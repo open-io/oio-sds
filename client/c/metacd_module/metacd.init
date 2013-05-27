@@ -1,0 +1,10 @@
+#!/bin/sh
+
+ulimit -c unlimited
+ulimit -s 512
+
+if test -d /GRID/common/core || mkdir -p /GRID/common/core
+then
+	cd /GRID/common/core
+fi
+

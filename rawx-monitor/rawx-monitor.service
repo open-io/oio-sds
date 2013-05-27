@@ -1,0 +1,352 @@
+#!/usr/bin/env perl
+
+# $Id: rawx-monitor.service,v 1.2 2010/04/07 08:34:22 a127803 Exp $
+
+BEGIN {
+	push(@INC, '/opt/local/service/bin');
+}
+
+require 'libressource.pl';
+
+use strict;
+use warnings;
+
+sub get_pid;
+sub is_up;
+sub mkdir_dirname($);
+sub get_cfg_ns;
+sub get_cfg_stgdev;
+sub get_cfg_url;
+sub get_cfg_pidfile;
+sub get_cfg_initfile;
+sub get_cfg_srvnum;
+sub get_cfg_outfile;
+sub load_cfg($);
+
+sub usage ;
+sub start ;
+sub stop ;
+sub info ;
+sub status ;
+sub clean ;
+sub debug;
+
+my $DEBUG = 0;
+my $UID = 120;
+my $GID = 220;
+my $EXE = "/usr/local/bin/rawx-monitor";
+
+my $title = undef;
+my $cfg_srv = undef;
+my $cfg_log = undef;
+my $operation = undef;
+my $out_srv = undef;
+my $init_srv = undef;
+my $pid_file = undef;
+
+if (@ARGV != 3) {
+	usage("Service tools misconfigured\n");
+}
+
+$cfg_srv = shift @ARGV;
+$cfg_log = shift @ARGV;
+$operation = shift @ARGV;
+my %config = load_cfg($cfg_srv);
+if (!%config) {
+	usage("Invalid configuration file $cfg_srv\n");
+}
+
+$title = get_cfg_ns(%config).'/rawx-monitor/'.get_cfg_url(%config);
+$out_srv = get_cfg_outfile(%config);
+$init_srv = get_cfg_initfile(%config);
+$pid_file = get_cfg_pidfile(%config);
+
+if ($operation eq "start") {
+	my $status = status();
+	if ($status == 0) {start() ? exit 0 : exit 1;}
+	elsif ($status == 1) {exit 0;}
+	elsif ($status == 2) {clean() && start() ? exit 0 : exit 1;}
+} elsif ($operation eq "stop") {
+	my $status = status();
+	if ($status == 0) {exit 0;}
+	elsif ($status == 1) {stop() ? exit 0 : exit 1;}
+	elsif ($status == 2) {clean() ? exit 0 : exit 1;}
+} elsif ($operation eq "info") {
+	exit(1) if not info();
+	exit(0);
+} elsif ($operation eq "status") {
+	exit(1) if not status();
+	exit(0);
+} else {
+	usage("Unexpected operation $operation");
+}
+
+sub get_pid {
+	return undef if not stat $pid_file;
+	open(FD_PID,"<$pid_file") or return undef;
+	my @lines = <FD_PID>;
+	my $pid = shift @lines;
+	close FD_PID;
+	chomp $pid;
+	return int $pid;
+}
+
+sub is_up {
+	my $pid = shift;
+	return 0 if not $pid;
+	return 0 eq system("kill -0 $pid > /dev/null 2>&1");
+}
+
+sub start {
+	
+	bold_print("[rawx-monitor]"); print(" Starting $title ... ");
+
+	# Creating run and logs directories if not exists
+	mkdir_dirname($out_srv);
+	mkdir_dirname($pid_file);
+
+	my $cmd = '';
+
+	# Use an init script if exists and executable
+	if (-x "$init_srv") {
+		$cmd = ". $init_srv ; ";
+	}
+
+	$cmd .= "$EXE $cfg_srv $cfg_log >> $out_srv 2>&1";
+	debug "Executing: $cmd";
+	
+	if (0 ne system($cmd)) {
+		fail_print("failed\n");
+		return 0;
+	}
+
+	# check for startup
+	sleep 1;
+	my @allpids = my_psauxw();
+	if (not @allpids) {
+		fail_print("failed (process died immediately)\n");
+		return 0;
+	}
+	
+	# wait for PID written in the file
+	my $pid = undef;
+	for my $c (1 .. 5) {
+		$pid = get_pid();
+		if ($pid) {
+			if (is_up($pid)) {
+				success_print("done\n");
+				return 1;
+			} else {
+				fail_print("failed (process died)\n");
+				return 0;
+			}
+		}
+		sleep 1;
+	}
+
+	fail_print("failed (pid not written)\n");
+	return 0;
+}
+
+sub stop {
+
+	bold_print("[rawx-monitor]"); print "Stopping $title ... ";
+	
+	my $killed = 0;
+	my $pid = get_pid();
+	
+	while (is_up ($pid)) {
+		$killed = 1;
+		last if 0 ne system("kill $pid > /dev/null 2>&1");
+		sleep 1;
+	}
+
+	if (is_up($pid)) {
+		fail_print("failed\n");
+		return 0;
+	} elsif ($killed) {
+		success_print("done\n");
+		return 1;
+	}
+}
+
+sub info {
+	print "$title";
+}
+
+sub status {
+	my $pid = get_pid();
+	my @pid_list = my_psauxw();
+
+	bold_print("[rawx-monitor]"); print(" Checking status of $title ... ");
+
+	if (not defined($pid)) {
+		if (@pid_list) {
+			success_print("started"); fail_print(" NO PID in $pid_file\n");
+			return(1);
+		} else {
+			stop_print("stopped\n");
+			return(0);
+		}
+	} elsif (is_up($pid)) {
+		if (@pid_list) {
+			foreach my $p (@pid_list) {
+				if ($p == $pid) {
+					success_print("running"); print("\n");
+					return(1);
+				}
+			}
+			success_print("running"); stop_print(" BROKEN pidfile $pid_file"); print("\n");
+			return(1);
+		}
+		else {
+			stop_print("stopped STALE pidfile $pid_file\n");
+			return (0);
+		}
+	} else {
+		if (@pid_list) {
+			success_print("running"); stop_print(" BROKEN pidfile $pid_file"); print("\n");
+			return(1);
+		}
+		else {
+			stop_print("stopped\n");
+			return (0);
+		}
+	}
+}
+
+sub clean {
+	my (@pid_list);
+	
+	@pid_list = my_psauxw();
+	
+	if (@pid_list) {
+		bold_print("[rawx-monitor]");
+		print " Killing $title ... ";
+		if (kill(15, @pid_list)) {
+			sleep 3;
+			@pid_list = my_psauxw();
+			if (@pid_list) {
+				if (kill(9, @pid_list)) {
+					success_print("done\n");
+					return 1;
+				} else {
+					fail_print("failed\n");
+					return 0;
+				}
+			} else {
+				success_print("done\n");
+				return 1;
+			}
+		} else {
+			fail_print("failed\n");
+			return 0;
+		}
+	}
+}
+
+sub load_cfg($) {
+	my $path = shift;
+	if (!stat($path)) {
+		fail_print("Cannot stat .ini configuration file in $path : $!\n");
+		return undef;
+	}
+	my %result = ();
+	my $last_section = undef;
+	open(FD,"<$path") or return undef;
+	while (my $l = <FD>) {
+		chomp $l;
+		next if $l =~ m/^\s*#/;
+		next if $l =~ m/^\s*$/;
+
+		if ($l =~ m/\[(.+)\]/i) {
+			$last_section = "$1";
+		} elsif ($l =~ m/^\s*(\S+)\s*=\s*(.+)\s*$/i) {
+			if (!$last_section) {
+				fail_print("Invalid .ini configuration file in $path : $!\n");
+				return undef;
+			} else {
+				$result{lc($last_section).'.'.$1} = $2;
+			}
+		}
+	}
+	close(FD);
+	return %result;
+}
+
+sub usage {
+	print STDERR join(@_),"\n" if @_;
+	print STDERR "Usage: $0 PATH_CFG PATH_LOG [start|stop|status|info]\n";
+	exit 1;
+}
+
+sub get_cfg_ns(%) {
+	my %config = (@_);
+	return ''.$config{'service.ns'};
+}
+
+sub get_cfg_url(%) {
+	my %config = (@_);
+	return ''.$config{'service.addr'};
+}
+
+sub get_cfg_stgdev(%) {
+	my %config = (@_);
+	my $pidfile = get_cfg_pidfile(%config);
+	$pidfile =~ s|/GRID/||;
+	$pidfile =~ s|/.*/||;
+	return $pidfile;
+}
+
+sub get_cfg_srvnum(%) {
+	my %config = (@_);
+	my $pidfile = get_cfg_pidfile(%config);
+	$pidfile =~ s|.*/([^/]+)|$1|;
+	$pidfile =~ s|[^0-9]||g;
+	return $pidfile;
+}
+
+sub get_cfg_outfile(%) {
+	my %config = (@_);
+	my $file = "$cfg_srv";
+	$file =~ s|.*/([^/]+)|$1|;
+	$file =~ s|\.[^.]+$||;
+	return '/GRID/'.get_cfg_ns(%config).'/logs/'.$file.'.out';
+}
+
+sub get_cfg_initfile(%) {
+	my %config = (@_);
+	my $file = "$cfg_srv";
+	$file =~ s|.*/([^/]+)|$1|;
+	$file =~ s|\.[^.]+$||;
+	return '/GRID/'.get_cfg_ns(%config).'/'.get_cfg_stgdev(%config).'/init/'.$file.'.init';
+}
+
+sub get_cfg_pidfile(%) {
+	my %config = (@_);
+	return ''.$config{'default.pidfile'};
+}
+
+sub mkdir_dirname($) {
+	my $dirname = shift;
+	$dirname =~ s|/[^/]*$||g;
+	if (! -e $dirname) {
+		mkdir($dirname);
+		if ((getpwuid($>))[0] eq "root") {
+			chown($UID, $GID, $dirname);
+		}
+	}
+}
+
+sub my_psauxw {
+	return psauxw($EXE, $cfg_srv);
+}
+
+sub debug {
+	if ($DEBUG) {
+		my $msg = join('',@_);
+		chomp $msg;
+		print STDERR "$msg\n";
+	}
+}
+

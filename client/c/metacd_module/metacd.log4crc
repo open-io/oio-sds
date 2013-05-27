@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!DOCTYPE log4c SYSTEM "">
+<log4c version="1.2.0">
+	<config>
+		<bufsize>2048</bufsize>
+		<debug level="9"/>
+		<nocleanup>0</nocleanup>
+	</config>
+	<layout name="dated_r" type="dated_r"/>
+	<rollingpolicy name="pol_all" type="sizewin" maxsize="5000000" maxnum="20" />
+	<appender name="app_all" type="rollingfile" logdir="/GRID/common/logs" prefix="metacd.log" layout="dated_r" rollingpolicy="pol_all"/>
+	<category name="root" priority="info" appender="app_all"/>
+</log4c>

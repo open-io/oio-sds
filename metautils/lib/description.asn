@@ -1,0 +1,386 @@
+AWL-MetaDirectory-Protocol DEFINITIONS AUTOMATIC TAGS ::=
+BEGIN
+
+	-- general purpose message structures
+
+	Parameter ::= SEQUENCE {
+			name PrintableString,
+			value OCTET STRING
+	}
+
+	Message ::= SEQUENCE {
+		id OCTET STRING OPTIONAL,
+		name OCTET STRING OPTIONAL,
+		version OCTET STRING OPTIONAL,
+		body OCTET STRING OPTIONAL,
+		content SET OF Parameter
+	}
+
+	ParameterSequence ::= SEQUENCE OF Parameter
+
+	EventSequence ::= SEQUENCE OF ParameterSequence
+
+	-- General network address information
+
+	AddrInfo ::= SEQUENCE {
+		ip CHOICE {
+			ipv4 OCTET STRING(SIZE(4)),
+			ipv6 OCTET STRING(SIZE(16))
+		},
+		port INTEGER OPTIONAL
+	}
+
+	AddrInfoSequence ::= SEQUENCE OF AddrInfo
+
+
+	-- Content information
+
+	ChunkId ::= SEQUENCE {
+		id   OCTET STRING(SIZE(16)),
+		addr AddrInfo,
+		vol  PrintableString
+	}
+
+	ChunkIdSequence ::= SET OF ChunkId
+
+	ChunkInfo ::= SEQUENCE {
+		id ChunkId,
+		size INTEGER,
+		position INTEGER,
+		nb INTEGER,
+		md5 OCTET STRING(SIZE(16))
+	}
+
+	ChunkInfoSequence ::= SET OF ChunkInfo
+
+
+	-- Container content list information
+
+	PathInfo ::= SEQUENCE {
+		path PrintableString,
+		size INTEGER OPTIONAL,
+		userMetadata OCTET STRING OPTIONAL,
+		systemMetadata OCTET STRING OPTIONAL
+	}
+
+	PathInfoSequence ::= SET OF PathInfo
+
+
+	-- score information
+
+	Score ::= SEQUENCE {
+		value	  INTEGER,
+		timestamp INTEGER
+	}
+
+
+	-- Digested information spread by the cluster conscience
+
+	-- Namespace information
+
+	NamespaceInfoValueList ::= SET OF Parameter
+
+	NamespaceInfo ::= SEQUENCE {
+		name		PrintableString,
+		addr		AddrInfo,
+		chunkSize	INTEGER,
+		options		NamespaceInfoValueList,
+		versionSrvcfg   INTEGER,
+		versionEvtcfg   INTEGER,
+		versionNscfg    INTEGER,
+		storagePolicy	NamespaceInfoValueList OPTIONAL,
+		dataSecurity	NamespaceInfoValueList OPTIONAL,
+		dataTreatments	NamespaceInfoValueList OPTIONAL
+	}
+
+	NamespaceInfoSequence ::= SET OF NamespaceInfo
+
+	-- RAWX information
+
+	VolumeInfo ::= SEQUENCE {
+		volume     PrintableString,
+		addr       AddrInfo,
+		score      Score
+	}
+
+	VolumeInfoSequence ::= SET OF VolumeInfo
+
+
+	-- meta0 mapping information
+
+	Meta0Info ::= SEQUENCE {
+		prefix OCTET STRING,
+		addr   AddrInfo
+	}
+
+	Meta0InfoSequence ::= SET OF Meta0Info
+
+
+	-- meta1 mapping information
+
+	Meta1Info ::= SEQUENCE {
+		addr    AddrInfo,
+		score   Score
+	}
+
+	Meta1InfoSequence ::= SEQUENCE OF Meta1Info
+
+
+	-- meta2 mapping information
+
+	Meta2Info ::= SEQUENCE {
+		score	Score,
+		addr	AddrInfo
+	}
+
+	Meta2InfoSequence ::= SEQUENCE OF Meta2Info
+
+
+	-- Volume stat info
+
+	VolumeStat ::= SEQUENCE {
+		cpuIdle	  INTEGER,
+		ioIdle	  INTEGER,
+		freeChunk INTEGER,
+		info	  VolumeInfo
+	}
+
+	VolumeStatSequence ::= SEQUENCE OF VolumeStat
+
+
+	-- Meta1 stat info
+
+	Meta1Stat ::= SEQUENCE {
+		cpuIdle INTEGER,
+		reqIdle	INTEGER,
+		info	Meta1Info
+	}
+
+	Meta1StatSequence ::= SEQUENCE OF Meta1Stat
+
+
+	-- Meta2 stat info
+
+	Meta2Stat ::= SEQUENCE {
+		cpuIdle INTEGER,
+		reqIdle	INTEGER,
+		info	Meta2Info
+	}
+
+	Meta2StatSequence ::= SEQUENCE OF Meta2Stat
+
+
+	-- Meta1 raw management structures
+
+	Meta1RawContainer ::= SEQUENCE {
+		id   OCTET STRING(SIZE(32)),
+		name PrintableString,
+		meta2 SEQUENCE OF AddrInfo,
+		flags OCTET STRING(SIZE(4))
+	}
+
+
+	-- Meta2 raw management structures
+
+	Meta2RawChunk ::= SEQUENCE {
+		id ChunkId,
+		hash OCTET STRING(SIZE(16)),
+		flags OCTET STRING(SIZE(4)),
+		size INTEGER,
+		position INTEGER,
+		metadata PrintableString OPTIONAL
+	}
+	Meta2RawChunkSequence ::= SEQUENCE OF Meta2RawChunk
+
+	Meta2RawContentHeader ::= SEQUENCE {
+		path PrintableString,
+		nbChunks INTEGER,
+		size INTEGER,
+		flags OCTET STRING(SIZE(4)),
+		cID OCTET STRING(SIZE(32)),
+		metadata OCTET STRING OPTIONAL,
+		systemMetadata OCTET STRING OPTIONAL
+		--version INTEGER OPTIONAL,
+		--deleted BOOLEAN OPTIONAL
+	}
+	Meta2RawContentHeaderSequence ::= SEQUENCE OF Meta2RawContentHeader
+
+	Meta2RawContent ::= SEQUENCE {
+		header Meta2RawContentHeader,
+		chunks SEQUENCE OF Meta2RawChunk
+	}
+	Meta2RawContentSequence ::= SEQUENCE OF Meta2RawContent
+
+	ContentList ::= SEQUENCE OF PrintableString
+	ArrayList ::= SEQUENCE OF OCTET STRING
+
+	-- Meta2V2 beans
+
+	M2V2Alias ::= SEQUENCE {
+		name             [0] PrintableString,
+		version          [1] INTEGER,
+		containerVersion [2] INTEGER,
+		contentId        [3] OCTET STRING,
+		mdsys            [4] PrintableString,
+		ctime            [5] INTEGER,
+		deleted          [6] BOOLEAN
+	}
+
+	M2V2ContentHeader ::= SEQUENCE {
+		id     [0] OCTET STRING, 
+		hash   [1] OCTET STRING OPTIONAL,
+		policy [2] PrintableString OPTIONAL,
+		size   [3] INTEGER
+	}
+
+	M2V2Chunk ::= SEQUENCE {
+		hash  [0] OCTET STRING,
+		id    [1] PrintableString,
+		size  [2] INTEGER,
+		ctime [3] INTEGER
+	}
+
+	M2V2Content ::= SEQUENCE {
+		contentId   [0] OCTET STRING,
+		chunkId     [1] PrintableString,
+		position    [2] PrintableString
+	}
+
+	M2V2Property ::= SEQUENCE {
+		aliasName    [0] PrintableString,
+		aliasVersion [1] INTEGER,
+		key          [2] PrintableString,
+		value        [3] OCTET STRING,
+		deleted      [4] BOOLEAN
+	}
+
+	M2V2Bean ::= SEQUENCE {
+		alias   [0] M2V2Alias OPTIONAL,
+		header  [1] M2V2ContentHeader OPTIONAL,
+		content [2] M2V2Content OPTIONAL,
+		chunk   [3] M2V2Chunk OPTIONAL,
+		prop    [4] M2V2Property OPTIONAL
+	}
+
+	M2V2BeanSequence ::= SEQUENCE OF M2V2Bean
+
+	-- Generic Service
+
+	ServiceTag ::= SEQUENCE {
+		name PrintableString,
+		value CHOICE {
+			b BOOLEAN,
+			i INTEGER,
+			r REAL,
+			s OCTET STRING,
+			macro SEQUENCE {
+				type PrintableString,
+				param PrintableString
+			}
+		}
+	}
+
+	ServiceInfo ::= SEQUENCE {
+		nsName PrintableString,
+		type   PrintableString,
+		addr   AddrInfo,
+		score  Score OPTIONAL,
+		tags   SEQUENCE OF ServiceTag OPTIONAL
+	}
+
+	ServiceInfoSequence ::= SEQUENCE OF ServiceInfo
+
+	-- Container Event structure
+
+	ContainerEvent ::= SEQUENCE {
+		rowid INTEGER,
+		timestamp INTEGER,
+		type PrintableString,
+		ref PrintableString,
+		eventMessage PrintableString
+	}
+
+	ContainerEventSequence ::= SEQUENCE OF ContainerEvent
+
+	-- Extended version of the Meta2RawContent, suitable for v1.5+ META2
+	-- contents representation.
+
+	Meta2Property ::= SEQUENCE {
+		name     [0] PrintableString,
+		version  [1] INTEGER,
+		value    [2] OCTET STRING
+	}
+	Meta2PropertySequence ::= SEQUENCE OF Meta2Property
+
+	Meta2RawContentV2 ::= SEQUENCE {
+		header      [0] Meta2RawContentHeader,
+		chunks      [1] Meta2RawChunkSequence,
+		services    [2] ServiceInfoSequence,
+		properties  [3] Meta2PropertySequence
+	}
+	Meta2RawContentV2Sequence ::= SEQUENCE OF Meta2RawContentV2
+
+	ContainerInfo ::= SEQUENCE {
+		id    [0] OCTET STRING(SIZE(32)),
+		size  [1] INTEGER
+	}
+	ContainerInfoSequence ::= SEQUENCE OF ContainerInfo
+
+	-- SQLX related structures
+
+	RowFieldValue ::= CHOICE {
+		i [0] INTEGER,
+		f [1] REAL,
+		b [2] OCTET STRING,
+		s [3] PrintableString,
+		n [4] NULL
+	}
+
+	RowField ::= SEQUENCE {
+		pos   [0] INTEGER,
+		value [1] RowFieldValue
+	}
+
+	RowFieldSequence ::= SEQUENCE OF RowField
+
+	Row ::= SEQUENCE {
+		rowid  [0] INTEGER,
+		fields [1] RowFieldSequence OPTIONAL
+	}
+
+	RowSet ::= SEQUENCE OF Row
+
+	RowFieldType ::= ENUMERATED {
+		typeInt   (0),
+		typeBlob  (1),
+		typeText  (2),
+		typeFloat (3)
+	}
+
+	RowName ::= SEQUENCE {
+		pos  [0] INTEGER,
+		name [1] OCTET STRING,
+		type [2] RowFieldType OPTIONAL
+	}
+
+	TableHeader ::= SEQUENCE OF RowName
+
+	Table ::= SEQUENCE {
+		name         [0] OCTET STRING,
+		header       [1] TableHeader,
+		rows         [2] RowSet,
+		status       [3] INTEGER OPTIONAL,
+		statusString [4] PrintableString OPTIONAL
+	}
+
+	TableSequence ::= SEQUENCE OF Table
+
+	TableVersion ::= SEQUENCE {
+		name    [0] PrintableString,
+		version [1] INTEGER,
+		when    [2] INTEGER
+	}
+
+	BaseVersion ::= SEQUENCE OF TableVersion
+
+END

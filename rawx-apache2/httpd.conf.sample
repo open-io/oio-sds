@@ -1,0 +1,77 @@
+LoadModule dav_module        /usr/local/oss/apache2-2.2.9/modules/mod_dav.so
+LoadModule dav_rawx_module   /usr/local/oss/apache2-2.2.9/modules/mod_dav_rawx.so
+#LoadModule log_config_module /usr/local/oss/apache2-2.2.9/modules/mod_log_config.so
+
+Listen 127.0.0.1:9000
+ServerRoot /GRID/@NS@/@STGDEV@/conf/rawx-@NB@
+ServerName w30176-rouge
+ServerSignature Off
+ServerTokens Prod
+# Not used here
+DocumentRoot /var/tmp
+TypesConfig /usr/local/oss/apache2-2.2.9/conf/mime.types
+
+KeepAlive off
+KeepAliveTimeout 0
+
+User  smig
+Group server
+
+ErrorLog /GRID/@NS@/logs/rawx-@NB@-errors.log
+LogFormat "%h %l %u %t \"%r\" %>s %b" common
+CustomLog /GRID/@NS@/logs/rawx-@NB@-access.log common
+LogLevel debug
+
+DavDepthInfinity Off
+
+# Mandatory values
+grid_hash_width 3
+grid_hash_depth 1
+grid_docroot /DATA/@NS@/@STGDEV@/rawx-@NB@
+grid_namespace @NS@
+grid_dir_run /GRID/@NS@/@STGDEV@/run
+
+# Optional trigger that specifies the scheme used in http headers.
+# Values:
+#   1    : v1.1 and v1.4 scheme (chunk_*, content_*)
+#   2    : v1.6 scheme (X-Grid- prefixed)
+#  both  : each header is written twice, once in each scheme
+# Default: 1
+grid_headers 1
+
+# Optional trigger that specifies if a fsync should be sent
+# after a PUT, when the stream is closed, before replying
+# to the client.
+# Possible values: true, on, yes, enabled
+# All the other values mean disabled.
+# Default: disabled
+grid_fsync enabled
+
+
+<IfModule mod_env.c> 
+SetEnv nokeepalive 1
+SetEnv downgrade-1.0 1
+SetEnv force-response-1.0 1
+</IfModule>
+
+<IfModule prefork.c>
+  MaxClients       150
+  StartServers       5
+  MinSpareServers    5
+  MaxSpareServers   10
+</IfModule>
+
+<IfModule worker.c>
+  StartServers         1
+  MaxClients           5
+  MinSpareThreads      2
+  MaxSpareThreads      5
+  ThreadsPerChild      5
+  MaxRequestsPerChild  0
+</IfModule>
+
+<Directory />
+  DAV rawx
+  AllowOverride None
+</Directory>
+

@@ -1,0 +1,385 @@
+/*
+ * Copyright (C) 2013 AtoS Worldline
+ * 
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU Affero General Public License as
+ * published by the Free Software Foundation, either version 3 of the
+ * License, or (at your option) any later version.
+ * 
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU Affero General Public License for more details.
+ * 
+ * You should have received a copy of the GNU Affero General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+
+#ifdef HAVE_CONFIG_H
+# include "../config.h"
+#endif
+#undef PACKAGE_BUGREPORT
+#undef PACKAGE_NAME
+#undef PACKAGE_STRING
+#undef PACKAGE_TARNAME
+#undef PACKAGE_VERSION
+
+#ifdef HAVE_COMPAT
+# include <metautils_compat.h>
+#endif
+
+#if APR_HAVE_STDIO_H
+#include <stdio.h>              /* for sprintf() */
+#endif
+
+#include <sys/socket.h>
+#include <netdb.h>
+
+
+# include <glib.h>
+# include <metatypes.h>
+# include <metautils.h>
+# include <metacomm.h>
+# include <rawx.h>
+
+#include <apr.h>
+#include <apr_file_io.h>
+#include <apr_strings.h>
+#include <apr_buckets.h>
+
+#include <httpd.h>
+#include <http_log.h>
+#include <http_config.h>
+#include <http_protocol.h>      /* for ap_set_* (in dav_rawx_set_headers) */
+#include <http_request.h>       /* for ap_update_mtime() */
+#include <mod_dav.h>
+
+#include "./mod_dav_rawx.h"
+#include "./rawx_internals.h"
+#include "./rawx_config.h"
+
+/* ------------------------------------------------------------------------- */
+
+typedef const char * (*generator_f)(const dav_resource *resource, apr_pool_t *pool);
+
+enum request_type_e {
+
+	STAT = 1,
+	INFO,
+};
+
+struct dav_resource_private {
+	apr_pool_t *pool;
+	const request_rec *request;
+	dav_rawx_server_conf *conf;
+	generator_f generator;
+	enum request_type_e type;
+	
+};
+
+/* ------------------------------------------------------------------------- */
+
+#define STR_KV(Field,Name) apr_psprintf(pool, "rawx."Name" %"APR_UINT64_T_FMT"\n", stats.Field)
+
+static const char *
+__gen_info(const dav_resource *resource, apr_pool_t *pool)
+{
+	dav_rawx_server_conf *conf;
+
+	conf = resource->info->conf;
+
+	return apr_pstrcat(pool, "namespace ", conf->ns_name, "\npath ", conf->docroot, "\n", NULL);
+}
+
+static const char *
+__gen_stats(const dav_resource *resource, apr_pool_t *pool)
+{
+	struct rawx_stats_s stats;
+
+	DAV_XDEBUG_POOL(pool, 0, "%s()", __FUNCTION__);
+
+	bzero(&stats, sizeof(stats));
+	dav_rawx_server_conf *c = NULL;
+	c = resource_get_server_config(resource);
+	server_getall_stat(c, pool, &stats);
+
+	/* struct delta_debug_s *d_req = rawx_stats_rrd_debug_get_delta(stats.rrd_req_sec, pool, 4);
+	struct delta_debug_s *d_avg = rawx_stats_rrd_debug_get_delta(stats.rrd_duration, pool, 4);
+	apr_uint64_t req = d_req->delta;
+	apr_uint64_t reqavgtime = d_avg->delta;
+
+	DAV_DEBUG_REQ(resource->info->request, 0, "RRD REQ:\n%s", d_req->dump);
+	DAV_DEBUG_REQ(resource->info->request, 0, "RRD DURATION:\n%s", d_avg->dump); */
+
+	apr_uint64_t req = rawx_stats_rrd_get_delta(&(stats.rrd_req_sec), 4);
+	apr_uint64_t reqavgtime = rawx_stats_rrd_get_delta(&(stats.rrd_duration), 4);
+	apr_uint64_t req_put = rawx_stats_rrd_get_delta(&(stats.rrd_req_put_sec), 4);
+	apr_uint64_t reqavgtime_put = rawx_stats_rrd_get_delta(&(stats.rrd_put_duration), 4);
+	apr_uint64_t req_get = rawx_stats_rrd_get_delta(&(stats.rrd_req_get_sec), 4);
+	apr_uint64_t reqavgtime_get = rawx_stats_rrd_get_delta(&(stats.rrd_get_duration), 4);
+	apr_uint64_t req_del = rawx_stats_rrd_get_delta(&(stats.rrd_req_del_sec), 4);
+	apr_uint64_t reqavgtime_del = rawx_stats_rrd_get_delta(&(stats.rrd_del_duration), 4);
+
+	apr_uint64_t r_time = 0, r_put_time = 0, r_get_time = 0, r_del_time = 0;
+	if(req > 0)
+		r_time = reqavgtime / req;
+	if(req_put > 0)
+		r_put_time = reqavgtime_put / req_put;
+	if(req_get > 0)
+		r_get_time = reqavgtime_get / req_get;
+	if(req_del > 0)
+		r_del_time = reqavgtime_del / req_del;
+
+	double r_rate = 0, r_put_rate = 0, r_get_rate = 0, r_del_rate = 0;
+	r_rate = (double)req / 4;
+	r_put_rate = (double)req_put / 4;
+	r_get_rate = (double)req_get / 4;
+	r_del_rate = (double)req_del / 4;
+
+	return apr_pstrcat(pool, 
+			STR_KV(req_all,       "req.all"),
+			STR_KV(req_chunk_put, "req.put"),
+			STR_KV(req_chunk_get, "req.get"),
+			STR_KV(req_chunk_del, "req.del"),
+			STR_KV(req_stat,      "req.stat"),
+			STR_KV(req_info,      "req.info"),
+			STR_KV(req_raw,       "req.raw"),
+			STR_KV(req_other,     "req.other"),
+			STR_KV(rep_2XX,       "rep.2xx"),
+			STR_KV(rep_4XX,       "rep.4xx"),
+			STR_KV(rep_5XX,       "rep.5xx"),
+			STR_KV(rep_other,     "rep.other"),
+			STR_KV(rep_403,       "rep.403"),
+			STR_KV(rep_404,       "rep.404"),
+			STR_KV(rep_bread,     "rep.bread"),
+			STR_KV(rep_bwritten,  "rep.bwritten"),
+			apr_psprintf(pool, "rawx.reqpersec %f\n", r_rate),
+			apr_psprintf(pool, "rawx.avreqtime %"APR_UINT64_T_FMT"\n", r_time),
+			apr_psprintf(pool, "rawx.reqputpersec %f\n", r_put_rate),
+			apr_psprintf(pool, "rawx.avputreqtime %"APR_UINT64_T_FMT"\n", r_put_time),
+			apr_psprintf(pool, "rawx.reqgetpersec %f\n", r_get_rate),
+			apr_psprintf(pool, "rawx.avgetreqtime %"APR_UINT64_T_FMT"\n", r_get_time),
+			apr_psprintf(pool, "rawx.reqdelpersec %f\n", r_del_rate),
+			apr_psprintf(pool, "rawx.avdelreqtime %"APR_UINT64_T_FMT"\n", r_del_time),
+			NULL);
+}
+
+static dav_resource*
+__build_req_resource(const request_rec *r, const dav_hooks_repository *hooks, generator_f gen)
+{
+	dav_resource *resource;
+
+	DAV_XDEBUG_REQ(r, 0, "%s(...)", __FUNCTION__);
+	
+	resource = apr_pcalloc(r->pool, sizeof(*resource));
+	resource->type = DAV_RESOURCE_TYPE_PRIVATE;
+	resource->hooks = hooks;
+	resource->pool = r->pool;
+	resource->exists = 1;
+	resource->collection = 0;
+
+	resource->info = apr_pcalloc(r->pool, sizeof(struct dav_resource_private));
+	resource->info->generator = gen;
+	resource->info->pool = r->pool;
+	resource->info->conf = request_get_server_config(r);
+	resource->info->request = r;
+
+	return resource;
+}
+
+dav_error *
+dav_rawx_stat_get_resource(request_rec *r, const char *root_dir, const char *label,
+	int use_checked_in, dav_resource **result_resource)
+{
+	(void) root_dir;
+	(void) label;
+	(void) use_checked_in;
+
+	DAV_XDEBUG_REQ(r, 0, "%s(...)", __FUNCTION__);
+	*result_resource = NULL;
+
+	if (r->method_number != M_GET)
+		return server_create_and_stat_error(request_get_server_config(r), r->pool,
+				HTTP_BAD_REQUEST, 0, apr_pstrdup(r->pool, "Invalid request method, only GET"));
+	
+	*result_resource = __build_req_resource(r, &dav_hooks_repository_rawxstat, __gen_stats);
+	(*result_resource)->info->type = STAT;
+	return NULL;
+}
+
+dav_error *
+dav_rawx_info_get_resource(request_rec *r, const char *root_dir, const char *label,
+	int use_checked_in, dav_resource **result_resource)
+{
+	(void) root_dir;
+	(void) label;
+	(void) use_checked_in;
+
+	DAV_XDEBUG_REQ(r, 0, "%s(...)", __FUNCTION__);
+	*result_resource = NULL;
+	
+	if (r->method_number != M_GET)
+		return server_create_and_stat_error(request_get_server_config(r), r->pool,
+				HTTP_BAD_REQUEST, 0, apr_pstrdup(r->pool, "Invalid request method, only GET"));
+
+	*result_resource = __build_req_resource(r, &dav_hooks_repository_rawxinfo, __gen_info);
+	(*result_resource)->info->type = INFO;
+	return NULL;
+}
+
+
+static dav_error *
+dav_rawx_get_parent_resource_SPECIAL(const dav_resource *resource, dav_resource **result_parent)
+{
+	DAV_XDEBUG_POOL(resource->info->pool, 0, "%s(...)", __FUNCTION__);
+	*result_parent = __build_req_resource(resource->info->request,
+		resource->hooks, resource->info->generator);
+	return NULL;
+}
+
+
+static int
+dav_rawx_is_same_resource_SPECIAL(const dav_resource *res1, const dav_resource *res2)
+{
+	(void) res1;
+	(void) res2;
+
+	DAV_XDEBUG_RES(res1, 0, "%s(...)", __FUNCTION__);
+	return (res1->type == res2->type) && (res1->hooks == res2->hooks);
+}
+
+
+static int
+dav_rawx_is_parent_resource_SPECIAL(const dav_resource *res1, const dav_resource *res2)
+{
+	DAV_XDEBUG_RES(res1, 0, "%s(...)", __FUNCTION__);
+	return dav_rawx_is_same_resource_SPECIAL(res1, res2);
+}
+
+
+static dav_error *
+dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
+{
+	const char *result;
+	int result_len;
+	apr_status_t status;
+	apr_pool_t *pool;
+	apr_bucket_brigade *bb;
+	apr_bucket *bkt;
+
+	DAV_XDEBUG_RES(resource, 0, "%s()", __FUNCTION__);
+	pool = resource->info->request->pool;
+
+	/* Check resource type */
+	if (resource->type != DAV_RESOURCE_TYPE_PRIVATE)
+		return server_create_and_stat_error(resource_get_server_config(resource), pool,
+			HTTP_CONFLICT, 0, apr_pstrdup(pool, "Cannot GET this type of resource."));
+	if (resource->collection)
+		return server_create_and_stat_error(resource_get_server_config(resource), pool,
+			HTTP_CONFLICT, 0, apr_pstrdup(pool,"No GET on collections"));
+
+	/* Generate the output */
+	result = resource->info->generator(resource, pool);
+	result_len = strlen(result);
+
+	/* We must reply a buffer */
+	bkt = apr_bucket_heap_create(result, result_len, NULL, output->c->bucket_alloc);
+	bb = apr_brigade_create(pool, output->c->bucket_alloc);
+	APR_BRIGADE_INSERT_TAIL(bb, bkt);
+
+	/* Nothing more to reply */
+	bkt = apr_bucket_eos_create(output->c->bucket_alloc);
+	APR_BRIGADE_INSERT_TAIL(bb, bkt);
+
+	DAV_XDEBUG_RES(resource, 0, "%s : ready to deliver", __FUNCTION__);
+
+	if ((status = ap_pass_brigade(output, bb)) != APR_SUCCESS)
+		return server_create_and_stat_error(resource_get_server_config(resource), pool,
+			HTTP_FORBIDDEN, 0, apr_pstrdup(pool,"Could not write contents to filter."));
+	
+	server_inc_stat(resource_get_server_config(resource), RAWX_STATNAME_REP_2XX, 0);
+
+	/* HERE ADD request counter */
+	switch(resource->info->type) {
+		case STAT:
+			server_inc_request_stat(resource_get_server_config(resource), RAWX_STATNAME_REQ_STAT,
+				request_get_duration(resource->info->request));
+			break;
+		case INFO:
+			server_inc_request_stat(resource_get_server_config(resource), RAWX_STATNAME_REQ_INFO,
+				request_get_duration(resource->info->request));
+			break;
+		default:
+			break;
+	}
+
+	return NULL;
+}
+
+static dav_error *
+dav_rawx_set_headers_SPECIAL(request_rec *r, const dav_resource *resource)
+{
+	(void) r;
+	(void) resource;
+	return NULL;
+}
+
+static const char *
+dav_rawx_stat_getetag(const dav_resource *resource)
+{
+	(void) resource;
+	return apr_pstrdup(resource->info->request->pool, "rawx-stat");
+}
+
+static const char *
+dav_rawx_info_getetag(const dav_resource *resource)
+{
+	(void) resource;
+	return apr_pstrdup(resource->info->request->pool, "rawx-info");
+}
+
+
+const dav_hooks_repository dav_hooks_repository_rawxinfo =
+{
+	1,
+	dav_rawx_info_get_resource,
+	dav_rawx_get_parent_resource_SPECIAL,
+	dav_rawx_is_same_resource_SPECIAL,
+	dav_rawx_is_parent_resource_SPECIAL,
+	NULL /*dav_rawx_info_open_stream*/,
+	NULL /*dav_rawx_info_close_stream*/,
+	NULL /*dav_rawx_info_write_stream*/,
+	NULL /*dav_rawx_info_seek_stream*/,
+	dav_rawx_set_headers_SPECIAL,
+	dav_rawx_deliver_SPECIAL,
+	NULL /* no collection creation */,
+	NULL /* no copy of resources allowed */,
+	NULL /* cannot move resources */,
+	NULL /*dav_rawx_info_remove_resource*/,
+	NULL /* no walk across the chunks */,
+	dav_rawx_info_getetag,
+	NULL /* no module context */
+};
+
+
+const dav_hooks_repository dav_hooks_repository_rawxstat =
+{
+	1,
+	dav_rawx_stat_get_resource,
+	dav_rawx_get_parent_resource_SPECIAL,
+	dav_rawx_is_same_resource_SPECIAL,
+	dav_rawx_is_parent_resource_SPECIAL,
+	NULL /*dav_rawx_stat_open_stream*/,
+	NULL /*dav_rawx_stat_close_stream*/,
+	NULL /*dav_rawx_stat_write_stream*/,
+	NULL /*dav_rawx_stat_seek_stream*/,
+	dav_rawx_set_headers_SPECIAL,
+	dav_rawx_deliver_SPECIAL,
+	NULL /* no collection creation */,
+	NULL /* no copy of resources allowed */,
+	NULL /* cannot move resources */,
+	NULL /*dav_rawx_stat_remove_resource*/,
+	NULL /* no walk across the chunks */,
+	dav_rawx_stat_getetag,
+	NULL /* no module context */
+};
