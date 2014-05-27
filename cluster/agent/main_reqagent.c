@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.agent.reqagent"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.agent.reqagent"
 #endif
 
 #include <errno.h>
@@ -28,11 +8,10 @@
 #include <string.h>
 #include <strings.h>
 
-#include <glib.h>
-
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
 #include "./agent.h"
+#include "./config.h"
 #include "./broken_workers.h"
 #include "./cpu_stat_task_worker.h"
 #include "./event_workers.h"
@@ -104,7 +83,7 @@ main_reqagent(void)
 		goto error_label;
 	}
 
-	
+
 	/* Conscience services tasks */
 	if (!start_namespace_get_task(&error)) {
 		ERROR("Failed to start namespace info retriever task : %s", gerror_get_message(error));
@@ -122,26 +101,27 @@ main_reqagent(void)
 		ERROR("Services PUSH task error : %s", gerror_get_message(error));
 		goto error_label;
 	}
-	if (!services_task_check(&error)) {
-		ERROR("Services crawler (detect_obsoletes) task error : %s", gerror_get_message(error));
-		goto error_label;
+	if (flag_check_services) {
+		if (!services_task_check(&error)) {
+			ERROR("Services crawler (detect_obsoletes) task error : %s", gerror_get_message(error));
+			goto error_label;
+		}
+		INFO("Services tasks successfully started");
 	}
-	INFO("Services tasks successfully started");
 
 
 	/* Conscience broken elements tasks */
-	if (!agent_start_broken_task_get(&error)) {
-		ERROR("Failed to start broken containers GET task: %s", gerror_get_message(error));
-		goto error_label;
+	if (flag_manage_broken) {
+		if (!agent_start_broken_task_get(&error)) {
+			ERROR("Failed to start broken containers GET task: %s", gerror_get_message(error));
+			goto error_label;
+		}
+		if (!agent_start_broken_task_push(&error)) {
+			ERROR("Failed to start broken containers SEND task : %s", gerror_get_message(error));
+			goto error_label;
+		}
+		INFO("Broken tasks successfully started");
 	}
-#ifdef HAVE_LEGACY
-	if (!agent_start_broken_task_push(&error)) {
-		ERROR("Failed to start broken containers SEND task : %s", gerror_get_message(error));
-		goto error_label;
-	}
-#endif
-	INFO("Broken tasks successfully started");
-
 
 	/* Event tasks : config + incoming */
 	if (!agent_start_event_task_config(&error)) {
@@ -150,13 +130,7 @@ main_reqagent(void)
 	}
 	INFO("Events tasks successfully started");
 
-
-	INFO("Starting the main IO scheduler...");
-	if (!launch_io_scheduler(&error)) {
-		ERROR("Failed to launch network io scheduler : %s", gerror_get_message(error));
-		goto error_label;
-	}
-
+	launch_io_scheduler();
 	rc = 0;
 
 error_label:

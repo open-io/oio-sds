@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "hc-policycheck"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "hc-policycheck"
 #endif
 
 #include <stdlib.h>
@@ -29,14 +9,9 @@
 #include <signal.h>
 #include <attr/xattr.h>
 
-#include <glib.h>
-#include <glib/gstdio.h>
-
-#include <metautils.h>
-#include <hc_url.h>
-#include <common_main.h>
-#include <rawx.h>
-#include <gridcluster.h>
+#include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
+#include <rawx-lib/src/rawx.h>
 
 #include "../lib/content_check.h"
 
@@ -44,6 +19,8 @@ static gboolean check_only = FALSE;
 
 struct hc_url_s *url = NULL;
 
+// m2v1_list declared in libintegrity
+GSList *m2v1_list = NULL;
 
 /* ------------------------------------------------------------------------- */
 static void
@@ -51,7 +28,7 @@ polcheck_action(void)
 {
 	if(url) {
 		GError *local_error = NULL;
-		if(!check_content_storage_policy(hc_url_get(url, HCURL_NS), hc_url_get_id(url),
+		if(!check_content_storage_policy(hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_HEXID),
 					hc_url_get(url, HCURL_PATH), check_only, &local_error)) {
 			GRID_ERROR("Storage policy check failure : %s", local_error ? local_error->message : NULL);
 		} else {

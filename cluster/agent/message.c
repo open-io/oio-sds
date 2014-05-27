@@ -1,35 +1,17 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.agent.message"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.agent.message"
 #endif
 
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
-#include "agent.h"
-#include "message.h"
+#include "./agent.h"
+#include "./message.h"
+#include "./write_message_worker.h"
+
 
 void 
 request_clean(request_t *request)
@@ -40,7 +22,7 @@ request_clean(request_t *request)
 		g_free(request->cmd);
 	if (request->arg)
 		g_free(request->arg);
-	memset(request, 0, sizeof(request));
+	memset(request, 0, sizeof(request_t));
 	g_free(request);
 }
 
@@ -70,7 +52,7 @@ message_clean(message_t *msg)
 		return;
 	if (msg->data)
 		g_free(msg->data);
-	memset(msg, 0, sizeof(msg));
+	memset(msg, 0, sizeof(message_t));
 	g_free(msg);
 }
 
@@ -160,8 +142,6 @@ build_message_from_response(response_t *response)
 
 	return message;
 }
-
-#include "write_message_worker.h"
 
 int
 __respond (worker_t *worker, int ok, GByteArray *content, GError **error)

@@ -1,22 +1,8 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef _RAWX_CONFIG_H_
 #define _RAWX_CONFIG_H_
+
+// TODO FIXME replace with APR equivalent
+#include <openssl/md5.h>
 
 #include <httpd.h>
 #include <http_config.h>
@@ -26,34 +12,37 @@
 #include <apr_strings.h>
 #include <apr_shm.h>
 #include <apr_global_mutex.h>
-#include <rawx.h>
+
 #include <mod_dav.h>
 
-#include <openssl/md5.h>
+#include <rawx-lib/src/rawx.h>
 
-#include "./rawx_stats_rrd.h"
+#include "rawx_stats_rrd.h"
+
+#define FSYNC_ON_CHUNK 1
+#define FSYNC_ON_CHUNK_DIR 2
 
 struct rawx_stats_s {
-	apr_uint64_t req_all;
-	apr_uint64_t req_chunk_get;
-	apr_uint64_t req_chunk_put;
-	apr_uint64_t req_chunk_del;
-	apr_uint64_t req_stat;
-	apr_uint64_t req_info;
-	apr_uint64_t req_raw;
-	apr_uint64_t req_other;
-	apr_uint64_t rep_2XX;
-	apr_uint64_t rep_4XX;
-	apr_uint64_t rep_5XX;
-	apr_uint64_t rep_other;
-	apr_uint64_t rep_403;
-	apr_uint64_t rep_404;
-	apr_uint64_t rep_bread;
-	apr_uint64_t rep_bwritten;
-	apr_uint64_t time_all;
-	apr_uint64_t time_put;
-	apr_uint64_t time_get;
-	apr_uint64_t time_del;
+	apr_uint32_t req_all;
+	apr_uint32_t req_chunk_get;
+	apr_uint32_t req_chunk_put;
+	apr_uint32_t req_chunk_del;
+	apr_uint32_t req_stat;
+	apr_uint32_t req_info;
+	apr_uint32_t req_raw;
+	apr_uint32_t req_other;
+	apr_uint32_t rep_2XX;
+	apr_uint32_t rep_4XX;
+	apr_uint32_t rep_5XX;
+	apr_uint32_t rep_other;
+	apr_uint32_t rep_403;
+	apr_uint32_t rep_404;
+	apr_uint32_t rep_bread;
+	apr_uint32_t rep_bwritten;
+	apr_uint32_t time_all;
+	apr_uint32_t time_put;
+	apr_uint32_t time_get;
+	apr_uint32_t time_del;
 	struct rawx_stats_rrd_s rrd_req_sec;
 	struct rawx_stats_rrd_s rrd_duration;
 	struct rawx_stats_rrd_s rrd_req_put_sec;
@@ -77,7 +66,7 @@ struct shm_stats_s {
 };
 
 typedef struct dav_rawx_server_conf_s dav_rawx_server_conf;
- 
+
 struct dav_rawx_server_conf_s {
 	apr_pool_t *pool;
 	char docroot[1024];
@@ -89,13 +78,10 @@ struct dav_rawx_server_conf_s {
 
 	/* Statistics involved data */
 	struct {
-		char path[128];
-		apr_file_t *fh;
 		apr_global_mutex_t *handle;
 	} lock;
 	struct {
 		char path[128];
-		apr_file_t *fh;
 		apr_shm_t *handle;
 	} shm;
 
@@ -139,7 +125,7 @@ apr_status_t server_child_stat_fini(dav_rawx_server_conf *conf, apr_pool_t *plog
  *
  *
  */
-void server_add_stat(dav_rawx_server_conf *conf, const char *n, apr_uint64_t value, apr_uint64_t duration);
+void server_add_stat(dav_rawx_server_conf *conf, const char *n, apr_uint32_t value, apr_uint32_t duration);
 
 /**
  *
@@ -168,13 +154,6 @@ void server_inc_daverror_stat(dav_rawx_server_conf *conf, dav_error *derr);
  *
  */
 dav_error *server_create_and_stat_error(dav_rawx_server_conf *conf, apr_pool_t *p, int status, int error_id, const char *desc);
-
-/**
- *
- *
- *
- */
-void server_getall_stat(dav_rawx_server_conf *conf, apr_pool_t *pool, struct rawx_stats_s *stats);
 
 /**
  *

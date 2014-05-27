@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gs_rebuild"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gs_rebuild"
 #endif
 #include <stdlib.h>
 #include <string.h>
@@ -28,14 +8,9 @@
 #include <signal.h>
 #include <attr/xattr.h>
 
-#include <glib.h>
-#include <glib/gstdio.h>
-
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-#include <common_main.h>
-#include <gridcluster.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <cluster/lib/gridcluster.h>
 
 #include "./repair.h"
 #include "../lib/chunk_db.h"
@@ -52,6 +27,9 @@ static gchar ns_name[LIMIT_LENGTH_NSNAME] = "";
 static time_t sleep_inter_refresh = 1000L;
 
 static GHashTable *ht_broken = NULL;
+
+// m2v1_list declared in libintegrity
+GSList *m2v1_list = NULL;
 
 /* ------------------------------------------------------------------------- */
 
@@ -104,9 +82,11 @@ service_info_trace_gslist(GSList *list, const gchar *tag)
 	GSList *l;
 	struct service_info_s *si;
 
-	if (!TRACE_ENABLED())
+	if (!TRACE_ENABLED()) {
+		(void) tag;
 		return;
- 	for (l=list; l ;l=l->next) {
+	}
+	for (l=list; l ;l=l->next) {
 		if (!(si = l->data))
 			TRACE("%s NULL", tag);
 		else {
@@ -177,8 +157,10 @@ holder_dump(GHashTable *ht, const gchar *tag)
 	GHashTableIter iter;
 	gpointer k, v;
 
-	if (!TRACE_ENABLED())
+	if (!TRACE_ENABLED()) {
+		(void) tag;
 		return;
+	}
 
 	TRACE("%sBroken elements holder ++++++++", tag);
 	g_hash_table_iter_init(&iter, ht);
@@ -196,7 +178,7 @@ static void
 _holder_save_content(GHashTable *ht, struct broken_element_s *broken)
 {
 	gchar *str_key;
-	
+
 	if (!broken)
 		return;
 
@@ -224,7 +206,7 @@ static void
 holder_forget(struct broken_element_s *broken)
 {
 	gchar *str_key;
-	
+
 	if (!broken)
 		return ;
 
@@ -306,7 +288,7 @@ rawx_get_volume(struct service_info_s *si)
 
 	if (!service_tag_get_value_string(tag, volname, sizeof(volname), NULL))
 		return g_strdup("/");
-	
+
 	return g_strdup(volname);
 }
 
@@ -322,7 +304,7 @@ get_grid_client(GError **err)
 		gs_error_free(gserr);
 		return NULL;
 	}
-	
+
 	gs_grid_storage_set_timeout(gs_client, GS_TO_RAWX_CNX, 30000, NULL);
 	gs_grid_storage_set_timeout(gs_client, GS_TO_RAWX_OP, 90000, NULL);
 	gs_grid_storage_set_timeout(gs_client, GS_TO_M0_CNX, 30000, NULL);
@@ -478,7 +460,7 @@ get_broken_containers(GError **err)
 label_exit:
 	g_slist_foreach(all_broken, g_free1, NULL);
 	g_slist_free(all_broken);
-	return result;	
+	return result;
 }
 
 static gboolean
@@ -613,7 +595,7 @@ static gboolean
 main_configure(int argc, char **args)
 {
 	ht_broken = holder_new();
-	
+
 	if (argc != 1) {
 		GRID_ERROR("Missing namespace argument");
 		return FALSE;

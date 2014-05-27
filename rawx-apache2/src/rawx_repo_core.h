@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef _RAWX_REPO_CORE_H_
 #define _RAWX_REPO_CORE_H_
 
@@ -26,16 +9,15 @@
 #include <apr_strings.h>
 #include <apr_shm.h>
 #include <apr_global_mutex.h>
-#include <rawx.h>
 #include <mod_dav.h>
 
 #include <openssl/md5.h>
 
-#include <metautils.h>
-#include <rawx.h>
-#include <compression.h>
+#include <metautils/lib/metautils.h>
+#include <rawx-lib/src/rawx.h>
+#include <rawx-lib/src/compression.h>
 
-#include "./rawx_config.h"
+#include "rawx_config.h"
 
 /* context needed to identify a resource */
 struct dav_resource_private {

@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-#include "../config.h"
-#endif
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "snmp.gridstorage"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "grid.snmp.gridstorage"
 #endif
 
 #include <sys/socket.h>
@@ -31,10 +11,10 @@
 #include <net-snmp/net-snmp-includes.h>
 #include <net-snmp/agent/net-snmp-agent-includes.h>
 
-#include <gridcluster.h>
-#include <stats_remote.h>
-#include <metautils.h>
-#include <gridcluster_remote.h>
+#include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
+#include <cluster/remote/gridcluster_remote.h>
+#include <gridd/clients/stats/stats_remote.h>
 
 #include "session.h"
 #include "grid_storage.h"
@@ -731,71 +711,152 @@ manage_meta2(struct service_info_s *si)
 		g_clear_error(&error);
 	}
 	else {
-		snmp_data.req_total =            get_double_value(meta2_stats, META2_STAT_REQ_TOTAL, 0.0);
-		snmp_data.req_create =           get_double_value(meta2_stats, META2_STAT_REQ_CREATE, 0.0);
-		snmp_data.req_list =             get_double_value(meta2_stats, META2_STAT_REQ_LIST, 0.0);
-		snmp_data.req_close =            get_double_value(meta2_stats, META2_STAT_REQ_CLOSE, 0.0);
-		snmp_data.req_destroy =          get_double_value(meta2_stats, META2_STAT_REQ_DESTROY, 0.0);
-		snmp_data.req_open =             get_double_value(meta2_stats, META2_STAT_REQ_OPEN, 0.0);
-		snmp_data.req_failures =         get_double_value(meta2_stats, META2_STAT_REQ_FAIL, 0.0);
-		snmp_data.req_content_retrieve = get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_RET, 0.0);
-		snmp_data.req_content_remove =   get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_RM, 0.0);
-		snmp_data.req_content_add =      get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_ADD, 0.0);
-		snmp_data.req_content_append =   get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_APPEND, 0.0);
-		snmp_data.req_content_commit =   get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_COMMIT, 0.0);
-		snmp_data.req_chunk_commit =     get_double_value(meta2_stats, META2_STAT_REQ_CHUNK_COMMIT, 0.0);
-		snmp_data.req_rplcontent =       get_double_value(meta2_stats, META2_STAT_REQ_RPLCONTENT, 0.0);
-		snmp_data.req_statcontent =      get_double_value(meta2_stats, META2_STAT_REQ_STATCONTENT, 0.0);
+		snmp_data.req_total = get_double_value(meta2_stats, META2_STAT_REQ_TOTAL, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_TOTAL_V2, 0.0);
+		snmp_data.req_create = get_double_value(meta2_stats, META2_STAT_REQ_CREATE, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_CREATE_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_CREATE_V2, 0.0);
+		snmp_data.req_list = get_double_value(meta2_stats, META2_STAT_REQ_LIST, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_LIST_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_LIST_V2, 0.0);
+		snmp_data.req_close = get_double_value(meta2_stats, META2_STAT_REQ_CLOSE, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_CLOSE_V2, 0.0);
+		snmp_data.req_destroy = get_double_value(meta2_stats, META2_STAT_REQ_DESTROY, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_DESTROY_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_DESTROY_V2, 0.0);
+		snmp_data.req_open = get_double_value(meta2_stats, META2_STAT_REQ_OPEN, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_OPEN_V2, 0.0);
+		snmp_data.req_failures = get_double_value(meta2_stats, META2_STAT_REQ_FAIL, 0.0);
+		snmp_data.req_content_retrieve = get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_RET, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_RET_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_RET_V2, 0.0);
+		snmp_data.req_content_remove = get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_RM, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_RM_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_RM_V2, 0.0);
+		snmp_data.req_content_add = get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_ADD, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_ADD_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_ADD_V2, 0.0);
+		snmp_data.req_content_append = get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_APPEND, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_APPEND_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_APPEND_V2, 0.0);
+		snmp_data.req_content_commit = get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_COMMIT, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_CONTENT_COMMIT_V1, 0.0);
+		snmp_data.req_chunk_commit = get_double_value(meta2_stats, META2_STAT_REQ_CHUNK_COMMIT, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_CHUNK_COMMIT_V1, 0.0);
+		snmp_data.req_rplcontent = get_double_value(meta2_stats, META2_STAT_REQ_RPLCONTENT, 0.0);
+		snmp_data.req_statcontent = get_double_value(meta2_stats, META2_STAT_REQ_STATCONTENT, 0.0);
 
-		snmp_data.time_create =           get_double_value(meta2_stats, META2_STAT_TIME_CREATE, 0.0);
-		snmp_data.time_content_retrieve = get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_RET, 0.0);
-		snmp_data.time_list =             get_double_value(meta2_stats, META2_STAT_TIME_LIST, 0.0);
-		snmp_data.time_close =            get_double_value(meta2_stats, META2_STAT_TIME_CLOSE, 0.0);
-		snmp_data.time_destroy =          get_double_value(meta2_stats, META2_STAT_TIME_DESTROY, 0.0);
-		snmp_data.time_content_remove =   get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_RM, 0.0);
-		snmp_data.time_open =             get_double_value(meta2_stats, META2_STAT_TIME_OPEN, 0.0);
-		snmp_data.time_content_add =      get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_ADD, 0.0);
-		snmp_data.time_content_append =   get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_APPEND, 0.0);
-		snmp_data.time_content_commit =   get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_CI, 0.0);
-		snmp_data.time_chunk_commit =     get_double_value(meta2_stats, META2_STAT_TIME_CHUNK_CI, 0.0);
-		snmp_data.time_rplcontent =       get_double_value(meta2_stats, META2_STAT_TIME_RPLCONTENT, 0.0);
-		snmp_data.time_statcontent =      get_double_value(meta2_stats, META2_STAT_TIME_STATCONTENT, 0.0);
+		snmp_data.time_create = get_double_value(meta2_stats, META2_STAT_TIME_CREATE, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_CREATE_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_CREATE_V2, 0.0);
+		snmp_data.time_content_retrieve =
+			get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_RET, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_RET_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_RET_V2, 0.0);
+		snmp_data.time_list = get_double_value(meta2_stats, META2_STAT_TIME_LIST, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_LIST_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_LIST_V2, 0.0);
+		snmp_data.time_close = get_double_value(meta2_stats, META2_STAT_TIME_CLOSE, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_CLOSE_V1, 0.0);
+		snmp_data.time_destroy = get_double_value(meta2_stats, META2_STAT_TIME_DESTROY, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_DESTROY_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_DESTROY_V2, 0.0);
+		snmp_data.time_content_remove = get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_RM, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_RM_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_RM_V2, 0.0);
+		snmp_data.time_open = get_double_value(meta2_stats, META2_STAT_TIME_OPEN, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_OPEN_V1, 0.0);
+		snmp_data.time_content_add = get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_ADD, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_ADD_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_ADD_V2, 0.0);
+		snmp_data.time_content_append =
+			get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_APPEND, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_APPEND_V1, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_APPEND_V2, 0.0);
+		snmp_data.time_content_commit = get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_CI, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_CONTENT_CI_V1, 0.0);
+		snmp_data.time_chunk_commit = get_double_value(meta2_stats, META2_STAT_TIME_CHUNK_CI, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_CHUNK_CI_V1, 0.0);
+		snmp_data.time_rplcontent = get_double_value(meta2_stats, META2_STAT_TIME_RPLCONTENT, 0.0);
+		snmp_data.time_statcontent = get_double_value(meta2_stats, META2_STAT_TIME_STATCONTENT, 0.0);
 
-		snmp_data.req_maintenance_getcontent = get_double_value(meta2_stats, META2_STAT_REQ_RAW_GETCONTENT, 0.0);
-		snmp_data.req_maintenance_getchunks   = get_double_value(meta2_stats, META2_STAT_REQ_RAW_GETCHUNK, 0.0);
-		snmp_data.req_maintenance_setcontent = get_double_value(meta2_stats, META2_STAT_REQ_RAW_SETCONTENT, 0.0);
-		snmp_data.req_maintenance_setchunks   = get_double_value(meta2_stats, META2_STAT_REQ_RAW_SETCHUNK, 0.0);
-		snmp_data.req_maintenance_delcontent = get_double_value(meta2_stats, META2_STAT_REQ_RAW_DELCONTENT, 0.0);
-		snmp_data.req_maintenance_delchunks   = get_double_value(meta2_stats, META2_STAT_REQ_RAW_DELCHUNK, 0.0);
-		snmp_data.req_maintenance_other      = get_double_value(meta2_stats, META2_STAT_REQ_RAW_OTHER, 0.0);
+		snmp_data.req_maintenance_getcontent =
+			get_double_value(meta2_stats, META2_STAT_REQ_RAW_GETCONTENT, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_RAW_GETCONTENT_V1, 0.0);
+		snmp_data.req_maintenance_getchunks =
+			get_double_value(meta2_stats, META2_STAT_REQ_RAW_GETCHUNK, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_RAW_GETCHUNK_V1, 0.0);
+		snmp_data.req_maintenance_setcontent =
+			get_double_value(meta2_stats, META2_STAT_REQ_RAW_SETCONTENT, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_RAW_SETCONTENT_V1, 0.0);
+		snmp_data.req_maintenance_setchunks =
+			get_double_value(meta2_stats, META2_STAT_REQ_RAW_SETCHUNK, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_RAW_SETCHUNK_V1, 0.0);
+		snmp_data.req_maintenance_delcontent =
+			get_double_value(meta2_stats, META2_STAT_REQ_RAW_DELCONTENT, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_RAW_DELCONTENT_V1, 0.0);
+		snmp_data.req_maintenance_delchunks =
+			get_double_value(meta2_stats, META2_STAT_REQ_RAW_DELCHUNK, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_REQ_RAW_DELCHUNK_V1, 0.0);
+		snmp_data.req_maintenance_other = get_double_value(meta2_stats, META2_STAT_REQ_RAW_OTHER, 0.0);
 
-		snmp_data.time_maintenance_getcontent = get_double_value(meta2_stats, META2_STAT_TIME_RAW_GETCONTENT, 0.0);
-		snmp_data.time_maintenance_getchunks   = get_double_value(meta2_stats, META2_STAT_TIME_RAW_GETCHUNK, 0.0);
-		snmp_data.time_maintenance_setcontent = get_double_value(meta2_stats, META2_STAT_TIME_RAW_SETCONTENT, 0.0);
-		snmp_data.time_maintenance_setchunks   = get_double_value(meta2_stats, META2_STAT_TIME_RAW_SETCHUNK, 0.0);
-		snmp_data.time_maintenance_delcontent = get_double_value(meta2_stats, META2_STAT_TIME_RAW_DELCONTENT, 0.0);
-		snmp_data.time_maintenance_delchunks   = get_double_value(meta2_stats, META2_STAT_TIME_RAW_DELCHUNK, 0.0);
-		snmp_data.time_maintenance_other      = get_double_value(meta2_stats, META2_STAT_TIME_RAW_OTHER, 0.0);
+		snmp_data.time_maintenance_getcontent =
+			get_double_value(meta2_stats, META2_STAT_TIME_RAW_GETCONTENT, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_RAW_GETCONTENT_V1, 0.0);
+		snmp_data.time_maintenance_getchunks =
+			get_double_value(meta2_stats, META2_STAT_TIME_RAW_GETCHUNK, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_RAW_GETCHUNK_V1, 0.0);
+		snmp_data.time_maintenance_setcontent =
+			get_double_value(meta2_stats, META2_STAT_TIME_RAW_SETCONTENT, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_RAW_SETCONTENT_V1, 0.0);
+		snmp_data.time_maintenance_setchunks =
+			get_double_value(meta2_stats, META2_STAT_TIME_RAW_SETCHUNK, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_RAW_SETCHUNK_V1, 0.0);
+		snmp_data.time_maintenance_delcontent =
+			get_double_value(meta2_stats, META2_STAT_TIME_RAW_DELCONTENT, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_RAW_DELCONTENT_V1, 0.0);
+		snmp_data.time_maintenance_delchunks =
+			get_double_value(meta2_stats, META2_STAT_TIME_RAW_DELCHUNK, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_TIME_RAW_DELCHUNK_V1, 0.0);
+		snmp_data.time_maintenance_other = get_double_value(meta2_stats, META2_STAT_TIME_RAW_OTHER, 0.0);
 
-		snmp_data.req_prop_set_content		= get_double_value(meta2_stats, META2_STAT_REQ_PROP_SET_CONTENT, 0.0);
-		snmp_data.req_prop_set_container	= get_double_value(meta2_stats,	META2_STAT_REQ_PROP_SET_CONTAINER, 0.0);
-		snmp_data.req_prop_get_content		= get_double_value(meta2_stats,	META2_STAT_REQ_PROP_GET_CONTENT, 0.0);
-		snmp_data.req_prop_get_container	= get_double_value(meta2_stats,	META2_STAT_REQ_PROP_GET_CONTAINER, 0.0);
-		snmp_data.req_prop_rm_content		= get_double_value(meta2_stats,	META2_STAT_REQ_PROP_RM_CONTENT, 0.0);
-		snmp_data.req_prop_rm_container		= get_double_value(meta2_stats, META2_STAT_REQ_PROP_RM_CONTAINER, 0.0);
-		snmp_data.req_prop_rpl_set_container	= get_double_value(meta2_stats,	META2_STAT_REQ_PROP_RPL_SET_CONTAINER, 0.0);
-		snmp_data.req_prop_rpl_rm_container	= get_double_value(meta2_stats, META2_STAT_REQ_PROP_RPL_RM_CONTAINER, 0.0);
+		snmp_data.req_prop_set_content =
+			get_double_value(meta2_stats, META2_STAT_REQ_PROP_SET_CONTENT, 0.0);
+		snmp_data.req_prop_set_container =
+			get_double_value(meta2_stats, META2_STAT_REQ_PROP_SET_CONTAINER, 0.0);
+		snmp_data.req_prop_get_content =
+			get_double_value(meta2_stats, META2_STAT_REQ_PROP_GET_CONTENT, 0.0);
+		snmp_data.req_prop_get_container =
+			get_double_value(meta2_stats, META2_STAT_REQ_PROP_GET_CONTAINER, 0.0);
+		snmp_data.req_prop_rm_content =
+			get_double_value(meta2_stats, META2_STAT_REQ_PROP_RM_CONTENT, 0.0);
+		snmp_data.req_prop_rm_container	=
+			get_double_value(meta2_stats, META2_STAT_REQ_PROP_RM_CONTAINER, 0.0);
+		snmp_data.req_prop_rpl_set_container =
+			get_double_value(meta2_stats, META2_STAT_REQ_PROP_RPL_SET_CONTAINER, 0.0);
+		snmp_data.req_prop_rpl_rm_container =
+			get_double_value(meta2_stats, META2_STAT_REQ_PROP_RPL_RM_CONTAINER, 0.0);
 
-		snmp_data.time_prop_set_content		= get_double_value(meta2_stats, META2_STAT_TIME_PROP_SET_CONTENT, 0.0);
-		snmp_data.time_prop_set_container	= get_double_value(meta2_stats, META2_STAT_TIME_PROP_SET_CONTAINER, 0.0);
-		snmp_data.time_prop_get_content		= get_double_value(meta2_stats, META2_STAT_TIME_PROP_GET_CONTENT, 0.0);
-		snmp_data.time_prop_get_container	= get_double_value(meta2_stats, META2_STAT_TIME_PROP_GET_CONTAINER, 0.0);
-		snmp_data.time_prop_rm_content		= get_double_value(meta2_stats, META2_STAT_TIME_PROP_RM_CONTENT, 0.0);
-		snmp_data.time_prop_rm_container	= get_double_value(meta2_stats, META2_STAT_TIME_PROP_RM_CONTAINER, 0.0);
-		snmp_data.time_prop_rpl_set_container	= get_double_value(meta2_stats, META2_STAT_TIME_PROP_RPL_SET_CONTAINER, 0.0);
-		snmp_data.time_prop_rpl_rm_container	= get_double_value(meta2_stats, META2_STAT_TIME_PROP_RPL_RM_CONTAINER, 0.0);
+		snmp_data.time_prop_set_content	=
+			get_double_value(meta2_stats, META2_STAT_TIME_PROP_SET_CONTENT, 0.0);
+		snmp_data.time_prop_set_container =
+			get_double_value(meta2_stats, META2_STAT_TIME_PROP_SET_CONTAINER, 0.0);
+		snmp_data.time_prop_get_content	=
+			get_double_value(meta2_stats, META2_STAT_TIME_PROP_GET_CONTENT, 0.0);
+		snmp_data.time_prop_get_container =
+			get_double_value(meta2_stats, META2_STAT_TIME_PROP_GET_CONTAINER, 0.0);
+		snmp_data.time_prop_rm_content =
+			get_double_value(meta2_stats, META2_STAT_TIME_PROP_RM_CONTENT, 0.0);
+		snmp_data.time_prop_rm_container =
+			get_double_value(meta2_stats, META2_STAT_TIME_PROP_RM_CONTAINER, 0.0);
+		snmp_data.time_prop_rpl_set_container =
+			get_double_value(meta2_stats, META2_STAT_TIME_PROP_RPL_SET_CONTAINER, 0.0);
+		snmp_data.time_prop_rpl_rm_container =
+			get_double_value(meta2_stats, META2_STAT_TIME_PROP_RPL_RM_CONTAINER, 0.0);
 
-		snmp_data.nb_thread = *(gdouble*)g_hash_table_lookup(meta2_stats, META2_STAT_NB_THREAD);
+		snmp_data.nb_thread = get_double_value(meta2_stats, META2_STAT_NB_THREAD, 0.0) +
+			get_double_value(meta2_stats, META2_STAT_NB_THREAD_V2, 0.0);
+
 		g_hash_table_destroy(meta2_stats);
 	}
 
@@ -1291,7 +1352,7 @@ u_char*
 var_meta2_entry(struct variable * vp, oid * name, size_t * length, int exact, size_t * var_len, WriteMethod ** write_method)
 {
 	gchar str_oid[256] = {0,0};
-	int index;
+	int idx;
 	struct meta2_snmp_data *snmp_data = NULL;
 
 	oid_to_string(name, *length, str_oid, sizeof(str_oid));
@@ -1309,11 +1370,11 @@ var_meta2_entry(struct variable * vp, oid * name, size_t * length, int exact, si
 		return NULL;
 	}
 
-	index = (int) name[*length - 1] - 1;
-	snmp_data = meta2_snmp_data[index];
+	idx = (int) name[*length - 1] - 1;
+	snmp_data = meta2_snmp_data[idx];
 	if (!snmp_data) {
-		DEBUGMSGTL(("grid", "%s stats not found index=%d oid=%s\n",
-			__FUNCTION__, index, str_oid));
+		DEBUGMSGTL(("grid", "%s stats not found idx=%d oid=%s\n",
+			__FUNCTION__, idx, str_oid));
 		return NULL;
 	}
 
@@ -1323,7 +1384,7 @@ var_meta2_entry(struct variable * vp, oid * name, size_t * length, int exact, si
 			return (u_char *) &long_return;
 
 		case META2_INDEX:
-			long_return = (long) index + 1;
+			long_return = (long) idx + 1;
 			return (u_char *) &long_return;
 
 		case META2_NAMESPACE:
@@ -1428,7 +1489,7 @@ u_char*
 var_rawx_entry(struct variable * vp, oid * name, size_t * length, int exact, size_t * var_len, WriteMethod ** write_method)
 {
 	gchar str_oid[256] = {0,0};
-	int index;
+	int idx;
 	struct rawx_snmp_data *snmp_data = NULL;
 
 	oid_to_string(name, *length, str_oid, sizeof(str_oid));
@@ -1446,12 +1507,12 @@ var_rawx_entry(struct variable * vp, oid * name, size_t * length, int exact, siz
 		return NULL;
 	}
 
-	index = (int) name[*length - 1] - 1;
+	idx = (int) name[*length - 1] - 1;
 
-	snmp_data = rawx_snmp_data[index];
+	snmp_data = rawx_snmp_data[idx];
 	if (!snmp_data) {
-		DEBUGMSGTL(("grid", "%s stats not found index=%d oid=%s\n",
-			__FUNCTION__, index, str_oid));
+		DEBUGMSGTL(("grid", "%s stats not found idx=%d oid=%s\n",
+			__FUNCTION__, idx, str_oid));
 		return NULL;
 	}
 
@@ -1461,7 +1522,7 @@ var_rawx_entry(struct variable * vp, oid * name, size_t * length, int exact, siz
 			return (u_char *) &long_return;
 
 		case RAWX_INDEX:
-			long_return = (long) index + 1;
+			long_return = (long) idx + 1;
 			return (u_char *) &long_return;
 
 		case RAWX_NAMESPACE:
@@ -1507,7 +1568,7 @@ u_char*
 var_saver_entry(struct variable * vp, oid * name, size_t * length, int exact, size_t * var_len, WriteMethod ** write_method)
 {
 	gchar str_oid[256] = {0,0};
-	int index;
+	int idx;
 	struct saver_snmp_data *snmp_data = NULL;
 
 	reload_local_services();
@@ -1524,12 +1585,12 @@ var_saver_entry(struct variable * vp, oid * name, size_t * length, int exact, si
 		return NULL;
 	}
 
-	index = (int) name[*length - 1] - 1;
-	snmp_data = saver_snmp_data[index];
+	idx = (int) name[*length - 1] - 1;
+	snmp_data = saver_snmp_data[idx];
 
 	if (!snmp_data) {
-		DEBUGMSGTL(("grid", "%s stats not found index=%d oid=%s\n",
-			__FUNCTION__, index, str_oid));
+		DEBUGMSGTL(("grid", "%s stats not found idx=%d oid=%s\n",
+			__FUNCTION__, idx, str_oid));
 		return NULL;
 	}
 
@@ -1539,7 +1600,7 @@ var_saver_entry(struct variable * vp, oid * name, size_t * length, int exact, si
 			return (u_char *) &long_return;
 
 		case SAVER_INDEX:
-			long_return = (long) index + 1;
+			long_return = (long) idx + 1;
 			return (u_char *) &long_return;
 
 		case SAVER_NAMESPACE:
@@ -1568,7 +1629,7 @@ u_char*
 var_tsmx_entry(struct variable * vp, oid * name, size_t * length, int exact, size_t * var_len, WriteMethod ** write_method)
 {
 	gchar str_oid[256] = {0,0};
-	int index;
+	int idx;
 	struct tsmx_snmp_data *snmp_data = NULL;
 
 	oid_to_string(name, *length, str_oid, sizeof(str_oid));
@@ -1586,12 +1647,12 @@ var_tsmx_entry(struct variable * vp, oid * name, size_t * length, int exact, siz
 		return NULL;
 	}
 
-	index = (int) name[*length - 1] - 1;
+	idx = (int) name[*length - 1] - 1;
 
-	snmp_data = tsmx_snmp_data[index];
+	snmp_data = tsmx_snmp_data[idx];
 	if (!snmp_data) {
-		DEBUGMSGTL(("grid", "%s stats not found index=%d oid=%s\n",
-			__FUNCTION__, index, str_oid));
+		DEBUGMSGTL(("grid", "%s stats not found idx=%d oid=%s\n",
+			__FUNCTION__, idx, str_oid));
 		return NULL;
 	}
 
@@ -1601,7 +1662,7 @@ var_tsmx_entry(struct variable * vp, oid * name, size_t * length, int exact, siz
 		return (u_char *) &long_return;
 
 	    case TSMX_INDEX:
-		long_return = (long) index + 1;
+		long_return = (long) idx + 1;
 		return (u_char *) &long_return;
 
 	    case TSMX_NAMESPACE:
@@ -1634,7 +1695,7 @@ u_char*
 var_solr_entry(struct variable * vp, oid * name, size_t * length, int exact, size_t * var_len, WriteMethod ** write_method)
 {
 	gchar str_oid[256] = {0,0};
-	int index;
+	int idx;
 	struct solr_snmp_data *snmp_data = NULL;
 
 	oid_to_string(name, *length, str_oid, sizeof(str_oid));
@@ -1652,12 +1713,12 @@ var_solr_entry(struct variable * vp, oid * name, size_t * length, int exact, siz
 		return NULL;
 	}
 
-	index = (int) name[*length - 1] - 1;
+	idx = (int) name[*length - 1] - 1;
 
-	snmp_data = solr_snmp_data[index];
+	snmp_data = solr_snmp_data[idx];
 	if (!snmp_data) {
-		DEBUGMSGTL(("grid", "%s stats not found index=%d oid=%s\n",
-			__FUNCTION__, index, str_oid));
+		DEBUGMSGTL(("grid", "%s stats not found idx=%d oid=%s\n",
+			__FUNCTION__, idx, str_oid));
 		return NULL;
 	}
 
@@ -1667,7 +1728,7 @@ var_solr_entry(struct variable * vp, oid * name, size_t * length, int exact, siz
 		return (u_char *) &long_return;
 
 	    case SOLR_INDEX:
-		long_return = (long) index + 1;
+		long_return = (long) idx + 1;
 		return (u_char *) &long_return;
 
 	    case SOLR_NAMESPACE:
@@ -1696,7 +1757,7 @@ u_char*
 var_rplx_entry(struct variable * vp, oid * name, size_t * length, int exact, size_t * var_len, WriteMethod ** write_method)
 {
 	gchar str_oid[256] = {0,0};
-	int index;
+	int idx;
 	struct rplx_snmp_data *snmp_data = NULL;
 
 	oid_to_string(name, *length, str_oid, sizeof(str_oid));
@@ -1714,11 +1775,11 @@ var_rplx_entry(struct variable * vp, oid * name, size_t * length, int exact, siz
 		return NULL;
 	}
 
-	index = (int) name[*length - 1] - 1;
-	snmp_data = rplx_snmp_data[index];
+	idx = (int) name[*length - 1] - 1;
+	snmp_data = rplx_snmp_data[idx];
 	if (!snmp_data) {
-		DEBUGMSGTL(("grid", "%s stats not found index=%d oid=%s\n",
-			__FUNCTION__, index, str_oid));
+		DEBUGMSGTL(("grid", "%s stats not found idx=%d oid=%s\n",
+			__FUNCTION__, idx, str_oid));
 		return NULL;
 	}
 
@@ -1728,7 +1789,7 @@ var_rplx_entry(struct variable * vp, oid * name, size_t * length, int exact, siz
 			return (u_char *) &long_return;
 
 		case RPLX_INDEX:
-			long_return = (long) index + 1;
+			long_return = (long) idx + 1;
 			return (u_char *) &long_return;
 
 		case RPLX_NAMESPACE:
@@ -1764,7 +1825,7 @@ u_char*
 var_evt_entry(struct variable * vp, oid * name, size_t * length, int exact, size_t * var_len, WriteMethod ** write_method)
 {
 	gchar str_oid[256] = {0,0};
-	int index;
+	int idx;
 	struct evt_snmp_data *snmp_data = NULL;
 
 	oid_to_string(name, *length, str_oid, sizeof(str_oid));
@@ -1782,11 +1843,11 @@ var_evt_entry(struct variable * vp, oid * name, size_t * length, int exact, size
 		return NULL;
 	}
 
-	index = (int) name[*length - 1] - 1;
-	snmp_data = evt_snmp_data[index];
+	idx = (int) name[*length - 1] - 1;
+	snmp_data = evt_snmp_data[idx];
 	if (!snmp_data) {
-		DEBUGMSGTL(("grid", "%s stats not found index=%d oid=%s\n",
-			__FUNCTION__, index, str_oid));
+		DEBUGMSGTL(("grid", "%s stats not found idx=%d oid=%s\n",
+			__FUNCTION__, idx, str_oid));
 		return NULL;
 	}
 
@@ -1796,7 +1857,7 @@ var_evt_entry(struct variable * vp, oid * name, size_t * length, int exact, size
 			return (u_char *) &long_return;
 
 		case EVT_INDEX:
-			long_return = (long) index + 1;
+			long_return = (long) idx + 1;
 			return (u_char *) &long_return;
 
 		case EVT_NAMESPACE:
@@ -1821,7 +1882,7 @@ u_char*
 var_csc_entry(struct variable * vp, oid * name, size_t * length, int exact, size_t * var_len, WriteMethod ** write_method)
 {
 	gchar str_oid[256] = {0,0};
-	int index;
+	int idx;
 	struct csc_snmp_data *snmp_data = NULL;
 
 	oid_to_string(name, *length, str_oid, sizeof(str_oid));
@@ -1839,11 +1900,11 @@ var_csc_entry(struct variable * vp, oid * name, size_t * length, int exact, size
 		return NULL;
 	}
 
-	index = (int) name[*length - 1] - 1;
-	snmp_data = csc_snmp_data[index];
+	idx = (int) name[*length - 1] - 1;
+	snmp_data = csc_snmp_data[idx];
 	if (!snmp_data) {
-		DEBUGMSGTL(("grid", "%s stats not found index=%d oid=%s\n",
-			__FUNCTION__, index, str_oid));
+		DEBUGMSGTL(("grid", "%s stats not found idx=%d oid=%s\n",
+			__FUNCTION__, idx, str_oid));
 		return NULL;
 	}
 
@@ -1853,7 +1914,7 @@ var_csc_entry(struct variable * vp, oid * name, size_t * length, int exact, size
 			return (u_char *) &long_return;
 
 		case CSC_INDEX:
-			long_return = (long) index + 1;
+			long_return = (long) idx + 1;
 			return (u_char *) &long_return;
 
 		case CSC_NAMESPACE:

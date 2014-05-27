@@ -1,35 +1,10 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "metautils.meta0_info"
 #endif
 
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "metautils.meta0_info"
-#endif
-
-#include <stdlib.h>
 #include <errno.h>
-#include <string.h>
-#include <glib.h>
 
-#include "./metatypes.h"
-#include "./metautils.h"
+#include "metautils.h"
 
 static gboolean
 func_equal_prefix(gconstpointer a, gconstpointer b)
@@ -52,25 +27,8 @@ func_equal_prefix(gconstpointer a, gconstpointer b)
 static guint
 func_hash_prefix(gconstpointer k)
 {
-	register guint8 *b;
-	register guint32 h = 5381;
-	register gsize s, i;
-
-	if (!k)
-		return 0;
-
-	b = ((meta0_info_t *) k)->prefixes;
-	i = 0;
-	h = 5381;
-	s = ((meta0_info_t *) k)->prefixes_size;
-
-	for (; i < s; i++) {
-		register guint32 tmpB = *(b++);
-
-		h = ((h << 5) + h) ^ tmpB;
-	}
-
-	return h;
+	return djb_hash_buf(((meta0_info_t *) k)->prefixes,
+			((meta0_info_t *) k)->prefixes_size);
 }
 
 

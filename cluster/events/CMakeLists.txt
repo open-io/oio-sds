@@ -1,7 +1,6 @@
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
-include_directories(BEFORE .
-		../../metautils/lib
-		../events ../conscience ../remote ../lib ../agent)
+include_directories(BEFORE . .. ../..)
 
 add_definitions(-Dyylex=event_yylex)
 
@@ -14,7 +13,7 @@ add_custom_command(
 add_library(gridcluster-events SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/cfg.yacc.c
 		${CMAKE_CURRENT_BINARY_DIR}/cfg.yacc.h
-		eventhandler.c events.c
+		eventhandler.c events.c events_repo.c
 		eventhandler_internals.h
 		gridcluster_eventhandler.h
 		gridcluster_events.h)
@@ -39,6 +38,14 @@ target_link_libraries(test_parser
 		gridcluster-events metautils
 		${GLIB2_LIBRARIES})
 add_dependencies(test_parser gridcluster_client)
+
+install(FILES
+			gridcluster_events.h
+			gridcluster_eventhandler.h
+			gridcluster_eventsremote.h
+		DESTINATION include/cluster/events
+		PERMISSIONS
+			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
 install(TARGETS gridcluster-events gridcluster-eventsremote
 		LIBRARY DESTINATION ${LD_LIBDIR})

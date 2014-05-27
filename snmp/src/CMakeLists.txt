@@ -1,10 +1,6 @@
-include_directories(BEFORE .
-		../../metautils/lib
-		../../cluster/lib
-		../../cluster/agent
-		../../cluster/events
-		../../cluster/remote
-		../../gridd/clients/stats)
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+
+include_directories(BEFORE . ../..)
 
 include_directories(AFTER
 		${NETSNMP_INCLUDE_DIRS}

@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "conscience.api.brk"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "conscience.api.brk"
 #endif
 #include <stdlib.h>
 #include <string.h>
@@ -28,7 +8,6 @@
 #include "./conscience_broken_holder_common.h"
 #include "./conscience_broken_holder.h"
 
-/*GHashTable iterator*/
 static gboolean remove_container(gpointer key, gpointer value, gpointer user_data);
 
 /* ------------------------------------------------------------------------- */
@@ -76,10 +55,6 @@ create_broken_meta1(addr_info_t * addr)
 	    brk_m1->string + writen_size,
 	    sizeof(brk_m1->string) - writen_size);
 
-	/*
-	   brk_m1->counter = 0;
-	   brk_m1->last_alert_stamp = time(0);
-	 */
 	if (addr)
 		memcpy(&(brk_m1->addr), addr, sizeof(addr_info_t));
 	return brk_m1;
@@ -124,10 +99,6 @@ create_broken_content(struct conscience_s *conscience, const gchar * cid, const 
 		conscience_release_locked_srvtype(srvtype);
 	}
 
-#ifdef HYPER_VERBOSE
-	TRACE("broken content : %s:%s:%s (%d)", brk_content->container_id,
-			brk_content->content_path, brk_content->cause, brk_content->counter);
-#endif
 	return brk_content;
 }
 
@@ -173,10 +144,6 @@ broken_holder_add_meta1(struct broken_holder_s * bh, struct broken_fields_s * bf
 	GError *error_local;
 	broken_meta1_t *brk_meta1;
 	addr_info_t *addr;
-
-#ifdef HYPER_VERBOSE
-	DEBUG("Adding [%s:%d] from [%s]", bf->ip, bf->port, bf->packed);
-#endif
 
 	error_local = NULL;
 	addr = build_addr_info(bf->ip, bf->port, &error_local);
@@ -230,15 +197,9 @@ broken_holder_add_container(struct broken_holder_s * bh,
 			DEBUG("Content yet broken [%s:%d/%s/%s]", bf->ip, bf->port, bf->cid, bf->content);
 			return ;
 		}
-#ifdef HYPER_VERBOSE
-		DEBUG("Simple content added in this meta2.");
-#endif
 		brk_content = create_broken_content(bh->conscience, bf->cid, bf->content, bf->cause);
 	} else {
 		/*remove all the content entries */
-#ifdef HYPER_VERBOSE
-		DEBUG("About to replace all the broken contents by a broken container.");
-#endif
 		g_hash_table_foreach_remove(brk_m2->broken_containers, remove_container, bf->cid);
 		brk_content = create_broken_content(bh->conscience, bf->cid, NULL, NULL);
 	}
@@ -257,9 +218,6 @@ broken_holder_add_in_meta2(struct broken_holder_s * bh, struct broken_fields_s *
 	struct broken_meta2_s *brk_m2;
 
 	error_local = NULL;
-#ifdef HYPER_VERBOSE
-	DEBUG("Adding [%s/%s(/%s)] in [%s:%d] from [%s]", bf->cid, bf->content, bf->cause, bf->ip, bf->port, bf->packed);
-#endif
 	do {
 		addr_info_t *wrk_addr = build_addr_info( bf->ip, bf->port, &error_local);
 		if (!wrk_addr) {
@@ -285,14 +243,8 @@ broken_holder_add_in_meta2(struct broken_holder_s * bh, struct broken_fields_s *
 	}
 
 	if (!bf->cid) {
-#ifdef HYPER_VERBOSE
-		TRACE("META2 seems broken");
-#endif
 		break_meta2(brk_m2, bh->conscience);
 	} else {
-#ifdef HYPER_VERBOSE
-		TRACE("Container/Content seems broken");
-#endif
 		broken_holder_add_container(bh, brk_m2, bf);
 	}
 }
@@ -313,10 +265,6 @@ broken_holder_add_element(struct broken_holder_s * bh, const gchar * element)
 	bf.packed = element;
 	bf.ns = bh->conscience->ns_info.name;
 
-#ifdef HYPER_VERBOSE
-	DEBUG("Adding broken element [%s]", element);
-#endif
-	
 	tokens = g_strsplit(element,":",0);
 	if (!tokens) {
 		WARN("Invalid format");
@@ -326,9 +274,6 @@ broken_holder_add_element(struct broken_holder_s * bh, const gchar * element)
 	
 	/*special case for the broken META1 */
 	if (tokens_length == 3 && g_ascii_strcasecmp(tokens[0],"META1")) {
-#ifdef HYPER_VERBOSE
-		TRACE("META1 matched");
-#endif
 		bf.ip = tokens[1];
 		bf.port = atoi(tokens[2]);
 		broken_holder_add_meta1(bh, &bf);

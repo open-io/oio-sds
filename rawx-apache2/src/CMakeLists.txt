@@ -1,7 +1,4 @@
-include_directories(BEFORE .
-		../../metautils/lib
-		../../cluster/lib ../../cluster/agent ../../cluster/events
-		../../rawx-lib/src)
+include_directories(BEFORE . ../..)
 
 include_directories(AFTER
 		${OPENSSL_INCLUDE_DIRS}

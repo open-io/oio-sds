@@ -1,26 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "metacomm.namespace_info.asn"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "metacomm.namespace_info.asn"
 #endif
 
 #include <errno.h>
@@ -125,11 +104,16 @@ namespace_info_ASN2API(const NamespaceInfo_t *asn, namespace_info_t *api)
 			return FALSE;
 	}
 
+	if (NULL != asn->storageClass) {
+		if (!list_conversion(asn->storageClass, &(api->storage_class), key_value_pairs_convert_to_map))
+			return FALSE;
+	}
+
 	return TRUE;
 
 }
 
-static gboolean 
+static gboolean
 hashtable_conversion(
 		GHashTable *ht,
 		struct NamespaceInfoValueList *nsinfo_vlist,
@@ -172,11 +156,11 @@ hashtable_conversion(
 }
 
 gboolean
-namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
+namespace_info_API2ASN(const namespace_info_t * api, gint64 vers, NamespaceInfo_t * asn)
 {
 	if (!api || !asn)
 		return FALSE;
-	
+
 	if (api->options && !hashtable_conversion(api->options, &(asn->options), key_value_pairs_convert_from_map))
 		return FALSE;
 
@@ -187,24 +171,44 @@ namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
 	asn_int64_to_INTEGER(&(asn->versionEvtcfg), api->versions.evtcfg);
 	asn_int64_to_INTEGER(&(asn->versionSrvcfg), api->versions.srvcfg);
 	asn_int64_to_INTEGER(&(asn->versionNscfg), api->versions.nscfg);
+	/* marshall this namespace info part only for recent comm */
+	if(vers >= 17) {
+		TRACE("vers >= 17");
+		if ( NULL != api->storage_policy) {
+			asn->storagePolicy = g_malloc0(sizeof(struct NamespaceInfoValueList));
+			if(!hashtable_conversion(api->storage_policy,
+						asn->storagePolicy,
+						key_value_pairs_convert_from_map))
+				return FALSE;
+		}
 
-	if ( NULL != api->storage_policy) {
-		asn->storagePolicy = g_malloc0(sizeof(struct NamespaceInfoValueList));
-		if(!hashtable_conversion(api->storage_policy, asn->storagePolicy, key_value_pairs_convert_from_map))
-			return FALSE;
-	}
+		if ( NULL != api->data_security) {
+			asn->dataSecurity = g_malloc0(sizeof(struct NamespaceInfoValueList));
+			if(!hashtable_conversion(api->data_security, 
+						asn->dataSecurity, 
+						key_value_pairs_convert_from_map))
+				return FALSE;
+		}
 
+		if ( NULL != api->data_treatments ) {
+			asn->dataTreatments = g_malloc0(sizeof(struct NamespaceInfoValueList));
+			if(!hashtable_conversion(api->data_treatments,
+						asn->dataTreatments,
+						key_value_pairs_convert_from_map))
+				return FALSE;
+		}
 
-	if ( NULL != api->data_security ) {
-		asn->dataSecurity = g_malloc0(sizeof(struct NamespaceInfoValueList));
-		if(!hashtable_conversion(api->data_security, asn->dataSecurity, key_value_pairs_convert_from_map))
-			return FALSE;
-	}
-
-	if ( NULL != api->data_treatments ) {
-		asn->dataTreatments = g_malloc0(sizeof(struct NamespaceInfoValueList));
-		if(!hashtable_conversion(api->data_treatments, asn->dataTreatments, key_value_pairs_convert_from_map))
-			return FALSE;
+		if(vers >= 18) {
+			if ( NULL != api->storage_class ) {
+				asn->storageClass = g_malloc0(sizeof(struct NamespaceInfoValueList));
+				if(!hashtable_conversion(api->storage_class,
+							asn->storageClass,
+							key_value_pairs_convert_from_map))
+					return FALSE;
+			}
+		}
+	} else {
+		TRACE("vers %"G_GINT64_FORMAT" < 17", vers);
 	}
 
 	errno = 0;
@@ -225,12 +229,14 @@ namespace_info_cleanASN(NamespaceInfo_t * asn, gboolean only_content)
 	}
 
 	asn->options.list.free = parameter_cleanASN;
-	if( NULL != asn->storagePolicy) 
+	if (NULL != asn->storagePolicy)
 		asn->storagePolicy->list.free = parameter_cleanASN;
-	if( NULL != asn->dataSecurity) 
+	if (NULL != asn->dataSecurity)
 		asn->dataSecurity->list.free = parameter_cleanASN;
-	if( NULL != asn->dataTreatments) 
+	if (NULL != asn->dataTreatments)
 		asn->dataTreatments->list.free = parameter_cleanASN;
+	if (NULL != asn->storageClass)
+		asn->storageClass->list.free = parameter_cleanASN;
 
 	if (only_content)
 		ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_NamespaceInfo, asn);

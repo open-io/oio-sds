@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  * @file gs_internals.h
  * Client internals
@@ -30,43 +13,52 @@
  * @{
  */
 
-#ifndef  LOG_DOMAIN
-# define LOG_DOMAIN "grid.client"
-#endif
 #ifndef  G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.client"
 #endif
 
-
+#include <assert.h>
 #include <errno.h>
 #include <netdb.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <time.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/un.h>
-#include <unistd.h>
+#include <sys/poll.h>
 
-#include <glib.h>
+#include <neon/ne_basic.h>
+#include <neon/ne_request.h>
+#include <neon/ne_session.h>
 
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-#include <hc_url.h>
-#include <meta0_remote.h>
-#include <meta1_remote.h>
-#include <meta2_remote.h>
-#include <meta2_remote.h>
-#include <meta2_services_remote.h>
-#include <meta2v2_remote.h>
-#include <autogen.h>
-#include <generic.h>
+#include <metautils/lib/metatypes.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+
+#include <cluster/lib/gridcluster.h>
+#include <meta0v2/meta0_remote.h>
+#include <meta0v2/meta0_utils.h>
+#include <meta1v2/meta1_remote.h>
+#include <meta2/remote/meta2_remote.h>
+#include <meta2/remote/meta2_services_remote.h>
+#include <meta2v2/meta2_utils.h>
+#include <meta2v2/meta2v2_remote.h>
+#include <meta2v2/autogen.h>
+#include <meta2v2/generic.h>
+#include <resolver/hc_resolver.h>
 
 #include "./grid_client.h"
 #include "./meta_resolver_explicit.h"
 #include "./meta_resolver_metacd.h"
+#include "./metacd_remote.h"
+#include "./loc_context.h"
+#include "./round_buffer.h"
+#include "./grid_client_shortcuts.h"
 
 #ifndef  CS_TOCNX_DEFAULT
 # define CS_TOCNX_DEFAULT  60000
@@ -163,7 +155,7 @@
 # define MAX_ATTEMPTS_ROLLBACK_UPLOAD 2
 #endif
 
-#define NB_RELOADS_GET 4 /* how many chunks list reload when the conditions match */
+#define NB_RELOADS_GET 2 /* how many chunks list reload when the conditions match */
 #define NB_DOWNLOADS_GET 3 /* how many attempts on a same chunk position */
 
 /**
@@ -183,7 +175,7 @@ struct gs_grid_storage_s {
 		} rawx;
 	} timeout;
 
-	metacd_t *metacd_resolver;
+	struct metacd_s *metacd_resolver;
 	resolver_direct_t *direct_resolver;
 	char *virtual_namespace;
 	char *physical_namespace;
@@ -200,13 +192,14 @@ struct gs_container_s {
 };
 
 struct gs_content_s {
-	gs_content_info_t  info;
-	gboolean           loaded_from_cache;
-	GSList            *chunk_list;
-	GByteArray        *gba_md;
-	GByteArray        *gba_sysmd;
-	gchar		  *version;
-	gboolean 	   deleted;
+	gs_content_info_t	info;
+	gboolean			loaded_from_cache;
+	GSList				*chunk_list;
+	GByteArray			*gba_md;
+	GByteArray			*gba_sysmd;
+	gchar				*version;
+	gboolean			deleted;
+	gchar				*policy;
 };
 
 typedef struct gs_chunk_s {
@@ -222,7 +215,7 @@ struct gs_service_s {
 #define C0_NAME(pC)     ((pC)->info.name)
 #define C0_ID(pC)       ((pC)->cID)
 #define C0_IDSTR(pC)    ((pC)->str_cID)
-#define C0_CNX(pC)      (pC)->meta2_cnx
+#define C0_CNX(pC)      &((pC)->meta2_cnx)
 #define C0_RAWX_TO_CNX(pC)  gs_grid_storage_get_timeout((pC)->info.gs, GS_TO_RAWX_CNX)
 #define C0_RAWX_TO_OP(pC)  gs_grid_storage_get_timeout((pC)->info.gs, GS_TO_RAWX_OP)
 #define C0_M2TO_CNX(pC) gs_grid_storage_get_timeout((pC)->info.gs, GS_TO_M2_CNX)
@@ -271,7 +264,8 @@ void gs_error_clear (gs_error_t **err);
 
 /* Reloads the internal chunk set of the given content */
 gboolean gs_content_reload (gs_content_t *content, gboolean allow_meta2, gboolean allow_cache, gs_error_t **err);
-
+gboolean gs_content_reload_with_filtered (gs_content_t *content, gboolean allow_meta2, gboolean allow_cache,
+		GSList **p_filtered, GSList **p_beans, gs_error_t **err);
 
 /* sort the chunk_info_t following the ascending order of their positions */
 gint chunkinfo_sort_position_ASC (gconstpointer c1, gconstpointer c2);
@@ -377,8 +371,12 @@ GSList* gs_resolve_meta2 (gs_grid_storage_t *gs, container_id_t cID, GError **er
 addr_info_t* gs_resolve_meta1 (gs_grid_storage_t *gs, container_id_t cID, GError **err);
 
 addr_info_t* gs_resolve_meta1v2 (gs_grid_storage_t *gs,
-		const container_id_t cID, int read_only,
+		const container_id_t cID, const gchar *cname, int read_only,
 		GSList *exclude, GError **err);
+
+addr_info_t* gs_resolve_meta1v2_v2(gs_grid_storage_t *gs,
+		const container_id_t cID, const gchar *cname, int read_only,
+		GSList *exclude, gboolean has_before_create, GError **err);
 
 int gs_update_meta1_master (gs_grid_storage_t *gs, const container_id_t cID, const char *m1);
 
@@ -406,10 +404,13 @@ extern long unsigned int wait_on_add_failed;
 void map_content_from_raw(gs_content_t *content,
 		struct meta2_raw_content_s *raw_content);
 
-gboolean map_raw_content_from_beans(struct meta2_raw_content_s *raw_content, GSList *beans);
+gboolean map_raw_content_from_beans(struct meta2_raw_content_s *raw_content, GSList *beans, GSList **filtered, gboolean force_keep_position);
 
 gboolean map_properties_from_beans(GSList **properties, GSList *beans);
 gboolean map_policy_from_beans(gchar **policy, GSList *beans);
+struct bean_CHUNKS_s *get_chunk_matching_content(GSList *beans, struct bean_CONTENTS_s *content);
+void fill_chunk_id_from_url(const char * const url, chunk_id_t *ci);
+void fill_hcurl_from_container(gs_container_t *c, struct hc_url_s **url);
 
 struct dl_status_s {
 	struct gs_download_info_s dl_info;/*< as transmitted by the client */
@@ -434,6 +435,14 @@ gs_container_t* gs_init_container(gs_grid_storage_t *gs,
 gs_grid_storage_t* gs_grid_storage_init_flags(const gchar *ns, uint32_t flags,
 		int to_cnx, int to_req, gs_error_t **err);
 
+/*
+ * Same as gs_get_storage_container (from grid_client.h) but takes
+ * m2v2_create_params_s as third parameter.
+ */
+gs_container_t* gs_get_storage_container2(gs_grid_storage_t *gs,
+		const char *container_name, struct m2v2_create_params_s *params,
+		int auto_create, gs_error_t **gs_err);
+
 /**
  * @param container
  * @param err
@@ -447,6 +456,20 @@ gboolean gs_reload_container(gs_container_t *container, GError **err);
  * @return
  */
 gboolean gs_relink_container(gs_container_t *container, GError **err);
+
+// ----- PROPERTIES ------
+gs_error_t* hc_set_container_global_property(gs_container_t *container,
+		const char *prop_name, const char *prop_val);
+
+gs_error_t* hc_del_container_global_property(gs_container_t *container,
+		const char *prop_name);
+
+gs_error_t *hc_get_container_global_properties(gs_container_t *container,
+		char ***result);
+
+#include "./rawx.h"
+#include "./rainx.h"
+#include "./rainx_remote.h"
 
 /** @} */
 

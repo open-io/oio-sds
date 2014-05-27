@@ -1,26 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "metacomm.namespace_info"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "metacomm.namespace_info"
 #endif
 
 #include <errno.h>
@@ -51,7 +30,7 @@ write_in_gba(const void *b, gsize bSize, void *key)
 
 
 GByteArray *
-namespace_info_marshall(namespace_info_t * namespace_info, GError ** err)
+namespace_info_marshall(namespace_info_t * namespace_info, const char *version, GError ** err)
 {
 	asn_enc_rval_t encRet;
 	GByteArray *result = NULL;
@@ -65,8 +44,22 @@ namespace_info_marshall(namespace_info_t * namespace_info, GError ** err)
 
 	memset(&asn1_namespace_info, 0x00, sizeof(NamespaceInfo_t));
 
+	/* convert version to an int to easy compare */
+	// FIXME ugly piece of code! 
+	gint64 versint64 = 0;
+	if(NULL != version) {
+		char *r = strchr(version,'.');
+		if(r) {
+			char tmp[256];
+			memset(tmp, '\0', 256);
+			g_snprintf(tmp, 256, "%.*s%s", (int)(r - version), version, r + 1);
+			versint64 = g_ascii_strtoll(tmp, NULL, 10);
+			TRACE("marshalling int64 : %"G_GINT64_FORMAT, versint64);
+		}
+	}
+
 	/*fills an ASN.1 structure */
-	if (!namespace_info_API2ASN(namespace_info, &asn1_namespace_info)) {
+	if (!namespace_info_API2ASN(namespace_info, versint64, &asn1_namespace_info)) {
 		GSETERROR(err, "API to ASN.1 mapping error");
 		goto error_mapping;
 	}

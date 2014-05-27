@@ -1,45 +1,25 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "gridcluster.agent.cpu_stat_task_worker"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "gridcluster.agent.cpu_stat_task_worker"
 #endif
 
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <asm/param.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <math.h>
 #include <mntent.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <unistd.h>
+#include <asm/param.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
-#include "cpu_stat_task_worker.h"
-#include "task_scheduler.h"
-#include "agent.h"
+#include "./cpu_stat_task_worker.h"
+#include "./task_scheduler.h"
+#include "./agent.h"
 
 #define TASK_ID "cpu_stat_task"
 #define PROC_STAT "/proc/stat"
@@ -53,6 +33,9 @@ static volatile guint64 last_nb_loops = 0;
 static volatile guint64 nb_loops = 0;
 static struct cpu_stat_s cpu_stat;
 
+/**
+ * FIXME TODO XXX file load duplicated at cluster/lib/gridcluster.c : gba_read()
+ */
 static int
 cpu_stat_task_worker(gpointer udata, GError ** error)
 {
@@ -77,7 +60,7 @@ cpu_stat_task_worker(gpointer udata, GError ** error)
 	buffer = g_byte_array_new();
 	while ((rl = read(fd, buff, DEFAULT_BUFFER_SIZE)) > 0)
 		buffer = g_byte_array_append(buffer, (guint8*)buff, rl);
-	close(fd);
+	metautils_pclose(&fd);
 
 	if (rl < 0) {
 		GSETERROR(error, "Read file [%s] failed with error : %s", PROC_STAT, strerror(errno));
@@ -97,9 +80,7 @@ cpu_stat_task_worker(gpointer udata, GError ** error)
 		&(pstat.io_wait), &(pstat.irq), &(pstat.soft_irq)) == 7) {
 
 		memcpy(&(cpu_stat.previous), &(cpu_stat.current), sizeof(proc_stat_t));
-		/*memcpy(&(cpu_stat.previous_time), &(cpu_stat.current_time), sizeof(struct timeval)); */
 		memcpy(&(cpu_stat.current), &pstat, sizeof(proc_stat_t));
-		/*gettimeofday(&(cpu_stat.current_time), NULL); */
 		nb_loops++;
 	}
 	else {
@@ -114,18 +95,11 @@ cpu_stat_task_worker(gpointer udata, GError ** error)
 int
 start_cpu_stat_task(GError ** error)
 {
-	task_t *task = NULL;
-	
 	nb_loops = 0;
 
-	task = g_try_new0(task_t, 1);
-	if (task == NULL) {
-		GSETERROR(error, "Memory allocation failure");
-		return 0;
-	}
-
+	task_t *task = g_malloc0(sizeof(task_t));
 	task->id = g_strdup(TASK_ID);
-	task->period = svc_check_freq;
+	task->period = 1;
 	task->task_handler = cpu_stat_task_worker;
 
 	if (!add_task_to_schedule(task, error)) {
@@ -137,9 +111,7 @@ start_cpu_stat_task(GError ** error)
 	return (1);
 }
 
-/*
- * values from /proc/stat are in 1/HZ sec
-*/
+// values from /proc/stat are in 1/HZ sec
 int
 get_cpu_idle(int *cpu_idle, GError ** error)
 {

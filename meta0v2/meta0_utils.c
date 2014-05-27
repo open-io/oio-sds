@@ -1,31 +1,11 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "meta0.utils"
 #endif
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
 
 #include "./internals.h"
-#include "../cluster/lib/gridcluster.h"
-#include "../metautils/lib/resolv.h"
-#include "../metautils/lib/metatypes.h"
-#include "../metautils/lib/hashstr.h"
 #include "./meta0_utils.h"
 
 static void
@@ -50,7 +30,7 @@ meta0_utils_array_to_tree(GPtrArray *byprefix)
 	GTree *result = NULL;
 	guint i, max;
 
-	META0_ASSERT(byprefix != NULL);
+	EXTRA_ASSERT(byprefix != NULL);
 	result = meta0_utils_tree_create();
 
 	for (i=0, max=byprefix->len; i<max ;i++) {
@@ -98,7 +78,7 @@ meta0_utils_list_to_tree(GSList *list)
 	GSList *l;
 	GTree *result = NULL;
 
-	META0_ASSERT(list != NULL);
+	EXTRA_ASSERT(list != NULL);
 
 	result = g_tree_new_full(
 			hashstr_quick_cmpdata, NULL,
@@ -134,11 +114,13 @@ meta0_utils_array_add(GPtrArray *gpa, const guint8 *bytes, const gchar *s)
 
 	prefix = meta0_utils_bytes_to_prefix(bytes);
 
-	if (!(v0 = gpa->pdata[prefix]))
-		v0 = g_malloc0(sizeof(gchar*));
-	len = g_strv_length(v0);
-
-	v1 = g_realloc(v0, sizeof(gchar*) * (len+2));
+	if (!(v0 = gpa->pdata[prefix])) {
+		len = 0;
+		v1 = g_malloc0(sizeof(gchar*) * 2);
+	} else {
+		len = g_strv_length(v0);
+		v1 = g_realloc(v0, sizeof(gchar*) * (len+2));
+	}
 	v1[len] = g_strdup(s);
 	v1[len+1] = NULL;
 	gpa->pdata[prefix] = v1;
@@ -174,7 +156,7 @@ meta0_utils_list_to_array(GSList *list)
 	GSList *l;
 	GPtrArray *result = NULL;
 
-	META0_ASSERT(list != NULL);
+	EXTRA_ASSERT(list != NULL);
 
 	result = meta0_utils_array_create();
 
@@ -194,14 +176,13 @@ meta0_utils_list_to_array(GSList *list)
 		for (; p<max; p++)
 			meta0_utils_array_add(result, (guint8*)p, url);
 	}
-	
+
 	return result;
 }
 
 GSList*
 meta0_utils_tree_to_list(GTree *byurl)
 {
-	auto gboolean _traverser(gpointer k, gpointer v, gpointer u);
 	gboolean _traverser(gpointer k, gpointer v, gpointer u) {
 		struct meta0_info_s *m0i;
 		hashstr_t *hurl = k;
@@ -219,7 +200,7 @@ meta0_utils_tree_to_list(GTree *byurl)
 
 	GSList *result = NULL;
 
-	META0_ASSERT(byurl != NULL);
+	EXTRA_ASSERT(byurl != NULL);
 	g_tree_foreach(byurl, _traverser, &result);
 	return result;
 }
@@ -230,7 +211,7 @@ meta0_utils_array_to_list(GPtrArray *array)
 	GTree *tree;
 	GSList *list;
 
-	META0_ASSERT(array != NULL);
+	EXTRA_ASSERT(array != NULL);
 
 	tree = meta0_utils_array_to_tree(array);
 	list = meta0_utils_tree_to_list(tree);
@@ -260,8 +241,8 @@ meta0_utils_array_get_urlv(GPtrArray *array, const guint8 *bytes)
 {
 	gchar **v;
 
-	META0_ASSERT(array != NULL);
-	META0_ASSERT(array->len == 65536);
+	EXTRA_ASSERT(array != NULL);
+	EXTRA_ASSERT(array->len == 65536);
 	v = array->pdata[meta0_utils_bytes_to_prefix(bytes)];
 	return v ? g_strdupv(v) : NULL;
 }

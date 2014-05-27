@@ -1,41 +1,8 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "grid.client.metacd.remote"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "grid.client.metacd.remote"
 #endif
 
-#include <errno.h>
-#include <fcntl.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <sys/types.h>
-#include <sys/un.h>
-#include <unistd.h>
-
-#include <sys/poll.h>
-
-#include <glib.h>
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-
-#include "./metacd_remote.h"
+#include "./gs_internals.h"
 #include "../metacd_module/metacd_module.h"
 
 #define TIMEOUT_CNX 100
@@ -54,21 +21,17 @@ connect_to_unix_socket(const struct metacd_connection_info_s *mi, GError **err)
 	sun.sun_family = PF_LOCAL;
 	g_strlcpy (sun.sun_path, mi->metacd.path, sizeof(sun.sun_path));
 
-	/*opens a non-blocking socket*/
-	if (-1==(fd=socket(PF_LOCAL,SOCK_STREAM,0))) {
-		GSETERROR(err,"cannot open a PF_LOCAL socket (%s)", strerror(errno));
-		goto errorLabel;
-	}
-
 	timeout.cnx = mi->metacd.timeout.cnx;
 	timeout.op = mi->metacd.timeout.op;
 
-	if (timeout.cnx >= 0) {
-		if (-1 == fcntl (fd, F_SETFL, (fcntl(fd, F_GETFL) | O_NONBLOCK))) {
-			GSETERROR(err,"cannot set the non blocking mode (%s)", strerror(errno));
-			goto errorLabel;
-		}
-	}
+    if (timeout.cnx > 0)
+        fd = socket_nonblock(PF_LOCAL,SOCK_STREAM,0);
+    else
+        fd = socket(PF_LOCAL,SOCK_STREAM,0);
+    if (0 > fd) {
+        GSETERROR(err,"cannot open a PF_LOCAL socket (%s)", strerror(errno));
+        goto errorLabel;
+    }
 
 	if (-1==(connect(fd, (struct sockaddr*) &sun, sizeof(sun)))) {
 		if (errno!=EINTR && errno!=EINPROGRESS) {
@@ -113,8 +76,7 @@ successLabel:
 	return fd;
 
 errorLabel:
-	if (fd>=0)
-		close(fd);
+	metautils_pclose(&fd);
 	return -1;
 }
 
@@ -161,7 +123,9 @@ metacd_create_request (const struct metacd_connection_info_s *mi, const containe
 	if (!message_add_field (request, MSGKEY_NS, sizeof(MSGKEY_NS)-1, mi->metacd.nsName, strlen(mi->metacd.nsName), err)) {
 		GSETERROR(err,"Cannot set the namespace name in the request");
 		goto errorLabel;
-	} else TRACE(MSGKEY_NS" set to %s", mi->metacd.nsName);
+	} else {
+		TRACE(MSGKEY_NS" set to %s", mi->metacd.nsName);
+	}
 
 	/*set the provided session ID*/
 	if (mi->cnx_id && mi->cnx_id_size>0) {
@@ -175,10 +139,7 @@ metacd_create_request (const struct metacd_connection_info_s *mi, const containe
 
 	return request;
 errorLabel:
-	if (request) {
-		if (!message_destroy(request,NULL))
-			ALERT("Cannot free a message structure, possible memory leak");
-	}
+	message_destroy(request,NULL);
 	return NULL;
 }
 
@@ -220,7 +181,6 @@ GSList*
 metacd_remote_get_meta0(const struct metacd_connection_info_s *mi, GError **err)
 {
 	int fd = -1;
-	GTimer *timer=NULL;
 	GSList *result=NULL;
 	MESSAGE request=NULL;
 	struct code_handler_s rs_codes [] = {
@@ -235,8 +195,7 @@ metacd_remote_get_meta0(const struct metacd_connection_info_s *mi, GError **err)
 		return NULL;
 	}
 
-	timer = g_timer_new();
-	START_TIMER(timer);
+	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!(request = metacd_create_request(mi,NULL,err))) {
 		GSETERROR (err,"cannot create the metacd request");
@@ -256,48 +215,50 @@ metacd_remote_get_meta0(const struct metacd_connection_info_s *mi, GError **err)
 	}
 
 	/*send the request and read the responses*/
-	if (!metaXClient_reply_sequence_run (err, request, fd, mi->metacd.timeout.op, &rs_data)) {
+	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &rs_data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	if (!message_destroy(request, NULL))
-		ALERT("cannot free a message structure, possible memory leak");
-
-	shutdown(fd,SHUT_RDWR);
-	close(fd);
-
-	STOP_TIMER(timer,"metacd_remote_get_meta1.success");
-	g_timer_destroy (timer);
-
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
 
 errorLabel:
-	if (request) {
-		if (!message_destroy(request, NULL))
-			ALERT("cannot free a message structure, possible memory leak");
-	}
-	if (fd>=0) {
-		shutdown(fd,SHUT_RDWR);
-		close(fd);
-	}
-	if (timer) {
-		STOP_TIMER(timer,"metacd_remote_get_meta1.error");
-		g_timer_destroy (timer);
-	}
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
-
 GSList*  metacd_remote_get_meta1 (const struct metacd_connection_info_s *mi, const container_id_t cID,
-		int ro, GSList *exclude, GError **err)
+		int ro, gboolean *p_ref_exists, GSList *exclude, GError **err)
 {
 	int fd = -1;
-	GTimer *timer=NULL;
 	GSList *result=NULL;
 	MESSAGE request=NULL;
+
+	gboolean _get_meta1_reply_cb (GError ** local_err, gpointer udata, gint code, MESSAGE rep)
+	{
+		(void) local_err;
+		(void) udata;
+		(void) code;
+		gchar *ref_exists = NULL;
+		gsize ref_value_size;
+		if (NULL == p_ref_exists)
+			return TRUE;
+		message_get_field(rep, "REF_EXISTS", strlen("REF_EXISTS"), (void**) (&ref_exists), &ref_value_size, local_err);
+		if (0 == g_strcmp0(ref_exists, "TRUE")) {
+			*p_ref_exists = TRUE;
+		} else {
+			*p_ref_exists = FALSE;
+		}
+		return TRUE;
+	}
+
 	struct code_handler_s rs_codes [] = {
-		{200,REPSEQ_FINAL|REPSEQ_BODYMANDATORY,addr_info_concat,NULL},
+		{200,REPSEQ_FINAL|REPSEQ_BODYMANDATORY,addr_info_concat,_get_meta1_reply_cb},
 		{0,0,NULL,NULL}
 	};
 	struct reply_sequence_data_s rs_data = {&result,0,rs_codes};
@@ -307,9 +268,7 @@ GSList*  metacd_remote_get_meta1 (const struct metacd_connection_info_s *mi, con
 		return NULL;
 	}
 
-	timer = g_timer_new();
-	START_TIMER(timer);
-
+	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	if (!(request = metacd_create_request(mi,cID,err))) {
 		GSETERROR (err,"cannot create the metacd request");
 		goto errorLabel;
@@ -354,34 +313,20 @@ GSList*  metacd_remote_get_meta1 (const struct metacd_connection_info_s *mi, con
 	}
 
 	/*send the request and read the responses*/
-	if (!metaXClient_reply_sequence_run (err, request, fd, mi->metacd.timeout.op, &rs_data)) {
+	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &rs_data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	if (!message_destroy(request, NULL))
-		ALERT("cannot free a message structure, possible memory leak");
-
-	shutdown(fd,SHUT_RDWR);
-	close(fd);
-
-	STOP_TIMER(timer,"metacd_remote_get_meta1.success");
-	g_timer_destroy (timer);
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
 
 errorLabel:
-	if (request) {
-		if (!message_destroy(request, NULL))
-			ALERT("cannot free a message structure, possible memory leak");
-	}
-	if (fd>=0) {
-		shutdown(fd,SHUT_RDWR);
-		close(fd);
-	}
-	if (timer) {
-		STOP_TIMER(timer,"metacd_remote_get_meta1.error");
-		g_timer_destroy (timer);
-	}
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
@@ -390,7 +335,6 @@ metacd_remote_set_meta1_master (const struct metacd_connection_info_s *mi, const
 		const char *master, GError **e)
 {
 	int fd = -1;
-	GTimer *timer=NULL;
 	MESSAGE request=NULL;
 
 	struct code_handler_s rs_codes [] = {
@@ -404,8 +348,7 @@ metacd_remote_set_meta1_master (const struct metacd_connection_info_s *mi, const
 		return FALSE;
 	}
 
-	timer = g_timer_new();
-	START_TIMER(timer);
+	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!(request = metacd_create_request(mi, cid, e))) {
 		GSETERROR (e, "Cannot create the metacd request");
@@ -427,34 +370,20 @@ metacd_remote_set_meta1_master (const struct metacd_connection_info_s *mi, const
 	}
 
 	/*send the request and read the responses*/
-	if (!metaXClient_reply_sequence_run (e, request, fd, mi->metacd.timeout.op, &rs_data)) {
+	if (!metaXClient_reply_sequence_run (e, request, &fd, mi->metacd.timeout.op, &rs_data)) {
 		GSETERROR (e, "cannot update meta1 master");
 		goto e_label;
 	}
 
-	if (!message_destroy(request, NULL))
-		ALERT("cannot free a message structure, possible memory leak");
-	
-	shutdown(fd,SHUT_RDWR);
-	close(fd);
-	
-	STOP_TIMER(timer,"metacd_remote_set_meta1_master.success");
-	g_timer_destroy (timer);
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 
 e_label:
-	if (request) {
-		if (!message_destroy(request, NULL))
-			ALERT("cannot free a message structure, possible memory leak");
-	}
-	if (fd>=0) {
-		shutdown(fd,SHUT_RDWR);
-		close(fd);
-	}
-	if (timer) {
-		STOP_TIMER(timer,"metacd_remote_decache.error");
-		g_timer_destroy (timer);
-	}
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
 
@@ -462,7 +391,6 @@ e_label:
 GSList*  metacd_remote_get_meta2 (const struct metacd_connection_info_s *mi, const container_id_t cID, GError **err)
 {
 	int fd = -1;
-	GTimer *timer=NULL;
 	GSList *result=NULL;
 	MESSAGE request=NULL;
 	struct code_handler_s rs_codes [] = {
@@ -476,8 +404,7 @@ GSList*  metacd_remote_get_meta2 (const struct metacd_connection_info_s *mi, con
 		return NULL;
 	}
 
-	timer = g_timer_new();
-	START_TIMER(timer);
+        gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!(request = metacd_create_request(mi,cID,err))) {
 		GSETERROR (err,"cannot create the metacd request");
@@ -497,33 +424,20 @@ GSList*  metacd_remote_get_meta2 (const struct metacd_connection_info_s *mi, con
 	}
 
 	/*send the request and read the responses*/
-	if (!metaXClient_reply_sequence_run (err, request, fd, mi->metacd.timeout.op, &rs_data)) {
+	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &rs_data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	if (!message_destroy(request, NULL))
-		ALERT("cannot free a message structure, possible memory leak");
-	shutdown(fd,SHUT_RDWR);
-	close(fd);
-
-	STOP_TIMER(timer,"metacd_remote_get_meta2.success");
-	g_timer_destroy (timer);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+	metautils_pclose(&fd);
 	return result;
 
 errorLabel:
-	if (request) {
-		if (!message_destroy(request, NULL))
-			ALERT("cannot free a message structure, possible memory leak");
-	}
-	if (fd>=0) {
-		shutdown(fd,SHUT_RDWR);
-		close(fd);
-	}
-	if (timer) {
-		STOP_TIMER(timer,"metacd_remote_get_meta2.error");
-		g_timer_destroy (timer);
-	}
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
@@ -531,7 +445,6 @@ errorLabel:
 gboolean metacd_remote_decache (const struct metacd_connection_info_s *mi, const container_id_t cID, GError **err)
 {
 	int fd = -1;
-	GTimer *timer=NULL;
 	MESSAGE request=NULL;
 	struct code_handler_s rs_codes [] = {
 		{200,REPSEQ_FINAL,NULL,NULL},
@@ -544,8 +457,7 @@ gboolean metacd_remote_decache (const struct metacd_connection_info_s *mi, const
 		return FALSE;
 	}
 
-	timer = g_timer_new();
-	START_TIMER(timer);
+	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!(request = metacd_create_request(mi,cID,err))) {
 		GSETERROR (err,"cannot create the metacd request");
@@ -565,34 +477,20 @@ gboolean metacd_remote_decache (const struct metacd_connection_info_s *mi, const
 	}
 
 	/*send the request and read the responses*/
-	if (!metaXClient_reply_sequence_run (err, request, fd, mi->metacd.timeout.op, &rs_data)) {
+	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &rs_data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	if (!message_destroy(request, NULL))
-		ALERT("cannot free a message structure, possible memory leak");
-	
-	shutdown(fd,SHUT_RDWR);
-	close(fd);
-	
-	STOP_TIMER(timer,"metacd_remote_decache.success");
-	g_timer_destroy (timer);
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+    gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 
 errorLabel:
-	if (request) {
-		if (!message_destroy(request, NULL))
-			ALERT("cannot free a message structure, possible memory leak");
-	}
-	if (fd>=0) {
-		shutdown(fd,SHUT_RDWR);
-		close(fd);
-	}
-	if (timer) {
-		STOP_TIMER(timer,"metacd_remote_decache.error");
-		g_timer_destroy (timer);
-	}
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
 
@@ -600,7 +498,6 @@ errorLabel:
 gboolean metacd_remote_decache_all (const struct metacd_connection_info_s *mi, GError **err)
 {
 	int fd = -1;
-	GTimer *timer=NULL;
 	MESSAGE request=NULL;
 	struct code_handler_s rs_codes [] = {
 		{200,REPSEQ_FINAL,NULL,NULL},
@@ -613,8 +510,7 @@ gboolean metacd_remote_decache_all (const struct metacd_connection_info_s *mi, G
 		return FALSE;
 	}
 
-	timer = g_timer_new();
-	START_TIMER(timer);
+	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!(request = metacd_create_request(mi,NULL,err))) {
 		GSETERROR (err,"cannot create the metacd request");
@@ -634,34 +530,20 @@ gboolean metacd_remote_decache_all (const struct metacd_connection_info_s *mi, G
 	}
 
 	/*send the request and read the responses*/
-	if (!metaXClient_reply_sequence_run (err, request, fd, mi->metacd.timeout.op, &rs_data)) {
+	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &rs_data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	if (!message_destroy(request, NULL))
-		ALERT("cannot free a message structure, possible memory leak");
-	
-	shutdown(fd,SHUT_RDWR);
-	close(fd);
-	
-	STOP_TIMER(timer,"metacd_remote_decache.success");
-	g_timer_destroy (timer);
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 
 errorLabel:
-	if (request) {
-		if (!message_destroy(request, NULL))
-			ALERT("cannot free a message structure, possible memory leak");
-	}
-	if (fd>=0) {
-		shutdown(fd,SHUT_RDWR);
-		close(fd);
-	}
-	if (timer) {
-		STOP_TIMER(timer,"metacd_remote_decache.error");
-		g_timer_destroy (timer);
-	}
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
 
@@ -679,6 +561,10 @@ metacd_remote_get_content (const struct metacd_connection_info_s *mi, const cont
 	MESSAGE request=NULL;
 	struct meta2_raw_content_s *result=NULL;
 	struct reply_sequence_data_s data = { &result , 0 , codes };
+
+
+        gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+
 
 	if (!mi || !cID || !path) {
 		GSETERROR(err,"invalid parameter");
@@ -704,28 +590,20 @@ metacd_remote_get_content (const struct metacd_connection_info_s *mi, const cont
 		GSETERROR (err, "cannot connect to the metacd");
 		goto errorLabel;
 	}
-	if (!metaXClient_reply_sequence_run (err, request, fd, mi->metacd.timeout.op, &data)) {
+	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	if (!message_destroy(request, NULL))
-		ALERT("cannot free a message structure, possible memory leak");
-
-	shutdown(fd,SHUT_RDWR);
-	close(fd);
-
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
 
 errorLabel:
-	if (request) {
-		if (!message_destroy(request, NULL))
-			ALERT("cannot free a message structure, possible memory leak");
-	}
-	if (fd>=0) {
-		shutdown(fd,SHUT_RDWR);
-		close(fd);
-	}
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
@@ -741,6 +619,10 @@ metacd_remote_forget_content(struct metacd_connection_info_s *mi,
 	int fd = -1;
 	MESSAGE request=NULL;
 	struct reply_sequence_data_s data = { NULL, 0 , codes };
+
+
+        gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+
 
 	if (!mi || !cID || !path) {
 		GSETERROR(err,"invalid parameter");
@@ -766,28 +648,20 @@ metacd_remote_forget_content(struct metacd_connection_info_s *mi,
 		GSETERROR (err, "cannot connect to the metacd");
 		goto errorLabel;
 	}
-	if (!metaXClient_reply_sequence_run (err, request, fd, mi->metacd.timeout.op, &data)) {
+	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	if (!message_destroy(request, NULL))
-		ALERT("cannot free a message structure, possible memory leak");
-
-	shutdown(fd,SHUT_RDWR);
-	close(fd);
-
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 
 errorLabel:
-	if (request) {
-		if (!message_destroy(request, NULL))
-			ALERT("cannot free a message structure, possible memory leak");
-	}
-	if (fd>=0) {
-		shutdown(fd,SHUT_RDWR);
-		close(fd);
-	}
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
 
@@ -808,6 +682,9 @@ metacd_remote_flush_content(struct metacd_connection_info_s *mi, GError **err)
 		goto errorLabel;
 	}
 
+        gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+
+
 	/*init the request*/
 	if (!(request = metacd_create_request(mi, NULL, err))) {
 		GSETERROR (err,"cannot create the metacd request");
@@ -823,28 +700,20 @@ metacd_remote_flush_content(struct metacd_connection_info_s *mi, GError **err)
 		GSETERROR (err, "cannot connect to the metacd");
 		goto errorLabel;
 	}
-	if (!metaXClient_reply_sequence_run (err, request, fd, mi->metacd.timeout.op, &data)) {
+	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	if (!message_destroy(request, NULL))
-		ALERT("cannot free a message structure, possible memory leak");
-
-	shutdown(fd,SHUT_RDWR);
-	close(fd);
-
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 
 errorLabel:
-	if (request) {
-		if (!message_destroy(request, NULL))
-			ALERT("cannot free a message structure, possible memory leak");
-	}
-	if (fd>=0) {
-		shutdown(fd,SHUT_RDWR);
-		close(fd);
-	}
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
 
@@ -873,6 +742,8 @@ metacd_remote_save_content(struct metacd_connection_info_s *mi, struct meta2_raw
 		GSETERROR(err,"Serialization error");
 		return FALSE;
 	}
+
+        gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 
 	/*init the request*/
 	if (!(request = metacd_create_request(mi, content->container_id, err))) {
@@ -903,30 +774,22 @@ metacd_remote_save_content(struct metacd_connection_info_s *mi, struct meta2_raw
 		GSETERROR (err, "cannot connect to the metacd");
 		goto errorLabel;
 	}
-	if (!metaXClient_reply_sequence_run (err, request, fd, mi->metacd.timeout.op, &data)) {
+	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	if (!message_destroy(request, NULL))
-		ALERT("cannot free a message structure, possible memory leak");
-
-	shutdown(fd,SHUT_RDWR);
-	close(fd);
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
 	g_byte_array_free(gba_body, TRUE);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 
 errorLabel:
-	if (request) {
-		if (!message_destroy(request, NULL))
-			ALERT("cannot free a message structure, possible memory leak");
-	}
-	if (fd>=0) {
-		shutdown(fd,SHUT_RDWR);
-		close(fd);
-	}
+	message_destroy(request, NULL);
+	metautils_pclose(&fd);
 	g_byte_array_free(gba_body, TRUE);
+	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
-
 

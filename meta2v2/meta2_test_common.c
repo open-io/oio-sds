@@ -1,29 +1,17 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+#include <string.h>
 
-#include <meta2v2_remote.h>
-#include <meta2_backend.h>
-#include <meta2_utils.h>
-#include <metautils.h>
-#include <sqliterepo.h>
-#include "./generic.h"
-#include "../metautils/lib/lb.h"
+#include <metautils/lib/metautils.h>
 
-#include "meta2_test_common.h"
+#include <sqliterepo/sqliterepo.h>
+
+#include <meta2v2/meta2v2_remote.h>
+#include <meta2v2/meta2_backend.h>
+#include <meta2v2/meta2_utils.h>
+#include <meta2v2/generic.h>
+
+#include <resolver/hc_resolver.h>
+
+#include "./meta2_test_common.h"
 
 static guint64 container_counter = 0;
 //static gint64 version = 0;
@@ -66,8 +54,8 @@ _init_nsinfo(struct namespace_info_s *nsinfo, const gchar *ns)
 			metautils_gba_from_string("COMP:algo=ZLIB|blocksize=262144"));
 }
 
-static void
-_init_lb(struct grid_lb_s *lb)
+static struct grid_lbpool_s *
+_init_lb(const gchar *ns)
 {
 	struct def_s { const gchar *url, *loc; };
 	static struct def_s defs[] = {
@@ -99,7 +87,12 @@ _init_lb(struct grid_lb_s *lb)
 		*p_si = si;
 		return TRUE;
 	}
-	grid_lb_reload(lb, provide);
+
+	struct grid_lbpool_s *glp = grid_lbpool_create(ns);
+	g_assert(glp != NULL);
+	grid_lbpool_configure_string(glp, "rawx", "RR");
+	grid_lbpool_reload(glp, "rawx", provide);
+	return glp;
 }
 
 void
@@ -131,7 +124,6 @@ GSList*
 create_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		const gchar *polname)
 {
-	auto void _onbean(gpointer u, gpointer bean);
 	void _onbean(gpointer u, gpointer bean) {
 		*((GSList**)u) = g_slist_prepend(*((GSList**)u), bean);
 	}
@@ -158,12 +150,12 @@ repo_wrapper(const gchar *ns, repo_test_f fr)
 {
 	gchar repodir[512];
 	GError *err = NULL;
-	struct grid_lb_s *lb = NULL;
-	struct grid_lb_iterator_s *lb_iter = NULL;
 	struct meta2_backend_s *backend = NULL;
 	struct sqlx_repository_s *repository = NULL;
+	struct hc_resolver_s *resolver = NULL;
 	struct namespace_info_s nsinfo;
 	struct sqlx_repo_config_s cfg;
+	struct grid_lbpool_s *glp;
 
 	g_printerr("\n");
 	g_assert(ns != NULL);
@@ -173,11 +165,9 @@ repo_wrapper(const gchar *ns, repo_test_f fr)
 	g_snprintf(repodir, sizeof(repodir), "/tmp/repo-%d", getpid());
 	g_mkdir_with_parents(repodir, 0755);
 
-	lb = grid_lb_init(ns, "rawx");
-	g_assert(lb != NULL);
-	_init_lb(lb);
-	lb_iter = grid_lb_iterator_weighted_round_robin(lb);
-	g_assert(lb_iter != NULL);
+	glp = _init_lb(ns);
+	resolver = hc_resolver_create();
+	g_assert(resolver != NULL);
 
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.flags = SQLX_REPO_DELETEON;
@@ -187,18 +177,17 @@ repo_wrapper(const gchar *ns, repo_test_f fr)
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
 
-	err = meta2_backend_init(&backend, repository, ns);
+	err = meta2_backend_init(&backend, repository, ns, glp, resolver);
 	g_assert_no_error(err);
 	meta2_backend_configure_nsinfo(backend, &nsinfo);
-	meta2_backend_configure_type(backend, "rawx", lb_iter);
 
 	if (fr)
 		fr(backend);
 
 	meta2_backend_clean(backend);
 	sqlx_repository_clean(repository);
-	grid_lb_iterator_clean(lb_iter);
-	grid_lb_clean(lb);
+	hc_resolver_destroy(resolver);
+	grid_lbpool_destroy(glp);
 }
 
 void
@@ -227,14 +216,6 @@ container_wrapper(container_test_f cf)
 		err = meta2_backend_close_container(m2, url);
 		g_assert_no_error(err);
 
-#if 0
-		err = meta2_backend_destroy_container(m2, url);
-		g_assert_no_error(err);
-
-		err = meta2_backend_open_container(m2, url);
-		g_assert_error(err, GQ(), CODE_CONTAINER_NOTFOUND);
-		g_clear_error(&err);
-#endif
 		hc_url_clean(url);
 	}
 

@@ -1,35 +1,16 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "server.msg"
-#endif /*LOG_DOMAIN*/
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "server.msg"
+#endif /*G_LOG_DOMAIN*/
 
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
 
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+
 #include "./server_internals.h"
 #include "./message_handler.h"
-
-#include <metautils.h>
-#include <metacomm.h>
-
-#include <glib.h>
 
 #define MS_REPLY_TIMEOUT 1000
 
@@ -169,65 +150,68 @@ reply_ctx_header_adder (gpointer k, gpointer v, gpointer u)
 gint
 reply_context_reply (struct reply_context_s *ctx, GError **err)
 {
-	MESSAGE answer=NULL;
-	gsize bufMLen=0;
-	void *bufM=NULL;
+	MESSAGE answer = NULL;
+	gsize bufMLen = 0;
+	void *bufM = NULL;
 
 	if (!ctx) {
-		GSETERROR(err,"Invalid parameter (%p)", ctx);
+		GSETERROR(err, "Invalid parameter (%p)", ctx);
 		return 0;
 	}
 
 	register gchar *ptr_msg = ctx->header.msg ? ctx->header.msg : "NOMSG";
-	if (!metaXServer_reply_simple (&answer, ctx->req_ctx->request, ctx->header.code, ptr_msg, err))
+	if (!metaXServer_reply_simple (&answer, ctx->req_ctx->request,
+			ctx->header.code, ptr_msg, err))
 	{
-		GSETERROR(err,"Cannot create the answer structure");
+		g_prefix_error(err, "Cannot create the answer structure: ");
 		goto errorLabel;
 	}
 
 	/*add the extra headers*/
 	if (ctx->extra_headers) {
-		TRACE("Extra-Headers have been set, ading them to %p", answer);
-		g_hash_table_foreach( ctx->extra_headers, reply_ctx_header_adder, answer);
+		GRID_TRACE("Extra-Headers have been set, ading them to %p", answer);
+		g_hash_table_foreach(ctx->extra_headers, reply_ctx_header_adder, answer);
 	}
 
 	if (ctx->body.buffer && (ctx->body.size > 0)) {
-		TRACE("body set to %p %"G_GSIZE_FORMAT, ctx->body.buffer, ctx->body.size);
-		if (0 >= message_set_BODY (answer, ctx->body.buffer, ctx->body.size, err))
+		GRID_TRACE("body set to %p %"G_GSIZE_FORMAT, ctx->body.buffer, ctx->body.size);
+		if (0 >= message_set_BODY(answer, ctx->body.buffer, ctx->body.size, err))
 		{
-			GSETERROR(err,"Cannot set the body of the answer");
+			g_prefix_error(err, "Cannot set the body of the answer: ");
 			goto errorLabel;
 		}
 	}
 
 	if (!message_marshall(answer, &bufM, &bufMLen, err)) {
-		GSETERROR(err, "Cannot serialize the answer");
+		g_prefix_error(err, "Cannot serialize the answer: ");
 		goto errorLabel;
 	}
 
-	if (!message_destroy (answer, err)) {
-		GSETERROR(err,"Cannot destroy the answer structure");
-		goto errorLabel;
-	}
+	message_destroy(answer, NULL);
+	answer = NULL;
 
 	if (bufM) {
-		gint _to =  MAX(MS_REPLY_TIMEOUT,MIN(60000,default_to_operation));
-		sock_to_write (ctx->req_ctx->fd, _to, bufM, bufMLen, NULL);
+		gint _to =  MAX(MS_REPLY_TIMEOUT, MIN(60000, default_to_operation));
+		gint sent = sock_to_write(ctx->req_ctx->fd, _to, bufM, bufMLen, err);
+		if (sent < (gint)bufMLen) {
+			g_prefix_error(err, "Failed to reply: ");
+			goto errorLabel;
+		}
 		g_free (bufM);
 	}
 	return 1;
-	
+
 errorLabel:
+
+	if (err && *err)
+		GRID_WARN("%s", (*err)->message);
 
 	if (bufM)
 		g_free (bufM);
 
-	if (answer && !message_destroy(answer, NULL))
-		WARN("Memory liberation error");
-	
-	if (err && *err)
-		WARN("%s",(*err)->message);
-	
+	if (answer)
+		message_destroy(answer, NULL);
+
 	return 0;
 }
 

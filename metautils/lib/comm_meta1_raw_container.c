@@ -1,26 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "metacomm.meta1_raw_container"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "metacomm.meta1_raw_container"
 #endif
 
 #include <errno.h>
@@ -110,7 +89,7 @@ container_api_to_asn1(struct meta1_raw_container_s *src, Meta1RawContainer_t * d
 
 	/* map simple fields */
 	OCTET_STRING_fromBuf(&(dst->id), (char *) src->id, sizeof(container_id_t));
-	OCTET_STRING_fromBuf(&(dst->name), src->name, sizeof(src->name));
+	OCTET_STRING_fromBuf(&(dst->name), src->name, strnlen(src->name, sizeof(src->name)));
 	OCTET_STRING_fromBuf(&(dst->flags), (char *) &(src->flags), sizeof(src->flags));
 
 	/* map meta2 addr list */

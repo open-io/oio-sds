@@ -1,4 +1,4 @@
-#include "./internals.h"
+#include "internals.h"
 
 struct dump_ctx_s {
 	struct meta2_dumpv1_hooks_remote_s hooks;

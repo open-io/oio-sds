@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef GENERIC_H
 # define GENERIC_H 1
 # include <glib.h>
@@ -43,7 +26,7 @@ typedef void (*on_bean_f) (gpointer u, gpointer bean);
 /** PRIVATE, DON'T TOUCH UNLESS YOU KNOW WHAT YOU ARE DOING */
 struct bean_header_s
 {
-	guint32 flags; 
+	guint32 flags;
 	guint64 fields; /*!< the bit at position i means that the fields at
 					  position i is set (and thus not NULL) */
 	const struct bean_descriptor_s *descr;
@@ -63,6 +46,7 @@ struct bean_descriptor_s {
 	const gchar *c_name;
 	const gchar *sql_name;
 	const gchar *sql_select;
+	const gchar *sql_count;
 	const gchar *sql_replace;
 	const gchar *sql_update;
 	const long offset_fields;
@@ -122,6 +106,20 @@ GError* _db_save_bean(sqlite3 *db, gpointer bean);
 
 /**
  * @param db
+ * @param list
+ * @return
+ */
+GError* _db_save_beans_list(sqlite3 *db, GSList *list);
+
+/**
+ * @param db
+ * @param array
+ * @return
+ */
+GError* _db_save_beans_array(sqlite3 *db, GPtrArray *array);
+
+/**
+ * @param db
  * @param bean
  * @return
  */
@@ -138,6 +136,10 @@ GError* _db_get_bean(const struct bean_descriptor_s *descr,
 		sqlite3 *db, const gchar *clause, GVariant **params,
 		on_bean_f cb, gpointer u);
 
+GError* _db_count_bean(const struct bean_descriptor_s *descr,
+		sqlite3 *db, const gchar *clause, GVariant **params,
+		gint64 *pcount);
+
 /**
  * Finds the FK descriptor, then calls _db_get_FK()
  * @param bean
@@ -149,6 +151,9 @@ GError* _db_get_bean(const struct bean_descriptor_s *descr,
  */
 GError* _db_get_FK_by_name(gpointer bean, const gchar *name,
 		sqlite3 *db, on_bean_f cb, gpointer u);
+
+GError* _db_count_FK_by_name(gpointer bean, const gchar *name,
+		sqlite3 *db, gint64 *pcount);
 
 /**
  * @param bean

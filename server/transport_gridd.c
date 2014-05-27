@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.utils.transport.gridd"
 #endif
@@ -25,15 +8,13 @@
 #include <string.h>
 #include <math.h>
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
 
-#include <metacomm.h>
-
-#include "./internals.h"
-#include "./hashstr.h"
-#include "./stats_holder.h"
-#include "./network_server.h"
-#include "./transport_gridd.h"
+#include "internals.h"
+#include "stats_holder.h"
+#include "network_server.h"
+#include "transport_gridd.h"
 
 struct cnx_data_s
 {
@@ -105,8 +86,8 @@ void
 gridd_register_requests_stats(struct grid_stats_holder_s *stats,
 		struct gridd_request_dispatcher_s *disp)
 {
-	SERVER_ASSERT(stats != NULL);
-	SERVER_ASSERT(disp != NULL);
+	EXTRA_ASSERT(stats != NULL);
+	EXTRA_ASSERT(disp != NULL);
 
 	gboolean _traverser(gpointer k, gpointer v, gpointer u) {
 		(void) k; (void) u;
@@ -218,9 +199,9 @@ transport_gridd_factory0(struct gridd_request_dispatcher_s *dispatcher,
 	if (!gquark_log)
 		gquark_log = g_quark_from_static_string("utils.proto.gridd");
 
-	SERVER_ASSERT(dispatcher != NULL);
-	SERVER_ASSERT(client != NULL);
-	SERVER_ASSERT(client->fd >= 0);
+	EXTRA_ASSERT(dispatcher != NULL);
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->fd >= 0);
 
 	transport_context = g_malloc0(sizeof(*transport_context));
 	transport_context->dispatcher = dispatcher;
@@ -271,8 +252,8 @@ _l4v_size(GByteArray *gba)
 {
 	guint32 size;
 
-	SERVER_ASSERT(gba != NULL);
-	SERVER_ASSERT(gba->len >= 4);
+	EXTRA_ASSERT(gba != NULL);
+	EXTRA_ASSERT(gba->len >= 4);
 
 	size = *((guint32*)gba->data);
 	return g_ntohl(size);
@@ -316,7 +297,7 @@ gba_read(GByteArray *gba, struct data_slab_s *ds, guint32 max)
 	guint8 *data = NULL;
 	gsize data_size = 0;
 
-	SERVER_ASSERT(max >= gba->len);
+	EXTRA_ASSERT(max >= gba->len);
 	if (max <= gba->len)
 		return 0;
 
@@ -443,11 +424,14 @@ _ctx_get_cnx_data(struct transport_client_context_s *ctx, const gchar *key)
 
 /* ------------------------------------------------------------------------- */
 
+static void _client_send_error(struct network_client_s *);
+
 static void
 transport_gridd_notify_error(struct network_client_s *clt)
 {
-	SERVER_ASSERT(clt != NULL);
-	GRID_TRACE("Transport: error on fd=%d", clt->fd);
+	EXTRA_ASSERT(clt != NULL);
+	//GRID_TRACE("Transport: error on fd=%d", clt->fd);
+	_client_send_error(clt);
 	_ctx_reset_cnx_data(clt->transport.client_context);
 }
 
@@ -456,10 +440,8 @@ transport_gridd_notify_input(struct network_client_s *clt)
 {
 	struct transport_client_context_s *ctx;
 
-	SERVER_ASSERT(clt != NULL);
-	SERVER_ASSERT(clt->fd >= 0);
-	GRID_TRACE("fd=%d %s << Input ready (%"G_GSIZE_FORMAT")",
-			clt->fd, __FUNCTION__, data_slab_sequence_size(&(clt->input)));
+	EXTRA_ASSERT(clt != NULL);
+	EXTRA_ASSERT(clt->fd >= 0);
 
 	ctx = clt->transport.client_context;
 	/* read the data */
@@ -473,15 +455,12 @@ transport_gridd_notify_input(struct network_client_s *clt)
 		if (!(ds = data_slab_sequence_shift(&(clt->input))))
 			break;
 
-		data_slab_trace("CURRENT", ds);
-
 		if (!data_slab_has_data(ds)) {
 			data_slab_free(ds);
 			continue;
 		}
 
 		if (ctx->gba_l4v->len < 4) { /* read the size */
-			GRID_TRACE("fd=%d reading the size", clt->fd);
 			gba_read(ctx->gba_l4v, ds, 4);
 			data_slab_sequence_unshift(&(clt->input), ds);
 			continue;
@@ -490,7 +469,6 @@ transport_gridd_notify_input(struct network_client_s *clt)
 		guint32 payload_size = _l4v_size(ctx->gba_l4v);
 
 		if (!payload_size) { /* empty message : reset the buffer */
-			GRID_TRACE("fd=%d empty message", clt->fd);
 			data_slab_sequence_unshift(&(clt->input), ds);
 			_ctx_reset(ctx);
 			continue;
@@ -503,9 +481,6 @@ transport_gridd_notify_input(struct network_client_s *clt)
 			network_client_close_output(clt, FALSE);
 			return RC_ERROR;
 		}
-
-		GRID_TRACE("fd=%d reading the body (%"G_GUINT32_FORMAT")",
-				clt->fd, payload_size);
 
 		gba_read(ctx->gba_l4v, ds, payload_size + 4);
 		data_slab_sequence_unshift(&(clt->input), ds);
@@ -522,7 +497,6 @@ transport_gridd_notify_input(struct network_client_s *clt)
 		}
 	}
 
-	GRID_TRACE("fd=%d input consumed", clt->fd);
 	return clt->transport.waiting_for_close ? RC_NODATA : RC_PROCESSED;
 }
 
@@ -572,7 +546,7 @@ _reply_message(struct network_client_s *clt, struct message_s *reply)
 
 	rc = message_marshall(reply, &encoded, &encoded_size, NULL);
 	message_destroy(reply, NULL);
-	
+
 	if (rc) {
 		network_client_send_slab(clt, data_slab_make_buffer(encoded, encoded_size));
 		return TRUE;
@@ -588,13 +562,30 @@ _client_reply_fixed(struct req_ctx_s *req_ctx, gint code, const gchar *msg)
 {
 	MESSAGE reply = NULL;
 
-	SERVER_ASSERT(!req_ctx->final_sent);
+	EXTRA_ASSERT(!req_ctx->final_sent);
 	if ((req_ctx->final_sent = is_code_final(code)))
 		network_client_log_access(req_ctx, "%s %s [%s] %d %s",
 				req_ctx->reqid, hashstr_str(req_ctx->reqname),
 				req_ctx->subject, code, msg);
 	return metaXServer_reply_simple(&reply, req_ctx->request, code, msg, NULL)
 		&& _reply_message(req_ctx->client, reply);
+}
+
+static void
+_client_send_error(struct network_client_s *clt)
+{
+	MESSAGE request = NULL, reply = NULL;
+	GError *err = clt->current_error;
+	if (!err)
+		return;
+	if (!message_create(&request, NULL)) {
+		g_warning("Memory allocation failure");
+		return;
+	}
+	// reply is destroyed in _reply_message
+	if (metaXServer_reply_simple(&reply, request, err->code, err->message, NULL))
+		(void) _reply_message(clt, reply);
+	message_destroy(request, NULL);
 }
 
 static gboolean
@@ -605,7 +596,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	GByteArray *body = NULL;
 
 	void _add_header(const gchar *n, GByteArray *v) {
-		SERVER_ASSERT(!req_ctx->final_sent);
+		EXTRA_ASSERT(!req_ctx->final_sent);
 		if (v) {
 			if (!n)
 				metautils_gba_unref(v);
@@ -618,7 +609,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		}
 	}
 	void _add_body(GByteArray *b) {
-		SERVER_ASSERT(!req_ctx->final_sent);
+		EXTRA_ASSERT(!req_ctx->final_sent);
 		if (body) {
 			metautils_gba_unref(body);
 			body = NULL;
@@ -628,7 +619,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	void _send_reply(gint code, gchar *msg) {
 		struct message_s *answer = NULL;
 
-		SERVER_ASSERT(!req_ctx->final_sent);
+		EXTRA_ASSERT(!req_ctx->final_sent);
 		GRID_DEBUG("fd=%d REPLY code=%d message=%s", req_ctx->client->fd, code, msg);
 
 		/* Create the request */
@@ -664,7 +655,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		_reply_message(req_ctx->client, answer);
 	}
 	void _send_error(gint code, GError *e) {
-		SERVER_ASSERT(!req_ctx->final_sent);
+		EXTRA_ASSERT(!req_ctx->final_sent);
 		if (!e) {
 			GRID_WARN("code=%d but no error", code);
 			_send_reply(code, "OK");
@@ -689,22 +680,21 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	}
 	void _register_cnx_data(const gchar *key, gpointer data,
 			GDestroyNotify cleanup) {
-		SERVER_ASSERT(key != NULL);
+		EXTRA_ASSERT(key != NULL);
 		_ctx_store_cnx_data(req_ctx->clt_ctx, key, data, cleanup);
 	}
 	void _forget_cnx_data(const gchar *key) {
-		SERVER_ASSERT(key != NULL);
+		EXTRA_ASSERT(key != NULL);
 		_ctx_forget_cnx_data(req_ctx->clt_ctx, key);
 	}
 	gpointer _get_cnx_data(const gchar *key) {
-		SERVER_ASSERT(key != NULL);
+		EXTRA_ASSERT(key != NULL);
 		return _ctx_get_cnx_data(req_ctx->clt_ctx, key);
 	}
 
 	gboolean rc = FALSE;
 	struct gridd_request_handler_s *hdl;
 
-	GRID_TRACE2("%s(%p)", __FUNCTION__, req_ctx);
 	/* reply data */
 	ctx.add_header = _add_header;
 	ctx.add_body = _add_body;
@@ -727,7 +717,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 				GRID_STAT_PREFIX_TIME".UNEXPECTED");
 	}
 	else {
-		SERVER_ASSERT(hdl->handler != NULL);
+		EXTRA_ASSERT(hdl->handler != NULL);
 		rc = hdl->handler(&ctx, hdl->gdata, hdl->hdata);
 		_notify_request(req_ctx, hdl->stat_name_req, hdl->stat_name_time);
 	}
@@ -752,9 +742,8 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	MESSAGE request = NULL;
 	gsize offset;
 
-	GRID_TRACE2("%s(%p,%p)", __FUNCTION__, client, gba);
-	SERVER_ASSERT(gba != NULL);
-	SERVER_ASSERT(client != NULL);
+	EXTRA_ASSERT(gba != NULL);
+	EXTRA_ASSERT(client != NULL);
 	memset(&req_ctx, 0, sizeof(req_ctx));
 
 	if (!message_create(&request, NULL)) {

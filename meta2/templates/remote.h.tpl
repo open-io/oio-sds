@@ -1,5 +1,8 @@
 #ifndef __{{module_name}}_REMOTE_H__
 # define __{{module_name}}_REMOTE_H__
+# include <metautils/lib/metautils.h>
+
+struct metacnx_ctx_s;
 
 {{FOREACH f IN module_functions}}
 /**

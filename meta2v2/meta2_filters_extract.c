@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta2.disp"
 #endif
@@ -23,27 +6,22 @@
 #include <string.h>
 #include <errno.h>
 
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-#include <hc_url.h>
-
 #include <glib.h>
 
-#include <transport_gridd.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
 
-#include "../server/gridd_dispatcher_filters.h"
+#include <server/transport_gridd.h>
+#include <server/gridd_dispatcher_filters.h>
 
-#include "./meta2_macros.h"
-#include "./meta2_filter_context.h"
-#include "./meta2_filters.h"
-#include "./meta2_backend_internals.h"
-#include "./meta2_bean.h"
-#include "./meta2v2_remote.h"
-#include "./generic.h"
-#include "./autogen.h"
-
-#define TRACE_FILTER() GRID_TRACE2("%s", __FUNCTION__)
+#include <meta2v2/meta2_macros.h>
+#include <meta2v2/meta2_filter_context.h>
+#include <meta2v2/meta2_filters.h>
+#include <meta2v2/meta2_backend_internals.h>
+#include <meta2v2/meta2_bean.h>
+#include <meta2v2/meta2v2_remote.h>
+#include <meta2v2/generic.h>
+#include <meta2v2/autogen.h>
 
 #define EXTRACT_STRING2(FieldName,VarName,Opt) do { \
 	e = message_extract_string(reply->request, FieldName, buf, sizeof(buf)); \
@@ -60,6 +38,16 @@
 } while (0)
 
 #define EXTRACT_STRING(Name, Opt) EXTRACT_STRING2(Name,Name,Opt)
+
+#define EXTRACT_OPT(Name) do { \
+	memset(buf, 0, sizeof(buf)); \
+	e = message_extract_string(reply->request, Name, buf, sizeof(buf)); \
+	if(NULL != e) { \
+		g_clear_error(&e); \
+	} else { \
+		meta2_filter_ctx_add_param(ctx, Name, buf); \
+	} \
+} while (0)
 
 int
 meta2_filter_extract_header_ns(struct gridd_filter_ctx_s *ctx,
@@ -91,9 +79,10 @@ meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
 {
 	GError *e = NULL;
 	struct hc_url_s *url = NULL;
-	char buf[512];
+	char buf[LIMIT_LENGTH_HCURL];
 	container_id_t cid;
 	gchar strcid[STRLEN_CONTAINERID];
+	const gchar *container, *path;
 
 	TRACE_FILTER();
 	e = message_extract_string(reply->request, M2_KEY_URL, buf, sizeof(buf));
@@ -103,17 +92,31 @@ meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	GRID_DEBUG("URL from header : %s", buf);
+	GRID_DEBUG("URL from header: %s", buf);
 
 	if(!(url = hc_url_init(buf))) {
 		GRID_DEBUG("Failed to init url from message field (%s)", buf);
-		meta2_filter_ctx_set_error(ctx, NEWERROR(400,
-					"Bad HC url format [%s]", buf));
+		e = NEWERROR(CODE_BAD_REQUEST, "Bad HC url format [%s]", buf);
+	} else if (strlen(hc_url_get(url, HCURL_NS)) > LIMIT_LENGTH_NSNAME) {
+		e = NEWERROR(CODE_BAD_REQUEST, "namespace name is too long");
+	}
+
+	container = hc_url_get(url, HCURL_REFERENCE);
+	path = hc_url_get(url, HCURL_PATH);
+	if (container && strlen(container) > LIMIT_LENGTH_CONTAINERNAME) {
+		e = NEWERROR(CODE_BAD_REQUEST, "container name is too long");
+	} else if (path && strlen(path) > LIMIT_LENGTH_CONTENTPATH) {
+		e = NEWERROR(CODE_BAD_REQUEST, "content path is too long");
+	}
+
+	if (e != NULL) {
+		meta2_filter_ctx_set_error(ctx, e);
+		hc_url_clean(url);
 		return FILTER_KO;
 	}
 
 	e = message_extract_cid(reply->request, "CONTAINER_ID", &cid);
-	if (NULL != e) { 
+	if (NULL != e) {
 		GRID_DEBUG("No container id, continue with the base url");
 		g_clear_error(&e);
 		GRID_DEBUG("Initialized url = %s", hc_url_get(url, HCURL_WHOLE));
@@ -126,9 +129,25 @@ meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
 		GRID_DEBUG("Container hexid != url hexid, replace it");
 		hc_url_set(url, HCURL_HEXID, strcid);
 	}
+
 	GRID_DEBUG("Initialized url = %s", hc_url_get(url, HCURL_WHOLE));
 	meta2_filter_ctx_set_url(ctx, url);
 
+	return FILTER_OK;
+}
+
+int
+meta2_filter_extract_header_copy(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	char buf[512];
+
+	TRACE_FILTER();
+	EXTRACT_STRING(M2_KEY_COPY_SOURCE, TRUE);
+	if(NULL != meta2_filter_ctx_get_param(ctx, M2_KEY_COPY_SOURCE)) {
+		meta2_filter_ctx_add_param(ctx, "BODY_OPT", "OK");
+	}
 	return FILTER_OK;
 }
 
@@ -246,6 +265,30 @@ meta2_filter_extract_header_cid_f0(struct gridd_filter_ctx_s *ctx,
 {
 	TRACE_FILTER();
 	return _meta2_filter_extract_cid(ctx, reply, "field_0");
+}
+
+int meta2_filter_extract_header_optional_cid(struct gridd_filter_ctx_s *ctx,
+                struct gridd_reply_ctx_s *reply)
+{
+	TRACE_FILTER();
+	GError *err;
+	container_id_t cid;
+	gchar strcid[STRLEN_CONTAINERID];
+	struct hc_url_s *url;
+
+	err = message_extract_cid(reply->request, NAME_MSGKEY_CONTAINERID, &cid);
+	if (err != NULL) {
+		g_clear_error(&err);
+		return FILTER_OK;
+	}
+
+	if (!(url = meta2_filter_ctx_get_url(ctx))) {
+		url = hc_url_empty();
+		meta2_filter_ctx_set_url(ctx, url);
+	}
+	container_id_to_string(cid, strcid, sizeof(strcid));
+	hc_url_set(url, HCURL_HEXID, strcid);
+	return FILTER_OK;
 }
 
 static int
@@ -374,8 +417,6 @@ int
 meta2_filter_extract_body_strlist(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	auto void cleanup(gpointer p);
-
 	void cleanup(gpointer p) {
 		if (!p)
 			return;
@@ -385,7 +426,8 @@ meta2_filter_extract_body_strlist(struct gridd_filter_ctx_s *ctx,
 	GError *err;
 	GSList *names = NULL;
 
-	err = message_extract_body_encoded(reply->request, &names, strings_unmarshall);
+	err = message_extract_body_encoded(reply->request,
+			&names, strings_unmarshall);
 	if (err != NULL) {
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;
@@ -399,8 +441,6 @@ int
 meta2_filter_extract_body_rawcontentv2(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	auto void cleanup(gpointer p);
-
 	void cleanup(gpointer p) {
 		if (!p)
 			return;
@@ -438,9 +478,10 @@ meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
 	GError *err = NULL;
 	void *b = NULL;
 	gsize blen = 0;
+	struct hc_url_s *url = NULL;
 
 	if (0 >= message_get_BODY(reply->request, &b, &blen, &err)) {
-		if (!err) 
+		if (!err)
 			err = NEWERROR(400, "Missing Body");
 		g_prefix_error(&err, "No content: ");
 		meta2_filter_ctx_set_error(ctx, err);
@@ -466,6 +507,23 @@ meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
 
 	meta2_filter_ctx_set_input_udata(ctx, content,
 			(GDestroyNotify)meta2_maintenance_destroy_content);
+
+	/* Defines a container id in context url if body raw content is the only
+	 * information we have about the targeted container (the url is mandatory
+	 * for potential has_container filter called later, so this action prevent
+	 * from null url and ugly meta2 behaviour
+	 */
+	if (!(url = meta2_filter_ctx_get_url(ctx))) {
+		url = hc_url_empty();
+		meta2_filter_ctx_set_url(ctx, url);
+	}
+
+	if(!hc_url_get(url, HCURL_HEXID)) {
+		gchar strcid[STRLEN_CONTAINERID];
+		container_id_to_string(content->container_id, strcid, sizeof(strcid));
+		hc_url_set(url, HCURL_HEXID, strcid);
+	}
+
 	return FILTER_OK;
 }
 
@@ -499,7 +557,7 @@ meta2_filter_extract_body_beans(struct gridd_filter_ctx_s *ctx,
 	/* get the message body */
 	if (0 >= message_get_BODY(reply->request, &b, &bsize, NULL)) {
 		GRID_DEBUG("Empty/Invalid body");
-		if(NULL == opt) {
+		if (NULL == opt) {
 			meta2_filter_ctx_set_error(ctx, NEWERROR(400,
 						"Invalid request, Empty / Invalid body"));
 			return FILTER_KO;
@@ -525,8 +583,6 @@ int
 meta2_filter_extract_body_chunk_info(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	auto void _ci_list_clean (gpointer cil);
-
 	GSList *l = NULL;
 	void *b = NULL;
 	gsize bsize = 0;
@@ -583,6 +639,22 @@ meta2_filter_extract_header_append(struct gridd_filter_ctx_s *ctx,
 
 	TRACE_FILTER();
 	EXTRACT_STRING2("APPEND", "APPEND", 1);
+	return FILTER_OK;
+}
+
+int
+meta2_filter_extract_header_spare(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[512];
+
+	TRACE_FILTER();
+	EXTRACT_OPT(M2_KEY_SPARE);
+	const gchar *type = meta2_filter_ctx_get_param(ctx, M2_KEY_SPARE);
+	// Body beans are required only when doing blacklist spare request
+	if (type == NULL || g_ascii_strcasecmp(type, M2V2_SPARE_BY_BLACKLIST))
+		meta2_filter_ctx_add_param(ctx, "BODY_OPT", "OK");
 	return FILTER_OK;
 }
 
@@ -651,6 +723,13 @@ meta2_filter_extract_header_flushflag(struct gridd_filter_ctx_s *ctx,
 }
 
 int
+meta2_filter_extract_header_localflag(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	return _extract_header_flag("LOCAL", ctx, reply);
+}
+
+int
 meta2_filter_extract_header_flags32(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
@@ -659,7 +738,7 @@ meta2_filter_extract_header_flags32(struct gridd_filter_ctx_s *ctx,
 	gchar strflags[32];
 
 	TRACE_FILTER();
-	e = message_extract_flags32(reply->request, "FLAGS", 0, &flags);
+	e = message_extract_flags32(reply->request, "FLAGS", FALSE, &flags);
 	if (NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
@@ -700,9 +779,10 @@ meta2_filter_extract_header_string_size(struct gridd_filter_ctx_s *ctx,
 {
 	GError *e = NULL;
 	gchar buf[64];
+	const char *opt = meta2_filter_ctx_get_param(ctx, "BODY_OPT");
 
 	TRACE_FILTER();
-	EXTRACT_STRING(NAME_MSGKEY_CONTENTLENGTH, 0);
+	EXTRACT_STRING(NAME_MSGKEY_CONTENTLENGTH, (opt == FALSE));
 	return FILTER_OK;
 }
 
@@ -742,6 +822,70 @@ meta2_filter_extract_header_optional_ns(struct gridd_filter_ctx_s *ctx,
 	return FILTER_OK;
 }
 
+int
+meta2_filter_extract_header_optional_position_prefix(struct gridd_filter_ctx_s *ctx,
+        struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[64];
+	TRACE_FILTER();
+	EXTRACT_STRING("POSITION_PREFIX", TRUE);
+	return FILTER_OK;
+}
+
+int
+meta2_filter_extract_header_optional_chunkid(struct gridd_filter_ctx_s *ctx,
+        struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[1024]; // XXX: is there a maximum length for chunk ids?
+	TRACE_FILTER();
+	EXTRACT_STRING(M2_KEY_CHUNK_ID, TRUE);
+	return FILTER_OK;
+}
+
+int
+meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
+        struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[64];
+	TRACE_FILTER();
+	EXTRACT_STRING(M2_KEY_OVERWRITE, TRUE);
+	return FILTER_OK;
+}
+
+int
+meta2_filter_extract_header_optional_max_keys(struct gridd_filter_ctx_s *ctx,
+        struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[64];
+	TRACE_FILTER();
+	EXTRACT_STRING(M2_KEY_MAX_KEYS, TRUE);
+	return FILTER_OK;
+}
+
+int
+meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
+        struct gridd_reply_ctx_s *reply)
+{
+	GError *e = NULL;
+	gchar buf[1024];
+	TRACE_FILTER();
+	EXTRACT_OPT(M2_KEY_LISTING_TYPE);
+	const char *type = meta2_filter_ctx_get_param(ctx, M2_KEY_LISTING_TYPE);
+	if(NULL != type && !g_ascii_strcasecmp(type, S3_LISTING_TYPE)) {
+		EXTRACT_OPT(M2_KEY_PREFIX);
+		EXTRACT_OPT(M2_KEY_MARKER);
+		EXTRACT_OPT(M2_KEY_DELIMITER);
+		EXTRACT_OPT(M2_KEY_MAX_KEYS);
+	} else {
+		EXTRACT_OPT(M2_KEY_NAME_PATTERN);
+		EXTRACT_OPT(M2_KEY_METADATA_PATTERN);
+	}
+	return FILTER_OK;
+}
 
 int
 meta2_filter_extract_header_cid_dst(struct gridd_filter_ctx_s *ctx,
@@ -814,3 +958,12 @@ meta2_filter_extract_header_addr_src(struct gridd_filter_ctx_s *ctx,
 
 	return FILTER_OK;
 }
+
+int
+meta2_filter_extract_header_snapshot_hardrestore(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	TRACE_FILTER();
+	return _extract_header_flag(M2_KEY_SNAPSHOT_HARDRESTORE, ctx, reply);
+}
+

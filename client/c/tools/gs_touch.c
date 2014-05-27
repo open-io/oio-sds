@@ -1,22 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "grid.tools.touch"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "grid.tools.touch"
 #endif
 
 #include <assert.h>
@@ -36,9 +19,9 @@
 
 #include <glib.h>
 
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
+#include <metautils/lib/metatypes.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
 
 #include "../lib/grid_client.h"
 #include "../lib/gs_internals.h"
@@ -50,6 +33,7 @@ int optind, opterr, optopt;
 int flag_verbose = 0;
 int flag_quiet = 0;
 int flag_help = 0;
+int flag_update_csize = 0;
 
 static gchar ns_name[LIMIT_LENGTH_NSNAME];
 static gchar container_name[LIMIT_LENGTH_CONTAINERNAME];
@@ -65,6 +49,7 @@ help(int argc, char **args)
 	g_printerr("OPTION::\n");
 	g_printerr("\t -h : displays this help section;\n");
 	g_printerr("\t -v : verbose mode, increases debug output;\n");
+	g_printerr("\t -u : force an update container size --> meta1(s)\n");
 	g_printerr("GRIDURL:\n");
 	g_printerr("\t NS/CONTAINER/CONTENT\n");
 }
@@ -76,7 +61,7 @@ parse_opt(int argc, char **args)
 	char *grid_url;
 	int opt;
 
-	while ((opt = getopt(argc, args, "hvq")) != -1) {
+	while ((opt = getopt(argc, args, "hvqu")) != -1) {
 		switch (opt) {
 		case 'h':
 			flag_help = ~0;
@@ -87,6 +72,9 @@ parse_opt(int argc, char **args)
 		case 'q':
 			flag_quiet = ~0;
 			break;
+		case 'u':
+			flag_update_csize = ~0;
+			break;			
 		case '?':
 		default:
 			PRINT_ERROR("unexpected %c (%s)\n", optopt, strerror(opterr));
@@ -172,6 +160,7 @@ main_set_defaults(void)
 	flag_verbose = 0;
 	flag_quiet = 0;
 	flag_help = 0;
+	flag_update_csize = 0;
 	bzero(ns_name, sizeof(ns_name));
 	bzero(container_name, sizeof(container_name));
 	bzero(content_path, sizeof(content_path));
@@ -221,6 +210,7 @@ main(int argc, char **args)
 	struct metacnx_ctx_s m2_ctx;
 	GError *gerr = NULL;
 	container_id_t cid;
+	guint32 flags = 0;
 
 	main_install_sighandlers();
 	main_set_defaults();
@@ -236,6 +226,10 @@ main(int argc, char **args)
 	if (flag_help) {
 		help(argc, args);
 		return 0;
+	}
+
+	if (flag_update_csize) {
+		flags = META2TOUCH_FLAGS_UPDATECSIZE;
 	}
 
 	gs = gs_grid_storage_init2(ns_name, 5000, 60000, &gserr);
@@ -297,9 +291,11 @@ main(int argc, char **args)
 	g_print("META1   :");
 	for (p=location->m1_url; p && *p ;p++)
 		g_print(" tcp://%s", *p);
+	g_print("\n");
 	g_print("META2   :");
 	for (p=location->m2_url; p && *p ;p++)
 		g_print(" tcp://%s", *p);
+	g_print("\n");
 	g_print("CNAME   : [%s]\n", location->container_name);
 	g_print("CID     : [%s]\n", location->container_hexid);
 	
@@ -314,7 +310,7 @@ main(int argc, char **args)
 		m2_ctx.timeout.req = 60000;
 		rc = *content_path != '\0'
 			? meta2_remote_touch_content(&m2_ctx, cid, content_path, &gerr)
-			: meta2_remote_touch_container(&m2_ctx, cid, &gerr) ;
+			: meta2_remote_touch_container_ex(&m2_ctx, cid, flags, &gerr) ;
 		metacnx_close(&m2_ctx);
 		metacnx_clear(&m2_ctx);
 

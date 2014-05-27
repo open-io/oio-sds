@@ -1,30 +1,8 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "metautils"
 #endif
 
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "metautils"
-#endif
-
-#include <string.h>
-#include "./metautils.h"
+#include "metautils.h"
 
 gint
 chunk_id_to_string(const chunk_id_t * ci, gchar * dst, gsize dstSize)
@@ -51,7 +29,6 @@ chunk_id_to_string(const chunk_id_t * ci, gchar * dst, gsize dstSize)
 			str_addr,
 			LIMIT_LENGTH_VOLUMENAME, ci->vol);
 
-	/*ALERT("dstSize = %"G_GSIZE_FORMAT" offset = %"G_GSIZE_FORMAT, dstSize, offset);*/
 	return MIN(offset,dstSize);
 }
 
@@ -81,6 +58,7 @@ chunk_info_print_all(const gchar * domain, const gchar * header, GSList * list)
 {
 	GSList *l;
 	gchar str_ci[256];
+	(void) domain, (void) header;
 
 	if (!list || !TRACE_ENABLED())
 		return;
@@ -101,3 +79,20 @@ chunk_info_gclean(gpointer d, gpointer u)
 	if (d)
 		g_free(d);
 }
+
+gchar *
+assemble_chunk_id(const gchar *straddr, const gchar *strvol, const gchar *strid)
+{
+	void _append(GString *gstr, const gchar *s) {
+		if (gstr->str[gstr->len - 1] != '/' && *s != '/')
+			g_string_append_c(gstr, '/');
+		g_string_append(gstr, s);
+	}
+
+	GString *gstr = g_string_new("http://");
+	_append(gstr, straddr);
+	_append(gstr, strvol);
+	_append(gstr, strid);
+	return g_string_free(gstr, FALSE);
+}
+

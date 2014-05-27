@@ -1,50 +1,25 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.sqlx.client"
 #endif
 
 #include <errno.h>
-#include <glib.h>
 
-#include "../metautils/lib/metatypes.h"
-#include "../metautils/lib/metautils.h"
-#include "../metautils/lib/metacomm.h"
-#include "../metautils/lib/loggers.h"
-#include "../metautils/lib/hc_url.h"
-#include "../metautils/lib/common_main.h"
-#include "../metautils/lib/gridd_client.h"
-#include "../client/c/lib/grid_client.h"
-#include "../sqliterepo/sqlx_remote.h"
+#include <grid_client.h>
 
-#include <RowFieldValue.h>
-#include <RowField.h>
-#include <RowFieldSequence.h>
-#include <Row.h>
-#include <RowSet.h>
-#include <RowName.h>
-#include <TableHeader.h>
-#include <Table.h>
-#include <TableSequence.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <sqliterepo/sqlx_remote.h>
+#include <sqliterepo/sqlx_remote_ex.h>
 
-#ifndef FREEP
-# define FREEP(F,P) do { if (!(P)) return; F(P); (P) = NULL; } while (0)
-#endif
+#include <metautils/lib/RowFieldValue.h>
+#include <metautils/lib/RowField.h>
+#include <metautils/lib/RowFieldSequence.h>
+#include <metautils/lib/Row.h>
+#include <metautils/lib/RowSet.h>
+#include <metautils/lib/RowName.h>
+#include <metautils/lib/TableHeader.h>
+#include <metautils/lib/Table.h>
+#include <metautils/lib/TableSequence.h>
 
 static gboolean flag_auto_ref = FALSE;
 static gboolean flag_auto_link = FALSE;
@@ -347,13 +322,17 @@ do_query(struct client_s *client, struct meta1_service_url_s *surl,
 	name.seq = surl->seq;
 	name.ns = hc_url_get(url, HCURL_NS);
 	name.schema = type;
-	name.cid = hc_url_get_id(url);
+	name.cid = (const container_id_t*)hc_url_get_id(url);
 
-	req = sqlx_pack_QUERY_single(&name, Q);
-	gridd_client_request(client, req, NULL, _on_reply);
+	req = sqlx_pack_QUERY_single(&name, Q, flag_auto_link);
+	err = gridd_client_request(client, req, NULL, _on_reply);
 	g_byte_array_unref(req);
 
-	if (NULL != (err = gridd_client_loop(client))) {
+	if (NULL != err) {
+		g_printerr("Local error: (%d) %s\n", err->code, err->message);
+		g_clear_error(&err);
+	}
+	else if (NULL != (err = gridd_client_loop(client))) {
 		g_printerr("Local error: (%d) %s\n", err->code, err->message);
 		g_clear_error(&err);
 	}
@@ -364,8 +343,8 @@ do_query(struct client_s *client, struct meta1_service_url_s *surl,
 		}
 		else {
 			GRID_DEBUG("SQLX query succeeded");
+			rc = 1;
 		}
-		rc = 1;
 	}
 
 	return rc;
@@ -397,9 +376,44 @@ do_queryv(struct meta1_service_url_s *surl)
 	return rc;
 }
 
+static gint
+do_destroy2(gs_grid_storage_t *hc, struct meta1_service_url_s *srv_url)
+{
+	gint rc = 1, seq = 1;
+	gchar *target = NULL;
+	GError *err = NULL;
+	gs_error_t *hc_err = NULL;
+
+	seq = srv_url->seq;
+	target = srv_url->host;
+
+	struct sqlxsrv_name_s name = {seq, hc_url_get(url, HCURL_NS),
+			(const container_id_t*)hc_url_get_id(url), type};
+
+	err = sqlx_remote_execute_DESTROY(target, NULL, &name, FALSE);
+
+	if (err != NULL) {
+		GRID_ERROR("Failed to destroy database: %s", err->message);
+		rc = 0;
+		goto end_label;
+	}
+	hc_err = hc_unlink_reference_service(hc,
+			hc_url_get(url, HCURL_REFERENCE), type);
+	if (hc_err) {
+		GRID_ERROR("Failed to unlink service: %s", hc_err->msg);
+		rc = 0;
+	}
+
+end_label:
+	g_clear_error(&err);
+	gs_error_free(hc_err);
+	return rc;
+}
+
 static void
 cli_action(void)
 {
+	gint rc = 0;
 	gs_error_t *hc_error = NULL;
 	gs_grid_storage_t *hc;
 	char **srvurlv = NULL;
@@ -423,8 +437,23 @@ retry:
 	hc_error = hc_list_reference_services(hc,
 			hc_url_get(url, HCURL_REFERENCE), type, &srvurlv);
 	if (hc_error != NULL) {
-		g_printerr("Service not located : (%d) %s\n", hc_error->code, hc_error->msg);
-		goto exit;
+		if (hc_error->code != CODE_CONTAINER_NOTFOUND || !flag_auto_ref) {
+			g_printerr("Service not located: (%d) %s\n", hc_error->code, hc_error->msg);
+			goto exit;
+		} else {
+			gs_error_free(hc_error);
+			hc_error = NULL;
+			g_printerr("Reference [%s/%s] does not exists, creating it\n",
+					hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE));
+			hc_error = hc_create_reference(hc, hc_url_get(url, HCURL_REFERENCE));
+			if (hc_error != NULL) {
+				g_printerr("Failed to create reference: (%d) %s\n",
+						hc_error->code, hc_error->msg);
+				goto exit;
+			} else {
+				goto retry;
+			}
+		}
 	}
 
 	if (!srvurlv || !*srvurlv) {
@@ -439,7 +468,7 @@ retry:
 		if (!hc_error) {
 			g_printerr("No service affected for type [%s],"
 					" allocated [%s]\n", type, srvurlv[0]);
-			goto retry; 
+			goto retry;
 		}
 		else {
 			g_printerr("No service affected for type [%s], allocation "
@@ -448,7 +477,6 @@ retry:
 		}
 	}
 	else {
-		gint rc;
 		gchar **s;
 
 		for (s=srvurlv; *s ;s++)
@@ -459,7 +487,11 @@ retry:
 			if (!(surl = meta1_unpack_url(*s)))
 				g_printerr("Invalid service URL from meta1 [%s]\n", *s);
 			else {
-				rc = do_queryv(surl);
+				if (!g_ascii_strcasecmp("destroy", query[0])) {
+					rc = do_destroy2(hc, surl);
+				} else {
+					rc = do_queryv(surl);
+				}
 				g_free(surl);
 			}
 		}
@@ -470,6 +502,7 @@ exit:
 	if (hc_error)
 		gs_error_free(hc_error);
 	gs_grid_storage_free(hc);
+	grid_main_set_status(rc == 0);
 }
 
 static struct grid_main_option_s *
@@ -480,6 +513,8 @@ cli_get_options(void)
 			"If the reference does not exist, create it now"},
 		{ "AutoLink", OT_BOOL, {.b = &flag_auto_link},
 			"If no sqlx base has been linked to the reference, do it now"},
+		{ "AutoCreate", OT_BOOL, {.b = &flag_auto_link},
+			"Same as AutoLink"},
 		{ "OutputXML", OT_BOOL, {.b = &flag_xml},
 			"Write XML instead of the default key=value output"},
 		{ "OutputJSON", OT_BOOL, {.b = &flag_json},
@@ -503,8 +538,8 @@ static void
 cli_specific_fini(void)
 {
 	GRID_DEBUG("Exiting");
-	FREEP(g_free, type);
-	FREEP(g_free, query);
+	metautils_pfree0(&type, NULL);
+	metautils_pfree0(&query, NULL);
 
 	if (url) {
 		hc_url_clean(url);
@@ -521,7 +556,7 @@ cli_specific_stop(void)
 static const gchar *
 cli_usage(void)
 {
-	return "NS/REF TYPE QUERY";
+	return "NS/REF TYPE QUERY [QUERY...]\nNS/REF TYPE 'destroy'";
 }
 
 static gboolean
@@ -538,10 +573,11 @@ cli_configure(int argc, char **argv)
 		g_printerr("Invalid hc URL (%s)\n", strerror(errno));
 		return FALSE;
 	}
-		
+
 	type = g_strconcat("sqlx.", argv[1], NULL);
 	query = g_strdupv(argv+2);
-	
+	GRID_DEBUG("Executing %u requests", g_strv_length(query));
+
 	return TRUE;
 }
 

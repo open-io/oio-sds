@@ -1,35 +1,9 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "hc.tools"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "hc.tools"
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
-#include <unistd.h>
-
-#include <glib.h>
-
-#include <hc_url.h>
-#include <grid_client.h>
-#include <hc.h>
+#include "./gs_internals.h"
+#include "./hc.h"
 
 void help_put(void)
 {
@@ -51,7 +25,7 @@ void help_get(void)
 	g_printerr("\t             NS : The Honeycomb namespace name\n");
 	g_printerr("\t CONTAINER_NAME : The container to list contents from or which contains the content to download.\n");
 	g_printerr("\t   CONTENT_NAME : The name of the content to download.\n");
-	g_printerr("\tCONTENT_VERSION : The version of the content to download. (latest version is downloaded if not specified)\n");
+	g_printerr("\tCONTENT_VERSION : The version of the content (or snapshot name) to download. (latest version is downloaded if not specified)\n");
 	g_printerr("\t   PATH_TO_FILE : The path of the local file in which to store the downloaded content.\n");
 	g_printerr("\n");
 }
@@ -88,13 +62,13 @@ void help_info(void)
 	g_printerr("\t             NS : The Honeycomb namespace\n");
 	g_printerr("\t CONTAINER_NAME : The container to get informations from.\n");
 	g_printerr("\t   CONTENT_NAME : The content to get informations from.\n");
-	g_printerr("\tCONTENT_VERSION : The content version to get informations from.\n");
+	g_printerr("\tCONTENT_VERSION : The content version (or snapshot name) to get informations from.\n");
 	g_printerr("\n");
 }
 
 void help_stgpol(void)
 {
-	g_printerr("usage: hc stgpol <NS>/<CONTAINER_NAME>/<PATH> STGPOL\n\n");
+	g_printerr("usage: hc stgpol <NS>/<CONTAINER_NAME>/<PATH> [STGPOL]\n\n");
 	g_printerr("    NS: Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
 	g_printerr("    CONTAINER_NAME: The container you want to set the storage policy or which contain your content.\n");
 	g_printerr("    PATH: The targeted content path. If not specified, this command work on container storage policy\n");
@@ -115,6 +89,7 @@ void help_version(void)
 	g_printerr("    CONTAINER_NAME: The container you want to set the storage policy or which contain your content.\n");
 	g_printerr("    VERSIONING: The versioning to set. There is 4 "
 				"possibility to the versioning status:\n");
+	g_printerr("		-2 : Use the default versioning value of the namespace\n");
 	g_printerr("		-1 : The number of versions of a content is unlimited and never purged\n");
 	g_printerr("		 0 : Deactivate the versioning on the container. The behaviour of meta2 services is like in Honeycomb 1.7 and older\n");
 	g_printerr("		 1 : Override mode. Uploading a content on an existing content replace the content"
@@ -197,6 +172,48 @@ void help_propdel(void) {
 	g_printerr("    CONTAINER: The container you want to work with.\n");
 	g_printerr("    CONTENT: The content you want to work with.\n");
 	g_printerr("    KEY: the property key.\n");
-	
+}
+
+void help_snaplist(void)
+{
+	g_printerr("\n");
+	g_printerr("usage: hc snaplist <NS>/<CONTAINER_NAME>\n\n");
+	g_printerr("\tList snapshots of a container\n\n");
+	g_printerr("\t             NS: The Honeycomb namespace name\n");
+	g_printerr("\t CONTAINER_NAME: The container to list snapshots from\n");
+	g_printerr("\n");
+}
+
+void help_snaptake(void)
+{
+	g_printerr("\n");
+	g_printerr("usage: hc snaptake <NS>/<CONTAINER_NAME>?snapshot=<SNAPSHOT_NAME>\n\n");
+	g_printerr("\tTake a snapshot of a container\n\n");
+	g_printerr("\t             NS: The Honeycomb namespace name\n");
+	g_printerr("\t CONTAINER_NAME: The container to take a snapshot of\n");
+	g_printerr("\t  SNAPSHOT_NAME: A name for the snapshot (must not start with a digit)\n");
+	g_printerr("\n");
+}
+void help_snapdel(void)
+{
+	g_printerr("\n");
+	g_printerr("usage: hc snapdel <NS>/<CONTAINER_NAME>?snapshot=<SNAPSHOT_NAME>\n\n");
+	g_printerr("\tDelete a snapshot\n\n");
+	g_printerr("\t             NS: The Honeycomb namespace name\n");
+	g_printerr("\t CONTAINER_NAME: The container to delete snapshot from\n");
+	g_printerr("\t  SNAPSHOT_NAME: The name of the snapshot to delete\n");
+	g_printerr("\n");
+}
+void help_snaprestore(void)
+{
+	g_printerr("\n");
+	g_printerr("usage: hc snaprestore <NS>/<CONTAINER_NAME>?snapshot=<SNAPSHOT_NAME>\n");
+	g_printerr("or     hc snaprestore <NS>/<CONTAINER_NAME>/<CONTENT_NAME>?snapshot=<SNAPSHOT_NAME>\n\n");
+	g_printerr("\tRestore a snapshot or a content from a snapshot\n\n");
+	g_printerr("\t             NS: The Honeycomb namespace name\n");
+	g_printerr("\t CONTAINER_NAME: The container to restore snapshot of\n");
+	g_printerr("\t   CONTENT_NAME: The content to restore from the snapshot\n");
+	g_printerr("\t  SNAPSHOT_NAME: The name of the snapshot to restore\n");
+	g_printerr("\n");
 }
 

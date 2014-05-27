@@ -1,89 +1,131 @@
 cmake_minimum_required(VERSION 2.6)
-project (Redc)
+project (Grid)
 
 macro(test_CLI var msg)
 	if (${var})
-		message(STATUS "FOUND CLI ${msg} : ${${var}}")
+		MESSAGE(STATUS "FOUND CLI ${msg} : ${${var}}")
 	else (${var})
-		message(FATAL_ERROR "NOT FOUND CLI ${msg}")
+		MESSAGE(FATAL_ERROR "NOT FOUND CLI ${msg}")
 	endif (${var})
 endmacro(test_CLI)
 
 macro(test_FOUND var msg)
 	if (${var})
-		message(STATUS "FOUND ${msg} : ${${var}}")
+		MESSAGE(STATUS "FOUND ${msg} : ${${var}}")
 	else (${var})
-		message(FATAL_ERROR "NOT FOUND ${msg}")
+		MESSAGE(FATAL_ERROR "NOT FOUND ${msg}")
 	endif (${var})
 	unset(${var} CACHE)
 endmacro(test_FOUND)
+
+macro(bin_prefix T N)
+	if (DEFINED EXE_PREFIX)
+	set_target_properties(${T} PROPERTIES OUTPUT_NAME ${EXE_PREFIX}${N})
+	endif()
+endmacro(bin_prefix)
+
+macro(bin_prefix_full T N)
+	if (DEFINED FULL_RENAME)
+	if (DEFINED EXE_PREFIX)
+	set_target_properties(${T} PROPERTIES OUTPUT_NAME ${EXE_PREFIX}${N})
+	endif()
+	endif()
+endmacro(bin_prefix_full)
 
 include(CheckIncludeFile)
 include(CheckLibraryExists)
 include(CheckTypeSize)
 #include(FindFLEX)
 #include(FindBISON)
+include(FindCURL)
 include(FindPerl)
 include(FindPythonInterp)
 include(FindPythonLibs)
 
-set(Redc_VERSION_MAJOR 1)
-set(Redc_VERSION_MINOR 8)
-set(Redc_RELEASE 1)
-set(API_VERSION "${Redc_VERSION_MAJOR}.${Redc_VERSION_MINOR}.${Redc_RELEASE}")
+set(Grid_VERSION_MAJOR 1)
+set(Grid_VERSION_MINOR 8)
+set(Grid_RELEASE 0)
+set(API_VERSION "${Grid_VERSION_MAJOR}.${Grid_VERSION_MINOR}.${Grid_RELEASE}")
+set(SHORT_API_VERSION "${Grid_VERSION_MAJOR}.${Grid_VERSION_MINOR}")
 if (NOT ABI_VERSION)
 	set(ABI_VERSION 0)
 endif()
 
-set(CFLAGS_COMMON "-Wall -Wextra -Wunused -pipe -std=gnu99")
-set(CFLAGS_COMMON "${CFLAGS_COMMON} -fPIC")
+set(CMAKE_C_FLAGS "-g -fPIC -pipe -Wall -Wextra -std=gnu99")
 
 if (CMAKE_COMPILER_IS_GNUCC)
-    MESSAGE("GCC!")
     EXEC_PROGRAM(gcc ARGS --version OUTPUT_VARIABLE CMAKE_C_COMPILER_VERSION)
-    set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wno-variadic-macros")
-    set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wsequence-point")
-    set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wredundant-decls")
-    set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wshadow")
-    if(CMAKE_C_COMPILER_VERSION MATCHES ".*4\\.[6789].*")
-        MESSAGE("GCC >= 4.6")
-        set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wcomment")
-        set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wmain")
-        set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wparentheses")
-        set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wfloat-equal")
-        set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wunsafe-loop-optimizations")
-        set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wmissing-prototypes")
-        set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wunused-but-set-parameter")
-        set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wunused-but-set-variable")
-        set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wframe-larger-than=8192")
-        #set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wswitch-enum")
-        #set(CFLAGS_COMMON "${CFLAGS_COMMON} -Wconversion")
-        #set(CFLAGS_COMMON "${CFLAGS_COMMON} -Winline")
-        set(CFLAGS_COMMON "${CFLAGS_COMMON} -finline-limit=8192")
+
+	# Activates the stack protection code when explicitely triggered
+	# and with a decently recent gcc (>= 4.2)
+    if(CMAKE_C_COMPILER_VERSION MATCHES " [4-9]\\.[2-9]\\.[0-9]+")
+		if (STACK_PROTECTOR)
+			set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fstack-protector-all")
+		endif()
+	endif()
+
+	# Activates extra warnings that are available in recents gcc.
+	# Some appeared well-managed since 4.4, others since 4.6.
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-variadic-macros")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wsequence-point")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wredundant-decls")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wshadow")
+
+    if(CMAKE_C_COMPILER_VERSION MATCHES " [4-9]\\.[4-9]\\.[0-9]+")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wcomment")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wmain")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wparentheses")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wfloat-equal")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunsafe-loop-optimizations")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused-but-set-parameter")
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused-but-set-variable")
     endif()
+
+	if(CMAKE_C_COMPILER_VERSION MATCHES " [4-9]\\.[6-9]\\.[0-9]+")
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wmissing-prototypes")
+		#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion")
+		#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wswitch-enum")
+	endif()
 endif()
 
-set(CMAKE_C_FLAGS                "${CFLAGS_COMMON} -g -O1")
-set(CMAKE_C_FLAGS_DEBUG          "${CFLAGS_COMMON} -g -O0 -fno-inline")
-set(CMAKE_C_FLAGS_RELEASE        "${CFLAGS_COMMON} -O2")
-set(CMAKE_C_FLAGS_RELWITHDEBINFO "${CFLAGS_COMMON} -g -O2 -fno-inline")
-set(CMAKE_C_FLAGS_MINSIZEREL     "${CFLAGS_COMMON} -Os")
+set(CMAKE_C_FLAGS_DEBUG          "-O0 -fno-inline")
+set(CMAKE_C_FLAGS_RELEASE        "-O2")
+set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -fno-inline")
+set(CMAKE_C_FLAGS_MINSIZEREL     "-Os -s")
 set(CMAKE_INSTALL_PREFIX "/usr/local")
 
 add_definitions(-DAPI_VERSION="${API_VERSION}")
+add_definitions(-DSHORT_API_VERSION="${SHORT_API_VERSION}")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
 MESSAGE("DEBUG symbols enabled")
-add_definitions(-DHAVE_EXTRA_DEBUG=1)
 add_definitions(-DHAVE_EXTRA_ASSERT=1)
-add_definitions(-DHAVE_ASSERT_SQLX=1)
-add_definitions(-DHAVE_ASSERT_HTTP=1)
-add_definitions(-DHAVE_ASSERT_SERVER=1)
-add_definitions(-DHAVE_ASSERT_META0=1)
-add_definitions(-DHAVE_ASSERT_META1=1)
-add_definitions(-DHAVE_ASSERT_UTILS=1)
-add_definitions(-DHAVE_ASSERT_HASHSTR=1)
+add_definitions(-DHAVE_ASSERT_EXTRA=1)
+add_definitions(-DHAVE_EXTRA_DEBUG=1)
+add_definitions(-DHAVE_DEBUG_EXTRA=1)
 endif()
+
+if (DEFINED MOCKS)
+	MESSAGE("MOCKS enabled ${MOCKS}")
+	add_definitions(-DHAVE_MOCKS)
+endif()
+if (DEFINED SOCKET_OPTIMIZED)
+	MESSAGE("SOCKET_OPTIMIZED ${SOCKET_OPTIMIZED}")
+	add_definitions(-D_GNU_SOURCE)
+	add_definitions(-DHAVE_SOCKET3)
+	add_definitions(-DHAVE_ACCEPT4)
+endif()
+
+if (DEFINED SOCKET_LINGER_ONOFF)
+	MESSAGE("SOCKET_LINGER_ONOFF ${SOCKET_LINGER_ONOFF}")
+	add_definitions(-DSOCK_DEFAULT_LINGER_ONOFF=${SOCKET_LINGER_ONOFF})
+endif ()
+
+if (DEFINED SOCKET_LINGER_DELAY)
+	MESSAGE("SOCKET_LINGER_DELAY ${SOCKET_LINGER_DELAY}")
+	add_definitions(-DSOCK_DEFAULT_LINGER_DELAY=${SOCKET_LINGER_DELAY})
+endif ()
 
 add_definitions(-D_REENTRANT)
 add_definitions(-D_LARGE_FILES)
@@ -91,24 +133,42 @@ add_definitions(-D_LARGEFILE_SOURCE)
 add_definitions(-D_LARGEFILE64_SOURCE)
 add_definitions(-D_FILE_OFFSET_BITS=64)
 add_definitions(-DG_ERRORCHECK_MUTEXES)
-add_definitions(-DG_DISABLE_DEPRECATED=1)
 add_definitions(-DHAVE_SOCKLEN_T)
-add_definitions(-DHAVE_LEGACY)
+
+if (DEFINED ALLOW_DEPRECATED)
+	if (ALLOW_DEPRECATED)
+		#add_definitions(-DG_DISABLE_DEPRECATED=1)
+		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-deprecated-declarations")
+	endif ()
+endif ()
+
 
 ###-------------------------------------------------------------------------###
 
-CHECK_TYPE_SIZE(long SIZEOF_LONG)
-message(STATUS "sizeof(long) = ${SIZEOF_LONG}")
-if(SIZEOF_LONG EQUAL 8)
-	set (LD_LIBDIR "lib64")
-else(SIZEOF_LONG EQUAL 8)
-	set (LD_LIBDIR "lib")
-endif(SIZEOF_LONG EQUAL 8)
+if (LD_LIBDIR)
+	MESSAGE("LD_LIBDIR explicitely set to ${LD_LIBDIR}")
+else()
+	CHECK_TYPE_SIZE(long SIZEOF_LONG)
+	MESSAGE(STATUS "sizeof(long) = ${SIZEOF_LONG}")
+	if(SIZEOF_LONG EQUAL 8)
+		set (LD_LIBDIR "lib64")
+	else(SIZEOF_LONG EQUAL 8)
+		set (LD_LIBDIR "lib")
+	endif(SIZEOF_LONG EQUAL 8)
+endif()
 
 if (PREFIX)
 	set(CMAKE_INSTALL_PREFIX ${PREFIX})
 endif (PREFIX)
-message(STATUS "Installation prefix : ${CMAKE_INSTALL_PREFIX}")
+MESSAGE(STATUS "Installation prefix : ${CMAKE_INSTALL_PREFIX}")
+
+set(TRIP_INSTALL_PATH "${PREFIX}/${LD_LIBDIR}/grid")
+if (TRIP_PATH)
+	set(TRIP_INSTALL_PATH ${TRIP_PATH})
+endif (TRIP_PATH)
+message(STATUS "Trip lib location path : ${TRIP_INSTALL_PATH}")
+
+add_definitions(-DTRIP_INSTALL_PATH="${TRIP_INSTALL_PATH}")
 
 ###-------------------------------------------------------------------------###
 
@@ -150,10 +210,15 @@ pkg_check_modules(GLIB2 REQUIRED glib-2.0 gthread-2.0 gmodule-2.0)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 pkg_check_modules(NEON REQUIRED neon)
 if (NOT CLIENT_ONLY)
+	if (NOT DEFINED ZMQ_INCDIR)
+		pkg_check_modules(ZMQ libzmq>=3.0.0)
+	endif()
+pkg_check_modules(JSONC json)
 pkg_check_modules(LIBEVENT REQUIRED libevent)
 pkg_check_modules(APR REQUIRED apr-1)
-endif()
+pkg_check_modules(GAMIN REQUIRED gamin)
 pkg_check_modules(DBUS REQUIRED dbus-1 dbus-glib-1)
+endif()
 
 if (NOT CLIENT_ONLY)
 ###--------------------###
@@ -185,6 +250,44 @@ endif (APACHE2_LIBDIR)
 ### Check for mandatory elements
 find_file(FOUND NAMES httpd/httpd.h httpd.h PATHS ${APACHE2_INCLUDE_DIRS})
 test_FOUND(FOUND "apache2-httpd header")
+
+###------------------------###
+### Dependency to lighttpd ###
+###------------------------###
+set(LIGHTTPD_INCLUDE_DIRS "/usr/include")
+set(LIGHTTPD_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
+if (LIGHTTPD_INCDIR)
+	set(LIGHTTPD_INCLUDE_DIRS "${LIGHTTPD_INCDIR}")
+endif(LIGHTTPD_INCDIR)
+if (LIGHTTPD_LIBDIR)
+	set(LIGHTTPD_LIBRARY_DIRS "${LIGHTTPD_LIBDIR}")
+endif(LIGHTTPD_LIBDIR)
+### Check for mandatory elements
+find_file(FOUND0 lighttpd/base.h ${LIGHTTPD_INCLUDE_DIRS})
+find_library(FOUND1 lighttpd/mod_expire.so ${LIGHTTPD_LIBRARY_DIRS})
+set(LIGHTTPD_FOUND FALSE)
+if (FOUND0 AND FOUND1)
+	set(LIGHTTPD_FOUND TRUE)
+else()
+	MESSAGE(STATUS "NOT FOUND lighttpd")
+endif()
+
+###--------------------------###
+### Dependency to BerkeleyDB ###
+###--------------------------###
+set(DB_INCLUDE_DIRS "/usr/include")
+set(DB_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
+if (DB_INCDIR)
+	set(DB_INCLUDE_DIRS "${DB_INCDIR}")
+endif(DB_INCDIR)
+if (DB_LIBDIR)
+	set(DB_LIBRARY_DIRS "${DB_LIBDIR}")
+endif(DB_LIBDIR)
+### Check for mandatory elements
+find_library(FOUND libdb.so ${DB_LIBRARY_DIRS})
+test_FOUND(FOUND "Berkeley DB library")
+find_file(FOUND db.h ${DB_INCLUDE_DIRS})
+test_FOUND(FOUND "Berkeley DB header")
 
 ###--------------------###
 ### Dependency to zlib ###
@@ -241,6 +344,22 @@ find_library(FOUND libgridinit-utils.so ${GRIDINIT_LIBRARY_DIRS})
 test_FOUND(FOUND "gridinit library")
 
 ###------------------------###
+### Dependency to librain  ###
+###------------------------###
+set(LIBRAIN_INCLUDE_DIRS "/usr/local/include")
+set(LIBRAIN_LIBRARY_DIRS "/usr/local/${LD_LIBDIR}")
+if (LIBRAIN_INCDIR)
+	set(LIBRAIN_INCLUDE_DIRS "${LIBRAIN_INCDIR}")
+endif (LIBRAIN_INCDIR)
+if (LIBRAIN_LIBDIR)
+	set(LIBRAIN_LIBRARY_DIRS "${LIBRAIN_LIBDIR}")
+endif (LIBRAIN_LIBDIR)
+find_file(FOUND librain.h ${LIBRAIN_INCLUDE_DIRS})
+test_FOUND(FOUND "librain header")
+find_library(FOUND librain.so ${LIBRAIN_LIBRARY_DIRS})
+test_FOUND(FOUND "librain library")
+
+###------------------------###
 ### Dependency to Net-SNMP ###
 ###------------------------###
 set(NETSNMP_INCLUDE_DIRS "/usr/include")
@@ -277,6 +396,22 @@ test_FOUND(FOUND "Zookeeper client header")
 find_library(FOUND libzookeeper_mt.so ${ZK_LIBRARY_DIRS})
 test_FOUND(FOUND "Zookeeper client library")
 
+#	###---------------------###
+#	### Dependency to JSONC ###
+#	###---------------------###
+#	set(JSONC_INCLUDE_DIRS "/usr/include")
+#	set(JSONC_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
+#	if (JSONC_INCDIR)
+#		set(JSONC_INCLUDE_DIRS ${JSONC_INCDIR})
+#	endif()
+#	if(JSONC_LIBDIR)
+#		set(JSONC_LIBRARY_DIRS ${JSONC_LIBDIR})
+#	endif()
+#	find_file(FOUND json/json.h ${JSONC_INCLUDE_DIRS})
+#	test_FOUND(FOUND "json-c client header")
+#	find_library(FOUND libjson.so ${JSONC_LIBRARY_DIRS})
+#	test_FOUND(FOUND "json-c client library")
+
 ###---------------------###
 ### Dependency to ASN1c ###
 ###---------------------###
@@ -285,7 +420,7 @@ if (ASN1C_EXE)
 else()
 	find_program(ASN1C_EXECUTABLE asn1c)
 endif()
-message("asn1c at ${ASN1C_EXECUTABLE}")
+MESSAGE("asn1c at ${ASN1C_EXECUTABLE}")
 
 set(ASN1C_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
 if(ASN1C_LIBDIR)
@@ -294,6 +429,35 @@ endif(ASN1C_LIBDIR)
 
 find_library(FOUND libASN1.so ${ASN1C_LIBRARY_DIRS})
 test_FOUND(FOUND "asn1c base codec library")
+
+###----------------------###
+### Dependency to ZeroMQ ###
+###----------------------###
+set(ZMQ_INCLUDE_DIRS "/usr/include")
+set(ZMQ_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
+if (ZMQ_INCDIR)
+	set(ZMQ_INCLUDE_DIRS ${ZMQ_INCDIR})
+	set(ZMQ_FOUND ON)
+endif()
+if(ZMQ_LIBDIR)
+	set(ZMQ_LIBRARY_DIRS ${ZMQ_LIBDIR})
+	set(ZMQ_FOUND ON)
+endif()
+
+find_file(FOUND zmq_utils.h ${ZMQ_INCLUDE_DIRS})
+if (NOT FOUND)
+	set(ZMQ_FOUND OFF)
+endif()
+
+find_file(FOUND zmq.h ${ZMQ_INCLUDE_DIRS})
+if (NOT FOUND)
+	set(ZMQ_FOUND OFF)
+endif()
+
+find_library(ZMQ_LIBRARIES libzmq.so ${ZMQ_LIBRARY_DIRS})
+if (NOT ZMQ_LIBRARIES)
+	set(ZMQ_FOUND OFF)
+endif()
 
 endif()
 
@@ -307,6 +471,11 @@ endif(GRIDD_PLUGINS)
 
 ###-------------------------------------------------------------------------###
 
+MESSAGE(STATUS "ZMQ   (${ZMQ_FOUND}? ${ZMQ_VERSION})")
+MESSAGE(STATUS "JSONC (${JSONC_FOUND}? ${JSONC_VERSION})")
+MESSAGE(STATUS "GLIB2 (${GLIB2_FOUND}? ${GLIB2_VERSION})")
+
+
 set(CMAKE_LIBRARY_PATH "")
 set(CMAKE_INCLUDE_PATH "")
 include_directories(AFTER
@@ -315,77 +484,67 @@ include_directories(AFTER
 link_directories(
 		${OPENSSL_LIBRARY_DIRS}
 		${GLIB2_LIBRARY_DIRS}
-		${ASN1C_LIBRARY_DIRS})
+		${ASN1C_LIBRARY_DIRS}
+		${LIBRAIN_LIBRARY_DIRS})
 
 ENABLE_TESTING()
 
 add_subdirectory(./metautils/lib)
 add_subdirectory(./server)
 add_subdirectory(./sqliterepo)
-
-if(NOT CLIENT_ONLY)
-	add_subdirectory(./sqlx)
-endif()
-
 add_subdirectory(./cluster/events)
 add_subdirectory(./cluster/remote)
 add_subdirectory(./cluster/lib)
+add_subdirectory(./cluster/tools)
+add_subdirectory(./meta2/remote)
+add_subdirectory(./gridd/main)
+add_subdirectory(./gridd/clients/ping)
+add_subdirectory(./gridd/clients/stats)
+add_subdirectory(./gridd/plugins/msg_fallback)
+add_subdirectory(./gridd/plugins/msg_ping)
+add_subdirectory(./gridd/plugins/msg_stats)
+add_subdirectory(./gridd/plugins/acl)
+add_subdirectory(./meta0v2)
+add_subdirectory(./meta1v2)
+add_subdirectory(./resolver)
+add_subdirectory(./client/c/lib)
+add_subdirectory(./client/c/metacd_module)
+add_subdirectory(./client/c/tools)
 
 if(NOT CLIENT_ONLY)
 	add_subdirectory(./cluster/conscience)
 	add_subdirectory(./cluster/agent)
-endif()
-
-add_subdirectory(./cluster/tools)
-add_subdirectory(./meta2/remote)
-
-add_subdirectory(./gridd/main)
-add_subdirectory(./gridd/clients/ping)
-add_subdirectory(./gridd/clients/stats)
-
-add_subdirectory(./gridd/plugins/msg_fallback)
-add_subdirectory(./gridd/plugins/msg_ping)
-add_subdirectory(./gridd/plugins/msg_stats)
-
-if(NOT CLIENT_ONLY)
-	add_subdirectory(./gridd/plugins/acl)
 	add_subdirectory(./cluster/module)
-	add_subdirectory(./cluster/event_service)
+	add_subdirectory(./sqlx)
 	add_subdirectory(./meta2v2)
 	add_subdirectory(./rawx-client/lib)
-endif()
-
-add_subdirectory(./meta0v2)
-add_subdirectory(./meta1v2)
-add_subdirectory(./resolver)
-add_subdirectory(./client/c/lib2)
-add_subdirectory(./client/c/lib)
-add_subdirectory(./client/c/metacd_module)
-add_subdirectory(./client/c/tools)
-add_subdirectory(./client/c/bench)
-
-if (NOT CLIENT_ONLY)
 	add_subdirectory(./rawx-lib/src)
 	add_subdirectory(./rawx-lib/tools)
 	add_subdirectory(./rawx-mover/src)
 	add_subdirectory(./rawx-monitor/src)
 	add_subdirectory(./rawx-apache2/src)
-
+	add_subdirectory(./rainx)
+	add_subdirectory(./polix)
 	add_subdirectory(./meta2-mover/lib)
 	add_subdirectory(./meta2-mover/tools)
-
-	if (PYTHONLIBS_FOUND)
-		add_subdirectory(./rules-motor/lib)
-	endif()
-
 	add_subdirectory(./integrity/lib)
 	add_subdirectory(./integrity/tools)
 	add_subdirectory(./snmp/src)
-
+	add_subdirectory(./svc-monitor/src)
+	add_subdirectory(./svc-monitor/contrib)
 	add_subdirectory(./vns-agent/lib)
 	add_subdirectory(./vns-agent/remote)
 	add_subdirectory(./vns-agent/module)
 	add_subdirectory(./tools)
+	if (PYTHONLIBS_FOUND)
+		add_subdirectory(./rules-motor/lib)
+	endif()
+	if (ZMQ_FOUND)
+		if (JSONC_FOUND)
+			add_subdirectory(./crawler/lib)
+			add_subdirectory(./crawler)
+			add_subdirectory(./crawler/listener)
+		endif()
+	endif()
 endif()
 
-add_subdirectory(./crawler)

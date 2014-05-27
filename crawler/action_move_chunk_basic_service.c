@@ -1,34 +1,17 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /* THIS FILE IS NO MORE MAINTAINED */
 
-#include <glib.h>
-#include <dbus/dbus.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <glib.h>
+#include <dbus/dbus.h>
+
+#include <metautils/lib/metautils.h>
+
 #include "crawler_constants.h"
 #include "crawler_common_tools.h"
-
-#include "../metautils/lib/loggers.h"
-#include "../metautils/lib/common_main.h"
 
 static DBusConnection* conn;
 
@@ -79,7 +62,7 @@ listening_action() {
                 if (NULL == msg)
                         continue;
 
-                if (dbus_message_is_signal(msg, signal_action_interface_name, action_name)) { /* Is the signal name corresponding to the service name */
+                if (dbus_message_is_signal(msg, SERVICE_IFACE_ACTION, action_name)) { /* Is the signal name corresponding to the service name */
                         if (!dbus_message_iter_init(msg, &iter)) /* Is the signal containing at least one parameter ? */
                                 continue;
                         else {
@@ -156,7 +139,7 @@ listening_action() {
 
                                 			ack_parameters = g_variant_new(gvariant_ack_param_type_string, context_id, temp_msg_gv);
 
-                                			if (EXIT_FAILURE == send_signal(conn, signal_object_name, signal_ack_interface_name, ACK_KO, ack_parameters))
+                                			if (EXIT_FAILURE == send_signal(conn, SERVICE_OBJECT_NAME, SERVICE_IFACE_ACK, ACK_KO, ack_parameters))
                                         			GRID_ERROR("%s (%d) : System D-Bus signal sending failed %s %s", action_name, service_pid, error.name, error.message);
                         			}
 						else {
@@ -168,7 +151,7 @@ listening_action() {
 
                                                 	ack_parameters = g_variant_new(gvariant_ack_param_type_string, context_id, temp_msg_gv);
 
-                                                	if (EXIT_FAILURE == send_signal(conn, signal_object_name, signal_ack_interface_name, ACK_OK, ack_parameters))
+                                                	if (EXIT_FAILURE == send_signal(conn, SERVICE_OBJECT_NAME, SERVICE_IFACE_ACK, ACK_OK, ack_parameters))
                                                 	        GRID_ERROR("%s (%d) : System D-Bus signal sending failed %s %s", action_name, service_pid, error.name, error.message);
 						}
 						g_variant_unref(ack_parameters);
@@ -219,7 +202,7 @@ main_action(void) {
         /* ------- */
 
         /* Signal subscription */
-        match_pattern = g_strconcat("type='signal',interface='", signal_action_interface_name, "'", NULL);
+        match_pattern = g_strconcat("type='signal',interface='", SERVICE_IFACE_ACTION, "'", NULL);
         dbus_bus_add_match(conn, match_pattern, &error);
         dbus_connection_flush(conn);
         if (dbus_error_is_set(&error)) {

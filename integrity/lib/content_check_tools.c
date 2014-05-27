@@ -1,22 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "integrity.lib.content_check_tools"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "integrity.lib.content_check_tools"
 #endif
 
 #include <stdlib.h>
@@ -33,25 +16,22 @@
 #include <sys/queue.h>
 #include <sys/socket.h>
 
-#include <glib.h>
+#include <neon/ne_basic.h>
+#include <neon/ne_request.h>
+#include <neon/ne_session.h>
+
 #include <event.h>
 #include <evdns.h>
 #include <evhttp.h>
 #include <evutil.h>
 
-#include <metautils.h>
-#include <metacomm.h>
-#include <metatypes.h>
-#include <loggers.h>
-#include <gridcluster.h>
-#include <meta2_remote.h>
-#include <storage_policy.h>
-
-#include <neon/ne_basic.h>
-#include <neon/ne_request.h>
-#include <neon/ne_session.h>
-
+// TODO FIXME replace the MD5 computation by the GLib way
 #include <openssl/md5.h>
+
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <cluster/lib/gridcluster.h>
+#include <meta2/remote/meta2_remote.h>
 
 #include "./content_check.h"
 
@@ -471,7 +451,7 @@ build_chunk_attrinfo_from_content(meta2_raw_content_t *content)
 }
 
 void
-content_check_ctx_clear(struct content_check_ctx_s *ctx) 
+content_check_ctx_clear(struct meta2_ctx_s *ctx)
 {
 	if(!ctx)
 		return;
@@ -573,10 +553,9 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 	}
 
 	gchar dst[128];
-	gsize dst_ip_size = sizeof(dst);
 	guint16 port = 0;
 
-	addr_info_get_addr(&(rc->id.addr), dst, dst_ip_size, &port, &result);
+	addr_info_get_addr(&(rc->id.addr), dst, sizeof(dst), &port);
 
 	session = ne_session_create("http", dst, port);
 
@@ -661,7 +640,7 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 	/* ensure chunk data treat */
 	const char *comp_info = ne_get_response_header(request, "metadatacompress");
 	const char *sysmd = ne_get_response_header(request, "content_metadata-sys");
-	if(!_check_sysmd_and_comp_info(sp, sysmd, comp_info)) {
+	if (sp && !_check_sysmd_and_comp_info(sp, sysmd, comp_info)) {
 		update_uri = g_strconcat(chunk_hash_str, "/update", NULL);
 		request_update = ne_request_create (session, "GET", update_uri);
 		if (!request) {
@@ -705,10 +684,9 @@ delete_chunk(const meta2_raw_chunk_t *rc)
 	char chunk_hash_str[128];
 
 	gchar dst[128];
-	gsize dst_ip_size = sizeof(dst);
 	guint16 port = 0;
 
-	addr_info_get_addr(&(rc->id.addr), dst, dst_ip_size, &port, &result);
+	addr_info_get_addr(&(rc->id.addr), dst, sizeof(dst), &port);
 
 	session = ne_session_create("http", dst, port);
 
@@ -766,7 +744,6 @@ is_rawx_reachable(const service_info_t *rawx)
 	ne_request *request=NULL;
 	int ne_rc;
 	gboolean result = FALSE;
-	GError *local_error = NULL;
 
 	int data_handler_no_op (void *uData, const char *b, const size_t bSize) {
 
@@ -778,13 +755,10 @@ is_rawx_reachable(const service_info_t *rawx)
 	}
 
 	gchar dst[128];
-	gsize dst_ip_size = sizeof(dst);
 	guint16 port = 0;
 
-	addr_info_get_addr(&(rawx->addr), dst, dst_ip_size, &port, &local_error);
-	if(local_error) {
+	if (!addr_info_get_addr(&(rawx->addr), dst, sizeof(dst), &port)) {
 		GRID_DEBUG("Failed to extract address info from rawx");
-		g_clear_error(&local_error);
 		goto end;
 	}
 
@@ -805,8 +779,6 @@ is_rawx_reachable(const service_info_t *rawx)
 		GRID_DEBUG("Failed to create neon request");
 		goto end;
 	}
-
-	/* ne_add_response_body_reader(request, ne_accept_2xx, data_handler_no_op, NULL); */
 
 	/* Now send the request */
 	switch (ne_rc = ne_request_dispatch(request)) {

@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  * @file broken_event.h
  */
@@ -29,7 +12,7 @@
  */
 
 #include <string.h>
-#include <metatypes.h>
+#include <metautils/lib/metatypes.h>
 
 /**
  * The list of chunk and content properties that can be checked by the integrity loop
@@ -59,6 +42,8 @@ enum broken_reason_e
 	R_FORMAT	/**< The element property doesn't have the correct format */
 };
 
+extern const gchar * const reason_to_str[];
+
 /**
  * The list of broken locations
  */
@@ -68,6 +53,8 @@ enum broken_location_e
 	L_CHUNK,	/**< The element was missing or badly formated in chunk attributes */
 	L_META2		/**< The element was missing or badly formated in META2 */
 };
+
+extern const gchar * const loc_to_str[];
 
 /**
  * A broken element
@@ -139,7 +126,7 @@ void broken_element_gfree(gpointer data, gpointer user_data);
  *
  * @param E the element to free
  */
-#define broken_element_free(E) broken_element_gfree(E, NULL)
+void broken_element_free(gpointer e);
 
 /** @} */
 

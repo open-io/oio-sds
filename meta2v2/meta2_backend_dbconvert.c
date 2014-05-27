@@ -1,38 +1,24 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "m2v2"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "m2v2"
 #endif
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
-#include <glib.h>
-#include <glib/gprintf.h>
 #include <time.h>
 #include <string.h>
+
 #include <sqlite3.h>
 
-#include "../sqliterepo/sqlite_utils.h"
-#include "./meta2_backend_dbconvert.h"
-#include "./metautils.h"
-#include "./generic.h"
-#include "./meta2_macros.h"
+#include <sqliterepo/sqlite_utils.h>
+#include <metautils/lib/metautils.h>
+
+#include <meta2v2/meta2_backend_dbconvert.h>
+#include <meta2v2/generic.h>
+#include <meta2v2/meta2_macros.h>
+
+#include <glib.h>
 
 /** Available types for table fields. */
 #define M2V2_TABLE_FIELD_TYPE_BLOB		"BLOB"
@@ -468,7 +454,7 @@ static inline gchar* _req_blob_to_hex(gchar *req, const guint8 *blob, const gint
 	gint i;
 	gchar *iter_req = req;
 	for (i = 0; i < blen; ++i, iter_req += 2)
-		g_sprintf(iter_req, "%02X", blob[i]);
+		g_snprintf(iter_req, 2, "%02X", blob[i]);
 	*iter_req = '\0';
 
 	return iter_req;
@@ -485,7 +471,7 @@ static inline gchar* _req_blob_to_int(gchar *req, const guint8 *blob)
 	const void *vblob = blob;
 	const guint64 *val = vblob;
 
-	iter_req += g_sprintf(iter_req, "%lu", val ? *val : 0UL);
+	iter_req += g_snprintf(iter_req, 32, "%lu", val ? *val : 0UL);
 
 	return iter_req;
 }
@@ -506,7 +492,7 @@ static inline guint8* _blob_to_hex(const guint8 *blob, guint blen)
 	g_assert(res);
 	if (blob) {
 		for (i = 0; i < blen; ++i, iter_res += 2)
-			g_sprintf(iter_res, "%02X", blob[i]);
+			g_snprintf(iter_res, 2, "%02X", blob[i]);
 	}
 	res[reslen - 1] = '\0';
 	return res;
@@ -567,8 +553,6 @@ static inline guint8* _hex_to_blob(const gchar *hex, const guint hexlen)
  */
 static gboolean _generate_create_request(gchar *crreq, const t_m2v2_table_info *ti)
 {
-	auto void _make_create_code(gpointer, gpointer);
-	auto void _add_field_and_comma(gpointer, gpointer);
 	gchar *req = crreq;
 	g_assert(crreq);
 
@@ -634,7 +618,6 @@ static gboolean _generate_create_request(gchar *crreq, const t_m2v2_table_info *
  */
 static gboolean _generate_update_request(gchar *upreq, t_m2v2_table_info *ti, GSList *values)
 {
-	auto void _make_update_code(gpointer, gpointer);
 	gchar *req = upreq;
 	g_assert(upreq);
 
@@ -672,7 +655,6 @@ static gboolean _generate_update_request(gchar *upreq, t_m2v2_table_info *ti, GS
  */
 static gboolean _generate_insert_request(gchar *insert_req, const t_m2v2_table_info *ti, GSList *values)
 {
-	auto void _make_insert_code(gpointer, gpointer);
 	GSList *field_name_list = ti->field_names;
 	gchar *req = insert_req;
 	gboolean ret = TRUE;
@@ -752,7 +734,6 @@ static gboolean _generate_insert_request(gchar *insert_req, const t_m2v2_table_i
  */
 static gboolean _generate_select_request(gchar *select_req, const t_m2v2_table_info *ti, GSList *fields)
 {
-	auto void _make_select_code(gpointer, gpointer);
 	g_assert(select_req);
 	gchar *sereq = select_req;
 
@@ -942,7 +923,6 @@ _exec_adm(sqlite3 *db, const char *k, const char *v) {
  */
 static gboolean _execute_request(const gchar *request, sqlite3 *db, GSList *insert_values, GSList **result, GError **err)
 {
-	auto void _bind_blobs(gpointer, gpointer);
 	sqlite3_stmt *stmt = NULL;
 	int rc, i, status, errcode, len;
 	GSList *fields;
@@ -1271,7 +1251,7 @@ static t_m2v2_sqlite3_result* _cb_make_chunk_pos2(gpointer _cur_val, gpointer _u
 		if (posres->value->data) {
 			memcpy(&intval32, posres->value->data, sizeof(intval32));
 			memset(posres->value->data, 0, posres->value->len);
-			posres->value->len = sprintf((gchar*)posres->value->data, "%u", intval32);
+			posres->value->len = g_snprintf((gchar*)posres->value->data, 16, "%u", intval32);
 		} else {
 			GRID_ERROR("Error: _cb_make_chunk_pos2: empty position");
 		}
@@ -1520,7 +1500,6 @@ static const gchar* _get_field_from_mdsys(const t_m2v2_sqlite3_result *mdsys_res
  */
 static t_m2v2_sqlite3_result* _cb_make_storage_pol(gpointer _cur_val, gpointer _cbarg)
 {
-	auto gint _find_content_path (gconstpointer, gconstpointer);
 	GSList * const cur_val = _cur_val;
 	GSList * const values = g_slist_nth_data((GSList*)_cbarg, 1);
 	GSList *found_list, *found_value;
@@ -1639,7 +1618,6 @@ static t_m2v2_sqlite3_result* _cb_make_contentid2(gpointer _cur_val, gpointer _c
  */
 static GSList* _merge_lists(GSList *values, GSList *cb_new_fields, gpointer cbarg)
 {
-	auto void _choose_value(gpointer, gpointer);
 	GSList *merged_list = NULL;
 	GSList *cursor_values = values;
 
@@ -1735,7 +1713,6 @@ static gboolean _insert_values(
 		gpointer cbarg,
 		GError **err)
 {
-	auto void _make_db_row(gpointer, gpointer);
 	gchar req[M2V2_MAX_REQ_SIZE];
 	gboolean ret = TRUE;
 
@@ -1922,8 +1899,7 @@ m2_convert_db(sqlite3 *db)
 	new_fields_cb = g_slist_append(new_fields_cb, _cb_make_ctime_result); // ctime
 
 	// Convert table
-	//ret = _convert_table(db, old_chunk_table, chunk_table, fields_names, new_fields_values, NULL, NULL, err);
-	if (TRUE == (ret = _retrieve_values(db, old_chunk_table, fields_names, p_retrieved_values, &err))
+	if ((ret = _retrieve_values(db, old_chunk_table, fields_names, p_retrieved_values, &err))
 			&& 0 < g_slist_length(*p_retrieved_values)) {
 		ret = _insert_values(db, chunk_table, *p_retrieved_values, new_fields_cb, NULL, &err);
 	}
@@ -1951,10 +1927,9 @@ m2_convert_db(sqlite3 *db)
 	new_fields_cb = g_slist_append(new_fields_cb, _cb_make_contentid2); // contentid
 	new_fields_cb = g_slist_append(new_fields_cb, _cb_make_chunkid); // chunkid
 	new_fields_cb = g_slist_append(new_fields_cb, _cb_make_chunk_pos2); // position
-   
-   	// Convert table
-	//ret = _convert_table(db, old_chunk_table, content_table, fields_names, new_fields_cb, NULL, NULL, err);
-	if (TRUE == (ret = _retrieve_values(db, old_chunk_table, fields_names, p_retrieved_values, &err)) 
+ 
+	// Convert table
+	if ((ret = _retrieve_values(db, old_chunk_table, fields_names, p_retrieved_values, &err)) 
 			&& 0 < g_slist_length(*p_retrieved_values)) {
 		ret = _insert_values(db, content_table, *p_retrieved_values, new_fields_cb, cbarg, &err);
 	}
@@ -1981,10 +1956,9 @@ m2_convert_db(sqlite3 *db)
 	new_fields_cb = g_slist_append(new_fields_cb, _cb_make_mdsys2); // mdsys
 	new_fields_cb = g_slist_append(new_fields_cb, _cb_make_ctime_result); // ctime
 	new_fields_cb = g_slist_append(new_fields_cb, _cb_make_zero_result); // deleted
-	
-   	// Convert table
-	//ret = _convert_table(db, old_content_table, alias_table, fields_names, new_fields_cb, NULL, p_retrieved_values, err);
-	if (TRUE == (ret = _retrieve_values(db, old_content_table, fields_names, p_retrieved_values, &err)) 
+
+	// Convert table
+	if ((ret = _retrieve_values(db, old_content_table, fields_names, p_retrieved_values, &err)) 
 			&& 0 < g_slist_length(*p_retrieved_values)) {
 		ret = _insert_values(db, alias_table, *p_retrieved_values, new_fields_cb, cbarg, &err);
 	}
@@ -2036,10 +2010,9 @@ m2_convert_db(sqlite3 *db)
 	new_fields_cb = g_slist_append(new_fields_cb, _cb_make_null_result); // hash
 	new_fields_cb = g_slist_append(new_fields_cb, _cb_make_size2); // size
 
-   	// Convert table
-	//ret = _convert_table(db, old_chunk_table, content_header_table, fields_names, new_fields_cb, p_retrieved_values, NULL, err);
+	// Convert table
 	cbarg = g_slist_append(cbarg, *p_retrieved_values);
-	if (TRUE == (ret = _retrieve_values(db, old_content_table, fields_names, p_retrieved_values2, &err))
+	if ((ret = _retrieve_values(db, old_content_table, fields_names, p_retrieved_values2, &err))
 			&& 0 < g_slist_length(*p_retrieved_values2)) {
 		ret = _insert_values(db, content_header_table, *p_retrieved_values2, new_fields_cb, cbarg, &err);
 	}
@@ -2053,7 +2026,6 @@ m2_convert_db(sqlite3 *db)
 	//-----------------------------------------------------------------
 	// CONTENT_PROPERTIES
 	// do not initialize p_retrieved_values
-	//p_retrieved_values = g_malloc0(sizeof(GSList*));
 	p_retrieved_values = g_malloc0(sizeof(GSList*));
 
 	// Build fields to be retrieved from old table
@@ -2069,7 +2041,7 @@ m2_convert_db(sqlite3 *db)
 	new_fields_cb = g_slist_append(new_fields_cb, _cb_make_prop_val); // value 
 	new_fields_cb = g_slist_append(new_fields_cb, _cb_make_zero_result); // deleted
 
-	if (TRUE == (ret = _retrieve_values(db, old_properties_table, fields_names, p_retrieved_values, &err))
+	if ((ret = _retrieve_values(db, old_properties_table, fields_names, p_retrieved_values, &err))
 			&& 0 < g_slist_length(*p_retrieved_values)) {
 		GRID_TRACE("Found %d properties in old table", g_slist_length(*p_retrieved_values));
 		ret = _insert_values(db, properties_table, *p_retrieved_values, new_fields_cb, cbarg, &err);
@@ -2094,7 +2066,6 @@ error:
  */
 static t_m2v2_sqlite3_result* _cb_make_mdsys(gpointer _cur_val, gpointer _values)
 {
-	auto gint _find_content_id (gconstpointer, gconstpointer);
 	GSList * const first_list_of_values = g_slist_nth_data((GSList*)_values, 0);
 	GSList *found_list, *found_value;
 	t_m2v2_sqlite3_result *ret = NULL;
@@ -2136,7 +2107,6 @@ static t_m2v2_sqlite3_result* _cb_make_mdsys(gpointer _cur_val, gpointer _values
  */
 static t_m2v2_sqlite3_result* _cb_make_content_path(gpointer _cur_val, gpointer _values)
 {
-	auto gint _find_content_id (gconstpointer, gconstpointer);
 	GSList *found_list, *found_value;
 	GSList * const first_list_of_values = g_slist_nth_data((GSList*)_values, 0);
 	t_m2v2_sqlite3_result *ret = NULL;
@@ -2174,8 +2144,6 @@ static t_m2v2_sqlite3_result* _cb_make_content_path(gpointer _cur_val, gpointer 
  */
 static t_m2v2_sqlite3_result* _cb_make_content_path_from_previous(gpointer _cur_val, gpointer _values)
 {
-	auto gint _find_content_path (gconstpointer, gconstpointer);
-	auto gint _find_content_id (gconstpointer, gconstpointer);
 	GSList *tmp_list, *found_list, *found_value, *found_list2;
 	GSList * const first_list_of_values = g_slist_nth_data((GSList*)_values, 0);
 	GSList * const second_list_of_values = g_slist_nth_data((GSList*)_values, 1);
@@ -2236,7 +2204,6 @@ static t_m2v2_sqlite3_result* _cb_make_content_path_from_previous(gpointer _cur_
  */
 static t_m2v2_sqlite3_result* _cb_make_chunk_pos(gpointer _cur_val, gpointer _values)
 {
-	auto gint _find_content_path (gconstpointer, gconstpointer);
 	GSList * const cur_val = _cur_val;
 	GSList *found_list, *found_value;
 	GSList * const second_list_of_values = g_slist_nth_data((GSList*)_values, 1);
@@ -2363,7 +2330,6 @@ static t_m2v2_sqlite3_result* _cb_make_chunknb(gpointer _cur_val, gpointer _valu
  */
 GError* m2_unconvert_db(sqlite3 *db)
 {
-	auto void _process_chunk_nb(gpointer, gpointer);
 	GError *err = NULL;
 	GSList *fields_names = NULL, *new_fields_cb = NULL, *cbarg = NULL;
 	GSList **p_retrieved_values = NULL, **p_retrieved_values2 = NULL, **p_retrieved_values3 = NULL;
@@ -2461,8 +2427,7 @@ GError* m2_unconvert_db(sqlite3 *db)
 	new_fields_cb = g_slist_append(new_fields_cb, _cb_make_null_result); // metadata
 
 	// Convert table
-	//ret = _convert_table(db, chunk_table, old_chunk_table, fields_names, new_fields_cb, NULL, NULL, err);
-	if (TRUE == (ret = _retrieve_values(db, chunk_table, fields_names, p_retrieved_values3, &err))) {
+	if ((ret = _retrieve_values(db, chunk_table, fields_names, p_retrieved_values3, &err))) {
 		ret = _insert_values(db, old_chunk_table, *p_retrieved_values3, new_fields_cb, cbarg, &err);
 	}
 	CVDB_FREE_LISTS;
@@ -2489,8 +2454,7 @@ GError* m2_unconvert_db(sqlite3 *db)
 	new_fields_cb = g_slist_append(new_fields_cb, _cb_make_null_result); // metadata
 
    	// Convert table
-	//ret = _convert_table(db, content_table, old_content_table, fields_names, new_fields_cb, NULL, NULL, err);
-	if (TRUE == (ret = _retrieve_values(db, content_header_table, fields_names, p_retrieved_values3, &err))) {
+	if ((ret = _retrieve_values(db, content_header_table, fields_names, p_retrieved_values3, &err))) {
 		ret = _insert_values(db, old_content_table, *p_retrieved_values3, new_fields_cb, cbarg, &err);
 	}
 	CVDB_FREE_LISTS;
@@ -2680,29 +2644,7 @@ static void _init_converters()
 // Test program
 int main(int argc, char **argv)
 {
-	//char req[1024];
 	m2v2_init_db();
-	//_generate_create_request(req, chunk_table);
-	//printf("%s\n", req);
-	//_generate_create_request(req, content_table);
-	//printf("%s\n", req);
-	//_generate_create_request(req, content_header_table);
-	//printf("%s\n", req);
-	//_generate_create_request(req, alias_table);
-	//printf("%s\n", req);
-	//_generate_create_request(req, metadata_table);
-	//printf("%s\n", req);
-	//_generate_create_request(req, snapshot_table);
-	//printf("%s\n", req);
-
-	//GSList *values = NULL;
-	//values = g_slist_append(values, "1234ABCD");
-	//values = g_slist_append(values, "AZERTYUIOP");
-	//values = g_slist_append(values, "8");
-	//values = g_slist_append(values, "1234567890");
-	//_generate_update_request(req, chunk_table, values); 
-	//printf("%s\n", req);
-	//g_slist_free(values);
 	GError *err = NULL;
 	gchar **tokens;
 	gchar ns_name[LIMIT_LENGTH_NSNAME];

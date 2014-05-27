@@ -4,9 +4,9 @@
 #---------------------------------------------------------------------------
 
 DOXYFILE_ENCODING      = UTF-8
-PROJECT_NAME           = Redcurrant
-PROJECT_NUMBER         = 1.8.1
-PROJECT_BRIEF          = Cloud Storage
+PROJECT_NAME           = Atos Wordline Honeycomb
+PROJECT_NUMBER         = 1.6
+PROJECT_BRIEF          = AWL cloud of services
 PROJECT_LOGO           =
 OUTPUT_DIRECTORY       = @CMAKE_CURRENT_BINARY_DIR@/doc
 CREATE_SUBDIRS         = YES

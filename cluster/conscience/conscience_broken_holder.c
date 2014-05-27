@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "conscience.api.brk"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "conscience.api.brk"
 #endif
 #include <string.h>
 #include <errno.h>
@@ -74,9 +54,6 @@ broken_holder_run_meta1( struct broken_holder_s *bh, time_t oldest,
 		struct broken_meta1_s *brk_m1 = v;
 		if (brk_m1->date_insertion >= oldest) {
 			if (!m1( udata, brk_m1 )) {
-#ifdef HYPER_VERBOSE
-				TRACE("Failed with a call to the META1 callback");
-#endif
 				return FALSE;
 			}
 			done = TRUE;
@@ -84,9 +61,6 @@ broken_holder_run_meta1( struct broken_holder_s *bh, time_t oldest,
 	}
 	if (done) {
 		if (!m1(udata,NULL)) {
-#ifdef HYPER_VERBOSE
-			TRACE("Failed with the terminal call to the META1 callback");
-#endif
 			return FALSE;
 		}
 	}
@@ -113,9 +87,6 @@ broken_holder_run_contents( struct broken_holder_s *bh, time_t oldest,
 		if (brk_m2->totally_broken) {
 			if (brk_m2->date_insertion >= oldest) {
 				if (!c( udata, brk_m2, NULL )) {
-#ifdef HYPER_VERBOSE
-					TRACE("Failed with a call to the meta2 callback.");
-#endif
 					return FALSE;
 				}
 				done = TRUE;
@@ -127,26 +98,15 @@ broken_holder_run_contents( struct broken_holder_s *bh, time_t oldest,
 				brk_content = m2_v;
 				if (brk_content->date_insertion >= oldest) {
 					if (!c( udata, brk_m2, brk_content )) {
-#ifdef HYPER_VERBOSE
-						TRACE("Failed with a call to the content callback.");
-#endif
 						return FALSE;
 					}
 					done = TRUE;
 				}
 			}
-#ifdef HYPER_VERBOSE
-			TRACE("A broken META2 has been ran.");
-		} else {
-			TRACE("Bad broken META2: not broken but not containing a boken content.");
-#endif
 		}
 	}
 	if (done) {
 		if (!c(udata,NULL,NULL)) {
-#ifdef HYPER_VERBOSE
-			TRACE("Failed with the terminal call to the meta2 callback.");
-#endif
 			return FALSE;
 		}
 	}

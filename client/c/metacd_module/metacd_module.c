@@ -1,45 +1,27 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #define MODULE_NAME "metacd"
 
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN MODULE_NAME".plugin"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN MODULE_NAME".plugin"
 #endif
 
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
 
-#include <plugin.h>
-#include <message_handler.h>
-
-#include <metautils.h>
-#include <metacomm.h>
-#include <meta0_remote.h>
-#include <meta1_remote.h>
-#include <meta2_remote.h>
+#include <meta0v2/meta0_remote.h>
+#include <meta1v2/meta1_remote.h>
+#include <meta2/remote/meta2_remote.h>
+#include <gridd/main/plugin.h>
+#include <gridd/main/message_handler.h>
 
 #include "../lib/meta_resolver_explicit.h"
+
 #include "./limited_cache.h"
 #include "./locktab.h"
-#include "metacd_module.h"
+#include "./metacd_module.h"
 
 #define MSG_BAD_REQUEST "Bad request"
 #define MSG_INTERNAL_ERROR "Internal error"
@@ -154,24 +136,11 @@ static GHashTable *caches = NULL;
 static guint
 chunk_key_hash(gconstpointer k)
 {
-	const struct chunk_key_s * key;
-	size_t i;
-	register guint32 h;
-	register guint8 *b;
+	const struct chunk_key_s *key = k;
+	guint32 h = djb_hash_buf(key->cid, sizeof(container_id_t));
 
-	key = k;
-	h = 5381;
-
-	b = (guint8 *)(key->cid);
-	for (i = 0; i < sizeof(container_id_t); i++)
-		h = ((h << 5) + h) ^ (guint32) (b[i]);
-
-	if (NULL != (b = (guint8 *)(key->content_path))) {
-		for (i = 0; i < LIMIT_LENGTH_CONTENTPATH && b[i]; i++)
-			h = ((h << 5) + h) ^ (guint32) (b[i]);
-	}
-
-	return h;
+	return djb_hash_buf3(h, (guint8 *) (key->content_path), strlen_len(
+			(guint8 *) (key->content_path), LIMIT_LENGTH_CONTENTPATH));
 }
 
 static gboolean
@@ -378,7 +347,12 @@ _locate_meta2(struct namespace_cache_s *nsCache, const gchar *ns, container_id_t
 
 	m2L = resolver_direct_get_meta2(nsCache->m0, ns, cid, err, 2);
 	if (!m2L) {
-		GSETERROR(err, "Cannot explicitely resolve META2 for NS=[%s] ID=[%s]", nsCache->ns_name, str_cid);
+		if (err != NULL)
+			g_prefix_error(err, "Cannot explicitely resolve META2 for NS=[%s] ID=[%s]: ",
+					nsCache->ns_name, str_cid);
+		else
+			GSETERROR(err, "Cannot explicitely resolve META2 for NS=[%s] ID=[%s]",
+					nsCache->ns_name, str_cid);
 		return NULL;
 	}
 	if (!(m2L->data)) {
@@ -443,25 +417,14 @@ _stat_content(const gchar *ns, container_id_t cid, gchar *str_cid, gchar *path, 
 	 * by the meta2 localization, and we keep the first positive
 	 * result*/
 	for (raw_content=NULL, l=list_of_addr; l && !raw_content ;l=l->next) {
-		struct metacnx_ctx_s cnx;
-		addr_info_t *m2_addr;
-		
 		raw_content = NULL;
-		m2_addr = l->data;
 
-		if (!meta2_remote_container_open(m2_addr, 4096, err, cid)) {
-			GSETERROR(err, "open failed");
-			continue;
-		}
-
-		memset(&cnx, 0x00, sizeof(cnx));
-		cnx.fd = -1;
-		metacnx_init_with_addr(&cnx, m2_addr, err);
+		struct metacnx_ctx_s cnx;
+		metacnx_clear(&cnx);
+		metacnx_init_with_addr(&cnx, (addr_info_t*) l->data, err);
 		raw_content = meta2raw_remote_get_chunks(&cnx, err, cid, key.content_path, strlen(key.content_path));
 		metacnx_close(&cnx);
-
-		if (!meta2_remote_container_close(m2_addr, 8192, err, cid))
-			ERROR("Container opened but not closed : [%s]", str_cid);
+		metacnx_clear(&cnx);
 	}
 	g_slist_foreach(list_of_addr, addr_info_gclean, NULL);
 	g_slist_free(list_of_addr);
@@ -483,7 +446,7 @@ _stat_content(const gchar *ns, container_id_t cid, gchar *str_cid, gchar *path, 
 		GSETCODE(err, 500, "serialization error");
 		return NULL;
 	}
-	
+
 	/*insert in the cache*/
 	limited_cache_put(nsCache->chunks_cache, &key, gba_content);
 	locktab_unlock(nsCache->chunks_locks, &key);
@@ -557,7 +520,7 @@ handler_get_meta1(struct request_context_s *req_ctx)
 	container_id_t cid;
 	gchar str_cid [STRLEN_CONTAINERID+1];
 	GError *e = NULL;
-	gboolean ro = FALSE;
+	gboolean ro = FALSE, ref_exists = FALSE;
 
 	/*initiations*/
 	memset(&ctx, 0x00, sizeof(struct reply_context_s));
@@ -590,11 +553,28 @@ handler_get_meta1(struct request_context_s *req_ctx)
 	if (!m1_ai) {
 		JUMPERR(&ctx, 500, MSG_INTERNAL_ERROR);
 	}
-	
-	do {/*reply the address saquence*/
+
+	ref_exists = limited_cache_has(nsCache->m1, cid, NULL);
+	if (!ref_exists) {
+		limited_cache_put(nsCache->m1, cid, NULL);
+		DEBUG("Created META1 reference for NS=[%s] ID=[%s] master=[]", nsName, str_cid);
+	} else {
+		DEBUG("META1 reference already exists for NS=[%s] ID=[%s]", nsName, str_cid);
+	}
+
+	do {/*reply the address sequence*/
 		GSList aL = {NULL,NULL};
 		aL.data = m1_ai;
-		reply_addr_info_list (&ctx, &aL);
+		void *bufAI = NULL;
+		gsize bufAISize = 0;
+		if (!addr_info_marshall(&aL, &bufAI, &bufAISize, &(ctx.warning))) {
+			GSETERROR(&(ctx.warning), "Cannot marshall the address list");
+			JUMPERR(&ctx, 500, ctx.warning->message);
+		}
+		reply_context_set_message(&ctx, 200, "OK");
+		reply_context_set_body(&ctx, bufAI, bufAISize, REPLYCTX_DESTROY_ON_CLEAN);
+		reply_context_add_strheader_in_reply(&ctx, "REF_EXISTS", ref_exists ? "TRUE" : "FALSE");
+		reply_context_reply(&ctx, &(ctx.warning));
 	} while (0);
 
 	g_free(m1_ai);
@@ -1036,7 +1016,7 @@ errorLabel:
 typedef gboolean(*_cmd_handler_f) (struct request_context_s *);
 
 
-static inline _cmd_handler_f
+static _cmd_handler_f
 __find_handler(gchar * n, gsize l)
 {
 	struct cmd_s *c;

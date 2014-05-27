@@ -1,41 +1,11 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+#include "./gs_internals.h"
 
-#include <assert.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include <glib.h>
-
-#include <metautils.h>
-#include "./round_buffer.h"
-
-#if 0
-# define SLAB_SIZE (1<<19)
-# define BUFLEN ((1<<22)+SLAB_SIZE)
-#else
-# define BUFLEN 8744243
-#endif
+#define BUFFER_MAXLEN 8744243
 
 
 struct {
-	unsigned char original [BUFLEN];
-	unsigned char copy [BUFLEN];
+	unsigned char original [BUFFER_MAXLEN];
+	unsigned char copy [BUFFER_MAXLEN];
 } buffers;
 
 static void
@@ -43,15 +13,15 @@ randomize (void)
 {
 	register int s, i;
 	memset(&buffers, 0x00, sizeof(buffers));
-	for (i=0, s=0; s<BUFLEN ;)
-		s += snprintf((char*)buffers.original+s, BUFLEN-s, "%i_", i++);
+	for (i=0, s=0; s<BUFFER_MAXLEN ;)
+		s += snprintf((char*)buffers.original+s, BUFFER_MAXLEN-s, "%i_", i++);
 }
 
 static ssize_t fill_chunk (round_buffer_t *src, ssize_t offset, ssize_t nb)
 {
 	ssize_t r=0, r_max=0, r_local=0;
-	while ( r_local<nb && offset<BUFLEN ) {
-		r_max = BUFLEN - offset;
+	while ( r_local<nb && offset<BUFFER_MAXLEN ) {
+		r_max = BUFFER_MAXLEN - offset;
 		if (r_max > nb-r_local)
 			r_max = nb-r_local;
 		r = rb_input_from( src, (char*)buffers.copy+offset+r_local, r_max);
@@ -79,8 +49,8 @@ int main (int argc, char ** args)
 	{
 		size_t max, nb;
 		(void)uData;
-		if (sizeFeed>=BUFLEN) return 0;
-		max = BUFLEN - sizeFeed;
+		if (sizeFeed>=BUFFER_MAXLEN) return 0;
+		max = BUFFER_MAXLEN - sizeFeed;
 		nb = MIN(s,max);
 		memcpy (b, buffers.original+sizeFeed, nb);
 		sizeFeed += nb;
@@ -102,7 +72,7 @@ int main (int argc, char ** args)
 	rb = rb_create_with_callback (chunk_size, feed_from_buffer, NULL);
 	rb_set_mark( rb);
 
-	while ( content_offset<BUFLEN ) {
+	while ( content_offset<BUFFER_MAXLEN ) {
 		ssize_t r;
 
 		g_printerr("reading a new chunk\n");
@@ -132,7 +102,7 @@ int main (int argc, char ** args)
 		content_offset += r;
 	}
 
-	if (0 == memcmp(buffers.original, buffers.copy, BUFLEN)) {
+	if (0 == memcmp(buffers.original, buffers.copy, BUFFER_MAXLEN)) {
 		fprintf(stdout,"copied buffers are equal\r\n");
 	} else {
 		fputs ("copied buffers differ\r\n", stdout);

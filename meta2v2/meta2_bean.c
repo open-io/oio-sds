@@ -1,26 +1,16 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #include <errno.h>
-#include <glib.h>
 
-#include "./meta2_bean.h"
-#include "./autogen.h"
-#include "./generic.h"
+#include <meta2v2/meta2_bean.h>
+#include <meta2v2/autogen.h>
+#include <meta2v2/generic.h>
+
+#include <metautils/lib/M2V2Bean.h>
+#include <metautils/lib/M2V2Alias.h>
+#include <metautils/lib/M2V2Content.h>
+#include <metautils/lib/M2V2ContentHeader.h>
+#include <metautils/lib/M2V2Property.h>
+
+#include <glib.h>
 
 /* ---------------------------------------------------------------- */
 
@@ -118,6 +108,21 @@ _generate_api_prop(const M2V2Bean_t * asn)
 	PROPERTIES_set2_key(result, (const char *)asn->prop->key.buf);
 	PROPERTIES_set2_value(result, asn->prop->value.buf, asn->prop->value.size);
 	PROPERTIES_set_deleted(result, asn->prop->deleted);
+
+	return result;
+}
+
+static gpointer
+_generate_api_snapshot(const M2V2Bean_t * asn)
+{
+	gpointer result = NULL;
+	gint64 version;
+	result = _bean_create(&descr_struct_SNAPSHOTS);
+
+	asn_INTEGER_to_int64(&(asn->snapshot->version), &version);
+
+	SNAPSHOTS_set_version(result, version);
+	SNAPSHOTS_set2_name(result, (const char *)asn->snapshot->name.buf);
 
 	return result;
 }
@@ -227,6 +232,20 @@ _alias_to_asn(gpointer api, M2V2Bean_t *asn)
 	return TRUE;
 }
 
+static gboolean
+_snapshot_to_asn(gpointer api, M2V2Bean_t *asn)
+{
+	struct bean_SNAPSHOTS_s *snap = (struct bean_SNAPSHOTS_s *) api;
+	asn->snapshot = g_malloc0(sizeof(M2V2Snapshot_t));
+
+	GString *name = SNAPSHOTS_get_name(snap);
+	OCTET_STRING_fromBuf(&(asn->snapshot->name), name->str, name->len);
+
+	asn_int64_to_INTEGER(&(asn->snapshot->version), SNAPSHOTS_get_version(snap));
+
+	return TRUE;
+}
+
 /* ---------------------------------------------------------------- */
 
 gpointer
@@ -235,20 +254,23 @@ bean_ASN2API(const M2V2Bean_t * asn)
 	if (!asn)
 		return NULL;
 
-	if(asn->alias)
+	if (asn->alias)
 		return _generate_api_alias(asn);
 
-	if(asn->header)
+	if (asn->header)
 		return _generate_api_header(asn);
 
-	if(asn->content)
+	if (asn->content)
 		return _generate_api_content(asn);
 
-	if(asn->chunk)
+	if (asn->chunk)
 		return _generate_api_chunk(asn);
 
-	if(asn->prop)
+	if (asn->prop)
 		return _generate_api_prop(asn);
+
+	if (asn->snapshot)
+		return _generate_api_snapshot(asn);
 
 	return NULL;
 }
@@ -257,20 +279,21 @@ gboolean
 bean_API2ASN(gpointer * api, M2V2Bean_t * asn)
 {
 	/* find bean type and fill matching item in M2V2Bean */
-	if(!api || !asn)
+	if (!api || !asn)
 		return FALSE;
 
-	if(DESCR(api) == &descr_struct_ALIASES)
+	if (DESCR(api) == &descr_struct_ALIASES)
 		return _alias_to_asn(api, asn);
-	if(DESCR(api) == &descr_struct_CONTENTS_HEADERS)
+	if (DESCR(api) == &descr_struct_CONTENTS_HEADERS)
 		return _header_to_asn(api, asn);
-	if(DESCR(api) == &descr_struct_CHUNKS)
+	if (DESCR(api) == &descr_struct_CHUNKS)
 		return _chunk_to_asn(api, asn);
-	if(DESCR(api) == &descr_struct_CONTENTS)
+	if (DESCR(api) == &descr_struct_CONTENTS)
 		return _content_to_asn(api, asn);
-	if(DESCR(api) == &descr_struct_PROPERTIES)
+	if (DESCR(api) == &descr_struct_PROPERTIES)
 		return _property_to_asn(api, asn);
-	
+	if (DESCR(api) == &descr_struct_SNAPSHOTS)
+		return _snapshot_to_asn(api, asn);
 
 	return FALSE;
 }

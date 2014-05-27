@@ -1,35 +1,17 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "integrity.lib.chunk_db"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "integrity.lib.chunk_db"
 #endif
 
 #include <string.h>
+
 #include <db.h>
+
 #include <glib/gstdio.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
-#include "chunk_db.h"
-#include "check.h"
+#include "./chunk_db.h"
+#include "./check.h"
 
 /**
  Convert a GByteArray to a string and add it to a list (GFunc to be used in g_slist_foreach)
@@ -61,10 +43,8 @@ _str2gba(const gchar *str)
 	int len;
 
 	len = strlen(str);
-	/*gba = g_byte_array_sized_new(len+1);*/
 	gba = g_byte_array_sized_new(len);
 	g_byte_array_append(gba, (guint8*)str, len);
-	/*gba->data[len] = '\0';*/
 	return gba;
 }
 
@@ -437,8 +417,9 @@ get_content_chunks(const gchar* volume_root, const gchar* container_id, const gc
 		return FALSE;
 	}
 
-	if (TRACE_ENABLED())
+	if (TRACE_ENABLED()) {
 		TRACE("Found %u chunks for container [%s]:[%s]", g_slist_length(result), container_id, content_name);
+	}
 
 	*list_chunk = NULL;
 	g_slist_foreach(result, _convert_byte_array_to_string, list_chunk);
@@ -469,8 +450,9 @@ get_container_chunks(const gchar* volume_root, const gchar* container_id, GSList
 		return FALSE;
 	}
 
-	if (TRACE_ENABLED())
+	if (TRACE_ENABLED()) {
 		TRACE("Found %u chunks for container [%s]", g_slist_length(result), container_id);
+	}
 
 	*list_chunk = NULL;
 	g_slist_foreach(result, _convert_byte_array_to_string, list_chunk);

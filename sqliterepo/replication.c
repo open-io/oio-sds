@@ -1,41 +1,12 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "grid.sqlx.repli"
+# define G_LOG_DOMAIN "sqliterepo"
 #endif
 
 #include <stddef.h>
 #include <unistd.h>
 
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-#include "../metautils/lib/hashstr.h"
-#include "../metautils/lib/loggers.h"
-
-#include <glib.h>
-
-#include "./internals.h"
-#include "./election.h"
-#include "./version.h"
-#include "./sqliterepo.h"
-#include "./sqlx_remote.h"
-#include "./gridd_client.h"
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
 
 #include <RowFieldSequence.h>
 #include <RowFieldValue.h>
@@ -46,34 +17,69 @@
 #include <TableHeader.h>
 #include <Table.h>
 #include <TableSequence.h>
-
 #include <asn_codecs.h>
 
-/* Collects the changes in a DB context */
+#include "sqliterepo.h"
+#include "election.h"
+#include "version.h"
+#include "sqlx_remote.h"
+#include "internals.h"
 
 struct sqlx_repctx_s
 {
-	gboolean huge;
-	int changes; /**< explicit changes */
-	struct sqlx_sqlite3_s *sq3;
+	// Explicit changes matched
 	TableSequence_t sequence;
-	GTree *pending;
-};
 
-static GQuark gquark_log = 0;
+	struct sqlx_sqlite3_s *sq3;
+
+	// Explicit changes matched but not yet resolved : this stores ROWID
+	GTree *pending;
+
+	// Some SLAVES maybe replied an error with code=471, telling their are out
+	// of sync. Their URLs are stored here, because after the local commit we
+	// will send them a whole dump.
+	GPtrArray *resync_todo; // <gchar*>
+
+	// Count the explicit changes, those matched
+	gint32 changes;
+
+	// if set, there is no replication configured, even if a replicated
+	// transaction context had been initiated.
+	char hollow : 1;
+
+	// if set, some changes were not matched by the update hook and a resync
+	// will be necessary. This is the case in the SQLX by "DELETE FROM <table>"
+	// queries.
+	char huge : 1;
+
+	char any_change : 1;
+};
 
 static guint
 group_to_quorum(guint group_size)
 {
-	return 1+(group_size / 2);
+	return 1 + (group_size / 2);
 }
 
+// This typedef is absent from sqlite3.h
+typedef void (*sqlite3_update_hook_f) (void *, int, char const *,
+		char const *, sqlite3_int64);
+
 /* ------------------------------------------------------------------------- */
+
+static void
+g_free0(gpointer p)
+{
+	if (p)
+		g_free(p);
+}
 
 static void
 dump_request(const gchar *func, gchar **targets,
 		const gchar *rn, struct sqlx_name_s *n)
 {
+	if (!GRID_DEBUG_ENABLED())
+		return;
 	gchar *tmp = g_strjoinv("|", targets);
 	GRID_DEBUG("%s [%s][%s] to %s (%s)", rn, n->base, n->type, tmp, func);
 	g_free(tmp);
@@ -132,8 +138,6 @@ load_table_header(sqlite3_stmt *stmt, Table_t *t)
 {
 	guint32 i, max;
 
-	GRID_TRACE2("%s(%p,%p)", __FUNCTION__, stmt, t);
-
 	for (i=0,max=sqlite3_data_count(stmt); i<max ;i++) {
 		const gchar *cname;
 		RowName_t *rname;
@@ -143,8 +147,6 @@ load_table_header(sqlite3_stmt *stmt, Table_t *t)
 		asn_uint32_to_INTEGER(&(rname->pos), i);
 		OCTET_STRING_fromBuf(&(rname->name), cname, strlen(cname));
 		asn_sequence_add(&(t->header.list), rname);
-
-		GRID_TRACE2(" > column (%u,%s)", i, cname);
 	}
 }
 
@@ -165,12 +167,10 @@ load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table,
 
 		rf = g_malloc0(sizeof(*rf));
 		asn_uint32_to_INTEGER(&(rf->pos), i);
-		/*rf->value.present = RowFieldValue_PR_NOTHING;*/
 		rf->value.present = RowFieldValue_PR_n;
 
 		switch (sqlite3_column_type(stmt, i)) {
 			case SQLITE_NULL:
-				GRID_TRACE2(" >> null   (%u)", i);
 				rf->value.present = RowFieldValue_PR_n;
 				break;
 			case SQLITE_INTEGER:
@@ -178,7 +178,6 @@ load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table,
 					gint64 i64 = sqlite3_column_int64(stmt, i);
 					asn_int64_to_INTEGER(&(rf->value.choice.i), i64);
 					rf->value.present = RowFieldValue_PR_i;
-					GRID_TRACE2(" >> int    (%u,%"G_GINT64_FORMAT")", i, i64);
 				} while (0);
 				break;
 			case SQLITE_FLOAT:
@@ -186,13 +185,11 @@ load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table,
 					gdouble d = sqlite3_column_double(stmt, i);
 					asn_double2REAL(&(rf->value.choice.f), d);
 					rf->value.present = RowFieldValue_PR_f;
-					GRID_TRACE2(" >> float  (%u,%f)", i, d);
 				}
 				else {
 					const guint8 *t = sqlite3_column_text(stmt, i);
 					OCTET_STRING_fromBuf(&(rf->value.choice.s), (char*)t, strlen((char*)t));
 					rf->value.present = RowFieldValue_PR_s;
-					GRID_TRACE2(" >> Sfloat (%u,%s)", i, t);
 				}
 				break;
 			case SQLITE_TEXT:
@@ -201,7 +198,6 @@ load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table,
 					gsize tsize = sqlite3_column_bytes(stmt, i);
 					OCTET_STRING_fromBuf(&(rf->value.choice.s), (char*)t, tsize);
 					rf->value.present = RowFieldValue_PR_s;
-					GRID_TRACE2(" >> char   (%u,%"G_GSIZE_FORMAT")", i, tsize);
 				} while (0);
 				break;
 			case SQLITE_BLOB:
@@ -210,11 +206,9 @@ load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table,
 					gsize bsize = sqlite3_column_bytes(stmt, i);
 					OCTET_STRING_fromBuf(&(rf->value.choice.b), (char*)b, bsize);
 					rf->value.present = RowFieldValue_PR_b;
-					GRID_TRACE2(" >> blob   (%u,%"G_GSIZE_FORMAT")", i, bsize);
 				} while (0);
 				break;
 			default:
-				GRID_TRACE2(" >> ?     (%u)", i);
 				rf->value.present = RowFieldValue_PR_n;
 				break;
 		}
@@ -247,21 +241,21 @@ load_table_row(sqlite3 *db, const hashstr_t *name, gint64 rowid, Row_t *row,
 static void
 context_pending_inc_versions(struct sqlx_repctx_s *ctx)
 {
-	gboolean _on_table(gpointer k, gpointer v, gpointer u0) {
-		GTree *rows = v;
+	gboolean _on_table(hashstr_t *k, GTree *rows, gpointer u0) {
 		(void) u0;
-
-		GRID_TRACE2("%s(%s,%p,%p)", __FUNCTION__, hashstr_str(k), v, u0);
 		if (g_tree_nnodes(rows) > 0) {
-			if (0 != g_ascii_strcasecmp(hashstr_str(k), "main.admin"))
-				version_increment(ctx->sq3->versions, hashstr_str(k));
+			if (0 != g_ascii_strcasecmp(hashstr_str(k), "main.admin")) {
+				gsize max = sizeof("version:")+hashstr_len(k);
+				gchar buf[max];
+				g_snprintf(buf, max, "version:%s", hashstr_str(k));
+				sqlx_admin_inc_version(ctx->sq3, buf, 1);
+			}
 		}
 		return FALSE;
 	}
 
-	GRID_TRACE2("%s(%p)", __FUNCTION__, ctx);
 	if (ctx->pending)
-		g_tree_foreach(ctx->pending, _on_table, NULL);
+		g_tree_foreach(ctx->pending, (GTraverseFunc)_on_table, NULL);
 }
 
 static void
@@ -300,9 +294,9 @@ context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 	}
 
 	GRID_TRACE2("%s(%p,%p)", __FUNCTION__, db, ctx);
-	SQLX_ASSERT(db != NULL);
-	SQLX_ASSERT(ctx != NULL);
-	SQLX_ASSERT(ctx->pending != NULL);
+	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(ctx != NULL);
+	EXTRA_ASSERT(ctx->pending != NULL);
 	g_tree_foreach(ctx->pending, _on_table, NULL);
 	context_flush_pending(ctx);
 }
@@ -327,35 +321,47 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 	clients = gridd_client_create_many(peers, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
 
+	gridd_clients_set_timeout(clients, 5.0, 10.0);
+
 	gridd_clients_start(clients);
 	err = gridd_clients_loop(clients);
 	if (!err) {
 		for (pc=clients; pc && *pc ;pc++) {
 			GError *e = gridd_client_error(*pc);
-			if (NULL != e) {
-				if (e->code == CODE_PIPEFROM) {
+			if (!e)
+				++ count_success;
+			else {
+				if (e->code == CODE_PIPEFROM || e->code == CODE_PIPETO
+						|| e->code == CODE_CONCURRENT)
+				{
+					// XXX JFS Previously, the SLAVE triggered a RESYNC. Now
+					// we immediately send the DUMP as soon as the COMMIT is
+					// terminated. We Just store the SLAVE's address.
+					// XXX Why do the resync in case of a PIPEFROM (understand
+					// as 'pipe from the peer') ? The current host is MASTER
+					// it is the refernce for several others bases, and
+					// whatever the remote problem on *that* peer, the it
+					// is MASTER because the election succeeded, and we won't
+					// restart a whole election
 					++ count_success;
-					/* The concerned peer will trigger a RESYNC */
+					g_ptr_array_add(ctx->resync_todo, g_strdup(
+							gridd_client_url(*pc)));
 				}
 				else
 					++ count_errors;
 				g_clear_error(&e);
 			}
-			else
-				++ count_success;
 		}
 
-		++ count_success; /* JFS: local success! */
+		++ count_success; // XXX JFS: don't forget the local success!
 		guint groupsize = 1 + g_strv_length(peers);
 		if (ctx->sq3->config->mode == ELECTION_MODE_GROUP) {
 			if (count_success < groupsize)
-				err = g_error_new(gquark_log, 500,
-						"Not enough successes, no group");
+				err = NEWERROR(500, "Not enough successes, no group");
 		}
 		else {
 			if (count_success < group_to_quorum(groupsize))
-				err = g_error_new(gquark_log, 500,
-						"Not enough successes, no quorum");
+				err = NEWERROR(500, "Not enough successes, no quorum");
 		}
 	}
 
@@ -363,47 +369,91 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 	return err;
 }
 
+static void
+_defer_synchronous_RESYNC(struct sqlx_repctx_s *ctx)
+{
+	gchar **peers = NULL;
+
+	GError *err = sqlx_config_get_peers(ctx->sq3->config,
+			ctx->sq3->logical_name, ctx->sq3->logical_type, &peers);
+
+	if (err != NULL) {
+		GRID_WARN("Replicated transaction started but peers not found "
+				"[%s][%s] : (%d) %s", ctx->sq3->logical_name,
+				ctx->sq3->logical_type, err->code, err->message);
+		g_clear_error(&err);
+		return;
+	}
+
+	if (peers) {
+		for (gchar **p=peers; *p ;++p)
+			g_ptr_array_add(ctx->resync_todo, *p);
+		g_free(peers);
+	}
+}
+
+static int
+_perform_REPLICATE(struct sqlx_repctx_s *ctx)
+{
+	GError *err;
+	gchar **peers = NULL;
+
+	err = sqlx_config_get_peers(ctx->sq3->config, ctx->sq3->logical_name,
+			ctx->sq3->logical_type, &peers);
+
+	if (err != NULL) {
+		GRID_WARN("Replicated transaction started but peers not found "
+				"[%s][%s] : (%d) %s", ctx->sq3->logical_name,
+				ctx->sq3->logical_type, err->code, err->message);
+		g_clear_error(&err);
+		return 1;
+	}
+
+	if (!peers) {
+		GRID_DEBUG("No peer located, no replication to do");
+		return 0;
+	}
+
+	err = _replicate_on_peers(peers, ctx);
+	g_strfreev(peers);
+	context_flush_rowsets(ctx);
+
+	if (!err)
+		return 0;
+
+	GRID_WARN("%s(%p) FAILED : (%d) %s", __FUNCTION__, ctx, err->code,
+			err->message);
+	g_error_free(err);
+	ctx->any_change = 0;
+	return 1;
+}
+
 static int
 hook_commit(gpointer d)
 {
 	struct sqlx_repctx_s *ctx = d;
-	GError *err = NULL;
-	gchar **peers = NULL;
 
 	GRID_TRACE2("%s(%p)", __FUNCTION__, ctx);
-	SQLX_ASSERT(ctx != NULL);
-	SQLX_ASSERT(ctx->sq3 != NULL);
-	SQLX_ASSERT(ctx->sq3->config != NULL);
-	SQLX_ASSERT(ctx->sq3->config->get_peers != NULL);
+	EXTRA_ASSERT(ctx != NULL);
+	EXTRA_ASSERT(ctx->sq3 != NULL);
+	EXTRA_ASSERT(ctx->sq3->config != NULL);
+	EXTRA_ASSERT(ctx->sq3->config->get_peers != NULL);
 
-	if (ctx->sequence.list.count <= 0) {
-		GRID_DEBUG("Empty transaction!");
+	ctx->any_change = 1;
+
+	if (ctx->huge) {
+		_defer_synchronous_RESYNC(ctx);
 		return 0;
 	}
 
-	peers = ctx->sq3->config->get_peers(ctx->sq3->config->ctx,
-			ctx->sq3->logical_name, ctx->sq3->logical_type);
-	if (!peers || !*peers) {
-		GRID_DEBUG("No peer located, no replication to do");
-		err = NULL;
-	}
-	else {
-		err = _replicate_on_peers(peers, ctx);
+	if (ctx->sequence.list.count <= 0) {
+		GRID_DEBUG("Empty transaction!");
+		ctx->any_change = 0;
+		context_flush_rowsets(ctx);
+		return 0;
 	}
 
-	if (peers)
-		g_strfreev(peers);
-	context_flush_rowsets(ctx);
-
-	if (err) {
-		GRID_WARN("%s(%p) FAILED : (%d) %s", __FUNCTION__, ctx, err->code,
-				err->message);
-		g_error_free(err);
-		return 1;
-	}
-
-	GRID_TRACE("%s(%p) OK : Replication requests succeded", __FUNCTION__, ctx);
-	return 0;
+	return _perform_REPLICATE(ctx);
 }
 
 static void
@@ -415,16 +465,16 @@ hook_rollback(void *d)
 }
 
 static void
-hook_update(void *d, int op, char const *bn, char const *tn,
+hook_update(struct sqlx_repctx_s *ctx, int op, char const *bn, char const *tn,
 	sqlite3_int64 rowid)
 {
 	hashstr_t *key;
-	struct sqlx_repctx_s *ctx;
-	GTree *subtree;
-	guint u;
+
+	if (ctx->hollow || ctx->huge)
+		return ;
 
 	GRID_TRACE2("%s(%p,%d,%s,%s,%"G_GINT64_FORMAT")", __FUNCTION__,
-			d, op, bn, tn, (gint64)rowid);
+			ctx, op, bn, tn, (gint64)rowid);
 
 	do {
 		gchar *n = g_strconcat(bn, ".", tn, NULL);
@@ -432,15 +482,38 @@ hook_update(void *d, int op, char const *bn, char const *tn,
 		g_free(n);
 	} while (0);
 
-	ctx = d;
 	ctx->changes ++;
-	subtree = context_get_pending_table(ctx->pending, key);
-	u = (op == SQLITE_DELETE ? 1 : 0);
+	GTree *subtree = context_get_pending_table(ctx->pending, key);
+	guint u = (op == SQLITE_DELETE);
 	g_tree_replace(subtree, g_memdup(&rowid, sizeof(rowid)),
 			GUINT_TO_POINTER(u));
 }
 
-/* Public API -------------------------------------------------------------- */
+static void
+sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
+{
+	GByteArray *dump;
+	GError *err;
+
+	// Generate the DUMP
+	err = sqlx_repository_dump_base(ctx->sq3, &dump);
+	if (NULL != err) {
+		GRID_WARN("[%s][%s] Synchronous COMMIT not possible : (%d) %s",
+				ctx->sq3->logical_name, ctx->sq3->logical_type,
+				err->code, err->message);
+		g_clear_error(&err);
+		return;
+	}
+
+	// Now send it to the SLAVES
+	struct sqlx_name_s n;
+	n.base = ctx->sq3->logical_name;
+	n.type = ctx->sq3->logical_type;
+	n.ns = "";
+	peers_restore(peers, &n, dump);
+	GRID_INFO("RESTORED on SLAVES [%s][%s]",
+			ctx->sq3->logical_name, ctx->sq3->logical_type);
+}
 
 static void
 sqlx_replication_free_context(struct sqlx_repctx_s *ctx)
@@ -450,93 +523,111 @@ sqlx_replication_free_context(struct sqlx_repctx_s *ctx)
 	context_flush_rowsets(ctx);
 	if (ctx->pending)
 		g_tree_destroy(ctx->pending);
+	if (ctx->resync_todo)
+		g_ptr_array_free(ctx->resync_todo, TRUE);
 	memset(ctx, 0, sizeof(*ctx));
 	g_free(ctx);
 }
 
-struct sqlx_repctx_s*
-sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3)
+static void
+sqlx_transaction_changes(struct sqlx_repctx_s *ctx)
 {
-	struct sqlx_repctx_s *repctx;
+	EXTRA_ASSERT(ctx != NULL);
+	EXTRA_ASSERT(ctx->sq3 != NULL);
+	EXTRA_ASSERT(ctx->sq3->db != NULL);
 
-	if (!gquark_log)
-		gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
+	if (sqlite3_total_changes(ctx->sq3->db) != ctx->changes) {
+		GRID_DEBUG("HUGE change detected [%s][%s]", ctx->sq3->logical_name,
+				ctx->sq3->logical_type);
+		ctx->huge = 1;
+	}
+
+	if (!ctx->hollow && !ctx->huge) {
+		context_pending_inc_versions(ctx);
+		context_pending_to_rowset(ctx->sq3->db, ctx);
+	}
+	else {
+		context_flush_pending(ctx);
+		sqlx_admin_inc_all_versions(ctx->sq3, 2);
+	}
+}
+
+// Public API -----------------------------------------------------------------
+
+GError *
+sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
+		struct sqlx_repctx_s **result)
+{
+	gboolean has = FALSE;
 
 	GRID_TRACE2("%s(%p)", __FUNCTION__, sq3);
 
-	SQLX_ASSERT(sq3 != NULL);
-	SQLX_ASSERT(sq3->repo != NULL);
-	SQLX_ASSERT(sq3->db != NULL);
+	EXTRA_ASSERT(result != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(sq3->repo != NULL);
+	EXTRA_ASSERT(sq3->db != NULL);
+	*result = NULL;
 
-	repctx = g_malloc0(sizeof(*repctx));
+	if (sqlx_repository_replication_configured(sq3->repo)) {
+		GError *err = election_has_peers(
+				sqlx_repository_get_elections_manager(sq3->repo),
+				sq3->logical_name, sq3->logical_type, &has);
+		if (err != NULL) {
+			g_prefix_error(&err, "Peer resolution: ");
+			return err;
+		}
+	}
 
+	struct sqlx_repctx_s *repctx = g_malloc0(sizeof(*repctx));
+	repctx->hollow = !has;
 	repctx->sq3 = sq3;
 	repctx->changes = sqlite3_total_changes(sq3->db);
-	context_flush_pending(repctx);
-	context_flush_rowsets(repctx);
 
-	if (sqlx_repository_replication_configured(sq3->repo) &&
-				election_has_peers(sqlx_repository_get_elections_manager(sq3->repo), sq3->logical_name, sq3->logical_type))
-	{
+	if (has) {
+		repctx->resync_todo = g_ptr_array_sized_new(4);
+		g_ptr_array_set_free_func(repctx->resync_todo, g_free0);
+
+		context_flush_pending(repctx);
+		context_flush_rowsets(repctx);
+
 		sqlite3_commit_hook(sq3->db, hook_commit, repctx);
 		sqlite3_rollback_hook(sq3->db, hook_rollback, repctx);
-		sqlite3_update_hook(sq3->db, hook_update, repctx);
+		sqlite3_update_hook(sq3->db, (sqlite3_update_hook_f)hook_update, repctx);
 	}
 
-	return repctx;
+	*result = repctx;
+	return NULL;
 }
 
-struct sqlx_repctx_s*
-sqlx_transaction_begin(struct sqlx_sqlite3_s *sq3)
+GError *
+sqlx_transaction_begin(struct sqlx_sqlite3_s *sq3,
+		struct sqlx_repctx_s **result)
 {
-	struct sqlx_repctx_s *repctx = sqlx_transaction_prepare(sq3);
+	struct sqlx_repctx_s *repctx = NULL;
+
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(result != NULL);
+	*result = NULL;
+
+	GError *err = sqlx_transaction_prepare(sq3, &repctx);
+	if (err != NULL) {
+		g_prefix_error(&err, "TNX error: ");
+		return err;
+	}
+
+	if (repctx->resync_todo)
+		g_ptr_array_set_size(repctx->resync_todo, 0);
 	sqlx_exec(sq3->db, "BEGIN");
-	return repctx;
-}
-
-void
-sqlx_transaction_changes(struct sqlx_repctx_s *ctx)
-{
-	SQLX_ASSERT(ctx != NULL);
-	SQLX_ASSERT(ctx->sq3 != NULL);
-	SQLX_ASSERT(ctx->sq3->db != NULL);
-
-	version_reinit(ctx->sq3);
-
-	if (sqlite3_total_changes(ctx->sq3->db) == ctx->changes
-			&& !ctx->huge)
-		context_pending_inc_versions(ctx);
-	else {
-		GRID_DEBUG("HUGE change detected");
-		context_flush_pending(ctx);
-		/* double increment to force a RESYNC on the slaves */
-		version_increment_all(ctx->sq3->versions);
-		version_increment_all(ctx->sq3->versions);
-		version_save(ctx->sq3);
-	}
-
-	version_save(ctx->sq3);
-	context_pending_to_rowset(ctx->sq3->db, ctx);
-	version_debug("NEW:", ctx->sq3->versions);
+	sqlx_admin_reload(sq3);
+	*result = repctx;
+	return NULL;
 }
 
 void
 sqlx_transaction_notify_huge_changes(struct sqlx_repctx_s *ctx)
 {
-	SQLX_ASSERT(ctx != NULL);
-	ctx->huge = TRUE;
-}
-
-void
-sqlx_transaction_detach(struct sqlx_repctx_s *ctx)
-{
-	SQLX_ASSERT(ctx != NULL);
-	SQLX_ASSERT(ctx->sq3 != NULL);
-	SQLX_ASSERT(ctx->sq3->db != NULL);
-
-	sqlite3_commit_hook(ctx->sq3->db, NULL, NULL);
-	sqlite3_rollback_hook(ctx->sq3->db, NULL, NULL);
-	sqlite3_update_hook(ctx->sq3->db, NULL, NULL);
+	EXTRA_ASSERT(ctx != NULL);
+	ctx->huge = 1;
 }
 
 GError*
@@ -544,58 +635,67 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 {
 	int rc;
 
-	if (!gquark_log)
-		gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
-
 	GRID_TRACE2("%s(%p)", __FUNCTION__, ctx);
-	SQLX_ASSERT(ctx != NULL);
-	SQLX_ASSERT(ctx->sq3 != NULL);
-	SQLX_ASSERT(ctx->sq3->db != NULL);
+
+	if (NULL == ctx) {
+		if (!err)
+			err = NEWERROR(500, "no tnx");
+		g_prefix_error(&err, "transaction error: ");
+		return err;
+	}
+
+	EXTRA_ASSERT(ctx != NULL);
+	EXTRA_ASSERT(ctx->sq3 != NULL);
+	EXTRA_ASSERT(ctx->sq3->db != NULL);
 
 	if (err) {
+		ctx->any_change = 0;
 		rc = sqlx_exec(ctx->sq3->db, "ROLLBACK");
-		if (rc != SQLITE_OK && rc != SQLITE_DONE)
-			GRID_WARN("ROLLBACK failed! (%d/%s) %s", rc, sqlite_strerror(rc), sqlite3_errmsg(ctx->sq3->db));
-		version_load(ctx->sq3, TRUE);
+		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+			GRID_WARN("ROLLBACK failed! (%d/%s) %s", rc,
+					sqlite_strerror(rc), sqlite3_errmsg(ctx->sq3->db));
+		}
+		sqlx_admin_reload(ctx->sq3);
 	}
 	else {
-		/* Manage the changes */
+		// Ensure that newly created tables have versions now referenced
+		// in the admin table.
+		sqlx_admin_reload(ctx->sq3);
+
+		// Agregate the changes
 		sqlx_transaction_changes(ctx);
 
-		/* apply them */
+		// Apply the changes on the slaves.
 		rc = sqlx_exec(ctx->sq3->db, "COMMIT");
 		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 			err = SQLITE_GERROR(ctx->sq3->db, rc);
 			g_prefix_error(&err, "COMMIT failed: ");
-			version_load(ctx->sq3, FALSE);
+			// Restore the in-RAM cache
+			sqlx_admin_reload(ctx->sq3);
+		}
+		else if (ctx->resync_todo && ctx->resync_todo->len) {
+			// Detected the need of an explicit RESYNC on some SLAVES.
+			g_ptr_array_add(ctx->resync_todo, NULL);
+			sqlx_synchronous_resync(ctx, (gchar**)ctx->resync_todo->pdata);
 		}
 	}
 
-	sqlx_transaction_detach(ctx);
-	sqlx_replication_free_context(ctx);
-
-	return err;
-}
-
-void
-sqlx_transaction_destroy(struct sqlx_repctx_s *ctx)
-{
-	if (!ctx)
-		return;
-
-	if (ctx->sq3 && ctx->sq3->db) {
-		sqlite3_commit_hook(ctx->sq3->db, NULL, NULL);
-		sqlite3_rollback_hook(ctx->sq3->db, NULL, NULL);
-		sqlite3_update_hook(ctx->sq3->db, NULL, NULL);
+	if (ctx->any_change) {
+		sqlx_repository_call_change_callback(ctx->sq3);
+		ctx->any_change = 0;
 	}
 
+	sqlite3_commit_hook(ctx->sq3->db, NULL, NULL);
+	sqlite3_rollback_hook(ctx->sq3->db, NULL, NULL);
+	sqlite3_update_hook(ctx->sq3->db, NULL, NULL);
 	sqlx_replication_free_context(ctx);
+	return err;
 }
 
 struct sqlx_sqlite3_s*
 sqlx_transaction_get_base(struct sqlx_repctx_s *ctx)
 {
-	SQLX_ASSERT(ctx != NULL);
+	EXTRA_ASSERT(ctx != NULL);
 	return ctx->sq3;
 }
 

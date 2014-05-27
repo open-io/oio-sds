@@ -1,13 +1,10 @@
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+
 add_definitions(-DHAVE_COMPRESSION)
 
-include_directories(BEFORE .
-		../../metautils/lib
-		../../cluster/lib ../../cluster/agent ../../cluster/events
-		../../meta0/remote
-		../../meta1/remote
-		../../meta2/remote
-		../../rawx-lib/src
-		../../client/c/lib)
+include_directories(BEFORE . ../..
+		../../client/c/lib
+		${CMAKE_CURRENT_BINARY_DIR}/../..)
 
 include_directories(AFTER
 		${OPENSSL_INCLUDE_DIRS})
@@ -15,20 +12,13 @@ include_directories(AFTER
 link_directories(
 		${SQLITE3_LIBRARY_DIRS})
 
-add_executable(redc-rawx-mover main.c lock.c lock.h)
-
-target_link_libraries(redc-rawx-mover
-	metautils gridclient meta2remote rawx
-	gridcluster-remote gridcluster-events gridcluster
+add_executable(gs-rawx-mover main.c lock.c lock.h)
+bin_prefix(gs-rawx-mover -rawx-mover)
+target_link_libraries(gs-rawx-mover
+	metautils gridclient meta2v2remote rawx hcresolve
+	gridcluster-remote gridcluster-events gridcluster integrity
 	${NEON_LIBRARIES} ${GLIB2_LIBRARIES} -lattr -lm -lcrypto)
 
-add_executable(redc-chunk-mover core.c utils.c chunk_mover.c mover.h lock.c lock.h)
-
-target_link_libraries(redc-chunk-mover
-	metautils gridclient meta2remote rawx
-	gridcluster-remote gridcluster-events gridcluster
-	${NEON_LIBRARIES} ${GLIB2_LIBRARIES} -lattr -lm -lcrypto)
-
-install(TARGETS redc-rawx-mover redc-chunk-mover
+install(TARGETS gs-rawx-mover
 		RUNTIME DESTINATION bin)
 

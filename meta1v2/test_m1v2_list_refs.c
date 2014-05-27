@@ -1,30 +1,8 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef  G_LOG_DOMAIN
 # define G_LOG_DOMAIN "m1v2.test.list"
 #endif
-#ifndef  LOG_DOMAIN
-# define LOG_DOMAIN G_LOG_DOMAIN
-#endif
 
-#include <metautils.h>
-#include <loggers.h>
-#include <common_main.h>
+#include <metautils/lib/metautils.h>
 
 #include "./meta1_remote.h"
 
@@ -79,7 +57,7 @@ static void
 main_set_defaults(void)
 {
 	ZERO(m1url);
-	memset(&m1addr, 0, sizeof(&m1addr));
+	memset(&m1addr, 0, sizeof(m1addr));
 	ZERO(nsname);
 	ZERO(prefix_hex);
 	memset(prefix, 0, sizeof(container_id_t));

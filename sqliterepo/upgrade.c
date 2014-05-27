@@ -1,32 +1,14 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "sqlx.up"
+# define G_LOG_DOMAIN "sqliterepo"
 #endif
-#include <glib.h>
 #include <fnmatch.h>
 
-#include "../metautils/lib/metautils.h"
-#include "./sqliterepo.h"
+#include <metautils/lib/metautils.h>
 
-#include "./sqlite_utils.h"
-#include "./internals.h"
-#include "./upgrade.h"
+#include "sqliterepo.h"
+#include "sqlite_utils.h"
+#include "internals.h"
+#include "upgrade.h"
 
 struct sqlx_upgrade_step_s
 {
@@ -100,7 +82,7 @@ sqlx_upgrade_do(struct sqlx_upgrader_s *su, struct sqlx_sqlite3_s *sq3)
 	g_assert(sq3->db != NULL);
 
 	guint i, max;
-	gchar *version = sqlx_get_admin_entry_noerror(sq3->db, "schema_version");
+	gchar *version = sqlx_admin_get_str(sq3, "schema_version");
 
 	for (i=0,max=su->steps->len; i<max ;i++) {
 		struct sqlx_upgrade_step_s *step = &g_array_index(su->steps,
@@ -112,16 +94,13 @@ sqlx_upgrade_do(struct sqlx_upgrader_s *su, struct sqlx_sqlite3_s *sq3)
 			GRID_TRACE("Runnig upgrade step");
 			GError *err = step->cb(sq3, step->cb_data);
 			if (!err) {
-				if (version)
-					g_free(version);
-				version = g_strdup(step->post);
-				sqlx_set_admin_entry_noerror(sq3->db, "schema_version", version);
+				metautils_str_replace(&version, step->post);
+				sqlx_admin_set_str(sq3, "schema_version", version);
 			}
 			else {
 				gchar *buf = g_strdup_printf("Conversion error from "
 						"[%s] to [%s]", version, step->post);
-				if (version)
-					g_free(version);
+				metautils_str_clean(&version);
 				g_prefix_error(&err, buf);
 				g_free(buf);
 				buf = NULL;
@@ -130,6 +109,7 @@ sqlx_upgrade_do(struct sqlx_upgrader_s *su, struct sqlx_sqlite3_s *sq3)
 		}
 	}
 
+	metautils_str_clean(&version);
 	return NULL;
 }
 

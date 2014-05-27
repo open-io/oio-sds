@@ -1,36 +1,15 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "metautils"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "metautils"
 #endif
 #include <stdlib.h>
-#include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
-#include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
-#include "./metautils.h"
+#include "metautils.h"
+#include "metautils_syscall.h"
 
 void
 addr_rule_g_free(gpointer data)
@@ -215,7 +194,11 @@ _parse_acl_bytes(const GByteArray* acl_byte)
 	return g_slist_reverse(result);
 }
 
-/* For parse informations from dedicated file */
+/**
+ * For parse informations from dedicated file
+ * FIXME TODO XXX File loading managed by glib2  : g_file_get_contents()
+ * FIXME TODO XXX duplicated in cluster/lib/gridcluster.c : gba_read()
+ */
 
 GSList*
 parse_acl_conf_file(const gchar* file_path, GError **error)
@@ -226,7 +209,7 @@ parse_acl_conf_file(const gchar* file_path, GError **error)
 	guint8 buff[256];
 	GByteArray* data = NULL;
 	GSList* result = NULL;
-	fd = open(file_path, O_RDONLY);
+	fd = metautils_syscall_open(file_path, O_RDONLY, 0);
 
 	if (fd == -1) {
 		GSETERROR(error, "Failed to open file [%s] : %s", file_path, strerror(errno));
@@ -235,11 +218,11 @@ parse_acl_conf_file(const gchar* file_path, GError **error)
 
 	data = g_byte_array_new();
 
-	while ((r = read(fd, buff, sizeof(buff))) > 0) {
+	while ((r = metautils_syscall_read(fd, buff, sizeof(buff))) > 0) {
                 data = g_byte_array_append(data, buff, r);
         }
 	
-	close(fd);
+	metautils_pclose(&fd);
 
         if (r < 0) {
                 GSETERROR(error, "Failed to read data from file [%s] : %s", file_path, strerror(errno));

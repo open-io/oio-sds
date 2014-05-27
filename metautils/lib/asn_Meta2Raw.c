@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "metacomm.meta2_raw.asn"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "metacomm.meta2_raw.asn"
 #endif
 
 #include <errno.h>
@@ -90,11 +70,12 @@ meta2_raw_content_ASN2API(const Meta2RawContent_t * src, struct meta2_raw_conten
 
 	asn_INTEGER_to_uint32(&(src->header.nbChunks), &(dst->nb_chunks));
 	asn_INTEGER_to_int64(&(src->header.size), &(dst->size));
-	/* if(NULL != src->header.version) {
+	/* asn_INTEGER_to_int64(&(src->header.version), &(dst->version)); */
+	if(NULL != src->header.version) {
 		asn_INTEGER_to_int64(src->header.version, &(dst->version));
 	} else {
-		dst->version = 1;
-	} */
+		dst->version = 0;
+	}
 	g_memmove(dst->path, src->header.path.buf, src->header.path.size);
 	g_memmove(&(dst->flags), src->header.flags.buf, src->header.flags.size);
 	g_memmove(dst->container_id, src->header.cID.buf, src->header.cID.size);
@@ -165,12 +146,10 @@ meta2_raw_content_API2ASN(const struct meta2_raw_content_s * src, Meta2RawConten
 	asn_uint32_to_INTEGER(&(dst->header.nbChunks), src->nb_chunks);
 
 	/* OPTIONAL FIELDS : since 1.8 */
-	/* dst->header.version = g_malloc0(sizeof(INTEGER_t));	
-	asn_int64_to_INTEGER(dst->header.version, src->version);
-
-	dst->header.deleted = g_malloc0(sizeof(BOOLEAN_t));
-	memcpy(dst->header.deleted, &dst->header.deleted, sizeof(int)); */
 	
+	if(src->version > 0)
+		dst->header.version = g_malloc0(sizeof(INTEGER_t));
+		asn_int64_to_INTEGER(dst->header.version, src->version);
 
 	if (src->metadata && src->metadata->len > 0 && src->metadata->data) {
 		dst->header.metadata = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING,

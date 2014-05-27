@@ -1,33 +1,21 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta2-mover"
 #endif
 
-#include <meta1_remote.h>
-#include <meta2_remote.h>
-#include <meta2_services_remote.h>
-#include <grid_client.h>
-#include "./meta2_mover.h"
-#include "./meta2_mover_internals.h"
-#include "./meta2_mover.h"
-
 #include <stdio.h>
+
+#include <grid_client.h>
+
+#include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
+#include <meta1v2/meta1_remote.h>
+#include <meta2/remote/meta2_remote.h>
+#include <meta2/remote/meta2_services_remote.h>
+#include <sqliterepo/sqlx_remote.h>
+
+#include "meta2_mover.h"
+#include "meta2_mover_internals.h"
+#include "meta2_mover.h"
 
 /* Global variables */
 time_t interval_update_services = 60L;
@@ -43,7 +31,41 @@ struct cid_move_s
 
 	struct xaddr_s dst;
 	struct meta1_service_url_s *dst_url;
+
+	gboolean v2;
 };
+
+static gboolean
+_is_meta2v2(const gchar *ns_name, GSList *meta2, const char *url)
+{
+	struct service_info_s si;
+	gchar **url_split = NULL;
+	gboolean result = FALSE;
+
+	int si_equal(gconstpointer si1, gconstpointer si2) {
+		return service_info_equal_v2(si1, si2) ? 0 : 1;
+	}
+
+	memset(&si, '\0', sizeof(struct service_info_s));
+	g_strlcpy(si.ns_name, ns_name, sizeof(si.ns_name));
+	g_strlcpy(si.type, "meta2", sizeof(si.type));
+	DEBUG("Checkin' if source is m2v2 [%s]", url);
+
+	url_split = g_strsplit(url, ":", 2);
+	if (url_split && g_strv_length(url_split) == 2 &&
+			service_info_set_address(&si, url_split[0], atoi(url_split[1]), NULL)) {
+		GSList *si_found = g_slist_find_custom(meta2, &si, si_equal);
+		if  (si_found && si_found->data) {
+			DEBUG("service found, checking tag");
+			result = (0 == g_ascii_strcasecmp(
+						service_info_get_tag_value(si_found->data, "tag.type", "m2v1"),
+						"m2v2"));
+		}
+	}
+	DEBUG("service is %s", result ? "m2v2" : "m2v1");
+	g_strfreev(url_split);
+	return result;
+}
 
 static void
 _disable_container(struct xcid_s *scid, struct xaddr_s *addr)
@@ -176,194 +198,122 @@ _cid_move_destroy(struct cid_move_s *move, gboolean content_only)
 		g_free(move);
 }
 
-static gchar*
-g_substr(const gchar* string, guint32 start_pos, guint32 end_pos) {
-	gsize len;
-	gchar* output = NULL;
-
-	if (start_pos >= strlen(string))
-		return NULL;
-
-	if (end_pos > strlen(string))
-		len = strlen(string) - start_pos;
-	else
-		len = end_pos - start_pos;
-
-	output = g_malloc0(len + 1);
-	if (NULL == output)
-		return NULL;
-
-	return g_utf8_strncpy(output, &string[start_pos], len);
-}
-
 static GError*
 meta2_mover_locate_destination(gs_grid_storage_t * ns_client,
-		struct xcid_s *scid, struct cid_move_s *move, const gchar* meta2_addr, gboolean forcing_ip)
+		struct xcid_s *scid, struct cid_move_s *move,
+		const gchar* meta2_addr, gboolean forcing_ip)
 {
-	gchar **ps, **result = NULL;
 	GError *err = NULL;
-	gboolean result2 = FALSE;
-	gchar* meta2_addr2 = NULL;
 
 	g_assert(scid != NULL);
 	g_assert(move != NULL);
 
-	if (NULL != meta2_addr) {
-		if (forcing_ip == TRUE) {
-			if (!meta1v2_remote_unlink_one_service(&(move->m1.addr), &err, gs_get_namespace(ns_client), scid->cid, "meta2", to_step, to_all, NULL, move->src_url->seq)) {
-				err = GS_ERROR_NEW(500, "Unref error");
-                                return err;
-			}
-			
-			meta2_addr2 = g_strconcat("2|meta2|", meta2_addr, "|", NULL);
-			DEBUG("Forcing a META2 Using namespace [%s] on meta2 [%s]", gs_get_namespace(ns_client), meta2_addr2);
-			result2 = meta1v2_remote_force_reference_service(&(move->m1.addr), &err,
-					gs_get_namespace(ns_client), scid->cid, meta2_addr2,
-					to_step, to_all, NULL);
-
-			if (FALSE == result2) {
-				DEBUG("Failed to move : No meta2 found for the specified URL \"%s\"", meta2_addr);
-				printf("Failed to move : No meta2 found for the specified URL \"%s\"\n", meta2_addr);
-				err = GS_ERROR_NEW(500, "No meta2 found for the specified URL");
-                                return err;
-			}
-			else {
-				DEBUG("Forcing the selection on the meta2 with URL \"%s\" succeeded", meta2_addr);
-			}
+	gboolean _poll(void)
+	{
+		gchar **ps, **result = NULL;
+		gchar tmp[256];
+		memset(tmp, '\0', 256);
+		g_snprintf(tmp, 256, "meta2%s%s",
+				(!meta2_addr && !move->v2) ? "" : ";",
+				(!meta2_addr) ? ((move->v2)? "tag.type=m2v2" : "") :
+				((move->v2) ? "tag.type=m2v2" : meta2_addr));
+		DEBUG("Ask for service polling with params [%s]", tmp);
+		result = meta1v2_remote_poll_reference_service(&(move->m1.addr),
+				&err, gs_get_namespace(ns_client), scid->cid, tmp,
+				to_step, to_all, NULL);
+		if(!result || 0 == g_strv_length(result)) {
+			if(!err)
+				err = GS_ERROR_NEW(500,
+						"Service [%s] polling failure, no error", tmp);
+			return FALSE;
 		}
-		else {
-			meta2_addr2 = g_strconcat("meta2;", meta2_addr, NULL);
-			DEBUG("POLL'ing a META2 Using namespace [%s] on meta2 [%s]", gs_get_namespace(ns_client), meta2_addr2);
-			result = meta1v2_remote_poll_reference_service(&(move->m1.addr), &err,
-					gs_get_namespace(ns_client), scid->cid, meta2_addr2,
-					to_step, to_all, NULL);
-			if (NULL == meta2_addr2) {
-                                g_free(meta2_addr2);
-                        }
+		DEBUG("Polling the meta2 with specified tag \"%s\" selection "
+				"succeeded with %u results",
+				meta2_addr, g_strv_length(result));
 
-			guint poll_srv_count = g_strv_length(result);
-			if (0 == poll_srv_count) {
-				DEBUG("Failed to move : No, or not enough, meta2 found for the specified tag \"%s\"", meta2_addr);
-				printf("Failed to move : No, or not enough, meta2 found for the specified tag \"%s\"\n", meta2_addr);
-				err = GS_ERROR_NEW(500, "No, or not enough,  meta2 found for the specified tag");
+		for (ps=result; *ps ;ps++) {
+			DEBUG("Got DST meta2 [%s]", *ps);
+		}
+
+		move->dst_url = meta1_unpack_url(result[0]);
+		g_strfreev(result);
+		return (!err);
+	}
+
+	if (NULL != meta2_addr) {
+		if (forcing_ip) {
+			gchar tmp[256];
+			memset(tmp, '\0', 256);
+			g_snprintf(tmp, 256, "%"G_GINT64_FORMAT"|meta2|%s|",
+					move->src_url->seq + 1, meta2_addr);
+			move->dst_url = meta1_unpack_url(tmp);
+			DEBUG("Forcing [%s]", tmp);
+			if(!meta1v2_remote_force_reference_service(&(move->m1.addr),
+						&err, gs_get_namespace(ns_client), scid->cid, tmp,
+						to_step, to_all, NULL)) {
 				return err;
 			}
-			else {
-				DEBUG("Polling the meta2 with specified tag \"%s\" selection succeeded with %u results", meta2_addr, poll_srv_count);
-			}
+			DEBUG("Service [%s] successfully forced", tmp);
+		} else {
+			if(!_poll()) return err;
 		}
-	}
-	else {
-		DEBUG("POLL'ing a META2 Using namespace [%s]", gs_get_namespace(ns_client));
-		result = meta1v2_remote_poll_reference_service(&(move->m1.addr), &err,
-				gs_get_namespace(ns_client), scid->cid, "meta2",
-				to_step, to_all, NULL);
-
-		guint poll_srv_count = g_strv_length(result);
-		if (0 == poll_srv_count) {
-			DEBUG("Failed to move : No, or not enough, meta2 found");
-			printf("Failed to move : No, or not enough, meta2 found\n");
-			err = GS_ERROR_NEW(500, "No, or not enough, meta2 found");
-                        return err;
-		}
-		else {
-			DEBUG("Polling the meta2 selection succeeded with %u results", poll_srv_count);
-		}
+	} else {
+		if(!_poll()) return err;
 	}
 
-	if (forcing_ip == TRUE) {
-		if (result2 == FALSE) {
-			if (!err) {
-				err = GS_ERROR_NEW(500, "No DST meta2 available");
-			}
-		}
-		else {
-			DEBUG("Got forced DST meta2 [%s]", meta2_addr2);
-
-			move->dst_url = meta1_unpack_url(meta2_addr2);
-			err = xaddr_init_from_url(&(move->dst), move->dst_url->host);
-			if (err != NULL) {
-				GS_ERROR_STACK(&err);
-			}
-
-			if (NULL == meta2_addr2) {
-				g_free(meta2_addr2);
-			}
-		}
-	}
-	else {
-		if (!result) {
-			if (!err) {
-				err = GS_ERROR_NEW(500, "No DST meta2 available");
-			}
-		}
-		else {
-			if (!result[0]) {
-				err = GS_ERROR_NEW(500, "No DST meta2 available");
-			}
-			else {
-				for (ps=result; *ps ;ps++) {
-					DEBUG("Got DST meta2 [%s]", *ps);
-				}
-
-				move->dst_url = meta1_unpack_url(result[0]);
-				err = xaddr_init_from_url(&(move->dst), move->dst_url->host);
-				if (err != NULL) {
-					GS_ERROR_STACK(&err);
-				}
-			}
-
-			g_strfreev(result);
-		}	
-	}
+	if(NULL != (err = xaddr_init_from_url(&(move->dst), move->dst_url->host)))
+		GS_ERROR_STACK(&err);
 
 	return err;
 }
 
 static GError*
 meta2_mover_locate_source(gs_grid_storage_t * ns_client,
-	struct xcid_s *scid, struct cid_move_s *move)
+	GSList *meta2, struct xcid_s *scid, struct cid_move_s *move)
 {
-GError *err;
-gs_error_t *gserr = NULL;
+	GError *err;
+	gs_error_t *gserr = NULL;
+	g_assert(scid != NULL);
+	g_assert(move != NULL);
 
-g_assert(scid != NULL);
-g_assert(move != NULL);
+	DEBUG("Trying to locate CID[%s]", scid->str);
 
-DEBUG("Trying to locate CID[%s]", scid->str);
+	/* Locate the source */
+	scid->location = gs_locate_container_by_hexid(ns_client, scid->str, &gserr);
+	if (!scid->location) {
+		err = GS_ERROR_NEW(gs_error_get_code(gserr),
+				"Grid ERROR : %s", gs_error_get_message(gserr));
+		GS_ERROR_STACK(&err);
+		gs_error_free(gserr);
+		return err;
+	}
 
-/* Locate the source */
-scid->location = gs_locate_container_by_hexid(ns_client, scid->str, &gserr);
-if (!scid->location) {
-	err = GS_ERROR_NEW(gs_error_get_code(gserr),
-			"Grid ERROR : %s", gs_error_get_message(gserr));
-	GS_ERROR_STACK(&err);
-	gs_error_free(gserr);
-	return err;
-}
+	if (!scid->location->m2_url || !scid->location->m2_url[0]) {
+		return GS_ERROR_NEW(CODE_CONTAINER_NOTFOUND, "No meta2 for this container");
+	} else if (g_strv_length(scid->location->m2_url) > 1) {
+		return GS_ERROR_NEW(CODE_NOT_IMPLEMENTED,
+				"Replicated container, cannot move (not implemetented)");
+	}
 
-if (!scid->location->m2_url || !scid->location->m2_url[0]) {
-	return GS_ERROR_NEW(CODE_CONTAINER_NOTFOUND, "No meta2 for this container");
-}
+	err = xaddr_init_from_url(&(move->m1), scid->location->m1_url[0]);
+	if (NULL != err) {
+		GS_ERROR_STACK(&err);
+		return err;
+	}
 
-err = xaddr_init_from_url(&(move->m1), scid->location->m1_url[0]);
-if (NULL != err) {
-	GS_ERROR_STACK(&err);
-	return err;
-}
+	/* Init all the source-related structures */
+	err = xaddr_init_from_url(&(move->src), scid->location->m2_url[0]);
+	if (NULL != err) {
+		GS_ERROR_STACK(&err);
+		return err;
+	}
 
-/* Init all the source-related structures */
-err = xaddr_init_from_url(&(move->src), scid->location->m2_url[0]);
-if (NULL != err) {
-	GS_ERROR_STACK(&err);
-	return err;
-}
-
-/* Get the old URL with the sequence number */
-do {
-	gchar **ps, **result;
-	result = meta1v2_remote_list_reference_services(&(move->m1.addr), &err,
+	/* Get the old URL with the sequence number */
+	do {
+		gchar **ps, **result;
+		result = meta1v2_remote_list_reference_services(&(move->m1.addr), &err,
 				gs_get_namespace(ns_client), scid->cid, "meta2",
+				
 				to_step, to_all);
 		if (!result) {
 			if (!err)
@@ -377,6 +327,7 @@ do {
 				for (ps=result; *ps ;ps++)
 					DEBUG("Got SRC meta2 [%s]", *ps);
 				move->src_url = meta1_unpack_url(result[0]);
+				move->v2 = _is_meta2v2(gs_get_namespace(ns_client), meta2, move->src_url->host);
 				if (err != NULL)
 					GS_ERROR_STACK(&err);
 			}
@@ -399,6 +350,45 @@ do {
  */
 
 static GError*
+_do_PIPEFROM(struct cid_move_s *move, struct xcid_s *scid)
+{
+	struct sqlx_name_s n;
+	struct client_s *client;
+	GError *err = NULL;
+
+	n.ns = "";
+	n.base = scid->str;
+	n.type = "meta2";
+
+	GByteArray *req = sqlx_pack_PIPEFROM(&n, move->src_url->host);
+
+	EXTRA_ASSERT(req != NULL);
+
+	client = gridd_client_create_idle(move->dst_url->host);
+	if (!client)
+		err = NEWERROR(2, "errno=%d %s", errno, strerror(errno));
+	else {
+		if ((to_step >= 0) && (to_all >= 0))
+			gridd_client_set_timeout(client, to_step, to_all);
+
+		if (!gridd_client_start(client))
+			err = gridd_client_error(client);
+		if (!err)
+			err = gridd_client_request(client, req, NULL, NULL);
+		if (!err) {
+			if (!(err = gridd_client_loop(client))) {
+				err = gridd_client_error(client);
+			}
+		}
+		gridd_client_free(client);
+	}
+
+	g_byte_array_free(req, TRUE);
+
+	return err;
+}
+
+static GError*
 _step2_MIGRATE(gs_grid_storage_t *ns_client,
 		struct xcid_s *scid, struct cid_move_s *move)
 {
@@ -412,30 +402,49 @@ _step2_MIGRATE(gs_grid_storage_t *ns_client,
 		if (attempts <= 0) {
 			err = GS_ERROR_NEW(500, "Too many attempts, migration not done");
 			GS_ERROR_STACK(&err);
+
+			/*no rollback*/
 			return err;
 		}
 
-		DEBUG("Sending the dump/restore command...");
-		if (meta2_remote_restorev1_container(&(move->dst.cnx), scid->cid, &(move->src.addr), scid->cid, &err))
-			break;
+		if(move->v2) {
+			DEBUG("Moving v2 container");
+			if(!(err = _do_PIPEFROM(move, scid)))
+				break;
+		} else {
+			DEBUG("Sending the dump/restore command...");
+			if (meta2_remote_restorev1_container(&(move->dst.cnx), scid->cid,
+						&(move->src.addr), scid->cid, &err))
+				break;
+		}
+
 
 		ERROR("Failed to copy the container : %s", gerror_get_message(err));
 		code = gerror_get_code(err);
 		if (code < 100) { /* network error */
 			g_clear_error(&err);
-		}
-		/*
-		else if (code == 501) {
-			g_clear_error(&err);
-			break;
-		}
-		*/
-		else {
+		} else {
 			GS_ERROR_STACK(&err);
+
+			/* ROLLBACK: remove the created container on the dest meta2 */
+			GError* local_error = NULL;
+			DEBUG("Rollback, Destroy created destination container on [%s]", move->dst.str);
+			addr_info_t* m2addr =  addr_info_from_service_str(move->dst.str);
+			if (m2addr) {
+				meta2_remote_container_destroy (m2addr, 3000, &local_error, scid->cid);
+				if (local_error) {
+					ERROR("Failed to destroy created container during rollback [%s] on [%s]", 
+							scid->str, move->dst.str);
+					g_error_free(local_error);
+				}
+				addr_info_clean(m2addr);
+			}
+
 			return err;
 		}
 	}
 	DEBUG("Container copied");
+
 
 	/* next step, no ROLLBACK to the migration operation */
 	return _step3_CHANGE_REFS(ns_client, scid, move);
@@ -443,7 +452,8 @@ _step2_MIGRATE(gs_grid_storage_t *ns_client,
 
 static GError*
 _step1_POLL_TARGET(gs_grid_storage_t *ns_client,
-		struct xcid_s *scid, struct cid_move_s *move, const gchar *meta2_addr, gboolean forcing_ip)
+	struct xcid_s *scid, struct cid_move_s *move,
+	const gchar *meta2_addr, gboolean forcing_ip)
 {
 	GError *err = NULL;
 
@@ -451,14 +461,15 @@ _step1_POLL_TARGET(gs_grid_storage_t *ns_client,
 	g_assert(move != NULL);
 
 	/* Init the target side of the movement */
-	err = meta2_mover_locate_destination(ns_client, scid, move, meta2_addr, forcing_ip);
+	err = meta2_mover_locate_destination(ns_client,
+			scid, move, meta2_addr, forcing_ip);
 	if (NULL != err) {
 		GS_ERROR_STACK(&err);
 		return err;
 	}
 
 	if (! g_ascii_strcasecmp(move->src.str, move->dst.str)) {
-		err = g_error_new(g_quark_from_static_string(LOG_DOMAIN), 500, "SRC and DST meta2 are the same, skipping");
+		err = NEWERROR(500, "SRC and DST meta2 are the same, skipping");
 	}
 	else {
 		DEBUG("Ready to move ID[%s] M0[%s] M1[%s] M2[%s] -> M2[%s]",
@@ -467,8 +478,8 @@ _step1_POLL_TARGET(gs_grid_storage_t *ns_client,
 
 		/* next step, move */
 		if (!(err = _step2_MIGRATE(ns_client, scid, move))) {
-			DEBUG("container \"%s\" successfuly migrated to service \"%s\"", scid->str, move->dst.str);
-			printf("Move succeeded : Container \"%s\" successfuly migrated to service \"%s\"\n", scid->str, move->dst.str);
+			DEBUG("container \"%s\" successfuly migrated to service \"%s\"",
+					scid->str, move->dst.str);
 			return NULL;
 		}
 	}
@@ -489,36 +500,12 @@ _step1_POLL_TARGET(gs_grid_storage_t *ns_client,
 		g_clear_error(&rollback_error);
 	}
 
-	/* Forcing the old association into Meta1 */
-	/*
-	gchar* meta2_addr2 = g_strconcat("1|meta2|", move->src.str, "|", NULL);
-	gchar temp_seq[20];
-	sprintf(temp_seq, "%ld", move->src_url->seq);
-	gchar* meta2_addr2 = g_strconcat(temp_seq, "|meta2|", move->src.str, "|", NULL);
-	*/
-	/*
-	gboolean result = FALSE;
-	DEBUG("Rollback : Forcing a META2 Using namespace [%s] on meta2 [%s]", gs_get_namespace(ns_client), meta2_addr2);
-	result = meta1v2_remote_force_reference_service(&(move->m1.addr), &err,
-				gs_get_namespace(ns_client), scid->cid, meta2_addr2,
-                                to_step, to_all, NULL);
-	if (result == FALSE) {
-		if (!err) {
-                	err = GS_ERROR_NEW(500, "Failed to rollback to the previous DST");
-			GS_ERROR_STACK(&err);
-                }
-	}
-	if (NULL != meta2_addr2) {
-		g_free(meta2_addr2);
-	}
-	*/
-
 	return err;
 }
 
 static GError*
-_step0_FREEZE_SOURCE(gs_grid_storage_t *ns_client,
-		struct xcid_s *scid, struct cid_move_s *move, const gchar* meta2_addr, gboolean forcing_ip)
+_step0_FREEZE_SOURCE(gs_grid_storage_t *ns_client, struct xcid_s *scid,
+		struct cid_move_s *move, const gchar* meta2_addr, gboolean forcing_ip)
 {
 	int attempts, code;
 	GError *err = NULL;
@@ -534,7 +521,8 @@ _step0_FREEZE_SOURCE(gs_grid_storage_t *ns_client,
 			return err;
 		}
 
-		DEBUG("Freezing the source container (%d attempts remaining) ...", attempts);
+		DEBUG("Freezing the source container (%d attempts remaining) ...",
+				attempts);
 		if (meta2_remote_container_freeze(&(move->src.cnx), scid->cid, &err)) {
 			INFO("Source container frozen");
 			break;
@@ -556,7 +544,8 @@ _step0_FREEZE_SOURCE(gs_grid_storage_t *ns_client,
 	}
 
 	/* next step */
-	if (!(err = _step1_POLL_TARGET(ns_client, scid, move, meta2_addr, forcing_ip)))
+	if (!(err = _step1_POLL_TARGET(ns_client, scid, move,
+					meta2_addr, forcing_ip)))
 		return NULL;
 
 	/* ROLLBACK : enables the source */
@@ -565,31 +554,33 @@ _step0_FREEZE_SOURCE(gs_grid_storage_t *ns_client,
 }
 
 
-/* ------------------------------------------------------------------------- */
+/* -------------------------------------------n------------------------------ */
 
 /*!
  * Locate the source META2 and the META1, poll a destination META2,
  * then advance to the next step
  */
 GError*
-meta2_mover_migrate(gs_grid_storage_t * ns_client, const gchar * xcid, const gchar *meta2_addr)
+meta2_mover_migrate(gs_grid_storage_t * ns_client, const gchar * xcid,
+		const gchar *meta2_addr)
 {
 	struct cid_move_s move;
 	struct xcid_s *scid = NULL;
 	GError *err = NULL;
+	GSList *meta2 = NULL;
+	GSList *cursor = NULL;
+	gboolean full_url = (NULL != meta2_addr
+			&& g_str_has_prefix(meta2_addr,"url="));
 
-	gchar* meta2_addr_ip = NULL;
-
-	if (NULL != meta2_addr && strlen(meta2_addr) >= 4) {
-		gchar* url_tok = g_substr(meta2_addr, 0, 4);
-		if (!g_strcmp0(url_tok, "url=")) {
-			meta2_addr_ip = g_substr(meta2_addr, 4, strlen(meta2_addr));
-
-			DEBUG("Forcing the META2 with IP %s", meta2_addr_ip);
+	gboolean _iterate_meta2(struct service_info_s **dst)
+	{
+		if (!cursor || !dst) {
+			cursor = meta2;
+			return FALSE;
 		}
-		if (url_tok) {
-                	g_free(url_tok);
-        	}
+		*dst = service_info_dup(cursor->data);
+		cursor = cursor->next;
+		return TRUE;
 	}
 
 	g_assert(xcid != NULL);
@@ -601,28 +592,38 @@ meta2_mover_migrate(gs_grid_storage_t * ns_client, const gchar * xcid, const gch
 		return err;
 	}
 
-	/* Locate the container */
-	if (NULL != (err = meta2_mover_locate_source(ns_client, scid, &move))) {
-		GS_ERROR_STACK(&err);
+	cursor = meta2 = list_namespace_services(gs_get_namespace(ns_client),
+				"meta2", &err);
+	if(NULL != err || 0 == g_slist_length(meta2)) {
 		_cid_move_destroy(&move, TRUE);
+		xcid_free(scid);
+		ERROR("Meta2 list loading failure");
 		return err;
 	}
 
-	if (NULL == meta2_addr_ip) {
-		if (NULL != (err = _step0_FREEZE_SOURCE(ns_client, scid, &move, meta2_addr, FALSE))) {
+	DEBUG("Found %u meta2 services for ns [%s]", g_slist_length(meta2),
+			gs_get_namespace(ns_client));
+
+	/* Locate the container */
+	if (!(err = meta2_mover_locate_source(ns_client, meta2, scid, &move))) {
+		/* ensure target is v2 if source is v2 */
+		if(NULL != meta2_addr && move.v2 && full_url
+				&& !_is_meta2v2(gs_get_namespace(ns_client), meta2, meta2_addr + 4)) {
+			err = GS_ERROR_NEW(0, "Source meta2 is identified as v2, but target"
+					" seems in v1, not able to migrate cid [%.*s]", 64, xcid);
+		} else if (NULL != (err = _step0_FREEZE_SOURCE(ns_client,
+						scid, &move,
+						full_url? meta2_addr + 4 : meta2_addr, full_url))) {
 			GS_ERROR_STACK(&err);
-		}		
-	}
-	else {
-		if (NULL != (err = _step0_FREEZE_SOURCE(ns_client, scid, &move, meta2_addr_ip, TRUE))) {
-                        GS_ERROR_STACK(&err);
-                }
+		}
+	} else {
+		GS_ERROR_STACK(&err);
 	}
 
+	g_slist_free_full(meta2, (GDestroyNotify)service_info_clean);
+	xcid_free(scid);
 	_cid_move_destroy(&move, TRUE);
-	if (meta2_addr_ip) {
-		g_free(meta2_addr_ip);
-	}
+
 	return err;
 }
 

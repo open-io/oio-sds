@@ -1,47 +1,24 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.lb.test"
 #endif
 
 #include <stddef.h>
+#include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
-
+#include <unistd.h>
 #include <arpa/inet.h>
+#include <math.h>
 
-#include <glib.h>
-
-#include <metautils.h>
-
-#include "./lb.h"
-#include "./loggers.h"
-
-#define BOOL(B) ((B)?1:0)
+#include "metautils.h"
 
 #define SRVTYPE "sqlx"
 
 #define ADDR_GOOD "127.0.0.1"
 #define ADDR_BAD  "127.0.0.2"
 
-static gboolean print_out = FALSE;
-static guint max_feed = 10;
-static guint max_get = 10000;
+static guint max_feed = 37;
+static guint max_get = 5001;
 
 static struct service_info_s *
 _build_si(const gchar *a, guint i)
@@ -98,22 +75,21 @@ _build(void)
 	lb = grid_lb_init("NS", SRVTYPE);
 	g_assert(lb != NULL);
 
+	grid_lb_set_SD_shortening(lb, FALSE);
+	grid_lb_set_shorten_ratio(lb, 1.001);
 	_fill(lb, max_feed);
 	return lb;
 }
 
 static void
-check_presence(gboolean expected, struct grid_lb_iterator_s *iter, struct service_info_s *si)
+check_presence(gboolean expected, struct grid_lb_iterator_s *iter,
+		struct service_info_s *si)
 {
 	gboolean available;
-	gchar *str;
 
 	available = grid_lb_iterator_is_srv_available(iter, si);
-	available = BOOL(available);
-	expected = BOOL(expected);
-
-	str = service_info_to_string(si);
-	g_free(str);
+	available = (available != 0);
+	expected = (expected != 0);
 
 	g_assert(available == expected);
 }
@@ -155,58 +131,149 @@ check_not_found(struct grid_lb_iterator_s *iter)
 	service_info_clean(si);
 }
 
-static guint
-_count(struct grid_lb_iterator_s *iter, const gchar *tag, guint max)
+static gint
+cmp_addr(gconstpointer a, gconstpointer b, gpointer user_data)
 {
-	gchar path[1024];
-	FILE *out = NULL;
+	(void) user_data;
+	return addr_info_compare(a, b);
+}
+
+static void
+_keep_for_repartition(GTree *used, struct service_info_s *si)
+{
+	guint *pi = g_tree_lookup(used, &(si->addr));
+	if (!pi) {
+		pi = g_malloc0(sizeof(guint));
+		*pi = 1;
+		g_tree_insert(used, g_memdup(&(si->addr), sizeof(struct addr_info_s)), pi);
+	}
+	else {
+		++ *pi;
+	}
+}
+
+static void
+_compute_repartition(GTree *used, struct service_info_s **siv)
+{
+	while (*siv)
+		_keep_for_repartition(used, *(siv++));
+}
+
+static void
+_check_repartition_uniform(GTree *used, gdouble ratio)
+{
+	gint64 count = 0, total = 0;
+	gdouble average = 0.0, min = 0.0, max = 0.0;
+
+	gboolean hook_sum(gpointer ai, guint *pi, gpointer ignored) {
+		(void) ai, (void) ignored;
+		total += *pi;
+		++ count;
+		return FALSE;
+	}
+	gboolean hook_check(gpointer ai, guint *pi, gpointer ignored) {
+		(void) ai, (void) ignored;
+		gdouble current = *pi;
+		g_debug("count=%f average=%f min=%f max=%f", current, average, min, max);
+		g_assert(current <= max);
+		g_assert(current >= min);
+		return FALSE;
+	}
+
+	g_tree_foreach(used, (GTraverseFunc)hook_sum, NULL);
+	if (count > 0) {
+		average = (gdouble)total / (gdouble)count;
+		min = floor(average * (1.0 - ratio));
+		max = ceil(average * (1.0 + ratio));
+	}
+	g_tree_foreach(used, (GTraverseFunc)hook_check, NULL);
+	g_assert((guint)g_tree_nnodes(used) == max_feed - 1);
+}
+
+static void
+generate_set_and_check_uniform_repartition(struct grid_lb_iterator_s *iter,
+		gdouble ratio)
+{
+	struct service_info_s **siv = NULL;
+	GTree *used = g_tree_new_full(cmp_addr, NULL, g_free, g_free);
+
+	struct lb_next_opt_s opt;
+	memset(&opt, 0, sizeof(opt));
+	opt.req.max = max_get;
+	opt.req.distance = 1;
+	opt.req.duplicates = TRUE;
+	gboolean rc = grid_lb_iterator_next_set(iter, &siv, &opt);
+	g_assert(rc != FALSE);
+
+	_compute_repartition(used, siv);
+	_check_repartition_uniform(used, ratio);
+	g_tree_destroy(used);
+	service_info_cleanv(siv, FALSE);
+}
+
+static void
+generate_1by1_and_check_uniform_repartition(struct grid_lb_iterator_s *iter,
+		gdouble ratio)
+{
+	GTree *used = g_tree_new_full(cmp_addr, NULL, g_free, g_free);
+	for (guint i=0; i<max_get; ++i) {
+		struct service_info_s *si = NULL;
+		if (!grid_lb_iterator_next(iter, &si))
+			break;
+		if (!si)
+			break;
+		_keep_for_repartition(used, si);
+		service_info_clean(si);
+	}
+	_check_repartition_uniform(used, ratio);
+	g_tree_destroy(used);
+}
+
+static guint
+_count_set(struct grid_lb_iterator_s *iter, guint max)
+{
+	struct service_info_s **siv = NULL;
+	gboolean rc;
+
+	struct lb_next_opt_s opt;
+	memset(&opt, 0, sizeof(opt));
+	opt.req.max = max;
+	opt.req.distance = 1;
+	opt.req.duplicates = TRUE;
+
+	rc = grid_lb_iterator_next_set(iter, &siv, &opt);
+	g_assert(rc != FALSE);
+
+	guint count = g_strv_length((gchar**)siv);
+	service_info_cleanv(siv, FALSE);
+	return count;
+}
+
+static guint
+_count_single(struct grid_lb_iterator_s *iter, guint max)
+{
 	guint count = 0;
 
-	if (print_out) {
-		g_snprintf(path, sizeof(path), "/tmp/%s.out", tag);
-		out = fopen(path, "w");
-		g_assert(out != NULL);
-	}
-	
 	while ((max--) > 0) {
 		struct service_info_s *si = NULL;
-		if (!grid_lb_iterator_next(iter, &si, 300))
+		if (!grid_lb_iterator_next(iter, &si))
 			break;
-
-		if (out) {
-			gchar addr[64];
-			addr_info_to_string(&(si->addr), addr, sizeof(addr));
-		}
-
 		service_info_clean(si);
 		count ++;
 	}
 
-	if (out)
-		fclose(out);
 	return count;
 }
 
-#if 0
 static void
-test_lb_SINGLE(void)
+check_service_count(struct grid_lb_iterator_s *iter)
 {
-	struct grid_lb_s *lb;
-	struct grid_lb_iterator_s *iter;
-
-	lb = _build();
-	iter = grid_lb_iterator_single_run(lb);
-
 	g_assert(iter != NULL);
-
 	check_not_found(iter);
-
-	g_assert(MIN(max_feed,max_get) == _count(iter, __FUNCTION__, max_get));
-
-	grid_lb_iterator_clean(iter);
-	grid_lb_clean(lb);
+	g_assert(max_get == _count_single(iter, max_get));
+	g_assert((max_feed + 10) == _count_set(iter, max_feed + 10));
+	g_assert(max_get == _count_set(iter, max_get));
 }
-#endif
 
 static void
 test_lb_RR(void)
@@ -217,11 +284,9 @@ test_lb_RR(void)
 	lb = _build();
 	iter = grid_lb_iterator_round_robin(lb);
 
-	g_assert(iter != NULL);
-
-	check_not_found(iter);
-
-	g_assert(max_get == _count(iter, __FUNCTION__, max_get));
+	check_service_count(iter);
+	generate_1by1_and_check_uniform_repartition(iter, 0.01);
+	generate_set_and_check_uniform_repartition(iter, 0.01);
 
 	grid_lb_iterator_clean(iter);
 	grid_lb_clean(lb);
@@ -235,13 +300,7 @@ test_lb_WRR(void)
 
 	lb = _build();
 	iter = grid_lb_iterator_weighted_round_robin(lb);
-
-	g_assert(iter != NULL);
-
-	check_not_found(iter);
-
-	g_assert(max_get == _count(iter, __FUNCTION__, max_get));
-
+	check_service_count(iter);
 	grid_lb_iterator_clean(iter);
 	grid_lb_clean(lb);
 }
@@ -254,13 +313,7 @@ test_lb_SRR(void)
 
 	lb = _build();
 	iter = grid_lb_iterator_scored_round_robin(lb);
-
-	g_assert(iter != NULL);
-
-	check_not_found(iter);
-
-	g_assert(max_get == _count(iter, __FUNCTION__, max_get));
-
+	check_service_count(iter);
 	grid_lb_iterator_clean(iter);
 	grid_lb_clean(lb);
 }
@@ -273,12 +326,9 @@ test_lb_RAND(void)
 
 	lb = _build();
 	iter = grid_lb_iterator_random(lb);
-
-	g_assert(iter != NULL);
-
-	check_not_found(iter);
-
-	g_assert(max_get == _count(iter, __FUNCTION__, max_get));
+	check_service_count(iter);
+	generate_1by1_and_check_uniform_repartition(iter, 0.3);
+	generate_set_and_check_uniform_repartition(iter, 0.3);
 
 	grid_lb_iterator_clean(iter);
 	grid_lb_clean(lb);
@@ -292,13 +342,7 @@ test_lb_WRAND(void)
 
 	lb = _build();
 	iter = grid_lb_iterator_weighted_random(lb);
-
-	g_assert(iter != NULL);
-
-	check_not_found(iter);
-
-	g_assert(max_get == _count(iter, __FUNCTION__, max_get));
-
+	check_service_count(iter);
 	grid_lb_iterator_clean(iter);
 	grid_lb_clean(lb);
 }
@@ -310,17 +354,21 @@ test_lb_SRAND(void)
 	struct grid_lb_iterator_s *iter;
 
 	lb = _build();
-
 	iter = grid_lb_iterator_scored_random(lb);
-
-	g_assert(iter != NULL);
-
-	check_not_found(iter);
-
-	g_assert(max_get == _count(iter, __FUNCTION__, max_get));
-
+	grid_lb_iterator_configure(iter, "shorten_ratio=0.9&standard_deviation=on");
+	check_service_count(iter);
 	grid_lb_iterator_clean(iter);
 	grid_lb_clean(lb);
+}
+
+/* -------------------------------------------------------------------------- */
+
+static void
+test_pool_create_destroy(void)
+{
+	struct grid_lbpool_s *glp = grid_lbpool_create("NS");
+	g_assert(glp != NULL);
+	grid_lbpool_destroy(glp);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -329,20 +377,15 @@ int
 main(int argc, char **argv)
 {
 	srand(time(0) ^ getpid());
-	if (!g_thread_supported())
-		g_thread_init(NULL);
-	g_set_prgname(argv[0]);
-	g_log_set_handler(NULL, G_LOG_LEVEL_MASK|G_LOG_FLAG_FATAL, logger_stderr, NULL);
+	HC_PROC_INIT(argv, GRID_LOGLVL_TRACE2);
 	g_test_init (&argc, &argv, NULL);
-
 	g_test_add_func("/grid/lb/WRAND", test_lb_WRAND);
 	g_test_add_func("/grid/lb/SRAND", test_lb_SRAND);
 	g_test_add_func("/grid/lb/RAND", test_lb_RAND);
 	g_test_add_func("/grid/lb/SRR", test_lb_SRR);
 	g_test_add_func("/grid/lb/WRR", test_lb_WRR);
 	g_test_add_func("/grid/lb/RR", test_lb_RR);
-	/*g_test_add_func("/grid/lb/SINGLE", test_lb_SINGLE);*/
-
+	g_test_add_func("/grid/pool/create_destroy", test_pool_create_destroy);
 	return g_test_run();
 }
 

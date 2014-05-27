@@ -1,10 +1,6 @@
 include_directories(BEFORE .
-		../../../metautils/lib
-		../../../meta0v2
-		../../../meta1v2
-		../../../meta2/remote
-		../../../gridd/main
-		../lib)
+		../../..
+		../../../metautils/lib)
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/metacd.conf.in
 		${CMAKE_CURRENT_BINARY_DIR}/metacd.conf @ONLY)

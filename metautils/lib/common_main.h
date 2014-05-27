@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  * @file common_main.h
  * Simple features set to unify all the dfeatures common to all grid
@@ -23,6 +6,21 @@
 
 #ifndef GRID__COMMON_MAIN_H
 # define GRID__COMMON_MAIN_H 1
+# include <glib/gtypes.h>
+
+/**
+ * @defgroup metautils_main Common Main
+ * @ingroup metautils
+ * @{
+ */
+
+#define HC_PROC_INIT(argv,LVL) do { \
+	if (!g_thread_supported ()) g_thread_init (NULL); \
+	grid_main_set_prgname(argv[0]); \
+	g_log_set_default_handler(logger_stderr, NULL); \
+	logger_init_level(LVL); \
+	logger_reset_level(); \
+} while (0)
 
 /**
  *
@@ -32,6 +30,7 @@ struct grid_main_option_s {
 	enum {
 		OT_BOOL=1,
 		OT_INT,
+		OT_UINT,
 		OT_INT64,
 		OT_DOUBLE,
 		OT_TIME,
@@ -40,6 +39,7 @@ struct grid_main_option_s {
 	} type;
 	union {
 		gboolean *b;
+		guint *u;
 		gint *i;
 		gint64 *i64;
 		gdouble *d;
@@ -50,16 +50,6 @@ struct grid_main_option_s {
 	const char *descr;
 };
 
-/**
- * Stops the execution of the processus
- */
-void grid_main_stop(void);
-
-/**
- * Tests if the processus execution has been stopped
- * @return
- */
-gboolean grid_main_is_running(void);
 
 /**
  * Returns an array of extra options managed by the current process.
@@ -79,22 +69,26 @@ struct grid_main_callbacks {
 	void (*specific_stop) (void);
 };
 
-/**
- * @param argc
- * @param argv
- * @param callbacks
- * @return
- */
-int grid_main(int argc, char ** argv,
-		struct grid_main_callbacks * callbacks);
+/** Uses sigprocmask to block a lot of signals */
+void metautils_ignore_signals(void);
 
-/**
- * @param argc
- * @param argv
- * @param callbacks
- * @return
- */
-int grid_main_cli(int argc, char ** argv,
-		struct grid_main_callbacks * callbacks);
+/** Stops the execution of the processus */
+void grid_main_stop(void);
+
+/** Tests if the processus execution has been stopped */
+gboolean grid_main_is_running(void);
+
+/** Calls this a the main routine for a non-deamonizable program */
+int grid_main(int argc, char ** argv, struct grid_main_callbacks *cb);
+
+/** Calls this a the main routine for a non-deamonizable program */
+int grid_main_cli(int argc, char ** argv, struct grid_main_callbacks *cb);
+
+/** Sets the result code of grid_main() and grid_main_cli() */
+void grid_main_set_status(int rc);
+
+/** Use this to set the name of the current command, this let the HC API
+ * apply the same filter on it (e.g. keep the basename) */
+void grid_main_set_prgname(const gchar *cmd);
 
 #endif

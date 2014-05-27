@@ -1,34 +1,12 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "rawx.repo"
 #endif
+
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
-
-#include <rawx.h>
-#include <storage_policy.h>
-
-#include "./rawx_repo_core.h"
-#include "./rawx_internals.h"
 
 #include <httpd.h>
 #include <http_log.h>
@@ -37,10 +15,15 @@
 #include <http_request.h>       /* for ap_update_mtime() */
 #include <mod_dav.h>
 
+#include <metautils/lib/metautils.h>
+#include <rawx-lib/src/rawx.h>
+
+#include "rawx_repo_core.h"
+#include "rawx_internals.h"
+
 
 #define DEFAULT_BLOCK_SIZE "5242880"
 #define DEFAULT_COMPRESSION_ALGO "ZLIB"
-
 
 /******************** INTERNALS METHODS **************************/
 
@@ -130,7 +113,7 @@ _finalize_chunk_creation(dav_stream *stream)
 				apr_pstrcat(stream->p, "fflush error : ", strerror(errno), NULL));
 	}
 
-	if (stream->fsync_on_close) {
+	if (stream->fsync_on_close & FSYNC_ON_CHUNK) {
 		if (-1 == fsync(fileno(stream->f))) {
 			DAV_ERROR_REQ(stream->r->info->request, 0, "fsync error : %s", strerror(errno));
 			e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
@@ -147,7 +130,22 @@ _finalize_chunk_creation(dav_stream *stream)
 		e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
 				MAP_IO2HTTP(status), 0,
 				apr_pstrcat(stream->p, "rename(",stream->pathname, ", ",stream->final_pathname, ") failure : ", strerror(errno), NULL));
+	} else if (stream->fsync_on_close & FSYNC_ON_CHUNK_DIR) {
+		/* Open directory and call fsync to ensure the rename has been done */
+		int dir = open(stream->r->info->dirname, 0);
+		if (dir != -1) {
+			status = fsync(dir);
+			if (status != 0) {
+				DAV_ERROR_REQ(stream->r->info->request, 0,
+						"fsync error : %s", strerror(errno));
+			}
+			close(dir);
+		} else {
+			DAV_ERROR_REQ(stream->r->info->request, 0,
+					"could not open directory to fsync: %s", strerror(errno));
+		}
 	}
+
 	return e;
 }
 
@@ -507,7 +505,7 @@ rawx_repo_check_request(request_rec *req, const char *root_dir, const char * lab
 	}
 	if (i != 64) {
 		return server_create_and_stat_error(request_get_server_config(req), req->pool,
-				HTTP_BAD_REQUEST, 0, "Invalid CHUNK id length");
+				HTTP_BAD_REQUEST, 0, apr_psprintf(req->pool, "Invalid CHUNK id length: %d", i));
 	}
 
 	return NULL;

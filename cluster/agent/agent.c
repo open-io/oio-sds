@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "gridcluster.agent.main"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "gridcluster.agent.main"
 #endif
 
 #include <errno.h>
@@ -30,14 +10,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
+#include <sys/resource.h>
+#include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
-#include <gridcluster.h>
-#include <conscience.h>
+#include <cluster/lib/gridcluster.h>
+#include <cluster/conscience/conscience.h>
+#include <cluster/module/module.h>
 
 #include "./agent.h"
 #include "./broken_workers.h"
@@ -53,15 +36,11 @@
 #include "./server.h"
 #include "./task_scheduler.h"
 
-#include "../module/module.h"
-
 
 /* GLOBALS */
 gboolean gridagent_blank_undefined_srvtags = TRUE;
 
-GHashTable *namespaces;
-
-long event_no_response_time_out = 5;
+GHashTable *namespaces = NULL;
 
 int event_file_mode = EVENTS_MODE_FILE_DEFAULT;
 int event_directory_mode = EVENTS_MODE_DIR_DEFAULT;
@@ -75,18 +54,21 @@ guint max_events_pending = EVENTS_MAXPENDING_DEFAULT;
 
 char xattr_event_timestamp[256] = AGENT_DEFAULT_EVENT_XATTR;
 time_t event_delay = EVENTS_DELAY_INCOMING_DEFAULT;
-time_t events_refresh_delay = EVENTS_DELAY_REFRESH_DEFAULT;
-time_t nsinfo_refresh_delay = NSINFO_DELAY_REFRESH_DEFAULT;
 
 enum process_type_e agent_type = PT_REQ;
 
-int svc_check_freq = 1;
-int cluster_update_freq = 1;
-int period_update_ns = 1;
-int period_update_srvtype = 1;
-int period_update_srv = 1;
-int period_update_evtconfig = 1;
-int period_update_srvlist = 1;
+gboolean flag_check_services = DEFAULT_SVC_CHECK;
+int period_check_services = DEFAULT_SVC_CHECK_FREQ;
+
+int period_get_evtconfig = DEFAULT_CS_UPDATE_FREQ;
+int period_get_ns = DEFAULT_CS_UPDATE_FREQ;
+int period_get_srvtype = DEFAULT_CS_UPDATE_FREQ;
+int period_get_srvlist = DEFAULT_CS_UPDATE_FREQ;
+int period_push_srvlist = DEFAULT_CS_UPDATE_FREQ;
+
+gboolean flag_manage_broken = DEFAULT_BROKEN_MANAGE;
+int period_push_broken = DEFAULT_BROKEN_FREQ;
+int period_get_broken = DEFAULT_BROKEN_FREQ;
 
 gchar str_opt_config[1024] = "/GRID/common/conf/gridagent.conf";
 gchar str_opt_log[1024] = "/GRID/common/conf/gridagent.log4crc";
@@ -98,16 +80,16 @@ const gchar*
 get_signame(int s)
 {
 	switch (s) {
-	case SIGPIPE: return "SIGPIPE";
-	case SIGUSR1: return "SIGUSR1";
-	case SIGUSR2: return "SIGUSR2";
-	case SIGINT: return "SIGINT";
-	case SIGTERM: return "SIGTERM";
-	case SIGABRT: return "SIGABRT";
-	case SIGQUIT: return "SIGQUIT";
-	case SIGCHLD: return "SIGCHLD";
-	case SIGCONT: return "SIGCONT";
-	case SIGHUP: return "SIGHUP";
+		case SIGPIPE: return "SIGPIPE";
+		case SIGUSR1: return "SIGUSR1";
+		case SIGUSR2: return "SIGUSR2";
+		case SIGINT: return "SIGINT";
+		case SIGTERM: return "SIGTERM";
+		case SIGABRT: return "SIGABRT";
+		case SIGQUIT: return "SIGQUIT";
+		case SIGCHLD: return "SIGCHLD";
+		case SIGCONT: return "SIGCONT";
+		case SIGHUP: return "SIGHUP";
 	}
 	return "?";
 }
@@ -163,11 +145,11 @@ is_agent_running(void)
 
 	if (connect(usock, (struct sockaddr *) &local, sizeof(local)) < 0) {
 		unlink(AGENT_SOCK_PATH);
-		close(usock);
+		metautils_pclose(&usock);
 		return (0);
 	}
 	else {
-		close(usock);
+		metautils_pclose(&usock);
 		return (1);
 	}
 }
@@ -296,14 +278,11 @@ destroy_namespace_data(gpointer p)
 static inline int
 _cfg_get_int_base(int base, GHashTable *ht, const gchar *name, int def)
 {
-	gint i;
-	gint64 i64;
-	gchar *str;
-	
-	str = g_hash_table_lookup(ht, name);
+	gchar *str = g_hash_table_lookup(ht, name);
 	if (!str)
 		return def;
-	i64 = g_ascii_strtoll(str, NULL, base);
+	gint64 i64 = g_ascii_strtoll(str, NULL, base);
+	gint i;
 	return (i = i64);
 }
 
@@ -313,71 +292,81 @@ _cfg_get_int(GHashTable *ht, const gchar *name, int def)
 	return _cfg_get_int_base(10, ht, name, def);
 }
 
-#if 0
-static void
-_cfg_get_str(GHashTable *ht, const gchar *name, const gchar *def,
-		gchar *dst, gsize dst_size)
+static inline gboolean
+_cfg_get_bool(GHashTable *ht, const gchar *name, gboolean def)
 {
-	gchar *str;
-
-	bzero(dst, dst_size);
-	if (NULL != (str = g_hash_table_lookup(ht, name)))
-		g_strlcpy(dst, str, dst_size-1);
-	else
-		g_strlcpy(dst, def, dst_size-1);
+	return metautils_cfg_get_bool(g_hash_table_lookup(ht, name), def);
 }
-#endif
+
+#define INT(K,D) _cfg_get_int(params, K, D)
+#define CFGBOOL(K,D) _cfg_get_bool(params, K, D)
 
 static int
 parse_configuration(const gchar *config, GError **error)
 {
-	GHashTable *params;
-	gchar *str;
+	namespaces = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, destroy_namespace_data);
 
-	namespaces = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, destroy_namespace_data);
-	params = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	GHashTable *params = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, g_free);
 
 	if (!parse_config(config, params, error)) {
 		GSETERROR(error,"Invalid configuration");
-		goto label_error;
+		g_hash_table_destroy(params);
+		return 0;
 	}
 
-	if (!change_user(g_hash_table_lookup(params, USER_KEY), g_hash_table_lookup(params, GROUP_KEY), error)) {
+	if (!change_user(g_hash_table_lookup(params, USER_KEY),
+				g_hash_table_lookup(params, GROUP_KEY), error)) {
 		GSETERROR(error,"Failed to change user");
-		goto label_error;
+		g_hash_table_destroy(params);
+		return 0;
 	}
+
+	NOTICE("Direct configuration variables set to...");
 
 	/* main configuration */
-	svc_check_freq = _cfg_get_int(params, SVC_CHECK_FREQ_KEY, DEFAULT_SVC_CHECK_FREQ);
-	cluster_update_freq = _cfg_get_int(params, CS_UPDATE_FREQ_KEY, DEFAULT_CS_UPDATE_FREQ);
+	flag_check_services = CFGBOOL(SVC_CHECK_KEY, DEFAULT_SVC_CHECK);
+	period_check_services = INT(SVC_CHECK_FREQ_KEY, DEFAULT_SVC_CHECK_FREQ);
+
+	NOTICE("  Check service = %s", flag_check_services ? "ON" : "OFF");
+	NOTICE("    period_check_services = %d", period_check_services);
+
 	/* finer tuning */
-	period_update_ns = _cfg_get_int(params, CS_UPDATE_NS_PERIOD_KEY, cluster_update_freq);
-	period_update_srvtype = _cfg_get_int(params, CS_UPDATE_SRVTYPE_PERIOD_KEY, cluster_update_freq);
-	period_update_srv = _cfg_get_int(params, CS_UPDATE_SRV_PERIOD_KEY, cluster_update_freq);
-	period_update_evtconfig = _cfg_get_int(params, CS_UPDATE_EVTCFG_PERIOD_KEY, cluster_update_freq);
-	period_update_srvlist = _cfg_get_int(params, CS_UPDATE_SRVLST_PERIOD_KEY, cluster_update_freq);
-	NOTICE("Direct configuration variables set to...");
-	NOTICE("  svc_check_freq = %d", svc_check_freq);
-	NOTICE("  cluster_update_freq = %d", cluster_update_freq);
-	NOTICE("    period_update_ns = %d", period_update_ns);
-	NOTICE("    period_update_srvtype = %d", period_update_srvtype);
-	NOTICE("    period_update_srv = %d", period_update_srv);
-	NOTICE("    period_update_evtconfig = %d", period_update_evtconfig);
-	NOTICE("    period_update_srvlist = %d", period_update_srvlist);
+	int def = INT(CS_DEFAULT_FREQ_KEY, DEFAULT_CS_UPDATE_FREQ);
+	period_get_ns = INT(CS_GET_NS_PERIOD_KEY, def);
+	period_get_srvtype = INT(CS_GET_SRVTYPE_PERIOD_KEY, def);
+	period_get_srvlist = INT(CS_GET_SRVLIST_PERIOD_KEY, def);
+	period_push_srvlist = INT(CS_PUSH_SRVLIST_PERIOD_KEY, def);
+	period_get_evtconfig = INT(CS_GET_EVTCFG_PERIOD_KEY, def);
+
+	NOTICE("  Default period = %d", def);
+	NOTICE("    period_get_ns = %d", period_get_ns);
+	NOTICE("    period_get_srvtype = %d", period_get_srvtype);
+	NOTICE("    period_get_srvlist = %d", period_get_srvlist);
+	NOTICE("    period_get_evtconfig = %d", period_get_evtconfig);
+	NOTICE("    period_push_srvlist = %d", period_push_srvlist);
+
+	/* broken elements streams */
+	flag_manage_broken = CFGBOOL(KEY_BROKEN_MANAGE, DEFAULT_BROKEN_MANAGE);
+	period_push_broken = INT(KEY_BROKEN_FREQ_PUSH, DEFAULT_BROKEN_FREQ);
+	period_get_broken = INT(KEY_BROKEN_FREQ_GET, DEFAULT_BROKEN_FREQ);
+
+	NOTICE("  broken streams = %s", flag_manage_broken ? "ON" : "OFF");
+	NOTICE("    period_push_broken = %d", period_push_broken);
+	NOTICE("    period_get_broken = %d", period_get_broken);
 
 	/*events configuration*/
-	if (NULL != (str = g_hash_table_lookup(params, EVENTS_MANAGE_ENABLE_KEY)))
-		event_enable_manage = (0 != g_ascii_strcasecmp(str,"false") && 0 != g_ascii_strcasecmp(str,"no"));
-	if (NULL != (str = g_hash_table_lookup(params, EVENTS_RECEIVE_ENABLE_KEY)))
-		event_enable_receive = (0 != g_ascii_strcasecmp(str,"false") && 0 != g_ascii_strcasecmp(str,"no"));
-
+	event_enable_manage = CFGBOOL(EVENTS_MANAGE_ENABLE_KEY, FALSE);
+	event_enable_receive = CFGBOOL(EVENTS_RECEIVE_ENABLE_KEY, FALSE);
+	max_events_pending = INT(EVENTS_MAXPENDING_KEY, EVENTS_MAXPENDING_DEFAULT);
+	event_delay = INT(EVENTS_DELAY_INCOMING_KEY, EVENTS_DELAY_INCOMING_DEFAULT);
+	gchar *str;
 	if (NULL != (str = g_hash_table_lookup(params, EVENTS_SPOOL_DIR_KEY)))
 		path_configured_top_spool_dir = g_strdup(str);
 	else
 		path_configured_top_spool_dir = g_strdup(EVENTS_SPOOL_DIR_DEFAULT);
-	
-	max_events_pending = _cfg_get_int(params, EVENTS_MAXPENDING_KEY, EVENTS_MAXPENDING_DEFAULT);
-	event_delay = _cfg_get_int(params, EVENTS_DELAY_INCOMING_KEY, EVENTS_DELAY_INCOMING_DEFAULT);
+
 	NOTICE("Event handling limits set to ...");
 	NOTICE("  event_receive = %s", event_enable_receive?"ON":"OFF");
 	NOTICE("  event_manage = %s", event_enable_manage?"ON":"OFF");
@@ -385,27 +374,17 @@ parse_configuration(const gchar *config, GError **error)
 	NOTICE("  events_incoming_delay = %ld", event_delay);
 	NOTICE("  events_spool_dir = %s", path_configured_top_spool_dir);
 
-	unix_socket_mode = _cfg_get_int_base(8, params, UNIX_SOCK_KEY_MODE, UNIX_SOCK_DEFAULT_MODE);
-	unix_socket_uid =  _cfg_get_int(params, UNIX_SOCK_KEY_UID,  UNIX_SOCK_DEFAULT_UID);
-	unix_socket_gid =  _cfg_get_int(params, UNIX_SOCK_KEY_GID,  UNIX_SOCK_DEFAULT_GID);
+	unix_socket_mode = _cfg_get_int_base(8,
+			params, UNIX_SOCK_KEY_MODE, UNIX_SOCK_DEFAULT_MODE);
+	unix_socket_uid = INT(UNIX_SOCK_KEY_UID,  UNIX_SOCK_DEFAULT_UID);
+	unix_socket_gid = INT(UNIX_SOCK_KEY_GID,  UNIX_SOCK_DEFAULT_GID);
 	NOTICE("Socket permissions set to ...");
 	NOTICE("  unix_socket_mode = %o", unix_socket_mode);
 	NOTICE("  unix_socket_uid = %d", unix_socket_uid);
 	NOTICE("  unix_socket_gid = %d", unix_socket_gid);
 
-	/* Indirect configuration, i.e. child config from the gridagent */
-	events_refresh_delay = _cfg_get_int(params, EVENTS_DELAY_REFRESH_KEY, EVENTS_DELAY_REFRESH_DEFAULT);
-	nsinfo_refresh_delay = _cfg_get_int(params, NSINFO_DELAY_REFRESH_KEY, NSINFO_DELAY_REFRESH_DEFAULT);
-	NOTICE("Indirect configuration variables set to...");
-	NOTICE("  events_refresh_delay = %ld", events_refresh_delay);
-	NOTICE("  nsinfo_refresh_delay = %ld", nsinfo_refresh_delay);
-
 	g_hash_table_destroy(params);
 	return 1;
-
-label_error:
-	g_hash_table_destroy(params);
-	return 0;
 }
 
 static void
@@ -443,7 +422,7 @@ parse_options(int argc, char ** args, GError **error)
 
 	for (;;) {
 		int c, option_index;
-		
+
 		c = getopt_long_only(argc, args, "", long_options, &option_index);
 		if (c == -1)
 			break;
@@ -455,7 +434,7 @@ parse_options(int argc, char ** args, GError **error)
 			agent_type = PT_REQ;
 			break;
 		case 3:
-			bzero(ns_name, sizeof(ns_name)); 
+			bzero(ns_name, sizeof(ns_name));
 			g_strlcpy(ns_name, optarg, sizeof(ns_name)-1);
 			agent_type = PT_EVT;
 			break;
@@ -513,22 +492,15 @@ set_system_limits(void)
 }
 
 int
-main(int argc, char **args)
+main(int argc, char **argv)
 {
 	GError *error = NULL;
 	gint rc = 0;
 
-	/* TODO refactor using common_main */
-	if (!g_thread_supported())
-		g_thread_init(NULL);
-	g_set_prgname(args[0]);
-	g_log_set_default_handler(logger_stderr, NULL);
-	logger_init_level(GRID_LOGLVL_INFO);
-	logger_reset_level();
-
+	HC_PROC_INIT(argv, GRID_LOGLVL_INFO);
 	set_system_limits();
 
-	if (!parse_options(argc, args, &error)) {
+	if (!parse_options(argc, argv, &error)) {
 		g_printerr("Failed to parse the program options : %s\n", gerror_get_message(error));
 		g_error_free(error);
 		return -1;
@@ -552,7 +524,7 @@ main(int argc, char **args)
 			rc = main_reqagent();
 			break;
 	}
-	
+
 	free_agent_structures();
 	log4c_fini();
 	return rc;

@@ -1,32 +1,8 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
-
-#ifdef HAVE_COMPAT
-# include <metautils_compat.h>
-#endif
 
 #if APR_HAVE_STDIO_H
 #include <stdio.h>              /* for sprintf() */
@@ -34,15 +10,6 @@
 
 #include <sys/socket.h>
 #include <netdb.h>
-
-
-# include <glib.h>
-# include <metatypes.h>
-# include <metautils.h>
-# include <metacomm.h>
-# include <rawx.h>
-# include <compression.h>
-# include <storage_policy.h>
 
 #include <apr.h>
 #include <apr_file_io.h>
@@ -56,9 +23,16 @@
 #include <http_request.h>       /* for ap_update_mtime() */
 #include <mod_dav.h>
 
-#include "./mod_dav_rawx.h"
-#include "./rawx_internals.h"
-#include "./rawx_config.h"
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <rawx-lib/src/rawx.h>
+#include <rawx-lib/src/compression.h>
+
+#include <glib.h>
+
+#include "mod_dav_rawx.h"
+#include "rawx_internals.h"
+#include "rawx_config.h"
 
 /* ------------------------------------------------------------------------- */
 
@@ -88,7 +62,7 @@ apr_hash_table_clean(void *p)
 
 #define STR_KV(Field,Name) apr_psprintf(pool, "rawx."Name" %"G_GUINT64_FORMAT"\n", stats.Field)
 
-dav_resource*
+static dav_resource*
 __get_chunkupdate_resource(const request_rec *r, const dav_hooks_repository *hooks)
 {
 	dav_resource *resource;
@@ -330,8 +304,9 @@ _update_chunk_storage(const dav_resource *resource, const char *path, const stru
 	if(NULL != c && 0 == g_ascii_strcasecmp(c, NS_COMPRESSION_ON)) {
 		DAV_DEBUG_REQ(r, 0, "In place chunk is compressed, uncompress it");
 		if(1 != uncompress_chunk(path, TRUE, &e)) {
-			de = server_create_and_stat_error(resource_get_server_config(r), r->pool,
-					HTTP_INTERNAL_SERVER_ERROR, 0, apr_pstrcat(r->pool, "Failed to uncompress chunk : ",
+			de = server_create_and_stat_error(request_get_server_config(r),
+					r->pool, HTTP_INTERNAL_SERVER_ERROR, 0,
+					apr_pstrcat(r->pool, "Failed to uncompress chunk : ",
 					((NULL != e)? e->message : "No error specified"), NULL));
 			if(NULL != e)
 				g_clear_error(&e);
@@ -345,14 +320,16 @@ _update_chunk_storage(const dav_resource *resource, const char *path, const stru
 		const char *algo = data_treatments_get_param(dt, DT_KEY_ALGO);
 		const char *bs = data_treatments_get_param(dt, DT_KEY_BLOCKSIZE);
 		if(!algo || !bs) {
-			return server_create_and_stat_error(resource_get_server_config(r), r->pool,
-					HTTP_INTERNAL_SERVER_ERROR, 0, apr_pstrcat(r->pool, "Cannot compress chunk, missing info: ",
+			return server_create_and_stat_error(request_get_server_config(r),
+					r->pool, HTTP_INTERNAL_SERVER_ERROR, 0,
+					apr_pstrcat(r->pool, "Cannot compress chunk, missing info: ",
 						algo, "|", bs, NULL));
 		}
 
 		if(1 != compress_chunk(path, algo, g_ascii_strtoll(bs, NULL, 10), TRUE, &e)) {
-			de = server_create_and_stat_error(resource_get_server_config(r), r->pool,
-					HTTP_INTERNAL_SERVER_ERROR, 0, apr_pstrcat(r->pool, "Failed to compress chunk : ",
+			de = server_create_and_stat_error(request_get_server_config(r),
+					r->pool, HTTP_INTERNAL_SERVER_ERROR, 0,
+					apr_pstrcat(r->pool, "Failed to compress chunk : ",
 						((NULL != e)? e->message : "No error specified"), NULL));
 			if(NULL != e)
 				g_clear_error(&e);
@@ -361,7 +338,6 @@ _update_chunk_storage(const dav_resource *resource, const char *path, const stru
 	}
 
 	return NULL;
-		
 }
 
 static dav_error *
@@ -386,7 +362,8 @@ _ensure_sys_metadata(const dav_resource *resource, const char *path, const char 
 			const char *end = NULL;
 			p = p + strlen("storage-policy=");
 			end = strchr(p, ';');
-			if((strlen(sp) != end - p) || 0 != g_ascii_strncasecmp(sp, p , strlen(sp))) {
+			if((strlen(sp) != (size_t)(end - p))
+					|| 0 != g_ascii_strncasecmp(sp, p , strlen(sp))) {
 				content->system_metadata = apr_pstrndup(resource->pool, content->system_metadata, p - content->system_metadata);
 				content->system_metadata = apr_pstrcat(resource->pool, content->system_metadata, sp, end, NULL); 
 			} else {
@@ -522,5 +499,9 @@ const dav_hooks_repository dav_hooks_repository_chunkupdate =
 	NULL /*dav_rawx_info_remove_resource*/,
 	NULL /* no walk across the chunks */,
 	dav_rawx_getetag,
-	NULL /* no module context */
+	NULL, /* no module context */
+#if MODULE_MAGIC_COOKIE == 0x41503234UL /* "AP24" */
+	NULL,
+	NULL,
+#endif
 };

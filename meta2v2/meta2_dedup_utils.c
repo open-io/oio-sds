@@ -1,29 +1,10 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+#include <metautils/lib/metautils.h>
+#include <sqliterepo/sqlite_utils.h>
+#include <meta2v2/generic.h>
+#include <meta2v2/autogen.h>
+#include <meta2v2/meta2_dedup_utils.h>
 
 #include <glib.h>
-#include <glib/gprintf.h>
-
-#include <generic.h>
-#include <autogen.h>
-#include <metautils.h>
-
-#include "../sqliterepo/sqlite_utils.h"
-#include <meta2_dedup_utils.h>
 
 /**
  * Inserts a bean (chunk or contents_headers) in a hashtable,
@@ -57,8 +38,7 @@ static void _add_to_hashtable_cb(gpointer hashtable, gpointer bean)
 gboolean
 hash_equals(gconstpointer a, gconstpointer b)
 {
-	int res = metautils_gba_cmp((GByteArray *)a,
-								(GByteArray *)b);
+	int res = metautils_gba_cmp((GByteArray *)a, (GByteArray *)b);
 	return (res == 0);
 }
 
@@ -82,8 +62,6 @@ bean_hash_to_guint32(gconstpointer key)
 static guint
 _remove_unique_beans(GHashTable *chunks_by_hash)
 {
-	auto gboolean _has_only_one_element(gpointer k, gpointer v, gpointer d);
-
 	/* Test if a list has one and only one element */
 	gboolean _has_only_one_element(gpointer k, gpointer v, gpointer d) {
 		(void) d;
@@ -132,7 +110,7 @@ get_dup_contents_headers_by_hash(sqlite3 *db, GError **err)
 }
 
 guint64
-dedup_aliases(sqlite3 *db, struct hc_url_s *url, GSList **impacted_aliases,
+dedup_aliases(sqlite3 *db, struct hc_url_s *url, gboolean dry_run, GSList **impacted_aliases,
 		GError **err)
 {
 	(void) url;
@@ -141,7 +119,6 @@ dedup_aliases(sqlite3 *db, struct hc_url_s *url, GSList **impacted_aliases,
 	GRID_DEBUG("Found %d different content hashes", g_hash_table_size(ch_by_h));
 	guint64 saved_space = 0;
 
-	auto void _dedup_ch_cb(gpointer k, gpointer v, gpointer d);
 	void _dedup_ch_cb(gpointer k, gpointer v, gpointer d)
 	{
 		(void) k;
@@ -158,13 +135,12 @@ dedup_aliases(sqlite3 *db, struct hc_url_s *url, GSList **impacted_aliases,
 					g_slist_prepend(ch_list, cursor->data));
 		}
 
-		auto void _dedup_ch_cb2(gpointer k2, gpointer v2, gpointer d2);
 		void _dedup_ch_cb2(gpointer k2, gpointer v2, gpointer d2) {
 			(void) k2;
 			(void) d2;
 			GSList *ch_list2 = (GSList *) v2;
 			saved_space += substitute_content_header(db, ch_list2->data,
-					ch_list2->next, impacted_aliases, err);
+					ch_list2->next, dry_run, impacted_aliases, err);
 		}
 		g_hash_table_foreach(by_sp, _dedup_ch_cb2, NULL);
 		g_hash_table_destroy(by_sp);
@@ -178,19 +154,21 @@ dedup_aliases(sqlite3 *db, struct hc_url_s *url, GSList **impacted_aliases,
 
 guint64
 substitute_content_header(sqlite3 *db, struct bean_CONTENTS_HEADERS_s *new_ch,
-		GSList *old_ch, GSList **impacted_aliases ,GError **err)
+		GSList *old_ch, gboolean dry_run, GSList **impacted_aliases ,GError **err)
 {
 	const gchar *clause = " content_id = ? ";
 	GVariant *params[2] = {NULL, NULL};
 	guint64 saved_space = 0;
 
-	auto void _substitute_ch_cb(gpointer ch, gpointer alias);
 	void _substitute_ch_cb(gpointer ch, gpointer alias)
 	{
 		GError *err2 = NULL;
-		struct bean_ALIASES_s *new_alias = _bean_dup(alias);
-		ALIASES_set_content_id(new_alias, CONTENTS_HEADERS_get_id(ch));
-		err2 = ALIASES_save(db, new_alias);
+		struct bean_ALIASES_s *new_alias = NULL;
+		if (!dry_run) {
+			new_alias = _bean_dup(alias);
+			ALIASES_set_content_id(new_alias, CONTENTS_HEADERS_get_id(ch));
+			err2 = ALIASES_save(db, new_alias);
+		}
 		if (err2 != NULL) {
 			GString *orig_ch_str = metautils_gba_to_hexgstr(NULL,
 					ALIASES_get_content_id(alias));
@@ -205,7 +183,7 @@ substitute_content_header(sqlite3 *db, struct bean_CONTENTS_HEADERS_s *new_ch,
 					g_strdup(ALIASES_get_alias(alias)->str));
 			saved_space += CONTENTS_HEADERS_get_size(ch);
 		}
-		_bean_clean(new_alias);
+		if (new_alias) _bean_clean(new_alias);
 		_bean_clean(alias);
 	}
 
@@ -241,9 +219,6 @@ substitute_chunk(sqlite3 *db, struct bean_CHUNKS_s *new_chunk,
 
 	/* Number of chunks that have been deduplicated */
 	guint chunk_counter = 0;
-
-	auto void _substitute_chunk_cb(gpointer chunk_pointer,
-			gpointer content_pointer);
 
 	/* Substitute the chunk id in a content bean */
 	void _substitute_chunk_cb(gpointer chunk_pointer, gpointer content_pointer)
@@ -363,11 +338,10 @@ dedup_chunks_of_alias(sqlite3 *db, GString *alias, guint copy_count, GError **er
 
 	/* Run the deduplication alogorithm on each chunk */
 	for (guint i = 0; i < chunk_array->len; i++) {
-		if (GRID_TRACE_ENABLED()) {
-			GString *id_str = CHUNKS_get_id(chunk_array->pdata[i]);
-			GRID_TRACE("- Finding duplicate chunks of %s (%s)",
-					id_str->str, alias->str);
-		}
+
+		GRID_TRACE("- Finding duplicate chunks of %s (%s)",
+				CHUNKS_get_id(chunk_array->pdata[i])->str, alias->str);
+
 		if (g_hash_table_lookup(already_dedup,
 				CHUNKS_get_id(chunk_array->pdata[i])->str) != NULL) {
 			continue;
@@ -390,7 +364,6 @@ dedup_chunks_of_alias(sqlite3 *db, GString *alias, guint copy_count, GError **er
 			params2[2] = g_variant_new_uint32(copy);
 
 			GSList *same_hash = NULL;
-			auto void _build_list_cb(gpointer data, gpointer bean);
 			void _build_list_cb(gpointer data, gpointer bean) {
 				(void) data;
 				GString *id_str2 = CHUNKS_get_id(bean);
@@ -448,65 +421,31 @@ end_label:
 	g_ptr_array_free(chunk_array, TRUE);
 }
 
-guint64
-get_container_size(sqlite3 *db)
-{
-	// TODO: move this function elsewhere, factorize it (sqlx_exec)
-	guint64 size = 0;
-	gchar *sql = ("SELECT SUM(size) FROM content_header_v2 WHERE id IN"
-			" (SELECT DISTINCT content_id FROM alias_v2)");
-	int rc, grc = SQLITE_OK;
-	const gchar *next;
-	sqlite3_stmt *stmt = NULL;
-
-	while ((grc == SQLITE_OK) && sql && *sql) {
-		next = NULL;
-		sqlite3_prepare_debug(rc, db, sql, -1, &stmt, &next);
-		sql = next;
-		if (rc != SQLITE_OK && rc != SQLITE_DONE)
-			grc = rc;
-		else if (stmt) {
-			while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-				size = sqlite3_column_int64(stmt, 0);
-			}
-			if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-				grc = rc;
-			}
-			rc = sqlite3_finalize(stmt);
-		}
-
-		stmt = NULL;
-	}
-	return size;
-}
-
 
 void
 print_bean_hashtable(GHashTable *hashtable)
 {
-	auto void print_entry(gpointer key, gpointer value, gpointer user_data);
-
 	void print_entry(gpointer key, gpointer value, gpointer user_data) {
 		(void) user_data;
 		GByteArray *hash = (GByteArray *)key;
 		GSList *chunk_list = (GSList *)value;
 		GString *hash_str = metautils_gba_to_hexgstr(NULL, hash);
-		g_printf("%d beans share same hash %s:\n", g_slist_length(chunk_list),
+		g_print("%d beans share same hash %s:\n", g_slist_length(chunk_list),
 				hash_str->str);
 		for (GSList *current = chunk_list; current; current = current->next) {
 			gpointer bean = current->data;
 			if (bean == NULL) {
-				g_printf("NULL, ");
+				g_print("NULL, ");
 			} else if (DESCR(bean) == &descr_struct_CHUNKS) {
 				GString *bid = CHUNKS_get_id(bean);
-				g_printf("\t%s\n", bid->str);
+				g_print("\t%s\n", bid->str);
 			} else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
 				GString *bid = metautils_gba_to_hexgstr(NULL, CONTENTS_HEADERS_get_id(bean));
-				g_printf("\t%s\n", bid->str);
+				g_print("\t%s\n", bid->str);
 				g_string_free(bid, TRUE);
 			}
 		}
-		g_printf("\n");
+		g_print("\n");
 		g_string_free(hash_str, TRUE);
 	}
 	g_hash_table_foreach(hashtable, print_entry, NULL);

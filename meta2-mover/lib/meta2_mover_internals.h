@@ -1,36 +1,15 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef GS_META2_MOVER__H
 # define GS_META2_MOVER__H 1
-# ifdef HAVE_CONFIG_H
-#  include <config.h>
-# endif /* HAVE_CONFIG_H */
-# ifndef LOG_DOMAIN
-#  define LOG_DOMAIN "grid.meta2.mover"
+# ifndef G_LOG_DOMAIN
+#  define G_LOG_DOMAIN "grid.meta2.mover"
 # endif
 # include <stdlib.h>
 # include <string.h>
 # include <errno.h>
-# include <glib.h>
-# include <metatypes.h>
-# include <metautils.h>
-# include <metacomm.h>
-# define GS_ERROR_NEW(CODE,FMT,...) g_error_new(g_quark_from_static_string(LOG_DOMAIN), CODE, FMT, ##__VA_ARGS__)
+# include <metautils/lib/metautils.h>
+# include <metautils/lib/metacomm.h>
+// TODO FIXME factorize these macroswith those present in metautils
+# define GS_ERROR_NEW(CODE,FMT,...) NEWERROR(CODE, FMT, ##__VA_ARGS__)
 # define GS_ERROR_STACK(E) g_prefix_error((E), "from(%s:%d,%s) ", __FILE__, __LINE__, __FUNCTION__)
 
 struct xcid_s {

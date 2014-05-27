@@ -1,8 +1,6 @@
-include_directories(BEFORE .
-		../../metautils/lib
-		../../libdbaccess/lib
-		../../gridd/main
-		../lib ../agent ../events ../conscience)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+
+include_directories(BEFORE . .. ../..)
 
 add_library(msg_conscience MODULE module.c module.h alerting.h)
 set_target_properties(msg_conscience PROPERTIES PREFIX "" SUFFIX .so)

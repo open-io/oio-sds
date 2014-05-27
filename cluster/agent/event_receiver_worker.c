@@ -1,43 +1,21 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.agent.event.receive"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.agent.event.receive"
 #endif
 
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/stat.h>
 #include <attr/xattr.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
-#include <glib.h>
-#include <glib/gstdio.h>
-
-#include "../lib/gridcluster.h"
-#include "../events/gridcluster_events.h"
-#include "../events/gridcluster_eventsremote.h"
-#include "../events/gridcluster_eventhandler.h"
-#include "../conscience/conscience.h"
+#include <cluster/lib/gridcluster.h>
+#include <cluster/events/gridcluster_events.h>
+#include <cluster/events/gridcluster_eventsremote.h>
+#include <cluster/events/gridcluster_eventhandler.h>
+#include <cluster/conscience/conscience.h>
 
 #include "./config.h"
 #include "./agent.h"
@@ -100,7 +78,7 @@ path_get_from_event_aggrname(gridcluster_event_t *decoded_event, const gchar *ba
 	bzero(aggr_name, sizeof(aggr_name));
 
 	/* Decode and check there is an UEID in the event */
-	if (!(gba = g_hash_table_lookup(decoded_event, "AGGRNAME"))) {
+	if (!(gba = g_hash_table_lookup(decoded_event, GRIDCLUSTER_EVTFIELD_AGGRNAME))) {
 		gchar *ueid = ueid_get_from_event(decoded_event);
 		g_strlcpy(aggr_name, ueid, sizeof(aggr_name)-1);
 		g_free(ueid);
@@ -115,7 +93,7 @@ path_get_from_event_aggrname(gridcluster_event_t *decoded_event, const gchar *ba
 	}
 
 	/* Replace the aggregation name with its canonized form */
-	gridcluster_event_add_string(decoded_event, "AGGRNAME", aggr_name);
+	gridcluster_event_add_string(decoded_event, GRIDCLUSTER_EVTFIELD_AGGRNAME, aggr_name);
 	return g_strdup_printf("%s%c%s", basedir, G_DIR_SEPARATOR, aggr_name);
 }
 

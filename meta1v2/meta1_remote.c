@@ -1,32 +1,11 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "meta1.remote"
 #endif
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN G_LOG_DOMAIN
-#endif
+
+#include <metautils/lib/metautils.h>
 
 #include "./internals.h"
 #include "./meta1_remote.h"
-#include "../metautils/lib/resolv.h"
-#include "../metautils/lib/loggers.h"
-#include "../metautils/lib/gridd_client.h"
 
 #define GBA_POOL_CLEAN(P) do { \
 	if (P) { \
@@ -217,8 +196,9 @@ strings_handler_list (GError **err, gpointer udata, gint code,
 		return FALSE;
 	}
 
-	if (TRACE_ENABLED())
+	if (TRACE_ENABLED()) {
 		TRACE("Arrays sequence unserialized, %d elements!", g_slist_length(list));
+	}
 
 	do {
 		GSList *pResL, *pL;
@@ -506,10 +486,10 @@ meta1_remote_create_container_v2 (addr_info_t *meta1, gint ms, GError **err, con
 
 end_label:
 	if (request) {
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
 	if (packed) {
-		g_byte_array_free(packed, TRUE);
+		g_byte_array_unref(packed);
 	}
 
 	gridd_client_free(client);
@@ -571,7 +551,7 @@ meta1_remote_destroy_container_by_name (addr_info_t *meta1, gint ms, GError **er
 
 end_label:
 	if (request) {
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
 	if (packed) {
 		g_byte_array_free(packed, TRUE);
@@ -615,7 +595,7 @@ meta1_remote_get_meta2_by_container_name (addr_info_t *meta1, gint ms, GError **
 
 errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	return list;
 }
 
@@ -683,7 +663,7 @@ meta1_remote_destroy_container_with_flags (addr_info_t *meta1, gint ms, GError *
 
 end_label:
 	if (request) {
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
 	if (packed) {
 		g_byte_array_free(packed, TRUE);
@@ -757,7 +737,7 @@ meta1_remote_get_meta2_by_container_id (addr_info_t *meta1, gint ms, GError **er
 end_label:
 
 	if (request) {
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
 	if (packed) {
 		g_byte_array_free(packed, TRUE);
@@ -805,11 +785,11 @@ meta1_remote_set_container_flag (addr_info_t *meta1, gint ms, GError **err,
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
 	return TRUE;
 errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	return FALSE;
 }
 
@@ -853,11 +833,11 @@ meta1_remote_get_container_flag (addr_info_t *meta1, gint ms, GError **err,
 		GSETERROR(err,"An error occured while executing the GET_CONTAINER request");
 		goto errorLabel;
 	}
-	message_destroy(request, err);
+	message_destroy(request, NULL);
 	return TRUE;
 errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	return FALSE;
 }
 
@@ -892,11 +872,11 @@ meta1_remote_range_add (addr_info_t *meta1, gint ms, GError **err,
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
 	return TRUE;
 errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	return FALSE;
 }
 
@@ -930,11 +910,11 @@ meta1_remote_range_del (addr_info_t *meta1, gint ms, GError **err,
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
 	return TRUE;
 errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	return FALSE;
 }
 
@@ -968,11 +948,11 @@ meta1_remote_range_set (addr_info_t *meta1, gint ms, GError **err,
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
 	return TRUE;
 errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	return FALSE;
 }
 
@@ -1039,11 +1019,11 @@ meta1_remote_range_get (addr_info_t *meta1, gint ms, GError **err,
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
 	return TRUE;
 errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	return FALSE;
 }
 
@@ -1080,11 +1060,11 @@ meta1_remote_range_list( addr_info_t *meta1, gint ms, GError **err)
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
 	return result;
 errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	return NULL;
 }
 
@@ -1210,11 +1190,11 @@ meta1_remote_force_creation( struct metacnx_ctx_s *ctx, GError **err,
 
 	/*cleans the working structures*/
 	g_free( body );
-	message_destroy(request, err);
+	message_destroy(request, NULL);
 	return TRUE;
 errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	if (body)
 		g_free( body );
 	return FALSE;
@@ -1279,10 +1259,10 @@ meta1_remote_get_container_by_id( struct metacnx_ctx_s *ctx, container_id_t cont
 end_label:
 
 	if (request) {
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
 	if (packed) {
-		g_byte_array_free(packed, TRUE);
+		g_byte_array_unref(packed);
 	}
 
 	gridd_client_free(client);
@@ -1331,13 +1311,13 @@ meta1_remote_get_container_by_name( struct metacnx_ctx_s *ctx, gchar *container_
 	}
 
 	/*cleans the working structures*/
-	message_destroy(request, err);
+	message_destroy(request, NULL);
 
 	return(raw_container);
 
 errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	if (raw_container)
 		g_free(raw_container);
 
@@ -1393,7 +1373,7 @@ meta1_remote_get_container_names_matching(struct metacnx_ctx_s *ctx, GSList *lis
 	}
 
 	/*cleans the working structures*/
-	message_destroy(request, err);
+	message_destroy(request, NULL);
 
 	*result = res;
 	return TRUE;
@@ -1404,7 +1384,7 @@ errorLabel:
 		g_slist_free(res);
 	}
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	return FALSE;
 }
 
@@ -1452,7 +1432,7 @@ meta1_remote_change_container_reference(struct metacnx_ctx_s *cnx, const contain
 	}
 
 	/*cleans the working structures*/
-	message_destroy(request, err);
+	message_destroy(request, NULL);
 	if (new_set)
 		*new_set = res;
 	else {
@@ -1467,28 +1447,34 @@ errorLabel:
 		g_slist_free(res);
 	}
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	return FALSE;
 }
 
 gboolean
-meta1_remote_update_containers(addr_info_t *meta1, GSList *list_of_containers,
+meta1_remote_update_containers(gchar *meta1_addr_str, GSList *list_of_containers,
 		gint ms, GError **err)
 {
-	struct code_handler_s codes [] = {
+	(void) ms;
+	/* struct code_handler_s codes [] = {
 		{ 200, REPSEQ_FINAL, NULL, NULL },
 		{ 0, 0, NULL, NULL },
 	};
 
-	struct reply_sequence_data_s data = { NULL , 0 , codes };
+	struct reply_sequence_data_s data = { NULL , 0 , codes }; */
 
 	MESSAGE request = NULL;
 	gboolean status = FALSE;
+	GByteArray *gba = NULL;
+	struct client_s *client;
+	GError *e = NULL;
 
-	if (!meta1 || !list_of_containers) {
-		GSETCODE(err, EINVAL, "Invalid parameter (%p %p)", meta1, list_of_containers);
+	if (!meta1_addr_str || !list_of_containers) {
+		GSETCODE(err, EINVAL, "Invalid parameter (%p %p)", meta1_addr_str, list_of_containers);
 		return FALSE;
 	}
+
+	GRID_DEBUG("Parameters are ok");
 
 	if (!message_create (&request, err)) {
 		GSETERROR(err, "Cannot create a message");
@@ -1520,12 +1506,35 @@ meta1_remote_update_containers(addr_info_t *meta1, GSList *list_of_containers,
 		goto errorLabel;
 	}
 
-	if (!metaXClient_reply_sequence_run_from_addrinfo (err, request, meta1, ms, &data)) {
-		GSETERROR(err, "Reply sequence error");
-		goto errorLabel;
+	GRID_DEBUG("Message created");
+
+	gba = message_marshall_gba_and_clean(request);
+	request = NULL;
+	GRID_DEBUG("Message converted in binary");
+
+	GRID_DEBUG("Targeting %s", meta1_addr_str);
+
+	client = gridd_client_create_idle(meta1_addr_str);
+	if(!client) {
+		e = NEWERROR(2, "errno=%d %s", errno, strerror(errno));
+	} else {
+		GRID_DEBUG("Client created");
+		gridd_client_start(client);
+		GRID_DEBUG("Client started");
+		e = gridd_client_request(client, gba, NULL, NULL);
+		if(!e){
+			if(!(e = gridd_client_loop(client)))
+				e = gridd_client_error(client);
+			if (!e)
+				status = TRUE;
+		}
+		GRID_DEBUG("Loop done");
+		gridd_client_free(client);
 	}
 
-	status = TRUE;
+	*err = e;
+
+	g_byte_array_free(gba, TRUE);
 
 errorLabel:
 
@@ -1534,12 +1543,12 @@ errorLabel:
 	if(body)
 		g_free(body);
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 
 	return status;
 }
 
-GHashTable* 
+GHashTable*
 meta1_remote_get_virtual_ns_state(addr_info_t *meta1, gint ms, GError **err)
 {
 	GHashTable *result = NULL;
@@ -1574,7 +1583,7 @@ meta1_remote_get_virtual_ns_state(addr_info_t *meta1, gint ms, GError **err)
 errorLabel:
 
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	return result;
 }
 
@@ -1611,8 +1620,8 @@ list_request(const addr_info_t *a, gdouble to_step, gdouble to_overall, GError *
 	GByteArray *gba;
 	GError *e = NULL;
 
-	META1_ASSERT(a != NULL);
-	META1_ASSERT(req != NULL);
+	EXTRA_ASSERT(a != NULL);
+	EXTRA_ASSERT(req != NULL);
 	GRID_TRACE2("%s:%d", __FUNCTION__, __LINE__);
 
 	gba = g_byte_array_new();
@@ -1622,9 +1631,11 @@ list_request(const addr_info_t *a, gdouble to_step, gdouble to_overall, GError *
 	if(to_step > 0 && to_overall > 0)
 		gridd_client_set_timeout(client, to_step, to_overall);
 
+	gscstat_tags_start(GSCSTAT_SERVICE_META1, GSCSTAT_TAGS_REQPROCTIME);
 	gridd_client_start(client);
 	if (!(e = gridd_client_loop(client)))
 		e = gridd_client_error(client);
+	gscstat_tags_end(GSCSTAT_SERVICE_META1, GSCSTAT_TAGS_REQPROCTIME);
 
 	/* in RO request, we don't need this information */
 	if(NULL != master) {
@@ -1639,10 +1650,12 @@ list_request(const addr_info_t *a, gdouble to_step, gdouble to_overall, GError *
 	gridd_client_free(client);
 
 	if (e) {
-		if (err)
+		if (err) {
 			*err = e;
-		else
+		}
+		else {
 			g_clear_error(&e);
+		}
 		g_byte_array_free(gba, TRUE);
 		return NULL;
 	}
@@ -1659,9 +1672,9 @@ meta1v2_remote_create_reference (const addr_info_t *meta1, GError **err,
 		const char *ns, const container_id_t refid, const gchar *refname,
 		gdouble to_step, gdouble to_overall, gchar **master)
 {
-	META1_ASSERT(meta1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
+	EXTRA_ASSERT(meta1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_CREATE,
@@ -1681,13 +1694,14 @@ meta1v2_remote_create_reference (const addr_info_t *meta1, GError **err,
 	return TRUE;
 }
 
-gboolean 
+
+gboolean
 meta1v2_remote_has_reference (const addr_info_t *meta1, GError **err,
 		const char *ns, const container_id_t refid, gdouble to_step, gdouble to_overall)
 {
-	META1_ASSERT(meta1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
+	EXTRA_ASSERT(meta1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_HAS,
@@ -1711,9 +1725,9 @@ meta1v2_remote_delete_reference (const addr_info_t *meta1, GError **err,
 		const char *ns, const container_id_t refid, gdouble to_step, gdouble to_overall,
 		char **master)
 {
-	META1_ASSERT(meta1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
+	EXTRA_ASSERT(meta1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_DESTROY,
@@ -1736,10 +1750,10 @@ gchar**
 meta1v2_remote_link_service(const addr_info_t *meta1, GError **err, const char *ns, const container_id_t refID,
 		const gchar *srvtype, gdouble to_step, gdouble to_overall, char **master)
 {
-	META1_ASSERT(meta1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refID != NULL);
-	META1_ASSERT(srvtype != NULL);
+	EXTRA_ASSERT(meta1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refID != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_SRVAVAIL,
@@ -1760,9 +1774,9 @@ gchar**
 meta1v2_remote_list_reference_services(const addr_info_t *meta1, GError **err, const char *ns, const container_id_t refid,
 		const gchar *srvtype, gdouble to_step, gdouble to_overall)
 {
-	META1_ASSERT(meta1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
+	EXTRA_ASSERT(meta1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
 	GRID_TRACE2("%s:%d", __FUNCTION__, __LINE__);
 
 	GSList *pool = NULL;
@@ -1774,6 +1788,7 @@ meta1v2_remote_list_reference_services(const addr_info_t *meta1, GError **err, c
 			NULL);
 	gchar **result = list_request(meta1, to_step, to_overall, err,
 			gba_poolify(&pool, message_marshall_gba(req, NULL)), NULL);
+
 	message_destroy(req, NULL);
 	GBA_POOL_CLEAN(pool);
 
@@ -1785,10 +1800,10 @@ meta1v2_remote_unlink_service(const addr_info_t *meta1, GError **err,
 		const char *ns, const container_id_t refid, const gchar *srvtype
 		, gdouble to_step, gdouble to_overall, char **master)
 {
-	META1_ASSERT(meta1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
-	META1_ASSERT(srvtype != NULL);
+	EXTRA_ASSERT(meta1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_SRVDEL,
@@ -1816,17 +1831,16 @@ gboolean meta1v2_remote_unlink_one_service(const addr_info_t *meta1,
 	GSList *pool = NULL;
 	GByteArray *body = NULL;
 
-	META1_ASSERT(meta1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
-	META1_ASSERT(srvtype != NULL);
+	EXTRA_ASSERT(meta1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
 
 	body = gba_poolify(&pool, g_byte_array_new());
 
 	if (seqid <= 0) {
 		if (err)
-			*err = g_error_new(g_quark_from_static_string(G_LOG_DOMAIN), 400,
-					"Invalid sequence number [%"G_GINT64_FORMAT"]", seqid);
+			*err = NEWERROR(400, "Invalid sequence number [%"G_GINT64_FORMAT"]", seqid);
 		GBA_POOL_CLEAN(pool);
 		return FALSE;
 	}
@@ -1839,8 +1853,7 @@ gboolean meta1v2_remote_unlink_one_service(const addr_info_t *meta1,
 
 	if (body->len <= 0) {
 		if (err)
-			*err = g_error_new(g_quark_from_static_string(G_LOG_DOMAIN),
-					400, "No sequence number provided");
+			*err = NEWERROR(400, "No sequence number provided");
 		GBA_POOL_CLEAN(pool);
 		return FALSE;
 	}
@@ -1867,10 +1880,10 @@ meta1v2_remote_poll_reference_service(const addr_info_t *meta1,
 		GError **err, const char *ns, const container_id_t refid,
 		const gchar *srvtype, gdouble to_step, gdouble to_overall, char **master)
 {
-	META1_ASSERT(meta1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
-	META1_ASSERT(srvtype != NULL);
+	EXTRA_ASSERT(meta1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_SRVNEW,
@@ -1881,20 +1894,60 @@ meta1v2_remote_poll_reference_service(const addr_info_t *meta1,
 			NULL);
 	gchar **result = list_request(meta1, to_step, to_overall, err,
 			gba_poolify(&pool, message_marshall_gba(req, NULL)), master);
+
 	message_destroy(req, NULL);
 	GBA_POOL_CLEAN(pool);
 	return result;
 }
+
+gchar **
+meta1v2_remote_update_m1_policy(const addr_info_t *meta1,
+                GError **err, const char *ns,  const container_id_t prefix, const container_id_t refid,
+                const gchar *srvtype, const gchar* action, gboolean checkonly, const gchar *excludeurl, gdouble to_step, gdouble to_overall)
+{
+        EXTRA_ASSERT(meta1 != NULL);
+        EXTRA_ASSERT(ns != NULL);
+        //EXTRA_ASSERT(refid != NULL);
+        EXTRA_ASSERT(srvtype != NULL);
+
+        GSList *pool = NULL;
+        MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_UPDATEM1POLICY,
+                        NULL,
+                        "NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
+                        "SRVTYPE", gba_poolify(&pool, metautils_gba_from_string(srvtype)),
+			"ACTION", gba_poolify(&pool, metautils_gba_from_string(action)),
+                        NULL);
+
+	if (prefix) {
+		message_add_fields_gba(req,"PREFIX",gba_poolify(&pool,metautils_gba_from_cid(prefix)),NULL);
+	}
+	if (refid) {
+		message_add_fields_gba(req,"CONTAINER_ID",gba_poolify(&pool,metautils_gba_from_cid(refid)),NULL);
+	}
+	if (checkonly)
+		message_add_field( req,"CHECKONLY", strlen("CHECKONLY"),
+                                        "true", sizeof("true")-1,
+                                        NULL);
+	if( excludeurl )
+		message_add_fields_gba(req,"EXCLUDEURL",gba_poolify(&pool,metautils_gba_from_string(excludeurl)),NULL);
+
+        gchar **result = list_request(meta1, to_step, to_overall, err,
+                        gba_poolify(&pool, message_marshall_gba(req, NULL)), NULL);
+        message_destroy(req, NULL);
+       GBA_POOL_CLEAN(pool);
+        return result;
+}
+
 
 gboolean
 meta1v2_remote_force_reference_service(const addr_info_t *meta1,
 		GError **err, const char *ns, const container_id_t refid,
 		const gchar *url, gdouble to_step, gdouble to_overall, char **master)
 {
-	META1_ASSERT(meta1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
-	META1_ASSERT(url != NULL);
+	EXTRA_ASSERT(meta1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_SRVSET,
@@ -1918,10 +1971,10 @@ meta1v2_remote_configure_reference_service(const addr_info_t *meta1,
 		GError **err, const char *ns, const container_id_t refid,
 		const gchar *url, gdouble to_step, gdouble to_overall, char **master)
 {
-	META1_ASSERT(meta1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
-	META1_ASSERT(url != NULL);
+	EXTRA_ASSERT(meta1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_SRVSETARG,
@@ -1945,9 +1998,9 @@ meta1v2_remote_reference_set_property(const addr_info_t *m1, GError **err,
 		const gchar *ns, const container_id_t refid, gchar **pairs
 		, gdouble to_step, gdouble to_overall, char **master)
 {
-	META1_ASSERT(m1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
+	EXTRA_ASSERT(m1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_CID_PROPSET,
@@ -1971,10 +2024,10 @@ meta1v2_remote_reference_get_property(const addr_info_t *m1, GError **err,
 		const gchar *ns, const container_id_t refid,
 		gchar **keys, gchar ***result, gdouble to_step, gdouble to_overall)
 {
-	META1_ASSERT(m1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
-	META1_ASSERT(result != NULL);
+	EXTRA_ASSERT(m1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
+	EXTRA_ASSERT(result != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_CID_PROPGET,
@@ -1995,9 +2048,9 @@ meta1v2_remote_reference_del_property(const addr_info_t *m1, GError **err,
 		const gchar *ns, const container_id_t refid,
 		gchar **keys, gdouble to_step, gdouble to_overall, char **master)
 {
-	META1_ASSERT(m1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
+	EXTRA_ASSERT(m1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_CID_PROPDEL,
@@ -2035,7 +2088,7 @@ gba_request(const addr_info_t *a, gdouble to_step, gdouble to_overall,
 	GError *e = NULL;
 	gboolean gba_created = FALSE;
 
-	META1_ASSERT(req != NULL);
+	EXTRA_ASSERT(req != NULL);
 
 	grid_addrinfo_to_string(a, stra, sizeof(stra));
 	if (!*result) {
@@ -2047,9 +2100,12 @@ gba_request(const addr_info_t *a, gdouble to_step, gdouble to_overall,
 	if (to_step > 0 && to_overall > 0)
 		gridd_client_set_timeout(client, to_step, to_overall);
 
+	gscstat_tags_start(GSCSTAT_SERVICE_META1, GSCSTAT_TAGS_REQPROCTIME);
 	gridd_client_start(client);
 	if (!(e = gridd_client_loop(client)))
 		e = gridd_client_error(client);
+	gscstat_tags_end(GSCSTAT_SERVICE_META1, GSCSTAT_TAGS_REQPROCTIME);
+
 	gridd_client_free(client);
 
 	if (!e)
@@ -2062,6 +2118,35 @@ gba_request(const addr_info_t *a, gdouble to_step, gdouble to_overall,
 	return e;
 }
 
+
+
+gchar**
+meta1v2_remote_list_services(const addr_info_t *m1, GError **err,
+        const gchar *ns, const container_id_t refid  )
+{
+
+    EXTRA_ASSERT(m1 != NULL);
+    EXTRA_ASSERT(ns != NULL);
+    EXTRA_ASSERT(refid != NULL);
+
+    GSList *pool = NULL;
+    MESSAGE req = message_create_request(NULL, NULL,
+            NAME_MSGNAME_M1V2_SRVALLONM1, NULL /* no body */,
+            "NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
+            "PREFIX", gba_poolify(&pool, metautils_gba_from_cid(refid)),
+            NULL);
+
+    gchar** result = list_request(m1,  60000, 60000, err,
+                              gba_poolify(&pool, message_marshall_gba(req, NULL)), NULL);
+
+    message_destroy(req, NULL);
+    GBA_POOL_CLEAN(pool);
+
+    return result;
+}
+
+
+
 GError *
 meta1v2_remote_list_references(const addr_info_t *m1,
 		const gchar *ns, const container_id_t refid,
@@ -2069,9 +2154,9 @@ meta1v2_remote_list_references(const addr_info_t *m1,
 {
 	GError *err;
 
-	META1_ASSERT(m1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
+	EXTRA_ASSERT(m1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL,
@@ -2096,9 +2181,9 @@ meta1v2_remote_list_references_by_service(const addr_info_t *m1,
 {
 	GError *err;
 
-	META1_ASSERT(m1 != NULL);
-	META1_ASSERT(ns != NULL);
-	META1_ASSERT(refid != NULL);
+	EXTRA_ASSERT(m1 != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(refid != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL,
@@ -2121,7 +2206,7 @@ gboolean
 meta1v2_remote_get_prefixes(const addr_info_t *m1, GError **err,
 		gchar *** result)
 {
-	META1_ASSERT(m1 != NULL);
+	EXTRA_ASSERT(m1 != NULL);
 
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_GETPREFIX,
@@ -2134,3 +2219,4 @@ meta1v2_remote_get_prefixes(const addr_info_t *m1, GError **err,
 
 	return *result != NULL;
 }
+

@@ -1,26 +1,8 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "grid.client.buffer"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "grid.client.buffer"
 #endif
 
 #include "./gs_internals.h"
-#include "./round_buffer.h"
 
 #ifndef SLAB_SIZE
 # define SLAB_SIZE (1<<19)
@@ -73,7 +55,6 @@ round_buffer_t* rb_create_with_callback (const size_t full_size,
 {
 	int numbers=0;
 	size_t allocated_size = 0;
-	//struct mark_s *pos_read;
 	
 	g_assert(full_size < G_MAXUINT);
 
@@ -114,10 +95,7 @@ round_buffer_t* rb_create_with_callback (const size_t full_size,
 	rb->pos_mark.slab = rb->slabs;
 	rb->pos_write.slab = rb->slabs;
 
-	//pos_read = (struct mark_s*) calloc(1, sizeof(struct mark_s));
 	rb->pos_read = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
-	//g_hash_table_insert(rb->pos_read, g_thread_self(), pos_read);
-	//pos_read->slab = rb->slabs;
 
 	rb->size = allocated_size;
 	rb->input = feeder;
@@ -154,7 +132,7 @@ void rb_destroy (round_buffer_t *rb)
 	g_hash_table_destroy(rb->data_being_read);
 	g_mutex_unlock(rb->lock);
 	g_mutex_free(rb->lock);
-	memset(rb,0x00,sizeof(rb));
+	memset(rb,0x00,sizeof(*rb));
 	free(rb);
 }
 
@@ -304,7 +282,6 @@ ssize_t rb_input_from (round_buffer_t *rb, char *pB, size_t s)
 	g_mutex_unlock(rb->lock);
 	
 	g_mutex_lock(lock);
-	//TRACE("rb_input_from: thread %p locking mutex (rsize=%i wsize=%i).", g_thread_self(), rsize, wsize);
 
 	/*did we read all the data?*/
 	if (rsize >= wsize)
@@ -381,7 +358,6 @@ ssize_t rb_input_from (round_buffer_t *rb, char *pB, size_t s)
 			g_cond_broadcast(cond);
 		}
 	}
-	//TRACE("rb_input_from: thread %p unlocking mutex.", g_thread_self());
 	g_mutex_unlock(lock);
 
 	g_mutex_lock(rb->lock);

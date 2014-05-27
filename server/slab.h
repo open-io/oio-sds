@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  * @file slab.h
  */
@@ -194,30 +177,12 @@ gsize data_slab_sequence_size(struct data_slab_sequence_s *dss);
  * @param alloc
  * @return
  */
-static inline struct data_slab_s *
-data_slab_make_empty(gsize alloc)
-{
-	struct data_slab_s ds;
-	ds.type = STYPE_BUFFER;
-	ds.data.buffer.buff = g_malloc0(alloc);
-	ds.data.buffer.start = 0;
-	ds.data.buffer.end = 0;
-	ds.data.buffer.alloc = alloc;
-	ds.next = NULL;
-	return g_memdup(&ds, sizeof(ds));
-}
+struct data_slab_s * data_slab_make_empty(gsize alloc);
 
 /**
  * @return
  */
-static inline struct data_slab_s *
-data_slab_make_eof(void)
-{
-	struct data_slab_s ds;
-	ds.type = STYPE_EOF;
-	ds.next = NULL;
-	return g_memdup(&ds, sizeof(ds));
-}
+struct data_slab_s * data_slab_make_eof(void);
 
 /**
  * @param fd
@@ -226,17 +191,7 @@ data_slab_make_eof(void)
  * @param end
  * @return
  */
-static inline struct data_slab_s *
-data_slab_make_file(int fd, off_t start, off_t end)
-{
-	struct data_slab_s ds;
-	ds.type = STYPE_FILE;
-	ds.data.file.start = start;
-	ds.data.file.end = end;
-	ds.data.file.fd = fd;
-	ds.next = NULL;
-	return g_memdup(&ds, sizeof(ds));
-}
+struct data_slab_s * data_slab_make_file(int fd, off_t start, off_t end);
 
 /**
  * @param path
@@ -244,48 +199,21 @@ data_slab_make_file(int fd, off_t start, off_t end)
  * @param end
  * @return
  */
-static inline struct data_slab_s *
-data_slab_make_path2(const gchar *path, off_t start, off_t end)
-{
-	struct data_slab_s ds;
-	ds.type = STYPE_PATH;
-	ds.data.path.path = g_strdup(path);
-	ds.data.path.start = start;
-	ds.data.path.end = end;
-	ds.data.path.fd = -1;
-	ds.data.path.flags = FLAG_OFFSET|FLAG_END;
-	ds.next = NULL;
-	return g_memdup(&ds, sizeof(ds));
-}
+struct data_slab_s * data_slab_make_path2(const gchar *path,
+		off_t start, off_t end);
 
 /**
  * @param path
  * @param must_unlink
  * @return
  */
-static inline struct data_slab_s *
-data_slab_make_path(const gchar *path, gboolean must_unlink)
-{
-	struct data_slab_s ds;
-	ds.type = STYPE_PATH;
-	ds.data.path.path = g_strdup(path);
-	ds.data.path.start = 0;
-	ds.data.path.end = 0;
-	ds.data.path.fd = -1;
-	ds.data.path.flags = must_unlink ? FLAG_UNLINK : 0;
-	ds.next = NULL;
-	return g_memdup(&ds, sizeof(ds));
-}
+struct data_slab_s * data_slab_make_path(const gchar *path, gboolean must_unlink);
 
 /**
  * @param path
  * @return
  */
-static inline struct data_slab_s *
-data_slab_make_tempfile(const gchar *path)
-{
-	return data_slab_make_path(path, TRUE);
-}
+struct data_slab_s * data_slab_make_tempfile(const gchar *path);
 
 /**
  * @param buff
@@ -295,19 +223,9 @@ data_slab_make_tempfile(const gchar *path)
  * @param alloc
  * @return
  */
-static inline struct data_slab_s *
+struct data_slab_s *
 data_slab_make_buffer2(guint8 *buff, gboolean tobefreed, gsize start,
-		gsize end, gsize alloc)
-{
-	struct data_slab_s ds;
-	ds.type = tobefreed ? STYPE_BUFFER : STYPE_BUFFER_STATIC;
-	ds.data.buffer.start = start;
-	ds.data.buffer.end = end;
-	ds.data.buffer.alloc = alloc;
-	ds.data.buffer.buff = buff;
-	ds.next = NULL;
-	return g_memdup(&ds, sizeof(ds));
-}
+		gsize end, gsize alloc);
 
 /**
  * @param buff
@@ -329,6 +247,17 @@ static inline struct data_slab_s *
 data_slab_make_buffer(guint8 *buff, gsize bs)
 {
 	return data_slab_make_buffer2(buff, TRUE, 0, bs, bs);
+}
+
+/**
+ * @param gstr
+ * @return
+ */
+static inline struct data_slab_s *
+data_slab_make_gstr(GString *gstr)
+{
+	guint l = gstr->len;
+	return data_slab_make_buffer2((guint8*)g_string_free(gstr, FALSE), TRUE, 0, l, l);
 }
 
 /**

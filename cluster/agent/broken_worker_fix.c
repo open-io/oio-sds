@@ -1,46 +1,25 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "gridcluster.agent.broken"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "gridcluster.agent.broken"
 #endif
 
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 
-#include <metatypes.h>
-#include <metacomm.h>
-#include <metautils.h>
-#include <conscience.h>
+#include <metautils/lib/metacomm.h>
 
-#include "agent.h"
-#include "asn1_request_worker.h"
-#include "broken_workers.h"
-#include "gridagent.h"
-#include "io_scheduler.h"
-#include "message.h"
-#include "namespace_get_task_worker.h"
-#include "services_workers.h"
-#include "task_scheduler.h"
-#include "../module/module.h"
+#include <cluster/module/module.h>
+#include <cluster/conscience/conscience.h>
+
+#include "./agent.h"
+#include "./asn1_request_worker.h"
+#include "./broken_workers.h"
+#include "./gridagent.h"
+#include "./io_scheduler.h"
+#include "./message.h"
+#include "./namespace_get_task_worker.h"
+#include "./services_workers.h"
+#include "./task_scheduler.h"
 
 static int
 asn1_final_handler( worker_t *worker, GError **error )
@@ -162,6 +141,9 @@ agent_fixed_erroneous_container(worker_t *worker, GError **error)
 	memset(broken_element, 0x00, sizeof(broken_element));
 	memset(ns_name, 0x00, sizeof(ns_name));
 
+	if (!flag_manage_broken)
+		return __respond_message(worker, 0, "Broken elements not managed", error);
+
 	/*extract the fields packed in the request's parameter*/
 	req = (request_t*)worker->data.session;
 	tokens = buffer_split( req->arg, req->arg?strlen(req->arg):0, ":", 2);
@@ -179,14 +161,14 @@ agent_fixed_erroneous_container(worker_t *worker, GError **error)
 	g_strlcpy(ns_name, tokens[0], sizeof(ns_name)-1);
 	g_snprintf(broken_element, sizeof(broken_element), "%s", req->arg + 1 + strlen(ns_name));
 	g_strfreev(tokens);
-	
+
 	ns_data = get_namespace(ns_name, NULL);
-	if (!ns_data || !ns_data->configured) 
+	if (!ns_data || !ns_data->configured)
 		return __respond_message(worker, 0, "NAMESPACE not found/ready", error);
-	
+
 	if (!check_format(ns_data->conscience, broken_element, &error_local))
 		return __respond_message(worker, 0, "Invalid ELEMENT format", error);
-	
+
         if (!create_sub_worker(ns_data, worker, broken_element, &error_local)) {
 		GSETERROR(&error_local, "Failed to connect to the conscience");
 		return __respond_error(worker, error_local, error);

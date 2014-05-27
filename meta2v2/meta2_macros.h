@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef HC_M2V2_MACROS__H
 #define  HC_M2V2_MACROS__H 1
 
@@ -26,6 +9,21 @@
 #define M2_KEY_URL "HC_URL"
 #define M2_KEY_GET_FLAGS "GET_ALIAS_FLAGS"
 #define M2_KEY_ALIAS_VERSION "ALIAS_VERSION"
+#define M2_KEY_COPY_SOURCE "COPY_SOURCE"
+#define M2_KEY_CHUNK_ID "CHUNK_ID"
+#define M2_KEY_OVERWRITE "OVERWRITE"
+#define M2_KEY_SPARE "SPARE"
+/* LIST params */
+#define M2_KEY_LISTING_TYPE "LIST_TYPE"
+#define S3_LISTING_TYPE "S3"
+#define REDC_LISTING_TYPE "REDC"
+#define M2_KEY_NAME_PATTERN "NAME_PATTERN"
+#define M2_KEY_METADATA_PATTERN "METADATA_PATTERN"
+#define M2_KEY_PREFIX "PREFIX"
+#define M2_KEY_MARKER "MARKER"
+#define M2_KEY_DELIMITER "DELIMITER"
+#define M2_KEY_MAX_KEYS "MAX_KEYS"
+#define M2_KEY_SNAPSHOT_HARDRESTORE "HARD_RESTORE"
 
 /* ---- LEGACY CONSTANTS ---- */
 

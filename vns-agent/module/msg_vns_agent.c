@@ -1,43 +1,23 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #define MODULE_NAME "vns_agent"
 
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN MODULE_NAME".plugin"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "grid."MODULE_NAME".plugin"
 #endif
 
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
+#include <gridd/main/plugin.h>
+#include <gridd/main/message_handler.h>
+#include <gridd/main/srvstats.h>
+#include <gridd/main/srvtimer.h>
+#include <gridd/main/srvalert.h>
 
-#include <plugin.h>
-#include <message_handler.h>
-#include <srvstats.h>
-#include <srvtimer.h>
-#include <srvalert.h>
-
-#include <gridcluster.h>
-#include <metautils.h>
-
-#include "../lib/vns_agent.h"
-#include "../remote/vns_agent_remote.h"
+#include "lib/vns_agent.h"
+#include "remote/vns_agent_remote.h"
 
 #define VNS_AGENT_ERRID_CONFIG "vns_agent.config"
 #define VNS_AGENT_ERRID_DB     "vns_agent.db"
@@ -254,7 +234,7 @@ plugin_init(GHashTable * params, GError ** err)
 
 	get_namespace_info_f get_ns_info = NULL;
 	get_ns_info = g_hash_table_lookup(params, KEY_NS_INFO_FUNC);
-	if(!get_ns_info) {
+	if (!get_ns_info) {
 		GSETCODE(err, VNS_AGENT_ERRCODE_CONFIG, "no [%s] key in the config", KEY_NS_INFO_FUNC);
 		return 0;
 	}
@@ -266,31 +246,31 @@ plugin_init(GHashTable * params, GError ** err)
 
 	GPtrArray* service_tags = NULL;
 	service_tags = _prepare_tags();
-	
+
 	if (!message_handler_add_v2("vns_agent", plugin_matcher, plugin_handler, service_tags, err)) {
 		GSETCODE(err, VNS_AGENT_ERRCODE_OTHER, "Module init error");
 		return 0;
 	}
-	
+
 	guint64 vns_agent_space_used_refresh_rate;
 	gint64 i64;
 	gchar * tmp_str = NULL;
 	tmp_str = g_hash_table_lookup(params, KEY_SPACE_USED_REFRESH_RATE);
-        if (!tmp_str)
-                vns_agent_space_used_refresh_rate = DEFAULT_SPACE_USED_REFRESH_RATE;
-        else {
-                i64 = g_ascii_strtoll(tmp_str, NULL, 10);
-                vns_agent_space_used_refresh_rate = i64 / 1000UL;
-                if (vns_agent_space_used_refresh_rate < LIMIT_MIN_SPACE_USED_REFRESH_RATE || 
+	if (!tmp_str)
+		vns_agent_space_used_refresh_rate = DEFAULT_SPACE_USED_REFRESH_RATE;
+	else {
+		i64 = g_ascii_strtoll(tmp_str, NULL, 10);
+		vns_agent_space_used_refresh_rate = i64;
+		if (vns_agent_space_used_refresh_rate < LIMIT_MIN_SPACE_USED_REFRESH_RATE || 
 				vns_agent_space_used_refresh_rate > LIMIT_MAX_SPACE_USED_REFRESH_RATE) {
-                        WARN("[space_used_refresh_rate] parameter out of range [%u,%u]", LIMIT_MIN_SPACE_USED_REFRESH_RATE,
-                            LIMIT_MAX_SPACE_USED_REFRESH_RATE);
-                        vns_agent_space_used_refresh_rate =
-                            CLAMP(vns_agent_space_used_refresh_rate, LIMIT_MIN_SPACE_USED_REFRESH_RATE, LIMIT_MAX_SPACE_USED_REFRESH_RATE);
-                }
-        }
+			WARN("[space_used_refresh_rate] parameter out of range [%u,%u]",
+					LIMIT_MIN_SPACE_USED_REFRESH_RATE, LIMIT_MAX_SPACE_USED_REFRESH_RATE);
+			vns_agent_space_used_refresh_rate =
+				CLAMP(vns_agent_space_used_refresh_rate, LIMIT_MIN_SPACE_USED_REFRESH_RATE, LIMIT_MAX_SPACE_USED_REFRESH_RATE);
+		}
+	}
 
-        NOTICE("space_used refresh rate set to [%lu] s", vns_agent_space_used_refresh_rate);
+	NOTICE("space_used refresh rate set to [%lu] s", vns_agent_space_used_refresh_rate);
 
 	/* register callback to periodicly refresh vns space_used and send it to the conscience */
 	srvtimer_register_regular(MODULE_NAME " virtual ns space_used refresh",

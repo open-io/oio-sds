@@ -1,9 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
-#include <metautils.h>
-#include <metacomm.h>
-#include "./meta2_services_remote.h"
-#include "./meta2_remote.h"
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include "meta2_services_remote.h"
+#include "meta2_remote.h"
 
 static struct metacnx_ctx_s cnx;
 static container_id_t cid;
@@ -34,19 +34,7 @@ _display_strlist( const gchar *prefix, GSList *list)
 	} else
 		g_printerr("%s***nothing***\r\n", prefix);
 }
-#if 0
-static void
-_display_strv( const gchar *prefix, gchar ** array)
-{
-	gchar **pStr;
-	if (array) {
-		for (pStr=array; *pStr ;pStr++)
-			g_printerr("%s%s\r\n", prefix, *pStr);
-	}
-	else
-		g_printerr("%s***nothing***\r\n", prefix);
-}
-#endif
+
 static GSList*
 build_paths_list(int argc, char ** args)
 {

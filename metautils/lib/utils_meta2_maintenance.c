@@ -1,33 +1,10 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "metautils.meta2_maintenance"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "metautils.meta2_maintenance"
 #endif
 
 #include <errno.h>
-#include <string.h>
-#include <glib.h>
-#include "./metatypes.h"
-#include "./metautils.h"
+
+#include "metautils.h"
 
 struct meta2_raw_content_s *
 meta2_maintenance_create_content(const container_id_t container_id, gint64 size,
@@ -71,6 +48,9 @@ meta2_raw_content_clean(meta2_raw_content_t *content)
 
 	if (content->system_metadata)
 		g_byte_array_free(content->system_metadata, TRUE);
+
+	if (content->storage_policy)
+		g_free(content->storage_policy);
 
 	bzero(content, sizeof(meta2_raw_content_t));
 	g_free(content);
@@ -320,7 +300,7 @@ meta2_raw_content_header_clean(meta2_raw_content_header_t *header)
 		g_byte_array_free(header->metadata, TRUE);
 	if (header->system_metadata)
 		g_byte_array_free(header->system_metadata, TRUE);
-	
+
 	bzero(header, sizeof(meta2_raw_content_header_t));
 	g_free(header);
 	errno = 0;
@@ -464,7 +444,7 @@ meta2_raw_content_v2_to_string(const meta2_raw_content_v2_t *content)
 	for (l=content->properties; l ;l=l->next)
 		_concat(meta2_property_to_string(l->data));
 	_concat(g_strdup("]"));
-	
+
 	_concat(g_strdup("]"));
 
 	result = g_strjoinv(";",tab);
@@ -484,7 +464,7 @@ meta2_raw_chunk_cmp(const meta2_raw_chunk_t *r1, const meta2_raw_chunk_t *r2)
 		return 1;
 	if (r1 && !r2)
 		return -1;
-	
+
 	memcpy(&c1, r1, sizeof(c1));
 	c1.metadata = NULL;
 	memcpy(&c2, r2, sizeof(c2));
@@ -504,7 +484,7 @@ meta2_property_cmp(const meta2_property_t *p1, const meta2_property_t *p2)
 		return 1;
 	if (p1 && !p2)
 		return -1;
-	
+
 	if (!p1->name && p2->name)
 		return 1;
 	if (p1->name && !p2->name)
@@ -524,7 +504,7 @@ meta2_raw_content_header_cmp(const meta2_raw_content_header_t *r1, const meta2_r
 		return 1;
 	if (r1 && !r2)
 		return -1;
-	
+
 	memcpy(&c1, r1, sizeof(c1));
 	c1.metadata = NULL;
 	c1.system_metadata = NULL;
@@ -594,7 +574,7 @@ meta2_raw_content_v2_get_v1(meta2_raw_content_v2_t *v2, GError **err)
 		GSETCODE(err, 500+ENOMEM, "Memory allocation failure");
 		return NULL;
 	}
-	
+
 	/* Copy the header */
 	memcpy(v1->container_id, v2->header.container_id, sizeof(container_id_t));
 	g_strlcpy(v1->path, v2->header.path, sizeof(v1->path)-1);
@@ -603,6 +583,9 @@ meta2_raw_content_v2_get_v1(meta2_raw_content_v2_t *v2, GError **err)
 	v1->size = v2->header.size;
 	v1->metadata = metautils_gba_dup(v2->header.metadata);
 	v1->system_metadata = metautils_gba_dup(v2->header.system_metadata);
+	v1->storage_policy = g_strdup(v2->header.policy);
+	v1->version = v2->header.version;
+	v1->deleted = v2->header.deleted;
 
 	/* Copy the chunks */
 	for (l=v2->raw_chunks; l ;l=l->next) {
@@ -653,7 +636,7 @@ convert_content_text_to_raw(const struct content_textinfo_s* text_content,
 		GSETERROR(error, "Invalid parameter (%p %p)", text_content, raw_content);
 		return FALSE;
 	}
-	
+
 	if (text_content->container_id != NULL
 		&& !hex2bin(text_content->container_id, &(raw_content->container_id), sizeof(container_id_t), error)) {
 			GSETERROR(error, "Failed to convert container_id from hex to bin");
@@ -669,6 +652,8 @@ convert_content_text_to_raw(const struct content_textinfo_s* text_content,
 			return FALSE;
 		}
 	}
+	if (text_content->version != NULL)
+		raw_content->version = g_ascii_strtoll(text_content->version, NULL, 10);
 
 	if (text_content->size != NULL)
 		raw_content->size = g_ascii_strtoll(text_content->size, NULL, 10);

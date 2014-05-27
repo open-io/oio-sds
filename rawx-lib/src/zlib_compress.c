@@ -1,32 +1,12 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "rawx.compress"
 #endif
+
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
-
-#ifdef HAVE_COMPAT
-# include <metautils_compat.h>
-#endif
 
 #ifdef APR_HAVE_STDIO_H
 #include <stdio.h>              /* for sprintf() */
@@ -35,15 +15,13 @@
 #include <unistd.h>
 #include <string.h>
 
-# include <glib.h>
-# include <metatypes.h>
-# include <metautils.h>
-# include <metacomm.h>
-# include <rawx.h>
-
 #include <zlib.h>
 #include <zconf.h>
-#include "./compression.h"
+
+#include <metautils/lib/metautils.h>
+
+#include "rawx.h"
+#include "compression.h"
 
 /* magic file header for zlib block compressed files */
 static const unsigned char magic[8] =
@@ -127,7 +105,6 @@ int
 zlib_compress_chunk_part(const void *buf, gsize bufsize, GByteArray *result, gulong* checksum)
 {
 	guint8* out = NULL;
-	//gulong out_len = 0;
 	gulong bufsize_ulong = bufsize;
 	gulong out_max;
 	int r = 0;
@@ -366,14 +343,6 @@ zlib_compressed_chunk_get_data(struct compressed_chunk_s *chunk, gsize offset, g
 			return -1;
 		}
 
-		/* 
-		if (rf == 0) {
-			TRACE("compressed_chunk_get_data : EOF");
-			if(!zlib_compressed_chunk_check_integrity(chunk)){
-				DEBUG("Wrong checksum, data seems to be corrupted...");	
-				return -1;
-			}
-		}*/
 		DEBUG("Entering compressed_chunk_get_data, buffer refilled, max=%u buf_offset=%u data_len=%u",
 				(uint)buf_len, (uint)chunk->buf_offset, (uint)chunk->data_len);
 	}

@@ -1,23 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
 
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
@@ -30,9 +10,10 @@
 #endif
 
 #include <unistd.h>
+#include <sys/stat.h>
 
-# include <glib.h>
-# include <rawx.h>
+// TODO FIXME replace with APR equivalent
+#include <openssl/md5.h>
 
 #include <apr.h>
 #include <apr_file_io.h>
@@ -46,15 +27,14 @@
 #include <http_request.h>       /* for ap_update_mtime() */
 #include <mod_dav.h>
 
-#include <sys/stat.h>
+#include <rawx-lib/src/rawx.h>
 
-#include "./rawx_bucket.h"
-#include "./rawx_repo_core.h"
-#include "./rawx_internals.h"
-#include "./rawx_config.h"
+#include <glib.h>
 
-#include <openssl/md5.h>
-
+#include "rawx_bucket.h"
+#include "rawx_repo_core.h"
+#include "rawx_internals.h"
+#include "rawx_config.h"
 
 void
 chunk_bucket_destroy(void *d)

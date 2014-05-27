@@ -1,10 +1,6 @@
-include_directories(BEFORE .
-		../../metautils/lib
-		../../cluster/lib
-		../../cluster/agent
-		../../cluster/events
-		../../cluster/remote
-		../../meta1v2)
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+
+include_directories(BEFORE . .. ../..)
 
 add_library(vns_agent SHARED vns_agent.c vns_agent.h vns_agent_internals.h)
 

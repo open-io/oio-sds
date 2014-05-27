@@ -1,28 +1,9 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
-#include <glib.h>
-
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
 #include "./limited_cache.h"
 
@@ -101,7 +82,14 @@ static void
 UNCHECKED_remove_element(limited_cache_t *lc, struct limited_cache_element_s *e)
 {
 	struct limited_cache_element_s *e_prev, *e_next;
-	
+
+	if (GRID_TRACE_ENABLED()) {
+		// XXX: Remove this when cache is used for anything else than cid
+		gchar str_cid[65];
+		container_id_to_string(e->k, str_cid, 65);
+		TRACE("cleaning entry %s -> %p", str_cid, e->v);
+	}
+
 	/*restore the chain*/
 	e_prev = e->prev;
 	e_next = e->next;
@@ -160,19 +148,24 @@ _lc_clean(limited_cache_t *lc, guint *count)
 		WARN ("Cannot clean %p", lc);
 		return;
 	}
-	
+
 	needle = (lc->expiration>0) ? (time(0) - lc->expiration) : 0;
 	c = 0U;
 
 	if (lc->limit > 0) {
+		if (lc->limit < lc->size)
+			DEBUG("cleaning %"G_GSSIZE_FORMAT" oldest entries of cache %p",
+					lc->size - lc->limit, (void*)lc);
 		while ((lc->size > lc->limit) && UNCHECKED_pop_last (lc))
 			c++;
 	}
 	if (lc->expiration >= 0) {
+		DEBUG("cleaning entries older than %lu from cache %p",
+				needle, (void*)lc);
 		while (UNCHECKED_pop_if_older(lc, needle))
 			c++;
 	}
-	
+
 	if (count)
 		*count = c;
 }
@@ -250,7 +243,7 @@ void limited_cache_put (limited_cache_t *lc, gpointer k, gpointer v)
 {
 	struct limited_cache_element_s *e = NULL, *e_old;
 	
-	if (!lc || !k || !v) {
+	if (!lc || !k) {
 		ALERT("Invalid parameter");
 		return ;
 	}
@@ -263,7 +256,7 @@ void limited_cache_put (limited_cache_t *lc, gpointer k, gpointer v)
 
 	e->k = lc->copy_k ? lc->copy_k(k) : k;
 	e->v = lc->copy_v ? lc->copy_v(v) : v;
-	if (!e->k || !e->v) {
+	if (!e->k) {
 		if (e->v && lc->free_v)
 			lc->free_v(e->v);
 		if (e->k && lc->free_k)
@@ -276,7 +269,6 @@ void limited_cache_put (limited_cache_t *lc, gpointer k, gpointer v)
 
 	/*remove the old entry*/
 	if (NULL != (e_old = g_hash_table_lookup(lc->ht, e->k))) {
-		/*DEBUG_DOMAIN("cache","rmold");*/
 		UNCHECKED_remove_element(lc, e_old);
 	}
 	
@@ -294,13 +286,10 @@ void limited_cache_put (limited_cache_t *lc, gpointer k, gpointer v)
 	lc->size ++;
 	_lc_clean(lc, NULL);
 	g_mutex_unlock (lc->mutex);	
-
-	/*DEBUG_DOMAIN("cache","push");*/
 }
 
-
-gpointer
-limited_cache_get (limited_cache_t *lc, gconstpointer k)
+static
+gpointer limited_cache_lookup(limited_cache_t *lc, gconstpointer k, gboolean *p_cache_has_key)
 {
 	time_t now;
 	gpointer eData=NULL;
@@ -313,18 +302,20 @@ limited_cache_get (limited_cache_t *lc, gconstpointer k)
 
 	now = time(0);
 
-	g_mutex_lock(lc->mutex);	
-	e = (struct limited_cache_element_s*) g_hash_table_lookup (lc->ht, k);
+	g_mutex_lock(lc->mutex);
+	if (p_cache_has_key) {
+		*p_cache_has_key = g_hash_table_lookup_extended(lc->ht, k, NULL, (gpointer*) &e);
+	} else {
+		e = (struct limited_cache_element_s*) g_hash_table_lookup (lc->ht, k);
+	}
 	if (!e) {
 		g_mutex_unlock(lc->mutex);	
-		/*DEBUG_DOMAIN("cache", "notfound");*/
 		return NULL;
 	}
 
 	if (e->date_access < (now - lc->expiration)) { /* EXPIRED */
 		UNCHECKED_remove_element(lc, e);
 		g_mutex_unlock(lc->mutex);
-		/*DEBUG_DOMAIN("cache", "expired");*/
 		return NULL;
 	}
 
@@ -345,11 +336,26 @@ limited_cache_get (limited_cache_t *lc, gconstpointer k)
 	}
 
 	eData = lc->copy_v ? lc->copy_v(e->v) : e->v;
-	g_mutex_unlock(lc->mutex);	
+	g_mutex_unlock(lc->mutex);
 
 	return eData;
 }
 
+gboolean
+limited_cache_has(limited_cache_t *lc, gconstpointer k, gpointer *p_val)
+{
+	gboolean has_val;
+	gpointer valret = limited_cache_lookup(lc, k, &has_val);
+	if (p_val)
+		*p_val = valret;
+	return has_val;
+}
+
+gpointer
+limited_cache_get (limited_cache_t *lc, gconstpointer k)
+{
+	return limited_cache_lookup(lc, k, NULL);
+}
 
 void
 limited_cache_del (limited_cache_t *lc, gconstpointer k)

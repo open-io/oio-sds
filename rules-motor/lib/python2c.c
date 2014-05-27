@@ -1,43 +1,12 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "rules-motor"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "rules-motor"
 #endif
 
 #include <grid_client.h>
-#include <meta2_mover.h>
-#include <content_check.h>
-#include "./motor.h"
+#include <meta2-mover/lib/meta2_mover.h>
+#include <integrity/lib/content_check.h>
 
-/****************************************************************
- * test functions 
- ****************************************************************/
-/*
-void
-content_info_test(struct crawler_chunk_data_pack_s *c_struct){
-	printf("it works!\n");	
-	printf("%s\n", c_struct->content_info->path);
-	printf("%s\n", c_struct->content_info->container_id);
-	printf("%ld\n", c_struct->atime);
-	printf("%s\n", c_struct->chunk_path);
-}
-*/
-
+#include "motor.h"
 
 /****************************************************************
  * chunks compression/decompression functions
@@ -163,11 +132,8 @@ void
 motor_check_storage_policy(const gchar * ns_name, const gchar * container_id, const gchar * content_name)
 {
 	GError *error = NULL;
-	container_id_t cid;
 
-	container_id_hex2bin(container_id, STRLEN_CONTAINERID, &cid, NULL);
-
-	if (!check_content_storage_policy(ns_name, cid, content_name, FALSE, &error)) {
+	if (!check_content_storage_policy(ns_name, container_id, content_name, FALSE, &error)) {
 		ERROR("Failed to check content [%s/%s/%s] storage policy : %s", ns_name, container_id, content_name, error->message);
 		g_clear_error(&error);
 	}

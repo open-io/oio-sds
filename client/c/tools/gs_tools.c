@@ -1,22 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "grid.tools.ls"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "grid.tools.ls"
 #endif
 
 #include <stdlib.h>
@@ -24,9 +7,8 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/wait.h>
-#include <glib.h>
 
-#include "loggers.h"
+#include <metautils/lib/metautils.h>
 #include "gs_tools.h"
 
 char *optarg;
@@ -392,8 +374,6 @@ static gint parse_opt_generic(int argc, char **args, t_gs_tools_options *options
 
 		case '?':
 		default:
-			/*      PRINT_ERROR("unexpected option %c (%s)\n", optopt, strerror(opterr));
-			   return 0;  */
 			break;
 		}
 	}
@@ -523,7 +503,8 @@ extern gint gs_tools_main(int argc, gchar **argv, const gchar *cmd, void (*helpc
  * @param check_args callback used to check generated arguments (NULL if not needed).
  * @return 0 if no error is encountered, -1 otherwise.
  */
-extern gint gs_tools_main_with_argument_check(int argc, gchar **argv, const gchar *cmd,
+extern gint
+gs_tools_main_with_argument_check(int argc, gchar **argv, const gchar *cmd,
 		void (*helpcb)(void), gboolean (*check_args)(t_gs_tools_options*, gchar**))
 {
 	int rc = 0;
@@ -536,6 +517,7 @@ extern gint gs_tools_main_with_argument_check(int argc, gchar **argv, const gcha
 	logger_init_level(GRID_LOGLVL_INFO);
 	logger_reset_level();
 
+	client_gscstat_init();
 	t_gs_tools_options *gs_tools_options = _new_gs_tools_options();
 
 	if (!parse_opt_generic(argc, argv, gs_tools_options)) {
@@ -555,6 +537,33 @@ extern gint gs_tools_main_with_argument_check(int argc, gchar **argv, const gcha
 
 gto_main_error:
 	_free_gs_tools_options(gs_tools_options);
-
+	client_gscstat_close();
 	return rc;
 }
+
+void
+client_gscstat_init(void)
+{
+	GError *e = NULL;
+    if (0 == gscstat_initAndConfigureALLServices(&e))
+		gscstat_tags_start(GSCSTAT_SERVICE_ALL, GSCSTAT_TAGS_REQPROCTIME);
+	else {
+		g_assert(e != NULL);
+		GRID_ERROR("Statistics support not initiated : (%d) %s",
+				e->code, e->message);
+		g_clear_error(&e);
+	}
+}
+
+void
+client_gscstat_close(void)
+{
+	gscstat_tags_end(GSCSTAT_SERVICE_ALL, GSCSTAT_TAGS_REQPROCTIME);
+	char* str = gscstat_dumpAllServices();
+	if (str != NULL) {
+		PRINT_DEBUG("processTimeService: \n%s", str);
+		free(str);
+	}
+	gscstat_free();
+}
+

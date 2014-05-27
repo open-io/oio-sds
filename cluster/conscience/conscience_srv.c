@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "conscience.api"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "conscience.api"
 #endif
 
 #include <stdlib.h>
@@ -27,11 +7,8 @@
 #include <strings.h>
 #include <math.h>
 
-#include <glib.h>
-#include <expr.h>
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
 
 #include "./conscience.h"
 #include "./conscience_srv.h"
@@ -98,6 +75,7 @@ conscience_srv_compute_score(struct conscience_srv_s
 	struct conscience_s *conscience;
 	struct conscience_srvtype_s *srvtype;
 	gdouble d;
+
 	char *getField(char *b, char *f) {
 		char str_name[128];
 		struct service_tag_s *pTag;

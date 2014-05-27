@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "bean"
 #endif
@@ -22,13 +5,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <glib.h>
 #include <sqlite3.h>
 
-#include <metautils.h>
-#include <loggers.h>
-#include <sqliterepo.h>
-#include <generic.h>
+#include <metautils/lib/metautils.h>
+#include <meta2v2/generic.h>
+#include <sqliterepo/sqliterepo.h>
 
 /* GVariant utils ---------------------------------------------------------- */
 
@@ -118,21 +99,6 @@ gv_freev(GVariant **gv, gboolean content_only)
 			*gv = NULL;
 		}
 	}
-}
-
-static GString*
-gv_debugv(GString *gstr, GVariant **v)
-{
-	if (!gstr)
-		gstr = g_string_new("(");
-	for (; *v ;v++) {
-		gchar *s = g_variant_print(*v, FALSE);
-		g_string_append(gstr, s);
-		g_free(s);
-		g_string_append_c(gstr, ',');
-	}
-	g_string_append(gstr, ")");
-	return gstr;
 }
 
 static GVariant*
@@ -313,13 +279,6 @@ _stmt_apply_GV_parameters(sqlite3_stmt *stmt, GVariant **params)
 		return NEWERROR(500, "Bad parameters : %u expected, %u received",
 				count_binds, count_params);
 
-	if (DEBUG_ENABLED()) {
-		GString *gstr = gv_debugv(NULL, params);
-		GRID_TRACE2("SQL applying parameters (%u %u) : %s",
-				count_binds, count_params, gstr->str);
-		g_string_free(gstr, TRUE);
-	}
-
 	for (i=1; (p=*params) ;i++,params++) {
 		GError *err = _stmt_apply_GV_parameter(stmt, i, p);
 		if (NULL != err)
@@ -336,7 +295,6 @@ _db_prepare_statement(sqlite3 *db, const gchar *sql, sqlite3_stmt **result)
 	sqlite3_stmt *stmt = NULL;
 
 	sqlite3_prepare_debug(rc, db, sql, -1, &stmt, NULL);
-	GRID_TRACE2("SQL prepare(%s) = %d", sql, rc);
 
 	if (rc != SQLITE_OK && rc != SQLITE_ROW)
 		return M2_SQLITE_GERROR(db,rc);
@@ -383,10 +341,6 @@ _row_to_bean(const struct bean_descriptor_s *descr, sqlite3_stmt *stmt)
 	gpointer res;
 	int col, s;
 
-#if 0
-	GRID_TRACE("SQL loading bean of type '%s' : %u fields, %u columns",
-			descr->name, descr->count_fields, sqlite3_column_count(stmt));
-#endif
 	res = _bean_create(descr);
 
 	for (fd=descr->fields; fd->name ;fd++) {
@@ -475,6 +429,44 @@ _db_get_bean(const struct bean_descriptor_s *descr,
 	return err;
 }
 
+GError*
+_db_count_bean(const struct bean_descriptor_s *descr,
+		sqlite3 *db, const gchar *clause, GVariant **params,
+		gint64 *pcount)
+{
+	GError *err = NULL;
+	sqlite3_stmt *stmt = NULL;
+	gint rc;
+
+	g_assert(descr != NULL);
+	g_assert(db != NULL);
+	g_assert(pcount != NULL);
+
+	if (!clause || !*clause)
+		err = _db_prepare_statement(db, descr->sql_count, &stmt);
+	else {
+		gchar *sql = g_strconcat(descr->sql_count, " WHERE ", clause, NULL);
+		err = _db_prepare_statement(db, sql, &stmt);
+		g_free(sql);
+	}
+
+	if (NULL != err) {
+		g_prefix_error(&err, "Prepare error: ");
+		return err;
+	}
+
+	if (!(err = _stmt_apply_GV_parameters(stmt, params))) {
+		while ((rc = sqlite3_step(stmt)) == SQLITE_ROW) {
+			*pcount = sqlite3_column_int64(stmt, 0);
+		}
+		g_assert(rc == SQLITE_OK || rc == SQLITE_DONE);
+	}
+
+	sqlite3_finalize(stmt);
+	stmt = NULL;
+	return err;
+}
+
 /* DELETE ------------------------------------------------------------------- */
 
 static gchar *
@@ -488,8 +480,6 @@ _bean_query_DELETE(gpointer bean)
 GError*
 _db_delete_bean(sqlite3 *db, gpointer bean)
 {
-	auto GVariant** _params_delete();
-
 	GVariant** _params_delete() {
 		const struct field_descriptor_s *fd;
 		GPtrArray *v;
@@ -538,9 +528,6 @@ _db_delete(const struct bean_descriptor_s *descr, sqlite3 *db,
 GError*
 _db_save_bean(sqlite3 *db, gpointer bean)
 {
-	auto GVariant** _params_update();
-	auto GVariant** _params_replace();
-
 	/* an UPDATE query has the form '... SET [non-pk] WHERE [pk]' */
 	GVariant** _params_update() {
 		const struct field_descriptor_s *fd;
@@ -551,14 +538,14 @@ _db_save_bean(sqlite3 *db, gpointer bean)
 		for (fd=DESCR(bean)->fields; fd->name ;fd++) {
 			if (!fd->pk) {
 				gv = _field_to_gvariant(bean, fd->position);
-				ASSERT_EXTRA(gv != NULL);
+				EXTRA_ASSERT(gv != NULL);
 				g_ptr_array_add(v, gv);
 			}
 		}
 		for (fd=DESCR(bean)->fields; fd->name ;fd++) {
 			if (fd->pk) {
 				gv = _field_to_gvariant(bean, fd->position);
-				ASSERT_EXTRA(gv != NULL);
+				EXTRA_ASSERT(gv != NULL);
 				g_ptr_array_add(v, gv);
 			}
 		}
@@ -596,6 +583,43 @@ _db_save_bean(sqlite3 *db, gpointer bean)
 	}
 
 	gv_freev(params, FALSE);
+	return err;
+}
+
+GError*
+_db_save_beans_list(sqlite3 *db, GSList *list)
+{
+	GError *err = NULL;
+
+	g_assert(db != NULL);
+	for (; !err && list ;list=list->next) {
+		if (!list->data)
+			continue;
+		if (GRID_TRACE2_ENABLED()) {
+			GString *s = _bean_debug(NULL, list->data);
+			GRID_TRACE("M2 saving  %s", s->str);
+			g_string_free(s, TRUE);
+		}
+		err = _db_save_bean(db, list->data);
+	}
+	return err;
+}
+
+GError*
+_db_save_beans_array(sqlite3 *src, GPtrArray *tmp)
+{
+	GError *err = NULL;
+
+	g_assert(src != NULL);
+	g_assert(tmp != NULL);
+	for (guint i=0; !err && i<tmp->len; i++) {
+		if (GRID_TRACE_ENABLED()) {
+			GString *s = _bean_debug(NULL, tmp->pdata[i]);
+			GRID_TRACE("M2 saving  %s", s->str);
+			g_string_free(s, TRUE);
+		}
+		err = _db_save_bean(src, tmp->pdata[i]);
+	}
 	return err;
 }
 
@@ -737,6 +761,69 @@ _db_get_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db,
 			if (DESCR(bean) == fk->dst)
 				return _db_get_FK(bean, fk->src_fields, fk->src,
 						fk->dst_fields, db, cb, u);
+		}
+	}
+
+	g_assert_not_reached();
+	return NEWERROR(500, "BUG"); /* makes the compilers happy */
+}
+
+static GError*
+_db_count_FK(gpointer bean,
+		const struct fk_field_s *fkf0,
+		const struct bean_descriptor_s *descr,
+		const struct fk_field_s *fkf1,
+		sqlite3 *db,
+		gint64 *pcount)
+{
+	GError *err;
+	guint count;
+	const struct fk_field_s *fkf;
+
+	/* build the query string */
+	GString *gsql = g_string_new("");
+	for (count=0,fkf=fkf0; fkf->name ;fkf++) {
+		if (count++)
+			g_string_append(gsql, " AND ");
+		g_string_append(gsql, fkf->name);
+		g_string_append_c(gsql, '=');
+		g_string_append_c(gsql, '?');
+	}
+
+	/* build the parameter string */
+	GPtrArray *p = g_ptr_array_new();
+	for (fkf=fkf1; fkf->name ;fkf++)
+		g_ptr_array_add(p, _field_to_gvariant(bean, fkf->i));
+	g_ptr_array_add(p, NULL);
+
+	/* execute the query */
+	err = _db_count_bean(descr, db, gsql->str, (GVariant**)(p->pdata), pcount);
+
+	g_string_free(gsql, TRUE);
+	gv_freev((GVariant**) g_ptr_array_free(p, FALSE), FALSE);
+
+	return err;
+}
+
+GError*
+_db_count_FK_by_name(gpointer bean, const gchar *name,
+		sqlite3 *db, gint64 *pcount)
+{
+	const struct fk_descriptor_s *fk;
+
+	g_assert(name != NULL);
+	g_assert(bean != NULL);
+	g_assert(pcount != NULL);
+
+	for (fk=DESCR(bean)->fk; fk->name ;fk++) {
+		if (!g_ascii_strcasecmp(fk->name, name)) {
+			g_assert(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
+			if (DESCR(bean) == fk->src)
+				return _db_count_FK(bean, fk->dst_fields, fk->dst,
+						fk->src_fields, db, pcount);
+			if (DESCR(bean) == fk->dst)
+				return _db_count_FK(bean, fk->src_fields, fk->src,
+						fk->dst_fields, db, pcount);
 		}
 	}
 
@@ -1064,7 +1151,7 @@ SHA256_randomized_string(gchar *d, gsize dlen)
 
 	h = _unique_random_SHA256();
 	hexa = g_checksum_get_string(h);
-	ASSERT_EXTRA(strlen(hexa) == 64);
+	EXTRA_ASSERT(strlen(hexa) == 64);
 	s = g_strlcpy(d, hexa, dlen);
 	for (; *d ;d++)
 		*d = g_ascii_toupper(*d);

@@ -1,34 +1,12 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef _AGENT_H
 # define _AGENT_H
 
 # include <sys/types.h>
 # include <unistd.h>
-# include <glib.h>
-# include <metatypes.h>
 
-# include "../events/gridcluster_eventhandler.h"
-# include "./gridagent.h"
-
-# define SOCK_TIMEOUT 10000
-# define DEFAULT_SVC_CHECK_FREQ 30
-# define DEFAULT_CS_UPDATE_FREQ 5
+# include <metautils/lib/metatypes.h>
+# include <cluster/events/gridcluster_eventhandler.h>
+# include <cluster/agent/gridagent.h>
 
 # define IS_FORKED_AGENT (agent_type!=PT_REQ)
 # define GS_AGENT_SPOOLDIR "/GRID/common/spool"
@@ -112,16 +90,18 @@ int main_reqagent(void);
 extern enum process_type_e agent_type;
 extern GHashTable *namespaces;
 
-extern int cluster_update_freq;
-extern int svc_check_freq;
+extern gboolean flag_check_services;
+extern int period_check_services;
 
-extern int period_update_ns;
-extern int period_update_srvtype;
-extern int period_update_srv;
-extern int period_update_evtconfig;
-extern int period_update_srvlist;
+extern int period_get_ns;
+extern int period_get_evtconfig;
+extern int period_get_srvtype;
+extern int period_get_srvlist;
+extern int period_push_srvlist;
 
-extern time_t nsinfo_refresh_delay;
+extern gboolean flag_manage_broken;
+extern int period_push_broken;
+extern int period_get_broken;
 
 extern gchar str_opt_config[1024];
 extern gchar str_opt_log[1024];
@@ -134,7 +114,6 @@ extern char xattr_event_timestamp[256];
 extern time_t event_delay;
 extern time_t events_refresh_delay;
 
-extern long event_no_response_time_out;
 extern int event_file_mode;
 extern int event_directory_mode;
 extern gboolean event_queue_cleaning_allowed;
@@ -154,9 +133,5 @@ extern char event_enable_manage;
  * from the default configuration in the gridagent configuration.
  */
 time_t get_event_delay(namespace_data_t *ns_data);
-
-time_t get_nsinfo_refresh_delay(namespace_data_t *ns_data);
-
-time_t get_event_refresh_delay(namespace_data_t *ns_data);
 
 #endif	/* _AGENT_H */

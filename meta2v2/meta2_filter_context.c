@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta2.reqctx"
 #endif
@@ -23,15 +6,10 @@
 #include <string.h>
 #include <errno.h>
 
-#include "../metautils/lib/metatypes.h"
-#include "../metautils/lib/metautils.h"
-#include "../metautils/lib/metacomm.h"
-#include "../metautils/lib/hc_url.h"
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
 
-#include <glib.h>
-
-#include "./meta2_filter_context.h"
-
+#include <meta2v2/meta2_filter_context.h>
 
 /* ------------------------------------------------------------------------ */
 
@@ -61,16 +39,16 @@ _input_data_clean(struct gridd_filter_input_data_s *input_data)
 	if(!input_data)
 		return;
 
-	if(NULL != input_data->url) 
+	if(NULL != input_data->url)
 		hc_url_clean(input_data->url);
-	
+
 	if(NULL != input_data->params)
 		g_hash_table_destroy(input_data->params);
 
 	if(NULL != input_data->udata)
 		input_data->cleaner(input_data->udata);
 
-	
+
 	g_free(input_data);
 }
 
@@ -185,11 +163,11 @@ meta2_filter_ctx_get_backend(const struct gridd_filter_ctx_s *ctx)
 }
 
 void
-meta2_filter_ctx_set_error(struct gridd_filter_ctx_s *ctx, GError *e) 
+meta2_filter_ctx_set_error(struct gridd_filter_ctx_s *ctx, GError *e)
 {
 	if(!ctx || !ctx->output_data)
 		return;
-	if(NULL != ctx->output_data->error) 
+	if(NULL != ctx->output_data->error)
 		g_clear_error(&(ctx->output_data->error));
 	ctx->output_data->error = e;
 }

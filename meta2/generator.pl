@@ -1163,6 +1163,7 @@ push @functions, {
 
 push @functions, {
 	'name' => 'modify_metadatausr',
+	'real_name' => 'modify_metadatausr_wrapper',
 	'args' => [
 		{
 			'type'             => 'container_id_t',
@@ -1183,6 +1184,7 @@ push @functions, {
 	'return' => {
 		'type'=>'status_t'
 	},
+	'flags' => 'REQ_MASTER_ALLOWED|REQ_WORM_ALLOWED|REQ_DROP_EVENTS',
 };
 
 push @functions, {
@@ -1372,6 +1374,9 @@ while (my $WHAT = shift @ARGV) {
 			}
 			elsif ($a->{'type'} eq 'char*') {
 				$a->{'type_decl'} = 'const char*';
+			}
+			elsif ($a->{'type'} eq 'container_id_t') {
+				$a->{'type_decl'} = 'const container_id_t';
 			}
 			else {
 				$a->{'type_decl'} = $a->{'type'};

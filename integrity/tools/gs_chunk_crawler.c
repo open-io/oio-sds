@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gs_chunk_crawler"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gs_chunk_crawler"
 #endif
 
 #include <stdlib.h>
@@ -30,17 +10,15 @@
 #include <signal.h>
 #include <attr/xattr.h>
 
-#include <glib.h>
-#include <glib/gstdio.h>
-
-#include <metautils.h>
-#include <common_main.h>
-#include <rawx.h>
-#include <motor.h>
+#include <metautils/lib/metautils.h>
+#include <rawx-lib/src/rawx.h>
+#include <rules-motor/lib/motor.h>
 
 #include "./lock.h"
-#include "../lib/volume_scanner.h"
+#include "./volume_scanner.h"
 #include "../lib/chunk_db.h"
+#include "../lib/chunk_check.h"
+#include "../lib/content_check.h"
 
 #ifndef  CHUNK_CRAWLER_XATTRLOCK
 # define CHUNK_CRAWLER_XATTRLOCK "user.grid.chunk-crawler.pid"
@@ -51,8 +29,15 @@
 #endif
 
 int volume_busy = 0;
+// motor_env and rules_reload_time_interval declared in motor.h
+struct rules_motor_env_s* motor_env = NULL;
+gint rules_reload_time_interval = 1L;
+
+// m2v1_list declared in libintegrity
+GSList *m2v1_list = NULL;
 
 struct crawler_stats_s {
+	gint    chunk_total;
 	guint64 chunk_skipped;
 	guint64 chunk_success;
 	guint64 chunk_failures;
@@ -72,19 +57,10 @@ static time_t interval_sleep = 200L;
 static gboolean flag_loop = FALSE;
 static gboolean flag_timestamp = FALSE;
 static gboolean flag_exit_on_error = FALSE;
+static gint  nbChunkMax = 0;
 
 /* ------------------------------------------------------------------------- */
 
-static gboolean
-is_hexa(const gchar *s)
-{
-	register char c;
-	for (; '\0'!=(c = *s) ;s++) {
-		if (!g_ascii_isxdigit(g_ascii_toupper(c)))
-			return FALSE;
-	}
-	return TRUE;
-}
 
 static gboolean
 chunk_path_is_valid(const gchar *fullpath)
@@ -108,36 +84,13 @@ chunk_path_is_valid(const gchar *fullpath)
 	return (i == 64);
 }
 
-static const char *
+static GError *
 chunk_check_attributes(struct chunk_textinfo_s *chunk, struct content_textinfo_s *content)
 {
-	if (!chunk->path)
-		return "Missing mandatory content path";
-
-	if (!chunk->id)
-		return "Missing mandatory chunk ID";
-
-	if (!chunk->size)
-		return "Missing mandatory chunk size";
-
-	if (!chunk->hash)
-		return "Missing mandatory chunk hash";
-
-	if (!chunk->position)
-		return "Missing mandatory chunk position";
-
-	if (!content->path)
-		return "Missing mandatory content path";
-
-	if (!content->size)
-		return "Missing mandatory content size";
-
-	if (!content->chunk_nb)
-		return "Missing mandatory chunk number";
-
-	if (!content->container_id)
-		return "Missing mandatory container identifier";
-		
+	GError *err = NULL;
+	if (!check_chunk_info(chunk, &err) || !check_content_info(content, &err)) {
+		return err;
+	}
 	return NULL;
 }
 
@@ -194,24 +147,24 @@ manage_dir_exit(const gchar *path_dir, guint depth, gpointer data)
 }
 
 static gboolean
-accept_chunk(const gchar *dirname, const gchar *basename, void *data)
+accept_chunk(const gchar *dirname, const gchar *bn, void *data)
 {
 	size_t len;
 
 	(void) dirname;
 	(void) data;
 
-	if (!basename || !*basename)
+	if (!bn || !*bn)
 		return FALSE;
 	if (!grid_main_is_running())
 		return FALSE;
 
-	len = strlen(basename);
+	len = strlen(bn);
 
-	if (basename[0]=='.' && (len==1 || (len==2 && basename[1] == '.')))
+	if (bn[0]=='.' && (len==1 || (len==2 && bn[1] == '.')))
 		return FALSE;
 
-	return is_hexa(basename);
+	return metautils_str_ishexa(bn, len);  
 }
 
 
@@ -239,6 +192,17 @@ manage_chunk(const gchar * chunk_path, void *data, struct rules_motor_env_s** mo
 		goto label_exit;
 	}
 
+    /* Execute action if nb max container wasn't already managed */
+    if (nbChunkMax > 0){
+        stats->chunk_total++;
+        if (nbChunkMax < stats->chunk_total) {
+	        GRID_WARN("stop because %d max container manage !", nbChunkMax);
+        	return SCAN_STOP_ALL;
+		}
+	}
+
+
+
 	/* Read content info from chunk attributes */
 	if (!get_rawx_info_in_attr(chunk_path, &local_error, &content_info, &chunk_info) ||\
 		!get_extra_chunk_info(chunk_path, &local_error, &chunk_info_extra)) {
@@ -250,9 +214,10 @@ manage_chunk(const gchar * chunk_path, void *data, struct rules_motor_env_s** mo
 	
 
 	do {
-		const char *str_err = chunk_check_attributes(&chunk_info, &content_info);
-		if (NULL != str_err) {
-			GRID_ERROR("chunk with invalid attributes [%s] : %s", chunk_path, str_err);
+		GError *err = chunk_check_attributes(&chunk_info, &content_info);
+		if (NULL != err) {
+			GRID_ERROR("chunk with invalid attributes [%s] : %s", chunk_path, err->message);
+			g_clear_error(&err);
 			stats->chunk_failures ++;
 			goto label_exit;
 		}
@@ -276,7 +241,7 @@ manage_chunk(const gchar * chunk_path, void *data, struct rules_motor_env_s** mo
 	chunk_crawler_data_block_init(data_block, &content_info, &chunk_info, &chunk_info_extra, &chunk_stat, chunk_path);
 	motor_args_init(&args, (gpointer)data_block, (gint8)CHUNK_TYPE_ID, motor, ns_name);
 	pass_to_motor((gpointer)(&args));
-	/* stamp_a_chunk(chunk_path);*/
+	/* stamp_a_chunk(chunk_path, ATTR_NAME_CHUNK_LAST_SCANNED_TIME);*/
 label_exit:
 	chunk_textinfo_free_content(&chunk_info);
 	chunk_textinfo_extra_free_content(&chunk_info_extra);
@@ -356,9 +321,10 @@ main_get_options(void)
 			"Timestamp each directory after each successful run"},
 		{"ExitOnError", OT_BOOL, {.b=&flag_exit_on_error},
 			"Stop the execution upon the first error"},
-
+		{"nbChunkMax",  OT_INT, {.i =  &nbChunkMax},
+		    "Stop after N chunks"},
 		{"InterChunksSleepMilli", OT_TIME, {.t=&interval_sleep},
-			"Service refresh period"},
+			"Sleep between each chunk"},
 		{"LockXattrName", OT_STRING, {.str=&lock_xattr_name},
 			"Xattr name used for locks"},
 		{"StampXattrName", OT_STRING, {.str=&stamp_xattr_name},

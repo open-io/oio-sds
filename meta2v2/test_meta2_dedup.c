@@ -1,27 +1,16 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #include <stdio.h>
 #include <stdlib.h>
-#include <sqlite3.h>
-#include <glib.h>
 
-#include <loggers.h>
-#include <meta2_dedup_utils.h>
+#include <sqlite3.h>
+
+#include <metautils/lib/metautils.h>
+
+#include <meta2v2/meta2_backend.h>
+#include <meta2v2/meta2_dedup_utils.h>
+#include <meta2v2/meta2_test_common.h>
+
+struct meta2_backend_s;
+struct hc_url_s;
 
 static void
 test_content_dedup(gconstpointer test_data)
@@ -90,7 +79,6 @@ int main(int argc, char **argv)
 	g_log_set_default_handler(logger_stderr, NULL);
 	logger_init_level(GRID_LOGLVL_TRACE);
 
-	//container_counter = random();
 	guint num_duplicates = 2;
 	g_test_add_data_func("/meta2v2/backend/content/dedup",
 			&num_duplicates, test_content_dedup);

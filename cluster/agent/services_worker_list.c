@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.agent.srv_list_get_task_worker"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.agent.srv_list_get_task_worker"
 #endif
 
 #include <stdlib.h>
@@ -27,12 +7,9 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include <metatypes.h>
-#include <metacomm.h>
-#include <metautils.h>
-
-#include "../conscience/conscience.h"
-#include "../module/module.h"
+#include <metautils/lib/metacomm.h>
+#include <cluster/conscience/conscience.h>
+#include <cluster/module/module.h>
 
 #include "./agent.h"
 #include "./asn1_request_worker.h"
@@ -104,13 +81,17 @@ build_known_services_list( struct namespace_data_s *ns_data, const gchar *type_n
 	req_data.result = NULL;
 	array_types = g_strsplit(type_name,",",0);
 
-	if (!conscience_run_srvtypes( ns_data->conscience, error, SRVTYPE_FLAG_INCLUDE_EXPIRED, array_types, services_runner, &req_data)) {
+	if (!conscience_run_srvtypes(
+			ns_data->conscience, error, SRVTYPE_FLAG_INCLUDE_EXPIRED,
+			array_types, services_runner, &req_data)) {
 		g_strfreev(array_types);
 		free_services_list(req_data.result);
-		GSETERROR(error,"Failed to collect the services %s/%s", ns_data->name, type_name);
+		if (!*error)
+			GSETERROR(error, "Failed to collect the services %s/%s",
+					ns_data->name, type_name);
 		return NULL;
 	}
-	
+
 	g_strfreev(array_types);
 	return req_data.result;
 }

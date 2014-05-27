@@ -1,18 +1,3 @@
-# Copyright (C) 2013 AtoS Worldline
-# 
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
-# 
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-# 
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 #!/usr/bin/python2.6
 
 index = 0
@@ -248,8 +233,8 @@ the list."""
 		out.write("\n")
 		out.write("#include <glib.h>\n")
 		out.write("#include <sqlite3.h>\n")
-		out.write("#include <generic.h>\n")
-		out.write("#include <autogen.h>\n")
+		out.write("#include <meta2v2/generic.h>\n")
+		out.write("#include <meta2v2/autogen.h>\n")
 		out.write("\n")
 
 		out.write("const gchar *schema =\n")
@@ -359,6 +344,7 @@ the list."""
 			out.write("\t"+dquoted(t.c_name)+",\n")
 			out.write("\t"+dquoted(t.sql_name)+",\n")
 			out.write('\t'+dquoted("SELECT "+(",".join(t.get_fields_names()))+" FROM "+t.sql_name)+',\n')
+			out.write('\t'+dquoted("SELECT COUNT(*) FROM "+t.sql_name)+',\n')
 
 			t0 = ",".join(t.get_fields_names())
 			t1 = ",".join(['?' for f in t.fields])
@@ -452,6 +438,8 @@ alias = generator.add_bean(Struct("aliases") \
 	.field(Int( "ctime")) \
 	.field(Bool("deleted")) \
 	.PK(("alias", "version")) \
+	.index('alias_index_by_name', ['alias']) \
+	.index('alias_index_by_header', ['content_id']) \
 	.set_sql_name("alias_v2"))
 
 properties = generator.add_bean(Struct("properties") \
@@ -470,6 +458,7 @@ contents = generator.add_bean(Struct("contents") \
 	.field(Text("position")) \
 	.PK(("content_id","chunk_id","position")) \
 	.index('contents_index_by_header', ['content_id']) \
+	.index('contents_index_by_chunk', ['chunk_id']) \
 	.set_sql_name("content_v2"))
 
 contents_headers = generator.add_bean(Struct("contents_headers") \

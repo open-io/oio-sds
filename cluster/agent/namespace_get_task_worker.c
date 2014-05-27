@@ -1,44 +1,21 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.agent.namespace_get_task_worker"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.agent.namespace_get_task_worker"
 #endif
 
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
 
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
+#include <metautils/lib/metacomm.h>
 
-#include "../lib/gridcluster.h"
-#include "../conscience/conscience.h"
+#include <cluster/lib/gridcluster.h>
+#include <cluster/conscience/conscience.h>
+#include <cluster/module/module.h>
 
 #include "./agent.h"
 #include "./asn1_request_worker.h"
 #include "./namespace_get_task_worker.h"
 #include "./task_scheduler.h"
-
-#include "../module/module.h"
 
 #define TASK_ID "namespace_get_task"
 
@@ -157,9 +134,10 @@ task_worker(gpointer p, GError **error)
 		GSETERROR(error,"Namespace '%s' not found", (gchar*)p);
 		return FALSE;
 	}
-	
+
 	asn1_worker = create_asn1_worker(&(ns_data->ns_info.addr), NAME_MSGNAME_CS_GET_NSINFO);
 	asn1_worker_set_session_data(asn1_worker, g_strdup(ns_data->name), session_data_cleaner);
+	asn1_worker_set_request_header(asn1_worker, "VERSION", SHORT_API_VERSION);
 	asn1_worker_set_handlers(asn1_worker,parse_namespace_info,error_handler,final_handler);
 
 	error = NULL;
@@ -190,7 +168,7 @@ task_starter(gpointer udata, GError **error)
 		g_snprintf(ns_id,sizeof(ns_id),TASK_ID".%s",ns_data->name);
 		if (!namespace_is_available(ns_data)) {
 			if (!is_task_scheduled(ns_id)) {
-				task = create_task(cluster_update_freq,ns_id);
+				task = create_task(period_get_ns, ns_id);
 				task = set_task_callbacks(task, task_worker, g_free, g_strdup(ns_data->name));
 				if (!add_task_to_schedule(task, error)) {
 					ERROR("[task_id="TASK_ID"] Failed to start a sub worker for namespace '%s'", (gchar*)ns_k);
@@ -208,25 +186,16 @@ task_starter(gpointer udata, GError **error)
 int
 start_namespace_get_task(GError **error)
 {
-        task_t *task = NULL;
+	task_t *task = create_task(2, TASK_ID);
+	task->task_handler = task_starter;
 
-        task = g_try_new0(task_t, 1);
-        if (task == NULL) {
-                GSETERROR(error, "Memory allocation failure");
-		return 0;
-        }
-
-        task->id = g_strdup(TASK_ID);
-        task->period = 1L;
-        task->task_handler = task_starter;
-
-        if (!add_task_to_schedule(task, error)) {
-                GSETERROR(error, "Failed to add vol_list_get task to scheduler");
+	if (!add_task_to_schedule(task, error)) {
+		GSETERROR(error, "Failed to add vol_list_get task to scheduler");
 		g_free(task);
-                return 0;
-        }
+		return 0;
+	}
 
-        return 1;
+	return 1;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -235,17 +204,21 @@ namespace_data_t*
 get_namespace(const char *ns_name, GError **error)
 {
 	namespace_data_t *ns_data = NULL;
+	const char *vns = strchr(ns_name, '.');
+	if (vns != NULL)
+		ns_name = g_strndup(ns_name, vns - ns_name);
 
 	/* Get namespace data */
 	ns_data = g_hash_table_lookup(namespaces, ns_name);
 	if (ns_data == NULL) {
 		GSETERROR(error, "Namespace [%s] unknown in config", ns_name);
-		return(NULL);
+		goto end_label;
 	}
 
 	if (!ns_data->configured) {
 		GSETERROR(error, "Namespace [%s] unavailable", ns_name);
-		return(NULL);
+		ns_data = NULL;
+		goto end_label;
 	}
 
 	if (!ns_data->local_services
@@ -253,10 +226,13 @@ get_namespace(const char *ns_name, GError **error)
 		|| !ns_data->conscience)
 	{
 		GSETERROR(error,"Namespace [%s] misconfigured", ns_name);
-		return NULL;
+		ns_data = NULL;
 	}
 
-	return(ns_data);
+end_label:
+	if (vns != NULL)
+		g_free((gpointer)ns_name);
+	return ns_data;
 }
 
 GSList*
@@ -357,7 +333,7 @@ agent_start_indirect_ns_config(const gchar *ns_name, GError **error)
 	}
 
 	task_id = g_strconcat(TASK_PREFIX, ".", ns_name, NULL);
-	task = set_task_callbacks(create_task(get_nsinfo_refresh_delay(NULL), task_id),
+	task = set_task_callbacks(create_task(period_get_ns, task_id),
 			worker_ns_indirect_config, g_free, g_strdup(ns_name));
 	g_free(task_id);
 

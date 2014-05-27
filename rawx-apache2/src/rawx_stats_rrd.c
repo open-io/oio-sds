@@ -1,42 +1,23 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
 
+#include <time.h>
+
 #include <apr.h>
 #include <apr_strings.h>
 #include <apr_shm.h>
 #include <apr_global_mutex.h>
-#include <time.h>
 #include <apr_time.h>
-#include <glib.h>
+#include <apr_atomic.h>
 
 #include <httpd.h>
 #include <http_log.h>
 #include <http_config.h>
 
-#include "./rawx_stats_rrd.h"
+#include "rawx_stats_rrd.h"
 
 static void
 _copy_tab_values(struct rawx_stats_rrd_s *src, struct rawx_stats_rrd_s *dst)
@@ -60,7 +41,7 @@ rawx_stats_rrd_create(apr_pool_t *pool, time_t period)
 	if(period <= 1)
 		return NULL;
 
-	result = apr_palloc(pool, sizeof(struct rawx_stats_rrd_s) +(period * (sizeof(apr_uint64_t))));
+	result = apr_palloc(pool, sizeof(struct rawx_stats_rrd_s) +(period * (sizeof(apr_uint32_t))));
 	result->last = time(0);
 	result->period = period;
 	_init_tab_values(result, period);
@@ -71,9 +52,26 @@ rawx_stats_rrd_create(apr_pool_t *pool, time_t period)
 void
 rawx_stats_rrd_init(struct rawx_stats_rrd_s *rsr)
 {
+	rsr->lock = 0;
 	rsr->last = time(0);
 	rsr->period = 8;
 	_init_tab_values(rsr, 8);
+}
+
+void
+rawx_stats_rrd_lock(struct rawx_stats_rrd_s *rsr)
+{
+	do {
+		if (0 == apr_atomic_cas32(&(rsr->lock), 1, 0))
+			return;
+		apr_sleep(100);
+	} while (1);
+}
+
+void
+rawx_stats_rrd_unlock(struct rawx_stats_rrd_s *rsr)
+{
+	 apr_atomic_cas32(&(rsr->lock), 0, 1);
 }
 
 struct rawx_stats_rrd_s *
@@ -84,7 +82,7 @@ rawx_stats_rrd_dup(apr_pool_t *pool, struct rawx_stats_rrd_s *rrd)
 
 	struct rawx_stats_rrd_s *result = NULL;
 
-	result = apr_palloc(pool, sizeof(struct rawx_stats_rrd_s) +(rrd->period * (sizeof(apr_uint64_t))));
+	result = apr_palloc(pool, sizeof(struct rawx_stats_rrd_s) +(rrd->period * (sizeof(apr_uint32_t))));
 	result->last = rrd->last;
 	result->period = rrd->period;
 	_copy_tab_values(rrd, result);
@@ -93,55 +91,81 @@ rawx_stats_rrd_dup(apr_pool_t *pool, struct rawx_stats_rrd_s *rrd)
 }
 
 static void
-_rsr_blank_empty_slots(struct rawx_stats_rrd_s *rsr, apr_uint64_t v, time_t now)
+_rsr_blank_empty_slots(register struct rawx_stats_rrd_s *rsr, register apr_uint32_t v, register time_t now)
 {
-	time_t i;
-	for (i = rsr->last; i < now;)
-		rsr->ten[(++i) % rsr->period] = v;
+	register apr_time_t last;
+
+	last = rsr->last % rsr->period;
 	rsr->last = now;
+	now = now % rsr->period;
+
+	if (now - last >= rsr->period) {
+		last = 0;
+		now = rsr->period-1;
+	}
+	do {
+		rsr->ten[last] = v;
+		last = (last+1) % rsr->period;
+	} while (last != now);
 }
 
 void
-rawx_stats_rrd_push(struct rawx_stats_rrd_s *rsr, apr_uint64_t v)
+rawx_stats_rrd_push(struct rawx_stats_rrd_s *rsr, apr_uint32_t v)
 {
-	time_t now;
+	apr_time_t now;
 	
+	rawx_stats_rrd_lock(rsr);
+
 	if ((now = time(0)) != rsr->last)
 		_rsr_blank_empty_slots(rsr, rsr->ten[rsr->last % rsr->period], now);
 	
 	rsr->ten[now % rsr->period] = v;
 	rsr->last = now;
+
+	rawx_stats_rrd_unlock(rsr);
 }
 
-apr_uint64_t
+apr_uint32_t
 rawx_stats_rrd_get(struct rawx_stats_rrd_s *rsr)
 {
 	apr_time_t now;
+	apr_uint32_t result;
+
+	rawx_stats_rrd_lock(rsr);
 
 	if ((now = time(0)) != rsr->last)
 		_rsr_blank_empty_slots(rsr, rsr->ten[rsr->last % rsr->period], now);
-	
-	return rsr->ten[now % rsr->period];
+	result = rsr->ten[now % rsr->period];
+
+	rawx_stats_rrd_unlock(rsr);
+
+	return result;
 }
 
-apr_uint64_t
+apr_uint32_t
 rawx_stats_rrd_get_delta(struct rawx_stats_rrd_s *rsr, time_t period)
 {
-	time_t now;
+	apr_time_t now;
+	apr_uint32_t result;
 
 	if (period >= rsr->period)
 		return 0;
 
+	rawx_stats_rrd_lock(rsr);
+
 	if ((now = time(0)) != rsr->last)
 		_rsr_blank_empty_slots(rsr, rsr->ten[rsr->last % rsr->period], now);
+	result = rsr->ten[now % rsr->period] - rsr->ten[(now-period) % rsr->period];
 
-	return rsr->ten[now % rsr->period] - rsr->ten[(now-period) % rsr->period];
+	rawx_stats_rrd_unlock(rsr);
+
+	return result;
 }
 
 static char *
 _dump_rrd(struct rawx_stats_rrd_s *rsr, apr_pool_t *p)
 {
-	return apr_psprintf(p, "[\"last\": \"%"G_GUINT64_FORMAT"\", period\": \"%"G_GUINT64_FORMAT"\", ten\": %s] ",
+	return apr_psprintf(p, "[\"last\": \"%li\", period\": \"%li\", ten\": %s] ",
 			rsr->last, rsr->period, rawx_stats_rrd_dump_values(rsr, p));
 }
 
@@ -152,7 +176,7 @@ rawx_stats_rrd_debug_get_delta(struct rawx_stats_rrd_s *rsr, apr_pool_t *p, time
 
 	char *result = NULL;
 
-	result = apr_psprintf(p, "%s | period : %"G_GUINT64_FORMAT" ", _dump_rrd(rsr,p), period);
+	result = apr_psprintf(p, "%s | period : %li ", _dump_rrd(rsr,p), period);
 
 	if (period >= rsr->period)
 		return 0;
@@ -160,15 +184,15 @@ rawx_stats_rrd_debug_get_delta(struct rawx_stats_rrd_s *rsr, apr_pool_t *p, time
 	if ((now = time(0)) != rsr->last)
 		_rsr_blank_empty_slots(rsr, rsr->ten[rsr->last % rsr->period], now);
 
-	apr_uint64_t op = rsr->ten[now % rsr->period] - rsr->ten[(now-period) % rsr->period];
-	apr_uint64_t nrp = now % rsr->period;
-	apr_uint64_t nprp = (now-period) % rsr->period;
+	apr_uint32_t op = rsr->ten[now % rsr->period] - rsr->ten[(now-period) % rsr->period];
+	apr_uint32_t nrp = now % rsr->period;
+	apr_uint32_t nprp = (now-period) % rsr->period;
 
-	result = apr_psprintf(p, "%s| now : %"G_GUINT64_FORMAT" after bs: %s"
-				"operation = rsr->ten[%"G_GUINT64_FORMAT" mod %"G_GUINT64_FORMAT"] - "
-				"rsr->ten[(%"G_GUINT64_FORMAT"-%"G_GUINT64_FORMAT") mod %"G_GUINT64_FORMAT"] "
-				"(rsr->ten[%"G_GUINT64_FORMAT"] - rsr->ten[%"G_GUINT64_FORMAT"] "
-				"(%"G_GUINT64_FORMAT" - %"G_GUINT64_FORMAT" (%"G_GUINT64_FORMAT")))",
+	result = apr_psprintf(p, "%s| now : %li after bs: %s"
+				"operation = rsr->ten[%li mod %li] - "
+				"rsr->ten[(%li-%li) mod %li] "
+				"(rsr->ten[%u] - rsr->ten[%u] "
+				"(%u - %u (%u)))",
 				result, now, _dump_rrd(rsr,p), now, rsr->period, now, period, rsr->period, nrp, 
 				nprp, rsr->ten[nrp], rsr->ten[nprp], op);
 
@@ -184,9 +208,9 @@ rawx_stats_rrd_dump_values(struct rawx_stats_rrd_s *rsr, apr_pool_t *p)
 {
 	char *str = NULL;
 
-	str = apr_psprintf(p, "[%"G_GUINT64_FORMAT, rsr->ten[0]);
+	str = apr_psprintf(p, "[%u", rsr->ten[0]);
 	for(uint i = 1; i < rsr->period; i++) {
-		str = apr_psprintf(p, "%s, %"G_GUINT64_FORMAT"", str, rsr->ten[i]);
+		str = apr_psprintf(p, "%s, %u", str, rsr->ten[i]);
 	}
 	str = apr_pstrcat(p, str, "]", NULL);
 

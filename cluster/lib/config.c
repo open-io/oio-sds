@@ -1,31 +1,11 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.lib"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.lib"
 #endif
 
 #include <string.h>
 #include <stdlib.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
 #include "gridcluster.h"
 
@@ -74,9 +54,8 @@ config_overwrite_with_file(GHashTable *ns_hash, const gchar *source, GError **er
 			}
 			g_hash_table_insert(ns_hash, g_strdup(name), g_memdup(&addr,sizeof(addr_info_t)));
 		}
-
-		g_strfreev(ns_names);
 	}
+	g_strfreev(ns_names);
 
 	g_key_file_free(key_file);
 	return 1;
@@ -101,7 +80,7 @@ parse_cluster_config(GHashTable * ns_hash, GError ** error)
 	if (g_file_test(GCLUSTER_CONFIG_DIR_PATH, G_FILE_TEST_IS_DIR|G_FILE_TEST_EXISTS)) {
 		GError *error_local;
 		gchar fullpath[512];
-		const char *basename = NULL;
+		const char *bn = NULL;
 		GDir *gdir = NULL;
 
 		error_local = NULL;
@@ -114,13 +93,15 @@ parse_cluster_config(GHashTable * ns_hash, GError ** error)
 			return 1;/* This is not so bad, in facts ...*/
 		}
 
-		while (NULL != (basename = g_dir_read_name(gdir))) {
+		while (NULL != (bn = g_dir_read_name(gdir))) {
 
-			if (*basename == '.') /* Skip hidden files*/
+			if (*bn == '.') /* Skip hidden files*/
 				continue;
 
 			bzero(fullpath, sizeof(fullpath));
-			g_snprintf(fullpath, sizeof(fullpath)-1, "%s/%s", GCLUSTER_CONFIG_DIR_PATH, basename);
+			g_snprintf(fullpath, sizeof(fullpath)-1, "%s/%s", GCLUSTER_CONFIG_DIR_PATH, bn);
+			if (!g_file_test(fullpath, G_FILE_TEST_IS_REGULAR))
+				continue; /* Skip directories, allow symlinks */
 			error_local = NULL;
 			if (!config_overwrite_with_file(ns_hash, fullpath, &error_local))
 				INFO("Could not load [%s] : %s", fullpath, gerror_get_message(error_local));
@@ -185,14 +166,14 @@ config_load_file(GHashTable *h, const gchar *source)
 static void
 config_load_dir(GHashTable *ht_cfg, const gchar *dirname, GDir *gdir)
 {
-	const char *basename = NULL;
+	const char *bn = NULL;
 
-	while (NULL != (basename = g_dir_read_name(gdir))) {
+	while (NULL != (bn = g_dir_read_name(gdir))) {
 		gchar *fullpath;
 
-		if (*basename == '.')
+		if (*bn == '.')
 			continue;
-		fullpath = g_strconcat(dirname, G_DIR_SEPARATOR_S, basename, NULL);
+		fullpath = g_strconcat(dirname, G_DIR_SEPARATOR_S, bn, NULL);
 		if (fullpath) {
 			config_load_file(ht_cfg, fullpath);
 			g_free(fullpath);
@@ -269,14 +250,14 @@ config_list_file(GHashTable *ht_list, const gchar *source)
 static void
 config_list_dir(GHashTable *ht_list, const gchar *dirname, GDir *gdir)
 {
-	const char *basename = NULL;
+	const char *bn = NULL;
 
-	while (NULL != (basename = g_dir_read_name(gdir))) {
+	while (NULL != (bn = g_dir_read_name(gdir))) {
 		gchar *fullpath;
 
-		if (*basename == '.')
+		if (*bn == '.')
 			continue;
-		fullpath = g_strconcat(dirname, G_DIR_SEPARATOR_S, basename, NULL);
+		fullpath = g_strconcat(dirname, G_DIR_SEPARATOR_S, bn, NULL);
 		if (fullpath) {
 			config_list_file(ht_list, fullpath);
 			g_free(fullpath);

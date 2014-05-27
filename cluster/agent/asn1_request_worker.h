@@ -1,26 +1,8 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef ASN1_REQUEST_WORKER_H
 # define ASN1_REQUEST_WORKER_H
-# include <glib.h>
-# include <metatypes.h>
-# include "./agent.h"
-# include "./worker.h"
+# include <metautils/lib/metatypes.h>
+# include <cluster/agent/agent.h>
+# include <cluster/agent/worker.h>
 
 typedef struct asn1_session_s {
 	addr_info_t *addr;
@@ -54,6 +36,8 @@ void* asn1_worker_get_session_data( worker_t *asn1_worker );
 void asn1_worker_set_handlers(worker_t *asn1_worker, worker_func_f response, worker_func_f error, worker_func_f final);
 
 void asn1_worker_set_session_data(worker_t *asn1_worker, void* data, GDestroyNotify clean);
+
+void asn1_worker_set_request_header(worker_t *asn1_worker, const char *key, const char *value);
 
 void asn1_worker_set_request_body(worker_t *asn1_worker, GByteArray *body);
 

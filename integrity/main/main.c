@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  * - Read service list from local agent (GridCluster Api:list_local_services)
  * - Launch a RAWX checker thread for each RAWX service
@@ -22,15 +5,15 @@
  * - Launch a META2 checker thread for each META2 service 
  */
 
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "integrity.main"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "integrity.main"
 #endif
 
 #include <stdlib.h>
 #include <string.h>
 
-#include <metautils.h>
-#include <gridcluster.h>
+#include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
 
 #include "./event_puller.h"
 

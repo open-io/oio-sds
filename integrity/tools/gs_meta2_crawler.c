@@ -1,36 +1,19 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gs_meta2_crawler"
+#endif
 
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
 #include <attr/xattr.h>
 
-#include <glib.h>
-#include <glib/gstdio.h>
+#include <metautils/lib/metautils.h>
+#include <meta2/remote/meta2_remote.h>
+#include <rawx-lib/src/rawx.h>
+#include <rules-motor/lib/motor.h>
 
-#include <metautils.h>
-#include <meta2_remote.h>
-#include <rawx.h>
-#include <motor.h>
-
-#include <common_main.h>
 #include "./lock.h"
-#include "../lib/volume_scanner.h"
+#include "./volume_scanner.h"
 
 #define LIMIT_LENGTH_URL 23
 
@@ -50,10 +33,11 @@
 int volume_busy = 0;
 
 struct meta2_crawler_stats_s{
+	gint    container_total;   
 	guint64 container_skipped;
-	guint64 container_success;
-	guint64 container_failures;
-	guint64 container_recently_scanned;
+	guint64 container_success; // not used
+	guint64 container_failures;// not used
+	guint64 container_recently_scanned; // not used
 };
 
 static gchar lock_xattr_name[256] = META2_CRAWLER_XATTRLOCK;
@@ -65,7 +49,22 @@ static gchar ns_name[LIMIT_LENGTH_NSNAME] = "";
 
 static gboolean flag_loop = FALSE;
 static gboolean flag_crawl_content = FALSE;
+static gint nbContainerMax = 0;
 
+// motor_env and rules_reload_time_interval declared in motor.h
+struct rules_motor_env_s* motor_env = NULL;
+gint rules_reload_time_interval = 1L;
+
+// m2v1_list declared in libintegrity
+GSList *m2v1_list = NULL;
+
+static time_t interval_sleep = 200L;
+
+static void
+sleep_inter_container(void)
+{
+	usleep(1000L * interval_sleep);
+}
 
 static void
 main_specific_stop(void)
@@ -86,10 +85,14 @@ main_get_options(void)
 	static struct grid_main_option_s options[] = {
 		{"RunLoop", OT_BOOL, {.b = &flag_loop},
 			"Loop until the FS usage fulfills"},
+		{"InterContainerSleepMilli", OT_TIME, {.t=&interval_sleep},
+			"Sleep between each container"},
 		{"RulesReloadTimeInterval", OT_INT, {.i = &rules_reload_time_interval},
 			"Update rules every n seconds"},
 		{"CrawlContents", OT_BOOL, {.b = &flag_crawl_content},
 			"Also crawl contents in containers"},
+		{"nbContainerMax", OT_INT, {.i =  &nbContainerMax},
+			"Stop after N containers"},
 		{NULL, 0, {.str = NULL}, NULL}
 	};
 
@@ -231,33 +234,24 @@ main_configure(int argc, char **args){
 	return TRUE;
 }
 
-static gboolean
-is_hexa(const gchar *s){
-	register char c;
-	for(; '\0' != (c = *s); s++){
-		if (!g_ascii_isxdigit(g_ascii_toupper(c)))
-			return FALSE;
-	}
-	return TRUE;
-}
 
 static gboolean
-accept_meta2(const gchar *dirname, const gchar *basename, void *data){
+accept_meta2(const gchar *dirname, const gchar *bn, void *data){
 	(void) dirname;
 	(void) data;
 
 	size_t len;
 
-	if (!basename || !*basename)
+	if (!bn || !*bn)
 		return FALSE;
 	if (!grid_main_is_running())
 		return FALSE;
 
-	len = strlen(basename);
-	if (basename[0]=='.' && (len==1 || (len==2 && basename[1] == '.')))
+	len = strlen(bn);
+	if (bn[0]=='.' && (len==1 || (len==2 && bn[1] == '.')))
 		return FALSE;
 
-	return is_hexa(basename);
+	return metautils_str_ishexa(bn, len); 
 }
 
 
@@ -278,15 +272,14 @@ meta2_path_is_valid(const gchar *fullpath){
 	i = 0;
 	len = strlen(fullpath);
 	ptr = fullpath + len - 1;
-	
+
 	for(; ptr >= fullpath; ptr--, i++){
 		register char c = *ptr;
-		if(c != '/')
+		if(c == '/')
 			break;
 		if(!g_ascii_isxdigit(c))
 			return FALSE;
 	}
-
 	return (i == 64);
 }
 
@@ -298,15 +291,20 @@ manage_meta2(const gchar *container_path, void *data, struct rules_motor_env_s**
 
 	stats = (struct meta2_crawler_stats_s*)data;
 
-	do {
-		if(meta2_path_is_valid(container_path)){
-			GRID_DEBUG("Skipping non-meta2 file [%s]", container_path);
-			stats->container_skipped++;
-			break;
-		}
-		printf("container_path: %s\n", container_path);
-	} while(0);
+	if (!meta2_path_is_valid(container_path)) {
+		GRID_DEBUG("Skipping non-container file [%s]", container_path);
+		stats->container_skipped++;
+		return SCAN_CONTINUE;
+	}
 
+	/* Execute action if nb max container wasn't already managed */
+	if (nbContainerMax > 0){
+		stats->container_total++;
+		if (nbContainerMax < stats->container_total) {
+			GRID_WARN("stop because %d max container manage !", nbContainerMax);
+			return SCAN_STOP_ALL;
+		}	
+	}
 
 	/* Execute python script over container */
 	do {
@@ -376,7 +374,22 @@ manage_meta2(const gchar *container_path, void *data, struct rules_motor_env_s**
 		g_free(container_id_str);
 	}
 
+	stats->container_success++;
+
 	return SCAN_CONTINUE;
+}
+
+static enum scanner_traversal_e
+manage_meta2_and_sleep(const gchar *container_path, void *data, struct rules_motor_env_s** motor)
+{
+	enum scanner_traversal_e rc;
+	
+	if (!grid_main_is_running())
+		return SCAN_STOP_ALL;
+
+	rc = manage_meta2(container_path, data, motor);
+	sleep_inter_container();
+	return rc;
 }
 
 static enum scanner_traversal_e
@@ -389,7 +402,7 @@ manage_dir_exit(const gchar *path_dir, guint depth, void *data){
 		return SCAN_ABORT;
 	}
 
-	usleep(200000L);
+	sleep_inter_container();
 	return SCAN_CONTINUE;
 }
 
@@ -403,7 +416,7 @@ main_action(void) {
 
 	scan_info.volume_path = path_root;
 	scan_info.file_match = accept_meta2;
-	scan_info.file_action = manage_meta2;
+	scan_info.file_action = manage_meta2_and_sleep;
 	scan_info.dir_enter = manage_dir_enter;
 	scan_info.dir_exit = manage_dir_exit;
 	scan_info.callback_data = &scan_stats;
@@ -444,6 +457,7 @@ static struct grid_main_callbacks cb =
 int
 main(int argc, char **argv)
 {
+	g_setenv("GS_DEBUG_ENABLE", "0", TRUE);
 	return grid_main_cli(argc, argv, &cb);
 }
 

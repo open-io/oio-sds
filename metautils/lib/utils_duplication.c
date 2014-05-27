@@ -1,42 +1,15 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "metautils"
 #endif
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "metautils"
-#endif
-
-#include <string.h>
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
 
 #include "metautils.h"
 
-static GQuark gquark_log = 0;
 
 char *
 storage_policy_from_mdsys_str(const char *mdsys)
 {
 	if(NULL != mdsys) {
-		GError *e = NULL; 
+		GError *e = NULL;
 		GHashTable *unpacked = metadata_unpack_string(mdsys, &e);
 		if(!e) {
 			char *pol = g_hash_table_lookup(unpacked, "storage-policy");
@@ -48,7 +21,6 @@ storage_policy_from_mdsys_str(const char *mdsys)
 		}
 		GRID_WARN("Failed to unpack mdsys send by client : %s", e->message);
 		g_clear_error(&e);
-			
 	}
 
 	return NULL;
@@ -59,7 +31,7 @@ storage_policy_from_metadata(GByteArray *sys_metadata, gchar **storage_policy)
 {
 	/* sanity check */
 	if(!sys_metadata || !sys_metadata->data || !storage_policy)
-		return g_error_new(gquark_log, 500, "Invalid parameter");
+		return NEWERROR(500, "Invalid parameter");
 
 	gchar buf[sys_metadata->len +1];
 	gchar **metadata_tokens = NULL;
@@ -78,8 +50,9 @@ storage_policy_from_metadata(GByteArray *sys_metadata, gchar **storage_policy)
 		if(p) {
 			*storage_policy = g_strdup(p + 1);
 		} else {
-			result = g_error_new(gquark_log, 500, "Failed to extract policy from metadata tokens : [%s]",
-				 metadata_tokens[i]);
+			result = NEWERROR(500,
+					"Failed to extract policy from metadata tokens: [%s]",
+					metadata_tokens[i]);
 		}
 		break;
 	}
@@ -93,22 +66,8 @@ storage_policy_from_metadata(GByteArray *sys_metadata, gchar **storage_policy)
 gchar*
 get_rawx_location(service_info_t* rawx)
 {
-	struct service_tag_s * loc_tag = NULL;
-	gchar loc[1024];
-
-	bzero(loc, sizeof(loc));
-
-	if(rawx)
-		loc_tag = service_info_get_tag(rawx->tags, NAME_TAGNAME_RAWX_LOC);
-
-	if(!loc_tag)
-		return NULL;
-
-	service_tag_get_value_string(loc_tag, loc, sizeof(loc), NULL);
-
-	if (*loc)
-		return g_strdup(loc);
-	return NULL;
+	const gchar *loc = service_info_get_rawx_location(rawx, NULL);
+	return loc && *loc ? g_strdup(loc) : NULL;
 }
 
 guint
@@ -125,46 +84,55 @@ distance_between_location(const gchar *loc1, const gchar *loc2)
 	/* Number of the current token. */
 	guint cur_iter = 0U;
 	/* TRUE if a different token was found. */
-        gboolean found_diff = FALSE;
-        /* Distance between 2 tokens. */
-        guint token_dist;
+	gboolean found_diff = FALSE;
+	/* Distance between 2 tokens. */
+	guint token_dist;
 
-        if ((loc1 == NULL || loc1[0] == '\0') && (loc2 == NULL || loc2[0] == '\0'))
-                return 0U;
+	if ((!loc1 || !*loc1) && (!loc2 || !*loc2))
+		return 1U;
 
-        split_loc1 = g_strsplit(loc1, ".", 0);
-        split_loc2 = g_strsplit(loc2, ".", 0);
+	split_loc1 = g_strsplit(loc1, ".", 0);
+	split_loc2 = g_strsplit(loc2, ".", 0);
 
-        iter_tok1 = split_loc1;
-        iter_tok2 = split_loc2;
+	iter_tok1 = split_loc1;
+	iter_tok2 = split_loc2;
 
-        cur_tok2 = *iter_tok2;
+	cur_tok2 = *iter_tok2;
 
-        while ((cur_tok1 = *iter_tok1++)) {
-                num_tok++;
-                if (cur_tok2 && (cur_tok2 = *iter_tok2++) && !found_diff) {
-                        cur_iter++;
-	  /* if both tokens are equal, continue */
-                        /* else set the found_diff flag to TRUE, keep the value of cur_iter and continue to set num_tok */
-                        if (g_strcmp0(cur_tok1, cur_tok2))
-                                found_diff = TRUE;
-                }
-        }
+	while ((cur_tok1 = *iter_tok1++)) {
+		num_tok++;
+		if (cur_tok2 && (cur_tok2 = *iter_tok2++) && !found_diff) {
+			cur_iter++;
+			/* if both tokens are equal, continue */
+			/* else set the found_diff flag to TRUE, keep the value of cur_iter and continue to set num_tok */
+			if (g_strcmp0(cur_tok1, cur_tok2))
+				found_diff = TRUE;
+		}
+	}
 
-        /* if loc2 has more tokens than loc1, increase num_tok to this value */
-        if (cur_tok2) {
-                while (*iter_tok2++)
-                        num_tok++;
-        }
+	/* if loc2 has more tokens than loc1, increase num_tok to this value */
+	if (cur_tok2) {
+		while (*iter_tok2++)
+			num_tok++;
+	}
 
-        /* Frees the arrays of tokens. */
-        g_strfreev(split_loc1);
-        g_strfreev(split_loc2);
+	/* Frees the arrays of tokens. */
+	g_strfreev(split_loc1);
+	g_strfreev(split_loc2);
 
-        token_dist = num_tok - cur_iter + 1;
+	token_dist = num_tok - cur_iter + 1;
 
-        /* If the token distance is 1 and the last tokens are equal (ie both locations are equal) -> return 0. */
-        /* If the token distance is 1 and the last tokens are different -> return 1. */
-        /* If the token distance is > 1, then return 2^(token_dist). */
-        return token_dist > 1U ? 1U << (token_dist - 1U) : (found_diff ? 1U : 0U);
+	/* If the token distance is 1 and the last tokens are equal (ie both locations are equal) -> return 0. */
+	/* If the token distance is 1 and the last tokens are different -> return 1. */
+	/* If the token distance is > 1, then return 2^(token_dist). */
+	return token_dist > 1U ? 1U << (token_dist - 1U) : (found_diff ? 1U : 0U);
 }
+
+guint
+distance_between_services(struct service_info_s *s0, struct service_info_s *s1)
+{
+	return distance_between_location(
+			service_info_get_rawx_location(s0, ""),
+			service_info_get_rawx_location(s1, ""));
+}
+

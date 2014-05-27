@@ -1,24 +1,7 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef __HC_H__
 #define __HC_H__
 
-#include <hc_url.h>
+struct hc_url_s;
 
 /************** HC FUNCTIONS (hc_func.c **************/
 
@@ -77,7 +60,7 @@ gs_error_t * hc_list_contents(gs_grid_storage_t *hc, struct hc_url_s *url, int o
  * @param dest the path to store the downloaded data
  * @return a pointer.
  */
-gs_error_t * hc_get_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *dest, int force, int cache);
+gs_error_t * hc_get_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *dest, int force, int cache, gchar *stgpol);
 
 
 /**
@@ -88,7 +71,7 @@ gs_error_t * hc_get_content(gs_grid_storage_t *hc, struct hc_url_s *url, const c
  * @param force if != 0, then destroy the container even if not empty (do flush before destroy)
  * @return a pointer.
  */
-gs_error_t * hc_delete_container(gs_grid_storage_t *hc, struct hc_url_s *url, int force);
+gs_error_t * hc_delete_container(gs_grid_storage_t *hc, struct hc_url_s *url, int force, int flush);
 
 /**
  * Delete a content. This function use features of meta1v2.
@@ -105,22 +88,20 @@ gs_error_t * hc_delete_content(gs_grid_storage_t *hc, struct hc_url_s *url);
  * @param hc
  * @param url the container or content url
  * @param xml if != 0, return info in xml format
- * @param group_chunks if != 0 group together duplicated chunks in output
  * @param result
  * @return a pointer to a gs_erorr_t if an error occured, NULL otherwise
  */
-gs_error_t * hc_object_info(gs_grid_storage_t *hc, struct hc_url_s *url, int xml, int group_chunks, char **result);
+gs_error_t * hc_object_info(gs_grid_storage_t *hc, struct hc_url_s *url, int xml, char **result);
 
 /**
- * Set a property to content. This function use features of meta2v2.
+ * Set a property to content or container. This function use features of meta2v2.
  * @param hc
  * @param url the content url
  * @param key
  * @param value
  * @return a pointer to a gs_erorr_t if an error occured, NULL otherwise
  */
-gs_error_t * hc_func_set_content_property(gs_grid_storage_t *hc, struct hc_url_s *url, char ** args);
-
+gs_error_t * hc_func_set_property(gs_grid_storage_t *hc, struct hc_url_s *url, char **args);
 
 /**
  * Get properties to content. This function use features of meta2v2.
@@ -131,13 +112,62 @@ gs_error_t * hc_func_set_content_property(gs_grid_storage_t *hc, struct hc_url_s
 gs_error_t * hc_func_get_content_properties(gs_grid_storage_t *hc, struct hc_url_s *url, char ***result);
 
 /**
- * Delete a property to content. This function use features of meta2v2.
+ * Delete a property from content/container. This function use features of meta2v2.
  * @param hc
  * @param url the content url
- * @param key 
+ * @param key
  * @return a pointer to a gs_erorr_t if an error occured, NULL otherwise
  */
-gs_error_t * hc_func_delete_content_property(gs_grid_storage_t *hc, struct hc_url_s *url,char **keys);
+gs_error_t * hc_func_delete_property(gs_grid_storage_t *hc, struct hc_url_s *url,char **keys);
+
+/**
+ * Create a copy of a content (intra container). This function use features of meta2v2.
+ * @param hc
+ * @param url the content url
+ * @param src
+ * @return a pointer to a gs_erorr_t if an error occured, NULL otherwise
+ */
+gs_error_t * hc_func_copy_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *source);
+
+
+/**
+ * List snapshots of a container.
+ *
+ * @param hc
+ * @param url The URL of the container
+ * @param output_xml Output result as an XML string instead of human-readable
+ * @param show_info Display extended information about snapshots
+ * @param[out] result Where to put the result string
+ */
+gs_error_t * hc_func_list_snapshots(gs_grid_storage_t *hc, struct hc_url_s *url,
+		int output_xml, int show_info, char **result);
+
+/**
+ * Take a snapshot of a container.
+ *
+ * @param hc
+ * @param url The URL of the container, with the snapshot name as a query string
+ */
+gs_error_t *hc_func_take_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url);
+
+/**
+ * Delete a snapshot from a container.
+ *
+ * @param hc
+ * @param url The URL of the container, with the snapshot name as a query string
+ */
+gs_error_t *hc_func_delete_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url);
+
+/**
+ * Restore the state of container or a content.
+ *
+ * @param hc
+ * @param url The URL of the container or content, with the snapshot name as
+ *   a query string
+ * @param hard_restore If true, erase all contents more recent than the snapshot
+ */
+gs_error_t *hc_func_restore_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url,
+		int hard_restore);
 
 
 /************** HELPS (hc_help.c)*********************/
@@ -226,5 +256,13 @@ void help_propget(void);
  * Display func_propdel help on stderr
  */
 void help_propdel(void);
+
+/*
+ * Display func_snapXXX help on stderr
+ */
+void help_snaplist(void);
+void help_snaptake(void);
+void help_snapdel(void);
+void help_snaprestore(void);
 
 #endif /*__HC_H__*/

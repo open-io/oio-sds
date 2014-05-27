@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "metautils.svc"
 #endif
@@ -22,11 +5,10 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <glib.h>
-
-#include "./loggers.h"
-#include "./hashstr.h"
-#include "./svc_policy.h"
+#include "metautils_loggers.h"
+#include "metautils_hashstr.h"
+#include "metautils_svc_policy.h"
+#include "common_main.h"
 
 static void
 test_tags(const gchar *str, ...)
@@ -188,19 +170,14 @@ test_configure_invalid(void)
 int
 main(int argc, char **argv)
 {
-	if (!g_thread_supported())
-		g_thread_init(NULL);
-	g_set_prgname(argv[0]);
-	g_log_set_default_handler(logger_stderr, NULL);
+	HC_PROC_INIT(argv, GRID_LOGLVL_TRACE2);
 	g_test_init (&argc, &argv, NULL);
-
 	g_test_add_func("/metautils/svc_policy/create_destroy",
 			test_create_destroy);
 	g_test_add_func("/metautils/svc_policy/configure/valid",
 			test_configure_valid);
 	g_test_add_func("/metautils/svc_policy/configure/invalid",
 			test_configure_invalid);
-
 	return g_test_run();
 }
 

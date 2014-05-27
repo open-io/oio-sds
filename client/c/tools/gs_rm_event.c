@@ -1,26 +1,8 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
 
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "grid.tools.event.set"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "grid.tools.event.set"
 #endif
 
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -33,11 +15,9 @@
 #include <unistd.h>
 #include <search.h>
 
-#include <metautils.h>
-
-#include "../lib/grid_client.h"
-#include "./gs_tools.h"
 #include "../lib/gs_internals.h"
+#include "./gs_tools.h"
+
 char *optarg;
 int optind, opterr, optopt;
 
@@ -103,8 +83,6 @@ parse_opt(int argc, char **args)
 
 		case '?':
 		default:
-			/* PRINT_ERROR("unexpected %c (%s)\n", optopt, strerror(opterr));
-			return 0; */
 			break;
 		}
 	}

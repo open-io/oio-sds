@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  * @file gridcluster_remote.h
  */
@@ -27,8 +10,7 @@
  * @{
  */
 
-#include <metatypes.h>
-#include <metacomm.h>
+#include <metautils/lib/metacomm.h>
 
 
 /**
@@ -56,144 +38,14 @@ namespace_info_t *gcluster_get_namespace_info_full(addr_info_t *addr,
 		long to, GError **error);
 
 
-/**
- * Get the full volume list from the conscience
- *
- * @param addr the conscience addr
- * @param to
- * @param error a glib error pointer
- * @return the list of volume_info_t pointers or NULL if an error occured
- */
-GSList *gcluster_get_volume_list(addr_info_t *addr, long to,
-		GError **error);
+meta0_info_t* gcluster_get_meta0(addr_info_t *addr,
+		long to, GError **error);
 
+meta0_info_t* gcluster_get_meta0_2timeouts(addr_info_t * addr,
+		long to_cnx, long to_req, GError ** error);
 
-/**
- * Get the meta0 from the conscience
- *
- * @param addr the conscience addr
- * @param to
- * @param error a glib error pointer
- * @return a meta0_info_t pointer or NULL if an error occured
- */
-meta0_info_t* gcluster_get_meta0(addr_info_t *addr, long to, GError **error);
-
-
-/**
- * @param addr
- * @param to_cnx
- * @param to_req
- * @param err
- * @return
- */
-meta0_info_t* gcluster_get_meta0_2timeouts(addr_info_t * addr, long to_cnx,
-		long to_req, GError ** error);
-
-
-/**
- * Get the meta0 from the conscience
- *
- * @param addr the conscience addr
- * @param to_cnx
- * @param to_req
- * @param error a glib error pointer
- * @return a meta0_info_t pointer or NULL if an error occured
- */
-meta0_info_t * gcluster_get_meta0_2tos(addr_info_t * addr, long to_cnx,
-		long to_req, GError ** error);
-
-
-/**
- * Get the full meta1 list from the conscience
- *
- * @deprecated
- * @param addr the conscience addr
- * @param to
- * @param error a glib error pointer
- * @return the list of meta1_info_t pointers or NULL if an error occured
- */
-GSList *gcluster_get_meta1_list(addr_info_t *addr, long to, GError **error);
-
-
-/**
- * Get the full meta2 list from the conscience
- *
- * @deprecated
- * @param addr the conscience addr
- * @param to
- * @param error a glib error pointer
- * @return the list of meta2_info_t pointers or NULL if an error occured
- */
-GSList *gcluster_get_meta2_list(addr_info_t *addr, long to, GError **error);
-
-
-/**
- * Push a list of volume_stat_t to the conscience
- *
- * @deprecated
- * @param addr the conscience addr
- * @param to
- * @param vstat a GSList of volume_stat_t
- * @param error a glib error pointer
- * @return 1 if succeed, 0 otherwise
- */
-gint gcluster_push_volume_stat(addr_info_t *addr, long to, GSList *vstat,
-		GError **error);
-
-
-/**
- * Push a list of meta1_stat_t to the conscience
- *
- * @deprecated
- * @param addr the conscience addr
- * @param to
- * @param mstat a GSList of meta1_stat_t
- * @param error a glib error pointer
- * @return 1 if succeed, 0 otherwise
- */
-gint gcluster_push_meta1_stat(addr_info_t *addr, long to, GSList *mstat,
-		GError **error);
-
-
-/**
- * Push a list of meta2_stat_t to the conscience
- *
- * @deprecated
- * @param addr the conscience addr
- * @param to
- * @param mstat a GSList of meta2_stat_t
- * @param error a glib error pointer
- * @return 1 if succeed, 0 otherwise
- */
-gint gcluster_push_meta2_stat(addr_info_t *addr, long to, GSList *mstat,
-		GError **error);
-
-
-/**
- * Push a list of meta2_info_t to the conscience to fix and lock a score
- *
- * @deprecated
- * @param addr the conscience addr
- * @param to a GSList of meta2_info_t
- * @param m2_list
- * @param error a glib error pointer
- * @return 1 if succeed, 0 otherwise
- */
-gint gcluster_push_meta2_score(addr_info_t *addr, long to,
-		GSList *m2_list, GError **error);
-
-
-/**
- * Push a list of volume_info_t to the conscience to fix and lock a score
- *
- * @param addr the conscience addr
- * @param to
- * @param vol_list
- * @param error a glib error pointer
- * @return 1 if succeed, 0 otherwise
- */
-gint gcluster_push_vol_score(addr_info_t *addr, long to,
-		GSList *vol_list, GError **error);
+meta0_info_t * gcluster_get_meta0_2tos(addr_info_t * addr,
+		long to_cnx, long to_req, GError ** error);
 
 
 /**
@@ -296,6 +148,17 @@ GSList *gcluster_get_broken_container(addr_info_t *addr, long to,
 GSList *gcluster_get_services( addr_info_t *addr, long to,
 		const gchar *type, GError **error);
 
+/**
+ * Get the list of service types from conscience.
+ *
+ * @param addr The address of the conscience
+ * @param timeout The timeout in milliseconds
+ * @param [out] error A pointer to a GError*, that will be not NULL
+ *   if an error occurs
+ * @return A GSList* with the service types (gchar*)
+ */
+GSList *gcluster_get_service_types(addr_info_t *addr, long timeout,
+		GError **error);
 
 /**
  * Get the full broken container list from the conscience

@@ -1,15 +1,8 @@
 %{
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 # include <unistd.h>
-
-#if 0
-# include "expr.yacc.h"
-#endif
 
 #include "expr.h"
 

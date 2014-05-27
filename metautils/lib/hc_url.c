@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.url"
 #endif
@@ -27,6 +10,7 @@
 #include "./metautils.h"
 
 #define HCURL_OPTION_KEY_VERSION "version"
+#define HCURL_OPTION_KEY_SNAPSHOT "snapshot"
 
 enum {
 	FLAG_DIRTY_ID    = 0x01,
@@ -57,37 +41,9 @@ struct hc_url_s
 
 /* ------------------------------------------------------------------------- */
 
-#define PREFIX "hc://"
-
-#define skip_slashes(p) do { for (; *p && *p == '/'; p++) {} } while (0)
-
-static inline void
-str_clean(gchar **s)
-{
-	if (*s)
-		g_free(*s);
-	*s = NULL;
-}
-
-static inline void
-str_replace(gchar **dst, const gchar *src)
-{
-	if (*dst)
-		g_free(*dst);
-	*dst = src ? g_strdup(src) : NULL;
-}
-
-static inline void
-_strip_trailing_slashes(gchar *src)
-{
-	register gchar *s;
-
-	if (!src || !*src)
-		return;
-
-	for (s = src + strlen(src) - 1; s>=src && *s == '/' ;s--)
-		*s = '\0';
-}
+#define GRID_PREFIX "grid://"
+#define HC_PREFIX "hc://"
+#define REDC_PREFIX "redc://"
 
 static void
 _parse_ns(struct hc_url_s *url)
@@ -104,9 +60,9 @@ _parse_ns(struct hc_url_s *url)
 		url->vns = g_strdup(dot);
 	}
 
-	_strip_trailing_slashes(url->ns);
-	_strip_trailing_slashes(url->pns);
-	_strip_trailing_slashes(url->vns);
+	metautils_rstrip(url->ns, '/');
+	metautils_rstrip(url->pns, '/');
+	metautils_rstrip(url->vns, '/');
 }
 
 static GHashTable*
@@ -124,8 +80,6 @@ _options_free(GHashTable *options)
 static void
 _options_dump(GHashTable *options)
 {
-	auto void _show_option(gpointer, gpointer, gpointer);
-
 	void _show_option(gpointer _option_name, gpointer _option_value, gpointer _unused)
 	{
 		gchar *name = _option_name;
@@ -196,25 +150,30 @@ _parse_url(struct hc_url_s *url, const gchar *str)
 {
 	const gchar *ns, *refname, *path, *options;
 
-	ns = g_str_has_prefix(str, PREFIX) ? str+sizeof(PREFIX)-1 : str;
+	if(g_str_has_prefix(str, GRID_PREFIX))
+		ns = str + sizeof(GRID_PREFIX) - 1;
+	else if(g_str_has_prefix(str, HC_PREFIX))
+		ns = str + sizeof(HC_PREFIX) - 1;
+	else if(g_str_has_prefix(str, REDC_PREFIX))
+		ns = str + sizeof(REDC_PREFIX) - 1;
+	else
+		ns = str;
 
-	skip_slashes(ns);
+	ns = metautils_lstrip(ns, '/');
 	if (!*ns)
 		return 0;
 
 	refname = strchr(ns, '/');
-	if (refname) {
-		++ refname;
-		skip_slashes(refname);
-	}
+	if (refname)
+		refname = metautils_lstrip(refname+1, '/');
 
-	path = refname ? strrchr(refname, '/') : NULL;
+	path = refname ? strchr(refname, '/') : NULL;
 	if (path) {
 		if (!*(++path))
 			path = NULL;
 	}
 
-	options = path ? strrchr(path, '?') : NULL;
+	options = path ? strrchr(path, '?') : refname ? strrchr(refname, '?') : NULL;
 	if (options) {
 		if (!*(++options))
 			options = NULL;
@@ -232,6 +191,8 @@ _parse_url(struct hc_url_s *url, const gchar *str)
 				url->path = g_strndup(path, (options-1)-path);
 			else
 				url->path = g_strdup(path);
+		} else if (options) {
+			url->refname = g_strndup(refname, (options-1)-refname);
 		} else {
 			url->refname = g_strdup(refname);
 		}
@@ -241,8 +202,9 @@ _parse_url(struct hc_url_s *url, const gchar *str)
 	}
 
 	_parse_ns(url);
-	_strip_trailing_slashes(url->path);
-	_strip_trailing_slashes(url->refname);
+	// We want trailing slashes, they are used by S3FS
+	//metautils_rstrip(url->path, '/');
+	metautils_rstrip(url->refname, '/');
 	return 1;
 }
 
@@ -308,6 +270,38 @@ hc_url_clean(struct hc_url_s *u)
 	g_free(u);
 }
 
+#define STRDUP(Dst,Src,Field) do { \
+	if (Src->Field) \
+		Dst->Field = g_strdup(Src->Field); \
+} while (0)
+
+struct hc_url_s *
+hc_url_dup(struct hc_url_s *u)
+{
+	if (!u)
+		return NULL;
+
+	struct hc_url_s *result = g_memdup(u, sizeof(struct hc_url_s));
+	result->options = _options_new();
+	STRDUP(result, u, ns);
+	STRDUP(result, u, pns);
+	STRDUP(result, u, vns);
+	STRDUP(result, u, refname);
+	STRDUP(result, u, path);
+	STRDUP(result, u, whole);
+
+	if (u->options) {
+		GHashTableIter iter;
+		gpointer k, v;
+		g_hash_table_iter_init(&iter, u->options);
+		while (g_hash_table_iter_next(&iter, &k, &v))
+			g_hash_table_insert(result->options,
+					g_strdup((gchar*)k), g_strdup((gchar*)v));
+	}
+
+	return result;
+}
+
 void
 hc_url_gclean(gpointer u, gpointer ignored)
 {
@@ -327,42 +321,42 @@ hc_url_set(struct hc_url_s *u, enum hc_url_field_e f,
 
 	switch (f) {
 		case HCURL_NS:
-			str_replace(&(u->ns), v);
-			str_clean(&(u->pns));
-			str_clean(&(u->vns));
-			str_clean(&(u->whole));
+			metautils_str_replace(&(u->ns), v);
+			metautils_str_clean(&(u->pns));
+			metautils_str_clean(&(u->vns));
+			metautils_str_clean(&(u->whole));
 			u->hexid[0] = 0;
 			_parse_ns(u);
 			return u;
 
 		case HCURL_NSPHYS:
-			str_clean(&(u->ns));
-			str_replace(&(u->pns), v);
+			metautils_str_clean(&(u->ns));
+			metautils_str_replace(&(u->pns), v);
 			u->ns = u->vns && u->pns
 				? g_strconcat(u->pns, ".", u->vns, NULL)
 				: g_strdup(u->pns);
-			str_clean(&(u->whole));
+			metautils_str_clean(&(u->whole));
 			return u;
 
 		case HCURL_NSVIRT:
-			str_clean(&(u->ns));
-			str_replace(&(u->vns), v);
+			metautils_str_clean(&(u->ns));
+			metautils_str_replace(&(u->vns), v);
 			u->ns = u->vns && u->pns
 				? g_strconcat(u->pns, ".", u->vns, NULL)
 				: g_strdup(u->pns);
-			str_clean(&(u->whole));
+			metautils_str_clean(&(u->whole));
 			u->hexid[0] = 0;
 			return u;
 
 		case HCURL_REFERENCE:
-			str_replace(&(u->refname), v);
-			str_clean(&(u->whole));
+			metautils_str_replace(&(u->refname), v);
+			metautils_str_clean(&(u->whole));
 			u->hexid[0] = 0;
 			return u;
 
 		case HCURL_PATH:
-			str_replace(&(u->path), v);
-			str_clean(&(u->whole));
+			metautils_str_replace(&(u->path), v);
+			metautils_str_clean(&(u->whole));
 			return u;
 
 		case HCURL_OPTIONS:
@@ -372,30 +366,39 @@ hc_url_set(struct hc_url_s *u, enum hc_url_field_e f,
 			_parse_options(u->options, v);
 			return u;
 
+		case HCURL_SNAPORVERS:
 		case HCURL_VERSION:
 			if (!u->options)
 				u->options = _options_new();
-			_add_option_value(u->options, g_strdup(HCURL_OPTION_KEY_VERSION), g_strdup(v));
+			_add_option_value(u->options, g_strdup(HCURL_OPTION_KEY_VERSION),
+					g_strdup(v));
+			return u;
+
+		case HCURL_SNAPSHOT:
+			if (!u->options)
+				u->options = _options_new();
+			_add_option_value(u->options, g_strdup(HCURL_OPTION_KEY_SNAPSHOT),
+					g_strdup(v));
 			return u;
 
 		case HCURL_WHOLE:
-			str_clean(&(u->ns));
-			str_clean(&(u->pns));
-			str_clean(&(u->vns));
-			str_clean(&(u->refname));
-			str_clean(&(u->path));
-			str_clean(&(u->whole));
+			metautils_str_clean(&(u->ns));
+			metautils_str_clean(&(u->pns));
+			metautils_str_clean(&(u->vns));
+			metautils_str_clean(&(u->refname));
+			metautils_str_clean(&(u->path));
+			metautils_str_clean(&(u->whole));
 			u->hexid[0] = 0;
 			if (!_parse_url(u, v))
 				return NULL;
 			return u;
 
 		case HCURL_HEXID:
-			str_clean(&(u->refname));
-			str_clean(&(u->whole));
+			metautils_str_clean(&(u->refname));
+			metautils_str_clean(&(u->whole));
 			u->hexid[0] = 0;
 
-			if (strlen(v)!=64) {
+			if (!metautils_str_ishexa(v,64)) {
 				errno = EINVAL;
 				return NULL;
 			}
@@ -434,11 +437,17 @@ hc_url_has(struct hc_url_s *u, enum hc_url_field_e f)
 			if (!u->options)
 				return 0;
 			return NULL != g_hash_table_lookup(u->options, HCURL_OPTION_KEY_VERSION);
+		case HCURL_SNAPSHOT:
+			if (!u->options)
+				return 0;
+			return NULL != g_hash_table_lookup(u->options, HCURL_OPTION_KEY_SNAPSHOT);
 
 		case HCURL_WHOLE:
 			return u->whole || (u->ns && u->refname);
 		case HCURL_HEXID:
 			return u->hexid[0] != '\0' || u->refname != NULL;
+		case HCURL_SNAPORVERS:
+			return hc_url_has(u, HCURL_SNAPSHOT) || hc_url_has(u, HCURL_VERSION);
 	}
 
 	g_assert_not_reached();
@@ -484,9 +493,9 @@ _append_options(GString *gs, struct hc_url_s *u)
 		g_hash_table_iter_init(&iter, u->options);
 		while (g_hash_table_iter_next(&iter, &k, &v)) {
 			g_string_append(gs, first ? "?" : "&");
-			g_string_append(gs, (gchar*)k);
+			g_string_append(gs, k ? (gchar*)k : "(null)");
 			g_string_append(gs, "=");
-			g_string_append(gs, (gchar*)v);
+			g_string_append(gs, v ? (gchar*)v : "(null)");
 		}
 	}
 	return gs;
@@ -513,6 +522,8 @@ hc_url_get(struct hc_url_s *u, enum hc_url_field_e f)
 			return NULL;
 		case HCURL_VERSION:
 			return hc_url_get_option_value(u, HCURL_OPTION_KEY_VERSION);
+		case HCURL_SNAPSHOT:
+			return hc_url_get_option_value(u, HCURL_OPTION_KEY_SNAPSHOT);
 
 		case HCURL_WHOLE:
 			if (!u->whole) {
@@ -534,13 +545,21 @@ hc_url_get(struct hc_url_s *u, enum hc_url_field_e f)
 				u->hexid[sizeof(u->hexid)-1] = '\0';
 			}
 			return u->hexid;
+
+		case HCURL_SNAPORVERS:
+			if (hc_url_has(u, HCURL_SNAPSHOT))
+				return hc_url_get(u, HCURL_SNAPSHOT);
+			else if (hc_url_has(u, HCURL_VERSION))
+				return hc_url_get(u, HCURL_VERSION);
+			else
+				return NULL;
 	}
 
 	g_assert_not_reached();
 	return NULL;
 }
 
-const void*
+const guint8*
 hc_url_get_id(struct hc_url_s *u)
 {
 	if (!u) {
@@ -587,27 +606,16 @@ hc_url_get_id_size(struct hc_url_s *u)
 void
 hc_url_dump(struct hc_url_s *u)
 {
-	GRID_WARN("URL %p", u);
 	if (!u)
 		return;
-	GRID_WARN(" +++++");
-	GRID_WARN(" NS   [%s]", u->ns);
-	GRID_WARN(" PNS  [%s]", u->pns);
-	GRID_WARN(" VNS  [%s]", u->vns);
-	GRID_WARN(" REF  [%s]", u->refname);
-	GRID_WARN(" PATH [%s]", u->path);
-	GRID_WARN(" OPTIONS:");
+	GRID_WARN(" +++ URL %p", u);
+	GRID_WARN("  [%s][%s][%s] [%s] [%s]",
+			hc_url_get(u, HCURL_NS), hc_url_get(u, HCURL_NSPHYS),
+			hc_url_get(u, HCURL_NSVIRT),
+			hc_url_get(u, HCURL_REFERENCE), hc_url_get(u, HCURL_PATH));
+	GRID_WARN("  OPTIONS:");
 	_options_dump(u->options);
-	GRID_WARN(" WHOLE[%s]", u->whole);
-	GRID_WARN(" HEXID[%s]", u->hexid);
-	GRID_WARN(" -----");
-	GRID_WARN(" NS   [%s]", hc_url_get(u, HCURL_NS));
-	GRID_WARN(" PNS  [%s]", hc_url_get(u, HCURL_NSPHYS));
-	GRID_WARN(" VNS  [%s]", hc_url_get(u, HCURL_NSVIRT));
-	GRID_WARN(" REF  [%s]", hc_url_get(u, HCURL_REFERENCE));
-	GRID_WARN(" PATH [%s]", hc_url_get(u, HCURL_PATH));
-	GRID_WARN(" WHOLE[%s]", hc_url_get(u, HCURL_WHOLE));
-	GRID_WARN(" HEXID[%s]", hc_url_get(u, HCURL_HEXID));
-	GRID_WARN(" =====");
+	GRID_WARN("  WHOLE[%s]", hc_url_get(u, HCURL_WHOLE));
+	GRID_WARN("  HEXID[%s]", hc_url_get(u, HCURL_HEXID));
 }
 

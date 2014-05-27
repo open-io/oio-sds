@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "bean"
 #endif
@@ -22,13 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <metautils.h>
-#include <loggers.h>
 #include <asn_SEQUENCE_OF.h>
 
-#include "./generic.h"
-#include "./meta2_bean.h"
-#include "../metautils/lib/M2V2BeanSequence.h"
+#include <metautils/lib/metautils.h>
+#include <M2V2BeanSequence.h>
+
+#include <meta2v2/generic.h>
+#include <meta2v2/meta2_bean.h>
 
 struct anonymous_sequence_s
 {
@@ -52,10 +35,6 @@ bean_sequence_marshall(GSList *beans)
 	asn_enc_rval_t encRet;
 	struct anonymous_sequence_s asnSeq;
 	GByteArray *gba = NULL;
-
-	auto int func_write(const void *b, gsize bSize, void *key);
-	auto void func_free(void *d);
-	auto void func_fill(gpointer d, gpointer u);
 
 	int func_write(const void *b, gsize bSize, void *key)
 	{
@@ -131,8 +110,11 @@ bean_sequence_unmarshall(const guint8 *buf, gsize buf_len)
 {
 	GSList *l = NULL;
 	GError *err = NULL;
-
-	if (!bean_sequence_decoder(&l, buf, &buf_len, &err)) {
+	gint rc = 0;
+	
+	rc = bean_sequence_decoder(&l, buf, &buf_len, &err);
+	if (rc <= 0) {
+	//if (!bean_sequence_decoder(&l, buf, &buf_len, &err)) {
 		if (err)
 			GRID_ERROR("Decoder error: (%d) %s", err->code, err->message);
 		else
@@ -153,8 +135,6 @@ bean_sequence_decoder(GSList **l, const void *buf, gsize *buf_len, GError **err)
 	asn_codec_ctx_t codecCtx;
 	struct anonymous_sequence_s *abstract_sequence;
 	GSList *beans = NULL;
-
-	auto void func_free(void *d);
 
 	void func_free(void *d) {
 		if (!d)

@@ -1,37 +1,23 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta2-mover"
 #endif
 
 #include <stdio.h>
 
-#include <metautils.h>
-#include <common_main.h>
-
-#include <meta1_remote.h>
-#include <meta2_remote.h>
-#include <meta2_services_remote.h>
 #include <grid_client.h>
-#include "../lib/meta2_mover.h"
-#include "../lib/meta2_mover_internals.h"
 
-#include <stdio.h>
+#include <metautils/lib/metautils.h>
+#include <meta1v2/meta1_remote.h>
+#include <meta2/remote/meta2_remote.h>
+#include <meta2/remote/meta2_services_remote.h>
+
+#include "lib/meta2_mover.h"
+#include "lib/meta2_mover_internals.h"
+
+// FIXME: this constant is defined in gs_internals.h
+#ifndef ENV_LOG4C_ENABLE
+# define ENV_LOG4C_ENABLE "GS_DEBUG_ENABLE"
+#endif
 
 /* Global variables */
 time_t interval_update_services;
@@ -116,16 +102,17 @@ main_action(void)
 
 		gchar* meta2_addr = NULL;
 		if (console_tag != NULL) {
-			meta2_addr = console_tag->str;
+			meta2_addr = g_strdup(console_tag->str);
 		}
-	
+
 		err = meta2_mover_migrate(ns_client, line, meta2_addr);
 		if (err != NULL) {
 			error_raised = TRUE;
-			GRID_ERROR("Migration error for [%s] : %s", line, gerror_get_message(err));
+			GRID_ERROR("Migration error for [%s]: %s",
+					line, gerror_get_message(err));
 			g_clear_error(&err);
 		}
-		if (NULL!= meta2_addr) {
+		if (NULL != meta2_addr) {
 			g_free(meta2_addr);
 		}
 	}
@@ -137,7 +124,7 @@ main_action(void)
 
 	GRID_DEBUG("End of input, job done!");
 
-	if (TRUE == error_raised) {
+	if (error_raised) {
 		main_specific_fini();
 		main_specific_stop();
 
@@ -207,6 +194,7 @@ static struct grid_main_callbacks cb =
 int
 main(int argc, char **argv)
 {
+	setenv(ENV_LOG4C_ENABLE, "0", TRUE);
 	return grid_main_cli(argc, argv, &cb);
 }
 

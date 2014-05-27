@@ -1,36 +1,18 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "gridcluster.agent.config"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "gridcluster.agent.config"
 #endif
 
 #include <string.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
+
+#include <cluster/lib/gridcluster.h>
+#include <cluster/module/module.h>
 
 #include "./config.h"
 #include "./agent.h"
 #include "./server.h"
 #include "./cluster_conf_parser.h"
-#include "../module/module.h"
 
 #define GRIDD_TIMEOUT 5000
 
@@ -74,13 +56,20 @@ parse_config(const char *config_file, GHashTable * params, GError ** error)
 
 	copy_cfg_value(GENERAL_GROUP, USER_KEY);
 	copy_cfg_value(GENERAL_GROUP, GROUP_KEY);
+
+	copy_cfg_value(GENERAL_GROUP, SVC_CHECK_KEY);
 	copy_cfg_value(GENERAL_GROUP, SVC_CHECK_FREQ_KEY);
-	copy_cfg_value(GENERAL_GROUP, CS_UPDATE_FREQ_KEY);
-	copy_cfg_value(GENERAL_GROUP, CS_UPDATE_NS_PERIOD_KEY);
-	copy_cfg_value(GENERAL_GROUP, CS_UPDATE_SRV_PERIOD_KEY);
-	copy_cfg_value(GENERAL_GROUP, CS_UPDATE_SRVTYPE_PERIOD_KEY);
-	copy_cfg_value(GENERAL_GROUP, CS_UPDATE_EVTCFG_PERIOD_KEY);
-	copy_cfg_value(GENERAL_GROUP, CS_UPDATE_SRVLST_PERIOD_KEY);
+
+	copy_cfg_value(GENERAL_GROUP, KEY_BROKEN_MANAGE);
+	copy_cfg_value(GENERAL_GROUP, KEY_BROKEN_FREQ_PUSH);
+	copy_cfg_value(GENERAL_GROUP, KEY_BROKEN_FREQ_GET);
+
+	copy_cfg_value(GENERAL_GROUP, CS_DEFAULT_FREQ_KEY);
+	copy_cfg_value(GENERAL_GROUP, CS_GET_EVTCFG_PERIOD_KEY);
+	copy_cfg_value(GENERAL_GROUP, CS_GET_NS_PERIOD_KEY);
+	copy_cfg_value(GENERAL_GROUP, CS_GET_SRVTYPE_PERIOD_KEY);
+	copy_cfg_value(GENERAL_GROUP, CS_GET_SRVLIST_PERIOD_KEY);
+	copy_cfg_value(GENERAL_GROUP, CS_PUSH_SRVLIST_PERIOD_KEY);
 
 	copy_cfg_value(GENERAL_GROUP, EVENTS_SPOOL_DIR_KEY);
 	copy_cfg_value(GENERAL_GROUP, EVENTS_SPOOL_SIZE_KEY);
@@ -90,9 +79,6 @@ parse_config(const char *config_file, GHashTable * params, GError ** error)
 	copy_cfg_value(GENERAL_GROUP, EVENTS_RECEIVE_ENABLE_KEY);
 	copy_cfg_value(GENERAL_GROUP, EVENTS_MAXPENDING_KEY);
 	copy_cfg_value(GENERAL_GROUP, EVENTS_DELAY_INCOMING_KEY);
-
-	copy_cfg_value(GENERAL_GROUP, EVENTS_DELAY_REFRESH_KEY);
-	copy_cfg_value(GENERAL_GROUP, NSINFO_DELAY_REFRESH_KEY);
 
 	copy_cfg_value(GENERAL_GROUP, UNIX_SOCK_KEY_MODE);
 	copy_cfg_value(GENERAL_GROUP, UNIX_SOCK_KEY_UID);
@@ -136,44 +122,14 @@ parse_config(const char *config_file, GHashTable * params, GError ** error)
 static time_t
 get_config_time(namespace_data_t *ns_data, const gchar *key, time_t def)
 {
-	gint64 i64;
-	time_t result;
-	GByteArray *gba_value;
-
-	if (!ns_data || !ns_data->ns_info.options)
+	if (!ns_data)
 		return def;
-
-	gba_value = g_hash_table_lookup(ns_data->ns_info.options, key);
-	if (!gba_value)
-		return def;
-
-	if (gba_value->data[gba_value->len-1]) {
-		g_byte_array_append(gba_value, (guint8*)"", 1);
-		g_byte_array_set_size(gba_value, gba_value->len-1);
-	}
-
-	i64 = g_ascii_strtoll((gchar*) gba_value->data, NULL, 10);
-	if (i64 < 0)
-		return 0;
-
-	return (result = i64); /* implicit conversion */
+	return gridcluster_get_nsinfo_int64(&(ns_data->ns_info), key, def);
 }
 
 time_t
 get_event_delay(namespace_data_t *ns_data)
 {
 	return get_config_time(ns_data, GS_CONFIG_EVENT_DELAY, event_delay);
-}
-
-time_t
-get_nsinfo_refresh_delay(namespace_data_t *ns_data)
-{
-	return get_config_time(ns_data, GS_CONFIG_NSINFO_REFRESH, nsinfo_refresh_delay);
-}
-
-time_t
-get_event_refresh_delay(namespace_data_t *ns_data)
-{
-	return get_config_time(ns_data, GS_CONFIG_EVENT_REFRESH, events_refresh_delay);
 }
 

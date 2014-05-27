@@ -1,121 +1,37 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #define MODULE_NAME "conscience"
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN MODULE_NAME".plugin"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN MODULE_NAME".plugin"
 #endif
 
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <arpa/inet.h>
 #include <fnmatch.h>
+#include <sys/time.h>
+#include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <sys/time.h>
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
 
-#include <metautils.h>
-#include <metacomm.h>
-#include <plugin.h>
-#include <message_handler.h>
-#include <srvalert.h>
-#include <srvtimer.h>
-#include <srvstats.h>
+#include <gridd/main/plugin.h>
+#include <gridd/main/message_handler.h>
+#include <gridd/main/srvalert.h>
+#include <gridd/main/srvtimer.h>
+#include <gridd/main/srvstats.h>
 
-#include "../events/gridcluster_events.h"
-#include "../events/gridcluster_eventsremote.h"
-#include "../events/gridcluster_eventhandler.h"
-#include "../conscience/conscience.h"
-#include "../conscience/conscience_broken_holder_common.h"
+#include <cluster/lib/gridcluster.h>
+#include <cluster/events/gridcluster_events.h>
+#include <cluster/events/gridcluster_eventsremote.h>
+#include <cluster/events/gridcluster_eventhandler.h>
+#include <cluster/conscience/conscience.h>
+#include <cluster/conscience/conscience_broken_holder_common.h>
 
-#include "./alerting.h"
-#include "./module.h"
+#include "alerting.h"
+#include "module.h"
 
-#include "../lib/gridcluster.h"
-
-#define BUFSIZE(B) (B),sizeof(B)
-#define BUFLEN(B) (B),sizeof(B)-1
 #define SRVID_OF_ADDR(A) ((struct conscience_srvid_s*)(A))
-#ifdef HAVE_LEGACY
-#define JUMPERR(CTX,C,M) \
-do {\
-        reply_context_clear((CTX), FALSE);\
-        reply_context_set_message ((CTX),\
-                ((CTX)->warning && (CTX)->warning->code ? (CTX)->warning->code : (C)),\
-                ((CTX)->warning && (CTX)->warning->message ? (CTX)->warning->message : (M)));\
-        goto errorLabel;\
-} while (0)
-
-/**/
-typedef GByteArray *(*serializer_f) (GSList *, GError **);
-
-/*apply an action on the service and the old *info_structure*/
-typedef gboolean(*action_f) (struct conscience_srv_s *, gpointer, GError **);
-
-/*convert an old *info in its serialized form*/
-typedef gint(*deserializer_f) (GSList **, void *, gsize *, GError **);
-
-/*clean for an old info structure*/
-typedef void (*gcleaner_f) (gpointer, gpointer);
-
-/*map a service into an old *info structure*/
-typedef void *(*converter_f) (struct service_info_s *);
-
-typedef GPtrArray* (*tags_builder_f) (struct service_info_s *srv, gpointer p);
-
-/*find a service in a conscience from an old *_info structure*/
-typedef struct conscience_srv_s *(*service_getter_f) (struct conscience_s *, gpointer, GError **);
-
-/*Execution context used across the several callback for the
- *service retrieval legacy functions*/
-struct legacy_srvget_s
-{
-	GSList *lines;
-	guint lines_length;
-	guint lines_total;
-	gchar type_name[LIMIT_LENGTH_SRVTYPE];
-	converter_f convert;
-	serializer_f serialize;
-	gcleaner_f clean;
-	struct reply_context_s reply_ctx;
-};
-
-/*
- */
-struct legacy_push_s
-{
-	struct request_context_s *request_ctx;
-	gchar type_name[LIMIT_LENGTH_SRVTYPE];
-	deserializer_f deserialize;
-	gcleaner_f clean;
-	tags_builder_f tags_builder;
-	enum { PUSH_STAT, PUSH_SCORE, REMOVE } action;
-	size_t addr_offset;
-	size_t score_offset;
-	size_t st_size;
-	size_t header_size;
-};
-#endif
 
 struct conscience_request_counters
 {
@@ -160,13 +76,15 @@ struct srvget_s
 {
 	gboolean full;
 	struct conscience_srvtype_s *srvtype;
-	struct reply_context_s reply_ctx;
 	GByteArray *gba_body;
 	guint srv_list_size;
 	guint total_size;
 	gchar str_ns[LIMIT_LENGTH_NSNAME + 1];
 
 	gboolean an_error_happened;
+
+	/** List of all successive bodies to send */
+	GSList *response_bodies;
 };
 
 typedef gint(*_cmd_handler_f) (struct request_context_s *);
@@ -195,6 +113,8 @@ static struct conscience_request_counters stats;
 static GStaticRecMutex counters_mutex;
 
 static GStaticRecMutex conscience_nsinfo_mutex;
+
+static gboolean flag_forced_meta0 = FALSE;
 
 static void
 _reply_ctx_set_error(struct reply_context_s *ctx)
@@ -310,7 +230,7 @@ timer_check_services(gpointer u)
 	list_type_names = conscience_get_srvtype_names(cs,NULL);
 	conscience_unlock_srvtypes(conscience);
 	/* XXX end of critical section */
-	
+
 	if (!list_type_names) {
 		if (error_local) {
 			ERROR("[NS=%s] Failed to collect the service types names : %s",
@@ -325,7 +245,7 @@ timer_check_services(gpointer u)
 		gboolean rc;
 		gchar *str_name;
 		struct conscience_srvtype_s *srvtype;
-		
+
 		if (!l->data)
 			continue;
 		str_name = l->data;
@@ -348,7 +268,7 @@ timer_check_services(gpointer u)
 		if (error_local)
 			g_error_free(error_local);
 	}
-	
+
 	g_slist_foreach(list_type_names,g_free1,NULL);
 	g_slist_free(list_type_names);
 }
@@ -382,7 +302,7 @@ timer_expire_services(gpointer u)
 		gint rc;
 		gchar *str_name;
 		struct conscience_srvtype_s *srvtype;
-		
+
 		if (!l->data)
 			continue;
 		str_name = l->data;
@@ -412,164 +332,10 @@ timer_expire_services(gpointer u)
 		if (error_local)
 			g_error_free(error_local);
 	}
-	
+
 	g_slist_foreach(list_type_names,g_free1,NULL);
 	g_slist_free(list_type_names);
 }
-
-#ifdef HYPER_VERBOSE
-static void
-dump_service(struct conscience_srv_s *srv, gpointer udata)
-{
-	gchar str_addr[STRLEN_ADDRINFO], str_tag[256];
-	guint i;
-	struct conscience_s *conscience;
-	struct conscience_srvtype_s *srvtype;
-	struct service_tag_s *tag;
-
-	(void)udata;
-	if (!srv)
-		return;
-	srvtype = srv->srvtype;
-	conscience = srvtype->conscience;
-	addr_info_to_string(&(srv->id.addr), str_addr, sizeof(str_addr));
-	if (srv->tags && srv->tags->len) {
-		DEBUG_DOMAIN(DOMAIN_PERIODIC, "   <srv score=\"%d\" addr=\"%s\" stamp=\"%ld\" locked=\"%s\">",
-				srv->score.value, str_addr, srv->score.timestamp, (srv->locked ? "true" : "false"));
-		for (i=srv->tags->len; i-->0 ;) {
-			tag = g_ptr_array_index(srv->tags, i);
-			if (tag) {
-				service_tag_to_string(tag, str_tag, sizeof(str_tag));
-				DEBUG_DOMAIN(DOMAIN_PERIODIC, "    <tag name=\"%s\" value=\"%s\"/>", tag->name, str_tag);
-			}
-		}
-		DEBUG_DOMAIN(DOMAIN_PERIODIC, "   </srv>");
-	}
-	else {
-		DEBUG_DOMAIN(DOMAIN_PERIODIC, "   <srv score=\"%d\" addr=\"%s\" stamp=\"%ld\" locked=\"%s\"/>",
-				srv->score.value, str_addr, srv->score.timestamp, (srv->locked ? "true" : "false"));
-	}
-}
-
-static void
-dump_srvtype(struct conscience_srvtype_s *srvtype)
-{
-
-	DEBUG_DOMAIN(DOMAIN_PERIODIC, "  <type name=\"%s\">", srvtype->type_name);
-	DEBUG_DOMAIN(DOMAIN_PERIODIC, "   <expr>%s</expr>", srvtype->score_expr_str);
-	conscience_srvtype_run_all(srvtype, NULL, SRVTYPE_FLAG_INCLUDE_EXPIRED, dump_service, NULL);
-	DEBUG_DOMAIN(DOMAIN_PERIODIC, "  </type>");
-}
-
-static void
-dump_srvtypes (GHashTable *ht)
-{
-	gpointer k, v;
-	GHashTableIter iter;
-
-	DEBUG_DOMAIN(DOMAIN_PERIODIC, " <srv>");
-	g_hash_table_iter_init(&iter, ht);
-	while (g_hash_table_iter_next(&iter, &k, &v))
-		dump_srvtype((struct conscience_srvtype_s *) v);
-	DEBUG_DOMAIN(DOMAIN_PERIODIC, " </srv>");
-}
-
-static void
-dump_broken_elements(struct broken_holder_s *bh)
-{
-	gchar str_addr[STRLEN_ADDRINFO];
-	gpointer k, v;
-	GHashTableIter iter;
-	broken_meta1_t *bm1;
-	broken_meta2_t *bm2;
-	
-	DEBUG_DOMAIN(DOMAIN_PERIODIC, " <broken>");
-	if (GRID_TRACE_ENABLED()) {
-		DEBUG_DOMAIN(DOMAIN_PERIODIC, "  <m1 nb=\"%u\"/>", g_hash_table_size(bh->ht_meta1));
-		DEBUG_DOMAIN(DOMAIN_PERIODIC, "  <m2 nb=\"%u\"/>", g_hash_table_size(bh->ht_meta2));
-	} else {
-		/*META1 dump*/
-		DEBUG_DOMAIN(DOMAIN_PERIODIC, "  <m1 nb=\"%u\"/>", g_hash_table_size(bh->ht_meta1));
-		g_hash_table_iter_init(&iter, bh->ht_meta1);
-		while (g_hash_table_iter_next(&iter,&k,&v)) {
-			bm1 = v;
-			addr_info_to_string(&(bm1->addr), str_addr, sizeof(str_addr));
-			TRACE_DOMAIN(DOMAIN_PERIODIC, "   <srv addr=\"%s\"/>", str_addr);
-		}
-		DEBUG_DOMAIN(DOMAIN_PERIODIC, "  </m1>");
-
-		/*META2 dump*/
-		DEBUG_DOMAIN(DOMAIN_PERIODIC, "  <m2 nb=\"%u\">", g_hash_table_size(bh->ht_meta2));
-		g_hash_table_iter_init(&iter, bh->ht_meta2);
-		while (g_hash_table_iter_next(&iter,&k,&v)) {
-			bm2 = v;
-			addr_info_to_string(&(bm2->addr), str_addr, sizeof(str_addr));
-			TRACE_DOMAIN(DOMAIN_PERIODIC, "   <srv addr=\"%s\" nb=\"%u\"/>", str_addr, g_hash_table_size(bm2->broken_containers));
-		}
-		DEBUG_DOMAIN(DOMAIN_PERIODIC, "  </m2>");
-	}
-	DEBUG_DOMAIN(DOMAIN_PERIODIC, " </broken>");
-}
-
-static void
-timer_dump_conscience(gpointer u)
-{
-	gchar str_addr[STRLEN_ADDRINFO];
-	struct conscience_s *conscience;
-
-	if (!u)
-		return;
-	if (!GRID_TRACE_ENABLED())
-		return;
-
-	conscience = u;
-	addr_info_to_string(&(conscience->ns_info.addr), str_addr, sizeof(str_addr));
-
-	DEBUG_DOMAIN(DOMAIN_PERIODIC, "<conscience ns=\"%s\" chunk_size=\"%lld\" conscience_addr=\"%s\">",
-	    conscience_get_namespace(conscience), conscience->ns_info.chunk_size, str_addr);
-	
-	/* XXX start of critical section */
-	conscience_lock_srvtypes(conscience,'r');
-	dump_srvtypes(conscience->srvtypes);
-	conscience_unlock_srvtypes(conscience);
-	/* XXX end of critical section */
-
-	/* XXX start of critical section */	
-	conscience_lock_broken_elements(conscience,'r');
-	dump_broken_elements(conscience->broken_elements);
-	conscience_unlock_broken_elements(conscience);
-	/* XXX end of critical section */
-	
-	DEBUG_DOMAIN(DOMAIN_PERIODIC, "</conscience>");
-}
-#endif
-
-#if 0
-static inline void
-manage_meta2_alerts(struct conscience_s *conscience, addr_info_t * addr)
-{
-	gsize str_addr_size;
-	gchar str_addr[128];
-	guint broken_elements_counter = 0;
-	broken_meta2_t *brk_meta2;
-
-	brk_meta2 = g_hash_table_lookup(conscience->broken_meta2, addr);
-	broken_elements_counter += g_hash_table_size(brk_meta2->broken_contents);
-	broken_elements_counter += g_hash_table_size(brk_meta2->broken_containers);
-
-	if (broken_elements_counter >= ALERT_THRESHOLD_BRKM2) {
-		time_t now = time(0);
-
-		if (now < brk_meta2->last_alert_stamp || (now - brk_meta2->last_alert_stamp) > 300) {
-			brk_meta2->last_alert_stamp = now;
-			str_addr_size = addr_info_to_string(addr, str_addr, sizeof(str_addr));
-			SRV_SEND_ERROR(ALERTID_BROKEN_META2,
-			    "META2 on %.*s has %d broken containers", str_addr_size, str_addr, broken_elements_counter);
-		}
-	}
-}
-#endif
-
 
 /* ------------------------------------------------------------------------- */
 static GNode*
@@ -650,574 +416,6 @@ request_body_matches_namespace(struct request_context_s *req_ctx, GError **err)
 
 /* ------------------------------------------------------------------------- */
 
-#ifdef HAVE_LEGACY
-static void
-_clean_legacy_srvget_accumulator(struct legacy_srvget_s *sg)
-{
-	if (sg) {
-		if (sg->lines) {
-			g_slist_foreach(sg->lines, sg->clean, NULL);
-			g_slist_free(sg->lines);
-		}
-		sg->lines = NULL;
-		sg->lines_length = 0;
-	}
-}
-
-static gboolean
-srvget_reply_do(struct conscience_srv_s *service, gpointer udata)
-{
-	struct service_info_s si;
-	struct legacy_srvget_s *sg;
-
-	if (!udata) {
-		ALERT("Invalid parameter");
-		return FALSE;
-	}
-
-	sg = udata;
-
-	if (service) {
-		void *api_data;
-
-		si.tags = service->tags;
-		memcpy(si.ns_name, conscience_get_namespace(conscience), LIMIT_LENGTH_NSNAME);
-		memcpy(&(si.addr),  &(service->id.addr), sizeof(addr_info_t));
-		memcpy(&(si.score), &(service->score), sizeof(score_t));
-		if (!(api_data = sg->convert(&si))) { /*THROW*/
-			GSETERROR(&(sg->reply_ctx.warning), "Service conversion error");
-			return FALSE;
-		}
-		sg->lines = g_slist_prepend(sg->lines, api_data);
-		sg->lines_length++;
-	}
-
-	if (!service || sg->lines_length > 256) {
-		/*serialize the body if there is list */
-		if (sg->lines) {
-			GByteArray *gba = sg->serialize(sg->lines, &(sg->reply_ctx.warning));
-
-			if (!gba) {
-				GSETERROR(&(sg->reply_ctx.warning), "Serialization error");
-				return FALSE;
-			}
-			reply_context_set_body(&(sg->reply_ctx), gba->data, gba->len, REPLYCTX_DESTROY_ON_CLEAN|REPLYCTX_COPY);
-			g_byte_array_free(gba, TRUE);
-			sg->lines_total += sg->lines_length;
-	
-			_clean_legacy_srvget_accumulator(sg);
-		}
-
-		/*is this callback the last one? */
-		if (!service)
-			reply_context_set_message(&(sg->reply_ctx), 200, "OK");
-		else
-			reply_context_set_message(&(sg->reply_ctx), 206, "Partial content");
-
-		if (!reply_context_reply(&(sg->reply_ctx), &(sg->reply_ctx.warning))) {
-			GSETERROR(&(sg->reply_ctx.warning), "Cannot reply");
-			return FALSE;
-		}
-	}
-
-	return TRUE;
-}
-
-static gint
-module_legacy_handler_get(struct legacy_srvget_s *sg)
-{
-	gboolean rc;
-	struct conscience_srvtype_s *srvtype;
-
-	/* XXX start of critical section */
-	srvtype = conscience_get_locked_srvtype(conscience, &(sg->reply_ctx.warning), sg->type_name, MODE_STRICT, 'r');
-	if (!srvtype) {
-		GSETERROR(&(sg->reply_ctx.warning), "srvtype=[%s] not found", sg->type_name);
-		rc = FALSE;
-	}
-	else {
-		rc = conscience_srvtype_run_all(srvtype, &(sg->reply_ctx.warning), SRVTYPE_FLAG_ADDITIONAL_CALL, srvget_reply_do, sg);
-		conscience_release_locked_srvtype(srvtype);
-	}
-	/* XXX end of critical section */
-
-	/*ensure all the data have been cleaned */
-	_clean_legacy_srvget_accumulator(sg);
-
-	/* If the service run failed, then reply an error */
-	if (!rc) {
-		_reply_ctx_set_error(&(sg->reply_ctx));
-		reply_context_reply(&(sg->reply_ctx), NULL);
-	}
-	reply_context_log_access(&(sg->reply_ctx), "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&(sg->reply_ctx), TRUE);
-	return rc ? 1 : 0;
-}
-
-static gint
-legacy_handler_get_vol(struct request_context_s *req_ctx)
-{
-	struct legacy_srvget_s sg;
-
-	memset(&sg, 0x00, sizeof(sg));
-	init_reply_ctx_with_request(req_ctx, &(sg.reply_ctx));
-	sg.clean = volume_info_gclean;
-	sg.serialize = volume_info_marshall_gba;
-	sg.convert = (converter_f) service_info_convert_to_volinfo;
-	g_strlcpy(sg.type_name, NAME_SRVTYPE_RAWX, sizeof(sg.type_name));
-	
-	return module_legacy_handler_get(&sg);
-}
-
-static gint
-legacy_handler_get_meta0(struct request_context_s *req_ctx)
-{
-	struct legacy_srvget_s sg;
-
-	memset(&sg, 0x00, sizeof(sg));
-	init_reply_ctx_with_request(req_ctx, &(sg.reply_ctx));
-	sg.clean = meta0_info_gclean;
-	sg.serialize = meta0_info_marshall_gba;
-	sg.convert = (converter_f) service_info_convert_to_m0info;
-	g_strlcpy(sg.type_name, NAME_SRVTYPE_META0, sizeof(sg.type_name));
-
-	return module_legacy_handler_get(&sg);
-}
-
-static gint
-legacy_handler_get_meta1(struct request_context_s *req_ctx)
-{
-	struct legacy_srvget_s sg;
-
-	memset(&sg, 0x00, sizeof(sg));
-	init_reply_ctx_with_request(req_ctx, &(sg.reply_ctx));
-	sg.clean = meta1_info_gclean;
-	sg.serialize = meta1_info_marshall_gba;
-	sg.convert = (converter_f) service_info_convert_to_m1info;
-	g_strlcpy(sg.type_name, NAME_SRVTYPE_META1, sizeof(sg.type_name));
-
-	return module_legacy_handler_get(&sg);
-}
-
-static gint
-legacy_handler_get_meta2(struct request_context_s *req_ctx)
-{
-	struct legacy_srvget_s sg;
-
-	memset(&sg, 0x00, sizeof(sg));
-	init_reply_ctx_with_request(req_ctx, &(sg.reply_ctx));
-	sg.clean = meta2_info_gclean;
-	sg.serialize = meta2_info_marshall_gba;
-	sg.convert = (converter_f) service_info_convert_to_m2info;
-	g_strlcpy(sg.type_name, NAME_SRVTYPE_META2, sizeof(sg.type_name));
-
-	return module_legacy_handler_get(&sg);
-}
-
-
-/* ------------------------------------------------------------------------- */
-
-static inline gboolean
-_legacy_is_zeroed(struct legacy_push_s *sp, guint8 *ptr)
-{
-	size_t i, len;
-	guint8 *start;
-
-	if (sp->st_size == 0 || sp->header_size == 0)
-		return FALSE;
-	else if (sp->st_size < sp->header_size)
-		return FALSE;
-
-	start = ptr + sp->header_size;
-	len = sp->st_size - sp->header_size;
-	for (i=0; i<len ;i++) {
-		if (start[i])
-			return FALSE;
-	}
-	return TRUE;
-}
-
-static gint
-module_legacy_handler_push(struct legacy_push_s *sp)
-{
-	struct conscience_srvtype_s *srvtype;
-	struct reply_context_s ctx;
-	void *data;
-	gsize data_size;
-	GSList *list = NULL, *l = NULL;
-
-	init_reply_ctx_with_request(sp->request_ctx, &(ctx));
-
-	/* Extract the BODY from request and decode it */
-	if (0 >= message_get_BODY(sp->request_ctx->request, &data, &data_size, &(ctx.warning))) {
-		GSETCODE(&(ctx.warning), 400, "[%s] Invalid request : no/bad body", sp->type_name);
-		goto errorLabel;
-	}
-	if (0 > sp->deserialize(&list, data, &data_size, &(ctx.warning))) {
-		GSETERROR(&(ctx.warning), "[%s] Cannot deserialize the list", sp->type_name);
-		goto errorLabel;
-	}
-
-	/* XXX start of critical section */
-	srvtype = conscience_get_locked_srvtype(conscience, NULL, sp->type_name, MODE_STRICT, 'w');
-	if (!srvtype) {
-		GSETERROR(&(ctx.warning), "[%s] service type not found", sp->type_name);
-		goto errorLabel;
-	}
-
-	for (l = list; l && l->data; l = l->next) {
-		struct service_info_s si;
-		struct conscience_srv_s *srv;
-
-		if (!l->data)
-			continue;
-
-		memset(&si, 0x00, sizeof(struct service_info_s));
-		g_strlcpy(si.ns_name, conscience_get_namespace(conscience), sizeof(si.ns_name));
-		g_strlcpy(si.type, sp->type_name, sizeof(si.type));
-		memcpy(&(si.addr), ((guint8 *) l->data) + sp->addr_offset, sizeof(addr_info_t));
-		memcpy(&(si.score), ((guint8 *) l->data) + sp->score_offset, sizeof(score_t));
-		if (sp->tags_builder)
-			sp->tags_builder(&si, l->data);
-
-		srv = conscience_srvtype_get_srv(srvtype, SRVID_OF_ADDR(&(si.addr)));
-		switch (sp->action) {
-		case PUSH_STAT: /* push some stats */
-			if (!srv)
-				conscience_srvtype_refresh(srvtype, &(ctx.warning), &si, FALSE);
-			else {
-				gint32 old_score;
-				
-				old_score = srv->score.value;
-				conscience_srvtype_refresh(srvtype, &(ctx.warning), &si, FALSE);
-				if (srv->score.value < old_score && srv->score.value <= 0) {
-					if (_legacy_is_zeroed(sp, l->data)) {
-						/* Only send alerts for stats totally zeroed, this
-						 * is how the old gridagent tells a service is down */
-						INFO("v1.1 service down");
-						_alert_service_with_zeroed_score(srv);
-					}
-				}
-			}
-			break;
-		case PUSH_SCORE: /* sets the score */
-			if (srv) {
-				if (si.score.value < 0) {
-					INFO("service [%.*s] UNLOCKED", (int)sizeof(srv->description), srv->description);
-					srv->locked = FALSE;
-				}
-				else
-					conscience_srv_lock_score(srv, si.score.value);
-			}
-			break;
-		case REMOVE: /* Removes the service */
-			if (srv) {
-				gchar str_descr[sizeof(srv->description)];
-
-				g_strlcpy(str_descr, srv->description, sizeof(str_descr));
-				conscience_srvtype_remove_srv(srvtype, SRVID_OF_ADDR(&(si.addr)));
-				INFO("Service [%.*s] explicitely removed", (int)sizeof(str_descr), str_descr);
-			}
-			else if (DEBUG_ENABLED()) {
-				gchar str_addr[STRLEN_ADDRINFO];
-
-				addr_info_to_string(&(si.addr), str_addr, sizeof(str_addr));
-				DEBUG("Service [%s/%s/%.*s] not found", si.ns_name, si.type, (int)sizeof(str_addr), str_addr);
-			}
-			break;
-		}
-
-		/* Clean the working structures */
-		if (si.tags) {
-			struct service_tag_s *tag;
-			gsize i;
-			for (i=0; i<si.tags->len ;i++) {
-				tag = g_ptr_array_index(si.tags,i);
-				if (tag)
-					service_tag_destroy(tag);
-			}
-			g_ptr_array_free(si.tags, TRUE);
-			si.tags = NULL;
-		}
-
-		/* clean the list's content */	
-		sp->clean(l->data, NULL);
-		l->data = NULL;
-	}
-	conscience_release_locked_srvtype(srvtype);
-	/* XXX end of critical section */
-
-	g_slist_free(list);
-
-	reply_context_set_message(&ctx, 200, "OK");
-	if (!reply_context_reply(&ctx, &(ctx.warning))) {
-		GSETERROR(&(ctx.warning), "Cannot acknowledge the volume score");
-		JUMPERR(&ctx, 500, "Internal error");
-	}
-
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&ctx, TRUE);
-	return 1;
-
-errorLabel:
-      	ERROR("An error occured : %s", gerror_get_message(ctx.warning));
-	reply_context_set_message(&ctx, gerror_get_code(ctx.warning), gerror_get_message(ctx.warning));
-	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&ctx, TRUE);
-	return 0;
-}
-
-
-static void
-_build_m1tags(struct service_info_s *si, gpointer p)
-{
-	meta1_stat_t *inf;
-	if (!si->tags)
-		si->tags = g_ptr_array_new();
-	if (si->tags) {
-		inf = p;
-		service_tag_set_value_i64(service_info_ensure_tag(si->tags, NAME_MACRO_CPU_NAME), inf->cpu_idle);
-		service_tag_set_value_i64(service_info_ensure_tag(si->tags, NAME_TAGNAME_REQIDLE), inf->req_idle);
-	}
-}
-
-static void
-_build_m2tags(struct service_info_s *si, gpointer p)
-{
-	meta2_stat_t *inf;
-	if (!si->tags)
-		si->tags = g_ptr_array_new();
-	if (si->tags) {
-		inf = p;
-		service_tag_set_value_i64(service_info_ensure_tag(si->tags, NAME_MACRO_CPU_NAME), inf->cpu_idle);
-		service_tag_set_value_i64(service_info_ensure_tag(si->tags, NAME_TAGNAME_REQIDLE), inf->req_idle);
-		service_tag_set_value_i64(service_info_ensure_tag(si->tags, NAME_MACRO_SPACE_NAME), 99);
-	}
-}
-
-static void
-_build_voltags(struct service_info_s *si, gpointer p)
-{
-	volume_stat_t *inf;
-	if (!si->tags)
-		si->tags = g_ptr_array_new();
-	if (si->tags) {
-		inf = p;
-		service_tag_set_value_i64(service_info_ensure_tag(si->tags, NAME_MACRO_CPU_NAME), inf->cpu_idle);
-		service_tag_set_value_i64(service_info_ensure_tag(si->tags, NAME_MACRO_IOIDLE_NAME), inf->io_idle);
-		service_tag_set_value_i64(service_info_ensure_tag(si->tags, NAME_MACRO_SPACE_NAME), inf->free_chunk);
-		service_tag_set_value_string(service_info_ensure_tag(si->tags, NAME_TAGNAME_RAWX_VOL), inf->info.name);
-	}
-}
-
-static gint
-_notify_flush(const gchar *type, struct request_context_s *req_ctx)
-{
-	struct reply_context_s ctx;
-
-	init_reply_ctx_with_request(req_ctx, &(ctx));
-
-	reply_context_set_message(&ctx, 200, "OK");
-	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s SRVTYPE=%s", conscience_get_namespace(conscience), type);
-	reply_context_clear(&ctx, TRUE);
-	return 1;
-}
-
-static gint
-handler_push_volscore(struct request_context_s *req_ctx)
-{
-	struct legacy_push_s sp;
-	
-	memset(&sp,0x00,sizeof(sp));
-	sp.request_ctx = req_ctx;
-	sp.clean = volume_info_gclean;
-	sp.deserialize = (deserializer_f) volume_info_unmarshall;
-	sp.action = PUSH_SCORE;
-	sp.tags_builder = (tags_builder_f) _build_voltags;
-	sp.addr_offset = offsetof(struct volume_info_s, addr);
-	sp.score_offset = offsetof(struct volume_info_s, score);
-	g_strlcpy(sp.type_name, NAME_SRVTYPE_RAWX, sizeof(sp.type_name));
-
-	return module_legacy_handler_push(&sp);
-}
-
-static gint
-handler_push_m2score(struct request_context_s *req_ctx)
-{
-	struct legacy_push_s sp;
-	
-	memset(&sp,0x00,sizeof(sp));
-	sp.request_ctx = req_ctx;
-	sp.clean = meta2_info_gclean;
-	sp.deserialize = (deserializer_f) meta2_info_unmarshall;
-	sp.action = PUSH_SCORE;
-	sp.tags_builder = (tags_builder_f) _build_m2tags;
-	sp.addr_offset = offsetof(struct meta2_info_s, addr);
-	sp.score_offset = offsetof(struct meta2_info_s, score);
-	g_strlcpy(sp.type_name, NAME_SRVTYPE_META2, sizeof(sp.type_name));
-
-	return module_legacy_handler_push(&sp);
-}
-
-static gint
-handler_push_volstat(struct request_context_s *req_ctx)
-{
-	struct legacy_push_s sp;
-
-	memset(&sp,0x00,sizeof(sp));
-	sp.request_ctx = req_ctx;
-	sp.clean = volume_stat_gclean;
-	sp.deserialize = (deserializer_f) volume_stat_unmarshall;
-	sp.action = PUSH_STAT;
-	sp.tags_builder = (tags_builder_f) _build_voltags;
-	sp.addr_offset = offsetof(struct volume_stat_s, info.addr);
-	sp.score_offset = offsetof(struct volume_stat_s, info.score);
-	sp.st_size = sizeof(struct volume_stat_s);
-	sp.header_size = sizeof(struct volume_info_s);
-	g_strlcpy(sp.type_name, NAME_SRVTYPE_RAWX, sizeof(sp.type_name));
-	
-	return module_legacy_handler_push(&sp);
-}
-
-static gint
-handler_push_m1stat(struct request_context_s *req_ctx)
-{
-	struct legacy_push_s sp;
-	
-	memset(&sp,0x00,sizeof(sp));
-	sp.request_ctx = req_ctx;
-	sp.clean = meta1_stat_gclean;
-	sp.deserialize = (deserializer_f) meta1_stat_unmarshall;
-	sp.action = PUSH_STAT;
-	sp.tags_builder = (tags_builder_f) _build_m1tags;
-	sp.addr_offset = offsetof(struct meta1_stat_s, info.addr);
-	sp.score_offset = offsetof(struct meta1_stat_s, info.score);
-	sp.st_size = sizeof(struct meta1_stat_s);
-	sp.header_size = sizeof(struct meta1_info_s);
-	g_strlcpy(sp.type_name, NAME_SRVTYPE_META1, sizeof(sp.type_name));
-
-	return module_legacy_handler_push(&sp);
-}
-
-static gint
-handler_push_m2stat(struct request_context_s *req_ctx)
-{
-	struct legacy_push_s sp;
-
-	memset(&sp,0x00,sizeof(sp));
-	sp.request_ctx = req_ctx;
-	sp.clean = meta2_stat_gclean;
-	sp.deserialize = (deserializer_f) meta2_stat_unmarshall;
-	sp.action = PUSH_STAT;
-	sp.tags_builder = (tags_builder_f) _build_m2tags;
-	sp.addr_offset = offsetof(struct meta2_stat_s, info.addr);
-	sp.score_offset = offsetof(struct meta2_stat_s, info.score);
-	sp.st_size = sizeof(struct meta2_stat_s);
-	sp.header_size = sizeof(struct meta2_info_s);
-	g_strlcpy(sp.type_name, NAME_SRVTYPE_META2, sizeof(sp.type_name));
-
-	return module_legacy_handler_push(&sp);
-}
-
-static gint
-handler_rm_vol(struct request_context_s *req_ctx)
-{
-	if (!message_has_BODY(req_ctx->request,NULL)) {
-		struct conscience_srvtype_s *srvtype;
-
-		/* XXX start of critical section */
-		srvtype = conscience_get_locked_srvtype(conscience, NULL, NAME_SRVTYPE_RAWX, MODE_STRICT, 'w');
-		if (srvtype) {
-			conscience_srvtype_flush(srvtype);
-			conscience_release_locked_srvtype(srvtype);
-		}
-		/* XXX end of critical section */
-		return _notify_flush(NAME_SRVTYPE_RAWX,req_ctx);
-	}
-	else {
-		struct legacy_push_s sp;
-
-		memset(&sp,0x00,sizeof(sp));
-		sp.request_ctx = req_ctx;
-		sp.clean = volume_info_gclean;
-		sp.deserialize = (deserializer_f) volume_info_unmarshall;
-		sp.action = REMOVE;
-		sp.addr_offset = offsetof(struct volume_info_s, addr);
-		sp.score_offset = offsetof(struct volume_info_s, score);
-		g_strlcpy(sp.type_name, NAME_SRVTYPE_RAWX, sizeof(sp.type_name));
-
-		return module_legacy_handler_push(&sp);
-	}
-}
-
-static gint
-handler_rm_meta1(struct request_context_s *req_ctx)
-{
-	if (!message_has_BODY(req_ctx->request,NULL)) {
-		struct conscience_srvtype_s *srvtype;
-
-		/* XXX start of critical section */
-		srvtype = conscience_get_locked_srvtype(conscience, NULL, NAME_SRVTYPE_META1, MODE_STRICT, 'w');
-		if (srvtype) {
-			conscience_srvtype_flush(srvtype);
-			conscience_release_locked_srvtype(srvtype);
-		}
-		/* XXX end of critical section */
-		return _notify_flush(NAME_SRVTYPE_META1,req_ctx);
-	}
-	else {
-		struct legacy_push_s sp;
-		
-		memset(&sp,0x00,sizeof(sp));
-		sp.request_ctx = req_ctx;
-		sp.clean = meta1_info_gclean;
-		sp.deserialize = (deserializer_f) meta1_info_unmarshall;
-		sp.action = REMOVE;
-		sp.addr_offset = offsetof(struct meta1_info_s, addr);
-		sp.score_offset = offsetof(struct meta1_info_s, score);
-		g_strlcpy(sp.type_name, NAME_SRVTYPE_META1, sizeof(sp.type_name));
-
-		return module_legacy_handler_push(&sp);
-	}
-}
-
-static gint
-handler_rm_meta2(struct request_context_s *req_ctx)
-{
-	if (!message_has_BODY(req_ctx->request,NULL)) {
-		struct conscience_srvtype_s *srvtype;
-
-		/* XXX start of critical section */
-		srvtype = conscience_get_locked_srvtype(conscience, NULL, NAME_SRVTYPE_META2, MODE_STRICT, 'w');
-		if (srvtype) {
-			conscience_srvtype_flush(srvtype);
-			conscience_release_locked_srvtype(srvtype);
-		}
-		/* XXX end of critical section */
-		return _notify_flush(NAME_SRVTYPE_META2, req_ctx);
-	} 
-	else {
-		struct legacy_push_s sp;
-
-		memset(&sp,0x00,sizeof(sp));
-		sp.request_ctx = req_ctx;
-		sp.clean = meta2_info_gclean;
-		sp.deserialize = (deserializer_f) meta2_info_unmarshall;
-		sp.action = REMOVE;
-		sp.addr_offset = offsetof(struct meta2_info_s, addr);
-		sp.score_offset = offsetof(struct meta2_info_s, score);
-		g_strlcpy(sp.type_name, NAME_SRVTYPE_META2, sizeof(sp.type_name));
-
-		return module_legacy_handler_push(&sp);
-	}
-}
-#endif
-
-
-/* ------------------------------------------------------------------------- */
-
 static gint
 handler_get_ns(struct request_context_s *req_ctx)
 {
@@ -1227,7 +425,7 @@ handler_get_ns(struct request_context_s *req_ctx)
 	init_reply_ctx_with_request(req_ctx, &ctx);
 
 	/*TODO lock the conscience */
-	g_static_rec_mutex_lock(&conscience_nsinfo_mutex);	
+	g_static_rec_mutex_lock(&conscience_nsinfo_mutex);
 	memset(&ns_info, 0x00, sizeof(ns_info));
 	memcpy(&ns_info, &(conscience->ns_info), sizeof(namespace_info_t));
 	g_static_rec_mutex_unlock(&conscience_nsinfo_mutex);
@@ -1252,6 +450,8 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 {
 	struct reply_context_s ctx;
 	GByteArray* gba = NULL;
+	char version[32];
+
 
 	init_reply_ctx_with_request(req_ctx, &ctx);
 
@@ -1268,17 +468,17 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 	}
 
 	/* Serialize ns_info */
-	/*
-	namespace_info_t ns_info;
-	memset(&ns_info, 0x00, sizeof(ns_info));
-	g_static_rec_mutex_lock(&conscience_nsinfo_mutex);
-	memcpy(&ns_info, &(conscience->ns_info), sizeof(namespace_info_t));
-	g_static_rec_mutex_unlock(&conscience_nsinfo_mutex);
-	memcpy(&(ns_info.addr),&(si->addr),sizeof(addr_info_t));
-	*/
+
+	/* get marshalling version asked */
+	memset(version, '\0', 32);
+	GError *e = NULL;
+	e = message_extract_string(req_ctx->request, "VERSION", version, sizeof(version));
+	if(NULL != e)
+		g_clear_error(&e);
 
 	g_static_rec_mutex_lock(&conscience_nsinfo_mutex);
-	gba = namespace_info_marshall(&(conscience->ns_info), &(ctx.warning));
+	DEBUG("Prepare to response to get_ns_info for version : %s", version);
+	gba = namespace_info_marshall(&(conscience->ns_info), version, &(ctx.warning));
 	g_static_rec_mutex_unlock(&conscience_nsinfo_mutex);
 	if (gba == NULL) {
 		GSETERROR(&(ctx.warning), "Failed to marshall namespace info");
@@ -1297,7 +497,7 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 		reply_context_clear(&ctx, FALSE);
 		return (0);
 	}
-	
+
 	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
 	reply_context_clear(&ctx, TRUE);
 	return (1);
@@ -1315,7 +515,7 @@ handler_rm_broken_containers(struct request_context_s *req_ctx)
 
 	if (message_has_BODY(req_ctx->request,NULL)) {
 		guint counter;
-		
+
 		/* Extract MESSAGE from request */
 		if (0 >= message_get_BODY(req_ctx->request, &data, &data_size, &(ctx.warning))) {
 			GSETCODE(&(ctx.warning), 400, "Bad request : no body");
@@ -1329,13 +529,13 @@ handler_rm_broken_containers(struct request_context_s *req_ctx)
 
 		for (list = elements; list && list->data; list = list->next) {
 			if (list->data) {
-				
+
 				/* XXX start of critical section*/
 				conscience_lock_broken_elements(conscience,'w');
 				broken_holder_remove_element(conscience->broken_elements, (gchar *) list->data);
 				conscience_unlock_broken_elements(conscience);
 				/* XXX end of critical section*/
-				
+
 				g_free(list->data);
 				list->data = NULL;
 				counter ++;
@@ -1367,7 +567,7 @@ handler_rm_broken_containers(struct request_context_s *req_ctx)
 	return (1);
 
       errorLabel:
-      	ERROR("An error occured : %s", gerror_get_message(ctx.warning));
+	ERROR("An error occured : %s", gerror_get_message(ctx.warning));
 	reply_context_clear(&ctx,FALSE);
 	reply_context_set_message(&ctx, ctx.warning->code, gerror_get_message(ctx.warning));
 	reply_context_reply(&ctx, NULL);
@@ -1437,7 +637,6 @@ errorLabel:
 	return 0;
 }
 
-#ifdef HAVE_LEGACY
 static gint
 handler_push_broken_containers(struct request_context_s *req_ctx)
 {
@@ -1484,7 +683,7 @@ handler_push_broken_containers(struct request_context_s *req_ctx)
 	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
 	reply_context_clear(&ctx, TRUE);
 	return (1);
-	
+
 errorLabel:
 	ERROR("An error occured : %s", gerror_get_message(ctx.warning));
 	reply_context_clear(&ctx,FALSE);
@@ -1494,12 +693,11 @@ errorLabel:
 	reply_context_clear(&ctx, TRUE);
 	return 1;
 }
-#endif
 
 static void
 print_node_info(GNode *node)
 {
-	DEBUG("Node info : name = %s, quota = %"G_GINT64_FORMAT", tot_space = %"G_GINT64_FORMAT, 
+	DEBUG("Node info : name = %s, quota = %"G_GINT64_FORMAT", tot_space = %"G_GINT64_FORMAT,
 		((struct vns_info_s*)node->data)->name, ((struct vns_info_s*)node->data)->quota, ((struct vns_info_s*)node->data)->total_space_used);
 
 }
@@ -1527,7 +725,7 @@ build_writable_vns_list(GNode * tree_root)
 	GSList *result = NULL;
 	GNode *node = tree_root;
 	print_node_info(node);
-	if((((struct vns_info_s*)node->data)->quota == -1) || 
+	if((((struct vns_info_s*)node->data)->quota == -1) ||
 		(((struct vns_info_s*)node->data)->total_space_used < ((struct vns_info_s*)node->data)->quota)) {
 		DEBUG("Node writable, add to list");
 		/* writable, add in list and check its children */
@@ -1569,6 +767,8 @@ update_virtual_namespace_state(gpointer k, gpointer v, gpointer udata)
 	else
 		new_space_used = g_ascii_strtoll((gchar*)((GByteArray*)v)->data, NULL, 10);
 
+	DEBUG("new space used for vns [%s]: %"G_GINT64_FORMAT, (gchar*)k, new_space_used);
+
 	/* search and update matching node */
 	GNode *vns_node = search_vns_in_tree(conscience->virtual_namespace_tree, (gchar*)k);
 	if(!vns_node)
@@ -1579,13 +779,13 @@ update_virtual_namespace_state(gpointer k, gpointer v, gpointer udata)
 		((struct vns_info_s*)vns_node->data)->total_space_used += diff;
 
 	vns_node = vns_node->parent;
-	
+
 	/* add diff to parent total space used */
 	while(vns_node) {
 		((struct vns_info_s*)vns_node->data)->total_space_used += diff;
 		vns_node = vns_node->parent;
 	}
-	
+
 }
 
 static gint
@@ -1647,7 +847,7 @@ handler_push_virtual_namespace_space_used(struct request_context_s *req_ctx)
 	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
 	reply_context_clear(&ctx, TRUE);
 	return (1);
-	
+
 errorLabel:
 	ERROR("An error occured : %s", gerror_get_message(ctx.warning));
 
@@ -1707,15 +907,9 @@ brkget_manage_m1(gpointer udata, struct broken_meta1_s *bm1)
 {
 	struct brkget_s *data = udata;
 
-#ifdef HYPER_VERBOSE
-	TRACE("Writing m1=%p", bm1);
-#endif
 	if (bm1) {
 		gchar *str = broken_holder_write_meta1(bm1);
 		if (str) {
-#ifdef HYPER_VERBOSE
-			TRACE("Broken element: %s", str);
-#endif
 			data->lines = g_slist_prepend(data->lines, str);
 			data->lines_length++;
 		}
@@ -1730,9 +924,6 @@ brkget_manage_content(gpointer udata, struct broken_meta2_s *bm2, struct broken_
 {
 	struct brkget_s *data = udata;
 
-#ifdef HYPER_VERBOSE
-	TRACE("Writing m2=%p bc=%p", bm2, bc);
-#endif
 	if (bm2) {
 		gchar *str;
 		if (bc)
@@ -1740,9 +931,6 @@ brkget_manage_content(gpointer udata, struct broken_meta2_s *bm2, struct broken_
 		else
 			str = broken_holder_write_meta2(bm2);
 		if (str) {
-#ifdef HYPER_VERBOSE
-			TRACE("Broken element: %s", str);
-#endif
 			data->lines = g_slist_prepend(data->lines, str);
 			data->lines_length++;
 		}
@@ -1766,7 +954,7 @@ handler_get_broken_containers(struct request_context_s *req_ctx)
 	rc = broken_holder_run_elements(conscience->broken_elements, 0, (gpointer) & data, brkget_manage_m1, brkget_manage_content);
 	conscience_unlock_broken_elements(conscience);
 	/* XXX end of critical section */
-	
+
 	if (!rc) {
 		WARN("Failed to run all the broken elements");
 		_clean_brkget_accumulator(&data);
@@ -1889,7 +1077,7 @@ static gboolean
 _srvinfo_append(struct srvget_s *sg, struct conscience_srv_s *srv)
 {
 	GByteArray *gba;
-	
+
 	if (sg->full) {
 		gba = _conscience_srv_serialize_full(srv);
 		if (gba) {
@@ -1936,8 +1124,9 @@ _srvget_close_body(struct srvget_s *sg)
 	g_byte_array_append(sg->gba_body, footer, sizeof(footer));
 }
 
+
 static gboolean
-reply_services(struct conscience_srv_s *srv, gpointer u)
+prepare_response_bodies(struct conscience_srv_s *srv, gpointer u)
 {
 	struct srvget_s *sg;
 
@@ -1956,25 +1145,42 @@ reply_services(struct conscience_srv_s *srv, gpointer u)
 
 		_srvget_close_body(sg);
 
-		reply_context_clear(&(sg->reply_ctx), TRUE);
-		reply_context_set_body(&(sg->reply_ctx), sg->gba_body->data,
-				sg->gba_body->len, REPLYCTX_DESTROY_ON_CLEAN|REPLYCTX_COPY);
-		
-		/*then forward the reply*/
-		reply_context_set_message(&(sg->reply_ctx), (srv?206:200),
-				(srv?"Partial content":"OK"));
+		/*
+		 * Previously we used to answer to the client directly.
+		 * But we are under a reader lock, and if the client is slow or
+		 * times out, all other clients will wait for the lock (if there are
+		 * writers, other readers are also blocked).
+		 */
+		sg->response_bodies = g_slist_prepend(sg->response_bodies,
+				metautils_gba_dup(sg->gba_body));
 
-		if (!reply_context_reply(&(sg->reply_ctx), &(sg->reply_ctx.warning))) {
-			sg->an_error_happened = TRUE;
-			return FALSE;
-		}
-
-		/*finally clean what have been replied */
+		/* finally clean what have been replied */
 		sg->total_size += sg->srv_list_size;
 		sg->srv_list_size = 0;
 		_srvget_reset_body(sg);
 	}
 	return TRUE;
+}
+
+static gboolean
+reply_services(struct reply_context_s *reply_ctx, GSList *response_bodies)
+{
+	for (GSList *l = response_bodies; l; l = l->next) {
+		GByteArray *body = l->data;
+		reply_context_clear(reply_ctx, TRUE);
+		reply_context_set_body(reply_ctx, body->data,
+				body->len, REPLYCTX_DESTROY_ON_CLEAN|REPLYCTX_COPY);
+
+		reply_context_set_message(reply_ctx, 206, "Partial content");
+
+		if (!reply_context_reply(reply_ctx, &(reply_ctx->warning))) {
+			return FALSE;
+		}
+	}
+
+	reply_context_clear(reply_ctx, TRUE);
+	reply_context_set_message(reply_ctx, 200, "OK");
+	return BOOL(reply_context_reply(reply_ctx, &(reply_ctx->warning)));
 }
 
 static gint
@@ -1984,37 +1190,44 @@ handler_get_service(struct request_context_s *req_ctx)
 	void *data;
 	gsize data_size;
 	struct srvget_s sg;
+	struct reply_context_s reply_ctx;
 
 	memset(&sg, 0x00, sizeof(sg));
-	init_reply_ctx_with_request(req_ctx, &(sg.reply_ctx));
+	init_reply_ctx_with_request(req_ctx, &reply_ctx);
 	sg.full = (0 < message_get_field(req_ctx->request,"FULL",4, &data, &data_size, NULL));
 
 	/* get the service type's name */
-	if (0 >= message_get_field(req_ctx->request, BUFLEN("TYPENAME"), &data, &data_size, &(sg.reply_ctx.warning))) {
-		GSETCODE(&(sg.reply_ctx.warning), 400, "Bad request : no/invalid TYPENAME field");
+	if (0 >= message_get_field(req_ctx->request, BUFLEN("TYPENAME"), &data, &data_size, &(reply_ctx.warning))) {
+		GSETCODE(&(reply_ctx.warning), 400, "Bad request: no/invalid TYPENAME field");
 	} else {
 		gchar **array_types = buffer_split(data, data_size, ",", 0);
 		g_strlcpy(sg.str_ns, conscience_get_namespace(conscience), sizeof(sg.str_ns));
 
 		/* XXX start of critical section */
-		rc = conscience_run_srvtypes(conscience, &(sg.reply_ctx.warning),
-			SRVTYPE_FLAG_ADDITIONAL_CALL|SRVTYPE_FLAG_LOCK_ENABLE, array_types, reply_services, &sg);
+		rc = conscience_run_srvtypes(conscience, &(reply_ctx.warning),
+				SRVTYPE_FLAG_ADDITIONAL_CALL|SRVTYPE_FLAG_LOCK_ENABLE,
+				array_types, prepare_response_bodies, &sg);
 		/* XXX end of critical section */
 
+		if (rc) {
+			rc = reply_services(&reply_ctx, sg.response_bodies);
+		}
+
+
 		g_strfreev(array_types);
-		rc = 1;
 	}
 
 	if (!rc) {
-		ERROR("An error occured : %s", gerror_get_message(sg.reply_ctx.warning));
-		_reply_ctx_set_error(&(sg.reply_ctx));
-		reply_context_reply(&(sg.reply_ctx),NULL);
+		ERROR("An error occured: %s", gerror_get_message(reply_ctx.warning));
+		_reply_ctx_set_error(&(reply_ctx));
+		reply_context_reply(&(reply_ctx),NULL);
 	}
 
 	if (sg.gba_body)
 		g_byte_array_free(sg.gba_body, TRUE);
-	reply_context_log_access(&(sg.reply_ctx), "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&(sg.reply_ctx), TRUE);
+	g_slist_free_full(sg.response_bodies, metautils_gba_unref);
+	reply_context_log_access(&(reply_ctx), "NS=%s", conscience_get_namespace(conscience));
+	reply_context_clear(&(reply_ctx), TRUE);
 	return rc ? 1 : 0;
 }
 
@@ -2039,13 +1252,17 @@ push_service(struct conscience_s *cs, struct service_info_s *si, gboolean lock_s
 
 
 	if (0 == g_ascii_strcasecmp(NAME_SRVTYPE_META0, si->type)) {
+		/* If we forced a meta0 in config, registering or unlocking is not
+		 * allowed */
+		if (flag_forced_meta0)
+			return;
+
+		/* Set the meta0 in ns_info struct if it was not forced in config */
 		if ( &(cs->ns_info.addr) == NULL ) {
 			g_memmove(&(cs->ns_info.addr), &(si->addr), sizeof(addr_info_t));
 		}
-		//INFO("Not unlocking a "NAME_SRVTYPE_META0" service");
-		//return ;
 	}
-	
+
 	/* XXX start of critical section */
 	srvtype = conscience_get_locked_srvtype(cs, &error_local, si->type, MODE_STRICT, 'w');
 	if (!srvtype) {
@@ -2056,7 +1273,7 @@ push_service(struct conscience_s *cs, struct service_info_s *si, gboolean lock_s
 		return;
 	}
 
-	/*for alerting purposes, we need to store the previous score*/	
+	/*for alerting purposes, we need to store the previous score*/
 	srv = conscience_srvtype_get_srv(srvtype, (struct conscience_srvid_s*)&(si->addr));
 	if (srv) {
 		old_score = srv->score.value;
@@ -2137,7 +1354,7 @@ handler_push_service(struct request_context_s *req_ctx)
 
 	/*check if we must work on the lock*/
 	lock_action = (0 < message_get_field(req_ctx->request,"LOCK",sizeof("LOCK")-1, &data, &data_size, NULL));
-	
+
 	/*Get the body and unpack it as a list of services */
 	if (0 >= message_get_BODY(req_ctx->request, &data, &data_size, &(ctx.warning))) {
 		GSETCODE(&(ctx.warning), 400, "Bad requets : no body");
@@ -2195,7 +1412,7 @@ handler_get_services_types(struct request_context_s *req_ctx)
 	 * it makes a deep copy of the list. We do not perform any blocking
 	 * operation on the list, so we build ourselves a hollow copy and we
 	 * marshal it. */
-	
+
 	/* XXX start of critical section */
 	conscience_lock_srvtypes(conscience,'r');
 	g_hash_table_iter_init(&iterator, conscience->srvtypes);
@@ -2280,17 +1497,13 @@ handler_rm_service(struct request_context_s *req_ctx)
 	init_reply_ctx_with_request(req_ctx, &(ctx));
 	data = NULL;
 	data_size = 0;
-	
+
 	/*Get the body and unpack it as a list of services */
 	if (0 < message_get_field(req_ctx->request,"TYPENAME",sizeof("TYPENAME")-1,&data,&data_size, NULL)) {
 		gchar str_type[LIMIT_LENGTH_SRVTYPE+1];
 		struct conscience_srvtype_s *srvtype;
-		
+
 		g_strlcpy(str_type, data, sizeof(str_type));
-		if (0 == g_ascii_strcasecmp(str_type,NAME_SRVTYPE_META0)) {
-			GSETCODE(&(ctx.warning),451,"srvtype=[%s] is read-only!", str_type);
-			goto errorLabel;
-		}
 
 		/* XXX start of critical section */
 		srvtype = conscience_get_locked_srvtype(conscience, &(ctx.warning), str_type, MODE_STRICT,'w');
@@ -2501,7 +1714,7 @@ handler_event_push(struct request_context_s *req_ctx)
 		GSETERROR(&(ctx.warning),"Request successful but reply failure!");
 		goto reply_error_label;
 	}
-	
+
 	reply_context_log_access(&ctx, "NS=%s|UEID=%s", conscience_get_namespace(conscience), str_ueid);
 	reply_context_clear(&ctx, TRUE);
 	return TRUE;
@@ -2561,7 +1774,7 @@ handler_get_eventhandler_configuration(struct request_context_s *req_ctx)
 
 	init_reply_ctx_with_request(req_ctx, &(ctx));
 
-	/** @todo XXX there is no lock around around the event handler handling 
+	/** @todo XXX there is no lock around around the event handler handling
 	 * because the conscience structure is not changed during the plugin lifecycle,
 	 * it is configured once at the boginning. */
 	gba_config = gridcluster_eventhandler_get_configuration(conscience->event_handler, &(ctx.warning));
@@ -2579,7 +1792,7 @@ handler_get_eventhandler_configuration(struct request_context_s *req_ctx)
 	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
 	reply_context_clear(&ctx,TRUE);
 	return 1;
-	
+
 reply_error_label:
 	reply_context_set_message(&ctx, gerror_get_code(ctx.warning), gerror_get_message(ctx.warning));
 error_label:
@@ -2590,142 +1803,8 @@ error_label:
 	return 0;
 }
 
-#if 0
-static gint
-handler_get_service_configuration(struct request_context_s *req_ctx)
-{
-	struct reply_context_s ctx;
-
-	void *data;
-	gsize data_size;
-
-	init_reply_ctx_with_request(req_ctx, &(ctx));
-	data = NULL;
-	data_size = 0;
-	
-	/*Get the body and unpack it as a list of services */
-	if (0 < message_get_field(req_ctx->request,"TYPENAME",sizeof("TYPENAME")-1,&data,&data_size, NULL)) {
-		GByteArray *gba_config;
-		gchar str_type[LIMIT_LENGTH_SRVTYPE+1];
-		struct conscience_srvtype_s *srvtype;
-
-		g_strlcpy(str_type, data, sizeof(str_type));
-
-		/* XXX start of critical section */
-		srvtype = conscience_get_locked_srvtype(conscience, &(ctx.warning), str_type, MODE_STRICT,'w');
-		if (!srvtype) {
-			GSETCODE(&(ctx.warning),450,"srvtype=[%s] not found", str_type);
-			goto errorLabel;
-		}
-		gba_config = conscience_get_serialized_configuration(srvtype,&(ctx.warning));
-		conscience_release_locked_srvtype(srvtype);
-		/* XXX end ofcritical section */
-
-		if (gba_config)
-			reply_context_set_body(&ctx, gba_config->data, gba_config->len, REPLYCTX_COPY|REPLYCTX_DESTROY_ON_CLEAN);
-		DEBUG("[NS=%s][SRVTYPE=%s] Configuration found", conscience_get_namespace(conscience), srvtype->type_name);
-		reply_context_set_message(&ctx, 200, "OK");
-		reply_context_reply(&ctx, NULL);
-		reply_context_log_access(&ctx, "NS=%s service %s configuration replied", conscience_get_namespace(conscience), str_type);
-	}
-	else {
-		guint reply_count;
-		GSList *list_names, *l;
-		struct conscience_srvtype_s *srvtype;
-
-		reply_count = 0;
-		list_names = conscience_get_srvtype_names(conscience, NULL);
-		for (l=list_names; l ;l=l->next) {
-			GByteArray *gba_type;
-			GByteArray *gba_config;
-
-			/* XXX start of critical section */
-			srvtype = conscience_get_locked_srvtype(conscience, &(ctx.warning), l->data, MODE_STRICT,'w');
-			if (!srvtype) {
-				GSETCODE(&(ctx.warning),450,"srvtype=[%s] not found", l->data);
-				goto errorLabel;
-			}
-			gba_config = conscience_get_serialized_configuration(srvtype,&(ctx.warning));
-			conscience_release_locked_srvtype(srvtype);
-			/* XXX end ofcritical section */
-
-			/* set the body */
-			reply_context_clear(&ctx, TRUE);
-			if (gba_config) {
-				reply_context_set_body(&ctx, gba_config->data, gba_config->len, REPLYCTX_COPY|REPLYCTX_DESTROY_ON_CLEAN);
-				g_byte_array_free(gba_config, TRUE);
-			}
-
-			/* set the message */
-			if (l->next)
-				reply_context_set_message(&ctx, 206, "Partial content");
-			else
-				reply_context_set_message(&ctx, 200, "OK");
-			TRACE("[NS=%s][SRVTYPE=%s] Configuration found", conscience_get_namespace(conscience), srvtype->type_name);
-
-			/* set additional headers */
-			gba_type = g_byte_array_append(g_byte_array_new(), srvtype->type_name, strlen(srvtype->type_name));
-			reply_context_add_header_in_reply(&ctx, "TYPENAME", gba_type);
-			g_byte_array_free(gba_type,TRUE);
-			
-			reply_context_reply(&ctx, NULL);
-			reply_count++;
-		}
-		if (!list_names) {
-			reply_context_clear(&ctx, TRUE);
-			reply_context_set_message(&ctx, 200, "OK");
-			reply_context_reply(&ctx, NULL);
-		}
-		DEBUG("[NS=%s] %d service replied", conscience_get_namespace(conscience), reply_count);
-		reply_context_log_access(&ctx, "NS=%s %d services replied", conscience_get_namespace(conscience), reply_count);
-	}
-
-	reply_context_clear(&ctx, TRUE);
-	return 1;
-
-errorLabel:
-	ERROR("Failed to get the configuration of some services : %s", gerror_get_message(ctx.warning));
-	_reply_ctx_set_error(&ctx);
-	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&ctx, TRUE);
-	return 0;
-}
-#endif
 
 /* ------------------------------------------------------------------------- */
-
-
-#ifdef HAVE_LEGACY
-static inline struct cmd_s *
-module_find_legacy_handler(gchar * n, gsize l)
-{
-	struct cmd_s *c;
-	static struct cmd_s CMD[] = {
-		{NAME_MSGNAME_CS_GETVOL, legacy_handler_get_vol, &(stats.services.get)},
-		{NAME_MSGNAME_CS_GETM0, legacy_handler_get_meta0, &(stats.services.get)},
-		{NAME_MSGNAME_CS_GETM1, legacy_handler_get_meta1, &(stats.services.get)},
-		{NAME_MSGNAME_CS_GETM2, legacy_handler_get_meta2, &(stats.services.get)},
-		{NAME_MSGNAME_CS_PUSH_VOLSTAT, handler_push_volstat, &(stats.services.push_stat)},
-		{NAME_MSGNAME_CS_PUSH_M1STAT, handler_push_m1stat, &(stats.services.push_stat)},
-		{NAME_MSGNAME_CS_PUSH_M2STAT, handler_push_m2stat, &(stats.services.push_stat)},
-		{NAME_MSGNAME_CS_RMVOL, handler_rm_vol, &(stats.services.remove)},
-		{NAME_MSGNAME_CS_RMM1, handler_rm_meta1, &(stats.services.remove)},
-		{NAME_MSGNAME_CS_RMM2, handler_rm_meta2, &(stats.services.remove)},
-		{NAME_MSGNAME_CS_PUSH_VOLSCORE, handler_push_volscore, &(stats.services.push_score)},
-		{NAME_MSGNAME_CS_PUSH_M2SCORE, handler_push_m2score, &(stats.services.push_score)},
-		{NAME_MSGNAME_CS_PUSH_BROKEN_CONT, handler_push_broken_containers, &(stats.broken.push)},
-		{NULL, NULL, NULL}
-	};
-
-	for (c = CMD; c && c->c; c++) {
-		if (0 == g_ascii_strncasecmp(c->c, n, l))
-			return c;
-	}
-
-	return NULL;
-}
-#endif
 
 static inline struct cmd_s *
 module_find_handler(gchar * n, gsize l)
@@ -2738,6 +1817,7 @@ module_find_handler(gchar * n, gsize l)
 		{NAME_MSGNAME_CS_GET_SRVNAMES, handler_get_services_types, &(stats.services.get)},
 		{NAME_MSGNAME_CS_PUSH_SRV, handler_push_service, &(stats.services.push_stat)},
 		{NAME_MSGNAME_CS_RM_SRV, handler_rm_service, &(stats.services.remove)},
+		{NAME_MSGNAME_CS_PUSH_BROKEN_CONT, handler_push_broken_containers, &(stats.broken.push)},
 		{NAME_MSGNAME_CS_GET_BROKEN_CONT, handler_get_broken_containers, &(stats.broken.get)},
 		{NAME_MSGNAME_CS_RM_BROKEN_CONT, handler_rm_broken_containers, &(stats.broken.remove)},
 		{NAME_MSGNAME_CS_FIX_BROKEN_CONT, handler_fix_broken_containers, &(stats.broken.fix)},
@@ -2779,10 +1859,6 @@ plugin_matcher(MESSAGE m, void *param, GError ** err)
 	}
 
 	c = module_find_handler(name, nameLen);
-#ifdef HAVE_LEGACY
-	if (!c)
-		c = module_find_legacy_handler(name, nameLen);
-#endif
 	return (c ? 1 : 0);
 }
 
@@ -2807,10 +1883,6 @@ plugin_handler(MESSAGE m, gint cnx, void *param, GError ** err)
 	}
 
 	c = module_find_handler(name, nameLen);
-#ifdef HAVE_LEGACY
-	if (!c)
-		c = module_find_legacy_handler(name, nameLen);
-#endif
 	if (!c) {
 		GSETERROR(err, "This message does not concern this plugin.");
 		return -1;
@@ -2968,8 +2040,32 @@ g_free_node_data(GNode *node, gpointer udata)
 static void
 destroy_vns_tree(GNode *tree_root)
 {
-	g_node_traverse (tree_root, G_IN_ORDER, G_TRAVERSE_ALL, -1, g_free_node_data, NULL); 
+	g_node_traverse (tree_root, G_IN_ORDER, G_TRAVERSE_ALL, -1, g_free_node_data, NULL);
 	g_node_destroy(tree_root);
+}
+
+static gint64
+_get_vns_quota(gchar *vns_name)
+{
+	gchar key[LIMIT_LENGTH_NSNAME + 6];
+
+	bzero(key, sizeof(key));
+	g_snprintf(key, sizeof(key), "quota_%s", vns_name);
+
+	GByteArray *quota_gba = g_hash_table_lookup(conscience->ns_info.options, key);
+	if(quota_gba)
+		return g_ascii_strtoll((gchar*)quota_gba->data, NULL, 10);
+
+	return -1;
+}
+
+static struct vns_info_s*
+_create_vns_info(gchar *vns_name)
+{
+	struct vns_info_s* new_vns_info = g_malloc0(sizeof(struct vns_info_s));
+	new_vns_info->name = vns_name;
+	new_vns_info->quota = _get_vns_quota(vns_name);
+	return new_vns_info;
 }
 
 static GNode*
@@ -3015,21 +2111,9 @@ init_vns_in_tree(GNode *tree_root, gchar* vns_name)
 			if(node->children)
 				node = node->children;
 			else {
-				vns_info = g_malloc0(sizeof(struct vns_info_s));
-				vns_info->name = vns_name;
-				vns_info->space_used = 0;
-				vns_info->total_space_used = 0;
-				gchar key[LIMIT_LENGTH_NSNAME + 10];
-				bzero(key, sizeof(key));
-				g_snprintf(key, sizeof(key), "quota_%s", vns_name);
-				GByteArray *quota_gba = g_hash_table_lookup(conscience->ns_info.options, key);
-
-				if(quota_gba)
-					vns_info->quota = g_ascii_strtoll((gchar*)quota_gba->data, NULL, 10);
-				else
-					vns_info->quota = -1;
+				vns_info = _create_vns_info(vns_name);
 				new_node = g_node_new(vns_info);
-				g_node_insert(node, -1, new_node); 
+				g_node_insert(node, -1, new_node);
 				break;
 			}
 		} else {
@@ -3037,15 +2121,7 @@ init_vns_in_tree(GNode *tree_root, gchar* vns_name)
 			if (g_str_has_prefix(((struct vns_info_s*)node->data)->name, vns_name)) {
 				/* current node is a child of this vns, insert before, and check if we need to downgrade its next sibling */
 				if(node->parent) {
-					vns_info = g_malloc0(sizeof(struct vns_info_s));
-					vns_info->name = vns_name;
-					vns_info->space_used = 0;
-					vns_info->total_space_used = 0;
-					GByteArray *quota_gba = g_hash_table_lookup(conscience->ns_info.options, vns_name);
-					if(quota_gba)
-						vns_info->quota = g_ascii_strtoll((gchar*)quota_gba->data, NULL, 10);
-					else
-						vns_info->quota = -1;
+					vns_info = _create_vns_info(vns_name);
 					new_node = g_node_new(vns_info);
 					new_node = g_node_insert_before(node->parent, node, new_node);
 					check_new_node_next_slibing(new_node);
@@ -3060,15 +2136,7 @@ init_vns_in_tree(GNode *tree_root, gchar* vns_name)
 					node = node->next;
 				else {
 					if(node->parent) {
-						vns_info = g_malloc0(sizeof(struct vns_info_s));
-						vns_info->name = vns_name;
-						vns_info->space_used = 0;
-						vns_info->total_space_used = 0;
-						GByteArray *quota_gba = g_hash_table_lookup(conscience->ns_info.options, vns_name);
-						if(quota_gba)
-							vns_info->quota = g_ascii_strtoll((gchar*)quota_gba->data, NULL, 10);
-						else
-							vns_info->quota = -1;
+						vns_info = _create_vns_info(vns_name);
 						new_node = g_node_new(vns_info);
 						g_node_insert(node->parent, -1, new_node);
 						break;
@@ -3087,8 +2155,8 @@ init_vns_in_tree(GNode *tree_root, gchar* vns_name)
 static gboolean
 reset_total_space_used(GNode *node, gpointer udata)
 {
-	(void) udata;  
-	DEBUG("Reset total_space_used fo vns %s",((struct vns_info_s*)node->data)->name);	
+	(void) udata;
+	DEBUG("Reset total_space_used fo vns %s",((struct vns_info_s*)node->data)->name);
 	((struct vns_info_s*)node->data)->total_space_used = 0;
 	return FALSE;
 }
@@ -3096,7 +2164,7 @@ reset_total_space_used(GNode *node, gpointer udata)
 static gboolean
 notify_total_space_used(GNode *node, gpointer udata)
 {
-	(void) udata;	
+	(void) udata;
 	GNode *n = node;
 	if(n->parent) {
 		DEBUG("Updating vns %s space used, new total_space_used = %"G_GINT64_FORMAT,
@@ -3142,7 +2210,7 @@ module_reload_vns(struct conscience_s *cs, GError ** err)
 
 	/*reload vns list from conf */
 	vns_gba = g_hash_table_lookup(cs->ns_info.options, KEY_VNS_LIST);
-	if(vns_gba) { 
+	if(vns_gba) {
 		/* vns gba split */
 		gchar **buf = NULL;
 		buf = g_strsplit((gchar*)vns_gba->data, ",", 0);
@@ -3190,7 +2258,7 @@ module_reload_vns(struct conscience_s *cs, GError ** err)
 	cs->virtual_namespace_tree = new_tree_root;
 
 	INFO("Virtual namespace n-tree rebuild");
-	
+
 	writable_list = build_writable_vns_list(cs->virtual_namespace_tree);
 
 	INFO("Conscience writable namespace list: [%d] elements", g_slist_length(writable_list));
@@ -3253,7 +2321,7 @@ module_init_vns(struct conscience_s *cs, GError ** err)
 	}
 
 	INFO("building writable namespace list...");
-	
+
 	writable_vns = build_writable_vns_list(cs->virtual_namespace_tree);
 
 	INFO("Conscience writable namespace list: [%d] elements", g_slist_length(writable_vns));
@@ -3264,7 +2332,7 @@ module_init_vns(struct conscience_s *cs, GError ** err)
 	/* free the tmp list */
 	g_slist_foreach(writable_vns, g_free1, NULL);
 	g_slist_free(writable_vns);
-	
+
 	return TRUE;
 }
 
@@ -3408,6 +2476,14 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 		e = NULL;
 	}
 
+	cs->ns_info.storage_class = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
+	e = fill_hashtable_with_group(cs->ns_info.storage_class, stg_conf_file, NAME_GROUPNAME_STORAGE_CLASS);
+	if( NULL != e) {
+		WARN("Storage class rules not correctly loaded from file [%s] : %s", filepath, e->message);
+		g_clear_error(&e);
+		e = NULL;
+	}
+
 	INFO("[NS=%s] storage conf loaded successfully from file [%s]",
 			cs->ns_info.name, filepath);
 
@@ -3431,7 +2507,7 @@ module_init_srvtype_from_cfg(struct conscience_s *cs, GHashTable * params, GErro
 
 	g_hash_table_iter_init(&params_iterator, params);
 	while (g_hash_table_iter_next(&params_iterator, &k, &v)) {
-		
+
 		if (match_info) {
 			g_match_info_free(match_info);
 			match_info = NULL;
@@ -3472,10 +2548,15 @@ module_init_meta0(struct conscience_s *cs, GHashTable * params, GError ** err)
 	struct conscience_srvid_s srvid;
 	struct conscience_srv_s *srv;
 
-	if (!(str = g_hash_table_lookup(params, KEY_META0))) {
-		GSETERROR(err, "Key '%s' is missing (format 'ip:port')", KEY_META0);
-		return FALSE;
-	}
+	/* If we find a meta0 in config, then it is forced and no other meta0 is
+	 * allowed to register. Otherwise the classic register method is used for
+	 * meta0 as any other service.
+	 */
+	if (!(str = g_hash_table_lookup(params, KEY_META0)))
+		return TRUE;
+	else
+		flag_forced_meta0 = TRUE;
+
 	if (!l4_address_init_with_url(&(srvid.addr),str,err)) {
 		GSETERROR(err,"Invalid META0 address");
 		return FALSE;
@@ -3600,7 +2681,7 @@ plugin_init(GHashTable * params, GError ** err)
 	}
 
 	/* storage conf initialization */
-	*err = module_init_storage_conf(conscience, namespace_storage_policy(&conscience->ns_info),
+	*err = module_init_storage_conf(conscience, namespace_storage_policy(&conscience->ns_info, conscience->ns_info.name),
 			g_hash_table_lookup(params, KEY_STG_CONF));
 	if( NULL != *err ) {
 		g_prefix_error(err, "[NS=%s] storage conf init failed", conscience->ns_info.name);
@@ -3618,12 +2699,10 @@ plugin_init(GHashTable * params, GError ** err)
 		goto error;
 	}
 
-	/*
 	if (!module_init_meta0(conscience, params, err)) {
 		GSETERROR(err, "[NS=%s] Failed to register a locked meta0 service", conscience->ns_info.name);
 		goto error;
 	}
-	*/
 
 	if (!module_init_srvtype_from_cfg(conscience, params, err)) {
 		GSETERROR(err, "Configuration error");
@@ -3649,14 +2728,6 @@ plugin_init(GHashTable * params, GError ** err)
 		GSETERROR(err, "Failed to register the conscience's dump callback");
 		goto error;
 	}
-#ifdef HYPER_VERBOSE
-	if (log4c_category_is_debug_enabled(log4c_category_get(DOMAIN_PERIODIC))) {
-		if (!srvtimer_register_regular("conscience.dump", timer_dump_conscience, NULL, conscience, 10LL)) {
-			GSETERROR(err, "Failed to register the conscience's dump callback");
-			goto error;
-		}
-	}
-#endif
 
 	if (!srvtimer_register_regular("conscience.stats", save_counters, NULL, NULL, 5LL)) {
 		GSETERROR(err, "Failed to register the server's statistics callback");
@@ -3697,7 +2768,7 @@ plugin_reload(GHashTable * params, GError ** err)
 	}
 	conscience->ns_info.chunk_size = g_ascii_strtoll(str, NULL, 10);
 	NOTICE("[NS=%s] Chunk size set to %"G_GINT64_FORMAT, conscience->ns_info.name, conscience->ns_info.chunk_size);
-	
+
 	g_static_rec_mutex_lock(&conscience_nsinfo_mutex);
 
 	/* OPTIONS reload */
@@ -3713,7 +2784,8 @@ plugin_reload(GHashTable * params, GError ** err)
 	g_hash_table_destroy(conscience->ns_info.storage_policy);
 	g_hash_table_destroy(conscience->ns_info.data_security);
 	g_hash_table_destroy(conscience->ns_info.data_treatments);
-	*err = module_init_storage_conf(conscience, namespace_storage_policy(&conscience->ns_info),
+	g_hash_table_destroy(conscience->ns_info.storage_class);
+	*err = module_init_storage_conf(conscience, namespace_storage_policy(&conscience->ns_info, conscience->ns_info.name),
 			g_hash_table_lookup(params, KEY_STG_CONF));
 	if( NULL != *err ) {
 		g_prefix_error(err, "[NS=%s] storage conf init failed", conscience->ns_info.name);

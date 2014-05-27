@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  * @file metatypes.h
  * The global types definition
@@ -53,6 +36,9 @@
 /** The maximum length of a service type name */
 #define LIMIT_LENGTH_SRVTYPE 32
 
+/** The maximum length of a service storage class */
+#define LIMIT_LENGTH_STGCLASS 32
+
 /** The maximum length of a location name */
 #define LIMIT_LENGTH_LOCNAME 64
 
@@ -61,6 +47,24 @@
 
 /** The maximum length of a container event ref */
 #define LIMIT_LENGTH_REF 256
+
+/** The maximum length of a URL query string (including '?') */
+#define LIMIT_LENGTH_HCURL_OPTIONS 512
+
+/** The maximum length of a URL
+ * (namespace, container, content, options, separators) */
+#define LIMIT_LENGTH_HCURL (LIMIT_LENGTH_NSNAME +\
+	LIMIT_LENGTH_CONTAINERNAME + LIMIT_LENGTH_CONTENTPATH +\
+	LIMIT_LENGTH_HCURL_OPTIONS + 2)
+
+/** The maximum length for values of 'admin' table */
+#define LIMIT_LENGTH_ADMIN_VALUE 1024
+
+#define TYPE_TO_STRLEN(T)  ((sizeof(T)*2)+1)
+#define STRLEN_CHUNKID     TYPE_TO_STRLEN(hash_sha256_t)
+#define STRLEN_CONTAINERID TYPE_TO_STRLEN(container_id_t)
+#define STRLEN_CHUNKHASH   TYPE_TO_STRLEN(hash_md5_t)
+#define STRLEN_ADDRINFO    sizeof("[XXXX:XXXX:XXXX:XXXX:XXXX:XXXX]:SSSSS")
 
 /** Type to store a file size */
 typedef gint64 file_size_t;
@@ -180,7 +184,7 @@ typedef struct namespace_info_s
 	addr_info_t addr;                /**< The network address of the conscience */
 	GHashTable* options;             /**< A hash of namespace options (gchar*) -> (GByteArray*) */
 	struct ns_versions_s {
-		gint64 srvcfg;           
+		gint64 srvcfg;
 		gint64 evtcfg;
 		gint64 nscfg;
 		gint64 snapshot;         /**< Version counter for the grid snapshot*/
@@ -189,6 +193,7 @@ typedef struct namespace_info_s
 	GHashTable* storage_policy;	 /**< Storage policies definitions name = STG_CLASS:DATA_SEC:DATA_THREAT */
 	GHashTable* data_security;	 /**< Data security definitions name = TYPE:OTHER_INFO */
 	GHashTable* data_treatments;	 /**< Data treatments definitions name = TYPE:OTHER_INFO */
+	GHashTable* storage_class;	 /**< Storage class definitions name = fallback_1:[...]:fallback_N */
 	GSList *writable_vns;		 /**< List of not full virtual namespaces */
 } namespace_info_t;
 
@@ -210,65 +215,6 @@ typedef struct meta0_info_s
 	guint8 *prefixes;	/**< The list of container id prefixes in the META0 */
 	gsize prefixes_size;	/**< The size of the prefixes list */
 } meta0_info_t;
-
-/**
- * Type to store a META1 info
- */
-typedef struct meta1_info_s
-{
-	addr_info_t addr;	/**< The META1 network address */
-	score_t score;		/**< The META1 score */
-} meta1_info_t;
-
-/**
- * Type to store a META2 info
- */
-typedef struct meta2_info_s
-{
-	addr_info_t addr;	/**< The META2 network address */
-	score_t score;		/**< The META2 score */
-} meta2_info_t;
-
-/**
- * Type to store a RAWX info
- */
-typedef struct volume_info_s
-{
-	gchar name[LIMIT_LENGTH_VOLUMENAME];	/**< The RAWX volume name */
-	addr_info_t addr;			/**< The RAWX network address */
-	score_t score;				/**< The RAWX score */
-} volume_info_t;
-
-/**
- * Type to store RAWX statistics
- */
-typedef struct volume_stat_s
-{
-	volume_info_t info;	/**< The RAWX info */
-	gint8 cpu_idle;		/**< The cpu idle percent 0..100 */
-	gint8 io_idle;		/**< The io idle percent 0..100 */
-	gint8 free_chunk;	/**< The free chunk percent 0..100 */
-} volume_stat_t;
-
-/**
- * Type to store META1 statistics
- */
-typedef struct meta1_stat_s
-{
-	meta1_info_t info;	/**< The META1 info */
-	gint8 cpu_idle;		/**< The cpu idle percent 0..100 */
-	gint8 req_idle;		/**< The request idle percent 0..100 */
-} meta1_stat_t;
-
-/**
- * Type to store META2 statistics
- */
-typedef struct meta2_stat_s
-{
-	meta2_info_t info;	/**< The META2 info */
-	gint8 cpu_idle;		/**< The cpu idle percent 0..100 */
-	gint8 req_idle;		/**< The request idle percent 0..100 */
-} meta2_stat_t;
 
 /**
  * Type to store a container id prefix in META0
@@ -304,7 +250,7 @@ typedef struct service_tag_s
 	char name[LIMIT_LENGTH_TAGNAME];	/**< The tag name */
 
 	/**
- 	 * The list of tag value types
+	 * The list of tag value types
 	 */
 	enum service_tag_value_type_e
 	{
@@ -373,6 +319,7 @@ typedef struct meta2_raw_content_s
         GSList *raw_chunks;          /**< The list of chunks */
 	content_version_t version;   /**< The content version */
 	gboolean deleted;	     /**< True if the content is flagged deleted */
+	gchar *storage_policy;	/**< The storage policy */
 } meta2_raw_content_t;
 
 /**
@@ -411,6 +358,10 @@ typedef struct content_textinfo_s
         gchar *chunk_nb;        /**< The number of chunks */
         gchar *metadata;        /**< The user metadata */
         gchar *system_metadata; /**< The system metadata */
+	gchar *storage_policy;	/**< The storage policy */
+	gchar *rawx_list; /**< The rawx list (introduced by the rainx service) */
+	gchar *spare_rawx_list; /**< The rawx list for reconstruction (introduced by the rainx service) */
+	gchar *version; /**< The content version */
 } content_textinfo_t;
 
 /**
@@ -437,7 +388,7 @@ typedef struct meta2_property_s
 } meta2_property_t;
 
 /**
- * Represent the content-wide information 
+ * Represent the content-wide information
  */
 typedef struct meta2_raw_content_header_s
 {
@@ -472,7 +423,7 @@ typedef struct addr_rule_s
 	gchar* network_addr; /**< IPv4 in decimal dotted notation */
 	gchar* network_mask; /**< IPv4 in decimal dotted notation */
 	gboolean authorize;  /**< Allow (TRUE) or deny (FALSE) */
-	
+
 } addr_rule_t;
 
 /** @} */

@@ -1,30 +1,15 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef CONTENT_CHECK_H
 #define CONTENT_CHECK_H
 
-#include <metautils.h>
-#include <grid_client.h>
-#include <glib.h>
 #include <event.h>
 #include <evdns.h>
 #include <evhttp.h>
 #include <evutil.h>
+
+#include <metautils/lib/metautils.h>
+#include <grid_client.h>
+
+#include "check.h"
 
 enum cnx_status_e {
         CNX_NONE = 0,
@@ -72,23 +57,11 @@ struct dup_chunk_info_s {
 	GSList *used_loc;
 };
 
-struct content_check_ctx_s {
-	gchar *ns;
-	gs_grid_storage_t *hc;
-	struct gs_container_location_s *loc;
-	struct metacnx_ctx_s *m2_cnx;
-	struct meta2_raw_content_s *content;
-	struct storage_policy_s *sp;
-	gboolean check_only;
-	gboolean modified;
-	gboolean fail;
-};
-
-gboolean check_content_storage_policy(const gchar *namespace, const container_id_t container_id, const gchar *content_name,
-			gboolean check_only, GError **error);
+gboolean check_content_storage_policy(const gchar *namespace, const gchar *container_id, const gchar *content_name,
+		gboolean check_only, GError **error);
 
 /* dup_check_ctx structure utils */
-void content_check_ctx_clear(struct content_check_ctx_s *ctx);
+void content_check_ctx_clear(struct meta2_ctx_s *ctx);
 
 /* chunk_transfer structure utils */
 
@@ -160,7 +133,6 @@ void dup_chunk_info_clear(struct dup_chunk_info_s *dup_chunk);
 
 guint dup_chunk_info_get_copy_count(struct dup_chunk_info_s *dup_chunk);
 
-
 /***********/
 
 void srv_info_debug_display(gpointer data, gpointer udata);
@@ -176,5 +148,23 @@ GError* download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_pol
 GError* delete_chunk(const meta2_raw_chunk_t *rc);
 
 gboolean is_rawx_reachable(const service_info_t *rawx);
+
+/* V2 */
+
+/*
+ * V2 integrity check function. This function works only with META2V2
+ */
+GError *check_content(struct hc_url_s *url, gboolean check_only);
+
+
+/**
+ * Check if struct content_textinfo_s given as argument id filled
+ *
+ * @param content the struct content_textinfo_s to check
+ * @param error
+ *
+ * @return TRUE or FALSE if a field is missing
+ */
+gboolean check_content_info(struct content_textinfo_s *content, GError **p_error);
 
 #endif

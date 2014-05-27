@@ -1,29 +1,10 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "grid.client.resolv.metacd"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "grid.client.resolv.metacd"
 #endif
 
 #include "./gs_internals.h"
-#include "./meta_resolver_metacd.h"
-#include "./metacd_remote.h"
 
-int resolver_metacd_is_up (metacd_t *m)
+int resolver_metacd_is_up (struct metacd_s *m)
 {
 	char *path;
 	struct stat stats;
@@ -54,7 +35,7 @@ int resolver_metacd_is_up (metacd_t *m)
 }
 
 
-void resolver_metacd_decache (metacd_t *m, const container_id_t cID)
+void resolver_metacd_decache (struct metacd_s *m, const container_id_t cID)
 {
 	GError *err=NULL;
 	struct metacd_connection_info_s mi;
@@ -68,14 +49,14 @@ void resolver_metacd_decache (metacd_t *m, const container_id_t cID)
 	memcpy(&(mi.metacd), m, sizeof(struct metacd_s));
 
 	if (!metacd_remote_decache(&mi,cID,&err)) {
-		WARN("cannot decache the container reference in the METACD (through %s)", m->path);
+		DEBUG("cannot decache the container reference in the METACD (through %s)", m->path);
 	}
 
 	if (err) g_clear_error(&err);
 }
 
 
-void resolver_metacd_decache_all (metacd_t *m)
+void resolver_metacd_decache_all (struct metacd_s *m)
 {
 	GError *err=NULL;
 	struct metacd_connection_info_s mi;
@@ -89,14 +70,14 @@ void resolver_metacd_decache_all (metacd_t *m)
 	memcpy(&(mi.metacd), m, sizeof(struct metacd_s));
 
 	if (!metacd_remote_decache_all(&mi,&err)) {
-		WARN("cannot decache the container reference in the METACD (through %s)", m->path);
+		DEBUG("cannot decache the container reference in the METACD (through %s)", m->path);
 	}
 
 	if (err) g_clear_error(&err);
 }
 
 
-GSList* resolver_metacd_get_meta2 (metacd_t *m, const container_id_t cID,
+GSList* resolver_metacd_get_meta2 (struct metacd_s *m, const container_id_t cID,
 	GError **err)
 {
 	GSList *m2L=NULL;
@@ -108,7 +89,7 @@ GSList* resolver_metacd_get_meta2 (metacd_t *m, const container_id_t cID,
 	}
 
 	memset(&mi,0x00,sizeof(mi));
-	memcpy(&(mi.metacd), m, sizeof(metacd_t));
+	memcpy(&(mi.metacd), m, sizeof(struct metacd_s));
 
 	m2L = metacd_remote_get_meta2(&mi, cID, err);
 	if (!m2L) {
@@ -121,14 +102,14 @@ GSList* resolver_metacd_get_meta2 (metacd_t *m, const container_id_t cID,
 }
 
 addr_info_t*
-resolver_metacd_get_meta0 (metacd_t *m, GError **err)
+resolver_metacd_get_meta0 (struct metacd_s *m, GError **err)
 {
 	addr_info_t *m0Addr=NULL;
 	GSList *m0L=NULL;
 	struct metacd_connection_info_s mi;
 	
 	memset(&mi,0x00,sizeof(mi));
-	memcpy(&(mi.metacd), m, sizeof(metacd_t));
+	memcpy(&(mi.metacd), m, sizeof(struct metacd_s));
 
 	m0L = metacd_remote_get_meta0(&mi, err);
 	if (!m0L) {
@@ -156,17 +137,17 @@ resolver_metacd_get_meta0 (metacd_t *m, GError **err)
 }
 
 
-addr_info_t* resolver_metacd_get_meta1 (metacd_t *m, const container_id_t cID,
-	int ro, GSList *exclude, GError **err)
+addr_info_t* resolver_metacd_get_meta1 (struct metacd_s *m, const container_id_t cID,
+	int ro, GSList *exclude, gboolean *p_ref_exists, GError **err)
 {
 	addr_info_t *m1Addr=NULL;
 	GSList *m1L=NULL;
 	struct metacd_connection_info_s mi;
 	
 	memset(&mi,0x00,sizeof(mi));
-	memcpy(&(mi.metacd), m, sizeof(metacd_t));
+	memcpy(&(mi.metacd), m, sizeof(struct metacd_s));
 
-	m1L = metacd_remote_get_meta1(&mi, cID, ro, exclude, err);
+	m1L = metacd_remote_get_meta1(&mi, cID, ro, p_ref_exists, exclude, err);
 	if (!m1L) {
 		GSETERROR(err,"cannot resolve META1 with METACD (invalid result)");
 		return NULL;
@@ -190,12 +171,12 @@ addr_info_t* resolver_metacd_get_meta1 (metacd_t *m, const container_id_t cID,
 	return m1Addr;
 }
 
-int resolver_metacd_set_meta1_master(metacd_t *m, const container_id_t cid, const char *m1, GError **e)
+int resolver_metacd_set_meta1_master(struct metacd_s *m, const container_id_t cid, const char *m1, GError **e)
 {
 	struct metacd_connection_info_s mi;
 	
 	memset(&mi,0x00,sizeof(mi));
-	memcpy(&(mi.metacd), m, sizeof(metacd_t));
+	memcpy(&(mi.metacd), m, sizeof(struct metacd_s));
 
 	if(!metacd_remote_set_meta1_master(&mi, cid, m1, e))
 		return 0;
@@ -203,13 +184,13 @@ int resolver_metacd_set_meta1_master(metacd_t *m, const container_id_t cid, cons
 }
 
 gboolean
-resolver_metacd_put_content (metacd_t *m, struct meta2_raw_content_s *raw_content, GError **err)
+resolver_metacd_put_content (struct metacd_s *m, struct meta2_raw_content_s *raw_content, GError **err)
 {
 	gboolean rc;
 	struct metacd_connection_info_s mi;
 	
 	memset(&mi,0x00,sizeof(mi));
-	memcpy(&(mi.metacd), m, sizeof(metacd_t));
+	memcpy(&(mi.metacd), m, sizeof(struct metacd_s));
 
 	rc = metacd_remote_save_content(&mi, raw_content, err);
 	if (!rc) {
@@ -221,13 +202,13 @@ resolver_metacd_put_content (metacd_t *m, struct meta2_raw_content_s *raw_conten
 }
 
 struct meta2_raw_content_s*
-resolver_metacd_get_content (metacd_t *m, const container_id_t cID, const gchar *content, GError **err)
+resolver_metacd_get_content (struct metacd_s *m, const container_id_t cID, const gchar *content, GError **err)
 {
 	struct meta2_raw_content_s *raw_content;
 	struct metacd_connection_info_s mi;
 	
 	memset(&mi,0x00,sizeof(mi));
-	memcpy(&(mi.metacd), m, sizeof(metacd_t));
+	memcpy(&(mi.metacd), m, sizeof(struct metacd_s));
 
 	raw_content = metacd_remote_get_content(&mi, cID, content, err);
 	if (!raw_content) {
@@ -239,13 +220,13 @@ resolver_metacd_get_content (metacd_t *m, const container_id_t cID, const gchar 
 }
 
 gboolean
-resolver_metacd_del_content(metacd_t *m, const container_id_t cID, const gchar *path, GError **err)
+resolver_metacd_del_content(struct metacd_s *m, const container_id_t cID, const gchar *path, GError **err)
 {
 	gboolean result = FALSE;
 	struct metacd_connection_info_s mi;
 
 	memset(&mi,0x00,sizeof(mi));
-	memcpy(&(mi.metacd), m, sizeof(metacd_t));
+	memcpy(&(mi.metacd), m, sizeof(struct metacd_s));
 
 	result = metacd_remote_forget_content(&mi, cID, path, err);
 	if (!result) {
@@ -257,17 +238,17 @@ resolver_metacd_del_content(metacd_t *m, const container_id_t cID, const gchar *
 }
 
 void
-resolver_metacd_free (metacd_t *m)
+resolver_metacd_free (struct metacd_s *m)
 {
 	if (m)
 		g_free(m);
 }
 
 
-metacd_t* resolver_metacd_create (const char * const config, GError **err)
+struct metacd_s* resolver_metacd_create (const char * const config, GError **err)
 {
 	char *metacdSock=NULL;
-	metacd_t *m;
+	struct metacd_s *m;
 
 	if (!config || !*config)
 	{
@@ -277,7 +258,7 @@ metacd_t* resolver_metacd_create (const char * const config, GError **err)
 
 	DEBUG("Creating a METAcd resolver for %s", config);
 	
-	m = g_try_malloc0(sizeof(metacd_t));
+	m = g_try_malloc0(sizeof(struct metacd_s));
 	if (!m) {
 		GSETERROR(err,"Memory allocation failure");
 		return NULL;

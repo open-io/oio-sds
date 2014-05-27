@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  * @file meta0_remote.h
  */
@@ -29,7 +12,7 @@
 
 #include <glib.h>
 
-#include <metatypes.h>
+#include <metautils/lib/metatypes.h>
 
 /** The request name when requesting the whole meta0 cache */
 #define NAME_MSGNAME_M0_GETALL "REQ_M0_GETALL"
@@ -127,11 +110,12 @@ gint meta0_remote_fill(addr_info_t *m0a, gint ms, gchar **urls,
  * @param m0a
  * @param ms
  * @param nbreplicas
+ * @param nodist true if the distance between every affected meta1 is not mandatory
  * @param err
  * @return
  */
 gint meta0_remote_fill_v2(addr_info_t *m0a, gint ms,
-		guint nbreplicas, GError **err);
+		guint nbreplicas, gboolean nodist, GError **err);
 
 /**
  * @param m0a

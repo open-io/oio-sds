@@ -1,18 +1,3 @@
-# Copyright (C) 2013 AtoS Worldline
-# 
-# This program is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Affero General Public License as
-# published by the Free Software Foundation, either version 3 of the
-# License, or (at your option) any later version.
-# 
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Affero General Public License for more details.
-# 
-# You should have received a copy of the GNU Affero General Public License
-# along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
 """Module dedicated to chunk-crawler"""
 
 # -------------------------------------------------------------------
@@ -70,6 +55,43 @@ class CrawlerChunkDataPackS(ctypes.Structure):
 			("mtime", ctypes.c_long),
 			("chunk_path", ctypes.c_char_p)]
 
+
+class Sqlx:
+	"""Class Sqlx for sqlx-crawler datas
+Defined members:
+	namespace		: the namespace
+	path            : path of the sqlx sqlite db file
+	seq             : sequence of container
+	cid             : container_id (hexa --> ascii)
+	type            : type of bdd (ex: "sqlx.test")
+	sqlx_url		: url of the sqlx service
+	path			: path of the sqlx sqlite db file
+	"""
+	def __init__(self, raw_data):
+		"""Initialize class Sqlx for sqlx-crawler datas"""
+		self.namespace = raw_data['ns_name']
+		self.path = raw_data['sqlx_path']
+		self.seq = raw_data['sqlx_seq']
+		self.cid = raw_data['sqlx_cid']
+		self.type = raw_data['sqlx_type']
+		self.sqlx_url = raw_data['sqlx_url']
+
+	def migrate(self):
+		print "Migrating sqlx database " + self.path + "|" + self.cid + "|" + self.type
+		elttype=self.type.split(".")
+		len_elttype=len(elttype)
+		if (len_elttype>0):
+			if (elttype[len_elttype-1]=="migrated"):
+				raise Exception("sqlx basefile %s not valid bdd to migrate", self.path)
+				
+		if (mod_mover.move_sqlx(self.namespace, self.sqlx_url, self.path, self.cid, self.type)):
+			os.rename(self.path, self.path + ".migrated")
+			print "sqlx basefile ", self.path, " migrated and renamed"
+
+
+
+
+
 class Container:
 	"""Class Container for meta2-crawler datas
 Defined members:
@@ -85,8 +107,11 @@ Defined members:
 		self.meta2_url = raw_data['meta2_url']
 		self.id = raw_data['container_id']
 		self.path = raw_data['container_path']
-		self.conn = sqlite3.connect(self.path)
-			
+		try:
+			self.conn = sqlite3.connect(self.path)
+		except BaseException:
+			print "Failed to open base at %s" % self.path
+			raise
 
 	def sqlite_pragma_check(self):
 		cursor = self.conn.cursor()
