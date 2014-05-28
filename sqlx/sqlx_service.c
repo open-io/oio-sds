@@ -354,7 +354,8 @@ sqlx_service_action(void)
 	sqlx_repository_configure_maxbases(SRV.repository, SRV.max_bases);
 
 	election_manager_set_clients(SRV.election_manager, SRV.clients_pool);
-	election_manager_set_sync(SRV.election_manager, SRV.sync);
+	if (SRV.sync)
+		election_manager_set_sync(SRV.election_manager, SRV.sync);
 	sqlx_repository_set_elections(SRV.repository, SRV.election_manager);
 
 	grid_task_queue_fire(SRV.gtq_reload);
@@ -562,7 +563,7 @@ sqlx_service_get_options(void)
 			"Timeout when opening bases in use by another thread "
 				"(milliseconds). -1 means wait forever, 0 return "
 				"immediately." },
-		{"CnxBacklog", OT_INT64, {.u=&SRV.cnx_backlog},
+		{"CnxBacklog", OT_INT64, {.i64=&SRV.cnx_backlog},
 			"Number of connections allowed when all workers are busy"},
 
 		{"MaxBases", OT_UINT, {.u = &SRV.cfg_max_bases},
