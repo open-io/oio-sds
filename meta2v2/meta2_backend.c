@@ -834,55 +834,58 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 	lp.flags = M2V2_FLAG_NODELETED;
 	lp.type = DEFAULT;
 
-	// Performs checks only if client did not ask for a local destroy
-	if (!local)
-		err = meta2_backend_list_aliases(m2, url, &lp, counter_cb, NULL);
-
+	GRID_DEBUG("DESTROY(%s)%s", hc_url_get(url, HCURL_WHOLE),
+			local? " (local)" : "");
+	err = m2b_open(m2, url, local? M2V2_OPEN_LOCAL : M2V2_OPEN_MASTERONLY,
+			&sq3);
 	if (!err) {
+		g_assert(sq3 != NULL);
+
+		// Performs checks only if client did not ask for a local destroy
+		if (!local)
+			err = m2db_list_aliases(sq3, &lp, counter_cb, NULL);
+
+		if (err) {
+			m2b_close(sq3);
+			return err;
+		}
+
 		if (counter > 0 && !(flags & (M2V2_DESTROY_FORCE|M2V2_DESTROY_FLUSH))) {
 			return NEWERROR(CODE_CONTAINER_NOTEMPTY,
 					"%d elements still in container", counter);
 		}
-		GRID_DEBUG("DESTROY(%s)%s", hc_url_get(url, HCURL_WHOLE),
-				local? " (local)" : "");
-		err = m2b_open(m2, url, local? M2V2_OPEN_LOCAL : M2V2_OPEN_MASTERONLY,
-				&sq3);
-		if (!err) {
-			g_assert(sq3 != NULL);
 
-			if (counter > 0 && flags & M2V2_DESTROY_FLUSH) {
-				err = m2db_flush_container(sq3->db);
-				if (err != NULL) {
-					GRID_WARN("Error flushing container: %s", err->message);
-					g_clear_error(&err);
-				}
-			}
-
-			if (!local) {
-				err = sqlx_config_get_peers(election_manager_get_config(
-						sqlx_repository_get_elections_manager(m2->repo)),
-						hc_url_get(url, HCURL_HEXID), META2_TYPE_NAME, &peers);
-				// peers may be NULL if no zookeeper URL is configured
-				if (!err && peers != NULL && g_strv_length(peers) > 0) {
-					err = m2v2_remote_execute_DESTROY_many(
-							peers, NULL, url, flags);
-					g_strfreev(peers);
-					peers = NULL;
-				}
-			}
-
-			if (!err) {
-				err = sqlx_repository_exit_election(m2->repo, "meta2",
-						hc_url_get(url, HCURL_HEXID));
-				m2b_destroy(sq3);
-				// There is a get_peers() call in close callback that puts back
-				// the reference in the cache. But it MUST NOT stay in it if
-				// we want to recreate the container on another meta2.
-				hc_decache_reference_service(m2->resolver, url, "meta2");
-			} else {
-				m2b_close(sq3);
+		if (counter > 0 && flags & M2V2_DESTROY_FLUSH) {
+			err = m2db_flush_container(sq3->db);
+			if (err != NULL) {
+				GRID_WARN("Error flushing container: %s", err->message);
+				g_clear_error(&err);
 			}
 		}
+
+		if (!local) {
+			err = sqlx_config_get_peers(election_manager_get_config(
+					sqlx_repository_get_elections_manager(m2->repo)),
+					hc_url_get(url, HCURL_HEXID), META2_TYPE_NAME, &peers);
+			// peers may be NULL if no zookeeper URL is configured
+			if (!err && peers != NULL && g_strv_length(peers) > 0) {
+				err = m2v2_remote_execute_DESTROY_many(
+						peers, NULL, url, flags);
+				g_strfreev(peers);
+				peers = NULL;
+			}
+		}
+
+		if (!err) {
+			m2b_destroy(sq3);
+		} else {
+			m2b_close(sq3);
+		}
+
+		// There is a get_peers() call in close callback that puts back
+		// the reference in the cache. But it MUST NOT stay in it if
+		// we want to recreate the container on another meta2.
+		hc_decache_reference_service(m2->resolver, url, META2_TYPE_NAME);
 	}
 
 	return err;
