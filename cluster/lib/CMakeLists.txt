@@ -3,7 +3,7 @@
 include_directories(BEFORE . .. ../..)
 
 add_library(gridcluster SHARED config.c
-		connect.c connect.h config.c
+		connect.c connect.h
 		gridcluster.c gridcluster.h
 		message.c message.h)
 

@@ -92,7 +92,6 @@ add_library(metautils SHARED
 		metautils_macros.h
 		utils_containers.c metautils_containers.h
 		utils_svc_policy.c metautils_svc_policy.h
-		utils_gba.c metautils_gba.h
 		utils_errors.c metautils_errors.h
 		utils_sockets.c metautils_sockets.h
 		utils_strings.c metautils_strings.h
