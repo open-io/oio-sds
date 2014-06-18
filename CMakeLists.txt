@@ -248,7 +248,7 @@ if (APACHE2_LIBDIR)
 	set(APACHE2_LIBRARY_DIRS "${APACHE2_LIBDIR}")
 endif (APACHE2_LIBDIR)
 ### Check for mandatory elements
-find_file(FOUND NAMES httpd/httpd.h httpd.h PATHS ${APACHE2_INCLUDE_DIRS})
+find_file(FOUND httpd.h PATHS ${APACHE2_INCLUDE_DIRS})
 test_FOUND(FOUND "apache2-httpd header")
 
 ###------------------------###
