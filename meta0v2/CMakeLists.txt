@@ -17,7 +17,7 @@ target_link_libraries(meta0remote
 add_library(meta0utils SHARED meta0_utils.c meta0_utils.h)
 set_target_properties(meta0utils PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(meta0utils
-		metautils metacomm
+		metautils metacomm gridcluster
 		${GLIB2_LIBRARIES})
 
 
