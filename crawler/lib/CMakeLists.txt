@@ -23,6 +23,10 @@ add_library(transp_layer SHARED
 		transp_layer.c
 		transp_layer_cmd.h
 		transp_layer_cmd.c)
+
+set_target_properties(transp_layer
+		PROPERTIES SOVERSION ${ABI_VERSION})
+
 target_link_libraries(transp_layer
 		${GLIB2_LIBRARIES}
 		${DBUS_LIBRARIES})

@@ -28,7 +28,8 @@ add_library(integrity SHARED
 	content_check_tools.c
 	http_pipe.c http_pipe.h)
 
-set_target_properties(integrity PROPERTIES SOVERSION ${ABI_VERSION})
+set_target_properties(integrity
+	PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(integrity
 		metautils metacomm gridclient

@@ -20,6 +20,9 @@ add_library(listenerremote SHARED
 		listener_remote.h
 		listener_remote.c)
 
+set_target_properties(listenerremote
+		PROPERTIES SOVERSION ${ABI_VERSION})
+
 target_link_libraries(listenerremote 
 		${ZMQ_LIBRARIES}
 		${JSONC_LIBRARIES}
