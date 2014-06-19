@@ -102,6 +102,7 @@ target_link_libraries(hcadmin ${REQLIBS})
 
 
 if (NOT DEFINED FULL_RENAME)
+if (NOT DEFINED EXE_PREFIX)
 install(TARGETS
 			gsv2_touch
 			gsv2_set_prop
@@ -124,6 +125,7 @@ install(TARGETS
 			gsv2_set_solr
 			gsv2_quota
 		RUNTIME DESTINATION bin)
+endif()
 endif()
 
 install(TARGETS hcdir hc hcadmin

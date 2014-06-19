@@ -69,6 +69,8 @@ target_link_libraries(test_version sqliterepo
 		${GLIB2_LIBRARIES})
 
 add_executable(gs_m1hash hash.h gs_m1hash.c)
+bin_prefix(gs_m1hash -m1hash)
+bin_prefix_full(gs_m1hash -sqlx-hash)
 target_link_libraries(gs_m1hash
 		metautils metacomm sqliterepo
 		${GLIB2_LIBRARIES})

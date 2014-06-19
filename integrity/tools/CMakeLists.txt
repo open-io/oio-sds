@@ -24,7 +24,7 @@ target_link_libraries(gs_rebuild
 
 add_executable(gs_rawx_list gs_rawx_list.c)
 bin_prefix(gs_rawx_list -rawx-list)
-bin_prefix_full(gs_rawx_list -integrity-list-rawx)
+bin_prefix_full(gs_rawx_list -integrity-rawx-list)
 target_link_libraries(gs_rawx_list
 		metautils integrity gridcluster gridcluster-events
 		gridcluster-remote
@@ -35,7 +35,7 @@ add_executable(hc_policycheck
 		policycheck_repair.c
 		policycheck_repair.h)
 bin_prefix(hc_policycheck -policycheck)
-bin_prefix_full(hc_policycheck -integrity-check-policy)
+bin_prefix_full(hc_policycheck -integrity-policycheck)
 target_link_libraries(hc_policycheck
 		metautils integrity gridcluster gridcluster-events
 		meta2v2lbutils
@@ -52,14 +52,14 @@ target_link_libraries(gs_break
 
 add_executable(gs_path2container gs_path2container.c)
 bin_prefix(gs_path2container -path2container)
-bin_prefix_full(gs_path2container -integrity-convert-path)
+bin_prefix_full(gs_path2container -integrity-path2container)
 target_link_libraries(gs_path2container
 		metautils gridcluster gridcluster-events gridcluster-remote
 		${GLIB2_LIBRARIES})
 
 add_executable(gs_chunk_crawler gs_chunk_crawler.c lock.c lock.h volume_scanner.c volume_scanner.h)
 bin_prefix(gs_chunk_crawler -chunk-crawler)
-bin_prefix_full(gs_chunk_crawler -integrity-crawl-rawx)
+bin_prefix_full(gs_chunk_crawler -integrity-chunk-crawler)
 target_link_libraries(gs_chunk_crawler
 		metautils rawx rawxclient meta2remote gridclient gridcluster
 		integrity gridcluster gridcluster-events gridcluster-remote
@@ -68,7 +68,7 @@ target_link_libraries(gs_chunk_crawler
 
 add_executable(gs_meta2_crawler gs_meta2_crawler.c lock.c lock.h volume_scanner.c volume_scanner.h)
 bin_prefix(gs_meta2_crawler -meta2-crawler)
-bin_prefix_full(gs_meta2_crawler -integrity-crawl-meta2)
+bin_prefix_full(gs_meta2_crawler -integrity-meta2-crawler)
 target_link_libraries(gs_meta2_crawler
 		integrity metautils meta2remote rulesmotorc2py
 		${GLIB2_LIBRARIES})

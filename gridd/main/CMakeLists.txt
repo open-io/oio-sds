@@ -17,6 +17,7 @@ add_executable(gridd
 		timer.c
 		access_log.c
 )
+bin_prefix_full(gridd -daemon)
 target_link_libraries(gridd
 		metautils metacomm gridcluster gridcluster-events gridcluster-remote
 		${GLIB2_LIBRARIES})

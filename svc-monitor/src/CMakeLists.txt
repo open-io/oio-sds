@@ -10,7 +10,7 @@ link_directories(
 		${GRIDINIT_LIBRARY_DIRS})
 
 add_executable(svc-monitor main.c)
-bin_prefix_full(svc-monitor -monitor-srv)
+bin_prefix(svc-monitor -svc-monitor)
 target_link_libraries(svc-monitor
 		metautils gridinit-utils gridcluster
 		${GLIB2_LIBRARIES})

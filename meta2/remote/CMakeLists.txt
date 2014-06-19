@@ -30,6 +30,7 @@ target_link_libraries(meta2remote
 		${GLIB2_LIBRARIES})
 
 add_executable(meta2_client client.c)
+bin_prefix_full(meta2_client -meta2-client)
 target_link_libraries(meta2_client
 		metautils metacomm meta2remote meta2servicesremote
 		${GLIB2_LIBRARIES})

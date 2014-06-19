@@ -44,6 +44,8 @@ add_executable(gridagent
 	worker.h
 	write_message_worker.c write_message_worker.h)
 
+bin_prefix_full(gridagent -cluster-agent)
+
 target_link_libraries(gridagent
 	gridcluster gridcluster-events gridcluster-eventsremote gridcluster-remote gridcluster-conscience
 	metautils metacomm

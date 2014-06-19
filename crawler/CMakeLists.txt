@@ -65,7 +65,7 @@ add_executable(crawler
 		lib/crawler_common.h
 		lib/crawler_tools.h
 		crawler.c)
-bin_prefix_full(crawler -crawler)
+bin_prefix(crawler -crawler)
 target_link_libraries(crawler
 		metautils
 		listenerremote
@@ -80,7 +80,7 @@ target_link_libraries(crawler
 add_executable(crawler_cmd
 		lib/crawler_common.h
 		crawler_cmd.c)
-bin_prefix_full(crawler_cmd -crawler-cmd)
+bin_prefix(crawler_cmd -crawler-cmd)
 target_link_libraries(crawler_cmd
 		metautils
 		transp_layer

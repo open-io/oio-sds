@@ -337,7 +337,7 @@ add_dependencies(metacomm metautils)
 
 add_executable(gs_oid2cid oid_to_cid.c)
 bin_prefix(gs_oid2cid -oid2cid)
-bin_prefix_full(gs_oid2cid -oid2cid)
+bin_prefix_full(gs_oid2cid -utils-oid2cid)
 target_link_libraries(gs_oid2cid
 		metautils
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES})
@@ -345,12 +345,14 @@ add_dependencies(gs_oid2cid metacomm metautils)
 
 add_executable(gs_dump_addr addr_dump.c)
 bin_prefix(gs_dump_addr -dump-addr)
-bin_prefix_full(gs_dump_addr -dump-addr)
+bin_prefix_full(gs_dump_addr -utils-dump-addr)
 target_link_libraries(gs_dump_addr
 		metautils metacomm
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES})
 
 add_executable(gs_same_hash gs_same_hash.c)
+bin_prefix(gs_same_hash -same-hash)
+bin_prefix_full(gs_dump_addr -utils-same-hash)
 target_link_libraries(gs_same_hash
 		metautils 
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES})

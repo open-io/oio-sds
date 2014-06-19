@@ -17,7 +17,6 @@ add_executable(rawx-monitor
 	snmp.c)
 
 bin_prefix(rawx-monitor -rawx-monitor)
-bin_prefix_full(rawx-monitor -monitor-rawx)
 
 target_link_libraries(rawx-monitor
 	metautils gridcluster gridcluster-remote gridcluster-events

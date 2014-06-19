@@ -91,6 +91,7 @@ add_executable(meta2_server
 		meta2_filters_action_events.c
 		meta2_filter_context.c
 		meta2_server.c)
+bin_prefix_full(meta2_server -meta2-server)
 
 target_link_libraries(meta2_server meta2v2
         hcresolve metacomm metautils gridcluster server
