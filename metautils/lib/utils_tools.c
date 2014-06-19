@@ -104,15 +104,15 @@ name_to_id(const gchar * name, gsize nameLen, hash_sha256_t * id)
 }
 
 void
-name_to_id_v2(const gchar * name, gsize nameLen, const gchar * virtual_namespace, hash_sha256_t * id)
+name_to_id_v2(const gchar * name, gsize nameLen, const gchar *vns, hash_sha256_t * id)
 {
-	gchar *full_name = NULL;
-	if(!virtual_namespace) {
+	if (!vns || !strchr(vns,'.')) {
 		/* old school client */
 		name_to_id(name, nameLen, id);
 		return;
 	}
-	full_name = g_strconcat(virtual_namespace, "/", name, NULL);
+
+	gchar *full_name = g_strconcat(vns, "/", name, NULL);
 
 	SHA256((unsigned char *) full_name, strlen(full_name), (unsigned char *) id);
 

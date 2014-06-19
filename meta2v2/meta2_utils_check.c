@@ -597,7 +597,8 @@ _alert_for_invalid_rain_stgpol(header_check_t *hc, struct ctx_rain_stgpol_s *ctx
 	guint lend = ctx->chunks_data->len;
 	guint actual_k = ctx->k;
 	gint64 size_real = CONTENTS_HEADERS_get_size(hc->header);
-	gint64 ns_chunk_size = hc->check->ns_info->chunk_size;
+	gint64 ns_chunk_size = namespace_chunk_size(hc->check->ns_info,
+			hc_url_get(hc->check->url, HCURL_NS));
 	gint64 metachunk_size = ns_chunk_size;
 
 	GRID_TRACE2("%s(%p,%u,%u)", __FUNCTION__, hc, lend, lenp);

@@ -318,6 +318,16 @@ gboolean namespace_in_worm_mode(namespace_info_t* ns_info);
 gint64 namespace_container_max_size(namespace_info_t* ns_info);
 
 /**
+ * Get chunk size for a specific VNS.
+ *
+ * @param ns_info the namespace info
+ * @param ns_name the full name of the VNS to get chunk size of
+ * @return the chunk size for the specified VNS, or the global one
+ *   if not defined for this VNS.
+ */
+gint64 namespace_chunk_size(const namespace_info_t* ns_info, const char *ns_name);
+
+/**
  * Extract namespace defined storage_policy from namespace_info
  *
  * @param ns_info the namespace_info

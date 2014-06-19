@@ -284,6 +284,20 @@ gs_status_t gs_grid_storage_get_timeout (gs_grid_storage_t *gs, gs_timeout_t to)
 
 const char* gs_get_namespace(gs_grid_storage_t *gs);
 
+/**
+ * Get the "virtual" part of the namespace.
+ */
+const char* gs_get_virtual_namespace(gs_grid_storage_t *gs);
+
+/**
+ * Get the full virtual namespace name, including the physical namespace part.
+ */
+const char* gs_get_full_vns(gs_grid_storage_t *gs);
+
+/* Allows to replace the configured NS by another virtual namespace in the
+ * same physical namespace. */
+int gs_set_namespace(gs_grid_storage_t *gs, const char *vns);
+
 /* --- Container operations ------------------------------------------------ */
 
 

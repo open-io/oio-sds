@@ -39,10 +39,20 @@ _create_container(struct gridd_filter_ctx_s *ctx)
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	GError *err = NULL;
+	int retry = 2;
 
 	params.storage_policy = meta2_filter_ctx_get_param(ctx, M2_KEY_STORAGE_POLICY);
 	params.version_policy = meta2_filter_ctx_get_param(ctx, M2_KEY_VERSION_POLICY);
+
+retry:
 	err = meta2_backend_create_container(m2b, url, &params);
+	if (err != NULL && err->code == CODE_REDIRECT && retry-- > 0 &&
+			!g_strcmp0(err->message, meta2_backend_get_local_addr(m2b))) {
+		GRID_WARN("Redirecting on myself!?! Retrying request immediately");
+		g_clear_error(&err);
+		hc_decache_reference_service(m2b->resolver, url, META2_TYPE_NAME);
+		goto retry;
+	}
 
 	if (!err)
 		return FILTER_OK;
@@ -81,7 +91,11 @@ meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
 
 	GError *e = meta2_backend_has_container(m2b, url);
 	if(NULL != e) {
-		GRID_DEBUG("No such container (%s)", hc_url_get(url, HCURL_WHOLE));
+		if (e->code == CODE_UNAVAILABLE)
+			GRID_DEBUG("Container %s exists but could not open it: %s",
+					hc_url_get(url, HCURL_WHOLE), e->message);
+		else
+			GRID_DEBUG("No such container (%s)", hc_url_get(url, HCURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	}

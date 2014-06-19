@@ -26,7 +26,7 @@ set_solr_service(gs_grid_storage_t *grid, const gchar *container_name, const gch
 			g_printerr("Error allocating memory for service_info creation\n");
 			return FALSE;
 		}
-		strcpy(si->ns_name, grid->ni.name);
+		strcpy(si->ns_name, gs_get_namespace(grid));
 		strcpy(si->type, "solr");
 		if (!l4_address_init_with_url(&si->addr, new_solr_service, &gerror)) {
 			g_printerr("Error creating addr_info from field [%s]. Error: [%s]\n",
@@ -81,7 +81,7 @@ set_solr_service(gs_grid_storage_t *grid, const gchar *container_name, const gch
 	}
 
 	/* set solr in container */
-	meta1_name2hash(cid, grid->ni.name, container_name);
+	meta1_name2hash(cid, gs_get_full_vns(grid), container_name);
 
 	if (!meta2raw_remote_set_admin_entry(ctx, &gerror, cid, "service_solr", new_value->data, new_value->len)) {
 		g_print("Failed to set solr service to new service [%s]: %s\n", new_solr_service ? new_solr_service : "", gerror->message);

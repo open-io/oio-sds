@@ -851,6 +851,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		}
 
 		if (counter > 0 && !(flags & (M2V2_DESTROY_FORCE|M2V2_DESTROY_FLUSH))) {
+			m2b_close(sq3);
 			return NEWERROR(CODE_CONTAINER_NOTEMPTY,
 					"%d elements still in container", counter);
 		}
@@ -1605,8 +1606,9 @@ meta2_backend_generate_beans_v1(struct meta2_backend_s *m2b,
 		if (!iter)
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No RAWX available");
 		else
-			err = m2_generate_beans_v1(url, size, nsinfo.chunk_size, policy, mdsys, mdusr,
-					iter, cb, cb_data);
+			err = m2_generate_beans_v1(url, size,
+					namespace_chunk_size(&nsinfo, hc_url_get(url, HCURL_NS)),
+					policy, mdsys, mdusr, iter, cb, cb_data);
 	}
 
 	namespace_info_clear(&nsinfo);

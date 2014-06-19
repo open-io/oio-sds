@@ -83,6 +83,8 @@ meta2_maintenance_add_chunk(struct meta2_raw_content_s *content, const struct me
 	if (chunk->metadata && chunk->metadata->len > 0 && chunk->metadata->data) {
 		copy->metadata = g_byte_array_sized_new(chunk->metadata->len);
 		copy->metadata = g_byte_array_append(copy->metadata, chunk->metadata->data, chunk->metadata->len);
+	} else {
+		copy->metadata = g_byte_array_new();
 	}
 	/*add the chunk to the content */
 	content->raw_chunks = g_slist_prepend(content->raw_chunks, copy);
@@ -561,7 +563,7 @@ meta2_raw_content_v1_get_v2(meta2_raw_content_t *v1, GError **err)
 }
 
 meta2_raw_content_t*
-meta2_raw_content_v2_get_v1(meta2_raw_content_v2_t *v2, GError **err)
+meta2_raw_content_v2_get_v1(const meta2_raw_content_v2_t *v2, GError **err)
 {
 	meta2_raw_content_t *v1 = NULL;
 	GSList *l;

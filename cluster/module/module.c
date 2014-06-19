@@ -2313,6 +2313,12 @@ module_init_vns(struct conscience_s *cs, GError ** err)
 			tmp = g_strstrip(g_strdup(buf[i]));
 			INFO("Serving virtual namespace : [%s]", tmp);
 			init_vns_in_tree(cs->virtual_namespace_tree, tmp);
+			gint64 vns_chunk_size = namespace_chunk_size(&cs->ns_info, tmp);
+			if (vns_chunk_size > cs->ns_info.chunk_size) {
+				WARN("Chunk size for %s (%"G_GINT64_FORMAT
+						") is greater than default (%"G_GINT64_FORMAT")",
+						tmp, vns_chunk_size, cs->ns_info.chunk_size);
+			}
 			tmp = NULL;
 		}
 		g_strfreev(buf);
@@ -2433,6 +2439,16 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 	GKeyFile *stg_conf_file = g_key_file_new();
 	GError *e = NULL;
 
+	// Case-insensitive comparison (reason for not using g_hash_table_lookup)
+	void _check_for_keyword(gchar *key, gpointer value, gchar **what)
+	{
+		(void) value;
+		if (!g_ascii_strcasecmp(what[0], key)) {
+			WARN("Redefining '%s' %s, this may not be taken into account",
+					key, what[1]);
+		}
+	}
+
 	if (!filepath || !g_key_file_load_from_file (stg_conf_file, filepath, G_KEY_FILE_NONE, &e)) {
 		if (NULL != stg_pol_in_option) {
 			GSETERROR(&e, "Cannot parse storage configuration from file [%s]", filepath);
@@ -2446,11 +2462,13 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 
 	cs->ns_info.storage_policy = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	e = fill_hashtable_with_group(cs->ns_info.storage_policy, stg_conf_file, NAME_GROUPNAME_STORAGE_POLICY);
-	if( NULL != e) {
+	if (NULL != e) {
 		g_prefix_error(&e, "Error collecting storage policy rules from file [%s]", filepath);
 		g_key_file_free(stg_conf_file);
 		return e;
 	}
+	g_hash_table_foreach(cs->ns_info.storage_policy,
+			(GHFunc)_check_for_keyword, (gchar*[2]){"NONE", "storage policy"});
 
 	/* If the storage policy set by param_option.storage_policy is not present in the storage conf file, set an error. */
 	if (stg_pol_in_option && !g_hash_table_lookup(cs->ns_info.storage_policy, stg_pol_in_option)) {
@@ -2467,6 +2485,8 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 		g_clear_error(&e);
 		e = NULL;
 	}
+	g_hash_table_foreach(cs->ns_info.data_security,
+			(GHFunc)_check_for_keyword, (gchar*[2]){"NONE", "data security"});
 
 	cs->ns_info.data_treatments = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	e = fill_hashtable_with_group(cs->ns_info.data_treatments, stg_conf_file, NAME_GROUPNAME_DATA_TREATMENTS);
@@ -2475,6 +2495,8 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 		g_clear_error(&e);
 		e = NULL;
 	}
+	g_hash_table_foreach(cs->ns_info.data_treatments,
+			(GHFunc)_check_for_keyword, (gchar*[2]){"NONE", "data treatment"});
 
 	cs->ns_info.storage_class = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	e = fill_hashtable_with_group(cs->ns_info.storage_class, stg_conf_file, NAME_GROUPNAME_STORAGE_CLASS);
@@ -2483,6 +2505,8 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 		g_clear_error(&e);
 		e = NULL;
 	}
+	g_hash_table_foreach(cs->ns_info.storage_class,
+			(GHFunc)_check_for_keyword, (gchar*[2]){"DUMMY", "storage class"});
 
 	INFO("[NS=%s] storage conf loaded successfully from file [%s]",
 			cs->ns_info.name, filepath);

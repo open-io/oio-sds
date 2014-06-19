@@ -313,6 +313,7 @@ _service_array_to_slist(char **m2)
 	GSList *result = NULL;
 	addr_info_t *a = NULL;
 	for (uint i = 0 ; i < g_strv_length(m2) ; i++) {
+		DEBUG("Got meta2=%s", m2[i]);
 		a = addr_info_from_service_str(m2[i]);
 		if (NULL != a) {
 			result = g_slist_prepend(result, a);

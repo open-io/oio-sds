@@ -160,8 +160,11 @@ meta2_filter_action_exit_election(struct gridd_filter_ctx_s *ctx,
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 
 	if (hc_url_has(url,HCURL_HEXID)) {
-		election_exit(sqlx_repository_get_elections_manager(m2b->repo),
-				hc_url_get(url,HCURL_HEXID), META2_TYPE_NAME);
+		GError *err = sqlx_repository_exit_election(m2b->repo, "meta2", hc_url_get(url,HCURL_HEXID));
+		if (err) {
+			meta2_filter_ctx_set_error(ctx, err);
+			return FILTER_KO;
+		}
 	} else {
 		election_manager_exit_all(sqlx_repository_get_elections_manager(
 					m2b->repo), NULL, FALSE);

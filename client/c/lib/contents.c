@@ -165,7 +165,7 @@ _free_content_internals(gs_content_t *content)
 	if (content->chunk_list) {
 
 		TRACE("Freeing %u old chunks in [grid://%s/%s/%s]", g_slist_length(content->chunk_list),
-				content->info.container->info.gs->ni.name, C1_IDSTR(content), C1_PATH(content));
+				gs_get_full_vns(content->info.container->info.gs), C1_IDSTR(content), C1_PATH(content));
 
 		g_slist_foreach (content->chunk_list, chunk_info_gclean, NULL);
 		g_slist_free (content->chunk_list);
@@ -183,7 +183,7 @@ static void
 _fill_hcurl_from_content(gs_content_t *content, struct hc_url_s **url)
 {
 	*url = hc_url_empty();
-	hc_url_set(*url, HCURL_NS, C1_C0(content)->info.gs->ni.name);
+	hc_url_set(*url, HCURL_NS, gs_get_full_vns(C1_C0(content)->info.gs));
 	hc_url_set(*url, HCURL_REFERENCE, C0_NAME(C1_C0(content)));
 	hc_url_set(*url, HCURL_PATH, C1_PATH(content));
 	if (content->version)
@@ -517,7 +517,7 @@ gs_relink_container(gs_container_t *container, GError **err)
 	if (rc && link_needed) {
 		rc = meta2_remote_container_create_v2(&(container->meta2_addr), 3000,
 				err, C0_ID(container), C0_NAME(container),
-				container->info.gs->virtual_namespace);
+				gs_get_virtual_namespace(container->info.gs));
 
 		if (!rc) { /* don't take care of 433 code */
 			if ((*err)->code != CODE_CONTAINER_EXISTS)
@@ -566,7 +566,7 @@ _reload_content(gs_content_t *content, GSList **p_filtered, GSList **p_beans, GE
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, C1_C0(content)->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(C1_C0(content)->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(C1_C0(content)));
 	hc_url_set(url, HCURL_PATH, C1_PATH(content));
 	if (!content->version) {
@@ -607,7 +607,7 @@ _reload_content(gs_content_t *content, GSList **p_filtered, GSList **p_beans, GE
 		_bean_cleanl2(beans);
 
 	TRACE("Content [grid://%s/%s/%s] reloaded (%u chunks)",
-		content->info.container->info.gs->ni.name, C1_IDSTR(content), C1_PATH(content),
+		gs_get_full_vns(content->info.container->info.gs), C1_IDSTR(content), C1_PATH(content),
 		g_slist_length(content->chunk_list));
 
 	return TRUE;
@@ -765,7 +765,7 @@ gs_status_t gs_destroy_content (gs_content_t *content, gs_error_t **err)
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, C1_C0(content)->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(C1_C0(content)->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(C1_C0(content)));
 	hc_url_set(url, HCURL_PATH, C1_PATH(content));
 	if (content->version) {
@@ -947,12 +947,12 @@ gs_decache_chunks_in_metacd(gs_content_t *content)
 	metacd_path = make_metacd_path(C1_PATH(content), _get_content_version(content));
 	if (!resolver_metacd_del_content(metacd, C0_ID(container), metacd_path, &flush_error)) {
 		WARN("METACD flush failed for [%s/%s/%s] : %s",
-				client->ni.name, C0_IDSTR(container), C1_PATH(content),
+				gs_get_full_vns(client), C0_IDSTR(container), C1_PATH(content),
 				(flush_error ? flush_error->message : "unknown error"));
 	}
 	else
 		INFO("decache order sent to METACD for [%s/%s/%s]",
-				client->ni.name, C0_IDSTR(container), C1_PATH(content));
+				gs_get_full_vns(client), C0_IDSTR(container), C1_PATH(content));
 	destroy_metacd_path(metacd_path);
 	if (flush_error)
 		g_clear_error(&flush_error);

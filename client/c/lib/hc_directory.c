@@ -53,7 +53,7 @@ _m1v2_request(gs_grid_storage_t *hc, const gchar *refname, request_cb cb)
 	addr_info_t *meta1_addr = NULL;
 	container_id_t ref_id;
 
-	meta1_name2hash(ref_id, hc->ni.name, refname);
+	meta1_name2hash(ref_id, gs_get_full_vns(hc), refname);
 
 	for (;;) {
 		meta1_addr = gs_resolve_meta1v2 (hc, ref_id, NULL, 0,
@@ -106,7 +106,7 @@ hc_create_reference(gs_grid_storage_t *hc, const char *reference)
 	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
 		GError *e = NULL;
 		gint rc = meta1v2_remote_create_reference(a, &e,
-				hc->ni.name, ref_id, reference,
+				gs_get_full_vns(hc), ref_id, reference,
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
 				master);
@@ -123,7 +123,7 @@ hc_delete_reference(gs_grid_storage_t *hc, const char *reference)
 	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
 		GError *e = NULL;
 		gint rc = meta1v2_remote_delete_reference(a, &e,
-				hc->ni.name, ref_id,
+				gs_get_full_vns(hc), ref_id,
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
 				master);
@@ -140,7 +140,7 @@ hc_link_service_to_reference(gs_grid_storage_t *hc, const char *reference, const
 	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
 		GError *e = NULL;
 		*result = meta1v2_remote_link_service(a, &e,
-				hc->ni.name, ref_id, srv_type,
+				gs_get_full_vns(hc), ref_id, srv_type,
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
 				master);
@@ -157,7 +157,7 @@ hc_list_reference_services(gs_grid_storage_t *hc, const char *reference, const c
 		GError *e = NULL;
 		(void) master;
 		*result = meta1v2_remote_list_reference_services(a, &e,
-				hc->ni.name, ref_id, srv_type,
+				gs_get_full_vns(hc), ref_id, srv_type,
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP));
 		return e;
@@ -173,7 +173,7 @@ hc_unlink_reference_service(gs_grid_storage_t *hc, const char *reference, const 
 		GError *e = NULL;
 		if(!strchr(srv_type, '|')) {
 			meta1v2_remote_unlink_service(a, &e,
-					hc->ni.name, ref_id, srv_type,
+					gs_get_full_vns(hc), ref_id, srv_type,
 					gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
 					gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
 					master);
@@ -184,7 +184,7 @@ hc_unlink_reference_service(gs_grid_storage_t *hc, const char *reference, const 
 				e = NEWERROR(400, "Invalid service description [%s]", srv_type);
 			} else {
 				meta1v2_remote_unlink_one_service(a, &e,
-						hc->ni.name, ref_id, toks[1],
+						gs_get_full_vns(hc), ref_id, toks[1],
 						gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
 						gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
 						master, seq);
@@ -204,7 +204,7 @@ hc_has_reference(gs_grid_storage_t *hc, const char *reference)
 	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
 		GError *e = NULL;
 		gint rc = meta1v2_remote_has_reference(a, &e,
-				hc->ni.name, ref_id,
+				gs_get_full_vns(hc), ref_id,
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP));
 		(void) rc;
@@ -221,7 +221,7 @@ hc_force_service(gs_grid_storage_t *hc, const char *reference, const char *url)
 	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
 		GError *e = NULL;
 		gint rc = meta1v2_remote_force_reference_service(a, &e,
-				hc->ni.name, ref_id, url,
+				gs_get_full_vns(hc), ref_id, url,
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
 				master);
@@ -239,7 +239,7 @@ hc_poll_service(gs_grid_storage_t *hc, const char *reference,
 	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
 		GError *e = NULL;
 		gchar **urlv = meta1v2_remote_poll_reference_service(a, &e,
-				hc->ni.name, ref_id, srvtype,
+				gs_get_full_vns(hc), ref_id, srvtype,
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
 				master);
@@ -260,7 +260,7 @@ hc_configure_service(gs_grid_storage_t *hc, const char *reference,
 	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
 		GError *e = NULL;
 		gint rc = meta1v2_remote_configure_reference_service(a, &e,
-				hc->ni.name, ref_id, url,
+				gs_get_full_vns(hc), ref_id, url,
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
 				master);
@@ -280,7 +280,7 @@ hc_set_reference_property(gs_grid_storage_t *hc, const char *reference,
 		GError *e = NULL;
 		pairs[0] = g_strdup_printf("%s=%s", key, value);
 		gint rc = meta1v2_remote_reference_set_property(a, &e,
-				hc->ni.name, ref_id, pairs,
+				gs_get_full_vns(hc), ref_id, pairs,
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX), 
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
 				master);
@@ -299,7 +299,7 @@ hc_get_reference_property(gs_grid_storage_t *hc, const char *reference,
 	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
 		GError *e = NULL;
 		gint rc = meta1v2_remote_reference_get_property(a, &e,
-				hc->ni.name, ref_id, keys, result,
+				gs_get_full_vns(hc), ref_id, keys, result,
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP));
 		(void) rc;
@@ -317,7 +317,7 @@ hc_delete_reference_property(gs_grid_storage_t *hc, const char *reference,
 	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
 		GError *e = NULL;
 		gint rc = meta1v2_remote_reference_del_property(a, &e,
-				hc->ni.name, ref_id, keys,
+				gs_get_full_vns(hc), ref_id, keys,
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
 				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
 				master);

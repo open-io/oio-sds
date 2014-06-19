@@ -653,7 +653,7 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 	addr_info_to_string(&container->meta2_addr, target, 64);
 
 	url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, container->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(container));
 	hc_url_set(url, HCURL_PATH, content_name);
 
@@ -910,7 +910,8 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 		}
 		else {
 			GRID_DEBUG("Chunks saved in the metacd for [%s/%s/%s]",
-					container->info.gs->ni.name, container->info.name, content_name);
+					gs_get_full_vns(container->info.gs),
+					container->info.name, content_name);
 		}
 		if (gerr_metacd)
 			g_clear_error(&gerr_metacd);

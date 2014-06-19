@@ -225,7 +225,7 @@ self_register_in_cluster(GError **err)
 	
 	/* Copy the service tags */
 	if (!serv_tags)
-		NOTICE("No tag found in gridd to set in service info");
+		DEBUG("No tag found in gridd to set in service info");
 	else {
 		gsize i;
 		for (i=0; i<serv_tags->len ;i++) {
@@ -657,17 +657,13 @@ manage_message (SERVER srv, GByteArray *gba, struct request_context_s* ctx, GErr
 
 	gettimeofday(&(ctx->tv_start), NULL);
 	ctx->request = m;
-	
+
 	int rc = GO_ON;
 
 	/*find an appropriated message handler*/
 	for (found=0,i=0; rc != DONE && i<srv->nbHandlers ; i++) {
-		int match_rc;
-		struct message_handler_s *h;
-
-		h = srv->handlers[i];
-
-		match_rc = h->matcher(m, h->udata, err);
+		struct message_handler_s *h = srv->handlers[i];
+		int match_rc = h->matcher(m, h->udata, err);
 
 		if (match_rc < 0) {
 			GSETERROR(err, "match error");
@@ -697,13 +693,13 @@ manage_message (SERVER srv, GByteArray *gba, struct request_context_s* ctx, GErr
 
 	message_destroy (m, NULL);
 
+	ctx->request = NULL;
 	return 1;
 
 errorLabel:
-
 	if (m)
-		message_destroy (m, NULL);
-
+		message_destroy(m, NULL);
+	ctx->request = NULL;
 	return 0;
 }
 
@@ -747,34 +743,36 @@ main_thread (gpointer arg)
 
 		memset(str_addr_src, 0, sizeof(str_addr_src));
 		addr_info_to_string(ctx->remote_addr, str_addr_src, sizeof(str_addr_src));
-		DEBUG ("Connection NEW fd=%d [%s]", clt, str_addr_src);
+		TRACE ("Connection NEW fd=%d [%s]", clt, str_addr_src);
 
-		/*loops on the received data*/
 		while (may_continue) {
-			gint rc;
-			GByteArray *gba = NULL;
 
 			if (!wait_for_socket(clt, 3000)) {
-				gint64 now = time(0);
-				if (now < ctx->tv_start.tv_sec || (now - ctx->tv_start.tv_sec) > 30) {
-					GSETCODE(&gErr, ERRCODE_CONN_TIMEOUT, "Idle for too long");
-					break;
+				if (srv->to_connection > 0) {
+					gint64 now = time(0);
+					if (now < ctx->tv_start.tv_sec ||
+							(now - ctx->tv_start.tv_sec) > srv->to_connection) {
+						GSETCODE(&gErr, ERRCODE_CONN_TIMEOUT, "Idle for too long");
+						break;
+					}
 				}
 				continue;
 			}
 
-			gba = l4v_read_2to (clt, srv->to_connection, srv->to_operation, &gErr);
+			GByteArray *gba = l4v_read(clt, srv->to_operation, &gErr);
 			if (!gba) {
 				GSETERROR(&gErr,"Read error");
 				break;
 			}
 
-			rc = manage_message (srv, gba, ctx, &gErr);
+			gint rc = manage_message (srv, gba, ctx, &gErr);
 			g_byte_array_free (gba,TRUE);
 			if (!rc) {
 				GSETERROR(&gErr,"Cannot manage the message");
 				break;
 			}
+
+			gettimeofday(&(ctx->tv_start), NULL);
 		}
 
 		request_context_free(ctx);
@@ -783,7 +781,7 @@ main_thread (gpointer arg)
 			switch (gErr->code) {
 				case ERRCODE_CONN_RESET:
 				case ERRCODE_CONN_CLOSED:
-					DEBUG ("Connection CLOSED/RESET fd=%i [%s]", clt, str_addr_src);
+					TRACE ("Connection CLOSED/RESET fd=%i [%s]", clt, str_addr_src);
 					break;
 				case ERRCODE_CONN_TIMEOUT:
 					DEBUG ("Connection TIMEOUT fd=%i [%s]", clt, str_addr_src);
@@ -797,7 +795,7 @@ main_thread (gpointer arg)
 			g_clear_error (&gErr);
 		}
 
-		DEBUG ("Connection CLOSING fd=%i [%s]", clt, str_addr_src);
+		TRACE ("Connection CLOSING fd=%i [%s]", clt, str_addr_src);
 		if (gridd_flags & GRIDD_FLAG_SHUTDOWN)
 			shutdown (clt, SHUT_RDWR);
 		metautils_pclose (&clt);
@@ -1202,9 +1200,14 @@ load_servers (GKeyFile *cfgFile, GError **err)
 			GET_INT(group,NAME_MIN_WORKERS,srv->mon.min_workers);
 			GET_INT(group,NAME_ALERT_PERIOD,srv->alert_cfg.frequency);
 
+			// XXX For compatibility purposes, we still receive timeouts in
+			// milliseconds, but we always compare them to timestamps in
+			// seconds.
+			srv->to_connection = srv->to_connection / 1000;
+
 			CHECK_WORKER_COUNTERS(srv->mon.min_workers, srv->mon.max_workers,
 					srv->mon.min_spare_workers, srv->mon.max_spare_workers);
-			
+
 			/*load the server list*/
 			srvList = g_key_file_get_string_list (cfgFile, group, NAME_LISTEN, 0, err);
 			if (!srvList)

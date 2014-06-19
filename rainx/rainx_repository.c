@@ -244,6 +244,10 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 		LOAD_HEADER(content, rawx_list, "rawxlist");
 		LOAD_HEADER(content, spare_rawx_list, "sparerawxlist");
 	}
+
+	resource->info->namespace = apr_pstrdup(request->pool, conf->ns_name);
+	__load_one_header(request, conf->headers_scheme,
+			"namespace", &(resource->info->namespace));
 }
 
 static dav_error *
@@ -301,9 +305,10 @@ dav_rainx_get_resource(request_rec *r, const char *root_dir, const char *label,
 
 	/* Check META-Chunk size not larger than namespace allowed chunk-size */
 
-	if(r->method_number == M_PUT && 
-			conf->rainx_conf->ni->chunk_size <
-			strtol(resource->info->chunk.size, NULL, 10)) {
+	if(r->method_number == M_PUT &&
+			namespace_chunk_size(conf->rainx_conf->ni,
+				resource->info->namespace)
+			< strtol(resource->info->chunk.size, NULL, 10)) {
 		DAV_DEBUG_REQ(r, 0 , "Request entity too large (1)");
 		return server_create_and_stat_error(conf, r->pool, HTTP_BAD_REQUEST, 0,
 				"Request entity too large");

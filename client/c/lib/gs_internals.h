@@ -177,7 +177,7 @@ struct gs_grid_storage_s {
 
 	struct metacd_s *metacd_resolver;
 	resolver_direct_t *direct_resolver;
-	char *virtual_namespace;
+	char *full_vns;
 	char *physical_namespace;
 };
 

@@ -230,6 +230,7 @@ static GError *_ask_reconstruct(struct rainx_params_s *params,
 	ADD_HEADER("chunksize", "%ld", metachunk_size); // Size of the metachunk
 	ADD_HEADER("chunkpos", "%ld", params->metachunk_pos); // Position of the metachunk
 	ADD_HEADER("contentmetadata-sys", "%s", ALIASES_get_mdsys(params->alias)->str);
+	ADD_HEADER("namespace", "%s", hc_url_get(url, HCURL_NS));
 
 #undef ADD_HEADER
 

@@ -298,8 +298,8 @@ gs_grid_storage_free(gs_grid_storage_t * gs)
 	if (gs->metacd_resolver)
 		resolver_metacd_free(gs->metacd_resolver);
 
-	if (gs->virtual_namespace)
-		free(gs->virtual_namespace);
+	if (gs->full_vns)
+		free(gs->full_vns);
 	if (gs->physical_namespace)
 		free(gs->physical_namespace);
 

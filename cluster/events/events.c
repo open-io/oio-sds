@@ -9,6 +9,7 @@
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 
+#include "./gridcluster_eventsremote.h"
 #include "./gridcluster_events.h"
 
 gridcluster_event_t *
@@ -49,18 +50,19 @@ gridcluster_event_add_string(gridcluster_event_t * event, const gchar * key, con
 void
 gridcluster_event_set_type(gridcluster_event_t * event, const gchar * str_type)
 {
-	gridcluster_event_add_string(event, "TYPE", str_type);
+	gridcluster_event_add_string(event, EVENT_FIELD_TYPE, str_type);
 }
 
 gsize
-gridcluster_event_get_type(gridcluster_event_t * event, gchar * dst_type, gsize dst_size)
+gridcluster_event_get_type(gridcluster_event_t *event, gchar *dst_type,
+		gsize dst_size)
 {
 	gsize len;
 	GByteArray *gba_value;
 
 	if (!event || !dst_type)
 		return 0;
-	gba_value = g_hash_table_lookup(event, "TYPE");
+	gba_value = g_hash_table_lookup(event, EVENT_FIELD_TYPE);
 	if (!gba_value)
 		return 0;
 	len = MIN(dst_size - 1, gba_value->len);

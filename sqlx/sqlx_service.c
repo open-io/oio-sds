@@ -344,16 +344,6 @@ _configure_network(struct sqlx_service_s *ss)
 // common_main hooks -----------------------------------------------------------
 
 static void
-_action_report_error(GError *err, const gchar *msg)
-{
-	GRID_ERROR("%s : (%d) %s", msg, !err?0:err->code, !err?"":err->message);
-	if (err)
-		g_clear_error(&err);
-	grid_main_stop();
-	return;
-}
-
-static void
 sqlx_service_action(void)
 {
 	GError *err = NULL;
@@ -376,25 +366,31 @@ sqlx_service_action(void)
 	/* Start the administrative threads */
 	SRV.thread_admin = grid_task_queue_run(SRV.gtq_admin, &err);
 	if (!SRV.thread_admin) {
-		_action_report_error(err, "Failed to start the ADMIN thread");
+		GRID_WARN("Failed to start the ADMIN thread : (%d) %s",
+				err->code, err->message);
+		g_clear_error(&err);
 		return;
 	}
 
 	SRV.thread_reload = grid_task_queue_run(SRV.gtq_reload, &err);
 	if (!SRV.thread_reload) {
-		_action_report_error(err, "Failed to start the RELOAD thread");
+		GRID_WARN("Failed to start the RELOAD thread : (%d) %s",
+				err->code, err->message);
+		g_clear_error(&err);
 		return;
 	}
 
 	SRV.thread_register = grid_task_queue_run(SRV.gtq_register, &err);
 	if (!SRV.thread_register) {
-		_action_report_error(err, "Failed to start the REGISTER thread");
+		GRID_WARN("Failed to start the REGISTER thread : (%d) %s",
+				err->code, err->message);
+		g_clear_error(&err);
 		return;
 	}
 
-	SRV.thread_client = g_thread_create(_worker_clients, &SRV, TRUE, &err);
+	SRV.thread_client = g_thread_create(_worker_clients, &SRV, TRUE, NULL);
 	if (!SRV.thread_client) {
-		_action_report_error(err, "Failed to start the CLIENT thread");
+		GRID_WARN("Failed to start the CLIENT thread");
 		return;
 	}
 
@@ -404,13 +400,15 @@ sqlx_service_action(void)
 	grid_daemon_bind_host(SRV.server, SRV.url->str, SRV.dispatcher);
 	err = network_server_open_servers(SRV.server);
 	if (NULL != err) {
-		_action_report_error(err, "GRIDD bind failure");
+		GRID_ERROR("GRIDD bind failure : (%d) %s", err->code, err->message);
+		g_clear_error(&err);
 		return;
 	}
 	if (!grid_main_is_running())
 		return;
 	if (NULL != (err = network_server_run(SRV.server))) {
-		_action_report_error(err, "GRIDD run failure");
+		GRID_ERROR("GRIDD run failure : (%d) %s", err->code, err->message);
+		g_clear_error(&err);
 		return;
 	}
 }

@@ -157,9 +157,17 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 	/* delete the base */
 	if (sq3->deleted) {
 		if (sq3->repo->election_manager) {
-			election_exit(sq3->repo->election_manager,
+			GError *err = election_exit(sq3->repo->election_manager,
 					sq3->logical_name,
 					sq3->logical_type);
+			if (err) {
+				GRID_WARN("Failed to exit election [%s]", err->message);
+				g_clear_error(&err);
+			} else {
+				GRID_TRACE("exit election succeeded [%s][%s]",
+						sq3->logical_name,
+						sq3->logical_type);
+			}
 		}
 		__delete_base(sq3);
 	}
@@ -1142,6 +1150,25 @@ sqlx_repository_status_base(sqlx_repository_t *repo,
 	status = election_get_status(repo->election_manager, name, type, &url);
 	switch (status) {
 		case ELECTION_LOST:
+			if (GRID_DEBUG_ENABLED()) {
+				gchar **my_peers = NULL;
+				gboolean master_in_peers = FALSE;
+				GError *err2 = election_get_peers(repo->election_manager,
+						name, type, &my_peers);
+				for (gchar **cursor = my_peers;
+						cursor && *cursor && !master_in_peers;
+						cursor++) {
+					master_in_peers |= (0 == g_strcmp0(url, *cursor));
+				}
+				if (!master_in_peers) {
+					gchar *tmp = g_strjoinv(", ", my_peers);
+					GRID_DEBUG("Redirecting to a bad service (%s not in [%s])",
+							url, tmp);
+					g_free(tmp);
+				}
+				g_strfreev(my_peers);
+				g_clear_error(&err2);
+			}
 			err = NEWERROR(CODE_REDIRECT, "%s", url);
 			break;
 		case ELECTION_LEADER:

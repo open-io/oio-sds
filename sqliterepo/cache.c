@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <errno.h>
 
+#include <malloc.h>
+
 #include <metautils/lib/metautils.h>
 
 #include "sqliterepo.h"
@@ -635,12 +637,13 @@ retry:
 				EXTRA_ASSERT(base->count_open > 0);
 				EXTRA_ASSERT(base->owner != NULL);
 				if (base->owner != g_thread_self()) {
-					GRID_DEBUG("Base [%s] in use by another thread, waiting...",
-							hashstr_str(hname));
+					GRID_DEBUG("Base [%s] in use by another thread (%X), waiting...",
+							hashstr_str(hname), compute_thread_id(base->owner));
 					// The lock is held by another thread/request
-					if (g_cond_timed_wait(base->cond, cache->lock, deadline))
+					if (g_cond_timed_wait(base->cond, cache->lock, deadline)) {
+						GRID_DEBUG("Retrying to open [%s]", hashstr_str(hname));
 						goto retry;
-					else {
+					} else {
 						if (cache->open_timeout > 0) {
 							err = NEWERROR(CODE_UNAVAILABLE,
 								"database currently in use by another request"
@@ -650,6 +653,9 @@ retry:
 							err = NEWERROR(CODE_UNAVAILABLE,
 								"database currently in use by another request");
 						}
+						GRID_DEBUG("failed to open base: "
+								"in use by another request (thread %X)",
+								compute_thread_id(base->owner));
 						break;
 					}
 				}
@@ -815,6 +821,11 @@ sqlx_cache_expire(sqlx_cache_t *cache, guint max, GTimeVal *end)
 	}
 
 	g_mutex_unlock(cache->lock);
+
+	/* Force malloc to release memory to the system.
+	 * Allow 1MiB of unused but not released memory. */
+	malloc_trim(1024 * 1024);
+
 	return nb;
 }
 

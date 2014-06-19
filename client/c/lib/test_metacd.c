@@ -42,9 +42,9 @@ test_data(struct test_data_s *pdata)
 	}
 	g_assert(gse == NULL);
 
-	check_strings(pdata->ns, gs->ni.name);
+	check_strings(pdata->pns, gs->ni.name);
 	check_strings(pdata->pns, gs->physical_namespace);
-	check_strings(pdata->vns, gs->virtual_namespace);
+	check_strings(pdata->ns, gs->full_vns);
 
 	container = gs_get_container(gs, pdata->refname, 1, &gse);
 	if (!container) {

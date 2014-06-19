@@ -130,7 +130,8 @@ _make_service_from_srvinfo(gs_container_t *container, struct service_info_s *si)
 static gs_service_t*
 _make_service_from_addr(gs_container_t *container, const gchar *service, const addr_info_t *ai)
 {
-	return _make_service_from_srvinfo(container, _make_srvinfo(container->info.gs->ni.name, service, ai));
+	return _make_service_from_srvinfo(container,
+			_make_srvinfo(gs_get_namespace(container->info.gs), service, ai));
 }
 
 static gs_service_t **
@@ -556,7 +557,8 @@ gs_get_all_services_used( gs_container_t *container, const gchar *srvtype, gs_er
 	gchar **tmp = NULL;
 
         meta1_addr = gs_resolve_meta1 (container->info.gs, C0_ID(container), &gerr);
-	tmp = meta1v2_remote_list_reference_services(meta1_addr, &gerr, container->info.gs->ni.name, C0_ID(container), srvtype,
+	tmp = meta1v2_remote_list_reference_services(meta1_addr, &gerr,
+			gs_get_full_vns(container->info.gs), C0_ID(container), srvtype,
 			C0_M1CNX(container)/1000, C0_M1TO(container)/1000);
 	/* TODO: make a list of addr_info from a list of string services */
 	guint i = 0;
@@ -669,7 +671,7 @@ gs_container_service_get_all(gs_container_t *container, const char *srvtype, gs_
 		}
 
 		srv_str_list = meta1v2_remote_list_reference_services(meta1_addr, &gerr,
-				container->info.gs->ni.name, C0_ID(container), srvtype,
+				gs_get_full_vns(container->info.gs), C0_ID(container), srvtype,
 				C0_M1CNX(container)/1000, C0_M1TO(container)/1000);
 
 		if (!srv_str_list) {
@@ -690,7 +692,8 @@ gs_container_service_get_all(gs_container_t *container, const char *srvtype, gs_
 				if(!srv_str_list[i] || strlen(srv_str_list[i]) <= 0)
 					continue;
 				srv = g_malloc0(sizeof(service_info_t));
-				g_snprintf(srv->ns_name, sizeof(srv->ns_name), "%s", container->info.gs->ni.name);
+				g_snprintf(srv->ns_name, sizeof(srv->ns_name), "%s",
+						gs_get_namespace(container->info.gs));
 				g_snprintf(srv->type, sizeof(srv->type), "%s", srvtype);
 				addr_info_t* tmp = NULL;
 				tmp = _unpack_service(srv_str_list[i]);
@@ -752,8 +755,9 @@ gs_container_service_get_available(gs_container_t *container, const char *srvtyp
 			result = NULL;
 			goto end_label;
 		}
-		str_srv = meta1v2_remote_link_service(meta1_addr, &gerr, container->info.gs->ni.name,C0_ID(container), srvtype,
-			C0_M1CNX(container), C0_M1TO(container), &master);
+		str_srv = meta1v2_remote_link_service(meta1_addr, &gerr,
+				gs_get_full_vns(container->info.gs), C0_ID(container), srvtype,
+				C0_M1CNX(container), C0_M1TO(container), &master);
 
 		_update_master(container, master);
 
@@ -777,7 +781,8 @@ gs_container_service_get_available(gs_container_t *container, const char *srvtyp
 					continue;
 				service_info_t *srv = NULL;
 				srv = g_malloc0(sizeof(service_info_t));
-				g_snprintf(srv->ns_name, sizeof(srv->ns_name), "%s", container->info.gs->ni.name);
+				g_snprintf(srv->ns_name, sizeof(srv->ns_name), "%s",
+						gs_get_namespace(container->info.gs));
 				g_snprintf(srv->type, sizeof(srv->type), "%s", srvtype);
 				addr_info_t *tmp = NULL;
 				tmp = _unpack_service(str_srv[i]);

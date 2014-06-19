@@ -513,7 +513,8 @@ end:
 }
 
 int
-uncompress_chunk(const gchar* path, gboolean preserve, GError ** error)
+uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
+		GError ** error)
 {
 	GError *local_error = NULL;
 	int status = 0;
@@ -621,33 +622,42 @@ uncompress_chunk(const gchar* path, gboolean preserve, GError ** error)
 		while(nb_read < bufsize) {
 			current_read = comp_ctx->data_uncompressor(cp_chunk, 0, data + nb_read, bufsize - nb_read, &local_error);
 			DEBUG("Currently read %"G_GINT64_FORMAT" bytes", current_read);
-			if(current_read <= 0) {
+			if(current_read < 0) {
 				if(local_error) {
 					GSETERROR(error, "An error occured while decompressing chunk : %s", local_error->message);	
 					g_clear_error(&local_error);
-				} else 
+				} else
 					GSETERROR(error, "An error occured while decompressing chunk\n"); 
 				goto end;
+			} else if (current_read == 0) {
+				/* Premature end of file, will still write to pending */
+				WARN("Read 0 bytes, original chunk may have been truncated");
+				break;
 			}
 			nb_read += current_read;
 		}
 		TRACE("buffer filled");
+		errno = 0;
 		/* write buf to dst file */
-		if(fwrite(data, bufsize, 1, dst) != 1) {
-			GSETERROR(error, "An error occured while writing data in destination file");
+		if(nb_read > 0 && fwrite(data, nb_read, 1, dst) != 1) {
+			GSETERROR(error, "An error occured while writing data in destination file: %s",
+					strerror(errno));
 			goto end;
 		}
-		if(data){
+		if (data) {
 			g_free(data);
 			data = NULL;
 		}
-		total_read += nb_read;
+		if (nb_read > 0)
+			total_read += nb_read;
+		else
+			break;
 	}
 
-	if(!comp_ctx->integrity_checker(cp_chunk)){
+	if(!comp_ctx->integrity_checker(cp_chunk)) {
 		GSETERROR(error, "Seems there is an error in decompression, invalid checksum\n");
 		goto end;
-        }
+	}
 
 	status = 1;
 
@@ -678,8 +688,10 @@ end:
 					GSETERROR(error, "Failed to rename tmp file");
 					status = 0;
 				}
+			} else if (keep_pending) {
+				INFO("Temporary file kept: %s", tmp_path);
 			} else {
-				/* remove tmp file */	
+				/* remove tmp file */
 				DEBUG("Removing failed file");
 				if(remove(tmp_path) != 0)
 					WARN("Failed to remove tmp file [%s]", tmp_path);
@@ -691,8 +703,10 @@ end:
 				status = 0;
 			} 
 		}
+	} else if (keep_pending) {
+		INFO("Temporary file kept: %s", tmp_path);
 	} else {
-		/* remove tmp file */	
+		/* remove tmp file */
 		DEBUG("Removing pending file\n");
 		if(remove(tmp_path) != 0)
 			WARN("Failed to remove tmp file [%s]", tmp_path);
@@ -711,4 +725,10 @@ end:
 		g_free(tmp_path);
 	
 	return status;
+}
+
+int
+uncompress_chunk(const gchar* path, gboolean preserve, GError ** error)
+{
+	return uncompress_chunk2(path, preserve, FALSE, error);
 }

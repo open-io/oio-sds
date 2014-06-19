@@ -209,6 +209,7 @@ create_rainx_request_from_chunk_list(ne_request **req, ne_session *session, cons
 		GRID_DEBUG("rawxlist=%s", rawxlist_str);
 		ne_print_request_header(*req, "rawxlist", "%s", rawxlist_str);
 		ne_add_request_header  (*req, "storagepolicy", storage_policy);
+		// TODO: add "namespace" header
 		g_free(rawxlist_str);
 		g_free(first_chunk.ci);
 		return str_req_id;
@@ -717,7 +718,8 @@ gboolean rainx_ask_reconstruct(struct dl_status_s *dl_status, gs_content_t *cont
 	GSList *all_chunks = NULL, *spare_chunks = NULL;
 	guint metachunkpos, metachunksize, metachunkoffset, k;
 	GError *local_error = NULL;
-	addr_info_t *rainx_addr = get_rainx_from_conscience(content->info.container->info.gs->ni.name, &local_error);
+	addr_info_t *rainx_addr = get_rainx_from_conscience(
+			gs_get_namespace(content->info.container->info.gs), &local_error);
 	if (rainx_addr == NULL) {
 		GSERRORCAUSE(err, local_error, "Reconstruct Failed");	
 		return FALSE;

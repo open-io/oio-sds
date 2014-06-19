@@ -41,6 +41,10 @@
 # ifndef EVENT_FIELD_TYPE
 #  define EVENT_FIELD_TYPE "TYPE"
 # endif
+# ifndef EVENT_TYPE_MAX_SIZE
+#  define EVENT_TYPE_MAX_SIZE 128
+# endif
+
 
 /**
  * @return 

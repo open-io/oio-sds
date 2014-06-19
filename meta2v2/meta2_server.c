@@ -116,6 +116,11 @@ filter_services(struct sqlx_service_s *ss,
 	}
 	else {
 		g_ptr_array_add(tmp, NULL);
+		if (GRID_DEBUG_ENABLED()) {
+			gchar *peers = g_strjoinv(", ", (gchar**)tmp->pdata);
+			GRID_DEBUG("Peers: %s", peers);
+			g_free(peers);
+		}
 		g_strfreev((gchar**)g_ptr_array_free(tmp, FALSE));
 		return NULL;
 	}

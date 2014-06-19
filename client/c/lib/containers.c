@@ -57,8 +57,10 @@ __create_in_meta2(addr_info_t *m1, gs_container_t *c, struct m2v2_create_params_
 	/* Useless code, gs_meta1v2 create the reference just before */
 
 	gchar **m2 = NULL;
-	m2 = meta1v2_remote_link_service((new_master) ? new_master : m1, &e, c->info.gs->ni.name, C0_ID(c), "meta2",
-			c->info.gs->direct_resolver->timeout.m1.cnx, c->info.gs->direct_resolver->timeout.m1.op, &master);
+	m2 = meta1v2_remote_link_service((new_master) ? new_master : m1, &e,
+			gs_get_full_vns(c->info.gs), C0_ID(c), "meta2",
+			c->info.gs->direct_resolver->timeout.m1.cnx,
+			c->info.gs->direct_resolver->timeout.m1.op, &master);
 	if( NULL != new_master)
 		g_free(new_master);
 
@@ -76,7 +78,7 @@ __create_in_meta2(addr_info_t *m1, gs_container_t *c, struct m2v2_create_params_
 
 	/* prepare the policies array */
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, c->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(c->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(c));
 
 	/* parse m2[0] srv to get ip:port  X|meta2|ip:port|... */
@@ -95,7 +97,7 @@ __create_in_meta2(addr_info_t *m1, gs_container_t *c, struct m2v2_create_params_
 		GError *e2 = NULL;
 		// Rollback meta1 service link
 		meta1v2_remote_unlink_service((new_master) ? new_master : m1, &e2,
-			c->info.gs->ni.name, C0_ID(c), "meta2",
+			gs_get_full_vns(c->info.gs), C0_ID(c), "meta2",
 			c->info.gs->direct_resolver->timeout.m1.cnx,
 			c->info.gs->direct_resolver->timeout.m1.op, &master);
 		if (e2 != NULL) {
@@ -309,7 +311,7 @@ void
 fill_hcurl_from_container(gs_container_t *c, struct hc_url_s **url)
 {
 	*url = hc_url_empty();
-	hc_url_set(*url, HCURL_NS, c->info.gs->ni.name);
+	hc_url_set(*url, HCURL_NS, gs_get_full_vns(c->info.gs));
 	hc_url_set(*url, HCURL_REFERENCE, C0_NAME(c));
 }
 
@@ -339,7 +341,7 @@ gs_init_container(gs_grid_storage_t *gs, const char *cname, int ac, gs_error_t *
 	container->info.gs = gs;
 	memcpy(container->info.name, cname, nLen);
 
-	meta1_name2hash(container->cID, gs->ni.name, C0_NAME(container));
+	meta1_name2hash(container->cID, gs_get_full_vns(gs), C0_NAME(container));
 	container_id_to_string( container->cID, container->str_cID, sizeof(container->str_cID) );
 	container->ac = ac;
 
@@ -506,7 +508,7 @@ _list_v2_wrapper(gs_container_t *c, const char *version, GError **e)
 	addr_info_to_string(&(c->meta2_addr), target, 64);
 
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, c->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(c->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(c));
 	if (version != NULL)
 		hc_url_set(url, HCURL_SNAPORVERS, version);
@@ -796,6 +798,7 @@ gs_container_load (gs_container_t *container, GError **err)
 
 		addr_info_t *m2addr = (addr_info_t*) locationCursor->data;
 		addr_info_to_string (m2addr, str_addr, sizeof(str_addr));
+		DEBUG("Trying to connect to meta2 [%s]", str_addr);
 
 		/*update the address of the container*/
 		g_memmove(&(container->meta2_addr), m2addr, sizeof(addr_info_t));
@@ -850,12 +853,14 @@ gs_container_reconnect_and_refresh (gs_container_t *container, GError **err, gbo
 	gchar addr[STRLEN_ADDRINFO];
 	addr_info_to_string(&(container->meta2_addr), addr, STRLEN_ADDRINFO);
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, container->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs));
 	hc_url_set(url, HCURL_HEXID, container->str_cID);
 	*err = m2v2_remote_execute_HAS(addr, NULL, url);
 	hc_url_clean(url);
-	if (*err)
+	if (*err) {
+		metautils_pclose(&(container->meta2_cnx));
 		return GS_ERROR;
+	}
 
 	/*the connection succeeded*/
 	return GS_OK;
@@ -935,7 +940,7 @@ _destroy_on_allm2(gs_container_t *container, guint32 flags)
 		return NEWERROR(CODE_CONTAINER_NOTFOUND, "No such container");
 
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, container->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(container));
 	hc_url_set(url, HCURL_HEXID, container->str_cID);
 
@@ -970,8 +975,9 @@ _destroy_everywhere(gs_container_t *container, GSList **exclude, guint32 flags)
 		g_prefix_error(&err, "META0/1 error: ");
 	}
 	else {
-		if (!meta1v2_remote_unlink_service(m1, &err, container->info.gs->ni.name,
-					C0_ID(container), "meta2", 10000, 30000, NULL))
+		if (!meta1v2_remote_unlink_service(m1, &err,
+				gs_get_full_vns(container->info.gs),
+				C0_ID(container), "meta2", 10000, 30000, NULL))
 			g_prefix_error(&err, "META0/1 unlink error: ");
 		g_free(m1);
 	}
@@ -1250,7 +1256,7 @@ gs_get_storage_container2(gs_grid_storage_t *gs, const char *container_name,
 		memcpy(container->info.name, container_name, nLen);
 
 		/*hash the name*/
-		meta1_name2hash(container->cID, gs->ni.name, C0_NAME(container));
+		meta1_name2hash(container->cID, gs_get_full_vns(gs), C0_NAME(container));
 
 		/*pre-set the string form of the container id */
 		container_id_to_string( container->cID, container->str_cID, sizeof(container->str_cID) );
@@ -1439,7 +1445,7 @@ hc_set_container_storage_policy(gs_container_t *container,
 	memset(target, '\0', 64);
 	addr_info_to_string(&(container->meta2_addr), target, 64);
 	url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, container->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(container));
 
 	if (NULL != (ge = m2v2_remote_execute_STGPOL(target, NULL, url,

@@ -56,6 +56,8 @@ struct dav_resource_private {
 	struct content_textinfo_s content;
 	struct chunk_textinfo_s chunk;
 
+	char *namespace; /* Namespace name, in case of VNS */
+
 	int k; /* Number of data metachunks (from the policy) */
 	int m; /* Number of coding metachunks (from the policy) */
 	const char* algo; /* Name of the algorythm to apply (from the policy) */

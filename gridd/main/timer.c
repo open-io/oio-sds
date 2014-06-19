@@ -110,9 +110,9 @@ srvtimer_fire(guint64 ticks)
 
 	}
 
-	DEBUG("Firing the timers...");
+	TRACE("Firing the timers...");
 	g_static_rw_lock_reader_lock(&rw_lock);
 	g_slist_foreach(timers_regular, timers_iterator, NULL);
 	g_static_rw_lock_reader_unlock(&rw_lock);
-	DEBUG("Timers fired");
+	TRACE("Timers fired");
 }

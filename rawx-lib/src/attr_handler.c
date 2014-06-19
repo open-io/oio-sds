@@ -1288,6 +1288,9 @@ rawx_get_volume_lock_state(const char *vol, const char *ns, const char *host, GE
 {
 	gchar value_host[512], value_ns[512];
 
+	memset(value_host, 0, sizeof(value_host));
+	memset(value_ns, 0, sizeof(value_ns));
+
 	if (!vol || !ns || !host) {
 		SETERRCODE(err, EINVAL, "Invalid parameter");
 		return ERROR_LS;
@@ -1300,8 +1303,10 @@ rawx_get_volume_lock_state(const char *vol, const char *ns, const char *host, GE
 	if (!*value_host && !*value_ns)
 		return NOLOCK_LS;
 
-	if (0 != g_ascii_strncasecmp(host, value_host, sizeof(value_host)))
-		return OTHER_LS;
+	if (*value_host) {
+		if (0 != g_ascii_strncasecmp(host, value_host, sizeof(value_host)))
+			return OTHER_LS;
+	}
 
 	if (*value_ns) {
 		if (0 != g_ascii_strncasecmp(ns, value_ns, sizeof(value_ns)))

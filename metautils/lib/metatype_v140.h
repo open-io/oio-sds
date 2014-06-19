@@ -489,7 +489,7 @@ meta2_raw_content_v2_t* meta2_raw_content_v1_get_v2(meta2_raw_content_t *v1,
  * @param err
  * @return
  */
-meta2_raw_content_t* meta2_raw_content_v2_get_v1(meta2_raw_content_v2_t *v2,
+meta2_raw_content_t* meta2_raw_content_v2_get_v1(const meta2_raw_content_v2_t *v2,
 		GError **err);
 
 /** @} */

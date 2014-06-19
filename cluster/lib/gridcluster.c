@@ -34,6 +34,7 @@
 #define NS_WORM_OPT_NAME "worm"
 #define NS_CONTAINER_MAX_SIZE_NAME "container_max_size"
 #define NS_STORAGE_POLICY_NAME "storage_policy"
+#define NS_CHUNK_SIZE_NAME "chunk_size"
 #define NS_WORM_OPT_VALUE_ON "on"
 #define NS_COMPRESS_OPT_NAME "compression"
 #define NS_COMPRESS_OPT_VALUE_ON "on"
@@ -1204,6 +1205,14 @@ namespace_container_max_size(namespace_info_t* ns_info)
 {
 	GByteArray *val = namespace_param_gba(ns_info, NULL, NS_CONTAINER_MAX_SIZE_NAME);
 	return _gba_to_int64(val, -1);
+}
+
+gint64
+namespace_chunk_size(const namespace_info_t* ns_info, const char *ns_name)
+{
+	GByteArray *val = namespace_param_gba(ns_info, ns_name,
+			NS_CHUNK_SIZE_NAME);
+	return _gba_to_int64(val, ns_info->chunk_size);
 }
 
 gchar *

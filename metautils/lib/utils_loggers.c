@@ -23,16 +23,22 @@ int main_log_flags = LOG_FLAG_TRIM_DOMAIN
 
 time_t main_log_level_update = 0;
 
-static inline guint16
-get_thread_id(void)
+inline guint16
+compute_thread_id(GThread *thread)
 {
 	union {
 		void *p;
 		guint16 u[4];
 	} bulk;
 	memset(&bulk, 0, sizeof(bulk));
-	bulk.p = g_thread_self();
+	bulk.p = thread;
 	return ((bulk.u[0] ^ bulk.u[1]) ^ bulk.u[2]) ^ bulk.u[3];
+}
+
+static inline guint16
+get_thread_id(void)
+{
+	return compute_thread_id(g_thread_self());
 }
 
 static inline const gchar*

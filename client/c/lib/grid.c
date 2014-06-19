@@ -43,10 +43,39 @@ env_init (void)
 	}
 }
 
+int
+gs_set_namespace(gs_grid_storage_t *gs, const char *vns)
+{
+	if (!gs)
+		return 0;
+
+	if (vns && !g_str_has_prefix(vns, gs->ni.name))
+		return 0;
+
+	if (gs->full_vns)
+		g_free(gs->full_vns);
+
+	gs->full_vns = vns ? g_strdup(vns) : NULL;
+	return 1;
+}
+
 const char*
 gs_get_namespace(gs_grid_storage_t *gs)
 {
-	return !gs ? "(nil)" : gs->ni.name;
+	return !gs ? "(nil)" : gs->physical_namespace;
+}
+
+const char*
+gs_get_virtual_namespace(gs_grid_storage_t *gs)
+{
+	return !gs ? "(nil)" : strchr(gs->full_vns, '.');
+}
+
+const char*
+gs_get_full_vns(gs_grid_storage_t *gs)
+{
+	return !gs ? "(nil)" : gs->full_vns?
+			gs->full_vns : gs->physical_namespace;
 }
 
 gs_grid_storage_t*
@@ -96,12 +125,11 @@ gs_grid_storage_init_flags(const gchar *ns, uint32_t flags,
 
 	if (NULL != (sep = strchr(ns, '.'))) {
 		gs->physical_namespace = g_strndup(ns, sep-ns);
-		gs->virtual_namespace = g_strdup(sep+1);
 	}
 	else {
 		gs->physical_namespace = g_strdup(ns);
-		gs->virtual_namespace = NULL;
 	}
+	gs->full_vns = g_strdup(ns);
 
 	if (!(flags & GSCLIENT_NOINIT)) {
 		GError *gErr = NULL;
@@ -131,6 +159,10 @@ gs_grid_storage_init_flags(const gchar *ns, uint32_t flags,
 	gs->timeout.m2.op =   M2_TOREQ_DEFAULT;
 	gs->timeout.m2.cnx =  M2_TOCNX_DEFAULT;
 	g_strlcpy(gs->ni.name, ns, sizeof(gs->ni.name));
+
+	if (NULL != strchr(gs->ni.name, '.'))
+		* (strchr(gs->ni.name, '.')) = '\0';
+
 	return gs;
 }
 
@@ -226,8 +258,8 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 
 		if (!ref_exists || !metacd_is_up) {
 			if (has_before_create) {
-				if (meta1v2_remote_has_reference(pA, &gErr, gs->ni.name, cID,
-						gs_grid_storage_get_timeout(gs, GS_TO_M1_CNX),
+				if (meta1v2_remote_has_reference(pA, &gErr, gs_get_full_vns(gs),
+						cID, gs_grid_storage_get_timeout(gs, GS_TO_M1_CNX),
 						gs_grid_storage_get_timeout(gs, GS_TO_M1_OP))) {
 					DEBUG("METACD reference already exists in meta1: [%s/%s]",
 							cname, str_cid);
@@ -241,7 +273,7 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 				}
 				DEBUG("Creating reference in meta1: [%s/%s]", cname, str_cid);
 			}
-			if (meta1v2_remote_create_reference(pA, &gErr, gs->ni.name,
+			if (meta1v2_remote_create_reference(pA, &gErr, gs_get_full_vns(gs),
 					cID, cname,
 					gs_grid_storage_get_timeout(gs, GS_TO_M1_CNX),
 					gs_grid_storage_get_timeout(gs, GS_TO_M1_OP),
@@ -328,8 +360,8 @@ GSList* gs_resolve_meta2 (gs_grid_storage_t *gs,
 		/* between two meta2 direct resolutions, we want to
 		 * be sure a metacd has not been spawned, so only
 		 * one try is made this turn */
-		pL = resolver_direct_get_meta2_once (gs->direct_resolver, gs->ni.name,
-				cID, exclude, &gErr);
+		pL = resolver_direct_get_meta2_once (gs->direct_resolver,
+				gs_get_full_vns(gs), cID, exclude, &gErr);
 
 		if (pL)
 			return pL;
@@ -614,7 +646,7 @@ gs_locate_container_by_name(gs_grid_storage_t *gs, const char *name, gs_error_t 
 		return NULL;
 	}
 	
-	meta1_name2hash(cid, gs->ni.name, name);
+	meta1_name2hash(cid, gs_get_full_vns(gs), name);
 
 	return _gs_locate_container_by_cid(gs, cid, NULL, gserr);
 }

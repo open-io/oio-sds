@@ -266,8 +266,9 @@ hc_create_container(gs_grid_storage_t *hc, struct hc_url_s *url,
 	e = NULL;
 	c = gs_get_storage_container2(hc, hc_url_get(url, HCURL_REFERENCE),
 			&params, 1, &e);
+
 	if (c)
-		g_print("Container [%s] created in namespace [%s].\n\n",
+		GRID_INFO("Container [%s] created in namespace [%s].\n\n",
 				hc_url_get(url, HCURL_REFERENCE), hc_url_get(url, HCURL_NS));
 
 end_label:
@@ -320,8 +321,8 @@ hc_upload_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *local
 			goto end_put;
 		}
 	}
-	g_print("Uploaded a new version of content [%s] in container [%s]\n\n", hc_url_get(url, HCURL_PATH),
-			hc_url_get(url, HCURL_REFERENCE));
+	GRID_INFO("Uploaded a new version of content [%s] in container [%s]\n\n",
+			hc_url_get(url, HCURL_PATH), hc_url_get(url, HCURL_REFERENCE));
 	GRID_DEBUG("Content successfully uploaded!\n");
 
 end_put:
@@ -566,19 +567,19 @@ hc_delete_container(gs_grid_storage_t *hc, struct hc_url_s *url, int force, int 
 
 	// to flush by meta2, but without event generated
 	//if (flush) flags |= M2V2_DESTROY_FLUSH;
-	
+
 	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, 0, &e);
 	if(NULL != c) {
 
 		// to flush by this process, but with event generated
 		if (flush) {
-	    	if (gs_flush_container(c, &e)) {
+			if (gs_flush_container(c, &e)) {
 				GRID_DEBUG("Container flushed\n");
 		    }
 		}
 
-		// destroy container 
-		if(!e) {
+		// destroy container
+		if (!e) {
 			if (gs_destroy_container_flags (c, flags, &e)) {
 				GRID_DEBUG("Container deleted\n");
 			}

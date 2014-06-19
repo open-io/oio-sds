@@ -204,4 +204,16 @@ compress_chunk(const gchar* path, const gchar* algorithm, const gint64 blocksize
 int
 uncompress_chunk(const gchar* path, gboolean preserve, GError ** error);
 
+/*
+ * Uncompressing a chunk file
+ *
+ * @param path the chunk file path to compress
+ * @param keep_pending keep .pending file in case of error
+ * @param error a glib GError pointer
+ *
+ * @return 1 if succeeded, 0 otherwise
+ */
+int
+uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending, GError ** error);
+
 #endif /*GRID_RAWXLIB_COMPRESSION__H*/

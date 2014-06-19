@@ -216,7 +216,7 @@ static void transition(struct election_member_s *member,
 
 static void defer_PIPEFROM(struct election_member_s *member);
 
-static void defer_USE(struct election_member_s *member, time_t now);
+static gboolean defer_USE(struct election_member_s *member, time_t now);
 
 static void defer_GETVERS(struct election_member_s *member);
 
@@ -1514,9 +1514,10 @@ on_end_USE(struct event_client_s *mc)
 	g_free(udata);
 }
 
-static void
+static gboolean
 defer_USE(struct election_member_s *member, time_t now)
 {
+	gboolean rc = FALSE;
 	gchar **peers = NULL, **p = NULL;
 	guint pending = 0;
 	struct sqlx_name_s n;
@@ -1527,10 +1528,11 @@ defer_USE(struct election_member_s *member, time_t now)
 
 	GError *err = member_get_peers(member, &peers);
 	if (err != NULL) {
-		GRID_WARN("[%s] Election initiated but get_peers error : (%d) %s",
-				__FUNCTION__, err->code, err->message);
+		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
+				__FUNCTION__, _step2str(member->step), err->code, err->message);
 		g_clear_error(&err);
-		return;
+		rc = FALSE;
+		goto end;
 	}
 
 	if (!peers || !*peers)
@@ -1542,9 +1544,10 @@ defer_USE(struct election_member_s *member, time_t now)
 			pending = g_strv_length(peers);
 	}
 
-	if (!pending)
+	if (!pending) {
 		member_trace(__FUNCTION__, "USE avoided", member);
-	else {
+		rc = TRUE; // FIXME: is it an error?
+	} else {
 		GByteArray *req;
 
 		member->last_USE = now ? now : time(0);
@@ -1572,10 +1575,14 @@ defer_USE(struct election_member_s *member, time_t now)
 		g_byte_array_unref(req);
 
 		member_trace(__FUNCTION__, "USE scheduled", member);
+		rc = TRUE;
 	}
 
+end:
 	if (peers)
 		g_strfreev(peers);
+
+	return rc;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -1771,8 +1778,8 @@ defer_GETVERS(struct election_member_s *member)
 	gchar **peers = NULL;
 	GError *err = member_get_peers(member, &peers);
 	if (err != NULL) {
-		GRID_WARN("[%s] Election initiated but get_peers error : (%d) %s",
-				__FUNCTION__, err->code, err->message);
+		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
+				__FUNCTION__, _step2str(member->step), err->code, err->message);
 		g_clear_error(&err);
 		return;
 	}
@@ -1868,7 +1875,10 @@ restart_election(struct election_member_s *member)
 	member->requested_USE = 0;
 
 	member_set_status(member, STEP_CANDREQ);
-	defer_USE(member, 0);
+	if (!defer_USE(member, 0)) {
+		member_set_status(member, STEP_FAILED);
+		return;
+	}
 	zrc = step_StartElection_start(member);
 	if (ZOK != zrc) {
 		member_warn_failed_creation(member, zrc);
@@ -1996,7 +2006,8 @@ member_ping(struct election_member_s *member)
 
 	if (!member->last_USE || member->last_USE + delay < now
 			|| member->last_USE > now)
-		defer_USE(member, now);
+		if (!defer_USE(member, now))
+			become_leaver(member);
 }
 
 static void
