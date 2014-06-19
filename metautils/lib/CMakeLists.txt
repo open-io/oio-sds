@@ -102,7 +102,7 @@ add_library(metautils SHARED
 		utils_manifest.c metautils_manifest.h
 		metautils_syscall.h utils_syscall.c
 		event_config.c event_config.h
-		grid_storage_client_stat.c grid_storage_client_stat.h
+		grid_storage_client_stat.c
 		lrutree.c lrutree.h tree.h
 		storage_policy.h storage_policy.c
 		hc_url.h hc_url.c
@@ -142,10 +142,6 @@ add_library(metautils SHARED
 
 target_link_libraries(metautils
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} -lm -lexpat)
-
-set_target_properties(metautils PROPERTIES
-		PUBLIC_HEADER "grid_storage_client_stat.h"
-		SOVERSION ${ABI_VERSION})
 
 add_dependencies(metautils asn1c_generation)
 
