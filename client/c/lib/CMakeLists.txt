@@ -31,12 +31,11 @@ add_library(gridclient SHARED
 		meta_resolver_explicit.c meta_resolver_explicit.h
 		meta_resolver_metacd.c meta_resolver_metacd.h
 		metacd_remote.c metacd_remote.h
-		round_buffer.c round_buffer.h
-		round_buffer_test.c
 		hc_directory.c
 		loc_context.c loc_context.h
 		hc_func.c hc_help.c hc.h
 		hcadmin_func.c hcadmin.h
+		http_put.c http_put.h
 )
 
 set_target_properties(gridclient PROPERTIES
@@ -74,6 +73,14 @@ target_link_libraries(test_url gridclient)
 
 add_executable(test_metacd test_metacd.c)
 target_link_libraries(test_metacd gridclient)
+
+if (MHD_FOUND)
+	include_directories(AFTER ${MHD_INCLUDE_DIRS})
+	link_directories(${MHD_LIBRARY_DIRS})
+	add_executable(test_http_put test_http_put.c)
+	target_link_libraries(test_http_put gridclient microhttpd)
+	add_test(NAME client/lib/http_put COMMAND test_http_put)
+endif(MHD_FOUND)
 
 install(FILES
 			grid_client_shortcuts.h

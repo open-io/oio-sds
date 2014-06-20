@@ -211,8 +211,6 @@ static gboolean
 func_put(gs_grid_storage_t *hc)
 {
 	gs_error_t *e = NULL;
-	namespace_info_t *ni = NULL;
-	GError *err = NULL;
 
 	if(hc_url_has(url, HCURL_PATH)) {
 		if (NULL != copy_source) {
@@ -226,22 +224,12 @@ func_put(gs_grid_storage_t *hc)
 				return FALSE;
 			}
 
-			ni = get_namespace_info(hc_url_get(url, HCURL_NS), &err);
-			if (!ni) {
-				GSERRORCAUSE(&e, err, "Cannot get namespace info for NS [%s]", hc_url_get(url, HCURL_NS));
-				g_clear_error(&err);
-				return FALSE;
-			}
-
-			memcpy(&(hc->ni), ni, sizeof(namespace_info_t));
-
 			e = hc_put_content(hc, url,
 					action_args[0],
 					(stgpol) ? stgpol->str : NULL,
 					(sys_metadata-> len > 0) ? sys_metadata->str : NULL,
 					flag_autocreate);
 
-			namespace_info_clear(ni);
 		}
 	} else {
 		/* container creation */
@@ -254,7 +242,7 @@ func_put(gs_grid_storage_t *hc)
 				(VERSIONING_NS_DEFAULT_VALUE < versioning) ? s : NULL);
 	}
 
-	if(NULL != e) {
+	if (NULL != e) {
 		__display_friendly_error(e);
 		gs_error_free(e);
 		return FALSE;
@@ -336,6 +324,8 @@ func_delete(gs_grid_storage_t *hc)
 			gs_error_free(e);
 			return FALSE;
 		}
+		GRID_INFO("Content [%s] deleted from namespace.\n",
+				hc_url_get(url, HCURL_WHOLE));
 	} else {
 		e = hc_delete_container(hc, url, flag_force, flag_flush);
 		if(NULL != e) {
@@ -343,6 +333,8 @@ func_delete(gs_grid_storage_t *hc)
 			gs_error_free(e);
 			return FALSE;
 		}
+		GRID_INFO("Container [%s] deleted from namespace [%s].\n",
+				hc_url_get(url, HCURL_REFERENCE), hc_url_get(url, HCURL_NS));
 	}
 
 	return TRUE;

@@ -300,7 +300,13 @@ m2v2_remote_pack_SPARE(GByteArray *sid, struct hc_url_s *url,
 		beans = g_slist_prepend(beans, chunk);
 	}
 
-	body = bean_sequence_marshall(beans);
+	/* body is only mandatory for M2V2_SPARE_BY_BLACKLIST so when
+	 * notin_list != NULL. If not_in_list != NULL, beans is always
+	 * != NULL so body is sent.
+	 */
+	if (beans != NULL)
+		body = bean_sequence_marshall(beans);
+
 	msg = _m2v2_build_request("M2V2_BEANS", sid, url, body);
 	message_add_fields_str(msg,
 			M2_KEY_STORAGE_POLICY, pol,

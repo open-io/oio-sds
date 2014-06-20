@@ -5,7 +5,8 @@
 #include "./gs_internals.h"
 #include <curl/curl.h>
 
-static GError *_fill_sorted_chunk_array(GArray *in, GArray *sorted_chunks)
+static GError *_fill_sorted_chunk_array(GArray *in, GArray *sorted_chunks,
+		gint64 k)
 {
 	gboolean ok = FALSE;
 	GError *err = NULL;
@@ -21,6 +22,8 @@ static GError *_fill_sorted_chunk_array(GArray *in, GArray *sorted_chunks)
 					(errno != 0)? g_strerror(errno) : "unknown reason");
 			break;
 		}
+		if (par)
+			sub += k;
 		GRID_TRACE("Filling chunk array pos %d with chunk %s", sub,
 				CONTENTS_get_position(pair->content)->str);
 		/* We must make copies because we are not capable of making
@@ -51,7 +54,7 @@ static GError *_find_gaps_and_dispatch_chunks(struct rainx_params_s *params,
 			*gap_positions = g_slist_prepend(*gap_positions, (gpointer)i);
 			// Look for an unavailable chunk matching the gap
 			gchar *s_pos = g_strdup_printf("%lu.%s%lu", params->metachunk_pos,
-					(i >= k)? "p" : "", i);
+					(i >= k)? "p" : "", (i >= k)? i-k : i);
 			GRID_DEBUG("Missing chunk at position %ld, looking for unavailable chunk '%s'",
 					i, s_pos);
 			for (guint j = 0; j < params->unavail_chunk_pairs->len; j++) {
@@ -329,10 +332,10 @@ GError *rainx_reconstruct(struct hc_url_s *url, namespace_info_t *nsinfo,
 	g_array_set_size(sorted_chunks, k + m);
 
 	// Browse the chunk pair arrays, and build an ordered one with gaps
-	err = _fill_sorted_chunk_array(params->data_chunk_pairs, sorted_chunks);
+	err = _fill_sorted_chunk_array(params->data_chunk_pairs, sorted_chunks, k);
 	if (err != NULL)
 		goto global_cleanup;
-	err = _fill_sorted_chunk_array(params->parity_chunk_pairs, sorted_chunks);
+	err = _fill_sorted_chunk_array(params->parity_chunk_pairs, sorted_chunks, k);
 	if (err != NULL)
 		goto global_cleanup;
 

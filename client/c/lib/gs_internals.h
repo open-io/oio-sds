@@ -57,7 +57,6 @@
 #include "./meta_resolver_metacd.h"
 #include "./metacd_remote.h"
 #include "./loc_context.h"
-#include "./round_buffer.h"
 #include "./grid_client_shortcuts.h"
 
 #ifndef  CS_TOCNX_DEFAULT

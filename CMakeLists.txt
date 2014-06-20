@@ -462,6 +462,32 @@ endif()
 
 endif()
 
+###-----------------------------###
+### Dependency to libmicrohttpd ###
+###-----------------------------###
+
+set(MICROHTTPD_INCLUDE_DIRS "/usr/include")
+set(MICROHTTPD_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
+set(MHD_FOUND ON)
+unset(FOUND CACHE)
+find_file(FOUND microhttpd.h ${MICROHTTPD_INCLUDE_DIRS})
+if (NOT FOUND)
+	set(MHD_FOUND OFF)
+endif(NOT FOUND)
+
+unset(FOUND CACHE)
+find_library(FOUND libmicrohttpd.so ${MICROHTTPD_LIBRARY_DIRS})
+if (NOT FOUND)
+	set(MHD_FOUND OFF)
+endif(NOT FOUND)
+
+if (MHD_FOUND)
+	message(STATUS "FOUND libmicrohttpd")
+else(MHD_FOUND)
+	message(STATUS "NOT FOUND libmicrohttpd (required for some unit tests)")
+endif(MHD_FOUND)
+
+
 ###---------------------------------------------###
 ### explicit plugin directory for gridd modules ###
 ###---------------------------------------------###

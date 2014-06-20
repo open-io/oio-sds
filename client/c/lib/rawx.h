@@ -39,20 +39,6 @@ gs_status_t rawx_delete (gs_chunk_t *chunk, GError **err);
 gboolean rawx_delete_v2(gpointer chunk, GError **err);
 
 /*  */
-gs_status_t rawx_upload_v2 (gs_chunk_t *chunk, GError **err,
-		gs_input_f input, void *user_data, GByteArray *user_metadata,
-		GByteArray *system_metadata, gboolean process_md5);
-
-/*  */
-gs_status_t rawx_upload (gs_chunk_t *chunk, GError **err,
-		gs_input_f input, void *user_data, GByteArray *system_metadata,
-		gboolean process_md5);
-
-void clean_after_upload(void *user_data);
-void finalize_content_hash(void);
-content_hash_t *get_content_hash(void);
-
-/*  */
 gboolean rawx_download (gs_chunk_t *chunk, GError **err,
 		struct dl_status_s *status, GSList **p_broken_rawx_list);
 int rawx_init (void);
@@ -82,5 +68,13 @@ char* create_rawx_request_from_chunk(ne_request **req, ne_session *session,
 
 ne_session *opensession_common(const addr_info_t *addr_info,
 		int connect_timeout, int read_timeout, GError **err);
+
+/**
+ * Generate an request id
+ *
+ * @param dst destination buffer (will be nul-terminated)
+ * @param dst_size size of the destination buffer
+ */
+void gen_req_id_header(gchar *dst, gsize dst_size);
 
 #endif /*__CHUNKINFO_NEON_SESSION_H__*/

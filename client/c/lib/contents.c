@@ -210,7 +210,8 @@ fill_chunk_id_from_url(const char * const url, chunk_id_t *ci)
 	}
 
 	/* vol */
-	memcpy(ci->vol, vol, id - vol);
+	g_strlcpy(ci->vol, vol, MIN(id - vol + 1 /* for '\0' */, (int)sizeof(ci->vol)));
+
 
 	/* id */
 	container_id_hex2bin(id + 1 , strlen(id +1 ), &(ci->id), NULL);

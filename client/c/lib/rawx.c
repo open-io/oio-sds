@@ -7,6 +7,14 @@
 // TODO FIXME replace with GLib equivalent
 #include <openssl/md5.h>
 
+#include <neon/ne_basic.h>
+#include <neon/ne_request.h>
+#include <neon/ne_session.h>
+
+#include <metautils/lib/metautils.h>
+
+#include "./rawx.h"
+
 #define WEBDAV_TIMEOUT 1
 #define RAWX_DELETE   "DELETE"
 #define RAWX_UPLOAD   "PUT"
@@ -14,7 +22,6 @@
 
 static void add_req_id_header(ne_request *request, gchar *dst, gsize dst_size);
 static void add_req_system_metadata_header (ne_request *request, GByteArray *system_metadata);
-static void add_req_user_metadata_header (ne_request *request, GByteArray *user_metadata);
 
 
 static void chunk_id2str (const gs_chunk_t *chunk, char *d, size_t dS)
@@ -268,48 +275,6 @@ end:
 	return (*err == NULL);
 }
 
-gs_status_t rawx_upload (gs_chunk_t *chunk, GError **err,
-	gs_input_f input, void *user_data, GByteArray *system_metadata, gboolean process_md5)
-{
-	return rawx_upload_v2(chunk, err, input, user_data, NULL, system_metadata, process_md5);
-}
-
-struct thread_data {
-	MD5_CTX md5_ctx;
-	chunk_hash_t hash;
-	gint md5_computed; // 0:not computed, 1:computed, -1:error
-	GMutex *lock;
-	GCond *cond;
-};
-
-static GHashTable *thread_data_ht = NULL;
-static GStaticMutex mutex = G_STATIC_MUTEX_INIT;
-static MD5_CTX content_md5_ctx;
-static content_hash_t content_hash;
-static gboolean content_md5_init = TRUE;
-
-void finalize_content_hash() {
-	MD5_Final((void*) &content_hash, &content_md5_ctx);
-}
-
-content_hash_t *get_content_hash() {
-	return &content_hash;
-}
-
-void clean_after_upload(void *user_data)
-{
-	g_static_mutex_lock(&mutex);
-	if (thread_data_ht) {
-		struct thread_data *thdata = g_hash_table_lookup(thread_data_ht, user_data);
-		if (thdata) {
-			g_mutex_free(thdata->lock);
-			g_cond_free(thdata->cond);
-			g_hash_table_remove(thread_data_ht, user_data);
-		}
-	}
-	content_md5_init = TRUE;
-	g_static_mutex_unlock(&mutex);
-}
 
 char*
 create_rawx_request_common(ne_request **req, ne_request_param_t *param, GError **err)
@@ -399,196 +364,6 @@ create_rawx_request_from_chunk(ne_request **p_req, ne_session *session, const ch
 
 	g_free(str_req_id);
 	return NULL;
-}
-
-gs_status_t rawx_upload_v2 (gs_chunk_t *chunk, GError **err,
-	gs_input_f input, void *user_data, GByteArray *user_metadata,
-	GByteArray *system_metadata, gboolean process_md5)
-{
-	GMutex *lock = NULL;
-	GCond *cond = NULL;
-
-	char
-		*str_req_id,
-		str_hash[STRLEN_CHUNKHASH],
-		cPath[CI_FULLPATHLEN];
-
-	int64_t size_to_be_read=0;
-
-	struct thread_data *thdata = NULL;
-
-	g_static_mutex_lock(&mutex);
-	if (thread_data_ht == NULL) {
-		thread_data_ht = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
-	}
-	thdata = g_hash_table_lookup(thread_data_ht, user_data);
-	if (thdata == NULL) {
-		thdata = calloc(1, sizeof(struct thread_data));
-		g_hash_table_insert(thread_data_ht, user_data, thdata);
-		thdata->lock = g_mutex_new();
-		thdata->cond = g_cond_new();
-	}
-	cond = thdata->cond;
-	lock = thdata->lock;
-	// in case the thread responsible for computing the MD5 sum cannot upload
-	// its chunk, force the other threads waiting for this MD5 to exit.
-	if (process_md5 == -1) {
-		thdata->md5_computed = -1;
-		g_mutex_lock (lock);
-		g_cond_broadcast(cond);
-		g_mutex_unlock (lock);
-		rb_handle_read_error(user_data);
-		g_static_mutex_unlock(&mutex);
-		return FALSE;
-	}
-	if (process_md5) {
-		DEBUG("thread %p: processing md5.", g_thread_self());
-		MD5_Init(&(thdata->md5_ctx));
-		thdata->md5_computed = 0;
-		bzero(&(thdata->hash), sizeof(thdata->hash));
-		if (content_md5_init == TRUE) {
-			MD5_Init(&(content_md5_ctx));
-			bzero(&(content_hash), sizeof(content_hash));
-			content_md5_init = FALSE;
-		}
-	}
-	g_static_mutex_unlock(&mutex);
-
-	ne_session *session=NULL;
-	ne_request *request=NULL;
-
-	/*reads at most the chunk size*/
-	ssize_t limited_input (void *udata, char *b, size_t bS)
-	{
-		ssize_t nb;
-		int64_t bS64, possible64;
-		size_t possible;
-
-		if (size_to_be_read <= 0) {
-			TRACE("reading input (end of input)");
-			return 0;
-		}
-		if (!bS) {
-			TRACE("reading input (preliminary call)");
-			return 0;
-		}
-
-		bS64 = bS;
-		possible64 = MAX(0,MIN(bS64,size_to_be_read));
-		possible = possible64;
-
-		nb = input (udata, b, possible);
-
-		TRACE("%"G_GSSIZE_FORMAT" bytes read, %"G_GINT64_FORMAT" -> %"G_GINT64_FORMAT, nb, size_to_be_read, size_to_be_read - nb);
-
-		if (nb>0) {
-			size_to_be_read = size_to_be_read - nb;
-			if (process_md5) {
-				MD5_Update(&(thdata->md5_ctx), b, nb);
-				MD5_Update(&(content_md5_ctx), b, nb);
-			}
-			if (size_to_be_read <= 0) {
-				g_mutex_lock (lock);
-				if (process_md5) {
-					DEBUG("thread %p: done with md5 processing.", g_thread_self());
-					MD5_Final((void*) &(thdata->hash), &(thdata->md5_ctx));
-					thdata->md5_computed = 1;
-					g_cond_broadcast(cond);
-				} else {
-					DEBUG("thread %p: waiting for md5 processing.", g_thread_self());
-					while (thdata->md5_computed == 0)
-						g_cond_wait(cond, lock);
-					DEBUG("thread %p: %s, resuming.",
-							g_thread_self(),
-							thdata->md5_computed == 1 ? "md5 processed" : "md5 could not be processed");
-				}
-				g_mutex_unlock (lock);
-				memcpy(chunk->ci->hash, thdata->hash, sizeof(chunk->ci->hash));
-				chunk_gethash (chunk, str_hash, sizeof(str_hash));
-				ne_add_request_header(request, "chunkhash", str_hash);
-			}
-		}
-
-		return nb;
-	}
-
-	/*sanity checks and variables initiations*/
-	if (!chunk || !chunk->ci || !chunk->content || !input)
-	{
-		GSETERROR(err, "Invalid parameter");
-		return 0;
-	}
-
-	if (chunk->ci->size < 0LL)
-	{
-		GSETERROR(err, "Invalid parameter: size out of range");
-		return 0;
-	}
-
-	size_to_be_read = chunk->ci->size;
-	chunk_getpath (chunk, cPath, sizeof(cPath));
-
-	gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
-
-	/*start a new WebDAV session and initiate a request*/
-	session = rawx_opensession (chunk, err);
-
-	/*create an upload request*/
-	if (!(str_req_id = create_rawx_request_from_chunk(&request, session,
-			RAWX_UPLOAD, chunk, system_metadata, err)))
-		goto error_label;
-
-	if (user_metadata && user_metadata->data && user_metadata->len>0)
-		add_req_user_metadata_header(request, user_metadata);
-
-	/*tell we'll read data from the provided callback*/
-	ne_set_request_body_provider (request, chunk->ci->size, limited_input, user_data);
-
-	/*really start the upload*/
-	switch (ne_request_dispatch (request))
-	{
-		case NE_OK:
-			if (ne_get_status(request)->klass != 2) {
-				GSETERROR(err, "cannot upload '%s' (%s) (ReqId:%s)", cPath,
-						ne_get_error(session), str_req_id);
-				goto error_label;
-			}
-			DEBUG("chunk upload finished (success)");
-			break;
-		case NE_AUTH:
-		case NE_CONNECT:
-		case NE_TIMEOUT:
-		case NE_ERROR:
-			GSETERROR(err, "error from the WebDAV server (%s) (ReqId:%s)",
-					ne_get_error(session), str_req_id);
-			goto error_label;
-		default:
-			GSETERROR(err, "unexpected error from the WebDAV server (%s) (ReqId:%s)",
-					ne_get_error(session), str_req_id);
-			goto error_label;
-	}
-
-	/*destroy the working structures*/
-	ne_request_destroy (request);
-	ne_session_destroy (session);
-
-	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
-
-	if (DEBUG_ENABLED()) {
-		TRACE("%s uploaded (ReqId:%s)", cPath, str_req_id);
-	}
-
-	g_free(str_req_id);
-	return TRUE;
-error_label:
-	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
-	if (request)
-		ne_request_destroy (request);
-	if (session)
-		ne_session_destroy (session);
-	TRACE("could not upload %s (ReqId:%s)", cPath, str_req_id);
-	g_free(str_req_id);
-	return FALSE;
 }
 
 static void
@@ -859,51 +634,40 @@ int rawx_init (void)
 	return 1;
 }
 
-void add_req_id_header(ne_request *request, gchar *dst, gsize dst_size) {
-        pid_t pid;
+void gen_req_id_header(gchar *dst, gsize dst_size) {
+	pid_t pid;
 	gsize i, s=16;
 	char idRequest[256];
-        guint8 idBuf[s+sizeof(int)];
-       
-        memset(idBuf, 0, sizeof(idBuf));
+	guint8 idBuf[s+sizeof(int)];
+
+	g_assert(dst != NULL);
+	g_assert(dst_size > 0);
+
+	memset(idBuf, 0, sizeof(idBuf));
 	memset(idRequest, 0, sizeof(idRequest));
 
-        pid = getpid();
-        memcpy (idBuf, (guint8*)(&pid), sizeof(pid));
-        for (i=sizeof(int); i<s ;i+=sizeof(int)) {
-                int r = random();
-                memcpy(idBuf+i, (guint8*)(&r), sizeof(int));
-        }
+	pid = getpid();
+	memcpy (idBuf, (guint8*)(&pid), sizeof(pid));
+	for (i=sizeof(int); i<s ;i+=sizeof(int)) {
+		int r = random();
+		memcpy(idBuf+i, (guint8*)(&r), sizeof(int));
+	}
 
 	buffer2str(idBuf, sizeof(idBuf), idRequest, sizeof(idRequest));
+
+	g_strlcpy(dst, idRequest, dst_size);
+}
+
+void add_req_id_header(ne_request *request, gchar *dst, gsize dst_size) {
+	char idRequest[256];
+
+	gen_req_id_header(idRequest, sizeof(idRequest));
 
 	DEBUG("Adding ReqId header to HTTP request => [%s:%s]", "GSReqId", idRequest);
 
 	ne_add_request_header(request, "GSReqId", idRequest);
 	if (dst && dst_size>0)
 		g_strlcpy(dst, idRequest, dst_size);
-}
-
-void add_req_user_metadata_header (ne_request *request, GByteArray *user_metadata)
-{
-	gchar *escaped = NULL;
-	gchar *unescaped = NULL;
-
-	if (!user_metadata)
-		return;
-	if (!request)
-		return;
-
-	// FIXME: limit user metadata size
-	/* ensure the URL is NULL terminated */
-	unescaped = g_malloc0(user_metadata->len + 1);
-	g_memmove(unescaped, user_metadata->data, user_metadata->len);
-
-	/*and add the escaped string as a header*/
-	escaped = g_strescape( unescaped, "");
-	ne_add_request_header( request, "contentmetadata", escaped);
-	g_free(escaped);
-	g_free(unescaped);
 }
 
 void add_req_system_metadata_header (ne_request *request, GByteArray *system_metadata)

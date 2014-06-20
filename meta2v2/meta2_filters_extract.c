@@ -652,6 +652,13 @@ meta2_filter_extract_header_spare(struct gridd_filter_ctx_s *ctx,
 	TRACE_FILTER();
 	EXTRACT_OPT(M2_KEY_SPARE);
 	const gchar *type = meta2_filter_ctx_get_param(ctx, M2_KEY_SPARE);
+
+	if (type != NULL)
+	{
+		/* No content length in spare request */
+		meta2_filter_ctx_add_param(ctx, "CONTENT_LENGTH_OPT", "OK");
+	}
+
 	// Body beans are required only when doing blacklist spare request
 	if (type == NULL || g_ascii_strcasecmp(type, M2V2_SPARE_BY_BLACKLIST))
 		meta2_filter_ctx_add_param(ctx, "BODY_OPT", "OK");
@@ -779,10 +786,10 @@ meta2_filter_extract_header_string_size(struct gridd_filter_ctx_s *ctx,
 {
 	GError *e = NULL;
 	gchar buf[64];
-	const char *opt = meta2_filter_ctx_get_param(ctx, "BODY_OPT");
+	const char *opt = meta2_filter_ctx_get_param(ctx, "CONTENT_LENGTH_OPT");
 
 	TRACE_FILTER();
-	EXTRACT_STRING(NAME_MSGKEY_CONTENTLENGTH, (opt == FALSE));
+	EXTRACT_STRING(NAME_MSGKEY_CONTENTLENGTH, (opt != NULL));
 	return FILTER_OK;
 }
 
