@@ -268,6 +268,7 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 	guint k = 0, m = 0;
 	gint64 k_signed, m_signed;
 	chunk_info_t *ci = NULL;
+	const guint nb_data_chunks = g_slist_length(content->chunk_list);
 
 	/*check the parameters*/
 	if (!content || !dl_info) {
@@ -387,7 +388,9 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 		download_debug(&status, content, "downloading chunk");
 		if (next_agregate) {
 			ci = g_slist_nth_data(next_agregate->data, 0);
-			is_last_subchunk = ((ci->position + 1) % k) == 0;
+			is_last_subchunk = nb_data_chunks < k ?
+					(ci->position + 1) == nb_data_chunks :
+					((ci->position + 1) % k) == 0;
 			if (is_rainx && remaining_reloads == -1 && g_hash_table_size(failed_chunks) > 0)
 				status.caller_stopped = TRUE;
 			cur_chunk = download_agregate(content, next_agregate->data, &status,

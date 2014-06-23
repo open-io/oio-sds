@@ -705,7 +705,7 @@ m2v2_beans_from_chunk_info_list(GByteArray *id,
 			"mime-type=octet/stream;chunk-method=chunk-size;", ct);
 
 	alias = _generate_alias(id, content_path, mdsys);
-	header = _generate_m2v2_headers(id, content_size, NULL);
+	header = _generate_m2v2_headers(id, content_size, mdsys);
 
 	result = g_slist_prepend(result, header);
 	result = g_slist_prepend(result, alias);

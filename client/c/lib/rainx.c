@@ -531,6 +531,12 @@ _create_meta2_raw_content(GSList *beans, gs_content_t *content, guint32 metachun
 					subpos++;
 					if (*subpos == 'p')
 						subpos++;
+					// This is usually the case, except when we only have 1
+					// subchunk: the parity chunks can then be identical to the
+					// data chunk, hence they have the same hash. We can filter
+					// out unwanted chunks using the subpos.
+					if (g_ascii_strtoull(subpos, NULL, 10) != found_spare->position)
+						continue;
 					CONTENTS_set2_position(bc, subpos);
 					beans_at_pos = g_slist_prepend(beans_at_pos, bc);
 					beans_at_pos = g_slist_prepend(beans_at_pos, ck);
