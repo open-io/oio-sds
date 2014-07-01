@@ -237,7 +237,7 @@ _configure_backend(struct sqlx_service_s *ss)
 	repository_config.flags |= ss->flag_autocreate ? SQLX_REPO_AUTOCREATE : 0;
 	repository_config.flags |= ss->flag_nolock ? SQLX_REPO_NOLOCK : 0;
 	repository_config.sync_solo = ss->sync_mode_solo;
-	repository_config.sync_repli = ss->sync_mode_solo;
+	repository_config.sync_repli = ss->sync_mode_repli;
 	repository_config.lock.ns = ss->ns_name;
 	repository_config.lock.type = ss->service_config->srvtype;
 	repository_config.lock.srv = ss->url->str;
