@@ -44,7 +44,7 @@ include(FindPythonLibs)
 
 set(Grid_VERSION_MAJOR 1)
 set(Grid_VERSION_MINOR 8)
-set(Grid_RELEASE 0)
+set(Grid_RELEASE 4)
 set(API_VERSION "${Grid_VERSION_MAJOR}.${Grid_VERSION_MINOR}.${Grid_RELEASE}")
 set(SHORT_API_VERSION "${Grid_VERSION_MAJOR}.${Grid_VERSION_MINOR}")
 if (NOT ABI_VERSION)
