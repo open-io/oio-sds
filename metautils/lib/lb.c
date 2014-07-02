@@ -1089,7 +1089,7 @@ grid_lb_iterator_next_set(struct grid_lb_iterator_s *iter,
 	const gchar *stgclass_name = storage_class_get_name(opt->req.stgclass);
 	GSList *fallbacks = NULL;
 	if (!opt->req.strict_stgclass)
-		storage_class_get_fallbacks(opt->req.stgclass);
+		fallbacks = (GSList *)storage_class_get_fallbacks(opt->req.stgclass);
 
 	// In a critical section to prevent several threads to iterate with
 	// the sameiterator and then skip services...
