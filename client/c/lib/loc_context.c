@@ -761,14 +761,18 @@ __dump_content(const struct loc_context_s *lc, GString **s)
 	struct beans_content_s *content = lc->rc;
 	struct storage_policy_s *sp = NULL;
 	GSList *l = NULL;
-	sp = _init_storage_policy(lc->namespace, CONTENTS_HEADERS_get_policy(content->header)->str);
 
-	GByteArray *hash = CONTENTS_HEADERS_get_hash(content->header);
+	const gchar *stgpol = content->header ? CONTENTS_HEADERS_get_policy(content->header)->str : "(nil)";
+	sp = _init_storage_policy(lc->namespace, stgpol);
+
 	char *str_hash = NULL;
-	if (hash != NULL && hash->len > 0) {
-		gint hash_len = 1 + sizeof(chunk_hash_t) * 2; // 2 digits per byte + '\0'
-		str_hash = g_alloca(hash_len);
-		buffer2str(hash->data, hash->len, str_hash, hash_len);
+	if (content->header) {
+		GByteArray *hash = CONTENTS_HEADERS_get_hash(content->header);
+		if (hash != NULL && hash->len > 0) {
+			gint hash_len = 1 + sizeof(chunk_hash_t) * 2; // 2 digits per byte + '\0'
+			str_hash = g_alloca(hash_len);
+			buffer2str(hash->data, hash->len, str_hash, hash_len);
+		}
 	}
 
 	g_string_append_printf(*s,
@@ -781,9 +785,9 @@ __dump_content(const struct loc_context_s *lc, GString **s)
 			"\t\t        Flags : %s\n",
 			ALIASES_get_alias(content->alias)->str,
 			ALIASES_get_version(content->alias),
-			CONTENTS_HEADERS_get_size(content->header),
+			content->header ? CONTENTS_HEADERS_get_size(content->header) : -1,
 			str_hash,
-			CONTENTS_HEADERS_get_policy(content->header)->str,
+			stgpol,
 			ALIASES_get_deleted(content->alias) ? "DELETED" : "ONLINE");
 
 	gint chunk_nb = ((content->pairs->len == 0)?
