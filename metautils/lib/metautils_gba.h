@@ -31,6 +31,7 @@ GByteArray* metautils_gba_dup(const GByteArray *gba);
  * @return
  */
 GByteArray* metautils_gba_from_string(const gchar *str);
+GByteArray* metautils_gba_from_hexstring(const gchar *str);
 
 
 /**
