@@ -96,6 +96,7 @@ metautils_gba_from_hexstring(const gchar *str)
 	if (len % 2)
 		return NULL;
 	GByteArray *gba = g_byte_array_sized_new(len / 2);
+	g_byte_array_set_size(gba, len/2);
 	if (len && !hex2bin(str, gba->data, gba->len, NULL)) {
 		g_byte_array_unref (gba);
 		return NULL;
