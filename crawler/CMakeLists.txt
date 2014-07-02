@@ -11,6 +11,7 @@ include_directories(AFTER
 	${PYTHON_INCLUDE_PATH}
 	${LZO_INCLUDE_DIRS}
 	${NEON_INCLUDE_DIRS}
+	${JSONC_INCLUDE_DIRS}
 	${ZK_INCLUDE_DIRS})
 
 link_directories(

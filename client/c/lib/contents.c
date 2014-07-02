@@ -767,7 +767,8 @@ gs_status_t gs_destroy_content (gs_content_t *content, gs_error_t **err)
 
 	struct hc_url_s *url = hc_url_empty();
 	hc_url_set(url, HCURL_NS, gs_get_full_vns(C1_C0(content)->info.gs));
-	hc_url_set(url, HCURL_REFERENCE, C0_NAME(C1_C0(content)));
+	hc_url_set(url, HCURL_HEXID, C0_IDSTR(C1_C0(content)));
+	//hc_url_set(url, HCURL_REFERENCE, C0_NAME(C1_C0(content)));
 	hc_url_set(url, HCURL_PATH, C1_PATH(content));
 	if (content->version) {
 		hc_url_set(url, HCURL_VERSION, content->version);

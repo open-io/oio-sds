@@ -140,7 +140,7 @@ chunk_key_hash(gconstpointer k)
 	guint32 h = djb_hash_buf(key->cid, sizeof(container_id_t));
 
 	return djb_hash_buf3(h, (guint8 *) (key->content_path), strlen_len(
-			(guint8 *) (key->content_path), LIMIT_LENGTH_CONTENTPATH));
+			(guint8 *) (key->content_path), LIMIT_LENGTH_CONTENTPATH + 1));
 }
 
 static gboolean
@@ -165,7 +165,7 @@ chunk_key_copy(gconstpointer k)
 		return NULL;
 	key = k;
 	copy = g_memdup(key, sizeof(struct chunk_key_s));
-	copy->content_path = g_strndup(key->content_path, LIMIT_LENGTH_CONTENTPATH);
+	copy->content_path = g_strndup(key->content_path, LIMIT_LENGTH_CONTENTPATH + 1);
 	return copy;
 }
 
@@ -374,7 +374,7 @@ _stat_content(const gchar *ns, container_id_t cid, gchar *str_cid, gchar *path, 
 	GSList *l, *list_of_addr = NULL;
 	GByteArray *gba_content = NULL;
 	struct namespace_cache_s *nsCache=NULL;
-	gchar content_path[LIMIT_LENGTH_CONTENTPATH];
+	gchar content_path[LIMIT_LENGTH_CONTENTPATH + 1];
 	struct chunk_key_s key;
 	struct meta2_raw_content_s *raw_content;
 
@@ -780,7 +780,7 @@ handler_chunks_get(struct request_context_s *req_ctx)
 
 	struct {
 		gchar ns[LIMIT_LENGTH_NSNAME];
-		gchar path[LIMIT_LENGTH_CONTENTPATH];
+		gchar path[LIMIT_LENGTH_CONTENTPATH + 1];
 		container_id_t cid;
 		gchar str_cid[STRLEN_CONTAINERID];
 	} args;

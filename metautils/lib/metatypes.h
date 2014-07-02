@@ -165,7 +165,7 @@ typedef struct container_info_s
  */
 typedef struct path_info_s
 {
-	gchar path[LIMIT_LENGTH_CONTENTPATH];	/**< The content name */
+	gchar path[LIMIT_LENGTH_CONTENTPATH + 1];	/**< The content name */
 	content_length_t size;			/**< The content size */
 	gboolean hasSize;			/**< The has size flag */
 	GByteArray *user_metadata;		/**< The content user metadata */

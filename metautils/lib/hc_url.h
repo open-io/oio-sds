@@ -92,19 +92,21 @@ int hc_url_has(struct hc_url_s *u, enum hc_url_field_e f);
 const guint8* hc_url_get_id(struct hc_url_s *u);
 
 /**
- * Returns the options hash table.
- * @param u The url struct.
- * @return The options hash table.
- */
-const GHashTable* hc_url_get_options(struct hc_url_s *u);
-
-/**
  * Returns the value of the given option.
  * @param u The url struct.
  * @param option_name The name of the option.
  * @return The value of the given option.
  */
-const gchar* hc_url_get_option_value(struct hc_url_s *u, const gchar *option_name);
+const gchar* hc_url_get_option_value(struct hc_url_s *u,
+		const gchar *option_name);
+
+/** Return the names of all the options registered. Free the result
+ * with g_strfreev(). 'u' cannot be NULL. */
+gchar ** hc_url_get_option_names(struct hc_url_s *u);
+
+/** Sets a new options in the URL. 'u' and 'k' cannot be NULL. If 'v' is
+ * NULL then an empty string will be saved. */
+void hc_url_set_option (struct hc_url_s *u,  const gchar *k, const gchar *v);
 
 /**
  * @param u

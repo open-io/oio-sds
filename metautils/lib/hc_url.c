@@ -21,21 +21,17 @@ enum {
 // format: hc://namespace/container/content?option1=val1&option2=val2...
 struct hc_url_s
 {
+	/* primary */
 	gchar *ns;
-	gchar *pns; /* secondary */
-	gchar *vns; /* secondary */
-
 	gchar *refname;
-
 	gchar *path;
-
-	GHashTable *options;
-
-	gchar *whole; /* secondary */
-
+	GSList *options;
+	/* secondary */
+	gchar *pns;
+	gchar *vns;
+	gchar *whole;
 	guint8 id[32];
 	gchar hexid[65];
-
 	guint8 flags;
 };
 
@@ -65,62 +61,35 @@ _parse_ns(struct hc_url_s *url)
 	metautils_rstrip(url->vns, '/');
 }
 
-static GHashTable*
-_options_new()
+static void
+_options_reset (struct hc_url_s *u)
 {
-	return g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	g_slist_free_full(u->options, g_free);
+	u->options = NULL;
 }
 
-static void
-_options_free(GHashTable *options)
+static gchar **
+_options_get(struct hc_url_s *u, const gchar *k)
 {
-	g_hash_table_destroy(options);
-}
-
-static void
-_options_dump(GHashTable *options)
-{
-	void _show_option(gpointer _option_name, gpointer _option_value, gpointer _unused)
-	{
-		gchar *name = _option_name;
-		gchar *value = _option_value;
-		(void) _unused;
-		GRID_WARN("   %s=%s", name, value);
+	for (GSList *l = u->options; l ;l=l->next) {
+		gchar *packed = l->data;
+		gchar *sep = strchr(packed, '=');
+		int kl = strlen(k);
+		if ((kl == (sep-packed)) && (0 == memcmp(k,packed,kl)))
+			return (gchar**)(&(l->data));
 	}
-
-	if (options)
-		g_hash_table_foreach(options, _show_option, NULL);
-}
-
-static gboolean
-_add_option_value(GHashTable *options_ht, gchar *option_name, gchar *option_value)
-{
-	gboolean ret;
-
-	if (*option_name) {
-		g_hash_table_insert(options_ht, option_name, option_value);
-		ret = TRUE;
-	} else {
-		GRID_WARN("empty option name in url (associated value=[%s])", option_value);
-		ret = FALSE;
-	}
-
-	return ret;
+	return NULL;
 }
 
 static void
-_add_option(GHashTable *options_ht, const gchar *option_str)
+_add_option(struct hc_url_s *u, const gchar *option_str)
 {
-	gchar *option_name, *option_value, *cursor;
-	g_assert(options_ht);
+	gchar *k, *cursor;
 	if (option_str) {
 		if (NULL != (cursor = strchr(option_str, '='))) {
-			option_name = g_strndup(option_str, cursor - option_str);
-			option_value = g_strdup(cursor + 1);
-			if (!_add_option_value(options_ht, option_name, option_value)) {
-				g_free(option_name);
-				g_free(option_value);
-			}
+			k = g_strndup(option_str, cursor - option_str);
+			hc_url_set_option(u, k, cursor+1);
+			g_free(k);
 		} else {
 			if (*option_str)
 				GRID_WARN("wrong url option syntax for token [%s]", option_str);
@@ -131,17 +100,17 @@ _add_option(GHashTable *options_ht, const gchar *option_str)
 }
 
 static void
-_parse_options(GHashTable *options_ht, const gchar *options)
+_parse_options(struct hc_url_s *u, const gchar *options)
 {
-	gchar **strv;
-	guint counter;
-	g_assert(options_ht);
-	if (options && *options)  {
-		if (NULL != (strv = g_strsplit(options, "&", 0))) {
-			for (counter = 0U; counter < g_strv_length(strv); counter++)
-				_add_option(options_ht, strv[counter]);
-			g_strfreev(strv);
-		}
+	g_assert(u != NULL);
+	_options_reset(u);
+	if (!options || ! *options)
+		return;
+	gchar **strv = g_strsplit(options, "&", 0);
+	if (NULL != strv) {
+		for (gchar **p = strv; *p ;++p)
+			_add_option(u, *p);
+		g_strfreev(strv);
 	}
 }
 
@@ -177,10 +146,8 @@ _parse_url(struct hc_url_s *url, const gchar *str)
 	if (options) {
 		if (!*(++options))
 			options = NULL;
-		if (url->options)
-			_options_free(url->options);
-		url->options = _options_new();
-		_parse_options(url->options, options);
+		_options_reset(url);
+		_parse_options(url, options);
 	}
 
 	if (refname) {
@@ -202,8 +169,7 @@ _parse_url(struct hc_url_s *url, const gchar *str)
 	}
 
 	_parse_ns(url);
-	// We want trailing slashes, they are used by S3FS
-	//metautils_rstrip(url->path, '/');
+	// XXX We want trailing slashes, they are used by S3FS !
 	metautils_rstrip(url->refname, '/');
 	return 1;
 }
@@ -228,12 +194,9 @@ _compute_id(struct hc_url_s *url)
 struct hc_url_s *
 hc_url_init(const char *url)
 {
-	struct hc_url_s *result;
-
 	if (!url)
 		return NULL;
-
-	result = g_malloc0(sizeof(*result));
+	struct hc_url_s *result = g_malloc0(sizeof(*result));
 	if (_parse_url(result, url))
 		return result;
 	hc_url_clean(result);
@@ -262,15 +225,16 @@ hc_url_clean(struct hc_url_s *u)
 		g_free(u->refname);
 	if (u->path)
 		g_free(u->path);
-	if (u->options)
-		_options_free(u->options);
 	if (u->whole)
 		g_free(u->whole);
 
+	_options_reset(u);
+	memset(u, 0, sizeof(struct hc_url_s));
 	g_free(u);
 }
 
-#define STRDUP(Dst,Src,Field) do { \
+#define STRDUP(Dst,Src,Field) \
+do { \
 	if (Src->Field) \
 		Dst->Field = g_strdup(Src->Field); \
 } while (0)
@@ -282,7 +246,6 @@ hc_url_dup(struct hc_url_s *u)
 		return NULL;
 
 	struct hc_url_s *result = g_memdup(u, sizeof(struct hc_url_s));
-	result->options = _options_new();
 	STRDUP(result, u, ns);
 	STRDUP(result, u, pns);
 	STRDUP(result, u, vns);
@@ -290,14 +253,12 @@ hc_url_dup(struct hc_url_s *u)
 	STRDUP(result, u, path);
 	STRDUP(result, u, whole);
 
-	if (u->options) {
-		GHashTableIter iter;
-		gpointer k, v;
-		g_hash_table_iter_init(&iter, u->options);
-		while (g_hash_table_iter_next(&iter, &k, &v))
-			g_hash_table_insert(result->options,
-					g_strdup((gchar*)k), g_strdup((gchar*)v));
+	result->options = NULL;
+	for (GSList *l=u->options; l ;l=l->next) {
+		gchar *packed = l->data;
+		result->options = g_slist_prepend(result->options, g_strdup(packed));
 	}
+	result->options = g_slist_reverse(result->options);
 
 	return result;
 }
@@ -311,8 +272,7 @@ hc_url_gclean(gpointer u, gpointer ignored)
 }
 
 struct hc_url_s*
-hc_url_set(struct hc_url_s *u, enum hc_url_field_e f,
-		const char *v)
+hc_url_set(struct hc_url_s *u, enum hc_url_field_e f, const char *v)
 {
 	if (!u) {
 		errno = EINVAL;
@@ -360,25 +320,16 @@ hc_url_set(struct hc_url_s *u, enum hc_url_field_e f,
 			return u;
 
 		case HCURL_OPTIONS:
-			if (u->options)
-				_options_free(u->options);
-			u->options = _options_new();
-			_parse_options(u->options, v);
+			_parse_options(u, v);
 			return u;
 
 		case HCURL_SNAPORVERS:
 		case HCURL_VERSION:
-			if (!u->options)
-				u->options = _options_new();
-			_add_option_value(u->options, g_strdup(HCURL_OPTION_KEY_VERSION),
-					g_strdup(v));
+			hc_url_set_option(u, HCURL_OPTION_KEY_VERSION, v);
 			return u;
 
 		case HCURL_SNAPSHOT:
-			if (!u->options)
-				u->options = _options_new();
-			_add_option_value(u->options, g_strdup(HCURL_OPTION_KEY_SNAPSHOT),
-					g_strdup(v));
+			hc_url_set_option(u, HCURL_OPTION_KEY_SNAPSHOT, v);
 			return u;
 
 		case HCURL_WHOLE:
@@ -434,13 +385,9 @@ hc_url_has(struct hc_url_s *u, enum hc_url_field_e f)
 		case HCURL_OPTIONS:
 			return NULL != u->options;
 		case HCURL_VERSION:
-			if (!u->options)
-				return 0;
-			return NULL != g_hash_table_lookup(u->options, HCURL_OPTION_KEY_VERSION);
+			return NULL != _options_get(u, HCURL_OPTION_KEY_VERSION);
 		case HCURL_SNAPSHOT:
-			if (!u->options)
-				return 0;
-			return NULL != g_hash_table_lookup(u->options, HCURL_OPTION_KEY_SNAPSHOT);
+			return NULL != _options_get(u, HCURL_OPTION_KEY_SNAPSHOT);
 
 		case HCURL_WHOLE:
 			return u->whole || (u->ns && u->refname);
@@ -457,9 +404,6 @@ hc_url_has(struct hc_url_s *u, enum hc_url_field_e f)
 static GString *
 _append_url(GString *gs, struct hc_url_s *u)
 {
-	if (!gs)
-		return NULL;
-
 	if (u->ns)
 		g_string_append(gs, u->ns);
 
@@ -483,20 +427,12 @@ _append_url(GString *gs, struct hc_url_s *u)
 static GString *
 _append_options(GString *gs, struct hc_url_s *u)
 {
-	if (!gs)
-		return NULL;
-
-	if (u->options && g_hash_table_size(u->options)) {
-		gpointer k, v;
-		GHashTableIter iter;
-		int first = 1;
-		g_hash_table_iter_init(&iter, u->options);
-		while (g_hash_table_iter_next(&iter, &k, &v)) {
-			g_string_append(gs, first ? "?" : "&");
-			g_string_append(gs, k ? (gchar*)k : "(null)");
-			g_string_append(gs, "=");
-			g_string_append(gs, v ? (gchar*)v : "(null)");
-		}
+	gboolean first = TRUE;
+	for (GSList *l=u->options; l ;l=l->next) {
+		g_string_append_c(gs, first ? '?' : '&');
+		// Cool, options have already the good packed form
+		g_string_append(gs, (gchar*)(l->data));
+		first = FALSE;
 	}
 	return gs;
 }
@@ -531,9 +467,10 @@ hc_url_get(struct hc_url_s *u, enum hc_url_field_e f)
 							!hc_url_has(u, HCURL_REFERENCE) &&
 							!hc_url_has(u, HCURL_HEXID)))
 					return NULL;
-				GString *gs = _append_options(_append_url(g_string_new(""), u), u);
-				if (gs)
-					u->whole = g_string_free(gs, FALSE);
+				GString *gs = g_string_new("");
+				gs = _append_url(gs, u);
+				gs = _append_options(gs, u);
+				u->whole = g_string_free(gs, FALSE);
 			}
 			return u->whole;
 
@@ -573,49 +510,49 @@ hc_url_get_id(struct hc_url_s *u)
 	return u->id;
 }
 
-const GHashTable*
-hc_url_get_options(struct hc_url_s *u)
+const gchar*
+hc_url_get_option_value(struct hc_url_s *u, const gchar *k)
 {
 	if (!u) {
 		errno = EINVAL;
 		return NULL;
 	}
-
-	return u->options;
+	gchar **pv = _options_get(u, k);
+	return pv ? strchr(*pv,'=')+1 : NULL;
 }
 
-const gchar*
-hc_url_get_option_value(struct hc_url_s *u, const gchar *option_name)
+gchar **
+hc_url_get_option_names(struct hc_url_s *u)
 {
-	if (!u) {
-		errno = EINVAL;
-		return NULL;
+	g_assert(u != NULL);
+	guint i=0;
+	gchar **result = g_malloc(sizeof(gchar*)*(1+g_slist_length(u->options)));
+	for (GSList *l = u->options ; l ;l=l->next) {
+		gchar *packed = l->data;
+		gchar *sep = strchr(packed, '=');
+		result[i++] = g_strndup(packed, sep-packed);
 	}
+	result[i] = NULL;
+	return result;
+}
 
-	if (u->options)
-		return g_hash_table_lookup(u->options, option_name);
-	return NULL;
+void
+hc_url_set_option (struct hc_url_s *u,  const gchar *k, const gchar *v)
+{
+	g_assert (u != NULL);
+	g_assert (k != NULL);
+	gchar **pv, *packed = g_strdup_printf("%s=%s", k, v);
+	if (!(pv = _options_get(u, k)))
+		u->options = g_slist_prepend(u->options, packed);
+	else {
+		g_free(*pv);
+		*pv = packed;
+	}
 }
 
 size_t
 hc_url_get_id_size(struct hc_url_s *u)
 {
 	return u ? sizeof(u->id) : 0;
-}
-
-void
-hc_url_dump(struct hc_url_s *u)
-{
-	if (!u)
-		return;
-	GRID_WARN(" +++ URL %p", u);
-	GRID_WARN("  [%s][%s][%s] [%s] [%s]",
-			hc_url_get(u, HCURL_NS), hc_url_get(u, HCURL_NSPHYS),
-			hc_url_get(u, HCURL_NSVIRT),
-			hc_url_get(u, HCURL_REFERENCE), hc_url_get(u, HCURL_PATH));
-	GRID_WARN("  OPTIONS:");
-	_options_dump(u->options);
-	GRID_WARN("  WHOLE[%s]", hc_url_get(u, HCURL_WHOLE));
-	GRID_WARN("  HEXID[%s]", hc_url_get(u, HCURL_HEXID));
 }
 

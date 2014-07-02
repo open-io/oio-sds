@@ -1594,18 +1594,26 @@ meta2_backend_generate_beans_v1(struct meta2_backend_s *m2b,
 	if (!err) {
 
 		gint64 max_version = _maxvers(sq3, m2b);
-		if (m2b->flag_precheck_on_generate && !append &&
-				VERSIONS_DISABLED(max_version)) {
+		if (m2b->flag_precheck_on_generate && VERSIONS_DISABLED(max_version)) {
 			/* If the versioning is not supported, we check the content
 			 * is not present */
 			err = _check_alias_doesnt_exist(sq3, url);
+			if(append) {
+				if(err) {
+					g_clear_error(&err);
+					err = NULL;
+				} else {
+					err = NEWERROR(CODE_CONTENT_NOTFOUND, "Content [%s] "
+							"not found", hc_url_get(url, HCURL_PATH));
+				}
+			}
 		}
 
 		/* Now check the storage policy */
 		if (!err) {
 			if (polname) {
 				if (!(policy = storage_policy_init(&nsinfo, polname)))
-					err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, 
+					err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
 							"Invalid policy [%s]", polname);
 			} else {
 				/* check polname not in mdsys */

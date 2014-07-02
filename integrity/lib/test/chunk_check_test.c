@@ -283,7 +283,7 @@ test_check_chunk_referencing_meta2_empty_prop()
 	GSList *mismatch = NULL;
 	container_id_t container_id;
 	chunk_id_t chunk_id;
-	gchar content_name[LIMIT_LENGTH_CONTENTPATH];
+	gchar content_name[LIMIT_LENGTH_CONTENTPATH + 1];
 	chunk_hash_t hash;
 
 	memset(container_id, 0, sizeof(container_id_t));

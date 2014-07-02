@@ -18,7 +18,6 @@ test_configure_valid(void)
 	/* plain URL */
 	url = hc_url_init("hc://NS/REF/PATH");
 	g_assert(url != NULL);
-	hc_url_dump(url);
 
 	g_assert(hc_url_has(url, HCURL_NS));
 	g_assert(hc_url_has(url, HCURL_NSPHYS));
@@ -36,7 +35,6 @@ test_configure_valid(void)
 	/* partial URL */
 	url = hc_url_init("hc://NS/REF");
 	g_assert(url != NULL);
-	hc_url_dump(url);
 
 	g_assert(hc_url_has(url, HCURL_NS));
 	g_assert(hc_url_has(url, HCURL_NSPHYS));
@@ -54,7 +52,6 @@ test_configure_valid(void)
 	/* partial with trailing slashes */
 	url = hc_url_init("hc:////NS///REF///");
 	g_assert(url != NULL);
-	hc_url_dump(url);
 
 	g_assert(hc_url_has(url, HCURL_NS));
 	g_assert(hc_url_has(url, HCURL_NSPHYS));
@@ -73,7 +70,6 @@ test_configure_valid(void)
 	/* partial with trailing slashes */
 	url = hc_url_init("hc:////NS///REF///PATH");
 	g_assert(url != NULL);
-	hc_url_dump(url);
 
 	g_assert(hc_url_has(url, HCURL_NS));
 	g_assert(hc_url_has(url, HCURL_NSPHYS));
@@ -140,12 +136,33 @@ test_hexid(void)
 		g_assert(url != NULL);
 		g_assert(NULL != hc_url_set(url, HCURL_NS, "NS"));
 		g_assert(NULL != hc_url_set(url, HCURL_HEXID, th->hexa));
-		hc_url_dump(url);
 		g_assert(NULL != hc_url_get_id(url));
 		g_assert(NULL != hc_url_get(url, HCURL_HEXID));
 		g_assert(!g_ascii_strcasecmp(hc_url_get(url, HCURL_HEXID), th->hexa));
 		hc_url_clean(url);
 	}
+}
+
+static void
+test_options (void)
+{
+	struct hc_url_s *url = hc_url_empty();
+	hc_url_set(url, HCURL_NS, "NS");
+	hc_url_set(url, HCURL_REFERENCE, "REF");
+	hc_url_set(url, HCURL_PATH, "PATH");
+
+	const gchar *v;
+
+	hc_url_set_option(url, "k", "v");
+	v = hc_url_get_option_value(url, "k");
+	g_assert(0 == strcmp(v, "v"));
+
+	hc_url_set_option(url, "k", "v0");
+	v = hc_url_get_option_value(url, "k");
+	g_assert(0 == strcmp(v, "v0"));
+
+	hc_url_clean(url);
+	url = NULL;
 }
 
 int
@@ -159,6 +176,7 @@ main(int argc, char **argv)
 			test_configure_invalid);
 	g_test_add_func("/metautils/hc_url/hexid", test_hexid);
 	g_test_add_func("/metautils/hc_url/hash", test_hash);
+	g_test_add_func("/metautils/hc_url/options", test_options);
 	return g_test_run();
 }
 

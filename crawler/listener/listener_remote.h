@@ -4,7 +4,7 @@
 
 
 #include <zmq.h>
-#include <json/json.h>
+#include <json.h>
 #include <glib.h> 
 
 
