@@ -1282,6 +1282,47 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 	return err;
 }
 
+GError*
+meta2_backend_substitute_chunks(struct meta2_backend_s *m2b,
+		struct hc_url_s *url, gboolean restrict_to_alias,
+		GSList *new_chunks, GSList *old_chunks)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+
+	if (g_slist_length(new_chunks) > 1) {
+		// TODO: support this, e.g. to change stgpol from NONE to DUP or RAIN
+		return NEWERROR(CODE_NOT_IMPLEMENTED,
+			"Substituting by more than one chunk is currently not supported!");
+	}
+
+	if (restrict_to_alias) {
+		return NEWERROR(CODE_NOT_IMPLEMENTED,
+				"Alias-restricted substitution is currently not supported!");
+	}
+
+	g_assert(m2b != NULL);
+	g_assert(url != NULL);
+
+	// TODO: check that new_chunks->data is really a struct bean_CHUNKS_s *
+
+	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
+	if (!err) {
+		if (!(err = _transaction_begin(sq3, url, &repctx))) {
+			err = m2db_substitute_chunk_everywhere(sq3,
+					(struct bean_CHUNKS_s *)new_chunks->data,
+					old_chunks);
+			if (!err)
+				m2db_increment_version(sq3);
+			err = sqlx_transaction_end(repctx, err);
+		}
+		m2b_close(sq3);
+	}
+
+	return err;
+}
+
 static GSList*
 _filter_beans(GSList *beans, const struct bean_descriptor_s *descr)
 {

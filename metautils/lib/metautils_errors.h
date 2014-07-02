@@ -58,6 +58,8 @@
 /* ACL codes */
 #define CODE_NOT_ALLOWED          403
 
+#define CODE_NOT_FOUND            404
+
 /* Content-related codes */
 #define CODE_CONTENT_NOTFOUND     420
 #define CODE_CONTENT_EXISTS       421

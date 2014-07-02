@@ -19,6 +19,7 @@
 #include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
+#include <resolver/hc_resolver.h>
 
 #include <glib.h>
 
@@ -1180,6 +1181,32 @@ meta2_filter_action_delete_beans(struct gridd_filter_ctx_s *ctx,
 	GRID_DEBUG("Failed to delete beans : (%d) %s", err->code, err->message);
 	meta2_filter_ctx_set_error(ctx, err);
 	return FILTER_KO;
+}
+
+int
+meta2_filter_action_substitute_chunks(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	(void) reply;
+	int rc = FILTER_OK;
+	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+
+	// See meta2_filter_extract_header_chunk_beans()
+	GSList **chunk_lists = meta2_filter_ctx_get_input_udata(ctx);
+	gboolean restrict_to_alias = meta2_filter_ctx_get_param(ctx,
+			"RESTRICT_TO_ALIAS") != NULL;
+
+	GError *err = meta2_backend_substitute_chunks(m2b, url, restrict_to_alias,
+			chunk_lists[0], chunk_lists[1]);
+
+	if (err) {
+		GRID_DEBUG("Failed to substitute chunks: %s", err->message);
+		meta2_filter_ctx_set_error(ctx, err);
+		rc = FILTER_KO;
+	}
+
+	return rc;
 }
 
 /* -------------- SNAPSHOT UTILITIES ----------------- */

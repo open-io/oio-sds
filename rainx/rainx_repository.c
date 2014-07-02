@@ -1321,11 +1321,17 @@ dav_rainx_deliver(const dav_resource *resource, ap_filter_t *output)
 	/* Coding strips */
 	for (i = 0; i < m; i++) {
 		if (failure_array[k + i] == TRUE) {
-			char* custom_chunkhash = g_compute_checksum_for_string(G_CHECKSUM_MD5, codingchunks[i], metachunk_size);
+			char* custom_chunkhash = g_compute_checksum_for_string(
+					G_CHECKSUM_MD5, codingchunks[i], metachunk_size);
 
-			if (g_ascii_strncasecmp(custom_chunkhash, spare_md5_list[cur_spare_rawx], strlen(custom_chunkhash))) {
-				DAV_DEBUG_REQ(resource->info->request, 0, "failed to reconstruct a coding chunk (MD5 differs)");
-				e = server_create_and_stat_error(conf, pool, HTTP_INTERNAL_SERVER_ERROR, 0, "Failed to reconstruct a coding chunk (MD5 differs)");
+			// FIXME: if md5 has special value "?", don't do this check, but
+			// add the computed checksum as a response header (client lost it).
+			if (g_ascii_strncasecmp(custom_chunkhash,
+					spare_md5_list[cur_spare_rawx], strlen(custom_chunkhash))) {
+				e = server_create_and_stat_error(conf, pool,
+						HTTP_INTERNAL_SERVER_ERROR, 0,
+						"Failed to reconstruct a coding chunk (MD5 differs)");
+				DAV_DEBUG_REQ(resource->info->request, 0, e->desc);
 				if(custom_chunkhash) {
 					g_free(custom_chunkhash);
 					custom_chunkhash = NULL;

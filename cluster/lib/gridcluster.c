@@ -101,6 +101,7 @@ _get_cs_addr(const char *ns_name, GError **error) {
 	ns_hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
 	if (!parse_cluster_config(ns_hash, error)) {
+		g_hash_table_destroy(ns_hash);
 		GSETERROR(error, "Failed to parse cluster config");
 		return(NULL);
 	}
@@ -118,7 +119,6 @@ _get_cs_addr(const char *ns_name, GError **error) {
 	}
 
 	g_hash_table_destroy(ns_hash);
-
 	return cs_addr;
 }
 

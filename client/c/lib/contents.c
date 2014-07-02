@@ -179,8 +179,8 @@ _free_content_internals(gs_content_t *content)
 	content->version = NULL;
 }
 
-static void
-_fill_hcurl_from_content(gs_content_t *content, struct hc_url_s **url)
+void
+fill_hcurl_from_content(gs_content_t *content, struct hc_url_s **url)
 {
 	*url = hc_url_empty();
 	hc_url_set(*url, HCURL_NS, gs_get_full_vns(C1_C0(content)->info.gs));
@@ -1064,7 +1064,7 @@ hc_set_content_property(gs_content_t *content, char ** props, gs_error_t **e)
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
 	struct hc_url_s *url;
-	_fill_hcurl_from_content(content, &url);
+	fill_hcurl_from_content(content, &url);
 
 	for ( i=0; i < g_strv_length(props); i++) {
 		struct bean_PROPERTIES_s *bp;
@@ -1115,7 +1115,7 @@ hc_get_content_properties(gs_content_t *content, char ***result, gs_error_t **e)
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
 	struct hc_url_s *url;
-	_fill_hcurl_from_content(content,&url);
+	fill_hcurl_from_content(content,&url);
 
 	GSList *beans = NULL;
 	GSList *l;
@@ -1170,7 +1170,7 @@ hc_delete_content_property(gs_content_t *content, char ** keys ,gs_error_t **e)
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
 	struct hc_url_s *url;
-	_fill_hcurl_from_content(content,&url);
+	fill_hcurl_from_content(content,&url);
 
 	GSList *out_beans = NULL;
 	GSList *in_beans = NULL;

@@ -47,7 +47,9 @@ static gchar* source_type_cmd_opt_name;
 
 static int service_pid;
 
-static const gchar* occur_type_string;
+static const gchar* occur_type1_string;
+static const gchar* occur_type2_string;
+
 
 /* Console parameters utils */
 static GString* console_log_path = NULL;
@@ -329,12 +331,18 @@ static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam,
 		/* ------- */
 
 		/* Checking occurence form */
-		GVariantType* gvt = g_variant_type_new(occur_type_string);
-		if (gvt == NULL)
+		if (NULL == pActParam->occur)
 			return FALSE;
-		if (NULL == pActParam->occur || FALSE == g_variant_is_of_type(pActParam->occur, gvt)) {
-			g_variant_type_free(gvt);
-			return FALSE;
+
+		GVariantType* gvt = g_variant_type_new(occur_type1_string);
+		if ((gvt == NULL)||(FALSE == g_variant_is_of_type(pActParam->occur, gvt))) {
+			if (gvt != NULL)
+				g_variant_type_free(gvt);
+			gvt = g_variant_type_new(occur_type2_string);
+			if ((gvt == NULL)||(FALSE == g_variant_is_of_type(pActParam->occur, gvt))) {
+				g_variant_type_free(gvt);
+				return FALSE;
+			}
 		}
 		g_variant_type_free(gvt);
 
@@ -533,7 +541,8 @@ main_set_defaults(void) {
 	namespace_cmd_opt_name = "n";
 	source_type_cmd_opt_name = "t";
 	service_pid = getpid();
-	occur_type_string = "(sssss)";
+	occur_type1_string = "(sssss)";
+	occur_type2_string = "(ss)";
 
     buildServiceName(g_service_name, SERVICENAME_MAX_BYTES,
                     SERVICE_ACTION_NAME, action_name, service_pid, FALSE);	

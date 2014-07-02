@@ -9,8 +9,8 @@
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 
-#include "./gridcluster_eventsremote.h"
 #include "./gridcluster_events.h"
+#include "./gridcluster_eventsremote.h"
 
 gridcluster_event_t *
 gridcluster_create_event(void)

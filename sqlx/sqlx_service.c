@@ -237,7 +237,7 @@ _configure_backend(struct sqlx_service_s *ss)
 	repository_config.flags |= ss->flag_autocreate ? SQLX_REPO_AUTOCREATE : 0;
 	repository_config.flags |= ss->flag_nolock ? SQLX_REPO_NOLOCK : 0;
 	repository_config.sync_solo = ss->sync_mode_solo;
-	repository_config.sync_repli = ss->sync_mode_solo;
+	repository_config.sync_repli = ss->sync_mode_repli;
 	repository_config.lock.ns = ss->ns_name;
 	repository_config.lock.type = ss->service_config->srvtype;
 	repository_config.lock.srv = ss->url->str;
@@ -576,6 +576,8 @@ sqlx_service_get_options(void)
 		{"CacheEnabled", OT_BOOL, {.b = &SRV.flag_cached_bases},
 			"If set, each base will be cached in a way it won't be accessed"
 			" by several requests in the same time."},
+		{"DeleteEnabled", OT_BOOL, {.b = &SRV.flag_delete_on},
+			"If not set, prevents deleting database files from disk"},
 
 		{NULL, 0, {.i=0}, NULL}
 	};

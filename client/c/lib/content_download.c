@@ -2,6 +2,8 @@
 # define G_LOG_DOMAIN "grid.client.download"
 #endif
 
+#include <glib.h>
+
 #include "./gs_internals.h"
 
 static void
@@ -248,6 +250,26 @@ gs_download_content (gs_content_t *content, gs_download_info_t *dl_info, gs_erro
 	return gs_download_content_full(content, dl_info, NULL, NULL, NULL, err);
 }
 
+/**
+ * Get a list of chunk URLs (gchar*) from a list of (chunk_info_t*).
+ * The list may contain duplicates. Free the values with g_free().
+ */
+static GSList*
+_chunk_ids_from_chunk_info_list(GSList *ci_list)
+{
+	GSList *out = NULL;
+	for (; ci_list; ci_list = ci_list->next) {
+		chunk_info_t *ci = ci_list->data;
+		gchar buf1[STRLEN_ADDRINFO], buf2[STRLEN_CHUNKID];
+		grid_addrinfo_to_string(&(ci->id.addr), buf1, STRLEN_ADDRINFO);
+		// Container id and chunk id are both hash_sha256_t
+		container_id_to_string(ci->id.id, buf2, STRLEN_CHUNKID);
+		gchar *str_cid = assemble_chunk_id(buf1, ci->id.vol, buf2);
+		out = g_slist_prepend(out, str_cid);
+	}
+	return out;
+}
+
 gs_status_t
 gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 		const char *stgpol, void *_filtered, void *_beans, gs_error_t **err)
@@ -263,12 +285,14 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 	gboolean may_reload = FALSE;
 	GSList *next_agregate = NULL;
 	gs_status_t ret = GS_ERROR;
-	GSList *filtered = _filtered;
+	// I don't know what this parameter was used for
+	(void) _filtered;
 	GSList *beans = _beans;
 	guint k = 0, m = 0;
 	gint64 k_signed, m_signed;
 	chunk_info_t *ci = NULL;
 	const guint nb_data_chunks = g_slist_length(content->chunk_list);
+	struct hc_url_s *url = NULL;
 
 	/*check the parameters*/
 	if (!content || !dl_info) {
@@ -316,7 +340,7 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 		if (status.dl_info.offset == 0LL)
 			status.dl_info.offset = 0LL;
 	}
-	if ((status.dl_info.offset > content->info.size) 
+	if ((status.dl_info.offset > content->info.size)
 			|| (status.dl_info.offset + status.dl_info.size > content->info.size)) {
 		GSERRORCODE(err, 400, "Byte range not satisfiable "
 			"asked=[%"G_GINT64_FORMAT",%"G_GINT64_FORMAT"] allowed=[0,%"G_GINT64_FORMAT"]",
@@ -324,6 +348,8 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 			content->info.size);
 		return GS_ERROR;
 	}
+
+	fill_hcurl_from_content(content, &url);
 
 	/* Now we can start working. First agregate the known chunks, then iterate
 	 * on them */
@@ -441,16 +467,74 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 			}
 		}
 
+		/* Function called by the reconstructor to provide the reconstructed
+		 * metachunk. As we may already have some data at the beginning,
+		 * we may have to skip up to (k-1)*chunk_size bytes. */
+		size_t _rainx_cb(void *buffer, size_t elt_size, size_t elt_count, void *udata)
+		{
+			size_t *to_skip = (size_t*) udata;
+			size_t written = 0;
+			if (to_skip && *to_skip > 0) {
+				if (*to_skip > elt_size * elt_count) {
+					written = elt_size * elt_count;
+					*to_skip -= written;
+				} else {
+					size_t to_write = elt_size * elt_count - *to_skip;
+					written = status.dl_info.writer(status.dl_info.user_data,
+						buffer + *to_skip, to_write);
+					status.content_dl += written;
+					status.chunk_dl_offset += written;
+					status.chunk_dl_size -= written;
+					// What was skipped must still be reported to the caller
+					written += *to_skip;
+					*to_skip = 0;
+				}
+			} else {
+				written = status.dl_info.writer(status.dl_info.user_data,
+						buffer, elt_size * elt_count);
+				status.content_dl += written;
+				status.chunk_dl_offset += written;
+				status.chunk_dl_size -= written;
+			}
+			download_debug(&status, content, "Received data from rainx");
+			return written;
+		}
+
 		remaining_reloads = NB_RELOADS_GET;
 		if (is_rainx && g_hash_table_size(failed_chunks) > 0 && is_last_subchunk) {
 			status.caller_stopped = FALSE;
 			DEBUG("Corruption detected, Reconstruction started...");
 			memcpy(&status_copy, &status, sizeof(struct dl_status_s));
 			memcpy(&status, &status_at_first_error, sizeof(struct dl_status_s));
-			if (FALSE == rainx_ask_reconstruct(&status, content, agregated_chunks,
-					local_filtered ? local_filtered : filtered,
-							local_beans ? local_beans : beans,
-									broken_rawx_list, failed_chunks, stgpol, err)) {
+
+			// Get URLs of broken chunks
+			GSList *broken_chunks = _chunk_ids_from_chunk_info_list(broken_rawx_list);
+
+			size_t to_skip = 0;
+			// If we are at the start of a metachunk, don't skip data
+			if (status.last_position % k) {
+				// Last chunk of metachunk may be smaller, take previous' size
+				GSList *prev_aggregate = g_slist_nth_data(agregated_chunks,
+						status.last_position - 1);
+				chunk_info_t *first_ci = prev_aggregate->data;
+				// Skip up to (k-1)*(chunk_size) bytes
+				to_skip = first_ci->size * (status.last_position % k);
+			}
+			// Prepare rainx reconstruction parameters
+			struct rainx_writer_s rainx_writer = {_rainx_cb, &to_skip};
+			struct rainx_rec_params_s *rainx_params = NULL;
+			rainx_params = rainx_rec_params_build(
+					local_beans? local_beans : beans,
+					broken_chunks, status.last_position / k);
+
+			local_gerr = rainx_reconstruct(url,
+					&(content->info.container->info.gs->ni),
+					rainx_params, &rainx_writer, TRUE);
+
+			rainx_rec_params_free(rainx_params);
+			g_slist_free_full(broken_chunks, g_free);
+
+			if (local_gerr != NULL) {
 				GSERRORCAUSE(err, local_gerr, "Corruption detected, and reconstruct failed.");
 				GSERRORSET(err, "Too many reload attempts");
 				g_clear_error(&local_gerr);
@@ -461,13 +545,12 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 					goto error_label;
 				}
 				DEBUG("Reconstruction failed, reload and restarted...");
+				memcpy(&status, &status_copy, sizeof(struct dl_status_s));
 			} else {
-				INFO("Reconstruction finished with success.");
-				g_clear_error(&local_gerr);
+				GRID_INFO("Reconstruction finished with success.");
 				gs_error_clear(err);
 			}
 			g_hash_table_remove_all(failed_chunks);
-			memcpy(&status, &status_copy, sizeof(struct dl_status_s));
 		}
 		download_debug(&status, content, "content reloaded");
 	} // end while
@@ -484,6 +567,7 @@ error_label:
 		g_slist_free(local_filtered);
 	if (local_beans)
 		_bean_cleanl2(local_beans);
+	hc_url_clean(url);
 	return ret;
 }
 

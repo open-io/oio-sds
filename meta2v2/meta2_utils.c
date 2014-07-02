@@ -767,6 +767,23 @@ m2db_delete_chunk(struct sqlx_sqlite3_s *sq3, gpointer chunk)
 	return e;
 }
 
+GError*
+m2db_substitute_chunk_everywhere(struct sqlx_sqlite3_s *sq3,
+		struct bean_CHUNKS_s *new_chunk, GSList *old_chunks)
+{
+	gint count = 0;
+	GError *err = NULL;
+
+	err = _db_save_bean(sq3->db, new_chunk);
+	if (!err) {
+		count = substitute_chunk(sq3->db, new_chunk, old_chunks, &err);
+		if (count > 0 && !err) {
+			GRID_DEBUG("Substituted %d chunks by %s", count,
+					CHUNKS_get_id(new_chunk)->str);
+		}
+	}
+	return err;
+}
 
 /* PROPERTIES --------------------------------------------------------------- */
 
@@ -1477,7 +1494,7 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans)
 			SHA256_randomized_buffer(uid, sizeof(uid));
 			args2.uid = uid;
 			args2.uid_size = sizeof(uid);
-			err = m2db_real_put_alias(args->sq3, &args2);		
+			err = m2db_real_put_alias(args->sq3, &args2);
 		}
 	}
 
