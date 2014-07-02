@@ -106,7 +106,7 @@ _m2db_count_alias_versions(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 
 	v = 0;
 	sqlite3_prepare_debug(rc, sq3->db,
-			"SELECT COUNT(version) FROM alias_v2 WHERE name = ?", -1, &stmt, NULL);
+			"SELECT COUNT(version) FROM alias_v2 WHERE alias = ?", -1, &stmt, NULL);
 	if (rc == SQLITE_OK) {
 		sqlite3_bind_text(stmt, 1, hc_url_get(url, HCURL_PATH), -1, NULL);
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
@@ -1526,6 +1526,21 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 		return NEWERROR(400, "Missing path");
 
 	gint64 size = m2db_patch_alias_beans_list(args, beans);
+
+	struct check_args_s check_args;
+	memset(&check_args, 0, sizeof(check_args));
+	check_args.ns_info = &args->nsinfo;
+	check_args.lbpool = args->lbpool;
+	check_args.mask_checks = m2db_get_mask_check_put(check_args.ns_info);
+	GRID_DEBUG("M2 PUT(%s) mask %08X", hc_url_get(args->url, HCURL_WHOLE),
+			check_args.mask_checks);
+
+	err = m2db_check_alias_beans_list(args->url, beans, &check_args);
+	if (NULL != err) {
+		g_prefix_error(&err, "Invalid beans: ");
+		err->code = 400;
+		return err;
+	}
 
 	SHA256_randomized_buffer(uid, sizeof(uid));
 	args2.put_args = args;

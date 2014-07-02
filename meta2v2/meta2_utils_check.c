@@ -897,10 +897,13 @@ _check_header(header_check_t *hc)
 
 	GRID_TRACE2("%s(%p)", __FUNCTION__, hc);
 	ds = storage_policy_get_data_security(hc->stgpol);
+	replicas = 1;
+	distance = 1;
 	switch (data_security_get_type(ds)) {
 		case DUPLI:
 			distance = _get_int_param(DS_KEY_DISTANCE, 1);
 			replicas = _get_int_param(DS_KEY_COPY_COUNT, 1);
+		case DS_NONE:
 			return _check_dupli_alias(hc, replicas, distance);
 		case RAIN:
 			distance = _get_int_param(DS_KEY_DISTANCE, 1);
@@ -908,8 +911,6 @@ _check_header(header_check_t *hc)
 			rain_m = _get_int_param(DS_KEY_M, 2);
 			algo = data_security_get_param(ds, DS_KEY_ALGO);
 			return _check_rained_alias(hc, rain_k, rain_m, distance, algo);
-		case DS_NONE:
-			return _check_dupli_alias(hc, 1, 1);
 	}
 }
 
@@ -933,6 +934,11 @@ _check_alias(struct m2v2_check_s *check, struct bean_ALIASES_s *alias)
 		e = _load_storage_policy(&hc);
 	if (!e)
 		e = _load_header_chunks(&hc);
+
+	// Even if empty, an alias must have a chunk's footprint
+	if (!hc.chunks->len)
+		return NEWERROR(400, "No chunk/content");
+
 	if (!e)
 		_check_header(&hc);
 
@@ -1065,11 +1071,15 @@ m2v2_check_consistency(struct m2v2_check_s *check)
 			check->aliases->len, check->headers->len,
 			check->contents->len, check->chunks->len);
 
+	// There must be something to test
+	if (!check->aliases->len)
+		return NEWERROR(400, "No alias");
+
 	for (guint i = 0; i < check->aliases->len ;++i) {
 		GError *err = _check_alias(check, g_ptr_array_index(check->aliases, i));
 		if (NULL != err) {
 			++ count_errors;
-			GRID_WARN("Erroneous ALIAS [%s] : (%d) %s",
+			GRID_DEBUG("Erroneous ALIAS [%s] : (%d) %s",
 					hc_url_get(check->url, HCURL_WHOLE),
 					err->code, err->message);
 			g_clear_error(&err);
@@ -1077,11 +1087,11 @@ m2v2_check_consistency(struct m2v2_check_s *check)
 	}
 
 	if (check->flaws->len) {
-		GRID_WARN("Checking [%s] found [%u] flaws",
+		GRID_DEBUG("Checking [%s] found [%u] flaws",
 				hc_url_get(check->url, HCURL_WHOLE), check->flaws->len);
 		for (guint i=0; i < check->flaws->len ;++i) {
 			struct m2v2_check_error_s *flaw = check->flaws->pdata[i];
-			GRID_NOTICE("FLAW: path[%s] version[%"G_GINT64_FORMAT"]"
+			GRID_DEBUG("FLAW: path[%s] version[%"G_GINT64_FORMAT"]"
 					" type=%d code=%d %s",
 					ALIASES_get_alias(flaw->alias)->str,
 					ALIASES_get_version(flaw->alias),
@@ -1157,8 +1167,8 @@ m2db_check_alias_beans_list(struct hc_url_s *url, GSList *beans,
 	GError *err = NULL;
 
 	_init_m2v2_check(&check, url, args);
-	for (; beans ;beans = beans->next)
-		_hook_dispatch_beans(&check, beans->data);
+	for (GSList *b = beans; b ;b = b->next)
+		_hook_dispatch_beans(&check, b->data);
 
 	if (NULL == (err = m2v2_check_consistency(&check))) {
 		if (0 < _count_meaningful_flaws(&check, args->mask_checks))
