@@ -18,8 +18,8 @@ path_info_ASN2API(const PathInfo_t * asn, path_info_t * api)
 	if (!api || !asn)
 		return FALSE;
 
-	memset(api->path, 0x00, LIMIT_LENGTH_CONTENTPATH);
-	memcpy(api->path, asn->path.buf, MIN(LIMIT_LENGTH_CONTENTPATH - 1, asn->path.size));
+	memset(api->path, 0x00, LIMIT_LENGTH_CONTENTPATH + 1);
+	memcpy(api->path, asn->path.buf, MIN(LIMIT_LENGTH_CONTENTPATH, asn->path.size));
 	/*set the size */
 	api->size = 0;
 	if (asn->size) {
@@ -49,7 +49,7 @@ path_info_ASN2API(const PathInfo_t * asn, path_info_t * api)
 gboolean
 path_info_API2ASN(const path_info_t * api, PathInfo_t * asn)
 {
-	char path_name[LIMIT_LENGTH_CONTENTPATH];
+	char path_name[LIMIT_LENGTH_CONTENTPATH + 1];
 
 	if (!api || !asn)
 		return FALSE;

@@ -21,7 +21,7 @@ static gint64 auto_hlength = 0;
 
 static gchar ns_name[LIMIT_LENGTH_NSNAME];
 static gchar container_name[LIMIT_LENGTH_CONTAINERNAME];
-static gchar content_path[LIMIT_LENGTH_CONTENTPATH];
+static gchar content_path[LIMIT_LENGTH_CONTENTPATH + 1];
 static addr_info_t fake_address;
 
 /* ------------------------------------------------------------------------- */

@@ -37,7 +37,7 @@ int flag_update_csize = 0;
 
 static gchar ns_name[LIMIT_LENGTH_NSNAME];
 static gchar container_name[LIMIT_LENGTH_CONTAINERNAME];
-static gchar content_path[LIMIT_LENGTH_CONTENTPATH];
+static gchar content_path[LIMIT_LENGTH_CONTENTPATH + 1];
 
 /* ------------------------------------------------------------------------- */
 
