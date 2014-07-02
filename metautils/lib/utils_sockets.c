@@ -59,7 +59,7 @@ socket_nonblock(int domain, int type, int protocol)
 	int fd = metautils_syscall_socket(domain, type, protocol);
 	if (fd < 0)
 		return fd;
-	if (0 == sock_set_non_blocking(fd, TRUE))
+	if (sock_set_non_blocking(fd, TRUE))
 		return fd;
 	metautils_pclose(&fd);
 	return -1;

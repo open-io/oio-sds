@@ -217,7 +217,7 @@ substitute_chunk(sqlite3 *db, struct bean_CHUNKS_s *new_chunk,
 	/* Values to substitute to '?' occurences */
 	GVariant *params[2] = {NULL, NULL};
 
-	/* Number of chunks that have been deduplicated */
+	/* Number of chunks that have been substituted */
 	guint chunk_counter = 0;
 
 	/* Substitute the chunk id in a content bean */
@@ -270,7 +270,7 @@ clean_beans:
 		 * the current chunk */
 		*err = CONTENTS_load(db, sql, params, _substitute_chunk_cb, new_chunk);
 		if (*err != NULL) {
-			g_prefix_error(err, "Failed to deduplicate chunks (%d remaining): ",
+			g_prefix_error(err, "Failed to substitute chunks (%d remaining): ",
 					g_slist_length(cursor));
 			break;
 		}

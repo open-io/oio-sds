@@ -410,6 +410,7 @@ gboolean map_policy_from_beans(gchar **policy, GSList *beans);
 struct bean_CHUNKS_s *get_chunk_matching_content(GSList *beans, struct bean_CONTENTS_s *content);
 void fill_chunk_id_from_url(const char * const url, chunk_id_t *ci);
 void fill_hcurl_from_container(gs_container_t *c, struct hc_url_s **url);
+void fill_hcurl_from_content(gs_content_t *content, struct hc_url_s **url);
 
 struct dl_status_s {
 	struct gs_download_info_s dl_info;/*< as transmitted by the client */

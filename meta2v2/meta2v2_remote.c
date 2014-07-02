@@ -208,6 +208,26 @@ m2v2_remote_pack_RAW_DEL(GByteArray *sid, struct hc_url_s *url, GSList *beans)
 }
 
 GByteArray*
+m2v2_remote_pack_SUBST_CHUNKS(GByteArray *sid, struct hc_url_s *url,
+		GSList *new_chunks, GSList *old_chunks, gboolean restrict_to_alias)
+{
+	struct message_s *msg;
+	GByteArray *new_chunks_gba = bean_sequence_marshall(new_chunks);
+	GByteArray *old_chunks_gba = bean_sequence_marshall(old_chunks);
+	msg = _m2v2_build_request("M2V2_SUBST_CHUNKS", sid, url, NULL);
+	if (restrict_to_alias) {
+		(void) message_add_field(msg,
+				M2_KEY_RESTRICT_TO_ALIAS, sizeof(M2_KEY_RESTRICT_TO_ALIAS)-1,
+				"TRUE", 5, NULL);
+	}
+	message_add_fields_gba(msg,
+			M2_KEY_NEW_CHUNKS, new_chunks_gba,
+			M2_KEY_OLD_CHUNKS, old_chunks_gba,
+			NULL);
+	return message_marshall_gba_and_clean(msg);
+}
+
+GByteArray*
 m2v2_remote_pack_GET(GByteArray *sid, struct hc_url_s *url, guint32 flags)
 {
 	return _m2v2_pack_request_with_flags("M2V2_GET", sid, url, NULL, flags);
@@ -671,6 +691,29 @@ m2v2_remote_execute_RAW_DEL(const gchar *target, GByteArray *sid,
 		struct hc_url_s *url, GSList *beans)
 {
 	return _m2v2_request(target, m2v2_remote_pack_RAW_DEL(sid, url, beans), NULL);
+}
+
+GError*
+m2v2_remote_execute_SUBST_CHUNKS(const gchar *target, GByteArray *sid,
+		struct hc_url_s *url, GSList *new_chunks, GSList *old_chunks,
+		gboolean restrict_to_alias)
+{
+	return _m2v2_request(target, m2v2_remote_pack_SUBST_CHUNKS(sid, url,
+			new_chunks, old_chunks, restrict_to_alias), NULL);
+}
+
+GError*
+m2v2_remote_execute_SUBST_CHUNKS_single(const gchar *target, GByteArray *sid,
+		struct hc_url_s *url, struct bean_CHUNKS_s *new_chunk,
+		struct bean_CHUNKS_s *old_chunk, gboolean restrict_to_alias)
+{
+	GSList *new_chunks = g_slist_prepend(NULL, new_chunk);
+	GSList *old_chunks = g_slist_prepend(NULL, old_chunk);
+	GError *res = m2v2_remote_execute_SUBST_CHUNKS(target, sid, url,
+			new_chunks, old_chunks, restrict_to_alias);
+	g_slist_free(new_chunks);
+	g_slist_free(old_chunks);
+	return res;
 }
 
 GError*

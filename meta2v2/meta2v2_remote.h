@@ -1,6 +1,7 @@
 #ifndef HC_M2V2_REMOTE__H
 # define HC_M2V2_REMOTE__H 1
 # include <glib.h>
+# include <meta2v2/autogen.h>
 
 #define M2V2_FLAG_NODELETED        0x00000001
 #define M2V2_FLAG_ALLVERSION       0x00000002
@@ -85,6 +86,9 @@ GByteArray* m2v2_remote_pack_DEL(GByteArray *sid, struct hc_url_s *url,
 
 GByteArray* m2v2_remote_pack_RAW_DEL(GByteArray *sid, struct hc_url_s *url,
 		GSList *beans);
+
+GByteArray* m2v2_remote_pack_SUBST_CHUNKS(GByteArray *sid, struct hc_url_s *url,
+		GSList *new_chunks, GSList *old_chunks, gboolean restrict_to_alias);
 
 GByteArray* m2v2_remote_pack_GET(GByteArray *sid, struct hc_url_s *url,
 		guint32 flags);
@@ -219,6 +223,19 @@ GError* m2v2_remote_execute_DEL(const gchar *target, GByteArray *sid,
 
 GError* m2v2_remote_execute_RAW_DEL(const gchar *target, GByteArray *sid,
 		struct hc_url_s *url, GSList *beans);
+
+/**
+ * Substitute chunks by another one in meta2 database.
+ * TODO: return number of substitutions
+ */
+GError* m2v2_remote_execute_SUBST_CHUNKS(const gchar *target, GByteArray *sid,
+		struct hc_url_s *url, GSList *new_chunks, GSList *old_chunks,
+		gboolean restrict_to_alias);
+
+GError* m2v2_remote_execute_SUBST_CHUNKS_single(const gchar *target,
+		GByteArray *sid,
+		struct hc_url_s *url, struct bean_CHUNKS_s *new_chunk,
+		struct bean_CHUNKS_s *old_chunk, gboolean restrict_to_alias);
 
 GError* m2v2_remote_execute_LIST(const gchar *target, GByteArray *sid,
 		struct hc_url_s *url, guint32 flags, GSList **out);

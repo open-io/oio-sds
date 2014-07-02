@@ -576,6 +576,8 @@ sqlx_service_get_options(void)
 		{"CacheEnabled", OT_BOOL, {.b = &SRV.flag_cached_bases},
 			"If set, each base will be cached in a way it won't be accessed"
 			" by several requests in the same time."},
+		{"DeleteEnabled", OT_BOOL, {.b = &SRV.flag_delete_on},
+			"If not set, prevents deleting database files from disk"},
 
 		{NULL, 0, {.i=0}, NULL}
 	};

@@ -1008,7 +1008,6 @@ sqlx_repository_unlock_and_close(struct sqlx_sqlite3_s *sq3)
 			sq3->deleted);
 	}
 	else {
-		sq3->deleted = FALSE; /* delete disabled when no cache used */
 		__close_base(sq3);
 	}
 

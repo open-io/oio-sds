@@ -49,6 +49,29 @@
 	} \
 } while (0)
 
+#define EXTRACT_HEADER_BEANS(FieldName,Variable) do {\
+	GError *err = NULL;\
+	void *b = NULL;\
+	gsize bsize = 0;\
+\
+	if (message_get_field(reply->request, FieldName, strlen(FieldName), &b, &bsize, &err) <= 0) {\
+		if (!err)\
+			err = NEWERROR(CODE_BAD_REQUEST, "Missing '%s' header", FieldName);\
+		meta2_filter_ctx_set_error(ctx, err);\
+		return FILTER_KO;\
+	} else if (bsize == 0) {\
+		if (!err)\
+			meta2_filter_ctx_set_error(ctx,\
+				NEWERROR(CODE_BAD_REQUEST, "Empty '%s' header", FieldName));\
+		return FILTER_KO;\
+	} else if (!(Variable = bean_sequence_unmarshall(b, bsize))) {\
+		if (!err)\
+			meta2_filter_ctx_set_error(ctx,\
+				NEWERROR(CODE_BAD_REQUEST, "Invalid '%s' header", FieldName));\
+		return FILTER_KO;\
+	}\
+} while(0)
+
 int
 meta2_filter_extract_header_ns(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
@@ -540,6 +563,22 @@ meta2_filter_extract_header_prop_action(struct gridd_filter_ctx_s *ctx,
 		meta2_filter_ctx_add_param(ctx, "BODY_OPT", "OK");
 	}
 
+	return FILTER_OK;
+}
+
+int
+meta2_filter_extract_header_chunk_beans(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	void _cleaner(gpointer ptr) {
+		GSList **lists = ptr;
+		_bean_cleanl2(lists[0]);
+		_bean_cleanl2(lists[1]);
+	}
+	GSList **lists = g_malloc0(2 * sizeof(GSList *));
+	EXTRACT_HEADER_BEANS(M2_KEY_NEW_CHUNKS, lists[0]);
+	EXTRACT_HEADER_BEANS(M2_KEY_OLD_CHUNKS, lists[1]);
+	meta2_filter_ctx_set_input_udata(ctx, lists, _cleaner);
 	return FILTER_OK;
 }
 

@@ -111,10 +111,9 @@ bean_sequence_unmarshall(const guint8 *buf, gsize buf_len)
 	GSList *l = NULL;
 	GError *err = NULL;
 	gint rc = 0;
-	
+
 	rc = bean_sequence_decoder(&l, buf, &buf_len, &err);
 	if (rc <= 0) {
-	//if (!bean_sequence_decoder(&l, buf, &buf_len, &err)) {
 		if (err)
 			GRID_ERROR("Decoder error: (%d) %s", err->code, err->message);
 		else
