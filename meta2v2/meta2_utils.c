@@ -106,7 +106,7 @@ _m2db_count_alias_versions(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 
 	v = 0;
 	sqlite3_prepare_debug(rc, sq3->db,
-			"SELECT COUNT(version) FROM aliases WHERE name = ?", -1, &stmt, NULL);
+			"SELECT COUNT(version) FROM alias_v2 WHERE name = ?", -1, &stmt, NULL);
 	if (rc == SQLITE_OK) {
 		sqlite3_bind_text(stmt, 1, hc_url_get(url, HCURL_PATH), -1, NULL);
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
