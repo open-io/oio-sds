@@ -23,8 +23,8 @@
 #include <neon/ne_request.h>
 #include <neon/ne_session.h>
 
-#include <grid_client.h>
-#include <gs_internals.h>
+#include <client/c/lib/grid_client.h>
+#include <client/c/lib/gs_internals.h>
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
@@ -677,6 +677,10 @@ validate_chunk_in_one_meta2(struct upload_info_s *info, const char *str_addr,
 	GError *gerr = NULL;
 	struct metacnx_ctx_s ctx;
 	gchar m2_descr[2048];
+	struct hc_url_s *url = hc_url_empty();
+	hc_url_set(url, HCURL_NS, ns_name);
+	hc_url_set(url, HCURL_HEXID, info->content.container_id);
+	hc_url_set(url, HCURL_PATH, info->content.path);
 
 	bzero(m2_descr, sizeof(m2_descr));
 	g_snprintf(m2_descr, sizeof(m2_descr), "%s|meta2|%s|%s",
@@ -685,38 +689,82 @@ validate_chunk_in_one_meta2(struct upload_info_s *info, const char *str_addr,
 
 	MY_DEBUG(*info, "About to validate the reference in meta2 at [%s]", m2_descr);
 
-	metacnx_clear(&ctx);
-	if (!metacnx_init_with_url(&ctx, str_addr, &gerr)) {
-		MY_WARN(*info, "invalid meta2 location [%s]: %s",
-				m2_descr, gerror_get_message(gerr));
-		goto label_cleanup;
+	// Call only if asked to dereference old chunk, and meta2v2
+	if (flag_dereference && !is_m2v1(str_addr)) {
+		chunk_hash_t bin_hash;
+		gchar tmp[STRLEN_ADDRINFO];
+		gchar *new_url, *old_url;
+
+		// Create beans necessary for the m2v2 request
+		struct bean_CHUNKS_s *new = _bean_create(&descr_struct_CHUNKS);
+		struct bean_CHUNKS_s *old = _bean_create(&descr_struct_CHUNKS);
+
+		g_snprintf(tmp, STRLEN_ADDRINFO, "%s:%d", info->dst_host, info->dst_port);
+		new_url = assemble_chunk_id(tmp, info->dst_volume, info->chunk.id);
+		// FIXME: binary hash is probably somewhere already
+		hex2bin(info->chunk.hash, bin_hash, sizeof(chunk_hash_t), NULL);
+		CHUNKS_set2_id(new, new_url);
+		CHUNKS_set2_hash(new, bin_hash, sizeof(chunk_hash_t));
+		CHUNKS_set_size(new, g_ascii_strtoll(info->chunk.size, NULL, 10));
+		// FIXME: set ctime?
+
+		old_url = assemble_chunk_id(rawx_str_addr, rawx_vol, info->chunk.id);
+		CHUNKS_set2_id(old, old_url); // This is the only required field
+
+		GRID_DEBUG("Call meta2 %s for substitution of %s by %s",
+				str_addr, old_url, new_url);
+		gerr = m2v2_remote_execute_SUBST_CHUNKS_single(str_addr, NULL, url,
+				new, old, FALSE);
+		if (gerr) {
+			m2_rc = FALSE;
+			// Host is meta2v1 but we didn't know
+			if (gerr->code == CODE_NOT_FOUND) {
+				add_to_m2v1_list(str_addr);
+				g_clear_error(&gerr);
+			}
+		} else {
+			m2_rc = TRUE;
+		}
+		g_free(new_url);
+		g_free(old_url);
 	}
-	ctx.timeout.cnx = 30000;
-	ctx.timeout.req = 60000;
 
-	GRID_DEBUG("New chunk container version: %ld", raw_new->version);
-
-	/* Insert the new chunk */
-	m2_rc = meta2raw_remote_update_chunks(&ctx, &gerr, raw_new, TRUE, NULL);
-	if (!m2_rc) {
-		MY_ERROR(*info, "Chunk reference insertion failed in [%s]: %s",
-				m2_descr, gerror_get_message(gerr));
-		goto label_cleanup;
-	}
-
-	if (flag_unlink && flag_dereference) {
-		/* Delete the old chunk */
-		m2_rc = meta2raw_remote_delete_chunks(&ctx, &gerr, raw_old);
-		if (!m2_rc) {
-			MY_ERROR(*info, "Chunk reference removal failed in [%s]: %s",
+	// If meta2v1 or dereference disabled
+	if (!gerr && !m2_rc) {
+		metacnx_clear(&ctx);
+		if (!metacnx_init_with_url(&ctx, str_addr, &gerr)) {
+			MY_WARN(*info, "invalid meta2 location [%s]: %s",
 					m2_descr, gerror_get_message(gerr));
 			goto label_cleanup;
 		}
-	}
+		ctx.timeout.cnx = 30000;
+		ctx.timeout.req = 60000;
 
-	MY_INFO(*info, "Reference updated in [%s] src[%s] dst[%s]",
-			m2_descr, info->src_descr, info->dst_descr);
-	m2_rc = TRUE;
+		GRID_DEBUG("New chunk container version: %ld", raw_new->version);
+
+		// FIXME: with m2v2, use m2v2_remote_execute_SUBST_CHUNKS_single()
+		/* Insert the new chunk */
+		m2_rc = meta2raw_remote_update_chunks(&ctx, &gerr, raw_new, TRUE, NULL);
+		if (!m2_rc) {
+			MY_ERROR(*info, "Chunk reference insertion failed in [%s]: %s",
+					m2_descr, gerror_get_message(gerr));
+			goto label_cleanup;
+		}
+
+		if (flag_unlink && flag_dereference) {
+			/* Delete the old chunk */
+			m2_rc = meta2raw_remote_delete_chunks(&ctx, &gerr, raw_old);
+			if (!m2_rc) {
+				MY_ERROR(*info, "Chunk reference removal failed in [%s]: %s",
+						m2_descr, gerror_get_message(gerr));
+				goto label_cleanup;
+			}
+		}
+
+		MY_INFO(*info, "Reference updated in [%s] src[%s] dst[%s]",
+				m2_descr, info->src_descr, info->dst_descr);
+		m2_rc = TRUE;
+	}
 
 label_cleanup:
 	if (gerr)

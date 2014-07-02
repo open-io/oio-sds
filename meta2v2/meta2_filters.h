@@ -263,6 +263,13 @@ int
 meta2_filter_extract_header_prop_action(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
+/*!
+ * Extract "NEW_CHUNKS" and "OLD_CHUNKS" headers from SUBST_CHUNK request.
+ * The extracted value, stored in udata, is an array with 2 lists of beans.
+ */
+int
+meta2_filter_extract_header_chunk_beans(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply);
 
 /*!
  * Extract the legacy field property value from a request.
@@ -1129,6 +1136,9 @@ int meta2_filter_action_replicate_content_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 int meta2_filter_action_delete_beans(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply);
+
+int meta2_filter_action_substitute_chunks(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 int meta2_filter_action_restore_container(struct gridd_filter_ctx_s *ctx,

@@ -2,8 +2,11 @@
 # define G_LOG_DOMAIN "rainx.remote"
 #endif
 
-#include "./gs_internals.h"
+#include <glib.h>
 #include <curl/curl.h>
+
+#include <meta2v2/autogen.h>
+#include "./gs_internals.h"
 
 static GError *_fill_sorted_chunk_array(GArray *in, GArray *sorted_chunks,
 		gint64 k)
@@ -38,24 +41,20 @@ static GError *_fill_sorted_chunk_array(GArray *in, GArray *sorted_chunks,
 	return err;
 }
 
-static GError *_find_gaps_and_dispatch_chunks(struct rainx_params_s *params,
+static GError *_find_gaps_and_dispatch_chunks(struct rainx_rec_params_s *params,
 		gint k, gint m, GArray *sorted_chunks, gint64 *metachunk_size,
 		GSList **gap_positions, GSList **valid_chunks, GSList **broken_chunks)
 {
 	GError *err = NULL;
-	gint64 max_chunk_size = 0;
-	gint really_missing_count = 0;
 
 	for (gint64 i = 0; i < k + m; i++) {
 		m2v2_chunk_pair_t *pair = &g_array_index(sorted_chunks,
 				 m2v2_chunk_pair_t, i);
 		if (pair->chunk == NULL) {
-			// Save the gap position (in numeric format)
-			*gap_positions = g_slist_prepend(*gap_positions, (gpointer)i);
 			// Look for an unavailable chunk matching the gap
 			gchar *s_pos = g_strdup_printf("%lu.%s%lu", params->metachunk_pos,
 					(i >= k)? "p" : "", (i >= k)? i-k : i);
-			GRID_DEBUG("Missing chunk at position %ld, looking for unavailable chunk '%s'",
+			GRID_DEBUG("No chunk at position %ld, looking for unavailable chunk '%s'",
 					i, s_pos);
 			for (guint j = 0; j < params->unavail_chunk_pairs->len; j++) {
 				m2v2_chunk_pair_t *pair2 = &g_array_index(
@@ -67,22 +66,26 @@ static GError *_find_gaps_and_dispatch_chunks(struct rainx_params_s *params,
 					pair->content = _bean_dup(pair2->content);
 					pair->chunk = _bean_dup(pair2->chunk);
 					*broken_chunks = g_slist_prepend(*broken_chunks, pair2->chunk);
-					*broken_chunks = g_slist_prepend(*broken_chunks, pair2->content);
 					GRID_DEBUG("-> found matching broken chunk/content, will reuse hash");
 					break;
 				}
 			}
-			// Not found, create dummy content
-			if (pair->chunk == NULL) {
-				GRID_DEBUG("-> not found, create dummy content");
-				// just make a content, chunk bean will be created later
-				pair->content = _bean_create(&descr_struct_CONTENTS);
-				CONTENTS_set_content_id(pair->content,
-						ALIASES_get_content_id(params->alias));
-				CONTENTS_set2_position(pair->content, s_pos);
-				// Count only data chunks
-				if (i < k)
-					really_missing_count++;
+			if (pair->chunk != NULL) {
+				// Save the gap position (in numeric format)
+				*gap_positions = g_slist_prepend(*gap_positions, (gpointer)i);
+			} else {
+				if (i > 0 && i < k) {
+					GRID_DEBUG("-> not found, metachunk was probably smaller"
+							" than (k-1)*rain_blocksize");
+				} else {
+					GRID_DEBUG("-> not found, create dummy content");
+					// just make a content, chunk bean will be created later
+					pair->content = _bean_create(&descr_struct_CONTENTS);
+					CONTENTS_set_content_id(pair->content,
+							ALIASES_get_content_id(params->alias));
+					CONTENTS_set2_position(pair->content, s_pos);
+					*gap_positions = g_slist_prepend(*gap_positions, (gpointer)i);
+				}
 			}
 			g_free(s_pos);
 		} else {
@@ -90,17 +93,13 @@ static GError *_find_gaps_and_dispatch_chunks(struct rainx_params_s *params,
 			*valid_chunks = g_slist_prepend(*valid_chunks, pair->content);
 		}
 
-		// Update metachunk_size and max_chunk_size
+		// Update metachunk_size
 		if (pair->chunk != NULL) {
-			if (CHUNKS_get_size(pair->chunk) > max_chunk_size)
-				max_chunk_size = CHUNKS_get_size(pair->chunk);
 			if (i < k)
 				*metachunk_size += CHUNKS_get_size(pair->chunk);
 		}
 	}
 
-	// Suppose that missing chunks are of maximum size
-	*metachunk_size += really_missing_count * max_chunk_size;
 	// Keep in order
 	*gap_positions = g_slist_reverse(*gap_positions);
 
@@ -108,7 +107,8 @@ static GError *_find_gaps_and_dispatch_chunks(struct rainx_params_s *params,
 }
 
 static GError *_fill_gaps_with_spares(GArray *sorted_chunks,
-		GSList *gap_positions, GSList **spare_chunks)
+		GSList *gap_positions, GSList **spare_chunks,
+		GSList **substitutions)
 {
 	GError *err = NULL;
 	if (g_slist_length(*spare_chunks) < g_slist_length(gap_positions)) {
@@ -125,8 +125,13 @@ static GError *_fill_gaps_with_spares(GArray *sorted_chunks,
 			// Chunk was lost, hash is still empty
 			pair->chunk = spare;
 		} else {
-			// Chunk was referenced but unavailable, hash is known
+			// Chunk was referenced but unavailable, hash is known,
+			// we just need the new chunk_id from the spare
+			struct bean_CHUNKS_s **subst = g_malloc0_n(2, sizeof(void*));
+			subst[0] = _bean_dup(pair->chunk);
 			CHUNKS_set_id(pair->chunk, CHUNKS_get_id(spare));
+			subst[1] = _bean_dup(pair->chunk);
+			*substitutions = g_slist_prepend(*substitutions, subst);
 			_bean_clean(spare);
 		}
 		CONTENTS_set_chunk_id(pair->content, CHUNKS_get_id(pair->chunk));
@@ -155,10 +160,11 @@ static gchar *_build_piped_rawx_list(GArray *chunks)
 {
 	gchar *res = NULL;
 	gchar **addrs = g_malloc0_n(chunks->len + 1, sizeof(gchar*));
-	for (guint i = 0; i < chunks->len; i++) {
+	for (guint i = 0, j = 0; i < chunks->len; i++) {
 		struct bean_CHUNKS_s *chunk = (&g_array_index(chunks,
 				m2v2_chunk_pair_t, i))->chunk;
-		addrs[i] = _chunk_url_to_short_form(CHUNKS_get_id(chunk)->str);
+		if (chunk)
+			addrs[j++] = _chunk_url_to_short_form(CHUNKS_get_id(chunk)->str);
 	}
 	res = g_strjoinv("|", addrs);
 	g_strfreev(addrs);
@@ -176,7 +182,8 @@ static gchar *_build_semicol_spare_rawx_list(GArray *chunks,
 		gchar *cid = _chunk_url_to_short_form(CHUNKS_get_id(pair->chunk)->str);
 		GByteArray *hash_gba = CHUNKS_get_hash(pair->chunk);
 		if (hash_gba == NULL || hash_gba->len == 0) {
-			hash_str = g_strdup("");
+			// We don't know the hash, but RAINX will fail on empty string.
+			hash_str = g_strdup("?");
 		} else {
 			GString *hash = metautils_gba_to_hexgstr(NULL,
 					CHUNKS_get_hash(pair->chunk));
@@ -199,9 +206,9 @@ static size_t _drop_curl_data(void *buffer, size_t size, size_t nmemb,
 	return size * nmemb;
 }
 
-static GError *_ask_reconstruct(struct rainx_params_s *params,
-		struct hc_url_s *url, GArray *sorted_chunks, gint64 metachunk_size,
-		GSList *gap_positions)
+static GError *_ask_reconstruct(struct rainx_rec_params_s *params,
+		struct rainx_writer_s *writer, struct hc_url_s *url,
+		GArray *sorted_chunks, gint64 metachunk_size, GSList *gap_positions)
 {
 	GError *err = NULL;
 	gchar rainx_url[128];
@@ -253,7 +260,14 @@ static GError *_ask_reconstruct(struct rainx_params_s *params,
 	handle = curl_easy_init();
 	curl_easy_setopt(handle, CURLOPT_HTTPHEADER, header_list);
 	curl_easy_setopt(handle, CURLOPT_URL, rainx_url);
-	curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, _drop_curl_data);
+	if (writer && writer->callback) {
+		curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, writer->callback);
+		if (writer->param) {
+			curl_easy_setopt(handle, CURLOPT_WRITEDATA, writer->param);
+		}
+	} else {
+		curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, _drop_curl_data);
+	}
 	curl_easy_setopt(handle, CURLOPT_ERRORBUFFER, error_buf);
 
 	GRID_DEBUG("Calling rainx at %s for reconstruction...", rainx_url);
@@ -294,7 +308,8 @@ static void _free_sorted_chunks(GArray *sorted_chunks)
 }
 
 GError *rainx_reconstruct(struct hc_url_s *url, namespace_info_t *nsinfo,
-		struct rainx_params_s *params, gboolean reuse_broken)
+		struct rainx_rec_params_s *params,
+		struct rainx_writer_s *writer, gboolean reuse_broken)
 {
 	GError *err = NULL;
 	struct meta1_service_url_s *m1u = NULL;
@@ -314,6 +329,18 @@ GError *rainx_reconstruct(struct hc_url_s *url, namespace_info_t *nsinfo,
 	GSList *final_beans = NULL;
 	// Array of chunk pairs, sorted by position (please free data)
 	GArray *sorted_chunks = NULL;
+	// List of chunks that have been substituted (arrays with old and new)
+	GSList *substitutions = NULL;
+
+	void _clean_subst(gpointer ptr)
+	{
+		struct bean_CHUNKS_s **subst = ptr;
+		_bean_clean(subst[0]);
+		_bean_clean(subst[1]);
+		subst[0] = NULL;
+		subst[1] = NULL;
+		g_free(ptr);
+	}
 
 	GRID_TRACE("%s(alias: '%s', data: %d, parity: %d, unavail: %d)",
 			__FUNCTION__, ALIASES_get_alias(params->alias)->str,
@@ -359,17 +386,19 @@ GError *rainx_reconstruct(struct hc_url_s *url, namespace_info_t *nsinfo,
 		goto global_cleanup;
 
 	// Travel gap_positions list and fix chunks
-	err = _fill_gaps_with_spares(sorted_chunks, gap_positions, &spare_chunks);
+	err = _fill_gaps_with_spares(sorted_chunks, gap_positions, &spare_chunks,
+			&substitutions);
 	if (err != NULL)
 		goto global_cleanup;
 
 	// Ask rainx for reconstruction
-	err = _ask_reconstruct(params, url, sorted_chunks, metachunk_size,
+	err = _ask_reconstruct(params, writer, url, sorted_chunks, metachunk_size,
 			gap_positions);
 	if (err != NULL) {
 		goto global_cleanup;
 	}
 
+/*	// TODO: this is commented because useless at the moment, see next TODO.
 	// Send new chunks to meta2
 	for (gint i = sorted_chunks->len -1; i >= 0; i--) {
 		m2v2_chunk_pair_t *pair = NULL;
@@ -379,18 +408,32 @@ GError *rainx_reconstruct(struct hc_url_s *url, namespace_info_t *nsinfo,
 	}
 	final_beans = g_slist_prepend(final_beans, params->content_header);
 	final_beans = g_slist_prepend(final_beans, params->alias);
+*/
+
 	GRID_DEBUG("Updating '%s' with new chunks",
 			ALIASES_get_alias(params->alias)->str);
-	err = m2v2_remote_execute_OVERWRITE(m1u->host, NULL, url, final_beans);
-	if (err != NULL)
-		goto global_cleanup;
+	for (GSList *l = substitutions; l; l = l->next) {
+		struct bean_CHUNKS_s **subst = l->data;
+		err = m2v2_remote_execute_SUBST_CHUNKS_single(m1u->host, NULL, url,
+				subst[1], subst[0], FALSE);
+		if (err != NULL)
+			goto global_cleanup;
+	}
 
-	// Remove broken chunks from meta2
-	GRID_DEBUG("Removing broken chunks from '%s'",
-			ALIASES_get_alias(params->alias)->str);
-	err = m2v2_remote_execute_RAW_DEL(m1u->host, NULL, url, broken_chunks);
+	if (broken_chunks) {
+		// Remove broken chunks from meta2
+		GRID_DEBUG("Removing broken chunks from '%s'",
+				ALIASES_get_alias(params->alias)->str);
+		err = m2v2_remote_execute_RAW_DEL(m1u->host, NULL, url, broken_chunks);
+	} else {
+		GRID_DEBUG("Some reconstructed chunks may still be unreferenced!");
+		// TODO: Chunk we repaired were unreferenced, so they are not in
+		// broken_chunks, and substitution won't work.
+		// We will have to reference them again.
+	}
 
 global_cleanup:
+
 	meta1_service_url_clean(m1u);
 	hc_resolver_destroy(resolver);
 	g_strfreev(meta2_addrs);
@@ -400,6 +443,111 @@ global_cleanup:
 	g_slist_free(broken_chunks);
 	g_slist_free(valid_chunks);
 	g_slist_free(final_beans);
+	g_slist_free_full(substitutions, _clean_subst);
 	return err;
+}
+
+struct rainx_rec_params_s *rainx_rec_params_build(GSList *beans,
+		GSList *broken_chunk_ids, gint64 position)
+{
+	struct rainx_rec_params_s *params = g_malloc0(
+			sizeof(struct rainx_rec_params_s));
+	params->metachunk_pos = position;
+	params->data_chunk_pairs = g_array_new(FALSE, TRUE,
+			sizeof(m2v2_chunk_pair_t));
+	params->parity_chunk_pairs = g_array_new(FALSE, TRUE,
+			sizeof(m2v2_chunk_pair_t));
+	params->unavail_chunk_pairs = g_array_new(FALSE, TRUE,
+			sizeof(m2v2_chunk_pair_t));
+
+	// Calling func can pass all chunks beans (not just chunks of the broken
+	// metachunk), so it's better to use a hash table to do the matching.
+	GHashTable *chunks = g_hash_table_new(g_str_hash, g_str_equal);
+
+	// Initialize chunk pairs for the broken metachunk and index chunk beans
+	for (GSList *l = beans; l; l = l->next) {
+		if (DESCR(l->data) == &descr_struct_CONTENTS) {
+			gint pos = 0, par = 0, sub = 0;
+			m2v2_parse_chunk_position(
+					CONTENTS_get_position(l->data)->str,
+					&pos, &par, &sub);
+			if (pos == position) {
+				m2v2_chunk_pair_t pair = {l->data, NULL};
+				if (par) {
+					g_array_append_val(params->parity_chunk_pairs, pair);
+				} else {
+					g_array_append_val(params->data_chunk_pairs, pair);
+				}
+			}
+		} else if (DESCR(l->data) == &descr_struct_CHUNKS) {
+			g_hash_table_insert(chunks, CHUNKS_get_id(l->data)->str, l->data);
+		} else if (DESCR(l->data) == &descr_struct_ALIASES) {
+			params->alias = l->data;
+		} else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+			params->content_header = l->data;
+		}
+	}
+
+	// Associate chunk beans to content data beans
+	for (guint i = 0; i < params->data_chunk_pairs->len; i++) {
+		m2v2_chunk_pair_t *pair = &g_array_index(params->data_chunk_pairs,
+				m2v2_chunk_pair_t, i);
+		gchar *id = CONTENTS_get_chunk_id(pair->content)->str;
+		pair->chunk = g_hash_table_lookup(chunks, id);
+		if (!pair->chunk)
+			GRID_WARN("No chunk bean found for [%s]", id);
+	}
+	// Associate chunk beans to content parity beans
+	for (guint i = 0; i < params->parity_chunk_pairs->len; i++) {
+		m2v2_chunk_pair_t *pair = &g_array_index(params->parity_chunk_pairs,
+				m2v2_chunk_pair_t, i);
+		gchar *id = CONTENTS_get_chunk_id(pair->content)->str;
+		pair->chunk = g_hash_table_lookup(chunks, id);
+		if (!pair->chunk)
+			GRID_WARN("No chunk bean found for [%s]", id);
+	}
+
+	// Move broken chunk pairs out of params->data_chunk_pairs
+	for (GSList *l = broken_chunk_ids; l; l = l->next) {
+		for (guint i = 0; i < params->data_chunk_pairs->len; i++) {
+			m2v2_chunk_pair_t *pair = &g_array_index(params->data_chunk_pairs,
+				m2v2_chunk_pair_t, i);
+			if (!g_strcmp0(l->data, CHUNKS_get_id(pair->chunk)->str)) {
+				g_array_append_val(params->unavail_chunk_pairs, *pair);
+				g_array_remove_index_fast(params->data_chunk_pairs, i);
+				break;
+			}
+		}
+	}
+	// Move broken chunk pairs out of params->parity_chunk_pairs
+	for (GSList *l = broken_chunk_ids; l; l = l->next) {
+		for (guint i = 0; i < params->parity_chunk_pairs->len; i++) {
+			m2v2_chunk_pair_t *pair = &g_array_index(params->parity_chunk_pairs,
+				m2v2_chunk_pair_t, i);
+			if (!g_strcmp0(l->data, CHUNKS_get_id(pair->chunk)->str)) {
+				g_array_append_val(params->unavail_chunk_pairs, *pair);
+				g_array_remove_index_fast(params->parity_chunk_pairs, i);
+				break;
+			}
+		}
+	}
+
+	g_hash_table_destroy(chunks);
+
+	GRID_DEBUG("Chunks: %d data, %d parity, %d unavailable",
+		params->data_chunk_pairs->len, params->parity_chunk_pairs->len,
+		params->unavail_chunk_pairs->len);
+
+	return params;
+}
+
+void rainx_rec_params_free(struct rainx_rec_params_s *params)
+{
+	if (!params)
+		return;
+	g_array_unref(params->data_chunk_pairs);
+	g_array_unref(params->parity_chunk_pairs);
+	g_array_unref(params->unavail_chunk_pairs);
+	memset(params, 0, sizeof(struct rainx_rec_params_s));
 }
 

@@ -270,6 +270,17 @@ GError* meta2_backend_force_alias(struct meta2_backend_s *m2b,
 GError* meta2_backend_delete_beans(struct meta2_backend_s *m2b,
                 struct hc_url_s *url, GSList *beans);
 
+
+/*!
+ * Substitute chunks of old_chunks list by the ones of new_chunks
+ * list. If restrict_to_alias is FALSE (by default), do the substitution
+ * in the whole container, otherwise do it only for chunks belonging to
+ * alias pointed by url.
+ */
+GError* meta2_backend_substitute_chunks(struct meta2_backend_s *m2b,
+		struct hc_url_s *url, gboolean restrict_to_alias,
+		GSList *new_chunks, GSList *old_chunks);
+
 /*!
  * Filters out only the CONTENTS-typed beans and call
  * meta2_backend_delete_beans()

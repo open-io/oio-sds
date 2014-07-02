@@ -557,6 +557,7 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 			if (ne_get_status(request)->klass != 2) {
 				GSETCODE(err, 1000 + ne_get_status(request)->code,
 					"cannot download '%s' (%s) (ReqId:%s)", cPath, ne_get_error(session), str_req_id);
+				*p_broken_rawx_list = g_slist_prepend(*p_broken_rawx_list, chunk->ci);
 				goto error_label;
 			}
 			if (flag_md5) {
@@ -574,6 +575,7 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 					GSETCODE(err, CODE_CONTENT_CORRUPTED, "Chunk downloaded [%s] was corrupted"
 							" (md5 does not match meta2) : %s/%s (%s)", cPath, hash_str,
 							md5_str, str_req_id);
+					*p_broken_rawx_list = g_slist_prepend(*p_broken_rawx_list, chunk->ci);
 					goto error_label;
 				}
 			}

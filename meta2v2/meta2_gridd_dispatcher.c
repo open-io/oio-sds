@@ -345,6 +345,21 @@ static gridd_filter M2V2_RAW_DEL[] =
 	NULL
 };
 
+static gridd_filter M2V2_SUBST_CHUNKS_FILTERS[] =
+{
+	meta2_filter_extract_header_url,
+	meta2_filter_fill_subject,
+	meta2_filter_extract_header_chunk_beans,
+	meta2_filter_check_backend,
+	meta2_filter_check_ns_name,
+	meta2_filter_check_ns_is_master,
+	meta2_filter_check_ns_not_wormed,
+	meta2_filter_action_has_container,
+	meta2_filter_action_substitute_chunks,
+	meta2_filter_success_reply,
+	NULL
+};
+
 /* ------------------------------------------------------------------------- */
 
 static gridd_filter M2V2_FILTERS_create_v1[] =
@@ -1108,6 +1123,7 @@ meta2_gridd_get_v2_requests(void)
 
 		/* raw beans */
 		{"M2V2_RAW_DEL",   (hook) meta2_dispatch_all, M2V2_RAW_DEL},
+		{"M2V2_SUBST_CHUNKS",   (hook) meta2_dispatch_all, M2V2_SUBST_CHUNKS_FILTERS},
 
 		{"M2V2_EXITELECTION", (hook) meta2_dispatch_all,  M2V2_EXITELECTION_FILTERS},
 

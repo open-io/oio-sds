@@ -14,7 +14,7 @@
 
 #include <cluster/lib/gridcluster.h>
 #include <resolver/hc_resolver.h>
-#include <rainx_remote.h>
+#include <client/c/lib/rainx_remote.h>
 
 #include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/meta2_utils.h>
@@ -507,14 +507,14 @@ _repair_missing_rain_chunks(struct policy_check_s *pc,
 {
 	GRID_INFO("Starting RAIN reconstruction");
 	GError *err = NULL;
-	struct rainx_params_s params = {
+	struct rainx_rec_params_s params = {
 			flaw->param.rain_toofew.metachunk_pos,
 			flaw->alias,
 			flaw->header,
 			flaw->param.rain_toofew.pairs_data,
 			flaw->param.rain_toofew.pairs_parity,
 			flaw->param.rain_toofew.pairs_unavailable};
-	err = rainx_reconstruct(pc->url, pc->nsinfo, &params, TRUE);
+	err = rainx_reconstruct(pc->url, pc->nsinfo, &params, NULL, TRUE);
 	if (err != NULL) {
 		GRID_ERROR("Failed to reconstruct: %s", err->message);
 		g_clear_error(&err);
