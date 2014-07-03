@@ -267,7 +267,9 @@ gboolean rawx_delete_v2(gpointer chunk, GError **err)
 		goto end;
 	}
 
+	gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 	_delete_request(hp[0], atoi(hp[1]), strrchr(cid, '/'), err);
+	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 
 end:
 	g_strfreev(hp);

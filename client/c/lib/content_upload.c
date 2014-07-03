@@ -678,7 +678,9 @@ static GError *_rainx_upload(struct hc_url_s *url, const gchar *target,
 			g_free(rawxlist);
 			rawxlist = NULL;
 
+			gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 			error = http_put_run(http_put);
+			gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 			if (error != NULL)
 				goto error_label;
 
@@ -829,7 +831,9 @@ static GError *_rawx_upload(struct hc_url_s *url, const gchar *target,
 					g_hash_table_size(chunks_at_position),
 					system_metadata, reqid);
 
+			gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 			error = http_put_run(http_put);
+			gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 			if (error != NULL)
 				goto error_label;
 
