@@ -1,118 +1,126 @@
 #!/usr/bin/python
 
-import sys, time, random, logging, traceback
+import sys, time, random, logging, traceback, itertools
+import threading
 
 import zookeeper
 
 PREFIX='/hc'
 PREFIX_NS=PREFIX+'/ns'
-
 default_expr = "pow(host['cpu_idle'] * host['netin_idle'] * host['netout_idle'] * volume['io_idle'] , 0.25)"
+hexa = '0123456789ABCDEF'
+acl_openbar = [{'perms':zookeeper.PERM_ALL, 'scheme':'world', 'id':'anyone'}]
 
-def create_tree(zh, tree_nodes, reset=True):
-	def new_acl_openbar():
-		return [{'perms':zookeeper.PERM_ALL, 'scheme':'world', 'id':'anyone'}]
-	def create_ignore_errors(path, data):
-		try:
-			zookeeper.create(zh, path, data, new_acl_openbar(), 0)
-			#print 'create/set('+path+') : OK'
-		except zookeeper.NodeExistsException:
-			if not reset:
-				#print 'create/set('+path+') : ALREADY'
-				return
-			try:
-				zookeeper.set(zh, path, data)
-				#print 'create/set('+path+') : OK'
-			except:
-				print 'create/set('+path+') : FAILED'
+def batch_split (nodes):
+	last = 0
+	batch = list()
+	for x in nodes:
+		current = x[0].count('/')
+		batch.append(x)
+		if len(batch) >= 2048 or last != current:
+			yield batch
+			batch = list()
+		last = current
+	yield batch
 
-	for path, data in tree_nodes:
-		create_ignore_errors(path, data)
-	print "Created", str(len(tree_nodes)), "nodes starting at", repr(tree_nodes[0])
+def batch_create (zh, batch):
+	sem = threading.Semaphore(0)
+	started = 0
+	def create_ignore_errors (zh, path, data):
+		def completion (*args, **kwargs):
+			rc, zrc, ignored = args
+			if rc != 0:
+				print "zookeeper.acreate() error"
+			else:
+				if zrc == 0:
+					#print 'create/set('+path+') : OK'
+					pass
+				elif zrc == zookeeper.NODEEXISTS:
+					#print 'create/set('+path+') : ALREADY'
+					pass
+				else:
+					print 'create/set('+path+') : FAILED'
+			sem.release()
+		zookeeper.acreate(zh, path, data, acl_openbar, 0, completion)
+	for path, data in batch:
+		create_ignore_errors(zh, path, data)
+		started += 1
+	for i in range(started):
+		sem.acquire()
+	return started, 0
 
-def delete_tree(zh, path):
-	path = path.replace('//', '/')
-	try:
-		for n in tuple(zookeeper.get_children(zh, path)):
-			delete_tree(zh, path + '/' + n)
-		zookeeper.delete(zh, path)
-	except:
-		pass
+def create_tree (zh, nodes):
+	ok, ko = 0, 0
+	for batch in batch_split(nodes):
+		pre = time.time()
+		o, k = batch_create(zh, batch)
+		post = time.time()
+		print " > batch({0},{1}) in {2}s".format(o,k,post-pre)
+		ok, ko = ok+o, ko+k
+	print "Created nodes : ok", ok,"ko",ko
 
-def init_srvtype(zh, ns, srvtype):
-	ns = str(ns)
-	srvtype = str(srvtype)
-	nodes = (
-		(PREFIX_NS+'/'+ns+'/srv/'+srvtype, ''),
-		(PREFIX_NS+'/'+ns+'/srv/'+srvtype+'/list', ''),
-	)
-	create_tree(zh, nodes)
+###--------------------------------------------------------------------------###
 
-def init_election(zh, basedir, d, w):
-	hexa = '0123456789ABCDEF'
-	last_level = [ (basedir,'') ]
-	create_tree(zh, last_level, reset=False)
-	for x in range(0,d):
-		print 'd', str(d), 'w', str(w), 'i', x
-		level = list()
-		for n,c in last_level:
-			if w == 1:
-				for i in hexa:
-					path = n+'/'+i+j
-					level.append((path,c))
-			elif w == 2:
-				for i in hexa:
-					for j in hexa:
-						path = n+'/'+i+j
-						level.append((path,c))
-			elif w == 3:
-				for i in hexa:
-					for j in hexa:
-						for k in hexa:
-							path = n+'/'+i+j+k
-							level.append((path,c))
-		create_tree(zh, level, reset=False)
-		last_level = level
-		d = d - 1
+def hash_tokens (w):
+	if w == 1:
+		return itertools.product(hexa)
+	elif w == 2:
+		return itertools.product(hexa,hexa)
+	elif w == 3:
+		return itertools.product(hexa,hexa,hexa)
+	else:
+		return []
+
+def hash_tree (d0, w0):
+	tokens = [''.join(x) for x in hash_tokens(w0)]
+	def depth (d):
+		if d == 1:
+			return itertools.product(tokens)
+		elif d == 2:
+			return itertools.product(tokens, tokens)
+		elif d == 3:
+			return itertools.product(tokens, tokens, tokens)
+		else:
+			return []
+	for d in range(d0+1):
+		for x in depth(d):
+			yield '/'.join(x) 
+
+def namespace_tree (ns):
+	yield (PREFIX_NS+'/'+ns, str(time.time()))
+	yield (PREFIX_NS+'/'+ns+'/vns', '')
+	yield (PREFIX_NS+'/'+ns+'/srv', '')
+	yield (PREFIX_NS+'/'+ns+'/el', '')
+	for srvtype in [ 'meta0', 'meta1', 'meta2', 'rawx', 'solr', 'sqlx', 'tsmx', 'saver', 'replicator']:
+		yield (PREFIX_NS+'/'+ns+'/el/'+srvtype, '')
+		yield (PREFIX_NS+'/'+ns+'/srv/'+srvtype, '')
+		yield (PREFIX_NS+'/'+ns+'/srv/'+srvtype+'/list', '')
+	for srvtype,d,w in [ ('',1,3), ('/meta0',0,0), ('/meta1',1,3), ('/meta2',2,2), ('/sqlx',2,2) ]:
+		basedir = PREFIX_NS+'/'+ns+'/el'+srvtype
+		for x in hash_tree(d,w):
+			yield (basedir+'/'+x, '')
+
+def boot_tree ():
+	yield (PREFIX, '')
+	yield (PREFIX+'/srv', default_expr)
+	yield (PREFIX+'/srv/meta0', '')
+	yield (PREFIX+'/srv/meta1', '')
+	yield (PREFIX+'/srv/meta2', '')
+	yield (PREFIX+'/srv/rawx', '')
+	yield (PREFIX+'/srv/solx', '')
+	yield (PREFIX+'/srv/solr', '')
+	yield (PREFIX+'/srv/tsmx', '')
+	yield (PREFIX+'/srv/saver', '')
+	yield (PREFIX+'/srv/replicator', '')
+	yield (PREFIX+'/srv/sqlx', '')
+	yield (PREFIX_NS, '')
+	yield (PREFIX+'/hosts', '')
+	yield (PREFIX+'/volumes', '')
+
+#-------------------------------------------------------------------------------
 
 def init_namespace(zh, ns):
-	ns = str(ns)
-	prefix_el = PREFIX_NS+'/'+ns+'/el'
-	nodes = (
-		(PREFIX_NS+'/'+ns, str(time.time())),
-		(PREFIX_NS+'/'+ns+'/vns', ''),
-		(PREFIX_NS+'/'+ns+'/srv', ''),
-		(prefix_el, ''),
-		(prefix_el+'/meta0', ''),
-		(prefix_el+'/meta1', ''),
-		(prefix_el+'/meta2', ''),
-		(prefix_el+'/sqlx', ''),
-	)
-	create_tree(zh, nodes)
-	for srvtype in [ 'meta0', 'meta1', 'meta2', 'rawx', 'solr', 'sqlx', 'tsmx', 'saver', 'replicator']:
-		init_srvtype(zh, ns, srvtype)
-	for srvtype,d,w in [ ('',1,3), ('/meta0',0,0), ('/meta1',1,3), ('/meta2',2,2), ('/sqlx',2,2) ]:
-		init_election(zh, prefix_el + srvtype, d, w)
-
-def init_boot(zh):
-	base_nodes = (
-		(PREFIX, ''),
-		(PREFIX+'/srv', default_expr),
-		(PREFIX+'/srv/meta0', ''),
-		(PREFIX+'/srv/meta1', ''),
-		(PREFIX+'/srv/meta2', ''),
-		(PREFIX+'/srv/rawx', ''),
-		(PREFIX+'/srv/solx', ''),
-		(PREFIX+'/srv/solr', ''),
-		(PREFIX+'/srv/tsmx', ''),
-		(PREFIX+'/srv/saver', ''),
-		(PREFIX+'/srv/replicator', ''),
-		(PREFIX+'/srv/sqlx', ''),
-		(PREFIX_NS, ''),
-		(PREFIX+'/hosts', ''),
-		(PREFIX+'/volumes', ''),
-	)
-	create_tree(zh, base_nodes, reset=False)
+	create_tree(zh, namespace_tree(ns))
 
 def load_config():
 	import glob
@@ -122,8 +130,6 @@ def load_config():
 	cfg.read('/etc/gridstorage.conf')
 	cfg.read(glob.glob('/etc/gridstorage.conf.d/*'))
 	return cfg
-
-#-------------------------------------------------------------------------------
 
 def main():
 	from optparse import OptionParser as OptionParser
@@ -154,8 +160,7 @@ def main():
 
 	zookeeper.set_debug_level(zookeeper.LOG_LEVEL_INFO)
 	zh = zookeeper.init(cnxstr)
-	#delete_tree(zh, PREFIX)
-	init_boot(zh)
+	create_tree(zh, boot_tree())
 	init_namespace(zh, ns)
 	zookeeper.close(zh)
 
