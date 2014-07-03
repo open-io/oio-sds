@@ -459,6 +459,29 @@ get_one_namespace_service(const gchar *ns_name, const gchar *type, GError **erro
 		return NULL;
 	}
 
+	if (!gridagent_available()) {
+		// Find best scored service. This is basically what's done in agent.
+		struct service_info_s *res = NULL;
+		GSList *services = list_namespace_services2(ns_name, type, error);
+		if (services) {
+			struct service_info_s *best = NULL;
+			for (GSList *l = services; l; l = l->next) {
+				struct service_info_s *cur = l->data;
+				if (cur->score.value > 0 &&
+						(!best || cur->score.value > best->score.value)) {
+					best = cur;
+				}
+			}
+			res = service_info_dup(best); // NULL safe
+			g_slist_free_full(services, (GDestroyNotify)service_info_clean);
+		}
+		if (!res && error && !*error) {
+			*error = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
+					"No %s service found", type);
+		}
+		return res;
+	}
+
 	memset(&req, 0, sizeof(request_t));
 	memset(&resp, 0, sizeof(response_t));
 	req.cmd = g_strdup(MSG_SRV_GET1);

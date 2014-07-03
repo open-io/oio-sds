@@ -95,7 +95,9 @@ meta0_info_t *get_meta0_info2(const char *ns_name, long timeout_cnx, long timeou
 gint count_namespace_services(const char *ns_name, const char *type, GError **error);
 
 /**
- * List services of a given type in a namespace
+ * List services of a given type in a namespace.
+ * list_namespace_services() fails if gridagent not available,
+ * list_namespace_services2() fallbacks on conscience.
  *
  * @param ns_name the namespace name
  * @param type the type of service to list
