@@ -206,8 +206,8 @@ metadata_merge(GHashTable *base, GHashTable *complement)
 {
 	GHashTableIter iter;
 	gpointer k, v;
-	
-	if (!base || complement)
+
+	if (!base || !complement)
 		return;
 
 	g_hash_table_iter_init(&iter, complement);
