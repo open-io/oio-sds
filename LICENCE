@@ -15,4 +15,5 @@ Those client-related files licensed under the terms of LGPL3 are:
   Its indirect dependencies:
     metautils/lib/*
     cluster/lib/*
-
+    server/*
+    sqliterepo/*
