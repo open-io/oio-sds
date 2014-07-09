@@ -101,7 +101,6 @@ def namespace_tree (ns):
 			yield (basedir+'/'+x, '')
 
 def boot_tree ():
-	yield (PREFIX, '')
 	yield (PREFIX+'/srv', default_expr)
 	yield (PREFIX+'/srv/meta0', '')
 	yield (PREFIX+'/srv/meta1', '')
@@ -160,6 +159,7 @@ def main():
 
 	zookeeper.set_debug_level(zookeeper.LOG_LEVEL_INFO)
 	zh = zookeeper.init(cnxstr)
+	zookeeper.create(zh, PREFIX, '', acl_openbar, 0)
 	create_tree(zh, boot_tree())
 	init_namespace(zh, ns)
 	zookeeper.close(zh)
