@@ -2612,7 +2612,6 @@ module_init_known_service_types(struct conscience_s *cs, GHashTable * params, GE
 		{NAME_SRVTYPE_META1,EXPR_DEFAULT_META1},
 		{NAME_SRVTYPE_META2,EXPR_DEFAULT_META2},
 		{NAME_SRVTYPE_RAWX,EXPR_DEFAULT_RAWX},
-		{NAME_SRVTYPE_SOLR,EXPR_DEFAULT_INDX},
 		{0,0}
 	};
 
