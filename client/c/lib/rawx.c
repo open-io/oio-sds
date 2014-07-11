@@ -1,37 +1,17 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "client.c.rawx"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "client.c.rawx"
 #endif
 
-#include <errno.h>
-#include <netdb.h>
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
+#include "./gs_internals.h"
 
-#include <glib.h>
-
+// TODO FIXME replace with GLib equivalent
 #include <openssl/md5.h>
 
 #include <neon/ne_basic.h>
 #include <neon/ne_request.h>
 #include <neon/ne_session.h>
+
+#include <metautils/lib/metautils.h>
 
 #include "./rawx.h"
 
@@ -42,7 +22,6 @@
 
 static void add_req_id_header(ne_request *request, gchar *dst, gsize dst_size);
 static void add_req_system_metadata_header (ne_request *request, GByteArray *system_metadata);
-static void add_req_user_metadata_header (ne_request *request, GByteArray *user_metadata);
 
 
 static void chunk_id2str (const gs_chunk_t *chunk, char *d, size_t dS)
@@ -66,63 +45,53 @@ static void chunk_getpath (const gs_chunk_t *chunk, char *cPath, size_t s)
 	MYASSERT(chunk);
 	MYASSERT(cPath);
 
-	cPathLen = snprintf (cPath, MAX(s,sizeof(chunk->ci->id.vol)), "%s/", chunk->ci->id.vol);
+	cPathLen = snprintf (cPath, MAX(s, sizeof(chunk->ci->id.vol)), "%s/",
+			chunk->ci->id.vol);
 	chunk_id2str (chunk, cPath+cPathLen, s-cPathLen);
 }
 
-/**
- * Create one webdav session associated to the guven chunk
- */
-static ne_session* rawx_opensession (gs_chunk_t *chunk, GError **err)
+ne_session *
+opensession_common(const addr_info_t *addr_info,
+		int connect_timeout, int read_timeout, GError **err)
 {
-	int rc;
-	struct sockaddr_storage ss;
-	gsize ss_size = sizeof(ss);
 	ne_session *session=NULL;
-	gchar host[1024], port[32];
+	gchar host[1024];
+	guint16 port;
 
-	if (!chunk || !chunk->ci)
-	{
+	if (!addr_info) {
 		GSETERROR (err, "Invalid parameter");
 		return NULL;
 	}
 
-	memset( host, 0x00, sizeof(host) );
-	memset( port, 0x00, sizeof(port) );
-
-	if (!addrinfo_to_sockaddr (&(chunk->ci->id.addr), (struct sockaddr*)&ss,
-		&ss_size))
-	{
-		GSETERROR(err,"The chunk_info_t cannot be mapped into a struct sockaddr_storage");
+	port = 0;
+	memset(host, 0x00, sizeof(host));
+	if (!addr_info_get_addr(addr_info, host, sizeof(host)-1, &port)) {
+		GSETERROR(err, "AddrInfo printing error");
 		return NULL;
 	}
 
-	rc = getnameinfo ( (struct sockaddr* )&ss, ss_size, host, sizeof(host),
-		port, sizeof(port), NI_NUMERICHOST|NI_NUMERICSERV);
-
-	if (rc)
-	{
-		GSETERROR(err,"The chunk_info_t cannot be reverse resolved (%s)", strerror(errno));
-		return NULL;
-	}
-
-	session = ne_session_create ("http", host, atoi(port));
-	if (!session)
-	{
+	session = ne_session_create ("http", host, port);
+	if (!session) {
 		GSETERROR(err,"cannot create a new WebDAV session");
 		return NULL;
 	}
 
-	/**@todo TODO manage a proxy HERE*/
-	register int to;
-
-	to = C1_RAWX_TO_CNX(chunk->content)/1000;
-	ne_set_connect_timeout (session, MAX(to,1));
-	
-	to = C1_RAWX_TO_OP(chunk->content)/1000;
-	ne_set_read_timeout (session, MAX(to,1));
-
+	ne_set_connect_timeout (session, connect_timeout);
+	ne_set_read_timeout (session, read_timeout);
 	return session;
+}
+
+/**
+ * Create one webdav session associated to the given chunk
+ */
+static ne_session* rawx_opensession (gs_chunk_t *chunk, GError **err)
+{
+	/**@todo TODO manage a proxy HERE*/
+	register int to_cnx, to_op;
+	to_cnx = C1_RAWX_TO_CNX(chunk->content)/1000;
+	to_op = MAX(C1_RAWX_TO_OP(chunk->content)/1000, 1);
+
+	return opensession_common(&(chunk->ci->id.addr), to_cnx, to_op, err);
 }
 
 
@@ -152,6 +121,8 @@ gs_status_t rawx_delete (gs_chunk_t *chunk, GError **err)
 	chunk_id2str(chunk, str_ci, sizeof(str_ci));
 	chunk_getpath (chunk, cPath, sizeof(cPath));
 	DEBUG("about to delete %s on %s", str_ci, cPath);
+
+	gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 
 	session = rawx_opensession (chunk, err);
 	if (!session)
@@ -209,6 +180,9 @@ gs_status_t rawx_delete (gs_chunk_t *chunk, GError **err)
 	ne_session_destroy (session);
 	
 	TRACE("%s deleted (ReqId:%s)", cPath, str_req_id);
+
+	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
+
 	return 1;
 error_label:
 	TRACE("could not delete %s", cPath);
@@ -216,255 +190,182 @@ error_label:
 		ne_request_destroy (request);
 	if (session)
 		ne_session_destroy (session);
+
+	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
+
 	return 0;
 }
 
-gs_status_t rawx_upload (gs_chunk_t *chunk, GError **err,
-	gs_input_f input, void *user_data, GByteArray *system_metadata, gboolean process_md5)
+static gboolean _delete_request(const char *host, int port,
+		const char *target, GError **err)
 {
-	return rawx_upload_v2(chunk, err, input, user_data, NULL, system_metadata, process_md5);
-}
+	GRID_TRACE("%s", __FUNCTION__);
+	gboolean result = FALSE;
+	ne_session* session = ne_session_create("http", host, port);
+	ne_set_connect_timeout(session, 10);
+	ne_set_read_timeout(session, 30);
 
-struct thread_data {
-	MD5_CTX md5_ctx;
-	chunk_hash_t hash;
-	gint md5_computed; // 0:not computed, 1:computed, -1:error
-	GMutex *lock;
-	GCond *cond;
-};
-
-static GHashTable *thread_data_ht = NULL;
-static GStaticMutex mutex = G_STATIC_MUTEX_INIT;
-static MD5_CTX content_md5_ctx;
-static content_hash_t content_hash;
-static gboolean content_md5_init = TRUE;
-
-void finalize_content_hash() {
-	MD5_Final((void*) &content_hash, &content_md5_ctx);
-}
-
-content_hash_t *get_content_hash() {
-	return &content_hash;
-}
-
-void clean_after_upload(void *user_data)
-{
-	g_static_mutex_lock(&mutex);
-	if (thread_data_ht) {
-		struct thread_data *thdata = g_hash_table_lookup(thread_data_ht, user_data);
-		if (thdata) {
-			g_mutex_free(thdata->lock);
-			g_cond_free(thdata->cond);
-			g_hash_table_remove(thread_data_ht, user_data);
+	GRID_DEBUG("DELETE http://%s:%d%s", host, port, target);
+	ne_request* req = ne_request_create(session, "DELETE", target);
+	if (NULL != req) {
+		switch (ne_request_dispatch(req)) {
+			case NE_OK:
+				if (ne_get_status(req)->klass != 2) {
+					*err = NEWERROR(0, "cannot delete '%s' (%s)", target,
+							ne_get_error(session));
+				} else {
+					result = TRUE;
+				}
+				break;
+			case NE_AUTH:
+			case NE_CONNECT:
+			case NE_TIMEOUT:
+			case NE_ERROR:
+			default:
+				*err = NEWERROR(0,
+						"unexpected error from the WebDAV server (%s)",
+						ne_get_error(session));
+				break;
 		}
+		ne_request_destroy(req);
+	} else {
+		// This should be an assertion
+		*err = NEWERROR(0, "Failed to create request");
 	}
-	content_md5_init = TRUE;
-	g_static_mutex_unlock(&mutex);
+	ne_session_destroy (session);
+	return result;
 }
 
-gs_status_t rawx_upload_v2 (gs_chunk_t *chunk, GError **err,
-	gs_input_f input, void *user_data, GByteArray *user_metadata,
-	GByteArray *system_metadata, gboolean process_md5)
+gboolean rawx_delete_v2(gpointer chunk, GError **err)
 {
-	GMutex *lock = NULL;
-	GCond *cond = NULL;
+	gchar *cid = NULL;
+	gchar **toks = NULL;
+	gchar **hp = NULL;
 
-	auto ssize_t limited_input (void *udata, char *b, size_t bS);
+	g_assert(chunk != NULL);
+	g_assert(err != NULL);
+	g_clear_error(err);
 
-	char
-		str_req_id[1024],
-		str_ci[STRLEN_CHUNKID],
-		str_hash[STRLEN_CHUNKHASH],
-		cPath[CI_FULLPATHLEN];
-
-	int64_t size_to_be_read=0;
-	/*int64_t to_be_uploaded=0;*/
-	/*int64_t already_uploaded=0;*/
-
-	struct thread_data *thdata = NULL;
-
-	g_static_mutex_lock(&mutex);
-	if (thread_data_ht == NULL) {
-		thread_data_ht = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
+	if (DESCR(chunk) == &descr_struct_CHUNKS) {
+		cid = CHUNKS_get_id((struct bean_CHUNKS_s*)chunk)->str;
+	} else if (DESCR(chunk) == &descr_struct_CONTENTS) {
+		cid = CONTENTS_get_chunk_id((struct bean_CONTENTS_s*)chunk)->str;
+	} else {
+		*err = NEWERROR(0, "Invalid 'chunk' argument, must be "
+				"(struct bean_CHUNKS_s*) or (struct bean_CONTENTS_s*)");
+		goto end;
 	}
-	thdata = g_hash_table_lookup(thread_data_ht, user_data);
-	if (thdata == NULL) {
-		thdata = calloc(1, sizeof(struct thread_data));
-		g_hash_table_insert(thread_data_ht, user_data, thdata);
-		thdata->lock = g_mutex_new();
-		thdata->cond = g_cond_new();
-	}
-	cond = thdata->cond;
-	lock = thdata->lock;
-	// in case the thread responsible for computing the MD5 sum cannot upload
-	// its chunk, force the other threads waiting for this MD5 to exit.
-	if (process_md5 == -1) {
-		thdata->md5_computed = -1;
-		g_mutex_lock (lock);
-		g_cond_broadcast(cond);
-		g_mutex_unlock (lock);
-		rb_handle_read_error(user_data);
-		g_static_mutex_unlock(&mutex);
-		return FALSE;
-	}
-	if (process_md5) {
-		DEBUG("thread %p: processing md5.", g_thread_self());
-		MD5_Init(&(thdata->md5_ctx));
-		thdata->md5_computed = 0;
-		bzero(&(thdata->hash), sizeof(thdata->hash));
-		if (content_md5_init == TRUE) {
-			MD5_Init(&(content_md5_ctx));
-			bzero(&(content_hash), sizeof(content_hash));
-			content_md5_init = FALSE;
-		}
-	}
-	g_static_mutex_unlock(&mutex);
 
-	ne_session *session=NULL;
-	ne_request *request=NULL;
+	toks = g_strsplit(cid + 7, "/", 2); // skip "http://" and get "host:port"
+	if (!toks || g_strv_length(toks) != 2) {
+		*err = NEWERROR(0, "Unparsable chunk URL format: '%s'", cid);
+		goto end;
+	}
+	hp = g_strsplit(toks[0], ":", 2); // split host and port
+	if (!hp || g_strv_length(hp) != 2) {
+		*err = NEWERROR(0, "Could not extract host and port: '%s'", toks[0]);
+		goto end;
+	}
+
+	gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
+	_delete_request(hp[0], atoi(hp[1]), strrchr(cid, '/'), err);
+	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
+
+end:
+	g_strfreev(hp);
+	g_strfreev(toks);
+	return (*err == NULL);
+}
+
+
+char*
+create_rawx_request_common(ne_request **req, ne_request_param_t *param, GError **err)
+{
+	ne_request *request = NULL;
+	char str_req_id[1024];
 
 	memset(str_req_id, 0x00, sizeof(str_req_id));
 
-	/*reads at most the chunk size*/
-	ssize_t limited_input (void *udata, char *b, size_t bS)
-	{
-		ssize_t nb;
-		int64_t bS64, possible64;
-		size_t possible;
-
-		if (size_to_be_read <= 0) {
-			TRACE("reading input (end of input)");
-			return 0;
-		}
-		if (!bS) {
-			TRACE("reading input (preliminary call)");
-			return 0;
-		}
-
-		bS64 = bS;
-		possible64 = MAX(0,MIN(bS64,size_to_be_read));
-		possible = possible64;
-
-		nb = input (udata, b, possible);
-		
-		TRACE("%"G_GSSIZE_FORMAT" bytes read, %"G_GINT64_FORMAT" -> %"G_GINT64_FORMAT, nb, size_to_be_read, size_to_be_read - nb);
-
-		if (nb>0) {
-			size_to_be_read = size_to_be_read - nb;
-			if (process_md5) {
-				MD5_Update(&(thdata->md5_ctx), b, nb);
-				MD5_Update(&(content_md5_ctx), b, nb);
-			}
-			if (size_to_be_read <= 0) {
-				g_mutex_lock (lock);
-				if (process_md5) {
-					DEBUG("thread %p: done with md5 processing.", g_thread_self());
-					MD5_Final((void*) &(thdata->hash), &(thdata->md5_ctx));
-					thdata->md5_computed = 1;
-					g_cond_broadcast(cond);
-				} else {
-					DEBUG("thread %p: waiting for md5 processing.", g_thread_self());
-					while (thdata->md5_computed == 0)
-						g_cond_wait(cond, lock);
-					DEBUG("thread %p: %s, resuming.",
-							g_thread_self(),
-							thdata->md5_computed == 1 ? "md5 processed" : "md5 could not be processed");
-				}
-				g_mutex_unlock (lock);
-				memcpy(chunk->ci->hash, thdata->hash, sizeof(chunk->ci->hash));
-				chunk_gethash (chunk, str_hash, sizeof(str_hash));
-				ne_add_request_header(request, "chunkhash", str_hash);
-			}
-		}
-
-		return nb;
-	}
-	
-	/*sanity checks and variables initiations*/
-	if (!chunk || !chunk->ci || !chunk->content || !input)
-	{
+	if (NULL == param->session || NULL == param->method || NULL == param->cPath) {
 		GSETERROR(err, "Invalid parameter");
-		return 0;
+		*req = NULL;
+		return NULL;
 	}
 
-	if (chunk->ci->size<0LL)
-	{
-		GSETERROR(err,"Invalid parameter : size out of range");
-		return 0;
+	if (NULL == (request = ne_request_create (param->session, param->method, param->cPath))) {
+		GSETERROR(err, "cannot create a new WebDAV request (%s)", ne_get_error(param->session));
+		*req = NULL;
+		return NULL;
 	}
 
-	size_to_be_read = chunk->ci->size;
-	chunk_id2str (chunk, str_ci, sizeof(str_ci));
-	chunk_getpath (chunk, cPath, sizeof(cPath));
-	//chunk_gethash (chunk, str_hash, sizeof(str_hash));
+	/* add additionnal headers */
+	ne_add_request_header  (request, "containerid", param->containerid);
+	ne_add_request_header  (request, "contentpath", param->contentpath);
+	ne_print_request_header(request, "chunkpos",    "%u", param->chunkpos);
+	ne_print_request_header(request, "chunknb",     "%u", param->chunknb);
+	ne_print_request_header(request, "chunksize",   "%"G_GINT64_FORMAT, param->chunksize);
+	ne_print_request_header(request, "contentsize", "%"G_GINT64_FORMAT, param->contentsize);
 
-	//DEBUG("about to upload '%s' (size=%"G_GINT64_FORMAT" pos=%"G_GUINT32_FORMAT") on '%s'", str_ci, chunk->ci->size, chunk->ci->position, cPath);
-
-	/*start a new WebDAV session and initiate a request*/
-	session = rawx_opensession (chunk, err);
-
-	/*create an upload request*/
-	request = ne_request_create (session, RAWX_UPLOAD, cPath);
-	if (!request)
-	{
-		GSETERROR(err, "cannot create a new WebDAV request (%s)", ne_get_error(session));
-		goto error_label;
-	}
+	gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 
 	/* Add request header */
 	add_req_id_header(request, str_req_id, sizeof(str_req_id)-1);
 
-	/* add additionnal headers */
-	ne_add_request_header  (request, "chunkid",     str_ci);
-	//ne_add_request_header  (request, "chunkhash",   str_hash);
-	ne_add_request_header  (request, "containerid", C1_IDSTR(chunk->content));
-	ne_add_request_header  (request, "contentpath", C1_PATH(chunk->content));
-	ne_print_request_header(request, "chunkpos",    "%u",  chunk->ci->position);
-	ne_print_request_header(request, "chunknb",     "%u",  chunk->ci->nb);
-	ne_print_request_header(request, "chunksize",   "%"G_GINT64_FORMAT, chunk->ci->size);
-	ne_print_request_header(request, "contentsize", "%"G_GINT64_FORMAT, chunk->content->info.size);
-	if (system_metadata && system_metadata->data && system_metadata->len>0)
-		add_req_system_metadata_header( request, system_metadata);
-	if (user_metadata && user_metadata->data && user_metadata->len>0)
-		add_req_user_metadata_header( request, user_metadata);
+	*req = request;
+	return g_strdup(str_req_id);
+}
 
-	/*tell we'll read data from the provided callback*/
-	ne_set_request_body_provider (request, chunk->ci->size, limited_input, user_data);
+ne_request_param_t* new_request_param()
+{
+	return g_malloc0(sizeof(ne_request_param_t));
+}
 
-	/*really start the upload*/
-	switch (ne_request_dispatch (request))
-	{
-		case NE_OK:
-			if (ne_get_status(request)->klass != 2) {
-				GSETERROR(err, "cannot upload '%s' (%s) (ReqId:%s)", cPath, ne_get_error(session), str_req_id);
-				goto error_label;
-			}
-			DEBUG("chunk upload finished (success)");
-			break;
-		case NE_AUTH:
-		case NE_CONNECT:
-		case NE_TIMEOUT:
-		case NE_ERROR:
-			GSETERROR(err, "error from the WebDAV server (%s) (ReqId:%s)", ne_get_error(session), str_req_id);
-			goto error_label;
-		default:
-			GSETERROR(err, "unexpected error from the WebDAV server (%s) (ReqId:%s)", ne_get_error(session), str_req_id);
-			goto error_label;
+void free_request_param(ne_request_param_t *param)
+{
+	g_free((gpointer)param->cPath);
+	g_free((gpointer)param->containerid);
+	g_free((gpointer)param->contentpath);
+	g_free((gpointer)param->method);
+	// session must not be freed (should not be created especially for use with request_param)
+
+	g_free(param);
+}
+
+char*
+create_rawx_request_from_chunk(ne_request **p_req, ne_session *session, const char *method, gs_chunk_t *chunk, GByteArray *system_metadata, GError **err)
+{
+	char str_ci[STRLEN_CHUNKID], cPath[CI_FULLPATHLEN], *str_req_id;
+	ne_request_param_t *params = new_request_param();
+
+	if (NULL == chunk) {
+		GSETERROR(err, "No chunk given");
+		return NULL;
 	}
 
-	/*destroy the working structures*/
-	ne_request_destroy (request);
-	ne_session_destroy (session);
+	params->session = session;
+	params->method = g_strdup(method);
+	chunk_getpath (chunk, cPath, sizeof(cPath));
+	params->cPath = g_strdup(cPath);
+	params->containerid = g_strdup(C1_IDSTR(chunk->content));
+	params->contentpath = g_strdup(C1_PATH(chunk->content));
+	params->chunkpos = chunk->ci->position;
+	params->chunknb = chunk->ci->nb;
+	params->chunksize = chunk->ci->size;
+	params->contentsize = chunk->content->info.size;
 
-	TRACE("%s uploaded (ReqId:%s)", cPath, str_req_id);
-	return TRUE;
-error_label:
-	if (request)
-		ne_request_destroy (request);
-	if (session)
-		ne_session_destroy (session);
-	TRACE("could not upload %s (ReqId:%s)", cPath, str_req_id);
-	return FALSE;
+	str_req_id = create_rawx_request_common(p_req, params, err);
+	free_request_param(params);
+	if (*p_req) {
+		if (system_metadata && system_metadata->data && system_metadata->len>0)
+			add_req_system_metadata_header(*p_req, system_metadata);
+		chunk_id2str(chunk, str_ci, sizeof(str_ci));
+		GRID_DEBUG("chunkid=%s", str_ci);
+		ne_add_request_header(*p_req, "chunkid", str_ci);
+		return str_req_id;
+	}
+
+	g_free(str_req_id);
+	return NULL;
 }
 
 static void
@@ -477,8 +378,8 @@ rawx_dl_advance_status(struct dl_status_s *status, size_t s)
 	status->chunk_dl_size = status->chunk_dl_size - nbW64;
 }
 
-gboolean
-rawx_update_chunk_attr(struct meta2_raw_chunk_s *c, const char *name, const char *val, GError **err)
+static gboolean
+_rawx_update_chunk_attrs(chunk_id_t *cid, GSList *attrs, GError **err)
 {
 	ne_session *s = NULL;
 	ne_request *r = NULL;
@@ -486,18 +387,15 @@ rawx_update_chunk_attr(struct meta2_raw_chunk_s *c, const char *name, const char
 	gboolean result = FALSE;
 
 	gchar dst[128];
-	gsize dst_ip_size = sizeof(dst);
 	guint16 port = 0;
 	GString *req_str = NULL;
 	char idstr[65];
 
-	addr_info_get_addr(&(c->id.addr), dst, dst_ip_size, &port, err);
-	if(NULL != *err) {
+	if (!addr_info_get_addr(&(cid->addr), dst, sizeof(dst), &port))
 		return result;
-	}
 
 	s = ne_session_create("http", dst, port);
-	if(!s) {
+	if (!s) {
 		GSETERROR(err, "Failed to create session to rawx %s:%d", dst, port);
 		return result;
 	}
@@ -507,15 +405,19 @@ rawx_update_chunk_attr(struct meta2_raw_chunk_s *c, const char *name, const char
 
 	req_str =g_string_new("/rawx/chunk/set/");
 	bzero(idstr, sizeof(idstr));
-	buffer2str(c->id.id, sizeof(c->id.id), idstr, sizeof(idstr));
+	buffer2str(&(cid->id), sizeof(cid->id), idstr, sizeof(idstr));
 	req_str = g_string_append(req_str, idstr);
+	GRID_TRACE("Calling %s", req_str->str);
 
 	r = ne_request_create (s, "GET", req_str->str);
 	if (!r) {
 		goto end_attr;
 	}
 
-	ne_add_request_header(r, name, val);
+	for (; attrs != NULL; attrs = attrs->next) {
+		struct chunk_attr_s *attr = attrs->data;
+		ne_add_request_header(r, attr->key, attr->val);
+	}
 
 	switch (ne_rc = ne_request_dispatch(r)) {
 		case NE_OK:
@@ -533,7 +435,6 @@ rawx_update_chunk_attr(struct meta2_raw_chunk_s *c, const char *name, const char
 		default:
 			GSETCODE(err, 500, "Request failed");
 			break;
-			
 	}
 
 end_attr:
@@ -545,11 +446,29 @@ end_attr:
 		ne_session_destroy (s);
 
 	return result;
+}
 
+
+gboolean
+rawx_update_chunk_attr(struct meta2_raw_chunk_s *c, const char *name,
+		const char *val, GError **err)
+{
+	struct chunk_attr_s attr = {name, val};
+	GSList l = {&attr, NULL};
+	return _rawx_update_chunk_attrs(&(c->id), &l, err);
 }
 
 gboolean
-rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status)
+rawx_update_chunk_attrs(const gchar *chunk_url, GSList *attrs, GError **err)
+{
+	chunk_id_t cid;
+	fill_chunk_id_from_url(chunk_url, &cid);
+	return _rawx_update_chunk_attrs(&cid, attrs, err);
+}
+
+gboolean
+rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
+		GSList **p_broken_rawx_list)
 {
 	char cPath[CI_FULLPATHLEN];
 	char str_ci[STRLEN_CHUNKID];
@@ -560,8 +479,6 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status)
 
 	int flag_md5 = 0;
 	MD5_CTX md5_ctx;
-
-	auto int output_wrapper (void *uData, const char *b, const size_t bSize);
 
 	int output_wrapper (void *uData, const char *b, const size_t bSize) {
 		size_t offset;
@@ -606,6 +523,10 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status)
 	chunk_id2str (chunk, str_ci, sizeof(str_ci));
 	TRACE("about to download '%s' from '%s'", str_ci, cPath);
 
+
+	gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
+
+
 	/*create a webdav session, a request with good headers */
 	session = rawx_opensession (chunk, err);
 	if (!session) {
@@ -638,6 +559,7 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status)
 			if (ne_get_status(request)->klass != 2) {
 				GSETCODE(err, 1000 + ne_get_status(request)->code,
 					"cannot download '%s' (%s) (ReqId:%s)", cPath, ne_get_error(session), str_req_id);
+				*p_broken_rawx_list = g_slist_prepend(*p_broken_rawx_list, chunk->ci);
 				goto error_label;
 			}
 			if (flag_md5) {
@@ -655,6 +577,7 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status)
 					GSETCODE(err, CODE_CONTENT_CORRUPTED, "Chunk downloaded [%s] was corrupted"
 							" (md5 does not match meta2) : %s/%s (%s)", cPath, hash_str,
 							md5_str, str_req_id);
+					*p_broken_rawx_list = g_slist_prepend(*p_broken_rawx_list, chunk->ci);
 					goto error_label;
 				}
 			}
@@ -670,6 +593,7 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status)
 		case NE_CONNECT:
 			GSETCODE(err, CODE_NETWORK_ERROR, "Service unavailable, cannot download '%s' (%s) (ReqId:%s)",
 					cPath, ne_get_error(session), str_req_id);
+			*p_broken_rawx_list = g_slist_prepend(*p_broken_rawx_list, chunk->ci);
 			goto error_label;
 		case NE_AUTH:
 		default:
@@ -684,6 +608,9 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status)
 	/*destroy the webdav structures*/
 	ne_request_destroy (request);
 	ne_session_destroy (session);
+
+	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
+
 	return TRUE;
 
 error_label:
@@ -694,6 +621,9 @@ error_label:
 		ne_session_destroy (session);
 
 	INFO("could not download %s (%s)", cPath, str_req_id);
+
+	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
+
 	return FALSE;
 }
 
@@ -708,23 +638,34 @@ int rawx_init (void)
 	return 1;
 }
 
-void add_req_id_header(ne_request *request, gchar *dst, gsize dst_size) {
-        pid_t pid;
+void gen_req_id_header(gchar *dst, gsize dst_size) {
+	pid_t pid;
 	gsize i, s=16;
 	char idRequest[256];
-        guint8 idBuf[s+sizeof(int)];
-       
-        memset(idBuf, 0, sizeof(idBuf));
+	guint8 idBuf[s+sizeof(int)];
+
+	g_assert(dst != NULL);
+	g_assert(dst_size > 0);
+
+	memset(idBuf, 0, sizeof(idBuf));
 	memset(idRequest, 0, sizeof(idRequest));
 
-        pid = getpid();
-        memcpy (idBuf, (guint8*)(&pid), sizeof(pid));
-        for (i=sizeof(int); i<s ;i+=sizeof(int)) {
-                int r = random();
-                memcpy(idBuf+i, (guint8*)(&r), sizeof(int));
-        }
+	pid = getpid();
+	memcpy (idBuf, (guint8*)(&pid), sizeof(pid));
+	for (i=sizeof(int); i<s ;i+=sizeof(int)) {
+		int r = random();
+		memcpy(idBuf+i, (guint8*)(&r), sizeof(int));
+	}
 
 	buffer2str(idBuf, sizeof(idBuf), idRequest, sizeof(idRequest));
+
+	g_strlcpy(dst, idRequest, dst_size);
+}
+
+void add_req_id_header(ne_request *request, gchar *dst, gsize dst_size) {
+	char idRequest[256];
+
+	gen_req_id_header(idRequest, sizeof(idRequest));
 
 	DEBUG("Adding ReqId header to HTTP request => [%s:%s]", "GSReqId", idRequest);
 
@@ -733,43 +674,24 @@ void add_req_id_header(ne_request *request, gchar *dst, gsize dst_size) {
 		g_strlcpy(dst, idRequest, dst_size);
 }
 
-void add_req_user_metadata_header (ne_request *request, GByteArray *user_metadata)
-{
-	char unescaped[65536];
-	char *escaped;
-	
-	if (!user_metadata)
-		return;
-	if (!request)
-		return;
-	
-	/*ensure the URL isNULL terminated*/
-	memset( unescaped, 0x00, sizeof(unescaped));
-	g_memmove( unescaped, user_metadata->data, MIN(sizeof(unescaped)-1,user_metadata->len));
-
-	/*and add the escaped string as a header*/
-	escaped = g_strescape( unescaped, "");
-	ne_add_request_header( request, "contentmetadata", escaped);
-	g_free( escaped);
-}
-
 void add_req_system_metadata_header (ne_request *request, GByteArray *system_metadata)
 {
-	char unescaped[65536];
-	char *escaped;
-	
+	gchar *escaped = NULL;
+	gchar *unescaped = NULL;
+
 	if (!system_metadata)
 		return;
 	if (!request)
 		return;
-	
-	/*ensure the URL isNULL terminated*/
-	memset( unescaped, 0x00, sizeof(unescaped));
-	g_memmove( unescaped, system_metadata->data, MIN(sizeof(unescaped)-1,system_metadata->len));
+
+	/* ensure the URL is NULL terminated */
+	unescaped = g_malloc0(system_metadata->len + 1);
+	g_memmove(unescaped, system_metadata->data, system_metadata->len);
 
 	/*and add the escaped string as a header*/
 	escaped = g_strescape( unescaped, "");
 	ne_add_request_header( request, "contentmetadata-sys", escaped);
-	g_free( escaped);
+	g_free(escaped);
+	g_free(unescaped);
 }
 

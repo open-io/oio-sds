@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "gridcluster.agent.broken"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "gridcluster.agent.broken"
 #endif
 
 #include <string.h>
@@ -27,17 +7,16 @@
 #include <errno.h>
 #include <stdlib.h>
 
-#include <metatypes.h>
-#include <metacomm.h>
-#include <metautils.h>
-#include <conscience.h>
+#include <metautils/lib/metacomm.h>
+
+#include <cluster/module/module.h>
+#include <cluster/conscience/conscience.h>
 
 #include "./agent.h"
 #include "./broken_workers.h"
 #include "./message.h"
 #include "./namespace_get_task_worker.h"
 #include "./task_scheduler.h"
-#include "../module/module.h"
 
 struct runner_data_s {
 	GByteArray *packed;
@@ -48,9 +27,9 @@ static gboolean
 broken_meta1_runner( gpointer u, struct broken_meta1_s *bm1 )
 {
 	struct runner_data_s *data;
-	
+
 	TRACE_POSITION();
-		
+
 	data = u;
 	if (bm1) {
 		gchar *str = broken_holder_write_meta1( bm1 );
@@ -69,7 +48,7 @@ broken_content_runner(gpointer u, struct broken_meta2_s *bm2, struct broken_cont
 {
 	gchar *str;
 	struct runner_data_s *data;
-	
+
 	TRACE_POSITION();
 	if (bm2) {
 		str = bc ? broken_holder_write_content(bm2,bc) : broken_holder_write_meta2(bm2);
@@ -91,7 +70,7 @@ agent_fetch_broken_all_elements(worker_t *worker, GError **error)
 	request_t *req = NULL;
 	namespace_data_t *ns_data = NULL;
 	gchar ns_name[LIMIT_LENGTH_NSNAME];
-	
+
 	TRACE_POSITION();
 	memset(&data, 0x00, sizeof(data));
 

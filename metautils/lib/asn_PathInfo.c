@@ -1,26 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "metacomm.path_info.asn"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "metacomm.path_info.asn"
 #endif
 
 #include <errno.h>
@@ -39,8 +18,8 @@ path_info_ASN2API(const PathInfo_t * asn, path_info_t * api)
 	if (!api || !asn)
 		return FALSE;
 
-	memset(api->path, 0x00, LIMIT_LENGTH_CONTENTPATH);
-	memcpy(api->path, asn->path.buf, MIN(LIMIT_LENGTH_CONTENTPATH - 1, asn->path.size));
+	memset(api->path, 0x00, LIMIT_LENGTH_CONTENTPATH + 1);
+	memcpy(api->path, asn->path.buf, MIN(LIMIT_LENGTH_CONTENTPATH, asn->path.size));
 	/*set the size */
 	api->size = 0;
 	if (asn->size) {
@@ -70,7 +49,7 @@ path_info_ASN2API(const PathInfo_t * asn, path_info_t * api)
 gboolean
 path_info_API2ASN(const path_info_t * api, PathInfo_t * asn)
 {
-	char path_name[LIMIT_LENGTH_CONTENTPATH];
+	char path_name[LIMIT_LENGTH_CONTENTPATH + 1];
 
 	if (!api || !asn)
 		return FALSE;

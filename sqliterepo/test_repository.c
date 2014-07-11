@@ -1,39 +1,15 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
 #ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "grid.sqlx.test"
+# define G_LOG_DOMAIN "sqliterepo"
 #endif
 
 #include <unistd.h>
 #include <stdio.h>
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
 
-#include <metautils.h>
-
-#include "./internals.h"
-#include "./cache.h"
-#include "./sqliterepo.h"
-
-static GQuark gquark_log;
+#include "sqliterepo.h"
+#include "cache.h"
+#include "internals.h"
 
 #define SCHEMA_META2 "CREATE TABLE IF NOT EXISTS content (" \
 	" path TEXT NOT NULL PRIMARY KEY," \
@@ -58,11 +34,7 @@ main(int argc, char **argv)
 	GError *err = NULL;
 	sqlx_repository_t *repo = NULL;
 
-	if (!g_thread_supported())
-		g_thread_init(NULL);
-	g_log_set_handler(NULL, G_LOG_LEVEL_MASK|G_LOG_FLAG_FATAL,
-			logger_stderr, NULL);
-	gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
+	HC_PROC_INIT(argv, GRID_LOGLVL_TRACE2);
 	g_assert(argc == 2);
 
 	err = sqlx_repository_init(argv[1], NULL, &repo);

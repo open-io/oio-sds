@@ -1,32 +1,12 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "rawx.compress"
 #endif
+
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
-
-#ifdef HAVE_COMPAT
-# include <metautils_compat.h>
-#endif
 
 #ifdef APR_HAVE_STDIO_H
 #include <stdio.h>              /* for sprintf() */
@@ -35,15 +15,15 @@
 #include <unistd.h>
 #include <string.h>
 
-# include <glib.h>
-# include <metatypes.h>
-# include <metautils.h>
-# include <metacomm.h>
-# include <rawx.h>
-
 #include <zlib.h>
 #include <zconf.h>
-#include "./compression.h"
+
+#include <metautils/lib/metautils.h>
+
+#include "rawx.h"
+#include "compression.h"
+
+#include <errno.h>
 
 /* magic file header for zlib block compressed files */
 static const unsigned char magic[8] =
@@ -127,7 +107,6 @@ int
 zlib_compress_chunk_part(const void *buf, gsize bufsize, GByteArray *result, gulong* checksum)
 {
 	guint8* out = NULL;
-	//gulong out_len = 0;
 	gulong bufsize_ulong = bufsize;
 	gulong out_max;
 	int r = 0;
@@ -200,11 +179,14 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 	while(1) {
 		/* read uncompressed size */
 		nb_read = 0;
+		errno = 0;
+		// FIXME: dangerous (sizeof(gulong) may vary)
 		nb_read = fread(&out_len, sizeof(out_len), 1, chunk->fd);
 
 		if (nb_read != 1) {
-			DEBUG("Failed to read data from chunk file");
-			return -1;
+			DEBUG("Failed to read block uncompressed size: %s",
+					feof(chunk->fd)? "EOF" : strerror(errno));
+			return feof(chunk->fd)? 0 : -1;
 		}
 		/* exit if last block (EOF marker) */
 		if(out_len == 0) {
@@ -214,10 +196,14 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 		/* read compressed size */
 		in_len = 0;
 		nb_read = 0;
+		errno = 0;
+		// FIXME: dangerous (sizeof(gulong) may vary)
 		nb_read = fread(&in_len, sizeof(in_len), 1, chunk->fd);
 
 		if (nb_read != 1) {
-			return -1;
+			DEBUG("Failed to read block compressed size: %s",
+					feof(chunk->fd)? "EOF" : strerror(errno));
+			return feof(chunk->fd)? 0 : -1;
 		}
 		/* check if we are in good block */
 		if(to_skip < total_skipped + out_len) {
@@ -230,7 +216,8 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 			total_skipped += out_len;
 			if(fseek(chunk->fd, in_len, SEEK_CUR)) {
 				/* fseek issue */
-				return -1;
+				DEBUG("Failed to skip block: %s", strerror(errno));
+				return feof(chunk->fd)? 0 : -1;
 			}
 		}
 	}
@@ -258,6 +245,7 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 		nb_read = fread(chunk->buf, chunk->buf_len, 1, chunk->fd);
 
 		if (nb_read != 1) {
+			DEBUG("Could not read block: %s", strerror(errno));
 			r = -1;
 			goto err;
 		}
@@ -291,6 +279,7 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 		g_free(in);
 
 		if (r != Z_OK) {
+			DEBUG("zlib uncompress returned %d", r);
 			r = -1;
 			goto err;
 		}
@@ -321,8 +310,8 @@ zlib_compressed_chunk_check_integrity(struct compressed_chunk_s *chunk)
 	nb_read  = fread(eof_info, len, 1, chunk->fd);
 	
 	if (nb_read != 1) {
-		printf("Failed to read %"G_GSIZE_FORMAT" bytes from chunk", len);
-		goto end;	
+		ERROR("Failed to read %"G_GSIZE_FORMAT" bytes from chunk", len);
+		goto end;
 	}
 
 	DEBUG("chunk->checksum : %lu\n", chunk->checksum);
@@ -351,7 +340,7 @@ zlib_compressed_chunk_get_data(struct compressed_chunk_s *chunk, gsize offset, g
 	gsize to_skip = 0;
 
 	(void) error;
-	
+
 	if(offset > 0) {
 		to_skip = offset - (chunk->data_len - chunk->buf_offset);
 		chunk->buf_offset = MIN(chunk->data_len, chunk->buf_offset + offset);
@@ -366,14 +355,6 @@ zlib_compressed_chunk_get_data(struct compressed_chunk_s *chunk, gsize offset, g
 			return -1;
 		}
 
-		/* 
-		if (rf == 0) {
-			TRACE("compressed_chunk_get_data : EOF");
-			if(!zlib_compressed_chunk_check_integrity(chunk)){
-				DEBUG("Wrong checksum, data seems to be corrupted...");	
-				return -1;
-			}
-		}*/
 		DEBUG("Entering compressed_chunk_get_data, buffer refilled, max=%u buf_offset=%u data_len=%u",
 				(uint)buf_len, (uint)chunk->buf_offset, (uint)chunk->data_len);
 	}
@@ -383,8 +364,11 @@ zlib_compressed_chunk_get_data(struct compressed_chunk_s *chunk, gsize offset, g
 	}
 
 
-	if (!chunk->buf || !chunk->data_len) {
-		DEBUG("This must never happened");	
+	if (!chunk->data_len) {
+		WARN("Premature end of archive");
+		return 0;
+	} else if (!chunk->buf) {
+		DEBUG("Buffer is null, this must never happen");
 		return -1;
 	}
 

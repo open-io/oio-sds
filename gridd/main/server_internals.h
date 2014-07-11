@@ -1,27 +1,14 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef __SERVER_INTERNALS_H__
 # define __SERVER_INTERNALS_H__
 
 #include <glib.h>
+#include <gridd/main/message_handler.h>
+#include <gridd/main/sock.h>
+
 
 #define NAME_GENERAL "General"
 #define NAME_SERVICE "Service"
+#define NAME_SERVICETAGS "ServiceTags"
 #define NAME_SRV_TYPE "type"
 #define NAME_NAMESPACE "namespace"
 #define NAME_REGISTER "register"
@@ -55,9 +42,6 @@
 #define SIZE_MSGHANDLERNAME 64
 
 #define GET_NS_INFO_RETRY_DELAY 10
-
-#include "./message_handler.h"
-#include "./sock.h"
 
 struct buffer_s {
 	guint8 *buf;
@@ -137,9 +121,6 @@ struct server_stats_s {
 extern char *config_file;
 extern char *log4c_file;
 extern char *pid_file;
-
-extern volatile gboolean may_continue;
-extern volatile gboolean must_daemonize;
 
 extern gsize default_to_operation;
 extern gsize default_to_connection;

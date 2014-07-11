@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta0.prefixassign"
 #endif
@@ -24,10 +7,8 @@
 #include <string.h>
 #include <errno.h>
 
-#include <glib.h>
-
-#include "../cluster/lib/gridcluster.h"
-#include "../metautils/lib/resolv.h"
+#include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
 
 #include "./meta0_backend.h"
 #include "./meta0_utils.h"
@@ -76,13 +57,6 @@ static void _free_meta0_assign_meta1(struct meta0_assign_meta1_s *aM1) {
 		g_free(aM1->addr);
 }
 
-//static void _gfree_meta0_assign_meta1(gpointer p1, gpointer p2)
-//{
-//        (void) p2;
-//        if (p1)
-//                _free_meta0_assign_meta1((struct meta0_assign_meta1_s *) p1);
-//}
-
 static void _gfree_map_meta0_assign_meta1(gpointer p1)
 {
         if (p1) {
@@ -96,7 +70,7 @@ static void _gfree_map_meta0_assign_meta1(gpointer p1)
 static struct meta0_assign_meta1_s*
 _unpack_meta1ref(gchar *s_meta1ref)
 {
-        META0_ASSERT(s_meta1ref != NULL);
+        EXTRA_ASSERT(s_meta1ref != NULL);
 
         struct meta0_assign_meta1_s *aM1;
 
@@ -230,7 +204,6 @@ _select_source_assign_m1(GList *lst, guint8 *treat_prefixes, const guint avgscor
 	if (lst == NULL )
 		return NULL;
 	struct meta0_assign_meta1_s *aM1 =(g_list_first(lst))->data;
-	//GRID_DEBUG("check meta1 : %s,  score %d, status %d",aM1->addr,aM1->score,aM1->available);
 
 	if (aM1->score <= avgscore)
 		return NULL;
@@ -249,7 +222,6 @@ _select_source_assign_m1(GList *lst, guint8 *treat_prefixes, const guint avgscor
 
 
 	if (!aM1->available) {
-		//_free_meta0_assign_meta1(aM1);
 		lst=g_list_delete_link(lst,lst);
 
 		return _select_source_assign_m1(lst, treat_prefixes,avgscore);
@@ -803,7 +775,8 @@ _initContext(struct meta0_backend_s *m0) {
 /* ----------------------------------------------------------------------------------------*/
 
 GError*
-meta0_assign_fill(struct meta0_backend_s *m0, gchar *ns_name, guint replicas)
+meta0_assign_fill(struct meta0_backend_s *m0, gchar *ns_name, guint replicas,
+		gboolean nodist)
 {
 	GError *error;
 	GList *working_m1list = NULL;
@@ -836,7 +809,7 @@ meta0_assign_fill(struct meta0_backend_s *m0, gchar *ns_name, guint replicas)
 	while (replicas--) {
 		for (idx=0; idx<65536 ;idx++) {
 			working_m1list=g_list_sort(working_m1list,meta0_assign_sort_by_score);
-			d_aM1 =_select_dest_assign_m1(working_m1list,NULL,(guint8*)(&idx),TRUE,TRUE);
+			d_aM1 =_select_dest_assign_m1(working_m1list,NULL,(guint8*)(&idx),TRUE, nodist);
                         if ( ! d_aM1 ) {
 				error=g_error_new(gquark_log,0, "Failed to assign prefix %d to meta1",idx);
 			        goto errorLabel;
@@ -901,7 +874,6 @@ meta0_assign_prefix_to_meta1(struct meta0_backend_s *m0, gchar *ns_name, gboolea
 	if ( error ) {
 		goto errorLabel;
 	}
-	//working_m1list =_init_assign_meta1_list(m1_list,avgscore,array_meta1_by_prefix,map_meta1_ref); 
 	if ( nocheck ) {
 		error =_check(working_m1list);
 		if ( error ) {

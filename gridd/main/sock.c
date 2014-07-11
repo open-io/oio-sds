@@ -1,42 +1,20 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "server.pool"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "server.pool"
 #endif
 
-#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <fnmatch.h>
-#include <netdb.h>
-#include <netinet/in.h>
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/un.h>
-#include <unistd.h>
 
-#include <pthread.h>
-#include <glib.h>
-
-#include <metatypes.h>
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
 #include "./sock.h"
 #include "./server_internals.h"
@@ -46,12 +24,7 @@
 #define FAMILY(S) ((struct sockaddr*)(S))->sa_family
 #define ADDRLEN(A) (((struct sockaddr*)(A))->sa_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6))
 
-#ifdef HAVE_EPOLL
-# include <sys/epoll.h>
-#endif
 #include <poll.h>
-
-
 
 gint
 format_addr (struct sockaddr *sa, gchar *h, gsize hL, gchar *p, gsize pL, GError **err)
@@ -77,7 +50,8 @@ format_addr (struct sockaddr *sa, gchar *h, gsize hL, gchar *p, gsize pL, GError
 }
 
 
-gint resolve (struct sockaddr_storage *sa, const gchar *h, const gchar *p, GError **err)
+gint
+resolve (struct sockaddr_storage *sa, const gchar *h, const gchar *p, GError **err)
 {
 	gint retCode;
 	struct addrinfo *ai=0, aiHint;
@@ -106,7 +80,8 @@ gint resolve (struct sockaddr_storage *sa, const gchar *h, const gchar *p, GErro
 }
 
 
-gint accept_make (ACCEPT_POOL *s, GError **err)
+gint
+accept_make(ACCEPT_POOL *s, GError **err)
 {
 	struct accept_pool_s *ap=NULL;
 
@@ -120,14 +95,6 @@ gint accept_make (ACCEPT_POOL *s, GError **err)
 		GSETERROR(err,"Memory allocation error");
 		goto error_pool;
 	}
-
-#ifdef HAVE_EPOLL
-	ap->epoll_fd = epoll_create (4);
-	if (ap->epoll_fd < 0) {
-		GSETERROR(err,"cannot open an epoll descriptor : %s", strerror(errno));
-		goto error_pool;
-	}
-#endif /* defined HAVE_EPOLL */
 
 	g_static_rec_mutex_init(&(ap->mut));
 
@@ -145,12 +112,8 @@ gint accept_make (ACCEPT_POOL *s, GError **err)
 	*s = ap;
 
 	return 1;
-	
+
 error_array:
-#ifdef HAVE_EPOLL
-	close(ap->epoll_fd);
-error_epoll:
-#endif
 	g_free(ap);
 error_pool:
 error_param:
@@ -171,8 +134,7 @@ _get_family_name (int f)
 }
 
 
-static
-gint
+static gint
 accept_add_any (ACCEPT_POOL ap, int srv, GError **err)
 {
 	gint rc = 0;
@@ -207,17 +169,6 @@ accept_add_any (ACCEPT_POOL ap, int srv, GError **err)
 
 	ap->srv [ap->count++] = srv;
 
-#ifdef HAVE_EPOLL
-	struct epoll_event ev;
-	ev.events = EPOLLIN | EPOLLERR;
-	ev.data.fd = srv;
-	if (-1 == epoll_ctl (ap->epoll_fd, EPOLL_CTL_ADD, srv, &ev))
-	{
-		GSETERROR(err,"epoll_ctl error on fd=%d : %s", srv, strerror(errno));
-		goto exitLabel;
-	}
-#endif
-
 	rc = 1;
 exitLabel:
 	g_static_rec_mutex_unlock (&(ap->mut));
@@ -227,20 +178,19 @@ exitLabel:
 
 
 
-struct working_parameter_s {
-	
+struct working_parameter_s
+{
 	char buf[2048];
 	int  buf_len;
-	
 	struct {
 		char *ptr;
 		int   size;
 	} path;
-
 	mode_t mode;
-} ;
+};
 
-static void parse_option_mode( struct working_parameter_s *pParam, char *pV )
+static void
+parse_option_mode( struct working_parameter_s *pParam, char *pV )
 {
 	char *pVEnd=NULL;
 	guint64 u64, max;
@@ -268,7 +218,8 @@ static void parse_option_mode( struct working_parameter_s *pParam, char *pV )
 	}
 }
 
-static void parse_one_option( struct working_parameter_s *pParam, char *pStr, int len )
+static void
+parse_one_option( struct working_parameter_s *pParam, char *pStr, int len )
 {
 	char *pEq;
 	pEq = g_strstr_len( pStr, len, "=" );
@@ -289,7 +240,8 @@ static void parse_one_option( struct working_parameter_s *pParam, char *pStr, in
 	}
 }
 
-static void parse_socket_options( struct working_parameter_s *pParam )
+static void
+parse_socket_options( struct working_parameter_s *pParam )
 {
 	char *pStart, *pEnd;
 	
@@ -319,7 +271,8 @@ static void parse_socket_options( struct working_parameter_s *pParam )
 	}
 }
 
-static void init_socket_options_defaults( const gchar *l, struct working_parameter_s *pParam)
+static void
+init_socket_options_defaults( const gchar *l, struct working_parameter_s *pParam)
 {
 	char *pStr;
 	memset( pParam, 0x00, sizeof(struct working_parameter_s) );
@@ -335,7 +288,8 @@ static void init_socket_options_defaults( const gchar *l, struct working_paramet
 	pParam->path.size = strlen( pParam->path.ptr );
 }
 
-static int check_socket_is_absent( struct working_parameter_s *pParam, GError **err )
+static int
+check_socket_is_absent( struct working_parameter_s *pParam, GError **err )
 {
 	struct sockaddr_un sun;
 	int attempts, fd, rc;
@@ -371,7 +325,7 @@ static int check_socket_is_absent( struct working_parameter_s *pParam, GError **
 			sun.sun_family = PF_LOCAL;
 			strncpy(sun.sun_path, pParam->path.ptr, sizeof(sun.sun_path));
 			rc = connect(fd,(struct sockaddr*)&sun,sizeof(sun));
-			close(fd);
+			metautils_pclose(&fd);
 			if (!rc) {
 				GSETERROR(err,"Server socket already up at [%s]", pParam->path.ptr);
 				return -1;
@@ -388,10 +342,8 @@ static int check_socket_is_absent( struct working_parameter_s *pParam, GError **
 	return -1;
 }
 
-
-
-
-gint accept_add_local (ACCEPT_POOL ap, const gchar *l, GError **err)
+gint
+accept_add_local (ACCEPT_POOL ap, const gchar *l, GError **err)
 {
 	struct working_parameter_s wrkParam;
 	struct sockaddr_un sun;
@@ -461,12 +413,13 @@ gint accept_add_local (ACCEPT_POOL ap, const gchar *l, GError **err)
 	return 1;
 errorLabel:
 	if (srv>=0)
-		close(srv);
+		metautils_pclose(&srv);
 	return 0;
 }
 
 
-gint accept_add_inet (ACCEPT_POOL ap, const gchar *h, const gchar *p, GError **err)
+gint
+accept_add_inet (ACCEPT_POOL ap, const gchar *h, const gchar *p, GError **err)
 {
 	struct sockaddr_storage sa;
 	gint srv = -1;
@@ -520,180 +473,69 @@ gint accept_add_inet (ACCEPT_POOL ap, const gchar *h, const gchar *p, GError **e
 
 	return 1;
 errorLabel:
-	if (srv!=-1)
-		close(srv);
+	if (srv>=0)
+		metautils_pclose(&srv);
 	return 0;
 }
 
 
-static inline int
-UNSAFE_accept_poll_many (ACCEPT_POOL ap, struct sockaddr *sa, socklen_t *saSize, GError **err)
+static int
+UNSAFE_accept_many_server(struct pollfd *pfd, int max,
+		struct sockaddr *sa, socklen_t *saSize, GError **err)
 {
-	int _clt = -1, i, j, max;
-	struct pollfd *pfd;
+	int nbEvents = poll(pfd, max, 2000);
 
-	g_static_rec_mutex_lock (&(ap->mut));
-
-	max = ap->count;
-	if (max<=0) {
-		GSETERROR(err,"Invalid state, server being closed");
-		g_static_rec_mutex_unlock (&(ap->mut));
+	/* timeout or error */
+	if (nbEvents == 0)
+		return -1;
+	if (nbEvents < 0) {
+		if (errno != EINTR && errno != EAGAIN)
+			GSETERROR(err,"poll error : %s", strerror(errno));
 		return -1;
 	}
 
-	pfd = g_alloca(max * sizeof(struct pollfd));
-
-	while (may_continue)
-	{
-		int nbEvents, iEvents;
-		_clt = -1;
-
-		/*poll an event*/
-		for (j=i=0; i<max ;i++) {
-			if (ap->srv[i] >= 0) {
-				pfd[j].fd = ap->srv[i];
-				pfd[j].events = POLLIN;
-				pfd[j].revents = 0;
-				j++;
-			}
-		}
-		nbEvents = poll (pfd, j, 2000);
-
-		/*timeout*/
-		if (nbEvents==0)
+	/* events! */
+	for (int i=0; i<max ;i++) {
+		if (!pfd[i].revents)
 			continue;
-
-		/*error*/
-		if (nbEvents==-1)
-		{
-			if (errno==EINTR)
-				continue;
-			GSETERROR(err,"poll error : %s", strerror(errno));
-			goto exitLabel;
-		}
-
-		/*events*/
-		for (i=0; i<j && i<max ;i++)
-		{
-			struct pollfd *current_pfd = pfd + i;
-			if (current_pfd->revents)
-			{
-				if (current_pfd->revents & POLLIN)
-				{
-retry:
-					_clt = accept(current_pfd->fd, sa, saSize);
-					if (_clt >= 0 || errno == EAGAIN)
-						goto exitLabel;
-					if (errno == EINTR)
-						goto retry;
-					if (errno == EAGAIN)
-						continue;
-					ALERT("Cannot accept a new connetion from srv=%d : %s", current_pfd->fd, strerror(errno));
-				}
-				else
-				{
-					_clt = -1;
-					ALERT("epoll error : unexpected event : %04X %s", current_pfd->revents, strerror(errno));
-				}
-			}
+		if (pfd[i].revents & POLLIN) {
+			int clt = accept_nonblock(pfd[i].fd, sa, saSize);
+			if (clt >= 0)
+				return clt;
+			if (errno != EAGAIN && errno != EINTR)
+				GSETERROR(err,"accept error : %s", strerror(errno));
+			return -1;
 		}
 	}
 
-exitLabel:
-	g_static_rec_mutex_unlock (&(ap->mut));
-	return _clt;
-}
-
-#ifdef HAVE_EPOLL
-static inline int
-UNSAFE_accept_epoll (ACCEPT_POOL ap, struct sockaddr *sa, socklen_t *saSize, GError **err)
-{
-	/*poll an event*/
-	while (may_continue)
-	{
-		int rc;
-		struct epoll_event ev;
-		memset (&ev, 0x00, sizeof(struct epoll_event));
-		rc = epoll_wait (ap->epoll_fd, &ev, 1, 2000);
-		switch (rc)
-		{
-			case 1:
-				if (ev.events & EPOLLERR)
-				{
-					GSETERROR(err,"epoll indicates an error with srv=%d : %s", ev.data.fd, strerror(errno));
-					return -1;
-				}
-				if (ev.events & EPOLLIN)
-				{
-					int _clt=-1;
-					_clt = accept (ev.data.fd, sa, saSize);
-					if (_clt < 0)
-					{
-						GSETERROR(err,"Cannot accept a new connection from srv=%d : %s", ev.data.fd, strerror(errno));
-						return -1;
-					}
-					return _clt;
-				}
-
-				GSETERROR(err,"fd=%i unexpected polled event %08X", ev.data.fd, ev.events);
-				return -1;
-
-			case 0:
-				/*timeout*/
-				break;
-
-			case -1:
-				GSETERROR(err,"epoll error on fd=%d : %s", ap->epoll_fd, ev.events);
-				return -1;
-
-			default:
-				GSETERROR(err,"unexpected epoll return code on fd=%d : %08X", ap->epoll_fd, ev.events);
-				return -1;
-		}
-	}
 	return -1;
 }
-#endif
 
-static inline int
-UNSAFE_accept_do (ACCEPT_POOL ap, struct sockaddr *sa, socklen_t *saSize, GError **err)
+static int
+UNSAFE_accept_do(ACCEPT_POOL ap, struct sockaddr *sa, socklen_t *saSize, GError **err)
 {
-	if (ap->count<=0) {
-		GSETERROR(err,"invalid parameter");
+	if (ap->count <= 0) {
+		GSETERROR(err,"No server configured");
 		return -1;
 	}
 
-	if (!may_continue) {
-		if (err && *err) 
-			g_clear_error(err);
-		return -1;
+	struct pollfd *pfd = g_alloca(ap->count * sizeof(struct pollfd));
+	for (int i=0; i<ap->count ;i++) {
+		pfd[i].fd = ap->srv[i];
+		pfd[i].events = POLLIN;
+		pfd[i].revents = 0;
 	}
 
-	if (ap->count==1) {
-		int clt;
-retry:
-		if (*(ap->srv) < 0)
-			return -1;
-		if (!wait_for_socket(*(ap->srv), 2000))
-			return -1;
-		if (0 > (clt = accept(*(ap->srv), sa, saSize))) {
-			if (errno == EINTR)
-				goto retry;
-			if (errno != EAGAIN)
-				GSETERROR(err,"Cannot accept a new connection : %s", strerror(errno));
-		}
-		return clt;
-	} else {
-#ifdef HAVE_EPOLL
-		return UNSAFE_accept_epoll (ap, sa, saSize, err);
-#else
-		return UNSAFE_accept_poll_many (ap, sa, saSize, err);
-#endif
-	}
+	g_static_rec_mutex_lock (&(ap->mut));
+	int clt = UNSAFE_accept_many_server(pfd, ap->count, sa, saSize, err);
+	g_static_rec_mutex_unlock (&(ap->mut));
+
+	return clt;
 }
 
 
-gint accept_add (ACCEPT_POOL ap, const gchar *url, GError **err)
+gint
+accept_add (ACCEPT_POOL ap, const gchar *url, GError **err)
 {
 	if (!ap || !url || !(*url)) {
 		GSETERROR(err,"Invalid parameter");
@@ -733,11 +575,6 @@ accept_do (ACCEPT_POOL ap, addr_info_t *cltaddr, GError **err)
 		return -1;
 	}
 
-	if (!may_continue) {
-		GSETERROR(err,"server stopped");
-		return -1;
-	}
-
 	if (!ap->srv || ap->count<=0) {
 		GSETERROR(err, "Empty server socket pool");
 		return -1;
@@ -756,15 +593,12 @@ accept_do (ACCEPT_POOL ap, addr_info_t *cltaddr, GError **err)
 	}
 
 	/*Set all the helpful socket options*/
-	sock_set_reuseaddr(clt, TRUE);
-	sock_set_linger(clt, 1, 0);
-	sock_set_keepalive(clt, TRUE);
-	sock_set_tcpquickack(clt, TRUE);
-	if (!sock_set_non_blocking(clt, TRUE)) {
-		GSETCODE(err, errno, "Failed to set non-blocking mode of fd=%d : %s", strerror(errno));
-		close(clt);
-		return -1;
-	}
+	if (gridd_flags & GRIDD_FLAG_NOLINGER)
+		sock_set_linger_default(clt);
+	if (gridd_flags & GRIDD_FLAG_KEEPALIVE)
+		sock_set_keepalive(clt, TRUE);
+	if (gridd_flags & GRIDD_FLAG_QUICKACK)
+		sock_set_tcpquickack(clt, TRUE);
 
 	return clt;
 }
@@ -807,7 +641,8 @@ remove_unix_socket( int fd )
 	}
 }
 
-gint accept_close_servers (ACCEPT_POOL ap, GError **err)
+gint
+accept_close_servers (ACCEPT_POOL ap, GError **err)
 {
 	int *pSrv = NULL; 
 	int max=0, nb_errors=0;
@@ -831,14 +666,9 @@ gint accept_close_servers (ACCEPT_POOL ap, GError **err)
 		for (i=0; i<max ;i++) {
 			int fd = pSrv[ i ];
 			if (fd>=0) {
-				/*remove the file if the socket is a PF_LOCAL*/
 				remove_unix_socket( fd );
-				/**/
 				errno=0;
-				if (0 != close( fd)) {
-					GSETERROR(err,"Could not close the server socket %d : %s", fd, strerror(errno));
-					nb_errors ++;
-				}
+				metautils_pclose(&fd);
 			}
 			pSrv[ i ] = -1;
 		}
@@ -848,13 +678,14 @@ gint accept_close_servers (ACCEPT_POOL ap, GError **err)
 	return nb_errors;
 }
 
-gsize accept_pool_to_string( ACCEPT_POOL ap, gchar *dst, gsize dst_size )
+gsize
+accept_pool_to_string( ACCEPT_POOL ap, gchar *dst, gsize dst_size )
 {
 	gchar *fmt1=",[%s]:%s", *fmt0="[%s]:%s";
 	struct sockaddr_storage ss;
 	socklen_t ss_size;
 	gsize writen_size=0;
-	
+
 	g_static_rec_mutex_lock (&(ap->mut));
 	if (ap->srv) {
 		int i,max;
@@ -882,13 +713,12 @@ gboolean
 wait_for_socket(int fd, long ms)
 {
 	struct pollfd pfd;
-	int rc;
 
 retry:
 	pfd.fd = fd;
 	pfd.events = POLLIN|POLLERR|POLLHUP;
 	pfd.revents = 0;
-	rc = poll(&pfd, 1, ms);
+	int rc = poll(&pfd, 1, ms);
 	if (rc < 0 && errno == EINTR)
 		goto retry;
 	return rc != 0;

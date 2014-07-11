@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  * @file meta_resolver_explicit.h
  * Explicit META resolver
@@ -32,12 +15,12 @@
  */
 
 # include <glib.h>
-# include <metatypes.h>
-# include "../lib/meta_resolver_metacd.h"
+# include <metautils/lib/metatypes.h>
 
 typedef struct prefix_info_s prefix_info_t;
 typedef struct resolver_direct_s resolver_direct_t;
 
+struct metacd_s;
 
 #define COND_MAXWAIT_MS 2000
 
@@ -72,7 +55,7 @@ struct resolver_direct_s
 	GPtrArray *mappings;
 
 	/* Maybe-NULL handle to a metacd (NULL -> metacd unavailable) */
-	metacd_t *metacd;
+	struct metacd_s *metacd;
 };
 
 #define M0CACHE_LOCK(R)      g_mutex_lock ((R).use_mutex)
@@ -86,7 +69,7 @@ resolver_direct_t* resolver_direct_create2 (const char * const config,
 resolver_direct_t* resolver_direct_create (const gchar * const url, GError **err);
 
 resolver_direct_t* resolver_direct_create_with_metacd(const gchar * const url,
-	metacd_t *metacd, gint to_cnx, gint to_req, GError **err);
+	struct metacd_s *metacd, gint to_cnx, gint to_req, GError **err);
 
 void resolver_direct_free (resolver_direct_t *r);
 

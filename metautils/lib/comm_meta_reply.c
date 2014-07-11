@@ -1,26 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "metautils"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "metautils"
 #endif
 
 #include <errno.h>
@@ -28,13 +7,6 @@
 #include <strings.h>
 #include <stdlib.h>
 
-#include <fcntl.h>
-#include <sys/socket.h>
-#include <unistd.h>
-
-#include <glib.h>
-
-#include "./metatypes.h"
 #include "./metautils.h"
 #include "./metacomm.h"
 #include "./gridd_client.h"
@@ -236,26 +208,6 @@ metaXClient_reply_simple(MESSAGE reply, gint * status, gchar ** msg, GError ** e
 	return 0;
 }
 
-static void
-message_randomize_id(struct message_s *req)
-{
-	static volatile guint32 seq = 0;
-	struct {
-		gint pid, ppid;
-		GTimeVal now;
-		guint32 seq;
-		gpointer req;
-	} bulk;
-
-	bulk.pid = getpid();
-	bulk.ppid = getppid();
-	g_get_current_time(&bulk.now);
-	bulk.seq = ++seq;
-	bulk.req = req;
-
-	message_set_ID(req, &bulk, sizeof(bulk), NULL);
-}
-
 struct repseq_ctx_s
 {
 	struct reply_sequence_data_s *data;
@@ -334,22 +286,23 @@ _repseq_run(struct message_s *req, struct metacnx_ctx_s *cnx,
 		struct reply_sequence_data_s *data)
 {
 	struct repseq_ctx_s ctx;
-	struct client_s *client;
-	int keepalive;
 
-	ctx.err = NULL;
+	if (cnx == NULL || req == NULL || data == NULL)
+		return NEWERROR(1, "BUG : Invalid parameters");
+
+	memset(&ctx, 0, sizeof(ctx));
 	ctx.data = data;
-	if (0 >= message_has_ID(req, NULL))
-		message_randomize_id(req);
+
+	struct client_s *client = gridd_client_create_empty();
+
+	int keepalive = cnx->flags & METACNX_FLAGMASK_KEEPALIVE;
+	gridd_client_set_keepalive(client, keepalive);
 
 	int to = MAX(cnx->timeout.cnx, cnx->timeout.req);
-
-	keepalive = cnx->flags & METACNX_FLAGMASK_KEEPALIVE;
-	client = gridd_client_create_empty();
-	gridd_client_set_keepalive(client, keepalive);
 	gridd_client_set_timeout(client, ms_to_s(to), ms_to_s(to));
 
-	if (!(ctx.err = gridd_client_set_fd(client, cnx->fd))) {
+	if (NULL == (ctx.err = gridd_client_set_fd(client, cnx->fd))) {
+		cnx->fd = -1;
 		GByteArray *gba = message_marshall_gba(req, NULL);
 		ctx.err = gridd_client_request(client, gba, &ctx, rep_handler);
 		g_byte_array_unref(gba);
@@ -362,6 +315,7 @@ _repseq_run(struct message_s *req, struct metacnx_ctx_s *cnx,
 	}
 
 	cnx->fd = gridd_client_fd(client);
+	(void) gridd_client_set_fd(client, -1);
 
 	gridd_client_free(client);
 	return ctx.err;
@@ -371,11 +325,13 @@ gboolean
 metaXClient_reply_sequence_run_context(GError ** err, struct metacnx_ctx_s *cnx,
 		MESSAGE request, struct reply_sequence_data_s * h)
 {
-	if (!metacnx_is_open(cnx)) {
-		if (!metacnx_open(cnx, err)) {
-			return FALSE;
-		}
+	if (cnx == NULL || request == NULL || h == NULL) {
+		GSETERROR(err, "BUG invalid parameter");
+		return FALSE;
 	}
+
+	if (!metacnx_is_open(cnx) && !metacnx_open(cnx, err))
+		return FALSE;
 
 	GError *e;
 
@@ -385,7 +341,11 @@ metaXClient_reply_sequence_run_context(GError ** err, struct metacnx_ctx_s *cnx,
 		return TRUE;
 	}
 	else {
-		g_error_transmit(err, e);
+		if (err && NULL == *err)
+			g_propagate_error(err, e);
+		else
+			g_clear_error(&e);
+
 		metacnx_close(cnx);
 		return FALSE;
 	}
@@ -398,6 +358,11 @@ metaXClient_reply_sequence_run_from_addrinfo(GError ** err, MESSAGE request,
 	struct metacnx_ctx_s cnx;
 	gboolean rc;
 
+	if (addr == NULL || request == NULL || h == NULL) {
+		GSETERROR(err, "BUG invalid parameter");
+		return FALSE;
+	}
+
 	metacnx_clear(&cnx);
 	metacnx_init_with_addr(&cnx, addr, NULL);
 	cnx.timeout.cnx = cnx.timeout.req = ms;
@@ -409,17 +374,23 @@ metaXClient_reply_sequence_run_from_addrinfo(GError ** err, MESSAGE request,
 }
 
 gboolean
-metaXClient_reply_sequence_run(GError ** err, MESSAGE req, int fd, gint ms,
+metaXClient_reply_sequence_run(GError ** err, MESSAGE req, int *fd, gint ms,
 		struct reply_sequence_data_s *h)
 {
 	struct metacnx_ctx_s cnx;
-	gboolean rc;
+
+	if (fd == NULL || req == NULL || h == NULL) {
+		GSETERROR(err, "BUG invalid parameter");
+		return FALSE;
+	}
 
 	metacnx_clear(&cnx);
 	cnx.timeout.cnx = cnx.timeout.req = ms;
-	cnx.fd = fd;
-	rc = metaXClient_reply_sequence_run_context(err, &cnx, req, h);
-	metacnx_close(&cnx);
+	cnx.fd = *fd;
+	cnx.flags = METACNX_FLAGMASK_KEEPALIVE;
+	gboolean rc = metaXClient_reply_sequence_run_context(err, &cnx, req, h);
+	*fd = cnx.fd;
+	cnx.fd = -1;
 	metacnx_clear(&cnx);
 
 	return rc;
@@ -430,10 +401,8 @@ metaXClient_reply_sequence_run(GError ** err, MESSAGE req, int fd, gint ms,
 void
 metacnx_clear(struct metacnx_ctx_s *ctx)
 {
-	if (!ctx) {
-		WARN("invalid parameter");
+	if (!ctx)
 		return;
-	}
 	memset(ctx, 0x00, sizeof(struct metacnx_ctx_s));
 	ctx->fd = -1;
 }
@@ -450,7 +419,7 @@ metacnx_open(struct metacnx_ctx_s *ctx, GError ** err)
 		metacnx_close(ctx);
 
 	ctx->fd = addrinfo_connect(&(ctx->addr), ctx->timeout.cnx, err);
-	return metacnx_is_open(ctx);
+	return ctx->fd >= 0;
 }
 
 gboolean
@@ -469,9 +438,7 @@ metacnx_close(struct metacnx_ctx_s *ctx)
 {
 	if (!ctx)
 		return;
-	if (ctx->fd != -1)
-		close(ctx->fd);
-	ctx->fd = -1;
+	metautils_pclose(&(ctx->fd));
 }
 
 struct metacnx_ctx_s *
@@ -518,8 +485,8 @@ metacnx_init_with_url(struct metacnx_ctx_s *ctx, const gchar *url, GError ** err
 
 	if (!l4_address_init_with_url(&(ctx->addr), url, err))
 		return FALSE;
-	ctx->timeout.req = 1000;
-	ctx->timeout.cnx = 1000;
+	ctx->timeout.req = 60000;
+	ctx->timeout.cnx = 30000;
 	return TRUE;
 }
 
@@ -531,8 +498,8 @@ metacnx_init_with_addr(struct metacnx_ctx_s *ctx, const addr_info_t* addr, GErro
 		return FALSE;
 	}
 	memcpy(&(ctx->addr), addr, sizeof(addr_info_t));
-	ctx->timeout.req = 1000;
-	ctx->timeout.cnx = 1000;
+	ctx->timeout.req = 60000;
+	ctx->timeout.cnx = 30000;
 	return TRUE;
 }
 

@@ -1,34 +1,15 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef HONEYCOMB__RULES_ENGINE_H
 # define HONEYCOMB__RULES_ENGINE_H 1
 #include <stddef.h>
 #include <stdlib.h>
 #include <sys/types.h>
-#include <attr/xattr.h>
 #include <string.h>
 
-#include <glib.h>
+#include <attr/xattr.h>
 
-#include <metautils.h>
-#include <metatypes.h>
-#include <compression.h>
-#include <gridcluster.h>
+#include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
+#include <rawx-lib/src/compression.h>
 
 #ifdef _GNU_SOURCE
 # undef _GNU_SOURCE
@@ -45,8 +26,8 @@
 # define ATTR_NAME_CHUNK_COMPRESSED_SIZE "chunk.compressedsize"
 # define ATTR_NAME_CHUNK_LAST_SCANNED_TIME "chunk.last_scanned_time"
 
-#define SETERROR(e, m, ...) *(e) = g_error_new(g_quark_from_static_string(LOG_DOMAIN), 0, m, ##__VA_ARGS__);
-#define SETERRCODE(e, c, m, ...) *(e) = g_error_new(g_quark_from_static_string(LOG_DOMAIN), c, m, ##__VA_ARGS__);
+#define SETERROR(e, m, ...) *(e) = g_error_new(g_quark_from_static_string(G_LOG_DOMAIN), 0, m, ##__VA_ARGS__);
+#define SETERRCODE(e, c, m, ...) *(e) = g_error_new(g_quark_from_static_string(G_LOG_DOMAIN), c, m, ##__VA_ARGS__);
 
 #define CHUNK_CRAWLER "chunk_crawler"
 
@@ -54,15 +35,24 @@
 #define CHUNK_TYPE_ID 3
 #define CONTENT_TYPE_ID 4
 
-struct rules_motor_env_s* motor_env = NULL;
+extern struct rules_motor_env_s* motor_env;
 
 /**************************************************
  *		C -> Python Part
  **************************************************/
 
-gint rules_reload_time_interval = 1L;
+extern gint rules_reload_time_interval;
 
 /* the wrap structure for crawler data block */
+
+struct crawler_sqlx_data_pack_s{
+	gchar * sqlx_path;
+	gchar * sqlx_seq;
+	gchar * sqlx_cid;
+	gchar * sqlx_type; 
+	gchar * sqlx_url;
+};
+
 
 struct crawler_meta2_data_pack_s{
 	gchar * container_path;
@@ -125,20 +115,27 @@ pass_to_motor(gpointer args);
 gpointer
 pass_to_motor_v_multi_thread(gpointer args);
 
+
+/* fill the sqlx datas from crawler into the wrap structure */
+void sqlx_crawler_data_block_init(struct crawler_sqlx_data_pack_s *data_block,
+     const gchar *sqlx_path, const gchar *sqlx_seq, const gchar *sqlx_cid,
+	      const gchar *sqlx_type, char *sqlx_url);
+void sqlx_crawler_data_block_free(struct crawler_sqlx_data_pack_s *data_block);
+
 /* fill the meta2 datas from crawler into the wrap structure */
-void
-meta2_crawler_data_block_init(struct crawler_meta2_data_pack_s *data_block,
+void meta2_crawler_data_block_init(struct crawler_meta2_data_pack_s *data_block,
 		const char *container_path,
 		char *meta2_url);
+void meta2_crawler_data_block_free(struct crawler_meta2_data_pack_s *data_block);
 
 /* fill the chunk datas from crawler into the wrap structure */
-void
-chunk_crawler_data_block_init(struct crawler_chunk_data_pack_s *data_block,
+void chunk_crawler_data_block_init(struct crawler_chunk_data_pack_s *data_block,
 		struct content_textinfo_s *content,
 		struct chunk_textinfo_s *chunk,
 		struct chunk_textinfo_extra_s *chunk_info_extra,
 		struct stat *chunk_stat,
 		const char *chunk_path);
+
 
 /* initiate arguments for motor */
 void
@@ -153,28 +150,22 @@ void
 chunk_textinfo_extra_free_content(struct chunk_textinfo_extra_s *ctie);
 
 /* Read extra content info from chunk attributes */
-gboolean
-get_extra_chunk_info(const char *pathname, GError ** error, struct chunk_textinfo_extra_s *chunk_textinfo_extra);
+gboolean get_extra_chunk_info(const char *pathname, GError ** error, struct chunk_textinfo_extra_s *chunk_textinfo_extra);
 
 /* specific data convert for chunk_crawler */
-void
-data_2_python(gpointer args, PyObject** pyobj_proxy);
+void data_2_python(gpointer args, PyObject** pyobj_proxy);
 
 /* free the arguments for each scan */
-void
-free_motor_args(struct rules_motor_env_s* motor_env);
+void free_motor_args(struct rules_motor_env_s* motor_env);
 
 /* destroy the motor environment */
-void
-destroy_motor_env(struct rules_motor_env_s** motor_env);
+void destroy_motor_env(struct rules_motor_env_s** motor_env);
 
 /* destroy the meta2-crawler datablock */
-void
-destroy_crawler_meta2_data_block(struct crawler_meta2_data_pack_s *data_block);
+void destroy_crawler_meta2_data_block(struct crawler_meta2_data_pack_s *data_block);
 
 /* destroy the motor environment (multi-thread version) */
-void
-destroy_motor_env_v_multi_thread(struct rules_motor_env_s** motor_env);
+void destroy_motor_env_v_multi_thread(struct rules_motor_env_s** motor_env);
 
 
 

@@ -1,23 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "hc.tools"
-#endif
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "hc.tools"
 #endif
@@ -34,12 +14,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "../../../metautils/lib/metautils.h"
-#include "../../../metautils/lib/common_main.h"
-#include "../../../metautils/lib/loggers.h"
-#include "../../../metautils/lib/hc_url.h"
-
-#include "../lib/grid_client.h"
 #include "../lib/gs_internals.h"
 
 #ifndef FREEP
@@ -130,9 +104,12 @@ static void
 help_list(void)
 {
 	g_printerr("usage: hcdir list <NS>/<REF> <SRV_TYPE>\n\n");
-	g_printerr("    NS: Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
-	g_printerr("    REF: The reference you want to create. A reference if mandatory to work with services in Honeycomb.\n");
-	g_printerr("    SRV_TYPE: The type of service you want to list (set ALL if you want to get all service types linked).\n");
+	g_printerr("    NS: Honeycomb namespace, if you don't know this, "
+			"please contact your Honeycomb namespace administrator\n");
+	g_printerr("    REF: The reference on which you want to list the services."
+			" A reference if mandatory to work with services in Honeycomb.\n");
+	g_printerr("    SRV_TYPE: The type of service you want to list "
+			"(set ALL if you want to get all service types linked).\n");
 }
 
 static gboolean
@@ -141,27 +118,32 @@ func_list(gs_grid_storage_t *hc)
 	gs_error_t *e = NULL;
 	gchar **services = NULL;
 
-	e = hc_list_reference_services(hc, hc_url_get(url, HCURL_REFERENCE), action_args[0], &services);
+	e = hc_list_reference_services(hc, hc_url_get(url, HCURL_REFERENCE),
+			action_args[0], &services);
 	if (NULL != e) {
 		g_printerr("%s", e->msg);
 		gs_error_free(e);
 		return FALSE;
-	}	
+	}
 
 	if (!services) {
 		gchar *tab[] = {NULL};
 
 		if (action_args[0])
-			g_printerr("No service [%s] linked to reference [%s].\n", action_args[0], hc_url_get(url, HCURL_REFERENCE));
+			g_printerr("No service [%s] linked to reference [%s].\n",
+					action_args[0], hc_url_get(url, HCURL_REFERENCE));
 		else
-			g_printerr("No service linked to reference [%s].\n", hc_url_get(url, HCURL_REFERENCE));
+			g_printerr("No service linked to reference [%s].\n",
+					hc_url_get(url, HCURL_REFERENCE));
 		dump_services(tab);
 	}
 	else {
 		if (action_args[0])
-			g_printerr("Reference [%s], services [%s] linked:\n", hc_url_get(url, HCURL_REFERENCE), action_args[0]);
+			g_printerr("Reference [%s], services [%s] linked:\n",
+					hc_url_get(url, HCURL_REFERENCE), action_args[0]);
 		else
-			g_printerr("Reference [%s], all services linked:\n", hc_url_get(url, HCURL_REFERENCE));
+			g_printerr("Reference [%s], all services linked:\n",
+					hc_url_get(url, HCURL_REFERENCE));
 
 		dump_services(services);
 	}
@@ -175,8 +157,9 @@ static void
 help_link(void)
 {
 	g_printerr("usage: hcdir link <NS>/<REF> <SRV_TYPE>\n\n");
-	g_printerr("    NS: Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
-	g_printerr("    REF: The reference you want to create. A reference if mandatory to work with services in Honeycomb.\n");
+	g_printerr("    NS: Honeycomb namespace, if you don't know this,"
+			" please contact your Honeycomb namespace administrator\n");
+	g_printerr("    REF: The reference on which you want to link a service.");
 	g_printerr("    SRV_TYPE: The type of service you want to link.\n");
 }
 
@@ -191,14 +174,18 @@ func_link(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	e = hc_link_service_to_reference(hc, hc_url_get(url, HCURL_REFERENCE), action_args[0], &urlv);
+	e = hc_link_service_to_reference(hc,
+			hc_url_get(url, HCURL_REFERENCE),
+			action_args[0],
+			&urlv);
 	if (NULL != e) {
 		g_printerr("Link error : %s", e->msg);
 		gs_error_free(e);
 		return FALSE;
 	}
 
-	g_printerr("Service [%s] linked to reference [%s]\n", urlv[0], hc_url_get(url, HCURL_REFERENCE));
+	g_printerr("Service [%s] linked to reference [%s]\n", urlv[0],
+			hc_url_get(url, HCURL_REFERENCE));
 	freev(urlv);
 	return TRUE;
 }
@@ -208,8 +195,9 @@ static void
 help_unlink(void)
 {
 	g_printerr("usage: hcdir unlink <NS>/<REF> <SRV_TYPE>\n\n");
-	g_printerr("    NS: Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
-	g_printerr("    REF: The reference you want to create. A reference if mandatory to work with services in Honeycomb.\n");
+	g_printerr("    NS: Honeycomb namespace, if you don't know this,"
+			" please contact your Honeycomb namespace administrator\n");
+	g_printerr("    REF: The reference on which you want to unlink services");
 	g_printerr("    SRV_TYPE: The type of service you want to unlink.\n");
 	g_printerr("    (This functionally will be improved later.)\n");
 }
@@ -224,10 +212,13 @@ func_unlink(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	if (!(e = hc_unlink_reference_service(hc, hc_url_get(url, HCURL_REFERENCE), action_args[0]))) {
-		g_printerr("Services [%s] unlinked from reference [%s]\n", action_args[0], hc_url_get(url, HCURL_REFERENCE));
+	if (!(e = hc_unlink_reference_service(hc,
+					hc_url_get(url, HCURL_REFERENCE),
+					action_args[0]))) {
+		g_printerr("Services [%s] unlinked from reference [%s]\n",
+				action_args[0], hc_url_get(url, HCURL_REFERENCE));
 		return TRUE;
-	}	
+	}
 
 	g_printerr("%s", e->msg);
 	gs_error_free(e);
@@ -239,7 +230,8 @@ static void
 help_has(void)
 {
 	g_printerr("usage: hcdir has <NS>/<REF>\n\n");
-	g_printerr("    NS: Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
+	g_printerr("    NS: Honeycomb namespace, if you don't know this,"
+			" please contact your Honeycomb namespace administrator\n");
 	g_printerr("    REF: The reference you want to check.\n");
 }
 
@@ -260,8 +252,9 @@ func_has(gs_grid_storage_t *hc)
 
 	if(e->code != 431)
 		g_printerr("%s", e->msg);
-	else 
-		g_print("Reference %s does not exist\n", hc_url_get(url, HCURL_REFERENCE));
+	else
+		g_print("Reference %s does not exist\n",
+				hc_url_get(url, HCURL_REFERENCE));
 
 	gs_error_free(e);
 	return FALSE;
@@ -272,7 +265,8 @@ static void
 help_delete(void)
 {
 	g_printerr("usage: hcdir delete <NS>/<REF>\n\n");
-	g_printerr("    NS: Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
+	g_printerr("    NS: Honeycomb namespace, if you don't know this,"
+			" please contact your Honeycomb namespace administrator\n");
 	g_printerr("    REF: The reference you want to delete.\n");
 }
 
@@ -282,7 +276,7 @@ func_delete(gs_grid_storage_t *hc)
 	gs_error_t *e;
 
 	if (!(e = hc_delete_reference(hc, hc_url_get(url, HCURL_REFERENCE)))) {
-		g_print("Reference [%s] deleted\n", hc_url_get(url, HCURL_REFERENCE));	
+		g_print("Reference [%s] deleted\n", hc_url_get(url, HCURL_REFERENCE));
 		return TRUE;
 	}
 
@@ -296,8 +290,10 @@ static void
 help_create(void)
 {
 	g_printerr("usage: hcdir create <NS>/<REF>\n\n");
-	g_printerr("    NS: Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
-	g_printerr("    REF: The reference you want to create. A reference if mandatory to work with services in Honeycomb.\n");
+	g_printerr("    NS: Honeycomb namespace, if you don't know this,"
+			"please contact your Honeycomb namespace administrator\n");
+	g_printerr("    REF: The reference you want to create."
+			"A reference if mandatory to work with services in Honeycomb.\n");
 }
 
 static gboolean
@@ -306,7 +302,7 @@ func_create(gs_grid_storage_t *hc)
 	gs_error_t *e;
 
 	if (!(e = hc_create_reference(hc, hc_url_get(url, HCURL_REFERENCE)))) {
-		g_print("Reference [%s] created\n", hc_url_get(url, HCURL_REFERENCE));	
+		g_print("Reference [%s] created\n", hc_url_get(url, HCURL_REFERENCE));
 		return TRUE;
 	}
 
@@ -320,8 +316,9 @@ static void
 help_poll(void)
 {
 	g_printerr("usage: hcdir poll <NS>/<REF> <TYPE>\n\n");
-	g_printerr("    NS: Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
-	g_printerr("    REF: The reference you want to create. A reference if mandatory to work with services in Honeycomb.\n");
+	g_printerr("    NS: Honeycomb namespace, if you don't know this,"
+			"please contact your Honeycomb namespace administrator\n");
+	g_printerr("    REF: The targeted reference");
 	g_printerr("    TYPE: A type of service managed in the given namespace\n");
 }
 
@@ -336,7 +333,10 @@ func_poll(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	if (!(e = hc_poll_service(hc, hc_url_get(url, HCURL_REFERENCE), action_args[0], &u))) {
+	if (!(e = hc_poll_service(hc,
+					hc_url_get(url, HCURL_REFERENCE),
+					action_args[0],
+					&u))) {
 		char *urlv[2] = {NULL,NULL};
 		urlv[0] = u;
 		dump_services(urlv);
@@ -354,12 +354,15 @@ static void
 help_force(void)
 {
 	g_printerr("usage: hcdir force <NS>/<REF> '<SEQ>|<TYPE>|<URL>|<ARGS>'\n\n");
-	g_printerr("    NS: Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
-	g_printerr("    REF: The reference you want to create. A reference if mandatory to work with services in Honeycomb.\n");
-	g_printerr("    SEQ: The sequence number for the given (service,container) association\n");
+	g_printerr("    NS: Honeycomb namespace, if you don't know this,"
+			" please contact your Honeycomb namespace administrator\n");
+	g_printerr("    REF: The targeted reference");
+	g_printerr("    SEQ: The sequence number for the given "
+			"(service,container) association\n");
 	g_printerr("    TYPE: A type of service managed in the given namespace\n");
 	g_printerr("    URL: the network address of the given service\n");
-	g_printerr("    ARGS: some service-dependant arguments attached to this (service,container) association\n");
+	g_printerr("    ARGS: some service-dependant arguments attached to this "
+			"(service,container) association\n");
 }
 
 static gboolean
@@ -372,13 +375,16 @@ func_force(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	if (NULL != (e = hc_force_service(hc, hc_url_get(url, HCURL_REFERENCE), action_args[0]))) {
+	if (NULL != (e = hc_force_service(hc,
+					hc_url_get(url, HCURL_REFERENCE),
+					action_args[0]))) {
 		g_printerr("%s", e->msg);
 		gs_error_free(e);
 		return FALSE;
 	}
 
-	g_print("Service [%s] forced for reference [%s]\n", action_args[0], hc_url_get(url, HCURL_REFERENCE));
+	g_print("Service [%s] forced for reference [%s]\n",
+			action_args[0], hc_url_get(url, HCURL_REFERENCE));
 	return TRUE;
 }
 
@@ -386,13 +392,17 @@ func_force(gs_grid_storage_t *hc)
 static void
 help_srvconfig(void)
 {
-	g_printerr("usage: hcdir srvconfig <NS>/<REF> '<SEQ>|<TYPE>|<URL>|<ARGS>'\n\n");
-	g_printerr("    NS: Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
-	g_printerr("    REF: The reference you want to create. A reference if mandatory to work with services in Honeycomb.\n");
-	g_printerr("    SEQ: The sequence number for the given (service,container) association\n");
+	g_printerr("usage: hcdir srvconfig <NS>/<REF> "
+			"'<SEQ>|<TYPE>|<URL>|<ARGS>'\n\n");
+	g_printerr("    NS: Honeycomb namespace, if you don't know this,"
+			" please contact your Honeycomb namespace administrator\n");
+	g_printerr("    REF: The targeted reference");
+	g_printerr("    SEQ: The sequence number for the given (service,container)"
+			" association\n");
 	g_printerr("    TYPE: A type of service managed in the given namespace\n");
 	g_printerr("    URL: the network address of the given service\n");
-	g_printerr("    ARGS: the new service-dependant arguments that will ve attached to this (service,container) association\n");
+	g_printerr("    ARGS: the new service-dependant arguments that will "
+			"be attached to this (service,container) association\n");
 }
 
 static gboolean
@@ -405,9 +415,11 @@ func_srvconfig(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	if (!(e = hc_configure_service(hc, hc_url_get(url, HCURL_REFERENCE), action_args[0]))) {
+	if (!(e = hc_configure_service(hc,
+					hc_url_get(url, HCURL_REFERENCE),
+					action_args[0]))) {
 		g_printerr("Service [%s] reconfigured for reference [%s]\n",
-				action_args[0], hc_url_get(url, HCURL_REFERENCE));	
+				action_args[0], hc_url_get(url, HCURL_REFERENCE));
 		return TRUE;
 	}
 
@@ -421,9 +433,11 @@ static void
 help_propset(void)
 {
 	g_printerr("usage: hcdir propset <NS>/<REF> KEY VALUE\n\n");
-	g_printerr("    NS: Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
-	g_printerr("    REF: The reference you want to create. A reference if mandatory to work with services in Honeycomb.\n");
-	g_printerr("    SEQ: The sequence number for the given (service,container) association\n");
+	g_printerr("    NS: Honeycomb namespace, if you don't know this,"
+			" please contact your Honeycomb namespace administrator\n");
+	g_printerr("    REF: The targeted reference");
+	g_printerr("    SEQ: The sequence number for the given (service,container)"
+			" association\n");
 	g_printerr("    KEY: \n");
 	g_printerr("    VALUE: \n");
 }
@@ -438,7 +452,8 @@ func_propset(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	if (!(e = hc_set_reference_property(hc, hc_url_get(url, HCURL_REFERENCE), action_args[0], action_args[1]))) {
+	if (!(e = hc_set_reference_property(hc, hc_url_get(url, HCURL_REFERENCE),
+					action_args[0], action_args[1]))) {
 		g_print("Key [%s] updated for reference [%s]\n", action_args[0],
 				action_args[1]);
 		return TRUE;
@@ -454,9 +469,11 @@ static void
 help_propget(void)
 {
 	g_printerr("usage: hcdir propget <NS>/<REF> [KEY]...\n\n");
-	g_printerr("    NS: Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
-	g_printerr("    REF: The reference you want to create. A reference if mandatory to work with services in Honeycomb.\n");
-	g_printerr("    SEQ: The sequence number for the given (service,container) association\n");
+	g_printerr("    NS: Honeycomb namespace, if you don't know this,"
+			" please contact your Honeycomb namespace administrator\n");
+	g_printerr("    REF: The targeted reference");
+	g_printerr("    SEQ: The sequence number for the given (service,container)"
+			" association\n");
 	g_printerr("    KEY: A potentially empty sequence of property names\n");
 }
 
@@ -466,9 +483,11 @@ func_propget(gs_grid_storage_t *hc)
 	gs_error_t *e;
 	gchar **values = NULL;
 
-	if (!(e = hc_get_reference_property(hc, hc_url_get(url, HCURL_REFERENCE), action_args, &values))) {
+	if (!(e = hc_get_reference_property(hc, hc_url_get(url, HCURL_REFERENCE),
+					action_args, &values))) {
 		if (!*values)
-			g_printerr("No property associated to the reference [%s]\n", hc_url_get(url, HCURL_REFERENCE));
+			g_printerr("No property associated to the reference [%s]\n",
+					hc_url_get(url, HCURL_REFERENCE));
 		dump_properties(values);
 		g_strfreev(values);
 		values = NULL;
@@ -485,9 +504,11 @@ static void
 help_propdel(void)
 {
 	g_printerr("usage: hcdir propget <NS>/<REF> KEY...\n\n");
-	g_printerr("    NS: Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
-	g_printerr("    REF: The reference you want to create. A reference if mandatory to work with services in Honeycomb.\n");
-	g_printerr("    SEQ: The sequence number for the given (service,container) association\n");
+	g_printerr("    NS: Honeycomb namespace, if you don't know this,"
+			" please contact your Honeycomb namespace administrator\n");
+	g_printerr("    REF: The targeted reference");
+	g_printerr("    SEQ: The sequence number for the given (service,container)"
+			" association\n");
 	g_printerr("    KEY: A not-empty sequence of property names\n");
 }
 
@@ -501,8 +522,10 @@ func_propdel(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	if (!(e = hc_delete_reference_property(hc, hc_url_get(url, HCURL_REFERENCE), action_args))) {
-		g_printerr("Properties deleted for reference [%s]\n", hc_url_get(url, HCURL_REFERENCE));
+	if (!(e = hc_delete_reference_property(hc, hc_url_get(url, HCURL_REFERENCE),
+					action_args))) {
+		g_printerr("Properties deleted for reference [%s]\n",
+				hc_url_get(url, HCURL_REFERENCE));
 		return TRUE;
 	}
 
@@ -599,7 +622,8 @@ hcdir_action(void)
 	if (!hc) {
 		g_printerr("Failed to load namespace [%s]. "
 				"Please ensure /etc/gridstorage.conf.d/%s file exists.\n"
-				"If not, please contact your Honeycomb namespace administrator.\n",
+				"If not, please contact your Honeycomb namespace"
+				" administrator.\n",
 				hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_NS));
 		return;
 	}
@@ -658,16 +682,22 @@ hcdir_usage(void)
 		"   has        Ensure a reference exists on a Honeycomb namespace\n"
 		"   delete     Delete a reference on a Honeycomb namespace\n"
 		"   link       Associate a reference to a specified service type\n"
-		"   list       List services from a specified type linked to a reference\n"
+		"   list       List services from a specified type linked to a"
+		" reference\n"
 		"   unlink     Dissociate a service from a reference\n"
-		"   poll       Like 'link' but tells the directory to force the election of a new service even if a service is still available\n"
-		"   force      Links to the reference a service explicitely described, beyong all load-balancing mechanics\n"
-		"   srvconfig  Changes the argument of a service linked to a reference.\n"
-		"   propget    Get the/some properties associated to a given reference\n"
+		"   poll       Like 'link' but tells the directory to force the"
+		" election of a new service even if a service is still available\n"
+		"   force      Links to the reference a service explicitely described,"
+		" beyong all load-balancing mechanics\n"
+		"   srvconfig  Changes the argument of a service linked to a"
+		" reference.\n"
+		"   propget    Get the/some properties associated to a given"
+		" reference\n"
 		"   propset    Associates a property to a reference\n"
 		"   propdel    Dissociates (deletes) a property for a given reference\n"
 		"\n"
-		"See 'hcdir help <command>' for more information on a specific command. (Not yet implemented)\n";
+		"See 'hcdir help <command>' for more information on a specific"
+		"command. (Not yet implemented)\n";
 }
 
 static gboolean

@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef __LIMITED_CACHE_H__
 # define __LIMITED_CACHE_H__
 
@@ -50,6 +33,7 @@ time_t limited_cache_get_expiration (limited_cache_t *lc);
 
 void limited_cache_put (limited_cache_t *lc, gpointer k, gpointer v);
 
+gboolean limited_cache_has(limited_cache_t *lc, gconstpointer k, gpointer *p_val);
 gpointer limited_cache_get (limited_cache_t *lc, gconstpointer k);
 
 void limited_cache_del (limited_cache_t *lc, gconstpointer k);

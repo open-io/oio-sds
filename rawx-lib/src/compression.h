@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef GRID_RAWXLIB_COMPRESSION__H
 # define GRID_RAWXLIB_COMPRESSION__H 1
 
@@ -220,5 +203,17 @@ compress_chunk(const gchar* path, const gchar* algorithm, const gint64 blocksize
  */
 int
 uncompress_chunk(const gchar* path, gboolean preserve, GError ** error);
+
+/*
+ * Uncompressing a chunk file
+ *
+ * @param path the chunk file path to compress
+ * @param keep_pending keep .pending file in case of error
+ * @param error a glib GError pointer
+ *
+ * @return 1 if succeeded, 0 otherwise
+ */
+int
+uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending, GError ** error);
 
 #endif /*GRID_RAWXLIB_COMPRESSION__H*/

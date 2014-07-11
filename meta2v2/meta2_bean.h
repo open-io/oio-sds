@@ -1,38 +1,22 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef __META2_BEAN_H__
 #define __META2_BEAN_H__
 
-#include "../metautils/lib/metatypes.h"
-#include "../metautils/lib/M2V2Bean.h"
-#include "../metautils/lib/M2V2Alias.h"
-#include "../metautils/lib/M2V2Content.h"
-#include "../metautils/lib/M2V2ContentHeader.h"
-#include "../metautils/lib/M2V2Property.h"
+#include <metautils/lib/metatypes.h>
+
+struct M2V2Property;
+struct M2V2Bean;
+struct M2V2Alias;
+struct M2V2Content;
+struct M2V2ContentHeader;
 
 /**
  *
  */
-gpointer bean_ASN2API(const M2V2Bean_t * asn);
+gpointer bean_ASN2API(const struct M2V2Bean *asn);
 
-gboolean bean_API2ASN(gpointer * api, M2V2Bean_t * asn);
+gboolean bean_API2ASN(gpointer * api, struct M2V2Bean * asn);
 
-void bean_cleanASN(M2V2Bean_t * asn, gboolean only_content);
+void bean_cleanASN(struct M2V2Bean * asn, gboolean only_content);
 
 /* ------------------------------------ */
 

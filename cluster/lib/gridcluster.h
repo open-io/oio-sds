@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  * @file gridcluster.h
  * Cluster information access library
@@ -28,9 +11,9 @@
  * @{
  */
 
-#include <metatypes.h>
-#include <gridagent.h>
-#include <gridcluster_eventhandler.h>			
+#include <metautils/lib/metatypes.h>
+#include <cluster/agent/gridagent.h>
+#include <cluster/events/gridcluster_eventhandler.h>
 
 /** The path to the grid config file */
 #define CONFIG_FILE_PATH "/etc/gridstorage.conf"
@@ -106,13 +89,15 @@ meta0_info_t *get_meta0_info2(const char *ns_name, long timeout_cnx, long timeou
  * @param ns_name the namespace name
  * @param type the type of service to count
  * @param error
- * 
+ *
  * @return the number of service or -1 if an error occured (error is set)
  */
 gint count_namespace_services(const char *ns_name, const char *type, GError **error);
 
 /**
- * List services of a given type in a namespace
+ * List services of a given type in a namespace.
+ * list_namespace_services() fails if gridagent not available,
+ * list_namespace_services2() fallbacks on conscience.
  *
  * @param ns_name the namespace name
  * @param type the type of service to list
@@ -327,7 +312,7 @@ gboolean namespace_in_worm_mode(namespace_info_t* ns_info);
 
 /**
  * Extract container max size allowed from namespace_info
- * 
+ *
  * @param ns_info the namespace_info
  *
  * @return the container max size allowed
@@ -335,17 +320,27 @@ gboolean namespace_in_worm_mode(namespace_info_t* ns_info);
 gint64 namespace_container_max_size(namespace_info_t* ns_info);
 
 /**
+ * Get chunk size for a specific VNS.
+ *
+ * @param ns_info the namespace info
+ * @param ns_name the full name of the VNS to get chunk size of
+ * @return the chunk size for the specified VNS, or the global one
+ *   if not defined for this VNS.
+ */
+gint64 namespace_chunk_size(const namespace_info_t* ns_info, const char *ns_name);
+
+/**
  * Extract namespace defined storage_policy from namespace_info
- * 
+ *
  * @param ns_info the namespace_info
  *
- * @return the storage_policy defined
+ * @return the storage_policy defined (must be freed)
  */
-gchar* namespace_storage_policy(const namespace_info_t* ns_info);
+gchar* namespace_storage_policy(const namespace_info_t* ns_info, const char *ns_name);
 
 /**
  * Check if a storage policy exist for a namespace
- * 
+ *
  * @param ns_info the namespace_info
  *
  * @param storage_policy the namespace_info
@@ -372,7 +367,7 @@ gchar* namespace_data_security_value(const namespace_info_t *ns_info, const gcha
  *
  * @param wanted_policy the policy to extract data security value. If null, get the data security matching the namespace configured policy
  *
- * @return the storage_policy "value"
+ * @return the storage_policy "value" (must be freed)
  */
 gchar* namespace_storage_policy_value(const namespace_info_t *ns_info, const gchar *wanted_policy);
 
@@ -453,7 +448,7 @@ gchar** gridcluster_list_ns(void);
 
 
 /** Returns the services update's configuration when the Load-Balancing
- * is performed by a servce of type srvtype.
+ * is performed by a servce of type srvtype for each namespace and virtual namespace.
  *
  * Thus 'srvtype' is not the service type that is being load-balanced, but
  * the service doing the LB.
@@ -462,14 +457,50 @@ gchar** gridcluster_list_ns(void);
  * @param srvtype
  * @return
  */
-gchar* gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo,
+GHashTable* gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo,
+		const gchar *srvtype);
+
+/**
+ *
+ *
+ *
+ */
+GHashTable* gridcluster_get_event_config(struct namespace_info_s *nsinfo,
 		const gchar *srvtype);
 
 /*!
  * @params nsinfo
- * @return 
+ * @return
  */
 gint64 gridcluster_get_container_max_versions(struct namespace_info_s *nsinfo);
+
+struct grid_lbpool_s;
+
+/*!
+ * @param glp
+ * @return NULL in case of successes
+ */
+GError* gridcluster_reload_lbpool(struct grid_lbpool_s *glp);
+
+/*!
+ * @param glp
+ * @return
+ */
+GError* gridcluster_reconfigure_lbpool(struct grid_lbpool_s *glp);
+
+/**
+ * Get the delay before actually removing contents marked as deleted.
+ *
+ * @param nsinfo A pointer to the namespace infos
+ * @return The delay in seconds, or -1 if disabled (never delete)
+ */
+gint64 gridcluster_get_keep_deleted_delay(struct namespace_info_s *nsinfo);
+
+gchar* gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
+		const gchar *key, const gchar *def);
+
+gint64 gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
+		const gchar* key, gint64 def);
 
 /** @} */
 

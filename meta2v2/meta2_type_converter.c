@@ -1,33 +1,31 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "m2v2.utils"
+#endif
 
-#include "./meta2_backend_internals.h"
-#include <meta2_utils.h>
-#include "./meta2_utils.h"
+#include <string.h>
 
-#include <metatypes.h>
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
-#include <meta2_macros.h>
-#include <generic.h>
-#include <autogen.h>
+#include <meta2v2/meta2_utils.h>
+#include <meta2v2/meta2_utils.h>
+#include <meta2v2/meta2_backend_internals.h>
+#include <meta2v2/meta2_macros.h>
+#include <meta2v2/generic.h>
+#include <meta2v2/autogen.h>
 
 
 /* ------------------------ INTERNALS -----------------------*/
+
+static GByteArray *
+_hex_string_to_byte_array(const gchar *src)
+{
+	GByteArray *gba = g_byte_array_new();
+	size_t bufsize = strlen(src) / 2;
+	guint8 buf[bufsize];
+	hex2bin(src, buf, bufsize, NULL);
+	g_byte_array_append(gba, buf, bufsize);
+	return gba;
+}
 
 static gpointer
 _generate_property_from_mdusr(const char *alias, GByteArray *mdusr)
@@ -51,15 +49,21 @@ _extract_mdusr_from_props(GSList *props)
 	GSList *l = NULL;
 	GByteArray *result = NULL;
 
+	GRID_DEBUG("%d properties to check", g_slist_length(props));
+
 	for(l = props; l && l->data; l = l->next) {
-		if(!g_ascii_strncasecmp((char*)PROPERTIES_get_value(l->data)->data,
-				MDUSR_PROPERTY_KEY, PROPERTIES_get_value(l->data)->len)) {
-			result = g_byte_array_append(g_byte_array_new(), 
+		if(!g_ascii_strcasecmp(PROPERTIES_get_key(l->data)->str,
+				MDUSR_PROPERTY_KEY)) {
+			result = g_byte_array_append(g_byte_array_new(),
 					PROPERTIES_get_value(l->data)->data, PROPERTIES_get_value(l->data)->len);
+			GRID_DEBUG("Found mdusr : %.*s", PROPERTIES_get_value(l->data)->len,
+			(char *) PROPERTIES_get_value(l->data)->data);
 			return result;
 			//break;
 		}
 	}
+
+	GRID_DEBUG("No mdusr found in properties");
 
 	return NULL /*result*/;
 }
@@ -101,7 +105,7 @@ _fill_chunk_id(chunk_id_t *cid, gpointer chunk)
 		} else {
 			e = g_error_new(GQ(), 400, "Unparsable chunk id : [%s]", idv2);
 		}
-		if(NULL != tok_addr) 
+		if(NULL != tok_addr)
 			g_strfreev(tok_addr);
 	} else {
 		e = g_error_new(GQ(), 400, "Unparsable chunk id : [%s]", idv2);
@@ -109,9 +113,8 @@ _fill_chunk_id(chunk_id_t *cid, gpointer chunk)
 
 	if(NULL != url_tok)
 		g_strfreev(url_tok);
-		
+
 	return e;
-	
 }
 
 static GSList *
@@ -228,30 +231,31 @@ _fill_raw_content_with_alias(meta2_raw_content_t *rc, gpointer alias)
 }
 
 static void
+_fill_sysmd_with_headers(GByteArray *sysmd, gpointer headers)
+{
+	GString *md = CONTENTS_HEADERS_get_policy(headers);
+	if (sysmd->len > 0) {
+		if(NULL != strstr((char *)sysmd->data, "storage-policy")) {
+			return;
+		}
+		g_byte_array_append(sysmd, (guint8*)";", 1);
+	}
+	g_byte_array_append(sysmd, (guint8*) "storage-policy=", 15);
+	g_byte_array_append(sysmd, (guint8*) md->str, md->len);
+}
+
+static void
 _fill_raw_content_v2_with_headers(meta2_raw_content_v2_t *rc, gpointer headers)
 {
 	rc->header.size = CONTENTS_HEADERS_get_size(headers);
-
-	GString *md = CONTENTS_HEADERS_get_policy(headers);
-	if (rc->header.system_metadata->len > 0) {
-		if(NULL != strstr((char *)rc->header.system_metadata->data, "storage-policy")) {
-			return;
-		}
-		g_byte_array_append(rc->header.system_metadata, (guint8*)";", 1);
-	}
-	g_byte_array_append(rc->header.system_metadata, (guint8*) "storage-policy=", 15);
-	g_byte_array_append(rc->header.system_metadata, (guint8*) md->str, md->len);
+	_fill_sysmd_with_headers(rc->header.system_metadata, headers);
 }
 
 static void
 _fill_raw_content_with_headers(meta2_raw_content_t *rc, gpointer headers)
 {
 	rc->size = CONTENTS_HEADERS_get_size(headers);
-
-	GString *md = CONTENTS_HEADERS_get_policy(headers);
-	if (rc->system_metadata->len > 0)
-		g_byte_array_append(rc->system_metadata, (guint8*)";", 1);
-	g_byte_array_append(rc->system_metadata, (guint8*) md->str, md->len);
+	_fill_sysmd_with_headers(rc->system_metadata, headers);
 }
 
 static GString *
@@ -275,7 +279,7 @@ _forge_chunk_id_v2(chunk_id_t *cid)
 }
 
 static gpointer
-_generate_m2v2_alias_from_raw_content(const char *id, meta2_raw_content_t *rc)
+_generate_m2v2_alias_from_raw_content(GByteArray *id, meta2_raw_content_t *rc)
 {
 	gpointer alias = _bean_create(&descr_struct_ALIASES);
 
@@ -283,13 +287,19 @@ _generate_m2v2_alias_from_raw_content(const char *id, meta2_raw_content_t *rc)
 	ALIASES_set_version(alias, rc->version);
 	ALIASES_set_deleted(alias, rc->deleted);
 	ALIASES_set_container_version(alias, 1);
-	ALIASES_set2_content_id(alias, (guint8*) id, strlen(id));
+	ALIASES_set_content_id(alias, id);
 	ALIASES_set_ctime(alias, time(0));
 
-	char *tmp = g_strndup((const char *)rc->system_metadata->data,
-			rc->system_metadata->len);
-	ALIASES_set2_mdsys(alias, tmp);
-	g_free(tmp);
+	if (rc->system_metadata != NULL) {
+		char *tmp = g_strndup((const char *)rc->system_metadata->data,
+				rc->system_metadata->len);
+		ALIASES_set2_mdsys(alias, tmp);
+		g_free(tmp);
+	} else {
+		/* FVE: I don't know if it's fatal, so just log it */
+		GRID_DEBUG("Empty system metadata for alias '%s' version %ld",
+				rc->path, rc->version);
+	}
 
 	return alias;
 }
@@ -308,8 +318,23 @@ _generate_bean_from_meta2_prop(const char *alias, gint64 alias_version, meta2_pr
 	return property;
 }
 
+meta2_property_t *
+bean_to_meta2_prop(struct bean_PROPERTIES_s *in_prop)
+{
+	meta2_property_t *out_prop = g_malloc0(sizeof(meta2_property_t));
+	if (in_prop != NULL) {
+		out_prop->name = g_strdup(PROPERTIES_get_key(in_prop)->str);
+		if (PROPERTIES_get_value(in_prop) != NULL &&
+				PROPERTIES_get_value(in_prop)->len > 0) {
+			out_prop->value = metautils_gba_dup(PROPERTIES_get_value(in_prop));
+		}
+		out_prop->version = PROPERTIES_get_alias_version(in_prop);
+	}
+	return out_prop;
+}
+
 static gpointer
-_generate_m2v2_alias_from_raw_content_v2(const char *id, meta2_raw_content_v2_t *rc)
+_generate_m2v2_alias_from_raw_content_v2(GByteArray *id, meta2_raw_content_v2_t *rc)
 {
 	gpointer alias = _bean_create(&descr_struct_ALIASES);
 
@@ -317,7 +342,8 @@ _generate_m2v2_alias_from_raw_content_v2(const char *id, meta2_raw_content_v2_t 
 	ALIASES_set_version(alias, rc->header.version);
 	ALIASES_set_deleted(alias, rc->header.deleted);
 	ALIASES_set_container_version(alias, 1);
-	ALIASES_set2_content_id(alias, (guint8*) id, strlen(id));
+	if (id != NULL)
+		ALIASES_set_content_id(alias, id);
 	ALIASES_set_ctime(alias, time(0));
 
 	char *tmp;
@@ -332,11 +358,12 @@ _generate_m2v2_alias_from_raw_content_v2(const char *id, meta2_raw_content_v2_t 
 }
 
 static gpointer
-_generate_alias(const char *id, const char *alias_name, GString *mdsys)
+_generate_alias(GByteArray *id, const char *alias_name, GString *mdsys)
 {
 	gpointer alias = _bean_create(&descr_struct_ALIASES);
 	ALIASES_set2_alias(alias, alias_name);
-	ALIASES_set2_content_id(alias, (guint8*)id, strlen(id));
+	if (id != NULL)
+		ALIASES_set_content_id(alias, id);
 	ALIASES_set_version(alias, 1);
 	ALIASES_set_container_version(alias, 1);
 	ALIASES_set_mdsys(alias, mdsys);
@@ -346,33 +373,49 @@ _generate_alias(const char *id, const char *alias_name, GString *mdsys)
 }
 
 static gpointer
-_generate_m2v2_headers(const char *id, gint64 size, GByteArray *sysmd)
+_generate_m2v2_headers(GByteArray *id, gint64 size, GByteArray *sysmd)
 {
 	gpointer headers = _bean_create(&descr_struct_CONTENTS_HEADERS);
+	GError *err = NULL;
 
-	CONTENTS_HEADERS_set2_id(headers, (guint8*) id, strlen(id));
+	if (id != NULL)
+		CONTENTS_HEADERS_set_id(headers, id);
 	CONTENTS_HEADERS_nullify_hash(headers);
 	CONTENTS_HEADERS_set_size(headers, size);
 
-	/* TODO: sp from sys_md */
-	(void) sysmd;
+	gchar *polname = NULL;
+	if(NULL != (err = storage_policy_from_metadata(sysmd, &polname))) {
+		WARN("Possible bad content state, cannot extract correctly storage policy from mdsys (%d) : %s",
+			err->code, err->message);
+		g_clear_error(&err);
+	}
+	if(NULL != polname)
+		CONTENTS_HEADERS_set2_policy(headers, polname);
+
+	g_free(polname);
 
 	return headers;
 }
 
 static GSList *
-_generate_beans_from_raw_chunk(const char *id, meta2_raw_chunk_t *rc)
+_generate_beans_from_raw_chunk_custom(GByteArray *id, meta2_raw_chunk_t *rc,
+		char* (*make_pos)(guint32, void*), void *udata)
 {
 	GSList * result = NULL;
 	gpointer content = _bean_create(&descr_struct_CONTENTS);
 	gpointer chunk = _bean_create(&descr_struct_CHUNKS);
 	GString *chunkid = _forge_chunk_id_v2(&(rc->id));
+	char *pos = NULL;
 
-	char pos[32];
-	memset(pos,'\0', 32);
-	g_snprintf(pos, 32, "%"G_GUINT32_FORMAT, rc->position);
+	if (make_pos) {
+		pos = make_pos(rc->position, udata);
+	} else {
+		pos = g_malloc0(32);
+		g_snprintf(pos, 32, "%"G_GUINT32_FORMAT, rc->position);
+	}
 
-	CONTENTS_set2_content_id(content, (guint8*) id, strlen(id));
+	if (id != NULL)
+		CONTENTS_set_content_id(content, id);
 	CONTENTS_set_chunk_id(content, chunkid);
 	CONTENTS_set2_position(content, pos);
 
@@ -384,40 +427,62 @@ _generate_beans_from_raw_chunk(const char *id, meta2_raw_chunk_t *rc)
 	result = g_slist_prepend(result, content);
 	result = g_slist_prepend(result, chunk);
 
+	g_free(pos);
+	g_string_free(chunkid, TRUE);
 	return result;
+}
+
+static GSList *
+_generate_beans_from_raw_chunk(GByteArray *id, meta2_raw_chunk_t *rc)
+{
+	return _generate_beans_from_raw_chunk_custom(id, rc, NULL, NULL);
 }
 
 /* -- RawContent -- */
 
 GSList *
-m2v2_beans_from_raw_content(const char *id, meta2_raw_content_t *rc)
+m2v2_beans_from_raw_content_custom(const char *id, meta2_raw_content_t *rc,
+		char* (*make_pos) (guint32, void*), void *udata)
 {
 	GSList *l = NULL;
 	GSList *beans = NULL;
+	GByteArray *id_gba = NULL;
 
 	/* sanity check */
-	if(!rc) {
+	if (!rc) {
 		return NULL;
 	}
 
+	if (id && strlen(id))
+		id_gba = _hex_string_to_byte_array(id);
+
 	/* headers */
-	beans = g_slist_prepend(beans, 
-			_generate_m2v2_headers(id, rc->size, rc->system_metadata));
+	beans = g_slist_prepend(beans,
+			_generate_m2v2_headers(id_gba, rc->size, rc->system_metadata));
 
 	for(l = rc->raw_chunks; l && l->data; l = l->next) {
-		beans = g_slist_concat(beans, _generate_beans_from_raw_chunk(id, (meta2_raw_chunk_t*) l->data));
+		beans = g_slist_concat(beans, _generate_beans_from_raw_chunk_custom(
+				id_gba, (meta2_raw_chunk_t*) l->data, make_pos, udata));
 	}
 
 	/*alias */
-	beans = g_slist_prepend(beans, _generate_m2v2_alias_from_raw_content(id, rc));
+	beans = g_slist_prepend(beans, _generate_m2v2_alias_from_raw_content(id_gba, rc));
 
 	/* properties from user_metadata */
 	gpointer prop = _generate_property_from_mdusr(rc->path, rc->metadata);
 
-	if(NULL != prop)
+	if (NULL != prop)
 		beans = g_slist_prepend(beans, prop);
+	if (id_gba)
+		g_byte_array_unref(id_gba);
 
 	return beans;
+}
+
+GSList *
+m2v2_beans_from_raw_content(const gchar *id, meta2_raw_content_t *rc)
+{
+	return m2v2_beans_from_raw_content_custom(id, rc, NULL, NULL);
 }
 
 meta2_raw_content_t *
@@ -462,22 +527,27 @@ m2v2_beans_from_raw_content_v2(const char *id, meta2_raw_content_v2_t *rc)
 {
 	GSList *beans = NULL;
 	GSList *l = NULL;
+	GByteArray *id_gba = NULL;
 
 	/* sanity check */
-	if(!rc) {
+	if (!rc) {
 		return NULL;
+	}
+	if (id != NULL && strlen(id) > 0) {
+		id_gba = _hex_string_to_byte_array(id);
 	}
 
 	/* headers */
-	beans = g_slist_prepend(beans, 
-			_generate_m2v2_headers(id, rc->header.size, rc->header.system_metadata));
+	beans = g_slist_prepend(beans,
+			_generate_m2v2_headers(id_gba, rc->header.size, rc->header.system_metadata));
 
 	for(l = rc->raw_chunks; l && l->data; l = l->next) {
-		beans = g_slist_concat(beans, _generate_beans_from_raw_chunk(id, (meta2_raw_chunk_t*) l->data));
+		beans = g_slist_concat(beans, _generate_beans_from_raw_chunk(id_gba,
+				(meta2_raw_chunk_t*) l->data));
 	}
 
 	/*alias */
-	beans = g_slist_prepend(beans, _generate_m2v2_alias_from_raw_content_v2(id, rc));
+	beans = g_slist_prepend(beans, _generate_m2v2_alias_from_raw_content_v2(id_gba, rc));
 
 	/* mdusr to props */
 	gpointer prop = _generate_property_from_mdusr(rc->header.path, rc->header.metadata);
@@ -487,10 +557,13 @@ m2v2_beans_from_raw_content_v2(const char *id, meta2_raw_content_v2_t *rc)
 
 	l = NULL;
 	for( l = rc->properties; l && l->data; l = l->next) {
-		beans = g_slist_prepend(beans, 
+		beans = g_slist_prepend(beans,
 			_generate_bean_from_meta2_prop(rc->header.path, rc->header.version,
 				(meta2_property_t*)l->data));
 	}
+
+	if (id_gba != NULL)
+		g_byte_array_unref(id_gba);
 
 	return beans;
 }
@@ -520,29 +593,25 @@ raw_content_v2_from_m2v2_beans(const container_id_t cid, GSList *l)
 		else if (DESCR(l->data) == &descr_struct_PROPERTIES) {
 			prop_beans = g_slist_prepend(prop_beans, l->data);
 		}
-		
 	}
 
+	GSList *m = NULL;
+	for (m=prop_beans; m && m->data; m=m->next) {
+		if(DESCR(m->data) == &descr_struct_PROPERTIES) {
+			struct bean_PROPERTIES_s *bp = (struct bean_PROPERTIES_s *)m->data;
+			if ( PROPERTIES_get_deleted(bp) )
+				continue;
+			meta2_property_t *prop = g_malloc0(sizeof(meta2_property_t));
 
-	
-        GSList *m = NULL;
-        for (m=prop_beans; m && m->data; m=m->next) {
-                if(DESCR(m->data) == &descr_struct_PROPERTIES) {
-                        struct bean_PROPERTIES_s *bp = (struct bean_PROPERTIES_s *)m->data;
-                        if ( PROPERTIES_get_deleted(bp) )
-                                continue;
-                        meta2_property_t *prop = g_malloc0(sizeof(meta2_property_t));
+			prop->name = g_strdup(PROPERTIES_get_key(bp)->str);
+			prop->version = PROPERTIES_get_alias_version(bp);
+			GByteArray *value = PROPERTIES_get_value(bp);
+			prop->value = g_byte_array_sized_new (value->len);
+			g_byte_array_append (prop->value, value->data, value->len);
 
-                        prop->name = g_strdup(PROPERTIES_get_key(bp)->str);
-                        prop->version = PROPERTIES_get_alias_version(bp);
-                        GByteArray *value = PROPERTIES_get_value(bp);
-                        prop->value = g_byte_array_sized_new (value->len);
-                        g_byte_array_append (prop->value, value->data, value->len);
-
-                        rc->properties = g_slist_prepend(rc->properties,prop);
-
-                }
-        }
+			rc->properties = g_slist_prepend(rc->properties,prop);
+		}
+	}
 
 
 	memcpy(&(rc->header.container_id), cid, sizeof(container_id_t));
@@ -579,7 +648,8 @@ chunk_info_list_from_m2v2_beans(GSList *l, char **mdsys)
 }
 
 GSList *
-m2v2_beans_from_chunk_info_list(const char *id, const char *content_path, GSList *chunks)
+m2v2_beans_from_chunk_info_list(GByteArray *id,
+		const char *content_path, GSList *chunks)
 {
 	GSList * result = NULL;
 	GSList * l = NULL;
@@ -608,7 +678,8 @@ m2v2_beans_from_chunk_info_list(const char *id, const char *content_path, GSList
 		memset(pos,'\0', 32);
 		g_snprintf(pos, 32, "%"G_GUINT32_FORMAT, ci->position);
 
-		CONTENTS_set2_content_id(content, (guint8*) id, strlen(id));
+		if (id != NULL)
+			CONTENTS_set_content_id(content, id);
 		CONTENTS_set_chunk_id(content, chunkid);
 		CONTENTS_set2_position(content, pos);
 
@@ -621,6 +692,7 @@ m2v2_beans_from_chunk_info_list(const char *id, const char *content_path, GSList
 		result = g_slist_prepend(result, content);
 
 		sizes[ci->position] = ci->size;
+		g_string_free(chunkid, TRUE);
 	}
 
 	for (uint i = 0; i < nb_chunks; i++) {
@@ -633,11 +705,12 @@ m2v2_beans_from_chunk_info_list(const char *id, const char *content_path, GSList
 			"mime-type=octet/stream;chunk-method=chunk-size;", ct);
 
 	alias = _generate_alias(id, content_path, mdsys);
-	header = _generate_m2v2_headers(id, content_size, NULL);
+	header = _generate_m2v2_headers(id, content_size, mdsys);
 
 	result = g_slist_prepend(result, header);
 	result = g_slist_prepend(result, alias);
 
+	g_string_free(mdsys, TRUE);
 	return result;
 }
 

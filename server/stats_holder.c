@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.utils.stats"
 #endif
@@ -22,12 +5,10 @@
 #include <stdarg.h>
 #include <fnmatch.h>
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
 
-#include "./internals.h"
-#include "./stats_holder.h"
-#include "./hashstr.h"
-#include "./stats_holder.h"
+#include "internals.h"
+#include "stats_holder.h"
 
 struct grid_stats_holder_s
 {
@@ -238,7 +219,7 @@ grid_single_rrd_create(time_t period)
 {
 	struct grid_single_rrd_s *result;
 
-	SERVER_ASSERT(period > 1);
+	EXTRA_ASSERT(period > 1);
 
 	result = g_malloc0(sizeof(struct grid_single_rrd_s)
 			+ (period * sizeof(guint64)));
@@ -293,7 +274,7 @@ grid_single_rrd_get_delta(struct grid_single_rrd_s *gsr, time_t period)
 {
 	time_t now;
 
-	SERVER_ASSERT(period < gsr->period);
+	EXTRA_ASSERT(period < gsr->period);
 
 	if ((now = time(0)) != gsr->last)
 		_gsr_blank_empty_slots(gsr, gsr->l0[gsr->last % gsr->period], now);
@@ -309,7 +290,7 @@ grid_single_rrd_feed(struct grid_stats_holder_s *gsh, ...)
 	va_list va;
 	time_t now;
 
-	SERVER_ASSERT(gsh != NULL);
+	EXTRA_ASSERT(gsh != NULL);
 
 	now = time(0);
 

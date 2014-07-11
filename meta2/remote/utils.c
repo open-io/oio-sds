@@ -1,4 +1,4 @@
-#include "./internals.h"
+#include "internals.h"
 
 MESSAGE
 meta2_remote_build_request(GError **err, GByteArray *id, char *name)

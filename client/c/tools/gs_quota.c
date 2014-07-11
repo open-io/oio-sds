@@ -1,28 +1,7 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "hc.tools"
-#endif
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "hc.tools"
 #endif
 
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -34,11 +13,6 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "../../../metautils/lib/metautils.h"
-#include "../../../metautils/lib/common_main.h"
-#include "../../../metautils/lib/loggers.h"
-
-#include "../lib/grid_client.h"
 #include "../lib/gs_internals.h"
 
 #ifndef FREEP
@@ -126,7 +100,8 @@ func_set(gs_grid_storage_t *hc)
 {
 	container_info_t cinfo;
 	GSList list = {.data = &cinfo, .next = NULL};
-	addr_info_t *m1a;
+	addr_info_t *m1a = NULL;
+	gchar strm1a[64];
 	gboolean rc;
 	GError *e = NULL;
 
@@ -138,13 +113,14 @@ func_set(gs_grid_storage_t *hc)
 	cinfo.size = g_ascii_strtoll(action_args[0], NULL, 10);
 	memcpy(cinfo.id, cid, sizeof(container_id_t));
 	
-	if (!(m1a = gs_resolve_meta1v2(hc, cid, 0, NULL, &e))) {
+	if (!(m1a = gs_resolve_meta1v2(hc, cid, NULL, 0, NULL, &e))) {
 		g_printerr("%s\n", e->message);
 		g_clear_error(&e);
 		return FALSE;
 	}
 
-	rc = meta1_remote_update_containers(m1a, &list, 60001, &e);
+	addr_info_to_string(m1a, strm1a, sizeof(strm1a));
+	rc = meta1_remote_update_containers(strm1a, &list, 60001, &e);
 	addr_info_clean(m1a);
 	m1a = NULL;
 

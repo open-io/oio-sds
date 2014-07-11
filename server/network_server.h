@@ -1,24 +1,7 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef GRID__NETWORK_SERVER__H
 # define GRID__NETWORK_SERVER__H 1
-# include "./slab.h"
 # include <sys/time.h>
+# include <server/slab.h>
 
 struct network_server_s;
 struct grid_stats_holder_s;
@@ -80,6 +63,7 @@ struct network_client_s
 	struct data_slab_sequence_s output;
 	/* What to do with pending data */
 	struct network_transport_s transport;
+	GError *current_error;
 
 	struct network_client_s *prev; /*!< XXX DO NOT USE */
 	struct network_client_s *next; /*!< XXX DO NOT USE */
@@ -100,12 +84,22 @@ struct network_server_s * network_server_init(void);
  */
 void network_server_set_maxcnx(struct network_server_s *srv, guint max);
 
+/*! Changes the number of connection backlog that can be
+ * used by the given server.
+ *
+ * This can be done while the server is working.
+ *
+ * @param srv
+ * @param cnx_bl
+ */
+void network_server_set_cnx_backlog(struct network_server_s *srv,
+		guint cnx_bl);
+
 typedef void (*network_transport_factory) (gpointer u,
 		struct network_client_s *clt);
 
 /*!
- * @param srv
- * @param url
+ * @param srv * @param url
  * @param factory
  */
 void network_server_bind_host(struct network_server_s *srv,
@@ -153,6 +147,18 @@ void network_server_clean(struct network_server_s *srv);
  */
 struct grid_stats_holder_s * network_server_get_stats(
 		struct network_server_s *srv);
+
+/*!
+ * @param srv
+ * @return
+ */
+gint network_server_pending_events(struct network_server_s *srv);
+
+/*!
+ * @param srv
+ * @return
+ */
+gdouble network_server_reqidle(struct network_server_s *srv);
 
 /* -------------------------------------------------------------------------- */
 

@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta2.disp"
 #endif
@@ -23,33 +6,31 @@
 #include <string.h>
 #include <errno.h>
 
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-#include <hc_url.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
 
 #include <glib.h>
 
-#include <transport_gridd.h>
+#include <server/transport_gridd.h>
+#include <server/gridd_dispatcher_filters.h>
 
-#include "../server/gridd_dispatcher_filters.h"
-
-#include "./meta2_macros.h"
-#include "./meta2_filter_context.h"
-#include "./meta2_filters.h"
-#include "./meta2_backend_internals.h"
-#include "./meta2_bean.h"
-#include "./meta2v2_remote.h"
-#include "./generic.h"
-#include "./autogen.h"
-
-#define TRACE_FILTER() GRID_TRACE2("%s", __FUNCTION__)
+#include <meta2v2/meta2_macros.h>
+#include <meta2v2/meta2_filter_context.h>
+#include <meta2v2/meta2_filters.h>
+#include <meta2v2/meta2_backend_internals.h>
+#include <meta2v2/meta2_bean.h>
+#include <meta2v2/meta2v2_remote.h>
+#include <meta2v2/generic.h>
+#include <meta2v2/autogen.h>
 
 struct on_bean_ctx_s *
-_on_bean_ctx_init(struct gridd_reply_ctx_s *reply)
+_on_bean_ctx_init(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
 {
 	struct on_bean_ctx_s * obc = g_malloc0(sizeof(struct on_bean_ctx_s));
 	obc->l = NULL;
+	obc->first = TRUE;
+	obc->ctx = ctx;
 	obc->reply = reply;
 	return obc;
 }
@@ -58,9 +39,28 @@ void
 _on_bean_ctx_send_list(struct on_bean_ctx_s *obc, gboolean final)
 {
 	/* marshall the list, send and clean it */
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(obc->ctx);
+	struct hc_url_s *url = meta2_filter_ctx_get_url(obc->ctx);
+	struct event_config_s * evt_config = meta2_backend_get_event_config(m2b,
+			hc_url_get(url, HCURL_NS));
+
 	if(NULL != obc->l) {
 		obc->reply->add_body(bean_sequence_marshall(obc->l));
-		_bean_cleanl2(obc->l);
+		if(event_is_enabled(evt_config)) {
+			/* beans will be clean by context */
+			if(obc->first) {
+				obc->first = FALSE;
+				meta2_filter_ctx_set_input_udata(obc->ctx, obc->l,
+						(GDestroyNotify)_bean_cleanl2);
+			} else {
+				meta2_filter_ctx_set_input_udata(obc->ctx,
+						g_slist_prepend(
+							(GSList*)meta2_filter_ctx_get_input_udata(obc->ctx),
+							obc->l), (GDestroyNotify) _bean_cleanl2);
+			}
+		} else {
+			_bean_cleanl2(obc->l);
+		}
 	}
 	if(final)
 		obc->reply->send_reply(200, "OK");
@@ -74,11 +74,19 @@ _on_bean_ctx_clean(struct on_bean_ctx_s *obc)
 {
 	if(!obc)
 		return;
+
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(obc->ctx);
+	struct hc_url_s *url = meta2_filter_ctx_get_url(obc->ctx);
+	struct event_config_s * evt_config = meta2_backend_get_event_config(m2b,
+			hc_url_get(url, HCURL_NS));
+
 	if(obc->l) {
-		_bean_cleanl2(obc->l);
+		if(!event_is_enabled(evt_config))
+			_bean_cleanl2(obc->l);
 		obc->l = NULL;
 	}
 	obc->reply = NULL;
+	obc->ctx = NULL;
 	g_free(obc);
 }
 
@@ -143,6 +151,14 @@ meta2_filter_pack_url(struct gridd_filter_ctx_s *ctx,
 		hc_url_set(url, HCURL_HEXID, hexid);
 		g_free(hexid);
 	}
+
+	// Hack in case there was "?version=XXX" in M2V1_KEY_PATH
+	struct hc_url_s *url2 = hc_url_init(hc_url_get(url, HCURL_WHOLE));
+	hc_url_set(url, HCURL_PATH, hc_url_get(url2, HCURL_PATH));
+	if (hc_url_has(url2, HCURL_SNAPORVERS)) {
+		hc_url_set(url, HCURL_SNAPORVERS, hc_url_get(url2, HCURL_SNAPORVERS));
+	}
+	hc_url_clean(url2);
 
 	return FILTER_OK;
 }

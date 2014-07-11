@@ -1,4 +1,5 @@
-include_directories(BEFORE .)
+include_directories(BEFORE . ../..
+		${CMAKE_CURRENT_BINARY_DIR}/../..)
 
 link_directories(
 		${ASN1C_LIBRARY_DIRS})
@@ -27,25 +28,18 @@ add_custom_command(
 		EventSequence.c EventSequence.h
 		Message.c Message.h
 		Meta0Info.c Meta0Info.h Meta0InfoSequence.c Meta0InfoSequence.h
-		Meta1Info.c Meta1Info.h Meta1InfoSequence.c Meta1InfoSequence.h
 		Meta1RawContainer.c Meta1RawContainer.h
-		Meta1Stat.c Meta1Stat.h Meta1StatSequence.c Meta1StatSequence.h
-		Meta2Info.c Meta2Info.h Meta2InfoSequence.c Meta2InfoSequence.h
 		Meta2Property.c Meta2Property.h Meta2PropertySequence.c Meta2PropertySequence.h
 		Meta2RawChunk.c Meta2RawChunk.h Meta2RawChunkSequence.c Meta2RawChunkSequence.h
 		Meta2RawContent.c Meta2RawContent.h Meta2RawContentSequence.c Meta2RawContentSequence.h
 		Meta2RawContentHeader.c Meta2RawContentHeader.h Meta2RawContentHeaderSequence.c Meta2RawContentHeaderSequence.h
 		Meta2RawContentV2.c Meta2RawContentV2.h Meta2RawContentV2Sequence.c Meta2RawContentV2Sequence.h
-		Meta2Stat.c Meta2Stat.h Meta2StatSequence.c Meta2StatSequence.h
 		NamespaceInfoValueList.c NamespaceInfoValueList.h NamespaceInfo.c NamespaceInfo.h NamespaceInfoSequence.c NamespaceInfoSequence.h
 		Parameter.c Parameter.h ParameterSequence.c ParameterSequence.h
 		PathInfo.c PathInfo.h PathInfoSequence.c PathInfoSequence.h
 		Score.c Score.h
 		ServiceInfo.c ServiceInfo.h ServiceInfoSequence.c ServiceInfoSequence.h
 		ServiceTag.c ServiceTag.h
-		VolumeInfo.c VolumeInfo.h VolumeInfoSequence.c VolumeInfoSequence.h
-		VolumeStat.c VolumeStat.h
-		VolumeStatSequence.c VolumeStatSequence.h
 		ContainerInfoSequence.c ContainerInfoSequence.h
 		ContainerInfo.c ContainerInfo.h
 
@@ -69,6 +63,7 @@ add_custom_command(
 		M2V2Content.c M2V2Content.h
 		M2V2ContentHeader.c M2V2ContentHeader.h
 		M2V2Property.c M2V2Property.h
+		M2V2Snapshot.c M2V2Snapshot.h
 
 	PRE_BUILD
 	COMMAND ${ASN1C_EXECUTABLE} -fcompound-names -fskeletons-copy ${CMAKE_CURRENT_SOURCE_DIR}/description.asn
@@ -93,6 +88,21 @@ add_custom_command(
 #	ARGS -d -s -oexpr.lex.c ${CMAKE_CURRENT_SOURCE_DIR}/expr.lex.l
 
 add_library(metautils SHARED
+		metautils_bits.h
+		metautils_macros.h
+		utils_containers.c metautils_containers.h
+		utils_svc_policy.c metautils_svc_policy.h
+		utils_errors.c metautils_errors.h
+		utils_sockets.c metautils_sockets.h
+		utils_strings.c metautils_strings.h
+		utils_hashstr.c metautils_hashstr.h
+		utils_resolv.c metautils_resolv.h
+		utils_loggers.c metautils_loggers.h
+		utils_task.c metautils_task.h
+		utils_manifest.c metautils_manifest.h
+		metautils_syscall.h utils_syscall.c
+		event_config.c event_config.h
+		grid_storage_client_stat.c
 		lrutree.c lrutree.h tree.h
 		storage_policy.h storage_policy.c
 		hc_url.h hc_url.c
@@ -105,9 +115,6 @@ add_library(metautils SHARED
 		metatypes.h
 		metautils.h
 		metautils_internals.h
-		gs_manifest.h
-		hashstr.h
-		loggers.h
 		volume_lock.h
 		utils_addr_info.c
 		utils_chunk_info.c
@@ -118,36 +125,23 @@ add_library(metautils SHARED
 		utils_acl.c
 		utils_l4v.c
 		utils_meta0_info.c
-		utils_meta1_info.c
 		utils_meta1_raw_container.c
-		utils_meta1_stat.c
-		utils_meta2_info.c
 		utils_meta2_maintenance.c
-		utils_meta2_stat.c
 		utils_metadata.c
-		utils_manifest.c
 		utils_namespace_info.c
 		utils_path_info.c
 		utils_rawx_maintenance.c
 		utils_score.c
 		utils_service_info.c
 		utils_tools.c
-		utils_volume_info.c
-		utils_volume_stat.c
 		utils_duplication.c
-		hashstr.c
 		volume_lock.c
-		loggers.c
-		resolv.c resolv.h
 		common_main.c common_main.h
 		lb.c lb.h
-		svc_policy.c svc_policy.h
 )
 
 target_link_libraries(metautils
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} -lm -lexpat)
-
-set_target_properties(metautils PROPERTIES SOVERSION ${ABI_VERSION})
 
 add_dependencies(metautils asn1c_generation)
 
@@ -203,20 +197,8 @@ add_library(metacomm SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0Info.h
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0InfoSequence.c
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0InfoSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta1Info.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta1Info.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta1InfoSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta1InfoSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/Meta1RawContainer.c
 		${CMAKE_CURRENT_BINARY_DIR}/Meta1RawContainer.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta1Stat.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta1Stat.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta1StatSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta1StatSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2Info.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2Info.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2InfoSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2InfoSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/Meta2Property.c
 		${CMAKE_CURRENT_BINARY_DIR}/Meta2Property.h
 		${CMAKE_CURRENT_BINARY_DIR}/Meta2PropertySequence.c
@@ -237,10 +219,6 @@ add_library(metacomm SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContentV2.h
 		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContentV2Sequence.c
 		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContentV2Sequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2Stat.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2Stat.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2StatSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2StatSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfoValueList.c
 		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfoValueList.h
 		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfo.c
@@ -263,14 +241,6 @@ add_library(metacomm SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/ServiceInfoSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/ServiceTag.c
 		${CMAKE_CURRENT_BINARY_DIR}/ServiceTag.h
-		${CMAKE_CURRENT_BINARY_DIR}/VolumeInfo.c
-		${CMAKE_CURRENT_BINARY_DIR}/VolumeInfo.h
-		${CMAKE_CURRENT_BINARY_DIR}/VolumeInfoSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/VolumeInfoSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/VolumeStat.c
-		${CMAKE_CURRENT_BINARY_DIR}/VolumeStat.h
-		${CMAKE_CURRENT_BINARY_DIR}/VolumeStatSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/VolumeStatSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/ContainerInfoSequence.c
 		${CMAKE_CURRENT_BINARY_DIR}/ContainerInfoSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/ContainerInfo.c
@@ -315,6 +285,9 @@ add_library(metacomm SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2ContentHeader.c
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Property.h
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Property.c
+		${CMAKE_CURRENT_BINARY_DIR}/M2V2Snapshot.h
+		${CMAKE_CURRENT_BINARY_DIR}/M2V2Snapshot.c
+
 
 		asn_AddrInfo.c
 		asn_AddrInfo.h
@@ -323,45 +296,32 @@ add_library(metacomm SHARED
 		asn_ContainerEvent.c
 		asn_ContainerEvent.h
 		asn_Integer.c
-		asn_Integer.h
 		asn_Meta0Info.c asn_Meta0Info.h
-		asn_Meta1Info.c asn_Meta1Info.h
-		asn_Meta1Stat.c asn_Meta1Stat.h
-		asn_Meta2Info.c asn_Meta2Info.h
 		asn_Meta2Raw.c asn_Meta2Raw.h
-		asn_Meta2Stat.c asn_Meta2Stat.h
 		asn_NamespaceInfo.c asn_NamespaceInfo.h
 		asn_Parameter.c asn_Parameter.h
 		asn_PathInfo.c asn_PathInfo.h
 		asn_Score.c asn_Score.h
 		asn_ServiceInfo.h
-		asn_VolumeInfo.c asn_VolumeInfo.h
-		asn_VolumeStat.c asn_VolumeStat.h
 		asn_ContainerInfo.c asn_ContainerInfo.h
 
 		comm_abstract_sequence.c
 		comm_addr_info.c
 		comm_chunk_info.c
 		comm_container_event.c
-		comm_integer.c
 		comm_message.c
 		comm_meta0_info.c
-		comm_meta1_info.c
 		comm_meta1_raw_container.c
-		comm_meta1_stat.c
-		comm_meta2_info.c
 		comm_meta2_maintenance.c
-		comm_meta2_stat.c
 		comm_meta_reply.c
 		comm_namespace_info.c
 		comm_parameter.c
 		comm_path_info.c
 		comm_service_info.c
-		comm_volume_info.c
-		comm_volume_stat.c
 		comm_container_info.c
 
 		gridd_client.c gridd_client.h
+		gridd_client_pool.c gridd_client_pool.h
 )
 
 include_directories(AFTER ${CMAKE_CURRENT_BINARY_DIR})
@@ -371,18 +331,24 @@ target_link_libraries(metacomm
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} -lASN1)
 add_dependencies(metacomm metautils)
 
-add_executable(redc-oid2cid oid_to_cid.c)
-target_link_libraries(redc-oid2cid
+add_executable(gs_oid2cid oid_to_cid.c)
+bin_prefix(gs_oid2cid -oid2cid)
+bin_prefix_full(gs_oid2cid -utils-oid2cid)
+target_link_libraries(gs_oid2cid
 		metautils
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES})
-add_dependencies(redc-oid2cid metacomm metautils)
+add_dependencies(gs_oid2cid metacomm metautils)
 
-add_executable(redc-dump-addr addr_dump.c)
-target_link_libraries(redc-dump-addr
+add_executable(gs_dump_addr addr_dump.c)
+bin_prefix(gs_dump_addr -dump-addr)
+bin_prefix_full(gs_dump_addr -utils-dump-addr)
+target_link_libraries(gs_dump_addr
 		metautils metacomm
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES})
 
 add_executable(gs_same_hash gs_same_hash.c)
+bin_prefix(gs_same_hash -same-hash)
+bin_prefix_full(gs_dump_addr -utils-same-hash)
 target_link_libraries(gs_same_hash
 		metautils 
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES})
@@ -406,16 +372,108 @@ target_link_libraries(test_hc_url
 		metautils 
 		${GLIB2_LIBRARIES})
 
+add_executable(test_addr test_addr.c)
+target_link_libraries(test_addr
+		metautils metacomm
+		${GLIB2_LIBRARIES})
+
+add_executable(test_gridd_client test_gridd_client.c)
+target_link_libraries(test_gridd_client
+		metautils metacomm
+		${GLIB2_LIBRARIES})
+
 add_executable(test_lrutree test_lrutree.c)
 target_link_libraries(test_lrutree
 		metautils 
 		${GLIB2_LIBRARIES})
 
-install(TARGETS metacomm metautils redc-oid2cid redc-dump-addr
+add_executable(test_sigfpe test_sigfpe.c)
+target_link_libraries(test_sigfpe
+		metautils 
+		${GLIB2_LIBRARIES})
+
+add_executable(test_str test_str.c)
+target_link_libraries(test_str
+		metautils 
+		${GLIB2_LIBRARIES})
+
+add_executable(test_gba test_gba.c)
+target_link_libraries(test_gba
+		metautils 
+		${GLIB2_LIBRARIES})
+
+install(TARGETS metacomm metautils gs_oid2cid gs_dump_addr
 		LIBRARY DESTINATION ${LD_LIBDIR}
-		RUNTIME DESTINATION bin)
+		RUNTIME DESTINATION bin
+		PUBLIC_HEADER DESTINATION include)
+
+install(FILES
+			asn_AddrInfo.h
+			asn_ChunkInfo.h
+			asn_ContainerEvent.h
+			asn_ContainerInfo.h
+			asn_Meta0Info.h
+			asn_Meta2Raw.h
+			asn_NamespaceInfo.h
+			asn_Parameter.h
+			asn_PathInfo.h
+			asn_Score.h
+			asn_ServiceInfo.h
+			common_main.h
+			expr.h
+			gridd_client.h
+			gridd_client_pool.h
+			grid_storage_client_stat.h
+			hc_url.h
+			lb.h
+			lrutree.h
+			metacomm.h
+			event_config.h
+			metatype_acl.h
+			metatype_addrinfo.h
+			metatype_cid.h
+			metatype_kv.h
+			metatype_m0info.h
+			metatype_m1url.h
+			metatype_metadata.h
+			metatype_nsinfo.h
+			metatypes.h
+			metatype_srvinfo.h
+			metatype_v140.h
+			metautils_bits.h
+			metautils_containers.h
+			metautils-doc.h
+			metautils_errors.h
+			metautils_gba.h
+			metautils.h
+			metautils_hashstr.h
+			metautils_internals.h
+			metautils_l4v.h
+			metautils_loggers.h
+			metautils_macros.h
+			metautils_manifest.h
+			metautils_resolv.h
+			metautils_sockets.h
+			metautils_strings.h
+			metautils_svc_policy.h
+			metautils_task.h
+			storage_policy.h
+			test_addr.h
+			tree.h
+			volume_lock.h
+		DESTINATION include/metautils/lib
+		PERMISSIONS
+			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
+			
 
 add_test(NAME metautils/svc_policy COMMAND test_svc_policy)
 add_test(NAME metautils/lb COMMAND test_lb)
 add_test(NAME metautils/url COMMAND test_hc_url)
+add_test(NAME metautils/logger COMMAND test_logger)
+add_test(NAME metautils/lru COMMAND test_lrutree)
+add_test(NAME metautils/addr COMMAND test_addr)
+add_test(NAME metautils/gridd_client COMMAND test_gridd_client)
+add_test(NAME metautils/sigfpe COMMAND test_sigfpe)
+add_test(NAME metautils/strings COMMAND test_str)
+add_test(NAME metautils/gba COMMAND test_gba)
 

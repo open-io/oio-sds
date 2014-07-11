@@ -1,57 +1,32 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.utils.transport.http"
 #endif
 
 #include <stddef.h>
 #include <string.h>
-
 #include <sys/stat.h>
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
 
-#include "./internals.h"
-#include "./slab.h"
-#include "./hashstr.h"
-#include "./network_server.h"
-#include "./stats_holder.h"
-#include "./transport_http.h"
-
-#define HTTP_REPLY_404 "HTTP/1.0 404 Not found\r\n\r\n"
-#define HTTP_REPLY_500 "HTTP/1.0 500 Server internal error\r\n\r\n"
-#define HTTP_REPLY_502 "HTTP/1.0 502 Bad gateway\r\n\r\n"
+#include "internals.h"
+#include "slab.h"
+#include "network_server.h"
+#include "stats_holder.h"
+#include "transport_http.h"
 
 struct transport_client_context_s
 {
+	struct http_parser_s *parser;
+	struct http_request_s *request;
 	struct http_request_dispatcher_s *dispatcher;
-	guint headers_offset;
-	GByteArray *headers;
-	struct http_request_s *current_request;
+
+	struct timeval tv_start;
 };
 
 struct http_request_handler_s
 {
-	gboolean (*matcher)(gpointer u,
-			struct http_request_s *request);
-	gboolean (*handler)(gpointer u,
-			struct http_request_s *request,
-			struct http_reply_ctx_s *reply);
+	enum http_rc_e (*handler)(gpointer u,
+			struct http_request_s *request, struct http_reply_ctx_s *reply);
 	gchar stat_name_req[256];
 	gchar stat_name_time[256];
 };
@@ -59,100 +34,238 @@ struct http_request_handler_s
 struct http_request_dispatcher_s
 {
 	gpointer u;
-	GTree *tree_requests;
+	GArray *requests;
+};
+
+struct req_ctx_s
+{
+	gboolean close_after_request;
+	struct timeval tv_parsed;
+
+	struct network_client_s *client;
+	struct network_transport_s *transport;
+	struct transport_client_context_s *context;
+	struct http_request_dispatcher_s *dispatcher;
+	struct http_request_s *request;
 };
 
 static int http_notify_input(struct network_client_s *clt);
 
-static void http_request_clean(struct http_request_s *req);
+//------------------------------------------------------------------------------
 
-GQuark gquark_log = 0;
-
-/* -------------------------------------------------------------------------- */
-
-void
-http_request_dispatcher_clean(struct http_request_dispatcher_s *d)
+enum http_parser_step_e
 {
-	if (!d)
-		return ;
-	if (d->tree_requests)
-		g_tree_destroy(d->tree_requests);
-	g_free(d);
+	STEP_FIRST_R0, STEP_FIRST_N0,
+	STEP_SEP_R0, STEP_SEP_N0,
+	STEP_HEADERS_R0, STEP_HEADERS_N0,
+	STEP_BODY_ASIS
+};
+
+struct http_parser_s
+{
+	enum http_parser_step_e step;
+	GError *error;
+	GString *buf;
+
+	gint64 content_read;
+	gint64 content_length;
+	void (*command_provider)(const gchar *req, const gchar *sel, const gchar *ver);
+	void (*header_provider)(const gchar *name, const gchar *value);
+	void (*body_provider)(const guint8 *data, gsize data_len);
+};
+
+struct http_parsing_result_s
+{
+	gsize consumed;
+	enum { HPRC_SUCCESS = 0, HPRC_MORE, HPRC_ERROR } status;
+};
+
+static inline void
+gstr_chomp(GString *gstr)
+{
+	if (!gstr)
+		return;
+	gchar *start, *end;
+	start = gstr->str;
+	end = start + gstr->len;
+	while (end > start && (*(end-1) == '\n' || *(end-1) == '\r'))
+		*(--end) = '\0';
 }
 
-struct http_request_dispatcher_s *
-transport_http_build_dispatcher(gpointer u,
-		const struct http_request_descr_s *descr)
+static inline gboolean
+_manage_and_renew_command(struct http_parser_s *parser, GString *buf)
 {
-	const struct http_request_descr_s *d;
-	struct http_request_dispatcher_s *dispatcher;
+	gchar *cmd, *selector, *version;
 
-	dispatcher = g_malloc0(sizeof(*dispatcher));
-	dispatcher->u = u;
-	dispatcher->tree_requests = g_tree_new_full(
-			hashstr_quick_cmpdata, NULL, g_free, g_free);
+	if (!buf->len)
+		return FALSE;
 
-	for (d=descr; d && d->name && d->matcher && d->handler ;d++) {
+	gstr_chomp(buf);
+	cmd = buf->str;
+	selector = strchr(cmd, ' ');
+	if (!selector)
+		return FALSE;
+	*(selector++) = '\0';
+	version = strrchr(selector, ' ');
+	if (!version)
+		return FALSE;
+	*(version++) = '\0';
 
-		struct http_request_handler_s *h = g_malloc0(sizeof(*h));
-		h->matcher = d->matcher;
-		h->handler = d->handler;
-		g_snprintf(h->stat_name_req, sizeof(h->stat_name_req),
-			"%s.%s", HTTP_STAT_PREFIX_REQ, d->name);
-		g_snprintf(h->stat_name_time, sizeof(h->stat_name_time),
-			"%s.%s", HTTP_STAT_PREFIX_TIME, d->name);
+	if (parser->command_provider)
+		parser->command_provider(cmd, selector, version);
 
-		g_tree_replace(dispatcher->tree_requests, hashstr_create(d->name), h);
+	g_string_set_size(buf, 0);
+	return TRUE;
+}
 
-		GRID_DEBUG("New handler added [%s] [%p] [%p}", d->name,
-				d->matcher, d->handler);
+static inline gboolean
+_manage_and_renew_header(struct http_parser_s *parser, GString *buf)
+{
+	if (!buf->len)
+		return TRUE;
+
+	gstr_chomp(buf);
+	gchar *header = buf->str;
+	gchar *sep = strchr(header, ':');
+	if (!sep)
+		return FALSE;
+	*(sep++) = '\0';
+	if (*(sep++) != ' ')
+		return FALSE;
+
+	if (!g_ascii_strcasecmp(header, "Content-Length"))
+		parser->content_length = g_ascii_strtoll(sep, NULL, 10);
+
+	if (parser->header_provider)
+		parser->header_provider(header, sep);
+
+	g_string_set_size(buf, 0);
+	return TRUE;
+}
+
+static struct http_parsing_result_s
+http_parse(struct http_parser_s *parser, const guint8 *data, gsize available)
+{
+	gsize consumed = 0;
+
+	struct http_parsing_result_s _build_rc(int status, const gchar *msg) {
+		struct http_parsing_result_s rc;
+		if (msg)
+			parser->error = NEWERROR(0, msg);
+		rc.status = status;
+		rc.consumed = consumed;
+		return rc;
 	}
 
-	return dispatcher;
-}
+	while (consumed < available) {
+		guint8 d = data[consumed];
+		gint64 max;
+		switch (parser->step) {
 
-/* -------------------------------------------------------------------------- */
+			case STEP_FIRST_R0:
+				if (d == '\r')
+					parser->step = STEP_FIRST_N0;
+				else
+					g_string_append_c(parser->buf, d);
+				++ consumed;
+				continue;
+
+			case STEP_FIRST_N0:
+				if (d == '\n') {
+					if (!_manage_and_renew_command(parser, parser->buf))
+						return _build_rc(HPRC_ERROR, "CMD parsing error");
+					parser->step = STEP_SEP_R0;
+					++ consumed;
+					continue;
+				}
+				return _build_rc(HPRC_ERROR, "CMD parsing error");
+
+			case STEP_SEP_R0:
+				if (d == '\r')
+					parser->step = STEP_SEP_N0;
+				else {
+					if (!_manage_and_renew_header(parser, parser->buf))
+						return _build_rc(HPRC_ERROR, "HDR parsing error");
+					g_string_append_c(parser->buf, d);
+					parser->step = STEP_HEADERS_R0;
+				}
+				++ consumed;
+				continue;
+
+			case STEP_SEP_N0:
+				if (d == '\n') {
+					++ consumed;
+					if (!_manage_and_renew_header(parser, parser->buf))
+						return _build_rc(HPRC_ERROR, "HDR parsing error");
+					parser->step = STEP_BODY_ASIS;
+					if (parser->content_read >= parser->content_length)
+						return _build_rc(HPRC_SUCCESS, NULL);
+					continue;
+				}
+				return _build_rc(HPRC_ERROR, "SEP parsing error");
+
+			case STEP_HEADERS_R0:
+				if (d == '\r')
+					parser->step = STEP_HEADERS_N0;
+				else
+					g_string_append_c(parser->buf, d);
+				++ consumed;
+				continue;
+
+			case STEP_HEADERS_N0:
+				if (d == '\n') {
+					parser->step = STEP_SEP_R0;
+					++ consumed;
+					continue;
+				}
+				return _build_rc(HPRC_ERROR, "HDR parsing error");
+
+			case STEP_BODY_ASIS:
+				max = available - consumed;
+				if (max > (parser->content_length - parser->content_read))
+					max = parser->content_length - parser->content_read;
+				if (parser->body_provider)
+					parser->body_provider(data+consumed, max);
+				consumed += max;
+				parser->content_read += max;
+
+				if (parser->content_read >= parser->content_length)
+					return _build_rc(HPRC_SUCCESS, NULL);
+				continue;
+		}
+	}
+
+	return _build_rc(HPRC_MORE, NULL);
+}
 
 static void
-http_context_clean(struct transport_client_context_s *ctx)
+http_parser_reset(struct http_parser_s *parser)
 {
-	if (!ctx)
+	parser->step = STEP_FIRST_R0;
+	g_string_set_size(parser->buf, 0);
+	parser->content_read = 0;
+	parser->content_length = -1;
+	if (parser->error)
+		g_clear_error(&parser->error);
+}
+
+static struct http_parser_s*
+http_parser_create(void)
+{
+	struct http_parser_s *parser = g_malloc0(sizeof(struct http_parser_s));
+	parser->buf = g_string_sized_new(1024);
+	http_parser_reset(parser);
+	return parser;
+}
+
+static void
+http_parser_destroy(struct http_parser_s *parser)
+{
+	if (!parser)
 		return;
-	if (ctx->headers)
-		g_byte_array_free(ctx->headers, TRUE);
-	if (ctx->current_request)
-		http_request_clean(ctx->current_request);
-	g_free(ctx);
+	g_string_free(parser->buf, TRUE);
+	g_free(parser);
 }
-
-void
-transport_http_factory0(struct http_request_dispatcher_s *dispatcher,
-		struct network_client_s *client)
-{
-	struct network_transport_s *transport;
-	struct transport_client_context_s *client_context;
-
-	if (!gquark_log)
-		gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
-
-	(void) client;
-
-	client_context = g_malloc0(sizeof(struct transport_client_context_s));
-	client_context->headers_offset = 0;
-	client_context->headers = NULL;
-	client_context->current_request = NULL;
-	client_context->dispatcher = dispatcher;
-
-	transport = &(client->transport);
-	transport->client_context = client_context;
-	transport->clean_context = http_context_clean;
-	transport->notify_input = http_notify_input;
-	transport->notify_error = NULL;
-
-	network_client_allow_input(client, TRUE);
-}
-
-/* -------------------------------------------------------------------------- */
 
 static struct http_request_s *
 http_request_create(struct network_client_s *client)
@@ -160,50 +273,9 @@ http_request_create(struct network_client_s *client)
 	struct http_request_s *req;
 	req = g_malloc0(sizeof(*req));
 	req->client = client;
-	req->tree_headers = g_tree_new_full(hashstr_quick_cmpdata,
-			NULL, g_free, g_free);
+	req->tree_headers = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
+	req->body = g_byte_array_new();
 	return req;
-}
-
-static void
-http_request_add_header(struct http_request_s *req,
-		gchar *n, const gchar *v)
-{
-
-	HTTP_ASSERT(req != NULL);
-	HTTP_ASSERT(req->tree_headers != NULL);
-	
-	/* Normalize the header name */
-	register enum { MAJUSCULE, MINUSCULE } step = MAJUSCULE;
-	register gchar *p;
-	for (p=n; *p ;p++) {
-		if (*p == '-')
-			step = MAJUSCULE;
-		else switch (step) {
-			case MAJUSCULE:
-				*p = g_ascii_toupper(*p);
-				step = MINUSCULE;
-				break;
-			case MINUSCULE:
-				*p = g_ascii_tolower(*p);
-				break;
-		}
-	}
-	
-	GRID_DEBUG("Header [%s] : [%s]", n, v);
-	g_tree_replace(req->tree_headers, hashstr_create(n), g_strdup(v));
-}
-
-const gchar *
-http_request_get_header(struct http_request_s *req, const gchar *n)
-{
-	hashstr_t *hname;
-
-	HTTP_ASSERT(req != NULL);
-	HTTP_ASSERT(req->tree_headers != NULL);
-
-	HASHSTR_ALLOCA(hname, n);
-	return g_tree_lookup(req->tree_headers, hname);
 }
 
 static void
@@ -217,508 +289,402 @@ http_request_clean(struct http_request_s *req)
 		g_free(req->version);
 	if (req->tree_headers)
 		g_tree_destroy(req->tree_headers);
+	if (req->body)
+		g_byte_array_free(req->body, TRUE);
 	g_free(req);
 }
 
-/* -------------------------------------------------------------------------- */
 
-struct req_ctx_s
+//------------------------------------------------------------------------------
+
+void
+http_request_dispatcher_clean(struct http_request_dispatcher_s *d)
 {
-	struct network_client_s *client;
-	struct network_transport_s *transport;
-	struct transport_client_context_s *context;
+	if (!d)
+		return ;
+	if (d->requests)
+		g_array_free(d->requests, TRUE);
+	g_free(d);
+}
+
+struct http_request_dispatcher_s *
+transport_http_build_dispatcher(gpointer u,
+		const struct http_request_descr_s *descr)
+{
+	const struct http_request_descr_s *d;
 	struct http_request_dispatcher_s *dispatcher;
-	struct http_request_s *request;
-};
 
-static inline void
-_reply_fixed(struct req_ctx_s *req, const gchar *whole)
-{
-	network_client_send_slab(
-			req->context->current_request->client,
-			data_slab_make_static_string(whole));
+	dispatcher = g_malloc0(sizeof(*dispatcher));
+	dispatcher->u = u;
+	dispatcher->requests = g_array_new(FALSE, FALSE,
+			sizeof(struct http_request_handler_s));
 
-	network_client_close_output(req->context->current_request->client, 0);
-	http_request_clean(req->context->current_request);
-	req->context->current_request = NULL;
-}
-
-static struct http_request_handler_s*
-http_get_handler(struct req_ctx_s *req_ctx)
-{
-	struct http_request_handler_s *result = NULL;
-
-	gboolean finder(gpointer k, gpointer v, gpointer u) {
-		struct http_request_handler_s *handler, **p_result;
-
-		(void) k;
-		handler = v;
-		p_result = u;
-
-		HTTP_ASSERT(handler->matcher != NULL);
-		HTTP_ASSERT(handler->handler != NULL);
-		if (!handler->matcher(req_ctx->dispatcher->u, req_ctx->request))
-			return FALSE;
-		*p_result = handler;
-		return TRUE;
+	for (d=descr; d && d->name && d->handler ;d++) {
+		struct http_request_handler_s h;
+		h.handler = d->handler;
+		g_snprintf(h.stat_name_req, sizeof(h.stat_name_req),
+				"%s.%s", HTTP_STAT_PREFIX_REQ, d->name);
+		g_snprintf(h.stat_name_time, sizeof(h.stat_name_time),
+				"%s.%s", HTTP_STAT_PREFIX_TIME, d->name);
+		g_array_append_vals(dispatcher->requests, &h, 1);
 	}
 
-	g_tree_foreach(req_ctx->dispatcher->tree_requests, finder, &result);
-
-	if (result) {
-		GRID_DEBUG("Request matched");
-		return result;
-	}
-
-	GRID_DEBUG("Request matched no handler");
-	return NULL;
+	return dispatcher;
 }
+
+
+//------------------------------------------------------------------------------
 
 static void
-send_status_line(struct network_client_s *client, int code, const gchar *msg)
+http_context_clean(struct transport_client_context_s *ctx)
 {
-	GString *gstr = g_string_sized_new(64);
-	g_string_append(gstr, "HTTP/1.0 ");
-	g_string_append_printf(gstr, "%d ", code);
-	g_string_append(gstr, msg);
-	g_string_append(gstr, "\r\n");
-
-	gsize l = gstr->len;
-	guint8 *b = (guint8*) g_string_free(gstr, FALSE);
-	network_client_send_slab(client, data_slab_make_buffer(b, l));
+	if (!ctx)
+		return;
+	if (ctx->parser)
+		http_parser_destroy(ctx->parser);
+	if (ctx->request)
+		http_request_clean(ctx->request);
+	g_free(ctx);
 }
+
+void
+transport_http_factory0(struct http_request_dispatcher_s *dispatcher,
+		struct network_client_s *client)
+{
+	struct network_transport_s *transport;
+	struct transport_client_context_s *client_context;
+
+	client_context = g_malloc0(sizeof(struct transport_client_context_s));
+	client_context->dispatcher = dispatcher;
+	client_context->parser = http_parser_create();
+	client_context->request = http_request_create(client);
+	gettimeofday(&client_context->tv_start, NULL);
+
+	transport = &(client->transport);
+	transport->client_context = client_context;
+	transport->clean_context = http_context_clean;
+	transport->notify_input = http_notify_input;
+	transport->notify_error = NULL;
+
+	network_client_allow_input(client, TRUE);
+}
+
+
+//------------------------------------------------------------------------------
 
 static gboolean
 sender(gpointer k, gpointer v, gpointer u)
 {
-	struct network_client_s *client = u;
-	struct hashstr_s *hname = k;
-
-	GString *gstr = g_string_sized_new(64);
-	g_string_append(gstr, hashstr_str(hname));
-	g_string_append_c(gstr, ':');
-	g_string_append_c(gstr, ' ');
-	g_string_append(gstr, (gchar*)v);
-
-	gsize l = gstr->len;
-	guint8 *b = (guint8*) g_string_free(gstr, FALSE);
-	network_client_send_slab(client, data_slab_make_buffer(b, l));
+	g_string_append((GString*)u, (gchar*)k);
+	g_string_append((GString*)u, ": ");
+	g_string_append((GString*)u, (gchar*)v);
+	g_string_append((GString*)u, "\r\n");
 	return FALSE;
 }
 
-static GError *
-http_manage_request(struct req_ctx_s *req_ctx)
+static void
+_access_log(struct req_ctx_s *r, gint status, gsize out_len)
 {
-	struct http_request_handler_s *h;
+	struct timeval tv_now, tv_diff0, tv_diff1;
 
-	gboolean headers_sent = 0;
+	gettimeofday(&tv_now, NULL);
+	timersub(&r->tv_parsed, &r->context->tv_start, &tv_diff0);
+	timersub(&tv_now, &r->tv_parsed, &tv_diff1);
+
+	GString *gstr = g_string_sized_new(256);
+	g_string_append(gstr, r->client->local_name);
+	g_string_append_c(gstr, ' ');
+	g_string_append(gstr, r->client->peer_name);
+
+	g_string_append_printf(gstr,
+			" %ld.%06ld %ld.%06ld %d %"G_GSIZE_FORMAT" %%s",
+			tv_diff0.tv_sec, tv_diff0.tv_usec,
+			tv_diff1.tv_sec, tv_diff1.tv_usec,
+			status, out_len);
+
+	g_log("access", GRID_LOGLVL_INFO, gstr->str, r->request->req_uri);
+
+	g_string_free(gstr, TRUE);
+}
+
+static GError *
+http_manage_request(struct req_ctx_s *r)
+{
+	gboolean finalized = 0;
 	int code = 500;
 	gchar *msg = NULL;
 	GTree *headers = NULL;
-	enum { NOTSET, INLINED, CHUNKED } body_encoding = NOTSET;
+	const gchar *content_type = "octet/stream";
+
+	struct {
+		guint8 *data;
+		gsize len;
+	} body;
+
+	void cleanup(void) {
+		if (msg) {
+			g_free(msg);
+			msg = NULL;
+		}
+		if (body.data) {
+			g_free(body.data);
+			body.data = NULL;
+			body.len = 0;
+		}
+		if (headers) {
+			g_tree_destroy(headers);
+			headers = NULL;
+		}
+	}
 
 	void set_status(int c, const gchar *m) {
-		HTTP_ASSERT(!headers_sent);
+		EXTRA_ASSERT(m != NULL);
 		code = c;
+		if (msg)
+			g_free(msg);
 		msg = g_strdup(m);
 	}
-	void add_header (const gchar *name, GString *v) {
-		HTTP_ASSERT(!headers_sent);
-		g_tree_replace(headers,
-				hashstr_create(name),
-				g_string_free(v, FALSE));
-	}
-	void set_inlined (guint64 size) {
-		HTTP_ASSERT(!headers_sent);
-		HTTP_ASSERT(body_encoding == NOTSET);
-		body_encoding = INLINED;
-		g_tree_replace(headers,
-				hashstr_create("Trasfer-Encoding"),
-				g_strdup("identity"));
-		g_tree_replace(headers,
-				hashstr_create("Content-Length"),
-				g_strdup_printf("%"G_GUINT64_FORMAT, size));
-	}
-	void set_chunked (void) {
-		HTTP_ASSERT(!headers_sent);
-		HTTP_ASSERT(body_encoding == NOTSET);
-		body_encoding = CHUNKED;
-		g_tree_replace(headers,
-				hashstr_create("Trasfer-Encoding"),
-				g_strdup("chunked"));
-		g_tree_remove(headers,
-				hashstr_create("Content-Length"));
-	}
-	void send_headers (void) {
-		HTTP_ASSERT(!headers_sent);
-		send_status_line(req_ctx->client, code, msg);
-		g_tree_foreach(headers, sender, req_ctx->client);
-		network_client_send_slab(req_ctx->client, data_slab_make_static_string("\r\n"));
-		headers_sent = TRUE;
-	}
-	void chunk_send_gba(GByteArray *gba) {
-		(void) gba;
-		HTTP_ASSERT(headers_sent);
-		HTTP_ASSERT(body_encoding == CHUNKED);
 
-		GString *gstr = g_string_sized_new(8);
-		g_string_append_printf(gstr, "%X\r\n", gba->len);
-
-		network_client_send_slab(req_ctx->client, data_slab_make_string(g_string_free(gstr, FALSE)));
-		network_client_send_slab(req_ctx->client, data_slab_make_gba(gba));
-		network_client_send_slab(req_ctx->client, data_slab_make_static_string("\r\n"));
-	}
-	void chunk_send_file(int fd) {
-		struct stat64 s;
-
-		HTTP_ASSERT(headers_sent);
-		HTTP_ASSERT(body_encoding == CHUNKED);
-
-		fstat64(fd, &s);
-
-		network_client_send_slab(req_ctx->client,
-				data_slab_make_string(	
-						g_strdup_printf("%"G_GUINT64_FORMAT"\r\n", s.st_size)
-				)
-		);
-		network_client_send_slab(req_ctx->client, data_slab_make_file(fd, 0, s.st_size));
-		network_client_send_slab(req_ctx->client, data_slab_make_static_string("\r\n"));
-	}
-	void chunk_last(void) {
-		HTTP_ASSERT(headers_sent);
-		HTTP_ASSERT(body_encoding == CHUNKED);
-		network_client_send_slab(req_ctx->client, data_slab_make_static_string("0\r\n"));
+	void set_content_type(const gchar *type) {
+		content_type = type;
 	}
 
-	(void) body_encoding;
-	(void) headers_sent;
-
-	/* Sanity checks + handler location */
-	if (!req_ctx->dispatcher) {
-		GRID_DEBUG("No dispatcher configured");
-		_reply_fixed(req_ctx, HTTP_REPLY_404);
-		return NULL;
-	}
-	if (!(h = http_get_handler(req_ctx))) {
-		GRID_DEBUG("Handler not found");
-		_reply_fixed(req_ctx, HTTP_REPLY_404);
-		return NULL;
-	}
-	if (!h->handler) {
-		GRID_DEBUG("Invalid handler");
-		_reply_fixed(req_ctx, HTTP_REPLY_502);
-		return NULL;
+	void add_header(const gchar *n, gchar *v) {
+		EXTRA_ASSERT(!finalized);
+		g_tree_replace(headers, (gpointer)n, v);
 	}
 
-	/* Handler calling */
-	struct http_reply_ctx_s reply = {
-		set_status,
-		add_header,
-		send_headers,
-		set_inlined,
-		set_chunked,
-		chunk_send_gba,
-		chunk_send_file,
-		chunk_last
-	};
-	headers = g_tree_new_full(hashstr_quick_cmpdata, NULL, g_free, g_free);
-	h->handler(req_ctx->dispatcher->u, req_ctx->request, &reply);
-	_reply_fixed(req_ctx, HTTP_REPLY_500);
-	return NULL;
-}
-
-/* -------------------------------------------------------------------------- */
-
-static GError *
-http_parse_request(struct http_request_s *req)
-{
-	gchar *arg;
-	gsize len = 0;
-
-	req->args = g_malloc0(sizeof(gchar*));
-
-	if (!(arg = strchr(req->req_uri, '?')))
-		req->path = g_uri_unescape_string(req->req_uri, "");
-	else {
-		*arg = '\0';
-		req->path = g_uri_unescape_string(req->req_uri, "");
-		*arg = '?';
-
-		for (++ arg;;) {
-			gchar *ampersand;
-
-			req->args = g_realloc(req->args, sizeof(gchar*) * (len+2));
-
-			if (!(ampersand = strchr(arg, '&'))) {
-				req->args[len] = g_uri_unescape_string(arg, "");
-				req->args[len+1] = NULL;
-				break;
-			}
-
-			*ampersand = '\0';
-			req->args[len] = g_uri_unescape_string(arg, "");
-			req->args[len+1] = NULL;
-			*ampersand = '&';
-
-			++ len;
-			arg = ampersand + 1;
-		}
+	void add_header_gstr(const gchar *n, GString *v) {
+		add_header(n, g_string_free(v, FALSE));
 	}
 
-	return NULL;
-}
-
-static GError *
-http_parse_request_line(struct http_request_s *req, gchar *raw)
-{
-	gchar *s;
-
-	/* Unpack the request line */
-	for (s=raw; *s ;s++) {
-		if (g_ascii_isspace(*s)) {
-			*s = '\0';
-			req->cmd = g_strdup(raw);
-			for (raw=s+1; *raw && g_ascii_isspace(*raw) ;raw++);
-			break;
-		}
-	}
-	for (s=raw; *s ;s++) {
-		if (g_ascii_isspace(*s)) {
-			*s = '\0';
-			req->req_uri = g_strdup(raw);
-			for (raw=s+1; *raw && g_ascii_isspace(*raw) ;raw++);
-			break;
-		}
-	}
-	if (*raw)
-		req->version = g_strdup(raw);
-
-	if (!req->cmd || !req->req_uri || !req->version)
-		return g_error_new(gquark_log, 400, "Invalid request line");
-
-	/* Unpack the request itself */
-	GRID_DEBUG("Request line [%s] [%s] [%s]", req->cmd,
-			req->req_uri, req->version);
-	return http_parse_request(req);
-}
-
-static GError *
-http_extract_rfc_headers(struct http_request_s *req)
-{
-	const gchar *v;
-
-	if (NULL != (v = http_request_get_header(req, "Content-Length"))) {
-		req->req_headers.content_length = g_ascii_strtoull(v, NULL, 10);
+	void set_body (guint8 *d, gsize l) {
+		if (body.data)
+			g_free(body.data);
+		body.data = d;
+		body.len = l;
 	}
 
-	if (NULL != (v = http_request_get_header(req, "Transfer-Encoding"))) {
-		if (!g_ascii_strcasecmp(v, "Chunked"))
-			req->req_headers.body_chunked = 1;
-	}
-	
-	if (NULL != (v = http_request_get_header(req, "Range"))) {
-		gchar *e = NULL;
-		if (!g_str_has_prefix(v, "bytes="))
-			return g_error_new(gquark_log, 400, "Invalid Range");
-		v += sizeof("bytes=")-1;
-		e = NULL;
-		req->req_headers.range.present = 1;
-		req->req_headers.range.start = g_ascii_strtoull(v, &e, 10);
-		req->req_headers.range.end = g_ascii_strtoull(e+1, NULL, 10);
-		GRID_DEBUG("Getting only range "
-				"[%"G_GUINT64_FORMAT"] to [%"G_GUINT64_FORMAT"]",
-			req->req_headers.range.start, req->req_headers.range.end);
+	void set_body_gstr(GString *gstr) {
+		gsize len = gstr->len;
+		guint8 *data = (guint8*) g_string_free(gstr, FALSE);
+		set_body(data, len);
 	}
 
-	return NULL;
-}
-
-static GError *
-http_parse_header(struct http_request_s *req, gchar *name, gsize len)
-{
-	gchar c, *value;
-
-	(void) len;
-	if (!(value = strchr(name, ':')))
-		return g_error_new(gquark_log, 400, "Invalid header format");
-
-	*(value++) = '\0';
-	while ((c = *value) && g_ascii_isspace(c))
-		*(value++) = '\0';
-
-	http_request_add_header(req, name, value);
-	return NULL;
-}
-
-static GError *
-http_parse_headers(struct http_request_s *req, gchar *all_headers,
-		gsize real_len)
-{
-	GError *err;
-	gsize len;
-	gchar *start, *crlf;
-	
-	(void) real_len;
-
-	/* Parse the request line */
-	start = all_headers;
-	crlf = g_strstr_len(start, real_len, "\r\n");
-	len = crlf - start;
-	*crlf = '\0';
-	if (NULL != (err = http_parse_request_line(req, start))) {
-		g_prefix_error(&err, "Request error : ");
-		return err;
+	void set_body_gba(GByteArray *gba) {
+		gsize len = gba->len;
+		guint8 *data = g_byte_array_free(gba, FALSE);
+		set_body(data, len);
 	}
 
-	/* Parse the headers */
-	for (start = crlf+2; *start ; start = crlf+2) {
+	void finalize(void) {
+		EXTRA_ASSERT(!finalized);
+		finalized = TRUE;
 
-		/* try to find the end of a line */
-		crlf = g_strstr_len(start, real_len - (all_headers - start), "\r\n");
-		if (!crlf)
-			break;
-		*crlf = '\0';
-		len = crlf - start;
-		if (!len)
-			break;
+		GString *buf = g_string_sized_new(256);
 
-		/* manage the whole line */
-		if (NULL != (err = http_parse_header(req, (gchar*)start, len))) {
-			g_prefix_error(&err, "HTTP error : ");
-			return err;
-		}
-	}
+		// Set the status line
+		g_string_append_printf(buf, "%s %d %s\r\n", r->request->version, code, msg);
+		g_string_append_printf(buf, "Server: metacd_http/%s\r\n", API_VERSION);
 
-	err = http_extract_rfc_headers(req);
-	if (NULL != err)
-		return err;
-
-	return NULL;
-}
-
-static gchar*
-http_are_headers_complete(struct transport_client_context_s *ctx)
-{
-	guint i;
-	gchar *sep;
-
-	sep = g_strstr_len(
-			(gchar*)ctx->headers->data + ctx->headers_offset,
-			ctx->headers->len - ctx->headers_offset,
-			"\r\n\r\n");
-
-	if (sep) {
-		*(sep+2) = *(sep+3) = '\0';
-		return sep;
-	}
-
-	/* Keep the position at which we didn't meet the double CRLF
-	 * This will help avoiding reparsing the whole buffer every
-	 * time a small data is received. */
-	ctx->headers_offset = ctx->headers->len;
-	for (i=ctx->headers_offset; i > 1 ;i--) {
-		gchar c = ctx->headers->data[i-1];
-		if (c!='\r' && c!='\n')
-			break;
-	}
-
-	return NULL;
-}
-
-static guint8*
-strchr_len(guint8 *b, gsize s, gchar wanted)
-{
-	while ((s--)>0) {
-		if (*(b++) == wanted)
-			return b-1;
-	}
-	return NULL;
-}
-
-static void
-_read_lines_from_slab(struct transport_client_context_s *ctx,
-		struct data_slab_sequence_s *in)
-{
-	GByteArray *hdr;
-
-	if (!(hdr = ctx->headers))
-		ctx->headers = hdr = g_byte_array_new();
-
-	while (data_slab_sequence_has_data(in)) {
-		gsize size = 0;
-		struct data_slab_s *ds;
-
-		ds = data_slab_sequence_shift(in);
-		if (!data_slab_has_data(ds))
-			data_slab_free(ds);
-		else {
-			guint8 *data = NULL;
-			guint8 *start = ds->data.buffer.buff + ds->data.buffer.start;
-			size = ds->data.buffer.end - ds->data.buffer.start;
-			guint8 *found = strchr_len(start, size, '\n');
-
-			if (!found) { /* consume all */
-				data_slab_consume(ds, &data, &size);
-				g_byte_array_append(hdr, data, size);	
-				data_slab_free(ds);
+		if (0 == g_ascii_strcasecmp("HTTP/1.1", r->request->version)) {
+			// Manage the "Connection" header of http/1.1
+			gchar *v = g_tree_lookup(r->request->tree_headers, "connection");
+			if (v && 0 == g_ascii_strcasecmp("Keep-Alive", v)) {
+				g_string_append(buf, "Connection: Keep-Alive\r\n");
+				r->close_after_request = FALSE;
 			}
 			else {
-				size = (found + 1) - start;
-				data_slab_consume(ds, &data, &size);
-				g_byte_array_append(hdr, data, size);
-				data_slab_sequence_unshift(in, ds);
+				g_string_append(buf, "Connection: Close\r\n");
+				r->close_after_request = TRUE;
 			}
 		}
 
-		if (size && http_are_headers_complete(ctx))
-			break;
+		// Add body-related headers
+		if (content_type)
+			g_string_append_printf(buf, "Content-Type: %s\r\n", content_type);
+		g_string_append_printf(buf, "Content-Length: %"G_GSIZE_FORMAT"\r\n", body.len);
+		if (body.data && body.len)
+			g_string_append(buf, "Transfer-Encoding: identity\r\n");
+
+		// Add Custom headers
+		g_tree_foreach(headers, sender, buf);
+
+		// Finalize and send the headers
+		g_string_append(buf, "\r\n");
+		network_client_send_slab(r->client, data_slab_make_gstr(buf));
+
+		// Now send the body
+		if (body.data && body.len)
+			network_client_send_slab(r->client,
+					data_slab_make_buffer(body.data, body.len));
+
+		_access_log(r, code, body.len);
+		body.data = NULL;
+		body.len = 0;
 	}
 
-	g_byte_array_append(hdr, (guint8*)"", 1);
-	g_byte_array_set_size(hdr, hdr->len - 1);
+	void final_error(int c_, const char *m_) {
+		if (!finalized) {
+			set_body(NULL, 0);
+			set_status(c_, m_);
+			finalize();
+			cleanup();
+		}
+	}
+
+	EXTRA_ASSERT(r->dispatcher != NULL);
+
+	struct http_reply_ctx_s reply = {
+		.set_status = set_status,
+		.set_content_type = set_content_type,
+		.add_header = add_header,
+		.add_header_gstr = add_header_gstr,
+		.set_body = set_body,
+		.set_body_gba = set_body_gba,
+		.set_body_gstr = set_body_gstr,
+		.finalize = finalize,
+	};
+
+	finalized = FALSE;
+	gettimeofday(&r->tv_parsed, NULL);
+	headers = g_tree_new_full(hashstr_quick_cmpdata, NULL, NULL, g_free);
+	body.data = NULL;
+	body.len = 0;
+
+	if (NULL == r->request->req_uri || NULL == r->request->cmd) {
+		final_error(400, "Bad request");
+		return NULL;
+	}
+
+	GArray *ga = r->dispatcher->requests;
+	for (guint i=0; i < ga->len ;++i) {
+		enum http_rc_e rc;
+		struct http_request_handler_s *h;
+		h = &g_array_index(ga, struct http_request_handler_s, i);
+		EXTRA_ASSERT(h->handler != NULL);
+		rc = h->handler(r->dispatcher->u, r->request, &reply);
+		switch (rc) {
+			case HTTPRC_DONE:
+				g_assert(finalized != FALSE);
+				cleanup();
+				return NULL;
+			case HTTPRC_NEXT:
+				break;
+			case HTTPRC_ABORT:
+				final_error(500, "Internal error");
+				return NEWERROR(500, "HTTP handler error");
+		}
+	}
+
+	g_assert(!finalized);
+	final_error(404, "No handler found");
+	return NULL;
+}
+
+
+//------------------------------------------------------------------------------
+
+static inline void
+_lower(gchar *s)
+{
+	for (; *s ;++s)
+		*s = g_ascii_tolower(*s);
 }
 
 static int
 http_notify_input(struct network_client_s *clt)
 {
 	struct req_ctx_s r;
-	gchar *sep;
-	GError *err;
 
-	if (r.context->current_request) {
-		r.context->current_request->notify_body(r.context->current_request);
-		return RC_PROCESSED;
+	void command_provider(const gchar *c, const gchar *s, const gchar *v) {
+		r.request->cmd = g_strdup(c);
+		r.request->req_uri = g_strdup(s);
+		r.request->version = g_strdup(v);
+	}
+	void header_provider(const gchar *k0, const gchar *v) {
+		gchar *k = g_strdup(k0);
+		_lower(k);
+		g_tree_replace(r.request->tree_headers, k, g_strdup(v));
+	}
+	void body_provider(const guint8 *data, gsize data_len) {
+		g_byte_array_append(r.request->body, data, data_len);
 	}
 
+	memset(&r, 0, sizeof(r));
+	r.close_after_request = TRUE;
 	r.client = clt;
 	r.transport = &(clt->transport);
 	r.context = r.transport->client_context;
 	r.dispatcher = r.context->dispatcher;
-	r.request = NULL;
+	r.request = r.context->request;
 
-	_read_lines_from_slab(r.context, &(r.client->input));
+	struct http_parser_s *parser = clt->transport.client_context->parser;
+	parser->command_provider = command_provider;
+	parser->body_provider = body_provider;
+	parser->header_provider = header_provider;
 
-	if (!(sep = http_are_headers_complete(r.context)))
-		return RC_PROCESSED;
+	gboolean done = FALSE;
+	while (!done && data_slab_sequence_has_data(&clt->input)) {
 
-	r.context->current_request = http_request_create(r.client);
-	r.request = r.context->current_request;
+		struct data_slab_s *slab;
+		if (!(slab = data_slab_sequence_shift(&clt->input)))
+			break;
 
-	err = http_parse_headers(r.context->current_request,
-			(gchar*)r.context->headers->data,
-			sep - (gchar*)(r.context->headers->data));
+		if (!data_slab_has_data(slab)) {
+			data_slab_free(slab);
+			continue;
+		}
 
-	if (err != NULL) {
-		g_warning("HTTP error : code=%d message=%s", err->code, err->message);
-		g_clear_error(&err);
-		network_client_close_output(clt, FALSE);
+		guint8 *data = NULL;
+		gsize data_size = (gsize)-1;
+
+		if (!data_slab_consume(slab, &data, &data_size)) {
+			data_slab_free(slab);
+			continue;
+		}
+
+		if (!data || !data_size) {
+			data_slab_free(slab);
+			continue;
+		}
+
+		struct http_parsing_result_s rc = http_parse(parser, data, data_size);
+
+		if (rc.status == HPRC_SUCCESS) {
+			GError *err = http_manage_request(&r);
+
+			http_parser_reset(parser);
+			http_request_clean(r.request);
+			r.request = r.context->request = http_request_create(r.client);
+
+			if (err) {
+				GRID_INFO("Request management error : %d %s", err->code, err->message);
+				g_clear_error(&err);
+				network_client_allow_input(clt, FALSE);
+				network_client_close_output(clt, 0);
+				done = TRUE;
+			}
+			else if (r.close_after_request) {
+				GRID_DEBUG("No connection keep-alive, closing.");
+				network_client_allow_input(clt, FALSE);
+				network_client_close_output(clt, 0);
+				done = TRUE;
+			}
+		}
+		else if (rc.status == HPRC_ERROR) {
+			GRID_DEBUG("Request parsing error");
+			network_client_allow_input(clt, FALSE);
+			network_client_close_output(clt, 0);
+			done = TRUE;
+		}
+
+		data_slab_sequence_unshift(&clt->input, slab);
 	}
-	else {
-		g_byte_array_free(r.context->headers, TRUE);
-		r.context->headers = NULL;
-		http_manage_request(&r);
-	}
 
+	parser->command_provider = NULL;
+	parser->body_provider = NULL;
+	parser->header_provider = NULL;
 	return clt->transport.waiting_for_close ? RC_NODATA : RC_PROCESSED;
 }
 

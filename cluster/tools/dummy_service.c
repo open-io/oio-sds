@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.tools"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.tools"
 #endif
 
 #include <errno.h>
@@ -28,11 +8,10 @@
 #include <string.h>
 #include <strings.h>
 #include <unistd.h>
-#include <metautils.h>
-#include <metacomm.h>
 
-#include "../../metautils/lib/loggers.h"
-#include "../lib/gridcluster.h"
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <cluster/lib/gridcluster.h>
 
 struct register_info_s {
 	char *original_str;
@@ -114,7 +93,7 @@ run(void)
 							GRID_WARN("[%s] No reply : %s", ri->original_str, gerror_get_message(err));
 					}
 					g_byte_array_free(gba,TRUE);
-					close(fd);
+					metautils_pclose(&fd);
 				}
 			}
 			if (err)
@@ -194,11 +173,7 @@ load_config(int argc, char **args)
 int
 main(int argc, char **argv)
 {
-	if (!g_thread_supported())
-		g_thread_init(NULL);
-	g_set_prgname(argv[0]);
-	g_log_set_default_handler(logger_stderr, NULL);
-	logger_init_level(GRID_LOGLVL_INFO);
+	HC_PROC_INIT(argv, GRID_LOGLVL_INFO);
 
 	freopen("/dev/null","r",stdin);
 	freopen("/dev/null","a",stdout);

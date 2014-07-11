@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta1.backend"
 #endif
@@ -25,14 +8,12 @@
 #include <errno.h>
 #include <arpa/inet.h>
 
-#include <glib.h>
 #include <sqlite3.h>
 
-#include "../metautils/lib/metacomm.h"
-#include "../metautils/lib/resolv.h"
-#include "../metautils/lib/lb.h"
-#include "../metautils/lib/svc_policy.h"
-#include "../sqliterepo/sqliterepo.h"
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <sqliterepo/sqliterepo.h>
+#include <meta2/remote/meta2_remote.h>
 
 #include "./internals.h"
 #include "./internals_sqlite.h"
@@ -40,60 +21,27 @@
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"
 
-#include <meta2_remote.h>
-
-GError *
-meta1_backend_init(struct meta1_backend_s **result,
-		const gchar *ns_name, const gchar *id, const gchar *basedir)
+struct meta1_backend_s *
+meta1_backend_init(const gchar *ns, struct sqlx_repository_s *repo,
+		struct grid_lbpool_s *glp)
 {
-	GError *err = NULL;
-	struct sqlx_repo_config_s cfg;
 	struct meta1_backend_s *m1;
 
-	if (!m1b_gquark_log)
-		m1b_gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
-
-	META1_ASSERT(ns_name != NULL);
-	META1_ASSERT(*ns_name != '\0');
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(*ns != '\0');
+	EXTRA_ASSERT(glp != NULL);
+	EXTRA_ASSERT(repo != NULL);
 
 	m1 = g_malloc0(sizeof(*m1));
-	META1_ASSERT(m1 != NULL);
-
-	m1->tree_lb = g_tree_new_full(hashstr_quick_cmpdata, NULL, g_free, NULL);
-	META1_ASSERT(m1->tree_lb != NULL);
-
-	m1->lock = g_mutex_new();
-	META1_ASSERT(m1->lock != NULL);
-
+	metautils_strlcpy_physical_ns(m1->ns_name, ns, sizeof(m1->ns_name));
+	g_static_rw_lock_init(&m1->rwlock_ns_policies);
+	m1->lb = glp;
+	m1->repository = repo;
 	m1->prefixes = meta1_prefixes_init();
-	META1_ASSERT(m1->prefixes != NULL);
+	m1->ns_policies = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, (GDestroyNotify) service_update_policies_destroy);
 
-	g_strlcpy(m1->ns_name, ns_name, sizeof(m1->ns_name)-1);
-
-	m1->policies = service_update_policies_create();
-
-	cfg.flags = SQLX_REPO_AUTOCREATE;
-	cfg.lock.ns = ns_name;
-	cfg.lock.type = META1_TYPE_NAME;
-	cfg.lock.srv = id;
-	err = sqlx_repository_init(basedir, &cfg, &(m1->repository));
-
-	if (NULL != err) {
-		g_prefix_error(&err, "sqlx error: ");
-		meta1_backend_clean(m1);
-		return err;
-	}
-
-	err = sqlx_repository_configure_type(m1->repository,
-			META1_TYPE_NAME, NULL, META1_SCHEMA);
-	if (err != NULL) {
-		g_prefix_error(&err, "sqlx schema error: ");
-		meta1_backend_clean(m1);
-		return err;
-	}
-
-	*result = m1;
-	return NULL;
+	return m1;
 }
 
 void
@@ -102,69 +50,40 @@ meta1_backend_clean(struct meta1_backend_s *m1)
 	if (!m1)
 		return;
 
-	if (m1->lock) {
-		g_mutex_lock(m1->lock);
-		g_mutex_unlock(m1->lock);
-		g_mutex_free(m1->lock);
-	}
-
-	if (m1->repository) {
-		sqlx_repository_clean(m1->repository);
-	}
-
-	if (m1->tree_lb) {
-		g_tree_destroy(m1->tree_lb);
-	}
-
 	if (m1->prefixes) {
 		meta1_prefixes_clean(m1->prefixes);
 	}
 
-	if (m1->policies) {
-		service_update_policies_destroy(m1->policies);
+	if (m1->ns_policies) {
+		g_hash_table_destroy(m1->ns_policies);
 	}
 
+	g_static_rw_lock_free(&m1->rwlock_ns_policies);
 	memset(m1, 0, sizeof(*m1));
 	g_free(m1);
 }
 
-struct sqlx_repository_s*
-meta1_backend_get_repository(struct meta1_backend_s *m1)
-{
-	return m1 ? m1->repository : NULL;
-}
-
 struct service_update_policies_s*
-meta1_backend_get_svcupdate(struct meta1_backend_s *m1)
+meta1_backend_get_svcupdate(struct meta1_backend_s *m1, const char *ns_name)
 {
-	return m1 ? m1->policies : NULL;
-}
+	struct service_update_policies_s* pol;
 
-void
-meta1_configure_type(struct meta1_backend_s *m1,
-		const gchar *type, struct grid_lb_iterator_s *iter)
-{
-	hashstr_t *htype;
-
-	if (!m1 || !m1->tree_lb)
-		return ;
-
-	htype = hashstr_create(type);
-
-	g_mutex_lock(m1->lock);
-	if (iter)
-		g_tree_insert(m1->tree_lb, htype, iter);
-	else {
-		g_tree_remove(m1->tree_lb, htype);
-		g_free(htype);
+	if(!m1)
+		return NULL;
+	g_static_rw_lock_writer_lock(&m1->rwlock_ns_policies);
+	if(!(pol = g_hash_table_lookup(m1->ns_policies, ns_name))) {
+		/* lazy init */
+		pol = service_update_policies_create();
+		g_hash_table_insert(m1->ns_policies, g_strdup(ns_name), pol);
 	}
-	g_mutex_unlock(m1->lock);
+	g_static_rw_lock_writer_unlock(&m1->rwlock_ns_policies);
+	return pol;
 }
 
 struct meta1_prefixes_set_s*
 meta1_backend_get_prefixes(struct meta1_backend_s *m1)
 {
-	META1_ASSERT(m1 != NULL);
+	EXTRA_ASSERT(m1 != NULL);
 	return m1->prefixes;
 }
 
@@ -175,4 +94,23 @@ meta1_backend_open_base(struct meta1_backend_s *m1, const container_id_t cid,
 	return _open_and_lock(m1, cid, how, sq3);
 }
 
+gboolean
+meta1_backend_base_already_created(struct meta1_backend_s *m1, const guint8 *prefix)
+{
+	gchar base[5] = {0,0,0,0,0};
+	GError *err;
+
+	g_snprintf(base, sizeof(base), "%02X%02X", prefix[0], prefix[1]);
+	err = sqlx_repository_has_base(m1->repository, META1_TYPE_NAME, base);
+	if (!err)
+		return TRUE;
+	g_clear_error(&err);
+	return FALSE;
+}
+
+gchar *
+meta1_backend_get_ns_name(const struct meta1_backend_s *m1)
+{
+	return g_strdup(m1->ns_name);
+}
 

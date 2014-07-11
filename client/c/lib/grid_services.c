@@ -1,22 +1,7 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #include "./gs_internals.h"
+#include <meta2/remote/meta2_services_remote.h>
 
+// TODO factorizes with GLib macros
 #define GSERR_EINVAL(err) do { if (err) { *err = gs_error_new(EINVAL, "<%s> Invalid parameter", __FUNCTION__); } } while (0)
 
 static void
@@ -145,7 +130,8 @@ _make_service_from_srvinfo(gs_container_t *container, struct service_info_s *si)
 static gs_service_t*
 _make_service_from_addr(gs_container_t *container, const gchar *service, const addr_info_t *ai)
 {
-	return _make_service_from_srvinfo(container, _make_srvinfo(container->info.gs->ni.name, service, ai));
+	return _make_service_from_srvinfo(container,
+			_make_srvinfo(gs_get_namespace(container->info.gs), service, ai));
 }
 
 static gs_service_t **
@@ -256,12 +242,7 @@ gs_service_get_address(const gs_service_t *service, struct sockaddr *sa, socklen
 
 	result_gsize = sa_size;
 	rc = addrinfo_to_sockaddr(&(service->gss_si->addr), sa, &result_gsize);
-	if (rc) {
-		socklen_t result;
-		result = result_gsize;
-		return result;
-	}
-	return 0;
+	return rc ? result_gsize : 0;
 }
 
 void
@@ -480,6 +461,7 @@ gs_validate_changes_on_paths(gs_container_t *container, const char *srvtype,
 			GSList *failed_now = NULL;
 			rc &= meta2_remote_service_commit_contents(&ctx, C0_ID(container),
 				srvtype, l->data, &failed_now, &gerr);
+			merge_cnx_in_container(&ctx,container);
 			failed_list = g_slist_concat(failed_list, failed_now);
 		}
 		gslist_chunks_destroy(list_of_lists, NULL);
@@ -534,6 +516,7 @@ gs_invalidate_changes_on_paths(gs_container_t *container, const char *srvtype,
 			GSList *failed_now = NULL;
 			rc &= meta2_remote_service_rollback_contents(&ctx, C0_ID(container),
 				srvtype, l->data, &failed_now, &gerr);
+			merge_cnx_in_container(&ctx,container);
 			failed_list = g_slist_concat(failed_list, failed_now);
 		}
 		gslist_chunks_destroy(list_of_lists, NULL);
@@ -562,7 +545,6 @@ gs_service_t**
 gs_get_all_services_used( gs_container_t *container, const gchar *srvtype, gs_error_t **err)
 {
 	gs_service_t **result;
-	/*struct metacnx_ctx_s ctx; */
 	GError *gerr = NULL;
 	GSList *list_addr = NULL;
 	
@@ -575,7 +557,8 @@ gs_get_all_services_used( gs_container_t *container, const gchar *srvtype, gs_er
 	gchar **tmp = NULL;
 
         meta1_addr = gs_resolve_meta1 (container->info.gs, C0_ID(container), &gerr);
-	tmp = meta1v2_remote_list_reference_services(meta1_addr, &gerr, container->info.gs->ni.name, C0_ID(container), srvtype,
+	tmp = meta1v2_remote_list_reference_services(meta1_addr, &gerr,
+			gs_get_full_vns(container->info.gs), C0_ID(container), srvtype,
 			C0_M1CNX(container)/1000, C0_M1TO(container)/1000);
 	/* TODO: make a list of addr_info from a list of string services */
 	guint i = 0;
@@ -676,7 +659,7 @@ gs_container_service_get_all(gs_container_t *container, const char *srvtype, gs_
 	int nb_try = 0;
 	while(nb_try < 3) {
 		nb_try++;
-		meta1_addr = gs_resolve_meta1v2(container->info.gs, C0_ID(container), 1, exclude, &gerr);
+		meta1_addr = gs_resolve_meta1v2(container->info.gs, C0_ID(container), C0_NAME(container), 1, exclude, &gerr);
 
 		if(!meta1_addr)	{
 			if(gerr) {
@@ -688,7 +671,7 @@ gs_container_service_get_all(gs_container_t *container, const char *srvtype, gs_
 		}
 
 		srv_str_list = meta1v2_remote_list_reference_services(meta1_addr, &gerr,
-				container->info.gs->ni.name, C0_ID(container), srvtype,
+				gs_get_full_vns(container->info.gs), C0_ID(container), srvtype,
 				C0_M1CNX(container)/1000, C0_M1TO(container)/1000);
 
 		if (!srv_str_list) {
@@ -709,7 +692,8 @@ gs_container_service_get_all(gs_container_t *container, const char *srvtype, gs_
 				if(!srv_str_list[i] || strlen(srv_str_list[i]) <= 0)
 					continue;
 				srv = g_malloc0(sizeof(service_info_t));
-				g_snprintf(srv->ns_name, sizeof(srv->ns_name), "%s", container->info.gs->ni.name);
+				g_snprintf(srv->ns_name, sizeof(srv->ns_name), "%s",
+						gs_get_namespace(container->info.gs));
 				g_snprintf(srv->type, sizeof(srv->type), "%s", srvtype);
 				addr_info_t* tmp = NULL;
 				tmp = _unpack_service(srv_str_list[i]);
@@ -735,7 +719,6 @@ end_label:
 	}
 
 	if (list_of_srvinfo) {
-		/*g_slist_foreach(list_of_srvinfo, service_info_gclean, NULL);*/
 		g_slist_free(list_of_srvinfo);
 	}
 	if (gerr)
@@ -764,7 +747,7 @@ gs_container_service_get_available(gs_container_t *container, const char *srvtyp
 	GSList *exclude = NULL;
 
 	while(1) {
-		meta1_addr = gs_resolve_meta1v2(container->info.gs, C0_ID(container), 0, exclude, &gerr);
+		meta1_addr = gs_resolve_meta1v2(container->info.gs, C0_ID(container), C0_NAME(container), 0, exclude, &gerr);
 
 		if(!meta1_addr) {
 			GSERRORCAUSE(err,gerr, "No service of type [%s] found for container [%s]",
@@ -772,8 +755,9 @@ gs_container_service_get_available(gs_container_t *container, const char *srvtyp
 			result = NULL;
 			goto end_label;
 		}
-		str_srv = meta1v2_remote_link_service(meta1_addr, &gerr, container->info.gs->ni.name,C0_ID(container), srvtype,
-			C0_M1CNX(container), C0_M1TO(container), &master);
+		str_srv = meta1v2_remote_link_service(meta1_addr, &gerr,
+				gs_get_full_vns(container->info.gs), C0_ID(container), srvtype,
+				C0_M1CNX(container), C0_M1TO(container), &master);
 
 		_update_master(container, master);
 
@@ -797,7 +781,8 @@ gs_container_service_get_available(gs_container_t *container, const char *srvtyp
 					continue;
 				service_info_t *srv = NULL;
 				srv = g_malloc0(sizeof(service_info_t));
-				g_snprintf(srv->ns_name, sizeof(srv->ns_name), "%s", container->info.gs->ni.name);
+				g_snprintf(srv->ns_name, sizeof(srv->ns_name), "%s",
+						gs_get_namespace(container->info.gs));
 				g_snprintf(srv->type, sizeof(srv->type), "%s", srvtype);
 				addr_info_t *tmp = NULL;
 				tmp = _unpack_service(str_srv[i]);
@@ -819,7 +804,6 @@ end_label:
 	}
 
 	if (list_of_srvinfo) {
-		/*g_slist_foreach(list_of_srvinfo, service_info_gclean, NULL);*/
 		g_slist_free(list_of_srvinfo);
 	}
 	if (gerr)

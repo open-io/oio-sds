@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  * @file meta0_backend.h
  */
@@ -56,22 +39,21 @@ struct sqlx_repository_s;
 
 enum m0v2_open_type_e
 {
-	M0V2_OPENBASE_LOCAL,
-	M0V2_OPENBASE_MASTERONLY,
-	M0V2_OPENBASE_MASTERSLAVE,
-	M0V2_OPENBASE_SLAVEONLY,
+	M0V2_OPENBASE_LOCAL        = 0x000,
+	M0V2_OPENBASE_MASTERONLY   = 0x001,
+	M0V2_OPENBASE_SLAVEONLY    = 0x002,
+	M0V2_OPENBASE_MASTERSLAVE  = 0x003,
 };
 
 
 /**
- * @param result
  * @param ns
  * @param id
- * @param basedir
+ * @param repo
  * @return
  */
-GError* meta0_backend_init(struct meta0_backend_s **result,
-		const gchar *ns, const gchar *id, const gchar *basedir);
+struct meta0_backend_s * meta0_backend_init(const gchar *ns, const gchar *id,
+		struct sqlx_repository_s *repo);
 
 
 void

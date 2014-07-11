@@ -1,42 +1,43 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "atos.grid.action"
+#endif
 
-#include <glib.h>
-#include <dbus/dbus.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
+
+#include <metautils/lib/metautils.h>
+#include <rules-motor/lib/motor.h>
+#include <rawx-lib/src/rawx.h>
+#include <integrity/lib/check.h>
+#include <integrity/lib/chunk_check.h>
+#include <integrity/lib/content_check.h>
+
 #include <sqlite3.h>
+#include <glib.h>
+#include <dbus/dbus.h>
 
-#include "crawler_constants.h"
-#include "crawler_common_tools.h"
+#include "lib/action_common.h"
 
-#include "../metautils/lib/loggers.h"
-#include "../metautils/lib/common_main.h"
-#include "../rules-motor/lib/motor.h"
-#include "../rawx-lib/src/rawx.h"
 
-static DBusConnection* conn;
+// motor_env and rules_reload_time_interval declared in motor.h
+struct rules_motor_env_s* motor_env = NULL;
+gint rules_reload_time_interval = 1L;
+
+// m2v1_list declared in libintegrity
+GSList *m2v1_list = NULL;
+
+static gchar* dryrun_cmd_opt_name;
+
+
+static TCrawlerBus* conn;
 
 static gboolean stop_thread;
 
 static gchar* action_name;
 
+static gboolean g_dryrun_mode = FALSE;
 static int service_pid;
 
 static const gchar* occur_type_string;
@@ -45,14 +46,29 @@ static const gchar* db_base_name;
 
 static GHashTable* volume_path_table; /* Association table between service identifier and its volume path  */
 
+static gchar     g_service_name[SERVICENAME_MAX_BYTES];
+static char*    g_dbusdaemon_address = NULL;
+static GMainLoop *g_main_loop = NULL;
+
+typedef gboolean (*check_func_t)(check_info_t *info, check_result_t *result, GError **p_err, gpointer udata);
+
+typedef struct _check_t {
+	const gchar *name;
+	check_func_t func;
+	gpointer udata;
+} check_t;
+
 #define CONTAINER_DB_SCHEMA \
 	"CREATE TABLE IF NOT EXISTS chunks ( "\
-                "container_id TEXT NOT NULL PRIMARY KEY, "\
-                "chunk_path TEXT NOT NULL, "\
-                "content_path TEXT NOT NULL);"
+	"container_id TEXT NOT NULL PRIMARY KEY, "\
+	"chunk_path TEXT NOT NULL, "\
+	"content_path TEXT NOT NULL);"
 
 static gchar*
-get_volume_path(const gchar* chunk_path) {
+get_volume_path(const gchar* chunk_path)
+{
+	gchar* volume_path = NULL;
+
 	if (NULL == chunk_path)
 		return NULL;
 
@@ -60,26 +76,25 @@ get_volume_path(const gchar* chunk_path) {
 	if (NULL == chunk_path_tokens)
 		return NULL;
 
-	/* Finding the array length */
-	int total_levels = 0;
-	gchar* ptr = chunk_path_tokens[0];
-	while (NULL != ptr) {
-		total_levels++;
-		ptr = chunk_path_tokens[total_levels];
-	}
-	/* ------- */
+	guint total_levels = g_strv_length(chunk_path_tokens);
 
-	if (3 > total_levels)
+	if (total_levels < 3) {
+		g_strfreev(chunk_path_tokens);
 		return NULL;
+	}
 
-	/* Freeing the last 3 occurences and replacing the NULL value */
-	int i;
-	for (i = total_levels - 1; i >= total_levels - 3; i--)
+	for (int i = total_levels - 1; i > 0; i--) {
 		g_free(chunk_path_tokens[i]);
-	chunk_path_tokens[total_levels - 3] = NULL;
-	/* ------- */
-
-	gchar* volume_path = g_strjoinv(G_DIR_SEPARATOR_S, chunk_path_tokens);
+		chunk_path_tokens[i] = NULL;
+		gchar *tmp = g_strjoinv(G_DIR_SEPARATOR_S, chunk_path_tokens);
+		if (getxattr(tmp, RAWXLOCK_ATTRNAME_NS, NULL, 0) > 0) {
+			// Found!
+			volume_path = tmp;
+			break;
+		} else {
+			g_free(tmp);
+		}
+	}
 
 	g_strfreev(chunk_path_tokens);
 
@@ -87,419 +102,504 @@ get_volume_path(const gchar* chunk_path) {
 }
 
 static gboolean
-chunk_check_attributes(struct chunk_textinfo_s *chunk, struct content_textinfo_s *content) {
-        if (!chunk->path)
-                return FALSE;
+chunk_check_orphan(check_info_t *info, check_result_t *result,
+		GError **p_err, gpointer udata)
+{
+	(void) udata;
+	return check_chunk_orphan(info, result, p_err);
+}
 
-        if (!chunk->id)
-                return FALSE;
+static gboolean
+chunk_check_attributes(check_info_t *info, check_result_t *result,
+		GError **p_err, gpointer udata)
+{
+	(void) udata;
+	if (check_chunk_info(info->ck_info, p_err)
+			&& check_content_info(info->ct_info, p_err)) {
+		if (result)
+			result->check_ok = TRUE;
+		return TRUE;
+	}
 
-        if (!chunk->size)
-                return FALSE;
+	GRID_DEBUG("Broken attributes for chunk [%s]", info->source_path);
 
-        if (!chunk->hash)
-                return FALSE;
+	if (!result)
+		return FALSE;
 
-        if (!chunk->position)
-                return FALSE;
+	// find out chunk size (ie file size)
+	struct stat chunk_stat;
+	errno = 0;
+	const gboolean found_size = (0 == stat(info->source_path, &chunk_stat));
+	const int local_err = errno;
 
-        if (!content->path)
-                return FALSE;
+	if (trash_chunk(info, result)) {
+		if (found_size)
+			check_result_append_msg(result,
+					" [size=%"G_GINT64_FORMAT"]", chunk_stat.st_size);
+		else
+			check_result_append_msg(result,
+					" [unknown size] (%s)", strerror(local_err));
+	}
 
-        if (!content->size)
-                return FALSE;
-
-        if (!content->chunk_nb)
-                return FALSE;
-
-        if (!content->container_id)
-                return FALSE;
-
-        return TRUE;
+	return TRUE;
 }
 
 static int
-do_work(const gchar* source_path, guint64 service_uid) {
-	if (NULL == source_path)
-		return EXIT_FAILURE;
+_move_temp_db(const gchar *source_path, const gchar *volume_path, guint64 *p_service_uid)
+{
+	int ret = EXIT_FAILURE;
+	gchar* db_final_path = NULL;
+	gchar* db_complete_path_dryrun = NULL;
+	gchar* db_complete_path = NULL;
 
 	/* Creating the associated SQLite database path */
-        gchar* db_complete_path = (char*)g_malloc0((SHORT_BUFFER_SIZE * sizeof(char)) + sizeof(guint64));
-        sprintf(db_complete_path, "%s%s%llu_%s", db_temp_path, G_DIR_SEPARATOR_S, (long long unsigned)service_uid, db_base_name);
-        /* ------- */
+	db_complete_path = g_strdup_printf("%s%s%"G_GUINT64_FORMAT"_%s",
+			db_temp_path, G_DIR_SEPARATOR_S, *p_service_uid, db_base_name);
 
-	/* If it's the final occurence (which is caracterized by an empty source path string), the temporary DB is moved to the volume directory */
+	/* If it's the final occurrence (in which case we get an empty source
+	 * path string), the temporary DB is moved to the volume directory */
 	if (!g_strcmp0("", source_path)) {
-		gchar* volume_path = g_hash_table_lookup(volume_path_table, &service_uid);
-		if (NULL == volume_path) {
-                        g_free(db_complete_path);
+		if (NULL == volume_path)
+			goto label_error;
 
-                        return EXIT_FAILURE;
+		db_final_path = g_strconcat(volume_path, G_DIR_SEPARATOR_S, db_base_name, NULL);
+
+		if (g_dryrun_mode == FALSE) {
+			//real mode
+			if (EXIT_FAILURE == move_file(db_complete_path, db_final_path, TRUE))
+				goto label_error;
+		} else {
+			//dryrun mode
+			db_complete_path_dryrun = g_strconcat(db_complete_path, ".dryrun", NULL);
+			DRYRUN_GRID("[%s] --> [%s] not executed, dryrun copy to [%s]\n",
+                        db_complete_path, db_final_path, db_complete_path_dryrun);
+			if (EXIT_FAILURE == move_file(db_complete_path, db_complete_path_dryrun, TRUE))
+				goto label_error;
 		}
-		
-		gchar* db_final_path = g_strconcat(volume_path, G_DIR_SEPARATOR_S, db_base_name, NULL);
-		if (EXIT_FAILURE == move_file(db_complete_path, db_final_path, TRUE)) {
-			g_free(db_complete_path);
-			g_free(db_final_path);
 
-			return EXIT_FAILURE;
-		}
-		g_free(db_final_path);
-
-		g_hash_table_remove(volume_path_table, &service_uid);
-
-		g_free(db_complete_path);
-
-		return EXIT_SUCCESS;
+		g_hash_table_remove(volume_path_table, p_service_uid);
 	}
-	/* ------- */
 
-	/* Check if the chunk path is correct */
-	if (!chunk_path_is_valid(source_path)) {
-		g_free(db_complete_path);
+	ret = EXIT_SUCCESS;
 
-		return EXIT_FAILURE;
-	}
-	/* ------- */
+label_error:
+	g_free(db_complete_path_dryrun);
+	g_free(db_final_path);
+	g_free(db_complete_path);
 
-	/* Init */
-        struct content_textinfo_s content_info;
-        bzero(&content_info, sizeof(content_info));
-        struct chunk_textinfo_s chunk_info;
-        bzero(&chunk_info, sizeof(chunk_info));
-        struct chunk_textinfo_extra_s chunk_info_extra;
-        bzero(&chunk_info_extra, sizeof(chunk_info_extra));
-        /* ------- */
+	return ret;
+}
 
-	/* Read content info from chunk attributes */
-	GError* local_error = NULL;
-        if (!get_rawx_info_in_attr(source_path, &local_error, &content_info, &chunk_info) ||\
-		!get_extra_chunk_info(source_path, &local_error, &chunk_info_extra)) {
-		chunk_textinfo_free_content(&chunk_info);
-		chunk_textinfo_extra_free_content(&chunk_info_extra);
-		content_textinfo_free_content(&content_info);
-		g_clear_error(&local_error);
-		g_free(db_complete_path);
-
-		return EXIT_FAILURE;
-	}
-	g_clear_error(&local_error);
-	/* ------- */
-
-	/* Checking chunk attributes */
-       	if (FALSE == chunk_check_attributes(&chunk_info, &content_info)) {
-        	chunk_textinfo_free_content(&chunk_info);
-        	chunk_textinfo_extra_free_content(&chunk_info_extra);
-        	content_textinfo_free_content(&content_info);
-		g_free(db_complete_path);
-
-                return EXIT_FAILURE;
-        }
-        /* ------- */
-
-	/* Testing the existance of the db */
+static int
+_fill_temp_db(const gchar *source_path, guint64 *p_service_uid, check_info_t *p_check_info)
+{
+	int ret = EXIT_FAILURE;
 	sqlite3* db = NULL;
-        sqlite3_stmt* stmt = NULL;
+	sqlite3_stmt* stmt = NULL;
+	gchar* req_string = NULL;
+	gchar* db_complete_path = NULL;
+
+	/* Creating the associated SQLite database path */
+	db_complete_path = g_strdup_printf("%s%s%"G_GUINT64_FORMAT"_%s",
+			db_temp_path, G_DIR_SEPARATOR_S, *p_service_uid, db_base_name);
+
+	/* Testing the existence of the db */
 	FILE* fp = fopen(db_complete_path, "rb");
 	if (NULL == fp) {
-		if (SQLITE_OK != sqlite3_open(db_complete_path, &db)) {
-			chunk_textinfo_free_content(&chunk_info);
-                	chunk_textinfo_extra_free_content(&chunk_info_extra);
-                	content_textinfo_free_content(&content_info);
-                	g_free(db_complete_path);
-
-                	return EXIT_FAILURE;
-        	}
-
+		if (SQLITE_OK != sqlite3_open(db_complete_path, &db))
+			goto label_error;
 		/* Creating the chunk table */
-		if (SQLITE_OK != sqlite3_prepare(db, CONTAINER_DB_SCHEMA, -1, &stmt, NULL)) {
-			chunk_textinfo_free_content(&chunk_info);
-                        chunk_textinfo_extra_free_content(&chunk_info_extra);
-                        content_textinfo_free_content(&content_info);
-			sqlite3_close(db);
-			g_free(db_complete_path);
-
-			return EXIT_FAILURE;
-		}
-		if (SQLITE_DONE != sqlite3_step(stmt)) {
-			chunk_textinfo_free_content(&chunk_info);
-                        chunk_textinfo_extra_free_content(&chunk_info_extra);
-                        content_textinfo_free_content(&content_info);
-			sqlite3_close(db);
-                        g_free(db_complete_path);
-
-                        return EXIT_FAILURE;
-		}
-		if (SQLITE_OK != sqlite3_finalize(stmt)) {
-			chunk_textinfo_free_content(&chunk_info);
-                        chunk_textinfo_extra_free_content(&chunk_info_extra);
-                        content_textinfo_free_content(&content_info);
-			sqlite3_close(db);
-                        g_free(db_complete_path);
-
-                        return EXIT_FAILURE;
-		}
-		/* ------- */
+		if (SQLITE_OK != sqlite3_prepare(db, CONTAINER_DB_SCHEMA, -1, &stmt, NULL))
+			goto label_error;
+		if (SQLITE_DONE != sqlite3_step(stmt))
+			goto label_error;
+		if (SQLITE_OK != sqlite3_finalize(stmt))
+			goto label_error;
 	}
 	else {
 		fclose(fp);
-
-		if (SQLITE_OK != sqlite3_open(db_complete_path, &db)) {
-			chunk_textinfo_free_content(&chunk_info);
-                        chunk_textinfo_extra_free_content(&chunk_info_extra);
-                        content_textinfo_free_content(&content_info);
-                        g_free(db_complete_path);
-
-                        return EXIT_FAILURE;
-                }
+		if (SQLITE_OK != sqlite3_open(db_complete_path, &db))
+			goto label_error;
 	}
-	/* ------- */
 
 	/* Managing database */
-	gchar* req_string = g_strconcat("INSERT OR REPLACE INTO chunks VALUES ( '", content_info.container_id, "', '", source_path, "', '", content_info.path, "');", NULL);
-	if (SQLITE_OK != sqlite3_prepare(db, req_string, -1, &stmt, NULL)) {
-		chunk_textinfo_free_content(&chunk_info);
-                chunk_textinfo_extra_free_content(&chunk_info_extra);
-                content_textinfo_free_content(&content_info);
-		sqlite3_close(db);
-		g_free(db_complete_path);
-		g_free(req_string);
+	req_string = g_strconcat("INSERT OR REPLACE INTO chunks VALUES ( '",
+			p_check_info->ct_info->container_id, "', '",
+			source_path, "', '",
+			p_check_info->ct_info->path, "');",
+			NULL);
+	if (SQLITE_OK != sqlite3_prepare(db, req_string, -1, &stmt, NULL))
+		goto label_error;
+	if (SQLITE_DONE != sqlite3_step(stmt))
+		goto label_error;
+	if (SQLITE_OK != sqlite3_finalize(stmt))
+		goto label_error;
 
-		return EXIT_FAILURE;
-	}
-	if (SQLITE_DONE != sqlite3_step(stmt)) {
-		chunk_textinfo_free_content(&chunk_info);
-                chunk_textinfo_extra_free_content(&chunk_info_extra);
-                content_textinfo_free_content(&content_info);
-		sqlite3_close(db);
-		g_free(db_complete_path);
-		g_free(req_string);
+	ret = EXIT_SUCCESS;
 
-		return EXIT_FAILURE;
-	}
-	if (SQLITE_OK != sqlite3_finalize(stmt)) {
-		chunk_textinfo_free_content(&chunk_info);
-                chunk_textinfo_extra_free_content(&chunk_info_extra);
-                content_textinfo_free_content(&content_info);
-		sqlite3_close(db);
-		g_free(db_complete_path);
-		g_free(req_string);
-
-		return EXIT_FAILURE;
-	}
-	/* ------- */
-	
-	/* Closing and freeing data */
-	chunk_textinfo_free_content(&chunk_info);
-        chunk_textinfo_extra_free_content(&chunk_info_extra);
-        content_textinfo_free_content(&content_info);
+label_error:
 	sqlite3_close(db);
 	g_free(db_complete_path);
 	g_free(req_string);
-	/* ------- */	
 
-	return EXIT_SUCCESS;
+	return ret;
 }
 
-/*
- * This method is listening to the system D-Bus action interface for action signals
- **/
-static void
-listening_action() {
-	DBusError error;
-	DBusMessage* msg = NULL;
-        DBusMessageIter iter;
-	GVariantType* param_type = NULL;
-	const char* param_print = NULL;
-	GVariant* param = NULL;
-	GVariant* ack_parameters = NULL;
+static int
+do_work(const gchar* source_path, guint64 service_uid, GSList *checks) {
+	int ret = EXIT_FAILURE;
+	GError* local_error = NULL;
+	gchar* volume_path = NULL;
+	check_info_t check_info;
 
-	/* Signal parsed parameters */
-	int argc = -1;
-        char** argv = NULL;
+	if (NULL == source_path)
+		return EXIT_FAILURE;
 
-	guint64 context_id = 0;
-	guint64 service_uid = 0;
-	GVariant* occur = NULL;
-	const gchar* source_path = NULL;
-	/* ------- */
+	volume_path = g_hash_table_lookup(volume_path_table, &service_uid);
 
-	dbus_error_init(&error);
+	if (!rawx_get_lock_info(volume_path,
+			check_info.rawx_str_addr, sizeof(check_info.rawx_str_addr),
+			check_info.ns_name, sizeof(check_info.ns_name), &local_error)
+			|| local_error != NULL)
+		goto label_error;
+	GRID_DEBUG("Volume path: %s, namespace: '%s'", volume_path, check_info.ns_name);
 
-	param_type = g_variant_type_new(gvariant_action_param_type_string); /* Initializing the GVariant param type value */
-
-        while ( FALSE == stop_thread ) {
-                dbus_connection_read_write(conn, DBUS_LISTENING_TIMEOUT);
-                msg = dbus_connection_pop_message(conn);
-
-                if (NULL == msg)
-                        continue;
-
-                if (dbus_message_is_signal(msg, signal_action_interface_name, action_name)) { /* Is the signal name corresponding to the service name */
-			if (!dbus_message_iter_init(msg, &iter)) { /* Is the signal containing at least one parameter ? */
-                                dbus_message_unref(msg);
-
-				continue;
-			}
-                        else {
-				if (DBUS_TYPE_STRING != dbus_message_iter_get_arg_type(&iter)) { /* Is the parameter corresponding to a string value ? */
-					dbus_message_unref(msg);
-
-					continue;
-				}
-                                else {
-                                	dbus_message_iter_get_basic(&iter, &param_print); /* Getting the string parameter */
-
-					if (NULL == (param = g_variant_parse(param_type, param_print, NULL, NULL, NULL))) {
-						dbus_message_unref(msg);
-
-						continue;
-					}
-
-					if (EXIT_FAILURE == disassemble_context_occur_argc_argv_uid(param, &context_id, &occur, &argc, &argv, &service_uid)) {
-						g_variant_unref(param);
-						dbus_message_unref(msg);
-
-						continue;
-					}
-
-					/* End type signal management (last occurence for the specific service_uid value) */
-					gboolean ending_signal = FALSE;
-                                        if (0 == context_id) {
-                                                GVariantType* occurt = g_variant_type_new("s");
-                                                if (TRUE == g_variant_is_of_type(occur, occurt)) {
-                                                        const gchar* occur_tile = g_variant_get_string(occur, NULL);
-                                                        if (!g_strcmp0(end_signal_tile, occur_tile))
-                                                                ending_signal = TRUE;
-                                                }
-                                                g_variant_type_free(occurt);
-                                        }
-					/* ------- */
-
-					/* ACTION SPECIFIC AREA */
-
-					if (FALSE == ending_signal) {
-						/* Checking occurence form */
-						GVariantType* gvt = g_variant_type_new(occur_type_string);
-						if (FALSE == g_variant_is_of_type(occur, gvt)) {
-							g_free(argv);
-                                                	g_variant_unref(param);
-                                                	dbus_message_unref(msg);
-							g_variant_type_free(gvt);
-
-							continue;
-						}
-						g_variant_type_free(gvt);
-						/* ------- */
-
-						/* Source path */
-						source_path = g_variant_get_string(g_variant_get_child_value(occur, 0), NULL);
-						/* ------- */
-
-						/* Populate the association table between service unique identifier and its volume path */
-                                        	if (NULL == g_hash_table_lookup(volume_path_table, &service_uid))
-                                                	g_hash_table_insert(volume_path_table, &service_uid, get_volume_path(source_path));
-                                        	/* ------- */
-					}
-					else
-						source_path = "";
-
-					/* Making chunk verifications and sending the ACK signal */
-					char* temp_msg = (char*)g_malloc0((SHORT_BUFFER_SIZE * sizeof(char)) + sizeof(guint64));
-					if (EXIT_FAILURE == do_work(source_path, service_uid)) {
-						if (FALSE == ending_signal) {
-                                			sprintf(temp_msg, "%s on %s for the context %llu and the file %s", ACK_KO, action_name, (long long unsigned)context_id, source_path);
-
-                                			GRID_INFO("%s (%d) : %s", action_name, service_pid, temp_msg);
-
-							GVariant* temp_msg_gv = g_variant_new_string(temp_msg);
-
-                                			ack_parameters = g_variant_new(gvariant_ack_param_type_string, context_id, temp_msg_gv);
-
-                                			if (EXIT_FAILURE == send_signal(conn, signal_object_name, signal_ack_interface_name, ACK_KO, ack_parameters))
-                                        			GRID_ERROR("%s (%d) : System D-Bus signal sending failed %s %s", action_name, service_pid, error.name, error.message);
-
-							g_variant_unref(ack_parameters);
-						}
-                        		}
-					else {
-						if (FALSE == ending_signal) {
-                                                	sprintf(temp_msg, "%s on %s for the context %llu and the file %s", ACK_OK, action_name, (long long unsigned)context_id, source_path);
-
-                                                	GRID_INFO("%s (%d) : %s", action_name, service_pid, temp_msg);
-
-							GVariant* temp_msg_gv = g_variant_new_string(temp_msg);
-
-                                        	        ack_parameters = g_variant_new(gvariant_ack_param_type_string, context_id, temp_msg_gv);
-
-                                                	if (EXIT_FAILURE == send_signal(conn, signal_object_name, signal_ack_interface_name, ACK_OK, ack_parameters))
-                                                        	GRID_ERROR("%s (%d) : System D-Bus signal sending failed %s %s", action_name, service_pid, error.name, error.message);
-							g_variant_unref(ack_parameters);
-						}
-					}
-                                        g_free(temp_msg);
-					/* ------- */
-
-					/* XXXXXXX */
-
-					g_free(argv);
-					g_variant_unref(param);
-				}
-			}
-		}
-
-		dbus_message_unref(msg);
+	// TODO Temp db processing bypassed until we have a way to know when the
+	// crawler has finished.
+	if (FALSE && !g_strcmp0("", source_path)) {
+		if (!_move_temp_db(source_path, volume_path, &service_uid))
+			goto label_error;
 	}
 
-	g_variant_type_free(param_type);
+	/* Check if the chunk path is correct */
+	if (!chunk_path_is_valid(source_path))
+		goto label_error;
+
+	/* Init */
+	check_info.ct_info = g_malloc0(sizeof(struct content_textinfo_s));
+	check_info.ck_info = g_malloc0(sizeof(struct chunk_textinfo_s));
+	check_info.ck_extra = g_malloc0(sizeof(struct chunk_textinfo_extra_s));
+
+	/* Read content info from chunk attributes */
+	if (!get_rawx_info_in_attr(source_path, &local_error, check_info.ct_info, check_info.ck_info) ||
+			!get_extra_chunk_info(source_path, &local_error, check_info.ck_extra))
+		goto label_error;
+
+	bzero(check_info.rawx_vol, sizeof(check_info.rawx_vol));
+	memcpy(check_info.rawx_vol, volume_path, strlen(volume_path));
+	bzero(check_info.source_path, sizeof(check_info.source_path));
+	memcpy(check_info.source_path, source_path, strlen(source_path));
+	check_info.options = NULL;
+	if (g_dryrun_mode) {
+		check_info.options = check_option_new();
+		check_option_set_bool(check_info.options, CHECK_OPTION_DRYRUN, TRUE);
+	}
+	/* Running checks */
+	GSList *c_iter = checks;
+	check_t *check = NULL;
+	check_result_t *result = NULL;
+	for (; c_iter; c_iter = g_slist_next(c_iter)) {
+		check = c_iter->data;
+		GRID_DEBUG("Starting check [%s] on chunk [%s]", check->name, check_info.source_path);
+		result = check_result_new();
+		if (!check->func(&check_info, result, &local_error, check->udata)) {
+			GRID_ERROR("Check [%s] failed on chunk [%s], error was [%s]",
+					check->name, source_path,
+					local_error ? local_error->message : "unspecified");
+			goto label_error;
+		} else {
+			if (!result->check_ok) {
+				if (result->msg)
+					GRID_INFO("Check [%s] on chunk [%s]: %s",
+							check->name, check_info.source_path, result->msg->str);
+				else
+					GRID_INFO("Check [%s] on chunk [%s]: KO (no details)",
+							check->name, check_info.source_path);
+				goto label_error;
+			}
+		}
+		check_result_clear(&result, NULL);
+	}
+
+	// TODO Temp db processing bypassed until we have a way to know when the
+	// crawler has finished.
+	if (FALSE && !_fill_temp_db(source_path, &service_uid, &check_info))
+		goto label_error;
+
+	ret = EXIT_SUCCESS;
+
+label_error:
+	if (local_error)
+		GRID_ERROR("%s", local_error->message);
+	check_result_clear(&result, NULL);
+	chunk_textinfo_free_content(check_info.ck_info);
+	g_free(check_info.ck_info);
+	chunk_textinfo_extra_free_content(check_info.ck_extra);
+	g_free(check_info.ck_extra);
+	content_textinfo_free_content(check_info.ct_info);
+	g_free(check_info.ct_info);
+	check_option_destroy(check_info.options);
+	g_clear_error(&local_error);
+
+	return ret;
 }
+
+
+
+
+//==============================================================================
+// Listening message come from, and execute action function
+//==============================================================================
+/* ------- */
+struct SParamMsgrx {
+    const gchar* source_path;
+    gchar* dryrun;
+};
+
+void init_paramMsgRx(struct SParamMsgrx* pParam)
+{
+    if (pParam == NULL) return;
+
+    memset(pParam, 0, sizeof(struct SParamMsgrx));
+}
+
+void clean_paramMsgRx(struct SParamMsgrx* pParam)
+{
+    if (pParam == NULL) return;
+
+    if (pParam->dryrun)       g_free(pParam->dryrun);
+    
+    init_paramMsgRx(pParam);
+}
+            
+
+static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam,
+        struct SParamMsgrx* pParam)
+{
+    if (pParam == NULL)
+        return FALSE;
+
+
+    if (allParam == TRUE) {
+		/* Checking occurence form */
+        GVariantType* gvt = g_variant_type_new(occur_type_string);
+        if (FALSE == g_variant_is_of_type(pActParam->occur, gvt)) {
+            g_variant_type_free(gvt);
+			return FALSE;
+        }
+        g_variant_type_free(gvt);
+
+        /* ------- */
+        if (NULL == (pParam->dryrun = get_argv_value(pActParam->argc, pActParam->argv, action_name,
+                        dryrun_cmd_opt_name))) {
+            g_dryrun_mode = FALSE;
+		} else {
+            g_dryrun_mode = TRUE;
+            if (g_strcmp0(pParam->dryrun, "FALSE") == 0)
+                g_dryrun_mode = FALSE;
+        }
+
+		/* Source path */
+		pParam->source_path = get_child_value_string(pActParam->occur, 0);
+
+    } else {
+		pParam->source_path = ""; 
+	}
+
+	return TRUE;
+}
+
+static void
+_add_check(GSList **checks, const gchar *name, check_func_t f, gpointer udata)
+{
+	check_t new_check = {.name = g_strdup(name), .func = f, .udata = udata};
+	*checks = g_slist_append(*checks, g_memdup(&new_check, sizeof(new_check)));
+}
+
+static GSList*
+_init_checks()
+{
+	GSList *checks = NULL;
+	_add_check(&checks, "Chunk attributes", &chunk_check_attributes, NULL);
+	_add_check(&checks, "Orphan chunk", &chunk_check_orphan, NULL);
+	return checks;
+}
+
+static void
+_free_checks(GSList *checks)
+{
+	void _free_check_name(gpointer _check, gpointer _udata)
+	{
+		check_t *check = _check;
+		(void) _udata;
+		g_free((gpointer) check->name);
+	}
+	g_slist_foreach(checks, _free_check_name, NULL);
+	g_slist_free_full(checks, g_free);
+}
+
+gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
+    const char *alldata, GError **error)
+{
+	int resultat = 0;
+    TActParam actparam;
+    struct SParamMsgrx msgRx;
+    act_paramact_init(&actparam);
+    init_paramMsgRx(&msgRx);
+
+	(void) obj;
+
+    GVariant* param = act_disassembleParam((char*) alldata, &actparam);
+    if (extract_paramMsgRx(TRUE, &actparam, &msgRx ) == FALSE) {
+        act_paramact_clean(&actparam);
+        clean_paramMsgRx(&msgRx);
+        g_variant_unref(param);
+        *error = NEWERROR(1, "Bad format for received data");
+        return FALSE;
+    }
+
+
+    /**/
+
+	if ((msgRx.source_path) && (strlen(msgRx.source_path) > 0)) {
+	    /* Populate the association table between service unique identifier and its volume path */
+    	if (NULL == g_hash_table_lookup(volume_path_table, &(actparam.service_uid)))
+        	g_hash_table_insert(volume_path_table, &(actparam.service_uid), get_volume_path(msgRx.source_path));
+	}
+
+	GSList *checks = _init_checks();
+	resultat = do_work(msgRx.source_path, actparam.service_uid, checks);
+	_free_checks(checks);
+
+
+    // save response
+	char* temp_msg = (char*)g_malloc0((SHORT_BUFFER_SIZE * sizeof(char)) + sizeof(guint64));
+	sprintf(temp_msg, "%s on %s for the context %llu and the file %s", 
+			((resultat!=EXIT_FAILURE)?ACK_OK:ACK_KO), action_name, 
+			(long long unsigned)actparam.context_id, msgRx.source_path);
+    char* status = act_buildResponse(action_name, service_pid, actparam.context_id, temp_msg);
+    g_free(temp_msg);
+
+	
+    static TCrawlerReq* req = NULL;
+    if (req)
+        crawler_bus_req_clear(&req);
+
+    GError* err = crawler_bus_req_init(conn, &req, sender, SERVICE_PATH, SERVICE_IFACE_CONTROL);
+    if (err) {
+        g_prefix_error(&err, "Failed to connectd to crawler services %s : ",
+                        sender);
+		GRID_WARN("Failed to send ack [%s]: %s", msgRx.source_path, err->message);
+		g_clear_error(&err);
+   }
+
+    tlc_Send_Ack_noreply(req, NULL, ((resultat!=EXIT_FAILURE)?ACK_OK:ACK_KO), status);
+    g_free(status);
+
+
+    act_paramact_clean(&actparam);
+    clean_paramMsgRx(&msgRx);
+    g_variant_unref(param);
+
+    return TRUE;
+}
+
+
+gboolean action_command(TCrawlerBusObject *obj, const char* cmd, const char *alldata,
+        char** status, GError **error)
+{
+    TActParam actparam;
+    struct SParamMsgrx msgRx;
+    act_paramact_init(&actparam);
+    init_paramMsgRx(&msgRx);
+
+	(void) obj;
+	(void) status;
+
+    GRID_DEBUG("%s...\n", __FUNCTION__);
+    GVariant* param = act_disassembleParam((char*) alldata, &actparam);
+    if (extract_paramMsgRx(FALSE, &actparam, &msgRx) == FALSE) {
+        act_paramact_clean(&actparam);
+        clean_paramMsgRx(&msgRx);
+        g_variant_unref(param);
+        *error = NEWERROR(1, "Bad format for received data");
+        GRID_ERROR((*error)->message);
+        return FALSE;
+    }
+
+    if (g_strcmp0(cmd, CMD_STARTTRIP) == 0) {
+        //-----------------------
+        // start process crawling
+        GRID_INFO("start process's crawler");
+
+        /* code here */
+ 
+    } else  if (g_strcmp0(cmd, CMD_STOPTRIP) == 0) {
+        //----------------------
+        // end process crawling       
+        GRID_INFO("stop process's crawler");
+        sleep(1);
+
+        /* code here */
+
+    } else {
+        if (cmd)
+            GRID_INFO("%s process's crawler", cmd);
+        else
+            GRID_INFO("%s process's crawler", "Unknown command");
+    }
+
+    GRID_DEBUG(">%s process's crawler\n", cmd);
+
+    act_paramact_clean(&actparam);
+    clean_paramMsgRx(&msgRx);
+    g_variant_unref(param);
+
+    return TRUE;
+}
+
+
+
 
 /* GRID COMMON MAIN */
 static struct grid_main_option_s *
 main_get_options(void) {
-        static struct grid_main_option_s options[] = {
-                { NULL, 0, {.b=NULL}, NULL }
-        };
+	static struct grid_main_option_s options[] = {
+		{ NULL, 0, {.b=NULL}, NULL }
+	};
 
-        return options;
+	return options;
 }
 
-static void
-main_action(void) {
-        gchar* match_pattern = NULL;
-        DBusError error;
+static void main_action(void) 
+{
+    GError* error = NULL;
 
-	log4c_init();
+    g_type_init();
 
-        dbus_error_init(&error);
+    g_main_loop = g_main_loop_new (NULL, FALSE);
 
-        /* DBus connexion */
-        if (EXIT_FAILURE == init_dbus_connection(&conn)) {
-                GRID_ERROR("%s (%d) : System D-Bus connection failed %s %s", action_name, service_pid, error.name, error.message);
+    /* DBus connexion */
+    error = tlc_init_connection(&conn, g_service_name, SERVICE_PATH, 
+				"" /*g_dbusdaemon_address*/ /*pour le bus system: =""*/, 
+				(TCrawlerBusObjectInfo*) act_getObjectInfo());
+    if (error) {
+        GRID_ERROR("System D-Bus connection failed: %s",
+                /*g_cfg_action_name, g_service_pid,*/ error->message);
+        exit(EXIT_FAILURE);
 
-                exit(EXIT_FAILURE);
-        }
-        /* ------- */
+    }
 
-        /* Signal subscription */
-        match_pattern = g_strconcat("type='signal',interface='", signal_action_interface_name, "'", NULL);
-        dbus_bus_add_match(conn, match_pattern, &error);
-        dbus_connection_flush(conn);
-        if (dbus_error_is_set(&error)) {
-                GRID_ERROR("%s (%d) : Subscription to the system D-Bus action signals on the action interface failed %s %s", action_name, service_pid, error.name, error.message);
 
-                g_free(match_pattern);
 
-                exit(EXIT_FAILURE);
-        }
+    GRID_INFO("%s (%d) : System D-Bus %s action signal listening thread started...", action_name, service_pid, action_name);
 
-        g_free(match_pattern);
-        /* ------- */
+    g_main_loop_run (g_main_loop);
 
-        GRID_INFO("%s (%d) : System D-Bus %s action signal listening thread started...", action_name, service_pid, action_name);
-        listening_action();
+    crawler_bus_Close(&conn);
 
-        exit(EXIT_SUCCESS);
+    exit(EXIT_SUCCESS);
+
 }
 
 static void
@@ -507,23 +607,33 @@ main_set_defaults(void) {
 	conn = NULL;
 	stop_thread = FALSE;
 	action_name = "action_integrity";
+    dryrun_cmd_opt_name = "dryrun";
 	service_pid = getpid();
 	occur_type_string = "(ss)";
 	db_temp_path = "/tmp";
 	db_base_name = "container.db";
 	volume_path_table = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, (GDestroyNotify)g_free);
+
+    buildServiceName(g_service_name, SERVICENAME_MAX_BYTES,
+                    SERVICE_ACTION_NAME, action_name, service_pid, FALSE);
+
 }
 
 static void
 main_specific_fini(void) {
 	if (NULL != volume_path_table)
 		g_hash_table_destroy(volume_path_table);
+	free_m2v1_list();
 }
 
 static gboolean
 main_configure(int argc, char **args) {
-	argc = argc;
-	args = args;
+	// enable logging
+	g_setenv("GS_DEBUG_ENABLE", "0", TRUE);
+
+	if (argc >= 1)
+		g_dbusdaemon_address = getBusAddress(args[0]);
+	GRID_DEBUG("dbus_daemon address:\"%s\"", g_dbusdaemon_address);
 
 	return TRUE;
 }
@@ -534,6 +644,7 @@ main_usage(void) { return ""; }
 static void
 main_specific_stop(void) {
 	stop_thread = TRUE;
+	g_main_loop_quit(g_main_loop);
 	GRID_INFO("%s (%d) : System D-Bus %s action signal listening thread stopped...", action_name, service_pid, action_name);
 }
 
@@ -549,6 +660,8 @@ static struct grid_main_callbacks cb = {
 
 int
 main(int argc, char **argv) {
+	dbus_threads_init_default();
+
 	return grid_main(argc, argv, &cb);
 }
 /* ------- */

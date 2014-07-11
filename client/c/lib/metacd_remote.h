@@ -1,25 +1,8 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef __METACD_CLIENT_H__
 # define __METACD_CLIENT_H__
 
 # include <glib.h>
-# include <metatypes.h>
+# include <metautils/lib/metatypes.h>
 
 
 struct metacd_s {
@@ -46,7 +29,7 @@ GSList* metacd_remote_get_meta0(const struct metacd_connection_info_s *mi,
 	GError **err);
 
 GSList* metacd_remote_get_meta1 (const struct metacd_connection_info_s *mi,
-	const container_id_t cID, int ro, GSList *exclude, GError **err);
+	const container_id_t cID, int ro, gboolean *p_ref_exists, GSList *exclude, GError **err);
 
 gboolean metacd_remote_set_meta1_master (const struct metacd_connection_info_s *mi, const container_id_t cid,
 	const char *master, GError **e);

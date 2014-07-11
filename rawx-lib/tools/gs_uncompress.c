@@ -1,22 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "grid.tools.uncompress"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "grid.tools.uncompress"
 #endif
 
 #include <assert.h>
@@ -31,15 +14,10 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-
 #include <signal.h>
 
-#include <glib.h>
-
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-#include "./gs_rawx_tools.h"
+#include <metautils/lib/metautils.h>
+#include "gs_rawx_tools.h"
 
 #define DECOMPRESSION_MAX_BUFSIZE 512000
 
@@ -59,7 +37,8 @@ struct compressed_chunk_s *cp_chunk = NULL;
 
 guint32 checksum;
 guint32 compressed_size;
-gboolean preserve = FALSE;
+static gboolean preserve = FALSE;
+static gboolean keep_pending = FALSE;
 
 static void
 help(int argc, char **args)
@@ -71,6 +50,8 @@ help(int argc, char **args)
 	g_printerr("Usage: %s [OPTION]... chunk_path...\n", args[0]);
 	g_printerr("OPTIONS::\n");
 	g_printerr("\t -h : displays this help section;\n");
+	g_printerr("\t -k : keep pending file in case of error;\n");
+	g_printerr("\t -l <path> : use log4c configuration file;\n");
 	g_printerr("\t -p : preserve mode (recommanded);\n");
 	g_printerr("\t -v : verbose mode, increases debug output;\n");
 }
@@ -80,10 +61,19 @@ parse_opt(int argc, char **args)
 {
 	int opt;
 
-	while ((opt = getopt(argc, args, "hvpq")) != -1) {
+	while ((opt = getopt(argc, args, "hvpqkl:")) != -1) {
 		switch (opt) {
 		case 'h':
 			flag_help = ~0;
+			break;
+		case 'k':
+			PRINT_DEBUG("Keep pending file\n");
+			keep_pending = TRUE;
+			break;
+		case 'l':
+			if (log4c_load(optarg) != 0) {
+				PRINT_ERROR("Failed to load %s\n", optarg);
+			}
 			break;
 		case 'v':
 			flag_verbose++;
@@ -109,7 +99,7 @@ int
 main(int argc, char** args)
 {
 	int rc = -1;
-
+	log4c_init();
 
 	if (argc <= 1) {
 		help(argc, args);
@@ -131,11 +121,13 @@ main(int argc, char** args)
 			/* Sanity check */
 			PRINT_DEBUG("Going to work with chunk file [%s]\n", args[i]);
 			/* Run decompression */
-			if(uncompress_chunk(args[i], preserve, &local_error) != 1) {
+			if(uncompress_chunk2(args[i], preserve, keep_pending, &local_error) != 1) {
 				if(local_error)
 					PRINT_ERROR("Failed to uncompress chunk [%s] :\n %s", args[i], local_error->message);
 				else
 					PRINT_ERROR("Failed to uncompress chunk [%s] : no error\n",args[i]);
+				if (keep_pending)
+					PRINT_DEBUG("%s.pending file kept\n", args[i]);
 			} else {
 				PRINT_DEBUG("Chunk [%s] uncompressed\n",args[i]);
 			}

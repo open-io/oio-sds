@@ -1,28 +1,7 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef _RAWX_H
 # define _RAWX_H
 
-# ifdef HAVE_COMPAT
-#  include <metautils_compat.h>
-# endif
-
-# include <metatypes.h>
+# include <metautils/lib/metatypes.h>
 
 # define ATTR_NAME_MAX_LENGTH 64
 
@@ -61,7 +40,7 @@ struct rawx_conf_s {
 	gint64 blocksize; */
 	namespace_info_t *ni;
 	struct storage_policy_s *sp;
-	GSList* acl;	
+	GSList* acl;
 	gint64 last_update;
 };
 
@@ -269,6 +248,17 @@ int rawx_lock_volume(const char *vol, const char *ns, const char *host,
 gboolean rawx_get_lock_info(const char *vol, gchar *dst_host,
 	gsize dst_host_size, gchar *dst_ns, gsize dst_ns_size, GError **gerr);
 
-void rawx_conf_gclean(rawx_conf_t* c);
+/**
+ * Clean a rawx config, but do not free the structure.
+ */
+void rawx_conf_clean(rawx_conf_t *c);
+
+/**
+ * Clean a rawx config, and free the structure.
+ */
+void rawx_conf_gclean(rawx_conf_t *c);
+
+/* stamp the last scanned time on a chunk */
+void stamp_a_chunk(const char *chunk_path, const char *attr_to_set);
 
 #endif	/* _RAWX_H */

@@ -1,4 +1,6 @@
-install(FILES zk-bootstrap.py
+
+install(FILES
+			zk-bootstrap.py
 		DESTINATION bin
 		PERMISSIONS
 			OWNER_WRITE OWNER_READ OWNER_EXECUTE GROUP_EXECUTE WORLD_EXECUTE)

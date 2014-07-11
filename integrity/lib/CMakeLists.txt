@@ -1,20 +1,15 @@
-include_directories(BEFORE .
-		../../metautils/lib
-		../../meta0/remote
-		../../meta1/remote
-		../../meta2/remote
+include_directories(BEFORE . .. ../..
 		../../client/c/lib
-		../../rawx-client/lib
-		../../cluster/lib ../../cluster/agent ../../cluster/events
-		../../rawx-lib/src
-		../../rules-motor/lib)
+		${CMAKE_CURRENT_BINARY_DIR}/../..
+)
 
 include_directories(AFTER
 		${DB_INCLUDE_DIRS}
 		${PYTHON_INCLUDE_PATH}
 		${LZO_INCLUDE_DIRS}
 		${ZLIB_INCLUDE_DIRS}
-		${ATTR_INCLUDE_DIRS})
+		${ATTR_INCLUDE_DIRS}
+		${CURL_INCLUDE_DIRS})
 
 link_directories(
 		${LZO_LIBRARY_DIRS}
@@ -22,16 +17,25 @@ link_directories(
 		${ATTR_LIBRARY_DIRS})
 
 add_library(integrity SHARED
-	chunk_db.c alert.c chunk_check.c meta2_check.c
-	broken_event.c service_cache.c volume_scanner.c
-	content_check.c content_check_tools.c)
+	check.c check.h
+	chunk_db.c chunk_db.h
+	alert.c alert.h
+	chunk_check.c
+	meta2_check.c meta2_check.h
+	broken_event.c broken_event.h
+	service_cache.c service_cache.h
+	content_check.c content_check.h
+	content_check_tools.c
+	http_pipe.c http_pipe.h)
 
-set_target_properties(integrity PROPERTIES SOVERSION ${ABI_VERSION})
+set_target_properties(integrity
+	PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(integrity
 		metautils metacomm gridclient
-		meta0remote meta1remote meta2remote rawx rawxclient
-		-ldb ${SQLITE3_LIBRARIES} ${LIBEVENT_LIBRARIES})
+		meta0remote meta1remote meta2remote rawxclient
+		hcresolve
+		-ldb ${SQLITE3_LIBRARIES} ${CURL_LIBRARIES} ${LIBEVENT_LIBRARIES})
 
 install(TARGETS integrity
 		LIBRARY DESTINATION ${LD_LIBDIR})

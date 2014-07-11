@@ -1,24 +1,7 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef _GRIDAGENT_H
 #define _GRIDAGENT_H
 
-#include <metatypes.h>
+#include <metautils/lib/metatypes.h>
 
 #define AGENT_DEFAULT_EVENT_XATTR "user.grid.agent.incoming-time"
 
@@ -108,13 +91,14 @@ typedef struct response_s {
 			return 0;\
 		}\
 		else DEBUG("[task_id=%s] task started for Namespace '%s'", TaskId, (gchar*)ns_k);\
-		\
 	}\
 	task_done(TaskId);\
 	return 1;\
 }
 
-#define NAMESPACE_TASK_CREATOR(Name,TaskId,NSWorkerCreator,Period)  static int Name ( gpointer udata, GError **error) {\
+#define NAMESPACE_TASK_CREATOR(Name,TaskId,NSWorkerCreator,Period) \
+static int \
+Name ( gpointer udata, GError **error) {\
 	gpointer ns_k, ns_v;\
 	GHashTableIter ns_iterator;\
 	TRACE_POSITION();\
@@ -126,7 +110,7 @@ typedef struct response_s {
 		g_snprintf(ns_id,sizeof(ns_id),"%s.%s",TaskId,ns_data->name);\
 		if (!namespace_is_available(ns_data)) {\
 			if (is_task_scheduled(ns_id)) {\
-				remove_task(ns_id, NULL);\
+				remove_task(ns_id); \
 				DEBUG("[task_id=%s] task running for an unavailable namespace", ns_id);\
 			} else DEBUG("[task_id=%s] Namespace '%s' is not (yet) available", ns_id, (gchar*)ns_k);\
 		}\

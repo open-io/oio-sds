@@ -1,25 +1,10 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#include "motor.h"
-#include <glib.h>
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "rules_motor"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "rules_motor"
 #endif
+
+#include <glib.h>
+
+#include "./motor.h"
 
 PyThreadState * mainThreadState = NULL;
 
@@ -63,7 +48,7 @@ get_and_load_rules(struct rules_motor_env_s** me, const gchar *ns_name){
 	/* Get rule script from conscience */
 	mod_in_string = namespace_get_rules(ns_name, CHUNK_CRAWLER, &err);
 	if(mod_in_string == NULL){
-		ERROR("Failed to fetch rules : %s", err->message); 
+		ERROR("Failed to fetch rules : %s", err->message);
 		g_clear_error (&err);
 		return -1;
 	}
@@ -124,13 +109,13 @@ pass_to_motor(gpointer args) {
 	pcheck = pyobj_proxy = py_arguments = NULL;
 
 	do {
-		data_2_python(args, &pyobj_proxy);	
+		data_2_python(args, &pyobj_proxy);
 		if (pyobj_proxy == NULL){
 			ERROR("Not able to generate the python diction proxy");
 			break;
 		}
 
-		py_arguments = Py_BuildValue("(O,i)", pyobj_proxy, ((struct motor_args*)args)->type_id);	
+		py_arguments = Py_BuildValue("(O,i)", pyobj_proxy, ((struct motor_args*)args)->type_id);
 		if (py_arguments == NULL) {
 			ERROR("Not able to build the args");
 			break;
@@ -138,11 +123,9 @@ pass_to_motor(gpointer args) {
 
 		if(update_rules(((struct motor_args*)args)->motor_env, ((struct motor_args*)args)->ns_name) == -1){
 			ERROR("No rules available, not passing to rules motor");
-			break;	
-		}   
-
-		pcheck = PyEval_CallObject((*((struct motor_args*)args)->motor_env)->py_function, py_arguments);	
-
+			break;
+		}
+		pcheck = PyEval_CallObject((*((struct motor_args*)args)->motor_env)->py_function, py_arguments);
 		if (pcheck == NULL) {
 			ERROR("Not able to evaluate the function");
 			break;
@@ -175,8 +158,6 @@ void
 chunk_textinfo_extra_free_content(struct chunk_textinfo_extra_s *ctie){
 	if(!ctie)
 		return;
-/*	if(ctie->last_scanned_time)
-		g_free(ctie->last_scanned_time);*/
 	if(ctie->compressedsize)
 		g_free(ctie->compressedsize);
 	if(ctie->metadatacompress)
@@ -184,14 +165,51 @@ chunk_textinfo_extra_free_content(struct chunk_textinfo_extra_s *ctie){
 	memset(ctie, 0x00, sizeof(struct chunk_textinfo_extra_s));
 }
 
-void
-meta2_crawler_data_block_init(struct crawler_meta2_data_pack_s *data_block, const gchar *container_path, char *meta2_url){
+
+
+void sqlx_crawler_data_block_init(struct crawler_sqlx_data_pack_s *data_block,
+	 const gchar *sqlx_path, const gchar *sqlx_seq, const gchar *sqlx_cid, 
+	 const gchar *sqlx_type, char *sqlx_url)
+{
+	data_block->sqlx_path = g_strdup(sqlx_path);
+	data_block->sqlx_seq  = g_strdup(sqlx_seq);
+	data_block->sqlx_cid  = g_strdup(sqlx_cid);
+	data_block->sqlx_type = g_strdup(sqlx_type);
+	data_block->sqlx_url  = g_strdup(sqlx_url);
+}
+
+void sqlx_crawler_data_block_free(struct crawler_sqlx_data_pack_s *data_block)
+{
+	g_free(data_block->sqlx_path);
+	g_free(data_block->sqlx_seq);
+	g_free(data_block->sqlx_cid);
+	g_free(data_block->sqlx_type);
+	g_free(data_block->sqlx_url);
+	g_free(data_block);
+}
+
+
+
+void meta2_crawler_data_block_init(struct crawler_meta2_data_pack_s *data_block, 
+	const gchar *container_path, char *meta2_url)
+{
 	gchar *container_id;
 	container_id = g_strrstr(container_path, "/") + 1;
 	data_block->container_path = g_strdup(container_path);
 	data_block->container_id = g_strdup(container_id);
 	data_block->meta2_url = g_strdup(meta2_url);
 }
+
+void meta2_crawler_data_block_free(struct crawler_meta2_data_pack_s *data_block)
+{
+	g_free(data_block->container_path);
+    g_free(data_block->container_id);
+    g_free(data_block->meta2_url);
+    g_free(data_block);
+}
+
+
+
 
 
 /* gether the informations got from chunk_crawler into one structure */
@@ -211,9 +229,11 @@ chunk_crawler_data_block_init(struct crawler_chunk_data_pack_s *data_block,
 	data_block->chunk_path = chunk_path;
 }
 
+
+
 /* initiate motor args */
 void
-motor_args_init(struct motor_args *args, gpointer data_block, gint8 type_id, 
+motor_args_init(struct motor_args *args, gpointer data_block, gint8 type_id,
 		struct rules_motor_env_s** me, gchar *ns_name){
 	args->data_block = data_block;
 	args->type_id = type_id;
@@ -379,7 +399,6 @@ _load_from_xattr(struct attr_handle_s *attr_handle, GError ** error){
 	buf = g_malloc0(bufMax);
 	bufSize = listxattr(attr_handle->chunk_path, buf, bufMax);
 
-	/*TRACE("Loading xattr for %s (bufSize=%d)", attr_handle->chunk_path, bufSize);*/
 	for (last_name = buf, i = 0; i < bufSize; i++) {
 		if (buf[i] == '\0') {
 			char *value = NULL;
@@ -445,32 +464,33 @@ _get_attr_from_handle(struct attr_handle_s *attr_handle, GError ** error, const 
 	return TRUE;
 }       
 
-static void     
-_clean_attr_handle(struct attr_handle_s *attr_handle, int content_only){               
+// FIXME TODO XXX Duplicated from rawx-lib
+static void
+_clean_attr_handle(struct attr_handle_s *attr_handle, int content_only)
+{
 	if (!attr_handle)
 		return;
 
-	if (attr_handle->chunk_path)
+	if (attr_handle->chunk_path) {
 		g_free(attr_handle->chunk_path);
-	if (attr_handle->chunk_file_des >= 0)           
-		close(attr_handle->chunk_file_des);    
-	if (attr_handle->attr_path) 
+		attr_handle->chunk_path = NULL;
+	}
+	if (attr_handle->attr_path) {
 		g_free(attr_handle->attr_path);
-	if (attr_handle->attr_file_des >= 0)
-		close(attr_handle->attr_file_des);
-
-	if (attr_handle->attr_hash)
+		attr_handle->attr_path = NULL;
+	}
+	if (attr_handle->attr_hash) {
 		g_hash_table_destroy(attr_handle->attr_hash);
-
-	attr_handle->attr_file_des = -1;
-	attr_handle->attr_path = NULL;
-	attr_handle->chunk_file_des = -1;
-	attr_handle->chunk_path = NULL;
-	attr_handle->attr_hash = NULL;
+		attr_handle->attr_hash = NULL;
+	}
+	if (attr_handle->chunk_file_des >= 0)
+		metautils_pclose(&(attr_handle->chunk_file_des));
+	if (attr_handle->attr_file_des >= 0)
+		metautils_pclose(&(attr_handle->attr_file_des));
 
 	if (!content_only)
 		g_free(attr_handle);
-}      
+}
 
 gboolean
 get_extra_chunk_info(const char *pathname, GError ** error, struct chunk_textinfo_extra_s *chunk_textinfo_extra){
@@ -483,9 +503,6 @@ get_extra_chunk_info(const char *pathname, GError ** error, struct chunk_textinf
 		return FALSE;
 	}
 	
-/*	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,\
-		ATTR_NAME_CHUNK_LAST_SCANNED_TIME, &(chunk_textinfo_extra->last_scanned_time)))
-		goto error_get_attr;*/
 	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,\
 		ATTR_NAME_CHUNK_COMPRESSED_SIZE, &(chunk_textinfo_extra->compressedsize)))
 		goto error_get_attr;
@@ -579,6 +596,21 @@ data_2_python(gpointer args, PyObject** pyobj_proxy){
 			Py_XDECREF(pdatablock);
 			Py_XDECREF(content_info);
 			Py_XDECREF(chunk_info);
+			break;
+		}
+		case 5:{
+            /* type_id 5 represents sqlx */
+            struct crawler_sqlx_data_pack_s *data_block;
+            data_block = ((struct motor_args*)args)->data_block;
+            pdatablock = Py_BuildValue("{s:s, s:s, s:s, s:s, s:s, s:s}",
+			            "sqlx_path", data_block->sqlx_path,
+						"sqlx_seq", data_block->sqlx_seq,
+						"sqlx_cid", data_block->sqlx_cid,
+						"sqlx_type", data_block->sqlx_type,
+						"sqlx_url", data_block->sqlx_url,
+						"ns_name", ((struct motor_args*)args)->ns_name);
+			*pyobj_proxy = PyDictProxy_New(pdatablock);
+			Py_XDECREF(pdatablock);
 			break;
 		}
 		default:{

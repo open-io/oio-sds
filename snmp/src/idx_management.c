@@ -1,37 +1,17 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-#include "../config.h"
-#endif
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "snmp.gridstorage"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "grid.snmp.manag"
 #endif
 
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
 #include "idx_management.h"
 
@@ -59,7 +39,7 @@ read_known_service_from_file(GArray *known_services, const char *file_name, GErr
 		data = g_byte_array_append(data, buff, r);
 	}
 
-	close(fd);
+	metautils_pclose(&fd);
 
 	if (r < 0) {
 		GSETERROR(error, "Failed to read data from file [%s] : %s", file_name, strerror(errno));
@@ -105,7 +85,7 @@ save_known_service_to_file(GArray *known_services, const char *file_name, GError
 			wl = write(fd, service + written, sizeof(struct grid_service_data) - written);
 			if (wl < 0) {
 				GSETERROR(error, "Failed to write to file [%s] : %s", new_file_name, strerror(errno));
-				close(fd);
+				metautils_pclose(&fd);
 				return(0);
 			}
 
@@ -114,7 +94,7 @@ save_known_service_to_file(GArray *known_services, const char *file_name, GError
 
 	}
 
-	close(fd);
+	metautils_pclose(&fd);
 
 	if (0 > rename(new_file_name, file_name)) {
 		GSETERROR(error, "Failed to move file [%s] to [%s] : %s", new_file_name, file_name, strerror(errno));

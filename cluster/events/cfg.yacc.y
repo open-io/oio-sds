@@ -2,12 +2,9 @@
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gridcluster.event.config"
 #endif
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN G_LOG_DOMAIN
-#endif
 #include <glib.h>
-#include "./eventhandler_internals.h"
-#include "../lib/gridcluster.h"
+#include <cluster/events/eventhandler_internals.h>
+#include <cluster/lib/gridcluster.h>
 #define YYLVAL event_yylval
 #define YYTEXT event_yytext
 

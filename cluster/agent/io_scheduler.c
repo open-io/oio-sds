@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.agent.io_scheduler"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.agent.io_scheduler"
 #endif
 
 #include <sys/time.h>
@@ -28,7 +8,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
 #include "./agent.h"
 #include "./io_scheduler.h"
@@ -44,7 +24,7 @@ static int epfd;
 static gboolean stopped = TRUE;
 static GSList *workers = NULL;
 
-void
+static void
 abort_worker(worker_t *worker)
 {
 	remove_fd_from_io_scheduler(worker, NULL);
@@ -69,29 +49,27 @@ init_io_scheduler(GError ** error)
 	return (1);
 }
 
-int
-launch_io_scheduler(GError ** error)
+static inline long
+_delay(void)
+{
+	register long d0 = time_to_next_timed_out_worker();
+	register long d1 = get_time_to_next_task_schedule();
+	d0 = MACRO_MIN(d0, d1);
+	return 1000 * MACRO_MAX(0, d0);
+}
+
+void
+launch_io_scheduler(void)
 {
 	struct epoll_event events[MAX_EVENTS];
-	int rc, i;
-	long delay_next_task, delay_next_worker, delay_final;
 
 	INFO("Launching IO scheduler");
-	(void)error;
 
-#ifdef AGENT_HYPERSPEED_MULTIVITAMINE
-# define TIME_SCALE 100
-#else
-# define TIME_SCALE 1000
-#endif
 	while (!stopped) {
-		memset(events, '\0', sizeof(events));
-		delay_next_worker = time_to_next_timed_out_worker();
-		delay_next_task = get_time_to_next_task_schedule();
-		delay_final = MIN(delay_next_task,delay_next_worker);
 
+		memset(events, 0, sizeof(events));
 		errno = 0;
-		rc = epoll_wait(epfd, events, MAX_EVENTS, delay_final <= 0 ? 0 : TIME_SCALE * delay_final);
+		int rc = epoll_wait(epfd, events, MAX_EVENTS, _delay());
 
 		if (rc < 0) {
 			if (errno != EINTR)
@@ -99,16 +77,15 @@ launch_io_scheduler(GError ** error)
 		}
 		else if (rc > 0) {
 
-			for (i = 0; i < rc; i++) {
+			for (int i = 0; i < rc; i++) {
 
 				worker_t *worker = (worker_t *) events[i].data.ptr;
 
 				/* Check if an error occured */
-				if (events[i].events & EPOLLHUP || events[i].events & EPOLLERR) {
+				if (events[i].events & (EPOLLHUP|EPOLLERR)) {
 					int sock_err = sock_get_error(worker->data.fd);
-
-					ERROR("An error occured on fd [%d], closing connection : %s", worker->data.fd, strerror(sock_err));
-
+					ERROR("An error occured on fd [%d], closing connection : %s",
+							worker->data.fd, strerror(sock_err));
 					abort_worker(worker);
 				}
 				else {
@@ -120,7 +97,6 @@ launch_io_scheduler(GError ** error)
 					if (!(worker->func(worker, &local_error))) {
 						if (local_error) {
 							ERROR("Failed to execute worker : %s", gerror_get_message(local_error));
-							ERROR("Closing connection");
 						}
 						abort_worker(worker);
 					}
@@ -136,7 +112,6 @@ launch_io_scheduler(GError ** error)
 	}
 
 	INFO("IO scheduler stopped.");
-	return (1);
 }
 
 void
@@ -201,20 +176,10 @@ change_fd_events_in_io_scheduler(worker_t * worker, __uint32_t events, GError **
 int
 remove_fd_from_io_scheduler(worker_t * worker, GError ** error)
 {
-	worker_data_t *data;
-	
-	TRACE_POSITION();
-
-	data = &(worker->data);
-	TRACE("Closing fd %d", data->fd);
+	(void) error;
+	worker_data_t *data = &(worker->data);
 	workers = g_slist_remove(workers, worker);
-
-	if (0 > epoll_ctl(epfd, EPOLL_CTL_DEL, data->fd, NULL)) {
-		GSETERROR(error, "Failed to remove fd from epoll pool : %s", strerror(errno));
-		return (0);
-	}
-
-	close(data->fd);
+	metautils_pclose(&(data->fd));
 	return (1);
 }
 
@@ -241,7 +206,8 @@ check_worker_timeout(gpointer data, gpointer user_data)
 	timersub(&tv, &(worker->timestamp), &elapsed);
 
 	if (timercmp(&elapsed, &timeout, >)) {
-		WARN("Worker %p timeout", worker);
+		WARN("Worker %p timeout (elapsed %ldms)", worker,
+				elapsed.tv_sec * 1000 + elapsed.tv_usec / 1000);
 		abort_worker(worker);
 	}
 }

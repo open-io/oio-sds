@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.agent"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.agent"
 #endif
 
 #include <errno.h>
@@ -29,32 +9,28 @@
 #include <string.h>
 #include <strings.h>
 
-#include <glib.h>
-#include <glib/gstdio.h>
 #include <neon/ne_request.h>
 #include <neon/ne_session.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
 #include "./agent.h"
 #include "./config.h"
 
 static gboolean is_running = TRUE;
 static gchar hostname[1024] = {0,0};
-static int fd_out;
+static int fd_out = -1;
 
 static void
 sighandler_config(int s)
 {
-	/*INFO("Signal %d (%s)", s, get_signame(s));*/
 	switch (s) {
 	case SIGUSR1:
 	case SIGUSR2:
 	case SIGCHLD:
 		break;
 	case SIGPIPE:
-		close(fd_out);
-		fd_out = -1;
+		metautils_pclose(&fd_out);
 		break;
 	case SIGTERM:
 	case SIGQUIT:
@@ -292,7 +268,7 @@ label_error:
 }
 
 static gboolean
-dump_gba(GByteArray *gba, int fd_out, GError **error)
+dump_gba(GByteArray *gba, int fd, GError **error)
 {
 	ssize_t wrc;
 	guint written, wrc_u;
@@ -304,7 +280,7 @@ dump_gba(GByteArray *gba, int fd_out, GError **error)
 
 	written = 0;
 	while (is_running && written < gba->len) {
-		wrc = write(fd_out, gba->data+written, gba->len-written);
+		wrc = write(fd, gba->data+written, gba->len-written);
 		if (wrc<0) {
 			GSETERROR(error,"write error : %s", strerror(errno));
 			return FALSE;
@@ -377,9 +353,8 @@ main_http_config(const gchar *hn, int fd)
 
 	rc = 0;
 label_error:
-	ne_session_destroy(http_session);	
-	shutdown(fd_out, 2);
-	close(fd_out);
+	ne_session_destroy(http_session);
+	metautils_pclose(&fd_out);
 	if (gba_services)
 		g_byte_array_free(gba_services, TRUE);
 	if (gba_files)

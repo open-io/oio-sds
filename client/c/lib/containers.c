@@ -1,23 +1,4 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #include "./gs_internals.h"
-#include "../../../metautils/lib/hc_url.h"
-#include "../../../metautils/lib/gridd_client.h"
 
 #define KEY_STG_POLICY "storage_policy"
 
@@ -68,96 +49,77 @@ __create_in_meta2(addr_info_t *m1, gs_container_t *c, struct m2v2_create_params_
 {
 	GError *e = NULL;
 	addr_info_t *new_master = NULL;
-	/* int to = 3000;
-	addr_info_t *m2_addr = NULL; */
 	char *master = NULL;
+	int rc = GS_OK;
 
 	/* Check ref exist, create if necessary, link to a meta2 and create meta2_entry */
-	if(!meta1v2_remote_has_reference(m1, &e, c->info.gs->ni.name, C0_ID(c), c->info.gs->direct_resolver->timeout.m1.cnx,
-			c->info.gs->direct_resolver->timeout.m1.op)) {
-		if( NULL != e) {
-			if(e->code == CODE_CONTAINER_NOTFOUND) {
-				g_clear_error(&e);
-				if(!meta1v2_remote_create_reference(m1, &e, c->info.gs->ni.name, C0_ID(c), C0_NAME(c),
-							C0_M1CNX(c), C0_M1TO(c), &master)) {
-					if(e->code >=400 && e->code < 500) {
-						/* update master */
-						new_master = _update_master(c, master);
-					}
 
-					if( NULL != master) {
-						g_free(master);
-					}
-					if( NULL != new_master)
-						g_free(new_master);
-
-					if (_is_sql_error(e->code)) {
-						GSETCODE(err, 500, "meta1 internal error: %s", e->message);
-					} else {
-						GSETCODE(err, e->code, "%s", e->message);
-					}
-
-					g_clear_error(&e);
-					return GS_ERROR;
-				}
-				new_master = _update_master(c, master);
-				if( NULL != master) {
-					g_free(master);
-					master = NULL;
-				}
-			} else {
-				GSETCODE(err, e->code, "%s", e->message);
-				g_clear_error(&e);
-				return GS_ERROR;
-			}
-		} else {
-			GSETCODE(err, 500, "Failed to check reference, no error specified");
-			return GS_ERROR;
-		}
-	}
+	/* Useless code, gs_meta1v2 create the reference just before */
 
 	gchar **m2 = NULL;
-	m2 = meta1v2_remote_link_service((new_master) ? new_master : m1, &e, c->info.gs->ni.name, C0_ID(c), "meta2",
-			c->info.gs->direct_resolver->timeout.m1.cnx, c->info.gs->direct_resolver->timeout.m1.op, &master);
+	m2 = meta1v2_remote_link_service((new_master) ? new_master : m1, &e,
+			gs_get_full_vns(c->info.gs), C0_ID(c), "meta2",
+			c->info.gs->direct_resolver->timeout.m1.cnx,
+			c->info.gs->direct_resolver->timeout.m1.op, &master);
 	if( NULL != new_master)
 		g_free(new_master);
 
 	new_master = _update_master(c, master);
 
-	if( NULL != new_master)
-		g_free(new_master);
-
 	if(!m2 || 0 == g_strv_length(m2)) {
 		if( NULL != e) {
 			GSETCODE(err, e->code, "%s", e->message);
-			g_clear_error(&e);
 		} else {
 			GSETCODE(err, 500, "Failed to link service meta2 , no error specified");
 		}
-		return GS_ERROR;
+		rc = GS_ERROR;
+		goto cleanup_label;
 	}
 
 	/* prepare the policies array */
-	/* m2_addr = addr_info_from_service_str(m2[0]); */
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, c->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(c->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(c));
 
 	/* parse m2[0] srv to get ip:port  X|meta2|ip:port|... */
 	char *p = strchr(strchr(m2[0], '|') + 1, '|') + 1;
 	char *end = strchr(p, '|');
 	p = g_strndup(p, end - p);
+
+	g_clear_error(&e);
 	e = m2v2_remote_execute_CREATE(p, NULL, url, params);
 
-	hc_url_clean(url);
+	g_free(p);
 
-	if( NULL != e) {
-		GSETCODE(err, e->code, "Failed to create meta2 container : %s" , e->message);
-		g_clear_error(&e);
-		return GS_ERROR;
+	if (NULL != e) {
+		GRID_WARN("Failed to create meta2 container: %s",
+				e->message);
+		GError *e2 = NULL;
+		// Rollback meta1 service link
+		meta1v2_remote_unlink_service((new_master) ? new_master : m1, &e2,
+			gs_get_full_vns(c->info.gs), C0_ID(c), "meta2",
+			c->info.gs->direct_resolver->timeout.m1.cnx,
+			c->info.gs->direct_resolver->timeout.m1.op, &master);
+		if (e2 != NULL) {
+			GRID_WARN("Failed to rollback service link: %s", e2->message);
+			g_clear_error(&e2);
+		}
+		GSETCODE(err, e->code, "Failed to create meta2 container: %s" ,
+				e->message);
+		rc = GS_ERROR;
 	}
 
-	return GS_OK;
+	g_strfreev(m2);
+	hc_url_clean(url);
+
+cleanup_label:
+	if (NULL != new_master)
+		g_free(new_master);
+
+	if (e != NULL)
+		g_clear_error(&e);
+
+	return rc;
 }
 
 /**
@@ -180,7 +142,13 @@ _create (gs_container_t *container, struct m2v2_create_params_s *params,
 		return GS_ERROR;
 	}
 
-	pM1 = gs_resolve_meta1v2 (container->info.gs, C0_ID(container), 0, *exclude, err);
+	pM1 = gs_resolve_meta1v2 (container->info.gs, C0_ID(container), C0_NAME(container), 0, *exclude, err);
+
+	if( NULL != *exclude ) {
+		g_slist_foreach(*exclude, addr_info_gclean, NULL);
+		g_slist_free(*exclude);
+		*exclude = NULL;
+	}
 
 	if (!pM1) {
 		DEBUG("META1 resolution error for [%s]", C0_NAME(container));
@@ -189,11 +157,6 @@ _create (gs_container_t *container, struct m2v2_create_params_s *params,
 	}
 	memcpy (&m1Addr, pM1, sizeof(addr_info_t));
 	addr_info_to_string (&m1Addr, str_addr, sizeof(str_addr));
-
-	/* if (meta1_remote_create_container_v2 (&m1Addr, C0_M1TO(container), err, C0_NAME(container), container->info.gs->ni.name, C0_ID(container))) {
-		DEBUG("Creation successful, now resolving [%s]", C0_NAME(container));
-		return _get(container, err, 0, NB_ATTEMPTS_GET_CONTAINER, 0);
-	} */
 
 	if (__create_in_meta2(&m1Addr, container, params, err)) {
 		g_free (pM1);
@@ -236,12 +199,12 @@ _create (gs_container_t *container, struct m2v2_create_params_s *params,
 /* Get the reference of the container and create it (if wanted) */
 static int
 _get (gs_container_t *container, struct m2v2_create_params_s *params,
-		GError **err, int nb, int max, int ac)
+		GError **err, int retry_count, int max_retries, int ac)
 {
 
 	DEBUG("Resolution attempt NAME=[%s] ID=[%s]", C0_NAME(container), C0_IDSTR(container));
 
-	if (nb>=max) {
+	if (retry_count >= max_retries) {
 		GSETERROR(err,"Too many resolution attempts");
 		return GS_ERROR;
 	}
@@ -280,7 +243,7 @@ _get (gs_container_t *container, struct m2v2_create_params_s *params,
 	gs_decache_container (container->info.gs, C0_ID(container));
 
 	if ((*err)->code < 100)
-		return _get( container, params, err, nb+1, max, ac );
+		return _get( container, params, err, retry_count + 1, max_retries, ac );
 
 	GSETERROR(err,"Unmanageable error on ID=[%s]", C0_IDSTR(container));
 	return GS_ERROR;
@@ -302,46 +265,29 @@ container_resolve_and_get_v2 (gs_container_t *container, GError **err)
 	/* resolve_meta1 + has */
 	addr_info_t *meta1_addr = NULL;
 	GSList *exclude_m1 = NULL;
-	char *master = NULL;
 	int retry = 3;
 
 	while(retry > 0) {
 		retry--;
-		meta1_addr = gs_resolve_meta1v2 (container->info.gs, C0_ID(container), 1, exclude_m1, err);
+		meta1_addr = gs_resolve_meta1v2_v2(container->info.gs, C0_ID(container),
+				C0_NAME(container), 1, exclude_m1, TRUE, err);
 
 		if(!meta1_addr) {
 			GSETERROR(err, "Failed to resolve Meta1");
 			goto end;
 		}
-		/* Ensure ref */
-		if(!meta1v2_remote_has_reference(meta1_addr, err, container->info.gs->ni.name, C0_ID(container),
-				container->info.gs->direct_resolver->timeout.m1.cnx, container->info.gs->direct_resolver->timeout.m1.cnx)) {
-			if(*err && (*err)->code == 431) {
-					g_clear_error(err);
-					int try = 0;
-					while(try < 3) {
-						if(meta1v2_remote_create_reference(meta1_addr, err,
-									container->info.gs->ni.name, C0_ID(container), C0_NAME(container),
-									C0_M1CNX(container), C0_M1TO(container), &master)) {
-							/* master freed inside _update_master func */
-							addr_info_t *tmp = _update_master(container, master);
 
-							if(NULL != tmp)
-								g_free(tmp);
-
-							status = GS_OK;
-							break;
-						}
-						try++;
-					}
-					GSETERROR(err,"Too many resolution attempts");
-					break;
-			} else {
+		if (*err) {
+			if ((*err)->code != CODE_CONTAINER_EXISTS) {
 				/* consider hard error, try on another M1 */
 				exclude_m1 = g_slist_prepend(exclude_m1, meta1_addr);
 				meta1_addr = NULL;
+			} else {
+				g_clear_error(err);
 			}
-		} else {
+		}
+
+		if (NULL == *err) {
 			status = GS_OK;
 			break;
 		}
@@ -358,7 +304,15 @@ end:
 		g_free(meta1_addr);
 	}
 
-        return status;
+	return status;
+}
+
+void
+fill_hcurl_from_container(gs_container_t *c, struct hc_url_s **url)
+{
+	*url = hc_url_empty();
+	hc_url_set(*url, HCURL_NS, gs_get_full_vns(c->info.gs));
+	hc_url_set(*url, HCURL_REFERENCE, C0_NAME(c));
 }
 
 gs_container_t*
@@ -387,7 +341,7 @@ gs_init_container(gs_grid_storage_t *gs, const char *cname, int ac, gs_error_t *
 	container->info.gs = gs;
 	memcpy(container->info.name, cname, nLen);
 
-	meta1_name2hash(container->cID, gs->ni.name, C0_NAME(container));
+	meta1_name2hash(container->cID, gs_get_full_vns(gs), C0_NAME(container));
 	container_id_to_string( container->cID, container->str_cID, sizeof(container->str_cID) );
 	container->ac = ac;
 
@@ -524,9 +478,6 @@ _alias_to_path_info(gpointer alias)
 		return NULL;
 	}
 	struct bean_ALIASES_s *a = (struct bean_ALIASES_s *) alias;
-	/* if(ALIASES_get_deleted(a)) {
-		return NULL;
-	} */
 	path_info_t *pi = g_malloc0(sizeof(path_info_t));
 	memset(pi->path, '\0', sizeof(pi->path));
 	char * str = ALIASES_get_alias(a)->str;
@@ -546,7 +497,7 @@ _alias_to_path_info(gpointer alias)
 }
 
 static GSList *
-_list_v2_wrapper(gs_container_t *c, GError **e)
+_list_v2_wrapper(gs_container_t *c, const char *version, GError **e)
 {
 	GSList *beans = NULL;
 	GError *le = NULL;
@@ -557,28 +508,27 @@ _list_v2_wrapper(gs_container_t *c, GError **e)
 	addr_info_to_string(&(c->meta2_addr), target, 64);
 
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, c->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(c->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(c));
+	if (version != NULL)
+		hc_url_set(url, HCURL_SNAPORVERS, version);
 
 	le = m2v2_remote_execute_LIST(target, NULL, url, M2V2_FLAG_ALLVERSION, &beans);
 
 	hc_url_clean(url);
 
 	if(NULL != le) {
-        
-	/*GLA: debut */
+
 		if (!*e) {
-        	        *e = g_error_new(g_quark_from_static_string(""), -1, "%s", le->message);
-	        } else {
-	                g_prefix_error(e, "\n\t%s", le->message);	               
-       	                (*e)->code = -1;
-	        }
-	/*GLA: fin*/
-		//g_prefix_error(e, "%s", le->message);
+			*e = NEWERROR(le->code, "%s", le->message);
+		} else {
+			g_prefix_error(e, "\n\t%s", le->message);
+			(*e)->code = le->code;
+		}
 		g_clear_error(&le);
 		return NULL;
 	}
-	
+
 	/* now we has aliases of all existing version of contents in the targeted container */
 	for(l = beans; l && l->data; l = l->next) {
 		path_info_t *pi = _alias_to_path_info(l->data);
@@ -592,28 +542,45 @@ _list_v2_wrapper(gs_container_t *c, GError **e)
 }
 
 gs_status_t
-gs_list_container (gs_container_t *container, gs_content_t*** result,
+gs_list_container(gs_container_t *container, gs_content_t*** result,
 		gs_content_filter_f filter, void *user_data, gs_error_t **err)
 {
-	gs_status_t rc=GS_ERROR;
+	return gs_list_container_snapshot(container, result, filter, user_data,
+			NULL, err);
+}
+
+gs_status_t
+gs_list_container_snapshot(gs_container_t *container, gs_content_t*** result,
+		gs_content_filter_f filter, void *user_data, const char *snapshot,
+		gs_error_t **err)
+{
+	gs_status_t rc = GS_ERROR;
 	int nbResult, nb_refreshes;
-	GError *localError=NULL;
-	GSList *contents=NULL, *current=NULL;
+	GError *localError = NULL;
+	GSList *contents = NULL, *current = NULL;
 
 	/*sanity checks*/
 	if (!container || !container->info.gs) {
-		GSERRORSET(err,"invalid parameter");
+		GSERRORSET(err, "invalid parameter");
 		return 0;
 	}
 
 	/* loop until the listing is got or too many attempts happen */
-	(void) gs_container_reconnect_if_necessary (container,NULL);
-	for (nb_refreshes=1 ; !(contents=_list_v2_wrapper(container,&localError)) && localError && nb_refreshes>0 ; nb_refreshes--)
+	(void) gs_container_reconnect_if_necessary (container, NULL);
+	for (nb_refreshes = 2; nb_refreshes > 0; nb_refreshes--)
 	{
-		if (localError && localError->code==CODE_CONTAINER_NOTFOUND) {
-			gs_decache_container( container->info.gs, C0_ID(container));
+		g_clear_error(&localError);
+		contents = _list_v2_wrapper(container, snapshot, &localError);
+		if (!contents && localError) {
+			if (localError->code == CODE_CONTAINER_NOTFOUND) {
+				GRID_DEBUG("Decaching container '%s'", container->info.name);
+				gs_decache_container(container->info.gs, C0_ID(container));
+			}
+			CONTAINER_REFRESH(container, localError, end_label,
+					"cannot list the content");
+		} else {
+			break;
 		}
-		CONTAINER_REFRESH(container,localError,end_label,"cannot list find the content");
 	}
 
 	/*it is NOT an error if*/
@@ -739,13 +706,23 @@ end_label:
 gs_content_t*
 gs_get_content_from_path (gs_container_t *container, const char *name, gs_error_t **err)
 {
-	return gs_get_content_from_path_and_version(container, name, NULL, err);
+	return gs_get_content_from_path_full(container, name, NULL, NULL, NULL, err);
 }
 
 gs_content_t*
-gs_get_content_from_path_and_version (gs_container_t *container, const char *name, const char *version, gs_error_t **err)
+gs_get_content_from_path_and_version (gs_container_t *container, const char *name, const char *version,
+		gs_error_t **err)
+{
+	return gs_get_content_from_path_full(container, name, version, NULL, NULL, err);
+}
+
+gs_content_t*
+gs_get_content_from_path_full (gs_container_t *container, const char *name, const char *version,
+		void *_p_filtered, void *_p_beans, gs_error_t **err)
 {
 	gs_content_t *content;
+	GSList **p_filtered = _p_filtered;
+	GSList **p_beans = _p_beans;
 
 	if (!container || !name || !*name) {
 		GSERRORSET(err, "invalid parameter");
@@ -763,7 +740,7 @@ gs_get_content_from_path_and_version (gs_container_t *container, const char *nam
 		content->version = g_strdup(version);
 	}
 
-	if (!gs_content_reload(content, TRUE, FALSE, err)) {
+	if (!gs_content_reload_with_filtered(content, TRUE, FALSE, p_filtered, p_beans, err)) {
 		gs_content_free(content);
 		return NULL;
 	}
@@ -782,9 +759,14 @@ gs_container_check_cnx (gs_container_t *container)
 {
 	if (!container)
 		return 0;
-	if (container->meta2_cnx<0)
+	if (container->meta2_cnx < 0)
 		return 0;
-	return sock_get_error(container->meta2_cnx) ? 0 : 1;
+	if (!sock_get_error(container->meta2_cnx))
+		return 1;
+
+	if (errno == EBADF)
+		container->meta2_cnx = -1;
+	return 0;
 }
 
 static gs_status_t
@@ -809,13 +791,14 @@ gs_container_load (gs_container_t *container, GError **err)
 	 * was the good one (if it was not the case, it MUST NOT HAVE ANSWERED). */
 
 	for ( locationCursor = m2Locations
-			; locationCursor!=NULL && container->meta2_cnx==-1
+			; locationCursor!=NULL && container->meta2_cnx < 0
 			; locationCursor = locationCursor->next )
 	{
 		char str_addr[STRLEN_ADDRINFO];
 
 		addr_info_t *m2addr = (addr_info_t*) locationCursor->data;
 		addr_info_to_string (m2addr, str_addr, sizeof(str_addr));
+		DEBUG("Trying to connect to meta2 [%s]", str_addr);
 
 		/*update the address of the container*/
 		g_memmove(&(container->meta2_addr), m2addr, sizeof(addr_info_t));
@@ -833,7 +816,7 @@ gs_container_load (gs_container_t *container, GError **err)
 	if (!gs_container_check_cnx(container)) {
 		GSETERROR(err, "no META2 accepted to serve %s/%s", C0_NAME(container), C0_IDSTR(container));
 	} else {
-		rs = GS_OK;
+		rs = (*err == NULL);
 	}
 
 	g_slist_foreach (m2Locations, addr_info_gclean, NULL);
@@ -863,7 +846,20 @@ gs_container_reconnect_and_refresh (gs_container_t *container, GError **err, gbo
 			GSETERROR(err, "Cannot reconnect/refresh to meta2 for %s/%s", C0_NAME(container), C0_IDSTR(container));
 			return GS_ERROR;
 		}
-		return GS_OK;
+	}
+
+	// Checking connection is not sufficient (is it even useful?),
+	// we must check if container is there.
+	gchar addr[STRLEN_ADDRINFO];
+	addr_info_to_string(&(container->meta2_addr), addr, STRLEN_ADDRINFO);
+	struct hc_url_s *url = hc_url_empty();
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs));
+	hc_url_set(url, HCURL_HEXID, container->str_cID);
+	*err = m2v2_remote_execute_HAS(addr, NULL, url);
+	hc_url_clean(url);
+	if (*err) {
+		metautils_pclose(&(container->meta2_cnx));
+		return GS_ERROR;
 	}
 
 	/*the connection succeeded*/
@@ -932,10 +928,10 @@ _allm2(gs_container_t *container, gchar ***targets)
 }
 
 static GError*
-_destroy_on_allm2(gs_container_t *container)
+_destroy_on_allm2(gs_container_t *container, guint32 flags)
 {
 	gchar **targets = NULL;
-	GError *err;
+	GError *err = NULL;
 
 	if (NULL != (err = _allm2(container, &targets)))
 		return err;
@@ -944,39 +940,19 @@ _destroy_on_allm2(gs_container_t *container)
 		return NEWERROR(CODE_CONTAINER_NOTFOUND, "No such container");
 
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, container->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(container));
 	hc_url_set(url, HCURL_HEXID, container->str_cID);
-	GByteArray *req = m2v2_remote_pack_DESTROY(NULL, url);
-	hc_url_clean(url);
 
-	struct client_s **clients = gridd_client_create_many(targets, req, NULL, NULL);
+	// Starting from 1.8.3.10, destroy event is called on slaves by the master
+	err = m2v2_remote_execute_DESTROY(targets[0], NULL, url, flags);
 	g_strfreev(targets);
-	targets = NULL;
-	g_byte_array_unref(req);
-	req = NULL;
 
-	gridd_clients_start(clients);
-	err = gridd_clients_loop(clients);
-
-	// Some errors need a special management
-	for (struct client_s **p = clients; !err && p && *p ;p++) {
-		if (!(err = gridd_client_error(*p)))
-			continue;
-		GRID_DEBUG("Container destruction attempts failed : (%d) %s",
-				err->code, err->message);
-		if (err->code == CODE_CONTAINER_NOTFOUND) {
-			g_clear_error(&err);
-			continue;
-		}
-	}
-
-	gridd_clients_free(clients);
 	return err;
 }
 
 static GError*
-_destroy_everywhere(gs_container_t *container, GSList **exclude)
+_destroy_everywhere(gs_container_t *container, GSList **exclude, guint32 flags)
 {
 	GError *err = NULL;
 
@@ -984,14 +960,14 @@ _destroy_everywhere(gs_container_t *container, GSList **exclude)
 	gs_decache_container(container->info.gs, C0_ID(container));
 
 	// Locate the meta2 and send the destruction command
-	if (NULL != (err = _destroy_on_allm2(container))) {
+	if (NULL != (err = _destroy_on_allm2(container, flags))) {
 		g_prefix_error(&err, "Failed on some M2: ");
 		return err;
 	}
 
 	/* if ok, drop m2 link */
 	struct addr_info_s *m1 = gs_resolve_meta1v2(container->info.gs,
-			C0_ID(container), 0, *exclude, &err);
+			C0_ID(container), NULL, 0, *exclude, &err);
 
 	if (!m1) {
 		if (!err)
@@ -999,8 +975,9 @@ _destroy_everywhere(gs_container_t *container, GSList **exclude)
 		g_prefix_error(&err, "META0/1 error: ");
 	}
 	else {
-		if (!meta1v2_remote_unlink_service(m1, &err, container->info.gs->ni.name,
-					C0_ID(container), "meta2", 10000, 30000, NULL))
+		if (!meta1v2_remote_unlink_service(m1, &err,
+				gs_get_full_vns(container->info.gs),
+				C0_ID(container), "meta2", 10000, 30000, NULL))
 			g_prefix_error(&err, "META0/1 unlink error: ");
 		g_free(m1);
 	}
@@ -1010,6 +987,13 @@ _destroy_everywhere(gs_container_t *container, GSList **exclude)
 gs_status_t
 gs_destroy_container (gs_container_t *container, gs_error_t **err)
 {
+	return gs_destroy_container_flags(container, 0, err);
+}
+
+gs_status_t
+gs_destroy_container_flags (gs_container_t *container, unsigned int flags,
+		gs_error_t **err)
+{
 	GError *e = NULL;
 	GSList *m1_exclude = NULL;
 
@@ -1017,7 +1001,7 @@ gs_destroy_container (gs_container_t *container, gs_error_t **err)
 		if (e)
 			g_clear_error(&e);
 
-		if (!(e = _destroy_everywhere(container, &m1_exclude)))
+		if (!(e = _destroy_everywhere(container, &m1_exclude, (guint32)flags)))
 			goto success;
 		if (e->code == CODE_CONTAINER_NOTFOUND)
 			goto success;
@@ -1048,7 +1032,6 @@ gs_flush_container (gs_container_t *container, gs_error_t **err)
 
 	/* this callback will be applied on each content. It destroys the
 	 * remote content and free the structure */
-
 	int _filter (gs_content_t *content, void *user_data)
 	{
 		gs_status_t rc;
@@ -1118,8 +1101,22 @@ gs_container_get_info (const gs_container_t *container,
 }
 
 gs_status_t
+gs_download_content_by_name(gs_container_t *container, const char *name,
+		gs_download_info_t *dl_info, gs_error_t **err)
+{
+	return gs_download_content_by_name_full(container, name, NULL, NULL, dl_info, err);
+}
+
+gs_status_t
 gs_download_content_by_name_and_version(gs_container_t *container, const char *name, const char *version,
-	gs_download_info_t *dl_info, gs_error_t **err)
+		gs_download_info_t *dl_info, gs_error_t **err)
+{
+	return gs_download_content_by_name_full(container, name, version, NULL, dl_info, err);
+}
+
+gs_status_t
+gs_download_content_by_name_full(gs_container_t *container, const char *name, const char *version,
+	const char *stgpol, gs_download_info_t *dl_info, gs_error_t **err)
 {
 	int rc = GS_ERROR;
 	gs_content_t *content = NULL;
@@ -1149,7 +1146,7 @@ gs_download_content_by_name_and_version(gs_container_t *container, const char *n
 			return GS_ERROR;
 		} else{
 			INFO("Chunks loaded from the metacd");
-			if (gs_download_content(content, dl_info, &gserr_cache)) {
+			if (gs_download_content_full(content, dl_info, stgpol, NULL, NULL, &gserr_cache)) {
 				/* SUCCESS */
 				gs_content_free(content);
 				if (gserr_cache)
@@ -1179,7 +1176,7 @@ gs_download_content_by_name_and_version(gs_container_t *container, const char *n
 		goto error_opened;
 	}
 
-	if (!gs_download_content(content, dl_info, err)) {
+	if (!gs_download_content_full(content, dl_info, stgpol, NULL, NULL, err)) {
 		GSERRORSET(err, "Download failure");
 		goto error_opened;
 	}
@@ -1190,13 +1187,6 @@ error_opened:
 	if (gserr_cache)
 		gs_error_free(gserr_cache);
 	return rc;
-}
-
-gs_status_t
-gs_download_content_by_name(gs_container_t *container, const char *name,
-	gs_download_info_t *dl_info, gs_error_t **err)
-{
-	return gs_download_content_by_name_and_version(container, name, NULL, dl_info, err);
 }
 
 gs_status_t
@@ -1231,12 +1221,11 @@ error_opened:
 	gs_content_free(content);
 	return rc;
 }
-
+/* Improved version of gs_get_storage_container */
 gs_container_t*
-gs_get_storage_container (gs_grid_storage_t *gs, const char *container_name,
-		const char *stgpol, int auto_create, gs_error_t **gs_err)
+gs_get_storage_container2(gs_grid_storage_t *gs, const char *container_name,
+		struct m2v2_create_params_s *params, int auto_create, gs_error_t **gs_err)
 {
-	struct m2v2_create_params_s params = {NULL,NULL};
 	GError *localError = NULL;
 	gs_container_t *container=NULL;
 
@@ -1247,7 +1236,6 @@ gs_get_storage_container (gs_grid_storage_t *gs, const char *container_name,
 	}
 
 	TRACE("get container [%s]", container_name);
-	params.storage_policy = stgpol;
 
 	/*allocates and init the structure*/
 	container = calloc (1, sizeof(gs_container_t));
@@ -1268,7 +1256,7 @@ gs_get_storage_container (gs_grid_storage_t *gs, const char *container_name,
 		memcpy(container->info.name, container_name, nLen);
 
 		/*hash the name*/
-		meta1_name2hash(container->cID, gs->ni.name, C0_NAME(container));
+		meta1_name2hash(container->cID, gs_get_full_vns(gs), C0_NAME(container));
 
 		/*pre-set the string form of the container id */
 		container_id_to_string( container->cID, container->str_cID, sizeof(container->str_cID) );
@@ -1281,7 +1269,7 @@ gs_get_storage_container (gs_grid_storage_t *gs, const char *container_name,
 	TRACE("hash done : name=[%s] -> id=[%s]", C0_NAME(container), C0_IDSTR(container));
 
 	/*get the container location*/
-	if (GS_ERROR == container_resolve_and_get(container, &params, auto_create, &localError)) {
+	if (GS_ERROR == container_resolve_and_get(container, params, auto_create, &localError)) {
 		if (!localError)
 			GSETERROR(&localError,"Failed to resolve container [%s]", C0_NAME(container));
 		goto error_label;
@@ -1303,11 +1291,31 @@ error_label:
 	return NULL;
 }
 
+gs_container_t*
+gs_get_storage_container (gs_grid_storage_t *gs, const char *container_name,
+		const char *stgpol, int auto_create, gs_error_t **gs_err)
+{
+	struct m2v2_create_params_s params = {stgpol, NULL};
+	return gs_get_storage_container2(gs, container_name, &params, auto_create,
+			gs_err);
+}
+
+
+gs_container_t* 
+gs_get_storage_container_v2(gs_grid_storage_t *gs,
+        const char *container_name, const char *stgpol, const char *verspol, 
+		int auto_create, gs_error_t **gs_err)
+{
+    struct m2v2_create_params_s params = {stgpol, verspol};
+    return gs_get_storage_container2(gs, container_name, &params, auto_create,
+	            gs_err);
+}
+
+
 char **
 hc_get_container_admin_entries(gs_container_t *container, gs_error_t **gs_err)
 {
 	GError *localError = NULL;
-	/* GHashTable *result = NULL; */
 
 	/*sanity checks*/
 	if (!container) {
@@ -1315,22 +1323,9 @@ hc_get_container_admin_entries(gs_container_t *container, gs_error_t **gs_err)
 		return NULL;
 	}
 	TRACE("get container admin entries [%s]", C0_NAME(container));
-	/*	(void) gs_container_reconnect_if_necessary (container,NULL);
 
-	result = meta2raw_remote_get_admin_entries(C0_CNX(container), &localError, C0_ID(container));
-	if(!result) {
-		if(!localError) {
-			GSETERROR(&localError, "Failed to list admin entries from container [%s]: no error");
-		}
-		goto error_label;
-	}
+	// FIXME TODO This function has been commented and does not do anything
 
-	if (localError)
-		g_clear_error(&localError);
-
-	return result;
-
-error_label: */
 	if (!localError)
 		GSETERROR(&localError,"unknown error");
 	GSERRORCAUSE(gs_err,localError,"Failed to get container admin entries [%s]", C0_NAME(container));
@@ -1339,54 +1334,109 @@ error_label: */
 }
 
 static gs_error_t*
-hc_set_container_global_property(gs_container_t *container, const char *prop_name, const char *prop_val)
+_hc_set_container_global_property(gs_container_t *container,
+		const char *prop_name, const char *prop_val, gboolean no_check)
 {
 	gs_error_t *result = NULL;
 	GError *g_error = NULL;
-	struct metacnx_ctx_s cnx;
+	struct hc_url_s *url = NULL;
 	gchar m2_url[STRLEN_ADDRINFO];
+	struct bean_PROPERTIES_s *bp = NULL;
+	GSList *beans = NULL;
 
-	if(!container || !prop_val) {
+	if (!container) {
 		char buf[256];
 		bzero(buf, sizeof(buf));
-		g_snprintf(buf, sizeof(buf) - 1, "Invalid parameter (%p | %s)", container, prop_val);
+		g_snprintf(buf, sizeof(buf) - 1, "Invalid parameter (%p | %s)",
+				container, prop_val);
 		result = g_malloc0(sizeof(gs_error_t));
 		result->code = 400;
 		result->msg = g_strdup(buf);
 		return result;
 	}
 
-	metacnx_clear(&cnx);
-	addr_info_to_string(&(container->meta2_addr), m2_url, sizeof(m2_url));
+	addr_info_to_string(&(container->meta2_addr), m2_url, STRLEN_ADDRINFO);
+	fill_hcurl_from_container(container, &url);
 
-	if (!metacnx_init_with_url(&cnx, m2_url, &g_error)) {
-		goto end;
+	bp = _bean_create(&descr_struct_PROPERTIES);
+	PROPERTIES_set2_key(bp, prop_name);
+	if (prop_val != NULL) {
+		PROPERTIES_set2_value(bp, (guint8*)prop_val, strlen(prop_val));
+	} else {
+		PROPERTIES_set2_value(bp, (const guint8*)"", 0);
+		PROPERTIES_set_deleted(bp, TRUE);
 	}
+	beans = g_slist_prepend(beans, bp);
 
-	if (!meta2_remote_container_open(&(cnx.addr), 60000, &g_error, C0_ID(container))) {
-		meta2_remote_container_close(&(cnx.addr), 60000, &g_error, C0_ID(container));
-		goto end;
-	}
-	meta2_remote_set_container_global_property(&cnx, C0_ID(container), prop_name, prop_val, &g_error);
-	meta2_remote_container_close(&(cnx.addr), 60000, &g_error, C0_ID(container));
+	g_error = m2v2_remote_execute_PROP_SET(m2_url, NULL, url,
+			no_check? M2V2_FLAG_NOFORMATCHECK : 0, beans);
 
-end:
-
-	metacnx_close(&cnx);
-	metacnx_clear(&cnx);
-
-	if(g_error) {
+	if (g_error) {
 		result = g_malloc0(sizeof(gs_error_t));
 		result->code = g_error->code;
 		result->msg = g_strdup(g_error->message);
 		g_clear_error(&g_error);
 	}
 
+	_bean_cleanl2(beans);
+	hc_url_clean(url);
 	return result;
 }
 
 gs_error_t*
-hc_set_container_storage_policy(gs_container_t *container, const char *storage_policy)
+hc_set_container_global_property(gs_container_t *container,
+		const char *prop_name, const char *prop_val)
+{
+	return _hc_set_container_global_property(container, prop_name, prop_val,
+			FALSE);
+}
+
+gs_error_t*
+hc_del_container_global_property(gs_container_t *container,
+		const char *prop_name)
+{
+	return _hc_set_container_global_property(container, prop_name, NULL, FALSE);
+}
+
+gs_error_t*
+hc_get_container_global_properties(gs_container_t *container, char ***result)
+{
+	GError *g_error = NULL;
+	struct hc_url_s *url = NULL;
+	gchar m2_url[STRLEN_ADDRINFO];
+	gs_error_t *err = NULL;
+	GSList *beans = NULL;
+	gint pos = 0;
+
+	addr_info_to_string(&(container->meta2_addr), m2_url, STRLEN_ADDRINFO);
+	fill_hcurl_from_container(container, &url);
+
+	g_error = m2v2_remote_execute_PROP_GET(m2_url, NULL, url, 0, &beans);
+	if (g_error) {
+		err = g_malloc0(sizeof(gs_error_t));
+		err->code = g_error->code;
+		err->msg = g_strdup(g_error->message);
+		g_clear_error(&g_error);
+	} else {
+		*result = g_malloc0((g_slist_length(beans)+1) * sizeof(gchar *));
+		for (GSList *l = beans; l != NULL; l = l->next) {
+			GByteArray *val = PROPERTIES_get_value(l->data);
+			char buf[val->len + 1];
+			memset(buf, '\0', sizeof(buf));
+			g_snprintf(buf, sizeof(buf), "%s", val->data);
+			(*result)[pos++] = g_strdup_printf("%s=%s",
+					PROPERTIES_get_key(l->data)->str, buf);
+		}
+		_bean_cleanl2(beans);
+	}
+
+	hc_url_clean(url);
+	return err;
+}
+
+gs_error_t*
+hc_set_container_storage_policy(gs_container_t *container,
+		const char *storage_policy)
 {
 	GError *ge = NULL;
 	char target[64];
@@ -1395,10 +1445,11 @@ hc_set_container_storage_policy(gs_container_t *container, const char *storage_p
 	memset(target, '\0', 64);
 	addr_info_to_string(&(container->meta2_addr), target, 64);
 	url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, container->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(container));
 
-	if(NULL != (ge = m2v2_remote_execute_STGPOL(target, NULL, url, storage_policy, NULL))) {
+	if (NULL != (ge = m2v2_remote_execute_STGPOL(target, NULL, url,
+			storage_policy, NULL))) {
 		gs_error_t *result = g_malloc0(sizeof(gs_error_t));
 		result->code = ge->code;
 		result->msg = g_strdup(ge->message);
@@ -1410,28 +1461,36 @@ hc_set_container_storage_policy(gs_container_t *container, const char *storage_p
 	hc_url_clean(url);
 
 	/* TODO : update chunk xattr */
-	
+
 	return NULL;
 }
 
 gs_error_t*
 hc_set_container_versioning(gs_container_t *container, const char *versioning)
 {
-	return hc_set_container_global_property(container,
-			GS_CONTAINER_PROPERTY_VERSIONING, versioning);
+	return _hc_set_container_global_property(container,
+			GS_CONTAINER_PROPERTY_VERSIONING, versioning, TRUE);
+}
+
+gs_error_t*
+hc_del_container_versioning(gs_container_t *container)
+{
+	return _hc_set_container_global_property(container, 
+            GS_CONTAINER_PROPERTY_VERSIONING, NULL, TRUE);
 }
 
 gs_error_t*
 hc_set_container_quota(gs_container_t *container, const char *quota)
 {
-	return hc_set_container_global_property(container,
-			GS_CONTAINER_PROPERTY_QUOTA, quota);
+	return _hc_set_container_global_property(container,
+			GS_CONTAINER_PROPERTY_QUOTA, quota, TRUE);
 }
 
 gs_container_t*
 hc_resolve_meta2_entry(gs_grid_storage_t *gs, const char *container_name,
                 int auto_create, gs_error_t **gs_err)
 {
-	return gs_get_storage_container (gs,container_name, NULL, auto_create, gs_err);
+	return gs_get_storage_container (gs,container_name, NULL, auto_create,
+			gs_err);
 }
 

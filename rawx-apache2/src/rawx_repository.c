@@ -1,45 +1,17 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
 
-#ifdef HAVE_COMPAT
-# include <metautils_compat.h>
-#endif
-
 #ifdef APR_HAVE_STDIO_H
 #include <stdio.h>              /* for sprintf() */
 #endif
 
 #include <unistd.h>
+#include <sys/stat.h>
 
-# include <glib.h>
-# include <metatypes.h>
-# include <metautils.h>
-# include <metacomm.h>
-# include <rawx.h>
-# include <gridcluster.h>
+#include <openssl/md5.h>
 
 #include <apr.h>
 #include <apr_file_io.h>
@@ -53,15 +25,18 @@
 #include <http_request.h>       /* for ap_update_mtime() */
 #include <mod_dav.h>
 
-#include <sys/stat.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <cluster/lib/gridcluster.h>
+#include <rawx-lib/src/rawx.h>
 
-#include "./mod_dav_rawx.h"
-#include "./rawx_bucket.h"
-#include "./rawx_repo_core.h"
-#include "./rawx_internals.h"
-#include "./rawx_config.h"
+#include <glib.h>
 
-#include <openssl/md5.h>
+#include "mod_dav_rawx.h"
+#include "rawx_bucket.h"
+#include "rawx_repo_core.h"
+#include "rawx_internals.h"
+#include "rawx_config.h"
 
 struct apr_bucket_type_t chunk_bucket_type = {
 	"CHUNK-input",
@@ -168,7 +143,12 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 
 	/* Check if client allowed to work with us */
 	if(conf->enabled_acl) {
-		if(!authorized_personal_only(r->connection->remote_ip, conf->rawx_conf->acl)) {
+#if MODULE_MAGIC_COOKIE == 0x41503234UL /* "AP24" */
+		if(!authorized_personal_only(r->connection->client_ip, conf->rawx_conf->acl))
+#else
+		if(!authorized_personal_only(r->connection->remote_ip, conf->rawx_conf->acl))
+#endif
+		{
 			return server_create_and_stat_error(conf, r->pool, HTTP_UNAUTHORIZED, 0, "Permission Denied (APO)");
 		}
 	}
@@ -347,10 +327,6 @@ dav_rawx_close_stream(dav_stream *stream, int commit)
 
 	/* stats update */
 	server_inc_request_stat(resource_get_server_config(stream->r), RAWX_STATNAME_REQ_CHUNKPUT, request_get_duration(stream->r->info->request));
-	/* DAV_DEBUG_REQ(stream->r->info->request, 0, "Reqpersec : %"G_GUINT64_FORMAT", AvgTreatTime : %"G_GUINT64_FORMAT,
-			server_get_reqperseq(resource_get_server_config(stream->r)),
-			server_get_reqavgtime(resource_get_server_config(stream->r))); */
-
 	return e;
 }
 
@@ -560,7 +536,6 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 			bkt->type = &chunk_bucket_type;
 			bkt->length = i64; 
 			bkt->start = 0;
-			//bkt->data = &ctx->cp_chunk; 
 			bkt->data = ctx; 
 			bkt->free = chunk_bucket_free_noop;
 			bkt->list = output->c->bucket_alloc;
@@ -614,12 +589,10 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 	char attr_path[2048];
 	apr_pool_t *pool;
 	apr_status_t status;
-	dav_resource_private *info;
 	dav_error *e = NULL;
 
 	DAV_XDEBUG_RES(resource, 0, "%s(%s)", __FUNCTION__, resource_get_pathname(resource));
 	pool = resource->pool;
-	info = resource->info;
 	*response = NULL;
 
 	if (DAV_RESOURCE_TYPE_REGULAR != resource->type)  {
@@ -746,7 +719,11 @@ static const dav_hooks_repository dav_hooks_repository_rawx =
 	dav_rawx_remove_resource /*only for regular resources*/,
 	dav_rawx_walk /* no walk across the chunks */,
 	dav_rawx_getetag,
-	NULL /* no module context */
+	NULL, /* no module context */
+#if MODULE_MAGIC_COOKIE == 0x41503234UL /* "AP24" */
+	NULL,
+	NULL,
+#endif
 };
 
 static dav_prop_insert
@@ -887,7 +864,7 @@ dav_rawx_patch_validate(const dav_resource *resource, const apr_xml_elem *elem, 
 	}
 
 	if (operation == DAV_PROP_OP_DELETE) {
-		return dav_new_error(resource->info->pool, HTTP_CONFLICT, 0,
+		return __dav_new_error(resource->info->pool, HTTP_CONFLICT, 0,
 				"The 'executable' property cannot be removed.");
 	}
 
@@ -902,7 +879,7 @@ dav_rawx_patch_validate(const dav_resource *resource, const apr_xml_elem *elem, 
 
 	if (cdata == NULL) {
 		if (f_cdata == NULL) {
-			return dav_new_error(resource->info->pool, HTTP_CONFLICT, 0,
+			return __dav_new_error(resource->info->pool, HTTP_CONFLICT, 0,
 					"The 'executable' property expects a single "
 					"character, valued 'T' or 'F'. There was no "
 					"value submitted.");
@@ -917,7 +894,7 @@ dav_rawx_patch_validate(const dav_resource *resource, const apr_xml_elem *elem, 
 
 	value = cdata->text[0];
 	if (value != 'T' && value != 'F') {
-		return dav_new_error(resource->info->pool, HTTP_CONFLICT, 0,
+		return __dav_new_error(resource->info->pool, HTTP_CONFLICT, 0,
 				"The 'executable' property expects a single "
 				"character, valued 'T' or 'F'. The value "
 				"submitted is invalid.");
@@ -928,7 +905,7 @@ dav_rawx_patch_validate(const dav_resource *resource, const apr_xml_elem *elem, 
 	return NULL;
 
 too_long:
-	return dav_new_error(resource->info->pool, HTTP_CONFLICT, 0,
+	return __dav_new_error(resource->info->pool, HTTP_CONFLICT, 0,
 			"The 'executable' property expects a single "
 			"character, valued 'T' or 'F'. The value submitted "
 			"has too many characters.");
@@ -945,7 +922,7 @@ dav_rawx_patch_exec(const dav_resource *resource, const apr_xml_elem *elem, int 
 	(void) context;
 	(void) rollback_ctx;
 	/* XXX JFS : TODO dump the xattr handle in the file */
-	return dav_new_error(resource->info->pool, HTTP_INTERNAL_SERVER_ERROR, 0, "PROPPATCH not yet implemented");
+	return __dav_new_error(resource->info->pool, HTTP_INTERNAL_SERVER_ERROR, 0, "PROPPATCH not yet implemented");
 }
 
 static void

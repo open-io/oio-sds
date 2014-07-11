@@ -1,22 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "integrity.main.chunk_checker"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "integrity.main.chunk_checker"
 #endif
 
 #include <stdlib.h>
@@ -119,8 +102,6 @@ check_chunk(const char *chunk_path, void *data, GError ** error)
 {
 	struct chunk_textinfo_s text_chunk;
 	GSList *list_mismatch = NULL;
-	/* struct content_textinfo_s text_content; */
-	/* struct meta2_raw_content_s meta2_raw; */
 
 	CHECK_ARG_POINTER(chunk_path, error);
 	CHECK_ARG_VALID_FILE(chunk_path, error);
@@ -131,7 +112,6 @@ check_chunk(const char *chunk_path, void *data, GError ** error)
 		return FALSE;
 	}
 
-	/*	NOTICE("Checking chunck in container %s",text_chunk.container_id);	*/
 	/* Check chunk integrity */
 	if (!check_chunk_integrity(chunk_path, &text_chunk, &list_mismatch, error)) {
 		GSETERROR(error, "Chunk integrity check failed");
@@ -140,13 +120,6 @@ check_chunk(const char *chunk_path, void *data, GError ** error)
 
 	/* if list_mismatch == NULL => chunk integrity ok, we can test chunk referencing  */
 	if (list_mismatch==NULL){
-		/* NOTICE("chunk integrity ok, now testing chunk referencing!\n");
-		if(!check_chunk_referencing(&text_content, &text_chunk, &meta2_raw, &list_mismatch, error))
-    		{
-			GSETERROR(error, "Chunk referencing check failed");
-			return FALSE;
-		}	
-		*/
 	}
 	
 	/* Send broken events if any */

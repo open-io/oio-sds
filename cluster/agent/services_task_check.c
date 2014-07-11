@@ -1,41 +1,17 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "agent.services.task_check"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "agent.services.task_check"
 #endif
 
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-
-#include "../conscience/conscience.h"
-#include "../conscience/conscience_srvtype.h"
-#include "../module/module.h"
+#include <metautils/lib/metacomm.h>
+#include <cluster/conscience/conscience.h>
+#include <cluster/conscience/conscience_srvtype.h>
+#include <cluster/module/module.h>
 
 #include "./asn1_request_worker.h"
-#include "./connect.h"
 #include "./io_scheduler.h"
 #include "./namespace_get_task_worker.h"
 #include "./services_workers.h"
@@ -300,7 +276,6 @@ _check_tcp_service_task(gpointer udata, GError **error)
 
 	ns_data = g_hash_table_lookup(namespaces, task_data->ns_name);
 	if (!ns_data) {
-		/*_mark_service_state(task_data->ns_name, task_data->srv_key, FALSE);*/
 		task_done(task_data->task_name);
 		GSETERROR(error, "Namespace unavailable");
 		return 0;
@@ -309,36 +284,35 @@ _check_tcp_service_task(gpointer udata, GError **error)
 	/* if the service does not exists, the task itself is de-scheduled */
 	if (!(si=g_hash_table_lookup(ns_data->local_services, task_data->srv_key))
 	    && !(si=g_hash_table_lookup(ns_data->down_services, task_data->srv_key))) {
-		/*_mark_service_state(task_data->ns_name, task_data->srv_key, FALSE);*/
 		task_done(task_data->task_name);
 		task_stop(task_data->task_name);
 		INFO("Service [%s] does not exist, stopping task [%s]", task_data->srv_key, task_data->task_name);
 		return 1;
 	}
-	
+
 	/* Now start a worker for this service. The worker has its own session_data,
 	 * without hard reference to the task_t or the namespace_data_t */
 	do {
-		struct workerdata_checksrv_s *wdata;
-		worker_t *worker;
-		int fd = -1;
-
-		if (!connect_addr_info(&fd, &(si->addr), error)) {
-			GSETERROR(error, "Connection to gridd server failed : %s", strerror(errno));
+		int fd = addrinfo_connect_nopoll(&(si->addr), 1000, error);
+		if (0 > fd) {
+			GSETERROR(error, "Connection to gridd server failed : (%d) %s",
+					errno, strerror(errno));
 			return 0;
 		}
 
-		wdata = g_try_malloc0(sizeof(*wdata));
+		sock_set_linger(fd, 1, 0);
+
+		struct workerdata_checksrv_s *wdata = g_try_malloc0(sizeof(*wdata));
 		g_strlcpy(wdata->task_name, task_data->task_name, sizeof(wdata->task_name)-1);
 		g_strlcpy(wdata->ns_name, task_data->ns_name, sizeof(wdata->ns_name)-1);
 		g_strlcpy(wdata->srv_key, task_data->srv_key, sizeof(wdata->srv_key)-1);
 
-		worker = g_try_malloc0(sizeof(worker_t));
+		worker_t *worker = g_try_malloc0(sizeof(worker_t));
 		worker->func = _check_tcp_service_worker_func;
 		worker->clean = _check_tcp_service_worker_cleaner;
 		worker->timeout = 1000;
 		worker->data.sock_timeout = 1000;
-		worker->data.fd = worker->data.sock_timeout = fd;
+		worker->data.fd = fd;
 		worker->data.session = wdata;
 
 		if (!add_fd_to_io_scheduler(worker, EPOLLOUT, error)) {
@@ -395,7 +369,10 @@ allservice_check_start_HT(struct namespace_data_s *ns_data, GHashTable *ht)
 				ERROR("Memory allocation failure");
 				continue;
 			}
-			task = set_task_callbacks(create_task(1,td_scheme.task_name), _check_tcp_service_task, g_free, task_data);
+
+			task = create_task(period_check_services, td_scheme.task_name);
+			task = set_task_callbacks(task, _check_tcp_service_task,
+					g_free, task_data);
 			if (!task) {
 				ERROR("Memory allocation failure");
 				continue;
@@ -450,12 +427,13 @@ services_task_check(GError ** error)
 
 	TRACE_POSITION();
 
-	task = set_task_callbacks(create_task(1,TASK_ID), allservices_check_starter, NULL, NULL);
+	task = set_task_callbacks(create_task(2, TASK_ID),
+			allservices_check_starter, NULL, NULL);
 	if (!task) {
 		GSETERROR(error, "Memory allocation failure");
 		return 0;
 	}
-	
+
 	if (!add_task_to_schedule(task, error)) {
 		g_free(task);
 		GSETERROR(error, "Failed to add vol_stat_send task to scheduler");

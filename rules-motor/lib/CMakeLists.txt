@@ -1,10 +1,5 @@
-include_directories(BEFORE .
-		../../metautils/lib
-		../../meta2-mover/lib
-		../../client/c/lib
-		../../cluster/lib ../../cluster/agent ../../cluster/events
-		../../rawx-lib/src
-		../../integrity/lib)
+include_directories(BEFORE . ../..
+		../../client/c/lib)
 
 include_directories(AFTER
 		${PYTHON_INCLUDE_PATH}
@@ -30,7 +25,7 @@ add_library(rulesmotorpy2c SHARED python2c.c motor.h)
 set_target_properties(rulesmotorpy2c PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(rulesmotorpy2c
-		metautils gridcluster rawx meta2mover
+		metautils gridcluster rawx meta2mover integrity
 		-lm -ldl -lpthread -lutil ${PYTHON_LIBRARIES} ${GLIB2_LIBRARIES})
 
 install(TARGETS rulesmotorc2py rulesmotorpy2c

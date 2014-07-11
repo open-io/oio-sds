@@ -1,31 +1,8 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "grid.client.resolv.local"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "grid.client.resolv.local"
 #endif
 
-#include <metautils.h>
-#include <gridcluster.h>
-#include <meta0_utils.h>
-#include <time.h>
-
 #include "./gs_internals.h"
-#include "./meta_resolver_explicit.h"
 
 static void
 _clean_cache_entry(gpointer data, gpointer udata)
@@ -90,7 +67,7 @@ UNSAFE_resolver_direct_reload (struct resolver_direct_s *r, gboolean locked, GEr
 	int rc = 0;
 
 	DEBUG("META0 cache reload wanted");
-
+	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 	/*sanity checks*/
 	if (!r)
 	{
@@ -165,6 +142,7 @@ UNSAFE_resolver_direct_reload (struct resolver_direct_s *r, gboolean locked, GEr
 
 exit_label:	
 
+	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 	return rc;
 
 }
@@ -225,7 +203,6 @@ resolver_direct_get_meta1 (resolver_direct_t *r, const container_id_t cID, int r
                         return NULL;
                 }
         }
-        /* memcpy (&a, r->mappings+i, sizeof(addr_info_t)); */
 	gchar ** meta1_addresses = NULL;
 	gchar *addr_str = NULL;
 	meta1_addresses = r->mappings->pdata[i];
@@ -300,7 +277,6 @@ resolver_direct_set_meta1_master (resolver_direct_t *r, const container_id_t cid
                         return 0;
                 }
         }
-        /* memcpy (&a, r->mappings+i, sizeof(addr_info_t)); */
 	all = r->mappings->pdata[i];
 	if(!all) {
 		M0CACHE_UNLOCK(*r);
@@ -337,6 +313,7 @@ _service_array_to_slist(char **m2)
 	GSList *result = NULL;
 	addr_info_t *a = NULL;
 	for (uint i = 0 ; i < g_strv_length(m2) ; i++) {
+		DEBUG("Got meta2=%s", m2[i]);
 		a = addr_info_from_service_str(m2[i]);
 		if (NULL != a) {
 			result = g_slist_prepend(result, a);
@@ -377,12 +354,15 @@ resolver_direct_get_meta2_once (resolver_direct_t *r, const char *ns, const cont
 
 	if (!m2 || 0 == g_strv_length(m2)) {
 		if (NULL != e) {
+			gchar strm1[50];
+			memset(strm1, 0, sizeof(strm1));
+			addr_info_to_string(m1, strm1, sizeof(strm1));
+			GSETCODE(err, e->code, "Cannot directly resolve META2 : %s [META1=%s]", e->message, strm1);
 			if(CODE_CONTAINER_NOTFOUND != e->code) {
 				*m1_exclude = g_slist_prepend(*m1_exclude, m1);
 			} else {
 				g_free(m1);
 			}
-			GSETCODE(err, e->code, "Cannot directly resolve META2 : %s", e->message);
 			g_clear_error(&e);
 		} else {
 			/* no error, this is simply a container not found */
@@ -428,7 +408,7 @@ resolver_direct_get_meta2 (resolver_direct_t *resolver, const char *ns, const co
 				INFO("metacd: not found fail M0");
 				return __directly_resolve (r, exclude, err);
 			} else if ((*err)->code < 100 || (*err)->code == 500) {
-				INFO("metacd: not found fail code");
+				INFO("metacd: not found fail code (%d)", (*err)->code);
 				return __directly_resolve (r, exclude, err);
 			} else {
 				return NULL;
@@ -482,7 +462,7 @@ resolver_direct_create (const char * const config, GError **err)
 }
 
 resolver_direct_t*
-resolver_direct_create_with_metacd(const gchar * const config, metacd_t *metacd, gint to_cnx, gint to_req, GError **err)
+resolver_direct_create_with_metacd(const gchar * const config, struct metacd_s *metacd, gint to_cnx, gint to_req, GError **err)
 {
 	resolver_direct_t *r = NULL;
 
@@ -515,7 +495,7 @@ resolver_direct_create_with_metacd(const gchar * const config, metacd_t *metacd,
 			return r;
 		}
 		else {
-			ERROR("META0 resolution failed with metacd : %s",
+			DEBUG("META0 resolution failed with metacd : %s",
 				((err_local && err_local->message)? err_local->message : "unknown error"));
 			if (err_local)
 				g_error_free(err_local);

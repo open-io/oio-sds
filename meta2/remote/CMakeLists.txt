@@ -1,6 +1,7 @@
-include_directories(BEFORE .
-		../../metautils/lib
-		../lib)
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+
+include_directories(BEFORE . .. ../..
+		${CMAKE_CURRENT_BINARY_DIR}/../..)
 
 add_custom_command(
 	OUTPUT meta2_services_remote.h meta2_services_remote.c
@@ -29,10 +30,18 @@ target_link_libraries(meta2remote
 		${GLIB2_LIBRARIES})
 
 add_executable(meta2_client client.c)
+bin_prefix_full(meta2_client -meta2-client)
 target_link_libraries(meta2_client
 		metautils metacomm meta2remote meta2servicesremote
 		${GLIB2_LIBRARIES})
 add_dependencies(meta2_client meta2remote)
+
+install(FILES
+			meta2_remote.h
+			${CMAKE_CURRENT_BINARY_DIR}/meta2_services_remote.h
+		DESTINATION include/meta2/remote
+		PERMISSIONS
+			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
 install(TARGETS meta2remote meta2servicesremote meta2_client
 		LIBRARY DESTINATION ${LD_LIBDIR}

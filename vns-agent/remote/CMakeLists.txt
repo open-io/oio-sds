@@ -1,5 +1,6 @@
-include_directories(BEFORE .
-		../../metautils/lib)
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+
+include_directories(BEFORE . .. ../..)
 
 add_library(vnsagentremote SHARED vns_agent_remote.c vns_agent_remote.h)
 

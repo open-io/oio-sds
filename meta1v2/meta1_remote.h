@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  * @file meta1_remote.h
  */
@@ -26,10 +9,8 @@
 # include <errno.h>
 # include <string.h>
 # include <unistd.h>
-# include <glib.h>
 
-# include <metatypes.h>
-# include <metacomm.h>
+# include <metautils/lib/metacomm.h>
 
 /**
  * @addtogroup meta1v2_remotev1
@@ -369,7 +350,7 @@ gboolean meta1_remote_change_container_reference(struct metacnx_ctx_s *cnx,
  * @return
  */
 gboolean
-meta1_remote_update_containers(addr_info_t *meta1, GSList *list_of_containers,
+meta1_remote_update_containers(gchar *meta1_addr_str, GSList *list_of_containers,
 		gint ms, GError **err);
 
 
@@ -398,6 +379,7 @@ GHashTable* meta1_remote_get_virtual_ns_state(addr_info_t *meta1, gint ms,
 #define NAME_MSGNAME_M1V2_SRVSETARG "M1V2_SRVSETARG"
 #define NAME_MSGNAME_M1V2_SRVDEL "M1V2_SRVDEL"
 #define NAME_MSGNAME_M1V2_SRVALL "M1V2_SRVALL"
+#define NAME_MSGNAME_M1V2_SRVALLONM1 "M1V2_SRVALLONM1"
 #define NAME_MSGNAME_M1V2_SRVAVAIL "M1V2_SRVAVAIL"
 #define NAME_MSGNAME_M1V2_CID_PROPGET "M1V2_CID_PROPGET"
 #define NAME_MSGNAME_M1V2_CID_PROPSET "M1V2_CID_PROPSET"
@@ -406,6 +388,9 @@ GHashTable* meta1_remote_get_virtual_ns_state(addr_info_t *meta1, gint ms,
 #define NAME_MSGNAME_M1V2_OPENALL "M1V2_OPENALL"
 #define NAME_MSGNAME_M1V2_LISTBYPREF "M1V2_LISTBYPREFIX"
 #define NAME_MSGNAME_M1V2_LISTBYSERV "M1V2_LISTBYSERV"
+#define NAME_MSGNAME_M1V2_UPDATEM1POLICY "M1V2_UPDATEM1POLICY"
+
+#define NAME_HEADER_DRYRUN "DRYRUN"
 
 /**
  * @param meta1
@@ -507,6 +492,22 @@ gchar** meta1v2_remote_poll_reference_service(const addr_info_t *meta1,
  * @param meta1
  * @param err
  * @param ns
+ * @param prefix
+ * @param refid
+ * @param srvtype
+ * @param action
+ * @param checkonly
+ * @param excludeurl
+ * @return
+ */
+gchar **
+meta1v2_remote_update_m1_policy(const addr_info_t *meta1,
+                GError **err, const char *ns,  const container_id_t prefix, const container_id_t refid,
+                const gchar *srvtype, const gchar* action, gboolean checkonly, const gchar *excludeurl, gdouble to_step, gdouble to_overall);
+/**
+ * @param meta1
+ * @param err
+ * @param ns
  * @param refid
  * @param url
  * @return
@@ -572,6 +573,17 @@ gboolean meta1v2_remote_reference_del_property(const addr_info_t *m1,
  * @parem result
  * @return
  */
+gchar** meta1v2_remote_list_services(const addr_info_t *m1, GError **err,
+        const gchar *ns, const container_id_t refid  );
+
+
+/**
+ * @param m1
+ * @param ns
+ * @param refid
+ * @parem result
+ * @return
+ */
 GError * meta1v2_remote_list_references(const addr_info_t *m1,
 		const gchar *ns, const container_id_t refid,
 		GByteArray **result);
@@ -589,6 +601,8 @@ GError * meta1v2_remote_list_references_by_service(const addr_info_t *m1,
 		const gchar *ns, const container_id_t refid,
 		const gchar *srvtype, const gchar *url,
 		GByteArray **result);
+
+
 
 /**
  * @param m1

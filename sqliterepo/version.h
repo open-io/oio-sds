@@ -1,26 +1,10 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  * @file version.h
  */
 
 #ifndef HC__SQLX_VERSION__H
 # define HC__SQLX_VERSION__H 1
+# include <glib.h>
 
 /**
  * @defgroup sqliterepo_version Databases versioning
@@ -44,23 +28,14 @@ struct object_version_s
 
 struct sqlx_sqlite3_s;
 
-/**
- * @param sq3
- */
-void version_reinit(struct sqlx_sqlite3_s *sq3);
+/** Wraps version_extract_from_admin_tree() called on the admin table
+ * cache. */
+GTree* version_extract_from_admin(struct sqlx_sqlite3_s *sq3);
 
-/**
- * @param sq3
- * @param schema_only
- * @return
- */
-gboolean version_load(struct sqlx_sqlite3_s *sq3, gboolean schema_only);
-
-/**
- * @param sq3
- * @return
- */
-gboolean version_save(struct sqlx_sqlite3_s *sq3);
+/** For testing purposes, prefer version_extract_from_admin()
+ * for production code.
+ * @see version_extract_from_admin() */
+GTree* version_extract_from_admin_tree(GTree *t);
 
 /**
  * @param t
@@ -76,27 +51,8 @@ void version_debug(const gchar *tag, GTree *sq3);
 
 /**
  * @param t
- * @param tname
- */
-void version_increment(GTree *t, const gchar *tname);
-
-/**
- * @param t
  */
 void version_increment_all(GTree *t);
-
-/**
- * @param diff
- * @param v0
- * @param v1
- */
-GError* version_diff(GTree **diff, GTree *v0, GTree *v1);
-
-/**
- * @param diff
- * @return
- */
-gint64 version_diff_worst(GTree *diff);
 
 /**
  * Computes what would be the version if the 'changes' were applied to a
@@ -109,13 +65,17 @@ gint64 version_diff_worst(GTree *diff);
 GTree* version_extract_expected(GTree *current, struct TableSequence *changes);
 
 /**
- * Builds the diff then returns the worst element
+ * Compute the diff between both versions, and returns an error if the worst
+ * version is > 1 in basolute value.
+ *
  * @param src
  * @param dst
- * @param worst
- * @return
+ * @param worst the worst difference matched, with the considering 'src - dst'
+ * @return the error that occured
  */
 GError* version_validate_diff(GTree *src, GTree *dst, gint64 *worst);
+
+GTree* version_empty(void);
 
 /**
  * @param t

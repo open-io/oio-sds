@@ -1,32 +1,12 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.agent.task_scheduler"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.agent.task_scheduler"
 #endif
 
 #include <stdlib.h>
 #include <time.h>
 #include <string.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
 #include "agent.h"
 #include "task_scheduler.h"
@@ -34,24 +14,14 @@
 #include "gridagent.h"
 #include "message.h"
 
-#define MAX_SCHEDULE_PERIOD 60
-
-#ifdef AGENT_HYPERSPEED_MULTIVITAMINE
-# define IS_TASK_READY(T) 1
-#else
-# define IS_TASK_READY(T) (T)->next_schedule <= now
-#endif
-
 static gboolean task_scheduler_running = TRUE;
 static GHashTable *tasks = NULL;
-static long global_next_schedule;
+static volatile time_t global_last_schedule = 0;
 
 static void
 task_cleaner(gpointer p)
 {
-	task_t *task;
-	
-	task = p;
+	task_t *task = p;
 	if (!task)
 		return;
 	if (task->id)
@@ -67,7 +37,7 @@ void
 init_task_scheduler(void)
 {
 	tasks = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, task_cleaner);
-	global_next_schedule = time(NULL) + MAX_SCHEDULE_PERIOD;
+	global_last_schedule = 0;
 }
 
 void
@@ -79,8 +49,6 @@ stop_task_scheduler(void)
 int
 add_task_to_schedule(task_t * task, GError ** error)
 {
-	long now;
-	
 	if (!task_scheduler_running) {
 		GSETERROR(error,"The task scheduler has been stopped!");
 		return 0;
@@ -96,25 +64,16 @@ add_task_to_schedule(task_t * task, GError ** error)
 		return (0);
 	}
 
-	now = time(NULL);
-	task->next_schedule = now + task->period;
-
-	if (task->next_schedule < global_next_schedule)
-		global_next_schedule = task->next_schedule;
+	task->next_schedule = global_last_schedule + 1;
 
 	g_hash_table_insert(tasks, task->id, task);
 	return (1);
 }
 
-int
-remove_task(const char *task_id, GError ** error)
+void
+remove_task(const char *task_id)
 {
-	if (!g_hash_table_lookup(tasks, task_id)) {
-		GSETERROR(error, "Task [%s] is not actually scheduled", task_id);
-		return (0);
-	}
 	g_hash_table_remove(tasks, task_id);
-	return (1);
 }
 
 static void
@@ -138,50 +97,34 @@ exec_scheduled_tasks(task_t *task)
 void
 exec_tasks(void)
 {
-	GList *list_of_keys, *l;
-	long now;
-
 	if (!task_scheduler_running) {
 		DEBUG("The task_scheduler has been stopped");
 		return;
 	}
 
-	now = time(NULL);
-	global_next_schedule = now + MAX_SCHEDULE_PERIOD;
-	list_of_keys = g_hash_table_get_keys(tasks);
-	for (l=list_of_keys; l ;l=l->next) {
+	time_t now = time(NULL);
+	gboolean rolled = now < global_last_schedule;
+
+	GList *list_of_keys = g_hash_table_get_keys(tasks);
+	for (GList *l=list_of_keys; l ;l=l->next) {
 		task_t *task = g_hash_table_lookup(tasks, l->data);
 
-		if (IS_TASK_READY(task)) {	/* This task needs to be executed */
-
-			/* Build the next schedule */
-			task->next_schedule += task->period;
-
-			/* Check that task is not already executed, and if the
-			 * task is detected busy it won't be destroyed because
-			 * of the continue statement */
-			if (task->busy) {
-				WARN("Task [%s] is busy (still executed), waiting next schedule", task->id);
-				continue;
+		if (rolled || now >= task->next_schedule) {
+			task->next_schedule = now + task->period;
+			if (task->busy)
+				WARN("Task [%s] is busy", task->id);
+			else {
+				task->busy = TRUE;
+				exec_scheduled_tasks(task);
 			}
-
-			task->busy = TRUE;
-
-			/* Avoid schedule starvation (force next_schedule in 1 sec) */
-			if (task->next_schedule <= now)
-				task->next_schedule = now + 1;
-
-			if (task->next_schedule < global_next_schedule)
-				global_next_schedule = task->next_schedule;
-
-			exec_scheduled_tasks(task);
 		}
+
 		if (task->flag_destroy)
 			g_hash_table_remove(tasks, l->data);
-		else if (task->next_schedule < global_next_schedule)
-			global_next_schedule = task->next_schedule;
 	}
 	g_list_free(list_of_keys);
+
+	global_last_schedule = now;
 }
 
 void
@@ -198,21 +141,13 @@ clean_task_scheduler(void)
 long
 get_time_to_next_task_schedule(void)
 {
-	long next;
-
-	next = global_next_schedule - time(NULL);
-
-	TRACE("Next schedule in %li sec", next);
-
-	return (next);
+	return time(NULL) <= global_last_schedule;
 }
 
 void
 task_stop(const char *id)
 {
-	task_t *task;
-	TRACE_POSITION();
-	task = g_hash_table_lookup(tasks, id);
+	task_t *task = g_hash_table_lookup(tasks, id);
 	if (task != NULL)
 		task->flag_destroy = TRUE;
 }
@@ -220,9 +155,7 @@ task_stop(const char *id)
 void
 task_done(const char *id)
 {
-	task_t *task;
-	TRACE_POSITION();
-	task = g_hash_table_lookup(tasks, id);
+	task_t *task = g_hash_table_lookup(tasks, id);
 	if (task != NULL)
 		task->busy = FALSE;
 }
@@ -230,12 +163,7 @@ task_done(const char *id)
 gboolean
 is_task_scheduled(const char *id)
 {
-
-	if (g_hash_table_lookup(tasks, id))
-		return (TRUE);
-	else
-		return (FALSE);
-
+	return NULL != g_hash_table_lookup(tasks, id);
 }
 
 int
@@ -249,8 +177,6 @@ list_tasks_worker(worker_t * worker, GError ** error)
 	} bulk;
 	GHashTableIter iter;
 	gpointer k, v;
-
-	TRACE_POSITION();
 
 	GByteArray *gba = g_byte_array_new();
 	g_hash_table_iter_init(&iter, tasks);
@@ -271,11 +197,7 @@ list_tasks_worker(worker_t * worker, GError ** error)
 task_t*
 create_task(long period, const gchar *id)
 {
-	task_t *task;
-	TRACE_POSITION();
-	task = g_try_malloc0(sizeof(task_t));
-	if (!task)
-		abort();
+	task_t *task = g_malloc0(sizeof(task_t));
 	task->period = period;
 	task->id = g_strdup(id);
 	return task;
@@ -291,5 +213,4 @@ set_task_callbacks(task_t *task, task_handler_f handle, GDestroyNotify clean, gp
 	task->clean_udata = clean;
 	return task;
 }
-
 

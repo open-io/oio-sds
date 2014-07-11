@@ -1,27 +1,9 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #include "./gs_internals.h"
-#include "./rawx.h"
 
 static void
 chunk_agregate_debug(GSList *agregates)
 {
-	gchar ci_str[2048]; 
+	gchar ci_str[2048];
 	GSList *ag;
 	GSList *chunks, *c;
 	chunk_info_t *ci;
@@ -177,19 +159,19 @@ static void
 _free_content_internals(gs_content_t *content)
 {
 	if (content->gba_sysmd)
-		g_byte_array_free(content->gba_sysmd, TRUE);
+		g_byte_array_unref(content->gba_sysmd);
 	if (content->gba_md)
-		g_byte_array_free(content->gba_md, TRUE);
+		g_byte_array_unref(content->gba_md);
 	if (content->chunk_list) {
 
 		TRACE("Freeing %u old chunks in [grid://%s/%s/%s]", g_slist_length(content->chunk_list),
-				content->info.container->info.gs->ni.name, C1_IDSTR(content), C1_PATH(content));
+				gs_get_full_vns(content->info.container->info.gs), C1_IDSTR(content), C1_PATH(content));
 
 		g_slist_foreach (content->chunk_list, chunk_info_gclean, NULL);
 		g_slist_free (content->chunk_list);
 	}
-	if (content->version)
-		g_free(content->version);
+	g_free(content->version);
+	g_free(content->policy);
 
 	content->gba_sysmd = NULL;
 	content->gba_md = NULL;
@@ -197,11 +179,11 @@ _free_content_internals(gs_content_t *content)
 	content->version = NULL;
 }
 
-static void
-_fill_hcurl_from_content(gs_content_t *content, struct hc_url_s **url) 
+void
+fill_hcurl_from_content(gs_content_t *content, struct hc_url_s **url)
 {
 	*url = hc_url_empty();
-	hc_url_set(*url, HCURL_NS, C1_C0(content)->info.gs->ni.name);
+	hc_url_set(*url, HCURL_NS, gs_get_full_vns(C1_C0(content)->info.gs));
 	hc_url_set(*url, HCURL_REFERENCE, C0_NAME(C1_C0(content)));
 	hc_url_set(*url, HCURL_PATH, C1_PATH(content));
 	if (content->version)
@@ -209,47 +191,68 @@ _fill_hcurl_from_content(gs_content_t *content, struct hc_url_s **url)
 
 }
 
-static void
-_fill_cid_from_bean(struct meta2_raw_chunk_s *ci, struct bean_CHUNKS_s *ck)
+void
+fill_chunk_id_from_url(const char * const url, chunk_id_t *ci)
 {
-	GError *e = NULL; 
+	GError *e = NULL;
 
-	/* split bean id into chunk id part rawx://ip:port/VOL/ID */
-	char *bean_id = CHUNKS_get_id(ck)->str;
-	char *id = strrchr(bean_id, '/');
-	char *addr = strchr(bean_id,':') + 3; /* skip :// */
+	/* rawx://ip:port/VOL/ID */
+	char *id = strrchr(url, '/');
+	char *addr = strchr(url,':') + 3; /* skip :// */
 	char *vol = strchr(addr, '/');
-
-	/* id */
-	/* hex2bin(id + 1, &(ci->id.id), sizeof(hash_sha256_t), &e); */
-	container_id_hex2bin(id + 1 , strlen(id +1 ), &(ci->id.id), NULL);
 
 	/* addr */
 	char tmp[128];
 	memset(tmp, '\0', 128);
 	memcpy(tmp, addr, vol - addr);
-	if(!l4_address_init_with_url(&(ci->id.addr), tmp, &e)) {
-		WARN("Failed to init chunk addr");
+	if(!l4_address_init_with_url(&(ci->addr), tmp, &e)) {
+		GRID_WARN("Failed to init chunk addr");
 	}
 
 	/* vol */
-	memcpy(ci->id.vol, vol, id - vol);
+	g_strlcpy(ci->vol, vol, MIN(id - vol + 1 /* for '\0' */, (int)sizeof(ci->vol)));
+
+
+	/* id */
+	container_id_hex2bin(id + 1 , strlen(id +1 ), &(ci->id), NULL);
+
+	/* debug: dump id */
+	char dst[65];
+	bzero(dst, 65);
+	container_id_to_string(ci->id, dst, 65);
 
 	if(NULL != e)
 		g_clear_error(&e);
 }
 
-static struct bean_CHUNKS_s *
-_get_chunk_matching_content(GSList *beans, struct bean_CONTENTS_s *content)
+static void
+_fill_cid_from_bean(struct meta2_raw_chunk_s *ci, gpointer bean)
+{
+	/* split bean id into chunk id part rawx://ip:port/VOL/ID */
+	char *bean_id = NULL;
+	if (DESCR(bean) == &descr_struct_CHUNKS)
+		bean_id = CHUNKS_get_id((struct bean_CHUNKS_s *) bean)->str;
+	else if (DESCR(bean) == &descr_struct_CONTENTS)
+		bean_id = CONTENTS_get_chunk_id((struct bean_CONTENTS_s *) bean)->str;
+	else
+		return;
+
+	fill_chunk_id_from_url(bean_id, &(ci->id));
+}
+
+struct bean_CHUNKS_s *
+get_chunk_matching_content(GSList *beans, struct bean_CONTENTS_s *content)
 {
 	GSList *l = NULL;
 	/*split the chunks into the spare and used chunks*/
 	char *cid1 = CONTENTS_get_chunk_id(content)->str;
+	GRID_DEBUG("Looking for chunk id %s", cid1);
 	for (l = beans; l && l->data ; l=l->next) {
 		if(DESCR(l->data) != &descr_struct_CHUNKS)
 			continue;
 		struct bean_CHUNKS_s *ck = (struct bean_CHUNKS_s *) l->data;
 		char *cid2 = CHUNKS_get_id(ck)->str;
+		GRID_DEBUG("--> %s", cid2);
 		if(0 == g_ascii_strcasecmp(cid1, cid2)) {
 			return ck;
 		}
@@ -258,41 +261,119 @@ _get_chunk_matching_content(GSList *beans, struct bean_CONTENTS_s *content)
 	return NULL;
 }
 
-gboolean
-map_raw_content_from_beans(struct meta2_raw_content_s *raw_content, GSList *beans)
+static GSList*
+_filter_and_sort(GSList *chunk_list, GSList **p_filtered)
 {
-	GSList *l = NULL;
+	GSList *contents_list = NULL, *non_contents_list = NULL;
 
-	gint maxpos = -1;
+	void _filter_parity_chunk(gpointer _bean, gpointer _unused)
+	{
+		struct bean_CONTENTS_s *bean = _bean;
+		char *pos_str = NULL;
+		(void) _unused;
+
+		if (DESCR(_bean) == &descr_struct_CONTENTS) {
+			pos_str = CONTENTS_get_position(bean)->str;
+			if (NULL == strchr(pos_str, 'p')) {
+				contents_list = g_slist_prepend(contents_list, _bean);
+			} else {
+				if (p_filtered)
+					*p_filtered = g_slist_prepend(*p_filtered, _bean);
+			}
+		} else {
+			non_contents_list = g_slist_prepend(non_contents_list, _bean);
+		}
+	}
+
+	gint _contents_cmp(gconstpointer _bean1, gconstpointer _bean2)
+	{
+		gint mainpos1, mainpos2, secondpos1, secondpos2;
+		gboolean par1, par2;
+
+		m2v2_parse_chunk_position(CONTENTS_get_position((struct bean_CONTENTS_s *)_bean1)->str,
+				&mainpos1, &par1, &secondpos1);
+		m2v2_parse_chunk_position(CONTENTS_get_position((struct bean_CONTENTS_s *)_bean2)->str,
+				&mainpos2, &par2, &secondpos2);
+
+		if (mainpos1 == mainpos2) {
+			return memcmp(&secondpos1, &secondpos2, sizeof(gint));
+		}
+		return memcmp(&mainpos1, &mainpos2, sizeof(gint));
+	}
+
+	// Create contents_list containing all CONTENTS beans without those corresponding to parity chunks,
+	// and non_contents_list containing all non-CONTENTS beans.
+	g_slist_foreach(chunk_list, _filter_parity_chunk, NULL);
+
+	// Sort the contents_list according to chunk position.
+	contents_list = g_slist_sort(contents_list, _contents_cmp);
+	if (p_filtered)
+		*p_filtered = g_slist_sort(*p_filtered, _contents_cmp);
+
+	// Create a new list containing all non-CONTENTS beans, followed by all CONTENTS beans sorted by position.
+	non_contents_list = g_slist_concat(non_contents_list, contents_list);
+
+	return non_contents_list;
+}
+
+static gboolean
+_has_dotted_position(GSList *beans)
+{
+	GSList *l = beans;
+	gchar * pos = NULL;
+
+	for (; l && l->data; l = l->next) {
+		if(DESCR(l->data) == &descr_struct_CONTENTS) {
+			pos = CONTENTS_get_position((struct bean_CONTENTS_s *)l->data)->str;
+			return NULL != strchr(pos, '.');
+		}
+	}
+	return FALSE;
+}
+
+gboolean
+map_raw_content_from_beans(struct meta2_raw_content_s *raw_content, GSList *beans, GSList **p_filtered, gboolean force_keep_position)
+{
+	GSList *l = NULL, *l_begining = NULL;
+
+	gint maxpos = -1, pos = 0;
+	gboolean rain_style_pos;
+
+	rain_style_pos = _has_dotted_position(beans);
+	if (rain_style_pos)
+		l = _filter_and_sort(beans, p_filtered);
+	else
+		l = beans;
+
+	l_begining = l;
+
 	/* read all beans and extract info */
-	for (l=beans; l && l->data; l=l->next) {
+	for (; l && l->data; l=l->next) {
 		if(DESCR(l->data) == &descr_struct_CONTENTS) {
 			struct bean_CONTENTS_s *bc = (struct bean_CONTENTS_s *) l->data;
-			struct bean_CHUNKS_s *ck = _get_chunk_matching_content(beans, bc);
+			struct bean_CHUNKS_s *ck = get_chunk_matching_content(beans, bc);
 			struct meta2_raw_chunk_s *ci = g_malloc0(sizeof(struct meta2_raw_chunk_s));
 			_fill_cid_from_bean(ci, ck);
 			ci->size = CHUNKS_get_size(ck);
-			char *pos_str = CONTENTS_get_position(bc)->str;
-			char **tok = g_strsplit(pos_str, ".", 2);
-			gint64 pos64 = g_ascii_strtoll(tok[0], NULL, 10);
-			guint32 pos = pos64;
-			ci->position = pos;
-			g_strfreev(tok);
+			if (rain_style_pos && !force_keep_position) {
+				ci->position = pos++;
+			} else {
+				gint64 pos64 = g_ascii_strtoll(CONTENTS_get_position(bc)->str, NULL, 10);
+				guint32 pos32 = pos64;
+				ci->position = pos32;
+			}
 			guint8 *hash = CHUNKS_get_hash(ck)->data;
 			memcpy(ci->hash, hash, sizeof(ci->hash));
 			raw_content->raw_chunks = g_slist_prepend(raw_content->raw_chunks, ci);
-			if ( pos64 > maxpos )
+			if ( pos > maxpos )
 				maxpos = pos;
 		}
 		else if(DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
 			raw_content->size = CONTENTS_HEADERS_get_size(l->data);
+			raw_content->storage_policy = strdup(CONTENTS_HEADERS_get_policy(l->data)->str);
 		}
 		else if(DESCR(l->data) == &descr_struct_ALIASES) {
 			char *mdsys = ALIASES_get_mdsys(l->data)->str;
-			/*
-			if(ALIASES_get_deleted(l->data)) {
-				return FALSE;
-			} */
 			g_strlcpy(raw_content->path, ALIASES_get_alias(l->data)->str, sizeof(raw_content->path));
 			raw_content->version = ALIASES_get_version(l->data);
 			raw_content->system_metadata = g_byte_array_append(g_byte_array_new(), (const guint8*)mdsys, strlen(mdsys));
@@ -300,6 +381,9 @@ map_raw_content_from_beans(struct meta2_raw_content_s *raw_content, GSList *bean
 		}
 	}
 	raw_content->nb_chunks = maxpos +1;
+
+	if (l_begining != beans)
+		g_slist_free(l_begining);
 
 	return TRUE;
 }
@@ -356,7 +440,9 @@ map_content_from_raw(gs_content_t *content, struct meta2_raw_content_s *raw_cont
 	content->gba_sysmd = _gba_dup(raw_content->system_metadata);
 
 	content->gba_md = _gba_dup(raw_content->metadata);
-	
+
+	content->policy = g_strdup(raw_content->storage_policy);
+
 	for (l=raw_content->raw_chunks; l ; l=l->next) {
 		raw_chunk = l->data;
 		if (!raw_chunk->flags) {
@@ -432,7 +518,7 @@ gs_relink_container(gs_container_t *container, GError **err)
 	if (rc && link_needed) {
 		rc = meta2_remote_container_create_v2(&(container->meta2_addr), 3000,
 				err, C0_ID(container), C0_NAME(container),
-				container->info.gs->virtual_namespace);
+				gs_get_virtual_namespace(container->info.gs));
 
 		if (!rc) { /* don't take care of 433 code */
 			if ((*err)->code != CODE_CONTAINER_EXISTS)
@@ -447,29 +533,17 @@ gs_relink_container(gs_container_t *container, GError **err)
 gboolean
 gs_reload_container(gs_container_t *container, GError **err)
 {
-	struct meta1_service_url_s *url;
-	gchar **urlv = NULL;
-	gs_error_t *e;
 	gboolean rc = TRUE;
 
-	e = hc_list_reference_services(container->info.gs, C0_NAME(container),
-			"meta2", &urlv);
-	if (e) {
-		GSETCODE(err, gs_error_get_code(e), "%s", gs_error_get_message(e));
-		gs_error_free(e);
-		return FALSE;
+	GSList *meta2 = gs_resolve_meta2(container->info.gs, C0_ID(container), err);
+	if(!meta2) {
+		GSETERROR(err,"Resolution error for NAME=[%s] ID=[%s]", C0_NAME(container), C0_IDSTR(container));
+		return GS_ERROR;
 	}
 
-	if (!urlv || !*urlv) {
-		GSETCODE(err, CODE_CONTAINER_NOTFOUND, "No META2");
-		g_strfreev2(&urlv);
-		return FALSE;
-	}
-
-	url = meta1_unpack_url(*urlv);
-	rc = l4_address_init_with_url(&(container->meta2_addr), url->host, err);
-	g_strfreev2(&urlv);
-	g_free(url);
+	memcpy(&(container->meta2_addr), meta2->data, sizeof(addr_info_t));
+	g_slist_foreach (meta2, addr_info_gclean, NULL);
+	g_slist_free (meta2);
 
 	if (!rc)
 		GSETERROR(err, "Invalid META2 address");
@@ -477,9 +551,8 @@ gs_reload_container(gs_container_t *container, GError **err)
 }
 
 static gboolean
-_reload_content(gs_content_t *content, GError **err)
+_reload_content(gs_content_t *content, GSList **p_filtered, GSList **p_beans, GError **err)
 {
-	struct metacnx_ctx_s ctx;
 	struct meta2_raw_content_s *raw_content;
 
 	if (C1_C0(content)->meta2_addr.port <= 0 &&
@@ -488,46 +561,28 @@ _reload_content(gs_content_t *content, GError **err)
 		return FALSE;
 	}
 
-	metacnx_clear(&ctx);
-	metacnx_init_with_addr(&ctx, &(C1_C0(content)->meta2_addr), NULL);
-	ctx.flags = METACNX_FLAGMASK_KEEPALIVE;
-	ctx.fd = C1_C0(content)->meta2_cnx;
-	ctx.timeout.cnx = M2_TOCNX_DEFAULT;
-	ctx.timeout.req = M2_TOREQ_DEFAULT;
-
-	/* raw_content = meta2_remote_stat_content(&ctx, C1_ID(content),
-		C1_PATH(content), strlen(C1_PATH(content)), err);
-
-	if (!raw_content) {
-		GSETERROR(err, "Failed to get raw data");
-		return FALSE;
-	}
-	if (raw_content->flags) {
-		meta2_maintenance_destroy_content(raw_content);
-		GSETERROR(err, "Content now unavailable");
-		return FALSE;
-	} */
-
-	/*reload the latest know data*/
-	/* map_content_from_raw(content, raw_content);
-	meta2_maintenance_destroy_content(raw_content);
-	*/
-
 	char target[64];
+	guint32 flags = 0;
 	bzero(target, 64);
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, C1_C0(content)->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(C1_C0(content)->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(C1_C0(content)));
 	hc_url_set(url, HCURL_PATH, C1_PATH(content));
-	if (content->version) {
+	if (!content->version) {
+		flags |= M2V2_FLAG_NODELETED;
+	} else if (g_ascii_strcasecmp(content->version,
+			HCURL_LATEST_VERSION) != 0) {
 		hc_url_set(url, HCURL_VERSION, content->version);
+	} else {
+		/* Do not set M2V2_FLAG_NODELETED but do not specify version,
+		 * so we get the latest, even if it's marked deleted. */
 	}
 
 	GSList *beans = NULL;
 
-	*err = m2v2_remote_execute_GET(target, NULL, url, 0, &beans);
+	*err = m2v2_remote_execute_GET(target, NULL, url, flags, &beans);
 
 	hc_url_clean(url);
 
@@ -537,31 +592,66 @@ _reload_content(gs_content_t *content, GError **err)
 	}
 
 	raw_content = g_malloc0(sizeof(struct meta2_raw_content_s));
-	if(!map_raw_content_from_beans(raw_content, beans)) {
+	if(!map_raw_content_from_beans(raw_content, beans, p_filtered, FALSE)) {
 		/* content deleted */
 		_bean_cleanl2(beans);
 		GSETCODE(err, CODE_CONTENT_NOTFOUND, "Content deleted");
 		return FALSE;
 	}
 
+
 	map_content_from_raw(content, raw_content);
 	meta2_raw_content_clean(raw_content);
-	_bean_cleanl2(beans);
+	if (p_beans)
+		*p_beans = beans;
+	else
+		_bean_cleanl2(beans);
 
-	C1_C0(content)->meta2_cnx = ctx.fd;
-	
 	TRACE("Content [grid://%s/%s/%s] reloaded (%u chunks)",
-		content->info.container->info.gs->ni.name, C1_IDSTR(content), C1_PATH(content),
+		gs_get_full_vns(content->info.container->info.gs), C1_IDSTR(content), C1_PATH(content),
 		g_slist_length(content->chunk_list));
 
 	return TRUE;
 }
 
+static gchar *
+_get_content_version(gs_content_t *content)
+{
+	gs_error_t *reloadErr = NULL;
+
+	if (content == NULL)
+		return NULL;
+
+	if (NULL == C1_VERSION(content)) {
+		// ask a reload to retrieve content version
+		if(!gs_content_reload(content, TRUE, FALSE, &reloadErr)) {
+			ERROR("Failed to get content informations from meta2 : (%s)\n", gs_error_get_message(reloadErr));
+			gs_error_free(reloadErr);
+			return NULL;
+		} else {
+			DEBUG("_get_content_version: found version [%s] for content [%s] from meta2",
+					C1_VERSION(content), C1_PATH(content));
+		}
+	} else {
+		DEBUG("_get_content_version: using given version [%s] for content [%s]",
+				C1_VERSION(content), C1_PATH(content));
+	}
+
+	return C1_VERSION(content);
+}
+
 /*
- * 
+ *
  */
 gboolean
 gs_content_reload (gs_content_t *content, gboolean allow_meta2, gboolean allow_cache, gs_error_t **err)
+{
+	return gs_content_reload_with_filtered(content, allow_meta2, allow_cache, NULL, NULL, err);
+}
+
+gboolean
+gs_content_reload_with_filtered (gs_content_t *content, gboolean allow_meta2, gboolean allow_cache,
+		GSList **p_filtered, GSList **p_beans, gs_error_t **err)
 {
 	gboolean rc = FALSE;
 	GError *localError=NULL;
@@ -577,17 +667,22 @@ gs_content_reload (gs_content_t *content, gboolean allow_meta2, gboolean allow_c
 		g_slist_free(content->chunk_list);
 		content->chunk_list = NULL;
 	}
+	if (p_filtered && *p_filtered) {
+		g_slist_foreach(*p_filtered, meta2_raw_chunk_gclean, NULL);
+		g_slist_free(*p_filtered);
+		*p_filtered = NULL;
+	}
 
 	if (allow_cache) { /* Try with the METACD */
-		metacd_t *metacd = C1_C0(content)->info.gs->metacd_resolver;
+		struct metacd_s *metacd = C1_C0(content)->info.gs->metacd_resolver;
 		if (resolver_metacd_is_up(metacd)) {
 			struct meta2_raw_content_s *raw_content;
-			metacd_path = make_metacd_path(C1_PATH(content), C1_VERSION(content));
+			metacd_path = make_metacd_path(C1_PATH(content), _get_content_version(content));
 			raw_content = resolver_metacd_get_content(metacd, C1_ID(content), metacd_path, &localError);
 			destroy_metacd_path(metacd_path);
 			if (!raw_content) {
 				if (localError && localError->code == CODE_CONTENT_NOTFOUND)
-					goto end_label;
+					goto try_direct_label;
 				ERROR("METAcd seemed UP but could not give us our chunks: %s",
 					localError?localError->message:"unknown error");
 			}
@@ -600,24 +695,37 @@ gs_content_reload (gs_content_t *content, gboolean allow_meta2, gboolean allow_c
 		}
 		if (content->chunk_list) {
 			/* XXX */
+			INFO("Chunks loaded from the metacd");
 			content->loaded_from_cache = ~0;
 			return 1;
 		}
 	}
 
+try_direct_label:
 	/* Try with the META2 */
 	content->loaded_from_cache = 0;
 	if (!allow_meta2) {
 		GSERRORSET(err, "Not found");
 		goto end_label;
 	}
-	if (!_reload_content(content, &localError)) {
-		GSERRORSET(err, "Content not found");
-		goto end_label;
+
+	for (int nb_refreshes = 1; nb_refreshes >= 0; nb_refreshes--) {
+		if (!_reload_content(content, p_filtered, p_beans, &localError)) {
+			if (localError->code == CODE_CONTAINER_NOTFOUND) {
+				gs_container_t *container = content->info.container;
+				CONTAINER_REFRESH(container, localError, end_label,
+						"cannot delete content");
+			} else {
+				GSERRORSET(err, "Content not found");
+				goto end_label;
+			}
+			if (localError)
+				g_clear_error(&localError);
+		} else {
+			break;
+		}
 	}
 
-	if (localError)
-		g_clear_error(&localError);
 	return 1;
 
 end_label:
@@ -644,51 +752,30 @@ gs_status_t gs_destroy_content (gs_content_t *content, gs_error_t **err)
 	}
 
 	/*loads the chunk's list*/
-	/* 
-	if (content->loaded_from_cache)
-		_free_content_internals(content);
-	if (!content->chunk_list) {
-		if (!gs_content_reload (content, TRUE, FALSE, err)) {
-			GSERRORSET(err,"No chunks in the content after a reload");
-			return GS_ERROR;
-		}
-	}
-	*/
 
 	/*mark the content for removal*/
 	(void) gs_container_reconnect_if_necessary (C1_C0(content),NULL);
-
-	/* 
-	for (nb_refreshes=1; !(remove_done=C1_REMOVE(content,&localError)) && nb_refreshes>0 ; nb_refreshes--) {
-		CONTAINER_REFRESH(C1_C0(content),localError,end_label,C1_PATH(content));
-	}
-
-	TRACE("REMOVE path=%s %s/%s", C1_PATH(content), C1_NAME(content), C1_IDSTR(content));
-	if (localError) g_clear_error(&localError);
-
-	*/
 
 	/*commit the removal*/
 #define MAX_ATTEMPTS_COMMIT 2
 
 	GSList *beans = NULL;
 
-	/* for (nb_refreshes=MAX_ATTEMPTS_COMMIT; !C1_COMMIT(content,&localError) && nb_refreshes>0 ; nb_refreshes--) */
-
 	char target[64];
 	memset(target, '\0', 64);
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, C1_C0(content)->info.gs->ni.name);
-	hc_url_set(url, HCURL_REFERENCE, C0_NAME(C1_C0(content)));
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(C1_C0(content)->info.gs));
+	hc_url_set(url, HCURL_HEXID, C0_IDSTR(C1_C0(content)));
+	//hc_url_set(url, HCURL_REFERENCE, C0_NAME(C1_C0(content)));
 	hc_url_set(url, HCURL_PATH, C1_PATH(content));
 	if (content->version) {
 		hc_url_set(url, HCURL_VERSION, content->version);
 	}
 
 	for(nb_refreshes = MAX_ATTEMPTS_COMMIT; nb_refreshes > 0; nb_refreshes--) {
-		localError = m2v2_remote_execute_DEL(target, NULL, url, &beans);
+		localError = m2v2_remote_execute_DEL(target, NULL, url, TRUE, &beans);
 		if(NULL != localError) {
 			if (localError->code==CODE_CONTENT_NOTFOUND && nb_refreshes<MAX_ATTEMPTS_COMMIT) {
 				/*content already removed*/
@@ -697,7 +784,7 @@ gs_status_t gs_destroy_content (gs_content_t *content, gs_error_t **err)
 		CONTAINER_REFRESH(C1_C0(content),localError,end_label,C1_PATH(content));
 		} else {
 			raw_content = g_malloc0(sizeof(struct meta2_raw_content_s));
-			map_raw_content_from_beans(raw_content, beans);
+			map_raw_content_from_beans(raw_content, beans, NULL, FALSE);
 			map_content_from_raw(content, raw_content);
 			meta2_raw_content_clean(raw_content);
 			break;
@@ -707,45 +794,28 @@ gs_status_t gs_destroy_content (gs_content_t *content, gs_error_t **err)
 	if(NULL != url)
 		hc_url_clean(url);
 
-	if(NULL != beans)
-		_bean_cleanl2(beans);
-
 	TRACE("COMMIT path=%s %s/%s", C1_PATH(content), C1_NAME(content), C1_IDSTR(content));
-	if (localError) g_clear_error(&localError);
+	if (localError)
+		g_clear_error(&localError);
 
 	/* We are about to delete the chunks, and the content has been marked for removal,
 	 * we send the decache order to the metacd, it won't be possible to reload it */
 	/* gs_decache_chunks_in_metacd(content); */
 
-
-	
 	/*delete the remote chunks*/
 
-	/* 
-	if (content->chunk_list)
-	{
-		gs_chunk_t cT;
-		GSList *cL;
-
-		cT.content = content;
-		for (cL=content->chunk_list; cL ;cL=cL->next)
-		{
-			GError *localErr=NULL;
-			int nb_tries, done=0;
-
-			cT.ci = (chunk_info_t*) cL->data;
-			for (nb_tries=2; !done && nb_tries>0 ;nb_tries--)
-				done = rawx_delete(&cT, &localErr);
-
-			if (!done) {
-				ERROR("Cannot delete a remote chunk of %s (in %s/%s): %s", C1_PATH(content),
-					C1_NAME(content), C1_IDSTR(content), g_error_get_message(localErr));
+	for (GSList *cursor = beans; cursor != NULL; cursor = cursor->next) {
+		if (DESCR(cursor->data) == &descr_struct_CHUNKS) {
+			if (!rawx_delete_v2(cursor->data, &localError)) {
+				gchar *cid = CHUNKS_get_id((struct bean_CHUNKS_s*)cursor->data)->str;
+				GRID_ERROR("Failed to delete chunk %s", cid);
+				g_clear_error(&localError);
 			}
-			
-			if (localErr)
-				g_clear_error(&localErr);
 		}
-	} */
+	}
+
+	if(NULL != beans)
+		_bean_cleanl2(beans);
 
 	if (localError)
 		g_clear_error(&localError);
@@ -764,7 +834,8 @@ end_label:
 error_label:
 	if (!localError)
 		GSETERROR(&localError,"unknown error");
-	GSERRORCAUSE(err,localError,"Cannot destroy %s in %s/%s", C1_PATH(content), C1_NAME(content), C1_IDSTR(content));
+	GSERRORCAUSE(err, localError, "Cannot destroy %s in %s/%s: ",
+			C1_PATH(content), C1_NAME(content), C1_IDSTR(content));
 	g_clear_error (&localError);
 	return GS_ERROR;
 }
@@ -834,7 +905,7 @@ gs_content_set_metadata(gs_content_t *content, uint8_t *src, size_t src_size, gs
 	(void) content;
 	(void) src;
 	(void) src_size;
-	
+
 	GSERRORSET(err, "not yet implemented");
 	return GS_ERROR;
 }
@@ -852,7 +923,7 @@ gs_decache_chunks_in_metacd(gs_content_t *content)
 {
 	GError *flush_error = NULL;
 	gs_grid_storage_t *client;
-	metacd_t *metacd;
+	struct metacd_s *metacd;
 	gs_container_t *container;
 	const gchar *metacd_path = NULL;
 
@@ -875,15 +946,15 @@ gs_decache_chunks_in_metacd(gs_content_t *content)
 		return;
 
 	/* send a decache order to the METACD */
-	metacd_path = make_metacd_path(C1_PATH(content), C1_VERSION(content));
+	metacd_path = make_metacd_path(C1_PATH(content), _get_content_version(content));
 	if (!resolver_metacd_del_content(metacd, C0_ID(container), metacd_path, &flush_error)) {
 		WARN("METACD flush failed for [%s/%s/%s] : %s",
-				client->ni.name, C0_IDSTR(container), C1_PATH(content),
+				gs_get_full_vns(client), C0_IDSTR(container), C1_PATH(content),
 				(flush_error ? flush_error->message : "unknown error"));
 	}
 	else
 		INFO("decache order sent to METACD for [%s/%s/%s]",
-				client->ni.name, C0_IDSTR(container), C1_PATH(content));
+				gs_get_full_vns(client), C0_IDSTR(container), C1_PATH(content));
 	destroy_metacd_path(metacd_path);
 	if (flush_error)
 		g_clear_error(&flush_error);
@@ -903,7 +974,7 @@ _update_sys_metadata(gpointer data, gpointer metadata)
 
 gs_status_t
 hc_set_content_storage_policy(gs_container_t *c, const char *path, const char *stgpol, gs_error_t **e)
-{ 
+{
 	GError *ge = NULL;
 	struct meta2_raw_content_s *rc = NULL;
 	struct metacnx_ctx_s ctx;
@@ -926,6 +997,7 @@ hc_set_content_storage_policy(gs_container_t *c, const char *path, const char *s
 	ctx.timeout.req = M2_TOREQ_DEFAULT;
 
 	rc = meta2_remote_stat_content(&ctx, C0_ID(c), path, strlen(path), &ge);
+	c->meta2_cnx = ctx.fd;
 
 	if (!rc) {
 		GSERRORCAUSE(e, ge, "Failed to load content information\n");
@@ -962,8 +1034,9 @@ hc_set_content_storage_policy(gs_container_t *c, const char *path, const char *s
 		return GS_ERROR;
 	}
 
-
-	if(!meta2_remote_modify_metadatasys(&ctx,  C0_ID(c), path, metadata_str, &ge)) {
+	int r0 = meta2_remote_modify_metadatasys(&ctx,  C0_ID(c), path, metadata_str, &ge);
+	c->meta2_cnx = ctx.fd;
+	if (!r0) {
 		GSERRORCAUSE(e, ge, "Failed to update system metadata of content [%s]", stgpol, path);
 		g_clear_error(&ge);
 		meta2_raw_content_clean(rc);
@@ -975,49 +1048,51 @@ hc_set_content_storage_policy(gs_container_t *c, const char *path, const char *s
 
 	g_free(metadata_str);
 	meta2_raw_content_clean(rc);
-	
+
 	return GS_OK;
 }
 
 gs_status_t
-hc_set_content_property(gs_content_t *content, char ** props, gs_error_t **e) 
+hc_set_content_property(gs_content_t *content, char ** props, gs_error_t **e)
 {
 	GError *ge = NULL;
 	char target[64];
 	GSList *beans = NULL;
 	gs_status_t status = GS_OK;
-	guint i ;
+	guint i;
 
 	bzero(target, 64);
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
 	struct hc_url_s *url;
-	_fill_hcurl_from_content(content,&url);
+	fill_hcurl_from_content(content, &url);
 
 	for ( i=0; i < g_strv_length(props); i++) {
 		struct bean_PROPERTIES_s *bp;
 
 		bp = _bean_create(&descr_struct_PROPERTIES);
-		
+
 		gchar **kv = g_strsplit(props[i],"=",2);
-		if(g_strv_length(kv) != 2) {
-			GSERRORCODE(e,0,"Invalid property [%s] : format  key=value",props[i]);
+		if (g_strv_length(kv) != 2) {
+			GSERRORCODE(e,0,"Invalid property [%s] : format  key=value", props[i]);
 			status = GS_ERROR;
 			goto enderror;
 		}
 		PROPERTIES_set2_alias(bp, hc_url_get(url, HCURL_PATH));
 		PROPERTIES_set_alias_version(bp, (guint64)hc_url_get(url, HCURL_VERSION));
 		PROPERTIES_set_key(bp, g_string_new(kv[0]));
-		PROPERTIES_set_value(bp, g_byte_array_append(g_byte_array_new(), (guint8*)g_strdup(kv[1]), strlen(kv[1])));
+		PROPERTIES_set_value(bp, g_byte_array_append(g_byte_array_new(),
+				(guint8*)g_strdup(kv[1]), strlen(kv[1])));
 		PROPERTIES_set_deleted(bp, FALSE);
 
 		beans = g_slist_prepend(beans,bp);
 	}
 
-	ge = m2v2_remote_execute_PROP_SET(target, NULL, url, beans);
+	ge = m2v2_remote_execute_PROP_SET(target, NULL, url, 0, beans);
 
 	if(NULL != ge) {
-		GSERRORCAUSE(e, ge, "Failed to update propertes to content [%s]", C1_PATH(content));
+		GSERRORCAUSE(e, ge, "Failed to update propertes to content [%s]",
+				C1_PATH(content));
 		g_clear_error(&ge);
 		status =  GS_ERROR;
 	}
@@ -1041,11 +1116,11 @@ hc_get_content_properties(gs_content_t *content, char ***result, gs_error_t **e)
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
 	struct hc_url_s *url;
-	_fill_hcurl_from_content(content,&url);
-	
+	fill_hcurl_from_content(content,&url);
+
 	GSList *beans = NULL;
 	GSList *l;
-	
+
 	ge = m2v2_remote_execute_PROP_GET(target, NULL, url, M2V2_FLAG_NODELETED, &beans);
 
 	if(NULL != ge) {
@@ -1054,14 +1129,14 @@ hc_get_content_properties(gs_content_t *content, char ***result, gs_error_t **e)
 		status = GS_ERROR;
 		goto enderror;
 	}
-	
+
 	max =0;
 	final = g_malloc0(sizeof(gchar*) * (max+1));
 	for (l=beans; l && l->data; l=l->next) {
 		if(DESCR(l->data) == &descr_struct_PROPERTIES) {
 			struct bean_PROPERTIES_s *bp = (struct bean_PROPERTIES_s *) l->data;
 
-			max ++;		
+			max ++;
 			final = g_realloc(final, sizeof(gchar*) * (max+1));
 
 			GByteArray *val =PROPERTIES_get_value(bp);
@@ -1082,7 +1157,7 @@ enderror :
 
 
 	return status;
-} 
+}
 
 gs_status_t
 hc_delete_content_property(gs_content_t *content, char ** keys ,gs_error_t **e)
@@ -1096,8 +1171,8 @@ hc_delete_content_property(gs_content_t *content, char ** keys ,gs_error_t **e)
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
 	struct hc_url_s *url;
-	_fill_hcurl_from_content(content,&url);
-	
+	fill_hcurl_from_content(content,&url);
+
 	GSList *out_beans = NULL;
 	GSList *in_beans = NULL;
 	GSList *l;
@@ -1109,7 +1184,7 @@ hc_delete_content_property(gs_content_t *content, char ** keys ,gs_error_t **e)
 		status= GS_ERROR;
 		goto enderror;
 	}
-	
+
 
 	for ( i=0; i < g_strv_length(keys); i++) {
 		for ( l=out_beans ; l && l->data ; l=l->next) {
@@ -1123,7 +1198,7 @@ hc_delete_content_property(gs_content_t *content, char ** keys ,gs_error_t **e)
 			}
 		}
 	}
-	ge = m2v2_remote_execute_PROP_SET(target, NULL, url, in_beans);
+	ge = m2v2_remote_execute_PROP_SET(target, NULL, url, 0, in_beans);
 
 	if(NULL != ge) {
 		GSERRORCAUSE(e, ge, "Failed to delete propertes of content [%s]", C1_PATH(content));
@@ -1138,4 +1213,27 @@ enderror:
 	_bean_cleanl2(in_beans);
 
 	return status;
+}
+
+gs_status_t
+hc_copy_content(gs_container_t *c, const char *src, const char *dst, gs_error_t **e)
+{
+	GError *ge = NULL;
+	char target[64];
+	struct hc_url_s *url;
+	fill_hcurl_from_container(c, &url);
+	hc_url_set(url, HCURL_PATH, dst);
+
+	bzero(target, 64);
+	addr_info_to_string(&(c->meta2_addr), target, 64);
+
+	ge = m2v2_remote_execute_COPY(target, NULL, url, src);
+	if(NULL != ge) {
+		GSERRORCAUSE(e, ge, "Failed to create a copy of content [%s] to [%s]",
+			src, hc_url_get(url, HCURL_WHOLE));
+			g_clear_error(&ge);
+		return GS_ERROR;
+	}
+
+	return GS_OK;
 }

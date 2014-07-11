@@ -1,31 +1,12 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "server.timer"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "server.timer"
 #endif
 
 #include <stdint.h>
 #include <string.h>
 #include <sys/time.h>
 
-#include <glib.h>
-
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
 #include "./srvtimer.h"
 
@@ -129,9 +110,9 @@ srvtimer_fire(guint64 ticks)
 
 	}
 
-	DEBUG("Firing the timers...");
+	TRACE("Firing the timers...");
 	g_static_rw_lock_reader_lock(&rw_lock);
 	g_slist_foreach(timers_regular, timers_iterator, NULL);
 	g_static_rw_lock_reader_unlock(&rw_lock);
-	DEBUG("Timers fired");
+	TRACE("Timers fired");
 }

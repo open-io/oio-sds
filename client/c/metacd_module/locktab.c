@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -44,7 +27,10 @@ typedef GMutex sync_mutex_t;
 	R = g_try_malloc0(sizeof(sync_cond_t));\
 	pthread_cond_init(R, NULL);\
 } while (0)
-# define COND_FREE(R) pthread_cond_destroy(R)
+# define COND_FREE(R) do {\
+	pthread_cond_destroy(R);\
+	g_free(R);\
+} while (0)
 # define LOCKTAB_UNLOCK(LT) pthread_mutex_unlock(LT->mutex)
 # define LOCKTAB_LOCK(LT) pthread_mutex_lock(LT->mutex)
 # define LOCKELT_SIGNAL(LE) pthread_cond_signal(LE->cond)
@@ -142,11 +128,9 @@ locktab_unlock(locktab *lt, gpointer key)
 	if (lt->checks_allowed) {
 		GThread *self = g_thread_self();
 		if (!le) {
-			/*g_printerr("** thread=%p attempts to release an unexistant lock **\n", self);*/
 			abort();
 		}
 		if (le->owner != self) {
-			/*g_printerr("** thread=%p attempts to release a lock owned by thread=%p **\n", self, le->owner);*/
 			abort();
 		}
 	}
@@ -159,9 +143,7 @@ locktab_unlock(locktab *lt, gpointer key)
 	else {
 		if (lt->ctx.on_destroy) {
 			LOCKTAB_UNLOCK(lt);
-			/* ref_count==0 is equivalent to a soft lock */
-			if (!lt->ctx.on_destroy(le, lt->ctx.ctx_data, &err))
-				/*g_printerr("on_destroy user callback error : %s\n", err?err->message:"no error available");*/
+			lt->ctx.on_destroy(le, lt->ctx.ctx_data, &err);
 			if (err)
 				g_error_free(err);
 			LOCKTAB_LOCK(lt);

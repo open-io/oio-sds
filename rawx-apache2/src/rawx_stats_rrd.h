@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef _RAWX_STATS_RRD_H_
 #define _RAWX_STATS_RRD_H_
 
@@ -44,12 +27,13 @@ struct rawx_stats_rrd_s
 {
 	time_t last;
 	time_t period;
-	apr_uint64_t ten[8];
+	apr_uint32_t ten[8];
+	apr_uint32_t lock;
 };
 
 struct delta_debug_s
 {
-	apr_uint64_t delta;
+	apr_uint32_t delta;
 	char *dump;
 };
 
@@ -67,6 +51,10 @@ struct rawx_stats_rrd_s * rawx_stats_rrd_create(apr_pool_t *pool, time_t period)
  */
 void rawx_stats_rrd_init(struct rawx_stats_rrd_s *rsr);
 
+void rawx_stats_rrd_lock(struct rawx_stats_rrd_s *rsr);
+
+void rawx_stats_rrd_unlock(struct rawx_stats_rrd_s *rsr);
+
 /**
  *
  *
@@ -79,21 +67,21 @@ struct rawx_stats_rrd_s * rawx_stats_rrd_dup(apr_pool_t *pool, struct rawx_stats
  *
  *
  */
-void rawx_stats_rrd_push(struct rawx_stats_rrd_s *rsr, apr_uint64_t v);
+void rawx_stats_rrd_push(struct rawx_stats_rrd_s *rsr, apr_uint32_t v);
 
 /**
  *
  *
  *
  */
-apr_uint64_t rawx_stats_rrd_get(struct rawx_stats_rrd_s *rsr);
+apr_uint32_t rawx_stats_rrd_get(struct rawx_stats_rrd_s *rsr);
 
 /**
  *
  *
  *
  */
-apr_uint64_t rawx_stats_rrd_get_delta(struct rawx_stats_rrd_s *rsr, time_t period);
+apr_uint32_t rawx_stats_rrd_get_delta(struct rawx_stats_rrd_s *rsr, time_t period);
 
 /**
  *

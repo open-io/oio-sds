@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef __METACOMM__H__
 # define __METACOMM__H__
 
@@ -29,73 +12,7 @@
  * @{
  */
 
-# include <glib.h>
-# include <metatypes.h>
-# include <metautils.h>
-
-#define CODE_NETWORK_ERROR        1
-
-#define CODE_FINAL_OK             200
-#define CODE_IS_OK(C)            ((C)/100 == 2)
-#define CODE_IS_FINAL(C)         ((C) == CODE_FINAL_OK || !CODE_IS_OK(C))
-
-/* MASTER/SLAVE codes */
-#define CODE_BADOPFORSLAVE        301
-#define CODE_REDIRECT             303
-#define CODE_LOOP_REDIRECT        304
-#define CODE_TOOMANY_REDIRECT     305
-
-/* ACL codes */
-#define CODE_NOT_ALLOWED 	      403
-
-/* Content-related codes */
-#define CODE_CONTENT_NOTFOUND     420
-#define CODE_CONTENT_EXISTS       421
-#define CODE_CONTENT_ONLINE       422
-#define CODE_CONTENT_UNCOMPLETE   423
-#define CODE_CONTENT_PRECONDITION 424
-#define CODE_CONTENT_CORRUPTED    425
-
-/* Container-related codes */
-#define CODE_CONTAINER_MIGRATED  430
-#define CODE_CONTAINER_NOTFOUND  431
-#define CODE_CONTAINER_CLOSED    432
-#define CODE_CONTAINER_EXISTS    433
-#define CODE_CONTAINER_LOCKED    434
-#define CODE_CONTAINER_INUSE     435
-#define CODE_CONTAINER_FROZEN    436
-#define CODE_CONTAINER_DISABLED  437
-#define CODE_CONTAINER_NOTEMPTY  438
-
-/* Quotas-level codes */
-#define CODE_CONTAINER_FULL 445
-#define CODE_NAMESPACE_FULL 446
-
-/* Meta1 prefixes codes */
-#define CODE_RANGE_NOTFOUND  450	/**< refresh meta2 */
-#define CODE_RANGE_MIGRATING 451	/**< the request cannot be satisfied on this
-									   META1 due to a migration. the body
-									   might contain a list of addresses */
-#define CODE_RANGE_EXISTS    452
-
-/* Properties codes */
-#define CODE_CONTAINER_PROP_NOTFOUND    460
-#define CODE_CONTENT_PROP_NOTFOUND      461 
-#define CODE_WRONG_PROP_PREFIX          462
-#define CODE_EMPTY_CONTAINER_EVENT_LIST 463
-
-/* Resynchronisation codes */
-#define CODE_PIPETO    470 /**< Local copy more recent, send a dump */
-#define CODE_PIPEFROM  471 /**< Local copy out of date, restore it */
-
-#define CODE_POLICY_NOT_SUPPORTED 480 /**< Wrong storage policy specified */
-#define CODE_POLICY_NOT_SATISFIABLE 481 /**< No enough service or service not enough spaced */
-
-/* Internals */
-#define CODE_INTERNAL_ERROR 500 /* internal error: memory allocation... */
-
-/*Platform */
-#define CODE_PLATFORM_ERROR 600 /* platform error ; all services unavailable */
+# include <metautils/lib/metautils.h>
 
 /* A flag usable in metacnx_ctx_s.flags to keep the connection alive */
 #define METACNX_FLAGMASK_KEEPALIVE 0x00000001
@@ -345,7 +262,7 @@ gboolean metaXClient_reply_sequence_run_context(GError ** err,
  * @deprecated
  */
 gboolean metaXClient_reply_sequence_run(GError ** err, MESSAGE request,
-		int fd, gint ms, struct reply_sequence_data_s *data);
+		int *fd, gint ms, struct reply_sequence_data_s *data);
 
 /** Wrapper around metaXClient_reply_sequence_run_context()
  *
@@ -441,7 +358,6 @@ enum message_param_e
 #define message_has_VERSION(M,E) message_has_param((M),MP_VERSION,(E))
 #define message_has_BODY(M,E)    message_has_param((M),MP_BODY,(E))
 
-
 /**
  * Allocates all the internal structures of a hidden message.
  *
@@ -461,7 +377,7 @@ gint message_create(MESSAGE * m, GError ** error);
  * @param error the error structure that will be set in case of failure
  * @return 1 on sucess, 0 on error
  */
-gint message_destroy(MESSAGE m, GError ** error);
+void message_destroy(MESSAGE m, GError ** error);
 
 
 /**
@@ -509,8 +425,8 @@ gint message_get_param(MESSAGE m, enum message_param_e mp, void **s, gsize * sSi
  * @param error the error structure that will be set in case of failure
  * @return 1 on success, 0 on error
  */
-gint message_set_param(MESSAGE m, enum message_param_e mp, const void *s, gsize sSize, GError ** error);
-
+gint message_set_param(MESSAGE m, enum message_param_e mp,
+		const void *s, gsize sSize, GError ** error);
 
 /**
  * Adds a new custom field in the list of the message. Now check is made to
@@ -569,16 +485,6 @@ gint message_del_field(MESSAGE m, const void *name, gsize nameSize,
  * @see g_strfreev() in the glib documentation
  */
 gchar **message_get_field_names(MESSAGE m, GError ** error);
-
-
-/**
- * @param m
- * @param dom
- * @param entete
- * @param err
- * @return
- */
-gint message_print(MESSAGE m, const gchar * dom, gchar * entete, GError ** err);
 
 
 /**
@@ -827,15 +733,6 @@ DECLARE_MARSHALLER_GBA(addr_info_marshall_gba);
 DECLARE_UNMARSHALLER(addr_info_unmarshall);
 DECLARE_BODY_MANAGER(addr_info_concat);
 
-DECLARE_MARSHALLER(volume_info_marshall);
-DECLARE_MARSHALLER_GBA(volume_info_marshall_gba);
-DECLARE_UNMARSHALLER(volume_info_unmarshall);
-DECLARE_MARSHALLER(meta1_info_marshall);
-
-DECLARE_MARSHALLER(volume_stat_marshall);
-DECLARE_MARSHALLER_GBA(volume_stat_marshall_gba);
-DECLARE_UNMARSHALLER(volume_stat_unmarshall);
-
 DECLARE_MARSHALLER(path_info_marshall);
 DECLARE_MARSHALLER_GBA(path_info_marshall_gba);
 DECLARE_UNMARSHALLER(path_info_unmarshall);
@@ -863,20 +760,6 @@ DECLARE_MARSHALLER(service_info_marshall);
 DECLARE_UNMARSHALLER(service_info_unmarshall);
 DECLARE_MARSHALLER_GBA(service_info_marshall_gba);
 DECLARE_BODY_MANAGER(service_info_concat);
-
-DECLARE_MARSHALLER_GBA(meta1_info_marshall_gba);
-DECLARE_UNMARSHALLER(meta1_info_unmarshall);
-DECLARE_MARSHALLER(meta1_stat_marshall);
-DECLARE_MARSHALLER_GBA(meta1_stat_marshall_gba);
-DECLARE_UNMARSHALLER(meta1_stat_unmarshall);
-
-DECLARE_MARSHALLER(     meta2_info_marshall);
-DECLARE_MARSHALLER_GBA( meta2_info_marshall_gba);
-DECLARE_UNMARSHALLER(   meta2_info_unmarshall);
-
-DECLARE_MARSHALLER(     meta2_stat_marshall);
-DECLARE_MARSHALLER_GBA( meta2_stat_marshall_gba);
-DECLARE_UNMARSHALLER(   meta2_stat_unmarshall);
 
 DECLARE_MARSHALLER_GBA( meta2_property_marshall_gba);
 DECLARE_MARSHALLER(     meta2_property_marshall);
@@ -1086,7 +969,7 @@ GByteArray *meta2_maintenance_sized_arrays_marshall(GSList * arrays, gsize array
  * @param err
  * @return the serialized ASN1 data in a GByteArray
  */
-GByteArray* namespace_info_marshall(struct namespace_info_s * namespace_info, GError ** err);
+GByteArray* namespace_info_marshall(struct namespace_info_s * namespace_info, const char *version, GError ** err);
 
 /**
  * Unserialize a namespace_info from ASN1

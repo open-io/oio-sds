@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /* Licensed to the Apache Software Foundation (ASF) under one or more
  * contributor license agreements.  See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
@@ -46,12 +29,7 @@
 #define DAV_FS_STATE_FILE_FOR_DIR       ".state_for_dir"
 #define DAV_FS_LOCK_NULL_FILE           ".locknull"
 
-#ifdef HAVE_COMPAT
-# include <metautils_compat.h>
-#else
-# include <metatypes.h>
-# include <metautils.h>
-#endif
+#include <unistd.h>
 
 #include <httpd.h>
 #include <http_config.h>
@@ -61,10 +39,10 @@
 #include <apr_strings.h>
 #include <apr_shm.h>
 #include <apr_global_mutex.h>
-#include <rawx.h>
 
-#include <unistd.h>
-/* provided by rawx-lib */
+#include <metautils/lib/metautils.h>
+#include <rawx-lib/src/rawx.h>
+
 
 /* return the storage pool associated with a resource */
 apr_pool_t *dav_rawx_pool(const dav_resource *resource);
@@ -72,6 +50,10 @@ apr_pool_t *dav_rawx_pool(const dav_resource *resource);
 const dav_hooks_propdb *dav_rawx_get_propdb_hooks(request_rec *r);
 
 void dav_rawx_gather_propsets(apr_array_header_t *uris);
+
+dav_error *dav_rawx_chunk_update_get_resource(request_rec *r,
+		const char *root_dir, const char *label,
+		int use_checked_in, dav_resource **result_resource);
 
 int dav_rawx_find_liveprop(const dav_resource *resource, const char *ns_uri, const char *name, const dav_hooks_liveprop **hooks);
 

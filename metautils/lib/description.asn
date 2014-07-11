@@ -90,21 +90,11 @@ BEGIN
 		versionNscfg    INTEGER,
 		storagePolicy	NamespaceInfoValueList OPTIONAL,
 		dataSecurity	NamespaceInfoValueList OPTIONAL,
-		dataTreatments	NamespaceInfoValueList OPTIONAL
+		dataTreatments	NamespaceInfoValueList OPTIONAL,
+		storageClass	NamespaceInfoValueList OPTIONAL
 	}
 
 	NamespaceInfoSequence ::= SET OF NamespaceInfo
-
-	-- RAWX information
-
-	VolumeInfo ::= SEQUENCE {
-		volume     PrintableString,
-		addr       AddrInfo,
-		score      Score
-	}
-
-	VolumeInfoSequence ::= SET OF VolumeInfo
-
 
 	-- meta0 mapping information
 
@@ -114,60 +104,6 @@ BEGIN
 	}
 
 	Meta0InfoSequence ::= SET OF Meta0Info
-
-
-	-- meta1 mapping information
-
-	Meta1Info ::= SEQUENCE {
-		addr    AddrInfo,
-		score   Score
-	}
-
-	Meta1InfoSequence ::= SEQUENCE OF Meta1Info
-
-
-	-- meta2 mapping information
-
-	Meta2Info ::= SEQUENCE {
-		score	Score,
-		addr	AddrInfo
-	}
-
-	Meta2InfoSequence ::= SEQUENCE OF Meta2Info
-
-
-	-- Volume stat info
-
-	VolumeStat ::= SEQUENCE {
-		cpuIdle	  INTEGER,
-		ioIdle	  INTEGER,
-		freeChunk INTEGER,
-		info	  VolumeInfo
-	}
-
-	VolumeStatSequence ::= SEQUENCE OF VolumeStat
-
-
-	-- Meta1 stat info
-
-	Meta1Stat ::= SEQUENCE {
-		cpuIdle INTEGER,
-		reqIdle	INTEGER,
-		info	Meta1Info
-	}
-
-	Meta1StatSequence ::= SEQUENCE OF Meta1Stat
-
-
-	-- Meta2 stat info
-
-	Meta2Stat ::= SEQUENCE {
-		cpuIdle INTEGER,
-		reqIdle	INTEGER,
-		info	Meta2Info
-	}
-
-	Meta2StatSequence ::= SEQUENCE OF Meta2Stat
 
 
 	-- Meta1 raw management structures
@@ -199,8 +135,8 @@ BEGIN
 		flags OCTET STRING(SIZE(4)),
 		cID OCTET STRING(SIZE(32)),
 		metadata OCTET STRING OPTIONAL,
-		systemMetadata OCTET STRING OPTIONAL
-		--version INTEGER OPTIONAL,
+		systemMetadata OCTET STRING OPTIONAL,
+		version INTEGER OPTIONAL
 		--deleted BOOLEAN OPTIONAL
 	}
 	Meta2RawContentHeaderSequence ::= SEQUENCE OF Meta2RawContentHeader
@@ -254,12 +190,18 @@ BEGIN
 		deleted      [4] BOOLEAN
 	}
 
+	M2V2Snapshot ::= SEQUENCE {
+		version [0] INTEGER,
+		name    [1] PrintableString
+	}
+
 	M2V2Bean ::= SEQUENCE {
-		alias   [0] M2V2Alias OPTIONAL,
-		header  [1] M2V2ContentHeader OPTIONAL,
-		content [2] M2V2Content OPTIONAL,
-		chunk   [3] M2V2Chunk OPTIONAL,
-		prop    [4] M2V2Property OPTIONAL
+		alias    [0] M2V2Alias OPTIONAL,
+		header   [1] M2V2ContentHeader OPTIONAL,
+		content  [2] M2V2Content OPTIONAL,
+		chunk    [3] M2V2Chunk OPTIONAL,
+		prop     [4] M2V2Property OPTIONAL,
+		snapshot [5] M2V2Snapshot OPTIONAL
 	}
 
 	M2V2BeanSequence ::= SEQUENCE OF M2V2Bean

@@ -1,22 +1,16 @@
-include_directories(BEFORE .
-		../../metautils/lib
-		../../libdbaccess/lib
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+
+include_directories(BEFORE . .. ../..
 		../../client/c/lib
-		../../cluster/lib ../../cluster/agent ../../cluster/events
-		../../meta0v2
-		../../meta1v2
-		../../meta2/remote
-		../lib)
+		${CMAKE_CURRENT_BINARY_DIR}/../..)
 
-include_directories(AFTER
-		${CMAKE_CURRENT_BINARY_DIR}/../../meta2/remote)
-
-add_executable(redc-meta2-mover
+add_executable(gs_meta2_mover
 		gs_meta2_mover.c)
-
-target_link_libraries(redc-meta2-mover
+bin_prefix(gs_meta2_mover -meta2-mover)
+target_link_libraries(gs_meta2_mover
 		meta2mover metautils metacomm meta2remote meta1remote
-		gridcluster
+		gridcluster meta2v2remote
 		${GLIB2_LIBRARIES})
 
-install(TARGETS redc-meta2-mover RUNTIME DESTINATION bin)
+install(TARGETS gs_meta2_mover
+	RUNTIME DESTINATION bin)

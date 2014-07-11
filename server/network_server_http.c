@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.utils.test"
 #endif
@@ -28,13 +11,11 @@
 #include <fcntl.h>
 #include <sys/epoll.h>
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
 
-#include "./internals.h"
-#include "./network_server.h"
-#include "./transport_http.h"
-#include "./loggers.h"
-#include "./common_main.h"
+#include "internals.h"
+#include "network_server.h"
+#include "transport_http.h"
 
 struct http_request_dispatcher_s *dispatcher = NULL;
 
@@ -42,30 +23,48 @@ struct network_server_s *server = NULL;
 
 /* -------------------------------------------------------------------------- */
 
-static gboolean
-static_matcher(gpointer u, struct http_request_s *request)
+static enum http_rc_e
+m1_handler(gpointer u, struct http_request_s *req, struct http_reply_ctx_s *reply)
 {
 	(void) u;
-	(void) request;
-	GRID_DEBUG("<%s:%d>", __FUNCTION__, __LINE__);
-	return TRUE;
+	if (0 != g_ascii_strcasecmp(req->req_uri, "/meta1"))
+		return HTTPRC_NEXT;
+	reply->set_body_gba(metautils_gba_from_string("META1 content..."));
+	reply->set_status(200, "OK");
+	reply->finalize();
+	return HTTPRC_DONE;
 }
 
-static gboolean
-static_handler(gpointer u, struct http_request_s *request,
+static enum http_rc_e
+m0_handler(gpointer u, struct http_request_s *req, struct http_reply_ctx_s *reply)
+{
+	(void) u;
+	if (0 != g_ascii_strcasecmp(req->req_uri, "/meta0"))
+		return HTTPRC_NEXT;
+	reply->set_body_gba(metautils_gba_from_string("META0 content..."));
+	reply->set_status(200, "OK");
+	reply->finalize();
+	return HTTPRC_DONE;
+}
+
+static enum http_rc_e
+any_handler(gpointer u, struct http_request_s *request,
 			struct http_reply_ctx_s *reply)
 {
 	(void) u;
 	(void) request;
-	(void) reply;
-	GRID_DEBUG("<%s:%d>", __FUNCTION__, __LINE__);
-	return FALSE;
+	reply->set_body_gba(metautils_gba_from_string("No handler suitable"));
+	reply->set_status(404, "Not found");
+	reply->finalize();
+	return HTTPRC_DONE;
 }
 
 struct http_request_descr_s all_requests[] =
 {
-	{ "static", static_matcher, static_handler },
-	{ NULL, NULL, NULL }
+	{ "meta1", m1_handler },
+	{ "meta0", m0_handler },
+	{ "any", any_handler },
+	{ NULL, NULL }
 };
 
 /* -------------------------------------------------------------------------- */
@@ -74,7 +73,7 @@ static void
 grid_main_action(void)
 {
 	GError *err = NULL;
-	
+
 	g_assert(server != NULL);
 
 	err = network_server_open_servers(server);
@@ -122,7 +121,7 @@ grid_main_configure(int argc, char **argv)
 	(void) argc;
 	(void) argv;
 
-	network_server_bind_host(server, "127.0.0.1:6000",
+	network_server_bind_host_lowlatency(server, "127.0.0.1:6000",
 			dispatcher, transport_http_factory);
 
 	return TRUE;

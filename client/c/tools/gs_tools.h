@@ -1,22 +1,7 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef __GS_TOOLS_H__
 # define __GS_TOOLS_H__
+
+# include <metautils/lib/metautils.h>
 
 #define ENV_CONTAINER "GS_CONTAINER"
 #define ENV_META0URL "GS_META0URL"
@@ -57,9 +42,20 @@ typedef struct s_gs_tools_options {
 } t_gs_tools_options;
 
 extern gchar* get_content_name(gchar *url);
-extern gboolean is_content_specified(t_gs_tools_options *gto, gchar **extra_args);
-extern gint gs_tools_main(int argc, gchar **argv, const gchar *cmd, void (*helpcb) (void));
-extern gint gs_tools_main_with_argument_check(int argc, gchar **argv, const gchar *cmd,
-		void (*helpcb) (void), gboolean (*check_args)(t_gs_tools_options*, gchar**));
+
+extern gboolean is_content_specified(t_gs_tools_options *gto,
+		gchar **extra_args);
+
+extern gint gs_tools_main(int argc, gchar **argv, const gchar *cmd,
+		void (*helpcb) (void));
+
+extern gint gs_tools_main_with_argument_check(int argc, gchar **argv,
+		const gchar *cmd, void (*helpcb) (void),
+		gboolean (*check_args)(t_gs_tools_options*, gchar**));
+
+void client_gscstat_init(void);
+
+void client_gscstat_close(void);
 
 #endif /*__GS_TOOLS_H__*/
+

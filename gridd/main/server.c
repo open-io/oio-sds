@@ -1,22 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "server.core"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "server.core"
 #endif
 
 #ifndef DOMAIN_THREADS
@@ -40,13 +23,11 @@
 #include <netinet/in.h>
 #include <signal.h>
 
-#include <glib.h>
-#include <gmodule.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <cluster/lib/gridcluster.h>
 
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-#include <gridcluster.h>
+#include <gmodule.h>
 
 #include "./server_internals.h"
 #include "./internal_alerts.h"
@@ -77,6 +58,9 @@ char *config_file=NULL;
 char *log4c_file=NULL;
 char *pid_file=NULL;
 
+guint32 gridd_flags = GRIDD_FLAG_NOLINGER | GRIDD_FLAG_SHUTDOWN
+		| GRIDD_FLAG_QUICKACK | GRIDD_FLAG_KEEPALIVE;
+
 
 /* NEW WAY INFORMATIONS ----------------------------------------------------- */
 
@@ -96,8 +80,8 @@ gchar* ns_name = NULL;
 /* -------------------------------------------------------------------------- */
 
 
-volatile gboolean may_continue = TRUE;
-volatile gboolean must_daemonize = FALSE;
+static volatile gboolean may_continue = TRUE;
+static volatile gboolean must_daemonize = FALSE;
 
 struct alert_cfg_s default_alert_cfg = { 0, 30 };
 
@@ -125,6 +109,38 @@ static GStaticRWLock ns_info_lock = G_STATIC_RW_LOCK_INIT;
 #define STATS_CNX_UP()   do { STATS_LOCK(); stats_total.total++; stats_total.created++; STATS_UNLOCK(); } while (0)
 #define STATS_CNX_DOWN() do { STATS_LOCK(); stats_total.total--; stats_total.stopped++; STATS_UNLOCK(); } while (0)
 
+static gboolean
+GET_FLAG(GKeyFile *gkf, const gchar *section, const gchar *k, gboolean def)
+{
+	gchar buf[256];
+	memset(buf, 0, sizeof(buf));
+	g_snprintf(buf, sizeof(buf), "flag.%s", k);
+	if (!g_key_file_has_key(gkf, section, buf, NULL))
+		return def;
+	gchar *v = g_key_file_get_value(gkf, section, buf, NULL);
+	gboolean flag = metautils_cfg_get_bool(v, def);
+	g_free(v);
+	return flag;
+}
+
+void
+gridd_set_flag(enum gridd_flag_e flag, int onoff)
+{
+	guint32 old_flags = gridd_flags;
+
+	if (onoff)
+		gridd_flags = gridd_flags | flag;
+	else
+		gridd_flags = gridd_flags & ~flag;
+
+	if (old_flags != gridd_flags) {
+		NOTICE("GRIDD flags changed (%08X) : [%08X] -> [%08X]",
+				flag, old_flags, gridd_flags);
+	}
+	else {
+		DEBUG("GRIDD flags unchanged (%08X) : [%08X]", flag, gridd_flags);
+	}
+}
 
 static void
 srv_inner_gauges_update (gpointer d)
@@ -209,7 +225,7 @@ self_register_in_cluster(GError **err)
 	
 	/* Copy the service tags */
 	if (!serv_tags)
-		NOTICE("No tag found in gridd to set in service info");
+		DEBUG("No tag found in gridd to set in service info");
 	else {
 		gsize i;
 		for (i=0; i<serv_tags->len ;i++) {
@@ -641,17 +657,13 @@ manage_message (SERVER srv, GByteArray *gba, struct request_context_s* ctx, GErr
 
 	gettimeofday(&(ctx->tv_start), NULL);
 	ctx->request = m;
-	
+
 	int rc = GO_ON;
 
 	/*find an appropriated message handler*/
 	for (found=0,i=0; rc != DONE && i<srv->nbHandlers ; i++) {
-		int match_rc;
-		struct message_handler_s *h;
-
-		h = srv->handlers[i];
-
-		match_rc = h->matcher(m, h->udata, err);
+		struct message_handler_s *h = srv->handlers[i];
+		int match_rc = h->matcher(m, h->udata, err);
 
 		if (match_rc < 0) {
 			GSETERROR(err, "match error");
@@ -679,18 +691,15 @@ manage_message (SERVER srv, GByteArray *gba, struct request_context_s* ctx, GErr
 		goto errorLabel;
 	}
 
-	if (!message_destroy (m, err)) {
-		GSETERROR (err, "Cannot destroy the request");
-		return 0;
-	}
+	message_destroy (m, NULL);
 
+	ctx->request = NULL;
 	return 1;
 
 errorLabel:
-
-	if (m && !message_destroy (m, err))
-		NOTICE ("Cannot destroy the request (possible leak)");
-
+	if (m)
+		message_destroy(m, NULL);
+	ctx->request = NULL;
 	return 0;
 }
 
@@ -701,7 +710,7 @@ main_thread (gpointer arg)
 	gchar str_addr_src[STRLEN_ADDRINFO+1];
 	struct server_s *srv;
 
-	/*init variables*/	
+	/*init variables*/
 	if (!(srv = arg))
 		return NULL;
 
@@ -715,7 +724,7 @@ main_thread (gpointer arg)
 		gint clt;
 		addr_info_t clt_addr;
 		struct request_context_s* ctx;
-		
+
 		/*accept a new connection*/
 		if (0 > (clt = accept_do(srv->ap, &clt_addr, &gErr))) {
 			if (gErr) {
@@ -734,36 +743,45 @@ main_thread (gpointer arg)
 
 		memset(str_addr_src, 0, sizeof(str_addr_src));
 		addr_info_to_string(ctx->remote_addr, str_addr_src, sizeof(str_addr_src));
-		DEBUG ("Connection NEW fd=%d [%s]", clt, str_addr_src);
+		TRACE ("Connection NEW fd=%d [%s]", clt, str_addr_src);
 
-		/*loops on the received data*/
 		while (may_continue) {
-			gint rc;
-			GByteArray *gba = NULL;
 
-			if (!wait_for_socket(clt, 5000))
+			if (!wait_for_socket(clt, 3000)) {
+				if (srv->to_connection > 0) {
+					gint64 now = time(0);
+					if (now < ctx->tv_start.tv_sec ||
+							(now - ctx->tv_start.tv_sec) > srv->to_connection) {
+						GSETCODE(&gErr, ERRCODE_CONN_TIMEOUT, "Idle for too long");
+						break;
+					}
+				}
 				continue;
+			}
 
-			gba = l4v_read_2to (clt, srv->to_connection, srv->to_operation, &gErr);
+			GByteArray *gba = l4v_read(clt, srv->to_operation, &gErr);
 			if (!gba) {
 				GSETERROR(&gErr,"Read error");
 				break;
 			}
-			rc = manage_message (srv, gba, ctx, &gErr);
+
+			gint rc = manage_message (srv, gba, ctx, &gErr);
 			g_byte_array_free (gba,TRUE);
 			if (!rc) {
 				GSETERROR(&gErr,"Cannot manage the message");
 				break;
 			}
+
+			gettimeofday(&(ctx->tv_start), NULL);
 		}
-	
+
 		request_context_free(ctx);
 
 		if (gErr) {
 			switch (gErr->code) {
 				case ERRCODE_CONN_RESET:
 				case ERRCODE_CONN_CLOSED:
-					DEBUG ("Connection CLOSED/RESET fd=%i [%s]", clt, str_addr_src);
+					TRACE ("Connection CLOSED/RESET fd=%i [%s]", clt, str_addr_src);
 					break;
 				case ERRCODE_CONN_TIMEOUT:
 					DEBUG ("Connection TIMEOUT fd=%i [%s]", clt, str_addr_src);
@@ -777,9 +795,10 @@ main_thread (gpointer arg)
 			g_clear_error (&gErr);
 		}
 
-		DEBUG ("Connection CLOSING fd=%i [%s]", clt, str_addr_src);
-		shutdown (clt, SHUT_RDWR);
-		close (clt);
+		TRACE ("Connection CLOSING fd=%i [%s]", clt, str_addr_src);
+		if (gridd_flags & GRIDD_FLAG_SHUTDOWN)
+			shutdown (clt, SHUT_RDWR);
+		metautils_pclose (&clt);
 		STATS_CNX_DOWN();
 
 		if (!thread_monitoring_release(srv)) /* in excess */
@@ -1181,9 +1200,14 @@ load_servers (GKeyFile *cfgFile, GError **err)
 			GET_INT(group,NAME_MIN_WORKERS,srv->mon.min_workers);
 			GET_INT(group,NAME_ALERT_PERIOD,srv->alert_cfg.frequency);
 
+			// XXX For compatibility purposes, we still receive timeouts in
+			// milliseconds, but we always compare them to timestamps in
+			// seconds.
+			srv->to_connection = srv->to_connection / 1000;
+
 			CHECK_WORKER_COUNTERS(srv->mon.min_workers, srv->mon.max_workers,
 					srv->mon.min_spare_workers, srv->mon.max_spare_workers);
-			
+
 			/*load the server list*/
 			srvList = g_key_file_get_string_list (cfgFile, group, NAME_LISTEN, 0, err);
 			if (!srvList)
@@ -1296,10 +1320,20 @@ reload_defaults (GKeyFile *cfgFile, GError **err)
 	GET_INT(NAME_GENERAL,NAME_TIMEOUT_CNX,default_to_connection);
 	GET_INT(NAME_GENERAL,NAME_TIMEOUT_OP,default_to_operation);
 
+	gridd_set_flag(GRIDD_FLAG_NOLINGER,
+			GET_FLAG(cfgFile, NAME_GENERAL, "NOLINGER", TRUE));
+
+	gridd_set_flag(GRIDD_FLAG_KEEPALIVE,
+			GET_FLAG(cfgFile, NAME_GENERAL, "KEEPALIVE", TRUE));
+
+	gridd_set_flag(GRIDD_FLAG_QUICKACK,
+			GET_FLAG(cfgFile, NAME_GENERAL, "QUICKACK", TRUE));
+
+	gridd_set_flag(GRIDD_FLAG_SHUTDOWN,
+			GET_FLAG(cfgFile, NAME_GENERAL, "SHUTDOWN", TRUE));
+
 	CHECK_WORKER_COUNTERS(default_min_workers, default_max_workers,
 			default_min_spare_workers, default_max_spare_workers);
-
-	/* don't check daemonize  and pidfile */
 
 	return 1;
 }
@@ -1307,21 +1341,8 @@ reload_defaults (GKeyFile *cfgFile, GError **err)
 static int
 load_defaults (GKeyFile *cfgFile, GError **err)
 {
-	if (!g_key_file_has_group (cfgFile, NAME_GENERAL)) {
-		GSETERROR(err, "No '%s' group in configuration", NAME_GENERAL);
+	if (!reload_defaults(cfgFile, err))
 		return 0;
-	}
-
-	GET_INT(NAME_GENERAL,NAME_WORKERS,default_max_workers);
-	GET_INT(NAME_GENERAL,NAME_MAX_WORKERS,default_max_workers);
-	GET_INT(NAME_GENERAL,NAME_MAX_SPARE_WORKERS,default_max_spare_workers);
-	GET_INT(NAME_GENERAL,NAME_MIN_SPARE_WORKERS,default_min_spare_workers);
-	GET_INT(NAME_GENERAL,NAME_MIN_WORKERS,default_min_workers);
-	GET_INT(NAME_GENERAL,NAME_TIMEOUT_CNX,default_to_connection);
-	GET_INT(NAME_GENERAL,NAME_TIMEOUT_OP,default_to_operation);
-
-	CHECK_WORKER_COUNTERS(default_min_workers, default_max_workers,
-			default_min_spare_workers, default_max_spare_workers);
 
 	must_daemonize = g_key_file_get_boolean (cfgFile, NAME_GENERAL, NAME_DAEMON, err);
 	if (err && *err)
@@ -1338,7 +1359,7 @@ load_defaults (GKeyFile *cfgFile, GError **err)
 			pid_file = NULL;
 			return 0;
 		} else {
-			close(pid_fd);
+			metautils_pclose(&pid_fd);
 			DEBUG("no pidfile found in the configuration section=%s key=%s : %s", NAME_GENERAL, NAME_PIDFILE, pid_file);
 		}
 	} else {
@@ -1346,6 +1367,31 @@ load_defaults (GKeyFile *cfgFile, GError **err)
 	}
 
 	return 1;
+}
+
+static void
+load_service_tags(GKeyFile *cfgFile, GError **err)
+{
+	gchar **tags, **cur_tag;
+	gchar *tag_name, *tag_value;
+	gsize number_of_tags;
+	struct service_tag_s tag_s;
+
+	if (NULL == serv_tags)
+		serv_tags = g_ptr_array_new();
+
+	if (g_key_file_has_group (cfgFile, NAME_SERVICETAGS)) {
+		tags = g_key_file_get_keys(cfgFile, NAME_SERVICETAGS, &number_of_tags, err);
+		for (cur_tag = tags; *cur_tag; cur_tag++) {
+			tag_name = g_strconcat("tag.", *cur_tag, NULL);
+			tag_value = g_key_file_get_value(cfgFile, NAME_SERVICETAGS, *cur_tag, err);
+			g_strlcpy(tag_s.name, tag_name, sizeof(tag_s.name));
+			service_tag_set_value_string(&tag_s, tag_value);
+			g_ptr_array_add(serv_tags, service_tag_dup(&tag_s));
+			g_free(tag_name);
+		}
+		g_strfreev(tags);
+	}
 }
 
 /**
@@ -1383,6 +1429,8 @@ load_service_info (GKeyFile *cfgFile, GError **err)
 			ns_info = get_namespace_info(ns_name, err);
 		}
 	}
+
+	load_service_tags(cfgFile, err);
 
 	return 1;
 }
@@ -1692,13 +1740,10 @@ signal_handler_NOOP (int s)
 static void
 signal_handler_RELOAD (int s)
 {
-	if(!reload_config()) {
-		WARN("Failed to reload server config");
+	if (!reload_config())
 		may_continue = FALSE;
-	}
 	signal( s, signal_handler_RELOAD);
 }
-
 
 static void
 signal_handler_QUIT (int s)
@@ -1743,28 +1788,21 @@ int
 main (int argc, char ** args)
 {
 	guint64 ticks;
-	int rc = 0;
 	GError *gErr = NULL;
+	int rc = 0;
+
+	HC_PROC_INIT(args,GRID_LOGLVL_INFO);
 
 	memset(&stats_mutex, 0, sizeof(stats_mutex));
 	g_static_mutex_init(&stats_mutex);
 	memset(&BEACON_SRV, 0x00, sizeof(BEACON_SRV));
 	memset(&BEACON_MSGHANDLER, 0x00, sizeof(BEACON_MSGHANDLER));
 
-	/* TODO refactor using common_main */
-	if (!g_thread_supported ())
-		g_thread_init (NULL);
-	g_set_prgname(args[0]);
-	g_log_set_default_handler(logger_stderr, NULL);
-	logger_init_level(GRID_LOGLVL_INFO);
-	logger_reset_level();
-
 	if (!g_module_supported()) {
 		g_error("GLib MODULES are not supported on this platform!");
 		return 1;
 	}
 	
-	/**/
 	if (argc > 1) {
 		config_file = g_strdup( args[1]);
 		if (argc > 2)
@@ -1790,6 +1828,7 @@ main (int argc, char ** args)
 	signal(SIGPIPE, signal_handler_NOOP);
 	signal(SIGUSR2, signal_handler_NOOP);
 
+	signal(SIGUSR1, signal_handler_RELOAD);
 	signal(SIGHUP,  signal_handler_RELOAD);
 
 	memset(&stats_interval, 0x00, sizeof(stats_interval));

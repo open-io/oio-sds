@@ -1,47 +1,24 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "rawx.compress"
 #endif
+
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
 
-#ifdef HAVE_COMPAT
-# include <metautils_compat.h>
-#endif
-
 #ifdef APR_HAVE_STDIO_H
 #include <stdio.h>              /* for sprintf() */
 #endif
 
 #include <unistd.h>
+#include <string.h>
 
-# include <glib.h>
-# include <metatypes.h>
-# include <metautils.h>
-# include <metacomm.h>
-# include <rawx.h>
-# include <string.h>
+#include <metautils/lib/metautils.h>
 
-#include "./compression.h"
+#include "rawx.h"
+#include "compression.h"
 
 /* magic file header for lzopack-compressed files */
 static const unsigned char lzo_magic[7] =
@@ -334,7 +311,6 @@ lzo_compressed_chunk_check_integrity(struct compressed_chunk_s *chunk)
 	/* read and verify checksum */
 	gchar *eof_info = NULL;
 	guint32 c;	
- 	/* sizeof(lzo_uint) + */
 	gsize len;
 	gsize nb_read;
 	gboolean status = FALSE;
@@ -353,12 +329,10 @@ lzo_compressed_chunk_check_integrity(struct compressed_chunk_s *chunk)
 	lzo_uint32 checksum32 = 0;
 	checksum32 = chunk->checksum;
 	DEBUG("chunk->checksum : %d\n", checksum32);
- 	/* + sizeof(lzo_uint) */
 	c = *((guint32*)(eof_info + sizeof(guint32)));	
 
 	DEBUG("c (get from file): %d\n", c);
 
- 	/*  + sizeof(lzo_uint)*/
 	if(memcmp(eof_info + sizeof(guint32), &checksum32, sizeof(guint32)) != 0)
 		goto end;
 	
@@ -396,16 +370,6 @@ lzo_compressed_chunk_get_data(struct compressed_chunk_s *chunk, gsize offset, gu
 			DEBUG("An error occured while filling buffer\n");
 			return -1;
 		}
-		/* 
-		if (rf == 0) {
-			DEBUG("compressed_chunk_get_data : EOF\n");
-			if (chunk->flags & LZO_FLAG_CHECKSUM){
-				if(!lzo_compressed_chunk_check_integrity(chunk)){
-					DEBUG("Wrong checksum, data seems to be corrupted...\n");	
-					return -1;
-				}
-			}
-		} */
 		DEBUG("Entering compressed_chunk_get_data, buffer refilled, max=%u buf_offset=%u data_len=%u\n",
 				(uint)buf_len, (uint)chunk->buf_offset, (uint)chunk->data_len);
 	}

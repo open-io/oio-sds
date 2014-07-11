@@ -1,34 +1,16 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
+#include <string.h>
 
-#include "./meta2_backend_internals.h"
-#include "./meta2v2_remote.h"
-#include "./generic.h"
-#include "./autogen.h"
+#include <meta2v2/meta2_backend_internals.h>
+#include <meta2v2/meta2v2_remote.h>
+#include <meta2v2/generic.h>
+#include <meta2v2/autogen.h>
+#include <meta2v2/meta2_test_common.h>
+#include <resolver/hc_resolver.h>
 
 static guint64 container_counter = 0;
 static gint64 version = 0;
 static gint64 chunk_size = 3000;
 static gint64 chunks_count = 3;
-
-typedef void (*repo_test_f) (struct meta2_backend_s *m2);
-
-typedef void (*container_test_f) (struct meta2_backend_s *m2,
-		struct hc_url_s *url);
 
 #define CHECK_ALIAS_VERSION(m2,u,v) do {\
 	gint64 _v = (v); \
@@ -45,7 +27,7 @@ _versioned(struct meta2_backend_s *m2, struct hc_url_s *u)
 	gint64 v = 0;
 	GError *err = meta2_backend_get_max_versions(m2, u, &v);
 	g_assert_no_error(err);
-	return v > 0;
+	return v != 0; // -1 means unlimited
 }
 
 static void
@@ -100,7 +82,6 @@ static GSList*
 _create_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		const gchar *polname)
 {
-	auto void _onbean(gpointer u, gpointer bean);
 	void _onbean(gpointer u, gpointer bean) {
 		*((GSList**)u) = g_slist_prepend(*((GSList**)u), bean);
 	}
@@ -146,7 +127,12 @@ check_list_count(struct meta2_backend_s *m2, struct hc_url_s *url, guint expecte
 		_bean_clean(bean);
 	}
 
-	err = meta2_backend_list_aliases(m2, url, M2V2_FLAG_ALLVERSION, counter_cb, NULL);
+	struct list_params_s lp;
+	memset(&lp, '\0', sizeof(struct list_params_s));
+	lp.flags = M2V2_FLAG_ALLVERSION;
+	lp.type = DEFAULT;
+
+	err = meta2_backend_list_aliases(m2, url, &lp, counter_cb, NULL);
 	g_assert_no_error(err);
 	GRID_DEBUG("TEST list_aliases counter=%u expected=%u", counter, expected);
 	g_assert(counter == expected);
@@ -187,8 +173,8 @@ _init_nsinfo(struct namespace_info_s *nsinfo, const gchar *ns)
 			metautils_gba_from_string("COMP:algo=ZLIB|blocksize=262144"));
 }
 
-static void
-_init_lb(struct grid_lb_s *lb)
+static struct grid_lbpool_s *
+_init_lb(const gchar *ns)
 {
 	struct def_s { const gchar *url, *loc; };
 	static struct def_s defs[] = {
@@ -220,7 +206,12 @@ _init_lb(struct grid_lb_s *lb)
 		*p_si = si;
 		return TRUE;
 	}
-	grid_lb_reload(lb, provide);
+
+	struct grid_lbpool_s *glp = grid_lbpool_create(ns);
+	g_assert(glp != NULL);
+	grid_lbpool_configure_string(glp, "rawx", "RR");
+	grid_lbpool_reload(glp, "rawx", provide);
+	return glp;
 }
 
 static void
@@ -228,10 +219,10 @@ _repo_wraper(const gchar *ns, repo_test_f fr)
 {
 	gchar repodir[512];
 	GError *err = NULL;
-	struct grid_lb_s *lb = NULL;
-	struct grid_lb_iterator_s *lb_iter = NULL;
+	struct grid_lbpool_s *glp = NULL;
 	struct meta2_backend_s *backend = NULL;
 	struct sqlx_repository_s *repository = NULL;
+	struct hc_resolver_s *resolver = NULL;
 	struct namespace_info_s nsinfo;
 	struct sqlx_repo_config_s cfg;
 
@@ -243,11 +234,10 @@ _repo_wraper(const gchar *ns, repo_test_f fr)
 	g_snprintf(repodir, sizeof(repodir), "/tmp/repo-%d", getpid());
 	g_mkdir_with_parents(repodir, 0755);
 
-	lb = grid_lb_init(ns, "rawx");
-	g_assert(lb != NULL);
-	_init_lb(lb);
-	lb_iter = grid_lb_iterator_weighted_round_robin(lb);
-	g_assert(lb_iter != NULL);
+	glp = _init_lb(ns);
+
+	resolver = hc_resolver_create();
+	g_assert(resolver != NULL);
 
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.flags = SQLX_REPO_DELETEON;
@@ -257,18 +247,17 @@ _repo_wraper(const gchar *ns, repo_test_f fr)
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
 
-	err = meta2_backend_init(&backend, repository, ns);
+	err = meta2_backend_init(&backend, repository, ns, glp, resolver);
 	g_assert_no_error(err);
 	meta2_backend_configure_nsinfo(backend, &nsinfo);
-	meta2_backend_configure_type(backend, "rawx", lb_iter);
 
 	if (fr)
 		fr(backend);
 
 	meta2_backend_clean(backend);
 	sqlx_repository_clean(repository);
-	grid_lb_iterator_clean(lb_iter);
-	grid_lb_clean(lb);
+	hc_resolver_destroy(resolver);
+	grid_lbpool_destroy(glp);
 }
 
 static void
@@ -278,12 +267,19 @@ _repo_failure(const gchar *ns)
 	GError *err = NULL;
 	struct meta2_backend_s *backend = NULL;
 	struct sqlx_repository_s *repository = NULL;
+	struct hc_resolver_s *resolver = NULL;
 	struct sqlx_repo_config_s cfg;
+	struct grid_lbpool_s *glp = NULL;
 
 	g_assert(ns != NULL);
 
 	g_snprintf(repodir, sizeof(repodir), "/tmp/repo-%d", getpid());
 	g_mkdir_with_parents(repodir, 0755);
+
+	glp = _init_lb(ns);
+
+	resolver = hc_resolver_create();
+	g_assert(resolver != NULL);
 
 	g_printerr("\n");
 	memset(&cfg, 0, sizeof(cfg));
@@ -293,13 +289,12 @@ _repo_failure(const gchar *ns)
 	cfg.lock.srv = "test-meta2";
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
-	err = meta2_backend_init(&backend, repository, ns);
+	err = meta2_backend_init(&backend, repository, ns, glp, resolver);
 	g_assert_error(err, GQ(), 400);
 
-	if (backend)
-		meta2_backend_clean(backend);
-	if (repository)
-		sqlx_repository_clean(repository);
+	meta2_backend_clean(backend);
+	sqlx_repository_clean(repository);
+	hc_resolver_destroy(resolver);
 }
 
 static void
@@ -328,14 +323,6 @@ _container_wraper(container_test_f cf)
 		err = meta2_backend_close_container(m2, url);
 		g_assert_no_error(err);
 
-#if 0
-		err = meta2_backend_destroy_container(m2, url);
-		g_assert_no_error(err);
-
-		err = meta2_backend_open_container(m2, url);
-		g_assert_error(err, GQ(), CODE_CONTAINER_NOTFOUND);
-		g_clear_error(&err);
-#endif
 		hc_url_clean(url);
 	}
 
@@ -396,7 +383,7 @@ static void
 test_content_delete_not_found(void)
 {
 	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
-		GError *err = meta2_backend_delete_alias(m2, u, NULL, NULL);
+		GError *err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		g_clear_error(&err);
 	}
@@ -452,26 +439,24 @@ test_content_put_prop_get(void)
 		_bean_cleanv2(tmp);
 
 		/* delete the bean */
-		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
 		g_assert_no_error(err);
 
-		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?2:1));
-		check_list_count(m2,u,(_versioned(m2,u)?2:1));
+		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?3:1));
+		check_list_count(m2,u,(_versioned(m2,u)?3:1));
 
 		/* check we get nothing when looking for a valid version */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_NODELETED, _appender, tmp);
-		g_assert_no_error(err);
+		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		expected = 0;
 		GRID_DEBUG("TEST count=%u expected=%u", tmp->len, expected);
 		g_assert(tmp->len == expected);
 		_bean_cleanv2(tmp);
 
-		/* Check we cannot delete twice */
-		tmp = g_ptr_array_new();
-		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
-		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
-		_bean_cleanv2(tmp);
+		/* Check we can undelete (by deleting deleted version) */
+		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		g_assert_no_error(err);
 
 		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?2:1));
 		check_list_count(m2,u,(_versioned(m2,u)?2:1));
@@ -507,35 +492,36 @@ test_content_put_get_delete(void)
 		check_list_count(m2,u,1);
 
 		/* delete the bean */
-		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
 		g_assert_no_error(err);
 
-		CHECK_ALIAS_VERSION(m2,u,1);
-		check_list_count(m2,u,1);
+		CHECK_ALIAS_VERSION(m2,u,2); // v1: original, v2: copy with 'deleted' flag
+		check_list_count(m2,u,2);
 
 		/* check we get nothing when looking for a valid version */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_NODELETED, _appender, tmp);
-		g_assert_no_error(err);
+		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		g_assert(tmp->len == 0);
 		_bean_cleanv2(tmp);
 
-		check_list_count(m2,u,1);
+		check_list_count(m2,u,2);
 
-		/* check we can get only 1 version */
+		/* check there are 2 versions */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION, _appender, tmp);
 		g_assert_no_error(err);
-		expected = 2+2*chunks_count;
-		GRID_DEBUG("TEST Got %u beans for all versions, expected %u",
-				tmp->len, expected);
+		// nb_versions * (1 alias + 1 content header + chunks_count * (1 chunk + 1 content))
+		expected = 2 * (2 + 2 * chunks_count);
+		GRID_DEBUG("TEST Got %u beans for all versions, expected %u (chunks count: %"G_GINT64_FORMAT")",
+				tmp->len, expected, chunks_count);
 		g_assert(tmp->len == expected);
 		_bean_cleanv2(tmp);
 
-		/* Check we cannot delete twice */
+		/* Check we can undelete (by deleting deleted version) */
 		tmp = g_ptr_array_new();
-		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
-		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
+		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		g_assert_no_error(err);
 		_bean_cleanv2(tmp);
 
 		CHECK_ALIAS_VERSION(m2,u,1);
@@ -600,15 +586,15 @@ test_content_append(void)
 		_bean_cleanv2(tmp);
 
 		/* delete the bean */
-		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
 		g_assert_no_error(err);
 
-		CHECK_ALIAS_VERSION(m2,u,2);
+		CHECK_ALIAS_VERSION(m2,u,3);
 
 		/* check we get nothing when looking for a valid version */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_NODELETED, _appender, tmp);
-		g_assert_no_error(err);
+		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		GRID_DEBUG("TEST Found %u beans (NODELETED)", tmp->len);
 		g_assert(tmp->len == 0);
 		_bean_cleanv2(tmp);
@@ -618,8 +604,8 @@ test_content_append(void)
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION, _appender, tmp);
 		g_assert_no_error(err);
 		_debug_beans_array(tmp);
-		expected = 2+2+(6*chunks_count);
-		g_assert(tmp->len == expected);
+		expected = 3+3+(10*chunks_count);
+		g_assert_cmpint(tmp->len, ==, expected);
 		_bean_cleanv2(tmp);
 
 		_bean_cleanl2(beans);
@@ -672,16 +658,16 @@ test_content_append_not_found(void)
 		_bean_cleanv2(tmp);
 
 		/* delete the bean */
-		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
 		g_assert_no_error(err);
 
-		CHECK_ALIAS_VERSION(m2,u,2);
+		CHECK_ALIAS_VERSION(m2,u,3);
 
 
 		/* check we get nothing when looking for a valid version */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_NODELETED, _appender, tmp);
-		g_assert_no_error(err);
+		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		g_assert(tmp->len == 0);
 		_bean_cleanv2(tmp);
 
@@ -761,7 +747,7 @@ test_props_set_deleted()
 		CHECK_ALIAS_VERSION(m2,u,1);
 
 		/* delete the content */
-		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
 		g_assert_no_error(err);
 
 		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?2:1));
@@ -773,8 +759,9 @@ test_props_set_deleted()
 		g_clear_error(&err);
 		_bean_cleanl2(beans);
 
-		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?3:1));
+		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?2:1));
 
+		// XXX: why do we check a second time?
 		/* set it properties */
 		beans = _props_generate(u, 1, 10);
 		err = meta2_backend_set_properties(m2, u, beans, NULL, NULL);
@@ -782,7 +769,7 @@ test_props_set_deleted()
 		g_clear_error(&err);
 		_bean_cleanl2(beans);
 
-		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?4:1));
+		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?2:1));
 	}
 	_container_wraper(test);
 }

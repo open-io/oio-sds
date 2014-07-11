@@ -1,0 +1,16 @@
+
+action_test_trip: to verify trip, the != data from trip --> crawler ...> stdout
+
+sudo crawler -vvvvvv  -Oaction=action_test_trip -Otrip=trip_container -- -trip_container.s=/DATA/TESTNS/sdgrid08s/meta2-4/
+sudo crawler -vvvvvv  -Oaction=action_test_trip -Otrip=trip_content -- -trip_content.s=/DATA/TESTNS/sdgrid08s/meta2-4/
+sudo crawler -vvvvvv  -Oaction=action_test_trip -Otrip=trip_prefix -- -trip_prefix.s=/DATA/TESTNS/sdgrid08s/meta1-1/
+
+
+
+trip_test_action: to verify action, the != data to action
+sudo crawler -vvvvvv  -Oaction=action_purge_container -Otrip=trip_test_action -- -trip_test_action.triptest=trip_container -trip_test_action.s=/DATA/TESTNS/sdgrid08s/meta2-4/ -action_purge_container.n=TESTNS
+sudo crawler -vvvvvv  -Oaction=action_dedup_container -Otrip=trip_test_action -- -trip_test_action.triptest=trip_container -trip_test_action.s=/DATA/TESTNS/sdgrid08s/meta2-4/ -action_dedup_container.n=TESTNS -action_dedup_container.dryrun=TRUE
+sudo crawler -vvvvvv  -Oaction=action_list_container -Otrip=trip_test_action -- -trip_test_action.triptest=trip_prefix -trip_test_action.s=/DATA/TESTNS/sdgrid08s/meta1-1/ -action_list_container.n=TESTNS -action_list_container.d=TRUE
+
+
+

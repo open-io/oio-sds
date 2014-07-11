@@ -1,28 +1,7 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "metacomm.as"
-#endif /*LOG_DOMAIN */
-#include "./metautils_internals.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "metacomm.as"
+#endif /*G_LOG_DOMAIN */
+#include "metautils_internals.h"
 #include <INTEGER.h>
 #include <asn_SEQUENCE_OF.h>
 
@@ -64,17 +43,12 @@ abstract_sequence_unmarshall(const struct abstract_sequence_handler_s *h,
 		return -1;
 	}
 
-	/* TRACE("Starting unmarshall a sequence of [%s]", h->type_name); */
-
 	codecCtx.max_stack_size = 1 << 19;
 	decRet = ber_decode(&codecCtx, h->asn1_descriptor, &(result), asn1_encoded, asn1_encoded_size);
 
 	switch (decRet.code) {
 	case RC_OK:
 		abstract_sequence = (struct anonymous_sequence_s *) result;
-
-		/* TRACE("ASN1 sequence of [%s] successfully decoded, %d/%d elements", h->type_name,
-			abstract_sequence->list.count, abstract_sequence->list.size); */
 
 		/*fill the list with the content of the array */
 		for (i = 0, max = abstract_sequence->list.count; i < max; i++) {
@@ -165,8 +139,6 @@ abstract_sequence_marshall(const struct abstract_sequence_handler_s * h, GSList 
 		}
 	}
 
-	TRACE("Serializing a list of %d elements", g_slist_length(api_sequence));
-
 	probable_size = g_slist_length(api_sequence) * (h->asn1_size + 6) + 64;
 	probable_size = MIN(probable_size, 4096);
 
@@ -195,8 +167,6 @@ abstract_sequence_marshall(const struct abstract_sequence_handler_s * h, GSList 
 		return NULL;
 	}
 
-	TRACE("marshalling done (%p size=%i/%u)", gba->data, gba->len, gba->len);
-
 	/*free the ASN.1 structure and the working buffer */
 	asnSeq.list.free = &func_free;
 	asn_set_empty(&asnSeq);
@@ -223,13 +193,13 @@ build_request(const gchar * req_name, void *body, gsize body_size, GError ** err
 
 	if (!message_set_NAME(req, req_name, strlen(req_name), error)) {
 		GSETERROR(error, "Failed to set message name %s", req_name);
-		message_destroy(req, error);
+		message_destroy(req, NULL);
 		return NULL;
 	}
 
 	if (body && !message_set_BODY(req, body, body_size, error)) {
 		GSETERROR(error, "Failed to set a body to message named %s", req_name);
-		message_destroy(req, error);
+		message_destroy(req, NULL);
 		return NULL;
 	}
 
@@ -275,7 +245,7 @@ abstract_sequence_request(struct metacnx_ctx_s * cnx, GError ** error,
 			h->clean_API(p1);
 	}
 
-	struct code_handler_s codes[] = {
+	static struct code_handler_s codes[] = {
 		{206, REPSEQ_BODYMANDATORY, &abstract_list_content_handler, NULL},
 		{200, REPSEQ_FINAL, &abstract_list_content_handler, NULL},
 		{0, 0, NULL, NULL}
@@ -307,12 +277,12 @@ abstract_sequence_request(struct metacnx_ctx_s * cnx, GError ** error,
 		message_add_field(req, k, strlen(k), v->data, v->len, error);
 	}
 	if (metaXClient_reply_sequence_run_context(error, cnx, req, &data)) {
-		message_destroy(req, error);
+		message_destroy(req, NULL);
 		return (al_req.result);
 	}
 
 	/*an error happened */
-	message_destroy(req, error);
+	message_destroy(req, NULL);
 	GSETERROR(error, "Cannot execute the query %s and receive all the responses", req_name);
 	if (al_req.result) {
 		if (h->clean_API)

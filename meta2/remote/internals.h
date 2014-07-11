@@ -1,20 +1,15 @@
 #ifndef GRIDSTORAGE__META2_REMOTE_INTERNALS__H
 # define GRIDSTORAGE__META2_REMOTE_INTERNALS__H 1
-# ifdef HAVE_CONFIG_H
-#  include "../config.h"
-# endif
-# ifndef LOG_DOMAIN
-#  define LOG_DOMAIN "meta2.remote"
+# ifndef G_LOG_DOMAIN
+#  define G_LOG_DOMAIN "meta2.remote"
 # endif
 # include <stdlib.h>
 # include <errno.h>
 # include <string.h>
 # include <unistd.h>
-# include <glib.h>
-# include <metatypes.h>
-# include <metautils.h>
-# include <metacomm.h>
-# include "./meta2_remote.h"
+# include <metautils/lib/metautils.h>
+# include <metautils/lib/metacomm.h>
+# include <meta2/remote/meta2_remote.h>
 
 # define STRING_2_GBA(res,st,st_len) do {\
 	(res)=NULL;\

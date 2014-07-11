@@ -7,7 +7,7 @@
 {{STOP}}
 {{END}}
 
-#include <internals.h>
+#include <meta2/module/internals.h>
 
 /* ------------------------------------------------------------------------- */
 

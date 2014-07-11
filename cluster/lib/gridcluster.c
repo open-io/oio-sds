@@ -1,46 +1,23 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.lib"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.lib"
 #endif
 
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
-#include <glib.h>
-
-#include <metautils.h>
-#include <metacomm.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <cluster/remote/gridcluster_remote.h>
 
 #include "gridcluster.h"
 #include "connect.h"
 #include "message.h"
-#include "config.h"
-#include "gridcluster_remote.h"
 
 #define MAX_REQ_LENGTH 1024
 #define CONNECT_TIMEOUT 5000
@@ -57,6 +34,7 @@
 #define NS_WORM_OPT_NAME "worm"
 #define NS_CONTAINER_MAX_SIZE_NAME "container_max_size"
 #define NS_STORAGE_POLICY_NAME "storage_policy"
+#define NS_CHUNK_SIZE_NAME "chunk_size"
 #define NS_WORM_OPT_VALUE_ON "on"
 #define NS_COMPRESS_OPT_NAME "compression"
 #define NS_COMPRESS_OPT_VALUE_ON "on"
@@ -85,6 +63,13 @@ _gba_to_bool(GByteArray *gba, gboolean def)
 	return metautils_cfg_get_bool(str, def);
 }
 
+static gboolean
+gridagent_available(void)
+{
+	struct stat sock_stat;
+	return (stat(AGENT_SOCK_PATH, &sock_stat) == 0);
+}
+
 static void
 clear_request_and_reply( request_t *req, response_t *resp )
 {
@@ -102,22 +87,66 @@ clear_request_and_reply( request_t *req, response_t *resp )
 	}
 }
 
-namespace_info_t*
-get_namespace_info(const char *ns_name, GError **error)
+/**
+ * Get conscience address from configuration files.
+ *
+ * Do not forget to free the result (g_free).
+ */
+static addr_info_t*
+_get_cs_addr(const char *ns_name, GError **error) {
+	addr_info_t *cs_addr;
+	GHashTable *ns_hash;
+
+	cs_addr = NULL;
+	ns_hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+
+	if (!parse_cluster_config(ns_hash, error)) {
+		g_hash_table_destroy(ns_hash);
+		GSETERROR(error, "Failed to parse cluster config");
+		return(NULL);
+	}
+
+	/* Need to truncate NS name => only physical NS NAME file exists */
+	gchar **tmp = NULL;
+	tmp =g_strsplit(ns_name , ".", 2);
+	cs_addr = g_hash_table_lookup(ns_hash, tmp[0]);
+	g_strfreev(tmp);
+
+	if (!cs_addr) {
+		GSETERROR(error, "No conscience addr found for namespace [%s]", ns_name);
+	} else {
+		cs_addr = g_memdup(cs_addr, sizeof(addr_info_t));
+	}
+
+	g_hash_table_destroy(ns_hash);
+	return cs_addr;
+}
+
+static namespace_info_t*
+_get_namespace_info_from_agent(const char *ns_name, GError **error)
 {
 	request_t req;
 	response_t resp;
+
+	gchar master_ns[512];
+	gchar *virt_ns = NULL;
 
 	if (!ns_name) {
 		GSETERROR(error,"Invalid parameter");
 		return 0;
 	}
 
+	virt_ns = strchr(ns_name, '.');
+	memset(master_ns, '\0', 512);
+	g_snprintf(master_ns, 512, "%.*s:%s",
+		virt_ns!=NULL? (gint) (virt_ns - ns_name) : (gint)strlen(ns_name), ns_name,
+		SHORT_API_VERSION);
+	
 	/* Build request */
 	memset(&req, 0, sizeof(request_t));
 	memset(&resp, 0, sizeof(response_t));
 	req.cmd = g_strdup(MSG_GETNS);
-	req.arg = g_strdup(ns_name);
+	req.arg = g_strdup(master_ns);
 	req.arg_size = strlen(req.arg);
 
 	if (!send_request(&req, &resp, error)) {
@@ -133,8 +162,11 @@ get_namespace_info(const char *ns_name, GError **error)
 			GSETERROR(error, "Failed to unserialize namespace_info");
 			return NULL;
 		}
-
-		return(ns);
+		if (virt_ns) {
+			memset(ns->name, '\0', LIMIT_LENGTH_NSNAME);
+			g_strlcpy(ns->name, ns_name, LIMIT_LENGTH_NSNAME);
+		}
+		return ns;
 	}
 
 	if (resp.status == STATUS_ERROR) {
@@ -147,33 +179,37 @@ get_namespace_info(const char *ns_name, GError **error)
 	return NULL;
 }
 
-static addr_info_t*
-_get_cs_addr(const char *ns_name, GError **error) {
-	addr_info_t *cs_addr;
-	GHashTable *ns_hash;
-
-	cs_addr = NULL;
-	ns_hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-
-	if (!parse_cluster_config(ns_hash, error)) {
-		GSETERROR(error, "Failed to parse cluster config");
-		return(NULL);
+static namespace_info_t*
+_get_namespace_info_from_conscience(const char *ns_name, GError **error)
+{
+	GError *local_error = NULL;
+	namespace_info_t *res = NULL;
+	addr_info_t *addr = _get_cs_addr(ns_name, &local_error);
+	if (addr == NULL) {
+		g_prefix_error(&local_error, "Failed to get conscience address: ");
+		*error = local_error;
+		res = NULL;
+	} else {
+		res = gcluster_get_namespace_info_full(addr,
+				CONNECT_TIMEOUT + SOCKET_TIMEOUT, error);
+		g_free(addr);
+		// In case we asked for a VNS
+		if (res)
+			g_strlcpy(res->name, ns_name, LIMIT_LENGTH_NSNAME);
 	}
-
-	/* Need to truncate NS name => only physical NS NAME file exists */
-	gchar **tmp = NULL;
-	tmp =g_strsplit(ns_name , ".", 2);
-	cs_addr = g_hash_table_lookup(ns_hash, tmp[0]);
-	g_strfreev(tmp);
-
-	if (!cs_addr) {
-		GSETERROR(error, "No conscience addr found for namespace [%s]", ns_name);
-	}
-	g_hash_table_destroy(ns_hash);
-
-	return cs_addr;
-
+	return res;
 }
+
+namespace_info_t*
+get_namespace_info(const char *ns_name, GError **error)
+{
+	if (!gridagent_available()) {
+		return _get_namespace_info_from_conscience(ns_name, error);
+	} else {
+		return _get_namespace_info_from_agent(ns_name, error);
+	}
+}
+
 
 static meta0_info_t*
 get_meta0_info_from_conscience(const char *ns_name, long timeout_cnx, long timeout_req, GError **error)
@@ -188,7 +224,8 @@ get_meta0_info_from_conscience(const char *ns_name, long timeout_cnx, long timeo
 	meta0 = gcluster_get_meta0_2timeouts(cs_addr, timeout_cnx, timeout_req, error);
 	if (!meta0)
 		GSETERROR(error, "Failed to retrieve meta0 infos from conscience of namespace [%s] timeout(%ld,%ld)",
-			ns_name, timeout_cnx, timeout_req);
+				ns_name, timeout_cnx, timeout_req);
+	g_free(cs_addr);
 	return(meta0);
 }
 
@@ -206,7 +243,6 @@ get_meta0_info_from_agent(const char *ns_name, GError **error)
 		return NULL;
 	}
 
-	//si = services->data;
 	srand(time(NULL));
 	si = g_slist_nth_data(services,rand()%g_slist_length(services));
 	meta0 = g_try_malloc0(sizeof(meta0_info_t));
@@ -220,14 +256,12 @@ get_meta0_info_from_agent(const char *ns_name, GError **error)
 meta0_info_t *
 get_meta0_info2(const char *ns_name, long timeout_cnx, long timeout_req, GError **error)
 {
-	struct stat sock_stat;
-
 	if (!ns_name) {
 		GSETERROR(error,"Invalid parameter");
 		return NULL;
 	}
 
-	if (stat(AGENT_SOCK_PATH, &sock_stat) < 0)
+	if (!gridagent_available())
 		return get_meta0_info_from_conscience(ns_name, timeout_cnx, timeout_req, error);
 	else
 		return get_meta0_info_from_agent(ns_name, error);
@@ -279,8 +313,8 @@ count_namespace_services(const char *ns_name, const char *type, GError **error)
 	return -1;
 }
 
-GSList*
-list_namespace_service_types(const char *ns_name, GError **error)
+static GSList*
+_list_namespace_service_types_from_agent(const char *ns_name, GError **error)
 {
 	request_t req;
 	response_t resp;
@@ -313,6 +347,32 @@ list_namespace_service_types(const char *ns_name, GError **error)
 		GSETERROR(error,"Invalid reply from agent : bad names payload (deserialization error)");
 	clear_request_and_reply(&req,&resp);
 	return names;
+}
+
+static GSList*
+_list_namespace_service_types_from_conscience(const char *ns_name, GError **error)
+{
+	addr_info_t *cs_addr;
+
+	cs_addr = _get_cs_addr(ns_name,error);
+	if(!cs_addr)
+		return(NULL);
+
+	GSList *types = gcluster_get_service_types(cs_addr,
+			CONNECT_TIMEOUT + SOCKET_TIMEOUT, error);
+
+	g_free(cs_addr);
+	return types;
+}
+
+GSList*
+list_namespace_service_types(const char *ns_name, GError **error)
+{
+	if (gridagent_available()) {
+		return _list_namespace_service_types_from_agent(ns_name, error);
+	} else {
+		return _list_namespace_service_types_from_conscience(ns_name, error);
+	}
 }
 
 GSList*
@@ -355,10 +415,6 @@ list_namespace_services(const char *ns_name, const char *type, GError **error)
 			return NULL;
 		}
 
-		if (DEBUG_ENABLED()) {
-			DEBUG("Received [%d] services from the gridagent", g_slist_length(services));
-		}
-	
 		clear_request_and_reply(&req,&resp);
 		return services;
 	}
@@ -370,13 +426,12 @@ list_namespace_services(const char *ns_name, const char *type, GError **error)
 GSList*
 list_namespace_services2(const char *ns_name, const char *type, GError **error)
 {
-	struct stat sock_stat;
 	if (!ns_name || !type) {
-                GSETERROR(error,"Invalid parameter");
-                return NULL;
-        }
+		GSETERROR(error,"Invalid parameter");
+		return NULL;
+	}
 
-	if (stat(AGENT_SOCK_PATH, &sock_stat) < 0) {	
+	if (!gridagent_available()) {
 		// from conscience
 		addr_info_t *cs_addr;
 
@@ -384,8 +439,9 @@ list_namespace_services2(const char *ns_name, const char *type, GError **error)
 		if(!cs_addr)
 			return(NULL);
 
-		return gcluster_get_services2(cs_addr, 1000, 4000, type, error);
-
+		GSList *res = gcluster_get_services2(cs_addr, 1000, 4000, type, error);
+		g_free(cs_addr);
+		return res;
 	} else {
 		// from agent
 		return list_namespace_services(ns_name,type,error);
@@ -401,6 +457,29 @@ get_one_namespace_service(const gchar *ns_name, const gchar *type, GError **erro
 	if (!ns_name || !type) {
 		GSETERROR(error,"Invalid parameter");
 		return NULL;
+	}
+
+	if (!gridagent_available()) {
+		// Find best scored service. This is basically what's done in agent.
+		struct service_info_s *res = NULL;
+		GSList *services = list_namespace_services2(ns_name, type, error);
+		if (services) {
+			struct service_info_s *best = NULL;
+			for (GSList *l = services; l; l = l->next) {
+				struct service_info_s *cur = l->data;
+				if (cur->score.value > 0 &&
+						(!best || cur->score.value > best->score.value)) {
+					best = cur;
+				}
+			}
+			res = service_info_dup(best); // NULL safe
+			g_slist_free_full(services, (GDestroyNotify)service_info_clean);
+		}
+		if (!res && error && !*error) {
+			*error = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
+					"No %s service found", type);
+		}
+		return res;
 	}
 
 	memset(&req, 0, sizeof(request_t));
@@ -473,7 +552,6 @@ copy_service_info(const struct service_info_s *si)
 int
 register_namespace_service(const struct service_info_s *si, GError **error)
 {
-	gint services_count;
 	GSList *l;
 	GByteArray *gba;
 	request_t req;
@@ -491,7 +569,6 @@ register_namespace_service(const struct service_info_s *si, GError **error)
 	}
 
 	gba = service_info_marshall_gba(l,error);
-	services_count = g_slist_length(l);
 	g_slist_foreach(l,service_info_gclean,NULL);
 	g_slist_free(l);
 
@@ -519,7 +596,6 @@ register_namespace_service(const struct service_info_s *si, GError **error)
 	}
 
 	clear_request_and_reply(&req,&resp);
-	TRACE("%d services registered", services_count);
 	return 1;
 }
 
@@ -592,7 +668,6 @@ clear_namespace_services(const char *ns_name, const char *type, GError **error)
 
 /* ------------------------------------------------------------------------- */
 
-#ifdef HAVE_LEGACY
 int
 store_erroneous_content( const char *ns_name, const container_id_t cID,
 	addr_info_t *src_addr, GError **error, const gchar *path, const gchar *cause )
@@ -645,42 +720,6 @@ store_erroneous_content( const char *ns_name, const container_id_t cID,
 	clear_request_and_reply(&req,&resp);
 	return 1;
 }
-#else
-int
-store_erroneous_content(const char *ns_name, const container_id_t cID,
-	addr_info_t *src_addr, GError **error, const gchar *path, const gchar *cause)
-{
-	int rc;
-	gridcluster_event_t *event;
-
-	if (!cID || !ns_name || !src_addr) {
-		GSETERROR(error,"Invalid parameter");
-		return 0;
-	}
-
-	event = gridcluster_create_event();
-	if (src_addr) {
-		gchar str_addr[STRLEN_ADDRINFO];
-		addr_info_to_string(src_addr, str_addr, sizeof(str_addr));
-		gridcluster_event_add_string(event, "ADDR", str_addr);
-	}
-	gridcluster_event_add_string(event, "NAMESPACE", ns_name);
-	gridcluster_event_add_buffer(event, "CONTAINER", cID, sizeof(container_id_t));
-	if (path) {
-		gridcluster_event_set_type(event, "broken.CONTENT");
-		gridcluster_event_add_string(event, "PATH", path);
-		if (cause)
-			gridcluster_event_add_string(event,"CAUSE", cause);
-	}
-	else
-		gridcluster_event_set_type(event, "broken.CONTAINER");
-
-	rc = event_send_to_agent(ns_name, event, error);
-	gridcluster_destroy_event(event);
-	DEBUG("Broken element sent as an asynchronous event");
-	return rc;
-}
-#endif
 
 int
 fixed_erroneous_content( const char *ns_name, const container_id_t cID, GError **error, const gchar *path)
@@ -725,7 +764,6 @@ fixed_erroneous_content( const char *ns_name, const container_id_t cID, GError *
 	return 1;
 }
 
-#ifdef HAVE_LEGACY
 int
 store_erroneous_meta1( const char *ns_name, const addr_info_t *m1_addr, GError **error )
 {
@@ -767,33 +805,7 @@ store_erroneous_meta1( const char *ns_name, const addr_info_t *m1_addr, GError *
 	clear_request_and_reply(&req,&resp);
 	return 1;
 }
-#else
-int
-store_erroneous_meta1( const char *ns_name, const addr_info_t *m1_addr, GError **error )
-{
-	int rc;
-	gchar str_addr[STRLEN_ADDRINFO];
-	gridcluster_event_t *event;
 
-	if (!ns_name || !m1_addr) {
-		GSETERROR(error,"Invalid parameter");
-		return 0;
-	}
-
-	addr_info_to_string(m1_addr, str_addr, sizeof(str_addr));
-	event = gridcluster_create_event();
-	gridcluster_event_add_string(event, "ADDR", str_addr);
-	gridcluster_event_add_string(event, "NAMESPACE", ns_name);
-	gridcluster_event_set_type(event, "broken.META1");
-
-	rc = event_send_to_agent(ns_name, event, error);
-	gridcluster_destroy_event(event);
-	DEBUG("Broken META1 event sent : %s", str_addr);
-	return rc;
-}
-#endif
-
-#ifdef HAVE_LEGACY
 int
 store_erroneous_container( const char *ns_name, const container_id_t cID, addr_info_t *src_addr, GError **error )
 {
@@ -838,13 +850,6 @@ store_erroneous_container( const char *ns_name, const container_id_t cID, addr_i
 	clear_request_and_reply(&req,&resp);
 	return(1);
 }
-#else
-int
-store_erroneous_container( const char *ns_name, const container_id_t cID, addr_info_t *src_addr, GError **error )
-{
-	return store_erroneous_content(ns_name, cID, src_addr, error, NULL, NULL);
-}
-#endif
 
 int
 fixed_erroneous_meta1( const char *ns_name, GError **error, addr_info_t *m1_addr)
@@ -1170,42 +1175,91 @@ event_send_to_agent( const gchar *ns_name, gridcluster_event_t *event, GError **
 	return TRUE;
 }
 
+/**
+ * Get a parameter from the namespace info "options" hash table.
+ * This intelligently looks for VNS overridden parameters.
+ *
+ * @param ns_info
+ * @param ns_name Namespace or VNS name
+ * @param param_name
+ * @return The value or NULL
+ */
+static GByteArray *
+namespace_param_gba(const namespace_info_t* ns_info, const gchar *ns_name,
+		const gchar *param_name)
+{
+	if (!ns_info || !ns_info->options)
+		return NULL;
+
+	if (!ns_name)
+		ns_name = ns_info->name;
+
+	GByteArray *gba = NULL;
+	gchar *parent_ns = g_strdup(ns_name);
+	gchar *end = parent_ns;
+	end += strlen(parent_ns);
+
+	/* Check if a parameter was specified for the namespace, or its parents */
+	do {
+		*end = '\0';
+		gchar *key = g_strdup_printf("%*s_%s", (int)(end - parent_ns),
+				parent_ns, param_name);
+		gba = g_hash_table_lookup(ns_info->options, key);
+		g_free(key);
+	} while (!gba && (end = strrchr(parent_ns, '.')) != NULL);
+	g_free((gpointer)parent_ns);
+
+	/* Fall back to the general parameter */
+	if (!gba)
+		gba = g_hash_table_lookup(ns_info->options, param_name);
+
+	return gba;
+}
+
 gboolean
 namespace_in_worm_mode(namespace_info_t* ns_info)
 {
-	if (!ns_info || !ns_info->options)
-		return FALSE;
-	return _gba_to_bool(g_hash_table_lookup(ns_info->options, NS_WORM_OPT_NAME), FALSE);
+	GByteArray *val = namespace_param_gba(ns_info, NULL, NS_WORM_OPT_NAME);
+	return _gba_to_bool(val, FALSE);
 }
 
 gint64
 namespace_container_max_size(namespace_info_t* ns_info)
 {
-	if (!ns_info  || !ns_info->options)
-		return -1;
+	GByteArray *val = namespace_param_gba(ns_info, NULL, NS_CONTAINER_MAX_SIZE_NAME);
+	return _gba_to_int64(val, -1);
+}
 
-	return _gba_to_int64(g_hash_table_lookup(ns_info->options, NS_CONTAINER_MAX_SIZE_NAME), -1);
+gint64
+namespace_chunk_size(const namespace_info_t* ns_info, const char *ns_name)
+{
+	GByteArray *val = namespace_param_gba(ns_info, ns_name,
+			NS_CHUNK_SIZE_NAME);
+	return _gba_to_int64(val, ns_info->chunk_size);
 }
 
 gchar *
-namespace_storage_policy(const namespace_info_t* ns_info)
+namespace_storage_policy(const namespace_info_t* ns_info, const char *ns_name)
 {
-	if (!ns_info || !ns_info->options)
-		return NULL;
-
-	GByteArray *gba = g_hash_table_lookup(ns_info->options, NS_STORAGE_POLICY_NAME);
+	GByteArray *gba = namespace_param_gba(ns_info, ns_name,
+			NS_STORAGE_POLICY_NAME);
 	return !gba ? NULL : g_strndup((gchar*)gba->data, gba->len);
 }
 
 gchar*
 namespace_storage_policy_value(const namespace_info_t *ns_info, const gchar *wanted_policy)
 {
-	const gchar *policy_to_lookup = wanted_policy ? wanted_policy : namespace_storage_policy(ns_info);
+	const gchar *policy_to_lookup = wanted_policy ?
+			wanted_policy : namespace_storage_policy(ns_info, ns_info->name);
 
 	if (!ns_info || ns_info->storage_policy)
 		return NULL;
 
 	GByteArray *gba = g_hash_table_lookup(ns_info->storage_policy, policy_to_lookup);
+
+	if (!wanted_policy)
+		g_free((gpointer)policy_to_lookup);
+
 	return !gba ? NULL : g_strndup((gchar*)gba->data, gba->len);
 }
 
@@ -1284,7 +1338,9 @@ namespace_in_compression_mode(namespace_info_t* ns_info)
 {
 	if (!ns_info || !ns_info->options)
 		return FALSE;
-	return _gba_to_bool(g_hash_table_lookup(ns_info->options, NS_COMPRESS_OPT_NAME), FALSE);
+	GByteArray *val = namespace_param_gba(ns_info, NULL, NS_COMPRESS_OPT_NAME);
+	gboolean res = _gba_to_bool(val, FALSE);
+	return res;
 }
 
 static gsize
@@ -1293,9 +1349,8 @@ namespace_get_size(namespace_info_t *ns_info, const gchar *name, gsize def)
 	if (!ns_info || !ns_info->options || !name)
 		return def;
 
-	gint64 i64 = _gba_to_int64(g_hash_table_lookup(ns_info->options, name), def);
-	gsize result = i64;
-	return result;
+	GByteArray *val = namespace_param_gba(ns_info, NULL, name);
+	return (gsize) _gba_to_int64(val, def);
 }
 
 gsize
@@ -1329,6 +1384,10 @@ namespace_get_rules_path(const gchar *ns, const gchar *typename, gchar **path,
 	return TRUE;
 }
 
+/**
+ * FIXME TODO XXX File loading managed by glib2  : g_file_get_contents()
+ * FIXME TODO XXX duplicated in metautils/lib/utils_acl.c : parse_acl_conf_file()
+ */
 static gboolean
 gba_read(GByteArray *gba, int fd, GError **err)
 {
@@ -1362,22 +1421,19 @@ gba_read(GByteArray *gba, int fd, GError **err)
 static gboolean
 gba_read_path(GByteArray *gba, gchar *path, GError **err)
 {
-	int fd;
-	gboolean rc;
-
 	if (!path || !*path) {
 		GSETERROR(err, "invalid parameter (NULL/empty path)");
 		return FALSE;
 	}
 
-	fd = open(path, O_RDONLY);
+	int fd = open(path, O_RDONLY);
 	if (fd < 0) {
 		GSETERROR(err, "open(%s) error : errno=%d (%s)", path, errno, strerror(errno));
 		return FALSE;
 	}
 
-	rc = gba_read(gba, fd, err);
-	close(fd);
+	gboolean rc = gba_read(gba, fd, err);
+	metautils_pclose(&fd);
 	return rc;
 }
 
@@ -1410,52 +1466,210 @@ namespace_get_rules(const gchar *ns, const gchar *typename, GError **err)
 	return gba;
 }
 
-gchar*
-gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo,
-		const gchar *srvtype)
+static void
+_svcupd_preload_with_default(GHashTable *ht, gchar *ns, const gchar *srvtype)
 {
-	GByteArray *value;
+	if (!g_ascii_strcasecmp(srvtype, "meta1"))
+		g_hash_table_insert(ht, g_strdup(ns), g_strdup(
+					"meta2=NONE;solr=APPEND;redis=REPLACE"));
+	else if (!g_ascii_strcasecmp(srvtype, "meta2"))
+		g_hash_table_insert(ht, g_strdup(ns), g_strdup(
+					"solr=APPEND;rawx=NONE;tsmx=APPEND"));
+	else
+		g_hash_table_insert(ht, g_strdup(ns), g_strdup(""));
+}
 
-	if (!nsinfo || !nsinfo->options) {
+static void
+_complete_with_nsinfo(GHashTable *ht, struct namespace_info_s *ni,
+		const gchar *key_suffix, const gchar *srvtype)
+{
+	GHashTableIter iter;
+	gchar *k;
+	GByteArray *vba;
+
+	gchar *suffix = g_strdup_printf("%s.%s", key_suffix, srvtype);
+	gsize suffix_len = strlen(suffix);
+
+	g_hash_table_iter_init(&iter, ni->options);
+	while (g_hash_table_iter_next(&iter, (gpointer*)&k, (gpointer*)&vba)) {
+		if (g_str_has_suffix(k, suffix)) { // New key with NS
+			gchar *key = (strlen(k) == suffix_len) ? g_strdup(ni->name)
+				: g_strndup(k, strlen(k) - suffix_len);
+			gchar *value = g_strndup((const char *)vba->data, vba->len);
+			g_hash_table_insert(ht, key, value);
+		}
+		else if (0 == g_ascii_strcasecmp(k, suffix+1)) { // Old key without NS
+			gchar *value = g_strndup((const char *)vba->data, vba->len);
+			g_hash_table_insert(ht, g_strdup(ni->name), value);
+		}
+	}
+	g_free(suffix);
+}
+
+GHashTable*
+gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo,
+	const gchar *srvtype)
+{
+	if (!nsinfo || !nsinfo->options || !srvtype) {
 		errno = EINVAL;
 		return NULL;
 	}
 
-	do {
-		gchar *key = g_strdup_printf("service_update_policy.%s", srvtype);
-		value = g_hash_table_lookup(nsinfo->options, key);
-		g_free(key);
-	} while (0);
-
-	if (value)
-		return g_strndup((gchar*)value->data, value->len);
-
-	if (!g_ascii_strcasecmp(srvtype, "meta1"))
-		return g_strdup("meta2=NONE;solr=APPEND;redis=REPLACE");
-
-	if (!g_ascii_strcasecmp(srvtype, "meta2"))
-		return g_strdup("solr=APPEND;rawx=NONE;tsmx=APPEND");
-
-	return g_strdup("");
+	GHashTable *result = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, g_free);
+	_svcupd_preload_with_default(result, nsinfo->name, srvtype);
+	_complete_with_nsinfo(result, nsinfo, "_service_update_policy", srvtype);
+	return result;
 }
 
-gint64
-gridcluster_get_container_max_versions(struct namespace_info_s *nsinfo)
+static void
+_evtcfg_preload_with_default(GHashTable *ht, gchar *ns, const gchar *srvtype)
 {
-	gint64 result;
+	if (!g_ascii_strcasecmp(srvtype, "meta2"))
+		g_hash_table_insert(ht, g_strdup(ns), g_strdup(
+					"enabled=false;dir=/GRID/common/spool;aggregate=false"));
+	else
+		g_hash_table_insert(ht, g_strdup(ns), g_strdup(""));
+}
+
+
+GHashTable*
+gridcluster_get_event_config(struct namespace_info_s *nsinfo,
+	const gchar *srvtype)
+{
+	if (!nsinfo || !nsinfo->options || !srvtype) {
+		errno = EINVAL;
+		return NULL;
+	}
+
+	GHashTable *result = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, g_free);
+	_evtcfg_preload_with_default(result, nsinfo->name, srvtype);
+	_complete_with_nsinfo(result, nsinfo, "_event_config", srvtype);
+	return result;
+}
+
+gchar*
+gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
+		const gchar *key, const gchar *def)
+{
 	GByteArray *value;
 
 	if (!nsinfo || !nsinfo->options)
-		return -1; /* versioning disabled */
+		return g_strdup(def);
 
-	value = g_hash_table_lookup(nsinfo->options, "meta2_max_versions");
+	value = g_hash_table_lookup(nsinfo->options, key);
 	if (!value)
-		return -1; /* versioning disabled by default */
+		return g_strdup(def);
+
+	return g_strndup((gchar*)value->data, value->len);
+}
+
+gint64
+gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
+		const gchar* key, gint64 def)
+{
+	gint64 result;
+	GByteArray *value;
+	if (!nsinfo || !nsinfo->options)
+		return def;
+
+	value = namespace_param_gba(nsinfo, NULL, key);
+	if (!value)
+		return def;
 
 	gchar *v = g_strndup((gchar*)value->data, value->len);
 	result = g_ascii_strtoll(v, NULL, 10);
 	g_free(v);
 
 	return result;
+}
+
+GError*
+gridcluster_reload_lbpool(struct grid_lbpool_s *glp)
+{
+	gboolean _reload_srvtype(const gchar *ns, const gchar *srvtype) {
+		GError *err = NULL;
+		GSList *list_srv = list_namespace_services2(ns, srvtype, &err);
+		if (err) {
+			GRID_WARN("Gridagent/conscience error: Failed to list the services"
+					" of type [%s]: code=%d %s", srvtype, err->code,
+					err->message);
+			g_clear_error(&err);
+			return FALSE;
+		}
+
+		if (list_srv) {
+			GSList *l = list_srv;
+
+			gboolean provide(struct service_info_s **p_si) {
+				if (!l)
+					return FALSE;
+				*p_si = l->data;
+				l->data = NULL;
+				l = l->next;
+				return TRUE;
+			}
+			grid_lbpool_reload(glp, srvtype, provide);
+			g_slist_free(list_srv);
+		}
+
+		return TRUE;
+	}
+
+	GError *err = NULL;
+	GSList *l, *list_srvtypes;
+
+	list_srvtypes = list_namespace_service_types(grid_lbpool_namespace(glp), &err);
+	if (err)
+		g_prefix_error(&err, "LB pool reload error: ");
+	else {
+		guint errors = 0;
+		const gchar *ns = grid_lbpool_namespace(glp);
+
+		for (l=list_srvtypes; l ;l=l->next) {
+			if (!l->data)
+				continue;
+			if (!_reload_srvtype(ns, l->data))
+				++ errors;
+		}
+
+		if (errors)
+			GRID_DEBUG("Reloaded %u service types, with %u errors",
+					g_slist_length(list_srvtypes), errors);
+	}
+
+	g_slist_foreach(list_srvtypes, g_free1, NULL);
+	g_slist_free(list_srvtypes);
+	return err;
+}
+
+GError*
+gridcluster_reconfigure_lbpool(struct grid_lbpool_s *glp)
+{
+	GError *err = NULL;
+	namespace_info_t *nsinfo;
+
+	nsinfo = get_namespace_info(grid_lbpool_namespace(glp), &err);
+	if (NULL != nsinfo) {
+		grid_lbpool_reconfigure(glp, nsinfo);
+		namespace_info_free(nsinfo);
+	}
+
+	return err;
+}
+
+gint64
+gridcluster_get_container_max_versions(struct namespace_info_s *nsinfo)
+{
+	/* For backward compatibility, versioning is disabled by default
+	 */
+	return gridcluster_get_nsinfo_int64(nsinfo, "meta2_max_versions", 0);
+}
+
+gint64
+gridcluster_get_keep_deleted_delay(struct namespace_info_s *nsinfo)
+{
+	return gridcluster_get_nsinfo_int64(nsinfo, "meta2_keep_deleted_delay", -1);
 }
 

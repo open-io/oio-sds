@@ -1,7 +1,6 @@
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
-include_directories(BEFORE .
-		../../metautils/lib
-		../events ../conscience ../remote ../lib ../agent)
+include_directories(BEFORE . .. ../..)
 
 add_executable(gridagent 
 	accept_worker.c accept_worker.h
@@ -17,7 +16,6 @@ add_executable(gridagent
 	cluster_conf_parser.c
 	cluster_conf_parser.h
 	config.c config.h
-	connect.c connect.h
 	cpu_stat_task_worker.c cpu_stat_task_worker.h
 	event_common.c
 	event_forwarder_worker.c
@@ -46,10 +44,20 @@ add_executable(gridagent
 	worker.h
 	write_message_worker.c write_message_worker.h)
 
+bin_prefix_full(gridagent -cluster-agent)
+
 target_link_libraries(gridagent
 	gridcluster gridcluster-events gridcluster-eventsremote gridcluster-remote gridcluster-conscience
 	metautils metacomm
 	-lm ${GLIB2_LIBRARIES})
+
+install(FILES
+			agent.h
+			gridagent.h
+			task.h
+		DESTINATION include/cluster/agent
+		PERMISSIONS
+			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
 install(TARGETS gridagent
         LIBRARY DESTINATION ${LD_LIBDIR}

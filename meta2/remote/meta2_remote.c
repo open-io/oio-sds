@@ -1,5 +1,5 @@
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "meta2.remote"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "meta2.remote"
 #endif
 
 #include <errno.h>
@@ -7,10 +7,12 @@
 #include <stdlib.h>
 #include <unistd.h>
 
+#include <metautils/lib/metautils.h>
+
 #include <glib.h>
 
-#include "./meta2_remote.h"
-#include "./internals.h"
+#include "meta2_remote.h"
+#include "internals.h"
 
 typedef enum meta2_operation_e
 {
@@ -162,7 +164,7 @@ meta2_remote_request_create(MESSAGE m, meta2_operation_t mop, const container_id
 }
 
 static gint
-meta2_remote_container_common_fd_v2(const char *caller, int fd, gint ms, GError ** err, meta2_operation_t mop,
+meta2_remote_container_common_fd_v2(const char *caller, int *fd, gint ms, GError ** err, meta2_operation_t mop,
     const container_id_t cid, const gchar *name, const gchar *vns, const char *stgpol)
 {
 	static struct code_handler_s codes[] = {
@@ -175,8 +177,10 @@ meta2_remote_container_common_fd_v2(const char *caller, int fd, gint ms, GError 
 
 	if (!message_create(&request, err)) {
 		GSETERROR(err, "<%s> Cannot create a message", caller);
-		goto errorLabel;
+		return 0;
 	}
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!meta2_remote_request_create(request, mop, cid, err)) {
 		GSETERROR(err, "<%s> Cannot init the message as a simple metaX request", caller);
@@ -209,47 +213,42 @@ meta2_remote_container_common_fd_v2(const char *caller, int fd, gint ms, GError 
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+	message_destroy(request, NULL);
 	return TRUE;
+
 errorLabel:
-	if (request)
-		message_destroy(request, err);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+	message_destroy(request, NULL);
 	return FALSE;
 }
 
 static gint
-meta2_remote_container_common_fd(const char *caller, int fd, gint ms, GError ** err, meta2_operation_t mop,
+meta2_remote_container_common_fd(const char *caller, int *fd, gint ms, GError ** err, meta2_operation_t mop,
     const container_id_t container_id, const gchar * name)
 {
 	return meta2_remote_container_common_fd_v2(caller, fd, ms, err, mop, container_id, name, NULL, NULL);
 }
 
 static gint
-meta2_remote_container_common_v2(const char *caller, const addr_info_t * m2_addr, gint ms, GError ** err, meta2_operation_t mop,
-    const container_id_t cid, const char *name, const char *vns, const char *stgpol)
+meta2_remote_container_common_v2(const char *caller, const addr_info_t * m2_addr, gint ms,
+		GError ** err, meta2_operation_t mop,
+		const container_id_t cid, const char *name, const char *vns, const char *stgpol)
 {
-	gchar str_addr[128];
 	int fd = -1;
 	gint rc = 0;
 
 	fd = addrinfo_connect(m2_addr, ms, err);
 	if (fd < 0) {
-		addr_info_to_string(m2_addr, str_addr, sizeof(str_addr));
 		GSETERROR(err, "<%s> Connection failed", caller);
-		goto end_label;
+		return 0;
 	}
 
-	if (!meta2_remote_container_common_fd_v2(caller, fd, ms, err, mop, cid, name, vns, stgpol)) {
-		shutdown(fd, SHUT_RDWR);
-		close(fd);
-		goto end_label;
+	if (meta2_remote_container_common_fd_v2(caller, &fd, ms, err, mop, cid, name, vns, stgpol)) {
+		rc = 1;
 	}
-	rc = 1;
-      end_label:
-	if (fd >= 0) {
-		shutdown(fd, SHUT_RDWR);
-		close(fd);
-	}
+
+	metautils_pclose(&fd);
 	return rc;
 }
 
@@ -305,52 +304,52 @@ gboolean meta2_remote_container_create_v3 (const addr_info_t *m2, gint ms, const
 
 GSList* meta2_remote_container_list (addr_info_t *m2_addr, gint ms, GError **err, const container_id_t container_id)
 {
-	GSList *result = NULL;
-
-	struct code_handler_s codes [] = {
+	static struct code_handler_s codes [] = {
 		{ 200, REPSEQ_FINAL,         &path_info_concat, NULL},
 		{ 206, REPSEQ_BODYMANDATORY, &path_info_concat, NULL},
 		{ 0, 0, NULL, NULL},
 	};
-	
-	struct reply_sequence_data_s data = { &result , 0 , codes };
 
+	GSList *result = NULL;
+	struct reply_sequence_data_s data = { &result , 0 , codes };
 	MESSAGE request = NULL;
 
-	if (!message_create (&request, err))
-	{
+	if (!message_create (&request, err)) {
 		GSETERROR(err, "Cannot create a message");
-		goto errorLabel;
+		return 0;
 	}
-	
-	if (!meta2_remote_request_create (request, M2_OP_CONTAINER_LIST, container_id, err))
-	{
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
+	if (!meta2_remote_request_create (request, M2_OP_CONTAINER_LIST, container_id, err)) {
 		GSETERROR(err, "Cannot init the message as a simple metaX request");
 		goto errorLabel;
 	}
 
-	if (!metaXClient_reply_sequence_run_from_addrinfo (err, request, m2_addr, ms, &data))
-	{
+	if (!metaXClient_reply_sequence_run_from_addrinfo (err, request, m2_addr, ms, &data)) {
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+	message_destroy(request, NULL);
 	return result;
+
 errorLabel:
-	if (result)
-	{
+	if (result) {
 		g_slist_foreach (result, path_info_gclean, NULL);
 		g_slist_free (result);
 		result = NULL;
 	}
 
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+	message_destroy(request, NULL);
 	return NULL;
 }
 
 gboolean meta2_remote_container_set_flag (addr_info_t *m2_addr, gint ms, GError **err, const container_id_t container_id, guint32 flag)
 {
-	struct code_handler_s codes [] = {
+	static struct code_handler_s codes [] = {
 		{ 200, REPSEQ_FINAL, NULL, NULL },
 		{ 0, 0, NULL, NULL },
 	};
@@ -358,6 +357,8 @@ gboolean meta2_remote_container_set_flag (addr_info_t *m2_addr, gint ms, GError 
 	struct reply_sequence_data_s data = { NULL , 0 , codes };
 
 	MESSAGE request = NULL;
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -381,13 +382,6 @@ gboolean meta2_remote_container_set_flag (addr_info_t *m2_addr, gint ms, GError 
 	{
 		TRACE("set flag %08x (originally %08x)", flag, g_ntohl(flag));
 	}
-	/*
-	if (!message_add_field(request, NAME_MSGKEY_FLAG, sizeof(NAME_MSGKEY_FLAG)-1, &flag, sizeof(flag), err))
-	{
-		GSETERROR(err, "Cannot add the new FLAG in the request (as a field)");
-		goto errorLabel;
-	}
-	*/
 
 	if (!metaXClient_reply_sequence_run_from_addrinfo (err, request, m2_addr, ms, &data))
 	{
@@ -395,14 +389,17 @@ gboolean meta2_remote_container_set_flag (addr_info_t *m2_addr, gint ms, GError 
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return TRUE;
 errorLabel:
 	if (request)
 	{
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
+
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return FALSE;
 }
@@ -411,9 +408,6 @@ gboolean
 meta2_remote_container_get_flag(addr_info_t * m2_addr, gint ms, GError ** err, const container_id_t container_id,
     guint32 * flag)
 {
-
-	auto gboolean flag_extractor(GError ** err0, gpointer udata, gint code, guint8 * body, gsize bodySize);
-
 	gboolean flag_extractor(GError ** err0, gpointer udata, gint code, guint8 * body, gsize bodySize)
 	{
 		(void) code;
@@ -444,6 +438,8 @@ meta2_remote_container_get_flag(addr_info_t * m2_addr, gint ms, GError ** err, c
 
 	MESSAGE request = NULL;
 
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	if (!message_create(&request, err)) {
 		GSETERROR(err, "Cannot create a message");
 		goto errorLabel;
@@ -459,12 +455,17 @@ meta2_remote_container_get_flag(addr_info_t * m2_addr, gint ms, GError ** err, c
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
+	message_destroy(request, NULL);
 
 	return TRUE;
       errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
+
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	return FALSE;
 }
 
@@ -482,6 +483,8 @@ gboolean meta2_remote_content_remove (addr_info_t *m2_addr, gint ms, GError **er
 	struct reply_sequence_data_s data = { NULL , 0 , codes };
 
 	MESSAGE request = NULL;
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -507,14 +510,17 @@ gboolean meta2_remote_content_remove (addr_info_t *m2_addr, gint ms, GError **er
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return TRUE;
 errorLabel:
 	if (request)
 	{
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
+
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return FALSE;
 }
@@ -530,6 +536,8 @@ gboolean meta2_remote_content_commit (addr_info_t *m2_addr, gint ms, GError **er
 	struct reply_sequence_data_s data = { NULL , 0 , codes };
 
 	MESSAGE request = NULL;
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -555,14 +563,16 @@ gboolean meta2_remote_content_commit (addr_info_t *m2_addr, gint ms, GError **er
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return TRUE;
 errorLabel:
 	if (request)
 	{
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return FALSE;
 }
@@ -579,6 +589,7 @@ gint meta2_remote_content_rollback (addr_info_t *m2_addr, gint ms, GError **err,
 	struct reply_sequence_data_s data = { NULL , 0 , codes };
 
 	MESSAGE request = NULL;
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -604,14 +615,16 @@ gint meta2_remote_content_rollback (addr_info_t *m2_addr, gint ms, GError **err,
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return 1;
 errorLabel:
 	if (request)
 	{
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return 0;
 }
@@ -630,6 +643,8 @@ GSList* meta2_remote_content_retrieve (addr_info_t *m2_addr, gint ms, GError **e
 	struct reply_sequence_data_s data = { &result , 0 , codes };
 
 	MESSAGE request = NULL;
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -655,13 +670,14 @@ GSList* meta2_remote_content_retrieve (addr_info_t *m2_addr, gint ms, GError **e
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return result;
 errorLabel:
 	if (request)
 	{
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
 
 	if (result)
@@ -669,26 +685,25 @@ errorLabel:
 		g_slist_foreach (result, chunk_info_gclean, NULL);
 		g_slist_free (result);
 	}
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return NULL;
 }
 
 GSList* meta2_remote_content_add (addr_info_t *m2_addr, gint ms, GError **err,
-	const container_id_t container_id, const gchar *content_path, 
+	const container_id_t container_id, const gchar *content_path,
 	content_length_t content_length, GByteArray *system_metadata, GByteArray **new_system_metadata)
 {
 	GSList *result = NULL;
-	
-	auto gboolean get_sys_metadata (GError **err0, gpointer udata, gint code, MESSAGE rep);
 
 	gboolean get_sys_metadata (GError **err0, gpointer udata, gint code, MESSAGE rep) {
 		int rc;
 		void *field=NULL;
 		gsize fieldLen=0;
-		
+
 		(void)code;
 		(void)udata;
-		
+
 		if (!rep)
 			return FALSE;
 		if (!new_system_metadata)
@@ -705,23 +720,25 @@ GSList* meta2_remote_content_add (addr_info_t *m2_addr, gint ms, GError **err,
 		GSETERROR(err0, "Cannot lookup the updated systemetadata");
 		return FALSE;
 	}
-	
+
 	struct code_handler_s codes [] = {
 		{ 206, REPSEQ_BODYMANDATORY, chunk_info_concat, NULL },
 		{ 200, REPSEQ_FINAL,         chunk_info_concat, get_sys_metadata },
 		{ 0,0,NULL,NULL}
 	};
-	
+
 	struct reply_sequence_data_s data = { &result , 0 , codes };
 
 	MESSAGE request = NULL;
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
 		GSETERROR(err, "Cannot create a message");
 		goto errorLabel;
 	}
-	
+
 	if (!meta2_remote_request_create (request, M2_OP_CONTENT_ADD, container_id, err))
 	{
 		GSETERROR(err, "Cannot init the message as a simple metaX request");
@@ -751,13 +768,14 @@ GSList* meta2_remote_content_add (addr_info_t *m2_addr, gint ms, GError **err,
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return result;
 errorLabel:
 	if (request)
 	{
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
 
 	if (result)
@@ -765,6 +783,7 @@ errorLabel:
 		g_slist_foreach (result, chunk_info_gclean, NULL);
 		g_slist_free (result);
 	}
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return NULL;
 }
@@ -782,6 +801,7 @@ gboolean meta2_remote_chunk_commit (addr_info_t *m2_addr, gint ms, GError **err,
 	void *body=NULL;
 	gsize bodySize=0;
 	MESSAGE request = NULL;
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -821,13 +841,15 @@ gboolean meta2_remote_chunk_commit (addr_info_t *m2_addr, gint ms, GError **err,
 	}
 
 	g_free(body);
-	message_destroy(request, err);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+	message_destroy(request, NULL);
 	return TRUE;
 errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	if (body)
 		g_free(body);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
 
@@ -846,6 +868,7 @@ GSList* meta2_remote_content_spare (addr_info_t *m2_addr, gint ms, GError **err,
 	struct reply_sequence_data_s data = { &result , 0 , codes };
 
 	MESSAGE request = NULL;
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -871,13 +894,14 @@ GSList* meta2_remote_content_spare (addr_info_t *m2_addr, gint ms, GError **err,
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return result;
 errorLabel:
 	if (request)
 	{
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
 
 	if (result)
@@ -885,6 +909,7 @@ errorLabel:
 		g_slist_foreach (result, chunk_info_gclean, NULL);
 		g_slist_free (result);
 	}
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return NULL;
 }
@@ -892,28 +917,28 @@ errorLabel:
 
 /* ------------------------------------------------------------------------- */
 
-gboolean meta2_remote_container_create_in_fd (int fd, gint ms, GError **err, const container_id_t container_id, const gchar *name)
+gboolean meta2_remote_container_create_in_fd (int *fd, gint ms, GError **err, const container_id_t container_id, const gchar *name)
 {
 	return meta2_remote_container_common_fd (__FUNCTION__, fd, ms, err, M2_OP_CONTAINER_CREATE, container_id, name);
 }
 
-gboolean meta2_remote_container_destroy_in_fd (int fd, gint ms, GError **err, const container_id_t container_id)
+gboolean meta2_remote_container_destroy_in_fd (int *fd, gint ms, GError **err, const container_id_t container_id)
 {
 	return meta2_remote_container_common_fd (__FUNCTION__, fd, ms, err, M2_OP_CONTAINER_DESTROY, container_id, NULL);
 }
 
-gboolean meta2_remote_container_open_in_fd (int fd, gint ms, GError **err, const container_id_t container_id)
+gboolean meta2_remote_container_open_in_fd (int *fd, gint ms, GError **err, const container_id_t container_id)
 {
 	return meta2_remote_container_common_fd (__FUNCTION__, fd, ms, err, M2_OP_CONTAINER_OPEN, container_id, NULL);
 }
 
-gboolean meta2_remote_container_close_in_fd (int fd, gint ms, GError **err, const container_id_t container_id)
+gboolean meta2_remote_container_close_in_fd (int *fd, gint ms, GError **err, const container_id_t container_id)
 {
 	return meta2_remote_container_common_fd (__FUNCTION__, fd, ms, err, M2_OP_CONTAINER_CLOSE, container_id, NULL);
 }
 
 
-GSList* meta2_remote_content_retrieve_in_fd (int fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path)
+GSList* meta2_remote_content_retrieve_in_fd (int *fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path)
 {
 	MESSAGE request = NULL;
 	GSList *result = NULL;
@@ -925,6 +950,8 @@ GSList* meta2_remote_content_retrieve_in_fd (int fd, gint ms, GError **err, cons
 	};
 	
 	struct reply_sequence_data_s data = { &result , 0 , codes };
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -950,12 +977,13 @@ GSList* meta2_remote_content_retrieve_in_fd (int fd, gint ms, GError **err, cons
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
 errorLabel:
 	if (request)
 	{
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
 
 	if (result)
@@ -964,11 +992,12 @@ errorLabel:
 		g_slist_free (result);
 	}
 
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
 
-gint meta2_remote_content_rollback_in_fd (int fd, gint ms, GError **err,
+gint meta2_remote_content_rollback_in_fd (int *fd, gint ms, GError **err,
 	const container_id_t container_id, const gchar *content_path)
 {
 	static struct code_handler_s codes [] = {
@@ -978,6 +1007,7 @@ gint meta2_remote_content_rollback_in_fd (int fd, gint ms, GError **err,
 	
 	struct reply_sequence_data_s data = { NULL , 0 , codes };
 	MESSAGE request = NULL;
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -1003,25 +1033,25 @@ gint meta2_remote_content_rollback_in_fd (int fd, gint ms, GError **err,
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return 1;
 errorLabel:
 	if (request)
 	{
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
 
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return 0;
 }
 
 
-GSList* meta2_remote_content_add_in_fd_v2 (int fd, gint ms, GError **err,
+GSList* meta2_remote_content_add_in_fd_v2 (int *fd, gint ms, GError **err,
 	const container_id_t container_id, const gchar *content_path, content_length_t content_length,
 	GByteArray *user_metadata, GByteArray *system_metadata, GByteArray **new_system_metadata)
 {
 	GSList *result = NULL;
-
-	auto gboolean get_sys_metadata (GError **err0, gpointer udata, gint code, MESSAGE rep);
 
 	gboolean get_sys_metadata (GError **err0, gpointer udata, gint code, MESSAGE rep) {
 		int rc;
@@ -1047,23 +1077,24 @@ GSList* meta2_remote_content_add_in_fd_v2 (int fd, gint ms, GError **err,
 		GSETERROR(err0, "Cannot lookup the updated systemetadata");
 		return FALSE;
 	}
-	
+
 	struct code_handler_s codes [] = {
 		{ 206, REPSEQ_BODYMANDATORY, chunk_info_concat, NULL },
 		{ 200, REPSEQ_FINAL,         chunk_info_concat, get_sys_metadata },
 		{ 0,0,NULL,NULL}
 	};
-	
+
 	struct reply_sequence_data_s data = { &result , 0 , codes };
 
 	MESSAGE request = NULL;
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
 		GSETERROR(err, "Cannot create a message");
 		goto errorLabel;
 	}
-	
+
 	if (!meta2_remote_request_create (request, M2_OP_CONTENT_ADD, container_id, err))
 	{
 		GSETERROR(err, "Cannot init the message as a simple metaX request");
@@ -1104,41 +1135,42 @@ GSList* meta2_remote_content_add_in_fd_v2 (int fd, gint ms, GError **err,
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return result;
 errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 
 	if (result) {
 		g_slist_foreach (result, chunk_info_gclean, NULL);
 		g_slist_free (result);
 	}
 
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	return NULL;
 }
 
-GSList* meta2_remote_content_add_in_fd (int fd, gint ms, GError **err,
+GSList* meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
 	const container_id_t container_id, const gchar *content_path, content_length_t content_length,
 	GByteArray *system_metadata, GByteArray **new_system_metadata)
 {
 	return meta2_remote_content_add_in_fd_v2(fd, ms, err, container_id, content_path, content_length, NULL, system_metadata, new_system_metadata);
 }
 
-GSList *meta2_remote_content_append_in_fd(int fd, gint ms, GError ** err,
+GSList *meta2_remote_content_append_in_fd(int *fd, gint ms, GError ** err,
     const container_id_t container_id, const gchar * content_path, content_length_t content_length)
 {
 	return meta2_remote_content_append_in_fd_v2(fd, ms, err, container_id, content_path, content_length, NULL);
 }
 
-GSList *meta2_remote_content_append_in_fd_v2(int fd, gint ms, GError ** err,
-    const container_id_t container_id, const gchar * content_path, content_length_t content_length,
-    	GByteArray **sys_metadata)
+GSList *meta2_remote_content_append_in_fd_v2(int *fd, gint ms, GError ** err,
+	    const container_id_t container_id, const gchar * content_path,
+		content_length_t content_length, GByteArray **sys_metadata)
 {
 	GSList *result = NULL;
-
-	auto gboolean get_sys_metadata(GError **err0, gpointer udata, gint code, MESSAGE rep);
 
 	gboolean get_sys_metadata (GError **err0, gpointer udata, gint code, MESSAGE rep) {
 			int rc;
@@ -1152,7 +1184,8 @@ GSList *meta2_remote_content_append_in_fd_v2(int fd, gint ms, GError ** err,
 				return FALSE;
 			if (!sys_metadata)
 				return TRUE;
-			rc = message_get_field (rep, NAME_HEADER_METADATA_SYS, sizeof(NAME_HEADER_METADATA_SYS)-1, &field, &fieldLen, err0);
+			rc = message_get_field (rep, NAME_HEADER_METADATA_SYS,
+					sizeof(NAME_HEADER_METADATA_SYS)-1, &field, &fieldLen, err0);
 			switch (rc) {
 				case 1:
 					*sys_metadata = g_byte_array_append( g_byte_array_new(), field, fieldLen);
@@ -1163,7 +1196,7 @@ GSList *meta2_remote_content_append_in_fd_v2(int fd, gint ms, GError ** err,
 			}
 			GSETERROR(err0, "Cannot lookup the updated systemetadata");
 			return FALSE;
-		}
+	}
 
 	struct code_handler_s codes[] = {
 		{206, REPSEQ_BODYMANDATORY, chunk_info_concat, NULL},
@@ -1174,11 +1207,13 @@ GSList *meta2_remote_content_append_in_fd_v2(int fd, gint ms, GError ** err,
 	MESSAGE request = NULL;
 	struct reply_sequence_data_s data = { &result, 0, codes };
 
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	if (!container_id || !content_path || !content_length) {
 		GSETERROR(err, "Invalid parameter");
 		goto errorLabel;
 	}
-	
+
 	if (!message_create(&request, err)) {
 		GSETERROR(err, "Cannot create a message");
 		goto errorLabel;
@@ -1191,28 +1226,29 @@ GSList *meta2_remote_content_append_in_fd_v2(int fd, gint ms, GError ** err,
 		GSETERROR(err, "Cannot add the content_path in the request (as a field)");
 		goto errorLabel;
 	}
-	if (!metaXClient_reply_sequence_run (err, request, fd, ms, &data))
-	{
+
+	if (!metaXClient_reply_sequence_run (err, request, fd, ms, &data)) {
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
 		goto errorLabel;
 	}
 
-
-	message_destroy(request, err);
-
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
 
-      errorLabel:
+errorLabel:
 	if (request)
-		message_destroy(request, err);
-	if (result)
-		g_slist_foreach(result, chunk_info_gclean, NULL);
-	g_slist_free(result);
+		message_destroy(request, NULL);
+
+	if (result) {
+		g_slist_foreach (result, chunk_info_gclean, NULL);
+		g_slist_free (result);
+	}
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
-
-GSList* meta2_remote_container_list_in_fd (int fd, gint ms, GError **err, const container_id_t container_id)
+GSList* meta2_remote_container_list_in_fd (int *fd, gint ms, GError **err, const container_id_t container_id)
 {
 	GSList *result = NULL;
 
@@ -1225,6 +1261,7 @@ GSList* meta2_remote_container_list_in_fd (int fd, gint ms, GError **err, const 
 	struct reply_sequence_data_s data = { &result , 0 , codes };
 
 	MESSAGE request = NULL;
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -1243,8 +1280,9 @@ GSList* meta2_remote_container_list_in_fd (int fd, gint ms, GError **err, const 
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
 		goto errorLabel;
 	}
-
-	message_destroy(request, err);
+	
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+	message_destroy(request, NULL);
 	return result;
 errorLabel:
 	if (result)
@@ -1254,11 +1292,13 @@ errorLabel:
 		result = NULL;
 	}
 
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+	
 	return NULL;
 }
 
 
-gboolean meta2_remote_chunk_commit_in_fd (int fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path, GSList *chunks)
+gboolean meta2_remote_chunk_commit_in_fd (int *fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path, GSList *chunks)
 {
 	struct code_handler_s codes [] = {
 		{ 200, REPSEQ_FINAL, NULL, NULL },
@@ -1270,6 +1310,8 @@ gboolean meta2_remote_chunk_commit_in_fd (int fd, gint ms, GError **err, const c
 	void *body=NULL;
 	gsize bodySize=0;
 	MESSAGE request = NULL;
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -1309,18 +1351,20 @@ gboolean meta2_remote_chunk_commit_in_fd (int fd, gint ms, GError **err, const c
 	}
 
 	g_free(body);
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	if (body)
 		g_free(body);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
 
 
-gboolean meta2_remote_content_commit_in_fd (int fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path)
+gboolean meta2_remote_content_commit_in_fd (int *fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path)
 {
 	struct code_handler_s codes [] = {
 		{ 200, REPSEQ_FINAL, NULL, NULL },
@@ -1330,6 +1374,7 @@ gboolean meta2_remote_content_commit_in_fd (int fd, gint ms, GError **err, const
 	struct reply_sequence_data_s data = { NULL , 0 , codes };
 
 	MESSAGE request = NULL;
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -1355,19 +1400,21 @@ gboolean meta2_remote_content_commit_in_fd (int fd, gint ms, GError **err, const
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return TRUE;
 errorLabel:
 	if (request)
 	{
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return FALSE;
 }
 
-gboolean meta2_remote_content_remove_in_fd (int fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path)
+gboolean meta2_remote_content_remove_in_fd (int *fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path)
 {
 	struct code_handler_s codes [] = {
 		{ 200, REPSEQ_FINAL, NULL, NULL },
@@ -1377,6 +1424,8 @@ gboolean meta2_remote_content_remove_in_fd (int fd, gint ms, GError **err, const
 	struct reply_sequence_data_s data = { NULL , 0 , codes };
 
 	MESSAGE request = NULL;
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -1402,20 +1451,23 @@ gboolean meta2_remote_content_remove_in_fd (int fd, gint ms, GError **err, const
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return TRUE;
 errorLabel:
 	if (request)
 	{
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return FALSE;
 }
 
 
-GSList* meta2_remote_content_spare_in_fd (int fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path)
+GSList* meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err, const container_id_t container_id,
+		const gchar *content_path, gint count, gint distance, const gchar *notin, const gchar *broken)
 {
 	static struct code_handler_s codes [] = {
 		{ 206, REPSEQ_BODYMANDATORY, chunk_info_concat, NULL },
@@ -1426,6 +1478,10 @@ GSList* meta2_remote_content_spare_in_fd (int fd, gint ms, GError **err, const c
 	GSList *result = NULL;
 	struct reply_sequence_data_s data = { &result , 0 , codes };
 	MESSAGE request = NULL;
+	gchar wrkBuf[32];
+	gsize wrkLen;
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (!message_create (&request, err))
 	{
@@ -1445,18 +1501,32 @@ GSList* meta2_remote_content_spare_in_fd (int fd, gint ms, GError **err, const c
 		goto errorLabel;
 	}
 
+	if (count > 0) {
+		wrkLen = g_snprintf(wrkBuf, sizeof(wrkBuf) - 1, "%"G_GINT32_FORMAT, count);
+		message_add_field(request, "COUNT", sizeof("COUNT") - 1, wrkBuf, wrkLen, err);
+	}
+	if (distance > 0) {
+		wrkLen = g_snprintf(wrkBuf, sizeof(wrkBuf) - 1, "%"G_GINT32_FORMAT, distance);
+		message_add_field(request, "DISTANCE", sizeof("DISTANCE") - 1, wrkBuf, wrkLen, err);
+	}
+	if (notin && *notin)
+		message_add_field(request, "NOT-IN", sizeof("NOT-IN") - 1, notin, strlen(notin) + 1, err);
+	if (broken && *broken)
+		message_add_field(request, "BROKEN", sizeof("BROKEN") - 1, broken, strlen(broken) + 1, err);
+
 	if (!metaXClient_reply_sequence_run (err, request, fd, ms, &data))
 	{
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
 errorLabel:
 	if (request)
 	{
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	}
 
 	if (result)
@@ -1465,7 +1535,13 @@ errorLabel:
 		g_slist_free (result);
 	}
 
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
+}
+
+GSList* meta2_remote_content_spare_in_fd (int *fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path)
+{
+	return meta2_remote_content_spare_in_fd_full(fd, ms, err, container_id, content_path, 1, 1, NULL, NULL);
 }
 
 
@@ -1561,8 +1637,8 @@ meta2raw_create_request(
 
 
 static struct meta2_raw_content_s*
-meta2raw_remote_stat_content(struct metacnx_ctx_s *ctx, const container_id_t container_id, const gchar *path,
-	gsize path_len, gboolean check_flags, GError **err)
+meta2raw_remote_stat_content(struct metacnx_ctx_s *ctx, const container_id_t cid,
+		const gchar *path, gsize path_len, gboolean check_flags, GError **err)
 {
 	static struct code_handler_s codes [] = {
 		{ 200, REPSEQ_FINAL|REPSEQ_BODYMANDATORY, concat_contents, NULL },
@@ -1574,13 +1650,13 @@ meta2raw_remote_stat_content(struct metacnx_ctx_s *ctx, const container_id_t con
 	struct meta2_raw_content_s *result=NULL;
 	struct reply_sequence_data_s data = { &result , 0 , codes };
 
-	if (!ctx || !container_id || !path || !path_len) {
+	if (!ctx || !cid || !path || !path_len) {
 		GSETERROR(err,"invalid parameter");
 		goto exit_label;
 	}
 
 	/*init the request*/
-	CID_2_GBA(gba_cid,container_id);
+	CID_2_GBA(gba_cid,cid);
 	if (!gba_cid) {
 		GSETERROR(err,"memory allocation failure");
 		goto error_alloc_cid;
@@ -1595,6 +1671,8 @@ meta2raw_remote_stat_content(struct metacnx_ctx_s *ctx, const container_id_t con
 		GSETERROR(err,"memory allocation failure");
 		goto error_alloc_check;
 	}
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	/*inits a request with the proper flags*/
 	request = meta2raw_create_request( err, ctx->id, NAME_MSGNAME_M2RAW_GETCHUNKS, NULL,
@@ -1613,14 +1691,15 @@ meta2raw_remote_stat_content(struct metacnx_ctx_s *ctx, const container_id_t con
 		goto error_meta;
 	}
 
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 	g_byte_array_free( gba_check, TRUE);
 	g_byte_array_free( gba_path, TRUE);
 	g_byte_array_free( gba_cid, TRUE);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
 
 error_meta:
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 error_alloc_request:
 	g_byte_array_free(gba_check, TRUE);
 error_alloc_check:
@@ -1629,6 +1708,7 @@ error_alloc_path:
 	g_byte_array_free(gba_cid, TRUE);
 error_alloc_cid:
 exit_label:
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
@@ -1636,7 +1716,7 @@ exit_label:
 gboolean
 meta2raw_remote_update_chunks(
         struct metacnx_ctx_s *ctx, GError **err,
-	        struct meta2_raw_content_s *content, gboolean allow_update)
+	        struct meta2_raw_content_s *content, gboolean allow_update, char *position_prefix)
 {
 	static struct code_handler_s codes [] = {
 		{ 200, REPSEQ_FINAL, NULL, NULL },
@@ -1651,6 +1731,8 @@ meta2raw_remote_update_chunks(
 		GSETERROR(err,"invalid parameter");
 		goto exit_label;
 	}
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	/*init the request*/
 	body = meta2_maintenance_marshall_content( content, err);
@@ -1668,6 +1750,10 @@ meta2raw_remote_update_chunks(
 	if (allow_update)
 		message_add_field(request, "ALLOW_UPDATE", sizeof("ALLOW_UPDATE")-1, "1", 1, NULL);
 
+	if (position_prefix)
+		message_add_field(request, "POSITION_PREFIX", sizeof("POSITION_PREFIX") - 1,
+				position_prefix, strlen(position_prefix), NULL);
+
 	/*send the request*/
 	if (!metaXClient_reply_sequence_run_context (err, ctx, request, &data)) {
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
@@ -1676,11 +1762,12 @@ meta2raw_remote_update_chunks(
 
 	rc = TRUE;
 error_meta:
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 error_alloc_request:
 	g_byte_array_free( body, TRUE);
 error_alloc_body:
 exit_label:
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return rc;
 }
 
@@ -1704,6 +1791,8 @@ meta2raw_remote_update_content(
 		goto exit_label;
 	}
 
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	/*init the request*/
 	body = meta2_maintenance_marshall_content( content, err);
 	if (!body) {
@@ -1726,13 +1815,15 @@ meta2raw_remote_update_content(
 		goto error_meta;
 	}
 
+
 	rc = TRUE;
 error_meta:
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 error_alloc_request:
 	g_byte_array_free( body, TRUE);
 error_alloc_body:
 exit_label:
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return rc;
 }
 
@@ -1756,6 +1847,8 @@ meta2raw_remote_delete_chunks(
 		goto exit_label;
 	}
 
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	/*init the request*/
 	body = meta2_maintenance_marshall_content( content, err);
 	if (!body) {
@@ -1777,11 +1870,14 @@ meta2raw_remote_delete_chunks(
 	
 	rc = TRUE;
 error_meta:
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 error_alloc_request:
 	g_byte_array_free( body, TRUE);
 error_alloc_body:
 exit_label:
+
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	return rc;
 }
 
@@ -1819,6 +1915,8 @@ meta2raw_remote_delete_content(
 		goto error_alloc_path;
 	}
 	
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	request = meta2raw_create_request( err, ctx->id, NAME_MSGNAME_M2RAW_DELCONTENT, NULL,
 		NAME_MSGKEY_CONTAINERID, gba_cid,
 		NAME_MSGKEY_CONTENTPATH, gba_path,
@@ -1837,13 +1935,14 @@ meta2raw_remote_delete_content(
 	
 	rc = TRUE;
 error_meta:
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 error_alloc_request:
 	g_byte_array_free( gba_cid, TRUE);
 error_alloc_cid:
 	g_byte_array_free( gba_path, TRUE);
 error_alloc_path:
 exit_label:
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return rc;
 }
 
@@ -1881,6 +1980,8 @@ meta2raw_remote_get_content_from_name(
 		goto error_alloc_path;
 	}
 	
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	request = meta2raw_create_request( err, ctx->id, NAME_MSGNAME_M2RAW_GETCONTENTBYPATH, NULL,
 		NAME_MSGKEY_CONTAINERID, gba_cid,
 		NAME_MSGKEY_CONTENTPATH, gba_path,
@@ -1897,26 +1998,29 @@ meta2raw_remote_get_content_from_name(
 		goto error_meta;
 	}
 
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 	g_byte_array_free( gba_cid, TRUE);
 	g_byte_array_free( gba_path, TRUE);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
 
 error_meta:
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 error_alloc_request:
 	g_byte_array_free( gba_cid, TRUE);
 error_alloc_cid:
 	g_byte_array_free( gba_path, TRUE);
 error_alloc_path:
 exit_label:
+
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
 
 struct meta2_raw_content_s*
-meta2raw_remote_get_chunks(struct metacnx_ctx_s *ctx, GError **err, const container_id_t container_id,
-	const char *path, gsize path_len)
+meta2raw_remote_get_chunks(struct metacnx_ctx_s *ctx, GError **err,
+		const container_id_t container_id, const char *path, gsize path_len)
 {
 	return meta2raw_remote_stat_content(ctx, container_id, path, path_len, FALSE, err);
 }
@@ -1949,6 +2053,8 @@ meta2raw_remote_get_contents_names(
 		goto error_alloc_cid;
 	}
 		
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+	
 	request = meta2raw_create_request( err, ctx->id, NAME_MSGNAME_M2RAW_GETCONTENTS, NULL,
 		NAME_MSGKEY_CONTAINERID, gba_cid,
 		NULL);
@@ -1963,16 +2069,19 @@ meta2raw_remote_get_contents_names(
 		goto error_meta;
 	}
 
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 	g_byte_array_free( gba_cid, TRUE);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
 
 error_meta:
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 error_alloc_request:
 	g_byte_array_free( gba_cid, TRUE);
 error_alloc_cid:
 exit_label:
+
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
@@ -2010,6 +2119,8 @@ meta2raw_remote_get_content_from_chunkid(
 		goto error_alloc_id;
 	}
 	
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	request = meta2raw_create_request( err, ctx->id, NAME_MSGNAME_M2RAW_GETCONTENTBYCHUNK, NULL,
 		NAME_MSGKEY_CONTAINERID, gba_cid,
 		NAME_MSGKEY_CHUNKID, gba_id,
@@ -2026,25 +2137,27 @@ meta2raw_remote_get_content_from_chunkid(
 		goto error_meta;
 	}
 
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 	g_byte_array_free( gba_cid, TRUE);
 	g_byte_array_free( gba_id, TRUE);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
 
 error_meta:
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 error_alloc_request:
 	g_byte_array_free( gba_id, TRUE);
 error_alloc_id:
 	g_byte_array_free( gba_cid, TRUE);
 error_alloc_cid:
 exit_label:
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
 
 gboolean
-meta2raw_remote_mark_container_repaired_in_fd (int fd, gint ms, GError **err, const container_id_t container_id)
+meta2raw_remote_mark_container_repaired_in_fd (int *fd, gint ms, GError **err, const container_id_t container_id)
 {
 	static struct code_handler_s codes [] = {
 		{ 200, REPSEQ_FINAL, NULL, NULL },
@@ -2067,6 +2180,8 @@ meta2raw_remote_mark_container_repaired_in_fd (int fd, gint ms, GError **err, co
 		goto error_alloc_cid;
 	}
 	
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	request = meta2raw_create_request( err, NULL, NAME_MSGNAME_M2RAW_MARK_REPAIRED, NULL,
 		NAME_MSGKEY_CONTAINERID, gba_cid,
 		NULL);
@@ -2082,16 +2197,19 @@ meta2raw_remote_mark_container_repaired_in_fd (int fd, gint ms, GError **err, co
 		goto error_meta;
 	}
 
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 	g_byte_array_free( gba_cid, TRUE);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 
 error_meta:
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 error_alloc_request:
 	g_byte_array_free( gba_cid, TRUE);
 error_alloc_cid:
 exit_label:
+
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
 
@@ -2120,6 +2238,8 @@ meta2raw_remote_mark_container_repaired (addr_info_t *ai, gint ms, GError **err,
 		goto error_alloc_cid;
 	}
 	
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	request = meta2raw_create_request( err, NULL, NAME_MSGNAME_M2RAW_MARK_REPAIRED, NULL,
 		NAME_MSGKEY_CONTAINERID, gba_cid,
 		NULL);
@@ -2135,16 +2255,21 @@ meta2raw_remote_mark_container_repaired (addr_info_t *ai, gint ms, GError **err,
 		goto error_meta;
 	}
 
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 	g_byte_array_free( gba_cid, TRUE);
+
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	return TRUE;
 
 error_meta:
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
 error_alloc_request:
 	g_byte_array_free( gba_cid, TRUE);
 error_alloc_cid:
 exit_label:
+
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 }
 
@@ -2201,6 +2326,8 @@ meta2_remote_info ( struct metacnx_ctx_s *ctx, GError **err )
 		return NULL;
 	}
 
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);	
+	
 	request = meta2raw_create_request( err, ctx->id, NAME_MSGNAME_M2_INFO, NULL, NULL);
 	if (!request) {
 		GSETERROR(err,"Memory allcation failure");
@@ -2213,13 +2340,15 @@ meta2_remote_info ( struct metacnx_ctx_s *ctx, GError **err )
 		goto error_meta;
 	}
 
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return ht;
 
 error_request:
 	g_hash_table_destroy( ht );
 error_meta:
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
@@ -2314,6 +2443,8 @@ GHashTable* meta2raw_remote_get_admin_entries(
 		return NULL;
 	}
 
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	request = meta2raw_create_request( err, ctx->id, NAME_MSGNAME_M2ADMIN_GETALL, NULL,
 		NAME_MSGKEY_CONTAINERID, gba_cid,
 		NULL);
@@ -2325,8 +2456,9 @@ GHashTable* meta2raw_remote_get_admin_entries(
 	/*send the request*/
 	ht = g_hash_table_new_full( g_str_hash, g_str_equal, g_free, g_free );
 	if (!ht) {
-		(void)message_destroy(request, NULL);
+		message_destroy(request, NULL);
 		GSETERROR(err,"Memory allocation failure");
+		gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 		return NULL;
 	}
 
@@ -2335,12 +2467,14 @@ GHashTable* meta2raw_remote_get_admin_entries(
 		goto error_meta;
 	}
 
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return ht;
 error_request:
 	g_hash_table_destroy( ht );
 error_meta:
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
@@ -2369,6 +2503,8 @@ meta2raw_remote_set_admin_entry(
 		return FALSE;
 	}
 
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+
 	gba_admin_key = g_byte_array_append(g_byte_array_new(), (const guint8*)key, strlen(key) + 1);
 	gba_admin_value = g_byte_array_append(g_byte_array_new(), (const guint8*)value, value_size);
 	request = meta2raw_create_request(error, ctx->id, NAME_MSGNAME_M2ADMIN_SETONE, NULL,
@@ -2390,7 +2526,8 @@ meta2raw_remote_set_admin_entry(
 	g_byte_array_free(gba_cid, TRUE);
 	g_byte_array_free(gba_admin_key, TRUE);
 	g_byte_array_free(gba_admin_value, TRUE);
-	(void)message_destroy(request, NULL);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	return TRUE;
 
@@ -2399,8 +2536,8 @@ error_meta:
 	g_byte_array_free(gba_cid, TRUE);
 	g_byte_array_free(gba_admin_key, TRUE);
 	g_byte_array_free(gba_admin_value, TRUE);
-	(void)message_destroy(request, NULL);
-
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
 
@@ -2429,6 +2566,8 @@ meta2_remote_content_append_v2(struct metacnx_ctx_s *ctx, GError ** err, gchar *
 		goto errorLabel;
 	}
 	
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);	
+
 	if (!message_create(&request, err)) {
 		GSETERROR(err, "Cannot create a message");
 		goto errorLabel;
@@ -2454,14 +2593,16 @@ meta2_remote_content_append_v2(struct metacnx_ctx_s *ctx, GError ** err, gchar *
 		goto errorLabel;
 	}
 
-	message_destroy(request, err);
+	message_destroy(request, NULL);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
       errorLabel:
 	if (request)
-		message_destroy(request, err);
+		message_destroy(request, NULL);
 	if (result)
 		g_slist_foreach(result, chunk_info_gclean, NULL);
 	g_slist_free(result);
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
@@ -2475,42 +2616,42 @@ meta2_remote_stat_content(struct metacnx_ctx_s *cnx, const container_id_t contai
 static MESSAGE
 _build_request(GError **err, GByteArray *id, char *name)
 {
-        MESSAGE msg=NULL;
-        message_create(&msg, err);
-        if (id)
-                message_set_ID (msg, id->data, id->len, err);
-        if (name)
-                message_set_NAME (msg, name, strlen(name), err);
-        return msg;
+	MESSAGE msg=NULL;
+	message_create(&msg, err);
+	if (id)
+		message_set_ID (msg, id->data, id->len, err);
+	if (name)
+		message_set_NAME (msg, name, strlen(name), err);
+	return msg;
 }
 
 status_t
-meta2_remote_touch_content(struct metacnx_ctx_s *ctx, const container_id_t var_0, gchar* var_1, GError **err)
+meta2_remote_touch_content(struct metacnx_ctx_s *ctx,
+		const container_id_t var_0, const gchar* var_1, GError **err)
 {
-	MESSAGE request;
-
-	status_t status = 0;
-	struct code_handler_s codes [] = {
+	static struct code_handler_s codes [] = {
 		{ 200, REPSEQ_FINAL,         NULL, NULL },
 		{ 0,0,NULL,NULL}
 	};
 	struct reply_sequence_data_s data = { NULL , 0 , codes };
-
+	MESSAGE request;
+	status_t status = 0;
 
 	if (!ctx || !var_0 || !var_1) {
 		GSETERROR(err,"Invalid parameter ( var_0=%p var_1=%p)"
 				, (void*)var_0, (void*)var_1);
-		goto error_check;
+		return 0;
 	}
 
 	request = _build_request( err, ctx->id, "REQ_M2RAW_TOUCH_CONTENT");
 	if (!request) {
 		GSETERROR(err,"Memory allocation failure");
-		goto error_check;
+		return 0;
 	}
 
-	/*prepare the request, fill all the fields*/
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
+	/*prepare the request, fill all the fields*/
 	do {
 		int rc;
 		GByteArray *gba;
@@ -2551,10 +2692,6 @@ meta2_remote_touch_content(struct metacnx_ctx_s *ctx, const container_id_t var_0
 
 
 	/*Now send the request*/
-	if (!metacnx_open(ctx, err)) {
-		GSETERROR(err,"Failed to open the connexion");
-		goto error_label;
-	}
 	if (!metaXClient_reply_sequence_run_context (err, ctx, request, &data)) {
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
 		goto error_label;
@@ -2563,36 +2700,43 @@ meta2_remote_touch_content(struct metacnx_ctx_s *ctx, const container_id_t var_0
 	status = 1;
 error_label:
 	message_destroy(request,NULL);
-error_check:
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return status;
 }
 
 status_t
 meta2_remote_touch_container(struct metacnx_ctx_s *ctx, const container_id_t var_0, GError **err)
 {
-	MESSAGE request;
+	return meta2_remote_touch_container_ex(ctx, var_0, 0, err);
+}
 
-	status_t status = 0;
-	struct code_handler_s codes [] = {
+
+status_t meta2_remote_touch_container_ex(struct metacnx_ctx_s *ctx, const container_id_t var_0,
+    unsigned int flags, GError **err)
+{
+	static struct code_handler_s codes [] = {
 		{ 200, REPSEQ_FINAL,         NULL, NULL },
 		{ 0,0,NULL,NULL}
 	};
-	struct reply_sequence_data_s data = { NULL , 0 , codes };
 
+	struct reply_sequence_data_s data = { NULL , 0 , codes };
+	MESSAGE request;
+	status_t status = 0;
 
 	if (!ctx || !var_0) {
 		GSETERROR(err,"Invalid parameter ( var_0=%p)" , (void*)var_0);
-		goto error_check;
+		return 0;
 	}
 
 	request = _build_request( err, ctx->id, "REQ_M2RAW_TOUCH_CONTAINER");
 	if (!request) {
 		GSETERROR(err,"Memory allocation failure");
-		goto error_check;
+		return 0;
 	}
 
-	/*prepare the request, fill all the fields*/
+	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
+	/*prepare the request, fill all the fields*/
 	do {
 		int rc;
 		GByteArray *gba;
@@ -2612,11 +2756,19 @@ meta2_remote_touch_container(struct metacnx_ctx_s *ctx, const container_id_t var
 		}
 	} while (0);
 
-	/*Now send the request*/
-	if (!metacnx_open(ctx, err)) {
-		GSETERROR(err,"Failed to open the connexion");
-		goto error_label;
+	/*add flags...*/
+	if (flags) {
+		int rc;
+		flags = g_htonl(flags);
+	    rc = message_add_field(request, "FLAGS", sizeof("FLAGS")-1,
+			            &flags, sizeof(flags), NULL);
+		if (!rc) {
+        	GSETERROR(err,"Cannot execute the update container size");
+			goto error_label;
+		}
 	}
+
+	/*Now send the request*/
 	if (!metaXClient_reply_sequence_run_context (err, ctx, request, &data)) {
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
 		goto error_label;
@@ -2625,6 +2777,9 @@ meta2_remote_touch_container(struct metacnx_ctx_s *ctx, const container_id_t var
 	status = 1;
 error_label:
 	message_destroy(request,NULL);
-error_check:
+	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return status;
 }
+
+
+

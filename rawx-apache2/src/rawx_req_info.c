@@ -1,32 +1,12 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "rawx"
 #endif
+
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
-
-#ifdef HAVE_COMPAT
-# include <metautils_compat.h>
-#endif
 
 #if APR_HAVE_STDIO_H
 #include <stdio.h>              /* for sprintf() */
@@ -34,13 +14,6 @@
 
 #include <sys/socket.h>
 #include <netdb.h>
-
-
-# include <glib.h>
-# include <metatypes.h>
-# include <metautils.h>
-# include <metacomm.h>
-# include <rawx.h>
 
 #include <apr.h>
 #include <apr_file_io.h>
@@ -54,9 +27,16 @@
 #include <http_request.h>       /* for ap_update_mtime() */
 #include <mod_dav.h>
 
-#include "./mod_dav_rawx.h"
-#include "./rawx_internals.h"
-#include "./rawx_config.h"
+#include <glib.h>
+
+#include <metautils/lib/metatypes.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <rawx-lib/src/rawx.h>
+
+#include "mod_dav_rawx.h"
+#include "rawx_internals.h"
+#include "rawx_config.h"
 
 /* ------------------------------------------------------------------------- */
 
@@ -79,7 +59,7 @@ struct dav_resource_private {
 
 /* ------------------------------------------------------------------------- */
 
-#define STR_KV(Field,Name) apr_psprintf(pool, "rawx."Name" %"APR_UINT64_T_FMT"\n", stats.Field)
+#define STR_KV(Field,Name) apr_psprintf(pool, "rawx."Name" %u\n", stats->body.Field)
 
 static const char *
 __gen_info(const dav_resource *resource, apr_pool_t *pool)
@@ -94,31 +74,25 @@ __gen_info(const dav_resource *resource, apr_pool_t *pool)
 static const char *
 __gen_stats(const dav_resource *resource, apr_pool_t *pool)
 {
-	struct rawx_stats_s stats;
+	struct shm_stats_s *stats = NULL;
 
 	DAV_XDEBUG_POOL(pool, 0, "%s()", __FUNCTION__);
 
 	bzero(&stats, sizeof(stats));
 	dav_rawx_server_conf *c = NULL;
 	c = resource_get_server_config(resource);
-	server_getall_stat(c, pool, &stats);
+	apr_global_mutex_lock(c->lock.handle);
+	stats = apr_shm_baseaddr_get(c->shm.handle);
+	apr_global_mutex_unlock(c->lock.handle);
 
-	/* struct delta_debug_s *d_req = rawx_stats_rrd_debug_get_delta(stats.rrd_req_sec, pool, 4);
-	struct delta_debug_s *d_avg = rawx_stats_rrd_debug_get_delta(stats.rrd_duration, pool, 4);
-	apr_uint64_t req = d_req->delta;
-	apr_uint64_t reqavgtime = d_avg->delta;
-
-	DAV_DEBUG_REQ(resource->info->request, 0, "RRD REQ:\n%s", d_req->dump);
-	DAV_DEBUG_REQ(resource->info->request, 0, "RRD DURATION:\n%s", d_avg->dump); */
-
-	apr_uint64_t req = rawx_stats_rrd_get_delta(&(stats.rrd_req_sec), 4);
-	apr_uint64_t reqavgtime = rawx_stats_rrd_get_delta(&(stats.rrd_duration), 4);
-	apr_uint64_t req_put = rawx_stats_rrd_get_delta(&(stats.rrd_req_put_sec), 4);
-	apr_uint64_t reqavgtime_put = rawx_stats_rrd_get_delta(&(stats.rrd_put_duration), 4);
-	apr_uint64_t req_get = rawx_stats_rrd_get_delta(&(stats.rrd_req_get_sec), 4);
-	apr_uint64_t reqavgtime_get = rawx_stats_rrd_get_delta(&(stats.rrd_get_duration), 4);
-	apr_uint64_t req_del = rawx_stats_rrd_get_delta(&(stats.rrd_req_del_sec), 4);
-	apr_uint64_t reqavgtime_del = rawx_stats_rrd_get_delta(&(stats.rrd_del_duration), 4);
+	apr_uint64_t req = rawx_stats_rrd_get_delta(&(stats->body.rrd_req_sec), 4);
+	apr_uint64_t reqavgtime = rawx_stats_rrd_get_delta(&(stats->body.rrd_duration), 4);
+	apr_uint64_t req_put = rawx_stats_rrd_get_delta(&(stats->body.rrd_req_put_sec), 4);
+	apr_uint64_t reqavgtime_put = rawx_stats_rrd_get_delta(&(stats->body.rrd_put_duration), 4);
+	apr_uint64_t req_get = rawx_stats_rrd_get_delta(&(stats->body.rrd_req_get_sec), 4);
+	apr_uint64_t reqavgtime_get = rawx_stats_rrd_get_delta(&(stats->body.rrd_get_duration), 4);
+	apr_uint64_t req_del = rawx_stats_rrd_get_delta(&(stats->body.rrd_req_del_sec), 4);
+	apr_uint64_t reqavgtime_del = rawx_stats_rrd_get_delta(&(stats->body.rrd_del_duration), 4);
 
 	apr_uint64_t r_time = 0, r_put_time = 0, r_get_time = 0, r_del_time = 0;
 	if(req > 0)
@@ -358,7 +332,11 @@ const dav_hooks_repository dav_hooks_repository_rawxinfo =
 	NULL /*dav_rawx_info_remove_resource*/,
 	NULL /* no walk across the chunks */,
 	dav_rawx_info_getetag,
-	NULL /* no module context */
+	NULL, /* no module context */
+#if MODULE_MAGIC_COOKIE == 0x41503234UL /* "AP24" */
+	NULL,
+	NULL,
+#endif
 };
 
 
@@ -381,5 +359,9 @@ const dav_hooks_repository dav_hooks_repository_rawxstat =
 	NULL /*dav_rawx_stat_remove_resource*/,
 	NULL /* no walk across the chunks */,
 	dav_rawx_stat_getetag,
-	NULL /* no module context */
+	NULL, /* no module context */
+#if MODULE_MAGIC_COOKIE == 0x41503234UL /* "AP24" */
+	NULL,
+	NULL,
+#endif
 };

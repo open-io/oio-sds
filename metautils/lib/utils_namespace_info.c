@@ -1,32 +1,34 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "metautils"
 #endif
 
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "metautils"
-#endif
-
-#include <string.h>
 #include <errno.h>
 
 #include "metautils.h"
+
+static void
+_copy_list_element(gpointer _elem, gpointer _p_dst_list)
+{
+	gchar *elem = _elem;
+	GSList **p_dst_list = _p_dst_list;
+	*p_dst_list = g_slist_prepend(*p_dst_list, g_strdup(elem));
+}
+
+static GHashTable *
+_copy_hash(GHashTable *src) {
+	GHashTable *res = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, metautils_gba_unref);
+	if (src) {
+		GHashTableIter iter;
+		gpointer k, v;
+
+		g_hash_table_iter_init(&iter, src);
+		while (g_hash_table_iter_next(&iter, &k, &v))
+			g_hash_table_insert(res, g_strdup((gchar*)k), metautils_gba_dup(v));
+	}
+
+	return res;
+}
 
 gboolean
 namespace_info_copy(namespace_info_t* src, namespace_info_t* dst, GError **error)
@@ -42,33 +44,28 @@ namespace_info_copy(namespace_info_t* src, namespace_info_t* dst, GError **error
 	memcpy(&(dst->addr), &(src->addr), sizeof(addr_info_t));
 	memcpy(&(dst->versions), &(src->versions), sizeof(struct ns_versions_s));
 
-	if (src->options != NULL) {
-		GHashTable *old = dst->options;
-
-		dst->options = g_hash_table_ref(src->options);
-		if (old)
-			g_hash_table_unref(old);
+#define NSI_COPY_TABLE_REF(SRC, DST) \
+	if ((SRC) != NULL) {\
+		GHashTable *old = (DST);\
+		DST = g_hash_table_ref(SRC);\
+		if (old)\
+			 g_hash_table_unref(old);\
 	}
-	if (src->storage_policy != NULL) {
-		GHashTable *old = dst->storage_policy;
 
-		dst->storage_policy = g_hash_table_ref(src->storage_policy);
-		if (old)
-			g_hash_table_unref(old);
-	}
-	if (src->data_security != NULL) {
-		GHashTable *old = dst->data_security;
+	NSI_COPY_TABLE_REF(src->options, dst->options);
+	NSI_COPY_TABLE_REF(src->storage_policy, dst->storage_policy);
+	NSI_COPY_TABLE_REF(src->data_security, dst->data_security);
+	NSI_COPY_TABLE_REF(src->data_treatments, dst->data_treatments);
+	NSI_COPY_TABLE_REF(src->storage_class, dst->storage_class);
 
-		dst->data_security = g_hash_table_ref(src->data_security);
-		if (old)
-			g_hash_table_unref(old);
-	}
-	if (src->data_treatments != NULL) {
-		GHashTable *old = dst->data_treatments;
+#undef NSI_COPY_TABLE_REF
 
-		dst->data_treatments = g_hash_table_ref(src->data_treatments);
+	if (src->writable_vns != NULL) {
+		GSList *old = dst->writable_vns;
+		dst->writable_vns = NULL;
+		g_slist_foreach (src->writable_vns, _copy_list_element, &(dst->writable_vns));
 		if (old)
-			g_hash_table_unref(old);
+			g_slist_free_full(old, g_free);
 	}
 
 	errno = 0;
@@ -91,41 +88,13 @@ namespace_info_dup(namespace_info_t* src, GError **error)
 	memcpy(&(dst->addr), &(src->addr), sizeof(addr_info_t));
 	memcpy(&(dst->versions), &(src->versions), sizeof(struct ns_versions_s));
 
-	dst->options = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
-	if (src->options) {
-		GHashTableIter iter;
-		gpointer k, v;
-		
-		g_hash_table_iter_init(&iter, src->options);
-		while (g_hash_table_iter_next(&iter, &k, &v))
-			g_hash_table_insert(dst->options, g_strdup((gchar*)k), metautils_gba_dup(v));
-	}
-	dst->storage_policy = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
-	if (src->storage_policy) {
-		GHashTableIter iter;
-		gpointer k, v;
-		
-		g_hash_table_iter_init(&iter, src->storage_policy);
-		while (g_hash_table_iter_next(&iter, &k, &v))
-			g_hash_table_insert(dst->storage_policy, g_strdup((gchar*)k), metautils_gba_dup(v));
-	}
-	dst->data_security = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
-	if (src->data_security) {
-		GHashTableIter iter;
-		gpointer k, v;
-		
-		g_hash_table_iter_init(&iter, src->data_security);
-		while (g_hash_table_iter_next(&iter, &k, &v))
-			g_hash_table_insert(dst->data_security, g_strdup((gchar*)k), metautils_gba_dup(v));
-	}
-	dst->data_treatments = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
-	if (src->data_treatments) {
-		GHashTableIter iter;
-		gpointer k, v;
-		
-		g_hash_table_iter_init(&iter, src->data_treatments);
-		while (g_hash_table_iter_next(&iter, &k, &v))
-			g_hash_table_insert(dst->data_treatments, g_strdup((gchar*)k), metautils_gba_dup(v));
+	dst->options = _copy_hash(src->options);
+	dst->storage_policy = _copy_hash(src->storage_policy);
+	dst->data_security = _copy_hash(src->data_security);
+	dst->data_treatments = _copy_hash(src->data_treatments);
+	dst->storage_class = _copy_hash(src->storage_class);
+	if (src->writable_vns) {
+		g_slist_foreach (src->writable_vns, _copy_list_element, &(dst->writable_vns));
 	}
 
 	return dst;
@@ -144,6 +113,10 @@ namespace_info_clear(namespace_info_t* ns_info)
 		g_hash_table_unref(ns_info->data_security);
 	if (ns_info->data_treatments != NULL)
 		g_hash_table_unref(ns_info->data_treatments);
+	if (ns_info->writable_vns != NULL)
+		g_slist_free_full(ns_info->writable_vns, g_free);
+	if (ns_info->storage_class != NULL)
+		g_hash_table_unref(ns_info->storage_class);
 
 	memset(ns_info, 0, sizeof(namespace_info_t));
 }
@@ -193,6 +166,7 @@ namespace_info_extract_name(GSList *list_nsinfo, gboolean copy)
 	return result;
 }
 
+// TODO: factorize 3 following functions
 gchar *
 namespace_info_get_data_security(namespace_info_t *ni, const gchar *data_sec_key)
 {
@@ -220,3 +194,26 @@ namespace_info_get_data_treatments(namespace_info_t *ni, const gchar *data_treat
 
 	return NULL;
 }
+
+gboolean
+namespace_info_is_vns_writable(namespace_info_t *ni, const gchar *vns)
+{
+	if (ni && ni->writable_vns && vns) {
+		return NULL != g_slist_find_custom(ni->writable_vns, vns, (GCompareFunc) g_strcmp0);
+	}
+	return FALSE;
+}
+
+gchar *
+namespace_info_get_storage_class(namespace_info_t *ni, const gchar *stgclass_key)
+{
+	if (ni->storage_class != NULL) {
+		GByteArray *gba = NULL;
+		gba = g_hash_table_lookup(ni->storage_class, stgclass_key);
+		if (gba != NULL) {
+			return g_strndup((gchar*)gba->data, gba->len);
+		}
+	}
+	return NULL;
+}
+

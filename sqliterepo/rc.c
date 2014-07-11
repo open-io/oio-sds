@@ -1,59 +1,28 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "grid.sqlx.rc"
+# define G_LOG_DOMAIN "sqliterepo"
 #endif
 
-#include <glib.h>
+#include <errno.h>
 
+#include <glib.h>
 #include <sqlite3.h>
 
-#include "./internals.h"
-#include "./sqliterepo.h"
+#include "sqliterepo.h"
+#include "internals.h"
 
-const char *
-sqlx_strerror(int rc)
-{
-	switch (rc) {
-		case SQLX_RC_BASE_LOCKED:
-			return "SQLX_RC_BASE_LOCKED";
-		case SQLX_RC_TOOMANY:
-			return "SQLX_RC_TOOMANY";
-		case SQLX_RC_INVALID_BASE_ID:
-			return "SQLX_RC_INVALID_BASE_ID";
-		case SQLX_RC_BASE_CLOSED:
-			return "SQLX_RC_BASE_CLOSED";
-		case SQLX_RC_NOT_IMPLEMENTED:
-			return "SQLX_RC_NOT_IMPLEMENTED";
-		case SQLX_RC_DESIGN_ERROR:
-			return "SQLX_RC_DESIGN_ERROR";
-		case SQLX_RC_NOERROR:
-			return "SQLX_RC_NOERROR";
-		case SQLX_RC_INVALID_SCHEMA:
-			return "SQLX_RC_INVALID_SCHEMA";
-		default:
-			return "SQLX_UNEXPECTED_ERROR";
-	}
-}
+#define _RC_ERRBUF_LEN 192
+static __thread gchar buf[_RC_ERRBUF_LEN];
 
 const char *
 sqlite_strerror(int err)
 {
+	if (err > 0xFF) {
+		gchar *end = g_stpcpy(buf, sqlite_strerror(err & 0xFF));
+		g_snprintf(end, _RC_ERRBUF_LEN - (end - buf),
+				" (+ ext code %d) (errno %d: %s)",
+				err >> 8, errno, strerror(errno));
+		return buf;
+	}
 	switch (err) {
 		case SQLITE_OK:
 			return "SQLITE_OK";

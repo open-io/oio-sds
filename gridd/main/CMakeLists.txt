@@ -1,6 +1,6 @@
-include_directories(BEFORE .
-		../../metautils/lib
-		../../cluster/lib ../../cluster/agent ../../cluster/events)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+
+include_directories(BEFORE . .. ../..)
 
 add_executable(gridd
 		internal_alerts.h
@@ -17,9 +17,21 @@ add_executable(gridd
 		timer.c
 		access_log.c
 )
+bin_prefix_full(gridd -daemon)
 target_link_libraries(gridd
 		metautils metacomm gridcluster gridcluster-events gridcluster-remote
 		${GLIB2_LIBRARIES})
+
+install(FILES
+			message_handler.h
+			plugin.h
+			plugin_holder.h
+			srvalert.h
+			srvstats.h
+			srvtimer.h
+		DESTINATION include/gridd/main
+		PERMISSIONS
+			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
 install(TARGETS gridd
 	LIBRARY DESTINATION ${LD_LIBDIR}

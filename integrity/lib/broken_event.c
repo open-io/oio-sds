@@ -1,28 +1,25 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "integrity.lib.broken_event"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "integrity.lib.broken_event"
 #endif
 
-#include <metautils.h>
 #include <string.h>
 
-#include "broken_event.h"
+#include <metautils/lib/metautils.h>
+
+#include "./broken_event.h"
+
+const gchar * const loc_to_str[] = {
+	"chunk or meta2",
+	"chunk",
+	"meta2"
+};
+
+const gchar * const reason_to_str[] = {
+	"missing",
+	"mismatch",
+	"bad format"
+};
+
 
 struct broken_element_s *
 broken_element_alloc(const container_id_t container_id, const gchar * content_name, const hash_sha256_t chunk_id,
@@ -77,8 +74,14 @@ void
 broken_element_gfree(gpointer data, gpointer user_data)
 {
 	(void) user_data;
-	struct broken_element_s *element = (struct broken_element_s *) data;
+	broken_element_free(data);
+}
 
-	if (element != NULL)
-		g_free(element);
+void
+broken_element_free(gpointer elem)
+{
+	struct broken_element_s *element = (struct broken_element_s *) elem;
+	if (element)
+		g_free(element->reference_value);
+	g_free(element);
 }

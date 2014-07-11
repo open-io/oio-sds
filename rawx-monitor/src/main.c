@@ -1,22 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "vol.monitor"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "vol.monitor"
 #endif
 
 #include <stdlib.h>
@@ -28,43 +11,36 @@
 #include <stdarg.h>
 #include <string.h>
 #include <strings.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
-#include <unistd.h>
-
-#include <glib.h>
-#include <glib/gstdio.h>
 
 #include <neon/ne_basic.h>
 #include <neon/ne_request.h>
 #include <neon/ne_session.h>
 
-#ifdef HAVE_COMPAT
-# include <metautils_compat.h>
-#else
-# include <metautils.h>
-# include <metacomm.h>
-# include <gridcluster.h>
-#endif
-
 #include <gridinit-utils.h>
 
-#include "./filer_monitor.h"
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <cluster/lib/gridcluster.h>
+
+#include "filer_monitor.h"
 #ifdef HAVE_NETAPP
-# include "./netapp.h"
+# include "netapp.h"
 #endif
 #ifdef HAVE_CORAID
-# include "./coraid.h"
+# include "coraid.h"
 #endif
 #ifdef HAVE_FUJI
-# include "./fuji.h"
+# include "fuji.h"
 #endif
 #ifdef HAVE_HDS
-# include "./hds.h"
+# include "hds.h"
 #endif
 #ifdef HAVE_EMC
-# include "./emc.h"
+# include "emc.h"
 #endif
 
 #define FILER_CONFIGURED(...) (filer_info.host[0]!='\0' && filer_info.volume[0]!='\0')
@@ -90,6 +66,7 @@ struct service_cfg_s {
 	gchar ns_name[LIMIT_LENGTH_NSNAME];
 	gchar type_name[LIMIT_LENGTH_SRVTYPE];
 	gchar location_name[LIMIT_LENGTH_LOCNAME];
+	gchar stgclass_name[LIMIT_LENGTH_STGCLASS];
 };
 
 struct filer_cfg_s {
@@ -211,13 +188,10 @@ _srvinfo_populate_with_rawx_stats(struct service_info_s *si)
 
 
        gchar dst[128];
-       gsize dst_ip_size = sizeof(dst);
        guint16 port = 0;
 
-       addr_info_get_addr(&(si->addr), dst, dst_ip_size, &port, &local_error);
-       if(local_error) {
+       if (!addr_info_get_addr(&(si->addr), dst, sizeof(dst), &port)) {
 	       DEBUG("Failed to extract address info from rawx");
-	       g_clear_error(&local_error);
 	       goto end;
        }
 
@@ -240,8 +214,8 @@ _srvinfo_populate_with_rawx_stats(struct service_info_s *si)
        ne_add_response_body_reader(request, ne_accept_2xx, stat_extractor, NULL);
        ne_request_dispatch(request);
 
-       DEBUG("Stats from rawx : reqpersec = %"G_GINT64_FORMAT" | reqavgtime = %"G_GINT64_FORMAT, 
-       		reqpersec, reqavgtime);
+       DEBUG("Stats from rawx : reqpersec = %f | reqavgtime = %"G_GINT64_FORMAT,
+			reqpersec, reqavgtime);
 
        service_tag_set_value_float(service_info_ensure_tag(si->tags, "stat.total_reqpersec"), reqpersec);
        service_tag_set_value_i64(service_info_ensure_tag(si->tags, "stat.total_avreqtime"), reqavgtime);
@@ -268,7 +242,7 @@ _srvinfo_populate_with_filer_info(struct service_info_s *si, struct filer_s *fil
 	struct volume_s *vol;
 	struct volume_statistics_s vol_stats;
 	struct enterprise_s *enterprise;
-	
+
 	error_local = NULL;
 	enterprise = filer->enterprise;
 
@@ -306,7 +280,7 @@ _srvinfo_populate_with_filer_info(struct service_info_s *si, struct filer_s *fil
 			}
 		}
 	}
-	
+
 	if (error_local)
 		g_clear_error(&error_local);
 }
@@ -323,9 +297,14 @@ thread_function_monitor(gpointer p)
 	filer = NULL;
 	timer = g_timer_new();
 
-	INFO("Starting the monitoring of RAWX at [%s] in [%s]", service.str_addr,
-		fs_info.docroot);
-	
+	if (strlen(fs_info.docroot) > 0) {
+		INFO("Starting the monitoring of %s at [%s] in [%s]", service.type_name,
+				service.str_addr, fs_info.docroot);
+	} else {
+		INFO("Starting the monitoring of %s at [%s]", service.type_name,
+		                service.str_addr);
+	}
+
 	/* Prepare the filer monitoring if necessary */
 	if (!FILER_CONFIGURED())
 		INFO("No need to monitor a filer");
@@ -333,7 +312,7 @@ thread_function_monitor(gpointer p)
 		INFO("Initiating the filer monitoring");
 		while (flag_continue && !filer) {
 			GError *error_local = NULL;
-			
+
 			filer = filer_init(filer_info.host, &(filer_info.auth.snmp),
 				&(filer_info.auth.filer), &error_local);
 			if (!filer) {
@@ -346,7 +325,7 @@ thread_function_monitor(gpointer p)
 		}
 	}
 
-	/* Start the monitoring loop */	
+	/* Start the monitoring loop */
 	while (flag_continue) {
 
 		/* There is only 1 child registered. Then if the count of process
@@ -354,7 +333,7 @@ thread_function_monitor(gpointer p)
 		 * child is still up. */
 		if (!supervisor_children_killall(0)) {
 			/* The RAWX service is down, nevermind its filer's state */
-			DEBUG("RAWX service is down");
+			DEBUG("%s service is down", service.type_name);
 			service_tag_set_value_boolean(service_info_ensure_tag(si->tags, TAGNAME_UP), FALSE);
 			register_namespace_service(si, NULL);
 		}
@@ -362,20 +341,22 @@ thread_function_monitor(gpointer p)
 			GError *error_local = NULL;
 
 			/* The RAWX seems UP, then check its storage state. */
-			TRACE("RAWX service is up");
+			TRACE("%s service is up", service.type_name);
 			service_tag_set_value_boolean(service_info_ensure_tag(si->tags, TAGNAME_UP), TRUE);
 			if (FILER_CONFIGURED())
 				_srvinfo_populate_with_filer_info(si, filer, filer_info.volume);
 
 			_srvinfo_populate_with_rawx_stats(si);
 
-			if (!register_namespace_service(si, &error_local))
-				WARN("Failed to register the RAWX : %s", gerror_get_message(error_local));
+			if (!register_namespace_service(si, &error_local)) {
+				WARN("Failed to register the %s: %s", service.type_name,
+						gerror_get_message(error_local));
+			}
 
 			if (error_local)
 				g_clear_error(&error_local);
 		}
-	
+
 		sleep_at_most(timer, 1.0);
 	}
 
@@ -422,17 +403,17 @@ _path_dereference_symlinks(const gchar *path, gchar *dst, gsize dst_size, GError
 
 		if (!**tok) /* ignores '/' sequences */
 			continue;
-		
+
 		int offset_int = dst_offset;
 		g_snprintf(current_path, sizeof(current_path), "%.*s/%s", offset_int, dst, *tok);
 
 		if (!g_file_test(current_path, G_FILE_TEST_EXISTS))
 			return FALSE;
-		
+
 		if (g_file_test(current_path, G_FILE_TEST_IS_SYMLINK)) {
 			memset(current_link, 0x00, sizeof(current_link));
 			readlink(current_path, current_link, sizeof(current_link));
-			
+
 			if (*current_link == '/')
 				dst_offset += g_snprintf(dst, dst_size, "%s", current_link);
 			else
@@ -589,7 +570,7 @@ _cfg_section_child(GKeyFile *kf, const gchar *section, GError **error)
 	supervisor_children_status(CHILD_KEY, 1);
 	supervisor_children_set_respawn(CHILD_KEY, 0);
 	supervisor_children_set_delay(CHILD_KEY, 0);
-	
+
 	/* Should the rawx-monitor make the Service respawn ?
 	 * Default : NO ! Remember the rawx-monitor will exit
 	 * if the underlying service stops and is not respawned */
@@ -604,19 +585,19 @@ _cfg_section_child(GKeyFile *kf, const gchar *section, GError **error)
 		long stack_size;
 		long max_files;
 	} rlimits;
-	
+
 	str = g_key_file_get_value(kf, section, "rlimit.core_size", NULL);
 	if (!str)
 		str = g_strdup("-1");
 	rlimits.core_size = atol(str);
 	g_free(str);
-		
+
 	str = g_key_file_get_value(kf, section, "rlimit.stack_size", NULL);
 	if (!str)
 		str = g_strdup("1024");
 	rlimits.stack_size = atol(str);
 	g_free(str);
-		
+
 	str = g_key_file_get_value(kf, section, "rlimit.max_files", NULL);
 	if (!str)
 		str = g_strdup("32768");
@@ -644,7 +625,7 @@ _cfg_section_service(GKeyFile *kf, const gchar *section, GError **error)
 	bzero(service.ns_name, sizeof(service.ns_name));
 	g_strlcpy(service.ns_name, str, sizeof(service.ns_name)-1);
 	g_free(str);
-	
+
 	str = g_key_file_get_value(kf, section, "addr", error);
 	if (!str) {
 		GSETERROR(error, "Key 'addr' not found (mandatory!)");
@@ -653,7 +634,7 @@ _cfg_section_service(GKeyFile *kf, const gchar *section, GError **error)
 	bzero(service.str_addr, sizeof(service.str_addr));
 	g_strlcpy(service.str_addr, str, sizeof(service.str_addr)-1);
 	g_free(str);
-	
+
 	str = g_key_file_get_value(kf, section, "type", error);
 	if (!str) {
 		GSETERROR(error, "Key 'type' not found (mandatory!)");
@@ -662,13 +643,25 @@ _cfg_section_service(GKeyFile *kf, const gchar *section, GError **error)
 	bzero(service.type_name, sizeof(service.type_name));
 	g_strlcpy(service.type_name, str, sizeof(service.type_name)-1);
 	g_free(str);
-	
+
 	str = g_key_file_get_value(kf, section, "location", error);
 	bzero(service.location_name, sizeof(service.location_name));
 	/* allow service to start without location url */
 	if (NULL != str) {
 		g_strlcpy(service.location_name, str, sizeof(service.location_name)-1);
 		g_free(str);
+	} else {
+		g_clear_error(error);
+	}
+
+	/* allow to start without storage class */
+	str = g_key_file_get_value(kf, section, "stgclass", error);
+	bzero(service.stgclass_name, sizeof service.stgclass_name);
+	if (str != NULL) {
+		g_strlcpy(service.stgclass_name, str, sizeof service.stgclass_name);
+		g_free(str);
+	} else {
+		g_clear_error(error);
 	}
 
 	/* Check the address exists */
@@ -686,7 +679,7 @@ _cfg_section_default(GKeyFile *kf, const gchar *section, GError **error)
 	gchar *str;
 
 	(void) error;
-	
+
 	str = g_key_file_get_value(kf, section, "daemon", NULL);
 	if (str) {
 		flag_daemon = ((0 == g_ascii_strcasecmp(str, "true"))
@@ -707,7 +700,7 @@ _cfg_section_default(GKeyFile *kf, const gchar *section, GError **error)
 		if (*pidfile_path && g_ascii_strcasecmp(pidfile_path, str)
 			&& g_file_test(pidfile_path, G_FILE_TEST_IS_REGULAR|G_FILE_TEST_EXISTS))
 				g_remove(pidfile_path);
-		
+
 		/* Save the latest */
 		bzero(pidfile_path, sizeof(pidfile_path));
 		g_strlcpy(pidfile_path, str, sizeof(pidfile_path)-1);
@@ -715,7 +708,7 @@ _cfg_section_default(GKeyFile *kf, const gchar *section, GError **error)
 
 		INFO("Pidfile path set to [%s]", pidfile_path);
 	}
-	
+
 	return TRUE;
 }
 
@@ -725,7 +718,7 @@ _cfg_read(const gchar *cfg_path, GError **error)
 	GKeyFile *kf = NULL;
 	gboolean rc = FALSE;
 	gchar **sections, **p_section;
-	
+
 	kf = g_key_file_new();
 	if (!g_key_file_load_from_file(kf, cfg_path, G_KEY_FILE_NONE, error)) {
 		g_key_file_free(kf);
@@ -754,6 +747,7 @@ _cfg_read(const gchar *cfg_path, GError **error)
 				INFO("Loading volume configuration from section [%s]", *p_section);
 				if (!_cfg_section_volume(kf, *p_section, error)) {
 					GSETERROR(error, "Error in section [%s]", *p_section);
+					NOTICE("If you are running a rainx, please don't set [Volume] section.");
 					goto label_exit;
 				}
 			}
@@ -854,21 +848,31 @@ main_prepare_srvinfo(void)
 	g_strlcpy(si->ns_name, service.ns_name, sizeof(si->ns_name)-1);
 	g_strlcpy(si->type, service.type_name, sizeof(si->type)-1);
 	memcpy(&(si->addr), &(service.addr), sizeof(addr_info_t));
-	
+
 	si->tags = g_ptr_array_sized_new(6U);
 
 	service_tag_set_value_macro(service_info_ensure_tag(si->tags,NAME_MACRO_CPU_NAME),
 			NAME_MACRO_CPU_TYPE, NULL);
-	service_tag_set_value_macro(service_info_ensure_tag(si->tags,NAME_MACRO_IOIDLE_NAME),
-			NAME_MACRO_IOIDLE_TYPE, fs_info.docroot);
-	service_tag_set_value_macro(service_info_ensure_tag(si->tags,NAME_MACRO_SPACE_NAME),
-			NAME_MACRO_SPACE_TYPE, fs_info.docroot);
-	service_tag_set_value_string(service_info_ensure_tag(si->tags,
-			NAME_TAGNAME_RAWX_VOL), fs_info.docroot);
-	if(0 < strlen(service.location_name)) {
-		service_tag_set_value_string(service_info_ensure_tag(si->tags,
-					NAME_TAGNAME_RAWX_LOC), service.location_name);
+	if (strlen(fs_info.docroot) > 0) {
+		service_tag_set_value_macro(
+				service_info_ensure_tag(si->tags, NAME_MACRO_IOIDLE_NAME),
+				NAME_MACRO_IOIDLE_TYPE, fs_info.docroot);
+		service_tag_set_value_macro(
+				service_info_ensure_tag(si->tags, NAME_MACRO_SPACE_NAME),
+				NAME_MACRO_SPACE_TYPE, fs_info.docroot);
+		service_tag_set_value_string(
+				service_info_ensure_tag(si->tags, NAME_TAGNAME_RAWX_VOL),
+				fs_info.docroot);
 	}
+	if (strlen(service.location_name) > 0) {
+		service_tag_set_value_string(service_info_ensure_tag(si->tags,
+				NAME_TAGNAME_RAWX_LOC), service.location_name);
+	}
+	if (strlen(service.stgclass_name) > 0) {
+		service_tag_set_value_string(service_info_ensure_tag(si->tags,
+				NAME_TAGNAME_RAWX_STGCLASS), service.stgclass_name);
+	}
+
 	_srvinfo_set_down(si);
 
 	return si;
@@ -882,10 +886,10 @@ service_info_down_and_clean(service_info_t *si)
 		return;
 	_srvinfo_set_down(si);
 	if (!register_namespace_service(si, &error_local))
-		WARN("Failed to register the RAWX : %s",
+		WARN("Failed to register the %s: %s", service.type_name,
 				gerror_get_message(error_local));
 	if (error_local)
-		g_clear_error(&error_local);	
+		g_clear_error(&error_local);
 	service_info_clean(si);
 }
 
@@ -899,12 +903,6 @@ _main_init(void)
 	bzero(&service, sizeof(service));
 
 	freopen( "/dev/null", "r", stdin);
-        /*freopen( "/dev/null", "w", stdout);*/
-	/*freopen( "/dev/null", "w", stderr);*/
-
-	/*close(0);*/
-	/*close(1);*/
-	/*close(2);*/
 
 	signal(SIGTERM, main_sighandler);
 	signal(SIGINT,  main_sighandler);
@@ -970,7 +968,7 @@ main(int argc, char ** argv)
 		GSETERROR(&error_local, "Invalid configuration for the grid version this progra was compiled for");
 		goto label_error;
 	}
-	
+
 	if (flag_daemon) {
 		close(2);
 		daemon(1,0);

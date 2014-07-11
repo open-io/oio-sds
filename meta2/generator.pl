@@ -510,9 +510,9 @@ push @functions, {
 };
 
 push @functions, {
-	# Does not generate an event but is allowed in SLAVE mode
+	# Now generates an event
 	'name'      => 'replicate_set_container_property',
-	'real_name' => 'set_container_property',
+	'real_name' => 'set_container_property_wrapper',
 	'args' => [
 		{
 			'type'             => 'container_id_t',
@@ -624,9 +624,9 @@ push @functions, {
 };
 
 push @functions, {
-	# Does not generate an event but is allowed in SLAVE mode
+	# Now generate an event
 	'name'      => 'replicate_remove_container_property',
-	'real_name' => 'remove_container_property',
+	'real_name' => 'remove_container_property_wrapper',
 	'args' => [
 		{
 			'type'             => 'container_id_t',
@@ -667,29 +667,30 @@ push @functions, {
 	},
 };
 
+# TODO
 push @functions, {
- 	         # Does not generate an event but is allowed in SLAVE mode
- 	         'name'      => 'replicate_add_container_event',
- 	         'real_name' => 'add_full_container_event',
- 	         'args' => [
- 	                 {
- 	                         'type'             => 'container_id_t',
- 	                         'serializer'       => $SERIALIZE_ARRAY,
- 	                         'message_location' => 'header',
- 	                 },
- 	                 {
- 	                         'type'             => 'container_event_t*',
- 	                         'serializer'       => $SERIALIZE_LIST_OF_CONTAINER_EVENT,
- 	                         'message_location' => 'body',
- 	                         'singleton'        => 1,
- 	                 },
- 	         ],
- 	         'return' => {
- 	                 'type'=>'status_t',
- 	         },
- 	         'flags' => 'REQ_SLAVE_ALLOWED|REQ_WORM_ALLOWED',
- 	         'v1' => 0,
- 	 };
+	# Now generates an event
+	'name' => 'replicate_add_container_event',
+	'real_name' => 'add_full_container_event_wrapper',
+	'args' => [
+		{
+			'type'             => 'container_id_t',
+			'serializer'       => $SERIALIZE_ARRAY,
+			'message_location' => 'header',
+		},
+		{
+			'type'             => 'container_event_t*',
+			'serializer'       => $SERIALIZE_LIST_OF_CONTAINER_EVENT,
+			'message_location' => 'body',
+			'singleton'        => 1,
+		},
+	],
+	'return' => {
+		'type'=>'status_t',
+	},
+	'flags' => 'REQ_SLAVE_ALLOWED|REQ_WORM_ALLOWED',
+	'v1' => 0,
+};
 
 push @functions, {
 	'name' => 'get_container_event_rowid',
@@ -966,9 +967,9 @@ push @functions, {
 };
 
 push @functions, {
-        # Does not generate an event but is allowed in SLAVE mode
+        # Now generates an event
         'name'      => 'replicate_remove_container_event',
-        'real_name' => 'remove_container_event_by_rowid',
+        'real_name' => 'remove_container_event_by_rowid_wrapper',
 	'args' => [
 		{
 			'type'             => 'container_id_t',
@@ -1030,8 +1031,10 @@ push @functions, {
 	},
 };
 
+# TODO
 push @functions, {
 	'name' => 'replicate_content_v2',
+	'real_name' => 'replicate_content_v2_wrapper',
 	'args' => [
 		{
 			'type'             => 'container_id_t',
@@ -1163,6 +1166,7 @@ push @functions, {
 
 push @functions, {
 	'name' => 'modify_metadatausr',
+	'real_name' => 'modify_metadatausr_wrapper',
 	'args' => [
 		{
 			'type'             => 'container_id_t',
@@ -1183,6 +1187,7 @@ push @functions, {
 	'return' => {
 		'type'=>'status_t'
 	},
+	'flags' => 'REQ_MASTER_ALLOWED|REQ_WORM_ALLOWED|REQ_DROP_EVENTS',
 };
 
 push @functions, {
@@ -1372,6 +1377,9 @@ while (my $WHAT = shift @ARGV) {
 			}
 			elsif ($a->{'type'} eq 'char*') {
 				$a->{'type_decl'} = 'const char*';
+			}
+			elsif ($a->{'type'} eq 'container_id_t') {
+				$a->{'type_decl'} = 'const container_id_t';
 			}
 			else {
 				$a->{'type_decl'} = $a->{'type'};

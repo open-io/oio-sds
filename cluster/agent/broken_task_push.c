@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "gridcluster.agent.broken"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "gridcluster.agent.broken"
 #endif
 
 #include <stdlib.h>
@@ -27,18 +7,15 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
+#include <metautils/lib/metacomm.h>
+#include <cluster/module/module.h>
 
 #include "./agent.h"
 #include "./asn1_request_worker.h"
 #include "./broken_workers.h"
-#include "./connect.h"
 #include "./io_scheduler.h"
 #include "./namespace_get_task_worker.h"
 #include "./task_scheduler.h"
-#include "../module/module.h"
 
 
 #define TASK_ID "broken_task_push"
@@ -177,23 +154,14 @@ task_action(gpointer task_param, GError **error)
 	return TRUE;
 }
 
-NAMESPACE_TASK_CREATOR(task_worker,TASK_ID,task_action,cluster_update_freq);
+NAMESPACE_TASK_CREATOR(task_worker,TASK_ID,task_action,period_push_broken);
 
 int
 agent_start_broken_task_push(GError **error)
 {
-	task_t *task = NULL;
-
-	TRACE_POSITION();
-
-	task = g_try_new0(task_t, 1);
-	if (task == NULL) {
-		GSETERROR(error, "Memory allocation failure");
-		return 0;
-	}
-
+	task_t *task = g_malloc0(sizeof(task_t));
 	task->id = g_strdup(TASK_ID);
-	task->period = 1;
+	task->period = 5;
 	task->task_handler = task_worker;
 
 	if (!add_task_to_schedule(task, error)) {

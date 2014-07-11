@@ -1,54 +1,27 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.agent.services_task_push"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.agent.services_task_push"
 #endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-
-#include "./services_workers.h"
-
-#define TASK_ID "services_task_push"
 
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <errno.h>
 
-#include <glib.h>
-
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-
-#include "../conscience/conscience.h"
+#include <metautils/lib/metacomm.h>
+#include <cluster/conscience/conscience.h>
+#include <cluster/module/module.h>
 
 #include "./agent.h"
 #include "./asn1_request_worker.h"
-#include "./connect.h"
 #include "./fs.h"
 #include "./io_scheduler.h"
 #include "./namespace_get_task_worker.h"
 #include "./services_workers.h"
 #include "./task.h"
 #include "./task_scheduler.h"
-#include "../module/module.h"
+
+#define TASK_ID "services_task_push"
+
 
 struct session_data_s
 {
@@ -165,24 +138,14 @@ task_worker(gpointer p, GError ** error)
 	return 1;
 }
 
-NAMESPACE_TASK_CREATOR(task_starter,TASK_ID, task_worker, cluster_update_freq);
+NAMESPACE_TASK_CREATOR(task_starter,TASK_ID, task_worker, period_push_srvlist);
 
 int
 services_task_push(GError ** error)
 {
-	task_t *task = NULL;
-
-	(void)task_worker;
 	TRACE_POSITION();
 
-	task = g_try_new0(task_t, 1);
-	if (task == NULL) {
-		GSETERROR(error, "Memory allocation failure");
-		return 0;
-	}
-
-	task->id = g_strdup(TASK_ID);
-	task->period = 1;
+	task_t *task = create_task(1, TASK_ID);
 	task->task_handler = task_starter;
 
 	if (!add_task_to_schedule(task, error)) {

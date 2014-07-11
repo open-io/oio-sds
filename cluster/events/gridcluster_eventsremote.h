@@ -1,27 +1,9 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef __GRIDCLUSTER__EVENTS_REMOTE__H__
 # define __GRIDCLUSTER__EVENTS_REMOTE__H__
 
-#include <glib.h>
-#include <metautils.h>
-#include <metacomm.h>
-#include <gridcluster_events.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <cluster/events/gridcluster_events.h>
 
 # ifndef  REQ_EVT_PUSH
 #  define REQ_EVT_PUSH "REQ_EVT_PUSH"
@@ -59,6 +41,10 @@
 # ifndef EVENT_FIELD_TYPE
 #  define EVENT_FIELD_TYPE "TYPE"
 # endif
+# ifndef EVENT_TYPE_MAX_SIZE
+#  define EVENT_TYPE_MAX_SIZE 128
+# endif
+
 
 /**
  * @return 

@@ -1,47 +1,26 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.agent.service_register_worker"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.agent.service_register_worker"
 #endif
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
 
-#include "../conscience/conscience.h"
+#include "conscience/conscience.h"
 
-#include "./agent.h"
-#include "./cpu_stat_task_worker.h"
-#include "./fs.h"
-#include "./gridagent.h"
-#include "./io_stat_task_worker.h"
-#include "./message.h"
-#include "./namespace_get_task_worker.h"
-#include "./task.h"
-#include "./task_scheduler.h"
-#include "./services_workers.h"
+#include "agent.h"
+#include "cpu_stat_task_worker.h"
+#include "fs.h"
+#include "gridagent.h"
+#include "io_stat_task_worker.h"
+#include "message.h"
+#include "namespace_get_task_worker.h"
+#include "task.h"
+#include "task_scheduler.h"
+#include "services_workers.h"
 
 gsize
 agent_get_service_key(struct service_info_s *si, gchar * dst, gsize dst_size)
@@ -63,16 +42,8 @@ expand_service_tags(struct namespace_data_s *ns_data, struct service_info_s *si,
 	struct service_tag_s *tag;
 	gchar str_addr[STRLEN_ADDRINFO], str_tag[1024];
 
-	TRACE_POSITION();
-
-	if (!si) {
-		DEBUG("Invalid parameter");
-		return FALSE;
-	}
-	if (!si->tags) {
-		DEBUG("No tags to expand");
+	if (!si->tags)
 		return TRUE;
-	}
 
 	addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
 	for (i = 0, max = si->tags->len; i < max; i++) {
@@ -90,7 +61,7 @@ expand_service_tags(struct namespace_data_s *ns_data, struct service_info_s *si,
 
 			if (!g_ascii_strcasecmp(tag->value.macro.type, NAME_MACRO_IOIDLE_TYPE)) {
 				if (get_io_idle_for_path(tag->value.macro.param, &idle, error))
-					service_tag_set_value_i64(tag, idle?idle:1);
+					service_tag_set_value_i64(tag, MACRO_MAX(idle,1));
 				else {
 					service_tag_to_string(tag, str_tag, sizeof(str_tag));
 					if (gridagent_blank_undefined_srvtags) {

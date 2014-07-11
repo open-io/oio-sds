@@ -1,9 +1,6 @@
-include_directories(BEFORE .
-		../../metautils/lib
-		../../cluster/lib
-		../../cluster/agent
-		../../cluster/events
-		../../gridd/main)
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
+
+include_directories(BEFORE . ../.. ..)
 
 add_library(msg_vns_agent MODULE msg_vns_agent.c)
 

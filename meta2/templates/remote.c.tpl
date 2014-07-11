@@ -6,8 +6,8 @@
 #error "Invalid configuration, no module_functions defined"
 {{STOP}}
 {{END}}
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "{{module_name}}.remote"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "{{module_name}}.remote"
 #endif
 
 /**
@@ -18,11 +18,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-
-#include "./{{module_name}}_remote.h"
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <meta2/remote/{{module_name}}_remote.h>
 
 static MESSAGE
 _build_request(GError **err, GByteArray *id, char *name)

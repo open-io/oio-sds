@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef __GRID_CLIENT_H__
 #define __GRID_CLIENT_H__
 
@@ -37,6 +20,8 @@
 
 #define GS_ENVKEY_MAXSPARE "GS_MAX_SPARE"
 #define GS_DEFAULT_MAXSPARE "5"
+
+#define GS_SNAPSHOT_MAXLENGTH 256
 
 /**
  * The hidden type that represents the connection to a Grid Storage platform
@@ -82,7 +67,6 @@ typedef struct {
  * to a gs_content_t might be cast into a pointer to a gs_content_info_t
  */
 typedef struct gs_content_s gs_content_t;
-
 
 /**
  * A simple type for functions returning simple return codes.
@@ -300,6 +284,20 @@ gs_status_t gs_grid_storage_get_timeout (gs_grid_storage_t *gs, gs_timeout_t to)
 
 const char* gs_get_namespace(gs_grid_storage_t *gs);
 
+/**
+ * Get the "virtual" part of the namespace.
+ */
+const char* gs_get_virtual_namespace(gs_grid_storage_t *gs);
+
+/**
+ * Get the full virtual namespace name, including the physical namespace part.
+ */
+const char* gs_get_full_vns(gs_grid_storage_t *gs);
+
+/* Allows to replace the configured NS by another virtual namespace in the
+ * same physical namespace. */
+int gs_set_namespace(gs_grid_storage_t *gs, const char *vns);
+
 /* --- Container operations ------------------------------------------------ */
 
 
@@ -390,6 +388,19 @@ int gs_container_is_open (gs_container_t *container, gs_error_t **err);
 gs_status_t gs_destroy_container (gs_container_t *container,
 	gs_error_t **err);
 
+/**
+ * Same as gs_destroy_container but supports flags.
+ *
+ * @param container a not-NULL pointer to a valid gs_container_t structure
+ * @param flags one of
+ *   M2V2_DESTROY_FORCE: destroy container even if it still has contents
+ *   M2V2_DESTROY_FLUSH: remove all contents before destroying container
+ * @param err a double pointer to an error structure, that will be set
+ *            if the function fails.
+ * @return 1 if the destruction succeed, 0 in case of error (and the err
+ *           parameter is set). */
+gs_status_t gs_destroy_container_flags (gs_container_t *container,
+	unsigned int flags, gs_error_t **err);
 
 /**
  * Destroys all the online contents in the given remote container.
@@ -427,9 +438,17 @@ gs_status_t gs_flush_container (gs_container_t *container, gs_error_t **err);
  *            if the function fails.
  * @return 1 if the function succeeded, 0 in case of failure
  */
-gs_status_t gs_list_container (gs_container_t *container, gs_content_t*** result, 
+gs_status_t gs_list_container (gs_container_t *container, gs_content_t*** result,
 	gs_content_filter_f filter, void *user_data, gs_error_t **err);
 
+/**
+ * Same as gs_list_container but takes a snapshot parameter.
+ *
+ * @param snapshot List only contents belonging to this snapshot
+ */
+gs_status_t gs_list_container_snapshot(gs_container_t *container,
+		gs_content_t*** result, gs_content_filter_f filter, void *user_data,
+		const char *snapshot, gs_error_t **err);
 
 /**
  * Puts a new content in the given remote container
@@ -449,7 +468,7 @@ gs_status_t gs_list_container (gs_container_t *container, gs_content_t*** result
  */
 gs_status_t gs_upload_content (gs_container_t *container,
 	const char *name, const int64_t size,
-	gs_input_f feeder, void *user_data, gs_error_t **err); 
+	gs_input_f feeder, void *user_data, gs_error_t **err);
 
 /**
  * Puts a new content in the given remote container
@@ -544,6 +563,21 @@ gs_status_t gs_download_content_by_name_and_version(gs_container_t *container,
 	const char *name, const char *version, gs_download_info_t *dl_info, gs_error_t **err);
 
 /**
+ * Get a portion of the remote content with a specified version.
+ *
+ * @param container the remote container
+ * @param name the name of the content in the distant container
+ * @param version the version of the content
+ * @param stgpol content storage policy
+ * @param dl_info a non-NULL pointer to the callback information
+ * @param err a double pointer to an error structure, that will be set
+ *            if the function fails.
+ * @return 1 if the download succeeded, 0 in case of failure (err is set)
+ */
+gs_status_t gs_download_content_by_name_full(gs_container_t *container,
+	const char *name, const char *version, const char *stgpol, gs_download_info_t *dl_info, gs_error_t **err);
+
+/**
  * Destroys the remote content
  *
  * Pay attention to the local structure that remains allocated and useable.
@@ -592,7 +626,31 @@ gs_content_t* gs_get_content_from_path (gs_container_t *container,
  * @param name a NULL terminated ASCII character string, the name of
  *             the targeted content
  * @param version	a NULL terminated ASCII character string, the version of
- 	 * 				the targeted content.
+ * 				the targeted content.
+ * @param p_filtered a pointer to a GSList* that will hold filtered out beans
+ * 				(eg parity chunks for RAIN). Can be NULL if not needed.
+ * @param p_beans a pointer to a GSList* that will hold all beans.  Can be NULL if not needed.
+ * @param err a double pointer to an error structure, that will be set
+ *            if the function fails.
+ * @return NULL if the function fails, or a properly allocated remote
+ *         content structure.
+ */
+gs_content_t* gs_get_content_from_path_full (gs_container_t *container,
+		const char *name, const char *version, void *p_filtered, void *p_beans, gs_error_t **err);
+
+/**
+ * Looks up in the given remote container for a content with the given
+ * name and version.
+ *
+ * If the content is found a new gs_content_t structure is initiated and
+ * returned.
+ *
+ * @param container a pointer to a rmeote container structure, returned
+ *                  by a previous call to gs_get_container()
+ * @param name a NULL terminated ASCII character string, the name of
+ *             the targeted content
+ * @param version	a NULL terminated ASCII character string, the version of
+ * 				the targeted content.
  * @param err a double pointer to an error structure, that will be set
  *            if the function fails.
  * @return NULL if the function fails, or a properly allocated remote
@@ -606,13 +664,28 @@ gs_content_t* gs_get_content_from_path_and_version (gs_container_t *container,
  *
  * @param content the remote content to be downloaded
  * @param dl_info
+ * @param stgpol storage policy
+ * @param filtered a list of filtered out beans
+ * @param beans the list of all beans
+ * @param err a double pointer to an error structure, that will be set
+ *            if the function fails.
+ * @return 1 if the download succeeded, 0 in case of failure (err is set)
+ */
+gs_status_t gs_download_content_full (gs_content_t *content,
+		gs_download_info_t *dl_info, const char *stgpol, void *filtered, void *beans, gs_error_t **err);
+
+/**
+ * Get a portion of the remote content.
+ *
+ * @param content the remote content to be downloaded
+ * @param dl_info
+ * @param stgpol storage policy
  * @param err a double pointer to an error structure, that will be set
  *            if the function fails.
  * @return 1 if the download succeeded, 0 in case of failure (err is set)
  */
 gs_status_t gs_download_content (gs_content_t *content,
-	gs_download_info_t *dl_info, gs_error_t **err);
-
+		gs_download_info_t *dl_info, gs_error_t **err);
 
 /**
  * Destroys the remote content
@@ -937,6 +1010,19 @@ struct gs_container_location_s * gs_locate_container(gs_container_t *container,
 struct gs_container_location_s * gs_locate_container_by_hexid(gs_grid_storage_t *client,
 	const char *hexid, gs_error_t **gserr);
 
+
+/**
+ *  * @param client
+ *   * @param hexid
+ *    * @param gserr
+ *     * @return
+ *      */
+struct gs_container_location_s * gs_locate_container_by_hexid_v2(gs_grid_storage_t *client,
+    const char *hexid, char** out_nsname_on_m1, gs_error_t **gserr);
+
+
+
+
 /**
  * @param client
  * @param name
@@ -970,6 +1056,13 @@ gs_container_t* hc_resolve_meta2_entry(gs_grid_storage_t *gs,
  */
 gs_container_t* gs_get_storage_container(gs_grid_storage_t *gs,
 		const char *container_name, const char *stgpol, int auto_create, gs_error_t **gs_err);
+
+
+gs_container_t* gs_get_storage_container_v2(gs_grid_storage_t *gs,
+        const char *container_name, const char *stgpol, const char *verspol, int auto_create, gs_error_t **gs_err);
+
+
+
 
 /* V2 functions */
 
@@ -1116,6 +1209,14 @@ gs_error_t* hc_set_container_quota(gs_container_t *container, const char *storag
  * @return an error their is an issue while setting the versioning
  */
 gs_error_t* hc_set_container_versioning(gs_container_t *container, const char *versioning);
+
+/**
+ * Deletes the versioning of this given container.
+ * @param container the targeted container
+ * @return an error there is an issue while deleting the versioning
+ */
+gs_error_t* hc_del_container_versioning(gs_container_t *container);
+
 /**
  * @param container the targeted container 
  * @param path the content to set the policy
@@ -1148,6 +1249,95 @@ gs_status_t hc_get_content_properties(gs_content_t *content, char ***result, gs_
  * @return an error their is an issue while deleting the property
  */
 gs_status_t hc_delete_content_property(gs_content_t *content, char ** keys, gs_error_t **e);
+
+/**
+ * Create a copy of a content 
+ * @param c
+ * @param src  
+ * @param dst  
+ * @return an error their is an issue while deleting the property
+ */
+gs_status_t hc_copy_content(gs_container_t *c, const char *src, const char *dst,
+			gs_error_t **e);
+
+
+/* Snapshots --------------------------------------------------------------- */
+
+/**
+ * The hidden type that represents a snapshot.
+ */
+typedef struct redc_snapshot_s redc_snapshot_t;
+
+/**
+ * Take a snapshot of a container.
+ *
+ * @param container The targeted container
+ * @param snapshot_name A name for the snapshot (must not start with a digit)
+ * @return An error if there is an issue while taking the snapshot, NULL otherwise
+ */
+gs_error_t* redc_take_snapshot(gs_container_t *container,
+		const char *snapshot_name);
+
+/**
+ * Delete a snapshot.
+ *
+ * @param container The targeted container
+ * @param snapshot_name The name of the snapshot to delete
+ * @return An error if there is an issue while deleting the snapshot, NULL otherwise
+ */
+gs_error_t* redc_delete_snapshot(gs_container_t *container,
+		const char *snapshot_name);
+
+/**
+ * Restore a snapshot.
+ *
+ * @param container The targeted container
+ * @param snapshot_name The name of the snapshot to restore
+ * @param hard_restore If true, erase all contents and snapshots more recent
+ *   than the specified snapshot (instead of just making contents reappear)
+ * @return An error if there is an issue while restoring the snapshot, NULL otherwise
+ */
+gs_error_t* redc_restore_snapshot(gs_container_t *container,
+		const char *snapshot_name, int hard_restore);
+
+/**
+ * Restore a content from snapshot.
+ *
+ * @param container The targeted container
+ * @param content The name of the content to restore
+ * @param snapshot_name The name of the snapshot to restore from
+ * @return An error if there is an issue while restoring the snapshot, NULL otherwise
+ */
+gs_error_t* redc_restore_snapshot_alias(gs_container_t *container,
+		const char *content, const char *snapshot_name);
+
+/**
+ * Get the list of snapshots of a container.
+ *
+ * @param container The targeted container
+ * @param[out] snapshots A pointer where to store the snapshots
+ * @return An error if there is an issue while listing snapshots, NULL otherwise
+ *
+ * @note The snapshots array is NULL-terminated,
+ *   and should be freed by redc_snapshot_array_clean
+ */
+gs_error_t* redc_list_snapshots(gs_container_t *container,
+		redc_snapshot_t ***snapshots);
+
+/**
+ * Get the name of a snapshot.
+ *
+ * @param snapshot The snapshot to get name of
+ * @return The name of the snapshot
+ */
+const char* redc_snapshot_get_name(redc_snapshot_t *snapshot);
+
+/**
+ * Clean an array of snapshots.
+ *
+ * @param snapshots The array of snapshots to clean.
+ */
+void redc_snapshot_array_clean(redc_snapshot_t **snapshots);
 
 /** @} */
 

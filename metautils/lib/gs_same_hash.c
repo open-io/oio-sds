@@ -1,22 +1,11 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
 
-#include <metautils.h>
-#include <common_main.h>
+#include <string.h>
+
+#include "./metautils.h"
+#include "./resolv.h"
+#include "./common_main.h"
+
+#define COUNT 65536
 
 static gchar* memory[65536];
 static GString *prefix;
@@ -92,7 +81,7 @@ static void
 main_specific_fini(void)
 {
 	guint i;
-	for (i=0; i<sizeof(memory) ;i++) {
+	for (i=0; i < COUNT ;i++) {
 		if (memory[i])
 			g_free(memory[i]);
 	}

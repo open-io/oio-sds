@@ -1,27 +1,6 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "gridcluster.agent.asn1_request_worker"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "gridcluster.agent.asn1_request_worker"
 #endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -29,12 +8,11 @@
 #include <unistd.h>
 #include <errno.h>
 
-#include <metautils.h>
-#include <metacomm.h>
+#include <metautils/lib/metacomm.h>
 
-#include "asn1_request_worker.h"
-#include "connect.h"
-#include "io_scheduler.h"
+#include "./asn1_request_worker.h"
+#include "./config.h"
+#include "./io_scheduler.h"
 
 #define RESPONSE_SIZE_SIZE 4
 
@@ -197,6 +175,18 @@ agent_asn1_default_response_handler(worker_t *worker, GError **error)
 }
 
 void
+asn1_worker_set_request_header(worker_t *asn1_worker, const char *key, const char *value)
+{
+	asn1_session_t *asn1_session;
+	if (!key || !value || !asn1_worker)
+		return;
+
+	asn1_session = asn1_worker_get_session(asn1_worker);
+	g_hash_table_insert(asn1_session->req_headers, g_strdup(key),
+			g_byte_array_append(g_byte_array_new(), (const guint8*) value, strlen(value)));
+}
+
+void
 asn1_worker_set_request_body(worker_t *asn1_worker, GByteArray *body)
 {
 	asn1_session_t *asn1_session;
@@ -241,22 +231,25 @@ asn1_request_worker(worker_t *worker, GError **error)
 		return 0;
 	}
 
-        if (!connect_addr_info(&fd, asn1_session->addr, error)) {
-                GSETERROR(error, "Connection to gridd server failed");
+	if (0 > (fd = addrinfo_connect_nopoll(asn1_session->addr, 1000, error))) {
+		GSETERROR(error, "Connection to gridd server failed");
 		return 0;
-        }
+	}
 
-        worker->func = write_request;
-        worker->data.fd = fd;
+	sock_set_linger_default(fd);
+	sock_set_nodelay(fd, TRUE);
 
-        if (!add_fd_to_io_scheduler(worker, EPOLLOUT, error)) {
-                GSETERROR(error, "Failed to add socket to io_scheduler");
+	worker->func = write_request;
+	worker->data.fd = fd;
+
+	if (!add_fd_to_io_scheduler(worker, EPOLLOUT, error)) {
+		GSETERROR(error, "Failed to add socket to io_scheduler");
 		return 0;
-        }
+	}
 
 	addr_info_to_string(asn1_session->addr, str_addr, sizeof(str_addr));
 	DEBUG("ASN.1 request '%s' sent to %s (fd=%d)", asn1_session->req_name, str_addr, fd);
-        return(1);
+	return(1);
 }
 
 int
@@ -284,10 +277,12 @@ write_request(worker_t *worker, GError **error)
 			GList *keys = g_hash_table_get_keys(asn1_session->req_headers);
 
 			for (key = keys; key && key->data; key = key->next) {
-				GByteArray *value = (GByteArray*)g_hash_table_lookup(asn1_session->req_headers, key->data);
-
-				if (!message_add_field(req, key->data, strlen((char*)key->data), value->data, value->len, error)) {
-					GSETERROR(error, "Failed to add field [%s] to message", (char*)key->data);
+				GByteArray *value = (GByteArray*)g_hash_table_lookup(
+						asn1_session->req_headers, key->data);
+				if (!message_add_field(req, key->data, strlen((char*)key->data),
+							value->data, value->len, error)) {
+					GSETERROR(error, "Failed to add field [%s] to message",
+							(char*)key->data);
 					goto error_set_headers;
 				}
 			}
@@ -309,13 +304,13 @@ write_request(worker_t *worker, GError **error)
 			gsize ds = 0;
 			if (!message_marshall(req, &(data->buffer), &ds, error)) {
 				GSETERROR(error, "Failed to marshall asn1 message");
-				message_destroy(req, error);
+				message_destroy(req, NULL);
 				goto error_marshall_message;
 			}
 			data->buffer_size = ds;
 		} while (0);
 
-                message_destroy(req, error);
+                message_destroy(req, NULL);
 
         } else if (data->done >= data->buffer_size) {
 
@@ -349,7 +344,7 @@ error_marshall_message:
 error_set_name:
 error_set_body:
 error_set_headers:
-        message_destroy(req, error);
+        message_destroy(req, NULL);
 error_mes_create:
 	asn1_session->error_handler(worker, error);
 	free_asn1_worker( worker, 0 );

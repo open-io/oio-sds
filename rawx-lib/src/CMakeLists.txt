@@ -1,6 +1,4 @@
-include_directories(BEFORE .
-		../../metautils/lib
-		../../cluster/lib ../../cluster/agent ../../cluster/events)
+include_directories(BEFORE . ../..)
 
 include_directories(AFTER
 		${LZO_INCLUDE_DIRS}
@@ -24,6 +22,13 @@ set_target_properties(rawx PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(rawx
 		metautils metacomm gridcluster gridcluster-events gridcluster-remote
 		${NEON_LIBRARIES} -lattr -lz -llzo2)
+
+install(FILES
+			compression.h
+			rawx.h
+		DESTINATION include/rawx-lib/src
+		PERMISSIONS
+			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
 install(TARGETS rawx
 		LIBRARY DESTINATION ${LD_LIBDIR})

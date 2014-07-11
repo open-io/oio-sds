@@ -1,10 +1,14 @@
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "meta2.test"
+#endif
+
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
 
-#include "../remote/meta2_remote.h"
+#include "meta2_remote.h"
 
 static struct metacnx_ctx_s ctx;
 static gchar content_path[1024];

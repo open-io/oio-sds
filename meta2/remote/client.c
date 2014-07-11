@@ -1,5 +1,5 @@
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "meta2.remote.client"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "meta2.remote.client"
 #endif
 
 #include <netdb.h>
@@ -7,17 +7,13 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
 
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-
-#include "./meta2_remote.h"
+#include "meta2_remote.h"
 
 
 static addr_info_t meta2addr;
-static int meta2_cnx = -1;
 static gint timeOut = 2000;
 static gchar *remotePath=NULL;
 
@@ -29,32 +25,32 @@ doCmd (gchar *cmd, GError **err)
 {
 	if (0 == strcasecmp("CREATE", cmd))
 	{
-		if (!meta2_remote_container_create_in_fd (meta2_cnx, timeOut, err, id, "test de nom de conteneur"))
+		if (!meta2_remote_container_create(&meta2addr, timeOut, err, id, "test de nom de conteneur"))
 			goto errorLabel;
 	}
 	
 	else if (0 == strcasecmp("DESTROY", cmd))
 	{
-		if (!meta2_remote_container_destroy_in_fd (meta2_cnx, timeOut, err, id))
+		if (!meta2_remote_container_destroy(&meta2addr, timeOut, err, id))
 			goto errorLabel;
 	}
 
 	else if (0 == strcasecmp("OPEN", cmd))
 	{
-		if (!meta2_remote_container_open_in_fd (meta2_cnx, timeOut, err, id))
+		if (!meta2_remote_container_open(&meta2addr, timeOut, err, id))
 			goto errorLabel;
 	}
 
 	else if (0 == strcasecmp("CLOSE", cmd))
 	{
-		if (!meta2_remote_container_close_in_fd (meta2_cnx, timeOut, err, id))
+		if (!meta2_remote_container_close(&meta2addr, timeOut, err, id))
 			goto errorLabel;
 	}
 
 	else if (0 == strcasecmp("ADD", cmd))
 	{
 		GSList *list, *l;
-		if (!(list = meta2_remote_content_add_in_fd (meta2_cnx, timeOut, err, id, remotePath, remoteSize, NULL, NULL)))
+		if (!(list = meta2_remote_content_add(&meta2addr, timeOut, err, id, remotePath, remoteSize, NULL, NULL)))
 			goto errorLabel;
 		for (l=list; l ;l=l->next) {
 			static gchar printBuf[4096];
@@ -74,14 +70,14 @@ doCmd (gchar *cmd, GError **err)
 
 	else if (0 == strcasecmp("ROLLBACK", cmd))
 	{
-		if (!meta2_remote_content_rollback_in_fd (meta2_cnx, timeOut, err, id, remotePath))
+		if (!meta2_remote_content_rollback(&meta2addr, timeOut, err, id, remotePath))
 			goto errorLabel;
 	}
 
 	else if (0 == strcasecmp("RETRIEVE", cmd))
 	{
 		GSList *list, *l;
-		if (!(list = meta2_remote_content_retrieve_in_fd (meta2_cnx, timeOut, err, id, remotePath)))
+		if (!(list = meta2_remote_content_retrieve(&meta2addr, timeOut, err, id, remotePath)))
 			goto errorLabel;
 		for (l=list; l ;l=l->next) {
 			static gchar printBuf[4096];
@@ -189,58 +185,28 @@ errorLabel:
 int
 main (int argc, char ** args)
 {
-	int i;
-	GError *err = NULL;
-
 	if (log4c_init())
 		g_error("Cannot init log4c");
 
-	if (argc<7)
-	{
-		ERROR("usage: %s HOST PORT PATH SIZE CONTAINER_ID ACTION\r\n", args[0]);
+	if (argc < 6) {
+		ERROR("usage: %s HOST:PORT PATH SIZE CONTAINER_ID ACTION\r\n", args[0]);
 		return 1;
 	}
 
+	GError *err = NULL;
 	memset (&meta2addr, 0x00, sizeof(addr_info_t));
-	/*resolves the meta2 address*/
-	{
-		int rc;
-		struct addrinfo *ai, hint;
-		
-		memset (&hint, 0x00, sizeof(hint));
-		hint.ai_flags = AI_NUMERICHOST;
-		hint.ai_family = PF_UNSPEC;
-		hint.ai_socktype = SOCK_STREAM;
-		hint.ai_protocol = 0;
-		
-		DEBUG("[%s]:%s", args[1], args[2]);
-		
-		if ((rc = getaddrinfo(args[1], args[2], &hint, &ai)))
-		{
-			DEBUG("%s", gai_strerror(rc));
-			return 1;
-		}
-		addrinfo_from_sockaddr (&meta2addr, ai->ai_addr, ai->ai_addrlen);
-		freeaddrinfo(ai);
+	if (!l4_address_init_with_url(&meta2addr, args[1], &err)) {
+		return -1;
 	}
 
 	/*connect to the meta2 address*/
-	meta2_cnx = addrinfo_connect (&meta2addr, timeOut, &err);
-	if (meta2_cnx == -1)
-	{
-		g_error("cannot connect the to provided META2 : %s", err ? err->message : "???");
-		return -1;
-	}
-	
-	remotePath = args[3];
-	remoteSize = g_ascii_strtoull(args[4],NULL,10);
+	remotePath = args[2];
+	remoteSize = g_ascii_strtoull(args[3],NULL,10);
 
 	DEBUG("size=%"G_GINT64_FORMAT"/%"G_GUINT64_FORMAT, remoteSize, (guint64)remoteSize);
-	
-	g_assert (container_id_hex2bin (args[5], strlen(args[5]), &id, &err));
+	g_assert (container_id_hex2bin (args[4], strlen(args[4]), &id, &err));
 
-	for (i=6; i<argc ;i++)
-	{
+	for (int i=5; i<argc ;i++) {
 		err = NULL;
 		if (!doCmd(args[i], &err))
 			ERROR("Cannot execute the command: %s", err?err->message:"?");

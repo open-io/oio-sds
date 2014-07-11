@@ -1,31 +1,19 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "grid.client.upload"
-#endif
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.client.upload"
 #endif
 
 #include "./gs_internals.h"
-#include "./round_buffer.h"
-#include "./rawx.h"
+
+// TODO FIXME replace by the GLib equivalent
 #include <openssl/md5.h>
+
+#include <metautils/lib/metautils.h>
+#include <meta2v2/meta2_utils.h>
+
+#include "./rawx.h"
+#include "./rainx.h"
+#include "./http_put.h"
+#include <glib/gprintf.h>
 
 #define MAX_ATTEMPTS_COMMIT 2
 #define MAX_ADD_ATTEMPTS 2
@@ -33,46 +21,36 @@
 #define UPLOAD_CLEAN() do {	/*finish cleaning the structures*/\
 	if (spare) g_slist_free (spare);\
 	if (chunks) { \
-		/*g_slist_foreach (chunks, chunk_info_gclean, NULL);*/ \
-		/* g_slist_free (chunks);*/ \
 		_bean_cleanl2(chunks); \
 	} \
-	if (local_error) g_clear_error(&local_error);\
-	if (system_metadata) g_byte_array_free(system_metadata, TRUE);\
+	if (system_metadata)\
+		g_byte_array_free(system_metadata, TRUE);\
+	if (system_metadata_str_esc)\
+		g_free(system_metadata_str_esc);\
+	if (storage_policy != actual_stgpol)\
+		g_free((gpointer)actual_stgpol);\
 } while (0)
 
 #define UPLOAD_CLEAN_MAIN_THREAD() do { \
 	if (chunks_at_position) { \
-		for (iter_chunks = lowest_position; iter_chunks < lowest_position + g_hash_table_size(chunks_at_position); iter_chunks++) { \
+		for (iter_chunks = 0; iter_chunks < g_hash_table_size(chunks_at_position); iter_chunks++) { \
 			fixed = g_hash_table_lookup(chunks_at_position, &iter_chunks); \
 			if (fixed) \
 				g_slist_free(fixed); \
 		} \
 		g_hash_table_destroy(chunks_at_position); \
 	} \
-	if (rb) { rb_destroy(rb); rb = NULL; } \
-	if (committed_counter) g_hash_table_destroy(committed_counter); \
-	if (uis) { \
-		g_mutex_free(uis->common->lock); \
-		g_cond_free(uis->common->cond); \
-		free(uis); \
-	} \
+	if (url) { hc_url_clean(url); } \
+	if (local_error) { g_error_free(local_error); } \
 	if(orig_sys_metadata_gba) \
 		g_byte_array_free(orig_sys_metadata_gba, TRUE); \
 } while (0)
 
-static int
-get_maximum_spare_chunks (gs_grid_storage_t *gs, guint32 nb_original)
+static guint
+get_maximum_spare_chunks ()
 {
 	gint64 res64;
-	int res;
-
-	(void)nb_original;	
-
-	if (!gs) {
-		GRID_ERROR("invalid parameter");
-		return 0;
-	}
+	guint res;
 
 	/*nevermind the client nor the namespace, take the environment*/
 	gchar *nb_str=getenv(GS_ENVKEY_MAXSPARE);
@@ -87,35 +65,19 @@ get_maximum_spare_chunks (gs_grid_storage_t *gs, guint32 nb_original)
 	return res;
 }
 
-typedef GSList* (*meta2_content_add_f) (int fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path,
+typedef GSList* (*meta2_content_add_f) (int *fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path,
 	content_length_t content_length, GByteArray *system_metadata, GByteArray **new_system_metadata);
 
-typedef GSList* (*meta2_content_add_v2_f) (int fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path,
+typedef GSList* (*meta2_content_add_v2_f) (int *fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path,
 	content_length_t content_length, GByteArray *user_metadata, GByteArray *system_metadata, GByteArray **new_system_metadata);
 
 static gs_status_t _gs_upload_content (meta2_content_add_f adder, gs_container_t *container,
 		const char *content_name, const int64_t content_size,
 		gs_input_f feeder, void *user_data, gs_error_t **err);
 
-/* static gs_status_t _gs_upload_content_v2 (meta2_content_add_v2_f adder, gs_container_t *container,
-		const char *content_name, const int64_t content_size,
-		gs_input_f feeder, void *user_data, const char *user_metadata, const char *sys_metadata, gs_error_t **err); */
-
 static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 		const char *content_name, gboolean append, const int64_t content_size,
 		gs_input_f feeder, void *user_data, const char *user_metadata, const char *sys_metadata, gs_error_t **err);
-
-#if 0
-static GSList* _meta2_remote_content_append_in_fd_v2(int fd, gint ms, GError **err,
-	const container_id_t container_id, const gchar *content_path, content_length_t content_length,
-        GByteArray *user_metadata, GByteArray *system_metadata, GByteArray **new_system_metadata)
-{
-	(void) user_metadata;
-	(void) system_metadata;
-
-	return meta2_remote_content_append_in_fd_v2(fd, ms, err, container_id, content_path, content_length, new_system_metadata);
-}
-#endif
 
 /* upload the given chunk from the retry buffer */
 gs_status_t gs_upload_content_v2 (gs_container_t *container,
@@ -166,64 +128,6 @@ get_nb_chunks_at_position(GSList *chunks, const chunk_position_t position)
 	return nb_chunks;
 }
 
-static chunk_position_t
-get_lowest_position(GSList *chunks)
-{
-	chunk_position_t found_position = G_MAXUINT32;
-	GSList *l = NULL;
-	for(l = chunks; l && l->data; l = l->next) {
-		if(DESCR(l->data) == &descr_struct_CONTENTS) {
-			struct bean_CONTENTS_s *content = (struct bean_CONTENTS_s *) l->data;
-			char *tmp = CONTENTS_get_position(content)->str;
-			char **tok = g_strsplit(tmp, ".", 2);
-			gint64 pos64 = g_ascii_strtoll(tok[0], NULL, 10);
-			guint32 pos = pos64;
-			if (pos < found_position) {
-				found_position = pos;
-			}
-			g_strfreev(tok);
-		}
-	}
-
-	return found_position;
-}
-
-static char *
-_compute_str_id(chunk_id_t *chunk_id)
-{
-	char result[256];
-	char addr[64];
-	char id[65];
-	memset(result, '\0', 256);
-	memset(addr, '\0', 64);
-	memset(id, '\0', 65);
-
-	addr_info_to_string(&(chunk_id->addr), addr, 64);
-	buffer2str(chunk_id->id, sizeof(hash_sha256_t), id, 65);
-	g_snprintf(result, 256, "http://%s%s/%s", addr, chunk_id->vol, id);
-	return g_strdup(result);
-}
-
-static void
-_update_bean_hash(gpointer chunk, gpointer beans)
-{
-	GSList * l =(GSList *) beans;
-	GSList *b = NULL;
-	chunk_info_t *ck = (chunk_info_t*)chunk;
-	char *chunk_str_id = _compute_str_id(&(ck->id));
-
-	for(b = l; b && b->data; b = b->next) {
-		if(DESCR(b->data) != &descr_struct_CHUNKS)
-			continue;
-		struct bean_CHUNKS_s *bean = (struct bean_CHUNKS_s *) b->data;
-		if(0 == g_ascii_strcasecmp(chunk_str_id, CHUNKS_get_id(bean)->str)) {
-			CHUNKS_set2_hash(bean, ck->hash, sizeof(chunk_hash_t));
-			break;
-		}
-	}
-	g_free(chunk_str_id);
-}
-
 static void
 _update_content_bean_hash(content_hash_t *ch, gpointer beans)
 {
@@ -238,12 +142,6 @@ _update_content_bean_hash(content_hash_t *ch, gpointer beans)
 		if (ch)
 			CONTENTS_HEADERS_set2_hash(bean, *ch, sizeof(content_hash_t));
 	}
-}
-
-static void
-_set_hash_to_beans(GSList *beans, GSList *chunks)
-{
-	g_slist_foreach(chunks, _update_bean_hash, beans);
 }
 
 static struct bean_CHUNKS_s *
@@ -265,159 +163,827 @@ _get_chunk_matching_content(GSList *beans, struct bean_CONTENTS_s *content)
 	return NULL;
 }
 
-static void
-_fill_cid_from_bean(chunk_info_t *ci, struct bean_CHUNKS_s *ck)
-{
-	GError *e = NULL; 
-
-	/* split bean id into chunk id part rawx://ip:port/VOL/ID */
-	char *bean_id = CHUNKS_get_id(ck)->str;
-	char *id = strrchr(bean_id, '/');
-	char *addr = strchr(bean_id,':') + 3; /* skip :// */
-	char *vol = strchr(addr, '/');
-
-	/* addr */
-	char tmp[128];
-	memset(tmp, '\0', 128);
-	memcpy(tmp, addr, vol - addr);
-	if(!l4_address_init_with_url(&(ci->id.addr), tmp, &e)) {
-		GRID_WARN("Failed to init chunk addr");
-	}
-
-	/* vol */
-	memcpy(ci->id.vol, vol, id - vol);
-
-	/* id */
-	id = g_ascii_strup(id + 1, strlen(id + 1));
-	if(!hex2bin(id, ci->id.id, sizeof(ci->id.id), &e)) {
-		GRID_WARN("Failed to convert hexa chunk id to binary");
-	}
-	g_free(id);
-
-	/* debug: dump id */
-	char dst[65];
-	bzero(dst, 65);
-	container_id_to_string(ci->id.id, dst, 65);
-
-	if(NULL != e)
-		g_clear_error(&e);
-}
-
-static GSList *
-_build_ci_list_from_beans(GSList *chunk_beans, guint32 first)
-{
-	GSList *result = NULL;
-	GSList *l = NULL;
-	guint32 chunk_count = g_slist_length(chunk_beans);
-	guint32 pos = first;
-	
-	for(l = chunk_beans; l && l->data; l = l->next) {
-		struct bean_CHUNKS_s *ck = (struct bean_CHUNKS_s *) l->data;
-		chunk_info_t *ci = g_malloc0(sizeof(chunk_info_t));	
-		_fill_cid_from_bean(ci, ck);
-		ci->size = CHUNKS_get_size(ck);
-		ci->nb = chunk_count;
-		ci->position = pos;
-		guint8 *hash = CHUNKS_get_hash(ck)->data;
-		memcpy(ci->hash, hash, sizeof(ci->hash));
-		result = g_slist_append(result, ci);
-		pos++;
-	}
-
-	return result;
-}
-
-struct upload_info_common
-{
-	GHashTable *committed_counter;
-	guint *nb_copies;
-	gs_container_t *container;
-	GByteArray *system_metadata;
-	gs_content_t *hollow_content;
-	GSList *spare;
-	const char *content_name;
-	round_buffer_t *rb;
-	GByteArray *user_metadata_gba;
-	GByteArray *orig_sys_metadata_gba;
-	GMutex *lock;
-	GCond *cond;
-};
-
-struct upload_info
-{
-	GSList *chunk_list;
-	GSList *confirmed_list;
-	const struct upload_info_common *common;
-};
-
-static gpointer upload_thread(gpointer data);
-
 /* upload the given chunk from the retry buffer */
 static gs_status_t _gs_upload_content (meta2_content_add_f adder, gs_container_t *container,
 		const char *content_name, const int64_t content_size,
 		gs_input_f feeder, void *user_data, gs_error_t **err)
 {
 	(void) adder;
-	/* GSList* _adder_v2(int _fd, gint _ms, GError **_err, const container_id_t _container_id, const gchar *_content_path,
-			content_length_t _content_length, GByteArray *_user_metadata, GByteArray *_system_metadata, GByteArray **_new_system_metadata) {
-		(void) _user_metadata;
-		return adder(_fd, _ms, _err, _container_id, _content_path, _content_length, _system_metadata, _new_system_metadata);
-	} */
-
 	return _gs_upload_content_v2(container, content_name, FALSE, content_size, feeder, user_data, NULL, NULL, err);
 }
 
 static GStaticMutex global_mutex = G_STATIC_MUTEX_INIT;
 
-/* upload the given chunk from the retry buffer */
-/* static gs_status_t _gs_upload_content_v2 (meta2_content_add_v2_f adder, gs_container_t *container,
-		const char *content_name, const int64_t content_size,
-		gs_input_f feeder, void *user_data, const char *user_metadata, const char *sys_metadata, gs_error_t **err) */
+/**
+ * Update chunk extended attributes (position, content size, number of chunks)
+ * which have changed during an append operation.
+ *
+ * @param beans List of all beans of the content
+ * @return the version of the content
+ */
+static content_version_t _get_vers_and_update_attr_if_needed(GSList *beans,
+		gboolean append)
+{
+	GError *err = NULL;
+	gint64 content_size = 0;
+	gint64 max_pos = 0;
+	content_version_t version = 0;
+
+	/* Compute number of chunks and get content size */
+	for (GSList *l = beans; l != NULL; l = l->next) {
+		if (DESCR(l->data) == &descr_struct_ALIASES) {
+			version = ALIASES_get_version(l->data);
+			DEBUG("version of the content: %"G_GINT64_FORMAT, version);
+		} else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+			content_size = CONTENTS_HEADERS_get_size(l->data);
+		} else if (DESCR(l->data) == &descr_struct_CONTENTS) {
+			/* We may have several chunks at the same position,
+			 * we cannot just count the number of chunk beans,
+			 * so we search the highest position. */
+			gchar *str_pos = CONTENTS_get_position(l->data)->str;
+			gint pos = 0, subpos = 0;
+			gboolean par = FALSE;
+			m2v2_parse_chunk_position(str_pos, &pos, &par, &subpos);
+			if (pos > max_pos)
+				max_pos = pos;
+		}
+	}
+	/* Update chunk attributes */
+	if (append) {
+		for (GSList *l = beans; l != NULL; l = l->next) {
+			if (DESCR(l->data) != &descr_struct_CONTENTS)
+				continue;
+			gboolean res = TRUE;
+			GSList *attrs = NULL;
+			const gchar *url = CONTENTS_get_chunk_id(l->data)->str;
+			const gchar *pos = CONTENTS_get_position(l->data)->str;
+			struct chunk_attr_s attr_pos = {RAWX_ATTR_CHUNK_POSITION, pos};
+			struct chunk_attr_s attr_size = {RAWX_ATTR_CONTENT_SIZE,
+				g_strdup_printf("%"G_GINT64_FORMAT, content_size)};
+			struct chunk_attr_s attr_chunknb = {RAWX_ATTR_CONTENT_CHUNKNB,
+				g_strdup_printf("%"G_GINT64_FORMAT, max_pos+1)};
+			attrs = g_slist_prepend(attrs, &attr_pos);
+			attrs = g_slist_prepend(attrs, &attr_chunknb);
+			attrs = g_slist_prepend(attrs, &attr_size);
+			res = rawx_update_chunk_attrs(url, attrs, &err);
+			if (!res || err != NULL) {
+				GRID_WARN("Could not update extended attributes of chunk %s: %s",
+						url, err?err->message:"reason unknown");
+				g_clear_error(&err);
+			}
+			g_free((gpointer)attr_size.val);
+			g_free((gpointer)attr_chunknb.val);
+			g_slist_free(attrs);
+		}
+	}
+
+	return version;
+}
+
+static GError *_rawx_update_beans_hash_from_request(struct http_put_s *http_put)
+{
+	GSList *i_list = NULL, *beans;
+	struct bean_CHUNKS_s *bc;
+	const gchar *hash_str;
+	chunk_hash_t hash;
+	GError *error = NULL;
+	gboolean ret;
+
+	beans = http_put_get_success_dests(http_put);
+
+	for (i_list = beans; i_list != NULL ; i_list = g_slist_next(i_list)) {
+		bc = i_list->data;
+
+		hash_str = http_put_get_header(http_put, bc, "chunk_hash");
+		if (hash_str == NULL)
+		{
+			GSETERROR(&error,"Missing chunk hash in response from rawx");
+			goto end;
+		}
+
+		ret = hex2bin(hash_str, hash, sizeof(hash), &error);
+		if (ret != TRUE)
+			goto end;
+
+		CHUNKS_set2_hash(bc, hash, sizeof(hash));
+	}
+
+end:
+	g_slist_free(beans);
+	return error;
+}
+
+/**
+ * Get CONTENT corresponding to one CHUNK.
+ *
+ * @param all_chunks chunks list with CONTENTS, CHUNKS, ALIAS, CONTENTS_HEADERS...
+ * @param bc chunk
+ *
+ * @return CONTENT if found, NULL otherwise
+ */
+static struct bean_CONTENTS_s *_bean_get_content_from_chunk(GSList *all_chunks, struct bean_CHUNKS_s *bc)
+{
+	GSList *i_list = NULL;
+	struct bean_CONTENTS_s *content;
+
+	for (i_list = all_chunks ; i_list != NULL ; i_list = g_slist_next(i_list)) {
+		if(DESCR(i_list->data) != &descr_struct_CONTENTS)
+			continue;
+
+		content = i_list->data;
+
+		if (0 == g_ascii_strcasecmp(CHUNKS_get_id(bc)->str, CONTENTS_get_chunk_id(content)->str)) {
+			return content;
+		}
+	}
+
+	return NULL;
+}
+
+/**
+ * Update chunks with information from the header 'chunklist' sent by rainx
+ * and remove unused chunks (in case of small data).
+ *
+ * @params all_chunks chunk list with CONTENTS, CHUNKS, ALIAS, CONTENTS_HEADERS...
+ * @param chunks_by_pos list of CHUNKS for one position
+ * @param header_chunklist 'chunklist' header sent by rainx
+ *
+ * @return NULL if ok, otherwise error
+ */
+static GError * _rainx_update_chunks_with_response(GSList **all_chunks, GSList **chunks_by_pos, const gchar *header_chunklist)
+{
+	gchar **split_header = NULL;
+	gchar **iter;
+	gchar *chunk_addr, *chunk_id, *chunk_hash, *chunk_size;
+	chunk_hash_t hash;
+	gint64 size;
+	GSList *i_list;
+	struct bean_CHUNKS_s *bc;
+	const gchar *bean_id;
+	GSList * beans_to_remove = NULL;
+	struct bean_CONTENTS_s *content_to_remove;
+	GError *error = NULL;
+
+	g_assert(header_chunklist != NULL);
+
+	/* chunklist format: ip:port/chunk_id|chunk_size|chunk_hash;... */
+
+	split_header = g_strsplit(header_chunklist, ";", 0);
+
+	beans_to_remove = g_slist_copy(*chunks_by_pos);
+
+	for (iter = split_header ; *iter != NULL ; iter++)
+	{
+		chunk_addr = *iter;
+		
+		chunk_id = g_strstr_len(chunk_addr, -1, "/");
+		if (chunk_id == NULL)
+		{
+			GSETERROR(&error,"Bad format for chunklist header (address)");
+			goto end;
+		}
+
+		chunk_id[0] = '\0';
+		chunk_id++;
+
+		chunk_size = g_strstr_len(chunk_id, -1, "|");
+		if (chunk_id == NULL)
+		{
+			GSETERROR(&error,"Bad format for chunklist header (size)");
+			goto end;
+		}
+		chunk_size[0] = '\0';
+		chunk_size++;
+		size = g_ascii_strtoll(chunk_size, NULL, 10);
+
+		chunk_hash = g_strstr_len(chunk_size, -1, "|");
+		if (chunk_id == NULL)
+		{
+			GSETERROR(&error,"Bad format for chunklist header (hash)");
+			goto end;
+		}
+		chunk_hash[0] = '\0';
+		chunk_hash++;
+		if (!hex2bin(chunk_hash, hash, sizeof(hash), &error))
+		{
+			GSETERROR(&error,"Bad format for chunklist header (hash hex)");
+			goto end;
+		}
+
+		TRACE("chunklist [%s] [%s] [%s] [%s]",
+				chunk_addr, chunk_id, chunk_size, chunk_hash);
+
+		/* search the bean and update their attributes */
+		for (i_list = beans_to_remove ; i_list != NULL ; i_list = i_list->next)
+		{
+			bc = i_list->data;
+			bean_id = g_strrstr(CHUNKS_get_id(bc)->str, "/");
+			g_assert(bean_id != NULL);
+			bean_id++;
+
+			if (g_strcmp0(bean_id, chunk_id) == 0)
+			{
+				CHUNKS_set2_hash(bc, hash, sizeof(hash));
+				CHUNKS_set_size(bc, size);
+
+				/* This chunk is ok so no need to remove it from global list */
+				beans_to_remove = g_slist_delete_link(beans_to_remove, i_list);
+				break;
+			}
+		}
+	}
+
+	/* Remove unused chunks */
+	for (i_list = beans_to_remove ; i_list != NULL ; i_list = g_slist_next(i_list))
+	{
+		/* Remove CONTENT associated to this CHUNK */
+		content_to_remove = _bean_get_content_from_chunk(*all_chunks, i_list->data);
+		if (content_to_remove == NULL)
+		{
+			GSETERROR(&error,"Content bean not found");
+			goto end;
+		}
+		*all_chunks = g_slist_remove(*all_chunks, content_to_remove);
+		_bean_clean(content_to_remove);
+
+		/* Remove all links to this CHUNK bean
+		 */
+		*chunks_by_pos = g_slist_remove(*chunks_by_pos, i_list->data);
+		*all_chunks = g_slist_remove(*all_chunks, i_list->data);
+		_bean_clean(i_list->data);
+	}
+
+end:
+	if (split_header != NULL)
+		g_strfreev(split_header);
+	if (beans_to_remove != NULL)
+		g_slist_free(beans_to_remove);
+
+	return error;
+}
+
+static GError * _http_put_set_dest(struct http_put_s *http_put, const gchar *url,
+		gpointer user_data,
+		const gchar *containerid, const gchar * chunkid, const gchar *contentpath,
+		gint64 contentsize, gint chunkpos, guint chunknb, gint64 chunksize,
+		const gchar *metadata, const char *rawxlist,
+		const char *storagepolicy, const gchar *reqid)
+{
+	struct http_put_dest_s *http_dest;
+	GError * error;
+
+	http_dest = http_put_add_dest(http_put, url, user_data);
+	if (http_dest == NULL)
+	{
+		GSETERROR(&error,"Failed to add destination");
+		return error;
+	}
+
+	http_put_dest_add_header(http_dest, "containerid", containerid);
+
+	http_put_dest_add_header(http_dest, "contentpath", contentpath);
+
+	http_put_dest_add_header(http_dest, "chunkpos", "%d", chunkpos);
+
+	http_put_dest_add_header(http_dest, "chunknb", "%u", chunknb);
+
+	http_put_dest_add_header(http_dest, "chunksize", "%"G_GINT64_FORMAT, chunksize);
+
+	http_put_dest_add_header(http_dest, "contentsize", "%"G_GINT64_FORMAT, contentsize);
+
+	/* No chunk id in case of rain
+	 */
+	if (NULL != chunkid)
+		http_put_dest_add_header(http_dest, "chunkid", chunkid);
+
+	http_put_dest_add_header(http_dest, "contentmetadata-sys", metadata);
+
+	http_put_dest_add_header(http_dest, "GSReqId", reqid);
+
+	if (rawxlist != NULL)
+		http_put_dest_add_header(http_dest, "rawxlist", rawxlist);
+
+	if (storagepolicy != NULL)
+		http_put_dest_add_header(http_dest, "storagepolicy", storagepolicy);
+
+	return NULL;
+}
+
+static GError * _http_put_set_dests(struct http_put_s *http_put, GSList *bean_list,
+		const gchar *containerid, const gchar *contentpath,
+		gint64 contentsize, gint chunkpos, guint chunknb,
+		const gchar *metadata, const gchar *reqid)
+{
+	struct bean_CHUNKS_s *bc;
+	GSList *i_list;
+	const gchar *chunkid;
+	GError *error;
+
+	for (i_list = bean_list ; i_list != NULL ; i_list = i_list->next)
+	{
+		bc = i_list->data;
+
+		GRID_DEBUG("\t=> %s (%"G_GINT64_FORMAT" bytes)", CHUNKS_get_id(bc)->str, CHUNKS_get_size(bc));
+
+		chunkid = strrchr(CHUNKS_get_id(bc)->str, '/');
+		if (chunkid == NULL)
+		{
+			GSETERROR(&error,"Bad format for chunk id");
+			return error;
+		}
+		chunkid++;
+
+		error = _http_put_set_dest(http_put, CHUNKS_get_id(bc)->str, bc,
+				containerid, chunkid,
+				contentpath, contentsize, chunkpos, chunknb,
+				CHUNKS_get_size(bc), metadata, NULL, NULL, reqid);
+		if (error != NULL)
+			return error;
+	}
+
+	return NULL;
+}
+
+/* Must have as least the same number of spare beans as broken beans
+ */
+static GError *_update_broken_beans(GSList *all_beans, GSList *broken_beans, GSList *spare_beans)
+{
+	struct bean_CHUNKS_s *spare_bc;
+	struct bean_CHUNKS_s *broken_bc;
+	struct bean_CONTENTS_s *content;
+	GError *error;
+
+	while (broken_beans != NULL)
+	{
+		g_assert(spare_beans != NULL);
+
+		broken_bc = broken_beans->data;
+		spare_bc = spare_beans->data;
+
+		GRID_DEBUG("SPARE: replace %s by %s",
+				CHUNKS_get_id(broken_bc)->str,
+				CHUNKS_get_id(spare_bc)->str);
+
+		content = _bean_get_content_from_chunk(all_beans, broken_bc);
+		if (content == NULL)
+		{
+			GSETERROR(&error,"Content bean not found");
+			return error;
+		}
+		CONTENTS_set_chunk_id(content, CHUNKS_get_id(spare_bc));
+
+		/* fill broken bean with spare bean data
+		 */
+		CHUNKS_set_id(broken_bc, CHUNKS_get_id(spare_bc));
+		CHUNKS_set_ctime(broken_bc, CHUNKS_get_ctime(spare_bc));
+
+		broken_beans = g_slist_next(broken_beans);
+		spare_beans = g_slist_next(spare_beans);
+	}
+
+	return NULL;
+}
+
+static gchar* _rainx_create_rawxlist_from_chunk_bean_list(GSList *bean_list)
+{
+	GString *res = NULL;
+	struct bean_CHUNKS_s *bc;
+	const gchar *chunk_id;
+	const gchar *tok_begin, *tok_end;
+
+	g_assert(bean_list != NULL);
+
+	res = g_string_new("");
+
+	for (GSList *l = bean_list; l; l = l->next) {
+		bc = l->data;
+		chunk_id = CHUNKS_get_id(bc)->str;
+
+		/* chunkid format: http://10.24.244.158:6032/DATA/CCANS/common/rawx-2/EC2E74D2A69A17C0CC099956E7C557CC5ED3D5C6881DF4BA0120FFACC91A6B11
+		 */
+		tok_begin = g_strstr_len(chunk_id, -1, "://"); /* ip:port */
+		g_assert(tok_begin != NULL);
+		tok_begin += 3; /* skip :// */
+		tok_end = g_strstr_len(tok_begin, -1, "/");
+		g_assert(tok_end != NULL);
+		
+		g_string_append_len(res, tok_begin, tok_end - tok_begin);
+
+		tok_begin = g_strrstr(chunk_id, "/"); /* chunk id, keep the / */
+		g_assert(tok_begin != NULL);
+
+		g_string_append(res, tok_begin);
+
+		if (l->next)
+			g_string_append(res, "|");
+	}
+
+	return g_string_free(res, FALSE);
+}
+
+static GError *_rainx_get_url(const gchar *nsname, gchar *buffer, gsize buffer_size)
+{
+	addr_info_t *rainx_addr = NULL;
+	gchar ip[256]; /* string representation of ipv6 address is 46 chars */
+	guint16 port;
+	GError *error = NULL;
+
+	g_assert(nsname != NULL);
+	g_assert(buffer != NULL);
+
+	rainx_addr = get_rainx_from_conscience(nsname, &error);
+	if (error != NULL)
+		return error;
+
+	if (! addr_info_get_addr(rainx_addr, ip, sizeof(ip), &port))
+	{
+		GSETERROR(&error,"Failed to convert ip and port to string");
+		g_free(rainx_addr);
+		return error;
+	}
+
+	g_snprintf(buffer, buffer_size, "http://%s:%"G_GUINT16_FORMAT"/rainx",
+			ip, port);
+
+	g_free(rainx_addr);
+	return NULL;
+}
+
+static GError *_rainx_upload(struct hc_url_s *url, const gchar *target,
+		GSList **chunks, GHashTable *chunks_at_position,
+		gs_input_f feeder, void *feeder_user_data, const gchar *container_id,
+		const gchar *content_name, const gint64 content_size,
+		const gchar *system_metadata, const gchar *stgpolicy,
+		const gchar *reqid, long timeout_cnx, long timeout_op)
+{
+	struct http_put_s *http_put = NULL;
+	GError *error = NULL;
+	GSList *val_l;
+	const gchar *chunk_buf;
+	gsize chunk_buf_size;
+	gint64 chunksize;
+	gchar *rawxlist = NULL;
+	GChecksum *checksum_md5 = NULL;
+	content_hash_t content_hash;
+	gsize content_hash_size = sizeof(content_hash);
+	gint retry;
+	gchar rainx_url[256]; /* http://ip:port/rainx always < 256 chars */
+	GSList *spare_list = NULL;
+	guint failure_nb;
+	const gchar *header_chunklist;
+
+	checksum_md5 = g_checksum_new(G_CHECKSUM_MD5);
+
+	error = _rainx_get_url(hc_url_get(url, HCURL_NS), rainx_url, sizeof(rainx_url));
+	if (error != NULL)
+		goto error_label;
+	GRID_DEBUG("rainx url [%s]", rainx_url);
+
+	for (guint pos = 0 ; pos < g_hash_table_size(chunks_at_position) ; pos++)
+	{
+		val_l = g_hash_table_lookup(chunks_at_position, &pos);
+
+		chunksize = CHUNKS_get_size((struct bean_CHUNKS_s*)val_l->data);
+
+		http_put = http_put_create(feeder, feeder_user_data, chunksize, timeout_cnx, timeout_op);
+		if (http_put == NULL)
+		{
+			GSETERROR(&error,"Failed to create put request");
+			goto error_label;
+		}
+
+		/* Try to upload data and use spare chunks if necessary */
+		retry = 0;
+		while (TRUE)
+		{
+			GRID_DEBUG("Position %d:", pos);
+
+			rawxlist = _rainx_create_rawxlist_from_chunk_bean_list(val_l);
+			if (rawxlist == NULL)
+			{
+				GSETERROR(&error,"Failed to generate rawxlist for the request");
+				goto error_label;
+			}
+			GRID_DEBUG("rawxlist [%s]", rawxlist);
+
+			/* Add all destinations to http_put handle */
+			http_put_clear_dests(http_put);
+			error =_http_put_set_dest(http_put, rainx_url, val_l, 
+					container_id, NULL, content_name, content_size,
+					pos, g_hash_table_size(chunks_at_position),
+					chunksize, system_metadata, rawxlist, stgpolicy, reqid);
+			if (error != NULL)
+				goto error_label;
+
+			g_free(rawxlist);
+			rawxlist = NULL;
+
+			gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
+			error = http_put_run(http_put);
+			gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
+			if (error != NULL)
+				goto error_label;
+
+			failure_nb = http_put_get_failure_number(http_put);
+			if (failure_nb == 0 || retry >= MAX_ADD_ATTEMPTS)
+				break;
+
+			/* Rainx didn't send us the list of broken rawx so
+			 * we replace all our beans by news beans.
+			 * We can't ask meta2 to ignore all current rawx because it
+			 * might have not enough rawx to fulfill this request.
+			 */
+
+			/* Get spare beans */
+			error = m2v2_remote_execute_SPARE(target, NULL, url, stgpolicy, NULL, NULL, &spare_list);
+			if (error != NULL)
+				goto error_label;
+
+			GRID_DEBUG("Number of beans in spare list : %u", g_slist_length(spare_list));
+
+			if (g_slist_length(spare_list) != g_slist_length(val_l))
+			{
+				GSETERROR(&error,"Not enough spare chunks");
+				goto error_label;
+			}
+
+			/* update broken chunks with data from spare chunks
+			 */
+			error = _update_broken_beans(*chunks, val_l, spare_list);
+			if (error != NULL)
+				goto error_label;
+
+			g_slist_free_full(spare_list, _bean_clean);
+			spare_list = NULL;
+
+			retry++;
+		}
+
+		if (http_put_get_failure_number(http_put) > 0)
+		{
+			GSETERROR(&error,"Failed to upload all chunks");
+			goto error_label;
+		}
+
+		header_chunklist = http_put_get_header(http_put, val_l, "chunklist");
+		if (header_chunklist == NULL)
+		{
+			GSETERROR(&error,"Failed to get chunklist header");
+			goto error_label;
+		}
+
+		/* Browse all beans to remove unused beans and update their
+		 * size and hash according to the response header 'chunklist'
+		 */
+		error = _rainx_update_chunks_with_response(chunks, &val_l, header_chunklist);
+		if (error != NULL)
+			goto error_label;
+
+		/* update the checksum of the whole content
+		*/
+		http_put_get_buffer(http_put, &chunk_buf, &chunk_buf_size);
+		g_checksum_update(checksum_md5, (const guchar *)chunk_buf, chunk_buf_size);
+
+		http_put_destroy(http_put);
+		http_put = NULL;
+	}
+
+	g_checksum_get_digest(checksum_md5, content_hash, &content_hash_size);
+	g_checksum_free(checksum_md5);
+	checksum_md5 = NULL;
+
+	_update_content_bean_hash(&content_hash, *chunks);
+
+	return NULL;
+
+error_label:
+	if (http_put != NULL)
+		http_put_destroy(http_put);
+	if (rawxlist != NULL)
+		g_free(rawxlist);
+	if (checksum_md5 != NULL)
+		g_checksum_free(checksum_md5);
+	if (spare_list != NULL)
+		g_slist_free_full(spare_list, _bean_clean);
+	return error;
+}
+
+static void _debug_bean_chunk_list(GSList *bck_list, const char * message)
+{
+	GSList *i_list;
+
+	for (i_list = bck_list ; i_list != NULL ; i_list = i_list->next)
+	{
+		struct bean_CHUNKS_s *bc = i_list->data;
+		GRID_DEBUG("%s: %s", message, CHUNKS_get_id(bc)->str);
+	}
+}
+
+static GError *_rawx_upload(struct hc_url_s *url, const gchar *target,
+		GSList **chunks, GHashTable *chunks_at_position,
+		gs_input_f feeder, void *feeder_user_data, const gchar *container_id,
+		const gchar *content_name, const gint64 content_size,
+		const gchar *system_metadata, const gchar *stgpolicy,
+		const gchar *reqid, long timeout_cnx, long timeout_op)
+{
+	struct http_put_s *http_put = NULL;
+	GSList *tosend_list = NULL;
+	const gchar *chunk_buf;
+	gsize chunk_buf_size;
+	gint64 chunksize;
+	GChecksum *checksum_md5 = NULL;
+	content_hash_t content_hash;
+	gsize content_hash_size = sizeof(content_hash);
+	GSList *notin_list = NULL;
+	GSList *broken_list = NULL;
+	GSList *spare_list = NULL;
+	guint failure_nb;
+	guint max_spare, remaining_spare;
+	GError *error = NULL;
+
+	max_spare = remaining_spare = get_maximum_spare_chunks();
+
+	checksum_md5 = g_checksum_new(G_CHECKSUM_MD5);
+
+	for (guint pos = 0 ; pos < g_hash_table_size(chunks_at_position) ; pos++)
+	{
+		tosend_list = g_slist_copy(g_hash_table_lookup(chunks_at_position, &pos));
+
+		chunksize = CHUNKS_get_size((struct bean_CHUNKS_s*)tosend_list->data);
+
+		http_put = http_put_create(feeder, feeder_user_data, chunksize, timeout_cnx, timeout_op);
+		if (http_put == NULL)
+		{
+			GSETERROR(&error,"Failed to create put request");
+			goto error_label;
+		}
+
+		/* Try to upload data and use spare chunks if necessary */
+		remaining_spare = max_spare;
+		while (TRUE)
+		{
+			GRID_DEBUG("Position %d:", pos);
+
+			/* Add all destinations to http_put handle */
+			http_put_clear_dests(http_put);
+			_http_put_set_dests(http_put, tosend_list, container_id,
+					content_name, content_size, pos,
+					g_hash_table_size(chunks_at_position),
+					system_metadata, reqid);
+
+			gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
+			error = http_put_run(http_put);
+			gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
+			if (error != NULL)
+				goto error_label;
+
+			/* update hash for successful transfers */
+			error = _rawx_update_beans_hash_from_request(http_put);
+			if (error != NULL)
+				goto error_label;
+
+			failure_nb = http_put_get_failure_number(http_put);
+			if (failure_nb == 0 || remaining_spare < failure_nb)
+				break;
+
+			remaining_spare -= failure_nb;
+
+			notin_list = g_slist_concat(notin_list, http_put_get_success_dests(http_put));
+			_debug_bean_chunk_list(notin_list, "SUCCESS");
+
+			broken_list = http_put_get_failure_dests(http_put);
+			_debug_bean_chunk_list(broken_list, "FAILED");
+
+			/* Get spare beans */
+			error = m2v2_remote_execute_SPARE(target, NULL, url, stgpolicy, notin_list, broken_list, &spare_list);
+			if (error != NULL)
+				goto error_label;
+
+			GRID_DEBUG("Number of beans in notin list : %u", g_slist_length(notin_list));
+			GRID_DEBUG("Number of beans in broken list : %u", g_slist_length(broken_list));
+			GRID_DEBUG("Number of beans in spare list : %u", g_slist_length(spare_list));
+
+			/* In case of RAIN with empty file, this normal upload
+			 * function is used but m2v2_remote_execute_spare use type
+			 * M2V2_SPARE_BY_STGPOL instead of M2V2_SPARE_BY_BLACKLIST
+			 * so the number of spare can be greater than the number of
+			 * broken beans.
+			 */
+			if (g_slist_length(spare_list) < failure_nb)
+			{
+				GSETERROR(&error,"Not enough spare chunks");
+				goto error_label;
+			}
+
+			/* update broken chunks with data from spare chunks
+			 */
+			error = _update_broken_beans(*chunks, broken_list, spare_list);
+			if (error != NULL)
+				goto error_label;
+
+			/* try new upload using modified broken beans
+			*/
+			g_slist_free(tosend_list);
+			tosend_list = broken_list;
+			broken_list = NULL;
+
+			g_slist_free_full(spare_list, _bean_clean);
+			spare_list = NULL;
+		}
+
+		g_slist_free(notin_list);
+		notin_list = NULL;
+
+		if (http_put_get_failure_number(http_put) > 0)
+		{
+			GSETERROR(&error,"Failed to upload all chunks");
+			goto error_label;
+		}
+
+		g_slist_free(tosend_list);
+		tosend_list = NULL;
+
+		/* update the checksum of the whole content
+		*/
+		http_put_get_buffer(http_put, &chunk_buf, &chunk_buf_size);
+		g_checksum_update(checksum_md5, (const guchar *)chunk_buf, chunk_buf_size);
+
+		http_put_destroy(http_put);
+		http_put = NULL;
+	}
+
+	g_checksum_get_digest(checksum_md5, content_hash, &content_hash_size);
+	g_checksum_free(checksum_md5);
+	checksum_md5 = NULL;
+
+	_update_content_bean_hash(&content_hash, *chunks);
+
+	return NULL;
+
+error_label:
+	if (http_put != NULL)
+		http_put_destroy(http_put);
+	if (tosend_list != NULL)
+		g_slist_free(tosend_list);
+	if (checksum_md5 != NULL)
+		g_checksum_free(checksum_md5);
+	if (spare_list != NULL)
+		g_slist_free_full(spare_list, _bean_clean);
+	if (broken_list != NULL)
+		g_slist_free(broken_list);
+	if (notin_list != NULL)
+		g_slist_free(notin_list);
+
+	return error;
+}
+
+static gchar * _esc_gba(GByteArray *metadata)
+{
+	gchar *metadata_esc, *tmp;
+
+	tmp = g_strndup((const gchar*)metadata->data, metadata->len);
+
+	metadata_esc = g_strescape(tmp, "");
+
+	g_free(tmp);
+
+	return metadata_esc;
+}
+
+/* upload the given chunk */
 static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 		const char *content_name, gboolean append, const int64_t content_size,
 		gs_input_f feeder, void *user_data, const char *storage_policy, const char *sys_metadata, gs_error_t **err)
 {
-/* #define CONTENT_ADD_V2()        adder (C0_CNX(container), C0_M2TO(container), &local_error,\
-	C0_ID(container), hollow_content.info.path, content_size,\
-	user_metadata_gba, orig_sys_metadata_gba, &system_metadata) */
-#define CONTENT_ADD_V2() 	m2v2_remote_execute_BEANS(target, NULL, url,  storage_policy, content_size, append, &chunks) 
-#define CHUNK_COMMIT(chunks) meta2_remote_chunk_commit_in_fd (C0_CNX(container), C0_M2TO(container), &local_error, C0_ID(container), hollow_content.info.path, chunks)
-/* #define CONTENT_COMMIT()     meta2_remote_content_commit_in_fd (C0_CNX(container), C0_M2TO(container), &local_error, C0_ID(container), hollow_content.info.path) */
+#define CONTENT_ADD_V2() m2v2_remote_execute_BEANS(target, NULL, url, actual_stgpol, content_size, append, &chunks)
 #define CONTENT_COMMIT() m2v2_remote_execute_PUT(target, NULL, url, chunks, &beans)
 #define APPEND_COMMIT() m2v2_remote_execute_APPEND(target, NULL, url, chunks, &beans)
-#define CONTENT_ROLLBACK()   meta2_remote_content_rollback_in_fd (C0_CNX(container), C0_M2TO(container), &local_error, C0_ID(container), hollow_content.info.path)
 
 	int nb_attempts;
 
 	/*parameters declaration and initiation*/
-	GError *local_error=NULL;
+	GError *local_error = NULL;
 	gchar pos_str[20];
 	GHashTable *chunks_at_position = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
-	GPtrArray *threads_per_copy_number = g_ptr_array_new();
-	gs_content_t hollow_content;
-	GByteArray *system_metadata=NULL;
+	GByteArray *system_metadata = NULL;
+	gchar *system_metadata_str_esc = NULL;
 	GByteArray *orig_sys_metadata_gba=NULL;
 	guint iter_chunks = 0;
-	guint iter_copies = 0;
-	GThread *iter_threads = NULL;
 	guint nb_copies = 0;
-	chunk_position_t lowest_position = 0;
-	gpointer chunk_copy = NULL;
 	char target[64];
+	gchar reqid[1024];
 	struct hc_url_s *url = NULL;
 	GSList
 		*chunks=NULL,           /*free: structure and content*/
 		*spare=NULL,            /*free: structure only*/
 		*fixed=NULL,            /*free: structure only*/
 		*cursor=NULL;           /*do not free*/
-	struct upload_info *uis = NULL;
-	GHashTable *committed_counter = g_hash_table_new_full(g_direct_hash, g_direct_equal, NULL, g_free);
+	GSList *beans = NULL;
+	const gchar *actual_stgpol = storage_policy;
+	long timeout_cnx, timeout_op;
 
-	/*this will keep the source bytes in memory, until each chunk can be comited*/
-	round_buffer_t *rb = NULL;
-
-	if (!g_thread_supported())
-		g_thread_init(NULL);
+	gboolean is_rainx;
+	content_version_t content_version;
 
 	/*sanity checks*/
 	if (!container || !content_name || content_size<0 || !feeder) {
@@ -425,40 +991,33 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 		return GS_ERROR;
 	}
 
+	timeout_cnx = MAX(gs_grid_storage_get_timeout(container->info.gs, GS_TO_RAWX_CNX) / 1000, 1);
+	timeout_op = MAX(gs_grid_storage_get_timeout(container->info.gs, GS_TO_RAWX_OP) / 1000, 1);
+	GRID_DEBUG("Timeout cnx %ld s ; timeout op %ld s", timeout_cnx, timeout_op);
+
+	is_rainx = stg_pol_is_rainx(&(container->info.gs->ni), actual_stgpol);
+
 	/* New meta1 purpose : ensure to be linked with a meta2 */
 	if(container->meta2_addr.port <= 0) {
 		gs_container_t *tmp = NULL;
-		tmp = gs_get_storage_container(container->info.gs, NULL, C0_NAME(container), container->ac, err);
+		tmp = gs_get_storage_container(container->info.gs, C0_NAME(container),
+				NULL, container->ac, err);
 		if(NULL != tmp ) {
 			memcpy(&(container->meta2_addr), &(tmp->meta2_addr), sizeof(addr_info_t));
 			gs_container_free(tmp);
 		}
 	}
 
-	/* Pack metadata in gba */
-//	if(user_metadata && strlen(user_metadata) > 0) {
-//		user_metadata_gba = g_byte_array_new();
-//		g_byte_array_append(user_metadata_gba, (guint8*)user_metadata, strlen(user_metadata));
-//	}
-
 	if(sys_metadata && strlen(sys_metadata) > 0) {
 		orig_sys_metadata_gba = g_byte_array_new();
 		g_byte_array_append(orig_sys_metadata_gba, (guint8*)sys_metadata, strlen(sys_metadata));
 	}
 
-	/*inits the hollow con	tent and the dummy chunk*/
-	memset (&hollow_content, 0x00, sizeof(hollow_content));
-	hollow_content.info.size = content_size;
-	hollow_content.info.container = container;
-	memset (hollow_content.info.path, 0x00, sizeof(hollow_content.info.path));
-	memcpy (hollow_content.info.path, content_name,
-			MIN(strlen(content_name), sizeof(hollow_content.info.path)-1));
-
 	bzero(target, sizeof(target));
 	addr_info_to_string(&container->meta2_addr, target, 64);
 
 	url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, container->info.gs->ni.name);
+	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(container));
 	hc_url_set(url, HCURL_PATH, content_name);
 
@@ -473,24 +1032,46 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 			GRID_DEBUG("Waiting [%lu] ms before retrying ADD", wait_on_add_failed);
 			usleep( wait_on_add_failed * 1000UL );
 		}
+		if (local_error)
+			g_clear_error(&local_error);
 	}
 	g_static_mutex_unlock(&global_mutex);
 
 	if (!chunks) {
-		GSETERROR(&local_error,"PUT error : Too many attempts");
+		GSETERROR(&local_error, "PUT error: Too many attempts");
 		goto exit_label;
 	}
 
-	lowest_position = get_lowest_position(chunks);
-	nb_copies = get_nb_chunks_at_position(chunks, lowest_position);
-	uis = (struct upload_info*) g_malloc0(nb_copies * sizeof(struct upload_info));
+	nb_copies = get_nb_chunks_at_position(chunks, 0);
 
 	/*save the system_metadata_information that will be copied into the last-chunk attributes*/
 
 	/*split the chunks into the spare and used chunks*/
 	for (cursor=chunks; cursor && cursor->data ;cursor=cursor->next) {
-		/* TODO: search contents item, foreach search chunk item and add it at the good pos */	
-		if(DESCR(cursor->data) != &descr_struct_CONTENTS) {
+		/* TODO: search contents item, foreach search chunk item and add it at the good pos */
+
+		if (DESCR(cursor->data) == &descr_struct_CONTENTS_HEADERS) {
+			/* Get the actual storage policy selected by meta2 */
+			GString *pol_str = CONTENTS_HEADERS_get_policy(cursor->data);
+			if (pol_str != NULL) {
+				actual_stgpol = g_strdup(pol_str->str);
+			}
+			continue;
+		} else if (DESCR(cursor->data) == &descr_struct_ALIASES) {
+			GString *sysmd = ALIASES_get_mdsys(cursor->data);
+			if (!system_metadata)
+				system_metadata = g_byte_array_new();
+			if (orig_sys_metadata_gba && orig_sys_metadata_gba->len > 0) {
+				g_byte_array_append(system_metadata,
+						orig_sys_metadata_gba->data,
+						orig_sys_metadata_gba->len);
+				g_byte_array_append(system_metadata, (guint8*)";", 1);
+			}
+			g_byte_array_append(system_metadata,
+					(guint8*)sysmd->str, sysmd->len);
+			continue;
+
+		} else if (DESCR(cursor->data) != &descr_struct_CONTENTS) {
 			continue;
 		}
 
@@ -500,6 +1081,7 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 			GRID_WARN("No chunk matching content, meta2 return some bad informations");
 			continue;
 		}
+		TRACE("Chunk id [%s] pos [%s] size[%"G_GINT64_FORMAT"]", CHUNKS_get_id(ck)->str, CONTENTS_get_position(content)->str, CHUNKS_get_size(ck));
 		char *tmp = CONTENTS_get_position(content)->str;
 		char **tok = g_strsplit(tmp, ".", 2);
 		gint64 pos64 = g_ascii_strtoll(tok[0], NULL, 10);
@@ -508,107 +1090,72 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 		} else {
 			gint pos = pos64;
 			fixed = g_hash_table_lookup(chunks_at_position, &pos);
-			fixed = g_slist_prepend(fixed, ck);
+			fixed = g_slist_append(fixed, ck);
 			g_hash_table_insert(chunks_at_position, g_memdup(&pos, sizeof(pos)), fixed);
 		}
 		g_strfreev(tok);
 	}
 
-
-	if (!fixed) {
+	if (!fixed && content_size > 0) {
 		GSETERROR(&local_error,"no fixed chunks have been found!");
 		goto error_label;
 	}
 
-	GRID_DEBUG("'%s' of size %"G_GINT64_FORMAT" split into %u chunks (every chunk is duplicated %u times, there are %u unique presets and %u spares)",
-			content_name, content_size, g_slist_length(chunks) / 2 / nb_copies, nb_copies,
-			g_hash_table_size(chunks_at_position), g_slist_length(spare));
-
-
-	/* create a round buffer. it should not store more than the bounded size
-	 * of a chunk */
-	/* rb = rb_create_with_callback (((chunk_info_t*)(fixed->data))->size, feeder, user_data); */
-	rb = rb_create_with_callback (CHUNKS_get_size((struct bean_CHUNKS_s*)fixed->data), feeder, user_data);
-	if (!rb)
-	{
-		GSETERROR(&local_error,"Memory allocation failure");
-		goto error_label;
+	// Don't do RAIN with empty contents
+	is_rainx = (content_size > 0 &&
+			stg_pol_is_rainx(&(container->info.gs->ni), actual_stgpol));
+	if (is_rainx) {
+		GRID_DEBUG("'%s' of size %"G_GINT64_FORMAT" split into %u chunks (every chunk has %u sub-chunks, there are %u unique presets and %u spares)",
+				content_name, content_size,
+				g_slist_length(chunks) / 2 / (nb_copies?nb_copies:1), nb_copies,
+				g_hash_table_size(chunks_at_position), g_slist_length(spare));
+	} else {
+		GRID_DEBUG("'%s' of size %"G_GINT64_FORMAT" split into %u chunks (every chunk is duplicated %u times, there are %u unique presets and %u spares)",
+				content_name, content_size,
+				g_slist_length(chunks) / 2 / (nb_copies?nb_copies:1), nb_copies,
+				g_hash_table_size(chunks_at_position), g_slist_length(spare));
 	}
-
-	const struct upload_info_common thread_data_common =
-			{committed_counter, &nb_copies, container, system_metadata, &hollow_content, spare, content_name, rb, NULL, orig_sys_metadata_gba,
-			g_mutex_new(), g_cond_new()};
 
 	if (GRID_TRACE_ENABLED()) {
 		for (iter_chunks = 0; iter_chunks < g_hash_table_size(chunks_at_position); ++iter_chunks) {
 			fixed = g_hash_table_lookup(chunks_at_position, &iter_chunks);
 			g_snprintf(pos_str, 20, "chunks[pos=%u]:", iter_chunks);
-			/*chunk_info_print_all (LOG_DOMAIN, pos_str, fixed);*/
 		}
 	}
 
-	for (iter_copies = 0, fixed = NULL; iter_copies < nb_copies; iter_copies++, fixed = NULL) {
-		for (iter_chunks = lowest_position; iter_chunks < lowest_position + g_hash_table_size(chunks_at_position); iter_chunks++) {
-			chunk_copy = g_slist_nth_data(g_hash_table_lookup(chunks_at_position, &iter_chunks), iter_copies);
-			fixed = g_slist_append(fixed, chunk_copy);
-		}
-		GSList *chunk_list = _build_ci_list_from_beans(fixed, lowest_position);
-		uis[iter_copies].chunk_list = chunk_list;
-		uis[iter_copies].common = &thread_data_common;
-		if (NULL != (iter_threads = g_thread_create(upload_thread, &uis[iter_copies], TRUE, NULL))) {
-			g_ptr_array_add(threads_per_copy_number, iter_threads);
-		} else {
-			GSETERROR(&local_error,"unable to create upload thread for copy #%u", iter_copies);
-			goto error_label;
-		}
+	system_metadata_str_esc = _esc_gba(system_metadata);
+	gen_req_id_header(reqid, sizeof(reqid));
+
+	if (is_rainx) {
+		local_error = _rainx_upload(url, target,
+				&chunks, chunks_at_position,
+				feeder, user_data, container->str_cID,
+				content_name, content_size,
+				system_metadata_str_esc, actual_stgpol,
+				reqid, timeout_cnx, timeout_op);
+	} else {
+		local_error = _rawx_upload(url, target,
+				&chunks, chunks_at_position,
+				feeder, user_data, container->str_cID,
+				content_name, content_size,
+				system_metadata_str_esc, actual_stgpol,
+				reqid, timeout_cnx, timeout_op);
 	}
 
-	for (iter_copies = 0; iter_copies < nb_copies; iter_copies++) {
-		if (NULL != (iter_threads = g_ptr_array_index(threads_per_copy_number, iter_copies))) {
-			g_thread_join(iter_threads);
-		} else {
-			GRID_DEBUG("Cannot find thread #%u", iter_copies);
-		}
+	if (local_error != NULL) {
+		GRID_WARN("Failed to upload chunks: %s", local_error->message);
+		goto error_label;
 	}
 
-	g_ptr_array_free(threads_per_copy_number, TRUE);
-	finalize_content_hash();
-	clean_after_upload(rb);
-
-	GSList* all_confirmed_chunks = NULL;
-	for (iter_copies = 0; iter_copies < nb_copies; iter_copies++) {
-		all_confirmed_chunks = g_slist_concat(all_confirmed_chunks, uis[iter_copies].confirmed_list);
-	}
-
-	/* set computed hash in our beans */
-	_update_content_bean_hash(get_content_hash(), chunks);
-	_set_hash_to_beans(chunks, all_confirmed_chunks);
 
 	/* ------------ *
 	 * COMMIT phase *
 	 * ------------ */
 
-#if 0
-	GRID_DEBUG("RAWX upload successful, %u chunks to commit", g_slist_length(all_confirmed_chunks));
-
-	g_static_mutex_lock(&global_mutex);
-	/*tries to commit the chunks*/
-	for (nb_attempts=2; !(done=CHUNK_COMMIT(all_confirmed_chunks)) && nb_attempts>0 ;nb_attempts--) {
-		CONTAINER_REFRESH(container,local_error,error_label_unlock,"chunk commit error");
-	}
-	if (!done) {
-		GSETERROR(&local_error,"CHUNK_COMMIT error : too many attempts");
-		goto error_label_unlock;
-	}
-
-	GRID_DEBUG("chunk commit successful, ready to commit the content");
-#endif
-
 	// TODO handle error cases occurring in upload_thread
 	GRID_DEBUG("whole upload successful");
 
 	/*tries to commit the content*/
-	GSList *beans = NULL;
 
 	/* TODO : copy hash from chunks_info into chunks bean */
 
@@ -622,6 +1169,9 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 				break;
 			}
 			CONTAINER_REFRESH(container,local_error,error_label_unlock,"commit error");
+			GRID_DEBUG("FVE: error pointer: %p", local_error);
+			if (local_error)
+				g_clear_error(&local_error);
 		}
 	} else {
 		for (nb_attempts=MAX_ATTEMPTS_COMMIT; (NULL != (local_error = APPEND_COMMIT())) && nb_attempts>0 ;nb_attempts--) {
@@ -632,9 +1182,12 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 				break;
 			}
 			CONTAINER_REFRESH(container,local_error,error_label_unlock,"commit error");
+			if (local_error)
+				g_clear_error(&local_error);
 		}
 	}
 
+	content_version = _get_vers_and_update_attr_if_needed(beans, append);
 
 	/* Try to save the chunk in the metacd. In case of failure this is
 	 * not an error for the whole upload. */
@@ -650,24 +1203,38 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 			GSETERROR(&gerr_metacd, "memory allocation failure");
 		}
 		else {
-			gs_error_t *reloadErr = NULL;
-			// ask a reload to retrieve content version
-			if(!gs_content_reload(&hollow_content, TRUE, FALSE, &reloadErr)) {
-				g_printerr("Failed to get content informations from meta2 : (%s)\n", gs_error_get_message(reloadErr));
-				gs_error_free(reloadErr);
-			}
-			raw_content->version = g_ascii_strtoll(hollow_content.version, NULL, 10);
+			raw_content->version = content_version;
 			GSList *l;
-			for (l=all_confirmed_chunks; l ;l=l->next) {
-				struct chunk_info_s *ci;
+			for (l = chunks ; l ; l = l->next) {
+				chunk_id_t chunk_id;
+				struct bean_CHUNKS_s *ck = (struct bean_CHUNKS_s *) l->data;
+				struct bean_CONTENTS_s *ct;
 				struct meta2_raw_chunk_s *raw_chunk;
-				ci = l->data;
-				raw_chunk = meta2_maintenance_create_chunk(&(ci->id), ci->hash,
-						0x00, ci->size, ci->position);
+				guint64 position;
+				gchar *endptr;
+				if(DESCR(l->data) != &descr_struct_CHUNKS)
+					continue;
+				ct = _bean_get_content_from_chunk(chunks, ck);
+				if (ct == NULL)
+					break;
+				fill_chunk_id_from_url(CHUNKS_get_id(ck)->str, &chunk_id);
+				position = g_ascii_strtoull(CONTENTS_get_position(ct)->str, &endptr, 10);
+				if (endptr != NULL && *endptr != '\0')
+					continue; /* found a spare chunk */
+				TRACE("Inserting chunk pos=[%"G_GUINT64_FORMAT"] size=[%"G_GINT64_FORMAT"] id=[%s] in metacd...", position, CHUNKS_get_size(ck), CHUNKS_get_id(ck)->str);
+				g_assert(CHUNKS_get_hash(ck)->len == sizeof(chunk_hash_t));
+				raw_chunk = meta2_maintenance_create_chunk(&chunk_id, CHUNKS_get_hash(ck)->data,
+						0x00, CHUNKS_get_size(ck), position);
 				meta2_maintenance_add_chunk(raw_content, raw_chunk);
+				meta2_raw_chunk_clean(raw_chunk);
 			}
-			rc = resolver_metacd_put_content(container->info.gs->metacd_resolver,
-					raw_content, &gerr_metacd);
+			if (l == NULL) { /* all chunks added to meta2_raw_content */
+				rc = resolver_metacd_put_content(container->info.gs->metacd_resolver,
+						raw_content, &gerr_metacd);
+			}
+			else {
+				GSETERROR(&gerr_metacd, "Not all chunks added to metacd content");
+			}
 			meta2_maintenance_destroy_content(raw_content);
 		}
 
@@ -677,7 +1244,8 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 		}
 		else {
 			GRID_DEBUG("Chunks saved in the metacd for [%s/%s/%s]",
-					container->info.gs->ni.name, container->info.name, content_name);
+					gs_get_full_vns(container->info.gs),
+					container->info.name, content_name);
 		}
 		if (gerr_metacd)
 			g_clear_error(&gerr_metacd);
@@ -689,13 +1257,6 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 	}
 
 	_bean_cleanl2(beans);
-
-	if(NULL != url)
-		hc_url_clean(url);
-
-	g_slist_free (all_confirmed_chunks);
-	for (iter_copies = 0; iter_copies < nb_copies; iter_copies++)
-		g_slist_free(uis[iter_copies].chunk_list);
 
 	UPLOAD_CLEAN_MAIN_THREAD();
 	UPLOAD_CLEAN();
@@ -712,30 +1273,13 @@ error_label:
 
 	/*rollback*/
 	if ((!local_error) || ((local_error->code != CODE_POLICY_NOT_SATISFIABLE) && (local_error->code != CODE_PLATFORM_ERROR) )) {
-
-#if 0
-		g_static_mutex_lock(&global_mutex);
-		(void) gs_container_reconnect_if_necessary (container,NULL);
-		for (nb_attempts=MAX_ATTEMPTS_ROLLBACK_UPLOAD; !CONTENT_ROLLBACK() && nb_attempts>0 ;nb_attempts--) {
-			/*CODE_CONTENT_PRECONDITION -> content online, we cannot do anything*/
-			if (local_error && local_error->code==CODE_CONTENT_NOTFOUND && nb_attempts<MAX_ATTEMPTS_ROLLBACK_UPLOAD) {
-				/*this is not an error, rollback already succeeded but answer not received*/
-				break;
-			}
-			CONTAINER_REFRESH(container,local_error,exit_label_unlock,"rollback error");
-		}
-		g_static_mutex_unlock(&global_mutex);
-#endif 
 	}
 
 	GSERRORCAUSE(err,local_error,"Cannot perform the whole upload");
-	if(NULL != url)
-		hc_url_clean(url);
 	UPLOAD_CLEAN_MAIN_THREAD();
 	UPLOAD_CLEAN();
 	return GS_ERROR;
 
-//exit_label_unlock:
 	g_static_mutex_unlock(&global_mutex);
 
 exit_label:
@@ -743,256 +1287,3 @@ exit_label:
 	UPLOAD_CLEAN_MAIN_THREAD();
 	return GS_ERROR;
 }
-
-static gpointer
-upload_thread(gpointer data)
-{
-	struct upload_info *ui = data;
-
-	// Locks accesses to committed_counter hash table
-	GMutex *committed_counter_lock = ui->common->lock;
-	// GCond used to signal threads that they can process next chunk
-	GCond *committed_counter_cond = ui->common->cond;
-
-	// The md5 will be computed once
-	gboolean compute_md5 = FALSE;
-
-	GHashTable *committed_counter 	= ui->common->committed_counter;
-	guint *nb_copies 				= ui->common->nb_copies;
-	gs_container_t *container 		= ui->common->container;
-	GByteArray *system_metadata 	= ui->common->system_metadata;
-	gs_content_t hollow_content 	= *ui->common->hollow_content;
-	GSList *spare					= ui->common->spare;
-	const char *content_name 		= ui->common->content_name;
-	round_buffer_t *rb 				= ui->common->rb;
-	GByteArray *user_metadata_gba 	= ui->common->user_metadata_gba;
-	GByteArray *orig_sys_metadata_gba = ui->common->orig_sys_metadata_gba;
-
-	GSList *fixed = ui->chunk_list;
-	GSList *confirmed_chunks = NULL;
-	// chunks to free when they are replaced by a spare chunk
-	GSList *chunks = NULL;
-
-	int nb_attempts;
-	GError *local_error=NULL;
-	gchar ci_str[2048];
-	int remaining_spare, max_spare;
-
-	GSList *cursor=NULL;           /*do not free*/
-
-	gs_chunk_t dummy_chunk;
-	chunk_info_t *dummy_ci = NULL;
-
-	dummy_chunk.ci = NULL;
-	dummy_chunk.content = &hollow_content;
-
-	guint count_cursor = 0;
-	guint *p_value = NULL;
-
-	/*get the max number of chunks*/
-	max_spare = remaining_spare = get_maximum_spare_chunks (container->info.gs, g_slist_length(fixed));
-
-	/* ------------ *
-	 * UPLOAD phase *
-	 * ------------ */
-	for (cursor=fixed; cursor;cursor=cursor->next)
-	{
-		gboolean upload_successful = FALSE;
-
-
-		// The committed_counter hash table counts the number of processed chunks for a given
-		// chunk position.  When this chunk count is equal to the number of copies asked,
-		// all threads can start processing next chunk.
-		g_mutex_lock(committed_counter_lock);
-		dummy_chunk.ci = (chunk_info_t*) cursor->data;
-		p_value = g_hash_table_lookup(committed_counter, GINT_TO_POINTER(count_cursor));
-		if (NULL == p_value) {
-			p_value = (gpointer) calloc(1, sizeof(guint));
-			g_hash_table_insert(committed_counter, GINT_TO_POINTER(count_cursor), p_value);
-			compute_md5 = TRUE;
-		} else {
-			compute_md5 = FALSE;
-		}
-		g_mutex_unlock(committed_counter_lock);
-
-		chunk_info_to_string(dummy_chunk.ci, ci_str, sizeof(ci_str));
-
-		GRID_TRACE("thread %p: starting upload, compute_md5=%i (chunk#%i)", g_thread_self(), compute_md5, count_cursor);
-		upload_successful = rawx_upload_v2 (&dummy_chunk, &local_error, (gs_input_f)rb_input_from, rb, user_metadata_gba, system_metadata, compute_md5);
-
-		if (upload_successful) {
-			GRID_TRACE("chunk successfully uploaded (nomminal) : %s", ci_str);
-		} else {
-			chunk_info_t *original_ci = dummy_chunk.ci;
-			if (!original_ci) {
-				GRID_ERROR("Lost chunk info, cannot retry upload.");
-				GSETERROR(&local_error,"Lost chunk info, cannot retry upload.");
-				goto error_label;
-			}
-
-			/*Write then Get rid of previous errors*/
-			GRID_WARN("failed to upload the normal chunk [%s] : %s", ci_str, local_error->message);
-			//GSETERROR(&local_error, "failed to upload the normal chunk : %s", ci_str);
-
-			/*stops on the first successfull upload in a spare chunk*/
-			while (!upload_successful)
-			{
-				g_static_mutex_lock(&global_mutex);
-				/*try to get more spare chunks of there aren't enough*/
-				if (!spare)
-				{
-					if (remaining_spare<=0) {
-						GRID_ERROR("no more spare chunks to retry the upload");
-						GSETERROR(&local_error,"no more spare chunks to retry the upload");
-						g_static_mutex_unlock(&global_mutex);
-						goto error_label;
-					} else {
-						GSList *newSpare;
-						remaining_spare --;
-						(void) gs_container_reconnect_if_necessary (container,NULL);
-						newSpare = meta2_remote_content_spare_in_fd (C0_CNX(container), C0_M2TO(container), &local_error, C0_ID(container), content_name);
-						if (!newSpare) {
-							GRID_ERROR("could not get more spare chunks from the server");
-							GSETERROR(&local_error, "could not get more spare chunks from the server");
-							g_static_mutex_unlock(&global_mutex);
-							goto error_label;
-						} else {
-							GRID_DEBUG("thread %p: we have a spare chunk", g_thread_self());
-							GSList *cL;
-							for (cL=newSpare; cL && cL->data ;cL=cL->next) {
-								/*keep in mind the chunk will have to be freed...*/
-								chunks = g_slist_prepend (chunks, cL->data);
-								/*...and prepend it to the spare*/
-								spare = g_slist_prepend (spare, cL->data);
-							}
-							g_slist_free (newSpare);
-						}
-					}
-				}
-
-				/*get the chunk and step to the next*/
-				do {
-					GSList *old_spare = spare;
-					spare = g_slist_remove_link (spare, old_spare);
-
-					/*prepare the spare chunk*/
-					dummy_chunk.ci = (chunk_info_t*) old_spare->data;
-					dummy_chunk.ci->size = original_ci->size;
-					dummy_chunk.ci->position = original_ci->position;
-					dummy_chunk.ci->nb = original_ci->nb;
-					memcpy(&(dummy_chunk.ci->hash), original_ci->hash, MD5_DIGEST_LENGTH);
-					chunk_info_to_string(dummy_chunk.ci, ci_str, sizeof(ci_str));
-
-					g_slist_free_1 (old_spare);
-				} while (0);
-				g_static_mutex_unlock(&global_mutex);
-
-				/*try to upload*/
-				rb_return_to_mark (rb);
-				if (rawx_upload_v2 (&dummy_chunk, &local_error, (gs_input_f)rb_input_from, rb, user_metadata_gba, orig_sys_metadata_gba, compute_md5))
-				{
-					remaining_spare = max_spare;
-					GRID_DEBUG("chunk successfully uploaded (spare) : %s", ci_str);
-					upload_successful = TRUE;
-				}
-				else
-				{
-					/*Write then Get rid of previous errors*/
-					GRID_WARN("failed to upload a spare chunk : %s", ci_str);
-					GSETERROR(&local_error, "failed to upload a spare chunk : %s", ci_str);
-					upload_successful = FALSE;
-				}
-			}
-		}
-
-		g_mutex_lock(committed_counter_lock);
-		(*p_value)++;
-		dummy_ci = dummy_chunk.ci;
-		if (*p_value == *nb_copies) {
-			GRID_TRACE("thread %p: all uploads are done for chunk#%i, broadcasting.", g_thread_self(), count_cursor);
-			g_cond_broadcast(committed_counter_cond);
-		} else {
-			GRID_TRACE("thread %p: waiting for all uploads to be done for chunk#%i (%i copies left).",
-					g_thread_self(), count_cursor, *nb_copies - *p_value);
-			while (*p_value < *nb_copies)
-				g_cond_wait(committed_counter_cond, committed_counter_lock);
-			GRID_TRACE("thread %p: resuming operations for chunk#%i.", g_thread_self(), count_cursor);
-		}
-		confirmed_chunks = g_slist_prepend (confirmed_chunks, dummy_ci);
-		count_cursor++;
-		g_mutex_unlock(committed_counter_lock);
-	}
-
-	ui->confirmed_list = confirmed_chunks;
-
-	return NULL;
-
-
-error_label:
-	/* ----------- *
-	 * CLEAN phase *
-	 * ----------- */
-	// Other threads may be waiting for all uploads to be done, which may
-	// never occur in case of retry failure.
-	g_mutex_lock(committed_counter_lock);
-	GRID_DEBUG("thread %p: broadcasting after error.", g_thread_self());
-	(*p_value)++;
-	g_cond_broadcast(committed_counter_cond);
-	g_mutex_unlock(committed_counter_lock);
-
-	// Other threads may be waiting for md5 computing, in which case we need
-	// to unlock them.
-	if (compute_md5) {
-		GRID_DEBUG("thread %p: error uploading chunk, force other threads to continue.", g_thread_self());
-		rawx_upload_v2 (NULL, NULL, NULL, NULL, NULL, NULL, -1);
-	}
-
-	/*remove remote chunks*/
-	for (cursor=confirmed_chunks; cursor ;cursor=cursor->next)
-	{
-		GError *removeError=NULL;
-		gs_chunk_t temp_chunk;
-		temp_chunk.ci = (chunk_info_t*) cursor->data;
-		temp_chunk.content = &hollow_content;
-		if (!rawx_delete (&temp_chunk, &removeError)) {
-			GRID_ERROR("Cannot delete a chunk : %s", g_error_get_message(removeError));
-		}
-		if (removeError)
-			g_error_free(removeError);
-	}
-
-	/*rollback*/
-	if (confirmed_chunks && (!local_error || local_error->code != 481)) {
-		g_static_mutex_lock(&global_mutex);
-		(void) gs_container_reconnect_if_necessary (container,NULL);
-		for (nb_attempts=MAX_ATTEMPTS_ROLLBACK_UPLOAD; !CONTENT_ROLLBACK() && nb_attempts>0 ;nb_attempts--) {
-			/*CODE_CONTENT_PRECONDITION -> content online, we cannot do anything*/
-			if (local_error && local_error->code==CODE_CONTENT_NOTFOUND && nb_attempts<MAX_ATTEMPTS_ROLLBACK_UPLOAD) {
-				/*this is not an error, rollback already succeeded but answer not received*/
-				break;
-			}
-			CONTAINER_REFRESH(container,local_error,exit_label,"rollback error");
-		}
-		g_static_mutex_unlock(&global_mutex);
-	}
-
-	//UPLOAD_CLEAN();
-	if (spare) g_slist_free (spare);
-	if (chunks) {
-		g_slist_foreach (chunks, chunk_info_gclean, NULL);
-		g_slist_free (chunks);
-	}
-	if (local_error) g_clear_error(&local_error);
-	if (system_metadata) g_byte_array_free(system_metadata, TRUE);
-
-	if (confirmed_chunks)
-		g_slist_free (confirmed_chunks);
-
-	return NULL;
-
-exit_label:
-	g_static_mutex_unlock(&global_mutex);
-	/*GSERRORCAUSE(err,local_error,"Cannot perform the whole upload");*/
-	return NULL;
-}
-

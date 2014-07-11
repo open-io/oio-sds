@@ -1,24 +1,7 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef _GRID_STORAGE_H
 #define _GRID_STORAGE_H
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
 config_require(util_funcs)
 config_add_mib(GRIDSTORAGE-MIB)
@@ -462,6 +445,9 @@ FindVarMethod var_csc_entry;
 #ifndef META2_STAT_REQ_TOTAL
 #define META2_STAT_REQ_TOTAL        "meta2.req.gauge.total"
 #endif
+#ifndef META2_STAT_REQ_TOTAL_V2
+#define META2_STAT_REQ_TOTAL_V2     "gridd.counter.allreq"
+#endif
 #ifndef META2_STAT_REQ_FAIL
 #define META2_STAT_REQ_FAIL         "meta2.req.gauge.failures"
 #endif
@@ -469,112 +455,256 @@ FindVarMethod var_csc_entry;
 #ifndef META2_STAT_REQ_CREATE
 #define META2_STAT_REQ_CREATE       "meta2.req.gauge.create"
 #endif
+#ifndef META2_STAT_REQ_CREATE_V1
+#define META2_STAT_REQ_CREATE_V1    "gridd.counter.req.REQ_M2_CREATE"
+#endif
+#ifndef META2_STAT_REQ_CREATE_V2
+#define META2_STAT_REQ_CREATE_V2    "gridd.counter.req.M2V2_CREATE"
+#endif
 #ifndef META2_STAT_REQ_OPEN
 #define META2_STAT_REQ_OPEN         "meta2.req.gauge.open"
+#endif
+#ifndef META2_STAT_REQ_OPEN_V2
+#define META2_STAT_REQ_OPEN_V2      "gridd.counter.req.REQ_M2_OPEN"
 #endif
 #ifndef META2_STAT_REQ_CLOSE
 #define META2_STAT_REQ_CLOSE        "meta2.req.gauge.close"
 #endif
+#ifndef META2_STAT_REQ_CLOSE_V2
+#define META2_STAT_REQ_CLOSE_V2     "gridd.counter.req.REQ_M2_CLOSE"
+#endif
 #ifndef META2_STAT_REQ_DESTROY
 #define META2_STAT_REQ_DESTROY      "meta2.req.gauge.destroy"
+#endif
+#ifndef META2_STAT_REQ_DESTROY_V1
+#define META2_STAT_REQ_DESTROY_V1   "gridd.counter.req.REQ_M2_DESTROY"
+#endif
+#ifndef META2_STAT_REQ_DESTROY_V2
+#define META2_STAT_REQ_DESTROY_V2   "gridd.counter.req.M2V2_DESTROY"
 #endif
 
 #ifndef META2_STAT_REQ_LIST
 #define META2_STAT_REQ_LIST         "meta2.req.gauge.list"
 #endif
+#ifndef META2_STAT_REQ_LIST_V1
+#define META2_STAT_REQ_LIST_V1      "gridd.counter.req.REQ_M2_LIST"
+#endif
+#ifndef META2_STAT_REQ_LIST_V2
+#define META2_STAT_REQ_LIST_V2      "gridd.counter.req.M2V2_LIST"
+#endif
 #ifndef META2_STAT_REQ_CONTENT_RET
 #define META2_STAT_REQ_CONTENT_RET  "meta2.req.gauge.content_retrieve"
+#endif
+#ifndef META2_STAT_REQ_CONTENT_RET_V1
+#define META2_STAT_REQ_CONTENT_RET_V1  "gridd.counter.req.REQ_M2_CONTENTRETRIEVE"
+#endif
+#ifndef META2_STAT_REQ_CONTENT_RET_V2
+#define META2_STAT_REQ_CONTENT_RET_V2  "gridd.counter.req.M2V2_GET"
 #endif
 #ifndef META2_STAT_REQ_CONTENT_RM
 #define META2_STAT_REQ_CONTENT_RM   "meta2.req.gauge.content_remove"
 #endif
+#ifndef META2_STAT_REQ_CONTENT_RM_V1
+#define META2_STAT_REQ_CONTENT_RM_V1 "gridd.counter.req.REQ_M2_CONTENTREMOVE"
+#endif
+#ifndef META2_STAT_REQ_CONTENT_RM_V2
+#define META2_STAT_REQ_CONTENT_RM_V2 "gridd.counter.req.M2V2_DEL"
+#endif
 #ifndef META2_STAT_REQ_CONTENT_ADD
-#define META2_STAT_REQ_CONTENT_ADD  "meta2.req.gauge.content_add"
+#define META2_STAT_REQ_CONTENT_ADD    "meta2.req.gauge.content_add"
+#endif
+#ifndef META2_STAT_REQ_CONTENT_ADD_V1
+#define META2_STAT_REQ_CONTENT_ADD_V1  "gridd.counter.req.REQ_M2_CONTENTADD"
+#endif
+#ifndef META2_STAT_REQ_CONTENT_ADD_V2
+#define META2_STAT_REQ_CONTENT_ADD_V2  "gridd.counter.req.M2V2_PUT"
 #endif
 #ifndef META2_STAT_REQ_CONTENT_APPEND
 #define META2_STAT_REQ_CONTENT_APPEND "meta2.req.gauge.content_append"
 #endif
+#ifndef META2_STAT_REQ_CONTENT_APPEND_V1
+#define META2_STAT_REQ_CONTENT_APPEND_V1 "gridd.counter.req.REQ_M2_CONTENTAPPEND"
+#endif
+#ifndef META2_STAT_REQ_CONTENT_APPEND_V2
+#define META2_STAT_REQ_CONTENT_APPEND_V2 "gridd.counter.req.M2V2_APPEND"
+#endif
 #ifndef META2_STAT_REQ_CONTENT_COMMIT
 #define META2_STAT_REQ_CONTENT_COMMIT "meta2.req.gauge.content_commit"
+#endif
+#ifndef META2_STAT_REQ_CONTENT_COMMIT_V1
+#define META2_STAT_REQ_CONTENT_COMMIT_V1 "gridd.counter.req.REQ_M2_CONTENTCOMMIT"
 #endif
 #ifndef META2_STAT_REQ_CHUNK_COMMIT
 #define META2_STAT_REQ_CHUNK_COMMIT   "meta2.req.gauge.chunks_commit"
 #endif
+#ifndef META2_STAT_REQ_CHUNK_COMMIT_V1
+#define META2_STAT_REQ_CHUNK_COMMIT_V1   "gridd.counter.req.REQ_M2_CHUNK_COMMIT"
+#endif
 
 #ifndef META2_STAT_REQ_RAW_GETCONTENT
-#define META2_STAT_REQ_RAW_GETCONTENT "meta2.req.gauge.maintenance_getcontent"
+#define META2_STAT_REQ_RAW_GETCONTENT "meta2.req.counter.maintenance_getcontent"
+#endif
+#ifndef META2_STAT_REQ_RAW_GETCONTENT_V1
+#define META2_STAT_REQ_RAW_GETCONTENT_V1 "gridd.counter.req.REQ_M2RAW_CONTENT_GET"
 #endif
 #ifndef META2_STAT_REQ_RAW_GETCHUNK
-#define META2_STAT_REQ_RAW_GETCHUNK   "meta2.req.gauge.maintenance_getchunks"
+#define META2_STAT_REQ_RAW_GETCHUNK   "meta2.req.counter.maintenance_getchunks"
+#endif
+#ifndef META2_STAT_REQ_RAW_GETCHUNK_V1
+#define META2_STAT_REQ_RAW_GETCHUNK_V1   "gridd.counter.req.REQ_M2RAW_CHUNKS_GET"
 #endif
 #ifndef META2_STAT_REQ_RAW_SETCONTENT
-#define META2_STAT_REQ_RAW_SETCONTENT "meta2.req.gauge.maintenance_setcontent"
+#define META2_STAT_REQ_RAW_SETCONTENT "meta2.req.counter.maintenance_setcontent"
+#endif
+#ifndef META2_STAT_REQ_RAW_SETCONTENT_V1
+#define META2_STAT_REQ_RAW_SETCONTENT_V1 "gridd.counter.req.REQ_M2RAW_CONTENT_SET"
 #endif
 #ifndef META2_STAT_REQ_RAW_SETCHUNK
-#define META2_STAT_REQ_RAW_SETCHUNK   "meta2.req.gauge.maintenance_setchunks"
+#define META2_STAT_REQ_RAW_SETCHUNK   "meta2.req.counter.maintenance_setchunks"
+#endif
+#ifndef META2_STAT_REQ_RAW_SETCHUNK_V1
+#define META2_STAT_REQ_RAW_SETCHUNK_V1   "gridd.counter.req.REQ_M2RAW_CHUNKS_SET"
 #endif
 #ifndef META2_STAT_REQ_RAW_DELCONTENT
-#define META2_STAT_REQ_RAW_DELCONTENT "meta2.req.gauge.maintenance_delcontent"
+#define META2_STAT_REQ_RAW_DELCONTENT "meta2.req.counter.maintenance_delcontent"
+#endif
+#ifndef META2_STAT_REQ_RAW_DELCONTENT_V1
+#define META2_STAT_REQ_RAW_DELCONTENT_V1 "gridd.counter.req.REQ_M2RAW_CONTENT_DEL"
 #endif
 #ifndef META2_STAT_REQ_RAW_DELCHUNK
-#define META2_STAT_REQ_RAW_DELCHUNK   "meta2.req.gauge.maintenance_delchunks"
+#define META2_STAT_REQ_RAW_DELCHUNK   "meta2.req.counter.maintenance_delchunks"
+#endif
+#ifndef META2_STAT_REQ_RAW_DELCHUNK_V1
+#define META2_STAT_REQ_RAW_DELCHUNK_V1   "gridd.counter.req.REQ_M2RAW_CHUNKS_DEL"
 #endif
 #ifndef META2_STAT_REQ_RAW_OTHER
-#define META2_STAT_REQ_RAW_OTHER      "meta2.req.gauge.maintenance_other"
+#define META2_STAT_REQ_RAW_OTHER      "meta2.req.counter.maintenance_other"
 #endif
 
 #ifndef META2_STAT_TIME_CREATE
 #define META2_STAT_TIME_CREATE      "meta2.req.time.create"
 #endif
+#ifndef META2_STAT_TIME_CREATE_V1
+#define META2_STAT_TIME_CREATE_V1   "gridd.counter.time.REQ_M2_CREATE"
+#endif
+#ifndef META2_STAT_TIME_CREATE_V2
+#define META2_STAT_TIME_CREATE_V2   "gridd.counter.time.M2V2_CREATE"
+#endif
 #ifndef META2_STAT_TIME_OPEN
 #define META2_STAT_TIME_OPEN        "meta2.req.time.open"
+#endif
+#ifndef META2_STAT_TIME_OPEN_V1
+#define META2_STAT_TIME_OPEN_V1        "gridd.counter.time.REQ_M2_OPEN"
 #endif
 #ifndef META2_STAT_TIME_CLOSE
 #define META2_STAT_TIME_CLOSE       "meta2.req.time.close"
 #endif
+#ifndef META2_STAT_TIME_CLOSE_V1
+#define META2_STAT_TIME_CLOSE_V1       "gridd.counter.time.REQ_M2_CLOSE"
+#endif
 #ifndef META2_STAT_TIME_DESTROY
 #define META2_STAT_TIME_DESTROY     "meta2.req.time.destroy"
+#endif
+#ifndef META2_STAT_TIME_DESTROY_V1
+#define META2_STAT_TIME_DESTROY_V1     "gridd.counter.time.REQ_M2_DESTROY"
+#endif
+#ifndef META2_STAT_TIME_DESTROY_V2
+#define META2_STAT_TIME_DESTROY_V2  "gridd.counter.time.M2V2_DESTROY"
 #endif
 
 #ifndef META2_STAT_TIME_LIST
 #define META2_STAT_TIME_LIST           "meta2.req.time.list"
 #endif
+#ifndef META2_STAT_TIME_LIST_V1
+#define META2_STAT_TIME_LIST_V1        "gridd.counter.time.REQ_M2_LIST"
+#endif
+#ifndef META2_STAT_TIME_LIST_V2
+#define META2_STAT_TIME_LIST_V2        "gridd.counter.time.M2V2_LIST"
+#endif
 #ifndef META2_STAT_TIME_CONTENT_RM
 #define META2_STAT_TIME_CONTENT_RM     "meta2.req.time.content_remove"
+#endif
+#ifndef META2_STAT_TIME_CONTENT_RM_V1
+#define META2_STAT_TIME_CONTENT_RM_V1  "gridd.counter.time.REQ_M2_CONTENTREMOVE"
+#endif
+#ifndef META2_STAT_TIME_CONTENT_RM_V2
+#define META2_STAT_TIME_CONTENT_RM_V2  "gridd.counter.time.M2V2_DEL"
 #endif
 #ifndef META2_STAT_TIME_CONTENT_RET    
 #define META2_STAT_TIME_CONTENT_RET    "meta2.req.time.content_retrieve"
 #endif
+#ifndef META2_STAT_TIME_CONTENT_RET_V1
+#define META2_STAT_TIME_CONTENT_RET_V1 "gridd.counter.time.REQ_M2RAW_CHUNKS_GET"
+#endif
+#ifndef META2_STAT_TIME_CONTENT_RET_V2    
+#define META2_STAT_TIME_CONTENT_RET_V2 "gridd.counter.time.M2V2_GET"
+#endif
 #ifndef META2_STAT_TIME_CONTENT_ADD    
 #define META2_STAT_TIME_CONTENT_ADD    "meta2.req.time.content_add"
+#endif
+#ifndef META2_STAT_TIME_CONTENT_ADD_V1
+#define META2_STAT_TIME_CONTENT_ADD_V1  "gridd.counter.time.REQ_M2_CONTENTADD"
+#endif
+#ifndef META2_STAT_TIME_CONTENT_ADD_V2    
+#define META2_STAT_TIME_CONTENT_ADD_V2 "gridd.counter.time.M2V2_PUT"
 #endif
 #ifndef META2_STAT_TIME_CONTENT_APPEND
 #define META2_STAT_TIME_CONTENT_APPEND "meta2.req.time.content_append"
 #endif
+#ifndef META2_STAT_TIME_CONTENT_APPEND_V1
+#define META2_STAT_TIME_CONTENT_APPEND_V1 "gridd.counter.time.REQ_M2_CONTENTAPPEND"
+#endif
+#ifndef META2_STAT_TIME_CONTENT_APPEND_V2
+#define META2_STAT_TIME_CONTENT_APPEND_V2 "gridd.counter.time.M2V2_APPEND"
+#endif
 #ifndef META2_STAT_TIME_CHUNK_CI
 #define META2_STAT_TIME_CHUNK_CI       "meta2.req.time.chunks_commit"
 #endif
+#ifndef META2_STAT_TIME_CHUNK_CI_V1
+#define META2_STAT_TIME_CHUNK_CI_V1    "gridd.counter.time.REQ_M2_CHUNK_COMMIT"
+#endif
 #ifndef META2_STAT_TIME_CONTENT_CI
 #define META2_STAT_TIME_CONTENT_CI     "meta2.req.time.content_commit"
+#endif
+#ifndef META2_STAT_TIME_CONTENT_CI_V1
+#define META2_STAT_TIME_CONTENT_CI_V1  "gridd.counter.time.REQ_M2_CONTENTCOMMIT"
 #endif
 
 #ifndef META2_STAT_TIME_RAW_GETCONTENT
 #define META2_STAT_TIME_RAW_GETCONTENT "meta2.req.time.maintenance_getcontent"
 #endif
+#ifndef META2_STAT_TIME_RAW_GETCONTENT_V1
+#define META2_STAT_TIME_RAW_GETCONTENT_V1 "gridd.counter.time.REQ_M2RAW_CONTENT_GET"
+#endif
 #ifndef META2_STAT_TIME_RAW_GETCHUNK
 #define META2_STAT_TIME_RAW_GETCHUNK   "meta2.req.time.maintenance_getchunks"
+#endif
+#ifndef META2_STAT_TIME_RAW_GETCHUNK_V1
+#define META2_STAT_TIME_RAW_GETCHUNK_V1   "gridd.counter.time.REQ_M2RAW_CHUNKS_GET"
 #endif
 #ifndef META2_STAT_TIME_RAW_SETCONTENT
 #define META2_STAT_TIME_RAW_SETCONTENT "meta2.req.time.maintenance_setcontent"
 #endif
+#ifndef META2_STAT_TIME_RAW_SETCONTENT_V1
+#define META2_STAT_TIME_RAW_SETCONTENT_V1 "gridd.counter.time.REQ_M2RAW_CONTENT_SET"
+#endif
 #ifndef META2_STAT_TIME_RAW_SETCHUNK
 #define META2_STAT_TIME_RAW_SETCHUNK   "meta2.req.time.maintenance_setchunks"
+#endif
+#ifndef META2_STAT_TIME_RAW_SETCHUNK_V1
+#define META2_STAT_TIME_RAW_SETCHUNK_V1   "gridd.counter.time.REQ_M2RAW_CHUNKS_SET"
 #endif
 #ifndef META2_STAT_TIME_RAW_DELCONTENT
 #define META2_STAT_TIME_RAW_DELCONTENT "meta2.req.time.maintenance_delcontent"
 #endif
+#ifndef META2_STAT_TIME_RAW_DELCONTENT_V1
+#define META2_STAT_TIME_RAW_DELCONTENT_V1 "gridd.counter.time.REQ_M2RAW_CONTENT_DEL"
+#endif
 #ifndef META2_STAT_TIME_RAW_DELCHUNK
 #define META2_STAT_TIME_RAW_DELCHUNK   "meta2.req.time.maintenance_delchunks"
+#endif
+#ifndef META2_STAT_TIME_RAW_DELCHUNK_V1
+#define META2_STAT_TIME_RAW_DELCHUNK_V1   "gridd.counter.time.REQ_M2RAW_CHUNKS_DEL"
 #endif
 #ifndef META2_STAT_TIME_RAW_OTHER
 #define META2_STAT_TIME_RAW_OTHER      "meta2.req.time.maintenance_other"
@@ -594,7 +724,10 @@ FindVarMethod var_csc_entry;
 #endif
 
 #ifndef META2_STAT_NB_THREAD
-#define META2_STAT_NB_THREAD        "server.cnx.gauge.total"
+#define META2_STAT_NB_THREAD           "server.cnx.gauge.total"
+#endif
+#ifndef META2_STAT_NB_THREAD_V2
+#define META2_STAT_NB_THREAD_V2        "server.thread.gauge.total"
 #endif
 
 #ifndef META2_STAT_REQ_PROP_GET_CONTAINER

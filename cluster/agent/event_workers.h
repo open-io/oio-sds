@@ -1,31 +1,15 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef __EVENT_WORKERS_H__
 # define __EVENT_WORKERS_H__
-# include "./agent.h"
-# include "./worker.h"
-# include "../conscience/conscience.h"
-# include "../events/gridcluster_events.h"
-# include "../events/gridcluster_eventhandler.h"
 
 # include <sys/types.h>
 # include <sys/stat.h>
 # include <unistd.h>
+
+# include <cluster/agent/agent.h>
+# include <cluster/agent/worker.h>
+# include <cluster/conscience/conscience.h>
+# include <cluster/events/gridcluster_events.h>
+# include <cluster/events/gridcluster_eventhandler.h>
 
 /* EVENT AGENT TASKS ------------------------------------------------------- */
 
@@ -83,10 +67,5 @@ struct path_data_s
 GSList* agent_list_earliest_events(const gchar *dir, guint max, time_t delay,
 		gboolean(*filter)(path_data_t *));
 
-int path_get_sequence(const gchar *path, gint64 *i64);
-
-int path_get_incoming_time(const gchar *path, time_t *t);
-
-int path_get_container_id(const gchar *path, container_id_t *id, gchar *str, gsize str_len);
 
 #endif /*__EVENT_WORKERS_H__*/

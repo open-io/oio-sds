@@ -1,32 +1,15 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "m2v2.test.client"
 #endif
 
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
 
-#include "./meta2_remote.h"
-#include "./meta2_services_remote.h"
-#include "../metautils/lib/hc_url.h"
+#include <meta2/remote/meta2_remote.h>
+#include <meta2/remote/meta2_services_remote.h>
 
 static struct hc_url_s *url = NULL;
 static struct addr_info_s addr;
@@ -99,11 +82,6 @@ wrapper(void (*cb)(void))
 
 	if (cb)
 		cb();
-
-#if 0
-	rc = meta2_remote_container_destroy(&addr, timeout, &err, hc_url_get_id(url));
-	CHECK_RC_ERR(rc, err, "DESTROY");
-#endif
 }
 
 static void
@@ -451,7 +429,7 @@ test_services(void)
 		metacnx_init_with_addr(&cnx, &addr, NULL);
 
 		singleton.next = NULL;
-		singleton.data = hc_url_get(url, HCURL_PATH);
+		singleton.data = (gpointer)hc_url_get(url, HCURL_PATH);
 
 		/* replicate content insertion */
 		v2 = generate_v2();

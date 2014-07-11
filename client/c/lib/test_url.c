@@ -1,25 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#include <glib.h>
-
-#include "../../../metautils/lib/loggers.h"
-
-#include "./grid_client.h"
 #include "./gs_internals.h"
 
 struct test_data_s {
@@ -30,10 +8,18 @@ struct test_data_s {
 	const char *refhexa;
 };
 
-struct test_data_s data[] = 
+struct test_data_s data[] =
 {
-	{"NS", "NS", NULL,
-		"JFS", "C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
+	/* without VNS */
+	{"NS", "NS", NULL, "JFS",
+		"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
+	{"NS0", "NS0", NULL, "JFS",
+		"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
+	/* with VNS */
+	{"NS.VNS0", "NS", "VNS0", "JFS",
+		"D44F8C6088724472AE630C5E14DFBD747323307644B5B432314E77FA9DB7D24C"},
+	{"NS0.VNS0", "NS0", "VNS0", "JFS",
+		"E6193C9E18E3B88AC94C4065575C9F4A336D22860F5A6FA4FD17D12C0A789865"},
 	{NULL, NULL, NULL, NULL, NULL}
 };
 
@@ -56,22 +42,24 @@ test_data(struct test_data_s *pdata)
 	struct gs_container_s *container = NULL;
 
 	gs = gs_grid_storage_init_flags(pdata->ns, GSCLIENT_NOINIT, 60, 60, &gse);
-	if (!gs) {
-		g_assert(gse != NULL);
-		abort();
-	}
+	g_assert((gs != NULL) ^ (gse != NULL));
+	if (!gs)
+		g_debug("gs_grid_storage_init_flags failed : (%d) %s\n",
+				gse->code, gse->msg);
 	g_assert(gse == NULL);
 
-	check_strings(pdata->ns, gs->ni.name);
+	check_strings(pdata->pns, gs->ni.name);
+	check_strings(pdata->ns, gs->full_vns);
 	check_strings(pdata->pns, gs->physical_namespace);
-	check_strings(pdata->vns, gs->virtual_namespace);
+	check_strings(pdata->vns, gs_get_virtual_namespace(gs));
 
 	container = gs_init_container(gs, pdata->refname, 0, &gse);
-	if (!container) {
-		g_assert(gse != NULL);
-		abort();
-	}
-	
+	g_assert((container != NULL) ^ (gse != NULL));
+	if (!container)
+		g_debug("gs_init_container failed : (%d) %s\n",
+				gse->code, gse->msg);
+	g_assert(gse == NULL);
+
 	check_strings(pdata->refname, container->info.name);
 	check_strings(pdata->refhexa, container->str_cID);
 
@@ -95,6 +83,7 @@ main(int argc, char **argv)
 		g_thread_init(NULL);
 	g_set_prgname(argv[0]);
 	g_log_set_default_handler(logger_stderr, NULL);
+	logger_init_level(GRID_LOGLVL_TRACE2);
 	g_test_init (&argc, &argv, NULL);
 
 	g_test_add_func("/client/lib/url/init", test_init);

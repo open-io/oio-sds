@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #include "./gs_internals.h"
 
 gint
@@ -81,13 +64,17 @@ gs_error_set_cause(gs_error_t ** err, GError * gErr, const char *format, ...)
 		return;
 	}
 
-#define ERROR_SEPARATOR "--- directory error ---"
+#ifdef HAVE_ANNOYING_DEBUG_TRACES
+# define ERROR_SEPARATOR "\r\n\t--- directory error ---\r\n\t"
+#else
+# define ERROR_SEPARATOR ""
+#endif
 
 	if (*err && (*err)->msg) {
 		if (gErr && gErr->message)
 			tmpFinal =
-			    g_strconcat(tmpCode, tmpCause, "\r\n\t", gErr->message, "\r\n\t" ERROR_SEPARATOR "\r\n\t",
-			    (*err)->msg, NULL);
+			    g_strconcat(tmpCode, tmpCause, "\r\n\t", gErr->message,
+						ERROR_SEPARATOR, (*err)->msg, NULL);
 		else
 			tmpFinal = g_strconcat(tmpCode, tmpCause, "\r\n\t", (*err)->msg, NULL);
 		free((*err)->msg);
@@ -96,7 +83,7 @@ gs_error_set_cause(gs_error_t ** err, GError * gErr, const char *format, ...)
 	else {
 		if (gErr && gErr->message)
 			tmpFinal =
-			    g_strconcat(tmpCode, tmpCause, "\r\n\t" ERROR_SEPARATOR "\r\n\t", gErr->message, NULL);
+			    g_strconcat(tmpCode, tmpCause, ERROR_SEPARATOR, gErr->message, NULL);
 		else
 			tmpFinal = g_strconcat(tmpCode, tmpCause, NULL);
 		if (*err)
@@ -311,10 +298,12 @@ gs_grid_storage_free(gs_grid_storage_t * gs)
 	if (gs->metacd_resolver)
 		resolver_metacd_free(gs->metacd_resolver);
 
-	if (gs->virtual_namespace)
-		free(gs->virtual_namespace);
+	if (gs->full_vns)
+		free(gs->full_vns);
 	if (gs->physical_namespace)
 		free(gs->physical_namespace);
+
+	namespace_info_clear(&(gs->ni));
 
 	free(gs);
 }
@@ -352,6 +341,10 @@ gs_content_free(gs_content_t * content)
 		g_free(content->version);
 		content->version = NULL;
 	}
+	if (content->policy) {
+		g_free(content->policy);
+		content->policy = NULL;
+	}
 	free(content);
 }
 
@@ -359,11 +352,8 @@ gs_content_free(gs_content_t * content)
 void
 gs_container_close_cnx(gs_container_t * container)
 {
-	if (container && container->meta2_cnx >= 0) {
-		shutdown(container->meta2_cnx, SHUT_RDWR);
-		close(container->meta2_cnx);
-		container->meta2_cnx = -1;
-	}
+	if (container && container->meta2_cnx >= 0)
+		metautils_pclose(&(container->meta2_cnx));
 }
 
 
@@ -504,7 +494,8 @@ gs_grid_storage_get_timeout(gs_grid_storage_t * gs, gs_timeout_t to)
 }
 
 static gs_status_t
-gs_manage_container_error_not_closed(gs_container_t * container, const char *caller, guint line, GError ** err)
+gs_manage_container_error_not_closed(gs_container_t * container,
+		const char *caller, guint line, GError ** err)
 {
 	gint code;
 
@@ -523,7 +514,8 @@ gs_manage_container_error_not_closed(gs_container_t * container, const char *cal
 	/*if it is a network error, only a container decache is necessary */
 	if (CODE_RECONNECT_CONTAINER(code)) {
 		if (!gs_container_reconnect(container, err)) {
-			GSETERROR(err, "[from %s:%d] refresh error for %s/%s", caller, line, C0_NAME(container), C0_IDSTR(container));
+			GSETERROR(err, "[from %s:%d] refresh error for %s/%s", caller, line,
+					C0_NAME(container), C0_IDSTR(container));
 			return GS_ERROR;
 		}
 		else
@@ -535,7 +527,8 @@ gs_manage_container_error_not_closed(gs_container_t * container, const char *cal
 		NOTICE("META0 REFRESH on %s", g_error_get_message(*err));
 		gs_decache_all(container->info.gs);
 		if (!gs_container_refresh(container, err)) {
-			GSETERROR(err, "[from %s:%d] refresh/reconnect error for %s/%s", caller, line, C0_NAME(container), C0_IDSTR(container));
+			GSETERROR(err, "[from %s:%d] refresh/reconnect error for %s/%s",
+					caller, line, C0_NAME(container), C0_IDSTR(container));
 			return GS_ERROR;
 		}
 		else
@@ -544,16 +537,20 @@ gs_manage_container_error_not_closed(gs_container_t * container, const char *cal
 
 	if (CODE_REFRESH_CONTAINER(code)) {
 		if (!gs_container_refresh(container, err)) {
-			GSETERROR(err, "[from %s:%d] refresh/reconnect error for %s/%s", caller, line, C0_NAME(container), C0_IDSTR(container));
+			GSETERROR(err, "[from %s:%d] refresh/reconnect error for %s/%s",
+					caller, line, C0_NAME(container), C0_IDSTR(container));
 			return GS_ERROR;
 		}
 		else
 			return GS_OK;
 	}
 
-	//GSETERROR(err, "[from %s:%d] error not manageable for %s/%s", caller, line, C0_NAME(container), C0_IDSTR(container));
-	//return GS_ERROR;
-	return GS_OK;
+#ifdef HAVE_ANNOYING_DEBUG_TRACES
+	GSETERROR(err, "[from %s:%d] error not manageable for %s/%s", caller, line,
+			C0_NAME(container), C0_IDSTR(container));
+#endif
+	return GS_ERROR;
+	//return GS_OK;
 }
 
 gs_status_t

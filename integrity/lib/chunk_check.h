@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 /**
  @file chunk_check.h
  Chunk integrity check lib
@@ -29,7 +12,9 @@
  * @{
  */
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
+
+#include "check.h"
 
 /**
  * Check that values of size and hash in the chunk attributes matches the chunk size and hash
@@ -98,6 +83,76 @@ gboolean check_chunk_integrity(const char *chunk_path, const struct chunk_textin
 gboolean check_chunk_referencing(const struct content_textinfo_s *content_from_chunk,
     const struct chunk_textinfo_s *chunk_from_chunk, const struct meta2_raw_content_s *content_from_meta2,
     GSList ** broken, GError ** error);
+
+
+/**
+ * Check struct chunk_textinfo_s given as argument is filled
+ *
+ * @param chunk the struct chunk_textinfo_s to check
+ * @param error
+ *
+ * @return TRUE or FALSE if a field is not set
+ */
+gboolean check_chunk_info(struct chunk_textinfo_s *chunk, GError **p_error);
+
+/**
+ * Check if a chunk is orphaned, ie if it belongs to the container/content
+ * specified in its extended attributes.
+ * If no container/content can be found, create them and add the chunk to the
+ * content. If no container can be created, trash the chunk.
+ *
+ * @param check_info info about the chunk path and its extended attributes
+ * @param cres result of testing: cres->check_ok is TRUE if the chunk is not
+ * 		orphaned, FALSE if it orphaned (in which case it was added to a new
+ * 		content or trashed).
+ * @param p_err error
+ * @return TRUE if the check could be fully executed,
+ * 		FALSE if an error occurred.
+ */
+gboolean check_chunk_orphan(check_info_t *check_info, check_result_t *cres, GError **p_err);
+
+/**
+ * Computes the md5 sum of the file given as argument.
+ * @param filepath path to the file
+ * @return the md5 sum (string), to be freed with g_free, or NULL
+ * 		if an error occurred.
+ */
+gchar* compute_file_md5(const gchar *filepath);
+
+/**
+ * Replaces a chunk in the content specified in ctx by the one specified by
+ * check_info. The comparison is based on chunk position, ie if the position
+ * found in extended attributes is N, the chunk at position N in the content
+ * will be deleted and replaced by a new chunk created from all extended
+ * attributes.
+ *
+ * @param ctx context containing info about container/content,
+ * 		usually returned by get_meta2_ctx (see check.h).
+ * @param rc the raw_chunk to be replaced
+ * @param check_info info about the chunk path and its extended attributes
+ * @param p_err error
+ * @return TRUE if the chunk was actually fixed, FALSE otherwise.
+ */
+gboolean replace_chunk(struct meta2_ctx_s *ctx, struct meta2_raw_chunk_s *rc,
+		check_info_t *check_info, GError **p_err);
+
+/**
+ * Rename the file by removing all characters after the last '.' in the file
+ * name.
+ * @param path the path of the file to rename
+ * @return TRUE if renaming was successful, FALSE otherwise
+ */
+gboolean remove_file_extension(const gchar *path);
+
+/**
+ * Trashes a chunk by moving it into a dedicated directory located at the root
+ * of rawx volume. Checks whether the dryrun mode was asked, in which case the
+ * chunk is not moved but a log message is filled.
+ * @param check_info info about the chunk path and its extended attributes
+ * @param cres the check result: a message is appended on dryrun mode
+ * @return TRUE if the chunk was moved successfully, FALSE otherwise
+ */
+gboolean trash_chunk(check_info_t *check_info, check_result_t *cres);
 
 /** @} */
 

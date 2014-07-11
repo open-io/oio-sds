@@ -1,36 +1,46 @@
-include_directories(BEFORE .
-		../metautils/lib
-		../cluster/lib
-		../cluster/agent
-		../cluster/events)
+#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+
+include_directories(BEFORE . ..
+		../client/c/lib
+		${CMAKE_CURRENT_BINARY_DIR}/..
+		${CMAKE_CURRENT_BINARY_DIR}/../metautils/lib)
 
 include_directories(AFTER
 		${OPENSSL_INCLUDE_DIRS}
-		${ZK_INCLUDE_DIRS}
-		${CMAKE_CURRENT_BINARY_DIR}/../metautils/lib)
+		${ZK_INCLUDE_DIRS})
 
 link_directories(
 		${ZK_LIBRARY_DIRS}
 		${SQLITE3_LIBRARY_DIRS})
 
 
-add_executable(redc-sqlx
-		sqlx_client.c)
+add_library(sqlxsrv SHARED
+		sqlx_service.c sqlx_service.h)
 
-target_link_libraries(redc-sqlx
-		gridclient metautils metacomm gridcluster sqlitereporemote
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
-		
+set_target_properties(sqlxsrv PROPERTIES SOVERSION ${ABI_VERSION})
 
-add_executable(sqlx_server sqlx_server.c)
-
-target_link_libraries(sqlx_server
+target_link_libraries(sqlxsrv
+		server metautils gridcluster sqliterepo
 		hcresolve meta0remote meta1remote
 		server sqliterepo metautils metacomm gridcluster
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 
-install(TARGETS sqlx_server redc-sqlx
+add_executable(hcsqlx sqlx_client.c)
+bin_prefix(hcsqlx -sqlx)
+bin_prefix_full(hcsqlx -sqlx-client)
+target_link_libraries(hcsqlx
+		gridclient metautils metacomm gridcluster sqlitereporemote
+		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
+		
+
+add_executable(sqlx_server sqlx_server.c)
+bin_prefix_full(sqlx_server -sqlx-server)
+target_link_libraries(sqlx_server
+		sqlxsrv ${GLIB2_LIBRARIES})
+
+
+install(TARGETS sqlx_server hcsqlx sqlxsrv
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 

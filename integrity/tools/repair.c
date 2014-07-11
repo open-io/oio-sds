@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gs-rebuild"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gs-rebuild"
 #endif
 
 #include <stdlib.h>
@@ -30,25 +10,16 @@
 #include <attr/xattr.h>
 #include <math.h>
 
-#include <glib.h>
-#include <glib/gstdio.h>
-
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-#include <gridcluster.h>
-#include <rawx.h>
-#include <meta2_remote.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <cluster/lib/gridcluster.h>
+#include <rawx-lib/src/rawx.h>
+#include <meta2/remote/meta2_remote.h>
 
 #include "./repair.h"
 #include "../lib/chunk_db.h"
 
-#ifdef HAVE_COMPAT
-# include <grid_location.h>
-# define RAW_CONTENT_GET_CID(R) (R)->cID
-#else
 # define RAW_CONTENT_GET_CID(R) (R)->container_id
-#endif
 
 static int
 get_timeout(struct metacnx_ctx_s *ctx)
@@ -172,7 +143,7 @@ meta2_repair_from_raw_content(struct meta2_raw_content_s *raw,
 		if (CODE_CONTAINER_NOTFOUND == gerror_get_code(*error)) {
 			if (!metacnx_open(&ctx, error))
 				GSETERROR(error, "Cannot connect to the META2");
-			else if (meta2_remote_container_create_in_fd(ctx.fd, ctx.timeout.req, error,
+			else if (meta2_remote_container_create_in_fd(&(ctx.fd), ctx.timeout.req, error,
 					raw->container_id, container_name))
 				GSETERROR(error, "CONTAINER recreated [%s]", container_name);
 			else {
@@ -198,7 +169,7 @@ meta2_repair_from_raw_content(struct meta2_raw_content_s *raw,
 	if (raw->raw_chunks != NULL && raw->raw_chunks->data != NULL && ((struct meta2_raw_chunk_s*)raw->raw_chunks->data)->position == 0)
 		local_rc = meta2raw_remote_update_content(&ctx, &local_error, raw, FALSE);
 	else
-		local_rc = meta2raw_remote_update_chunks(&ctx, &local_error, raw, FALSE);
+		local_rc = meta2raw_remote_update_chunks(&ctx, &local_error, raw, FALSE, NULL);
 	if (local_rc == FALSE) {
 		switch (gerror_get_code(local_error)) {
 			case CODE_CONTENT_EXISTS:

@@ -1,42 +1,25 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "rawx.compress"
 #endif
+
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
 
-#include <stdio.h>              /* for sprintf() */
-#include <sys/types.h> 
-#include <sys/stat.h> 
+#include <stdio.h>
 #include <unistd.h>
 #include <string.h>
 #include <fcntl.h>
 #include <errno.h>
 #include <utime.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
-#include <glib.h>
-#include <metautils.h>
-#include "./compression.h"
-#include "./rawx.h"
+#include <metautils/lib/metautils.h>
+#include "compression.h"
+#include "rawx.h"
 
 #define DECOMPRESSION_MAX_BUFSIZE 512000
 
@@ -330,6 +313,7 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
         }
 
 	
+	do {
 	int fd;
 
 	if((fd = open(tmp_path, O_WRONLY|O_CREAT|O_EXCL, 0644)) == -1) {
@@ -337,7 +321,8 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 		goto end;
 	}
 	
-	close(fd);
+	metautils_pclose(&fd);
+	} while (0);
 
 	if(!copy_fattr(path, tmp_path, &local_error)) {
 		if(local_error) {
@@ -448,11 +433,13 @@ compress_chunk(const gchar* path, const gchar* algo, const gint64 blocksize, gbo
 end:
 	if(src) {
 		if(fclose(src) != 0)
-			WARN("Failed to close source file");
+			WARN("Failed to fclose source file");
+		src = NULL;
 	}
 	if(dst) {
 		if(fclose(dst) != 0)
-			WARN("Failed to close destination file");
+			WARN("Failed to fclose destination file");
+		dst = NULL;
 	}
 	
 	if(status == 1) {
@@ -526,7 +513,8 @@ end:
 }
 
 int
-uncompress_chunk(const gchar* path, gboolean preserve, GError ** error)
+uncompress_chunk2(const gchar* path, gboolean preserve, gboolean keep_pending,
+		GError ** error)
 {
 	GError *local_error = NULL;
 	int status = 0;
@@ -596,6 +584,7 @@ uncompress_chunk(const gchar* path, gboolean preserve, GError ** error)
 		goto end;
 	}
 	
+	do {
 	int fd;
 
 	if((fd = open(tmp_path, O_WRONLY|O_CREAT|O_EXCL, 0644)) == -1) {
@@ -603,7 +592,8 @@ uncompress_chunk(const gchar* path, gboolean preserve, GError ** error)
 		goto end;
 	}
 	
-	close(fd);
+	metautils_pclose(&fd);
+	} while (0);
 
 	if(!copy_fattr(path, tmp_path, error)) {
 		GSETERROR(error, "Failed to copy extended attributes to destination file\n");
@@ -632,40 +622,50 @@ uncompress_chunk(const gchar* path, gboolean preserve, GError ** error)
 		while(nb_read < bufsize) {
 			current_read = comp_ctx->data_uncompressor(cp_chunk, 0, data + nb_read, bufsize - nb_read, &local_error);
 			DEBUG("Currently read %"G_GINT64_FORMAT" bytes", current_read);
-			if(current_read <= 0) {
+			if(current_read < 0) {
 				if(local_error) {
 					GSETERROR(error, "An error occured while decompressing chunk : %s", local_error->message);	
 					g_clear_error(&local_error);
-				} else 
+				} else
 					GSETERROR(error, "An error occured while decompressing chunk\n"); 
 				goto end;
+			} else if (current_read == 0) {
+				/* Premature end of file, will still write to pending */
+				WARN("Read 0 bytes, original chunk may have been truncated");
+				break;
 			}
 			nb_read += current_read;
 		}
 		TRACE("buffer filled");
+		errno = 0;
 		/* write buf to dst file */
-		if(fwrite(data, bufsize, 1, dst) != 1) {
-			GSETERROR(error, "An error occured while writing data in destination file");
+		if(nb_read > 0 && fwrite(data, nb_read, 1, dst) != 1) {
+			GSETERROR(error, "An error occured while writing data in destination file: %s",
+					strerror(errno));
 			goto end;
 		}
-		if(data){
+		if (data) {
 			g_free(data);
 			data = NULL;
 		}
-		total_read += nb_read;
+		if (nb_read > 0)
+			total_read += nb_read;
+		else
+			break;
 	}
 
-	if(!comp_ctx->integrity_checker(cp_chunk)){
+	if(!comp_ctx->integrity_checker(cp_chunk)) {
 		GSETERROR(error, "Seems there is an error in decompression, invalid checksum\n");
 		goto end;
-        }
+	}
 
 	status = 1;
 
 end:
 	if(dst) {
 		if(fclose(dst) != 0)
-			WARN("Failed to close destination file");
+			WARN("Failed to fclose destination file");
+		dst = NULL;
 	}
 	
 	if(status == 1) {
@@ -688,8 +688,10 @@ end:
 					GSETERROR(error, "Failed to rename tmp file");
 					status = 0;
 				}
+			} else if (keep_pending) {
+				INFO("Temporary file kept: %s", tmp_path);
 			} else {
-				/* remove tmp file */	
+				/* remove tmp file */
 				DEBUG("Removing failed file");
 				if(remove(tmp_path) != 0)
 					WARN("Failed to remove tmp file [%s]", tmp_path);
@@ -701,8 +703,10 @@ end:
 				status = 0;
 			} 
 		}
+	} else if (keep_pending) {
+		INFO("Temporary file kept: %s", tmp_path);
 	} else {
-		/* remove tmp file */	
+		/* remove tmp file */
 		DEBUG("Removing pending file\n");
 		if(remove(tmp_path) != 0)
 			WARN("Failed to remove tmp file [%s]", tmp_path);
@@ -721,4 +725,10 @@ end:
 		g_free(tmp_path);
 	
 	return status;
+}
+
+int
+uncompress_chunk(const gchar* path, gboolean preserve, GError ** error)
+{
+	return uncompress_chunk2(path, preserve, FALSE, error);
 }

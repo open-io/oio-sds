@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "conscience.api"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "conscience.api"
 #endif
 #include <stdlib.h>
 #include <string.h>
@@ -197,10 +177,6 @@ broken_holder_fix_element(struct broken_holder_s *bh, const gchar *element)
 	bf.packed = element;
 	bf.ns = bh->conscience->ns_info.name;
 
-#ifdef HYPER_VERBOSE
-	DEBUG("Fixing broken element [%s]", element);
-#endif
-
 	tokens = g_strsplit(element,":",0);
 	if (!tokens) {
 		errno = EBADMSG;
@@ -210,9 +186,6 @@ broken_holder_fix_element(struct broken_holder_s *bh, const gchar *element)
 	
 	/*special case for the broken META1 */
 	if (tokens_length == 3 && g_ascii_strcasecmp(tokens[0],"META1")) {
-#ifdef HYPER_VERBOSE
-		TRACE("META1 matched");
-#endif
 		bf.ip = tokens[1];
 		bf.port = atoi(tokens[2]);
 		broken_holder_fix_meta1(bh, &bf);
@@ -228,16 +201,10 @@ broken_holder_fix_element(struct broken_holder_s *bh, const gchar *element)
 		case 4:
 			bf.content = *(tokens[3]) ? tokens[3] : NULL;
 		case 3:
-#ifdef HYPER_VERBOSE
-			TRACE("Container matched");
-#endif
 			bf.cid = *(tokens[2]) ? tokens[2] : NULL;
 			broken_holder_fix_in_meta2(bh, &bf);
 			break;
 		case 2:
-#ifdef HYPER_VERBOSE
-			TRACE("META2 matched");
-#endif
 			broken_holder_fix_meta2(bh, &bf);
 			break;
 		}

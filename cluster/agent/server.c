@@ -1,48 +1,27 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.agent.server"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.agent.server"
 #endif
 
-#include <arpa/inet.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <netinet/in.h>
-#include <netinet/tcp.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>
 #include <sys/socket.h>
-#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/un.h>
-#include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
-#include "server.h"
-#include "config.h"
-#include "gridagent.h"
-#include "io_scheduler.h"
-#include "accept_worker.h"
+#include "./server.h"
+#include "./config.h"
+#include "./gridagent.h"
+#include "./io_scheduler.h"
+#include "./accept_worker.h"
 
 /* Global variables */
 int backlog_unix = MAX_ACCEPT;
@@ -110,16 +89,9 @@ start_unix_server(long sock_timeout, GError **error)
 	memset(&worker_unix, 0, sizeof(worker_t));
 
 	/* Create ressources to monitor */
-	usock = socket(PF_UNIX, SOCK_STREAM, 0);
+	usock = socket_nonblock(PF_UNIX, SOCK_STREAM, 0);
 	if (usock < 0) {
 		GSETERROR(error, "Failed to create socket : %s", strerror(errno));
-		return(0);
-	}
-
-	/* Got to non-blocking mode */
-	if (!sock_set_non_blocking(usock, TRUE)) {
-		GSETERROR(error, "Failed to put socket %d in non-blocking mode : %s", usock, strerror(errno));
-		close(usock);
 		return(0);
 	}
 
@@ -129,20 +101,20 @@ start_unix_server(long sock_timeout, GError **error)
 
 	if (-1 == bind(usock, (struct sockaddr *)&local, sizeof(local))) {
 		GSETERROR(error, "Failed to bind socket %d to file %s : %s", usock, AGENT_SOCK_PATH, strerror(errno));
-		close(usock);
+		metautils_pclose(&usock);
 		return(0);
 	}
 
 	/* Listen on that socket */
 	if (-1 == listen(usock, backlog_unix)) {
 		GSETERROR(error, "Failed to listen on socket %d : %s", usock, strerror(errno));
-		close(usock);
+		metautils_pclose(&usock);
 		return(0);
 	}
 
 	if (!set_unix_permissions(AGENT_SOCK_PATH, error)) {
 		GSETERROR(error, "Failed to set proper permissions on socket %d", usock);
-		close(usock);
+		metautils_pclose(&usock);
 		return(0);
 	}
 
@@ -157,7 +129,7 @@ start_unix_server(long sock_timeout, GError **error)
 	/* Accept new connection */
 	if (!add_fd_to_io_scheduler(&worker_unix, EPOLLIN, error)) {
 		GSETERROR(error,"Failed to add server sock to io_scheduler");
-		close(usock);
+		metautils_pclose(&usock);
 		return 0;
 	}
 
@@ -176,20 +148,12 @@ start_inet_server(long sock_timeout, GError **error)
 	memset(&worker_inet, 0, sizeof(worker_t));
 
 	/* Create ressources to monitor */
-	sock_inet = socket(PF_INET, SOCK_STREAM, 0);
+	sock_inet = socket_nonblock(PF_INET, SOCK_STREAM, 0);
 	if (sock_inet < 0) {
 		GSETERROR(error, "Failed to create socket : %s", strerror(errno));
 		return(0);
 	}
 
-	/* Got to non-blocking mode */
-	if (!sock_set_non_blocking(sock_inet, TRUE)) {
-		GSETERROR(error, "Failed to put socket [%d] in non-blocking mode : %s", sock_inet, strerror(errno));
-		close(sock_inet);
-		return(0);
-	}
-
-	sock_set_tcpquickack(sock_inet, TRUE);
 	sock_set_reuseaddr(sock_inet, TRUE);
 
 	/* Bind to file */
@@ -259,14 +223,12 @@ stop_server(void)
 
 	if (usock>=0) {
 		remove_fd_from_io_scheduler(&worker_unix, NULL);
-		close(usock);
-		usock = -1;
+		metautils_pclose(&usock);
 	}
-	
+
 	if (sock_inet>=0) {
 		remove_fd_from_io_scheduler(&worker_inet, NULL);
-		close(sock_inet);
-		sock_inet = -1;
+		metautils_pclose(&sock_inet);
 	}
 
 	unlink(AGENT_SOCK_PATH);

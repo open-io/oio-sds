@@ -1,4 +1,4 @@
-#include "./internals.h"
+#include "internals.h"
 
 static GByteArray*
 _addrinfo_pack_singleton(const addr_info_t *ai, GError **err)

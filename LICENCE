@@ -1,0 +1,19 @@
+As explained on http://www.redcurrant.io/legal/licenses, Redcurrant is dual-licensed.
+By default, the code is covered by the AGPL3 license, excepted for files related to the client API that licensed under the terms of LGPL3.
+
+Those client-related files licensed under the terms of LGPL3 are:
+  The client API:
+    client/c/lib/*
+  Its direct dependencies:
+    meta0v2/meta0_remote*
+    meta0v2/meta0_utils*
+    meta1v2/meta1_remote*
+    meta2/remote/meta2_remote*
+    meta2v2/meta2v2_remote*
+    meta2v2/meta2v2_utils*
+    rawx-client/*
+  Its indirect dependencies:
+    metautils/lib/*
+    cluster/lib/*
+    server/*
+    sqliterepo/*

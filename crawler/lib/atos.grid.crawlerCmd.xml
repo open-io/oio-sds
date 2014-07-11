@@ -1,0 +1,35 @@
+<node>
+  <interface name="atos.grid.Crawler.Comm.Control">
+
+  <!-- ... Listing cut for brevity ... -->
+
+    <method name="ack">
+		<arg type="s" name="cmd"     direction="in" />
+    	<arg type="s" name="alldata" direction="in" />
+    </method>
+
+
+
+    <!-- Signal (D-Bus) definitions -->
+
+    <!-- NOTE: The current version of dbus-bindings-tool doesn't
+         actually enforce the signal arguments _at_all_. Signals need
+         to be declared in order to be passed through the bus itself,
+         but otherwise no checks are done! For example, you could
+         leave the signal arguments unspecified completely, and the
+         code would still work. -->
+
+    <!-- Signals to tell interested clients about state change.
+         We send a string parameter with them. They never can have
+         arguments with direction=in. -->
+    <!--signal name="end_signal_for_test">
+        <arg type="s" name="message" direction="out"/>
+    </signal-->
+
+  </interface>
+
+
+
+
+
+  </node>

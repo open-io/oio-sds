@@ -1,25 +1,5 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.agent.http_request_worker"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.agent.http_request_worker"
 #endif
 
 #include <stdlib.h>
@@ -28,11 +8,10 @@
 #include <string.h>
 #include <errno.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
-#include "http_request_worker.h"
-#include "connect.h"
-#include "io_scheduler.h"
+#include "./http_request_worker.h"
+#include "./io_scheduler.h"
 
 #define HTTP_REQ_MAX_SIZE 256
 #define DEFAULT_BUFFER_SIZE 256
@@ -46,33 +25,35 @@ static int read_http_status(worker_t *worker, GError **error);
 static int read_content_length(worker_t *worker, GError **error);
 static int read_response_body(worker_t *worker, GError **error);
 
-int http_request_worker(worker_t *worker, GError **error) {
-        int fd;
+int
+http_request_worker(worker_t *worker, GError **error)
+{
+	int fd;
 	worker_data_t *data = NULL;
 	http_session_t *http_session = NULL;
 
-        TRACE("Executing http_request worker");
+	TRACE("Executing http_request worker");
 
 	data = &(worker->data);
 	http_session = (http_session_t*)data->session;
 
-        if (!connect_addr_info(&fd, http_session->addr, error)) {
-                GSETERROR(error, "Connection to HTTP server failed");
-                goto error;
-        }
+	if (0 > (fd = addrinfo_connect_nopoll(http_session->addr, 1000, error))) {
+		GSETERROR(error, "Connection to HTTP server failed");
+		goto error;
+	}
 
-        worker->func = write_request;
-        worker->data.fd = fd;
+	worker->func = write_request;
+	worker->data.fd = fd;
 
-        if (!add_fd_to_io_scheduler(worker, EPOLLOUT, error)) {
-                GSETERROR(error, "Failed to add socket to io_scheduler");
-                goto error;
-        }
+	if (!add_fd_to_io_scheduler(worker, EPOLLOUT, error)) {
+		GSETERROR(error, "Failed to add socket to io_scheduler");
+		goto error;
+	}
 
-        return(1);
+	return(1);
 
 error:
-        return(0);
+	return(0);
 }
 
 int write_request(worker_t *worker, GError **error) {

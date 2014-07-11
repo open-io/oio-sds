@@ -1,37 +1,16 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.events"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.events"
 #endif
 
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
-#include <glib.h>
-
-#include <metautils.h>
-#include <metacomm.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
 
 #include "./gridcluster_events.h"
+#include "./gridcluster_eventsremote.h"
 
 gridcluster_event_t *
 gridcluster_create_event(void)
@@ -71,18 +50,19 @@ gridcluster_event_add_string(gridcluster_event_t * event, const gchar * key, con
 void
 gridcluster_event_set_type(gridcluster_event_t * event, const gchar * str_type)
 {
-	gridcluster_event_add_string(event, "TYPE", str_type);
+	gridcluster_event_add_string(event, EVENT_FIELD_TYPE, str_type);
 }
 
 gsize
-gridcluster_event_get_type(gridcluster_event_t * event, gchar * dst_type, gsize dst_size)
+gridcluster_event_get_type(gridcluster_event_t *event, gchar *dst_type,
+		gsize dst_size)
 {
 	gsize len;
 	GByteArray *gba_value;
 
 	if (!event || !dst_type)
 		return 0;
-	gba_value = g_hash_table_lookup(event, "TYPE");
+	gba_value = g_hash_table_lookup(event, EVENT_FIELD_TYPE);
 	if (!gba_value)
 		return 0;
 	len = MIN(dst_size - 1, gba_value->len);
@@ -156,5 +136,16 @@ gridcluster_event_gclean(gpointer pevent, gpointer ignored)
 	(void) ignored;
 	if (pevent)
 		gridcluster_destroy_event(pevent);
+}
+
+
+gchar*
+gridcluster_event_get_string(gridcluster_event_t *event, const gchar *key)
+{
+    GByteArray *gba;
+
+    if (!(gba = g_hash_table_lookup(event, key)))
+        return NULL;
+    return g_strndup((gchar*)gba->data, gba->len);
 }
 

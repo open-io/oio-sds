@@ -1,44 +1,22 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "gridcluster.agent.event.forward"
-#endif
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "gridcluster.agent.event.forward"
 #endif
 
 #include <stdlib.h>
+#include <stdio.h>
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
 #include <sys/types.h>
 #include <attr/xattr.h>
 
-#include <metautils.h>
+#include <metautils/lib/metautils.h>
 
-#include <glib.h>
-#include <glib/gstdio.h>
-
-#include "../lib/gridcluster.h"
-#include "../events/gridcluster_events.h"
-#include "../events/gridcluster_eventsremote.h"
-#include "../events/gridcluster_eventhandler.h"
-#include "../conscience/conscience.h"
+#include <cluster/lib/gridcluster.h>
+#include <cluster/events/gridcluster_events.h>
+#include <cluster/events/gridcluster_eventsremote.h>
+#include <cluster/events/gridcluster_eventhandler.h>
+#include <cluster/conscience/conscience.h>
 
 
 #include "./agent.h"
@@ -473,24 +451,24 @@ static struct event_handle_s*
 event_handle_load_from_path(namespace_data_t *ns_data, const gchar *path, GError **error)
 {
 	struct event_handle_s *handle;
-	gchar *dirname, *basename;
+	gchar *dirname, *bn;
 	struct path_data_s pd;
 
-	basename = g_path_get_basename(path);
+	bn = g_path_get_basename(path);
 	dirname = g_path_get_dirname(path);
 
 	bzero(&pd, sizeof(pd));
-	path_get_sequence(path, &(pd.xattr_seq));
-	path_get_incoming_time(path, &(pd.xattr_time));
-	path_get_container_id(path, &(pd.id), pd.str_cid, sizeof(pd.str_cid));
+	gridcluster_eventxattr_get_seq(path, &(pd.xattr_seq));
+	gridcluster_eventxattr_get_incoming_time(path, &(pd.xattr_time));
+	gridcluster_eventxattr_get_container_id(path, &(pd.id), pd.str_cid, sizeof(pd.str_cid));
 	stat(path, &(pd.stat));
-	g_strlcpy(pd.relpath, basename, sizeof(pd.relpath) - 1);
+	g_strlcpy(pd.relpath, bn, sizeof(pd.relpath) - 1);
 	pd.relpath_size = strlen(pd.relpath);
 
 	handle = event_handle_load(ns_data, dirname, &pd, error);
 
 	g_free(dirname);
-	g_free(basename);
+	g_free(bn);
 	return handle;
 }
 
@@ -536,6 +514,35 @@ action_destroy(struct event_action_s *action)
 
 	bzero(action, sizeof(*action));
 	g_free(action);
+}
+
+static void
+action_trash(struct event_action_s *action)
+{
+	gchar *trash_path = NULL;
+
+	XDEBUG("ACTION[%s] workers=%u being trashed", action->id, action->workers);
+
+	trash_path = g_strconcat(action->handle->ns_data->queues.dir_trash,
+			G_DIR_SEPARATOR_S, action->handle->ueid, NULL);
+
+	if (-1 == g_rename(action->path, trash_path))
+		WARN("ACTION[%s] trash failed (%s) for path=%s", action->id,
+				strerror(errno), action->path);
+	else
+		DEBUG("ACTION[%s] trashed path=%s", action->id, action->path);
+
+	if (action->handle) {
+		event_handle_unref(action->handle);
+		action->handle = NULL;
+	}
+
+	g_hash_table_remove(ht_pending_actions, action->id);
+	g_hash_table_remove(ht_idle_actions, action->id);
+
+	bzero(action, sizeof(*action));
+	g_free(action);
+	g_free(trash_path);
 }
 
 static gboolean
@@ -651,17 +658,17 @@ static gboolean
 action_unpack_path(struct event_action_s *action, const gchar *path,
 		gchar *ueid, gsize ueid_size, GError **error)
 {
-	gchar *basename, **tokens;
+	gchar *bn, **tokens;
 
 	g_strlcpy(action->path, path, sizeof(action->path)-1);
 
-	if (!(basename = g_path_get_basename(path))) {
+	if (!(bn = g_path_get_basename(path))) {
 		GSETERROR(error, "no basename in path");
 		return FALSE;
 	}
 	bzero(action->id, sizeof(action->id));
-	g_strlcpy(action->id, basename, sizeof(action->id)-1);
-	g_free(basename);
+	g_strlcpy(action->id, bn, sizeof(action->id)-1);
+	g_free(bn);
 
 	tokens = g_strsplit(action->id, ",", 3);
 	if (!tokens) {
@@ -712,7 +719,7 @@ action_load(namespace_data_t *ns_data, const gchar *path, GError **error)
 	}
 
 	action->action_status = (action->target.port == 0) ? ES_NONE : ES_PUSHED;
-	
+
 	/* Try to reuse an event handle, or load one new by default */
 	action->handle = g_hash_table_lookup(ht_event_by_ueid, ueid);
 	if (action->handle)
@@ -818,7 +825,7 @@ asn1_action_cleaner(gpointer p)
 			switch (action->event_status) {
 				case CODE_EVT_ERROR_DEF:
 					INFO("ACTION[%s] ERROR addr=%s", action->id, action->str_target);
-					action_destroy(action);
+					action_trash(action);
 					return;
 				case CODE_EVT_ERROR_TMP:
 					action_restart_push_or_destroy(action);
@@ -1233,12 +1240,10 @@ agent_start_idle_actions(namespace_data_t *ns_data, guint max)
 		case ES_NONE:
 			if (action_push_is_delayed(action, now) ) {
 				TRACE("ACTION[%s] PUSH delayed", action->id);
-				/*action_make_idle(action);*/
 			}
 			else if (!action_start_worker_push(action, &err)) {
 				WARN("ACTION[%s] PUSH request startup failed : %s",
 						action->id, gerror_get_message(err));
-				/*action_make_idle(action);*/
 				++ counter_err;
 			}
 			else {
@@ -1253,12 +1258,10 @@ agent_start_idle_actions(namespace_data_t *ns_data, guint max)
 		case ES_PUSHED:
 			if (action_status_is_delayed(action, now)) {
 				TRACE("ACTION[%s] STATUS delayed", action->id);
-				/*action_make_idle(action);*/
 			}
 			else if (!action_start_worker_status(action, &err)) {
 				WARN("ACTION[%s] STATUS request startup failed : %s",
 						action->id, gerror_get_message(err));
-				/*action_make_idle(action);*/
 				++ counter_err;
 			}
 			else {
@@ -1364,7 +1367,7 @@ error_label:
 static void
 _recover_actions(namespace_data_t *ns_data)
 {
-	const gchar *basename;
+	const gchar *bn;
 	const gchar *dirname;
 	guint count;
 	GError *err;
@@ -1381,13 +1384,13 @@ _recover_actions(namespace_data_t *ns_data)
 		return;
 	}
 
-	while (NULL != (basename = g_dir_read_name(gdir))) {
+	while (NULL != (bn = g_dir_read_name(gdir))) {
 		gchar *fullpath;
 
-		fullpath = g_strconcat(dirname, G_DIR_SEPARATOR_S, basename, NULL);
+		fullpath = g_strconcat(dirname, G_DIR_SEPARATOR_S, bn, NULL);
 		if (NULL == action_load(ns_data, fullpath, &err))
 			ERROR("[NS=%s] Failed to recover ACTION[%s] : %s",
-					ns_data->name, basename, gerror_get_message(err));
+					ns_data->name, bn, gerror_get_message(err));
 		else
 			++ count;
 		if (err)

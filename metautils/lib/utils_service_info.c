@@ -1,31 +1,8 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "metautils"
 #endif
 
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "metautils"
-#endif
-
-#include <stdlib.h>
-#include <string.h>
-#include "./metautils.h"
+#include "metautils.h"
 
 static void
 clean_tag_value(struct service_tag_s *tag)
@@ -144,7 +121,7 @@ service_tag_get_value_boolean(struct service_tag_s *tag, gboolean *b, GError **e
 }
 
 void
-service_tag_set_value_string(struct service_tag_s *tag, gchar * s)
+service_tag_set_value_string(struct service_tag_s *tag, const gchar *s)
 {
 	gsize str_length;
 
@@ -273,11 +250,7 @@ service_tag_dup(struct service_tag_s *src)
 	if (!src)
 		return NULL;
 
-	result = g_try_malloc0(sizeof(struct service_tag_s));
-	if (!result) {
-		abort();
-		return NULL;
-	}
+	result = g_malloc0(sizeof(struct service_tag_s));
 	service_tag_copy(result, src);
 	return result;
 }
@@ -454,65 +427,41 @@ service_info_equal(const struct service_info_s * si1, const struct service_info_
 	return TRUE;
 }
 
-meta1_info_t *
-service_info_convert_to_m1info(struct service_info_s * srv)
+// for test <NS part> from a complete VNS name only
+gboolean
+service_info_equal_v2(const struct service_info_s * si1, const struct service_info_s * si2)
 {
-	meta1_info_t *mi;
+	const gchar *sep = NULL;
 
-	if (!srv)
-		return NULL;
-	if (!(mi = g_try_malloc0(sizeof(meta1_info_t))))
-		abort();
-	memcpy(&(mi->addr), &(srv->addr), sizeof(addr_info_t));
-	memcpy(&(mi->score), &(srv->score), sizeof(score_t));
-	return mi;
+    if (si1 == si2)
+       return TRUE;
+
+    if (si1 == NULL || si2 == NULL)
+       return FALSE;
+
+	// for compare NS part from VNS name, 
+	if (NULL != (sep = strchr(si2->ns_name, '.'))) {
+		gboolean result = FALSE;
+		struct service_info_s *si2_tmp = service_info_dup(si2);
+		g_strlcpy(si2_tmp->ns_name, si2->ns_name, sep - si2->ns_name+1);
+        //VNS part not used here: = g_strdup(sep+1);
+		result = service_info_equal(si1, si2_tmp);
+		service_info_clean(si2_tmp);
+		return result;
+	}
+
+	return service_info_equal(si1, si2);
 }
 
-meta2_info_t *
-service_info_convert_to_m2info(struct service_info_s * srv)
-{
-	meta2_info_t *mi;
-
-	if (!srv)
-		return NULL;
-	if (!(mi = g_try_malloc0(sizeof(meta2_info_t))))
-		abort();
-	memcpy(&(mi->addr), &(srv->addr), sizeof(addr_info_t));
-	memcpy(&(mi->score), &(srv->score), sizeof(score_t));
-	return mi;
-}
 
 meta0_info_t *
 service_info_convert_to_m0info(struct service_info_s * srv)
 {
-	meta0_info_t *mi;
-
 	if (!srv)
 		return NULL;
-	if (!(mi = g_try_malloc0(sizeof(meta2_info_t))))
-		abort();
+	meta0_info_t *mi = g_malloc0(sizeof(meta0_info_t));
 	memcpy(&(mi->addr), &(srv->addr), sizeof(addr_info_t));
 	return mi;
-}
-
-volume_info_t *
-service_info_convert_to_volinfo(struct service_info_s * srv)
-{
-	volume_info_t *vi;
-	struct service_tag_s *tag;
-
-	if (!srv)
-		return NULL;
-	if (!(vi = g_try_malloc0(sizeof(volume_info_t))))
-		abort();
-	tag = service_info_get_tag(srv->tags, "tag.vol");
-	if (tag)
-		service_tag_to_string(tag, vi->name, sizeof(vi->name));
-	else
-		vi->name[0] = '/';
-	memcpy(&(vi->addr), &(srv->addr), sizeof(addr_info_t));
-	memcpy(&(vi->score), &(srv->score), sizeof(score_t));
-	return vi;
 }
 
 struct service_tag_s *
@@ -547,11 +496,7 @@ service_info_ensure_tag(GPtrArray * a, const gchar * name)
 		return NULL;
 	srvtag = service_info_get_tag(a, name);
 	if (!srvtag) {
-		srvtag = g_try_malloc0(sizeof(struct service_tag_s));
-		if (!srvtag) {
-			abort();
-			return NULL;
-		}
+		srvtag = g_malloc0(sizeof(struct service_tag_s));
 		g_strlcpy(srvtag->name, name, sizeof(srvtag->name));
 		g_ptr_array_add(a, srvtag);
 		srvtag->type = STVT_BOOL;
@@ -638,6 +583,7 @@ service_info_to_string(const service_info_t *si)
 {
 	guint count = 0;
 	gchar **strv = NULL;
+
 	void concat(gchar *s) {
 		count = count + 1;
 		strv = g_realloc(strv, (count+1) * sizeof(gchar*));
@@ -688,22 +634,38 @@ service_info_swap(struct service_info_s *si0, struct service_info_s *si1)
 	memcpy(si1, &tmp, sizeof(struct service_info_s));
 }
 
-gchar*
-metautils_rawx_get_volume(struct service_info_s *si)
+const gchar *
+service_info_get_tag_value(const struct service_info_s *si,
+		const gchar *name, const gchar *def)
 {
-	gchar volname[1024];
 	struct service_tag_s *tag;
 
-	if (!si->tags)
-		return g_strdup("/");
+	if (!si || !si->tags)
+		return def;
+	if (!(tag = service_info_get_tag(si->tags, name)))
+		return def;
+	if (tag->type == STVT_STR)
+		return tag->value.s;
+	if (tag->type == STVT_BUF)
+		return tag->value.buf;
+	return def;
+}
 
-	tag = service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_VOL);
-	if (!tag)
-		return g_strdup("/");
+const gchar *
+service_info_get_rawx_location(const struct service_info_s *si, const gchar *d)
+{
+	return service_info_get_tag_value(si, NAME_TAGNAME_RAWX_LOC, d);
+}
 
-	if (!service_tag_get_value_string(tag, volname, sizeof(volname), NULL))
-		return g_strdup("/");
+const gchar *
+service_info_get_rawx_volume(const struct service_info_s *si, const gchar *d)
+{
+	return service_info_get_tag_value(si, NAME_TAGNAME_RAWX_VOL, d);
+}
 
-	return g_strdup(volname);
+const gchar *
+service_info_get_stgclass(const struct service_info_s *si, const gchar *d)
+{
+	return service_info_get_tag_value(si, NAME_TAGNAME_RAWX_STGCLASS, d);
 }
 

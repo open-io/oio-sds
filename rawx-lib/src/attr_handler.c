@@ -1,28 +1,9 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "rawx.attr"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "rawx.attr"
 #endif
 
 #include <stdlib.h>
+#include <stdint.h>
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -33,19 +14,13 @@
 #include <unistd.h>
 #include <attr/xattr.h>
 
-#include <glib.h>
-
-#ifdef HAVE_COMPAT
-# include <metautils_compat.h>
-#endif
-
-#include <metautils.h>
-#include <storage_policy.h>
+#include <metautils/lib/metautils.h>
 
 #include "rawx.h"
 
-#define SETERROR(e, m, ...) *(e) = g_error_new(g_quark_from_static_string(LOG_DOMAIN), 0, m, ##__VA_ARGS__);
-#define SETERRCODE(e, c, m, ...) *(e) = g_error_new(g_quark_from_static_string(LOG_DOMAIN), c, m, ##__VA_ARGS__);
+// TODO FIXME factorise with the metautils equivalent
+#define SETERROR(e, m, ...) *(e) = g_error_new(g_quark_from_static_string(G_LOG_DOMAIN), 0, m, ##__VA_ARGS__);
+#define SETERRCODE(e, c, m, ...) *(e) = g_error_new(g_quark_from_static_string(G_LOG_DOMAIN), c, m, ##__VA_ARGS__);
 
 struct attr_handle_s
 {
@@ -253,14 +228,12 @@ _commit_attr_handle(struct attr_handle_s *attr_handle, GError ** error)
 	if (attr_handle->chunk_file_des >= 0) {
 		if (_write_attributes(attr_handle->attr_hash, attr_handle->chunk_file_des, _write_to_xattr,
 			&local_error)) {
-			close(attr_handle->chunk_file_des);
-			attr_handle->chunk_file_des = -1;
+			metautils_pclose(&(attr_handle->chunk_file_des));
 			return TRUE;
 		}
 		else {
 			/*WARN("Failed to write attributes to chunk xattr : %s", local_error->message);*/
-			close(attr_handle->chunk_file_des);
-			attr_handle->chunk_file_des = -1;
+			metautils_pclose(&(attr_handle->chunk_file_des));
 			g_clear_error(&local_error);
 		}
 	}
@@ -274,13 +247,12 @@ _commit_attr_handle(struct attr_handle_s *attr_handle, GError ** error)
 	else {
 		if (!_write_attributes(attr_handle->attr_hash, attr_handle->attr_file_des, _write_to_attr_file,
 				&local_error)) {
-			close(attr_handle->attr_file_des);
-			attr_handle->attr_file_des = -1;
+			metautils_pclose(&(attr_handle->attr_file_des));
 			SETERROR(error, "Failed to write attributes to chunk.attr : %s", local_error->message);
 			g_clear_error(&local_error);
 			return FALSE;
 		}
-		close(attr_handle->attr_file_des);
+		metautils_pclose(&(attr_handle->attr_file_des));
 	}
 
 	return TRUE;
@@ -310,7 +282,6 @@ _commit_v2_attr_handle(int filedes, struct attr_handle_s *attr_handle, GError **
 			&local_error))
 			return TRUE;
 		else
-			/*WARN("Failed to write attributes to chunk xattr : %s", local_error->message);*/
 			g_clear_error(&local_error);
 	}
 
@@ -361,10 +332,12 @@ error_handle:
 
 
 /**
- Free struct attr_handle_s
-
- @param attr_handle a struct attr_handle_s to free
- @param content_only a flag to specify if we want to free the struct itself
+ * Free struct attr_handle_s
+ *
+ * @param attr_handle a struct attr_handle_s to free
+ * @param content_only a flag to specify if we want to free the struct itself
+ *
+ * TODO FIXME XXX duplicated in rawx-lighttpd/li and rules-motor/c2python.c
  */
 static void
 _clean_attr_handle(struct attr_handle_s *attr_handle, int content_only)
@@ -372,23 +345,22 @@ _clean_attr_handle(struct attr_handle_s *attr_handle, int content_only)
 	if (!attr_handle)
 		return;
 
-	if (attr_handle->chunk_path)
+	if (attr_handle->chunk_path) {
 		g_free(attr_handle->chunk_path);
-	if (attr_handle->chunk_file_des >= 0)
-		close(attr_handle->chunk_file_des);
-	if (attr_handle->attr_path)
+		attr_handle->chunk_path = NULL;
+	}
+	if (attr_handle->attr_path) {
 		g_free(attr_handle->attr_path);
-	if (attr_handle->attr_file_des >= 0)
-		close(attr_handle->attr_file_des);
-
-	if (attr_handle->attr_hash)
+		attr_handle->attr_path = NULL;
+	}
+	if (attr_handle->attr_hash) {
 		g_hash_table_destroy(attr_handle->attr_hash);
-
-	attr_handle->attr_file_des = -1;
-	attr_handle->attr_path = NULL;
-	attr_handle->chunk_file_des = -1;
-	attr_handle->chunk_path = NULL;
-	attr_handle->attr_hash = NULL;
+		attr_handle->attr_hash = NULL;
+	}
+	if (attr_handle->chunk_file_des >= 0)
+		metautils_pclose(&(attr_handle->chunk_file_des));
+	if (attr_handle->attr_file_des >= 0)
+		metautils_pclose(&(attr_handle->attr_file_des));
 
 	if (!content_only)
 		g_free(attr_handle);
@@ -593,13 +565,15 @@ _lazy_load_attr_from_file(const char *chunk_path, struct attr_handle_s** attr_ha
  @param error
  @param domain the attibute domain
  @param attrname the attribute name
- @param result will be allocated with attribute value or NULL if an error occured or attrbute was not found
+ @param result will be allocated with attribute value or NULL if an error
+	occured or attrbute was not found
 
- @return TRUE or FALSE if an error occured or attribute was not found (error is set)
+ @return TRUE or FALSE if an error occured or attribute was not found
+	(error is set)
  */
 static gboolean
 _get_attr_from_handle(struct attr_handle_s *attr_handle, GError ** error,
-		const char *domain, const char *attrname, char **result)
+		const char *domain, const char *attrname, char **result, gboolean opt)
 {
 	char attr_name_buf[ATTR_NAME_MAX_LENGTH], *value;
 
@@ -617,7 +591,12 @@ _get_attr_from_handle(struct attr_handle_s *attr_handle, GError ** error,
 	if (value)
 		*result = g_strdup(value);
 	else {
-		INFO("Attribute [%s] not found for chunk [%s]", attr_name_buf, attr_handle->chunk_path);
+		if(!opt)
+			INFO("Attribute [%s] not found for chunk [%s]",
+					attr_name_buf, attr_handle->chunk_path);
+		else
+			DEBUG("Attribute [%s] not found for chunk [%s]",
+					attr_name_buf, attr_handle->chunk_path);
 		*result = NULL;
 	}
 	return TRUE;
@@ -636,8 +615,8 @@ _get_attr_from_handle(struct attr_handle_s *attr_handle, GError ** error,
  @return TRUE or FALSE if an error occured (error is set)
  */
 static gboolean
-_set_attr_in_handle(struct attr_handle_s *attr_handle, GError ** error, const char *domain, const char *attrname,
-    const char *attrvalue)
+_set_attr_in_handle(struct attr_handle_s *attr_handle, GError ** error,
+		const char *domain, const char *attrname, const char *attrvalue)
 {
 	char *k, *v;
 
@@ -658,81 +637,6 @@ _set_attr_in_handle(struct attr_handle_s *attr_handle, GError ** error, const ch
 		SETERRCODE(error, ENOMEM, "Memory allocation failure");
 		return FALSE;
 	}
-}
-
-
-/**
- Check struct chunk_textinfo_s given as argument is filled
-
- @param chunk the struct chunk_textinfo_s to check
- @param error
-
- @return TRUE or FALSE if a field is not set
- */
-static gboolean
-_check_chunk(struct chunk_textinfo_s *chunk, GError ** error)
-{
-	if (chunk->path == NULL) {
-		SETERRCODE(error, EINVAL, "Missing mandatory content path");
-		return FALSE;
-	}
-
-	if (!chunk->id) {
-		SETERRCODE(error, EINVAL, "Missing mandatory chunk ID");
-		return FALSE;
-	}
-
-	if (!chunk->size) {
-		SETERRCODE(error, EINVAL, "Missing mandatory chunk size");
-		return FALSE;
-	}
-
-	if (!chunk->hash) {
-		SETERRCODE(error, EINVAL, "Missing mandatory chunk hash");
-		return FALSE;
-	}
-
-	if (!chunk->position) {
-		SETERRCODE(error, EINVAL, "Missing mandatory chunk position");
-		return FALSE;
-	}
-
-	return TRUE;
-}
-
-
-/**
- Check if struct content_textinfo_s given as argument id filled
-
- @param content the struct content_textinfo_s to check
- @param error
-
- @return TRUE or FALSE if a field is missing
- */
-static gboolean
-_check_content(struct content_textinfo_s *content, GError ** error)
-{
-	if (!content->path) {
-		SETERRCODE(error, EINVAL, "Missing mandatory content path");
-		return FALSE;
-	}
-
-	if (!content->size) {
-		SETERRCODE(error, EINVAL, "Missing mandatory content size");
-		return FALSE;
-	}
-
-	if (!content->chunk_nb) {
-		SETERRCODE(error, EINVAL, "Missing mandatory chunk number");
-		return FALSE;
-	}
-
-	if (!content->container_id) {
-		SETERRCODE(error, EINVAL, "Missing mandatory container identifier");
-		return FALSE;
-	}
-
-	return TRUE;
 }
 
 
@@ -892,12 +796,6 @@ set_chunk_info_in_attr(const char *pathname, GError ** error, struct chunk_texti
 	struct attr_handle_s *attr_handle;
 	GError *local_error = NULL;
 
-	if (!_check_chunk(cti, &local_error)) {
-		SETERROR(error, "%s", local_error->message);
-		g_clear_error(&local_error);
-		return FALSE;
-	}
-
 	if (!_lazy_load_attr_from_file(pathname, &attr_handle, &local_error)) {
 		SETERROR(error, "Failed to init the attribute management context : %s", local_error->message);
 		g_clear_error(&local_error);
@@ -944,12 +842,6 @@ set_content_info_in_attr(const char *pathname, GError ** error, struct content_t
 {
 	struct attr_handle_s *attr_handle;
 	GError *local_error = NULL;
-
-	if (!_check_content(cti, &local_error)) {
-		SETERRCODE(error, EINVAL, "Invalid parameter : %s", local_error->message);
-		g_clear_error(&local_error);
-		return FALSE;
-	}
 
 	if (!_lazy_load_attr_from_file(pathname, &attr_handle, &local_error)) {
 		SETERRCODE(error, local_error->code, "Failed to init the attribute management context : %s",
@@ -1095,48 +987,58 @@ get_chunk_compressed_size_in_attr(const char *pathname, GError ** error, guint32
 }
 
 gboolean
-get_rawx_info_in_attr(const char *pathname, GError ** error, struct content_textinfo_s * content,
-    struct chunk_textinfo_s * chunk)
+get_rawx_info_in_attr(const char *pathname, GError ** error,
+		struct content_textinfo_s * content, struct chunk_textinfo_s * chunk)
 {
 	struct attr_handle_s *attr_handle;
 	GError *local_error = NULL;
 
 	if (!_load_attr_from_file(pathname, &attr_handle, &local_error)) {
-		SETERROR(error, "Failed to init the attribute management context : %s", local_error->message);
+		SETERROR(error, "Failed to init the attribute management context : %s",
+				local_error->message);
 		g_clear_error(&local_error);
 		return FALSE;
 	}
 
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_PATH, &(content->path)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_PATH, &(content->path), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_SIZE, &(content->size)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_SIZE, &(content->size), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_NBCHUNK,
-		&(content->chunk_nb)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_NBCHUNK, &(content->chunk_nb), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_CONTAINER,
-		&(content->container_id)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_CONTAINER, &(content->container_id), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA,
-		&(content->metadata)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_METADATA, &(content->metadata), TRUE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA_SYS,
-		&(content->system_metadata)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_METADATA_SYS,
+				&(content->system_metadata), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_ID, &(chunk->id)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CHUNK_ID, &(chunk->id), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_SIZE, &(chunk->size)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CHUNK_SIZE, &(chunk->size), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_POS, &(chunk->position)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CHUNK_POS, &(chunk->position), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_HASH, &(chunk->hash)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CHUNK_HASH, &(chunk->hash), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_METADATA,
-		&(chunk->metadata)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CHUNK_METADATA, &(chunk->metadata), TRUE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_PATH, &(chunk->path)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_PATH, &(chunk->path), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_CONTAINER, &(chunk->container_id)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_CONTAINER, &(chunk->container_id), FALSE))
 		goto error_get_attr;
 
 	_clean_attr_handle(attr_handle, FALSE);
@@ -1152,7 +1054,8 @@ get_rawx_info_in_attr(const char *pathname, GError ** error, struct content_text
 }
 
 gboolean
-get_content_info_in_attr(const char *pathname, GError ** error, struct content_textinfo_s * cti)
+get_content_info_in_attr(const char *pathname, GError ** error,
+		struct content_textinfo_s * cti)
 {
 	struct attr_handle_s *attr_handle;
 	GError *local_error = NULL;
@@ -1163,23 +1066,29 @@ get_content_info_in_attr(const char *pathname, GError ** error, struct content_t
 	}
 
 	if (!_load_attr_from_file(pathname, &attr_handle, &local_error)) {
-		SETERROR(error, "Failed to init the attribute management context : %s", local_error->message);
+		SETERROR(error, "Failed to init the attribute management context : %s",
+				local_error->message);
 		g_clear_error(&local_error);
 		return FALSE;
 	}
 
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_PATH, &(cti->path)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_PATH, &(cti->path), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_SIZE, &(cti->size)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_SIZE, &(cti->size), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_NBCHUNK, &(cti->chunk_nb)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_NBCHUNK, &(cti->chunk_nb), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_CONTAINER, &(cti->container_id)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_CONTAINER, &(cti->container_id), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA, &(cti->metadata)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_METADATA, &(cti->metadata), TRUE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA_SYS,
-		&(cti->system_metadata)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_METADATA_SYS, &(cti->system_metadata), FALSE))
 		goto error_get_attr;
 
 	_clean_attr_handle(attr_handle, FALSE);
@@ -1195,7 +1104,8 @@ get_content_info_in_attr(const char *pathname, GError ** error, struct content_t
 }
 
 gboolean
-get_chunk_info_in_attr(const char *pathname, GError ** error, struct chunk_textinfo_s * cti)
+get_chunk_info_in_attr(const char *pathname, GError ** error,
+		struct chunk_textinfo_s * cti)
 {
 	struct attr_handle_s *attr_handle;
 	GError *local_error = NULL;
@@ -1208,24 +1118,32 @@ get_chunk_info_in_attr(const char *pathname, GError ** error, struct chunk_texti
 	}
 
 	if (!_load_attr_from_file(pathname, &attr_handle, &local_error)) {
-		SETERROR(error, "Failed to init the attribute management context : %s", local_error->message);
+		SETERROR(error, "Failed to init the attribute management context : %s",
+				local_error->message);
 		g_clear_error(&local_error);
 		return FALSE;
 	}
 
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_ID, &(cti->id)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CHUNK_ID, &(cti->id), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_SIZE, &(cti->size)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CHUNK_SIZE, &(cti->size), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_POS, &(cti->position)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CHUNK_POS, &(cti->position), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_HASH, &(cti->hash)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CHUNK_HASH, &(cti->hash), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_METADATA, &(cti->metadata)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CHUNK_METADATA, &(cti->metadata), TRUE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_CONTAINER, &(cti->container_id)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_CONTAINER, &(cti->container_id), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_PATH, &(cti->path)))
+	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
+				ATTR_NAME_CONTENT_PATH, &(cti->path), FALSE))
 		goto error_get_attr;
 
 	_clean_attr_handle(attr_handle, FALSE);
@@ -1370,6 +1288,9 @@ rawx_get_volume_lock_state(const char *vol, const char *ns, const char *host, GE
 {
 	gchar value_host[512], value_ns[512];
 
+	memset(value_host, 0, sizeof(value_host));
+	memset(value_ns, 0, sizeof(value_ns));
+
 	if (!vol || !ns || !host) {
 		SETERRCODE(err, EINVAL, "Invalid parameter");
 		return ERROR_LS;
@@ -1382,8 +1303,10 @@ rawx_get_volume_lock_state(const char *vol, const char *ns, const char *host, GE
 	if (!*value_host && !*value_ns)
 		return NOLOCK_LS;
 
-	if (0 != g_ascii_strncasecmp(host, value_host, sizeof(value_host)))
-		return OTHER_LS;
+	if (*value_host) {
+		if (0 != g_ascii_strncasecmp(host, value_host, sizeof(value_host)))
+			return OTHER_LS;
+	}
 
 	if (*value_ns) {
 		if (0 != g_ascii_strncasecmp(ns, value_ns, sizeof(value_ns)))
@@ -1403,16 +1326,45 @@ _rawx_acl_clean(gpointer data, gpointer udata)
 void
 rawx_conf_gclean(rawx_conf_t* c)
 {
-	if(!c)
-		return;
-	if(c->ni)
-		namespace_info_free(c->ni);
-	if(c->sp)
-		storage_policy_clean(c->sp);
-	if(c->acl) {
-		g_slist_foreach(c->acl, _rawx_acl_clean, NULL);
-		g_slist_free(c->acl);
-	}
+	rawx_conf_clean(c);
 	g_free(c);
 }
 
+void
+rawx_conf_clean(rawx_conf_t* c)
+{
+	if(!c)
+		return;
+
+	if(c->ni) {
+		namespace_info_free(c->ni);
+		c->ni = NULL;
+	}
+	if(c->sp) {
+		storage_policy_clean(c->sp);
+		c->sp = NULL;
+	}
+	if(c->acl) {
+		g_slist_foreach(c->acl, _rawx_acl_clean, NULL);
+		g_slist_free(c->acl);
+		c->acl = NULL;
+	}
+}
+
+#define REAL_TIME_BUF_SIZE 16
+/* stamp a chunk */
+void
+stamp_a_chunk(const char *chunk_path, const char *attr_to_set){
+	char attr_name_buf[ATTR_NAME_MAX_LENGTH];
+	int real_time;
+	char real_time_buf[REAL_TIME_BUF_SIZE];
+	if (!attr_to_set)
+		return;
+	/* Concatenate the ATTR_DOMAIN and ATTR_NAME_CHUNK_LAST_SCANNED_TIME */
+	memset(attr_name_buf, '\0', sizeof(attr_name_buf));
+	snprintf(attr_name_buf, sizeof(attr_name_buf), "%s.%s", ATTR_DOMAIN, attr_to_set);
+	/* get time and stamp it g_get_real_time is available since 2.28 */
+	real_time = time((time_t *)NULL);
+	snprintf(real_time_buf, REAL_TIME_BUF_SIZE, "%d", real_time);
+	setxattr(chunk_path, attr_name_buf, real_time_buf, strlen(real_time_buf), 0);
+}

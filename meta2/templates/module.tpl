@@ -6,24 +6,21 @@
 #error "Invalid configuration, no module_functions defined"
 {{STOP}}
 {{END}}
-#ifndef LOG_DOMAIN
-# define LOG_DOMAIN "{{module_name}}.module"
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "{{module_name}}.module"
 #endif
 
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
 
-#include <metatypes.h>
-#include <metautils.h>
-#include <metacomm.h>
-
-#include <plugin.h>
-#include <message_handler.h>
-#include <srvstats.h>
-#include <srvtimer.h>
+#include <gridd/main/plugin.h>
+#include <gridd/main/message_handler.h>
+#include <gridd/main/srvstats.h>
+#include <gridd/main/srvtimer.h>
 
 #define LOCK_STATS()   g_static_rec_mutex_lock(&mutex_stats)
 #define UNLOCK_STATS() g_static_rec_mutex_unlock(&mutex_stats)

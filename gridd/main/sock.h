@@ -1,34 +1,24 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef __SOCK_H__
 #define __SOCK_H__
 
-#include <pthread.h>
 #include <sys/socket.h>
 #include <glib.h>
 
 #define  AP_BACKLOG 256
 
+enum gridd_flag_e {
+	GRIDD_FLAG_NOLINGER = 0x01,
+	GRIDD_FLAG_KEEPALIVE = 0x02,
+	GRIDD_FLAG_QUICKACK = 0x04,
+	GRIDD_FLAG_SHUTDOWN = 0x08
+};
+
+extern guint32 gridd_flags;
+
+extern void gridd_set_flag(enum gridd_flag_e flag, int onoff);
+
 typedef struct accept_pool_s
 {
-#ifdef HAVE_EPOLL
-	int epoll_fd;
-#endif /*HAVE_EPOLL*/
 	GStaticRecMutex mut;
 	gint *srv;
 	gint size;

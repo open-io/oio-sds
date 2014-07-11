@@ -1,34 +1,13 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifdef HAVE_CONFIG_H
-# include "../config.h"
-#endif
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
 #undef PACKAGE_STRING
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
 
-#include <metautils.h>
-#include <storage_policy.h>
-#include <gridcluster.h>
+#include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
 
-#include "./rawx_config.h"
+#include "rawx_config.h"
 
 
 static void
@@ -131,7 +110,7 @@ update_rawx_conf(apr_pool_t* p, rawx_conf_t **rawx_conf, const gchar* ns_name)
 
 	new_conf = apr_palloc(p, sizeof(rawx_conf_t));
 	char * stgpol = NULL;
-	stgpol = namespace_storage_policy(ns_info);
+	stgpol = namespace_storage_policy(ns_info, ns_info->name);
 	if(NULL != stgpol) {
 		new_conf->sp = storage_policy_init(ns_info, stgpol);
 	}
@@ -139,11 +118,6 @@ update_rawx_conf(apr_pool_t* p, rawx_conf_t **rawx_conf, const gchar* ns_name)
 	new_conf->ni = ns_info;
 	new_conf->acl = _get_acl(p, ns_info);
         new_conf->last_update = time(0);
-
-#if 0
-	if (ns_info)
-		namespace_info_free(ns_info);
-#endif
 
 	*rawx_conf = new_conf;
 	return TRUE;

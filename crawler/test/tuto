@@ -1,0 +1,43 @@
+
+//-----------------------
+// test timeout on meta2-2
+sudo iptables -A INPUT -p tcp --dport 6006 -j DROP
+
+// pour annuler la regle
+sudo iptables -D INPUT -p tcp --dport 6006 -j DROP
+
+
+
+//-----------------------
+// remplace un texte par un autre texte
+yourhost=127.0.0.1
+desthost=127.0.0.1
+portorg=6006
+porttmp=10101
+text-A=""     #texte to replace
+text-B=""     # texte replaced
+
+iptables -t nat -D PREROUTING -s $yourhost -d $desthost -p tcp --dport $portorg  -j REDIRECT --to $porttmp
+netsed tcp $porttmp desthost $portorg s/text-A/text-B
+
+
+iptables -t nat -A PREROUTING -d 127.0.0.1 -p tcp --dport 6005  -j REDIRECT --to 10101
+
+
+
+-----
+// "Container PURGE failure (2): [errno=111] Connection refused"
+sudo iptables -t nat -A OUTPUT -p tcp --dport 6005 -j REDIRECT --to-port 6099
+
+pour annuler
+sudo iptables -t nat -D OUTPUT -p tcp --dport 6005 -j REDIRECT --to-port 6099
+
+
+//-----
+// voir la liste
+sudo iptables -t nat  -L -n -v
+
+// tt supprimer
+sudo iptables -t nat  -F 
+
+

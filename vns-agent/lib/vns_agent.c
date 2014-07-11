@@ -1,41 +1,22 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
-#ifndef LOG_DOMAIN
-#define LOG_DOMAIN "vns_agent.backend"
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "grid.vns_agent.backend"
 #endif
 
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
+#include <netdb.h>
 #include <sys/types.h>
 #include <sys/socket.h>
-#include <netdb.h>
 
-#include <glib.h>
+#include <metautils/lib/metautils.h>
+#include <metautils/lib/metacomm.h>
+#include <cluster/lib/gridcluster.h>
+#include <cluster/remote/gridcluster_remote.h>
+#include <meta1v2/meta1_remote.h>
 
-#include <metautils.h>
-#include <metacomm.h>
+#include "vns_agent_internals.h"
 
-#include <gridcluster.h>
-#include <gridcluster_remote.h>
-#include <meta1_remote.h>
-
-#include "./vns_agent_internals.h"
 struct vns_agent_handle_s *vns_agent_handle = NULL;
 
 GStaticRWLock vns_table_mutex = G_STATIC_RW_LOCK_INIT;
@@ -65,7 +46,7 @@ aggregate_vns_space_used(gpointer key, gpointer value, gpointer udata)
 	gchar ns_space_str[256];
 	bzero(ns_space_str, sizeof(ns_space_str));
 	g_snprintf(ns_space_str, sizeof(ns_space_str), "%"G_GINT64_FORMAT, ns_space);
-	g_hash_table_replace(vns_agent_handle->vns_space_used, g_strdup(key), g_byte_array_append(g_byte_array_new(), (guint8*)ns_space_str, strlen(ns_space_str)));
+	g_hash_table_replace(vns_agent_handle->vns_space_used, g_strdup(key), g_byte_array_append(g_byte_array_new(), (guint8*)ns_space_str, strlen(ns_space_str) + 1));
 	DEBUG("%"G_GINT64_FORMAT" total space used of VNS %s", ns_space, (gchar*)key);
 }
 

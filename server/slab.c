@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.utils.slab"
 #endif
@@ -22,14 +5,14 @@
 #include <stddef.h>
 #include <errno.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/sendfile.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <fcntl.h>
 
-#include "./slab.h"
-#include "./internals.h"
+#include "slab.h"
+#include "internals.h"
 
 static inline const gchar *
 data_slab_type2str(struct data_slab_s *ds)
@@ -117,16 +100,16 @@ data_slab_free(struct data_slab_s *ds)
 			break;
 		case STYPE_FILE:
 			if (ds->data.file.fd >= 0)
-				close(ds->data.file.fd);
+				metautils_pclose(&(ds->data.file.fd));
 			break;
 		case STYPE_PATH:
 			if (ds->data.path.path) {
 				if (ds->data.path.flags & FLAG_UNLINK)
 					unlink(ds->data.path.path);
 				g_free(ds->data.path.path);
-			}			
+			}
 			if (ds->data.path.fd >= 0)
-				close(ds->data.path.fd);
+				metautils_pclose(&(ds->data.path.fd));
 			break;
 		case STYPE_EOF:
 			break;
@@ -253,9 +236,9 @@ data_slab_consume(struct data_slab_s *ds, guint8 **p_data, gsize *p_size)
 		case STYPE_BUFFER:
 		case STYPE_BUFFER_STATIC:
 
-			SERVER_ASSERT(ds->data.buffer.start <= ds->data.buffer.alloc);
-			SERVER_ASSERT(ds->data.buffer.start <= ds->data.buffer.end);
-			SERVER_ASSERT(ds->data.buffer.end <= ds->data.buffer.alloc);
+			EXTRA_ASSERT(ds->data.buffer.start <= ds->data.buffer.alloc);
+			EXTRA_ASSERT(ds->data.buffer.start <= ds->data.buffer.end);
+			EXTRA_ASSERT(ds->data.buffer.end <= ds->data.buffer.alloc);
 
 			remaining = ds->data.buffer.end  - ds->data.buffer.start;
 			if (remaining < max)
@@ -264,9 +247,9 @@ data_slab_consume(struct data_slab_s *ds, guint8 **p_data, gsize *p_size)
 			*p_size = max;
 			ds->data.buffer.start += max;
 
-			SERVER_ASSERT(ds->data.buffer.start <= ds->data.buffer.alloc);
-			SERVER_ASSERT(ds->data.buffer.start <= ds->data.buffer.end);
-			SERVER_ASSERT(ds->data.buffer.end <= ds->data.buffer.alloc);
+			EXTRA_ASSERT(ds->data.buffer.start <= ds->data.buffer.alloc);
+			EXTRA_ASSERT(ds->data.buffer.start <= ds->data.buffer.end);
+			EXTRA_ASSERT(ds->data.buffer.end <= ds->data.buffer.alloc);
 
 			return TRUE;
 		case STYPE_FILE:
@@ -291,13 +274,13 @@ data_slab_sequence_send(struct data_slab_sequence_s *dss, int fd)
 
 	return data_slab_send(dss->first, fd);
 }
- 
+
 void
 data_slab_sequence_append(struct data_slab_sequence_s *dss,
 		struct data_slab_s *ds)
 {
 	if (!dss->first || !dss->last) {
-		SERVER_ASSERT(dss->last == NULL && dss->first == NULL);
+		EXTRA_ASSERT(dss->last == NULL && dss->first == NULL);
 		dss->last = (dss->first = ds);
 	}
 	else {
@@ -319,7 +302,7 @@ data_slab_sequence_shift(struct data_slab_sequence_s *dss)
 
 	if (!(dss->first = ds->next))
 		dss->last = NULL;
-	
+
 	ds->next = NULL;
 	return ds;
 }
@@ -345,9 +328,11 @@ data_slab_sequence_unshift(struct data_slab_sequence_s *dss,
 void
 data_slab_trace(const gchar *tag, struct data_slab_s *ds)
 {
-	GString *gstr;
+	if (!GRID_TRACE_ENABLED())
+		return;
 
-	gstr = g_string_sized_new(256);
+	(void) tag;
+	GString *gstr = g_string_sized_new(256);
 	switch (ds->type) {
 		case STYPE_BUFFER:
 		case STYPE_BUFFER_STATIC:
@@ -374,7 +359,6 @@ data_slab_trace(const gchar *tag, struct data_slab_s *ds)
 	}
 
 	GRID_TRACE("%s %p type=%s%s", tag, ds, data_slab_type2str(ds), gstr->str);
-	
 	g_string_free(gstr, TRUE);
 }
 
@@ -382,6 +366,9 @@ void
 data_slab_sequence_trace(struct data_slab_sequence_s *dss)
 {
 	struct data_slab_s *s;
+
+	if (!GRID_TRACE_ENABLED())
+		return;
 
 	GRID_TRACE(" DSS %p -> %p", dss->first, dss->last);
 	for (s = dss->first; s ;) {
@@ -406,5 +393,89 @@ data_slab_sequence_size(struct data_slab_sequence_s *dss)
 	}
 
 	return total;
+}
+
+//------------------------------------------------------------------------------
+
+struct data_slab_s *
+data_slab_make_empty(gsize alloc)
+{
+	struct data_slab_s ds;
+	ds.type = STYPE_BUFFER;
+	ds.data.buffer.buff = g_malloc(alloc);
+	ds.data.buffer.start = 0;
+	ds.data.buffer.end = 0;
+	ds.data.buffer.alloc = alloc;
+	ds.next = NULL;
+	return g_memdup(&ds, sizeof(ds));
+}
+
+struct data_slab_s *
+data_slab_make_eof(void)
+{
+	struct data_slab_s ds;
+	ds.type = STYPE_EOF;
+	ds.next = NULL;
+	return g_memdup(&ds, sizeof(ds));
+}
+
+struct data_slab_s *
+data_slab_make_file(int fd, off_t start, off_t end)
+{
+	struct data_slab_s ds;
+	ds.type = STYPE_FILE;
+	ds.data.file.start = start;
+	ds.data.file.end = end;
+	ds.data.file.fd = fd;
+	ds.next = NULL;
+	return g_memdup(&ds, sizeof(ds));
+}
+
+struct data_slab_s *
+data_slab_make_path2(const gchar *path, off_t start, off_t end)
+{
+	struct data_slab_s ds;
+	ds.type = STYPE_PATH;
+	ds.data.path.path = g_strdup(path);
+	ds.data.path.start = start;
+	ds.data.path.end = end;
+	ds.data.path.fd = -1;
+	ds.data.path.flags = FLAG_OFFSET|FLAG_END;
+	ds.next = NULL;
+	return g_memdup(&ds, sizeof(ds));
+}
+
+struct data_slab_s *
+data_slab_make_path(const gchar *path, gboolean must_unlink)
+{
+	struct data_slab_s ds;
+	ds.type = STYPE_PATH;
+	ds.data.path.path = g_strdup(path);
+	ds.data.path.start = 0;
+	ds.data.path.end = 0;
+	ds.data.path.fd = -1;
+	ds.data.path.flags = must_unlink ? FLAG_UNLINK : 0;
+	ds.next = NULL;
+	return g_memdup(&ds, sizeof(ds));
+}
+
+struct data_slab_s *
+data_slab_make_tempfile(const gchar *path)
+{
+	return data_slab_make_path(path, TRUE);
+}
+
+struct data_slab_s *
+data_slab_make_buffer2(guint8 *buff, gboolean tobefreed, gsize start,
+		gsize end, gsize alloc)
+{
+	struct data_slab_s ds;
+	ds.type = tobefreed ? STYPE_BUFFER : STYPE_BUFFER_STATIC;
+	ds.data.buffer.start = start;
+	ds.data.buffer.end = end;
+	ds.data.buffer.alloc = alloc;
+	ds.data.buffer.buff = buff;
+	ds.next = NULL;
+	return g_memdup(&ds, sizeof(ds));
 }
 

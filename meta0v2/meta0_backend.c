@@ -1,20 +1,3 @@
-/*
- * Copyright (C) 2013 AtoS Worldline
- * 
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Affero General Public License as
- * published by the Free Software Foundation, either version 3 of the
- * License, or (at your option) any later version.
- * 
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU Affero General Public License for more details.
- * 
- * You should have received a copy of the GNU Affero General Public License
- * along with this program.  If not, see <http://www.gnu.org/licenses/>.
- */
-
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta0.backend"
 #endif
@@ -24,14 +7,13 @@
 #include <string.h>
 #include <errno.h>
 
-#include <glib.h>
+#include <metautils/lib/metacomm.h>
+#include <sqliterepo/sqliterepo.h>
+#include <sqliterepo/version.h>
 
 #include "./internals.h"
 #include "./meta0_utils.h"
 #include "./meta0_backend.h"
-#include "../sqliterepo/sqliterepo.h"
-#include "../sqliterepo/version.h"
-#include "../metautils/lib/metacomm.h"
 
 struct meta0_backend_s
 {
@@ -44,12 +26,17 @@ struct meta0_backend_s
 	gboolean reload_requested;
 };
 
-static GQuark gquark_log = 0;
+static GError* _open_and_lock(struct meta0_backend_s *m0,
+		enum m0v2_open_type_e how, struct sqlx_sqlite3_s **handle);
+
+static void _unlock_and_close(struct sqlx_sqlite3_s *sq3);
+
+/* ------------------------------------------------------------------------- */
 
 static inline int
 m0_to_sqlx(enum m0v2_open_type_e t)
 {
-	switch (t) {
+	switch (t & 0x03) {
 		case M0V2_OPENBASE_LOCAL:
 			return SQLX_OPEN_LOCAL;
 		case M0V2_OPENBASE_MASTERONLY:
@@ -63,16 +50,6 @@ m0_to_sqlx(enum m0v2_open_type_e t)
 	return SQLX_OPEN_LOCAL;
 }
 
-
-static GError*
-_open_and_lock(struct meta0_backend_s *m0, enum m0v2_open_type_e how, struct sqlx_sqlite3_s **handle);
-
-static void
-_unlock_and_close(struct sqlx_sqlite3_s *sq3);
-
-//static void
-//_migrademeta0db(struct meta0_backend_s *m0);
-
 static GError*
 _array_check(GPtrArray *gpa)
 {
@@ -81,7 +58,7 @@ _array_check(GPtrArray *gpa)
 	gchar **v;
 
 	if (gpa->len != 65536)
-		return g_error_new(gquark_log, EINVAL, "Invalid cache size");
+		return NEWERROR(EINVAL, "Invalid cache size");
 
 	for (i=0; i<gpa->len ;i++) {
 		prefix = i;
@@ -90,56 +67,26 @@ _array_check(GPtrArray *gpa)
 			continue;
 		}
 		if (!*v)
-			return g_error_new(gquark_log, EINVAL,
-					"Prefix not managed (2) : %04X", prefix);
+			return NEWERROR(EINVAL, "Prefix not managed (2) : %04X", prefix);
 	}
 
 	return NULL;
 }
 
-GError*
-meta0_backend_init(struct meta0_backend_s **result,
-		const gchar *ns, const gchar *id, const gchar *basedir)
+struct meta0_backend_s *
+meta0_backend_init(const gchar *ns, const gchar *id,
+		struct sqlx_repository_s *repo)
 {
-	GError *err = NULL;
-	struct sqlx_repository_s *repository = NULL;
-	struct meta0_backend_s *m0 = NULL;
-	struct sqlx_repo_config_s cfg;
-
-	if (!gquark_log)
-		gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
-
-	memset(&cfg, '\0', sizeof(struct sqlx_repo_config_s));
-	cfg.lock.ns = ns;
-	cfg.lock.type = META0_TYPE_NAME;
-	cfg.lock.srv = id;
-
-	if (NULL != (err = sqlx_repository_init(basedir, &cfg, &repository))) {
-		g_prefix_error(&err, "SQLX init failure: ");
-		return err;
-	}
-
-	m0 = g_malloc0(sizeof(*m0));
+	struct meta0_backend_s *m0 = g_malloc0(sizeof(*m0));
+	g_static_rw_lock_init(&(m0->rwlock));
 	m0->id = g_strdup(id);
 	m0->ns = g_strdup(ns);
-	g_static_rw_lock_init(&(m0->rwlock));
 	m0->array_by_prefix = NULL;
 	m0->array_meta1_ref = NULL;
-	m0->repository = repository;
+	m0->repository = repo;
 	m0->reload_requested = FALSE;
 
-	err = sqlx_repository_configure_type(m0->repository,
-			META0_TYPE_NAME, NULL, META0_SCHEMA);
-	if (err != NULL) {
-		g_prefix_error(&err, "sqlx schema error: ");
-		meta0_backend_clean(m0);
-		return err;
-	}
-
-	//_migrademeta0db(m0);
-
-	*result = m0;
-	return NULL;
+	return m0;
 }
 
 void
@@ -153,17 +100,15 @@ meta0_backend_clean(struct meta0_backend_s *m0)
 		meta0_utils_array_clean(m0->array_by_prefix);
 	if (m0->array_meta1_ref)
 		meta0_utils_array_meta1ref_clean(m0->array_meta1_ref);
-	if (m0->repository)
-		sqlx_repository_clean(m0->repository);
-	memset(m0, 0, sizeof(m0));
+	memset(m0, 0, sizeof(struct meta0_backend_s));
 	g_free(m0);
 }
 
 GError*
 meta0_backend_check(struct meta0_backend_s *m0)
 {
-	META0_ASSERT(m0 != NULL);
-	META0_ASSERT(m0->array_by_prefix != NULL);
+	EXTRA_ASSERT(m0 != NULL);
+	EXTRA_ASSERT(m0->array_by_prefix != NULL);
 
 	return _array_check(m0->array_by_prefix);
 }
@@ -171,14 +116,15 @@ meta0_backend_check(struct meta0_backend_s *m0)
 struct sqlx_repository_s*
 meta0_backend_get_repository(struct meta0_backend_s *m0)
 {
-	META0_ASSERT(m0 != NULL);
+	EXTRA_ASSERT(m0 != NULL);
 	return m0->repository;
 }
 
-void meta0_backend_reload_requested(struct meta0_backend_s *m0)
+void
+meta0_backend_reload_requested(struct meta0_backend_s *m0)
 {
-	META0_ASSERT(m0 != NULL);
-	m0->reload_requested=TRUE;
+	EXTRA_ASSERT(m0 != NULL);
+	m0->reload_requested = TRUE;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -198,7 +144,8 @@ meta0_backend_migrate(struct meta0_backend_s *m0)
 		if  (  (strstr(err->message, strerror(ENOENT)) != NULL) ) {
 			g_clear_error(&err);
 			err = NULL;
-			err = sqlx_repository_open_and_lock(m0->repository,META0_TYPE_NAME, m0->ns,SQLX_OPEN_LOCAL|SQLX_OPEN_CREATE,&handle, NULL);
+			err = sqlx_repository_open_and_lock(m0->repository, META0_TYPE_NAME,
+					m0->ns,SQLX_OPEN_LOCAL|SQLX_OPEN_CREATE,&handle, NULL);
 			if( !err ) {
 				// Migration (1.7 -> 1.8) from old meta0 database
 
@@ -221,16 +168,8 @@ meta0_backend_migrate(struct meta0_backend_s *m0)
 							g_free(errmsg);
 
 						// set table version
-						struct object_version_s * admin_ver = NULL;
-						version_load(handle,FALSE);
-						admin_ver = g_tree_lookup(handle->versions, hashstr_printf("main.admin"));
-						if ( admin_ver && admin_ver->version == 0 ) {
-							GRID_INFO("Update version in database");
-							version_increment_all(handle->versions);
-							version_increment_all(handle->versions);
-							version_save(handle);
-						}
-						g_free(admin_ver);
+						GRID_INFO("Update version in database");
+						sqlx_admin_inc_all_versions(handle, 2);
 					}
 
 				} else {
@@ -427,15 +366,18 @@ __fill(sqlite3 *db, gchar **urls, guint max, guint shift)
 }
 
 static GError*
-_fill(struct sqlx_sqlite3_s *sq3,guint replicas, gchar **m1urls) {
-	struct sqlx_repctx_s *repctx;
-	guint max;
+_fill(struct sqlx_sqlite3_s *sq3,guint replicas, gchar **m1urls)
+{
+	struct sqlx_repctx_s *repctx = NULL;
 	GError *err = NULL;
+	guint max;
 
 	max = m1urls ? g_strv_length(m1urls) : 0;
-	META0_ASSERT(max > 0 && max < 65536);
+	EXTRA_ASSERT(max > 0 && max < 65536);
 
-	repctx = sqlx_transaction_begin(sq3);
+	err = sqlx_transaction_begin(sq3, &repctx);
+	if (NULL != err)
+		return err;
 
 	while (replicas--) {
 		err = __fill(sq3->db, m1urls, max, replicas);
@@ -450,7 +392,7 @@ _reload(struct meta0_backend_s *m0, gboolean lazy)
 {
 	GError *err = NULL;
 
-	META0_ASSERT(m0 != NULL);
+	EXTRA_ASSERT(m0 != NULL);
 	GRID_TRACE("%s(%p,lazy=%d)", __FUNCTION__, m0, lazy);
 
 	g_static_rw_lock_writer_lock(&(m0->rwlock));
@@ -466,44 +408,23 @@ _reload(struct meta0_backend_s *m0, gboolean lazy)
 		}
 
 		err = _load(m0);
-		m0->reload_requested=FALSE;
+		m0->reload_requested = FALSE;
 		if (NULL != err)
 			g_prefix_error(&err, "Loading error: ");
 	}
 
 	g_static_rw_lock_writer_unlock(&(m0->rwlock));
-
 	return err;
 }
 
 static GError*
-_open_and_lock(struct meta0_backend_s *m0,
-		enum m0v2_open_type_e how, struct sqlx_sqlite3_s **handle)
+_open_and_lock(struct meta0_backend_s *m0, enum m0v2_open_type_e how,
+		struct sqlx_sqlite3_s **handle)
 {
 	GError *err = NULL;
 
-	META0_ASSERT(m0 != NULL);
-	META0_ASSERT(handle != NULL);
-
-	/* Wait for a final status whatever the read/write op */
-
-	if (how & M0V2_OPENBASE_MASTERSLAVE || how & M0V2_OPENBASE_MASTERONLY) {
-		err = sqlx_repository_status_base(m0->repository, META0_TYPE_NAME, m0->ns);
-		if (NULL != err) {
-			if (err->code == CODE_REDIRECT) {
-				if (how & M0V2_OPENBASE_MASTERONLY)
-					return err;
-				g_clear_error(&err);
-			}
-			else {
-				GRID_TRACE("STATUS error [%s.%s]: (%d) %s",
-						m0->id, META0_TYPE_NAME,
-						err->code, err->message);
-				return err;
-			}
-		}
-	}
-
+	EXTRA_ASSERT(m0 != NULL);
+	EXTRA_ASSERT(handle != NULL);
 
 	/* Now open/lock the base in a way suitable for our op */
 	guint flag = m0_to_sqlx(how);
@@ -516,7 +437,7 @@ _open_and_lock(struct meta0_backend_s *m0,
 		return err;
 	}
 
-	META0_ASSERT(*handle != NULL);
+	EXTRA_ASSERT(*handle != NULL);
 	GRID_TRACE("Opened and locked [%s/%s]", m0->id, META0_TYPE_NAME);
 
 	return NULL;
@@ -525,13 +446,14 @@ _open_and_lock(struct meta0_backend_s *m0,
 static void
 _unlock_and_close(struct sqlx_sqlite3_s *sq3)
 {
-	META0_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
 }
 
 static GError *
-_assign_prefixes(sqlite3 *db, const GPtrArray *new_assign_prefixes, gboolean init)
+_assign_prefixes(sqlite3 *db, const GPtrArray *new_assign_prefixes,
+		gboolean init)
 {
 	GError *err = NULL;
 	gint rc;
@@ -596,18 +518,18 @@ static GError *
 _record_meta1ref(sqlite3 *db, const GPtrArray *new_assign_meta1ref)
 {
 	GError *err = NULL;
-        gint rc;
-        guint idx;
-        sqlite3_stmt *stmt = NULL;
+	gint rc;
+	guint idx;
+	sqlite3_stmt *stmt = NULL;
 
 	sqlite3_prepare_debug(rc, db, "REPLACE INTO meta1_ref"
 			" (addr,state,prefixes) VALUES (?,?,?)", -1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 		if ( rc == SQLITE_ERROR ) {
-                        GRID_DEBUG("Missing table meta1ref in DB");
+			GRID_DEBUG("Missing table meta1ref in DB");
 			return NULL;
 		}
-                return SQLITE_GERROR(db, rc);
+		return SQLITE_GERROR(db, rc);
 	}
 
 	for (idx=0; idx < new_assign_meta1ref->len; idx++) {
@@ -631,34 +553,35 @@ _record_meta1ref(sqlite3 *db, const GPtrArray *new_assign_meta1ref)
 				err = SQLITE_GERROR(db, rc);
 		}
 
-		if (addr) g_free(addr);
-		if (ref) g_free(ref);
-		if (nb) g_free(nb);
-
+		if (addr)
+			g_free(addr);
+		if (ref)
+			g_free(ref);
+		if (nb)
+			g_free(nb);
 	}
 	sqlite3_finalize_debug(rc, stmt);
 	return err;
 }
 
 static GError *
-_delete_meta1_ref(sqlite3 *db, gchar *meta1_ref) {
+_delete_meta1_ref(sqlite3 *db, gchar *meta1_ref)
+{
 	GError *err = NULL;
 	gint rc;
 	sqlite3_stmt *stmt = NULL;
 
-	sqlite3_prepare_debug(rc, db, "DELETE FROM meta1_ref where addr=?", -1, &stmt, NULL);
+	sqlite3_prepare_debug(rc, db, "DELETE FROM meta1_ref where addr=?",
+			-1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)
 		return SQLITE_GERROR(db, rc);
 
 	(void) sqlite3_bind_text(stmt,1,meta1_ref, strlen(meta1_ref), NULL);
-	do {
-		rc = sqlite3_step(stmt);
-	} while (rc == SQLITE_ROW );
+	do { rc = sqlite3_step(stmt); } while (rc == SQLITE_ROW );
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)
 		err = SQLITE_GERROR(db, rc);
 
 	sqlite3_finalize_debug(rc, stmt);
-
 	return err;
 }
 
@@ -671,9 +594,9 @@ meta0_backend_fill(struct meta0_backend_s *m0, guint replicas, gchar **m1urls)
 	GError *err;
 	gchar **u = NULL;
 
-	META0_ASSERT(m0 != NULL);
-	META0_ASSERT(replicas < 65535);
-	META0_ASSERT(m1urls != 0);
+	EXTRA_ASSERT(m0 != NULL);
+	EXTRA_ASSERT(replicas < 65535);
+	EXTRA_ASSERT(m1urls != 0);
 
 	u = g_strdupv(m1urls);
 	err = _open_and_lock(m0, M0V2_OPENBASE_MASTERONLY, &sq3);
@@ -689,8 +612,7 @@ meta0_backend_fill(struct meta0_backend_s *m0, guint replicas, gchar **m1urls)
 GError *
 meta0_backend_reload(struct meta0_backend_s *m0)
 {
-	META0_ASSERT(m0 != NULL);
-
+	EXTRA_ASSERT(m0 != NULL);
 	return _reload(m0, FALSE);
 }
 
@@ -699,8 +621,8 @@ meta0_backend_get_all(struct meta0_backend_s *m0, GPtrArray **result)
 {
 	GError *err = NULL;
 
-	META0_ASSERT(m0 != NULL);
-	META0_ASSERT(result != NULL);
+	EXTRA_ASSERT(m0 != NULL);
+	EXTRA_ASSERT(result != NULL);
 
 	if (NULL != (err = _reload(m0, TRUE))) {
 		g_prefix_error(&err, "Reload error: ");
@@ -708,7 +630,7 @@ meta0_backend_get_all(struct meta0_backend_s *m0, GPtrArray **result)
 	}
 
 	g_static_rw_lock_reader_lock(&(m0->rwlock));
-	META0_ASSERT(m0->array_by_prefix != NULL);
+	EXTRA_ASSERT(m0->array_by_prefix != NULL);
 	*result = meta0_utils_array_dup(m0->array_by_prefix);
 	g_static_rw_lock_reader_unlock(&(m0->rwlock));
 
@@ -721,8 +643,8 @@ meta0_backend_get_one(struct meta0_backend_s *m0, const guint8 *prefix,
 {
 	GError *err;
 
-	META0_ASSERT(m0 != NULL);
-	META0_ASSERT(u != NULL);
+	EXTRA_ASSERT(m0 != NULL);
+	EXTRA_ASSERT(u != NULL);
 
 	GRID_TRACE("%s(%p,%02X%02X,%p)", __FUNCTION__,
 			m0, prefix[0], prefix[1], u);
@@ -733,43 +655,38 @@ meta0_backend_get_one(struct meta0_backend_s *m0, const guint8 *prefix,
 	}
 
 	g_static_rw_lock_reader_lock(&(m0->rwlock));
-	META0_ASSERT(m0->array_by_prefix != NULL);
+	EXTRA_ASSERT(m0->array_by_prefix != NULL);
 	*u = meta0_utils_array_get_urlv(m0->array_by_prefix, prefix);
 	g_static_rw_lock_reader_unlock(&(m0->rwlock));
 
-	return *u ? NULL :
-		g_error_new(gquark_log, EINVAL, "META0 partially not missing");
+	return *u ? NULL : NEWERROR(EINVAL, "META0 partially not missing");
 }
 
 GError*
-meta0_backend_assign(struct meta0_backend_s *m0, const GPtrArray *new_assign_prefixes, const GPtrArray *new_assign_meta1ref, const gboolean init)
+meta0_backend_assign(struct meta0_backend_s *m0,
+		const GPtrArray *new_assign_prefixes,
+		const GPtrArray *new_assign_meta1ref, const gboolean init)
 {
 	GError *err;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx;
+	struct sqlx_repctx_s *repctx = NULL;
 
-	META0_ASSERT(m0 != NULL);
-	META0_ASSERT(new_assign_prefixes != NULL);
-	META0_ASSERT(new_assign_meta1ref != NULL);
+	EXTRA_ASSERT(m0 != NULL);
+	EXTRA_ASSERT(new_assign_prefixes != NULL);
+	EXTRA_ASSERT(new_assign_meta1ref != NULL);
 
 	err = _open_and_lock(m0, M0V2_OPENBASE_MASTERONLY, &sq3);
-	if (NULL != err) {
+	if (NULL != err)
 		return err;
+
+	err = sqlx_transaction_begin(sq3, &repctx);
+	if (NULL == err) {
+		err = _assign_prefixes(sq3->db, new_assign_prefixes,init);
+		if (!err)
+			err = _record_meta1ref(sq3->db, new_assign_meta1ref);
+		err = sqlx_transaction_end(repctx, err);
 	}
-
-	repctx = sqlx_transaction_begin(sq3);
-
-        err = _assign_prefixes(sq3->db, new_assign_prefixes,init);
-	if (!err)
-		err = _record_meta1ref(sq3->db, new_assign_meta1ref);
-
-	err = sqlx_transaction_end(repctx, err);
-
-
 	_unlock_and_close(sq3);
-	//if (!err)
-	//	_reload(m0,FALSE);
-
 	return err;
 }
 
@@ -778,9 +695,8 @@ meta0_backend_get_all_meta1_ref(struct meta0_backend_s *m0, GPtrArray **result)
 {
 	GError *err;
 
-        META0_ASSERT(m0 != NULL);
-	META0_ASSERT(result != NULL);
-
+	EXTRA_ASSERT(m0 != NULL);
+	EXTRA_ASSERT(result != NULL);
 
 	if (NULL != (err = _reload(m0, TRUE))) {
 		g_prefix_error(&err, "Reload error: ");
@@ -788,7 +704,7 @@ meta0_backend_get_all_meta1_ref(struct meta0_backend_s *m0, GPtrArray **result)
 	}
 
 	g_static_rw_lock_reader_lock(&(m0->rwlock));
-	META0_ASSERT(m0->array_meta1_ref != NULL);
+	EXTRA_ASSERT(m0->array_meta1_ref != NULL);
 	*result = meta0_utils_array_meta1ref_dup(m0->array_meta1_ref);
 	g_static_rw_lock_reader_unlock(&(m0->rwlock));
 
@@ -796,17 +712,18 @@ meta0_backend_get_all_meta1_ref(struct meta0_backend_s *m0, GPtrArray **result)
 }
 
 GError*
-meta0_backend_destroy_meta1_ref(struct meta0_backend_s *m0, gchar *meta1) {
+meta0_backend_destroy_meta1_ref(struct meta0_backend_s *m0, gchar *meta1)
+{
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx;
+	struct sqlx_repctx_s *repctx = NULL;
 	GPtrArray *result;
+	gchar *v, *addr, *ref, *nb;
 	guint i, max, cmpaddr, cmpstate;
-	gchar *v, *addr, * ref, *nb;
 
 
-	META0_ASSERT(m0 != NULL);
-	META0_ASSERT(meta1 != NULL);
+	EXTRA_ASSERT(m0 != NULL);
+	EXTRA_ASSERT(meta1 != NULL);
 
 	/* check if meta1 is disable */
 	if (NULL != (err = _reload(m0, TRUE))) {
@@ -815,9 +732,10 @@ meta0_backend_destroy_meta1_ref(struct meta0_backend_s *m0, gchar *meta1) {
 	}
 
 	g_static_rw_lock_reader_lock(&(m0->rwlock));
-	META0_ASSERT(m0->array_meta1_ref != NULL);
+	EXTRA_ASSERT(m0->array_meta1_ref != NULL);
 	result = meta0_utils_array_meta1ref_dup(m0->array_meta1_ref);
 	g_static_rw_lock_reader_unlock(&(m0->rwlock));
+
 	for (i=0,max=result->len; i<max ;i++) {
 		if (!(v = result->pdata[i]))
 			continue;
@@ -828,21 +746,21 @@ meta0_backend_destroy_meta1_ref(struct meta0_backend_s *m0, gchar *meta1) {
 		g_free(ref);
 		g_free(nb);
 		if ( cmpaddr == 0) {
-			if (cmpstate != 0) {
-				return g_error_new(gquark_log, EINVAL, "meta1 always available to prefix allocation");
-			}
+			if (cmpstate != 0)
+				return NEWERROR(EINVAL, "meta1 always available to prefix allocation");
 			err = _open_and_lock(m0, M0V2_OPENBASE_MASTERONLY, &sq3);
-			if (NULL != err) {
+			if (NULL != err)
 				return err;
+
+			err = sqlx_transaction_begin(sq3, &repctx);
+			if (NULL == err) {
+				err = _delete_meta1_ref(sq3->db, meta1);
+				err = sqlx_transaction_end(repctx, err);
 			}
-
-			repctx = sqlx_transaction_begin(sq3);
-			err = _delete_meta1_ref(sq3->db, meta1);
-
-			err = sqlx_transaction_end(repctx, err);
 			_unlock_and_close(sq3);
 			return err;
 		}
 	}
-	return g_error_new(gquark_log, EINVAL, "UNKNOWN meta1");
+	return NEWERROR(EINVAL, "UNKNOWN meta1");
 }
+
