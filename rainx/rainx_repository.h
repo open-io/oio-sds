@@ -19,6 +19,7 @@
 #include <rawx-lib/src/compression.h>
 #include <rainx/rainx_config.h>
 
+// FIXME: first-level separator should be ';' or ',' but not '|'
 #define RAWXLIST_SEPARATOR "|"
 #define RAWXLIST_SEPARATOR2 ";"
 #define MAX_REPLY_MESSAGE_SIZE 1024
@@ -61,13 +62,22 @@ struct dav_resource_private {
 	int k; /* Number of data metachunks (from the policy) */
 	int m; /* Number of coding metachunks (from the policy) */
 	const char* algo; /* Name of the algorythm to apply (from the policy) */
-	int metachunk_size; /* Calculated size of a metachunk */
-	char** rawx_list; /* List of rawx services (i.e http://ip:port/DATA/NS/machine/volume/XX/XX/CID|...) must contain k + m addresses */
+	int subchunk_size; /* Calculated size of a subchunk */
+	int metachunk_size; /* Actual size of a metachunk */
+	/* List of rawx services
+	 * (i.e http://ip:port/DATA/NS/machine/volume/XX/XX/CID|...).
+	 * Must contain k + m addresses */
+	char** rawx_list;
 
 	int current_rawx; /* Index of the current rawx in the rawx list */
-	int current_chunk_remaining; /* Number of bytes until the current chunk buffer is totally filled */
+	/* Number of bytes until the current chunk buffer is totally filled */
+	int current_chunk_remaining;
+	/* The list (ip:port/chunk_id|stored_size|md5_digest;...) of actual
+	 * metachunks stored on the rawx to put in the response header */
+	char* response_chunk_list;
 
-	char* response_chunk_list; /* The list (ip:port/chunk_id|stored_size|md5_digest;...) of actual metachunks stored on the rawx to put in the response header */
+	/** TRUE if user asked for on-the-fly reconstruction */
+	int on_the_fly;
 };
 
 struct dav_stream {
