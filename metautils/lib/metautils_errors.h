@@ -59,6 +59,7 @@
 #define CODE_NOT_ALLOWED          403
 
 #define CODE_NOT_FOUND            404
+#define CODE_NAMESPACE_NOTMANAGED 418
 
 /* Content-related codes */
 #define CODE_CONTENT_NOTFOUND     420
