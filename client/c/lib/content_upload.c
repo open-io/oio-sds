@@ -422,10 +422,15 @@ end:
 	return error;
 }
 
+/**
+ * subchunk = -1: on NONE/DUPPLI mode for format position field 
+ *          >=0: on RAINX mode for format position field "<chunkpos>.<subchunk>"
+ *          used only if content_size == 0. no need parity format, only data format
+ */
 static GError * _http_put_set_dest(struct http_put_s *http_put, const gchar *url,
 		gpointer user_data,
 		const gchar *containerid, const gchar * chunkid, const gchar *contentpath,
-		gint64 contentsize, gint chunkpos, guint chunknb, gint64 chunksize,
+		gint64 contentsize, gint chunkpos, gint subchunk, guint chunknb, gint64 chunksize,
 		const gchar *metadata, const char *rawxlist,
 		const char *storagepolicy, const gchar *reqid)
 {
@@ -443,7 +448,11 @@ static GError * _http_put_set_dest(struct http_put_s *http_put, const gchar *url
 
 	http_put_dest_add_header(http_dest, "contentpath", contentpath);
 
-	http_put_dest_add_header(http_dest, "chunkpos", "%d", chunkpos);
+	if (subchunk >= 0) {
+		http_put_dest_add_header(http_dest, "chunkpos", "%d.%d", chunkpos, subchunk);
+    }else{
+		http_put_dest_add_header(http_dest, "chunkpos", "%d", chunkpos);
+	}
 
 	http_put_dest_add_header(http_dest, "chunknb", "%u", chunknb);
 
@@ -469,9 +478,14 @@ static GError * _http_put_set_dest(struct http_put_s *http_put, const gchar *url
 	return NULL;
 }
 
+/**
+ * subchunk = -1: on NONE/DUPPLI mode for format position field
+ *          >=0: on RAINX mode for format position field "<chunkpos>.<subchunk>"
+ *          used only if content_size == 0. no need parity format, only data format
+ */
 static GError * _http_put_set_dests(struct http_put_s *http_put, GSList *bean_list,
 		const gchar *containerid, const gchar *contentpath,
-		gint64 contentsize, gint chunkpos, guint chunknb,
+		gint64 contentsize, gint chunkpos, gint subchunk, guint chunknb,
 		const gchar *metadata, const gchar *reqid)
 {
 	struct bean_CHUNKS_s *bc;
@@ -495,7 +509,7 @@ static GError * _http_put_set_dests(struct http_put_s *http_put, GSList *bean_li
 
 		error = _http_put_set_dest(http_put, CHUNKS_get_id(bc)->str, bc,
 				containerid, chunkid,
-				contentpath, contentsize, chunkpos, chunknb,
+				contentpath, contentsize, chunkpos, subchunk, chunknb,
 				CHUNKS_get_size(bc), metadata, NULL, NULL, reqid);
 		if (error != NULL)
 			return error;
@@ -670,7 +684,7 @@ static GError *_rainx_upload(struct hc_url_s *url, const gchar *target,
 			http_put_clear_dests(http_put);
 			error =_http_put_set_dest(http_put, rainx_url, val_l, 
 					container_id, NULL, content_name, content_size,
-					pos, g_hash_table_size(chunks_at_position),
+					pos, -1, g_hash_table_size(chunks_at_position),
 					chunksize, system_metadata, rawxlist, stgpolicy, reqid);
 			if (error != NULL)
 				goto error_label;
@@ -779,12 +793,16 @@ static void _debug_bean_chunk_list(GSList *bck_list, const char * message)
 	}
 }
 
+/* is_rain =true when on rainx stgpol but the content_size==0.
+ * rawx upload it's used, but extended attribute.position it's on already rainx mode 
+ * */
 static GError *_rawx_upload(struct hc_url_s *url, const gchar *target,
 		GSList **chunks, GHashTable *chunks_at_position,
 		gs_input_f feeder, void *feeder_user_data, const gchar *container_id,
 		const gchar *content_name, const gint64 content_size,
 		const gchar *system_metadata, const gchar *stgpolicy,
-		const gchar *reqid, long timeout_cnx, long timeout_op)
+		const gchar *reqid, long timeout_cnx, long timeout_op, 
+		gboolean is_rain)
 {
 	struct http_put_s *http_put = NULL;
 	GSList *tosend_list = NULL;
@@ -827,7 +845,7 @@ static GError *_rawx_upload(struct hc_url_s *url, const gchar *target,
 			/* Add all destinations to http_put handle */
 			http_put_clear_dests(http_put);
 			_http_put_set_dests(http_put, tosend_list, container_id,
-					content_name, content_size, pos,
+					content_name, content_size, pos, ((is_rain)?0:-1),
 					g_hash_table_size(chunks_at_position),
 					system_metadata, reqid);
 
@@ -982,7 +1000,7 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 	const gchar *actual_stgpol = storage_policy;
 	long timeout_cnx, timeout_op;
 
-	gboolean is_rainx;
+	gboolean is_rainx, tmp_is_rainx;
 	content_version_t content_version;
 
 	/*sanity checks*/
@@ -1102,8 +1120,8 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 	}
 
 	// Don't do RAIN with empty contents
-	is_rainx = (content_size > 0 &&
-			stg_pol_is_rainx(&(container->info.gs->ni), actual_stgpol));
+	tmp_is_rainx = stg_pol_is_rainx(&(container->info.gs->ni), actual_stgpol);
+	is_rainx = (content_size > 0 && tmp_is_rainx);
 	if (is_rainx) {
 		GRID_DEBUG("'%s' of size %"G_GINT64_FORMAT" split into %u chunks (every chunk has %u sub-chunks, there are %u unique presets and %u spares)",
 				content_name, content_size,
@@ -1139,7 +1157,7 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 				feeder, user_data, container->str_cID,
 				content_name, content_size,
 				system_metadata_str_esc, actual_stgpol,
-				reqid, timeout_cnx, timeout_op);
+				reqid, timeout_cnx, timeout_op, tmp_is_rainx);
 	}
 
 	if (local_error != NULL) {
