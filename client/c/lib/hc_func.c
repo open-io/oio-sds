@@ -27,7 +27,7 @@ struct list_content_s {
 /* --------------------------- UTILS FUNCTIONS ------------------------------ */
 
 static gs_error_t *
-_dl_nocache(gs_container_t *c, struct hc_url_s *url, const char *local_path,
+_dl_nocache(gs_container_t *c, struct hc_url_s *url,
 		gs_download_info_t *dlinfo, gchar *stgpol)
 {
 	gs_error_t *e = NULL;
@@ -55,17 +55,8 @@ _dl_nocache(gs_container_t *c, struct hc_url_s *url, const char *local_path,
 		namespace_info_copy(ni, &(content->info.container->info.gs->ni), &err);
 
 		/*download the content*/
-		if (!gs_download_content_full (content, dlinfo, stgpol, filtered,
-				beans, &e)) {
-			g_printerr("Cannot download %s from %s (into %s)\n",
-					hc_url_get(url, HCURL_PATH),
-					hc_url_get(url, HCURL_REFERENCE),
-					local_path ? local_path : "<stdout>");
-		} else {
-			GRID_DEBUG("Download done from %s to %s\n",
-					hc_url_get(url, HCURL_PATH),
-					local_path ? local_path : "<stdout>");
-		}
+		(void) gs_download_content_full (content, dlinfo, stgpol, filtered,
+				beans, &e);
 		namespace_info_clear(ni);
 		g_free(ni);
 		gs_content_free (content);
@@ -458,50 +449,66 @@ hc_list_contents(gs_grid_storage_t *hc, struct hc_url_s *url, int output_xml, in
 }
 
 gs_error_t *
+hc_dl_content(gs_grid_storage_t *hc, struct hc_url_s *url, gs_download_info_t *dl_info, int cache, gchar *stgpol)
+{
+	gs_error_t *e = NULL;
+	gs_container_t *c = NULL;
+
+	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, 0, &e);
+	if (c) {
+		if (cache) {
+			gs_download_content_by_name_full(c, hc_url_get(url, HCURL_PATH),
+					hc_url_get(url, HCURL_SNAPORVERS), stgpol, dl_info, &e);
+		} else {
+			e = _dl_nocache(c, url, dl_info, stgpol);
+		}
+		gs_container_free(c);
+	} else {
+		g_printerr("Failed to resolve meta2 entry for reference %s\n",
+				hc_url_get(url, HCURL_REFERENCE));
+	}
+
+	return e;
+}
+
+gs_error_t *
 hc_get_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *local_path, int force, int cache, gchar *stgpol)
 {
 	gs_error_t *e = NULL;
 	/* download a content */
 	gs_download_info_t dl_info;
-	gs_container_t *c = NULL;
 	int out = 0;
 
 	memset(&dl_info, 0x00, sizeof(dl_info));
 
-	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, 0, &e);
-
-	if(NULL != c) {
-		if(_open_destination(local_path, force, &out)) {
-			GRID_DEBUG("Destination file descriptor ready fd=%d path=%s\n", out, local_path ? local_path : "<stdout>");
-			/*download the content */
-			dl_info.offset = 0;
-			dl_info.size = 0;
-			dl_info.writer = _write_to_fd;
-			dl_info.user_data = &out;
-			if (cache) {
-				gs_download_content_by_name_full(c, hc_url_get(url, HCURL_PATH),
-						hc_url_get(url, HCURL_SNAPORVERS), stgpol, &dl_info, &e);
-			} else {
-				e = _dl_nocache(c, url, local_path, &dl_info, stgpol);
-			}
-
-			if (out >= 0) {
-				metautils_pclose(&out);
-			}
-		} else {
-			gchar tmp[256];
-			bzero(tmp, sizeof(tmp));
-			g_snprintf(tmp, sizeof(tmp), "Failed to open the destination file descriptor to path=%s\n", local_path ? local_path : "<stdout>");
-			e = g_malloc0(sizeof(gs_error_t));
-			e->code = 0;
-			e->msg = g_strdup(tmp);
+	if(_open_destination(local_path, force, &out)) {
+		GRID_DEBUG("Destination file descriptor ready fd=%d path=%s\n", out, local_path ? local_path : "<stdout>");
+		/*download the content */
+		dl_info.offset = 0;
+		dl_info.size = 0;
+		dl_info.writer = _write_to_fd;
+		dl_info.user_data = &out;
+		e = hc_dl_content(hc, url, &dl_info, cache, stgpol);
+		if (out >= 0) {
+			metautils_pclose(&out);
 		}
-
-		gs_container_free(c);
-
+		if (e) {
+			g_printerr("Cannot download %s from %s (into %s)\n",
+					hc_url_get(url, HCURL_PATH),
+					hc_url_get(url, HCURL_REFERENCE),
+					local_path ? local_path : "<stdout>");
+		} else {
+			GRID_DEBUG("Download done from %s to %s\n",
+					hc_url_get(url, HCURL_PATH),
+					local_path ? local_path : "<stdout>");
+		}
 	} else {
-		g_printerr("Failed to resolve meta2 entry for reference %s\n",
-				hc_url_get(url, HCURL_REFERENCE));
+		gchar tmp[256];
+		bzero(tmp, sizeof(tmp));
+		g_snprintf(tmp, sizeof(tmp), "Failed to open the destination file descriptor to path=%s\n", local_path ? local_path : "<stdout>");
+		e = g_malloc0(sizeof(gs_error_t));
+		e->code = 0;
+		e->msg = g_strdup(tmp);
 	}
 
 	return e;

@@ -25,6 +25,7 @@ struct rawx_session_s
 
 int body_reader(void *userdata, const char *buf, size_t len);
 
+GHashTable *header_parser(ne_request *request);
 GHashTable *body_parser(GByteArray * buffer, GError ** err);
 
 #endif /*__RAWX_CLIENT_INTERNALS_H__*/

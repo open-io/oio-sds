@@ -3,6 +3,7 @@
 #endif
 
 #include <metautils/lib/metautils.h>
+#include "rawx_client_internals.h"
 
 int
 body_reader(void *userdata, const char *buf, size_t len)
@@ -11,6 +12,41 @@ body_reader(void *userdata, const char *buf, size_t len)
 
 	g_byte_array_append(buffer, (guint8*)buf, len);
 	return 0;
+}
+
+static gchar *
+_replace_underscore_with_dot(gchar *str)
+{
+	if (str) {
+		gchar *iter = str;
+		gchar c = *iter;
+		do {
+			if (c == '_')
+				*iter = '.';
+		} while ('\0' != (c = *(++iter)));
+	}
+	return str;
+}
+
+GHashTable *
+header_parser(ne_request *request)
+{
+	void *cur = NULL;
+	const gchar *name = NULL, *value = NULL;
+	gchar *dotted_name = NULL;
+	GHashTable *result = NULL;
+
+	result = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+
+	// The name is formatted with _ instead of . found in extended attributes
+	// (e.g. content_path instead of content.path). We convert _ to . so we may
+	// use the same parser function for both cases.
+	while (NULL != (cur = ne_response_header_iterate(request, cur, &name, &value))) {
+		dotted_name = _replace_underscore_with_dot(g_strdup(name));
+		g_hash_table_insert(result, dotted_name, g_strdup(value));
+	}
+
+	return result;
 }
 
 GHashTable *

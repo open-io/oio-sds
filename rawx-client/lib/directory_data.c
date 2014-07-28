@@ -12,6 +12,10 @@
 
 #include "rawx_client_internals.h"
 
+#define RAWXATTR_FROM_HEAD_CONTENT_CONTAINERID "content.containerid"
+#define RAWXATTR_FROM_HEAD_CONTENT_METADATA_SYS "content.metadata-sys"
+#define RAWXATTR_FROM_HEAD_CONTENT_CHUNKSNB "content.chunksnb"
+
 static void
 parse_chunkinfo_from_rawx(GHashTable *ht, struct content_textinfo_s *content,
     struct chunk_textinfo_s *chunk)
@@ -22,7 +26,7 @@ parse_chunkinfo_from_rawx(GHashTable *ht, struct content_textinfo_s *content,
 	g_hash_table_iter_init(&iterator, ht);
 
 	while (g_hash_table_iter_next(&iterator, &key, &value)) {
-		DEBUG("key (%s) / value (%s)", (gchar*)key, (gchar*)value);
+		GRID_TRACE("key (%s) / value (%s)", (gchar*)key, (gchar*)value);
 		if (0 == g_ascii_strcasecmp(RAWXATTR_NAME_CHUNK_ID, key))
 			chunk->id = g_strdup(value);
 		else if (0 == g_ascii_strcasecmp(RAWXATTR_NAME_CHUNK_SIZE, key))
@@ -37,17 +41,17 @@ parse_chunkinfo_from_rawx(GHashTable *ht, struct content_textinfo_s *content,
 			chunk->path = g_strdup(value);
 			content->path = g_strdup(value);
 		}
-		else if (0 == g_ascii_strcasecmp(RAWXATTR_NAME_CONTENT_CONTAINER, key)) {
+		else if (0 == g_ascii_strcasecmp(RAWXATTR_FROM_HEAD_CONTENT_CONTAINERID, key)) {
 			chunk->container_id = g_strdup(value);
 			content->container_id = g_strdup(value);
 		}
 		else if (0 == g_ascii_strcasecmp(RAWXATTR_NAME_CONTENT_SIZE, key))
 			content->size = g_strdup(value);
-		else if (0 == g_ascii_strcasecmp(RAWXATTR_NAME_CONTENT_NBCHUNK, key))
+		else if (0 == g_ascii_strcasecmp(RAWXATTR_FROM_HEAD_CONTENT_CHUNKSNB, key))
 			content->chunk_nb = g_strdup(value);
 		else if (0 == g_ascii_strcasecmp(RAWXATTR_NAME_CONTENT_METADATA, key))
 			content->metadata = g_strdup(value);
-		else if (0 == g_ascii_strcasecmp(RAWXATTR_NAME_CONTENT_METADATA_SYS, key))
+		else if (0 == g_ascii_strcasecmp(RAWXATTR_FROM_HEAD_CONTENT_METADATA_SYS, key))
 			content->system_metadata = g_strdup(value);
 	}
 }
@@ -78,7 +82,7 @@ rawx_client_get_directory_data(rawx_session_t * session, hash_sha256_t chunk_id,
 
 	ne_set_connect_timeout(session->neon_session, session->timeout.cnx / 1000);
 	ne_set_read_timeout(session->neon_session, session->timeout.req / 1000);
-	request = ne_request_create(session->neon_session, "GET", str_req);
+	request = ne_request_create(session->neon_session, "HEAD", str_req);
 	if (!request) {
 		GSETERROR(error, "neon request creation error");
 		return FALSE;
@@ -94,8 +98,8 @@ rawx_client_get_directory_data(rawx_session_t * session, hash_sha256_t chunk_id,
 						ne_get_status(request)->code, ne_get_status(request)->reason_phrase);
 				goto error;
 			}
-			else if (!(result = body_parser(buffer, error))) {
-				GSETERROR(error, "No directory data from the RAWX server");
+			else if (!(result = header_parser(request))) {
+				GSETERROR(error, "No attr from the RAWX server");
 				goto error;
 			}
 			break;

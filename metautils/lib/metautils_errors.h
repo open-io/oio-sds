@@ -32,6 +32,7 @@
 # define ERRCODE_CONN_TIMEOUT 5
 # define ERRCODE_CONN_NOROUTE 6
 # define ERRCODE_CONN_NOTCONNECTED 7
+# define ERRCODE_READ_TIMEOUT 8
 
 # define GSETCODE(e,C,FMT,...) g_error_trace (e, G_LOG_DOMAIN, (C), __LINE__, __FUNCTION__, __FILE__, FMT, ##__VA_ARGS__)
 # define GSETERROR(e,FMT,...)  g_error_trace (e, G_LOG_DOMAIN, 0,   __LINE__, __FUNCTION__, __FILE__, FMT, ##__VA_ARGS__)

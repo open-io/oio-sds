@@ -669,7 +669,7 @@ check_attributes(struct chunk_textinfo_s *chunk, struct content_textinfo_s *cont
 	return NULL;
 }
 
-static gboolean
+static GError *
 validate_chunk_in_one_meta2(struct upload_info_s *info, const char *str_addr,
 	struct meta2_raw_content_s *raw_old, struct meta2_raw_content_s *raw_new)
 {
@@ -767,10 +767,8 @@ validate_chunk_in_one_meta2(struct upload_info_s *info, const char *str_addr,
 	}
 
 label_cleanup:
-	if (gerr)
-		g_error_free(gerr);
 	metacnx_close(&ctx);
-	return m2_rc;
+	return gerr;
 }
 
 static struct meta2_raw_content_s*
@@ -823,19 +821,27 @@ label_error:
 	return NULL;
 }
 
-static gboolean
+static GError *
 validate_chunk_in_all_meta2(struct upload_info_s *info)
 {
 	gchar **url;
-	gboolean rc = TRUE;
+	GError *err = NULL;
 
 	/* Update the reference and clean the old directly in the META2 */
 	for (url=info->location->m2_url; url && *url ;url++) {
-		if (!validate_chunk_in_one_meta2(info, *url, info->raw_old, info->raw_new))
-			rc = FALSE;
+		GError *err2 = validate_chunk_in_one_meta2(info, *url,
+				info->raw_old, info->raw_new);
+		if (err2 != NULL) {
+			MY_WARN(*info, "M2V2 error [%s] : (%d) %s",
+					*url, err2->code, err2->message);
+			if (err == NULL)
+				g_propagate_error(&err, err2);
+			else
+				g_clear_error(&err2);
+		}
 	}
 
-	return rc;
+	return err;
 }
 
 static int
@@ -922,7 +928,8 @@ delete_uploaded_chunk(struct upload_info_s *info)
 
 	(void) info;
 
-	MY_DEBUG(*info, "Deleting from [%s:%d]", info->dst_host, info->dst_port);
+	MY_DEBUG(*info, "Deleting %s from [%s:%d]", info->dst_path,
+			info->dst_host, info->dst_port);
 
 	session = ne_session_create("http", info->dst_host, info->dst_port);
 	ne_set_connect_timeout(session, 60);
@@ -1337,6 +1344,7 @@ static int
 move_chunk(const gchar *path)
 {
 	int rc = 0;
+	GError *err = NULL;
 	struct upload_info_s info;
 
 	if ((volumes_last_update + interval_update_services) <= time(NULL)) {
@@ -1368,14 +1376,20 @@ move_chunk(const gchar *path)
 	}
 
 	/* Manage the upload's success: validates the new chunk in the META2 */
-	if (!validate_chunk_in_all_meta2(&info)) {
+	if ((err = validate_chunk_in_all_meta2(&info))) {
 		/* XXX: before, we thought that Validation potentially PARTIALLY FAILED,
 		 * so do not delete neither the local nor the remote chunk. This is an
 		 * error and lead to loop replicaion of chunks when their single meta2
 		 * is broken. */
-		FINAL_ERROR(info, "META2 operation failed src[%s] dst[%s]",
-				info.src_descr, info.dst_descr);
-		delete_uploaded_chunk(&info);
+		if (err->code == ERRCODE_READ_TIMEOUT) {
+			// This case happened in meta2 databases with missing chunk index
+			MY_INFO(info, "Last error was a timeout, preserve new chunk in "
+					"case meta2 operation succeeds (but is really slow)");
+		} else {
+			FINAL_ERROR(info, "META2 operation failed src[%s] dst[%s]",
+					info.src_descr, info.dst_descr);
+			delete_uploaded_chunk(&info);
+		}
 		goto label_exit;
 	}
 

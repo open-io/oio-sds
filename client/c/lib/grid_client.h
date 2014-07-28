@@ -1286,6 +1286,32 @@ gs_status_t hc_delete_content_property(gs_content_t *content, char ** keys, gs_e
 gs_status_t hc_copy_content(gs_container_t *c, const char *src, const char *dst,
 			gs_error_t **e);
 
+/**
+ * Download a content. This function use features of meta1v2.
+ *
+ * @param hc
+ * @param container the container name
+ * @param content the content name
+ * @param dl_info
+ * @param e a pointer to gs_error_t*
+ * @return GS_OK or GS_ERROR
+ */
+gs_status_t hc_dl_content_custom(gs_grid_storage_t *hc, const char *container,
+		const char *content, gs_download_info_t *dl_info, gs_error_t **e);
+
+/**
+ * Download a content. This function use features of meta1v2.
+ *
+ * @param hc
+ * @param container the container name
+ * @param content the content name
+ * @param dest the path to store the downloaded data
+ * @param e a pointer to gs_error_t*
+ * @return GS_OK or GS_ERROR
+ */
+gs_status_t hc_dl_content_to_file(gs_grid_storage_t *hc, const char *container,
+		const char *content, const char *dest, gs_error_t **e);
+
 
 /* Snapshots --------------------------------------------------------------- */
 

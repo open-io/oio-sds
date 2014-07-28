@@ -781,7 +781,7 @@ _client_expire(struct gridd_client_s *client, GTimeVal *now)
 		return;
 	if (_client_expired(client, now)) {
 		_client_reset_cnx(client);
-		client->error = NEWERROR(0, "Timeout");
+		client->error = NEWERROR(ERRCODE_READ_TIMEOUT, "Timeout");
 		client->step = STATUS_FAILED;
 	}
 }

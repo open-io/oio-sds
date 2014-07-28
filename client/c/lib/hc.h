@@ -62,6 +62,17 @@ gs_error_t * hc_list_contents(gs_grid_storage_t *hc, struct hc_url_s *url, int o
  */
 gs_error_t * hc_get_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *dest, int force, int cache, gchar *stgpol);
 
+/**
+ * Download a content to writer specified in dl_info.
+ *
+ * @param hc
+ * @param url
+ * @param dl_info
+ * @param cache
+ * @param stgpol
+ * @return
+ */
+gs_error_t * hc_dl_content(gs_grid_storage_t *hc, struct hc_url_s *url, gs_download_info_t *dl_info, int cache, gchar *stgpol);
 
 /**
  * Delete a container. This function use features of meta1v2.

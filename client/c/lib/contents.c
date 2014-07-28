@@ -1,4 +1,5 @@
 #include "./gs_internals.h"
+#include "hc.h"
 
 static void
 chunk_agregate_debug(GSList *agregates)
@@ -1236,4 +1237,50 @@ hc_copy_content(gs_container_t *c, const char *src, const char *dst, gs_error_t 
 	}
 
 	return GS_OK;
+}
+
+static struct hc_url_s *
+_init_url(const char *ns, const char *container, const char *content)
+{
+	struct hc_url_s *url = hc_url_empty();
+	(void) hc_url_set(url, HCURL_NS, ns);
+	(void) hc_url_set(url, HCURL_REFERENCE, container);
+	(void) hc_url_set(url, HCURL_PATH, content);
+	return url;
+}
+
+gs_status_t
+hc_dl_content_to_file(gs_grid_storage_t *hc, const char *container,
+		const char *content, const char *dest, gs_error_t **e)
+{
+	struct hc_url_s *url = _init_url(hc->full_vns, container, content);
+
+	gs_error_t *err = hc_get_content(hc, url, dest, FALSE, FALSE, NULL);
+	gs_status_t status = err == NULL ? GS_OK : GS_ERROR;
+
+	if (e)
+		*e = err;
+	else
+		gs_error_free(err);
+
+	hc_url_clean(url);
+	return status;
+}
+
+gs_status_t
+hc_dl_content_custom(gs_grid_storage_t *hc, const char *container,
+		const char *content, gs_download_info_t *dl_info, gs_error_t **e)
+{
+	struct hc_url_s *url = _init_url(hc->full_vns, container, content);
+
+	gs_error_t *err = hc_dl_content(hc, url, dl_info, FALSE, NULL);
+	gs_status_t status = err == NULL ? GS_OK : GS_ERROR;
+
+	if (e)
+		*e = err;
+	else
+		gs_error_free(err);
+
+	hc_url_clean(url);
+	return status;
 }

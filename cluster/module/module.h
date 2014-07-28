@@ -54,7 +54,6 @@
 # define EXPR_DEFAULT_META1 "root(2,((num stat.cpu)*(num stat.io)))"
 # define EXPR_DEFAULT_META2 "root(2,((num stat.cpu)*(num stat.io)))"
 # define EXPR_DEFAULT_RAWX  "root(3,((num stat.cpu)*(num stat.io)*(num stat.space)))"
-# define EXPR_DEFAULT_INDX  "num stat.cpu"
 
 # define NB_BROKEN_LINES 64U
 # define NB_SRV_ELEMENTS 128U

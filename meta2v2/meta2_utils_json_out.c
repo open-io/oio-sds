@@ -56,7 +56,7 @@ meta2_json_headers_only(GString *gstr, GSList *l)
 				CONTENTS_HEADERS_get_size(bean));
 		g_string_append_printf(g, ",\"policy\":\"%s\"}",
 				CONTENTS_HEADERS_get_policy(bean)->str);
-}
+	}
 	_json_BEAN_only(gstr, l, &descr_struct_CONTENTS_HEADERS, code);
 }
 

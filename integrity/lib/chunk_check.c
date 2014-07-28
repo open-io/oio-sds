@@ -1171,6 +1171,11 @@ check_chunk_orphan(check_info_t *check_info, check_result_t *cres, GError **p_er
 		raw_chunk = _get_chunk(ctx->content->raw_chunks, check_info->ck_info->position);
 		is_referenced = check_chunk_referencing_full(content_info, check_info->ck_info,
 				ctx->content, raw_chunk, &broken_elements, p_err);
+		if (is_referenced && 0 != g_strcmp0(raw_chunk->id.vol, check_info->rawx_vol)) {
+			check_result_append_msg(cres, "rawx mismatch (volume found in m2: [%s])",
+					raw_chunk->id.vol);
+			is_referenced = FALSE;
+		}
 	} else {
 		// crawled chunk is older than content, trash it
 		if (trash_chunk(check_info, cres))

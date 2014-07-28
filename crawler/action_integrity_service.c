@@ -251,11 +251,13 @@ do_work(const gchar* source_path, guint64 service_uid, GSList *checks) {
 	GError* local_error = NULL;
 	gchar* volume_path = NULL;
 	check_info_t check_info;
+	check_result_t *result = NULL;
 
 	if (NULL == source_path)
 		return EXIT_FAILURE;
 
 	volume_path = g_hash_table_lookup(volume_path_table, &service_uid);
+	memset(&check_info, 0x00, sizeof(check_info));
 
 	if (!rawx_get_lock_info(volume_path,
 			check_info.rawx_str_addr, sizeof(check_info.rawx_str_addr),
@@ -289,7 +291,6 @@ do_work(const gchar* source_path, guint64 service_uid, GSList *checks) {
 	memcpy(check_info.rawx_vol, volume_path, strlen(volume_path));
 	bzero(check_info.source_path, sizeof(check_info.source_path));
 	memcpy(check_info.source_path, source_path, strlen(source_path));
-	check_info.options = NULL;
 	if (g_dryrun_mode) {
 		check_info.options = check_option_new();
 		check_option_set_bool(check_info.options, CHECK_OPTION_DRYRUN, TRUE);
@@ -297,7 +298,6 @@ do_work(const gchar* source_path, guint64 service_uid, GSList *checks) {
 	/* Running checks */
 	GSList *c_iter = checks;
 	check_t *check = NULL;
-	check_result_t *result = NULL;
 	for (; c_iter; c_iter = g_slist_next(c_iter)) {
 		check = c_iter->data;
 		GRID_DEBUG("Starting check [%s] on chunk [%s]", check->name, check_info.source_path);
