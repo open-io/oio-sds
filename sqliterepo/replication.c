@@ -568,7 +568,8 @@ sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 	EXTRA_ASSERT(sq3->db != NULL);
 	*result = NULL;
 
-	if (sqlx_repository_replication_configured(sq3->repo)) {
+	if (!sq3->no_peers &&
+			sqlx_repository_replication_configured(sq3->repo)) {
 		GError *err = election_has_peers(
 				sqlx_repository_get_elections_manager(sq3->repo),
 				sq3->logical_name, sq3->logical_type, &has);

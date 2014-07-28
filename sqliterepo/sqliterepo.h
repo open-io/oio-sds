@@ -63,6 +63,7 @@ struct sqlx_sqlite3_s
 	GTree *admin; // <gchar*,GByteArray*>
 	gint bd; // ID in cache
 	gboolean deleted : 8;
+	gboolean no_peers : 8; // Prevent get_peers()
 };
 
 enum sqlx_repo_flag_e
