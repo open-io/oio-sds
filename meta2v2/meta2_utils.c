@@ -2170,13 +2170,13 @@ _m2_generate_RAIN(struct gen_ctx_s *ctx)
 
 	(void) distance;
 
-	for (pos=0,s=0; s < ctx->size ;) {
+	for (pos=0,s=0; s < MAX(ctx->size,1) ;) {
 		struct service_info_s **siv = NULL;
 
 		struct lb_next_opt_s opt;
 		memset(&opt, 0, sizeof(opt));
 		opt.req.duplicates = (distance <= 0);
-		opt.req.max = k + m;
+		opt.req.max = ((ctx->size>0)?(k + m):1);
 		opt.req.distance = distance;
 		opt.req.stgclass = stgclass;
 		opt.req.strict_stgclass = FALSE; // Accept ersatzes
@@ -2306,7 +2306,7 @@ m2_generate_beans_v1(struct hc_url_s *url, gint64 size, gint64 chunk_size,
 	ctx.mdsys = mdsys;
 	ctx.mdusr = mdusr;
 
-	if (!pol || size == 0)
+	if (!pol/* || size == 0*/)
 		return _m2_generate_DUPLI(&ctx);
 
 	switch (data_security_get_type(storage_policy_get_data_security(pol))) {

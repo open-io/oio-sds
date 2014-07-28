@@ -44,6 +44,7 @@ _create_container(struct gridd_filter_ctx_s *ctx)
 
 	params.storage_policy = meta2_filter_ctx_get_param(ctx, M2_KEY_STORAGE_POLICY);
 	params.version_policy = meta2_filter_ctx_get_param(ctx, M2_KEY_VERSION_POLICY);
+	params.local = (meta2_filter_ctx_get_param(ctx, "LOCAL") != NULL);
 
 retry:
 	err = meta2_backend_create_container(m2b, url, &params);
@@ -376,7 +377,9 @@ meta2_filter_action_list_contents(struct gridd_filter_ctx_s *ctx,
 	lp.type = DEFAULT;
 
 	if (NULL != fstr) {
-		lp.flags = (guint32) g_ascii_strtoull(fstr, NULL, 10);
+		//lp.flags = (guint32) g_ascii_strtoull(fstr, NULL, 10);
+        lp.flags = atoi(fstr);
+        lp.flags = g_ntohl(lp.flags);
 	}
 	if(type && !g_ascii_strcasecmp(type, S3_LISTING_TYPE)) {
 		return _list_S3(ctx, reply, &lp);
