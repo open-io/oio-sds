@@ -514,7 +514,7 @@ _repair_missing_rain_chunks(struct policy_check_s *pc,
 			flaw->param.rain_toofew.pairs_data,
 			flaw->param.rain_toofew.pairs_parity,
 			flaw->param.rain_toofew.pairs_unavailable};
-	err = rainx_reconstruct(pc->url, pc->nsinfo, &params, NULL, TRUE);
+	err = rainx_reconstruct(pc->url, pc->nsinfo, &params, NULL, TRUE, FALSE);
 	if (err != NULL) {
 		GRID_ERROR("Failed to reconstruct: %s", err->message);
 		g_clear_error(&err);
