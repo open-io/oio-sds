@@ -26,6 +26,7 @@ struct dav_resource_private {
 
 	char dirname[1024];
 	char hex_chunkid[STRLEN_CHUNKID];
+	char file_extension[64];
 	gboolean compression;
 	char compress_algo[512];
 

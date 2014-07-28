@@ -189,7 +189,8 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	bzero(&(resource->info->comp_ctx), sizeof(struct compression_ctx_s));
 
 	resource->info->fullpath = apr_pstrcat(resource->pool,
-		resource->info->dirname, "/", resource->info->hex_chunkid,
+		resource->info->dirname, resource->info->hex_chunkid,
+		resource->info->file_extension,
 		NULL);
 	
 	/* init compression context structure if we are in get method (for decompression) */
@@ -201,7 +202,9 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	/* Check the chunk's existence */
 	resource_stat_chunk(resource, r->method_number == M_GET || r->method_number == M_OPTIONS);
 
-	if (r->method_number == M_PUT || r->method_number == M_POST || (r->method_number == M_GET && ctx.update_only)) {
+	if (r->method_number == M_PUT || r->method_number == M_POST ||
+			r->method_number == M_MOVE ||
+			(r->method_number == M_GET && ctx.update_only)) {
 		request_load_chunk_info(r, resource);
 	}
 
@@ -253,7 +256,8 @@ dav_rawx_is_same_resource(const dav_resource *res1, const dav_resource *res2)
 
 	return (res1->type == res2->type)
 		&& (0 == apr_strnatcasecmp(ctx1->hex_chunkid, ctx2->hex_chunkid))
-		&& (0 == apr_strnatcasecmp(ctx1->dirname, ctx2->dirname));
+		&& (0 == apr_strnatcasecmp(ctx1->dirname, ctx2->dirname))
+		&& (0 == apr_strnatcasecmp(ctx1->file_extension, ctx2->file_extension));
 }
 
 static int
@@ -583,6 +587,59 @@ end_deliver:
 }
 
 static dav_error *
+dav_rawx_move_resource(dav_resource *src_res, dav_resource *dst_res,
+		dav_response **response)
+{
+	char buff[128];
+	apr_pool_t *pool;
+	pool = dst_res->pool;
+	apr_status_t status;
+	dav_error *e = NULL;
+	dav_rawx_server_conf *srv_conf = resource_get_server_config(src_res);
+
+	*response = NULL;
+
+	if (DAV_RESOURCE_TYPE_REGULAR != src_res->type)  {
+		e = server_create_and_stat_error(srv_conf, pool,
+			HTTP_CONFLICT, 0, "Cannot MOVE this type of resource.");
+		goto end_move;
+	}
+	if (src_res->collection) {
+		e = server_create_and_stat_error(srv_conf, pool,
+			HTTP_CONFLICT, 0, "No MOVE on collections");
+		goto end_move;
+	}
+	if (apr_strnatcasecmp(src_res->info->hex_chunkid,
+			dst_res->info->hex_chunkid)) {
+		e = server_create_and_stat_error(srv_conf, pool,
+				HTTP_FORBIDDEN, 0,
+				"Source and destination chunk ids are not the same");
+		goto end_move;
+	}
+
+	DAV_DEBUG_RES(src_res, 0, "Moving %s to %s",
+			resource_get_pathname(src_res), resource_get_pathname(dst_res));
+	status = apr_file_rename(resource_get_pathname(src_res),
+			resource_get_pathname(dst_res), pool);
+
+	if (status != APR_SUCCESS) {
+		e = server_create_and_stat_error(srv_conf,
+				pool, HTTP_INTERNAL_SERVER_ERROR, status,
+				apr_pstrcat(pool, "Failed to MOVE this chunk: ",
+					apr_strerror(status, buff, sizeof(buff)), NULL));
+		goto end_move;
+	}
+
+	server_inc_stat(srv_conf, RAWX_STATNAME_REP_2XX, 0);
+
+end_move:
+	server_inc_request_stat(srv_conf, RAWX_STATNAME_REQ_OTHER,
+			request_get_duration(src_res->info->request));
+
+	return e;
+}
+
+static dav_error *
 dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 {
 	char buff[128];
@@ -715,8 +772,8 @@ static const dav_hooks_repository dav_hooks_repository_rawx =
 	dav_rawx_deliver,
 	NULL /* no collection creation */,
 	NULL /* no copy of resources allowed */,
-	NULL /* cannot move resources */,
-	dav_rawx_remove_resource /*only for regular resources*/,
+	dav_rawx_move_resource /* only for regular resources */,
+	dav_rawx_remove_resource /* only for regular resources */,
 	dav_rawx_walk /* no walk across the chunks */,
 	dav_rawx_getetag,
 	NULL, /* no module context */
