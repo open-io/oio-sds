@@ -37,6 +37,7 @@ struct m2v2_create_params_s
 {
 	const gchar *storage_policy;
 	const gchar *version_policy;
+	gboolean local; /**< Do not try to replicate, do not call get_peers() */
 };
 
 /**

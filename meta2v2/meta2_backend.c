@@ -626,12 +626,19 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 		enum m2v2_open_type_e how, struct sqlx_sqlite3_s **result)
 {
 	GError *err = NULL;
+	gboolean no_peers = FALSE;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(result != NULL);
 	EXTRA_ASSERT(m2 != NULL);
 	EXTRA_ASSERT(m2->repo != NULL);
+
+	no_peers = hc_url_get_option_value(url, META2_URL_LOCAL_BASE) != NULL;
+	if (no_peers) {
+		how &= ~M2V2_OPEN_REPLIMODE;
+		how |= M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK;
+	}
 
 	enum m2v2_open_type_e repli = how & M2V2_OPEN_REPLIMODE;
 	if (repli != M2V2_OPEN_LOCAL && !(how & M2V2_OPEN_NOREFCHECK)) {
@@ -659,6 +666,8 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 			err->domain = g_quark_from_static_string(G_LOG_DOMAIN);
 		return err;
 	}
+
+	sq3->no_peers = no_peers;
 
 	// XXX If the container is being deleted, this is sad ...
 	// This MIGHT happen if a cache is present (and this is the
@@ -765,7 +774,7 @@ _create_container_init_phase(struct sqlx_sqlite3_s *sq3,
 	GError *err = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	if ((err = _transaction_begin(sq3, url, &repctx)))
+	if (!params->local && (err = _transaction_begin(sq3, url, &repctx)))
 		return err;
 
 	if (!err && params->storage_policy)
@@ -776,7 +785,9 @@ _create_container_init_phase(struct sqlx_sqlite3_s *sq3,
 	}
 	if (!err)
 		sqlx_admin_init_i64(sq3, META2_INIT_FLAG, 1);
-	return sqlx_transaction_end(repctx, err);
+	if (!params->local)
+		err = sqlx_transaction_end(repctx, err);
+	return err;
 }
 
 GError *
@@ -784,11 +795,13 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 		struct hc_url_s *url, struct m2v2_create_params_s *params)
 {
 	GError *err = NULL;
+	enum m2v2_open_type_e open_mode = 0;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
-	GRID_DEBUG("CREATE(%s,%s,%s)", hc_url_get(url, HCURL_WHOLE),
+	GRID_DEBUG("CREATE(%s,%s,%s)%s", hc_url_get(url, HCURL_WHOLE),
 			params?params->storage_policy:NULL,
-			params?params->version_policy:NULL);
+			params?params->version_policy:NULL,
+			(params && params->local)? " (local)" : "");
 
 	/* We must check storage policy BEFORE opening the base if we don't
 	 * want to have an empty base in case of invalid policy */
@@ -797,7 +810,13 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 			return err;
 	}
 
-	err = m2b_open(m2, url, M2V2_OPEN_AUTOCREATE|M2V2_OPEN_MASTERONLY, &sq3);
+	if (params->local) // NOREFCHECK: do not call get_peers()
+		open_mode = M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK;
+	else
+		open_mode = M2V2_OPEN_MASTERONLY;
+	open_mode |= M2V2_OPEN_AUTOCREATE;
+
+	err = m2b_open(m2, url, open_mode, &sq3);
 	if (sq3 && !err) {
 		if (sqlx_admin_has(sq3, META2_INIT_FLAG))
 			err = NEWERROR(CODE_CONTAINER_EXISTS, "Container already initiated");

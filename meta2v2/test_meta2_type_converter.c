@@ -174,7 +174,7 @@ static void
 _container_wraper(container_test_f cf)
 {
 	void test(struct meta2_backend_s *m2) {
-		struct m2v2_create_params_s params = {NULL,NULL};
+		struct m2v2_create_params_s params = {NULL,NULL, FALSE};
 		struct hc_url_s *url;
 		GError *err;
 

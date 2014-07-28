@@ -48,6 +48,7 @@
 #  define META2_EVTFIELD_CHUNKS "CHUNKS"
 # endif
 
+#define META2_URL_LOCAL_BASE "__M2V2_LOCAL_BASE__"
 
 
 struct transient_s

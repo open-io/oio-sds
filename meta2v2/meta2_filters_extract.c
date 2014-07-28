@@ -772,7 +772,14 @@ int
 meta2_filter_extract_header_localflag(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	return _extract_header_flag("LOCAL", ctx, reply);
+	int ret = _extract_header_flag("LOCAL", ctx, reply);
+	if (meta2_filter_ctx_get_param(ctx, "LOCAL")) {
+		/* This is a hack to avoid changing every meta2_backend.h
+		 * function prototype. */
+		struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+		hc_url_set_option(url, META2_URL_LOCAL_BASE, "true");
+	}
+	return ret;
 }
 
 int
