@@ -548,6 +548,8 @@ hc_url_set_option (struct hc_url_s *u,  const gchar *k, const gchar *v)
 		g_free(*pv);
 		*pv = packed;
 	}
+	g_free(u->whole);
+	u->whole = NULL;
 }
 
 size_t
