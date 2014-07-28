@@ -397,12 +397,12 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len)
 	g_string_append(gstr, r->client->peer_name);
 
 	g_string_append_printf(gstr,
-			" %ld.%06ld %ld.%06ld %d %"G_GSIZE_FORMAT" %%s",
+			" %ld.%06ld %ld.%06ld %d %"G_GSIZE_FORMAT" %%s %%s",
 			tv_diff0.tv_sec, tv_diff0.tv_usec,
 			tv_diff1.tv_sec, tv_diff1.tv_usec,
 			status, out_len);
 
-	g_log("access", GRID_LOGLVL_INFO, gstr->str, r->request->req_uri);
+	g_log("access", GRID_LOGLVL_INFO, gstr->str, r->request->cmd, r->request->req_uri);
 
 	g_string_free(gstr, TRUE);
 }
