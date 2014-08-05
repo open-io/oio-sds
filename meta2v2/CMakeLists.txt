@@ -50,11 +50,15 @@ add_library(meta2v2utils SHARED
 		meta2_backend_dbconvert.c
 		meta2_dedup_utils.h
 		meta2_dedup_utils.c
+		meta2_utils_json_in.c
+		meta2_utils_json_out.c
+		meta2_utils_json.h
 )
 
 target_link_libraries(meta2v2utils
 		metautils gridcluster sqliteutils rain
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
+		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES}
+		${JSONC_LIBRARIES})
 
 add_library(meta2v2remote SHARED
 		meta2v2_remote.h
@@ -137,6 +141,7 @@ install(FILES
 			meta2_test_common.h
 			meta2_utils.h
 			meta2_utils_lb.h
+			meta2_utils_json.h
 			meta2v2_remote.h
 		DESTINATION include/meta2v2
 		PERMISSIONS
