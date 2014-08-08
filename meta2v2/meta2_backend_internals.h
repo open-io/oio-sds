@@ -11,6 +11,10 @@
 # include <meta2v2/meta2_backend.h>
 # include <meta2v2/meta2_events.h>
 
+#ifdef USE_KAFKA
+# include <librdkafka/rdkafka.h>
+#endif
+
 # ifndef M2V2_KEY_VERSION
 #  define M2V2_KEY_VERSION "m2vers"
 # endif
@@ -89,6 +93,13 @@ struct meta2_backend_s
 	GHashTable *modified_containers;
 
 	struct hc_resolver_s *resolver;
+
+#ifdef USE_KAFKA
+	// TODO: move to sqlx_repository_s, we may need it in meta1
+	rd_kafka_t *kafka_handle;
+	// TODO: make hash table of topic objects
+	rd_kafka_topic_t *kafka_topic;
+#endif
 };
 
 struct transient_element_s

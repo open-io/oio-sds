@@ -2,6 +2,8 @@
 #define G_LOG_DOMAIN "m2v2"
 #endif
 
+#include <glib.h>
+
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 
@@ -16,12 +18,17 @@
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/meta2v2_remote.h>
+#include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2_utils_lb.h>
 #include <meta2v2/meta2_backend_internals.h>
 
 #include <meta2/remote/meta2_remote.h>
 
 #include <resolver/hc_resolver.h>
+
+#ifdef USE_KAFKA
+#include <librdkafka/rdkafka.h>
+#endif
 
 enum m2v2_open_type_e
 {
@@ -351,6 +358,64 @@ _check_policy(struct meta2_backend_s *m2, const gchar *polname)
 	return err;
 }
 
+#ifdef USE_KAFKA
+GError *
+meta2_backend_init_kafka(struct meta2_backend_s *m2)
+{
+	GError *err = NULL;
+	gchar errmsg[256];
+	gchar str_addr[128];
+	service_info_t *broker = NULL;
+
+	// TODO: customize configuration
+	rd_kafka_t *handle = rd_kafka_new(RD_KAFKA_PRODUCER, NULL,
+			errmsg, sizeof(errmsg));
+
+	if (!handle) {
+		err = NEWERROR(CODE_INTERNAL_ERROR,
+				"Failed to initialize Kafka: %s", errmsg);
+		goto end;
+	}
+	rd_kafka_set_logger(handle, rd_kafka_log_syslog);
+	broker = get_one_namespace_service(m2->ns_name, "kafka", &err);
+	if (err) {
+		rd_kafka_destroy(handle);
+		goto end;
+	}
+	grid_addrinfo_to_string(&(broker->addr), str_addr, sizeof(str_addr));
+	if (!rd_kafka_brokers_add(handle, str_addr)) {
+		err = NEWERROR(CODE_INTERNAL_ERROR,
+				"Failed to configure kafka broker to %s", str_addr);
+		rd_kafka_destroy(handle);
+		goto end;
+	} else {
+		service_info_clean(broker);
+	}
+	m2->kafka_handle = handle;
+
+end:
+	return err;
+}
+
+GError *
+meta2_backend_init_kafka_topic(struct meta2_backend_s *m2, const gchar *name)
+{
+	rd_kafka_topic_t *topic = NULL;
+
+	g_assert(m2 != NULL);
+	g_assert(m2->kafka_handle != NULL);
+
+	// TODO: customize configuration
+	topic = rd_kafka_topic_new(m2->kafka_handle, name, NULL);
+	if (!topic) {
+		return NEWERROR(CODE_INTERNAL_ERROR,
+				"Failed to initialize Kafka topic: %s", strerror(errno));
+	}
+	m2->kafka_topic = topic;
+	return NULL;
+}
+#endif
+
 GError *
 meta2_backend_init(struct meta2_backend_s **result,
 		struct sqlx_repository_s *repo, const gchar *ns,
@@ -460,6 +525,16 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 	if (m2->resolver) {
 		m2->resolver = NULL;
 	}
+#ifdef USE_KAFKA
+	if (m2->kafka_topic) {
+		rd_kafka_topic_destroy(m2->kafka_topic);
+		m2->kafka_topic = NULL;
+	}
+	if (m2->kafka_handle) {
+		rd_kafka_destroy(m2->kafka_handle);
+		m2->kafka_handle = NULL;
+	}
+#endif
 	g_static_rw_lock_free(&m2->rwlock_evt_config);
 	namespace_info_clear(&(m2->ns_info));
 	g_free(m2);
@@ -700,6 +775,13 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 		}
 	}
 
+	if (!hc_url_has(url, HCURL_REFERENCE)) {
+		gchar *ref = sqlx_admin_get_str(sq3,
+				M2V2_PROP_PREFIX_SYS "container_name");
+		if (ref)
+			hc_url_set(url, HCURL_REFERENCE, ref);
+		g_free(ref);
+	}
 	*result = sq3;
 	return NULL;
 }

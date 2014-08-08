@@ -11,6 +11,12 @@
 #include <sys/stat.h>
 #include <attr/xattr.h>
 
+#include <glib.h>
+
+#ifdef USE_KAFKA
+#include <librdkafka/rdkafka.h>
+#endif
+
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 #include <server/transport_gridd.h>
@@ -25,6 +31,13 @@
 #include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
+#include <meta2v2/meta2_utils_json.h>
+
+#define META2_JSON_EVENT_TEMPLATE "{ \"timestamp\": %ld,\
+ \"origin\": \"%s\",\
+ \"type\": \"%s\",\
+ \"seq\": %d,\
+ \"data\": { %s }}"
 
 static GError*
 _meta2_event_add_raw_v1(gridcluster_event_t *event, meta2_raw_content_t *v1)
@@ -285,6 +298,63 @@ touch_ALIAS(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	return err;
 }
 
+static GError *
+_notify_kafka(struct meta2_backend_s *m2b, struct hc_url_s *url,
+		GSList *beans, const char *evt_type)
+{
+#ifndef USE_KAFKA
+	(void) m2b;
+	(void) url;
+	(void) beans;
+	(void) evt_type;
+	return NULL;
+#else
+	int rc = 0;
+	gint64 version = 0;
+	GError *err = NULL;
+	GString *event = NULL, *event_data = NULL;
+
+	if (!m2b->kafka_topic) {
+		return NULL;
+	}
+
+	event = g_string_sized_new(1024);
+	event_data = g_string_sized_new(1024);
+
+	// FIXME: search version in beans (or do it in consumer?)
+	if (hc_url_has(url, HCURL_VERSION)) {
+		version = g_ascii_strtoll(hc_url_get(url, HCURL_VERSION), NULL, 10);
+	}
+
+	g_string_append_printf(event_data,
+			"\"url\": \"%s/%s/%s?version=%ld\", ",
+			hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE),
+			hc_url_get(url, HCURL_PATH), version);
+	meta2_json_dump_all_beans(event_data, beans);
+
+	g_string_append_printf(event, META2_JSON_EVENT_TEMPLATE,
+			time(NULL),
+			meta2_backend_get_local_addr(m2b),
+			evt_type,
+			1,
+			event_data->str);
+
+	errno = 0;
+	rc = rd_kafka_produce(m2b->kafka_topic, 0, RD_KAFKA_MSG_F_COPY,
+			event->str, event->len+1, NULL, 0, NULL);
+	if (rc < 0) {
+		err = NEWERROR(CODE_INTERNAL_ERROR,
+				"Failed to send event to Kafka: (%d) %s",
+				errno, rd_kafka_err2str(rd_kafka_errno2err(errno)));
+	}
+
+	g_string_free(event_data, TRUE);
+	g_string_free(event, TRUE);
+
+	return err;
+#endif
+}
+
 
 static void
 _get_beans(gpointer udata, gpointer b)
@@ -316,9 +386,15 @@ _notify_content(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b,
 			hc_url_get(url, HCURL_NS));
+	GSList *beans = (GSList*)meta2_filter_ctx_get_input_udata(ctx);
 
+	err = _notify_kafka(m2b, url, beans, evt_type);
+	if (err) {
+		GRID_WARN("Content notification failure: %s", err->message);
+		g_clear_error(&err);
+	}
 
-	if(!event_is_enabled(evt_config)){
+	if (!event_is_enabled(evt_config)) {
 		GRID_TRACE("Event not enabled");
 		return FILTER_OK;
 	}
@@ -326,7 +402,6 @@ _notify_content(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	// add RAW field
 	if (!bChunk_purged_only) {
 		GRID_INFO("Going to notify content creation");
-		GSList *beans = (GSList*)meta2_filter_ctx_get_input_udata(ctx);
 		GRID_INFO("Found %d beans in context", g_slist_length(beans));
 		err = touch_ALIAS_beans(m2b, url, beans, evt_type);
 	}

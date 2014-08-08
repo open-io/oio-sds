@@ -219,6 +219,7 @@ pkg_check_modules(LIBEVENT REQUIRED libevent)
 pkg_check_modules(APR REQUIRED apr-1)
 pkg_check_modules(GAMIN REQUIRED gamin)
 pkg_check_modules(DBUS REQUIRED dbus-1 dbus-glib-1)
+pkg_check_modules(RDKAFKA rdkafka)
 endif()
 
 if (NOT CLIENT_ONLY)
@@ -498,9 +499,10 @@ endif(GRIDD_PLUGINS)
 
 ###-------------------------------------------------------------------------###
 
-MESSAGE(STATUS "ZMQ   (${ZMQ_FOUND}? ${ZMQ_VERSION})")
-MESSAGE(STATUS "JSONC (${JSONC_FOUND}? ${JSONC_VERSION})")
-MESSAGE(STATUS "GLIB2 (${GLIB2_FOUND}? ${GLIB2_VERSION})")
+MESSAGE(STATUS "ZMQ     (${ZMQ_FOUND}? ${ZMQ_VERSION})")
+MESSAGE(STATUS "JSONC   (${JSONC_FOUND}? ${JSONC_VERSION})")
+MESSAGE(STATUS "GLIB2   (${GLIB2_FOUND}? ${GLIB2_VERSION})")
+MESSAGE(STATUS "RDKAFKA (${RDKAFKA_FOUND}? ${RDKAFKA_VERSION})")
 
 
 set(CMAKE_LIBRARY_PATH "")

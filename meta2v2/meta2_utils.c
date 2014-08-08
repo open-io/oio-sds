@@ -1588,7 +1588,10 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 
 	if (!err) {
 		err = m2db_real_put_alias(args->sq3, &args2);
-		if(!err) {
+		if (!err) {
+			gchar buf[16];
+			g_snprintf(buf, sizeof(buf), "%"G_GINT64_FORMAT, args2.version+1);
+			hc_url_set(args->url, HCURL_VERSION, buf);
 			m2db_set_size(args->sq3, m2db_get_size(args->sq3) + size);
 		}
 	}

@@ -70,4 +70,8 @@
 #  define META2_EVTTYPE_CONTAINER_EVTRM "meta2.CONTAINER.evt.rm"
 # endif
 
+# ifndef META2_EVT_TOPIC
+#  define META2_EVT_TOPIC "redc.meta2"
+# endif
+
 #endif /* META2V2_EVENTS__H */

@@ -42,6 +42,21 @@ GError* meta2_backend_init(struct meta2_backend_s **result,
  */
 void meta2_backend_clean(struct meta2_backend_s *m2);
 
+#ifdef USE_KAFKA
+/**
+ * Initialize Kafka broker handle.
+ */
+GError *meta2_backend_init_kafka(struct meta2_backend_s *m2);
+
+/**
+ * Initialize Kafka topic.
+ *
+ * @param name The name of the topic to initialize
+ */
+GError *meta2_backend_init_kafka_topic(struct meta2_backend_s *m2,
+		const gchar *name);
+#endif
+
 /*!
  * Thread-safely set the internal nsinfo of the meta2_backend.
  *

@@ -21,6 +21,7 @@
 #include <meta2v2/meta2_gridd_dispatcher.h>
 #include <meta2v2/meta2_backend.h>
 #include <meta2v2/meta2_backend_dbconvert.h>
+#include <meta2v2/meta2_events.h>
 #include <sqlx/sqlx_service.h>
 
 static struct grid_lbpool_s *glp = NULL;
@@ -233,12 +234,26 @@ _post_config(struct sqlx_service_s *ss)
 	GError *err = meta2_backend_init(&m2, ss->repository, ss->ns_name, glp,
 			ss->resolver);
 	if (err) {
-		GRID_WARN("META2 backend init failure : (%d) %s", err->code, err->message);
+		GRID_WARN("META2 backend init failure: (%d) %s", err->code, err->message);
 		g_clear_error(&err);
 		return FALSE;
 	}
 	meta2_backend_build_meta0_prefix_mapping(m2);
 	GRID_DEBUG("META0 mappings now ready");
+
+#ifdef USE_KAFKA
+	err = meta2_backend_init_kafka(m2);
+	if (err) {
+		GRID_WARN(err->message);
+		g_clear_error(&err);
+	} else {
+		err = meta2_backend_init_kafka_topic(m2, META2_EVT_TOPIC);
+		if (err) {
+			GRID_WARN("%s", err->message);
+			g_clear_error(&err);
+		}
+	}
+#endif
 
 	/* Make deleted bases exit the cache */
 	sqlx_repository_configure_close_callback(ss->repository, meta2_on_close, ss);
