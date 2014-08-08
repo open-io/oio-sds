@@ -299,13 +299,12 @@ touch_ALIAS(struct meta2_backend_s *m2b, struct hc_url_s *url,
 }
 
 static GError *
-_notify_kafka(struct meta2_backend_s *m2b, struct hc_url_s *url,
-		GSList *beans, const char *evt_type)
+_notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
+		const char *evt_type)
 {
+	(void) reply;
 #ifndef USE_KAFKA
-	(void) m2b;
-	(void) url;
-	(void) beans;
+	(void) ctx;
 	(void) evt_type;
 	return NULL;
 #else
@@ -313,6 +312,8 @@ _notify_kafka(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	gint64 version = 0;
 	GError *err = NULL;
 	GString *event = NULL, *event_data = NULL;
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 
 	if (!m2b->kafka_topic) {
 		return NULL;
@@ -321,22 +322,42 @@ _notify_kafka(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	event = g_string_sized_new(1024);
 	event_data = g_string_sized_new(1024);
 
-	// FIXME: search version in beans (or do it in consumer?)
-	if (hc_url_has(url, HCURL_VERSION)) {
-		version = g_ascii_strtoll(hc_url_get(url, HCURL_VERSION), NULL, 10);
-	}
+	if (g_str_has_prefix(evt_type, "meta2.CONTENT")) {
+		GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
+		// FIXME: search version in beans (or do it in consumer?)
+		if (hc_url_has(url, HCURL_VERSION)) {
+			version = g_ascii_strtoll(hc_url_get(url, HCURL_VERSION), NULL, 10);
+		}
 
-	g_string_append_printf(event_data,
-			"\"url\": \"%s/%s/%s?version=%ld\", ",
-			hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE),
-			hc_url_get(url, HCURL_PATH), version);
-	meta2_json_dump_all_beans(event_data, beans);
+		g_string_append_printf(event_data,
+				"\"url\": \"%s/%s/%s?version=%ld\", ",
+				hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE),
+				hc_url_get(url, HCURL_PATH), version);
+		meta2_json_dump_all_beans(event_data, beans);
+	} else { // Container event
+		g_string_append_printf(event_data, "\"url\": \"%s/%s\"",
+				hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE));
+		if (!strcmp(evt_type, META2_EVTTYPE_CREATE)) {
+			const gchar *storage_policy = meta2_filter_ctx_get_param(ctx,
+					M2_KEY_STORAGE_POLICY);
+			const gchar *versioning = meta2_filter_ctx_get_param(ctx,
+					M2_KEY_VERSION_POLICY);
+			if (storage_policy) {
+				g_string_append_printf(event_data,
+						", \"policy\": \"%s\"", storage_policy);
+			}
+			if (versioning) {
+				g_string_append_printf(event_data,
+						", \"versioning\": \"%s\"", versioning);
+			}
+		}
+	}
 
 	g_string_append_printf(event, META2_JSON_EVENT_TEMPLATE,
 			time(NULL),
 			meta2_backend_get_local_addr(m2b),
 			evt_type,
-			1,
+			1, // TODO: generate real sequence number
 			event_data->str);
 
 	errno = 0;
@@ -375,7 +396,8 @@ _get_beans(gpointer udata, gpointer b)
  * 		all content write on event
  */
 static int
-_notify_content(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
+_notify_content_gridd(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply,
 		gboolean bChunk_purged_only, struct on_bean_ctx_s *purged_chunk, const char *evt_type)
 {
 	TRACE_FILTER();
@@ -387,12 +409,6 @@ _notify_content(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b,
 			hc_url_get(url, HCURL_NS));
 	GSList *beans = (GSList*)meta2_filter_ctx_get_input_udata(ctx);
-
-	err = _notify_kafka(m2b, url, beans, evt_type);
-	if (err) {
-		GRID_WARN("Content notification failure: %s", err->message);
-		g_clear_error(&err);
-	}
 
 	if (!event_is_enabled(evt_config)) {
 		GRID_TRACE("Event not enabled");
@@ -431,6 +447,19 @@ _notify_content(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	return FILTER_OK;
 }
 
+static int
+_notify_content(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
+		gboolean purged_chunk_only, struct on_bean_ctx_s *purged_chunk, const char *evt_type)
+{
+	GError *err = _notify_kafka(ctx, reply, evt_type);
+	if (err) {
+		GRID_WARN("Kafka content notification failure: %s", err->message);
+		g_clear_error(&err);
+	}
+	return _notify_content_gridd(ctx, reply,
+			purged_chunk_only, purged_chunk, evt_type);
+}
+
 int
 meta2_filter_action_notify_content_PUT(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
@@ -453,7 +482,7 @@ meta2_filter_action_notify_content_DELETE_v2(struct gridd_filter_ctx_s *ctx,
 }
 
 static int
-_notify_container(struct gridd_filter_ctx_s *ctx,
+_notify_container_gridd(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply, const char *evt_type)
 {
 	GError *err = NULL;
@@ -491,6 +520,18 @@ _notify_container(struct gridd_filter_ctx_s *ctx,
 	g_hash_table_destroy(event);
 
 	return FILTER_OK;
+}
+
+static int
+_notify_container(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply, const char *evt_type)
+{
+	GError *err = _notify_kafka(ctx, reply, evt_type);
+	if (err) {
+		GRID_WARN("Kafka content notification failure: %s", err->message);
+		g_clear_error(&err);
+	}
+	return _notify_container_gridd(ctx, reply, evt_type);
 }
 
 int

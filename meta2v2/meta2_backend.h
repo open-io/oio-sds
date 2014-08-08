@@ -44,12 +44,12 @@ void meta2_backend_clean(struct meta2_backend_s *m2);
 
 #ifdef USE_KAFKA
 /**
- * Initialize Kafka broker handle.
+ * Initialize Kafka broker handle. No-op if already initialized.
  */
 GError *meta2_backend_init_kafka(struct meta2_backend_s *m2);
 
 /**
- * Initialize Kafka topic.
+ * Initialize Kafka topic. No-op if already initialized.
  *
  * @param name The name of the topic to initialize
  */

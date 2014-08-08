@@ -9,6 +9,8 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
+#include <glib.h>
+
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
@@ -27,6 +29,29 @@
 static struct grid_lbpool_s *glp = NULL;
 static struct meta2_backend_s *m2 = NULL;
 static struct sqlx_upgrader_s *upgrader = NULL;
+
+/**
+ * Connect (or reconnect) to Apache Kafka broker
+ * in order to send events.
+ */
+static void
+_init_kafka_events(void)
+{
+#ifdef USE_KAFKA
+	GError *err = NULL;
+	err = meta2_backend_init_kafka(m2);
+	if (err) {
+		GRID_WARN(err->message);
+		g_clear_error(&err);
+	} else {
+		err = meta2_backend_init_kafka_topic(m2, META2_EVT_TOPIC);
+		if (err) {
+			GRID_WARN(err->message);
+			g_clear_error(&err);
+		}
+	}
+#endif
+}
 
 static void
 _task_reload_event_config(gpointer p)
@@ -57,6 +82,8 @@ _task_reload_event_config(gpointer p)
 				PSRV(p)->ns_name, err->code, err->message);
 		g_clear_error(&err);
 	}
+
+	_init_kafka_events();
 }
 
 static void
@@ -241,19 +268,7 @@ _post_config(struct sqlx_service_s *ss)
 	meta2_backend_build_meta0_prefix_mapping(m2);
 	GRID_DEBUG("META0 mappings now ready");
 
-#ifdef USE_KAFKA
-	err = meta2_backend_init_kafka(m2);
-	if (err) {
-		GRID_WARN(err->message);
-		g_clear_error(&err);
-	} else {
-		err = meta2_backend_init_kafka_topic(m2, META2_EVT_TOPIC);
-		if (err) {
-			GRID_WARN("%s", err->message);
-			g_clear_error(&err);
-		}
-	}
-#endif
+	_init_kafka_events();
 
 	/* Make deleted bases exit the cache */
 	sqlx_repository_configure_close_callback(ss->repository, meta2_on_close, ss);

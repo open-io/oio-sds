@@ -367,6 +367,10 @@ meta2_backend_init_kafka(struct meta2_backend_s *m2)
 	gchar str_addr[128];
 	service_info_t *broker = NULL;
 
+	// Already initialized
+	if (m2->kafka_handle != NULL)
+		return NULL;
+
 	// TODO: customize configuration
 	rd_kafka_t *handle = rd_kafka_new(RD_KAFKA_PRODUCER, NULL,
 			errmsg, sizeof(errmsg));
@@ -403,7 +407,10 @@ meta2_backend_init_kafka_topic(struct meta2_backend_s *m2, const gchar *name)
 	rd_kafka_topic_t *topic = NULL;
 
 	g_assert(m2 != NULL);
-	g_assert(m2->kafka_handle != NULL);
+
+	// No connection to Kafka or topic already initialized
+	if (!m2->kafka_handle || m2->kafka_topic != NULL)
+		return NULL;
 
 	// TODO: customize configuration
 	topic = rd_kafka_topic_new(m2->kafka_handle, name, NULL);
