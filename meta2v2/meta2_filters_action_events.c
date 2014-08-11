@@ -39,6 +39,9 @@
  \"seq\": %d,\
  \"data\": { %s }}"
 
+// Per service sequence number
+static volatile gint _seq = 0;
+
 static GError*
 _meta2_event_add_raw_v1(gridcluster_event_t *event, meta2_raw_content_t *v1)
 {
@@ -353,11 +356,17 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		}
 	}
 
+#ifdef OLD_GLIB2
+	gint seq = g_atomic_int_exchange_and_add(&_seq, 1);
+#else
+	gint seq = g_atomic_int_add(&_seq, 1);
+#endif
+
 	g_string_append_printf(event, META2_JSON_EVENT_TEMPLATE,
-			time(NULL),
+			g_get_real_time() / 1000, // milliseconds since 1970
 			meta2_backend_get_local_addr(m2b),
 			evt_type,
-			1, // TODO: generate real sequence number
+			seq,
 			event_data->str);
 
 	errno = 0;

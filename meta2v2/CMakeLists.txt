@@ -20,6 +20,10 @@ if (RDKAFKA_FOUND)
 	add_definitions(-DUSE_KAFKA=1)
 endif()
 
+if (GLIB2_VERSION VERSION_LESS "2.30")
+	add_definitions(-DOLD_GLIB2)
+endif()
+
 add_custom_command(
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/autogen.c ${CMAKE_CURRENT_BINARY_DIR}/autogen.h
 	COMMAND ${PYTHON_EXECUTABLE}
