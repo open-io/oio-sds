@@ -39,15 +39,22 @@ void
 _on_bean_ctx_send_list(struct on_bean_ctx_s *obc, gboolean final)
 {
 	/* marshall the list, send and clean it */
+#ifndef USE_KAFKA
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(obc->ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(obc->ctx);
 	struct event_config_s * evt_config = meta2_backend_get_event_config(m2b,
 			hc_url_get(url, HCURL_NS));
+#endif
 
-	if(NULL != obc->l) {
+	if (NULL != obc->l) {
 		obc->reply->add_body(bean_sequence_marshall(obc->l));
-		if(event_is_enabled(evt_config)) {
-			if (obc->first) {
+#ifdef USE_KAFKA
+		if (1) {
+#else
+		if (event_is_enabled(evt_config)) {
+#endif
+			/* beans will be clean by context */
+			if(obc->first) {
 				obc->first = FALSE;
 				meta2_filter_ctx_set_input_udata(obc->ctx, obc->l,
 						(GDestroyNotify)_bean_cleanl2);
@@ -74,13 +81,17 @@ _on_bean_ctx_clean(struct on_bean_ctx_s *obc)
 	if(!obc)
 		return;
 
+#ifndef USE_KAFKA
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(obc->ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(obc->ctx);
 	struct event_config_s * evt_config = meta2_backend_get_event_config(m2b,
 			hc_url_get(url, HCURL_NS));
+#endif
 
-	if(obc->l) {
-		if(!event_is_enabled(evt_config))
+	if (obc->l) {
+#ifndef USE_KAFKA
+		if (!event_is_enabled(evt_config))
+#endif
 			_bean_cleanl2(obc->l);
 		obc->l = NULL;
 	}

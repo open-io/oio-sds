@@ -82,9 +82,7 @@ _get_cb(gpointer udata, gpointer bean)
 		GRID_TRACE("Bean got: %s", str->str);
 		g_string_free(str, TRUE);
 	}
-	/* TODO: Need to keep beans in context if we have to send
-	 * an event after the put */
-	if(ctx && ctx->l && g_slist_length(ctx->l) >= 32) {
+	if (ctx && ctx->l && g_slist_length(ctx->l) >= 32) {
 		_on_bean_ctx_send_list(ctx, FALSE);
 	}
 	ctx->l = g_slist_prepend(ctx->l, bean);

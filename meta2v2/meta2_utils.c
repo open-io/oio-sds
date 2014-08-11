@@ -1726,6 +1726,10 @@ _keep_old_bean(gpointer u, gpointer bean)
 		}
 		g_ptr_array_add(ctx->tmp, bean);
 	}
+	else if (DESCR(bean) == &descr_struct_CHUNKS) {
+		/* We need them for notification purposes */
+		g_ptr_array_add(ctx->tmp, bean);
+	}
 	else {
 		if (DESCR(bean) == &descr_struct_ALIASES) {
 			/* get the most up-to-date version */

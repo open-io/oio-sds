@@ -782,11 +782,16 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 		}
 	}
 
+	// Complete URL with full VNS and container name
 	if (!hc_url_has(url, HCURL_REFERENCE)) {
 		gchar *ref = sqlx_admin_get_str(sq3,
 				M2V2_PROP_PREFIX_SYS "container_name");
-		if (ref)
+		gchar *full_vns = sqlx_admin_get_str(sq3,
+				M2V2_PROP_PREFIX_SYS "namespace");
+		if (ref && full_vns) {
+			hc_url_set(url, HCURL_NS, full_vns);
 			hc_url_set(url, HCURL_REFERENCE, ref);
+		}
 		g_free(ref);
 	}
 	*result = sq3;

@@ -301,6 +301,18 @@ touch_ALIAS(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	return err;
 }
 
+static gint64
+_find_alias_version(GSList *beans)
+{
+	for (GSList *l = beans; l ; l = l->next) {
+		if (DESCR(l->data) == &descr_struct_ALIASES) {
+			gint64 version = ALIASES_get_version(l->data);
+			return version;
+		}
+	}
+	return 0;
+}
+
 static GError *
 _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		const char *evt_type)
@@ -327,11 +339,10 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 
 	if (g_str_has_prefix(evt_type, "meta2.CONTENT")) {
 		GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
-		// FIXME: search version in beans (or do it in consumer?)
-		if (hc_url_has(url, HCURL_VERSION)) {
+		version = _find_alias_version(beans);
+		if (version == 0 && hc_url_has(url, HCURL_VERSION)) {
 			version = g_ascii_strtoll(hc_url_get(url, HCURL_VERSION), NULL, 10);
 		}
-
 		g_string_append_printf(event_data,
 				"\"url\": \"%s/%s/%s?version=%ld\", ",
 				hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE),
