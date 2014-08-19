@@ -387,6 +387,9 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		err = NEWERROR(CODE_INTERNAL_ERROR,
 				"Failed to send event to Kafka: (%d) %s",
 				errno, rd_kafka_err2str(rd_kafka_errno2err(errno)));
+	} else {
+		GRID_DEBUG("Kafka notified of event %s for %s",
+				evt_type, hc_url_get(url, HCURL_WHOLE));
 	}
 
 	g_string_free(event_data, TRUE);

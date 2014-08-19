@@ -52,9 +52,11 @@ meta2_json_headers_only(GString *gstr, GSList *l)
 		metautils_gba_to_hexgstr(g, CONTENTS_HEADERS_get_id(bean));
 		g_string_append_printf(g, "\",\"hash\":\"");
 		metautils_gba_to_hexgstr(g, CONTENTS_HEADERS_get_hash(bean));
-		g_string_append_printf(g, "\",\"size\":%"G_GINT64_FORMAT"}",
+		g_string_append_printf(g, "\",\"size\":%"G_GINT64_FORMAT,
 				CONTENTS_HEADERS_get_size(bean));
-	}
+		g_string_append_printf(g, "\",\"policy\":\"%s\"}",
+				CONTENTS_HEADERS_get_policy(bean)->str);
+}
 	_json_BEAN_only(gstr, l, &descr_struct_CONTENTS_HEADERS, code);
 }
 
