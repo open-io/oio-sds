@@ -382,7 +382,7 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 
 	errno = 0;
 	rc = rd_kafka_produce(m2b->kafka_topic, 0, RD_KAFKA_MSG_F_COPY,
-			event->str, event->len+1, NULL, 0, NULL);
+			event->str, event->len, NULL, 0, NULL); // No '\0' character
 	if (rc < 0) {
 		err = NEWERROR(CODE_INTERNAL_ERROR,
 				"Failed to send event to Kafka: (%d) %s",
