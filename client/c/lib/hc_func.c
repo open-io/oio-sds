@@ -316,8 +316,8 @@ hc_upload_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *local
 			goto end_put;
 		}
 	} else {
-		if (!gs_upload_content_v2(c, hc_url_get(url, HCURL_PATH), s.st_size, _feed_from_fd,
-				&in, stgpol, sys_metadata, &e)) {
+		if (!gs_upload(c, hc_url_get(url, HCURL_PATH), s.st_size, _feed_from_fd,
+				&in, NULL, sys_metadata, stgpol, &e)) {
 			goto end_put;
 		}
 	}
@@ -331,11 +331,11 @@ end_put:
 	if (in > 1)
 		metautils_pclose(&in);
 
-	if(NULL != c) {	
+	if(NULL != c) {
 		gs_container_free(c);
 		c = NULL;
 	}
-	
+
 	return e;
 }
 

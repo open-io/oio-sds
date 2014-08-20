@@ -27,8 +27,7 @@
 		g_byte_array_free(system_metadata, TRUE);\
 	if (system_metadata_str_esc)\
 		g_free(system_metadata_str_esc);\
-	if (storage_policy != actual_stgpol)\
-		g_free((gpointer)actual_stgpol);\
+	g_free((gpointer)actual_stgpol);\
 } while (0)
 
 #define UPLOAD_CLEAN_MAIN_THREAD() do { \
@@ -77,16 +76,31 @@ static gs_status_t _gs_upload_content (meta2_content_add_f adder, gs_container_t
 
 static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 		const char *content_name, gboolean append, const int64_t content_size,
-		gs_input_f feeder, void *user_data, const char *user_metadata, const char *sys_metadata, gs_error_t **err);
+		gs_input_f feeder, void *user_data, const char *mdusr,
+		const char *sys_metadata, gs_error_t **err);
+
+static gs_status_t _gs_upload(gs_container_t *container,
+		const char *content_name, gboolean append, const int64_t content_size,
+		gs_input_f feeder, void *user_data, const char *mdusr,
+		const char *mdsys, const char *stgpol, gs_error_t **err);
+
+gs_status_t gs_upload(gs_container_t *container, const char *content_name,
+		const int64_t content_size, gs_input_f feeder, void *user_data,
+		const char *mdusr, const char *mdsys, const char *stgpol,
+		gs_error_t **err)
+{
+	return _gs_upload(container, content_name, FALSE, content_size, feeder,
+			user_data, mdusr, mdsys, stgpol, err);
+}
 
 /* upload the given chunk from the retry buffer */
 gs_status_t gs_upload_content_v2 (gs_container_t *container,
 		const char *content_name, const int64_t content_size,
-		gs_input_f feeder, void *user_data, const char *stgpol, const char *sys_metadata,
-		gs_error_t **err)
+		gs_input_f feeder, void *user_data, const char *mdusr,
+		const char *sys_metadata, gs_error_t **err)
 {
-	return _gs_upload_content_v2(container, content_name, FALSE, content_size, feeder, user_data,
-			stgpol, sys_metadata, err);
+	return gs_upload(container, content_name, content_size, feeder,
+			user_data, mdusr, sys_metadata, NULL, err);
 }
 
 gs_status_t gs_upload_content (gs_container_t *container,
@@ -971,7 +985,17 @@ static gchar * _esc_gba(GByteArray *metadata)
 /* upload the given chunk */
 static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 		const char *content_name, gboolean append, const int64_t content_size,
-		gs_input_f feeder, void *user_data, const char *storage_policy, const char *sys_metadata, gs_error_t **err)
+		gs_input_f feeder, void *user_data, const char *mdusr,
+		const char *sys_metadata, gs_error_t **err)
+{
+	return _gs_upload(container, content_name, append, content_size, feeder, user_data, mdusr,
+			sys_metadata, NULL, err);
+}
+
+static gs_status_t _gs_upload(gs_container_t *container,
+		const char *content_name, gboolean append, const int64_t content_size,
+		gs_input_f feeder, void *user_data, const char *mdusr,
+		const char *sys_metadata, const char *stgpol, gs_error_t **err)
 {
 #define CONTENT_ADD_V2() m2v2_remote_execute_BEANS(target, NULL, url, actual_stgpol, content_size, append, &chunks)
 #define CONTENT_COMMIT() m2v2_remote_execute_PUT(target, NULL, url, chunks, &beans)
@@ -997,8 +1021,8 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 		*fixed=NULL,            /*free: structure only*/
 		*cursor=NULL;           /*do not free*/
 	GSList *beans = NULL;
-	const gchar *actual_stgpol = storage_policy;
 	long timeout_cnx, timeout_op;
+	gchar *actual_stgpol = stgpol ? g_strdup(stgpol) : NULL;
 
 	gboolean is_rainx, tmp_is_rainx;
 	content_version_t content_version;
@@ -1072,6 +1096,8 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 			/* Get the actual storage policy selected by meta2 */
 			GString *pol_str = CONTENTS_HEADERS_get_policy(cursor->data);
 			if (pol_str != NULL) {
+				if(NULL != actual_stgpol)
+					g_free(actual_stgpol);
 				actual_stgpol = g_strdup(pol_str->str);
 			}
 			continue;
@@ -1173,9 +1199,19 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 	// TODO handle error cases occurring in upload_thread
 	GRID_DEBUG("whole upload successful");
 
-	/*tries to commit the content*/
+	/* Pack mdusr into M2V2_PROPERTY beans */
+	if(mdusr &&  0 < strlen(mdusr)) {
+		struct bean_PROPERTIES_s *bp = _bean_create(&descr_struct_PROPERTIES);
+		PROPERTIES_set2_alias(bp, hc_url_get(url, HCURL_PATH));
+		PROPERTIES_set_alias_version(bp, (guint64)hc_url_get(url, HCURL_VERSION));
+		PROPERTIES_set_key(bp, g_string_new("sys.m2v1_mdusr"));
+		PROPERTIES_set_value(bp, g_byte_array_append(g_byte_array_new(),
+					(guint8*)g_strdup(mdusr), strlen(mdusr)));
+		PROPERTIES_set_deleted(bp, FALSE);
+		chunks = g_slist_prepend(chunks, bp);
+	}
 
-	/* TODO : copy hash from chunks_info into chunks bean */
+	/*tries to commit the content*/
 
 	g_static_mutex_lock(&global_mutex);
 	if(!append) {

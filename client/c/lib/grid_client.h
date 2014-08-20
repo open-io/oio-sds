@@ -52,7 +52,7 @@ typedef struct gs_container_s gs_container_t;
 
 
 /**
- * The public information about 
+ * The public information about
  */
 typedef struct {
 	gs_container_t *container; /**< the remote container the content belongs to*/
@@ -494,6 +494,32 @@ gs_status_t gs_upload_content_v2 (gs_container_t *container,
 		const char *content_name, const int64_t content_size,
 		gs_input_f feeder, void *user_data, const char *user_metadata,
 		const char *sys_metadata, gs_error_t **err);
+
+/**
+ * Puts a new content in the given remote container
+ *
+ * The pointer to the newly uploaded content might be obtained with
+ * gs_get_content_from_path()
+ *
+ * @param container the base remote container
+ * @param content_name the name of the content in this container
+ * @param content_size the exact size of the content
+ * @param feeder a callback function used to get the next data chunk
+ * @param user_data a pointer to an arbitrary data, will be fed to each
+ *                  call to the feeder callback
+ * @param mdusr a pointer to a byte array, which contains the
+ *		user_metadata to set to the content
+ * @param mdsys a pointer to a byte array, which contains the
+ *		system metadata to set to the content
+ * @param stgpol storage policy name to apply to the uploaded content
+ * @param err a double pointer to an error structure, that will be set
+ *            if the function fails.
+ * @return 1 if the function succeeded, 0 in case of failure
+ */
+gs_status_t gs_upload (gs_container_t *container, const char *content_name,
+		const int64_t content_size, gs_input_f feeder, void *user_data,
+		const char *mdusr, const char *mdsys, const char *stgpol,
+		gs_error_t **err);
 
 /**
  * Puts a new content in the given remote container
