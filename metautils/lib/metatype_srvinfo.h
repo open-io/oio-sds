@@ -364,6 +364,9 @@ gchar* get_rawx_location(service_info_t* rawx);
 #define metautils_rawx_get_volume(si) \
 	g_strdup(service_info_get_rawx_volume((si), "/"))
 
+// Appends to 'out' a json representation of 'si'
+void service_info_encode_json(GString *out, struct service_info_s *si);
+
 /** @} */
 
 #endif // __REDCURRANT_metatype_srvinfo__h
