@@ -482,39 +482,6 @@ _extract_date_from_sysmd(const guint8 *mdsys, gsize mdsys_len)
 	return md_date;
 }
 
-static void
-_replace_sysmd_date(struct meta2_ctx_s *ctx, gint64 newdate)
-{
-	GError *err = NULL;
-	struct meta2_raw_content_s *rc = ctx->content;
-	GHashTable *unpacked = metadata_unpack_gba(rc->system_metadata, &err);
-	if (!err) {
-		metadata_add_printf(unpacked, "creation-date", "%"G_GINT64_FORMAT, newdate);
-	} else {
-		GRID_DEBUG("Cannot replace system metadata creation-date: %s",
-				err->message ? err->message : "<no details>");
-		g_clear_error(&err);
-	}
-	g_byte_array_free(rc->system_metadata, TRUE);
-	rc->system_metadata = metadata_pack(unpacked, &err);
-	if (err) {
-		GRID_DEBUG("Cannot repack system metadata: %s",
-				err->message ? err->message : "<no details>");
-		g_clear_error(&err);
-	}
-
-	gchar *sysmd = g_strndup((gchar*)rc->system_metadata->data,
-			rc->system_metadata->len);
-	if (!meta2_remote_modify_metadatasys(ctx->m2_cnx, rc->container_id,
-			rc->path, sysmd, &err)) {
-		GRID_DEBUG("Error modifying system metadata for content [%s] (%s)",
-				rc->path, err && err->message ? err->message : "no details");
-		g_clear_error(&err);
-	}
-	g_free(sysmd);
-	g_hash_table_destroy(unpacked);
-}
-
 static gboolean
 _ensure_container_created_in_m2(struct meta2_ctx_s *ctx, container_id_t *p_cid,
 		gchar *stgpol, check_result_t *cres)
@@ -563,7 +530,6 @@ _ensure_container_created(struct meta2_ctx_s *ctx, check_info_t *check_info,
 	struct content_textinfo_s *ct_info = check_info->ct_info;
 	gchar *hexid = ct_info->container_id;
 	container_id_t cid;
-	gint64 date_in_attr = 0;
 
 	GRID_DEBUG("Check/Create container with...storage_policy=%s, version=%s, container_id=%s, container_name=%s/%s,",
 			ct_info->storage_policy, ct_info->version,
@@ -576,17 +542,9 @@ _ensure_container_created(struct meta2_ctx_s *ctx, check_info_t *check_info,
 		if (!_create_container(ctx, &cid, p_err))
 			goto clean_up;
 
-		// replace date of new container by the one from extended attributes
-		if (ct_info->system_metadata)
-			date_in_attr = _extract_date_from_sysmd(
-					(guint8*)ct_info->system_metadata,
-					strlen(ct_info->system_metadata));
-		_replace_sysmd_date(ctx, date_in_attr);
-
 		// log message
-		check_result_append_msg(cres, "Created container [%s] "
-				"with date [%"G_GINT64_FORMAT"]",
-				ct_info->container_id, date_in_attr);
+		check_result_append_msg(cres, "Created container [%s]",
+				ct_info->container_id);
 	} else {
 		if (!_ensure_container_created_in_m2(ctx, &cid,
 				ct_info->storage_policy, cres))
