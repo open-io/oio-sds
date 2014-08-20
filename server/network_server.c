@@ -1083,10 +1083,10 @@ _thread_must_start(struct network_server_s *srv)
 		if (srv->workers_hit_max || _thread_too_few(srv, srv->workers_total)) {
 			srv->workers_total ++;
 			srv->counter_created ++;
-			srv->workers_hit_max = 0;
 			rc = TRUE;
 		}
 	}
+	srv->workers_hit_max = 0;
 	g_mutex_unlock(srv->lock_threads);
 
 	return rc;
