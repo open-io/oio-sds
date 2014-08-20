@@ -69,6 +69,12 @@ GError * meta2_filter_ctx_get_error(const struct gridd_filter_ctx_s *ctx);
  */
 void meta2_filter_ctx_set_input_udata(const struct gridd_filter_ctx_s * ctx, gpointer udata, GDestroyNotify in_cleaner);
 
+/**
+ * Set or replace the filter user data and optionally clean the old user data.
+ */
+void meta2_filter_ctx_set_input_udata2(const struct gridd_filter_ctx_s *ctx,
+		gpointer udata, GDestroyNotify in_cleaner, gboolean call_cleaner);
+
 /*!
  *
  */

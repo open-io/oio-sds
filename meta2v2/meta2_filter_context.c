@@ -196,11 +196,19 @@ meta2_filter_ctx_get_input_udata(const struct gridd_filter_ctx_s * ctx)
 }
 
 void
-meta2_filter_ctx_set_input_udata(const struct gridd_filter_ctx_s * ctx, gpointer udata, GDestroyNotify in_cleaner)
+meta2_filter_ctx_set_input_udata(const struct gridd_filter_ctx_s *ctx,
+		gpointer udata, GDestroyNotify in_cleaner)
 {
-	if(!ctx || !ctx->input_data || !udata)
+	return meta2_filter_ctx_set_input_udata2(ctx, udata, in_cleaner, TRUE);
+}
+
+void
+meta2_filter_ctx_set_input_udata2(const struct gridd_filter_ctx_s *ctx,
+		gpointer udata, GDestroyNotify in_cleaner, gboolean call_cleaner)
+{
+	if (!ctx || !ctx->input_data || !udata)
 		return;
-	if(NULL != ctx->input_data->udata)
+	if (NULL != ctx->input_data->udata && call_cleaner)
 		ctx->input_data->cleaner(ctx->input_data->udata);
 
 	ctx->input_data->udata = udata;

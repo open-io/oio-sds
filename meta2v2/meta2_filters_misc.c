@@ -47,16 +47,15 @@ _on_bean_ctx_send_list(struct on_bean_ctx_s *obc, gboolean final)
 	if(NULL != obc->l) {
 		obc->reply->add_body(bean_sequence_marshall(obc->l));
 		if(event_is_enabled(evt_config)) {
-			/* beans will be clean by context */
-			if(obc->first) {
+			if (obc->first) {
 				obc->first = FALSE;
 				meta2_filter_ctx_set_input_udata(obc->ctx, obc->l,
 						(GDestroyNotify)_bean_cleanl2);
 			} else {
-				meta2_filter_ctx_set_input_udata(obc->ctx,
-						g_slist_prepend(
-							(GSList*)meta2_filter_ctx_get_input_udata(obc->ctx),
-							obc->l), (GDestroyNotify) _bean_cleanl2);
+				meta2_filter_ctx_set_input_udata2(obc->ctx,
+						g_slist_concat(obc->l,
+							(GSList*)meta2_filter_ctx_get_input_udata(obc->ctx)),
+							(GDestroyNotify) _bean_cleanl2, FALSE);
 			}
 		} else {
 			_bean_cleanl2(obc->l);

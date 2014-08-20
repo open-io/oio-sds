@@ -77,9 +77,11 @@ static void
 _get_cb(gpointer udata, gpointer bean)
 {
 	struct on_bean_ctx_s *ctx = (struct on_bean_ctx_s*) udata;
-	GString *str= _bean_debug(NULL, bean);
-	GRID_TRACE("Bean got : %s", str->str);
-	g_string_free(str, TRUE);
+	if (GRID_TRACE_ENABLED()) {
+		GString *str = _bean_debug(NULL, bean);
+		GRID_TRACE("Bean got: %s", str->str);
+		g_string_free(str, TRUE);
+	}
 	/* TODO: Need to keep beans in context if we have to send
 	 * an event after the put */
 	if(ctx && ctx->l && g_slist_length(ctx->l) >= 32) {
