@@ -260,7 +260,7 @@ do_work(gchar* namespace, gint8 source_type, const struct SActionRulesMotorDataW
            g_strfreev(my_tokens);
 		content_textinfo_free_content(&content_info);
 		g_free(data_block);
-		g_free(raw_info);
+		meta2_raw_content_clean(raw_info);
 	}
 
 	return EXIT_SUCCESS;
