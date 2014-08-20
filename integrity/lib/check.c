@@ -131,15 +131,18 @@ get_meta2_ctx(const gchar *ns_name, const gchar *container_hexid,
 			&local_error);
 
 	if (!ctx->content) {
-		GRID_DEBUG("Content %s/%s/%s doesn't exist", ctx->ns/*ns_name*/, container_hexid, content_name);
+		GRID_DEBUG("Content %s/%s/%s doesn't exist", ctx->ns,
+				container_hexid, content_name);
 		if (local_error) {
-			GSETERROR(error, "Cannot check content state, content not found %s/%s/%s : %s",
-					ctx->ns/*ns_name*/, container_hexid, content_name, local_error->message);
+			GSETERROR(error, "Cannot check content state, "
+					"content not found %s/%s/%s: %s",
+					ctx->ns, container_hexid, content_name,
+					local_error->message);
 		}
 		goto clean_up;
 	}
 
-	GRID_DEBUG("Content informations :");
+	GRID_DEBUG("Content information:");
 	GRID_DEBUG("Nb chunks: %"G_GUINT32_FORMAT, ctx->content->nb_chunks);
 	GRID_DEBUG("Size: %"G_GINT64_FORMAT, ctx->content->size);
 	if(ctx->content->metadata)
@@ -147,14 +150,19 @@ get_meta2_ctx(const gchar *ns_name, const gchar *container_hexid,
 	else
 		GRID_DEBUG("No metadata returned");
 
-	if((local_error = storage_policy_from_metadata(ctx->content->system_metadata, &storage_policy)) != NULL) {
-		GSETERROR(error, "Failed to extract storage policy from content metadata : %s", local_error->message);
-		goto clean_up;
-	}
+	local_error = storage_policy_from_metadata(ctx->content->system_metadata,
+			&storage_policy);
+	if (local_error != NULL || !storage_policy) {
+		storage_policy = namespace_storage_policy(ns_info, ctx->ns);
+		if (!storage_policy) {
+			GSETERROR(error, "Failed to get content storage policy, "
+					"cannot check it");
 
-	if(!storage_policy) {
-		GSETERROR(error, "Failed to get content storage policy, cannot check it");
-		goto clean_up;
+			goto clean_up;
+		} else {
+			GRID_INFO("No storage policy defined for content, "
+					"will use default from namespace: %s", storage_policy);
+		}
 	}
 
 	ctx->sp = storage_policy_init(ns_info, storage_policy);
