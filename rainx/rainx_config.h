@@ -70,6 +70,7 @@ struct dav_rainx_server_conf_s {
 	int hash_width;
 	int fsync_on_close;
 	apr_uint32_t headers_scheme;
+	apr_interval_time_t socket_timeout;
 
 	/* Statistics involved data */
 	struct {

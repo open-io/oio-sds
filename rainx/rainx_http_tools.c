@@ -12,8 +12,9 @@ rainx_http_req(struct req_params_store* rps) {
 	int data_length = rps->data_to_send_size;
 	char** reply = &(rps->reply);
 	apr_pool_t *local_pool = rps->pool;
+	dav_rainx_server_conf *server_conf = resource_get_server_config(resource);
 
-	if (NULL == resource || NULL == remote_uri || NULL == req_type)
+	if (NULL == resource || NULL == remote_uri || NULL == req_type || NULL == server_conf)
 		return -1;
 
 	const gboolean is_get = (0 == g_strcmp0(req_type, "GET"));
@@ -35,9 +36,6 @@ rainx_http_req(struct req_params_store* rps) {
 	apr_sockaddr_t* sockaddr;
 	apr_status_t status;
 
-	/* FIXME: this timeout should be configurable or at least #define-d */
-	apr_interval_time_t timeout = MAX(100000, data_length); /* timeout in microsec */
-
 	if ((status = apr_sockaddr_info_get(&sockaddr, remote_ip, APR_INET, remote_port, 0, local_pool)) != APR_SUCCESS) {
 		DAV_DEBUG_REQ(resource->info->request, 0, "unable to connect to the rawx %s", full_remote_url);
 		return status;
@@ -48,7 +46,7 @@ rainx_http_req(struct req_params_store* rps) {
 		return status;
 	}
 
-	if ((status = apr_socket_timeout_set(sock, timeout)) != APR_SUCCESS) {
+	if ((status = apr_socket_timeout_set(sock, server_conf->socket_timeout)) != APR_SUCCESS) {
 		DAV_DEBUG_REQ(resource->info->request, 0, "unable to set timeout for the socket to the rawx %s", full_remote_url);
 		return status;
 	}

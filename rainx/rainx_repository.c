@@ -795,29 +795,34 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 		char* reply_code = apr_pcalloc(stream->r->info->request->pool, 4);
 		char* reply_message = apr_pcalloc(stream->r->info->request->pool,
 				MAX_REPLY_MESSAGE_SIZE);
+		char apr_error_message[256];
 		for (i = 0; i < stream->r->info->k; i++) {
 			if (data_put_params[i] == NULL) {
 				DAV_DEBUG_REQ(stream->r->info->request, 0,
 						"Nothing to put on rawx %d", i);
 			} else if (data_put_params[i]->req_status != APR_SUCCESS) {
+				apr_strerror(data_put_params[i]->req_status, apr_error_message, sizeof(apr_error_message));
 				if (!extract_code_message_reply(stream->r,
 						data_put_params[i]->reply,
 						&reply_code, &reply_message)) {
 					DAV_DEBUG_REQ(stream->r->info->request, 0,
-							"error while putting the data to the rawx %d: (%d) %s",
+							"error while putting the data to the rawx %d: (%d: %s) %s",
 							i, data_put_params[i]->req_status,
-							data_put_params[i]->reply); // FIXME: call apr_strerror
+							apr_error_message,
+							data_put_params[i]->reply);
 					e = server_create_and_stat_error(conf, stream->p,
-							HTTP_INTERNAL_SERVER_ERROR, 0,
+							(data_put_params[i]->req_status == APR_TIMEUP ?
+							 HTTP_GATEWAY_TIME_OUT : HTTP_INTERNAL_SERVER_ERROR), 0,
 							"Rain operation failed on put "
 							"(and was unable to extract error message)");
 					goto close_stream_error_label;
 				}
 				if (!g_str_has_prefix(reply_code, "20")) {
 					DAV_DEBUG_REQ(stream->r->info->request, 0,
-							"error while putting the data to the rawx %d: (%d) '%s'",
+							"error while putting the data to the rawx %d: (%d:%s) '%s'",
 							i, data_put_params[i]->req_status,
-							data_put_params[i]->reply); // FIXME: call apr_strerror
+							apr_error_message,
+							data_put_params[i]->reply);
 					e = server_create_and_stat_error(conf, stream->p,
 							atoi(reply_code), 0, reply_message);
 					goto close_stream_error_label;

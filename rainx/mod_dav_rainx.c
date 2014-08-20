@@ -19,6 +19,8 @@
 #include "rainx_internals.h"
 #include "rainx_config.h"
 
+#define RAINX_DEFAULT_SOCKET_TIMEOUT	300000 /* microseconds */
+
 static void
 _stat_cleanup_child(dav_rainx_server_conf *conf)
 {
@@ -62,6 +64,7 @@ dav_rainx_create_server_config(apr_pool_t *p, server_rec *s)
 	conf->headers_scheme = HEADER_SCHEME_V1;
 	conf->fsync_on_close = ~0;
 	conf->FILE_buffer_size = 0;
+	conf->socket_timeout = RAINX_DEFAULT_SOCKET_TIMEOUT;
 	
 	apr_snprintf(conf->lock.path, sizeof(conf->lock.path), "/var/run/httpd-lock.%d", getpid());
 	apr_snprintf(conf->shm.path, sizeof(conf->shm.path), "/var/run/httpd-shm.%d", getpid());
@@ -303,6 +306,35 @@ dav_rainx_cmd_gridconfig_acl(cmd_parms *cmd, void *config, const char *arg1)
 	return NULL;
 }
 
+static const char *
+dav_rainx_cmd_gridconfig_sock_timeout(cmd_parms *cmd, void *config, const char *arg1)
+{
+	dav_rainx_server_conf *conf;
+	apr_int64_t socket_timeout;
+	char *endstr;
+	(void) config;
+
+	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
+
+	conf = ap_get_module_config(cmd->server->module_config, &dav_rainx_module);
+
+	socket_timeout = apr_strtoi64(arg1, &endstr, 10);
+	if (errno == 0 && *endstr == '\0')
+	{
+		conf->socket_timeout = socket_timeout;
+	}
+	else
+	{
+		DAV_ERROR_POOL(cmd->pool, 0, "Invalid socket timeout, default value will be used");
+	}
+
+	DAV_DEBUG_POOL(cmd->pool, 0,
+			"Socket timeout for rawx request is %" APR_TIME_T_FMT " microseconds",
+			conf->socket_timeout);
+	
+	return NULL;
+}
+
 static void
 rainx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 {
@@ -429,6 +461,7 @@ static const command_rec dav_rainx_cmds[] =
     AP_INIT_TAKE1("grid_headers",     dav_rainx_cmd_gridconfig_headers,     NULL, RSRC_CONF, "which header scheme to adopt (1, 2, both)"),
     AP_INIT_TAKE1("grid_acl",         dav_rainx_cmd_gridconfig_acl,         NULL, RSRC_CONF, "enabled acl"),
     AP_INIT_TAKE1("grid_upload_blocksize",    dav_rainx_cmd_gridconfig_upblock,     NULL, RSRC_CONF, "upload block size"),
+    AP_INIT_TAKE1("grid_rawx_socket_timeout", dav_rainx_cmd_gridconfig_sock_timeout,       NULL, RSRC_CONF, "socket timeout for rawx connections (in microsecond)"),
     AP_INIT_TAKE1(NULL,  NULL,  NULL, RSRC_CONF, NULL)
 };
 
