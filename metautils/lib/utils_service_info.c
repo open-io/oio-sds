@@ -183,7 +183,10 @@ service_tag_set_value_macro(struct service_tag_s *tag, const gchar * type, const
 }
 
 gboolean
-service_tag_get_value_macro(struct service_tag_s *tag, gchar * type, gsize type_size, gchar* param, gsize param_size, GError** error)
+service_tag_get_value_macro(struct service_tag_s *tag,
+		gchar * type, gsize type_size,
+		gchar* param, gsize param_size,
+		GError** error)
 {
 	if (tag == NULL) {
 		GSETERROR(error, "Argument tag is NULL");
@@ -695,7 +698,7 @@ _append_one_tag(GString* gstr, struct service_tag_s *tag)
 					(int) sizeof(tag->value.buf), tag->value.buf);
 			return;
 		case STVT_MACRO:
-			g_string_append_printf(gstr, "\"${%s}${%s}\"",
+			g_string_append_printf(gstr, "[\"%s\",\"%s\"]",
 					tag->value.macro.type, tag->value.macro.param);
 			return;
 	}
@@ -731,7 +734,7 @@ service_info_encode_json(GString *gstr, struct service_info_s *si)
 
 
 static struct service_tag_s *
-_srvtag_load_json (gchar *name, struct json_object *obj)
+_srvtag_load_json (const gchar *name, struct json_object *obj)
 {
 	struct service_tag_s *tag = g_malloc0(sizeof(struct service_tag_s));
 	g_strlcpy(tag->name, name, sizeof(tag->name));
@@ -743,8 +746,21 @@ _srvtag_load_json (gchar *name, struct json_object *obj)
 		service_tag_set_value_float(tag, json_object_get_double(obj));
 	} else if (json_object_is_type(obj, json_type_boolean)) {
 		service_tag_set_value_boolean(tag, json_object_get_boolean(obj));
+	} else if (json_object_is_type(obj, json_type_array)) { // macro
+		if (json_object_array_length(obj) > 0) {
+			json_object *k, *v = NULL;
+			k = json_object_array_get_idx(obj, 0);
+			if (json_object_array_length(obj) > 1)
+				v = json_object_array_get_idx(obj, 1);
+			if (json_object_is_type(k, json_type_string)
+					&& (!v || json_object_is_type(v, json_type_string))) {
+				service_tag_set_value_macro(tag,
+						json_object_get_string(k),
+						v ? json_object_get_string(v) : NULL);
+			}
+		}
 	} else {
-		/* TODO manage MACRO tags */
+		service_tag_set_value_boolean(tag, FALSE);
 	}
 	return tag;
 }
@@ -785,9 +801,7 @@ service_info_load_json_object(struct json_object *obj,
 		return NULL;
 	}
 	json_object_object_foreach(tags,key,val) {
-		if (!g_str_has_prefix(key, "tag."))
-			continue;
-		if (!g_str_has_prefix(key, "stat."))
+		if (!g_str_has_prefix(key, "tag.") && !g_str_has_prefix(key, "stat."))
 			continue;
 		struct service_tag_s *tag = _srvtag_load_json(key, val);
 		if (tag) {
