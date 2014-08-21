@@ -535,7 +535,7 @@ rm -rf $RPM_BUILD_ROOT
 
 %pre server
 # Add user and group "admgrid" if not exist
-if ! grep -q admgrid /etc/group ; then
+if ! grep -q "^admgrid" /etc/group ; then
 	echo "Adding group admgrid"
 	groupadd -g 220 admgrid >/dev/null 2>&1
 fi
