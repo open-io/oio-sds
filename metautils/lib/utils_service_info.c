@@ -4,6 +4,8 @@
 
 #include "metautils.h"
 
+#include <json/json.h>
+
 static void
 clean_tag_value(struct service_tag_s *tag)
 {
@@ -726,3 +728,82 @@ service_info_encode_json(GString *gstr, struct service_info_s *si)
 	_append_all_tags(gstr, si->tags);
 	g_string_append(gstr, "}}");
 }
+
+
+static struct service_tag_s *
+_srvtag_load_json (gchar *name, struct json_object *obj)
+{
+	struct service_tag_s *tag = g_malloc0(sizeof(struct service_tag_s));
+	g_strlcpy(tag->name, name, sizeof(tag->name));
+	if (json_object_is_type(obj, json_type_int)) {
+		service_tag_set_value_i64(tag, json_object_get_int64(obj));
+	} else if (json_object_is_type(obj, json_type_string)) {
+		service_tag_set_value_string(tag, json_object_get_string(obj));
+	} else if (json_object_is_type(obj, json_type_double)) {
+		service_tag_set_value_float(tag, json_object_get_double(obj));
+	} else if (json_object_is_type(obj, json_type_boolean)) {
+		service_tag_set_value_boolean(tag, json_object_get_boolean(obj));
+	} else {
+		/* TODO manage MACRO tags */
+	}
+	return tag;
+}
+
+GError*
+service_info_load_json_object(struct json_object *obj,
+		struct service_info_s **out)
+{
+	*out = NULL;
+	if (!json_object_is_type(obj, json_type_object))
+		return NEWERROR(400, "Bad object");
+
+	// SAnity checks
+	struct json_object *ns, *type, *url, *score, *tags;
+	if (!json_object_object_get_ex(obj, "ns", &ns)
+		|| !json_object_object_get_ex(obj, "type", &type)
+		|| !json_object_object_get_ex(obj, "url", &url)
+		|| !json_object_object_get_ex(obj, "score", &score))
+		return NEWERROR(400, "Missing field");
+	if (!json_object_is_type(ns, json_type_string)
+		|| !json_object_is_type(type, json_type_string)
+		|| !json_object_is_type(url, json_type_string)
+		|| !json_object_is_type(score, json_type_int))
+		return NEWERROR(400, "Invalid field");
+
+	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
+	if (!json_object_object_get_ex(obj, "tags", &tags)) {
+		*out = si;
+		return NULL;
+	}
+	if (!json_object_is_type(tags, json_type_object)) {
+		*out = si;
+		return NULL;
+	}
+	json_object_object_foreach(tags,key,val) {
+		if (!g_str_has_prefix(key, "tag."))
+			continue;
+		if (!g_str_has_prefix(key, "stat."))
+			continue;
+		struct service_tag_s *tag = _srvtag_load_json(key, val);
+		if (tag) {
+			if (!si->tags)
+				si->tags = g_ptr_array_new();
+			g_ptr_array_add(si->tags, tag);
+		}
+	}
+	*out = si;
+	return NULL;
+}
+
+GError*
+service_info_load_json(const gchar *encoded, struct service_info_s **out)
+{
+	struct json_tokener *tok = json_tokener_new();
+	struct json_object *obj = json_tokener_parse_ex(tok,
+			encoded, strlen(encoded));
+	json_tokener_free(tok);
+	GError *err = service_info_load_json_object(obj, out);
+	json_object_put(obj);
+	return err;
+}
+
