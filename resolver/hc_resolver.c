@@ -413,6 +413,20 @@ _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
 /* ------------------------------------------------------------------------- */
 
 GError*
+hc_resolve_reference_directory(struct hc_resolver_s *r, struct hc_url_s *url,
+		gchar ***result)
+{
+	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE));
+	g_assert(r != NULL);
+	g_assert(url != NULL);
+	g_assert(result != NULL);
+	if (!hc_url_get_id(url) || !hc_url_has(url, HCURL_NS))
+		return NEWERROR(400, "Incomplete URL [%s]", hc_url_get(url, HCURL_WHOLE));
+
+	return _resolve_meta1(r, url, result);
+}
+
+GError*
 hc_resolve_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
 		const gchar *srvtype, gchar ***result)
 {

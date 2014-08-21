@@ -51,16 +51,18 @@ void hc_resolver_flush_csm0(struct hc_resolver_s *r);
 
 void hc_resolver_flush_services(struct hc_resolver_s *r);
 
-
-/**
- * @param r
- * @param url
- * @param srvtype
- * @param result
- * @return
- */
+// Fills 'result' with a NULL-terminated array on meta1 urls, those referenced
+// in the meta0/1 directory for the given service and the given URL.
+// Please note that calling this function with srvtype=meta1 will give the the
+// meta1 associated with the reference, and not the meta1 that should have been
+// returned by hc_resolve_reference_directory().
 GError* hc_resolve_reference_service(struct hc_resolver_s *r,
 		struct hc_url_s *url, const gchar *srvtype, gchar ***result);
+
+// Fills 'result' with a NULL-terminated array of IP:port couples, those
+// responsible for the given URL.
+GError* hc_resolve_reference_directory(struct hc_resolver_s *r,
+		struct hc_url_s *url, gchar ***result);
 
 /**
  * @param r
