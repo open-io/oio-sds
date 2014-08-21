@@ -116,6 +116,9 @@ gboolean namespace_info_is_vns_writable(struct namespace_info_s *ni,
 gchar * namespace_info_get_storage_class(struct namespace_info_s *ni,
 		const gchar *stgclass_key);
 
+// Appends to 'out' a json representation of 'ni'
+void namespace_info_encode_json(GString *out, struct namespace_info_s *ni);
+
 /** @} */
 
 #endif // __REDCURRANT_metatype_nsinfo__h
