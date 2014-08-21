@@ -320,7 +320,6 @@ meta1_backend_get_container_properties(struct meta1_backend_s *m1,
 
 	EXTRA_ASSERT(m1 != NULL);
 	EXTRA_ASSERT(cid != NULL);
-	EXTRA_ASSERT(names != NULL);
 	EXTRA_ASSERT(result != NULL);
 
 	err = _open_and_lock(m1, cid, M1V2_OPENBASE_MASTERSLAVE, &sq3);
