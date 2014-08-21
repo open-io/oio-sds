@@ -1995,8 +1995,8 @@ meta1v2_remote_configure_reference_service(const addr_info_t *meta1,
 
 gboolean
 meta1v2_remote_reference_set_property(const addr_info_t *m1, GError **err,
-		const gchar *ns, const container_id_t refid, gchar **pairs
-		, gdouble to_step, gdouble to_overall, char **master)
+		const gchar *ns, const container_id_t refid, gchar **pairs,
+		gdouble to_step, gdouble to_overall, char **master)
 {
 	EXTRA_ASSERT(m1 != NULL);
 	EXTRA_ASSERT(ns != NULL);
