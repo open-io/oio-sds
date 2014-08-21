@@ -771,6 +771,11 @@ service_info_load_json_object(struct json_object *obj,
 		return NEWERROR(400, "Invalid field");
 
 	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
+	metautils_strlcpy_physical_ns(si->ns_name, json_object_get_string(ns), sizeof(si->ns_name));
+	grid_string_to_addrinfo(json_object_get_string(url), NULL, &si->addr);
+	g_strlcpy(si->type, json_object_get_string(type), sizeof(si->type));
+	si->score.value = json_object_get_int(score);
+
 	if (!json_object_object_get_ex(obj, "tags", &tags)) {
 		*out = si;
 		return NULL;
