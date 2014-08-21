@@ -363,8 +363,7 @@ key_value_pair_to_string(key_value_pair_t * kv)
 struct meta1_service_url_s*
 meta1_unpack_url(const gchar *url)
 {
-	gchar *type, *host, *args;
-	struct meta1_service_url_s *result;
+	gchar *type = NULL, *host = NULL, *args = NULL;
 
 	EXTRA_ASSERT(url != NULL);
 
@@ -384,10 +383,11 @@ meta1_unpack_url(const gchar *url)
 		return NULL;
 	*(args++) = '\0';
 
+	struct meta1_service_url_s *result;
 	result = g_malloc0(sizeof(*result) + strlen(args) + 1);
 	result->seq = g_ascii_strtoll(url, NULL, 10);
-	g_strlcpy(result->srvtype, type, sizeof(result->srvtype)-1);
-	g_strlcpy(result->host, host, sizeof(result->host)-1);
+	g_strlcpy(result->srvtype, type, sizeof(result->srvtype));
+	g_strlcpy(result->host, host, sizeof(result->host));
 	strcpy(result->args, args);
 
 	return result;
@@ -396,8 +396,11 @@ meta1_unpack_url(const gchar *url)
 void
 meta1_service_url_clean(struct meta1_service_url_s *u)
 {
-	if (u)
+	if (u) {
+		u->seq = 0;
+		u->srvtype[0] = u->host[0] = u->args[0] = 0;
 		g_free(u);
+	}
 }
 
 void
