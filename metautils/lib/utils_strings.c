@@ -94,15 +94,19 @@ strn_isprint(const gchar *start, const gchar *end)
 gchar **
 metautils_decode_lines(const gchar *start, const gchar *end)
 {
-	GSList *lines = NULL;
-	const gchar *p;
-
+	if (!start)
+		return NULL;
+	if (!end)
+		end = start + strlen(start);
+	else if (end <= start)
+		return NULL;
 	if (!strn_isprint(start, end))
 		return NULL;
 
+	GSList *lines = NULL;
 	while (start < end) {
 		for (; start < end && *start == '\n'; start++);
-
+		const gchar *p;
 		if (!(p = strchr_guarded(start, end, '\n'))) {
 			gchar *l = g_strndup(start, end-start);
 			lines = g_slist_prepend(lines, l);
