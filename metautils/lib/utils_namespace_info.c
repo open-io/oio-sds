@@ -228,10 +228,9 @@ _encode_json_properties (GString *out, GHashTable *ht, const gchar *tag)
 		g_hash_table_iter_init(&iter, ht);
 		while (g_hash_table_iter_next(&iter, &k, &v)) {
 			GByteArray *gba = v;
-			if (!first) {
+			if (!first)
 				g_string_append_c(out, ',');
-				first = FALSE;
-			}
+			first = FALSE;
 			g_string_append_printf(out, "\"%s\":\"%.*s\"", (gchar*)k,
 					gba->len, (gchar*)(gba->data));
 		}
@@ -246,14 +245,17 @@ namespace_info_encode_json(GString *out, struct namespace_info_s *ni)
 	g_string_append_printf(out, "\"ns\":\"%s\",", ni->name);
 	g_string_append_printf(out, "\"chunksize\":\"%"G_GINT64_FORMAT"\",",
 			ni->chunk_size);
+
 	g_string_append(out, "\"writable_vns\":[");
 	for (GSList *l=ni->writable_vns; l ;l=l->next) {
-		if (l == ni->writable_vns)
+		if (l != ni->writable_vns)
 			g_string_append_c(out, ',');
 		g_string_append_printf(out, "\"%s\"", (gchar*)(l->data));
 	}
 	g_string_append(out, "],");
 
+	_encode_json_properties(out, ni->options, "options");
+	g_string_append_c(out, ',');
 	_encode_json_properties(out, ni->storage_policy, "storage_policy");
 	g_string_append_c(out, ',');
 	_encode_json_properties(out, ni->storage_class, "storage_class");
