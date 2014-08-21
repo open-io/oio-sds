@@ -58,10 +58,6 @@ GByteArray* m2v2_remote_pack_CREATE(GByteArray *sid, struct hc_url_s *url,
 GByteArray* m2v2_remote_pack_DESTROY(GByteArray *sid, struct hc_url_s *url,
 		guint32 flags);
 
-GByteArray* m2v2_remote_pack_OPEN(GByteArray *sid, struct hc_url_s *url);
-
-GByteArray* m2v2_remote_pack_CLOSE(GByteArray *sid, struct hc_url_s *url);
-
 GByteArray* m2v2_remote_pack_HAS(GByteArray *sid, struct hc_url_s *url);
 
 GByteArray* m2v2_remote_pack_PUT(GByteArray *sid, struct hc_url_s *url,
@@ -155,12 +151,6 @@ GError* m2v2_remote_execute_DESTROY(const gchar *target, GByteArray *sid,
  */
 GError* m2v2_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
 		struct hc_url_s *url, guint32 flags);
-
-GError* m2v2_remote_execute_OPEN(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url);
-
-GError* m2v2_remote_execute_CLOSE(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url);
 
 GError* m2v2_remote_execute_HAS(const gchar *target, GByteArray *sid,
 		struct hc_url_s *url);

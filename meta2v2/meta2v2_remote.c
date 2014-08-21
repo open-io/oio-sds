@@ -117,18 +117,6 @@ m2v2_remote_pack_DESTROY(GByteArray *sid, struct hc_url_s *url, guint32 flags)
 }
 
 GByteArray*
-m2v2_remote_pack_OPEN(GByteArray *sid, struct hc_url_s *url)
-{
-	return _m2v2_pack_request("M2V2_OPEN", sid, url, NULL);
-}
-
-GByteArray*
-m2v2_remote_pack_CLOSE(GByteArray *sid, struct hc_url_s *url)
-{
-	return _m2v2_pack_request("M2V2_CLOSE", sid, url, NULL);
-}
-
-GByteArray*
 m2v2_remote_pack_HAS(GByteArray *sid, struct hc_url_s *url)
 {
 	return _m2v2_pack_request("M2V2_HAS", sid, url, NULL);
@@ -530,20 +518,6 @@ m2v2_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
 
 	gridd_clients_free(clients);
 	return err;
-}
-
-GError*
-m2v2_remote_execute_OPEN(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url)
-{
-	return _m2v2_request(target, m2v2_remote_pack_OPEN(sid, url), NULL);
-}
-
-GError*
-m2v2_remote_execute_CLOSE(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url)
-{
-	return _m2v2_request(target, m2v2_remote_pack_CLOSE(sid, url), NULL);
 }
 
 GError*
