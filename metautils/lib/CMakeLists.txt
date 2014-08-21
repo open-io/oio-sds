@@ -141,7 +141,8 @@ add_library(metautils SHARED
 )
 
 target_link_libraries(metautils
-		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} -lm -lexpat)
+		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES}
+		${JSONC_LIBRARIES} -lm -lexpat)
 
 add_dependencies(metautils asn1c_generation)
 
