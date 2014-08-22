@@ -124,6 +124,7 @@ add_library(metautils SHARED
 		utils_kv.c
 		utils_acl.c
 		utils_l4v.c
+		utils_m1url.c
 		utils_meta0_info.c
 		utils_meta1_raw_container.c
 		utils_meta2_maintenance.c

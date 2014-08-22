@@ -44,6 +44,11 @@ gboolean meta1_url_get_address(struct meta1_service_url_s *u,
 
 gboolean meta1_strurl_get_address(const gchar *str, struct addr_info_s *dst);
 
+GError* meta1_service_url_load_json_object(struct json_object *obj,
+		struct meta1_service_url_s **out);
+
+void meta1_service_url_encode_json (GString *gstr,
+		struct meta1_service_url_s *m1u);
 
 /** @} */
 

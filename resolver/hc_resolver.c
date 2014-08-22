@@ -341,6 +341,7 @@ _resolve_service_through_one_m1(const gchar *m1, struct hc_url_s *u,
 
 	*result = meta1v2_remote_list_reference_services(&ai, &err,
 			hc_url_get(u, HCURL_NS), hc_url_get_id(u), s, 30.0, 300.0);
+	g_assert((err!=NULL) ^ (*result!=NULL));
 
 	return err;
 }
@@ -438,6 +439,8 @@ hc_resolve_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
 	g_assert(url != NULL);
 	g_assert(srvtype != NULL);
 	g_assert(result != NULL);
+	g_assert(*result == NULL);
+
 	if (!hc_url_get_id(url) || !hc_url_has(url, HCURL_NS))
 		return NEWERROR(400, "Incomplete URL [%s]", hc_url_get(url, HCURL_WHOLE));
 

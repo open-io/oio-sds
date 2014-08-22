@@ -98,7 +98,7 @@ metautils_decode_lines(const gchar *start, const gchar *end)
 		return NULL;
 	if (!end)
 		end = start + strlen(start);
-	else if (end <= start)
+	else if (end < start)
 		return NULL;
 	if (!strn_isprint(start, end))
 		return NULL;
