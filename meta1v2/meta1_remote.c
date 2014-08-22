@@ -1662,6 +1662,8 @@ list_request(const addr_info_t *a, gdouble to_step, gdouble to_overall, GError *
 
 	gchar **lines = metautils_decode_lines((gchar*)gba->data,
 			(gchar*)(gba->data + gba->len));
+	if (!lines && err)
+		*err = NEWERROR(CODE_BAD_REQUEST, "Invalid buffer content");
 	g_byte_array_free(gba, TRUE);
 	return lines;
 }
@@ -1770,7 +1772,7 @@ meta1v2_remote_link_service(const addr_info_t *meta1, GError **err, const char *
 	return result;
 }
 
-gchar** 
+gchar**
 meta1v2_remote_list_reference_services(const addr_info_t *meta1, GError **err, const char *ns, const container_id_t refid,
 		const gchar *srvtype, gdouble to_step, gdouble to_overall)
 {
