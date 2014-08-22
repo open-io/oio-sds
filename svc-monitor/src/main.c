@@ -33,7 +33,6 @@ static GRegex *regex_tag = NULL;
 static GRegex *regex_svc = NULL;
 
 static volatile int flag_quiet = 0;
-static volatile int flag_daemon = 0;
 static volatile int flag_running = ~0;
 static volatile int flag_reconfigure = 0;
 static volatile int flag_restart_children = 0;
@@ -259,30 +258,6 @@ monitoring_loop(service_info_t *si)
 	g_free(timer);
 }
 
-static void
-close_all_fd(void)
-{
-	rlim_t i;
-	struct rlimit rl;
-
-	memset(&rl, 0x00, sizeof(rl));
-	if (0 != getrlimit(RLIMIT_NOFILE, &rl)) {
-		ERROR("getrlimit(RLIMIT_NOFILE) error : %s", strerror(errno));
-		return;
-	}
-
-	close(0);
-	if (flag_daemon) {
-		close(1);
-		close(2);
-	}
-
-	DEBUG("Closing the %ld first descriptors", rl.rlim_max);
-	for (i=3; i<rl.rlim_max ;i++)
-		(void) close(i);
-	errno = 0;
-}
-
 int
 main(int argc, char ** argv)
 {
@@ -379,7 +354,7 @@ main(int argc, char ** argv)
 		goto label_error;
 	}
 
-	close_all_fd();
+	freopen("/dev/null", "r", stdin);
 
 	log4c_init();
 	if (*log_path)
