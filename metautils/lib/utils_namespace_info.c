@@ -4,6 +4,8 @@
 
 #include <errno.h>
 
+#include <json/json.h>
+
 #include "metautils.h"
 
 static void
@@ -15,7 +17,8 @@ _copy_list_element(gpointer _elem, gpointer _p_dst_list)
 }
 
 static GHashTable *
-_copy_hash(GHashTable *src) {
+_copy_hash(GHashTable *src)
+{
 	GHashTable *res = g_hash_table_new_full(g_str_hash, g_str_equal,
 			g_free, metautils_gba_unref);
 	if (src) {
@@ -122,11 +125,35 @@ namespace_info_clear(namespace_info_t* ns_info)
 }
 
 void
+namespace_info_init(namespace_info_t *ni)
+{
+	if (!ni)
+		return;
+	ni->chunk_size = 0;
+	memset(ni->name, 0, sizeof(ni->name));
+	memset(&ni->addr, 0, sizeof(ni->addr));
+	memset(&ni->versions, 0, sizeof(ni->versions));
+	ni->options = _copy_hash(NULL);
+	ni->storage_policy = _copy_hash(NULL);
+	ni->data_security = _copy_hash(NULL);
+	ni->data_treatments = _copy_hash(NULL);
+	ni->storage_class = _copy_hash(NULL);
+}
+
+void
+namespace_info_reset(namespace_info_t *ni)
+{
+	if (ni == NULL)
+		return;
+	namespace_info_clear(ni);
+	namespace_info_init(ni);
+}
+
+void
 namespace_info_free(namespace_info_t* ns_info)
 {
 	if (ns_info == NULL)
 		return;
-
 	namespace_info_clear(ns_info);
 	g_free(ns_info);
 }
@@ -216,6 +243,101 @@ namespace_info_get_storage_class(namespace_info_t *ni, const gchar *stgclass_key
 	}
 	return NULL;
 }
+
+//------------------------------------------------------------------------------
+
+static GError *
+_load_hash (struct json_object *obj, const gchar *k, GHashTable *dst)
+{
+	struct json_object *sub = NULL;
+
+	if (!json_object_object_get_ex(obj, k, &sub))
+		return NULL;
+	if (!json_object_is_type(sub, json_type_object))
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid '%s' field", k);
+
+	json_object_object_foreach(sub,key,val) {
+		if (!json_object_is_type(val, json_type_string))
+			continue;
+		g_hash_table_insert(dst, g_strdup(key), metautils_gba_from_string(
+					json_object_get_string(val)));
+	}
+	return NULL;
+}
+
+GError *
+namespace_info_init_json_object(struct json_object *obj,
+		struct namespace_info_s *ni)
+{
+	EXTRA_ASSERT(ni != NULL);
+
+	if (!obj || !json_object_is_type(obj, json_type_object))
+		return NEWERROR(CODE_BAD_REQUEST, "Not a JSON object");
+
+	struct json_object *sub = NULL;
+	// Mandatory fields
+	if (!json_object_object_get_ex(obj, "ns", &sub))
+		return NEWERROR(CODE_BAD_REQUEST, "Missing 'ns' field");
+	if (!json_object_is_type(sub, json_type_string))
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid 'ns' field");
+	metautils_strlcpy_physical_ns(ni->name, json_object_get_string(sub),
+			sizeof(ni->name));
+
+	if (!json_object_object_get_ex(obj, "chunksize", &sub))
+		return NEWERROR(CODE_BAD_REQUEST, "Missing 'chunksize' field");
+	if (!json_object_is_type(sub, json_type_int))
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid 'chunksize' field");
+	ni->chunk_size = json_object_get_int64(sub);
+
+	// Optional fields
+	if (json_object_object_get_ex(obj, "writable_vns", &sub)) {
+		if (!json_object_is_type(sub, json_type_array))
+			return NEWERROR(CODE_BAD_REQUEST, "Invalid 'writable_vns' field");
+		for (int i=json_object_array_length(sub)-1; i>=0 ;--i) {
+			struct json_object *item = json_object_array_get_idx(sub, i);
+			g_assert(item != NULL);
+			g_assert(json_object_is_type(item, json_type_string));
+			ni->writable_vns = g_slist_prepend(ni->writable_vns,
+					g_strdup(json_object_get_string(item)));
+		}
+	}
+
+	GError *err;
+	if (NULL != (err = _load_hash(obj, "options", ni->options))
+			|| NULL != (err = _load_hash(obj, "storage_policy", ni->storage_policy))
+			|| NULL != (err = _load_hash(obj, "data_security", ni->data_security))
+			|| NULL != (err = _load_hash(obj, "data_treatments", ni->data_treatments))
+			|| NULL != (err = _load_hash(obj, "storage_class", ni->storage_class)))
+		return err;
+
+	return NULL;
+}
+
+GError *
+namespace_info_init_json(const gchar *encoded, struct namespace_info_s *ni)
+{
+	EXTRA_ASSERT(ni != NULL);
+
+	if (!encoded || !*encoded)
+		return NEWERROR(CODE_BAD_REQUEST, "Empty data");
+
+	struct json_tokener *tok = json_tokener_new();
+	if (!tok)
+		return NEWERROR(CODE_INTERNAL_ERROR, "Memory error");
+
+	GError *err = NULL;
+	struct json_object *obj = json_tokener_parse_ex(tok, encoded, strlen(encoded));
+	if (!obj)
+		err = NEWERROR(CODE_BAD_REQUEST, "JSON parsing error");
+	else {
+		err = namespace_info_init_json_object(obj, ni);
+		json_object_put(obj);
+	}
+	json_tokener_free(tok);
+	return err;
+}
+
+//------------------------------------------------------------------------------
 
 static void
 _encode_json_properties (GString *out, GHashTable *ht, const gchar *tag)
