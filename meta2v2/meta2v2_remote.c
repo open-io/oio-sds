@@ -1,5 +1,5 @@
 #ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "m2.remote"
+# define G_LOG_DOMAIN "m2v2"
 #endif
 
 #include <errno.h>
