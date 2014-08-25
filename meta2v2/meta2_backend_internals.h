@@ -1,8 +1,5 @@
 #ifndef META2V2_INTERNALS__H
 # define META2V2_INTERNALS__H 1
-# ifndef G_LOG_DOMAIN
-#  define G_LOG_DOMAIN "m2"
-# endif
 # include <stdlib.h>
 # include <unistd.h>
 # include <errno.h>
@@ -48,8 +45,13 @@
 #  define META2_EVTFIELD_CHUNKS "CHUNKS"
 # endif
 
-#define META2_URL_LOCAL_BASE "__M2V2_LOCAL_BASE__"
+# ifndef CONNECT_RETRY_DELAY
+#  define CONNECT_RETRY_DELAY 10
+# endif
 
+# ifndef META2_URL_LOCAL_BASE
+#  define META2_URL_LOCAL_BASE "__M2V2_LOCAL_BASE__"
+# endif
 
 struct transient_s
 {
@@ -59,7 +61,7 @@ struct transient_s
 
 struct meta2_backend_s
 {
-	gchar ns_name[256]; /* Read-only */
+	gchar ns_name[LIMIT_LENGTH_NSNAME]; /* Read-only */
 
 	struct sqlx_repository_s *repo;
 
