@@ -51,6 +51,8 @@ struct namespace_info_s* namespace_info_dup(struct namespace_info_s* src,
  */
 void namespace_info_clear(struct namespace_info_s* ns_info);
 
+void namespace_info_reset(namespace_info_t *ni);
+void namespace_info_init(namespace_info_t *ni);
 
 /**
  * Free a namespace_info pointer
@@ -115,6 +117,14 @@ gboolean namespace_info_is_vns_writable(struct namespace_info_s *ni,
  */
 gchar * namespace_info_get_storage_class(struct namespace_info_s *ni,
 		const gchar *stgclass_key);
+
+struct json_object;
+
+GError * namespace_info_init_json_object(struct json_object *obj,
+		struct namespace_info_s *ni);
+
+GError * namespace_info_init_json(const gchar *encoded,
+		struct namespace_info_s *ni);
 
 // Appends to 'out' a json representation of 'ni'
 void namespace_info_encode_json(GString *out, struct namespace_info_s *ni);
