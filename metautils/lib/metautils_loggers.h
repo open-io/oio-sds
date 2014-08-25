@@ -163,6 +163,8 @@ void logger_quiet(void);
  */
 void logger_init_level(int l);
 
+void logger_init_level_from_env(const gchar *k);
+
 /**
  *
  */

@@ -119,11 +119,14 @@ get_facility(const gchar *domain)
 		? LOG_LOCAL1 : LOG_LOCAL0;
 }
 
+#define REAL_LEVEL(L)   (guint32)((L) >> G_LOG_LEVEL_USER_SHIFT)
+#define ALLOWED_LEVEL() REAL_LEVEL(main_log_level)
+
 static inline gboolean
-glvl_allowed(GLogLevelFlags lvl)
+glvl_allowed(register GLogLevelFlags lvl)
 {
 	return (lvl & 0x7F)
-		|| (main_log_level >> G_LOG_LEVEL_USER_SHIFT) >= (lvl >> G_LOG_LEVEL_USER_SHIFT);
+		|| (ALLOWED_LEVEL() >= REAL_LEVEL(lvl));
 }
 
 static inline void
@@ -289,8 +292,36 @@ logger_verbose_default(void)
 void
 logger_init_level(int l)
 {
-	main_log_level_default = main_log_level = (l?l|0x7F:0);
+	main_log_level_default = main_log_level = (l?(l|0x7F):0);
 	main_log_level_update = time(0);
+}
+
+void
+logger_init_level_from_env(const gchar *k)
+{
+	const gchar *v = g_getenv(k);
+	if (v) {
+		switch (g_ascii_toupper(*v)) {
+			case 'T':
+				logger_init_level(GRID_LOGLVL_TRACE2);
+				return;
+			case 'D':
+				logger_init_level(GRID_LOGLVL_DEBUG);
+				return;
+			case 'I':
+				logger_init_level(GRID_LOGLVL_INFO);
+				return;
+			case 'N':
+				logger_init_level(GRID_LOGLVL_NOTICE);
+				return;
+			case 'W':
+				logger_init_level(GRID_LOGLVL_WARN);
+				return;
+			case 'E':
+				logger_init_level(GRID_LOGLVL_ERROR);
+				return;
+		}
+	}
 }
 
 void
