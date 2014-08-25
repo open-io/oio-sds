@@ -158,15 +158,17 @@ message_add_random_id(struct message_s *req)
 	message_set_ID(req, (guint8*)&bulk, sizeof(bulk), NULL);
 }
 
+static int
+write_gba(const void *b, gsize bSize, void *key)
+{
+	if (b && bSize > 0)
+		g_byte_array_append((GByteArray*)key, b, bSize);
+	return 0;
+}
+
 GByteArray*
 message_marshall_gba(MESSAGE m, GError **err)
 {
-	int write_f(const void *b, gsize bSize, void *key) {
-		if (b && bSize > 0)
-			g_byte_array_append((GByteArray*)key, b, bSize);
-		return 0;
-	}
-
 	GByteArray *result = NULL;
 	asn_enc_rval_t encRet;
 
@@ -187,7 +189,7 @@ message_marshall_gba(MESSAGE m, GError **err)
 	guint32 u32 = 0;
 	result = g_byte_array_sized_new(256);
 	g_byte_array_append(result, (guint8*)&u32, sizeof(u32));
-	encRet = der_encode(&asn_DEF_Message, m->asnMsg, write_f, result);
+	encRet = der_encode(&asn_DEF_Message, m->asnMsg, write_gba, result);
 
 	if (encRet.encoded < 0) {
 		g_byte_array_free(result, TRUE);
@@ -277,8 +279,6 @@ message_unmarshall(MESSAGE m, void *s, gsize * sSize, GError ** error)
 	_clean_asn_message(m);
 	return 0;
 }
-
-
 
 gint
 message_has_param(MESSAGE m, enum message_param_e mp, GError ** error)
