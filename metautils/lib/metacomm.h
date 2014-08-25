@@ -567,6 +567,8 @@ GByteArray* message_marshall_gba(MESSAGE m, GError **err);
  */
 gint message_unmarshall(MESSAGE m, void *s, gsize * sSize, GError ** error);
 
+struct Message;
+
 /**
  * Calls message_marshall_gba() then message_destroy() on 'm'.
  *
