@@ -1,10 +1,5 @@
 #ifndef META2V2_EVENTS__H
 # define META2V2_EVENTS__H 1
-# ifndef G_LOG_DOMAIN
-#  define G_LOG_DOMAIN "m2"
-# endif
-
-
 
 # ifndef  META2_EVTFIELD_NAMESPACE
 #  define META2_EVTFIELD_NAMESPACE "NS"
