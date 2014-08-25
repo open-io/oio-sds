@@ -477,7 +477,7 @@ add_test(NAME metautils/logger COMMAND test_logger)
 add_test(NAME metautils/lru COMMAND test_lrutree)
 add_test(NAME metautils/addr COMMAND test_addr)
 add_test(NAME metautils/gridd_client COMMAND test_gridd_client)
-add_test(NAME metautils/sigfpe COMMAND test_sigfpe)
+#add_test(NAME metautils/sigfpe COMMAND test_sigfpe)
 add_test(NAME metautils/strings COMMAND test_str)
 add_test(NAME metautils/gba COMMAND test_gba)
 
