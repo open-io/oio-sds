@@ -19,7 +19,15 @@
 	grid_main_set_prgname(argv[0]); \
 	g_log_set_default_handler(logger_stderr, NULL); \
 	logger_init_level(LVL); \
-	logger_reset_level(); \
+} while (0)
+
+#define HC_TEST_INIT(argc,argv) do { \
+	if (!g_thread_supported ()) g_thread_init (NULL); \
+	g_test_init (&argc, &argv, NULL); \
+	grid_main_set_prgname(argv[0]); \
+	g_log_set_default_handler(logger_stderr, NULL); \
+	logger_init_level(GRID_LOGLVL_INFO); \
+	logger_init_level_from_env("G_DEBUG_LEVEL"); \
 } while (0)
 
 /**
