@@ -38,7 +38,6 @@ int
 main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
-	g_test_init (&argc, &argv, NULL);
 	g_test_add_func("/metautils/addr/bad_connect",
 			test_bad_connect_address);
 	g_test_add_func("/metautils/gridd_client/good_address",

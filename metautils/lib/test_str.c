@@ -152,8 +152,7 @@ test_hex2bin(void)
 int
 main(int argc, char **argv)
 {
-	HC_PROC_INIT(argv, GRID_LOGLVL_TRACE2);
-	g_test_init (&argc, &argv, NULL);
+	HC_TEST_INIT(argc,argv);
 	g_test_add_func("/metautils/str/reuse", test_reuse);
 	g_test_add_func("/metautils/str/replace", test_replace);
 	g_test_add_func("/metautils/str/clean", test_clean);

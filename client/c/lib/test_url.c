@@ -30,7 +30,10 @@ check_strings(const char *src, const char *s2)
 		g_assert(s2 == NULL);
 	else {
 		g_assert(s2 != NULL);
-		g_assert(0 == strcmp(src, s2));
+		if (0 != strcmp(src, s2)) {
+			g_printerr("CID mismatch [%s] [%s]\n", src, s2);
+			g_assert_not_reached();
+		}
 	}
 }
 
@@ -70,24 +73,15 @@ test_data(struct test_data_s *pdata)
 static void
 test_init(void)
 {
-	struct test_data_s *td;
-
-	for (td=data; td->ns ;td++)
+	for (struct test_data_s *td=data; td->ns ;td++)
 		test_data(td);
 }
 
 int
 main(int argc, char **argv)
 {
-	if (!g_thread_supported())
-		g_thread_init(NULL);
-	g_set_prgname(argv[0]);
-	g_log_set_default_handler(logger_stderr, NULL);
-	logger_init_level(GRID_LOGLVL_TRACE2);
-	g_test_init (&argc, &argv, NULL);
-
+	HC_TEST_INIT(argc,argv);
 	g_test_add_func("/client/lib/url/init", test_init);
-
 	return g_test_run();
 }
 
