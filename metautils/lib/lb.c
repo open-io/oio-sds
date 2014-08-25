@@ -17,10 +17,12 @@
 
 #include <glib.h>
 
+#include <json/json.h>
+
 #include "./metautils.h"
 #include "./resolv.h"
 #include "./lb.h"
-#include <storage_policy.h>
+#include "./storage_policy.h"
 
 #define SLOT(P) ((struct score_slot_s*)P)
 
@@ -1407,6 +1409,36 @@ grid_lbpool_reload(struct grid_lbpool_s *glp, const gchar *srvtype,
 	g_static_rw_lock_writer_unlock(&(glp->rwlock));
 }
 
+GError*
+grid_lbpool_reload_json(struct grid_lbpool_s *glp, const gchar *srvtype,
+		const gchar *encoded)
+{
+	g_assert(glp != NULL);
+	g_assert(srvtype != NULL);
+
+	g_static_rw_lock_writer_lock(&(glp->rwlock));
+	(void) _ensure_iterator(glp, srvtype);
+	GError *err = grid_lb_reload_json(_ensure_pool(glp, srvtype), encoded);
+	g_static_rw_lock_writer_unlock(&(glp->rwlock));
+
+	return err;
+}
+
+GError*
+grid_lbpool_reload_json_object(struct grid_lbpool_s *glp, const gchar *srvtype,
+		struct json_object *obj)
+{
+	g_assert(glp != NULL);
+	g_assert(srvtype != NULL);
+
+	g_static_rw_lock_writer_lock(&(glp->rwlock));
+	(void) _ensure_iterator(glp, srvtype);
+	GError *err = grid_lb_reload_json_object(_ensure_pool(glp, srvtype), obj);
+	g_static_rw_lock_writer_unlock(&(glp->rwlock));
+
+	return err;
+}
+
 struct grid_lb_iterator_s*
 grid_lbpool_get_iterator(struct grid_lbpool_s *glp, const gchar *srvtype)
 {
@@ -1441,5 +1473,46 @@ grid_lbpool_get_service_from_url(struct grid_lbpool_s *glp,
 	g_static_rw_lock_reader_unlock(&(glp->rwlock));
 
 	return result;
+}
+
+GError *
+grid_lb_reload_json_object(struct grid_lb_s *lb, struct json_object *obj)
+{
+	if (!lb)
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid parameter");
+	if (!json_object_is_type(obj, json_type_array))
+		return NEWERROR(CODE_BAD_REQUEST, "JSON object is not an array");
+
+	int i = json_object_array_length(obj);
+	gboolean provide(struct service_info_s **p_si) {
+		*p_si = NULL;
+		while (i > 0) {
+			--i;
+			struct json_object *item = json_object_array_get_idx(obj, i);
+			if (!item || !json_object_is_type(item, json_type_object))
+				return TRUE;
+			*p_si = NULL;
+			GError *e = service_info_load_json_object(item, p_si);
+			if (!e)
+				return FALSE;
+			g_clear_error(&e);
+		}
+		*p_si = NULL;
+		return TRUE;
+	}
+	grid_lb_reload(lb, provide);
+	return NULL;
+}
+
+GError *
+grid_lb_reload_json(struct grid_lb_s *lb, const gchar *encoded)
+{
+	struct json_tokener *tok = json_tokener_new();
+	struct json_object *obj = json_tokener_parse_ex(tok,
+			encoded, strlen(encoded));
+	json_tokener_free(tok);
+	GError *err = grid_lb_reload_json_object(lb, obj);
+	json_object_put(obj);
+	return err;
 }
 

@@ -77,6 +77,13 @@ void grid_lb_clean(struct grid_lb_s *lb);
  */
 void grid_lb_reload(struct grid_lb_s *lb, service_provider_f provide);
 
+struct json_object;
+
+GError*  grid_lb_reload_json_object(struct grid_lb_s *lb,
+		struct json_object *obj);
+
+GError*  grid_lb_reload_json(struct grid_lb_s *lb, const gchar *encoded);
+
 /**
  * @param lb not NULL
  * @return the number of elements in the given pool, after shorten ratio.
@@ -376,6 +383,12 @@ void grid_lbpool_configure_string(struct grid_lbpool_s *glp,
 void grid_lbpool_reload(struct grid_lbpool_s *glp, const gchar *srvtype,
 		service_provider_f provider);
 
+GError* grid_lbpool_reload_json_object(struct grid_lbpool_s *glp, const gchar *srvtype,
+		struct json_object *obj);
+
+GError* grid_lbpool_reload_json(struct grid_lbpool_s *glp, const gchar *srvtype,
+		const gchar *encoded);
+
 /**
  * @param glp
  * @param srvtype
@@ -384,7 +397,8 @@ void grid_lbpool_reload(struct grid_lbpool_s *glp, const gchar *srvtype,
 struct grid_lb_iterator_s* grid_lbpool_get_iterator(struct grid_lbpool_s *glp,
 		const gchar *srvtype);
 
-struct service_info_s* grid_lbpool_get_service_from_url(struct grid_lbpool_s *glp,
+struct service_info_s* grid_lbpool_get_service_from_url(
+struct grid_lbpool_s *glp,
 		const gchar *srvtype, const gchar *url);
 
 /*! @} */
