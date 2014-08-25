@@ -149,7 +149,7 @@ sock_to_write(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 			return -1;
 		}
 		if (p.revents & POLLERR) {
-			int sock_err = sock_get_error(fd);
+			int sock_err = socket_get_errcode(fd);
 			GSETERROR(err, "Socket (%d) error after %i bytes written : (%d) %s", fd, nbSent, sock_err, strerror(sock_err));
 			return -1;
 		}
@@ -221,7 +221,7 @@ sock_to_read(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 				return 0;
 			}
 			if (p.revents & POLLERR) {
-				int sock_err = sock_get_error(fd);
+				int sock_err = socket_get_errcode(fd);
 				GSETCODE(err, ERRCODE_CONN_CLOSED, "Socket %d error : (%d) %s", fd, sock_err, strerror(sock_err));
 				return 0;
 			}
@@ -259,7 +259,7 @@ sock_to_read_size(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 /* ------------------------------------------------------------------------- */
 
 gint
-sock_get_error(int fd)
+socket_get_errcode(int fd)
 {
 #ifdef HAVE_MOCKS
 	if (VTABLE.get_error)
@@ -275,6 +275,15 @@ sock_get_error(int fd)
 	rc = metautils_syscall_getsockopt(fd, SOL_SOCKET, SO_ERROR, &sock_err, &sock_err_size);
 	return (0 != rc) ? -1 : sock_err;
 }
+
+GError *
+socket_get_error(int fd)
+{
+	int sock_err = socket_get_errcode(fd);
+	return NEWERROR(errno_to_errcode(sock_err), "[errno=%d] %s",
+			sock_err, strerror(sock_err));
+}
+
 
 gboolean
 sock_set_tcpquickack(int fd, gboolean enabled)

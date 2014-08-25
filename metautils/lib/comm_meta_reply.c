@@ -10,6 +10,7 @@
 #include "./metautils.h"
 #include "./metacomm.h"
 #include "./gridd_client.h"
+#include "./gridd_client_ext.h"
 
 static inline gdouble
 ms_to_s(int ms)
@@ -430,7 +431,7 @@ metacnx_is_open(struct metacnx_ctx_s * ctx)
 	if (ctx->fd < 0)
 		return FALSE;
 
-	return sock_get_error(ctx->fd) ? FALSE : TRUE;
+	return socket_get_errcode(ctx->fd) ? FALSE : TRUE;
 }
 
 void

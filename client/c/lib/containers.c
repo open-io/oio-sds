@@ -761,7 +761,7 @@ gs_container_check_cnx (gs_container_t *container)
 		return 0;
 	if (container->meta2_cnx < 0)
 		return 0;
-	if (!sock_get_error(container->meta2_cnx))
+	if (!socket_get_errcode(container->meta2_cnx))
 		return 1;
 
 	if (errno == EBADF)

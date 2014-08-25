@@ -94,7 +94,9 @@ int accept_nonblock(int srv, struct sockaddr *sa, socklen_t *sa_len);
  * @param fd a valid socket
  * @return a errno code
  */
-gint sock_get_error(int fd);
+gint socket_get_errcode(int fd);
+
+GError* socket_get_error(int fd);
 
 /**
  * Set non blocking 

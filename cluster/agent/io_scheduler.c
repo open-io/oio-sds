@@ -83,7 +83,7 @@ launch_io_scheduler(void)
 
 				/* Check if an error occured */
 				if (events[i].events & (EPOLLHUP|EPOLLERR)) {
-					int sock_err = sock_get_error(worker->data.fd);
+					int sock_err = socket_get_errcode(worker->data.fd);
 					ERROR("An error occured on fd [%d], closing connection : %s",
 							worker->data.fd, strerror(sock_err));
 					abort_worker(worker);

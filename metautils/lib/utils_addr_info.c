@@ -102,7 +102,7 @@ retry:
 		GSETERROR(err, "poll error: (%d) %s", errno, strerror(errno));
 	}
 	else if ((p.revents & POLLERR) || (p.revents & POLLHUP) || (p.revents & POLLNVAL)) {
-		int e = sock_get_error(fd);
+		int e = socket_get_errcode(fd);
 		GSETCODE(err, CODE_NETWORK_ERROR, "connect error: (%d) %s",
 				e, strerror(e));
 	}
