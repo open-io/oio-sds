@@ -1,5 +1,8 @@
 #ifndef HC_GRIDD_CLIENT_H
 # define HC_GRIDD_CLIENT_H 1
+# include <glib.h>
+# include <sys/time.h>
+
 
 /**
  * @defgroup metautils_client
@@ -10,9 +13,6 @@
  * @{
  */
 
-# include <glib.h>
-# include <sys/time.h>
-
 # ifndef GRIDC_DEFAULT_TIMEOUT_STEP
 #  define GRIDC_DEFAULT_TIMEOUT_STEP 10.0
 # endif
@@ -21,7 +21,11 @@
 #  define GRIDC_DEFAULT_TIMEOUT_OVERALL 30.0
 # endif
 
-struct client_s;
+#define client_s gridd_client_s
+
+struct gridd_client_s;
+struct gridd_client_factory_s;
+
 struct message_s;
 struct addr_info_s;
 
@@ -33,92 +37,145 @@ enum client_interest_e
 
 typedef gboolean (*client_on_reply)(gpointer ctx, struct message_s *reply);
 
-/* CONSTRUCTORS & DESTRUCTORS ---------------------------------------------- */
+struct gridd_client_vtable_s
+{
+	// Destructor
+	void (*clean) (struct gridd_client_s *c);
 
-struct client_s * gridd_client_create_empty(void);
+	// Connectors
+	GError* (*connect_url) (struct gridd_client_s *c, const gchar *target);
+	GError* (*connect_addr) (struct gridd_client_s *c, const struct addr_info_s *a);
 
-struct client_s * gridd_client_create_idle(const gchar *target);
+	// Sets the next request to be sent, and what to do with the reply.
+	GError* (*request) (struct gridd_client_s *c, GByteArray *req,
+			gpointer ctx, client_on_reply cb);
 
-struct client_s * gridd_client_create(const gchar *target,
-		GByteArray *req, gpointer ctx, client_on_reply cb);
+	// Returns a copy of the last error that occured.
+	GError* (*error) (struct gridd_client_s *c);
 
-void gridd_client_clean(struct client_s *client);
+	// Tells which among client_interest_e is to be monitored
+	int (*interest) (struct gridd_client_s *c);
 
-void gridd_client_free(struct client_s *client);
+	// Returns the last URL we connected to
+	const gchar* (*get_url) (struct gridd_client_s *c);
 
-/* TRIGGERS ---------------------------------------------------------------- */
+	// Returns the file descriptor currently used
+	int (*get_fd) (struct gridd_client_s *c);
 
-GError* gridd_client_connect_url(struct client_s *client, const gchar *url);
+	// Force a new descriptor
+	GError* (*set_fd) (struct gridd_client_s *c, int fd);
 
-GError* gridd_client_connect_addr(struct client_s *client,
-		const struct addr_info_s *ai);
+	// Tells to keep the connection open between requests.
+	void (*set_keepalive) (struct gridd_client_s *c, gboolean on);
 
-GError* gridd_client_request(struct client_s *client,
-		GByteArray *req, gpointer ctx, client_on_reply cb);
+	// Force the timeout for each signel request (step), and for each request
+	// and its redirections.
+	void (*set_timeout) (struct gridd_client_s *c, gdouble step, gdouble overall);
 
-/* GETTERS ----------------------------------------------------------------- */
+	// Returns if the client's last change is older than 'now'
+	gboolean (*expired) (struct gridd_client_s *c, GTimeVal *now);
 
-GError* gridd_client_error(struct client_s *client);
+	// Returns FALSE if the client is still expecting events.
+	gboolean (*finished) (struct gridd_client_s *c);
 
-int gridd_client_interest(struct client_s *client);
+	// Initiate the request.
+	gboolean (*start) (struct gridd_client_s *c);
 
-const gchar* gridd_client_url(struct client_s *client);
+	// Manage the events raised
+	void (*react) (struct gridd_client_s *c);
 
-int gridd_client_fd(struct client_s *client);
+	// If expired() is true, sets the internal error and mark the client
+	// as failed.
+	void (*expire) (struct gridd_client_s *c, GTimeVal *now);
 
-/* SETTERS ----------------------------------------------------------------- */
+	void (*fail) (struct gridd_client_s *c, GError *why);
+};
 
-GError* gridd_client_set_fd(struct client_s *client, int fd);
+struct abstract_client_s
+{
+	struct gridd_client_vtable_s *vtable;
+};
 
-void gridd_client_set_keepalive(struct client_s *client, gboolean on);
+#define gridd_client_free(p) \
+	((struct abstract_client_s*)(p))->vtable->clean(p)
 
-void gridd_client_set_timeout(struct client_s *client, gdouble to_step,
-		gdouble to_overall);
+#define gridd_client_connect_url(p,u) \
+	((struct abstract_client_s*)(p))->vtable->connect_url(p,u)
 
-void gridd_clients_set_timeout(struct client_s **clients, gdouble to_step,
-		gdouble to_overall);
+#define gridd_client_connect_addr(p,a) \
+	((struct abstract_client_s*)(p))->vtable->connect_addr(p,a)
 
-/* LOOPING ----------------------------------------------------------------- */
+#define gridd_client_request(p,req,ctx,cb) \
+	((struct abstract_client_s*)(p))->vtable->request(p,req,ctx,cb)
 
-gboolean gridd_client_expired(struct client_s *client, GTimeVal *now);
+#define gridd_client_error(p) \
+	((struct abstract_client_s*)(p))->vtable->error(p)
 
-void gridd_client_cnx_error(struct client_s *client);
+#define gridd_client_interest(p) \
+	((struct abstract_client_s*)(p))->vtable->interest(p)
 
-gboolean gridd_client_finished(struct client_s *client);
+#define gridd_client_url(p) \
+	((struct abstract_client_s*)(p))->vtable->get_url(p)
 
-gboolean gridd_client_start(struct client_s *client);
+#define gridd_client_fd(p) \
+	((struct abstract_client_s*)(p))->vtable->get_fd(p)
 
-GError* gridd_client_step(struct client_s *client);
+#define gridd_client_set_fd(p,fd) \
+	((struct abstract_client_s*)(p))->vtable->set_fd(p,fd)
 
-GError* gridd_client_loop(struct client_s *client);
+#define gridd_client_set_keepalive(p,on) \
+	((struct abstract_client_s*)(p))->vtable->set_keepalive(p,on)
 
-void gridd_client_react(struct client_s *client);
+#define gridd_client_set_timeout(p,t0,t1) \
+	((struct abstract_client_s*)(p))->vtable->set_timeout(p,t0,t1)
 
-/* ----------------------------------------------------------------------------
- * ARRAYS of clients
- *
- *
- * ------------------------------------------------------------------------- */
+#define gridd_client_expired(p,now) \
+	((struct abstract_client_s*)(p))->vtable->expired(p,now)
 
-/**
- * @return NULL if one of the subsequent client creation fails
- */
-struct client_s ** gridd_client_create_many(gchar **targets,
-		GByteArray *request, gpointer ctx, client_on_reply cb);
+#define gridd_client_finished(p) \
+	((struct abstract_client_s*)(p))->vtable->finished(p)
 
-void gridd_clients_free(struct client_s **clients);
+#define gridd_client_start(p) \
+	((struct abstract_client_s*)(p))->vtable->start(p)
 
-gboolean gridd_clients_finished(struct client_s **clients);
+#define gridd_client_expire(p,now) \
+	((struct abstract_client_s*)(p))->vtable->expire(p,now)
 
-GError * gridd_clients_error(struct client_s **clients);
+#define gridd_client_react(p) \
+	((struct abstract_client_s*)(p))->vtable->react(p)
 
-void gridd_clients_start(struct client_s **clients);
+#define gridd_client_fail(p,why) \
+	((struct abstract_client_s*)(p))->vtable->fail(p,why)
 
-// Poll for network events (using poll()), and call gridd_client_react()
-// if a non-error event occured.
-GError * gridd_clients_step(struct client_s **clients);
+// Instanciate a client with the default VTABLE
+struct gridd_client_s * gridd_client_create_empty(void);
 
-GError * gridd_clients_loop(struct client_s **clients);
+
+/* ------------------------------------------------------------------------- */
+
+struct gridd_client_factory_vtable_s
+{
+	void (*clean) (struct gridd_client_factory_s *self);
+
+	// Instatiates an empty client (no target, ni request).
+	struct gridd_client_s* (*create) (struct gridd_client_factory_s *f);
+};
+
+struct abstract_client_factory_s
+{
+	struct gridd_client_factory_vtable_s *vtable;
+};
+
+#define gridd_client_factory_clean(p) \
+	((struct abstract_client_factory_s*)(p))->vtable->clean(p)
+
+#define gridd_client_factory_create_client(p) \
+	((struct abstract_client_factory_s*)(p))->vtable->create(p)
+
+// Instanciate a clients factory with the default VTABLE. This factory will
+// provide clients with the same VTABLE than those created with
+// gridd_client_create_empty().
+struct gridd_client_factory_s * gridd_client_factory_create(void);
 
 /** @} */
 

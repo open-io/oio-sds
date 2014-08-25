@@ -323,6 +323,7 @@ add_library(metacomm SHARED
 		comm_container_info.c
 
 		gridd_client.c gridd_client.h
+		gridd_client_ext.c gridd_client_ext.h
 		gridd_client_pool.c gridd_client_pool.h
 )
 
@@ -424,6 +425,7 @@ install(FILES
 			common_main.h
 			expr.h
 			gridd_client.h
+			gridd_client_ext.h
 			gridd_client_pool.h
 			grid_storage_client_stat.h
 			hc_url.h

@@ -9,7 +9,6 @@
 #include <string.h>
 #include <strings.h>
 #include <errno.h>
-#include <poll.h>
 #include <sys/types.h>
 
 #include "./metautils_macros.h"
@@ -41,8 +40,14 @@ enum client_step_e
 	STATUS_FAILED
 };
 
-struct client_s
+struct gridd_client_factory_s
 {
+	struct abstract_client_factory_s abstract;
+};
+
+struct gridd_client_s
+{
+	struct abstract_client_s abstract;
 	gchar orig_url[URL_MAXLEN];
 
 	gchar url[URL_MAXLEN];
@@ -69,13 +74,56 @@ struct client_s
 	gboolean keepalive;
 };
 
-static GError *
-socket_get_error(int fd)
+static void _client_free(struct gridd_client_s *client);
+static GError* _client_connect_url(struct gridd_client_s *client, const gchar *url);
+static GError* _client_connect_addr(struct gridd_client_s *client,
+		const struct addr_info_s *ai);
+static GError* _client_request(struct gridd_client_s *client, GByteArray *req,
+		gpointer ctx, client_on_reply cb);
+static gboolean _client_expired(struct gridd_client_s *client, GTimeVal *now);
+static gboolean _client_finished(struct gridd_client_s *c);
+static const gchar* _client_url(struct gridd_client_s *client);
+static int _client_get_fd(struct gridd_client_s *client);
+static int _client_interest(struct gridd_client_s *client);
+static GError* _client_error(struct gridd_client_s *client);
+static gboolean _client_start(struct gridd_client_s *client);
+static GError* _client_set_fd(struct gridd_client_s *client, int fd);
+static void _client_set_timeout(struct gridd_client_s *client, gdouble to0, gdouble to1);
+static void _client_set_keepalive(struct gridd_client_s *client, gboolean on);
+static void _client_react(struct gridd_client_s *client);
+static void _client_expire(struct gridd_client_s *client, GTimeVal *now);
+static void _client_fail(struct gridd_client_s *client, GError *why);
+
+static void _factory_clean(struct gridd_client_factory_s *self);
+static struct gridd_client_s * _factory_create_client (
+		struct gridd_client_factory_s *self);
+
+struct gridd_client_factory_vtable_s VTABLE_FACTORY =
 {
-	int sock_err = sock_get_error(fd);
-	return NEWERROR(errno_to_errcode(sock_err), "[errno=%d] %s",
-			sock_err, strerror(sock_err));
-}
+	_factory_clean,
+	_factory_create_client
+};
+
+struct gridd_client_vtable_s VTABLE_CLIENT =
+{
+	_client_free,
+	_client_connect_url,
+	_client_connect_addr,
+	_client_request,
+	_client_error,
+	_client_interest,
+	_client_url,
+	_client_get_fd,
+	_client_set_fd,
+	_client_set_keepalive,
+	_client_set_timeout,
+	_client_expired,
+	_client_finished,
+	_client_start,
+	_client_react,
+	_client_expire,
+	_client_fail
+};
 
 static int
 _connect(const gchar *url, GError **err)
@@ -105,7 +153,7 @@ _connect(const gchar *url, GError **err)
 }
 
 static GError*
-_client_connect(struct client_s *client)
+_client_connect(struct gridd_client_s *client)
 {
 	GError *err = NULL;
 	client->fd = _connect(client->url, &err);
@@ -122,26 +170,8 @@ _client_connect(struct client_s *client)
 	return NULL;
 }
 
-static inline int
-_client_to_pollfd(struct client_s *client, struct pollfd *pfd)
-{
-	register int interest;
-
-	if (client->fd < 0 || !(interest = gridd_client_interest(client)))
-		return 0;
-
-	pfd->fd = client->fd;
-	pfd->events = 0;
-	pfd->revents = 0;
-	if (interest & CLIENT_WR)
-		pfd->events = POLLOUT;
-	if (interest & CLIENT_RD)
-		pfd->events = POLLIN;
-	return 1;
-}
-
 static void
-_client_reset_request(struct client_s *client)
+_client_reset_request(struct gridd_client_s *client)
 {
 	if (client->request)
 		g_byte_array_unref(client->request);
@@ -153,7 +183,7 @@ _client_reset_request(struct client_s *client)
 }
 
 static void
-_client_reset_reply(struct client_s *client)
+_client_reset_reply(struct gridd_client_s *client)
 {
 	client->size = 0;
 	if (!client->reply)
@@ -163,7 +193,7 @@ _client_reset_reply(struct client_s *client)
 }
 
 static void
-_client_reset_cnx(struct client_s *client)
+_client_reset_cnx(struct gridd_client_s *client)
 {
 	if (client->fd >= 0)
 		metautils_pclose(&(client->fd));
@@ -171,42 +201,21 @@ _client_reset_cnx(struct client_s *client)
 }
 
 static void
-_client_reset_target(struct client_s *client)
+_client_reset_target(struct gridd_client_s *client)
 {
 	memset(client->url, 0, sizeof(client->url));
 	memset(client->orig_url, 0, sizeof(client->orig_url));
 }
 
 static void
-_client_reset_error(struct client_s *client)
+_client_reset_error(struct gridd_client_s *client)
 {
 	if (client->error)
 		g_clear_error(&(client->error));
 }
 
-static void
-_client_expire(struct client_s *c, GTimeVal *now)
-{
-	if (gridd_client_finished(c))
-		return;
-	if (gridd_client_expired(c, now)) {
-		_client_reset_cnx(c);
-		c->error = NEWERROR(0, "Timeout");
-		c->step = STATUS_FAILED;
-	}
-}
-
-static void
-_clients_expire(struct client_s **clients, GTimeVal *now)
-{
-	while (*clients)
-		_client_expire(*(clients++), now);
-}
-
-/* ------------------------------------------------------------------------- */
-
 static gboolean
-_client_looped(struct client_s *client, const gchar *url)
+_client_looped(struct gridd_client_s *client, const gchar *url)
 {
 	gboolean rc;
 	gchar *start, *end;
@@ -226,7 +235,7 @@ _client_looped(struct client_s *client, const gchar *url)
 }
 
 static GError *
-_client_manage_reply(struct client_s *client, MESSAGE reply)
+_client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 {
 	GError *err;
 	gint status = 0;
@@ -312,7 +321,7 @@ _client_manage_reply(struct client_s *client, MESSAGE reply)
 }
 
 static GError *
-_client_manage_reply_data(struct client_s *client)
+_client_manage_reply_data(struct gridd_client_s *client)
 {
 	gsize s = 0;
 	MESSAGE reply = NULL;
@@ -333,7 +342,7 @@ _client_manage_reply_data(struct client_s *client)
 }
 
 static GError *
-_client_manage_event_in_buffer(struct client_s *client, guint8 *d, gsize ds)
+_client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize ds)
 {
 	ssize_t rc;
 
@@ -440,7 +449,7 @@ _client_manage_event_in_buffer(struct client_s *client, guint8 *d, gsize ds)
 }
 
 static GError *
-_client_manage_event(struct client_s *client)
+_client_manage_event(struct gridd_client_s *client)
 {
 	guint8 *d = g_malloc(EVENT_BUFFER_SIZE);
 	if (!d)
@@ -450,9 +459,16 @@ _client_manage_event(struct client_s *client)
 	return err;
 }
 
-void
-gridd_client_react(struct client_s *client)
+/* ------------------------------------------------------------------------- */
+
+static void
+_client_react(struct gridd_client_s *client)
 {
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
+
+	if (!client)
+		return;
 	GError *err = NULL;
 
 retry:
@@ -470,109 +486,38 @@ retry:
 	}
 }
 
-/* CONSTRUCTORS ------------------------------------------------------------ */
-
-struct client_s *
-gridd_client_create_empty(void)
+static const gchar*
+_client_url(struct gridd_client_s *client)
 {
-	struct client_s *client = g_malloc0(sizeof(*client));
-	if (unlikely(NULL == client))
-		return NULL;
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
-	client->fd = -1;
-	client->step = NONE;
-	client->delay_overall = GRIDC_DEFAULT_TIMEOUT_OVERALL;
-	client->delay_step = GRIDC_DEFAULT_TIMEOUT_STEP,
-	client->past_url = g_string_new("");
-
-	return client;
-}
-
-struct client_s *
-gridd_client_create_idle(const gchar *target)
-{
-	struct client_s *client = gridd_client_create_empty();
-	if (unlikely(NULL == client))
-		return NULL;
-
-	GError *err = gridd_client_connect_url(client, target);
-	if (likely(NULL == err))
-		return client;
-
-	GRID_WARN("Client creation failed: (%d) %s", err->code, err->message);
-	g_clear_error(&err);
-	gridd_client_free(client);
-	return NULL;
-}
-
-struct client_s *
-gridd_client_create(const gchar *target, GByteArray *req, gpointer ctx,
-                client_on_reply cb)
-{
-	EXTRA_ASSERT(req != NULL);
-
-	struct client_s *client = gridd_client_create_idle(target);
 	if (!client)
 		return NULL;
-
-	client->ctx = ctx;
-	client->on_reply = cb;
-	client->request = g_byte_array_ref(req);
-	return client;
-}
-
-struct client_s **
-gridd_client_create_many(gchar **targets, GByteArray *req, gpointer ctx,
-                client_on_reply cb)
-{
-	gint i, max;
-	struct client_s **clients;
-
-	EXTRA_ASSERT(targets != NULL);
-	EXTRA_ASSERT(req != NULL);
-
-	max = (gint)g_strv_length(targets);
-	clients = g_malloc0(sizeof(struct client_s*) * (max+1));
-
-	for (i = 0; i < max; i++) {
-		struct client_s *client = gridd_client_create(targets[i], req, ctx, cb);
-		if (!client)
-			break;
-		clients[i] = client;
+	else {
+		client->url[ sizeof(client->url)-1 ] = '\0';
+		return client->url;
 	}
-	if (i < max) {
-		// something went wrong, rolling back
-		for (; i >= 0; i--) {
-			gridd_client_free(clients[i]);
-			clients[i] = NULL;
-		}
-		g_free(clients);
-		clients = NULL;
-	}
-
-	return clients;
 }
 
-/* GETTERS ----------------------------------------------------------------- */
-
-const gchar*
-gridd_client_url(struct client_s *client)
-{
-	client->url[ sizeof(client->url)-1 ] = '\0';
-	return client->url;
-}
-
-int
-gridd_client_fd(struct client_s *client)
+static int
+_client_get_fd(struct gridd_client_s *client)
 {
 	EXTRA_ASSERT(client != NULL);
-	return client->fd;
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
+
+	return client ? client->fd : -1;
 }
 
-int
-gridd_client_interest(struct client_s *client)
+static int
+_client_interest(struct gridd_client_s *client)
 {
 	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
+
+	if (!client)
+		return 0;
+
 	switch (client->step) {
 		case NONE:
 			return 0;
@@ -596,40 +541,25 @@ gridd_client_interest(struct client_s *client)
 	}
 }
 
-GError *
-gridd_client_error(struct client_s *client)
+static GError *
+_client_error(struct gridd_client_s *client)
 {
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
+
 	if (!client || !client->error)
+		return NULL;
+	if (NULL == client->error)
 		return NULL;
 	return NEWERROR(client->error->code, client->error->message);
 }
 
-GError *
-gridd_clients_error(struct client_s **clients)
+static void
+_client_free(struct gridd_client_s *client)
 {
-	struct client_s *c;
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
-	if (!clients)
-		return NEWERROR(EINVAL, "NULL clients array");
-
-	for (; (c = *clients) ;clients++) {
-		if (c->step != STATUS_OK) {
-			GError *e = gridd_client_error(c);
-			if (e != NULL)
-				return e;
-		}
-	}
-
-	return NULL;
-}
-
-/* DESTRUCTORS ------------------------------------------------------------- */
-
-void
-gridd_client_clean(struct client_s *client)
-{
-	if (!client)
-		return;
 	_client_reset_reply(client);
 	_client_reset_request(client);
 	_client_reset_cnx(client);
@@ -641,81 +571,53 @@ gridd_client_clean(struct client_s *client)
 		g_string_free(client->past_url, TRUE);
 	memset(client, 0, sizeof(*client));
 	client->fd = -1;
-}
-
-void
-gridd_client_free(struct client_s *client)
-{
-	if (!client)
-		return;
-	gridd_client_clean(client);
 	g_free(client);
 }
 
-void
-gridd_clients_free(struct client_s **clients)
+static void
+_client_set_keepalive(struct gridd_client_s *client, gboolean on)
 {
-	struct client_s **c;
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
-	if (!clients)
-		return;
-	for (c=clients; *c ;c++)
-		gridd_client_free(*c);
-	g_free(clients);
-}
-
-/* SETTERS ----------------------------------------------------------------- */
-
-void
-gridd_client_set_keepalive(struct client_s *client, gboolean on)
-{
-	if (!client)
-		return;
 	client->keepalive = on;
 }
 
-void
-gridd_clients_set_timeout(struct client_s **clients, gdouble to_step,
-		gdouble to_overall)
-{
-	for (; *clients ;++clients)
-		gridd_client_set_timeout(*clients, to_step, to_overall);
-}
-
-void
-gridd_client_set_timeout(struct client_s *client, gdouble to_step,
-		gdouble to_overall)
-{
-	if (!client)
-		return;
-	client->delay_overall = to_overall;
-	client->delay_step = to_step;
-}
-
-GError*
-gridd_client_set_fd(struct client_s *client, int fd)
+static void
+_client_set_timeout(struct gridd_client_s *client, gdouble to0, gdouble to1)
 {
 	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
+
+	client->delay_step = to0;
+	client->delay_overall = to1;
+}
+
+static GError*
+_client_set_fd(struct gridd_client_s *client, int fd)
+{
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
 	if (fd >= 0) {
-	switch (client->step) {
-		case NONE: /* ok */
-			break;
-		case CONNECTING:
-			if (client->request != NULL)
+		switch (client->step) {
+			case NONE: /* ok */
+				break;
+			case CONNECTING:
+				if (client->request != NULL)
+					return NEWERROR(500, "Request pending");
+				/* PASSTHROUGH */
+			case CONNECTED: /* ok */
+				break;
+			case REQ_SENDING:
+			case REP_READING_SIZE:
+			case REP_READING_DATA:
 				return NEWERROR(500, "Request pending");
-			/* PASSTHROUGH */
-		case CONNECTED: /* ok */
-			break;
-		case REQ_SENDING:
-		case REP_READING_SIZE:
-		case REP_READING_DATA:
-			return NEWERROR(500, "Request pending");
-		case STATUS_OK:
-		case STATUS_FAILED:
-			/* ok */
-			break;
-	}
+			case STATUS_OK:
+			case STATUS_FAILED:
+				/* ok */
+				break;
+		}
 	}
 
 	/* reset any connection and request */
@@ -735,13 +637,61 @@ gridd_client_set_fd(struct client_s *client, int fd)
 	return NULL;
 }
 
-/* TRIGGERS ---------------------------------------------------------------- */
-
-GError*
-gridd_client_request(struct client_s *client,
-		GByteArray *req, gpointer ctx, client_on_reply cb)
+static GError*
+_client_connect_url(struct gridd_client_s *client, const gchar *url)
 {
 	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
+
+	if (NULL == url || !url[0])
+		return NEWERROR(CODE_INTERNAL_ERROR, "Bad address");
+
+	if (!metautils_url_valid_for_connect(url))
+		return NEWERROR(400, "Bad address [%s]", url);
+
+	g_assert(client != NULL);
+
+	_client_reset_cnx(client);
+	_client_reset_target(client);
+	_client_reset_reply(client);
+
+	g_strlcpy(client->orig_url, url, URL_MAXLEN);
+	memcpy(client->url, client->orig_url, URL_MAXLEN);
+	client->step = NONE;
+	return NULL;
+}
+
+static GError*
+_client_connect_addr(struct gridd_client_s *client,
+		const struct addr_info_s *ai)
+{
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
+
+	if (NULL == ai || !ai->port)
+		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid parameter");
+
+	g_assert(client != NULL);
+
+	_client_reset_cnx(client);
+	_client_reset_target(client);
+	_client_reset_reply(client);
+
+	grid_addrinfo_to_string(ai, client->orig_url, URL_MAXLEN);
+	memcpy(client->url, client->orig_url, URL_MAXLEN);
+	client->step = NONE;
+	return NULL;
+}
+
+static GError*
+_client_request(struct gridd_client_s *client, GByteArray *req,
+		gpointer ctx, client_on_reply cb)
+{
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
+
+	if ( NULL == req)
+		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid parameter");
 
 	switch (client->step) {
 		case NONE:
@@ -777,259 +727,8 @@ gridd_client_request(struct client_s *client,
 	return NULL;
 }
 
-GError*
-gridd_client_connect_url(struct client_s *client, const gchar *url)
-{
-	if (NULL == url || !url[0])
-		return NEWERROR(400, "Bad address");
-
-	if (!metautils_url_valid_for_connect(url))
-		return NEWERROR(400, "Bad address [%s]", url);
-
-	g_assert(client != NULL);
-
-	_client_reset_cnx(client);
-	_client_reset_target(client);
-	_client_reset_reply(client);
-
-	g_strlcpy(client->orig_url, url, URL_MAXLEN);
-	memcpy(client->url, client->orig_url, URL_MAXLEN);
-	client->step = NONE;
-	return NULL;
-}
-
-GError*
-gridd_client_connect_addr(struct client_s *client,
-		const struct addr_info_s *ai)
-{
-	if (NULL == ai || !ai->port)
-		return NEWERROR(400, "Bad address");
-
-	g_assert(client != NULL);
-
-	_client_reset_cnx(client);
-	_client_reset_target(client);
-	_client_reset_reply(client);
-
-	grid_addrinfo_to_string(ai, client->orig_url, URL_MAXLEN);
-	memcpy(client->url, client->orig_url, URL_MAXLEN);
-	client->step = NONE;
-	return NULL;
-}
-
-/* Looping ----------------------------------------------------------------- */
-
-void
-gridd_client_cnx_error(struct client_s *client)
-{
-	EXTRA_ASSERT(client != NULL);
-	if (client->error)
-		g_error_free(client->error);
-	client->error = socket_get_error(client->fd);
-}
-
-gboolean
-gridd_client_finished(struct client_s *c)
-{
-	if (!c || c->error != NULL)
-		return TRUE;
-
-	switch (c->step) {
-		case NONE:
-			return TRUE;
-		case CONNECTING:
-			return FALSE;
-		case CONNECTED:
-			return TRUE;
-		case REQ_SENDING:
-		case REP_READING_SIZE:
-		case REP_READING_DATA:
-			/* The only case where fd<0 is when an error occured,
-			 * and 'error' MUST have been set */
-			g_assert(c->fd >= 0);
-			return FALSE;
-		case STATUS_OK:
-		case STATUS_FAILED:
-			return TRUE;
-	}
-
-	g_assert_not_reached();
-	return FALSE;
-}
-
-gboolean
-gridd_clients_finished(struct client_s **clients)
-{
-	if (!clients)
-		return TRUE;
-
-	while (*clients) {
-		if (!gridd_client_finished(*(clients++)))
-			return FALSE;
-	}
-
-	return TRUE;
-}
-
-gboolean
-gridd_client_start(struct client_s *client)
-{
-	g_assert(client != NULL);
-
-	g_get_current_time(&(client->tv_start));
-	memcpy(&(client->tv_step), &(client->tv_start), sizeof(GTimeVal));
-
-	if (client->step != NONE)
-		return FALSE;
-
-	if (!client->url[0]) {
-		_client_reset_error(client);
-		client->error = NEWERROR(EINVAL, "No target");
-		return FALSE;
-	}
-
-	GError *err = _client_connect(client);
-	if (NULL == err)
-		return TRUE;
-
-	client->step = STATUS_FAILED;
-	client->error = err;
-	return FALSE;
-}
-
-void
-gridd_clients_start(struct client_s **clients)
-{
-	g_assert(clients != NULL);
-	for (; *clients ;++clients) {
-		if (!gridd_client_start(*clients)) {
-			if (NULL != (*clients)->error) {
-				GRID_WARN("STARTUP failed fd=%d [%s] : (%d) %s",
-						(*clients)->fd, (*clients)->url,
-						(*clients)->error->code,
-						(*clients)->error->message);
-			}
-		}
-	}
-}
-
-GError*
-gridd_client_step(struct client_s *client)
-{
-	struct pollfd pfd = {-1, 0, 0};
-
-	if (!_client_to_pollfd(client, &pfd)) {
-		return NULL;
-	}
-
-	int rc = metautils_syscall_poll(&pfd, 1, 1000);
-	if (rc == 0) {
-		GTimeVal now;
-		g_get_current_time(&now);
-		_client_expire(client, &now);
-		return NULL;
-	}
-	if (rc < 0)
-		return NEWERROR(errno, "poll errno=%d %s", errno, strerror(errno));
-
-	if (pfd.revents & POLLERR)
-		client->error = socket_get_error(client->fd);
-	else
-		gridd_client_react(client);
-	return NULL;
-}
-
-GError *
-gridd_clients_step(struct client_s **clients)
-{
-	struct client_s ** _lookup_client(int fd, struct client_s **ppc) {
-		struct client_s *c;
-		for (; (c = *ppc) ;ppc++) {
-			if (c->fd == fd)
-				return ppc;
-		}
-		return ppc;
-	}
-
-	guint i, j;
-	int rc;
-	struct client_s *last, **plast;
-	GTimeVal now;
-	guint nbclients;
-
-	EXTRA_ASSERT(clients != NULL);
-	nbclients = g_strv_length((gchar**)clients);
-	EXTRA_ASSERT(nbclients > 0);
-
-	struct pollfd pfd[nbclients];
-
-	for (j=0,plast=clients; NULL != (last = *plast) ;plast++) {
-		if (_client_to_pollfd(last, pfd+j))
-			j++;
-	}
-	if (!j)
-		return NULL;
-
-	/* Wait for an event to happen */
-	if (!(rc = poll(pfd, j, 100))) {
-		g_get_current_time(&now);
-		_clients_expire(clients, &now);
-		return NULL;
-	}
-	if (rc < 0)
-		return NEWERROR(errno, "poll error (%s)", strerror(errno));
-
-	/* Then manage each event */
-	for (plast=clients,i=0; i<j ;i++) {
-		if (!pfd[i].revents)
-			continue;
-
-		/* Find the client for this pollfd */
-		plast = _lookup_client(pfd[i].fd, plast);
-		EXTRA_ASSERT(plast != NULL);
-		last = *plast;
-
-		/* Manage the poll() event */
-		if (pfd[i].revents & POLLERR)
-			gridd_client_cnx_error(last);
-		else
-			gridd_client_react(last);
-	}
-
-	/* Now check for expired clients */
-	g_get_current_time(&now);
-	_clients_expire(clients, &now);
-	return NULL;
-}
-
-GError *
-gridd_client_loop(struct client_s *client)
-{
-	while (!gridd_client_finished(client)) {
-		GError *err = gridd_client_step(client);
-		if (err) {
-			g_prefix_error(&err, "(Step) ");
-			return err;
-		}
-	}
-	return NULL;
-}
-
-GError *
-gridd_clients_loop(struct client_s **clients)
-{
-	while (!gridd_clients_finished(clients)) {
-		GError *err = gridd_clients_step(clients);
-		if (err) {
-			g_prefix_error(&err, "(Step) ");
-			return err;
-		}
-	}
-	return NULL;
-}
-
-gboolean
-gridd_client_expired(struct client_s *client, GTimeVal *now)
+static gboolean
+_client_expired(struct gridd_client_s *client, GTimeVal *now)
 {
 	inline gdouble seconds_elapsed(struct timeval *tv) {
 		gdouble ds, du, dr;
@@ -1042,6 +741,7 @@ gridd_client_expired(struct client_s *client, GTimeVal *now)
 	struct timeval diff;
 
 	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
 	switch (client->step) {
 		case NONE:
@@ -1069,5 +769,136 @@ gridd_client_expired(struct client_s *client, GTimeVal *now)
 
 	g_assert_not_reached();
 	return FALSE;
+}
+
+static void
+_client_expire(struct gridd_client_s *client, GTimeVal *now)
+{
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
+
+	if (_client_finished(client))
+		return;
+	if (_client_expired(client, now)) {
+		_client_reset_cnx(client);
+		client->error = NEWERROR(0, "Timeout");
+		client->step = STATUS_FAILED;
+	}
+}
+
+static gboolean
+_client_finished(struct gridd_client_s *client)
+{
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
+
+	if (client->error != NULL)
+		return TRUE;
+
+	switch (client->step) {
+		case NONE:
+			return TRUE;
+		case CONNECTING:
+			return FALSE;
+		case CONNECTED:
+			return TRUE;
+		case REQ_SENDING:
+		case REP_READING_SIZE:
+		case REP_READING_DATA:
+			/* The only case where fd<0 is when an error occured,
+			 * and 'error' MUST have been set */
+			g_assert(client->fd >= 0);
+			return FALSE;
+		case STATUS_OK:
+		case STATUS_FAILED:
+			return TRUE;
+	}
+
+	g_assert_not_reached();
+	return FALSE;
+}
+
+static gboolean
+_client_start(struct gridd_client_s *client)
+{
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
+
+	g_get_current_time(&(client->tv_start));
+	memcpy(&(client->tv_step), &(client->tv_start), sizeof(GTimeVal));
+
+	if (client->step != NONE)
+		return FALSE;
+
+	if (!client->url[0]) {
+		_client_reset_error(client);
+		client->error = NEWERROR(EINVAL, "No target");
+		return FALSE;
+	}
+
+	GError *err = _client_connect(client);
+	if (NULL == err)
+		return TRUE;
+
+	client->step = STATUS_FAILED;
+	client->error = err;
+	return FALSE;
+}
+
+static void
+_client_fail(struct gridd_client_s *client, GError *why)
+{
+	EXTRA_ASSERT(client != NULL);
+	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
+	if (client->error != NULL)
+		g_clear_error(&(client->error));
+	client->error = NEWERROR(why->code, why->message);
+}
+
+static void
+_factory_clean(struct gridd_client_factory_s *self)
+{
+	EXTRA_ASSERT(self != NULL);
+	EXTRA_ASSERT(self->abstract.vtable == &VTABLE_FACTORY);
+	g_free(self);
+}
+
+static struct gridd_client_s *
+_factory_create_client (struct gridd_client_factory_s *factory)
+{
+	EXTRA_ASSERT(factory != NULL);
+	EXTRA_ASSERT(factory->abstract.vtable == &VTABLE_FACTORY);
+	struct gridd_client_s *client = gridd_client_create_empty();
+	if (!client)
+		return NULL;
+	gridd_client_set_timeout(client, 30.0, 60.0);
+	return client;
+}
+
+/* ------------------------------------------------------------------------- */
+
+struct gridd_client_s *
+gridd_client_create_empty(void)
+{
+	struct gridd_client_s *client = g_malloc0(sizeof(*client));
+	if (unlikely(NULL == client))
+		return NULL;
+
+	client->abstract.vtable = &VTABLE_CLIENT;
+	client->fd = -1;
+	client->step = NONE;
+	client->delay_overall = GRIDC_DEFAULT_TIMEOUT_OVERALL;
+	client->delay_step = GRIDC_DEFAULT_TIMEOUT_STEP,
+	client->past_url = g_string_new("");
+
+	return client;
+}
+
+struct gridd_client_factory_s *
+gridd_client_factory_create(void)
+{
+	struct gridd_client_factory_s *factory = g_malloc0(sizeof(*factory));
+	factory->abstract.vtable = &VTABLE_FACTORY;
+	return factory;
 }
 

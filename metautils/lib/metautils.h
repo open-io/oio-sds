@@ -56,6 +56,7 @@
 # include <metautils/lib/common_main.h>
 # include <metautils/lib/volume_lock.h>
 # include <metautils/lib/gridd_client.h>
+# include <metautils/lib/gridd_client_ext.h>
 # include <metautils/lib/gridd_client_pool.h>
 # include <metautils/lib/grid_storage_client_stat.h>
 # include <metautils/lib/expr.h>
