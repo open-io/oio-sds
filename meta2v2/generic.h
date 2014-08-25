@@ -32,7 +32,8 @@ struct bean_header_s
 	const struct bean_descriptor_s *descr;
 };
 
-struct field_descriptor_s {
+struct field_descriptor_s
+{
 	const gchar *name;
 	const guint position;
 	const long offset;
@@ -41,7 +42,8 @@ struct field_descriptor_s {
 	const gboolean pk;
 };
 
-struct bean_descriptor_s {
+struct bean_descriptor_s
+{
 	const gchar *name;
 	const gchar *c_name;
 	const gchar *sql_name;
@@ -55,14 +57,17 @@ struct bean_descriptor_s {
 	const struct field_descriptor_s *fields;
 	const struct fk_descriptor_s *fk;
 	gchar **fk_names;
+	const gint order;
 };
 
-struct fk_field_s {
+struct fk_field_s
+{
 	gint i;
 	const gchar *name;
 };
 
-struct fk_descriptor_s {
+struct fk_descriptor_s
+{
 	/* the name making sense for the  */
 	const gchar *logical_name;
 

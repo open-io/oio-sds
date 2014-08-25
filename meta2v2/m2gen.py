@@ -89,6 +89,7 @@ class Struct(object):
 		self.fk_outgoing = list()
 		self.fk_incoming = list()
 		self.indexes = list()
+		self.order = 999
 
 	def __repr__(self):
 		l = list()
@@ -128,6 +129,10 @@ class Struct(object):
 		for fk in self.fk_outgoing:
 			l.append(str(fk.base_name))
 		return l
+
+	def set_order(self, o):
+		self.order = o
+		return self
 
 #-------------------------------------------------------------------------------
 
@@ -264,7 +269,6 @@ the list."""
 		print_quoted("INSERT OR IGNORE INTO admin(k,v) VALUES (\\\"version:main.admin\\\",\\\"1:0\\\");")
 		for t in self.reverse_dependencies():
 			print_quoted("INSERT OR IGNORE INTO admin(k,v) VALUES (\\\"version:main."+t.sql_name+"\\\",\\\"1:0\\\");")
-		print_quoted("VACUUM;")
 		out.write(';\n')
 
 		for fk in self.allfk:
@@ -359,7 +363,8 @@ the list."""
 			out.write('\t'+str(len(t.fields))+",\n")
 			out.write("\tdescr_fields_"+t.c_name+",\n")
 			out.write("\tdescr_fk_"+t.c_name+",\n")
-			out.write("\tdescr_fk_names_"+t.c_name+"\n")
+			out.write("\tdescr_fk_names_"+t.c_name+",\n")
+			out.write("\t"+str(t.order)+"\n")
 			out.write("};\n\n")
 
 		for t in self.allbeans.values():
@@ -440,7 +445,7 @@ alias = generator.add_bean(Struct("aliases") \
 	.PK(("alias", "version")) \
 	.index('alias_index_by_name', ['alias']) \
 	.index('alias_index_by_header', ['content_id']) \
-	.set_sql_name("alias_v2"))
+	.set_sql_name("alias_v2")).set_order(0)
 
 properties = generator.add_bean(Struct("properties") \
 	.field(Text("alias")) \
@@ -450,7 +455,7 @@ properties = generator.add_bean(Struct("properties") \
 	.field(Bool("deleted")) \
 	.PK(("alias","alias_version","key")) \
 	.index('properties_index_by_header', ['alias']) \
-	.set_sql_name("properties_v2"))
+	.set_sql_name("properties_v2")).set_order(5)
 
 contents = generator.add_bean(Struct("contents") \
 	.field(Blob("content_id")) \
@@ -459,7 +464,7 @@ contents = generator.add_bean(Struct("contents") \
 	.PK(("content_id","chunk_id","position")) \
 	.index('contents_index_by_header', ['content_id']) \
 	.index('contents_index_by_chunk', ['chunk_id']) \
-	.set_sql_name("content_v2"))
+	.set_sql_name("content_v2")).set_order(2)
 
 contents_headers = generator.add_bean(Struct("contents_headers") \
 	.field(Blob("id")) \
@@ -467,7 +472,7 @@ contents_headers = generator.add_bean(Struct("contents_headers") \
 	.field(Blob("hash"), mandatory=False) \
 	.field(Int("size")) \
 	.PK(("id","policy")) \
-	.set_sql_name("content_header_v2"))
+	.set_sql_name("content_header_v2")).set_order(1)
 
 chunks = generator.add_bean(Struct("chunks") \
 	.field(Text("id")) \
@@ -475,14 +480,14 @@ chunks = generator.add_bean(Struct("chunks") \
 	.field(Int("size")) \
 	.field(Int("ctime")) \
 	.PK(("id",)) \
-	.set_sql_name("chunk_v2"))
+	.set_sql_name("chunk_v2")).set_order(3)
 
 snapshots = generator.add_bean(Struct("snapshots") \
 	.field(Int("version")) \
 	.field(Text("name")) \
 	.PK(("version",)) \
 	.index('snapshot_index_by_name', ['name']) \
-	.set_sql_name("snapshot_v2"))
+	.set_sql_name("snapshot_v2")).set_order(4)
 
 
 #generator.add_fk(ForeignKey(
