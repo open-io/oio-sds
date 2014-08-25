@@ -8,6 +8,7 @@
 
 #include "metautils_loggers.h"
 #include "metautils_resolv.h"
+#include "metautils_bits.h"
 #include "common_main.h"
 #include "test_addr.h"
 
@@ -36,7 +37,7 @@ test_good_connect_address(void)
 int
 main(int argc, char **argv)
 {
-	HC_PROC_INIT(argv, GRID_LOGLVL_TRACE2);
+	HC_TEST_INIT(argc,argv);
 	g_test_init (&argc, &argv, NULL);
 	g_test_add_func("/metautils/addr/bad_connect",
 			test_bad_connect_address);

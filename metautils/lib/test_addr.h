@@ -1,3 +1,5 @@
+#ifndef redcurrant__metautils_lib_test_addr_h
+#define redcurrant__metautils_lib_test_addr_h 1
 
 static gchar *bad_urls[] =
 {
@@ -39,9 +41,11 @@ static gchar *good_urls[] =
 {
 	"127.0.0.1:6000",
 	"[::1]:6000",
+
+	NULL
 };
 
-static void
+static inline void
 test_on_urlv(gchar **urlv, void (*test)(const gchar *))
 {
 	for (; *urlv ;++urlv)
@@ -49,9 +53,8 @@ test_on_urlv(gchar **urlv, void (*test)(const gchar *))
 }
 
 #define URL_ASSERT(C) do { \
-	if (!(C)) { \
-		g_printerr("<%s> Failed with [%s]", pProc, url); \
-		g_assert(C); \
-	} \
+	if (!BOOL(C)) \
+		g_error("<%s> Failed with [%s]", pProc, url); \
 } while (0)
 
+#endif

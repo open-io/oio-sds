@@ -376,9 +376,7 @@ test_pool_create_destroy(void)
 int
 main(int argc, char **argv)
 {
-	srand(time(0) ^ getpid());
-	HC_PROC_INIT(argv, GRID_LOGLVL_TRACE2);
-	g_test_init (&argc, &argv, NULL);
+	HC_TEST_INIT(argc,argv);
 	g_test_add_func("/grid/lb/WRAND", test_lb_WRAND);
 	g_test_add_func("/grid/lb/SRAND", test_lb_SRAND);
 	g_test_add_func("/grid/lb/RAND", test_lb_RAND);
