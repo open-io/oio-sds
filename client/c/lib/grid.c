@@ -68,7 +68,10 @@ gs_get_namespace(gs_grid_storage_t *gs)
 const char*
 gs_get_virtual_namespace(gs_grid_storage_t *gs)
 {
-	return !gs ? "(nil)" : strchr(gs->full_vns, '.');
+	if (!gs)
+		return NULL;
+	char *s = strchr(gs->full_vns, '.');
+	return (s!=NULL) ? s+1 : NULL;
 }
 
 const char*
