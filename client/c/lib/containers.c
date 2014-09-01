@@ -947,6 +947,7 @@ _destroy_on_allm2(gs_container_t *container, guint32 flags)
 	// Starting from 1.8.3.10, destroy event is called on slaves by the master
 	err = m2v2_remote_execute_DESTROY(targets[0], NULL, url, flags);
 	g_strfreev(targets);
+	hc_url_clean(url);
 
 	return err;
 }
