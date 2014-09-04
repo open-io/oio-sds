@@ -38,6 +38,24 @@ gs_status_t rawx_delete (gs_chunk_t *chunk, GError **err);
  */
 gboolean rawx_delete_v2(gpointer chunk, GError **err);
 
+/**
+ * Tell a RawX a chunk is corrupted (rename it with ".corrupted" extension),
+ * so future GET will return 404 instead of corrupted data.
+ *
+ * @param chunk A pointer to a gs_chunk_t instance
+ * @param[out] err A pointer to a GError (required)
+ */
+gs_status_t rawx_set_corrupted(gs_chunk_t *chunk, GError **err);
+
+/**
+ * Tell a RawX a chunk is corrupted (rename it with ".corrupted" extension),
+ * so future GET will return 404 instead of corrupted data.
+ *
+ * @param chunk A pointer to a bean_CHUNKS_s or bean_CONTENTS_s instance
+ * @param[out] err A pointer to a GError (required)
+ */
+gboolean rawx_set_corrupted_v2(gpointer chunk, GError **err);
+
 /*  */
 gboolean rawx_download (gs_chunk_t *chunk, GError **err,
 		struct dl_status_s *status, GSList **p_broken_rawx_list);

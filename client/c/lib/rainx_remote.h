@@ -52,11 +52,12 @@ void rainx_rec_params_free(struct rainx_rec_params_s *params);
  *   (see struct rainx_rec_params_s)
  * @param writer Callback to write recontructed data to
  * @param reuse_broken Allow the reuse of RAWX containing broken chunks
+ * @param on_the_fly Do not upload reconstructed chunks to rawx
  * @return A GError in case of error, NULL otherwise
  */
 GError *rainx_reconstruct(struct hc_url_s *url, namespace_info_t *nsinfo,
-		struct rainx_rec_params_s *params,
-		struct rainx_writer_s *writer, gboolean reuse_broken);
+		struct rainx_rec_params_s *params, struct rainx_writer_s *writer,
+		gboolean reuse_broken, gboolean on_the_fly);
 
 #endif
 

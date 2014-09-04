@@ -11,6 +11,7 @@
 #include <neon/ne_request.h>
 #include <neon/ne_session.h>
 
+#include <metautils/lib/metatypes.h>
 #include <metautils/lib/metautils.h>
 
 #include "./rawx.h"
@@ -196,8 +197,63 @@ error_label:
 	return 0;
 }
 
-static gboolean _delete_request(const char *host, int port,
-		const char *target, GError **err)
+static void split_chunk_url(const gchar *url,
+		gchar **host, gint *port, gchar **chunk_hexid, GError **err)
+{
+	gchar **toks = NULL;
+	gchar **hp = NULL;
+
+	toks = g_strsplit(url + 7, "/", 2); // skip "http://" and get "host:port"
+	if (!toks || g_strv_length(toks) != 2) {
+		if (err)
+			*err = NEWERROR(0, "Unparsable chunk URL format: '%s'", url);
+		goto end;
+	}
+	hp = g_strsplit(toks[0], ":", 2); // split host and port
+	if (!hp || g_strv_length(hp) != 2) {
+		if (err)
+			*err = NEWERROR(0, "Could not extract host and port: '%s'", toks[0]);
+		goto end;
+	}
+
+	*host = g_strdup(hp[0]);
+	*port = atoi(hp[1]);
+	*chunk_hexid = g_strdup(strrchr(url, '/'));
+
+end:
+	g_strfreev(hp);
+	g_strfreev(toks);
+}
+
+/**
+ * Extract host, port and chunk hexadecimal id from a bean.
+ *
+ * @param bean A pointer to a bean_CHUNKS_s or bean_CONTENTS_s
+ * @param[out] host
+ * @param[out] port
+ * @param[out] chunk_hexid The chunk hexadecimal id (with leading '/')
+ * @param[out] err
+ */
+static void extract_chunk_url(gpointer bean,
+		gchar **host, gint *port, gchar **chunk_hexid, GError **err)
+{
+	gchar *cid_url = NULL;
+	if (DESCR(bean) == &descr_struct_CHUNKS) {
+		cid_url = CHUNKS_get_id((struct bean_CHUNKS_s*)bean)->str;
+	} else if (DESCR(bean) == &descr_struct_CONTENTS) {
+		cid_url = CONTENTS_get_chunk_id((struct bean_CONTENTS_s*)bean)->str;
+	} else {
+		if (err)
+			*err = NEWERROR(0, "Invalid 'bean' argument, must be "
+					"(struct bean_CHUNKS_s*) or (struct bean_CONTENTS_s*)");
+		else
+			return;
+	}
+	return split_chunk_url(cid_url, host, port, chunk_hexid, err);
+}
+
+static gboolean _ne_request(const char *host, int port, const char *target,
+		const char *method, GSList *headers, GError **err)
 {
 	GRID_TRACE("%s", __FUNCTION__);
 	gboolean result = FALSE;
@@ -205,13 +261,18 @@ static gboolean _delete_request(const char *host, int port,
 	ne_set_connect_timeout(session, 10);
 	ne_set_read_timeout(session, 30);
 
-	GRID_DEBUG("DELETE http://%s:%d%s", host, port, target);
-	ne_request* req = ne_request_create(session, "DELETE", target);
+	GRID_DEBUG("%s http://%s:%d%s", method, host, port, target);
+	ne_request* req = ne_request_create(session, method, target);
 	if (NULL != req) {
+		for (GSList *l = headers; l; l = l->next) {
+			gchar **toks = g_strsplit(l->data, ":", 2);
+			ne_add_request_header(req, toks[0], toks[1]);
+			g_strfreev(toks);
+		}
 		switch (ne_request_dispatch(req)) {
 			case NE_OK:
 				if (ne_get_status(req)->klass != 2) {
-					*err = NEWERROR(0, "cannot delete '%s' (%s)", target,
+					*err = NEWERROR(0, "cannot %s '%s' (%s)", method, target,
 							ne_get_error(session));
 				} else {
 					result = TRUE;
@@ -236,44 +297,89 @@ static gboolean _delete_request(const char *host, int port,
 	return result;
 }
 
+static gboolean _delete_request(const char *host, int port,
+		const char *target, GError **err)
+{
+	return _ne_request(host, port, target, "DELETE", NULL, err);
+}
+
 gboolean rawx_delete_v2(gpointer chunk, GError **err)
 {
-	gchar *cid = NULL;
-	gchar **toks = NULL;
-	gchar **hp = NULL;
+	gchar *cid_hex = NULL;
+	gchar *host = NULL;
+	gint port = 0;
 
 	g_assert(chunk != NULL);
 	g_assert(err != NULL);
 	g_clear_error(err);
 
-	if (DESCR(chunk) == &descr_struct_CHUNKS) {
-		cid = CHUNKS_get_id((struct bean_CHUNKS_s*)chunk)->str;
-	} else if (DESCR(chunk) == &descr_struct_CONTENTS) {
-		cid = CONTENTS_get_chunk_id((struct bean_CONTENTS_s*)chunk)->str;
-	} else {
-		*err = NEWERROR(0, "Invalid 'chunk' argument, must be "
-				"(struct bean_CHUNKS_s*) or (struct bean_CONTENTS_s*)");
+	extract_chunk_url(chunk, &host, &port, &cid_hex, err);
+	if (err && *err)
 		goto end;
-	}
-
-	toks = g_strsplit(cid + 7, "/", 2); // skip "http://" and get "host:port"
-	if (!toks || g_strv_length(toks) != 2) {
-		*err = NEWERROR(0, "Unparsable chunk URL format: '%s'", cid);
-		goto end;
-	}
-	hp = g_strsplit(toks[0], ":", 2); // split host and port
-	if (!hp || g_strv_length(hp) != 2) {
-		*err = NEWERROR(0, "Could not extract host and port: '%s'", toks[0]);
-		goto end;
-	}
 
 	gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
-	_delete_request(hp[0], atoi(hp[1]), strrchr(cid, '/'), err);
+	_delete_request(host, port, cid_hex, err);
 	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 
 end:
-	g_strfreev(hp);
-	g_strfreev(toks);
+	g_free(host);
+	g_free(cid_hex);
+	return (*err == NULL);
+}
+
+static void
+_rawx_set_corrupted(gchar *host, gint port, gchar *cid_hex, GError **err)
+{
+	gchar *dst_header = NULL;
+	GSList *headers = NULL;
+
+	// Rename chunk with ".corrupted" suffix, using "MOVE" WebDAV method
+	dst_header = g_strdup_printf("Destination: http://%s:%d%s.corrupted",
+		host, port, cid_hex);
+	headers = g_slist_prepend(headers, dst_header);
+	_ne_request(host, port, cid_hex, "MOVE", headers, err);
+
+	g_slist_free(headers);
+	g_free(dst_header);
+}
+
+gs_status_t
+rawx_set_corrupted(gs_chunk_t *chunk, GError **err)
+{
+	gchar cid_hex[66] = {'/', 0};
+	gchar host[128] = {0};
+	gint port = 0;
+
+	g_assert(chunk != NULL);
+	g_assert(err != NULL);
+	g_clear_error(err);
+
+	addr_info_get_addr(&(chunk->ci->id.addr), host, sizeof(host), (guint16*)&port);
+	container_id_to_string(chunk->ci->id.id, cid_hex+1, sizeof(cid_hex)-1);
+
+	_rawx_set_corrupted(host, port, cid_hex, err);
+	return (*err == NULL)? GS_OK:GS_ERROR;
+}
+
+gboolean
+rawx_set_corrupted_v2(gpointer chunk, GError **err)
+{
+	gchar *cid_hex = NULL;
+	gchar *host = NULL;
+	gint port = 0;
+
+	g_assert(chunk != NULL);
+	g_assert(err != NULL);
+	g_clear_error(err);
+
+	extract_chunk_url(chunk, &host, &port, &cid_hex, err);
+	if (err && *err)
+		goto end;
+	_rawx_set_corrupted(host, port, cid_hex, err);
+
+end:
+	g_free(host);
+	g_free(cid_hex);
 	return (*err == NULL);
 }
 
@@ -332,7 +438,9 @@ void free_request_param(ne_request_param_t *param)
 }
 
 char*
-create_rawx_request_from_chunk(ne_request **p_req, ne_session *session, const char *method, gs_chunk_t *chunk, GByteArray *system_metadata, GError **err)
+create_rawx_request_from_chunk(ne_request **p_req, ne_session *session,
+		const char *method, gs_chunk_t *chunk, GByteArray *system_metadata,
+		GError **err)
 {
 	char str_ci[STRLEN_CHUNKID], cPath[CI_FULLPATHLEN], *str_req_id;
 	ne_request_param_t *params = new_request_param();
