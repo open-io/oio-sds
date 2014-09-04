@@ -468,7 +468,9 @@ rawx_repo_check_request(request_rec *req, const char *root_dir, const char * lab
 	 * increment the request counters */
 	int i;
 	const char *src;
-	if(g_str_has_prefix(req->uri, "/rawx/chunk/set")) {
+	dav_rawx_server_conf *conf = request_get_server_config(req);
+
+	if (g_str_has_prefix(req->uri, "/rawx/chunk/set")) {
 		ctx->update_only = TRUE;
 	} else {
 		ctx->update_only = FALSE;
@@ -490,22 +492,33 @@ rawx_repo_check_request(request_rec *req, const char *root_dir, const char * lab
 	}
 
 	if (g_str_has_prefix(src, "rawx/")) {
-		server_inc_request_stat(request_get_server_config(req), RAWX_STATNAME_REQ_RAW, request_get_duration(req));
-		return server_create_and_stat_error(request_get_server_config(req), req->pool,
+		server_inc_request_stat(conf, RAWX_STATNAME_REQ_RAW, request_get_duration(req));
+		return server_create_and_stat_error(conf, req->pool,
 				HTTP_BAD_REQUEST, 0, "Raw request not yet implemented");
 	}
 
 	for (i=0; *src ; src++, i++) {
 		char c = *src;
 		c = g_ascii_toupper(*src);
-		if (!g_ascii_isdigit(c) && (c < 'A' || c > 'F'))
-			return server_create_and_stat_error(request_get_server_config(req), req->pool,
+		if (!g_ascii_isdigit(c) && (c < 'A' || c > 'F') && i < 64) {
+			/* Only compare first 64 characters */
+			return server_create_and_stat_error(conf, req->pool,
 					HTTP_BAD_REQUEST, 0, "Invalid CHUNK id character");
-		ctx->hex_chunkid[i] = c;
+		} else if (i < 64) {
+			ctx->hex_chunkid[i] = c; // Upper case
+		} else if (i >= 64 && i < (int)(63 + sizeof(ctx->file_extension))) {
+			/* Consider extra characters are file extension */
+			ctx->file_extension[i-64] = *src; // Original case
+		}
 	}
-	if (i != 64) {
-		return server_create_and_stat_error(request_get_server_config(req), req->pool,
+	if (i != 64 && req->method_number != M_MOVE) {
+		return server_create_and_stat_error(conf, req->pool,
 				HTTP_BAD_REQUEST, 0, apr_psprintf(req->pool, "Invalid CHUNK id length: %d", i));
+	} else if (ctx->file_extension[0] != 0 &&
+			apr_strnatcasecmp(ctx->file_extension, ".corrupted")) {
+		return server_create_and_stat_error(conf, req->pool, HTTP_BAD_REQUEST,
+				0, apr_psprintf(req->pool, "Invalid extension: %s",
+				ctx->file_extension));
 	}
 
 	return NULL;
@@ -757,7 +770,7 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 			/* compression forced by request header */
 			if(!ctx->forced_cp_algo || !ctx->forced_cp_bs){
 				return server_create_and_stat_error(resource_get_server_config(resource), p,
-						400, 0,
+						HTTP_BAD_REQUEST, 0,
 						apr_pstrcat(p, "Failed to get compression info from incoming request", NULL));
 			}	
 			ds->blocksize = strtol(ctx->forced_cp_bs, NULL, 10);
@@ -784,7 +797,7 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 		guint32 bsize32 = ds->blocksize;
 		if(0 != ds->comp_ctx.header_writer(ds->f, bsize32, &checksum, &(ds->compressed_size))){
 			return server_create_and_stat_error(resource_get_server_config(resource), p,
-				500, 0,
+				HTTP_INTERNAL_SERVER_ERROR, 0,
 				apr_pstrcat(p, "Failed to write compression headers", NULL));
 		}
 		ds->compress_checksum = checksum;
