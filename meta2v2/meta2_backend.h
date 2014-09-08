@@ -294,7 +294,7 @@ GError* meta2_backend_delete_beans(struct meta2_backend_s *m2b,
  */
 GError* meta2_backend_substitute_chunks(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gboolean restrict_to_alias,
-		GSList *new_chunks, GSList *old_chunks);
+		GSList *new_chunks, GSList *old_chunks, m2_onbean_cb cb, gpointer u0);
 
 /*!
  * Filters out only the CONTENTS-typed beans and call

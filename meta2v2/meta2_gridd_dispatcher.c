@@ -363,6 +363,7 @@ static gridd_filter M2V2_SUBST_CHUNKS_FILTERS[] =
 	meta2_filter_action_has_container,
 	meta2_filter_action_substitute_chunks,
 	meta2_filter_success_reply,
+	meta2_filter_action_notify_content_PUT,
 	NULL
 };
 

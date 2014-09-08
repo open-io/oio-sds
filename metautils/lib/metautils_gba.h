@@ -43,6 +43,17 @@ GByteArray* metautils_gba_from_hexstring(const gchar *str);
 gsize metautils_gba_data_to_string(const GByteArray *gba, gchar *dst,
 		gsize dst_size);
 
+/**
+ * Compare 2 GByteArray. Can be cast to GEqualFunc and
+ * used as 2nd param of g_hash_table_new().
+ */
+gboolean metautils_gba_equal(const GByteArray *a, const GByteArray *b);
+
+/**
+ * Generate a hash from a GByteArray. Can be cast
+ * to GHashFunc and used as 1st param of g_hash_table_new().
+ */
+guint metautils_gba_hash(const GByteArray *gba);
 
 /**
  * @param a

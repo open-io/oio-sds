@@ -1398,7 +1398,7 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 GError*
 meta2_backend_substitute_chunks(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gboolean restrict_to_alias,
-		GSList *new_chunks, GSList *old_chunks)
+		GSList *new_chunks, GSList *old_chunks, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1423,9 +1423,9 @@ meta2_backend_substitute_chunks(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			err = m2db_substitute_chunk_everywhere(sq3,
+			err = m2db_substitute_chunk_everywhere(sq3, url,
 					(struct bean_CHUNKS_s *)new_chunks->data,
-					old_chunks);
+					old_chunks, cb, u0);
 			if (!err)
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);

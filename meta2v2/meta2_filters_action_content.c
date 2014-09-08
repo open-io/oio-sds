@@ -10,6 +10,7 @@
 #include <sys/time.h>
 #include <sys/stat.h>
 #include <attr/xattr.h>
+#include <glib.h>
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
@@ -329,10 +330,18 @@ _copy_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	GRID_DEBUG("Copying %s from %s", hc_url_get(url, HCURL_WHOLE), source);
 
 	e = meta2_backend_copy_alias(m2b, url, source);
-	if(NULL != e) {
+	if (NULL != e) {
 		GRID_DEBUG("Fail to copy alias (%s) to (%s)", source, hc_url_get(url, HCURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
+	} else {
+		// For notification purposes, we need to load all the beans
+		struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
+		e = meta2_backend_get_alias(m2b, url, M2V2_FLAG_NOPROPS, _get_cb, obc);
+		if (!e) {
+			_on_bean_ctx_send_list(obc, TRUE);
+		}
+		_on_bean_ctx_clean(obc);
 	}
 
 	reply->send_reply(200, "OK");

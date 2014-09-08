@@ -3,6 +3,7 @@
 # include <sqlite3.h>
 # include <metautils/lib/metautils.h>
 # include <meta2v2/autogen.h>
+# include <meta2v2/meta2_utils.h>
 
 # define CODE_SRVTYPE_NOTMANAGED 440
 
@@ -643,13 +644,16 @@ GError* m2db_delete_chunk(struct sqlx_sqlite3_s *sq3, gpointer chunk);
 /*!
  * Substitute chunks by another one in the whole container.
  *
- * @param sq3 Pointer to sqlx databasem2v2  (container)
+ * @param sq3 Pointer to sqlx m2v2 database (container)
+ * @param url URL of the container
  * @param new_chunk Chunk to substitute to old_chunks
  * @param old_chunks Chunks to be substituted by new_chunk
  * @return a GError in case of error, NULL otherwise
  */
 GError* m2db_substitute_chunk_everywhere(struct sqlx_sqlite3_s *sq3,
-		struct bean_CHUNKS_s *new_chunk, GSList *old_chunks);
+		struct hc_url_s *url,
+		struct bean_CHUNKS_s *new_chunk, GSList *old_chunks,
+		m2_onbean_cb cb, gpointer udata);
 
 GError* m2db_purge_alias_being_deleted(struct sqlx_sqlite3_s *sq3, GSList *beans,
 		GSList **deleted);

@@ -338,6 +338,7 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	event_data = g_string_sized_new(1024);
 
 	if (g_str_has_prefix(evt_type, "meta2.CONTENT")) {
+		// FIXME: handle multiple alias in the same list
 		GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 		version = _find_alias_version(beans);
 		if (version == 0 && hc_url_has(url, HCURL_VERSION)) {

@@ -1194,6 +1194,7 @@ meta2_filter_action_substitute_chunks(struct gridd_filter_ctx_s *ctx,
 	int rc = FILTER_OK;
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
 	// See meta2_filter_extract_header_chunk_beans()
 	GSList **chunk_lists = meta2_filter_ctx_get_input_udata(ctx);
@@ -1201,13 +1202,17 @@ meta2_filter_action_substitute_chunks(struct gridd_filter_ctx_s *ctx,
 			"RESTRICT_TO_ALIAS") != NULL;
 
 	GError *err = meta2_backend_substitute_chunks(m2b, url, restrict_to_alias,
-			chunk_lists[0], chunk_lists[1]);
+			chunk_lists[0], chunk_lists[1], _get_cb, obc);
 
 	if (err) {
 		GRID_DEBUG("Failed to substitute chunks: %s", err->message);
 		meta2_filter_ctx_set_error(ctx, err);
 		rc = FILTER_KO;
+	} else {
+		_on_bean_ctx_send_list(obc, TRUE);
 	}
+
+	_on_bean_ctx_clean(obc);
 
 	return rc;
 }

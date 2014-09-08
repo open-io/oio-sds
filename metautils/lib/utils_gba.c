@@ -30,6 +30,20 @@ metautils_buffer_cmp(const guint8 * const d0, const guint l0,
 	return MACRO_COND(cmp_data, cmp_data, CMP(l0, l1));
 }
 
+
+gboolean
+metautils_gba_equal(const GByteArray *a, const GByteArray *b)
+{
+	return metautils_gba_cmp(a, b) == 0;
+}
+
+guint
+metautils_gba_hash(const GByteArray *gba)
+{
+	EXTRA_ASSERT(gba != NULL);
+	return djb_hash_buf(gba->data, gba->len);
+}
+
 int
 metautils_gba_cmp(const GByteArray *a, const GByteArray *b)
 {

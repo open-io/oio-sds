@@ -3,6 +3,7 @@
 #endif
 
 #include <string.h>
+#include <glib.h>
 #include <meta2v2/meta2_backend_internals.h>
 
 #include <meta2v2/meta2_utils.h>
@@ -769,19 +770,47 @@ m2db_delete_chunk(struct sqlx_sqlite3_s *sq3, gpointer chunk)
 
 GError*
 m2db_substitute_chunk_everywhere(struct sqlx_sqlite3_s *sq3,
-		struct bean_CHUNKS_s *new_chunk, GSList *old_chunks)
+		struct hc_url_s *url,
+		struct bean_CHUNKS_s *new_chunk, GSList *old_chunks,
+		m2_onbean_cb cb, gpointer udata)
 {
 	gint count = 0;
 	GError *err = NULL;
+	GSList *urls = NULL;
 
+	// Save the new chunk
 	err = _db_save_bean(sq3->db, new_chunk);
-	if (!err) {
-		count = substitute_chunk(sq3->db, new_chunk, old_chunks, &err);
-		if (count > 0 && !err) {
-			GRID_DEBUG("Substituted %d chunks by %s", count,
-					CHUNKS_get_id(new_chunk)->str);
+	if (err)
+		goto end;
+	// Replace old chunks by the new one
+	count = substitute_chunk(sq3->db, new_chunk, old_chunks, &err);
+	if (count > 0 && !err) {
+		GRID_DEBUG("Substituted %d chunks by %s", count,
+				CHUNKS_get_id(new_chunk)->str);
+		// Notify all contents with the new chunk
+		err = m2db_content_urls_from_chunk_id(sq3, url,
+				CHUNKS_get_id(new_chunk)->str, -1, &urls);
+		if (err) {
+			// This error is not fatal
+			GRID_WARN("Failed to notify contents with chunks substituted: %s",
+					err->message);
+			g_clear_error(&err);
+		} else {
+			for (GSList *l = urls; l ; l = l->next) {
+				err = m2db_get_alias(sq3, l->data, 0, cb, udata);
+				if (err) {
+					GRID_WARN("Notification of chunk substitution failed "
+							"for [%s]: %s", hc_url_get(l->data, HCURL_WHOLE),
+							err->message);
+					g_clear_error(&err);
+				}
+			}
+			g_slist_free_full(urls, (GDestroyNotify)hc_url_clean);
 		}
+		// TODO: remove the old chunks from the database
+		// (currently they are removed by the purge)
 	}
+end:
 	return err;
 }
 
@@ -2694,6 +2723,7 @@ m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions, gint64 retention_del
 	gboolean dry_run = flags & M2V2_MODE_DRYRUN;
 
 	if (!dry_run) {
+		// TODO: send purged aliases to callback
 		if (NULL != (err = _purge_exceeding_aliases(sq3, max_versions))) {
 			GRID_WARN("Failed to purge ALIASES: (code=%d) %s",
 					err->code, err->message);
