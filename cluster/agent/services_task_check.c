@@ -347,13 +347,32 @@ allservice_check_start_HT(struct namespace_data_s *ns_data, GHashTable *ht)
 	g_hash_table_iter_init(&iter_serv, ht);
 	while (g_hash_table_iter_next(&iter_serv, &k, &v)) {
 		struct service_info_s *si = v;
+		gboolean srv_check_enabled = TRUE;
+
+		/* Services can disable TCP checks (enabled by default) */
+		service_tag_t *tag = service_info_get_tag(si->tags,
+				NAME_TAGNAME_AGENT_CHECK);
+		if (tag) {
+			GError *err = NULL;
+			if (tag->type == STVT_BOOL) {
+				service_tag_get_value_boolean(tag, &srv_check_enabled, &err);
+			} else {
+				gchar buf[64] = {0};
+				service_tag_get_value_string(tag, buf, sizeof(buf), &err);
+				srv_check_enabled = metautils_cfg_get_bool(buf, TRUE);
+			}
+			g_clear_error(&err);
+		}
 
 		memset(&td_scheme, 0x00, sizeof(td_scheme));
 		offset = g_snprintf(td_scheme.task_name, sizeof(td_scheme.task_name), "%s.", TASK_ID);
 		addr_info_to_string(&(si->addr), td_scheme.task_name+offset, sizeof(td_scheme.task_name)-offset);
 		g_strlcpy(td_scheme.ns_name, ns_data->name, sizeof(td_scheme.ns_name)-1);
 
-		if (!is_task_scheduled(td_scheme.task_name)) {
+		if (!srv_check_enabled) {
+			GRID_DEBUG("Task [%s] disabled by "
+					NAME_TAGNAME_AGENT_CHECK, td_scheme.task_name);
+		} else if (!is_task_scheduled(td_scheme.task_name)) {
 			GError *error_local = NULL;
 			task_t *task = NULL;
 			struct taskdata_checksrv_s *task_data;

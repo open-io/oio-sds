@@ -47,4 +47,6 @@
 # define NAME_TAGNAME_RAWX_STGCLASS "tag.stgclass"
 # define NAME_TAGNAME_REQIDLE "stat.req_idle"
 
+# define NAME_TAGNAME_AGENT_CHECK "tag.agent_check"
+
 #endif // __REDCURRANT_metautils_macros_h
