@@ -1177,17 +1177,14 @@ _real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_beans)
 	// Now really delete the beans
 	for (GSList *l = deleted; l ;l=l->next) {
 		GError *e = NULL;
-		if (DESCR(l->data) == &descr_struct_CHUNKS) {
-			if (deleted_beans) {
-				// The presence of this argument indicates that client
-				// will delete the chunk from disk, so we can remove it
-				// from the database.
-				*deleted_beans = g_slist_prepend(*deleted_beans, l->data);
-				e = _db_delete_bean(sq3->db, l->data);
-			} else {
-				// The chunk stays in the database,
-				// and will be deleted later by a purge crawler.
-			}
+		if (DESCR(l->data) == &descr_struct_CHUNKS && !deleted_beans) {
+			// Client won't delete chunks from rawx (async delete),
+			// so the chunk stays in the database,
+			// and will be deleted later by a purge crawler.
+		} else if (DESCR(l->data) == &descr_struct_ALIASES &&
+				ALIASES_get_deleted(l->data)) {
+			// Do not notify aliases with delete flag
+			e = _db_delete_bean(sq3->db, l->data);
 		} else {
 			if (deleted_beans) {
 				*deleted_beans = g_slist_prepend(*deleted_beans, l->data);
@@ -1287,13 +1284,9 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		ALIASES_set_version(new_alias, 1 + ALIASES_get_version(alias));
 		ALIASES_set_container_version(new_alias, 1 + m2db_get_version(sq3));
 		ALIASES_set_ctime(new_alias, (gint64)time(0));
-		if (!(err = _db_save_bean(sq3->db, new_alias))) {
-			if (cb) {
-				cb(u0, new_alias);
-			} else {
-				_bean_clean(new_alias);
-			}
-		}
+		err = _db_save_bean(sq3->db, new_alias);
+		// Do not send it to callback (do not trigger event), just clean it
+		_bean_clean(new_alias);
 
 		// Now ensure that properties for this alias have a DELETED version for
 		// the current version.
@@ -2540,7 +2533,8 @@ m2db_purge_alias_being_deleted(struct sqlx_sqlite3_s *sq3, GSList *beans,
 }
 
 static GError*
-_purge_exceeding_aliases(struct sqlx_sqlite3_s *sq3, gint64 max_versions)
+_purge_exceeding_aliases(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
+		m2_onbean_cb cb, gpointer u0)
 {
 	struct elt_s {
 		gchar *alias;
@@ -2555,7 +2549,7 @@ _purge_exceeding_aliases(struct sqlx_sqlite3_s *sq3, gint64 max_versions)
 		"AND container_version NOT IN (SELECT version FROM snapshot_v2) "
 		"GROUP BY alias "
 		"HAVING COUNT(*) > ?";
-	const gchar *sql_delete = "DELETE FROM alias_v2 WHERE rowid IN "
+	const gchar *sql_delete = " rowid IN "
 		"(SELECT rowid FROM alias_v2 WHERE alias = ? "
 		"AND container_version NOT IN (SELECT version FROM snapshot_v2) "
 		" ORDER BY version ASC LIMIT ? ) ";
@@ -2584,30 +2578,39 @@ _purge_exceeding_aliases(struct sqlx_sqlite3_s *sq3, gint64 max_versions)
 
 	GRID_DEBUG("Nb alias to drop: %d", g_slist_length(to_be_deleted));
 
-	sqlite3_prepare_debug(rc, sq3->db, sql_delete, -1, &stmt, NULL);
-	if (rc == SQLITE_OK) {
-		// OK, allowed to enter the loop above
-		rc = SQLITE_DONE;
+	// Delete the alias bean and send it to callback
+	void _delete_cb(gpointer udata, struct bean_ALIASES_s *alias)
+	{
+		GError *local_err = _db_delete_bean(sq3->db, alias);
+		if (!local_err) {
+			cb(udata, alias); // alias is cleaned by callback
+		} else {
+			GRID_WARN("Failed to drop %s (v%"G_GINT64_FORMAT"): %s",
+					ALIASES_get_alias(alias)->str,
+					ALIASES_get_version(alias),
+					local_err->message);
+			_bean_clean(alias);
+			g_clear_error(&local_err);
+		}
 	}
-	for (GSList *l=to_be_deleted; l ; l=l->next) {
-		struct elt_s *elt = l->data;
-		sqlite3_clear_bindings(stmt);
-		sqlite3_reset(stmt);
-		sqlite3_bind_text(stmt, 1, elt->alias, -1, NULL);
-		sqlite3_bind_int64(stmt, 2, elt->count - max_versions);
-		GRID_TRACE("Dropping %ld oldest versions of %s",
-				(elt->count - max_versions),  elt->alias);
-		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) { }
-	}
-	if (rc == SQLITE_DONE)
-		rc = sqlite3_finalize(stmt);
 
-	if (rc != SQLITE_OK) {
-		if (!gquark_log)
-			gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
-		err = SQLITE_GERROR(sq3->db, rc);
-		GRID_ERROR("Failed to remove exceeding alias versions: %s",
-				err->message);
+	for (GSList *l=to_be_deleted; l ; l=l->next) {
+		GError *err2 = NULL;
+		GVariant *params[] = {NULL, NULL, NULL};
+		struct elt_s *elt = l->data;
+		params[0] = g_variant_new_string(elt->alias);
+		params[1] = g_variant_new_int64(elt->count - max_versions);
+		err2 = ALIASES_load(sq3->db, sql_delete, params,
+				(m2_onbean_cb)_delete_cb, u0);
+		if (err2) {
+			GRID_WARN("Failed to drop exceeding copies of %s: %s",
+					elt->alias, err2->message);
+			if (!err)
+				err = err2;
+			else
+				g_clear_error(&err2);
+		}
+		gvariant_unrefv(params);
 	}
 
 	for (GSList *l=to_be_deleted; l ;l=l->next) {
@@ -2622,7 +2625,8 @@ _purge_exceeding_aliases(struct sqlx_sqlite3_s *sq3, gint64 max_versions)
 }
 
 static GError*
-_purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay)
+_purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
+		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 	gchar *sql, *sql2;
@@ -2668,11 +2672,27 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay)
 	}
 	ALIASES_load(sq3->db, sql2, params, _load_old_deleted, NULL);
 
+	// Delete the alias bean and send it to callback
+	void _delete_cb(gpointer udata, struct bean_ALIASES_s *alias)
+	{
+		GError *local_err = _db_delete_bean(sq3->db, alias);
+		if (!local_err) {
+			cb(udata, alias); // alias is cleaned by callback
+		} else {
+			GRID_WARN("Failed to drop %s (v%"G_GINT64_FORMAT"): %s",
+					ALIASES_get_alias(alias)->str,
+					ALIASES_get_version(alias),
+					local_err->message);
+			_bean_clean(alias);
+			g_clear_error(&local_err);
+		}
+	}
+
 	// Do the purge.
 	GRID_DEBUG("Purging deleted aliases older than %ld seconds (timestamp < %ld)",
 			delay, time_limit);
 	params[0] = g_variant_new_int64(time_limit);
-	err = ALIASES_delete(sq3->db, sql, params);
+	err = ALIASES_load(sq3->db, sql, params, (m2_onbean_cb)_delete_cb, u0);
 	gvariant_unrefv(params);
 
 	// Re-delete what needs to.
@@ -2732,15 +2752,14 @@ m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions, gint64 retention_del
 	gboolean dry_run = flags & M2V2_MODE_DRYRUN;
 
 	if (!dry_run) {
-		// TODO: send purged aliases to callback
-		if (NULL != (err = _purge_exceeding_aliases(sq3, max_versions))) {
+		if ((err = _purge_exceeding_aliases(sq3, max_versions, cb, u0))) {
 			GRID_WARN("Failed to purge ALIASES: (code=%d) %s",
 					err->code, err->message);
 			g_clear_error(&err);
 		}
 
 		if (retention_delay >= 0) {
-			if ((err = _purge_deleted_aliases(sq3, retention_delay)) != NULL) {
+			if ((err = _purge_deleted_aliases(sq3, retention_delay, cb, u0))) {
 				GRID_WARN("Failed to purge deleted ALIASES: (code=%d) %s",
 						err->code, err->message);
 				g_clear_error(&err);

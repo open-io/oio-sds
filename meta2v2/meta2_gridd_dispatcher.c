@@ -123,6 +123,7 @@ static gridd_filter M2V2_PURGE_FILTERS[] =
 	meta2_filter_check_ns_is_master,
 	meta2_filter_action_has_container,
 	meta2_filter_action_purge_container,
+	meta2_filter_action_notify_content_DELETE,
 	NULL
 };
 
