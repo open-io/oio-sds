@@ -1153,7 +1153,7 @@ m2db_flush_property(struct sqlx_sqlite3_s *sq3, const gchar *k)
 /* DELETE ------------------------------------------------------------------- */
 
 static GError*
-_real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_chunks)
+_real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_beans)
 {
 	// call the purge to know which beans must be really deleted
 	GSList *deleted = NULL;
@@ -1178,14 +1178,20 @@ _real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_chunks)
 	for (GSList *l = deleted; l ;l=l->next) {
 		GError *e = NULL;
 		if (DESCR(l->data) == &descr_struct_CHUNKS) {
-			if (deleted_chunks) {
-				*deleted_chunks = g_slist_prepend(*deleted_chunks, l->data);
+			if (deleted_beans) {
+				// The presence of this argument indicates that client
+				// will delete the chunk from disk, so we can remove it
+				// from the database.
+				*deleted_beans = g_slist_prepend(*deleted_beans, l->data);
 				e = _db_delete_bean(sq3->db, l->data);
 			} else {
 				// The chunk stays in the database,
 				// and will be deleted later by a purge crawler.
 			}
 		} else {
+			if (deleted_beans) {
+				*deleted_beans = g_slist_prepend(*deleted_beans, l->data);
+			}
 			e = _db_delete_bean(sq3->db, l->data);
 		}
 		if (e != NULL) {
@@ -1204,6 +1210,9 @@ _real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_chunks)
 					" (lost %"G_GINT64_FORMAT")", size, decrement);
 		}
 	}
+
+	if (deleted_beans)
+		*deleted_beans = g_slist_reverse(*deleted_beans);
 
 	g_slist_free(deleted);
 	deleted = NULL;
@@ -1254,16 +1263,16 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 			((hc_url_has(url, HCURL_VERSION) || ALIASES_get_deleted(alias)) &&
 				!is_in_a_snapshot_b)) {
 
-		GSList *deleted_chunks = NULL;
+		GSList *deleted_beans = NULL;
 		/* If versions disabled/suspended or version specified
 		 * or marked as deleted -> delete alias permanently */
-		err = _real_delete(sq3, beans, del_chunks? &deleted_chunks : NULL);
-		/* Client asked to remove no-more referenced chunks, we tell him which */
-		for (GSList *chunk = deleted_chunks; chunk; chunk = chunk->next) {
+		err = _real_delete(sq3, beans, del_chunks? &deleted_beans : NULL);
+		/* Client asked to remove no-more referenced beans, we tell him which */
+		for (GSList *bean = deleted_beans; bean; bean = bean->next) {
 			if (cb)
-				cb(u0, _bean_dup(chunk->data)); // Callback frees beans
+				cb(u0, _bean_dup(bean->data)); // Callback frees beans
 		}
-		g_slist_free(deleted_chunks);
+		g_slist_free(deleted_beans);
 
 	} else if (hc_url_has(url, HCURL_VERSION)) {
 		/* Alias is in a snapshot but user explicitly asked for its deletion */

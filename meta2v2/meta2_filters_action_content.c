@@ -493,6 +493,9 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
+	// This is required for Kafka notifications to work
+	_on_bean_ctx_send_list(obc, FALSE);
+
 	//generate notification before send reply, 
 	//besause a destroy container should executes 
 	//   before realy generated events was created on disk

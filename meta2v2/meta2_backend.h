@@ -358,7 +358,7 @@ GError* meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
  * @param m2b
  * @param url
  * @param sync_del TRUE in case of synchronous deletion
- * @param cb
+ * @param cb Callback that will be passed all unreferenced beans
  * @param u0
  * @return
  */

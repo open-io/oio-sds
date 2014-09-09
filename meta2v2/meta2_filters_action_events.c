@@ -301,17 +301,54 @@ touch_ALIAS(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	return err;
 }
 
-static gint64
-_find_alias_version(GSList *beans)
+struct bean_ALIASES_s *
+_find_alias(GSList *beans)
 {
 	for (GSList *l = beans; l ; l = l->next) {
 		if (DESCR(l->data) == &descr_struct_ALIASES) {
-			gint64 version = ALIASES_get_version(l->data);
-			return version;
+			return l->data;
 		}
 	}
-	return 0;
+	return NULL;
 }
+
+#ifdef USE_KAFKA
+static GError *
+_produce_kafka_event(struct meta2_backend_s *m2b, struct hc_url_s *url,
+		const char *evt_type, const gchar *event_data)
+{
+	int rc = 0;
+	GError *err = NULL;
+	GString *event = g_string_sized_new(1024);
+#ifdef OLD_GLIB2
+	gint seq = g_atomic_int_exchange_and_add(&_seq, 1);
+#else
+	gint seq = g_atomic_int_add(&_seq, 1);
+#endif
+
+	g_string_append_printf(event, META2_JSON_EVENT_TEMPLATE,
+			g_get_real_time() / 1000, // milliseconds since 1970
+			meta2_backend_get_local_addr(m2b),
+			evt_type,
+			seq,
+			event_data);
+
+	errno = 0;
+	rc = rd_kafka_produce(m2b->kafka_topic, 0, RD_KAFKA_MSG_F_COPY,
+			event->str, event->len, NULL, 0, NULL); // No '\0' character
+	if (rc < 0) {
+		err = NEWERROR(CODE_INTERNAL_ERROR,
+				"Failed to send event to Kafka: (%d) %s",
+				errno, rd_kafka_err2str(rd_kafka_errno2err(errno)));
+	} else {
+		GRID_DEBUG("Kafka notified of event %s for %s",
+				evt_type, hc_url_get(url, HCURL_WHOLE));
+	}
+
+	g_string_free(event, TRUE);
+	return err;
+}
+#endif
 
 static GError *
 _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
@@ -323,10 +360,9 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	(void) evt_type;
 	return NULL;
 #else
-	int rc = 0;
-	gint64 version = 0;
 	GError *err = NULL;
-	GString *event = NULL, *event_data = NULL;
+	GString *event_data = NULL;
+	GSList *events_data = NULL; // List of gchar*
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 
@@ -334,22 +370,55 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		return NULL;
 	}
 
-	event = g_string_sized_new(1024);
-	event_data = g_string_sized_new(1024);
-
 	if (g_str_has_prefix(evt_type, "meta2.CONTENT")) {
-		// FIXME: handle multiple alias in the same list
 		GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
-		version = _find_alias_version(beans);
-		if (version == 0 && hc_url_has(url, HCURL_VERSION)) {
-			version = g_ascii_strtoll(hc_url_get(url, HCURL_VERSION), NULL, 10);
+		if (!beans) {
+			GRID_WARN("No beans, content event not sent for [%s]",
+					hc_url_get(url, HCURL_WHOLE));
+			return NULL;
 		}
-		g_string_append_printf(event_data,
-				"\"url\": \"%s/%s/%s?version=%ld\", ",
-				hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE),
-				hc_url_get(url, HCURL_PATH), version);
-		meta2_json_dump_all_beans(event_data, beans);
+		/* Generate a sublist for each alias */
+		GSList *list_of_lists = NULL;
+		GSList *sublist = NULL;
+		for (GSList *l = beans; l != NULL; l = l->next) {
+			if (DESCR(l->data) == &descr_struct_ALIASES) {
+				// Aliases mark the beginning of a sublist
+				// FIXME: don't rely on that, rearrange beans properly
+				if (sublist != NULL)
+					list_of_lists = g_slist_prepend(list_of_lists, sublist);
+				sublist = NULL;
+			}
+			sublist = g_slist_prepend(sublist, l->data);
+		}
+		if (sublist != NULL) {
+			list_of_lists = g_slist_prepend(list_of_lists, sublist);
+			sublist = NULL;
+		}
+
+		/* Generate event data for each sublist */
+		for (GSList *l = list_of_lists; l != NULL; l = l->next) {
+			sublist = l->data;
+			struct bean_ALIASES_s *alias = _find_alias(sublist);
+			if (!alias) {
+				GRID_WARN("Cannot generate event: "
+						"no alias in the list of beans");
+				g_slist_free(sublist);
+				continue;
+			}
+			event_data = g_string_sized_new(1024);
+			g_string_append_printf(event_data,
+					"\"url\": \"%s/%s/%s?version=%ld\", ",
+					hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE),
+					ALIASES_get_alias(alias)->str, ALIASES_get_version(alias));
+			meta2_json_dump_all_beans(event_data, sublist);
+			events_data = g_slist_prepend(events_data,
+					g_string_free(event_data, FALSE));
+			event_data = NULL;
+			g_slist_free(sublist);
+		}
+		g_slist_free(list_of_lists);
 	} else { // Container event
+		event_data = g_string_sized_new(1024);
 		g_string_append_printf(event_data, "\"url\": \"%s/%s\"",
 				hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE));
 		if (!strcmp(evt_type, META2_EVTTYPE_CREATE)) {
@@ -366,35 +435,23 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 						", \"versioning\": \"%s\"", versioning);
 			}
 		}
+		events_data = g_slist_prepend(events_data,
+				g_string_free(event_data, FALSE));
 	}
 
-#ifdef OLD_GLIB2
-	gint seq = g_atomic_int_exchange_and_add(&_seq, 1);
-#else
-	gint seq = g_atomic_int_add(&_seq, 1);
-#endif
-
-	g_string_append_printf(event, META2_JSON_EVENT_TEMPLATE,
-			g_get_real_time() / 1000, // milliseconds since 1970
-			meta2_backend_get_local_addr(m2b),
-			evt_type,
-			seq,
-			event_data->str);
-
-	errno = 0;
-	rc = rd_kafka_produce(m2b->kafka_topic, 0, RD_KAFKA_MSG_F_COPY,
-			event->str, event->len, NULL, 0, NULL); // No '\0' character
-	if (rc < 0) {
-		err = NEWERROR(CODE_INTERNAL_ERROR,
-				"Failed to send event to Kafka: (%d) %s",
-				errno, rd_kafka_err2str(rd_kafka_errno2err(errno)));
-	} else {
-		GRID_DEBUG("Kafka notified of event %s for %s",
-				evt_type, hc_url_get(url, HCURL_WHOLE));
+	for (GSList *l = events_data; l != NULL; l = l->next) {
+		GError *err2 = _produce_kafka_event(m2b, url, evt_type, l->data);
+		if (err2) {
+			GRID_WARN("Failed to send event to Kafka: %s", err2->message);
+			if (!err) {
+				err = err2;
+			} else {
+				g_clear_error(&err2);
+			}
+		}
 	}
 
-	g_string_free(event_data, TRUE);
-	g_string_free(event, TRUE);
+	g_slist_free_full(events_data, g_free);
 
 	return err;
 #endif
@@ -455,7 +512,7 @@ _notify_content_gridd(struct gridd_filter_ctx_s *ctx,
 		} else
 			obc = purged_chunk;
 
-		GRID_ERROR("%s: [%d beans to purged]", __FUNCTION__, g_slist_length(obc->l));
+		GRID_INFO("%s: [%d beans to purge]", __FUNCTION__, g_slist_length(obc->l));
 		err = touch_ALIAS_chunk(m2b, url, obc->l, evt_type);
 		if (purged_chunk == NULL)
 			_on_bean_ctx_clean(obc);

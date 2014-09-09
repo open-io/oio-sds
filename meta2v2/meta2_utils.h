@@ -319,7 +319,7 @@ GError* m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *ur
  * @param max_versions
  * @param url
  * @param del_chunks Remove no-more referenced chunks from the base
- * @param cb
+ * @param cb Callback that will receive all unreferenced beans
  * @param u0
  * @return
  */
