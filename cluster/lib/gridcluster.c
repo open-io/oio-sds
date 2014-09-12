@@ -1194,26 +1194,7 @@ namespace_param_gba(const namespace_info_t* ns_info, const gchar *ns_name,
 	if (!ns_name)
 		ns_name = ns_info->name;
 
-	GByteArray *gba = NULL;
-	gchar *parent_ns = g_strdup(ns_name);
-	gchar *end = parent_ns;
-	end += strlen(parent_ns);
-
-	/* Check if a parameter was specified for the namespace, or its parents */
-	do {
-		*end = '\0';
-		gchar *key = g_strdup_printf("%*s_%s", (int)(end - parent_ns),
-				parent_ns, param_name);
-		gba = g_hash_table_lookup(ns_info->options, key);
-		g_free(key);
-	} while (!gba && (end = strrchr(parent_ns, '.')) != NULL);
-	g_free((gpointer)parent_ns);
-
-	/* Fall back to the general parameter */
-	if (!gba)
-		gba = g_hash_table_lookup(ns_info->options, param_name);
-
-	return gba;
+	return namespace_hash_table_lookup(ns_info->options, ns_name, param_name);
 }
 
 gboolean
@@ -1466,6 +1447,38 @@ namespace_get_rules(const gchar *ns, const gchar *typename, GError **err)
 	return gba;
 }
 
+gpointer
+namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
+		const gchar *param_name)
+{
+	gpointer *value = NULL;
+	gchar *parent_ns = g_strdup(ns_name);
+	gchar *end = parent_ns;
+	end += strlen(parent_ns);
+
+	/* Check if a parameter was specified for the namespace, or its parents */
+	do {
+		*end = '\0';
+		gchar *key = NULL;
+		if (param_name && *param_name) {
+			key = g_strdup_printf("%*s_%s", (int)(end - parent_ns),
+					parent_ns, param_name);
+		} else {
+			key = g_strndup(parent_ns, (int)(end - parent_ns));
+		}
+		value = g_hash_table_lookup(table, key);
+		g_free(key);
+	} while (!value && (end = strrchr(parent_ns, '.')) != NULL);
+	g_free((gpointer)parent_ns);
+
+	/* Fall back to the general parameter */
+	if (!value && param_name && *param_name) {
+		value = g_hash_table_lookup(table, param_name);
+	}
+
+	return value;
+}
+
 static void
 _svcupd_preload_with_default(GHashTable *ht, gchar *ns, const gchar *srvtype)
 {
@@ -1527,7 +1540,8 @@ _evtcfg_preload_with_default(GHashTable *ht, gchar *ns, const gchar *srvtype)
 {
 	if (!g_ascii_strcasecmp(srvtype, "meta2"))
 		g_hash_table_insert(ht, g_strdup(ns), g_strdup(
-					"enabled=false;dir=/GRID/common/spool;aggregate=false"));
+					"enabled=false;dir=/GRID/common/spool;aggregate=false"
+					";kafka_enabled=false;kafka_topic=redc.meta2"));
 	else
 		g_hash_table_insert(ht, g_strdup(ns), g_strdup(""));
 }

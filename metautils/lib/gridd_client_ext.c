@@ -110,7 +110,7 @@ gridd_client_create_many(gchar **targets, GByteArray *req, gpointer ctx,
 void
 gridd_clients_free(struct client_s **clients)
 {
-	if (!clients) {
+	if (clients) {
 		struct client_s **c;
 		for (c=clients; *c ;c++)
 			gridd_client_free(*c);

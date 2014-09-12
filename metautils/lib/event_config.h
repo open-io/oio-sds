@@ -34,6 +34,18 @@ GError* event_config_reconfigure(struct event_config_s *ec, const gchar *cfg);
 gboolean event_is_enabled(struct event_config_s *evt_config);
 
 /**
+ * Are Kafka events enabled?
+ */
+gboolean event_is_kafka_enabled(struct event_config_s *evt_config);
+
+/**
+ * Get the name of the Kafka topic defined in configuration. If no topic
+ * is defined, return default_topic.
+ */
+const gchar *event_get_kafka_topic_name(struct event_config_s *evt_config,
+		const gchar *default_topic);
+
+/**
  * @param evt_config
  * @return
  */

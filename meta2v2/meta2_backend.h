@@ -8,6 +8,10 @@
 # include <meta2v2/meta2_utils.h>
 # include <glib.h>
 
+#ifdef USE_KAFKA
+# include <librdkafka/rdkafka.h>
+#endif
+
 struct grid_lbpool_s;
 struct meta2_backend_s;
 struct event_config_s;
@@ -49,12 +53,41 @@ void meta2_backend_clean(struct meta2_backend_s *m2);
 GError *meta2_backend_init_kafka(struct meta2_backend_s *m2);
 
 /**
- * Initialize Kafka topic. No-op if already initialized.
+ * Free Kafka broker handle (and the topic, if not already freed).
+ * Not thread safe.
+ */
+void meta2_backend_free_kafka(struct meta2_backend_s *m2);
+
+/**
+ * Get or initialize a Kafka topic.
+ *
+ * @param name the name of the topic to get
+ * @param topic where to put the topic pointer
+ * @return a GError if topic not initialized
+ */
+GError *meta2_backend_kafka_topic_ref(struct meta2_backend_s *m2,
+		const gchar *name, rd_kafka_topic_t **topic);
+
+/**
+ * Release a Kafka topic.
+ */
+void meta2_backend_kafka_topic_unref(struct meta2_backend_s *m2,
+		rd_kafka_topic_t *topic);
+
+/**
+ * Initialize Kafka topic and add it to the cache.
+ * Not thread safe.
  *
  * @param name The name of the topic to initialize
  */
-GError *meta2_backend_init_kafka_topic(struct meta2_backend_s *m2,
+GError *meta2_backend_kafka_topic_cache(struct meta2_backend_s *m2,
 		const gchar *name);
+
+/**
+ * Clear the Kafka topic cache.
+ * Not thread safe.
+ */
+void meta2_backend_kafka_topic_cache_clear(struct meta2_backend_s *m2);
 #endif
 
 /*!
@@ -82,8 +115,19 @@ void meta2_backend_configure_nsinfo(struct meta2_backend_s *m2,
 gboolean meta2_backend_get_nsinfo(struct meta2_backend_s *m2,
 		struct namespace_info_s *dst);
 
+/**
+ * Get the event configuration of the specified namespace. If not defined,
+ * look for its parent namespace configuration.
+ */
 struct event_config_s * meta2_backend_get_event_config(struct meta2_backend_s *m2,
 		const gchar *ns_name);
+
+/**
+ * Same as previous, but you can prevent the fallback on parent namespace by
+ * passing FALSE as the last argument.
+ */
+struct event_config_s * meta2_backend_get_event_config2(struct meta2_backend_s *m2,
+		const gchar *ns_name, gboolean vns_fallback);
 
 /*!
  * Tests if the backend has been fully initiated. I.e. it checks a

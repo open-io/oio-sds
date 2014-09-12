@@ -8,12 +8,14 @@
 
 struct event_config_s {
 	gboolean enabled;
+	gboolean kafka_enabled;
 	GMutex *lock;
 	gint64 seq;
 	gchar *dir;
 	gboolean aggregate;
 	time_t last_error;
 	time_t delay_on_error;
+	gchar *kafka_topic;
 };
 
 static GQuark gquark_log = 0;
@@ -73,10 +75,13 @@ event_config_dump(struct event_config_s *evt_config)
 	GString *out = g_string_new("event_config={");
 
 	g_mutex_lock(evt_config->lock);
-	g_string_append_printf(out,"enabled=%s; dir=%s; aggr=%s,"
+	g_string_append_printf(out,"enabled=%s; kafka_enabled=%s; dir=%s; aggr=%s,"
 			" seq=%"G_GINT64_FORMAT,
-			evt_config->enabled ? "yes":"no", evt_config->dir,
-			evt_config->aggregate ? "yes":"no", evt_config->seq);
+			evt_config->enabled ? "yes":"no",
+			evt_config->kafka_enabled ? "yes":"no",
+			evt_config->dir,
+			evt_config->aggregate ? "yes":"no",
+			evt_config->seq);
 	g_mutex_unlock(evt_config->lock);
 
 	out = g_string_append(out, "}");
@@ -106,10 +111,16 @@ event_config_reconfigure(struct event_config_s *evt_config,
 				(int)(val - tok[i]), tok[i], val);
 		if(0 == g_ascii_strncasecmp(tok[i], "enabled", 7)) {
 			evt_config->enabled = metautils_cfg_get_bool(val, FALSE);
+		} else if (0 == g_ascii_strncasecmp(tok[i], "kafka_enabled", 13)) {
+			evt_config->kafka_enabled = metautils_cfg_get_bool(val, FALSE);
+		} else if (0 == g_ascii_strncasecmp(tok[i], "kafka_topic", 11)) {
+			if (evt_config->kafka_topic)
+				g_free(evt_config->kafka_topic);
+			evt_config->kafka_topic = g_strdup(val);
 		} else if(0 == g_ascii_strncasecmp(tok[i], "dir", 3)) {
-			if(evt_config->dir)
+			if (evt_config->dir)
 				g_free(evt_config->dir);
-				evt_config->dir = g_strdup(val);
+			evt_config->dir = g_strdup(val);
 		} else if(0 == g_ascii_strncasecmp(tok[i], "aggregate", 9)) {
 			evt_config->aggregate = metautils_cfg_get_bool(val, FALSE);
 		}
@@ -126,6 +137,22 @@ gboolean
 event_is_enabled(struct event_config_s *evt_config)
 {
 	return (!evt_config) ? FALSE : evt_config->enabled;
+}
+
+gboolean
+event_is_kafka_enabled(struct event_config_s *evt_config)
+{
+	return (!evt_config) ? FALSE : evt_config->kafka_enabled;
+}
+
+const gchar *
+event_get_kafka_topic_name(struct event_config_s *evt_config, const gchar *def)
+{
+	if (!evt_config || !evt_config->kafka_topic) {
+		return def;
+	} else {
+		return evt_config->kafka_topic;
+	}
 }
 
 gboolean

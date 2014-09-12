@@ -395,31 +395,86 @@ meta2_backend_init_kafka(struct meta2_backend_s *m2)
 	} else {
 		service_info_clean(broker);
 	}
+	m2->kafka_topics = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, (GDestroyNotify)rd_kafka_topic_destroy);
 	m2->kafka_handle = handle;
 
 end:
 	return err;
 }
 
-GError *
-meta2_backend_init_kafka_topic(struct meta2_backend_s *m2, const gchar *name)
+void
+meta2_backend_free_kafka(struct meta2_backend_s *m2)
 {
+	if (m2->kafka_handle) {
+		// Set pointer to NULL so Kafka events are disabled immediately
+		rd_kafka_t *handle = m2->kafka_handle;
+		m2->kafka_handle = NULL;
+		// Now clear handle
+		meta2_backend_kafka_topic_cache_clear(m2);
+		rd_kafka_destroy(handle);
+	}
+}
+
+GError *
+meta2_backend_kafka_topic_ref(struct meta2_backend_s *m2, const gchar *name,
+		rd_kafka_topic_t **topic)
+{
+	rd_kafka_topic_t *new_topic = NULL;
+
+	g_assert(m2 != NULL);
+
+	if (!m2->kafka_handle) {
+		return NEWERROR(CODE_INTERNAL_ERROR,
+				"No kafka handle, events disabled?");
+	}
+
+	// TODO: customize topic configuration
+	// Returns a reference if topic already exists
+	new_topic = rd_kafka_topic_new(m2->kafka_handle, name, NULL);
+	if (!new_topic) {
+		return NEWERROR(CODE_INTERNAL_ERROR,
+				"Failed to initialize Kafka topic: %s", strerror(errno));
+	}
+	*topic = new_topic;
+	return NULL;
+}
+
+void
+meta2_backend_kafka_topic_unref(struct meta2_backend_s *m2,
+		rd_kafka_topic_t *utopic)
+{
+	(void) m2;
+	// Decreases reference counter
+	rd_kafka_topic_destroy(utopic);
+}
+
+GError *
+meta2_backend_kafka_topic_cache(struct meta2_backend_s *m2, const gchar *name)
+{
+	GError *err = NULL;
 	rd_kafka_topic_t *topic = NULL;
 
 	g_assert(m2 != NULL);
 
-	// No connection to Kafka or topic already initialized
-	if (!m2->kafka_handle || m2->kafka_topic != NULL)
+	if (!m2->kafka_handle)
 		return NULL;
 
-	// TODO: customize configuration
-	topic = rd_kafka_topic_new(m2->kafka_handle, name, NULL);
-	if (!topic) {
-		return NEWERROR(CODE_INTERNAL_ERROR,
-				"Failed to initialize Kafka topic: %s", strerror(errno));
+	err = meta2_backend_kafka_topic_ref(m2, name, &topic);
+	if (!err) {
+		g_hash_table_insert(m2->kafka_topics, g_strdup(name), topic);
 	}
-	m2->kafka_topic = topic;
-	return NULL;
+	return err;
+}
+
+void
+meta2_backend_kafka_topic_cache_clear(struct meta2_backend_s *m2)
+{
+	if (m2->kafka_topics) {
+		// Hash table was created with topic destroy callback
+		g_hash_table_destroy(m2->kafka_topics);
+		m2->kafka_topics = NULL;
+	}
 }
 #endif
 
@@ -485,18 +540,30 @@ meta2_backend_init(struct meta2_backend_s **result,
 }
 
 struct event_config_s *
-meta2_backend_get_event_config(struct meta2_backend_s *m2, const char *ns_name)
+meta2_backend_get_event_config2(struct meta2_backend_s *m2, const char *ns_name,
+		gboolean vns_fallback)
 {
 	struct event_config_s *event = NULL;
-	if(NULL != m2) {
+	if (NULL != m2) {
 		g_static_rw_lock_writer_lock(&m2->rwlock_evt_config);
-		if(!(event = g_hash_table_lookup(m2->evt_config, ns_name))) {
+		if (vns_fallback)
+			event = namespace_hash_table_lookup(m2->evt_config, ns_name, NULL);
+		else
+			event = g_hash_table_lookup(m2->evt_config, ns_name);
+		if (!event) {
+			GRID_DEBUG("Event config not found for %s, creating one", ns_name);
 			event = event_config_create();
 			g_hash_table_insert(m2->evt_config, g_strdup(ns_name), event);
 		}
 		g_static_rw_lock_writer_unlock(&m2->rwlock_evt_config);
 	}
 	return event;
+}
+
+struct event_config_s *
+meta2_backend_get_event_config(struct meta2_backend_s *m2, const char *ns_name)
+{
+	return meta2_backend_get_event_config2(m2, ns_name, TRUE);
 }
 
 void
@@ -533,14 +600,7 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 		m2->resolver = NULL;
 	}
 #ifdef USE_KAFKA
-	if (m2->kafka_topic) {
-		rd_kafka_topic_destroy(m2->kafka_topic);
-		m2->kafka_topic = NULL;
-	}
-	if (m2->kafka_handle) {
-		rd_kafka_destroy(m2->kafka_handle);
-		m2->kafka_handle = NULL;
-	}
+	meta2_backend_free_kafka(m2); // also cleans topics
 #endif
 	g_static_rw_lock_free(&m2->rwlock_evt_config);
 	namespace_info_clear(&(m2->ns_info));
@@ -793,6 +853,7 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 			hc_url_set(url, HCURL_REFERENCE, ref);
 		}
 		g_free(ref);
+		g_free(full_vns);
 	}
 	*result = sq3;
 	return NULL;

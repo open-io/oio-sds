@@ -314,8 +314,8 @@ _find_alias(GSList *beans)
 
 #ifdef USE_KAFKA
 static GError *
-_produce_kafka_event(struct meta2_backend_s *m2b, struct hc_url_s *url,
-		const char *evt_type, const gchar *event_data)
+_produce_kafka_event(rd_kafka_topic_t *topic, const gchar *src_addr,
+		struct hc_url_s *url, const char *evt_type, const gchar *event_data)
 {
 	int rc = 0;
 	GError *err = NULL;
@@ -328,13 +328,13 @@ _produce_kafka_event(struct meta2_backend_s *m2b, struct hc_url_s *url,
 
 	g_string_append_printf(event, META2_JSON_EVENT_TEMPLATE,
 			g_get_real_time() / 1000, // milliseconds since 1970
-			meta2_backend_get_local_addr(m2b),
+			src_addr,
 			evt_type,
 			seq,
 			event_data);
 
 	errno = 0;
-	rc = rd_kafka_produce(m2b->kafka_topic, 0, RD_KAFKA_MSG_F_COPY,
+	rc = rd_kafka_produce(topic, 0, RD_KAFKA_MSG_F_COPY,
 			event->str, event->len, NULL, 0, NULL); // No '\0' character
 	if (rc < 0) {
 		err = NEWERROR(CODE_INTERNAL_ERROR,
@@ -365,8 +365,12 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	GSList *events_data = NULL; // List of gchar*
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b,
+			hc_url_get(url, HCURL_NS));
+	rd_kafka_topic_t *topic = NULL;
 
-	if (!m2b->kafka_topic) {
+	if (!event_is_kafka_enabled(evt_config) || metautils_cfg_get_bool(
+			hc_url_get_option_value(url, META2_URL_LOCAL_BASE), FALSE)) {
 		return NULL;
 	}
 
@@ -439,16 +443,26 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 				g_string_free(event_data, FALSE));
 	}
 
-	for (GSList *l = events_data; l != NULL; l = l->next) {
-		GError *err2 = _produce_kafka_event(m2b, url, evt_type, l->data);
-		if (err2) {
-			GRID_WARN("Failed to send event to Kafka: %s", err2->message);
-			if (!err) {
-				err = err2;
-			} else {
-				g_clear_error(&err2);
+	err = meta2_backend_kafka_topic_ref(m2b,
+			event_get_kafka_topic_name(evt_config, META2_EVT_TOPIC),
+			&topic);
+	if (!err) {
+		for (GSList *l = events_data; l != NULL; l = l->next) {
+			GError *err2 = _produce_kafka_event(topic,
+					meta2_backend_get_local_addr(m2b), url, evt_type, l->data);
+			if (err2) {
+				GRID_WARN("Failed to send event to Kafka: %s", err2->message);
+				if (!err) {
+					err = err2;
+				} else {
+					g_clear_error(&err2);
+				}
 			}
 		}
+		meta2_backend_kafka_topic_unref(m2b, topic);
+	} else {
+		GRID_WARN("%d events not sent: %s",
+				g_slist_length(events_data), err->message);
 	}
 
 	g_slist_free_full(events_data, g_free);

@@ -32,10 +32,11 @@ static struct sqlx_upgrader_s *upgrader = NULL;
 
 /**
  * Connect (or reconnect) to Apache Kafka broker
- * in order to send events.
+ * in order to send events and ensure the specified topic
+ * is created.
  */
 static void
-_init_kafka_events(void)
+_init_kafka_events(const gchar *topic)
 {
 #ifdef USE_KAFKA
 	GError *err = NULL;
@@ -44,7 +45,7 @@ _init_kafka_events(void)
 		GRID_WARN(err->message);
 		g_clear_error(&err);
 	} else {
-		err = meta2_backend_init_kafka_topic(m2, META2_EVT_TOPIC);
+		err = meta2_backend_kafka_topic_cache(m2, topic);
 		if (err) {
 			GRID_WARN(err->message);
 			g_clear_error(&err);
@@ -54,15 +55,30 @@ _init_kafka_events(void)
 }
 
 static void
+_clear_kafka_events(void)
+{
+#ifdef USE_KAFKA
+	meta2_backend_free_kafka(m2);
+#endif
+}
+
+static void
 _task_reload_event_config(gpointer p)
 {
 	GError *err = NULL;
+	gboolean must_clear_kafka = TRUE;
 
 	void _update_each(gpointer k, gpointer v, gpointer ignored) {
 		(void) ignored;
 		if (!err) {
-			err = event_config_reconfigure(
-				meta2_backend_get_event_config(m2, (char *)k), (char *)v);
+			struct event_config_s *conf = meta2_backend_get_event_config2(m2,
+					(char *)k, FALSE);
+			err = event_config_reconfigure(conf, (char *)v);
+			if (!err && event_is_kafka_enabled(conf)) {
+				must_clear_kafka = FALSE;
+				_init_kafka_events(
+						event_get_kafka_topic_name(conf, META2_EVT_TOPIC));
+			}
 		}
 	}
 
@@ -83,7 +99,8 @@ _task_reload_event_config(gpointer p)
 		g_clear_error(&err);
 	}
 
-	_init_kafka_events();
+	if (must_clear_kafka)
+		_clear_kafka_events();
 }
 
 static void
@@ -267,8 +284,6 @@ _post_config(struct sqlx_service_s *ss)
 	}
 	meta2_backend_build_meta0_prefix_mapping(m2);
 	GRID_DEBUG("META0 mappings now ready");
-
-	_init_kafka_events();
 
 	/* Make deleted bases exit the cache */
 	sqlx_repository_configure_close_callback(ss->repository, meta2_on_close, ss);

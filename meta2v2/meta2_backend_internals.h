@@ -4,6 +4,8 @@
 # include <unistd.h>
 # include <errno.h>
 
+# include <glib.h>
+
 # include <metautils/lib/metautils.h>
 # include <metautils/lib/metacomm.h>
 # include <sqliterepo/sqliterepo.h>
@@ -97,8 +99,7 @@ struct meta2_backend_s
 #ifdef USE_KAFKA
 	// TODO: move to sqlx_repository_s, we may need it in meta1
 	rd_kafka_t *kafka_handle;
-	// TODO: make hash table of topic objects
-	rd_kafka_topic_t *kafka_topic;
+	GHashTable *kafka_topics; // GHashTable<rd_kafka_topic_t*>
 #endif
 };
 
