@@ -275,12 +275,12 @@ election_manager_set_clients(struct election_manager_s *manager,
 
 void
 election_manager_set_sync (struct election_manager_s *manager,
-		struct sqlx_sync_s *sync)
+		struct sqlx_sync_s *my_sync)
 {
 	EXTRA_ASSERT(manager != NULL);
-	EXTRA_ASSERT(sync != NULL);
+	EXTRA_ASSERT(my_sync != NULL);
 	EXTRA_ASSERT(manager->vtable == &VTABLE);
-	manager->sync = sync;
+	manager->sync = my_sync;
 }
 
 /* XXX MIsc helpers -------------------------------------------------------- */
@@ -905,7 +905,7 @@ step_AskMaster_completion(int zrc, const char *v, int vlen,
 	struct election_member_s *member;
 
 	(void) s;
-	member = d;
+	member = (struct election_member_s *)d;
 	MEMBER_CHECK(member);
 	member_trace(__FUNCTION__, "DONE", member);
 
@@ -936,7 +936,7 @@ step_ListGroup_completion(int zrc, const struct String_vector *sv,
 {
 	struct election_member_s *member;
 
-	member = data;
+	member = (struct election_member_s *) data;
 	MEMBER_CHECK(member);
 	member_trace(__FUNCTION__, "DONE", member);
 
@@ -960,7 +960,7 @@ step_LeaveElection_completion(int zrc, const void *d)
 {
 	struct election_member_s *member;
 
-	member = d;
+	member = (struct election_member_s *) d;
 	MEMBER_CHECK(member);
 	member_trace(__FUNCTION__, "DONE", member);
 
@@ -987,7 +987,7 @@ step_WatchNode_completion(int zrc, const struct Stat *s, const void *d)
 
 	(void) s;
 
-	member = d;
+	member = (struct election_member_s *) d;
 	MEMBER_CHECK(member);
 	member_trace(__FUNCTION__, "DONE", member);
 
@@ -1010,7 +1010,7 @@ step_StartElection_completion(int zrc, const char *path, const void *d)
 	gint64 i64;
 	struct election_member_s *member;
 
-	member = d;
+	member = (struct election_member_s *) d;
 	MEMBER_CHECK(member);
 	member_trace(__FUNCTION__, "DONE", member);
 
@@ -1784,42 +1784,41 @@ defer_GETVERS(struct election_member_s *member)
 		return;
 	}
 
-	pending = member->pending_GETVERS ? 0 : g_strv_length(peers);
+	pending = g_strv_length(peers);
 
-	if (!pending)
-		member_debug(__FUNCTION__ ,"GETVERS avoided", member);
-	else {
-		struct sqlx_name_s n;
-		n.ns = "";
-		n.base = member->name;
-		n.type = member->type;
+	if (member->sent_GETVERS > 0)
+		member_debug(__FUNCTION__ , "GETVERS req lost", member);
 
-		member->sent_GETVERS = pending;
-		member->pending_GETVERS = pending;
-		member->reqid_GETVERS = manager_next_reqid(member->manager);
+	struct sqlx_name_s n;
+	n.ns = "";
+	n.base = member->name;
+	n.type = member->type;
 
-		GByteArray *req = sqlx_pack_GETVERS(&n);
-		for (gchar **p=peers; p && *p ;p++) {
-			struct event_client_s *mc;
-			struct udata_GETVERS_s udata;
+	member->sent_GETVERS = pending;
+	member->pending_GETVERS = pending;
+	member->reqid_GETVERS = manager_next_reqid(member->manager);
 
-			member_ref(member);
-			udata.reqid = member->reqid_GETVERS;
-			udata.version = NULL;
-			udata.member = member;
-			mc = g_malloc0(sizeof(*mc));
-			mc->on_end = on_end_GETVERS;
-			mc->udata = g_memdup(&udata, sizeof(udata));
-			mc->client = gridd_client_create(*p, req, mc, on_reply_GETVERS);
-			gridd_client_set_timeout(mc->client,
-					time2double(member->manager->delay_max_wait),
-					time2double(member->manager->delay_max_wait));
-			gridd_client_pool_defer(member->manager->pool, mc);
-		}
-		g_byte_array_unref(req);
+	GByteArray *req = sqlx_pack_GETVERS(&n);
+	for (gchar **p=peers; p && *p; p++) {
+		struct event_client_s *mc;
+		struct udata_GETVERS_s udata;
 
-		member_trace(__FUNCTION__ ,"GETVERS scheduled", member);
+		member_ref(member);
+		udata.reqid = member->reqid_GETVERS;
+		udata.version = NULL;
+		udata.member = member;
+		mc = g_malloc0(sizeof(*mc));
+		mc->on_end = on_end_GETVERS;
+		mc->udata = g_memdup(&udata, sizeof(udata));
+		mc->client = gridd_client_create(*p, req, mc, on_reply_GETVERS);
+		gridd_client_set_timeout(mc->client,
+				time2double(member->manager->delay_max_wait),
+				time2double(member->manager->delay_max_wait));
+		gridd_client_pool_defer(member->manager->pool, mc);
 	}
+	g_byte_array_unref(req);
+
+	member_trace(__FUNCTION__ , "GETVERS scheduled", member);
 
 	g_strfreev(peers);
 }
@@ -2114,7 +2113,14 @@ _transition(struct election_member_s *member, enum event_type_e evt,
 		case STEP_PRELOST:
 			switch (evt) {
 				case EVT_NONE:
-					member_ping(member);
+					if (member_pending_for_too_long(member)) {
+						// See TO-HONEYCOMB-757
+						GRID_INFO("Election for [%s] seems stale, "
+							"restarting GETVERS", member->name);
+						defer_GETVERS(member);
+					} else {
+						member_ping(member);
+					}
 					return;
 				case EVT_RESYNC_REQ:
 					member_RESYNC_if_not_pending(member);
@@ -2183,7 +2189,14 @@ _transition(struct election_member_s *member, enum event_type_e evt,
 		case STEP_PRELEAD:
 			switch (evt) {
 				case EVT_NONE:
-					member_ping(member);
+					if (member_pending_for_too_long(member)) {
+						// See TO-HONEYCOMB-757
+						GRID_INFO("Election for [%s] seems stale, "
+							"restarting GETVERS", member->name);
+						defer_GETVERS(member);
+					} else {
+						member_ping(member);
+					}
 					return;
 				case EVT_RESYNC_REQ:
 				case EVT_EXITING:
