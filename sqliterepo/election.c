@@ -1863,7 +1863,8 @@ manage_deleted(struct election_member_s *member)
 static void
 restart_election(struct election_member_s *member)
 {
-	int zrc;
+	if (member->myid > 0)
+		return become_leaver(member);
 
 	member_reset(member);
 	if (member->manager->exiting) {
@@ -1878,7 +1879,7 @@ restart_election(struct election_member_s *member)
 		member_set_status(member, STEP_FAILED);
 		return;
 	}
-	zrc = step_StartElection_start(member);
+	int zrc = step_StartElection_start(member);
 	if (ZOK != zrc) {
 		member_warn_failed_creation(member, zrc);
 		member_set_status(member, STEP_FAILED);
@@ -1945,9 +1946,7 @@ member_finish_PRELOST(struct election_member_s *member)
 
 	// FIXME compare to the sizeof of the quorum
 	if (errors > 1) {
-		//become_candidate(member);
-		member_reset(member);
-		member_set_status(member, STEP_FAILED);
+		become_leaver(member);
 	} else if (concurrent > 1) {
 		member_RESYNC_if_not_pending(member);
 	} else {
@@ -1969,8 +1968,7 @@ member_finish_PRELEAD(struct election_member_s *member)
 
 	// FIXME compare to the sizeof of the quorum
 	if (errors > 1) {
-		member_reset(member);
-		member_set_status(member, STEP_FAILED);
+		become_leaver(member);
 	} else if (concurrent > 1) {
 		// No quorum, so become a LOSER and resync from the master.
 		become_leaver(member);
