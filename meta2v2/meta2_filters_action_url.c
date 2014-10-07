@@ -86,7 +86,7 @@ _update_content_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_back
 		return FILTER_OK;
 	}
 
-	e = storage_policy_check_compat_by_name(&(m2b->ns_info),
+	e = storage_policy_check_compat_by_name(&(m2b->backend.ns_info),
 			CONTENTS_HEADERS_get_policy(header)->str, stgpol);
 	if (e != NULL) {
 		GRID_DEBUG("Failed to update storage policy: %s", e->message);
@@ -160,14 +160,15 @@ meta2_filter_action_exit_election(struct gridd_filter_ctx_s *ctx,
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 
 	if (hc_url_has(url,HCURL_HEXID)) {
-		GError *err = sqlx_repository_exit_election(m2b->repo, "meta2", hc_url_get(url,HCURL_HEXID));
+		GError *err = sqlx_repository_exit_election(m2b->backend.repo,
+				"meta2", hc_url_get(url,HCURL_HEXID));
 		if (err) {
 			meta2_filter_ctx_set_error(ctx, err);
 			return FILTER_KO;
 		}
 	} else {
 		election_manager_exit_all(sqlx_repository_get_elections_manager(
-					m2b->repo), NULL, FALSE);
+					m2b->backend.repo), NULL, FALSE);
 	}
 	return FILTER_OK;
 }

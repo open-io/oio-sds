@@ -1183,6 +1183,8 @@ event_send_to_agent( const gchar *ns_name, gridcluster_event_t *event, GError **
  * @param ns_name Namespace or VNS name
  * @param param_name
  * @return The value or NULL
+ *
+ * TODO: move to metautils/lib/utils_namespace_info.c?
  */
 static GByteArray *
 namespace_param_gba(const namespace_info_t* ns_info, const gchar *ns_name,
@@ -1445,38 +1447,6 @@ namespace_get_rules(const gchar *ns, const gchar *typename, GError **err)
 		return NULL;
 	}
 	return gba;
-}
-
-gpointer
-namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
-		const gchar *param_name)
-{
-	gpointer *value = NULL;
-	gchar *parent_ns = g_strdup(ns_name);
-	gchar *end = parent_ns;
-	end += strlen(parent_ns);
-
-	/* Check if a parameter was specified for the namespace, or its parents */
-	do {
-		*end = '\0';
-		gchar *key = NULL;
-		if (param_name && *param_name) {
-			key = g_strdup_printf("%*s_%s", (int)(end - parent_ns),
-					parent_ns, param_name);
-		} else {
-			key = g_strndup(parent_ns, (int)(end - parent_ns));
-		}
-		value = g_hash_table_lookup(table, key);
-		g_free(key);
-	} while (!value && (end = strrchr(parent_ns, '.')) != NULL);
-	g_free((gpointer)parent_ns);
-
-	/* Fall back to the general parameter */
-	if (!value && param_name && *param_name) {
-		value = g_hash_table_lookup(table, param_name);
-	}
-
-	return value;
 }
 
 static void

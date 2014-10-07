@@ -8,21 +8,12 @@ include_directories(BEFORE . ..
 include_directories(AFTER
 		${OPENSSL_INCLUDE_DIRS}
 		${NEON_INCLUDE_DIRS}
-		${LIBRAIN_INCLUDE_DIRS}
-		${RDKAFKA_INCLUDE_DIRS})
+		${LIBRAIN_INCLUDE_DIRS})
 
 link_directories(
 		${ZK_LIBRARY_DIRS}
 		${SQLITE3_LIBRARY_DIRS}
 		${LIBRAIN_LIBRARY_DIRS})
-
-if (RDKAFKA_FOUND)
-	add_definitions(-DUSE_KAFKA=1)
-endif()
-
-if (GLIB2_VERSION VERSION_LESS "2.30")
-	add_definitions(-DOLD_GLIB2)
-endif()
 
 add_custom_command(
 	OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/autogen.c ${CMAKE_CURRENT_BINARY_DIR}/autogen.h
@@ -85,24 +76,13 @@ add_library(meta2v2 SHARED
 		meta2_backend.h
 		meta2_backend.c)
 
-if (RDKAFKA_FOUND)
-	target_link_libraries(meta2v2
-		metautils sqliterepo
-		meta2remote meta1remote
-		meta0remote meta0utils
-		meta2v2utils meta2v2lbutils meta2v2remote
-		sqlxsrv
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES}
-		${RDKAFKA_LIBRARIES})
-else()
-	target_link_libraries(meta2v2
+target_link_libraries(meta2v2
 		metautils sqliterepo
 		meta2remote meta1remote
 		meta0remote meta0utils
 		meta2v2utils meta2v2lbutils meta2v2remote
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
-endif()
 
 add_executable(meta2_server
 		meta2_gridd_dispatcher.c

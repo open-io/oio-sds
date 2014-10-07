@@ -13,7 +13,9 @@
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 #include <sqliterepo/sqliterepo.h>
+#include <sqliterepo/election.h>
 #include <meta2/remote/meta2_remote.h>
+#include <cluster/lib/gridcluster.h>
 
 #include "./internals.h"
 #include "./internals_sqlite.h"
@@ -23,7 +25,7 @@
 
 struct meta1_backend_s *
 meta1_backend_init(const gchar *ns, struct sqlx_repository_s *repo,
-		struct grid_lbpool_s *glp)
+		struct grid_lbpool_s *glp, struct event_config_repo_s *evt_repo)
 {
 	struct meta1_backend_s *m1;
 
@@ -33,14 +35,17 @@ meta1_backend_init(const gchar *ns, struct sqlx_repository_s *repo,
 	EXTRA_ASSERT(repo != NULL);
 
 	m1 = g_malloc0(sizeof(*m1));
-	metautils_strlcpy_physical_ns(m1->ns_name, ns, sizeof(m1->ns_name));
+	metautils_strlcpy_physical_ns(m1->backend.ns_name, ns,
+			sizeof(m1->backend.ns_name));
 	g_static_rw_lock_init(&m1->rwlock_ns_policies);
-	m1->lb = glp;
-	m1->repository = repo;
+	m1->backend.type = META1_TYPE_NAME;
+	m1->backend.lb = glp;
+	m1->backend.repo = repo;
 	m1->prefixes = meta1_prefixes_init();
 	m1->ns_policies = g_hash_table_new_full(g_str_hash, g_str_equal,
 			g_free, (GDestroyNotify) service_update_policies_destroy);
 
+	m1->backend.evt_repo = evt_repo;
 	return m1;
 }
 
@@ -98,10 +103,10 @@ gboolean
 meta1_backend_base_already_created(struct meta1_backend_s *m1, const guint8 *prefix)
 {
 	gchar base[5] = {0,0,0,0,0};
-	GError *err;
+	GError *err = NULL;
 
 	g_snprintf(base, sizeof(base), "%02X%02X", prefix[0], prefix[1]);
-	err = sqlx_repository_has_base(m1->repository, META1_TYPE_NAME, base);
+	err = sqlx_repository_has_base(m1->backend.repo, META1_TYPE_NAME, base);
 	if (!err)
 		return TRUE;
 	g_clear_error(&err);
@@ -111,6 +116,38 @@ meta1_backend_base_already_created(struct meta1_backend_s *m1, const guint8 *pre
 gchar *
 meta1_backend_get_ns_name(const struct meta1_backend_s *m1)
 {
-	return g_strdup(m1->ns_name);
+	return g_strdup(m1->backend.ns_name);
+}
+
+struct event_config_repo_s *
+meta1_backend_get_evt_config_repo(const struct meta1_backend_s *m1)
+{
+	return m1->backend.evt_repo;
+}
+
+metautils_notifier_t *
+meta1_backend_get_notifier(struct meta1_backend_s *m1)
+{
+	return event_config_repo_get_notifier(m1->backend.evt_repo);
+}
+
+struct event_config_s *
+meta1_backend_get_event_config(struct meta1_backend_s *m1, const char *ns_name)
+{
+	return event_config_repo_get(m1->backend.evt_repo, ns_name, TRUE);
+}
+
+// TODO: add another parameter with the wanted brokers (Kafka, AMQ...)
+GError *
+meta1_backend_init_notifs(struct meta1_backend_s *m1)
+{
+	metautils_notifier_t *notifier = meta1_backend_get_notifier(m1);
+	return metautils_notifier_init_kafka(notifier);
+}
+
+const gchar*
+meta1_backend_get_local_addr(struct meta1_backend_s *m1)
+{
+	return sqlx_repository_get_local_addr(m1->backend.repo);
 }
 

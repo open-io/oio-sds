@@ -33,6 +33,38 @@ _copy_hash(GHashTable *src)
 	return res;
 }
 
+gpointer
+namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
+		const gchar *param_name)
+{
+	gpointer *value = NULL;
+	gchar *parent_ns = g_strdup(ns_name);
+	gchar *end = parent_ns;
+	end += strlen(parent_ns);
+
+	/* Check if a parameter was specified for the namespace, or its parents */
+	do {
+		*end = '\0';
+		gchar *key = NULL;
+		if (param_name && *param_name) {
+			key = g_strdup_printf("%*s_%s", (int)(end - parent_ns),
+					parent_ns, param_name);
+		} else {
+			key = g_strndup(parent_ns, (int)(end - parent_ns));
+		}
+		value = g_hash_table_lookup(table, key);
+		g_free(key);
+	} while (!value && (end = strrchr(parent_ns, '.')) != NULL);
+	g_free((gpointer)parent_ns);
+
+	/* Fall back to the general parameter */
+	if (!value && param_name && *param_name) {
+		value = g_hash_table_lookup(table, param_name);
+	}
+
+	return value;
+}
+
 gboolean
 namespace_info_copy(namespace_info_t* src, namespace_info_t* dst, GError **error)
 {

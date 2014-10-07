@@ -18,6 +18,12 @@ struct event_config_s {
 	gchar *kafka_topic;
 };
 
+struct event_config_repo_s {
+	GStaticRWLock rwlock;
+	GHashTable *evt_config; /* <gchar*, struct event_config_s*> */
+	metautils_notifier_t *notifier;
+};
+
 static GQuark gquark_log = 0;
 
 /* ------------------------------------------------------------------------- */
@@ -140,13 +146,13 @@ event_is_enabled(struct event_config_s *evt_config)
 }
 
 gboolean
-event_is_kafka_enabled(struct event_config_s *evt_config)
+event_is_notifier_enabled(struct event_config_s *evt_config)
 {
 	return (!evt_config) ? FALSE : evt_config->kafka_enabled;
 }
 
 const gchar *
-event_get_kafka_topic_name(struct event_config_s *evt_config, const gchar *def)
+event_get_notifier_topic_name(struct event_config_s *evt_config, const gchar *def)
 {
 	if (!evt_config || !evt_config->kafka_topic) {
 		return def;
@@ -178,3 +184,60 @@ event_get_lock(struct event_config_s *evt_config)
 {
 	return (!evt_config) ? NULL : evt_config->lock;
 }
+
+struct event_config_repo_s *
+event_config_repo_create(const gchar *ns_name, struct grid_lbpool_s *lbpool)
+{
+	struct event_config_repo_s *conf = NULL;
+	conf = g_malloc0(sizeof(struct event_config_repo_s));
+	conf->evt_config = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, (GDestroyNotify) event_config_destroy);
+	g_static_rw_lock_init(&(conf->rwlock));
+	metautils_notifier_init(&(conf->notifier), ns_name, lbpool);
+
+	return conf;
+}
+
+void
+event_config_repo_clear(struct event_config_repo_s **repo)
+{
+	if (!repo || !*repo)
+		return;
+	struct event_config_repo_s *repo2 = *repo;
+	*repo = NULL;
+	metautils_notifier_clear(&(repo2->notifier));
+	if (repo2->evt_config) {
+		g_hash_table_destroy(repo2->evt_config);
+	}
+	g_static_rw_lock_free(&(repo2->rwlock));
+	memset(repo2, 0, sizeof(struct event_config_repo_s));
+	g_free(repo2);
+}
+
+metautils_notifier_t *
+event_config_repo_get_notifier(struct event_config_repo_s *repo)
+{
+	return repo->notifier;
+}
+
+struct event_config_s*
+event_config_repo_get(struct event_config_repo_s *conf,
+	const char *ns_name, gboolean vns_fallback)
+{
+	struct event_config_s *event = NULL;
+	if (conf != NULL) {
+		g_static_rw_lock_writer_lock(&conf->rwlock);
+		if (vns_fallback)
+			event = namespace_hash_table_lookup(conf->evt_config, ns_name, NULL);
+		else
+			event = g_hash_table_lookup(conf->evt_config, ns_name);
+		if (!event) {
+			GRID_DEBUG("Event config not found for %s, creating one", ns_name);
+			event = event_config_create();
+			g_hash_table_insert(conf->evt_config, g_strdup(ns_name), event);
+		}
+		g_static_rw_lock_writer_unlock(&conf->rwlock);
+	}
+	return event;
+}
+

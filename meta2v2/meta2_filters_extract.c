@@ -863,7 +863,7 @@ meta2_filter_extract_header_optional_ns(struct gridd_filter_ctx_s *ctx,
 
 	if (!*ns) {
 		const struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-		g_strlcpy(ns, m2b->ns_name, sizeof(ns));
+		g_strlcpy(ns, m2b->backend.ns_name, sizeof(ns));
 	}
 
 	if (!(url = meta2_filter_ctx_get_url(ctx))) {

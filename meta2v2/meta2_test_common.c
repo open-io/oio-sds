@@ -1,4 +1,5 @@
 #include <string.h>
+#include <glib.h>
 
 #include <metautils/lib/metautils.h>
 
@@ -177,7 +178,7 @@ repo_wrapper(const gchar *ns, repo_test_f fr)
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
 
-	err = meta2_backend_init(&backend, repository, ns, glp, resolver);
+	err = meta2_backend_init(&backend, repository, ns, glp, resolver, NULL);
 	g_assert_no_error(err);
 	meta2_backend_configure_nsinfo(backend, &nsinfo);
 

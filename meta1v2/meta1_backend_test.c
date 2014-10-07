@@ -45,7 +45,7 @@ _meta1_init(void)
 
 	memset(&cfg, 0, sizeof(cfg));
 	err = sqlx_repository_init(basedir, &cfg, &repo);
-	m1 = meta1_backend_init(ns, repo, glp);
+	m1 = meta1_backend_init(ns, repo, glp, NULL);
 	assert_noerror(err);
 	g_assert(m1 != NULL);
 

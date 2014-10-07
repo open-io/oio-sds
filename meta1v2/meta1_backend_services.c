@@ -28,8 +28,10 @@
 
 static GError *__get_container_all_services(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
         const gchar *srvtype, struct meta1_service_url_s ***result);
-
-
+static GError *__notify_services(struct meta1_backend_s *m1,
+		struct sqlx_sqlite3_s *sq3, struct hc_url_s *url);
+static GError *__notify_services_by_cid(struct meta1_backend_s *m1,
+		struct sqlx_sqlite3_s *sq3, const container_id_t cid);
 
 static struct meta1_service_url_s *
 meta1_url_dup(struct meta1_service_url_s *u)
@@ -273,7 +275,8 @@ __del_container_one_service(struct sqlx_sqlite3_s *sq3,
 }
 
 static GError *
-__del_container_services(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
+__del_container_services(struct meta1_backend_s *m1,
+		 struct sqlx_sqlite3_s *sq3, const container_id_t cid,
 		const gchar *srvtype, gchar **urlv)
 {
 	gint64 seq;
@@ -306,12 +309,20 @@ __del_container_services(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
 		err = __get_container_all_services(sq3, cid, srvtype, &used);
 		if (err) {
 			g_prefix_error(&err, "Preliminary lookup error : ");
-		} else {		
+		} else {
 			if ((!used || !*used)){
 				// service type not used for this container_id...
 				// delete all properties about cid/srvtype
 				__del_container_srvtype_properties(sq3, cid, srvtype);
 			}
+		}
+		GError *err2 = __notify_services_by_cid(m1, sq3, cid);
+		if (err2 != NULL) {
+			gchar buf[128] = {0};
+			container_id_to_string(cid, buf, sizeof(buf));
+			GRID_WARN("Failed to notify [%s] service deletions"
+				" in [%s]: %s", srvtype, buf, err2->message);
+			g_clear_error(&err2);
 		}
 	}
 
@@ -564,7 +575,8 @@ static GError*
 _get_iterator(struct meta1_backend_s *m1, struct compound_type_s *ct,
 		struct grid_lb_iterator_s **result)
 {
-	struct grid_lb_iterator_s *r = grid_lbpool_get_iterator(m1->lb, ct->baretype);
+	struct grid_lb_iterator_s *r = grid_lbpool_get_iterator(m1->backend.lb,
+			ct->baretype);
 
 	if (!r) {
 		*result = NULL;
@@ -630,7 +642,8 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 		opt.req.duplicates = FALSE;
 		opt.req.stgclass = NULL;
 		opt.req.strict_stgclass = TRUE;
-		opt.srv_forbidden = __srvinfo_from_m1srvurl(m1->lb, ct->baretype, used);
+		opt.srv_forbidden = __srvinfo_from_m1srvurl(m1->backend.lb,
+				ct->baretype, used);
 		opt.filter.hook = _filter_tag;
 		opt.filter.data = ct;
 
@@ -785,6 +798,14 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 				struct meta1_service_url_s **unpacked = expand_url(m1_url);
 				*result = pack_urlv(unpacked);
 				free_urlv(unpacked);
+
+				GError *err2 = __notify_services(m1, sq3, url);
+				if (err2 != NULL) {
+					GRID_WARN("Failed to notify [%s] service modifications"
+							" of [%s]: %s", ct->type,
+							hc_url_get(url, HCURL_WHOLE), err2->message);
+					g_clear_error(&err2);
+				}
 			}
 			g_free(m1_url);
 		}
@@ -856,6 +877,16 @@ meta1_backend_set_service_arguments(struct meta1_backend_s *m1,
 			err = __configure_service(sq3, cid, url);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
+			else {
+				GError *err2 = __notify_services_by_cid(m1, sq3, cid);
+				if (err2 != NULL) {
+					gchar buf[128] = {0};
+					container_id_to_string(cid, buf, sizeof(buf));
+					GRID_WARN("Failed to notify [%s] service arg modification"
+							" in [%s]: %s", url->srvtype, buf, err2->message);
+					g_clear_error(&err2);
+				}
+			}
 		}
 		sqlx_repository_unlock_and_close_noerror(sq3);
 	}
@@ -886,6 +917,16 @@ meta1_backend_force_service(struct meta1_backend_s *m1,
 			err = __insert_service(sq3, cid, url);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
+			else {
+				GError *err2 = __notify_services_by_cid(m1, sq3, cid);
+				if (err2 != NULL) {
+					gchar buf[128] = {0};
+					container_id_to_string(cid, buf, sizeof(buf));
+					GRID_WARN("Failed to notify forced service [%s]"
+							" in [%s]: %s", packedurl, buf, err2->message);
+					g_clear_error(&err2);
+				}
+			}
 		}
 		sqlx_repository_unlock_and_close_noerror(sq3);
 	}
@@ -1026,7 +1067,7 @@ meta1_backend_del_container_services(struct meta1_backend_s *m1,
 	if (!err) {
 		if (!(err = __info_container(sq3, cid, NULL))) {
 			//delete container services
-			err = __del_container_services(sq3, cid, srvtype, urlv);
+			err = __del_container_services(m1, sq3, cid, srvtype, urlv);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
@@ -1075,10 +1116,10 @@ _get_expanded(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
 }
 
 static void
-__del_container_meta2_noerror(struct sqlx_sqlite3_s *sq3,
-		const container_id_t cid)
+__del_container_meta2_noerror(struct meta1_backend_s *m1,
+		struct sqlx_sqlite3_s *sq3, const container_id_t cid)
 {
-	GError *err = __del_container_services(sq3, cid, "meta2", NULL);
+	GError *err = __del_container_services(m1, sq3, cid, "meta2", NULL);
 	if (NULL != err) {
 		GRID_WARN("Failed to delete meta2 service links : (%d) %s",
 				err->code, err->message);
@@ -1126,7 +1167,7 @@ meta1_backend_destroy_m2_container(struct meta1_backend_s *m1,
 					break;
 			}
 			if (!err)
-				__del_container_meta2_noerror(sq3, cid);
+				__del_container_meta2_noerror(m1, sq3, cid);
 		}
 		else // Not found
 			err = NEWERROR(431, "No meta2 linked with this reference");
@@ -1637,3 +1678,85 @@ failedend:
 	return  err;
 }
 
+void
+__meta1_service_url_to_json(GString *out, struct meta1_service_url_s *svc)
+{
+	g_string_append_printf(out,
+			"{ \"seq\": %ld, \"srvtype\": \"%s\", \"url\": \"%s\", \"args\": \"%s\" }",
+			svc->seq, svc->srvtype, svc->host, svc->args);
+}
+
+static GError *
+__notify_services_by_cid(struct meta1_backend_s *m1,
+		struct sqlx_sqlite3_s *sq3, const container_id_t cid)
+{
+	GError *err = NULL;
+	gchar **urls = NULL;
+	err = __info_container(sq3, cid, &urls);
+	if (!err) {
+		struct hc_url_s *url = hc_url_init(urls[0]);
+		err = __notify_services(m1, sq3, url);
+		hc_url_clean(url);
+		g_strfreev(urls);
+	}
+	return err;
+}
+
+static GError *
+__notify_services(struct meta1_backend_s *m1,
+		struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
+{
+	GError *err = NULL;
+	const gchar *topic = NULL;
+	struct meta1_service_url_s **services = NULL, **services2 = NULL;
+	struct event_config_s *evt_config = meta1_backend_get_event_config(m1,
+			hc_url_get(url, HCURL_NS));
+
+	if (!event_is_notifier_enabled(evt_config))
+		return NULL;
+
+	if (!hc_url_has(url, HCURL_REFERENCE)) {
+		return __notify_services_by_cid(m1, sq3, hc_url_get_id(url));
+	}
+
+	topic = event_get_notifier_topic_name(evt_config, META1_EVT_TOPIC);
+
+	err = __get_container_all_services(sq3, hc_url_get_id(url), NULL, &services);
+	if (!err) {
+		services2 = expand_urlv(services);
+		metautils_notifier_t *notifier = meta1_backend_get_notifier(m1);
+		GString *notif = g_string_sized_new(128);
+		g_string_append_printf(notif, "\"url\": \"%s/%s\",",
+				hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE));
+		g_string_append(notif, " \"services\": [ ");
+		for (struct meta1_service_url_s **svc = services2; svc && *svc; svc++) {
+			if (svc != services2) // not at the beginning
+				g_string_append(notif, ", ");
+			__meta1_service_url_to_json(notif, *svc);
+		}
+		g_string_append(notif, " ]");
+
+		err = metautils_notifier_send_json(notifier, topic,
+				meta1_backend_get_local_addr(m1),
+				"meta1.services", notif->str);
+
+		g_string_free(notif, TRUE);
+		free_urlv(services2);
+		free_urlv(services);
+	}
+	return err;
+}
+
+GError *
+meta1_backend_notify_services(struct meta1_backend_s *m1, struct hc_url_s *url)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	err = _open_and_lock(m1, hc_url_get_id(url), M1V2_OPENBASE_MASTERSLAVE, &sq3);
+	if (!err) {
+		err = __notify_services(m1, sq3, url);
+		sqlx_repository_unlock_and_close_noerror(sq3);
+	}
+	return err;
+}

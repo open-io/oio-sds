@@ -127,6 +127,8 @@ struct sqlx_cache_s* sqlx_repository_get_cache(struct sqlx_repository_s *r);
 struct election_manager_s* sqlx_repository_get_elections_manager(
 		struct sqlx_repository_s *repo);
 
+const gchar* sqlx_repository_get_local_addr(struct sqlx_repository_s *repo);
+
 gboolean sqlx_repository_replication_configured(
 		const struct sqlx_repository_s *r);
 

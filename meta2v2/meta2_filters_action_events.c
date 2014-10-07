@@ -13,10 +13,6 @@
 
 #include <glib.h>
 
-#ifdef USE_KAFKA
-#include <librdkafka/rdkafka.h>
-#endif
-
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 #include <server/transport_gridd.h>
@@ -32,12 +28,6 @@
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/meta2_utils_json.h>
-
-#define META2_JSON_EVENT_TEMPLATE "{ \"timestamp\": %ld,\
- \"origin\": \"%s\",\
- \"type\": \"%s\",\
- \"seq\": %d,\
- \"data\": { %s }}"
 
 // Per service sequence number
 static volatile gint _seq = 0;
@@ -312,54 +302,11 @@ _find_alias(GSList *beans)
 	return NULL;
 }
 
-#ifdef USE_KAFKA
-static GError *
-_produce_kafka_event(rd_kafka_topic_t *topic, const gchar *src_addr,
-		struct hc_url_s *url, const char *evt_type, const gchar *event_data)
-{
-	int rc = 0;
-	GError *err = NULL;
-	GString *event = g_string_sized_new(1024);
-#ifdef OLD_GLIB2
-	gint seq = g_atomic_int_exchange_and_add(&_seq, 1);
-#else
-	gint seq = g_atomic_int_add(&_seq, 1);
-#endif
-
-	g_string_append_printf(event, META2_JSON_EVENT_TEMPLATE,
-			g_get_real_time() / 1000, // milliseconds since 1970
-			src_addr,
-			evt_type,
-			seq,
-			event_data);
-
-	errno = 0;
-	rc = rd_kafka_produce(topic, 0, RD_KAFKA_MSG_F_COPY,
-			event->str, event->len, NULL, 0, NULL); // No '\0' character
-	if (rc < 0) {
-		err = NEWERROR(CODE_INTERNAL_ERROR,
-				"Failed to send event to Kafka: (%d) %s",
-				errno, rd_kafka_err2str(rd_kafka_errno2err(errno)));
-	} else {
-		GRID_DEBUG("Kafka notified of event %s for %s",
-				evt_type, hc_url_get(url, HCURL_WHOLE));
-	}
-
-	g_string_free(event, TRUE);
-	return err;
-}
-#endif
-
 static GError *
 _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		const char *evt_type)
 {
 	(void) reply;
-#ifndef USE_KAFKA
-	(void) ctx;
-	(void) evt_type;
-	return NULL;
-#else
 	GError *err = NULL;
 	GString *event_data = NULL;
 	GSList *events_data = NULL; // List of gchar*
@@ -367,9 +314,9 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b,
 			hc_url_get(url, HCURL_NS));
-	rd_kafka_topic_t *topic = NULL;
+	const gchar *topic = NULL;
 
-	if (!event_is_kafka_enabled(evt_config) || metautils_cfg_get_bool(
+	if (!event_is_notifier_enabled(evt_config) || metautils_cfg_get_bool(
 			hc_url_get_option_value(url, META2_URL_LOCAL_BASE), FALSE)) {
 		return NULL;
 	}
@@ -443,13 +390,13 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 				g_string_free(event_data, FALSE));
 	}
 
-	err = meta2_backend_kafka_topic_ref(m2b,
-			event_get_kafka_topic_name(evt_config, META2_EVT_TOPIC),
-			&topic);
+	topic = event_get_notifier_topic_name(evt_config, META2_EVT_TOPIC);
+
 	if (!err) {
+		metautils_notifier_t *notifier = meta2_backend_get_notifier(m2b);
 		for (GSList *l = events_data; l != NULL; l = l->next) {
-			GError *err2 = _produce_kafka_event(topic,
-					meta2_backend_get_local_addr(m2b), url, evt_type, l->data);
+			GError *err2 = metautils_notifier_send_json(notifier, topic,
+					meta2_backend_get_local_addr(m2b), evt_type, l->data);
 			if (err2) {
 				GRID_WARN("Failed to send event to Kafka: %s", err2->message);
 				if (!err) {
@@ -459,7 +406,6 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 				}
 			}
 		}
-		meta2_backend_kafka_topic_unref(m2b, topic);
 	} else {
 		GRID_WARN("%d events not sent: %s",
 				g_slist_length(events_data), err->message);
@@ -468,7 +414,6 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	g_slist_free_full(events_data, g_free);
 
 	return err;
-#endif
 }
 
 

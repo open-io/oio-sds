@@ -587,6 +587,21 @@ sqlx_repository_get_cache(struct sqlx_repository_s *r)
 	return r->cache;
 }
 
+const gchar*
+sqlx_repository_get_local_addr(struct sqlx_repository_s *repo)
+{
+	const gchar* url = NULL;
+
+    struct election_manager_s* em = sqlx_repository_get_elections_manager(repo);
+    if (em) {
+        const struct replication_config_s *emrc = election_manager_get_config(em);
+        if (emrc) {
+            url = emrc->get_local_url(emrc->ctx);
+            GRID_DEBUG("%s: url:[%s]", __FUNCTION__, url);
+        }
+    }
+	return url;
+}
 
 /* ------------------------------------------------------------------------- */
 

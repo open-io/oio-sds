@@ -25,83 +25,11 @@
 #include <meta2v2/meta2_backend_dbconvert.h>
 #include <meta2v2/meta2_events.h>
 #include <sqlx/sqlx_service.h>
+#include <sqlx/sqlx_service_extras.h>
 
-static struct grid_lbpool_s *glp = NULL;
 static struct meta2_backend_s *m2 = NULL;
 static struct sqlx_upgrader_s *upgrader = NULL;
 
-/**
- * Connect (or reconnect) to Apache Kafka broker
- * in order to send events and ensure the specified topic
- * is created.
- */
-static void
-_init_kafka_events(const gchar *topic)
-{
-#ifdef USE_KAFKA
-	GError *err = NULL;
-	err = meta2_backend_init_kafka(m2);
-	if (err) {
-		GRID_WARN(err->message);
-		g_clear_error(&err);
-	} else {
-		err = meta2_backend_kafka_topic_cache(m2, topic);
-		if (err) {
-			GRID_WARN(err->message);
-			g_clear_error(&err);
-		}
-	}
-#endif
-}
-
-static void
-_clear_kafka_events(void)
-{
-#ifdef USE_KAFKA
-	meta2_backend_free_kafka(m2);
-#endif
-}
-
-static void
-_task_reload_event_config(gpointer p)
-{
-	GError *err = NULL;
-	gboolean must_clear_kafka = TRUE;
-
-	void _update_each(gpointer k, gpointer v, gpointer ignored) {
-		(void) ignored;
-		if (!err) {
-			struct event_config_s *conf = meta2_backend_get_event_config2(m2,
-					(char *)k, FALSE);
-			err = event_config_reconfigure(conf, (char *)v);
-			if (!err && event_is_kafka_enabled(conf)) {
-				must_clear_kafka = FALSE;
-				_init_kafka_events(
-						event_get_kafka_topic_name(conf, META2_EVT_TOPIC));
-			}
-		}
-	}
-
-	GHashTable *ht = gridcluster_get_event_config(&(PSRV(p)->nsinfo),
-			META2_TYPE_NAME);
-	if (!ht)
-		err = NEWERROR(EINVAL, "Invalid parameter");
-	else {
-		g_hash_table_foreach(ht, _update_each, NULL);
-		g_hash_table_destroy(ht);
-	}
-
-	if (!err)
-		GRID_TRACE("Event config reloaded");
-	else {
-		GRID_WARN("Event config reload error [%s] : (%d) %s",
-				PSRV(p)->ns_name, err->code, err->message);
-		g_clear_error(&err);
-	}
-
-	if (must_clear_kafka)
-		_clear_kafka_events();
-}
 
 static void
 _task_reconfigure_m2(gpointer p)
@@ -116,25 +44,6 @@ _task_notify_modified_containers(gpointer p)
 	GRID_DEBUG("Notifying modified containers");
 	meta2_backend_notify_modified_containers(m2);
 	GRID_DEBUG("Notification done");
-}
-
-static void
-_task_reload_lb(gpointer p)
-{
-	GError *err;
-	(void) p;
-
-	if (NULL != (err = gridcluster_reload_lbpool(glp))) {
-		GRID_WARN("Failed to reload the LB pool : (%d) %s",
-				err->code, err->message);
-		g_clear_error(&err);
-	}
-
-	if (NULL != (err = gridcluster_reconfigure_lbpool(glp))) {
-		GRID_WARN("Failed to reconfigure the LB pool : (%d) %s",
-				err->code, err->message);
-		g_clear_error(&err);
-	}
 }
 
 static inline gchar **
@@ -268,15 +177,22 @@ meta2_on_close(struct sqlx_sqlite3_s *sq3, gboolean deleted, gpointer cb_data)
 static gboolean
 _post_config(struct sqlx_service_s *ss)
 {
-	glp = grid_lbpool_create(ss->ns_name);
+	GError *err = NULL;
 
 	upgrader = sqlx_upgrader_create();
 	sqlx_upgrader_register(upgrader, "!1.8", "1.8", _upgrade_to_18, NULL);
 	sqlx_repository_configure_open_callback(ss->repository, meta2_on_open, upgrader);
 
+	err = sqlx_service_extras_init(ss);
+	if (err != NULL) {
+		GRID_WARN("%s", err->message);
+		g_clear_error(&err);
+		return FALSE;
+	}
+
 	// prepare a meta2 backend
-	GError *err = meta2_backend_init(&m2, ss->repository, ss->ns_name, glp,
-			ss->resolver);
+	err = meta2_backend_init(&m2, ss->repository, ss->ns_name, ss->extras->lb,
+			ss->resolver, ss->extras->evt_repo);
 	if (err) {
 		GRID_WARN("META2 backend init failure: (%d) %s", err->code, err->message);
 		g_clear_error(&err);
@@ -296,11 +212,11 @@ _post_config(struct sqlx_service_s *ss)
 
 	// Register few meta2 tasks
 	grid_task_queue_register(ss->gtq_reload, 5,
-			_task_reload_event_config, NULL, ss);
+			(GDestroyNotify)sqlx_task_reload_event_config, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 5,
 			_task_reconfigure_m2, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 10,
-			_task_reload_lb, NULL, ss);
+			(GDestroyNotify)sqlx_task_reload_lb, NULL, ss);
 
 	grid_task_queue_register(ss->gtq_admin, 30,
 			_task_notify_modified_containers, NULL, NULL);
@@ -318,8 +234,6 @@ main(int argc, char **argv)
 	int rc = sqlite_service_main(argc, argv, &cfg);
 	if (m2)
 		meta2_backend_clean(m2);
-	if (glp)
-		grid_lbpool_destroy(glp);
 	if (upgrader)
 		sqlx_upgrader_destroy(upgrader);
 	m2v2_clean_db();

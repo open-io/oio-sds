@@ -1,20 +1,19 @@
 #ifndef META1_BACKEND_INTERNALS__H
 # define META1_BACKEND_INTERNALS__H 1
 # include <glib.h>
+# include <metautils/lib/metautils.h>
 
 #define M1_SQLITE_GERROR(db,RC) g_error_new(GQ(), (RC), "(%s) %s", \
 		sqlite_strerror(RC), (db)?sqlite3_errmsg(db):"unkown error")
 
 struct meta1_backend_s
 {
-	gchar ns_name[256];
+	struct meta_backend_common_s backend;
 
 	GStaticRWLock rwlock_ns_policies;
 	GHashTable *ns_policies; /* <gchar*,struct service_update_policies_s*> */
 
 	struct meta1_prefixes_set_s *prefixes;
-	sqlx_repository_t *repository;
-	struct grid_lbpool_s *lb;
 };
 
 /*!

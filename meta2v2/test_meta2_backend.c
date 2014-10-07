@@ -1,4 +1,5 @@
 #include <string.h>
+#include <glib.h>
 
 #include <meta2v2/meta2_backend_internals.h>
 #include <meta2v2/meta2v2_remote.h>
@@ -247,7 +248,7 @@ _repo_wraper(const gchar *ns, repo_test_f fr)
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
 
-	err = meta2_backend_init(&backend, repository, ns, glp, resolver);
+	err = meta2_backend_init(&backend, repository, ns, glp, resolver, NULL);
 	g_assert_no_error(err);
 	meta2_backend_configure_nsinfo(backend, &nsinfo);
 
@@ -289,7 +290,7 @@ _repo_failure(const gchar *ns)
 	cfg.lock.srv = "test-meta2";
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
-	err = meta2_backend_init(&backend, repository, ns, glp, resolver);
+	err = meta2_backend_init(&backend, repository, ns, glp, resolver, NULL);
 	g_assert_error(err, GQ(), 400);
 
 	meta2_backend_clean(backend);
@@ -342,8 +343,8 @@ test_backend_strange_ns(void)
 	static gchar ns_256[257];
 
 	void test(struct meta2_backend_s *m2) {
-		g_assert(strlen(m2->ns_name) > 0);
-		g_assert(NULL == strchr(m2->ns_name, '.'));
+		g_assert(strlen(m2->backend.ns_name) > 0);
+		g_assert(NULL == strchr(m2->backend.ns_name, '.'));
 	}
 
 	/* successful creations */

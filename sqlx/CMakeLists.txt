@@ -15,7 +15,8 @@ link_directories(
 
 
 add_library(sqlxsrv SHARED
-		sqlx_service.c sqlx_service.h)
+		sqlx_service.c sqlx_service.h
+		sqlx_service_extras.c sqlx_service_extras.h)
 
 set_target_properties(sqlxsrv PROPERTIES SOVERSION ${ABI_VERSION})
 

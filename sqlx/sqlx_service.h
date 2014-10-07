@@ -18,6 +18,7 @@ struct grid_single_rrd_s;
 struct sqlx_repo_config_s;
 struct sqlx_sync_s;
 struct replication_config_s;
+struct sqlx_service_extras_s;
 
 struct sqlx_service_config_s
 {
@@ -57,9 +58,10 @@ struct sqlx_service_s
 	struct network_server_s *server;
 	struct gridd_request_dispatcher_s *dispatcher;
 	struct hc_resolver_s *resolver;
+	struct sqlx_service_extras_s *extras;
 
 	// The tasks under this queue always follow a reload of the
-	// nsinfo field, are can safely play with it. This is the place
+	// nsinfo field, and can safely play with it. This is the place
 	// for LB reloading, reconfiguration, etc.
 	struct namespace_info_s nsinfo;
 	struct grid_task_queue_s *gtq_reload;

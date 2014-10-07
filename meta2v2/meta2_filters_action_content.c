@@ -931,7 +931,8 @@ meta2_filter_action_modify_mdsys_v1(struct gridd_filter_ctx_s *ctx,
 	ALIASES_set2_mdsys(alias, mdsys);
 	if (NULL != sp) {
 		const gchar *old_sp = CONTENTS_HEADERS_get_policy(header)->str;
-		e = storage_policy_check_compat_by_name(&(m2b->ns_info), old_sp, sp);
+		e = storage_policy_check_compat_by_name(&(m2b->backend.ns_info),
+				old_sp, sp);
 		if (e == NULL)
 			CONTENTS_HEADERS_set2_policy(header, sp);
 		g_free(sp);
@@ -1424,7 +1425,7 @@ meta2_filter_action_add_raw_v1(struct gridd_filter_ctx_s *ctx,
 	buffer2str(content->container_id, sizeof(container_id_t), hexid, 65);
 
 	/* fill url */
-	hc_url_set(url, HCURL_NS, m2b->ns_name);
+	hc_url_set(url, HCURL_NS, m2b->backend.ns_name);
 	hc_url_set(url, HCURL_HEXID, hexid);
 	hc_url_set(url, HCURL_PATH, content->path);
 
@@ -1567,7 +1568,7 @@ meta2_filter_action_remove_raw_v1(struct gridd_filter_ctx_s *ctx,
 	TRACE_FILTER();
 
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, m2b->ns_name);
+	hc_url_set(url, HCURL_NS, m2b->backend.ns_name);
 	hc_url_set(url, HCURL_HEXID, strcid);
 	hc_url_set(url, HCURL_PATH, content->path);
 

@@ -69,7 +69,7 @@ _open_and_lock(struct meta1_backend_s *m1, const container_id_t cid,
 			((guint8*)cid)[0], ((guint8*)cid)[1]);
 
 	/* Now open/lock the base in a way suitable for our op */
-	err = sqlx_repository_open_and_lock(m1->repository,
+	err = sqlx_repository_open_and_lock(m1->backend.repo,
 			META1_TYPE_NAME, base, m1_to_sqlx(how), handle, NULL);
 
 	if (err != NULL) {

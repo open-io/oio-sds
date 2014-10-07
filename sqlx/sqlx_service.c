@@ -9,6 +9,8 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
+#include <glib.h>
+
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
@@ -25,6 +27,7 @@
 #include <resolver/hc_resolver.h>
 
 #include "sqlx_service.h"
+#include "sqlx_service_extras.h"
 
 // common_main hooks
 static struct grid_main_option_s * sqlx_service_get_options(void);
@@ -524,6 +527,9 @@ sqlx_service_specific_fini(void)
 	if (SRV.zk_url)
 		metautils_str_clean(&SRV.zk_url);
 
+	if (SRV.extras)
+		sqlx_service_extras_clear(&SRV);
+
 	namespace_info_clear(&SRV.nsinfo);
 }
 
@@ -689,7 +695,7 @@ _task_reload_nsinfo(gpointer p)
 	struct namespace_info_s *ni;
 
 	if (!(ni = get_namespace_info(PSRV(p)->ns_name, &err))) {
-		GRID_WARN("NSINFO reload error [%s] : (%d) %s",
+		GRID_WARN("NSINFO reload error [%s]: (%d) %s",
 				PSRV(p)->ns_name, err->code, err->message);
 		g_clear_error(&err);
 	} else {

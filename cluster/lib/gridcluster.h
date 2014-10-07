@@ -427,14 +427,6 @@ GByteArray* namespace_get_rules(const gchar *ns, const gchar *srvtype,
 		GError **err);
 
 /**
- * Find a namespace-prefixed key in a hash table. If key not found, try again
- * with parent VNS, and so on. If still not found, try unprefixed key.
- * Key may be NULL if the key is the namespace name.
- */
-gpointer namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
-		const gchar *key);
-
-/**
  * @param ns
  * @param what
  * @param how

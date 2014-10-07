@@ -32,7 +32,7 @@ _meta2_filter_check_ns_name(struct gridd_filter_ctx_s *ctx,
 	const struct meta2_backend_s *backend = meta2_filter_ctx_get_backend(ctx);
 	const char *req_ns = hc_url_get(meta2_filter_ctx_get_url(ctx), HCURL_NSPHYS);
 
-	if (!backend || !backend->ns_name[0]) {
+	if (!backend || !backend->backend.ns_name[0]) {
 		GRID_DEBUG("Missing information for namespace checking");
 		meta2_filter_ctx_set_error(ctx, NEWERROR(500,
 					"Missing backend information, cannot check namespace"));
@@ -49,10 +49,10 @@ _meta2_filter_check_ns_name(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	if (0 != g_ascii_strcasecmp(backend->ns_name, req_ns)) {
+	if (0 != g_ascii_strcasecmp(backend->backend.ns_name, req_ns)) {
 		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST,
 					"Request namespace [%s] does not match server namespace [%s]",
-					req_ns, backend->ns_name));
+					req_ns, backend->backend.ns_name));
 		return FILTER_KO;
 	}
 
@@ -134,9 +134,9 @@ meta2_filter_check_ns_is_writable(struct gridd_filter_ctx_s *ctx,
 	if (!m2b || !meta2_backend_is_quota_enabled(m2b))
 		return FILTER_OK;
 
-	g_mutex_lock(m2b->lock_ns_info);
-	found = namespace_info_is_vns_writable(&(m2b->ns_info), vns);
-	g_mutex_unlock(m2b->lock_ns_info);
+	g_mutex_lock(m2b->backend.ns_info_lock);
+	found = namespace_info_is_vns_writable(&(m2b->backend.ns_info), vns);
+	g_mutex_unlock(m2b->backend.ns_info_lock);
 
 	if (!found) {
 		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_NAMESPACE_FULL, "VNS full"));

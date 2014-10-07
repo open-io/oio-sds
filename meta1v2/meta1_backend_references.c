@@ -157,9 +157,9 @@ meta1_backend_create_container(struct meta1_backend_s *m1,
 	EXTRA_ASSERT(m1 != NULL);
 	EXTRA_ASSERT(cname != NULL);
 
-	if (vns && *vns && !g_str_has_prefix(vns, m1->ns_name))
+	if (vns && *vns && !g_str_has_prefix(vns, m1->backend.ns_name))
 		return NEWERROR(400, "Invalid NS/VNS, [%s] not a prefix of [%s]",
-				m1->ns_name, vns);
+				m1->backend.ns_name, vns);
 
 	meta1_name2hash(cid, vns, cname);
 
@@ -172,7 +172,8 @@ meta1_backend_create_container(struct meta1_backend_s *m1,
 		}
 		else {
 			g_clear_error(&err);
-			err = __create_container(sq3, (vns && *vns ? vns : m1->ns_name),
+			err = __create_container(sq3,
+					(vns && *vns ? vns : m1->backend.ns_name),
 					cname, cid);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");

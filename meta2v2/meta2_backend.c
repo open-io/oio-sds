@@ -5,6 +5,7 @@
 #include <glib.h>
 
 #include <metautils/lib/metautils.h>
+#include <metautils/lib/event_config.h>
 #include <cluster/lib/gridcluster.h>
 
 #include <sqliterepo/sqliterepo.h>
@@ -25,10 +26,6 @@
 #include <meta2/remote/meta2_remote.h>
 
 #include <resolver/hc_resolver.h>
-
-#ifdef USE_KAFKA
-#include <librdkafka/rdkafka.h>
-#endif
 
 enum m2v2_open_type_e
 {
@@ -72,7 +69,7 @@ m2b_quota(struct meta2_backend_s *m2b, const gchar *vns)
 static inline gint64
 _quota(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
-	gchar *vns = m2db_get_namespace(sq3, m2b->ns_name);
+	gchar *vns = m2db_get_namespace(sq3, m2b->backend.ns_name);
 	gint64 res = m2db_get_quota(sq3, m2b_quota(m2b, vns));
 	g_free(vns);
 	return res;
@@ -103,7 +100,7 @@ m2b_keep_deleted_delay(struct meta2_backend_s *m2b, const gchar *vns)
 static inline gint64
 _maxvers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
-	gchar *vns = m2db_get_namespace(sq3, m2b->ns_name);
+	gchar *vns = m2db_get_namespace(sq3, m2b->backend.ns_name);
 	gint64 res = m2db_get_max_versions(sq3, m2b_max_versions(m2b, vns));
 	g_free(vns);
 	return res;
@@ -112,7 +109,7 @@ _maxvers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 static inline gint64
 _retention_delay(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
-	gchar *vns = m2db_get_namespace(sq3, m2b->ns_name);
+	gchar *vns = m2db_get_namespace(sq3, m2b->backend.ns_name);
 	gint64 res = m2db_get_keep_deleted_delay(sq3,
 			m2b_keep_deleted_delay(m2b, vns));
 	g_free(vns);
@@ -226,7 +223,8 @@ m2b_transient_put(struct meta2_backend_s *m2b, const gchar *key, const gchar * h
 	GError *err = NULL;
 
 	if (hexID != NULL)
-		err = sqlx_repository_status_base(m2b->repo, META2_TYPE_NAME, hexID);
+		err = sqlx_repository_status_base(m2b->backend.repo,
+				META2_TYPE_NAME, hexID);
 	if ( !err ) {
 		struct transient_s *trans = NULL;
 
@@ -257,7 +255,8 @@ m2b_transient_get(struct meta2_backend_s *m2b, const gchar *key, const gchar * h
 	GError *local_err = NULL;
 
 	if (hexID != NULL)
-		local_err = sqlx_repository_status_base(m2b->repo, META2_TYPE_NAME, hexID);
+		local_err = sqlx_repository_status_base(m2b->backend.repo,
+				META2_TYPE_NAME, hexID);
 
 	if (local_err) {
 		*err = local_err;
@@ -288,7 +287,8 @@ m2b_transient_del(struct meta2_backend_s *m2b, const gchar *key, const gchar * h
 	GError *err = NULL;
 
 	if (hexID != NULL)
-		err = sqlx_repository_status_base(m2b->repo, META2_TYPE_NAME, hexID);
+		err = sqlx_repository_status_base(m2b->backend.repo,
+				META2_TYPE_NAME, hexID);
 
 	if ( !err ) {
 		struct transient_s *trans = NULL;
@@ -358,130 +358,44 @@ _check_policy(struct meta2_backend_s *m2, const gchar *polname)
 	return err;
 }
 
-#ifdef USE_KAFKA
-GError *
-meta2_backend_init_kafka(struct meta2_backend_s *m2)
+metautils_notifier_t *
+meta2_backend_get_notifier(struct meta2_backend_s *m2)
 {
-	GError *err = NULL;
-	gchar errmsg[256];
-	gchar str_addr[128];
-	service_info_t *broker = NULL;
-
-	// Already initialized
-	if (m2->kafka_handle != NULL)
-		return NULL;
-
-	// TODO: customize configuration
-	rd_kafka_t *handle = rd_kafka_new(RD_KAFKA_PRODUCER, NULL,
-			errmsg, sizeof(errmsg));
-
-	if (!handle) {
-		err = NEWERROR(CODE_INTERNAL_ERROR,
-				"Failed to initialize Kafka: %s", errmsg);
-		goto end;
-	}
-	rd_kafka_set_logger(handle, rd_kafka_log_syslog);
-	broker = get_one_namespace_service(m2->ns_name, "kafka", &err);
-	if (err) {
-		rd_kafka_destroy(handle);
-		goto end;
-	}
-	grid_addrinfo_to_string(&(broker->addr), str_addr, sizeof(str_addr));
-	if (!rd_kafka_brokers_add(handle, str_addr)) {
-		err = NEWERROR(CODE_INTERNAL_ERROR,
-				"Failed to configure kafka broker to %s", str_addr);
-		rd_kafka_destroy(handle);
-		goto end;
-	} else {
-		service_info_clean(broker);
-	}
-	m2->kafka_topics = g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, (GDestroyNotify)rd_kafka_topic_destroy);
-	m2->kafka_handle = handle;
-
-end:
-	return err;
+	return event_config_repo_get_notifier(m2->backend.evt_repo);
 }
 
-void
-meta2_backend_free_kafka(struct meta2_backend_s *m2)
+struct event_config_repo_s *
+meta2_backend_get_evt_config_repo(const struct meta2_backend_s *m2)
 {
-	if (m2->kafka_handle) {
-		// Set pointer to NULL so Kafka events are disabled immediately
-		rd_kafka_t *handle = m2->kafka_handle;
-		m2->kafka_handle = NULL;
-		// Now clear handle
-		meta2_backend_kafka_topic_cache_clear(m2);
-		rd_kafka_destroy(handle);
-	}
+	return m2->backend.evt_repo;
 }
 
 GError *
-meta2_backend_kafka_topic_ref(struct meta2_backend_s *m2, const gchar *name,
-		rd_kafka_topic_t **topic)
+meta2_backend_init_notifs(struct meta2_backend_s *m2)
 {
-	rd_kafka_topic_t *new_topic = NULL;
-
-	g_assert(m2 != NULL);
-
-	if (!m2->kafka_handle) {
-		return NEWERROR(CODE_INTERNAL_ERROR,
-				"No kafka handle, events disabled?");
-	}
-
-	// TODO: customize topic configuration
-	// Returns a reference if topic already exists
-	new_topic = rd_kafka_topic_new(m2->kafka_handle, name, NULL);
-	if (!new_topic) {
-		return NEWERROR(CODE_INTERNAL_ERROR,
-				"Failed to initialize Kafka topic: %s", strerror(errno));
-	}
-	*topic = new_topic;
-	return NULL;
+	metautils_notifier_t *notifier = meta2_backend_get_notifier(m2);
+	return metautils_notifier_init_kafka(notifier);
 }
 
 void
-meta2_backend_kafka_topic_unref(struct meta2_backend_s *m2,
-		rd_kafka_topic_t *utopic)
+meta2_backend_free_notifs(struct meta2_backend_s *m2)
 {
-	(void) m2;
-	// Decreases reference counter
-	rd_kafka_topic_destroy(utopic);
+	metautils_notifier_t *notifier = meta2_backend_get_notifier(m2);
+	metautils_notifier_free_kafka(notifier);
 }
 
 GError *
-meta2_backend_kafka_topic_cache(struct meta2_backend_s *m2, const gchar *name)
+meta2_backend_prepare_notif_topic(struct meta2_backend_s *m2, const gchar *name)
 {
-	GError *err = NULL;
-	rd_kafka_topic_t *topic = NULL;
-
-	g_assert(m2 != NULL);
-
-	if (!m2->kafka_handle)
-		return NULL;
-
-	err = meta2_backend_kafka_topic_ref(m2, name, &topic);
-	if (!err) {
-		g_hash_table_insert(m2->kafka_topics, g_strdup(name), topic);
-	}
-	return err;
+	metautils_notifier_t *notifier = meta2_backend_get_notifier(m2);
+	return metautils_notifier_prepare_kafka_topic(notifier, name);
 }
-
-void
-meta2_backend_kafka_topic_cache_clear(struct meta2_backend_s *m2)
-{
-	if (m2->kafka_topics) {
-		// Hash table was created with topic destroy callback
-		g_hash_table_destroy(m2->kafka_topics);
-		m2->kafka_topics = NULL;
-	}
-}
-#endif
 
 GError *
 meta2_backend_init(struct meta2_backend_s **result,
 		struct sqlx_repository_s *repo, const gchar *ns,
-		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver)
+		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver,
+		struct event_config_repo_s *evt_repo)
 {
 	GError *err = NULL;
 	struct meta2_backend_s *m2 = NULL;
@@ -493,20 +407,20 @@ meta2_backend_init(struct meta2_backend_s **result,
 	g_assert(resolver != NULL);
 
 	m2 = g_malloc0(sizeof(struct meta2_backend_s));
-
-	s = metautils_strlcpy_physical_ns(m2->ns_name, ns, sizeof(m2->ns_name));
-	if (sizeof(m2->ns_name) <= s) {
+	s = metautils_strlcpy_physical_ns(m2->backend.ns_name, ns,
+			sizeof(m2->backend.ns_name));
+	if (sizeof(m2->backend.ns_name) <= s) {
 		g_free(m2);
 		return NEWERROR(400, "Namespace too long");
 	}
 
-	m2->repo = repo;
-	m2->glp = glp;
+	m2->backend.type = META2_TYPE_NAME;
+	m2->backend.repo = repo;
+	m2->backend.lb = glp;
+	m2->backend.evt_repo = evt_repo;
 	m2->policies = service_update_policies_create();
-	m2->evt_config = g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, (GDestroyNotify) event_config_destroy);
 
-	m2->lock_ns_info = g_mutex_new();
+	m2->backend.ns_info_lock = g_mutex_new();
 
 	m2->lock_transient = g_mutex_new();
 	m2->transient = g_hash_table_new_full(g_str_hash, g_str_equal,
@@ -521,19 +435,19 @@ meta2_backend_init(struct meta2_backend_s **result,
 	m2->modified_containers = g_hash_table_new_full(g_str_hash, g_str_equal,
 			g_free, g_free);
 
-	err = sqlx_repository_configure_type(m2->repo, META2_TYPE_NAME, NULL,
-			schema);
+	err = sqlx_repository_configure_type(m2->backend.repo, META2_TYPE_NAME,
+			NULL, schema);
 	if (NULL != err) {
 		meta2_backend_clean(m2);
 		g_prefix_error(&err, "Backend init error: ");
 		return err;
 	}
 
-	sqlx_repository_set_locator(m2->repo, meta2_file_locator, NULL);
+	sqlx_repository_set_locator(m2->backend.repo, meta2_file_locator, NULL);
 	m2->resolver = resolver;
 
 	GRID_DEBUG("M2V2 backend created for NS[%s] and repo[%p]",
-			m2->ns_name, m2->repo);
+			m2->backend.ns_name, m2->backend.repo);
 
 	*result = m2;
 	return NULL;
@@ -543,21 +457,7 @@ struct event_config_s *
 meta2_backend_get_event_config2(struct meta2_backend_s *m2, const char *ns_name,
 		gboolean vns_fallback)
 {
-	struct event_config_s *event = NULL;
-	if (NULL != m2) {
-		g_static_rw_lock_writer_lock(&m2->rwlock_evt_config);
-		if (vns_fallback)
-			event = namespace_hash_table_lookup(m2->evt_config, ns_name, NULL);
-		else
-			event = g_hash_table_lookup(m2->evt_config, ns_name);
-		if (!event) {
-			GRID_DEBUG("Event config not found for %s, creating one", ns_name);
-			event = event_config_create();
-			g_hash_table_insert(m2->evt_config, g_strdup(ns_name), event);
-		}
-		g_static_rw_lock_writer_unlock(&m2->rwlock_evt_config);
-	}
-	return event;
+	return event_config_repo_get(m2->backend.evt_repo, ns_name, vns_fallback);
 }
 
 struct event_config_s *
@@ -575,11 +475,8 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 	if (m2->policies) {
 		service_update_policies_destroy(m2->policies);
 	}
-	if (m2->lock_ns_info) {
-		g_mutex_free(m2->lock_ns_info);
-	}
-	if (m2->evt_config) {
-		g_hash_table_destroy(m2->evt_config);
+	if (m2->backend.ns_info_lock) {
+		g_mutex_free(m2->backend.ns_info_lock);
 	}
 	if (m2->m0_mapping) {
 		g_ptr_array_free(m2->m0_mapping, TRUE);
@@ -599,11 +496,7 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 	if (m2->resolver) {
 		m2->resolver = NULL;
 	}
-#ifdef USE_KAFKA
-	meta2_backend_free_kafka(m2); // also cleans topics
-#endif
-	g_static_rw_lock_free(&m2->rwlock_evt_config);
-	namespace_info_clear(&(m2->ns_info));
+	namespace_info_clear(&(m2->backend.ns_info));
 	g_free(m2);
 }
 
@@ -652,10 +545,10 @@ meta2_backend_configure_nsinfo(struct meta2_backend_s *m2,
 	EXTRA_ASSERT(m2 != NULL);
 	EXTRA_ASSERT(ns_info != NULL);
 
-	g_mutex_lock(m2->lock_ns_info);
-	(void) namespace_info_copy(ns_info, &(m2->ns_info), NULL);
-	_update_writable_vns_list(&(m2->ns_info));
-	g_mutex_unlock(m2->lock_ns_info);
+	g_mutex_lock(m2->backend.ns_info_lock);
+	(void) namespace_info_copy(ns_info, &(m2->backend.ns_info), NULL);
+	_update_writable_vns_list(&(m2->backend.ns_info));
+	g_mutex_unlock(m2->backend.ns_info_lock);
 }
 
 gboolean
@@ -667,12 +560,12 @@ meta2_backend_get_nsinfo(struct meta2_backend_s *m2,
 	EXTRA_ASSERT(m2 != NULL);
 	EXTRA_ASSERT(dst != NULL);
 
-	g_mutex_lock(m2->lock_ns_info);
-	if (m2->ns_info.name[0]) {
-		(void) namespace_info_copy(&(m2->ns_info), dst, NULL);
+	g_mutex_lock(m2->backend.ns_info_lock);
+	if (m2->backend.ns_info.name[0]) {
+		(void) namespace_info_copy(&(m2->backend.ns_info), dst, NULL);
 		rc = TRUE;
 	}
-	g_mutex_unlock(m2->lock_ns_info);
+	g_mutex_unlock(m2->backend.ns_info_lock);
 
 	return rc;
 }
@@ -687,7 +580,7 @@ meta2_backend_poll_service(struct meta2_backend_s *m2,
 	g_assert(type != NULL);
 	g_assert(si != NULL);
 
-	if (!(iter = grid_lbpool_get_iterator(m2->glp, type)))
+	if (!(iter = grid_lbpool_get_iterator(m2->backend.lb, type)))
 		return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "no such service");
 
 	struct lb_next_opt_ext_s opt_ext;
@@ -711,7 +604,7 @@ gboolean
 meta2_backend_initiated(struct meta2_backend_s *m2)
 {
 	EXTRA_ASSERT(m2 != NULL);
-	gboolean rc = (m2->ns_info.name[0] != '\0');
+	gboolean rc = (m2->backend.ns_info.name[0] != '\0');
 	return rc;
 }
 
@@ -774,7 +667,7 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(result != NULL);
 	EXTRA_ASSERT(m2 != NULL);
-	EXTRA_ASSERT(m2->repo != NULL);
+	EXTRA_ASSERT(m2->backend.repo != NULL);
 
 	no_peers = hc_url_get_option_value(url, META2_URL_LOCAL_BASE) != NULL;
 	if (no_peers) {
@@ -784,7 +677,7 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 
 	enum m2v2_open_type_e repli = how & M2V2_OPEN_REPLIMODE;
 	if (repli != M2V2_OPEN_LOCAL && !(how & M2V2_OPEN_NOREFCHECK)) {
-		err = sqlx_repository_status_base(m2->repo, META2_TYPE_NAME,
+		err = sqlx_repository_status_base(m2->backend.repo, META2_TYPE_NAME,
 				hc_url_get(url, HCURL_HEXID));
 		if (!err) { /* MASTER */
 			if (repli == M2V2_OPEN_SLAVEONLY)
@@ -801,7 +694,7 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 		}
 	}
 
-	err = sqlx_repository_open_and_lock(m2->repo, META2_TYPE_NAME,
+	err = sqlx_repository_open_and_lock(m2->backend.repo, META2_TYPE_NAME,
 			hc_url_get(url, HCURL_HEXID), m2_to_sqlx(how), &sq3, NULL);
 	if (NULL != err) {
 		if (err->code == CODE_CONTAINER_NOTFOUND)
@@ -904,7 +797,7 @@ meta2_backend_has_container(struct meta2_backend_s *m2,
 	EXTRA_ASSERT(url != NULL);
 	GRID_DEBUG("HAS(%s)", hc_url_get(url, HCURL_WHOLE));
 
-	err = sqlx_repository_has_base(m2->repo, META2_TYPE_NAME,
+	err = sqlx_repository_has_base(m2->backend.repo, META2_TYPE_NAME,
 			hc_url_get(url, HCURL_HEXID));
 	if (NULL != err) {
 		g_prefix_error(&err, "File error: ");
@@ -1040,7 +933,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 
 		if (!local) {
 			err = sqlx_config_get_peers(election_manager_get_config(
-					sqlx_repository_get_elections_manager(m2->repo)),
+					sqlx_repository_get_elections_manager(m2->backend.repo)),
 					hc_url_get(url, HCURL_HEXID), META2_TYPE_NAME, &peers);
 			// peers may be NULL if no zookeeper URL is configured
 			if (!err && peers != NULL && g_strv_length(peers) > 0) {
@@ -1137,14 +1030,14 @@ meta2_backend_close_container(struct meta2_backend_s *m2,
 	gboolean has = FALSE;
 
 	err = sqlx_config_has_peers(election_manager_get_config(
-				sqlx_repository_get_elections_manager(m2->repo)),
+				sqlx_repository_get_elections_manager(m2->backend.repo)),
 			hc_url_get(url, HCURL_HEXID), META2_TYPE_NAME, &has);
 	if (NULL != err) {
 		g_prefix_error(&err, "Not managed: ");
 		return err;
 	}
 
-	err = sqlx_repository_has_base(m2->repo, META2_TYPE_NAME,
+	err = sqlx_repository_has_base(m2->backend.repo, META2_TYPE_NAME,
 			hc_url_get(url, HCURL_HEXID));
 	if (NULL != err) {
 		g_prefix_error(&err, "File error: ");
@@ -1332,7 +1225,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
 		meta2_backend_get_nsinfo(m2b, &(args.nsinfo));
-		args.lbpool = m2b->glp;
+		args.lbpool = m2b->backend.lb;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_put_alias(&args, beans, cb, u0))) {
@@ -1370,7 +1263,7 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
 		meta2_backend_get_nsinfo(m2b, &(args.nsinfo));
-		args.lbpool = m2b->glp;
+		args.lbpool = m2b->backend.lb;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_copy_alias(&args, src)))
@@ -1405,7 +1298,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b,
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
 		meta2_backend_get_nsinfo(m2b, &(args.nsinfo));
-		args.lbpool = m2b->glp;
+		args.lbpool = m2b->backend.lb;
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
 			if (!(err = m2db_force_alias(&args, beans))) {
@@ -1825,7 +1718,7 @@ meta2_backend_generate_beans_v1(struct meta2_backend_s *m2b,
 
 	/* Let's continue to generate the beans, no need for an open container for the moment */
 	if (!err) {
-		iter = grid_lbpool_get_iterator(m2b->glp, "rawx");
+		iter = grid_lbpool_get_iterator(m2b->backend.lb, "rawx");
 		if (!iter)
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No RAWX available");
 		else
@@ -2065,7 +1958,7 @@ meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 			if (strlen(urls[i]) <= 0)
 				continue;
 			struct service_info_s *si = NULL;
-			err2 = service_info_from_chunk_id(m2b->glp, urls[i], &si);
+			err2 = service_info_from_chunk_id(m2b->backend.lb, urls[i], &si);
 			if (NULL != si)
 				sil = g_slist_prepend(sil, si);
 			if (err2 != NULL) {
@@ -2091,9 +1984,9 @@ meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 	broken2 = srvinfo_from_piped_chunkid(broken);
 
 	// FIXME: storage class should come as parameter
-	stgpol = storage_policy_init(&(m2b->ns_info), NULL);
+	stgpol = storage_policy_init(&(m2b->backend.ns_info), NULL);
 
-	err = get_conditioned_spare_chunks(m2b->glp, count, dist,
+	err = get_conditioned_spare_chunks(m2b->backend.lb, count, dist,
 			storage_policy_get_storage_class(stgpol), notin2, broken2, result,
 			answer_beans);
 
@@ -2157,7 +2050,7 @@ meta2_backend_get_conditionned_spare_chunks_v2(struct meta2_backend_s *m2b,
 	if (err != NULL)
 		return err;
 
-	err = get_conditioned_spare_chunks2(m2b->glp, pol, notin, broken,
+	err = get_conditioned_spare_chunks2(m2b->backend.lb, pol, notin, broken,
 			result, TRUE);
 
 	storage_policy_clean(pol);
@@ -2177,7 +2070,7 @@ meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct hc_url_s *url
 	err = _load_storage_policy(m2b, url, polname, &pol);
 
 	if (!err) {
-		err = get_spare_chunks(m2b->glp, pol, result, use_beans);
+		err = get_spare_chunks(m2b->backend.lb, pol, result, use_beans);
 	}
 
 	if (pol)
@@ -2428,7 +2321,7 @@ _restore_content(gpointer u, meta2_raw_content_v2_t *p)
 	args.sq3 = cb_data->sq3;
 	args.url = cb_data->url;
 	args.max_versions = cb_data->max_versions;
-	args.lbpool = cb_data->m2b->glp;
+	args.lbpool = cb_data->m2b->backend.lb;
 	meta2_backend_get_nsinfo(cb_data->m2b, &(args.nsinfo));
 
 	GRID_DEBUG("Restoring content %s", p->header.path);
@@ -2823,7 +2716,7 @@ meta2_backend_build_meta0_prefix_mapping(struct meta2_backend_s *m2b)
 	do {
 		/* Get meta0 addr */
 		err_local = NULL;
-		m0 = get_meta0_info(m2b->ns_name, &err_local);
+		m0 = get_meta0_info(m2b->backend.ns_name, &err_local);
 		if (!m0) {
 			/* conscience or gridagent are probably not ready, see bug TO-HONEYCOMB-221 */
 			if(err_local) {
@@ -2888,7 +2781,7 @@ error_label:
 gboolean
 meta2_backend_is_quota_enabled(struct meta2_backend_s *m2b)
 {
-	return m2b && m2b->ns_info.writable_vns;
+	return m2b && m2b->backend.ns_info.writable_vns;
 }
 
 
@@ -2896,18 +2789,6 @@ meta2_backend_is_quota_enabled(struct meta2_backend_s *m2b)
 const gchar*
 meta2_backend_get_local_addr(struct meta2_backend_s *m2)
 {
-	const gchar* m2url = NULL;
-
-    struct election_manager_s* em = sqlx_repository_get_elections_manager(m2->repo);
-    if (em) {
-        const struct replication_config_s *emrc = election_manager_get_config(em);
-        if (emrc) {
-            m2url = emrc->get_local_url(emrc->ctx);
-            GRID_DEBUG("%s: m2url:[%s]", __FUNCTION__, m2url);
-        }
-    }
-	return m2url;
+	return sqlx_repository_get_local_addr(m2->backend.repo);
 }
-
-
 

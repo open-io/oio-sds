@@ -12,6 +12,10 @@
 
 #define CONNECT_RETRY_DELAY 3
 
+# ifndef META1_EVT_TOPIC
+#  define META1_EVT_TOPIC "redc.meta1"
+# endif
+
 /**
  * @param reqname
  * @param cid

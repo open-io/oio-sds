@@ -19,13 +19,13 @@
 #include <sqliterepo/election.h>
 #include <sqliterepo/replication_dispatcher.h>
 #include <sqlx/sqlx_service.h>
+#include <sqlx/sqlx_service_extras.h>
 
 #include "./internals.h"
 #include "./meta1_backend.h"
 #include "./meta1_prefixes.h"
 #include "./meta1_gridd_dispatcher.h"
 
-static struct grid_lbpool_s *glp = NULL;
 static struct meta1_backend_s *m1 = NULL;
 
 static GError*
@@ -75,25 +75,6 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 		g_array_free(updated_prefixes, TRUE);
 
 	return NULL;
-}
-
-static void
-_task_reload_lb(gpointer p)
-{
-	GError *err;
-	(void) p;
-
-	if (NULL != (err = gridcluster_reload_lbpool(glp))) {
-		GRID_WARN("Failed to reload the LB pool services : (%d) %s",
-				err->code, err->message);
-		g_clear_error(&err);
-	}
-
-	if (NULL != (err = gridcluster_reconfigure_lbpool(glp))) {
-		GRID_WARN("Failed to reload the LB pool configuration : (%d) %s",
-				err->code, err->message);
-		g_clear_error(&err);
-	}
 }
 
 static void
@@ -201,12 +182,15 @@ _get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t, gchar ***r
 static gboolean
 _post_config(struct sqlx_service_s *ss)
 {
-	if (!(glp = grid_lbpool_create(ss->ns_name))) {
-		GRID_WARN("LB pool init failure");
+	GError *err = sqlx_service_extras_init(ss);
+	if (err != NULL) {
+		GRID_WARN("%s", err->message);
+		g_clear_error(&err);
 		return FALSE;
 	}
 
-	if (!(m1 = meta1_backend_init(ss->ns_name, ss->repository, glp))) {
+	if (!(m1 = meta1_backend_init(ss->ns_name, ss->repository,
+				ss->extras->lb, ss->extras->evt_repo))) {
 		GRID_WARN("META1 backend init failure");
 		return FALSE;
 	}
@@ -218,7 +202,7 @@ _post_config(struct sqlx_service_s *ss)
 		/* Preloads the prefixes locally managed: It happens often that
 		 * meta1 starts before gridagent, and _reload_prefixes() fails
 		 * for this reason. */
-		GError *err = _reload_prefixes(ss, TRUE);
+		err = _reload_prefixes(ss, TRUE);
 		if (NULL == err) {
 			done = TRUE;
 		} else {
@@ -230,9 +214,11 @@ _post_config(struct sqlx_service_s *ss)
 	}
 
 	grid_task_queue_register(ss->gtq_reload, 5,
+			(GDestroyNotify)sqlx_task_reload_event_config, NULL, ss);
+	grid_task_queue_register(ss->gtq_reload, 5,
 			_task_reload_policies, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 11,
-			_task_reload_lb, NULL, ss);
+			(GDestroyNotify)sqlx_task_reload_lb, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 31,
 			_task_reload_prefixes, NULL, ss);
 
@@ -249,8 +235,6 @@ main(int argc, char ** argv)
 	int rc = sqlite_service_main(argc, argv, &cfg);
 	if (m1)
 		meta1_backend_clean(m1);
-	if (glp)
-		grid_lbpool_destroy(glp);
 	return rc;
 }
 

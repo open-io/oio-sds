@@ -83,7 +83,8 @@ struct meta1_backend_s;
  */
 struct meta1_backend_s * meta1_backend_init(const gchar *ns,
 		struct sqlx_repository_s *repo,
-		struct grid_lbpool_s *glp);
+		struct grid_lbpool_s *glp,
+		struct event_config_repo_s *evt_repo);
 
 /** Returns the set of prefixes internally managed
  *
@@ -314,6 +315,47 @@ meta1_backend_update_m1_policy(struct meta1_backend_s *m1, const gchar *ns, cons
  *
  */
 gchar* meta1_backend_get_ns_name(const struct meta1_backend_s *m1);
+
+struct event_config_repo_s *meta1_backend_get_evt_config_repo(const struct meta1_backend_s *m1);
+
+/**
+ * Get the event configuration for a specific namespace. Will fallback
+ * on parent VNS if not found.
+ */
+struct event_config_s *meta1_backend_get_event_config(struct meta1_backend_s *m1, const char *ns_name);
+
+metautils_notifier_t *meta1_backend_get_notifier(struct meta1_backend_s *m1);
+
+/**
+ * Initialize the notification system for Meta1
+ */
+GError *meta1_backend_init_notifs(struct meta1_backend_s *m1);
+
+/**
+ * Free the notifications system of Meta1
+ */
+void meta1_backend_free_notifs(struct meta1_backend_s *m1);
+
+/**
+ * Initialize a topic and add it to the cache.
+ * Not thread safe.
+ *
+ * @param name The name of the topic to initialize
+ */
+GError *meta1_backend_prepare_notif_topic(struct meta1_backend_s *m1,
+	const gchar *topic);
+
+/**
+ * Get the ip:port the current process is listening to.
+ */
+const gchar* meta1_backend_get_local_addr(struct meta1_backend_s *m1);
+
+/**
+ * Send a notification (if enabled) with the services linked to a container.
+ */
+GError *meta1_backend_notify_services(struct meta1_backend_s *m1,
+		struct hc_url_s *url);
+
 
 /** @} */
 #endif

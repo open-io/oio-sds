@@ -50,7 +50,6 @@
 # include <metautils/lib/metatype_acl.h>
 
 # include <metautils/lib/hc_url.h>
-# include <metautils/lib/event_config.h>
 # include <metautils/lib/lrutree.h>
 # include <metautils/lib/storage_policy.h>
 # include <metautils/lib/common_main.h>
@@ -61,5 +60,8 @@
 # include <metautils/lib/grid_storage_client_stat.h>
 # include <metautils/lib/expr.h>
 # include <metautils/lib/lb.h>
+# include <metautils/lib/notifications.h>
+# include <metautils/lib/event_config.h>
+# include <metautils/lib/meta_backend_common.h>
 
 #endif /*__METAUTILS__H__*/

@@ -8,10 +8,6 @@
 # include <meta2v2/meta2_utils.h>
 # include <glib.h>
 
-#ifdef USE_KAFKA
-# include <librdkafka/rdkafka.h>
-#endif
-
 struct grid_lbpool_s;
 struct meta2_backend_s;
 struct event_config_s;
@@ -38,7 +34,8 @@ void meta2_file_locator(gpointer ignored, const gchar *n, const gchar *t,
  */
 GError* meta2_backend_init(struct meta2_backend_s **result,
 		struct sqlx_repository_s *repo, const gchar *ns_name,
-		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver);
+		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver,
+		struct event_config_repo_s *evt_repo);
 
 /*!
  *
@@ -46,49 +43,36 @@ GError* meta2_backend_init(struct meta2_backend_s **result,
  */
 void meta2_backend_clean(struct meta2_backend_s *m2);
 
-#ifdef USE_KAFKA
 /**
- * Initialize Kafka broker handle. No-op if already initialized.
+ * Initialize notification handle. No-op if already initialized.
  */
-GError *meta2_backend_init_kafka(struct meta2_backend_s *m2);
+GError *meta2_backend_init_notifs(struct meta2_backend_s *m2);
 
 /**
- * Free Kafka broker handle (and the topic, if not already freed).
+ * Free notification handle (and the topics, if not already freed).
  * Not thread safe.
  */
-void meta2_backend_free_kafka(struct meta2_backend_s *m2);
+void meta2_backend_free_notifs(struct meta2_backend_s *m2);
 
 /**
- * Get or initialize a Kafka topic.
- *
- * @param name the name of the topic to get
- * @param topic where to put the topic pointer
- * @return a GError if topic not initialized
- */
-GError *meta2_backend_kafka_topic_ref(struct meta2_backend_s *m2,
-		const gchar *name, rd_kafka_topic_t **topic);
-
-/**
- * Release a Kafka topic.
- */
-void meta2_backend_kafka_topic_unref(struct meta2_backend_s *m2,
-		rd_kafka_topic_t *topic);
-
-/**
- * Initialize Kafka topic and add it to the cache.
+ * Initialize a topic and add it to the cache.
  * Not thread safe.
  *
  * @param name The name of the topic to initialize
  */
-GError *meta2_backend_kafka_topic_cache(struct meta2_backend_s *m2,
+GError *meta2_backend_prepare_notif_topic(struct meta2_backend_s *m2,
 		const gchar *name);
 
 /**
- * Clear the Kafka topic cache.
+ * Clear the topic cache.
  * Not thread safe.
  */
-void meta2_backend_kafka_topic_cache_clear(struct meta2_backend_s *m2);
-#endif
+void meta2_backend_clear_topic_cache(struct meta2_backend_s *m2);
+
+/**
+ * Get the metautils_notifier_t used by this Meta2.
+ */
+metautils_notifier_t *meta2_backend_get_notifier(struct meta2_backend_s *m2);
 
 /*!
  * Thread-safely set the internal nsinfo of the meta2_backend.
@@ -758,6 +742,12 @@ GError* meta2_backend_restore_container_from_peer(struct meta2_backend_s *m2b, s
 GError* meta2_backend_get_content_urls_from_chunk_id(
 		struct meta2_backend_s *m2b, struct hc_url_s *url,
 		const gchar* chunk_id, gint64 limit, GSList **urls);
+
+/**
+ * Get the event/notification configuration repo from a Meta2 backend.
+ */
+struct event_config_repo_s *meta2_backend_get_evt_config_repo(
+		const struct meta2_backend_s *m2b);
 
 /**
  * Notifies all meta1 services of modified containers.

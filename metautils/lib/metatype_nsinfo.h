@@ -13,6 +13,14 @@ struct namespace_info_s;
  */
 
 /**
+ * Find a namespace-prefixed key in a hash table. If key not found, try again
+ * with parent VNS, and so on. If still not found, try unprefixed key.
+ * Key may be NULL if the key is the namespace name.
+ */
+gpointer namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
+		const gchar *key);
+
+/**
  * Copy a namespace_info into another namespace_info
  *
  * The option hashtable is not copied. The old table's reference
