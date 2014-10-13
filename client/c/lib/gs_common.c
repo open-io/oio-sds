@@ -67,7 +67,7 @@ gs_error_set_cause(gs_error_t ** err, GError * gErr, const char *format, ...)
 #ifdef HAVE_ANNOYING_DEBUG_TRACES
 # define ERROR_SEPARATOR "\r\n\t--- directory error ---\r\n\t"
 #else
-# define ERROR_SEPARATOR ""
+# define ERROR_SEPARATOR " "
 #endif
 
 	if (*err && (*err)->msg) {

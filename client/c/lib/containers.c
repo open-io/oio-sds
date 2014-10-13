@@ -656,6 +656,8 @@ gs_list_container_snapshot(gs_container_t *container, gs_content_t*** result,
 						newTab [nbResult] = NULL;
 						*result = newTab;
 						nbResult ++;
+					} else {
+						gs_content_free(content);
 					}
 					break;
 				case -1:

@@ -1,3 +1,8 @@
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "grid.client"
+#endif
+
+#include <glib.h>
 #include "./gs_internals.h"
 
 long unsigned int wait_on_add_failed = 1000LU;
@@ -269,9 +274,13 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 					return pA;
 				} else if (gErr && gErr->code == CODE_CONTAINER_NOTFOUND) {
 					g_clear_error(&gErr);
+				} else if (gErr && CODE_IS_NETWORK_ERROR(gErr->code)) {
+					DEBUG("Network error (meta1 down?): %s", gErr->message);
+					exclude = g_slist_prepend(exclude, pA);
+					return _try();
 				} else {
-					ERROR("METACD error checking reference [%s] in meta1: %s",
-							str_cid, (gErr?gErr->message:"?"));
+					WARN("METACD error checking reference [%s] in meta1: (%d) %s",
+							str_cid, gErr?gErr->code:0, gErr?gErr->message:"?");
 					g_clear_error(&gErr);
 				}
 				DEBUG("Creating reference in meta1: [%s/%s]", cname, str_cid);
@@ -288,8 +297,8 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 					DEBUG("METACD reference already exists in meta1: [%s/%s]",
 							cname, str_cid);
 				} else {
-					ERROR("METACD error creating reference [%s] in meta1: %s",
-							str_cid, (gErr?gErr->message:"?"));
+					DEBUG("METACD error creating reference [%s] in meta1: (%d) %s",
+							str_cid, gErr?gErr->code:0, gErr?gErr->message:"?");
 					if (metacd_is_up)
 						resolver_metacd_decache(gs->metacd_resolver, cID);
 					GSETERROR(&gErr,"Could not create reference");
@@ -320,6 +329,8 @@ addr_info_t*
 gs_resolve_meta1v2 (gs_grid_storage_t *gs, const container_id_t cID, const gchar *cname,
 		int read_only, GSList *exclude, GError **err)
 {
+	// Do not set has_before_create to TRUE or container creation will
+	// fail when metacd is present and one meta1 is broken
 	return gs_resolve_meta1v2_v2(gs, cID, cname, read_only, exclude, FALSE, err);
 }
 
@@ -526,11 +537,13 @@ gs_locate_container(gs_container_t *container, gs_error_t **gserr)
 }
 
 static struct gs_container_location_s *
-_gs_locate_container_by_cid(gs_grid_storage_t *gs, container_id_t cid, char** out_nsname_on_m1, 
+_gs_locate_container_by_cid(gs_grid_storage_t *gs, container_id_t cid, char** out_nsname_on_m1,
 	gs_error_t **gserr)
 {
 	addr_info_t *addr;
 	addr_info_t *m1_addr;
+	int m1_index = -1;
+	gboolean success = FALSE;
 	gchar str_addr[STRLEN_ADDRINFO], str_cid[STRLEN_CONTAINERID];;
 	struct gs_container_location_s *location;
 
@@ -539,10 +552,10 @@ _gs_locate_container_by_cid(gs_grid_storage_t *gs, container_id_t cid, char** ou
 		GSERRORSET(gserr, "Memory allocation failure");
 		return NULL;
 	}
-	
+
 	container_id_to_string(cid, str_cid, sizeof(str_cid));
 	location->container_hexid = strdup(str_cid);
-	
+
 	/*resolve meta0*/
 	addr_info_to_string(&(gs->direct_resolver->meta0), str_addr, sizeof(str_addr));
 	location->m0_url = strdup(str_addr);
@@ -550,7 +563,7 @@ _gs_locate_container_by_cid(gs_grid_storage_t *gs, container_id_t cid, char** ou
 	_fill_meta1_tabs(&(location->m1_url), &m1_addr, gs, cid, NULL);
 
 	/* In this case we ask the META1 for the raw container */
-	do {
+	while (m1_addr[++m1_index].port != 0) { // port 0 -> no more meta1
 		struct metacnx_ctx_s cnx_tmp;
 		struct meta1_raw_container_s *m1_raw;
 		GError *gerror_local;
@@ -559,16 +572,13 @@ _gs_locate_container_by_cid(gs_grid_storage_t *gs, container_id_t cid, char** ou
 		gerror_local = NULL;
 		memset(&cnx_tmp, 0x00, sizeof(cnx_tmp));
 		cnx_tmp.fd = -1;
-		memcpy(&(cnx_tmp.addr), &(m1_addr[0]), sizeof(addr_info_t));
+		memcpy(&(cnx_tmp.addr), &(m1_addr[m1_index]), sizeof(addr_info_t));
 		m1_raw = meta1_remote_get_container_by_id(&cnx_tmp, cid, &gerror_local,
 			gs_grid_storage_get_timeout(gs, GS_TO_M1_CNX)/1000, gs_grid_storage_get_timeout(gs, GS_TO_M1_OP)/1000);
 		if (!m1_raw) {
 			GSERRORCAUSE(gserr, gerror_local, "Container ID=[%s] not found", str_cid);
 			g_clear_error(&gerror_local);
-			gs_container_location_free(location);
-			if (m1_addr)
-				free(m1_addr);
-			return NULL;
+			continue;
 		}
 
 		/* copy the ADDRESSES of the possible META2 */
@@ -589,12 +599,12 @@ _gs_locate_container_by_cid(gs_grid_storage_t *gs, container_id_t cid, char** ou
 			g_slist_foreach(m1_raw->meta2, addr_info_gclean, NULL);
 			g_slist_free(m1_raw->meta2);
 		}
-		
+
 		/* copy the container's name */
 		// the answer is formatted NS/CNAME, so we need to skip NS/
-		cname = strchr(m1_raw->name, '/');		
+		cname = strchr(m1_raw->name, '/');
 		if (cname) {
-			location->container_name = g_strdup(cname + 1);
+			location->container_name = strdup(cname + 1);
 			if (out_nsname_on_m1) {
 				cname[0] = '\0';
 				*out_nsname_on_m1 = g_strdup(m1_raw->name);    // used if ns is a VNS
@@ -602,13 +612,21 @@ _gs_locate_container_by_cid(gs_grid_storage_t *gs, container_id_t cid, char** ou
 		}
 
 		/* that's all, folks! */
-		if (m1_addr)
-			free(m1_addr);
 		g_free(m1_raw);
 		if (gerror_local)
-			g_error_free(gerror_local);
-	} while (0);
+			g_clear_error(&gerror_local);
+		success = TRUE;
+	}
 
+	if (m1_addr)
+		free(m1_addr);
+
+	if (success) {
+		gs_error_clear(gserr);
+	} else {
+		gs_container_location_free(location);
+		location = NULL;
+	}
 	return location;
 }
 

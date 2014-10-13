@@ -224,6 +224,7 @@ gridd_client_step(struct client_s *client)
 
 	if (pfd.revents & POLLERR) {
 		GError *err = socket_get_error(pfd.fd);
+		g_prefix_error(&err, "%s: ", gridd_client_url(client));
 		gridd_client_fail(client, err);
 		g_clear_error(&err);
 	}
@@ -285,6 +286,7 @@ gridd_clients_step(struct client_s **clients)
 		/* Manage the poll() event */
 		if (pfd[i].revents & POLLERR) {
 			GError *err = socket_get_error(pfd[i].fd);
+			g_prefix_error(&err, "%s: ", gridd_client_url(last));
 			gridd_client_fail(last, err);
 			g_clear_error(&err);
 		}

@@ -33,6 +33,8 @@
 # define ERRCODE_CONN_NOROUTE 6
 # define ERRCODE_CONN_NOTCONNECTED 7
 # define ERRCODE_READ_TIMEOUT 8
+// Please keep this macro up to date, see CODE_IS_NETWORK_ERROR
+# define ERRCODE_UPPER_LIMIT 9
 
 # define GSETCODE(e,C,FMT,...) g_error_trace (e, G_LOG_DOMAIN, (C), __LINE__, __FUNCTION__, __FILE__, FMT, ##__VA_ARGS__)
 # define GSETERROR(e,FMT,...)  g_error_trace (e, G_LOG_DOMAIN, 0,   __LINE__, __FUNCTION__, __FILE__, FMT, ##__VA_ARGS__)
@@ -47,6 +49,7 @@
 #define CODE_FINAL_OK             200
 #define CODE_IS_OK(C)            ((C)/100 == 2)
 #define CODE_IS_FINAL(C)         ((C) == CODE_FINAL_OK || !CODE_IS_OK(C))
+#define CODE_IS_NETWORK_ERROR(C) ((C) == CODE_NETWORK_ERROR || (C) < ERRCODE_UPPER_LIMIT)
 
 /* MASTER/SLAVE codes */
 #define CODE_BADOPFORSLAVE        301
