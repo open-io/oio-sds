@@ -344,8 +344,6 @@ _copy_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		_on_bean_ctx_clean(obc);
 	}
 
-	reply->send_reply(200, "OK");
-
 	return FILTER_OK;
 }
 
