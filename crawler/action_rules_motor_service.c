@@ -34,9 +34,6 @@ struct SActionRulesMotorDataWork {
 struct rules_motor_env_s* motor_env = NULL;
 gint rules_reload_time_interval = 1L;
 
-// m2v1_list declared in libintegrity
-GSList *m2v1_list = NULL;
-
 static TCrawlerBus* conn;
 
 static gboolean stop_thread;

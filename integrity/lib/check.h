@@ -17,12 +17,6 @@ typedef struct _check_result {
 } check_result_t;
 
 /**
- * List of meta2 for which a m2v1 request was successfully executed.
- * This enables to skip sending m2v2 requests to this meta2.
- */
-extern GSList *m2v1_list;
-
-/**
  * Frees the m2v1 list.
  */
 void free_m2v1_list();

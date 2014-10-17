@@ -28,9 +28,6 @@
 
 static struct policy_check_s policy_check;
 
-// m2v1_list declared in libintegrity
-GSList *m2v1_list = NULL;
-
 //------------------------------------------------------------------------------
 // Main hooks
 //------------------------------------------------------------------------------

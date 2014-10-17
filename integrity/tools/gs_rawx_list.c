@@ -18,9 +18,6 @@ static gboolean flag_contents = FALSE;
 static gboolean flag_containers = FALSE;
 static gchar path_volume[1024] = "";
 
-// m2v1_list declared in libintegrity
-GSList *m2v1_list = NULL;
-
 /* -------------------------------------------------------------------------- */
 
 static gboolean

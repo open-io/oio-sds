@@ -19,9 +19,6 @@ static gboolean check_only = FALSE;
 
 struct hc_url_s *url = NULL;
 
-// m2v1_list declared in libintegrity
-GSList *m2v1_list = NULL;
-
 /* ------------------------------------------------------------------------- */
 static void
 polcheck_action(void)

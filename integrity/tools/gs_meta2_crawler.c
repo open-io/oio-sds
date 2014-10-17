@@ -55,9 +55,6 @@ static gint nbContainerMax = 0;
 struct rules_motor_env_s* motor_env = NULL;
 gint rules_reload_time_interval = 1L;
 
-// m2v1_list declared in libintegrity
-GSList *m2v1_list = NULL;
-
 static time_t interval_sleep = 200L;
 
 static void

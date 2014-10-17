@@ -50,9 +50,6 @@
 
 #define RAW_CONTENT_GET_CID(R) (R)->container_id
 
-// m2v1_list declared in libintegrity
-GSList *m2v1_list = NULL;
-
 static GString *lock_xattr_name = NULL;
 static GString *forced_namespace = NULL;
 static addr_info_t rawx_addr;

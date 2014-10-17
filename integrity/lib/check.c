@@ -11,6 +11,12 @@
 
 #include "check.h"
 
+/**
+ * List of meta2 for which a m2v1 request was successfully executed.
+ * This enables to skip sending m2v2 requests to this meta2.
+ */
+static GSList *m2v1_list = NULL;
+
 static GError*
 _init_meta2_connection(struct meta2_ctx_s *ctx)
 {

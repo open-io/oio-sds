@@ -28,9 +28,6 @@ static time_t sleep_inter_refresh = 1000L;
 
 static GHashTable *ht_broken = NULL;
 
-// m2v1_list declared in libintegrity
-GSList *m2v1_list = NULL;
-
 /* ------------------------------------------------------------------------- */
 
 static time_t
