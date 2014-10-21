@@ -103,29 +103,37 @@ _disable_container(struct xcid_s *scid, struct xaddr_s *addr)
 static void
 _enable_container(struct xcid_s *scid, struct xaddr_s *addr)
 {
-        GError *err = NULL;
-        int attempts, code;
+	GError *err = NULL;
+	int attempts, code;
+	const int max_attempts = 5;
 
-        INFO("Enabling on %s", addr->str);
+	INFO("Enabling on %s", addr->str);
 
-        for (attempts = 5 ; ; --attempts) {
+	for (attempts = max_attempts; ; --attempts) {
 
-                if (attempts <= 0) {
-                        ERROR("Enabling error on %s: Too many attempts", addr->str);
-                        break;
-                }
-                if (meta2_remote_container_set_flag(&(addr->addr), 30000,
-                                        &err, scid->cid, 0x00000000))
-                {
-                        INFO("Enabling success on %s: now enabled", addr->str);
-                        return;
-                }
+		if (attempts <= 0) {
+			ERROR("Enabling error on %s: Too many attempts", addr->str);
+			break;
+		}
+		if (meta2_remote_container_set_flag(&(addr->addr), 30000,
+					&err, scid->cid, 0x00000000))
+		{
+			INFO("Enabling success on %s: now enabled", addr->str);
+			return;
+		}
 
-                code = gerror_get_code(err);
-                WARN("Enabling error on %s: (%d) %s", addr->str, code, gerror_get_message(err));
-                if (err)
-                        g_clear_error(&err);
-        }
+		code = gerror_get_code(err);
+		WARN("Enabling error on %s: (%d) %s", addr->str, code, gerror_get_message(err));
+		if (err)
+			g_clear_error(&err);
+		if (code == CODE_NETWORK_ERROR) {
+			// We've seen source meta2 restart after memory allocation
+			// failure, when moving huge bases.
+			INFO("Will wait %ds before retrying (meta2 restart?)",
+					max_attempts - attempts + 2);
+			sleep(max_attempts - attempts + 2);
+		}
+	}
 }
 
 static GError*

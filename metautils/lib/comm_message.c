@@ -264,11 +264,13 @@ message_unmarshall(MESSAGE m, void *s, gsize * sSize, GError ** error)
 		break;
 
 	case RC_FAIL:
-		GSETERROR(error, "Cannot deserialize: %s", "invalid content");
+		GSETERROR(error, "Cannot deserialize: %s (%d bytes consumed)",
+				"invalid content", decRet.consumed);
 		goto errorLABEL;
 
 	case RC_WMORE:
-		GSETERROR(error, "Cannot deserialize: %s", "uncomplete content");
+		GSETERROR(error, "Cannot deserialize: %s (%d bytes consumed)",
+				"uncomplete content", decRet.consumed);
 		goto errorLABEL;
 	}
 
