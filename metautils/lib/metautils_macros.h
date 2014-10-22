@@ -44,6 +44,7 @@
 # define NAME_TAGNAME_RAWX_VOL "tag.vol"
 # define NAME_TAGNAME_RAWX_FIRST "tag.first"
 # define NAME_TAGNAME_RAWX_LOC "tag.loc"
+# define NAME_TAGNAME_INTERNAL "tag.internal"
 # define NAME_TAGNAME_RAWX_STGCLASS "tag.stgclass"
 # define NAME_TAGNAME_REQIDLE "stat.req_idle"
 

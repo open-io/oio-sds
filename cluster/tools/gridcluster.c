@@ -151,29 +151,35 @@ raw_print_namespace(namespace_info_t * ns)
 }
 
 static void
-print_formated_services(const gchar * ns, const gchar * type, GSList * services)
+print_formated_services(const gchar * type, GSList * services,
+	gboolean show_internals)
 {
-	(void)ns;
-	g_print("\n-- %s --\n", type);
+	if(services && 0 < g_slist_length(services)) {
 
-	if (services) {
-		GSList *l;
-		for (l = services; l; l = l->next) {
-			struct service_info_s *si;
-			char str_score[32];
-			char str_addr[STRLEN_ADDRINFO];
-
-			if (!(si = l->data))
+		gboolean init = FALSE;
+		for (GSList *l = services; l; l = l->next) {
+			struct service_info_s *si = l->data;
+			if(!si)
 				continue;
-			addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
-			g_snprintf(str_score, sizeof(str_score), "%d", si->score.value);
-			g_print("%20s\t%20s\n", str_addr, str_score);
+			if(show_internals || !service_info_is_internal(si)) {
+				if(!init) {
+					g_print("\n-- %s --\n", type);
+					init = TRUE;
+				}
+				char str_score[32];
+				char str_addr[STRLEN_ADDRINFO];
+
+				addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
+				g_snprintf(str_score, sizeof(str_score), "%d", si->score.value);
+				g_print("%20s\t%20s\n", str_addr, str_score);
+			}
 		}
 	}
 }
 
 static void
-print_raw_services(const gchar * ns, const gchar * type, GSList * services)
+print_raw_services(const gchar * ns, const gchar * type, GSList * services,
+	gboolean show_internals)
 {
 	GSList *l;
 
@@ -187,21 +193,25 @@ print_raw_services(const gchar * ns, const gchar * type, GSList * services)
 		si = l->data;
 		if (!si)
 			continue;
-		addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
-		g_snprintf(str_score, sizeof(str_score), "%d", si->score.value);
-		g_print("%s|%s|%s|score=%d", ns ? ns : si->ns_name, type ? type : si->type, str_addr, si->score.value);
-		if (si->tags) {
-			int i, max;
-			struct service_tag_s *tag;
-			gchar str_tag_value[256];
+		if(show_internals || !service_info_is_internal(si)) {
+			addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
+			g_snprintf(str_score, sizeof(str_score), "%d", si->score.value);
+			g_print("%s|%s|%s|score=%d", ns ? ns : si->ns_name,
+					type ? type : si->type, str_addr, si->score.value);
+			if (si->tags) {
+				int i, max;
+				struct service_tag_s *tag;
+				gchar str_tag_value[256];
 
-			for (i = 0, max = si->tags->len; i < max; i++) {
-				tag = g_ptr_array_index(si->tags, i);
-				service_tag_to_string(tag, str_tag_value, sizeof(str_tag_value));
-				g_print("|%s=%s", tag->name, str_tag_value);
+				for (i = 0, max = si->tags->len; i < max; i++) {
+					tag = g_ptr_array_index(si->tags, i);
+					service_tag_to_string(tag, str_tag_value,
+							sizeof(str_tag_value));
+					g_print("|%s=%s", tag->name, str_tag_value);
+				}
 			}
+			g_print("\n");
 		}
-		g_print("\n");
 	}
 }
 
@@ -311,6 +321,7 @@ main(int argc, char **argv)
 	gboolean has_allcfg = FALSE;
 	gboolean has_nslist = FALSE;
 	gboolean has_show = TRUE;
+	gboolean has_show_internals = FALSE;
 	gboolean has_raw = FALSE;
 	gboolean has_clear_services = FALSE;
 	gboolean has_clear_errors = FALSE;
@@ -346,6 +357,7 @@ main(int argc, char **argv)
 		{"local-srv",      0, 0, 'l'},
 		{"local-tasks",    0, 0, 't'},
 		{"show",           0, 0, 's'},
+		{"show-internals", 0, 0, 'a'},
 		{"raw",            0, 0, 'r'},
 		{"full",           0, 0, 7},
 		{"help",           0, 0, 'h'},
@@ -361,7 +373,7 @@ main(int argc, char **argv)
 	memset(cid_str, 0x00, sizeof(cid_str));
 	enable_debug();
 
-	while ((c = getopt_long(argc, argv, "ALsveltrcP:B:R:C:S:h?", long_options, &option_index)) > -1) {
+	while ((c = getopt_long(argc, argv, "ALsvealtrcP:B:R:C:S:h?", long_options, &option_index)) > -1) {
 
 		switch (c) {
 			case 'A':
@@ -440,6 +452,9 @@ main(int argc, char **argv)
 				break;
 			case 'v':
 				has_log4c = TRUE;
+				break;
+			case 'a':
+				has_show_internals = TRUE;
 				break;
 			case 'h':
 			case '?':
@@ -580,7 +595,7 @@ main(int argc, char **argv)
 			goto exit_label;
 		}
 
-		print_raw_services(NULL, NULL, services);
+		print_raw_services(NULL, NULL, services, has_show_internals);
 
 	}
 	else if (has_list_task) {
@@ -669,7 +684,8 @@ main(int argc, char **argv)
 
 				/* Generate the list */
 				if (!has_flag_full || !has_raw) {
-					list_services = list_namespace_services(namespace, str_type, &error);
+					list_services = list_namespace_services(namespace,
+							str_type, &error);
 				}
 				else {
 					struct metacnx_ctx_s cnx;
@@ -685,14 +701,17 @@ main(int argc, char **argv)
 
 				/* Dump the list */
 				if (error && !list_services) {
-					g_printerr("No service known for namespace %s and service type %s : %s\n",
+					g_printerr("No service known for namespace %s and service"
+							" type %s : %s\n",
 							namespace, str_type, gerror_get_message(error));
 				}
 				else {
 					if (has_raw)
-						print_raw_services(namespace, str_type, list_services);
+						print_raw_services(namespace, str_type, list_services,
+								has_show_internals);
 					else
-						print_formated_services(namespace, str_type, list_services);
+						print_formated_services(str_type, list_services,
+								has_show_internals);
 				}
 
 				if (error)

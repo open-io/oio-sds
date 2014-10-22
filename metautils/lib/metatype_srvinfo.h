@@ -355,6 +355,12 @@ const gchar * service_info_get_rawx_volume(const struct service_info_s *si,
 const gchar * service_info_get_stgclass(const struct service_info_s *si,
 		const gchar *def);
 
+/**
+ * Check if a service_info is specified as internal (i.e. if it has a tag "tag.internal"
+ * with a string value not equals to "false"
+ */
+gboolean service_info_is_internal(const struct service_info_s *si);
+
 /** Extract the rawx location from service info tag */
 gchar* get_rawx_location(service_info_t* rawx);
 
