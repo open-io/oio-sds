@@ -417,7 +417,7 @@ meta2_filter_action_get_content(struct gridd_filter_ctx_s *ctx,
 	}
 
 	if (chunk_id == NULL) {
-		urls = g_slist_prepend(urls, hc_url_init(hc_url_get(url, HCURL_WHOLE)));
+		urls = g_slist_prepend(urls, hc_url_dup(url));
 	} else {
 		// Search aliases referencing a specific chunk and build URLs
 		GRID_DEBUG("Searching aliases referencing chunk %s", chunk_id);

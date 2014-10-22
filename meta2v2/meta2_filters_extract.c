@@ -140,17 +140,22 @@ meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
 
 	e = message_extract_cid(reply->request, "CONTAINER_ID", &cid);
 	if (NULL != e) {
-		GRID_DEBUG("No container id, continue with the base url");
 		g_clear_error(&e);
+		if (metautils_str_ishexa(container, STRLEN_CONTAINERID-1)) {
+			GRID_DEBUG("Refname in url looks like container id, "
+					"and no container id specified in header");
+			g_strlcpy(strcid, container, sizeof(strcid));
+			hc_url_set(url, HCURL_HEXID, strcid);
+		} else {
+			GRID_DEBUG("No container id, continue with the base url");
+		}
 		GRID_DEBUG("Initialized url = %s", hc_url_get(url, HCURL_WHOLE));
-		meta2_filter_ctx_set_url(ctx, url);
-		return FILTER_OK;
-	}
-
-	container_id_to_string(cid, strcid, sizeof(strcid));
-	if(0 != g_ascii_strcasecmp(strcid, hc_url_get(url, HCURL_HEXID))) {
-		GRID_DEBUG("Container hexid != url hexid, replace it");
-		hc_url_set(url, HCURL_HEXID, strcid);
+	} else {
+		container_id_to_string(cid, strcid, sizeof(strcid));
+		if (0 != g_ascii_strcasecmp(strcid, hc_url_get(url, HCURL_HEXID))) {
+			GRID_DEBUG("Container hexid != url hexid, replace it");
+			hc_url_set(url, HCURL_HEXID, strcid);
+		}
 	}
 
 	GRID_DEBUG("Initialized url = %s", hc_url_get(url, HCURL_WHOLE));
