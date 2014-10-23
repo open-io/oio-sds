@@ -75,6 +75,13 @@ _get_content_info(GSList *beans, enum content_action_e action)
 }
 
 static void
+_bean_list_prepend_cb(gpointer udata, gpointer bean)
+{
+	struct on_bean_ctx_s *ctx = (struct on_bean_ctx_s*) udata;
+	ctx->l = g_slist_prepend(ctx->l, bean);
+}
+
+static void
 _get_cb(gpointer udata, gpointer bean)
 {
 	struct on_bean_ctx_s *ctx = (struct on_bean_ctx_s*) udata;
@@ -86,7 +93,7 @@ _get_cb(gpointer udata, gpointer bean)
 	if (ctx && ctx->l && g_slist_length(ctx->l) >= 32) {
 		_on_bean_ctx_send_list(ctx, FALSE);
 	}
-	ctx->l = g_slist_prepend(ctx->l, bean);
+	_bean_list_prepend_cb(ctx, bean);
 }
 
 static int
@@ -291,32 +298,37 @@ static int
 _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 {
 	GError *e = NULL;
+	gint rc = FILTER_OK;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
+	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
-	GRID_DEBUG("Putting %d beans", g_slist_length(beans));
+	GRID_DEBUG("Putting %d beans in [%s]%s", g_slist_length(beans),
+			hc_url_get(url, HCURL_WHOLE),
+			meta2_filter_ctx_get_param(ctx, M2_KEY_OVERWRITE)?
+			" (overwrite)":"");
 
-	if(NULL != meta2_filter_ctx_get_param(ctx, M2_KEY_OVERWRITE)) {
+	if (NULL != meta2_filter_ctx_get_param(ctx, M2_KEY_OVERWRITE)) {
 		e = meta2_backend_force_alias(m2b, url, beans);
-		if(!e)
-			reply->send_reply(200, "OK");
-	} else {
-		struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
-		e = meta2_backend_put_alias(m2b, url, beans, _get_cb, obc);
-		if(!e) {
-			_on_bean_ctx_send_list(obc, TRUE);
+		if (!e) {
+			e = meta2_backend_get_alias(m2b, url, 0, _get_cb, obc);
 		}
-		_on_bean_ctx_clean(obc);
+	} else {
+		e = meta2_backend_put_alias(m2b, url, beans, _get_cb, obc);
 	}
 
-	if(NULL != e) {
+	if (NULL != e) {
 		GRID_DEBUG("Fail to put alias (%s)", hc_url_get(url, HCURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
+		rc = FILTER_KO;
+	} else {
+		_on_bean_ctx_send_list(obc, TRUE);
+		rc = FILTER_OK;
 	}
 
-	return FILTER_OK;
+	_on_bean_ctx_clean(obc);
+	return rc;
 }
 
 static int
@@ -1406,7 +1418,7 @@ meta2_filter_action_add_raw_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	GError *err;
-	struct hc_url_s *url = hc_url_empty();
+	struct hc_url_s *old_url = NULL, *url = hc_url_empty();
 	struct meta2_backend_s *m2b;
 	struct meta2_raw_content_s *content;
 	const char *position_prefix = meta2_filter_ctx_get_param(ctx, "POSITION_PREFIX");
@@ -1428,6 +1440,10 @@ meta2_filter_action_add_raw_v1(struct gridd_filter_ctx_s *ctx,
 	hc_url_set(url, HCURL_NS, m2b->backend.ns_name);
 	hc_url_set(url, HCURL_HEXID, hexid);
 	hc_url_set(url, HCURL_PATH, content->path);
+	old_url = meta2_filter_ctx_get_url(ctx);
+	if (old_url)
+		hc_url_clean(old_url);
+	meta2_filter_ctx_set_url(ctx, url);
 
 	if (_has_versioning(m2b, url)) {
 		struct all_vers_cb_args cbargs = {
@@ -1441,8 +1457,13 @@ meta2_filter_action_add_raw_v1(struct gridd_filter_ctx_s *ctx,
 		err = _add_beans(m2b, content, url, content_id, position_prefix);
 	}
 
-	/* clean up tmp url */
-	hc_url_clean(url);
+	if (!err) {
+		struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
+		err = meta2_backend_get_alias(m2b, url, M2V2_FLAG_NODELETED,
+				_bean_list_prepend_cb, obc);
+		_on_bean_ctx_append_udata_list(obc);
+		_on_bean_ctx_clean(obc);
+	}
 
 	if (NULL != err) {
 		meta2_filter_ctx_set_error(ctx, err);

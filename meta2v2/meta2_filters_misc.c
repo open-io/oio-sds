@@ -36,33 +36,39 @@ _on_bean_ctx_init(struct gridd_filter_ctx_s *ctx,
 }
 
 void
-_on_bean_ctx_send_list(struct on_bean_ctx_s *obc, gboolean final)
+_on_bean_ctx_append_udata_list(struct on_bean_ctx_s *obc)
 {
-	/* marshall the list, send and clean it */
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(obc->ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(obc->ctx);
 	struct event_config_s * evt_config = meta2_backend_get_event_config(m2b,
 			hc_url_get(url, HCURL_NS));
 
+	if (event_is_enabled(evt_config) || event_is_notifier_enabled(evt_config)) {
+		if (obc->first) {
+			obc->first = FALSE;
+			meta2_filter_ctx_set_input_udata(obc->ctx, obc->l,
+					(GDestroyNotify)_bean_cleanl2);
+		} else {
+			meta2_filter_ctx_set_input_udata2(obc->ctx,
+					g_slist_concat(obc->l,
+						(GSList*)meta2_filter_ctx_get_input_udata(obc->ctx)),
+					(GDestroyNotify) _bean_cleanl2, FALSE);
+		}
+	} else {
+		GRID_TRACE("Events disabled, cleaning beans immediately");
+		_bean_cleanl2(obc->l);
+	}
+}
+
+void
+_on_bean_ctx_send_list(struct on_bean_ctx_s *obc, gboolean final)
+{
+	/* marshall the list, send and clean it */
 	if (NULL != obc->l) {
 		obc->reply->add_body(bean_sequence_marshall(obc->l));
-		if (event_is_enabled(evt_config) || event_is_notifier_enabled(evt_config)) {
-			if (obc->first) {
-				obc->first = FALSE;
-				meta2_filter_ctx_set_input_udata(obc->ctx, obc->l,
-						(GDestroyNotify)_bean_cleanl2);
-			} else {
-				meta2_filter_ctx_set_input_udata2(obc->ctx,
-						g_slist_concat(obc->l,
-							(GSList*)meta2_filter_ctx_get_input_udata(obc->ctx)),
-						(GDestroyNotify) _bean_cleanl2, FALSE);
-			}
-		} else {
-			GRID_TRACE("Events disabled, cleaning beans immediately");
-			_bean_cleanl2(obc->l);
-		}
+		_on_bean_ctx_append_udata_list(obc);
 	}
-	if(final)
+	if (final)
 		obc->reply->send_reply(200, "OK");
 	else
 		obc->reply->send_reply(206, "CONTINUE");

@@ -1023,6 +1023,7 @@ static gridd_filter M2V2_FILTERS_set_raw_v1[] =
 	meta2_filter_action_has_container,
 	meta2_filter_action_add_raw_v1,
 	meta2_filter_success_reply,
+	meta2_filter_action_notify_content_PUT,
 	NULL
 };
 
