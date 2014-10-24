@@ -1010,6 +1010,9 @@ static gridd_filter M2V2_FILTERS_del_raw_v1[] =
 	meta2_filter_action_has_container,
 	meta2_filter_action_remove_raw_v1,
 	meta2_filter_success_reply,
+	// This request is used to remove a chunk from a content.
+	// The notification has to be PUT with the updated set of chunks.
+	meta2_filter_action_notify_content_PUT,
 	NULL
 };
 
