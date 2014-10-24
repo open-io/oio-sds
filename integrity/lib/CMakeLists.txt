@@ -26,15 +26,16 @@ add_library(integrity SHARED
 	service_cache.c service_cache.h
 	content_check.c content_check.h
 	content_check_tools.c
+	policycheck_repair.c policycheck_repair.h
 	http_pipe.c http_pipe.h)
 
 set_target_properties(integrity
 	PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(integrity
-		metautils metacomm gridclient
+		metautils metacomm gridclient gridcluster
 		meta0remote meta1remote meta2remote rawxclient
-		hcresolve
+		hcresolve meta2v2lbutils
 		-ldb ${SQLITE3_LIBRARIES} ${CURL_LIBRARIES} ${LIBEVENT_LIBRARIES})
 
 install(TARGETS integrity

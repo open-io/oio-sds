@@ -394,7 +394,7 @@ _duplicate_and_ref(struct policy_check_s *pc, struct m2v2_check_error_s *flaw)
 		g_clear_error(&e);
 	}
 	g_slist_free_full(new_pairs, _clear_chunk_pair);
-	g_slist_free_full(used_loc, (GDestroyNotify) g_free);
+	g_slist_free_full(used_loc, (GDestroyNotify) service_info_clean);
 	g_slist_free(beans);
 	meta1_service_url_clean(m2u);
 }
@@ -1004,5 +1004,97 @@ policy_check_and_repair(struct policy_check_s *pc)
 	if (!pc->check_only && pc->check->flaws->len)
 		err = _policy_check_repair(pc);
 	return err;
+}
+
+void
+_check_args_clean(struct check_args_s *args)
+{
+	grid_lbpool_destroy(args->lbpool);
+	namespace_info_free(args->ns_info);
+	memset(args, 0, sizeof(struct check_args_s));
+}
+
+GError*
+_check_args_init(struct check_args_s *args, const gchar *ns)
+{
+	GError *err = NULL;
+	args->ns_info = get_namespace_info(ns, &err);
+	if (!err) {
+		args->lbpool = grid_lbpool_create(ns);
+		grid_lbpool_reconfigure(args->lbpool, args->ns_info);
+		err = gridcluster_reload_lbpool(args->lbpool);
+	}
+
+	if (err) {
+		_check_args_clean(args);
+	}
+	return err;
+}
+
+gint
+check_and_repair_content(struct hc_url_s *url,
+		gboolean check_only, GError **error)
+{
+	GError *err = NULL;
+	gint flaws = 0;
+	struct check_args_s args;
+	struct policy_check_s policy_check;
+
+	err = _check_args_init(&args, hc_url_get(url, HCURL_NSPHYS));
+	if (!err) {
+		policy_check.check_only = check_only;
+		policy_check.url = url;
+		policy_check.m2urlv = NULL;
+		policy_check.nsinfo = args.ns_info;
+		policy_check.lbpool = args.lbpool;
+		policy_check.resolver = hc_resolver_create();
+		policy_check.check = m2v2_check_create(policy_check.url, &args);
+
+		if (!(err = policy_load_beans(&policy_check))) {
+			GRID_DEBUG("Beans loaded");
+			err = policy_check_and_repair(&policy_check);
+			flaws = policy_check.check->flaws->len;
+		}
+	}
+
+	if (err) {
+		GRID_ERROR("Policy check repair error: (%d) %s", err->code, err->message);
+		if (error) {
+			g_error_transmit(error, err);
+		} else {
+			g_clear_error(&err);
+		}
+	}
+
+	m2v2_check_destroy(policy_check.check);
+	g_strfreev(policy_check.m2urlv);
+	_check_args_clean(&args);
+	hc_resolver_destroy(policy_check.resolver);
+	policy_check.check = NULL;
+	policy_check.m2urlv = NULL;
+	policy_check.nsinfo = NULL;
+	policy_check.lbpool = NULL;
+	policy_check.resolver = NULL;
+
+	return flaws;
+}
+
+gint
+check_and_repair_content2(const gchar *namespace, const gchar *container_id,
+		const gchar *content_name, const gchar *content_version,
+		gboolean check_only, GError **error)
+{
+	gint retval = 0;
+	struct hc_url_s *url = hc_url_empty();
+	hc_url_set(url, HCURL_NS, namespace);
+	hc_url_set(url, HCURL_HEXID, container_id);
+	hc_url_set(url, HCURL_PATH, content_name);
+	if (content_version != NULL)
+		hc_url_set(url, HCURL_SNAPORVERS, content_version);
+
+	retval = check_and_repair_content(url, check_only, error);
+
+	hc_url_clean(url);
+	return retval;
 }
 

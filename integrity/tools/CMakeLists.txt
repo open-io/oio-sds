@@ -31,15 +31,11 @@ target_link_libraries(gs_rawx_list
 		${GLIB2_LIBRARIES})
 
 add_executable(hc_policycheck
-		hc_policycheck_v2.c
-		policycheck_repair.c
-		policycheck_repair.h)
+		hc_policycheck_v2.c)
 bin_prefix(hc_policycheck -policycheck)
 bin_prefix_full(hc_policycheck -integrity-policycheck)
 target_link_libraries(hc_policycheck
-		metautils integrity gridcluster gridcluster-events
-		meta2v2lbutils
-		gridcluster-remote hcresolve gridclient
+		integrity
 		${GLIB2_LIBRARIES})
 
 add_executable(gs_break gs_break.c)
