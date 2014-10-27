@@ -523,7 +523,7 @@ _manage_prefix(struct meta1_backend_s *m1, guint8 *prefix, sqlite3 *tmpdb)
 		GRID_WARN("An error occured during VNS size computation: %s", err_msg);
 	}
 	sqlite3_free(err_msg);
-	sqlx_repository_unlock_and_close_noerror(sq3);
+	sqlx_repository_unlock_and_close_noerror2(sq3, SQLX_CLOSE_IMMEDIATELY);
 }
 
 static GSList *
