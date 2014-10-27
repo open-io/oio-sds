@@ -210,9 +210,7 @@ pkg_check_modules(GLIB2 REQUIRED glib-2.0 gthread-2.0 gmodule-2.0)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 pkg_check_modules(NEON REQUIRED neon)
 if (NOT CLIENT_ONLY)
-	if (NOT DEFINED ZMQ_INCDIR)
-		pkg_check_modules(ZMQ libzmq>=3.0.0)
-	endif()
+pkg_check_modules(ZMQ libzmq>=3.0.0)
 pkg_check_modules(JSONC json)
 pkg_check_modules(JSONC json-c)
 pkg_check_modules(LIBEVENT REQUIRED libevent)
@@ -220,7 +218,7 @@ pkg_check_modules(APR REQUIRED apr-1)
 pkg_check_modules(GAMIN REQUIRED gamin)
 pkg_check_modules(DBUS REQUIRED dbus-1 dbus-glib-1)
 pkg_check_modules(RDKAFKA rdkafka)
-endif()
+endif ()
 
 if (NOT CLIENT_ONLY)
 ###--------------------###
@@ -398,21 +396,77 @@ test_FOUND(FOUND "Zookeeper client header")
 find_library(FOUND libzookeeper_mt.so ${ZK_LIBRARY_DIRS})
 test_FOUND(FOUND "Zookeeper client library")
 
-#	###---------------------###
-#	### Dependency to JSONC ###
-#	###---------------------###
-#	set(JSONC_INCLUDE_DIRS "/usr/include")
-#	set(JSONC_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
-#	if (JSONC_INCDIR)
-#		set(JSONC_INCLUDE_DIRS ${JSONC_INCDIR})
-#	endif()
-#	if(JSONC_LIBDIR)
-#		set(JSONC_LIBRARY_DIRS ${JSONC_LIBDIR})
-#	endif()
-#	find_file(FOUND json/json.h ${JSONC_INCLUDE_DIRS})
-#	test_FOUND(FOUND "json-c client header")
-#	find_library(FOUND libjson.so ${JSONC_LIBRARY_DIRS})
-#	test_FOUND(FOUND "json-c client library")
+###-----------------------###
+### Dependency to RdKafka ###
+###-----------------------###
+if (NOT DEFINED RDKAFKA_INCLUDE_DIRS)
+	set(RDKAFKA_INCLUDE_DIRS "/usr/include")
+endif ()
+if (NOT DEFINED RDKAFKA_LIBRARY_DIRS)
+	set(RDKAFKA_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
+endif ()
+if (RDKAFKA_INCDIR)
+	set(RDKAFKA_INCLUDE_DIRS ${RDKAFKA_INCDIR})
+endif()
+if(RDKAFKA_LIBDIR)
+	set(RDKAFKA_LIBRARY_DIRS ${RDKAFKA_LIBDIR})
+endif()
+find_file(RDKAFKA_FOUND librdkafka/rdkafka.h ${RDKAFKA_INCLUDE_DIRS})
+if (DEFINED RDKAFKA_FOUND)
+	find_library(RDKAFKA_LIBRARIES rdkafka ${RDKAFKA_LIBRARY_DIRS})
+	if (NOT RDKAFKA_LIBRARIES)
+		set (RDKAFKA_FOUND OFF)
+	endif()
+endif ()
+
+###----------------------###
+### Dependency to ZeroMQ ###
+###----------------------###
+if (NOT DEFINED ZMQ_INCLUDE_DIRS)
+	set(ZMQ_INCLUDE_DIRS "/usr/include")
+endif()
+if (NOT DEFINED ZMQ_LIBRARY_DIRS)
+	set(ZMQ_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
+endif()
+if (ZMQ_INCDIR)
+	set(ZMQ_INCLUDE_DIRS ${ZMQ_INCDIR})
+endif()
+if(ZMQ_LIBDIR)
+	set(ZMQ_LIBRARY_DIRS ${ZMQ_LIBDIR})
+endif()
+
+find_file(ZMQ_FOUND zmq_utils.h ${ZMQ_INCLUDE_DIRS})
+if (DEFINED ZMQ_FOUND)
+	find_file(ZMQ_FOUND zmq.h ${ZMQ_INCLUDE_DIRS})
+	if (DEFINED ZMQ_FOUND)
+		find_library(ZMQ_LIBRARIES zmq ${ZMQ_LIBRARY_DIRS})
+		if (NOT ZMQ_LIBRARIES)
+			set(ZMQ_FOUND OFF)
+		endif()
+	endif()
+endif()
+
+endif()
+
+###---------------------###
+### Dependency to JSONC ###
+###---------------------###
+if (NOT DEFINED JSONC_INCLUDE_DIRS)
+	set(JSONC_INCLUDE_DIRS "/usr/include")
+endif ()
+if (NOT DEFINED JSONC_LIBRARY_DIRS)
+	set(JSONC_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
+endif ()
+if (JSONC_INCDIR)
+	set(JSONC_INCLUDE_DIRS ${JSONC_INCDIR})
+endif()
+if(JSONC_LIBDIR)
+	set(JSONC_LIBRARY_DIRS ${JSONC_LIBDIR})
+endif()
+find_file(JSONC_FOUND json.h ${JSONC_INCLUDE_DIRS})
+if (JSONC_FOUND)
+	find_library(JSONC_FOUND libjson-c.so ${JSONC_LIBRARY_DIRS})
+endif ()
 
 ###---------------------###
 ### Dependency to ASN1c ###
@@ -431,37 +485,6 @@ endif(ASN1C_LIBDIR)
 
 find_library(FOUND libASN1.so ${ASN1C_LIBRARY_DIRS})
 test_FOUND(FOUND "asn1c base codec library")
-
-###----------------------###
-### Dependency to ZeroMQ ###
-###----------------------###
-set(ZMQ_INCLUDE_DIRS "/usr/include")
-set(ZMQ_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
-if (ZMQ_INCDIR)
-	set(ZMQ_INCLUDE_DIRS ${ZMQ_INCDIR})
-	set(ZMQ_FOUND ON)
-endif()
-if(ZMQ_LIBDIR)
-	set(ZMQ_LIBRARY_DIRS ${ZMQ_LIBDIR})
-	set(ZMQ_FOUND ON)
-endif()
-
-find_file(FOUND zmq_utils.h ${ZMQ_INCLUDE_DIRS})
-if (NOT FOUND)
-	set(ZMQ_FOUND OFF)
-endif()
-
-find_file(FOUND zmq.h ${ZMQ_INCLUDE_DIRS})
-if (NOT FOUND)
-	set(ZMQ_FOUND OFF)
-endif()
-
-find_library(ZMQ_LIBRARIES libzmq.so ${ZMQ_LIBRARY_DIRS})
-if (NOT ZMQ_LIBRARIES)
-	set(ZMQ_FOUND OFF)
-endif()
-
-endif()
 
 ###-----------------------------###
 ### Dependency to libmicrohttpd ###
@@ -499,11 +522,20 @@ endif(GRIDD_PLUGINS)
 
 ###-------------------------------------------------------------------------###
 
-MESSAGE(STATUS "ZMQ     (${ZMQ_FOUND}? ${ZMQ_VERSION})")
-MESSAGE(STATUS "JSONC   (${JSONC_FOUND}? ${JSONC_VERSION})")
-MESSAGE(STATUS "GLIB2   (${GLIB2_FOUND}? ${GLIB2_VERSION})")
-MESSAGE(STATUS "RDKAFKA (${RDKAFKA_FOUND}? ${RDKAFKA_VERSION})")
+macro(debug_found PREFIX)
+MESSAGE(STATUS "### ${PREFIX} FOUND=${${PREFIX}_FOUND} VERSION=${${PREFIX}_VERSION} INCLUDE=${${PREFIX}_INCLUDE_DIRS} LIBS=${${PREFIX}_LIBRARY_DIRS} L=${${PREFIX}_LIBRARIES}")
+endmacro()
 
+debug_found("ZMQ")
+debug_found("JSONC")
+debug_found("GLIB2")
+debug_found("RDKAFKA")
+debug_found("SQLITE3")
+debug_found("NEON")
+debug_found("LIBEVENT")
+debug_found("APR")
+debug_found("GAMIN")
+debug_found("DBUS")
 
 set(CMAKE_LIBRARY_PATH "")
 set(CMAKE_INCLUDE_PATH "")

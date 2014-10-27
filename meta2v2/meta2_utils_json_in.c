@@ -1,5 +1,5 @@
 #include <glib.h>
-#include <json/json.h>
+#include <json.h>
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metautils_errors.h>

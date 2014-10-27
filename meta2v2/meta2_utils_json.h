@@ -2,7 +2,7 @@
 #define META2_UTILS_JSON_H
 
 #include <glib.h>
-#include <json/json.h>
+#include <json.h>
 #include <metautils/lib/hc_url.h>
 
 /**

@@ -2,7 +2,7 @@
 # define G_LOG_DOMAIN "metautils.tools"
 #endif
 
-#include <json/json.h>
+#include <json.h>
 
 #include "metautils.h"
 #include "metautils_internals.h"

@@ -17,7 +17,7 @@
 
 #include <glib.h>
 
-#include <json/json.h>
+#include <json.h>
 
 #include "./metautils.h"
 #include "./resolv.h"

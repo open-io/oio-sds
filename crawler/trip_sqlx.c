@@ -39,7 +39,7 @@ static sqlx_repository_t *global_repo = NULL;
 
 
 
-gboolean extract_from_bdd(gchar* file_path, gchar** type_, gchar** seq, gchar** cid)
+static gboolean extract_from_bdd(gchar* file_path, gchar** type_, gchar** seq, gchar** cid)
 {
 	gchar* container_name = NULL;
 	gchar** v = NULL;

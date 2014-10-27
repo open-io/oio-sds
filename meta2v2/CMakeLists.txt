@@ -6,6 +6,7 @@ include_directories(BEFORE . ..
 		${CMAKE_CURRENT_BINARY_DIR}/../metautils/lib)
 
 include_directories(AFTER
+		${JSONC_INCLUDE_DIRS}
 		${OPENSSL_INCLUDE_DIRS}
 		${NEON_INCLUDE_DIRS}
 		${LIBRAIN_INCLUDE_DIRS})

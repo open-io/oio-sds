@@ -1,8 +1,10 @@
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
 
-include_directories(BEFORE . ..)
+include_directories(BEFORE . ..
+		${JSONC_INCLUDE_DIRS})
 
 link_directories(
+		${JSONC_LIBRARY_DIRS}
 		${ZK_LIBRARY_DIRS}
 		${SQLITE3_LIBRARY_DIRS})
 

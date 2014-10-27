@@ -4,7 +4,7 @@
 
 #include "metautils.h"
 
-#include <json/json.h>
+#include <json.h>
 
 static void
 clean_tag_value(struct service_tag_s *tag)

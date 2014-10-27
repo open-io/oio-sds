@@ -4,7 +4,7 @@
 
 #include <errno.h>
 
-#include <json/json.h>
+#include <json.h>
 
 #include "metautils.h"
 

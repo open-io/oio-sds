@@ -6,7 +6,8 @@ link_directories(
 
 include_directories(AFTER
 		${OPENSSL_INCLUDE_DIRS}
-		${RDKAFKA_INCLUDE_DIRS})
+		${RDKAFKA_INCLUDE_DIRS}
+		${JSONC_INCLUDE_DIRS})
 
 if (GLIB2_VERSION VERSION_LESS "2.30")
 	add_definitions(-DOLD_GLIB2)
