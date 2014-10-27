@@ -204,6 +204,12 @@ enum sqlx_open_type_e
 	SQLX_OPEN_NOREFCHECK  = 0x20
 };
 
+enum sqlx_close_flag_e
+{
+	/** Close the base immediately, don't keep it in the cache */
+	SQLX_CLOSE_IMMEDIATELY = 0x01,
+};
+
 /**
  * @param repo
  * @param type
@@ -225,9 +231,23 @@ GError* sqlx_repository_unlock_and_close(struct sqlx_sqlite3_s *sq3);
 
 /**
  * @param sq3
+ * @param flags OR'ed close flags (see sqlx_close_flag_e)
+ */
+GError* sqlx_repository_unlock_and_close2(struct sqlx_sqlite3_s *sq3,
+		guint32 flags);
+
+/**
+ * @param sq3
  * @see sqlx_repository_unlock_and_close()
  */
 void sqlx_repository_unlock_and_close_noerror(struct sqlx_sqlite3_s *sq3);
+
+/**
+ * @param sq3
+ * @param flags flags OR'ed close flags (see sqlx_close_flag_e)
+ */
+void sqlx_repository_unlock_and_close_noerror2(struct sqlx_sqlite3_s *sq3,
+		guint32 flags);
 
 /**
  */

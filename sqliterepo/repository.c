@@ -1007,7 +1007,7 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 /* ------------------------------------------------------------------------- */
 
 GError*
-sqlx_repository_unlock_and_close(struct sqlx_sqlite3_s *sq3)
+sqlx_repository_unlock_and_close2(struct sqlx_sqlite3_s *sq3, guint32 flags)
 {
 	GError * err=NULL;
 	EXTRA_ASSERT(sq3 != NULL);
@@ -1020,7 +1020,7 @@ sqlx_repository_unlock_and_close(struct sqlx_sqlite3_s *sq3)
 
 	if (sq3->repo->cache) {
 		err = sqlx_cache_unlock_and_close_base(sq3->repo->cache, sq3->bd,
-			sq3->deleted);
+			sq3->deleted || (flags & SQLX_CLOSE_IMMEDIATELY));
 	}
 	else {
 		__close_base(sq3);
@@ -1029,15 +1029,28 @@ sqlx_repository_unlock_and_close(struct sqlx_sqlite3_s *sq3)
 	return err;
 }
 
+GError*
+sqlx_repository_unlock_and_close(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_repository_unlock_and_close2(sq3, 0);
+}
+
 void
-sqlx_repository_unlock_and_close_noerror(struct sqlx_sqlite3_s *sq3)
+sqlx_repository_unlock_and_close_noerror2(struct sqlx_sqlite3_s *sq3,
+		guint32 flags)
 {
 	GRID_TRACE2("%s(%p)", __FUNCTION__, sq3);
-	GError *e = sqlx_repository_unlock_and_close(sq3);
+	GError *e = sqlx_repository_unlock_and_close2(sq3, flags);
 	if (e) {
 		GRID_WARN("DB closure error : (%d) %s", e->code, e->message);
 		g_error_free(e);
 	}
+}
+
+void
+sqlx_repository_unlock_and_close_noerror(struct sqlx_sqlite3_s *sq3)
+{
+	return sqlx_repository_unlock_and_close_noerror2(sq3, 0);
 }
 
 GError*
