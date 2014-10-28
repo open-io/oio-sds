@@ -1413,48 +1413,29 @@ _has_versioning(struct meta2_backend_s *m2b, struct hc_url_s *url)
 	return maxvers != 0;
 }
 
-int
-meta2_filter_action_add_raw_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
+static int
+_update_beans(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
+		all_vers_cb cb, struct all_vers_cb_args *cbargs)
 {
-	GError *err;
-	struct hc_url_s *old_url = NULL, *url = hc_url_empty();
-	struct meta2_backend_s *m2b;
-	struct meta2_raw_content_s *content;
-	const char *position_prefix = meta2_filter_ctx_get_param(ctx, "POSITION_PREFIX");
-
-	(void) reply;
-	TRACE_FILTER();
-	m2b = meta2_filter_ctx_get_backend(ctx);
-	content = meta2_filter_ctx_get_input_udata(ctx);
-
-	gchar content_id[64];
-	memset(content_id, 0, sizeof(content_id));
-	SHA256_randomized_string(content_id, sizeof(content_id));
-
-	char hexid[65];
-	memset(hexid, '\0', 65);
-	buffer2str(content->container_id, sizeof(container_id_t), hexid, 65);
+	GError *err = NULL;
+	gchar strcid[STRLEN_CONTAINERID];
+	struct hc_url_s *url = hc_url_empty();
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct meta2_raw_content_s *content = meta2_filter_ctx_get_input_udata(ctx);
+	container_id_to_string(content->container_id, strcid, sizeof(strcid));
 
 	/* fill url */
 	hc_url_set(url, HCURL_NS, m2b->backend.ns_name);
-	hc_url_set(url, HCURL_HEXID, hexid);
+	hc_url_set(url, HCURL_HEXID, strcid);
 	hc_url_set(url, HCURL_PATH, content->path);
-	old_url = meta2_filter_ctx_get_url(ctx);
-	if (old_url)
-		hc_url_clean(old_url);
+	hc_url_clean(meta2_filter_ctx_get_url(ctx));
 	meta2_filter_ctx_set_url(ctx, url);
 
 	if (_has_versioning(m2b, url)) {
-		struct all_vers_cb_args cbargs = {
-				.contentid = content_id,
-				.udata_in = position_prefix,
-				.udata_out = NULL
-		};
-		err = _call_for_all_versions(m2b, content, url, _add_beans_cb, &cbargs);
+		err = _call_for_all_versions(m2b, content, url, cb, cbargs);
 	} else {
 		_update_url_version_from_content(content, url);
-		err = _add_beans(m2b, content, url, content_id, position_prefix);
+		err = cb(m2b, content, url, cbargs);
 	}
 
 	if (!err) {
@@ -1466,11 +1447,31 @@ meta2_filter_action_add_raw_v1(struct gridd_filter_ctx_s *ctx,
 	}
 
 	if (NULL != err) {
+		GRID_DEBUG("Failed to update beans: %s", err->message);
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;
 	}
 
 	return FILTER_OK;
+}
+
+int
+meta2_filter_action_add_raw_v1(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	TRACE_FILTER();
+	const char *position_prefix = meta2_filter_ctx_get_param(ctx, "POSITION_PREFIX");
+	gchar content_id[64];
+	memset(content_id, 0, sizeof(content_id));
+	SHA256_randomized_string(content_id, sizeof(content_id));
+
+	struct all_vers_cb_args cbargs = {
+			.contentid = content_id,
+			.udata_in = position_prefix,
+			.udata_out = NULL
+	};
+
+	return _update_beans(ctx, reply, _add_beans_cb, &cbargs);
 }
 
 static GSList*
@@ -1574,41 +1575,12 @@ _delete_beans_cb(struct meta2_backend_s *m2b,
 	return _delete_beans(m2b, content, url);
 }
 
-	int
+int
 meta2_filter_action_remove_raw_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	(void) reply;
-
-	GError *e = NULL;
-	gchar strcid[STRLEN_CONTAINERID];
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct meta2_raw_content_s *content = meta2_filter_ctx_get_input_udata(ctx);
-	container_id_to_string(content->container_id, strcid, sizeof(strcid));
-
 	TRACE_FILTER();
-
-	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, m2b->backend.ns_name);
-	hc_url_set(url, HCURL_HEXID, strcid);
-	hc_url_set(url, HCURL_PATH, content->path);
-
-	if (_has_versioning(m2b, url)) {
-		e = _call_for_all_versions(m2b, content, url, _delete_beans_cb, NULL);
-	} else {
-		_update_url_version_from_content(content, url);
-		e = _delete_beans(m2b, content, url);
-	}
-
-	hc_url_clean(url);
-
-	if (NULL != e) {
-		GRID_DEBUG("Failed to force alias : %s", e->message);
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	return FILTER_OK;
+	return _update_beans(ctx, reply, _delete_beans_cb, NULL);
 }
 
 	int
