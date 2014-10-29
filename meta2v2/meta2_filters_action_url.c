@@ -6,6 +6,8 @@
 #include <string.h>
 #include <errno.h>
 
+#include <glib.h>
+
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 #include <server/transport_gridd.h>
@@ -19,8 +21,7 @@
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <sqliterepo/election.h>
-
-#include <glib.h>
+#include <resolver/hc_resolver.h>
 
 static int
 _update_container_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_backend_s *m2b,
@@ -162,6 +163,7 @@ meta2_filter_action_exit_election(struct gridd_filter_ctx_s *ctx,
 	if (hc_url_has(url,HCURL_HEXID)) {
 		GError *err = sqlx_repository_exit_election(m2b->backend.repo,
 				"meta2", hc_url_get(url,HCURL_HEXID));
+		hc_decache_reference_service(m2b->resolver, url, META2_TYPE_NAME);
 		if (err) {
 			meta2_filter_ctx_set_error(ctx, err);
 			return FILTER_KO;

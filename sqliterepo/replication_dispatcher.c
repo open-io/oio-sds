@@ -1448,6 +1448,24 @@ sqlx_dispatch_USE(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
+sqlx_dispatch_EXITELECTION(struct gridd_reply_ctx_s *reply,
+		struct sqlx_repository_s *repo, gpointer ignored)
+{
+	GError *err = NULL;
+	gchar base[256], type[64];
+
+	(void) ignored;
+	EXTRACT_STRING("BASE_NAME", base);
+	EXTRACT_STRING("BASE_TYPE", type);
+	reply->subject("%s.%s", base, type);
+	if (NULL != (err = sqlx_repository_exit_election(repo, type, base)))
+		reply->send_error(0, err);
+	else
+		reply->send_reply(200, "OK");
+	return TRUE;
+}
+
+static gboolean
 sqlx_dispatch_PIPETO(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
@@ -1804,7 +1822,7 @@ sqlx_dispatch_ADMSET(struct gridd_reply_ctx_s *reply,
 
 	struct sqlx_repctx_s *repctx = NULL;
 	if (!flag_local)
-		err = sqlx_transaction_prepare(sq3, &repctx);
+		err = sqlx_transaction_begin(sq3, &repctx);
 	if (NULL == err) {
 		sqlx_admin_set_str(sq3, k, v);
 		if (!flag_local)
@@ -1976,6 +1994,7 @@ sqlx_repli_gridd_get_requests(void)
 		{"SQLX_ISMASTER",  (hook) sqlx_dispatch_ISMASTER,  NULL},
 		{"SQLX_USE",	   (hook) sqlx_dispatch_USE,       NULL},
 		{"SQLX_ELECTION",  (hook) sqlx_dispatch_USE,       NULL},
+		{"SQLX_EXITELECTION", (hook) sqlx_dispatch_EXITELECTION, NULL},
 		{"SQLX_PIPETO",	   (hook) sqlx_dispatch_PIPETO,    NULL},
 		{"SQLX_PIPEFROM",  (hook) sqlx_dispatch_PIPEFROM,  NULL},
 		{"SQLX_DUMP",	   (hook) sqlx_dispatch_DUMP,      NULL},

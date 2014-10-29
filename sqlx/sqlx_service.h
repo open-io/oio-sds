@@ -30,7 +30,7 @@ struct sqlx_service_config_s
 	const gchar *schema;
 
 	GError* (*get_peers) (struct sqlx_service_s *ss,
-			const gchar *n, const gchar *t,
+			const gchar *n, const gchar *t, gboolean nocache,
 			gchar ***result);
 
 	// Called at the end of the configure step. Destined to initiating

@@ -429,9 +429,9 @@ member_get_url(struct election_member_s *m)
 }
 
 static GError *
-member_get_peers(struct election_member_s *m, gchar ***peers)
+member_get_peers(struct election_member_s *m, gboolean nocache, gchar ***peers)
 {
-	return sqlx_config_get_peers(MCFG(m), m->name, m->type, peers);
+	return sqlx_config_get_peers2(MCFG(m), m->name, m->type, nocache, peers);
 }
 
 static inline void
@@ -578,7 +578,7 @@ member_dump_log(struct election_member_s *member)
 
 	/* the peers */
 	gchar **peers = NULL;
-	GError *err = member_get_peers(member, &peers);
+	GError *err = member_get_peers(member, FALSE, &peers);
 	if (err != NULL) {
 		g_string_append_printf(out, "NOT MANAGED (%d) %s",
 				err->code, err->message);
@@ -1526,7 +1526,7 @@ defer_USE(struct election_member_s *member, time_t now)
 	n.base = member->name;
 	n.type = member->type;
 
-	GError *err = member_get_peers(member, &peers);
+	GError *err = member_get_peers(member, FALSE, &peers);
 	if (err != NULL) {
 		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
 				__FUNCTION__, _step2str(member->step), err->code, err->message);
@@ -1776,7 +1776,7 @@ defer_GETVERS(struct election_member_s *member)
 	GRID_TRACE2("%s(%p)", __FUNCTION__, member);
 
 	gchar **peers = NULL;
-	GError *err = member_get_peers(member, &peers);
+	GError *err = member_get_peers(member, TRUE, &peers);
 	if (err != NULL) {
 		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
 				__FUNCTION__, _step2str(member->step), err->code, err->message);
@@ -2424,21 +2424,28 @@ sqlx_config_get_local_url(const struct replication_config_s *cfg)
 }
 
 GError *
-sqlx_config_get_peers(const struct replication_config_s *cfg, const gchar *n,
-		const gchar *t, gchar ***result)
+sqlx_config_get_peers2(const struct replication_config_s *cfg, const gchar *n,
+		const gchar *t, gboolean nocache, gchar ***result)
 {
 	if (!cfg || !cfg->get_peers) {
 		if (result)
 			*result = NULL;
 		return NULL;
 	}
-	GError *err = cfg->get_peers(cfg->ctx, n, t, result);
+	GError *err = cfg->get_peers(cfg->ctx, n, t, nocache, result);
 	if (!err)
 		return NULL;
 	gchar msg[256];
 	g_snprintf(msg, sizeof(msg), "get_peers(%s,%s): ", n, t);
 	g_prefix_error(&err, msg);
 	return err;
+}
+
+GError *
+sqlx_config_get_peers(const struct replication_config_s *cfg, const gchar *n,
+		const gchar *t, gchar ***result)
+{
+	return sqlx_config_get_peers2(cfg, n, t, FALSE, result);
 }
 
 GError *

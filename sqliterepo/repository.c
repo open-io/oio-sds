@@ -149,10 +149,7 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 	if (sq3->repo && sq3->repo->flag_autovacuum)
 		sqlx_exec(sq3->db, "VACUUM");
 
-	if (sq3->repo != NULL && sq3->repo->close_callback != NULL) {
-		sq3->repo->close_callback(sq3, sq3->deleted,
-				sq3->repo->close_callback_data);
-	}
+	sqlx_repository_call_close_callback(sq3);
 
 	/* delete the base */
 	if (sq3->deleted) {
@@ -509,6 +506,15 @@ sqlx_repository_configure_close_callback(sqlx_repository_t *repo,
 
 	repo->close_callback = cb;
 	repo->close_callback_data = cb_data;
+}
+
+void
+sqlx_repository_call_close_callback(struct sqlx_sqlite3_s *sq3)
+{
+	if (sq3->repo != NULL && sq3->repo->close_callback != NULL) {
+		sq3->repo->close_callback(sq3, sq3->deleted,
+				sq3->repo->close_callback_data);
+	}
 }
 
 void
@@ -1259,7 +1265,8 @@ sqlx_repository_exit_election(sqlx_repository_t *repo,
 		return NULL;
 	}
 
-	return election_exit(repo->election_manager, name, type);
+	err = election_exit(repo->election_manager, name, type);
+	return err;
 }
 
 GError*

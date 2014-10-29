@@ -178,6 +178,10 @@ void sqlx_repository_configure_close_callback(sqlx_repository_t *repo,
 
 /**
  */
+void sqlx_repository_call_close_callback(struct sqlx_sqlite3_s *sq3);
+
+/**
+ */
 void sqlx_repository_configure_open_callback(sqlx_repository_t *repo,
 		sqlx_repo_open_hook cb, gpointer cb_data);
 

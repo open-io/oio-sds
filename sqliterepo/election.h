@@ -59,7 +59,7 @@ struct replication_config_s
 	 * @return NULL if 'result'
 	 */
 	GError* (*get_peers) (gpointer ctx, const gchar *n, const gchar *t,
-			gchar ***result);
+			gboolean nocache, gchar ***result);
 
 	/** Encapsulate the query for the DB's version */
 	GError* (*get_version) (gpointer ctx, const gchar *n, const gchar *t,
@@ -196,6 +196,10 @@ const gchar *sqlx_config_get_local_url(const struct replication_config_s *cfg);
 /** Wraps the call to the hook in the config structure */
 GError* sqlx_config_get_peers(const struct replication_config_s *cfg,
 		const gchar *n, const gchar *t, gchar ***result);
+
+/** Wraps the call to the hook in the config structure */
+GError* sqlx_config_get_peers2(const struct replication_config_s *cfg,
+		const gchar *n, const gchar *t, gboolean nocache, gchar ***result);
 
 /** Wraps the call to the hook in the config structure */
 GError* sqlx_config_has_peers(const struct replication_config_s *cfg,

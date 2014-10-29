@@ -152,7 +152,8 @@ filter_urls_and_clean(gchar **src, const gchar *avoid)
 }
 
 static GError *
-_get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t, gchar ***result)
+_get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t,
+		gboolean nocache, gchar ***result)
 {
 	container_id_t cid;
 	guchar s[3]= {0,0,0};

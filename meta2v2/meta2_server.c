@@ -116,30 +116,47 @@ _init_hc_url(struct sqlx_service_s *ss, const gchar *n, gint64 *pseq)
 }
 
 static GError *
-_get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t, gchar ***result)
+_get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t,
+		gboolean nocache, gchar ***result)
 {
 	if (!n || !t || !result)
 		return NEWERROR(500, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
 	if (!g_str_has_prefix(t, META2_TYPE_NAME))
 		return NEWERROR(400, "Invalid type name: '%s'", t);
 
+	gint retries = 1;
 	gint64 seq = 1;
-	struct hc_url_s *u = _init_hc_url(ss, n, &seq);
+	struct hc_url_s *u = NULL;
+	gchar **peers = NULL;
+	GError *err = NULL;
+
+	u = _init_hc_url(ss, n, &seq);
 	if (!u)
 		return NEWERROR(400, "Invalid base name [%s]", n);
 
-	gchar **peers = NULL;
-	GError *err = hc_resolve_reference_service(ss->resolver, u, t, &peers);
-	hc_url_clean(u);
+retry:
+	if (nocache) {
+		hc_decache_reference_service(ss->resolver, u, t);
+	}
+	err = hc_resolve_reference_service(ss->resolver, u, t, &peers);
 
 	if (NULL != err) {
 		g_prefix_error(&err, "Peer resolution error: ");
+		hc_url_clean(u);
 		return err;
 	}
 
-	if (!(*result = filter_services_and_clean(ss, peers, seq, t)))
-		return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
-	return NULL;
+	if (!(*result = filter_services_and_clean(ss, peers, seq, t))) {
+		if (retries-- > 0) {
+			peers = NULL;
+			nocache = TRUE;
+			goto retry;
+		}
+		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
+	}
+
+	hc_url_clean(u);
+	return err;
 }
 
 static GError*

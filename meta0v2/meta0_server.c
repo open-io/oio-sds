@@ -78,7 +78,7 @@ strv_filter(struct sqlx_service_s *ss, GSList *l)
 
 static GError *
 _get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t,
-		gchar ***result)
+		gboolean nocache, gchar ***result)
 {
 	GSList *peers;
 	GError *err;

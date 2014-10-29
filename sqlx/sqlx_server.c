@@ -7,6 +7,8 @@
 #include <errno.h>
 #include <string.h>
 
+#include <glib.h>
+
 #include <metautils/lib/metautils.h>
 #include <resolver/hc_resolver.h>
 #include <server/grid_daemon.h>
@@ -60,7 +62,8 @@ filter_services_and_clean(struct sqlx_service_s *ss,
 }
 
 static GError *
-_get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t, gchar ***result)
+_get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t,
+		gboolean nocache, gchar ***result)
 {
 	if (!n || !t || !result)
 		return NEWERROR(500, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
@@ -75,6 +78,10 @@ _get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t, gchar ***r
 	if (!hc_url_set(u, HCURL_HEXID, sep+1)) {
 		hc_url_clean(u);
 		return NEWERROR(400, "Invalid HEXID [%s]", sep+1);
+	}
+
+	if (nocache) {
+		hc_decache_reference_service(ss->resolver, u, t);
 	}
 
 	gchar **peers = NULL;
