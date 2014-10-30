@@ -472,6 +472,8 @@ install(FILES
 			test_addr.h
 			tree.h
 			volume_lock.h
+			notifications.h
+			meta_backend_common.h
 		DESTINATION include/metautils/lib
 		PERMISSIONS
 			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
