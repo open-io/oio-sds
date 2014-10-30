@@ -1421,7 +1421,7 @@ sqlx_dispatch_DESCR(struct gridd_reply_ctx_s *reply,
 	memset(descr, 0, sizeof(descr));
 	descr[0] = '?';
 	election_manager_whatabout(sqlx_repository_get_elections_manager(repo),
-			type, base, descr, sizeof(descr));
+			base, type, descr, sizeof(descr));
 	reply->add_body(metautils_gba_from_string(descr));
 	reply->send_reply(200, "OK");
 	return TRUE;
@@ -1587,12 +1587,20 @@ sqlx_dispatch_RESYNC(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err = NULL;
+	gboolean has_peers = FALSE;
 	gchar base[256], type[64];
+	struct election_manager_s *em = NULL;
 
 	(void) ignored;
 	EXTRACT_STRING("BASE_NAME", base);
 	EXTRACT_STRING("BASE_TYPE", type);
 	reply->subject("%s.%s", base, type);
+
+	/* Force refresh of peers from meta1 */
+	em = sqlx_repository_get_elections_manager(repo);
+	err = sqlx_config_has_peers2(election_manager_get_config(em),
+			base, type, TRUE, &has_peers);
+	g_clear_error(&err);
 
 	/* Open and lock the base */
 	err = sqlx_repository_use_base(repo, type, base);

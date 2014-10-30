@@ -9,6 +9,8 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
+#include <glib.h>
+
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 
@@ -80,6 +82,7 @@ static GError *
 _get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t,
 		gboolean nocache, gchar ***result)
 {
+	(void) nocache;
 	GSList *peers;
 	GError *err;
 

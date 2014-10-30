@@ -227,7 +227,7 @@ _configure_replication(struct sqlx_service_s *ss)
 	replication_config.get_local_url = _get_url;
 	replication_config.get_version = _get_version;
 	replication_config.get_peers = (GError* (*)(gpointer, const gchar*,
-			const gchar*, gchar ***)) ss->service_config->get_peers;
+			const gchar*, gboolean nocache, gchar ***)) ss->service_config->get_peers;
 
 	GError *err = election_manager_create(&replication_config,
 			&ss->election_manager);

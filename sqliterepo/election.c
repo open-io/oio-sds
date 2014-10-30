@@ -1776,7 +1776,7 @@ defer_GETVERS(struct election_member_s *member)
 	GRID_TRACE2("%s(%p)", __FUNCTION__, member);
 
 	gchar **peers = NULL;
-	GError *err = member_get_peers(member, TRUE, &peers);
+	GError *err = member_get_peers(member, FALSE, &peers);
 	if (err != NULL) {
 		GRID_WARN("[%s] Election initiated (%s) but get_peers error: (%d) %s",
 				__FUNCTION__, _step2str(member->step), err->code, err->message);
@@ -2449,11 +2449,11 @@ sqlx_config_get_peers(const struct replication_config_s *cfg, const gchar *n,
 }
 
 GError *
-sqlx_config_has_peers(const struct replication_config_s *cfg, const gchar *n,
-		const gchar *t, gboolean *result)
+sqlx_config_has_peers2(const struct replication_config_s *cfg, const gchar *n,
+		const gchar *t, gboolean nocache, gboolean *result)
 {
 	gchar **peers = NULL;
-	GError *err = sqlx_config_get_peers(cfg, n, t, &peers);
+	GError *err = sqlx_config_get_peers2(cfg, n, t, nocache, &peers);
 	if (err != NULL) {
 		*result = FALSE;
 		return err;
@@ -2462,5 +2462,12 @@ sqlx_config_has_peers(const struct replication_config_s *cfg, const gchar *n,
 	if (peers)
 		g_strfreev(peers);
 	return NULL;
+}
+
+GError *
+sqlx_config_has_peers(const struct replication_config_s *cfg, const gchar *n,
+		const gchar *t, gboolean *result)
+{
+	return sqlx_config_has_peers2(cfg, n, t, FALSE, result);
 }
 

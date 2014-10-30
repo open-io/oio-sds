@@ -204,6 +204,8 @@ GError* sqlx_config_get_peers2(const struct replication_config_s *cfg,
 /** Wraps the call to the hook in the config structure */
 GError* sqlx_config_has_peers(const struct replication_config_s *cfg,
 		const gchar *n, const gchar *t, gboolean *result);
+GError* sqlx_config_has_peers2(const struct replication_config_s *cfg,
+		const gchar *n, const gchar *t, gboolean nocache, gboolean *result);
 
 
 /** @} */

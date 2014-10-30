@@ -173,6 +173,9 @@ _get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t,
 	s[1] = n[3];
 	((guint8*)cid)[1] = g_ascii_strtoull((gchar*)s, NULL, 16);
 
+	if (nocache)
+		_reload_prefixes(ss, FALSE);
+
 	gchar **peers = meta1_prefixes_get_peers(
 			meta1_backend_get_prefixes(m1), cid);
 	if (!(*result = filter_urls_and_clean(peers, ss->url->str)))
