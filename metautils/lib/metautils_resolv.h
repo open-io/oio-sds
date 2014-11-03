@@ -133,7 +133,11 @@ struct addr_info_s *build_addr_info(const gchar * ip, int port, GError ** err);
 
 gboolean metautils_addr_valid_for_connect(const struct addr_info_s *a);
 
+gboolean metautils_addr_valid_for_bind(const struct addr_info_s *a);
+
 gboolean metautils_url_valid_for_connect(const gchar *url);
+
+gboolean metautils_url_valid_for_bind(const gchar *url);
 
 /** @} */
 

@@ -15,8 +15,18 @@
 #include "metacomm.h"
 
 gboolean
+metautils_addr_valid_for_bind(const struct addr_info_s *a)
+{
+	/* @todo TODO we should check the address is not broadcast (local
+	 * or global), not multicast, not network address, etc. */
+	return a->port != 0;
+}
+
+gboolean
 metautils_addr_valid_for_connect(const struct addr_info_s *a)
 {
+	/* @todo TODO we should check the address is not broadcast (local
+	 * or global), not multicast, not network address, etc. */
 	return a->port != 0 && !data_is_zeroed(&(a->addr), sizeof(a->addr));
 }
 
@@ -32,6 +42,20 @@ metautils_url_valid_for_connect(const gchar *url)
 	if (!grid_string_to_addrinfo(url, NULL, &ai))
 		return FALSE;
 	return metautils_addr_valid_for_connect(&ai);
+}
+
+gboolean
+metautils_url_valid_for_bind(const gchar *url)
+{
+	if (NULL == url) {
+		errno = EINVAL;
+		return FALSE;
+	}
+	addr_info_t ai;
+	memset(&ai, 0, sizeof(ai));
+	if (!grid_string_to_addrinfo(url, NULL, &ai))
+		return FALSE;
+	return metautils_addr_valid_for_bind(&ai);
 }
 
 gint

@@ -66,7 +66,7 @@ static const gchar *
 _get_url(gpointer ctx)
 {
 	EXTRA_ASSERT(ctx != NULL);
-	return PSRV(ctx)->url->str;
+	return PSRV(ctx)->announce->str;
 }
 
 static GError*
@@ -94,8 +94,20 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 		GRID_WARN("No URL!");
 		return FALSE;
 	}
+	if (!ss->announce) {
+		ss->announce = g_string_new(ss->url->str);
+		GRID_NOTICE("No announce set, using endpoint [%s]", ss->announce->str);
+	}
+	if (!metautils_url_valid_for_bind(ss->url->str)) {
+		GRID_ERROR("Invalid URL as a endpoint [%s]", ss->url->str);
+		return FALSE;
+	}
+	if (!metautils_url_valid_for_connect(ss->announce->str)) {
+		GRID_ERROR("Invalid URL to be announced [%s]", ss->announce->str);
+		return FALSE;
+	}
 	if (argc < 2) {
-		GRID_WARN("Not enough options, see usage.");
+		GRID_ERROR("Not enough options, see usage.");
 		return FALSE;
 	}
 
@@ -243,12 +255,12 @@ _configure_backend(struct sqlx_service_s *ss)
 	repository_config.sync_repli = ss->sync_mode_repli;
 	repository_config.lock.ns = ss->ns_name;
 	repository_config.lock.type = ss->service_config->srvtype;
-	repository_config.lock.srv = ss->url->str;
+	repository_config.lock.srv = ss->announce->str;
 
 	GError *err = sqlx_repository_init(ss->volume, &repository_config,
 			&ss->repository);
 	if (err) {
-		GRID_WARN("SQLX repository init failure : (%d) %s",
+		GRID_ERROR("SQLX repository init failure : (%d) %s",
 				err->code, err->message);
 		g_clear_error(&err);
 		return FALSE;
@@ -309,7 +321,7 @@ _configure_registration(struct sqlx_service_s *ss)
 	si->tags = g_ptr_array_new();
 	metautils_strlcpy_physical_ns(si->ns_name, ss->ns_name, sizeof(si->ns_name));
 	g_strlcpy(si->type, ss->service_config->srvtype, sizeof(si->type)-1);
-	grid_string_to_addrinfo(ss->url->str, NULL, &(si->addr));
+	grid_string_to_addrinfo(ss->announce->str, NULL, &(si->addr));
 
 	service_tag_set_value_string(
 			service_info_ensure_tag(si->tags, "tag.type"),
@@ -522,6 +534,8 @@ sqlx_service_specific_fini(void)
 		g_slist_free_full(SRV.custom_tags, g_free);
 	if (SRV.si)
 		service_info_clean(SRV.si);
+	if (SRV.announce)
+		g_string_free(SRV.announce, TRUE);
 	if (SRV.url)
 		g_string_free(SRV.url, TRUE);
 	if (SRV.zk_url)
@@ -540,6 +554,9 @@ sqlx_service_get_options(void)
 	{
 		{"Endpoint", OT_STRING, {.str = &SRV.url},
 			"Bind to this IP:PORT couple instead of 0.0.0.0 and a random port"},
+		{"Announce", OT_STRING, {.str = &SRV.announce},
+			"Announce this IP:PORT couple instead of the TCP endpoint"},
+
 		{"Tag", OT_LIST, {.lst = &SRV.custom_tags},
 			"Tag to associate to the SRV (multiple custom tags are supported)"},
 

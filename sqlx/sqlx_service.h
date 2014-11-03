@@ -50,6 +50,7 @@ struct sqlx_service_s
 	const struct sqlx_service_config_s *service_config;
 
 	GString *url;
+	GString *announce;
 	gchar *zk_url;
 
 	struct sqlx_repository_s *repository;
