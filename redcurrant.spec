@@ -17,7 +17,7 @@ BuildRoot:	%(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 %define prefix	/usr
 %define libdir	%{prefix}/%{_lib}
 
-BuildRequires:	compat-glib2-devel = 2.28.8
+BuildRequires:	glib2-devel >= 2.28.8
 BuildRequires:	openssl-devel >= 0.9.8
 BuildRequires:  libzookeeper >= 3.3.4
 BuildRequires:  libzookeeper-devel >= 3.3.4
@@ -62,7 +62,7 @@ Redcurrant is brought to the community by Atos Worldline.
 License: LGPL3, GNU Lesser General Public License v3.0
 Summary: common files for Redcurrant cloud solution
 Group: Redcurrant
-Requires:	compat-glib2 >= 2.28
+Requires:	glib2 >= 2.28.8
 Requires:	asn1c >= 0.9.21
 Requires:	openssl >= 0.9.8
 Requires:	zlib,expat
