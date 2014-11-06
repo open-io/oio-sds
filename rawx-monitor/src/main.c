@@ -26,6 +26,8 @@
 #include <metautils/lib/metacomm.h>
 #include <cluster/lib/gridcluster.h>
 
+#include <svc-monitor/src/utils.h>
+
 #include "filer_monitor.h"
 #ifdef HAVE_NETAPP
 # include "netapp.h"
@@ -570,6 +572,7 @@ _cfg_section_child(GKeyFile *kf, const gchar *section, GError **error)
 	supervisor_children_status(CHILD_KEY, 1);
 	supervisor_children_set_respawn(CHILD_KEY, 0);
 	supervisor_children_set_delay(CHILD_KEY, 0);
+	supervisor_preserve_env(CHILD_KEY);
 
 	/* Should the rawx-monitor make the Service respawn ?
 	 * Default : NO ! Remember the rawx-monitor will exit

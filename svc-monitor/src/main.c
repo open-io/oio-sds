@@ -21,6 +21,8 @@
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 
+#include <svc-monitor/src/utils.h>
+
 #define CHILD_KEY "SVC"
 #define DEFAULT_MONITOR_PERIOD 10
 
@@ -347,6 +349,7 @@ main(int argc, char ** argv)
 
 	supervisor_children_set_respawn(CHILD_KEY, FALSE);
 	supervisor_children_set_working_directory(CHILD_KEY, "/tmp");
+	supervisor_preserve_env(CHILD_KEY);
 
 	service = g_malloc0(sizeof(service_info_t));
 	if (0 != init_srvinfo(svc_id, service)) {

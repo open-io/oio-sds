@@ -1,5 +1,9 @@
-LoadModule dav_module        /usr/local/oss/apache2-2.2.9/modules/mod_dav.so
-LoadModule dav_rawx_module   /usr/local/oss/apache2-2.2.9/modules/mod_dav_rawx.so
+# For httpd 2.4
+LoadModule mpm_worker_module modules/mod_mpm_worker.so
+LoadModule unixd_module      modules/mod_unixd.so
+
+LoadModule dav_module        modules/mod_dav.so
+LoadModule dav_rawx_module   modules/mod_dav_rawx.so
 #LoadModule log_config_module /usr/local/oss/apache2-2.2.9/modules/mod_log_config.so
 
 Listen 127.0.0.1:9000
