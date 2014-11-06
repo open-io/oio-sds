@@ -50,6 +50,8 @@ _m2v2_build_request(const gchar *name, GByteArray *sid,
 				metautils_gba_from_string(hc_url_get(url, HCURL_NS))),
 			"CONTAINER_ID", gba_poolify(&pool,
 				_url_2_gba(url)),
+			"CONTENT_PATH", gba_poolify(&pool, metautils_gba_from_string(
+					hc_url_get(url, HCURL_PATH))),
 			NULL);
 	GBA_POOL_CLEAN(pool);
 

@@ -60,8 +60,11 @@ gridcluster_event_SaveNewEvent(struct event_config_s *evt_config, gridcluster_ev
 	time_t now = time(0);
 	int fd;
 
-	GRID_INFO("Event config : [%s]", event_config_dump(evt_config));
-	GRID_INFO("Writing event in [%s]", event_get_dir(evt_config));
+	GRID_TRACE("Event config : [%s]", event_config_dump(evt_config));
+	if (!event_is_enabled(evt_config))
+		return NULL;
+
+	GRID_DEBUG("Writing event in [%s]", event_get_dir(evt_config));
 
 	gchar *str_ueid     = gridcluster_event_get_string(evt, GRIDCLUSTER_EVTFIELD_UEID);
 	gchar *str_aggrname = gridcluster_event_get_string(evt, GRIDCLUSTER_EVTFIELD_AGGRNAME);

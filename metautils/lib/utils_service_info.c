@@ -784,7 +784,7 @@ service_info_load_json_object(struct json_object *obj,
 	struct json_object *ns, *type, *url, *score, *tags;
 	if (!json_object_object_get_ex(obj, "ns", &ns)
 		|| !json_object_object_get_ex(obj, "type", &type)
-		|| !json_object_object_get_ex(obj, "url", &url)
+		|| !json_object_object_get_ex(obj, "addr", &url)
 		|| !json_object_object_get_ex(obj, "score", &score))
 		return NEWERROR(400, "Missing field");
 	if (!json_object_is_type(ns, json_type_string)

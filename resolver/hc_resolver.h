@@ -64,14 +64,14 @@ GError* hc_resolve_reference_service(struct hc_resolver_s *r,
 GError* hc_resolve_reference_directory(struct hc_resolver_s *r,
 		struct hc_url_s *url, gchar ***result);
 
-/**
- * @param r
- * @param url
- * @param srvtype
- */
+// Removes from the cache the services associated to the given references.
+// It doesn't touch the directory services belonging to the reference.
 void hc_decache_reference_service(struct hc_resolver_s *r,
 		struct hc_url_s *url, const gchar *srvtype);
 
+// Removes from the cache the directory services for the given references.
+// It doesn't touche the cache entries for the directory content.
+void hc_decache_reference(struct hc_resolver_s *r, struct hc_url_s *url);
 
 struct hc_resolver_stats_s
 {

@@ -454,15 +454,13 @@ hc_resolve_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
 }
 
 void
-hc_decache_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
-		const gchar *srvtype)
+hc_decache_reference(struct hc_resolver_s *r, struct hc_url_s *url)
 {
 	struct hashstr_s *hk;
 
-	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE), srvtype);
+	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE));
 	g_assert(r != NULL);
 	g_assert(url != NULL);
-	g_assert(srvtype != NULL);
 
 	if (r->flags & HC_RESOLVER_NOCACHE)
 		return;
@@ -475,6 +473,21 @@ hc_decache_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
 			hc_url_get(url, HCURL_HEXID));
 	hc_resolver_forget(r, r->csm0.cache, hk);
 	g_free(hk);
+}
+
+void
+hc_decache_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
+		const gchar *srvtype)
+{
+	struct hashstr_s *hk;
+
+	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE), srvtype);
+	g_assert(r != NULL);
+	g_assert(url != NULL);
+	g_assert(srvtype != NULL);
+
+	if (r->flags & HC_RESOLVER_NOCACHE)
+		return;
 
 	hk = hashstr_printf("%s|%s|%s", srvtype,
 			hc_url_get(url, HCURL_NSPHYS),

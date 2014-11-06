@@ -176,7 +176,7 @@ touch_v2_content(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b,
 			hc_url_get(url, HCURL_NS));
 
-	GRID_INFO("Touch v2 content");
+	GRID_DEBUG("Touch v2 content [%s]", hc_url_get(url, HCURL_WHOLE));
 
 	event = _build_event(m2b, evt_type, url);
 
@@ -187,7 +187,7 @@ touch_v2_content(struct meta2_backend_s *m2b, struct hc_url_s *url,
 			goto error;
 
 		if (!(v1 = meta2_raw_content_v2_get_v1(v2, NULL)))
-			WARN("V2 to V1 mapping error");
+			GRID_WARN("V2 to V1 mapping error");
 		else {
 			err = _meta2_event_add_raw_v1(event, v1);
 			meta2_maintenance_destroy_content(v1);
@@ -196,11 +196,8 @@ touch_v2_content(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		}
 	}
 
-	if (event_get_dir(evt_config)) {
-		GRID_INFO("writing event");
+	if (event_get_dir(evt_config))
 		err = gridcluster_event_SaveNewEvent(evt_config, event);
-		//err = event_write(evt_config, event);
-	}
 
 error:
 	g_hash_table_destroy(event);
@@ -219,7 +216,7 @@ touch_v2_content_chunkonly(struct meta2_backend_s *m2b, struct hc_url_s *url,
 			hc_url_get(url, HCURL_NS));
 	const gchar* m2url = meta2_backend_get_local_addr(m2b);
 
-	GRID_INFO("Touch v2 content");
+	GRID_DEBUG("Touch v2 content [%s]", hc_url_get(url, HCURL_WHOLE));
 
 	event = _build_event(m2b, evt_type, url);
 
@@ -232,10 +229,8 @@ touch_v2_content_chunkonly(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	if (m2url)
 		gridcluster_event_add_string(event, META2_EVTFIELD_M2ADDR, m2url);
 
-	if (event_get_dir(evt_config)) {
-		GRID_INFO("writing event");
+	if (event_get_dir(evt_config))
 		err = gridcluster_event_SaveNewEvent(evt_config, event);
-	}
 
 error:
 	g_hash_table_destroy(event);
