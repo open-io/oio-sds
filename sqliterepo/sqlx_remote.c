@@ -186,12 +186,13 @@ sqlx_pack_PIPETO(struct sqlx_name_s *name, const gchar *target)
 }
 
 GByteArray*
-sqlx_pack_DUMP(struct sqlx_name_s *name)
+sqlx_pack_DUMP(struct sqlx_name_s *name, gboolean chunked)
 {
 	MESSAGE req;
 	GByteArray *gba;
 
 	req = make_request("SQLX_DUMP", name);
+	message_add_field(req, "CHUNKED", 7, &chunked, 1, NULL);
 	gba = message_marshall_gba(req, NULL);
 	(void) message_destroy(req, NULL);
 	return gba;

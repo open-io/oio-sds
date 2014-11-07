@@ -40,6 +40,7 @@ add_library(sqliterepo SHARED
 		election.c
 		replication_dispatcher.c
 		repository.c
+		restoration.c
 		zk_manager.c
 		upgrade.c)
 

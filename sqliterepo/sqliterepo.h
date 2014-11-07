@@ -291,10 +291,28 @@ GError* sqlx_repository_use_base(sqlx_repository_t *repo,
 GError* sqlx_repository_status_base(sqlx_repository_t *repo,
 		const gchar *type, const gchar *name);
 
-// Collect into  a buffer the binary dump of the base (i.e. the content
-// of a valid sqlite3 file, with only the meaningful pages).
-GError* sqlx_repository_dump_base(struct sqlx_sqlite3_s *sq3,
+/** Collect into a buffer the binary dump of the base (i.e. the content
+ *  of a valid sqlite3 file, with only the meaningful pages). */
+GError* sqlx_repository_dump_base_gba(struct sqlx_sqlite3_s *sq3,
 		GByteArray **dump);
+
+/** Callback for sqlx_repository_dump_base_fd(). */
+typedef GError*(*dump_base_fd_cb)(int fd, gpointer arg);
+
+/** Open a dump of the base (with only the meaningful pages)
+ *  and pass the file descriptor to a callback. */
+GError* sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
+		dump_base_fd_cb callback, gpointer callback_arg);
+
+/** Callback for sqlx_repository_dump_base_chunked() */
+typedef GError*(*dump_base_chunked_cb)(GByteArray *gba, gint64 remaining_bytes,
+		gpointer arg);
+
+/** Open a dump of the base (with only the meaningful pages),
+ *  and send parts of it to a callback, as GByteArrays (must be cleaned
+ *  by caller). */
+GError* sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
+		gint chunk_size, dump_base_chunked_cb callback, gpointer callback_arg);
 
 // Perform a SQLite backup on the sqlite handles underlying two sqliterepo
 // bases.
@@ -303,6 +321,8 @@ GError* sqlx_repository_backup_base(struct sqlx_sqlite3_s *src_sq3,
 
 GError* sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
 		guint8 *raw, gsize rawsize);
+GError* sqlx_repository_restore_from_file(struct sqlx_sqlite3_s *sq3,
+		const gchar *path);
 
 GError* sqlx_repository_retore_from_master(struct sqlx_sqlite3_s *sq3);
 

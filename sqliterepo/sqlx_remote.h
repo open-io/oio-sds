@@ -66,7 +66,7 @@ GByteArray* sqlx_pack_PIPEFROM(struct sqlx_name_s *name,
 GByteArray* sqlx_pack_PIPETO(struct sqlx_name_s *name,
 		const gchar *target);
 
-GByteArray* sqlx_pack_DUMP(struct sqlx_name_s *name);
+GByteArray* sqlx_pack_DUMP(struct sqlx_name_s *name, gboolean chunked);
 
 GByteArray* sqlx_pack_RESTORE(struct sqlx_name_s *name,
 		const guint8 *raw, gsize rawsize);
@@ -110,8 +110,15 @@ void peers_restore(gchar **targets, struct sqlx_name_s *name,
 GError * peer_restore(const gchar *target, struct sqlx_name_s *name,
 		GByteArray *dump);
 
-GError * peer_dump(const gchar *target, struct sqlx_name_s *name,
+GError * peer_dump_gba(const gchar *target, struct sqlx_name_s *name,
 		GByteArray **result);
+
+typedef GError* (*peer_dump_cb)(GByteArray *part, gint64 remaining, gpointer arg);
+
+GError *
+peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
+		peer_dump_cb, gpointer cb_arg);
+
 
 /** @} */
 

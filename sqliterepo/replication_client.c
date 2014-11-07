@@ -15,6 +15,8 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
+#include <glib.h>
+
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 
@@ -89,32 +91,44 @@ peers_restore(gchar **targets, struct sqlx_name_s *name,
 }
 
 GError *
-peer_dump(const gchar *target, struct sqlx_name_s *name, GByteArray **result)
+peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
+		peer_dump_cb callback, gpointer cb_arg)
 {
-	GByteArray *dump = NULL;
 	struct client_s *client;
 	GByteArray *encoded;
 	GError *err = NULL;
 
 	gboolean on_reply(gpointer ctx, MESSAGE reply) {
+		GError *err2 = NULL;
 		void *b = NULL;
 		gsize bsize = 0;
+		gint64 remaining = -1;
 		(void) ctx;
 
+		err2 = message_extract_strint64(reply, "remaining", &remaining);
+		g_clear_error(&err2);
+
 		if (0 < message_get_BODY(reply, &b, &bsize, NULL)) {
-			if (!dump)
-				dump = g_byte_array_new();
+			GByteArray *dump = g_byte_array_new();
 			g_byte_array_append(dump, b, bsize);
+			err2 = callback(dump, remaining, cb_arg);
+		}
+		if (err2 != NULL) {
+			GRID_ERROR("Failed to use result of dump: (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err2);
+			return FALSE;
 		}
 		return TRUE;
 	}
 
-	GRID_TRACE2("%s(%s,%p,%p)", __FUNCTION__, target, name, result);
+	GRID_TRACE2("%s(%s,%p,%d,%p,%p)", __FUNCTION__, target, name, chunked,
+			callback, cb_arg);
 
 	if (!target)
 		return NEWERROR(500, "No target URL");
 
-	encoded = sqlx_pack_DUMP(name);
+	encoded = sqlx_pack_DUMP(name, chunked);
 	client = gridd_client_create(target, encoded, NULL, on_reply);
 	g_byte_array_unref(encoded);
 
@@ -127,14 +141,25 @@ peer_dump(const gchar *target, struct sqlx_name_s *name, GByteArray **result)
 	gridd_client_set_timeout(client, 3600.0, 4000.0);
 	gridd_client_start(client);
 	if (!(err = gridd_client_loop(client))) {
-		if (!(err = gridd_client_error(client)))
-			*result = dump;
+		err = gridd_client_error(client);
 	}
 
-	if (err && dump)
-		g_byte_array_free(dump, TRUE);
-
 	gridd_client_free(client);
+
 	return err;
+}
+
+GError *
+peer_dump_gba(const gchar *target, struct sqlx_name_s *name, GByteArray **result)
+{
+	GError *peer_dump_gba_cb(GByteArray *chunk, gint64 remaining, gpointer arg)
+	{
+		(void) remaining;
+		(void) arg;
+		*result = chunk;
+		return NULL;
+	}
+
+	return peer_dump(target, name, FALSE, peer_dump_gba_cb, NULL);
 }
 

@@ -31,6 +31,7 @@
 #include "sqlx_remote_ex.h"
 #include "replication_dispatcher.h"
 #include "internals.h"
+#include "restoration.h"
 
 #define EXTRACT_FLAG(Name,Flag) do { \
 	err = message_extract_flag(reply->request, Name, FALSE, &(Flag)); \
@@ -420,6 +421,27 @@ _restore(struct sqlx_repository_s *repo, const gchar *base, const gchar *type,
 }
 
 static GError *
+_restore2(struct sqlx_repository_s *repo, const gchar *base, const gchar *type,
+		const gchar *path)
+{
+	GError *err;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	err = sqlx_repository_open_and_lock(repo, type, base, SQLX_OPEN_LOCAL
+			|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE,
+			&sq3, NULL);
+	if (!err) {
+		err = sqlx_repository_restore_from_file(sq3, path);
+		if (!err) {
+			sqlx_repository_call_change_callback(sq3);
+		}
+	}
+
+	sqlx_repository_unlock_and_close_noerror(sq3);
+	return err;
+}
+
+static GError *
 _dump(struct sqlx_repository_s *repo, const gchar *base, const gchar *type,
 		GByteArray **result)
 {
@@ -434,7 +456,7 @@ _dump(struct sqlx_repository_s *repo, const gchar *base, const gchar *type,
 	if (NULL != err)
 		return err;
 
-	err = sqlx_repository_dump_base(sq3, &dump);
+	err = sqlx_repository_dump_base_gba(sq3, &dump);
 	if (!err) {
 		GRID_TRACE("Dump done!");
 		*result = dump;
@@ -450,28 +472,71 @@ _dump(struct sqlx_repository_s *repo, const gchar *base, const gchar *type,
 }
 
 static GError *
+_dump_chunked(struct sqlx_repository_s *repo, const gchar *base,
+		const gchar *type,
+		void (*_send_chunk)(GByteArray *chunk, gint64 remaining))
+{
+	guint64 sent = 0;
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	GRID_TRACE2("%s(%p,%s,%s,%p)", __FUNCTION__, repo, base, type, _send_chunk);
+
+	err = sqlx_repository_open_and_lock(repo, type, base,
+			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK, &sq3, NULL);
+	if (NULL != err)
+		return err;
+
+	GError *_dump_chunked_cb(GByteArray *gba, gint64 remaining, gpointer arg)
+	{
+		(void) arg;
+		sent += gba->len;
+		_send_chunk(gba, remaining);
+		return NULL;
+	}
+
+	err = sqlx_repository_dump_base_chunked(sq3, SQLX_DUMP_CHUNK_SIZE,
+			_dump_chunked_cb, NULL);
+
+	sqlx_repository_unlock_and_close_noerror(sq3);
+	return err;
+}
+
+static GError *
 _pipe_from(const gchar *source, struct sqlx_repository_s *repo,
 		const gchar *base, const gchar *type)
 {
 	GError *err;
 	struct sqlx_name_s name;
-	GByteArray *dump = NULL;
+	struct restore_ctx_s *ctx = NULL;
 
 	GRID_TRACE2("%s(%s,%p,%s,%s)", __FUNCTION__, source, repo, base, type);
 	name.ns = "";
 	name.base = base;
 	name.type = type;
 
-	err = peer_dump(source, &name, &dump);
-	if (NULL != err)
-		return err;
+	err = restore_ctx_create("/tmp/restore.sqlite3.XXXXXX", &ctx);
+	if (err != NULL)
+		goto end;
 
-	if (!dump)
-		return NEWERROR(500, "No dump generated!");
+	GError *_pipe_from_cb(GByteArray *part, gint64 remaining, gpointer arg)
+	{
+		(void) arg;
+		GError *err2 = NULL;
+		GRID_DEBUG("PIPEFROM received block of %u bytes, %"
+				G_GINT64_FORMAT" bytes remaining", part->len, remaining);
+		err2 = restore_ctx_append(ctx, part->data, part->len);
+		metautils_gba_unref(part);
+		return err2;
+	}
 
-	err = _restore(repo, base, type, dump->data, dump->len);
-	g_byte_array_unref(dump);
+	err = peer_dump(source, &name, TRUE, _pipe_from_cb, NULL);
+	if (!err) {
+		err = _restore2(repo, base, type, ctx->path);
+	}
 
+end:
+	restore_ctx_clear(&ctx);
 	return err;
 }
 
@@ -1507,24 +1572,44 @@ sqlx_dispatch_DUMP(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err = NULL;
-	GByteArray *dump = NULL;
 	gchar base[256], type[64];
+	gboolean chunked = FALSE;
 
 	(void) ignored;
 	EXTRACT_STRING("BASE_NAME", base);
 	EXTRACT_STRING("BASE_TYPE", type);
+	EXTRACT_FLAG("CHUNKED", chunked);
 	reply->subject("%s.%s", base, type);
 
-	/* Open and lock the base */
-	err = _dump(repo, base, type, &dump);
-	if (NULL != err) {
-		reply->send_error(0, err);
-		return TRUE;
+	void _send_part(GByteArray *part, gint64 remaining)
+	{
+		gchar tmp[32] = {0};
+		g_snprintf(tmp, 32, "%"G_GINT64_FORMAT, remaining);
+		GRID_DEBUG("DUMP sending block of %u bytes, %"
+				G_GINT64_FORMAT" bytes remaining",
+				part->len, remaining);
+		reply->add_body(part);
+		reply->add_header("remaining", metautils_gba_from_string(tmp));
+		reply->send_reply(CODE_PARTIAL_CONTENT, "Partial content");
 	}
 
-	reply->add_body(dump);
-	reply->add_header("format", metautils_gba_from_string("sqlite3"));
-	reply->send_reply(200, "OK");
+	if (chunked) {
+		err = _dump_chunked(repo, base, type, _send_part);
+	} else {
+		GByteArray *dump = NULL;
+		/* Open and lock the base */
+		err = _dump(repo, base, type, &dump);
+		if (!err) {
+			reply->add_body(dump);
+		}
+	}
+
+	if (NULL != err) {
+		reply->send_error(0, err);
+	} else {
+		reply->add_header("format", metautils_gba_from_string("sqlite3"));
+		reply->send_reply(200, "OK");
+	}
 	return TRUE;
 }
 

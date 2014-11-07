@@ -47,6 +47,7 @@
 #define CODE_NETWORK_ERROR        1
 
 #define CODE_FINAL_OK             200
+#define CODE_PARTIAL_CONTENT      206
 #define CODE_IS_OK(C)            ((C)/100 == 2)
 #define CODE_IS_FINAL(C)         ((C) == CODE_FINAL_OK || !CODE_IS_OK(C))
 #define CODE_IS_NETWORK_ERROR(C) ((C) == CODE_NETWORK_ERROR || (C) < ERRCODE_UPPER_LIMIT)

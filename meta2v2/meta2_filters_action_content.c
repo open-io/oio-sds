@@ -113,13 +113,13 @@ _reply_chunk_info_list(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s 
 			return FILTER_KO;
 		}
 		reply->add_body(body);
-		reply->send_reply(206, "Partial content");
+		reply->send_reply(CODE_PARTIAL_CONTENT, "Partial content");
 	}
 	if (NULL != mdsys) {
 		reply->add_header("METADATA_SYS", g_byte_array_append(g_byte_array_new(),
 				(const guint8*)mdsys, strlen(mdsys)));
 	}
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 
 	gslist_chunks_destroy(list_of_lists, NULL);
 
@@ -205,13 +205,14 @@ _reply_chunked_raw_content(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ct
 		}
 		rc->raw_chunks = (GSList *) cursor->data;
 		if (g_slist_next(cursor)) {
-			if(FILTER_KO == _reply_raw_content(ctx, reply, rc, 206, "partial content")) {
+			if(FILTER_KO == _reply_raw_content(ctx, reply, rc,
+					CODE_PARTIAL_CONTENT, "partial content")) {
 				rc->raw_chunks = original_chunks;
 				gslist_chunks_destroy(list_of_lists, NULL);
 				return FILTER_KO;
 			}
 		} else {
-			if(FILTER_KO ==  _reply_raw_content(ctx, reply, rc, 200, "OK")) {
+			if(FILTER_KO ==  _reply_raw_content(ctx, reply, rc, CODE_FINAL_OK, "OK")) {
 				rc->raw_chunks = original_chunks;
 				gslist_chunks_destroy(list_of_lists, NULL);
 				return FILTER_KO;
@@ -284,7 +285,7 @@ meta2_filter_action_raw_chunks_get_v1(struct gridd_filter_ctx_s *ctx,
 	/******************/
 
 	if (!rc->raw_chunks) {
-		status = _reply_raw_content(ctx, reply, rc, 200, "OK");
+		status = _reply_raw_content(ctx, reply, rc, CODE_FINAL_OK, "OK");
 	} else {
 		status = _reply_chunked_raw_content(ctx, reply, rc);
 	}
@@ -608,7 +609,7 @@ _cancel_set_content_properties(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 
 	return FILTER_OK;
 }
@@ -652,7 +653,7 @@ _init_set_content_properties(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return FILTER_OK;
 }
 
@@ -1001,7 +1002,7 @@ meta2_filter_action_get_content_prop_v1(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return FILTER_OK;
 }
 
@@ -1038,7 +1039,7 @@ int meta2_filter_action_list_all_content_properties(struct gridd_filter_ctx_s *c
 	}
 
 	reply->add_header("field_3", bean_sequence_marshall(beans));
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	_bean_cleanl2(beans);
 
 	return FILTER_OK;
@@ -1779,7 +1780,7 @@ meta2_filter_action_list_content_services(struct gridd_filter_ctx_s *ctx,
 	}
 
 	reply->add_body(addr_info_marshall_gba(args.result, NULL));
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	cleanup(args.result);
 	return FILTER_OK;
 }
@@ -1827,7 +1828,7 @@ meta2_filter_action_list_all_content_services(struct gridd_filter_ctx_s *ctx,
 	}
 	else {
 		reply->add_body(addr_info_marshall_gba(result, NULL));
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 		rc = FILTER_OK;
 	}
 
@@ -1873,7 +1874,7 @@ meta2_filter_action_del_content_services(struct gridd_filter_ctx_s *ctx,
 	else {
 		reply->add_header("result", addr_info_marshall_gba(result, NULL));
 		reply->add_body(strings_marshall_gba(paths, NULL));
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 		rc = FILTER_OK;
 	}
 
@@ -1901,7 +1902,7 @@ meta2_filter_action_flush_content_services(struct gridd_filter_ctx_s *ctx,
 	}
 	else {
 		reply->add_body(addr_info_marshall_gba(NULL, NULL));
-		reply->send_reply(200, "0K");
+		reply->send_reply(CODE_FINAL_OK, "0K");
 		return FILTER_OK;
 	}
 }
@@ -1939,7 +1940,7 @@ meta2_filter_action_replicate_content_v1(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 	else {
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 		return FILTER_OK;
 	}
 }
@@ -1984,7 +1985,7 @@ meta2_filter_action_statv2_v1(struct gridd_filter_ctx_s *ctx,
 	GSList singleton = {NULL, NULL};
 	singleton.data = v2;
 	reply->add_body(meta2_raw_content_v2_marshall_gba(&singleton, NULL));
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	meta2_raw_content_v2_clean(v2);
 
 	return FILTER_OK;

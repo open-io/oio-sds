@@ -496,7 +496,7 @@ sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
 	GError *err;
 
 	// Generate the DUMP
-	err = sqlx_repository_dump_base(ctx->sq3, &dump);
+	err = sqlx_repository_dump_base_gba(ctx->sq3, &dump);
 	if (NULL != err) {
 		GRID_WARN("[%s][%s] Synchronous COMMIT not possible : (%d) %s",
 				ctx->sq3->logical_name, ctx->sq3->logical_type,

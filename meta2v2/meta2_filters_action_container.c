@@ -423,7 +423,7 @@ _reply_path_info_list(struct gridd_filter_ctx_s *ctx,
 			return FILTER_KO;
 		}
 		reply->add_body(gba);
-		reply->send_reply(206, "Partial content");
+		reply->send_reply(CODE_PARTIAL_CONTENT, "Partial content");
 	}
 
 	reply->send_reply(200, "OK");

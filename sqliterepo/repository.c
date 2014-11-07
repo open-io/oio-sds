@@ -22,6 +22,7 @@
 #include "version.h"
 #include "sqlite_utils.h"
 #include "internals.h"
+#include "restoration.h"
 
 #define GSTR_APPEND_SEP(S) do { \
 	if ((S)->str[(S)->len-1]!=G_DIR_SEPARATOR) \
@@ -1324,41 +1325,34 @@ _backup_main(sqlite3 *src, sqlite3 *dst)
 	return err;
 }
 
-static GError *
-fill_tmp_file(gchar *path, int *result, guint8 *raw, gsize rawsize)
+static GError*
+_read_file_chunk(int fd, guint64 chunk_size, GByteArray *gba)
 {
-	int fd;
-	gsize wtotal;
+	ssize_t r;
+	guint64 tot = 0;
+	guint8 *d;
 	GError *err = NULL;
 
-	GRID_TRACE2("%s(%s,%p,%p,%"G_GSIZE_FORMAT")", __FUNCTION__, path,
-			result, raw, rawsize);
+	d = g_malloc(SQLX_DUMP_BUFFER_SIZE);
 
-	fd = g_mkstemp(path);
-	if (fd < 0)
-		return NEWERROR(errno, "mkstemp: %s", strerror(errno));
-
-	for (wtotal=0; wtotal<rawsize ;) {
-		gssize w = write(fd, raw+wtotal, rawsize-wtotal);
-		if (w<0) {
-			err = NEWERROR(errno, "write: %s", strerror(errno));
-			unlink(path);
-			metautils_pclose(&fd);
-			return err;
+	do {
+		r = read(fd, d, MIN(chunk_size - tot, SQLX_DUMP_BUFFER_SIZE));
+		if (r < 0) {
+			err = NEWERROR(errno, "read error: %s", strerror(errno));
+		} else if (r > 0) {
+			tot += r;
+			g_byte_array_append(gba, d, r);
 		}
-		wtotal += w;
-	}
+	} while (r > 0 && tot < chunk_size && !err);
 
-	*result = fd;
-	return NULL;
+	g_free(d);
+	return err;
 }
 
 static GError*
 _read_file(int fd, GByteArray *gba)
 {
 	int rc;
-	ssize_t r;
-	guint8 *d;
 	struct stat st;
 	GError *err = NULL;
 
@@ -1372,17 +1366,7 @@ _read_file(int fd, GByteArray *gba)
 	g_byte_array_set_size(gba, st.st_size);
 	g_byte_array_set_size(gba, 0);
 
-	d = g_malloc(8192);
-
-	do {
-		r = read(fd, d, 8192);
-		if (r < 0)
-			err = NEWERROR(errno, "read error: %s", strerror(errno));
-		else if (r > 0)
-			g_byte_array_append(gba, d, r);
-	} while (r > 0 && !err);
-
-	g_free(d);
+	err = _read_file_chunk(fd, (guint64)st.st_size, gba);
 	return err;
 }
 
@@ -1396,16 +1380,17 @@ sqlx_repository_backup_base(struct sqlx_sqlite3_s *src_sq3,
 }
 
 GError*
-sqlx_repository_dump_base(struct sqlx_sqlite3_s *sq3, GByteArray **dump)
+sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
+		dump_base_fd_cb read_file_cb, gpointer cb_arg)
 {
 	gchar path[] = "/tmp/dump.sqlite3.XXXXXX";
 	int rc, fd;
 	sqlite3 *dst = NULL;
 	GError *err = NULL;
 
-	GRID_TRACE2("%s(%p,%p)", __FUNCTION__, sq3, dump);
+	GRID_TRACE2("%s(%p,%p,%p)", __FUNCTION__, sq3, read_file_cb, cb_arg);
 	EXTRA_ASSERT(sq3 != NULL);
-	EXTRA_ASSERT(dump != NULL);
+	EXTRA_ASSERT(read_file_cb != NULL);
 
 	if (0 > (fd = g_mkstemp(path)))
 		return NEWERROR(errno, "Temporary file creation error"
@@ -1432,15 +1417,82 @@ sqlx_repository_dump_base(struct sqlx_sqlite3_s *sq3, GByteArray **dump)
 	unlink(path);
 
 	if (!err) {
-		GByteArray *_dump = g_byte_array_new();
-		err = _read_file(fd, _dump);
-		if (!err)
-			*dump = _dump;
-		else
-			g_byte_array_free(_dump, TRUE);
+		err = read_file_cb(fd, cb_arg);
 	}
 
 	metautils_pclose(&fd);
+	return err;
+}
+
+GError*
+sqlx_repository_dump_base_gba(struct sqlx_sqlite3_s *sq3, GByteArray **dump)
+{
+	GError *_monolytic_dump_cb(int fd, gpointer arg)
+	{
+		GError *_err = NULL;
+		GByteArray **dump2 = arg;
+		GByteArray *_dump = g_byte_array_new();
+		_err = _read_file(fd, _dump);
+		if (!_err)
+			*dump2 = _dump;
+		else
+			g_byte_array_free(_dump, TRUE);
+		return _err;
+	}
+	return sqlx_repository_dump_base_fd(sq3, _monolytic_dump_cb, dump);
+}
+
+GError*
+sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
+		gint chunk_size, dump_base_chunked_cb callback, gpointer callback_arg)
+{
+	GError *_chunked_dump_cb(int fd, gpointer arg)
+	{
+		(void) arg;
+		int rc;
+		gint64 bytes_read = 0;
+		struct stat st;
+		GError *err = NULL;
+
+		rc = fstat(fd, &st);
+		if (0 > rc)
+			return NEWERROR(errno, "Failed to stat the temporary base");
+		do {
+			GByteArray *gba = g_byte_array_new();
+			err = _read_file_chunk(fd, chunk_size, gba);
+			if (!err) {
+				bytes_read += gba->len;
+				err = callback(gba, st.st_size - bytes_read, callback_arg);
+			}
+		} while (!err && bytes_read < st.st_size);
+		return err;
+	}
+	return sqlx_repository_dump_base_fd(sq3, _chunked_dump_cb, NULL);
+}
+
+GError*
+sqlx_repository_restore_from_file(struct sqlx_sqlite3_s *sq3,
+		const gchar *path)
+{
+	int rc;
+	sqlite3 *src = NULL;
+	GError *err = NULL;
+
+	/* Tries to open the temporary file as a SQLite3 DB */
+	rc = sqlite3_open_v2(path, &src,
+			SQLITE_OPEN_READONLY, NULL);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		_close_handle(&src);
+		err = NEWERROR(rc,
+				"sqlite3_open error: (%s) (errno=%d) %s",
+				sqlite_strerror(rc), errno, strerror(errno));
+		g_prefix_error(&err, "Invalid raw SQLite base: ");
+	} else { /* Backup now! */
+		err = _backup_main(src, sq3->db);
+		_close_handle(&src);
+		sqlx_admin_reload(sq3);
+	}
+
 	return err;
 }
 
@@ -1449,9 +1501,7 @@ sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
 		guint8 *raw, gsize rawsize)
 {
 	GError *err = NULL;
-	gchar path[] = "/tmp/restore.sqlite3.XXXXXX";
-	int rc, fd = -1;
-	sqlite3 *src = NULL;
+	struct restore_ctx_s *restore_ctx = NULL;
 
 	GRID_TRACE2("%s(%p,%p,%"G_GSIZE_FORMAT")", __FUNCTION__, sq3,
 			raw, rawsize);
@@ -1460,39 +1510,24 @@ sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
 	EXTRA_ASSERT(rawsize > 0);
 
 	/* fills a temporary file */
-	err = fill_tmp_file(path, &fd, raw, rawsize);
-	GRID_TRACE("RESTORE from [%s] fd=%d in [%s][%s]", path, fd,
-			sq3->logical_name, sq3->logical_type);
-
+	err = restore_ctx_create("/tmp/restore.sqlite3.XXXXXX", &restore_ctx);
 	if (err != NULL) {
-		EXTRA_ASSERT(fd < 0);
-		g_prefix_error(&err, "Temporary file error: ");
-	}
-	else {
-		EXTRA_ASSERT(fd >= 0);
-
-		/* Tries to open the temporary file as a SQLite3 DB */
-		rc = sqlite3_open_v2(path, &src, SQLITE_OPEN_READONLY, NULL);
-		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-			_close_handle(&src);
-			err = NEWERROR(rc,
-					"sqlite3_open error: (%s) (errno=%d) %s",
-					sqlite_strerror(rc), errno, strerror(errno));
-			g_prefix_error(&err, "Invalid raw SQLite base: ");
+		g_prefix_error(&err, "Failed to create restore context: ");
+	} else {
+		err = restore_ctx_append(restore_ctx, raw, rawsize);
+		if (err != NULL) {
+			g_prefix_error(&err, "Failed to fill temp file: ");
+		} else {
+			EXTRA_ASSERT(restore_ctx->fd >= 0);
+			err = sqlx_repository_restore_from_file(sq3, restore_ctx->path);
 		}
-		else { /* Backup now! */
-			err = _backup_main(src, sq3->db);
-			_close_handle(&src);
-			sqlx_admin_reload(sq3);
-		}
-
-		unlink(path);
-		metautils_pclose(&fd);
+		restore_ctx_clear(&restore_ctx);
 	}
+
 	if (err)
 		GRID_ERROR("Failed to restore base: %s", err->message);
 
-	GRID_TRACE("Base restored ? (%d) %s", err?err->code:0,
+	GRID_TRACE("Base restored? (%d) %s", err?err->code:0,
 			err?err->message:"OK");
 	return err;
 }

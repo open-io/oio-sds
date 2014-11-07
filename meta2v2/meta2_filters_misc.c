@@ -69,9 +69,9 @@ _on_bean_ctx_send_list(struct on_bean_ctx_s *obc, gboolean final)
 		_on_bean_ctx_append_udata_list(obc);
 	}
 	if (final)
-		obc->reply->send_reply(200, "OK");
+		obc->reply->send_reply(CODE_FINAL_OK, "OK");
 	else
-		obc->reply->send_reply(206, "CONTINUE");
+		obc->reply->send_reply(CODE_PARTIAL_CONTENT, "Partial content");
 	obc->l = NULL;
 }
 
