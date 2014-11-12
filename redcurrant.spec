@@ -210,6 +210,7 @@ solution.
 
 
 %build
+PKG_CONFIG_PATH=$PKG_CONFIG_PATH:/lib64/pkgconfig \
 cmake \
 	-DCMAKE_BUILD_TYPE=Debug \
 	-DPREFIX=%{prefix} \
