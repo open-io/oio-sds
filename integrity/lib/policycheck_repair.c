@@ -1085,6 +1085,8 @@ check_and_repair_content2(const gchar *namespace, const gchar *container_id,
 		gboolean check_only, GError **error)
 {
 	gint retval = 0;
+	if (!g_thread_supported())
+		g_thread_init(NULL);
 	struct hc_url_s *url = hc_url_empty();
 	hc_url_set(url, HCURL_NS, namespace);
 	hc_url_set(url, HCURL_HEXID, container_id);
