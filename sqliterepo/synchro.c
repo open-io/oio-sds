@@ -5,7 +5,8 @@
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 
-#include <zookeeper/zookeeper.h>
+#include <zookeeper.h>
+#include <zookeeper_log.h>
 
 #include "synchro.h"
 

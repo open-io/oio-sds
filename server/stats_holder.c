@@ -207,26 +207,34 @@ grid_stats_holder_increment_merge(struct grid_stats_holder_s *base,
 
 /* ------------------------------------------------------------------------- */
 
+enum {
+	/*! If set, when there is no activity, the untouched slots are filled
+	 * with zeros. If not set (default), the previous value is repeated. */
+	RRD_FLAG_SHIFT_SET = 0x01,
+};
+
 struct grid_single_rrd_s
 {
 	time_t last;
 	time_t period;
+	guint32 flags;
+	guint64 def;
 	guint64 l0[];
 };
 
 struct grid_single_rrd_s*
-grid_single_rrd_create(time_t period)
+grid_single_rrd_create(time_t now, time_t period)
 {
-	struct grid_single_rrd_s *result;
+	struct grid_single_rrd_s *gsr;
 
 	EXTRA_ASSERT(period > 1);
 
-	result = g_malloc0(sizeof(struct grid_single_rrd_s)
+	gsr = g_malloc0(sizeof(struct grid_single_rrd_s)
 			+ (period * sizeof(guint64)));
-	result->last = time(0);
-	result->period = period;
+	gsr->last = now;
+	gsr->period = period;
 
-	return result;
+	return gsr;
 }
 
 void
@@ -236,74 +244,126 @@ grid_single_rrd_destroy(struct grid_single_rrd_s *gsr)
 		g_free(gsr);
 }
 
+void
+grid_single_rrd_set_default(struct grid_single_rrd_s *gsr, guint64 v)
+{
+	gsr->def = v;
+	gsr->flags |= RRD_FLAG_SHIFT_SET;
+}
+
+static inline void
+_rrd_set(struct grid_single_rrd_s *gsr, guint64 v)
+{
+	gsr->l0[gsr->last % gsr->period] = v;
+}
+
+static inline guint64
+_rrd_get(struct grid_single_rrd_s *gsr, time_t at)
+{
+	return gsr->l0[at % gsr->period];
+}
+
+static inline guint64
+_rrd_current(struct grid_single_rrd_s *gsr)
+{
+	return _rrd_get(gsr, gsr->last);
+}
+
+static guint64
+_rrd_past(struct grid_single_rrd_s *gsr, time_t period)
+{
+	return _rrd_get(gsr, gsr->last - period);
+}
+
 static void
-_gsr_blank_empty_slots(struct grid_single_rrd_s *gsr, guint64 v, time_t now)
+_gsr_manage_timeshift(struct grid_single_rrd_s *gsr, time_t now)
 {
-	time_t i;
+	if (now == gsr->last)
+		return ;
 
-	for (i=gsr->last; i<now ;)
-		gsr->l0[(i++) % gsr->period] = v;
+	guint64 v = (gsr->flags & RRD_FLAG_SHIFT_SET) ? gsr->def : _rrd_current(gsr);
+	for (time_t i=0; gsr->last != now && i++ < gsr->period ;) {
+		gsr->last ++;
+		_rrd_set(gsr,v);
+	}
 	gsr->last = now;
 }
 
 void
-grid_single_rrd_push(struct grid_single_rrd_s *gsr, guint64 v)
+grid_single_rrd_push(struct grid_single_rrd_s *gsr, time_t now, guint64 v)
 {
-	time_t now;
-
-	if ((now = time(0)) != gsr->last)
-		_gsr_blank_empty_slots(gsr, gsr->l0[gsr->last % gsr->period], now);
-
-	gsr->l0[now % gsr->period] = v;
-	gsr->last = now;
-}
-
-guint64
-grid_single_rrd_get(struct grid_single_rrd_s *gsr)
-{
-	time_t now;
-
-	if ((now = time(0)) != gsr->last)
-		_gsr_blank_empty_slots(gsr, gsr->l0[gsr->last % gsr->period], now);
-
-	return gsr->l0[now % gsr->period];
-}
-
-guint64
-grid_single_rrd_get_delta(struct grid_single_rrd_s *gsr, time_t period)
-{
-	time_t now;
-
-	EXTRA_ASSERT(period < gsr->period);
-
-	if ((now = time(0)) != gsr->last)
-		_gsr_blank_empty_slots(gsr, gsr->l0[gsr->last % gsr->period], now);
-
-	return gsr->l0[now % gsr->period] - gsr->l0[(now-period) % gsr->period];
+	_gsr_manage_timeshift(gsr, now);
+	_rrd_set(gsr, v);
 }
 
 void
-grid_single_rrd_feed(struct grid_stats_holder_s *gsh, ...)
+grid_single_rrd_pushifmax(struct grid_single_rrd_s *gsr, time_t now, guint64 v)
+{
+	_gsr_manage_timeshift(gsr, now);
+	guint64 v0 = _rrd_current(gsr);
+	_rrd_set(gsr, MAX(v0,v));
+}
+
+guint64
+grid_single_rrd_get(struct grid_single_rrd_s *gsr, time_t now)
+{
+	_gsr_manage_timeshift(gsr, now);
+	return _rrd_current(gsr);
+}
+
+guint64
+grid_single_rrd_get_delta(struct grid_single_rrd_s *gsr,
+		time_t now, time_t period)
+{
+	EXTRA_ASSERT(period <= gsr->period);
+	_gsr_manage_timeshift(gsr, now);
+	return _rrd_current(gsr) - _rrd_past(gsr, period);
+}
+
+guint64
+grid_single_rrd_get_max(struct grid_single_rrd_s *gsr,
+		time_t now, time_t period)
+{
+	EXTRA_ASSERT(period <= gsr->period);
+	_gsr_manage_timeshift(gsr, now);
+	guint64 maximum = 0;
+	for (time_t i=0; i<period ;i++) {
+		guint64 m = _rrd_past(gsr,i);
+		maximum = MAX(maximum,m);
+	}
+	return maximum;
+}
+
+void
+grid_single_rrd_get_allmax(struct grid_single_rrd_s *gsr,
+		time_t now, time_t period, guint64 *out)
+{
+	EXTRA_ASSERT(period <= gsr->period);
+	_gsr_manage_timeshift(gsr, now);
+	guint64 maximum = 0;
+	for (time_t i=0; i<period ;i++) {
+		guint64 m = _rrd_past(gsr,i);
+		out[i] = maximum = MAX(maximum,m);
+	}
+}
+
+void
+grid_single_rrd_feed(struct grid_stats_holder_s *gsh, time_t now, ...)
 {
 	struct grid_single_rrd_s *gsr;
 	gchar *n;
 	va_list va;
-	time_t now;
 
 	EXTRA_ASSERT(gsh != NULL);
 
-	now = time(0);
-
-	va_start(va, gsh);
+	va_start(va, now);
 	g_mutex_lock(gsh->lock);
 	while (NULL != (n = va_arg(va, gchar*))) {
 		gsr = va_arg(va, struct grid_single_rrd_s*);
 		if (!gsr)
 			break;
-		if (now != gsr->last)
-			_gsr_blank_empty_slots(gsr, gsr->l0[gsr->last % gsr->period], now);
-		gsr->l0[now % gsr->period] = _real_get(gsh->hashset, n);
-		gsr->last = now;
+		_gsr_manage_timeshift(gsr, now);
+		_rrd_set(gsr, _real_get(gsh->hashset, n));
 	}
 	g_mutex_unlock(gsh->lock);
 	va_end(va);

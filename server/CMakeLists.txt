@@ -47,6 +47,10 @@ target_link_libraries(grid_daemon_test
 		server metautils metacomm
 		${GLIB2_LIBRARIES})
 
+add_executable(test_stats_holder test_stats_holder.c)
+target_link_libraries(test_stats_holder server
+        ${GLIB2_LIBRARIES})
+
 install(FILES
 			grid_daemon.h
 			gridd_dispatcher_filters.h

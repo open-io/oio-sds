@@ -175,8 +175,8 @@ _init_configless_structures(struct sqlx_service_s *ss)
 			|| !(ss->dispatcher = transport_gridd_build_empty_dispatcher())
 			|| !(ss->si = g_malloc0(sizeof(struct service_info_s)))
 			|| !(ss->clients_pool = gridd_client_pool_create())
-			|| !(ss->gsr_reqtime = grid_single_rrd_create(8))
-			|| !(ss->gsr_reqcounter = grid_single_rrd_create(8))
+			|| !(ss->gsr_reqtime = grid_single_rrd_create(network_server_bogonow(ss->server), 8))
+			|| !(ss->gsr_reqcounter = grid_single_rrd_create(network_server_bogonow(ss->server),8))
 			|| !(ss->resolver = hc_resolver_create())
 			|| !(ss->gtq_admin = grid_task_queue_create("admin"))
 			|| !(ss->gtq_register = grid_task_queue_create("register"))
@@ -639,13 +639,17 @@ _task_register(gpointer p)
 		return;
 
 	/* Computes the avg requests rate/time */
-	grid_single_rrd_feed(network_server_get_stats(PSRV(p)->server),
+	time_t now = network_server_bogonow(PSRV(p)->server);
+
+	grid_single_rrd_feed(network_server_get_stats(PSRV(p)->server), now,
 			INNER_STAT_NAME_REQ_COUNTER, PSRV(p)->gsr_reqcounter,
 			INNER_STAT_NAME_REQ_TIME, PSRV(p)->gsr_reqtime,
 			NULL);
 
-	guint64 avg_counter = grid_single_rrd_get_delta(PSRV(p)->gsr_reqcounter, 4);
-	guint64 avg_time = grid_single_rrd_get_delta(PSRV(p)->gsr_reqtime, 4);
+	guint64 avg_counter = grid_single_rrd_get_delta(PSRV(p)->gsr_reqcounter,
+			now, 4);
+	guint64 avg_time = grid_single_rrd_get_delta(PSRV(p)->gsr_reqtime,
+			now, 4);
 
 	avg_counter = MACRO_COND(avg_counter != 0, avg_counter, 1);
 	avg_time = MACRO_COND(avg_time != 0, avg_time, 1);

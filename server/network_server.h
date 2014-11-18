@@ -3,6 +3,14 @@
 # include <sys/time.h>
 # include <server/slab.h>
 
+# define timespec_sub(a, b, result) do { \
+	(result)->tv_sec = (a)->tv_sec - (b)->tv_sec, \
+	(result)->tv_nsec = (a)->tv_nsec - (b)->tv_nsec; \
+	if ((result)->tv_nsec < 0) { \
+		--(result)->tv_sec, (result)->tv_nsec += 1000000000; \
+	} \
+} while (0)
+
 struct network_server_s;
 struct grid_stats_holder_s;
 struct network_client_s;
@@ -52,9 +60,9 @@ struct network_client_s
 	gchar peer_name[128];
 	int flags;
 	struct {
-		time_t cnx;
-		time_t evt_in;
-		time_t evt_out;
+		time_t cnx; // coarse (bogo)
+		time_t evt_out; // coarse (bogo)
+		struct timespec evt_in; // precise
 	} time;
 
 	/* Pending input */
@@ -159,6 +167,14 @@ gint network_server_pending_events(struct network_server_s *srv);
  * @return
  */
 gdouble network_server_reqidle(struct network_server_s *srv);
+
+/*! "not really precise and not really reliable" clock with a precision at a
+ * second. Useful and sufficiant when sub-second precision is not required,
+ * e.g. for cache expirations. Does not involve syscalls. */
+time_t network_server_bogonow(const struct network_server_s *srv);
+
+/*! Precise monotonic clock measurement. Might involve a syscall. */
+void network_server_now(struct timespec *ts);
 
 /* -------------------------------------------------------------------------- */
 

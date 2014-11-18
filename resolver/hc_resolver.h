@@ -9,6 +9,14 @@ enum hc_resolver_flags_e
 	HC_RESOLVER_NOMAX =   0x04,
 };
 
+/** timeout (in seconds) for requests to meta0 services.
+ * Ignored if negative or zero. Negative (unset) by default. */
+extern gdouble rc_resolver_timeout_m0;
+
+/** timeout (in seconds) for requests to meta1 services.
+ * Ignored if negative or zero. Negative (unset) by default. */
+extern gdouble rc_resolver_timeout_m1;
+
 /* forward declarations */
 struct meta1_service_url_s;
 struct hc_url_s;

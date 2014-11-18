@@ -75,6 +75,9 @@ struct network_server_s
 	guint workers_active;
 	guint workers_hit_max;
 
+	struct grid_single_rrd_s *workers_active_1; /* at least 30 slots, 1/sec */
+	struct grid_single_rrd_s *workers_active_60; /* at least 60 slots, 1/min */
+
 	guint workers_minimum;
 	guint workers_minimum_spare;
 	guint workers_maximum;
@@ -94,7 +97,8 @@ struct network_server_s
 	time_t atexit_max_idle; /*< max idle time since last input */
 	time_t atexit_max_open_persist; /*< max connection time for persistant
 									  connections*/
-	time_t bogonow;
+
+	struct timespec now;
 
 	int wakeup[2];
 	int epollfd;
@@ -223,7 +227,8 @@ network_server_init(void)
 	result = g_malloc0(sizeof(struct network_server_s));
 	result->flag_continue = ~0;
 	result->stats = grid_stats_holder_init();
-	result->bogonow = time(0);
+
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &result->now);
 
 	result->queue_events = g_async_queue_new();
 	result->queue_monitor = g_async_queue_new();
@@ -240,6 +245,10 @@ network_server_init(void)
 	result->wakeup[0] = wakeup[0];
 	result->wakeup[1] = wakeup[1];
 	result->epollfd = epoll_create(4096);
+
+	// XXX JFS : #slots as a power of 2 ... for efficient modulos
+	result->workers_active_1 = grid_single_rrd_create(result->now.tv_sec, 32);
+	result->workers_active_60 = grid_single_rrd_create(result->now.tv_sec/60, 64);
 
 	result->atexit_max_open_never_input = 3;
 	result->atexit_max_idle = 2;
@@ -293,6 +302,15 @@ network_server_clean(struct network_server_s *srv)
 	if (srv->queue_events) {
 		g_async_queue_unref(srv->queue_events);
 		srv->queue_events = NULL;
+	}
+
+	if (srv->workers_active_1) {
+		grid_single_rrd_destroy(srv->workers_active_1);
+		srv->workers_active_1 = NULL;
+	}
+	if (srv->workers_active_60) {
+		grid_single_rrd_destroy(srv->workers_active_60);
+		srv->workers_active_60 = NULL;
 	}
 
 	g_free(srv);
@@ -465,7 +483,8 @@ ARM_ENDPOINT(struct network_server_s *srv, struct endpoint_s *e, int how)
 
 static void
 _manage_client_event(struct network_server_s *srv,
-		struct network_client_s *clt, register int ev0)
+		struct network_client_s *clt, register int ev0,
+		struct timespec *now)
 {
 	_client_remove_from_monitored(srv, clt);
 
@@ -477,6 +496,9 @@ _manage_client_event(struct network_server_s *srv,
 		| MACRO_COND(ev0 & (EPOLLERR|EPOLLHUP|EPOLLRDHUP), CLT_ERROR, 0);
 	clt->events = MACRO_COND(!ev0, CLT_ERROR, ev0);
 
+	if (ev0 & EPOLLIN)
+		memcpy(&clt->time.evt_in, now, sizeof(struct timespec));
+
 	if (clt->events & CLT_ERROR)
 		ARM_CLIENT(srv, clt, EPOLL_CTL_DEL);
 	g_async_queue_push(srv->queue_events, clt);
@@ -485,13 +507,15 @@ _manage_client_event(struct network_server_s *srv,
 static void
 _manage_events(struct network_server_s *srv)
 {
-	int rc, erc;
-	struct epoll_event allev[MAXEV], *pev;
 	struct network_client_s *clt;
+	struct epoll_event allev[MAXEV], *pev;
+	struct timespec now;
+	int rc, erc;
 
 	(void) rc;
 	erc = epoll_wait(srv->epollfd, allev, MAXEV, 500);
 	if (erc > 0) {
+		network_server_now(&now);
 		while (erc-- > 0) {
 			pev = allev+erc;
 
@@ -509,7 +533,7 @@ _manage_events(struct network_server_s *srv)
 				ARM_ENDPOINT(srv, e, EPOLL_CTL_MOD);
 			}
 			else {
-				_manage_client_event(srv, pev->data.ptr, pev->events);
+				_manage_client_event(srv, pev->data.ptr, pev->events, &now);
 			}
 		}
 	}
@@ -527,7 +551,7 @@ _server_shutdown_inactive_connections(struct network_server_s *srv)
 {
 	struct network_client_s *clt, *n;
 
-	time_t now = srv->bogonow;
+	time_t now = network_server_bogonow(srv);
 	time_t ti = now - srv->atexit_max_idle;
 	time_t tc = now - srv->atexit_max_open_never_input;
 	time_t tp = now - srv->atexit_max_open_persist;
@@ -535,13 +559,13 @@ _server_shutdown_inactive_connections(struct network_server_s *srv)
 	for (clt=srv->first ; clt ; clt=n) {
 		n = clt->next;
 		EXTRA_ASSERT(clt->fd >= 0);
-		if (clt->time.evt_in) {
-			if (clt->time.evt_in < ti || clt->time.cnx < tp) {
-				_manage_client_event(srv, clt, 0);
+		if (clt->time.evt_in.tv_sec) {
+			if (clt->time.evt_in.tv_sec < ti || clt->time.cnx < tp) {
+				_manage_client_event(srv, clt, 0, NULL);
 			}
 		}
 		else if (clt->time.cnx < tc) { /* never input */
-			_manage_client_event(srv, clt, 0);
+			_manage_client_event(srv, clt, 0, NULL);
 		}
 	}
 }
@@ -550,16 +574,19 @@ static gpointer
 _thread_cb_events(gpointer d)
 {
 	struct network_server_s *srv = d;
-	time_t last = srv->bogonow;
+	time_t now, last;
 
 	metautils_ignore_signals();
 	GRID_INFO("EVENTS thread starting pfd=%d", srv->epollfd);
 
+	now = last = network_server_bogonow(srv);
+
 	while (srv->flag_continue) {
 		_manage_events(srv);
-		if (srv->bogonow > last + 30 || srv->bogonow < last) {
+		now = network_server_bogonow(srv);
+		if (now > last + 30 || now < last) {
 			_server_shutdown_inactive_connections(srv);
-			last = srv->bogonow;
+			last = now;
 		}
 	}
 
@@ -579,7 +606,7 @@ GError *
 network_server_run(struct network_server_s *srv)
 {
 	struct endpoint_s **pu, *u;
-	time_t last_update;
+	time_t now, last_update;
 	GError *err = NULL;
 
 	/* Sanity checks */
@@ -599,14 +626,16 @@ network_server_run(struct network_server_s *srv)
 	_server_start_one_worker(srv, FALSE);
 	srv->thread_events = g_thread_create(_thread_cb_events, srv, TRUE, NULL);
 
-	last_update = srv->bogonow = time(0);
+	clock_gettime(CLOCK_MONOTONIC_COARSE, &srv->now);
+	last_update = network_server_bogonow(srv);
 	while (srv->flag_continue) {
-		if (last_update < srv->bogonow) {
+		now = network_server_bogonow(srv);
+		if (last_update < now) {
 			_server_update_main_stats(srv);
-			last_update = srv->bogonow;
+			last_update = now;
 		}
 		usleep(_start_necessary_threads(srv) ? 50000 : 500000);
-		srv->bogonow = time(0);
+		clock_gettime(CLOCK_MONOTONIC_COARSE, &srv->now);
 	}
 
 	network_server_close_servers(srv);
@@ -615,7 +644,7 @@ network_server_run(struct network_server_s *srv)
 	while (srv->workers_total) {
 		GRID_DEBUG("Waiting for %u workers to die", srv->workers_total);
 		usleep(200000);
-		srv->bogonow = time(0);
+		clock_gettime(CLOCK_MONOTONIC_COARSE, &srv->now);
 	}
 	srv->thread_first_worker = NULL;
 
@@ -665,6 +694,19 @@ network_server_reqidle(struct network_server_s *srv)
 	gdouble d = pending;
 	return 100.0 / d;
 }
+
+time_t
+network_server_bogonow(const struct network_server_s *srv)
+{
+	return srv->now.tv_sec;
+}
+
+void
+network_server_now(struct timespec *ts)
+{
+	clock_gettime(CLOCK_MONOTONIC, ts);
+}
+
 
 /* Endpoint features ------------------------------------------------------- */
 
@@ -771,9 +813,7 @@ retry:
 	grid_sockaddr_to_string((struct sockaddr*)&ss,
 			clt->peer_name, sizeof(clt->peer_name));
 	_client_sock_name(fd, clt->local_name, sizeof(clt->local_name));
-	clt->flags = 0;
-	clt->time.evt_in = clt->time.evt_out = 0;
-	clt->time.cnx = time(0);
+	clt->time.cnx = network_server_bogonow(srv);
 	clt->events = CLT_READ;
 
 	clt->input.first = clt->input.last = NULL;
@@ -806,6 +846,14 @@ _server_start_one_worker(struct network_server_s *srv, gboolean counters_changed
 static void
 _server_update_main_stats(struct network_server_s *srv)
 {
+	guint64 max_sec[30], max_min[60];
+	time_t now = network_server_bogonow(srv);
+
+	g_mutex_lock(srv->lock_threads);
+	grid_single_rrd_get_allmax(srv->workers_active_1, now, 30, max_sec);
+	grid_single_rrd_get_allmax(srv->workers_active_60, now/60, 60, max_min);
+	g_mutex_unlock(srv->lock_threads);
+
 	grid_stats_holder_set(srv->stats,
 			"server.thread.gauge.min", guint_to_guint64(srv->workers_minimum),
 			"server.thread.gauge.max", guint_to_guint64(srv->workers_maximum),
@@ -822,6 +870,15 @@ _server_update_main_stats(struct network_server_s *srv)
 			"server.thread.counter.active_out", srv->active_out,
 			"server.cnx.counter.accept", srv->cnx_accept,
 			"server.cnx.counter.close", srv->cnx_close,
+
+			"server.thread.max.1", max_sec[1], // 0 is probably uncomplete
+			"server.thread.max.5", max_sec[4],
+			"server.thread.max.15", max_sec[14],
+			"server.thread.max.30", max_sec[29],
+			"server.thread.max.60", max_min[1], // idem
+			"server.thread.max.300", max_min[4],
+			"server.thread.max.900", max_min[14],
+			"server.thread.max.3600", max_min[59],
 			NULL);
 }
 
@@ -918,14 +975,14 @@ _thread_cb_worker(gpointer td)
 
 	metautils_ignore_signals();
 	_thread_maybe_become_first(srv);
-	last_update = last_not_idle = srv->bogonow;
+	last_update = last_not_idle = network_server_bogonow(srv);
 	local_stats = grid_stats_holder_init();
 	GRID_DEBUG("Thread starting for srv %p", srv);
 
 	while (srv->flag_continue || srv->cnx_clients > 0) {
 		struct network_client_s *clt = get_next_client(srv);
 		if (!clt) {
-			gboolean expired = srv->bogonow >
+			gboolean expired = network_server_bogonow(srv) >
 				(last_not_idle + srv->workers_max_idle_delay);
 			if (expired && _thread_can_die(srv)) {
 				GRID_DEBUG("Thread idle for too long, exiting!");
@@ -936,17 +993,17 @@ _thread_cb_worker(gpointer td)
 			EXTRA_ASSERT(clt->server == srv);
 
 			_thread_become_active(srv);
-			last_not_idle = srv->bogonow;
+			last_not_idle = network_server_bogonow(srv);
 			clt->local_stats = local_stats;
 			_work_on_client(srv, clt);
 			_thread_become_inactive(srv);
 		}
 
 		/* periodically merge the local stats in the main stats */
-		if (last_update < srv->bogonow) {
+		if (last_update < network_server_bogonow(srv)) {
 			grid_stats_holder_increment_merge(srv->stats, local_stats);
 			grid_stats_holder_zero(local_stats);
-			last_update = srv->bogonow;
+			last_update = network_server_bogonow(srv);
 		}
 	}
 
@@ -1027,22 +1084,50 @@ _thread_too_few(struct network_server_s *srv, guint total)
 static void
 _thread_become_active(struct network_server_s *srv)
 {
+	time_t now = network_server_bogonow(srv);
+
 	g_mutex_lock(srv->lock_threads);
+
 	++ srv->workers_active;
+	++ srv->active_in;
+
+	grid_single_rrd_set_default(srv->workers_active_1,
+			srv->workers_active);
+	grid_single_rrd_set_default(srv->workers_active_60,
+			srv->workers_active);
+
+	grid_single_rrd_pushifmax(srv->workers_active_1, now,
+			srv->workers_active);
+	grid_single_rrd_pushifmax(srv->workers_active_60, now/60,
+			srv->workers_active);
+
 	if (_thread_too_few(srv, srv->workers_total)) {
 		srv->workers_hit_max ++;
 		srv->counter_hitmax ++;
 	}
-	++ srv->active_in;
 	g_mutex_unlock(srv->lock_threads);
 }
 
 static void
 _thread_become_inactive(struct network_server_s *srv)
 {
+	time_t now = network_server_bogonow(srv);
+
 	g_mutex_lock(srv->lock_threads);
+
 	-- srv->workers_active;
 	++ srv->active_out;
+
+	grid_single_rrd_set_default(srv->workers_active_1,
+			srv->workers_active);
+	grid_single_rrd_set_default(srv->workers_active_60,
+			srv->workers_active);
+
+	grid_single_rrd_pushifmax(srv->workers_active_1, now,
+			srv->workers_active);
+	grid_single_rrd_pushifmax(srv->workers_active_60, now / 60,
+			srv->workers_active);
+
 	if (_thread_too_few(srv, srv->workers_total)) {
 		srv->workers_hit_max ++;
 		srv->counter_hitmax ++;
@@ -1337,9 +1422,6 @@ _client_manage_event(struct network_client_s *clt, int events)
 	rcO = _client_has_pending_output(clt);
 	rcI = events & CLT_READ ;
 
-	if (rcI)
-		clt->time.evt_in = time(0);
-
 	do {
 		/* Try to send some data if any */
 		if (rcO) {
@@ -1387,7 +1469,7 @@ network_client_send_slab(struct network_client_s *client, struct data_slab_s *ds
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(ds != NULL);
 
-	client->time.evt_out = time(0);
+	client->time.evt_out = network_server_bogonow(client->server);
 
 	if (!_client_ready_for_output(client)) {
 		register int type = ds->type;

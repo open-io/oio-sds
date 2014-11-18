@@ -14,6 +14,10 @@
 
 #include <glib.h>
 
+gdouble rc_resolver_timeout_m0 = -1.0;
+
+gdouble rc_resolver_timeout_m1 = -1.0;
+
 /* Packing */
 static inline gsize
 _strv_total_length(gchar **v)
@@ -79,6 +83,14 @@ hc_resolver_element_create(gchar **value)
 	_strv_concat(elt->s, value);
 
 	return elt;
+}
+
+/* Timeout helpers --------------------------------------------------------- */
+
+static gdouble
+_timeout(gdouble *pd, gdouble def)
+{
+	return (!pd || *pd <= 0.001) ? def : *pd;
 }
 
 /* Public API -------------------------------------------------------------- */
@@ -252,7 +264,8 @@ _resolve_m1_through_one_m0(const gchar *m0, const guint8 *prefix, gchar ***resul
 	meta1_strurl_get_address(m0, &ai);
 
 	do {
-		GSList *lmap = meta0_remote_get_meta1_one(&ai, 30000, prefix, &err);
+		GSList *lmap = meta0_remote_get_meta1_one(&ai,
+				_timeout(&rc_resolver_timeout_m0, 30.0), prefix, &err);
 		if (!lmap) {
 			if (err)
 				return err;
@@ -340,7 +353,9 @@ _resolve_service_through_one_m1(const gchar *m1, struct hc_url_s *u,
 	meta1_strurl_get_address(m1, &ai);
 
 	*result = meta1v2_remote_list_reference_services(&ai, &err,
-			hc_url_get(u, HCURL_NS), hc_url_get_id(u), s, 30.0, 300.0);
+			hc_url_get(u, HCURL_NS), hc_url_get_id(u), s,
+			_timeout(&rc_resolver_timeout_m1, 30.0),
+			_timeout(&rc_resolver_timeout_m1, 30.0));
 	g_assert((err!=NULL) ^ (*result!=NULL));
 
 	return err;

@@ -420,8 +420,10 @@ grid_main_init(int argc, char **args)
 
 	if (*syslog_id) {
 		GRID_INFO("Opening syslog with id [%s]", syslog_id);
-		openlog(syslog_id, LOG_PID|LOG_NDELAY, LOG_LOCAL0);
+		logger_syslog_open();
 		g_log_set_default_handler(logger_syslog, NULL);
+	} else {
+		g_strlcpy(syslog_id, "-", sizeof(syslog_id));
 	}
 
 	flag_running = TRUE;

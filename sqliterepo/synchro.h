@@ -10,7 +10,7 @@
  *
  * Helps the developper to make use of a ZooKeeper-like server.
  */
-#include <zookeeper/zookeeper.h>
+#include <zookeeper.h>
 
 struct sqlx_sync_s;
 

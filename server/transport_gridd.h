@@ -69,6 +69,8 @@ struct gridd_reply_ctx_s
 	 */
 	void (*subject) (const gchar *fmt, ...);
 
+	void (*uid) (const gchar *fmt, ...);
+
 	/**
 	 * @param key
 	 * @param data

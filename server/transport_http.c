@@ -19,16 +19,12 @@ struct transport_client_context_s
 	struct http_parser_s *parser;
 	struct http_request_s *request;
 	struct http_request_dispatcher_s *dispatcher;
-
-	struct timeval tv_start;
 };
 
 struct http_request_handler_s
 {
 	enum http_rc_e (*handler)(gpointer u,
 			struct http_request_s *request, struct http_reply_ctx_s *reply);
-	gchar stat_name_req[256];
-	gchar stat_name_time[256];
 };
 
 struct http_request_dispatcher_s
@@ -39,14 +35,15 @@ struct http_request_dispatcher_s
 
 struct req_ctx_s
 {
-	gboolean close_after_request;
-	struct timeval tv_parsed;
+	struct timespec tv_start, tv_parsed;
 
 	struct network_client_s *client;
 	struct network_transport_s *transport;
 	struct transport_client_context_s *context;
 	struct http_request_dispatcher_s *dispatcher;
 	struct http_request_s *request;
+
+	gboolean close_after_request;
 };
 
 static int http_notify_input(struct network_client_s *clt);
@@ -322,10 +319,6 @@ transport_http_build_dispatcher(gpointer u,
 	for (d=descr; d && d->name && d->handler ;d++) {
 		struct http_request_handler_s h;
 		h.handler = d->handler;
-		g_snprintf(h.stat_name_req, sizeof(h.stat_name_req),
-				"%s.%s", HTTP_STAT_PREFIX_REQ, d->name);
-		g_snprintf(h.stat_name_time, sizeof(h.stat_name_time),
-				"%s.%s", HTTP_STAT_PREFIX_TIME, d->name);
 		g_array_append_vals(dispatcher->requests, &h, 1);
 	}
 
@@ -358,7 +351,6 @@ transport_http_factory0(struct http_request_dispatcher_s *dispatcher,
 	client_context->dispatcher = dispatcher;
 	client_context->parser = http_parser_create();
 	client_context->request = http_request_create(client);
-	gettimeofday(&client_context->tv_start, NULL);
 
 	transport = &(client->transport);
 	transport->client_context = client_context;
@@ -385,25 +377,28 @@ sender(gpointer k, gpointer v, gpointer u)
 static void
 _access_log(struct req_ctx_s *r, gint status, gsize out_len)
 {
-	struct timeval tv_now, tv_diff0, tv_diff1;
+	struct timespec now, diff_total, diff_handler;
 
-	gettimeofday(&tv_now, NULL);
-	timersub(&r->tv_parsed, &r->context->tv_start, &tv_diff0);
-	timersub(&tv_now, &r->tv_parsed, &tv_diff1);
+	network_server_now(&now);
+	timespec_sub(&now, &r->tv_start, &diff_total);
+	timespec_sub(&now, &r->tv_parsed, &diff_handler);
 
 	GString *gstr = g_string_sized_new(256);
+
 	g_string_append(gstr, r->client->local_name);
 	g_string_append_c(gstr, ' ');
 	g_string_append(gstr, r->client->peer_name);
 
 	g_string_append_printf(gstr,
-			" %ld.%06ld %ld.%06ld %d %"G_GSIZE_FORMAT" %%s %%s",
-			tv_diff0.tv_sec, tv_diff0.tv_usec,
-			tv_diff1.tv_sec, tv_diff1.tv_usec,
-			status, out_len);
+			" %s %d %ld.%06ld %"G_GSIZE_FORMAT" - %s t=%ld.%06ld",
+			r->request->cmd,
+			status,
+			diff_total.tv_sec, diff_total.tv_nsec / 1000,
+			out_len,
+			r->request->req_uri,
+			diff_handler.tv_sec, diff_handler.tv_nsec / 1000);
 
-	g_log("access", GRID_LOGLVL_INFO, gstr->str, r->request->cmd, r->request->req_uri);
-
+	g_log("access", GRID_LOGLVL_INFO, "%s", gstr->str);
 	g_string_free(gstr, TRUE);
 }
 
@@ -547,7 +542,6 @@ http_manage_request(struct req_ctx_s *r)
 	};
 
 	finalized = FALSE;
-	gettimeofday(&r->tv_parsed, NULL);
 	headers = g_tree_new_full(hashstr_quick_cmpdata, NULL, NULL, g_free);
 	body.data = NULL;
 	body.len = 0;
@@ -652,6 +646,13 @@ http_notify_input(struct network_client_s *clt)
 		struct http_parsing_result_s rc = http_parse(parser, data, data_size);
 
 		if (rc.status == HPRC_SUCCESS) {
+
+			// Important times are now known.$
+			// First, the last chunk of data received
+			// Second, the moment the real treatment start ... i.e. now!
+			memcpy(&r.tv_start, &clt->time.evt_in, sizeof(r.tv_start));
+			network_server_now(&r.tv_parsed);
+
 			GError *err = http_manage_request(&r);
 
 			http_parser_reset(parser);

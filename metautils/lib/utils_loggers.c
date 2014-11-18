@@ -6,13 +6,14 @@
 #include <stdio.h>
 #include <syslog.h>
 #include <sys/time.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #include "metautils.h"
 
 static int syslog_opened = 0;
 
-gchar syslog_id[256] = {0,0,0};
+gchar syslog_id[256] = "";
 
 int main_log_level_default = 0x7F;
 
@@ -32,7 +33,7 @@ compute_thread_id(GThread *thread)
 	} bulk;
 	memset(&bulk, 0, sizeof(bulk));
 	bulk.p = thread;
-	return ((bulk.u[0] ^ bulk.u[1]) ^ bulk.u[2]) ^ bulk.u[3];
+	return (bulk.u[0] ^ bulk.u[1]) ^ (bulk.u[2] ^ bulk.u[3]);
 }
 
 static inline guint16
@@ -154,17 +155,13 @@ _purify(register gchar *s)
 static inline void
 _append_message(GString *gstr, const gchar *msg)
 {
-	if (!msg) {
-		g_string_append(gstr, "XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX");
-	}
-	else {
-		for (; *msg && g_ascii_isspace(*msg) ;msg++) {}
-		if (!*msg)
-			g_string_append(gstr, "");
-		else
-			g_string_append(gstr, msg);
-	}
-	g_string_append_c(gstr, '\n');
+	if (!msg)
+		return;
+
+	// skip leading blanks
+	for (; *msg && g_ascii_isspace(*msg) ;msg++) {}
+
+	g_string_append(gstr, msg);
 }
 
 void
@@ -181,23 +178,30 @@ static void
 _logger_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data)
 {
-	GString *gstr;
-	register int facility;
-
 	(void) user_data;
 
-	gstr = g_string_sized_new(256);
+	GString *gstr = g_string_new("");
 
-	if (LOG_LOCAL1 == (facility = get_facility(log_domain)))
-		g_string_append(gstr, "access ");
-	else if (log_domain)
-		g_string_append_printf(gstr, "%04X %s ", get_thread_id(), log_domain);
-	else
-		g_string_append_printf(gstr, "%04X - ", get_thread_id());
+	g_string_append_printf(gstr, "%d %04X", getpid(), get_thread_id());
+
+	if (LOG_LOCAL1 == get_facility(log_domain)) {
+		g_string_append(gstr, " access ");
+		g_string_append(gstr, glvl_to_str(log_level));
+	}
+	else {
+		if (!log_domain || !*log_domain)
+			log_domain = "-";
+		g_string_append(gstr, " log ");
+		g_string_append(gstr, glvl_to_str(log_level));
+		g_string_append_c(gstr, ' ');
+		g_string_append(gstr, log_domain);
+	}
+
+	g_string_append_c(gstr, ' ');
 
 	_append_message(gstr, message);
 
-	syslog(facility|glvl_to_lvl(log_level), gstr->str);
+	syslog(get_facility(log_domain)|glvl_to_lvl(log_level), gstr->str);
 	g_string_free(gstr, TRUE);
 }
 
@@ -223,23 +227,30 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 	gstr = g_string_sized_new(256);
 	gettimeofday(&tv, NULL);
 
-	g_string_append_printf(gstr, "%ld.%03ld %05d %04X %s ",
-			tv.tv_sec, tv.tv_usec/1000, getpid(),
-			get_thread_id(), glvl_to_str(log_level));
+	g_string_append_printf(gstr, "%ld.%03ld %d %04X ",
+			tv.tv_sec, tv.tv_usec/1000,
+			getpid(), get_thread_id());
 
-	/* Print the domain */
 	if (!log_domain || !*log_domain)
-		g_string_append_c(gstr, '-');
-	else if (!(main_log_flags & LOG_FLAG_TRIM_DOMAIN))
-		g_string_append(gstr, log_domain);
-	else {
-		const gchar *p = log_domain;
-		while (p && *p) {
-			g_string_append_c(gstr, *p);
-			p = strchr(p, '.');
-			if (p) {
-				g_string_append_c(gstr, '.');
-				p ++;
+		log_domain = "-";
+
+	if (LOG_LOCAL1 == get_facility(log_domain)) {
+		g_string_append_printf(gstr, "acc %s ", glvl_to_str(log_level));
+	} else {
+		g_string_append_printf(gstr, "log %s ", glvl_to_str(log_level));
+
+		/* print the domain */
+		if (!(main_log_flags & LOG_FLAG_TRIM_DOMAIN))
+			g_string_append(gstr, log_domain);
+		else {
+			const gchar *p = log_domain;
+			while (p && *p) {
+				g_string_append_c(gstr, *p);
+				p = strchr(p, '.');
+				if (p) {
+					g_string_append_c(gstr, '.');
+					p ++;
+				}
 			}
 		}
 	}
@@ -256,6 +267,8 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 
 	/* now append the message */
 	_append_message(gstr, message);
+	g_string_append_c(gstr, '\n');
+
 	if (main_log_flags & LOG_FLAG_PURIFY)
 		_purify(gstr->str);
 
@@ -515,15 +528,31 @@ _priority_to_flags(const char *what)
 }
 
 static void
-_syslog_open(const char *tag)
+_stderr_open(void)
+{
+	g_strlcpy(syslog_id, "-", sizeof(syslog_id));
+}
+
+void
+logger_syslog_open (void)
 {
 	if (syslog_opened)
 		return;
 	syslog_opened = 1;
+	openlog(syslog_id, LOG_NDELAY, LOG_LOCAL0);
+}
+
+static void
+_syslog_open(const char *tag)
+{
+	if (syslog_opened)
+		return;
 	memset(syslog_id, 0, sizeof(syslog_id));
-	g_snprintf(syslog_id, sizeof(syslog_id), "%s",
-			tag&&*tag ? tag : g_get_prgname());
-	openlog(syslog_id, LOG_PID|LOG_NDELAY, LOG_LOCAL0);
+	if (tag && *tag)
+		g_strlcpy(syslog_id, tag, sizeof(syslog_id));
+	else
+		g_strlcpy(syslog_id, g_get_prgname(), sizeof(syslog_id));
+	logger_syslog_open();
 }
 
 static gboolean
@@ -546,8 +575,10 @@ category_runner(gpointer k, gpointer v, gpointer u)
 				_syslog_open(cat[1]);
 				g_log_set_default_handler(logger_syslog, NULL);
 			}
-			else if (IS("stream") || IS("stderr"))
+			else if (IS("stream") || IS("stderr")) {
+				_stderr_open();
 				g_log_set_default_handler(logger_stderr, NULL);
+			}
 			else
 				g_log_set_default_handler(logger_noop, NULL);
 		}
@@ -563,8 +594,10 @@ category_runner(gpointer k, gpointer v, gpointer u)
 				_syslog_open(cat[1]);
 				g_log_set_handler(cat_name, flags, _logger_syslog, NULL);
 			}
-			else if (IS("stream") || IS("stderr"))
+			else if (IS("stream") || IS("stderr")) {
+				_stderr_open();
 				g_log_set_handler(cat_name, flags, _logger_stderr, NULL);
+			}
 			else
 				g_log_set_handler(cat_name, flags, logger_noop, NULL);
 		}

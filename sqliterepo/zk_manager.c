@@ -8,7 +8,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#include <zookeeper/zookeeper.h>
+#include <zookeeper.h>
 
 #include <metautils/lib/metautils.h>
 

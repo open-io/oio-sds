@@ -200,6 +200,9 @@ void logger_noop(const gchar *log_domain, GLogLevelFlags log_level,
 void logger_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data);
 
+/* Activate syslog logging */
+void logger_syslog_open (void);
+
 guint16 compute_thread_id(GThread *thread);
 /** @} */
 
