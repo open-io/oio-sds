@@ -158,9 +158,15 @@ cb_enqueue(void *data, size_t s, size_t n, struct http_pipe_s *p)
 		}
 	}
 
+	if (p->queue_current > 0) {
+		if (p->to.handle) {
+			curl_easy_pause(p->to.handle, CURLPAUSE_SEND_CONT);
+		}
+	}
+
 	if (!p->to.started)
 		 _start_upload(p);
-	return n;
+	return slice.buf_len;
 }
 
 static size_t
@@ -171,9 +177,17 @@ cb_dequeue(void *data, size_t s, size_t n, struct http_pipe_s *p)
 	if (!s || !n)
 		return 0;
 
-	slice = g_queue_pop_head(p->queue);
-	if (!slice)
+	if (p->queue_current == 0) {
+		if (p->from.handle == NULL) {
+			g_debug("Download and upload finished.");
+		} else if (p->to.handle) {
+			curl_easy_pause(p->to.handle, CURLPAUSE_SEND);
+		}
 		return 0;
+	}
+
+	slice = g_queue_pop_head(p->queue);
+	g_assert(slice);
 
 	size_t max = s * n;
 	if (max > slice->buf_len - slice->buf_read)
@@ -182,9 +196,9 @@ cb_dequeue(void *data, size_t s, size_t n, struct http_pipe_s *p)
 	slice->buf_read += max;
 	p->queue_current -= max;
 
-	if (slice->buf_read < slice->buf_len)
+	if (slice->buf_read < slice->buf_len) {
 		g_queue_push_head(p->queue, slice);
-	else {
+	} else {
 		g_free(slice->buf);
 		memset(slice, 0, sizeof(struct slice_s));
 		g_free(slice);
@@ -215,7 +229,7 @@ _start_download(struct http_pipe_s *p)
 	g_assert(p->from.handle != NULL);
 
 	curl_easy_setopt(p->from.handle, CURLOPT_PRIVATE, &p->from);
-	curl_easy_setopt(p->to.handle, CURLOPT_USERAGENT, "http_pipe/1.0");
+	curl_easy_setopt(p->from.handle, CURLOPT_USERAGENT, "http_pipe/1.0");
 	curl_easy_setopt(p->from.handle, CURLOPT_URL, p->from.url);
 	curl_easy_setopt(p->from.handle, CURLOPT_NOPROGRESS, 1L);
 	curl_easy_setopt(p->from.handle, CURLOPT_WRITEFUNCTION, cb_enqueue);
@@ -284,6 +298,8 @@ check_multi_info(struct http_pipe_s *p)
 			curl_easy_getinfo(easy, CURLINFO_EFFECTIVE_URL, &eff_url);
 			g_assert(easy == end->handle);
 			g_debug("DONE! %s", end == &p->from ? "from" : "to");
+			if (end == &p->from && p->to.handle)
+				curl_easy_pause(p->to.handle, CURLPAUSE_SEND_CONT);
 
 			curl_multi_remove_handle(p->mhandle, end->handle);
 			curl_easy_cleanup(end->handle);
