@@ -371,11 +371,11 @@ addr_info_t* gs_resolve_meta1 (gs_grid_storage_t *gs, container_id_t cID, GError
 
 addr_info_t* gs_resolve_meta1v2 (gs_grid_storage_t *gs,
 		const container_id_t cID, const gchar *cname, int read_only,
-		GSList *exclude, GError **err);
+		GSList **exclude, GError **err);
 
 addr_info_t* gs_resolve_meta1v2_v2(gs_grid_storage_t *gs,
 		const container_id_t cID, const gchar *cname, int read_only,
-		GSList *exclude, gboolean has_before_create, GError **err);
+		GSList **exclude, gboolean has_before_create, GError **err);
 
 int gs_update_meta1_master (gs_grid_storage_t *gs, const container_id_t cID, const char *m1);
 

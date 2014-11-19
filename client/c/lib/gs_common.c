@@ -493,6 +493,12 @@ gs_grid_storage_get_timeout(gs_grid_storage_t * gs, gs_timeout_t to)
 	return -1;
 }
 
+double
+gs_grid_storage_get_to_sec(gs_grid_storage_t * gs, gs_timeout_t to)
+{
+	return gs_grid_storage_get_timeout(gs, to) / 1000.0;
+}
+
 static gs_status_t
 gs_manage_container_error_not_closed(gs_container_t * container,
 		const char *caller, guint line, GError ** err)

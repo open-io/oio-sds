@@ -227,7 +227,7 @@ gs_update_meta1_master (gs_grid_storage_t *gs, const container_id_t cID,
 
 addr_info_t*
 gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
-		const gchar *cname, int read_only, GSList *exclude,
+		const gchar *cname, int read_only, GSList **exclude,
 		gboolean has_before_create, GError **err)
 {
 	gchar str_cid[STRLEN_CONTAINERID+1];
@@ -247,7 +247,8 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 		/* tries a metacd resolution, and if it succeeds, clears the direct resolver */
 		metacd_is_up = resolver_metacd_is_up (gs->metacd_resolver);
 		if (metacd_is_up) {
-			pA = resolver_metacd_get_meta1 (gs->metacd_resolver, cID, read_only, exclude, &ref_exists, NULL);
+			pA = resolver_metacd_get_meta1(gs->metacd_resolver, cID, read_only,
+					exclude? *exclude:NULL, &ref_exists, NULL);
 			if (pA) {
 				resolver_direct_clear (gs->direct_resolver);
 			} else {
@@ -256,7 +257,8 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 		}
 
 		if (NULL == pA) {
-			pA = resolver_direct_get_meta1 (gs->direct_resolver, cID, read_only, exclude, &gErr);
+			pA = resolver_direct_get_meta1(gs->direct_resolver, cID, read_only,
+					exclude? *exclude:NULL, &gErr);
 			if (!pA)
 				return _try();
 		}
@@ -267,8 +269,8 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 		if (!ref_exists || !metacd_is_up) {
 			if (has_before_create) {
 				if (meta1v2_remote_has_reference(pA, &gErr, gs_get_full_vns(gs),
-						cID, gs_grid_storage_get_timeout(gs, GS_TO_M1_CNX),
-						gs_grid_storage_get_timeout(gs, GS_TO_M1_OP))) {
+						cID, gs_grid_storage_get_to_sec(gs, GS_TO_M1_CNX),
+						gs_grid_storage_get_to_sec(gs, GS_TO_M1_OP))) {
 					DEBUG("METACD reference already exists in meta1: [%s/%s]",
 							cname, str_cid);
 					return pA;
@@ -276,7 +278,8 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 					g_clear_error(&gErr);
 				} else if (gErr && CODE_IS_NETWORK_ERROR(gErr->code)) {
 					DEBUG("Network error (meta1 down?): %s", gErr->message);
-					exclude = g_slist_prepend(exclude, pA);
+					if (exclude != NULL)
+						*exclude = g_slist_prepend(*exclude, pA);
 					return _try();
 				} else {
 					WARN("METACD error checking reference [%s] in meta1: (%d) %s",
@@ -287,8 +290,8 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 			}
 			if (meta1v2_remote_create_reference(pA, &gErr, gs_get_full_vns(gs),
 					cID, cname,
-					gs_grid_storage_get_timeout(gs, GS_TO_M1_CNX),
-					gs_grid_storage_get_timeout(gs, GS_TO_M1_OP),
+					gs_grid_storage_get_to_sec(gs, GS_TO_M1_CNX),
+					gs_grid_storage_get_to_sec(gs, GS_TO_M1_OP),
 					NULL)) {
 				DEBUG("METACD created reference in meta1: [%s/%s]",
 						cname, str_cid);
@@ -302,7 +305,8 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 					if (metacd_is_up)
 						resolver_metacd_decache(gs->metacd_resolver, cID);
 					GSETERROR(&gErr,"Could not create reference");
-					exclude = g_slist_prepend(exclude, pA);
+					if (exclude != NULL)
+						*exclude = g_slist_prepend(*exclude, pA);
 					/* if (err) *err = gErr; */
 					return _try();
 				}
@@ -327,7 +331,7 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 
 addr_info_t*
 gs_resolve_meta1v2 (gs_grid_storage_t *gs, const container_id_t cID, const gchar *cname,
-		int read_only, GSList *exclude, GError **err)
+		int read_only, GSList **exclude, GError **err)
 {
 	// Do not set has_before_create to TRUE or container creation will
 	// fail when metacd is present and one meta1 is broken
@@ -452,7 +456,7 @@ _fill_meta1_tabs(char ***p_m1_url_tab, addr_info_t **p_addr_tab, gs_grid_storage
 
 	// The meta1_list will contain all meta1 addresses.
 	// It is passed as the 'exclude' argument to gs_resolve_meta1v2.
-	while (NULL != (addr = gs_resolve_meta1v2(gs, cid, cname, 0, meta1_list, NULL)))
+	while (NULL != (addr = gs_resolve_meta1v2(gs, cid, cname, 0, &meta1_list, NULL)))
 		meta1_list = g_slist_append(meta1_list, addr);
 	
 	// The result tabs will contain all addresses, plus a NULL trailing element.
@@ -574,7 +578,8 @@ _gs_locate_container_by_cid(gs_grid_storage_t *gs, container_id_t cid, char** ou
 		cnx_tmp.fd = -1;
 		memcpy(&(cnx_tmp.addr), &(m1_addr[m1_index]), sizeof(addr_info_t));
 		m1_raw = meta1_remote_get_container_by_id(&cnx_tmp, cid, &gerror_local,
-			gs_grid_storage_get_timeout(gs, GS_TO_M1_CNX)/1000, gs_grid_storage_get_timeout(gs, GS_TO_M1_OP)/1000);
+				gs_grid_storage_get_to_sec(gs, GS_TO_M1_CNX),
+				gs_grid_storage_get_to_sec(gs, GS_TO_M1_OP));
 		if (!m1_raw) {
 			GSERRORCAUSE(gserr, gerror_local, "Container ID=[%s] not found", str_cid);
 			g_clear_error(&gerror_local);

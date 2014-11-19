@@ -143,7 +143,7 @@ _get_container_user_properties(gs_grid_storage_t *hc, struct hc_url_s *url, cont
                 return 0;
         for (;;) {
 
-                m1 = gs_resolve_meta1v2(hc, cid, c->info.name, 1, excluded, &gerr);
+                m1 = gs_resolve_meta1v2(hc, cid, c->info.name, 1, &excluded, &gerr);
 
                 if (!m1) {
                         *gserr = gs_error_new(500, "No META1 found for [%s]", hc_url_get(url, HCURL_REFERENCE));

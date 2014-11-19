@@ -659,7 +659,8 @@ gs_container_service_get_all(gs_container_t *container, const char *srvtype, gs_
 	int nb_try = 0;
 	while(nb_try < 3) {
 		nb_try++;
-		meta1_addr = gs_resolve_meta1v2(container->info.gs, C0_ID(container), C0_NAME(container), 1, exclude, &gerr);
+		meta1_addr = gs_resolve_meta1v2(container->info.gs, C0_ID(container),
+				C0_NAME(container), 1, &exclude, &gerr);
 
 		if(!meta1_addr)	{
 			if(gerr) {
@@ -747,7 +748,8 @@ gs_container_service_get_available(gs_container_t *container, const char *srvtyp
 	GSList *exclude = NULL;
 
 	while(1) {
-		meta1_addr = gs_resolve_meta1v2(container->info.gs, C0_ID(container), C0_NAME(container), 0, exclude, &gerr);
+		meta1_addr = gs_resolve_meta1v2(container->info.gs, C0_ID(container),
+				C0_NAME(container), 0, &exclude, &gerr);
 
 		if(!meta1_addr) {
 			GSERRORCAUSE(err,gerr, "No service of type [%s] found for container [%s]",
@@ -757,7 +759,7 @@ gs_container_service_get_available(gs_container_t *container, const char *srvtyp
 		}
 		str_srv = meta1v2_remote_link_service(meta1_addr, &gerr,
 				gs_get_full_vns(container->info.gs), C0_ID(container), srvtype,
-				C0_M1CNX(container), C0_M1TO(container), &master);
+				C0_M1CNX(container)/1000.0, C0_M1TO(container)/1000.0, &master);
 
 		_update_master(container, master);
 

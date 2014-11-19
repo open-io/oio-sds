@@ -57,7 +57,7 @@ _m1v2_request(gs_grid_storage_t *hc, const gchar *refname, request_cb cb)
 
 	for (;;) {
 		meta1_addr = gs_resolve_meta1v2 (hc, ref_id, NULL, 0,
-				excluded, &local_error);
+				&excluded, &local_error);
 
 		if (!meta1_addr) {
 			result = gs_error_new(500, "No META1 found for [%s]", refname);
@@ -107,8 +107,8 @@ hc_create_reference(gs_grid_storage_t *hc, const char *reference)
 		GError *e = NULL;
 		gint rc = meta1v2_remote_create_reference(a, &e,
 				gs_get_full_vns(hc), ref_id, reference,
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
 				master);
 		(void) rc;
 		return e;
@@ -124,8 +124,8 @@ hc_delete_reference(gs_grid_storage_t *hc, const char *reference)
 		GError *e = NULL;
 		gint rc = meta1v2_remote_delete_reference(a, &e,
 				gs_get_full_vns(hc), ref_id,
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
 				master);
 		(void) rc;
 		return e;
@@ -141,8 +141,8 @@ hc_link_service_to_reference(gs_grid_storage_t *hc, const char *reference, const
 		GError *e = NULL;
 		*result = meta1v2_remote_link_service(a, &e,
 				gs_get_full_vns(hc), ref_id, srv_type,
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
 				master);
 		return e;
 	}
@@ -158,8 +158,8 @@ hc_list_reference_services(gs_grid_storage_t *hc, const char *reference, const c
 		(void) master;
 		*result = meta1v2_remote_list_reference_services(a, &e,
 				gs_get_full_vns(hc), ref_id, srv_type,
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP));
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP));
 		return e;
 	}
 
@@ -174,8 +174,8 @@ hc_unlink_reference_service(gs_grid_storage_t *hc, const char *reference, const 
 		if(!strchr(srv_type, '|')) {
 			meta1v2_remote_unlink_service(a, &e,
 					gs_get_full_vns(hc), ref_id, srv_type,
-					gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
-					gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
+					gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
+					gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
 					master);
 		} else {
 			char **toks = g_strsplit(srv_type, "|", 0);
@@ -185,8 +185,8 @@ hc_unlink_reference_service(gs_grid_storage_t *hc, const char *reference, const 
 			} else {
 				meta1v2_remote_unlink_one_service(a, &e,
 						gs_get_full_vns(hc), ref_id, toks[1],
-						gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
-						gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
+						gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
+						gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
 						master, seq);
 			}
 			g_strfreev(toks);
@@ -205,8 +205,8 @@ hc_has_reference(gs_grid_storage_t *hc, const char *reference)
 		GError *e = NULL;
 		gint rc = meta1v2_remote_has_reference(a, &e,
 				gs_get_full_vns(hc), ref_id,
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP));
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP));
 		(void) rc;
 		(void) master;
 		return e;
@@ -222,8 +222,8 @@ hc_force_service(gs_grid_storage_t *hc, const char *reference, const char *url)
 		GError *e = NULL;
 		gint rc = meta1v2_remote_force_reference_service(a, &e,
 				gs_get_full_vns(hc), ref_id, url,
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
 				master);
 		(void) rc;
 		return e;
@@ -240,8 +240,8 @@ hc_poll_service(gs_grid_storage_t *hc, const char *reference,
 		GError *e = NULL;
 		gchar **urlv = meta1v2_remote_poll_reference_service(a, &e,
 				gs_get_full_vns(hc), ref_id, srvtype,
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
 				master);
 		if (urlv) {
 			*srv = g_strdup(urlv[0]);
@@ -261,8 +261,8 @@ hc_configure_service(gs_grid_storage_t *hc, const char *reference,
 		GError *e = NULL;
 		gint rc = meta1v2_remote_configure_reference_service(a, &e,
 				gs_get_full_vns(hc), ref_id, url,
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
 				master);
 		(void) rc;
 		return e;
@@ -281,8 +281,8 @@ hc_set_reference_property(gs_grid_storage_t *hc, const char *reference,
 		pairs[0] = g_strdup_printf("%s=%s", key, value);
 		gint rc = meta1v2_remote_reference_set_property(a, &e,
 				gs_get_full_vns(hc), ref_id, pairs,
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX), 
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX), 
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
 				master);
 		g_free(pairs[0]);
 		(void) rc;
@@ -300,8 +300,8 @@ hc_get_reference_property(gs_grid_storage_t *hc, const char *reference,
 		GError *e = NULL;
 		gint rc = meta1v2_remote_reference_get_property(a, &e,
 				gs_get_full_vns(hc), ref_id, keys, result,
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP));
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP));
 		(void) rc;
 		(void) master;
 		return e;
@@ -318,8 +318,8 @@ hc_delete_reference_property(gs_grid_storage_t *hc, const char *reference,
 		GError *e = NULL;
 		gint rc = meta1v2_remote_reference_del_property(a, &e,
 				gs_get_full_vns(hc), ref_id, keys,
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_timeout(hc, GS_TO_M1_OP),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
+				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
 				master);
 		(void) rc;
 		return e;

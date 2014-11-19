@@ -142,7 +142,8 @@ _create (gs_container_t *container, struct m2v2_create_params_s *params,
 		return GS_ERROR;
 	}
 
-	pM1 = gs_resolve_meta1v2 (container->info.gs, C0_ID(container), C0_NAME(container), 0, *exclude, err);
+	pM1 = gs_resolve_meta1v2 (container->info.gs, C0_ID(container),
+			C0_NAME(container), 0, exclude, err);
 
 	if( NULL != *exclude ) {
 		g_slist_foreach(*exclude, addr_info_gclean, NULL);
@@ -270,7 +271,7 @@ container_resolve_and_get_v2 (gs_container_t *container, GError **err)
 	while(retry > 0) {
 		retry--;
 		meta1_addr = gs_resolve_meta1v2_v2(container->info.gs, C0_ID(container),
-				C0_NAME(container), 1, exclude_m1, TRUE, err);
+				C0_NAME(container), 1, &exclude_m1, TRUE, err);
 
 		if(!meta1_addr) {
 			GSETERROR(err, "Failed to resolve Meta1");
@@ -970,8 +971,7 @@ _destroy_everywhere(gs_container_t *container, GSList **exclude, guint32 flags)
 
 	/* if ok, drop m2 link */
 	struct addr_info_s *m1 = gs_resolve_meta1v2(container->info.gs,
-			C0_ID(container), NULL, 0, *exclude, &err);
-
+			C0_ID(container), NULL, 0, exclude, &err);
 	if (!m1) {
 		if (!err)
 			err = NEWERROR(500, "Unknown error");

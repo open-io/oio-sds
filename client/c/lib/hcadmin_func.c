@@ -37,13 +37,13 @@ _m1policy_update(gchar *action, gchar *ns,gboolean isprefix, container_id_t cid,
 	if (!hc)
 		return hc_error;
 
-	m1addr = gs_resolve_meta1v2(hc,cid,NULL,0,exclude,&err);
+	m1addr = gs_resolve_meta1v2(hc, cid, NULL, 0, &exclude, &err);
 	while (m1addr) {
 		hc_result = meta1v2_remote_update_m1_policy(m1addr, &err, ns, ( isprefix ? cid : NULL), ( isprefix ? NULL: cid), type, action, checkonly, exludesrv, 300, 300);
 		if ( err ) {
 			if ( err->code < 100 || err->code > 500 ) {
 				exclude=g_slist_prepend(exclude,m1addr);
-				m1addr = gs_resolve_meta1v2(hc,cid,NULL,0,exclude,&err);
+				m1addr = gs_resolve_meta1v2(hc, cid, NULL, 0, &exclude, &err);
 			} else {
 				GRID_WARN("META1 request error (%d) : %s", err->code, err->message);
 				GSERRORCAUSE(&hc_error, err, "Failed to apply Meta1 policy\n");

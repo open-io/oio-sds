@@ -1223,7 +1223,6 @@ static gs_status_t _gs_upload(gs_container_t *container,
 				break;
 			}
 			CONTAINER_REFRESH(container,local_error,error_label_unlock,"commit error");
-			GRID_DEBUG("FVE: error pointer: %p", local_error);
 			if (local_error)
 				g_clear_error(&local_error);
 		}

@@ -282,6 +282,11 @@ gs_status_t gs_grid_storage_set_timeout (gs_grid_storage_t *gs,
 
 gs_status_t gs_grid_storage_get_timeout (gs_grid_storage_t *gs, gs_timeout_t to);
 
+/**
+ * @return the timeout in seconds, or a negative value if not specified
+ */
+double gs_grid_storage_get_to_sec(gs_grid_storage_t * gs, gs_timeout_t to);
+
 const char* gs_get_namespace(gs_grid_storage_t *gs);
 
 /**
