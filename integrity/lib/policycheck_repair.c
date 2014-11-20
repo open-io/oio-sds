@@ -1069,6 +1069,20 @@ _check_args_init(struct check_args_s *args, const gchar *ns)
 	return err;
 }
 
+static gint
+_count_handled_flaws(GPtrArray *flaws)
+{
+	gint ret = 0;
+	void _cb(gpointer _flaw, gpointer _unused) {
+		(void) _unused;
+		struct m2v2_check_error_s *flaw = _flaw;
+		if (flaw->type != M2CHK_RAWX_UNKNOWN)
+			ret++;
+	}
+	g_ptr_array_foreach(flaws, _cb, NULL);
+	return ret;
+}
+
 gint
 check_and_repair_content(struct hc_url_s *url,
 		guint32 flags, GError **error)
@@ -1091,7 +1105,11 @@ check_and_repair_content(struct hc_url_s *url,
 		if (!(err = policy_load_beans(&policy_check))) {
 			GRID_DEBUG("Beans loaded");
 			err = policy_check_and_repair(&policy_check);
-			flaws = policy_check.check->flaws->len;
+			// If FORCE flag is set, all flaws are handled
+			if (flags & POLCHK_FLAG_FORCE_RAWX_REBUILD)
+				flaws = policy_check.check->flaws->len;
+			else
+				flaws = _count_handled_flaws(policy_check.check->flaws);
 		}
 	}
 
