@@ -159,7 +159,10 @@ def main():
 
 	zookeeper.set_debug_level(zookeeper.LOG_LEVEL_INFO)
 	zh = zookeeper.init(cnxstr)
-	zookeeper.create(zh, PREFIX, '', acl_openbar, 0)
+	try:
+		zookeeper.create(zh, PREFIX, '', acl_openbar, 0)
+	except zookeeper.NodeExistsException:
+		pass
 	create_tree(zh, boot_tree())
 	init_namespace(zh, ns)
 	zookeeper.close(zh)
