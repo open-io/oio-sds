@@ -32,9 +32,6 @@ struct http_request_s
 	gchar *cmd;
 	gchar *req_uri;
 	gchar *version;
-	/* unpacked 'request' */
-	gchar *path;
-	gchar **args;
 
 	/* all the headers mapped as <gchar*,gchar*> */
 	GTree *tree_headers;
