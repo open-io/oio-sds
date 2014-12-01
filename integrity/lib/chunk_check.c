@@ -17,14 +17,12 @@
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <client/c/lib/gs_internals.h>
+#include <rawx-lib/src/rawx.h>
 
 #include "check.h"
 #include "content_check.h"
 #include "chunk_check.h"
 #include "broken_event.h"
-
-#define META1_TIMEOUT 6000
-#define META2_TIMEOUT 6000
 
 /**
  * Compute the MD5 hash of a chunk file
@@ -427,6 +425,19 @@ check_chunk_info(struct chunk_textinfo_s *chunk, GError **p_error)
 	return TRUE;
 }
 
+static inline void
+_set_or_free_error(GError *err, GError **p_err)
+{
+	if (err) {
+		if (p_err) {
+			*p_err = err;
+		} else {
+			GRID_ERROR("[%s]", err->message);
+			g_error_free(err);
+		}
+	}
+}
+
 static gboolean
 _create_container(struct meta2_ctx_s *ctx, container_id_t *p_cid, GError **p_err)
 {
@@ -484,7 +495,7 @@ _extract_date_from_sysmd(const guint8 *mdsys, gsize mdsys_len)
 
 static gboolean
 _ensure_container_created_in_m2(struct meta2_ctx_s *ctx, container_id_t *p_cid,
-		gchar *stgpol, check_result_t *cres)
+		gchar *stgpol, check_result_t *cres, GError **p_err)
 {
 	addr_info_t m2;
 	gboolean ret = FALSE;
@@ -515,7 +526,7 @@ _ensure_container_created_in_m2(struct meta2_ctx_s *ctx, container_id_t *p_cid,
 	} else {
 		GRID_DEBUG("Failed to create container [%s/%s] (%s).",
 				ctx->ns, ctx->loc->container_name, local_error->message);
-		g_error_free(local_error);
+		_set_or_free_error(local_error, p_err);
 	}
 
 	return ret;
@@ -547,7 +558,7 @@ _ensure_container_created(struct meta2_ctx_s *ctx, check_info_t *check_info,
 				ct_info->container_id);
 	} else {
 		if (!_ensure_container_created_in_m2(ctx, &cid,
-				ct_info->storage_policy, cres))
+				ct_info->storage_policy, cres, p_err))
 			goto clean_up;
 	}
 
@@ -638,37 +649,23 @@ static gboolean
 _fill_raw_chunk_with_info(struct meta2_raw_chunk_s *rc,
 		check_info_t *check_info, GError **p_err)
 {
-	struct chunk_textinfo_s *ci = check_info->ck_info;
+	GError *err = NULL;
 
 	if (!rc)
 		return FALSE;
 
-	// HASH
-	if (!hex2bin(ci->hash, rc->hash, sizeof(rc->hash), p_err))
+	err = generate_raw_chunk(check_info, rc);
+	if (err) {
+		_set_or_free_error(err, p_err);
 		return FALSE;
-
-	// ID
-	if (!hex2bin(ci->id, rc->id.id, sizeof(rc->id.id), p_err))
-		return FALSE;
-	memset(rc->id.vol, 0, sizeof(rc->id.vol));
-	memcpy(rc->id.vol, check_info->rawx_vol, sizeof(rc->id.vol));
-	grid_string_to_addrinfo(check_info->rawx_str_addr, NULL, &(rc->id.addr));
-
-	// SIZE
-	if (ci->size)
-		rc->size = g_ascii_strtoll(ci->size, NULL, 10);
-
-	// METADATA
-	if (ci->metadata) {
-		if (rc->metadata)
-			g_byte_array_free(rc->metadata, TRUE);
-		rc->metadata = g_byte_array_append(g_byte_array_new(),
-				(const guint8*) ci->metadata, strlen(ci->metadata));
 	}
 
-	// POSITION
-	if (ci->position)
-		rc->position = g_ascii_strtoull(ci->position, NULL, 10);
+	memset(rc->id.vol, 0, sizeof(rc->id.vol));
+	memcpy(rc->id.vol, check_info->rawx_vol, sizeof(rc->id.vol));
+	/* make sure volume does not end with '/' */
+	if (rc->id.vol[strlen(rc->id.vol) - 1] == '/')
+		rc->id.vol[strlen(rc->id.vol) - 1] = '\0';
+	grid_string_to_addrinfo(check_info->rawx_str_addr, NULL, &(rc->id.addr));
 
 	return TRUE;
 }
@@ -717,7 +714,8 @@ clean_up:
 }
 
 static gboolean
-_find_content_from_chunkid(struct meta2_ctx_s *ctx, check_info_t *check_info)
+_find_content_from_chunkid(struct meta2_ctx_s *ctx, check_info_t *check_info,
+		GError **p_err)
 {
 	gboolean ret = FALSE;
 	GSList *chunk_ids = NULL;
@@ -761,8 +759,7 @@ clean_up:
 		content_info->path = old_content_path;
 	hc_url_clean(url);
 	g_slist_free_full(chunk_ids, g_free);
-	if (local_error)
-		g_error_free(local_error);
+	_set_or_free_error(local_error, p_err);
 
 	return ret;
 }
@@ -1060,7 +1057,7 @@ _is_newer_than_content(struct meta2_raw_content_s *content,
 
 static gboolean
 _recreate_content(struct meta2_ctx_s *ctx, check_info_t *check_info,
-		check_result_t *cres)
+		check_result_t *cres, GError **p_err)
 {
 	GError *local_error = NULL;
 	gboolean ret = FALSE;
@@ -1085,8 +1082,83 @@ _recreate_content(struct meta2_ctx_s *ctx, check_info_t *check_info,
 	ret = TRUE;
 
 clean_up:
-	if (local_error)
-		g_error_free(local_error);
+	_set_or_free_error(local_error, p_err);
+	return ret;
+}
+
+static gboolean
+_overwrite_chunk_creation_date(struct meta2_ctx_s *ctx,
+		check_info_t *check_info, check_result_t *cres, GError **p_err)
+{
+	const gboolean is_dryrun = check_option_get_bool(check_info->options,
+			CHECK_OPTION_DRYRUN);
+	const GByteArray *sysmd = ctx->content->system_metadata;
+	GError *err = NULL;
+	gboolean ret = FALSE;
+	gint64 date_in_m2 = 0;
+	GByteArray *pack = NULL;
+	GHashTable *unpacked = NULL;
+
+	if (sysmd)
+		date_in_m2 = _extract_date_from_sysmd(sysmd->data, sysmd->len);
+
+	// overwrite creation date in metadata hashtable
+	unpacked = metadata_unpack_string(check_info->ct_info->system_metadata, &err);
+	if (!err) {
+		metadata_add_printf(unpacked, "creation-date", "%"G_GINT64_FORMAT, date_in_m2);
+	} else {
+		goto exit;
+	}
+
+	// replace metadata
+	g_free(check_info->ct_info->system_metadata);
+	pack = metadata_pack(unpacked, &err);
+	if (err)
+		goto exit;
+	check_info->ct_info->system_metadata = g_strndup((const gchar *)pack->data, pack->len);
+
+	// write xattr to disk
+	if (is_dryrun) {
+		check_result_append_msg(cres, "dryrun prevented from overwriting chunk"
+				" creation-date metadata with: %"G_GINT64_FORMAT, date_in_m2);
+	} else {
+		GRID_DEBUG("Overwriting creation-date in system metadata"
+				" with new date: %"G_GINT64_FORMAT, date_in_m2);
+		if (!set_content_info_in_attr(check_info->source_path, &err, check_info->ct_info))
+			goto exit;
+		check_result_append_msg(cres, "System metadata 'creation-date' "
+				"overwritten with content date: %"G_GINT64_FORMAT, date_in_m2);
+	}
+
+	ret = TRUE;
+
+exit:
+	if (unpacked)
+		g_hash_table_destroy(unpacked);
+	if (pack)
+		g_byte_array_free(pack, TRUE);
+	_set_or_free_error(err, p_err);
+
+	return ret;
+}
+
+static int
+_volumes_cmp0(const gchar *vol1, const gchar *vol2)
+{
+	GString *str_vol1 = g_string_new(vol1);
+	GString *str_vol2 = g_string_new(vol2);
+	int ret;
+
+	if (str_vol1->str[str_vol1->len - 1] != G_DIR_SEPARATOR)
+		g_string_append_c(str_vol1, G_DIR_SEPARATOR);
+	if (str_vol2->str[str_vol2->len - 1] != G_DIR_SEPARATOR)
+		g_string_append_c(str_vol2, G_DIR_SEPARATOR);
+
+	ret = g_strcmp0(str_vol1->str, str_vol2->str);
+
+	g_string_free(str_vol1, TRUE);
+	g_string_free(str_vol2, TRUE);
+
 	return ret;
 }
 
@@ -1101,12 +1173,19 @@ check_chunk_orphan(check_info_t *check_info, check_result_t *cres, GError **p_er
 	struct content_textinfo_s *content_info = check_info->ct_info;
 	gchar *src_basename = NULL;
 	struct meta2_raw_chunk_s *raw_chunk = NULL;
-	GError *local_error = NULL;
+	GError *err = NULL;
 	gboolean same_age, is_chunk_newer;
 
 	// find container and content
 	ctx = get_meta2_ctx(check_info->ns_name, content_info->container_id,
-			content_info->path, TRUE, p_err);
+			content_info->path, TRUE, &err);
+
+	if (err) {
+		if (err->code > 0 && CODE_IS_NETWORK_ERROR(err->code))
+			goto clean_up;
+		// errors will be repaired, discard what was detected in get_meta2_ctx
+		g_clear_error(&err);
+	}
 
 	if (!ctx) {
 		GRID_DEBUG("Failed to get meta2 context, check your NS is started. (NS:%s)", check_info->ns_name);
@@ -1134,53 +1213,73 @@ check_chunk_orphan(check_info_t *check_info, check_result_t *cres, GError **p_er
 			goto success;
 		}
 		// check / create
-		if (!_ensure_container_created(ctx, check_info, cres, p_err)) {
+		if (!_ensure_container_created(ctx, check_info, cres, &err)) {
 			GRID_DEBUG("Giving up chunk integration (no container).");
 			goto clean_up;
 		}
 
 		if (ctx->loc->m2_url == NULL) {
-			if (!_reinit_ctx(&ctx, check_info->ct_info, p_err))
+			if (!_reinit_ctx(&ctx, check_info->ct_info, &err))
 				goto clean_up;
 		}
+
+		g_clear_error(&err);
 	}
 
 	// if content not found, try to find content from chunk id
 	if (!ctx->content) {
-		g_clear_error(&local_error);
-		if (!_find_content_from_chunkid(ctx, check_info)) {
-			local_error = _content_fill(ctx, check_info);
-			if (local_error)
+		g_clear_error(&err);
+		if (!_find_content_from_chunkid(ctx, check_info, &err)) {
+			if (err && err->code != CODE_NOT_FOUND && err->code != CODE_CONTENT_NOTFOUND)
+				goto clean_up;
+			g_clear_error(&err);
+			err = _content_fill(ctx, check_info);
+			if (err)
 				goto clean_up;
 			check_result_append_msg(cres, "Content [%s] in container [%s]"
-					" will be created",
+					" will be created.",
 					content_info->path, content_info->container_id);
 		}
 	}
 
-	// if chunk is newer than the content it refers to, re-create content
-	// if both have the same date, check referencing
-	// if chunk is older, trash it and exit successfully
-	is_chunk_newer = _is_newer_than_content(ctx->content, check_info, &same_age);
-	if (is_chunk_newer) {
-		if (!_recreate_content(ctx, check_info, cres))
-			goto clean_up;
-		is_referenced = TRUE;
-	} else if (same_age) {
+	// content->raw_chunks may be null if content was just created
+	if (ctx->content->raw_chunks) {
 		// check if chunk is well referenced in meta2
 		raw_chunk = _get_chunk(ctx->content->raw_chunks, check_info->ck_info->position);
 		is_referenced = check_chunk_referencing_full(content_info, check_info->ck_info,
-				ctx->content, raw_chunk, &broken_elements, p_err);
-		if (is_referenced && 0 != g_strcmp0(raw_chunk->id.vol, check_info->rawx_vol)) {
-			check_result_append_msg(cres, "rawx mismatch (volume found in m2: [%s])",
-					raw_chunk->id.vol);
-			is_referenced = FALSE;
+				ctx->content, raw_chunk, &broken_elements, &err);
+		is_chunk_newer = _is_newer_than_content(ctx->content, check_info, &same_age);
+
+		if (is_referenced) {
+			// rawx volume check
+			if (0 != _volumes_cmp0(raw_chunk->id.vol, check_info->rawx_vol)) {
+				check_result_append_msg(cres,
+						"rawx mismatch (volume found in m2: [%s])",
+						raw_chunk->id.vol);
+				is_referenced = FALSE;
+			} else {
+				if (!same_age)
+					if (!_overwrite_chunk_creation_date(ctx, check_info, cres, &err))
+						goto clean_up;
+			}
+		} else {
+			// if chunk is newer than the content it refers to, re-create content
+			// if both have the same date, everything is ok
+			// if chunk is older, trash it and exit successfully
+			if (is_chunk_newer) {
+				if (!_recreate_content(ctx, check_info, cres, &err))
+					goto clean_up;
+				is_referenced = TRUE;
+			} else if (same_age) {
+				// nothing to do here, the chunk will be added
+				GRID_DEBUG("Crawled chunk has the same date as content (OK)");
+			} else {
+				// crawled chunk is older than content, trash it
+				if (trash_chunk(check_info, cres))
+					check_result_append_msg(cres, "(chunk too old)");
+				goto success;
+			}
 		}
-	} else {
-		// crawled chunk is older than content, trash it
-		if (trash_chunk(check_info, cres))
-			check_result_append_msg(cres, "(chunk too old)");
-		goto success;
 	}
 
 	src_basename = g_path_get_basename(check_info->source_path);
@@ -1193,7 +1292,7 @@ check_chunk_orphan(check_info_t *check_info, check_result_t *cres, GError **p_er
 			if (trash_chunk(check_info, cres))
 				check_result_append_msg(cres, "(unreferenced .pending)");
 		} else {
-			if (!_add_missing_chunk(ctx, check_info, cres, p_err))
+			if (!_add_missing_chunk(ctx, check_info, cres, &err))
 				goto clean_up;
 		}
 	} else {
@@ -1228,10 +1327,7 @@ clean_up:
 	g_free(src_basename);
 	content_check_ctx_clear(ctx);
 	g_slist_free_full(broken_elements, broken_element_free);
-	if (local_error) {
-		g_prefix_error(p_err, "%s", local_error->message);
-		g_error_free(local_error);
-	}
+	_set_or_free_error(err, p_err);
 
 	return ret;
 }

@@ -261,6 +261,11 @@ GError* m2v2_remote_touch_content(const gchar *target, GByteArray *sid,
 GError* m2v2_remote_touch_container_ex(const gchar *target, GByteArray *sid,
         struct hc_url_s *url, guint32 flags);
 
+/**
+ * Allows to send a request with custom timeouts.
+ */
+GError* m2v2_request(const gchar *url, GByteArray *req,
+		gdouble timeout_to_step, gdouble timeout_to_overall, GSList **out);
 
 /**
  * @}

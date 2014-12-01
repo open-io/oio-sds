@@ -1,5 +1,6 @@
 include_directories(BEFORE . .. ../..
 		../../client/c/lib
+		../../rawx-lib/src
 		${CMAKE_CURRENT_BINARY_DIR}/../..
 )
 
@@ -34,7 +35,7 @@ set_target_properties(integrity
 
 target_link_libraries(integrity
 		metautils metacomm gridclient gridcluster
-		meta0remote meta1remote meta2remote rawxclient
+		meta0remote meta1remote meta2remote rawxclient rawx
 		hcresolve meta2v2lbutils
 		-ldb ${SQLITE3_LIBRARIES} ${CURL_LIBRARIES} ${LIBEVENT_LIBRARIES})
 

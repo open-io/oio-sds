@@ -10,6 +10,9 @@
 #include <metautils/lib/metautils.h>
 #include <grid_client.h>
 
+#define META1_TIMEOUT 60 * 60 * 1000
+#define META2_TIMEOUT 60 * 60 * 1000
+
 typedef struct _check_result {
 	gboolean check_ok;
 	GString *msg;

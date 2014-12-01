@@ -463,7 +463,12 @@ _m2v2_request(const gchar *url, GByteArray *req, GSList **out)
     return _m2v2_request_ex(url, req, -1, -1, out);
 }
 
-
+GError*
+m2v2_request(const gchar *url, GByteArray *req, gdouble timeout_to_step,
+		gdouble timeout_to_overall, GSList **out)
+{
+    return _m2v2_request_ex(url, req, timeout_to_step, timeout_to_overall, out);
+}
 
 GError*
 m2v2_remote_execute_CREATE(const gchar *target, GByteArray *sid,
