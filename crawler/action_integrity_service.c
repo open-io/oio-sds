@@ -303,6 +303,7 @@ do_work(const gchar* source_path, guint64 service_uid, GSList *checks) {
 			GRID_ERROR("Check [%s] failed on chunk [%s], error was [%s]",
 					check->name, source_path,
 					local_error ? local_error->message : "unspecified");
+			g_clear_error(&local_error);
 			goto label_error;
 		} else {
 			if (!result->check_ok) {
