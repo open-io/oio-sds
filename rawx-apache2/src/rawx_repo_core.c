@@ -311,7 +311,11 @@ __load_one_header(request_rec *request, apr_uint32_t headers, const char *name, 
 {
 	const char *value;
 
-	*dst = NULL;
+	if (*dst != NULL) {
+		DAV_XDEBUG_REQ(request, 0,
+				"Header already defined [%s]: [%s]", name, *dst);
+		return;
+	}
 
 	if (headers & HEADER_SCHEME_V2) {
 		char new_name[strlen(name) + sizeof(HEADER_PREFIX_GRID)];
