@@ -28,6 +28,8 @@
 
 static struct hc_url_s *url;
 static gboolean check_only;
+static gboolean no_md5;
+static gboolean force_rawx_rebuild;
 
 //------------------------------------------------------------------------------
 // Main hooks
@@ -37,7 +39,16 @@ static void
 polcheck_action(void)
 {
 	GError *err = NULL;
-	check_and_repair_content(url, check_only, &err);
+	guint32 flags = 0;
+
+	if (check_only)
+		flags |= POLCHK_FLAG_CHECKONLY;
+	if (no_md5)
+		flags |= POLCHK_FLAG_NOMD5;
+	if (force_rawx_rebuild)
+		flags |= POLCHK_FLAG_FORCE_RAWX_REBUILD;
+
+	check_and_repair_content(url, flags, &err);
 
 	if (err) {
 		GRID_ERROR("Policy check repair error: (%d) %s", err->code, err->message);
@@ -52,6 +63,10 @@ polcheck_get_options(void)
 	static struct grid_main_option_s polcheck_options[] = {
 		{"CheckOnly", OT_BOOL, {.b = &check_only},
 			"Only check if content is ok, don't perform any action"},
+		{"NoMd5", OT_BOOL, {.b = &no_md5},
+			"Skip chunks md5 check"},
+		{"ForceRawxRebuild", OT_BOOL, {.b = &force_rawx_rebuild},
+			"Consider unreachable rawx as broken"},
 		{ NULL, 0, {.i=0}, NULL}
 	};
 
@@ -62,6 +77,8 @@ static void
 polcheck_set_defaults(void)
 {
 	check_only = FALSE;
+	no_md5 = FALSE;
+	force_rawx_rebuild = FALSE;
 	url = NULL;
 }
 

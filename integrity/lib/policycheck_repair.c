@@ -847,7 +847,7 @@ _repair_single_flaw(struct policy_check_s *pc, struct m2v2_check_error_s *flaw)
 //------------------------------------------------------------------------------
 
 static GError *
-download_and_check_chunk_bean(struct bean_CHUNKS_s *chunk)
+_check_chunk_bean(struct bean_CHUNKS_s *chunk, gboolean no_md5)
 {
 	int md5_data_handler(void *u, const char *b, const size_t blen) {
 		if (b && blen)
@@ -860,33 +860,32 @@ download_and_check_chunk_bean(struct bean_CHUNKS_s *chunk)
 	ne_session *session = NULL;
 	ne_request *request = NULL;
 
-	GRID_DEBUG("Checking the MD5 of [%s]", CHUNKS_get_id(chunk)->str);
+	if (no_md5) {
+		GRID_DEBUG("Skipping check of MD5 of [%s]", CHUNKS_get_id(chunk)->str);
+		err = _request_prepare("HEAD", CHUNKS_get_id(chunk)->str, &session, &request);
+		if (NULL != err)
+			goto end;
+		err = _request_dispatch(session, request);
+		goto end;
+	}
 
 	// Prepare the DL context
+	GRID_DEBUG("Checking the MD5 of [%s]", CHUNKS_get_id(chunk)->str);
 	err = _request_prepare("GET", CHUNKS_get_id(chunk)->str, &session, &request);
 	if (NULL != err)
-		return err;
+		goto end;
+
 	checksum = g_checksum_new(G_CHECKSUM_MD5);
 
 	ne_add_response_body_reader(request, ne_accept_2xx, md5_data_handler, checksum);
 	err = _request_dispatch(session, request);
-	ne_request_destroy(request);
-	request = NULL;
-	ne_session_destroy(session);
-	session = NULL;
-
-	if (NULL != err) {
-		g_checksum_free(checksum);
-		checksum = NULL;
-		return err;
-	}
+	if (NULL != err)
+		goto end;
 
 	// Check the metadata are identical
 	guint8 buf[32];
 	gsize buflen = sizeof(buf);
 	g_checksum_get_digest(checksum, buf, &buflen);
-	g_checksum_free(checksum);
-	checksum = NULL;
 
 	GByteArray *h = CHUNKS_get_hash(chunk);
 	if (buflen != h->len)
@@ -895,22 +894,40 @@ download_and_check_chunk_bean(struct bean_CHUNKS_s *chunk)
 		err = NEWERROR(500, "Hash mismatch (value)");
 
 	// TODO Force the storage policy
+
+end:
+	if (request) {
+		ne_request_destroy(request);
+		request = NULL;
+	}
+	if (session) {
+		ne_session_destroy(session);
+		session = NULL;
+	}
+	if (checksum) {
+		g_checksum_free(checksum);
+		checksum = NULL;
+	}
 	return err;
 }
 
 static void
 _check_chunks_availability(struct policy_check_s *pc, GPtrArray *unavailable)
 {
+	gboolean no_md5_check = pc->flags & POLCHK_FLAG_NOMD5;
 	for (guint i=0; i < pc->check->chunks->len ;) {
 		struct bean_CHUNKS_s *chunk = g_ptr_array_index(pc->check->chunks, i);
-		GError *err = download_and_check_chunk_bean(chunk);
+		GError *err = _check_chunk_bean(chunk, no_md5_check);
 		if (NULL != err) {
 			int code = err->code;
 			GRID_ERROR("Chunk unreachable [%s]: (%d) %s",
 					CHUNKS_get_id(chunk)->str, code, err->message);
 			g_clear_error(&err);
-			if (code == 10060 || code == 10061) {
-				// Unknown status
+			if ((code == 10060 || code == 10061) &&
+					!(pc->flags & POLCHK_FLAG_FORCE_RAWX_REBUILD)) {
+				// Error codes thrown when a rawx is unreachable (connection
+				// error or timeout).  In this case chunks are not considered
+				// as broken unless the FORCE flag is set.
 				++ i;
 			}
 			else {
@@ -988,12 +1005,33 @@ _policy_check_repair(struct policy_check_s *pc)
 	return NULL;
 }
 
+static void
+_unref_unavailable_chunks(struct policy_check_s *pc)
+{
+	GSList *beans_list = NULL;
+	if (pc->check->unavail_chunks->len == 0)
+		return;
+	GRID_DEBUG("Unreferencing unavailable chunks (%i)",
+			pc->check->unavail_chunks->len);
+	void _cb(gpointer _bean, gpointer _unused) {
+		(void) _unused;
+		beans_list = g_slist_prepend(beans_list, _bean);
+	}
+	g_ptr_array_foreach(pc->check->unavail_chunks, _cb, NULL);
+	_unref_in_m2v2(pc->m2urlv, pc->url, beans_list);
+	g_slist_free(beans_list);
+}
+
 GError*
 policy_check_and_repair(struct policy_check_s *pc)
 {
 	GError *err = NULL;
+	gboolean check_only = pc->flags & POLCHK_FLAG_CHECKONLY;
 
 	_check_chunks_availability(pc, pc->check->unavail_chunks);
+
+	if (!check_only && (pc->flags & POLCHK_FLAG_FORCE_RAWX_REBUILD))
+		_unref_unavailable_chunks(pc);
 
 	if (NULL != (err = m2v2_check_consistency(pc->check))) {
 		GRID_WARN("Check error");
@@ -1001,7 +1039,7 @@ policy_check_and_repair(struct policy_check_s *pc)
 	}
 
 	GRID_INFO("Check done: %u flaws found", pc->check->flaws->len);
-	if (!pc->check_only && pc->check->flaws->len)
+	if (!check_only && pc->check->flaws->len)
 		err = _policy_check_repair(pc);
 	return err;
 }
@@ -1033,7 +1071,7 @@ _check_args_init(struct check_args_s *args, const gchar *ns)
 
 gint
 check_and_repair_content(struct hc_url_s *url,
-		gboolean check_only, GError **error)
+		guint32 flags, GError **error)
 {
 	GError *err = NULL;
 	gint flaws = 0;
@@ -1042,7 +1080,7 @@ check_and_repair_content(struct hc_url_s *url,
 
 	err = _check_args_init(&args, hc_url_get(url, HCURL_NSPHYS));
 	if (!err) {
-		policy_check.check_only = check_only;
+		policy_check.flags = flags;
 		policy_check.url = url;
 		policy_check.m2urlv = NULL;
 		policy_check.nsinfo = args.ns_info;
@@ -1082,11 +1120,13 @@ check_and_repair_content(struct hc_url_s *url,
 gint
 check_and_repair_content2(const gchar *namespace, const gchar *container_id,
 		const gchar *content_name, const gchar *content_version,
-		gboolean check_only, GError **error)
+		guint32 flags, GError **error)
 {
 	gint retval = 0;
+
 	if (!g_thread_supported())
 		g_thread_init(NULL);
+
 	struct hc_url_s *url = hc_url_empty();
 	hc_url_set(url, HCURL_NS, namespace);
 	hc_url_set(url, HCURL_HEXID, container_id);
@@ -1094,9 +1134,19 @@ check_and_repair_content2(const gchar *namespace, const gchar *container_id,
 	if (content_version != NULL)
 		hc_url_set(url, HCURL_SNAPORVERS, content_version);
 
-	retval = check_and_repair_content(url, check_only, error);
+	retval = check_and_repair_content(url, flags, error);
 
 	hc_url_clean(url);
 	return retval;
 }
 
+gint rebuild_broken_chunks_for_content(const gchar *ns,
+		const gchar *container_id, const gchar *content_name,
+		const gchar *content_version, gboolean check_only, GError **error)
+{
+	guint32 flags = POLCHK_FLAG_NOMD5 | POLCHK_FLAG_FORCE_RAWX_REBUILD;
+	if (check_only)
+		flags |= POLCHK_FLAG_CHECKONLY;
+	return check_and_repair_content2(ns, container_id, content_name,
+			content_version, flags, error);
+}
