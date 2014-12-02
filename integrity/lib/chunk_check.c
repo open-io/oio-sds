@@ -166,13 +166,24 @@ do {\
 	return FALSE;
 }
 
-gint _chunk_position_comparator(gconstpointer _chunk, gconstpointer _str_position) {
+static gint
+_chunk_position_comparator(gconstpointer _chunk, gconstpointer _str_position) {
 	guint32 position = g_ascii_strtoull((const gchar*)_str_position, NULL, 10);
 	const struct meta2_raw_chunk_s *chunk = _chunk;
 	return chunk->position - position;
 }
 
-gint _chunk_hash_comparator(gconstpointer _chunk, gconstpointer _str_hash) {
+static gint
+_chunk_id_comparator(gconstpointer _chunk, gconstpointer _str_id) {
+	const gchar *str_id = _str_id;
+	const struct meta2_raw_chunk_s *chunk = _chunk;
+	gchar id_from_chunk[STRLEN_CHUNKID];
+	buffer2str(chunk->id.id, sizeof(chunk->id.id), id_from_chunk, STRLEN_CHUNKID);
+	return g_strcmp0(id_from_chunk, str_id);
+}
+
+static gint
+_chunk_hash_comparator(gconstpointer _chunk, gconstpointer _str_hash) {
 	const gchar *str_hash = _str_hash;
 	const struct meta2_raw_chunk_s *chunk = _chunk;
 	gchar hash_from_chunk[STRLEN_CHUNKHASH];
@@ -181,11 +192,22 @@ gint _chunk_hash_comparator(gconstpointer _chunk, gconstpointer _str_hash) {
 }
 
 static struct meta2_raw_chunk_s *
-_get_chunk(GSList *raw_chunks, const gchar *position)
+_get_chunk(GSList *raw_chunks, const chunk_textinfo_t *ci)
 {
-	GSList *found_element = g_slist_find_custom(raw_chunks,
-			position, _chunk_position_comparator);
-	return found_element ? found_element->data : NULL;
+	GSList *found_element = NULL;
+
+#define FIND_CHUNK(attr, func) \
+		found_element = g_slist_find_custom(raw_chunks, attr, func); \
+		if (found_element) \
+			return found_element->data;
+
+	FIND_CHUNK(ci->id, _chunk_id_comparator);
+	FIND_CHUNK(ci->hash, _chunk_hash_comparator);
+	FIND_CHUNK(ci->position, _chunk_position_comparator);
+
+#undef FIND_CHUNK
+
+	return NULL;
 }
 
 static gboolean
@@ -222,7 +244,7 @@ do {\
 		chunk_from_meta2 = raw_chunk;
 	} else {
 		chunk_from_meta2 = _get_chunk(content_from_meta2->raw_chunks,
-				chunk_from_chunk->position);
+				chunk_from_chunk);
 		if (chunk_from_meta2 ==NULL)
 			return FALSE;
 	}
@@ -1087,6 +1109,34 @@ clean_up:
 }
 
 static gboolean
+_overwrite_chunk_id(check_info_t *ci, check_result_t *cres,
+		GError **p_err)
+{
+	const gboolean is_dryrun = check_option_get_bool(ci->options,
+			CHECK_OPTION_DRYRUN);
+	GError *err = NULL;
+	gboolean ret = FALSE;
+
+	if (is_dryrun) {
+		GRID_DEBUG("Skipping overwriting of chunk.id (dryrun)");
+		check_result_append_msg(cres, "dryrun prevented from overwriting"
+				" chunk.id with: %s", ci->ck_info->id);
+	} else {
+		GRID_DEBUG("Overwriting chunk.id with: %s", ci->ck_info->id);
+		if (!set_chunk_info_in_attr(ci->source_path, &err, ci->ck_info))
+			goto end;
+		check_result_append_msg(cres, "Xattr 'chunk.id' "
+				"overwritten with: %s", ci->ck_info->id);
+	}
+
+	ret = TRUE;
+
+end:
+	_set_or_free_error(err, p_err);
+	return ret;
+}
+
+static gboolean
 _overwrite_chunk_creation_date(struct meta2_ctx_s *ctx,
 		check_info_t *check_info, check_result_t *cres, GError **p_err)
 {
@@ -1245,7 +1295,7 @@ check_chunk_orphan(check_info_t *check_info, check_result_t *cres, GError **p_er
 	// content->raw_chunks may be null if content was just created
 	if (ctx->content->raw_chunks) {
 		// check if chunk is well referenced in meta2
-		raw_chunk = _get_chunk(ctx->content->raw_chunks, check_info->ck_info->position);
+		raw_chunk = _get_chunk(ctx->content->raw_chunks, check_info->ck_info);
 		is_referenced = check_chunk_referencing_full(content_info, check_info->ck_info,
 				ctx->content, raw_chunk, &broken_elements, &err);
 		is_chunk_newer = _is_newer_than_content(ctx->content, check_info, &same_age);
@@ -1328,6 +1378,49 @@ clean_up:
 	content_check_ctx_clear(ctx);
 	g_slist_free_full(broken_elements, broken_element_free);
 	_set_or_free_error(err, p_err);
+
+	return ret;
+}
+
+gboolean
+check_chunk_id_parsable(check_info_t *ci, check_result_t *cres, GError **p_err)
+{
+	GError *err = NULL;
+	gboolean ret = FALSE;
+	gboolean id_overwritten = FALSE;
+	gchar *file_name = NULL, *previous_id = NULL;
+	hash_sha256_t h;
+
+	if (!(cres->check_ok = hex2bin(ci->ck_info->id, &h, sizeof(h), &err))) {
+		file_name = g_path_get_basename(ci->source_path);
+		GRID_DEBUG("Could not convert chunk.id to binary, try again conversion "
+				"with chunk id regenerated from filename: [%s].", file_name);
+		previous_id = ci->ck_info->id;
+		// only copy the first 64 chars as there may be an extension
+		ci->ck_info->id = g_strndup(file_name, STRLEN_CHUNKID - 1);
+		g_clear_error(&err);
+		if (!hex2bin(ci->ck_info->id, &h, sizeof(h), &err))
+			goto end;
+		GRID_DEBUG("Conversion succeeded using chunkid: %s", ci->ck_info->id);
+		if (!(id_overwritten = _overwrite_chunk_id(ci, cres, &err)))
+			goto end;
+		GRID_DEBUG("Xattr overwritten.");
+	}
+
+	ret = TRUE;
+
+end:
+	_set_or_free_error(err, p_err);
+
+	if (previous_id) {
+		g_free(file_name);
+		if (id_overwritten) {
+			g_free(previous_id);
+		} else {
+			g_free(ci->ck_info->id);
+			ci->ck_info->id = previous_id;
+		}
+	}
 
 	return ret;
 }

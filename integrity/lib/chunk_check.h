@@ -112,6 +112,17 @@ gboolean check_chunk_info(struct chunk_textinfo_s *chunk, GError **p_error);
 gboolean check_chunk_orphan(check_info_t *check_info, check_result_t *cres, GError **p_err);
 
 /**
+ * Check whether the chunk.id xattr is parsable, and replace it with the file
+ * name if needed.
+ * @param ci info about the chunk path and its extended attributes
+ * @param cres
+ * @param p_err error
+ * @return TRUE if the check could be fully executed,
+ * 		FALSE if an error occurred.
+ */
+gboolean check_chunk_id_parsable(check_info_t *ci, check_result_t *cres, GError **p_err);
+
+/**
  * Computes the md5 sum of the file given as argument.
  * @param filepath path to the file
  * @return the md5 sum (string), to be freed with g_free, or NULL
