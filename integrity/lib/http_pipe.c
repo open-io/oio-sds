@@ -216,9 +216,10 @@ cb_dequeue(void *data, size_t s, size_t n, struct http_pipe_s *p)
 static size_t
 _parse_dl_headers(void *ptr, size_t s, size_t n, struct http_pipe_s *p)
 {
+	const size_t hsize = s * n;
 	p->copied_headers = g_slist_prepend(p->copied_headers,
-			g_strndup((gchar*)ptr, s*n));
-	return n;
+			g_strstrip(g_strndup((gchar*)ptr, hsize)));
+	return hsize;
 }
 
 static void
