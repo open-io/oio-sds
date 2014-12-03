@@ -22,6 +22,17 @@
 #define DT_KEY_BLOCKSIZE "blocksize"
 #define DT_KEY_ALGO "algo"
 
+#define STORAGE_POLICY_NONE "DUMMY"
+
+#define STORAGE_CLASS_ANY "DUMMY"
+#define STORAGE_CLASS_NONE "DUMMY"
+
+#define DATA_TREATMENT_NONE "NONE"
+#define DATA_TREATMENT_OFF "OFF"
+
+#define DATA_SECURITY_NONE "NONE"
+#define DATA_SECURITY_OFF "OFF"
+
 enum data_security_e
 {
 	DUPLI=1,
@@ -97,6 +108,17 @@ const gchar *data_security_type_name(enum data_security_e type);
 const struct data_treatments_s *storage_policy_get_data_treatments(
 		const struct storage_policy_s *sp);
 
+/** Inits a storage class from scratch, with its namespace configuration. */
+struct storage_class_s * storage_class_init (struct namespace_info_s *ni,
+		const char *name);
+
+/** Frees all the internal memory used by the storage class pointed by <sc> */
+void storage_class_clean(struct storage_class_s *sc);
+
+/** Calls storage_class_clean() on <u> and ignores <ignored> */
+void storage_class_gclean(gpointer u, gpointer ignored);
+
+
 /**
  * @param sp
  * @return
@@ -168,8 +190,8 @@ const GSList * storage_class_get_fallbacks(const struct storage_class_s *sc);
  * Does a storage class satisfies the requirements of another ?
  *
  * This function compares the storage class names, it does not
- * look at the fallback list. If wsc is "DUMMY" or NULL,
- * it returns TRUE.
+ * look at the fallback list. A wanted storage class STORAGE_CLASS_NONE,
+ * STORAGE_CLASS_ANY or NULL is always satisfied.
  *
  * @param wsc Wanted storage class (gchar *)
  * @param asc Actual storage class (gchar *)

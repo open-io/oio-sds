@@ -2,43 +2,33 @@
 # define G_LOG_DOMAIN "grid.stgpol"
 #endif
 
+#include "metautils_containers.h"
 #include "metautils_macros.h"
 #include "metautils_errors.h"
 #include "metautils_loggers.h"
+#include "metautils_strings.h"
 #include "metatypes.h"
 #include "metatype_nsinfo.h"
-#include "storage_policy.h"
 
+#include "storage_policy_internals.h"
 
-struct data_security_s
-{
-	gchar *name;
-	enum data_security_e type;
-	GHashTable *params;
-};
+static GHashTable * _params (void) {
+	return g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+}
 
-struct data_treatments_s
-{
-	gchar *name;
-	enum data_treatments_e type;
-	GHashTable *params;
-};
+static gboolean _is_none(const gchar *s) {
+	return !s || !*s || !g_ascii_strcasecmp(s,"none");
+}
 
-struct storage_class_s
-{
-	gchar *name;
-	GSList *fallbacks;
-};
+static gboolean _is_any(const gchar *s) {
+	return _is_none(s) || !g_ascii_strcasecmp(s, STORAGE_CLASS_ANY);
+}
 
-struct storage_policy_s
-{
-	gchar *name;
-	struct data_security_s *datasec;
-	struct data_treatments_s *datatreat;
-	struct storage_class_s *stgclass;
-};
+static gboolean _is_off(const gchar *s) {
+	return _is_any(s) || !g_ascii_strcasecmp(s,"off");
+}
 
-/***********************************************************/
+/* Destructors ------------------------------------------------------------- */
 
 static void
 _data_security_clean(struct data_security_s *ds)
@@ -46,12 +36,9 @@ _data_security_clean(struct data_security_s *ds)
 	if (!ds)
 		return;
 
-	if (NULL != ds->name)
-		g_free(ds->name);
-
+	metautils_str_clean(&ds->name);
 	if (NULL != ds->params)
 		g_hash_table_destroy(ds->params);
-
 	g_free(ds);
 }
 
@@ -61,26 +48,94 @@ _data_treatments_clean(struct data_treatments_s *dt)
 	if (!dt)
 		return;
 
-	if (NULL != dt->name)
-		g_free(dt->name);
-
+	metautils_str_clean(&dt->name);
 	if (NULL != dt->params)
 		g_hash_table_destroy(dt->params);
-
 	g_free(dt);
 }
 
-static void
-_storage_class_clean(struct storage_class_s *sc)
+void
+storage_class_clean(struct storage_class_s *sc)
 {
 	if (!sc)
 		return;
-	if (sc->name != NULL)
-		g_free(sc->name);
-	sc->name = NULL;
+	metautils_str_clean(&sc->name);
 	g_slist_free_full(sc->fallbacks, g_free);
 	g_free(sc);
 }
+
+void
+storage_class_gclean(gpointer u, gpointer ignored)
+{
+	(void) ignored;
+	storage_class_clean((struct storage_class_s*)u);
+}
+
+void
+storage_policy_clean(struct storage_policy_s *sp)
+{
+	if (!sp)
+		return;
+
+	metautils_str_clean(&sp->name);
+	if (NULL != sp->datasec)
+		_data_security_clean(sp->datasec);
+	if (NULL != sp->datatreat)
+		_data_treatments_clean(sp->datatreat);
+	if (NULL != sp->stgclass)
+		storage_class_clean(sp->stgclass);
+	g_free(sp);
+}
+
+void
+storage_policy_gclean(gpointer u, gpointer ignored)
+{
+	(void) ignored;
+	storage_policy_clean((struct storage_policy_s*) u);
+}
+
+/* Dummy implementations --------------------------------------------------- */
+
+static struct storage_class_s *
+_dummy_stgclass(void)
+{
+	struct storage_class_s *result = g_malloc0(sizeof(struct storage_class_s));
+	result->name  = g_strdup(STORAGE_CLASS_ANY);
+	return result;
+}
+
+static struct data_treatments_s*
+_dummy_datatreat(void)
+{
+	struct data_treatments_s *result = g_malloc0(sizeof(struct data_treatments_s));
+	result->name = g_strdup(DATA_TREATMENT_NONE);
+	result->type = DT_NONE;
+	result->params = _params();
+	return result;
+}
+
+static struct data_security_s *
+_dummy_datasec(void)
+{
+	struct data_security_s *result = g_malloc0(sizeof(struct data_security_s));
+	result->name = g_strdup(DATA_SECURITY_NONE);
+	result->type = DS_NONE;
+	result->params = _params();
+	return result;
+}
+
+static struct storage_policy_s*
+_dummy_stgpol(void)
+{
+	struct storage_policy_s *result = g_malloc0(sizeof(struct storage_policy_s));
+	result->name = g_strdup(STORAGE_POLICY_NONE);
+	result->datasec = _dummy_datasec();
+	result->datatreat = _dummy_datatreat();
+	result->stgclass = _dummy_stgclass();
+	return result;
+}
+
+/* Constructors & parsers -------------------------------------------------- */
 
 static void
 __fill_info(GHashTable *params, const char *info)
@@ -99,299 +154,152 @@ __fill_info(GHashTable *params, const char *info)
 }
 
 static int
-_parse_data_treatments(struct storage_policy_s *sp, const char *str)
+_parse_data_treatments(struct data_treatments_s *dt, const char *config)
 {
-	gchar **tok = NULL;
-	tok = g_strsplit(str, ":", 2);
-	if(g_strv_length(tok) != 2) {
+	gchar **tok = g_strsplit(config, ":", 2);
+
+	if (g_strv_length(tok) != 2) {
 		g_strfreev(tok);
 		return 0;
 	}
 
 	if (g_str_has_prefix(tok[0], "COMP")) {
-		sp->datatreat->type = COMPRESSION;
+		dt->type = COMPRESSION;
 	} else if (g_str_has_prefix(tok[0],"CYPHER")) {
-		sp->datasec->type = CYPHER;
+		dt->type = CYPHER;
 	} else {
 		g_strfreev(tok);
 		return 0;
 	}
-	sp->datatreat->params = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-	__fill_info(sp->datatreat->params, tok[1]);
+
+	__fill_info(dt->params, tok[1]);
 	g_strfreev(tok);
 	return 1;
 }
 
-static int
-_parse_data_security(struct storage_policy_s *sp, const char *str)
+static struct data_treatments_s *
+_load_data_treatments(namespace_info_t *ni, const char *key)
 {
-	gchar **tok = NULL;
-	tok = g_strsplit(str, ":", 2);
-	if(g_strv_length(tok) != 2) {
+	if (_is_off(key))
+		return _dummy_datatreat();
+	if (!ni)
+		return NULL;
+
+	gchar *config = namespace_info_get_data_treatments(ni, key);
+	if (!config)
+		return NULL;
+
+	struct data_treatments_s *dt = g_malloc0(sizeof(struct data_treatments_s));
+	dt->name = g_strdup(key);
+	dt->params = _params();
+	dt->type = DT_NONE;
+
+	int rc = _parse_data_treatments(dt, config);
+	g_free(config);
+	if (rc)
+		return dt;
+	_data_treatments_clean(dt);
+	return NULL;
+}
+
+static int
+_parse_data_security(struct data_security_s *ds, const char *config)
+{
+	gchar **tok = g_strsplit(config, ":", 2);
+
+	if (g_strv_length(tok) != 2) {
 		g_strfreev(tok);
 		return 0;
 	}
 
 	if (g_str_has_prefix(tok[0], "DUP")) {
-		sp->datasec->type = DUPLI;
+		ds->type = DUPLI;
 	} else if (g_str_has_prefix(tok[0],"RAIN")) {
-		sp->datasec->type = RAIN;
+		ds->type = RAIN;
 	} else {
 		g_strfreev(tok);
 		return 0;
 	}
-	sp->datasec->params = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-	__fill_info(sp->datasec->params, tok[1]);
+
+	__fill_info(ds->params, tok[1]);
 	g_strfreev(tok);
 	return 1;
 }
 
-/**
- * Parse the storage class fallback list.
- *
- * @param sp The storage policy object to put parsed data into
- * @param str The raw storage class string to parse (storage classes
- *   separated by ':')
- * @return 1 in case of success
- */
-static int
-_parse_storage_class(struct storage_policy_s *sp, const char *str)
+static struct data_security_s *
+_load_data_security(namespace_info_t *ni, const gchar *key)
 {
-	if (str == NULL) {
-		return 1; // No fallback
-	}
-	gchar **tok = NULL;
-	tok = g_strsplit(str, ":", 0);
-	for (gchar **tok2 = tok; tok2 && *tok2; tok2++) {
-		sp->stgclass->fallbacks = g_slist_prepend(sp->stgclass->fallbacks,
-				g_strdup(*tok));
-	}
-	sp->stgclass->fallbacks = g_slist_reverse(sp->stgclass->fallbacks);
-	g_strfreev(tok);
-	return 1;
-}
+	if (_is_off(key))
+		return _dummy_datasec();
+	if (!ni)
+		return NULL;
 
-static int
-_load_data_security(struct storage_policy_s *sp, const char *key, namespace_info_t *ni)
-{
-	int status = 0;
-	gchar *datasec = NULL;
+	gchar *config = namespace_info_get_data_security(ni, key);
+	if (!config)
+		return NULL;
 
-	sp->datasec = g_malloc0(sizeof(struct data_security_s));
-	sp->datasec->name = g_strdup(key);
+	struct data_security_s *ds = g_malloc0(sizeof(struct data_security_s));
+	ds->name = g_strdup(key);
+	ds->type = DS_NONE;
+	ds->params = _params();
 
-	if ((0 == g_ascii_strcasecmp(key, "NONE")) || (0 == g_ascii_strcasecmp(key, "OFF"))) {
-		sp->datasec->type = DS_NONE;
-		return 1;
-	}
-
-	datasec = namespace_info_get_data_security(ni, key);
-	if (datasec == NULL) {
-		return 0;
-	}
-
-	status = _parse_data_security(sp, datasec);
-
-	g_free(datasec);
-
-	return status;
-}
-
-static int
-_load_data_treatments(struct storage_policy_s *sp, const char *key, namespace_info_t *ni)
-{
-	int status = 0;
-	gchar *datatreat = NULL;
-
-	sp->datatreat = g_malloc0(sizeof(struct data_treatments_s));
-	sp->datatreat->name = g_strdup(key);
-
-	if ((0 == g_ascii_strcasecmp(key, "NONE")) || (0 == g_ascii_strcasecmp(key, "OFF"))) {
-		sp->datatreat->type = DT_NONE;
-		return 1;
-	}
-
-	datatreat = namespace_info_get_data_treatments(ni, key);
-	if (datatreat == NULL) {
-		return 0;
-	}
-
-	status = _parse_data_treatments(sp, datatreat);
-
-	g_free(datatreat);
-	return status;
-}
-
-static int
-_load_storage_class(struct storage_policy_s *sp, const char *key, namespace_info_t *ni)
-{
-	int status = 0;
-	gchar *stgclass_str = NULL;
-	sp->stgclass = g_malloc0(sizeof(struct storage_class_s));
-	sp->stgclass->name = g_strdup(key);
-
-	stgclass_str = namespace_info_get_storage_class(ni, key);
-	status = _parse_storage_class(sp, stgclass_str);
-
-	g_free(stgclass_str);
-	return status;
+	int rc = _parse_data_security(ds, config);
+	g_free(config);
+	if (rc)
+		return ds;
+	_data_security_clean(ds);
+	return NULL;
 }
 
 static int
 _load_storage_policy(struct storage_policy_s *sp, GByteArray *gba, namespace_info_t *ni)
 {
-	gchar *str = NULL;
-	gchar **tok = NULL;
-	str = g_strndup((gchar *)gba->data, gba->len);
-	tok = g_strsplit(str, ":", 3);
+	gchar *str = g_strndup((gchar *)gba->data, gba->len);
+	gchar **tok = g_strsplit(str, ":", 3);
 	g_free(str);
 
-	if(g_strv_length(tok) != 3) {
-		goto error_label;
-	}
-
-	if (!_load_storage_class(sp, tok[0], ni)) {
-		goto error_label;
-	}
-
-	if (!_load_data_security(sp, tok[1], ni)) {
-		goto error_label;
-	}
-
-	if (!_load_data_treatments(sp, tok[2], ni)) {
-		goto error_label;
-	}
-
+	int rc = (3 == g_strv_length(tok))
+		&& NULL != (sp->stgclass = storage_class_init(ni, tok[0]))
+		&& NULL != (sp->datasec = _load_data_security(ni, tok[1]))
+		&& NULL != (sp->datatreat = _load_data_treatments(ni, tok[2]));
 	g_strfreev(tok);
-	return 1;
-
-error_label:
-	g_strfreev(tok);
-	return 0;
+	return rc;
 }
 
-static void
-__kv_dup(gpointer k, gpointer v, gpointer out)
+struct storage_class_s *
+storage_class_init (struct namespace_info_s *ni, const char *name)
 {
-	GHashTable **r = (GHashTable **) out;
-	g_hash_table_insert(*r, g_strdup((gchar*)k), g_strdup((gchar*)v));
-}
+	if (_is_any (name))
+		return _dummy_stgclass();
+	if (!ni)
+		return NULL;
 
-static GHashTable *
-__copy_params(GHashTable *params)
-{
-	GHashTable *r = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	gchar *config = namespace_info_get_storage_class(ni, name);
+	if (!config)
+		return NULL;
 
-	g_hash_table_foreach(params, __kv_dup, &r);
+	struct storage_class_s *result = g_malloc(sizeof(struct storage_class_s));
+	result->name = g_strdup(name);
+	gchar **fallbacks = g_strsplit(config, ":", 0);
+	result->fallbacks = metautils_array_to_list((void**)fallbacks);
 
-	return r;
-}
-
-static struct data_security_s *
-_data_security_dup(struct data_security_s *ds)
-{
-	struct data_security_s *r = NULL;
-
-	r = g_malloc0(sizeof(struct data_security_s));
-
-	if(NULL != ds->name)
-		r->name = g_strdup(ds->name);
-	r->type = ds->type;
-	if(NULL != ds->params)
-		r->params = __copy_params(ds->params);
-
-	return r;
-}
-
-static struct data_treatments_s *
-_data_treatments_dup(struct data_treatments_s *dt)
-{
-	struct data_treatments_s *r = NULL;
-
-	r = g_malloc0(sizeof(struct data_treatments_s));
-
-	if(NULL != dt->name)
-		r->name = g_strdup(dt->name);
-	r->type = dt->type;
-	if(NULL != dt->params)
-		r->params = __copy_params(dt->params);
-
-	return r;
-}
-
-static struct storage_class_s *
-_storage_class_dup(struct storage_class_s *sc)
-{
-	struct storage_class_s *copy = NULL;
-	copy = g_malloc0(sizeof(struct storage_class_s));
-	if (sc->name != NULL)
-		copy->name = g_strdup(sc->name);
-	else
-		copy->name = NULL;
-
-	void _dup_elm(gchar *fallback, GSList **list) {
-		*list = g_slist_prepend(*list, g_strdup(fallback));
-	}
-	g_slist_foreach(sc->fallbacks, (GFunc)_dup_elm, &(copy->fallbacks));
-	copy->fallbacks = g_slist_reverse(copy->fallbacks);
-	return copy;
-}
-
-/* ------------------------------------------------------------------------- */
-
-static struct storage_class_s *
-_dummy_stgclass(void)
-{
-	struct storage_class_s *result = g_malloc0(sizeof(struct storage_class_s));
-	result->name  = g_strdup(DUMMY_STORAGE_CLASS);
-	return result;
-}
-
-static struct data_treatments_s*
-_dummy_datatreat(void)
-{
-	struct data_treatments_s *result = g_malloc0(sizeof(struct data_treatments_s));
-	result->name = g_strdup("none");
-	result->type = DT_NONE;
-	result->params = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-	return result;
-}
-
-static struct data_security_s *
-_dummy_datasec(void)
-{
-	struct data_security_s *result = g_malloc0(sizeof(struct data_security_s));
-	result->name = g_strdup("none");
-	result->type = DS_NONE;
-	result->params = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-	return result;
-}
-
-static struct storage_policy_s*
-_dummy_stgpol(void)
-{
-	struct storage_policy_s *result = g_malloc0(sizeof(struct storage_policy_s));
-	result->name = g_strdup("none");
-	result->datasec = _dummy_datasec();
-	result->datatreat = _dummy_datatreat();
-	result->stgclass = _dummy_stgclass();
+	g_free(fallbacks); // XXX Pointers reused !
+	g_free(config);
 	return result;
 }
 
 struct storage_policy_s *
 storage_policy_init(namespace_info_t *ni, const char *name)
 {
-	if (!name || !g_ascii_strcasecmp(name, "none"))
+	if (_is_any(name))
 		return _dummy_stgpol();
-
-	/* sanity check */
 	if (!ni)
 		return NULL;
 
 	GByteArray *gba = NULL;
-	struct storage_policy_s *sp = NULL;
-	sp = g_malloc0(sizeof(struct storage_policy_s));
+	struct storage_policy_s *sp = g_malloc0(sizeof(struct storage_policy_s));
 	sp->name = g_strdup(name);
+
 	gba = g_hash_table_lookup(ni->storage_policy, name);
 	if (gba == NULL) {
 		/* set dirty flag, don't allow any getter */
@@ -405,6 +313,69 @@ storage_policy_init(namespace_info_t *ni, const char *name)
 	}
 
 	return sp;
+}
+
+/* Copy constructors ------------------------------------------------------- */
+
+static void
+__kv_dup(gpointer k, gpointer v, gpointer out)
+{
+	GHashTable **r = (GHashTable **) out;
+	g_hash_table_insert(*r, g_strdup((gchar*)k), g_strdup((gchar*)v));
+}
+
+static GHashTable *
+__copy_params(GHashTable *params)
+{
+	GHashTable *r = _params();
+	g_hash_table_foreach(params, __kv_dup, &r);
+	return r;
+}
+
+static struct data_security_s *
+_data_security_dup(struct data_security_s *ds)
+{
+	struct data_security_s *r = NULL;
+
+	r = g_malloc0(sizeof(struct data_security_s));
+	r->type = ds->type;
+	if(NULL != ds->name)
+		r->name = g_strdup(ds->name);
+	if(NULL != ds->params)
+		r->params = __copy_params(ds->params);
+
+	return r;
+}
+
+static struct data_treatments_s *
+_data_treatments_dup(struct data_treatments_s *dt)
+{
+	struct data_treatments_s *r = NULL;
+
+	r = g_malloc0(sizeof(struct data_treatments_s));
+	r->type = dt->type;
+	if(NULL != dt->name)
+		r->name = g_strdup(dt->name);
+	if(NULL != dt->params)
+		r->params = __copy_params(dt->params);
+
+	return r;
+}
+
+static struct storage_class_s *
+_storage_class_dup(struct storage_class_s *sc)
+{
+	struct storage_class_s *copy = NULL;
+	copy = g_malloc0(sizeof(struct storage_class_s));
+	if (sc->name != NULL)
+		copy->name = g_strdup(sc->name);
+
+	void _dup_elm(gchar *fallback, GSList **list) {
+		*list = g_slist_prepend(*list, g_strdup(fallback));
+	}
+	g_slist_foreach(sc->fallbacks, (GFunc)_dup_elm, &(copy->fallbacks));
+	copy->fallbacks = g_slist_reverse(copy->fallbacks);
+	return copy;
 }
 
 struct storage_policy_s *
@@ -429,37 +400,7 @@ storage_policy_dup(const struct storage_policy_s *sp)
 	return r;
 }
 
-void storage_policy_clean(struct storage_policy_s *sp)
-{
-	if (!sp)
-		return;
-
-	if (NULL != sp->name)
-		g_free(sp->name);
-
-	if (NULL != sp->datasec) {
-		_data_security_clean(sp->datasec);
-		sp->datasec = NULL;
-	}
-
-	if (NULL != sp->datatreat) {
-		_data_treatments_clean(sp->datatreat);
-		sp->datatreat = NULL;
-	}
-
-	if (NULL != sp->stgclass) {
-		_storage_class_clean(sp->stgclass);
-		sp->stgclass = NULL;
-	}
-
-	g_free(sp);
-}
-
-void storage_policy_gclean(gpointer u, gpointer ignored)
-{
-	(void) ignored;
-	storage_policy_clean((struct storage_policy_s*) u);
-}
+/* Various getters --------------------------------------------------------- */
 
 const char *
 storage_policy_get_name(const struct storage_policy_s *sp)
@@ -552,7 +493,6 @@ data_treatments_get_param(const struct data_treatments_s *dt, const char *key)
 	return NULL;
 }
 
-
 const gchar *
 storage_class_get_name(const struct storage_class_s *sc)
 {
@@ -568,41 +508,23 @@ storage_class_get_fallbacks(const struct storage_class_s *sc)
 gboolean
 storage_class_is_satisfied(const gchar *wsc, const gchar *asc)
 {
-	GRID_TRACE("Wanted storage class: %s, got %s", wsc, asc);
-
-	/* NULL or DUMMY wanted -> always OK */
-	if (wsc == NULL || !g_ascii_strcasecmp(wsc, DUMMY_STORAGE_CLASS)) {
-		return TRUE;
-	}
-	/* Specific class wanted and no class defined -> KO */
-	if (asc == NULL) {
-		return FALSE;
-	}
-	/* Do an exact match of storage class (case insensitive) */
-	return (g_ascii_strcasecmp(wsc, asc) == 0);
+	return _is_any(wsc) || (asc && !g_ascii_strcasecmp(wsc, asc));
 }
 
 gboolean
 storage_class_is_satisfied2(const struct storage_class_s *wsc,
 		const gchar *asc, gboolean strict)
 {
-	GRID_TRACE("Wanted storage class (%s): %s, got %s",
-		strict ? "strictly" : "lazily", wsc? wsc->name : NULL, asc);
-
-	if (wsc == NULL || storage_class_is_satisfied(wsc->name, asc)) {
+	if (wsc == NULL || storage_class_is_satisfied(wsc->name, asc))
 		return TRUE;
-	} else if (strict) {
+	if (strict)
 		return FALSE;
-	} else {
-		GRID_DEBUG("Trying fallbacks");
-		/* Search in the fallback list */
-		for (GSList *cursor = wsc->fallbacks;
-				cursor != NULL && cursor->data != NULL;
-				cursor = cursor->next) {
-			if (storage_class_is_satisfied((gchar*)cursor->data, asc)) {
-				return TRUE;
-			}
-		}
+
+	for (GSList *l = wsc->fallbacks; l != NULL ; l = l->next) {
+		if (!l->data)
+			continue;
+		if (storage_class_is_satisfied((gchar*)l->data, asc))
+			return TRUE;
 	}
 	return FALSE;
 }

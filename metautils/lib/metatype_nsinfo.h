@@ -1,7 +1,6 @@
 #ifndef __REDCURRANT_metatype_nsinfo__h
 #define __REDCURRANT_metatype_nsinfo__h 1
 
-#define DUMMY_STORAGE_CLASS "DUMMY"
 #define REDC_LOSTFOUND_FOLDER "redc_lost+found"
 
 struct namespace_info_s;

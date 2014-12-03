@@ -319,7 +319,7 @@ hook_CHUNK_stgclass(header_check_t *hc, chunk_pair_t *pair, void *u)
 	struct service_info_s *rawx = grid_lbpool_get_service_from_url(
 			hc->check->lbpool, "rawx", url);
 	if (rawx != NULL) {
-		const gchar *stgclass = service_info_get_stgclass(rawx, "DUMMY");
+		const gchar *stgclass = service_info_get_stgclass(rawx, STORAGE_CLASS_NONE);
 		if (!storage_class_is_satisfied2(ctx->stgclass, stgclass, FALSE)) {
 			g_ptr_array_add(ctx->bad_pairs, pair);
 		}
