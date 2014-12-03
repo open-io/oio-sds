@@ -142,9 +142,21 @@ metautils_list_to_gpa(GSList *orig)
 }
 
 void**
+metautils_gpa_to_array(GPtrArray *orig, gboolean clean)
+{
+	if (!orig)
+		return NULL;
+	if (orig->len <= 0)
+		return g_malloc0(sizeof(void**));
+	if (NULL != orig->pdata[ orig->len - 1 ])
+		g_ptr_array_add(orig, NULL);
+	return clean ? g_ptr_array_free(orig, FALSE) : orig->pdata;
+}
+
+void**
 metautils_list_to_array(GSList *orig)
 {
-	return g_ptr_array_free(metautils_list_to_gpa(orig), FALSE);
+	return metautils_gpa_to_array(metautils_list_to_gpa(orig), TRUE);
 }
 
 GSList*
@@ -213,5 +225,20 @@ g_slist_agregate(GSList * list, GCompareFunc comparator)
 
 	g_slist_free (sorted);
 	return g_slist_reverse(resL2);
+}
+
+GPtrArray*
+metautils_gtree_to_gpa(GTree *t, gboolean clean)
+{
+	gboolean run_move(gpointer k, gpointer v, gpointer u) {
+		(void) k;
+		g_ptr_array_add(u, v);
+		return FALSE;
+	}
+	GPtrArray *tmp = g_ptr_array_new();
+	g_tree_foreach(t, run_move, tmp);
+	if (clean)
+		g_tree_destroy(t);
+	return tmp;
 }
 

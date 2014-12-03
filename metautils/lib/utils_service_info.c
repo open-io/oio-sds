@@ -681,6 +681,14 @@ service_info_is_internal(const struct service_info_s *si)
 	            NAME_TAGNAME_INTERNAL, "false")));
 }
 
+gboolean
+service_info_check_storage_class(const struct service_info_s *si, const gchar *wanted_class)
+{
+	const gchar *actual_class = service_info_get_tag_value(si,
+			NAME_TAGNAME_RAWX_STGCLASS, NULL);
+	return storage_class_is_satisfied(wanted_class, actual_class);
+}
+
 gchar *
 service_info_key (const struct service_info_s *si)
 {

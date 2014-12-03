@@ -172,7 +172,7 @@ _find_matching_rawx(GSList *rawx, GSList *used_loc, gint64 distance,
 		}
 
 		/* check rawx has appropriate storage class (strictly) */
-		if (!grid_lb_check_storage_class(stg_class, l->data)) {
+		if (!service_info_check_storage_class(l->data, stg_class)) {
 			GRID_DEBUG(MSG_DONT_MATCH_CRITERIA, "storage class");
 			continue;
 		}
@@ -869,7 +869,7 @@ _check_duplicated_content_is_valid(struct meta2_ctx_s *ctx)
 		}
 
 		/* check chunk storage class */
-		if (!grid_lb_check_storage_class(storage_class_get_name(stg_class), si)) {
+		if (!service_info_check_storage_class(si, storage_class_get_name(stg_class))) {
 			GRID_INFO("Wrong storage class for %s: expected '%s'",
 					chunk_str, storage_class_get_name(stg_class));
 			/* Add the chunk to the "almost good" list. These

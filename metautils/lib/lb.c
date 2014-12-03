@@ -24,6 +24,8 @@
 #include "./lb.h"
 #include "./storage_policy.h"
 
+#define BOOLNAME(b) ((b)?"TRUE":"FALSE")
+#define IS(S) !g_ascii_strcasecmp(type, (S))
 #define SLOT(P) ((struct score_slot_s*)P)
 
 typedef guint32 srv_weight_t;
@@ -66,9 +68,9 @@ struct grid_lb_iterator_s
 		LBIT_SINGLE=1,
 		LBIT_SHARED,
 		LBIT_RR,
-		LBIT_SRR,
+		LBIT_WRR,
 		LBIT_RAND,
-		LBIT_SRAND
+		LBIT_WRAND
 	} type;
 	union {
 		struct {
@@ -177,7 +179,7 @@ sort_slots_by_score(gconstpointer p1, gconstpointer p2)
 }
 
 
-// Pool features
+/* Pool features ----------------------------------------------------------- */
 
 static inline void
 grid_lb_lock(struct grid_lb_s *lb)
@@ -444,7 +446,7 @@ grid_lb_get_service_from_url(struct grid_lb_s *lb, const gchar *url)
 {
 	addr_info_t ai;
 
-	if (!url)
+	if (!lb || !url)
 		return NULL;
 
 	memset(&ai, 0, sizeof(struct addr_info_s));
@@ -513,7 +515,12 @@ grid_lb_count(struct grid_lb_s *lb)
 {
 	if (!lb)
 		return 0;
-	return (gsize) lb->size_max;
+
+	grid_lb_lock(lb);
+	gsize rc = (gsize) lb->size_max;
+	grid_lb_unlock(lb);
+
+	return rc;
 }
 
 gsize
@@ -521,7 +528,12 @@ grid_lb_count_all(struct grid_lb_s *lb)
 {
 	if (!lb)
 		return 0;
-	return (gsize) lb->gpa->len;
+
+	grid_lb_lock(lb);
+	gsize rc = (gsize) lb->gpa->len;
+	grid_lb_unlock(lb);
+
+	return rc;
 }
 
 
@@ -574,12 +586,6 @@ grid_lb_iterator_round_robin(struct grid_lb_s *lb)
 struct grid_lb_iterator_s*
 grid_lb_iterator_weighted_round_robin(struct grid_lb_s *lb)
 {
-	return grid_lb_iterator_scored_round_robin(lb);
-}
-
-struct grid_lb_iterator_s*
-grid_lb_iterator_scored_round_robin(struct grid_lb_s *lb)
-{
 	struct grid_lb_iterator_s *iter;
 
 	g_assert(lb != NULL);
@@ -587,7 +593,7 @@ grid_lb_iterator_scored_round_robin(struct grid_lb_s *lb)
 	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
 	iter->lb = lb;
 	iter->version = lb->version;
-	iter->type = LBIT_SRR;
+	iter->type = LBIT_WRR;
 	return iter;
 }
 
@@ -608,12 +614,6 @@ grid_lb_iterator_random(struct grid_lb_s *lb)
 struct grid_lb_iterator_s*
 grid_lb_iterator_weighted_random(struct grid_lb_s *lb)
 {
-	return grid_lb_iterator_scored_random(lb);
-}
-
-struct grid_lb_iterator_s*
-grid_lb_iterator_scored_random(struct grid_lb_s *lb)
-{
 	struct grid_lb_iterator_s *iter;
 
 	g_assert(lb != NULL);
@@ -621,7 +621,7 @@ grid_lb_iterator_scored_random(struct grid_lb_s *lb)
 	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
 	iter->lb = lb;
 	iter->version = lb->version;
-	iter->type = LBIT_SRAND;
+	iter->type = LBIT_WRAND;
 	return iter;
 }
 
@@ -629,20 +629,27 @@ struct grid_lb_iterator_s*
 grid_lb_iterator_init(struct grid_lb_s *lb, const gchar *type)
 {
 	if (type && *type) {
-		if (!g_ascii_strcasecmp(type, "WRR"))
-			return grid_lb_iterator_weighted_round_robin(lb);
-		if (!g_ascii_strcasecmp(type, "SRR"))
-			return grid_lb_iterator_scored_round_robin(lb);
-		if (!g_ascii_strcasecmp(type, "RAND"))
+		if (IS("RR"))
+			return grid_lb_iterator_round_robin(lb);
+		if (IS("RAND"))
 			return grid_lb_iterator_random(lb);
-		if (!g_ascii_strcasecmp(type, "WRAND"))
+		if (IS("WRR") || IS("SRR"))
+			return grid_lb_iterator_weighted_round_robin(lb);
+		if (IS("WRAND") || IS("SRAND"))
 			return grid_lb_iterator_weighted_random(lb);
-		if (!g_ascii_strcasecmp(type, "SRAND"))
-			return grid_lb_iterator_scored_random(lb);
-		if (!g_ascii_strcasecmp(type, "SINGLE"))
+		if (IS("SINGLE"))
 			return grid_lb_iterator_single_run(lb);
 	}
 	return grid_lb_iterator_round_robin(lb);
+}
+
+void
+grid_lb_iterator_clean(struct grid_lb_iterator_s *iter)
+{
+	if (!iter)
+		return;
+	memset(iter, 0, sizeof(struct grid_lb_iterator_s));
+	g_free(iter);
 }
 
 gboolean
@@ -659,6 +666,123 @@ grid_lb_iterator_is_addr_available(struct grid_lb_iterator_s *iter,
 {
 	g_assert(iter != NULL);
 	return grid_lb_is_addr_available(iter->lb, ai);
+}
+
+static void
+grid_lb_configure_kv(struct grid_lb_s *lb, const gchar *k, const gchar *v)
+{
+	if (!g_ascii_strcasecmp(k, "shorten_ratio")) {
+		gdouble sr = g_ascii_strtod(v, NULL);
+		sr = CLAMP(sr, 0.001, 1.001);
+		grid_lb_lock(lb);
+		lb->shorten_ratio = sr;
+		grid_lb_unlock(lb);
+		return;
+	}
+
+	if (!g_ascii_strcasecmp(k, "standard_deviation")) {
+		grid_lb_lock(lb);
+		lb->standard_deviation = metautils_cfg_get_bool(v, FALSE);
+		grid_lb_unlock(lb);
+		return;
+	}
+
+	if (!g_ascii_strcasecmp(k, "reset_delay")) {
+		grid_lb_lock(lb);
+		lb->reset_delay = g_ascii_strtoll(v, NULL, 10);
+		grid_lb_unlock(lb);
+		return;
+	}
+}
+
+static void
+grid_lb_configure_pair(struct grid_lb_s *lb, const gchar *k, gsize l)
+{
+	gchar *eq, *pair;
+
+	pair = g_alloca(l+1);
+	memcpy(pair, k, l+1);
+
+	eq = strchr(pair, '=');
+	if (!eq)
+		grid_lb_configure_kv(lb, pair, "");
+	else {
+		*(eq++) = '\0';
+		grid_lb_configure_kv(lb, pair, eq);
+	}
+}
+
+static const gchar *
+_next(const gchar *p, const gchar *sep)
+{
+	g_assert(p != NULL);
+	g_assert(sep != NULL);
+	for (; *p ; p++) {
+		if (strchr(sep, *p))
+			return p + 1;
+	}
+	return NULL;
+}
+
+void
+grid_lb_configure_options(struct grid_lb_s *lb, const gchar *opts)
+{
+
+	int l;
+	const gchar *p, *e;
+
+	// Reset the defaults
+	lb->shorten_ratio = 1.001;
+	lb->standard_deviation = FALSE;
+
+	// Set new specific options
+	for (p=opts; p && *p ;p+=l) {
+		l = !(e = _next(p, "?&")) ? (int)strlen(p) : (e - p);
+		grid_lb_configure_pair(lb, p, l);
+	}
+}
+
+void
+grid_lb_iterator_configure(struct grid_lb_iterator_s *iter, const gchar *val)
+{
+	if (iter->type == LBIT_SHARED) {
+		return;
+	}
+
+	switch (*val) {
+		case 'R':
+			if (g_str_has_prefix(val, "RR")) {
+				if (iter->type != LBIT_RR) {
+					iter->type = LBIT_RR;
+					iter->internals.rr.next_idx = 0;
+					iter->internals.rr.next_idx_global = 0;
+				}
+			}
+			else if (g_str_has_prefix(val, "RAND")) {
+				iter->type = LBIT_RAND;
+			}
+
+			grid_lb_configure_options(iter->lb, _next(val, "?&"));
+			break;
+
+		case 'S':
+		case 'W':
+			if (g_str_has_prefix(val, "WRR") || g_str_has_prefix(val, "SRR")) {
+				if (iter->type != LBIT_WRR) {
+					iter->type = LBIT_WRR;
+					iter->internals.srr.next_idx = 0;
+					iter->internals.srr.next_idx_global = 0;
+					iter->internals.srr.current = 0;
+					iter->internals.srr.last_reset = time(NULL);
+				}
+			}
+			else if (g_str_has_prefix(val, "WRAND") || g_str_has_prefix(val, "SRAND")) {
+				iter->type = LBIT_WRAND;
+			}
+
+			grid_lb_configure_options(iter->lb, _next(val, "?&"));
+			break;
+	}
 }
 
 
@@ -842,7 +966,7 @@ _iterator_next_shorten(struct grid_lb_iterator_s *iter,
 			return __next_SINGLE(iter->lb, iter, si);
 		case LBIT_RR:
 			return __next_RR(iter->lb, iter, si, shorten);
-		case LBIT_SRR:
+		case LBIT_WRR:
 			if (shorten) {
 				return __next_SRR(iter->lb, iter, si);
 			} else {
@@ -854,7 +978,7 @@ _iterator_next_shorten(struct grid_lb_iterator_s *iter,
 			}
 		case LBIT_RAND:
 			return __next_RAND(iter->lb, si);
-		case LBIT_SRAND:
+		case LBIT_WRAND:
 			return __next_SRAND(iter->lb, si);
 		case LBIT_SHARED:
 			return __next_SHARED(iter, si, shorten);
@@ -887,46 +1011,6 @@ grid_lb_iterator_next(struct grid_lb_iterator_s *iter,
 		struct service_info_s **si)
 {
 	return grid_lb_iterator_next_shorten(iter, si, TRUE);
-}
-
-void
-grid_lb_iterator_clean(struct grid_lb_iterator_s *iter)
-{
-	if (!iter)
-		return;
-	memset(iter, 0, sizeof(struct grid_lb_iterator_s));
-	g_free(iter);
-}
-
-static GPtrArray*
-gtree_to_gpa(GTree *t)
-{
-	gboolean run_move(gpointer k, gpointer v, gpointer u) {
-		(void) k;
-		g_ptr_array_add(u, v);
-		return FALSE;
-	}
-	GPtrArray *tmp = g_ptr_array_sized_new(g_tree_nnodes(t)+1);
-	g_tree_foreach(t, run_move, tmp);
-	g_tree_destroy(t);
-	return tmp;
-}
-
-static void**
-gpa_to_array(GPtrArray *gpa)
-{
-	g_assert(gpa != NULL);
-	if (!gpa->len || NULL != gpa->pdata[gpa->len - 1])
-		g_ptr_array_add(gpa, NULL);
-	return g_ptr_array_free(gpa, FALSE);
-}
-
-gboolean
-grid_lb_check_storage_class(const gchar *wanted_class, service_info_t *si)
-{
-	const gchar *actual_class = service_info_get_tag_value(si,
-			NAME_TAGNAME_RAWX_STGCLASS, NULL);
-	return storage_class_is_satisfied(wanted_class, actual_class);
 }
 
 static gsize
@@ -998,7 +1082,7 @@ _search_servers(struct grid_lb_iterator_s *iter, struct lb_next_opt_s *opt,
 		if (!_iterator_next_shorten(iter, &si, shorten))
 			return;
 
-		if (!grid_lb_check_storage_class(stgclass, si)
+		if (!service_info_check_storage_class(si, stgclass)
 				|| !_filter_matches(&(opt->filter), si)
 				|| !_distance_fits(opt->req.distance, polled, si))
 		{
@@ -1106,7 +1190,8 @@ grid_lb_iterator_next_set(struct grid_lb_iterator_s *iter,
 		return FALSE;
 	}
 
-	*result = (struct service_info_s**) gpa_to_array(gtree_to_gpa(polled));
+	*result = (struct service_info_s**) metautils_gpa_to_array(
+			metautils_gtree_to_gpa(polled, TRUE), TRUE);
 	return TRUE;
 }
 
@@ -1162,118 +1247,6 @@ grid_lb_iterator_next_set2(struct grid_lb_iterator_s *iter,
 	return grid_lb_iterator_next_set(iter, result, &opt);
 }
 
-#define BOOLNAME(b) ((b)?"TRUE":"FALSE")
-static void
-grid_lb_configure_kv(struct grid_lb_s *lb, const gchar *k, const gchar *v)
-{
-	if (!g_ascii_strcasecmp(k, "shorten_ratio")) {
-		gdouble sr = g_ascii_strtod(v, NULL);
-		sr = CLAMP(sr, 0.001, 1.001);
-		lb->shorten_ratio = sr;
-		return;
-	}
-
-	if (!g_ascii_strcasecmp(k, "standard_deviation")) {
-		lb->standard_deviation = metautils_cfg_get_bool(v, FALSE);
-		return;
-	}
-
-	if (!g_ascii_strcasecmp(k, "reset_delay")) {
-		lb->reset_delay = g_ascii_strtoll(v, NULL, 10);
-		return;
-	}
-}
-
-static void
-grid_lb_configure_pair(struct grid_lb_s *lb, const gchar *k, gsize l)
-{
-	gchar *eq, *pair;
-
-	pair = g_alloca(l+1);
-	memcpy(pair, k, l+1);
-
-	eq = strchr(pair, '=');
-	if (!eq)
-		grid_lb_configure_kv(lb, pair, "");
-	else {
-		*(eq++) = '\0';
-		grid_lb_configure_kv(lb, pair, eq);
-	}
-}
-
-static const gchar *
-_next(const gchar *p, const gchar *sep)
-{
-	g_assert(p != NULL);
-	g_assert(sep != NULL);
-	for (; *p ; p++) {
-		if (strchr(sep, *p))
-			return p + 1;
-	}
-	return NULL;
-}
-
-void
-grid_lb_configure_options(struct grid_lb_s *lb, const gchar *opts)
-{
-
-	int l;
-	const gchar *p, *e;
-
-	// Reset the defaults
-	lb->shorten_ratio = 1.001;
-	lb->standard_deviation = FALSE;
-
-	// Set new specific options
-	for (p=opts; p && *p ;p+=l) {
-		l = !(e = _next(p, "?&")) ? (int)strlen(p) : (e - p);
-		grid_lb_configure_pair(lb, p, l);
-	}
-}
-
-void
-grid_lb_iterator_configure(struct grid_lb_iterator_s *iter, const gchar *val)
-{
-	if (iter->type == LBIT_SHARED) {
-		return;
-	}
-
-	switch (*val) {
-		case 'R':
-			if (g_str_has_prefix(val, "RR")) {
-				if (iter->type != LBIT_RR) {
-					iter->type = LBIT_RR;
-					iter->internals.rr.next_idx = 0;
-					iter->internals.rr.next_idx_global = 0;
-				}
-			}
-			else if (g_str_has_prefix(val, "RAND")) {
-				iter->type = LBIT_RAND;
-			}
-
-			grid_lb_configure_options(iter->lb, _next(val, "?&"));
-			break;
-
-		case 'S':
-		case 'W':
-			if (g_str_has_prefix(val, "WRR") || g_str_has_prefix(val, "SRR")) {
-				if (iter->type != LBIT_SRR) {
-					iter->type = LBIT_SRR;
-					iter->internals.srr.next_idx = 0;
-					iter->internals.srr.next_idx_global = 0;
-					iter->internals.srr.current = 0;
-					iter->internals.srr.last_reset = time(NULL);
-				}
-			}
-			else if (g_str_has_prefix(val, "WRAND") || g_str_has_prefix(val, "SRAND")) {
-				iter->type = LBIT_SRAND;
-			}
-
-			grid_lb_configure_options(iter->lb, _next(val, "?&"));
-			break;
-	}
-}
-
 /* ------------------------------------------------------------------------- */
 
 struct grid_lbpool_s*
@@ -1314,27 +1287,27 @@ grid_lbpool_destroy(struct grid_lbpool_s *glp)
 	g_free(glp);
 }
 
-static struct grid_lb_s *
-_ensure_pool(struct grid_lbpool_s *glp, const gchar *srvtype)
+static void
+_ensure(struct grid_lbpool_s *glp, const gchar *srvtype,
+		struct grid_lb_s **plb, struct grid_lb_iterator_s **pit)
 {
-	struct grid_lb_s *lb = NULL;
+	struct grid_lb_s *lb;
+	struct grid_lb_iterator_s *iterator;
 
 	if (!(lb = g_tree_lookup(glp->pools, srvtype))) {
 		lb = grid_lb_init(glp->ns, srvtype);
 		g_tree_insert(glp->pools, g_strdup(srvtype), lb);
 	}
-	return lb;
-}
 
-static struct grid_lb_iterator_s *
-_ensure_iterator(struct grid_lbpool_s *glp, const gchar *srvtype)
-{
-	struct grid_lb_iterator_s *iterator;
 	if (!(iterator = g_tree_lookup(glp->iterators, srvtype))) {
-		iterator = grid_lb_iterator_round_robin(_ensure_pool(glp, srvtype));
+		iterator = grid_lb_iterator_round_robin(lb);
 		g_tree_insert(glp->iterators, g_strdup(srvtype), iterator);
 	}
-	return iterator;
+
+	if (pit)
+		*pit = iterator;
+	if (plb)
+		*plb = lb;
 }
 
 void
@@ -1344,11 +1317,7 @@ grid_lbpool_configure_string(struct grid_lbpool_s *glp, const gchar *srvtype,
 	g_assert(glp != NULL);
 	g_assert(srvtype != NULL);
 	g_assert(cfg != NULL);
-
-	g_static_rw_lock_writer_lock(&(glp->rwlock));
-	struct grid_lb_iterator_s *iterator = _ensure_iterator(glp, srvtype);
-	grid_lb_iterator_configure(iterator, cfg);
-	g_static_rw_lock_writer_unlock(&(glp->rwlock));
+	grid_lb_iterator_configure (grid_lbpool_ensure_iterator(glp, srvtype), cfg);
 }
 
 static void
@@ -1395,6 +1364,47 @@ grid_lbpool_reconfigure(struct grid_lbpool_s *glp,
 	}
 }
 
+struct grid_lb_s *
+grid_lbpool_get_lb (struct grid_lbpool_s *glp, const gchar *srvtype)
+{
+	g_assert (glp != NULL);
+	g_assert (srvtype != NULL);
+
+	g_static_rw_lock_reader_lock(&(glp->rwlock));
+	struct grid_lb_s *lb = g_tree_lookup(glp->pools, srvtype);
+	g_static_rw_lock_reader_unlock(&(glp->rwlock));
+
+	return lb;
+}
+
+struct grid_lb_iterator_s *
+grid_lbpool_ensure_iterator (struct grid_lbpool_s *glp, const gchar *srvtype)
+{
+	struct grid_lb_iterator_s *iterator =  NULL;
+	g_assert (glp != NULL);
+	g_assert (srvtype != NULL);
+
+	g_static_rw_lock_writer_lock(&(glp->rwlock));
+	_ensure (glp, srvtype, NULL, &iterator);
+	g_static_rw_lock_writer_unlock(&(glp->rwlock));
+
+	return iterator;
+}
+
+struct grid_lb_s *
+grid_lbpool_ensure_lb (struct grid_lbpool_s *glp, const gchar *srvtype)
+{
+	struct grid_lb_s *lb =  NULL;
+	g_assert (glp != NULL);
+	g_assert (srvtype != NULL);
+
+	g_static_rw_lock_writer_lock(&(glp->rwlock));
+	_ensure (glp, srvtype, &lb, NULL);
+	g_static_rw_lock_writer_unlock(&(glp->rwlock));
+
+	return lb;
+}
+
 void
 grid_lbpool_reload(struct grid_lbpool_s *glp, const gchar *srvtype,
 		service_provider_f provider)
@@ -1402,11 +1412,7 @@ grid_lbpool_reload(struct grid_lbpool_s *glp, const gchar *srvtype,
 	g_assert(glp != NULL);
 	g_assert(srvtype != NULL);
 	g_assert(provider != NULL);
-
-	g_static_rw_lock_writer_lock(&(glp->rwlock));
-	grid_lb_reload(_ensure_pool(glp, srvtype), provider);
-	(void) _ensure_iterator(glp, srvtype);
-	g_static_rw_lock_writer_unlock(&(glp->rwlock));
+	return grid_lb_reload(grid_lbpool_ensure_lb(glp, srvtype), provider);
 }
 
 GError*
@@ -1415,13 +1421,7 @@ grid_lbpool_reload_json(struct grid_lbpool_s *glp, const gchar *srvtype,
 {
 	g_assert(glp != NULL);
 	g_assert(srvtype != NULL);
-
-	g_static_rw_lock_writer_lock(&(glp->rwlock));
-	(void) _ensure_iterator(glp, srvtype);
-	GError *err = grid_lb_reload_json(_ensure_pool(glp, srvtype), encoded);
-	g_static_rw_lock_writer_unlock(&(glp->rwlock));
-
-	return err;
+	return grid_lb_reload_json(grid_lbpool_ensure_lb(glp, srvtype), encoded);
 }
 
 GError*
@@ -1430,13 +1430,7 @@ grid_lbpool_reload_json_object(struct grid_lbpool_s *glp, const gchar *srvtype,
 {
 	g_assert(glp != NULL);
 	g_assert(srvtype != NULL);
-
-	g_static_rw_lock_writer_lock(&(glp->rwlock));
-	(void) _ensure_iterator(glp, srvtype);
-	GError *err = grid_lb_reload_json_object(_ensure_pool(glp, srvtype), obj);
-	g_static_rw_lock_writer_unlock(&(glp->rwlock));
-
-	return err;
+	return grid_lb_reload_json_object(grid_lbpool_ensure_lb(glp, srvtype), obj);
 }
 
 struct grid_lb_iterator_s*
@@ -1467,12 +1461,7 @@ grid_lbpool_get_service_from_url(struct grid_lbpool_s *glp,
 	g_assert(srvtype != NULL);
 	g_assert(url != NULL);
 
-	g_static_rw_lock_reader_lock(&(glp->rwlock));
-	struct grid_lb_s *lbpool = g_tree_lookup(glp->pools, srvtype);
-	struct service_info_s *result = grid_lb_get_service_from_url(lbpool, url);
-	g_static_rw_lock_reader_unlock(&(glp->rwlock));
-
-	return result;
+	return grid_lb_get_service_from_url(grid_lbpool_get_lb(glp, srvtype), url);
 }
 
 GError *

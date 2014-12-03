@@ -23,12 +23,13 @@ GPtrArray* metautils_list_to_gpa(GSList *orig);
  */
 GSList* metautils_gpa_to_list(GPtrArray *gpa);
 
-/**
- * @param orig
- * @return
- */
+/** Convert an array of pointer to a signly linked list, omitting the last
+ * NULL beacon. */
 GSList* metautils_array_to_list(void **orig);
 
+void** metautils_gpa_to_array(GPtrArray *orig, gboolean clean);
+
+GPtrArray* metautils_gtree_to_gpa(GTree *t, gboolean clean);
 
 GSList * metautils_gslist_shuffle(GSList *src);
 

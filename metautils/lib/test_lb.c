@@ -306,19 +306,6 @@ test_lb_WRR(void)
 }
 
 static void
-test_lb_SRR(void)
-{
-	struct grid_lb_s *lb;
-	struct grid_lb_iterator_s *iter;
-
-	lb = _build();
-	iter = grid_lb_iterator_scored_round_robin(lb);
-	check_service_count(iter);
-	grid_lb_iterator_clean(iter);
-	grid_lb_clean(lb);
-}
-
-static void
 test_lb_RAND(void)
 {
 	struct grid_lb_s *lb;
@@ -347,20 +334,6 @@ test_lb_WRAND(void)
 	grid_lb_clean(lb);
 }
 
-static void
-test_lb_SRAND(void)
-{
-	struct grid_lb_s *lb;
-	struct grid_lb_iterator_s *iter;
-
-	lb = _build();
-	iter = grid_lb_iterator_scored_random(lb);
-	grid_lb_iterator_configure(iter, "shorten_ratio=0.9&standard_deviation=on");
-	check_service_count(iter);
-	grid_lb_iterator_clean(iter);
-	grid_lb_clean(lb);
-}
-
 /* -------------------------------------------------------------------------- */
 
 static void
@@ -378,9 +351,7 @@ main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
 	g_test_add_func("/grid/lb/WRAND", test_lb_WRAND);
-	g_test_add_func("/grid/lb/SRAND", test_lb_SRAND);
 	g_test_add_func("/grid/lb/RAND", test_lb_RAND);
-	g_test_add_func("/grid/lb/SRR", test_lb_SRR);
 	g_test_add_func("/grid/lb/WRR", test_lb_WRR);
 	g_test_add_func("/grid/lb/RR", test_lb_RR);
 	g_test_add_func("/grid/pool/create_destroy", test_pool_create_destroy);

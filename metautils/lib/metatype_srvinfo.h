@@ -355,6 +355,18 @@ const gchar * service_info_get_rawx_volume(const struct service_info_s *si,
 const gchar * service_info_get_stgclass(const struct service_info_s *si,
 		const gchar *def);
 
+/*!
+ * Tests if the storage class of a service complies with
+ * a specific storage class.
+ *
+ * @param wanted_class The class we want to match to
+ * @param si The service description
+ * @param strict If false, accept equivalent storage classes
+ * @return TRUE if storage class match, FALSE otherwise
+ */
+gboolean service_info_check_storage_class(const struct service_info_s *si,
+		const gchar *wanted_class);
+
 /**
  * Check if a service_info is specified as internal (i.e. if it has a tag "tag.internal"
  * with a string value not equals to "false"
