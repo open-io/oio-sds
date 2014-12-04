@@ -381,6 +381,9 @@ GError* service_info_load_json(const gchar *encoded,
 // Appends to 'out' a json representation of 'si'
 void service_info_encode_json(GString *out, struct service_info_s *si);
 
+/* Returns a unique key identifying the service */
+gchar * service_info_key (const struct service_info_s *si);
+
 /** @} */
 
 #endif // __REDCURRANT_metatype_srvinfo__h
