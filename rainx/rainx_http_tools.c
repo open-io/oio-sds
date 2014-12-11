@@ -14,8 +14,14 @@ rainx_http_req(struct req_params_store* rps) {
 	apr_pool_t *local_pool = rps->pool;
 	dav_rainx_server_conf *server_conf = resource_get_server_config(resource);
 
-	if (NULL == resource || NULL == remote_uri || NULL == req_type || NULL == server_conf)
-		return -1;
+	if (NULL == resource || NULL == remote_uri ||
+			NULL == req_type || NULL == server_conf) {
+		DAV_ERROR_POOL(local_pool, APR_EINVAL, "One of these params is wrong: "
+				"remote_uri=%p, req_type=%p, server_conf=%p"
+				" (__FILE__:__LINE__)",
+				remote_uri, req_type, server_conf);
+		return APR_EINVAL;
+	}
 
 	const gboolean is_get = (0 == g_strcmp0(req_type, "GET"));
 

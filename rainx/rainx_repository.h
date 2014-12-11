@@ -82,12 +82,14 @@ struct dav_resource_private {
 
 struct dav_stream {
 	const dav_resource *r;
-	apr_pool_t *p;
+	apr_pool_t *pool;
 	int original_data_size; /* Size of the original data */
 	char* original_data; /* Buffer where the entire received data is stored */
 	char* original_data_chunk_start_ptr; /* Pointer to the beginning of the current chunk */
 	char* original_data_chunk_end_ptr; /* Pointer to the end of the current chunk */
 	int original_data_stored; /* Amount of data currently stored in 'original_data' */
+
+	struct req_params_store** data_put_params; /* List of thread references for data */
 
 	MD5_CTX md5_ctx;
 };

@@ -19,7 +19,7 @@
 #include "rainx_internals.h"
 #include "rainx_config.h"
 
-#define RAINX_DEFAULT_SOCKET_TIMEOUT	300000 /* microseconds */
+#define RAINX_DEFAULT_SOCKET_TIMEOUT (30 * 1000000) /* microseconds */
 
 static void
 _stat_cleanup_child(dav_rainx_server_conf *conf)
@@ -169,7 +169,7 @@ dav_rainx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg
 
 	conf = ap_get_module_config(cmd->server->module_config, &dav_rainx_module);
 	memset(conf->ns_name, 0x00, sizeof(conf->ns_name));
-	apr_cpystrn(conf->ns_name, arg1, sizeof(conf->ns_name)-1);
+	apr_cpystrn(conf->ns_name, arg1, sizeof(conf->ns_name));
 
 
 	DAV_DEBUG_POOL(cmd->pool, 0, "NS=[%s]", conf->ns_name);
@@ -177,12 +177,13 @@ dav_rainx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg
 	/* Prepare COMPRESSION / ACL CONF when we get ns name */
 	namespace_info_t* ns_info;
 	GError *local_error = NULL;
- 	ns_info = get_namespace_info(conf->ns_name, &local_error);
-        if(!ns_info) {
+	ns_info = get_namespace_info(conf->ns_name, &local_error);
+	if (!ns_info) {
 		DAV_DEBUG_POOL(cmd->temp_pool, 0, "Failed to get namespace info from ns [%s]", conf->ns_name);
-		return apr_pstrcat(cmd->temp_pool, "Failed to get namespace info from ns  : ", conf->ns_name, NULL);
-        }
-	
+		return apr_pstrcat(cmd->temp_pool, "Failed to get namespace info from ns: ",
+				conf->ns_name, " ", local_error->message, NULL);
+	}
+
 	conf->rainx_conf = apr_palloc(cmd->pool, sizeof(rawx_conf_t));
 
 	char * stgpol = NULL;
