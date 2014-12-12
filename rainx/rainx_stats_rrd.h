@@ -27,12 +27,13 @@ struct rainx_stats_rrd_s
 {
 	time_t last;
 	time_t period;
-	apr_uint64_t ten[8];
+	apr_uint32_t ten[8];
+	apr_uint32_t lock;
 };
 
 struct delta_debug_s
 {
-	apr_uint64_t delta;
+	apr_uint32_t delta;
 	char *dump;
 };
 
@@ -50,6 +51,10 @@ struct rainx_stats_rrd_s * rainx_stats_rrd_create(apr_pool_t *pool, time_t perio
  */
 void rainx_stats_rrd_init(struct rainx_stats_rrd_s *rsr);
 
+void rainx_stats_rrd_lock(struct rainx_stats_rrd_s *rsr);
+
+void rainx_stats_rrd_unlock(struct rainx_stats_rrd_s *rsr);
+
 /**
  *
  *
@@ -62,21 +67,21 @@ struct rainx_stats_rrd_s * rainx_stats_rrd_dup(apr_pool_t *pool, struct rainx_st
  *
  *
  */
-void rainx_stats_rrd_push(struct rainx_stats_rrd_s *rsr, apr_uint64_t v);
+void rainx_stats_rrd_push(struct rainx_stats_rrd_s *rsr, apr_uint32_t v);
 
 /**
  *
  *
  *
  */
-apr_uint64_t rainx_stats_rrd_get(struct rainx_stats_rrd_s *rsr);
+apr_uint32_t rainx_stats_rrd_get(struct rainx_stats_rrd_s *rsr);
 
 /**
  *
  *
  *
  */
-apr_uint64_t rainx_stats_rrd_get_delta(struct rainx_stats_rrd_s *rsr, time_t period);
+apr_uint32_t rainx_stats_rrd_get_delta(struct rainx_stats_rrd_s *rsr, time_t period);
 
 /**
  *

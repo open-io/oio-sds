@@ -11,12 +11,11 @@
 #include <apr_shm.h>
 #include <apr_global_mutex.h>
 #include <apr_time.h>
+#include <apr_atomic.h>
 
 #include <httpd.h>
 #include <http_log.h>
 #include <http_config.h>
-
-#include <glib.h>
 
 #include "rainx_stats_rrd.h"
 
@@ -42,7 +41,7 @@ rainx_stats_rrd_create(apr_pool_t *pool, time_t period)
 	if(period <= 1)
 		return NULL;
 
-	result = apr_palloc(pool, sizeof(struct rainx_stats_rrd_s) +(period * (sizeof(apr_uint64_t))));
+	result = apr_palloc(pool, sizeof(struct rainx_stats_rrd_s) +(period * (sizeof(apr_uint32_t))));
 	result->last = time(0);
 	result->period = period;
 	_init_tab_values(result, period);
@@ -53,9 +52,26 @@ rainx_stats_rrd_create(apr_pool_t *pool, time_t period)
 void
 rainx_stats_rrd_init(struct rainx_stats_rrd_s *rsr)
 {
+	rsr->lock = 0;
 	rsr->last = time(0);
 	rsr->period = 8;
 	_init_tab_values(rsr, 8);
+}
+
+void
+rainx_stats_rrd_lock(struct rainx_stats_rrd_s *rsr)
+{
+	do {
+		if (0 == apr_atomic_cas32(&(rsr->lock), 1, 0))
+			return;
+			apr_sleep(100);
+	} while (1);
+}
+
+void
+rainx_stats_rrd_unlock(struct rainx_stats_rrd_s *rsr)
+{
+	apr_atomic_cas32(&(rsr->lock), 0, 1);
 }
 
 struct rainx_stats_rrd_s *
@@ -66,7 +82,7 @@ rainx_stats_rrd_dup(apr_pool_t *pool, struct rainx_stats_rrd_s *rrd)
 
 	struct rainx_stats_rrd_s *result = NULL;
 
-	result = apr_palloc(pool, sizeof(struct rainx_stats_rrd_s) +(rrd->period * (sizeof(apr_uint64_t))));
+	result = apr_palloc(pool, sizeof(struct rainx_stats_rrd_s) +(rrd->period * (sizeof(apr_uint32_t))));
 	result->last = rrd->last;
 	result->period = rrd->period;
 	_copy_tab_values(rrd, result);
@@ -75,55 +91,73 @@ rainx_stats_rrd_dup(apr_pool_t *pool, struct rainx_stats_rrd_s *rrd)
 }
 
 static void
-_rsr_blank_empty_slots(struct rainx_stats_rrd_s *rsr, apr_uint64_t v, time_t now)
+_rsr_blank_empty_slots(struct rainx_stats_rrd_s *rsr, apr_uint32_t v, time_t now)
 {
-	time_t i;
+	apr_time_t i;
 	for (i = rsr->last; i < now;)
 		rsr->ten[(++i) % rsr->period] = v;
 	rsr->last = now;
 }
 
 void
-rainx_stats_rrd_push(struct rainx_stats_rrd_s *rsr, apr_uint64_t v)
-{
-	time_t now;
-	
-	if ((now = time(0)) != rsr->last)
-		_rsr_blank_empty_slots(rsr, rsr->ten[rsr->last % rsr->period], now);
-	
-	rsr->ten[now % rsr->period] = v;
-	rsr->last = now;
-}
-
-apr_uint64_t
-rainx_stats_rrd_get(struct rainx_stats_rrd_s *rsr)
+rainx_stats_rrd_push(struct rainx_stats_rrd_s *rsr, apr_uint32_t v)
 {
 	apr_time_t now;
 
+	rainx_stats_rrd_lock(rsr);
+
 	if ((now = time(0)) != rsr->last)
 		_rsr_blank_empty_slots(rsr, rsr->ten[rsr->last % rsr->period], now);
-	
-	return rsr->ten[now % rsr->period];
+
+	rsr->ten[now % rsr->period] = v;
+	rsr->last = now;
+
+	rainx_stats_rrd_unlock(rsr);
 }
 
-apr_uint64_t
+apr_uint32_t
+rainx_stats_rrd_get(struct rainx_stats_rrd_s *rsr)
+{
+	apr_time_t now;
+	apr_uint32_t result;
+
+	rainx_stats_rrd_lock(rsr);
+
+	if ((now = time(0)) != rsr->last)
+		_rsr_blank_empty_slots(rsr, rsr->ten[rsr->last % rsr->period], now);
+
+	result = rsr->ten[now % rsr->period];
+
+	rainx_stats_rrd_unlock(rsr);
+
+	return result;
+}
+
+apr_uint32_t
 rainx_stats_rrd_get_delta(struct rainx_stats_rrd_s *rsr, time_t period)
 {
-	time_t now;
+	apr_time_t now;
+	apr_uint32_t result;
 
 	if (period >= rsr->period)
 		return 0;
 
+	rainx_stats_rrd_lock(rsr);
+
 	if ((now = time(0)) != rsr->last)
 		_rsr_blank_empty_slots(rsr, rsr->ten[rsr->last % rsr->period], now);
 
-	return rsr->ten[now % rsr->period] - rsr->ten[(now-period) % rsr->period];
+	result = rsr->ten[now % rsr->period] - rsr->ten[(now-period) % rsr->period];
+
+	rainx_stats_rrd_unlock(rsr);
+
+	return result;
 }
 
 static char *
 _dump_rrd(struct rainx_stats_rrd_s *rsr, apr_pool_t *p)
 {
-	return apr_psprintf(p, "[\"last\": \"%"G_GUINT64_FORMAT"\", period\": \"%"G_GUINT64_FORMAT"\", ten\": %s] ",
+	return apr_psprintf(p, "[\"last\": \"%li\", period\": \"%li\", ten\": %s] ",
 			rsr->last, rsr->period, rainx_stats_rrd_dump_values(rsr, p));
 }
 
@@ -134,7 +168,7 @@ rainx_stats_rrd_debug_get_delta(struct rainx_stats_rrd_s *rsr, apr_pool_t *p, ti
 
 	char *result = NULL;
 
-	result = apr_psprintf(p, "%s | period : %"G_GUINT64_FORMAT" ", _dump_rrd(rsr,p), period);
+	result = apr_psprintf(p, "%s | period: %li ", _dump_rrd(rsr,p), period);
 
 	if (period >= rsr->period)
 		return 0;
@@ -142,15 +176,15 @@ rainx_stats_rrd_debug_get_delta(struct rainx_stats_rrd_s *rsr, apr_pool_t *p, ti
 	if ((now = time(0)) != rsr->last)
 		_rsr_blank_empty_slots(rsr, rsr->ten[rsr->last % rsr->period], now);
 
-	apr_uint64_t op = rsr->ten[now % rsr->period] - rsr->ten[(now-period) % rsr->period];
-	apr_uint64_t nrp = now % rsr->period;
-	apr_uint64_t nprp = (now-period) % rsr->period;
+	apr_uint32_t op = rsr->ten[now % rsr->period] - rsr->ten[(now-period) % rsr->period];
+	apr_uint32_t nrp = now % rsr->period;
+	apr_uint32_t nprp = (now-period) % rsr->period;
 
-	result = apr_psprintf(p, "%s| now : %"G_GUINT64_FORMAT" after bs: %s"
-				"operation = rsr->ten[%"G_GUINT64_FORMAT" mod %"G_GUINT64_FORMAT"] - "
-				"rsr->ten[(%"G_GUINT64_FORMAT"-%"G_GUINT64_FORMAT") mod %"G_GUINT64_FORMAT"] "
-				"(rsr->ten[%"G_GUINT64_FORMAT"] - rsr->ten[%"G_GUINT64_FORMAT"] "
-				"(%"G_GUINT64_FORMAT" - %"G_GUINT64_FORMAT" (%"G_GUINT64_FORMAT")))",
+	result = apr_psprintf(p, "%s| now: %li after bs: %s"
+				"operation = rsr->ten[%li mod %li] - "
+				"rsr->ten[(%li-%li) mod %li] "
+				"(rsr->ten[%u] - rsr->ten[%u] "
+				"(%u - %u (%u)))",
 				result, now, _dump_rrd(rsr,p), now, rsr->period, now, period, rsr->period, nrp, 
 				nprp, rsr->ten[nrp], rsr->ten[nprp], op);
 
@@ -166,9 +200,9 @@ rainx_stats_rrd_dump_values(struct rainx_stats_rrd_s *rsr, apr_pool_t *p)
 {
 	char *str = NULL;
 
-	str = apr_psprintf(p, "[%"G_GUINT64_FORMAT, rsr->ten[0]);
+	str = apr_psprintf(p, "[%u", rsr->ten[0]);
 	for(uint i = 1; i < rsr->period; i++) {
-		str = apr_psprintf(p, "%s, %"G_GUINT64_FORMAT"", str, rsr->ten[i]);
+		str = apr_psprintf(p, "%s, %u", str, rsr->ten[i]);
 	}
 	str = apr_pstrcat(p, str, "]", NULL);
 

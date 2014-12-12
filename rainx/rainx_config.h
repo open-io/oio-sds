@@ -18,26 +18,26 @@
 #include <rainx/rainx_stats_rrd.h>
 
 struct rainx_stats_s {
-	apr_uint64_t req_all;
-	apr_uint64_t req_chunk_get;
-	apr_uint64_t req_chunk_put;
-	apr_uint64_t req_chunk_del;
-	apr_uint64_t req_stat;
-	apr_uint64_t req_info;
-	apr_uint64_t req_raw;
-	apr_uint64_t req_other;
-	apr_uint64_t rep_2XX;
-	apr_uint64_t rep_4XX;
-	apr_uint64_t rep_5XX;
-	apr_uint64_t rep_other;
-	apr_uint64_t rep_403;
-	apr_uint64_t rep_404;
-	apr_uint64_t rep_bread;
-	apr_uint64_t rep_bwritten;
-	apr_uint64_t time_all;
-	apr_uint64_t time_put;
-	apr_uint64_t time_get;
-	apr_uint64_t time_del;
+	apr_uint32_t req_all;
+	apr_uint32_t req_chunk_get;
+	apr_uint32_t req_chunk_put;
+	apr_uint32_t req_chunk_del;
+	apr_uint32_t req_stat;
+	apr_uint32_t req_info;
+	apr_uint32_t req_raw;
+	apr_uint32_t req_other;
+	apr_uint32_t rep_2XX;
+	apr_uint32_t rep_4XX;
+	apr_uint32_t rep_5XX;
+	apr_uint32_t rep_other;
+	apr_uint32_t rep_403;
+	apr_uint32_t rep_404;
+	apr_uint32_t rep_bread;
+	apr_uint32_t rep_bwritten;
+	apr_uint32_t time_all;
+	apr_uint32_t time_put;
+	apr_uint32_t time_get;
+	apr_uint32_t time_del;
 	struct rainx_stats_rrd_s rrd_req_sec;
 	struct rainx_stats_rrd_s rrd_duration;
 	struct rainx_stats_rrd_s rrd_req_put_sec;
@@ -124,7 +124,7 @@ apr_status_t server_child_stat_fini(dav_rainx_server_conf *conf, apr_pool_t *plo
  *
  *
  */
-void server_add_stat(dav_rainx_server_conf *conf, const char *n, apr_uint64_t value, apr_uint64_t duration);
+void server_add_stat(dav_rainx_server_conf *conf, const char *n, apr_uint32_t value, apr_uint32_t duration);
 
 /**
  *
@@ -153,13 +153,6 @@ void server_inc_daverror_stat(dav_rainx_server_conf *conf, dav_error *derr);
  *
  */
 dav_error *server_create_and_stat_error(dav_rainx_server_conf *conf, apr_pool_t *p, int status, int error_id, const char *desc);
-
-/**
- *
- *
- *
- */
-void server_getall_stat(dav_rainx_server_conf *conf, apr_pool_t *pool, struct rainx_stats_s *stats);
 
 /**
  *

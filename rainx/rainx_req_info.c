@@ -59,7 +59,7 @@ struct dav_resource_private {
 
 /* ------------------------------------------------------------------------- */
 
-#define STR_KV(Field,Name) apr_psprintf(pool, "rainx."Name" %"APR_UINT64_T_FMT"\n", stats.Field)
+#define STR_KV(Field,Name) apr_psprintf(pool, "rainx."Name" %u\n", stats->body.Field)
 
 static const char *
 __gen_info(const dav_resource *resource, apr_pool_t *pool)
@@ -74,23 +74,25 @@ __gen_info(const dav_resource *resource, apr_pool_t *pool)
 static const char *
 __gen_stats(const dav_resource *resource, apr_pool_t *pool)
 {
-	struct rainx_stats_s stats;
+	struct shm_stats_s *stats = NULL;
 
 	DAV_XDEBUG_POOL(pool, 0, "%s()", __FUNCTION__);
 
 	bzero(&stats, sizeof(stats));
 	dav_rainx_server_conf *c = NULL;
 	c = resource_get_server_config(resource);
-	server_getall_stat(c, pool, &stats);
+	apr_global_mutex_lock(c->lock.handle);
+	stats = apr_shm_baseaddr_get(c->shm.handle);
+	apr_global_mutex_unlock(c->lock.handle);
 
-	apr_uint64_t req = rainx_stats_rrd_get_delta(&(stats.rrd_req_sec), 4);
-	apr_uint64_t reqavgtime = rainx_stats_rrd_get_delta(&(stats.rrd_duration), 4);
-	apr_uint64_t req_put = rainx_stats_rrd_get_delta(&(stats.rrd_req_put_sec), 4);
-	apr_uint64_t reqavgtime_put = rainx_stats_rrd_get_delta(&(stats.rrd_put_duration), 4);
-	apr_uint64_t req_get = rainx_stats_rrd_get_delta(&(stats.rrd_req_get_sec), 4);
-	apr_uint64_t reqavgtime_get = rainx_stats_rrd_get_delta(&(stats.rrd_get_duration), 4);
-	apr_uint64_t req_del = rainx_stats_rrd_get_delta(&(stats.rrd_req_del_sec), 4);
-	apr_uint64_t reqavgtime_del = rainx_stats_rrd_get_delta(&(stats.rrd_del_duration), 4);
+	apr_uint64_t req = rainx_stats_rrd_get_delta(&(stats->body.rrd_req_sec), 4);
+	apr_uint64_t reqavgtime = rainx_stats_rrd_get_delta(&(stats->body.rrd_duration), 4);
+	apr_uint64_t req_put = rainx_stats_rrd_get_delta(&(stats->body.rrd_req_put_sec), 4);
+	apr_uint64_t reqavgtime_put = rainx_stats_rrd_get_delta(&(stats->body.rrd_put_duration), 4);
+	apr_uint64_t req_get = rainx_stats_rrd_get_delta(&(stats->body.rrd_req_get_sec), 4);
+	apr_uint64_t reqavgtime_get = rainx_stats_rrd_get_delta(&(stats->body.rrd_get_duration), 4);
+	apr_uint64_t req_del = rainx_stats_rrd_get_delta(&(stats->body.rrd_req_del_sec), 4);
+	apr_uint64_t reqavgtime_del = rainx_stats_rrd_get_delta(&(stats->body.rrd_del_duration), 4);
 
 	apr_uint64_t r_time = 0, r_put_time = 0, r_get_time = 0, r_del_time = 0;
 	if(req > 0)
