@@ -48,15 +48,6 @@
 /* pull this in from the other source file */
 /*extern const dav_hooks_locks dav_hooks_locks_fs; */
 
-/* HERE */
-
-/* Thread */
-static apr_status_t rv;
-static apr_pool_t *mp;
-static apr_thread_mutex_t *mutex;
-struct req_params_store** data_put_params; /* List of thread references for data */
-/* ------- */
-
 #define POINTER_TO_REQPARAMSSTORE(p) ((struct req_params_store*)p)
 #define REQPARAMSSTORE_TO_POINTER(rps) ((void*)rps)
 
@@ -138,14 +129,11 @@ static const dav_liveprop_group dav_rainx_liveprop_group =
 static void* APR_THREAD_FUNC
 putrawx(apr_thread_t *thd, void* params)
 {
-	(void)thd;
-
 	struct req_params_store* rps = POINTER_TO_REQPARAMSSTORE(params);
 
-	apr_thread_mutex_lock(mutex);
 	rps->req_status = rainx_http_req(rps);
-	apr_thread_mutex_unlock(mutex);
 
+	apr_thread_exit(thd, APR_SUCCESS);
 	return NULL;
 }
 
@@ -318,7 +306,10 @@ dav_rainx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	gint64 subchunk_size = apr_atoi64(resource->info->chunk.size);
 	if (r->method_number == M_PUT && ns_chunk_size < subchunk_size) {
 		return server_create_and_stat_error(conf, r->pool, HTTP_BAD_REQUEST, 0,
-				"Metachunk size exceeds namespace chunk size");
+				apr_psprintf(resource->pool,
+				"Metachunk size exceeds namespace chunk size: %"
+				G_GINT64_FORMAT" (chunk) > %"G_GINT64_FORMAT" (%s)",
+				subchunk_size, ns_chunk_size, resource->info->namespace));
 	}
 
 
@@ -423,7 +414,7 @@ rainx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 	apr_pool_t *p = resource->info->pool;
 	dav_stream *ds = apr_pcalloc(p, sizeof(*ds));
 
-	ds->p = p;
+	apr_pool_create(&(ds->pool), p);
 	ds->r = resource;
 	/* ------- */
 
@@ -567,19 +558,13 @@ dav_rainx_open_stream(const dav_resource *resource, dav_stream_mode mode,
 		return e;
 	}
 
-	*stream = ds;
-
 	/* Thread */
-	apr_initialize();
-	apr_pool_create(&mp, NULL);
-
-	apr_thread_mutex_create(&mutex, APR_THREAD_MUTEX_UNNESTED, mp);
-
-	data_put_params = (struct req_params_store**)apr_pcalloc(
-			resource->info->request->pool,
+	ds->data_put_params = (struct req_params_store**)apr_pcalloc(
+			resource->pool,
 			resource->info->k * sizeof(struct req_params_store*));
 	/* ------- */
 
+	*stream = ds;
 	return NULL;
 }
 
@@ -671,12 +656,14 @@ static dav_error *
 dav_rainx_close_stream(dav_stream *stream, int commit)
 {
 	dav_error *e = NULL;
+	apr_status_t rv = APR_SUCCESS;
 	int i;
 	char* custom_chunkid = NULL;
 	char* custom_chunkpos = NULL;
 	char* custom_chunksize = NULL;
 	char* custom_chunkhash = NULL;
 	char** coding_metachunks = NULL;
+	struct req_params_store** data_put_params = stream->data_put_params;
 	struct req_params_store** coding_put_params = NULL;
 	apr_pool_t **coding_subpools = NULL;
 
@@ -687,7 +674,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 			stream->r->info->request->server->module_config, &dav_rainx_module);
 
 	if (!commit) {
-		e = server_create_and_stat_error(conf, stream->p,
+		e = server_create_and_stat_error(conf, stream->pool,
 				HTTP_INTERNAL_SERVER_ERROR, 0, "Rain operation failed");
 		goto close_stream_error_label;
 	} else {
@@ -720,19 +707,19 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 				"%s.%d", temp_chunk.position, stream->r->info->current_rawx);
 		custom_chunksize = apr_itoa(stream->r->info->request->pool,
 				subchunk_size - stream->r->info->current_chunk_remaining);
-		custom_chunkhash = g_compute_checksum_for_string(G_CHECKSUM_MD5,
-				stream->original_data_chunk_start_ptr,
+		custom_chunkhash = g_compute_checksum_for_data(G_CHECKSUM_MD5,
+				(const guchar*)stream->original_data_chunk_start_ptr,
 				subchunk_size - stream->r->info->current_chunk_remaining);
 		/* ------- */
 
 		apr_pool_t *subpool = NULL;
-		apr_pool_create(&subpool, mp);
+		apr_pool_create(&subpool, stream->pool);
 		/* Flushing the last data metachunk (without the padding) */
 		if (stream->original_data_stored > stream->original_data_size) {
 			// FIXME: what?
 			DAV_DEBUG_REQ(stream->r->info->request,
 					0, "request entity too large");
-			e = server_create_and_stat_error(conf, stream->p,
+			e = server_create_and_stat_error(conf, stream->pool,
 					HTTP_BAD_REQUEST, 0, "Request entity too large");
 			goto close_stream_error_label;
 		}
@@ -766,7 +753,9 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 			rv = apr_thread_create(&(data_put_params[i]->thd_arr),
 					data_put_params[i]->thd_attr, putrawx,
 					REQPARAMSSTORE_TO_POINTER(data_put_params[i]), subpool);
-			assert(rv == APR_SUCCESS);
+			if (rv != APR_SUCCESS) {
+				data_put_params[i]->req_status = rv;
+			}
 			/* ------- */
 
 			update_response_list(stream,
@@ -783,7 +772,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 		for (i = 0; i < stream->r->info->k; i++) {
 			if (data_put_params[i] && data_put_params[i]->thd_arr) {
 				apr_thread_join(&rv, data_put_params[i]->thd_arr);
-				assert(rv == APR_SUCCESS);
+				EXTRA_ASSERT(rv == APR_SUCCESS);
 			}
 		}
 
@@ -810,11 +799,11 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 							i, data_put_params[i]->req_status,
 							apr_error_message,
 							data_put_params[i]->reply);
-					e = server_create_and_stat_error(conf, stream->p,
+					e = server_create_and_stat_error(conf, stream->pool,
 							(data_put_params[i]->req_status == APR_TIMEUP ?
 							 HTTP_GATEWAY_TIME_OUT : HTTP_INTERNAL_SERVER_ERROR), 0,
-							"Rain operation failed on put "
-							"(and was unable to extract error message)");
+							apr_psprintf(stream->pool,
+							"Rain operation failed on put: %s", apr_error_message));
 					goto close_stream_error_label;
 				}
 				if (!g_str_has_prefix(reply_code, "20")) {
@@ -823,7 +812,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 							i, data_put_params[i]->req_status,
 							apr_error_message,
 							data_put_params[i]->reply);
-					e = server_create_and_stat_error(conf, stream->p,
+					e = server_create_and_stat_error(conf, stream->pool,
 							atoi(reply_code), 0, reply_message);
 					goto close_stream_error_label;
 				}
@@ -835,12 +824,13 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 
 		/* Rain calculation */
 		stream->r->info->current_rawx = stream->r->info->k; /* Set there to rollback correctly in case of error */
-		if (!(coding_metachunks = rain_get_coding_chunks(stream->original_data,
+		if (!(coding_metachunks = rain_get_coding_chunks(
+					(guint8*)stream->original_data,
 					stream->original_data_size, stream->r->info->k,
 					stream->r->info->m, stream->r->info->algo))) {
 			DAV_DEBUG_REQ(stream->r->info->request, 0,
 					"failed to calculate coding chunks");
-			e = server_create_and_stat_error(conf, stream->p,
+			e = server_create_and_stat_error(conf, stream->pool,
 					HTTP_INTERNAL_SERVER_ERROR, 0,
 					"Coding chunks calculation failed");
 			goto close_stream_error_label;
@@ -872,9 +862,9 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 						stream->r->info->current_rawx - stream->r->info->k);
 				custom_chunksize = apr_itoa(stream->r->info->request->pool,
 						subchunk_size);
-				custom_chunkhash = g_compute_checksum_for_string(G_CHECKSUM_MD5,
-						coding_metachunks[i], subchunk_size);
-				apr_pool_create(&(coding_subpools[i]), mp);
+				custom_chunkhash = g_compute_checksum_for_data(G_CHECKSUM_MD5,
+						(const guchar*)coding_metachunks[i], subchunk_size);
+				apr_pool_create(&(coding_subpools[i]), stream->pool);
 				/* ------- */
 
 				/* Initializing the PUT params structure */
@@ -904,7 +894,9 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 						coding_put_params[i]->thd_attr, putrawx,
 						REQPARAMSSTORE_TO_POINTER(coding_put_params[i]),
 						coding_subpools[i]);
-				assert(rv == APR_SUCCESS);
+				if (rv != APR_SUCCESS) {
+					coding_put_params[i]->req_status = rv;
+				}
 				/* ------- */
 
 				update_response_list(stream,
@@ -916,8 +908,10 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 			}
 
 			for (i = 0; i < stream->r->info->m; i++) {
-				rv = apr_thread_join(&rv, coding_put_params[i]->thd_arr);
-				assert(rv == APR_SUCCESS);
+				if (coding_put_params[i] && coding_put_params[i]->thd_arr) {
+					apr_thread_join(&rv, coding_put_params[i]->thd_arr);
+					EXTRA_ASSERT(rv == APR_SUCCESS);
+				}
 			}
 			/* ------- */
 
@@ -931,7 +925,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 								"error while putting the coding to the rawx %d: (%d) %s",
 								i, coding_put_params[i]->req_status,
 								coding_put_params[i]->reply);
-						e = server_create_and_stat_error(conf, stream->p,
+						e = server_create_and_stat_error(conf, stream->pool,
 								HTTP_INTERNAL_SERVER_ERROR, 0,
 								"Rain operation failed on put");
 						goto close_stream_error_label;
@@ -941,7 +935,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 								"error while putting the coding to the rawx %d: (%d) %s",
 								i, coding_put_params[i]->req_status,
 								coding_put_params[i]->reply);
-						e = server_create_and_stat_error(conf, stream->p,
+						e = server_create_and_stat_error(conf, stream->pool,
 								atoi(reply_code), 0, reply_message);
 						goto close_stream_error_label;
 					}
@@ -982,9 +976,7 @@ close_stream_error_label:
 		for (i = 0; i < stream->r->info->m; i++)
 			apr_pool_destroy(coding_subpools[i]);
 	}
-	apr_terminate();
-	apr_thread_mutex_destroy(mutex);
-	apr_pool_destroy(mp);
+	apr_pool_destroy(stream->pool);
 	return e;
 }
 
@@ -993,6 +985,8 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 {
 	(void) buf;
 
+	apr_status_t rv = APR_SUCCESS;
+	struct req_params_store** data_put_params = stream->data_put_params;
 	dav_rainx_server_conf *conf = ap_get_module_config(
 			stream->r->info->request->server->module_config, &dav_rainx_module);
 
@@ -1001,7 +995,7 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 	if (stream->original_data_stored + (int)bufsize > stream->original_data_size) {
 		/* Rollback */
 		DAV_DEBUG_REQ(stream->r->info->request, 0, "request entity too large");
-		return server_create_and_stat_error(conf, stream->p,
+		return server_create_and_stat_error(conf, stream->pool,
 				HTTP_BAD_REQUEST, 0, "Request entity too large");
 	}
 
@@ -1057,14 +1051,14 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 					"%s.%d", temp_chunk.position, stream->r->info->current_rawx);
 			char* custom_chunksize = apr_itoa(stream->r->info->request->pool,
 					subchunk_size);
-			char* custom_chunkhash = g_compute_checksum_for_string(
-					G_CHECKSUM_MD5, stream->original_data_chunk_start_ptr,
+			char* custom_chunkhash = g_compute_checksum_for_data(G_CHECKSUM_MD5,
+					(const guchar*)stream->original_data_chunk_start_ptr,
 					subchunk_size);
 			/* ------- */
 
 			/* Initializing the PUT params structure */
 			int i = stream->r->info->current_rawx;
-			apr_pool_create(&(data_subpools[i]), mp);
+			apr_pool_create(&(data_subpools[i]), stream->pool);
 			data_put_params[i] = (struct req_params_store*)apr_pcalloc(
 					data_subpools[i], sizeof(struct req_params_store));
 			data_put_params[i]->service_address = \
@@ -1132,11 +1126,16 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 	int i;
 	for (i = 0; i < stream->r->info->k; i++) {
 		if (data_put_params[i] && data_put_params[i]->thd_arr) {
-			apr_thread_join(&rv, data_put_params[i]->thd_arr);
-			assert(rv == APR_SUCCESS);
+			apr_status_t retval = APR_SUCCESS;
+			apr_thread_join(&retval, data_put_params[i]->thd_arr);
+			assert(retval == APR_SUCCESS);
+			data_put_params[i]->thd_arr = NULL;
+			data_put_params[i] = NULL;
 		}
-		if (data_subpools[i])
+		if (data_subpools[i]) {
 			apr_pool_destroy(data_subpools[i]);
+			data_subpools[i] = NULL;
+		}
 	}
 
 	/* ------- */
@@ -1153,7 +1152,7 @@ dav_rainx_seek_stream(dav_stream *stream, apr_off_t abs_pos)
 	(void) abs_pos, (void) stream;
 
 	/* Do we really need this ? */
-	DAV_XDEBUG_POOL(stream->p, 0, "%s", __FUNCTION__);
+	DAV_XDEBUG_POOL(stream->pool, 0, "%s", __FUNCTION__);
 	return NULL;
 }
 
@@ -1283,8 +1282,9 @@ check_reconstructed_data(const dav_resource *resource, gboolean* failure_array,
 			if (data_to_hash_size < 0)
 				data_to_hash_size = 0;
 
-			char* custom_chunkhash = g_compute_checksum_for_string(
-					G_CHECKSUM_MD5, datachunks[i], data_to_hash_size);
+			char* custom_chunkhash = g_compute_checksum_for_data(
+					G_CHECKSUM_MD5, (const guchar*)datachunks[i],
+					data_to_hash_size);
 
 			if (custom_chunkhash) {
 				g_free(custom_chunkhash);
@@ -1301,8 +1301,9 @@ check_reconstructed_data(const dav_resource *resource, gboolean* failure_array,
 	/* Coding strips */
 	for (int i = 0; i < m; i++) {
 		if (failure_array[k + i]) {
-			char* custom_chunkhash = g_compute_checksum_for_string(
-					G_CHECKSUM_MD5, codingchunks[i], subchunk_size);
+			char* custom_chunkhash = g_compute_checksum_for_data(
+					G_CHECKSUM_MD5, (const guchar*)codingchunks[i],
+					subchunk_size);
 
 			// FIXME: if md5 has special value "?", don't do this check, but
 			// add the computed checksum as a response header (client lost it).
@@ -1400,8 +1401,9 @@ upload_to_rawx(const dav_resource *resource, gboolean* failure_array,
 					"%s.%d", temp_chunk.position, i);
 			char* custom_chunksize = apr_itoa(resource->info->request->pool,
 					byte_count_to_send);
-			char* custom_chunkhash = g_compute_checksum_for_string(
-					G_CHECKSUM_MD5, datachunks[i], byte_count_to_send);
+			char* custom_chunkhash = g_compute_checksum_for_data(
+					G_CHECKSUM_MD5, (const guchar*)datachunks[i],
+					byte_count_to_send);
 			char* custom_header2 = apr_psprintf(resource->info->request->pool,
 					"%s\nchunkid: %s\nchunkpos: %s\nchunksize: %s\nchunkhash: %s",
 					custom_header, custom_chunkid, custom_chunkpos,
@@ -1469,8 +1471,9 @@ upload_to_rawx(const dav_resource *resource, gboolean* failure_array,
 					"%s.p%d", temp_chunk.position, i);
 			char* custom_chunksize = apr_itoa(
 					resource->info->request->pool, subchunk_size);
-			char* custom_chunkhash = g_compute_checksum_for_string(
-					G_CHECKSUM_MD5, codingchunks[i], subchunk_size);
+			char* custom_chunkhash = g_compute_checksum_for_data(
+					G_CHECKSUM_MD5, (const guchar*)codingchunks[i],
+					subchunk_size);
 			char* custom_header2 = apr_psprintf(resource->info->request->pool,
 					"%s\nchunkid: %s\nchunkpos: %s\nchunksize: %s\nchunkhash: %s",
 					custom_header, custom_chunkid, custom_chunkpos,
@@ -1795,7 +1798,8 @@ dav_rainx_deliver(const dav_resource *resource, ap_filter_t *output)
 	/* ------- */
 
 	/* Repairing lost data or coding subchunks */
-	reconstructed_data = rain_repair_and_get_raw_data(datachunks, codingchunks,
+	reconstructed_data = rain_repair_and_get_raw_data(
+			(guint8**)datachunks, (guint8**)codingchunks,
 			metachunk_size, k, m, algo);
 	if (NULL == reconstructed_data) {
 		DAV_DEBUG_REQ(resource->info->request,

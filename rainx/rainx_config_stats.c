@@ -10,6 +10,7 @@
 #include <apr_shm.h>
 #include <apr_global_mutex.h>
 #include <apr_time.h>
+#include <apr_atomic.h>
 
 #include <httpd.h>
 #include <http_log.h>
@@ -150,7 +151,7 @@ server_child_stat_fini(dav_rainx_server_conf *conf, apr_pool_t *plog)
 
 
 void
-server_add_stat(dav_rainx_server_conf *conf, const char *n, apr_uint64_t value, apr_uint64_t duration)
+server_add_stat(dav_rainx_server_conf *conf, const char *n, apr_uint32_t value, apr_uint32_t duration)
 {
 	struct shm_stats_s *shm_stats;
 
@@ -174,69 +175,66 @@ server_add_stat(dav_rainx_server_conf *conf, const char *n, apr_uint64_t value, 
 	}
 
 	apr_global_mutex_lock(conf->lock.handle);
-	/* XXX */
+	shm_stats = apr_shm_baseaddr_get(conf->shm.handle);
+	apr_global_mutex_unlock(conf->lock.handle);
 
 	/* increase the appropriated counter */
-	shm_stats = apr_shm_baseaddr_get(conf->shm.handle);
 	if (shm_stats) {
 		switch (*n) {
 			case 'q':
 				switch (n[1]) {
 					case '0': 
-						shm_stats->body.req_all += value;
+						apr_atomic_add32(&(shm_stats->body.req_all), value);
 						if(duration > 0) {
-							shm_stats->body.time_all += duration;
+							apr_atomic_add32(&(shm_stats->body.time_all), duration);
 							rainx_stats_rrd_push(&(shm_stats->body.rrd_req_sec), shm_stats->body.req_all);
 							rainx_stats_rrd_push(&(shm_stats->body.rrd_duration), shm_stats->body.time_all);
 						}
 						break;
 					case '1':
-						shm_stats->body.req_chunk_get += value;
+						apr_atomic_add32(&(shm_stats->body.req_chunk_get), value);
 						if(duration > 0) {
-							shm_stats->body.time_get += duration;
+							apr_atomic_add32(&(shm_stats->body.time_get), duration);
 							rainx_stats_rrd_push(&(shm_stats->body.rrd_req_get_sec), shm_stats->body.req_chunk_get);
 							rainx_stats_rrd_push(&(shm_stats->body.rrd_get_duration), shm_stats->body.time_get);
 						}
 						break;
 					case '2':
-						shm_stats->body.req_chunk_put += value;
+						apr_atomic_add32(&(shm_stats->body.req_chunk_put), value);
 						if(duration > 0) {
-							shm_stats->body.time_put += duration;
+							apr_atomic_add32(&(shm_stats->body.time_put), duration);
 							rainx_stats_rrd_push(&(shm_stats->body.rrd_req_put_sec), shm_stats->body.req_chunk_put);
 							rainx_stats_rrd_push(&(shm_stats->body.rrd_put_duration), shm_stats->body.time_put);
 						}
 						break;
 					case '3':
-						shm_stats->body.req_chunk_del += value;
+						apr_atomic_add32(&(shm_stats->body.req_chunk_del), value);
 						if(duration > 0) {
-							shm_stats->body.time_del += duration;
+							apr_atomic_add32(&(shm_stats->body.time_del), duration);
 							rainx_stats_rrd_push(&(shm_stats->body.rrd_req_del_sec), shm_stats->body.req_chunk_del);
 							rainx_stats_rrd_push(&(shm_stats->body.rrd_del_duration), shm_stats->body.time_del);
 						}
 						break;
-					case '4': shm_stats->body.req_stat += value; break;
-					case '5': shm_stats->body.req_info += value; break;
-					case '6': shm_stats->body.req_raw += value; break;
-					case '7': shm_stats->body.req_other += value; break;
+					case '4': apr_atomic_add32(&(shm_stats->body.req_stat), value); break;
+					case '5': apr_atomic_add32(&(shm_stats->body.req_info), value); break;
+					case '6': apr_atomic_add32(&(shm_stats->body.req_raw), value); break;
+					case '7': apr_atomic_add32(&(shm_stats->body.req_other), value); break;
 				}
 				break;
 			case 'r':
 				switch (n[1]) {
-					case '1': shm_stats->body.rep_2XX += value; break;
-					case '2': shm_stats->body.rep_4XX += value; break;
-					case '3': shm_stats->body.rep_5XX += value; break;
-					case '4': shm_stats->body.rep_other += value; break;
-					case '5': shm_stats->body.rep_403 += value; break;
-					case '6': shm_stats->body.rep_404 += value; break;
-					case '7': shm_stats->body.rep_bread += value; break;
-					case '8': shm_stats->body.rep_bwritten += value; break;
+					case '1': apr_atomic_add32(&(shm_stats->body.rep_2XX), value); break;
+					case '2': apr_atomic_add32(&(shm_stats->body.rep_4XX), value); break;
+					case '3': apr_atomic_add32(&(shm_stats->body.rep_5XX), value); break;
+					case '4': apr_atomic_add32(&(shm_stats->body.rep_other), value); break;
+					case '5': apr_atomic_add32(&(shm_stats->body.rep_403), value); break;
+					case '6': apr_atomic_add32(&(shm_stats->body.rep_404), value); break;
+					case '7': apr_atomic_add32(&(shm_stats->body.rep_bread), value); break;
+					case '8': apr_atomic_add32(&(shm_stats->body.rep_bwritten), value); break;
 				}
 				break;
 		}
 	}
-
-	/* XXX */
-	apr_global_mutex_unlock(conf->lock.handle);
 }
 
 void
@@ -287,24 +285,4 @@ server_create_and_stat_error(dav_rainx_server_conf *conf, apr_pool_t *p, int sta
 	error = __dav_new_error(p, status, error_id, desc);
 	server_inc_daverror_stat(conf, error);
 	return error;
-}
-
-void
-server_getall_stat(dav_rainx_server_conf *conf, apr_pool_t *pool, struct rainx_stats_s *stats)
-{
-	char *ptr_counter;
-	(void) pool;
-
-	apr_global_mutex_lock(conf->lock.handle);
-	/* XXX */
-
-	/* increase the appropriated counter */
-	ptr_counter = apr_shm_baseaddr_get(conf->shm.handle);
-	if (ptr_counter) {
-		struct shm_stats_s *stats_struct = (struct shm_stats_s*)ptr_counter;
-		memcpy(stats, &(stats_struct->body), sizeof(struct rainx_stats_s));
-	}
-
-	/* XXX */
-	apr_global_mutex_unlock(conf->lock.handle);
 }
