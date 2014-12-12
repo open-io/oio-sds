@@ -99,6 +99,14 @@ get_volume_path(const gchar* chunk_path)
 }
 
 static gboolean
+chunk_id_parsable(check_info_t *info, check_result_t *result,
+		GError **p_err, gpointer udata)
+{
+	(void) udata;
+	return check_chunk_id_parsable(info, result, p_err);
+}
+
+static gboolean
 chunk_check_orphan(check_info_t *info, check_result_t *result,
 		GError **p_err, gpointer udata)
 {
@@ -419,6 +427,7 @@ _init_checks()
 {
 	GSList *checks = NULL;
 	_add_check(&checks, "Chunk attributes", &chunk_check_attributes, NULL);
+	_add_check(&checks, "Chunk id", &chunk_id_parsable, NULL);
 	_add_check(&checks, "Orphan chunk", &chunk_check_orphan, NULL);
 	return checks;
 }

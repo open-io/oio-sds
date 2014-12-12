@@ -62,7 +62,9 @@ get_meta2_ctx(const gchar *ns_name, const gchar *container_hexid,
 
 	/* load namespace info for storage policies definitions */
 	if(!(ns_info = get_namespace_info(ns_name, &local_error))) {
-		GSETERROR(error, "Failed to load namespace info, cannot check content policy : %s",local_error->message);
+		GSETCODE(error, local_error ? local_error->code : 0,
+				"Failed to load namespace info, cannot check content policy: %s",
+				local_error ? local_error->message : "<no details>");
 		goto clean_up;
 	}
 
@@ -91,11 +93,9 @@ get_meta2_ctx(const gchar *ns_name, const gchar *container_hexid,
 	char* ct_ns_name = NULL;
 	ctx->loc = gs_locate_container_by_hexid_v2(ctx->hc, container_hexid, &ct_ns_name, &gs_error);
 	if (ctx->loc == NULL || ctx->loc->m2_url == NULL) {
-		if(gs_error) {
-			GSETERROR(error, "Failed to locate container [%s] in namespace: %s", container_hexid, gs_error_get_message(gs_error));
-		} else {
-			GSETERROR(error, "Failed to locate container [%s] in namespace: No error", container_hexid);
-		}		
+		GSETCODE(error, gs_error_get_code(gs_error),
+				"Failed to locate container [%s] in namespace: %s",
+				container_hexid, gs_error_get_message(gs_error));
 	}
 
 
@@ -110,7 +110,9 @@ get_meta2_ctx(const gchar *ns_name, const gchar *container_hexid,
 
 			// reinit hc with VNS name
 			if(!(ctx->hc = gs_grid_storage_init(ctx->ns, &gs_error))) {
-	        	GSETERROR(error, "Failed to init grid storage client : %s", gs_error_get_message(gs_error));
+	        	GSETCODE(error, gs_error_get_code(gs_error),
+	        			"Failed to init grid storage client: %s",
+						gs_error_get_message(gs_error));
 				goto clean_up;
 			}
 		} else {
@@ -126,7 +128,9 @@ get_meta2_ctx(const gchar *ns_name, const gchar *container_hexid,
 
 
 	if((local_error = _init_meta2_connection(ctx)) != NULL) {
-		GSETERROR(error, "Failed to init meta2 connection :%s", local_error->message);
+		GSETCODE(error, local_error->code,
+				"Failed to init meta2 connection: %s",
+				local_error->message);
 		goto clean_up;
 	}
 
@@ -140,7 +144,8 @@ get_meta2_ctx(const gchar *ns_name, const gchar *container_hexid,
 		GRID_DEBUG("Content %s/%s/%s doesn't exist", ctx->ns,
 				container_hexid, content_name);
 		if (local_error) {
-			GSETERROR(error, "Cannot check content state, "
+			GSETCODE(error, local_error->code,
+					"Cannot check content state, "
 					"content not found %s/%s/%s: %s",
 					ctx->ns, container_hexid, content_name,
 					local_error->message);
@@ -365,6 +370,8 @@ _find_sp_fc_m2v2(const gchar* meta2,
 	struct chunk_textinfo_s *chunk_info = check_info->ck_info;
 	struct content_textinfo_s *content_info = check_info->ct_info;
 	gchar *chunk_id;
+	// timeouts are expressed in seconds in m2v2
+	gdouble m2to = META2_TIMEOUT / 1000.0;
 
 	chunk_id = assemble_chunk_id(check_info->rawx_str_addr,
 			check_info->rawx_vol, chunk_info->id);
@@ -373,8 +380,9 @@ _find_sp_fc_m2v2(const gchar* meta2,
 			hc_url_get(url, HCURL_WHOLE));
 	GRID_DEBUG("Chunk id to look for: [%s]", chunk_id);
 
-	err = m2v2_remote_execute_GET_BY_CHUNK(meta2, NULL, url,
-			chunk_id, 1, &beans);
+	err = m2v2_request(meta2,
+			m2v2_remote_pack_GET_BY_CHUNK(NULL, url, chunk_id, 1),
+			m2to, m2to, &beans);
 	if (err != NULL) {
 		g_prefix_error(&err, "Could not get contents referencing chunk %s: ",
 				chunk_id);
@@ -478,19 +486,30 @@ find_storage_policy_and_friend_chunks_full(const gchar* meta2,
 			return err;
 		}
 	}
-	if (is_v1 || (err != NULL && err->code == 404)) {
+	// CODE_NOT_FOUND error code can be thrown when processing M2V2_GET (by chunk):
+	//  - by m2v2 when no alias is found
+	//  - by m2v1 because the request is unknown
+	if (is_v1 || (err != NULL && err->code == CODE_NOT_FOUND)) {
 		// If error code is 404, try with M2V1 request
 		GRID_DEBUG("Trying with M2V1 request on m2 [%s] for chunk [%s]",
 				meta2, check_info->ck_info->id);
 		err2 = _find_sp_fc_m2v1(meta2, check_info, chunk_ids, p_raw_content);
 		if (err2) {
 			g_prefix_error(&err, "M2V1 request also failed: [%s] ", err2->message);
-			g_clear_error(&err2);
+			// CODE_NOT_IMPLEMENTED thrown by m2v2 answering REQ_M2RAW_CONTENT_GETBYCHUNK.
+			// In this case, keep the first error, else keep the second error.
+			if (err2->code == CODE_NOT_IMPLEMENTED)
+				g_clear_error(&err2);
 		} else {
 			g_clear_error(&err);
 			if (!is_v1)
 				add_to_m2v1_list(meta2);
 		}
+	}
+
+	if (err2) {
+		g_clear_error(&err);
+		return err2;
 	}
 
 	return err;
