@@ -11,6 +11,8 @@
 #include <apr_global_mutex.h>
 #include <mod_dav.h>
 
+#include <librain.h>
+
 // TODO FIXME replace this by the APR equivalent
 #include <openssl/md5.h>
 
@@ -59,11 +61,8 @@ struct dav_resource_private {
 
 	char *namespace; /* Namespace name, in case of VNS */
 
-	int k; /* Number of data metachunks (from the policy) */
-	int m; /* Number of coding metachunks (from the policy) */
-	const char* algo; /* Name of the algorythm to apply (from the policy) */
-	int subchunk_size; /* Calculated size of a subchunk */
-	int metachunk_size; /* Actual size of a metachunk */
+	struct rain_encoding_s rain_params;
+
 	/* List of rawx services
 	 * (i.e http://ip:port/DATA/NS/machine/volume/XX/XX/CID|...).
 	 * Must contain k + m addresses */
@@ -85,8 +84,8 @@ struct dav_stream {
 	apr_pool_t *pool;
 	int original_data_size; /* Size of the original data */
 	char* original_data; /* Buffer where the entire received data is stored */
-	char* original_data_chunk_start_ptr; /* Pointer to the beginning of the current chunk */
-	char* original_data_chunk_end_ptr; /* Pointer to the end of the current chunk */
+	char* chunk_start_ptr; /* Pointer to the beginning of the current chunk */
+	char* chunk_end_ptr; /* Pointer to the end of the current chunk */
 	int original_data_stored; /* Amount of data currently stored in 'original_data' */
 
 	struct req_params_store** data_put_params; /* List of thread references for data */

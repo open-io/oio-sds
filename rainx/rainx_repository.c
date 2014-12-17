@@ -72,6 +72,12 @@ enum {
 	DAV_FS_URI_MYPROPS         /* the namespace URI for our custom props */
 };
 
+static const char *const rain_algorithm_name[] = {
+	"unknown",
+	"liber8tion",
+	"crs"
+};
+
 static apr_status_t
 apr_storage_policy_clean(void *p)
 {
@@ -402,19 +408,116 @@ compute_subchunk_size(const dav_resource *resource, int k, int m,
 }
 
 static dav_error *
+_init_rain_encoding(dav_rainx_server_conf *srv_conf,
+		const dav_resource *resource)
+{
+	dav_error *err = NULL;
+	char *err_msg = NULL;
+	dav_resource_private *res_priv = resource->info;
+	char* stgpol_str = res_priv->content.storage_policy;
+	struct storage_policy_s *sp = NULL;
+	const struct data_security_s *datasec = NULL;
+	const char *k_str = NULL, *m_str = NULL, *algo = NULL;
+	long k,m;
+	apr_int64_t mc_size = -1;
+
+	if (!stgpol_str ||
+			!(sp = storage_policy_init(srv_conf->rainx_conf->ni, stgpol_str))) {
+		err_msg = apr_psprintf(res_priv->pool,
+				"\"%s\" policy init failed for namespace \"%s\"",
+				stgpol_str, srv_conf->rainx_conf->ni->name);
+		goto end;
+	}
+	apr_pool_cleanup_register(res_priv->pool, sp,
+			apr_storage_policy_clean, apr_pool_cleanup_null);
+
+	DAV_DEBUG_REQ(resource->info->request, 0,
+			"[%s] policy init succeeded for namespace [%s]",
+			stgpol_str, srv_conf->rainx_conf->ni->name);
+
+	datasec = storage_policy_get_data_security(sp);
+	if (RAIN != data_security_get_type(datasec)) {
+		err_msg = apr_psprintf(res_priv->pool,
+				"Data security type for policy '%s' is not RAIN",
+				stgpol_str);
+		goto end;
+	}
+
+	if (!(k_str = data_security_get_param(datasec, "k"))
+			|| !(m_str = data_security_get_param(datasec, "m"))
+			|| !(algo = data_security_get_param(datasec, "algo"))) {
+		err_msg = apr_psprintf(res_priv->pool,
+				"Failed to get parameters of policy [%s]: k=%s, m=%s, algo=%s",
+				stgpol_str, k_str, m_str, algo);
+		goto end;
+	}
+
+	k = strtol(k_str, NULL, 10);
+	m = strtol(m_str, NULL, 10);
+	if (k < 1 || m < 1 || k < m) {
+		err_msg = apr_psprintf(res_priv->pool,
+				"Invalid RAIN parameters: k=%ld, m=%ld. "
+				"Must verify m>0 and k>=m", k, m);
+		goto end;
+	}
+
+	mc_size = apr_atoi64(res_priv->chunk.size);
+	if (errno != 0) {
+		err_msg = apr_psprintf(res_priv->pool,
+				"Failed to parse chunk size: (%d) %s",
+				errno, strerror(errno));
+		goto end;
+	} else if (mc_size < 0) {
+		err_msg = apr_psprintf(res_priv->pool,
+				"Chunk size must be positive (found %"APR_INT64_T_FMT,
+				mc_size);
+	}
+
+	if (!rain_get_encoding(&(res_priv->rain_params), mc_size,
+			k, m, algo)) {
+		if (errno)
+			err_msg = apr_psprintf(res_priv->pool,
+					"Failed to initialize RAIN encoding: (%d) %s",
+					errno, strerror(errno));
+		else
+			err_msg = apr_pstrdup(res_priv->pool,
+					"Failed to initialize RAIN encoding: "
+					"chunk size too small?");
+		goto end;
+	}
+	DAV_DEBUG_REQ(resource->info->request, 0,
+			"[%s] policy parameters are: k=%ld, m=%ld, algo=%s",
+			stgpol_str, k, m, algo);
+	DAV_DEBUG_REQ(resource->info->request, 0,
+			"Encoding parameters are: block_size=%lu, packet_size=%lu, "
+			"strip_size=%lu",
+			res_priv->rain_params.block_size,
+			res_priv->rain_params.packet_size,
+			res_priv->rain_params.strip_size);
+
+end:
+	if (err_msg != NULL) {
+		DAV_DEBUG_REQ(resource->info->request, 0, "%s", err_msg);
+		err = server_create_and_stat_error(srv_conf, res_priv->pool,
+				HTTP_INTERNAL_SERVER_ERROR, 0, err_msg);
+	}
+
+	return err;
+}
+
+static dav_error *
 rainx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 {
-	int metachunk_size;
-	int subchunk_size;
-	dav_error *e = NULL;
+	dav_error *err = NULL;
+	struct rain_encoding_s *rain_params = NULL;
 
 	DAV_DEBUG_REQ(resource->info->request, 0, "%s", __FUNCTION__);
 
 	/* Build the stream */
-	apr_pool_t *p = resource->info->pool;
-	dav_stream *ds = apr_pcalloc(p, sizeof(*ds));
+	apr_pool_t *pool = resource->info->pool;
+	dav_stream *ds = apr_pcalloc(pool, sizeof(*ds));
 
-	apr_pool_create(&(ds->pool), p);
+	apr_pool_create(&(ds->pool), pool);
 	ds->r = resource;
 	/* ------- */
 
@@ -424,109 +527,47 @@ rainx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 
 	/* Storage policy management */
 	/* Getting policy parameters (k, m, algo) */
-	char* str = resource->info->content.storage_policy;
-	struct storage_policy_s *sp = NULL;
-	if (!str || !(sp = storage_policy_init(conf->rainx_conf->ni, str))) {
-		DAV_DEBUG_REQ(resource->info->request, 0 ,
-				"\"%s\" policy init failed for namespace \"%s\"",
-				str, conf->rainx_conf->ni->name);
-		return server_create_and_stat_error(conf, p, HTTP_BAD_REQUEST, 0,
-				"Bad policy parameter");
-	}
-
-	apr_pool_cleanup_register(p, sp,
-			apr_storage_policy_clean, apr_pool_cleanup_null);
-
-	DAV_DEBUG_REQ(resource->info->request, 0 ,
-			"\"%s\" policy init succeeded for namespace \"%s\"",
-			str, conf->rainx_conf->ni->name);
-
-	const struct data_security_s *datasec = storage_policy_get_data_security(sp);
-	if (RAIN != data_security_get_type(datasec)) {
-		DAV_DEBUG_REQ(resource->info->request, 0 ,
-				"the data security type for the policy '%s' is not rain", str);
-		return server_create_and_stat_error(conf, p, HTTP_INTERNAL_SERVER_ERROR,
-				0, "Bad data security type (not rain)");
-	}
-
-	const char* k = NULL;
-	const char* m = NULL;
-
-	if ((NULL == (k = data_security_get_param(datasec, "k")))
-			|| (NULL == (m = data_security_get_param(datasec, "m")))
-			|| (NULL == (resource->info->algo =
-					data_security_get_param(datasec, "algo")))) {
-		DAV_DEBUG_REQ(resource->info->request, 0 ,
-				"Failed to get all the \"%s\" policy parameters", str);
-		return server_create_and_stat_error(conf, p, HTTP_INTERNAL_SERVER_ERROR,
-				0, "Rain operation failed on loading policy");
-	}
-
-	if (0 >= (resource->info->k = strtol(k, NULL, 10))) {
-		DAV_DEBUG_REQ(resource->info->request, 0 ,
-				"bad \"%s\" policy 'k' parameter value", str);
-		return server_create_and_stat_error(conf, p,
-				HTTP_INTERNAL_SERVER_ERROR, 0,
-				"Rain operation failed on loading policy");
-	}
-
-	if (0 >= (resource->info->m = strtol(m, NULL, 10))) {
-		DAV_DEBUG_REQ(resource->info->request, 0 ,
-				"bad \"%s\" policy 'm' parameter value", str);
-		return server_create_and_stat_error(conf, p,
-				HTTP_INTERNAL_SERVER_ERROR, 0,
-				"Rain operation failed on loading policy");
-	}
-
-	DAV_DEBUG_REQ(resource->info->request, 0 ,
-			"\"%s\" policy parameters are : k = %d, m = %d, algo = %s",
-			str, resource->info->k, resource->info->m, resource->info->algo);
-	/* ------- */
-
-	/* Calculating subchunk size */
-	e = compute_subchunk_size(resource, resource->info->k, resource->info->m,
-			resource->info->algo, &metachunk_size, &subchunk_size);
-	if (e)
-		return e;
-	resource->info->subchunk_size = subchunk_size;
-	DAV_DEBUG_REQ(resource->info->request, 0, "calculated chunk size is %d bytes",
-			resource->info->subchunk_size);
+	err = _init_rain_encoding(conf, resource);
+	if (err != NULL)
+		return err;
+	rain_params = &(resource->info->rain_params);
 	/* ------- */
 
 	/* Creating data buffer and infos */
-	ds->original_data_size = metachunk_size;
-	ds->original_data = apr_pcalloc(p, metachunk_size * sizeof(char));
-	ds->original_data_chunk_start_ptr = ds->original_data;
-	ds->original_data_chunk_end_ptr = ds->original_data;
+	ds->original_data_size = rain_params->data_size;
+	// FIXME: use streal pool instead of resource pool?
+	ds->original_data = apr_pcalloc(pool, ds->original_data_size * sizeof(char));
+	ds->chunk_start_ptr = ds->original_data;
+	ds->chunk_end_ptr = ds->original_data;
 	ds->original_data_stored = 0;
 	/* ------ */
 
 	/* Setting metachunk info */
 	resource->info->current_rawx = 0;
-	resource->info->current_chunk_remaining = subchunk_size;
+	resource->info->current_chunk_remaining = rain_params->block_size;
 	/* ------- */
 
 	/* Getting the rawx addresses */
 	char* rawx_list = resource->info->content.rawx_list;
 	if (NULL == rawx_list) {
 		DAV_DEBUG_REQ(resource->info->request, 0 , "rawx list is null");
-		return server_create_and_stat_error(conf, p, HTTP_BAD_REQUEST,
+		return server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST,
 				0, "Bad rawx list parameter");
 	}
-	resource->info->rawx_list = (char**)apr_pcalloc(p,
-			(resource->info->k + resource->info->m) * sizeof(char*));
+	resource->info->rawx_list = (char**)apr_pcalloc(pool,
+			(rain_params->k + rain_params->m) * sizeof(char*));
 	char* last;
 	// FIXME: this should be separated by ';', not '|'
 	char* temp_tok = apr_strtok(rawx_list, RAWXLIST_SEPARATOR, &last);
-	int i;
-	for (i = 0; temp_tok && i < resource->info->k + resource->info->m; i++) {
+	unsigned int i;
+	for (i = 0; temp_tok && i < rain_params->k + rain_params->m; i++) {
 		resource->info->rawx_list[i] = temp_tok;
 		temp_tok = apr_strtok(NULL, RAWXLIST_SEPARATOR, &last);
 	}
-	if (i != resource->info->k + resource->info->m) {
+	if (i != rain_params->k + rain_params->m) {
 		DAV_DEBUG_REQ(resource->info->request, 0 ,
 				"missing one or more rawx address(es)");
-		return server_create_and_stat_error(conf, p, HTTP_BAD_REQUEST,
+		return server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST,
 				0, "Missing one or more rawx address(es)");
 	}
 	/* ------- */
@@ -561,7 +602,7 @@ dav_rainx_open_stream(const dav_resource *resource, dav_stream_mode mode,
 	/* Thread */
 	ds->data_put_params = (struct req_params_store**)apr_pcalloc(
 			resource->pool,
-			resource->info->k * sizeof(struct req_params_store*));
+			resource->info->rain_params.k * sizeof(struct req_params_store*));
 	/* ------- */
 
 	*stream = ds;
@@ -590,7 +631,8 @@ do_rollback_specific(dav_stream *stream, char* rawx_address)
 static void
 do_rollback(dav_stream *stream)
 {
-	for (int i = 0; i < stream->r->info->k + stream->r->info->m; i++)
+	struct rain_encoding_s *params = &(stream->r->info->rain_params);
+	for (int i = 0; i < params->k + params->m; i++)
 		do_rollback_specific(stream, stream->r->info->rawx_list[i]);
 }
 
@@ -665,6 +707,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 	char** coding_metachunks = NULL;
 	struct req_params_store** data_put_params = stream->data_put_params;
 	struct req_params_store** coding_put_params = NULL;
+	struct rain_encoding_s *rain_params = &(stream->r->info->rain_params);
 	apr_pool_t **coding_subpools = NULL;
 
 	DAV_DEBUG_REQ(stream->r->info->request, 0, "Closing (%s) the stream",
@@ -678,7 +721,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 				HTTP_INTERNAL_SERVER_ERROR, 0, "Rain operation failed");
 		goto close_stream_error_label;
 	} else {
-		int subchunk_size = stream->r->info->subchunk_size;
+		int subchunk_size = rain_params->block_size;
 
 		/* Preparing custom header */
 		struct content_textinfo_s temp_content = stream->r->info->content;
@@ -708,7 +751,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 		custom_chunksize = apr_itoa(stream->r->info->request->pool,
 				subchunk_size - stream->r->info->current_chunk_remaining);
 		custom_chunkhash = g_compute_checksum_for_data(G_CHECKSUM_MD5,
-				(const guchar*)stream->original_data_chunk_start_ptr,
+				(const guchar*)stream->chunk_start_ptr,
 				subchunk_size - stream->r->info->current_chunk_remaining);
 		/* ------- */
 
@@ -732,7 +775,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 			data_put_params[i]->service_address = \
 					stream->r->info->rawx_list[stream->r->info->current_rawx];
 			data_put_params[i]->data_to_send = \
-					stream->original_data_chunk_start_ptr;
+					stream->chunk_start_ptr;
 			data_put_params[i]->data_to_send_size = \
 					subchunk_size - stream->r->info->current_chunk_remaining;
 			data_put_params[i]->header = apr_psprintf(subpool,
@@ -769,7 +812,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 		/* ------- */
 
 		/* Managing the end of put data threads */
-		for (i = 0; i < stream->r->info->k; i++) {
+		for (i = 0; i < rain_params->k; i++) {
 			if (data_put_params[i] && data_put_params[i]->thd_arr) {
 				apr_thread_join(&rv, data_put_params[i]->thd_arr);
 				EXTRA_ASSERT(rv == APR_SUCCESS);
@@ -785,7 +828,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 		char* reply_message = apr_pcalloc(stream->r->info->request->pool,
 				MAX_REPLY_MESSAGE_SIZE);
 		char apr_error_message[256];
-		for (i = 0; i < stream->r->info->k; i++) {
+		for (i = 0; i < rain_params->k; i++) {
 			if (data_put_params[i] == NULL) {
 				DAV_DEBUG_REQ(stream->r->info->request, 0,
 						"Nothing to put on rawx %d", i);
@@ -823,11 +866,11 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 		/* ------- */
 
 		/* Rain calculation */
-		stream->r->info->current_rawx = stream->r->info->k; /* Set there to rollback correctly in case of error */
-		if (!(coding_metachunks = rain_get_coding_chunks(
+		stream->r->info->current_rawx = rain_params->k; /* Set there to rollback correctly in case of error */
+		if (!(coding_metachunks = (char **)rain_get_coding_chunks(
 					(guint8*)stream->original_data,
-					stream->original_data_size, stream->r->info->k,
-					stream->r->info->m, stream->r->info->algo))) {
+					stream->original_data_size, rain_params->k,
+					rain_params->m, rain_algorithm_name[rain_params->algo]))) {
 			DAV_DEBUG_REQ(stream->r->info->request, 0,
 					"failed to calculate coding chunks");
 			e = server_create_and_stat_error(conf, stream->pool,
@@ -841,16 +884,16 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 			/* List of thread references */
 			coding_put_params = (struct req_params_store**)apr_pcalloc(
 					stream->r->info->request->pool,
-					stream->r->info->m * sizeof(struct req_params_store*));
+					rain_params->m * sizeof(struct req_params_store*));
 			coding_subpools = (apr_pool_t**) apr_pcalloc(
 					stream->r->info->request->pool,
-					stream->r->info->m * sizeof(apr_pool_t*));
+					rain_params->m * sizeof(apr_pool_t*));
 			/* ------- */
 
 			/* Filling the stream->r->info->m coding metachunks */
-			for (i = 0; i < stream->r->info->m; i++) {
+			for (i = 0; i < rain_params->m; i++) {
 				/* Set there to rollback correctly in case of error */
-				stream->r->info->current_rawx = stream->r->info->k + i;
+				stream->r->info->current_rawx = rain_params->k + i;
 
 				/* Finalizing custom header values */
 				startid = strlen(stream->r->info->rawx_list[stream->r->info->current_rawx]) - 64;
@@ -859,7 +902,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 						+ startid);
 				custom_chunkpos = apr_psprintf(stream->r->info->request->pool,
 						"%s.p%d", temp_chunk.position,
-						stream->r->info->current_rawx - stream->r->info->k);
+						stream->r->info->current_rawx - rain_params->k);
 				custom_chunksize = apr_itoa(stream->r->info->request->pool,
 						subchunk_size);
 				custom_chunkhash = g_compute_checksum_for_data(G_CHECKSUM_MD5,
@@ -907,7 +950,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 				custom_chunkhash = NULL;
 			}
 
-			for (i = 0; i < stream->r->info->m; i++) {
+			for (i = 0; i < rain_params->m; i++) {
 				if (coding_put_params[i] && coding_put_params[i]->thd_arr) {
 					apr_thread_join(&rv, coding_put_params[i]->thd_arr);
 					EXTRA_ASSERT(rv == APR_SUCCESS);
@@ -916,7 +959,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 			/* ------- */
 
 			/* Error management */
-			for (i = 0; i < stream->r->info->m; i++) {
+			for (i = 0; i < rain_params->m; i++) {
 				if (coding_put_params[i]->req_status != APR_SUCCESS) {
 					if (!extract_code_message_reply(stream->r,
 							coding_put_params[i]->reply,
@@ -968,12 +1011,12 @@ close_stream_error_label:
 		do_rollback(stream);
 	g_free(custom_chunkhash);
 	if (coding_metachunks) {
-		for (i = 0; i < stream->r->info->m; i++)
+		for (i = 0; i < rain_params->m; i++)
 			g_free(coding_metachunks[i]);
 		g_free(coding_metachunks);
 	}
 	if (coding_subpools) {
-		for (i = 0; i < stream->r->info->m; i++)
+		for (i = 0; i < rain_params->m; i++)
 			apr_pool_destroy(coding_subpools[i]);
 	}
 	apr_pool_destroy(stream->pool);
@@ -987,6 +1030,7 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 
 	apr_status_t rv = APR_SUCCESS;
 	struct req_params_store** data_put_params = stream->data_put_params;
+	struct rain_encoding_s *rain_params = &(stream->r->info->rain_params);
 	dav_rainx_server_conf *conf = ap_get_module_config(
 			stream->r->info->request->server->module_config, &dav_rainx_module);
 
@@ -999,7 +1043,7 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 				HTTP_BAD_REQUEST, 0, "Request entity too large");
 	}
 
-	int subchunk_size = stream->r->info->subchunk_size;
+	int subchunk_size = rain_params->block_size;
 
 	/* Buf management */
 	int to_read = bufsize;
@@ -1023,19 +1067,19 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 	/* ------- */
 
 	data_subpools = (apr_pool_t**) apr_pcalloc(stream->r->info->request->pool,
-			stream->r->info->k * sizeof(apr_pool_t*));
+			rain_params->k * sizeof(apr_pool_t*));
 
 	/* While buf is not completely read */
 	while (to_read > 0) {
 		if (stream->r->info->current_chunk_remaining < to_read) {
-			memcpy(stream->original_data_chunk_end_ptr, buf_ptr,
+			memcpy(stream->chunk_end_ptr, buf_ptr,
 					stream->r->info->current_chunk_remaining);
 
 			/* Updating buf state */
 			buf_ptr += stream->r->info->current_chunk_remaining;
 			to_read -= stream->r->info->current_chunk_remaining;
 
-			stream->original_data_chunk_end_ptr += \
+			stream->chunk_end_ptr += \
 					stream->r->info->current_chunk_remaining;
 			stream->original_data_stored += \
 					stream->r->info->current_chunk_remaining;
@@ -1052,7 +1096,7 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 			char* custom_chunksize = apr_itoa(stream->r->info->request->pool,
 					subchunk_size);
 			char* custom_chunkhash = g_compute_checksum_for_data(G_CHECKSUM_MD5,
-					(const guchar*)stream->original_data_chunk_start_ptr,
+					(const guchar*)stream->chunk_start_ptr,
 					subchunk_size);
 			/* ------- */
 
@@ -1064,7 +1108,7 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 			data_put_params[i]->service_address = \
 					stream->r->info->rawx_list[stream->r->info->current_rawx];
 			data_put_params[i]->data_to_send = \
-					stream->original_data_chunk_start_ptr;
+					stream->chunk_start_ptr;
 			data_put_params[i]->data_to_send_size = subchunk_size;
 			data_put_params[i]->header = apr_psprintf(data_subpools[i],
 					"%s\nchunkid: %s\nchunkpos: %s\nchunksize: %s\nchunkhash: %s",
@@ -1100,8 +1144,8 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 
 			/* Updating current metachunk buffer state */
 			stream->r->info->current_chunk_remaining = subchunk_size;
-			stream->original_data_chunk_start_ptr = \
-					stream->original_data_chunk_end_ptr;
+			stream->chunk_start_ptr = \
+					stream->chunk_end_ptr;
 			/* ------- */
 
 			/* Updating general context */
@@ -1109,10 +1153,10 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 			/* ------- */
 		}
 		else {
-			memcpy(stream->original_data_chunk_end_ptr, buf_ptr, to_read);
+			memcpy(stream->chunk_end_ptr, buf_ptr, to_read);
 
 			/* Updating buf state */
-			stream->original_data_chunk_end_ptr += to_read;
+			stream->chunk_end_ptr += to_read;
 			stream->original_data_stored += to_read;
 
 			stream->r->info->current_chunk_remaining -= to_read;
@@ -1124,7 +1168,7 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 	}
 
 	int i;
-	for (i = 0; i < stream->r->info->k; i++) {
+	for (i = 0; i < rain_params->k; i++) {
 		if (data_put_params[i] && data_put_params[i]->thd_arr) {
 			apr_status_t retval = APR_SUCCESS;
 			apr_thread_join(&retval, data_put_params[i]->thd_arr);
@@ -1268,10 +1312,10 @@ check_reconstructed_data(const dav_resource *resource, gboolean* failure_array,
 	int cur_spare_rawx = 0;
 	int cumulated_data = 0;
 
-	k = resource->info->k;
-	m = resource->info->m;
-	subchunk_size = resource->info->subchunk_size;
-	metachunk_size = resource->info->metachunk_size;
+	k = resource->info->rain_params.k;
+	m = resource->info->rain_params.m;
+	subchunk_size = resource->info->rain_params.block_size;
+	metachunk_size = resource->info->rain_params.data_size;
 
 	/* Data strips */
 	for (int i = 0; i < k; i++) {
@@ -1345,10 +1389,10 @@ upload_to_rawx(const dav_resource *resource, gboolean* failure_array,
 	apr_status_t req_status;
 	int cur_spare_rawx = 0;
 	int cumulated_data = 0;
-	int k = resource->info->k;
-	int m = resource->info->m;
-	int subchunk_size = resource->info->subchunk_size;
-	int metachunk_size = resource->info->metachunk_size;
+	int k = resource->info->rain_params.k;
+	int m = resource->info->rain_params.m;
+	int subchunk_size = resource->info->rain_params.block_size;
+	int metachunk_size = resource->info->rain_params.data_size;
 	char *reply, *reply_code, *reply_message;
 	char* custom_header;
 	struct req_params_store rps;
@@ -1534,38 +1578,73 @@ end:
 }
 
 static dav_error *
+_send_reconstructed_data(const dav_resource *resource, ap_filter_t *output,
+		char **data)
+{
+	dav_error *err = NULL;
+	struct rain_encoding_s *rain_params = &(resource->info->rain_params);
+	size_t expected_size = rain_params->data_size;
+	size_t sent_size = 0;
+	apr_bucket_brigade *bb = apr_brigade_create(
+			resource->info->request->pool, output->c->bucket_alloc);
+	for (unsigned int i = 0; i < rain_params->k && sent_size < expected_size; i++) {
+		// Last subchunk may be smaller, and there may be less than k subchunks
+		size_t out_size = MIN(expected_size-sent_size, rain_params->block_size);
+		DAV_DEBUG_REQ(resource->info->request, 0, "writing %u bytes, pos %u",
+				out_size, i);
+		apr_brigade_write(bb, NULL, resource->info, data[i], out_size);
+		sent_size += out_size;
+		DAV_DEBUG_REQ(resource->info->request, 0, "%u bytes sent", sent_size);
+	}
+	if (sent_size != expected_size) {
+		DAV_ERROR_REQ(resource->info->request, 0,
+				"Expected %u bytes, sent %u bytes",
+				expected_size, sent_size);
+	}
+	if (ap_pass_brigade(output, bb) != APR_SUCCESS) {
+		char *err_msg = "could not write content to filter";
+		DAV_DEBUG_REQ(resource->info->request, 0, err_msg);
+		err = server_create_and_stat_error(resource_get_server_config(resource),
+				resource->pool, HTTP_FORBIDDEN, 0, err_msg);
+	} else {
+		DAV_DEBUG_REQ(resource->info->request, 0,
+				"Reconstructed metachunk sent to client");
+	}
+	return err;
+}
+
+static dav_error *
 dav_rainx_deliver(const dav_resource *resource, ap_filter_t *output)
 {
 	/* GET MAIN METHOD */
 
 	dav_rainx_server_conf *conf;
 	apr_pool_t *pool;
-	dav_error *e = NULL;
+	dav_error *err = NULL;
 	apr_status_t req_status;
 	int i;
 	char* reply = NULL;
-	char *reconstructed_data = NULL;
 	/* The array showing if a rawx is a failure */
 	gboolean* failure_array = NULL;
 	/* The array containing the spared rawx addresses */
 	char** spare_rawx_list = NULL;
 	/* The array containing the hash to check after reconstruction of a chunk */
 	char** spare_md5_list = NULL;
-	int metachunk_size = -1;
-	int subchunk_size = -1;
+	struct rain_encoding_s *rain_params;
 
 	pool = resource->pool;
 	conf = resource_get_server_config(resource);
+	rain_params = &(resource->info->rain_params);
 
 	/* Check resource type */
 	if (DAV_RESOURCE_TYPE_REGULAR != resource->type) {
-		e = server_create_and_stat_error(conf, pool, HTTP_CONFLICT, 0,
+		err = server_create_and_stat_error(conf, pool, HTTP_CONFLICT, 0,
 			"Cannot GET this type of resource.");
 		goto end_deliver;
 	}
 
 	if (resource->collection) {
-		e = server_create_and_stat_error(conf, pool, HTTP_CONFLICT, 0,
+		err = server_create_and_stat_error(conf, pool, HTTP_CONFLICT, 0,
 			"No GET on collections");
 		goto end_deliver;
 	}
@@ -1573,130 +1652,64 @@ dav_rainx_deliver(const dav_resource *resource, ap_filter_t *output)
 
 	/* Storage policy management (storage policy name got from the header) */
 	/* Getting policy parameters (k, m, algo) */
-	char* str = resource->info->content.storage_policy;
-	struct storage_policy_s *sp;
-
-	int k = -1;
-	int m = -1;
-	const char* algo = NULL;
-
-	if (!str || !(sp = storage_policy_init(conf->rainx_conf->ni, str))) {
-		DAV_DEBUG_REQ(resource->info->request, 0 ,
-				"\"%s\" policy init failed for namespace \"%s\"",
-				str, conf->rainx_conf->ni->name);
-		e = server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST, 0,
-				"Bad policy parameter");
-		goto end_deliver;
-	}
-
-	apr_pool_cleanup_register(pool, sp,
-			apr_storage_policy_clean, apr_pool_cleanup_null);
-
-	DAV_DEBUG_REQ(resource->info->request, 0 ,
-			"\"%s\" policy init succeeded for namespace \"%s\"",
-			str, conf->rainx_conf->ni->name);
-
-	const struct data_security_s *datasec = storage_policy_get_data_security(sp);
-	if (RAIN != data_security_get_type(datasec)) {
-		DAV_DEBUG_REQ(resource->info->request, 0 ,
-				"the data security type for the policy \"%s\" is not rain", str);
-		goto end_deliver;
-	}
-
-	const char* orig_k = NULL;
-	const char* orig_m = NULL;
-
-	if ((NULL == (orig_k = data_security_get_param(datasec, "k")))
-			|| (NULL == (orig_m = data_security_get_param(datasec, "m")))
-			|| (NULL == (algo = data_security_get_param(datasec, "algo")))) {
-		DAV_DEBUG_REQ(resource->info->request, 0 ,
-				"failed to get all the \"%s\" policy parameters", str);
-		e = server_create_and_stat_error(conf, pool, HTTP_INTERNAL_SERVER_ERROR, 0,
-				"Rain operation failed on loading policy");
-		goto end_deliver;
-	}
-
-	k = strtol(orig_k, NULL, 10);
-	m = strtol(orig_m, NULL, 10);
-	resource->info->k = k;
-	resource->info->m = m;
-	resource->info->algo = apr_pstrdup(pool, algo);
-
-	if (k <= 0 || m <= 0) {
-		DAV_DEBUG_REQ(resource->info->request, 0 ,
-				"bad \"%s\" policy 'k'  or 'm' parameter value", str);
-		e = server_create_and_stat_error(conf, pool, HTTP_INTERNAL_SERVER_ERROR, 0,
-				"Rain operation failed on loading policy");
-		goto end_deliver;
-	}
-
-	DAV_DEBUG_REQ(resource->info->request, 0 , "\"%s\" policy parameters are : "
-			"k = %d, m = %d, algo = %s", str, k, m, algo);
+	err = _init_rain_encoding(conf, resource);
 	/* ------- */
 
 	/* Getting the rawx addresses from the header */
 	if (NULL == resource->info->content.rawx_list) {
 		DAV_DEBUG_REQ(resource->info->request, 0 , "rawx list is null");
-		e = server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST, 0,
+		err = server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST, 0,
 				"Bad rawx list parameter");
 		goto end_deliver;
 	}
+	/* The given rawx addresses list */
 	char** rawx_list =(char**)apr_pcalloc(resource->info->request->pool,
-			(k + m) * sizeof(char*)); /* The given rawx addresses list */
+			(rain_params->k + rain_params->m) * sizeof(char*));
 	char* last;
 	// FIXME: this should be separated by ';', not '|'
 	char* temp_tok = apr_strtok(resource->info->content.rawx_list,
 			RAWXLIST_SEPARATOR, &last);
-	for (i = 0; temp_tok != NULL && i < k + m; i++) {
+	for (i = 0; temp_tok != NULL && i < rain_params->k + rain_params->m; i++) {
 		rawx_list[i] = temp_tok;
 		temp_tok = apr_strtok(NULL, RAWXLIST_SEPARATOR, &last);
 	}
-	int data_rawx_list_size = i - m; /* The number of given data rawx addresses */
+	/* The number of given data rawx addresses */
+	int data_rawx_list_size = i - rain_params->m;
 	/* ------- */
 
 	/* Getting the spare rawx addresses, the failures array,
 	 * and the original MD5 array from the header */
 	if (NULL == resource->info->content.spare_rawx_list) {
 		DAV_DEBUG_REQ(resource->info->request, 0 , "spare rawx list is null");
-		e = server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST,
+		err = server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST,
 				0, "Bad spare rawx list parameter");
 		goto end_deliver;
 	}
 
-	failure_array = (gboolean*)apr_pcalloc(
-			resource->info->request->pool, (k + m) * sizeof(gboolean));
+	int total_subchunks = (rain_params->k + rain_params->m);
+	failure_array = (gboolean*)apr_pcalloc(resource->info->request->pool,
+			total_subchunks * sizeof(gboolean));
 	spare_rawx_list = (char**)apr_pcalloc(resource->info->request->pool,
-			(k + m) * sizeof(char*));
+			total_subchunks * sizeof(char*));
 	spare_md5_list = (char**)apr_pcalloc(resource->info->request->pool,
-			(k + m) * sizeof(char*));
-	e = parse_spare_rawx_list(resource, k + m,
+			total_subchunks * sizeof(char*));
+	err = parse_spare_rawx_list(resource, total_subchunks,
 			failure_array, spare_rawx_list, spare_md5_list);
-	if (e)
+	if (err)
 		goto end_deliver;
-	/* ------- */
-
-	/* Calculating subchunk size through the librain library */
-	e = compute_subchunk_size(resource, k, m, algo,
-			&metachunk_size, &subchunk_size);
-	DAV_DEBUG_REQ(resource->info->request,
-			0, "calculated subchunk size is %d bytes", subchunk_size);
-	if (e)
-		goto end_deliver;
-	resource->info->subchunk_size = subchunk_size;
-	resource->info->metachunk_size = metachunk_size;
 	/* ------- */
 
 	/* Creating data strips */
-	char** datachunks = (char**)apr_pcalloc(
-			resource->info->request->pool, k * sizeof(char*));
+	char** datachunks = (char**)apr_pcalloc(resource->info->request->pool,
+			rain_params->k * sizeof(char*));
 	char* reply_code = apr_pcalloc(resource->info->request->pool, 4);
 	char* reply_message = apr_pcalloc(resource->info->request->pool,
 			MAX_REPLY_MESSAGE_SIZE);
 	reply = apr_palloc(resource->info->request->pool,
-			MAX_REPLY_HEADER_SIZE + subchunk_size);
+			MAX_REPLY_HEADER_SIZE + rain_params->block_size);
 	struct req_params_store rps;
 	memset(&rps, 0, sizeof(rps));
-	rps.data_to_send_size = subchunk_size;
+	rps.data_to_send_size = rain_params->block_size;
 	rps.pool = resource->info->request->pool;
 	rps.reply = reply;
 	rps.req_type = "GET";
@@ -1704,8 +1717,8 @@ dav_rainx_deliver(const dav_resource *resource, ap_filter_t *output)
 	for (i = 0; i < data_rawx_list_size; i++) {
 		if (!failure_array[i]) {
 			datachunks[i] = (char*)apr_pcalloc(resource->info->request->pool,
-					subchunk_size * sizeof(char));
-			memset(reply, 0, MAX_REPLY_HEADER_SIZE + subchunk_size);
+					rain_params->block_size * sizeof(char));
+			memset(reply, 0, MAX_REPLY_HEADER_SIZE + rain_params->block_size);
 			rps.service_address = rawx_list[i];
 			req_status = rainx_http_req(&rps);
 
@@ -1717,7 +1730,7 @@ dav_rainx_deliver(const dav_resource *resource, ap_filter_t *output)
 					!g_str_has_prefix(reply_code, "20")) {
 				DAV_DEBUG_REQ(resource->info->request,
 						0, "unexpected failure on data rawx %d: %s", i, reply);
-				e = server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST,
+				err = server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST,
 						0, "Unexpected failure on data rawx");
 				goto end_deliver;
 			}
@@ -1730,7 +1743,7 @@ dav_rainx_deliver(const dav_resource *resource, ap_filter_t *output)
 				DAV_DEBUG_REQ(resource->info->request,
 						0, "problem occured while extracting the content "
 						"got from the data rawx %d", i);
-				e = server_create_and_stat_error(conf, pool,
+				err = server_create_and_stat_error(conf, pool,
 						HTTP_INTERNAL_SERVER_ERROR, 0,
 						"Problem occured while extracting the content got from a data rawx");
 				goto end_deliver;
@@ -1740,26 +1753,26 @@ dav_rainx_deliver(const dav_resource *resource, ap_filter_t *output)
 			datachunks[i] = NULL;
 	}
 	/* If it remains entire padded chunks at the end */
-	for (i = data_rawx_list_size; i < k; i++)
+	for (i = data_rawx_list_size; i < rain_params->k; i++)
 		datachunks[i] = (char*)apr_pcalloc(resource->info->request->pool,
-				subchunk_size * sizeof(char));
+				rain_params->block_size * sizeof(char));
 	/* ------- */
 
 	/* Creating coding strips */
 	char** codingchunks = (char**)apr_pcalloc(resource->info->request->pool,
-			m * sizeof(char*));
+			rain_params->m * sizeof(char*));
 	memset(&rps, 0, sizeof(rps));
-	rps.data_to_send_size = subchunk_size;
+	rps.data_to_send_size = rain_params->block_size;
 	rps.pool = resource->info->request->pool;
 	rps.reply = reply;
 	rps.req_type = "GET";
 	rps.resource = resource;
-	for (i = 0; i < m; i++) {
-		if (!failure_array[k + i]) {
+	for (i = 0; i < rain_params->m; i++) {
+		if (!failure_array[rain_params->k + i]) {
 			codingchunks[i] = (char*)apr_pcalloc(resource->info->request->pool,
-					subchunk_size * sizeof(char));
+					rain_params->block_size * sizeof(char));
 
-			memset(reply, 0, MAX_REPLY_HEADER_SIZE + subchunk_size);
+			memset(reply, 0, MAX_REPLY_HEADER_SIZE + rain_params->block_size);
 			rps.service_address = rawx_list[data_rawx_list_size + i];
 			req_status = rainx_http_req(&rps);
 
@@ -1771,7 +1784,7 @@ dav_rainx_deliver(const dav_resource *resource, ap_filter_t *output)
 						!g_str_has_prefix(reply_code, "20")) {
 				DAV_DEBUG_REQ(resource->info->request,
 						0, "unexpected failure on data rawx %d: %s", i, reply);
-				e = server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST,
+				err = server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST,
 						0, "Unexpected failure on data rawx");
 				goto end_deliver;
 			}
@@ -1785,7 +1798,7 @@ dav_rainx_deliver(const dav_resource *resource, ap_filter_t *output)
 				DAV_DEBUG_REQ(resource->info->request, 0,
 						"problem occured while extracting the content "
 						"got from the coding rawx %d", i);
-				e = server_create_and_stat_error(conf, pool,
+				err = server_create_and_stat_error(conf, pool,
 						HTTP_INTERNAL_SERVER_ERROR, 0,
 						"Problem occured while extracting the content "
 						"got from a coding rawx");
@@ -1798,49 +1811,33 @@ dav_rainx_deliver(const dav_resource *resource, ap_filter_t *output)
 	/* ------- */
 
 	/* Repairing lost data or coding subchunks */
-	reconstructed_data = rain_repair_and_get_raw_data(
-			(guint8**)datachunks, (guint8**)codingchunks,
-			metachunk_size, k, m, algo);
-	if (NULL == reconstructed_data) {
-		DAV_DEBUG_REQ(resource->info->request,
-				0, "failed to reconstruct the original data");
-		e = server_create_and_stat_error(conf, pool,
-				HTTP_INTERNAL_SERVER_ERROR, 0,
-				"Failed to reconstruct the original data");
+	if (!rain_rehydrate((uint8_t**)datachunks, (guint8**)codingchunks, rain_params, NULL)) {
+		char *err_msg = apr_pstrdup(pool, "Failed to reconstruct the original data");
+		DAV_DEBUG_REQ(resource->info->request, 0, err_msg);
+		err = server_create_and_stat_error(conf, pool,
+				HTTP_INTERNAL_SERVER_ERROR, 0, err_msg);
 		goto end_deliver;
 	}
 	/* ------- */
 
 	/* Testing the reconstructed data with the header md5 */
-	e = check_reconstructed_data(resource, failure_array, datachunks,
+	err = check_reconstructed_data(resource, failure_array, datachunks,
 			codingchunks, spare_md5_list);
-	if (e)
+	if (err)
 		goto end_deliver;
 	/* ------- */
 
 	/* Putting reconstructed subchunks into new rawx */
 	if (!resource->info->on_the_fly) {
-		e = upload_to_rawx(resource, failure_array, datachunks, codingchunks,
+		err = upload_to_rawx(resource, failure_array, datachunks, codingchunks,
 				spare_rawx_list, data_rawx_list_size);
-		if (e)
+		if (err)
 			goto end_deliver;
 	}
 	/* ------- */
 
 	/* Returning the whole reconstructed data */
-	apr_bucket_brigade *bb = apr_brigade_create(
-			resource->info->request->pool, output->c->bucket_alloc);
-	apr_brigade_write(bb, NULL, resource->info, reconstructed_data, metachunk_size);
-	if (ap_pass_brigade(output, bb) != APR_SUCCESS) {
-		DAV_DEBUG_REQ(resource->info->request, 0,
-				"could not write content to filter");
-		e = server_create_and_stat_error(conf, pool, HTTP_FORBIDDEN, 0,
-				"Could not write content to filter");
-		goto end_deliver;
-	} else {
-		DAV_DEBUG_REQ(resource->info->request, 0,
-				"Reconstructed metachunk sent to client");
-	}
+	err = _send_reconstructed_data(resource, output, datachunks);
 	/* ------- */
 
 	server_inc_stat(conf, RAWX_STATNAME_REP_2XX, 0);
@@ -1852,9 +1849,7 @@ end_deliver:
 			RAWX_STATNAME_REQ_CHUNKGET,
 			request_get_duration(resource->info->request));
 
-	g_free(reconstructed_data);
-
-	return e;
+	return err;
 }
 
 static dav_error *

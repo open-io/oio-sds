@@ -47,7 +47,7 @@ BuildRequires:	perl-Template-Toolkit,perl-AppConfig,perl-File-HomeDir
 BuildRequires:	asn1c
 BuildRequires:	cmake,bison,flex
 BuildRequires:	dbus,dbus-devel,dbus-glib-devel,dbus-glib
-BuildRequires:	librain-devel
+BuildRequires:	redcurrant-librain-devel >= 0.7.1
 BuildRequires:	json-c, json-c-devel
 BuildRequires:	librdkafka1, librdkafka-devel
 
@@ -168,7 +168,7 @@ Summary: Apache HTTPd module for Redcurrant cloud solution
 Group: Redcurrant
 Requires:	%{name}-server = %{version}
 Requires:	httpd >= 2.2
-Requires:       librain
+Requires:	redcurrant-librain >= 0.7.1
 %description mod-httpd-rainx
 Redcurrant software storage solution is designed to handle PETA-bytes of
 data in a distributed way, data such as: images, videos, documents, emails,
