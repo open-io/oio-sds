@@ -369,6 +369,11 @@ target_link_libraries(test_lb
 		metautils metacomm
 		${GLIB2_LIBRARIES})
 
+add_executable(test_stg_policy test_stg_policy.c)
+target_link_libraries(test_stg_policy
+		metautils 
+		${GLIB2_LIBRARIES})
+
 add_executable(test_svc_policy test_svc_policy.c)
 target_link_libraries(test_svc_policy
 		metautils 
@@ -480,6 +485,7 @@ install(FILES
 			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 			
 
+add_test(NAME metautils/stgpol COMMAND test_stg_policy)
 add_test(NAME metautils/svc_policy COMMAND test_svc_policy)
 add_test(NAME metautils/lb COMMAND test_lb)
 add_test(NAME metautils/url COMMAND test_hc_url)
