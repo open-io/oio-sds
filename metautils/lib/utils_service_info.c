@@ -681,6 +681,20 @@ service_info_is_internal(const struct service_info_s *si)
 	            NAME_TAGNAME_INTERNAL, "false")));
 }
 
+gchar *
+service_info_key (const struct service_info_s *si)
+{
+	gchar ns[LIMIT_LENGTH_NSNAME], addr[STRLEN_ADDRINFO];
+	metautils_strlcpy_physical_ns(ns, si->ns_name, sizeof(ns));
+
+	const gchar *explicit = service_info_get_tag_value(si, "tag.id", NULL);
+	if (explicit)
+		return g_strdup_printf("%s|%s|%s", ns, si->type, explicit);
+
+	grid_addrinfo_to_string(&si->addr, addr, sizeof(addr));
+	return g_strdup_printf("%s|%s|%s", ns, si->type, addr);
+}
+
 //------------------------------------------------------------------------------
 
 static void
