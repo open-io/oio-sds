@@ -354,6 +354,7 @@ struct m2v2_check_error_s
 		M2CHK_CHUNK_RAIN_TOOFEW, // Too few but repairable
 		M2CHK_CHUNK_RAIN_LOST, // Too many chunks missing, reconstruction not possible
 		M2CHK_CHUNK_RAIN_BAD_DISTANCE,
+		M2CHK_CHUNK_RAIN_BAD_ALGO,
 
 		M2CHK_CONTENT_SIZE_MISMATCH,
 		M2CHK_CONTENT_STGCLASS,

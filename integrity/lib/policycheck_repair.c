@@ -842,6 +842,12 @@ _repair_single_flaw(struct policy_check_s *pc, struct m2v2_check_error_s *flaw)
 		case M2CHK_CHUNK_RAIN_BAD_DISTANCE:
 			_repair_bad_distance_chunks(pc, flaw);
 			break;
+		case M2CHK_CHUNK_RAIN_BAD_ALGO:
+			/* RAIN parameters don't come from the content but from
+			 * namespace configuration. This flaw will appear on all
+			 * contents of the same data security. */
+			GRID_ERROR("Invalid RAIN parameters, please fix namespace config.");
+			break;
 
 		case M2CHK_CONTENT_SIZE_MISMATCH:
 			_tell_content_is_lost(pc, flaw);

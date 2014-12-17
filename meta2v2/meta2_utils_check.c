@@ -6,6 +6,8 @@
 #include <string.h>
 #include <errno.h>
 
+#include <glib.h>
+
 #include <librain.h>
 
 #include <metautils/lib/metautils.h>
@@ -600,6 +602,7 @@ _alert_for_invalid_rain_stgpol(header_check_t *hc, struct ctx_rain_stgpol_s *ctx
 	gint64 ns_chunk_size = namespace_chunk_size(hc->check->ns_info,
 			hc_url_get(hc->check->url, HCURL_NS));
 	gint64 metachunk_size = ns_chunk_size;
+	struct rain_encoding_s rain_encoding;
 
 	GRID_TRACE2("%s(%p,%u,%u)", __FUNCTION__, hc, lend, lenp);
 
@@ -618,14 +621,30 @@ _alert_for_invalid_rain_stgpol(header_check_t *hc, struct ctx_rain_stgpol_s *ctx
 		return;
 	}
 
+	// Last chunk can be smaller than namespace's chunk size
+	if (ctx->last->position.meta == (size_real / ns_chunk_size)) {
+		// This won't work if we allow first chunks to be smaller than
+		// namespace chunk size, but it's the only way (afaik) to get
+		// metachunk size.
+		// FIXME: the problem will occur if we append the content
+		// A solution could be to save metachunk size in position field
+		// of bean_CONTENTS_s structs.
+		metachunk_size = (size_real % ns_chunk_size);
+	}
+	errno = 0; // rain_get_encoding() doesn't set errno in case of success
+	rain_get_encoding(&rain_encoding, metachunk_size, ctx->k, ctx->m, ctx->algo);
+	if (errno != 0) {
+		flaw = m2v2_check_append_flaw(hc, M2CHK_CHUNK_RAIN_BAD_ALGO,
+				NEWERROR(0,
+				"Invalid RAIN algorithm or parameters: algo=%s, k=%u, m=%u",
+				ctx->algo, ctx->k, ctx->m));
+		return;
+	}
+
 	// For last position of the content, actual_k may be smaller than k,
 	// depending on the RAIN algorithm and the metachunk size
 	if (ctx->last->position.meta == (size_real / ns_chunk_size)) {
-		// This won't work if we allow first chunks to be smaller than
-		// namespace chunk size, but it's the only way to get metachunk size
-		metachunk_size = (size_real % ns_chunk_size);
-		gint64 rain_chunk_size = get_chunk_size(metachunk_size,
-				ctx->k, ctx->m, ctx->algo);
+		gint64 rain_chunk_size = rain_encoding.block_size;
 		actual_k = 1 + ((metachunk_size - 1) / rain_chunk_size);
 		GRID_TRACE("metachunk size: %ld, rain chunk size: %ld, k: %u, actual_k: %u",
 				metachunk_size, rain_chunk_size, ctx->k, actual_k);
@@ -1138,6 +1157,10 @@ _count_meaningful_flaws(struct m2v2_check_s *check, guint32 mask)
 			case M2CHK_CHUNK_RAIN_BAD_DISTANCE:
 				if (mask & M2V2_CHECK_DIST)
 					++ count_meaningful;
+				break;
+
+			case M2CHK_CHUNK_RAIN_BAD_ALGO:
+				++ count_meaningful;
 				break;
 
 			case M2CHK_CONTENT_SIZE_MISMATCH:
