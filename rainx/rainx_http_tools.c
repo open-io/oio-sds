@@ -114,6 +114,11 @@ rainx_http_req(struct req_params_store* rps) {
 		}
 	}
 
+	if (is_get) {
+		/* This avoids a ~5s delay in the communication */
+		apr_socket_shutdown(sock, APR_SHUTDOWN_WRITE);
+	}
+
 	DAV_DEBUG_REQ(resource->info->request, 0, "%s request to the rawx %s sent for the content %s", req_type, full_remote_url, content_hexid);
     /* ------ */
 

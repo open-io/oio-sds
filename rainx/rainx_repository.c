@@ -1718,9 +1718,12 @@ dav_rainx_deliver(const dav_resource *resource, ap_filter_t *output)
 			datachunks[i] = NULL;
 	}
 	/* If it remains entire padded chunks at the end */
-	for (i = data_rawx_list_size; i < rain_params->k; i++)
+	for (i = data_rawx_list_size; i < rain_params->k; i++) {
+		DAV_DEBUG_REQ(resource->info->request, 0,
+				"Fill chunk %d with zeros", i);
 		datachunks[i] = (char*)apr_pcalloc(resource->info->request->pool,
 				rain_params->block_size * sizeof(char));
+	}
 	/* ------- */
 
 	/* Creating coding strips */

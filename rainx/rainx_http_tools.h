@@ -6,8 +6,8 @@
 #include <rainx/rainx_repository.h>
 
 #define MAX_REPLY_HEADER_SIZE 8192
-#define REPLY_BUFFER_SIZE 102400
-#define REQUEST_BUFFER_SIZE 102400
+#define REPLY_BUFFER_SIZE 131072
+#define REQUEST_BUFFER_SIZE 131072
 
 /*
  * Sends a request to a rawx.
