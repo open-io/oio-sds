@@ -1124,6 +1124,50 @@ m2v2_check_consistency(struct m2v2_check_s *check)
 	return NEWERROR(500, "Check failed, check for flaws");
 }
 
+static const char*
+_m2v2_check_error_str(int type)
+{
+	switch(type) {
+	case M2CHK_CHUNK_DUPLI_BADPOS:
+		return "Bad chunk position (dupli)";
+	case M2CHK_CHUNK_DUPLI_GAP:
+		return "Gap in positions (dupli)";
+	case M2CHK_CHUNK_DUPLI_SIZE:
+		return "Chunk size mismatch";
+	case M2CHK_CHUNK_DUPLI_HASH:
+		return "Chunk hash mismatch";
+	case M2CHK_CHUNK_DUPLI_TOOMUCH:
+		return "Too many chunks at same position (dupli)";
+	case M2CHK_CHUNK_DUPLI_TOOFEW:
+		return "Too few chunks at same position";
+	case M2CHK_CHUNK_DUPLI_BAD_DISTANCE:
+		return "Insufficient distance between chunks (dupli)";
+
+	case M2CHK_CHUNK_RAIN_BADPOS:
+		return "Bad format for position (RAIN)";
+	case M2CHK_CHUNK_RAIN_TOOMUCH:
+		return "Too many chunks at same position (RAIN)";
+	case M2CHK_CHUNK_RAIN_TOOFEW:
+		return "Missing chunks (RAIN)";
+	case M2CHK_CHUNK_RAIN_LOST:
+		return "Too many chunks missing, RAIN reconstruction not possible";
+	case M2CHK_CHUNK_RAIN_BAD_DISTANCE:
+		return "Insufficient distance between chunks (RAIN)";
+	case M2CHK_CHUNK_RAIN_BAD_ALGO:
+		return "Wrong RAIN algorithm";
+
+	case M2CHK_CONTENT_SIZE_MISMATCH:
+		return "Content size mismatch";
+	case M2CHK_CONTENT_STGCLASS:
+		return "Wrong storage class";
+	case M2CHK_RAWX_UNKNOWN:
+		return "RAWX not found in services";
+	default:
+		return "<unknown error>";
+	}
+	return NULL;
+}
+
 static guint
 _count_meaningful_flaws(struct m2v2_check_s *check, guint32 mask)
 {
@@ -1182,6 +1226,19 @@ _count_meaningful_flaws(struct m2v2_check_s *check, guint32 mask)
 	return count_meaningful;
 }
 
+/** @return a string describing the flaws. Must be freed by g_free(). */
+static gchar*
+_flaws_to_str(GPtrArray *flaws)
+{
+	const gchar *msgs[flaws->len + 1];
+	for (unsigned int i = 0; i < flaws->len; i++) {
+		struct m2v2_check_error_s *flaw = flaws->pdata[i];
+		msgs[i] = _m2v2_check_error_str(flaw->type);
+	}
+	msgs[flaws->len] = NULL;
+	return g_strjoinv(", ", (gchar**) msgs);
+}
+
 GError*
 m2db_check_alias_beans_list(struct hc_url_s *url, GSList *beans,
 		struct check_args_s *args)
@@ -1194,8 +1251,11 @@ m2db_check_alias_beans_list(struct hc_url_s *url, GSList *beans,
 		_hook_dispatch_beans(&check, b->data);
 
 	if (NULL == (err = m2v2_check_consistency(&check))) {
-		if (0 < _count_meaningful_flaws(&check, args->mask_checks))
-			err = NEWERROR(CODE_CONTENT_CORRUPTED, "Flaws found");
+		if (0 < _count_meaningful_flaws(&check, args->mask_checks)) {
+			gchar *full_msg = _flaws_to_str(check.flaws);
+			err = NEWERROR(CODE_CONTENT_CORRUPTED, "Flaws found (%s)", full_msg);
+			g_free(full_msg);
+		}
 	}
 	_clean_m2v2_check(&check);
 	return err;
