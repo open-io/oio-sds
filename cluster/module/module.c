@@ -12,6 +12,8 @@
 #include <netdb.h>
 #include <netinet/in.h>
 
+#include <glib.h>
+
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 
@@ -2468,7 +2470,7 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 		return e;
 	}
 	g_hash_table_foreach(cs->ns_info.storage_policy,
-			(GHFunc)_check_for_keyword, (gchar*[2]){"NONE", "storage policy"});
+			(GHFunc)_check_for_keyword, (gchar*[2]){STORAGE_POLICY_NONE, "storage policy"});
 
 	/* If the storage policy set by param_option.storage_policy is not present in the storage conf file, set an error. */
 	if (stg_pol_in_option && !g_hash_table_lookup(cs->ns_info.storage_policy, stg_pol_in_option)) {
@@ -2486,7 +2488,7 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 		e = NULL;
 	}
 	g_hash_table_foreach(cs->ns_info.data_security,
-			(GHFunc)_check_for_keyword, (gchar*[2]){"NONE", "data security"});
+			(GHFunc)_check_for_keyword, (gchar*[2]){DATA_SECURITY_NONE, "data security"});
 
 	cs->ns_info.data_treatments = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	e = fill_hashtable_with_group(cs->ns_info.data_treatments, stg_conf_file, NAME_GROUPNAME_DATA_TREATMENTS);
@@ -2496,7 +2498,7 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 		e = NULL;
 	}
 	g_hash_table_foreach(cs->ns_info.data_treatments,
-			(GHFunc)_check_for_keyword, (gchar*[2]){"NONE", "data treatment"});
+			(GHFunc)_check_for_keyword, (gchar*[2]){DATA_TREATMENT_NONE, "data treatment"});
 
 	cs->ns_info.storage_class = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	e = fill_hashtable_with_group(cs->ns_info.storage_class, stg_conf_file, NAME_GROUPNAME_STORAGE_CLASS);
@@ -2506,7 +2508,7 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 		e = NULL;
 	}
 	g_hash_table_foreach(cs->ns_info.storage_class,
-			(GHFunc)_check_for_keyword, (gchar*[2]){"DUMMY", "storage class"});
+			(GHFunc)_check_for_keyword, (gchar*[2]){STORAGE_CLASS_NONE, "storage class"});
 
 	INFO("[NS=%s] storage conf loaded successfully from file [%s]",
 			cs->ns_info.name, filepath);
