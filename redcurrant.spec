@@ -19,18 +19,18 @@ BuildRoot:	%(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
 BuildRequires:	glib2-devel >= 2.28.8
 BuildRequires:	openssl-devel >= 0.9.8
-BuildRequires:  libzookeeper >= 3.3.4
-BuildRequires:  libzookeeper-devel >= 3.3.4
+BuildRequires:	libzookeeper >= 3.3.4
+BuildRequires:	libzookeeper-devel >= 3.3.4
 %if %{?el6}0
 BuildRequires:	neon-devel >= 0.29
 BuildRequires:	python-devel
-#BuildRequires:  mysql-devel
-BuildRequires:  zeromq3, zeromq3-devel
+#BuildRequires:	mysql-devel
+BuildRequires:	zeromq3, zeromq3-devel
 BuildRequires:	libcurl-devel
 %else
 BuildRequires:	compat-neon-029-devel >= 0.29
 BuildRequires:	python26-devel
-BuildRequires:  zeromq, zeromq-devel
+BuildRequires:	zeromq, zeromq-devel
 BuildRequires:	compat-libcurl-devel
 %endif
 BuildRequires:	apr-devel >= 1.2
@@ -47,7 +47,7 @@ BuildRequires:	perl-Template-Toolkit,perl-AppConfig,perl-File-HomeDir
 BuildRequires:	asn1c
 BuildRequires:	cmake,bison,flex
 BuildRequires:	dbus,dbus-devel,dbus-glib-devel,dbus-glib
-BuildRequires:	redcurrant-librain-devel >= 0.7.1
+BuildRequires:	redcurrant-librain-devel >= 0.8
 BuildRequires:	json-c, json-c-devel
 BuildRequires:	librdkafka1, librdkafka-devel
 
@@ -66,7 +66,9 @@ Requires:	glib2 >= 2.28.8
 Requires:	asn1c >= 0.9.21
 Requires:	openssl >= 0.9.8
 Requires:	zlib,expat
-Requires:       libzookeeper >= 3.3.4
+Requires:	libzookeeper >= 3.3.4
+# Necessary for libmeta2v2utils.so
+Requires:	redcurrant-librain >= 0.8
 %description common
 Redcurrant software storage solution is designed to handle PETA-bytes of
 data in a distributed way, data such as: images, videos, documents, emails,
@@ -79,8 +81,8 @@ This package contains common files used by other Redcurrant packages.
 Summary: Server files for Redcurrant cloud solution
 Group: Redcurrant
 Requires:	%{name}-common = %{version}
-Requires:       libzookeeper >= 3.3.4
-Requires:       python-zookeeper
+Requires:	libzookeeper >= 3.3.4
+Requires:	python-zookeeper
 %if %{?el6}0
 Requires:	neon >= 0.29
 Requires:	python >= 2.6
@@ -168,7 +170,7 @@ Summary: Apache HTTPd module for Redcurrant cloud solution
 Group: Redcurrant
 Requires:	%{name}-server = %{version}
 Requires:	httpd >= 2.2
-Requires:	redcurrant-librain >= 0.7.1
+Requires:	redcurrant-librain >= 0.8
 %description mod-httpd-rainx
 Redcurrant software storage solution is designed to handle PETA-bytes of
 data in a distributed way, data such as: images, videos, documents, emails,
@@ -183,13 +185,13 @@ Summary: Integrity Loop for Redcurrant cloud solution
 Group: Redcurrant
 Requires:	%{name}-server = %{version}
 Requires:	dbus-glib, dbus
-Requires:       json-c
+Requires:	json-c
 %if %{?el6}0
-Requires:       libcurl
-Requires:       zeromq3
+Requires:	libcurl
+Requires:	zeromq3
 %else
-Requires:       compat-libcurl
-Requires:       zeromq
+Requires:	compat-libcurl
+Requires:	zeromq
 %endif
 %description integrityloop
 Redcurrant software storage solution is designed to handle PETA-bytes of
@@ -228,8 +230,8 @@ sed -i -e 's@-llog4c@@' integrity/tools/CMakeLists.txt
 make %{?_smp_mflags}
 
 # Build python
-(cd rules-motor/lib/python && %{__python}2.6 ./setup.py build)
-(cd crawler/listener       && %{__python}2.6 ./setup.py build)
+(cd rules-motor/lib/python	&& %{__python}2.6 ./setup.py build)
+(cd crawler/listener		&& %{__python}2.6 ./setup.py build)
 
 
 %install
