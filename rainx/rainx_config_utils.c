@@ -4,6 +4,8 @@
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
 
+#include <glib.h>
+
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 
@@ -117,9 +119,20 @@ update_rainx_conf(apr_pool_t* p, rawx_conf_t **rainx_conf, const gchar* ns_name)
 	struct storage_policy_s *stgpol = NULL;
 	GSList *acls = NULL;
 
-	ns_info = get_namespace_info(ns_name, &local_error);
-	if (!ns_info)
+	if (!ns_name || !ns_name[0]) {
+		DAV_ERROR_POOL(p, 0,
+				"Namespace is null or empty string, cannot update conf");
 		return FALSE;
+	}
+
+	ns_info = get_namespace_info(ns_name, &local_error);
+	if (!ns_info) {
+		if (local_error != NULL) {
+			DAV_ERROR_POOL(p, 0, "%s", local_error->message);
+			g_clear_error(&local_error);
+		}
+		return FALSE;
+	}
 
 	char *polname = NULL;
 	if(!(polname = namespace_storage_policy(ns_info, ns_info->name)))
