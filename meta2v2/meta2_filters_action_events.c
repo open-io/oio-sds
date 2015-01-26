@@ -390,8 +390,10 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	if (!err) {
 		metautils_notifier_t *notifier = meta2_backend_get_notifier(m2b);
 		for (GSList *l = events_data; l != NULL; l = l->next) {
+			// Use first 4 bytes of CID for Kafka partitioning
 			GError *err2 = metautils_notifier_send_json(notifier, topic,
-					meta2_backend_get_local_addr(m2b), evt_type, l->data);
+					meta2_backend_get_local_addr(m2b), evt_type, l->data,
+					(const guint32*)hc_url_get_id(url));
 			if (err2) {
 				GRID_WARN("Failed to send event to Kafka: %s", err2->message);
 				if (!err) {

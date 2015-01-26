@@ -1738,7 +1738,9 @@ __notify_services(struct meta1_backend_s *m1,
 
 		err = metautils_notifier_send_json(notifier, topic,
 				meta1_backend_get_local_addr(m1),
-				"meta1.services", notif->str);
+				"meta1.services", notif->str,
+				// Use first 4 bytes of CID for Kafka partitioning
+				(const guint32 *)hc_url_get_id(url));
 
 		g_string_free(notif, TRUE);
 		free_urlv(services2);

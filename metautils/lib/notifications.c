@@ -30,7 +30,7 @@ static volatile gint _seq = 0;
 // --- Kafka specific --------------------------------------------------------
 static GError *
 _kafka_topic_ref(metautils_notifier_t *handle, const gchar *name,
-		rd_kafka_topic_t **topic)
+		rd_kafka_topic_conf_t *topic_conf, rd_kafka_topic_t **topic)
 {
 	rd_kafka_topic_t *new_topic = NULL;
 	if (!handle->kafka) {
@@ -38,7 +38,7 @@ _kafka_topic_ref(metautils_notifier_t *handle, const gchar *name,
 				"No kafka handle, events disabled?");
 	}
 	// Returns a reference if topic already exists
-	new_topic = rd_kafka_topic_new(handle->kafka, name, NULL);
+	new_topic = rd_kafka_topic_new(handle->kafka, name, topic_conf);
 	if (!new_topic) {
 		return NEWERROR(CODE_INTERNAL_ERROR,
 				"Failed to initialize Kafka topic: %s", strerror(errno));
@@ -77,7 +77,63 @@ metautils_notifier_prepare_kafka_topic(metautils_notifier_t *notifier,
 				"Kafka notifications not configured!");
 	}
 
-	err = _kafka_topic_ref(notifier, topic_name, &topic);
+	gint32 _partitioner(const rd_kafka_topic_t *rkt,
+			const void *keydata, size_t keylen, gint32 partition_cnt,
+			void *rkt_opaque, void *msg_opaque) {
+		(void) rkt_opaque;
+		(void) msg_opaque;
+
+		guint32 part = 0;
+		guint32 max_part = 1;
+
+		// Zero partition? Write to partition 0
+		// and hope it will be automatically created.
+		if (partition_cnt == 0) {
+			GRID_DEBUG("No already created partition for topic [%s], "
+					"writing to [0]", rd_kafka_topic_name(rkt));
+			return 0;
+		}
+
+		// Make sure the number of partitions is a power of two
+		while (max_part <= (guint32)partition_cnt &&
+				max_part <= MAX_TOPIC_PARTITIONS)
+			max_part *= 2;
+		max_part /= 2;
+
+		switch (keylen) {
+		default:
+		// Unless MAX_TOPIC_PARTITIONS is greater than 65536,
+		// the highest bytes are irrelevant
+/*
+		case 4:
+			part |= ((gint8*)keydata)[3] << 24;
+		case 3:
+			part |= ((gint8*)keydata)[2] << 16;
+*/
+		case 2:
+			part |= ((guint8*)keydata)[1] << 8;
+		case 1:
+			part |= ((guint8*)keydata)[0];
+			break;
+		case 0:
+			part = 0;
+			break;
+		}
+		if (GRID_TRACE_ENABLED()) {
+			gchar tmp[16] = {0};
+			buffer2str(keydata, keylen, tmp, sizeof(tmp));
+			GRID_TRACE("Partition [%d] chosen for key [%s]",
+					part % max_part, tmp);
+		}
+		return part % max_part;
+	}
+
+	// Prepare a topic configuration with a partitioner.
+	// Because we are the first to ask for this topic, it will be
+	// created with this configuration, and next callers can pass NULL.
+	rd_kafka_topic_conf_t *topic_conf = rd_kafka_topic_conf_new();
+	rd_kafka_topic_conf_set_partitioner_cb(topic_conf, _partitioner);
+	err = _kafka_topic_ref(notifier, topic_name, topic_conf, &topic);
 	if (!err) {
 		g_hash_table_insert(notifier->kafka_topics, g_strdup(topic_name), topic);
 	}
@@ -144,16 +200,25 @@ metautils_notifier_free_kafka(metautils_notifier_t *handle)
 
 static GError *
 _send_notif_to_kafka(metautils_notifier_t *handle, const gchar *topic_name,
-		GByteArray *data)
+		GByteArray *data, const guint32 *lb_key)
 {
 	int rc = 0;
 	GError *err = NULL;
 	rd_kafka_topic_t *topic = NULL;
 
-	err = _kafka_topic_ref(handle, topic_name, &topic);
+	err = _kafka_topic_ref(handle, topic_name, NULL, &topic);
 	if (!err) {
-		rc = rd_kafka_produce(topic, 0, RD_KAFKA_MSG_F_COPY,
-				data->data, data->len, NULL, 0, NULL);
+		const void *key;
+		size_t key_len;
+		if (lb_key != NULL) {
+			key = (const void *)lb_key;
+			key_len = sizeof(guint32);
+		} else {
+			key = NULL;
+			key_len = 0;
+		}
+		rc = rd_kafka_produce(topic, RD_KAFKA_PARTITION_UA, RD_KAFKA_MSG_F_COPY,
+				data->data, data->len, key, key_len, NULL);
 		if (rc < 0) {
 			err = NEWERROR(CODE_INTERNAL_ERROR,
 					"Failed to send event to Kafka: (%d) %s",
@@ -198,12 +263,12 @@ metautils_notifier_clear(metautils_notifier_t **handle)
 
 GError *
 metautils_notifier_send_raw(metautils_notifier_t *handle, const gchar *topic,
-		GByteArray *data)
+		GByteArray *data, const guint32 *lb_key)
 {
 	GError *err = NULL;
 
 	if (handle && handle->kafka) {
-		err = _send_notif_to_kafka(handle, topic, data);
+		err = _send_notif_to_kafka(handle, topic, data, lb_key);
 	} else {
 		GRID_DEBUG("Notification not sent: no broker configured");
 	}
@@ -213,7 +278,8 @@ metautils_notifier_send_raw(metautils_notifier_t *handle, const gchar *topic,
 
 GError *
 metautils_notifier_send_json(metautils_notifier_t *handle, const gchar *topic,
-		const gchar *src_addr, const char *notif_type, const gchar *notif_data)
+		const gchar *src_addr, const char *notif_type, const gchar *notif_data,
+		const guint32 *lb_key)
 {
 	GError *err = NULL;
 	GString *event = g_string_sized_new(1024);
@@ -232,7 +298,7 @@ metautils_notifier_send_json(metautils_notifier_t *handle, const gchar *topic,
 			notif_data);
 
 	event_gba = metautils_gba_from_string(event->str);
-	err = metautils_notifier_send_raw(handle, topic, event_gba);
+	err = metautils_notifier_send_raw(handle, topic, event_gba, lb_key);
 
 	metautils_gba_unref(event_gba);
 	g_string_free(event, TRUE);
