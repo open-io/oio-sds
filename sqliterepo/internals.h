@@ -41,6 +41,8 @@
 #define SQLX_DUMP_BUFFER_SIZE 32768
 // Size of chunks sent to client when doing chunked SQLX_DUMP
 #define SQLX_DUMP_CHUNK_SIZE (8*1024*1024)
+// Page size at database creation (should be multiple of storage block size)
+#define SQLX_DEFAULT_PAGE_SIZE 4096
 
 #define MALLOC_TRIM_SIZE (16*1024*1024)
 
