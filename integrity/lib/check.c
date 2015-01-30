@@ -481,8 +481,12 @@ find_storage_policy_and_friend_chunks_full(const gchar* meta2,
 				meta2, check_info->ck_info->id);
 		err = _find_sp_fc_m2v2(meta2, url, check_info, chunk_ids);
 		if (!err) {
-			if (p_raw_content)
+			if (p_raw_content) {
+				if (*p_raw_content)
+					meta2_raw_content_clean(*p_raw_content);
+				*p_raw_content = g_malloc0(sizeof(struct meta2_raw_content_s));
 				convert_content_text_to_raw(check_info->ct_info, *p_raw_content, &err);
+			}
 			return err;
 		}
 	}
@@ -555,18 +559,18 @@ _set_option(GHashTable *options,
 gint
 check_option_get_int(GHashTable *options, const gchar *option_name)
 {
-	gint *optval = _get_option(options, option_name);
+	gchar *optval = _get_option(options, option_name);
 	if (optval)
-		return *optval;
+		return g_ascii_strtoll(optval, NULL, 10);
 	return G_MAXINT;
 }
 
 gboolean
 check_option_get_bool(GHashTable *options, const gchar *option_name)
 {
-	gboolean *optval = _get_option(options, option_name);
+	gchar *optval = _get_option(options, option_name);
 	if (optval)
-		return *optval;
+		return g_ascii_strtoll(optval, NULL, 10);
 	return FALSE;
 }
 
@@ -581,7 +585,7 @@ void
 check_option_set_int(GHashTable *options,
 		const gchar *oname, gint ovalue)
 {
-	_set_option(options, oname, g_memdup(&ovalue, sizeof(ovalue)));
+	_set_option(options, oname, g_strdup_printf("%i", ovalue));
 }
 
 void
@@ -596,4 +600,104 @@ check_option_set_str(GHashTable *options,
 		const gchar *oname, const gchar *ovalue)
 {
 	_set_option(options, oname, g_strdup(ovalue));
+}
+
+#define DUPSTR(F) do { newci->F = g_strdup(src->F); } while (0)
+
+static chunk_textinfo_t*
+_chunk_textinfo_dup(chunk_textinfo_t *src)
+{
+	chunk_textinfo_t *newci = NULL;
+
+	if (src == NULL)
+		return NULL;
+
+	newci = g_malloc0(sizeof(chunk_textinfo_t));
+	DUPSTR(id);
+	DUPSTR(path);
+	DUPSTR(size);
+	DUPSTR(position);
+	DUPSTR(hash);
+	DUPSTR(metadata);
+	DUPSTR(container_id);
+
+	return newci;
+}
+
+static content_textinfo_t*
+_content_textinfo_dup(content_textinfo_t *src)
+{
+	content_textinfo_t *newci = NULL;
+
+	if (src == NULL)
+		return NULL;
+
+	newci = g_malloc0(sizeof(content_textinfo_t));
+	DUPSTR(container_id);
+	DUPSTR(path);
+	DUPSTR(size);
+	DUPSTR(chunk_nb);
+	DUPSTR(metadata);
+	DUPSTR(system_metadata);
+	DUPSTR(storage_policy);
+	DUPSTR(rawx_list);
+	DUPSTR(spare_rawx_list);
+	DUPSTR(version);
+
+	return newci;
+}
+
+#undef DUPSTR
+
+static GHashTable*
+_check_options_dup(GHashTable *src)
+{
+	GHashTable *newci = NULL;
+
+	if (src == NULL)
+		return NULL;
+
+	newci = check_option_new();
+	void _copy_option(gpointer _key, gpointer _val, gpointer _udata)
+	{
+		const gchar *key = _key;
+		const gchar *val = _val;
+		(void) _udata;
+		g_hash_table_insert(newci, g_strdup(key), g_strdup(val));
+	}
+	g_hash_table_foreach(src, _copy_option, NULL);
+
+	return newci;
+}
+
+check_info_t*
+check_info_dup(check_info_t *src)
+{
+	check_info_t *newci = g_malloc0(sizeof(check_info_t));
+
+#define COPYARRAY(F) do { memcpy(newci->F, src->F, sizeof(newci->F)); } while (0)
+	COPYARRAY(ns_name);
+	COPYARRAY(rawx_str_addr);
+	COPYARRAY(rawx_vol);
+	COPYARRAY(source_path);
+#undef COPYARRAY
+
+	newci->ck_info = _chunk_textinfo_dup(src->ck_info);
+	newci->ct_info = _content_textinfo_dup(src->ct_info);
+	newci->options = _check_options_dup(src->options);
+
+	return newci;
+}
+
+void
+check_info_free(check_info_t *ci)
+{
+	if (ci == NULL)
+		return;
+	chunk_textinfo_free_content(ci->ck_info);
+	content_textinfo_free_content(ci->ct_info);
+	check_option_destroy(ci->options);
+	g_free(ci->ck_info);
+	g_free(ci->ct_info);
+	g_free(ci);
 }

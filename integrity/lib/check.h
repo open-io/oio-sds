@@ -100,6 +100,19 @@ typedef struct _check_info_t {
 	GHashTable *options;
 } check_info_t;
 
+/**
+ * Duplicates a check_info.
+ * @param ci the source check_info
+ * @return a newly allocated check_info
+ */
+check_info_t *check_info_dup(check_info_t *ci);
+
+/**
+ * Frees a check_info.
+ * @param ci the check_info to be freed
+ */
+void check_info_free(check_info_t *ci);
+
 struct meta2_ctx_s *get_meta2_ctx(const gchar *ns_name, const gchar *container_hexid,
 		const gchar *content_name, gboolean check_only, GError **error);
 

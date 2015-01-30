@@ -1021,5 +1021,6 @@ check_content_info(struct content_textinfo_s *content, GError **p_error)
 	CHECK_INFO(content->size,			p_error, "Missing mandatory content size");
 	CHECK_INFO(content->chunk_nb,		p_error, "Missing mandatory chunk number");
 	CHECK_INFO(content->container_id,	p_error, "Missing mandatory container identifier");
+	CHECK_INFO(content->system_metadata,	p_error, "Missing mandatory metadatasys");
 	return TRUE;
 }

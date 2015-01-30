@@ -530,25 +530,22 @@ _ensure_container_created_in_m2(struct meta2_ctx_s *ctx, container_id_t *p_cid,
 	ret = meta2_remote_container_create_v3 (&m2, META2_TIMEOUT,
 			ctx->ns, ctx->loc->container_name,
 			*p_cid, stgpol, &local_error);
-	// if return "already created": it's not an error!
-	if (!ret && local_error)  {
+
+	if (ret && !local_error) {
+		check_result_append_msg(cres, "Created container [%s]",
+				ctx->loc->container_hexid);
+	} else if (local_error) {
 		if (local_error->code == CODE_CONTAINER_EXISTS) {
 			g_clear_error(&local_error);
 			GRID_DEBUG("Container [%s/%s] already exist on meta2 [%s]",
 					ctx->ns, ctx->loc->container_name,
 					ctx->loc->m2_url[0]);
 			ret = TRUE;
+		} else {
+			GRID_DEBUG("Failed to create container [%s/%s] (%s).",
+					ctx->ns, ctx->loc->container_name, local_error->message);
+			_set_or_free_error(local_error, p_err);
 		}
-	}
-
-	if (!local_error) {
-		check_result_append_msg(cres, "Created container [%s]",
-				ctx->loc->container_hexid);
-		ret = TRUE;
-	} else {
-		GRID_DEBUG("Failed to create container [%s/%s] (%s).",
-				ctx->ns, ctx->loc->container_name, local_error->message);
-		_set_or_free_error(local_error, p_err);
 	}
 
 	return ret;
@@ -1127,9 +1124,8 @@ _overwrite_chunk_id(check_info_t *ci, check_result_t *cres,
 			goto end;
 		check_result_append_msg(cres, "Xattr 'chunk.id' "
 				"overwritten with: %s", ci->ck_info->id);
+		ret = TRUE;
 	}
-
-	ret = TRUE;
 
 end:
 	_set_or_free_error(err, p_err);
@@ -1213,8 +1209,9 @@ _volumes_cmp0(const gchar *vol1, const gchar *vol2)
 }
 
 gboolean
-check_chunk_orphan(check_info_t *check_info, check_result_t *cres, GError **p_err)
+check_chunk_orphan(check_info_t *ci, check_result_t *cres, GError **p_err)
 {
+	check_info_t *check_info = check_info_dup(ci);
 	const gboolean is_dryrun = check_option_get_bool(check_info->options,
 			CHECK_OPTION_DRYRUN);
 	gboolean ret = FALSE, is_referenced = FALSE, has_extension = FALSE;
@@ -1239,7 +1236,7 @@ check_chunk_orphan(check_info_t *check_info, check_result_t *cres, GError **p_er
 
 	if (!ctx) {
 		GRID_DEBUG("Failed to get meta2 context, check your NS is started. (NS:%s)", check_info->ns_name);
-		return FALSE;
+		goto clean_up;
 	}
 
 	// if container NOT FOUND on meta1, trash chunk and exit successfully
@@ -1317,6 +1314,9 @@ check_chunk_orphan(check_info_t *check_info, check_result_t *cres, GError **p_er
 			// if both have the same date, everything is ok
 			// if chunk is older, trash it and exit successfully
 			if (is_chunk_newer) {
+				check_result_append_msg(cres, "Recreate content [%s/%s] (chunk is newer)",
+						check_info->ct_info->container_id,
+						check_info->ct_info->path);
 				if (!_recreate_content(ctx, check_info, cres, &err))
 					goto clean_up;
 				is_referenced = TRUE;
@@ -1378,17 +1378,19 @@ clean_up:
 	content_check_ctx_clear(ctx);
 	g_slist_free_full(broken_elements, broken_element_free);
 	_set_or_free_error(err, p_err);
+	check_info_free(check_info);
 
 	return ret;
 }
 
 gboolean
-check_chunk_id_parsable(check_info_t *ci, check_result_t *cres, GError **p_err)
+check_chunk_id_parsable(check_info_t *check_info, check_result_t *cres, GError **p_err)
 {
 	GError *err = NULL;
 	gboolean ret = FALSE;
 	gboolean id_overwritten = FALSE;
 	gchar *file_name = NULL, *previous_id = NULL;
+	check_info_t *ci = check_info_dup(check_info);
 	hash_sha256_t h;
 
 	if (!(cres->check_ok = hex2bin(ci->ck_info->id, &h, sizeof(h), &err))) {
@@ -1422,5 +1424,6 @@ end:
 		}
 	}
 
+	check_info_free(ci);
 	return ret;
 }
