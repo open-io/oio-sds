@@ -37,6 +37,9 @@
 #  define SQLX_DELAY_ELECTION_REPLAY 5L
 # endif
 
+// Timeout for SQLX_REPLICATE requests, in seconds
+#define SQLX_REPLICATION_TIMEOUT 10.0
+
 // Size of buffer for reading dump file
 #define SQLX_DUMP_BUFFER_SIZE 32768
 // Size of chunks sent to client when doing chunked SQLX_DUMP

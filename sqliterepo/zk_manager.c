@@ -110,7 +110,7 @@ zk_srv_manager_create(gchar *namespace, gchar *url, gchar *srvType,
 	EXTRA_ASSERT(srvType != NULL);
 
 	struct zk_manager_s *manager;
-	struct Stat stat;
+	struct Stat my_stat;
 	int rc;
 
 	manager = g_malloc0(sizeof(*manager));
@@ -124,7 +124,7 @@ zk_srv_manager_create(gchar *namespace, gchar *url, gchar *srvType,
 		return NEWERROR(errno, "ZooKeeper init failure: %s", strerror(errno));
 
 	//check if zk_dir node exist . zk_dir Node should be created by zk-boostrap.py
-	rc = zoo_exists(manager->zh, manager->zk_dir, 0, &stat);
+	rc = zoo_exists(manager->zh, manager->zk_dir, 0, &my_stat);
 	if ( rc == ZNONODE ) {
 		return NEWERROR(0, "zk base node [%s] doesn't exist, zk code [%d]",
 				manager->zk_dir, rc);
@@ -189,7 +189,7 @@ list_zk_children_node(struct zk_manager_s *manager, gchar *sub_dir, GSList **res
 	struct String_vector sv;
 	int i, rc;
 	gchar buffer[512];
-	struct Stat stat;
+	struct Stat my_stat;
 	gchar *fullpath=NULL;
 	gchar *dirpath=NULL;
 	GError *err = NULL;
@@ -212,7 +212,7 @@ list_zk_children_node(struct zk_manager_s *manager, gchar *sub_dir, GSList **res
 		buflen= sizeof(buffer)-1;
 		zknode = g_malloc0(sizeof(struct zk_node_s));
 		fullpath = g_strdup_printf("%s/%s",dirpath,sv.data[i]);
-		rc = zoo_get(manager->zh, fullpath, 1, buffer , &buflen, &stat);
+		rc = zoo_get(manager->zh, fullpath, 1, buffer , &buflen, &my_stat);
 		if ( rc != ZOK ) {
 			err =  NEWERROR(0, "Failed to get node [%s] , zk code [%d]",fullpath,rc);
 			goto end_error;
