@@ -36,6 +36,9 @@
 /** The maximum length of a service type name */
 #define LIMIT_LENGTH_SRVTYPE 32
 
+/** The maximum length of service options */
+#define LIMIT_LENGTH_SRVARGS 256
+
 /** The maximum length of a service storage class */
 #define LIMIT_LENGTH_STGCLASS 32
 

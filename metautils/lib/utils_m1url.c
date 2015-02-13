@@ -30,6 +30,8 @@ meta1_unpack_url(const gchar *url)
 	if (!(args = strchr(host, '|')))
 		return NULL;
 	*(args++) = '\0';
+	if (strlen(args) >= LIMIT_LENGTH_SRVARGS)
+		return NULL;
 
 	struct meta1_service_url_s *result;
 	result = g_malloc0(sizeof(*result) + strlen(args) + 1);
@@ -134,7 +136,7 @@ meta1_service_url_encode_json (GString *gstr, struct meta1_service_url_s *m1u)
 		g_string_append_printf(gstr, "\"host\":\"%.*s\",",
 				(int)sizeof(m1u->host), m1u->host);
 		g_string_append_printf(gstr, "\"args\":\"%.*s\"}",
-				(int)sizeof(m1u->args), m1u->args);
+				LIMIT_LENGTH_SRVARGS, m1u->args);
 	}
 }
 

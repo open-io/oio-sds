@@ -1678,14 +1678,6 @@ failedend:
 	return  err;
 }
 
-void
-__meta1_service_url_to_json(GString *out, struct meta1_service_url_s *svc)
-{
-	g_string_append_printf(out,
-			"{ \"seq\": %ld, \"srvtype\": \"%s\", \"url\": \"%s\", \"args\": \"%s\" }",
-			svc->seq, svc->srvtype, svc->host, svc->args);
-}
-
 static GError *
 __notify_services_by_cid(struct meta1_backend_s *m1,
 		struct sqlx_sqlite3_s *sq3, const container_id_t cid)
@@ -1726,15 +1718,15 @@ __notify_services(struct meta1_backend_s *m1,
 		services2 = expand_urlv(services);
 		metautils_notifier_t *notifier = meta1_backend_get_notifier(m1);
 		GString *notif = g_string_sized_new(128);
-		g_string_append_printf(notif, "\"url\": \"%s/%s\",",
+		g_string_append_printf(notif, "\"url\":\"%s/%s\",",
 				hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE));
-		g_string_append(notif, " \"services\": [ ");
+		g_string_append(notif, "\"services\":[");
 		for (struct meta1_service_url_s **svc = services2; svc && *svc; svc++) {
 			if (svc != services2) // not at the beginning
-				g_string_append(notif, ", ");
-			__meta1_service_url_to_json(notif, *svc);
+				g_string_append(notif, ",");
+			meta1_service_url_encode_json(notif, *svc);
 		}
-		g_string_append(notif, " ]");
+		g_string_append(notif, "]");
 
 		err = metautils_notifier_send_json(notifier, topic,
 				meta1_backend_get_local_addr(m1),

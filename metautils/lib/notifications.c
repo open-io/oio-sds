@@ -10,11 +10,11 @@
 
 #include <metautils/lib/notifications.h>
 
-#define METAUTILS_NOTIFIER_JSON_TEMPLATE "{ \"timestamp\": %ld,\
- \"origin\": \"%s\",\
- \"type\": \"%s\",\
- \"seq\": %d,\
- \"data\": { %s } }"
+#define METAUTILS_NOTIFIER_JSON_TEMPLATE "{\"timestamp\":%ld,\
+\"origin\":\"%s\",\
+\"type\":\"%s\",\
+\"seq\":%d,\
+\"data\":{%s}}"
 
 struct metautils_notifier_s
 {
