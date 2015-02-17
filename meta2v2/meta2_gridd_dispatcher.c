@@ -802,6 +802,7 @@ static gridd_filter M2V2_FILTERS_freeze[] =
 {
 	meta2_filter_extract_header_optional_ns,
 	meta2_filter_extract_header_cid_f0,
+	meta2_filter_extract_header_localflag,
 	meta2_filter_fill_subject,
 	meta2_filter_check_optional_ns_name,
 	meta2_filter_check_backend,
@@ -815,6 +816,7 @@ static gridd_filter M2V2_FILTERS_disable_frozen[] =
 {
 	meta2_filter_extract_header_optional_ns,
 	meta2_filter_extract_header_cid_f0,
+	meta2_filter_extract_header_localflag,
 	meta2_filter_fill_subject,
 	meta2_filter_check_optional_ns_name,
 	meta2_filter_check_backend,
