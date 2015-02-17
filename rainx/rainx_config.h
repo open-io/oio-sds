@@ -88,6 +88,7 @@ struct dav_rainx_server_conf_s {
 
 	int enabled_acl;
 	rawx_conf_t* rainx_conf;
+	apr_thread_mutex_t *rainx_conf_lock;
 	ssize_t FILE_buffer_size; /**< negative or zero means 'unset', positive set the buffer size to this value, but we force a maximum of '131072' */
 };
 

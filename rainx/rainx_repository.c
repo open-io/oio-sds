@@ -266,14 +266,16 @@ dav_rainx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	/* ACL */
 	/* Check if client allowed to work with us */
 	if (conf->enabled_acl) {
+		apr_thread_mutex_lock(conf->rainx_conf_lock);
 #if MODULE_MAGIC_COOKIE == 0x41503234UL /* "AP24" */
-		if (!authorized_personal_only(r->connection->client_ip,
-				conf->rainx_conf->acl))
+		gboolean apo = authorized_personal_only(r->connection->client_ip,
+				conf->rainx_conf->acl);
 #else
-		if (!authorized_personal_only(r->connection->remote_ip,
-				conf->rainx_conf->acl))
+		gboolean apo = authorized_personal_only(r->connection->remote_ip,
+				conf->rainx_conf->acl);
 #endif
-		{
+		apr_thread_mutex_unlock(conf->rainx_conf_lock);
+		if (!apo) {
 			return server_create_and_stat_error(conf, r->pool,
 					HTTP_UNAUTHORIZED, 0, "Permission Denied (APO)");
 		}
@@ -307,8 +309,10 @@ dav_rainx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	request_load_chunk_info(r, resource);
 
 	/* Check META-Chunk size not larger than namespace allowed chunk-size */
+	apr_thread_mutex_lock(conf->rainx_conf_lock);
 	gint64 ns_chunk_size = namespace_chunk_size(conf->rainx_conf->ni,
 				resource->info->namespace);
+	apr_thread_mutex_unlock(conf->rainx_conf_lock);
 	gint64 subchunk_size = apr_atoi64(resource->info->chunk.size);
 	if (r->method_number == M_PUT && ns_chunk_size < subchunk_size) {
 		return server_create_and_stat_error(conf, r->pool, HTTP_BAD_REQUEST, 0,
@@ -388,19 +392,22 @@ _init_rain_encoding(dav_rainx_server_conf *srv_conf,
 	long k,m;
 	apr_int64_t mc_size = -1;
 
+	apr_thread_mutex_lock(srv_conf->rainx_conf_lock);
 	if (!stgpol_str ||
 			!(sp = storage_policy_init(srv_conf->rainx_conf->ni, stgpol_str))) {
 		err_msg = apr_psprintf(res_priv->pool,
 				"\"%s\" policy init failed for namespace \"%s\"",
 				stgpol_str, srv_conf->rainx_conf->ni->name);
+		apr_thread_mutex_unlock(srv_conf->rainx_conf_lock);
 		goto end;
 	}
-	apr_pool_cleanup_register(res_priv->pool, sp,
-			apr_storage_policy_clean, apr_pool_cleanup_null);
-
 	DAV_DEBUG_REQ(resource->info->request, 0,
 			"[%s] policy init succeeded for namespace [%s]",
 			stgpol_str, srv_conf->rainx_conf->ni->name);
+	apr_thread_mutex_unlock(srv_conf->rainx_conf_lock);
+
+	apr_pool_cleanup_register(res_priv->pool, sp,
+			apr_storage_policy_clean, apr_pool_cleanup_null);
 
 	datasec = storage_policy_get_data_security(sp);
 	if (RAIN != data_security_get_type(datasec)) {

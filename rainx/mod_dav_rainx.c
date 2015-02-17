@@ -25,12 +25,20 @@ static void
 _stat_cleanup_child(dav_rainx_server_conf *conf)
 {
 	server_child_stat_fini(conf, conf->pool);
+	if (conf->rainx_conf_lock) {
+		apr_thread_mutex_destroy(conf->rainx_conf_lock);
+		conf->rainx_conf_lock = NULL;
+	}
 }
 
 static void
 _stat_cleanup_master(dav_rainx_server_conf *conf)
 {
 	server_master_stat_fini(conf, conf->pool);
+	if (conf->rainx_conf_lock) {
+		apr_thread_mutex_destroy(conf->rainx_conf_lock);
+		conf->rainx_conf_lock = NULL;
+	}
 }
 
 /**
@@ -92,6 +100,8 @@ dav_rainx_merge_server_config(apr_pool_t *p, void *base, void *overrides)
 	newconf->FILE_buffer_size = child->FILE_buffer_size;
 	memcpy(newconf->docroot, child->docroot, sizeof(newconf->docroot));
 	memcpy(newconf->ns_name, child->ns_name, sizeof(newconf->ns_name));
+	apr_thread_mutex_create(&(newconf->rainx_conf_lock),
+			APR_THREAD_MUTEX_DEFAULT, newconf->pool);
 	update_rainx_conf(p, &(newconf->rainx_conf), newconf->ns_name);
 
 	DAV_DEBUG_POOL(p, 0, "Configuration merged!");
@@ -173,7 +183,7 @@ dav_rainx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg
 
 
 	DAV_DEBUG_POOL(cmd->pool, 0, "NS=[%s]", conf->ns_name);
-	
+
 	/* Prepare COMPRESSION / ACL CONF when we get ns name */
 	namespace_info_t* ns_info;
 	GError *local_error = NULL;
@@ -184,6 +194,12 @@ dav_rainx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg
 				conf->ns_name, " ", local_error->message, NULL);
 	}
 
+	if (!conf->rainx_conf_lock) {
+		apr_thread_mutex_create(&(conf->rainx_conf_lock),
+				APR_THREAD_MUTEX_DEFAULT, conf->pool);
+	}
+
+	apr_thread_mutex_lock(conf->rainx_conf_lock);
 	conf->rainx_conf = apr_palloc(cmd->pool, sizeof(rawx_conf_t));
 
 	char * stgpol = NULL;
@@ -197,7 +213,8 @@ dav_rainx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg
 	conf->rainx_conf->ni = ns_info;
 
 	conf->rainx_conf->acl = _get_acl(cmd->pool, ns_info);
-        conf->rainx_conf->last_update = time(0);
+	conf->rainx_conf->last_update = time(0);
+	apr_thread_mutex_unlock(conf->rainx_conf_lock);
 
 	if(local_error)
 		g_clear_error(&local_error);

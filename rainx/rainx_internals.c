@@ -30,7 +30,9 @@ request_get_server_config(const request_rec *r)
 	dav_rainx_server_conf *conf;
 
 	conf = ap_get_module_config(r->server->module_config, &dav_rainx_module);
+	apr_thread_mutex_lock(conf->rainx_conf_lock);
 	update_rainx_conf_if_necessary(conf->pool, &(conf->rainx_conf));
+	apr_thread_mutex_unlock(conf->rainx_conf_lock);
 	return conf;
 }
 
