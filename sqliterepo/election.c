@@ -2112,10 +2112,11 @@ _transition(struct election_member_s *member, enum event_type_e evt,
 			switch (evt) {
 				case EVT_NONE:
 					if (member_pending_for_too_long(member)) {
-						// See TO-HONEYCOMB-757
-						GRID_INFO("Election for [%s] seems stale, "
+						// See case STEP_PRELOST for explanations
+						GRID_INFO("Election for [%s] seems stale (PRELEAD), "
 							"restarting GETVERS", member->name);
 						defer_GETVERS(member);
+						g_get_current_time(&(member->last_status));
 					} else {
 						member_ping(member);
 					}
@@ -2188,10 +2189,16 @@ _transition(struct election_member_s *member, enum event_type_e evt,
 			switch (evt) {
 				case EVT_NONE:
 					if (member_pending_for_too_long(member)) {
-						// See TO-HONEYCOMB-757
-						GRID_INFO("Election for [%s] seems stale, "
+						// Sometimes the response to SQLX_GETVERS never
+						// arrives. See TO-HONEYCOMB-757.
+						GRID_INFO("Election for [%s] seems stale (PRELOST), "
 							"restarting GETVERS", member->name);
 						defer_GETVERS(member);
+						// This is to prevent SQLX_GETVERS bursts. We got a
+						// case where defer_GETVERS was called several times
+						// before the first response arrives.
+						// See TO-HONEYCOMB-773.
+						g_get_current_time(&(member->last_status));
 					} else {
 						member_ping(member);
 					}
