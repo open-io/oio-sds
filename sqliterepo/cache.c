@@ -411,6 +411,14 @@ _expire_specific_base(sqlx_cache_t *cache, sqlx_base_t *b, GTimeVal *now,
 	sqlx_base_move_to_list(cache, b, SQLX_BASE_USED);
 
 	_expire_base(cache, b);
+
+	/* If someone is waiting on the base while it is being closed
+	 * (this arrives when someone tries to read it again after
+	 * waiting exactly the grace delay), we must notify him so it can
+	 * retry (and open it in another file descriptor).
+	 * See bug TO-HONEYCOMB-774 */
+	g_cond_signal(b->cond);
+
 	return 1;
 }
 
