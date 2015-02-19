@@ -44,6 +44,7 @@ static void _task_expire_bases(gpointer p);
 static void _task_expire_resolver(gpointer p);
 static void _task_retry_elections(gpointer p);
 static void _task_reload_nsinfo(gpointer p);
+static void _task_reload_workers(gpointer p);
 static gpointer _worker_clients(gpointer p);
 
 // Static variables
@@ -288,6 +289,7 @@ _configure_tasks(struct sqlx_service_s *ss)
 	grid_task_queue_register(ss->gtq_register, 1, _task_register, NULL, ss);
 
 	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_nsinfo, NULL, ss);
+	grid_task_queue_register(ss->gtq_reload, 5, _task_reload_workers, NULL, ss);
 
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
@@ -457,6 +459,7 @@ sqlx_service_set_defaults(void)
 	SRV.cfg_max_bases = 0;
 	SRV.cfg_max_passive = 0;
 	SRV.cfg_max_active = 0;
+	SRV.cfg_max_workers = 200;
 	SRV.flag_replicable = TRUE;
 	SRV.flag_autocreate = TRUE;
 	SRV.flag_delete_on = TRUE;
@@ -584,7 +587,9 @@ sqlx_service_get_options(void)
 		{"MaxPassive", OT_UINT, {.u = &SRV.cfg_max_passive},
 			"Limits the number of concurrent passive connections" },
 		{"MaxActive", OT_UINT, {.u = &SRV.cfg_max_active},
-			"Limits the number of concurrent passive connections" },
+			"Limits the number of concurrent active connections" },
+		{"MaxWorkers", OT_UINT, {.u=&SRV.cfg_max_workers},
+			"Limits the number of worker threads" },
 
 		{"CacheEnabled", OT_BOOL, {.b = &SRV.flag_cached_bases},
 			"If set, each base will be cached in a way it won't be accessed"
@@ -723,5 +728,14 @@ _task_reload_nsinfo(gpointer p)
 		namespace_info_copy(ni, &(PSRV(p)->nsinfo), NULL);
 		namespace_info_free(ni);
 	}
+}
+
+static void
+_task_reload_workers(gpointer p)
+{
+	gint64 max_workers = namespace_info_get_srv_param_i64(&(PSRV(p)->nsinfo),
+			NULL, PSRV(p)->service_config->srvtype, "max_workers",
+			SRV.cfg_max_workers);
+	network_server_set_max_workers(PSRV(p)->server, (guint) max_workers);
 }
 

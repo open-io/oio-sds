@@ -1175,28 +1175,11 @@ event_send_to_agent( const gchar *ns_name, gridcluster_event_t *event, GError **
 	return TRUE;
 }
 
-/**
- * Get a parameter from the namespace info "options" hash table.
- * This intelligently looks for VNS overridden parameters.
- *
- * @param ns_info
- * @param ns_name Namespace or VNS name
- * @param param_name
- * @return The value or NULL
- *
- * TODO: move to metautils/lib/utils_namespace_info.c?
- */
 static GByteArray *
 namespace_param_gba(const namespace_info_t* ns_info, const gchar *ns_name,
 		const gchar *param_name)
 {
-	if (!ns_info || !ns_info->options)
-		return NULL;
-
-	if (!ns_name)
-		ns_name = ns_info->name;
-
-	return namespace_hash_table_lookup(ns_info->options, ns_name, param_name);
+	return namespace_info_get_srv_param_gba(ns_info, ns_name, NULL, param_name);
 }
 
 gboolean
@@ -1553,20 +1536,7 @@ gint64
 gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
 		const gchar* key, gint64 def)
 {
-	gint64 result;
-	GByteArray *value;
-	if (!nsinfo || !nsinfo->options)
-		return def;
-
-	value = namespace_param_gba(nsinfo, NULL, key);
-	if (!value)
-		return def;
-
-	gchar *v = g_strndup((gchar*)value->data, value->len);
-	result = g_ascii_strtoll(v, NULL, 10);
-	g_free(v);
-
-	return result;
+	return namespace_info_get_srv_param_i64(nsinfo, NULL, NULL, key, def);
 }
 
 GError*

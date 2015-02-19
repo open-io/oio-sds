@@ -883,6 +883,22 @@ _server_update_main_stats(struct network_server_s *srv)
 }
 
 void
+network_server_set_max_workers(struct network_server_s *srv, guint max)
+{
+	EXTRA_ASSERT(srv != NULL);
+	guint emax = CLAMP(max, 1, G_MAXUINT32);
+
+	if (emax != max)
+		GRID_WARN("Max workers [%u] clamped to [%u]", max, emax);
+
+	if (srv->workers_maximum != emax) {
+		GRID_INFO("Max workers [%u] changed to [%u]",
+				srv->workers_maximum, emax);
+		srv->workers_maximum = emax;
+	}
+}
+
+void
 network_server_set_maxcnx(struct network_server_s *srv, guint max)
 {
 	EXTRA_ASSERT(srv != NULL);

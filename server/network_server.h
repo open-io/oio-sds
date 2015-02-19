@@ -82,6 +82,15 @@ struct network_client_s
  */
 struct network_server_s * network_server_init(void);
 
+/*!
+ * Changes the maximum number of worker threads that the server can run.
+ * This can be done while the server is working.
+ *
+ * @param srv
+ * @param max
+ */
+void network_server_set_max_workers(struct network_server_s *srv, guint max);
+
 /*! Changes the maximum number of concurrent connections that can be
  * managed by the given server.
  *

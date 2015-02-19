@@ -225,7 +225,6 @@ namespace_info_extract_name(GSList *list_nsinfo, gboolean copy)
 	return result;
 }
 
-// TODO: factorize 3 following functions
 gchar *
 namespace_info_get_data_security(namespace_info_t *ni, const gchar *data_sec_key)
 {
@@ -276,6 +275,58 @@ namespace_info_get_storage_class(namespace_info_t *ni, const gchar *stgclass_key
 		}
 	}
 	return NULL;
+}
+
+GByteArray *
+namespace_info_get_srv_param_gba(const namespace_info_t *ni,
+		const gchar *ns_name, const gchar *srv_type, const gchar *param_name)
+{
+	gchar key[128] = {0};
+	GByteArray *res = NULL;
+
+	if (!ni || !ni->options)
+		return NULL;
+
+	if (!ns_name)
+		ns_name = ni->name;
+
+	if (srv_type != NULL) {
+		// Prefix the param name with the service type
+		g_snprintf(key, sizeof(key), "%s_%s", srv_type, param_name);
+		res = namespace_hash_table_lookup(ni->options, ns_name, key);
+	}
+
+	if (!res) {
+		// Try with unprefixed param name
+		res = namespace_hash_table_lookup(ni->options, ns_name, param_name);
+	}
+
+	return res;
+}
+
+gint64
+namespace_info_get_srv_param_i64(const namespace_info_t *ni,
+		const gchar *ns_name, const gchar *srv_type,
+		const gchar *param_name, gint64 def)
+{
+	gint64 res;
+	gchar *end = NULL;
+	GByteArray *value;
+
+	if (!ni || !ni->options)
+		return def;
+
+	value = namespace_info_get_srv_param_gba(ni, ns_name, srv_type, param_name);
+	if (!value)
+		return def;
+
+	gchar *v = g_strndup((gchar*)value->data, value->len);
+	res = g_ascii_strtoll(v, &end, 10);
+	if (end == v) // Conversion failed
+		res = def;
+	g_free(v);
+
+	return res;
 }
 
 //------------------------------------------------------------------------------

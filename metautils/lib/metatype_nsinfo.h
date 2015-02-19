@@ -20,6 +20,32 @@ gpointer namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
 		const gchar *key);
 
 /**
+ * Get a parameter from the namespace info "options" hash table.
+ * This intelligently looks for VNS overridden parameters.
+ * If a service type is provided by the type-specific parameter
+ * cannot be found, the generic parameter is tried.
+ *
+ * @param ni Pointer to the namespace info
+ * @param ns_name Namespace or VNS name
+ * @param srv_type The type of the service asking for this parameter
+ *   (can be NULL)
+ * @param param_name Name of the parameter to look for
+ * @return The value or NULL
+ */
+GByteArray *namespace_info_get_srv_param_gba(const namespace_info_t *ni,
+		const gchar *ns_name, const gchar *srv_type, const gchar *param_name);
+
+/**
+ * Same as namespace_info_get_srv_param_gba but converts the result
+ * to int64.
+ *
+ * @param def The value to return when parameter is not found
+ */
+gint64 namespace_info_get_srv_param_i64(const namespace_info_t *ni,
+		const gchar *ns_name, const gchar *srv_type, const gchar *param_name,
+		gint64 def);
+
+/**
  * Copy a namespace_info into another namespace_info
  *
  * The option hashtable is not copied. The old table's reference
