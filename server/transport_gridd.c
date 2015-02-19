@@ -233,39 +233,39 @@ struct log_item_s
 };
 
 static void
-network_client_log_access(struct log_item_s *log)
+network_client_log_access(struct log_item_s *item)
 {
 	struct timespec diff_total, diff_handler;
 
-	if (!log->req_ctx->tv_end.tv_sec)
-		network_server_now(&log->req_ctx->tv_end);
-	timespec_sub(&log->req_ctx->tv_end, &log->req_ctx->tv_start, &diff_total);
-	timespec_sub(&log->req_ctx->tv_end, &log->req_ctx->tv_parsed, &diff_handler);
+	if (!item->req_ctx->tv_end.tv_sec)
+		network_server_now(&item->req_ctx->tv_end);
+	timespec_sub(&item->req_ctx->tv_end, &item->req_ctx->tv_start, &diff_total);
+	timespec_sub(&item->req_ctx->tv_end, &item->req_ctx->tv_parsed, &diff_handler);
 
 	GString *gstr = g_string_sized_new(256);
 
-	g_string_append(gstr, ensure(log->req_ctx->client->local_name));
+	g_string_append(gstr, ensure(item->req_ctx->client->local_name));
 	g_string_append_c(gstr, ' ');
 
-	g_string_append(gstr, ensure(log->req_ctx->client->peer_name));
+	g_string_append(gstr, ensure(item->req_ctx->client->peer_name));
 	g_string_append_c(gstr, ' ');
 
-	g_string_append(gstr, ensure(hashstr_str(log->req_ctx->reqname)));
+	g_string_append(gstr, ensure(hashstr_str(item->req_ctx->reqname)));
 
-	g_string_append_printf(gstr, " %d", log->code);
+	g_string_append_printf(gstr, " %d", item->code);
 
 	g_string_append_printf(gstr, " %ld.%06ld", diff_total.tv_sec, diff_total.tv_nsec / 1000);
 
-	g_string_append_printf(gstr, " %"G_GSIZE_FORMAT" ", log->out_len); // reply size
+	g_string_append_printf(gstr, " %"G_GSIZE_FORMAT" ", item->out_len); // reply size
 
-	g_string_append(gstr, ensure(log->req_ctx->uid));
+	g_string_append(gstr, ensure(item->req_ctx->uid));
 	g_string_append_c(gstr, ' ');
 
-	g_string_append(gstr, ensure(log->req_ctx->reqid));
+	g_string_append(gstr, ensure(item->req_ctx->reqid));
 
 	g_string_append_printf(gstr, " t=%ld.%06ld ", diff_handler.tv_sec, diff_handler.tv_nsec / 1000);
 
-	g_string_append(gstr, ensure(log->req_ctx->subject));
+	g_string_append(gstr, ensure(item->req_ctx->subject));
 
 	g_log("access", GRID_LOGLVL_INFO, "%s", gstr->str);
 	g_string_free(gstr, TRUE);
@@ -592,12 +592,12 @@ _client_reply_fixed(struct req_ctx_s *req_ctx, gint code, const gchar *msg)
 
 	EXTRA_ASSERT(!req_ctx->final_sent);
 	if ((req_ctx->final_sent = is_code_final(code))) {
-		struct log_item_s log;
-		log.req_ctx = req_ctx;
-		log.code = code;
-		log.msg = msg;
-		log.out_len = 0;
-		network_client_log_access(&log);
+		struct log_item_s item;
+		item.req_ctx = req_ctx;
+		item.code = code;
+		item.msg = msg;
+		item.out_len = 0;
+		network_client_log_access(&item);
 	}
 	return metaXServer_reply_simple(&reply, req_ctx->request, code, msg, NULL)
 		&& _reply_message(req_ctx->client, reply);
@@ -680,12 +680,12 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 
 		/* encode and send */
 		if ((req_ctx->final_sent = is_code_final(code))) {
-			struct log_item_s log;
-			log.req_ctx = req_ctx;
-			log.code = code;
-			log.msg = msg;
-			log.out_len = 0;
-			network_client_log_access(&log);
+			struct log_item_s item;
+			item.req_ctx = req_ctx;
+			item.code = code;
+			item.msg = msg;
+			item.out_len = 0;
+			network_client_log_access(&item);
 		}
 		_reply_message(req_ctx->client, answer);
 	}
@@ -822,12 +822,12 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	network_server_now(&req_ctx.tv_parsed);
 
 	if (!asn1_rc) {
-		struct log_item_s log;
-		log.req_ctx = &req_ctx;
-		log.code = 400;
-		log.msg = "Malformed ASN.1/BER Message";
-		log.out_len = 0;
-		network_client_log_access(&log);
+		struct log_item_s item;
+		item.req_ctx = &req_ctx;
+		item.code = 400;
+		item.msg = "Malformed ASN.1/BER Message";
+		item.out_len = 0;
+		network_client_log_access(&item);
 		GRID_INFO("fd=%d ASN.1 decoder error: (%d) %s",
 				client->fd, err->code, err->message);
 		goto label_exit;
