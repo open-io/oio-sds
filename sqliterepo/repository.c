@@ -305,6 +305,7 @@ GError *
 sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 		sqlx_repository_t **result)
 {
+	gchar tmpdir[LIMIT_LENGTH_VOLUMENAME+8] = {0};
 	struct stat s;
 	sqlx_repository_t *repo;
 
@@ -351,6 +352,10 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 				return err;
 		}
 	}
+
+	/* Create the directory used by dump/restore functions */
+	g_snprintf(tmpdir, sizeof(tmpdir), "%s/tmp", vol);
+	mkdir(tmpdir, 0755);
 
 	repo = g_malloc0(sizeof(struct sqlx_repository_s));
 	g_strlcpy(repo->basedir, vol, sizeof(repo->basedir)-1);
@@ -1391,7 +1396,8 @@ GError*
 sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 		dump_base_fd_cb read_file_cb, gpointer cb_arg)
 {
-	gchar path[] = "/tmp/dump.sqlite3.XXXXXX";
+	gchar path[LIMIT_LENGTH_VOLUMENAME+32] = {0};
+	gboolean try_slash_tmp = FALSE;
 	int rc, fd;
 	sqlite3 *dst = NULL;
 	GError *err = NULL;
@@ -1400,29 +1406,42 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(read_file_cb != NULL);
 
-	if (0 > (fd = g_mkstemp(path)))
-		return NEWERROR(errno, "Temporary file creation error"
-				" : %s", strerror(errno));
+	do {
+		// First try to dump on local volume, on error try /tmp
+		g_snprintf(path, sizeof(path), "%s/tmp/dump.sqlite3.XXXXXX",
+				try_slash_tmp? "" : sq3->repo->basedir);
 
-	GRID_TRACE("DUMP to [%s] fd=%d from bd=[%s][%s]", path, fd,
-			sq3->logical_name, sq3->logical_type);
+		if (0 > (fd = g_mkstemp(path))) {
+			err = NEWERROR(errno, "Temporary file creation error: %s",
+					strerror(errno));
+		} else {
+			GRID_TRACE("DUMP to [%s] fd=%d from bd=[%s][%s]", path, fd,
+					sq3->logical_name, sq3->logical_type);
 
-	/* TODO : provides a VFS dumping everything in memory */
-	rc = sqlite3_open_v2(path, &dst, SQLITE_OPEN_PRIVATECACHE
-			|SQLITE_OPEN_CREATE|SQLITE_OPEN_READWRITE, NULL);
+			/* TODO : provides a VFS dumping everything in memory */
+			rc = sqlite3_open_v2(path, &dst, SQLITE_OPEN_PRIVATECACHE
+					|SQLITE_OPEN_CREATE|SQLITE_OPEN_READWRITE, NULL);
 
-	if (rc != SQLITE_OK) {
-		_close_handle(&dst);
-		err = NEWERROR(rc,
-				"sqlite3_open error: (%s) (errno=%d) %s",
-				sqlite_strerror(rc), errno, strerror(errno));
-		unlink(path);
-		return err;
-	}
+			if (rc != SQLITE_OK) {
+				err = NEWERROR(rc,
+						"sqlite3_open error: (%s) (errno=%d) %s",
+						sqlite_strerror(rc), errno, strerror(errno));
+			} else {
+				err = _backup_main(sq3->db, dst);
+			}
+			_close_handle(&dst);
+			unlink(path);
+		}
 
-	err = _backup_main(sq3->db, dst);
-	_close_handle(&dst);
-	unlink(path);
+		if (err && !try_slash_tmp) {
+			GRID_WARN("Failed to dump base into %s (%s), will try with /tmp",
+					path, err->message);
+			g_clear_error(&err);
+			try_slash_tmp = TRUE;
+		} else {
+			break;
+		}
+	} while (1);
 
 	if (!err) {
 		err = read_file_cb(fd, cb_arg);
@@ -1508,6 +1527,8 @@ GError*
 sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
 		guint8 *raw, gsize rawsize)
 {
+	gboolean try_slash_tmp = FALSE;
+	gchar path[LIMIT_LENGTH_VOLUMENAME+32] = {0};
 	GError *err = NULL;
 	struct restore_ctx_s *restore_ctx = NULL;
 
@@ -1517,20 +1538,38 @@ sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
 	EXTRA_ASSERT(raw != NULL);
 	EXTRA_ASSERT(rawsize > 0);
 
-	/* fills a temporary file */
-	err = restore_ctx_create("/tmp/restore.sqlite3.XXXXXX", &restore_ctx);
-	if (err != NULL) {
-		g_prefix_error(&err, "Failed to create restore context: ");
-	} else {
-		err = restore_ctx_append(restore_ctx, raw, rawsize);
+	do {
+		g_snprintf(path, sizeof(path), "%s/tmp/restore.sqlite3.XXXXXX",
+				try_slash_tmp? "" : sq3->repo->basedir);
+
+		/* fills a temporary file */
+		err = restore_ctx_create(path, &restore_ctx);
 		if (err != NULL) {
-			g_prefix_error(&err, "Failed to fill temp file: ");
+			g_prefix_error(&err, "Failed to create restore context into %s: ",
+					path);
 		} else {
-			EXTRA_ASSERT(restore_ctx->fd >= 0);
-			err = sqlx_repository_restore_from_file(sq3, restore_ctx->path);
+			err = restore_ctx_append(restore_ctx, raw, rawsize);
+			if (err != NULL) {
+				g_prefix_error(&err, "Failed to fill temp file %s: ",
+						path);
+			}
 		}
-		restore_ctx_clear(&restore_ctx);
+
+		if (err && !try_slash_tmp) {
+			GRID_WARN("%s, will try with /tmp", err->message);
+			restore_ctx_clear(&restore_ctx);
+			g_clear_error(&err);
+			try_slash_tmp = TRUE;
+		} else {
+			break;
+		}
+	} while (1);
+
+	if (!err) {
+		EXTRA_ASSERT(restore_ctx->fd >= 0);
+		err = sqlx_repository_restore_from_file(sq3, restore_ctx->path);
 	}
+	restore_ctx_clear(&restore_ctx);
 
 	if (err)
 		GRID_ERROR("Failed to restore base: %s", err->message);
