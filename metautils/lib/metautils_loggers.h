@@ -56,6 +56,7 @@
 #  define GRID_TRACE2(FMT,...)
 #  define GRID_TRACE(FMT,...)
 # endif
+# define GRID_LOG(LEVEL,FMT,...)   g_log(G_LOG_DOMAIN, LEVEL << G_LOG_LEVEL_USER_SHIFT, FMT, ##__VA_ARGS__)
 # define GRID_DEBUG(FMT,...)   g_log(G_LOG_DOMAIN, GRID_LOGLVL_DEBUG, FMT, ##__VA_ARGS__)
 # define GRID_INFO(FMT,...)    g_log(G_LOG_DOMAIN, GRID_LOGLVL_INFO, FMT, ##__VA_ARGS__)
 # define GRID_NOTICE(FMT,...)  g_log(G_LOG_DOMAIN, GRID_LOGLVL_NOTICE, FMT, ##__VA_ARGS__)

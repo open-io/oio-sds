@@ -140,6 +140,14 @@ metautils_notifier_prepare_kafka_topic(metautils_notifier_t *notifier,
 	return err;
 }
 
+static void
+_kafka_logger(const rd_kafka_t *rk, int level, const char *fac, const char *buf)
+{
+	(void) fac;
+	int redc_level = 1 << MAX(0, level-3);
+	GRID_LOG(redc_level, "%s: %s", rk ? rd_kafka_name(rk) : "", buf);
+}
+
 GError *
 metautils_notifier_init_kafka(metautils_notifier_t *handle)
 {
@@ -168,7 +176,7 @@ metautils_notifier_init_kafka(metautils_notifier_t *handle)
 				"Failed to initialize Kafka: %s", errmsg);
 		goto end;
 	}
-	rd_kafka_set_logger(k_handle, rd_kafka_log_syslog);
+	rd_kafka_set_logger(k_handle, _kafka_logger);
 
 	if (!rd_kafka_brokers_add(k_handle, broker)) {
 		err = NEWERROR(CODE_INTERNAL_ERROR,
