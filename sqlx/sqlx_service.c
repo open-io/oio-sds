@@ -132,7 +132,7 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 	ss->zk_url = gridcluster_get_config(ss->ns_name, "zookeeper",
 			GCLUSTER_CFG_NS|GCLUSTER_CFG_LOCAL);
 	if (!ss->zk_url) {
-		GRID_INFO("No replication : no ZooKeeper URL configured");
+		GRID_INFO("No ZooKeeper URL configured");
 		return TRUE;
 	}
 
@@ -188,12 +188,42 @@ _init_configless_structures(struct sqlx_service_s *ss)
 	return TRUE;
 }
 
+static gchar*
+_build_zk_url(const gchar *ns_name)
+{
+	GError *err = NULL;
+	GString *zk_url = NULL;
+	GSList *zk_srvinfo_list = list_namespace_services2(ns_name,
+			NAME_SRVTYPE_ZOOKEEPER, &err);
+	if (err != NULL) {
+		GRID_NOTICE("Failed to request %s services from conscience or gridagent: %s",
+				NAME_SRVTYPE_ZOOKEEPER, err->message);
+		g_clear_error(&err);
+		return NULL;
+	}
+	zk_url = g_string_sized_new(64);
+	for (GSList *cur = zk_srvinfo_list; cur; cur = cur->next) {
+		gchar addr[64] = {0};
+		service_info_t *svc = cur->data;
+		grid_addrinfo_to_string(&(svc->addr), addr, sizeof(addr));
+		g_string_append_printf(zk_url, "%s%s",
+				(zk_url->len > 0)? "," : "", addr);
+	}
+	g_slist_free_full(zk_srvinfo_list, (GDestroyNotify)service_info_clean);
+	return g_string_free(zk_url, FALSE);
+}
+
 static gboolean
 _configure_synchronism(struct sqlx_service_s *ss)
 {
 	if (!ss->zk_url) {
-		GRID_NOTICE("SYNC off (no ZK)");
-		return TRUE;
+		ss->zk_url = _build_zk_url(SRV.ns_name);
+		if (!ss->zk_url) {
+			GRID_NOTICE("SYNC off (no ZK)");
+			return TRUE;
+		} else {
+			GRID_INFO("Built ZooKeeper URL [%s]", ss->zk_url);
+		}
 	}
 
 	ss->sync = sqlx_sync_create(ss->zk_url);
@@ -210,7 +240,7 @@ _configure_synchronism(struct sqlx_service_s *ss)
 
 	GError *err = sqlx_sync_open(ss->sync);
 	if (err != NULL) {
-		GRID_WARN("SYNC init error : (%d) %s", err->code, err->message);
+		GRID_WARN("SYNC init error: (%d) %s", err->code, err->message);
 		g_clear_error(&err);
 		return FALSE;
 	}

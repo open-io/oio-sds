@@ -26,6 +26,7 @@
 # define NAME_SRVTYPE_META1 "meta1"
 # define NAME_SRVTYPE_META2 "meta2"
 # define NAME_SRVTYPE_RAWX  "rawx"
+# define NAME_SRVTYPE_ZOOKEEPER "zookeeper"
 
 /*
  * Some well known service tags macro names
