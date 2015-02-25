@@ -16,6 +16,8 @@
 #include <math.h>
 #include <getopt.h>
 
+#include <glib.h>
+
 #include <gridinit-utils.h>
 
 #include <metautils/lib/metautils.h>
@@ -29,7 +31,7 @@
 static char svc_id[1024] = {0,0,0};
 static char svc_mon[4096] = {0,0,0};
 static char svc_cmd[4096] = {0,0,0};
-static char log_path[1024] = {0,0,0};
+// syslog_id declared as extern in metautils_loggers.h
 
 static GRegex *regex_tag = NULL;
 static GRegex *regex_svc = NULL;
@@ -41,6 +43,7 @@ static volatile int flag_restart_children = 0;
 /* Should we restart children when they die, or should we die ourselves? */
 static gboolean auto_restart_children = FALSE;
 static gint monitor_period = DEFAULT_MONITOR_PERIOD;
+static GSList *custom_tags = NULL;
 
 static void
 my_chomp(char *str)
@@ -74,12 +77,12 @@ parse_output(const gchar *cmd, service_info_t *si)
 	g_snprintf(cmd_with_args, sizeof(cmd_with_args), "%s %s", cmd, svc_id);
 	INFO("Executing [%s]", cmd_with_args);
 	if (0 > (fd = command_get_pipe(cmd_with_args))) {
-		WARN("Exec failed : %s", strerror(errno));
+		WARN("Exec failed: %s", strerror(errno));
 		return;
 	}
 
 	if (!(stream_in = fdopen(fd, "r"))) {
-		WARN("fdopen failed : %s", strerror(errno));
+		WARN("fdopen failed: %s", strerror(errno));
 		metautils_pclose(&fd);
 		return;
 	}
@@ -127,6 +130,17 @@ parse_output(const gchar *cmd, service_info_t *si)
 	fclose(stream_in);
 }
 
+void
+_add_custom_tags(service_info_t *si)
+{
+	struct service_tag_s *tag = NULL;
+	for (GSList *cursor = custom_tags; cursor; cursor = cursor->next) {
+		gchar **kv = cursor->data;
+		tag = service_info_ensure_tag(si->tags, kv[0]);
+		service_tag_set_value_string(tag, kv[1]);
+	}
+}
+
 static void
 monitor_get_status(const gchar *monitor_cmd, service_info_t *si)
 {
@@ -136,7 +150,7 @@ monitor_get_status(const gchar *monitor_cmd, service_info_t *si)
 		TRACE("Collecting the service state");
 		parse_output(monitor_cmd, si);
 		str_si =  service_info_to_string(si);
-		DEBUG("SVC state : %s", str_si);
+		DEBUG("SVC state: %s", str_si);
 		g_free(str_si);
 	}
 }
@@ -214,6 +228,7 @@ monitoring_loop(service_info_t *si)
 
 	timer = g_timer_new();
 	monitor_get_status(svc_mon, si);
+	_add_custom_tags(si);
 
 	proc_count = supervisor_children_startall(NULL, NULL);
 	DEBUG("First started %u processes", proc_count);
@@ -239,10 +254,12 @@ monitoring_loop(service_info_t *si)
 			break;
 
 		if (g_timer_elapsed(timer, NULL) >= 1.0) {
-			if (!((++jiffies) % monitor_period))
+			if (!((++jiffies) % monitor_period)) {
 				monitor_get_status(svc_mon, si);
+				_add_custom_tags(si);
+			}
 			if (!register_namespace_service(si, &error)) {
-				ERROR("Failed to register the service : %s", gerror_get_message(error));
+				ERROR("Failed to register the service: %s", gerror_get_message(error));
 				g_clear_error(&error);
 			}
 			g_timer_reset(timer);
@@ -260,92 +277,133 @@ monitoring_loop(service_info_t *si)
 	g_free(timer);
 }
 
+// TODO: convert this to use metautils' common_main
 int
 main(int argc, char ** argv)
 {
 	int rc = 1;
 	service_info_t *service = NULL;
+	setenv("GS_DEBUG_ENABLE", "0", TRUE);
 
 	supervisor_children_init();
-	memset(log_path, 0x00, sizeof(log_path));
 
 	do {
 		GError *err = NULL;
 		regex_tag = g_regex_new("((stat|tag)\\.([^.=\\s]+))\\s*=\\s*(.*)",
 				G_REGEX_CASELESS|G_REGEX_EXTENDED, 0, &err);
 		if (!regex_tag) {
-			FATAL("Cannot compile tag regex : %s", err->message);
+			FATAL("Cannot compile tag regex: %s", err->message);
 			g_clear_error(&err);
 			exit(-1);
 		}
 		regex_svc = g_regex_new("([^|]*)\\|([^|]*)\\|(.*)",
 				G_REGEX_CASELESS, 0, &err);
 		if (!regex_svc) {
-			FATAL("Cannot compile svc regex : %s", err->message);
+			FATAL("Cannot compile svc regex: %s", err->message);
 			g_clear_error(&err);
 			exit(-1);
 		}
 	} while (0);
 
 	static struct option long_options[] = {
-		{"svc-id", 1, 0, 0},
-		{"monitor", 1, 0, 1},
-		{"svc-cmd", 1, 0, 2},
-		{"log4c", 1, 0, 3},
-		{"auto-restart-children", 0, 0, 4},
-		{"monitor-period", 1, 0, 5},
+		{"svc-id", 1, 0, 'i'},
+		{"monitor", 1, 0, 'm'},
+		{"svc-cmd", 1, 0, 'c'},
+		{"syslog-id", 1, 0, 's'},
+		{"auto-restart-children", 0, 0, 'a'},
+		{"monitor-period", 1, 0, 'p'},
+		{"no-tcp-check", 0, 0, 'n'},
+		{"tag", 1, 0, 't'},
 		{0, 0, 0, 0}
 	};
 
 	int c;
 	int option_index = 0;
-	while (-1 != (c = getopt_long(argc, argv, "", long_options, &option_index))) {
+	gchar *optarg2 = NULL;
+	gchar **kv = NULL;
+	while (-1 != (c = getopt_long(argc, argv, "ac:i:m:np:s:t:",
+			long_options, &option_index))) {
 		switch (c) {
-		case 0:
+		case 'i':
 			g_strlcpy(svc_id, optarg, sizeof(svc_id)-1);
 			break;
-		case 1:
+		case 'm':
 			g_strlcpy(svc_mon, optarg, sizeof(svc_mon)-1);
 			break;
-		case 2:
+		case 'c':
 			g_strlcpy(svc_cmd, optarg, sizeof(svc_cmd)-1);
 			break;
-		case 3:
-			g_strlcpy(log_path, optarg, sizeof(log_path)-1);
+		case 'n':
+			kv = g_malloc0(3 * sizeof(gchar*));
+			kv[0] = g_strdup("tag.agent_check");
+			kv[1] = g_strdup("false");
+			custom_tags = g_slist_prepend(custom_tags, kv);
 			break;
-		case 4:
+		case 'a':
 			auto_restart_children = TRUE;
 			break;
-		case 5:
+		case 'p':
 			monitor_period = strtoll(optarg, NULL, 10);
 			break;
+		case 's':
+			g_strlcpy(syslog_id, optarg, sizeof(syslog_id)-1);
+			break;
+		case 't':
+			if (!g_str_has_prefix(optarg, "tag."))
+				optarg2 = g_strdup_printf("tag.%s", optarg);
+			else
+				optarg2 = g_strdup(optarg);
+			kv = g_strsplit(optarg2, "=", 2);
+			if (kv && g_strv_length(kv) == 2) {
+				custom_tags = g_slist_prepend(custom_tags, kv);
+			} else {
+				g_printerr("Invalid tag, must contain '=': %s", optarg);
+				g_strfreev(kv);
+				kv = NULL;
+			}
+			g_free(optarg2);
+			optarg2 = NULL;
+			break;
 		default:
-			g_printerr("Unexpected option : %c\n", c);
+			g_printerr("Unexpected option: %c\n", c);
 			break;
 		}
 		option_index = 0;
 	}
 
 	if (argc <= 1 || strlen(svc_id) == 0 || strlen(svc_cmd) == 0) {
-		g_printerr("Usage: %s --svc-id <NS|type|ip:port> --svc-cmd /service/cmd/to/launch\n"
-				"\t[--monitor /script/to/monitor] [--monitor-period <seconds>]\n"
-				"\t[--log4c /path/to/log4crc] [--auto-restart-children]\n",
-				argv[0]);
+		g_printerr("Usage: %s\n", argv[0]);
+		g_printerr("Mandatory options:\n");
+		g_printerr("\t-i\t--svc-id <NS|type|ip:port>\n"
+				"\t-c\t--svc-cmd </service/cmd/to/launch>\n\n"
+				"Other options:\n"
+				"\t-m\t--monitor </script/to/monitor>\n"
+				"\t-p\t--monitor-period <seconds>\n"
+				"\t-s\t--syslog-id <syslog-id>\n"
+				"\t-t\t--tag <key=val>\n"
+				"\t-a\t--auto-restart-children\n"
+				"\t-n\t--no-tcp-check\n");
 		return 1;
+	}
+
+	if (*syslog_id) {
+		logger_init_level(GRID_LOGLVL_INFO);
+		logger_syslog_open();
+		g_log_set_default_handler(logger_syslog, NULL);
 	}
 
 	GError *error = NULL;
 	if (!supervisor_children_register(CHILD_KEY, svc_cmd, &error)) {
-		g_printerr("Child registration failure :\n\t%s\n", gerror_get_message(error));
+		g_printerr("Child registration failure:\n\t%s\n", gerror_get_message(error));
 		goto label_error;
 	}
 
 	if (0 != supervisor_children_set_limit(CHILD_KEY, SUPERV_LIMIT_THREAD_STACK, 8192 * 1024))
-		WARN("Limit on thread stack size cannot be set : %s", strerror(errno));
+		WARN("Limit on thread stack size cannot be set: %s", strerror(errno));
 	if (0 != supervisor_children_set_limit(CHILD_KEY, SUPERV_LIMIT_MAX_FILES, 32 * 1024))
-		WARN("Limit on max opened files cannot be set : %s", strerror(errno));
+		WARN("Limit on max opened files cannot be set: %s", strerror(errno));
 	if (0 != supervisor_children_set_limit(CHILD_KEY, SUPERV_LIMIT_CORE_SIZE, -1))
-		WARN("Limit on core file size cannot be set : %s", strerror(errno));
+		WARN("Limit on core file size cannot be set: %s", strerror(errno));
 
 	supervisor_children_set_respawn(CHILD_KEY, FALSE);
 	supervisor_children_set_working_directory(CHILD_KEY, "/tmp");
@@ -353,15 +411,11 @@ main(int argc, char ** argv)
 
 	service = g_malloc0(sizeof(service_info_t));
 	if (0 != init_srvinfo(svc_id, service)) {
-		g_printerr("Internal error : failed to init srvinfo\n");
+		g_printerr("Internal error: failed to init srvinfo\n");
 		goto label_error;
 	}
 
 	freopen("/dev/null", "r", stdin);
-
-	log4c_init();
-	if (*log_path)
-		log4c_load(log_path);
 
 	NOTICE("%s restarted, pid=%d", argv[0], getpid());
 
@@ -378,6 +432,7 @@ main(int argc, char ** argv)
 	rc = 0;
 
 label_error:
+	g_slist_free_full(custom_tags, (GDestroyNotify) g_strfreev);
 	service_info_clean(service);
 	supervisor_children_cleanall();
 	return rc;
