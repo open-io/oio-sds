@@ -311,12 +311,6 @@ __load_one_header(request_rec *request, apr_uint32_t headers, const char *name, 
 {
 	const char *value;
 
-	if (*dst != NULL) {
-		DAV_XDEBUG_REQ(request, 0,
-				"Header already defined [%s]: [%s]", name, *dst);
-		return;
-	}
-
 	if (headers & HEADER_SCHEME_V2) {
 		char new_name[strlen(name) + sizeof(HEADER_PREFIX_GRID)];
 		g_snprintf(new_name, sizeof(new_name), HEADER_PREFIX_GRID"%s", name);
@@ -326,7 +320,7 @@ __load_one_header(request_rec *request, apr_uint32_t headers, const char *name, 
 		}
 	}
 
-	if (!(*dst) && (headers & HEADER_SCHEME_V1)) {
+	if (headers & HEADER_SCHEME_V1) {
 		if (NULL != (value = apr_table_get(request->headers_in, name))) {
 			*dst = apr_pstrdup(request->pool, value);
 			DAV_XDEBUG_REQ(request, 0, "Header found [%s]:[%s]", name, *dst);
