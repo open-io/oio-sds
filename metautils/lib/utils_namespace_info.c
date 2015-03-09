@@ -56,25 +56,26 @@ gpointer
 namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
 		const gchar *param_name)
 {
+	gchar key[LIMIT_LENGTH_NSNAME+64] = {0};
+	gchar parent_ns[LIMIT_LENGTH_NSNAME] = {0};
 	gpointer *value = NULL;
-	gchar *parent_ns = g_strdup(ns_name);
+
+	g_strlcpy(parent_ns, ns_name, sizeof(parent_ns));
+
 	gchar *end = parent_ns;
 	end += strlen(parent_ns);
 
 	/* Check if a parameter was specified for the namespace, or its parents */
 	do {
 		*end = '\0';
-		gchar *key = NULL;
 		if (param_name && *param_name) {
-			key = g_strdup_printf("%*s_%s", (int)(end - parent_ns),
+			g_snprintf(key, sizeof(key), "%*s_%s", (int)(end - parent_ns),
 					parent_ns, param_name);
 		} else {
-			key = g_strndup(parent_ns, (int)(end - parent_ns));
+			strncpy(key, parent_ns, (int)(end - parent_ns));
 		}
 		value = g_hash_table_lookup(table, key);
-		g_free(key);
 	} while (!value && (end = strrchr(parent_ns, '.')) != NULL);
-	g_free((gpointer)parent_ns);
 
 	/* Fall back to the general parameter */
 	if (!value && param_name && *param_name) {
