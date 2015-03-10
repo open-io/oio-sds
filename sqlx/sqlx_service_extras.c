@@ -90,11 +90,8 @@ sqlx_task_reload_lb(struct sqlx_service_s *ss)
 		g_clear_error(&err);
 	}
 
-	if (NULL != (err = gridcluster_reconfigure_lbpool(ss->extras->lb))) {
-		GRID_WARN("Failed to reload the LB pool configuration: (%d) %s",
-				err->code, err->message);
-		g_clear_error(&err);
-	}
+	// ss->nsinfo is reloaded by _task_reload_nsinfo()
+	grid_lbpool_reconfigure(ss->extras->lb, &(ss->nsinfo));
 }
 
 static GError*
