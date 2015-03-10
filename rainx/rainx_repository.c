@@ -1177,6 +1177,8 @@ dav_rainx_set_headers(request_rec *r, const dav_resource *resource)
 		return NULL;
 
 	DAV_DEBUG_REQ(r, 0, "%s", __FUNCTION__);
+	
+	ap_set_content_length(r, strtoll(resource->info->chunk.size, NULL, 10));
 
 	return NULL;
 }
