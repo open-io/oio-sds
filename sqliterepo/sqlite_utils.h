@@ -78,19 +78,21 @@ sqlx_code_good(const int rc)
 /** @see sqlite3_prepare_v2() */
 # define sqlite3_prepare_debug(R,db,zSql,nByte,ppStmt,pzTail) do { \
 	(R) = sqlite3_prepare_v2(db, zSql, nByte, ppStmt, pzTail); \
-	g_log(SQLX_QUERY_DOMAIN, \
-			sqlx_code_good(R) ? GRID_LOGLVL_TRACE : GRID_LOGLVL_WARN, \
-			"sqlite3_prepare_v2(%p,%p,\"%s\") = (%d/%s) %s", \
-			db, ppStmt, zSql, (R), sqlite_strerror(R), sqlite3_errmsg(db)); \
+	if (!sqlx_code_good(R) || GRID_TRACE_ENABLED()) \
+		g_log(SQLX_QUERY_DOMAIN, \
+				sqlx_code_good(R) ? GRID_LOGLVL_TRACE : GRID_LOGLVL_WARN, \
+				"sqlite3_prepare_v2(%p,%p,\"%s\") = (%d/%s) %s", \
+				db, ppStmt, zSql, (R), sqlite_strerror(R), sqlite3_errmsg(db)); \
 } while (0)
 
 /** @see sqlite3_step() */
 # define sqlite3_step_debug(R,S) do { \
 	(R) = sqlite3_step(S); \
-	g_log(SQLX_QUERY_DOMAIN, \
-			sqlx_code_good(R) ? GRID_LOGLVL_TRACE2 : GRID_LOGLVL_WARN, \
-			"sqlite3_step() = %s (%d)", \
-			sqlite_strerror(R), R); \
+	if (!sqlx_code_good(R) || GRID_TRACE2_ENABLED()) \
+		g_log(SQLX_QUERY_DOMAIN, \
+				sqlx_code_good(R) ? GRID_LOGLVL_TRACE2 : GRID_LOGLVL_WARN, \
+				"sqlite3_step() = %s (%d)", \
+				sqlite_strerror(R), R); \
 } while (0)
 
 /** @see sqlite3_step_debug() */
@@ -101,10 +103,11 @@ sqlx_code_good(const int rc)
 /** @see sqlite3_finalize() */
 # define sqlite3_finalize_debug(R,S) do { \
 	(R) = sqlite3_finalize(S); \
-	g_log(SQLX_QUERY_DOMAIN, \
-			sqlx_code_good(R) ? GRID_LOGLVL_TRACE2 : GRID_LOGLVL_WARN, \
-			"sqlite3_finalize() = %s (%d)", \
-			sqlite_strerror(R), R); \
+	if (!sqlx_code_good(R) || GRID_TRACE2_ENABLED()) \
+		g_log(SQLX_QUERY_DOMAIN, \
+				sqlx_code_good(R) ? GRID_LOGLVL_TRACE2 : GRID_LOGLVL_WARN, \
+				"sqlite3_finalize() = %s (%d)", \
+				sqlite_strerror(R), R); \
 } while (0)
 
 /** Return a string describing the error that occured on the SQLite base */
