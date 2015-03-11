@@ -225,6 +225,7 @@ __file_read(const gchar *path, GByteArray **raw)
 static GError*
 __test_schema(const gchar *schema, const gchar *version, GByteArray **raw)
 {
+	gchar ps_buf[64] = {0};
 	gchar *tmp_path;
 	int rc;
 	char *errmsg = NULL;
@@ -244,12 +245,25 @@ __test_schema(const gchar *schema, const gchar *version, GByteArray **raw)
 		goto label_exit;
 	}
 
+	/* Set sqlite page size. The default of 1024 produces a lot of
+	 * fragmentation. We advise at least 4096. Big containers with a
+	 * lot of chunks should benefit from page sizes >=16384. */
+	g_snprintf(ps_buf, sizeof(ps_buf), "PRAGMA page_size=%d",
+			SQLX_DEFAULT_PAGE_SIZE);
+	rc = sqlite3_exec(db, ps_buf, NULL, NULL, &errmsg);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		GRID_WARN("Failed to set page_size=%d in schema: %s",
+				SQLX_DEFAULT_PAGE_SIZE, errmsg);
+		sqlite3_free(errmsg);
+		errmsg = NULL;
+	}
+
 	/* Force an admin table */
 	rc = sqlite3_exec(db, "CREATE TABLE admin ("
 				"k TEXT PRIMARY KEY NOT NULL, v BLOB DEFAULT NULL)",
 				NULL, NULL, &errmsg);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)  {
-		error = NEWERROR(rc, "Admin table error : %s (%s)",
+		error = NEWERROR(rc, "Admin table error: %s (%s)",
 			sqlite3_errmsg(db), errmsg);
 		goto label_exit;
 	}
@@ -715,18 +729,10 @@ label_retry:
 	do {
 		sqlite3 *h;
 		if (SQLITE_OK == sqlite3_open(path, &h)) {
-			/* Set sqlite page size. The default of 1024 produces a lot of
-			 * fragmentation. We advise at least 4096. Big containers with a
-			 * lot of chunks should benefit from page sizes >=16384. */
-			gchar buf[64] = {0};
-			g_snprintf(buf, sizeof(buf), "PRAGMA page_size=%d",
-					SQLX_DEFAULT_PAGE_SIZE);
-			sqlx_exec(h, buf);
 			sqlx_exec(h, "BEGIN");
 			_admin_entry_set_str_noerror(h, SQLX_ADMIN_BASENAME, args->name.base);
 			_admin_entry_set_str_noerror(h, SQLX_ADMIN_BASETYPE, args->name.type);
 			sqlx_exec(h, "COMMIT");
-			sqlx_exec(h, "VACUUM");
 			sqlite3_close(h);
 		}
 	} while (0);
