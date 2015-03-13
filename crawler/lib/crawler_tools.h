@@ -1,12 +1,30 @@
-#ifndef CRAWLER_TOOLS_H
-#define CRAWLER_TOOLS_H
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__crawler__lib__crawler_tools_h
+# define OIO_SDS__crawler__lib__crawler_tools_h 1
 
 #include <glib.h>
 #include <gmodule.h>
 
 #include <dbus/dbus.h>
 #include <time.h>
-
 
 /**
  * build the name of service on dbus bus
@@ -18,7 +36,6 @@ void buildServiceName(char* svc_name, int max_size_svc_name,
  * search and determine, and return the adresse bud-daemon to used dbus bus
  */
 char* getBusAddress(char* userdata);
-
 
 /**
  * This function returns a substring of a string (must free the returned value).
@@ -42,7 +59,6 @@ int disassemble_context_occur_argc_argv_uid(GVariant*, guint64*, GVariant**, int
  */
 GVariant* assemble_context_occur_argc_argv_uid(GVariant** b, guint64, GVariant*, int, char**, guint64);
 
-
 /*
  * This function gets the specific value of argv
  **/
@@ -62,7 +78,6 @@ gboolean container_path_is_valid(const gchar*);
  * This function moves a file on the disk, and eventualy deletes it in the end
  **/
 int move_file(const char*, const char*, gboolean);
-
 
 guint64   get_child_value_uint64(GVariant* gv, int order);
 GVariant* get_child_value_variant(GVariant* gv, int order);
@@ -91,8 +106,6 @@ struct trip_lib_entry_points {
  *   */
 void free_trip_lib_entry_points(struct trip_lib_entry_points*);
 
-
 struct trip_lib_entry_points* load_trip_library(char* path, char* trip_library_name);
 
-
-#endif
+#endif /*OIO_SDS__crawler__lib__crawler_tools_h*/

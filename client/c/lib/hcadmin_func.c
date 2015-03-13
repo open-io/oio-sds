@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "hc.tools"
 #endif
@@ -17,7 +36,7 @@ struct thread_user_data_s {
 	gchar *action;
 	gchar *excludesrv;
 	gboolean checkonly;
-	GMutex *lock;
+	GMutex lock;
 	GPtrArray *gpa;
 	guint indexreach;
 	struct global_cpt_s *cpts;
@@ -41,7 +60,7 @@ _m1policy_update(gchar *action, gchar *ns,gboolean isprefix, container_id_t cid,
 	while (m1addr) {
 		hc_result = meta1v2_remote_update_m1_policy(m1addr, &err, ns, ( isprefix ? cid : NULL), ( isprefix ? NULL: cid), type, action, checkonly, exludesrv, 300, 300);
 		if ( err ) {
-			if ( err->code < 100 || err->code > 500 ) {
+			if (CODE_IS_NETWORK_ERROR(err->code) || err->code > CODE_INTERNAL_ERROR) {
 				exclude=g_slist_prepend(exclude,m1addr);
 				m1addr = gs_resolve_meta1v2(hc, cid, NULL, 0, &exclude, &err);
 			} else {
@@ -66,7 +85,6 @@ _m1policy_update(gchar *action, gchar *ns,gboolean isprefix, container_id_t cid,
 	return hc_error;
 }
 
-
 static gs_error_t* _m2_touch(struct hc_url_s *hcurl, guint32 flags)
 {
 	GError*            err    = NULL;
@@ -83,7 +101,6 @@ static gs_error_t* _m2_touch(struct hc_url_s *hcurl, guint32 flags)
 	ns             = hc_url_get(hcurl, HCURL_NS);	
 	container_name = hc_url_get(hcurl, HCURL_REFERENCE);
 	content        = hc_url_get(hcurl, HCURL_PATH);
-
 
 	/* init grid client */
 	if ((ns==NULL) || (strlen(ns)==0)) {
@@ -109,7 +126,6 @@ static gs_error_t* _m2_touch(struct hc_url_s *hcurl, guint32 flags)
 			return gserr;
 		}
 	} else return gserr;
-
 
 	/* search meta2 master */
 	m2list = gs_resolve_meta2(hc, C0_ID(cid), &err);		
@@ -141,9 +157,6 @@ static gs_error_t* _m2_touch(struct hc_url_s *hcurl, guint32 flags)
 	
 	return gserr;
 }
-
-
-
 
 static void _pack_result(GPtrArray **gpa,gchar *id,gchar **result,gs_error_t *err, struct global_cpt_s *cpts) {
 	if ( !*gpa)
@@ -186,10 +199,10 @@ _m1policy_update_thread(gpointer data, gpointer p)
 		return;
 	}
 	err = _m1policy_update(user_data->action,user_data->ns,TRUE,cid, "meta2", user_data->excludesrv, user_data->checkonly, &tmp);
-	g_mutex_lock(user_data->lock);
+	g_mutex_lock(&user_data->lock);
 	_pack_result(&(user_data->gpa),base, tmp, err, user_data->cpts);
 	user_data->indexreach ++;
-	g_mutex_unlock(user_data->lock);
+	g_mutex_unlock(&user_data->lock);
 	if ( err ) {
 		gs_error_free(err);
 		err = NULL;
@@ -214,7 +227,7 @@ hcadmin_meta1_policy_update(char *ns,gchar *action, gboolean checkonly, gchar **
 	gchar        **tmp     = NULL;
 
 	if ((!args) || ( g_strv_length(args) == 0)) {
-		GSERRORCODE(&err,500, "Invalid argument list\n");
+		GSERRORCODE(&err, CODE_INTERNAL_ERROR, "Invalid argument list\n");
 		goto failed;
 	}
 
@@ -233,10 +246,10 @@ hcadmin_meta1_policy_update(char *ns,gchar *action, gboolean checkonly, gchar **
 		if ( g_strv_length(args) > 1 )
 			excludesrv = args[1];
 		else {
-			GSERRORCODE(&err, 500, "Missing service url \n");
+			GSERRORCODE(&err, CODE_INTERNAL_ERROR, "Missing service url \n");
 		}
 	} else {	
-		GSERRORCODE(&err, 500, "INVALID meta1 policy action %s\n",action);
+		GSERRORCODE(&err, CODE_INTERNAL_ERROR, "INVALID meta1 policy action %s\n",action);
 	}
 	if (err)
 		goto failed;
@@ -252,7 +265,7 @@ hcadmin_meta1_policy_update(char *ns,gchar *action, gboolean checkonly, gchar **
 		user_data->type = g_strdup_printf(srvtype);
 		user_data->excludesrv = excludesrv;
 		user_data->checkonly = checkonly;
-		user_data->lock = g_mutex_new();
+		g_mutex_init(&user_data->lock);
 		user_data->indexreach=0;
 		user_data->cpts = cpts;
 		user_data->gpa = NULL;
@@ -287,7 +300,7 @@ hcadmin_meta1_policy_update(char *ns,gchar *action, gboolean checkonly, gchar **
 			hc_url_clean(url);
 		}
 		g_thread_pool_free(pool, FALSE, TRUE);
-		g_mutex_free(user_data->lock);
+		g_mutex_clear(&user_data->lock);
 		g_free(user_data);
 		gpa = user_data->gpa;
 
@@ -337,7 +350,7 @@ hcadmin_meta1_policy_update(char *ns,gchar *action, gboolean checkonly, gchar **
 
 		// other ? --> error
 		} else {
-			GSERRORCODE(&err,500,"invalid ID %s, %d \n",hexID, sizeof(hexID));
+			GSERRORCODE(&err, CODE_INTERNAL_ERROR, "invalid ID %s, %d \n", hexID, sizeof(hexID));
 		}
 	}
 
@@ -363,9 +376,6 @@ failed :
 
 	return err;
 }
-
-
-
 
 gs_error_t * hcadmin_touch(char *url,gchar *action, gboolean checkonly, gchar **globalresult, gchar ***result, char ** args)
 {
@@ -408,5 +418,4 @@ gs_error_t * hcadmin_touch(char *url,gchar *action, gboolean checkonly, gchar **
 	hc_url_clean(hcurl);
 	return err;
 }
-
 

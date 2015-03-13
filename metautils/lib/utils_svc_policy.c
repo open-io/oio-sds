@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "metautils.svc"
 #endif
@@ -5,12 +24,13 @@
 #include <errno.h>
 
 #include "./metautils_macros.h"
+#include "./metautils_errors.h"
 #include "./metautils_hashstr.h"
 #include "./metautils_svc_policy.h"
 
 struct service_update_policies_s
 {
-	GMutex *lock;
+	GMutex lock;
 	GTree *tree_elements;
 };
 
@@ -30,8 +50,6 @@ struct kv_s
 	const gchar *name;
 	enum service_update_policy_e policy;
 };
-
-static GQuark gquark_log = 0;
 
 /* ------------------------------------------------------------------------- */
 
@@ -69,7 +87,7 @@ _get_from_array(const gchar *name, struct kv_s *pkv,
 		}
 	}
 
-	return g_error_new(gquark_log, 0, "Invalid policy");
+	return NEWERROR(0, "Invalid policy");
 }
 
 static inline GError*
@@ -116,13 +134,8 @@ _new_tree(void)
 struct service_update_policies_s *
 service_update_policies_create(void)
 {
-	struct service_update_policies_s *result;
-
-	if (!gquark_log)
-		gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
-
-	result = g_malloc0(sizeof(*result));
-	result->lock = g_mutex_new();
+	struct service_update_policies_s *result = g_malloc0(sizeof(*result));
+	g_mutex_init(&result->lock);
 	result->tree_elements = _new_tree();
 	return result;
 }
@@ -130,27 +143,14 @@ service_update_policies_create(void)
 void
 service_update_policies_destroy(struct service_update_policies_s *pol)
 {
-	GMutex *lock = NULL;
-
 	if (!pol)
 		return;
 
-	if (pol->lock) {
-		lock = pol->lock;
-		pol->lock = NULL;
-	}
-
-	if (lock)
-		g_mutex_lock(lock);
+	g_mutex_clear(&pol->lock);
 
 	if (pol->tree_elements) {
 		g_tree_destroy(pol->tree_elements);
 		pol->tree_elements = NULL;
-	}
-
-	if (lock) {
-		g_mutex_unlock(lock);
-		g_mutex_free(lock);
 	}
 
 	g_free(pol);
@@ -167,10 +167,10 @@ service_howto_update2(struct service_update_policies_s *pol,
 	EXTRA_ASSERT(htype != NULL);
 
 	policy = SVCUPD_NOT_SPECIFIED;
-	g_mutex_lock(pol->lock);
+	g_mutex_lock(&pol->lock);
 	if (NULL != (el = g_tree_lookup(pol->tree_elements, htype)))
 		policy = el->howto_update;
-	g_mutex_unlock(pol->lock);
+	g_mutex_unlock(&pol->lock);
 
 	return policy;
 }
@@ -212,9 +212,9 @@ service_update_policies_dump(struct service_update_policies_s *pol)
 	GString *out;
 
 	out = g_string_new("");
-	g_mutex_lock(pol->lock);
+	g_mutex_lock(&pol->lock);
 	g_tree_foreach(pol->tree_elements, _runner, out);
-	g_mutex_unlock(pol->lock);
+	g_mutex_unlock(&pol->lock);
 
 	return g_string_free(out, FALSE);
 }
@@ -251,14 +251,14 @@ configure_strkv(GTree *tree, gchar *name)
 	guint step, reqdist = 0, replicas = 1;
 
 	if (!(value = strchr(name, '=')))
-		return g_error_new(gquark_log, 0, "Invalid value");
+		return NEWERROR(0, "Invalid value");
 
 	*(value ++) = '\0';
 
 	if (!*name)
-		return g_error_new(gquark_log, 0, "Empty name");
+		return NEWERROR(0, "Empty name");
 	if (!*value)
-		return g_error_new(gquark_log, 0, "Empty value");
+		return NEWERROR(0, "Empty value");
 
 	// Look for arguments
 	gchar *p, *next;
@@ -279,24 +279,24 @@ configure_strkv(GTree *tree, gchar *name)
 				end = NULL;
 				r64 = g_ascii_strtoull(p, &end, 10);
 				if (r64 == G_MAXUINT64 && errno == ERANGE)
-					return g_error_new(gquark_log, 0, "Replicas count overflow");
+					return NEWERROR(0, "Replicas count overflow");
 				if (r64 > 65536)
-					return g_error_new(gquark_log, 0, "Replicas count overflow");
+					return NEWERROR(0, "Replicas count overflow");
 				if (!r64 || end == p)
-					return g_error_new(gquark_log, 0, "Invalid replicas count (zero not allowed)");
+					return NEWERROR(0, "Invalid replicas count (zero not allowed)");
 				else if (end && *end != '\0')
-					return g_error_new(gquark_log, 0, "Unexpected extra chars in replicas count");
+					return NEWERROR(0, "Unexpected extra chars in replicas count");
 				replicas = r64;
 				break;
 			case 2: // REQDIST
 				end = NULL;
 				r64 = g_ascii_strtoull(p, &end, 10);
 				if (r64 == G_MAXUINT64 && errno == ERANGE)
-					return g_error_new(gquark_log, 0, "Distance overflow");
+					return NEWERROR(0, "Distance overflow");
 				if (r64 > 65536)
-					return g_error_new(gquark_log, 0, "Distance overflow");
+					return NEWERROR(0, "Distance overflow");
 				if (end && *end != '\0')
-					return g_error_new(gquark_log, 0, "Unexpected extra chars in distance");
+					return NEWERROR(0, "Unexpected extra chars in distance");
 				reqdist = r64;
 				break;
 			case 3: // TAG FILTER
@@ -364,9 +364,6 @@ service_update_reconfigure(struct service_update_policies_s *pol,
 	GError *err;
 	GTree *newtree, *oldtree;
 
-	if (!gquark_log)
-		gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
-
 	newtree = _new_tree();
 
 	err = configure_newtree(newtree, cfg);
@@ -375,10 +372,10 @@ service_update_reconfigure(struct service_update_policies_s *pol,
 		return err;
 	}
 
-	g_mutex_lock(pol->lock);
+	g_mutex_lock(&pol->lock);
 	oldtree = pol->tree_elements;
 	pol->tree_elements = newtree;
-	g_mutex_unlock(pol->lock);
+	g_mutex_unlock(&pol->lock);
 
 	if (oldtree)
 		g_tree_destroy(oldtree);
@@ -397,10 +394,10 @@ service_howmany_replicas2(struct service_update_policies_s *pol,
 
 	count = 0;
 	if (pol && htype) {
-		g_mutex_lock(pol->lock);
+		g_mutex_lock(&pol->lock);
 		if (NULL != (el = g_tree_lookup(pol->tree_elements, htype)))
 			count = el->replicas;
-		g_mutex_unlock(pol->lock);
+		g_mutex_unlock(&pol->lock);
 	}
 
 	return count;
@@ -438,10 +435,10 @@ service_howmany_distance2(struct service_update_policies_s *pol,
 
 	count = 0;
 	if (pol && htype) {
-		g_mutex_lock(pol->lock);
+		g_mutex_lock(&pol->lock);
 		if (NULL != (el = g_tree_lookup(pol->tree_elements, htype)))
 			count = el->reqdist;
-		g_mutex_unlock(pol->lock);
+		g_mutex_unlock(&pol->lock);
 	}
 
 	return count;
@@ -477,7 +474,7 @@ service_update_tagfilter2(struct service_update_policies_s *pol,
 	EXTRA_ASSERT(pol != NULL);
 	EXTRA_ASSERT(htype != NULL);
 
-	g_mutex_lock(pol->lock);
+	g_mutex_lock(&pol->lock);
 	if (NULL != (el = g_tree_lookup(pol->tree_elements, htype))) {
 		if (el->tagname) {
 			if (pname)
@@ -487,7 +484,7 @@ service_update_tagfilter2(struct service_update_policies_s *pol,
 			rc = TRUE;
 		}
 	}
-	g_mutex_unlock(pol->lock);
+	g_mutex_unlock(&pol->lock);
 
 	return rc;
 }

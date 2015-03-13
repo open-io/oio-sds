@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.client.resolv.local"
 #endif
@@ -32,7 +51,6 @@ void resolver_direct_clear (resolver_direct_t *r)
 	M0CACHE_UNLOCK(*r);
 }
 
-
 static
 GPtrArray*
 build_meta0_cache (struct resolver_direct_s *r, GError **err)
@@ -58,7 +76,6 @@ build_meta0_cache (struct resolver_direct_s *r, GError **err)
 
 	return array;
 }
-
 
 static
 int
@@ -88,7 +105,7 @@ UNSAFE_resolver_direct_reload (struct resolver_direct_s *r, gboolean locked, GEr
 		g_get_current_time (&gtv);
 		g_time_val_add (&gtv, COND_MAXWAIT_MS * 1000);
 
-		if (g_cond_timed_wait(r->refresh_condition, r->use_mutex, &gtv)) {
+		if (g_cond_timed_wait(&r->refresh_condition, &r->use_mutex, &gtv)) {
 			/*when signal is thrown, and g_condwait return, mutex is locked*/
 			if (!locked) M0CACHE_UNLOCK(*r);
 			rc = 1;
@@ -134,7 +151,7 @@ UNSAFE_resolver_direct_reload (struct resolver_direct_s *r, gboolean locked, GEr
 		/* refresh done, change the state in a critical section and wake up
 		 * all the threads waiting on the condition. */
 		r->refresh_pending = FALSE;	
-		g_cond_broadcast (r->refresh_condition);
+		g_cond_broadcast (&r->refresh_condition);
 		
 		if (!locked)
 			M0CACHE_UNLOCK(*r);
@@ -146,7 +163,6 @@ exit_label:
 	return rc;
 
 }
-
 
 void
 resolver_direct_decache_all (resolver_direct_t *r)
@@ -165,7 +181,6 @@ resolver_direct_decache_all (resolver_direct_t *r)
 		WARN("Cause:%s", g_error_get_message(gErr));
 	}
 }
-
 
 static gboolean
 _is_usable_meta1(addr_info_t *addr, GSList *exclude) {
@@ -218,7 +233,6 @@ resolver_direct_get_meta1 (resolver_direct_t *r, const container_id_t cID, int r
 	if(g_slist_length(exclude) == nb_meta1) {
 		goto end_label;
 	}
-
 
 	while(try < nb_meta1) {
 		if(!ro) {
@@ -340,7 +354,7 @@ resolver_direct_get_meta2_once (resolver_direct_t *r, const char *ns, const cont
 	/*resolves meta1*/
 	m1 = resolver_direct_get_meta1 (r, cid, 1, *m1_exclude, &e);
 	if (!m1) {
-		GSETCODE (err, e ? e->code : 500, "META1 Resolution error : %s", e ? e->message : "no error specified");
+		GSETCODE (err, e ? e->code : CODE_INTERNAL_ERROR, "META1 Resolution error : %s", e ? e->message : "no error specified");
 		if (NULL != e)
 			g_clear_error(&e);
 		return NULL;
@@ -350,7 +364,6 @@ resolver_direct_get_meta2_once (resolver_direct_t *r, const char *ns, const cont
 	m2 = meta1v2_remote_list_reference_services (m1, &e, ns, cid, "meta2", (r->timeout.m1.cnx)/1000, (r->timeout.m1.op)/1000);
 
 	DEBUG("Meta2 services listed");
-
 
 	if (!m2 || 0 == g_strv_length(m2)) {
 		if (NULL != e) {
@@ -379,7 +392,6 @@ resolver_direct_get_meta2_once (resolver_direct_t *r, const char *ns, const cont
 	return result;
 }
 
-
 GSList *
 resolver_direct_get_meta2 (resolver_direct_t *resolver, const char *ns, const container_id_t cID, GError **e, int max_attempts)
 {
@@ -407,7 +419,7 @@ resolver_direct_get_meta2 (resolver_direct_t *resolver, const char *ns, const co
 				resolver_direct_decache_all (r);
 				INFO("metacd: not found fail M0");
 				return __directly_resolve (r, exclude, err);
-			} else if ((*err)->code < 100 || (*err)->code == 500) {
+			} else if (CODE_IS_NETWORK_ERROR((*err)->code) || (*err)->code == CODE_INTERNAL_ERROR) {
 				INFO("metacd: not found fail code (%d)", (*err)->code);
 				return __directly_resolve (r, exclude, err);
 			} else {
@@ -443,11 +455,9 @@ void resolver_direct_free (resolver_direct_t *r)
 	}
 
 	M0CACHE_FINI_LOCK(*r);
-	if (r->refresh_condition)
-		g_cond_free (r->refresh_condition);
+	g_cond_clear (&r->refresh_condition);
 	free (r);
 }
-
 
 resolver_direct_t*
 resolver_direct_create2 (const char * const config, gint to_cnx, gint to_req, GError **err)
@@ -474,7 +484,7 @@ resolver_direct_create_with_metacd(const gchar * const config, struct metacd_s *
 	r->metacd = metacd;
 	r->mappings = NULL;
 	M0CACHE_INIT_LOCK(*r);
-	r->refresh_condition = g_cond_new ();
+	g_cond_init(&r->refresh_condition);
 	r->timeout.conscience.op =  to_req;
 	r->timeout.conscience.cnx = to_cnx;
 	r->timeout.m0.op =  M0_TOREQ_DEFAULT;

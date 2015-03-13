@@ -1,9 +1,24 @@
-/**
- * @file meta1_prefixes.h
- */
+/*
+OpenIO SDS meta1v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
-#ifndef GRID__META1_PREFIXES__H
-# define GRID__META1_PREFIXES__H 1
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__meta1v2__meta1_prefixes_h
+# define OIO_SDS__meta1v2__meta1_prefixes_h 1
 
 /**
  * @addtogroup meta1v2_prefixes 
@@ -63,7 +78,6 @@ gboolean meta1_prefixes_is_managed(struct meta1_prefixes_set_s *m1ps,
 gchar ** meta1_prefixes_get_peers(struct meta1_prefixes_set_s *m1ps,
 		const guint8 *bytes);
 
-
 /**
  * @param m1ps
  * @return
@@ -74,4 +88,4 @@ guint8* meta1_prefixes_get_cache(struct meta1_prefixes_set_s *m1ps);
 
 /** @} */
 
-#endif
+#endif /*OIO_SDS__meta1v2__meta1_prefixes_h*/

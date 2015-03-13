@@ -1,7 +1,24 @@
-#ifndef __REDCURRANT_metatype_nsinfo__h
-#define __REDCURRANT_metatype_nsinfo__h 1
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
-#define REDC_LOSTFOUND_FOLDER "redc_lost+found"
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__metatype_nsinfo_h
+# define OIO_SDS__metautils__lib__metatype_nsinfo_h 1
 
 struct namespace_info_s;
 
@@ -61,7 +78,6 @@ gint64 namespace_info_get_srv_param_i64(const namespace_info_t *ni,
 gboolean namespace_info_copy(struct namespace_info_s* src,
 		struct namespace_info_s* dst, GError **error);
 
-
 /**
  * Makes a deep copy of the input struct namespace_info_s.
  *
@@ -73,9 +89,7 @@ gboolean namespace_info_copy(struct namespace_info_s* src,
  *
  * @return NULL in case of error, or a valid struct namespace_info_s
  */
-struct namespace_info_s* namespace_info_dup(struct namespace_info_s* src,
-		GError **error);
-
+struct namespace_info_s* namespace_info_dup(struct namespace_info_s* src);
 
 /**
  * Clear a namespace_info content
@@ -94,7 +108,6 @@ void namespace_info_init(namespace_info_t *ni);
  */
 void namespace_info_free(struct namespace_info_s* ns_info);
 
-
 /**
  * Calls namespace_info_free() on p1 and ignores p2.
  *
@@ -103,14 +116,12 @@ void namespace_info_free(struct namespace_info_s* ns_info);
  */
 void namespace_info_gclean(gpointer p1, gpointer p2);
 
-
 /** 
  * Map the given list of struct namespace_info_s in a GHashTable
  * where the values are the list elements (not a copy!)
  * and where the keys are the "name" fields the the values.
  */
 GHashTable* namespace_info_list2map(GSList *list_nsinfo, gboolean auto_free);
-
 
 /**
  * Return the list of the namespace names contained in
@@ -122,7 +133,6 @@ GHashTable* namespace_info_list2map(GSList *list_nsinfo, gboolean auto_free);
  * sequence order of the input list, and the duplicated entries.
  */
 GSList* namespace_info_extract_name(GSList *list_nsinfo, gboolean copy);
-
 
 /**
  * Get the data_security definition from the specified key
@@ -164,4 +174,4 @@ void namespace_info_encode_json(GString *out, struct namespace_info_s *ni);
 
 /** @} */
 
-#endif // __REDCURRANT_metatype_nsinfo__h
+#endif /*OIO_SDS__metautils__lib__metatype_nsinfo_h*/

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "atos.grid.action"
 #endif
@@ -44,9 +63,6 @@ static gchar     g_service_name[SERVICENAME_MAX_BYTES];
 static char*     g_dbusdaemon_address = NULL;
 static GMainLoop *g_main_loop = NULL;
 
-
-
-
 //==============================================================================
 // Listening message come from, and execute action function
 //==============================================================================
@@ -85,7 +101,6 @@ static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam,
 	if (pParam == NULL)
 		return FALSE;
 
-
 	if (allParam == TRUE) {
 		// Namespace extraction
 		if (NULL == (pParam->namespace = get_argv_value(pActParam->argc, pActParam->argv, action_name,
@@ -116,7 +131,6 @@ static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam,
 		} 
 		GRID_DEBUG("Timeout Request purge: %lf", pParam->timeout_request);		
 
-
 		/* Checking occurence form */
 		GVariantType* gvt = g_variant_type_new(occur_type_string);
 		if (FALSE == g_variant_is_of_type(pActParam->occur, gvt)) {
@@ -140,9 +154,6 @@ static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam,
 	return TRUE;
 }
 
-
-
-
 gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
     const char *alldata, GError **error)
 {
@@ -154,7 +165,6 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
 	init_paramMsgRx(&msgRx);
 
 	(void) obj;
-
 
 	GVariant* param = act_disassembleParam((char*) alldata, &actparam);
 
@@ -176,7 +186,6 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
 	g_free(cstr);
 	
 
-
 	// save response
 	char* temp_msg = (char*)g_malloc0((SHORT_BUFFER_SIZE*sizeof(char)) + sizeof(guint64));
 	sprintf(temp_msg, "%s on %s for the context %llu and the file %s",
@@ -184,7 +193,6 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
 			(long long unsigned)actparam.context_id, msgRx.source_path);
 	char *status = act_buildResponse(action_name, service_pid, actparam.context_id, temp_msg);
 	g_free(temp_msg);
-
 
 	// send it
     static TCrawlerReq* req = NULL;
@@ -203,14 +211,12 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
 
 	g_free(status);
 
-
 	act_paramact_clean(&actparam);
 	clean_paramMsgRx(&msgRx);
 	g_variant_unref(param);
 
 	return TRUE;
 }
-
 
 gboolean action_command(TCrawlerBusObject *obj, const char* cmd, const char *alldata,
 		char** status, GError **error)
@@ -265,10 +271,6 @@ gboolean action_command(TCrawlerBusObject *obj, const char* cmd, const char *all
 	return TRUE;
 }
 
-
-
-
-
 /* GRID COMMON MAIN */
 static struct grid_main_option_s *main_get_options(void)
 {
@@ -296,8 +298,6 @@ static void main_action(void)
 				/*g_cfg_action_name, g_service_pid,*/ error->message);
 		exit(EXIT_FAILURE);
 	}
-
-
 
 	GRID_INFO("%s (%d): System D-Bus %s action signal listening thread started...",
 			action_name, service_pid, action_name);

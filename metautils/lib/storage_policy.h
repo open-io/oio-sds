@@ -1,10 +1,24 @@
-/**
- * @file storage_policy.h
- * Server Storage policy library
- */
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
-#ifndef __STORAGE_POLICY__H__
-# define __STORAGE_POLICY__H__ 1
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__storage_policy_h
+# define OIO_SDS__metautils__lib__storage_policy_h 1
 
 /**
  * @defgroup storage_policy
@@ -117,7 +131,6 @@ void storage_class_clean(struct storage_class_s *sc);
 
 /** Calls storage_class_clean() on <u> and ignores <ignored> */
 void storage_class_gclean(gpointer u, gpointer ignored);
-
 
 /**
  * @param sp
@@ -259,4 +272,4 @@ guint distance_between_services(struct service_info_s *s0,
 
 /** @} */
 
-#endif /* __STORAGE_POLICY__H__ */
+#endif /*OIO_SDS__metautils__lib__storage_policy_h*/

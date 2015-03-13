@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta1v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta1.prefix"
 #endif
@@ -19,7 +38,6 @@
 #include "./meta1_prefixes.h"
 #include "./meta1_backend.h"
 
-
 #define SWAP_PTR(P0,PNEW) do { \
 	if (!(P0)) { (P0) = (PNEW); (PNEW) = NULL; } \
 	else { void *p = (P0); (P0) = (PNEW); (PNEW) = p; } } while (0)
@@ -28,7 +46,7 @@ struct meta1_prefixes_set_s
 {
 	guint8 *cache;
 	GPtrArray *by_prefix;
-	GMutex *lock;
+	GMutex lock;
 };
 
 /* CACHE operations --------------------------------------------------------- */
@@ -102,7 +120,7 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 	guint8 *cache = _cache_from_m0l(m0info_list, local_addr);
 	GPtrArray *by_prefix = meta0_utils_list_to_array(m0info_list);
 
-	g_mutex_lock(m1ps->lock);
+	g_mutex_lock(&m1ps->lock);
 	GRID_DEBUG("Got %u prefixes from M0, %u in place",
 			by_prefix->len, m1ps->by_prefix ? m1ps->by_prefix->len : 0);
 
@@ -118,7 +136,7 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 
 	SWAP_PTR(m1ps->by_prefix, by_prefix);
 	SWAP_PTR(m1ps->cache, cache);
-	g_mutex_unlock(m1ps->lock);
+	g_mutex_unlock(&m1ps->lock);
 
 	if (by_prefix)
 		meta0_utils_array_clean(by_prefix);
@@ -186,7 +204,7 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps,
 		}
 
 		GRID_WARN("M0 cache loading error : (%d) %s", err->code, err->message);
-		if (err->code >= 100)
+		if (!CODE_IS_NETWORK_ERROR(err->code))
 			break;
 
 		g_clear_error(&err);
@@ -210,9 +228,9 @@ meta1_prefixes_is_managed(struct meta1_prefixes_set_s *m1ps,
 	gboolean rc = FALSE;
 	if (!m1ps || !m1ps->cache || !bytes)
 		return FALSE;
-	g_mutex_lock(m1ps->lock);
+	g_mutex_lock(&m1ps->lock);
 	rc = _cache_is_managed(m1ps->cache, bytes);
-	g_mutex_unlock(m1ps->lock);
+	g_mutex_unlock(&m1ps->lock);
 	return rc;
 }
 
@@ -225,8 +243,7 @@ meta1_prefixes_clean(struct meta1_prefixes_set_s *m1ps)
 		g_free(m1ps->cache);
 	if (m1ps->by_prefix)
 		meta0_utils_array_clean(m1ps->by_prefix);
-	if (m1ps->lock)
-		g_mutex_free(m1ps->lock);
+	g_mutex_clear(&m1ps->lock);
 	memset(m1ps, 0, sizeof(*m1ps));
 	g_free(m1ps);
 }
@@ -240,7 +257,7 @@ meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps,
 
 	EXTRA_ASSERT(m1ps != NULL);
 
-	g_mutex_lock(m1ps->lock);
+	g_mutex_lock(&m1ps->lock);
 	memset(m1ps->cache, ~0, 8192);
 	if (m1ps->by_prefix)
 		meta0_utils_array_clean(m1ps->by_prefix);
@@ -249,7 +266,7 @@ meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps,
 		u16 = i32;
 		meta0_utils_array_add(m1ps->by_prefix, (guint8*)(&u16), local_url);
 	}
-	g_mutex_unlock(m1ps->lock);
+	g_mutex_unlock(&m1ps->lock);
 
 	return NULL;
 }
@@ -301,18 +318,16 @@ meta1_prefixes_get_all(struct meta1_prefixes_set_s *m1ps)
 	return result;
 }
 
-
 guint8*
 meta1_prefixes_get_cache(struct meta1_prefixes_set_s *m1ps)
 {
 	EXTRA_ASSERT(m1ps != NULL);
 
-	g_mutex_lock(m1ps->lock);
+	g_mutex_lock(&m1ps->lock);
 	guint8* result = g_memdup(m1ps->cache,8192);
-	g_mutex_unlock(m1ps->lock);
+	g_mutex_unlock(&m1ps->lock);
 	return result;
 }
-
 
 struct meta1_prefixes_set_s *
 meta1_prefixes_init(void)
@@ -321,7 +336,7 @@ meta1_prefixes_init(void)
 
 	m1ps = g_malloc0(sizeof(struct meta1_prefixes_set_s));
 	m1ps->cache = g_malloc0(8192);
-	m1ps->lock = g_mutex_new();
+	g_mutex_init(&m1ps->lock);
 	m1ps->by_prefix = NULL;
 	return m1ps;
 }
@@ -334,9 +349,9 @@ meta1_prefixes_get_peers(struct meta1_prefixes_set_s *m1ps,
 
 	EXTRA_ASSERT(m1ps != NULL);
 
-	g_mutex_lock(m1ps->lock);
+	g_mutex_lock(&m1ps->lock);
 	a = meta0_utils_array_get_urlv(m1ps->by_prefix, bytes);
-	g_mutex_unlock(m1ps->lock);
+	g_mutex_unlock(&m1ps->lock);
 
 	return a;
 }

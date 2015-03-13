@@ -1,19 +1,20 @@
 include_directories(BEFORE . ../..)
 
 include_directories(AFTER
-		${OPENSSL_INCLUDE_DIRS}
+		${ATTR_INCLUDE_DIRS}
 		${APACHE2_INCLUDE_DIRS}
 		${APR_INCLUDE_DIRS}
+		${OPENSSL_INCLUDE_DIRS}
 		${LZO_INCLUDE_DIRS}
-		${ZLIB_INCLUDE_DIRS}
-		${ATTR_INCLUDE_DIRS})
+		${ZLIB_INCLUDE_DIRS})
 
 link_directories(
-		${LZO_LIBRARY_DIRS}
-		${ZLIB_LIBRARY_DIRS}
 		${ATTR_LIBRARY_DIRS}
 		${APACHE2_LIBRARY_DIRS}
-		${APR_LIBRARY_DIRS})
+		${APR_LIBRARY_DIRS}
+		${OPENSSL_LIBRARY_DIRS}
+		${LZO_LIBRARY_DIRS}
+		${ZLIB_LIBRARY_DIRS})
 
 add_library(mod_dav_rawx MODULE
 		mod_dav_rawx.c
@@ -39,8 +40,8 @@ set_target_properties(mod_dav_rawx PROPERTIES PREFIX "" SUFFIX .so)
 target_link_libraries(mod_dav_rawx
 		metautils rawx
 		${APR_LIBRARIES} ${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES}
-		-lz -llzo2)
+		${ZLIB_LIBRARIES} ${LZO_LIBRARIES})
 
 install(TARGETS mod_dav_rawx
-		LIBRARY DESTINATION ${APACHE2_LIBRARY_DIRS}/modules)
+		LIBRARY DESTINATION ${APACHE2_MODULES_DIRS})
 

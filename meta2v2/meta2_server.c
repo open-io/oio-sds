@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta2.server"
 #endif
@@ -30,7 +49,6 @@
 static struct meta2_backend_s *m2 = NULL;
 static struct sqlx_upgrader_s *upgrader = NULL;
 
-
 static void
 _task_reconfigure_m2(gpointer p)
 {
@@ -48,14 +66,14 @@ _task_notify_modified_containers(gpointer p)
 
 static inline gchar **
 filter_services(struct sqlx_service_s *ss,
-		gchar **s, gint64 seq, const gchar *t)
+		gchar **s, gint64 seq, const gchar *type)
 {
 	gboolean matched = FALSE;
 	GPtrArray *tmp = g_ptr_array_new();
 	(void) seq;
 	for (; *s ;s++) {
 		struct meta1_service_url_s *u = meta1_unpack_url(*s);
-		if (0 == strcmp(t, u->srvtype)) {
+		if (0 == strcmp(type, u->srvtype)) {
 			if (!g_ascii_strcasecmp(u->host, ss->url->str))
 				matched = TRUE;
 			else
@@ -92,37 +110,38 @@ filter_services_and_clean(struct sqlx_service_s *ss,
 }
 
 static struct hc_url_s *
-_init_hc_url(struct sqlx_service_s *ss, const gchar *n, gint64 *pseq)
+_init_hc_url(struct sqlx_service_s *ss, struct sqlx_name_s *n, gint64 *pseq)
 {
+	gint64 seq = 1;
 	struct hc_url_s *u = hc_url_empty();
 
 	hc_url_set(u, HCURL_NS, ss->ns_name);
-	const gchar *sep = strchr(n, '@');
-	gint64 seq = 1;
 
+	const gchar *sep = strchr(n->base, '@');
 	if (!sep)
-		sep = n;
+		sep = n->base;
 	else {
-		seq = g_ascii_strtoll(n, NULL, 10);
+		seq = g_ascii_strtoll(n->base, NULL, 10);
 		++ sep;
 	}
 	if (!hc_url_set(u, HCURL_HEXID, sep)) {
 		hc_url_clean(u);
 		return NULL;
 	}
-	if (pseq)
-		*pseq = seq;
+	*pseq = seq;
 	return u;
 }
 
 static GError *
-_get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t,
+_get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
-	if (!n || !t || !result)
-		return NEWERROR(500, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
-	if (!g_str_has_prefix(t, META2_TYPE_NAME))
-		return NEWERROR(400, "Invalid type name: '%s'", t);
+	EXTRA_ASSERT(ss != NULL);
+	EXTRA_ASSERT(result != NULL);
+	SQLXNAME_CHECK(n);
+
+	if (!g_str_has_prefix(n->type, META2_TYPE_NAME))
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name: '%s'", n->type);
 
 	gint retries = 1;
 	gint64 seq = 1;
@@ -132,13 +151,13 @@ _get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t,
 
 	u = _init_hc_url(ss, n, &seq);
 	if (!u)
-		return NEWERROR(400, "Invalid base name [%s]", n);
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name [%s]", n->base);
 
 retry:
 	if (nocache) {
-		hc_decache_reference_service(ss->resolver, u, t);
+		hc_decache_reference_service(ss->resolver, u, n->type);
 	}
-	err = hc_resolve_reference_service(ss->resolver, u, t, &peers);
+	err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);
 
 	if (NULL != err) {
 		g_prefix_error(&err, "Peer resolution error: ");
@@ -146,7 +165,7 @@ retry:
 		return err;
 	}
 
-	if (!(*result = filter_services_and_clean(ss, peers, seq, t))) {
+	if (!(*result = filter_services_and_clean(ss, peers, seq, n->type))) {
 		if (retries-- > 0) {
 			peers = NULL;
 			nocache = TRUE;
@@ -176,14 +195,15 @@ meta2_on_open(struct sqlx_sqlite3_s *sq3, gpointer cb_data)
 static void
 meta2_on_close(struct sqlx_sqlite3_s *sq3, gboolean deleted, gpointer cb_data)
 {
+	gint64 seq = 1;
 	EXTRA_ASSERT(sq3 != NULL);
 
 	if (!deleted)
 		return;
 
-	struct hc_url_s *u = _init_hc_url(PSRV(cb_data), sq3->logical_name, NULL);
+	struct hc_url_s *u = _init_hc_url(PSRV(cb_data), sqlx_name_mutable_to_const(&sq3->name), &seq);
 	if (!u) {
-		GRID_WARN("Invalid base name [%s]", sq3->logical_name);
+		GRID_WARN("Invalid base name [%s]", sq3->name.base);
 		return;
 	}
 	hc_decache_reference_service(PSRV(cb_data)->resolver, u, META2_TYPE_NAME);

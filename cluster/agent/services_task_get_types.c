@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "agent.services.task_get"
 #endif
@@ -137,26 +156,19 @@ sdata_cleaner(struct session_data_s *sdata)
 static int
 task_worker(gpointer p, GError **error )
 {
-	struct session_data_s *sdata;
-	struct namespace_data_s *ns_data;
-        worker_t *asn1_worker;
-
 	TRACE_POSITION();
 
-	ns_data = get_namespace((gchar*)p, error);
+	struct namespace_data_s *ns_data = get_namespace((gchar*)p, error);
 	if (!ns_data) {
 		GSETERROR(error,"Namespace [%s] not (yet) managed", (gchar*)p);
 		return 0;
 	}
 
-	sdata=NULL;
-	asn1_worker=NULL;
-
-	sdata = g_try_malloc0(sizeof(struct session_data_s));
+	struct session_data_s *sdata = g_malloc0(sizeof(struct session_data_s));
 	g_strlcpy(sdata->ns, ns_data->name, sizeof(sdata->ns)-1);
 	g_snprintf(sdata->task_id,sizeof(sdata->task_id), TASK_ID".%s",ns_data->name);
 
-	asn1_worker = create_asn1_worker(&(ns_data->ns_info.addr), NAME_MSGNAME_CS_GET_SRVNAMES);
+	worker_t *asn1_worker = create_asn1_worker(&(ns_data->ns_info.addr), NAME_MSGNAME_CS_GET_SRVNAMES);
 	asn1_worker_set_handlers(asn1_worker,parse_names_list,asn1_error_handler,asn1_final_handler);
 	asn1_worker_set_session_data(asn1_worker, sdata, (GDestroyNotify)sdata_cleaner);
 
@@ -167,7 +179,7 @@ task_worker(gpointer p, GError **error )
 		return 0;
 	}
 
-        return 1;
+	return 1;
 }
 
 /* ------------------------------------------------------------------------- */

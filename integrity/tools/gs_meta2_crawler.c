@@ -1,3 +1,22 @@
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gs_meta2_crawler"
 #endif
@@ -16,7 +35,6 @@
 #include "./volume_scanner.h"
 
 #define LIMIT_LENGTH_URL 23
-
 
 #ifndef META2LOCK_ATTRNAME_URL
 #define META2LOCK_ATTRNAME_URL "user.meta2_server.address"
@@ -231,7 +249,6 @@ main_configure(int argc, char **args){
 	return TRUE;
 }
 
-
 static gboolean
 accept_meta2(const gchar *dirname, const gchar *bn, void *data){
 	(void) dirname;
@@ -250,7 +267,6 @@ accept_meta2(const gchar *dirname, const gchar *bn, void *data){
 
 	return metautils_str_ishexa(bn, len); 
 }
-
 
 static enum scanner_traversal_e
 manage_dir_enter(const gchar *path_dir, guint depth, gpointer data){
@@ -431,7 +447,6 @@ main_action(void) {
 	do{
 		scan_volume(&scan_info, &motor_env);
 	}while(flag_loop && grid_main_is_running());
-
 
 	destroy_motor_env(&motor_env);
 	if (*path_root && *lock_xattr_name) {

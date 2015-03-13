@@ -1,5 +1,24 @@
-#ifndef __METACOMM__H__
-# define __METACOMM__H__
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__metacomm_h
+# define OIO_SDS__metautils__lib__metacomm_h 1
 
 /**
  * @file metacomm.h
@@ -90,9 +109,7 @@ typedef struct message_s *MESSAGE;
 
 struct metacnx_ctx_s;
 
-/**
- * Struct to store a META connection context
- */
+/** Struct to store a META connection context */
 struct metacnx_ctx_s
 {
 	GByteArray *id;		/**< The connection id */
@@ -109,84 +126,34 @@ struct metacnx_ctx_s
 	} timeout;		/*<! The timeouts */
 };
 
-/**
- * Allocate a new instance of struct metacnx_ctx_s
- *
- * @param err
- * @return a newly allocated instance of struct metacnx_ctx_s or NULL if an error occured (err is set)
- */
-struct metacnx_ctx_s *metacnx_create(GError ** err);
+/** Allocate a new instance of struct metacnx_ctx_s */
+struct metacnx_ctx_s *metacnx_create(void);
 
-/**
- * Clear a struct metacnx_ctx_s
- * 
- * @param ctx an allocated instance of struct metacnx_ctx_s
- */
+/** Clear a struct metacnx_ctx_s (but does not free it) */
 void metacnx_clear(struct metacnx_ctx_s *ctx);
 
-/**
- * Free a struct metacnx_ctx_s
- *
- * @param ctx an allocated instance of struct metacnx_ctx_s
- */
+/** Free a struct metacnx_ctx_s */
 void metacnx_destroy(struct metacnx_ctx_s *ctx);
 
-/**
- * Initialize a struct metacnx_ctx_s with host and port
- * 
- * @param ctx an instance of struct metacnx_ctx_s allocated with metacnx_create()
- * @param host the hostname of the service the connection has to be estalished to
- * @param port the port of the service the connection has to be estalished to
- * @param err
- * @return TRUE or FALSE if an error occured (err is set)
- */
+/** Initialize a struct metacnx_ctx_s with host and port */
 gboolean metacnx_init(struct metacnx_ctx_s *ctx, const gchar * host,
 		int port, GError ** err);
 
-/**
- * Initialize a struct metacnx_ctx_s with URL IPv4:port or [IPv6]:port
- * 
- * @param ctx an instance of struct metacnx_ctx_s allocated with metacnx_create()
- * @param url the URL of the service the connection has to be estalished to
- * @param err
- * @return TRUE or FALSE if an error occured (err is set)
- */
+/** Initialize a struct metacnx_ctx_s with URL IPv4:port or [IPv6]:port */
 gboolean metacnx_init_with_url(struct metacnx_ctx_s *ctx, const gchar *url,
 		GError ** err);
 
-/**
- * Initialize a struct metacnx_ctx_s with addr_info_t
- * 
- * @param ctx an instance of struct metacnx_ctx_s allocated with metacnx_create()
- * @param addr an addr_info_t representin the address of the target we want to connect to
- * @param err
- * @return TRUE or FALSE if an error occured (err is set)
- */
+/** Initialize a struct metacnx_ctx_s with addr_info_t */
 gboolean metacnx_init_with_addr(struct metacnx_ctx_s *ctx,
 		const addr_info_t* addr, GError** err);
 
-/**
- * Open a connection to a META
- *
- * @param ctx an instance of struct metacnx_ctx_s allocated with metacnx_create() and initialized with metacnx_init() or metacnx_init_with_url()
- * @param err
- * @return TRUE or FALSE if an error occured (err is set)
- */
+/** Open a connection to a META */
 gboolean metacnx_open(struct metacnx_ctx_s *ctx, GError ** err);
 
-/**
- * Check if a connection to a META is opened
- *
- * @param ctx an instance of struct metacnx_ctx_s opened with metacnx_open()
- * @return TRUE if the connection is opened, FALSE otherwise
- */
+/** Check if a connection to a META is opened */
 gboolean metacnx_is_open(struct metacnx_ctx_s *ctx);
 
-/**
- * Close an opened connection to a METAX
- * 
- * @param ctx an instance of struct metacnx_ctx_s opened with metacnx_open()
- */
+/** Close an opened connection to a METAX */
 void metacnx_close(struct metacnx_ctx_s *ctx);
 
 /** @} */
@@ -199,28 +166,10 @@ void metacnx_close(struct metacnx_ctx_s *ctx);
  * @{
  */
 
-/**
- * @param err
- * @param udata
- * @param code
- * @param body
- * @param bodySize
- * @return
- */
 typedef gboolean(*content_handler_f) (GError ** err, gpointer udata, gint code, guint8 * body, gsize bodySize);
 
-/**
- * @param err
- * @param udata
- * @param code
- * @param rep
- * @return
- */
 typedef gboolean(*msg_handler_f) (GError ** err, gpointer udata, gint code, MESSAGE rep);
 
-/**
- *
- */
 struct code_handler_s
 {
 	int code;                          /**<  */
@@ -229,9 +178,6 @@ struct code_handler_s
 	msg_handler_f msg_handler;         /**<  */
 };
 
-/**
- *
- */
 struct reply_sequence_data_s
 {
 	gpointer udata;               /**<  */
@@ -239,42 +185,15 @@ struct reply_sequence_data_s
 	struct code_handler_s *codes; /**<  */
 };
 
-/**
- * @param err
- * @param ctx
- * @param request
- * @param handlers
- * @return
- */
 gboolean metaXClient_reply_sequence_run_context(GError ** err,
 		struct metacnx_ctx_s *ctx, MESSAGE request,
 		struct reply_sequence_data_s *handlers);
 
-/** Wrapper around metaXClient_reply_sequence_run_context()
- *
- * @param err
- * @param request
- * @param fd
- * @param ms
- * @param data
- * @return
- * @see metaXClient_reply_sequence_run_context()
- * @deprecated
- */
+/** Wrapper around metaXClient_reply_sequence_run_context() */
 gboolean metaXClient_reply_sequence_run(GError ** err, MESSAGE request,
 		int *fd, gint ms, struct reply_sequence_data_s *data);
 
-/** Wrapper around metaXClient_reply_sequence_run_context()
- *
- * @param err
- * @param request
- * @param addr
- * @param ms
- * @param data
- * @return
- * @see metaXClient_reply_sequence_run_context()
- * @deprecated
- */
+/** Wrapper around metaXClient_reply_sequence_run_context() */
 gboolean metaXClient_reply_sequence_run_from_addrinfo(GError ** err,
 		MESSAGE request, addr_info_t * addr, gint ms,
 		struct reply_sequence_data_s *data);
@@ -307,23 +226,15 @@ gboolean metaXClient_reply_sequence_run_from_addrinfo(GError ** err,
 gint metaXServer_reply_simple(MESSAGE * reply, MESSAGE request, gint status,
 		const gchar * msg, GError ** err);
 
-
 /**
  * Performs the opposite operation : retrieves the core elements
  * of the message (supposed to be a reply).
  *
  * The message returned in the msg pointer is a copy of the original.
  * It is allocated with the g_lib and must be freed with g_free().
- *
- * @param reply
- * @param status
- * @param msg
- * @param err
- * @return
  */
 gint metaXClient_reply_simple(MESSAGE reply, gint * status, gchar ** msg,
 		GError ** err);
-
 
 /**
  * Altough the list of fixed parameters is quite small, we do not want a set of
@@ -358,38 +269,14 @@ enum message_param_e
 #define message_has_VERSION(M,E) message_has_param((M),MP_VERSION,(E))
 #define message_has_BODY(M,E)    message_has_param((M),MP_BODY,(E))
 
-/**
- * Allocates all the internal structures of a hidden message.
- *
- * @param m a pointer to a message pointer. At the exit of the function,
- * it will be set to the newly allocated value.
- * @param error the error structure that will be set in case of failure
- * @return 1 on success, 0 on error
- */
-gint message_create(MESSAGE * m, GError ** error);
+/** Allocates all the internal structures of a hidden message. */
+MESSAGE message_create(void);
 
+/** Frees all the internal structures of the pointed message. */
+void message_destroy(MESSAGE m);
 
-/**
- * Frees all the internal structures of the pointed message.
- *
- * @param m a pointer to the message to destroy. The pointer itself won't be
- * freed.
- * @param error the error structure that will be set in case of failure
- * @return 1 on sucess, 0 on error
- */
-void message_destroy(MESSAGE m, GError ** error);
-
-
-/**
- * Returns wether the given message has the targeted parameter or not.
- *
- * @param m the inspected message
- * @param mp the code of the targeted parameter
- * @param error the error structure that will be set in case of failure
- * @return 1 on success and true, 0 on false or error
- */
+/** Returns wether the given message has the targeted parameter or not.  */
 gint message_has_param(MESSAGE m, enum message_param_e mp, GError ** error);
-
 
 /**
  * @brief Finds and returns a pointer to a given quick parameter in the given
@@ -409,7 +296,6 @@ gint message_has_param(MESSAGE m, enum message_param_e mp, GError ** error);
  * @return 1 on success, 0 on error
  */
 gint message_get_param(MESSAGE m, enum message_param_e mp, void **s, gsize * sSize, GError ** error);
-
 
 /**
  * @brief Sets a new value for the given parameter, in the given message.
@@ -435,15 +321,10 @@ gint message_set_param(MESSAGE m, enum message_param_e mp,
  *
  * @param m a pointer to a message. It may not be NULL.
  * @param name a not NULL pointer to the name of the new field.
- * @param nameSize the length of the name of the new field.
  * @param value a pointer to the content of the new field.
  * @param valueSize the length of the new value of the field.
- * @param error the error structure that will be set in case of failure
- * @return 1 on success, 0 on error
  */
-gint message_add_field(MESSAGE m, const void *name, gsize nameSize,
-		const void *value, gsize valueSize, GError ** error);
-
+void message_add_field(MESSAGE m, const char *name, const void *value, gsize valueSize);
 
 /**
  * Retrieves a copy of the 
@@ -460,18 +341,6 @@ gint message_get_field(MESSAGE m, const void *name, gsize nameSize,
 		void **value, gsize * valueSize, GError ** error);
 
 /**
- *
- * @param m
- * @param name
- * @param nameSize
- * @param error the error structure that will be set in case of failure
- * @return 1 on success, 0 on error
- */
-gint message_del_field(MESSAGE m, const void *name, gsize nameSize,
-		GError ** error);
-
-
-/**
  * Return the names of all the fields in the given message
  *
  * On success, it always return a not-NULL pointer to an array. If no stats
@@ -484,216 +353,88 @@ gint message_del_field(MESSAGE m, const void *name, gsize nameSize,
  * g_strfreev(). In case of failure, NULL is retrurned.
  * @see g_strfreev() in the glib documentation
  */
-gchar **message_get_field_names(MESSAGE m, GError ** error);
+gchar ** message_get_field_names(MESSAGE m, GError ** error);
 
-
-/**
- * @param m
- * @param hash
- * @param error
- * @return
- */ 
 gint message_get_fields(MESSAGE m, GHashTable ** hash, GError ** error);
 
-/**
- * @param err
- * @param id
- * @param name
- * @param body
- * @param ... a NULL-terminated va_list of GByteArray*
- * @return
- */
+/** @param ... a NULL-terminated va_list of GByteArray* */
 MESSAGE message_create_request(GError ** err, GByteArray * id,
 		const char *name, GByteArray * body, ...);
 
-/**
- * @param m
- * @param args
- */
+void message_add_field_strint64(MESSAGE m, const char *n, gint64 v);
+
+static inline void message_add_field_strint(MESSAGE m, const char *n, gint v) { return message_add_field_strint64(m,n,v); }
+static inline void message_add_field_struint(MESSAGE m, const char *n, guint v) { return message_add_field_strint64(m,n,v); }
+
 void message_add_fieldv_gba(MESSAGE m, va_list args);
 
-/**
- * @param m
- * @param ...
- */
 void message_add_fields_gba(MESSAGE m, ...);
 
-/**
- * @param m
- * @param args
- */
 void message_add_fieldv_str(MESSAGE m, va_list args);
 
-/**
- * @param m
- * @param ...
- */
 void message_add_fields_str(MESSAGE m, ...);
 
-/**
- * Perform the serialization of the message.
- *
- * @param m a pointer to the message to serialzie
- *
- * @param s the buffer that will contain the serialized form of the message
- *
- * @param sSize a pointer to the size of the buffer. When the function is called,
- * it must contain the maximum length of the buffer, and at the exit of the 
- * function, it holds the filled length in the buffer.
- *
- * @param error the error structure that will be set in case of failure
- *
- * @return 1 upon succes, 0 upon error
- */
+/** Perform the serialization of the message. */
 gint message_marshall(MESSAGE m, void **s, gsize * sSize, GError ** error);
 
-/**
- * @param m
- * @param err
- * @return
- */
 GByteArray* message_marshall_gba(MESSAGE m, GError **err);
 
-/**
- * Allocates a new message and Unserializes the given buffer.
- * 
- * @param m a pointer to a message pointer.
- * @param s the source buffer containing the serialized form of the message
- * @param sSize a pointer the size of the source buffer. When the function
- * is called, it must contain the size of the buffer, and at exit, it holds
- * the number of bytes read in the buffer.
- * @param error the error structure that will be set in case of failure
- * @return 0 upon error, 1 upon success
- */
+/** Allocates a new message and Unserializes the given buffer. */
 gint message_unmarshall(MESSAGE m, void *s, gsize * sSize, GError ** error);
 
 struct Message;
 
-/**
- * Calls message_marshall_gba() then message_destroy() on 'm'.
- *
- * @see message_marshall_gba
- * @param m
- * @return
- */
+/** Calls message_marshall_gba() then message_destroy() on 'm'. */
 GByteArray* message_marshall_gba_and_clean(MESSAGE m);
 
+typedef gint (body_decoder_f)(GSList **res, const void *b, gsize *bs, GError **err);
 
-/**
- * @param msg
- * @param n
- * @param cid
- * @return
- */
 GError* message_extract_cid(struct message_s *msg, const gchar *n,
 		container_id_t *cid);
 
-/**
- * @param msg
- * @param n
- * @param d
- * @param dsize
- * @return
- */
 GError* message_extract_prefix(struct message_s *msg, const gchar *n,
 		guint8 *d, gsize *dsize);
 
-/**
- * @param msg
- * @param n
- * @param mandatory
- * @param flag
- * @return
- */
 GError* message_extract_flag(struct message_s *msg, const gchar *n,
 		gboolean mandatory, gboolean *flag);
 
-/*!
- * @param msg
- * @param n
- * @param mandatory
- * @param flags
- */
 GError* message_extract_flags32(struct message_s *msg, const gchar *n,
 		gboolean mandatory, guint32 *flags);
 
-/**
- * @param msg
- * @param n
- * @param dst
- * @param dst_size
- * @return
- */
 GError* message_extract_string(struct message_s *msg, const gchar *n, gchar *dst,
 		gsize dst_size);
 
-/**
- * @param msg
- * @param n
- * @param i64
- * @return
- */
+GError* message_extract_string_copy(struct message_s *msg, const gchar *n,
+		gchar **dst);
+
 GError* message_extract_strint64(struct message_s *msg, const gchar *n,
 		gint64 *i64);
 
-/**
- * @param msg
- * @param n
- * @param u
- * @return
- */
 GError* message_extract_struint(struct message_s *msg, const gchar *n,
 		guint *u);
 
-/**
- * @param res
- * @param b
- * @param bs
- * @param err
- * @return
- */
-typedef gint (body_decoder_f)(GSList **res, const void *b, gsize *bs, GError **err);
+GError* message_extract_boolean(struct message_s *msg,
+		const gchar *n, gboolean mandatory, gboolean *v);
 
-/**
- * @param msg
- * @param result
- * @param decoder
- * @return
- */
-GError* message_extract_body_encoded(struct message_s *msg, GSList **result,
-		body_decoder_f decoder);
+GError* message_extract_header_encoded(struct message_s *msg,
+		const gchar *n, gboolean mandatory,
+		GSList **result, body_decoder_f decoder);
 
-/** Upon success, ensures result will be a printable string with a trailing \0
- * @param msg
- * @param result
- * @return
- */
-GError* message_extract_body_string(struct message_s *msg, gchar **result);
-
-/**
- * @param msg
- * @param result
- * @return
- */
-GError* message_extract_body_gba(struct message_s *msg, GByteArray **result);
-
-/**
- * @param msg
- * @param n
- * @param mandatory
- * @param result
- * @return
- */
 GError* message_extract_header_gba(struct message_s *msg, const gchar *n,
 		gboolean mandatory, GByteArray **result);
 
-/**
- * @param msg
- * @param result
- * @return
- */
+GError* message_extract_body_gba(struct message_s *msg, GByteArray **result);
+
+/** Upon success, ensures result will be a printable string with a trailing \0 */
+GError* message_extract_body_string(struct message_s *msg, gchar **result);
+
 GError* message_extract_body_strv(struct message_s *msg, gchar ***result);
 
+GError* metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
+		body_decoder_f decoder);
+
+GError* message_extract_body_encoded(struct message_s *msg, gboolean mandatory,
+		GSList **result, body_decoder_f decoder);
 
 /** @} */
 
@@ -705,13 +446,6 @@ GError* message_extract_body_strv(struct message_s *msg, gchar ***result);
  * @{
  */
 
-/**
- * @param ni
- * @param s
- * @param sSize
- * @param err
- * @return
- */
 gint namespace_info_unmarshall_one(struct namespace_info_s **ni,
 		const void *s, gsize *sSize, GError **err);
 
@@ -783,7 +517,6 @@ DECLARE_MARSHALLER(     meta2_raw_chunk_marshall);
 DECLARE_UNMARSHALLER(   meta2_raw_chunk_unmarshall);
 DECLARE_BODY_MANAGER(   meta2_raw_chunk_concat);
 
-
 /**
  * @param si the structure to be serialized. NULL is an error
  * @param err a pointer to the error structure being returned
@@ -791,198 +524,72 @@ DECLARE_BODY_MANAGER(   meta2_raw_chunk_concat);
  */
 GByteArray* service_info_marshall_1(service_info_t *si, GError **err);
 
-/**
- * @param cnx
- * @param err
- * @param req_name
- * @param body
- * @param ...
- * @return
- */
 GSList *service_info_sequence_request(struct metacnx_ctx_s *cnx, GError ** err,
 		const gchar * req_name, GByteArray * body, ...);
 
-/**
- * @param container
- * @param err
- * @return
- */
 GByteArray *meta1_raw_container_marshall(struct meta1_raw_container_s *container,
 		GError ** err);
 
-/**
- * @param buf
- * @param buf_len
- * @param err
- * @return
- */
 struct meta1_raw_container_s *meta1_raw_container_unmarshall(guint8 * buf,
 		gsize buf_len, GError ** err);
 
-/**
- * @param bytes
- * @param size
- * @param result
- * @return
- */
 gboolean simple_integer_unmarshall(const guint8 * bytes, gsize size,
 		gint64 * result);
 
-/**
- * @param i64
- * @param err
- * @return
- */
 GByteArray* simple_integer_marshall_gba(gint64 i64, GError **err);
 
-/**
- * Serializes the content structure into its ASN.1 representation.
- * @param content
- * @param err
- * @return
- */
+/** Serializes the content structure into its ASN.1 representation.  */
 GByteArray *meta2_maintenance_marshall_content(
 		struct meta2_raw_content_s *content, GError ** err);
 
-/**
- * Unserializes the ASN.1 encoded content structure. The returned
+/** Unserializes the ASN.1 encoded content structure. The returned
  * structure has to be freed with the meta2_maintenance_destroy_content()
- * function
- * @param encoded_content
- * @param err
- * @return
- */
+ * function. */
 struct meta2_raw_content_s *meta2_maintenance_content_unmarshall_bytearray(
 		GByteArray * encoded_content, GError ** err);
 
-/**
- * @param buf
- * @param buf_size
- * @param err
- * @return
- */
 struct meta2_raw_content_s *meta2_maintenance_content_unmarshall_buffer(
 		guint8 * buf, gsize buf_size, GError ** err);
 
-/**
- * @param chunkId
- * @param err
- * @return
- */
 GByteArray *chunk_id_marshall(const chunk_id_t * chunkId, GError ** err);
 
-/**
- * @param chunkId
- * @param src
- * @param srcSize
- * @param err
- * @return
- */
 gint chunk_id_unmarshall(chunk_id_t * chunkId, void *src, gsize srcSize, GError ** err);
 
-/**
- * Returns the unserialized form of the String sequence as a linked list
- * of GByteArrays
- *
- * @param encoded_form
- * @param err
- * @return
- */
+/** Returns the unserialized form of the String sequence as a linked list
+ * of GByteArrays */
 GSList *meta2_maintenance_arrays_unmarshall_bytearray(
 		GByteArray * encoded_form, GError ** err);
 
-/**
- * Returns the unserialized form of the String sequence as a linked list
- * of GByteArrays
- *
- * @param buf
- * @param buf_len
- * @param err
- * @return
- */
+/** Returns the unserialized form of the String sequence as a linked list
+ * of GByteArrays */
 GSList *meta2_maintenance_arrays_unmarshall_buffer(guint8 * buf, gsize buf_len, GError ** err);
 
-/**
- * Returns the unserialized form of the String sequence as a linked list
- * of NULL-terminated character strings
- *
- * @param encoded_form
- * @param err
- * @return
- */
+/** Returns the unserialized form of the String sequence as a linked list
+ * of NULL-terminated character strings */
 GSList *meta2_maintenance_names_unmarshall_bytearray(GByteArray * encoded_form, GError ** err);
 
-/**
- * Returns the unserialized form of the String sequence as a linked list
- * of NULL-terminated character strings
- *
- * @param buf
- * @param buf_len
- * @param err
- */
+/** Returns the unserialized form of the String sequence as a linked list
+ * of NULL-terminated character strings */
 GSList *meta2_maintenance_names_unmarshall_buffer(const guint8 * buf, gsize buf_len, GError ** err);
 
-/**
- * @param names
- * @param err
- * @return
- */
 GByteArray *meta2_maintenance_names_marshall(GSList * names, GError ** err);
 
-/**
- * @param arrays
- * @param err
- * @return
- */
 GByteArray *meta2_maintenance_arrays_marshall(GSList * arrays, GError ** err);
 
-/**
- * @param buf
- * @param buf_len
- * @param array_size
- * @param err
- * @return
- */
 GSList *meta2_maintenance_sized_arrays_unmarshall_buffer(guint8 * buf, gsize buf_len, gsize array_size,
 		GError ** err);
 
-/**
- * @param encoded
- * @param array_size
- * @param err
- * @return
- */
 GSList *meta2_maintenance_sized_arrays_unmarshall_bytearray(GByteArray * encoded, gsize array_size, GError ** err);
 
-/**
- * Serializes a list of arrays of fixed sized (given as the second argument)
- * @param arrays
- * @param array_size
- * @param err
- * @return
- */
+/** Serializes a list of arrays of fixed sized (given as the second argument) */
 GByteArray *meta2_maintenance_sized_arrays_marshall(GSList * arrays, gsize array_size, GError ** err);
 
+/** Serialize a namespace_info to ASN1 */
+GByteArray* namespace_info_marshall(struct namespace_info_s * namespace_info, GError ** err);
 
-/**
- * Serialize a namespace_info to ASN1
- *
- * @param namespace_info the namespace_info_t to serialize
- * @param err
- * @return the serialized ASN1 data in a GByteArray
- */
-GByteArray* namespace_info_marshall(struct namespace_info_s * namespace_info, const char *version, GError ** err);
-
-/**
- * Unserialize a namespace_info from ASN1
- *
- * @param buf the ASN1 serialized data
- * @param buf_len the size of the ASN1 data
- * @param err
- * @return the namespace_info_t struct
- */
+/** Unserialize a namespace_info from ASN1 */
 namespace_info_t* namespace_info_unmarshall(const guint8 * buf, gsize buf_len, GError ** err);
 
 /** @} */
 
-#endif /*__METACOMM__H__*/
+#endif /*OIO_SDS__metautils__lib__metacomm_h*/

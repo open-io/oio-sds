@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "m2v2.utils.lb"
 #endif
@@ -86,7 +105,6 @@ _gen_chunk_bean(struct service_info_s *si)
 
 //------------------------------------------------------------------------------
 
-
 static GError*
 _poll_services(struct grid_lbpool_s *lbp, const gchar *srvtype,
 		struct lb_next_opt_ext_s *opt_ext,
@@ -96,10 +114,9 @@ _poll_services(struct grid_lbpool_s *lbp, const gchar *srvtype,
 	struct service_info_s **psi, **siv = NULL;
 
 	if (!lbp || !srvtype)
-		return NEWERROR(500, "Invalid parameter");
+		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid parameter");
 	if (!(iter = grid_lbpool_get_iterator(lbp, srvtype)))
 		return NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No RAWX available");
-
 
 	if (!grid_lb_iterator_next_set2(iter, &siv, opt_ext))
 		return NEWERROR(CODE_PLATFORM_ERROR, "Cannot get services"
@@ -138,7 +155,7 @@ get_spare_chunks(struct grid_lbpool_s *lbp, struct storage_policy_s *stgpol,
 			k = data_security_get_param(ds, DS_KEY_K);
 			m = data_security_get_param(ds, DS_KEY_M);
 			if (!k || !m)
-				return NEWERROR(400, "Invalid RAIN policy (missing K and/or M)");
+				return NEWERROR(CODE_BAD_REQUEST, "Invalid RAIN policy (missing K and/or M)");
 			opt_ext.req.max = atoi(k) + atoi(m);
 			break;
 		case DUPLI:

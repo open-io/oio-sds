@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.loggers"
 #endif
@@ -201,7 +220,7 @@ _logger_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 
 	_append_message(gstr, message);
 
-	syslog(get_facility(log_domain)|glvl_to_lvl(log_level), gstr->str);
+	syslog(get_facility(log_domain)|glvl_to_lvl(log_level), "%s", gstr->str);
 	g_string_free(gstr, TRUE);
 }
 
@@ -285,7 +304,6 @@ logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 		return;
 	_logger_stderr(log_domain, log_level, message, user_data);
 }
-
 
 void
 logger_verbose(void)
@@ -426,20 +444,20 @@ parse(const gchar *path, XML_Parser parser)
 	GError *err = NULL;
 
 	if (!(in = fopen(path, "r")))
-		return NEWERROR(500, "fopen(%s) : (%d) %s", path, errno, strerror(errno));
+		return NEWERROR(CODE_INTERNAL_ERROR, "fopen(%s) : (%d) %s", path, errno, strerror(errno));
 
 	while (!feof(in) && !ferror(in)) {
 		len = fread(s, 1, sizeof(s), in);
 		if (len) {
 			if (XML_STATUS_OK != (rc = XML_Parse(parser, s, len, 0))) {
-				err = NEWERROR(500, "%s", xml_err2str(parser));
+				err = NEWERROR(CODE_INTERNAL_ERROR, "%s", xml_err2str(parser));
 				break;
 			}
 		}
 	}
 	if (!err) {
 		if (XML_STATUS_OK != (rc = XML_Parse(parser, "", 0, 1)))
-			err = NEWERROR(500, "%s", xml_err2str(parser));
+			err = NEWERROR(CODE_INTERNAL_ERROR, "%s", xml_err2str(parser));
 	}
 	fclose(in);
 	return err;

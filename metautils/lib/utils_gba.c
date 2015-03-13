@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metautils"
 #endif
@@ -29,7 +48,6 @@ metautils_buffer_cmp(const guint8 * const d0, const guint l0,
 	register gint cmp_data = memcmp(d0, d1, MIN(l0, l1));
 	return MACRO_COND(cmp_data, cmp_data, CMP(l0, l1));
 }
-
 
 gboolean
 metautils_gba_equal(const GByteArray *a, const GByteArray *b)
@@ -141,6 +159,16 @@ metautils_gba_clean(gpointer p)
 }
 
 void
+metautils_gba_cleanv(GByteArray **tab)
+{
+	if (tab) {
+		for (GByteArray **p=tab; *p ;++p)
+			metautils_gba_unref (*p);
+		g_free(tab);
+	}
+}
+
+void
 meatutils_gba_gclean(gpointer p1, gpointer p2)
 {
 	(void) p2;
@@ -170,5 +198,23 @@ metautils_gba_to_hexgstr(GString *gstr, GByteArray *gba)
 	buffer2str(gba->data, gba->len, gstr->str + len, gstr->len - len + 1);
 
 	return gstr;
+}
+
+void
+gba_pool_clean(GSList **pool)
+{
+	if (*pool) {
+		g_slist_free_full(*pool, metautils_gba_unref);
+		*pool = NULL;
+	}
+}
+
+GByteArray *
+gba_poolify(GSList **pool, GByteArray *gba)
+{
+	if (!gba)
+		return NULL;
+	*pool = g_slist_prepend(*pool, gba);
+	return gba;
 }
 

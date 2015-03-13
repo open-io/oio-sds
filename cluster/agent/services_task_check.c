@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "agent.services.task_check"
 #endif
@@ -22,7 +41,6 @@
 
 #define TASKNAME_LENGTH_MAX (sizeof(TASK_ID)+1+STRLEN_ADDRINFO)
 #define SRVKEY_LEN (LIMIT_LENGTH_SRVTYPE + 1 + STRLEN_ADDRINFO + 1)
-
 
 struct taskdata_checksrv_s {
 	gchar task_name[TASKNAME_LENGTH_MAX];
@@ -302,12 +320,12 @@ _check_tcp_service_task(gpointer udata, GError **error)
 
 		sock_set_linger(fd, 1, 0);
 
-		struct workerdata_checksrv_s *wdata = g_try_malloc0(sizeof(*wdata));
+		struct workerdata_checksrv_s *wdata = g_malloc0(sizeof(*wdata));
 		g_strlcpy(wdata->task_name, task_data->task_name, sizeof(wdata->task_name)-1);
 		g_strlcpy(wdata->ns_name, task_data->ns_name, sizeof(wdata->ns_name)-1);
 		g_strlcpy(wdata->srv_key, task_data->srv_key, sizeof(wdata->srv_key)-1);
 
-		worker_t *worker = g_try_malloc0(sizeof(worker_t));
+		worker_t *worker = g_malloc0(sizeof(worker_t));
 		worker->func = _check_tcp_service_worker_func;
 		worker->clean = _check_tcp_service_worker_cleaner;
 		worker->timeout = 1000;

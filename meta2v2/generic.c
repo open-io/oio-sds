@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "m2v2"
 #endif
@@ -233,7 +252,7 @@ _stmt_apply_GV_parameter_simple(sqlite3_stmt *stmt, int pos, GVariant *p)
 			return NULL;
 		/* XXX TODO manage the G_VARIANT_UNIT associtaed to NULL'd fields */
 		default:
-			return NEWERROR(400, "Unexpected parameter at position %d ('%s')",
+			return NEWERROR(CODE_BAD_REQUEST, "Unexpected parameter at position %d ('%s')",
 					pos, (gchar*)g_variant_get_type(p));
 	}
 }
@@ -261,7 +280,7 @@ _stmt_apply_GV_parameter(sqlite3_stmt *stmt, int pos, GVariant *p)
 		return NULL;
 	}
 
-	return NEWERROR(400, "Unexpected parameter at position %d (type '%s')",
+	return NEWERROR(CODE_BAD_REQUEST, "Unexpected parameter at position %d (type '%s')",
 			pos, (gchar*)g_variant_get_type(p));
 }
 
@@ -276,7 +295,7 @@ _stmt_apply_GV_parameters(sqlite3_stmt *stmt, GVariant **params)
 	count_params = g_strv_length((gchar**)params);
 
 	if (count_params != count_binds)
-		return NEWERROR(500, "Bad parameters : %u expected, %u received",
+		return NEWERROR(CODE_INTERNAL_ERROR, "Bad parameters : %u expected, %u received",
 				count_binds, count_params);
 
 	for (i=1; (p=*params) ;i++,params++) {
@@ -522,7 +541,6 @@ _db_delete(const struct bean_descriptor_s *descr, sqlite3 *db,
 	return err;
 }
 
-
 /* REPLACE ------------------------------------------------------------------ */
 
 GError*
@@ -765,7 +783,7 @@ _db_get_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db,
 	}
 
 	g_assert_not_reached();
-	return NEWERROR(500, "BUG"); /* makes the compilers happy */
+	return NEWERROR(CODE_INTERNAL_ERROR, "BUG"); /* makes the compilers happy */
 }
 
 static GError*
@@ -828,7 +846,7 @@ _db_count_FK_by_name(gpointer bean, const gchar *name,
 	}
 
 	g_assert_not_reached();
-	return NEWERROR(500, "BUG"); /* makes the compilers happy */
+	return NEWERROR(CODE_INTERNAL_ERROR, "BUG"); /* makes the compilers happy */
 }
 
 GError*
@@ -1157,5 +1175,14 @@ SHA256_randomized_string(gchar *d, gsize dlen)
 		*d = g_ascii_toupper(*d);
 	g_checksum_free(h);
 	return MIN(s,dlen);
+}
+
+gint
+_bean_compare_kind (gconstpointer b0, gconstpointer b1)
+{
+	if (!b0 && !b1) return 0;
+	if (!b0) return 1;
+	if (!b1) return -1;
+	return DESCR(b1)->order - DESCR(b0)->order;
 }
 

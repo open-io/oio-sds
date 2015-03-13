@@ -1,9 +1,27 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metautils"
 #endif
 
 #include "metautils.h"
-
 
 char *
 storage_policy_from_mdsys_str(const char *mdsys)
@@ -31,7 +49,7 @@ storage_policy_from_metadata(GByteArray *sys_metadata, gchar **storage_policy)
 {
 	/* sanity check */
 	if(!sys_metadata || !sys_metadata->data || !storage_policy)
-		return NEWERROR(500, "Invalid parameter");
+		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid parameter");
 
 	gchar buf[sys_metadata->len +1];
 	gchar **metadata_tokens = NULL;
@@ -50,7 +68,7 @@ storage_policy_from_metadata(GByteArray *sys_metadata, gchar **storage_policy)
 		if(p) {
 			*storage_policy = g_strdup(p + 1);
 		} else {
-			result = NEWERROR(500,
+			result = NEWERROR(CODE_INTERNAL_ERROR,
 					"Failed to extract policy from metadata tokens: [%s]",
 					metadata_tokens[i]);
 		}

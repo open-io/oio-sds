@@ -1,3 +1,22 @@
+/*
+OpenIO SDS gridd
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "server.stats"
 #endif
@@ -14,8 +33,7 @@
 #include "./srvstats.h"
 #define IS(gv,T) g_variant_type_equal(g_variant_get_type(gv), T)
 
-
-static GStaticRWLock rw_lock = G_STATIC_RW_LOCK_INIT;
+static GRWLock rw_lock;
 
 static GHashTable *ht_stats = NULL;
 
@@ -34,11 +52,11 @@ srvstat_get_gvariant(const gchar *name)
 	if (!ht_stats)
 		srvstat_init();
 
-	g_static_rw_lock_writer_lock (&rw_lock);
+	g_rw_lock_writer_lock (&rw_lock);
 	gv = g_hash_table_lookup(ht_stats, name);
 	if (gv)
 		gv = g_variant_ref(gv);
-	g_static_rw_lock_writer_unlock (&rw_lock);
+	g_rw_lock_writer_unlock (&rw_lock);
 
 	if (!gv) {
 		TRACE2("Found <%s,NULL>", name);
@@ -74,9 +92,9 @@ srvstat_set_gvariant(const gchar *name, GVariant *gv)
 
 	pKey = g_strdup(name);
 
-	g_static_rw_lock_writer_lock (&rw_lock);
+	g_rw_lock_writer_lock (&rw_lock);
 	g_hash_table_insert (ht_stats, pKey, gv);
-	g_static_rw_lock_writer_unlock (&rw_lock);
+	g_rw_lock_writer_unlock (&rw_lock);
 
 	return TRUE;
 }
@@ -91,7 +109,6 @@ _set_gvariant(const gchar *name, GVariant *gv)
 
 	return TRUE;
 }
-
 
 gboolean
 srvstat_set_double(const gchar *name, gdouble value)
@@ -142,14 +159,12 @@ srvstat_get_double(const gchar *name, gdouble *value)
 	return FALSE;
 }
 
-
 /* Kept for backward compatibility */
 gboolean
 srvstat_set (const gchar *name, gdouble value)
 {
 	return srvstat_set_double(name, value);
 }
-
 
 /* Kept for backward compatibility */
 gboolean
@@ -310,9 +325,9 @@ srvstat_del (const gchar *name)
 	if (!ht_stats)
 		srvstat_init();
 
-	g_static_rw_lock_writer_lock (&rw_lock);
+	g_rw_lock_writer_lock (&rw_lock);
 	g_hash_table_remove (ht_stats, name);
-	g_static_rw_lock_writer_unlock (&rw_lock);
+	g_rw_lock_writer_unlock (&rw_lock);
 }
 
 static void
@@ -329,28 +344,26 @@ void
 srvstat_init (void)
 {
 	memset(&rw_lock,0x00,sizeof(rw_lock));
-	g_static_rw_lock_init(&rw_lock);
+	g_rw_lock_init(&rw_lock);
 	
-	g_static_rw_lock_writer_lock (&rw_lock);
+	g_rw_lock_writer_lock (&rw_lock);
 	if (!ht_stats)
 		ht_stats = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, gvariant_free);
-	g_static_rw_lock_writer_unlock (&rw_lock);
+	g_rw_lock_writer_unlock (&rw_lock);
 }
-
 
 void
 srvstat_fini (void)
 {
 	DEBUG("about to free the statistics");
-	g_static_rw_lock_writer_lock (&rw_lock);
+	g_rw_lock_writer_lock (&rw_lock);
 	if (ht_stats) {
 		g_hash_table_destroy (ht_stats);
 		ht_stats = NULL;
 	}
-	g_static_rw_lock_writer_unlock (&rw_lock);
+	g_rw_lock_writer_unlock (&rw_lock);
 	INFO("statistics freed");
 }
-
 
 void srvstat_flush (void)
 {
@@ -362,9 +375,9 @@ void srvstat_flush (void)
 	if (!ht_stats)
 		srvstat_init();
 	else {
-		g_static_rw_lock_writer_lock (&rw_lock);
+		g_rw_lock_writer_lock (&rw_lock);
 		g_hash_table_foreach_remove (ht_stats, func_yes, NULL);
-		g_static_rw_lock_writer_unlock (&rw_lock);
+		g_rw_lock_writer_unlock (&rw_lock);
 	}
 	INFO("statistics flushed");
 }
@@ -385,7 +398,7 @@ srvstat_foreach_gvariant(const gchar *pattern, srvstat_iterator_gvariant_f cb, v
 	if (!ht_stats)
 		srvstat_init();
 
-	g_static_rw_lock_writer_lock (&rw_lock);
+	g_rw_lock_writer_lock (&rw_lock);
 
 	g_hash_table_iter_init(&iter, ht_stats);
 	while (g_hash_table_iter_next(&iter, &k, &v)) {
@@ -400,6 +413,6 @@ srvstat_foreach_gvariant(const gchar *pattern, srvstat_iterator_gvariant_f cb, v
 		}
 	}
 
-	g_static_rw_lock_writer_unlock (&rw_lock);
+	g_rw_lock_writer_unlock (&rw_lock);
 }
 

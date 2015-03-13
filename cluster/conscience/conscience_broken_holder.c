@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "conscience.api.brk"
 #endif
@@ -9,20 +28,10 @@
 struct broken_holder_s*
 conscience_create_broken_holder ( struct conscience_s *conscience )
 {
-	struct broken_holder_s *bh;
-
-	bh = g_try_malloc0(sizeof(struct broken_holder_s));
-	if (!bh)
-		return NULL;
-	
+	struct broken_holder_s *bh = g_malloc0(sizeof(struct broken_holder_s));
 	bh->conscience = conscience;
 	bh->ht_meta2 = g_hash_table_new_full(addr_info_hash, addr_info_equal, NULL, free_broken_m2);
 	bh->ht_meta1 = g_hash_table_new_full(addr_info_hash, addr_info_equal, NULL, g_free);
-	
-	if (!bh->ht_meta1 || !bh->ht_meta2) {
-		conscience_destroy_broken_holder( bh );
-		return NULL;
-	}
 	return bh;
 }
 

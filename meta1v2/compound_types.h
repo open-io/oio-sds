@@ -1,5 +1,25 @@
-#ifndef HC_compound_type__H
-#define HC_compound_type__H 1
+/*
+OpenIO SDS meta1v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__meta1v2__compound_types_h
+# define OIO_SDS__meta1v2__compound_types_h 1
+
 #include <glib.h>
 
 struct service_update_policies_s;
@@ -32,4 +52,4 @@ GError* compound_type_parse(struct compound_type_s *ct, const gchar *srvtype);
 void compound_type_update_arg(struct compound_type_s *ct,
 		struct service_update_policies_s *pol, gboolean override);
 
-#endif // HC_compound_type__H
+#endif /*OIO_SDS__meta1v2__compound_types_h*/

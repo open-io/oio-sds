@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gridcluster.agent.reqagent"
 #endif
@@ -9,9 +28,10 @@
 #include <strings.h>
 
 #include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
+#include <cluster/lib/message.h>
 
 #include "./agent.h"
-#include "./config.h"
 #include "./broken_workers.h"
 #include "./cpu_stat_task_worker.h"
 #include "./event_workers.h"
@@ -27,7 +47,6 @@
 static void
 sighandler_agent(int s)
 {
-	/*INFO("Signal %d (%s)", s, get_signame(s));*/
 	switch (s) {
 	case SIGPIPE:
 		break;
@@ -42,6 +61,19 @@ sighandler_agent(int s)
 	signal(s,sighandler_agent);
 }
 
+static gboolean
+gridagent_running(void)
+{
+	int sock = gridagent_connect(NULL);
+	if (sock < 0) {
+		gchar *path = gridcluster_get_agent();
+		unlink(path);
+		g_free(path);
+		return 0;
+	}
+	metautils_pclose(&sock);
+	return 1;
+}
 
 int
 main_reqagent(void)
@@ -54,7 +86,7 @@ main_reqagent(void)
 	signal(SIGINT,  sighandler_agent);
 	signal(SIGPIPE, sighandler_agent);
 
-	if (is_agent_running()) {
+	if (gridagent_running()) {
 		ERROR("An agent is already running");
 		goto error_label;
 	}
@@ -63,7 +95,7 @@ main_reqagent(void)
 		ERROR("Failed to init io scheduler : %s", gerror_get_message(error));
 		goto error_label;
 	}
-	if (!start_server(SOCK_TIMEOUT, &error)) {
+	if (!start_server(&error)) {
 		ERROR("Failed to start server : %s", gerror_get_message(error));
 		goto error_label;
 	}
@@ -71,7 +103,6 @@ main_reqagent(void)
 		ERROR("Failed to init message worker : %s", gerror_get_message(error));
 		goto error_label;
 	}
-
 
 	/* Local monitoring tasks */
 	if (!start_io_stat_task(&error)) {
@@ -82,7 +113,6 @@ main_reqagent(void)
 		ERROR("Failed to start cpu stat task : %s", gerror_get_message(error));
 		goto error_label;
 	}
-
 
 	/* Conscience services tasks */
 	if (!start_namespace_get_task(&error)) {
@@ -103,21 +133,23 @@ main_reqagent(void)
 	}
 	if (flag_check_services) {
 		if (!services_task_check(&error)) {
-			ERROR("Services crawler (detect_obsoletes) task error : %s", gerror_get_message(error));
+			ERROR("Services crawler (detect_obsoletes) task error : %s",
+					gerror_get_message(error));
 			goto error_label;
 		}
 		INFO("Services tasks successfully started");
 	}
 
-
 	/* Conscience broken elements tasks */
 	if (flag_manage_broken) {
 		if (!agent_start_broken_task_get(&error)) {
-			ERROR("Failed to start broken containers GET task: %s", gerror_get_message(error));
+			ERROR("Failed to start broken containers GET task: %s",
+					gerror_get_message(error));
 			goto error_label;
 		}
 		if (!agent_start_broken_task_push(&error)) {
-			ERROR("Failed to start broken containers SEND task : %s", gerror_get_message(error));
+			ERROR("Failed to start broken containers SEND task : %s",
+					gerror_get_message(error));
 			goto error_label;
 		}
 		INFO("Broken tasks successfully started");
@@ -138,5 +170,4 @@ error_label:
 		g_clear_error(&error);
 	return rc;
 }
-
 

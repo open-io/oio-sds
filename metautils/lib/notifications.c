@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "metautils.notif"
 #endif
@@ -144,8 +163,8 @@ static void
 _kafka_logger(const rd_kafka_t *rk, int level, const char *fac, const char *buf)
 {
 	(void) fac;
-	int redc_level = 1 << MAX(0, level-3);
-	GRID_LOG(redc_level, "%s: %s", rk ? rd_kafka_name(rk) : "", buf);
+	int user_level = 1 << MAX(0, level-3);
+	GRID_LOG(user_level, "%s: %s", rk ? rd_kafka_name(rk) : "", buf);
 }
 
 GError *
@@ -292,11 +311,7 @@ metautils_notifier_send_json(metautils_notifier_t *handle, const gchar *topic,
 	GError *err = NULL;
 	GString *event = g_string_sized_new(1024);
 	GByteArray *event_gba = NULL;
-#ifdef OLD_GLIB2
-	gint seq = g_atomic_int_exchange_and_add(&_seq, 1);
-#else
 	gint seq = g_atomic_int_add(&_seq, 1);
-#endif
 
 	g_string_append_printf(event, METAUTILS_NOTIFIER_JSON_TEMPLATE,
 			g_get_real_time() / 1000, // milliseconds since 1970

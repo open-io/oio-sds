@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metautils"
 #endif
@@ -458,7 +477,6 @@ service_info_equal_v2(const struct service_info_s * si1, const struct service_in
 	return service_info_equal(si1, si2);
 }
 
-
 meta0_info_t *
 service_info_convert_to_m0info(struct service_info_s * srv)
 {
@@ -761,7 +779,6 @@ service_info_encode_json(GString *gstr, struct service_info_s *si)
 	g_string_append(gstr, "}}");
 }
 
-
 static struct service_tag_s *
 _srvtag_load_json (const gchar *name, struct json_object *obj)
 {
@@ -800,7 +817,7 @@ service_info_load_json_object(struct json_object *obj,
 {
 	*out = NULL;
 	if (!json_object_is_type(obj, json_type_object))
-		return NEWERROR(400, "Bad object");
+		return NEWERROR(CODE_BAD_REQUEST, "Bad object");
 
 	// SAnity checks
 	struct json_object *ns, *type, *url, *score, *tags;
@@ -808,12 +825,12 @@ service_info_load_json_object(struct json_object *obj,
 		|| !json_object_object_get_ex(obj, "type", &type)
 		|| !json_object_object_get_ex(obj, "addr", &url)
 		|| !json_object_object_get_ex(obj, "score", &score))
-		return NEWERROR(400, "Missing field");
+		return NEWERROR(CODE_BAD_REQUEST, "Missing field");
 	if (!json_object_is_type(ns, json_type_string)
 		|| !json_object_is_type(type, json_type_string)
 		|| !json_object_is_type(url, json_type_string)
 		|| !json_object_is_type(score, json_type_int))
-		return NEWERROR(400, "Invalid field");
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid field");
 
 	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
 	metautils_strlcpy_physical_ns(si->ns_name, json_object_get_string(ns), sizeof(si->ns_name));

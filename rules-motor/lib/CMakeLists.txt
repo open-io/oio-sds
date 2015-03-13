@@ -17,7 +17,7 @@ add_library(rulesmotorc2py SHARED c2python.c motor.h)
 set_target_properties(rulesmotorc2py PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(rulesmotorc2py 
-		metautils gridcluster rawx meta2mover
+		metautils gridcluster rawx 
 		-lm -ldl -lpthread -lutil ${PYTHON_LIBRARIES} ${GLIB2_LIBRARIES})
 
 add_library(rulesmotorpy2c SHARED python2c.c motor.h)
@@ -25,7 +25,7 @@ add_library(rulesmotorpy2c SHARED python2c.c motor.h)
 set_target_properties(rulesmotorpy2c PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(rulesmotorpy2c
-		metautils gridcluster rawx meta2mover integrity
+		metautils gridcluster rawx integrity
 		-lm -ldl -lpthread -lutil ${PYTHON_LIBRARIES} ${GLIB2_LIBRARIES})
 
 install(TARGETS rulesmotorc2py rulesmotorpy2c

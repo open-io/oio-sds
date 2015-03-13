@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #include "./gs_internals.h"
 
 struct test_data_s {
@@ -72,14 +91,8 @@ test_get_container(void)
 int
 main(int argc, char **argv)
 {
-	if (!g_thread_supported())
-		g_thread_init(NULL);
-	g_set_prgname(argv[0]);
-	g_log_set_default_handler(logger_stderr, NULL);
-	g_test_init (&argc, &argv, NULL);
-
+	HC_TEST_INIT(argc,argv);
 	g_test_add_func("/client/lib/cache/get_container", test_get_container);
-
 	return g_test_run();
 }
 

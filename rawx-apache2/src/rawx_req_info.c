@@ -1,3 +1,22 @@
+/*
+OpenIO SDS rawx-apache2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "rawx"
 #endif
@@ -201,7 +220,6 @@ dav_rawx_info_get_resource(request_rec *r, const char *root_dir, const char *lab
 	return NULL;
 }
 
-
 static dav_error *
 dav_rawx_get_parent_resource_SPECIAL(const dav_resource *resource, dav_resource **result_parent)
 {
@@ -210,7 +228,6 @@ dav_rawx_get_parent_resource_SPECIAL(const dav_resource *resource, dav_resource 
 		resource->hooks, resource->info->generator);
 	return NULL;
 }
-
 
 static int
 dav_rawx_is_same_resource_SPECIAL(const dav_resource *res1, const dav_resource *res2)
@@ -222,14 +239,12 @@ dav_rawx_is_same_resource_SPECIAL(const dav_resource *res1, const dav_resource *
 	return (res1->type == res2->type) && (res1->hooks == res2->hooks);
 }
 
-
 static int
 dav_rawx_is_parent_resource_SPECIAL(const dav_resource *res1, const dav_resource *res2)
 {
 	DAV_XDEBUG_RES(res1, 0, "%s(...)", __FUNCTION__);
 	return dav_rawx_is_same_resource_SPECIAL(res1, res2);
 }
-
 
 static dav_error *
 dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
@@ -312,7 +327,6 @@ dav_rawx_info_getetag(const dav_resource *resource)
 	return apr_pstrdup(resource->info->request->pool, "rawx-info");
 }
 
-
 const dav_hooks_repository dav_hooks_repository_rawxinfo =
 {
 	1,
@@ -338,7 +352,6 @@ const dav_hooks_repository dav_hooks_repository_rawxinfo =
 	NULL,
 #endif
 };
-
 
 const dav_hooks_repository dav_hooks_repository_rawxstat =
 {

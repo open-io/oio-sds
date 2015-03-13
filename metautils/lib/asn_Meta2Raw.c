@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "metacomm.meta2_raw.asn"
 #endif
@@ -107,11 +126,7 @@ meta2_raw_content_ASN2API(const Meta2RawContent_t * src, struct meta2_raw_conten
 		if (!chunk_asn) /* Skip NULL chunks */
 			continue;
 
-		chunk_api = g_try_malloc0(sizeof(struct meta2_raw_chunk_s));
-		if (!chunk_api) {
-			errno = ENOMEM;
-			return FALSE;
-		}
+		chunk_api = g_malloc0(sizeof(struct meta2_raw_chunk_s));
 
 		if (!meta2_raw_chunk_ASN2API(chunk_asn, chunk_api)) {
 			WARN("ASN.1 to ASN.1 mapping failure");
@@ -178,12 +193,7 @@ meta2_raw_content_API2ASN(const struct meta2_raw_content_s * src, Meta2RawConten
 			continue;
 
 		chunk_api = (struct meta2_raw_chunk_s *) (c->data);
-
-		chunk_asn = g_try_malloc0(sizeof(Meta2RawChunk_t));
-		if (!chunk_asn) {
-			errno = ENOMEM;
-			return FALSE;
-		}
+		chunk_asn = g_malloc0(sizeof(Meta2RawChunk_t));
 
 		if (!meta2_raw_chunk_API2ASN(chunk_api, chunk_asn)) {
 			g_free(chunk_asn);
@@ -396,10 +406,7 @@ meta2_raw_content_v2_ASN2API(const Meta2RawContentV2_t *asn, meta2_raw_content_v
 
 		if (!(c_asn = asn->chunks.list.array[i])) /* Skip NULL's */
 			continue;
-		if (!(c_api = g_try_malloc0(sizeof(*c_api)))) {
-			errno = ENOMEM;
-			goto label_error;
-		}
+		c_api = g_malloc0(sizeof(*c_api));
 		if (!meta2_raw_chunk_ASN2API(c_asn, c_api)) {
 			g_free(c_api);
 			WARN("chunk ASN.1 to ASN.1 mapping failure");
@@ -417,10 +424,7 @@ meta2_raw_content_v2_ASN2API(const Meta2RawContentV2_t *asn, meta2_raw_content_v
 
 		if (!(c_asn = asn->services.list.array[i])) /* Skip NULL's */
 			continue;
-		if (!(c_api = g_try_malloc0(sizeof(*c_api)))) {
-			errno = ENOMEM;
-			goto label_error;
-		}
+		c_api = g_malloc0(sizeof(*c_api));
 		if (!service_info_ASN2API(c_asn, c_api)) {
 			g_free(c_api);
 			WARN("service_info ASN.1 to ASN.1 mapping failure");
@@ -438,10 +442,7 @@ meta2_raw_content_v2_ASN2API(const Meta2RawContentV2_t *asn, meta2_raw_content_v
 
 		if (!(c_asn = asn->properties.list.array[i])) /* Skip NULL's */
 			continue;
-		if (!(c_api = g_try_malloc0(sizeof(*c_api)))) {
-			errno = ENOMEM;
-			goto label_error;
-		}
+		c_api = g_malloc0(sizeof(*c_api));
 		if (!meta2_property_ASN2API(c_asn, c_api)) {
 			g_free(c_api);
 			WARN("service_info ASN.1 to ASN.1 mapping failure");
@@ -482,10 +483,7 @@ meta2_raw_content_v2_API2ASN(const meta2_raw_content_v2_t *api, Meta2RawContentV
 
 		if (!(chunk_api = l->data))
 			continue;
-		if (!(chunk_asn = g_try_malloc0(sizeof(Meta2RawChunk_t)))) {
-			errno = ENOMEM;
-			goto label_error;
-		}
+		chunk_asn = g_malloc0(sizeof(Meta2RawChunk_t));
 		if (!meta2_raw_chunk_API2ASN(chunk_api, chunk_asn)) {
 			g_free(chunk_asn);
 			errno = EINVAL;
@@ -501,10 +499,7 @@ meta2_raw_content_v2_API2ASN(const meta2_raw_content_v2_t *api, Meta2RawContentV
 
 		if (!(si = l->data))
 			continue;
-		if (!(si_asn = g_try_malloc0(sizeof(*si_asn)))) {
-			errno = ENOMEM;
-			goto label_error;
-		}
+		si_asn = g_malloc0(sizeof(*si_asn));
 		if (!service_info_API2ASN(si, si_asn)) {
 			g_free(si_asn);
 			errno = EINVAL;
@@ -520,10 +515,7 @@ meta2_raw_content_v2_API2ASN(const meta2_raw_content_v2_t *api, Meta2RawContentV
 
 		if (!(prop_api = l->data))
 			continue;
-		if (!(prop_asn = g_try_malloc0(sizeof(*prop_asn)))) {
-			errno = ENOMEM;
-			goto label_error;
-		}
+		prop_asn = g_malloc0(sizeof(*prop_asn));
 		if (!meta2_property_API2ASN(prop_api, prop_asn)) {
 			g_free(prop_asn);
 			errno = EINVAL;

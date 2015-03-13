@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "metacomm.meta2_maintenance"
 #endif
@@ -162,7 +181,7 @@ meta2_maintenance_sized_arrays_unmarshall_buffer(guint8 * buf, gsize buf_len, gs
 			goto error_size;
 		}
 
-		new_buf = g_try_malloc(array_size);
+		new_buf = g_malloc(array_size);
 		g_memmove(new_buf, osCursor->buf, osCursor->size);
 		result = g_slist_prepend(result, new_buf);
 	}
@@ -184,7 +203,6 @@ meta2_maintenance_sized_arrays_unmarshall_buffer(guint8 * buf, gsize buf_len, gs
 	return NULL;
 }
 
-
 GSList *
 meta2_maintenance_sized_arrays_unmarshall_bytearray(GByteArray * encoded, gsize array_size, GError ** err)
 {
@@ -194,7 +212,6 @@ meta2_maintenance_sized_arrays_unmarshall_bytearray(GByteArray * encoded, gsize 
 	}
 	return meta2_maintenance_sized_arrays_unmarshall_buffer(encoded->data, encoded->len, array_size, err);
 }
-
 
 GByteArray *
 meta2_maintenance_sized_arrays_marshall(GSList * arrays, gsize array_size, GError ** err)
@@ -243,9 +260,7 @@ meta2_maintenance_sized_arrays_marshall(GSList * arrays, gsize array_size, GErro
 	return NULL;
 }
 
-
 /* ------------------------------------------------------------------------- */
-
 
 GSList *
 meta2_maintenance_arrays_unmarshall_bytearray(GByteArray * encoded, GError ** err)
@@ -256,7 +271,6 @@ meta2_maintenance_arrays_unmarshall_bytearray(GByteArray * encoded, GError ** er
 	}
 	return meta2_maintenance_arrays_unmarshall_buffer(encoded->data, encoded->len, err);
 }
-
 
 GSList *
 meta2_maintenance_arrays_unmarshall_buffer(guint8 * buf, gsize buf_len, GError ** err)
@@ -311,7 +325,6 @@ meta2_maintenance_arrays_unmarshall_buffer(guint8 * buf, gsize buf_len, GError *
 	return NULL;
 }
 
-
 GByteArray *
 meta2_maintenance_arrays_marshall(GSList * arrays, GError ** err)
 {
@@ -362,9 +375,7 @@ meta2_maintenance_arrays_marshall(GSList * arrays, GError ** err)
 	return NULL;
 }
 
-
 /* ------------------------------------------------------------------------- */
-
 
 GSList *
 meta2_maintenance_names_unmarshall_bytearray(GByteArray * encoded, GError ** err)
@@ -373,7 +384,6 @@ meta2_maintenance_names_unmarshall_bytearray(GByteArray * encoded, GError ** err
 		return NULL;
 	return meta2_maintenance_names_unmarshall_buffer(encoded->data, encoded->len, err);
 }
-
 
 GSList *
 meta2_maintenance_names_unmarshall_buffer(const guint8 * buf, gsize buf_len, GError ** err)
@@ -414,14 +424,7 @@ meta2_maintenance_names_unmarshall_buffer(const guint8 * buf, gsize buf_len, GEr
 			continue;
 		}
 
-		str = g_try_malloc(osCursor->size + 1);
-		if (!str) {
-			ALERT("Memory allocation failure");
-			continue;
-		}
-		else
-			memset(str, 0x00, osCursor->size + 1);
-
+		str = g_malloc0(osCursor->size + 1);
 		g_memmove(str, osCursor->buf, osCursor->size);
 		result = g_slist_prepend(result, str);
 	}
@@ -508,9 +511,7 @@ meta2_maintenance_names_marshall(GSList * contents, GError ** err)
 	return NULL;
 }
 
-
 /* ------------------------------------------------------------------------- */
-
 
 GByteArray *
 meta2_maintenance_marshall_content(struct meta2_raw_content_s * content, GError ** err)
@@ -566,7 +567,6 @@ meta2_maintenance_marshall_content(struct meta2_raw_content_s * content, GError 
       error_params:
 	return NULL;
 }
-
 
 struct meta2_raw_content_s *
 meta2_maintenance_content_unmarshall_buffer(guint8 * buf, gsize buf_size, GError ** err)
@@ -626,7 +626,6 @@ meta2_maintenance_content_unmarshall_bytearray(GByteArray * encoded_content, GEr
 
 	return meta2_maintenance_content_unmarshall_buffer(encoded_content->data, encoded_content->len, err);
 }
-
 
 /* ------------------------------------------------------------------------- */
 

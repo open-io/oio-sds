@@ -1,7 +1,33 @@
-#ifndef __REDCURRANT__hc_strings__h
-# define __REDCURRANT__hc_strings__h 1
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__metautils_strings_h
+# define OIO_SDS__metautils__lib__metautils_strings_h 1
 
 #include <glib.h>
+
+#define STRING_STACKIFY(S) do { \
+	gsize _s = strlen((S)); gchar *_t = (S); \
+	(S) = alloca(_s + 1); \
+	memcpy((S), _t, _s+1); \
+	g_free(_t); \
+} while (0)
 
 /**
  * Copies in 'd' the part of 's' representing a valid physical namespace.
@@ -12,7 +38,6 @@
  * @return the size of the physical namespace in the source string
  */
 gsize metautils_strlcpy_physical_ns(gchar *d, const gchar *s, gsize dlen);
-
 
 /**
  * @param src
@@ -56,7 +81,6 @@ gsize strlen_len(const guint8 * s, gsize l);
  */
 gboolean hex2bin(const gchar * src, void * dst, gsize dst_size, GError** error);
 
-
 /**
  * Fills d (which size is dS) with the hexadecimal alpha-numerical representation
  * of the content of s (which size is sS)
@@ -67,7 +91,6 @@ gboolean hex2bin(const gchar * src, void * dst, gsize dst_size, GError** error);
  * @param dS
  */
 void buffer2str(const void *s, size_t sS, char *d, size_t dS);
-
 
 /**
  * Splits the given buffer (considered as a non NULL-terminated) into 
@@ -80,7 +103,6 @@ void buffer2str(const void *s, size_t sS, char *d, size_t dS);
  * @return
  */
 gchar **buffer_split(const void *buf, gsize buflen, const gchar * separator, gint max_tokens);
-
 
 /**
  * Check a segment of data is filled with 0
@@ -145,6 +167,9 @@ gboolean metautils_cfg_get_bool(const gchar *value, gboolean def);
 /** Fills 'buf' with buflen random bytes */
 void metautils_randomize_buffer(guint8 *bufn, gsize buflen);
 
+/** Frees <p> if p is not NULL */
+void g_free0(gpointer p);
+
 /** Frees the first argument and ignores the second */
 void g_free1(gpointer p1, gpointer p2);
 
@@ -157,4 +182,4 @@ none(const gchar *src)
 	return src ? src : "null";
 }
 
-#endif // __REDCURRANT__hc_strings__h
+#endif /*OIO_SDS__metautils__lib__metautils_strings_h*/

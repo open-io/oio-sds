@@ -1,3 +1,22 @@
+/*
+OpenIO SDS sqliterepo
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "sqliterepo"
 #endif
@@ -35,7 +54,7 @@ struct sqlx_repctx_s
 	// Explicit changes matched but not yet resolved : this stores ROWID
 	GTree *pending;
 
-	// Some SLAVES maybe replied an error with code=471, telling their are out
+	// Some SLAVES maybe replied an error with code=CODE_PIPEFROM, telling their are out
 	// of sync. Their URLs are stored here, because after the local commit we
 	// will send them a whole dump.
 	GPtrArray *resync_todo; // <gchar*>
@@ -66,13 +85,6 @@ typedef void (*sqlite3_update_hook_f) (void *, int, char const *,
 		char const *, sqlite3_int64);
 
 /* ------------------------------------------------------------------------- */
-
-static void
-g_free0(gpointer p)
-{
-	if (p)
-		g_free(p);
-}
 
 static void
 dump_request(const gchar *func, gchar **targets,
@@ -307,17 +319,16 @@ static GError*
 _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 {
 	GError *err = NULL;
-	struct sqlx_name_s n;
 	GByteArray *encoded;
 	struct client_s **clients, **pc;
 	guint count_errors = 0, count_success = 0;
 
-	n.ns = "";
-	n.base = ctx->sq3->logical_name;
-	n.type =  ctx->sq3->logical_type;
-	dump_request(__FUNCTION__, peers, "SQLX_REPLICATE", &n);
+	dump_request(__FUNCTION__, peers, "SQLX_REPLICATE",
+			sqlx_name_mutable_to_const(&ctx->sq3->name));
 
-	encoded = sqlx_pack_REPLICATE(&n, &(ctx->sequence));
+	encoded = sqlx_pack_REPLICATE(
+			sqlx_name_mutable_to_const(&ctx->sq3->name),
+			&(ctx->sequence));
 	clients = gridd_client_create_many(peers, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
 
@@ -359,11 +370,11 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 		guint groupsize = 1 + g_strv_length(peers);
 		if (ctx->sq3->config->mode == ELECTION_MODE_GROUP) {
 			if (count_success < groupsize)
-				err = NEWERROR(500, "Not enough successes, no group");
+				err = NEWERROR(CODE_INTERNAL_ERROR, "Not enough successes, no group");
 		}
 		else {
 			if (count_success < group_to_quorum(groupsize))
-				err = NEWERROR(500, "Not enough successes, no quorum");
+				err = NEWERROR(CODE_INTERNAL_ERROR, "Not enough successes, no quorum");
 		}
 	}
 
@@ -376,13 +387,11 @@ _defer_synchronous_RESYNC(struct sqlx_repctx_s *ctx)
 {
 	gchar **peers = NULL;
 
-	GError *err = sqlx_config_get_peers(ctx->sq3->config,
-			ctx->sq3->logical_name, ctx->sq3->logical_type, &peers);
+	GError *err = sqlx_config_get_peers(ctx->sq3->config, sqlx_name_mutable_to_const(&ctx->sq3->name), &peers);
 
 	if (err != NULL) {
 		GRID_WARN("Replicated transaction started but peers not found "
-				"[%s][%s] : (%d) %s", ctx->sq3->logical_name,
-				ctx->sq3->logical_type, err->code, err->message);
+				"[%s][%s] : (%d) %s", ctx->sq3->name.base, ctx->sq3->name.type, err->code, err->message);
 		g_clear_error(&err);
 		return;
 	}
@@ -400,13 +409,12 @@ _perform_REPLICATE(struct sqlx_repctx_s *ctx)
 	GError *err;
 	gchar **peers = NULL;
 
-	err = sqlx_config_get_peers(ctx->sq3->config, ctx->sq3->logical_name,
-			ctx->sq3->logical_type, &peers);
+	err = sqlx_config_get_peers(ctx->sq3->config, sqlx_name_mutable_to_const(&ctx->sq3->name), &peers);
 
 	if (err != NULL) {
 		GRID_WARN("Replicated transaction started but peers not found "
-				"[%s][%s] : (%d) %s", ctx->sq3->logical_name,
-				ctx->sq3->logical_type, err->code, err->message);
+				"[%s][%s] : (%d) %s", ctx->sq3->name.base,
+				ctx->sq3->name.type, err->code, err->message);
 		g_clear_error(&err);
 		return 1;
 	}
@@ -501,20 +509,15 @@ sqlx_synchronous_resync(struct sqlx_repctx_s *ctx, gchar **peers)
 	err = sqlx_repository_dump_base_gba(ctx->sq3, &dump);
 	if (NULL != err) {
 		GRID_WARN("[%s][%s] Synchronous COMMIT not possible : (%d) %s",
-				ctx->sq3->logical_name, ctx->sq3->logical_type,
+				ctx->sq3->name.base, ctx->sq3->name.type,
 				err->code, err->message);
 		g_clear_error(&err);
 		return;
 	}
 
 	// Now send it to the SLAVES
-	struct sqlx_name_s n;
-	n.base = ctx->sq3->logical_name;
-	n.type = ctx->sq3->logical_type;
-	n.ns = "";
-	peers_restore(peers, &n, dump);
-	GRID_INFO("RESTORED on SLAVES [%s][%s]",
-			ctx->sq3->logical_name, ctx->sq3->logical_type);
+	peers_restore(peers, sqlx_name_mutable_to_const(&ctx->sq3->name), dump);
+	GRID_INFO("RESTORED on SLAVES [%s][%s]", ctx->sq3->name.base, ctx->sq3->name.type);
 }
 
 static void
@@ -539,8 +542,7 @@ sqlx_transaction_changes(struct sqlx_repctx_s *ctx)
 	EXTRA_ASSERT(ctx->sq3->db != NULL);
 
 	if (sqlite3_total_changes(ctx->sq3->db) != ctx->changes) {
-		GRID_DEBUG("HUGE change detected [%s][%s]", ctx->sq3->logical_name,
-				ctx->sq3->logical_type);
+		GRID_DEBUG("HUGE change detected [%s][%s]", ctx->sq3->name.base, ctx->sq3->name.type);
 		ctx->huge = 1;
 	}
 
@@ -574,7 +576,7 @@ sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 			sqlx_repository_replication_configured(sq3->repo)) {
 		GError *err = election_has_peers(
 				sqlx_repository_get_elections_manager(sq3->repo),
-				sq3->logical_name, sq3->logical_type, &has);
+				sqlx_name_mutable_to_const(&sq3->name), &has);
 		if (err != NULL) {
 			g_prefix_error(&err, "Peer resolution: ");
 			return err;
@@ -609,6 +611,7 @@ sqlx_transaction_begin(struct sqlx_sqlite3_s *sq3,
 	struct sqlx_repctx_s *repctx = NULL;
 
 	EXTRA_ASSERT(sq3 != NULL);
+	SQLXNAME_CHECK(&sq3->name);
 	EXTRA_ASSERT(result != NULL);
 	*result = NULL;
 
@@ -642,7 +645,7 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 
 	if (NULL == ctx) {
 		if (!err)
-			err = NEWERROR(500, "no tnx");
+			err = NEWERROR(CODE_INTERNAL_ERROR, "no tnx");
 		g_prefix_error(&err, "transaction error: ");
 		return err;
 	}

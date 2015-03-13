@@ -1,3 +1,22 @@
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "integrity.main.event_puller"
 #endif
@@ -13,13 +32,8 @@
 #include "event_filter.h"
 #include "log_event_filter.h"
 
-
-
 /* TODO: hash map to store broken events already in run */
 GHashTable* knowable_broken_events;
-
-
-
 
 /**
  @file event_puller.c
@@ -148,7 +162,6 @@ pull_events_from_agent(GSList** events, GError** error)
 	}
 	return TRUE;
 }
-
 
 gboolean start_event_puller_thread(GError** error){
 	if(!g_thread_create(pull_events_from_agent, NULL, FALSE, error)){

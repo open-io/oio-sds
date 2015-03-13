@@ -1,5 +1,25 @@
-#ifndef __REDCURRANT_metatype_cid__h
-#define __REDCURRANT_metatype_cid__h 1
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__metatype_cid_h
+# define OIO_SDS__metautils__lib__metatype_cid_h 1
+
 #include <glib/gtypes.h>
 
 /**
@@ -18,13 +38,11 @@
 gboolean container_id_hex2bin(const gchar * s, gsize src_size,
 		container_id_t * dst, GError ** error);
 
-
 /**
  * @param k
  * @return
  */
 guint container_id_hash(gconstpointer k);
-
 
 /**
  * @param k1
@@ -32,7 +50,6 @@ guint container_id_hash(gconstpointer k);
  * @return
  */
 gboolean container_id_equal(gconstpointer k1, gconstpointer k2);
-
 
 /**
  * Fills the given buffer with the haxedecimal representatino of the
@@ -44,7 +61,6 @@ gboolean container_id_equal(gconstpointer k1, gconstpointer k2);
  * @return 
  */
 gsize container_id_to_string(const container_id_t id, gchar * dst, gsize dstsize);
-
 
 /**
  * Builds the container identifier from the container name
@@ -59,7 +75,6 @@ gsize container_id_to_string(const container_id_t id, gchar * dst, gsize dstsize
  * @return NULL if an error occured, or a valid pointer to a container identifier.
  */
 void name_to_id(const gchar * name, gsize nameLen, container_id_t * id);
-
 
 /**
  * Builds the container identifier from the container name
@@ -77,7 +92,6 @@ void name_to_id(const gchar * name, gsize nameLen, container_id_t * id);
 void name_to_id_v2(const gchar * name, gsize nameLen, const gchar *vns,
 		container_id_t * id);
 
-
 /**
  * @param cid
  * @param ns
@@ -87,4 +101,4 @@ void meta1_name2hash(container_id_t cid, const gchar *ns, const gchar *cname);
 
 /** @} */
 
-#endif // __REDCURRANT_metatype_cid__h
+#endif /*OIO_SDS__metautils__lib__metatype_cid_h*/

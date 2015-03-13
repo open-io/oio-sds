@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metacomm.chunk_info"
 #endif
@@ -36,7 +55,6 @@ func_write(const void *b, gsize bSize, void *key)
 	return 0;
 }
 
-
 GByteArray *
 chunk_id_marshall(const chunk_id_t * chunkId, GError ** err)
 {
@@ -70,7 +88,6 @@ chunk_id_marshall(const chunk_id_t * chunkId, GError ** err)
 	g_byte_array_free(gba, TRUE);
 	return NULL;
 }
-
 
 gint
 chunk_id_unmarshall(chunk_id_t * chunkId, void *src, gsize srcSize, GError ** err)

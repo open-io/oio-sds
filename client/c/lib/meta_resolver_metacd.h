@@ -1,9 +1,24 @@
-/**
- * @file meta_resolver_metacd.h
- * Cached META resolver
- */
-#ifndef __RESOLVER_METACD_H__
-# define __RESOLVER_METACD_H__
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__client__c__lib__meta_resolver_metacd_h
+# define OIO_SDS__client__c__lib__meta_resolver_metacd_h 1
 
 /**
  * @defgroup resolver_metacd MetaCD Resolver
@@ -16,18 +31,13 @@
 
 struct metacd_s;
 
-
 struct metacd_s* resolver_metacd_create (const char * const config, GError **err);
-
 
 void resolver_metacd_free (struct metacd_s *d);
 
-
 int resolver_metacd_is_up (struct metacd_s *m);
 
-
 void resolver_metacd_decache (struct metacd_s *m, const container_id_t cID);
-
 
 void resolver_metacd_decache_all (struct metacd_s *m);
 
@@ -49,4 +59,4 @@ gboolean resolver_metacd_put_content (struct metacd_s *m, struct meta2_raw_conte
 
 /** @} */
 
-#endif /*__RESOLVER_METACD_H__*/
+#endif /*OIO_SDS__client__c__lib__meta_resolver_metacd_h*/

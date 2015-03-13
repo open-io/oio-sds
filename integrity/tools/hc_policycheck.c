@@ -1,3 +1,22 @@
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "hc-policycheck"
 #endif
@@ -69,11 +88,10 @@ polcheck_specific_stop(void)
 	/* no op */
 }
 
-
 static const gchar *
 polcheck_usage(void)
 {
-	return	"Expected argument: an Honeycomb url => NAMESPACE/REFERENCE/PATH\n";
+	return "Expected argument: NAMESPACE/REFERENCE/PATH\n";
 }
 
 static gboolean
@@ -87,7 +105,7 @@ polcheck_configure(int argc, char **argv)
 	url = hc_url_init(argv[0]);
 	if(!hc_url_has(url, HCURL_NS) || !hc_url_has(url, HCURL_REFERENCE) 
 			|| !hc_url_has(url, HCURL_PATH)) { 
-		GRID_ERROR("Invalid Honeycomb url : [%s]", argv[0]);
+		GRID_ERROR("Invalid url : [%s]", argv[0]);
 		return FALSE;
 	}
 	return TRUE;
@@ -107,6 +125,5 @@ static struct grid_main_callbacks polcheck_callbacks =
 int
 main(int argc, char **args)
 {
-	g_setenv("GS_DEBUG_GLIB2", "1", TRUE);
 	return grid_main_cli(argc, args, &polcheck_callbacks);
 }

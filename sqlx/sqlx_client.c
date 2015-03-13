@@ -1,3 +1,22 @@
+/*
+OpenIO SDS sqlx
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.sqlx.client"
 #endif
@@ -315,14 +334,13 @@ do_query(struct client_s *client, struct meta1_service_url_s *surl,
 	gint rc = 0;
 	GError *err;
 	GByteArray *req;
-	struct sqlxsrv_name_s name;
+	struct sqlx_name_s name;
 
 	GRID_DEBUG("Querying [%s]", Q);
 
-	name.seq = surl->seq;
 	name.ns = hc_url_get(url, HCURL_NS);
-	name.schema = type;
-	name.cid = (const container_id_t*)hc_url_get_id(url);
+	name.base = g_strdup_printf("%"G_GINT64_FORMAT"@%s", surl->seq, hc_url_get(url, HCURL_HEXID));
+	name.type = type;
 
 	req = sqlx_pack_QUERY_single(&name, Q, flag_auto_link);
 	err = gridd_client_request(client, req, NULL, _on_reply);
@@ -379,26 +397,25 @@ do_queryv(struct meta1_service_url_s *surl)
 static gint
 do_destroy2(gs_grid_storage_t *hc, struct meta1_service_url_s *srv_url)
 {
-	gint rc = 1, seq = 1;
-	gchar *target = NULL;
-	GError *err = NULL;
+	gint rc = 1;
 	gs_error_t *hc_err = NULL;
 
-	seq = srv_url->seq;
-	target = srv_url->host;
-
-	struct sqlxsrv_name_s name = {seq, hc_url_get(url, HCURL_NS),
-			(const container_id_t*)hc_url_get_id(url), type};
-
-	err = sqlx_remote_execute_DESTROY(target, NULL, &name, FALSE);
+	const gchar *target = srv_url->host;
+	gchar *base = g_strdup_printf("%"G_GINT64_FORMAT"@%s", srv_url->seq, hc_url_get(url, HCURL_HEXID));
+	struct sqlx_name_s name = {
+		.base = base,
+		.type = srv_url->srvtype,
+		.ns = gs_get_full_vns(hc),
+	};
+	GError *err = sqlx_remote_execute_DESTROY(target, NULL, &name, FALSE);
+	g_free0 (base);
 
 	if (err != NULL) {
 		GRID_ERROR("Failed to destroy database: %s", err->message);
 		rc = 0;
 		goto end_label;
 	}
-	hc_err = hc_unlink_reference_service(hc,
-			hc_url_get(url, HCURL_REFERENCE), type);
+	hc_err = hc_unlink_reference_service(hc, hc_url_get(url, HCURL_REFERENCE), type);
 	if (hc_err) {
 		GRID_ERROR("Failed to unlink service: %s", hc_err->msg);
 		rc = 0;
@@ -595,7 +612,6 @@ struct grid_main_callbacks cli_callbacks =
 int
 main(int argc, char **args)
 {
-	g_setenv("GS_DEBUG_GLIB2", "1", TRUE);
 	return grid_main_cli(argc, args, &cli_callbacks);
 }
 

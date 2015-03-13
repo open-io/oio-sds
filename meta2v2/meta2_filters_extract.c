@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta2.disp"
 #endif
@@ -42,7 +61,7 @@
 #define EXTRACT_OPT(Name) do { \
 	memset(buf, 0, sizeof(buf)); \
 	e = message_extract_string(reply->request, Name, buf, sizeof(buf)); \
-	if(NULL != e) { \
+	if (NULL != e) { \
 		g_clear_error(&e); \
 	} else { \
 		meta2_filter_ctx_add_param(ctx, Name, buf); \
@@ -50,26 +69,11 @@
 } while (0)
 
 #define EXTRACT_HEADER_BEANS(FieldName,Variable) do {\
-	GError *err = NULL;\
-	void *b = NULL;\
-	gsize bsize = 0;\
-\
-	if (message_get_field(reply->request, FieldName, strlen(FieldName), &b, &bsize, &err) <= 0) {\
-		if (!err)\
-			err = NEWERROR(CODE_BAD_REQUEST, "Missing '%s' header", FieldName);\
+	GError *err = message_extract_header_encoded(reply->request, FieldName, TRUE, &Variable, bean_sequence_decoder);\
+	if (err) { \
 		meta2_filter_ctx_set_error(ctx, err);\
 		return FILTER_KO;\
-	} else if (bsize == 0) {\
-		if (!err)\
-			meta2_filter_ctx_set_error(ctx,\
-				NEWERROR(CODE_BAD_REQUEST, "Empty '%s' header", FieldName));\
-		return FILTER_KO;\
-	} else if (!(Variable = bean_sequence_unmarshall(b, bsize))) {\
-		if (!err)\
-			meta2_filter_ctx_set_error(ctx,\
-				NEWERROR(CODE_BAD_REQUEST, "Invalid '%s' header", FieldName));\
-		return FILTER_KO;\
-	}\
+	} \
 } while(0)
 
 int
@@ -454,8 +458,7 @@ meta2_filter_extract_body_strlist(struct gridd_filter_ctx_s *ctx,
 	GError *err;
 	GSList *names = NULL;
 
-	err = message_extract_body_encoded(reply->request,
-			&names, strings_unmarshall);
+	err = message_extract_body_encoded(reply->request, TRUE, &names, strings_unmarshall);
 	if (err != NULL) {
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;
@@ -478,12 +481,12 @@ meta2_filter_extract_body_rawcontentv2(struct gridd_filter_ctx_s *ctx,
 	GSList *result = NULL;
 	GError *err;
 
-	err = message_extract_body_encoded(reply->request, &result,
+	err = message_extract_body_encoded(reply->request, TRUE, &result,
 		meta2_raw_content_v2_unmarshall);
 
 	if (!err) {
 		if (!result) {
-			meta2_filter_ctx_set_error(ctx, NEWERROR(400, "No content"));
+			meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST, "No content"));
 			return FILTER_KO;
 		}
 		else {
@@ -510,14 +513,14 @@ meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
 
 	if (0 >= message_get_BODY(reply->request, &b, &blen, &err)) {
 		if (!err)
-			err = NEWERROR(400, "Missing Body");
+			err = NEWERROR(CODE_BAD_REQUEST, "Missing Body");
 		g_prefix_error(&err, "No content: ");
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;
 	}
 
 	if (!b || blen<=0) {
-		err = NEWERROR(400, "Invalid body");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid body");
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;
 	}
@@ -527,7 +530,7 @@ meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
 
 	if (!content) {
 		if (!err)
-			err = NEWERROR(400, "unknown error");
+			err = NEWERROR(CODE_BAD_REQUEST, "unknown error");
 		g_prefix_error(&err, "Decoding error: ");
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;
@@ -579,6 +582,7 @@ meta2_filter_extract_header_chunk_beans(struct gridd_filter_ctx_s *ctx,
 		GSList **lists = ptr;
 		_bean_cleanl2(lists[0]);
 		_bean_cleanl2(lists[1]);
+		// FIXME memleak with <lists> itself ?
 	}
 	GSList **lists = g_malloc0(2 * sizeof(GSList *));
 	EXTRACT_HEADER_BEANS(M2_KEY_NEW_CHUNKS, lists[0]);
@@ -592,35 +596,47 @@ meta2_filter_extract_body_beans(struct gridd_filter_ctx_s *ctx,
                 struct gridd_reply_ctx_s *reply)
 {
 	GSList *l = NULL;
-	void *b = NULL;
-	gsize bsize = 0;
 	const char *opt = meta2_filter_ctx_get_param(ctx, "BODY_OPT");
 
 	TRACE_FILTER();
 
 	/* get the message body */
-	if (0 >= message_get_BODY(reply->request, &b, &bsize, NULL)) {
-		GRID_DEBUG("Empty/Invalid body");
-		if (NULL == opt) {
-			meta2_filter_ctx_set_error(ctx, NEWERROR(400,
-						"Invalid request, Empty / Invalid body"));
-			return FILTER_KO;
-		}
-		return FILTER_OK;
-	}
-
-	l = bean_sequence_unmarshall(b, bsize);
-	if(!l) {
-		GRID_DEBUG("Empty/Invalid body");
-		meta2_filter_ctx_set_error(ctx, NEWERROR(400,
+	GError *err = message_extract_body_encoded (reply->request, (opt==NULL), &l, bean_sequence_decoder);
+	if (err) {
+		_bean_cleanl2 (l);
+		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST,
 					"Invalid request, Empty / Invalid body"));
 		return FILTER_KO;
 	}
 
-	/* store beans in context */
 	meta2_filter_ctx_set_input_udata(ctx, l, (GDestroyNotify)_bean_cleanl2);
-
 	return FILTER_OK;
+}
+
+int
+meta2_filter_extract_body_strings(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GSList *l = NULL;
+	const char *opt = meta2_filter_ctx_get_param(ctx, "BODY_OPT");
+
+	TRACE_FILTER();
+
+	GError *err = message_extract_body_encoded (reply->request, (opt==NULL), &l, strings_unmarshall);
+	if (err) {
+		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST,
+					"Invalid request, Empty / Invalid body"));
+		return FILTER_KO;
+	}
+
+	meta2_filter_ctx_set_input_udata(ctx, l, g_free0);
+	return FILTER_OK;
+}
+
+static void
+_ci_list_clean(gpointer cil)
+{
+	g_slist_free_full ((GSList*)cil, (GDestroyNotify)chunk_info_clean);
 }
 
 int
@@ -628,37 +644,16 @@ meta2_filter_extract_body_chunk_info(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	GSList *l = NULL;
-	void *b = NULL;
-	gsize bsize = 0;
-	GError *e = NULL;
 
 	TRACE_FILTER();
 
-	void _ci_list_clean(gpointer cil) {
-		GSList *list = (GSList *)cil;
-		g_slist_foreach(list, chunk_info_gclean, NULL);
-		g_slist_free(list);
-	}
-
-	/* get the message body */
-	if (0 >= message_get_BODY(reply->request, &b, &bsize, NULL)) {
-		GRID_DEBUG("Empty/Invalid body");
-		meta2_filter_ctx_set_error(ctx, NEWERROR(400,
-					"Invalid request, Empty / Invalid body"));
+	GError *err = message_extract_body_encoded (reply->request, TRUE, &l, chunk_info_unmarshall);
+	if (err) {
+		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;
 	}
 
-	GRID_DEBUG("CHUNK COMMIT body size : %"G_GSIZE_FORMAT, bsize);
-
-	if(0 >= chunk_info_unmarshall(&l, b, &bsize, &e)) {
-		g_prefix_error(&e, "Bad body in request, cannot unmarshall");
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	/* store beans in context */
 	meta2_filter_ctx_set_input_udata(ctx, l, _ci_list_clean);
-
 	return FILTER_OK;
 }
 
@@ -697,8 +692,7 @@ meta2_filter_extract_header_spare(struct gridd_filter_ctx_s *ctx,
 	EXTRACT_OPT(M2_KEY_SPARE);
 	const gchar *type = meta2_filter_ctx_get_param(ctx, M2_KEY_SPARE);
 
-	if (type != NULL)
-	{
+	if (type != NULL) {
 		/* No content length in spare request */
 		meta2_filter_ctx_add_param(ctx, "CONTENT_LENGTH_OPT", "OK");
 	}
@@ -823,7 +817,7 @@ meta2_filter_extract_body_flags32(struct gridd_filter_ctx_s *ctx,
 
 	meta2_filter_ctx_set_input_udata(ctx, body, (GDestroyNotify)metautils_gba_unref);
 	if (body->len != 4) {
-		e = g_error_new(GQ(), 400, "Invalid flags in body");
+		e = NEWERROR(CODE_BAD_REQUEST, "Invalid flags in body");
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	}
@@ -931,17 +925,11 @@ meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
 	GError *e = NULL;
 	gchar buf[1024];
 	TRACE_FILTER();
-	EXTRACT_OPT(M2_KEY_LISTING_TYPE);
-	const char *type = meta2_filter_ctx_get_param(ctx, M2_KEY_LISTING_TYPE);
-	if(NULL != type && !g_ascii_strcasecmp(type, S3_LISTING_TYPE)) {
-		EXTRACT_OPT(M2_KEY_PREFIX);
-		EXTRACT_OPT(M2_KEY_MARKER);
-		EXTRACT_OPT(M2_KEY_DELIMITER);
-		EXTRACT_OPT(M2_KEY_MAX_KEYS);
-	} else {
-		EXTRACT_OPT(M2_KEY_NAME_PATTERN);
-		EXTRACT_OPT(M2_KEY_METADATA_PATTERN);
-	}
+	EXTRACT_OPT(M2_KEY_SNAPSHOT);
+	EXTRACT_OPT(M2_KEY_PREFIX);
+	EXTRACT_OPT(M2_KEY_MARKER);
+	EXTRACT_OPT(M2_KEY_MARKER_END);
+	EXTRACT_OPT(M2_KEY_MAX_KEYS);
 	return FILTER_OK;
 }
 
@@ -993,7 +981,7 @@ meta2_filter_extract_header_addr_src(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 	if (rc < 0) {
-		meta2_filter_ctx_set_error(ctx, NEWERROR(500, "Invalid peer address"));
+		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_INTERNAL_ERROR, "Invalid peer address"));
 		return FILTER_KO;
 	}
 
@@ -1003,7 +991,7 @@ meta2_filter_extract_header_addr_src(struct gridd_filter_ctx_s *ctx,
 	}
 
 	if (!l) {
-		meta2_filter_ctx_set_error(ctx, NEWERROR(400, "empty peer address list"));
+		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST, "empty peer address list"));
 		return FILTER_KO;
 	}
 

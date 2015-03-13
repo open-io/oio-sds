@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metautils"
 #endif
@@ -69,7 +88,7 @@ gboolean
 namespace_info_copy(namespace_info_t* src, namespace_info_t* dst, GError **error)
 {
 	if (src == NULL || dst == NULL) {
-		GSETCODE(error, 500+EINVAL, "Argument src or dst should not be NULL");
+		GSETCODE(error, ERRCODE_PARAM, "Argument src or dst should not be NULL");
 		errno = EINVAL;
 		return FALSE;
 	}
@@ -77,7 +96,6 @@ namespace_info_copy(namespace_info_t* src, namespace_info_t* dst, GError **error
 	memcpy(dst->name, src->name, sizeof(src->name));
 	dst->chunk_size = src->chunk_size;
 	memcpy(&(dst->addr), &(src->addr), sizeof(addr_info_t));
-	memcpy(&(dst->versions), &(src->versions), sizeof(struct ns_versions_s));
 
 #define NSI_COPY_TABLE_REF(SRC, DST) \
 	if ((SRC) != NULL) {\
@@ -108,30 +126,20 @@ namespace_info_copy(namespace_info_t* src, namespace_info_t* dst, GError **error
 }
 
 namespace_info_t*
-namespace_info_dup(namespace_info_t* src, GError **error)
+namespace_info_dup(namespace_info_t* src)
 {
-	namespace_info_t *dst;
-
-	dst = g_try_malloc0(sizeof(namespace_info_t));
-	if (!dst) {
-		GSETERROR(error, "Memory allocation failure");
-		return NULL;
-	}
-
+	namespace_info_t *dst = g_malloc0(sizeof(namespace_info_t));
 	memcpy(dst->name, src->name, sizeof(src->name));
 	dst->chunk_size = src->chunk_size;
 	memcpy(&(dst->addr), &(src->addr), sizeof(addr_info_t));
-	memcpy(&(dst->versions), &(src->versions), sizeof(struct ns_versions_s));
 
 	dst->options = _copy_hash(src->options);
 	dst->storage_policy = _copy_hash(src->storage_policy);
 	dst->data_security = _copy_hash(src->data_security);
 	dst->data_treatments = _copy_hash(src->data_treatments);
 	dst->storage_class = _copy_hash(src->storage_class);
-	if (src->writable_vns) {
+	if (src->writable_vns)
 		g_slist_foreach (src->writable_vns, _copy_list_element, &(dst->writable_vns));
-	}
-
 	return dst;
 }
 
@@ -164,7 +172,6 @@ namespace_info_init(namespace_info_t *ni)
 	ni->chunk_size = 0;
 	memset(ni->name, 0, sizeof(ni->name));
 	memset(&ni->addr, 0, sizeof(ni->addr));
-	memset(&ni->versions, 0, sizeof(ni->versions));
 	ni->options = _copy_hash(NULL);
 	ni->storage_policy = _copy_hash(NULL);
 	ni->data_security = _copy_hash(NULL);

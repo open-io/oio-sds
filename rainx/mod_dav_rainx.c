@@ -1,3 +1,22 @@
+/*
+OpenIO SDS rainx
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
 #undef PACKAGE_STRING
@@ -181,7 +200,6 @@ dav_rainx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg
 	memset(conf->ns_name, 0x00, sizeof(conf->ns_name));
 	apr_cpystrn(conf->ns_name, arg1, sizeof(conf->ns_name));
 
-
 	DAV_DEBUG_POOL(cmd->pool, 0, "NS=[%s]", conf->ns_name);
 
 	/* Prepare COMPRESSION / ACL CONF when we get ns name */
@@ -362,9 +380,6 @@ rainx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 	DAV_XDEBUG_POOL(pchild, 0, "%s()", __FUNCTION__);
 	conf = ap_get_module_config(s->module_config, &dav_rainx_module);
 	conf->cleanup = _stat_cleanup_child;
-
-	if (!g_thread_supported ())
-		g_thread_init (NULL);
 	
 	status = server_init_child_stat(conf, pchild, pchild);
 	if (APR_SUCCESS != status)
@@ -405,8 +420,6 @@ rainx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp, s
 
 	if (__rainx_is_first_call(server)) {
 		DAV_DEBUG_POOL(plog, 0, "First call detected");
-		if (!g_thread_supported ())
-			g_thread_init (NULL);
 		return OK;
 	}
 

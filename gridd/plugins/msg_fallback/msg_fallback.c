@@ -1,3 +1,22 @@
+/*
+OpenIO SDS gridd
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #define MODULE_NAME "fallback"
 
 #ifndef G_LOG_DOMAIN
@@ -13,7 +32,6 @@
 #include <gridd/main/plugin.h>
 #include <gridd/main/message_handler.h>
 
-
 static gint
 plugin_matcher(MESSAGE m, void *param, GError ** err)
 {
@@ -22,7 +40,6 @@ plugin_matcher(MESSAGE m, void *param, GError ** err)
 	(void)err;
 	return 1;
 }
-
 
 static gint
 plugin_handler(MESSAGE m, gint fd, void *param, GError ** err)
@@ -39,7 +56,7 @@ plugin_handler(MESSAGE m, gint fd, void *param, GError ** err)
 	req_ctx.request = m;
 	ctx.req_ctx = &req_ctx;
 
-	reply_context_set_message(&ctx, 404, "No message handler found, check your NS configuration");
+	reply_context_set_message(&ctx, CODE_NOT_FOUND, "No message handler found, check your NS configuration");
 	reply_context_log_access(&ctx, "");
 
 	rc = reply_context_reply(&ctx, err);
@@ -48,7 +65,6 @@ plugin_handler(MESSAGE m, gint fd, void *param, GError ** err)
 	return rc;
 }
 
-
 static gint
 plugin_init(GHashTable * params, GError ** err)
 {
@@ -56,14 +72,12 @@ plugin_init(GHashTable * params, GError ** err)
 	return message_handler_add("fallback", plugin_matcher, plugin_handler, err);
 }
 
-
 static gint
 plugin_close(GError ** err)
 {
 	(void)err;
 	return 1;
 }
-
 
 struct exported_api_s exported_symbol = {
 	MODULE_NAME,

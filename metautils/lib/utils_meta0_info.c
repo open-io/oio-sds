@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metautils.meta0_info"
 #endif
@@ -23,14 +42,12 @@ func_equal_prefix(gconstpointer a, gconstpointer b)
 	return (0 == memcmp(((meta0_info_t *) a)->prefixes, ((meta0_info_t *) b)->prefixes, sA)) ? TRUE : FALSE;
 }
 
-
 static guint
 func_hash_prefix(gconstpointer k)
 {
 	return djb_hash_buf(((meta0_info_t *) k)->prefixes,
 			((meta0_info_t *) k)->prefixes_size);
 }
-
 
 static void
 func_free_meta0(gpointer v)
@@ -42,9 +59,7 @@ func_free_meta0(gpointer v)
 	}
 }
 
-
 /* ------------------------------------------------------------------------- */
-
 
 gsize
 meta0_info_to_string(const meta0_info_t * m0i, gchar * dst, gsize dstSize)
@@ -85,7 +100,6 @@ meta0_info_gclean(gpointer d, gpointer u)
 	meta0_info_clean(d);
 }
 
-
 static meta0_info_t *
 meta0_info_copy(meta0_info_t * src)
 {
@@ -96,26 +110,15 @@ meta0_info_copy(meta0_info_t * src)
 		return NULL;
 	}
 
-	m0i = g_try_malloc0(sizeof(meta0_info_t));
-	if (!m0i) {
-		errno = ENOMEM;
-		return NULL;
-	}
-
+	m0i = g_malloc0(sizeof(meta0_info_t));
 	m0i->prefixes_size = src->prefixes_size;
-	m0i->prefixes = g_try_malloc0(m0i->prefixes_size);
-	if (!m0i->prefixes) {
-		g_free(m0i);
-		errno = ENOMEM;
-		return NULL;
-	}
+	m0i->prefixes = g_malloc0(m0i->prefixes_size);
 
 	g_memmove(&(m0i->addr), &(src->addr), sizeof(addr_info_t));
 	g_memmove(m0i->prefixes, src->prefixes, src->prefixes_size);
 	errno = 0;
 	return m0i;
 }
-
 
 GHashTable *
 meta0_info_list_map_by_addr(GSList * mL, GError ** err)
@@ -157,7 +160,6 @@ meta0_info_list_map_by_addr(GSList * mL, GError ** err)
 	errno = 0;
 	return mH;
 }
-
 
 GHashTable *
 meta0_info_list_map_by_prefix(GSList * mL, GError ** err)
@@ -201,7 +203,6 @@ meta0_info_list_map_by_prefix(GSList * mL, GError ** err)
 	return mH;
 }
 
-
 GSList *
 meta0_info_compress_prefixes(GSList * mL, GError ** err)
 {
@@ -229,7 +230,6 @@ meta0_info_compress_prefixes(GSList * mL, GError ** err)
 	g_hash_table_destroy(map_addr);
 	return list_result;
 }
-
 
 GSList *
 meta0_info_uncompress_prefixes(GSList * mL, GError ** err)

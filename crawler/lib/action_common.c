@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.crawler.action.common"
 #endif
@@ -22,7 +41,6 @@ const TCrawlerBusObjectInfo* act_getObjectInfo(void)
 {
 	return &dbus_glib_action_object_info;
 }
-
 
 void act_paramact_init(TActParam* pActParam)
 {
@@ -52,8 +70,6 @@ void act_paramact_clean(TActParam* pActParam)
 	act_paramact_init(pActParam);
 }
 
-
-
 GVariant* act_disassembleParam(char* param_print, TActParam* pActParamOut)
 {
 	GVariant* param = NULL;
@@ -61,7 +77,6 @@ GVariant* act_disassembleParam(char* param_print, TActParam* pActParamOut)
 
 	if (!param_type)
 		param_type = g_variant_type_new(gvariant_action_param_type_string);
-
 
 	param = g_variant_parse(param_type, param_print, NULL, NULL, NULL);
 	if (NULL == param) {
@@ -105,5 +120,4 @@ char* act_buildResponse(gchar* action_name, int pid,  guint64 context_id, gchar*
 
 	return gv_print;
 }
-
 

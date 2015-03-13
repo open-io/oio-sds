@@ -1,8 +1,24 @@
-/*!
- * @file lb.h
- */
-#ifndef GRID__LB_H
-# define GRID__LB_H 1
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__lb_h
+# define OIO_SDS__metautils__lib__lb_h 1
 
 #include <metautils/lib/metatypes.h>
 
@@ -10,7 +26,6 @@ struct namespace_info_s;
 struct service_info_s;
 struct addr_info_s;
 struct json_object;
-
 
 /**
  * @defgroup metautils_lb Load-Balancing
@@ -32,7 +47,6 @@ struct grid_lb_iterator_s;
 
 /*! Used to iterate over service_info while reloading the pool. */
 typedef gboolean (*service_provider_f) (struct service_info_s **p_si);
-
 
 /* Mono-service pool features ---------------------------------------------- */
 
@@ -90,7 +104,6 @@ struct service_info_s* grid_lb_get_service_from_addr(struct grid_lb_s *lb,
 
 /*! Reconfigures the pool, Acquires/Releases the lock on pool. */
 void grid_lb_configure_options(struct grid_lb_s *lb, const gchar *opts);
-
 
 /* Iterators features ------------------------------------------------------ */
 
@@ -241,7 +254,6 @@ gboolean grid_lb_iterator_next_set(struct grid_lb_iterator_s *iter,
 gboolean grid_lb_iterator_next_set2(struct grid_lb_iterator_s *iter,
 		struct service_info_s ***si, struct lb_next_opt_ext_s *opt);
 
-
 /* Multi-services pool features --------------------------------------------- */
 
 /*! Create a lbpool ready to use (no service declared). */
@@ -296,4 +308,4 @@ struct service_info_s* grid_lbpool_get_service_from_url(
 
 /*! @} */
 
-#endif /* GRID__LB_H */
+#endif /*OIO_SDS__metautils__lib__lb_h*/

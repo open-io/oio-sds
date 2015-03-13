@@ -1,3 +1,22 @@
+/*
+OpenIO SDS sqliterepo
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "sqliterepo"
 #endif
@@ -71,11 +90,11 @@ struct sqlx_cache_s
 {
 	gboolean used;
 
-	GMutex *lock;
+	GMutex lock;
 	GTree *bases_by_name;
 	guint bases_count;
 	sqlx_base_t *bases;
-	GCond **cond_array;
+	GCond *cond_array;
 	gsize cond_count;
 	glong open_timeout; // milliseconds
 
@@ -325,7 +344,7 @@ sqlx_base_reserve(sqlx_cache_t *cache, const hashstr_t *hs,
 	sqlx_base_t *base;
 
 	if (!(base = sqlx_poll_free_base(cache)))
-		return NEWERROR(500, "too many bases");
+		return NEWERROR(CODE_INTERNAL_ERROR, "too many bases");
 
 	/* base reserved and in PENDING state */
 	base->name = hashstr_dup(hs);
@@ -368,10 +387,10 @@ _expire_base(sqlx_cache_t *cache, sqlx_base_t *b)
 	 * But this can take a lot of time. So we can release the pool,
 	 * free the handle and unlock the cache */
 	g_cond_signal(b->cond);
-	g_mutex_unlock(cache->lock);
+	g_mutex_unlock(&cache->lock);
 	if (cache->close_hook)
 		cache->close_hook(handle);
-	g_mutex_lock(cache->lock);
+	g_mutex_lock(&cache->lock);
 
 	b->handle = NULL;
 	b->owner = NULL;
@@ -415,8 +434,7 @@ _expire_specific_base(sqlx_cache_t *cache, sqlx_base_t *b, GTimeVal *now,
 	/* If someone is waiting on the base while it is being closed
 	 * (this arrives when someone tries to read it again after
 	 * waiting exactly the grace delay), we must notify him so it can
-	 * retry (and open it in another file descriptor).
-	 * See bug TO-HONEYCOMB-774 */
+	 * retry (and open it in another file descriptor). */
 	g_cond_signal(b->cond);
 
 	return 1;
@@ -444,7 +462,7 @@ sqlx_cache_reset_bases(sqlx_cache_t *cache, guint max)
 {
 	guint old, i;
 
-	g_mutex_lock(cache->lock);
+	g_mutex_lock(&cache->lock);
 
 	if (cache->used) {
 		GRID_WARN("SQLX base cahce cannot be reset: already in use");
@@ -467,14 +485,14 @@ sqlx_cache_reset_bases(sqlx_cache_t *cache, guint max)
 			base->index = i;
 			base->link.prev = base->link.next = -1;
 			SQLX_UNSHIFT(cache, base, &(cache->beacon_free), SQLX_BASE_FREE);
-			base->cond = cache->cond_array[i % cache->cond_count];
+			base->cond = cache->cond_array + (i % cache->cond_count);
 		}
 
 		GRID_INFO("SQLX cache size change from %u to %u", old,
 				cache->bases_count);
 	}
 
-	g_mutex_unlock(cache->lock);
+	g_mutex_unlock(&cache->lock);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -517,12 +535,12 @@ sqlx_cache_init(void)
 	cache->hot_grace_delay = SQLX_GRACE_DELAY_HOT;
 	cache->heat_threshold = 1;
 	cache->used = FALSE;
-	cache->lock = g_mutex_new();
+	g_mutex_init(&cache->lock);
 	cache->bases_by_name = g_tree_new_full(hashstr_quick_cmpdata,
 			NULL, NULL, NULL);
 	cache->bases_count = SQLX_MAX_BASES;
 	cache->cond_count = SQLX_MAX_COND;
-	cache->cond_array = g_malloc0(cache->cond_count * sizeof(void*));
+	cache->cond_array = g_malloc0(cache->cond_count * sizeof(GCond));
 	cache->open_timeout = DEFAULT_CACHE_OPEN_TIMEOUT;
 	BEACON_RESET(&(cache->beacon_free));
 	BEACON_RESET(&(cache->beacon_idle));
@@ -530,7 +548,7 @@ sqlx_cache_init(void)
 	BEACON_RESET(&(cache->beacon_used));
 
 	for (i=0; i<cache->cond_count ;i++)
-		cache->cond_array[i] = g_cond_new();
+		g_cond_init(cache->cond_array + i);
 
 	sqlx_cache_reset_bases(cache, cache->bases_count);
 	return cache;
@@ -565,11 +583,10 @@ sqlx_cache_clean(sqlx_cache_t *cache)
 		g_free(cache->bases);
 	}
 
-	if (cache->lock)
-		g_mutex_free(cache->lock);
+	g_mutex_clear(&cache->lock);
 	if (cache->cond_array) {
 		for (i=0; i<cache->cond_count ;i++)
-			g_cond_free(cache->cond_array[i]);
+			g_cond_clear(cache->cond_array + i);
 		g_free(cache->cond_array);
 	}
 	if (cache->bases_by_name)
@@ -601,7 +618,7 @@ sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
 		deadline = NULL;
 	}
 
-	g_mutex_lock(cache->lock);
+	g_mutex_lock(&cache->lock);
 	cache->used = TRUE;
 retry:
 	bd = sqlx_lookup_id(cache, hname);
@@ -648,7 +665,7 @@ retry:
 					GRID_DEBUG("Base [%s] in use by another thread (%X), waiting...",
 							hashstr_str(hname), compute_thread_id(base->owner));
 					// The lock is held by another thread/request
-					if (g_cond_timed_wait(base->cond, cache->lock, deadline)) {
+					if (g_cond_timed_wait(base->cond, &cache->lock, deadline)) {
 						GRID_DEBUG("Retrying to open [%s]", hashstr_str(hname));
 						goto retry;
 					} else {
@@ -675,7 +692,7 @@ retry:
 			case SQLX_BASE_CLOSING:
 				EXTRA_ASSERT(base->owner != NULL);
 				// Just wait for a notification then retry
-				if (g_cond_timed_wait(base->cond, cache->lock, deadline))
+				if (g_cond_timed_wait(base->cond, &cache->lock, deadline))
 					goto retry;
 				else {
 					err = NEWERROR(CODE_UNAVAILABLE,
@@ -693,7 +710,7 @@ retry:
 		}
 		g_cond_signal(base->cond);
 	}
-	g_mutex_unlock(cache->lock);
+	g_mutex_unlock(&cache->lock);
 	return err;
 }
 
@@ -707,9 +724,9 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, gboolean force)
 
 	EXTRA_ASSERT(cache != NULL);
 	if (base_id_out(cache, bd))
-		return NEWERROR(500, "invalid base id=%d", bd);
+		return NEWERROR(CODE_INTERNAL_ERROR, "invalid base id=%d", bd);
 
-	g_mutex_lock(cache->lock);
+	g_mutex_lock(&cache->lock);
 	cache->used = TRUE;
 
 	base = GET(cache,bd);
@@ -759,7 +776,7 @@ sqlx_cache_unlock_and_close_base(sqlx_cache_t *cache, gint bd, gboolean force)
 	if (base && !err)
 		sqlx_base_debug(__FUNCTION__, base);
 	g_cond_signal(base->cond);
-	g_mutex_unlock(cache->lock);
+	g_mutex_unlock(&cache->lock);
 	return err;
 }
 
@@ -801,10 +818,10 @@ sqlx_cache_expire_all(sqlx_cache_t *cache)
 
 	EXTRA_ASSERT(cache != NULL);
 
-	g_mutex_lock(cache->lock);
+	g_mutex_lock(&cache->lock);
 	cache->used = TRUE;
 	for (nb=0; sqlx_expire_first_idle_base(cache, NULL) ;nb++) { }
-	g_mutex_unlock(cache->lock);
+	g_mutex_unlock(&cache->lock);
 
 	return nb;
 }
@@ -816,7 +833,7 @@ sqlx_cache_expire(sqlx_cache_t *cache, guint max, GTimeVal *end)
 
 	EXTRA_ASSERT(cache != NULL);
 
-	g_mutex_lock(cache->lock);
+	g_mutex_lock(&cache->lock);
 	cache->used = TRUE;
 
 	for (nb=0; !max || nb < max ; nb++) {
@@ -828,7 +845,7 @@ sqlx_cache_expire(sqlx_cache_t *cache, guint max, GTimeVal *end)
 			break;
 	}
 
-	g_mutex_unlock(cache->lock);
+	g_mutex_unlock(&cache->lock);
 
 	/* Force malloc to release memory to the system.
 	 * Allow 1MiB of unused but not released memory. */
@@ -869,12 +886,12 @@ static guint
 _count_beacon(sqlx_cache_t *cache, struct beacon_s *beacon)
 {
 	guint count = 0;
-	g_mutex_lock(cache->lock);
+	g_mutex_lock(&cache->lock);
 	for (gint idx = beacon->first; idx != -1 ;) {
 		++ count;
 		idx = GET(cache, idx)->link.next;
 	}
-	g_mutex_unlock(cache->lock);
+	g_mutex_unlock(&cache->lock);
 	return count;
 }
 

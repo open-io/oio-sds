@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.client.upload"
 #endif
@@ -186,7 +205,7 @@ static gs_status_t _gs_upload_content (meta2_content_add_f adder, gs_container_t
 	return _gs_upload_content_v2(container, content_name, FALSE, content_size, feeder, user_data, NULL, NULL, err);
 }
 
-static GStaticMutex global_mutex = G_STATIC_MUTEX_INIT;
+static GMutex global_mutex = G_STATIC_MUTEX_INIT;
 
 /**
  * Update chunk extended attributes (position, content size, number of chunks)
@@ -1064,11 +1083,11 @@ static gs_status_t _gs_upload(gs_container_t *container,
 	hc_url_set(url, HCURL_PATH, content_name);
 
 	/*get a list of chunks*/
-	g_static_mutex_lock(&global_mutex);
+	g_mutex_lock(&global_mutex);
 	(void) gs_container_reconnect_if_necessary (container,NULL);
 	for (nb_attempts=MAX_ADD_ATTEMPTS; (NULL != (local_error=CONTENT_ADD_V2())) && nb_attempts>0 ;nb_attempts--) {
 		CONTAINER_REFRESH(container,local_error,error_label_unlock,"PUT error");
-		if ((!local_error || local_error->code<200/*error is local*/)
+		if ((!local_error || CODE_IS_NETWORK_ERROR(local_error->code))
 			&& wait_on_add_failed>0UL && nb_attempts>1)
 		{
 			GRID_DEBUG("Waiting [%lu] ms before retrying ADD", wait_on_add_failed);
@@ -1077,7 +1096,7 @@ static gs_status_t _gs_upload(gs_container_t *container,
 		if (local_error)
 			g_clear_error(&local_error);
 	}
-	g_static_mutex_unlock(&global_mutex);
+	g_mutex_unlock(&global_mutex);
 
 	if (!chunks) {
 		GSETERROR(&local_error, "PUT error: Too many attempts");
@@ -1191,7 +1210,6 @@ static gs_status_t _gs_upload(gs_container_t *container,
 		goto error_label;
 	}
 
-
 	/* ------------ *
 	 * COMMIT phase *
 	 * ------------ */
@@ -1213,7 +1231,7 @@ static gs_status_t _gs_upload(gs_container_t *container,
 
 	/*tries to commit the content*/
 
-	g_static_mutex_lock(&global_mutex);
+	g_mutex_lock(&global_mutex);
 	if(!append) {
 		for (nb_attempts=MAX_ATTEMPTS_COMMIT; (NULL != (local_error = CONTENT_COMMIT())) && nb_attempts>0 ;nb_attempts--) {
 			if (local_error && local_error->code==CODE_CONTENT_ONLINE && nb_attempts<MAX_ATTEMPTS_COMMIT) {
@@ -1303,7 +1321,7 @@ static gs_status_t _gs_upload(gs_container_t *container,
 		if (gerr_metacd)
 			g_clear_error(&gerr_metacd);
 	}
-	g_static_mutex_unlock(&global_mutex);
+	g_mutex_unlock(&global_mutex);
 	if (!beans) {
 		GSETERROR(&local_error,"CONTENT_COMMIT error : too many attempts");
 		goto error_label;
@@ -1316,7 +1334,7 @@ static gs_status_t _gs_upload(gs_container_t *container,
 	return GS_OK;
 
 error_label_unlock:
-	g_static_mutex_unlock(&global_mutex);
+	g_mutex_unlock(&global_mutex);
 
 error_label:
 
@@ -1333,7 +1351,7 @@ error_label:
 	UPLOAD_CLEAN();
 	return GS_ERROR;
 
-	g_static_mutex_unlock(&global_mutex);
+	g_mutex_unlock(&global_mutex);
 
 exit_label:
 	GSERRORCAUSE(err,local_error,"Cannot perform the whole upload");

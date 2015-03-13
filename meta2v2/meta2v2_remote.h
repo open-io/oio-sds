@@ -1,5 +1,25 @@
-#ifndef HC_M2V2_REMOTE__H
-# define HC_M2V2_REMOTE__H 1
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__meta2v2__meta2v2_remote_h
+# define OIO_SDS__meta2v2__meta2v2_remote_h 1
+
 # include <glib.h>
 # include <meta2v2/autogen.h>
 
@@ -27,10 +47,20 @@
 
 struct hc_url_s;
 
+struct list_params_s;
+
 /**
  * @addtogroup meta2v2_remote
  * @{
  */
+
+struct list_result_s {
+	GSList *beans;
+	gchar *next_marker;
+	gboolean truncated;
+};
+
+void m2v2_list_result_clean (struct list_result_s *p);
 
 struct m2v2_create_params_s
 {
@@ -80,11 +110,14 @@ GByteArray* m2v2_remote_pack_SPARE(GByteArray *sid, struct hc_url_s *url,
 GByteArray* m2v2_remote_pack_DEL(GByteArray *sid, struct hc_url_s *url,
 		gboolean sync_del);
 
+GByteArray* m2v2_remote_pack_RAW_ADD(GByteArray *sid, struct hc_url_s *url,
+		GSList *beans);
+
 GByteArray* m2v2_remote_pack_RAW_DEL(GByteArray *sid, struct hc_url_s *url,
 		GSList *beans);
 
-GByteArray* m2v2_remote_pack_SUBST_CHUNKS(GByteArray *sid, struct hc_url_s *url,
-		GSList *new_chunks, GSList *old_chunks, gboolean restrict_to_alias);
+GByteArray* m2v2_remote_pack_RAW_SUBST(GByteArray *sid, struct hc_url_s *url,
+		GSList *new_chunks, GSList *old_chunks);
 
 GByteArray* m2v2_remote_pack_GET(GByteArray *sid, struct hc_url_s *url,
 		guint32 flags);
@@ -93,13 +126,16 @@ GByteArray* m2v2_remote_pack_GET_BY_CHUNK(GByteArray *sid,
 		struct hc_url_s *url, const gchar *chunk_id, gint64 limit);
 
 GByteArray* m2v2_remote_pack_LIST(GByteArray *sid, struct hc_url_s *url,
-		guint32 flags);
+		struct list_params_s *p);
 
-GByteArray* m2v2_remote_pack_PROP_GET(GByteArray *sid, struct hc_url_s *url,
-		guint32 flags);
+GByteArray* m2v2_remote_pack_PROP_DEL(GByteArray *sid, struct hc_url_s *url,
+		GSList *names);
 
 GByteArray* m2v2_remote_pack_PROP_SET(GByteArray *sid, struct hc_url_s *url,
 		guint32 flags, GSList *beans);
+
+GByteArray* m2v2_remote_pack_PROP_GET(GByteArray *sid, struct hc_url_s *url,
+		guint32 flags);
 
 GByteArray* m2v2_remote_pack_STGPOL(GByteArray *sid, struct hc_url_s *url,
 		const char *pol);
@@ -120,7 +156,6 @@ GByteArray* m2v2_remote_pack_TOUCH_container(GByteArray *sid, struct hc_url_s *u
 /**
  * @}
  */
-
 
 #define M2V2_MODE_DRYRUN  0x10000000
 
@@ -211,24 +246,27 @@ GError* m2v2_remote_execute_GET_BY_CHUNK(const gchar *target, GByteArray *sid,
 GError* m2v2_remote_execute_DEL(const gchar *target, GByteArray *sid,
 		struct hc_url_s *url, gboolean sync_del, GSList **out);
 
+GError* m2v2_remote_execute_RAW_ADD(const gchar *target, GByteArray *sid,
+		struct hc_url_s *url, GSList *beans);
+
 GError* m2v2_remote_execute_RAW_DEL(const gchar *target, GByteArray *sid,
 		struct hc_url_s *url, GSList *beans);
 
-/**
- * Substitute chunks by another one in meta2 database.
- * TODO: return number of substitutions
- */
-GError* m2v2_remote_execute_SUBST_CHUNKS(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, GSList *new_chunks, GSList *old_chunks,
-		gboolean restrict_to_alias);
+/** Substitute chunks by another one in meta2 database.
+ * TODO: return number of substitutions */
+GError* m2v2_remote_execute_RAW_SUBST(const gchar *target, GByteArray *sid,
+		struct hc_url_s *url, GSList *new_chunks, GSList *old_chunks);
 
-GError* m2v2_remote_execute_SUBST_CHUNKS_single(const gchar *target,
-		GByteArray *sid,
-		struct hc_url_s *url, struct bean_CHUNKS_s *new_chunk,
-		struct bean_CHUNKS_s *old_chunk, gboolean restrict_to_alias);
+GError* m2v2_remote_execute_RAW_SUBST_single(const gchar *target, GByteArray *sid,
+		struct hc_url_s *url,
+		struct bean_CHUNKS_s *new_chunk, struct bean_CHUNKS_s *old_chunk);
 
 GError* m2v2_remote_execute_LIST(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, guint32 flags, GSList **out);
+		struct hc_url_s *url, struct list_params_s *p,
+		struct list_result_s *out);
+
+GError* m2v2_remote_execute_PROP_DEL(const gchar *target, GByteArray *sid,
+		struct hc_url_s *url, GSList *names);
 
 GError* m2v2_remote_execute_PROP_SET(const gchar *target, GByteArray *sid,
 		struct hc_url_s *url, guint32 flags, GSList *in);
@@ -254,7 +292,6 @@ GError* m2v2_remote_execute_SNAP_RESTORE(const gchar *target, GByteArray *sid,
 GError* m2v2_remote_execute_SNAP_DELETE(const gchar *target, GByteArray *sid,
 		struct hc_url_s *url);
 
-
 GError* m2v2_remote_touch_content(const gchar *target, GByteArray *sid,
         struct hc_url_s *url);
 
@@ -271,4 +308,4 @@ GError* m2v2_request(const gchar *url, GByteArray *req,
  * @}
  */
 
-#endif /* HC_M2V2_REMOTE__H */
+#endif /*OIO_SDS__meta2v2__meta2v2_remote_h*/

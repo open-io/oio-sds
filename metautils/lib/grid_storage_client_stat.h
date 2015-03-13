@@ -1,6 +1,24 @@
-#ifndef __GRID_STORAGE_CLIENT_STAT_H
-#define __GRID_STORAGE_CLIENT_STAT_H
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__grid_storage_client_stat_h
+# define OIO_SDS__metautils__lib__grid_storage_client_stat_h 1
 
 /******************************************************/
 /* constant / macro / type                            */
@@ -16,7 +34,6 @@
 #define GSCSTAT_SERVICE_RAWX   "rawx"
 #define GSCSTAT_SERVICE_SOLR   "solr"
 
-
 /**
  * tag name
  */
@@ -27,12 +44,10 @@ typedef enum
 	GSCSTAT_TAGS_all = 0xFFFF
 } gscstat_service_tags_e;
 
-
 /**
  * tags name list, separated by '|'
  */
 #define gscstat_service_tags_lst unsigned short
-
 
 /******************************************************/
 /* structure for service / tag config / value         */
@@ -54,7 +69,6 @@ typedef struct gscstat_service_tag_reqprctime_s
 	double average_req;	// = sum / nb
 } gscstat_service_tag_reqprctime_t;
 
-
 /**
  * configuration and data for each service
  */
@@ -68,9 +82,7 @@ typedef struct gscstat_service_info_s
 	// value of tags enabled
 	gscstat_service_tag_reqprctime_t tag_recproctime;
 
-
 } gscstat_service_info_t;
-
 
 /******************************************************/
 /* functions                                          */
@@ -89,7 +101,6 @@ int gscstat_addTagsToService(char *pServiceType,
 int gscstat_getTagFromService(char *pServiceType, gscstat_service_tags_e tag,
     void *tagValue, GError ** err);
 
-
 /* Debug */
 char *gscstat_dumpAllServices(void);
 char *gscstat_dumpService(char *pServiceType, GError ** err);
@@ -100,4 +111,4 @@ void gscstat_tags_clear(char *pServiceType, gscstat_service_tags_lst tag);
 void gscstat_tags_start(char *pServiceType, gscstat_service_tags_lst tag);
 void gscstat_tags_end(char *pServiceType, gscstat_service_tags_lst tag);
 
-#endif //__GRID_STORAGE_CLIENT_STAT_H
+#endif /*OIO_SDS__metautils__lib__grid_storage_client_stat_h*/

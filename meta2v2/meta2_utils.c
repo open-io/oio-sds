@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "m2v2.utils"
 #endif
@@ -13,53 +32,55 @@
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 
-
-static GQuark gquark_log = 0;
-
 static GError*
 _get_container_policy(struct sqlx_sqlite3_s *sq3, struct namespace_info_s *nsinfo,
 		struct storage_policy_s **result);
 
-static GString *
-_list_params_to_sql_clause(struct list_params_s *lp)
+static void
+gpa_reverse (GPtrArray *gpa)
 {
-	GString *clause = g_string_new("");
-	switch(lp->type) {
-		case S3:
-			if (NULL != lp->params.s3.marker) {
-				g_string_append_printf(clause, "alias > '%s' ",
-						lp->params.s3.marker);
-			}
-			if (clause->len > 0 && NULL != lp->params.s3.prefix)
-				g_string_append_printf(clause, "%s ", "AND");
-			if (NULL != lp->params.s3.prefix) {
-				g_string_append_printf(clause, "alias LIKE '%s%s' ",
-						lp->params.s3.prefix, "%%");
-			}
-			if (clause->len == 0)
-				g_string_append(clause, "1 ");
-			g_string_append_printf(clause, "%s ", "ORDER BY alias ASC");
-			g_string_append_printf(clause, "LIMIT %"G_GINT64_FORMAT,
-					(lp->params.s3.maxkeys > 0) ? lp->params.s3.maxkeys : 1000);
-			break;
-		case DEFAULT:
-			if (NULL != lp->params.redc.name_pattern)
-				g_string_append_printf(clause, "alias LIKE '%s'",
-						lp->params.redc.name_pattern);
-		default:
-			if (lp->snapshot_name != NULL) {
-				if (clause->len > 0)
-					g_string_append(clause, " AND ");
-				// calling function converts snapshot_name to container_version
-				g_string_append_printf(clause, " container_version = ? ");
-			}
-			if (clause->len == 0)
-				clause = g_string_append(clause, "1");
+	if (!gpa || gpa->len < 1)
+		return;
+	guint i, j;
+	for (i=0,j=gpa->len-1; i<j ;i++,j--) {
+		gpointer tmp = gpa->pdata[i];
+		gpa->pdata[i] = gpa->pdata[j];
+		gpa->pdata[j] = tmp;
+	}
+}
+
+static void
+_list_params_to_sql_clause(struct list_params_s *lp, GString *clause, GVariant **params)
+{
+	int i = 0;
+	void set_param (GVariant *gv) { if (params[i]) g_variant_unref(params[i]); params[i]=gv; }
+	void add_param (GVariant *gv) { set_param(gv); i++; set_param(NULL); }
+	void lazy_and () { if (clause->len > 0) { g_string_append(clause, " AND"); } }
+
+	if (lp->marker_start) {
+		lazy_and();
+		g_string_append (clause, " alias > ?");
+		add_param (g_variant_new_string (lp->marker_start));
+	} else if (lp->prefix) {
+		lazy_and();
+		g_string_append (clause, " alias >= ?");
+		add_param (g_variant_new_string (lp->prefix));
 	}
 
-	GRID_DEBUG("Listing clause: [%s]", clause->str);
+	if (lp->marker_end) {
+		lazy_and();
+		g_string_append (clause, " alias < ?");
+		add_param (g_variant_new_string (lp->marker_end));
+	}
 
-	return clause;
+	if (clause->len == 0)
+		clause = g_string_append(clause, " 1");
+
+	if (!lp->flag_allversion || lp->maxkeys>0 || lp->marker_start || lp->marker_end)
+		g_string_append(clause, " ORDER BY alias ASC, version ASC");
+
+	if (lp->maxkeys > 0)
+		g_string_append_printf(clause, " LIMIT %"G_GINT64_FORMAT, lp->maxkeys);
 }
 
 static void
@@ -211,8 +232,7 @@ m2db_get_container_size(sqlite3 *db, gboolean check_alias)
 gchar *
 m2db_get_namespace(struct sqlx_sqlite3_s *sq3, const gchar *def)
 {
-	gchar *ns = sqlx_admin_get_str(sq3, M2V2_PROP_PREFIX_SYS
-			M2V2_KEY_NAMESPACE);
+	gchar *ns = sqlx_admin_get_str(sq3, SQLX_ADMIN_NAMESPACE);
 	if (!ns)
 		return def? g_strdup(def) : NULL;
 	return ns;
@@ -221,69 +241,61 @@ m2db_get_namespace(struct sqlx_sqlite3_s *sq3, const gchar *def)
 gint64
 m2db_get_max_versions(struct sqlx_sqlite3_s *sq3, gint64 def)
 {
-	return sqlx_admin_get_i64(sq3, M2V2_PROP_PREFIX_SYS
-			M2V2_KEY_VERSIONING_POLICY, def);
+	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_VERSIONING_POLICY, def);
 }
 
 void
 m2db_set_max_versions(struct sqlx_sqlite3_s *sq3, gint64 max)
 {
-	sqlx_admin_set_i64(sq3, M2V2_PROP_PREFIX_SYS
-			M2V2_KEY_VERSIONING_POLICY, max);
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_VERSIONING_POLICY, max);
 }
 
 gint64
 m2db_get_keep_deleted_delay(struct sqlx_sqlite3_s *sq3, gint64 def)
 {
-	return sqlx_admin_get_i64(sq3, M2V2_PROP_PREFIX_SYS
-			M2V2_KEY_KEEP_DELETED_DELAY, def);
+	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_KEEP_DELETED_DELAY, def);
 }
 
 void
 m2db_set_keep_deleted_delay(struct sqlx_sqlite3_s *sq3, gint64 delay)
 {
-	sqlx_admin_set_i64(sq3, M2V2_PROP_PREFIX_SYS
-			M2V2_KEY_KEEP_DELETED_DELAY, delay);
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_KEEP_DELETED_DELAY, delay);
 }
 
 gint64
 m2db_get_version(struct sqlx_sqlite3_s *sq3)
 {
-	return sqlx_admin_get_i64(sq3, M2V2_PROP_PREFIX_SYS
-			M2V2_KEY_VERSION, 1);
+	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_VERSION, 1);
 }
 
 void
 m2db_increment_version(struct sqlx_sqlite3_s *sq3)
 {
-	sqlx_admin_inc_i64(sq3, M2V2_PROP_PREFIX_SYS M2V2_KEY_VERSION, 1);
+	sqlx_admin_inc_i64(sq3, M2V2_ADMIN_VERSION, 1);
 }
 
 gint64
 m2db_get_size(struct sqlx_sqlite3_s *sq3)
 {
-	return sqlx_admin_get_i64(sq3, M2V2_PROP_PREFIX_SYS M2V2_KEY_SIZE, 0);
+	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_SIZE, 0);
 }
 
 void
 m2db_set_size(struct sqlx_sqlite3_s *sq3, gint64 size)
 {
-	sqlx_admin_set_i64(sq3, M2V2_PROP_PREFIX_SYS
-			M2V2_KEY_SIZE, size);
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_SIZE, size);
 }
 
 gint64
 m2db_get_quota(struct sqlx_sqlite3_s *sq3, gint64 def)
 {
-	return sqlx_admin_get_i64(sq3, M2V2_PROP_PREFIX_SYS
-			M2V2_KEY_QUOTA, def);
+	return sqlx_admin_get_i64(sq3, M2V2_ADMIN_QUOTA, def);
 }
 
 void
 m2db_set_quota(struct sqlx_sqlite3_s *sq3, gint64 quota)
 {
-	sqlx_admin_set_i64(sq3, M2V2_PROP_PREFIX_SYS
-			M2V2_KEY_QUOTA, quota);
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_QUOTA, quota);
 }
 
 /* GET ---------------------------------------------------------------------- */
@@ -447,7 +459,7 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *u,
 
 	/* sanity checks */
 	if (!hc_url_has(u, HCURL_PATH))
-		return NEWERROR(400, "Missing path");
+		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
 	GRID_TRACE("GET(%s) Flags got[%s], allowed[%s]", hc_url_get(u, HCURL_WHOLE),
 			m2v2_flags(flags, d0, sizeof(d0)),
@@ -509,120 +521,91 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *u,
 }
 
 GError*
-m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp,
+m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 		m2_onbean_cb cb, gpointer u)
 {
-	static guint32 allowed_mask = M2V2_FLAG_NODELETED
-		|M2V2_FLAG_ALLVERSION|M2V2_FLAG_HEADERS;
-	gchar d0[64], d1[64];
-	(void) d0, (void) d1, (void) allowed_mask;
-	GVariant *params[] = {NULL, NULL};
+	struct list_params_s lp = *lp0;
 	GError *err = NULL;
-	m2_onbean_cb local_cb = cb;
+	GSList *aliases = NULL;
+	guint count_aliases = 0;
+	gboolean done = FALSE;
 
-	g_assert(sq3 != NULL);
-
-	GRID_TRACE("LIST Flags got[%s], allowed[%s]",
-			m2v2_flags(lp->flags, d0, sizeof(d0)),
-			m2v2_flags(allowed_mask, d1, sizeof(d1)));
-
-	void _load_header_cb(gpointer udata, gpointer bean) {
-		GError *err_local = NULL;
-		struct bean_ALIASES_s *alias = bean;
-		GVariant *ch_params[] = {NULL, NULL};
-		ch_params[0] = _gba_to_gvariant(ALIASES_get_content_id(alias));
-		// Send content header
-		err = CONTENTS_HEADERS_load(sq3->db, "id = ?", ch_params, cb, udata);
-		if (err != NULL) {
-			GRID_WARN("Failed to load header for alias [%s] version %"G_GINT64_FORMAT,
-					ALIASES_get_alias(alias)->str,
-					ALIASES_get_version(alias));
-			g_clear_error(&err_local);
+	while (!done && (lp.maxkeys <= 0 || count_aliases < lp.maxkeys)) {
+		GPtrArray *tmp = g_ptr_array_new();
+		void cleanup (void) {
+			g_ptr_array_set_free_func (tmp, _bean_clean);
+			g_ptr_array_free (tmp, TRUE);
 		}
-		// Send alias
-		cb(udata, bean);
-		gvariant_unrefv(ch_params);
-	}
 
-	if (lp->flags & M2V2_FLAG_HEADERS) {
-		local_cb = _load_header_cb;
-	}
+		if (aliases)
+			lp.marker_start = ALIASES_get_alias(aliases->data)->str;
+		if (lp.maxkeys > 0)
+			lp.maxkeys -= count_aliases;
 
-	if (lp->snapshot_name != NULL) {
-		struct bean_SNAPSHOTS_s *snapshot = NULL;
-		err = m2db_get_snapshot_by_name(sq3, lp->snapshot_name, &snapshot);
-		if (err == NULL) {
-			// SQL clause uses container_version, not snapshot_name
-			params[0] = g_variant_new_int64(SNAPSHOTS_get_version(snapshot));
-			_bean_clean(snapshot);
-		} else {
-			return err;
-		}
-	}
+		// List the next items
+		GString *clause = g_string_new("");
+		GVariant *params[] = {NULL,NULL,NULL,NULL};
+		_list_params_to_sql_clause (&lp, clause, params);
+		err = ALIASES_load(sq3->db, clause->str, params, _bean_buffer_cb, tmp);
+		gvariant_unrefv (params);
+		g_string_free (clause, TRUE);
+		if (err) { cleanup (); goto label_error; }
+		if (!tmp->len) { cleanup (); goto label_ok; }
 
-	gint _compare_version(struct bean_ALIASES_s *a1,
-			struct bean_ALIASES_s *a2) {
-		return ALIASES_get_version(a2) - ALIASES_get_version(a1);
-	}
-	gboolean _free_list(gpointer k, gpointer v, gpointer u0) {
-		(void) k;
-		(void) u0;
-		g_slist_free((GSList*)v);
-		return FALSE;
-	}
+		gpa_reverse (tmp);
 
-	// Build lists of aliases sorted by version,
-	// and insert them into a tree indexed by alias.
-	// At the end, we just run the tree and forward each
-	// element to the caller.
-	void wrapper(gpointer u0, gpointer bean) {
-		GTree *atree = u0;
-		struct bean_ALIASES_s *alias;
-		GSList *found;
-		alias = (struct bean_ALIASES_s *) bean;
-		found = g_tree_lookup(atree, ALIASES_get_alias(alias)->str);
-		found = g_slist_insert_sorted(found, alias, (GCompareFunc)_compare_version);
-		g_tree_replace(atree, g_strdup(ALIASES_get_alias(alias)->str), found);
-	}
-	// Function that will be called on each alias list
-	gboolean runner(gpointer k, gpointer v, gpointer u0) {
-		(void) k;
-		GSList *l = (GSList *) v;
-		if (!((lp->flags & M2V2_FLAG_NODELETED) && ALIASES_get_deleted(l->data))) {
-			// Latest version is not deleted or we are allowed to list deleted
-			if (lp->flags & M2V2_FLAG_ALLVERSION) {
-				// Reverse to get oldest version first
-				for (GSList *cursor = g_slist_reverse(l);
-						cursor != NULL; cursor = cursor->next) {
-					local_cb(u0, cursor->data);
-				}
+		// Keep the aliases that do not exceed and that match the prefix
+		// backward-iterator to benefit from version-sorted items
+		for (guint i=tmp->len; i>0 ;i--) {
+			struct bean_ALIASES_s *alias = tmp->pdata[i-1];
+			const gchar *name = ALIASES_get_alias(alias)->str;
+
+			if ((lp.prefix && !g_str_has_prefix(name, lp.prefix)) ||
+					(lp.maxkeys > 0 && count_aliases > lp.maxkeys)) {
+				cleanup (); goto label_ok;
+			}
+
+			g_ptr_array_remove_index_fast (tmp, i-1);
+			if (!aliases || lp.flag_allversion) {
+				aliases = g_slist_prepend(aliases, alias);
+				++ count_aliases;
 			} else {
-				// M2V2_FLAG_ALLVERSION is not set, list latest version,
-				// and clean the rest
-				local_cb(u0, l->data);
-				_bean_cleanl2(l->next);
-				l->next = NULL;
-			}
-		} else {
-			// If latest version is marked deleted and M2V2_FLAG_NODELETED,
-			// do not call back, just clean
-			for (; l ;l=l->next) {
-				_bean_clean(l->data);
+				const gchar *last_name = ALIASES_get_alias(aliases->data)->str;
+				if (!strcmp(last_name, name)) {
+					_bean_clean (aliases->data);
+					aliases->data = alias;
+				} else {
+					aliases = g_slist_prepend(aliases, alias);
+					++ count_aliases;
+				}
 			}
 		}
-		return FALSE;
+
+		done = (lp.maxkeys <= 0) || (lp.maxkeys > tmp->len);
+		cleanup();
 	}
 
-	GString *clause = _list_params_to_sql_clause(lp);
+label_ok:
+	aliases = g_slist_reverse (aliases);
+	for (GSList *l=aliases; l ;l=l->next) {
+		struct bean_ALIASES_s *alias = l->data;
+		if (lp.flag_headers) {
+			GPtrArray *t0 = g_ptr_array_new();
+			GError *e = _db_get_FK_by_name_buffered(alias, "image", sq3->db, t0);
+			if (e) {
+				GRID_DEBUG("No header for [%s] : (%d) %s", ALIASES_get_alias(alias)->str, err->code, err->message);
+				g_clear_error (&e);
+			}
+			for (guint i=0; i<t0->len ;i++)
+				cb(u, t0->pdata[i]);
+			g_ptr_array_free (t0, TRUE);
+		}
+		cb(u, alias);
+		l->data = NULL;
+	}
 
-	GTree *atree = g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
-	err = ALIASES_load(sq3->db, clause->str, params, wrapper, atree);
-	if (!err)
-		g_tree_foreach(atree, runner, u);
-	g_tree_foreach(atree, _free_list, NULL);
-	g_tree_destroy(atree);
-	g_string_free(clause, TRUE);
-	gvariant_unrefv(params);
+label_error:
+	g_slist_free_full (aliases, _bean_clean);
 	return err;
 }
 
@@ -659,9 +642,9 @@ m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, gpoin
 	g_assert(result != NULL);
 
 	if (!hc_url_has(url, HCURL_PATH))
-		return NEWERROR(400, "Missing path");
+		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 	if (!hc_url_has(url, HCURL_VERSION))
-		return NEWERROR(400, "Missing version");
+		return NEWERROR(CODE_BAD_REQUEST, "Missing version");
 
 	tmp = g_ptr_array_new();
 	params[0] = g_variant_new_string(hc_url_get(url, HCURL_PATH));
@@ -694,7 +677,7 @@ m2db_latest_alias(struct sqlx_sqlite3_s *sq3,  struct hc_url_s *url, gpointer *r
 	g_assert(result != NULL);
 
 	if (!hc_url_has(url, HCURL_PATH))
-		return NEWERROR(400, "Missing path");
+		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
 	tmp = g_ptr_array_new();
 	params[0] = g_variant_new_string(hc_url_get(url, HCURL_PATH));
@@ -711,106 +694,6 @@ m2db_latest_alias(struct sqlx_sqlite3_s *sq3,  struct hc_url_s *url, gpointer *r
 	}
 
 	_bean_cleanv2(tmp);
-	return err;
-}
-
-GError*
-m2db_delete_content(struct sqlx_sqlite3_s *sq3, gpointer content)
-{
-	GError *e = NULL;
-	sqlite3_stmt *stmt = NULL;
-	int rc;
-
-	sqlite3_prepare_debug(rc, sq3->db,
-			"DELETE FROM content_v2 WHERE chunk_id = ? AND content_id = ?",
-			-1, &stmt, NULL);
-
-	sqlite3_clear_bindings(stmt);
-	sqlite3_reset(stmt);
-	sqlite3_bind_text(stmt, 1, CONTENTS_get_chunk_id(content)->str,
-			CONTENTS_get_chunk_id(content)->len, NULL);
-	sqlite3_bind_blob(stmt, 2, CONTENTS_get_content_id(content)->data,
-			CONTENTS_get_content_id(content)->len, NULL);
-	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-			e = NEWERROR(500, "SQLite error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
-		}
-	}
-
-	(void) sqlite3_finalize(stmt);
-
-	return e;
-}
-
-GError*
-m2db_delete_chunk(struct sqlx_sqlite3_s *sq3, gpointer chunk)
-{
-	GError *e = NULL;
-	sqlite3_stmt *stmt = NULL;
-	int rc;
-
-	sqlite3_prepare_debug(rc, sq3->db,
-			"DELETE FROM chunk_v2 WHERE id = ?",
-			-1, &stmt, NULL);
-
-	sqlite3_clear_bindings(stmt);
-	sqlite3_reset(stmt);
-	sqlite3_bind_text(stmt, 1, CHUNKS_get_id(chunk)->str,
-			CHUNKS_get_id(chunk)->len, NULL);
-	while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-			e = NEWERROR(500, "SQLite error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
-		}
-	}
-
-	(void) sqlite3_finalize(stmt);
-
-	return e;
-}
-
-GError*
-m2db_substitute_chunk_everywhere(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url,
-		struct bean_CHUNKS_s *new_chunk, GSList *old_chunks,
-		m2_onbean_cb cb, gpointer udata)
-{
-	gint count = 0;
-	GError *err = NULL;
-	GSList *urls = NULL;
-
-	// Save the new chunk
-	err = _db_save_bean(sq3->db, new_chunk);
-	if (err)
-		goto end;
-	// Replace old chunks by the new one
-	count = substitute_chunk(sq3->db, new_chunk, old_chunks, &err);
-	if (count > 0 && !err) {
-		GRID_DEBUG("Substituted %d chunks by %s", count,
-				CHUNKS_get_id(new_chunk)->str);
-		// Notify all contents with the new chunk
-		err = m2db_content_urls_from_chunk_id(sq3, url,
-				CHUNKS_get_id(new_chunk)->str, -1, &urls);
-		if (err) {
-			// This error is not fatal
-			GRID_WARN("Failed to notify contents with chunks substituted: %s",
-					err->message);
-			g_clear_error(&err);
-		} else {
-			for (GSList *l = urls; l ; l = l->next) {
-				err = m2db_get_alias(sq3, l->data, 0, cb, udata);
-				if (err) {
-					GRID_WARN("Notification of chunk substitution failed "
-							"for [%s]: %s", hc_url_get(l->data, HCURL_WHOLE),
-							err->message);
-					g_clear_error(&err);
-				}
-			}
-			g_slist_free_full(urls, (GDestroyNotify)hc_url_clean);
-		}
-		// TODO: remove the old chunks from the database
-		// (currently they are removed by the purge)
-	}
-end:
 	return err;
 }
 
@@ -952,7 +835,7 @@ m2db_set_properties(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	struct bean_ALIASES_s *latest = NULL;
 
 	if (!beans)
-		return NEWERROR(400, "No properties");
+		return NEWERROR(CODE_BAD_REQUEST, "No properties");
 	if (NULL != (err = m2db_latest_alias(sq3, url, (gpointer*)(&latest))))
 		return err;
 	if (!latest)
@@ -1026,8 +909,9 @@ m2db_get_container_properties(struct sqlx_sqlite3_s *sq3, guint32 flags,
 {
 	gboolean runner(gchar *k, GByteArray *v, gpointer ignored) {
 		(void) ignored;
-		if (!(flags & M2V2_FLAG_ALLPROPS) && !g_str_has_prefix(k, M2V2_PROP_PREFIX_SYS)
-				&& !g_str_has_prefix(k, M2V2_PROP_PREFIX_USER))
+		if (!(flags & M2V2_FLAG_ALLPROPS)
+				&& !g_str_has_prefix(k, SQLX_ADMIN_PREFIX_SYS)
+				&& !g_str_has_prefix(k, SQLX_ADMIN_PREFIX_USER))
 			return FALSE;
 		return cb(cb_data, k, v->data, v->len);
 	}
@@ -1055,7 +939,7 @@ m2db_set_container_properties(struct sqlx_sqlite3_s *sq3, guint32 flags, GSList 
 		}
 
 		if (!(flags & M2V2_FLAG_NOFORMATCHECK) &&
-				!g_str_has_prefix(m2p->name, M2V2_PROP_PREFIX_USER)) {
+				!g_str_has_prefix(m2p->name, SQLX_ADMIN_PREFIX_USER)) {
 			prop_errs = g_slist_prepend(prop_errs, m2p->name);
 			continue;
 		}
@@ -1072,7 +956,7 @@ m2db_set_container_properties(struct sqlx_sqlite3_s *sq3, guint32 flags, GSList 
 				continue;
 
 			if (!(flags & M2V2_FLAG_NOFORMATCHECK) &&
-					!g_str_has_prefix(m2p->name, M2V2_PROP_PREFIX_USER)) {
+					!g_str_has_prefix(m2p->name, SQLX_ADMIN_PREFIX_USER)) {
 				prop_errs = g_slist_prepend(prop_errs, m2p->name);
 				continue;
 			}
@@ -1096,59 +980,32 @@ m2db_set_container_properties(struct sqlx_sqlite3_s *sq3, guint32 flags, GSList 
 }
 
 GError*
-m2db_get_all_properties(struct sqlx_sqlite3_s *sq3, const gchar *k, guint32 flags,
-		m2_onbean_cb cb, gpointer u0)
+m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, gchar **namev)
 {
-	GVariant *params[2] = {NULL,NULL};
-	GError *err;
-
-	(void) flags;
-
-	params[0] = g_variant_new_string(k);
-	err = PROPERTIES_load(sq3->db, "key = ?", params, cb, u0);
-	g_variant_unref(params[0]);
-	return err;
-}
-
-GError*
-m2db_del_property(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, const gchar *k)
-{
-	guint i;
 	GError *err;
 	GPtrArray *tmp;
 
 	g_assert(sq3 != NULL);
 	g_assert(url != NULL);
-	g_assert(k != NULL);
+	g_assert(namev != NULL);
 
 	tmp = g_ptr_array_new();
-	err = m2db_get_property(sq3, url, k, M2V2_FLAG_NODELETED, _bean_buffer_cb, tmp);
+	err = m2db_get_properties(sq3, url, M2V2_FLAG_NODELETED, _bean_buffer_cb, tmp);
 	if (!err) {
-		for (i=0; !err && i<tmp->len ;++i) {
-			gpointer bean = tmp->pdata[i];
-			PROPERTIES_set_deleted(bean, TRUE);
-			err = _db_save_bean(sq3->db, bean);
+		for (guint i=0; !err && i<tmp->len ;++i) {
+			struct bean_PROPERTIES_s *bean = tmp->pdata[i];
+			for (gchar **p=namev; *p ;++p) {
+				if (!strcmp(*p, PROPERTIES_get_key(bean)->str)) {
+					_db_delete_bean (sq3->db, bean);
+					break;
+				}
+			}
 		}
 	}
 
 	_bean_cleanv2(tmp);
 	return err;
 }
-
-GError*
-m2db_flush_property(struct sqlx_sqlite3_s *sq3, const gchar *k)
-{
-	GVariant *params[] = { NULL, NULL };
-	GError *err;
-
-	params[0] = g_variant_new_string(k);
-	err = PROPERTIES_delete(sq3->db, "key = ?", params);
-	g_variant_unref(params[0]);
-
-	GRID_DEBUG("%i services deleted", sqlite3_changes(sq3->db));
-	return err;
-}
-
 
 /* DELETE ------------------------------------------------------------------- */
 
@@ -1414,14 +1271,13 @@ m2db_merge_alias(struct m2db_put_args_s *m2db_args, struct bean_ALIASES_s *lates
 	GError *err = NULL;;
 	GByteArray *gba = NULL;
 
-
 	/* Extract the CONTENT_HEADER id in place */
 	g_assert(latest != NULL);
 	if (NULL != (err = _db_get_FK_by_name(latest, "image", m2db_args->sq3->db, cb, &gba)))
 		g_prefix_error(&err, "DB error: ");
 	else {
 		if (gba == NULL)
-			err = NEWERROR(500, "HEADER not found");
+			err = NEWERROR(CODE_INTERNAL_ERROR, "HEADER not found");
 		else {
 			args->merge_only = TRUE;
 			args->uid = gba->data;
@@ -1434,7 +1290,6 @@ m2db_merge_alias(struct m2db_put_args_s *m2db_args, struct bean_ALIASES_s *lates
 		g_byte_array_free(gba, TRUE);
 	return err;
 }
-
 
 /* PUT ---------------------------------------------------------------------- */
 
@@ -1492,7 +1347,7 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans)
 	g_assert(args->sq3 != NULL);
 	g_assert(args->url != NULL);
 	if (!hc_url_has(args->url, HCURL_PATH))
-		return NEWERROR(400, "Missing path");
+		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
 	memset(&args2, 0, sizeof(args2));
 	args2.beans = beans;
@@ -1554,7 +1409,7 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	g_assert(args->sq3 != NULL);
 	g_assert(args->url != NULL);
 	if (!hc_url_has(args->url, HCURL_PATH))
-		return NEWERROR(400, "Missing path");
+		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
 	gint64 size = m2db_patch_alias_beans_list(args, beans);
 
@@ -1569,7 +1424,7 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	err = m2db_check_alias_beans_list(args->url, beans, &check_args);
 	if (NULL != err) {
 		g_prefix_error(&err, "Invalid beans: ");
-		err->code = 400;
+		err->code = CODE_BAD_REQUEST;
 		return err;
 	}
 
@@ -1647,7 +1502,7 @@ m2db_copy_alias(struct m2db_put_args_s *args, const char *source)
 	g_assert(source != NULL);
 
 	if (!hc_url_has(args->url, HCURL_PATH))
-		return NEWERROR(400, "Missing path");
+		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
 	// Try to use source as an URL
 	orig = hc_url_init(source);
@@ -1854,7 +1709,7 @@ m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 	g_assert(sq3 != NULL);
 	g_assert(url != NULL);
 	if (!hc_url_has(url, HCURL_PATH))
-		return NEWERROR(400, "Missing path");
+		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
 	memset(&ctx, 0, sizeof(ctx));
 	ctx.tmp = g_ptr_array_new();
@@ -1992,7 +1847,6 @@ _update_new_bean(struct update_alias_header_ctx_s *ctx, gpointer bean)
 	g_ptr_array_add(ctx->tmp, _bean_dup(bean));
 }
 
-
 GError*
 m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		struct hc_url_s *url, GSList *beans, gboolean skip_checks)
@@ -2018,7 +1872,7 @@ m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		err = m2db_check_alias_beans_list(url, beans, &check_args);
 		if (NULL != err) {
 			g_prefix_error(&err, "Invalid beans: ");
-			err->code = 400;
+			err->code = CODE_BAD_REQUEST;
 			return err;
 		}
 	}
@@ -2049,7 +1903,6 @@ m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	_bean_cleanv2(ctx.tmp);
 	return err;
 }
-
 
 /* GENERATOR ---------------------------------------------------------------- */
 
@@ -2325,11 +2178,11 @@ m2_generate_beans_v1(struct hc_url_s *url, gint64 size, gint64 chunk_size,
 	g_assert(iter != NULL);
 
 	if (!hc_url_has(url, HCURL_PATH))
-		return NEWERROR(400, "Missing path");
+		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 	if (size < 0)
-		return NEWERROR(400, "Invalid size");
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid size");
 	if (chunk_size <= 0)
-		return NEWERROR(400, "Invalid chunk size");
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid chunk size");
 
 	memset(ctx.h, 0, sizeof(ctx.h));
 	memset(ctx.uid, 0, sizeof(ctx.uid));
@@ -2398,7 +2251,7 @@ _get_container_policy(struct sqlx_sqlite3_s *sq3, struct namespace_info_s *nsinf
 	g_assert(result != NULL);
 
 	*result = NULL;
-	pname = sqlx_admin_get_str(sq3, M2V2_PROP_PREFIX_SYS"storage_policy");
+	pname = sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY);
 	if (pname) {
 		*result = storage_policy_init(nsinfo, pname);
 		g_free(pname);
@@ -2435,7 +2288,7 @@ m2db_get_storage_policy(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 GError*
 m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname, int replace)
 {
-	const gchar *k = M2V2_PROP_PREFIX_SYS"storage_policy";
+	const gchar *k = M2V2_ADMIN_STORAGE_POLICY;
 
 	if (!replace) {
 		gchar *s = sqlx_admin_get_str(sq3, k);
@@ -2454,28 +2307,28 @@ m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 {
 	const gchar *v;
 
-	sqlx_admin_init_str(sq3, M2V2_PROP_PREFIX_SYS M2V2_KEY_VERSION, "0");
+	sqlx_admin_init_str(sq3, M2V2_ADMIN_VERSION, "0");
 
 	v = hc_url_get(url, HCURL_REFERENCE);
 	if (v != NULL)
-		sqlx_admin_init_str(sq3, M2V2_PROP_PREFIX_SYS "container_name", v);
+		sqlx_admin_init_str(sq3, SQLX_ADMIN_REFERENCE, v);
 
 	v = hc_url_get(url, HCURL_NS);
 	if (v != NULL)
-		sqlx_admin_init_str(sq3, M2V2_PROP_PREFIX_SYS "namespace", v);
+		sqlx_admin_init_str(sq3, SQLX_ADMIN_NAMESPACE, v);
 }
 
 GError*
 m2db_get_container_status(struct sqlx_sqlite3_s *sq3, guint32 *status)
 {
-	*status = sqlx_admin_get_i64(sq3, "flags", (gint64)CONTAINER_STATUS_ENABLED);
+	*status = sqlx_admin_get_i64(sq3, SQLX_ADMIN_STATUS, (gint64)CONTAINER_STATUS_ENABLED);
 	return NULL;
 }
 
 GError*
 m2db_set_container_status(struct sqlx_sqlite3_s *sq3, guint32 repl)
 {
-	sqlx_admin_set_i64(sq3, "flags", (gint64)repl);
+	sqlx_admin_set_i64(sq3, SQLX_ADMIN_STATUS, (gint64)repl);
 	return NULL;
 }
 
@@ -2829,7 +2682,7 @@ m2db_deduplicate_chunks(struct sqlx_sqlite3_s *sq3, namespace_info_t *nsinfo,
 	/* List all non-deleted aliases */
 	struct list_params_s lp;
 	memset(&lp, '\0', sizeof(struct list_params_s));
-	lp.flags = M2V2_FLAG_NODELETED;
+	lp.flag_nodeleted = ~0;
 
 	err = m2db_list_aliases(sq3, &lp, (m2_onbean_cb) alias_bean_cb, NULL);
 
@@ -2928,12 +2781,7 @@ GError*
 m2db_flush_container(sqlite3 *db)
 {
 	GError *err = NULL;
-	int rc = SQLITE_OK;
-
-	if (!gquark_log)
-		gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
-
-	rc = sqlx_exec(db, "DELETE FROM snapshot_v2");
+	int rc = sqlx_exec(db, "DELETE FROM snapshot_v2");
 	if (rc != SQLITE_OK) {
 		err = SQLITE_GERROR(db, rc);
 	} else {

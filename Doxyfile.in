@@ -4,9 +4,9 @@
 #---------------------------------------------------------------------------
 
 DOXYFILE_ENCODING      = UTF-8
-PROJECT_NAME           = Atos Wordline Honeycomb
+PROJECT_NAME           = OpenIO Software Defined Storage
 PROJECT_NUMBER         = 1.6
-PROJECT_BRIEF          = AWL cloud of services
+PROJECT_BRIEF          = OpenIO, object storage + grid for apps
 PROJECT_LOGO           =
 OUTPUT_DIRECTORY       = @CMAKE_CURRENT_BINARY_DIR@/doc
 CREATE_SUBDIRS         = YES

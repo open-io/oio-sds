@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "grid.crawler.trip_common"
 #endif //G_LOG_DOMAIN
@@ -13,9 +32,9 @@
 
 #include <glib.h>
 
+#include "trip_common.h"
+
 // FIX TODO: source code to move in sqliterepo ?!??! common trip_prefix/trip_sqlx
-
-
 
 //=============================================================================
 /**
@@ -24,16 +43,12 @@
  * t: ="meta1"
  */
 static void
-tc_sqliterepo_file_locator(gpointer ignored, const gchar *n, const gchar *t, GString *result)
+tc_sqliterepo_file_locator(gpointer ignored, struct sqlx_name_s *n, GString *result)
 {
 	(void) ignored;
-	(void) t;
-
 	g_string_truncate(result, 0);
-	g_string_append(result, n);
+	g_string_append(result, n->base);
 }
-
-
 
 /**
  * \brief initialize repository structure
@@ -72,7 +87,6 @@ tc_sqliterepo_initRepository(const gchar* basedir, gchar* svc_type, sqlx_reposit
 	return NULL;
 }
 
-
 /**
  * \brief extract admin properties field from bdd file
  *
@@ -93,13 +107,11 @@ tc_sqliterepo_admget(sqlx_repository_t* repo, gchar* type_, gchar* bddnameWithEx
 	gchar *value = NULL;
 
 	/* Now open/lock the base in a way suitable for our op */
-	err = sqlx_repository_open_and_lock(repo, type_,
-			bddnameWithExtension,
-			SQLX_OPEN_LOCAL,
-			&sq3, NULL);
+	struct sqlx_name_s n = {.base=bddnameWithExtension, .type=type_, .ns=""};
+	err = sqlx_repository_open_and_lock(repo, &n, SQLX_OPEN_LOCAL, &sq3, NULL);
 
 	if (err != NULL) {
-		if (err->code < 300 || err->code > 399)
+		if (!CODE_IS_REDIRECT(err->code))
 			g_prefix_error(&err, "Open/Lock error: ");
 
 		GRID_WARN("not open and lock: [%s]: %s", bddnameWithExtension,  err->message);
@@ -122,7 +134,6 @@ tc_sqliterepo_admget(sqlx_repository_t* repo, gchar* type_, gchar* bddnameWithEx
 
 	return value;
 }
-
 
 void tc_sqliterepo_free(sqlx_repository_t** repo)
 {

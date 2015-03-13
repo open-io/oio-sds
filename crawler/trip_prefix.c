@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "grid.crawler.trip_prefix"
 #endif //G_LOG_DOMAIN
@@ -22,7 +41,6 @@
 #include "lib/dir_explorer.h"
 #include "lib/trip_common.h"
 
-
 // string utilities
 static gchar* trip_name                = "trip_prefix";
 static gchar* source_cmd_opt_name      = "s";
@@ -45,7 +63,6 @@ static int current_bdd_nb      = 0;
 // running temp data
 static sqlx_repository_t *global_repo = NULL;
 static dir_explorer_t dir_explorer_handle;
-
 
 enum {
 	TRIPERR_BADBDD = 1,
@@ -107,7 +124,6 @@ meta1_IsMaster(gchar* bddname)
 		} else TRIP_WARN("%s: [%s]: (a)%s", __FUNCTION__, bddname,  err->message);
 	}  else TRIP_WARN("%s: [%s]: (b)%s", __FUNCTION__, bddname,  err->message);
 
-
 	// error received ?
 	if (err) {
 		TRIP_TRACE("(a)master or slave: :master=%d", master);
@@ -117,10 +133,8 @@ meta1_IsMaster(gchar* bddname)
 	// desallocated
 	gridd_client_free(client);
 
-
 	return master;
 }
-
 
 /**
  * \brief return a percentage about progress trip
@@ -129,7 +143,6 @@ int trip_progress(void)
 {
 	return dir_progress(&dir_explorer_handle);
 }
-
 
 /**
  * \brief first function to call before used trip _next()
@@ -185,7 +198,6 @@ int trip_start(int argc, char** argv)
 	/* ------- */
 
 	TRIP_INFO("Initialize and scan directory [%s]... please Wait...", source_directory_path);
-
 
 	err = tc_sqliterepo_initRepository(source_directory_path, META1_TYPE_NAME, &global_repo);
 	if (err) {
@@ -265,7 +277,6 @@ static GVariant*_sub_trip_next()
 		//returned  data
 		if (bRetryAnotherPrefix == FALSE)
 			return pVariant;
-
 
 		g_free(file_path);			 
 		file_path = dir_next_file(&dir_explorer_handle, NULL);

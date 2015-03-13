@@ -1,6 +1,0 @@
-#ifndef __VNS_AGENT_REMOTE_H__
-#define __VNS_AGENT_REMOTE_H__
-
-#define NAME_MSGNAME_VNSA_INFO "REQ_VNSA_INFO"
-
-#endif /*__VNS_AGENT_REMOTE_H__*/

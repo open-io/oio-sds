@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "m2v2.check"
 #endif
@@ -31,7 +50,6 @@ typedef struct header_check_s
 	GArray *unavail_chunks; // (chunk_pair_t)
 } header_check_t;
 
-
 typedef gboolean (*on_chunk_f) (header_check_t *hc,
 		chunk_pair_t *pair, gpointer ctx);
 
@@ -43,7 +61,6 @@ typedef struct single_check_s
 	on_chunk_f on_chunk;
 	on_end_f on_end;
 } single_check_t;
-
 
 // -------------------------------------------------------------------------
 // Performs a set of checks on the sequence of chunk_pair_s (ordered by
@@ -294,7 +311,6 @@ _check_distances(GPtrArray *locations, guint distance_requested)
 	return NULL;
 }
 
-
 // -------------------------------------------------------------------------
 // XXX COMMON tests to all data_security policies XXX
 // -------------------------------------------------------------------------
@@ -352,7 +368,6 @@ hook_END_stgclass(header_check_t *hc, void *u)
 		g_ptr_array_free(ctx->bad_pairs, TRUE);
 	}
 }
-
 
 // -------------------------------------------------------------------------
 // XXX DUPLICATED XXX
@@ -573,7 +588,6 @@ _check_dupli_alias(header_check_t *hc, guint replicas, guint distance)
 		_check_chunks_sequence(hc, checks);
 	}
 }
-
 
 // -------------------------------------------------------------------------
 // XXX RAIN XXX
@@ -809,7 +823,6 @@ _check_rained_alias(header_check_t *hc, guint k, guint m, guint distance,
 	_check_chunks_sequence(hc, checks);
 }
 
-
 // -------------------------------------------------------------------------
 // XXX Internals XXX
 // -------------------------------------------------------------------------
@@ -956,7 +969,7 @@ _check_alias(struct m2v2_check_s *check, struct bean_ALIASES_s *alias)
 
 	// Even if empty, an alias must have a chunk's footprint
 	if (!hc.chunks->len)
-		return NEWERROR(400, "No chunk/content");
+		return NEWERROR(CODE_BAD_REQUEST, "No chunk/content");
 
 	if (!e)
 		_check_header(&hc);
@@ -985,10 +998,9 @@ _init_m2v2_check(struct m2v2_check_s *check, struct hc_url_s *url,
 
 	check->flags |= M2CHK_FLAG_CLEAN_NSINFO;
 	if (args && args->ns_info)
-		check->ns_info = namespace_info_dup(args->ns_info, NULL);
+		check->ns_info = namespace_info_dup(args->ns_info);
 	else {
-		check->ns_info = get_namespace_info(hc_url_get(check->url,
-					HCURL_NSPHYS), NULL);
+		check->ns_info = get_namespace_info(hc_url_get(check->url, HCURL_NSPHYS), NULL);
 	}
 
 	if (args && args->lbpool)
@@ -1092,7 +1104,7 @@ m2v2_check_consistency(struct m2v2_check_s *check)
 
 	// There must be something to test
 	if (!check->aliases->len)
-		return NEWERROR(400, "No alias");
+		return NEWERROR(CODE_BAD_REQUEST, "No alias");
 
 	for (guint i = 0; i < check->aliases->len ;++i) {
 		GError *err = _check_alias(check, g_ptr_array_index(check->aliases, i));
@@ -1121,7 +1133,7 @@ m2v2_check_consistency(struct m2v2_check_s *check)
 
 	if (!count_errors)
 		return NULL;
-	return NEWERROR(500, "Check failed, check for flaws");
+	return NEWERROR(CODE_INTERNAL_ERROR, "Check failed, check for flaws");
 }
 
 static const char*

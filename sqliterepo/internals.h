@@ -1,5 +1,24 @@
-#ifndef SQLX__INTERNALS_H
-# define SQLX__INTERNALS_H 1
+/*
+OpenIO SDS sqliterepo
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__sqliterepo__internals_h
+# define OIO_SDS__sqliterepo__internals_h 1
 
 /**
  * @defgroup sqliterepo_misc Misc. features
@@ -15,7 +34,6 @@
 # include <Row.h>
 # include <Table.h>
 # include <TableSequence.h>
-
 
 # ifndef SQLX_MAX_COND
 #  define SQLX_MAX_COND 64
@@ -42,8 +60,10 @@
 
 // Size of buffer for reading dump file
 #define SQLX_DUMP_BUFFER_SIZE 32768
+
 // Size of chunks sent to client when doing chunked SQLX_DUMP
 #define SQLX_DUMP_CHUNK_SIZE (8*1024*1024)
+
 // Page size at database creation (should be multiple of storage block size)
 #define SQLX_DEFAULT_PAGE_SIZE 4096
 
@@ -55,9 +75,7 @@
 #define MCFG(D)     MMANAGER(D)->config
 #define MKEY_S(D)   hashstr_str(MEMBER(D)->key)
 
-/**
- * @param C
- */
+/** @param C */
 #define CONFIG_CHECK(C) do {\
 	EXTRA_ASSERT((C) != NULL);\
 	EXTRA_ASSERT((C)->get_local_url != NULL); \
@@ -66,25 +84,24 @@
 	EXTRA_ASSERT((C)->mode <= ELECTION_MODE_GROUP); \
 } while (0)
 
-/**
- * @param M
- */
+/** @param M */
 #define MANAGER_CHECK(M) do {\
 	EXTRA_ASSERT((M) != NULL);\
-	EXTRA_ASSERT((M)->lock != NULL);\
 	EXTRA_ASSERT((M)->lrutree_members != NULL);\
 	CONFIG_CHECK((M)->config); \
 } while (0)
 
-/**
- * @param M
- */
+/** @param M */
 #define MEMBER_CHECK(M) do {\
 	EXTRA_ASSERT(MEMBER(M) != NULL);\
-	EXTRA_ASSERT(MEMBER(M)->name != NULL);\
-	EXTRA_ASSERT(MEMBER(M)->type != NULL);\
+	NAME_CHECK(&(MEMBER(M)->name)); \
 	EXTRA_ASSERT(MEMBER(M)->key != NULL);\
 	MANAGER_CHECK(MMANAGER(M));\
+} while (0)
+
+#define REPO_CHECK(R) do { \
+	EXTRA_ASSERT((R) != NULL); \
+	EXTRA_ASSERT((R)->schemas != NULL); \
 } while (0)
 
 struct sqlx_cache_s;
@@ -131,7 +148,6 @@ struct sqlx_repository_s
 
 	gboolean running : 1;
 };
-
 
 /**
  * @param t0
@@ -200,4 +216,4 @@ const gchar * sqlite_op2str(int op);
 
 /** @} */
 
-#endif
+#endif /*OIO_SDS__sqliterepo__internals_h*/

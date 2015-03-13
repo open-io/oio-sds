@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "http.put"
 #endif
@@ -16,7 +35,6 @@
 #include "gs_internals.h"
 #include "grid_client.h"
 #include "http_put.h"
-
 
 struct http_put_dest_s
 {
@@ -66,6 +84,9 @@ struct http_put_s
 	gsize buffer_filled;	/* content already read from client */
 };
 
+void init_curl (void);
+void destroy_curl (void);
+
 void __attribute__ ((constructor)) init_curl(void)
 {
 	/* With NSS, all internal data are not correctly freed at
@@ -78,7 +99,6 @@ void __attribute__ ((destructor)) destroy_curl(void)
 {
 	curl_global_cleanup();
 }
-
 
 struct http_put_s *
 http_put_create(http_put_input_f cb_input, gpointer cb_input_data, size_t data_length, long timeout_cnx, long timeout_op)
@@ -472,7 +492,7 @@ guint http_put_get_failure_number(struct http_put_s *p)
 	return ret;
 }
 
-GSList *_http_put_get_dests(struct http_put_s *p, gboolean success)
+static GSList *_http_put_get_dests(struct http_put_s *p, gboolean success)
 {
 	struct http_put_dest_s *dest;
 	GSList *list_ret = NULL;

@@ -1,5 +1,25 @@
-#ifndef FILER_MONITOR_H
-# define FILER_MONITOR_H
+/*
+OpenIO SDS rawx-monitor
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__rawx_monitor__src__filer_monitor_h
+# define OIO_SDS__rawx_monitor__src__filer_monitor_h 1
+
 # ifndef G_LOG_DOMAIN
 #  define G_LOG_DOMAIN "vol.monitor"
 # endif
@@ -65,7 +85,6 @@ typedef const char* (*volume_name_getter_f) (struct volume_s *vol);
 
 typedef int (*volume_type_getter_f) (struct volume_s *vol);
 
-
 struct filer_s {
 	char str_addr[64];
 	oid oid_enterprise;
@@ -109,7 +128,6 @@ struct volume_statistics_s {
 	gint64 io_idle;/**<disks idle*/
 	gint64 perf_idle;
 };
-
 
 /* SNMP common features ---------------------------------------------------- */
 
@@ -159,4 +177,4 @@ struct filer_s* filer_init(const gchar *host, struct snmp_auth_s *snmp_auth,
 
 void filer_fini(struct filer_s *filer);
 
-#endif
+#endif /*OIO_SDS__rawx_monitor__src__filer_monitor_h*/

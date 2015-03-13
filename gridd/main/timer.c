@@ -1,3 +1,22 @@
+/*
+OpenIO SDS gridd
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "server.timer"
 #endif
@@ -10,7 +29,7 @@
 
 #include "./srvtimer.h"
 
-static GStaticRWLock rw_lock = G_STATIC_RW_LOCK_INIT;
+static GRWLock rw_lock;
 
 static GSList *timers_regular = NULL;
 
@@ -26,9 +45,7 @@ struct srvtimer_s
 	char name[ST_NAMELEN];
 };
 
-
 /* ------------------------------------------------------------------------- */
-
 
 gboolean
 srvtimer_register_regular(const char *name, srvtimer_f fire, srvtimer_f close_cb, gpointer udata, guint64 freq)
@@ -48,20 +65,20 @@ srvtimer_register_regular(const char *name, srvtimer_f fire, srvtimer_f close_cb
 	st->ticks = 0;
 	g_strlcpy(st->name, name, ST_NAMELEN);
 
-	g_static_rw_lock_writer_lock(&rw_lock);
+	g_rw_lock_writer_lock(&rw_lock);
 	timers_regular = g_slist_prepend(timers_regular, st);
-	g_static_rw_lock_writer_unlock(&rw_lock);
+	g_rw_lock_writer_unlock(&rw_lock);
 
 	return TRUE;
 }
-
 
 void
 srvtimer_init(void)
 {
 	INFO("timers initialization done");
+	memset(&rw_lock, 0, sizeof(rw_lock));
+	g_rw_lock_init(&rw_lock);
 }
-
 
 void
 srvtimer_fini(void)
@@ -77,15 +94,14 @@ srvtimer_fini(void)
 		}
 	}
 
-	g_static_rw_lock_writer_lock(&rw_lock);
+	g_rw_lock_writer_lock(&rw_lock);
 	g_slist_foreach(timers_regular, func_free, NULL);
 	g_slist_free(timers_regular);
 	timers_regular = NULL;
-	g_static_rw_lock_writer_unlock(&rw_lock);
+	g_rw_lock_writer_unlock(&rw_lock);
 
 	INFO("timers freed");
 }
-
 
 void
 srvtimer_fire(guint64 ticks)
@@ -111,8 +127,8 @@ srvtimer_fire(guint64 ticks)
 	}
 
 	TRACE("Firing the timers...");
-	g_static_rw_lock_reader_lock(&rw_lock);
+	g_rw_lock_reader_lock(&rw_lock);
 	g_slist_foreach(timers_regular, timers_iterator, NULL);
-	g_static_rw_lock_reader_unlock(&rw_lock);
+	g_rw_lock_reader_unlock(&rw_lock);
 	TRACE("Timers fired");
 }

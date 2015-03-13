@@ -1,3 +1,22 @@
+/*
+OpenIO SDS snmp
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "grid.snmp.manag"
 #endif
@@ -12,10 +31,10 @@
 #include <sys/stat.h>
 
 #include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
 
 #include "idx_management.h"
 
-#define IDX_STORE_PATH "/GRID/common/run/"
 #define NEW_EXT ".new"
 
 static int
@@ -105,7 +124,7 @@ save_known_service_to_file(GArray *known_services, const char *file_name, GError
 }
 
 int get_idx_of_service(const char *service_type, struct grid_service_data *service, GError **error) {
-	char file_name[strlen(IDX_STORE_PATH) + strlen(service_type) +1];
+	char file_name[strlen(GCLUSTER_RUN_DIR) + strlen(service_type) +1];
 	struct stat file_stat;
 	int rc;
 	GArray *known_services = NULL;
@@ -113,10 +132,10 @@ int get_idx_of_service(const char *service_type, struct grid_service_data *servi
 	gboolean idx_found = FALSE;
 	int last_idx = 0;
 
-	memset(file_name, '\0', strlen(IDX_STORE_PATH) + strlen(service_type) +1);
+	memset(file_name, '\0', strlen(GCLUSTER_RUN_DIR) + strlen(service_type) +1);
 	memset(&file_stat, 0, sizeof(struct stat));
 
-	sprintf(file_name, "%s%s_snmp_idx.dat", IDX_STORE_PATH, service_type);
+	sprintf(file_name, "%s%s_snmp_idx.dat", GCLUSTER_RUN_DIR, service_type);
 
 	rc = stat(file_name, &file_stat);
 	if (rc < 0 && errno != ENOENT && errno != ENOTDIR) {

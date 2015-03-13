@@ -1,3 +1,22 @@
+/*
+OpenIO SDS gridd
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "server.pool"
 #endif
@@ -19,7 +38,6 @@
 #include "./sock.h"
 #include "./server_internals.h"
 #include "./srvalert.h"
-
 
 #define FAMILY(S) ((struct sockaddr*)(S))->sa_family
 #define ADDRLEN(A) (((struct sockaddr*)(A))->sa_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6))
@@ -48,7 +66,6 @@ format_addr (struct sockaddr *sa, gchar *h, gsize hL, gchar *p, gsize pL, GError
 
 	return 1;
 }
-
 
 gint
 resolve (struct sockaddr_storage *sa, const gchar *h, const gchar *p, GError **err)
@@ -79,7 +96,6 @@ resolve (struct sockaddr_storage *sa, const gchar *h, const gchar *p, GError **e
 	return 1;
 }
 
-
 gint
 accept_make(ACCEPT_POOL *s, GError **err)
 {
@@ -96,7 +112,7 @@ accept_make(ACCEPT_POOL *s, GError **err)
 		goto error_pool;
 	}
 
-	g_static_rec_mutex_init(&(ap->mut));
+	g_rec_mutex_init(&(ap->mut));
 
 	ap->count = 0;
 	ap->size = 2;
@@ -120,7 +136,6 @@ error_param:
 	return 0;
 }
 
-
 static const char*
 _get_family_name (int f)
 {
@@ -133,7 +148,6 @@ _get_family_name (int f)
 	return "?";
 }
 
-
 static gint
 accept_add_any (ACCEPT_POOL ap, int srv, GError **err)
 {
@@ -144,7 +158,7 @@ accept_add_any (ACCEPT_POOL ap, int srv, GError **err)
 		return 0;
 	}
 
-	g_static_rec_mutex_lock (&(ap->mut));
+	g_rec_mutex_lock (&(ap->mut));
 
 	/*allocates an array if it is necessary*/
 	if (!ap->srv) {
@@ -171,12 +185,9 @@ accept_add_any (ACCEPT_POOL ap, int srv, GError **err)
 
 	rc = 1;
 exitLabel:
-	g_static_rec_mutex_unlock (&(ap->mut));
+	g_rec_mutex_unlock (&(ap->mut));
 	return rc;
 }
-
-
-
 
 struct working_parameter_s
 {
@@ -320,7 +331,6 @@ check_socket_is_absent( struct working_parameter_s *pParam, GError **err )
 				return -1;
 			}
 
-
 			/*try to connect*/
 			sun.sun_family = PF_LOCAL;
 			strncpy(sun.sun_path, pParam->path.ptr, sizeof(sun.sun_path));
@@ -417,7 +427,6 @@ errorLabel:
 	return 0;
 }
 
-
 gint
 accept_add_inet (ACCEPT_POOL ap, const gchar *h, const gchar *p, GError **err)
 {
@@ -478,7 +487,6 @@ errorLabel:
 	return 0;
 }
 
-
 static int
 UNSAFE_accept_many_server(struct pollfd *pfd, int max,
 		struct sockaddr *sa, socklen_t *saSize, GError **err)
@@ -526,13 +534,16 @@ UNSAFE_accept_do(ACCEPT_POOL ap, struct sockaddr *sa, socklen_t *saSize, GError 
 		pfd[i].revents = 0;
 	}
 
-	g_static_rec_mutex_lock (&(ap->mut));
-	int clt = UNSAFE_accept_many_server(pfd, ap->count, sa, saSize, err);
-	g_static_rec_mutex_unlock (&(ap->mut));
+	int clt = -1;
+	if (may_continue) {
+		g_rec_mutex_lock (&(ap->mut));
+		if (may_continue)
+			clt = UNSAFE_accept_many_server(pfd, ap->count, sa, saSize, err);
+		g_rec_mutex_unlock (&(ap->mut));
+	}
 
 	return clt;
 }
-
 
 gint
 accept_add (ACCEPT_POOL ap, const gchar *url, GError **err)
@@ -559,7 +570,6 @@ accept_add (ACCEPT_POOL ap, const gchar *url, GError **err)
 	}
 	return 0;
 }
-
 
 gint
 accept_do (ACCEPT_POOL ap, addr_info_t *cltaddr, GError **err)
@@ -602,7 +612,6 @@ accept_do (ACCEPT_POOL ap, addr_info_t *cltaddr, GError **err)
 
 	return clt;
 }
-
 
 static void
 remove_unix_socket( int fd )
@@ -652,14 +661,14 @@ accept_close_servers (ACCEPT_POOL ap, GError **err)
 		return 0;
 	}
 
-	g_static_rec_mutex_lock (&(ap->mut));
+	g_rec_mutex_lock (&(ap->mut));
 	if (ap->srv) {
 		pSrv = ap->srv;
 		max = ap->count;
 	}
 	ap->srv = NULL;
 	ap->count = 0;
-	g_static_rec_mutex_unlock (&(ap->mut));
+	g_rec_mutex_unlock (&(ap->mut));
 
 	if (pSrv) {
 		int i;
@@ -686,7 +695,7 @@ accept_pool_to_string( ACCEPT_POOL ap, gchar *dst, gsize dst_size )
 	socklen_t ss_size;
 	gsize writen_size=0;
 
-	g_static_rec_mutex_lock (&(ap->mut));
+	g_rec_mutex_lock (&(ap->mut));
 	if (ap->srv) {
 		int i,max;
 		char host[64], port[6], *fmt=fmt0;
@@ -704,7 +713,7 @@ accept_pool_to_string( ACCEPT_POOL ap, gchar *dst, gsize dst_size )
 				writen_size += writen;
 		}
 	}
-	g_static_rec_mutex_unlock (&(ap->mut));
+	g_rec_mutex_unlock (&(ap->mut));
 
 	return writen_size;
 }

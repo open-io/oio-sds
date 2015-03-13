@@ -1,7 +1,30 @@
-#ifndef __GCLUSTER_CONSCIENCE_MODULE_H__
-# define __GCLUSTER_CONSCIENCE_MODULE_H__
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__cluster__module__module_h
+# define OIO_SDS__cluster__module__module_h 1
+
+#if 0
+// FIXME dead code
 # define NAME_MSGNAME_CS_GETNS  "REQ_CS_GETNS"
+#endif
+
 # define NAME_MSGNAME_CS_GET_NSINFO "REQ_CS_GET_NSINFO"
 
 # define NAME_MSGNAME_CS_PUSH_BROKEN_CONT "REQ_PUSH_BROKEN_CONT"
@@ -58,4 +81,4 @@
 # define NB_BROKEN_LINES 64U
 # define NB_SRV_ELEMENTS 128U
 
-#endif /*__GCLUSTER_CONSCIENCE_MODULE_H__*/
+#endif /*OIO_SDS__cluster__module__module_h*/

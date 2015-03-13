@@ -1,3 +1,22 @@
+/*
+OpenIO SDS sqliterepo
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "sqliterepo"
 #endif
@@ -97,8 +116,8 @@ struct election_manager_s
 	const struct replication_config_s *config;
 
 	struct lru_tree_s *lrutree_members; // pending elections
-	GMutex *lock;
-	GCond *conds[COND_COUNT];
+	GMutex lock;
+	GCond conds[COND_COUNT];
 
 	time_t delay_max_wait; /*!< how many seconds we accept to wait for a
 							    status. */
@@ -121,9 +140,8 @@ struct election_manager_s
 struct election_member_s
 {
 	struct election_manager_s *manager;
+	struct sqlx_name_mutable_s name;
 	hashstr_t *key;
-	gchar *name;
-	gchar *type;
 
 	/* election status */
 	GTimeVal last_status;
@@ -174,21 +192,29 @@ static guint _manager_retry_elections(struct election_manager_s *manager,
 		guint max, GTimeVal *end);
 
 static GError * _election_trigger_RESYNC(struct election_manager_s *manager,
-		const gchar *name, const gchar *type);
+		struct sqlx_name_s *n);
+
 static GError * _election_init(struct election_manager_s *manager,
-		const gchar *name, const gchar *type);
+		struct sqlx_name_s *n);
+
 static GError * _election_start(struct election_manager_s *manager,
-		const gchar *name, const gchar *type);
+		struct sqlx_name_s *n);
+
 static GError * _election_exit(struct election_manager_s *manager,
-		const gchar *name, const gchar *type);
+		struct sqlx_name_s *n);
+
 static GError * _election_has_peers(struct election_manager_s *manager,
-		const gchar *name, const gchar *type, gboolean *peers_present);
+		struct sqlx_name_s *n, gboolean *peers_present);
+
 static GError * _election_get_peers(struct election_manager_s *manager,
-		const gchar *name, const gchar *type, gchar ***peers);
+		struct sqlx_name_s *n, gchar ***peers);
+
 static void _election_whatabout(struct election_manager_s *m,
-		const gchar *name, const gchar *type, gchar *d, gsize ds);
+		struct sqlx_name_s *n, gchar *d, gsize ds);
+
 static enum election_status_e _election_get_status(struct election_manager_s *m,
-		const gchar *name, const gchar *type, gchar **master_url);
+		struct sqlx_name_s *n, gchar **master_url);
+
 static struct election_counts_s _manager_count(struct election_manager_s *manager);
 
 static struct election_manager_vtable_s VTABLE =
@@ -255,9 +281,9 @@ election_manager_create(struct replication_config_s *config,
 			(GCompareFunc)hashstr_quick_cmp,
 			g_free, (GDestroyNotify)member_destroy, 0);
 
-	manager->lock = g_mutex_new();
+	g_mutex_init(&manager->lock);
 	for (guint i=0; i<COND_COUNT ;i++)
-		manager->conds[i] = g_cond_new();
+		g_cond_init(manager->conds + i);
 
 	*result = manager;
 	return NULL;
@@ -409,7 +435,6 @@ _evt2str(enum event_type_e evt)
 
 /* XXX Member handling ----------------------------------------------------- */
 
-
 static inline req_id_t
 manager_next_reqid(struct election_manager_s *m)
 {
@@ -431,7 +456,8 @@ member_get_url(struct election_member_s *m)
 static GError *
 member_get_peers(struct election_member_s *m, gboolean nocache, gchar ***peers)
 {
-	return sqlx_config_get_peers2(MCFG(m), m->name, m->type, nocache, peers);
+	return sqlx_config_get_peers2(MCFG(m),
+			sqlx_name_mutable_to_const(&m->name), nocache, peers);
 }
 
 static inline void
@@ -456,13 +482,13 @@ static inline GCond*
 member_get_cond(struct election_member_s *m)
 {
 	register guint h = hashstr_hash(m->key);
-	return MMANAGER(m)->conds[h % COND_COUNT];
+	return MMANAGER(m)->conds + (h % COND_COUNT);
 }
 
 static inline GMutex*
 member_get_lock(struct election_member_s *m)
 {
-	return MMANAGER(m)->lock;
+	return &(MMANAGER(m)->lock);
 }
 
 static inline void
@@ -615,7 +641,7 @@ member_descr(const struct election_member_s *m, gchar *d, gsize ds)
 			_step2str(m->step), m->myid, m->master_id, m->master_url,
 			m->refcount, m->pending_USE, m->pending_GETVERS, m->pending_PIPEFROM,
 			hashstr_ulen(m->key), hashstr_str(m->key),
-			m->name, m->type);
+			m->name.base, m->name.type);
 }
 
 static void
@@ -651,10 +677,8 @@ member_warn(const gchar *tag, const struct election_member_s *m)
 	GRID_WARN("%s %s", tag ? tag : "", d);
 }
 
-
 static struct election_member_s *
-member_create(struct election_manager_s *manager,
-		const gchar *name, const gchar *type,
+member_create(struct election_manager_s *manager, struct sqlx_name_s *n,
 		const struct hashstr_s *key)
 {
 	GTimeVal now;
@@ -662,13 +686,15 @@ member_create(struct election_manager_s *manager,
 
 	g_get_current_time(&now);
 	MANAGER_CHECK(manager);
+	SQLXNAME_CHECK(n);
 
 	result = g_malloc0(sizeof(*result));
 	result->manager = manager;
 	memcpy(&(result->last_status), &now, sizeof(now));
 	result->key = hashstr_dup(key);
-	result->name = g_strdup(name);
-	result->type = g_strdup(type);
+	result->name.base = g_strdup(n->base);
+	result->name.type = g_strdup(n->type);
+	result->name.ns = g_strdup(n->ns);
 	result->myid = result->master_id = -1;
 
 	return result;
@@ -698,14 +724,9 @@ member_destroy(struct election_member_s *member)
 	if (!member)
 		return;
 
-	if (member->master_url)
-		g_free(member->master_url);
-	if (member->key)
-		g_free(member->key);
-	if (member->name)
-		g_free(member->name);
-	if (member->type)
-		g_free(member->type);
+	metautils_str_clean (&member->master_url);
+	g_free0 (member->key);
+	sqlx_name_clean (&member->name);
 
 	memset(member, 0, sizeof(*member));
 	member->myid = member->master_id = -1;
@@ -776,18 +797,19 @@ member_failed_for_too_long(struct election_member_s *member)
 }
 
 static struct election_member_s *
-manager_init_member(struct election_manager_s *manager,
-		const gchar *name, const gchar *type, gboolean lazy)
+manager_init_member(struct election_manager_s *manager, struct sqlx_name_s *n,
+		gboolean lazy)
 {
 	struct election_member_s *member;
 	struct hashstr_s *key;
 
 	MANAGER_CHECK(manager);
+	NAME_CHECK(n);
 
-	key = sqliterepo_hash_name(name, type);
+	key = sqliterepo_hash_name(n);
 	member = manager_get_member(manager, key);
 	if (!member && lazy) {
-		member = member_create(manager, name, type, key);
+		member = member_create(manager, n, key);
 		lru_tree_insert(manager->lrutree_members, hashstr_dup(key), member);
 	}
 	g_free(key);
@@ -811,9 +833,9 @@ manager_count_active(struct election_manager_s *manager)
 	}
 
 	count = 0;
-	g_mutex_lock(manager->lock);
+	g_mutex_lock(&manager->lock);
 	lru_tree_foreach_TREE(manager->lrutree_members, _count, NULL);
-	g_mutex_unlock(manager->lock);
+	g_mutex_unlock(&manager->lock);
 	return count;
 }
 
@@ -843,10 +865,10 @@ _manager_exit_all(struct election_manager_s *manager, GTimeVal *max,
 	MANAGER_CHECK(manager);
 
 	/* Order the node to exit */
-	g_mutex_lock(manager->lock);
+	g_mutex_lock(&manager->lock);
 	manager->exiting = TRUE;
 	manager_send_EXITING(manager);
-	g_mutex_unlock(manager->lock);
+	g_mutex_unlock(&manager->lock);
 
 	while (0 < (count = manager_count_active(manager))) {
 		GRID_INFO("Waiting for %u active elections", count);
@@ -865,20 +887,19 @@ _manager_exit_all(struct election_manager_s *manager, GTimeVal *max,
 }
 
 static void
-_election_whatabout(struct election_manager_s *m,
-		const gchar *name, const gchar *type, gchar *d, gsize ds)
+_election_whatabout(struct election_manager_s *m, struct sqlx_name_s *n,
+		gchar *d, gsize ds)
 {
 	struct election_member_s *member;
 	hashstr_t *key;
 
 	MANAGER_CHECK(m);
-	EXTRA_ASSERT(name != NULL);
-	EXTRA_ASSERT(type != NULL);
+	NAME_CHECK(n);
 	EXTRA_ASSERT(d != NULL);
 	EXTRA_ASSERT(ds > 0);
 
-	key = sqliterepo_hash_name(name, type);
-	g_mutex_lock(m->lock);
+	key = sqliterepo_hash_name(n);
+	g_mutex_lock(&m->lock);
 	member = manager_get_member(m, key);
 	if (member) {
 		gchar *log;
@@ -888,9 +909,16 @@ _election_whatabout(struct election_manager_s *m,
 		g_strlcat(d, log, ds);
 		g_free(log);
 	}
-	else
-		g_snprintf(d, ds, "Not found");
-	g_mutex_unlock(m->lock);
+	else {
+		const struct replication_config_s *cfg = election_manager_get_config(m);
+		if (!cfg)
+			g_snprintf(d, ds, "No replication configured");
+		else if (cfg->mode == ELECTION_MODE_NONE)
+			g_snprintf(d, ds, "Replication disabled by configuration");
+		else
+			g_snprintf(d, ds, "No election for [%s][%s] [%s]", n->base, n->type, hashstr_str(key));
+	}
+	g_mutex_unlock(&m->lock);
 
 	g_free(key);
 }
@@ -1082,7 +1110,7 @@ member_warn_failed_creation(struct election_member_s *member, int zrc)
 {
 	gchar *p = member_fullpath(member);
 	GRID_WARN("CREATE failed [%s.%s] [%s] : (%d) %s",
-			member->name, member->type, p, zrc, zerror(zrc));
+			member->name.base, member->name.type, p, zrc, zerror(zrc));
 	g_free(p);
 }
 
@@ -1192,36 +1220,32 @@ step_LeaveElection_start(struct election_member_s *member)
 	return zrc;
 }
 
-
 /* ------------------------------------------------------------------------- */
-
 
 enum election_op_e {
 	ELOP_NONE, ELOP_START, ELOP_RESYNC, ELOP_EXIT
 };
 
 static GError *
-_election_make(struct election_manager_s *m, const gchar *name,
-		const gchar *type, enum election_op_e op)
+_election_make(struct election_manager_s *m, struct sqlx_name_s *n,
+		enum election_op_e op)
 {
 	MANAGER_CHECK(m);
-	EXTRA_ASSERT(name != NULL);
-	EXTRA_ASSERT(type != NULL);
+	SQLXNAME_CHECK(n);
 
 	gboolean peers_present = FALSE;
-	GError *err = election_has_peers(m, name, type, &peers_present);
+	GError *err = election_has_peers(m, n, &peers_present);
 	if (err != NULL) {
 		g_prefix_error(&err, "Election error: ");
 		return err;
 	}
 	if (!peers_present) {
-		GRID_DEBUG("No peer for [%s][%s]", name, type);
+		GRID_DEBUG("No peer for [%s][%s]", n->base, n->type);
 		return NULL;
 	}
 
-	g_mutex_lock(m->lock);
-	struct election_member_s *member = manager_init_member(m, name, type,
-			op != ELOP_EXIT);
+	g_mutex_lock(&m->lock);
+	struct election_member_s *member = manager_init_member(m, n, op != ELOP_EXIT);
 	switch (op) {
 		case ELOP_NONE:
 			break;
@@ -1238,53 +1262,48 @@ _election_make(struct election_manager_s *m, const gchar *name,
 	}
 	if (member)
 		member_unref(member);
-	g_mutex_unlock(m->lock);
+	g_mutex_unlock(&m->lock);
 
 	return NULL;
 }
 
 static GError *
-_election_trigger_RESYNC(struct election_manager_s *manager,
-		const gchar *name, const gchar *type)
+_election_trigger_RESYNC(struct election_manager_s *manager, struct sqlx_name_s *n)
 {
-	return _election_make(manager, name, type, ELOP_RESYNC);
+	return _election_make(manager, n, ELOP_RESYNC);
 }
 
 static GError *
-_election_init(struct election_manager_s *manager, const gchar *name,
-		const gchar *type)
+_election_init(struct election_manager_s *manager, struct sqlx_name_s *n)
 {
-	return _election_make(manager, name, type, ELOP_NONE);
+	return _election_make(manager, n, ELOP_NONE);
 }
 
 static GError *
-_election_start(struct election_manager_s *manager, const gchar *name,
-		const gchar *type)
+_election_start(struct election_manager_s *manager, struct sqlx_name_s *n)
 {
-	return _election_make(manager, name, type, ELOP_START);
+	return _election_make(manager, n, ELOP_START);
 }
 
 static GError *
-_election_exit(struct election_manager_s *manager, const gchar *name,
-		const gchar *type)
+_election_exit(struct election_manager_s *manager, struct sqlx_name_s *n)
 {
-	return _election_make(manager, name, type, ELOP_EXIT);
+	return _election_make(manager, n, ELOP_EXIT);
 }
 
 static GError *
-_election_has_peers(struct election_manager_s *manager,
-		const gchar *name, const gchar *type, gboolean *peers_present)
+_election_has_peers(struct election_manager_s *manager, struct sqlx_name_s *n,
+		gboolean *peers_present)
 {
-	return sqlx_config_has_peers(manager->config, name, type, peers_present);
+	return sqlx_config_has_peers(manager->config, n, peers_present);
 }
 
 static GError *
-_election_get_peers(struct election_manager_s *manager,
-		const gchar *name, const gchar *type, gchar ***peers)
+_election_get_peers(struct election_manager_s *manager, struct sqlx_name_s *n,
+		gchar ***peers)
 {
-	return sqlx_config_get_peers(manager->config, name, type, peers);
+	return sqlx_config_get_peers(manager->config, n, peers);
 }
-
 
 static gboolean
 wait_for_final_status(struct election_member_s *member,
@@ -1299,18 +1318,18 @@ wait_for_final_status(struct election_member_s *member,
 		g_get_current_time(&tmp);
 		if (gtv_bigger(&tmp, pmax)) {
 			GRID_WARN("TIMEOUT! (wait) [%s.%s]",
-					member->name, member->type);
+					member->name.base, member->name.type);
 			return FALSE;
 		}
 
 		if (member_pending_for_too_long(member)) {
 			GRID_WARN("TIMEOUT! (pending) [%s.%s]",
-					member->name, member->type);
+					member->name.base, member->name.type);
 			return FALSE;
 		}
 
 		GRID_TRACE("Still waiting for a final status on [%s.%s]",
-				member->name, member->type);
+				member->name.base, member->name.type);
 
 		g_time_val_add(&tmp, 1000000L);
 		member_wait(member, &tmp);
@@ -1320,8 +1339,7 @@ wait_for_final_status(struct election_member_s *member,
 }
 
 static enum election_status_e
-_election_get_status(struct election_manager_s *m, const gchar *name,
-		const gchar *type, gchar **master_url)
+_election_get_status(struct election_manager_s *m, struct sqlx_name_s *n, gchar **master_url)
 {
 	GTimeVal max;
 	int rc;
@@ -1329,15 +1347,14 @@ _election_get_status(struct election_manager_s *m, const gchar *name,
 	struct election_member_s *member;
 
 	MANAGER_CHECK(m);
-	EXTRA_ASSERT(name != NULL);
-	EXTRA_ASSERT(type != NULL);
+	EXTRA_ASSERT(n != NULL);
 
-	g_mutex_lock(m->lock);
+	g_mutex_lock(&m->lock);
 
 	g_get_current_time(&max);
 	g_time_val_add(&max, 1000000L * m->delay_max_wait);
 
-	member = manager_init_member(m, name, type, TRUE);
+	member = manager_init_member(m, n, TRUE);
 	member_kickoff(member);
 
 	if (!wait_for_final_status(member, &max)) // TIMEOUT!
@@ -1388,13 +1405,10 @@ _manager_clean(struct election_manager_s *manager)
 	if (manager->lrutree_members)
 		lru_tree_destroy(manager->lrutree_members);
 
-	if (manager->lock)
-		g_mutex_free(manager->lock);
+	g_mutex_clear(&manager->lock);
 
-	for (i=0; i<COND_COUNT ;i++) {
-		if (manager->conds[i])
-			g_cond_free(manager->conds[i]);
-	}
+	for (i=0; i<COND_COUNT ;i++)
+		g_cond_clear(manager->conds + i);
 
 	memset(manager, 0, sizeof(*manager));
 	g_free(manager);
@@ -1458,7 +1472,7 @@ _manager_retry_elections(struct election_manager_s *manager,
 		return 0;
 
 	/* Generate the list of members to be notified */
-	g_mutex_lock(manager->lock);
+	g_mutex_lock(&manager->lock);
 	g_get_current_time(&now);
 	g_time_val_add(&now, SQLX_DELAY_ELECTION_REPLAY * -1000000L);
 	to_be_notified = _get_to_be_notified(manager, &now);
@@ -1474,7 +1488,7 @@ _manager_retry_elections(struct election_manager_s *manager,
 		count ++;
 	}
 
-	g_mutex_unlock(manager->lock);
+	g_mutex_unlock(&manager->lock);
 
 	g_slist_free(to_be_notified);
 	return count;
@@ -1520,11 +1534,6 @@ defer_USE(struct election_member_s *member, time_t now)
 	gboolean rc = FALSE;
 	gchar **peers = NULL, **p = NULL;
 	guint pending = 0;
-	struct sqlx_name_s n;
-
-	n.ns = "";
-	n.base = member->name;
-	n.type = member->type;
 
 	GError *err = member_get_peers(member, FALSE, &peers);
 	if (err != NULL) {
@@ -1554,7 +1563,7 @@ defer_USE(struct election_member_s *member, time_t now)
 		member->pending_USE = pending;
 		member->reqid_USE = manager_next_reqid(member->manager);
 
-		req = sqlx_pack_USE(&n);
+		req = sqlx_pack_USE(sqlx_name_mutable_to_const(&member->name));
 		for (p=peers; p && *p ;p++) {
 			struct udata_USE_s *udata;
 			struct event_client_s *mc;
@@ -1601,7 +1610,7 @@ on_end_PIPEFROM(struct event_client_s *mc)
 
 	err = gridd_client_error(mc->client);
 	GRID_DEBUG("PIPEFROM result [%s.%s] [%s]: (%d) %s",
-			member->name, member->type,
+			member->name.base, member->name.type,
 			hashstr_str(member->key), err?err->code:0, err?err->message:"OK");
 
 	member_lock(member);
@@ -1628,16 +1637,12 @@ defer_PIPEFROM(struct election_member_s *member)
 		member_debug(__FUNCTION__, "PIPEFROM avoided", member);
 	else {
 		struct event_client_s *mc;
-		struct sqlx_name_s n;
-		n.ns = "";
-		n.base = member->name;
-		n.type = member->type;
 
 		member->reqid_PIPEFROM = manager_next_reqid(member->manager);
 		member->requested_PIPEFROM = 0;
 		member->pending_PIPEFROM = 1;
 
-		GByteArray *req = sqlx_pack_PIPEFROM(&n, source);
+		GByteArray *req = sqlx_pack_PIPEFROM(sqlx_name_mutable_to_const(&member->name), source);
 		member_ref(member);
 		mc = g_malloc0(sizeof(*mc));
 		mc->client = gridd_client_create(target, req, NULL, NULL);
@@ -1688,15 +1693,16 @@ on_end_GETVERS(struct event_client_s *mc)
 		member_debug(err->message, "GETVERS result", member);
 
 	if (!err && !vremote)
-		err = NEWERROR(500, "BUG: no version received");
+		err = NEWERROR(CODE_INTERNAL_ERROR, "BUG: no version received");
 
 	if (!err)
 		err = member->manager->config->get_version(
 				member->manager->config->ctx,
-				member->name, member->type, &vlocal);
+				sqlx_name_mutable_to_const(&member->name),
+				&vlocal);
 
 	if (!err && !vlocal)
-		err = NEWERROR(500, "BUG: no version loaded");
+		err = NEWERROR(CODE_INTERNAL_ERROR, "BUG: no version loaded");
 
 	if (!err) {
 		gint64 worst = 0;
@@ -1789,16 +1795,11 @@ defer_GETVERS(struct election_member_s *member)
 	if (member->sent_GETVERS > 0)
 		member_debug(__FUNCTION__ , "GETVERS req lost", member);
 
-	struct sqlx_name_s n;
-	n.ns = "";
-	n.base = member->name;
-	n.type = member->type;
-
 	member->sent_GETVERS = pending;
 	member->pending_GETVERS = pending;
 	member->reqid_GETVERS = manager_next_reqid(member->manager);
 
-	GByteArray *req = sqlx_pack_GETVERS(&n);
+	GByteArray *req = sqlx_pack_GETVERS(sqlx_name_mutable_to_const(&member->name));
 	for (gchar **p=peers; p && *p; p++) {
 		struct event_client_s *mc;
 		struct udata_GETVERS_s udata;
@@ -1822,7 +1823,6 @@ defer_GETVERS(struct election_member_s *member)
 
 	g_strfreev(peers);
 }
-
 
 /* ------------------------------------------------------------------------ */
 
@@ -1910,7 +1910,7 @@ manage_list(struct election_member_s *member, GArray *i64v)
 			zrc = step_AskMaster_start(member);
 			if (zrc != ZOK) {
 				GRID_WARN("AskMaster failed [%s.%s] [%s] : (%d) %s",
-						member->name, member->type, hashstr_str(member->key),
+						member->name.base, member->name.type, hashstr_str(member->key),
 						zrc, zerror(zrc));
 				become_leaver(member);
 			}
@@ -2113,8 +2113,8 @@ _transition(struct election_member_s *member, enum event_type_e evt,
 				case EVT_NONE:
 					if (member_pending_for_too_long(member)) {
 						// See case STEP_PRELOST for explanations
-						GRID_INFO("Election for [%s] seems stale (PRELEAD), "
-							"restarting GETVERS", member->name);
+						GRID_INFO("Election for [%s.%s] seems stale (PRELEAD), restarting GETVERS",
+								member->name.base, member->name.type);
 						defer_GETVERS(member);
 						g_get_current_time(&(member->last_status));
 					} else {
@@ -2189,15 +2189,13 @@ _transition(struct election_member_s *member, enum event_type_e evt,
 			switch (evt) {
 				case EVT_NONE:
 					if (member_pending_for_too_long(member)) {
-						// Sometimes the response to SQLX_GETVERS never
-						// arrives. See TO-HONEYCOMB-757.
-						GRID_INFO("Election for [%s] seems stale (PRELOST), "
-							"restarting GETVERS", member->name);
+						// Sometimes the response to SQLX_GETVERS never arrives.
+						GRID_INFO("Election for [%s.%s] seems stale (PRELOST), restarting GETVERS",
+								member->name.base, member->name.type);
 						defer_GETVERS(member);
 						// This is to prevent SQLX_GETVERS bursts. We got a
 						// case where defer_GETVERS was called several times
 						// before the first response arrives.
-						// See TO-HONEYCOMB-773.
 						g_get_current_time(&(member->last_status));
 					} else {
 						member_ping(member);
@@ -2260,7 +2258,7 @@ _transition(struct election_member_s *member, enum event_type_e evt,
 					member_RESYNC_if_not_pending(member);
 					return;
 				case EVT_LEAVE_OK:
-					GRID_INFO("LEFT election [%s.%s]", member->name, member->type);
+					GRID_INFO("LEFT election [%s.%s]", member->name.base, member->name.type);
 					member_reset(member);
 					member_set_status(member, STEP_NONE);
 					return;
@@ -2410,14 +2408,15 @@ _count_runner(hashstr_t *k, struct election_member_s *v,
 static struct election_counts_s
 _manager_count(struct election_manager_s *manager)
 {
+	MANAGER_CHECK(manager);
 	struct election_counts_s count;
 
 	memset(&count, 0, sizeof(count));
 	if (manager != NULL) {
-		g_mutex_lock(manager->lock);
+		g_mutex_lock(&manager->lock);
 		lru_tree_foreach_DEQ(manager->lrutree_members,
 				(GTraverseFunc) _count_runner, &count);
-		g_mutex_unlock(manager->lock);
+		g_mutex_unlock(&manager->lock);
 	}
 	return count;
 }
@@ -2431,36 +2430,38 @@ sqlx_config_get_local_url(const struct replication_config_s *cfg)
 }
 
 GError *
-sqlx_config_get_peers2(const struct replication_config_s *cfg, const gchar *n,
-		const gchar *t, gboolean nocache, gchar ***result)
+sqlx_config_get_peers2(const struct replication_config_s *cfg, struct sqlx_name_s *n,
+		gboolean nocache, gchar ***result)
 {
+	SQLXNAME_CHECK(n);
+
 	if (!cfg || !cfg->get_peers) {
 		if (result)
 			*result = NULL;
 		return NULL;
 	}
-	GError *err = cfg->get_peers(cfg->ctx, n, t, nocache, result);
+	GError *err = cfg->get_peers(cfg->ctx, n, nocache, result);
 	if (!err)
 		return NULL;
 	gchar msg[256];
-	g_snprintf(msg, sizeof(msg), "get_peers(%s,%s): ", n, t);
+	g_snprintf(msg, sizeof(msg), "get_peers(%s,%s): ", n->base, n->type);
 	g_prefix_error(&err, msg);
 	return err;
 }
 
 GError *
-sqlx_config_get_peers(const struct replication_config_s *cfg, const gchar *n,
-		const gchar *t, gchar ***result)
+sqlx_config_get_peers(const struct replication_config_s *cfg,
+		struct sqlx_name_s *n, gchar ***result)
 {
-	return sqlx_config_get_peers2(cfg, n, t, FALSE, result);
+	return sqlx_config_get_peers2(cfg, n, FALSE, result);
 }
 
 GError *
-sqlx_config_has_peers2(const struct replication_config_s *cfg, const gchar *n,
-		const gchar *t, gboolean nocache, gboolean *result)
+sqlx_config_has_peers2(const struct replication_config_s *cfg,
+		struct sqlx_name_s *n, gboolean nocache, gboolean *result)
 {
 	gchar **peers = NULL;
-	GError *err = sqlx_config_get_peers2(cfg, n, t, nocache, &peers);
+	GError *err = sqlx_config_get_peers2(cfg, n, nocache, &peers);
 	if (err != NULL) {
 		*result = FALSE;
 		return err;
@@ -2472,9 +2473,9 @@ sqlx_config_has_peers2(const struct replication_config_s *cfg, const gchar *n,
 }
 
 GError *
-sqlx_config_has_peers(const struct replication_config_s *cfg, const gchar *n,
-		const gchar *t, gboolean *result)
+sqlx_config_has_peers(const struct replication_config_s *cfg,
+		struct sqlx_name_s *n, gboolean *result)
 {
-	return sqlx_config_has_peers2(cfg, n, t, FALSE, result);
+	return sqlx_config_has_peers2(cfg, n, FALSE, result);
 }
 

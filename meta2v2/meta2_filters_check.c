@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta2.disp"
 #endif
@@ -34,7 +53,7 @@ _meta2_filter_check_ns_name(struct gridd_filter_ctx_s *ctx,
 
 	if (!backend || !backend->backend.ns_name[0]) {
 		GRID_DEBUG("Missing information for namespace checking");
-		meta2_filter_ctx_set_error(ctx, NEWERROR(500,
+		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_INTERNAL_ERROR,
 					"Missing backend information, cannot check namespace"));
 		return FILTER_KO;
 	}
@@ -86,7 +105,7 @@ meta2_filter_check_backend(struct gridd_filter_ctx_s *ctx,
 	m2b = meta2_filter_ctx_get_backend(ctx);
 	if (meta2_backend_initiated(m2b))
 		return FILTER_OK;
-	meta2_filter_ctx_set_error(ctx, NEWERROR(500, "Backend not ready"));
+	meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_INTERNAL_ERROR, "Backend not ready"));
 	return FILTER_KO;
 }
 
@@ -134,9 +153,9 @@ meta2_filter_check_ns_is_writable(struct gridd_filter_ctx_s *ctx,
 	if (!m2b || !meta2_backend_is_quota_enabled(m2b))
 		return FILTER_OK;
 
-	g_mutex_lock(m2b->backend.ns_info_lock);
+	g_mutex_lock(&m2b->backend.ns_info_lock);
 	found = namespace_info_is_vns_writable(&(m2b->backend.ns_info), vns);
-	g_mutex_unlock(m2b->backend.ns_info_lock);
+	g_mutex_unlock(&m2b->backend.ns_info_lock);
 
 	if (!found) {
 		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_NAMESPACE_FULL, "VNS full"));

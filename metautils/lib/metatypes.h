@@ -1,9 +1,25 @@
-/**
- * @file metatypes.h
- * The global types definition
- */
-#ifndef __METATYPES_H__
-# define __METATYPES_H__
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__metatypes_h
+# define OIO_SDS__metautils__lib__metatypes_h 1
+
 # include <glib.h>
 
 /**
@@ -186,13 +202,6 @@ typedef struct namespace_info_s
 	chunk_size_t chunk_size;	 /**< The chunk size in the namespace */
 	addr_info_t addr;                /**< The network address of the conscience */
 	GHashTable* options;             /**< A hash of namespace options (gchar*) -> (GByteArray*) */
-	struct ns_versions_s {
-		gint64 srvcfg;
-		gint64 evtcfg;
-		gint64 nscfg;
-		gint64 snapshot;         /**< Version counter for the grid snapshot*/
-		gint64 broken;           /**< Version counter for the broken element list */
-	} versions;                      /**< Some counters for the namespace configuration */
 	GHashTable* storage_policy;	 /**< Storage policies definitions name = STG_CLASS:DATA_SEC:DATA_THREAT */
 	GHashTable* data_security;	 /**< Data security definitions name = TYPE:OTHER_INFO */
 	GHashTable* data_treatments;	 /**< Data treatments definitions name = TYPE:OTHER_INFO */
@@ -431,4 +440,4 @@ typedef struct addr_rule_s
 
 /** @} */
 
-#endif /*__METATYPES_H__*/
+#endif /*OIO_SDS__metautils__lib__metatypes_h*/

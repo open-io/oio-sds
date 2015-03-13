@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "atos.grid.crawler.crawler_bus"
 #endif //G_LOG_DOMAIN
@@ -11,15 +30,11 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-
 #include <glib-object.h>
 #include "../../metautils/lib/metautils.h"
 
 #include "transp_layer.h"
 #include "transp_layer_cmd.h"
-
-
-
 
 /**************************************************************************/
 /* Constants                                                              */
@@ -30,12 +45,9 @@
 #define CRAWLER_BUSCMD_SENDDATA      "setDataTripEx"
 #define CRAWLER_BUSCMD_ACK           "ack"
 
-
-
 /**************************************************************************/
 /* MACRO                                                                  */
 /**************************************************************************/
-
 
 /**************************************************************************/
 /* common generic function                                                */
@@ -62,21 +74,13 @@ GError* tlc_init_connection(TCrawlerBus** conn, char* service_name, char* servic
        return error;
     }
 
-
     return NULL;
 }
-
-
-
-
-
-
 
 /**************************************************************************/
 /* Request ASYNC: send request and return imediately                      */
 /*                 other function for read response                       */
 /**************************************************************************/
-
 
 /**
  * if _notify_callback == NULL: no reply
@@ -90,7 +94,6 @@ GError* tlc_Send_CmdProc(TCrawlerReq* req, int timeout,
    	                _notify_callback, user_data, cmd, alldata);
 }
 
-
 GError* tlc_Send_CmdProcEx(TCrawlerReq* req, int timeout,
         void (*_notify_callback)(TCrawlerReq* req, GError* error, char* msgReceived, void *user_data),
         void *user_data, char* cmd, const char* sender, char* alldata)
@@ -99,21 +102,15 @@ GError* tlc_Send_CmdProcEx(TCrawlerReq* req, int timeout,
                     _notify_callback, user_data, cmd, (char*)sender, alldata);
 }
 
-
-
 GError* tlc_Send_DataTripEx_noreply(TCrawlerReq* req, void *user_data, char* addSender, char* alldata)
 {
     return crawler_bus_reqcCall_Send_ss_s(req, CRAWLER_BUSCMD_SENDDATA, 0,
                     NULL, user_data, addSender, alldata);
 }
 
-
 GError* tlc_Send_Ack_noreply(TCrawlerReq* req, void *user_data, char* cmd, char* alldata)
 {
     return crawler_bus_reqcCall_Send_ss_s(req, CRAWLER_BUSCMD_ACK, 0,
                     NULL, user_data, cmd, alldata);
 }
-
-
-
 

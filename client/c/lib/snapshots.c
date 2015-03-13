@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #include "./gs_internals.h"
 
 #define _SNAPSHOT_FUNC_HEAD \
@@ -12,7 +31,6 @@
 	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs)); \
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(container)); \
 
-
 #define _SNAPSHOT_FUNC_TAIL(ERR_MSG) \
 	if (err != NULL) { \
 		GSERRORCAUSE(&gserr, err, (ERR_MSG), \
@@ -23,7 +41,6 @@
 	hc_url_clean(url); \
 	return gserr; \
 
-
 struct redc_snapshot_s {
 	char name[GS_SNAPSHOT_MAXLENGTH];
 	gint64 version;
@@ -31,7 +48,6 @@ struct redc_snapshot_s {
 
 redc_snapshot_t* redc_snapshot_new(void);
 void redc_snapshot_clean(redc_snapshot_t *snapshot);
-
 
 void
 redc_snapshot_clean(redc_snapshot_t *snapshot)

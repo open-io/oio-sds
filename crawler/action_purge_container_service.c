@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "atos.grid.action"
 #endif
@@ -14,7 +33,6 @@
 #include <rules-motor/lib/motor.h>
 #include <rawx-lib/src/rawx.h>
 #include <polix/polix_action.h>
-
 
 #include <glib.h>
 #include <dbus/dbus.h>
@@ -44,7 +62,6 @@ static gchar     g_service_name[SERVICENAME_MAX_BYTES];
 static char*     g_dbusdaemon_address = NULL;
 static GMainLoop *g_main_loop = NULL;
 
-
 //==============================================================================
 // Listening message come from, and execute action function
 //==============================================================================
@@ -58,14 +75,14 @@ struct SParamMsgrx {
 	gdouble timeout_request;
 };
 
-void init_paramMsgRx(struct SParamMsgrx* pParam)
+static void init_paramMsgRx(struct SParamMsgrx* pParam)
 {
 	if (pParam == NULL) return;
 
 	memset(pParam, 0, sizeof(struct SParamMsgrx));
 }
 
-void clean_paramMsgRx(struct SParamMsgrx* pParam)
+static void clean_paramMsgRx(struct SParamMsgrx* pParam)
 {
 	if (pParam == NULL) return;
 
@@ -152,8 +169,6 @@ _url_from_msg(struct SParamMsgrx *msg)
 
 	return url;
 }
-
-
 
 static GError *
 _do_purge(struct SParamMsgrx *msgRx)
@@ -262,7 +277,6 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
 	return (NULL == *error);
 }
 
-
 gboolean action_command(TCrawlerBusObject *obj, const char* cmd,
 		const char *alldata, char** status, GError **error)
 {
@@ -316,10 +330,6 @@ gboolean action_command(TCrawlerBusObject *obj, const char* cmd,
 	return TRUE;
 }
 
-
-
-
-
 /* GRID COMMON MAIN */
 static struct grid_main_option_s *main_get_options(void)
 {
@@ -347,8 +357,6 @@ static void main_action(void)
 				/*g_cfg_action_name, g_service_pid,*/ error->message);
 		exit(EXIT_FAILURE);
 	}
-
-
 
 	GRID_INFO("%s (%d): System D-Bus %s action signal listening thread started...",
 			action_name, service_pid, action_name);
@@ -420,10 +428,9 @@ static struct grid_main_callbacks cb = {
 	.specific_stop = main_specific_stop
 };
 
-	int
+int
 main(int argc, char **argv)
 {
-	g_thread_init(NULL);
 	dbus_g_thread_init();
 	dbus_threads_init_default();
 

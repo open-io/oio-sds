@@ -1,5 +1,25 @@
-#ifndef SQLITEREPO_utils__h
-# define SQLITEREPO_utils__h 1
+/*
+OpenIO SDS sqliterepo
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__sqliterepo__sqlite_utils_h
+# define OIO_SDS__sqliterepo__sqlite_utils_h 1
+
 # include <sqlite3.h>
 # include <glib.h>
 
@@ -7,10 +27,37 @@
 # define SQLX_QUERY_DOMAIN "sqlx.query"
 #endif
 
-#define SQLX_INIT_FLAG "sqlx:init"
+#ifndef SQLX_ADMIN_PREFIX_SYS
+#define SQLX_ADMIN_PREFIX_SYS "sys."
+#endif
 
-/** For compatibility with m2v2 */
-#define ADMIN_STATUS_KEY "flags"
+#ifndef SQLX_ADMIN_PREFIX_USER
+#define SQLX_ADMIN_PREFIX_USER "user."
+#endif
+
+#ifndef SQLX_ADMIN_INITFLAG
+#define SQLX_ADMIN_INITFLAG SQLX_ADMIN_PREFIX_SYS "sqlx.init"
+#endif
+
+#ifndef SQLX_ADMIN_STATUS
+#define SQLX_ADMIN_STATUS SQLX_ADMIN_PREFIX_SYS "status"
+#endif
+
+#ifndef SQLX_ADMIN_NAMESPACE
+#define SQLX_ADMIN_NAMESPACE SQLX_ADMIN_PREFIX_SYS "ns"
+#endif
+
+#ifndef SQLX_ADMIN_REFERENCE
+#define SQLX_ADMIN_REFERENCE SQLX_ADMIN_PREFIX_SYS "reference"
+#endif
+
+#ifndef SQLX_ADMIN_BASENAME
+#define SQLX_ADMIN_BASENAME SQLX_ADMIN_PREFIX_SYS "name"
+#endif
+
+#ifndef SQLX_ADMIN_BASETYPE
+#define SQLX_ADMIN_BASETYPE SQLX_ADMIN_PREFIX_SYS "type"
+#endif
 
 /** Can read and write */
 #define ADMIN_STATUS_ENABLED  0x00000000
@@ -19,10 +66,6 @@
 /** Can neither write nor read */
 #define ADMIN_STATUS_DISABLED (guint32)-2
 
-/**
- * @param db
- * @param RC
- */
 #define SQLITE_GERROR(db,RC) NEWERROR((RC), "(%s) %s", \
 		sqlite_strerror(RC), ((db)?sqlite3_errmsg(db):"unknown error"))
 
@@ -32,14 +75,7 @@ sqlx_code_good(const int rc)
 	return rc == SQLITE_ROW || rc == SQLITE_DONE || rc == SQLITE_OK;
 }
 
-/**
- * @param R
- * @param db
- * @param zSql
- * @param nByte
- * @param ppStmt
- * @param pzTail
- */
+/** @see sqlite3_prepare_v2() */
 # define sqlite3_prepare_debug(R,db,zSql,nByte,ppStmt,pzTail) do { \
 	(R) = sqlite3_prepare_v2(db, zSql, nByte, ppStmt, pzTail); \
 	g_log(SQLX_QUERY_DOMAIN, \
@@ -48,11 +84,7 @@ sqlx_code_good(const int rc)
 			db, ppStmt, zSql, (R), sqlite_strerror(R), sqlite3_errmsg(db)); \
 } while (0)
 
-
-/**
- * @param R
- * @param S
- */
+/** @see sqlite3_step() */
 # define sqlite3_step_debug(R,S) do { \
 	(R) = sqlite3_step(S); \
 	g_log(SQLX_QUERY_DOMAIN, \
@@ -61,14 +93,12 @@ sqlx_code_good(const int rc)
 			sqlite_strerror(R), R); \
 } while (0)
 
+/** @see sqlite3_step_debug() */
 # define sqlite3_step_debug_until_end(R,S) do { \
 	sqlite3_step_debug((R),(S)); \
 } while ((R) == SQLITE_ROW)
 
-/**
- * @param R
- * @param S
- */
+/** @see sqlite3_finalize() */
 # define sqlite3_finalize_debug(R,S) do { \
 	(R) = sqlite3_finalize(S); \
 	g_log(SQLX_QUERY_DOMAIN, \
@@ -77,17 +107,9 @@ sqlx_code_good(const int rc)
 			sqlite_strerror(R), R); \
 } while (0)
 
-/**
- * @param rc an SQLite error code
- * @return a string describing the error that occured on the SQLite base
- */
+/** Return a string describing the error that occured on the SQLite base */
 const char * sqlite_strerror(const int rc);
 
-/**
- * @param handle
- * @param sql
- * @return
- */
 int sqlx_exec(sqlite3 *handle, const gchar *sql);
 
 GError* sqlite_admin_entry_set(sqlite3 *db, const int repl, const gchar *k,
@@ -121,6 +143,8 @@ gint64 sqlx_admin_get_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint
 
 gchar* sqlx_admin_get_str(struct sqlx_sqlite3_s *sq3, const gchar *k);
 
+gchar** sqlx_admin_get_keys(struct sqlx_sqlite3_s *sq3);
+
 GByteArray* sqlx_admin_get_gba(struct sqlx_sqlite3_s *sq3, const gchar *k);
 
 /** Set an application-level status in admin table */
@@ -129,4 +153,4 @@ void sqlx_admin_set_status(struct sqlx_sqlite3_s *sq3, gint64 status);
 /** Get an application-level status from admin table */
 gint64 sqlx_admin_get_status(struct sqlx_sqlite3_s *sq3);
 
-#endif /* SQLITEREPO_utils__h */
+#endif /*OIO_SDS__sqliterepo__sqlite_utils_h*/

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS gridd
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "server.msg"
 #endif /*G_LOG_DOMAIN*/
@@ -13,7 +32,6 @@
 #include "./message_handler.h"
 
 #define MS_REPLY_TIMEOUT 1000
-
 
 /*
  * REPLY MANAGEMENT:
@@ -39,7 +57,6 @@ do {\
 	memset(&(ctx->body), 0x00, sizeof(ctx->body));\
 } while (0)
 
-
 void
 reply_context_clear (struct reply_context_s *ctx, gboolean all)
 {
@@ -61,7 +78,6 @@ reply_context_clear (struct reply_context_s *ctx, gboolean all)
 	REPLYCTX_CLEANBODY(ctx);
 }
 
-
 void
 reply_context_set_message (struct reply_context_s *ctx, gint code, const gchar *msg)
 {
@@ -72,7 +88,6 @@ reply_context_set_message (struct reply_context_s *ctx, gint code, const gchar *
 	ctx->header.msg = msg ? g_strdup(msg) : NULL;
 	TRACE("couple message/code set to (%i %s)", ctx->header.code, ctx->header.msg);
 }
-
 
 void
 reply_context_set_body (struct reply_context_s *ctx, void *body, gsize bodySize, guint32 flags)
@@ -130,22 +145,17 @@ reply_context_add_header_in_reply(struct reply_context_s *ctx, const char *k, GB
 	reply_context_add_bufheader_in_reply(ctx, k, v->data, v->len);
 }
 
-
 static void
 reply_ctx_header_adder (gpointer k, gpointer v, gpointer u)
 {
-	register int rc;
 	MESSAGE answer = u;
 	GByteArray *gba = v;
 	if (!k || !v || !u)
 		return;
 	if (!gba->data || gba->len<=0)
 		return;
-	rc = message_add_field( answer, (char*)k, strlen((char*)k), gba->data, gba->len, NULL);
-	if (rc!=1)
-		ERROR("The field %s could not be added to a message", (char*)k);
+	message_add_field (answer, (char*)k, gba->data, gba->len);
 }
-
 
 gint
 reply_context_reply (struct reply_context_s *ctx, GError **err)
@@ -187,7 +197,7 @@ reply_context_reply (struct reply_context_s *ctx, GError **err)
 		goto errorLabel;
 	}
 
-	message_destroy(answer, NULL);
+	message_destroy(answer);
 	answer = NULL;
 
 	if (bufM) {
@@ -202,19 +212,13 @@ reply_context_reply (struct reply_context_s *ctx, GError **err)
 	return 1;
 
 errorLabel:
-
 	if (err && *err)
 		GRID_WARN("%s", (*err)->message);
-
 	if (bufM)
 		g_free (bufM);
-
-	if (answer)
-		message_destroy(answer, NULL);
-
+	message_destroy(answer);
 	return 0;
 }
-
 
 gint message_handler_add (const char *name,
 	message_matcher_f m, message_handler_f h, GError **err)
@@ -227,13 +231,7 @@ gint message_handler_add (const char *name,
 		return 0;
 	}
 
-	mh = g_try_malloc0 (sizeof(struct message_handler_s));
-	if (!mh)
-	{
-		GSETERROR(err, "Memory allocation error");
-		return 0;
-	}
-
+	mh = g_malloc0 (sizeof(struct message_handler_s));
 	mh->matcher = m;
 	mh->handler = h;
 	strncpy (mh->name, name, SIZE_MSGHANDLERNAME-1);
@@ -257,12 +255,7 @@ gint message_handler_add_v2 (const char *name,
 		return 0;
 	}
 
-	mh = g_try_malloc0 (sizeof(struct message_handler_s));
-	if (!mh) {
-		GSETERROR(err, "Memory allocation error");
-		return 0;
-	}
-
+	mh = g_malloc0 (sizeof(struct message_handler_s));
 	mh->matcher = m;
 	mh->handler = NULL;
 	strncpy (mh->name, name, SIZE_MSGHANDLERNAME-1);
@@ -292,8 +285,7 @@ void
 request_context_clear(struct request_context_s* request_info)
 {
 	if(request_info == NULL)
-                return;
-
+		return;
 	if(request_info->local_addr)
 		g_free(request_info->local_addr);
 	if(request_info->remote_addr)
@@ -306,7 +298,6 @@ request_context_free(struct request_context_s* request_info)
 {
 	if(request_info == NULL)
 		return;
-
 	request_context_clear(request_info);
 	g_free(request_info);
 }
@@ -360,8 +351,9 @@ gridd_get_ns_name(void)
 namespace_info_t*
 gridd_get_namespace_info(GError **error)
 {
+	(void) error;
 	if(!ns_info)
 		return NULL;
-	return namespace_info_dup(ns_info, error);
+	return namespace_info_dup(ns_info);
 }
 

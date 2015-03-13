@@ -3,10 +3,18 @@ BEGIN
 
 	-- general purpose message structures
 
+	ContentList ::= SEQUENCE OF PrintableString
+
+	ArrayList ::= SEQUENCE OF OCTET STRING
+
 	Parameter ::= SEQUENCE {
 			name PrintableString,
 			value OCTET STRING
 	}
+
+	ParameterSequence ::= SEQUENCE OF Parameter
+
+	EventSequence ::= SEQUENCE OF ParameterSequence
 
 	Message ::= SEQUENCE {
 		id OCTET STRING OPTIONAL,
@@ -15,10 +23,6 @@ BEGIN
 		body OCTET STRING OPTIONAL,
 		content SET OF Parameter
 	}
-
-	ParameterSequence ::= SEQUENCE OF Parameter
-
-	EventSequence ::= SEQUENCE OF ParameterSequence
 
 	-- General network address information
 
@@ -65,15 +69,6 @@ BEGIN
 
 	PathInfoSequence ::= SET OF PathInfo
 
-
-	-- score information
-
-	Score ::= SEQUENCE {
-		value	  INTEGER,
-		timestamp INTEGER
-	}
-
-
 	-- Digested information spread by the cluster conscience
 
 	-- Namespace information
@@ -84,14 +79,11 @@ BEGIN
 		name		PrintableString,
 		addr		AddrInfo,
 		chunkSize	INTEGER,
-		options		NamespaceInfoValueList,
-		versionSrvcfg   INTEGER,
-		versionEvtcfg   INTEGER,
-		versionNscfg    INTEGER,
-		storagePolicy	NamespaceInfoValueList OPTIONAL,
-		dataSecurity	NamespaceInfoValueList OPTIONAL,
-		dataTreatments	NamespaceInfoValueList OPTIONAL,
-		storageClass	NamespaceInfoValueList OPTIONAL
+		options		    NamespaceInfoValueList,
+		storagePolicy	NamespaceInfoValueList,
+		dataSecurity	NamespaceInfoValueList,
+		dataTreatments	NamespaceInfoValueList,
+		storageClass	NamespaceInfoValueList
 	}
 
 	NamespaceInfoSequence ::= SET OF NamespaceInfo
@@ -146,9 +138,6 @@ BEGIN
 		chunks SEQUENCE OF Meta2RawChunk
 	}
 	Meta2RawContentSequence ::= SEQUENCE OF Meta2RawContent
-
-	ContentList ::= SEQUENCE OF PrintableString
-	ArrayList ::= SEQUENCE OF OCTET STRING
 
 	-- Meta2V2 beans
 
@@ -208,6 +197,11 @@ BEGIN
 
 	-- Generic Service
 
+	Score ::= SEQUENCE {
+		value	  INTEGER,
+		timestamp INTEGER
+	}
+
 	ServiceTag ::= SEQUENCE {
 		name PrintableString,
 		value CHOICE {
@@ -231,18 +225,6 @@ BEGIN
 	}
 
 	ServiceInfoSequence ::= SEQUENCE OF ServiceInfo
-
-	-- Container Event structure
-
-	ContainerEvent ::= SEQUENCE {
-		rowid INTEGER,
-		timestamp INTEGER,
-		type PrintableString,
-		ref PrintableString,
-		eventMessage PrintableString
-	}
-
-	ContainerEventSequence ::= SEQUENCE OF ContainerEvent
 
 	-- Extended version of the Meta2RawContent, suitable for v1.5+ META2
 	-- contents representation.

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS sqliterepo
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "sqliterepo"
 #endif
@@ -23,6 +42,7 @@
 #include "sqlite_utils.h"
 #include "internals.h"
 #include "restoration.h"
+#include "sqlx_remote.h"
 
 #define GSTR_APPEND_SEP(S) do { \
 	if ((S)->str[(S)->len-1]!=G_DIR_SEPARATOR) \
@@ -102,9 +122,7 @@ __op2str(int op)
 	}
 }
 
-
 /* ------------------------------------------------------------------------- */
-
 
 static void
 _admin_entry_set_str_noerror(sqlite3 *db, const gchar *k, const gchar *v)
@@ -120,17 +138,16 @@ static void
 __delete_base(struct sqlx_sqlite3_s *sq3)
 {
 	if (!sq3->path) {
-		GRID_WARN("DELETE disabled [%s][%s]",
-				sq3->logical_name, sq3->logical_type);
+		GRID_WARN("DELETE disabled [%s][%s]", sq3->name.base, sq3->name.type);
 		return;
 	}
 
 	if (!unlink(sq3->path))
-		GRID_DEBUG("DELETE done [%s][%s] (%s)", sq3->logical_name,
-			sq3->logical_type, sq3->path);
+		GRID_DEBUG("DELETE done [%s][%s] (%s)", sq3->name.base,
+			sq3->name.type, sq3->path);
 	else
 		GRID_WARN("DELETE failed [%s][%s] (%s) : (%d) %s",
-				sq3->logical_name, sq3->logical_type, sq3->path,
+				sq3->name.base, sq3->name.type, sq3->path,
 				errno, strerror(errno));
 	sq3->deleted = 0;
 }
@@ -143,8 +160,8 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 		return;
 	}
 
-	GRID_TRACE2("DB being closed [%s][%s]", sq3->logical_name,
-			sq3->logical_type);
+	GRID_TRACE2("DB being closed [%s][%s]", sq3->name.base,
+			sq3->name.type);
 
 	/* send a vacuum */
 	if (sq3->repo && sq3->repo->flag_autovacuum)
@@ -156,15 +173,12 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 	if (sq3->deleted) {
 		if (sq3->repo->election_manager) {
 			GError *err = election_exit(sq3->repo->election_manager,
-					sq3->logical_name,
-					sq3->logical_type);
+					sqlx_name_mutable_to_const(&sq3->name));
 			if (err) {
 				GRID_WARN("Failed to exit election [%s]", err->message);
 				g_clear_error(&err);
 			} else {
-				GRID_TRACE("exit election succeeded [%s][%s]",
-						sq3->logical_name,
-						sq3->logical_type);
+				GRID_TRACE("exit election succeeded [%s][%s]", sq3->name.base, sq3->name.type);
 			}
 		}
 		__delete_base(sq3);
@@ -174,13 +188,7 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 		_close_handle(&(sq3->db));
 
 	/* Clean the structure */
-
-	if (sq3->logical_name)
-		g_free(sq3->logical_name);
-	if (sq3->logical_type)
-		g_free(sq3->logical_type);
-	if (sq3->path)
-		g_free(sq3->path);
+	sqlx_name_clean(&sq3->name);
 	if (sq3->admin)
 		g_tree_destroy(sq3->admin);
 
@@ -297,9 +305,7 @@ __get_schema(sqlx_repository_t *repo, const gchar *type, GByteArray **res)
 	return NULL;
 }
 
-
 /* ------------------------------------------------------------------------- */
-
 
 GError *
 sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
@@ -617,12 +623,10 @@ sqlx_repository_get_local_addr(struct sqlx_repository_s *repo)
 
 /* ------------------------------------------------------------------------- */
 
-
 struct open_args_s
 {
 	struct sqlx_repository_s *repo;
-	const gchar *logical_name;
-	const gchar *logical_type;
+	struct sqlx_name_s name;
 	GByteArray *raw;
 	hashstr_t *realname;
 	gchar *realpath;
@@ -719,9 +723,8 @@ label_retry:
 					SQLX_DEFAULT_PAGE_SIZE);
 			sqlx_exec(h, buf);
 			sqlx_exec(h, "BEGIN");
-			_admin_entry_set_str_noerror(h, "base_name", args->logical_name);
-			_admin_entry_set_str_noerror(h, "container_name", args->logical_name);
-			_admin_entry_set_str_noerror(h, "base_type", args->logical_type);
+			_admin_entry_set_str_noerror(h, SQLX_ADMIN_BASENAME, args->name.base);
+			_admin_entry_set_str_noerror(h, SQLX_ADMIN_BASETYPE, args->name.type);
 			sqlx_exec(h, "COMMIT");
 			sqlx_exec(h, "VACUUM");
 			sqlite3_close(h);
@@ -734,27 +737,32 @@ label_retry:
 
 static GError *
 _open_fill_args(struct open_args_s *args, struct sqlx_repository_s *repo,
-		const gchar *t, const gchar *n)
+		struct sqlx_name_s *n)
 {
+	EXTRA_ASSERT(args != NULL);
+	EXTRA_ASSERT(repo != NULL);
+	SQLXNAME_CHECK(n);
+
 	memset(args, 0, sizeof(struct open_args_s));
 
 	args->repo = repo;
-	args->logical_type = t;
-	args->logical_name = n;
+	args->name.type = n->type;
+	args->name.base = n->base;
+	args->name.ns = n->ns;
 
 	if (!repo->locator) {
-		args->realname = sqliterepo_hash_name(n, t);
-		args->realpath = compute_path(repo, args->realname, t);
+		args->realname = sqliterepo_hash_name(n);
+		args->realpath = compute_path(repo, args->realname, n->type);
 	}
 	else {
 		GString *fn = g_string_new("");
-		repo->locator(repo->locator_data, n, t, fn);
+		repo->locator(repo->locator_data, n, fn);
 		args->realname = hashstr_create_from_gstring(fn);
 		g_string_free(fn, TRUE);
 		args->realpath = compute_path(repo, args->realname, NULL);
 	}
 
-	return __get_schema(repo, t, &(args->raw));
+	return __get_schema(repo, args->name.type, &(args->raw));
 }
 
 static void
@@ -835,7 +843,7 @@ sqlx_admin_reload(struct sqlx_sqlite3_s *sq3)
 	__admin_load_from_table(sq3);
 	__admin_ensure_version(sq3);
 	GRID_TRACE("Loaded %u ADMIN from [%s.%s]", g_tree_nnodes(sq3->admin),
-			sq3->logical_name, sq3->logical_type);
+			sq3->name.base, sq3->name.type);
 }
 
 static GError*
@@ -904,8 +912,9 @@ retry:
 	sq3->bd = -1;
 	sq3->repo = args->repo;
 	sq3->config = election_manager_get_config(args->repo->election_manager);
-	sq3->logical_name = g_strdup(args->logical_name);
-	sq3->logical_type = g_strdup(args->logical_type);
+	sq3->name.base = g_strdup(args->name.base);
+	sq3->name.type = g_strdup(args->name.type);
+	sq3->name.ns = g_strdup(args->name.ns);
 	sq3->path = g_strdup(args->realpath);
 
 	sqlx_admin_reload(sq3);
@@ -930,7 +939,7 @@ __open_maybe_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 
 	*result = sqlx_cache_get_handle(args->repo->cache, bd);
 	GRID_TRACE("Cache slot reserved bd=%d, base [%s][%s] %s open",
-				bd, args->logical_name, args->logical_type,
+				bd, args->name.base, args->name.type,
 				(*result != NULL) ? "already" : "not");
 
 	if (NULL != *result)
@@ -964,8 +973,7 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 
 	if (election_configured && !args->no_refcheck) {
 		gboolean has_peers = FALSE;
-		err = election_has_peers(args->repo->election_manager,
-				args->logical_name, args->logical_type, &has_peers);
+		err = election_has_peers(args->repo->election_manager, &args->name, &has_peers);
 		if (err != NULL) {
 			g_prefix_error(&err, "Peers resolution error: ");
 			return err;
@@ -977,15 +985,13 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 	/* Now manage the replication status */
 	if (!expected || !election_configured || !args->is_replicated) {
 		GRID_TRACE("No status (%d) expected on [%s][%s] (peers found: %s)",
-				expected, args->logical_name, args->logical_type,
+				expected, args->name.base, args->name.type,
 				args->is_replicated ? "true" : "false");
-	}
-	else {
+	} else {
 		enum election_status_e status;
 		gchar *url = NULL;
 
-		status = election_get_status(args->repo->election_manager,
-				args->logical_name, args->logical_type, &url);
+		status = election_get_status(args->repo->election_manager, &args->name, &url);
 		GRID_TRACE("Status got=%d expected=%d master=%s", status, expected, url);
 
 		switch (status) {
@@ -1004,8 +1010,8 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 					err = NEWERROR(CODE_BADOPFORSLAVE, "not SLAVE");
 				break;
 			case ELECTION_FAILED:
-				err = NEWERROR(500, "Election failed [%s][%s]",
-						args->logical_name, args->logical_type);
+				err = NEWERROR(CODE_INTERNAL_ERROR, "Election failed [%s][%s]",
+						args->name.base, args->name.type);
 				break;
 		}
 
@@ -1023,7 +1029,6 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 	return err;
 }
 
-
 /* ------------------------------------------------------------------------- */
 
 GError*
@@ -1033,7 +1038,7 @@ sqlx_repository_unlock_and_close2(struct sqlx_sqlite3_s *sq3, guint32 flags)
 	EXTRA_ASSERT(sq3 != NULL);
 
 	GRID_TRACE2("Closing bd=%d [%s][%s]", sq3->bd,
-			sq3->logical_name, sq3->logical_type);
+			sq3->name.base, sq3->name.type);
 
 	if (!sq3->repo->flag_delete_on)
 		sq3->deleted = FALSE;
@@ -1075,7 +1080,7 @@ sqlx_repository_unlock_and_close_noerror(struct sqlx_sqlite3_s *sq3)
 
 GError*
 sqlx_repository_open_and_lock(sqlx_repository_t *repo,
-		const gchar *type, const gchar *name, enum sqlx_open_type_e how,
+		struct sqlx_name_s *n, enum sqlx_open_type_e how,
 		struct sqlx_sqlite3_s **result, gchar **lead)
 {
 	GError *err = NULL;
@@ -1084,13 +1089,15 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 	memset(&args, '\0', sizeof(struct open_args_s));
 
 	EXTRA_ASSERT(repo != NULL);
+	SQLXNAME_CHECK(n);
+	
 	if (result)
 		*result = NULL;
 
 	if (!repo->running)
-		return NEWERROR(500, "Repository being closed");
+		return NEWERROR(CODE_INTERNAL_ERROR, "Repository being closed");
 
-	if (NULL != (err = _open_fill_args(&args, repo, type, name)))
+	if (NULL != (err = _open_fill_args(&args, repo, n)))
 		return err;
 	args.no_refcheck = BOOL(how & SQLX_OPEN_NOREFCHECK);
 	args.create = BOOL(how & SQLX_OPEN_CREATE);
@@ -1114,6 +1121,22 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 			g_assert_not_reached();
 	}
 
+	gint64 expected_status = how & SQLX_OPEN_STATUS;
+	if (expected_status) {
+
+		gint64 flags = sqlx_admin_get_status(*result);
+		gint64 mode = SQLX_OPEN_ENABLED;
+		if (flags == ADMIN_STATUS_FROZEN)
+			mode = SQLX_OPEN_FROZEN;
+		else if (flags == ADMIN_STATUS_DISABLED)
+			mode = SQLX_OPEN_DISABLED;
+
+		if (!(mode & expected_status)) {
+			err = NEWERROR(CODE_CONTAINER_FROZEN, "Invalid status");
+			sqlx_repository_unlock_and_close_noerror(*result);
+		}
+	}
+
 	_open_clean_args(&args);
 
 	if (!err && repo->open_callback && result) {
@@ -1130,18 +1153,19 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 	return err;
 }
 
-
-
 GError*
-sqlx_repository_has_base2(sqlx_repository_t *repo, const gchar *type,
-		const gchar *name, gchar** bddname)
+sqlx_repository_has_base2(sqlx_repository_t *repo, struct sqlx_name_s *n,
+		gchar** bddname)
 {
+	REPO_CHECK(repo);
+	SQLXNAME_CHECK(n);
+
 	struct open_args_s args;
 
 	if (bddname != NULL)
 		*bddname = NULL;
 
-	GError *err = _open_fill_args(&args, repo, type, name);
+	GError *err = _open_fill_args(&args, repo, n);
 	if (NULL != err)
 		return err;
 
@@ -1158,21 +1182,20 @@ sqlx_repository_has_base2(sqlx_repository_t *repo, const gchar *type,
 /* ------------------------------------------------------------------------- */
 
 GError*
-sqlx_repository_status_base(sqlx_repository_t *repo,
-		const gchar *type, const gchar *name)
+sqlx_repository_status_base(sqlx_repository_t *repo, struct sqlx_name_s *n)
 {
+	REPO_CHECK(repo);
+	SQLXNAME_CHECK(n);
+
 	GError *err = NULL;
 	gboolean has_peers = FALSE;
 
-	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, type, name);
-	EXTRA_ASSERT(repo != NULL);
-	EXTRA_ASSERT(type != NULL);
-	EXTRA_ASSERT(name != NULL);
+	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, n->type, n->base);
 
 	if (!repo->running)
-		return NEWERROR(500, "Repository being shut down");
+		return NEWERROR(CODE_INTERNAL_ERROR, "Repository being shut down");
 
-	if (NULL != (err = __get_schema(repo, type, NULL)))
+	if (NULL != (err = __get_schema(repo, n->type, NULL)))
 		return err;
 
 	if (!election_manager_configured(repo->election_manager)) {
@@ -1180,28 +1203,27 @@ sqlx_repository_status_base(sqlx_repository_t *repo,
 		return NULL;
 	}
 
-	err = election_has_peers(repo->election_manager, name, type, &has_peers);
+	err = election_has_peers(repo->election_manager, n, &has_peers);
 	if (err != NULL) {
 		g_prefix_error(&err, "Peers resolution error: ");
 		return err;
 	}
 
 	if (!has_peers) {
-		GRID_TRACE("Unable to find peers for [%s][%s]", name, type);
+		GRID_TRACE("Unable to find peers for [%s][%s]", n->base, n->type);
 		return NULL;
 	}
 
 	gchar *url = NULL;
 	enum election_status_e status;
 
-	status = election_get_status(repo->election_manager, name, type, &url);
+	status = election_get_status(repo->election_manager, n, &url);
 	switch (status) {
 		case ELECTION_LOST:
 			if (GRID_DEBUG_ENABLED()) {
 				gchar **my_peers = NULL;
 				gboolean master_in_peers = FALSE;
-				GError *err2 = election_get_peers(repo->election_manager,
-						name, type, &my_peers);
+				GError *err2 = election_get_peers(repo->election_manager, n, &my_peers);
 				for (gchar **cursor = my_peers;
 						cursor && *cursor && !master_in_peers;
 						cursor++) {
@@ -1222,8 +1244,8 @@ sqlx_repository_status_base(sqlx_repository_t *repo,
 			err = NULL;
 			break;
 		case ELECTION_FAILED:
-			err = NEWERROR(500,
-					"Election failed for %s.%s", name, type);
+			err = NEWERROR(CODE_INTERNAL_ERROR,
+					"Election failed for %s.%s", n->base, n->type);
 			break;
 	}
 
@@ -1233,20 +1255,18 @@ sqlx_repository_status_base(sqlx_repository_t *repo,
 }
 
 GError*
-sqlx_repository_prepare_election(sqlx_repository_t *repo,
-		const gchar *type, const gchar *name)
+sqlx_repository_prepare_election(sqlx_repository_t *repo, struct sqlx_name_s *n)
 {
-	GError *err;
+	REPO_CHECK(repo);
+	SQLXNAME_CHECK(n);
 
-	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, type, name);
-	EXTRA_ASSERT(repo != NULL);
-	EXTRA_ASSERT(type != NULL);
-	EXTRA_ASSERT(name != NULL);
+	GError *err;
+	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, n->type, n->base);
 
 	if (!repo->running)
-		return NEWERROR(500, "Repository being shut down");
+		return NEWERROR(CODE_INTERNAL_ERROR, "Repository being shut down");
 
-	if (NULL != (err = __get_schema(repo, type, NULL)))
+	if (NULL != (err = __get_schema(repo, n->type, NULL)))
 		return err;
 
 	if (!election_manager_configured(repo->election_manager)) {
@@ -1254,24 +1274,22 @@ sqlx_repository_prepare_election(sqlx_repository_t *repo,
 		return NULL;
 	}
 
-	return election_init(repo->election_manager, name, type);
+	return election_init(repo->election_manager, n);
 }
 
 GError*
-sqlx_repository_exit_election(sqlx_repository_t *repo,
-		const gchar *type, const gchar *name)
+sqlx_repository_exit_election(sqlx_repository_t *repo, struct sqlx_name_s *n)
 {
-	GError *err;
+	REPO_CHECK(repo);
+	SQLXNAME_CHECK(n);
 
-	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, type, name);
-	EXTRA_ASSERT(repo != NULL);
-	EXTRA_ASSERT(type != NULL);
-	EXTRA_ASSERT(name != NULL);
+	GError *err;
+	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, n->type, n->base);
 
 	if (!repo->running)
-		return NEWERROR(500, "Repository being shut down");
+		return NEWERROR(CODE_INTERNAL_ERROR, "Repository being shut down");
 
-	if (NULL != (err = __get_schema(repo, type, NULL)))
+	if (NULL != (err = __get_schema(repo, n->type, NULL)))
 		return err;
 
 	if (!repo->election_manager) {
@@ -1279,25 +1297,23 @@ sqlx_repository_exit_election(sqlx_repository_t *repo,
 		return NULL;
 	}
 
-	err = election_exit(repo->election_manager, name, type);
+	err = election_exit(repo->election_manager, n);
 	return err;
 }
 
 GError*
-sqlx_repository_use_base(sqlx_repository_t *repo, const gchar *type,
-		const gchar *name)
+sqlx_repository_use_base(sqlx_repository_t *repo, struct sqlx_name_s *n)
 {
+	REPO_CHECK(repo);
+	SQLXNAME_CHECK(n);
 	GError *err;
 
-	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, type, name);
-	EXTRA_ASSERT(repo != NULL);
-	EXTRA_ASSERT(type != NULL);
-	EXTRA_ASSERT(name != NULL);
+	GRID_TRACE2("%s(%p,t=%s,n=%s)", __FUNCTION__, repo, n->type, n->base);
 
 	if (!repo->running)
-		return NEWERROR(500, "Repository being shut down");
+		return NEWERROR(CODE_INTERNAL_ERROR, "Repository being shut down");
 
-	if (NULL != (err = __get_schema(repo, type, NULL)))
+	if (NULL != (err = __get_schema(repo, n->type, NULL)))
 		return err;
 
 	if (!election_manager_configured(repo->election_manager)) {
@@ -1305,12 +1321,10 @@ sqlx_repository_use_base(sqlx_repository_t *repo, const gchar *type,
 		return NULL;
 	}
 
-	return election_start(repo->election_manager, name, type);
+	return election_start(repo->election_manager, n);
 }
 
-
 /* ------------------------------------------------------------------------- */
-
 
 static GError*
 _backup_main(sqlite3 *src, sqlite3 *dst)
@@ -1416,7 +1430,7 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 					strerror(errno));
 		} else {
 			GRID_TRACE("DUMP to [%s] fd=%d from bd=[%s][%s]", path, fd,
-					sq3->logical_name, sq3->logical_type);
+					sq3->name.base, sq3->name.type);
 
 			/* TODO : provides a VFS dumping everything in memory */
 			rc = sqlite3_open_v2(path, &dst, SQLITE_OPEN_PRIVATECACHE
@@ -1524,8 +1538,7 @@ sqlx_repository_restore_from_file(struct sqlx_sqlite3_s *sq3,
 }
 
 GError*
-sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
-		guint8 *raw, gsize rawsize)
+sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3, guint8 *raw, gsize rawsize)
 {
 	gboolean try_slash_tmp = FALSE;
 	gchar path[LIMIT_LENGTH_VOLUMENAME+32] = {0};
@@ -1585,9 +1598,9 @@ sqlx_repository_retore_from_master(struct sqlx_sqlite3_s *sq3)
 	EXTRA_ASSERT(sq3 != NULL);
 
 	return !election_manager_configured(sq3->repo->election_manager)
-		? NEWERROR(500, "Replication not configured")
+		? NEWERROR(CODE_INTERNAL_ERROR, "Replication not configured")
 		: election_manager_trigger_RESYNC(sq3->repo->election_manager,
-			sq3->logical_name, sq3->logical_type);
+				sqlx_name_mutable_to_const(&sq3->name));
 }
 
 GError *
@@ -1595,29 +1608,27 @@ sqlx_repository_get_version(struct sqlx_sqlite3_s *sq3, GTree **result)
 {
 	GRID_TRACE2("%s(%p,%p)", __FUNCTION__, sq3, result);
 	if (!sq3 || !result)
-		return NEWERROR(500, "Invalid parameter");
+		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid parameter");
 	*result = version_extract_from_admin(sq3);
 	return NULL;
 }
 
 GError *
-sqlx_repository_get_version2(sqlx_repository_t *repo,
-		const gchar *type, const gchar *name, GTree **result)
+sqlx_repository_get_version2(sqlx_repository_t *repo, struct sqlx_name_s *n,
+		GTree **result)
 {
-	GRID_TRACE2("%s(%p,%s,%s)", __FUNCTION__, repo, type, name);
+	REPO_CHECK(repo);
+	SQLXNAME_CHECK(n);
+	EXTRA_ASSERT(result != NULL);
+
+	GRID_TRACE2("%s(%p,%s,%s)", __FUNCTION__, repo, n->type, n->base);
 
 	GError *err;
 	GTree *version = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
-	EXTRA_ASSERT(repo != NULL);
-	EXTRA_ASSERT(type != NULL);
-	EXTRA_ASSERT(name != NULL);
-	EXTRA_ASSERT(result != NULL);
-
 	*result = NULL;
-	err = sqlx_repository_open_and_lock(repo, type, name,
-			SQLX_OPEN_LOCAL, &sq3, NULL);
+	err = sqlx_repository_open_and_lock(repo, n, SQLX_OPEN_LOCAL, &sq3, NULL);
 	if (NULL != err)
 		return err;
 

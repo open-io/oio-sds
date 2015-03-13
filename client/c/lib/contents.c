@@ -1,10 +1,28 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #include "./gs_internals.h"
 #include "hc.h"
 
 static void
 chunk_agregate_debug(GSList *agregates)
 {
-	gchar ci_str[2048];
 	GSList *ag;
 	GSList *chunks, *c;
 	chunk_info_t *ci;
@@ -29,8 +47,7 @@ chunk_agregate_debug(GSList *agregates)
 					TRACE(" chunk-%d-%d : NULL", i_ag, i_chunk);
 				}
 				else {
-					chunk_info_to_string (ci, ci_str, sizeof(ci_str));
-					TRACE(" chunk-%d-%d : %s", i_ag, i_chunk, ci_str);
+					TRACE(" chunk-%d-%d :  %s", i_ag, i_chunk, ci->id.vol);
 				}
 			}
 		}
@@ -212,7 +229,6 @@ fill_chunk_id_from_url(const char * const url, chunk_id_t *ci)
 
 	/* vol */
 	g_strlcpy(ci->vol, vol, MIN(id - vol + 1 /* for '\0' */, (int)sizeof(ci->vol)));
-
 
 	/* id */
 	container_id_hex2bin(id + 1 , strlen(id +1 ), &(ci->id), NULL);
@@ -600,7 +616,6 @@ _reload_content(gs_content_t *content, GSList **p_filtered, GSList **p_beans, GE
 		return FALSE;
 	}
 
-
 	map_content_from_raw(content, raw_content);
 	meta2_raw_content_clean(raw_content);
 	if (p_beans)
@@ -738,7 +753,6 @@ end_label:
 	return rc;
 }
 
-
 gs_status_t gs_destroy_content (gs_content_t *content, gs_error_t **err)
 {
 	int nb_refreshes=1;
@@ -840,7 +854,6 @@ error_label:
 	g_clear_error (&localError);
 	return GS_ERROR;
 }
-
 
 gs_status_t gs_content_get_info (const gs_content_t *content, gs_content_info_t *info, gs_error_t **err)
 {
@@ -1156,7 +1169,6 @@ enderror :
 	hc_url_clean(url);
 	_bean_cleanl2(beans);
 
-
 	return status;
 }
 
@@ -1185,7 +1197,6 @@ hc_delete_content_property(gs_content_t *content, char ** keys ,gs_error_t **e)
 		status= GS_ERROR;
 		goto enderror;
 	}
-
 
 	for ( i=0; i < g_strv_length(keys); i++) {
 		for ( l=out_beans ; l && l->data ; l=l->next) {

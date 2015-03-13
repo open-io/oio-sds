@@ -1,3 +1,22 @@
+/*
+OpenIO SDS vns-agent
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #define MODULE_NAME "vns_agent"
 
 #ifndef G_LOG_DOMAIN
@@ -17,8 +36,8 @@
 #include <gridd/main/srvalert.h>
 
 #include "lib/vns_agent.h"
-#include "remote/vns_agent_remote.h"
 
+#define NAME_MSGNAME_VNSA_INFO "REQ_VNSA_INFO"
 #define VNS_AGENT_ERRID_CONFIG "vns_agent.config"
 #define VNS_AGENT_ERRID_DB     "vns_agent.db"
 #define VNS_AGENT_ERRID_OTHER  "vns_agent.other"
@@ -40,8 +59,8 @@ do {\
 #define MSG_INTERNAL_ERROR "Internal error"
 #define MSG_REQUEST_FORBIDEN "Request forbiden"
 
-#define LOCK_STATS()   g_static_rec_mutex_lock(&stat_mutex)
-#define UNLOCK_STATS() g_static_rec_mutex_unlock(&stat_mutex)
+#define LOCK_STATS()   g_rec_mutex_lock(&stat_mutex)
+#define UNLOCK_STATS() g_rec_mutex_unlock(&stat_mutex)
 
 typedef gint(*_cmd_handler_f) (struct request_context_s *, GError **);
 
@@ -49,20 +68,20 @@ struct cmd_s
 {
 	char *c;
 	_cmd_handler_f h;
-	gint64 *pStat;
-	gint64 *pTimeStat;
+	guint64 *pStat;
+	guint64 *pTimeStat;
 };
 
 struct vns_agent_stats_s
 {
-	gint64 total;
-	gint64 info;
+	guint64 total;
+	guint64 info;
 };
 
 static struct vns_agent_stats_s vnsastats;
 static struct vns_agent_stats_s vnsatimes;
 
-static GStaticRecMutex stat_mutex;
+static GRecMutex stat_mutex;
 
 static GPtrArray*
 _prepare_tags(void)
@@ -82,47 +101,46 @@ _prepare_tags(void)
 static gint
 handler_info(struct request_context_s *req_ctx, GError ** err)
 {
-        struct reply_context_s ctx;
-        char ns_name[LIMIT_LENGTH_NSNAME];
+	struct reply_context_s ctx;
+	char ns_name[LIMIT_LENGTH_NSNAME];
 
-        memset(ns_name, '\0', sizeof(ns_name));
-        memset(&ctx, 0x00, sizeof(struct reply_context_s));
-        ctx.req_ctx = req_ctx;
+	memset(ns_name, '\0', sizeof(ns_name));
+	memset(&ctx, 0x00, sizeof(struct reply_context_s));
+	ctx.req_ctx = req_ctx;
 
-        if (!vns_agent_info(ns_name, &(ctx.warning))) {
-                GSETERROR(&(ctx.warning), "Failed to get meta1 info");
-                JUMPERR(&ctx, 500, MSG_INTERNAL_ERROR);
-        }
+	if (!vns_agent_info(ns_name, &(ctx.warning))) {
+		GSETERROR(&(ctx.warning), "Failed to get meta1 info");
+		JUMPERR(&ctx, CODE_INTERNAL_ERROR, MSG_INTERNAL_ERROR);
+	}
 
-        reply_context_set_body(&ctx, ns_name, strlen(ns_name), REPLYCTX_COPY | REPLYCTX_DESTROY_ON_CLEAN);
-        reply_context_set_message(&ctx, 200, "OK");
+	reply_context_set_body(&ctx, ns_name, strlen(ns_name), REPLYCTX_COPY | REPLYCTX_DESTROY_ON_CLEAN);
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 
-        if (!reply_context_reply(&ctx, &(ctx.warning))) {
-                GSETERROR(&(ctx.warning), "Failed to send response");
-                JUMPERR(&ctx, 500, MSG_INTERNAL_ERROR);
-        }
+	if (!reply_context_reply(&ctx, &(ctx.warning))) {
+		GSETERROR(&(ctx.warning), "Failed to send response");
+		JUMPERR(&ctx, CODE_INTERNAL_ERROR, MSG_INTERNAL_ERROR);
+	}
 
-        /* Log access */
-        reply_context_log_access(&ctx, "");
+	/* Log access */
+	reply_context_log_access(&ctx, "");
 
-        /*clean the working structures */
-        reply_context_clear(&ctx, TRUE);
-        return (1);
+	/*clean the working structures */
+	reply_context_clear(&ctx, TRUE);
+	return (1);
 
-      errorLabel:
-        if (ctx.warning && ctx.warning->message)
-                WARN("Failed to gather info about this VNS_AGENT. cause:\n\t%s", ctx.warning->message);
-        if (!reply_context_reply(&ctx, err))
-                GSETERROR(err, "Failed to send response");
+errorLabel:
+	if (ctx.warning && ctx.warning->message)
+		WARN("Failed to gather info about this VNS_AGENT. cause:\n\t%s", ctx.warning->message);
+	if (!reply_context_reply(&ctx, err))
+		GSETERROR(err, "Failed to send response");
 
-        /* Log access */
-        reply_context_log_access(&ctx, "");
+	/* Log access */
+	reply_context_log_access(&ctx, "");
 
-        /*clean the working structures */
-        reply_context_clear(&ctx, TRUE);
-        return (0);
+	/*clean the working structures */
+	reply_context_clear(&ctx, TRUE);
+	return (0);
 }
-
 
 /*************************************************/
 
@@ -217,7 +235,7 @@ plugin_handler(struct request_context_s *ctx, GError ** err)
 static void
 _init_static_data(void)
 {
-	g_static_rec_mutex_init(&stat_mutex);
+	g_rec_mutex_init(&stat_mutex);
 	memset(&vnsastats, 0x00, sizeof(struct vns_agent_stats_s));
 	memset(&vnsatimes, 0x00, sizeof(struct vns_agent_stats_s));
 }

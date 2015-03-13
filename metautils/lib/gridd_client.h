@@ -1,8 +1,27 @@
-#ifndef HC_GRIDD_CLIENT_H
-# define HC_GRIDD_CLIENT_H 1
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__gridd_client_h
+# define OIO_SDS__metautils__lib__gridd_client_h 1
+
 # include <glib.h>
 # include <sys/time.h>
-
 
 /**
  * @defgroup metautils_client
@@ -96,60 +115,43 @@ struct abstract_client_s
 	struct gridd_client_vtable_s *vtable;
 };
 
-#define gridd_client_free(p) \
-	((struct abstract_client_s*)(p))->vtable->clean(p)
+#define VTABLE_CHECK(self,T,F) do { \
+	g_assert(self != NULL); \
+	g_assert(((T)self)->vtable != NULL); \
+	g_assert(((T)self)->vtable-> F != NULL); \
+} while (0)
 
-#define gridd_client_connect_url(p,u) \
-	((struct abstract_client_s*)(p))->vtable->connect_url(p,u)
+#define VTABLE_CALL(self,T,F) \
+	VTABLE_CHECK(self,T,F); \
+	return ((T)self)->vtable-> F
 
-#define gridd_client_connect_addr(p,a) \
-	((struct abstract_client_s*)(p))->vtable->connect_addr(p,a)
+#define GRIDD_CALL(self,F) \
+	VTABLE_CALL(self,struct abstract_client_s*,F)
 
-#define gridd_client_request(p,req,ctx,cb) \
-	((struct abstract_client_s*)(p))->vtable->request(p,req,ctx,cb)
+// wrappers to the call to the vtable.
+//
 
-#define gridd_client_error(p) \
-	((struct abstract_client_s*)(p))->vtable->error(p)
-
-#define gridd_client_interest(p) \
-	((struct abstract_client_s*)(p))->vtable->interest(p)
-
-#define gridd_client_url(p) \
-	((struct abstract_client_s*)(p))->vtable->get_url(p)
-
-#define gridd_client_fd(p) \
-	((struct abstract_client_s*)(p))->vtable->get_fd(p)
-
-#define gridd_client_set_fd(p,fd) \
-	((struct abstract_client_s*)(p))->vtable->set_fd(p,fd)
-
-#define gridd_client_set_keepalive(p,on) \
-	((struct abstract_client_s*)(p))->vtable->set_keepalive(p,on)
-
-#define gridd_client_set_timeout(p,t0,t1) \
-	((struct abstract_client_s*)(p))->vtable->set_timeout(p,t0,t1)
-
-#define gridd_client_expired(p,now) \
-	((struct abstract_client_s*)(p))->vtable->expired(p,now)
-
-#define gridd_client_finished(p) \
-	((struct abstract_client_s*)(p))->vtable->finished(p)
-
-#define gridd_client_start(p) \
-	((struct abstract_client_s*)(p))->vtable->start(p)
-
-#define gridd_client_expire(p,now) \
-	((struct abstract_client_s*)(p))->vtable->expire(p,now)
-
-#define gridd_client_react(p) \
-	((struct abstract_client_s*)(p))->vtable->react(p)
-
-#define gridd_client_fail(p,why) \
-	((struct abstract_client_s*)(p))->vtable->fail(p,why)
+void gridd_client_free (struct gridd_client_s *self);
+GError * gridd_client_connect_url (struct gridd_client_s *self, const gchar *u);
+GError * gridd_client_connect_addr (struct gridd_client_s *self, const struct addr_info_s *a);
+GError * gridd_client_request (struct gridd_client_s *self, GByteArray *req,
+		gpointer ctx, client_on_reply cb);
+GError * gridd_client_error (struct gridd_client_s *self);
+int gridd_client_interest (struct gridd_client_s *self);
+const gchar * gridd_client_url (struct gridd_client_s *self);
+int gridd_client_fd (struct gridd_client_s *self);
+GError * gridd_client_set_fd(struct gridd_client_s *self, int fd);
+void gridd_client_set_keepalive(struct gridd_client_s *self, gboolean on);
+void gridd_client_set_timeout (struct gridd_client_s *self, gdouble t0, gdouble t1);
+gboolean gridd_client_expired(struct gridd_client_s *self, GTimeVal *now);
+gboolean gridd_client_finished (struct gridd_client_s *self);
+gboolean gridd_client_start (struct gridd_client_s *self);
+void gridd_client_expire (struct gridd_client_s *self, GTimeVal *now);
+void gridd_client_react (struct gridd_client_s *self);
+void gridd_client_fail (struct gridd_client_s *self, GError *why);
 
 // Instanciate a client with the default VTABLE
 struct gridd_client_s * gridd_client_create_empty(void);
-
 
 /* ------------------------------------------------------------------------- */
 
@@ -179,4 +181,4 @@ struct gridd_client_factory_s * gridd_client_factory_create(void);
 
 /** @} */
 
-#endif /* HC_GRIDD_CLIENT_H */
+#endif /*OIO_SDS__metautils__lib__gridd_client_h*/

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta1v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta1.backend"
 #endif
@@ -69,8 +88,6 @@ __del_container_properties(struct sqlx_sqlite3_s *sq3,
 
 	return sqlx_transaction_end(repctx, err);
 }
-
-
 
 static GError *
 __replace_property(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
@@ -240,15 +257,15 @@ __check_property_format(gchar **strv)
 	gchar *p_eq;
 
 	if (!strv)
-		return NEWERROR(400, "NULL array");
+		return NEWERROR(CODE_BAD_REQUEST, "NULL array");
 
 	for (; *strv ; strv++, line++) {
 		if (!(p_eq = strchr(*strv, '=')))
-			return NEWERROR(400, "line %u : no equal symbol", line);
+			return NEWERROR(CODE_BAD_REQUEST, "line %u : no equal symbol", line);
 		if (p_eq == *strv)
-			return NEWERROR(400, "line %u : no name", line);
+			return NEWERROR(CODE_BAD_REQUEST, "line %u : no name", line);
 		if (!*(p_eq+1))
-			return NEWERROR(400, "line %u : no value", line);
+			return NEWERROR(CODE_BAD_REQUEST, "line %u : no value", line);
 	}
 
 	return NULL;
@@ -308,8 +325,6 @@ meta1_backend_del_container_properties(struct meta1_backend_s *m1,
 
 	return err;
 }
-
-
 
 GError *
 meta1_backend_get_container_properties(struct meta1_backend_s *m1,

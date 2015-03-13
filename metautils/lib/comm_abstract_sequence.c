@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "metacomm.as"
 #endif /*G_LOG_DOMAIN */
@@ -54,9 +73,8 @@ abstract_sequence_unmarshall(const struct abstract_sequence_handler_s *h,
 		for (i = 0, max = abstract_sequence->list.count; i < max; i++) {
 			void *api_structure;
 
-			if (!(api_structure = g_try_malloc0(h->api_size))
-				|| !h->map_ASN1_to_API(abstract_sequence->list.array[i], api_structure))
-			{
+			api_structure = g_malloc0(h->api_size);
+			if (!h->map_ASN1_to_API(abstract_sequence->list.array[i], api_structure)) {
 				GSETERROR(err,"Element of type [%s] ASN-to-API conversion error", h->type_name);
 
 				if (api_structure)
@@ -94,7 +112,6 @@ abstract_sequence_unmarshall(const struct abstract_sequence_handler_s *h,
 		GSETERROR(err, "Serialisation produced an unknow return code : %d", decRet.code);
 		return -1;
 	}
-
 
 	return -1;
 }
@@ -182,27 +199,12 @@ abstract_sequence_marshall(const struct abstract_sequence_handler_s * h, GSList 
  */
 
 static MESSAGE
-build_request(const gchar * req_name, void *body, gsize body_size, GError ** error)
+build_request(const gchar * req_name, void *body, gsize body_size)
 {
-	MESSAGE req = NULL;
-
-	if (!message_create(&req, error)) {
-		GSETERROR(error, "Failed to create a new message named %s", req_name);
-		return NULL;
-	}
-
-	if (!message_set_NAME(req, req_name, strlen(req_name), error)) {
-		GSETERROR(error, "Failed to set message name %s", req_name);
-		message_destroy(req, NULL);
-		return NULL;
-	}
-
-	if (body && !message_set_BODY(req, body, body_size, error)) {
-		GSETERROR(error, "Failed to set a body to message named %s", req_name);
-		message_destroy(req, NULL);
-		return NULL;
-	}
-
+	MESSAGE req = message_create();
+	message_set_NAME(req, req_name, strlen(req_name), NULL);
+	if (body)
+		message_set_BODY(req, body, body_size, NULL);
 	return (req);
 }
 
@@ -233,24 +235,18 @@ GSList *
 abstract_sequence_request(struct metacnx_ctx_s * cnx, GError ** error,
     const struct abstract_sequence_handler_s * h, const gchar * req_name, GByteArray * body, va_list args)
 {
-	(void) body;
-	(void) args;
-	MESSAGE req = NULL;
-	struct alist_request_s al_req;
-
-	void element_gclean(gpointer p1, gpointer p2)
-	{
+	void element_gclean(gpointer p1, gpointer p2) {
 		(void) p2;
 		if (p1)
 			h->clean_API(p1);
 	}
 
 	static struct code_handler_s codes[] = {
-		{206, REPSEQ_BODYMANDATORY, &abstract_list_content_handler, NULL},
-		{200, REPSEQ_FINAL, &abstract_list_content_handler, NULL},
+		{CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, &abstract_list_content_handler, NULL},
+		{CODE_FINAL_OK, REPSEQ_FINAL, &abstract_list_content_handler, NULL},
 		{0, 0, NULL, NULL}
 	};
-
+	struct alist_request_s al_req;
 	struct reply_sequence_data_s data = { &al_req, 0, codes };
 
 	if (!h || !cnx) {
@@ -258,15 +254,11 @@ abstract_sequence_request(struct metacnx_ctx_s * cnx, GError ** error,
 		return NULL;
 	}
 
+	(void) body, (void) args;
 	al_req.h = h;
 	al_req.result = NULL;
 
-	/*Create the request, send it and read the answers */
-	req = build_request(req_name, NULL, 0, error);
-	if (req == NULL) {
-		GSETERROR(error, "Failed to build request");
-		return NULL;
-	}
+	MESSAGE req = build_request(req_name, NULL, 0);
 	for (;;) {
 		char *k;
 		GByteArray *v;
@@ -274,15 +266,15 @@ abstract_sequence_request(struct metacnx_ctx_s * cnx, GError ** error,
 		if (!k) break;
 		v = va_arg(args,GByteArray*);
 		if (!v) break;
-		message_add_field(req, k, strlen(k), v->data, v->len, error);
+		message_add_field(req, k, v->data, v->len);
 	}
 	if (metaXClient_reply_sequence_run_context(error, cnx, req, &data)) {
-		message_destroy(req, NULL);
+		message_destroy(req);
 		return (al_req.result);
 	}
 
 	/*an error happened */
-	message_destroy(req, NULL);
+	message_destroy(req);
 	GSETERROR(error, "Cannot execute the query %s and receive all the responses", req_name);
 	if (al_req.result) {
 		if (h->clean_API)

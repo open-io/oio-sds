@@ -1,9 +1,24 @@
-/**
- * @file meta0_remote.h
- */
+/*
+OpenIO SDS meta0v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
-#ifndef __META0_REMOTE_H__
-# define __META0_REMOTE_H__ 1
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__meta0v2__meta0_remote_h
+# define OIO_SDS__meta0v2__meta0_remote_h 1
 
 /**
  * @addtogroup meta0v2_remote
@@ -65,7 +80,6 @@
  */
 GSList *meta0_remote_get_meta1_all(addr_info_t *m0a, gint ms, GError **err);
 
-
 /**
  * @param m0a
  * @param ms
@@ -75,7 +89,6 @@ GSList *meta0_remote_get_meta1_all(addr_info_t *m0a, gint ms, GError **err);
  */
 GSList *meta0_remote_get_meta1_one(addr_info_t *m0a, gint ms,
 		const guint8 *prefix, GError **err);
-
 
 /**
  * Tell the distant reference META0 server to refresh its cache
@@ -93,7 +106,6 @@ GSList *meta0_remote_get_meta1_one(addr_info_t *m0a, gint ms,
  * @return 0 if the function fails, 1 in case of success.
  */
 gint meta0_remote_cache_refresh(addr_info_t *m0a, gint ms, GError **err);
-
 
 /**
  * @param m0a
@@ -159,4 +171,4 @@ meta0_remote_destroy_meta0zknode(addr_info_t *m0a, gint ms, gchar *urls, GError 
 
 /** @} */
 
-#endif /*__META0_REMOTE_H__*/
+#endif /*OIO_SDS__meta0v2__meta0_remote_h*/

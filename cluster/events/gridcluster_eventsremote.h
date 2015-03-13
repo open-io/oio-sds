@@ -1,5 +1,24 @@
-#ifndef __GRIDCLUSTER__EVENTS_REMOTE__H__
-# define __GRIDCLUSTER__EVENTS_REMOTE__H__
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__cluster__events__gridcluster_eventsremote_h
+# define OIO_SDS__cluster__events__gridcluster_eventsremote_h 1
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
@@ -45,7 +64,6 @@
 #  define EVENT_TYPE_MAX_SIZE 128
 # endif
 
-
 /**
  * @return 
  */
@@ -58,4 +76,4 @@ gboolean gridcluster_push_event(struct metacnx_ctx_s *cnx, const gchar *ueid, gr
 gboolean gridcluster_status_event(struct metacnx_ctx_s *cnx, const gchar *ueid, GError **event_error,
 	GError **error);
 
-#endif /*__GRIDCLUSTER__EVENTS_REMOTE__H__*/
+#endif /*OIO_SDS__cluster__events__gridcluster_eventsremote_h*/

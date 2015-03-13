@@ -1,10 +1,24 @@
-/**
- * @file gridcluster.h
- * Cluster information access library
- */
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
-#ifndef _GRIDCLUSTER_H
-#define _GRIDCLUSTER_H
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__cluster__lib__gridcluster_h
+# define OIO_SDS__cluster__lib__gridcluster_h 1
 
 /**
  * @ingroup gridcluster_lib
@@ -16,7 +30,6 @@
 #include <cluster/events/gridcluster_eventhandler.h>
 
 /** The path to the grid config file */
-#define CONFIG_FILE_PATH "/etc/gridstorage.conf"
 
 /**  */
 #define NS_ACL_ALLOW_OPTION "allow"
@@ -24,8 +37,36 @@
 /**  */
 #define NS_ACL_DENY_OPTION "deny"
 
+#define GCLUSTER_CFG_CONSCIENCE "conscience"
+#define GCLUSTER_CFG_ZOOKEEPER "zookeeper"
+#define GCLUSTER_CFG_AGENT "agent"
+
+#ifndef GCLUSTER_ETC_DIR
+# define GCLUSTER_ETC_DIR "/etc/oio"
+#endif
+
+#ifndef GCLUSTER_CONFIG_FILE_PATH
+# define GCLUSTER_CONFIG_FILE_PATH GCLUSTER_ETC_DIR "/sds.conf"
+#endif
+
 #ifndef GCLUSTER_CONFIG_DIR_PATH
-# define GCLUSTER_CONFIG_DIR_PATH "/etc/gridstorage.conf.d"
+# define GCLUSTER_CONFIG_DIR_PATH GCLUSTER_ETC_DIR "/sds.conf.d"
+#endif
+
+#ifndef GCLUSTER_CONFIG_LOCAL_PATH
+# define GCLUSTER_CONFIG_LOCAL_PATH ".oio/sds.conf"
+#endif
+
+#ifndef GCLUSTER_SPOOL_DIR
+# define GCLUSTER_SPOOL_DIR "/var/spool"
+#endif
+
+#ifndef GCLUSTER_RUN_DIR
+# define GCLUSTER_RUN_DIR "/var/run"
+#endif
+
+#ifndef GCLUSTER_AGENT_SOCK_PATH
+# define GCLUSTER_AGENT_SOCK_PATH GCLUSTER_RUN_DIR "/oio-sds-agent.sock"
 #endif
 
 /**
@@ -37,7 +78,6 @@
  * @see gridcluster_list_ns()
  */
 #define GCLUSTER_CFG_NS    2
-
 
 /**
  * Struct to store an agent task description
@@ -243,16 +283,6 @@ int flush_erroneous_elements( const char *ns_name, GError **error );
 GSList* fetch_erroneous_containers( const char *ns_name, GError **error );
 
 /**
- * Parse the grid config file CONFIG_FILE_PATH
- *
- * @param ns_hash an allocated hashtable string:string which will be filled with the result of the parsing
- * @param error
- *
- * @return 1 or 0 if an error occured (error is set)
- */
-int parse_cluster_config(GHashTable *ns_hash, GError **error);
-
-/**
  * List internal tasks of the agent
  *
  * @param error
@@ -432,20 +462,38 @@ GByteArray* namespace_get_rules(const gchar *ns, const gchar *srvtype,
  * @param how
  * @return NULL if the NS was not found or the key not defined for the NS
  */
-gchar* gridcluster_get_config(const gchar *ns, const gchar *what, gint how);
+gchar* gridcluster_get_config(const gchar *ns, const gchar *what);
+#define gridcluster_get_conscience(ns) gridcluster_get_config((ns), GCLUSTER_CFG_CONSCIENCE)
+#define gridcluster_get_zookeeper(ns) gridcluster_get_config((ns), GCLUSTER_CFG_ZOOKEEPER)
 
+static inline gchar *
+gridcluster_get_agent(void)
+{
+	gchar *cfg = gridcluster_get_config(NULL, GCLUSTER_CFG_AGENT);
+	return cfg ? cfg : g_strdup(GCLUSTER_AGENT_SOCK_PATH);
+}
+
+static inline struct addr_info_s *
+gridcluster_get_conscience_addr(const char *ns_name)
+{
+	addr_info_t addr;
+	gchar *cs = gridcluster_get_conscience(ns_name);
+	if (!cs)
+		return NULL;
+	gboolean rc = grid_string_to_addrinfo(cs, NULL, &addr);
+	g_free(cs);
+	return rc ? g_memdup(&addr, sizeof(addr_info_t)) : NULL;
+}
 
 /** List all the configuration variables locally set.
  * @return
  */
 GHashTable* gridcluster_parse_config(void);
 
-
 /** List all the namespaces locally known
  * @return
  */
 gchar** gridcluster_list_ns(void);
-
 
 /** Returns the services update's configuration when the Load-Balancing
  * is performed by a servce of type srvtype for each namespace and virtual namespace.
@@ -504,4 +552,4 @@ gint64 gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
 
 /** @} */
 
-#endif	/* _GRIDCLUSTER_H */
+#endif /*OIO_SDS__cluster__lib__gridcluster_h*/

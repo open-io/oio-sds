@@ -1,3 +1,22 @@
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "integrity.lib.content_check"
 #endif
@@ -37,8 +56,6 @@
 	"Chunk %s cannot be associated to any rawx returned by namespace"
 #define MSG_DONT_MATCH_CRITERIA \
 	"Rawx don't match search criteria (%s)"
-
-static GQuark gquark_log = 0;
 
 typedef gboolean (*policy_check_f)(GSList *chunk_list);
 
@@ -337,7 +354,6 @@ __out_start(struct chunk_transfer_s *ct)
 		bzero(port_str, sizeof(port_str));
 		g_snprintf(port_str, sizeof(port_str), "%d", port);
 
-
 		GRID_DEBUG("addr extracted: %s %s", dst, port_str);
 
 		dst_fd = tcpip_open(dst, port_str);
@@ -474,7 +490,7 @@ __cb_req_in_final(struct evhttp_request *req, void *udata)
 {
         struct chunk_transfer_s *ct = (struct chunk_transfer_s *) udata;
 
-        if (!req || req->response_code < 200 || req->response_code > 299) {
+        if (!req || !CODE_IS_OK(req->response_code)) {
                 GRID_ERROR("input request error : %d (%s)",
                                 (req) ? req->response_code : -1, (req) ? req->response_code_line : NULL);
                 ct->src_status = CNX_FAILED;
@@ -499,7 +515,7 @@ __cb_req_in_ready(struct evhttp_request *req, void *udata)
 		GRID_ERROR("Input error (network)");
 		return ;
 	}
-        if (req->response_code < 200 || req->response_code >= 300) {
+        if (!CODE_IS_OK(req->response_code)) {
                 GRID_ERROR("Input error : %d (%s)",
                                 req->response_code, req->response_code_line);
                 return ;
@@ -593,7 +609,7 @@ _copy_chunk_data(meta2_raw_content_t *content, meta2_raw_chunk_t *src_chunk, GSL
 		content->raw_chunks = g_slist_concat(content->raw_chunks, new_chunks);
 	} else {
 		GRID_DEBUG("Chunk upload failed on rawx, don't add it to meta2");
-		g_set_error(&local_error, gquark_log, 500, "Destination rawx connection error");
+		GSETCODE(&local_error, CODE_INTERNAL_ERROR, "Destination rawx connection error");
 	}
 
 	chunk_transfer_clear(ct);
@@ -628,7 +644,7 @@ _upload_new_copy(struct meta2_ctx_s *ctx, GSList *rawx,
 			if (g_slist_length(dest) > 0) {
 				break; // We can do something
 			} else {
-				g_set_error(&result, gquark_log, CODE_POLICY_NOT_SATISFIABLE,
+				GSETCODE(&result, CODE_POLICY_NOT_SATISFIABLE,
 						"Cannot add missing copies, no matching rawx available");
 				goto clean_up; // Impossible to repair anything
 			}
@@ -659,7 +675,7 @@ _upload_new_copy(struct meta2_ctx_s *ctx, GSList *rawx,
 	if (g_slist_length(dest) == nb_dup) {
 		GRID_DEBUG("Missing chunks correctly created and filled.");
 	} else {
-		g_set_error(&result, gquark_log, CODE_POLICY_NOT_SATISFIABLE,
+		GSETCODE(&result, CODE_POLICY_NOT_SATISFIABLE,
 				"Some copies are still missing (not enough matching rawx available)");
 		GRID_DEBUG("No all missing copies have been created (%d/%d)",
 				g_slist_length(dest), nb_dup);
@@ -820,7 +836,6 @@ _check_duplicated_content_is_valid(struct meta2_ctx_s *ctx)
 	}
 
 	GRID_DEBUG("Rawx list ok");
-
 
 	GRID_DEBUG("Checking content's chunks state");
 

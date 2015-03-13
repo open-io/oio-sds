@@ -1,3 +1,22 @@
+/*
+OpenIO SDS server
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.utils.stats"
 #endif
@@ -12,7 +31,7 @@
 
 struct grid_stats_holder_s
 {
-	GMutex *lock;
+	GMutex lock;
 	GTree *hashset;
 };
 
@@ -63,7 +82,7 @@ struct grid_stats_holder_s *
 grid_stats_holder_init(void)
 {
 	struct grid_stats_holder_s *result = g_malloc0(sizeof(*result));
-	result->lock = g_mutex_new();
+	g_mutex_init(&result->lock);
 	result->hashset = g_tree_new_full(
 			hashstr_quick_cmpdata, NULL,
 			g_free, g_free);
@@ -76,19 +95,12 @@ grid_stats_holder_clean(struct grid_stats_holder_s *gsh)
 	if (!gsh)
 		return;
 
-	if (gsh->lock) {
-		GMutex *lock = gsh->lock;
-		gsh->lock = NULL;
-		g_mutex_lock(lock);
-		g_mutex_unlock(lock);
-		g_mutex_free(lock);
-	}
-
 	if (gsh->hashset) {
 		g_tree_destroy(gsh->hashset);
 		gsh->hashset = NULL;
 	}
 
+	g_mutex_clear(&gsh->lock);
 	g_free(gsh);
 }
 
@@ -103,13 +115,13 @@ grid_stats_holder_set(struct grid_stats_holder_s *gsh, ...)
 		return;
 
 	va_start(va, gsh);
-	g_mutex_lock(gsh->lock);
+	g_mutex_lock(&gsh->lock);
 	while ((n = va_arg(va, gchar*)) != NULL) {
 		v = va_arg(va, guint64);
 		g_tree_replace(gsh->hashset, hashstr_create(n),
 				g_memdup(&v, sizeof(v)));
 	}
-	g_mutex_unlock(gsh->lock);
+	g_mutex_unlock(&gsh->lock);
 	va_end(va);
 }
 
@@ -142,10 +154,10 @@ grid_stats_holder_get(struct grid_stats_holder_s *gsh, ...)
 		return;
 
 	va_start(va, gsh);
-	g_mutex_lock(gsh->lock);
+	g_mutex_lock(&gsh->lock);
 	while ((n = va_arg(va, gchar*)) && (pv = va_arg(va, guint64*)))
 		*pv = _real_get(gsh->hashset, n);
-	g_mutex_unlock(gsh->lock);
+	g_mutex_unlock(&gsh->lock);
 	va_end(va);
 }
 
@@ -165,9 +177,9 @@ grid_stats_holder_foreach(struct grid_stats_holder_s *gsh, const gchar *p,
 	if (!_gsh_check(gsh) || !output)
 		return;
 
-	g_mutex_lock(gsh->lock);
+	g_mutex_lock(&gsh->lock);
 	g_tree_foreach(gsh->hashset, traverser, NULL);
-	g_mutex_unlock(gsh->lock);
+	g_mutex_unlock(&gsh->lock);
 }
 
 void
@@ -200,9 +212,9 @@ grid_stats_holder_increment_merge(struct grid_stats_holder_s *base,
 	if (!_gsh_check(base) || !_gsh_check(inc))
 		return;
 
-	g_mutex_lock(base->lock);
+	g_mutex_lock(&base->lock);
 	g_tree_foreach(inc->hashset, traverser, NULL);
-	g_mutex_unlock(base->lock);
+	g_mutex_unlock(&base->lock);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -357,7 +369,7 @@ grid_single_rrd_feed(struct grid_stats_holder_s *gsh, time_t now, ...)
 	EXTRA_ASSERT(gsh != NULL);
 
 	va_start(va, now);
-	g_mutex_lock(gsh->lock);
+	g_mutex_lock(&gsh->lock);
 	while (NULL != (n = va_arg(va, gchar*))) {
 		gsr = va_arg(va, struct grid_single_rrd_s*);
 		if (!gsr)
@@ -365,7 +377,7 @@ grid_single_rrd_feed(struct grid_stats_holder_s *gsh, time_t now, ...)
 		_gsr_manage_timeshift(gsr, now);
 		_rrd_set(gsr, _real_get(gsh->hashset, n));
 	}
-	g_mutex_unlock(gsh->lock);
+	g_mutex_unlock(&gsh->lock);
 	va_end(va);
 }
 

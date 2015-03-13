@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gridcluster.agent.event.configure"
 #endif
@@ -382,11 +401,6 @@ worker_event_indirect_config(gpointer udata, GError **error)
 	TRACE_POSITION();
 	g_snprintf(task_id, sizeof(task_id), "%s.%s", TASK_PREFIX, ns_name);
 
-	if (!IS_FORKED_AGENT) {
-		GSETERROR(error, "CODE ERROR: a secondary task cannot be started within the main agent");
-		goto label_end;
-	}
-
 	if (!(ns_data = get_namespace(ns_name, error))) {
 		GSETERROR(error, "NS[%s] unknown", ns_name);
 		goto label_end;
@@ -411,11 +425,6 @@ agent_start_indirect_event_config(const gchar *ns_name, GError **error)
 	task_t *task;
 
 	TRACE_POSITION();
-
-	if (!IS_FORKED_AGENT) {
-		GSETERROR(error, "CODE ERROR: a secondary task cannot be started within the main agent");
-		return FALSE;
-	}
 
 	task_id = g_strconcat(TASK_PREFIX, ".", ns_name, NULL);
 	task = set_task_callbacks(create_task(period_get_evtconfig, task_id),

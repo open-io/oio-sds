@@ -1,10 +1,24 @@
-/**
- * @file meta2_check.h
- * META2 checking library
- */
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
-#ifndef META2_CHECK_H
-#define META2_CHECK_H
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__integrity__lib__meta2_check_h
+# define OIO_SDS__integrity__lib__meta2_check_h 1
 
 /**
  * @defgroup integrity_loop_lib_meta2_check META2 related checks
@@ -42,4 +56,4 @@ gboolean check_meta2_chunk(const struct meta2_raw_content_s* raw_content, GSList
 
 /** @} */
 
-#endif /* META2_CHECK_H */
+#endif /*OIO_SDS__integrity__lib__meta2_check_h*/

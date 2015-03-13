@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta0v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta0.prefixassign"
 #endif
@@ -15,40 +34,37 @@
 #include "./internals.h"
 #include "./meta0_prefixassign.h"
 
-
 struct meta0_assign_meta1_s
 {
-        gchar *addr;
-        guint score;
-        gboolean available;
+	gchar *addr;
+	guint score;
+	gboolean available;
 	gboolean used;
-        GArray *assignPrefixes;
+	GArray *assignPrefixes;
 };
 
 struct meta0_assign_context_s
 {
 	GDateTime *lastAssignTime;
-        GPtrArray *array_meta1_by_prefix ;
+	GPtrArray *array_meta1_by_prefix ;
 	GHashTable *map_meta1_ref;
 
-        GHashTable *working_map_meta1_ref ;
+	GHashTable *working_map_meta1_ref ;
 
 	guint8 *treat_prefixes;
-        guint replica, avgscore;
-
+	guint replica, avgscore;
 };
 
-
-static GQuark gquark_log = 0;
 static struct meta0_assign_context_s *context=NULL;
 
 static guint period_between_two_assign = 10;  // in minute
 static guint trigger_assignment = 5;  // percent
 
-
 /* ----------------------------------------------------------------------------------------*/
 
-static void _free_meta0_assign_meta1(struct meta0_assign_meta1_s *aM1) {
+static void
+_free_meta0_assign_meta1(struct meta0_assign_meta1_s *aM1)
+{
 	if (!aM1)
 		return;
 	if (aM1->assignPrefixes)
@@ -57,118 +73,115 @@ static void _free_meta0_assign_meta1(struct meta0_assign_meta1_s *aM1) {
 		g_free(aM1->addr);
 }
 
-static void _gfree_map_meta0_assign_meta1(gpointer p1)
+static void
+_gfree_map_meta0_assign_meta1(gpointer p1)
 {
-        if (p1) {
-                _free_meta0_assign_meta1((struct meta0_assign_meta1_s *) p1);
+	if (p1) {
+		_free_meta0_assign_meta1((struct meta0_assign_meta1_s *) p1);
 	}
 }
-
 
 /* ----------------------------------------------------------------------------------------*/
 
 static struct meta0_assign_meta1_s*
 _unpack_meta1ref(gchar *s_meta1ref)
 {
-        EXTRA_ASSERT(s_meta1ref != NULL);
+	EXTRA_ASSERT(s_meta1ref != NULL);
 
-        struct meta0_assign_meta1_s *aM1;
+	struct meta0_assign_meta1_s *aM1;
 
-        aM1 = g_malloc0(sizeof(struct meta0_assign_meta1_s));
-        gchar** split_result = g_strsplit(s_meta1ref,"|",-1);
+	aM1 = g_malloc0(sizeof(struct meta0_assign_meta1_s));
+	gchar** split_result = g_strsplit(s_meta1ref,"|",-1);
 
-        if ( g_strv_length(split_result) != 3 )
-                return NULL;
+	if ( g_strv_length(split_result) != 3 )
+		return NULL;
 
-        aM1->addr=g_strdup(split_result[0]);
-        aM1->used=(g_ascii_strtoll(split_result[1], NULL, 10) == 0) ? FALSE : TRUE;
-        aM1->score=g_ascii_strtoll(split_result[2], NULL, 10);
+	aM1->addr=g_strdup(split_result[0]);
+	aM1->used=(g_ascii_strtoll(split_result[1], NULL, 10) == 0) ? FALSE : TRUE;
+	aM1->score=g_ascii_strtoll(split_result[2], NULL, 10);
 	g_strfreev(split_result);
 
-        return aM1;
+	return aM1;
 }
 
 static gchar *
 _pack_meta1ref(struct meta0_assign_meta1_s *m1ref)
 {
-        gchar *nb = g_strdup_printf("%d",m1ref->score);
-        gchar * result = meta0_utils_pack_meta1ref(m1ref->addr,( m1ref->used ? "1":"0") ,nb);
-        g_free(nb);
-        return result;
+	gchar *nb = g_strdup_printf("%d",m1ref->score);
+	gchar * result = meta0_utils_pack_meta1ref(m1ref->addr,( m1ref->used ? "1":"0") ,nb);
+	g_free(nb);
+	return result;
 }
 
-static GHashTable*  _meta1ref_array_to_map(GPtrArray *array)
+static GHashTable*
+_meta1ref_array_to_map(GPtrArray *array)
 {
-        GHashTable *result;
-        guint i, max;
+	GHashTable *result;
+	guint i, max;
 
-        result = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+	result = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 
-        for (i=0, max=array->len; i<max ;i++) {
+	for (i=0, max=array->len; i<max ;i++) {
 		struct meta0_assign_meta1_s *aM1 = _unpack_meta1ref(array->pdata[i]);
-                if (aM1)
-                        g_hash_table_insert(result,aM1->addr,aM1);
-        }
+		if (aM1)
+			g_hash_table_insert(result,aM1->addr,aM1);
+	}
 
-        return result;
+	return result;
 }
 
-static GPtrArray* _meta1ref_map_to_array(GHashTable *map)
+static GPtrArray*
+_meta1ref_map_to_array(GHashTable *map)
 {
-        GPtrArray *result;
-        GHashTableIter iter;
-        gpointer key, value;
+	GPtrArray *result;
+	GHashTableIter iter;
+	gpointer key, value;
 
+	result = g_ptr_array_new();
 
-        result = g_ptr_array_new();
+	g_hash_table_iter_init(&iter, map);
+	while ( g_hash_table_iter_next(&iter,&key,&value))
+	{
+		struct meta0_assign_meta1_s *mRef = value;
 
-        g_hash_table_iter_init(&iter, map);
-        while ( g_hash_table_iter_next(&iter,&key,&value))
-        {
-                struct meta0_assign_meta1_s *mRef = value;
-
-                g_ptr_array_add(result,_pack_meta1ref(mRef));
-        }
-        return result;
+		g_ptr_array_add(result,_pack_meta1ref(mRef));
+	}
+	return result;
 }
-
 
 /* ----------------------------------------------------------------------------------------*/
 
 static void
 _treat_prefix(guint8 *cache, const guint8 *prefix)
 {
-        guint16 slot = meta0_utils_bytes_to_prefix(prefix);
-        cache[ slot / 8 ] |= (0x01 << (slot % 8));
+	guint16 slot = meta0_utils_bytes_to_prefix(prefix);
+	cache[ slot / 8 ] |= (0x01 << (slot % 8));
 }
 
 static gboolean
 _is_treat_prefix(guint8 *cache, const guint8 *prefix)
 {
-        guint16 slot = meta0_utils_bytes_to_prefix(prefix);
-        return cache[ slot / 8 ] & (0x01 << (slot % 8));
+	guint16 slot = meta0_utils_bytes_to_prefix(prefix);
+	return cache[ slot / 8 ] & (0x01 << (slot % 8));
 }
-
 
 static gint
 meta0_assign_sort_by_score(gconstpointer a, gconstpointer b)
 {
-        const struct meta0_assign_meta1_s *si_a, *si_b;
+	const struct meta0_assign_meta1_s *si_a, *si_b;
 
-        if (!a && b)
-                return 1;
-        if (a && !b)
-                return -1;
-        if (a == b)
-                return 0;
-        si_a = a;
-        si_b = b;
-        return si_b->score - si_a->score;
+	if (!a && b)
+		return 1;
+	if (a && !b)
+		return -1;
+	if (a == b)
+		return 0;
+	si_a = a;
+	si_b = b;
+	return si_b->score - si_a->score;
 }
 
-
 /* ----------------------------------------------------------------------------------------*/
-
 
 static gboolean
 _select_prefix(GArray *prefixes, guint8 *treat_prefixes)
@@ -185,7 +198,7 @@ _select_prefix(GArray *prefixes, guint8 *treat_prefixes)
 		}
 
 		prefixes=g_array_remove_index(prefixes,0);	
-		
+
 		if ( prefixes->len != 0 ) {
 			return _select_prefix(prefixes,treat_prefixes);
 		} 
@@ -197,7 +210,6 @@ _select_prefix(GArray *prefixes, guint8 *treat_prefixes)
 	return FALSE;
 }
 
-
 static struct meta0_assign_meta1_s*  
 _select_source_assign_m1(GList *lst, guint8 *treat_prefixes, const guint avgscore)
 {
@@ -207,7 +219,6 @@ _select_source_assign_m1(GList *lst, guint8 *treat_prefixes, const guint avgscor
 
 	if (aM1->score <= avgscore)
 		return NULL;
-
 
 	// check current prefix 
 	GArray *prefixes = aM1->assignPrefixes;
@@ -220,17 +231,14 @@ _select_source_assign_m1(GList *lst, guint8 *treat_prefixes, const guint avgscor
 		aM1->available=FALSE;
 	}
 
-
 	if (!aM1->available) {
 		lst=g_list_delete_link(lst,lst);
-
 		return _select_source_assign_m1(lst, treat_prefixes,avgscore);
 	}
 
 	GRID_TRACE("select source meta1 %s, score %d",aM1->addr,aM1->score);
 	return aM1;
 }
-
 
 static struct meta0_assign_meta1_s*
 _select_dest_assign_m1(GList *lst, const struct meta0_assign_meta1_s *s_aM1, guint8 *prefixe, gboolean unref,gboolean force)
@@ -244,7 +252,6 @@ _select_dest_assign_m1(GList *lst, const struct meta0_assign_meta1_s *s_aM1, gui
 		else 
 			return NULL;
 	}
-	GRID_TRACE("select prefix %02X%02X ",prefix[0],prefix[1]);
 
 	lst = g_list_last(lst);
 	struct meta0_assign_meta1_s *d_aM1 = lst->data;
@@ -263,7 +270,7 @@ _select_dest_assign_m1(GList *lst, const struct meta0_assign_meta1_s *s_aM1, gui
 			d_aM1=NULL;
 		} else {
 			l4_address_split(d_aM1->addr,&dhost,&dport);
-	
+
 			gchar **urls = meta0_utils_array_get_urlv(context->array_meta1_by_prefix , prefix);	
 			if ( urls ) {
 				len = g_strv_length(urls);
@@ -278,8 +285,8 @@ _select_dest_assign_m1(GList *lst, const struct meta0_assign_meta1_s *s_aM1, gui
 					if (l4_address_split(urls[i],&host,&port)) {
 						if (g_ascii_strncasecmp(host,dhost,strlen(dhost)) == 0 && ( shost==NULL || g_ascii_strncasecmp(host,shost,strlen(shost)) != 0)){
 							if (!force) {
-							//nouveau meta1 host identique a un host deja present
-							//meta1 remplace a un host different , on fait pire au niveau localisation
+								//nouveau meta1 host identique a un host deja present
+								//meta1 remplace a un host different , on fait pire au niveau localisation
 								loop=TRUE;
 								break;
 							}
@@ -337,13 +344,9 @@ _select_dest_assign_m1(GList *lst, const struct meta0_assign_meta1_s *s_aM1, gui
 		sport=NULL;
 	}
 
-	if (d_aM1) {
-		GRID_TRACE("select meta1 dest %s, score %d",d_aM1->addr,d_aM1->score);
-	} else {
+	if (!d_aM1)
 		GRID_TRACE("NO meta1 dest found");
-	}
 	return d_aM1;
-
 }
 
 static void
@@ -353,7 +356,6 @@ _remove_first_prefix_to_assign_meta1(struct meta0_assign_meta1_s *aM1)
 	GArray *prefixes = aM1->assignPrefixes;
 	if (prefixes->len > 0 ) 
 		prefixes=g_array_remove_index(prefixes,0);
-
 
 	if (prefixes->len == 0 ) {
 		aM1->available=FALSE;
@@ -372,12 +374,10 @@ _get_first_prefix_to_assign_meta1(struct meta0_assign_meta1_s *aM1)
 	return NULL;
 }
 
-
 static void
 _increase_score(struct meta0_assign_meta1_s *aM1)
 {
 	aM1->score++;
-
 }
 
 static void
@@ -395,22 +395,16 @@ _replace(struct meta0_assign_meta1_s *s_aM1, struct meta0_assign_meta1_s *d_aM1)
 	if(meta0_utils_array_replace(context->array_meta1_by_prefix,prefix,s_aM1->addr,d_aM1->addr))
 	{
 		_treat_prefix(context->treat_prefixes,prefix);
-
 		_remove_first_prefix_to_assign_meta1(s_aM1);
 		_decrease_score(s_aM1);
-
 		_increase_score(d_aM1);
-
 	}
-
 }
 
 static GPtrArray*
-_updated_meta1ref() {
-	
-	GPtrArray *array = _meta1ref_map_to_array(context->working_map_meta1_ref);
-
-	return array;
+_updated_meta1ref()
+{
+	return _meta1ref_map_to_array(context->working_map_meta1_ref);
 }
 
 static GError*
@@ -429,13 +423,13 @@ _assign(GList *working_m1list,GSList *unref_m1list)
 			do {
 				if(_is_treat_prefix(context->treat_prefixes,prefix)) {
 					GRID_ERROR("prefix [%02X%02X] already treat",prefix[0],prefix[1]);
-					error=g_error_new(gquark_log,0, "Failed to remove Meta1 service"); 
+					error = NEWERROR(0, "Failed to remove Meta1 service"); 
 				}
 				d_aM1 =_select_dest_assign_m1(working_m1list,s_aM1,NULL,TRUE,FALSE);
 				if ( ! d_aM1 ) {
 					d_aM1 =_select_dest_assign_m1(working_m1list,s_aM1,NULL,TRUE,TRUE);
 					if ( ! d_aM1 ) {
-						error=g_error_new(gquark_log,0, "Failed to assign prefix from meta1 %s",s_aM1->addr);
+						error = NEWERROR(0, "Failed to assign prefix from meta1 %s",s_aM1->addr);
 						return error;
 					}
 				}
@@ -445,7 +439,6 @@ _assign(GList *working_m1list,GSList *unref_m1list)
 			} while ( s_aM1->assignPrefixes);
 		}
 	}
-
 
 	gboolean loop = TRUE;
 
@@ -498,15 +491,15 @@ _init_assign(gchar *ns_name, GList **working_m1list,GSList **unref_m1list)
 	GRID_INFO("nb m1 cs %d",g_slist_length(m1_list));
 	if ( context->replica > g_slist_length(m1_list)) {
 		GRID_ERROR("Number of meta1 services [%d] less than number of replication [%d]",g_slist_length(m1_list),context->replica);
-		error = g_error_new(gquark_log,EINVAL, "Number of meta1 services [%d] less than number of replication [%d]",g_slist_length(m1_list),context->replica);
+		error = NEWERROR(EINVAL, "Number of meta1 services [%d] less than number of replication [%d]",g_slist_length(m1_list),context->replica);
 		goto errorLabel;
 	}
 	if ( context->replica <= 0 ) {
 		GRID_ERROR("Invalid replica number [%d]",context->replica);
-		error = g_error_new(gquark_log,EINVAL, "Invalid replica number [%d]",context->replica);
+		error = NEWERROR(EINVAL, "Invalid replica number [%d]",context->replica);
 		goto errorLabel;
 	}
-	
+
 	// Duplicate the current prefix distribution and build a List
 	GSList *prefixByMeta1 = meta0_utils_array_to_list(context->array_meta1_by_prefix);
 
@@ -516,13 +509,13 @@ _init_assign(gchar *ns_name, GList **working_m1list,GSList **unref_m1list)
 		struct meta0_assign_meta1_s *aM1;
 		struct service_info_s *sInfo;
 		gchar url[128];
-                url[0] = '\0';
+		url[0] = '\0';
 
 		aM1 = g_malloc0(sizeof(struct meta0_assign_meta1_s));
 
 		sInfo=m1_list->data;
 
-                grid_addrinfo_to_string(&(sInfo->addr), url, sizeof(url));
+		grid_addrinfo_to_string(&(sInfo->addr), url, sizeof(url));
 		aM1->addr=g_strdup(url);
 		aM1->score=0;
 		aM1->available=FALSE;
@@ -566,17 +559,16 @@ _init_assign(gchar *ns_name, GList **working_m1list,GSList **unref_m1list)
 		}
 		g_hash_table_insert(context->working_map_meta1_ref,strdup(aM1->addr),aM1);
 	}
-	
+
 	GRID_TRACE("len working %d, len reste pref %d",g_list_length(*working_m1list),g_slist_length(prefixByMeta1));
 	guint nb_M1 = g_list_length(*working_m1list) + g_slist_length(prefixByMeta1);
 
 	//defined the average assign score
 	if (nb_M1 == 0 ) {
 		GRID_ERROR("No Meta1 available");
-		error = g_error_new(gquark_log,0, "No Meta1 service available");
+		error = NEWERROR(0, "No Meta1 service available");
 		goto errorLabel;
 	}
-
 
 	context->avgscore = (65536* context->replica)/nb_M1; 
 	GRID_DEBUG("average meta1 score %d",context->avgscore);
@@ -585,7 +577,7 @@ _init_assign(gchar *ns_name, GList **working_m1list,GSList **unref_m1list)
 	for (;work;work=work->next) {
 		struct meta0_assign_meta1_s *aM1 = work->data;
 		if ( aM1->score > context->avgscore) {
-		 	aM1->available=TRUE;
+			aM1->available=TRUE;
 		}
 	}
 
@@ -596,9 +588,9 @@ _init_assign(gchar *ns_name, GList **working_m1list,GSList **unref_m1list)
 
 errorLabel :
 	if (m1_list) {
-                g_slist_foreach(m1_list, service_info_gclean, NULL);
-                g_slist_free(m1_list);
-        }
+		g_slist_foreach(m1_list, service_info_gclean, NULL);
+		g_slist_free(m1_list);
+	}
 
 	return error;
 }
@@ -631,7 +623,7 @@ _unref_meta1(gchar **urls)
                                 for (; p<max; p++) {
 					if (_is_treat_prefix(prefix_mask,(guint8*)p) ) {
 						GRID_WARN("prefix %02X%02X manage by two meta1 present in the request",((guint8*)p)[0],((guint8*)p)[1]);
-						error = g_error_new(gquark_log,0, "prefix %02X%02X manage by two meta1 present in the request",((guint8*)p)[0],((guint8*)p)[1]);
+						error = NEWERROR(0, "prefix %02X%02X manage by two meta1 present in the request",((guint8*)p)[0],((guint8*)p)[1]);
 						goto errorLabel;
 					}
 					_treat_prefix(prefix_mask,(guint8*)p);
@@ -661,7 +653,6 @@ errorLabel :
 	return error;
 }
 
-
 static GError*
 _check(GList *working_m1list) {
 	GError *error = NULL;
@@ -676,7 +667,7 @@ _check(GList *working_m1list) {
 		GRID_TRACE("check delta highscore %d ,lowscore %d",highscore,lowscore);
 		if ( (highscore - lowscore) < (context->avgscore * trigger_assignment )/ 100  ) {
 			GRID_WARN("New assign not necessary, high score %d , low score %d, average %d", highscore, lowscore, context->avgscore);
-			error = g_error_new(gquark_log,0, "New assign not necessary");
+			error = NEWERROR(0, "New assign not necessary");
 			return error;
 		}
 	}
@@ -689,7 +680,7 @@ _check(GList *working_m1list) {
 		GRID_TRACE("currentTime :%s , last time + %d min :%s, comp :%d",g_date_time_format (currentTime,"%Y-%m-%d %H:%M"),period_between_two_assign,g_date_time_format (ltime,"%Y-%m-%d %H:%M"), g_date_time_compare(ltime,currentTime));
 		if (g_date_time_compare(ltime,currentTime) > 0 ) {
 			GRID_WARN("delay between two meta1 assign  not respected. Try later. last date [%s]",g_date_time_format (context->lastAssignTime,"%Y-%m-%d %H:%M"));
-			error = g_error_new(gquark_log,0,"delay between two meta1 assign  not respected. Try later.");
+			error = NEWERROR(0,"delay between two meta1 assign  not respected. Try later.");
 			return error;
 		}
 	}
@@ -716,7 +707,6 @@ _resetContext() {
 		context->map_meta1_ref=NULL;
 	}
 
-
 	if (context->treat_prefixes) {
 		g_free(context->treat_prefixes);
 		context->treat_prefixes=NULL;
@@ -726,7 +716,8 @@ _resetContext() {
 }
 
 static GError* 
-_initContext(struct meta0_backend_s *m0) {
+_initContext(struct meta0_backend_s *m0)
+{
 	GError * error;
 
 	if ( !context ) {
@@ -739,21 +730,21 @@ _initContext(struct meta0_backend_s *m0) {
 	if ( error ) {
 		GRID_ERROR("failed to duplicate current prefix distribution :(%d) %s", error->code, error->message);
 		return error;
-        }
+	}
 
 	GPtrArray *meta1_ref;
 	error = meta0_backend_get_all_meta1_ref(m0,&meta1_ref);
 	if ( error ) {
 		meta0_utils_array_meta1ref_clean(meta1_ref);
-                GRID_ERROR("failed to duplicate current Meta1 reference :(%d) %s", error->code, error->message);
+		GRID_ERROR("failed to duplicate current Meta1 reference :(%d) %s", error->code, error->message);
 		return error;
-        }
+	}
 	context->map_meta1_ref = _meta1ref_array_to_map(meta1_ref);
 	meta0_utils_array_meta1ref_clean(meta1_ref);
-	
+
 	context->working_map_meta1_ref=g_hash_table_new_full(g_str_hash, g_str_equal,g_free,_gfree_map_meta0_assign_meta1 );
-	
-        context->treat_prefixes = g_malloc0(8192);
+
+	context->treat_prefixes = g_malloc0(8192);
 
 	context->replica=0;  
 	context->avgscore=0;
@@ -764,8 +755,8 @@ _initContext(struct meta0_backend_s *m0) {
 			for (; *v ;v++)
 				context->replica++;
 			if ( context->replica > 65536) {
-				return g_error_new(gquark_log,EINVAL, "Invalid nb replica [%d]",context->replica);
-        		}
+				return NEWERROR(EINVAL, "Invalid nb replica [%d]",context->replica);
+			}
 		}
 		GRID_DEBUG("replica %d",context->replica);
 	}
@@ -785,48 +776,42 @@ meta0_assign_fill(struct meta0_backend_s *m0, gchar *ns_name, guint replicas,
 	guint idx;
 	struct meta0_assign_meta1_s *d_aM1;
 
-	if (!gquark_log)
-                gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
-
 	GRID_INFO("START fill meta0 db , replica %d",replicas);
 
 	error = _initContext(m0);
-	if (error) {
+	if (error)
 		goto errorLabel;
-	}
 	context->replica=replicas;
 
 	error = _init_assign(ns_name,&working_m1list,&unref_m1list);
-	if ( error ) {
+	if ( error )
 		goto errorLabel;
-	}
 
 	error =_check(NULL);
-	if ( error ) {
+	if ( error )
 		goto errorLabel;
-        }
 
 	while (replicas--) {
 		for (idx=0; idx<65536 ;idx++) {
 			working_m1list=g_list_sort(working_m1list,meta0_assign_sort_by_score);
 			d_aM1 =_select_dest_assign_m1(working_m1list,NULL,(guint8*)(&idx),TRUE, nodist);
-                        if ( ! d_aM1 ) {
-				error=g_error_new(gquark_log,0, "Failed to assign prefix %d to meta1",idx);
-			        goto errorLabel;
-                        }
+			if ( ! d_aM1 ) {
+				error = NEWERROR(0, "Failed to assign prefix %d to meta1",idx);
+				goto errorLabel;
+			}
 
 			meta0_utils_array_add(context->array_meta1_by_prefix,(guint8*)(&idx),d_aM1->addr);
 
-        	        _increase_score(d_aM1);
+			_increase_score(d_aM1);
 		}
 	}
 
 	new_meta1ref = _updated_meta1ref();
 	error = meta0_backend_assign(m0, context->array_meta1_by_prefix, new_meta1ref,TRUE);
 	if ( error ) {
-                GRID_ERROR("failed to update BDD :(%d) %s", error->code, error->message);
+		GRID_ERROR("failed to update BDD :(%d) %s", error->code, error->message);
 		goto errorLabel;
-        }
+	}
 
 	context->lastAssignTime=g_date_time_new_now_local();
 
@@ -836,7 +821,7 @@ errorLabel :
 		meta0_utils_array_meta1ref_clean(new_meta1ref);
 	}
 	if (working_m1list) {
-                g_list_free(working_m1list);
+		g_list_free(working_m1list);
 		working_m1list=NULL;
 	}
 	if (unref_m1list) {
@@ -844,10 +829,9 @@ errorLabel :
 		unref_m1list=NULL;
 	}
 	GRID_INFO("END FILL");
-	
+
 	return error;
 }
-
 
 GError*
 meta0_assign_prefix_to_meta1(struct meta0_backend_s *m0, gchar *ns_name, gboolean nocheck)
@@ -857,9 +841,6 @@ meta0_assign_prefix_to_meta1(struct meta0_backend_s *m0, gchar *ns_name, gboolea
 	GSList *unref_m1list = NULL;
 	GError *error;
 	GPtrArray *new_meta1ref = NULL;
-	
-	if (!gquark_log)
-                gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
 
 	GRID_INFO("START Assign prefix");
 
@@ -867,7 +848,6 @@ meta0_assign_prefix_to_meta1(struct meta0_backend_s *m0, gchar *ns_name, gboolea
 	if (error) {
 		goto errorLabel;
 	}
-
 
 	// build working list , list sorted by score
 	error = _init_assign(ns_name,&working_m1list,&unref_m1list);
@@ -878,20 +858,20 @@ meta0_assign_prefix_to_meta1(struct meta0_backend_s *m0, gchar *ns_name, gboolea
 		error =_check(working_m1list);
 		if ( error ) {
 			goto errorLabel;
-        	}
+		}
 	}
-	
+
 	error = _assign(working_m1list,unref_m1list);	
 	if ( error ) {
 		goto errorLabel;
-        }
+	}
 
 	new_meta1ref = _updated_meta1ref();
 	error = meta0_backend_assign(m0, context->array_meta1_by_prefix, new_meta1ref,FALSE);
 	if ( error ) {
-                GRID_ERROR("failed to update BDD :(%d) %s", error->code, error->message);
+		GRID_ERROR("failed to update BDD :(%d) %s", error->code, error->message);
 		goto errorLabel;
-        }
+	}
 	context->lastAssignTime=g_date_time_new_now_local();
 
 errorLabel :
@@ -900,7 +880,7 @@ errorLabel :
 		meta0_utils_array_meta1ref_clean(new_meta1ref);
 	}
 	if (working_m1list) {
-                g_list_free(working_m1list);
+		g_list_free(working_m1list);
 		working_m1list=NULL;
 	}
 	if (unref_m1list) {
@@ -910,7 +890,6 @@ errorLabel :
 	GRID_INFO("END ASSIGN");
 
 	return error;
-
 }
 
 GError*
@@ -920,67 +899,58 @@ meta0_assign_disable_meta1(struct meta0_backend_s *m0, gchar *ns_name, char **m1
 	GSList *unref_m1list = NULL;
 	GPtrArray *new_meta1ref = NULL;
 	GError *error;
-	
-	if (!gquark_log)
-                gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
 
 	gchar * urls = g_strjoinv(" ",m1urls);
 	GRID_INFO("START disable meta1 %s",urls);
 	g_free(urls);
 
 	error = _initContext(m0);
-	if (error) {
+	if (error)
 		goto errorLabel;
-	}
 
 	if ( nocheck ) {
 		error =_check(NULL);
-		if ( error ) {
+		if ( error )
 			goto errorLabel;
-        	}
 	}
 
 	error =_unref_meta1(m1urls);
-	if ( error ) {
-                goto errorLabel;
-        }
+	if ( error )
+		goto errorLabel;
 
 	error = _init_assign(ns_name,&working_m1list,&unref_m1list);
-	if ( error ) {
+	if ( error )
 		goto errorLabel;
-	}
-	
+
 	error = _assign(working_m1list,unref_m1list);
-	if ( error ) {
+	if ( error )
 		goto errorLabel;
-	}
 
 	new_meta1ref = _updated_meta1ref();
-        error = meta0_backend_assign(m0, context->array_meta1_by_prefix, new_meta1ref ,FALSE);
-        if ( error ) {
-                GRID_ERROR("failed to update BDD :(%d) %s", error->code, error->message);
-                goto errorLabel;
-        }
+	error = meta0_backend_assign(m0, context->array_meta1_by_prefix, new_meta1ref ,FALSE);
+	if ( error ) {
+		GRID_ERROR("failed to update BDD :(%d) %s", error->code, error->message);
+		goto errorLabel;
+	}
 
 	context->lastAssignTime=g_date_time_new_now_local();
 
 errorLabel :
-        _resetContext();
+	_resetContext();
 	if (new_meta1ref) {
 		meta0_utils_array_meta1ref_clean(new_meta1ref);
 	}
-        if (working_m1list) {
+	if (working_m1list) {
 		g_list_free(working_m1list);
-                working_m1list=NULL;
-        }
-        if (unref_m1list) {
+		working_m1list=NULL;
+	}
+	if (unref_m1list) {
 		g_slist_free(unref_m1list);
-                unref_m1list=NULL;
-        }
+		unref_m1list=NULL;
+	}
 	GRID_INFO("END DISABLE META1");
 
-        return error;
+	return error;
 
 }
-
 

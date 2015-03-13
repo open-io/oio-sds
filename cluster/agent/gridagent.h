@@ -1,11 +1,28 @@
-#ifndef _GRIDAGENT_H
-#define _GRIDAGENT_H
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__cluster__agent__gridagent_h
+# define OIO_SDS__cluster__agent__gridagent_h 1
 
 #include <metautils/lib/metatypes.h>
 
 #define AGENT_DEFAULT_EVENT_XATTR "user.grid.agent.incoming-time"
-
-#define AGENT_SOCK_PATH "/GRID/common/run/gridagent.sock"
 
 #define MSG_SRVTYPE_LST "SRVTYPELST"
 #define MSG_SRV_GET1 "SRVGET1"
@@ -30,32 +47,13 @@
 #define LIMIT_MAX_ERRCID 20000
 #define MAX_TASKID_LENGTH 128
 
-#define STATUS_OK 200
-#define STATUS_ERROR 500
-
-#define RAWX_INFO_URL "/info"
-#define RAWX_STAT_URL "/stat"
+#define STATUS_OK CODE_FINAL_OK
+#define STATUS_ERROR CODE_INTERNAL_ERROR
 
 #define SPOOL_DIRNAME_LENGTH 512
 #define SUFFIX_SPOOL_INCOMING "incoming"
 #define SUFFIX_SPOOL_TRASH    "trash"
 #define SUFFIX_SPOOL_PENDING  "pending"
-
-#ifndef  GRIDCONF_LOCAL_BASEDIR_DEFAULT
-# define GRIDCONF_LOCAL_BASEDIR_DEFAULT "/"
-#endif
-
-#ifndef  GRIDCONF_DISTANT_BASEDIR_DEFAULT
-# define GRIDCONF_DISTANT_BASEDIR_DEFAULT "/"
-#endif
-
-#ifndef  GRIDCONF_DISTANT_LISTSRV_DEFAULT
-# define GRIDCONF_DISTANT_LISTSRV_DEFAULT "services.list"
-#endif
-
-#ifndef  GRIDCONF_DISTANT_LISTFILES_DEFAULT
-# define GRIDCONF_DISTANT_LISTFILES_DEFAULT "files.list"
-#endif
 
 typedef struct message_s {
         guint32 length;
@@ -129,4 +127,4 @@ Name ( gpointer udata, GError **error) {\
 	return 1;\
 }
 
-#endif	/* _GRIDAGENT_H */
+#endif /*OIO_SDS__cluster__agent__gridagent_h*/

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS sqliterepo
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "sqliterepo"
 #endif
@@ -37,7 +56,9 @@ get_fullpath(struct zk_manager_s *manager, gchar *subdir, gchar* name)
 		result =  g_strdup(manager->zk_dir);
 
 	if ( name ) {
-		key = sqliterepo_hash_name(name,"");
+		struct sqlx_name_s n = {"", "", ""};
+		n.base = name;
+		key = sqliterepo_hash_name(&n);
 		result =  g_strdup_printf("%s/%s",result,hashstr_str(key));
 		g_free(key);
 	}
@@ -181,7 +202,6 @@ create_zk_node(struct zk_manager_s *manager, gchar *subdir, gchar *name, gchar *
 		return  NEWERROR(0, "Failed to create Zk node [%s], zk code [%d]", name, rc );
 	return NULL;
 }
-
 
 GError *
 list_zk_children_node(struct zk_manager_s *manager, gchar *sub_dir, GSList **result)

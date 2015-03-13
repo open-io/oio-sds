@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "http_put.test"
 #endif
@@ -10,7 +29,6 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 #include <microhttpd.h>
-
 
 #include <glib.h>
 
@@ -802,8 +820,7 @@ static void test_test(void)
 int
 main(int argc, char **argv)
 {
-	g_set_prgname(argv[0]);
-	g_test_init (&argc, &argv, NULL);
+	HC_TEST_INIT(argc,argv);
 
 	g_test_add_data_func("/client/lib/http_put/put_1xdest_0byte",
 			&(struct test_put_config){ .nb_req = 1, .data_len = 0 },

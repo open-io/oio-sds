@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta1v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta1.disp"
 #endif
@@ -54,8 +73,6 @@
 #define EXTRACT_NS(Dst) EXTRACT_STRING("NAMESPACE", Dst, TRUE)
 #define EXTRACT_SRVTYPE(Dst,Mandatory) EXTRACT_STRING("SRVTYPE", Dst, Mandatory)
 
-static GQuark gquark_log = 0;
-
 static gsize m1b_bufsize_listbypref = 16384;
 
 static gboolean
@@ -111,7 +128,7 @@ marshall_addrl(GSList *l, GError **err)
 	if (gba)
 		return gba;
 
-	*err = g_error_new(gquark_log, 500, "Encoding error (addr_info_t)");
+	*err = NEWERROR(CODE_INTERNAL_ERROR, "Encoding error (addr_info_t)");
 	return NULL;
 }
 
@@ -166,8 +183,7 @@ _create_on_meta2(const gchar *srv, const gchar *vns, const gchar *cname,
 	GRID_DEBUG("Creation attempt on META2 at [%s]", srv);
 
 	if (!srv_to_addr(srv, m2addr))
-		return g_error_new(gquark_log, 500, "Invalid address (%d %s)",
-				errno, strerror(errno));
+		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid address (%d %s)", errno, strerror(errno));
 
 	rc = vns && *vns
 		? meta2_remote_container_create_v2(m2addr, 30000, &err, cid, cname, vns)
@@ -175,8 +191,7 @@ _create_on_meta2(const gchar *srv, const gchar *vns, const gchar *cname,
 
 	if (!rc) {
 		if (!err)
-			return g_error_new(gquark_log, 502,
-					"Unknown error when contacting META2");
+			return NEWERROR(CODE_PROXY_ERROR, "Unknown error when contacting META2");
 		g_prefix_error(&err, "META2 error : ");
 		return err;
 	}
@@ -327,7 +342,7 @@ meta1_dispatch_v1_CREATE(struct gridd_reply_ctx_s *reply,
 			break;
 		}
 
-		if (err->code >= 300) {
+		if (!CODE_IS_NETWORK_ERROR(err->code)) {
 			GRID_DEBUG("Error when creating the container on META2 [%s]"
 					" : code=%d message=%s",
 					*p_url, err->code, err->message);
@@ -350,63 +365,7 @@ meta1_dispatch_v1_CREATE(struct gridd_reply_ctx_s *reply,
 	reply->add_body(marshall_addrl(singleton_addrl(&m2addr), NULL));
 
 	GRID_DEBUG("Container created!");
-	reply->send_reply(200, "OK");
-	return TRUE;
-}
-
-static gboolean
-meta1_dispatch_v1_DESTROY(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
-{
-	GError *err;
-	container_id_t cid;
-	gchar strcid[65];
-
-	(void) ignored;
-	EXTRACT_CID(cid);
-	reply->subject("%s", strcid);
-
-	err = meta1_backend_destroy_m2_container(m1, cid);
-	if (NULL != err) {
-		reply->send_error(0, err);
-		return TRUE;
-	}
-
-	reply->send_reply(200, "OK");
-	return TRUE;
-}
-
-static gboolean
-meta1_dispatch_v1_GET(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
-{
-	GError *err;
-	container_id_t cid;
-	gchar strcid[65], **result;
-
-	(void) ignored;
-	EXTRACT_CID(cid);
-	reply->subject("%s", strcid);
-
-	err = meta1_backend_get_container_all_services(m1, cid, "meta2", &result);
-	if (NULL != err) {
-		reply->send_error(0, err);
-		return TRUE;
-	}
-	if (!result || !*result) {
-		reply->send_error(0, g_error_new(gquark_log, CODE_CONTAINER_NOTFOUND,
-					"Container exists but no META2 associated"));
-		return TRUE;
-	}
-
-	reply->add_body(marshall_addrl(convert_urlv_to_addrl(result), &err));
-	if (err) {
-		g_prefix_error(&err, "ASN.1 encoding error : ");
-		reply->send_error(500, err);
-		return FALSE;
-	}
-
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -420,7 +379,7 @@ meta1_dispatch_UPDATECONTAINERS(struct gridd_reply_ctx_s *reply,
 	GSList *list_of_cinfo = NULL, *l;
 
 	(void) ignored;
-	err = message_extract_body_encoded(reply->request, &list_of_cinfo,
+	err = message_extract_body_encoded(reply->request, TRUE, &list_of_cinfo,
 			container_info_unmarshall);
 	if (NULL != err) {
 		reply->send_error(0, err);
@@ -451,7 +410,7 @@ meta1_dispatch_UPDATECONTAINERS(struct gridd_reply_ctx_s *reply,
 	}
 
 	if (!err)
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -594,7 +553,7 @@ meta1_dispatch_GETVNSSTATE(struct gridd_reply_ctx_s *reply,
 			continue;
 		_manage_prefix(m1, &(u.b[0]), db);
 
-		reply->send_reply(100, "Prefix managed");
+		reply->send_reply(CODE_TEMPORARY, "Prefix managed");
 	}
 
 	/* Serialize the DB content, then close it */
@@ -604,23 +563,12 @@ meta1_dispatch_GETVNSSTATE(struct gridd_reply_ctx_s *reply,
 	g_slist_free_full(kvl, (GDestroyNotify)key_value_pair_clean);
 
 	if (!gba) {
-		reply->send_error(500, err);
+		reply->send_error(CODE_INTERNAL_ERROR, err);
 		return TRUE;
 	}
 
 	reply->add_body(gba);
-	reply->send_reply(200, "OK");
-	return TRUE;
-}
-
-static gboolean
-meta1_dispatch_NOTIMPL(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
-{
-	(void) m1;
-	(void) ignored;
-
-	reply->send_error(500, g_error_new(gquark_log, 500, "Not implemented"));
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -644,37 +592,9 @@ meta1_dispatch_v1_BYID(struct gridd_reply_ctx_s *reply,
 		GByteArray *gba = meta1_raw_container_marshall(raw, NULL);
 		meta1_raw_container_clean(raw);
 		reply->add_body(gba);
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
-	return TRUE;
-}
-
-static gboolean
-meta1_dispatch_v1_BYNAME(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
-{
-	GError *err;
-	container_id_t cid;
-	gchar cname[256], vns[256];
-	struct meta1_raw_container_s *raw = NULL;
-
-	(void) ignored;
-	EXTRACT_VNS(vns);
-	EXTRACT_CNAME(cname);
-	reply->subject("%s/%s", vns, cname);
-
-	meta1_name2hash(cid, vns, cname);
-
-	err = _stat_container(m1, cid, &raw);
-	if (NULL != err)
-		reply->send_error(0, err);
-	else {
-		GByteArray *gba = meta1_raw_container_marshall(raw, NULL);
-		meta1_raw_container_clean(raw);
-		reply->add_body(gba);
-		reply->send_reply(200, "OK");
-	}
 	return TRUE;
 }
 
@@ -700,7 +620,7 @@ meta1_dispatch_v2_CREATE(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 	else {
 		reply->add_header("CONTAINER_ID", metautils_gba_from_cid(_cid));
-		reply->send_reply(200, "Created");
+		reply->send_reply(CODE_FINAL_OK, "Created");
 	}
 	return TRUE;
 }
@@ -720,7 +640,7 @@ meta1_dispatch_v2_DESTROY(struct gridd_reply_ctx_s *reply,
 	reply->subject("%s/%s|%d", ns, strcid, force);
 
 	if (NULL != (err = message_extract_flag(reply->request, "FORCE", FALSE, &force))) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
@@ -728,7 +648,7 @@ meta1_dispatch_v2_DESTROY(struct gridd_reply_ctx_s *reply,
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -752,7 +672,7 @@ meta1_dispatch_v2_HAS(struct gridd_reply_ctx_s *reply,
 	}
 	else {
 		reply->add_body(marshall_stringv(info));
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
 	return TRUE;
@@ -785,7 +705,7 @@ meta1_dispatch_v2_SRV_GETAVAIL(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 	else {
 		reply->add_body(marshall_stringv(result));
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
 	hc_url_clean(url);
@@ -818,53 +738,9 @@ meta1_dispatch_v2_SRV_NEW(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 	else {
 		reply->add_body(marshall_stringv(result));
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 	hc_url_clean(url);
-	return TRUE;
-}
-
-static gboolean
-meta1_dispatch_v2_SRV_OPENALL(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
-{
-	unsigned int count_errors = 0;
-	int i;
-	union {
-		guint16 prefix;
-		guint8 b[2];
-		container_id_t cid;
-	} u;
-	struct meta1_prefixes_set_s *m1ps;
-
-	(void) ignored;
-	u.prefix = 0;
-	m1ps = meta1_backend_get_prefixes(m1);
-
-	for (i=0; i<65536 ;i++,u.prefix++) {
-		if (!grid_main_is_running())
-			break;
-		if (meta1_prefixes_is_managed(m1ps, &(u.b[0]))) {
-			struct sqlx_sqlite3_s *sq3 = NULL;
-			GError *err;
-
-			err = meta1_backend_open_base(m1, u.cid, M1V2_OPENBASE_LOCAL, &sq3);
-			if (!err)
-				sqlx_repository_unlock_and_close_noerror(sq3);
-			else {
-				GRID_WARN("META1 open error [%02X%02X] : (%d) %s",
-						u.b[0], u.b[1], err->code, err->message);
-				g_clear_error(&err);
-				++ count_errors;
-			}
-		}
-	}
-
-	if (count_errors)
-		reply->send_error(500, g_error_new(gquark_log, 500,
-					"%u bases not opened", count_errors));
-	else
-		reply->send_reply(200, "OK");
 	return TRUE;
 }
 
@@ -880,7 +756,7 @@ meta1_dispatch_v2_SRV_SET(struct gridd_reply_ctx_s *reply,
 	EXTRACT_NS(ns);
 	EXTRACT_CID(cid);
 	if (NULL != (err = message_extract_body_string(reply->request, &url))) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 	reply->subject("%s/%s|%s", ns, strcid, url);
@@ -891,7 +767,7 @@ meta1_dispatch_v2_SRV_SET(struct gridd_reply_ctx_s *reply,
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_BAD_REQUEST, "OK");
 
 	return TRUE;
 }
@@ -909,7 +785,7 @@ meta1_dispatch_v2_SRV_SETARG(struct gridd_reply_ctx_s *reply,
 	EXTRACT_CID(cid);
 	reply->subject("%s/%s|%s", ns, strcid, url);
 	if (NULL != (err = message_extract_body_string(reply->request, &url))) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
@@ -919,7 +795,7 @@ meta1_dispatch_v2_SRV_SETARG(struct gridd_reply_ctx_s *reply,
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 
 	return TRUE;
 }
@@ -938,7 +814,7 @@ meta1_dispatch_v2_SRV_DELETE(struct gridd_reply_ctx_s *reply,
 	EXTRACT_SRVTYPE(srvtype, TRUE);
 	reply->subject("%s/%s|%s", ns, strcid, srvtype);
 	if (NULL != (err = message_extract_body_strv(reply->request, &urlv))) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
@@ -949,7 +825,7 @@ meta1_dispatch_v2_SRV_DELETE(struct gridd_reply_ctx_s *reply,
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 
 	g_strfreev(urlv);
 	return TRUE;
@@ -975,11 +851,10 @@ meta1_dispatch_v2_SRV_GETALL(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 	else {
 		reply->add_body(marshall_stringv(result));
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 	return TRUE;
 }
-
 
 static gboolean 
 meta1_dispatch_v2_SRV_GETALLonM1(struct gridd_reply_ctx_s *reply,
@@ -1005,18 +880,17 @@ meta1_dispatch_v2_SRV_GETALLonM1(struct gridd_reply_ctx_s *reply,
     gchar strpfx[65];
     container_id_to_string(prefix, strpfx, sizeof(strpfx));
     reply->subject("%s/%s", ns, strpfx);
-    reply->send_reply(100, "Received");
+    reply->send_reply(CODE_TEMPORARY, "Received");
 	err = meta1_backend_get_all_services(m1, prefix, &result); 
     if (NULL != err)
         reply->send_error(0, err);
     else {
         reply->add_body(marshall_stringv(result));
-        reply->send_reply(200, "OK");
+        reply->send_reply(CODE_FINAL_OK, "OK");
     }
 	
     return TRUE;
 }
-
 
 static gboolean
 meta1_dispatch_v2_CID_PROPGET(struct gridd_reply_ctx_s *reply,
@@ -1031,7 +905,7 @@ meta1_dispatch_v2_CID_PROPGET(struct gridd_reply_ctx_s *reply,
 	EXTRACT_NS(ns);
 	reply->subject("%s/%s", ns, strcid);
 	if (NULL != (err = message_extract_body_strv(reply->request, &strv))) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
@@ -1043,7 +917,7 @@ meta1_dispatch_v2_CID_PROPGET(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 	else {
 		reply->add_body(marshall_stringv(result));
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 	return TRUE;
 }
@@ -1061,7 +935,7 @@ meta1_dispatch_v2_CID_PROPSET(struct gridd_reply_ctx_s *reply,
 	EXTRACT_NS(ns);
 	reply->subject("%s/%s", ns, strcid);
 	if (NULL != (err = message_extract_body_strv(reply->request, &strv))) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
@@ -1071,7 +945,7 @@ meta1_dispatch_v2_CID_PROPSET(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -1089,7 +963,7 @@ meta1_dispatch_v2_CID_PROPDEL(struct gridd_reply_ctx_s *reply,
 	reply->subject("%s/%s", ns, strcid);
 
 	if (NULL != (err = message_extract_body_strv(reply->request, &strv))) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
@@ -1099,10 +973,9 @@ meta1_dispatch_v2_CID_PROPDEL(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
-
 
 struct reflist_ctx_s
 {
@@ -1126,7 +999,7 @@ reflist_hook(gpointer p, const gchar *ns, const gchar *ref)
 	if (ctx->gba->len > m1b_bufsize_listbypref) {
 		ctx->reply->add_body(ctx->gba);
 		ctx->gba = NULL;
-		ctx->reply->send_reply(206, "Partial content");
+		ctx->reply->send_reply(CODE_PARTIAL_CONTENT, "Partial content");
 	}
 }
 
@@ -1141,7 +1014,7 @@ reflist_final(struct reflist_ctx_s *ctx, GError *err)
 	else {
 		if (ctx->gba)
 			ctx->reply->add_body(ctx->gba);
-		ctx->reply->send_reply(200, "OK");
+		ctx->reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
 	ctx->gba = NULL;
@@ -1171,7 +1044,7 @@ meta1_dispatch_v2_SRV_LISTPREF(struct gridd_reply_ctx_s *reply,
 		gchar strpfx[65];
 		container_id_to_string(prefix, strpfx, sizeof(strpfx));
 		reply->subject("%s/%s", ns, strpfx);
-		reply->send_reply(100, "Received");
+		reply->send_reply(CODE_TEMPORARY, "Received");
 		err = meta1_backend_list_references(m1, prefix, reflist_hook, &reflist_ctx);
 	}
 
@@ -1204,7 +1077,7 @@ meta1_dispatch_v2_SRV_LISTSERV(struct gridd_reply_ctx_s *reply,
 		gchar strpfx[65];
 		container_id_to_string(prefix, strpfx, sizeof(strpfx));
 		reply->subject("%s/%s/%s/%s", ns, strpfx, srvtype, url);
-		reply->send_reply(100, "Received");
+		reply->send_reply(CODE_TEMPORARY, "Received");
 		err = meta1_backend_list_references_by_service(m1, prefix,
 				srvtype, url, reflist_hook, &reflist_ctx);
 	}
@@ -1227,7 +1100,7 @@ meta1_dispatch_v2_GET_PREFIX(struct gridd_reply_ctx_s *reply,
 
 	if ( result )
 		reply->add_body(marshall_stringv(result));
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	
 	return TRUE;
 }
@@ -1293,8 +1166,9 @@ meta1_dispatch_v2_UPDATE_M1_POLICY(struct gridd_reply_ctx_s *reply,
 
 	reply->subject("%s/%s/%s", ns, strcid, srvtype);
 
-	// FVE: the next function can answer 303 so it's weird to answer 100 now
-	// reply->send_reply(100, "Received");
+	// FVE: the next function can answer CODE_REDIRECT so it's weird to answer CODE_TEMPORARY now
+	// reply->send_reply(CODE_TEMPORARY, "Received");
+
 	err = meta1_backend_update_m1_policy(m1, ns,
 			(foundprefix? prefix : NULL),(foundcontainer? cid : NULL),
 			srvtype, excludesrv, action, checkonly, &result);
@@ -1307,7 +1181,7 @@ meta1_dispatch_v2_UPDATE_M1_POLICY(struct gridd_reply_ctx_s *reply,
 		g_byte_array_append(gba, (guint8*)"", 1);
 		g_byte_array_set_size(gba, gba->len - 1);
 		reply->add_body(gba);
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
 	g_free(result);
@@ -1339,31 +1213,19 @@ meta1_gridd_get_requests(void)
 		{NAME_MSGNAME_M1V2_CID_PROPGET, (hook) meta1_dispatch_v2_CID_PROPGET,   NULL},
 		{NAME_MSGNAME_M1V2_CID_PROPSET, (hook) meta1_dispatch_v2_CID_PROPSET,   NULL},
 		{NAME_MSGNAME_M1V2_CID_PROPDEL, (hook) meta1_dispatch_v2_CID_PROPDEL,   NULL},
-		{NAME_MSGNAME_M1V2_OPENALL,     (hook) meta1_dispatch_v2_SRV_OPENALL,   NULL},
 		{NAME_MSGNAME_M1V2_GETPREFIX,	(hook) meta1_dispatch_v2_GET_PREFIX,    NULL},
 		{NAME_MSGNAME_M1V2_LISTBYPREF,  (hook) meta1_dispatch_v2_SRV_LISTPREF,  NULL},
 		{NAME_MSGNAME_M1V2_LISTBYSERV,  (hook) meta1_dispatch_v2_SRV_LISTSERV,  NULL},
 		{NAME_MSGNAME_M1V2_UPDATEM1POLICY,(hook) meta1_dispatch_v2_UPDATE_M1_POLICY, NULL},
 
 		/* Old fashoned meta2-orentied requests */
-		{NAME_MSGNAME_M1_GET,           (hook) meta1_dispatch_v1_GET,      NULL},
 		{NAME_MSGNAME_M1_CREATE,        (hook) meta1_dispatch_v1_CREATE,   NULL},
-		{NAME_MSGNAME_M1_DESTROY,       (hook) meta1_dispatch_v1_DESTROY,  NULL},
-		{NAME_MSGNAME_M1_INFO,          (hook) meta1_dispatch_NOTIMPL,     NULL},
-		{NAME_MSGNAME_M1_GETALLONM2,    (hook) meta1_dispatch_NOTIMPL,     NULL},
-		{NAME_MSGNAME_M1_FORCECREATE,   (hook) meta1_dispatch_NOTIMPL,     NULL},
-		{NAME_MSGNAME_M1_GETMATCHES,    (hook) meta1_dispatch_NOTIMPL,     NULL},
 		{NAME_MSGNAME_M1_CONT_BY_ID,    (hook) meta1_dispatch_v1_BYID,     NULL},
-		{NAME_MSGNAME_M1_CONT_BY_NAME,  (hook) meta1_dispatch_v1_BYNAME,   NULL},
-		{NAME_MSGNAME_M1_MIGRATE_CONTAINER, (hook) meta1_dispatch_NOTIMPL, NULL},
 		{NAME_MSGNAME_M1_UPDATE_CONTAINERS, (hook) meta1_dispatch_UPDATECONTAINERS, NULL},
 		{NAME_MSGNAME_M1_GET_VNS_STATE,     (hook) meta1_dispatch_GETVNSSTATE,      NULL},
 
 		{NULL, NULL, NULL}
 	};
-
-	if (!gquark_log)
-		gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
 
 	return descriptions;
 }

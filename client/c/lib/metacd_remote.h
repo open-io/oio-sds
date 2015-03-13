@@ -1,9 +1,27 @@
-#ifndef __METACD_CLIENT_H__
-# define __METACD_CLIENT_H__
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__client__c__lib__metacd_remote_h
+# define OIO_SDS__client__c__lib__metacd_remote_h 1
 
 # include <glib.h>
 # include <metautils/lib/metatypes.h>
-
 
 struct metacd_s {
 	char path[1024];
@@ -13,7 +31,6 @@ struct metacd_s {
 		gint op;
 	} timeout;
 };
-
 
 struct metacd_connection_info_s {
 	struct metacd_s metacd;
@@ -43,7 +60,6 @@ gboolean metacd_remote_decache (const struct metacd_connection_info_s *mi,
 gboolean metacd_remote_decache_all (const struct metacd_connection_info_s *mi,
 	GError **err);
 
-
 struct meta2_raw_content_s* metacd_remote_get_content (const struct metacd_connection_info_s *mi,
 	const container_id_t cID, const gchar *content, GError **err);
 
@@ -55,5 +71,4 @@ gboolean metacd_remote_save_content(struct metacd_connection_info_s *mi, struct 
 gboolean metacd_remote_flush_content(struct metacd_connection_info_s *mi,
 	GError **err);
 
-
-#endif /*__METACD_CLIENT_H__*/
+#endif /*OIO_SDS__client__c__lib__metacd_remote_h*/

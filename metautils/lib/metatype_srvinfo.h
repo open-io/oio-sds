@@ -1,5 +1,25 @@
-#ifndef __REDCURRANT_metatype_srvinfo__h
-#define __REDCURRANT_metatype_srvinfo__h 1
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__metatype_srvinfo_h
+# define OIO_SDS__metautils__lib__metatype_srvinfo_h 1
+
 #include <glib/gtypes.h>
 
 /**
@@ -19,7 +39,6 @@
  */
 gint score_to_string(const score_t * src, gchar * dst, gsize dstsize);
 
-
 /**
  * Free a service_info_t pointer
  *
@@ -37,7 +56,6 @@ void service_info_cleanv(struct service_info_s **siv, gboolean content_only);
  */
 void service_info_gclean(gpointer si, gpointer unused);
 
-
 /**
  * Duplicate a service_info_t pointer
  *
@@ -47,7 +65,6 @@ void service_info_gclean(gpointer si, gpointer unused);
  */
 struct service_info_s *service_info_dup(const struct service_info_s *si);
 
-
 /**
  * Copy a GPtrArray of service_tag_t
  *
@@ -56,7 +73,6 @@ struct service_info_s *service_info_dup(const struct service_info_s *si);
  * @return a new GPtrArray or NULL if an error occured
  */
 GPtrArray *service_info_copy_tags(GPtrArray * original);
-
 
 /**
  * Extract the list of all namespace names involved in a list of services
@@ -68,14 +84,12 @@ GPtrArray *service_info_copy_tags(GPtrArray * original);
  */
 GSList* service_info_extract_nsname(GSList *services, gboolean copy);
 
-
 /**
  * Frees a service_tag_t and all its internal data
  *
  * @param tag the service_tag_t to free
  */
 void service_tag_destroy(struct service_tag_s *tag);
-
 
 /**
  * Same as service_tag_destroy() usable for g_slist_foreach()
@@ -85,7 +99,6 @@ void service_tag_destroy(struct service_tag_s *tag);
  */
 void service_tag_gclean(gpointer tag, gpointer unused);
 
-
 /**
  * Set a service_tag_t string value
  *
@@ -93,7 +106,6 @@ void service_tag_gclean(gpointer tag, gpointer unused);
  * @param s the string value (duplicated inside)
  */
 void service_tag_set_value_string(struct service_tag_s *tag, const gchar *s);
-
 
 /**
  * Get a service_tag_t string value
@@ -108,7 +120,6 @@ void service_tag_set_value_string(struct service_tag_s *tag, const gchar *s);
 gboolean service_tag_get_value_string(struct service_tag_s *tag, gchar * s,
 		gsize s_size, GError **error);
 
-
 /**
  * Set a service_tag_t boolean value
  *
@@ -116,7 +127,6 @@ gboolean service_tag_get_value_string(struct service_tag_s *tag, gchar * s,
  * @param b the boolean value
  */
 void service_tag_set_value_boolean(struct service_tag_s *tag, gboolean b);
-
 
 /**
  * Get a service_tag_t boolean value
@@ -130,7 +140,6 @@ void service_tag_set_value_boolean(struct service_tag_s *tag, gboolean b);
 gboolean service_tag_get_value_boolean(struct service_tag_s *tag, gboolean *b,
 		GError **error);
 
-
 /**
  * Set a service_tag_t int value
  *
@@ -138,7 +147,6 @@ gboolean service_tag_get_value_boolean(struct service_tag_s *tag, gboolean *b,
  * @param i the int value
  */
 void service_tag_set_value_i64(struct service_tag_s *tag, gint64 i);
-
 
 /**
  * Get a service_tag_t int value
@@ -152,7 +160,6 @@ void service_tag_set_value_i64(struct service_tag_s *tag, gint64 i);
 gboolean service_tag_get_value_i64(struct service_tag_s *tag, gint64* i,
 		GError** error);
 
-
 /**
  * Set a service_tag_t double value
  *
@@ -160,7 +167,6 @@ gboolean service_tag_get_value_i64(struct service_tag_s *tag, gint64* i,
  * @param r the double value
  */
 void service_tag_set_value_float(struct service_tag_s *tag, gdouble r);
-
 
 /**
  * Get a service_tag_t double value
@@ -174,7 +180,6 @@ void service_tag_set_value_float(struct service_tag_s *tag, gdouble r);
 gboolean service_tag_get_value_float(struct service_tag_s *tag, gdouble *r,
 		GError** error);
 
-
 /**
  * Copy a service_tag_t from src to dst
  *
@@ -182,7 +187,6 @@ gboolean service_tag_get_value_float(struct service_tag_s *tag, gdouble *r,
  * @param src the service_tag_t to copy from
  */
 void service_tag_copy(struct service_tag_s *dst, struct service_tag_s *src);
-
 
 /**
  * Set a service_tag_t macro value
@@ -193,7 +197,6 @@ void service_tag_copy(struct service_tag_s *dst, struct service_tag_s *src);
  */
 void service_tag_set_value_macro(struct service_tag_s *tag, const gchar * type,
 		const gchar * param);
-
 
 /**
  * Get a service_tag_t macro value
@@ -210,7 +213,6 @@ void service_tag_set_value_macro(struct service_tag_s *tag, const gchar * type,
 gboolean service_tag_get_value_macro(struct service_tag_s *tag, gchar * type,
 		gsize type_size, gchar* param, gsize param_size, GError** error);
 
-
 /**
  * Duplicate a service_tag_t
  *
@@ -219,7 +221,6 @@ gboolean service_tag_get_value_macro(struct service_tag_s *tag, gchar * type,
  * @return a newly allocated service_tag_t duplicates of src or NULL if an error occured
  */
 struct service_tag_s *service_tag_dup(struct service_tag_s *src);
-
 
 /**
  * Convert a service_tag_t to a string representation
@@ -232,7 +233,6 @@ struct service_tag_s *service_tag_dup(struct service_tag_s *src);
  */
 gsize service_tag_to_string(const struct service_tag_s *tag, gchar * dst,
 		gsize dst_size);
-
 
 /**
  * @param si
@@ -256,7 +256,6 @@ void service_info_swap(struct service_info_s *si0, struct service_info_s *si1);
  */
 gint service_info_sort_by_score(gconstpointer a, gconstpointer b);
 
-
 /**
  * Compare two service_info_t pointers
  *
@@ -266,7 +265,6 @@ gint service_info_sort_by_score(gconstpointer a, gconstpointer b);
  */
 gboolean service_info_equal(const struct service_info_s * si1,
 		const struct service_info_s * si2);
-
 
 /**
  * Compare two service_info_t pointers, compare only ns part of name which is vns name, 
@@ -278,7 +276,6 @@ gboolean service_info_equal(const struct service_info_s * si1,
  */
 gboolean service_info_equal_v2(const struct service_info_s * si1,
 		const struct service_info_s * si2);
-
 
 /**
  * Convert a service_info_t to a legacy meta0_info_t
@@ -298,7 +295,6 @@ meta0_info_t *service_info_convert_to_m0info(struct service_info_s *srv);
  */
 struct service_tag_s *service_info_get_tag(GPtrArray * a, const gchar * n);
 
-
 /**
  * Create a new empty service_tag_t with the given name and store it in a GPtrArray
  *
@@ -308,7 +304,6 @@ struct service_tag_s *service_info_get_tag(GPtrArray * a, const gchar * n);
  */
 struct service_tag_s *service_info_ensure_tag(GPtrArray * a, const gchar * name);
 
-
 /**
  * Remove a service_tag_t with the given name from a GPtrArray
  *
@@ -316,7 +311,6 @@ struct service_tag_s *service_info_ensure_tag(GPtrArray * a, const gchar * name)
  * @param name a tag name
  */
 void service_info_remove_tag(GPtrArray * a, const gchar * name);
-
 
 /**
  * Set a service_info_t addr
@@ -398,4 +392,4 @@ gchar * service_info_key (const struct service_info_s *si);
 
 /** @} */
 
-#endif // __REDCURRANT_metatype_srvinfo__h
+#endif /*OIO_SDS__metautils__lib__metatype_srvinfo_h*/

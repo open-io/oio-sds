@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gridcluster.events"
 #endif
@@ -82,7 +101,7 @@ gridcluster_decode_event2(const guint8 * const encoded, gsize encoded_size, GErr
 		return NULL;
 	}
 
-	event = key_value_pairs_convert_to_map(list_kv, TRUE, err);
+	event = key_value_pairs_convert_to_map(list_kv, err);
 	if (!event)
 		GSETERROR(err, "Event List->Map conversion failure");
 
@@ -137,7 +156,6 @@ gridcluster_event_gclean(gpointer pevent, gpointer ignored)
 	if (pevent)
 		gridcluster_destroy_event(pevent);
 }
-
 
 gchar*
 gridcluster_event_get_string(gridcluster_event_t *event, const gchar *key)

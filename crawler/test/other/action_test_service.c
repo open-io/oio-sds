@@ -1,4 +1,21 @@
-/* THIS FILE IS NO MORE MAINTAINED */
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -15,7 +32,6 @@
 #include "crawler_common_tools.h"
 
 #include "listener/listener_remote.h"
-
 
 static DBusConnection* conn;
 static void*           g_zmq_ctx;
@@ -36,7 +52,6 @@ static int service_pid;
 
 static const gchar* occur_type_string;
 static gchar*    g_crawlerID = NULL;
-
 
 gboolean alcs_listener_connect(const char* listenerUrl)
 {
@@ -73,7 +88,6 @@ gboolean alcs_listener_connect(const char* listenerUrl)
 
 }
 
-
 /**
  *  * svc_url / svc_url: meta2, solr, ...
  *   */
@@ -94,7 +108,6 @@ void alcs_listener_sendJSON(const gchar* listenerUrl, json_object* jobj)
 }
 
             
-
 
 void alcs_listener_buildHead(TLstJSONHeader* msgH, char* name, int pid, char* status, char* idcrawl)
 {
@@ -141,8 +154,6 @@ struct json_object * alcs_listener_request_buildData(TLstJSONHeader* msgH, gchar
     } else
         listener_remote_json_addSection(j_root, LST_SECTION_DATAH, j_datah);
 
-
-
     //----
     //    // build data toi reduce by listener&reduce
     j_data = listener_remote_json_newSection();
@@ -157,7 +168,6 @@ struct json_object * alcs_listener_request_buildData(TLstJSONHeader* msgH, gchar
         listener_remote_json_clean(j_root);
         return NULL;
     } else listener_remote_json_addSection(j_root, LST_SECTION_DATAR, j_datah);
-
 
     return j_root;
 }
@@ -177,7 +187,6 @@ struct json_object * alcs_listener_request_buildCmd(TLstJSONHeader* msgH)
 
     return j_root;
 }
-
 
 void alcs_listener_sendData(const char* listenerUrl, gchar* filename)
 {
@@ -216,10 +225,6 @@ void alcs_listener_sendStopMsg(const char* listenerUrl)
     alcs_listener_sendJSON(listenerUrl, jobj);
     listener_remote_json_clean(jobj);
 }
-
-
-
-
 
 /*
  * This method is listening to the system D-Bus action interface for action signals
@@ -314,8 +319,6 @@ listening_action() {
                     }
 					GRID_TRACE("ListenerUrl=[%s]", (tmp_listenerUrl==NULL)?"null":tmp_listenerUrl);
 
-
-
                     if (NULL == (crawlerID = get_argv_value(argc, argv, action_name,
                                     g_cfg_crawlerID_cmd_opt_name))) {
                         g_free(argv);
@@ -325,7 +328,6 @@ listening_action() {
                         continue;
                     }
 					GRID_TRACE("crawlerID=[%s]", (crawlerID==NULL)?"null":crawlerID);
-
 
 					/* ACTION SPECIFIC AREA */
 					if (FALSE == ending_signal) {
@@ -358,7 +360,6 @@ listening_action() {
 
 						g_variant_type_free(gvt);
 
-
 						gchar* value = NULL;
 						GVariant* temp_value = g_variant_get_child_value(occur, 0);
 						if (temp_value) {
@@ -373,7 +374,6 @@ listening_action() {
 
 						/* ------- */
 
-
 					if (g_crawlerID != NULL) {
                         g_free(g_crawlerID);
                         g_crawlerID = NULL;
@@ -383,10 +383,7 @@ listening_action() {
                         g_strlcpy(g_crawlerID, crawlerID, strlen(crawlerID)+1);
                     }
 
-
 					alcs_listener_sendData(tmp_listenerUrl, source_path);
-
-
 
 						/* Moving the file and sending the ACK signal */
 						char* temp_msg = (char*)g_malloc0((SHORT_BUFFER_SIZE * sizeof(char)) + sizeof(guint64));

@@ -1,5 +1,24 @@
-#ifndef HC_sqliterepo_synchro__h
-# define HC_sqliterepo_synchro__h 1
+/*
+OpenIO SDS sqliterepo
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__sqliterepo__synchro_h
+# define OIO_SDS__sqliterepo__synchro_h 1
 
 #ifndef SQLX_SYNC_DEFAULT_ZK_TIMEOUT
 # define SQLX_SYNC_DEFAULT_ZK_TIMEOUT 4000
@@ -93,4 +112,4 @@ void sqlx_sync_set_prefix(struct sqlx_sync_s *ss, const gchar *prefix);
 
 void sqlx_sync_set_hash(struct sqlx_sync_s *ss, guint witdth, guint depth);
 
-#endif // HC_sqliterepo_synchro__h
+#endif /*OIO_SDS__sqliterepo__synchro_h*/

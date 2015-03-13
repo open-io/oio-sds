@@ -1,5 +1,25 @@
-#ifndef __REDCURRANT_metatype_metadata__h
-#define __REDCURRANT_metatype_metadata__h 1
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__metatype_metadata_h
+# define OIO_SDS__metautils__lib__metatype_metadata_h 1
+
 #include <glib/gtypes.h>
 
 /**
@@ -14,14 +34,12 @@
  */
 GHashTable* metadata_create_empty(void);
 
-
 /**
  * @param gba
  * @param error
  * @return
  */
 GHashTable* metadata_unpack_gba(GByteArray *gba, GError **error);
-
 
 /**
  * @param data
@@ -31,7 +49,6 @@ GHashTable* metadata_unpack_gba(GByteArray *gba, GError **error);
  */
 GHashTable* metadata_unpack_buffer(const guint8 *data, gsize size, GError **error);
 
-
 /**
  * @param data
  * @param error
@@ -39,14 +56,12 @@ GHashTable* metadata_unpack_buffer(const guint8 *data, gsize size, GError **erro
  */
 GHashTable* metadata_unpack_string(const gchar *data, GError **error);
 
-
 /**
  * @param unpacked
  * @param error
  * @return
  */
 GByteArray* metadata_pack(GHashTable *unpacked, GError **error);
-
 
 /**
  * Returns if given metadata strings contain the same key/values.
@@ -58,7 +73,6 @@ GByteArray* metadata_pack(GHashTable *unpacked, GError **error);
  */
 gboolean metadata_equal(const gchar *md1, const gchar *md2, GSList **diff);
 
-
 /**
  * @param unpacked
  * @param prefix
@@ -66,7 +80,6 @@ gboolean metadata_equal(const gchar *md1, const gchar *md2, GSList **diff);
  * @return
  */
 GHashTable* metadata_remove_prefixed(GHashTable *unpacked, const gchar *prefix, GError **error);
-
 
 /**
  * @param unpacked
@@ -76,13 +89,11 @@ GHashTable* metadata_remove_prefixed(GHashTable *unpacked, const gchar *prefix, 
  */
 GHashTable* metadata_extract_prefixed(GHashTable *unpacked, const gchar *prefix, GError **error);
 
-
 /**
  * @param base
  * @param complement
  */
 void metadata_merge(GHashTable *base, GHashTable *complement);
-
 
 /**
  * @param md
@@ -90,7 +101,6 @@ void metadata_merge(GHashTable *base, GHashTable *complement);
  * @param t
  */
 void metadata_add_time(GHashTable *md, const gchar *key, GTimeVal *t); 
-
 
 /**
  * @param md
@@ -102,4 +112,4 @@ void metadata_add_printf(GHashTable *md, const gchar *key, const gchar *fmt, ...
 
 /** @} */
 
-#endif // __REDCURRANT_metatype_metadata__h
+#endif /*OIO_SDS__metautils__lib__metatype_metadata_h*/

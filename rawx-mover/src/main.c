@@ -1,3 +1,22 @@
+/*
+OpenIO SDS rawx-mover
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef  G_LOG_DOMAIN
 # define G_LOG_DOMAIN "rawx.mover"
 #endif
@@ -30,7 +49,6 @@
 #include <metautils/lib/metacomm.h>
 #include <cluster/lib/gridcluster.h>
 #include <resolver/hc_resolver.h>
-#include <meta2/remote/meta2_remote.h>
 #include <meta2v2/meta2_utils.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/generic.h>
@@ -133,7 +151,6 @@ struct mover_stats_s {
 	gint64 dirs_run;
 	gint64 dirs_pruned;
 };
-
 
 static struct grid_main_option_s rawx_mover_options[] = {
 	{"CheckScore", OT_BOOL, {.b=&flag_check_score},
@@ -667,10 +684,8 @@ check_attributes(struct chunk_textinfo_s *chunk, struct content_textinfo_s *cont
 }
 
 static GError *
-validate_chunk_in_one_meta2(struct upload_info_s *info, const char *str_addr,
-	struct meta2_raw_content_s *raw_old, struct meta2_raw_content_s *raw_new)
+validate_chunk_in_one_meta2(struct upload_info_s *info, const char *str_addr)
 {
-	gboolean m2_rc=FALSE;
 	GError *gerr = NULL;
 	struct metacnx_ctx_s ctx;
 	gchar m2_descr[2048];
@@ -710,60 +725,19 @@ validate_chunk_in_one_meta2(struct upload_info_s *info, const char *str_addr,
 
 		GRID_DEBUG("Call meta2 %s for substitution of %s by %s",
 				str_addr, old_url, new_url);
-		gerr = m2v2_remote_execute_SUBST_CHUNKS_single(str_addr, NULL, url,
-				new, old, FALSE);
+		gerr = m2v2_remote_execute_RAW_SUBST_single(str_addr, NULL, url,
+				new, old);
 		if (gerr) {
-			m2_rc = FALSE;
 			// Host is meta2v1 but we didn't know
 			if (gerr->code == CODE_NOT_FOUND) {
 				add_to_m2v1_list(str_addr);
 				g_clear_error(&gerr);
 			}
-		} else {
-			m2_rc = TRUE;
 		}
 		g_free(new_url);
 		g_free(old_url);
 	}
 
-	// If meta2v1 or dereference disabled
-	if (!gerr && !m2_rc) {
-		metacnx_clear(&ctx);
-		if (!metacnx_init_with_url(&ctx, str_addr, &gerr)) {
-			MY_WARN(*info, "invalid meta2 location [%s]: %s",
-					m2_descr, gerror_get_message(gerr));
-			goto label_cleanup;
-		}
-		ctx.timeout.cnx = 30000;
-		ctx.timeout.req = 60000;
-
-		GRID_DEBUG("New chunk container version: %ld", raw_new->version);
-
-		// FIXME: with m2v2, use m2v2_remote_execute_SUBST_CHUNKS_single()
-		/* Insert the new chunk */
-		m2_rc = meta2raw_remote_update_chunks(&ctx, &gerr, raw_new, TRUE, NULL);
-		if (!m2_rc) {
-			MY_ERROR(*info, "Chunk reference insertion failed in [%s]: %s",
-					m2_descr, gerror_get_message(gerr));
-			goto label_cleanup;
-		}
-
-		if (flag_unlink && flag_dereference) {
-			/* Delete the old chunk */
-			m2_rc = meta2raw_remote_delete_chunks(&ctx, &gerr, raw_old);
-			if (!m2_rc) {
-				MY_ERROR(*info, "Chunk reference removal failed in [%s]: %s",
-						m2_descr, gerror_get_message(gerr));
-				goto label_cleanup;
-			}
-		}
-
-		MY_INFO(*info, "Reference updated in [%s] src[%s] dst[%s]",
-				m2_descr, info->src_descr, info->dst_descr);
-		m2_rc = TRUE;
-	}
-
-label_cleanup:
 	metacnx_close(&ctx);
 	return gerr;
 }
@@ -826,8 +800,7 @@ validate_chunk_in_all_meta2(struct upload_info_s *info)
 
 	/* Update the reference and clean the old directly in the META2 */
 	for (url=info->location->m2_url; url && *url ;url++) {
-		GError *err2 = validate_chunk_in_one_meta2(info, *url,
-				info->raw_old, info->raw_new);
+		GError *err2 = validate_chunk_in_one_meta2(info, *url);
 		if (err2 != NULL) {
 			MY_WARN(*info, "M2V2 error [%s] : (%d) %s",
 					*url, err2->code, err2->message);
@@ -981,7 +954,6 @@ upload_chunk(struct upload_info_s *info)
 	session = ne_session_create("http", info->dst_host, info->dst_port);
 	ne_set_connect_timeout(session, 60);
 	ne_set_read_timeout(session, 60);
-
 
 	if(info->comp && 0 == g_ascii_strcasecmp("true", info->comp)){
 		gchar *uri = NULL;
@@ -1198,8 +1170,6 @@ load_chunk(const gchar *path, struct upload_info_s *info)
 
 	MY_DEBUG(*info, "RAWX polled: dst[%s]", info->dst_descr);
 
-
-
 	/* Compression purpose */
 	info->comp = g_strdup("false");
 	info->algo = g_strdup("none");
@@ -1390,8 +1360,7 @@ move_chunk(const gchar *path)
 		goto label_exit;
 	}
 
-	/* FIXME: https://jira.itsm.atosworldline.com/jira/browse/TO-HONEYCOMB-673
-	 * Call m2v2_remote_execute_GET_BY_CHUNK without limit and
+	/* FIXME: Call m2v2_remote_execute_GET_BY_CHUNK without limit and
 	 * update chunks with m2v2_remote_execute_OVERWRITE */
 
 	if (!flag_unlink)
@@ -1461,7 +1430,7 @@ run_directory(const gchar *basedir, int depth, struct mover_stats_s *stats)
 				basedir, path_len, path);
 
 		if ((path[0]=='.' && (path_len==1 || (path_len==2 && path[1]=='.'))) ||
-			0 == g_ascii_strcasecmp(path, REDC_LOSTFOUND_FOLDER)) {
+			0 == g_ascii_strcasecmp(path, RAWX_LOSTFOUND_FOLDER)) {
 			INFO("Skip %s", path);
 			continue;
 		}
@@ -1672,7 +1641,6 @@ rawx_mover_init(void)
 		}
 		g_free(str);
 	}
-
 
 	return TRUE;
 }

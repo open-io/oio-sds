@@ -1,3 +1,22 @@
+/*
+OpenIO SDS gridd
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "server"
 #endif
@@ -8,7 +27,6 @@
 #include "./plugin.h"
 #include "./plugin_holder.h"
 #include "./message_handler.h"
-
 
 GHashTable *plugins = NULL;
 
@@ -22,15 +40,11 @@ struct plugin_s
 	struct exported_api_s *syms;
 };
 
-static gint plugin_holder_init (GError **err)
+static void plugin_holder_init (void)
 {
-	plugins = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
 	if (!plugins)
-	{
-		GSETERROR(err,"Cannot initialize the main plugin repository");
-		return 0;
-	}
-	return 1;
+		plugins = g_hash_table_new_full (g_str_hash, g_str_equal, NULL, NULL);
+	g_assert(plugins != NULL);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -46,10 +60,7 @@ gpointer plugin_get_api (const gchar *plugin_name, GError **err)
 		return NULL;
 	}
 
-	if (!plugins && !plugin_holder_init(err))
-	{
-		return NULL;
-	}
+	plugin_holder_init();
 	
 	if (!(ptr = g_hash_table_lookup (plugins, plugin_name)))
 	{
@@ -72,17 +83,9 @@ gint plugin_holder_keep (GModule *mod, GHashTable *params, GError **err)
 		return 0;
 	}
 
-	if (!plugins && !plugin_holder_init(err))
-	{
-		GSETERROR(err, "Cannot init the plugin repository");
-		return 0;
-	}
+	plugin_holder_init();
 	
-	if (!(plg=g_try_malloc0(sizeof(struct plugin_s))))
-	{
-		GSETERROR(err,"Memory allocation failure");
-		return 0;
-	}
+	plg = g_malloc0(sizeof(struct plugin_s));
 	
 	/* try to load EXPORTED_SYMBOL_V2 if exists */
 	if (!g_module_symbol(mod, EXPORTED_SYMBOL_NAME_V2, (void**)&(plg->syms))) {
@@ -126,46 +129,29 @@ errorLabel:
 	return 0;	
 }
 
-gint plugin_holder_close_all (GError **err)
+void plugin_holder_close_all (void)
 {
-	gboolean mayContinue=TRUE;
-
-	DEBUG ("About to close all the plugins...");
-	
-	void runner (gpointer d, gpointer u)
-	{
+	void runner (gpointer d, gpointer u) {
 		struct plugin_s *plg = (struct plugin_s*) d;
 		(void) u;
-		if (!mayContinue)
-			return;
-		if (!plg->syms->close(err))
-		{
-			GSETERROR(err, "cannot close the plugin %s", plg->syms->name);
-			mayContinue = FALSE;
-		}
+		GError *err = NULL;
+		if (!plg->syms->close(&err))
+			ERROR("cannot close the plugin %s : (%d) %s", plg->syms->name, err->code, err->message);
+		if (err)
+			g_clear_error(&err);
 	}
 	
-	if (!plugins && !plugin_holder_init(err))
-	{
-		GSETERROR(err,"Cannot init the plugin manager");
-		return 0;
-	}
+	plugin_holder_init();
 	
-	g_slist_foreach (plugins_list, runner, err);
-	
-	DEBUG ("closure done!");
-
-	return mayContinue ? 1 : 0;
+	g_slist_foreach (plugins_list, runner, NULL);
+	DEBUG ("Plugins closed!");
 }
 
 gint plugin_holder_init_all (GError **err)
 {
 	gboolean mayContinue=TRUE;
 
-	DEBUG ("About to initialize all the plugins...");
-	
-	void runner (gpointer d, gpointer e0)
-	{
+	void runner (gpointer d, gpointer e0) {
 		struct plugin_s *plg = (struct plugin_s*) d;
 		if (!mayContinue)
 			return;
@@ -173,22 +159,16 @@ gint plugin_holder_init_all (GError **err)
 			return;
 		plg->init_done = TRUE;
 		DEBUG ("initializing %s", plg->syms->name);
-		if (!plg->syms->init (plg->params, e0))
-		{
+		if (!plg->syms->init (plg->params, e0)) {
 			GSETERROR(e0, "Failed to init plugin %s", plg->syms->name);
 			mayContinue = FALSE;
 		}
 	}
 	
-	if (!plugins && !plugin_holder_init(err))
-	{
-		return 0;
-	}
-	
+	plugin_holder_init();
+	DEBUG ("Plugins being initiated ...");
 	g_slist_foreach (plugins_list, runner, err);
-
-	DEBUG ("initialization done!");
-	
+	DEBUG ("Plugins initiated!");
 	return mayContinue ? 1 : 0;
 }
 
@@ -204,11 +184,7 @@ gint plugin_holder_update_config (GModule *mod, GHashTable *params, GError **err
 		return 0;
 	}
 
-	if (!plugins && !plugin_holder_init(err))
-	{
-		GSETERROR(err, "Cannot init the plugin repository");
-		return 0;
-	}
+	plugin_holder_init();
 	
 	/* try to load EXPORTED_SYMBOL_V2 if exists */
 	if (!g_module_symbol(mod, EXPORTED_SYMBOL_NAME_V2, (gpointer*)&symbol)) {

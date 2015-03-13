@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta1v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta1.backend"
 #endif
@@ -37,7 +56,7 @@ meta1_backend_init(const gchar *ns, struct sqlx_repository_s *repo,
 	m1 = g_malloc0(sizeof(*m1));
 	metautils_strlcpy_physical_ns(m1->backend.ns_name, ns,
 			sizeof(m1->backend.ns_name));
-	g_static_rw_lock_init(&m1->rwlock_ns_policies);
+	g_rw_lock_init(&m1->rwlock_ns_policies);
 	m1->backend.type = META1_TYPE_NAME;
 	m1->backend.lb = glp;
 	m1->backend.repo = repo;
@@ -63,7 +82,7 @@ meta1_backend_clean(struct meta1_backend_s *m1)
 		g_hash_table_destroy(m1->ns_policies);
 	}
 
-	g_static_rw_lock_free(&m1->rwlock_ns_policies);
+	g_rw_lock_clear(&m1->rwlock_ns_policies);
 	memset(m1, 0, sizeof(*m1));
 	g_free(m1);
 }
@@ -75,13 +94,13 @@ meta1_backend_get_svcupdate(struct meta1_backend_s *m1, const char *ns_name)
 
 	if(!m1)
 		return NULL;
-	g_static_rw_lock_writer_lock(&m1->rwlock_ns_policies);
+	g_rw_lock_writer_lock(&m1->rwlock_ns_policies);
 	if(!(pol = g_hash_table_lookup(m1->ns_policies, ns_name))) {
 		/* lazy init */
 		pol = service_update_policies_create();
 		g_hash_table_insert(m1->ns_policies, g_strdup(ns_name), pol);
 	}
-	g_static_rw_lock_writer_unlock(&m1->rwlock_ns_policies);
+	g_rw_lock_writer_unlock(&m1->rwlock_ns_policies);
 	return pol;
 }
 
@@ -106,7 +125,8 @@ meta1_backend_base_already_created(struct meta1_backend_s *m1, const guint8 *pre
 	GError *err = NULL;
 
 	g_snprintf(base, sizeof(base), "%02X%02X", prefix[0], prefix[1]);
-	err = sqlx_repository_has_base(m1->backend.repo, META1_TYPE_NAME, base);
+	struct sqlx_name_s n = {.base=base, .type=META1_TYPE_NAME, .ns=m1->backend.ns_name};
+	err = sqlx_repository_has_base(m1->backend.repo, &n);
 	if (!err)
 		return TRUE;
 	g_clear_error(&err);

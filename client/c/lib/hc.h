@@ -1,12 +1,31 @@
-#ifndef __HC_H__
-#define __HC_H__
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__client__c__lib__hc_h
+# define OIO_SDS__client__c__lib__hc_h 1
 
 struct hc_url_s;
 
 /************** HC FUNCTIONS (hc_func.c **************/
 
 /**
- * Create a container on Honeycomb. This funcion use meta1v2 requests. (RELEASE-1.6)
+ * Create a container on a namespace.
  *
  * @param hc
  * @param url the container url
@@ -94,7 +113,7 @@ gs_error_t * hc_delete_container(gs_grid_storage_t *hc, struct hc_url_s *url, in
 gs_error_t * hc_delete_content(gs_grid_storage_t *hc, struct hc_url_s *url);
 
 /**
- * Get information about an Honeycomb object (container or content)
+ * Get information about an object (container or content)
  * 
  * @param hc
  * @param url the container or content url
@@ -140,7 +159,6 @@ gs_error_t * hc_func_delete_property(gs_grid_storage_t *hc, struct hc_url_s *url
  */
 gs_error_t * hc_func_copy_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *source);
 
-
 /**
  * List snapshots of a container.
  *
@@ -179,7 +197,6 @@ gs_error_t *hc_func_delete_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url)
  */
 gs_error_t *hc_func_restore_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url,
 		int hard_restore);
-
 
 /************** HELPS (hc_help.c)*********************/
 
@@ -276,4 +293,4 @@ void help_snaptake(void);
 void help_snapdel(void);
 void help_snaprestore(void);
 
-#endif /*__HC_H__*/
+#endif /*OIO_SDS__client__c__lib__hc_h*/

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metacomm.path_info.asn"
 #endif
@@ -10,7 +29,6 @@
 #include "./metacomm.h"
 
 #include "./asn_PathInfo.h"
-
 
 gboolean
 path_info_ASN2API(const PathInfo_t * asn, path_info_t * api)
@@ -45,7 +63,6 @@ path_info_ASN2API(const PathInfo_t * asn, path_info_t * api)
 	return TRUE;
 }
 
-
 gboolean
 path_info_API2ASN(const path_info_t * api, PathInfo_t * asn)
 {
@@ -55,11 +72,7 @@ path_info_API2ASN(const path_info_t * api, PathInfo_t * asn)
 		return FALSE;
 
 	if (api->hasSize) {
-		asn->size = g_try_malloc0(sizeof(INTEGER_t));
-		if (!asn->size) {
-			WARN("<%s> memory allocation failure", __FUNCTION__);
-			return FALSE;
-		}
+		asn->size = g_malloc0(sizeof(INTEGER_t));
 		asn_int64_to_INTEGER(asn->size, api->size);
 	}
 
@@ -82,7 +95,6 @@ path_info_API2ASN(const path_info_t * api, PathInfo_t * asn)
 
 	return TRUE;
 }
-
 
 void
 path_info_cleanASN(PathInfo_t * asn, gboolean only_content)

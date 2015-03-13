@@ -1,3 +1,22 @@
+/*
+OpenIO SDS sqliterepo
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "sqliterepo"
 #endif
@@ -20,8 +39,8 @@
 		__FUNCTION__, __LINE__,						\
 		(E)->code, (E)->message)
 
-
-static const gchar type[] = "meta2";
+static const gchar nsname[] = "NS";
+static const gchar type[] = NAME_SRVTYPE_META2;
 static const gchar name[] =
 		"0123456789ABCDEF"
 		"0123456789ABCDEF"
@@ -48,12 +67,13 @@ main(int argc, char **argv)
 	}
 
 	for (i=0; i<20 ;i++) {
-		struct sqlx_sqlite3_s *sq3 = NULL;
 
 		g_debug("Test round");
 
-		err = sqlx_repository_open_and_lock(repo, type, name,
-				 SQLX_OPEN_LOCAL, &sq3, NULL);
+		struct sqlx_sqlite3_s *sq3 = NULL;
+		struct sqlx_name_s n = { .base = name, .type = type, .ns = nsname, };
+
+		err = sqlx_repository_open_and_lock(repo, &n, SQLX_OPEN_LOCAL, &sq3, NULL);
 		if (err != NULL)
 			FAIL(err);
 		g_debug("Base [%s|%s] open", type, name);

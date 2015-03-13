@@ -3,11 +3,11 @@
 include_directories(BEFORE . ../..)
 
 include_directories(AFTER
-		${GRIDINIT_INCDIR}
+		${GRIDINIT_INCLUDE_DIRS}
 		${ONTAP_INCDIR})
 
 link_directories(
-		${GRIDINIT_LIBDIR}
+		${GRIDINIT_LIBRARY_DIRS}
 		${ONTAP_LIBDIR})
 
 add_executable(rawx-monitor
@@ -20,7 +20,9 @@ bin_prefix(rawx-monitor -rawx-monitor)
 
 target_link_libraries(rawx-monitor
 	metautils gridcluster gridcluster-remote gridcluster-events
-	-lgridinit-utils -lm -lnetsnmp ${NEON_LIBRARIES} ${GLIB2_LIBRARIES})
+	-lm
+	${GRIDINIT_LIBRARIES}
+	${NETSNMP_LIBRARIES} ${NEON_LIBRARIES} ${GLIB2_LIBRARIES})
 
 install(TARGETS rawx-monitor
 	LIBRARY DESTINATION ${LD_LIBDIR}

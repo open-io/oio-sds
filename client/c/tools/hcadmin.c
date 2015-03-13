@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "hc.tools"
 #endif
@@ -16,17 +35,15 @@
 #include "../lib/gs_internals.h"
 #include "../lib/hcadmin.h"
 
-
 static gchar *g_url = NULL;
 static gchar *action = NULL;
 static gchar **action_args = NULL;
 static gboolean flag_checkonly = FALSE;
 
-
 typedef gboolean (*action_func)();
 typedef void (*help_func)(void);
 
-	static void
+static void
 _display_err(gchar *msg, gs_error_t *err)
 {
 	if(!err->msg) {
@@ -39,10 +56,9 @@ _display_err(gchar *msg, gs_error_t *err)
 	} else {
 		g_printerr("Failed to excecute action %s (%d) : %s\n", action, err->code, err->msg);
 	}
-
 }
 
-	static void
+static void
 _dump_arrays(gchar **arrays)
 {
 	guint i;
@@ -53,11 +69,12 @@ _dump_arrays(gchar **arrays)
 	}
 }
 
-static void help_meta1_policy_update() 
+static void
+help_meta1_policy_update() 
 {
-    g_printerr("\n");
+	g_printerr("\n");
 	g_printerr("usage: hcadmin meta1_policy_apply NS ALL|PREFIX|REFERENCE_ID [SRVTYPE]\n\n");
-	g_printerr("\t              NS : Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n\n");
+	g_printerr("\t              NS : The namespace name\n");
 	g_printerr("\t             ALL : apply the meta1 policy to all references defined in the namespace\n");
 	g_printerr("\t          PREFIX : apply the meta1 policy only to the references defined for this prefix. (Prefix is defined by 4 hexadecimal digits)\n");
 	g_printerr("\t    REFERENCE_ID : apply the meta1 policy only to this reference. (REFERENCE_ID is defined by 32 hexadecimal digits)\n");
@@ -65,12 +82,13 @@ static void help_meta1_policy_update()
 	g_printerr("\n");
 }
 
-static void help_meta1_policy_exclude() 
+static void
+help_meta1_policy_exclude() 
 {
 	g_printerr("\n");
 	g_printerr("usage: hcadmin meta1_policy_exclude NS ALL|PREFIX|REFERENCE_ID SRV_URL\n\n");
 	g_printerr("\tThis action can be use to exclude a meta2 service and replace it by another service for the replication mechanism\n\n");
-	g_printerr("\t            NS : Honeycomb namespace, if you don't know this, please contact your Honeycomb namespace administrator\n");
+	g_printerr("\t            NS : The namespace name\n");
 	g_printerr("\t           ALL : apply the meta1 policy to all references defined in the namespace\n");
 	g_printerr("\t        PREFIX : apply the meta1 policy only to the references defined for this prefix. (Prefix is defined by 4 hexadecimal digits)\n");
 	g_printerr("\t  REFERENCE_ID : apply the meta1 policy only to this reference. (REFERENCE_ID is defined by 32 hexadecimal digits)\n");
@@ -78,24 +96,23 @@ static void help_meta1_policy_exclude()
 	g_printerr("\n");
 }
 
-static void help_touch(void)
+static void
+help_touch(void)
 {
 	g_printerr("\n");
 	g_printerr("usage: hcadmin touch <NS>/<CONTAINER_NAME> [UPDATE_CSIZE|RECALC_CSIZE]\n");
 	g_printerr("or     hcadmin touch <NS>/<CONTAINER_NAME>/<CONTENT_NAME>\n\n");
 	g_printerr("\tExecute a touch command on a container or on a simgle content\n\n");
-	g_printerr("\t             NS: The Honeycomb namespace name\n");
-	g_printerr("\t CONTAINER_NAME: The container to restore snapshot of\n");
-	g_printerr("\t   CONTENT_NAME: The content to restore from the snapshot\n");
-	g_printerr("\t   UPDATE_CSIZE: Option for update container_size data on meta1 by container_size from meta2 \n");
+	g_printerr("\t             NS : The namespace name\n");
+	g_printerr("\t CONTAINER_NAME : The container to restore snapshot of\n");
+	g_printerr("\t   CONTENT_NAME : The content to restore from the snapshot\n");
+	g_printerr("\t   UPDATE_CSIZE : Option for update container_size data on meta1 by container_size from meta2 \n");
 	g_printerr("\t                 (without recalculation)\n");
-    g_printerr("\t   RECALC_CSIZE: Option for recalculation container_size form content_header(meta2) and update data on meta1\n");
+	g_printerr("\t   RECALC_CSIZE : Option for recalculation container_size form content_header(meta2) and update data on meta1\n");
 	g_printerr("\n");
 }
 
-
 /* ---------------------------------------- */
-
 
 static gboolean
 _func_meta1_policy_update(void)
@@ -121,28 +138,23 @@ static gboolean
 _func_touch(void)
 {
 	gs_error_t *err=NULL;
-    gchar **result=NULL;
-    gchar *globalresult= NULL;
+	gchar **result=NULL;
+	gchar *globalresult= NULL;
 	err =  hcadmin_touch(g_url,action,flag_checkonly,&globalresult,&result,action_args);
 
 	if ( err != NULL )
 	{
 		_display_err("Failed to apply touch cmd ",err);			
 	} else {
-        if ( globalresult)
-           g_print("%s\n",globalresult);
-         _dump_arrays(result);
-    }
-    
-
+		if ( globalresult)
+			g_print("%s\n",globalresult);
+		_dump_arrays(result);
+	}
 
 	return TRUE;
 }
 
-
-
 /* ---------------------------------------- */
-
 
 struct action_s {
 	const gchar *name;
@@ -161,14 +173,15 @@ static struct action_s actions[] = {
 	{NULL,          NULL},
 };
 
-static struct help_s helps[] = {
+static struct help_s helps[] =
+{
 	{"meta1_policy_apply",   help_meta1_policy_update},
 	{"meta1_policy_exclude", help_meta1_policy_exclude},
 	{"touch", help_touch},
 	{NULL,		NULL},
 };
 
-	static void
+static void
 _call_action()
 {
 	struct action_s *paction;
@@ -183,7 +196,7 @@ _call_action()
 	g_printerr("Unknown action [%s]\n", action);
 }
 
-	static gboolean
+static gboolean
 _call_help(const gchar *a)
 {
 	struct help_s *phelp;
@@ -197,15 +210,14 @@ _call_help(const gchar *a)
 	return FALSE;
 }
 
-	static void
+static void
 hcadmin_action(void)
 {
 	if ( action && action[0] && g_url && g_url[0] )
 		_call_action();
-
 }
 
-	static struct grid_main_option_s *
+static struct grid_main_option_s *
 hcadmin_get_options(void)
 {
 	static struct grid_main_option_s hcdir_options[] = {
@@ -215,7 +227,7 @@ hcadmin_get_options(void)
 	return hcdir_options;
 }
 
-	static void
+static void
 hcadmin_set_defaults(void)
 {
 	GRID_DEBUG("Setting defaults");
@@ -224,7 +236,7 @@ hcadmin_set_defaults(void)
 	action_args = NULL;
 }
 
-	static void
+static void
 hcadmin_specific_fini(void)
 {
 	g_free(g_url);
@@ -232,13 +244,12 @@ hcadmin_specific_fini(void)
 	g_strfreev(action_args);
 }
 
-	static void
+static void
 hcadmin_specific_stop(void)
 {
-
 }
 
-	static const gchar *
+static const gchar *
 hcadmin_usage(void)
 {
 	return "<command> NS[/Container/Content] [<args>]\n\n"
@@ -250,8 +261,7 @@ hcadmin_usage(void)
 		"See 'hcadmin help <command>' for more information on a specific command.\n\n";
 }
 
-
-	static gboolean
+static gboolean
 hcadmin_configure(int argc, char **argv)
 {
 	GRID_DEBUG("Configuration");
@@ -282,7 +292,6 @@ hcadmin_configure(int argc, char **argv)
 	return TRUE;
 }
 
-
 static struct grid_main_callbacks hcadmin_callbacks =
 {
 	.options = hcadmin_get_options,
@@ -294,9 +303,8 @@ static struct grid_main_callbacks hcadmin_callbacks =
 	.specific_stop = hcadmin_specific_stop,
 };
 
-	int
+int
 main(int argc, char **args)
 {
-	g_setenv("GS_DEBUG_GLIB2", "1", TRUE);
 	return grid_main_cli(argc, args, &hcadmin_callbacks);
 }

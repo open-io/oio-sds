@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #define MODULE_NAME "metacd"
 
 #ifndef G_LOG_DOMAIN
@@ -39,13 +58,13 @@
 	gsize fieldLen=0;\
 	if (!message_get_field (req_ctx->request, MSGKEY_PATH, sizeof(MSGKEY_PATH)-1, &field, &fieldLen, &(ctx.warning)))\
 	{\
-		GSETCODE(&(ctx.warning), 400, "Bad Request (no path)");\
-		JUMPERR(&ctx, 400, MSG_BAD_REQUEST);\
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad Request (no path)");\
+		JUMPERR(&ctx, CODE_BAD_REQUEST, MSG_BAD_REQUEST);\
 	}\
 	if (!field || fieldLen<=0 || fieldLen>((sizeof(wrkName))-1))\
 	{\
-		GSETCODE(&(ctx.warning), 400, "Bad Request (invalid path)");\
-		JUMPERR(&ctx, 400, MSG_BAD_REQUEST);\
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad Request (invalid path)");\
+		JUMPERR(&ctx, CODE_BAD_REQUEST, MSG_BAD_REQUEST);\
 	}\
 	else { memset(wrkName,0x00,sizeof(wrkName)); memcpy (wrkName, field, fieldLen); }\
 } while (0)
@@ -55,11 +74,11 @@
 	gsize fieldLen=0;\
 	if (!message_get_field (req_ctx->request, MSGKEY_CID, sizeof(MSGKEY_CID)-1, &field, &fieldLen, &(ctx.warning)))\
 	{\
-		GSETCODE(&(ctx.warning), 400, "Bad Request (no container id)");\
-		JUMPERR(&ctx, 400, MSG_BAD_REQUEST);\
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad Request (no container id)");\
+		JUMPERR(&ctx, CODE_BAD_REQUEST, MSG_BAD_REQUEST);\
 	} if (!field || fieldLen!=sizeof(container_id_t)) {\
-		GSETCODE(&(ctx.warning), 400, "Bad Request (invalid container id)");\
-		JUMPERR(&ctx, 400, MSG_BAD_REQUEST);\
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad Request (invalid container id)");\
+		JUMPERR(&ctx, CODE_BAD_REQUEST, MSG_BAD_REQUEST);\
 	} else {\
 		memset(cid, 0x00, sizeof(container_id_t));\
 		memcpy(cid, field, sizeof(container_id_t));\
@@ -72,13 +91,13 @@
 	gsize fieldLen=0;\
 	if (!message_get_field (req_ctx->request, MSGKEY_NS, sizeof(MSGKEY_NS)-1, &field, &fieldLen, &(ctx.warning)))\
 	{\
-		GSETCODE(&(ctx.warning), 400, "Bad Request (no namespace name)");\
-		JUMPERR(&ctx, 400, MSG_BAD_REQUEST);\
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad Request (no namespace name)");\
+		JUMPERR(&ctx, CODE_BAD_REQUEST, MSG_BAD_REQUEST);\
 	}\
 	if (!field || fieldLen<=0 || fieldLen>((sizeof(wrkName))-1))\
 	{\
-		GSETCODE(&(ctx.warning), 400, "Bad Request (invalid namespace name)");\
-		JUMPERR(&ctx, 400, MSG_BAD_REQUEST);\
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad Request (invalid namespace name)");\
+		JUMPERR(&ctx, CODE_BAD_REQUEST, MSG_BAD_REQUEST);\
 	}\
 	else { memset(wrkName,0x00,sizeof(wrkName)); memcpy (wrkName, field, fieldLen); }\
 } while (0)
@@ -86,18 +105,18 @@
 #define EXTRACT_BODY(req_ctx,ctx,gba_result,minLen,maxLen) do {\
 	void *field=NULL; gsize fieldLen=0;\
 	if (!message_get_BODY (req_ctx->request, &field, &fieldLen, &(ctx.warning))) {\
-		GSETCODE(&(ctx.warning), 400,"No body in the message");\
-		JUMPERR(&ctx, 400, MSG_BAD_REQUEST);\
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST,"No body in the message");\
+		JUMPERR(&ctx, CODE_BAD_REQUEST, MSG_BAD_REQUEST);\
 	} else if (!field || fieldLen<(minLen) || fieldLen>(maxLen)) {\
-		GSETCODE(&(ctx.warning), 400, "Invalid  size (should be between %d and %d)", (minLen), (maxLen));\
-		JUMPERR(&ctx, 400, MSG_BAD_REQUEST);\
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Invalid  size (should be between %d and %d)", (minLen), (maxLen));\
+		JUMPERR(&ctx, CODE_BAD_REQUEST, MSG_BAD_REQUEST);\
 	} else {\
 		gba_result = g_byte_array_append(g_byte_array_new(), field, fieldLen);\
 	}\
 } while (0)
 
-#define RESOLVERS_LOCK()   do { TRACE("LOCKING(main)"); g_static_rec_mutex_lock (&resolvers_mutex); } while (0)
-#define RESOLVERS_UNLOCK() do { TRACE("UNLOCKING(main)"); g_static_rec_mutex_unlock (&resolvers_mutex); } while (0)
+#define RESOLVERS_LOCK()   do { TRACE("LOCKING(main)"); g_rec_mutex_lock (&resolvers_mutex); } while (0)
+#define RESOLVERS_UNLOCK() do { TRACE("UNLOCKING(main)"); g_rec_mutex_unlock (&resolvers_mutex); } while (0)
 #define LOG_ACCESS(CTX,FMT,...) do { if (flag_access) reply_context_log_access((CTX), FMT, __VA_ARGS__); } while (0)
 
 /* ------------------------------------------------------------------------- */
@@ -128,7 +147,7 @@ static gboolean chunks_cache_noatime = TRUE;
 static gssize chunks_cache_size = 50000;
 static time_t chunks_cache_expiration = 86400;/* 24h */
 
-static GStaticRecMutex resolvers_mutex;
+static GRecMutex resolvers_mutex;
 static GHashTable *caches = NULL;
 
 /* ------------------------------------------------------------------------- */
@@ -179,7 +198,6 @@ chunk_key_free(gpointer k)
 		g_free(key->content_path);
 	g_free(key);
 }
-
 
 static gpointer
 cid_copy(gconstpointer p)
@@ -291,9 +309,7 @@ namespace_cache_init(const char *name, GError ** err)
 	return nsCache;
 }
 
-
 /* ------------------------------------------------------------------------- */
-
 
 static gboolean
 reply_addr_info_list(struct reply_context_s *ctx, GSList * aL)
@@ -312,13 +328,13 @@ reply_addr_info_list(struct reply_context_s *ctx, GSList * aL)
 
 		if (!addr_info_marshall(nextList, &bufAI, &bufAISize, &(ctx->warning))) {
 			GSETERROR(&(ctx->warning), "Cannot marshall the address list");
-			JUMPERR(ctx, 500, ctx->warning->message);
+			JUMPERR(ctx, CODE_INTERNAL_ERROR, ctx->warning->message);
 		}
 
 		if (cursor->next)
-			reply_context_set_message(ctx, 206, "Partial content");
+			reply_context_set_message(ctx, CODE_PARTIAL_CONTENT, "Partial content");
 		else
-			reply_context_set_message(ctx, 200, "OK");
+			reply_context_set_message(ctx, CODE_FINAL_OK, "OK");
 
 		reply_context_set_body(ctx, bufAI, bufAISize, REPLYCTX_DESTROY_ON_CLEAN);
 		reply_context_reply(ctx, &(ctx->warning));
@@ -390,11 +406,11 @@ _stat_content(const gchar *ns, container_id_t cid, gchar *str_cid, gchar *path, 
 	nsCache = namespace_cache_init (ns, err);
 	RESOLVERS_UNLOCK();
 	if (!nsCache) {
-		GSETCODE(err, 500, "Namespace unknown NS=[%s]", ns);
+		GSETCODE(err, CODE_NAMESPACE_NOTMANAGED, "Namespace unknown NS=[%s]", ns);
 		return NULL;
 	}
 	if (!locktab_lock(nsCache->chunks_locks, &key)) {
-		GSETCODE(err, 500, "Lock failure", ns);
+		GSETCODE(err, CODE_INTERNAL_ERROR, "Lock failure", ns);
 		return NULL;
 	}
 
@@ -443,7 +459,7 @@ _stat_content(const gchar *ns, container_id_t cid, gchar *str_cid, gchar *path, 
 
 	if (!gba_content) {
 		locktab_unlock(nsCache->chunks_locks, &key);
-		GSETCODE(err, 500, "serialization error");
+		GSETCODE(err, CODE_INTERNAL_ERROR, "serialization error");
 		return NULL;
 	}
 
@@ -453,9 +469,7 @@ _stat_content(const gchar *ns, container_id_t cid, gchar *str_cid, gchar *path, 
 	return gba_content;
 }
 
-
 /* ------------------------------------------------------------------------- */
-
 
 static gboolean
 handler_get_meta0 (struct request_context_s *req_ctx)
@@ -479,12 +493,12 @@ handler_get_meta0 (struct request_context_s *req_ctx)
 	m0_ai = nsCache ? g_memdup(&(nsCache->m0->meta0), sizeof(addr_info_t)) : NULL;
 	RESOLVERS_UNLOCK();
 	if (!nsCache) {
-		GSETERROR(&(ctx.warning),"Namespace unknown NS=[%s]", nsName);
-		JUMPERR(&ctx,500,MSG_INTERNAL_ERROR);
+		GSETCODE(&(ctx.warning), CODE_NAMESPACE_NOTMANAGED, "Namespace unknown NS=[%s]", nsName);
+		JUMPERR(&ctx, CODE_NAMESPACE_NOTMANAGED, MSG_INTERNAL_ERROR);
 	}
 	if (!m0_ai) {
-		GSETCODE(&(ctx.warning), 500, "Memory allocation failure");
-		JUMPERR(&ctx,500,MSG_INTERNAL_ERROR);
+		GSETCODE(&(ctx.warning), CODE_INTERNAL_ERROR, "Memory allocation failure");
+		JUMPERR(&ctx, CODE_INTERNAL_ERROR, MSG_INTERNAL_ERROR);
 	}
 	
 	do { /*reply the address saquence*/
@@ -508,7 +522,6 @@ errorLabel:
 	return FALSE;
 }
 
-
 static gboolean
 handler_get_meta1(struct request_context_s *req_ctx)
 {
@@ -529,7 +542,7 @@ handler_get_meta1(struct request_context_s *req_ctx)
 	EXTRACT_CONTAINER_ID(req_ctx,ctx,cid,str_cid);
 	EXTRACT_NAMESPACE_NAME(req_ctx,ctx,nsName);
 	message_extract_flag(req_ctx->request, "RO", FALSE, &ro);
-	e = message_extract_body_encoded(req_ctx->request, &exclude, addr_info_unmarshall);
+	e = message_extract_body_encoded(req_ctx->request, TRUE, &exclude, addr_info_unmarshall);
 	if( NULL != e ) {
 		if(!g_str_has_prefix(e->message, "Missing body"))
 			DEBUG("Error while unmarshalling body : %s", e->message);
@@ -543,15 +556,15 @@ handler_get_meta1(struct request_context_s *req_ctx)
 	nsCache = namespace_cache_init (nsName, &(ctx.warning));
 	RESOLVERS_UNLOCK();
 	if (!nsCache) {
-		GSETERROR(&(ctx.warning),"Namespace unknown NS=[%s]", nsName);
-		JUMPERR(&ctx,500,MSG_INTERNAL_ERROR);
+		GSETCODE(&(ctx.warning), CODE_NAMESPACE_NOTMANAGED, "Namespace unknown NS=[%s]", nsName);
+		JUMPERR(&ctx, CODE_NAMESPACE_NOTMANAGED, MSG_INTERNAL_ERROR);
 	}
 
 	/* TODO : gba_content contains the excluded services and must be used */
 
 	m1_ai = resolver_direct_get_meta1(nsCache->m0, cid, ro, exclude, &(ctx.warning));
 	if (!m1_ai) {
-		JUMPERR(&ctx, 500, MSG_INTERNAL_ERROR);
+		JUMPERR(&ctx, CODE_INTERNAL_ERROR, MSG_INTERNAL_ERROR);
 	}
 
 	ref_exists = limited_cache_has(nsCache->m1, cid, NULL);
@@ -569,9 +582,9 @@ handler_get_meta1(struct request_context_s *req_ctx)
 		gsize bufAISize = 0;
 		if (!addr_info_marshall(&aL, &bufAI, &bufAISize, &(ctx.warning))) {
 			GSETERROR(&(ctx.warning), "Cannot marshall the address list");
-			JUMPERR(&ctx, 500, ctx.warning->message);
+			JUMPERR(&ctx, CODE_INTERNAL_ERROR, ctx.warning->message);
 		}
-		reply_context_set_message(&ctx, 200, "OK");
+		reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 		reply_context_set_body(&ctx, bufAI, bufAISize, REPLYCTX_DESTROY_ON_CLEAN);
 		reply_context_add_strheader_in_reply(&ctx, "REF_EXISTS", ref_exists ? "TRUE" : "FALSE");
 		reply_context_reply(&ctx, &(ctx.warning));
@@ -613,7 +626,7 @@ handler_set_m1_master(struct request_context_s *req_ctx)
 	EXTRACT_CONTAINER_ID(req_ctx, ctx, cid, str_cid);
 	ctx.warning = message_extract_string(req_ctx->request, NAME_MSGKEY_M1_MASTER, master, sizeof(master));
 	if(NULL != ctx.warning)
-		JUMPERR(&ctx, 400, MSG_BAD_REQUEST);
+		JUMPERR(&ctx, CODE_BAD_REQUEST, MSG_BAD_REQUEST);
 	
 	RESOLVERS_LOCK();
 	nsCache = namespace_cache_init (nsName, &(ctx.warning));
@@ -625,7 +638,7 @@ handler_set_m1_master(struct request_context_s *req_ctx)
 		resolver_direct_set_meta1_master(nsCache->m0, cid, master, &(ctx.warning));
 	}
 
-	reply_context_set_message (&ctx, 200, "OK");
+	reply_context_set_message (&ctx, CODE_FINAL_OK, "OK");
 	reply_context_set_body (&ctx, NULL, 0, 0);
 	reply_context_reply (&ctx, &(ctx.warning));
 
@@ -641,7 +654,6 @@ errorLabel:
 	reply_context_clear (&ctx, TRUE);
 	return TRUE;
 }
-
 
 static gboolean
 handler_get_meta2(struct request_context_s *req_ctx)
@@ -671,13 +683,13 @@ handler_get_meta2(struct request_context_s *req_ctx)
 	RESOLVERS_UNLOCK();
 	if (!nsCache) {
 		GSETERROR(&(ctx.warning), "Cannot init a namespace cache");
-		JUMPERR(&ctx, 500, MSG_INTERNAL_ERROR);
+		JUMPERR(&ctx, CODE_INTERNAL_ERROR, MSG_INTERNAL_ERROR);
 	}
 
 	aL = _locate_meta2(nsCache, nsName, cid, str_cid, &(ctx.warning));
 	if (!aL) {
 		GSETERROR(&(ctx.warning), "Container not found");
-		JUMPERR(&ctx, 500, MSG_INTERNAL_ERROR);
+		JUMPERR(&ctx, CODE_INTERNAL_ERROR, MSG_INTERNAL_ERROR);
 	}
 
 	reply_addr_info_list(&ctx, aL);
@@ -698,7 +710,6 @@ errorLabel:
 	reply_context_clear (&ctx, TRUE);
 	return TRUE;
 }
-
 
 static gboolean
 handler_decache(struct request_context_s *req_ctx)
@@ -727,8 +738,8 @@ handler_decache(struct request_context_s *req_ctx)
 			cid_present = FALSE;
 		}
 		if (!field || fieldLen!=sizeof(container_id_t)) {
-			GSETCODE(&(ctx.warning), 400, "Bad Request (invalid container id)");
-			JUMPERR(&ctx, 400, MSG_BAD_REQUEST);
+			GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad Request (invalid container id)");
+			JUMPERR(&ctx, CODE_BAD_REQUEST, MSG_BAD_REQUEST);
 		} else {
 			memset(&cid, 0x00, sizeof(container_id_t));
 			memcpy(&cid, field, sizeof(container_id_t));
@@ -754,7 +765,7 @@ handler_decache(struct request_context_s *req_ctx)
 		}
 	}
 
-	reply_context_set_message (&ctx, 200, "OK");
+	reply_context_set_message (&ctx, CODE_FINAL_OK, "OK");
 	reply_context_set_body (&ctx, NULL, 0, 0);
 	reply_context_reply (&ctx, &(ctx.warning));
 
@@ -804,7 +815,7 @@ handler_chunks_get(struct request_context_s *req_ctx)
 		
 	/* reply the success */	
 	reply_context_clear(&ctx, FALSE);
-	reply_context_set_message(&ctx, 200, "chunks found");
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "chunks found");
 	reply_context_set_body(&ctx, gba_content->data, gba_content->len, REPLYCTX_DESTROY_ON_CLEAN);
 	reply_context_reply(&ctx, &(ctx.warning));
 	g_byte_array_free(gba_content, FALSE);
@@ -820,7 +831,7 @@ errorLabel:
 	if (ctx.warning)
 		reply_context_set_message(&ctx, ctx.warning->code, ctx.warning->message);
 	else 
-		reply_context_set_message(&ctx, 500, "Content not found");
+		reply_context_set_message(&ctx, CODE_INTERNAL_ERROR, "Content not found");
 	reply_context_set_body (&ctx, NULL, 0, 0);
 	reply_context_reply (&ctx, NULL);
 	LOG_ACCESS(&ctx, "/%.*s/%.*s/%.*s",
@@ -863,8 +874,8 @@ handler_chunks_save(struct request_context_s *req_ctx)
 	nsCache = namespace_cache_init (nsName, &(ctx.warning));
 	RESOLVERS_UNLOCK();
 	if (!nsCache) {
-		GSETCODE(&(ctx.warning), 500, "Namespace unknown NS=[%s]", nsName);
-		JUMPERR(&ctx, 500, "Namespace not found");
+		GSETCODE(&(ctx.warning), CODE_NAMESPACE_NOTMANAGED, "Namespace unknown NS=[%s]", nsName);
+		JUMPERR(&ctx, CODE_NAMESPACE_NOTMANAGED, "Namespace not found");
 	}
 
 	if (locktab_lock(nsCache->chunks_locks, &key)) {
@@ -874,7 +885,7 @@ handler_chunks_save(struct request_context_s *req_ctx)
 	cache_size = limited_cache_get_size(nsCache->chunks_cache);
 
 	reply_context_clear(&ctx, FALSE);
-	reply_context_set_message(&ctx, 200, "Content now cached");
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "Content now cached");
 	reply_context_set_body(&ctx, NULL, 0, 0);
 	reply_context_reply(&ctx, NULL);
 	
@@ -933,8 +944,8 @@ handler_chunks_forget(struct request_context_s *req_ctx)
 	nsCache = namespace_cache_init (nsName, &(ctx.warning));
 	RESOLVERS_UNLOCK();
 	if (!nsCache) {
-		GSETCODE(&(ctx.warning), 500, "Namespace unknown NS=[%s]", nsName);
-		JUMPERR(&ctx, 500, "Namespace not found");
+		GSETCODE(&(ctx.warning), CODE_NAMESPACE_NOTMANAGED, "Namespace unknown NS=[%s]", nsName);
+		JUMPERR(&ctx, CODE_NAMESPACE_NOTMANAGED, "Namespace not found");
 	}
 	if (locktab_lock(nsCache->chunks_locks, &key)) {
 		limited_cache_del(nsCache->chunks_cache, &key);
@@ -943,7 +954,7 @@ handler_chunks_forget(struct request_context_s *req_ctx)
 	cache_size = limited_cache_get_size(nsCache->chunks_cache);
 
 	reply_context_clear(&ctx, FALSE);
-	reply_context_set_message(&ctx, 200, "Content not cached anymore");
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "Content not cached anymore");
 	reply_context_set_body(&ctx, NULL, 0, 0);
 	reply_context_reply(&ctx, NULL);
 	
@@ -966,7 +977,6 @@ errorLabel:
 	return FALSE;
 }
 
-
 static gboolean
 handler_chunks_flush(struct request_context_s *req_ctx)
 {
@@ -986,14 +996,14 @@ handler_chunks_flush(struct request_context_s *req_ctx)
 	nsCache = namespace_cache_init (nsName, &(ctx.warning));
 	RESOLVERS_UNLOCK();
 	if (!nsCache) {
-		GSETCODE(&(ctx.warning), 500, "Namespace unknown NS=[%s]", nsName);
-		JUMPERR(&ctx, 500, "Namespace not found");
+		GSETCODE(&(ctx.warning), CODE_NAMESPACE_NOTMANAGED, "Namespace unknown NS=[%s]", nsName);
+		JUMPERR(&ctx, CODE_NAMESPACE_NOTMANAGED, "Namespace not found");
 	}
 	limited_cache_flush(nsCache->chunks_cache);
 	cache_size = limited_cache_get_size(nsCache->chunks_cache);
 
 	reply_context_clear(&ctx, FALSE);
-	reply_context_set_message(&ctx, 200, "DONE");
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "DONE");
 	reply_context_set_body(&ctx, NULL, 0, 0);
 	reply_context_reply(&ctx, NULL);
 
@@ -1009,12 +1019,9 @@ errorLabel:
 	return FALSE;
 }
 
-
 /* ------------------------------------------------------------------------- */
 
-
 typedef gboolean(*_cmd_handler_f) (struct request_context_s *);
-
 
 static _cmd_handler_f
 __find_handler(gchar * n, gsize l)
@@ -1046,7 +1053,6 @@ __find_handler(gchar * n, gsize l)
 	return NULL;
 }
 
-
 static gint
 plugin_matcher(MESSAGE m, void *param, GError ** err)
 {
@@ -1070,7 +1076,6 @@ plugin_matcher(MESSAGE m, void *param, GError ** err)
 
 	return (__find_handler((gchar *) name, nameLen) != NULL ? 1 : 0);
 }
-
 
 static gint
 plugin_handler(MESSAGE m, gint cnx, void *param, GError ** err)
@@ -1157,7 +1162,7 @@ plugin_init(GHashTable * params, GError ** err)
 		return 0;
 	}
 
-	g_static_rec_mutex_init(&resolvers_mutex);
+	g_rec_mutex_init(&resolvers_mutex);
 
 	/*overrides the default meta1 cache value if present and valid */
 	flag_access = _read_param_bool(params, KEY_PARAM_ACCESSLOG, FALSE);
@@ -1212,7 +1217,6 @@ plugin_init(GHashTable * params, GError ** err)
 	return 1;
 }
 
-
 static gint
 plugin_close(GError ** err)
 {
@@ -1223,7 +1227,6 @@ plugin_close(GError ** err)
 	INFO("METAcd init cleaned");
 	return 1;
 }
-
 
 struct exported_api_s exported_symbol = {
 	MODULE_NAME,

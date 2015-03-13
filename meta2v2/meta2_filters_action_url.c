@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta2.disp"
 #endif
@@ -58,7 +77,6 @@ _update_content_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_back
 	GSList *beans = NULL;
 	gpointer alias = NULL;
 	gpointer header = NULL;
-
 
 	void _get_alias_header_cb(gpointer udata, gpointer bean) {
 		(void) udata;
@@ -138,7 +156,7 @@ meta2_filter_action_update_storage_policy(struct gridd_filter_ctx_s *ctx,
 
 	/* ensure storage policy */
 	if((!stgpol) || (NULL ==(sp = storage_policy_init(&ni, stgpol)))) {
-		meta2_filter_ctx_set_error(ctx, NEWERROR(400, "Invalid storage policy [%s]", stgpol));
+		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST, "Invalid storage policy [%s]", stgpol));
 		return FILTER_KO;
 	}
 
@@ -161,8 +179,12 @@ meta2_filter_action_exit_election(struct gridd_filter_ctx_s *ctx,
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 
 	if (hc_url_has(url,HCURL_HEXID)) {
-		GError *err = sqlx_repository_exit_election(m2b->backend.repo,
-				"meta2", hc_url_get(url,HCURL_HEXID));
+		struct sqlx_name_s n = {
+			.base = hc_url_get(url,HCURL_HEXID),
+			.type = META2_TYPE_NAME,
+			.ns = m2b->backend.ns_name
+		};
+		GError *err = sqlx_repository_exit_election(m2b->backend.repo, &n);
 		hc_decache_reference_service(m2b->resolver, url, META2_TYPE_NAME);
 		if (err) {
 			meta2_filter_ctx_set_error(ctx, err);

@@ -1,5 +1,24 @@
-#ifndef _AGENT_H
-# define _AGENT_H
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__cluster__agent__agent_h
+# define OIO_SDS__cluster__agent__agent_h 1
 
 # include <sys/types.h>
 # include <unistd.h>
@@ -8,20 +27,17 @@
 # include <cluster/events/gridcluster_eventhandler.h>
 # include <cluster/agent/gridagent.h>
 
-# define IS_FORKED_AGENT (agent_type!=PT_REQ)
-# define GS_AGENT_SPOOLDIR "/GRID/common/spool"
+# ifndef GS_CONFIG_EVENT_DELAY
+#  define GS_CONFIG_EVENT_DELAY "event_delay"
+# endif
 
-#ifndef GS_CONFIG_EVENT_DELAY
-# define GS_CONFIG_EVENT_DELAY "event_delay"
-#endif
+# ifndef GS_CONFIG_EVENT_REFRESH
+#  define GS_CONFIG_EVENT_REFRESH "event_refresh"
+# endif
 
-#ifndef GS_CONFIG_EVENT_REFRESH
-# define GS_CONFIG_EVENT_REFRESH "event_refresh"
-#endif
-
-#ifndef GS_CONFIG_NSINFO_REFRESH
-# define GS_CONFIG_NSINFO_REFRESH "nsinfo_refresh"
-#endif
+# ifndef GS_CONFIG_NSINFO_REFRESH
+#  define GS_CONFIG_NSINFO_REFRESH "nsinfo_refresh"
+# endif
 
 # ifdef HAVE_EXTRA_DEBUG
 #  define TRACE_POSITION() TRACE("At %s (%s %d)", __FUNCTION__, __FILE__, __LINE__)
@@ -29,11 +45,132 @@
 #  define TRACE_POSITION()
 # endif
 
-# ifndef DEFAULT_TIMEOUT_KILL
-#  define DEFAULT_TIMEOUT_KILL 5L
-# endif
+/* ------------------------------------------------------------------------- */
 
-enum process_type_e {PT_SUPERV, PT_EVT, PT_REQ};
+# define SOCK_TIMEOUT 10000
+
+# define KEY_USER             "user"
+# define KEY_GROUP            "group"
+# define KEY_UID              "uid"
+# define KEY_GID              "gid"
+# define KEY_MODE             "mode"
+# define KEY_PATH             "path"
+# define KEY_PORT             "port"
+# define KEY_BACKLOG          "backlog"
+# define KEY_TIMEOUT          "timeout"
+
+# define SVC_CHECK_KEY        "service_check"
+# define SVC_CHECK_FREQ_KEY   "service_check_freq"
+# define STATS_PERIOD         "period_local_stats"
+# define SVC_PUSH_BLANK_KEY   "service_push_blank_unknown"
+
+# define DEFAULT_SVC_CHECK       TRUE
+# define DEFAULT_SVC_CHECK_FREQ  1
+# define DEFAULT_SVC_PUSH_BLANK  TRUE
+
+# define DEFAULT_BROKEN_MANAGE   TRUE
+# define DEFAULT_BROKEN_FREQ     30
+# define KEY_BROKEN_MANAGE       "enable_broken_elements"
+# define KEY_BROKEN_FREQ_PUSH    "period_broken_push"
+# define KEY_BROKEN_FREQ_GET     "period_broken_get"
+
+// Default value for the next 5
+# define DEFAULT_CS_UPDATE_FREQ           5
+# define CS_DEFAULT_FREQ_KEY              "cluster_update_freq"
+
+# define CS_GET_NS_PERIOD_KEY            "period_get_ns"
+# define CS_GET_SRVLIST_PERIOD_KEY       "period_get_srv"
+# define CS_GET_SRVTYPE_PERIOD_KEY       "period_get_srvtype"
+# define CS_GET_EVTCFG_PERIOD_KEY        "period_get_evtconfig"
+# define CS_PUSH_SRVLIST_PERIOD_KEY      "period_push_srv"
+
+# define EVENTS_MODE_FILE_KEY            "events.mode.file"
+# define EVENTS_MODE_DIR_KEY             "events.mode.dir"
+# define EVENTS_SPOOL_DIR_KEY            "events.spool.dir"
+# define EVENTS_SPOOL_SIZE_KEY           "events.spool.size"
+# define EVENTS_MANAGE_ENABLE_KEY        "events.manage.enable"
+# define EVENTS_RECEIVE_ENABLE_KEY       "events.receive.enable"
+# define EVENTS_MAXPENDING_KEY           "events.max_pending"
+# define EVENTS_DELAY_INCOMING_KEY       "events.incoming_delay"
+
+# define EVENTS_MODE_FILE_DEFAULT        0444
+# define EVENTS_MODE_DIR_DEFAULT         0755
+# define EVENTS_SPOOL_SIZE_DEFAULT       0
+# define EVENTS_SPOOL_SIZE_DEFAULT       0
+# define EVENTS_MANAGE_ENABLE_DEFAULT    1
+# define EVENTS_RECEIVE_ENABLE_DEFAULT   1
+# define EVENTS_MAXPENDING_ACTIONS_DEFAULT 500U
+# define EVENTS_MAXPENDING_DEFAULT         100U
+# define EVENTS_DELAY_INCOMING_DEFAULT   0L
+
+# define SECTION_GENERAL "General"
+# define SECTION_SERVER_INET  "server.inet"
+# define SECTION_SERVER_UNIX  "server.unix"
+
+# define UNIX_DEFAULT_PATH      "" /*not set*/
+# define UNIX_DEFAULT_GID       -1
+# define UNIX_DEFAULT_UID       -1
+# define UNIX_DEFAULT_MODE      0660
+# define UNIX_DEFAULT_BACKLOG   32768
+# define UNIX_DEFAULT_TIMEOUT   10000
+
+# define INET_DEFAULT_PORT      -1 /*not set*/
+# define INET_DEFAULT_BACKLOG   32768
+# define INET_DEFAULT_TIMEOUT   10000
+
+/* GLOBALS ----------------------------------------------------------------- */
+
+/* main config */
+extern gchar str_opt_config[1024];
+extern gchar str_opt_log[1024];
+extern enum process_type_e agent_type;
+extern gboolean flag_check_services;
+extern int period_check_services;
+extern gboolean gridagent_blank_undefined_srvtags;
+
+/* networking */
+extern int inet_socket_backlog;
+extern int inet_socket_timeout;
+extern int inet_socket_port;
+
+extern char unix_socket_path[1024];
+extern int unix_socket_timeout;
+extern int unix_socket_backlog;
+extern int unix_socket_mode;
+extern int unix_socket_uid;
+extern int unix_socket_gid;
+
+/* refresh */
+extern int period_get_ns;
+extern int period_get_evtconfig;
+extern int period_get_srvtype;
+extern int period_get_srvlist;
+extern int period_push_srvlist;
+
+/* broken items */
+extern gboolean flag_manage_broken;
+extern int period_push_broken;
+extern int period_get_broken;
+
+/* events */
+extern char xattr_event_timestamp[256];
+extern time_t event_delay;
+extern time_t events_refresh_delay;
+
+extern int event_file_mode;
+extern int event_directory_mode;
+extern gboolean event_queue_cleaning_allowed;
+extern gchar path_configured_top_spool_dir[SPOOL_DIRNAME_LENGTH];
+
+extern guint max_events_actions_pending;
+extern guint max_events_pending;
+
+extern char event_enable_receive;
+extern char event_enable_manage;
+
+/* ------------------------------------------------------------------------- */
+
+enum process_type_e {PT_EVT, PT_REQ};
 
 /*One directory for each queue*/
 struct event_queue_set_s {
@@ -60,20 +197,11 @@ typedef struct namespace_data_s {
 
 void free_agent_structures(void);
 
-int parse_namespaces(GError ** error);
+void parse_namespaces(void);
 
-int is_agent_running(void);
-
-const gchar* get_signame(int s);
+extern GHashTable *namespaces;
 
 /* ------------------------------------------------------------------------- */
-
-/**
- * Run a supervisor agent that will fork a request-agent, 
- * event management children, a configuration child, and
- * the services children.
- */
-int main_supervisor(void);
 
 /**
  *
@@ -85,48 +213,6 @@ int main_event(const gchar *ns_name);
  */
 int main_reqagent(void);
 
-/* --- GLOBALS ------------------------------------------------------------- */
-
-extern enum process_type_e agent_type;
-extern GHashTable *namespaces;
-
-extern gboolean flag_check_services;
-extern int period_check_services;
-
-extern int period_get_ns;
-extern int period_get_evtconfig;
-extern int period_get_srvtype;
-extern int period_get_srvlist;
-extern int period_push_srvlist;
-
-extern gboolean flag_manage_broken;
-extern int period_push_broken;
-extern int period_get_broken;
-
-extern gchar str_opt_config[1024];
-extern gchar str_opt_log[1024];
-
-extern gboolean gridagent_blank_undefined_srvtags;
-
-/* ------------------------------------------------------------------------- */
-
-extern char xattr_event_timestamp[256];
-extern time_t event_delay;
-extern time_t events_refresh_delay;
-
-extern int event_file_mode;
-extern int event_directory_mode;
-extern gboolean event_queue_cleaning_allowed;
-extern gchar *path_configured_top_spool_dir;
-
-extern guint max_events_actions_pending;
-extern guint max_events_pending;
-
-extern char event_enable_receive;
-extern char event_enable_manage;
-
-/* Helpers ----------------------------------------------------------------- */
-
 /**
  * Returns the delayed configured for the given namespace.
  * The value is read in the namesapce options if it is present, or taken
@@ -134,4 +220,4 @@ extern char event_enable_manage;
  */
 time_t get_event_delay(namespace_data_t *ns_data);
 
-#endif	/* _AGENT_H */
+#endif /*OIO_SDS__cluster__agent__agent_h*/

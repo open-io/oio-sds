@@ -1,9 +1,24 @@
-/**
- * @file gs_internals.h
- * Client internals
- */
-#ifndef _GS_INTERNALS_H__
-#define _GS_INTERNALS_H__
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__client__c__lib__gs_internals_h
+# define OIO_SDS__client__c__lib__gs_internals_h 1
 
 /**
  * @defgroup private Private
@@ -238,13 +253,11 @@ struct gs_service_s {
 #define C1_PATH(pC)     (pC->info.path)
 #define C1_VERSION(pC)     (pC->version)
 
-
 #define GSERRORSET(E,FMT,...) gs_error_set((E),0,(FMT),##__VA_ARGS__)
 
 #define GSERRORCODE(E,C,FMT,...) gs_error_set((E),(C),(FMT),##__VA_ARGS__)
 
 #define GSERRORCAUSE(E,GE,FMT,...) gs_error_set_cause((E),(GE),(FMT),##__VA_ARGS__)
-
 
 void gs_error_set (gs_error_t **err, int code, const char *format, ...);
 
@@ -260,7 +273,6 @@ void gs_error_set_cause (gs_error_t **err, GError *ge, const char *format, ...);
  */
 void gs_error_clear (gs_error_t **err);
 
-
 /* Reloads the internal chunk set of the given content */
 gboolean gs_content_reload (gs_content_t *content, gboolean allow_meta2, gboolean allow_cache, gs_error_t **err);
 gboolean gs_content_reload_with_filtered (gs_content_t *content, gboolean allow_meta2, gboolean allow_cache,
@@ -269,10 +281,8 @@ gboolean gs_content_reload_with_filtered (gs_content_t *content, gboolean allow_
 /* sort the chunk_info_t following the ascending order of their positions */
 gint chunkinfo_sort_position_ASC (gconstpointer c1, gconstpointer c2);
 
-
 /* sort the chunk_info_t following the descending order of their positions */
 gint chunkinfo_sort_position_DESC (gconstpointer c1, gconstpointer c2);
-
 
 /**
  * Split the given URL into 2 buffers.
@@ -280,7 +290,6 @@ gint chunkinfo_sort_position_DESC (gconstpointer c1, gconstpointer c2);
  * in dotted notation, or an IPv6 address in hexadecimal representation.
  * If the format is good, the address part is resolved using getnameinfo */
 gboolean gs_url_split (const gchar *url, gchar **host, gchar **port);
-
 
 /**
  * Explicitely refresh a reference to a remote container.
@@ -306,7 +315,6 @@ gs_status_t gs_container_refresh (gs_container_t *container, GError **err);
  */
 gs_status_t gs_container_reconnect (gs_container_t *container, GError **err);
 
-
 /**
  *
  */
@@ -321,7 +329,6 @@ gs_status_t gs_manage_container_error (gs_container_t *container, const char *ca
  */
 void gs_container_close_cnx (gs_container_t *container);
 
-
 /**
  * Utility function that returns a pointer to the internal message
  * of the GError structure. Do not free it, do not touch it, no ...
@@ -329,7 +336,6 @@ void gs_container_close_cnx (gs_container_t *container);
  * It always returns a valid NULL terminated pointer.
  */
 const char* g_error_get_message (GError *err);
-
 
 /**
  * Returns a static string explaining quickly the error code.
@@ -342,7 +348,6 @@ const char* gs_error_code_to_error (int code);
 gs_error_t* gs_error_new(int code, const gchar *fmt, ...);
 
 /* ------------------------------------------------------------------------- */
-
 
 /* Tells the given grid storage to decache its information about the given
  * container identifier. If the only_resolver is not NULL, only this
@@ -387,13 +392,7 @@ gs_status_t gs_check_chunk_agregate (GSList *agregate, gs_error_t **gserr);
 
 void gs_decache_chunks_in_metacd(gs_content_t *content);
 
-#define C0_LIST(C,E) meta2_remote_container_list_in_fd (C0_CNX(C), C0_M2TO(C), (E), C0_ID(C))
-#define C0_DESTROY(A,C,E) meta1_remote_destroy_container_by_id ((A), C0_M1TO(C), (E), C0_ID(C))
-
-#define C1_GET(C,E) meta2_remote_content_retrieve_in_fd (C1_CNX(C), C1_M2TO(C), (E), C1_ID(C), C1_PATH(C))
-#define C1_COMMIT(C,E) meta2_remote_content_commit_in_fd (C1_CNX(content), C1_M2TO(content), &localError, C1_ID(content), C1_PATH(content))
 #define C1_ROLLBACK(C,E) meta2_remote_content_rollback_in_fd (C1_CNX(content), C1_M2TO(content), &localError, C1_ID(content), C1_PATH(content))
-#define C1_REMOVE(C,E) meta2_remote_content_remove_in_fd (C1_CNX(content), C1_M2TO(content), &localError, C1_ID(content), C1_PATH(content))
 
 #define CONTAINER_REFRESH(C,Error,Label,Msg) do\
 { if (GS_OK != gs_manage_container_error(C,__FILE__,__LINE__,&Error)) goto Label; } while (0)
@@ -473,4 +472,4 @@ gs_error_t *hc_get_container_global_properties(gs_container_t *container,
 
 /** @} */
 
-#endif /*_GS_INTERNALS_H__*/
+#endif /*OIO_SDS__client__c__lib__gs_internals_h*/

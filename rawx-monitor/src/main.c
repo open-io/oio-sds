@@ -1,3 +1,22 @@
+/*
+OpenIO SDS rawx-monitor
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "vol.monitor"
 #endif
@@ -25,8 +44,6 @@
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 #include <cluster/lib/gridcluster.h>
-
-#include <svc-monitor/src/utils.h>
 
 #include "filer_monitor.h"
 #ifdef HAVE_NETAPP
@@ -187,7 +204,6 @@ _srvinfo_populate_with_rawx_stats(struct service_info_s *si)
 			g_strfreev(tok);
 		return 0;
        }
-
 
        gchar dst[128];
        guint16 port = 0;
@@ -441,7 +457,6 @@ _path_get_mountpoint(const gchar *path, struct volume_cfg_s *mfs, GError **error
 	}
 	INFO("Docroot real path is [%s]", mfs->docroot);
 
-
 	stream_proc = fopen("/proc/mounts", "r");
 	if (!stream_proc) {
 		GSETERROR(error, "fopen(/proc/mounts) error : %s", strerror(errno));
@@ -572,7 +587,7 @@ _cfg_section_child(GKeyFile *kf, const gchar *section, GError **error)
 	supervisor_children_status(CHILD_KEY, 1);
 	supervisor_children_set_respawn(CHILD_KEY, 0);
 	supervisor_children_set_delay(CHILD_KEY, 0);
-	supervisor_preserve_env(CHILD_KEY);
+	supervisor_children_inherit_env(CHILD_KEY);
 
 	/* Should the rawx-monitor make the Service respawn ?
 	 * Default : NO ! Remember the rawx-monitor will exit
@@ -917,8 +932,6 @@ _main_init(void)
 	signal(SIGUSR2, main_sighandler);
 	signal(SIGCHLD, main_sighandler);
 
-	if (!g_thread_supported ())
-		g_thread_init (NULL);
 	if (log4c_init())
 		g_printerr("No log4c available : %s\n", strerror(errno));
 }
@@ -984,7 +997,7 @@ main(int argc, char ** argv)
 
 	/* start the filer monitoring */
 	si = main_prepare_srvinfo();/* Does not return if it fails (ENOMEM) */
-	th = g_thread_create(thread_function_monitor, si, TRUE, &error_local);
+	th = g_thread_try_new("monitor", thread_function_monitor, si, &error_local);
 	if (!th) {
 		GSETERROR(&error_local, "Failed to start the monitoring thread");
 		goto label_error;

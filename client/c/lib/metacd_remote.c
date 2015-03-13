@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.client.metacd.remote"
 #endif
@@ -97,52 +116,17 @@ inline void destroy_metacd_path(const gchar *metacd_path)
 }
 
 static MESSAGE
-metacd_create_request (const struct metacd_connection_info_s *mi, const container_id_t cID, GError **err)
+metacd_create_request (const struct metacd_connection_info_s *mi, const container_id_t cID)
 {
-	MESSAGE request=NULL;
-
-	if (!mi) {
-		GSETERROR(err, "invalid parameter");
-		return NULL;
-	}
-
-	if (!message_create(&request,err)) {
-		GSETERROR(err,"cannot create a request message");
-		return NULL;
-	}
-
-	/*Sets the container ID if provided*/
-	if (cID) {
-		if (!message_add_field (request, MSGKEY_CID, sizeof(MSGKEY_CID)-1, cID, sizeof(container_id_t), err)) {
-			GSETERROR(err, "Cannot set the containerId in the request");
-			goto errorLabel;
-		}
-	}
-
-	/*sets the namespace name*/
-	if (!message_add_field (request, MSGKEY_NS, sizeof(MSGKEY_NS)-1, mi->metacd.nsName, strlen(mi->metacd.nsName), err)) {
-		GSETERROR(err,"Cannot set the namespace name in the request");
-		goto errorLabel;
-	} else {
-		TRACE(MSGKEY_NS" set to %s", mi->metacd.nsName);
-	}
-
-	/*set the provided session ID*/
-	if (mi->cnx_id && mi->cnx_id_size>0) {
-		TRACE("requesting METAcd mi=%p id=%p size=%lu", mi,
-			(mi->cnx_id ? mi->cnx_id : NULL), (mi->cnx_id ? mi->cnx_id_size : 0));
-		if (!message_set_ID(request, mi->cnx_id, mi->cnx_id_size, err)) {
-			GSETERROR(err,"Cannot add the container ID in the message");
-			goto errorLabel;
-		}
-	}
-
+	g_assert (mi != NULL);
+	MESSAGE request = message_create();
+	if (cID)
+		message_add_field (request, MSGKEY_CID, cID, sizeof(container_id_t));
+	message_add_field (request, MSGKEY_NS, mi->metacd.nsName, strlen(mi->metacd.nsName));
+	if (mi->cnx_id && mi->cnx_id_size>0)
+		message_set_ID(request, mi->cnx_id, mi->cnx_id_size, NULL);
 	return request;
-errorLabel:
-	message_destroy(request,NULL);
-	return NULL;
 }
-
 
 static gboolean
 concat_contents (GError **err, gpointer udata, gint code, guint8 *body, gsize bodySize)
@@ -173,21 +157,17 @@ concat_contents (GError **err, gpointer udata, gint code, guint8 *body, gsize bo
 	return TRUE;
 }
 
-
 /* ------------------------------------------------------------------------- */
-
 
 GSList*
 metacd_remote_get_meta0(const struct metacd_connection_info_s *mi, GError **err)
 {
-	int fd = -1;
-	GSList *result=NULL;
-	MESSAGE request=NULL;
-	struct code_handler_s rs_codes [] = {
-		{206,REPSEQ_BODYMANDATORY,addr_info_concat,NULL},
-		{200,REPSEQ_FINAL|REPSEQ_BODYMANDATORY,addr_info_concat,NULL},
+	static struct code_handler_s rs_codes [] = {
+		{CODE_PARTIAL_CONTENT,REPSEQ_BODYMANDATORY,addr_info_concat,NULL},
+		{CODE_FINAL_OK,REPSEQ_FINAL|REPSEQ_BODYMANDATORY,addr_info_concat,NULL},
 		{0,0,NULL,NULL}
 	};
+	GSList *result=NULL;
 	struct reply_sequence_data_s rs_data = {&result,0,rs_codes};
 
 	if (!mi) {
@@ -196,37 +176,26 @@ metacd_remote_get_meta0(const struct metacd_connection_info_s *mi, GError **err)
 	}
 
 	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+	MESSAGE request = metacd_create_request(mi, NULL);
+	message_set_NAME (request, MSGNAME_METACD_GETM0, sizeof(MSGNAME_METACD_GETM0)-1, NULL);
 
-	if (!(request = metacd_create_request(mi,NULL,err))) {
-		GSETERROR (err,"cannot create the metacd request");
-		goto errorLabel;
-	}
-
-	if (!message_set_NAME (request, MSGNAME_METACD_GETM0, sizeof(MSGNAME_METACD_GETM0)-1, err))
-	{
-		GSETERROR (err, "Cannot set the name of the request");
-		goto errorLabel;
-	}
-
-	/*open the connection*/
+	int fd = -1;
 	if (0>(fd=connect_to_unix_socket(mi, err))) {
 		GSETERROR (err, "cannot connect to the metacd");
 		goto errorLabel;
 	}
-
-	/*send the request and read the responses*/
 	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &rs_data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
 
 errorLabel:
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
@@ -235,15 +204,9 @@ errorLabel:
 GSList*  metacd_remote_get_meta1 (const struct metacd_connection_info_s *mi, const container_id_t cID,
 		int ro, gboolean *p_ref_exists, GSList *exclude, GError **err)
 {
-	int fd = -1;
-	GSList *result=NULL;
-	MESSAGE request=NULL;
-
 	gboolean _get_meta1_reply_cb (GError ** local_err, gpointer udata, gint code, MESSAGE rep)
 	{
-		(void) local_err;
-		(void) udata;
-		(void) code;
+		(void) local_err, (void) udata, (void) code;
 		gchar *ref_exists = NULL;
 		gsize ref_value_size;
 		if (NULL == p_ref_exists)
@@ -258,9 +221,10 @@ GSList*  metacd_remote_get_meta1 (const struct metacd_connection_info_s *mi, con
 	}
 
 	struct code_handler_s rs_codes [] = {
-		{200,REPSEQ_FINAL|REPSEQ_BODYMANDATORY,addr_info_concat,_get_meta1_reply_cb},
+		{CODE_FINAL_OK,REPSEQ_FINAL|REPSEQ_BODYMANDATORY,addr_info_concat,_get_meta1_reply_cb},
 		{0,0,NULL,NULL}
 	};
+	GSList *result=NULL;
 	struct reply_sequence_data_s rs_data = {&result,0,rs_codes};
 
 	if (!mi || !cID) {
@@ -268,63 +232,40 @@ GSList*  metacd_remote_get_meta1 (const struct metacd_connection_info_s *mi, con
 		return NULL;
 	}
 
+	int fd = -1;
 	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
-	if (!(request = metacd_create_request(mi,cID,err))) {
-		GSETERROR (err,"cannot create the metacd request");
-		goto errorLabel;
-	}
-
-	if (!message_set_NAME (request, MSGNAME_METACD_GETM1, sizeof(MSGNAME_METACD_GETM1)-1, err))
-	{
-		GSETERROR (err, "Cannot set the name of the request");
-		goto errorLabel;
-	}
+	MESSAGE request = metacd_create_request(mi, cID);
+	message_set_NAME (request, MSGNAME_METACD_GETM1, sizeof(MSGNAME_METACD_GETM1)-1, NULL);
 
 	if( NULL != exclude) {
 		GByteArray *encoded = NULL;
-
 		if (!(encoded = addr_info_marshall_gba(exclude, err))) {
 			GSETERROR(err, "Exclude meta1 encode error");
 			goto errorLabel;
 		}
-
-		int rc = 0;
-		rc = message_set_BODY(request, encoded->data, encoded->len, err);
-
+		message_set_BODY(request, encoded->data, encoded->len, NULL);
 		g_byte_array_free(encoded, TRUE);
-		if (!rc) {
-			GSETERROR(err,"Request configuration failure");
-			goto errorLabel;
-		}
 	}
 
-	if(ro) {
-		if (!message_add_field (request, "RO", strlen("RO"), "TRUE", strlen("TRUE"), err)) {
-			GSETERROR(err,"Cannot set the read_only state in the request");
-			goto errorLabel;
-		}
-	}
+	if (ro)
+		message_add_field (request, "RO", "TRUE", strlen("TRUE"));
 
-
-	/*open the connection*/
 	if (0>(fd=connect_to_unix_socket(mi, err))) {
 		GSETERROR (err, "cannot connect to the metacd");
 		goto errorLabel;
 	}
-
-	/*send the request and read the responses*/
 	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &rs_data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
 
 errorLabel:
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
@@ -334,11 +275,8 @@ gboolean
 metacd_remote_set_meta1_master (const struct metacd_connection_info_s *mi, const container_id_t cid,
 		const char *master, GError **e)
 {
-	int fd = -1;
-	MESSAGE request=NULL;
-
 	struct code_handler_s rs_codes [] = {
-		{200,REPSEQ_FINAL,NULL,NULL},
+		{CODE_FINAL_OK,REPSEQ_FINAL,NULL,NULL},
 		{0,0,NULL,NULL}
 	};
 	struct reply_sequence_data_s rs_data = {NULL,0,rs_codes};
@@ -348,55 +286,40 @@ metacd_remote_set_meta1_master (const struct metacd_connection_info_s *mi, const
 		return FALSE;
 	}
 
+	int fd = -1;
 	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+	MESSAGE request = metacd_create_request(mi, cid);
+	message_set_NAME (request, MSGNAME_METACD_SET_M1_MASTER, sizeof(MSGNAME_METACD_SET_M1_MASTER) - 1, NULL);
+	message_add_fields_str(request, NAME_MSGKEY_M1_MASTER, g_strdup(master), NULL);
 
-	if (!(request = metacd_create_request(mi, cid, e))) {
-		GSETERROR (e, "Cannot create the metacd request");
-		goto e_label;
-	}
-
-	if (!message_set_NAME (request, MSGNAME_METACD_SET_M1_MASTER, sizeof(MSGNAME_METACD_SET_M1_MASTER) - 1, e)) {
-		GSETERROR (e, "Cannot set the name of the request");
-		goto e_label;
-	}
-
-	message_add_fields_str(request, NAME_MSGKEY_M1_MASTER, g_strdup(master),
-				NULL);
-
-	/*open the connection*/
 	if (0>(fd=connect_to_unix_socket(mi, e))) {
 		GSETERROR (e, "cannot connect to the metacd");
 		goto e_label;
 	}
-
-	/*send the request and read the responses*/
 	if (!metaXClient_reply_sequence_run (e, request, &fd, mi->metacd.timeout.op, &rs_data)) {
 		GSETERROR (e, "cannot update meta1 master");
 		goto e_label;
 	}
 
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 
 e_label:
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
 
-
 GSList*  metacd_remote_get_meta2 (const struct metacd_connection_info_s *mi, const container_id_t cID, GError **err)
 {
-	int fd = -1;
-	GSList *result=NULL;
-	MESSAGE request=NULL;
-	struct code_handler_s rs_codes [] = {
-		{200,REPSEQ_FINAL|REPSEQ_BODYMANDATORY,addr_info_concat,NULL},
+	static struct code_handler_s rs_codes [] = {
+		{CODE_FINAL_OK,REPSEQ_FINAL|REPSEQ_BODYMANDATORY,addr_info_concat,NULL},
 		{0,0,NULL,NULL}
 	};
+	GSList *result=NULL;
 	struct reply_sequence_data_s rs_data = {&result,0,rs_codes};
 
 	if (!mi || !cID) {
@@ -404,50 +327,36 @@ GSList*  metacd_remote_get_meta2 (const struct metacd_connection_info_s *mi, con
 		return NULL;
 	}
 
-        gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+	int fd = -1;
+	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+	MESSAGE request = metacd_create_request(mi, cID);
+	message_set_NAME (request, MSGNAME_METACD_GETM2, sizeof(MSGNAME_METACD_GETM2)-1, NULL);
 
-	if (!(request = metacd_create_request(mi,cID,err))) {
-		GSETERROR (err,"cannot create the metacd request");
-		goto errorLabel;
-	}
-
-	if (!message_set_NAME (request, MSGNAME_METACD_GETM2, sizeof(MSGNAME_METACD_GETM2)-1, err))
-	{
-		GSETERROR (err, "Cannot set the name of the request");
-		goto errorLabel;
-	}
-
-	/*open the connection*/
 	if (0>(fd=connect_to_unix_socket(mi, err))) {
 		GSETERROR (err, "cannot connect to the metacd");
 		goto errorLabel;
 	}
-
-	/*send the request and read the responses*/
 	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &rs_data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	message_destroy(request, NULL);
+	message_destroy(request);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	metautils_pclose(&fd);
 	return result;
 
 errorLabel:
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
 
-
 gboolean metacd_remote_decache (const struct metacd_connection_info_s *mi, const container_id_t cID, GError **err)
 {
-	int fd = -1;
-	MESSAGE request=NULL;
-	struct code_handler_s rs_codes [] = {
-		{200,REPSEQ_FINAL,NULL,NULL},
+	static struct code_handler_s rs_codes [] = {
+		{CODE_FINAL_OK,REPSEQ_FINAL,NULL,NULL},
 		{0,0,NULL,NULL}
 	};
 	struct reply_sequence_data_s rs_data = {NULL,0,rs_codes};
@@ -457,50 +366,36 @@ gboolean metacd_remote_decache (const struct metacd_connection_info_s *mi, const
 		return FALSE;
 	}
 
+	int fd = -1;
 	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+	MESSAGE request = metacd_create_request(mi, cID);
+	message_set_NAME (request, MSGNAME_METACD_DECACHE, sizeof(MSGNAME_METACD_DECACHE)-1, NULL);
 
-	if (!(request = metacd_create_request(mi,cID,err))) {
-		GSETERROR (err,"cannot create the metacd request");
-		goto errorLabel;
-	}
-
-	if (!message_set_NAME (request, MSGNAME_METACD_DECACHE, sizeof(MSGNAME_METACD_DECACHE)-1, err))
-	{
-		GSETERROR (err, "Cannot set the name of the request");
-		goto errorLabel;
-	}
-
-	/*open the connection*/
 	if (0>(fd=connect_to_unix_socket(mi, err))) {
 		GSETERROR (err, "cannot connect to the metacd");
 		goto errorLabel;
 	}
-
-	/*send the request and read the responses*/
 	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &rs_data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
     gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 
 errorLabel:
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
 
-
 gboolean metacd_remote_decache_all (const struct metacd_connection_info_s *mi, GError **err)
 {
-	int fd = -1;
-	MESSAGE request=NULL;
-	struct code_handler_s rs_codes [] = {
-		{200,REPSEQ_FINAL,NULL,NULL},
+	static struct code_handler_s rs_codes [] = {
+		{CODE_FINAL_OK,REPSEQ_FINAL,NULL,NULL},
 		{0,0,NULL,NULL}
 	};
 	struct reply_sequence_data_s rs_data = {NULL,0,rs_codes};
@@ -510,82 +405,55 @@ gboolean metacd_remote_decache_all (const struct metacd_connection_info_s *mi, G
 		return FALSE;
 	}
 
+	int fd = -1;
 	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+	MESSAGE request = metacd_create_request(mi, NULL);
+	message_set_NAME (request, MSGNAME_METACD_DECACHE, sizeof(MSGNAME_METACD_DECACHE)-1, NULL);
 
-	if (!(request = metacd_create_request(mi,NULL,err))) {
-		GSETERROR (err,"cannot create the metacd request");
-		goto errorLabel;
-	}
-
-	if (!message_set_NAME (request, MSGNAME_METACD_DECACHE, sizeof(MSGNAME_METACD_DECACHE)-1, err))
-	{
-		GSETERROR (err, "Cannot set the name of the request");
-		goto errorLabel;
-	}
-
-	/*open the connection*/
 	if (0>(fd=connect_to_unix_socket(mi, err))) {
 		GSETERROR (err, "cannot connect to the metacd");
 		goto errorLabel;
 	}
-
-	/*send the request and read the responses*/
 	if (!metaXClient_reply_sequence_run (err, request, &fd, mi->metacd.timeout.op, &rs_data)) {
 		GSETERROR (err, "cannot resolver META2");
 		goto errorLabel;
 	}
 
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 
 errorLabel:
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
-
 
 struct meta2_raw_content_s*
 metacd_remote_get_content (const struct metacd_connection_info_s *mi, const container_id_t cID,
 	const gchar *path, GError **err)
 {
 	static struct code_handler_s codes [] = {
-		{ 200, REPSEQ_FINAL|REPSEQ_BODYMANDATORY, concat_contents, NULL },
-		{ 206, REPSEQ_BODYMANDATORY, concat_contents, NULL },
+		{ CODE_FINAL_OK, REPSEQ_FINAL|REPSEQ_BODYMANDATORY, concat_contents, NULL },
+		{ CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, concat_contents, NULL },
 		{ 0,0,NULL,NULL}
 	};
-	int fd = -1;
-	MESSAGE request=NULL;
 	struct meta2_raw_content_s *result=NULL;
 	struct reply_sequence_data_s data = { &result , 0 , codes };
 
-
-        gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
-
-
 	if (!mi || !cID || !path) {
 		GSETERROR(err,"invalid parameter");
-		goto errorLabel;
+		return NULL;
 	}
 
-	/*init the request*/
-	if (!(request = metacd_create_request(mi, cID, err))) {
-		GSETERROR (err,"cannot create the metacd request");
-		goto errorLabel;
-	}
-	if (!message_add_field(request, MSGKEY_PATH, sizeof(MSGKEY_PATH)-1, path, strlen(path), err)) {
-		GSETERROR(err, "Cannot set the path in the request");
-		goto errorLabel;
-	}
-	if (!message_set_NAME(request, MSGNAME_METACD_V2_CHUNKS_GET, sizeof(MSGNAME_METACD_V2_CHUNKS_GET)-1, err)) {
-		GSETERROR (err, "Cannot set the name of the request");
-		goto errorLabel;
-	}
+	int fd = -1;
+	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+	MESSAGE request = metacd_create_request(mi, cID);
+	message_add_field(request, MSGKEY_PATH, path, strlen(path));
+	message_set_NAME(request, MSGNAME_METACD_V2_CHUNKS_GET, sizeof(MSGNAME_METACD_V2_CHUNKS_GET)-1, NULL);
 
-	/*open the connection*/
 	if (0>(fd=connect_to_unix_socket(mi, err))) {
 		GSETERROR (err, "cannot connect to the metacd");
 		goto errorLabel;
@@ -595,13 +463,13 @@ metacd_remote_get_content (const struct metacd_connection_info_s *mi, const cont
 		goto errorLabel;
 	}
 
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return result;
 
 errorLabel:
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
@@ -612,38 +480,23 @@ metacd_remote_forget_content(struct metacd_connection_info_s *mi,
 	const container_id_t cID, const gchar *path, GError **err)
 {
 	static struct code_handler_s codes [] = {
-		{ 200, REPSEQ_FINAL, NULL, NULL },
-		{ 206, 0, NULL, NULL },
+		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
+		{ CODE_PARTIAL_CONTENT, 0, NULL, NULL },
 		{ 0,0,NULL,NULL}
 	};
-	int fd = -1;
-	MESSAGE request=NULL;
 	struct reply_sequence_data_s data = { NULL, 0 , codes };
-
-
-        gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
-
 
 	if (!mi || !cID || !path) {
 		GSETERROR(err,"invalid parameter");
-		goto errorLabel;
+		return FALSE;
 	}
 
-	/*init the request*/
-	if (!(request = metacd_create_request(mi, cID, err))) {
-		GSETERROR (err,"cannot create the metacd request");
-		goto errorLabel;
-	}
-	if (!message_add_field(request, MSGKEY_PATH, sizeof(MSGKEY_PATH)-1, path, strlen(path), err)) {
-		GSETERROR(err, "Cannot set the path in the request");
-		goto errorLabel;
-	}
-	if (!message_set_NAME(request, MSGNAME_METACD_V1_CHUNKS_DEL, sizeof(MSGNAME_METACD_V1_CHUNKS_DEL)-1, err)) {
-		GSETERROR (err, "Cannot set the name of the request");
-		goto errorLabel;
-	}
+	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+	MESSAGE request = metacd_create_request(mi, cID);
+	message_add_field(request, MSGKEY_PATH, path, strlen(path));
+	message_set_NAME(request, MSGNAME_METACD_V1_CHUNKS_DEL, sizeof(MSGNAME_METACD_V1_CHUNKS_DEL)-1, NULL);
 
-	/*open the connection*/
+	int fd = -1;
 	if (0>(fd=connect_to_unix_socket(mi, err))) {
 		GSETERROR (err, "cannot connect to the metacd");
 		goto errorLabel;
@@ -653,13 +506,13 @@ metacd_remote_forget_content(struct metacd_connection_info_s *mi,
 		goto errorLabel;
 	}
 
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 
 errorLabel:
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
@@ -669,33 +522,22 @@ gboolean
 metacd_remote_flush_content(struct metacd_connection_info_s *mi, GError **err)
 {
 	static struct code_handler_s codes [] = {
-		{ 200, REPSEQ_FINAL, NULL, NULL },
-		{ 206, 0, NULL, NULL },
+		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
+		{ CODE_PARTIAL_CONTENT, 0, NULL, NULL },
 		{ 0,0,NULL,NULL}
 	};
-	int fd = -1;
-	MESSAGE request=NULL;
 	struct reply_sequence_data_s data = { NULL, 0 , codes };
 
 	if (!mi) {
 		GSETERROR(err,"invalid parameter");
-		goto errorLabel;
+		return FALSE;
 	}
 
-        gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+	MESSAGE request = metacd_create_request(mi, NULL);
+	message_set_NAME(request, MSGNAME_METACD_V1_CHUNKS_FLUSH, sizeof(MSGNAME_METACD_V1_CHUNKS_FLUSH)-1, NULL);
 
-
-	/*init the request*/
-	if (!(request = metacd_create_request(mi, NULL, err))) {
-		GSETERROR (err,"cannot create the metacd request");
-		goto errorLabel;
-	}
-	if (!message_set_NAME(request, MSGNAME_METACD_V1_CHUNKS_FLUSH, sizeof(MSGNAME_METACD_V1_CHUNKS_FLUSH)-1, err)) {
-		GSETERROR (err, "Cannot set the name of the request");
-		goto errorLabel;
-	}
-
-	/*open the connection*/
+	int fd = -1;
 	if (0>(fd=connect_to_unix_socket(mi, err))) {
 		GSETERROR (err, "cannot connect to the metacd");
 		goto errorLabel;
@@ -705,71 +547,50 @@ metacd_remote_flush_content(struct metacd_connection_info_s *mi, GError **err)
 		goto errorLabel;
 	}
 
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 
 errorLabel:
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return FALSE;
 }
 
-
 gboolean
 metacd_remote_save_content(struct metacd_connection_info_s *mi, struct meta2_raw_content_s *content, GError **err)
 {
 	static struct code_handler_s codes [] = {
-		{ 200, REPSEQ_FINAL, NULL, NULL },
+		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
 		{ 0,0,NULL,NULL}
 	};
-	int fd = -1;
-	size_t path_len;
-	MESSAGE request = NULL;
-	GByteArray *gba_body = NULL;
 	struct reply_sequence_data_s data = { NULL, 0, codes };
-	const gchar *metacd_path = NULL;
 
 	if (!mi || !content) {
 		GSETERROR(err,"invalid parameter");
 		return FALSE;
 	}
 
-	gba_body = meta2_maintenance_marshall_content(content, err);
+	GByteArray *gba_body = meta2_maintenance_marshall_content(content, err);
 	if (!gba_body) {
 		GSETERROR(err,"Serialization error");
 		return FALSE;
 	}
 
-        gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
-
-	/*init the request*/
-	if (!(request = metacd_create_request(mi, content->container_id, err))) {
-		GSETERROR (err,"cannot create the metacd request");
-		goto errorLabel;
-	}
-
-	metacd_path = make_metacd_path2(content->path, content->version);
-	path_len = strlen(metacd_path);
-	if (!message_add_field(request, MSGKEY_PATH, sizeof(MSGKEY_PATH)-1,
-			metacd_path, path_len, err)) {
-		GSETERROR(err, "Cannot set the path in the request");
+	gscstat_tags_start(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
+	MESSAGE request = metacd_create_request(mi, content->container_id);
+	do {
+		const gchar *metacd_path = make_metacd_path2(content->path, content->version);
+		size_t path_len = strlen(metacd_path);
+		message_add_field(request, MSGKEY_PATH, metacd_path, path_len);
 		destroy_metacd_path(metacd_path);
-		goto errorLabel;
-	}
-	destroy_metacd_path(metacd_path);
-	if (!message_set_NAME(request, MSGNAME_METACD_V2_CHUNKS_PUT, sizeof(MSGNAME_METACD_V2_CHUNKS_PUT)-1, err)) {
-		GSETERROR (err, "Cannot set the name of the request");
-		goto errorLabel;
-	}
-	if (!message_set_BODY(request, gba_body->data, gba_body->len, err)) {
-		GSETERROR (err, "Cannot set the BODY of the request");
-		goto errorLabel;
-	}
+	} while (0);
+	message_set_NAME(request, MSGNAME_METACD_V2_CHUNKS_PUT, sizeof(MSGNAME_METACD_V2_CHUNKS_PUT)-1, NULL);
+	message_set_BODY(request, gba_body->data, gba_body->len, NULL);
 
-	/*open the connection*/
+	int fd = -1;
 	if (0>(fd=connect_to_unix_socket(mi, err))) {
 		GSETERROR (err, "cannot connect to the metacd");
 		goto errorLabel;
@@ -779,14 +600,14 @@ metacd_remote_save_content(struct metacd_connection_info_s *mi, struct meta2_raw
 		goto errorLabel;
 	}
 
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	g_byte_array_free(gba_body, TRUE);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);
 	return TRUE;
 
 errorLabel:
-	message_destroy(request, NULL);
+	message_destroy(request);
 	metautils_pclose(&fd);
 	g_byte_array_free(gba_body, TRUE);
 	gscstat_tags_end(GSCSTAT_SERVICE_METACD, GSCSTAT_TAGS_REQPROCTIME);

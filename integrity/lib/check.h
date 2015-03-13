@@ -1,5 +1,24 @@
-#ifndef CHECK_H
-#define CHECK_H
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__integrity__lib__check_h
+# define OIO_SDS__integrity__lib__check_h 1
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -22,7 +41,7 @@ typedef struct _check_result {
 /**
  * Frees the m2v1 list.
  */
-void free_m2v1_list();
+void free_m2v1_list (void);
 
 /**
  * Returns whether the provided meta2 address is known as m2v1.
@@ -131,7 +150,7 @@ GError* generate_raw_chunk(check_info_t *info,
  * Creates a new check_result_t.
  * @return a new check_result_t
  */
-check_result_t *check_result_new();
+check_result_t *check_result_new (void);
 
 /**
  * Clears all memory allocated for res.
@@ -155,7 +174,7 @@ void check_result_append_msg(check_result_t *res, const gchar *format, ...);
  * Creates a new option hash table.
  * @return a new hash table
  */
-GHashTable *check_option_new();
+GHashTable *check_option_new (void);
 
 /**
  * Destroys an option hash table.
@@ -215,4 +234,4 @@ void check_option_set_bool(GHashTable *options,
 void check_option_set_str(GHashTable *options,
 		const gchar *oname, const gchar *ovalue);
 
-#endif /* CHECK_H */
+#endif /*OIO_SDS__integrity__lib__check_h*/

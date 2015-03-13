@@ -3,9 +3,8 @@
 include_directories(BEFORE . .. ../..)
 
 add_library(gridcluster SHARED config.c
-		connect.c connect.h
-		gridcluster.c gridcluster.h
-		message.c message.h)
+		gridcluster.c
+		message.c)
 
 set_target_properties(gridcluster PROPERTIES SOVERSION ${ABI_VERSION})
 

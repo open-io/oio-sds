@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gridcluster.remote"
 #endif
@@ -16,56 +35,20 @@
 #include "gridcluster_remote.h"
 
 static MESSAGE
-build_request(gchar * req_name, void *body, gsize body_size, GError ** error)
+build_request(gchar * req_name, void *body, gsize body_size)
 {
-	MESSAGE req = NULL;
-
-	/*create a request and serializes it */
-	if (!message_create(&req, error)) {
-		GSETERROR(error, "Failed to create a new message");
-		goto error_create;
-	}
-
-	if (body && !message_set_BODY(req, body, body_size, error)) {
-		GSETERROR(error, "Failed to set message body");
-		goto error_set_body;
-	}
-
-	/*sets the request name */
-	if (!message_set_NAME(req, req_name, strlen(req_name), error)) {
-		GSETERROR(error, "Failed to set message name");
-		goto error_set_name;
-	}
-
+	MESSAGE req = message_create();
+	if (body)
+		message_set_BODY(req, body, body_size, NULL);
+	message_set_NAME(req, req_name, strlen(req_name), NULL);
 	return (req);
-
-error_set_name:
-error_set_body:
-	message_destroy(req, NULL);
-error_create:
-
-	return (NULL);
-}
-
-static gboolean
-namespace_info_handler(GError ** error, gpointer udata, gint code, guint8 * body, gsize bodySize)
-{
-	namespace_info_t **ns_info = (namespace_info_t **) udata;
-	(void) error;
-	(void) code;
-	(void) bodySize;
-	memcpy(*ns_info, body, sizeof(namespace_info_t));
-	return (TRUE);
 }
 
 static gboolean
 namespace_info_full_handler(GError ** error, gpointer udata, gint code, guint8 * body, gsize bodySize)
 {
+	(void) error, (void) code, (void) bodySize;
 	namespace_info_t **ns_info = (namespace_info_t **) udata;
-
-	(void) error;
-	(void) code;
-	(void) bodySize;
 	*ns_info = namespace_info_unmarshall(body, bodySize, error);
 	return (TRUE);
 }
@@ -73,29 +56,23 @@ namespace_info_full_handler(GError ** error, gpointer udata, gint code, guint8 *
 static gboolean
 container_list_content_handler(GError ** error, gpointer udata, gint code, guint8 * body, gsize bodySize)
 {
-	GSList **the_list, *list_from_body;
-
 	(void) code;
-	the_list = (GSList **) udata;
-	list_from_body = meta2_maintenance_names_unmarshall_buffer(body, bodySize, error);
+	GSList **the_list = (GSList **) udata;
+	GSList *list_from_body = meta2_maintenance_names_unmarshall_buffer(body, bodySize, error);
 	if (!list_from_body) {
 		GSETERROR(error, "Cannot unmarshall body of message as broken containers");
 		return (FALSE);
 	}
 
 	*the_list = g_slist_concat(*the_list, list_from_body);
-
 	return (TRUE);
 }
 
 meta0_info_t *
 gcluster_get_meta0_2timeouts(addr_info_t * addr, long to_cnx, long to_req, GError ** error)
 {
-	meta0_info_t *m0;
-	GSList *result;
-
-	result = gcluster_get_services2(addr, to_cnx, to_req, "meta0", error);
-	m0 = NULL;
+	meta0_info_t *m0 = NULL;
+	GSList *result = gcluster_get_services2(addr, to_cnx, to_req, "meta0", error);
 	if (result) {
 		m0 = service_info_convert_to_m0info(g_slist_nth_data(result,rand()%g_slist_length(result)));
 		g_slist_foreach(result, service_info_gclean, NULL);
@@ -112,74 +89,26 @@ gcluster_get_meta0(addr_info_t * addr, long timeout, GError ** error)
 }
 
 namespace_info_t *
-gcluster_get_namespace_info(addr_info_t * addr, long timeout, GError ** error)
-{
-	static struct code_handler_s codes[] = {
-		{200, REPSEQ_FINAL, &namespace_info_handler, NULL},
-		{0, 0, NULL, NULL}
-	};
-	namespace_info_t *ns_info = NULL;
-	struct reply_sequence_data_s data = { &ns_info, 0, codes };
-	MESSAGE req = NULL;
-
-	req = build_request(NAME_MSGNAME_CS_GETNS, NULL, 0, error);
-	if (req == NULL) {
-		GSETERROR(error, "Failed to build request %s", NAME_MSGNAME_CS_GETNS);
-		goto error_buildreq;
-	}
-
-	/*reads the answers */
-	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, timeout, &data)) {
-		GSETERROR(error, "Cannot execute the query %s and receive all the responses", NAME_MSGNAME_CS_GETNS);
-		goto error_reply;
-	}
-
-	message_destroy(req, NULL);
-
-	return (ns_info);
-
-error_reply:
-	message_destroy(req, NULL);
-error_buildreq:
-
-	return (NULL);
-}
-
-namespace_info_t *
 gcluster_get_namespace_info_full(addr_info_t * addr, long timeout, GError ** error)
 {
 	static struct code_handler_s codes[] = {
-		{200, REPSEQ_FINAL, &namespace_info_full_handler, NULL},
+		{CODE_FINAL_OK, REPSEQ_FINAL, &namespace_info_full_handler, NULL},
 		{0, 0, NULL, NULL}
 	};
 	namespace_info_t *ns_info = NULL;
 	struct reply_sequence_data_s data = { &ns_info, 0, codes };
-	MESSAGE req = NULL;
+	MESSAGE req = build_request(NAME_MSGNAME_CS_GET_NSINFO, NULL, 0);
 
-	req = build_request(NAME_MSGNAME_CS_GET_NSINFO, NULL, 0, error);
-	if (req == NULL) {
-		GSETERROR(error, "Failed to build request %s", NAME_MSGNAME_CS_GET_NSINFO);
-		goto error_buildreq;
-	}
-
-	(void) message_add_field(req, "VERSION", 7,
-				SHORT_API_VERSION, sizeof(SHORT_API_VERSION)-1,
-				NULL);
-
-	/*reads the answers */
 	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, timeout, &data)) {
 		GSETERROR(error, "Cannot execute the query %s and receive all the responses", NAME_MSGNAME_CS_GET_NSINFO);
 		goto error_reply;
 	}
 
-	message_destroy(req, NULL);
-
+	message_destroy(req);
 	return (ns_info);
 
 error_reply:
-	message_destroy(req, NULL);
-error_buildreq:
-
+	message_destroy(req);
 	return (NULL);
 }
 
@@ -187,43 +116,31 @@ gint
 gcluster_push_broken_container(addr_info_t * addr, long timeout, GSList * container_list, GError ** error)
 {
 	static struct code_handler_s codes[] = {
-		{200, REPSEQ_FINAL, NULL, NULL},
+		{CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL},
 		{0, 0, NULL, NULL}
 	};
 	struct reply_sequence_data_s data = { NULL, 0, codes };
-	MESSAGE req = NULL;
-	GByteArray *buf = NULL;
 
-	buf = meta2_maintenance_names_marshall(container_list, error);
+	GByteArray *buf = meta2_maintenance_names_marshall(container_list, error);
 	if (!buf) {
 		GSETERROR(error, "Failed to marshall container list");
-		goto error_marshall;
+		return 0;
 	}
 
-	req = build_request(NAME_MSGNAME_CS_PUSH_BROKEN_CONT, buf->data, buf->len, error);
-	if (req == NULL) {
-		GSETERROR(error, "Failed to build request %s", NAME_MSGNAME_CS_PUSH_BROKEN_CONT);
-		goto error_buildreq;
-	}
-
-	/*reads the answers */
+	MESSAGE req = build_request(NAME_MSGNAME_CS_PUSH_BROKEN_CONT, buf->data, buf->len);
 	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, timeout, &data)) {
 		GSETERROR(error, "Cannot execute the query %s and receive all the responses",
 				NAME_MSGNAME_CS_PUSH_BROKEN_CONT);
 		goto error_reply;
 	}
 
-	message_destroy(req, NULL);
+	message_destroy(req);
 	g_byte_array_free(buf, TRUE);
-
 	return (1);
 
 error_reply:
-	message_destroy(req, NULL);
-error_buildreq:
+	message_destroy(req);
 	g_byte_array_free(buf, TRUE);
-error_marshall:
-
 	return (0);
 }
 
@@ -231,12 +148,11 @@ gint
 gcluster_push_virtual_ns_space_used(addr_info_t * addr, long timeout, GHashTable *space_used, GError ** error)
 {
 	static struct code_handler_s codes[] = {
-		{200, REPSEQ_FINAL, NULL, NULL},
+		{CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL},
 		{0, 0, NULL, NULL}
 	};
 	struct reply_sequence_data_s data = { NULL, 0, codes };
 	MESSAGE req = NULL;
-	GByteArray *buf = NULL;
 	GSList *kv_list = NULL;
 
 	/* send the hashtable in the body */
@@ -247,44 +163,29 @@ gcluster_push_virtual_ns_space_used(addr_info_t * addr, long timeout, GHashTable
 	}
 
 	/*encode the list */
-	buf = key_value_pairs_marshall_gba(kv_list, error);
+	GByteArray *buf = key_value_pairs_marshall_gba(kv_list, error);
 	if (!buf) {
 		GSETERROR(error, "Failed to marshall kv list");
 		goto error_marshall;
 	}
 
-	req = build_request(NAME_MSGNAME_CS_PUSH_VNS_SPACE_USED, buf->data, buf->len, error);
-	if (req == NULL) {
-		GSETERROR(error, "Failed to build request %s", NAME_MSGNAME_CS_PUSH_VNS_SPACE_USED);
-		goto error_buildreq;
-	}
-
-	/*reads the answers */
+	req = build_request(NAME_MSGNAME_CS_PUSH_VNS_SPACE_USED, buf->data, buf->len);
 	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, timeout, &data)) {
 		GSETERROR(error, "Cannot execute the query %s and receive all the responses",
 				NAME_MSGNAME_CS_PUSH_BROKEN_CONT);
 		goto error_reply;
 	}
 
-	message_destroy(req, NULL);
+	message_destroy(req);
 	g_byte_array_free(buf, TRUE);
-	if(kv_list) {
-		g_slist_foreach(kv_list, g_free1, NULL);
-		g_slist_free(kv_list);
-	}
-
+	g_slist_free_full (kv_list, g_free0);
 	return (1);
 
 error_reply:
-	message_destroy(req, NULL);
-error_buildreq:
+	message_destroy(req);
 	g_byte_array_free(buf, TRUE);
 error_marshall:
-	if(kv_list) {
-		g_slist_foreach(kv_list, g_free1, NULL);
-		g_slist_free(kv_list);
-	}
-
+	g_slist_free_full(kv_list, g_free0);
 	return (0);
 }
 
@@ -353,43 +254,31 @@ gint
 gcluster_fix_broken_container(addr_info_t * addr, long timeout, GSList * container_list, GError ** error)
 {
 	static struct code_handler_s codes[] = {
-		{200, REPSEQ_FINAL, NULL, NULL},
+		{CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL},
 		{0, 0, NULL, NULL}
 	};
 	struct reply_sequence_data_s data = { NULL, 0, codes };
-	MESSAGE req = NULL;
-	GByteArray *buf = NULL;
 
-	buf = meta2_maintenance_names_marshall(container_list, error);
+	GByteArray *buf = meta2_maintenance_names_marshall(container_list, error);
 	if (!buf) {
 		GSETERROR(error, "Failed to marshall container list");
-		goto error_marshall;
+		return 0;
 	}
 
-	req = build_request(NAME_MSGNAME_CS_FIX_BROKEN_CONT, buf->data, buf->len, error);
-	if (req == NULL) {
-		GSETERROR(error, "Failed to build request %s", NAME_MSGNAME_CS_FIX_BROKEN_CONT);
-		goto error_buildreq;
-	}
-
-	/*reads the answers */
+	MESSAGE req = build_request(NAME_MSGNAME_CS_FIX_BROKEN_CONT, buf->data, buf->len);
 	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, timeout, &data)) {
 		GSETERROR(error, "Cannot execute the query %s and receive all the responses",
 				NAME_MSGNAME_CS_FIX_BROKEN_CONT);
 		goto error_reply;
 	}
 
-	message_destroy(req, NULL);
+	message_destroy(req);
 	g_byte_array_free(buf, TRUE);
-
 	return (1);
 
 error_reply:
-	message_destroy(req, NULL);
-error_buildreq:
+	message_destroy(req);
 	g_byte_array_free(buf, TRUE);
-error_marshall:
-
 	return (0);
 }
 
@@ -397,43 +286,31 @@ gint
 gcluster_rm_broken_container(addr_info_t * addr, long timeout, GSList * container_list, GError ** error)
 {
 	static struct code_handler_s codes[] = {
-		{200, REPSEQ_FINAL, NULL, NULL},
+		{CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL},
 		{0, 0, NULL, NULL}
 	};
 	struct reply_sequence_data_s data = { NULL, 0, codes };
-	MESSAGE req = NULL;
-	GByteArray *buf = NULL;
 
-	buf = meta2_maintenance_names_marshall(container_list, error);
+	GByteArray *buf = meta2_maintenance_names_marshall(container_list, error);
 	if (!buf) {
 		GSETERROR(error, "Failed to marshall container list");
-		goto error_marshall;
+		return 0;
 	}
 
-	req = build_request(NAME_MSGNAME_CS_RM_BROKEN_CONT, buf->data, buf->len, error);
-	if (req == NULL) {
-		GSETERROR(error, "Failed to build request %s", NAME_MSGNAME_CS_RM_BROKEN_CONT);
-		goto error_buildreq;
-	}
-
-	/*reads the answers */
+	MESSAGE req = build_request(NAME_MSGNAME_CS_RM_BROKEN_CONT, buf->data, buf->len);
 	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, timeout, &data)) {
 		GSETERROR(error, "Cannot execute the query %s and receive all the responses",
 				NAME_MSGNAME_CS_RM_BROKEN_CONT);
 		goto error_reply;
 	}
 
-	message_destroy(req, NULL);
+	message_destroy(req);
 	g_byte_array_free(buf, TRUE);
-
 	return (1);
 
 error_reply:
-	message_destroy(req, NULL);
-error_buildreq:
+	message_destroy(req);
 	g_byte_array_free(buf, TRUE);
-error_marshall:
-
 	return (0);
 }
 
@@ -441,35 +318,25 @@ GSList *
 gcluster_get_broken_container(addr_info_t * addr, long timeout, GError ** error)
 {
 	static struct code_handler_s codes[] = {
-		{206, REPSEQ_BODYMANDATORY, &container_list_content_handler, NULL},
-		{200, REPSEQ_FINAL, &container_list_content_handler, NULL},
+		{CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, &container_list_content_handler, NULL},
+		{CODE_FINAL_OK, REPSEQ_FINAL, &container_list_content_handler, NULL},
 		{0, 0, NULL, NULL}
 	};
 	GSList *containers = NULL;
 	struct reply_sequence_data_s data = { &containers, 0, codes };
-	MESSAGE req = NULL;
 
-	req = build_request(NAME_MSGNAME_CS_GET_BROKEN_CONT, NULL, 0, error);
-	if (req == NULL) {
-		GSETERROR(error, "Failed to build request %s", NAME_MSGNAME_CS_GET_BROKEN_CONT);
-		goto error_buildreq;
-	}
-
-	/*reads the answers */
+	MESSAGE req = build_request(NAME_MSGNAME_CS_GET_BROKEN_CONT, NULL, 0);
 	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, timeout, &data)) {
 		GSETERROR(error, "Cannot execute the query %s and receive all the responses",
 				NAME_MSGNAME_CS_GET_BROKEN_CONT);
 		goto error_reply;
 	}
 
-	message_destroy(req, NULL);
-
+	message_destroy(req);
 	return (containers);
 
 error_reply:
-	message_destroy(req, NULL);
-error_buildreq:
-
+	message_destroy(req);
 	return (NULL);
 }
 
@@ -537,33 +404,23 @@ GSList *
 gcluster_get_service_types(addr_info_t *addr, long timeout, GError ** error)
 {
 	static struct code_handler_s codes[] = {
-		{206, REPSEQ_BODYMANDATORY, &container_list_content_handler, NULL},
-		{200, REPSEQ_FINAL, &container_list_content_handler, NULL},
+		{CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, &container_list_content_handler, NULL},
+		{CODE_FINAL_OK, REPSEQ_FINAL, &container_list_content_handler, NULL},
 		{0, 0, NULL, NULL}};
 	GSList *srvtypes = NULL;
 	struct reply_sequence_data_s data = { &srvtypes, 0, codes };
-	MESSAGE req = NULL;
 
-	req = build_request(NAME_MSGNAME_CS_GET_SRVNAMES, NULL, 0, error);
-	if (req == NULL) {
-		GSETERROR(error, "Failed to build request %s", NAME_MSGNAME_CS_GET_SRVNAMES);
-		goto error_buildreq;
-	}
-
-	/*reads the answers */
+	MESSAGE req = build_request(NAME_MSGNAME_CS_GET_SRVNAMES, NULL, 0);
 	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, timeout, &data)) {
 		GSETERROR(error, "Cannot execute the query %s and receive all the responses", NAME_MSGNAME_CS_GET_SRVNAMES);
 		goto error_reply;
 	}
 
-	message_destroy(req, NULL);
-
+	message_destroy(req);
 	return (srvtypes);
 
 error_reply:
-	message_destroy(req, NULL);
-error_buildreq:
-
+	message_destroy(req);
 	return (NULL);
 }
 
@@ -571,45 +428,33 @@ gint
 gcluster_push_services(addr_info_t * addr, long timeout, GSList * services_list, gboolean lock_action, GError ** error)
 {
 	static struct code_handler_s codes[] = {
-		{200, REPSEQ_FINAL, NULL, NULL},
+		{CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL},
 		{0, 0, NULL, NULL}
 	};
 	struct reply_sequence_data_s data = { NULL, 0, codes };
-	MESSAGE req = NULL;
-	GByteArray *buf = NULL;
 
-	buf = service_info_marshall_gba(services_list, error);
+	GByteArray *buf = service_info_marshall_gba(services_list, error);
 	if (!buf) {
 		GSETERROR(error, "Failed to marshall services list");
-		goto error_marshall;
+		return 0;
 	}
 
-	req = build_request(NAME_MSGNAME_CS_PUSH_SRV, buf->data, buf->len, error);
-	if (req == NULL) {
-		GSETERROR(error, "Failed to build request %s", NAME_MSGNAME_CS_PUSH_SRV);
-		goto error_buildreq;
-	}
-
+	MESSAGE req = build_request(NAME_MSGNAME_CS_PUSH_SRV, buf->data, buf->len);
 	if (lock_action)
-		message_add_field(req, "LOCK", sizeof("LOCK") - 1, "true", sizeof("true") - 1, NULL);
+		message_add_field(req, "LOCK", "true", sizeof("true") - 1);
 
-	/*reads the answers */
 	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, timeout, &data)) {
 		GSETERROR(error, "Cannot execute the query %s and receive all the responses", NAME_MSGNAME_CS_PUSH_SRV);
 		goto error_reply;
 	}
 
-	message_destroy(req, NULL);
+	message_destroy(req);
 	g_byte_array_free(buf, TRUE);
-
 	return (1);
 
 error_reply:
-	message_destroy(req, NULL);
-error_buildreq:
+	message_destroy(req);
 	g_byte_array_free(buf, TRUE);
-error_marshall:
-
 	return (0);
 }
 
@@ -617,8 +462,7 @@ static gboolean
 body_to_gba_handler(GError ** error, gpointer udata, gint code, guint8 * body, gsize body_size)
 {
 	GByteArray **gba_result = (GByteArray **) udata;
-	(void) error;
-	(void) code;
+	(void) error, (void) code;
 	if (gba_result && *gba_result)
 		g_byte_array_free(*gba_result, TRUE);
 	*gba_result = g_byte_array_append(g_byte_array_new(), body, body_size);
@@ -629,39 +473,29 @@ GByteArray *
 gcluster_get_srvtype_event_config(addr_info_t * addr, long to, gchar * name, GError ** error)
 {
 	static struct code_handler_s codes[] = {
-		{200, REPSEQ_FINAL, &body_to_gba_handler, NULL},
+		{CODE_FINAL_OK, REPSEQ_FINAL, &body_to_gba_handler, NULL},
 		{0, 0, NULL, NULL}
 	};
 	GByteArray *result = NULL;
 	struct reply_sequence_data_s data = { &result, 0, codes };
-	MESSAGE req = NULL;
 
 	if (!addr || !name || to<0L) {
 		GSETERROR(error,"Invalid parameter (%p %p)", addr, name);
 		return NULL;
 	}
 
-	req = build_request(NAME_MSGNAME_CS_GET_EVENT_CONFIG, NULL, 0, error);
-	if (req == NULL) {
-		GSETERROR(error, "Failed to build request "NAME_MSGNAME_CS_GET_EVENT_CONFIG);
-		return NULL;
-	}
-
-	if (!message_add_field(req, "TYPENAME", sizeof("TYPENAME") - 1, name, strlen(name), NULL)) {
-		GSETERROR(error, "Failed to add the service typ name in the request headers");
-		message_destroy(req, NULL);
-		return NULL;
-	}
+	MESSAGE req = build_request(NAME_MSGNAME_CS_GET_EVENT_CONFIG, NULL, 0);
+	message_add_field(req, "TYPENAME", name, strlen(name));
 
 	result = g_byte_array_new();
 	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, to, &data)) {
 		GSETERROR(error, "Cannot execute the query "NAME_MSGNAME_CS_GET_EVENT_CONFIG" and receive all the responses");
 		g_byte_array_free(result, TRUE);
-		message_destroy(req, NULL);
+		message_destroy(req);
 		return NULL;
 	}
 
-	message_destroy(req, NULL);
+	message_destroy(req);
 	return result;
 }
 

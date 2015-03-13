@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gridcluster.agent.event.forward"
 #endif
@@ -17,7 +36,6 @@
 #include <cluster/events/gridcluster_eventsremote.h>
 #include <cluster/events/gridcluster_eventhandler.h>
 #include <cluster/conscience/conscience.h>
-
 
 #include "./agent.h"
 #include "./asn1_request_worker.h"
@@ -207,8 +225,6 @@ __zero_service(namespace_data_t *ns_data, const gchar *type_name, addr_info_t *a
 	bzero(key, sizeof(key));
 	g_snprintf(key, sizeof(key), "%s:%s", ns_data->name, type_name);
 
-	if (!(IS_FORKED_AGENT))
-		abort();
 	if (!local_services)
 		return;
 	if (!(spool = g_hash_table_lookup(local_services, key)))
@@ -231,11 +247,6 @@ __choose_service(namespace_data_t *ns_data, const gchar *type_name, struct servi
 	struct service_pool_s *spool;
 	time_t now;
 	gchar key[LIMIT_LENGTH_NSNAME+1+LIMIT_LENGTH_SRVTYPE+1];
-
-	if (!(IS_FORKED_AGENT)) {
-		GSETERROR(err, "Invalid state : illegal call in a non-forked agent");
-		return FALSE;
-	}
 
 	if (!local_services) {
 		local_services = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, _free_array);
@@ -381,20 +392,11 @@ static struct event_handle_s*
 event_handle_load(namespace_data_t *ns_data, const gchar *basedir,
 		const struct path_data_s *pd, GError **error)
 {
-	struct event_handle_s *handle;
-
-	handle = g_try_malloc0(sizeof(struct event_handle_s));
-	if (!handle) {
-		GSETCODE(error, ENOMEM, "malloc error");
-		return NULL;
-	}
-
+	struct event_handle_s *handle = g_malloc0(sizeof(struct event_handle_s));
 	handle->ns_data = ns_data;
 	handle->ref_count = 0;
-
 	g_memmove(handle->cid, pd->id, sizeof(container_id_t));
 	g_strlcpy(handle->str_cid, pd->str_cid, sizeof(handle->str_cid)-1);
-
 	handle->xattr_time = pd->xattr_time;
 	handle->xattr_seq = pd->xattr_seq;
 	handle->path = g_strconcat(basedir, G_DIR_SEPARATOR_S, pd->relpath, NULL);

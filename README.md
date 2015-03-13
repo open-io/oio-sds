@@ -1,37 +1,50 @@
-# Redcurrant
+# OpenIO Software Defined Storage
 
-Redcurrant is a software solution for objects storage, targetting very large-scale unstructured data volumes.
-
-As described [here](http://www.redcurrant.io/legal/licenses), the code is licensed under the terms of two licenses: LGPL3 for client-relaed files, AGPL3 for all the others. Please find in the LICENSE file more details about this.
+OpenIO SDS is a software solution for objects storage, targetting very large-scale unstructured data volumes.
 
 ## Install
 
-There are a few different ways you can install Redcurrant:
-
-* Download the zipfile from the [downloads](https://github.com/redcurrant/redcurrant/archives/master) page and install it. 
-* Checkout the source: `git clone git://github.com/redcurrant/redcurrant.git` and install it yourself.
+Or you go from scratch (the source), or you download the packages for your Linux distribution, intall, and run!
 
 ## Getting Started
 
-Go to http://www.redcurrant.io for documentations about installation and configuration of Redcurrant.
+There is one simple script to execute:
+
+  oio-reset.sh
+
+And if it succeed you wil have the joy to experiment your own little SDS instance. No root privileges are required!
 
 ## Build
 
 ### Dependencies
 
-The build process of Redcurrant's core depends on:
-* cmake, make, cp, seq, bison, flex
-* asn1c
-* glib2
-* openssl
-* libevent
+The build process of OpenIO SDS depends on:
+* cmake, make, cp, sed, bison, flex
 * perl, perl-Template-Toolkit: in its early years, these were used as code generators. This is a legacy code.
-* python: more recently, the code generators became base-python scripts.
-
-In additon, the build process of Redcurrant's crawler tools repends on:
-* json-c
-* zeromq3
-* debus
+* python: more recently, the code generators became pythonic scripts. Pure python, no dependency.
+* apr, apr-util-devel, apr-devel
+* [asn1c](https://github.com/vlm/asn1c)
+* attr, libattr-devel
+* curl, libcurl, libcurl-devel
+* dbus, dbus-devel, dbus-glib-devel
+* expat, expat-devel
+* gamin, gamin-devel
+* glib2, glib2-devel
+* [gridinit](https://github.com/open-io/gridinit)
+* httpd, httpd-devel
+* json-c, json-c-devel
+* libevent-devel
+* [librain](https://github.com/open-io/redcurrant-librain)
+* [librdkafka](https://github.com/edenhill/librdkafka): buid it from the source, it is easy and without dependency.
+* lzo, lzo-devel
+* neon, neon-devel
+* net-snmp, net-snmp-devel
+* openssl, openssl-devel
+* python-devel: required for the integrityloop
+* python-distutils-extra: required for the installation process
+* sqlite, sqlite-devel
+* zeromq3, zeromq3-devel
+* zookeeper-devel, libzookeeper\_mt.so : building with distribution's zookeeper client is OK, but the package ships with a lot of dependencies, including the openjdk. We recommand to use the official Oracle/Su JDK, and to build your own zookeeper client from the source to avoid a huge waste of space and bandwith.
 
 ### Configuration
 
@@ -43,22 +56,22 @@ cmake -D${K}=${V} ${SRCDIR}
 ```
 
 In addition to common cmake options, these specific options are also available:
-* ``PREFIX`` : an alternative to the cmake's CMAKE_INSTALL_PREFIX
-* ``MOCKS`` : define it to allow mock'ing syscalls and socket operations.
-* ``SOCKET_OPTIMIZED`` : define if to use socket3 and accept4 syscalls
-* ``EXE_PREFIX`` : define it to a prefix to be prepended to every executable generated. If not specified, a legacy format will be used.
-* ``SOCKET_LINGER_ONOFF`` : (integer value) triggers the onoff value of the SO_LINGER configuration.
-* ``SOCKET_LINGER_DELAY`` : (integer value) set it to the delay in milliseconds, this will the delay part of the SO_LINGER configuration.
-* ``ALLOW_DEPRECATED`` : define it to hide warnings for deprecated symbols from the GLib2
 
-In addition, some options axist to specify uncommon installation paths. Their
-format is ``${DEP}_INCDIR`` or ``${DEP}_LIBDIR``, and ``DEP`` might take the given values:
-* ``MYSQL`` : idem for MySQL
-* ``ZK`` : [Apache ZooKeeper](http://zookeeper.apache.org)
-* ``ZMQ`` : [ZeroMQ](http://zeromq.org) (>=3.1)
-* ``ASN1C`` : [asn1c](https://github.com/redcurrant/asn1c), our modified version of the original [asn1c](http://lionet.info/asn1c/)
-* ``GRIDINIT`` : [gridinit](https://github.com/redcurrant/gridinit)
-* ``LIBRAIN`` : ?
+| Directive | Help |
+| --------- | ---- |
+| LD\_LIBDIR | Path suffix to the installation prefix, to define the default directory for libraries. E.g. "lib" or "lib64", depending on the architecture. |
+| STACK\_PROTECTOR | Trigger stack protection code. Only active when CMAKE\_BUILD\_TYPE is set to "Debug" or "RelWithDebInfo" |
+| TRIP\_PATH | Installation directory for crawler plugins. |
+| GRIDD\_PLUGINS | Installation directory for gridd plugins. |
+| APACHE2\_MODDIR | Installation directory for apache2 modules. |
+| ALLOW\_DEPRECATED | define it to hide warnings for deprecated symbols from the GLib2. |
+| EXE\_PREFIX | Defines a prefix to all CLI tool. By default, set to "sds". |
+| MOCKS | Activate mocks to wrap syscalls. |
+| SOCKET\_OPTIMIZED | define if to use socket3 and accept4 syscalls |
+| SOCKET\_LINGER\_ONOFF | (integer value) triggers the onoff value of the SO\_LINGER configuration. |
+| SOCKET\_LINGER\_DELAY | (integer value) set it to the delay in milliseconds, this will the delay part of the SO\_LINGER configuration. |
+
+In addition, some options axist to specify uncommon installation paths. Their format is ``${DEP}_INCDIR`` or ``${DEP}_LIBDIR``, and ``DEP`` might take the given values ``APACHE2``, ``ASN1C``, ``ATTR``, ``CURL``, ``DB``, ``GRIDINIT``, ``JSONC``, ``LIBRAIN``, ``LZO``, ``MICROHTTPD``, ``NETSNMP``, ``RDKAFKA``, ``ZK``, ``ZLIB``, ``ZMQ``
 
 ### Building
 
@@ -68,4 +81,38 @@ make
 make test
 make DESTDIR=${install_dir} install
 ```
+
+## Compile-time configuration
+
+| Macro | Default | Description |
+| ----- | ------- | ----------- |
+| GCLUSTER\_ETC\_DIR | "/etc/oio" | System-wide configuration directory |
+| GCLUSTER\_SPOOL\_DIR | "/var/spool" | Top-level directory for namespace spool dirs for events. |
+| GCLUSTER\_RUN\_DIR | "/var/run" | Prefix to spool. |
+| GCLUSTER\_CONFIG\_FILE\_PATH | "/etc/oio/sds.conf" | System-wide configuration file |
+| GCLUSTER\_CONFIG\_DIR\_PATH | "/etc/oio/sds.conf.d" | System-wide configuration directory for additional files. |
+| GCLUSTER\_CONFIG\_LOCAL\_PATH | ".oio/sds.conf" | Local configuration directory. |
+| GCLUSTER\_AGENT\_SOCK\_PATH | "/var/run/oio-sds-agent.sock" | Default path for agent's socket. |
+| GS\_CONFIG\_EVENT\_DELAY | "event\_delay" | Default pre-treatment delay applied to gridagent's events. |
+| GS\_CONFIG\_EVENT\_REFRESH | "event\_refresh" | Default refresh period for event's management configuration. |
+| GS\_CONFIG\_NSINFO\_REFRESH | "nsinfo\_refresh" | Default refresh period for 
+| PROXYD\_PREFIX | "/v1.0" | Prefix applied to proxyd's URL |
+| PROXYD_PATH_MAXLEN | 2048 | Maximum length for path to be accepted in requests. |
+| PROXYD_DEFAULT_TTL_CSM0 | 0 | Maximum TTL (in seconds) for conscience entries in the proxyd cache. |
+| PROXYD_DEFAULT_TTL_SERVICES | 3600 | Idem for services entries. |
+| PROXYD_DEFAULT_MAX_CSM0 | 0 | Maximum number of conscience's items in the proxyd cache. |
+| PROXYD_DEFAULT_MAX_SERVICES | 200000 | Idem for service entries. |
+| PROXYD_DIR_TIMEOUT_SINGLE | 30.0 | Timeout for directory operations (single request) |
+| PROXYD_DIR_TIMEOUT_GLOBAL | 30.0 | Timeout for directory operations (global operations) |
+| PROXYD_HEADER_PREFIX | "X-oio-" | Timeout for directory operations (global operations) |
+| DAEMON_DEFAULT_TIMEOUT_READ | 1000 | How long a gridd will block on a recv() (in milliseconds) |
+| DAEMON_DEFAULT_TIMEOUT_ACCEPT | 1000 | How long a gridd will block on a accept() (in milliseconds) |
+| SQLX_ADMIN_PREFIX_SYS  | "sys." | Prefix used for keys used in admin table of sqlite bases |
+| SQLX_ADMIN_PREFIX_USER | "user." | Prefix used for keys used in admin table of sqlite bases |
+| SQLX_ADMIN_INITFLAG  | SQLX_ADMIN_PREFIX_SYS "sqlx.init" | Key used in admin table of sqlite bases |
+| SQLX_ADMIN_STATUS    | SQLX_ADMIN_PREFIX_SYS "sqlx.flags" | Key used in admin table of sqlite bases |
+| SQLX_ADMIN_REFERENCE | SQLX_ADMIN_PREFIX_SYS "sqlx.reference" | Key used in admin table of sqlite bases |
+| SQLX_ADMIN_BASENAME  | SQLX_ADMIN_PREFIX_SYS "sqlx.name" | Key used in admin table of sqlite bases |
+| SQLX_ADMIN_BASETYPE  | SQLX_ADMIN_PREFIX_SYS "sqlx.type" | Key used in admin table of sqlite bases |
+| SQLX_ADMIN_NAMESPACE | SQLX_ADMIN_PREFIX_SYS "sqlx.ns" | Key used in admin table of sqlite bases |
 

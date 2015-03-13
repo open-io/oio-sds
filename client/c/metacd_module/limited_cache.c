@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,7 +35,6 @@ struct limited_cache_element_s
 	struct limited_cache_element_s *next;
 };
 
-
 struct limited_cache_s
 {
 	time_t expiration;
@@ -29,33 +47,23 @@ struct limited_cache_s
 	value_copier_f copy_v;
 	GHashTable *ht;
 	struct limited_cache_element_s BEACON;
-	GMutex *mutex;
+	GMutex mutex;
 };
-
 
 limited_cache_t* limited_cache_create (gssize limit, time_t expiration,
 	struct limited_cache_callbacks *callbacks, guint32 flags, GError **err)
 {
 	struct limited_cache_s *lc = NULL;
 	GHashTable *ht=NULL;
-	GMutex *mutex = NULL;
-	
-	mutex = g_mutex_new ();
-	if (!mutex) {
-		GSETERROR(err,"Mutex allocation failure");
-		return NULL;
-	}
 	
 	ht = g_hash_table_new_full (callbacks->hash_k, callbacks->equal_k, NULL, NULL);
 	if (!ht) {
-		g_mutex_free(mutex);
 		GSETERROR(err,"Memory allocation failure");
 		return NULL;
 	}
 	
 	lc = g_try_malloc0(sizeof(struct limited_cache_s));
 	if (!lc) {
-		g_mutex_free(mutex);
 		g_hash_table_destroy(ht);
 		GSETERROR(err,"Memory allocation failure (size=%d) : %s",
 			sizeof(struct limited_cache_s), strerror(errno));
@@ -73,7 +81,7 @@ limited_cache_t* limited_cache_create (gssize limit, time_t expiration,
 	lc->ht = ht;
 	lc->BEACON.prev = &(lc->BEACON);
 	lc->BEACON.next = &(lc->BEACON);
-	lc->mutex = mutex;
+	g_mutex_init(&lc->mutex);
 
 	return lc;
 }
@@ -170,33 +178,27 @@ _lc_clean(limited_cache_t *lc, guint *count)
 		*count = c;
 }
 
-
 void limited_cache_destroy (limited_cache_t *lc)
 {
-	GMutex *mutex;
 	if (!lc)
 		return;
-	mutex = lc->mutex;
-	g_mutex_lock(mutex);
 	while (UNCHECKED_pop_last (lc));
 	g_hash_table_destroy (lc->ht);
 	memset(lc, 0x00, sizeof(limited_cache_t));
+	g_mutex_clear(&lc->mutex);
 	g_free (lc);
-	g_mutex_unlock(mutex);
-	g_mutex_free(mutex);
 }
 
 void limited_cache_clean (limited_cache_t *lc)
 {
 	guint count = 0;
 	
-	g_mutex_lock(lc->mutex);
+	g_mutex_lock(&lc->mutex);
 	_lc_clean(lc, &count);
-	g_mutex_unlock(lc->mutex);
+	g_mutex_unlock(&lc->mutex);
 	
 	INFO("%u elements cleaned", count);
 }
-
 
 void
 limited_cache_set_limit (limited_cache_t *lc, gssize s)
@@ -204,9 +206,9 @@ limited_cache_set_limit (limited_cache_t *lc, gssize s)
 	if (!lc)
 		return;
 
-	g_mutex_lock(lc->mutex);
+	g_mutex_lock(&lc->mutex);
 	lc->limit = (s>0?s:0);
-	g_mutex_unlock(lc->mutex);
+	g_mutex_unlock(&lc->mutex);
 }
 
 time_t
@@ -217,9 +219,9 @@ limited_cache_get_expiration (limited_cache_t *lc)
 	if (!lc)
 		return -1;
 
-	g_mutex_lock(lc->mutex);
+	g_mutex_lock(&lc->mutex);
 	result = lc->expiration;
-	g_mutex_unlock(lc->mutex);
+	g_mutex_unlock(&lc->mutex);
 
 	return result;
 }
@@ -232,9 +234,9 @@ limited_cache_get_limit (limited_cache_t *lc)
 	if (!lc)
 		return -1;
 
-	g_mutex_lock(lc->mutex);
+	g_mutex_lock(&lc->mutex);
 	result = lc->limit;
-	g_mutex_unlock(lc->mutex);
+	g_mutex_unlock(&lc->mutex);
 
 	return result;
 }
@@ -265,7 +267,7 @@ void limited_cache_put (limited_cache_t *lc, gpointer k, gpointer v)
 		return ;
 	}
 
-	g_mutex_lock (lc->mutex);	
+	g_mutex_lock (&lc->mutex);	
 
 	/*remove the old entry*/
 	if (NULL != (e_old = g_hash_table_lookup(lc->ht, e->k))) {
@@ -285,7 +287,7 @@ void limited_cache_put (limited_cache_t *lc, gpointer k, gpointer v)
 	e->date_access = time(0);
 	lc->size ++;
 	_lc_clean(lc, NULL);
-	g_mutex_unlock (lc->mutex);	
+	g_mutex_unlock (&lc->mutex);	
 }
 
 static
@@ -302,20 +304,20 @@ gpointer limited_cache_lookup(limited_cache_t *lc, gconstpointer k, gboolean *p_
 
 	now = time(0);
 
-	g_mutex_lock(lc->mutex);
+	g_mutex_lock(&lc->mutex);
 	if (p_cache_has_key) {
 		*p_cache_has_key = g_hash_table_lookup_extended(lc->ht, k, NULL, (gpointer*) &e);
 	} else {
 		e = (struct limited_cache_element_s*) g_hash_table_lookup (lc->ht, k);
 	}
 	if (!e) {
-		g_mutex_unlock(lc->mutex);	
+		g_mutex_unlock(&lc->mutex);	
 		return NULL;
 	}
 
 	if (e->date_access < (now - lc->expiration)) { /* EXPIRED */
 		UNCHECKED_remove_element(lc, e);
-		g_mutex_unlock(lc->mutex);
+		g_mutex_unlock(&lc->mutex);
 		return NULL;
 	}
 
@@ -336,7 +338,7 @@ gpointer limited_cache_lookup(limited_cache_t *lc, gconstpointer k, gboolean *p_
 	}
 
 	eData = lc->copy_v ? lc->copy_v(e->v) : e->v;
-	g_mutex_unlock(lc->mutex);
+	g_mutex_unlock(&lc->mutex);
 
 	return eData;
 }
@@ -367,13 +369,12 @@ limited_cache_del (limited_cache_t *lc, gconstpointer k)
 		return;
 	}
 	
-	g_mutex_lock(lc->mutex);
+	g_mutex_lock(&lc->mutex);
 	e = (struct limited_cache_element_s*) g_hash_table_lookup (lc->ht, k);
 	if (e)
 		UNCHECKED_remove_element(lc, e);
-	g_mutex_unlock(lc->mutex);
+	g_mutex_unlock(&lc->mutex);
 }
-
 
 void
 limited_cache_flush(limited_cache_t *lc)
@@ -384,12 +385,12 @@ limited_cache_flush(limited_cache_t *lc)
 	if (!lc)
 		return;
 
-	g_mutex_lock(lc->mutex);
+	g_mutex_lock(&lc->mutex);
 	real_expiration = lc->expiration;
 	lc->expiration = 0;
 	_lc_clean(lc, &count);
 	lc->expiration = real_expiration;
-	g_mutex_unlock(lc->mutex);
+	g_mutex_unlock(&lc->mutex);
 	
 	INFO("Flush done : %u elements", count);
 }
@@ -402,9 +403,9 @@ limited_cache_get_size (limited_cache_t *lc)
 	if (!lc)
 		return -1;
 
-	g_mutex_lock(lc->mutex);
+	g_mutex_lock(&lc->mutex);
 	result = lc->size;
-	g_mutex_unlock(lc->mutex);
+	g_mutex_unlock(&lc->mutex);
 
 	return result;
 }

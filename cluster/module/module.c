@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #define MODULE_NAME "conscience"
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN MODULE_NAME".plugin"
@@ -112,9 +131,9 @@ static struct conscience_s *conscience = NULL;
 
 static struct conscience_request_counters stats;
 
-static GStaticRecMutex counters_mutex;
+static GRecMutex counters_mutex;
 
-static GStaticRecMutex conscience_nsinfo_mutex;
+static GRecMutex conscience_nsinfo_mutex;
 
 static gboolean flag_forced_meta0 = FALSE;
 
@@ -397,7 +416,7 @@ request_body_matches_namespace(struct request_context_s *req_ctx, GError **err)
 	}
 
 	if (1 != g_slist_length(list_ns)) {
-		GSETCODE(err, 400, "Too many namespaces, this conscience only manage exactly 1 NS");
+		GSETCODE(err, CODE_BAD_REQUEST, "Too many namespaces, this conscience only manage exactly 1 NS");
 		rc = FALSE;
 	}
 	else {
@@ -419,47 +438,16 @@ request_body_matches_namespace(struct request_context_s *req_ctx, GError **err)
 /* ------------------------------------------------------------------------- */
 
 static gint
-handler_get_ns(struct request_context_s *req_ctx)
-{
-	namespace_info_t ns_info;
-	struct reply_context_s ctx;
-
-	init_reply_ctx_with_request(req_ctx, &ctx);
-
-	/*TODO lock the conscience */
-	g_static_rec_mutex_lock(&conscience_nsinfo_mutex);
-	memset(&ns_info, 0x00, sizeof(ns_info));
-	memcpy(&ns_info, &(conscience->ns_info), sizeof(namespace_info_t));
-	g_static_rec_mutex_unlock(&conscience_nsinfo_mutex);
-
-	/*set the body of the answer */
-	reply_context_set_body(&ctx, &ns_info, sizeof(ns_info), REPLYCTX_COPY);
-	reply_context_set_message(&ctx, 200, "OK");
-	if (!reply_context_reply(&ctx, &(ctx.warning))) {
-		GSETERROR(&(ctx.warning), "Cannot reply the namespace info");
-		reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
-		reply_context_clear(&ctx, FALSE);
-		return (0);
-	}
-
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&ctx, TRUE);
-	return (1);
-}
-
-static gint
 handler_get_ns_info(struct request_context_s *req_ctx)
 {
 	struct reply_context_s ctx;
 	GByteArray* gba = NULL;
-	char version[32];
-
 
 	init_reply_ctx_with_request(req_ctx, &ctx);
 
 	if (!request_body_matches_namespace(req_ctx, &(ctx.warning))) {
 		if (!ctx.warning)
-			GSETCODE(&(ctx.warning), 400, "Invalid namespace");
+			GSETCODE(&(ctx.warning), CODE_NAMESPACE_NOTMANAGED, "Invalid namespace");
 		reply_context_clear(&ctx, FALSE);
 		reply_context_set_message(&ctx, gerror_get_code(ctx.warning),
 				gerror_get_message(ctx.warning));
@@ -469,19 +457,10 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 		return (0);
 	}
 
-	/* Serialize ns_info */
+	g_rec_mutex_lock(&conscience_nsinfo_mutex);
+	gba = namespace_info_marshall(&(conscience->ns_info), &(ctx.warning));
+	g_rec_mutex_unlock(&conscience_nsinfo_mutex);
 
-	/* get marshalling version asked */
-	memset(version, '\0', 32);
-	GError *e = NULL;
-	e = message_extract_string(req_ctx->request, "VERSION", version, sizeof(version));
-	if(NULL != e)
-		g_clear_error(&e);
-
-	g_static_rec_mutex_lock(&conscience_nsinfo_mutex);
-	DEBUG("Prepare to response to get_ns_info for version : %s", version);
-	gba = namespace_info_marshall(&(conscience->ns_info), version, &(ctx.warning));
-	g_static_rec_mutex_unlock(&conscience_nsinfo_mutex);
 	if (gba == NULL) {
 		GSETERROR(&(ctx.warning), "Failed to marshall namespace info");
 		reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
@@ -489,10 +468,9 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 		return 0;
 	}
 
-	/*set the body of the answer */
 	reply_context_set_body(&ctx, gba->data, gba->len, REPLYCTX_COPY);
 	g_byte_array_free(gba, TRUE);
-	reply_context_set_message(&ctx, 200, "OK");
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	if (!reply_context_reply(&ctx, &(ctx.warning))) {
 		GSETERROR(&(ctx.warning), "Cannot reply the namespace info");
 		reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
@@ -520,11 +498,11 @@ handler_rm_broken_containers(struct request_context_s *req_ctx)
 
 		/* Extract MESSAGE from request */
 		if (0 >= message_get_BODY(req_ctx->request, &data, &data_size, &(ctx.warning))) {
-			GSETCODE(&(ctx.warning), 400, "Bad request : no body");
+			GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad request : no body");
 			goto errorLabel;
 		}
 		if (!strings_unmarshall(&elements, data, &data_size, &(ctx.warning))) {
-			GSETCODE(&(ctx.warning), 400, "Bad request : failed to unmarshall broken container list");
+			GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad request : failed to unmarshall broken container list");
 			goto errorLabel;
 		}
 		counter=0;
@@ -558,7 +536,7 @@ handler_rm_broken_containers(struct request_context_s *req_ctx)
 	}
 
 	reply_context_clear(&ctx, TRUE);
-	reply_context_set_message(&ctx, 200, "OK");
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	if (!reply_context_reply(&ctx, &(ctx.warning))) {
 		GSETERROR(&(ctx.warning), "Broken elements removed, failed to reply");
 		goto errorLabel;
@@ -591,13 +569,13 @@ handler_fix_broken_containers(struct request_context_s *req_ctx)
 
 	/* Extract MESSAGE from request */
 	if (0 >= message_get_BODY(req_ctx->request, &data, &data_size, &(ctx.warning))) {
-		GSETCODE(&(ctx.warning),400,"Invalid request - missing body");
+		GSETCODE(&(ctx.warning),CODE_BAD_REQUEST,"Invalid request - missing body");
 		goto errorLabel;
 	}
 
 	containers = meta2_maintenance_names_unmarshall_buffer(data, data_size, &(ctx.warning));
 	if (!containers) {
-		GSETCODE(&(ctx.warning),400,"Invalid request - invalid body, deserialization eror");
+		GSETCODE(&(ctx.warning),CODE_BAD_REQUEST,"Invalid request - invalid body, deserialization eror");
 		goto errorLabel;
 	}
 
@@ -624,7 +602,7 @@ handler_fix_broken_containers(struct request_context_s *req_ctx)
 
 	g_slist_free(containers);
 
-	reply_context_set_message(&ctx, 200, "OK");
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	rc = reply_context_reply(&ctx, &(ctx.warning));
 	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
 	reply_context_clear(&ctx, TRUE);
@@ -652,13 +630,13 @@ handler_push_broken_containers(struct request_context_s *req_ctx)
 
 	/* Extract MESSAGE from request */
 	if (0 >= message_get_BODY(req_ctx->request, &data, &data_size, &(ctx.warning))) {
-		GSETCODE(&(ctx.warning),400,"Invalid request - missing body");
+		GSETCODE(&(ctx.warning),CODE_BAD_REQUEST,"Invalid request - missing body");
 		goto errorLabel;
 	}
 
 	elements = meta2_maintenance_names_unmarshall_buffer(data, data_size, &(ctx.warning));
 	if (!elements) {
-		GSETCODE(&(ctx.warning),400,"body unmarshalling error");
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST,"body unmarshalling error");
 		goto errorLabel;
 	}
 
@@ -680,7 +658,7 @@ handler_push_broken_containers(struct request_context_s *req_ctx)
 	}
 	g_slist_free(elements);
 
-	reply_context_set_message(&ctx, 200, "OK");
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	reply_context_reply(&ctx, &(ctx.warning));
 	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
 	reply_context_clear(&ctx, TRUE);
@@ -805,16 +783,16 @@ handler_push_virtual_namespace_space_used(struct request_context_s *req_ctx)
 
 	/* Extract MESSAGE from request */
 	if (0 >= message_get_BODY(req_ctx->request, &data, &data_size, &(ctx.warning))) {
-		GSETCODE(&(ctx.warning),400,"Invalid request - missing body");
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST,"Invalid request - missing body");
 		goto errorLabel;
 	}
 
 	if( 0 >= key_value_pairs_unmarshall(&list, data, &data_size, &(ctx.warning))) {
-		GSETCODE(&(ctx.warning),400,"body unmarshalling error");
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST,"body unmarshalling error");
 		goto errorLabel;
 	}
 
-	vns_space_used = key_value_pairs_convert_to_map(list, TRUE, &(ctx.warning));
+	vns_space_used = key_value_pairs_convert_to_map(list, &(ctx.warning));
         if (!vns_space_used) {
 		GSETERROR (&(ctx.warning), "Cannot unserialize the content of the reply");
 		goto errorLabel;
@@ -823,7 +801,7 @@ handler_push_virtual_namespace_space_used(struct request_context_s *req_ctx)
 	if (DEBUG_ENABLED())
 		DEBUG("%d VNS space used received", g_hash_table_size(vns_space_used));
 	/* lock ns_info */
-	g_static_rec_mutex_lock(&conscience_nsinfo_mutex);
+	g_rec_mutex_lock(&conscience_nsinfo_mutex);
 
 	g_hash_table_foreach(vns_space_used, update_virtual_namespace_state, NULL);
 
@@ -831,7 +809,7 @@ handler_push_virtual_namespace_space_used(struct request_context_s *req_ctx)
 
 	namespace_info_set_writable_vns(&(conscience->ns_info), writable);
 
-	g_static_rec_mutex_unlock(&conscience_nsinfo_mutex);
+	g_rec_mutex_unlock(&conscience_nsinfo_mutex);
 	/* delock */
 	if(writable) {
 		g_slist_foreach(writable, g_free1, NULL);
@@ -844,7 +822,7 @@ handler_push_virtual_namespace_space_used(struct request_context_s *req_ctx)
 		g_slist_free(list);
 	}
 
-	reply_context_set_message(&ctx, 200, "OK");
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	reply_context_reply(&ctx, &(ctx.warning));
 	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
 	reply_context_clear(&ctx, TRUE);
@@ -893,7 +871,7 @@ _brkget_reply_do(struct brkget_s *data, gboolean is_last)
 		if (!gba)
 			return FALSE;
 		reply_context_clear(&(data->reply_ctx), TRUE);
-		reply_context_set_message(&(data->reply_ctx), (is_last?200:206), (is_last?"OK":"Partial content"));
+		reply_context_set_message(&(data->reply_ctx), (is_last?CODE_FINAL_OK:CODE_PARTIAL_CONTENT), (is_last?"OK":"Partial content"));
 		reply_context_set_body(&(data->reply_ctx), gba->data, gba->len, REPLYCTX_DESTROY_ON_CLEAN|REPLYCTX_COPY);
 		g_byte_array_free(gba, TRUE);
 		if (!reply_context_reply(&(data->reply_ctx), &(data->reply_ctx.warning)))
@@ -966,7 +944,7 @@ handler_get_broken_containers(struct request_context_s *req_ctx)
 		DEBUG("Broken elements successfuly ran");
 		_brkget_reply_do(&data, TRUE);
 		reply_context_clear(&(data.reply_ctx), FALSE);
-		reply_context_set_message(&(data.reply_ctx), 200, "OK");
+		reply_context_set_message(&(data.reply_ctx), CODE_FINAL_OK, "OK");
 	}
 
 	reply_context_reply(&(data.reply_ctx), &(data.reply_ctx.warning));
@@ -974,7 +952,6 @@ handler_get_broken_containers(struct request_context_s *req_ctx)
 	reply_context_clear(&(data.reply_ctx), TRUE);
 	return rc ? 1 : 0;
 }
-
 
 /* ------------------------------------------------------------------------- */
 
@@ -1126,7 +1103,6 @@ _srvget_close_body(struct srvget_s *sg)
 	g_byte_array_append(sg->gba_body, footer, sizeof(footer));
 }
 
-
 static gboolean
 prepare_response_bodies(struct conscience_srv_s *srv, gpointer u)
 {
@@ -1173,7 +1149,7 @@ reply_services(struct reply_context_s *reply_ctx, GSList *response_bodies)
 		reply_context_set_body(reply_ctx, body->data,
 				body->len, REPLYCTX_DESTROY_ON_CLEAN|REPLYCTX_COPY);
 
-		reply_context_set_message(reply_ctx, 206, "Partial content");
+		reply_context_set_message(reply_ctx, CODE_PARTIAL_CONTENT, "Partial content");
 
 		if (!reply_context_reply(reply_ctx, &(reply_ctx->warning))) {
 			return FALSE;
@@ -1181,7 +1157,7 @@ reply_services(struct reply_context_s *reply_ctx, GSList *response_bodies)
 	}
 
 	reply_context_clear(reply_ctx, TRUE);
-	reply_context_set_message(reply_ctx, 200, "OK");
+	reply_context_set_message(reply_ctx, CODE_FINAL_OK, "OK");
 	return BOOL(reply_context_reply(reply_ctx, &(reply_ctx->warning)));
 }
 
@@ -1200,7 +1176,7 @@ handler_get_service(struct request_context_s *req_ctx)
 
 	/* get the service type's name */
 	if (0 >= message_get_field(req_ctx->request, BUFLEN("TYPENAME"), &data, &data_size, &(reply_ctx.warning))) {
-		GSETCODE(&(reply_ctx.warning), 400, "Bad request: no/invalid TYPENAME field");
+		GSETCODE(&(reply_ctx.warning), CODE_BAD_REQUEST, "Bad request: no/invalid TYPENAME field");
 	} else {
 		gchar **array_types = buffer_split(data, data_size, ",", 0);
 		g_strlcpy(sg.str_ns, conscience_get_namespace(conscience), sizeof(sg.str_ns));
@@ -1214,7 +1190,6 @@ handler_get_service(struct request_context_s *req_ctx)
 		if (rc) {
 			rc = reply_services(&reply_ctx, sg.response_bodies);
 		}
-
 
 		g_strfreev(array_types);
 	}
@@ -1233,7 +1208,6 @@ handler_get_service(struct request_context_s *req_ctx)
 	return rc ? 1 : 0;
 }
 
-
 /* ------------------------------------------------------------------------- */
 
 /**
@@ -1251,7 +1225,6 @@ push_service(struct conscience_s *cs, struct service_info_s *si, gboolean lock_s
 	GError *error_local=NULL;
 	struct conscience_srvtype_s *srvtype;
 	struct conscience_srv_s *srv;
-
 
 	if (0 == g_ascii_strcasecmp(NAME_SRVTYPE_META0, si->type)) {
 		/* If we forced a meta0 in config, registering or unlocking is not
@@ -1359,11 +1332,11 @@ handler_push_service(struct request_context_s *req_ctx)
 
 	/*Get the body and unpack it as a list of services */
 	if (0 >= message_get_BODY(req_ctx->request, &data, &data_size, &(ctx.warning))) {
-		GSETCODE(&(ctx.warning), 400, "Bad requets : no body");
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad requets : no body");
 		goto errorLabel;
 	}
 	if (0 >= service_info_unmarshall(&list_srvinfo, data, &data_size, &(ctx.warning))) {
-		GSETCODE(&(ctx.warning), 400, "Bad request : failed to deserialize the body");
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad request : failed to deserialize the body");
 		goto errorLabel;
 	}
 
@@ -1380,7 +1353,7 @@ handler_push_service(struct request_context_s *req_ctx)
 	}
 	g_slist_free(list_srvinfo);
 
-	reply_context_set_message(&ctx, 200, "OK");
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	reply_context_reply(&ctx, NULL);
 	reply_context_log_access(&ctx, "NS=%s %d service pushed", conscience_get_namespace(conscience), counter);
 	reply_context_clear(&ctx, TRUE);
@@ -1433,7 +1406,7 @@ handler_get_services_types(struct request_context_s *req_ctx)
 
 	/* Now we can manage the potential error and reply */
 	if (!gba_names) {
-		reply_context_set_message(&ctx, 500, gerror_get_message(ctx.warning));
+		reply_context_set_message(&ctx, CODE_INTERNAL_ERROR, gerror_get_message(ctx.warning));
 		ERROR("Failed to reply the service types : %s", gerror_get_message(ctx.warning));
 		reply_context_reply(&ctx, NULL);
 		reply_context_log_access(&ctx, "NS=%s %d names pushed", conscience_get_namespace(conscience), counter);
@@ -1443,7 +1416,7 @@ handler_get_services_types(struct request_context_s *req_ctx)
 
 	reply_context_set_body(&ctx, gba_names->data, gba_names->len, REPLYCTX_DESTROY_ON_CLEAN|REPLYCTX_COPY);
 	g_byte_array_free(gba_names, TRUE);
-	reply_context_set_message(&ctx, 200, "OK");
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	reply_context_reply(&ctx, NULL);
 	reply_context_log_access(&ctx, "NS=%s %d names pushed", conscience_get_namespace(conscience), counter);
 	reply_context_clear(&ctx, TRUE);
@@ -1510,7 +1483,7 @@ handler_rm_service(struct request_context_s *req_ctx)
 		/* XXX start of critical section */
 		srvtype = conscience_get_locked_srvtype(conscience, &(ctx.warning), str_type, MODE_STRICT,'w');
 		if (!srvtype) {
-			GSETCODE(&(ctx.warning),450,"srvtype=[%s] not found", str_type);
+			GSETCODE(&(ctx.warning), CODE_SRVTYPE_NOTMANAGED,"srvtype=[%s] not found", str_type);
 			goto errorLabel;
 		}
 		counter = conscience_srvtype_count_srv(srvtype,TRUE);
@@ -1519,18 +1492,18 @@ handler_rm_service(struct request_context_s *req_ctx)
 		/* XXX end ofcritical section */
 
 		NOTICE("[NS=%s][SRVTYPE=%s] flush done!", conscience_get_namespace(conscience), srvtype->type_name);
-		reply_context_set_message(&ctx, 200, "OK");
+		reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	}
 	else if (0 < message_has_BODY(req_ctx->request,NULL)) {
 		GSList *list_srvinfo, *l;
 
 		list_srvinfo = NULL;
 		if (0 >= message_get_BODY(req_ctx->request, &data, &data_size, &(ctx.warning))) {
-			GSETCODE(&(ctx.warning), 400, "No body");
+			GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "No body");
 			goto errorLabel;
 		}
 		if (0 >= service_info_unmarshall(&list_srvinfo, data, &data_size, &(ctx.warning))) {
-			GSETCODE(&(ctx.warning), 400, "Invalid body: deserialization error");
+			GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Invalid body: deserialization error");
 			goto errorLabel;
 		}
 
@@ -1546,11 +1519,11 @@ handler_rm_service(struct request_context_s *req_ctx)
 			}
 		}
 		g_slist_free(list_srvinfo);
-		reply_context_set_message(&ctx, 200, "OK");
+		reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	}
 	else {
 		counter = 0;
-		GSETCODE(&(ctx.warning), 400, "Bad request : no service in the body, no service type in the fields");
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad request : no service in the body, no service type in the fields");
 		goto errorLabel;
 	}
 
@@ -1595,7 +1568,7 @@ extract_ueid_from_headers(MESSAGE request, GError **error, gchar *dst, gsize dst
 	gsize data_size;
 
 	if (0 >= message_get_field(request,MSG_HEADER_UEID,sizeof(MSG_HEADER_UEID)-1, &data, &data_size, NULL)) {
-		GSETCODE(error,400,"Header '"MSG_HEADER_UEID"' extraction failure");
+		GSETCODE(error, CODE_BAD_REQUEST,"Header '"MSG_HEADER_UEID"' extraction failure");
 		return 0;
 	}
 
@@ -1610,11 +1583,11 @@ extract_event_from_body(MESSAGE request, GError **error)
 	gridcluster_event_t *event;
 
 	if (0 >= message_get_BODY(request, &data, &data_size, error)) {
-		GSETCODE(error, 400, "Bad request: no body");
+		GSETCODE(error, CODE_BAD_REQUEST, "Bad request: no body");
 		return NULL;
 	}
 	if (!(event = gridcluster_decode_event2(data, data_size, error))) {
-		GSETCODE(error, 400, "Bad requets: invalid body");
+		GSETCODE(error, CODE_BAD_REQUEST, "Bad requets: invalid body");
 		return NULL;
 	}
 	return event;
@@ -1697,7 +1670,7 @@ handler_event_push(struct request_context_s *req_ctx)
 	if (!str_ueid_size)
 		goto error_label;
 	if (!(event=extract_event_from_body(req_ctx->request, &(ctx.warning)))) {
-		GSETCODE(&(ctx.warning), 400, "Invalid event sequence in the payload");
+		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Invalid event sequence in the payload");
 		goto error_label;
 	}
 
@@ -1707,13 +1680,13 @@ handler_event_push(struct request_context_s *req_ctx)
 	if (error_event)
 		g_clear_error(&error_event);
 	if (!rc) {
-		GSETERROR(&(ctx.warning),"Internal error, event management failed");
+		GSETCODE(&(ctx.warning), CODE_INTERNAL_ERROR, "Internal error, event management failed");
 		goto error_label;
 	}
 
-	reply_context_set_message(&ctx, 200, "OK");
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	if (!reply_context_reply(&ctx, &(ctx.warning))) {
-		GSETERROR(&(ctx.warning),"Request successful but reply failure!");
+		GSETCODE(&(ctx.warning), CODE_INTERNAL_ERROR, "Request successful but reply failure!");
 		goto reply_error_label;
 	}
 
@@ -1781,14 +1754,14 @@ handler_get_eventhandler_configuration(struct request_context_s *req_ctx)
 	 * it is configured once at the boginning. */
 	gba_config = gridcluster_eventhandler_get_configuration(conscience->event_handler, &(ctx.warning));
 	if (!gba_config) {
-		GSETCODE(&(ctx.warning),500,"Failed to get the textual configuration of the eventhandler");
+		GSETCODE(&(ctx.warning), CODE_INTERNAL_ERROR,"Failed to get the textual configuration of the eventhandler");
 		goto reply_error_label;
 	}
 	reply_context_set_body(&ctx, gba_config->data, gba_config->len, REPLYCTX_DESTROY_ON_CLEAN);
 	g_byte_array_free(gba_config,FALSE);
-	reply_context_set_message(&ctx,200,"OK");
+	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	if (!reply_context_reply(&ctx,&(ctx.warning))) {
-		GSETCODE(&(ctx.warning), 600, "Failed to reply to the client");
+		GSETCODE(&(ctx.warning), CODE_INTERNAL_ERROR, "Failed to reply to the client");
 		goto error_label;
 	}
 	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
@@ -1805,7 +1778,6 @@ error_label:
 	return 0;
 }
 
-
 /* ------------------------------------------------------------------------- */
 
 static inline struct cmd_s *
@@ -1813,7 +1785,6 @@ module_find_handler(gchar * n, gsize l)
 {
 	struct cmd_s *c;
 	static struct cmd_s CMD[] = {
-		{NAME_MSGNAME_CS_GETNS, handler_get_ns, &(stats.ns_info)},
 		{NAME_MSGNAME_CS_GET_NSINFO, handler_get_ns_info, &(stats.ns_info)},
 		{NAME_MSGNAME_CS_GET_SRV, handler_get_service, &(stats.services.get)},
 		{NAME_MSGNAME_CS_GET_SRVNAMES, handler_get_services_types, &(stats.services.get)},
@@ -1895,13 +1866,12 @@ plugin_handler(MESSAGE m, gint cnx, void *param, GError ** err)
 	ctx.fd = cnx;
 	gettimeofday(&(ctx.tv_start), NULL);
 
-	g_static_rec_mutex_lock(&counters_mutex);
+	g_rec_mutex_lock(&counters_mutex);
 	*(c->req_counter) = *(c->req_counter) + 1;
-	g_static_rec_mutex_unlock(&counters_mutex);
+	g_rec_mutex_unlock(&counters_mutex);
 
 	return c->h(&ctx);
 }
-
 
 /* ------------------------------------------------------------------------- */
 
@@ -2273,7 +2243,6 @@ module_reload_vns(struct conscience_s *cs, GError ** err)
 	return TRUE;
 }
 
-
 static gboolean
 module_init_vns(struct conscience_s *cs, GError ** err)
 {
@@ -2410,7 +2379,7 @@ fill_hashtable_with_group(GHashTable *ht, GKeyFile *conf_file, const gchar *grou
 	GError *e = NULL;
 
 	if (!g_key_file_has_group (conf_file, group_name)) {
-		g_set_error(&e, 0, 500, "No '%s' group in configuration", group_name);
+		GSETCODE(&e, CODE_INTERNAL_ERROR, "No '%s' group in configuration", group_name);
 		return e;
 	}
 
@@ -2419,19 +2388,18 @@ fill_hashtable_with_group(GHashTable *ht, GKeyFile *conf_file, const gchar *grou
 		for (uint i = 0; i < g_strv_length(keys); i++) {
 			v = g_key_file_get_value (conf_file, group_name, keys[i], &e);
 			if (!v) {
-				GSETERROR (&e, "Cannot get the value");
+				GSETERROR (&e, "Cannot get the value for [%s][%s]", group_name, keys[i]);
 				break;
 			}
 			if (NULL != g_hash_table_lookup(ht, keys[i])) {
-				WARN("Duplicate key [%s] in hashtable for group [%s].  The value [%s] will be associated to this key.",
-						keys[i], group_name, v);
+				WARN("Duplicate key [%s][%s], new value [%s]", group_name, keys[i], v);
 			}
 			g_hash_table_insert (ht, g_strdup(keys[i]), metautils_gba_from_string(v));
 		}
 		g_strfreev(keys);
 		return e;
 	}
-	g_set_error(&e, 0 , 500, "Cannot get all keys of group '%s'", group_name);
+	GSETCODE(&e, CODE_INTERNAL_ERROR, "Cannot get all keys of group '%s'", group_name);
 	return e;
 }
 
@@ -2442,8 +2410,8 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 	GError *e = NULL;
 
 	// Case-insensitive comparison (reason for not using g_hash_table_lookup)
-	void _check_for_keyword(gchar *key, gpointer value, gchar **what)
-	{
+	void _check_for_keyword(gchar *key, gpointer value, gchar **what) {
+		NOTICE("%s %s", what[1], key);
 		(void) value;
 		if (!g_ascii_strcasecmp(what[0], key)) {
 			WARN("Redefining '%s' %s, this may not be taken into account",
@@ -2462,6 +2430,7 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 		return e;
 	}
 
+	// XXX POLICIES
 	cs->ns_info.storage_policy = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	e = fill_hashtable_with_group(cs->ns_info.storage_policy, stg_conf_file, NAME_GROUPNAME_STORAGE_POLICY);
 	if (NULL != e) {
@@ -2473,46 +2442,47 @@ module_init_storage_conf(struct conscience_s *cs, const gchar *stg_pol_in_option
 			(GHFunc)_check_for_keyword, (gchar*[2]){STORAGE_POLICY_NONE, "storage policy"});
 
 	/* If the storage policy set by param_option.storage_policy is not present in the storage conf file, set an error. */
-	if (stg_pol_in_option && !g_hash_table_lookup(cs->ns_info.storage_policy, stg_pol_in_option)) {
-		GSETERROR(&e, "[NS=%s] storage conf init failed: the policy [%s] wanted as an option is not defined in [%s]",
-				cs->ns_info.name, stg_pol_in_option, filepath);
-		g_key_file_free(stg_conf_file);
-		return e;
+	if (stg_pol_in_option && 0 != g_ascii_strcasecmp(stg_pol_in_option,STORAGE_POLICY_NONE)) {
+		if (!g_hash_table_lookup(cs->ns_info.storage_policy, stg_pol_in_option)) {
+			GSETERROR(&e, "[NS=%s] storage conf init failed: the policy [%s] wanted as an option is not defined in [%s]",
+					cs->ns_info.name, stg_pol_in_option, filepath);
+			g_key_file_free(stg_conf_file);
+			return e;
+		}
 	}
 
+	// XXX SECURITY
 	cs->ns_info.data_security = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	e = fill_hashtable_with_group(cs->ns_info.data_security, stg_conf_file, NAME_GROUPNAME_DATA_SECURITY);
 	if( NULL != e) {
 		WARN("Data security rules not correctly loaded from file [%s] : %s", filepath, e->message);
-		g_clear_error(&e);
-		e = NULL;
+		return e;
 	}
 	g_hash_table_foreach(cs->ns_info.data_security,
 			(GHFunc)_check_for_keyword, (gchar*[2]){DATA_SECURITY_NONE, "data security"});
 
+	// XXX TREATMENTS
 	cs->ns_info.data_treatments = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	e = fill_hashtable_with_group(cs->ns_info.data_treatments, stg_conf_file, NAME_GROUPNAME_DATA_TREATMENTS);
 	if( NULL != e) {
 		WARN("Data treatments rules not correctly loaded from file [%s] : %s", filepath, e->message);
-		g_clear_error(&e);
-		e = NULL;
+		return e;
 	}
 	g_hash_table_foreach(cs->ns_info.data_treatments,
 			(GHFunc)_check_for_keyword, (gchar*[2]){DATA_TREATMENT_NONE, "data treatment"});
 
+	// XXX CLASSES
 	cs->ns_info.storage_class = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_unref);
 	e = fill_hashtable_with_group(cs->ns_info.storage_class, stg_conf_file, NAME_GROUPNAME_STORAGE_CLASS);
 	if( NULL != e) {
 		WARN("Storage class rules not correctly loaded from file [%s] : %s", filepath, e->message);
-		g_clear_error(&e);
-		e = NULL;
+		return e;
 	}
 	g_hash_table_foreach(cs->ns_info.storage_class,
 			(GHFunc)_check_for_keyword, (gchar*[2]){STORAGE_CLASS_NONE, "storage class"});
 
 	INFO("[NS=%s] storage conf loaded successfully from file [%s]",
 			cs->ns_info.name, filepath);
-
 	return NULL;
 }
 
@@ -2648,8 +2618,8 @@ plugin_init(GHashTable * params, GError ** err)
 {
 	gchar *str;
 
-	g_static_rec_mutex_init(&counters_mutex);
-	g_static_rec_mutex_init(&conscience_nsinfo_mutex);
+	g_rec_mutex_init(&counters_mutex);
+	g_rec_mutex_init(&conscience_nsinfo_mutex);
 
 	/*NAMEPSACE name */
 	if (!(str = g_hash_table_lookup(params, KEY_NAMESPACE))) {
@@ -2794,7 +2764,7 @@ plugin_reload(GHashTable * params, GError ** err)
 	conscience->ns_info.chunk_size = g_ascii_strtoll(str, NULL, 10);
 	NOTICE("[NS=%s] Chunk size set to %"G_GINT64_FORMAT, conscience->ns_info.name, conscience->ns_info.chunk_size);
 
-	g_static_rec_mutex_lock(&conscience_nsinfo_mutex);
+	g_rec_mutex_lock(&conscience_nsinfo_mutex);
 
 	/* OPTIONS reload */
 	/* flush old ns_info_options table */
@@ -2840,9 +2810,7 @@ plugin_reload(GHashTable * params, GError ** err)
 	else
 		NOTICE("[NS=%s] event handlers successfully reloaded from [%s]", conscience->ns_info.name, str);
 
-
-
-	g_static_rec_mutex_unlock(&conscience_nsinfo_mutex);
+	g_rec_mutex_unlock(&conscience_nsinfo_mutex);
 
 	if(tmp)
 		g_strfreev(tmp);
@@ -2862,7 +2830,7 @@ plugin_close(GError ** err)
 {
 	(void)err;
 	if (conscience) {
-		g_static_rec_mutex_free(&counters_mutex);
+		g_rec_mutex_clear(&counters_mutex);
 		conscience_destroy(conscience);
 		conscience = NULL;
 	}

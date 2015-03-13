@@ -30,13 +30,13 @@ target_link_libraries(meta0v2
 
 
 add_executable(meta0_client meta0_client.c)
-bin_prefix_full(meta0_client -meta0-client)
+bin_prefix(meta0_client -meta0-client)
 target_link_libraries(meta0_client gridcluster
 		meta0remote meta0utils metautils server)
 
 
 add_executable(meta0_init meta0_init.c)
-bin_prefix_full(meta0_init -meta0-init)
+bin_prefix(meta0_init -meta0-init)
 target_link_libraries(meta0_init gridcluster
 		meta0remote meta0utils metautils server)
 
@@ -48,7 +48,7 @@ target_link_libraries(meta0_init gridcluster
 
 add_executable(meta0_server
 		meta0_gridd_dispatcher.c meta0_server.c)
-bin_prefix_full(meta0_server -meta0-server)
+bin_prefix(meta0_server -meta0-server)
 target_link_libraries(meta0_server
 		meta0v2 meta0utils
         metacomm metautils gridcluster server sqliterepo

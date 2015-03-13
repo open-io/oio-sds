@@ -1,10 +1,24 @@
-/**
- * @file scanner_thread.h
- * Thread managing volume scanning checkers
- */
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
-#ifndef SCANNER_THREAD_H
-#define SCANNER_THREAD_H
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__integrity__main__scanner_thread_h
+# define OIO_SDS__integrity__main__scanner_thread_h 1
 
 #include <integrity/lib/volume_scanner.h>
 #include <integrity/main/config.h>
@@ -72,4 +86,5 @@ gboolean register_scanning_callback(const gchar * service_type, struct scan_work
 gboolean start_scanner_thread(struct integrity_loop_config_s *config, GError ** error);
 
 /** @} */
-#endif /* SCANNER_THREAD_H */
+
+#endif /*OIO_SDS__integrity__main__scanner_thread_h*/

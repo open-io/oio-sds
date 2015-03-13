@@ -1,20 +1,27 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metautils.path_info"
 #endif
 
 #include "metautils.h"
-
-gint
-path_info_to_string(const path_info_t * src, gchar * dst, gsize dstSize)
-{
-	if (!src || !dst)
-		return -1;
-	if (!dstSize)
-		return 0;
-
-	return g_snprintf(dst, dstSize, "path=%*.*s size=%"G_GINT64_FORMAT" hasSize=%i",
-	    1, LIMIT_LENGTH_CONTENTPATH, src->path, src->hasSize ? src->size : 0, src->hasSize ? 1 : 0);
-}
 
 void
 path_info_gclean(gpointer d, gpointer u)

@@ -1,5 +1,24 @@
-#ifndef __VNS_AGENT_H__
-#define __VNS_AGENT_H__
+/*
+OpenIO SDS vns-agent
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__vns_agent__lib__vns_agent_h
+# define OIO_SDS__vns_agent__lib__vns_agent_h 1
 
 #include <metautils/lib/metatypes.h>
 #include <glib.h>
@@ -47,4 +66,4 @@ void vns_agent_close (void);
  */
 void vns_agent_space_used_refresh(gpointer d);
 
-#endif /*__VNS_AGENT_H__*/
+#endif /*OIO_SDS__vns_agent__lib__vns_agent_h*/

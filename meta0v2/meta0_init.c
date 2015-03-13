@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta0v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "grid.meta0.client"
 #endif
@@ -18,7 +37,6 @@ static addr_info_t addr;
 static gchar *namespace=NULL;
 static gboolean flag_fill_v1 =FALSE;
 static gboolean nodist = FALSE;
-
 
 static gboolean
 url_check(const gchar *url)
@@ -54,38 +72,39 @@ _getMeta0addr(GSList **m0_lst, GSList *exclude ) {
 	return NULL;
 }
 
-
 static void
 meta0_action(void)
 {
 	GError *err = NULL;
-	gboolean result = FALSE;
 	GSList *m0_lst = NULL;
 	GSList *exclude = NULL;
 	addr_info_t *m0addr;
 
 	m0addr = _getMeta0addr(&m0_lst,exclude);
 	while (m0addr) {
+		gboolean rc = FALSE;
 		if ( flag_fill_v1 )
-			result=meta0_remote_fill(m0addr, 60000, urls, nbreplicas, &err);
+			rc = meta0_remote_fill(m0addr, 60000, urls, nbreplicas, &err);
 		else
-			result=meta0_remote_fill_v2(m0addr, 60000, nbreplicas, nodist, &err);
+			rc = meta0_remote_fill_v2(m0addr, 60000, nbreplicas, nodist, &err);
+		g_assert((err != NULL) ^ (BOOL(rc)));
 
-		if (!result) {
-			if ( err->code < 300 ) {
+		if (!rc) {
+			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
+			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				exclude=g_slist_prepend(exclude,m0addr);
 				m0addr = _getMeta0addr(&m0_lst,exclude);
 			} else {
-				GRID_WARN("META0 request error (%d) : %s",
-					err->code, err->message);
 				g_clear_error(&err);
-				m0addr=NULL;
+				m0addr = NULL;
 			}
 		} else {
 			GRID_INFO("META0 filled!");
-			break;
+			return;
 		}	
 	}
+
+	grid_main_set_status(0);
 }
 
 static const char *
@@ -138,9 +157,14 @@ meta0_configure(int argc, char **argv)
 
 	if (!grid_string_to_addrinfo(argv[0], NULL, &addr)) {
 		namespace = strdup(argv[0]);
+		GRID_INFO("[%s] considered as a namespace name", argv[0]);
+	} else {
+		GRID_INFO("[%s] considered as an explicit META0 address", argv[0]);
 	}
 
-	if ( argc >= 2 ) {
+	if (argc < 2) {
+		GRID_NOTICE("META1 located from the conscience");
+	} else {
 		// meta1 addr 
 		if (!urlv_check(argv+1)) {
 			GRID_WARN("Invalid META1 address");
@@ -149,7 +173,7 @@ meta0_configure(int argc, char **argv)
 
 		urls = g_strdupv(argv+1);
 		flag_fill_v1 = TRUE;
-		GRID_INFO("Ready to configure [%u] META1", g_strv_length(urls));
+		GRID_INFO("Ready to configure [%u] explicit META1", g_strv_length(urls));
 	}
 	return TRUE;
 }

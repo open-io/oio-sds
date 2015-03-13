@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "rainx.remote"
 #endif
@@ -251,7 +270,7 @@ static GError *_ask_reconstruct(struct rainx_rec_params_s *params,
 			hc_url_get(url, HCURL_NS), "rainx", &err);
 	if (!si) {
 		if (err != NULL)
-			GSETCODE(&err, 500, "Unknown error");
+			GSETCODE(&err, CODE_INTERNAL_ERROR, "Unknown error");
 		goto reconstruct_cleanup;
 	} else {
 		addr_info_to_string(&(si->addr), rainx_url+7, sizeof(rainx_url)-7);
@@ -423,12 +442,10 @@ GError *rainx_reconstruct(struct hc_url_s *url, namespace_info_t *nsinfo,
 				ALIASES_get_alias(params->alias)->str);
 		for (GSList *l = substitutions; l; l = l->next) {
 			struct bean_CHUNKS_s **subst = l->data;
-			err = m2v2_remote_execute_SUBST_CHUNKS_single(m1u->host, NULL, url,
-					subst[1], subst[0], FALSE);
+			err = m2v2_remote_execute_RAW_SUBST_single(m1u->host, NULL, url, subst[1], subst[0]);
 			if (err != NULL)
 				goto global_cleanup;
 		}
-
 
 		if (broken_chunks) {
 			// Remove broken chunks from meta2

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta0v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "meta0.remote"
 #endif
@@ -179,13 +198,9 @@ meta0_remote_fill(addr_info_t *m0a, gint ms, gchar **urls,
 	}
 	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 
-	message_create(&request, NULL);
+	request = message_create();
 	message_set_NAME(request, NAME_MSGNAME_M0_FILL, sizeof(NAME_MSGNAME_M0_FILL)-1, NULL);
-	do {
-		gchar str[32];
-		g_snprintf(str, sizeof(str), "%u", nbreplicas);
-		message_add_field(request, "REPLICAS", sizeof("REPLICAS"), str, strlen(str), NULL);
-	} while (0);
+	message_add_field_strint64(request, "REPLICAS", nbreplicas);
 	do {
 		gchar *body = g_strjoinv("\n", urls);
 		message_set_BODY(request, body, strlen(body), NULL);
@@ -207,8 +222,7 @@ meta0_remote_fill(addr_info_t *m0a, gint ms, gchar **urls,
 		goto end_label;
 
 end_label:
-	if (request)
-		message_destroy(request, NULL);
+	message_destroy(request);
 	if (packed) 
 		g_byte_array_free(packed, TRUE);
 
@@ -225,31 +239,23 @@ gint
 meta0_remote_fill_v2(addr_info_t *m0a, gint ms,
                 guint nbreplicas, gboolean nodist, GError **err)
 {
-        MESSAGE request = NULL;
-        GError *local_err = NULL;
+	MESSAGE request = NULL;
+	GError *local_err = NULL;
 	struct client_s *client = NULL;
 	gchar target[64];
 	GByteArray *packed = NULL;
 
-        if (nbreplicas < 1) {
-                GSETERROR(err, "Too few replicas");
-                return FALSE;
-        }
+	if (nbreplicas < 1) {
+		GSETERROR(err, "Too few replicas");
+		return FALSE;
+	}
 
 	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 
-        message_create(&request, NULL);
-        message_set_NAME(request, NAME_MSGNAME_M0_V2_FILL, sizeof(NAME_MSGNAME_M0_V2_FILL)-1, NULL);
-        do {
-                gchar str[32];
-                g_snprintf(str, sizeof(str), "%u", nbreplicas);
-                message_add_field(request, "REPLICAS", sizeof("REPLICAS"), str, strlen(str), NULL);
-        } while (0);
-        do {
-                gchar str[32];
-                g_snprintf(str, sizeof(str), "%u", nodist);
-                message_add_field(request, "NODIST", sizeof("NODIST"), str, strlen(str), NULL);
-        } while (0);
+	request = message_create();
+	message_set_NAME(request, NAME_MSGNAME_M0_V2_FILL, sizeof(NAME_MSGNAME_M0_V2_FILL)-1, NULL);
+	message_add_field_strint64(request, "REPLICAS", nbreplicas);
+	message_add_field_strint(request, "NODIST", nodist);
 
 	addr_info_to_string(m0a, target, sizeof(target));
 	packed = message_marshall_gba(request, NULL);
@@ -266,8 +272,7 @@ meta0_remote_fill_v2(addr_info_t *m0a, gint ms,
 		goto end_label;
 
 end_label:
-	if (request)
-		message_destroy(request, NULL);
+	message_destroy(request);
 	if (packed) 
 		g_byte_array_free(packed, TRUE);
 
@@ -280,7 +285,6 @@ end_label:
 	return FALSE;
 }
 
-
 gint
 meta0_remote_assign(addr_info_t *m0a, gint ms, gboolean nocheck, GError **err)
 {
@@ -292,12 +296,10 @@ meta0_remote_assign(addr_info_t *m0a, gint ms, gboolean nocheck, GError **err)
 
 	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 
-	message_create(&request, NULL);
+	request = message_create();
         message_set_NAME(request,NAME_MSGNAME_M0_ASSIGN,sizeof(NAME_MSGNAME_M0_ASSIGN)-1, NULL);
-	if (nocheck) {
-		gchar *str ="yes";
-		message_add_field(request, "NOCHECK", sizeof("NOCHECK")-1, str, strlen(str), NULL);
-	}
+	if (nocheck)
+		message_add_field(request, "NOCHECK", "yes", 3);
 	
 	addr_info_to_string(m0a, target, sizeof(target));
 	packed = message_marshall_gba(request, NULL);
@@ -315,8 +317,7 @@ meta0_remote_assign(addr_info_t *m0a, gint ms, gboolean nocheck, GError **err)
 		goto end_label;
 
 end_label:
-	if (request)
-		message_destroy(request, NULL);
+	message_destroy(request);
 	if (packed) 
 		g_byte_array_free(packed, TRUE);
 
@@ -344,12 +345,10 @@ meta0_remote_disable_meta1(addr_info_t *m0a, gint ms, gchar **urls, gboolean noc
 
 	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 
-	message_create(&request, NULL);
+	request = message_create();
 	message_set_NAME(request, NAME_MSGNAME_M0_DISABLE_META1, sizeof(NAME_MSGNAME_M0_DISABLE_META1)-1, NULL);
-	if (nocheck) {
-		gchar *str ="yes";
-		message_add_field(request, "NOCHECK", sizeof("NOCHECK")-1, str, strlen(str), NULL);
-	}
+	if (nocheck)
+		message_add_field(request, "NOCHECK", "yes", 3);
 	do {
 		gchar *body = g_strjoinv("\n", urls);
 		message_set_BODY(request, body, strlen(body), NULL);
@@ -370,8 +369,7 @@ meta0_remote_disable_meta1(addr_info_t *m0a, gint ms, gchar **urls, gboolean noc
 		goto end_label;
 
 end_label:
-	if (request)
-		message_destroy(request, NULL);
+	message_destroy(request);
 	if (packed)
 		g_byte_array_free(packed, TRUE);
 
@@ -443,8 +441,7 @@ meta0_remote_get_meta1_info(addr_info_t *m0a, gint ms, GError **err)
 		goto end_label;
 
 end_label:
-	if (request)
-		message_destroy(request, NULL);
+	message_destroy(request);
 	if (packed)
 		g_byte_array_free(packed, TRUE);
 
@@ -460,7 +457,6 @@ end_label:
 	return result;
 }
 
-
 gint
 meta0_remote_destroy_meta1ref(addr_info_t *m0a, gint ms, gchar *urls, GError **err)
 {
@@ -475,10 +471,9 @@ meta0_remote_destroy_meta1ref(addr_info_t *m0a, gint ms, gchar *urls, GError **e
 		return FALSE;
 	}
 
-	message_create(&request, NULL);
+	request = message_create();
 	message_set_NAME(request, NAME_MSGNAME_M0_DESTROY_META1REF, sizeof(NAME_MSGNAME_M0_DESTROY_META1REF)-1, NULL);
-
-	message_add_field(request, "METAURL", sizeof("METAURL"), urls, strlen(urls), NULL);
+	message_add_field(request, "METAURL", urls, strlen(urls));
 
 	addr_info_to_string(m0a, target, sizeof(target));
 	packed = message_marshall_gba(request, NULL);
@@ -496,8 +491,7 @@ meta0_remote_destroy_meta1ref(addr_info_t *m0a, gint ms, gchar *urls, GError **e
 		goto end_label;
 
 end_label:
-	if (request)
-		message_destroy(request, NULL);
+	message_destroy(request);
 	if (packed) 
 		g_byte_array_free(packed, TRUE);
 
@@ -522,10 +516,9 @@ meta0_remote_destroy_meta0zknode(addr_info_t *m0a, gint ms, gchar *urls, GError 
 		return FALSE;
 	}
 
-	message_create(&request, NULL);
+	request = message_create();
 	message_set_NAME(request, NAME_MSGNAME_M0_DESTROY_META0ZKNODE, sizeof(NAME_MSGNAME_M0_DESTROY_META0ZKNODE)-1, NULL);
-
-	message_add_field(request, "METAURL", sizeof("METAURL"), urls, strlen(urls), NULL);
+	message_add_field(request, "METAURL", urls, strlen(urls));
 
 	addr_info_to_string(m0a, target, sizeof(target));
 	packed = message_marshall_gba(request, NULL);
@@ -543,8 +536,7 @@ meta0_remote_destroy_meta0zknode(addr_info_t *m0a, gint ms, gchar *urls, GError 
 		goto end_label;
 
 end_label:
-	if (request)
-		message_destroy(request, NULL);
+	message_destroy(request);
 	if (packed) 
 		g_byte_array_free(packed, TRUE);
 

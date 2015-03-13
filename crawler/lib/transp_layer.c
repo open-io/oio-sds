@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "atos.grid.crawler.crawler_bus"
 #endif //G_LOG_DOMAIN
@@ -17,16 +36,9 @@
 
 #include "transp_layer.h"
 
-
-
-
-
 /**************************************************************************/
 /* Constants                                                              */
 /**************************************************************************/
-
-
-
 
 /******************************************************************************/
 /* Object definition                                                          */
@@ -43,15 +55,12 @@ struct TCrawlerBusObjectClass {
 
 G_DEFINE_TYPE(TCrawlerBusObject, crawler_object, G_TYPE_OBJECT)
 
-
 #define CRAWLER_TYPE_OBJECT              (crawler_object_get_type ())
 #define CRAWLER_OBJECT(object)           (G_TYPE_CHECK_INSTANCE_CAST ((object), CRAWLER_TYPE_OBJECT, TCrawlerBusObject))
 #define CRAWLER_OBJECT_CLASS(klass)      (G_TYPE_CHECK_CLASS_CAST ((klass), CRAWLER_TYPE_OBJECT, TCrawlerBusObjectClass))
 #define CRAWLER_IS_OBJECT(object)        (G_TYPE_CHECK_INSTANCE_TYPE ((object), CRAWLER_TYPE_OBJECT))
 #define CRAWLER_IS_OBJECT_CLASS(klass)   (G_TYPE_CHECK_CLASS_TYPE ((klass), CRAWLER_TYPE_OBJECT))
 #define CRAWLER_OBJECT_GET_CLASS(obj)    (G_TYPE_INSTANCE_GET_CLASS ((obj), CRAWLER_TYPE_OBJECT, TCrawlerBusObjectClass))
-
-
 
 static void crawler_object_init (TCrawlerBusObject *obj)
 {
@@ -63,9 +72,6 @@ static void crawler_object_class_init (TCrawlerBusObjectClass *klass)
 {
 	(void) klass;
 }
-
-
-
 
 /******************************************************************************/
 /* structure                                                                  */
@@ -89,9 +95,6 @@ struct TCrawlerReq {
 	DBusGProxy*  proxy;        // proxy to remote process
 };
 
-
-
-
 /**
  *
  *
@@ -102,8 +105,6 @@ typedef enum {
 
 } ECrawlerBusCmdCallResponseType;
 
-
-
 /**
  * \brief structure which contains data about notification callback (ASYNC Request)
  */
@@ -113,10 +114,8 @@ typedef struct {
 
 	ECrawlerBusCmdCallResponseType resp_typ;
 
-
     void (*_notify_callback)(TCrawlerReq* req, GError* error, void* msgReceived, void *user_data);
 } TCrawlerBusCmdCall;
-
 
 /**
  * \brief structure which contains data about notification callback (ASYNC Request)
@@ -128,10 +127,6 @@ typedef struct {
     void (*_notify_callback)(TCrawlerReq* req, char* msgReceived, void *user_data);
 } TCrawlerBusCmdSig;
 
-
-
-
-
 /**************************************************************************/
 /* MACRO                                                                  */
 /**************************************************************************/
@@ -141,15 +136,10 @@ typedef struct {
 	c->resp_typ = (ECrawlerBusCmdCallResponseType) resp;\
 	//c->_notify_callback = cb       // comment besause a warning at compil, and not used in real
 
-
-
-
 /******************************************************************************/
 /* functions                                                                  */
 /******************************************************************************/
 GError* _crawler_bus_VerifIsConnected(TCrawlerBus *handle);
-
-
 
 /**
  * \brief init a connection to the bus
@@ -180,7 +170,6 @@ GError* crawler_bus_Open(TCrawlerBus **handle, gchar* address)
 			g_prefix_error(&error, "Failed to open connection to bus(system): ");
 			return error;
 		}
-
 
 	} else {
 		/* used a personal session */
@@ -213,7 +202,6 @@ GError* crawler_bus_Open(TCrawlerBus **handle, gchar* address)
     return NULL;
 }
 
-
 /**
  * \brief close opnened connection
  * \param[in] handle connection to close
@@ -236,7 +224,6 @@ GError* crawler_bus_Close(TCrawlerBus **handle)
 
 	return NULL;
 }
-
 
 GError* _crawler_bus_VerifIsConnected(TCrawlerBus *handle)
 {
@@ -307,8 +294,6 @@ GError* crawler_bus_Register(TCrawlerBus *handle, char* service_name, char* serv
 	return NULL;
 }
 
-
-
 /**
  * BLOCKED FUNCTION !!!
  */
@@ -317,7 +302,6 @@ GError* crawler_bus_flush(TCrawlerBus *handle)
 	dbus_g_connection_flush (handle->conn);
 	return NULL;
 }
-
 
 /**************************************************************************/
 /* Request SYNC: send request and wait response before return             */
@@ -340,7 +324,6 @@ GError* crawler_bus_req_init(TCrawlerBus *handle, TCrawlerReq** req,
 	TCrawlerReq* r = NULL;
     GError* error = _crawler_bus_VerifIsConnected(handle);
     if (error) return error;
-
 
 	if (!req)
 		return NEWERROR(-1, "Bad request");
@@ -397,9 +380,6 @@ void crawler_bus_req_clear(TCrawlerReq** req)
 	*req = NULL;
 }
 
-
-
-
 /**************************************************************************/
 /* Request to org.freedesktop.DBus                                        */
 /* SYNC methods                                                           */
@@ -420,7 +400,6 @@ GError* crawler_bus_reqBase_init(TCrawlerBus *handle, TCrawlerReq** req)
 	return crawler_bus_req_init(handle, req, 
 			dbus_server_name, dbus_server_path, dbus_server_iface);
 }
-
 
 /**
  * \brief register a name and publish all methods to bus
@@ -448,8 +427,6 @@ GError* crawler_bus_reqBase_RegisterName(TCrawlerReq* req, const char *name)
 
 	return NULL;
 }
-
-
 
 /**
  * \brief verif if a name exist on bus
@@ -479,8 +456,6 @@ GError* crawler_bus_reqBase_IsNameExists(TCrawlerReq* req, const char *name, gbo
     return NULL;
 }
 
-
-
 /**
  * \brief Get all service name connected on the same bus
  * \param[in] req   request to  to used
@@ -502,8 +477,6 @@ GError* crawler_bus_reqBase_GetListNames(TCrawlerReq* req, char*** listnames)
 
     return NULL;
 }
-
-
 
 /**************************************************************************/
 /* Generic Request to other interface                                     */
@@ -544,17 +517,10 @@ GError* crawler_bus_req_Send_ss_s(TCrawlerReq* req, char* method, int timeout,
     return NULL;
 }
 
-
-
-
-
 /**************************************************************************/
 /* Generic Request to other interface                                     */
 /* A-SYNC methods                                                         */
 /**************************************************************************/
-
-
-
 
 static void reply__nc (DBusGProxy *proxy, DBusGProxyCall *call, void *user_data)
 {
@@ -599,8 +565,7 @@ static void reply__nc (DBusGProxy *proxy, DBusGProxyCall *call, void *user_data)
 		g_clear_error(&error);
 }
 
-
-GError* crawler_bus_reqcCall_verifArg(TCrawlerReq* req, char* method_call)
+static GError* crawler_bus_reqcCall_verifArg(TCrawlerReq* req, char* method_call)
 {
     if (!req)
         return NEWERROR(-1, "Request/proxy not available to %s service", "Unknown");
@@ -660,54 +625,6 @@ GError* crawler_bus_reqcCall_Send_s_as(TCrawlerReq* req, char* method_call, int 
     return NULL;
 }
 
-
-/**
- * w
- * if _notify_callback == NULL: no reply
- * timeout = -1: infinite
- */
-GError* crawler_bus_reqcCall_Send_s_s(TCrawlerReq* req, char* method_call, int timeout,
-        void (*_notify_callback)(TCrawlerReq* req, GError* error, char* msgReceived, void *user_data),
-        void *user_data, char* dataToSend)
-{
-    DBusGProxyCall *call = NULL;
-    TCrawlerBusCmdCall* c = NULL;
-    GError* error = NULL;
-
-    error = crawler_bus_reqcCall_verifArg(req, method_call);
-    if (error) return error;
-
-	if (!_notify_callback) {
-		dbus_g_proxy_call_no_reply(
-                req->proxy,
-                method_call, /* data to send */
-
-                /* parameter */
-                G_TYPE_STRING, dataToSend,
-                G_TYPE_INVALID);
-
-	} else {
-	    c = g_new0 (TCrawlerBusCmdCall, 1);
-    	CRAWLER_BUSCMD_SAVEUSERDATA(c, req, RESP_S, user_data, _notify_callback);
-
-	    call = dbus_g_proxy_begin_call_with_timeout(
-                req->proxy,
-                method_call, /* data to send */
-                reply__nc, c,     /* callback for reply, user_data pass for it*/
-                g_free,     /* function free for user_data */
-                timeout,    /* timeout in ms */
-
-                /* parameter */
-                G_TYPE_STRING, dataToSend,
-                G_TYPE_INVALID);
-	}
-
-	(void) call;
-
-    return NULL;
-}
-
-
 /**
  * if _notify_callback == NULL: no reply
  * timeout = -1: infinite
@@ -755,8 +672,6 @@ GError* crawler_bus_reqcCall_Send_ss_s(TCrawlerReq* req, char* method_call, int 
     return NULL;
 }
 
-
-
 /**
  *  * if _notify_callback == NULL: no reply
  *   * timeout = -1: infinite
@@ -783,7 +698,6 @@ GError* crawler_bus_reqcCall_Send_sss_s(TCrawlerReq* req, char* method_call, int
 				G_TYPE_STRING, dataToSend3,
                 G_TYPE_INVALID);
 
-
     } else {
         c = g_new0 (TCrawlerBusCmdCall, 1);
         CRAWLER_BUSCMD_SAVEUSERDATA(c, req, RESP_S, user_data, _notify_callback);
@@ -807,10 +721,6 @@ GError* crawler_bus_reqcCall_Send_sss_s(TCrawlerReq* req, char* method_call, int
 
     return NULL;
 }
-
-
-
-
 
 /**
  * if _notify_callback == NULL: no reply
@@ -837,7 +747,6 @@ GError* crawler_bus_reqcCall_Send_ts_s(TCrawlerReq* req, char* method_call, int 
 				G_TYPE_STRING, dataToSend2,
 				G_TYPE_INVALID);
 
-
 	} else {
 		c = g_new0 (TCrawlerBusCmdCall, 1);
 		CRAWLER_BUSCMD_SAVEUSERDATA(c, req, RESP_S, user_data, _notify_callback);
@@ -860,14 +769,9 @@ GError* crawler_bus_reqcCall_Send_ts_s(TCrawlerReq* req, char* method_call, int 
 	return NULL;
 }
 
-
-
-
 /**************************************************************************/
 /* Generic Signal management                                              */
 /**************************************************************************/
-
-
 
 static void reply_sig_cb (DBusGProxy *proxy, const char* message, gpointer user_data)
 {
@@ -885,7 +789,6 @@ static void reply_sig_cb (DBusGProxy *proxy, const char* message, gpointer user_
 	
 }
 
-
 GError* crawler_bus_reqSig_OpenInputQueue(TCrawlerReq* req, const char *signal_name, void *user_data)
 {
 	TCrawlerBusCmdSig* sig = NULL;
@@ -894,7 +797,6 @@ GError* crawler_bus_reqSig_OpenInputQueue(TCrawlerReq* req, const char *signal_n
 	dbus_g_proxy_add_signal(req->proxy, signal_name, G_TYPE_STRING, G_TYPE_INVALID);
 //	 dbus_g_proxy_add_signal(req->proxy, "atos-grid-Crawler-Comm-Action-end_signal_for_test",
 //		G_TYPE_STRING, G_TYPE_INVALID);
-
 
 	sig = g_new0(TCrawlerBusCmdSig, 1);
 	sig->req = req;
@@ -907,15 +809,12 @@ GError* crawler_bus_reqSig_OpenInputQueue(TCrawlerReq* req, const char *signal_n
 	return NULL;
 }
 
-
 GError* crawler_bus_reqSig_CloseInputQueue(TCrawlerReq* req, const char *signal_name)
 {
 	dbus_g_proxy_disconnect_signal(req->proxy, signal_name, G_CALLBACK(reply_sig_cb), NULL);
 
 	return NULL;
 }
-
-
 
 GError* crawler_bus_reqSig_SendMsg(TCrawlerReq* req, gboolean broadcast, 
 		char* service_path, char* service_iface, 
@@ -953,10 +852,4 @@ GError* crawler_bus_reqSig_SendMsg(TCrawlerReq* req, gboolean broadcast,
 
 	return NULL;
 }
-
-
-
-
-
-
 

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "grid.crawler.action_list_container"
 #endif //G_LOG_DOMAIN
@@ -25,13 +44,10 @@
 
 #include "listener/listener_remote.h"
 
-
-
 //==============================================================================
 // constantes
 //==============================================================================
 #define ALCS_CONTENTNAME_MAX_BYTES      150
-
 
 //==============================================================================
 // structure
@@ -59,9 +75,6 @@ struct _ActionListCtStatData_s {
 	int svc_nbErrReq;         // ...request meta1 failed / prefix / service
 };
 
-
-
-
 /**
  * save data before save on grid
  */
@@ -75,13 +88,7 @@ typedef struct {
 	int   datalen;
 }TAlcsSharedMem;
 
-
-
 static GSList* g_alcs_listsm = NULL;           // TAlcsSharedMem item
-
-
-
-
 
 //==============================================================================
 // variables
@@ -123,9 +130,6 @@ static GMainLoop *g_main_loop = NULL;
 #define ALCS_TRACE(...) { GRID_TRACE(__VA_ARGS__);  ALCS_PRINTF(__VA_ARGS__); }
 #define ALCS_DEBUG(...) { GRID_DEBUG(__VA_ARGS__);  ALCS_PRINTF(__VA_ARGS__); }
 
-
-
-
 // function: meta1 request
 //==============================================================================
 /**
@@ -159,7 +163,6 @@ alcs_meta1_PrepareDataIn(const gchar* pMeta1_url_In, addr_info_t *pM1addr_Out,
 	return NULL;
 }
 
-
 /**
  * \brief get list container by service or not
  *
@@ -183,7 +186,6 @@ alcs_meta1_GetListContainer(gchar* namespace, addr_info_t *m1addr,
 		err = meta1v2_remote_list_references_by_service(m1addr, namespace,
 				*prefix, srvtype, srvurl, result);
 
-
 	if (err) {
 		ALCS_WARN("M1V2 error : (%d) %s", err->code, err->message);
 		metautils_gba_unref(result);
@@ -200,8 +202,6 @@ alcs_meta1_GetListContainer(gchar* namespace, addr_info_t *m1addr,
 	return err;
 }
 
-
-
 //return list service / cid
 static gchar** alcs_meta1_GetListServices(gchar* namespace, addr_info_t *m1addr,
         container_id_t *cid, GError** err)
@@ -216,10 +216,6 @@ static gchar** alcs_meta1_GetListServices(gchar* namespace, addr_info_t *m1addr,
     return result;
 }
 
-
-
-
-
 //==============================================================================
 //// function: GRIDCLIENT
 ////==============================================================================
@@ -232,13 +228,11 @@ typedef struct {
 	gchar *stream;       // content
 }TALCSStreams;
 
-
 typedef struct {
 	gboolean      bOpened;
 	TALCSStreams* pStream;
 	int           position;
 } TALCSStreamHandle;
-
 
 	static gs_grid_storage_t*
 alcs_gridclient_init(GError ** g_err, gchar* namespace)
@@ -256,7 +250,6 @@ alcs_gridclient_init(GError ** g_err, gchar* namespace)
 	return hc;
 }
 
-
 	static GError*
 alcs_gridclient_free(gs_grid_storage_t** hc)
 {
@@ -267,8 +260,6 @@ alcs_gridclient_free(gs_grid_storage_t** hc)
 	*hc = NULL;
 	return NULL;
 }
-
-
 
 /**
  * create a container on a specific namespace
@@ -299,7 +290,6 @@ alcs_gridclient_container_Create(gs_grid_storage_t* hc, gchar* namespace, gchar*
 		if (err != NULL) gs_error_free(err);
 		err = NULL;
 
-
 		if (g_dryrun_mode == FALSE) {	
 			// crezate the container
 			c = gs_get_storage_container (hc, sContainer, stgpol, 1, &err);
@@ -318,7 +308,6 @@ alcs_gridclient_container_Create(gs_grid_storage_t* hc, gchar* namespace, gchar*
 				ALCS_SETERR(&g_err, "Cannot create container: %s", "Unknown Error");
 		}
 
-
 	} else {
 		ALCS_WARN("Container [%s] exists", sContainer);                
 	}
@@ -328,7 +317,6 @@ alcs_gridclient_container_Create(gs_grid_storage_t* hc, gchar* namespace, gchar*
 
 	return g_err;
 }
-
 
 static ssize_t _alcs_gridclient_content_feed_from_stream(void *uData, char *b, size_t bSize)
 {
@@ -373,11 +361,8 @@ static ssize_t _alcs_gridclient_content_feed_from_stream(void *uData, char *b, s
 		pHandleStream->position += nbRead;
 	}
 
-
 	return nbRead;
 }
-
-
 
 	static GError*
 alcs_gridclient_content_PUTorAPPEND(gs_grid_storage_t* hc, gchar* namespace, gchar* sContainer, 
@@ -389,7 +374,6 @@ alcs_gridclient_content_PUTorAPPEND(gs_grid_storage_t* hc, gchar* namespace, gch
 	gchar* stgpol = NULL;
 	TALCSStreams* pStream;
 	TALCSStreamHandle* pStream_handle = NULL;
-
 
 	if (buf == NULL ) {
 		ALCS_DEBUG("%s: buffer = null", __FUNCTION__);
@@ -425,11 +409,9 @@ alcs_gridclient_content_PUTorAPPEND(gs_grid_storage_t* hc, gchar* namespace, gch
 		if (err != NULL) gs_error_free(err);
 		err = NULL;
 
-
 		pStream_handle->bOpened      = TRUE;
 		pStream_handle->pStream      = pStream;
 		pStream_handle->position     = 0;
-
 
 		gs_status_t s = 0;
 
@@ -470,21 +452,12 @@ alcs_gridclient_content_PUTorAPPEND(gs_grid_storage_t* hc, gchar* namespace, gch
 		}
 	}
 
-
-
 	g_free(pStream);
 	g_free(pStream_handle);
 	if (err != NULL) gs_error_free(err);
 	if (c != NULL)   gs_container_free(c);
 	return g_err;
 }
-
-
-
-
-
-
-
 
 //==============================================================================
 // LISTENER
@@ -526,7 +499,6 @@ alcs_listener_connect(const char* listenerUrl)
 
 }
 
-
 /**
  * svc_url / svc_url: meta2, solr, ...
  */
@@ -554,8 +526,6 @@ alcs_listener_sendJSON(const gchar* listenerUrl, json_object* jobj)
 		} else { ALCS_ERROR("Faile to convert JSON to String"); }
 	}
 }
-
-
 
 	static void
 alcs_listener_buildHead(TLstJSONHeader* msgH, char* name, int pid, char* status, char* idcrawl)
@@ -609,8 +579,6 @@ alcs_listener_request_buildData(gboolean bMeta1Only, TLstJSONHeader* msgH,
 	} else  
 		listener_remote_json_addSection(j_root, LST_SECTION_DATAH, j_datah);
 
-
-
 	//----
 	// build data toi reduce by listener&reduce
 	j_data = listener_remote_json_newSection();
@@ -657,10 +625,8 @@ alcs_listener_request_buildData(gboolean bMeta1Only, TLstJSONHeader* msgH,
 		return NULL;
 	} else listener_remote_json_addSection(j_root, LST_SECTION_DATAR, j_data);
 
-
 	return j_root;
 }
-
 
 /**
  * build requete command format json
@@ -677,7 +643,6 @@ alcs_listener_request_buildCmd(TLstJSONHeader* msgH)
 
 	return j_root; 
 }
-
 
 	static void
 alcs_listener_sendData(const char* listenerUrl, const gchar* meta1_url,
@@ -723,9 +688,6 @@ alcs_listener_sendStopMsg(const char* listenerUrl)
 	alcs_listener_sendJSON(listenerUrl, jobj);
 	listener_remote_json_clean(jobj);
 }
-
-
-
 
 //==============================================================================
 // Shared memory
@@ -777,8 +739,6 @@ alcs_sharedmem_get(gchar* namespace, gchar* contentName)
 	return ptr;
 }
 
-
-
 	static void
 alcs_sharedmem_free(TAlcsSharedMem* ptr)
 {
@@ -791,7 +751,6 @@ alcs_sharedmem_free(TAlcsSharedMem* ptr)
 		g_free(ptr->namespace);
 	g_free(ptr);
 }
-
 
 	static void
 alcs_sharedmem_free_all(gchar* crawlerIDonly)
@@ -813,9 +772,6 @@ alcs_sharedmem_free_all(gchar* crawlerIDonly)
 	}
 }
 
-
-
-
 	static GError*
 alcs_sharedmem_saveOnGrid(TAlcsSharedMem* pData, gchar* buf, int len)
 {
@@ -832,7 +788,6 @@ alcs_sharedmem_saveOnGrid(TAlcsSharedMem* pData, gchar* buf, int len)
 		return g_err;
 	}
 
-
 	//TODO: verif si content existe ou non: pour 	
 
 	//save data on content before
@@ -845,7 +800,6 @@ alcs_sharedmem_saveOnGrid(TAlcsSharedMem* pData, gchar* buf, int len)
 
 	return g_err;
 }
-
 
 /**
  * save on grid only when crawlID is used
@@ -874,7 +828,6 @@ alcs_sharedmem_saveOnGrid_all(gchar* crawlerIDonly)
 
 	return err;
 }
-
 
 	static GError*
 alcs_sharedmem_add(gchar* namespace, gchar* contentName, gchar* pDataHead, GByteArray* result)
@@ -931,9 +884,6 @@ alcs_sharedmem_add(gchar* namespace, gchar* contentName, gchar* pDataHead, GByte
 	return g_err;
 }
 
-
-
-
 //==============================================================================
 // Action
 //==============================================================================
@@ -972,7 +922,6 @@ do_analyzeListContainer(GByteArray* result, gboolean bShowAll)
 	return nbCtTotal;
 }
 
-
 	static gboolean
 do_verifAndInitPrefix( struct _ActionListCtStatData_s* data,
 		const gchar* prefixCt, container_id_t* prefix)
@@ -1004,8 +953,6 @@ do_verifAndInitPrefix( struct _ActionListCtStatData_s* data,
 
 	return TRUE;
 }
-
-
 
 	static void
 do_Execute(const char* listenerUrl, const gchar* meta1_url, gchar* namespace,
@@ -1082,7 +1029,6 @@ do_work(const char* listenerUrl, const gchar* meta1_url,
 		alcs_listener_sendData(listenerUrl, meta1_url, NULL, NULL, prefixCt, &data);
 		return NULL;
 	}
-
 
 	if (meta2cfg == NULL) {
 		// read list all containers on meta1
@@ -1161,12 +1107,9 @@ do_work(const char* listenerUrl, const gchar* meta1_url,
 	return err;
 }
 
-
-
 //==============================================================================
 // Listening message come from, and execute action function
 //==============================================================================
-
 
 /* ------- */
 struct SParamMsgrx {
@@ -1180,14 +1123,14 @@ struct SParamMsgrx {
 	gchar* dryrun;
 };
 
-void init_paramMsgRx(struct SParamMsgrx* pParam)
+static void init_paramMsgRx(struct SParamMsgrx* pParam)
 {
 	if (pParam == NULL) return;
 
 	memset(pParam, 0, sizeof(struct SParamMsgrx));
 }
 
-void clean_paramMsgRx(struct SParamMsgrx* pParam)
+static void clean_paramMsgRx(struct SParamMsgrx* pParam)
 {
 	if (pParam == NULL) return;
 
@@ -1205,9 +1148,6 @@ void clean_paramMsgRx(struct SParamMsgrx* pParam)
 
 	init_paramMsgRx(pParam);
 }
-
-
-
 
 static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam, 
 		struct SParamMsgrx* pParam, gboolean* bShowAll)
@@ -1234,10 +1174,8 @@ static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam,
 		ALCS_TRACE("Failed to get listener from args");
     }
 
-
 	pParam->dryrun = get_argv_value(pActParam->argc, pActParam->argv, 
 			g_cfg_action_name, g_cfg_dryrun_cmd_opt_name);
-
 
         if (NULL == (pParam->crawlerID = get_argv_value(pActParam->argc, pActParam->argv, 
 						g_cfg_action_name, g_cfg_crawlerID_cmd_opt_name))) {
@@ -1256,7 +1194,6 @@ static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam,
 		g_variant_type_free(gvt);
 		gvt = NULL;
 
-
 		// prefix
 		pParam->prefixCt = get_child_value_string(pActParam->occur, 1);
 		if (pParam->prefixCt != NULL) {
@@ -1271,7 +1208,6 @@ static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam,
 		pParam->prefixCt    = "";
 		pParam->meta1_url   = "";
 	}
-
 
 	/////////////////////////////////////////////////
 	// save on global variables...
@@ -1299,12 +1235,8 @@ static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam,
             g_dryrun_mode = FALSE;
     } else g_dryrun_mode = FALSE;
 
-
-
 	return TRUE;
 }
-
-
 
 gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
     const char *alldata, GError **error)
@@ -1377,7 +1309,6 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
 	tlc_Send_Ack_noreply(req, NULL, ((!e)?ACK_OK:ACK_KO), status);
     g_free(status);	
 
-
 	if (e) {
 		ALCS_WARN("Failed to list containers [%s] : %s", msgRx.source_path, e->message);
 		g_clear_error(&e);
@@ -1389,7 +1320,6 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
 
 	return TRUE;
 }
-
 
 gboolean action_command(TCrawlerBusObject *obj, const char* cmd, const char *alldata, 
 		char** status, GError **error)
@@ -1475,7 +1405,6 @@ static void main_action(void)
 		fprintf(stderr, "zmq_init failed (%d)", errno);
 		exit(EXIT_FAILURE);
 	}
-
 
 	/* DBus connexion */
 	error = tlc_init_connection(&g_conn, g_service_name, SERVICE_PATH, 
@@ -1594,5 +1523,4 @@ main(int argc, char **argv)
 
 	return grid_main(argc, argv, &cb);
 }
-
 

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "client.c.rawx"
 #endif
@@ -23,7 +42,6 @@
 
 static void add_req_id_header(ne_request *request, gchar *dst, gsize dst_size);
 static void add_req_system_metadata_header (ne_request *request, GByteArray *system_metadata);
-
 
 static void chunk_id2str (const gs_chunk_t *chunk, char *d, size_t dS)
 {
@@ -95,9 +113,7 @@ static ne_session* rawx_opensession (gs_chunk_t *chunk, GError **err)
 	return opensession_common(&(chunk->ci->id.addr), to_cnx, to_op, err);
 }
 
-
 /* ------------------------------------------------------------------------- */
-
 
 gs_status_t rawx_delete (gs_chunk_t *chunk, GError **err)
 {
@@ -148,7 +164,6 @@ gs_status_t rawx_delete (gs_chunk_t *chunk, GError **err)
 
 	/* Add request header */
 	add_req_id_header(request, str_req_id, sizeof(str_req_id)-1);
-
 
 	ne_add_request_header  (request, "chunkid",     str_ci);
 	ne_add_request_header  (request, "chunkhash",   str_hash);
@@ -383,7 +398,6 @@ end:
 	return (*err == NULL);
 }
 
-
 char*
 create_rawx_request_common(ne_request **req, ne_request_param_t *param, GError **err)
 {
@@ -532,16 +546,16 @@ _rawx_update_chunk_attrs(chunk_id_t *cid, GSList *attrs, GError **err)
 			result = TRUE;
 			break;
 		case NE_ERROR:
-			GSETCODE(err, 500, "Request NE_ERROR");
+			GSETCODE(err, CODE_INTERNAL_ERROR, "Request NE_ERROR");
 			break;
 		case NE_TIMEOUT:
-			GSETCODE(err, 500, "Request Timeout");
+			GSETCODE(err, CODE_INTERNAL_ERROR, "Request Timeout");
 			break;
 		case NE_CONNECT:
-			GSETCODE(err, 500, "Request Connection timeout");
+			GSETCODE(err, CODE_INTERNAL_ERROR, "Request Connection timeout");
 			break;
 		default:
-			GSETCODE(err, 500, "Request failed");
+			GSETCODE(err, CODE_INTERNAL_ERROR, "Request failed");
 			break;
 	}
 
@@ -555,7 +569,6 @@ end_attr:
 
 	return result;
 }
-
 
 gboolean
 rawx_update_chunk_attr(struct meta2_raw_chunk_s *c, const char *name,
@@ -631,9 +644,7 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 	chunk_id2str (chunk, str_ci, sizeof(str_ci));
 	TRACE("about to download '%s' from '%s'", str_ci, cPath);
 
-
 	gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
-
 
 	/*create a webdav session, a request with good headers */
 	session = rawx_opensession (chunk, err);
@@ -692,7 +703,7 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 			break;
 
 		case NE_ERROR:
-			GSETCODE(err, 500, "Caller error '%s' (%s) (ReqId:%s)",
+			GSETCODE(err, CODE_INTERNAL_ERROR, "Caller error '%s' (%s) (ReqId:%s)",
 					cPath, ne_get_error(session), str_req_id);
 			status->caller_error = TRUE;
 			goto error_label;

@@ -1,5 +1,25 @@
-#ifndef __MESSAGE_HANDLER_H__
-# define __MESSAGE_HANDLER_H__
+/*
+OpenIO SDS gridd
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__gridd__main__message_handler_h
+# define OIO_SDS__gridd__main__message_handler_h 1
+
 # include <sys/time.h>
 # include <metautils/lib/metacomm.h>
 
@@ -17,7 +37,6 @@ typedef gint (*message_handler_v2_f) (struct request_context_s *ctx, GError **er
 
 gint message_handler_add (const char *name, message_matcher_f m, message_handler_f h, GError **err);
 gint message_handler_add_v2 (const char *name, message_matcher_f m, message_handler_v2_f h, const GPtrArray *tags, GError **err);
-
 
 #define GO_ON 2
 #define DONE 1
@@ -51,7 +70,6 @@ void reply_context_clear (struct reply_context_s *ctx, gboolean all);
  * @param msg
  */
 void reply_context_set_message (struct reply_context_s *ctx, gint code, const gchar *msg);
-
 
 /**
  * @param ctx
@@ -103,4 +121,4 @@ gint get_network_socket (message_handler_f h, char **addr, int *port, GError **e
 
 gchar* gridd_get_ns_name(void);
 
-#endif /*__MESSAGE_HANDLER_H__*/
+#endif /*OIO_SDS__gridd__main__message_handler_h*/

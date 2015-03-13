@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta1v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta1.server"
 #endif
@@ -49,7 +68,7 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 			GRID_INFO("RELOAD prefix, nb updated prefixes %d",updated_prefixes->len);
 		guint i , max;
 		guint16 prefix;
-		gchar name[8], type[] = META1_TYPE_NAME;
+		gchar name[8];
 		max = updated_prefixes->len;
 
 		for ( i=0; i < max ; i++) {
@@ -62,7 +81,8 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 				}
 			}
 			else { // Lost prefix managed
-				err = election_exit(ss->election_manager, name, type);
+				struct sqlx_name_s n = {.base=name, .type=META1_TYPE_NAME, .ns=ss->ns_name};
+				err = election_exit(ss->election_manager, &n);
 				if (err) {
 					GRID_WARN("SQLX error : (%d) %s", err->code, err->message);
 					g_clear_error(&err);
@@ -152,25 +172,25 @@ filter_urls_and_clean(gchar **src, const gchar *avoid)
 }
 
 static GError *
-_get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t,
+_get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
 	container_id_t cid;
 	guchar s[3]= {0,0,0};
 
-	if (!n || !t || !result)
-		return NEWERROR(500, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
-	if (!g_str_has_prefix(t, META1_TYPE_NAME))
-		return NEWERROR(400, "Invalid type name");
-	if (!metautils_str_ishexa(n,4))
-		return NEWERROR(400, "Invalid base name");
+	if (!n || !result)
+		return NEWERROR(CODE_INTERNAL_ERROR, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
+	if (!g_str_has_prefix(n->type, META1_TYPE_NAME))
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name");
+	if (!metautils_str_ishexa(n->base,4))
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name");
 
 	memset(cid, 0, sizeof(container_id_t));
-	s[0] = n[0];
-	s[1] = n[1];
+	s[0] = n->base[0];
+	s[1] = n->base[1];
 	((guint8*)cid)[0] = g_ascii_strtoull((gchar*)s, NULL, 16);
-	s[0] = n[2];
-	s[1] = n[3];
+	s[0] = n->base[2];
+	s[1] = n->base[3];
 	((guint8*)cid)[1] = g_ascii_strtoull((gchar*)s, NULL, 16);
 
 	if (nocache)

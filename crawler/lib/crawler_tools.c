@@ -1,7 +1,25 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "atos.grid.crawler.common"
 #endif //G_LOG_DOMAIN
-
 
 #include <stdlib.h>
 #include <stdio.h>
@@ -18,7 +36,6 @@
 #include "crawler_constants.h"
 #include "crawler_tools.h"
 
-
 void buildServiceName(char* svc_name, int max_size_svc_name, 
 		char* prefix_name, char* action_name, int pid, gboolean bPrefixOnly)
 {
@@ -27,7 +44,6 @@ void buildServiceName(char* svc_name, int max_size_svc_name,
 	else
 		g_snprintf(svc_name, max_size_svc_name, "%s_%s_%d", prefix_name, action_name, pid);
 }
-
 
 char* getBusAddress(char* userdata)
 {
@@ -40,9 +56,6 @@ char* getBusAddress(char* userdata)
 	GRID_DEBUG("dbus_daemon address:\"%s\"", ((add)?add:"(null)"));
 	return add;
 }
-
-
-
 
 gchar* g_substr(const gchar* string, guint32 start_pos, guint32 end_pos)
 {
@@ -63,8 +76,6 @@ gchar* g_substr(const gchar* string, guint32 start_pos, guint32 end_pos)
 
 	return g_utf8_strncpy(output, &string[start_pos], len);
 }
-
-
 
 guint64 get_child_value_uint64(GVariant* gv, int order)
 {
@@ -101,7 +112,6 @@ int get_child_value_int(GVariant* gv, int order)
 	return value;
 }
 
-
 const gchar* get_child_value_string(GVariant* gv, int order)
 {
 	const gchar* value = NULL;
@@ -114,7 +124,6 @@ const gchar* get_child_value_string(GVariant* gv, int order)
 	return value;
 }
 
-
 void get_child_value_strv(GVariant* gv, int order, gchar*** value)
 {
 	GVariant* tmp = g_variant_get_child_value(gv, order);
@@ -123,8 +132,6 @@ void get_child_value_strv(GVariant* gv, int order, gchar*** value)
 		g_variant_unref(tmp);
 	} else *value = NULL;
 }
-
-
 
 /* Returned argv value must be freed with g_free() */
 int disassemble_context_occur_argc_argv_uid(GVariant* gv_glued, guint64* context_id,
@@ -147,7 +154,6 @@ int disassemble_context_occur_argc_argv_uid(GVariant* gv_glued, guint64* context
 	return EXIT_SUCCESS;
 }
 
-
 GVariant* assemble_context_occur_argc_argv_uid(GVariant** b, guint64 context_id, GVariant* gv, int argc,
 		char** argv, guint64 service_uid)
 {
@@ -158,11 +164,9 @@ GVariant* assemble_context_occur_argc_argv_uid(GVariant** b, guint64 context_id,
 	if (NULL == gv || NULL == argv)
 		return NULL;
 
-
 	argv_builder = g_variant_builder_new(G_VARIANT_TYPE_ARRAY);
 	for (i = 0; (argv[i]); i++)
 		g_variant_builder_add(argv_builder, "s", argv[i]);
-
 
 	ret = g_variant_new(gvariant_action_param_type_string, context_id, gv, argc,
 			argv_builder, service_uid);
@@ -172,8 +176,6 @@ GVariant* assemble_context_occur_argc_argv_uid(GVariant** b, guint64 context_id,
 	*b = ret;
 	return ret;
 }
-
-
 
 gchar* get_argv_value(int argc, char** argv, gchar* module_name, gchar* variable_name)
 {
@@ -295,9 +297,6 @@ int move_file(const char* source_file_path, const char* destination_file_path,
 	return EXIT_SUCCESS;
 }
 
-
-
-
 void free_trip_lib_entry_points(struct trip_lib_entry_points* trip_ep)
 {
 	if (NULL != trip_ep) {
@@ -306,7 +305,6 @@ void free_trip_lib_entry_points(struct trip_lib_entry_points* trip_ep)
 		g_free(trip_ep);
 	}
 }
-
 
 /**
  *  * plugin_path: path+filename of libtrip_xx.so
@@ -355,17 +353,13 @@ struct trip_lib_entry_points* load_trip_library(char* path, char* trip_library_n
 		return NULL;
 	}
 
-
 	if (!g_module_symbol(ret->lib_ref, "trip_progress", (void**)&(ret->trip_progress))) {
 		g_free(plugin_path);
 		g_free(ret);
 		return NULL;
 	}
 
-
 	g_free(plugin_path);
 	return ret;
 }
-
-
 

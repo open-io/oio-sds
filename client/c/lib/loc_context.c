@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.location"
 #endif
@@ -23,7 +42,7 @@ struct beans_content_s {
 
 /* ------------------------------------------------------------------------------ */
 
-static gboolean _close_meta2_connection(struct metacnx_ctx_s *cnx, container_id_t cid);
+static gboolean _close_meta2_connection(struct metacnx_ctx_s *cnx);
 
 static struct storage_policy_s *
 _init_storage_policy(const char *ns, const char *polname)
@@ -129,58 +148,59 @@ _check_chunk(const char *cid)
 	return g_string_free(str, FALSE);
 }
 
+#if 0
 static status_t
 _get_container_user_properties(gs_grid_storage_t *hc, struct hc_url_s *url, container_id_t cid,
                 char ***props, gs_error_t **gserr)
 {
-        GError *gerr = NULL;
-        gboolean rc;
-        addr_info_t *m1 = NULL;
-        gs_container_t *c = NULL;
-        GSList *excluded = NULL;
-        c = gs_get_container(hc, hc_url_get(url, HCURL_REFERENCE), 0, gserr);
-        if(!c)
-                return 0;
-        for (;;) {
+	GError *gerr = NULL;
+	gboolean rc;
+	addr_info_t *m1 = NULL;
+	gs_container_t *c = NULL;
+	GSList *excluded = NULL;
+	c = gs_get_container(hc, hc_url_get(url, HCURL_REFERENCE), 0, gserr);
+	if(!c)
+		return 0;
+	for (;;) {
 
-                m1 = gs_resolve_meta1v2(hc, cid, c->info.name, 1, &excluded, &gerr);
+		m1 = gs_resolve_meta1v2(hc, cid, c->info.name, 1, &excluded, &gerr);
 
-                if (!m1) {
-                        *gserr = gs_error_new(500, "No META1 found for [%s]", hc_url_get(url, HCURL_REFERENCE));
-                        break;
-                }
+		if (!m1) {
+			*gserr = gs_error_new(CODE_INTERNAL_ERROR, "No META1 found for [%s]", hc_url_get(url, HCURL_REFERENCE));
+			break;
+		}
 
-                rc = meta1v2_remote_reference_get_property(m1, &gerr, hc_url_get(url, HCURL_NS), cid, NULL, props, -1, -1);
+		rc = meta1v2_remote_reference_get_property(m1, &gerr, hc_url_get(url, HCURL_NS), cid, NULL, props, -1, -1);
 
-                if (!rc) {
-                        excluded = g_slist_prepend(excluded, m1);
-                        m1=NULL;
-                        if (gerr) {
-                                if (gerr->code < 100) { /* network error */
-                                        g_error_free(gerr);
-                                        gerr = NULL;
-                                } else {
-                                        GSERRORCAUSE(gserr, gerr, "Cannot get container user properties");
-                                        break;
-                                }
-                        }
-                } else {
-                        break;
-                }
-        }
-        if (excluded) {
-                g_slist_foreach(excluded, addr_info_gclean, NULL);
-                g_slist_free(excluded);
-        }
-        if (m1)
-                g_free(m1);
+		if (!rc) {
+			excluded = g_slist_prepend(excluded, m1);
+			m1=NULL;
+			if (gerr) {
+				if (CODE_IS_NETWORK_ERROR(gerr->code)) {
+					g_error_free(gerr);
+					gerr = NULL;
+				} else {
+					GSERRORCAUSE(gserr, gerr, "Cannot get container user properties");
+					break;
+				}
+			}
+		} else {
+			break;
+		}
+	}
+	if (excluded) {
+		g_slist_foreach(excluded, addr_info_gclean, NULL);
+		g_slist_free(excluded);
+	}
+	if (m1)
+		g_free(m1);
 
-        gs_container_free(c);
+	gs_container_free(c);
 
-        if (gerr)
-                g_error_free(gerr);
+	if (gerr)
+		g_error_free(gerr);
 
-        return rc;
+	return rc;
 }
 
 static status_t
@@ -190,31 +210,29 @@ _get_container_global_property(gs_grid_storage_t *hc, struct metacnx_ctx_s *cnx,
 	GSList *prop_list = NULL, *l = NULL;
 	GError *gerr = NULL;
 
-
 	// get all properties with current meta2
 	if (!meta2_remote_list_all_container_properties(cnx, cid, &prop_list, &gerr)) {
 
 		GSList     *m2_list = NULL;
-                addr_info_t *addr    = NULL;
-                GSList      *m2      = NULL;
-                gchar       str_addr[STRLEN_ADDRINFO];
-                struct metacnx_ctx_s cnxOther;
-                gs_error_t  *e       = NULL;
+		addr_info_t *addr    = NULL;
+		GSList      *m2      = NULL;
+		gchar       str_addr[STRLEN_ADDRINFO];
+		struct metacnx_ctx_s cnxOther;
+		gs_error_t  *e       = NULL;
 		gboolean    bResult  = FALSE;
 
-        	// search all meta2 fo current contener
-        	m2_list = gs_resolve_meta2(hc, cid, &gerr);
-        	if (!m2_list) {
-        		GSERRORCAUSE(gserr, gerr, "Failed to get container admin entries, Cannot find meta2(s)");
+		// search all meta2 fo current contener
+		m2_list = gs_resolve_meta2(hc, cid, &gerr);
+		if (!m2_list) {
+			GSERRORCAUSE(gserr, gerr, "Failed to get container admin entries, Cannot find meta2(s)");
 			if (gerr)
 				g_error_free(gerr);
 			return 0;
 		}
 
-
 		// test each meta2...
 		for (m2=m2_list; m2 ;m2=m2->next) {
-                        addr = m2->data;
+			addr = m2->data;
 			if (addr) {
 				addr_info_to_string(addr, str_addr, sizeof(str_addr));
 				DEBUG("Failed to get container admin entries -> test with next meta2 [%s]", str_addr);
@@ -227,12 +245,12 @@ _get_container_global_property(gs_grid_storage_t *hc, struct metacnx_ctx_s *cnx,
 				}
 
 				if (!meta2_remote_list_all_container_properties(&cnxOther, cid, &prop_list, &gerr)) {
-				        _close_meta2_connection(&cnxOther, cid);
-                                        GSERRORCAUSE(gserr, gerr, "Failed to get container admin entries: %s\n",str_addr);
+					_close_meta2_connection(&cnxOther);
+					GSERRORCAUSE(gserr, gerr, "Failed to get container admin entries: %s\n",str_addr);
 					continue;
 
 				} else {
-					_close_meta2_connection(&cnxOther, cid);
+					_close_meta2_connection(&cnxOther);
 					// no error
 					bResult = TRUE;
 					break;
@@ -240,11 +258,10 @@ _get_container_global_property(gs_grid_storage_t *hc, struct metacnx_ctx_s *cnx,
 			}
 		}
 
-
 		if (m2_list) { 
-                	g_slist_foreach(m2_list, addr_info_gclean, NULL); 
-	                g_slist_free(m2_list); 
-        	}
+			g_slist_foreach(m2_list, addr_info_gclean, NULL); 
+			g_slist_free(m2_list); 
+		}
 
 		if (gerr)
 			g_error_free(gerr);
@@ -253,7 +270,6 @@ _get_container_global_property(gs_grid_storage_t *hc, struct metacnx_ctx_s *cnx,
 			return 0;
 
 	}
-
 
 	// here: reading properties ok
 
@@ -277,6 +293,7 @@ _get_container_global_property(gs_grid_storage_t *hc, struct metacnx_ctx_s *cnx,
 
 	return 1;
 }
+#endif
 
 static struct beans_content_s *
 _beans_to_content(const GSList *beans)
@@ -622,7 +639,6 @@ _chunk_location_row(const struct loc_context_s *lc, const char *cid)
 	return g_string_free(result, FALSE);
 }
 
-
 static void
 _dump_chunks_NORMAL(const struct loc_context_s *lc, GString **s)
 {
@@ -825,11 +841,9 @@ __dump_content(const struct loc_context_s *lc, GString **s)
 }
 
 static gboolean
-_close_meta2_connection(struct metacnx_ctx_s *cnx, container_id_t cid)
+_close_meta2_connection(struct metacnx_ctx_s *cnx)
 {
 	GError *ge = NULL;
-
-	meta2_remote_container_close(&(cnx->addr), 60000, &ge, cid);
 
 	metacnx_close(cnx);
 	metacnx_clear(cnx);
@@ -842,7 +856,6 @@ _close_meta2_connection(struct metacnx_ctx_s *cnx, container_id_t cid)
 
 	return TRUE;
 }
-
 
 static void
 __write_admin_info(gpointer k, gpointer v, gpointer gstr)
@@ -997,7 +1010,6 @@ _loc_context_to_text(const struct loc_context_s *lc)
 		g_string_append_printf(s, "\n");
 	}
 
-
 	if (NULL != lc->rc)
 		__dump_content(lc, &s);
 	
@@ -1091,6 +1103,8 @@ loc_context_init(gs_grid_storage_t *hc, struct hc_url_s *url, gs_error_t **p_e)
 		goto label_error;
 	}
 
+// XXX TODO FIXME repair this
+#if 0
 	if (!_get_container_user_properties(hc, url, cid, &ctx->container_props, &e)) {
 		gs_error_set(&e, e ? e->code : 0, "Container properties not found : %s\n",
 				gs_error_get_message(e));
@@ -1102,6 +1116,7 @@ loc_context_init(gs_grid_storage_t *hc, struct hc_url_s *url, gs_error_t **p_e)
 				gs_error_get_message(e));
 		goto label_error_close_cnx;
 	}
+#endif
 
 	/* Now Dump the content and its chunks */
 	ctx->rc = NULL;
@@ -1113,11 +1128,11 @@ loc_context_init(gs_grid_storage_t *hc, struct hc_url_s *url, gs_error_t **p_e)
 		}
 	}
 
-	_close_meta2_connection(&cnx, cid);
+	_close_meta2_connection(&cnx);
 	return ctx;
 
 label_error_close_cnx:
-	_close_meta2_connection(&cnx, cid);
+	_close_meta2_connection(&cnx);
 
 label_error:
 	loc_context_clean(ctx);
@@ -1148,7 +1163,7 @@ loc_context_init_retry(gs_grid_storage_t *hc, struct hc_url_s *url, gs_error_t *
 	}
 	if (!lc && !e) {
 		e = g_malloc0(sizeof(gs_error_t));
-		e->code = 500;
+		e->code = CODE_INTERNAL_ERROR;
 		e->msg = g_strdup("Cannot initialize loc_context structure");
 	}
 	if (e && p_e)
@@ -1194,7 +1209,7 @@ loc_context_clean(struct loc_context_s *lc)
 
 	if (NULL != lc->container_props)
 		g_strfreev(lc->container_props);
-	
+
 	g_free(lc->container_stgpol);
 	// do not free namespace
 	grid_lbpool_destroy(lc->glp);
@@ -1214,20 +1229,16 @@ loc_context_to_string(const struct loc_context_s *lc, int xml)
 		return _loc_context_to_text(lc);
 }
 
-
-
 char* loc_context_getstgpol_to_string(const struct loc_context_s *lc, gboolean bContent)
 {
 	if (bContent == TRUE) {
 		return CONTENTS_HEADERS_get_policy(lc->rc->header)->str;
-		
+
 	} else {
-	        if(NULL == lc->admin_info || g_hash_table_size(lc->admin_info) == 0)
-        	        return NULL;
+		if(NULL == lc->admin_info || g_hash_table_size(lc->admin_info) == 0)
+			return NULL;
 
 		return (char*) g_hash_table_lookup(lc->admin_info, GS_CONTAINER_PROPERTY_STORAGE_POLICY);
 	}
 }
-
-
 

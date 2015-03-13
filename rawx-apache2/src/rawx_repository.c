@@ -1,3 +1,22 @@
+/*
+OpenIO SDS rawx-apache2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
 #undef PACKAGE_STRING
@@ -73,7 +92,6 @@ enum {
 	DAV_FS_URI_DAV,            /* the DAV: namespace URI */
 	DAV_FS_URI_MYPROPS         /* the namespace URI for our custom props */
 };
-
 
 static const dav_liveprop_spec dav_rawx_props[] =
 {
@@ -512,7 +530,6 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 		fclose(f);
 	} else {
 		bb = apr_brigade_create(pool, output->c->bucket_alloc);
-
 
 		if(!ctx->compression){
 			apr_file_t *fd = NULL;
@@ -1002,7 +1019,6 @@ dav_rawx_patch_rollback(const dav_resource *resource, int operation, void *conte
 	/* Nothing to do */
 	return NULL;
 }
-
 
 static const dav_hooks_liveprop dav_hooks_liveprop_rawx =
 {

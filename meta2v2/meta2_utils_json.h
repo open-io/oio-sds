@@ -1,63 +1,76 @@
-#ifndef META2_UTILS_JSON_H
-#define META2_UTILS_JSON_H
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__meta2v2__meta2_utils_json_h
+# define OIO_SDS__meta2v2__meta2_utils_json_h 1
 
 #include <glib.h>
 #include <json.h>
 #include <metautils/lib/hc_url.h>
 
-/**
- * Convert alias beans to their JSON representation.
- *
- * @param gstr The output string
- * @param l A list of beans
- */
-void meta2_json_alias_only(GString *gstr, GSList *l);
+GError* m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean);
+GError* m2v2_json_load_single_header (struct json_object *j, gpointer *pbean);
+GError* m2v2_json_load_single_content (struct json_object *j, gpointer *pbean);
+GError* m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean);
 
-/**
- * Convert header beans to their JSON representation.
- *
- * @param gstr The output string
- * @param l A list of beans
- */
-void meta2_json_headers_only(GString *gstr, GSList *l);
+/* the type is discovered in the json object */
+GError *m2v2_json_load_single_xbean (struct json_object *j, gpointer *pbean);
 
-/**
- * Convert content beans to their JSON representation.
- *
- * @param gstr The output string
- * @param l A list of beans
- */
-void meta2_json_contents_only(GString *gstr, GSList *l);
+/** Extract a list of beans from a JSON object.
+ * @param j The JSON object to extract beans from
+ * @param out The output list of beans */
+GError * meta2_json_load_setof_beans(struct json_object *j, GSList **out);
 
-/**
- * Convert chunk beans to their JSON representation.
- *
- * @param gstr The output string
- * @param l A list of beans
- */
-void meta2_json_chunks_only(GString *gstr, GSList *l);
+/**  */
+GError * m2v2_json_load_setof_xbean (struct json_object *j, GSList **out);
 
-/**
- * Serialize beans to JSON. The output does not contain
- * the initial '{' and final '}' characters, to allow easier
- * inclusion in a dictionary.
- *
- * @param gstr The output string
- * @param l A list of beans
- */
+/** Convert alias beans to their JSON representation.
+ * Ignores beans of other types. */
+void meta2_json_alias_only(GString *gstr, GSList *l, gboolean extend);
+
+/** Convert header beans to their JSON representation.
+ * Ignores beans os other types. */
+void meta2_json_headers_only(GString *gstr, GSList *l, gboolean extend);
+
+/** Convert content beans to their JSON representation.
+ * Ignores beans os other types. */
+void meta2_json_contents_only(GString *gstr, GSList *l, gboolean extend);
+
+/** Convert chunk beans to their JSON representation.
+ * Ignores beans os other types. */
+void meta2_json_chunks_only(GString *gstr, GSList *l, gboolean extend);
+
+/** Serialize beans to JSON.
+ * The output has the form:
+ *   "chunks":[],"aliases":[],"headers":[],"contents":[]
+ * The output does not contain the outer curly brackets, to allow easier
+ * inclusion in an existing dictionary. */
 void meta2_json_dump_all_beans(GString *gstr, GSList *beans);
 
-// TODO: add a function to output json_object
+/** Serialize beans to JSON.
+ * The output has the form:
+ *   {"type":"chunk":,...},
+ *   {"type":"alias",...},
+ *   {"type":"content":,...},
+ *   {"type":"header",...}
+ * The output does not contain the outer square brackets, to allow easier
+ * inclusion in an existing array. */
+void meta2_json_dump_all_xbeans(GString *gstr, GSList *beans);
 
-
-/**
- * Extract a list of beans from a JSON object.
- *
- * @param beans The output list of beans
- * @param jbody The JSON object to extract beans from
- * @return A GError in case of error, NULL otherwise
- */
-GError *meta2_json_object_to_beans(GSList **beans, struct json_object *jbeans);
-
-#endif // META2_UTILS_JSON_H
-
+#endif /*OIO_SDS__meta2v2__meta2_utils_json_h*/

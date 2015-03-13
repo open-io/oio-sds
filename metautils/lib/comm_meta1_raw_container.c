@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metacomm.meta1_raw_container"
 #endif
@@ -31,7 +50,6 @@ free_asn1_container(Meta1RawContainer_t * asn1_container, gboolean content_only)
 	errno = 0;
 }
 
-
 static gboolean
 container_asn1_to_api(Meta1RawContainer_t * src, struct meta1_raw_container_s *dst)
 {
@@ -58,11 +76,7 @@ container_asn1_to_api(Meta1RawContainer_t * src, struct meta1_raw_container_s *d
 			continue;
 		}
 
-		addr_api = g_try_malloc0(sizeof(addr_info_t));
-		if (!addr_api) {
-			ALERT("memory allocation failure");
-			abort();
-		}
+		addr_api = g_malloc0(sizeof(addr_info_t));
 
 		if (!addr_info_ASN2API(addr_asn, addr_api)) {
 			WARN("ASN.1 to ASN.1 mapping failure");
@@ -75,7 +89,6 @@ container_asn1_to_api(Meta1RawContainer_t * src, struct meta1_raw_container_s *d
 
 	return TRUE;
 }
-
 
 static gboolean
 container_api_to_asn1(struct meta1_raw_container_s *src, Meta1RawContainer_t * dst)
@@ -104,11 +117,7 @@ container_api_to_asn1(struct meta1_raw_container_s *src, Meta1RawContainer_t * d
 		else
 			addr_api = (addr_info_t *) (meta2->data);
 
-		addr_asn = g_try_malloc0(sizeof(AddrInfo_t));
-		if (addr_asn == NULL) {
-			ALERT("memory allocation failure");
-			continue;
-		}
+		addr_asn = g_malloc0(sizeof(AddrInfo_t));
 
 		if (!addr_info_API2ASN(addr_api, addr_asn)) {
 			WARN("API to ASN.1 mapping failure");
@@ -129,7 +138,6 @@ write_in_gba(const void *b, gsize bSize, void *key)
 
 	return a ? 0 : -1;
 }
-
 
 GByteArray *
 meta1_raw_container_marshall(struct meta1_raw_container_s * container, GError ** err)

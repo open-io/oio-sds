@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "gridcluster.agent.asn1_request_worker"
 #endif
@@ -11,7 +30,6 @@
 #include <metautils/lib/metacomm.h>
 
 #include "./asn1_request_worker.h"
-#include "./config.h"
 #include "./io_scheduler.h"
 
 #define RESPONSE_SIZE_SIZE 4
@@ -165,7 +183,6 @@ free_asn1_worker( worker_t *worker, int worker_too )
 		g_free(worker);
 }
 
-
 int
 agent_asn1_default_response_handler(worker_t *worker, GError **error)
 {
@@ -265,12 +282,12 @@ write_request(worker_t *worker, GError **error)
 	data = &(worker->data);
 	asn1_session = (asn1_session_t*)data->session;
 
-        if (data->buffer == NULL) {
+	if (data->buffer == NULL) {
 
-		if (!message_create(&req, error)) {
-			GSETERROR(error, "Failed to create a new asn1 message");
-			goto error_mes_create;
-		}
+		req = message_create();
+		message_set_NAME(req, asn1_session->req_name, strlen(asn1_session->req_name), NULL);
+		if (asn1_session->req_body)
+			message_set_BODY(req, asn1_session->req_body, asn1_session->req_body_size, NULL);
 
 		if (asn1_session->req_headers) {
 			GList *key = NULL;
@@ -279,73 +296,54 @@ write_request(worker_t *worker, GError **error)
 			for (key = keys; key && key->data; key = key->next) {
 				GByteArray *value = (GByteArray*)g_hash_table_lookup(
 						asn1_session->req_headers, key->data);
-				if (!message_add_field(req, key->data, strlen((char*)key->data),
-							value->data, value->len, error)) {
-					GSETERROR(error, "Failed to add field [%s] to message",
-							(char*)key->data);
-					goto error_set_headers;
-				}
+				message_add_field(req, (char*)key->data, value->data, value->len);
 			}
 
 			g_list_free(keys);
-		}
-
-		if (asn1_session->req_body && !message_set_BODY(req, asn1_session->req_body, asn1_session->req_body_size, error)) {
-			GSETERROR(error, "Failed to set asn1 message body");
-			goto error_set_body;
-		}
-
-		if (!message_set_NAME(req, asn1_session->req_name, strlen(asn1_session->req_name), error)) {
-			GSETERROR(error, "Failed to set message name");
-			goto error_set_name;
 		}
 
 		do {
 			gsize ds = 0;
 			if (!message_marshall(req, &(data->buffer), &ds, error)) {
 				GSETERROR(error, "Failed to marshall asn1 message");
-				message_destroy(req, NULL);
+				message_destroy(req);
 				goto error_marshall_message;
 			}
 			data->buffer_size = ds;
 		} while (0);
 
-                message_destroy(req, NULL);
+		message_destroy(req);
 
-        } else if (data->done >= data->buffer_size) {
+	} else if (data->done >= data->buffer_size) {
 
-                CLEAR_WORKER_DATA(data);
+		CLEAR_WORKER_DATA(data);
 
 		g_free(asn1_session->req_body);
 		asn1_session->req_body=NULL;
 
-                worker->func = read_response_size;
+		worker->func = read_response_size;
 
-                if (!change_fd_events_in_io_scheduler(worker, EPOLLIN, error)) {
-                        GSETERROR(error, "Failed to change polling event on fd %d", data->fd);
-                        goto error_sched;
-                }
+		if (!change_fd_events_in_io_scheduler(worker, EPOLLIN, error)) {
+			GSETERROR(error, "Failed to change polling event on fd %d", data->fd);
+			goto error_sched;
+		}
 
-        } else {
-                wl = write(data->fd, data->buffer + data->done, data->buffer_size - data->done);
-                if (wl < 0) {
-                        GSETERROR(error, "Write error on socket : %s", strerror(errno));
-                        goto error_write;
-                }
+	} else {
+		wl = write(data->fd, data->buffer + data->done, data->buffer_size - data->done);
+		if (wl < 0) {
+			GSETERROR(error, "Write error on socket : %s", strerror(errno));
+			goto error_write;
+		}
 
-                data->done += wl;
-        }
+		data->done += wl;
+	}
 
-        return(1);
+	return(1);
 
 error_sched:
 error_write:
 error_marshall_message:
-error_set_name:
-error_set_body:
-error_set_headers:
-        message_destroy(req, NULL);
-error_mes_create:
+	message_destroy(req);
 	asn1_session->error_handler(worker, error);
 	free_asn1_worker( worker, 0 );
 	return 0;
@@ -354,117 +352,99 @@ error_mes_create:
 int
 read_response_size(worker_t *worker, GError **error)
 {
-        ssize_t rl;
-        guint32 response_size;
-        worker_data_t *data = NULL;
+	ssize_t rl;
+	guint32 response_size;
+	worker_data_t *data = NULL;
 	asn1_session_t *asn1_session = NULL;
 
-        TRACE_POSITION();
+	TRACE_POSITION();
 
-        data = &(worker->data);
+	data = &(worker->data);
 	asn1_session = (asn1_session_t*)data->session;
 
-        if (data->buffer == NULL) {
-                data->buffer_size = RESPONSE_SIZE_SIZE;
-                data->buffer = g_try_malloc0(data->buffer_size);
-                if (data->buffer == NULL) {
-                        GSETERROR(error, "Memory allocation failure");
-                        goto error_alloc_buffer;
-                }
+	if (data->buffer == NULL) {
+		data->buffer_size = RESPONSE_SIZE_SIZE;
+		data->buffer = g_malloc0(data->buffer_size);
+	} else if (data->done >= data->buffer_size) {
+		memcpy(&response_size, data->buffer, RESPONSE_SIZE_SIZE);
+		data->buffer_size += g_ntohl(response_size);
+		data->buffer = g_realloc(data->buffer, data->buffer_size);
+		memset(data->buffer + data->done, 0, g_ntohl(response_size));
+		worker->func = read_response;
+	} else {
+		rl = read(data->fd, data->buffer + data->done, data->buffer_size - data->done);
+		if (rl < 0) {
+			GSETERROR(error, "Read error on socket : %s", strerror(errno));
+			goto error_read;
+		}
 
-        } else if (data->done >= data->buffer_size) {
+		if (rl == 0 && data->done < data->buffer_size) {
+			GSETERROR(error, "Connection closed while reading response size");
+			goto error_read;
+		}
 
-                memcpy(&response_size, data->buffer, RESPONSE_SIZE_SIZE);
+		data->done += rl;
+	}
 
-                data->buffer_size += g_ntohl(response_size);
-                data->buffer = g_try_realloc(data->buffer, data->buffer_size);
-                if (data->buffer == NULL) {
-                        GSETERROR(error, "Memory allocation failure");
-                        goto error_alloc_buffer;
-                } else {
-                        memset(data->buffer + data->done, 0, g_ntohl(response_size));
-                }
-
-                worker->func = read_response;
-
-        } else {
-                rl = read(data->fd, data->buffer + data->done, data->buffer_size - data->done);
-                if (rl < 0) {
-                        GSETERROR(error, "Read error on socket : %s", strerror(errno));
-                        goto error_read;
-                }
-
-                if (rl == 0 && data->done < data->buffer_size) {
-                        GSETERROR(error, "Connection closed while reading response size");
-                        goto error_read;
-                }
-
-                data->done += rl;
-        }
-
-        return(1);
+	return(1);
 
 error_read:
-error_alloc_buffer:
 	asn1_session->error_handler(worker, error);
 	free_asn1_worker( worker, 0 );
-        return 0;
+	return 0;
 }
 
 int
 read_response(worker_t *worker, GError **error)
 {
 	int rc;
-        ssize_t rl;
-        worker_data_t *data = NULL;
+	ssize_t rl;
+	worker_data_t *data = NULL;
 	asn1_session_t *asn1_session = NULL;
-        MESSAGE resp = NULL;
-        gint status = 999;
-        gchar *msg = NULL;
-        gsize msg_size;
+	MESSAGE resp = NULL;
+	gint status = CODE_INTERNAL_ERROR;
+	gchar *msg = NULL;
+	gsize msg_size;
 
-        TRACE_POSITION();
+	TRACE_POSITION();
 
-        data = &(worker->data);
+	data = &(worker->data);
 	asn1_session = (asn1_session_t*)data->session;
 
 	/*read a bit more*/
-        rl = read(data->fd, data->buffer + data->done, data->buffer_size - data->done);
-        if (rl < 0) {
-                GSETERROR(error, "Read error on socket : %s", strerror(errno));
-                goto error_read;
-        }
+	rl = read(data->fd, data->buffer + data->done, data->buffer_size - data->done);
+	if (rl < 0) {
+		GSETERROR(error, "Read error on socket : %s", strerror(errno));
+		goto error_read;
+	}
 
-        if (rl == 0 && data->done < data->buffer_size) {
-                GSETERROR(error, "Connection closed while reading response");
-                goto error_read;
-        }
+	if (rl == 0 && data->done < data->buffer_size) {
+		GSETERROR(error, "Connection closed while reading response");
+		goto error_read;
+	}
 
-        data->done += rl;
+	data->done += rl;
 
 	/*manage the message*/
-        if (data->done >= data->buffer_size) {
+	if (data->done >= data->buffer_size) {
 
 		TRACE("Data available : (done=%d) >= (size=%d)", data->done, data->buffer_size);
 
-                if (!message_create(&resp, error)) {
-                        GSETERROR(error, "Failed to create response message");
-                        goto error_message_create;
-                }
+		resp = message_create();
 
-                msg_size = data->buffer_size;
+		msg_size = data->buffer_size;
 
-                if (!message_unmarshall(resp, data->buffer, &msg_size, error)) {
-                        GSETERROR(error, "Failed to unmarshall response");
-                        goto error_unmarshall;
-                }
+		if (!message_unmarshall(resp, data->buffer, &msg_size, error)) {
+			GSETERROR(error, "Failed to unmarshall response");
+			goto error_unmarshall;
+		}
 
-                if (!metaXClient_reply_simple(resp, &status, &msg, error)) {
-                        GSETERROR(error, "Failed to decode response");
-                        goto error_decode;
-                }
+		if (!metaXClient_reply_simple(resp, &status, &msg, error)) {
+			GSETERROR(error, "Failed to decode response");
+			goto error_decode;
+		}
 
-                if (status!=200 && status!=206) {
+		if (status!=CODE_FINAL_OK && status!=CODE_PARTIAL_CONTENT) {
 			GSETERROR(error, "ASN1 request failed with status %d :\n%s", status, msg);
 			goto error_status;
 		}
@@ -498,13 +478,13 @@ read_response(worker_t *worker, GError **error)
 			g_hash_table_destroy(asn1_session->resp_headers);
 			asn1_session->resp_headers = NULL;
 		}
-		
-                g_free(msg);
-                message_destroy(resp, error);
 
-		if (status==200 || !rc) {
+		g_free(msg);
+		message_destroy(resp);
+
+		if (status==CODE_FINAL_OK || !rc) {
 			TRACE("Reply sequence terminated (status=%d rc=%d)", status, rc);
-			
+
 			if (rc) {
 				if (asn1_session->final_handler)
 					rc = asn1_session->final_handler( worker, error );
@@ -512,30 +492,29 @@ read_response(worker_t *worker, GError **error)
 				if (asn1_session->error_handler)
 					rc = asn1_session->error_handler( worker, error );
 			}
-			
+
 			free_asn1_worker( worker, rc );
 			return rc;
 		} else {
 			TRACE("Reply sequence not terminated (status=%d rc=%d)", status, rc);
-                	CLEAR_WORKER_DATA(data);
+			CLEAR_WORKER_DATA(data);
 			worker->func = read_response_size;
 			return 1;
 		}
-        }
+	}
 
 	/*worker is left unchanged, wa wait for the remaining of the reply*/
-        return(1);
+	return(1);
 
 error_body:
 error_headers:
 error_status:
-        g_free(msg);
+	g_free(msg);
 error_decode:
 error_unmarshall:
-        message_destroy(resp, error);
-error_message_create:
+	message_destroy(resp);
 error_read:
-        asn1_session->error_handler(worker, error);
+	asn1_session->error_handler(worker, error);
 	free_asn1_worker( worker, 0 );
 	return 0;
 }

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS snmp
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "grid.snmp.gridstorage"
 #endif
@@ -119,12 +138,11 @@ register_config(void)
 	/* Init var and set defaults */
 	csc_ns_list = NULL;
 	memset(evt_spool_dir, '\0', sizeof(evt_spool_dir));
-	g_strlcpy(evt_spool_dir, SPOOLDIR, sizeof(evt_spool_dir));
+	g_strlcpy(evt_spool_dir, GCLUSTER_SPOOL_DIR, sizeof(evt_spool_dir));
 
 	register_app_config_handler("CollectConscience", config_parser, NULL, "A coma separated list of ns names");
 	register_app_config_handler("GridEventSpoolDir", config_parser, NULL, "A path");
 }
-
 
 /* ------------------------------------------------------------------------- */
 
@@ -1269,7 +1287,6 @@ manage_csc(const gchar * ns_name)
 	csc_max_index = MAX(csc_max_index, index_data.idx);
 	csc_count ++;
 }
-
 
 /* ------------------------------------------------------------------------- */
 

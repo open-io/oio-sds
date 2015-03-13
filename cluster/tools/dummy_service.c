@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gridcluster.tools"
 #endif
@@ -136,9 +155,7 @@ load_config(int argc, char **args)
 			str_type = g_match_info_fetch(match_info, 6);
 			str_url = g_match_info_fetch(match_info, 7);
 
-			si = g_try_malloc0(sizeof(struct service_info_s));
-			if (!si)
-				abort();
+			si = g_malloc0(sizeof(struct service_info_s));
 			si->score.value = -2;
 			si->score.timestamp = 0;
 			g_strlcpy(si->ns_name, str_ns, sizeof(si->ns_name));
@@ -151,9 +168,7 @@ load_config(int argc, char **args)
 			service_tag_set_value_macro(service_info_ensure_tag(si->tags, NAME_MACRO_CPU_NAME), NAME_MACRO_CPU_TYPE, NULL);
 			service_tag_set_value_macro(service_info_ensure_tag(si->tags, NAME_MACRO_SPACE_NAME), NAME_MACRO_SPACE_TYPE, "/");
 
-			ri = g_try_malloc0(sizeof(struct register_info_s));
-			if (!ri)
-				abort();
+			ri = g_malloc0(sizeof(struct register_info_s));
 			ri->original_str = g_strdup(args[i]);
 			ri->si = si;
 			ri->port = (*str_how=='u') ? -1 : atoi(str_tcp_port);

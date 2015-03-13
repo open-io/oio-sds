@@ -1,18 +1,27 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "metautils"
 #endif
 
 #include "metautils_errors.h"
-
-void
-g_error_prefix_place(GError **e, const gchar *file, const gchar *func,
-		int line)
-{
-	(void) file;
-	gchar *tag = g_strdup_printf("(code=%d) [%s:%d]\n\t", (*e)->code, func, line);
-	g_prefix_error(e, tag);
-	g_free(tag);
-}
 
 void
 g_error_trace(GError ** e, const char *dom, int code,
@@ -54,7 +63,6 @@ g_error_transmit(GError **err, GError *e)
 			g_propagate_error(err, e);
 		}
 		else {
-			GSETMARK(err);
 			GSETRAW(err, e->code, e->message);
 			g_clear_error(&e);
 		}

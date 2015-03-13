@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.client.download"
 #endif
@@ -83,7 +102,6 @@ memcpy(&statusTmp, status, sizeof(struct dl_status_s));
 			return l->data;
 		}
 
-
 		if (status->caller_error) {
 			download_debug(status, content, "chunk download error due to caller");
 			*may_reload = FALSE;
@@ -92,7 +110,6 @@ memcpy(&statusTmp, status, sizeof(struct dl_status_s));
 
 			return NULL;
 		}
-
 
 		if (status->content_dl > statusTmp.content_dl) {
 			ftruncate(*((int *) status->dl_info.user_data), statusTmp.content_dl);
@@ -171,7 +188,6 @@ download_jump_to_target(GSList *agregates, struct dl_status_s *status, chunk_inf
 	chunks = agregates->data;
 	ci = chunks->data;
 
-
 	for (ag=agregates; ag ; ag=ag->next, status->chunk_start_offset += ci->size) {
 		chunks = ag->data;
 		ci = chunks->data;
@@ -203,7 +219,6 @@ download_jump_to_target(GSList *agregates, struct dl_status_s *status, chunk_inf
 			return ag;
 		}
 	}
-
 
 	GSERRORSET(gserr, "Offset/Size pair not satisfiable");
 	return NULL;
@@ -352,7 +367,7 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 	}
 	if ((status.dl_info.offset > content->info.size)
 			|| (status.dl_info.offset + status.dl_info.size > content->info.size)) {
-		GSERRORCODE(err, 400, "Byte range not satisfiable "
+		GSERRORCODE(err, CODE_BAD_REQUEST, "Byte range not satisfiable "
 			"asked=[%"G_GINT64_FORMAT",%"G_GINT64_FORMAT"] allowed=[0,%"G_GINT64_FORMAT"]",
 			status.dl_info.offset, status.dl_info.offset + status.dl_info.size,
 			content->info.size);

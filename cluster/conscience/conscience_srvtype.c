@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "conscience.api"
 #endif
@@ -35,17 +54,10 @@ destroy_gba(gpointer p)
 struct conscience_srvtype_s *
 conscience_srvtype_create(struct conscience_s *conscience, const char *type)
 {
-	struct conscience_srvtype_s *srvtype;
+	struct conscience_srvtype_s *srvtype = g_malloc0(sizeof(struct conscience_srvtype_s));
 
-	srvtype = g_try_malloc0(sizeof(struct conscience_srvtype_s));
-	if (!srvtype) {
-		ERROR("Memory allocation failure");
-		abort();
-		return NULL;
-	}
-
-	 /*sets a default expression that always fits*/
-    	if (!conscience_srvtype_set_type_expression(srvtype, NULL, "100")) {
+	/*sets a default expression that always fits*/
+	if (!conscience_srvtype_set_type_expression(srvtype, NULL, "100")) {
 		ERROR("Failed to force the score to 100");
 		conscience_srvtype_destroy(srvtype);
 		return NULL;
@@ -186,7 +198,6 @@ conscience_srvtype_get_config(struct conscience_srvtype_s * srvtype,
 		srvtype->config_serialized->len);
 }
 
-
 struct conscience_srv_s *
 conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
     GError ** err, const struct conscience_srvid_s *srvid)
@@ -195,16 +206,11 @@ conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
 	struct conscience_srv_s *service;
 
 	if (!srvtype || !srvid) {
-		GSETCODE(err, 500, "Invalid parameter");
+		GSETCODE(err, CODE_INTERNAL_ERROR, "Invalid parameter");
 		return NULL;
 	}
 
-	service = g_try_malloc0(sizeof(struct conscience_srv_s));
-	if (!service) {
-		GSETCODE(err, 500, "Memory allocation failure");
-		return NULL;
-	}
-
+	service = g_malloc0(sizeof(struct conscience_srv_s));
 	memcpy(&(service->id), srvid, sizeof(struct conscience_srvid_s));
 	service->tags = g_ptr_array_new();
 	service->locked = FALSE;
@@ -230,7 +236,6 @@ conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
 
 	return service;
 }
-
 
 gint
 conscience_srvtype_remove_expired(struct conscience_srvtype_s * srvtype,
@@ -351,13 +356,13 @@ conscience_srvtype_set_type_expression(struct conscience_srvtype_s * srvtype,
 	struct expr_s *pE;
 
 	if (!srvtype || !expr_str) {
-		GSETCODE(err, 500, "Invalid parameter");
+		GSETCODE(err, ERRCODE_PARAM, "Invalid parameter");
 		return FALSE;
 	}
 
 	pE = NULL;
 	if (expr_parse(expr_str, &pE)) {
-		GSETCODE(err, 502, "Failed to parse the expression");
+		GSETCODE(err, CODE_INTERNAL_ERROR, "Failed to parse the expression");
 		return FALSE;
 	}
 
@@ -409,7 +414,6 @@ conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype,
 		return FALSE;
 	}
 	memcpy(&(srvid.addr), &(si->addr), sizeof(addr_info_t));
-
 
 	/* Get first launching tag if any and lock score to 0 if true */
 	tag_first = service_info_get_tag(si->tags, NAME_TAGNAME_RAWX_FIRST);

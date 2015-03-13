@@ -12,6 +12,8 @@ include_directories(AFTER
 		${LIBRAIN_INCLUDE_DIRS})
 
 link_directories(
+		${JSONC_LIBRARY_DIRS}
+		${OPENSSL_LIBRARY_DIRS}
 		${ZK_LIBRARY_DIRS}
 		${SQLITE3_LIBRARY_DIRS}
 		${LIBRAIN_LIBRARY_DIRS})
@@ -57,9 +59,9 @@ add_library(meta2v2utils SHARED
 )
 
 target_link_libraries(meta2v2utils
-		metautils gridcluster sqliteutils rain
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES}
-		${JSONC_LIBRARIES})
+		metautils gridcluster sqliteutils
+		${LIBRAIN_LIBRARIES}
+		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${JSONC_LIBRARIES})
 
 add_library(meta2v2remote SHARED
 		meta2v2_remote.h
@@ -96,7 +98,7 @@ add_executable(meta2_server
 		meta2_filters_action_events.c
 		meta2_filter_context.c
 		meta2_server.c)
-bin_prefix_full(meta2_server -meta2-server)
+bin_prefix(meta2_server -meta2-server)
 
 target_link_libraries(meta2_server meta2v2
         hcresolve metacomm metautils gridcluster server
@@ -105,11 +107,6 @@ target_link_libraries(meta2_server meta2v2
 add_executable(test_meta2_backend test_meta2_backend.c)
 target_link_libraries(test_meta2_backend
 		meta2v2 ${GLIB2_LIBRARIES})
-
-add_executable(test_meta2_client test_meta2_client.c)
-target_link_libraries(test_meta2_client
-		meta2remote meta2servicesremote
-		meta2v2 metautils ${GLIB2_LIBRARIES})
 
 add_executable(test_meta2_type_converter test_meta2_type_converter.c)
 target_link_libraries(test_meta2_type_converter

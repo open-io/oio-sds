@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta0v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta0.disp"
 #endif
@@ -17,15 +36,13 @@
 #include "./meta0_gridd_dispatcher.h"
 #include "./internals.h"
 
-static GQuark gquark_log = 0;
-
 struct meta0_disp_s
 {
 	struct meta0_backend_s *m0;
 	struct zk_manager_s *m0zkmanager;
 	gchar *ns_name;
-	GMutex *lock;
 	GByteArray *encoded;
+	GMutex lock;
 	gboolean reload_requested;
 };
 
@@ -51,11 +68,11 @@ extract_prefix(struct message_s *msg, const gchar *n,
 
 	if (0 >= message_get_field(msg, n, strlen(n), &f, &f_size, NULL)) {
 		if (mandatory)
-			return g_error_new(gquark_log, 400, "Missing field '%s'", n);
+			return NEWERROR(CODE_BAD_REQUEST, "Missing field '%s'", n);
 		return NULL;
 	}
 	if (f_size != 2)
-		return g_error_new(gquark_log, 400, "Invalid field size '%s'", n);
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid field size '%s'", n);
 
 	prefix[0] = ((guint8*)f)[0];
 	prefix[1] = ((guint8*)f)[1];
@@ -108,7 +125,7 @@ _get_encoded(struct meta0_disp_s *m0disp)
 	GError *err = NULL;
 	GByteArray *encoded = NULL;
 
-	g_mutex_lock(m0disp->lock);
+	g_mutex_lock(&m0disp->lock);
 	if (!m0disp->encoded || m0disp->reload_requested) {
 		GPtrArray *array = NULL;
 		err = meta0_backend_get_all(m0disp->m0, &array);
@@ -118,7 +135,7 @@ _get_encoded(struct meta0_disp_s *m0disp)
 	}
 	if (m0disp->encoded)
 		encoded = g_byte_array_ref(m0disp->encoded);
-	g_mutex_unlock(m0disp->lock);
+	g_mutex_unlock(&m0disp->lock);
 
 	if (err) {
 		GRID_WARN("META0 reload failed : (%d) %s", err->code, err->message);
@@ -134,7 +151,7 @@ _encode_meta1ref(struct meta0_disp_s *m0disp)
 	GByteArray *encoded = NULL;
 	GPtrArray *array = NULL;
 
-	g_mutex_lock(m0disp->lock);
+	g_mutex_lock(&m0disp->lock);
 	err = meta0_backend_get_all_meta1_ref(m0disp->m0, &array);
 	if(!err) {
 		guint i, max;
@@ -146,7 +163,7 @@ _encode_meta1ref(struct meta0_disp_s *m0disp)
 
 		encoded=metautils_encode_lines(v0);
 	}
-	g_mutex_unlock(m0disp->lock);
+	g_mutex_unlock(&m0disp->lock);
 
 	meta0_utils_array_meta1ref_clean(array);
 
@@ -163,7 +180,7 @@ _reload(struct meta0_disp_s *m0disp)
 	GError *err = NULL;
 	GPtrArray *array = NULL;
 
-	g_mutex_lock(m0disp->lock);
+	g_mutex_lock(&m0disp->lock);
 	err = meta0_backend_get_all(m0disp->m0, &array);
 	m0disp->reload_requested = FALSE;
 	if (!err) {
@@ -171,7 +188,7 @@ _reload(struct meta0_disp_s *m0disp)
 			g_byte_array_unref(m0disp->encoded);
 		m0disp->encoded = _encode_meta0_array(array);
 	}
-	g_mutex_unlock(m0disp->lock);
+	g_mutex_unlock(&m0disp->lock);
 
 	if (err) {
 		GRID_WARN("META0 reload failed : (%d) %s", err->code, err->message);
@@ -192,7 +209,7 @@ meta0_dispatch_v1_GETONE(struct gridd_reply_ctx_s *reply,
 	(void) ignored;
 	err = extract_prefix(reply->request, "PREFIX", TRUE, prefix);
 	if (NULL != err) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
@@ -201,12 +218,12 @@ meta0_dispatch_v1_GETONE(struct gridd_reply_ctx_s *reply,
 	err = meta0_backend_get_one(m0disp->m0, prefix, &urlv);
 	if (NULL != err) {
 		g_prefix_error(&err, "Backend error: ");
-		reply->send_error(500, err);
+		reply->send_error(CODE_INTERNAL_ERROR, err);
 		return TRUE;
 	}
 
 	reply->add_body(_encode_meta0_tree(urlv_to_tree(prefix, urlv)));
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -216,7 +233,7 @@ meta0_dispatch_v1_GETALL(struct gridd_reply_ctx_s *reply,
 {
 	(void) ignored;
 	reply->add_body(_get_encoded(m0disp));
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -231,13 +248,13 @@ meta0_dispatch_v1_FILL(struct gridd_reply_ctx_s *reply,
 	(void) ignored;
 	err = message_extract_struint(reply->request, "REPLICAS", &nbreplicas);
 	if (err != NULL) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
 	err = message_extract_body_strv(reply->request, &urls);
 	if (err != NULL) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
@@ -247,7 +264,7 @@ meta0_dispatch_v1_FILL(struct gridd_reply_ctx_s *reply,
 	g_strfreev(urls);
 
 	if (!err)
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	else
 		reply->send_error(0, err);
 
@@ -268,7 +285,7 @@ meta0_dispatch_v1_RELOAD(struct gridd_reply_ctx_s *reply,
 	}
 
 	_reload(m0disp);
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -283,12 +300,12 @@ meta0_dispatch_v2_FILL(struct gridd_reply_ctx_s *reply,
 
 	err = message_extract_struint(reply->request, "REPLICAS", &nbreplicas);
 	if (err != NULL) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 	err = message_extract_struint(reply->request, "NODIST", (guint*)&nodist);
 	if (err != NULL) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
@@ -296,13 +313,12 @@ meta0_dispatch_v2_FILL(struct gridd_reply_ctx_s *reply,
 
 	err = meta0_assign_fill(m0disp->m0, m0disp->ns_name, nbreplicas, nodist);
 	if (!err)
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	else
 		reply->send_error(0, err);
 
 	return TRUE;
 }
-
 
 static gboolean
 meta0_dispatch_v2_ASSIGN_PREFIX(struct gridd_reply_ctx_s *reply,
@@ -319,7 +335,7 @@ meta0_dispatch_v2_ASSIGN_PREFIX(struct gridd_reply_ctx_s *reply,
 	}
 
 	_reload(m0disp);
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -334,7 +350,7 @@ meta0_dispatch_v2_DISABLE_META1(struct gridd_reply_ctx_s *reply,
 
 	err = message_extract_body_strv(reply->request, &urls);
 	if (err != NULL) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
@@ -349,7 +365,7 @@ meta0_dispatch_v2_DISABLE_META1(struct gridd_reply_ctx_s *reply,
 	}
 
 	_reload(m0disp);
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -360,7 +376,7 @@ meta0_dispatch_v2_META1_INFO(struct gridd_reply_ctx_s *reply,
 	(void) ignored;
 
 	reply->add_body(_encode_meta1ref(m0disp));
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -374,7 +390,7 @@ meta0_dispatch_v2_DESTROY_META1REF(struct gridd_reply_ctx_s *reply,
 
 	err = message_extract_string(reply->request, "METAURL", meta1url, sizeof(meta1url));
 	if (err != NULL) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
@@ -386,7 +402,7 @@ meta0_dispatch_v2_DESTROY_META1REF(struct gridd_reply_ctx_s *reply,
 	}
 
 	_reload(m0disp);
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -400,7 +416,7 @@ meta0_dispatch_v2_DESTROY_ZKNODE(struct gridd_reply_ctx_s *reply,
 
 	err = message_extract_string(reply->request, "METAURL", meta0url, sizeof(meta0url));
 	if (err != NULL) {
-		reply->send_error(400, err);
+		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
@@ -410,10 +426,9 @@ meta0_dispatch_v2_DESTROY_ZKNODE(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
-
 
 /* ------------------------------------------------------------------------- */
 
@@ -436,9 +451,6 @@ meta0_gridd_get_requests(void)
 		{NULL, NULL, NULL}
 	};
 
-	if (!gquark_log)
-		gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
-
 	return descriptions;
 }
 
@@ -459,7 +471,7 @@ meta0_gridd_get_dispatcher(struct meta0_backend_s *m0,
 	result->ns_name = g_strdup(ns_name);
 	result->m0 = m0;
 	result->m0zkmanager = m0zkmanager;
-	result->lock = g_mutex_new();
+	g_mutex_init(&result->lock);
 
 	meta0_gridd_requested_reload(result);
 	return result;
@@ -470,10 +482,9 @@ meta0_gridd_free_dispatcher(struct meta0_disp_s *m0disp)
 {
 	if (!m0disp)
 		return;
-	if (m0disp->lock)
-		g_mutex_free(m0disp->lock);
 	if (m0disp->encoded)
 		g_byte_array_unref(m0disp->encoded);
+	g_mutex_clear(&m0disp->lock);
 	memset(m0disp, 0, sizeof(*m0disp));
 	g_free(m0disp);
 }

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta2.disp"
 #endif
@@ -242,7 +261,6 @@ static gridd_filter M2V2_DELETE_FILTERS[] =
 static gridd_filter M2V2_PROPSET_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
-	meta2_filter_extract_header_prop_action,
 	meta2_filter_fill_subject,
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
@@ -263,6 +281,18 @@ static gridd_filter M2V2_PROPGET_FILTERS[] =
 	meta2_filter_extract_header_flags32,
 	meta2_filter_action_has_container,
 	meta2_filter_action_get_content_properties,
+	NULL
+};
+
+static gridd_filter M2V2_PROPDEL_FILTERS[] =
+{
+	meta2_filter_extract_header_url,
+	meta2_filter_fill_subject,
+	meta2_filter_check_backend,
+	meta2_filter_check_ns_name,
+	meta2_filter_extract_body_strings,
+	meta2_filter_action_has_container,
+	meta2_filter_action_del_content_properties,
 	NULL
 };
 
@@ -339,7 +369,7 @@ static gridd_filter M2V2_EXITELECTION_FILTERS[] =
 	NULL
 };
 
-static gridd_filter M2V2_RAW_DEL[] =
+static gridd_filter M2V2_RAW_DEL_filters[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_fill_subject,
@@ -354,7 +384,22 @@ static gridd_filter M2V2_RAW_DEL[] =
 	NULL
 };
 
-static gridd_filter M2V2_SUBST_CHUNKS_FILTERS[] =
+static gridd_filter M2V2_RAW_ADD_filters[] =
+{
+	meta2_filter_extract_header_url,
+	meta2_filter_fill_subject,
+	meta2_filter_extract_body_beans,
+	meta2_filter_check_backend,
+	meta2_filter_check_ns_name,
+	meta2_filter_check_ns_is_master,
+	meta2_filter_check_ns_not_wormed,
+	meta2_filter_action_has_container,
+	meta2_filter_action_insert_beans,
+	meta2_filter_success_reply,
+	NULL
+};
+
+static gridd_filter M2V2_RAW_SUBST_filters[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_fill_subject,
@@ -364,10 +409,8 @@ static gridd_filter M2V2_SUBST_CHUNKS_FILTERS[] =
 	meta2_filter_check_ns_is_master,
 	meta2_filter_check_ns_not_wormed,
 	meta2_filter_action_has_container,
-	meta2_filter_action_substitute_chunks,
-	/* Do not call meta2_filter_success_reply()
-	 * since the previous filter already sent "200 OK" */
-	meta2_filter_action_notify_content_PUT,
+	meta2_filter_action_update_beans,
+	meta2_filter_success_reply,
 	NULL
 };
 
@@ -404,38 +447,6 @@ static gridd_filter M2V2_FILTERS_destroy_v1[] =
 	meta2_filter_check_ns_not_wormed,
 	meta2_filter_action_has_container,
 	meta2_filter_action_delete_container,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_open_v1[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_check_ns_is_master,
-	meta2_filter_check_ns_is_writable,
-	meta2_filter_check_ns_not_wormed,
-	meta2_filter_action_has_container,
-	meta2_filter_action_open_container,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_close_v1[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_check_ns_is_master,
-	meta2_filter_check_ns_is_writable,
-	meta2_filter_check_ns_not_wormed,
-	meta2_filter_action_has_container,
-	meta2_filter_action_close_container,
 	meta2_filter_success_reply,
 	NULL
 };
@@ -546,64 +557,6 @@ static gridd_filter M2V2_FILTERS_list_v1[] =
 	NULL
 };
 
-static gridd_filter M2V2_FILTERS_set_content_prop_v1[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_extract_header_path_f1,
-	meta2_filter_extract_header_propname_f2,
-	meta2_filter_extract_header_propvalue_f3,
-	meta2_filter_action_has_container,
-	meta2_filter_action_set_content_prop_v1,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_get_content_prop_v1[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_extract_header_path_f1,
-	meta2_filter_extract_header_propname_f2,
-	meta2_filter_action_has_container,
-	meta2_filter_action_get_content_prop_v1,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_list_all_content_properties[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_extract_header_path_f1,
-	meta2_filter_action_has_container,
-	meta2_filter_action_list_all_content_properties,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_remove_content_prop_v1[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_extract_header_path_f1,
-	meta2_filter_extract_header_propname_f2,
-	meta2_filter_action_has_container,
-	meta2_filter_action_remove_content_prop_v1,
-	meta2_filter_success_reply,
-	NULL
-};
-
 static gridd_filter M2V2_FILTERS_modify_mdusr_v1[] =
 {
 	meta2_filter_extract_header_optional_ns,
@@ -631,324 +584,6 @@ static gridd_filter M2V2_FILTERS_modify_mdsys_v1[] =
 	meta2_filter_action_has_container,
 	meta2_filter_action_modify_mdsys_v1,
 	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_set_container_prop_v1[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_extract_header_string_K_f1,
-	meta2_filter_extract_header_string_V_f2,
-	meta2_filter_check_ns_is_master,
-	meta2_filter_check_ns_is_writable,
-	meta2_filter_check_ns_not_wormed,
-	meta2_filter_check_prop_key_prefix,
-	meta2_filter_action_has_container,
-	meta2_filter_action_set_container_properties,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_replicate_container_properties[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_extract_header_string_K_f1,
-	meta2_filter_extract_header_string_V_f2,
-	meta2_filter_check_ns_is_slave,
-	meta2_filter_check_ns_is_writable,
-	meta2_filter_check_ns_not_wormed,
-	meta2_filter_action_has_container,
-	meta2_filter_action_set_container_properties,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_get_container_prop_v1[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_extract_header_string_K_f1,
-	meta2_filter_check_ns_is_master,
-	meta2_filter_check_ns_is_writable,
-	meta2_filter_check_ns_not_wormed,
-	meta2_filter_action_has_container,
-	meta2_filter_action_get_container_prop_v1,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_list_usr_container_properties[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_list_usr_container_properties,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_list_all_container_properties[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_list_all_container_properties,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_remove_container_property[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_extract_header_string_K_f1,
-	meta2_filter_check_ns_is_master,
-	meta2_filter_check_ns_not_wormed,
-	meta2_filter_action_has_container,
-	meta2_filter_action_remove_container_properties,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_replicate_remove_container_property[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_extract_header_string_K_f1,
-	meta2_filter_check_ns_is_slave,
-	meta2_filter_check_ns_not_wormed,
-	meta2_filter_action_has_container,
-	meta2_filter_action_remove_container_properties,
-	/* TODO Post an event */
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_getflags[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_get_flags,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_setflags[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid,
-	meta2_filter_extract_body_flags32,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_set_flags,
-	NULL
-};
-
-
-static gridd_filter M2V2_FILTERS_enable[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_extract_header_localflag,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_enable,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_disable[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_extract_header_localflag,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_disable,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_freeze[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_extract_header_localflag,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_freeze,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_disable_frozen[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_extract_header_localflag,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_disable_frozen,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_restore_container[] =
-{
-	meta2_filter_extract_header_cid_dst,
-	meta2_filter_extract_header_cid_src,
-	meta2_filter_extract_header_addr_src,
-	meta2_filter_pack_url,
-	meta2_filter_fill_subject,
-	meta2_filter_check_backend,
-	meta2_filter_action_restore_container,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_add_service_content[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_extract_header_srvtype_f1,
-	meta2_filter_fill_subject,
-	meta2_filter_extract_body_strlist,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_add_service_content,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_spare_service_content[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_extract_header_srvtype_f1,
-	meta2_filter_fill_subject,
-	meta2_filter_extract_body_strlist,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_add_service_content,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_flush_content_services[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_extract_header_srvtype_f1,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_flush_content_services,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_delete_content_services[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_extract_header_srvtype_f1,
-	meta2_filter_fill_subject,
-	meta2_filter_extract_body_strlist,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_del_content_services,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_commit_service_content[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_extract_header_srvtype_f1,
-	meta2_filter_fill_subject,
-	meta2_filter_extract_body_strlist,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_rollback_service_content[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_extract_header_srvtype_f1,
-	meta2_filter_fill_subject,
-	meta2_filter_extract_body_strlist,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_list_content_services[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_extract_header_srvtype_f1,
-	meta2_filter_extract_header_path_f2,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_list_content_services,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_list_all_content_services[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid_f0,
-	meta2_filter_extract_header_srvtype_f1,
-	meta2_filter_extract_header_path_f2,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_list_all_content_services,
 	NULL
 };
 
@@ -1037,28 +672,6 @@ static gridd_filter M2V2_FILTERS_set_raw_v1[] =
 	NULL
 };
 
-static gridd_filter M2V2_FILTERS_getall_admin_v1[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_getall_admin_v1,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_setone_admin_v1[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_setone_admin_v1,
-	NULL
-};
-
 static gridd_filter M2V2_FILTERS_touch_content_v1[] =
 {
 	meta2_filter_extract_header_optional_ns,
@@ -1081,17 +694,6 @@ static gridd_filter M2V2_FILTERS_touch_container_v1[] =
 	meta2_filter_check_backend,
 	meta2_filter_action_has_container,
 	meta2_filter_action_touch_container_v1,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_replicatev2_v1[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_body_rawcontentv2,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_replicate_content_v1,
 	NULL
 };
 
@@ -1129,11 +731,11 @@ meta2_gridd_get_v2_requests(void)
 		{"M2V2_GET",       (hook) meta2_dispatch_all, M2V2_GET_FILTERS},
 		{"M2V2_DEL",       (hook) meta2_dispatch_all, M2V2_DELETE_FILTERS},
 		{"M2V2_LIST",      (hook) meta2_dispatch_all, M2V2_LIST_FILTERS},
-		/* url */
-		{"M2V2_STGPOL",    (hook) meta2_dispatch_all, M2V2_STGPOL_FILTERS},
-		/* properties */
+		/* content properties (container properties now managed through
+		 * sqlx queries) */
 		{"M2V2_PROP_SET",  (hook) meta2_dispatch_all, M2V2_PROPSET_FILTERS},
 		{"M2V2_PROP_GET",  (hook) meta2_dispatch_all, M2V2_PROPGET_FILTERS},
+		{"M2V2_PROP_DEL",  (hook) meta2_dispatch_all, M2V2_PROPDEL_FILTERS},
 		/* snapshots */
 		{"M2V2_SNAP_TAKE", (hook) meta2_dispatch_all, M2V2_SNAPTAKE_FILTERS},
 		{"M2V2_SNAP_LIST", (hook) meta2_dispatch_all, M2V2_SNAPLIST_FILTERS},
@@ -1141,10 +743,13 @@ meta2_gridd_get_v2_requests(void)
 		{"M2V2_SNAP_DEL",  (hook) meta2_dispatch_all, M2V2_SNAPDEL_FILTERS},
 
 		/* raw beans */
-		{"M2V2_RAW_DEL",   (hook) meta2_dispatch_all, M2V2_RAW_DEL},
-		{"M2V2_SUBST_CHUNKS",   (hook) meta2_dispatch_all, M2V2_SUBST_CHUNKS_FILTERS},
+		{"M2V2_RAW_DEL",   (hook) meta2_dispatch_all, M2V2_RAW_DEL_filters},
+		{"M2V2_RAW_ADD",   (hook) meta2_dispatch_all, M2V2_RAW_ADD_filters},
+		{"M2V2_RAW_SUBST", (hook) meta2_dispatch_all, M2V2_RAW_SUBST_filters},
 
 		{"M2V2_EXITELECTION", (hook) meta2_dispatch_all,  M2V2_EXITELECTION_FILTERS},
+		/* url */
+		{"M2V2_STGPOL",    (hook) meta2_dispatch_all, M2V2_STGPOL_FILTERS},
 
 		{NULL, NULL, NULL}
 	};
@@ -1161,32 +766,18 @@ meta2_gridd_get_v1_requests(void)
 		/* CONTAINER */
 		{"REQ_M2_CREATE", (hook) meta2_dispatch_all, M2V2_FILTERS_create_v1},
 		{"REQ_M2_DESTROY", (hook) meta2_dispatch_all, M2V2_FILTERS_destroy_v1},
-		{"REQ_M2_OPEN", (hook) meta2_dispatch_all, M2V2_FILTERS_open_v1},
-		{"REQ_M2_CLOSE", (hook) meta2_dispatch_all, M2V2_FILTERS_close_v1},
 		{"REQ_M2_LIST", (hook) meta2_dispatch_all, M2V2_FILTERS_list_v1},
-		{"META2_SERVICES_LIST_CONTENT_SPECIF", (hook) meta2_dispatch_all, M2V2_FILTERS_list_v1},
-
-		/* CONTAINER PROPERTIES */
-		{"REQ_M2RAW_ADMIN_GETALL", (hook) meta2_dispatch_all, M2V2_FILTERS_getall_admin_v1},
-		{"REQ_M2RAW_ADMIN_SETONE", (hook) meta2_dispatch_all, M2V2_FILTERS_setone_admin_v1},
-		{"META2_SERVICES_SET_CONTAINER_GLOBAL_PROPERTY", (hook) meta2_dispatch_all, M2V2_FILTERS_set_container_prop_v1},
-		{"META2_SERVICES_SET_CONTAINER_PROPERTY", (hook) meta2_dispatch_all, M2V2_FILTERS_set_container_prop_v1},
-		{"META2_SERVICES_REPLICATE_SET_CONTAINER_PROPERTY", (hook) meta2_dispatch_all, M2V2_FILTERS_replicate_container_properties},
-		{"META2_SERVICES_GET_CONTAINER_PROPERTY", (hook) meta2_dispatch_all, M2V2_FILTERS_get_container_prop_v1},
-		{"META2_SERVICES_LIST_ALL_CONTAINER_PROPERTIES", (hook) meta2_dispatch_all, M2V2_FILTERS_list_all_container_properties},
-		{"META2_SERVICES_LIST_CONTAINER_PROPERTIES", (hook) meta2_dispatch_all, M2V2_FILTERS_list_usr_container_properties},
-		{"META2_SERVICES_REMOVE_CONTAINER_PROPERTY", (hook) meta2_dispatch_all, M2V2_FILTERS_remove_container_property},
-		{"META2_SERVICES_REPLICATE_REMOVE_CONTAINER_PROPERTY", (hook) meta2_dispatch_all, M2V2_FILTERS_replicate_remove_container_property},
 
 		/* CONTENT LEVEL */
 		{"REQ_M2_CONTENTADD", (hook) meta2_dispatch_all, M2V2_FILTERS_add_v1},
 		{"REQ_M2_CHUNK_COMMIT", (hook) meta2_dispatch_all, M2V2_FILTERS_chunk_commit_v1},
-		{"REQ_M2_CONTENTRETRIEVE", (hook) meta2_dispatch_all, M2V2_FILTERS_retrieve_v1},
 		{"REQ_M2_CONTENTREMOVE", (hook) meta2_dispatch_all, M2V2_FILTERS_remove_v1},
 		{"REQ_M2_CONTENTCOMMIT", (hook) meta2_dispatch_all, M2V2_FILTERS_content_commit_v1},
 		{"REQ_M2_CONTENTSPARE", (hook) meta2_dispatch_all, M2V2_FILTERS_spare_v1},
 		{"REQ_M2_CONTENTAPPEND", (hook) meta2_dispatch_all, M2V2_FILTERS_append_v1},
 		{"REQ_M2_CONTENTROLLBACK", (hook) meta2_dispatch_all, M2V2_FILTERS_content_rollback_v1},
+
+		{"REQ_M2_CONTENTRETRIEVE", (hook) meta2_dispatch_all, M2V2_FILTERS_retrieve_v1},
 		{"META2_SERVICES_STAT_CONTENT_V2", (hook) meta2_dispatch_all, M2V2_FILTERS_statv2_v1},
 
 		{"REQ_M2RAW_CONTENT_GET", (hook) meta2_dispatch_all, M2V2_FILTERS_raw_chunks_get_v1},
@@ -1201,12 +792,6 @@ meta2_gridd_get_v1_requests(void)
 		{"REQ_M2RAW_CONTENT_SET", (hook) meta2_dispatch_all, M2V2_FILTERS_set_raw_v1},
 		{"REQ_M2RAW_CHUNKS_SET", (hook) meta2_dispatch_all, M2V2_FILTERS_set_raw_v1},
 
-		/* CONTENT_PROPERTIES */
-		{"META2_SERVICES_SET_CONTENT_PROPERTY", (hook) meta2_dispatch_all, M2V2_FILTERS_set_content_prop_v1},
-		{"META2_SERVICES_GET_CONTENT_PROPERTY", (hook) meta2_dispatch_all, M2V2_FILTERS_get_content_prop_v1},
-		{"META2_SERVICES_LIST_ALL_CONTENT_PROPERTIES", (hook) meta2_dispatch_all, M2V2_FILTERS_list_all_content_properties},
-		{"META2_SERVICES_REMOVE_CONTENT_PROPERTY", (hook) meta2_dispatch_all, M2V2_FILTERS_remove_content_prop_v1},
-
 		/* CONTENT METADATA */
 		{"META2_SERVICES_MODIFY_METADATAUSR", (hook) meta2_dispatch_all, M2V2_FILTERS_modify_mdusr_v1},
 		{"META2_SERVICES_MODIFY_METADATASYS", (hook) meta2_dispatch_all, M2V2_FILTERS_modify_mdsys_v1},
@@ -1214,52 +799,6 @@ meta2_gridd_get_v1_requests(void)
 		/* AGENT EVENTS */
 		{"REQ_M2RAW_TOUCH_CONTAINER", (hook) meta2_dispatch_all, M2V2_FILTERS_touch_container_v1},
 		{"REQ_M2RAW_TOUCH_CONTENT", (hook) meta2_dispatch_all, M2V2_FILTERS_touch_content_v1},
-
-		/* CONTAINER FLAGS */
-		{"REQ_M2_GETFLAG", (hook) meta2_dispatch_all, M2V2_FILTERS_getflags},
-		{"REQ_M2_SETFLAG", (hook) meta2_dispatch_all, M2V2_FILTERS_setflags},
-		{"META2_SERVICES_CONTAINER_ENABLE", (hook) meta2_dispatch_all, M2V2_FILTERS_enable},
-		{"META2_SERVICES_CONTAINER_DISABLE", (hook) meta2_dispatch_all, M2V2_FILTERS_disable},
-		{"META2_SERVICES_CONTAINER_FREEZE", (hook) meta2_dispatch_all, M2V2_FILTERS_freeze},
-		{"META2_SERVICES_CONTAINER_DISABLE_DISABLED", (hook) meta2_dispatch_all, M2V2_FILTERS_disable_frozen},
-
-		/* RESTORE */
-		{"META2_SERVICES_REPLICATE_CONTENT_V2", (hook) meta2_dispatch_all, M2V2_FILTERS_replicatev2_v1},
-
-		{"REQ_M2RAW_RESTORE_CONTAINER", (hook) meta2_dispatch_all, M2V2_FILTERS_restore_container},
-
-		/* CONTENT SERVICES */
-		{"META2_SERVICES_SERVICE_ADD_CONTENTS", (hook) meta2_dispatch_all, M2V2_FILTERS_add_service_content},
-		{"META2_SERVICES_SERVICE_ADD_SPARES", (hook) meta2_dispatch_all, M2V2_FILTERS_spare_service_content},
-		{"META2_SERVICES_SERVICE_COMMIT_CONTENTS", (hook) meta2_dispatch_all, M2V2_FILTERS_commit_service_content},
-		{"META2_SERVICES_SERVICE_ROLLBACK_CONTENTS", (hook) meta2_dispatch_all, M2V2_FILTERS_rollback_service_content},
-
-		{"META2_SERVICES_SERVICE_GET_CONTENT_SERVICE", (hook) meta2_dispatch_all, M2V2_FILTERS_list_content_services},
-		{"META2_SERVICES_SERVICE_GET_ALL_USED", (hook) meta2_dispatch_all, M2V2_FILTERS_list_all_content_services},
-
-		{"META2_SERVICES_SERVICE_DELETE_CONTENTS", (hook) meta2_dispatch_all, M2V2_FILTERS_delete_content_services},
-		{"META2_SERVICES_SERVICE_FLUSH", (hook) meta2_dispatch_all, M2V2_FILTERS_flush_content_services},
-
-
-		/* Given up */
-		{"REQ_M2RAW_CONTENT_GETBYCHUNK", (hook) meta2_dispatch_all, NULL},
-		{"META2_SERVICES_CONTAINER_SERVICES_GET_ALL_USED", (hook) meta2_dispatch_all, NULL},
-		{"META2_SERVICES_CONTAINER_SERVICES_GET_AVAILABLE", (hook) meta2_dispatch_all, NULL},
-
-		{"REQ_M2_INFO", (hook) meta2_dispatch_all, NULL},
-		{"REQ_M2RAW_MARK_REPAIRED", (hook) meta2_dispatch_all, NULL},
-		{"REQ_M2RAW_DUMP_CONTAINER", (hook) meta2_dispatch_all, NULL},
-		{"META2_SERVICES_ADD_CONTAINER_EVENT", (hook) meta2_dispatch_all, NULL},
-		{"META2_SERVICES_REPLICATE_ADD_CONTAINER_EVENT", (hook) meta2_dispatch_all, NULL},
-		{"META2_SERVICES_GET_CONTAINER_EVENT_ROWID", (hook) meta2_dispatch_all, NULL},
-		{"META2_SERVICES_GET_CONTAINER_EVENTS_BY_TIMESTAMP", (hook) meta2_dispatch_all, NULL},
-		{"META2_SERVICES_LIST_CONTAINER_EVENTS", (hook) meta2_dispatch_all, NULL},
-		{"META2_SERVICES_LIST_CONTAINER_EVENTS_SINCE", (hook) meta2_dispatch_all, NULL},
-		{"META2_SERVICES_LIST_CONTAINER_EVENTS_UP_TO", (hook) meta2_dispatch_all, NULL},
-		{"META2_SERVICES_LIST_LAST_CONTAINER_EVENTS", (hook) meta2_dispatch_all, NULL},
-		{"META2_SERVICES_LIST_ALL_CONTAINER_EVENTS", (hook) meta2_dispatch_all, NULL},
-		{"META2_SERVICES_REMOVE_CONTAINER_EVENT_BY_ROWID", (hook) meta2_dispatch_all, NULL},
-		{"META2_SERVICES_REMOVE_CONTAINER_EVENT_BY_EVENT", (hook) meta2_dispatch_all, NULL},
 
 		{NULL, NULL, NULL}
 	};

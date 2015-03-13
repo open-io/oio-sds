@@ -1,3 +1,22 @@
+/*
+OpenIO SDS rawx-apache2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "rawx.repo"
 #endif
@@ -21,12 +40,10 @@
 #include "rawx_repo_core.h"
 #include "rawx_internals.h"
 
-
 #define DEFAULT_BLOCK_SIZE "5242880"
 #define DEFAULT_COMPRESSION_ALGO "ZLIB"
 
 /******************** INTERNALS METHODS **************************/
-
 
 static apr_status_t
 apr_storage_policy_clean(void *p)
@@ -148,7 +165,6 @@ _finalize_chunk_creation(dav_stream *stream)
 
 	return e;
 }
-
 
 static dav_error *
 _write_data_crumble_UNCOMP(dav_stream *stream)
@@ -374,7 +390,6 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 	}
 }
 
-
 void
 request_parse_query(request_rec *r, dav_resource *resource)
 {
@@ -384,7 +399,6 @@ request_parse_query(request_rec *r, dav_resource *resource)
 	
 	char *query = NULL;
 	query = apr_pstrdup(r->pool, r->parsed_uri.query);
-
 
 	/* Expected cp=true&algo=XXXX&bs=XXXX */
 	char *k = NULL;
@@ -454,7 +468,6 @@ chunk_textinfo_fill_headers(request_rec *r, struct chunk_textinfo_s *cti)
 	__set_header(r, conf->headers_scheme, "chunk_metadata",    cti->metadata);
 	__set_header(r, conf->headers_scheme, "chunk_containerid", cti->container_id);
 }
-
 
 /*************************************************************************/
 
@@ -675,7 +688,6 @@ __extract_stgpol(apr_pool_t *p, const char *str)
 	return tmp;
 }
 
-
 dav_error *
 rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 {
@@ -697,7 +709,6 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 	ds->r = resource;
 	ds->final_pathname = apr_pstrcat(p, ctx->dirname, "/", ctx->hex_chunkid, NULL);
 	ds->pathname = apr_pstrcat(p, ctx->dirname, "/", ctx->hex_chunkid, ".pending", NULL);
-
 
 	/* Create busy chunk file */
 	ds->f = fopen(ds->pathname, "w");

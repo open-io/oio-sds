@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "conscience.api.brk"
 #endif
@@ -36,20 +55,11 @@ remove_container(gpointer key, gpointer value, gpointer user_data)
 	return 0 == g_ascii_strncasecmp(brk_content->container_id, str_cid, sizeof(brk_content->container_id));
 }
 
-
 static struct broken_meta1_s *
 create_broken_meta1(addr_info_t * addr)
 {
-	gsize writen_size;
-	struct broken_meta1_s *brk_m1;
-
-	brk_m1 = g_try_malloc0(sizeof(struct broken_meta1_s));
-	if (!brk_m1) {
-		abort();
-		return NULL;
-	}
-
-	writen_size = g_strlcpy(brk_m1->string, "META1:",
+	struct broken_meta1_s *brk_m1 = g_malloc0(sizeof(struct broken_meta1_s));
+	gsize writen_size = g_strlcpy(brk_m1->string, "META1:",
 	    sizeof(brk_m1->string));
 	addr_info_to_string(&(brk_m1->addr),
 	    brk_m1->string + writen_size,
@@ -63,10 +73,7 @@ create_broken_meta1(addr_info_t * addr)
 static struct broken_meta2_s *
 create_broken_meta2(addr_info_t * addr)
 {
-	struct broken_meta2_s *brk_m2;
-	brk_m2 = g_try_malloc0(sizeof(struct broken_meta2_s));
-	if (!brk_m2)
-		abort();
+	struct broken_meta2_s *brk_m2 = g_malloc0(sizeof(struct broken_meta2_s));
 	brk_m2->counter = 0;
 	brk_m2->totally_broken = FALSE;
 	brk_m2->last_alert_stamp = time(0);
@@ -79,12 +86,7 @@ create_broken_meta2(addr_info_t * addr)
 static struct broken_content_s *
 create_broken_content(struct conscience_s *conscience, const gchar * cid, const gchar * path, const gchar * cause)
 {
-	struct conscience_srvtype_s *srvtype;
-	struct broken_content_s *brk_content;
-
-	brk_content = g_try_malloc0(sizeof(struct broken_content_s));
-	if (!brk_content)
-		abort();
+	struct broken_content_s *brk_content = g_malloc0(sizeof(struct broken_content_s));
 
 	g_strlcpy(brk_content->container_id, cid, sizeof(brk_content->container_id));
 	if (path) {
@@ -93,7 +95,8 @@ create_broken_content(struct conscience_s *conscience, const gchar * cid, const 
 			g_strlcpy(brk_content->cause, cause, sizeof(brk_content->cause));
 	}
 
-	srvtype = conscience_get_locked_srvtype(conscience, NULL, "rawx", MODE_STRICT, 'r');
+	struct conscience_srvtype_s *srvtype = conscience_get_locked_srvtype(
+			conscience, NULL, "rawx", MODE_STRICT, 'r');
 	if (srvtype) {
 		brk_content->counter = conscience_srvtype_count_srv(srvtype, FALSE);
 		conscience_release_locked_srvtype(srvtype);

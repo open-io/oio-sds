@@ -23,22 +23,13 @@
 #include <meta2/remote/{{module_name}}_remote.h>
 
 static MESSAGE
-_build_request(GError **err, GByteArray *id, char *name)
+_build_request(GByteArray *id, char *name)
 {
-	MESSAGE msg=NULL;
-	message_create(&msg, err);
+	MESSAGE msg = message_create();
 	if (id)
-		if (!message_set_ID (msg, id->data, id->len, err)) {
-			GSETERROR(err, "Failed to set message ID");
-			message_destroy(msg, NULL);
-			return NULL;
-		}
+		message_set_ID (msg, id->data, id->len, NULL);
 	if (name)
-		if (!message_set_NAME (msg, name, strlen(name), err)) {
-			GSETERROR(err, "Failed to set message NAME");
-			message_destroy(msg, NULL);
-			return NULL;
-		}
+		message_set_NAME (msg, name, strlen(name), NULL);
 	return msg;
 }
 
@@ -82,14 +73,14 @@ msg_manager_{{f.name}}(GError ** err, gpointer udata, gint code, MESSAGE rep)
 	args = udata;
 	
 	{{FOREACH arg IN f.out_args}}
-	{{IF arg.on_error}}if (code<200 || code>=400){{ELSE}}if (code==200 || code==206){{END}}
+	{{IF arg.on_error}}if (!CODE_IS_OK(code)){{ELSE}}if (CODE_IS_OK(code)){{END}}
 	{
 	{{SWITCH arg.message_location}}
 	{{CASE 'header'}}/* Get args->{{arg.local_name}} from the header {{arg.message_name}} */
 	{{PROCESS get_arg_from_header msg='rep' where="(args -> $arg.local_name )" err='err' arg=arg}}
 	{{CASE 'body'}}/* Get args->{{arg.local_name}} from the body */
 	gint has_body = message_has_BODY(rep,NULL);
-	if (code == 206 && 0 > has_body) {
+	if (code == CODE_PARTIAL_CONTENT && 0 > has_body) {
 		GSETERROR(err,"No body found in the reply");
 		goto error_label;
 	} else if (has_body > 0) { /*a body has been found in the message*/
@@ -100,7 +91,7 @@ msg_manager_{{f.name}}(GError ** err, gpointer udata, gint code, MESSAGE rep)
 	{{END}}
 
 	{{IF f.return.serializer}}
-	{{IF arg.on_error}}if (code<200 || code>=400){{ELSE}}if (code==200 || code==206){{END}}
+	{{IF arg.on_error}}if (!CODE_IS_OK(code)){{ELSE}}if (CODE_IS_OK(code)){{END}}
 	{
 	{{SWITCH f.return.message_location}}
 	{{CASE 'header'}}/* Get args->result from the header {{f.return.message_name}} */
@@ -129,15 +120,15 @@ error_label:
 	{{IF f.has_out -}}
 	struct arg_{{f.name}}_s args;
 	struct code_handler_s codes [] = {
-		{ 200, REPSEQ_FINAL,         NULL, msg_manager_{{f.name}} },
-		{ 206, REPSEQ_BODYMANDATORY, NULL, msg_manager_{{f.name}} },
-		{ -1,  REPSEQ_ERROR,         NULL, msg_manager_{{f.name}} },
+		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, msg_manager_{{f.name}} },
+		{ CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, NULL, msg_manager_{{f.name}} },
+		{ -1, REPSEQ_ERROR, NULL, msg_manager_{{f.name}} },
 		{ 0,0,NULL,NULL}
 	};
 	struct reply_sequence_data_s data = { &args , 0 , codes };
 	{{ELSE -}}
 	struct code_handler_s codes [] = {
-		{ 200, REPSEQ_FINAL,         NULL, NULL },
+		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
 		{ 0,0,NULL,NULL}
 	};
 	struct reply_sequence_data_s data = { NULL , 0 , codes };
@@ -155,19 +146,13 @@ error_label:
 		goto error_check;
 	}
 
-	request = _build_request( err, ctx->id, "{{f.request_name}}");
-	if (!request) {
-		GSETERROR(err,"Memory allocation failure");
-		goto error_check;
-	}
+	request = _build_request(ctx->id, "{{f.request_name}}");
 
 	/*prepare the request, fill all the fields*/
 	{{FOREACH arg IN f.in_args}}
 		{{IF arg.serializer}}
 			do {
-				int rc;
 				GByteArray *gba;
-
 				{{PROCESS serialize_data gba="gba" arg=arg err="err"}}
 				if (!gba) {
 					GSETERROR(err,"Serialization error");
@@ -175,21 +160,13 @@ error_label:
 				}
 				{{SWITCH arg.message_location}}
 				{{CASE 'body'}}
-				rc = message_set_BODY(request, gba->data, gba->len, err);
+				message_set_BODY(request, gba->data, gba->len, NULL);
 				{{CASE 'header'}}
 				/* empty gba not necessary an error, don't try to serialize it */
-				if (gba->len > 0) {
-					rc = message_add_field(request, "{{arg.message_name}}",
-							sizeof("{{arg.message_name}}")-1, gba->data, gba->len, err);
-				} else {
-					rc = 1;
-				}
+				if (gba->len > 0)
+					message_add_field(request, "{{arg.message_name}}", gba->data, gba->len);
 				{{END}}
 				g_byte_array_free(gba, TRUE);
-				if (!rc) {
-					GSETERROR(err,"Request configuration failure");
-					goto error_label;
-				}
 			} while (0);
 		{{END}}
 	{{END}}
@@ -206,7 +183,7 @@ error_label:
 	
 	{{UNLESS f.return.serializer}}status = 1;{{END}}
 error_label:
-	message_destroy(request,NULL);
+	message_destroy(request);
 error_check:
 	
 	{{FOREACH arg IN f.out_args}}if ({{arg.local_name}})

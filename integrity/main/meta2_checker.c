@@ -1,3 +1,22 @@
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "integrity.main.meta2_checker"
 #endif
@@ -14,9 +33,7 @@
 #include "meta2_checker.h"
 #include "../lib/meta2_check.h"
 
-
 extern GSList *gs_resolve_meta2(gs_grid_storage_t * gs, const container_id_t cID, GError ** err);
-
 
 /**
  * Find the META2 which is local in the given list of META2 addr
@@ -95,7 +112,6 @@ _resolv_meta2(const gchar * ns_name, const container_id_t container_id, addr_inf
 	return FALSE;
 }
 
-
 /**
  * Check all chunks from the list of contents names given in args
  *
@@ -137,7 +153,6 @@ _check_chunk_from_list(struct metacnx_ctx_s *ctx, const container_id_t container
 	}
 }
 
-
 gboolean
 check_meta2(const gchar * meta2_db_path, void *data, GError ** error)
 {
@@ -177,11 +192,7 @@ check_meta2(const gchar * meta2_db_path, void *data, GError ** error)
 	}
 
 	/* init META2 connection context */
-	ctx_meta2 = metacnx_create(error);
-	if (ctx_meta2 == NULL) {
-		GSETERROR(error, "Failed to create metacnx_ctx_s");
-		goto error_alloc_ctx;
-	}
+	ctx_meta2 = metacnx_create();
 
 	if (!metacnx_init_with_addr(ctx_meta2, &addr_meta2, error)) {
 		GSETERROR(error, "Failed to init metacnx_ctx_s");

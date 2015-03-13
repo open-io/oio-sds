@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "atos.grid.action"
 #endif
@@ -20,13 +39,11 @@
 
 #include "lib/action_common.h"
 
-
 // motor_env and rules_reload_time_interval declared in motor.h
 struct rules_motor_env_s* motor_env = NULL;
 gint rules_reload_time_interval = 1L;
 
 static gchar* dryrun_cmd_opt_name;
-
 
 static TCrawlerBus* conn;
 
@@ -350,9 +367,6 @@ label_error:
 	return ret;
 }
 
-
-
-
 //==============================================================================
 // Listening message come from, and execute action function
 //==============================================================================
@@ -362,14 +376,14 @@ struct SParamMsgrx {
     gchar* dryrun;
 };
 
-void init_paramMsgRx(struct SParamMsgrx* pParam)
+static void init_paramMsgRx(struct SParamMsgrx* pParam)
 {
     if (pParam == NULL) return;
 
     memset(pParam, 0, sizeof(struct SParamMsgrx));
 }
 
-void clean_paramMsgRx(struct SParamMsgrx* pParam)
+static void clean_paramMsgRx(struct SParamMsgrx* pParam)
 {
     if (pParam == NULL) return;
 
@@ -384,7 +398,6 @@ static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam,
 {
     if (pParam == NULL)
         return FALSE;
-
 
     if (allParam == TRUE) {
 		/* Checking occurence form */
@@ -465,7 +478,6 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
         return FALSE;
     }
 
-
     /**/
 
 	if ((msgRx.source_path) && (strlen(msgRx.source_path) > 0)) {
@@ -477,7 +489,6 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
 	GSList *checks = _init_checks();
 	resultat = do_work(msgRx.source_path, actparam.service_uid, checks);
 	_free_checks(checks);
-
 
     // save response
 	char* temp_msg = (char*)g_malloc0((SHORT_BUFFER_SIZE * sizeof(char)) + sizeof(guint64));
@@ -503,14 +514,12 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
     tlc_Send_Ack_noreply(req, NULL, ((resultat!=EXIT_FAILURE)?ACK_OK:ACK_KO), status);
     g_free(status);
 
-
     act_paramact_clean(&actparam);
     clean_paramMsgRx(&msgRx);
     g_variant_unref(param);
 
     return TRUE;
 }
-
 
 gboolean action_command(TCrawlerBusObject *obj, const char* cmd, const char *alldata,
         char** status, GError **error)
@@ -565,9 +574,6 @@ gboolean action_command(TCrawlerBusObject *obj, const char* cmd, const char *all
     return TRUE;
 }
 
-
-
-
 /* GRID COMMON MAIN */
 static struct grid_main_option_s *
 main_get_options(void) {
@@ -596,8 +602,6 @@ static void main_action(void)
         exit(EXIT_FAILURE);
 
     }
-
-
 
     GRID_INFO("%s (%d) : System D-Bus %s action signal listening thread started...", action_name, service_pid, action_name);
 

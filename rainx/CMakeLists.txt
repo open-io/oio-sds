@@ -41,8 +41,8 @@ set_target_properties(mod_dav_rainx PROPERTIES PREFIX "" SUFFIX .so)
 target_link_libraries(mod_dav_rainx
 		metautils rawx
 		${APR_LIBRARIES} ${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES}
-		-lrain -lz -llzo2)
+		${LIBRAIN_LIBRARIES} ${ZLIB_LIBRARIES} ${LZO_LIBRARIES})
 
 install(TARGETS mod_dav_rainx
-		LIBRARY DESTINATION ${APACHE2_LIBRARY_DIRS}/modules)
+		LIBRARY DESTINATION ${APACHE2_MODULES_DIRS})
 

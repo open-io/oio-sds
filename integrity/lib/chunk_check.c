@@ -1,3 +1,22 @@
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "integrity.lib.chunk_check"
 #endif
@@ -83,7 +102,6 @@ _compute_chunk_md5_hash(const gchar * chunk_path, chunk_hash_t chunk_hash, GErro
 	return TRUE;
 }
 
-
 gboolean
 check_chunk_integrity(const char *chunk_path, const struct chunk_textinfo_s * text_chunk, GSList ** mismatch,
     GError ** error)
@@ -95,7 +113,6 @@ check_chunk_integrity(const char *chunk_path, const struct chunk_textinfo_s * te
 	CHECK_ARG_POINTER(chunk_path, error);
 	CHECK_ARG_POINTER(text_chunk, error);
 	CHECK_ARG_VALID_FILE(chunk_path, error);
-
 
 #define ADD_BRK_EL_TXT(L, P, R, V) \
 do {\
@@ -249,11 +266,9 @@ do {\
 			return FALSE;
 	}
 
-
 	gboolean check_chunk_hash_same  = FALSE;
 	gboolean check_chunk_id_notsame = FALSE;
 	gboolean is_referenced = TRUE;
-
 
 	/* Check chunk hash */
 	if (chunk_from_chunk->hash == NULL && !data_is_zeroed(chunk_from_meta2->hash, sizeof(chunk_hash_t))) {
@@ -486,7 +501,6 @@ clean_up:
 
 	return ret;
 }
-
 
 static gint64
 _extract_date_from_sysmd(const guint8 *mdsys, gsize mdsys_len)
@@ -996,16 +1010,16 @@ trash_chunk(check_info_t *check_info, check_result_t *cres)
 	if (dst_dir->str[dst_dir->len - 1] != G_DIR_SEPARATOR)
 		g_string_append_c(dst_dir, G_DIR_SEPARATOR);
 
-	g_string_append(dst_dir, REDC_LOSTFOUND_FOLDER);
+	g_string_append(dst_dir, RAWX_LOSTFOUND_FOLDER);
 	if (is_dryrun) {
 		ret = TRUE;
 		check_result_append_msg(cres, "dryrun prevented from moving chunk to "
-				REDC_LOSTFOUND_FOLDER);
+				RAWX_LOSTFOUND_FOLDER);
 	} else {
 		ret = _move_file_to_dir(src_file->str, dst_dir->str);
 		if (ret)
 			check_result_append_msg(cres, "chunk moved to "
-					REDC_LOSTFOUND_FOLDER);
+					RAWX_LOSTFOUND_FOLDER);
 	}
 	g_string_free(dst_dir, TRUE);
 	g_string_free(src_file, TRUE);

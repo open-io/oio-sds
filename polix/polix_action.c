@@ -1,3 +1,22 @@
+/*
+OpenIO SDS polix
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "polix"
 #endif
@@ -70,9 +89,6 @@ clean_up:
 	return m2_url;
 }
 
-
-
-
 //-------------------------------------------------------------------------------
 // purge request
 //-------------------------------------------------------------------------------
@@ -112,9 +128,6 @@ _delete_chunks_on_rawx(gboolean dryrun, GSList *chunks, guint32 *count, gint64* 
 	return error;
 }
 
-
-
-
 gboolean polix_action_drop_chunks(gboolean dryrun, GSList *del_chunks_list, 
 		polix_action_purge_result_t* result, GError **error)
 {
@@ -134,9 +147,6 @@ gboolean polix_action_drop_chunks(gboolean dryrun, GSList *del_chunks_list,
 
 	return (*error==NULL);
 }
-
-
-
 
 /**
  * hexid: cid on char ascii format
@@ -175,8 +185,6 @@ gboolean polix_action_purge(char* namespace, char* hexid, const char* meta2_url,
 	return rc;
 }
 
-
-
 gboolean polix_action_purge_byurl(struct hc_url_s *url, const char* meta2_url,
         gdouble timeout_request, gboolean dryrun, 
 		polix_action_purge_result_t* result, GError **error)
@@ -205,8 +213,4 @@ gboolean polix_action_purge_byurl(struct hc_url_s *url, const char* meta2_url,
 
 	return ((*error)?FALSE:TRUE);
 }
-
-
-
-
 

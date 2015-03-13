@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta0v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta0.backend"
 #endif
@@ -19,7 +38,7 @@ struct meta0_backend_s
 {
 	gchar *id;
 	gchar *ns;
-	GStaticRWLock rwlock;
+	GRWLock rwlock;
 	GPtrArray *array_by_prefix;
 	GPtrArray *array_meta1_ref;
 	struct sqlx_repository_s *repository;
@@ -78,7 +97,7 @@ meta0_backend_init(const gchar *ns, const gchar *id,
 		struct sqlx_repository_s *repo)
 {
 	struct meta0_backend_s *m0 = g_malloc0(sizeof(*m0));
-	g_static_rw_lock_init(&(m0->rwlock));
+	g_rw_lock_init(&(m0->rwlock));
 	m0->id = g_strdup(id);
 	m0->ns = g_strdup(ns);
 	m0->array_by_prefix = NULL;
@@ -136,20 +155,23 @@ meta0_backend_migrate(struct meta0_backend_s *m0)
 	struct sqlx_sqlite3_s *handle=NULL;
 	struct sqlx_sqlite3_s *oldhandle=NULL;
 
-	err = sqlx_repository_open_and_lock(m0->repository,
-			META0_TYPE_NAME, m0->ns,SQLX_OPEN_LOCAL, &handle, NULL);
+	struct sqlx_name_s n;
+	n.base = m0->ns;
+	n.type = META0_TYPE_NAME;
+	n.ns = m0->ns;
+	err = sqlx_repository_open_and_lock(m0->repository, &n, SQLX_OPEN_LOCAL, &handle, NULL);
 	if ( err )
 	{
 		// check if the erreur message is the ENOENT message ; DB doesn't exist
 		if  (  (strstr(err->message, strerror(ENOENT)) != NULL) ) {
 			g_clear_error(&err);
 			err = NULL;
-			err = sqlx_repository_open_and_lock(m0->repository, META0_TYPE_NAME,
-					m0->ns,SQLX_OPEN_LOCAL|SQLX_OPEN_CREATE,&handle, NULL);
+			err = sqlx_repository_open_and_lock(m0->repository, &n, SQLX_OPEN_LOCAL|SQLX_OPEN_CREATE,&handle, NULL);
 			if( !err ) {
 				// Migration (1.7 -> 1.8) from old meta0 database
 
-				err = sqlx_repository_open_and_lock(m0->repository,META0_TYPE_NAME, m0->id,SQLX_OPEN_LOCAL, &oldhandle,NULL);
+				n.base = m0->id;
+				err = sqlx_repository_open_and_lock(m0->repository, &n, SQLX_OPEN_LOCAL, &oldhandle,NULL);
 				if ( ! err ) {
 					GRID_INFO("Start Migrate meta0 database");
 					err = sqlx_repository_backup_base(oldhandle,handle);
@@ -395,7 +417,7 @@ _reload(struct meta0_backend_s *m0, gboolean lazy)
 	EXTRA_ASSERT(m0 != NULL);
 	GRID_TRACE("%s(%p,lazy=%d)", __FUNCTION__, m0, lazy);
 
-	g_static_rw_lock_writer_lock(&(m0->rwlock));
+	g_rw_lock_writer_lock(&(m0->rwlock));
 
 	if (!lazy || m0->reload_requested || !m0->array_by_prefix || !m0->array_meta1_ref) {
 		if (m0->array_by_prefix) {
@@ -413,7 +435,7 @@ _reload(struct meta0_backend_s *m0, gboolean lazy)
 			g_prefix_error(&err, "Loading error: ");
 	}
 
-	g_static_rw_lock_writer_unlock(&(m0->rwlock));
+	g_rw_lock_writer_unlock(&(m0->rwlock));
 	return err;
 }
 
@@ -428,11 +450,11 @@ _open_and_lock(struct meta0_backend_s *m0, enum m0v2_open_type_e how,
 
 	/* Now open/lock the base in a way suitable for our op */
 	guint flag = m0_to_sqlx(how);
-	err = sqlx_repository_open_and_lock(m0->repository,
-			META0_TYPE_NAME, m0->ns,flag, handle, NULL);
+	struct sqlx_name_s n = {.base=m0->ns, .type=META0_TYPE_NAME, .ns=m0->ns};
+	err = sqlx_repository_open_and_lock(m0->repository, &n, flag, handle, NULL);
 
 	if (err != NULL) {
-		if (err->code < 300 || err->code > 399)
+		if (!CODE_IS_REDIRECT(err->code))
 			g_prefix_error(&err, "Open/Lock error: ");
 		return err;
 	}
@@ -629,10 +651,10 @@ meta0_backend_get_all(struct meta0_backend_s *m0, GPtrArray **result)
 		return err;
 	}
 
-	g_static_rw_lock_reader_lock(&(m0->rwlock));
+	g_rw_lock_reader_lock(&(m0->rwlock));
 	EXTRA_ASSERT(m0->array_by_prefix != NULL);
 	*result = meta0_utils_array_dup(m0->array_by_prefix);
-	g_static_rw_lock_reader_unlock(&(m0->rwlock));
+	g_rw_lock_reader_unlock(&(m0->rwlock));
 
 	return NULL;
 }
@@ -654,12 +676,12 @@ meta0_backend_get_one(struct meta0_backend_s *m0, const guint8 *prefix,
 		return err;
 	}
 
-	g_static_rw_lock_reader_lock(&(m0->rwlock));
+	g_rw_lock_reader_lock(&(m0->rwlock));
 	EXTRA_ASSERT(m0->array_by_prefix != NULL);
 	*u = meta0_utils_array_get_urlv(m0->array_by_prefix, prefix);
-	g_static_rw_lock_reader_unlock(&(m0->rwlock));
+	g_rw_lock_reader_unlock(&(m0->rwlock));
 
-	return *u ? NULL : NEWERROR(EINVAL, "META0 partially not missing");
+	return *u ? NULL : NEWERROR(EINVAL, "META0 partially missing");
 }
 
 GError*
@@ -703,10 +725,10 @@ meta0_backend_get_all_meta1_ref(struct meta0_backend_s *m0, GPtrArray **result)
 		return err;
 	}
 
-	g_static_rw_lock_reader_lock(&(m0->rwlock));
+	g_rw_lock_reader_lock(&(m0->rwlock));
 	EXTRA_ASSERT(m0->array_meta1_ref != NULL);
 	*result = meta0_utils_array_meta1ref_dup(m0->array_meta1_ref);
-	g_static_rw_lock_reader_unlock(&(m0->rwlock));
+	g_rw_lock_reader_unlock(&(m0->rwlock));
 
 	return NULL;
 }
@@ -721,7 +743,6 @@ meta0_backend_destroy_meta1_ref(struct meta0_backend_s *m0, gchar *meta1)
 	gchar *v, *addr, *ref, *nb;
 	guint i, max, cmpaddr, cmpstate;
 
-
 	EXTRA_ASSERT(m0 != NULL);
 	EXTRA_ASSERT(meta1 != NULL);
 
@@ -731,10 +752,10 @@ meta0_backend_destroy_meta1_ref(struct meta0_backend_s *m0, gchar *meta1)
 		return err;
 	}
 
-	g_static_rw_lock_reader_lock(&(m0->rwlock));
+	g_rw_lock_reader_lock(&(m0->rwlock));
 	EXTRA_ASSERT(m0->array_meta1_ref != NULL);
 	result = meta0_utils_array_meta1ref_dup(m0->array_meta1_ref);
-	g_static_rw_lock_reader_unlock(&(m0->rwlock));
+	g_rw_lock_reader_unlock(&(m0->rwlock));
 
 	for (i=0,max=result->len; i<max ;i++) {
 		if (!(v = result->pdata[i]))

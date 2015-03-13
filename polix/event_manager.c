@@ -1,3 +1,22 @@
+/*
+OpenIO SDS polix
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #  define G_LOG_DOMAIN "polix"
 #endif
@@ -23,7 +42,6 @@
 #include "polix_action.h"
 #include "gridd_module.h"
 
-
 struct event_manager_s
 {
 	const gchar *type_ref;
@@ -36,9 +54,6 @@ struct event_manager_s
 			gboolean dryrun, 
 			GError **error);
 };
-
-
-
 
 static GSList *
 polix_event_get_unmarshall_list_field(gridcluster_event_t *event, const gchar *name)
@@ -54,9 +69,6 @@ polix_event_get_unmarshall_list_field(gridcluster_event_t *event, const gchar *n
 
 	return list;
 }
-
-
-
 
 static gboolean
 polix_event_content_delete(grid_polix_t *polix, const gchar *ueid,
@@ -75,15 +87,14 @@ polix_event_content_delete(grid_polix_t *polix, const gchar *ueid,
 	str_m2addr= gridcluster_event_get_string(event, META2_EVTFIELD_M2ADDR);
 
 	if (!str_ns) {
-		GSETCODE(error, 500+EINVAL, "Invalid event : no namespace");
+		GSETCODE(error, ERRCODE_PARAM, "Invalid event : no namespace");
 		goto label_exit;		
 	}
 
 	if (!str_cid) {
-		GSETCODE(error, 500+EINVAL, "Invalid event : no container id");
+		GSETCODE(error, ERRCODE_PARAM, "Invalid event : no container id");
 		goto label_exit;
 	}
-
 
 	if (!str_m2addr) {
 		m2_url = polix_action_get_meta2_url_byhexid(str_ns, str_cid, error);
@@ -155,7 +166,6 @@ label_exit:
 	return rc;
 }
 
-
 /* ------------------------------------------------------------------------- */
 
 static struct event_manager_s MANAGERS[] =
@@ -174,7 +184,6 @@ static struct event_manager_s MANAGERS[] =
 	{NULL, NULL}
 };
 
-
 grid_polix_t* polix_event_create(void)
 {
 	grid_polix_t* p = g_malloc0(sizeof(grid_polix_t));
@@ -184,15 +193,11 @@ grid_polix_t* polix_event_create(void)
 	return p;
 }
 
-
 void polix_event_free(grid_polix_t* polix)
 {
 	if (polix)
 		g_free(polix);
 }
-
-
-
 
 gboolean
 polix_event_manager(grid_polix_t *polix, const gchar *ueid,
@@ -207,17 +212,16 @@ polix_event_manager(grid_polix_t *polix, const gchar *ueid,
 		*flag_retry = TRUE;
 
 	if (!polix|| !ueid || !event) {		
-		GSETCODE(err, 500+EINVAL, "Invalid parameter");
+		GSETCODE(err, CODE_INTERNAL_ERROR, "Invalid parameter");
 		return FALSE;
 	}
-
 
 	GRID_DEBUG("Managing UEID[%s]", ueid);
 
 	bzero(type, sizeof(type));
 	type_size = gridcluster_event_get_type(event, type, sizeof(type));
 	if (!type_size || !*type) {
-		GSETCODE(err, 400, "Event has no type");
+		GSETCODE(err, CODE_BAD_REQUEST, "Event has no type");
 		if (flag_retry)
 			*flag_retry = FALSE;
 		return TRUE;
@@ -242,7 +246,7 @@ polix_event_manager(grid_polix_t *polix, const gchar *ueid,
 	}
 
 	GRID_DEBUG("No event manager found for UEID[%s] type[%s]", ueid, type);
-	GSETCODE(err, 400, "Unexpected event type [%s]", type);
+	GSETCODE(err, CODE_BAD_REQUEST, "Unexpected event type [%s]", type);
 	return FALSE;
 }
 

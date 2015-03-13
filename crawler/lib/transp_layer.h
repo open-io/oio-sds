@@ -1,11 +1,26 @@
-#ifndef __CRAWLER_BUS_H
-#define __CRAWLER_BUS_H
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
 
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__crawler__lib__transp_layer_h
+# define OIO_SDS__crawler__lib__transp_layer_h 1
 
 #include <dbus/dbus-glib.h>
-
-
 
 typedef struct TCrawlerBus TCrawlerBus;
 typedef struct TCrawlerReq TCrawlerReq;
@@ -15,8 +30,6 @@ typedef struct TCrawlerBusObjectClass TCrawlerBusObjectClass;
 
 #define TCrawlerBusObjectInfo DBusGObjectInfo
 
-
-
 /**
  * \brief init a connection to the bus
  * \param[in] address =NULL: used local DBUS_BUS_SYSTEM, else local session
@@ -25,7 +38,6 @@ typedef struct TCrawlerBusObjectClass TCrawlerBusObjectClass;
  * \return the errors if error occurs, else =NULL
  */
 GError* crawler_bus_Open(TCrawlerBus **handle, gchar* address);
-
 
 /**
  * \brief close opnened connection
@@ -45,7 +57,6 @@ GError* crawler_bus_Close(TCrawlerBus **handle);
 GError* crawler_bus_Register(TCrawlerBus *handle, char* service_name, char* service_path,
             const TCrawlerBusObjectInfo* object_info);
 
-
 /**************************************************************************/
 /* Request SYNC: send request and wait response before return             */
 /**************************************************************************/
@@ -63,22 +74,16 @@ GError* crawler_bus_Register(TCrawlerBus *handle, char* service_name, char* serv
 GError* crawler_bus_req_init(TCrawlerBus *handle, TCrawlerReq** req,
     const char *name, const char *path, const char *iface);
 
-
 /**
  * \brief close and clrear a request
  * \param[in] req request to close 
  */
 void crawler_bus_req_clear(TCrawlerReq** req);
 
-
-
 GError* crawler_bus_flush(TCrawlerBus *handle);
-
 
 GError* crawler_bus_req_Send_ss_s(TCrawlerReq* req, char* method, int timeout, 
                       char* dataToSend1, char* dataToSend2, char** dataToreceiv);
-
-
 
 /************************************************************************
 * Request to org.freedesktop.DBus                                        
@@ -91,7 +96,6 @@ GError* crawler_bus_req_Send_ss_s(TCrawlerReq* req, char* method, int timeout,
  * \return the errors if error occurs, else =NULL
  */
 GError* crawler_bus_reqBase_init(TCrawlerBus *handle, TCrawlerReq** req);
-
 
 /**
  * \brief register a name and publish all methods to bus
@@ -110,7 +114,6 @@ GError* crawler_bus_reqBase_RegisterName(TCrawlerReq* req, const char *name);
 */
 GError* crawler_bus_reqBase_IsNameExists(TCrawlerReq* req, const char *name, gboolean* name_exist);
 
-
 /**
  * \brief Get all service name connected on the same bus
  * \param[in] req   request to  to used
@@ -118,7 +121,6 @@ GError* crawler_bus_reqBase_IsNameExists(TCrawlerReq* req, const char *name, gbo
  * \return the errors if error occurs, else =NULL
  */
 GError* crawler_bus_reqBase_GetListNames(TCrawlerReq* req, char*** listnames);
-
 
 /**************************************************************************/
 /* Request ASYNC: send request and return imediately                      */
@@ -145,7 +147,6 @@ GError* crawler_bus_reqcCall_Send_s_as(TCrawlerReq* req, char* method_call, int 
         void (*_notify_callback)(TCrawlerReq* req, GError* error, char** msgReceived, void *user_data),
         void *user_data, char* dataToSend);
 
-
 /**************************************************************************/
 /* Generic Signal management                                              */
 /**************************************************************************/
@@ -157,8 +158,4 @@ GError* crawler_bus_reqSig_SendMsg(TCrawlerReq* req, gboolean broadcast,
 		char* service_path, char* service_iface, 
 		const char *signal_name, const char* signal_data, void *data);
 
-
-#endif   //__CRAWLER_BUS_H
-
-
-
+#endif /*OIO_SDS__crawler__lib__transp_layer_h*/

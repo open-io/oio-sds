@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "metautils.meta2_maintenance"
 #endif
@@ -15,10 +34,7 @@ meta2_maintenance_create_content(const container_id_t container_id, gint64 size,
 	if (!path || size < 0LL || path_len > LIMIT_LENGTH_CONTENTPATH)
 		return NULL;
 
-	result = g_try_malloc0(sizeof(struct meta2_raw_content_s));
-	if (!result)
-		return NULL;
-
+	result = g_malloc0(sizeof(struct meta2_raw_content_s));
 	g_memmove(result->container_id, container_id, sizeof(container_id_t));
 	g_memmove(result->path, path, MIN(path_len, sizeof(result->path) - 1));
 
@@ -90,7 +106,6 @@ meta2_maintenance_add_chunk(struct meta2_raw_content_s *content, const struct me
 	content->raw_chunks = g_slist_prepend(content->raw_chunks, copy);
 }
 
-
 void
 meta2_maintenance_increment_chunks_count(struct meta2_raw_content_s *content)
 {
@@ -103,19 +118,13 @@ struct meta2_raw_chunk_s *
 meta2_maintenance_create_chunk(const chunk_id_t * chunk_id, const chunk_hash_t hash,
     guint32 flags, gint64 size, guint32 position)
 {
-	struct meta2_raw_chunk_s *result = NULL;
-
-	result = g_try_new0(struct meta2_raw_chunk_s, 1);
-
-	if (result != NULL) {
-		memcpy(&(result->id), chunk_id, sizeof(chunk_id_t));
-		memcpy(result->hash, hash, sizeof(chunk_hash_t));
-		result->flags = flags;
-		result->size = size;
-		result->position = position;
-		result->metadata = NULL;
-	}
-
+	struct meta2_raw_chunk_s *result = g_malloc0(sizeof(struct meta2_raw_chunk_s));
+	memcpy(&(result->id), chunk_id, sizeof(chunk_id_t));
+	memcpy(result->hash, hash, sizeof(chunk_hash_t));
+	result->flags = flags;
+	result->size = size;
+	result->position = position;
+	result->metadata = NULL;
 	return result;
 }
 
@@ -264,7 +273,6 @@ meta2_maintenance_diff_chunks(struct meta2_raw_chunk_s * chunk1, struct meta2_ra
 	return result;
 }
 #endif /* HAVE_UNUSED_CODE */
-
 
 void
 meta2_property_clean(meta2_property_t *prop)
@@ -529,16 +537,12 @@ meta2_raw_content_v2_t*
 meta2_raw_content_v1_get_v2(meta2_raw_content_t *v1, GError **err)
 {
 	GSList *l;
-	meta2_raw_content_v2_t *v2;
 
 	if (!v1) {
-		GSETCODE(err, 500+EINVAL, "Invalid parameter");
+		GSETCODE(err, ERRCODE_PARAM, "Invalid parameter");
 		return NULL;
 	}
-	if (!(v2 = g_try_malloc0(sizeof(*v2)))) {
-		GSETCODE(err, 500+ENOMEM, "Memory allocation failure");
-		return NULL;
-	}
+	meta2_raw_content_v2_t *v2 = g_malloc0(sizeof(*v2));
 
 	/* Copy the header */
 	memcpy(v2->header.container_id, v1->container_id, sizeof(container_id_t));
@@ -565,17 +569,13 @@ meta2_raw_content_v1_get_v2(meta2_raw_content_t *v1, GError **err)
 meta2_raw_content_t*
 meta2_raw_content_v2_get_v1(const meta2_raw_content_v2_t *v2, GError **err)
 {
-	meta2_raw_content_t *v1 = NULL;
 	GSList *l;
 
 	if (!v2) {
-		GSETCODE(err, 500+EINVAL, "Invalid parameter");
+		GSETCODE(err, ERRCODE_PARAM, "Invalid parameter");
 		return NULL;
 	}
-	if (!(v1 = g_try_malloc0(sizeof(*v1)))) {
-		GSETCODE(err, 500+ENOMEM, "Memory allocation failure");
-		return NULL;
-	}
+	meta2_raw_content_t *v1 = g_malloc0(sizeof(*v1));
 
 	/* Copy the header */
 	memcpy(v1->container_id, v2->header.container_id, sizeof(container_id_t));
@@ -603,11 +603,9 @@ meta2_raw_content_v2_get_v1(const meta2_raw_content_v2_t *v2, GError **err)
 meta2_raw_chunk_t*
 meta2_raw_chunk_dup(meta2_raw_chunk_t *chunk)
 {
-	meta2_raw_chunk_t *copy;
 	if (!chunk)
 		return NULL;
-	if (!(copy = g_try_malloc0(sizeof(*copy))))
-		return NULL;
+	meta2_raw_chunk_t *copy = g_malloc0(sizeof(*copy));
 	g_memmove(copy, chunk, sizeof(*copy));
 	copy->metadata = metautils_gba_dup(chunk->metadata);
 	return copy;
@@ -616,14 +614,9 @@ meta2_raw_chunk_dup(meta2_raw_chunk_t *chunk)
 meta2_property_t*
 meta2_property_dup(meta2_property_t *prop_orig)
 {
-	meta2_property_t *prop_copy;
-
 	if (!prop_orig)
 		return NULL;
-
-	if (!(prop_copy = g_try_malloc0(sizeof(*prop_copy))))
-		return NULL;
-
+	meta2_property_t *prop_copy = g_malloc0(sizeof(*prop_copy));
 	prop_copy->name = g_strdup(prop_orig->name);
 	prop_copy->version = prop_orig->version;
 	prop_copy->value = metautils_gba_dup(prop_orig->value);

@@ -100,7 +100,7 @@ class Reducer:
 
 ##################################################################
 
-	#return an array with the list of action name used with redcer
+	#return an array with the list of action name used with reducer
 	def getListActionName(self):
 		list = []
 		for action in self.reduce:

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS gridd
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #define MODULE_NAME "stats"
 
 #ifndef G_LOG_DOMAIN
@@ -18,7 +37,6 @@
 #include "./msg_stats.h"
 
 #define JUMPERR(C,M) do { code=(C) ; msg=(M); goto errorLabel; } while (0);
-
 
 static gint
 plugin_matcher (MESSAGE m, void *param, GError **err)
@@ -47,7 +65,6 @@ plugin_matcher (MESSAGE m, void *param, GError **err)
 	return (nameLen==sizeof(MSG_NAME)-1)
 		&& !g_ascii_strncasecmp((gchar*)field, MSG_NAME, sizeof(MSG_NAME)-1);
 }
-
 
 static gint
 handler_get_stats(struct request_context_s *req_ctx, const char* pattern, GError **err)
@@ -84,7 +101,6 @@ handler_get_stats(struct request_context_s *req_ctx, const char* pattern, GError
 
 	return rc;
 }
-
 
 static gint
 plugin_handler (MESSAGE m, gint fd, void *param, GError **err)
@@ -126,9 +142,7 @@ plugin_handler (MESSAGE m, gint fd, void *param, GError **err)
 	return 0;
 }
 
-
 /* ------------------------------------------------------------------------- */
-
 
 static gint plugin_init (GHashTable *params, GError **err)
 {
@@ -142,13 +156,11 @@ static gint plugin_init (GHashTable *params, GError **err)
 	return 1;
 }
 
-
 static gint plugin_close (GError **err)
 {
 	(void) err;
 	return 1;
 }
-
 
 struct exported_api_s exported_symbol = 
 {

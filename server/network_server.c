@@ -1,3 +1,22 @@
+/*
+OpenIO SDS server
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.utils.server"
 #endif
@@ -63,7 +82,7 @@ struct network_server_s
 
 	struct grid_stats_holder_s *stats;
 
-	GMutex *lock_threads;
+	GMutex lock_threads;
 
 	guint64 counter_created;
 	guint64 counter_destroyed;
@@ -184,26 +203,25 @@ static gboolean
 _cnx_notify_accept(struct network_server_s *srv)
 {
 	gboolean inxs;
-	g_mutex_lock(srv->lock_threads);
+	g_mutex_lock(&srv->lock_threads);
 	++ srv->cnx_accept;
 	++ srv->cnx_clients;
 	inxs = 1 + srv->workers_active > srv->workers_maximum + srv->cnx_backlog ;
-	g_mutex_unlock(srv->lock_threads);
+	g_mutex_unlock(&srv->lock_threads);
 	return inxs;
 }
 
 static void
 _cnx_notify_close(struct network_server_s *srv)
 {
-	g_mutex_lock(srv->lock_threads);
+	g_mutex_lock(&srv->lock_threads);
 	EXTRA_ASSERT(srv->cnx_clients > 0);
 	-- srv->cnx_clients;
 	++ srv->cnx_close;
-	g_mutex_unlock(srv->lock_threads);
+	g_mutex_unlock(&srv->lock_threads);
 }
 
 /* Public API --------------------------------------------------------------- */
-
 
 struct network_server_s *
 network_server_init(void)
@@ -234,7 +252,7 @@ network_server_init(void)
 	result->queue_monitor = g_async_queue_new();
 
 	result->endpointv = g_malloc0(sizeof(struct endpoint_s*));
-	result->lock_threads = g_mutex_new();
+	g_mutex_init(&result->lock_threads);
 	result->workers_max_idle_delay = SERVER_DEFAULT_MAX_IDLEDELAY;
 	result->workers_minimum = count;
 	result->workers_minimum_spare = count;
@@ -275,8 +293,7 @@ network_server_clean(struct network_server_s *srv)
 		g_error("FirstThread not joined!");
 	}
 
-	if (srv->lock_threads)
-		g_mutex_free(srv->lock_threads);
+	g_mutex_clear(&srv->lock_threads);
 
 	network_server_close_servers(srv);
 
@@ -624,7 +641,7 @@ network_server_run(struct network_server_s *srv)
 	ARM_WAKER(srv, EPOLL_CTL_ADD);
 
 	_server_start_one_worker(srv, FALSE);
-	srv->thread_events = g_thread_create(_thread_cb_events, srv, TRUE, NULL);
+	srv->thread_events = g_thread_new("events", _thread_cb_events, srv);
 
 	clock_gettime(CLOCK_MONOTONIC_COARSE, &srv->now);
 	last_update = network_server_bogonow(srv);
@@ -706,7 +723,6 @@ network_server_now(struct timespec *ts)
 {
 	clock_gettime(CLOCK_MONOTONIC, ts);
 }
-
 
 /* Endpoint features ------------------------------------------------------- */
 
@@ -835,7 +851,7 @@ _server_start_one_worker(struct network_server_s *srv, gboolean counters_changed
 	if (!counters_changed)
 		_thread_start(srv);
 
-	GThread *th = g_thread_create(_thread_cb_worker, srv, TRUE, NULL);
+	GThread *th = g_thread_try_new("worker", _thread_cb_worker, srv, NULL);
 
 	if (!th) {
 		_thread_stop(srv);
@@ -849,10 +865,10 @@ _server_update_main_stats(struct network_server_s *srv)
 	guint64 max_sec[30], max_min[60];
 	time_t now = network_server_bogonow(srv);
 
-	g_mutex_lock(srv->lock_threads);
+	g_mutex_lock(&srv->lock_threads);
 	grid_single_rrd_get_allmax(srv->workers_active_1, now, 30, max_sec);
 	grid_single_rrd_get_allmax(srv->workers_active_60, now/60, 60, max_min);
-	g_mutex_unlock(srv->lock_threads);
+	g_mutex_unlock(&srv->lock_threads);
 
 	grid_stats_holder_set(srv->stats,
 			"server.thread.gauge.min", guint_to_guint64(srv->workers_minimum),
@@ -937,12 +953,12 @@ _thread_maybe_become_first(struct network_server_s *srv)
 	gboolean is_first = FALSE;
 
 	if (!srv->thread_first_worker) {
-		g_mutex_lock(srv->lock_threads);
+		g_mutex_lock(&srv->lock_threads);
 		if (!srv->thread_first_worker) {
 			srv->thread_first_worker = g_thread_self();
 			is_first = TRUE;
 		}
-		g_mutex_unlock(srv->lock_threads);
+		g_mutex_unlock(&srv->lock_threads);
 	}
 
 	return is_first;
@@ -951,10 +967,7 @@ _thread_maybe_become_first(struct network_server_s *srv)
 static struct network_client_s *
 get_next_client(struct network_server_s *srv)
 {
-	GTimeVal when;
-	g_get_current_time(&when);
-	g_time_val_add(&when, 1000000L);
-	return g_async_queue_timed_pop(srv->queue_events, &when);
+	return g_async_queue_timeout_pop(srv->queue_events, 1000000);
 }
 
 static void
@@ -1075,19 +1088,19 @@ _server_get_maxfd(void)
 static void
 _thread_start(struct network_server_s *srv)
 {
-	g_mutex_lock(srv->lock_threads);
+	g_mutex_lock(&srv->lock_threads);
 	srv->workers_total ++;
 	srv->counter_created ++;
-	g_mutex_unlock(srv->lock_threads);
+	g_mutex_unlock(&srv->lock_threads);
 }
 
 static void
 _thread_stop(struct network_server_s *srv)
 {
-	g_mutex_lock(srv->lock_threads);
+	g_mutex_lock(&srv->lock_threads);
 	srv->workers_total --;
 	srv->counter_destroyed ++;
-	g_mutex_unlock(srv->lock_threads);
+	g_mutex_unlock(&srv->lock_threads);
 }
 
 static gboolean
@@ -1102,7 +1115,7 @@ _thread_become_active(struct network_server_s *srv)
 {
 	time_t now = network_server_bogonow(srv);
 
-	g_mutex_lock(srv->lock_threads);
+	g_mutex_lock(&srv->lock_threads);
 
 	++ srv->workers_active;
 	++ srv->active_in;
@@ -1121,7 +1134,7 @@ _thread_become_active(struct network_server_s *srv)
 		srv->workers_hit_max ++;
 		srv->counter_hitmax ++;
 	}
-	g_mutex_unlock(srv->lock_threads);
+	g_mutex_unlock(&srv->lock_threads);
 }
 
 static void
@@ -1129,7 +1142,7 @@ _thread_become_inactive(struct network_server_s *srv)
 {
 	time_t now = network_server_bogonow(srv);
 
-	g_mutex_lock(srv->lock_threads);
+	g_mutex_lock(&srv->lock_threads);
 
 	-- srv->workers_active;
 	++ srv->active_out;
@@ -1148,7 +1161,7 @@ _thread_become_inactive(struct network_server_s *srv)
 		srv->workers_hit_max ++;
 		srv->counter_hitmax ++;
 	}
-	g_mutex_unlock(srv->lock_threads);
+	g_mutex_unlock(&srv->lock_threads);
 }
 
 static gboolean
@@ -1159,7 +1172,7 @@ _thread_can_die(struct network_server_s *srv)
 	if (srv->thread_first_worker == g_thread_self())
 		return FALSE;
 
-	g_mutex_lock(srv->lock_threads);
+	g_mutex_lock(&srv->lock_threads);
 	if (_thread_too_few(srv, srv->workers_total-1)) {
 		srv->counter_hitmax ++;
 		srv->workers_hit_max ++;
@@ -1169,7 +1182,7 @@ _thread_can_die(struct network_server_s *srv)
 		srv->counter_destroyed ++;
 		rc = TRUE;
 	}
-	g_mutex_unlock(srv->lock_threads);
+	g_mutex_unlock(&srv->lock_threads);
 
 	return rc;
 }
@@ -1179,7 +1192,7 @@ _thread_must_start(struct network_server_s *srv)
 {
 	gboolean rc = FALSE;
 
-	g_mutex_lock(srv->lock_threads);
+	g_mutex_lock(&srv->lock_threads);
 	if (srv->workers_total < srv->workers_maximum) {
 		if (srv->workers_hit_max || _thread_too_few(srv, srv->workers_total)) {
 			srv->workers_total ++;
@@ -1188,7 +1201,7 @@ _thread_must_start(struct network_server_s *srv)
 		}
 	}
 	srv->workers_hit_max = 0;
-	g_mutex_unlock(srv->lock_threads);
+	g_mutex_unlock(&srv->lock_threads);
 
 	return rc;
 }
@@ -1198,13 +1211,13 @@ _thread_can_start(struct network_server_s *srv)
 {
 	gboolean rc = FALSE;
 
-	g_mutex_lock(srv->lock_threads);
+	g_mutex_lock(&srv->lock_threads);
 	if (srv->flag_continue && srv->workers_total < srv->workers_maximum) {
 		srv->workers_total ++;
 		srv->counter_created ++;
 		rc = TRUE;
 	}
-	g_mutex_unlock(srv->lock_threads);
+	g_mutex_unlock(&srv->lock_threads);
 
 	return rc;
 }
@@ -1427,7 +1440,6 @@ _client_manage_output(struct network_client_s *client)
 	}
 	return rc;
 }
-
 
 static void
 _client_manage_event(struct network_client_s *clt, int events)

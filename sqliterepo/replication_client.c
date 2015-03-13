@@ -1,3 +1,22 @@
+/*
+OpenIO SDS sqliterepo
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "sqliterepo"
 #endif
@@ -49,10 +68,8 @@ peer_restore(const gchar *target, struct sqlx_name_s *name,
 	struct client_s *client = gridd_client_create(target, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
 
-	if (!client) {
-		return NEWERROR(500, "Failed to create client to [%s], bad address?",
-				target);
-	}
+	if (!client)
+		return NEWERROR(CODE_INTERNAL_ERROR, "Failed to create client to [%s], bad address?", target);
 
 	gridd_client_set_timeout(client, 5.0, 30.0);
 	gridd_client_start(client);
@@ -126,16 +143,14 @@ peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 			callback, cb_arg);
 
 	if (!target)
-		return NEWERROR(500, "No target URL");
+		return NEWERROR(CODE_INTERNAL_ERROR, "No target URL");
 
 	encoded = sqlx_pack_DUMP(name, chunked);
 	client = gridd_client_create(target, encoded, NULL, on_reply);
 	g_byte_array_unref(encoded);
 
-	if (!client) {
-		return NEWERROR(500, "Failed to create client to [%s], bad address?",
-				target);
-	}
+	if (!client)
+		return NEWERROR(CODE_INTERNAL_ERROR, "Failed to create client to [%s], bad address?", target);
 
 	// set a long timeout to allow moving large meta2 bases
 	gridd_client_set_timeout(client, 3600.0, 4000.0);

@@ -1,8 +1,24 @@
-#ifndef HC_M2V2_MACROS__H
-#define  HC_M2V2_MACROS__H 1
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
-#define M2V2_PROP_PREFIX_USER "user."
-#define M2V2_PROP_PREFIX_SYS "sys."
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__meta2v2__meta2_macros_h
+# define OIO_SDS__meta2v2__meta2_macros_h 1
 
 #define M2_KEY_STORAGE_POLICY "STORAGE_POLICY"
 #define M2_KEY_VERSION_POLICY "VERSION_POLICY"
@@ -13,18 +29,13 @@
 #define M2_KEY_CHUNK_ID "CHUNK_ID"
 #define M2_KEY_OVERWRITE "OVERWRITE"
 #define M2_KEY_SPARE "SPARE"
-#define M2_KEY_RESTRICT_TO_ALIAS "RESTRICT_TO_ALIAS"
 #define M2_KEY_NEW_CHUNKS "NEW_CHUNKS"
 #define M2_KEY_OLD_CHUNKS "OLD_CHUNKS"
 /* LIST params */
-#define M2_KEY_LISTING_TYPE "LIST_TYPE"
-#define S3_LISTING_TYPE "S3"
-#define REDC_LISTING_TYPE "REDC"
-#define M2_KEY_NAME_PATTERN "NAME_PATTERN"
-#define M2_KEY_METADATA_PATTERN "METADATA_PATTERN"
+#define M2_KEY_SNAPSHOT "SNAPSHOT"
 #define M2_KEY_PREFIX "PREFIX"
 #define M2_KEY_MARKER "MARKER"
-#define M2_KEY_DELIMITER "DELIMITER"
+#define M2_KEY_MARKER_END "MARKER_END"
 #define M2_KEY_MAX_KEYS "MAX_KEYS"
 #define M2_KEY_SNAPSHOT_HARDRESTORE "HARD_RESTORE"
 
@@ -56,4 +67,4 @@
 
 #define MDUSR_PROPERTY_KEY "sys.m2v1_mdusr"
 
-#endif
+#endif /*OIO_SDS__meta2v2__meta2_macros_h*/

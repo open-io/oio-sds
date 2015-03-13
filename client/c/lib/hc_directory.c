@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.client.directory"
 #endif
@@ -11,32 +30,22 @@ _create_friendly_error(GError *local_error)
 			local_error->message);
 
 	switch (local_error->code) {
-		case 431 :
-			return gs_error_new(local_error->code, "This reference does not"
-					" exist.\nPlease ensure you have create the reference"
-					" before retry (see hcdir create command).\n");
-		case 433 :
-			return gs_error_new(local_error->code, "This reference is already"
-					" created.(you could check it with hcdir has command)\n");
-		case 435 :
-			return gs_error_new(local_error->code, "This reference is still"
-					" linked with some services.\n"
-					"Please unlink these services before retry "
-					"(see hcdir unlink command).\n");
-		case 460 :
-			return gs_error_new(local_error->code, "This kind of service is"
-					" not managed by your Honeycomb namespace.\n");
-		case 461 :
-			return gs_error_new(local_error->code, "No more service of "
-					"this type available."
-					" Please ensure your services are correctly started.\n");
-		case 500 :
-			return gs_error_new(local_error->code, "The server encounters"
-					" an internal error, please contact your honeycomb"
-					" namespace administrator\n");
+		case CODE_CONTAINER_NOTFOUND :
+			return gs_error_new(local_error->code, "This reference does not exist.\n"
+					"Please ensure you have create the reference before retry\n");
+		case CODE_CONTAINER_EXISTS :
+			return gs_error_new(local_error->code, "This reference is already created\n");
+		case CODE_CONTAINER_INUSE :
+			return gs_error_new(local_error->code, "This reference is still linked with some services.\n");
+		case CODE_CONTAINER_PROP_NOTFOUND :
+			return gs_error_new(local_error->code, "This kind of service is not managed by your namespace.\n");
+		case CODE_CONTENT_PROP_NOTFOUND :
+			return gs_error_new(local_error->code, "No more service of this type available.\n");
+		case CODE_INTERNAL_ERROR :
+			return gs_error_new(local_error->code, "Server internal error\n");
 		default :
 			return gs_error_new(local_error->code, "Error code not managed "
-					"<%d> : %s", local_error->code, local_error->message);
+					"<%d> : %s\n", local_error->code, local_error->message);
 	}
 	return NULL;
 }
@@ -60,7 +69,7 @@ _m1v2_request(gs_grid_storage_t *hc, const gchar *refname, request_cb cb)
 				&excluded, &local_error);
 
 		if (!meta1_addr) {
-			result = gs_error_new(500, "No META1 found for [%s]", refname);
+			result = gs_error_new(CODE_INTERNAL_ERROR, "No META1 found for [%s]", refname);
 			break;
 		}
 
@@ -77,7 +86,7 @@ _m1v2_request(gs_grid_storage_t *hc, const gchar *refname, request_cb cb)
 		meta1_addr = NULL;
 
 		if (local_error) {
-			if (local_error->code < 100) /* network error */
+			if (CODE_IS_NETWORK_ERROR(local_error->code))
 				g_clear_error(&local_error);
 			else {
 				result = _create_friendly_error(local_error);
@@ -181,7 +190,7 @@ hc_unlink_reference_service(gs_grid_storage_t *hc, const char *reference, const 
 			char **toks = g_strsplit(srv_type, "|", 0);
 			gint64 seq = 0;
 			if((g_strv_length(toks) < 2) || (0 >= (seq = g_ascii_strtoll(toks[0], NULL, 10)))) {
-				e = NEWERROR(400, "Invalid service description [%s]", srv_type);
+				e = NEWERROR(CODE_BAD_REQUEST, "Invalid service description [%s]", srv_type);
 			} else {
 				meta1v2_remote_unlink_one_service(a, &e,
 						gs_get_full_vns(hc), ref_id, toks[1],

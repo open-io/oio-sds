@@ -1,3 +1,22 @@
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "integrity.lib.content_check_tools"
 #endif
@@ -34,9 +53,6 @@
 #include <meta2/remote/meta2_remote.h>
 
 #include "./content_check.h"
-
-/* chunk_transfer_s structure utils */
-static GQuark gquark_log = 0;
 
 struct chunk_transfer_s *
 chunk_transfer_new(void)
@@ -560,7 +576,7 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 	session = ne_session_create("http", dst, port);
 
 	if (!session) {
-		g_set_error(&result, gquark_log, 500, "Cannot open a new WebDAV session");
+		GSETCODE(&result, CODE_INTERNAL_ERROR, "Cannot open a new WebDAV session");
 		goto error_label;
 	}
 
@@ -573,7 +589,7 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 
 	request = ne_request_create (session, "GET", chunk_hash_str);
 	if (!request) {
-		g_set_error(&result, gquark_log, 500, "WebDAV request creation error (%s)", ne_get_error(session));
+		GSETCODE(&result, CODE_INTERNAL_ERROR, "WebDAV request creation error (%s)", ne_get_error(session));
 		goto error_label;
 	}
 
@@ -586,7 +602,7 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 		case NE_OK:
 			GRID_DEBUG("Chunk check request correctly send to the rawx");
 			if (ne_get_status(request)->klass != 2) {
-				g_set_error(&result, gquark_log, 1000 + ne_get_status(request)->code, 
+				GSETCODE(&result, 1000 + ne_get_status(request)->code, 
 					"Cannot download '%s' (%s)", chunk_hash_str, ne_get_error(session));
 				GRID_DEBUG("Error while downloading chunk");
 				goto error_label;
@@ -605,7 +621,7 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 			GRID_DEBUG("md5 calculated for downloaded chunk = %s, get from meta2 = %s", md5_str, hash_str);
 
 			if (memcmp(rc->hash, md5, MD5_DIGEST_LENGTH) != 0) {
-				g_set_error(&result, gquark_log, CODE_CONTENT_CORRUPTED, "Chunk downloaded [%s] was corrupted"
+				GSETCODE(&result, CODE_CONTENT_CORRUPTED, "Chunk downloaded [%s] was corrupted"
 						" (md5 does not match meta2) : %s/%s", chunk_hash_str, hash_str, md5_str);
 				goto error_label;
 			}
@@ -613,27 +629,27 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 
 		case NE_ERROR:
 			GRID_DEBUG("Chunk check request error (NE_ERROR)");
-			g_set_error(&result, gquark_log, 500, "Caller error '%s' (%s)",
+			GSETCODE(&result, CODE_INTERNAL_ERROR, "Caller error '%s' (%s)",
 					chunk_hash_str, ne_get_error(session));
 			goto error_label;
 
 		case NE_TIMEOUT:
 			GRID_DEBUG("Chunk check request timeout (NE_TIMEOUT)");
-			g_set_error(&result, gquark_log, 10060, "Cannot download '%s' (%s) ",
+			GSETCODE(&result, 10060, "Cannot download '%s' (%s) ",
 					chunk_hash_str, ne_get_error(session));
 			goto error_label;
 		case NE_CONNECT:
 			GRID_DEBUG("Chunk check request error (NE_CONNECT)");
-			g_set_error(&result, gquark_log, 10061, "Caller error '%s' (%s)",
+			GSETCODE(&result, 10061, "Caller error '%s' (%s)",
 					chunk_hash_str, ne_get_error(session));
 			goto error_label;
 		case NE_AUTH:
 			GRID_DEBUG("Chunk check request error (NE_CONNECT)");
-			g_set_error(&result, gquark_log, 500, "Caller error '%s' (%s)",
+			GSETCODE(&result, CODE_INTERNAL_ERROR, "Caller error '%s' (%s)",
 					chunk_hash_str, ne_get_error(session));
 			goto error_label;
 		default:
-			g_set_error(&result, gquark_log, 500, "Cannot download '%s' (%s) ",
+			GSETCODE(&result, CODE_INTERNAL_ERROR, "Cannot download '%s' (%s) ",
 					chunk_hash_str, ne_get_error(session));
 			goto error_label;
 	}
@@ -644,7 +660,7 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 		update_uri = g_strconcat(chunk_hash_str, "/update", NULL);
 		request_update = ne_request_create (session, "GET", update_uri);
 		if (!request) {
-			g_set_error(&result, gquark_log, 500, "WebDAV request creation error (%s)", ne_get_error(session));
+			GSETCODE(&result, CODE_INTERNAL_ERROR, "WebDAV request creation error (%s)", ne_get_error(session));
 			goto error_label;
 		}
 
@@ -691,7 +707,7 @@ delete_chunk(const meta2_raw_chunk_t *rc)
 	session = ne_session_create("http", dst, port);
 
 	if (!session) {
-		g_set_error(&result, gquark_log, 500, "Cannot open a new WebDAV session");
+		GSETCODE(&result, CODE_INTERNAL_ERROR, "Cannot open a new WebDAV session");
 		goto error_label;
 	}
 
@@ -704,7 +720,7 @@ delete_chunk(const meta2_raw_chunk_t *rc)
 
 	request = ne_request_create (session, "DELETE", chunk_hash_str);
 	if (!request) {
-		g_set_error(&result, gquark_log, 500, "WebDAV request creation error (%s)", ne_get_error(session));
+		GSETCODE(&result, CODE_INTERNAL_ERROR, "WebDAV request creation error (%s)", ne_get_error(session));
 		goto error_label;
 	}
 
@@ -712,7 +728,7 @@ delete_chunk(const meta2_raw_chunk_t *rc)
 	{
 		case NE_OK:
 			if (ne_get_status(request)->klass != 2) {
-				g_set_error(&result, gquark_log, 1000 + ne_get_status(request)->code,
+				GSETCODE(&result, 1000 + ne_get_status(request)->code,
 						"cannot delete '%s' (%s)", chunk_hash_str, ne_get_error(session));
 				goto error_label;
 			}
@@ -721,7 +737,7 @@ delete_chunk(const meta2_raw_chunk_t *rc)
 		case NE_CONNECT:
 		case NE_TIMEOUT:
 		case NE_ERROR:
-			g_set_error(&result, gquark_log, 500, "unexpected error from the WebDAV server (%s)", ne_get_error(session));
+			GSETCODE(&result, CODE_INTERNAL_ERROR, "unexpected error from the WebDAV server (%s)", ne_get_error(session));
 			goto error_label;
 	}
 

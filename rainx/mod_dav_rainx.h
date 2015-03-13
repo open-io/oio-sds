@@ -1,18 +1,24 @@
-/* Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+/*
+OpenIO SDS rainx
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__rainx__mod_dav_rainx_h
+# define OIO_SDS__rainx__mod_dav_rainx_h 1
 
 /**
  * @file  mod_dav_rainx.h
@@ -42,7 +48,6 @@
 
 #include <metautils/lib/metatypes.h>
 #include <metautils/lib/metautils.h>
-
 
 /* return the storage pool associated with a resource */
 apr_pool_t *dav_rainx_pool(const dav_resource *resource);
@@ -88,3 +93,4 @@ extern dav_error * dav_rainx_info_get_resource(request_rec *r,
 #endif /* _DAV_FS_REPOS_H_ */
 /** @} */
 
+#endif /*OIO_SDS__rainx__mod_dav_rainx_h*/

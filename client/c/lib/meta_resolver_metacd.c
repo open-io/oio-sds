@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.client.resolv.metacd"
 #endif
@@ -34,7 +53,6 @@ int resolver_metacd_is_up (struct metacd_s *m)
 	return 0;
 }
 
-
 void resolver_metacd_decache (struct metacd_s *m, const container_id_t cID)
 {
 	GError *err=NULL;
@@ -55,7 +73,6 @@ void resolver_metacd_decache (struct metacd_s *m, const container_id_t cID)
 	if (err) g_clear_error(&err);
 }
 
-
 void resolver_metacd_decache_all (struct metacd_s *m)
 {
 	GError *err=NULL;
@@ -75,7 +92,6 @@ void resolver_metacd_decache_all (struct metacd_s *m)
 
 	if (err) g_clear_error(&err);
 }
-
 
 GSList* resolver_metacd_get_meta2 (struct metacd_s *m, const container_id_t cID,
 	GError **err)
@@ -135,7 +151,6 @@ resolver_metacd_get_meta0 (struct metacd_s *m, GError **err)
 
 	return m0Addr;
 }
-
 
 addr_info_t* resolver_metacd_get_meta1 (struct metacd_s *m, const container_id_t cID,
 	int ro, GSList *exclude, gboolean *p_ref_exists, GError **err)
@@ -243,7 +258,6 @@ resolver_metacd_free (struct metacd_s *m)
 	if (m)
 		g_free(m);
 }
-
 
 struct metacd_s* resolver_metacd_create (const char * const config, GError **err)
 {

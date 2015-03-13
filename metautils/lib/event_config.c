@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "metautils.evt"
 #endif
@@ -5,42 +24,36 @@
 #include <errno.h>
 
 #include "metautils.h"
+#include <cluster/lib/gridcluster.h>
 
 struct event_config_s {
-	gboolean enabled;
-	gboolean kafka_enabled;
-	GMutex *lock;
+	GMutex lock;
 	gint64 seq;
 	gchar *dir;
-	gboolean aggregate;
 	time_t last_error;
 	time_t delay_on_error;
 	gchar *kafka_topic;
+	gboolean aggregate;
+	gboolean enabled;
+	gboolean kafka_enabled;
 };
 
 struct event_config_repo_s {
-	GStaticRWLock rwlock;
+	GRWLock rwlock;
 	GHashTable *evt_config; /* <gchar*, struct event_config_s*> */
 	metautils_notifier_t *notifier;
 };
-
-static GQuark gquark_log = 0;
 
 /* ------------------------------------------------------------------------- */
 
 struct event_config_s *
 event_config_create(void)
 {
-	struct event_config_s *result;
-
-	if (!gquark_log)
-		gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
-
-	result = g_malloc0(sizeof(*result));
+	struct event_config_s *result = g_malloc0(sizeof(*result));
 	result->enabled = FALSE;
-	result->lock = g_mutex_new();
+	g_mutex_init(&result->lock);
 	result->seq = 0;
-	result->dir = g_strdup("/GRID/common/spool");
+	result->dir = g_strdup(GCLUSTER_SPOOL_DIR);
 	result->aggregate = FALSE;
 	result->last_error = 0;
 	result->delay_on_error = 0;
@@ -51,26 +64,13 @@ event_config_create(void)
 void
 event_config_destroy(struct event_config_s *evt_config)
 {
-	GMutex *lock = NULL;
-
 	if (!evt_config)
 		return;
 
-	if (evt_config->lock) {
-		lock = evt_config->lock;
-		evt_config->lock = NULL;
-	}
-
-	if (lock)
-		g_mutex_lock(lock);
+	g_mutex_clear(&evt_config->lock);
 
 	if (evt_config->dir)
 		g_free(evt_config->dir);
-
-	if (lock) {
-		g_mutex_unlock(lock);
-		g_mutex_free(lock);
-	}
 
 	g_free(evt_config);
 }
@@ -80,7 +80,7 @@ event_config_dump(struct event_config_s *evt_config)
 {
 	GString *out = g_string_new("event_config={");
 
-	g_mutex_lock(evt_config->lock);
+	g_mutex_lock(&evt_config->lock);
 	g_string_append_printf(out,"enabled=%s; kafka_enabled=%s; dir=%s; aggr=%s,"
 			" seq=%"G_GINT64_FORMAT,
 			evt_config->enabled ? "yes":"no",
@@ -88,7 +88,7 @@ event_config_dump(struct event_config_s *evt_config)
 			evt_config->dir,
 			evt_config->aggregate ? "yes":"no",
 			evt_config->seq);
-	g_mutex_unlock(evt_config->lock);
+	g_mutex_unlock(&evt_config->lock);
 
 	out = g_string_append(out, "}");
 
@@ -101,11 +101,8 @@ GError*
 event_config_reconfigure(struct event_config_s *evt_config,
 		const gchar *cfg)
 {
-	if (!gquark_log)
-		gquark_log = g_quark_from_static_string(G_LOG_DOMAIN);
-
 	gchar **tok = g_strsplit(cfg, ";", 0);
-	g_mutex_lock(evt_config->lock);
+	g_mutex_lock(&evt_config->lock);
 
 	for(guint i = 0; i < g_strv_length(tok); i++) {
 		char *val = NULL;
@@ -132,9 +129,9 @@ event_config_reconfigure(struct event_config_s *evt_config,
 		}
 	}
 
-	g_strfreev(tok);
+	g_mutex_unlock(&evt_config->lock);
 
-	g_mutex_unlock(evt_config->lock);
+	g_strfreev(tok);
 
 	return NULL;
 }
@@ -182,7 +179,7 @@ event_get_and_inc_seq(struct event_config_s *evt_config)
 GMutex *
 event_get_lock(struct event_config_s *evt_config)
 {
-	return (!evt_config) ? NULL : evt_config->lock;
+	return (!evt_config) ? NULL : &evt_config->lock;
 }
 
 struct event_config_repo_s *
@@ -192,7 +189,7 @@ event_config_repo_create(const gchar *ns_name, struct grid_lbpool_s *lbpool)
 	conf = g_malloc0(sizeof(struct event_config_repo_s));
 	conf->evt_config = g_hash_table_new_full(g_str_hash, g_str_equal,
 			g_free, (GDestroyNotify) event_config_destroy);
-	g_static_rw_lock_init(&(conf->rwlock));
+	g_rw_lock_init(&(conf->rwlock));
 	metautils_notifier_init(&(conf->notifier), ns_name, lbpool);
 
 	return conf;
@@ -209,7 +206,7 @@ event_config_repo_clear(struct event_config_repo_s **repo)
 	if (repo2->evt_config) {
 		g_hash_table_destroy(repo2->evt_config);
 	}
-	g_static_rw_lock_free(&(repo2->rwlock));
+	g_rw_lock_clear(&(repo2->rwlock));
 	memset(repo2, 0, sizeof(struct event_config_repo_s));
 	g_free(repo2);
 }
@@ -226,7 +223,7 @@ event_config_repo_get(struct event_config_repo_s *conf,
 {
 	struct event_config_s *event = NULL;
 	if (conf != NULL) {
-		g_static_rw_lock_writer_lock(&conf->rwlock);
+		g_rw_lock_writer_lock(&conf->rwlock);
 		if (vns_fallback)
 			event = namespace_hash_table_lookup(conf->evt_config, ns_name, NULL);
 		else
@@ -236,7 +233,7 @@ event_config_repo_get(struct event_config_repo_s *conf,
 			event = event_config_create();
 			g_hash_table_insert(conf->evt_config, g_strdup(ns_name), event);
 		}
-		g_static_rw_lock_writer_unlock(&conf->rwlock);
+		g_rw_lock_writer_unlock(&conf->rwlock);
 	}
 	return event;
 }

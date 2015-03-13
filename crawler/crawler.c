@@ -1,7 +1,25 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN   "atos.grid.crawler"
 #endif
-
 
 #include <string.h>
 #include <stdlib.h>
@@ -10,7 +28,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/types.h>
-
 
 #include <dbus/dbus.h>
 
@@ -30,14 +47,10 @@
 #  define TRIP_INSTALL_PATH "/usr/local/lib64/grid"
 # endif
 
-
-
-
 //==============================================================================
 // constantes
 //==============================================================================
 #define CRAWLER_COMMAND_MAX_BYTES       64
-
 
 //==============================================================================
 // variables
@@ -49,13 +62,8 @@ static TCrawlerBus*        g_tl_conn = NULL;
 static GThread*            control_tripmanage_thread;
 static GThread*            control_timeout_thread;
 
-
-
-
 /******************************************************************************/
 /******************************************************************************/
-
-
 
 typedef struct SCrawlerOptions {
 	guint    reloadaction;
@@ -74,8 +82,7 @@ typedef struct SCrawlerOptions {
 	gboolean dryrun_mode;
 } TCrawlerConsole;
 
-
-static GMutex*  mutex_ctx_update; /* Mutex related to action context update */
+static GMutex   mutex_ctx_update; /* Mutex related to action context update */
 static gboolean stop_thread; /* Flag to stop the listening threads */
 
 static char     g_control_status[CRAWLER_COMMAND_MAX_BYTES]; /* Current control status (BYPASS, PAUSE, ...) */
@@ -107,8 +114,6 @@ main_set_defaults(void)
 	action_ctx_table = g_hash_table_new_full(g_int64_hash, g_int64_equal, NULL, (GDestroyNotify)free_action_context);
 	action_list = NULL;
 	action_list_length = 0;
-
-
 
 	/* init console/options */
 	memset(&console, 0, sizeof(TCrawlerConsole));
@@ -144,10 +149,10 @@ main_specific_fini(void)
 	stop_thread = TRUE;
 	(trip_ep->trip_end)();
 
-	g_mutex_lock(mutex_ctx_update);
+	g_mutex_lock(&mutex_ctx_update);
 	if (NULL != action_ctx_table)
 		g_hash_table_destroy(action_ctx_table);
-	g_mutex_unlock(mutex_ctx_update);
+	g_mutex_unlock(&mutex_ctx_update);
 
 	if (NULL != trip_ep)
 		free_trip_lib_entry_points(trip_ep);
@@ -158,15 +163,14 @@ main_specific_fini(void)
 	GRID_INFO("%s (%d) : Crawler ended", g_service_name, service_pid);
 }
 
-
 static gboolean main_configure(int argc, char **args) {
-	g_mutex_lock(mutex_ctx_update);
+	g_mutex_lock(&mutex_ctx_update);
 	if (NULL == action_ctx_table) {
 		GRID_ERROR("%s (%d) : Context table failed to create", g_service_name, service_pid);
-		g_mutex_unlock(mutex_ctx_update);
+		g_mutex_unlock(&mutex_ctx_update);
 		return FALSE;
 	}
-	g_mutex_unlock(mutex_ctx_update);
+	g_mutex_unlock(&mutex_ctx_update);
 	GRID_INFO("%s (%d) : Context table created", g_service_name, service_pid);
 
 	/* Trip management */
@@ -213,7 +217,6 @@ static gboolean main_configure(int argc, char **args) {
 	GRID_INFO("%s (%d) : Action list feeded", g_service_name, service_pid);
 	/* ------- */
 
-
 	if (console.ctxWait_sup == 0)
 		console.ctxWait_inf = 0;
 	else if (console.ctxWait_sup == 1)
@@ -228,15 +231,11 @@ static gboolean main_configure(int argc, char **args) {
 	my_argv = args;
 	GRID_INFO("%s (%d) : Additional parameters stored", g_service_name, service_pid);
 
-
     buildServiceName(g_service_name, SERVICENAME_MAX_BYTES,
                     SERVICE_CRAWLER_NAME, action_list[0], service_pid, FALSE);
 
-
-
 	return TRUE;
 }
-
 
 static gboolean action_timeout(gpointer key, gpointer val, gpointer udata)
 {
@@ -257,7 +256,6 @@ static gboolean action_timeout(gpointer key, gpointer val, gpointer udata)
 	return TRUE;
 }
 
-
 static gpointer thread_action_timeout_check(gpointer data)
 {
 	time_t current_time_stamp;
@@ -277,19 +275,19 @@ static gpointer thread_action_timeout_check(gpointer data)
 		if ((console.reloadaction) < difftime(current_time_stamp,
 					current_time_stamp_reloadaction)) {
 			GRID_DEBUG("crawler_ServiceAction_UpdateList...");
-			g_mutex_lock(mutex_ctx_update);
+			g_mutex_lock(&mutex_ctx_update);
 			crawler_ServiceAction_UpdateList(g_tl_conn, g_list_svcAction,
 					SERVICE_ACTION_NAME, action_list[0]);
-			g_mutex_unlock(mutex_ctx_update);
+			g_mutex_unlock(&mutex_ctx_update);
 			time(&current_time_stamp_reloadaction);
 		}
 
-		g_mutex_lock(mutex_ctx_update);
+		g_mutex_lock(&mutex_ctx_update);
 		if (NULL != action_ctx_table) {
 			g_hash_table_foreach_remove(action_ctx_table,
 					(GHRFunc)action_timeout, NULL);
 		}
-		g_mutex_unlock(mutex_ctx_update);
+		g_mutex_unlock(&mutex_ctx_update);
 
 		sleep(1);
 	}
@@ -306,7 +304,7 @@ static void action_ctx_update(guint64 context_id)
 {
 	struct action_context* action_ctx = NULL;
 
-	g_mutex_lock(mutex_ctx_update);
+	g_mutex_lock(&mutex_ctx_update);
 	action_ctx = (struct action_context*)g_hash_table_lookup(action_ctx_table,
 			&context_id);
 
@@ -322,7 +320,7 @@ static void action_ctx_update(guint64 context_id)
 				g_service_name, service_pid, (unsigned long long)context_id);
 
 	}
-	g_mutex_unlock(mutex_ctx_update);
+	g_mutex_unlock(&mutex_ctx_update);
 }
 
 gboolean crawler_command(TCrawlerBusObject *obj, const char* cmd,
@@ -339,11 +337,9 @@ gboolean crawler_command(TCrawlerBusObject *obj, const char* cmd,
 			g_service_name, service_pid, cmd);
 
 	if (!g_strcmp0(CTRL_LIST, cmd)) {
-		g_mutex_lock(mutex_ctx_update);
+		g_mutex_lock(&mutex_ctx_update);
 		ret = crawler_ServiceAction_ListToStr(g_list_svcAction);
-		g_mutex_unlock(mutex_ctx_update);
-
-
+		g_mutex_unlock(&mutex_ctx_update);
 
 		// progress trip control signal
 	} else if ( !g_strcmp0(CTRL_PROGRESS, cmd)) {
@@ -355,8 +351,6 @@ gboolean crawler_command(TCrawlerBusObject *obj, const char* cmd,
 		g_string_append_printf(str, "%d%% achieved\nstatus = %s",
 				progression, g_control_status);
 		ret = g_string_free(str, FALSE);
-
-
 
 		// CTRL_STOP,... control signal
 	} else if (   (!g_strcmp0(CTRL_STOP,   cmd))
@@ -370,17 +364,14 @@ gboolean crawler_command(TCrawlerBusObject *obj, const char* cmd,
 		str = g_string_new("command executed with success");
 		ret = g_string_free(str, FALSE);
 
-
 		// other: unknown command
 	} else {
 		str = g_string_new("Command not implemented");
 		ret = g_string_free(str, FALSE);
 	}
 
-
 	if (ret == NULL)
 		return FALSE;
-
 
 	// send response
 	static TCrawlerReq* req = NULL;
@@ -401,9 +392,6 @@ gboolean crawler_command(TCrawlerBusObject *obj, const char* cmd,
 
 	return TRUE;
 }
-
-
-
 
 gboolean crawler_ack(TCrawlerBusObject *obj, const char* cmd,
 		const char *alldata, GError **error)
@@ -444,9 +432,6 @@ gboolean crawler_ack(TCrawlerBusObject *obj, const char* cmd,
 	return TRUE;
 }
 
-
-
-
 /* GRID COMMON MAIN */
 static struct grid_main_option_s *
 main_get_options(void)
@@ -478,7 +463,6 @@ main_get_options(void)
 
 	return options;
 }
-
 
 static gboolean sendToListener(gchar* listenerUrl, gchar* crawlerID)
 {
@@ -523,7 +507,6 @@ static gboolean sendToListener(gchar* listenerUrl, gchar* crawlerID)
 		if (!j_root)
 			return FALSE;
 
-
 		if (console.dryrun_mode == FALSE) {
 			// real mode
 			TLstError* err2 = listener_remote_sendJSON(zmq_sock, j_root);
@@ -547,8 +530,6 @@ static gboolean sendToListener(gchar* listenerUrl, gchar* crawlerID)
 	return TRUE;
 }
 
-
-
 static gboolean buildCrawlerID(gchar* crawlerID, int sizec, int arg)
 {
 	time_t t;
@@ -569,7 +550,6 @@ static gboolean buildCrawlerID(gchar* crawlerID, int sizec, int arg)
 	g_snprintf(&crawlerID[strlen(crawlerID)], sizec - strlen(crawlerID), "_%d", arg);
 	return TRUE;
 }
-
 
 static void addItemsToArgvArgc(gchar* crawlerID, gchar* listenerUrl)
 {
@@ -635,7 +615,6 @@ static gboolean send_startend_signal( gchar* signal_tile)
 			return TRUE;
 		}
 
-
 		// real mode
 		gchar* s_signal_parameters = NULL;
 		s_signal_parameters = g_variant_print(signal_param, FALSE);
@@ -662,7 +641,6 @@ static gboolean send_startend_signal( gchar* signal_tile)
 		g_free(s_signal_parameters);
 	}
 
-
 	/* ------- */
 
 	g_variant_unref(signal_param);
@@ -670,9 +648,7 @@ static gboolean send_startend_signal( gchar* signal_tile)
 	return bResult;
 }
 
-
-
-gboolean send_DataTrip_toAction(TCrawlerSvcAct* svc_act,
+static gboolean send_DataTrip_toAction(TCrawlerSvcAct* svc_act,
 	struct action_context* temp_action_ctx, GVariant** occur)
 {
 	GError* error = NULL;
@@ -728,8 +704,6 @@ gboolean send_DataTrip_toAction(TCrawlerSvcAct* svc_act,
 	return TRUE;
 }
 
-
-
 void init_bus(void);
 
 static gpointer thread_manage_trip_data(gpointer data)
@@ -757,10 +731,8 @@ static gpointer thread_manage_trip_data(gpointer data)
 		addItemsToArgvArgc(crawlerid, console.listenerUrl->str);
 	} else addItemsToArgvArgc(crawlerid, NULL);
 
-
 	send_startend_signal(CMD_STARTTRIP );
 	sleep(1);
-
 
 	/* and the trip goes on... */
 	occur = (GVariant*)(trip_ep->trip_next)();
@@ -774,7 +746,6 @@ static gpointer thread_manage_trip_data(gpointer data)
 			break;
 		else if (!g_strcmp0(CTRL_SLOW, g_control_status))
 			sleep(SLOW_VALUE);
-
 
 		/* action context creation and storage */
 		temp_action_ctx = new_action_context();
@@ -794,9 +765,9 @@ static gpointer thread_manage_trip_data(gpointer data)
 		temp_action_ctx->occur = NULL;
 
 		// send msg to actions
-		g_mutex_lock(mutex_ctx_update);
+		g_mutex_lock(&mutex_ctx_update);
 		TCrawlerSvcAct* svc_act = crawler_ServiceAction_GetNextService(g_list_svcAction, TRUE);
-		g_mutex_unlock(mutex_ctx_update);
+		g_mutex_unlock(&mutex_ctx_update);
 		if ((svc_act == NULL) || (svc_act->bEnabled == FALSE)) {
 			GRID_ERROR("No service action are available\n");
 			free_action_context(temp_action_ctx);
@@ -806,10 +777,10 @@ static gpointer thread_manage_trip_data(gpointer data)
 					g_service_name, service_pid, (unsigned long long)temp_action_ctx->id);
 
 			if (send_DataTrip_toAction(svc_act, temp_action_ctx, &occur)) {
-				g_mutex_lock(mutex_ctx_update);
+				g_mutex_lock(&mutex_ctx_update);
 				g_hash_table_insert(action_ctx_table, &(temp_action_ctx->id), temp_action_ctx);
 				temp_action_ctx = NULL;
-				g_mutex_unlock(mutex_ctx_update);
+				g_mutex_unlock(&mutex_ctx_update);
 			} else {
 				free_action_context(temp_action_ctx);
 				temp_action_ctx = NULL;
@@ -820,20 +791,19 @@ static gpointer thread_manage_trip_data(gpointer data)
 		if (console.ctxWait_sup > 0) {
 			GRID_DEBUG("console.ctxWait_sup: %d", console.ctxWait_sup);
 			guint action_ctx_table_size = 0;
-			g_mutex_lock(mutex_ctx_update);
+			g_mutex_lock(&mutex_ctx_update);
 			action_ctx_table_size = g_hash_table_size(action_ctx_table);
-			g_mutex_unlock(mutex_ctx_update);
+			g_mutex_unlock(&mutex_ctx_update);
 			if (action_ctx_table_size >= console.ctxWait_sup) {
 				do {
 					GRID_DEBUG("nb context: %d: Waiting...", action_ctx_table_size);
 					sleep(1);
-					g_mutex_lock(mutex_ctx_update);
+					g_mutex_lock(&mutex_ctx_update);
 					action_ctx_table_size = g_hash_table_size(action_ctx_table);
-					g_mutex_unlock(mutex_ctx_update);
+					g_mutex_unlock(&mutex_ctx_update);
 				} while((action_ctx_table_size > console.ctxWait_inf)&&(!stop_thread));
 			}
 		}
-
 
 		// stop loop ?
 		if (console.ctxmax > 0) {
@@ -869,18 +839,12 @@ static gpointer thread_manage_trip_data(gpointer data)
 	send_startend_signal(CMD_STOPTRIP);
 	sleep(1);
 
-
     crawler_bus_Close(&g_tl_conn);
-
 
 	g_main_loop_quit(g_main_loop);
 
 	return NULL;
 }
-
-
-
-
 
 void init_bus(void)
 {
@@ -913,8 +877,6 @@ void init_bus(void)
         GRID_DEBUG("next action to send: [no]");
 }
 
-
-
 static void main_action(void)
 {
 	g_type_init();
@@ -925,22 +887,19 @@ static void main_action(void)
 
 	GRID_INFO("%s (%d) : Crawler started", g_service_name, service_pid);
 
-
 	// launch thread for manage timeout about ack received
-   control_timeout_thread = g_thread_create(thread_action_timeout_check, NULL, FALSE, NULL);
+   control_timeout_thread = g_thread_try_new("timeout", thread_action_timeout_check, NULL, NULL);
     if (NULL == control_timeout_thread)
         GRID_INFO("%s (%d) : System Timeout Ack management thread failed to start...", g_service_name, service_pid);
     else
         GRID_INFO("%s (%d) : System Timtout Ack management thread started...", g_service_name, service_pid);
 
-
 	// launch thread for manage trip_data
-	control_tripmanage_thread = g_thread_create(thread_manage_trip_data, NULL, FALSE, NULL);
+	control_tripmanage_thread = g_thread_try_new("trip", thread_manage_trip_data, NULL, NULL);
 	if (NULL == control_tripmanage_thread)
 		GRID_INFO("%s (%d) : System Trip Data management thread failed to start...", g_service_name, service_pid);
 	else
 		GRID_INFO("%s (%d) : System Trip Data management thread started...", g_service_name, service_pid);
-
 
 	g_main_loop_run(g_main_loop);
 
@@ -988,23 +947,17 @@ static struct grid_main_callbacks cb = {
 	int
 main(int argc, char **argv)
 {
-	int rc = 0;
-	g_thread_init(NULL);
 	dbus_g_thread_init();
 	dbus_threads_init_default();
 
-	mutex_ctx_update = g_mutex_new();
+	g_mutex_init(&mutex_ctx_update);
 
 	if (!g_module_supported()) {
 		g_error("GLib MODULES are not supported on this platform!");
 		return 1;
 	}
 
-	rc = grid_main(argc, argv, &cb);
-
-	if (NULL != mutex_ctx_update) {
-		g_mutex_free(mutex_ctx_update);
-		mutex_ctx_update = NULL;
-	}
+	int rc = grid_main(argc, argv, &cb);
+	g_mutex_clear(&mutex_ctx_update);
 	return rc;
 }

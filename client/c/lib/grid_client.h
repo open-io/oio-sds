@@ -1,5 +1,24 @@
-#ifndef __GRID_CLIENT_H__
-#define __GRID_CLIENT_H__
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__client__c__lib__grid_client_h
+# define OIO_SDS__client__c__lib__grid_client_h 1
 
 /**
  * @defgroup client_public Public
@@ -16,7 +35,7 @@
 #define GS_ERROR ((gs_status_t)0)
 
 #define GS_ENVKEY_METACDSOCK "GS_METACD_SOCKET"
-#define GS_DEFAULT_METACDSOCK "/GRID/common/run/metacd.sock"
+#define GS_DEFAULT_METACDSOCK GCLUSTER_RUN_DIR "/metacd.sock"
 
 #define GS_ENVKEY_MAXSPARE "GS_MAX_SPARE"
 #define GS_DEFAULT_MAXSPARE "5"
@@ -27,7 +46,6 @@
  * The hidden type that represents the connection to a Grid Storage platform
  */
 typedef struct gs_grid_storage_s gs_grid_storage_t;
-
 
 /**
  * The public information about a remote container on a grid storage
@@ -42,14 +60,12 @@ typedef struct {
 					     this is not mandatory). */
 } gs_container_info_t ;
 
-
 /**
  * The hidden remote container type.
  * This structure starts with a gs_container_info_t member, thus a pointer to
  * a container might be cast into a gs_container_t to access its fields.
  */
 typedef struct gs_container_s gs_container_t;
-
 
 /**
  * The public information about
@@ -59,7 +75,6 @@ typedef struct {
 	char            path[1024]; /**< the path of the content in this container */
 	int64_t         size;
 } gs_content_info_t;
-
 
 /**
  * A hidden type holding the complete information about a remote content.
@@ -73,7 +88,6 @@ typedef struct gs_content_s gs_content_t;
  */
 typedef int gs_status_t;
 
-
 /**
  * A structure set by functions in case of failure, with the reason of the
  * failure.
@@ -82,7 +96,6 @@ typedef struct {
 	int code; /**<  */
 	char *msg; /**<  */
 } gs_error_t;
-
 
 #define GS_CODE_ERROR                 1
 #define GS_CODE_CONTAINER_ERROR       2
@@ -105,7 +118,6 @@ typedef struct {
  */
 void gs_container_free (gs_container_t *container);
 
-
 /**
  * frees the given gs_content_t structure and all the associated internal
  * data
@@ -113,7 +125,6 @@ void gs_container_free (gs_container_t *container);
  * @param content a pointer to th structure to be destroyed. 
  */
 void gs_content_free (gs_content_t *content);
-
 
 /**
  * Cleans the gs_grid_storage_t structure and all the associated internal
@@ -123,7 +134,6 @@ void gs_content_free (gs_content_t *content);
  *           call to gs_init_grid_storage().
  */
 void gs_grid_storage_free (gs_grid_storage_t *gs);
-
 
 /**
  * Collects basic informations about the remote container
@@ -135,7 +145,6 @@ void gs_grid_storage_free (gs_grid_storage_t *gs);
  */
 gs_status_t gs_container_get_info (const gs_container_t *container,
 	gs_container_info_t *info, gs_error_t **err);
-
 
 /**
  * Collects basic information about the given remote content.
@@ -189,7 +198,6 @@ gs_status_t gs_content_set_metadata(gs_content_t *content, uint8_t *src, size_t 
  */
 typedef int (*gs_content_filter_f) (gs_content_t *content, void *user_data);
 
-
 /**
  * Callback function destined to give data to the upload function of the API.
  *
@@ -204,7 +212,6 @@ typedef int (*gs_content_filter_f) (gs_content_t *content, void *user_data);
  */
 typedef ssize_t (*gs_input_f) (void *uData, char *b, size_t bSize);
 
-
 /**
  * Callback type as provided to the download function. 
  *
@@ -217,7 +224,6 @@ typedef ssize_t (*gs_input_f) (void *uData, char *b, size_t bSize);
  * @return the number of written bytes or a negative number of bytes on error.
  */
 typedef ssize_t (*gs_output_f) (void *uData, const char *b, const size_t bSize);
-
 
 /**
  * A handy structure holding useful information to download
@@ -234,9 +240,7 @@ typedef struct gs_download_info_s
 								 the writer callback */
 } gs_download_info_t ;
 
-
 /* --- Grid Storage main operations ---------------------------------------- */
-
 
 /**
  * Creates allocates a new gs_grid_storage_t structure and inits it to be 
@@ -275,10 +279,8 @@ typedef enum gs_timeout_e {
 	GS_TO_MCD_OP=9
 } gs_timeout_t;
 
-
 gs_status_t gs_grid_storage_set_timeout (gs_grid_storage_t *gs,
 	gs_timeout_t to, int val, gs_error_t **err);
-
 
 gs_status_t gs_grid_storage_get_timeout (gs_grid_storage_t *gs, gs_timeout_t to);
 
@@ -304,7 +306,6 @@ const char* gs_get_full_vns(gs_grid_storage_t *gs);
 int gs_set_namespace(gs_grid_storage_t *gs, const char *vns);
 
 /* --- Container operations ------------------------------------------------ */
-
 
 /**
  * Get a refname to a remote container.
@@ -337,7 +338,6 @@ gs_container_t* gs_get_container (gs_grid_storage_t *gs,
 gs_container_t* gs_get_container_by_hexid (gs_grid_storage_t *gs,
 	const char *hex_id, int auto_create, gs_error_t **err);
 
-
 /**
  * Opens a remote container
  *
@@ -350,7 +350,6 @@ gs_container_t* gs_get_container_by_hexid (gs_grid_storage_t *gs,
  * @return 1 in case of success, 0 in case of failure
  */
 gs_status_t gs_open_container (gs_container_t *container, gs_error_t **err);
-
 
 /**
  * Closes a remote container
@@ -366,7 +365,6 @@ gs_status_t gs_open_container (gs_container_t *container, gs_error_t **err);
  */
 gs_status_t gs_close_container (gs_container_t *container, gs_error_t **err);
 
-
 /**
  * Checks the state of the container
  * @param container a not-NULL pointer to a valid container structure
@@ -375,7 +373,6 @@ gs_status_t gs_close_container (gs_container_t *container, gs_error_t **err);
  * @return 0 if the container is closed, 1 if it is opened, -1 upon error
  */
 int gs_container_is_open (gs_container_t *container, gs_error_t **err);
-
 
 /**
  * Destroys the remote container.
@@ -412,9 +409,7 @@ gs_status_t gs_destroy_container_flags (gs_container_t *container,
  */
 gs_status_t gs_flush_container (gs_container_t *container, gs_error_t **err);
 
-
 /* ------------------------------------------------------------------------- */
-
 
 /**
  * List the content of the given remote container.
@@ -622,9 +617,7 @@ gs_status_t gs_download_content_by_name_full(gs_container_t *container,
 gs_status_t gs_delete_content_by_name(gs_container_t *container,
 	const char *name, gs_error_t **err);
 
-
 /* --- Content operations -------------------------------------------------- */
-
 
 /**
  * Looks up in the given remote container for a content with the given
@@ -739,7 +732,6 @@ int64_t gs_content_get_size(gs_content_t *content);
  */
 void gs_error_free (gs_error_t *err);
 
-
 /**
  * Returns a pointer to the internal message of the error structure.
  * This function always return a message even if the error structure
@@ -760,254 +752,6 @@ const char* gs_error_get_message (gs_error_t *err);
  *          structure is not set.
  */
 int gs_error_get_code (gs_error_t *err);
-
-/* ------------------------------------------------------------------------- */
-
-typedef struct gs_service_s gs_service_t;
-
-/**
- * Writes a textual representation of the IP/PORT couple in the given
- * destination buffer. The size of this character string is returned.
- *
- * The size returned does not contain the terminal NULL character. The format
- * of the string will be BBB.BBB.BBB.BBB:SSSSS for an IPv4 address or
- * [HH:HH:HH:HH:HH:HH]:SSSSS for an IPv6 address.
- *
- * @param service
- * @param dst
- * @param dst_size
- * @return 
- */
-size_t gs_service_get_url(const gs_service_t *service, char *dst, size_t dst_size);
-
-socklen_t gs_service_get_address(const gs_service_t *service, struct sockaddr *sa, socklen_t sa_size);
-
-/**
- * Returns a textual representation of the service-type name.
- *
- * The returned string might be directly extracted from the hidden
- * structure, so there is no need to free it, it will be freed with the
- * service structure. 
- *
- * @param service
- * @return
- */
-const char* gs_service_get_type(const gs_service_t *service);
-
-/**
- * Free the structure and all its components.
- *
- * @param service
- */
-void gs_free_service( gs_service_t *service );
-
-/**
- * @param services
- */
-void gs_service_free_array( gs_service_t **services);
-
-/* ------------------------------------------------------------------------- */
-
-/**
- * Retrieves the indexer refname of an already indexed content in a given
- * container.
- * 
- * This function does not change the service refname status, thus there is
- * no need to {in,}validate anything.
- *
- * There is no caching feature for the services in a container. Then a call
- * to gs_index_get_service_from_path() might fail if the same content is being
- * indexed elsewhere, but has not yet been validated by the other caller (even
- * if it is performed in the same * thread, on the same gs_container_t
- * structure).
- *
- * @param container a valid and open container
- * @param srvtype
- * @param paths a NULL terminated array or NULL-terminated character strings
- * @param err a double pointer to an error structure, that will be set
- *            if the function fails. err may be NULL.
- * @return
- */
-gs_service_t** gs_get_services_for_paths( gs_container_t *container, const char *srvtype, char **paths, gs_error_t **err);
-
-/**
- * Returns a single service refname to store all the object paths provided.
- * 
- * @param container
- * @param srvtype
- * @param paths
- * @param err
- * @return
- */
-gs_service_t* gs_choose_service_for_paths( gs_container_t *container, const char *srvtype, char **paths, gs_error_t **err);
-
-/**
- * There is no need to {in,}validate the change made to the service, this
- * operation is atomical.
- * 
- * @param container
- * @param srvtype
- * @param paths a NULL-terminated array or NULL-terminated character strings
- * @param removed if provided, filled with an array of strings containing the subset of paths that was really marked for removal
- * @param services
- * @param err a double pointer to an error structure, that will be set
- *            if the function fails. err may be NULL.
- * @return FALSE if no error occured (no path failed)
- */
-gs_status_t gs_delete_services_for_paths( gs_container_t *container, const char *srvtype, char **paths,
-	char ***removed, gs_service_t ***services, gs_error_t **err);
-
-/**
- * @param container
- * @param srvtype
- * @param err
- * @return
- */
-gs_service_t ** gs_service_flush(gs_container_t *container, const char *srvtype, gs_error_t **err);
-
-/**
- * Commit the changes made on the given contents.
- *
- * @param container
- * @param paths a NULL terminated array or NULL-terminated character strings
- * @param srvtype
- * @param paths
- * @param err a double pointer to an error structure, that will be set
- *            if the function fails. err may be NULL.
- * @return NULL if validate succeeded, the list of failed path otherwise
- */
-char** gs_validate_changes_on_paths( gs_container_t *container, const char *srvtype, char **paths, gs_error_t **err);
-
-/**
- * Rollback the changes made on the given list on contents.
- *
- * @param container an opened container
- * @param srvtype
- * @param paths a NULL terminated array or NULL-terminated character strings
- * @param err a double pointer to an error structure, that will be set
- *            if the function fails. err may be NULL.
- * @return
- */
-char** gs_invalidate_changes_on_paths( gs_container_t *container, const char *srvtype, char **paths, gs_error_t **err);
-
-/** 
- * Get all services used by commited contents in a container
- *
- * @param container
- * @param srvtype
- * @param err set on error if not NULL
- * @return NULL on error, a (maybe empty) service array (free it with gs_service_free_array())
- */
-gs_service_t** gs_get_all_services_used( gs_container_t *container, const char *srvtype, gs_error_t **err);
-
-/* ------------------------------------------------------------------------- */
-
-/**
- * Retrieves the indexer refname of an already indexed content in a given
- * container.
- * 
- * This function does not change the service refname status, thus there is
- * no need to {in,}validate anything.
- *
- * There is no caching feature for the services in a container. Then a call
- * to gs_index_get_service_from_path() might fail if the same content is being
- * indexed elsewhere, but has not yet been validated by the other caller (even
- * if it is performed in the same * thread, on the same gs_container_t
- * structure).
- *
- * @param container a valid and open container
- * @param paths a NULL terminated array or NULL-terminated character strings
- * @param err a double pointer to an error structure, that will be set
- *            if the function fails. err may be NULL.
- * @return
- */
-gs_service_t** gs_index_get_services_for_paths( gs_container_t *container, char **paths, gs_error_t **err);
-
-/**
- * Returns a single service refname to store all the object paths provided.
- * 
- * @param container an opened container refname
- * @param paths a NULL terminated array or NULL-terminated character strings
- * @param err a double pointer to an error structure, that will be set
- *            if the function fails. err may be NULL.
- * @return
- */
-gs_service_t* gs_index_choose_service_for_paths( gs_container_t *container, char **paths, gs_error_t **err);
-
-/**
- * There is no need to {in,}validate the change made to the service, this
- * operation is atomical.
- * 
- * @param container
- * @param paths a NULL-terminated array or NULL-terminated character strings
- * @param removed if provided, filled with an array of strings containing the subset of paths that was really marked for removal
- * @param services
- * @param err a double pointer to an error structure, that will be set
- *            if the function fails. err may be NULL.
- * @return FALSE if no error occured (no path failed)
- */
-gs_status_t gs_index_delete_services_for_paths( gs_container_t *container,
-		char **paths, char ***removed, gs_service_t ***services,
-		gs_error_t **err);
-
-/**
- * @param container
- * @param err
- * @return
- */
-gs_service_t ** gs_index_flush(gs_container_t *container, gs_error_t **err);
-
-/**
- * Commit the changes made on the given contents.
- *
- * @param container
- * @param paths a NULL terminated array or NULL-terminated character strings
- * @param err a double pointer to an error structure, that will be set
- *            if the function fails. err may be NULL.
- * @return NULL if validate succeeded, the list of failed path otherwise
- */
-char** gs_index_validate_changes_on_paths( gs_container_t *container,
-		char **paths, gs_error_t **err);
-
-/**
- * Rollback the changes made on the given list on contents.
- *
- * @param container an opened container
- * @param paths a NULL terminated array or NULL-terminated character strings
- * @param err a double pointer to an error structure, that will be set
- *            if the function fails. err may be NULL.
- * @return
- */
-char** gs_index_invalidate_changes_on_paths( gs_container_t *container,
-		char **paths, gs_error_t **err);
-
-/** 
- * Get all services used by commited contents in a container
- *
- * @param container
- * @param err set on error if not NULL
- * @return NULL on error, a (maybe empty) service array (free it with gs_service_free_array())
- */
-gs_service_t** gs_index_get_all_services_used( gs_container_t *container,
-		gs_error_t **err);
-
-/**
- * @param container
- * @param srvtype
- * @param err
- * @return
- */
-gs_service_t** gs_container_service_get_available(gs_container_t *container,
-		const char *srvtype, gs_error_t **err);
-
-/**
- * @param container
- * @param srvtype
- * @param err
- * @return
- */
-gs_service_t** gs_container_service_get_all(gs_container_t *container,
-		const char *srvtype, gs_error_t **err);
 
 /* ------------------------------------------------------------------------- */
 
@@ -1041,7 +785,6 @@ struct gs_container_location_s * gs_locate_container(gs_container_t *container,
 struct gs_container_location_s * gs_locate_container_by_hexid(gs_grid_storage_t *client,
 	const char *hexid, gs_error_t **gserr);
 
-
 /**
  *  * @param client
  *   * @param hexid
@@ -1050,9 +793,6 @@ struct gs_container_location_s * gs_locate_container_by_hexid(gs_grid_storage_t 
  *      */
 struct gs_container_location_s * gs_locate_container_by_hexid_v2(gs_grid_storage_t *client,
     const char *hexid, char** out_nsname_on_m1, gs_error_t **gserr);
-
-
-
 
 /**
  * @param client
@@ -1088,12 +828,8 @@ gs_container_t* hc_resolve_meta2_entry(gs_grid_storage_t *gs,
 gs_container_t* gs_get_storage_container(gs_grid_storage_t *gs,
 		const char *container_name, const char *stgpol, int auto_create, gs_error_t **gs_err);
 
-
 gs_container_t* gs_get_storage_container_v2(gs_grid_storage_t *gs,
         const char *container_name, const char *stgpol, const char *verspol, int auto_create, gs_error_t **gs_err);
-
-
-
 
 /* V2 functions */
 
@@ -1117,7 +853,6 @@ gs_error_t* hc_has_reference(gs_grid_storage_t *hc, const char *reference);
  * @return
  */
 gs_error_t* hc_delete_reference(gs_grid_storage_t *hc, const char *reference);
-
 
 /* Services ---------------------------------------------------------------- */
 
@@ -1317,7 +1052,6 @@ gs_status_t hc_dl_content_custom(gs_grid_storage_t *hc, const char *container,
 gs_status_t hc_dl_content_to_file(gs_grid_storage_t *hc, const char *container,
 		const char *content, const char *dest, gs_error_t **e);
 
-
 /* Snapshots --------------------------------------------------------------- */
 
 /**
@@ -1398,4 +1132,4 @@ void redc_snapshot_array_clean(redc_snapshot_t **snapshots);
 
 /** @} */
 
-#endif /*__GRID_CLIENT_H__*/
+#endif /*OIO_SDS__client__c__lib__grid_client_h*/

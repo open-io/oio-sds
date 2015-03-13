@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "atos.grid.crawler.common"
 #endif //G_LOG_DOMAIN
@@ -17,15 +36,12 @@
 #include "crawler-glue.h"
 #include "crawler_tools.h"
 
-
 const TCrawlerBusObjectInfo* crawler_getObjectInfo(void)
 {
 	return &dbus_glib_crawler_object_info;
 }
 
-
-
-GError*  crawler_ServiceAction_AddServices(TCrawlerBus *handle, 
+static GError*  crawler_ServiceAction_AddServices(TCrawlerBus *handle, 
 		TCrawlerSvcActList* list_svc, gchar* svc_name)
 {
 	TCrawlerReq* r = NULL;
@@ -41,7 +57,6 @@ GError*  crawler_ServiceAction_AddServices(TCrawlerBus *handle,
 				svc_name);
 		return error;
 	} 
-
 
 	// add new service to internal listed
 	elt = g_new0(TCrawlerSvcAct, 1);
@@ -65,7 +80,7 @@ GError*  crawler_ServiceAction_AddServices(TCrawlerBus *handle,
 	return NULL;
 }
 
-GError*  crawler_ServiceAction_RemoveServices(TCrawlerSvcActList* list_svc, TCrawlerSvcAct* elt)
+static GError*  crawler_ServiceAction_RemoveServices(TCrawlerSvcActList* list_svc, TCrawlerSvcAct* elt)
 {
 	TCrawlerSvcAct* eltCrt = NULL;
 	gboolean bCrtToSearch = FALSE;
@@ -92,7 +107,6 @@ GError*  crawler_ServiceAction_RemoveServices(TCrawlerSvcActList* list_svc, TCra
 
 	return NULL;
 }
-
 
 TCrawlerSvcAct*  crawler_ServiceAction_GetCrtService(TCrawlerSvcActList* list_svc)
 {
@@ -161,10 +175,6 @@ TCrawlerSvcAct*  crawler_ServiceAction_GetNextService(TCrawlerSvcActList* list_s
 	return eltOldCrt;
 }
 
-
-
-
-
 GError*  crawler_ServiceAction_InitList(TCrawlerBus *handle, TCrawlerSvcActList** list_svc,
 		char* prefix_service_action_name, char* action_name)
 {
@@ -181,7 +191,6 @@ GError*  crawler_ServiceAction_InitList(TCrawlerBus *handle, TCrawlerSvcActList*
 
 	return error;
 }
-
 
 void crawler_ServiceAction_ClearList(TCrawlerSvcActList** list_svc)
 {
@@ -202,7 +211,6 @@ void crawler_ServiceAction_ClearList(TCrawlerSvcActList** list_svc)
 	*list_svc = NULL;
 }
 
-
 GError*  crawler_ServiceAction_UpdateList(TCrawlerBus *handle, TCrawlerSvcActList* list_svc, 
 		char* prefix_service_action_name, char* action_name)
 {
@@ -215,7 +223,6 @@ GError*  crawler_ServiceAction_UpdateList(TCrawlerBus *handle, TCrawlerSvcActLis
 	gboolean bOk = FALSE;
 	char tmp_action_name[1024];
 	GError* error = NULL;
-
 
 	buildServiceName(tmp_action_name, 1024, prefix_service_action_name, action_name, 0, TRUE);
 
@@ -232,7 +239,6 @@ GError*  crawler_ServiceAction_UpdateList(TCrawlerBus *handle, TCrawlerSvcActLis
 		crawler_bus_req_clear(&req);
 		return error;
 	}
-
 
 	//--------------
 	//close and delete svc_listed not existed on list connectd
@@ -263,8 +269,6 @@ GError*  crawler_ServiceAction_UpdateList(TCrawlerBus *handle, TCrawlerSvcActLis
 			crawler_ServiceAction_RemoveServices(list_svc, elt);
 		pList = pListNext;
 	}
-
-
 
 	//--------------
 	// add new svc connectd if not exist on svc_listed	
@@ -300,7 +304,6 @@ GError*  crawler_ServiceAction_UpdateList(TCrawlerBus *handle, TCrawlerSvcActLis
 
 	return error;
 }
-
 
 void crawler_ServiceAction_DumpList(TCrawlerSvcActList* list_svc)
 {
@@ -338,12 +341,6 @@ char* crawler_ServiceAction_ListToStr(TCrawlerSvcActList* list_svc)
 
 	return g_string_free(str, FALSE);
 }
-
-
-
-
-
-
 
 struct action_context* new_action_context(void)
 {

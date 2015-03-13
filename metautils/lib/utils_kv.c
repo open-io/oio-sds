@@ -1,9 +1,27 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metautils"
 #endif
 
 #include "metautils.h"
-
 
 struct key_value_pair_s*
 key_value_pair_create(const gchar *k, const guint8 *v, gsize vs)
@@ -16,31 +34,27 @@ key_value_pair_create(const gchar *k, const guint8 *v, gsize vs)
 }
 
 GHashTable *
-key_value_pairs_convert_to_map(GSList * pairs, gboolean copy, GError ** err)
+key_value_pairs_empty (void)
 {
-	GSList *pair;
-	GHashTable *result;
+	return g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, metautils_gba_clean);
+}
 
-	result = g_hash_table_new_full(g_str_hash, g_str_equal,
-			copy ? g_free : NULL,
-			copy ? metautils_gba_clean : NULL);
+GHashTable *
+key_value_pairs_convert_to_map(GSList * pairs, GError ** err)
+{
+	GHashTable *result = key_value_pairs_empty();
+
 	if (!result) {
 		GSETERROR(err, "Memory allocation failure");
 		return NULL;
 	}
 
-	for (pair = pairs; pair; pair = g_slist_next(pair)) {
+	for (GSList *pair = pairs; pair; pair = g_slist_next(pair)) {
 		if(!pair->data)
 			continue;
 		key_value_pair_t *p = (key_value_pair_t *) pair->data;
-		gchar *key = p->key;
-		GByteArray *value = p->value;
-
-		if (copy) {
-			key = g_strdup(p->key);
-			value = metautils_gba_dup(p->value);
-		}
-		g_hash_table_insert(result, key, value);
+		g_hash_table_insert(result, g_strdup(p->key), metautils_gba_dup(p->value));
 	}
 
 	return result;

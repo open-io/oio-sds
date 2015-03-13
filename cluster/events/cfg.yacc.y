@@ -103,20 +103,10 @@ __make_rule( YYARG_DECL, const gchar *pattern, GSList *actions)
 	
 	TRACE("Building a rule of %u actions\n", g_slist_length(actions));
 	
-	rule = g_try_malloc0( sizeof(struct gridcluster_eventrule_s) );
-	if (!rule) {
-		g_snprintf(error_buffer,sizeof(error_buffer),
-			"Memory allocation failure at (%s,%d)", __FILE__, __LINE__);
-		goto errorLabel;
-	}
+	rule = g_malloc0( sizeof(struct gridcluster_eventrule_s) );
 
 	rule->pattern = g_strdup(pattern);
-	rule->actions = g_try_malloc0( sizeof(void*) * (1+g_slist_length(actions)) );
-	if (!rule->actions) {
-		g_snprintf(error_buffer,sizeof(error_buffer),
-			"Memory allocation failure at (%s,%d)", __FILE__, __LINE__);
-		goto errorLabel;
-	}
+	rule->actions = g_malloc0( sizeof(void*) * (1+g_slist_length(actions)) );
 	
 	for (i=0,le=actions; le ; le=g_slist_next(le)) {
 		if (le->data)
@@ -126,56 +116,24 @@ __make_rule( YYARG_DECL, const gchar *pattern, GSList *actions)
 
 	g_slist_free(actions);
 	return rule;
-
-errorLabel:	
-	if (rule->pattern)
-		g_free( rule->pattern );
-	if (rule->actions)
-		g_free( rule->actions );
-	event_yyerror(YYARG_CALL,error_buffer);
-	return NULL;
 }
 
 struct gridcluster_eventaction_s*
 __make_action_drop( YYARG_DECL )
 {
 	gchar error_buffer[1024];
-	struct gridcluster_eventaction_s *action;
-
-	action = g_try_malloc0( sizeof(struct gridcluster_eventaction_s) );
-	if (!action) {
-		g_snprintf(error_buffer,sizeof(error_buffer),
-			"Memory allocation failure at (%s,%d)", __FILE__, __LINE__);
-		goto errorLabel;
-	}
+	struct gridcluster_eventaction_s *action = g_malloc0( sizeof(struct gridcluster_eventaction_s) );
 	action->type = GCEAT_DROP;
 	return action;
-errorLabel:
-	event_yyerror(YYARG_CALL,error_buffer);
-	if (action)
-		g_free(action);
-	return NULL;
 }
 
 struct gridcluster_eventaction_s*
 __make_action_stop( YYARG_DECL )
 {
 	gchar error_buffer[1024];
-	struct gridcluster_eventaction_s *action;
-
-	action = g_try_malloc0( sizeof(struct gridcluster_eventaction_s) );
-	if (!action) {
-		g_snprintf(error_buffer,sizeof(error_buffer),
-			"Memory allocation failure at (%s,%d)", __FILE__, __LINE__);
-		goto errorLabel;
-	}
+	struct gridcluster_eventaction_s *action = g_malloc0( sizeof(struct gridcluster_eventaction_s) );
 	action->type = GCEAT_EXIT;
 	return action;
-errorLabel:
-	event_yyerror(YYARG_CALL,error_buffer);
-	if (action)
-		g_free(action);
-	return NULL;
 }
 
 struct gridcluster_eventaction_s*
@@ -185,13 +143,7 @@ __make_action_forward_to_address( YYARG_DECL, const gchar *word)
 	gchar error_buffer[1024];
 	struct gridcluster_eventaction_s *action;
 
-	action = g_try_malloc0( sizeof(struct gridcluster_eventaction_s) );
-	if (!action) {
-		g_snprintf(error_buffer,sizeof(error_buffer),
-			"Memory allocation failure at (%s,%d)", __FILE__, __LINE__);
-		goto errorLabel;
-	}
-
+	action = g_malloc0( sizeof(struct gridcluster_eventaction_s) );
 	action->type = GCEAT_ADDRESS;
 	if (!l4_address_init_with_url(&(action->parameter.address), word, NULL)) {
 		g_snprintf(error_buffer,sizeof(error_buffer), "Invalid address format");
@@ -213,23 +165,10 @@ struct gridcluster_eventaction_s*
 __make_action_forward_to_service( YYARG_DECL, const gchar *word)
 {
 	gchar error_buffer[1024];
-	struct gridcluster_eventaction_s *action;
-
-	action = g_try_malloc0( sizeof(struct gridcluster_eventaction_s) );
-	if (!action) {
-		g_snprintf(error_buffer,sizeof(error_buffer),
-			"Memory allocation failure at (%s,%d)", __FILE__, __LINE__);
-		goto errorLabel;
-	}
-
+	struct gridcluster_eventaction_s *action = g_malloc0( sizeof(struct gridcluster_eventaction_s) );
 	action->type = GCEAT_SERVICE;
 	g_strlcpy( action->parameter.service, word, sizeof(action->parameter.service) ); 
 	return action;
-errorLabel:
-	event_yyerror(YYARG_CALL,error_buffer);
-	if (action)
-		g_free(action);
-	return NULL;
 }
 
 void
@@ -329,7 +268,7 @@ gridcluster_eventhandler_configure(
 		h->ruleset = NULL;
 	}
 
-	h->ruleset = g_try_malloc0( sizeof(struct gridcluster_eventrule_s*) * (1+g_slist_length(pp.rules)));
+	h->ruleset = g_malloc0( sizeof(struct gridcluster_eventrule_s*) * (1+g_slist_length(pp.rules)));
 	for (i=0,le=pp.rules; le ;le=le->next) {
 		if (le->data) {
 			h->ruleset[ i++ ] = (struct gridcluster_eventrule_s*) le->data;

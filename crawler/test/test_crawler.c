@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "crawler.test"
 #endif
@@ -73,10 +92,10 @@ g_hsrvstub     = NULL
 
 #define TEST_DEBUG(...)   if (g_bdebug)   fprintf(stdout, __VA_ARGS__)
 
-
-
 //--------------------------------------------------------
-void libtrip_close(struct trip_lib_entry_points** ep)
+
+static void
+libtrip_close(struct trip_lib_entry_points** ep)
 {
 	if (!ep || !*ep) 
 		return;
@@ -86,16 +105,14 @@ void libtrip_close(struct trip_lib_entry_points** ep)
 	*ep = NULL;
 }
 
-
-struct trip_lib_entry_points* libtrip_load(char* path, char* trip)
+static struct trip_lib_entry_points*
+libtrip_load(char* path, char* trip)
 {
 	return (struct trip_lib_entry_points*) load_trip_library(path, trip);
 }
 
-
-
-
-int  __binary_getError(TBinRedir* handle, char* errmsg, int size)
+static int
+__binary_getError(TBinRedir* handle, char* errmsg, int size)
 {
 #define BUFF_MAX  1024
 	char buff[BUFF_MAX] = "";
@@ -147,12 +164,9 @@ int  __binary_getError(TBinRedir* handle, char* errmsg, int size)
 	return 0;
 }
 
-
-
-
 /** return TRUE if ENDTEST WITH ERROR, else FALSE
  * */
-static gboolean _binredir_manage_error(TBinRedir* hbin, gboolean bTestTrueIsGood, gchar* msgIfFailed, gboolean* bEnd, gboolean* bErr)
+static void _binredir_manage_error(TBinRedir* hbin, gboolean bTestTrueIsGood, gchar* msgIfFailed, gboolean* bEnd, gboolean* bErr)
 {
 	int nb = 0;
 	char errmsg[1024] = "";
@@ -170,9 +184,7 @@ static gboolean _binredir_manage_error(TBinRedir* hbin, gboolean bTestTrueIsGood
 	}
 }
 
-
 //------------------------------------------------------------------------------
-
 
 static struct trip_lib_entry_points* __test_trip_loadandstart(char* path, char* trip, char* args, gboolean bTestTrueIsGood, gchar* errMsg)
 {
@@ -204,8 +216,6 @@ static struct trip_lib_entry_points* __test_trip_loadandstart(char* path, char* 
 	return ep;
 }
 
-
-
 static void __crawl(struct trip_lib_entry_points* ep)
 {
 	GVariant* occur = NULL;
@@ -229,8 +239,6 @@ static void __crawl(struct trip_lib_entry_points* ep)
 	};
 }
 
-
-
 static gpointer _thread_srvstub_run(gpointer d)
 {
 	TSrvStubHandle* handle = (TSrvStubHandle*) d;
@@ -251,9 +259,6 @@ static gpointer _thread_srvstub_run(gpointer d)
 	return 0;
 }
 
-
-
-
 static void __spy_crawler_action(char* cmdline_action, char* cmdline_crawler, gboolean bTestTrueIsGood, char* msgIfFailed)
 {
 	// launch binary to test num1
@@ -265,7 +270,6 @@ static void __spy_crawler_action(char* cmdline_action, char* cmdline_crawler, gb
 		} else
 			sleep(1);
 	}
-
 
 	// launch binary to test num2
 	if ((cmdline_crawler != NULL) && (strlen(cmdline_crawler) > 0)) {
@@ -304,12 +308,7 @@ static void __spy_crawler_action(char* cmdline_action, char* cmdline_crawler, gb
 	}
 }
 
-
-
-
-
 //------------------------------------------------------------------------------
-
 
 typedef struct STestCaseSrvStub {
 	char*       url;          // url of stub services
@@ -317,8 +316,6 @@ typedef struct STestCaseSrvStub {
 	char*       name;         // name of request
 	GSList*       responsedata; // ...> name
 }TTestCaseSrvStub;
-
-
 
 //                                      test trip...                      |  test action
 typedef struct STestCase{
@@ -338,11 +335,6 @@ typedef struct STestCase{
 	void             (*test)(gconstpointer);
 	gchar*            msgIfFailed;     //                           msg if failed
 }TTestCase;
-
-
-
-
-
 
 static void _test_trip_start(gconstpointer userdata)
 {
@@ -364,8 +356,6 @@ static void _test_trip_start(gconstpointer userdata)
 	TEST_END();
 }
 
-
-
 static void _test_crawler_simple(gconstpointer userdata)
 {
 	TEST_START();
@@ -382,8 +372,6 @@ static void _test_crawler_simple(gconstpointer userdata)
 
 	TEST_END();
 }
-
-
 
 static void _test_action_simple(gconstpointer userdata)
 {
@@ -413,7 +401,7 @@ static void _test_action_simple(gconstpointer userdata)
 			TEST_END_WITH_ERROR("Failed to initialize service stub (%s)\n", tcss->url);
 
 		// launch service stub run
-		GThread* th = g_thread_create(_thread_srvstub_run, g_hsrvstub, TRUE, NULL);
+		g_thread_new("stub", _thread_srvstub_run, g_hsrvstub);
 
 		sleep(2);
 	}
@@ -423,7 +411,6 @@ static void _test_action_simple(gconstpointer userdata)
 
 	TEST_END();
 }
-
 
 static void _test_action_timeout(gconstpointer userdata)
 {
@@ -436,18 +423,16 @@ static void _test_action_timeout(gconstpointer userdata)
 	binredir_exec("iptables -D INPUT -p tcp --dport 6099 -j DROP");
 }
 
-
-
 //------------------------------------------------------------------------------
 
-
-void usage(char* appname)
+static void
+usage(char* appname)
 {
 	g_printf("USAGE\n, %s [-d|--debug] [-v|--verbose] -b <trip_name_to_test> [-a <good_repository_about_s_arg - ONLY ERROR CASE if omited>] \n", appname);
 }
 
-
-gboolean getoption(int argc, char** argv)
+static gboolean
+getoption(int argc, char** argv)
 {
 	gboolean ret = TRUE;
 	int c;
@@ -488,18 +473,11 @@ gboolean getoption(int argc, char** argv)
 	return ret;
 }
 
-
-int main(int argc, char **argv)
+int
+main(int argc, char **argv)
 {
+	HC_TEST_INIT(argc,argv);
 	gchar* testcase = NULL;
-
-	//init
-	if (!g_thread_supported())
-		g_thread_init(NULL);
-	g_set_prgname(argv[0]);
-	g_log_set_default_handler(logger_stderr, NULL);
-	logger_init_level(GRID_LOGLVL_TRACE2);
-	g_test_init (&argc, &argv, NULL);
 
 	g_bverbose = FALSE;
 	g_bdebug   = FALSE;
@@ -530,13 +508,10 @@ int main(int argc, char **argv)
 		{NULL, NULL, 0, NULL, NULL, NULL, NULL}
 	};
 
-
 	//---------
 	// action
 	TTestCaseSrvStub tcss_allok[]  = {{url_srvstub,       SSCMD_ALL_OK_WITHOUTDATA,  "", NULL}, {NULL, 0, "", NULL}};
 	TTestCaseSrvStub tcss_allerr[] = {{url_srvstub,      SSCMD_ALL_ERR_WITHOUTDATA, "", NULL}, {NULL, 0, "", NULL}};
-	TTestCaseSrvStub tcss_allnone[] = {{url_srvstub,      SSCMD_ALL_NONE, "", NULL}, {NULL, 0, "", NULL}};
-
 
 	TTestCase testcase_act[] = {
 		{ g_bin_name, g_args, FALSE,  &tcss_allerr[0],"metaX/with_error_without_data", _test_action_simple, TEST_ERRMSG_ACTION_MISSINGERR  },
@@ -546,8 +521,6 @@ int main(int argc, char **argv)
 		//{ g_bin_name, g_args, TRUE,   NULL, "simple", _test_action_simple, TEST_ERRMSG_ACTION_FAILEDSTART},
 		{NULL, NULL, 0, NULL, NULL, NULL, NULL}
 	};
-
-
 
 	//---------
 	TTestCase* pT = NULL;
@@ -571,9 +544,6 @@ int main(int argc, char **argv)
 		g_free(testcase);
 	}	
 
-
-	int rc = g_test_run();
-
-	return rc;
+	return g_test_run();
 }
 

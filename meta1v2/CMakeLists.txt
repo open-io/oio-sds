@@ -36,7 +36,7 @@ target_link_libraries(meta1_backend_test
 		meta1v2 meta0utils metautils server sqliterepo)
 
 add_executable(meta1_server meta1_gridd_dispatcher.c meta1_server.c)
-bin_prefix_full(meta1_server -meta1-server)
+bin_prefix(meta1_server -meta1-server)
 target_link_libraries(meta1_server meta1v2
         meta0utils metacomm metautils gridcluster server sqliterepo
 		sqlxsrv
@@ -47,7 +47,7 @@ target_link_libraries(test_m1v2_list_refs
 		meta1remote ${GLIB2_LIBRARIES})
 
 add_executable(meta1_client meta1_client.c)
-bin_prefix_full(meta1_client -meta1-client)
+bin_prefix(meta1_client -meta1-client)
 target_link_libraries(meta1_client metautils metacomm meta1remote)
 
 install(FILES

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS resolver
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.sqlx.resolve"
 #endif
@@ -111,7 +130,7 @@ hc_resolver_create1(time_t now)
 			g_free, g_free, 0);
 
 	resolver->bogonow = now;
-	resolver->lock = g_mutex_new();
+	g_mutex_init(&resolver->lock);
 	return resolver;
 }
 
@@ -130,8 +149,7 @@ hc_resolver_destroy(struct hc_resolver_s *r)
 		lru_tree_destroy(r->csm0.cache);
 	if (r->services.cache)
 		lru_tree_destroy(r->services.cache);
-	if (r->lock)
-		g_mutex_free(r->lock);
+	g_mutex_clear(&r->lock);
 	g_free(r);
 }
 
@@ -142,13 +160,13 @@ hc_resolver_get_cached(struct hc_resolver_s *r, struct lru_tree_s *lru,
 	gchar **result = NULL;
 	struct cached_element_s *elt;
 
-	g_mutex_lock(r->lock);
+	g_mutex_lock(&r->lock);
 	if (NULL != (elt = lru_tree_get(lru, k))) {
 		if (!(r->flags & HC_RESOLVER_NOATIME))
 			elt->use = r->bogonow;
 		result = hc_resolver_element_extract(elt);
 	}
-	g_mutex_unlock(r->lock);
+	g_mutex_unlock(&r->lock);
 
 	return result;
 }
@@ -163,10 +181,10 @@ hc_resolver_store(struct hc_resolver_s *r, struct lru_tree_s *lru,
 	struct cached_element_s *elt = hc_resolver_element_create(v);
 	struct hashstr_s *k = hashstr_dup(key);
 
-	g_mutex_lock(r->lock);
+	g_mutex_lock(&r->lock);
 	elt->use = r->bogonow;
 	lru_tree_insert(lru, k, elt);
-	g_mutex_unlock(r->lock);
+	g_mutex_unlock(&r->lock);
 }
 
 static inline void
@@ -174,9 +192,9 @@ hc_resolver_forget(struct hc_resolver_s *r, struct lru_tree_s *lru,
 		const struct hashstr_s *k)
 {
 	if (lru) {
-		g_mutex_lock(r->lock);
+		g_mutex_lock(&r->lock);
 		lru_tree_remove(lru, k);
-		g_mutex_unlock(r->lock);
+		g_mutex_unlock(&r->lock);
 	}
 }
 
@@ -216,7 +234,7 @@ _resolve_meta0(struct hc_resolver_s *r, const gchar *ns, gchar ***result)
 		/* Now attempt a real resolution */
 		if (!(allm0 = list_namespace_services2(ns, "meta0", &err))) {
 			if (!err)
-				err = NEWERROR(500, "No meta0 available");
+				err = NEWERROR(CODE_INTERNAL_ERROR, "No meta0 available");
 			*result = NULL;
 		}
 		else {
@@ -269,7 +287,7 @@ _resolve_m1_through_one_m0(const gchar *m0, const guint8 *prefix, gchar ***resul
 		if (!lmap) {
 			if (err)
 				return err;
-			return NEWERROR(500, "No meta1 found");
+			return NEWERROR(CODE_INTERNAL_ERROR, "No meta1 found");
 		}
 		else {
 			*result = _m0list_to_urlv(lmap);
@@ -285,7 +303,6 @@ _resolve_m1_through_one_m0(const gchar *m0, const guint8 *prefix, gchar ***resul
 static GError *
 _resolve_m1_through_many_m0(gchar **urlv, const guint8 *prefix, gchar ***result)
 {
-	GError *err;
 	guint i, last;
 	gchar *url;
 
@@ -295,17 +312,20 @@ _resolve_m1_through_many_m0(gchar **urlv, const guint8 *prefix, gchar ***result)
 		i = rand() % last;
 		url = urlv[i];
 
-		if (!(err = _resolve_m1_through_one_m0(url, prefix, result)))
+		GError *err = _resolve_m1_through_one_m0(url, prefix, result);
+		g_assert((err!=NULL) ^ (*result!=NULL));
+		if (!err)
 			return NULL;
-		if (err->code < 100)
-			g_error_free(err);
+		if (!CODE_IS_NETWORK_ERROR(err->code))
+			return err;
 
+		g_error_free(err);
 		/* swap 'i' and 'last' */
 		urlv[i] = urlv[last-1];
 		urlv[last-1] = url;
 	}
 
-	return NEWERROR(500, "No META0 answered");
+	return NEWERROR(CODE_INTERNAL_ERROR, "No META0 answered");
 }
 
 static GError *
@@ -377,10 +397,9 @@ _resolve_service_through_many_meta1(gchar **urlv, struct hc_url_s *u,
 
 		GError *err = _resolve_service_through_one_m1(url, u, s, result);
 		g_assert((err!=NULL) ^ (*result!=NULL));
-
 		if (!err)
 			return NULL;
-		if (err->code >= 100)
+		if (!CODE_IS_NETWORK_ERROR(err->code))
 			return err;
 		g_clear_error(&err);
 
@@ -389,7 +408,7 @@ _resolve_service_through_many_meta1(gchar **urlv, struct hc_url_s *u,
 		urlv[last-1] = url;
 	}
 
-	return NEWERROR(500, "No META0 answered");
+	return NEWERROR(CODE_INTERNAL_ERROR, "No META0 answered");
 }
 
 static GError*
@@ -437,9 +456,28 @@ hc_resolve_reference_directory(struct hc_resolver_s *r, struct hc_url_s *url,
 	g_assert(url != NULL);
 	g_assert(result != NULL);
 	if (!hc_url_get_id(url) || !hc_url_has(url, HCURL_NS))
-		return NEWERROR(400, "Incomplete URL [%s]", hc_url_get(url, HCURL_WHOLE));
+		return NEWERROR(CODE_BAD_REQUEST, "Incomplete URL [%s]", hc_url_get(url, HCURL_WHOLE));
 
-	return _resolve_meta1(r, url, result);
+	GError *err = NULL;
+	gchar **m1v = NULL, **m0v = NULL;
+
+	if (!(err = _resolve_meta0(r, hc_url_get(url, HCURL_NS), &m0v)))
+		err = _resolve_meta1(r, url, &m1v);
+
+	if (err) {
+		if (m0v) g_strfreev (m0v);
+		if (m1v) g_strfreev (m1v);
+		return err;
+	}
+
+	*result = g_malloc0(sizeof(gchar*) *
+			(g_strv_length(m0v) + g_strv_length(m1v) + 1));
+	gchar **d = *result;
+	for (gchar **p=m0v; *p ;++p) { *(d++) = *p; }
+	g_free (m0v); // pointers reused
+	for (gchar **p=m1v; *p ;++p) { *(d++) = *p; }
+	g_free (m1v); // pointers reused
+	return NULL;
 }
 
 GError*
@@ -457,7 +495,7 @@ hc_resolve_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
 	g_assert(*result == NULL);
 
 	if (!hc_url_get_id(url) || !hc_url_has(url, HCURL_NS))
-		return NEWERROR(400, "Incomplete URL [%s]", hc_url_get(url, HCURL_WHOLE));
+		return NEWERROR(CODE_BAD_REQUEST, "Incomplete URL [%s]", hc_url_get(url, HCURL_WHOLE));
 
 	hk = hashstr_printf("%s|%s|%s", srvtype,
 			hc_url_get(url, HCURL_NSPHYS),
@@ -515,9 +553,9 @@ void
 hc_resolver_set_now(struct hc_resolver_s *r, time_t now)
 {
 	g_assert(r != NULL);
-	g_mutex_lock(r->lock);
+	g_mutex_lock(&r->lock);
 	r->bogonow = now;
-	g_mutex_unlock(r->lock);
+	g_mutex_unlock(&r->lock);
 }
 
 static guint
@@ -545,10 +583,10 @@ _LRU_expire(struct hc_resolver_s *r, struct lru_ext_s *l)
 {
 	guint count = 0;
 	EXTRA_ASSERT(r != NULL);
-	g_mutex_lock(r->lock);
+	g_mutex_lock(&r->lock);
 	if (l->ttl > 0 && l->cache != NULL)
 		count = _resolver_expire(l->cache, r->bogonow - l->ttl);
-	g_mutex_unlock(r->lock);
+	g_mutex_unlock(&r->lock);
 	return count;
 }
 
@@ -579,10 +617,10 @@ static guint
 _LRU_purge(struct hc_resolver_s *r, struct lru_ext_s *l)
 {
 	guint count = 0;
-	g_mutex_lock(r->lock);
+	g_mutex_lock(&r->lock);
 	if (l->max > 0 && l->cache != NULL)
 		count = _resolver_purge(l->cache, l->max);
-	g_mutex_unlock(r->lock);
+	g_mutex_unlock(&r->lock);
 	return count;
 }
 
@@ -613,18 +651,18 @@ void
 hc_resolver_flush_csm0(struct hc_resolver_s *r)
 {
 	EXTRA_ASSERT(r != NULL);
-	g_mutex_lock(r->lock);
+	g_mutex_lock(&r->lock);
 	_lru_flush(r->csm0.cache);
-	g_mutex_unlock(r->lock);
+	g_mutex_unlock(&r->lock);
 }
 
 void
 hc_resolver_flush_services(struct hc_resolver_s *r)
 {
 	EXTRA_ASSERT(r != NULL);
-	g_mutex_lock(r->lock);
+	g_mutex_lock(&r->lock);
 	_lru_flush(r->services.cache);
-	g_mutex_unlock(r->lock);
+	g_mutex_unlock(&r->lock);
 }
 
 static inline void
@@ -666,7 +704,7 @@ hc_resolver_info(struct hc_resolver_s *r, struct hc_resolver_stats_s *s)
 {
 	EXTRA_ASSERT(s != NULL);
 	EXTRA_ASSERT(r != NULL);
-	g_mutex_lock(r->lock);
+	g_mutex_lock(&r->lock);
 	s->clock = r->bogonow;
 	s->csm0.max = r->csm0.max;
 	s->csm0.ttl = r->csm0.ttl;
@@ -674,6 +712,6 @@ hc_resolver_info(struct hc_resolver_s *r, struct hc_resolver_stats_s *s)
 	s->services.max = r->services.max;
 	s->services.ttl = r->services.ttl;
 	s->services.count = lru_tree_count(r->services.cache);
-	g_mutex_unlock(r->lock);
+	g_mutex_unlock(&r->lock);
 }
 

@@ -14,27 +14,16 @@ add_custom_command(
 		${CMAKE_CURRENT_SOURCE_DIR}/../templates/remote.h.tpl
 )
 
-add_library(meta2servicesremote SHARED
+add_library(meta2remote SHARED
+		utils.c
+		meta2_remote.c
+		meta2_remote.h
 		${CMAKE_CURRENT_BINARY_DIR}/meta2_services_remote.h
 		${CMAKE_CURRENT_BINARY_DIR}/meta2_services_remote.c)
-set_target_properties(meta2servicesremote PROPERTIES SOVERSION ${ABI_VERSION})
-target_link_libraries(meta2servicesremote
-		metautils metacomm
-		${GLIB2_LIBRARIES})
-
-add_library(meta2remote SHARED
-		utils.c dump.c restore.c meta2_remote.c meta2_remote.h)
 set_target_properties(meta2remote PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(meta2remote
 		metautils metacomm
 		${GLIB2_LIBRARIES})
-
-add_executable(meta2_client client.c)
-bin_prefix_full(meta2_client -meta2-client)
-target_link_libraries(meta2_client
-		metautils metacomm meta2remote meta2servicesremote
-		${GLIB2_LIBRARIES})
-add_dependencies(meta2_client meta2remote)
 
 install(FILES
 			meta2_remote.h
@@ -43,7 +32,7 @@ install(FILES
 		PERMISSIONS
 			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
-install(TARGETS meta2remote meta2servicesremote meta2_client
+install(TARGETS meta2remote
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS gridd
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
@@ -165,7 +184,7 @@ static gboolean
 _send_request(struct metacnx_ctx_s *cnx, MESSAGE request, GError **err)
 {
 	struct code_handler_s codes [] = {
-		{ 200, REPSEQ_FINAL, NULL, NULL },
+		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
 		{ 0, 0, NULL, NULL}
 	};
 	struct reply_sequence_data_s data = { NULL , 0 , codes };
@@ -248,7 +267,7 @@ thread_worker(gpointer p)
 	metacnx_close(&cnx);
 	metacnx_clear(&cnx);
 error_cnx:
-	message_destroy(request, NULL);
+	message_destroy(request);
 error_request:
 	if (err)
 		g_clear_error(&err);
@@ -269,7 +288,7 @@ thread_start_N(void)
 		p = g_malloc0(sizeof(struct thread_data_s));
 		memcpy(&(p->target), &g_array_index(addresses, addr_info_t, i), sizeof(addr_info_t));
 
-		th = g_thread_create(thread_worker, p, TRUE, &err);
+		th = g_thread_try_new("worker", thread_worker, p, &err);
 		if (th != NULL)
 			threads = g_slist_prepend(threads, th);
 		else {

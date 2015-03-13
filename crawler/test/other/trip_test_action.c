@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "grid.crawler.trip_container"
 #endif //G_LOG_DOMAIN
@@ -19,7 +38,6 @@
 
 #define LIMIT_LENGTH_URL 23
 
-
 static gchar* trip_name = "trip_test_action";
 static gchar* source_cmd_opt_name = "s";
 static gchar* infinite_cmd_opt_name = "infinite";
@@ -37,7 +55,6 @@ static dir_explorer_t dir_explorer_handle;
 
 static gboolean infinite = FALSE;
 
-
 struct SItemTest {
 	gboolean bTitle;
 	int argc;
@@ -45,8 +62,6 @@ struct SItemTest {
 };
 
 static GSList* g_item_test = NULL;   //struct SItemTest*
-
-
 
 int
 trip_progress(void)
@@ -86,7 +101,6 @@ trip_start(int argc, char** argv)
 	if (NULL != (triptest = get_argv_value(argc, argv, trip_name, triptest_cmd_opt_name))) {
 	}
 
-
 	/* Meta2 URL extraction */
 	if (getxattr(source_directory_path_ref, "user.meta2_server.address", meta2_url, sizeof(meta2_url)) <= 0) {
         GRID_ERROR("Failed during get xattr(meta2) parameter about repository [%s]: (errno:%d)", source_directory_path_ref, errno);
@@ -97,7 +111,6 @@ trip_start(int argc, char** argv)
         GRID_ERROR("Failed during get xattr(meta2) parameter about repository [%s]: (errno:%d)", source_directory_path_ref, errno);
     }
 
-
 	/* ------- */
 	err = dir_explore(source_directory_path_ref, &dir_explorer_handle);
 	if (err) {
@@ -105,7 +118,6 @@ trip_start(int argc, char** argv)
         g_clear_error(&err);
         return EXIT_FAILURE;
     }
-
 
 	FILE* f = fopen(triptestdata, "r");
 	if (f) {
@@ -126,8 +138,6 @@ trip_start(int argc, char** argv)
 		fclose(f);
 	}
 
-
-
 	return EXIT_SUCCESS;
 }
 
@@ -141,7 +151,6 @@ _reset_infinite(void)
 
 	return TRUE;
 }
-
 
 // selection du type de test: trip_chunk / trip_container / trip_content / trip_prefix
 //selon type de test, selection meta1_url/meta2_url

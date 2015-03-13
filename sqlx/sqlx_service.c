@@ -1,3 +1,22 @@
+/*
+OpenIO SDS sqlx
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "sqlite_service"
 #endif
@@ -71,10 +90,10 @@ _get_url(gpointer ctx)
 }
 
 static GError*
-_get_version(gpointer ctx, const gchar *n, const gchar *t, GTree **result)
+_get_version(gpointer ctx, struct sqlx_name_s *n, GTree **result)
 {
 	EXTRA_ASSERT(ctx != NULL);
-	return sqlx_repository_get_version2(PSRV(ctx)->repository, t, n, result);
+	return sqlx_repository_get_version2(PSRV(ctx)->repository, n, result);
 }
 
 // sqlite_service configuration steps ------------------------------------------
@@ -129,10 +148,9 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 	}
 	GRID_NOTICE("Volume configured to [%s]", ss->volume);
 
-	ss->zk_url = gridcluster_get_config(ss->ns_name, "zookeeper",
-			GCLUSTER_CFG_NS|GCLUSTER_CFG_LOCAL);
+	ss->zk_url = gridcluster_get_zookeeper(ss->ns_name);
 	if (!ss->zk_url) {
-		GRID_INFO("No ZooKeeper URL configured");
+		GRID_INFO("No replication : no ZooKeeper URL configured");
 		return TRUE;
 	}
 
@@ -188,42 +206,12 @@ _init_configless_structures(struct sqlx_service_s *ss)
 	return TRUE;
 }
 
-static gchar*
-_build_zk_url(const gchar *ns_name)
-{
-	GError *err = NULL;
-	GString *zk_url = NULL;
-	GSList *zk_srvinfo_list = list_namespace_services2(ns_name,
-			NAME_SRVTYPE_ZOOKEEPER, &err);
-	if (err != NULL) {
-		GRID_NOTICE("Failed to request %s services from conscience or gridagent: %s",
-				NAME_SRVTYPE_ZOOKEEPER, err->message);
-		g_clear_error(&err);
-		return NULL;
-	}
-	zk_url = g_string_sized_new(64);
-	for (GSList *cur = zk_srvinfo_list; cur; cur = cur->next) {
-		gchar addr[64] = {0};
-		service_info_t *svc = cur->data;
-		grid_addrinfo_to_string(&(svc->addr), addr, sizeof(addr));
-		g_string_append_printf(zk_url, "%s%s",
-				(zk_url->len > 0)? "," : "", addr);
-	}
-	g_slist_free_full(zk_srvinfo_list, (GDestroyNotify)service_info_clean);
-	return g_string_free(zk_url, FALSE);
-}
-
 static gboolean
 _configure_synchronism(struct sqlx_service_s *ss)
 {
 	if (!ss->zk_url) {
-		ss->zk_url = _build_zk_url(SRV.ns_name);
-		if (!ss->zk_url) {
-			GRID_NOTICE("SYNC off (no ZK)");
-			return TRUE;
-		} else {
-			GRID_INFO("Built ZooKeeper URL [%s]", ss->zk_url);
-		}
+		GRID_NOTICE("SYNC off (no ZK)");
+		return TRUE;
 	}
 
 	ss->sync = sqlx_sync_create(ss->zk_url);
@@ -240,7 +228,7 @@ _configure_synchronism(struct sqlx_service_s *ss)
 
 	GError *err = sqlx_sync_open(ss->sync);
 	if (err != NULL) {
-		GRID_WARN("SYNC init error: (%d) %s", err->code, err->message);
+		GRID_WARN("SYNC init error : (%d) %s", err->code, err->message);
 		g_clear_error(&err);
 		return FALSE;
 	}
@@ -257,8 +245,8 @@ _configure_replication(struct sqlx_service_s *ss)
 	replication_config.ctx = ss;
 	replication_config.get_local_url = _get_url;
 	replication_config.get_version = _get_version;
-	replication_config.get_peers = (GError* (*)(gpointer, const gchar*,
-			const gchar*, gboolean nocache, gchar ***)) ss->service_config->get_peers;
+	replication_config.get_peers = (GError* (*)(gpointer, struct sqlx_name_s*,
+				gboolean nocache, gchar ***)) ss->service_config->get_peers;
 
 	GError *err = election_manager_create(&replication_config,
 			&ss->election_manager);
@@ -433,7 +421,7 @@ sqlx_service_action(void)
 	if (!SRV.thread_register)
 		return _action_report_error(err, "Failed to start the REGISTER thread");
 
-	SRV.thread_client = g_thread_create(_worker_clients, &SRV, TRUE, &err);
+	SRV.thread_client = g_thread_try_new("clients", _worker_clients, &SRV, &err);
 	if (!SRV.thread_client)
 		return _action_report_error(err, "Failed to start the CLIENT thread");
 

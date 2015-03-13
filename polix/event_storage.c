@@ -1,3 +1,22 @@
+/*
+OpenIO SDS polix
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "polix"
 #endif
@@ -20,15 +39,13 @@
 
 static GSList* g_list_pe = NULL;
 
-
 typedef struct {
 	polix_event_t*   pe;
 	event_status_et  status;
 } polix_event_storage_t;
 
-
-
-polix_event_t* pe_create(void)
+polix_event_t*
+pe_create(void)
 {
 	polix_event_t* pe = g_malloc0(sizeof(polix_event_t));
 	if (!pe)
@@ -39,8 +56,8 @@ polix_event_t* pe_create(void)
 	return pe;
 }
 
-
-void pe_free(polix_event_t* pe)
+static void
+pe_free(polix_event_t* pe)
 {
 	if (!pe)
 		return;
@@ -50,16 +67,11 @@ void pe_free(polix_event_t* pe)
 	g_free(pe);
 }
 
-
-
-
-
 gboolean pes_init(void)
 {
 	g_list_pe = NULL;
 	return TRUE;
 }
-
 
 void pes_close(void)
 {	
@@ -74,8 +86,8 @@ void pes_close(void)
 	g_slist_free_full(g_list_pe, g_free);
 }
 
-
-polix_event_storage_t* pes_get(const gchar* ueid)
+static polix_event_storage_t*
+pes_get(const gchar* ueid)
 {
 	polix_event_storage_t* pes = NULL;
 
@@ -93,16 +105,13 @@ polix_event_storage_t* pes_get(const gchar* ueid)
 	return pes;
 }
 
-
-
 gboolean pes_IsExist(const gchar* ueid)
 {
 	return ((pes_get(ueid))?TRUE:FALSE);
 }
 
-
-
-polix_event_storage_t* pes_add(polix_event_t *pe, event_status_et status)
+static polix_event_storage_t*
+pes_add(polix_event_t *pe, event_status_et status)
 {
 	polix_event_storage_t* pes = NULL;
 
@@ -126,7 +135,6 @@ polix_event_storage_t* pes_add(polix_event_t *pe, event_status_et status)
 
 	return pes;
 }
-
 
 gboolean pes_get_status(const gchar* ueid, event_status_et *status)
 {
@@ -175,5 +183,4 @@ gboolean pes_delete(const gchar* ueid, gboolean bAll)
 
 	return TRUE;
 }
-
 

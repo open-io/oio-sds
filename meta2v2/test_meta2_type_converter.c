@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <string.h>
 
 #include <resolver/hc_resolver.h>
@@ -187,21 +206,11 @@ _container_wraper(container_test_f cf)
 		err = meta2_backend_create_container(m2, url, &params);
 		g_assert_no_error(err);
 
-		err = meta2_backend_open_container(m2, url);
-		g_assert_no_error(err);
-
 		if (cf)
 			cf(m2, url);
 
-		err = meta2_backend_close_container(m2, url);
-		g_assert_no_error(err);
-
 		err = meta2_backend_destroy_container(m2, url, 0);
 		g_assert_no_error(err);
-
-		err = meta2_backend_open_container(m2, url);
-		g_assert_error(err, GQ(), CODE_CONTAINER_NOTFOUND);
-		g_clear_error(&err);
 
 		hc_url_clean(url);
 	}
@@ -255,15 +264,9 @@ test_raw_content_v2_to_beans()
 int
 main(int argc, char **argv)
 {
-	if (!g_thread_supported())
-		g_thread_init(NULL);
-	g_set_prgname(argv[0]);
+	HC_TEST_INIT(argc,argv);
 
 	container_counter = random();
-
-	g_test_init (&argc, &argv, NULL);
-	g_log_set_default_handler(logger_stderr, NULL);
-	logger_init_level(GRID_LOGLVL_TRACE2);
 
 	g_test_add_func("/meta2v2/converter/beans_to_raw_content",
 			test_beans_to_raw_content);

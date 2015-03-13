@@ -1,5 +1,25 @@
-#ifndef __CHUNKINFO_NEON_SESSION_H__
-# define __CHUNKINFO_NEON_SESSION_H__
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__client__c__lib__rawx_h
+# define OIO_SDS__client__c__lib__rawx_h 1
+
 # include "./gs_internals.h"
 
 #define RAWX_ATTR_CHUNK_POSITION "chunkpos"
@@ -95,4 +115,4 @@ ne_session *opensession_common(const addr_info_t *addr_info,
  */
 void gen_req_id_header(gchar *dst, gsize dst_size);
 
-#endif /*__CHUNKINFO_NEON_SESSION_H__*/
+#endif /*OIO_SDS__client__c__lib__rawx_h*/

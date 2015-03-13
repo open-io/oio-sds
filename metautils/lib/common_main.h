@@ -1,11 +1,25 @@
-/**
- * @file common_main.h
- * Simple features set to unify all the dfeatures common to all grid
- * processes: logging, daemonizing, configuring, pidfile writing, etc.
- */
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
-#ifndef GRID__COMMON_MAIN_H
-# define GRID__COMMON_MAIN_H 1
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__common_main_h
+# define OIO_SDS__metautils__lib__common_main_h 1
+
 # include <glib/gtypes.h>
 
 /**
@@ -15,14 +29,12 @@
  */
 
 #define HC_PROC_INIT(argv,LVL) do { \
-	if (!g_thread_supported ()) g_thread_init (NULL); \
 	grid_main_set_prgname(argv[0]); \
 	g_log_set_default_handler(logger_stderr, NULL); \
 	logger_init_level(LVL); \
 } while (0)
 
 #define HC_TEST_INIT(argc,argv) do { \
-	if (!g_thread_supported ()) g_thread_init (NULL); \
 	g_test_init (&argc, &argv, NULL); \
 	grid_main_set_prgname(argv[0]); \
 	g_log_set_default_handler(logger_stderr, NULL); \
@@ -57,7 +69,6 @@ struct grid_main_option_s {
 	} data;
 	const char *descr;
 };
-
 
 /**
  * Returns an array of extra options managed by the current process.
@@ -99,4 +110,4 @@ void grid_main_set_status(int rc);
  * apply the same filter on it (e.g. keep the basename) */
 void grid_main_set_prgname(const gchar *cmd);
 
-#endif
+#endif /*OIO_SDS__metautils__lib__common_main_h*/

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS rules-motor
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "rules_motor"
 #endif
@@ -165,8 +184,6 @@ chunk_textinfo_extra_free_content(struct chunk_textinfo_extra_s *ctie){
 	memset(ctie, 0x00, sizeof(struct chunk_textinfo_extra_s));
 }
 
-
-
 void sqlx_crawler_data_block_init(struct crawler_sqlx_data_pack_s *data_block,
 	 const gchar *sqlx_path, const gchar *sqlx_seq, const gchar *sqlx_cid, 
 	 const gchar *sqlx_type, char *sqlx_url)
@@ -188,8 +205,6 @@ void sqlx_crawler_data_block_free(struct crawler_sqlx_data_pack_s *data_block)
 	g_free(data_block);
 }
 
-
-
 void meta2_crawler_data_block_init(struct crawler_meta2_data_pack_s *data_block, 
 	const gchar *container_path, char *meta2_url)
 {
@@ -208,10 +223,6 @@ void meta2_crawler_data_block_free(struct crawler_meta2_data_pack_s *data_block)
     g_free(data_block);
 }
 
-
-
-
-
 /* gether the informations got from chunk_crawler into one structure */
 void
 chunk_crawler_data_block_init(struct crawler_chunk_data_pack_s *data_block,
@@ -228,8 +239,6 @@ chunk_crawler_data_block_init(struct crawler_chunk_data_pack_s *data_block,
 	}
 	data_block->chunk_path = chunk_path;
 }
-
-
 
 /* initiate motor args */
 void
@@ -519,7 +528,6 @@ error_get_attr:
 	_clean_attr_handle(attr_handle, FALSE);
 	return FALSE;
 }
-
 
 /* specific data convert for chunk_crawler */
 void

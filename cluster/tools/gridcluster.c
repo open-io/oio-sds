@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gridcluster.tools"
 #endif
@@ -64,7 +83,7 @@ usage(void)
 	g_printerr("  %-20s\t%s\n", "--set-score <[0..100]>      ", "Set and lock score for the service specified by -S.");
 	g_printerr("  %-20s\t%s\n", "--show,                   -s", "Show elements of the cluster.");
 	g_printerr("  %-20s\t%s\n", "--unlock-score              ", "Unlock score for the service specified by -S.");
-	g_printerr("  %-20s\t%s\n", "--verbose,                -v", "Activate log4c logging");
+	g_printerr("  %-20s\t%s\n", "--verbose,                -v", "Increases the verbosity");
 }
 
 static void
@@ -96,16 +115,17 @@ print_formated_errors(GSList * l)
 static void
 print_formatted_hashtable(GHashTable *ht, const gchar *name)
 {
-	GHashTableIter iterator;
-	gpointer k, v;
-
 	if (!ht)
 		return;
 
-	g_hash_table_iter_init(&iterator, ht);
-	while (g_hash_table_iter_next(&iterator, &k, &v))
-		g_print("%20s : %s = %.*s\n", name, (gchar*)k, ((GByteArray*)v)->len,
-				(gchar*)(((GByteArray*)v)->data));
+	GList *lk = g_hash_table_get_keys (ht);
+	lk = g_list_sort (lk, (GCompareFunc) g_ascii_strcasecmp);
+	for (GList *l=lk; l ;l=l->next) {
+		const gchar *key = l->data;
+		GByteArray *value = g_hash_table_lookup (ht, key);
+		g_print("%20s : %s = %.*s\n", name, key, value->len, (gchar*)(value->data));
+	}
+	g_list_free(lk);
 }
 
 static void
@@ -137,6 +157,7 @@ print_formated_namespace(namespace_info_t * ns)
 
 	print_formatted_hashtable(ns->options, "Option");
 	print_formatted_hashtable(ns->storage_policy, "Storage Policy");
+	print_formatted_hashtable(ns->storage_class, "Storage Class");
 	print_formatted_hashtable(ns->data_security, "Data Security");
 	print_formatted_hashtable(ns->data_treatments, "Data Treatments");
 	print_formatted_slist(ns->writable_vns, "Writable VNS");
@@ -238,9 +259,8 @@ set_service_score(const char *service_desc, int score, GError ** error)
 	char *remaining = NULL;
 	char *service_ip = NULL;
 	int service_port = 0;
-	addr_info_t *cluster_addr = NULL;
 	GSList *list = NULL;
-	GHashTable *ns_hash = NULL;
+	addr_info_t *cluster_addr = NULL;
 
 	nb_match = sscanf(service_desc, "%a[^|]|%a[^|]|%a[^:]:%i|%as", &ns_name, &service_type, &service_ip, &service_port, &remaining);
 	if (nb_match < 4) {
@@ -248,23 +268,12 @@ set_service_score(const char *service_desc, int score, GError ** error)
 		goto exit_label;
 	}
 
-	ns_hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-	if (!parse_cluster_config(ns_hash, error)) {
-		GSETERROR(error, "Failed to parse cluster config");
+	if (!(cluster_addr = gridcluster_get_conscience_addr(ns_name))) {
+		GSETERROR(error, "Unknown namespace");
 		goto exit_label;
 	}
 
-	cluster_addr = g_hash_table_lookup(ns_hash, ns_name);
-	if (!cluster_addr) {
-		GSETERROR(error, "Could not find a cluster addr for namespace [%s]", ns_name);
-		goto exit_label;
-	}
-
-	si = g_try_malloc0(sizeof(struct service_info_s));
-	if (!si) {
-		GSETERROR(error, "Memory allocation failure");
-		goto exit_label;
-	}
+	si = g_malloc0(sizeof(struct service_info_s));
 
 	if (!service_info_set_address(si, service_ip, service_port, error)) {
 		GSETERROR(error, "Invalid service address ip=%s port=%i", service_ip, service_port);
@@ -284,7 +293,7 @@ set_service_score(const char *service_desc, int score, GError ** error)
 
 	if (!rc)
 		GSETERROR(error, "Failed to lock the service");
-      exit_label:
+exit_label:
 	if (remaining)
 		free(remaining);
 	if (ns_name)
@@ -295,8 +304,8 @@ set_service_score(const char *service_desc, int score, GError ** error)
 		free(service_ip);
 	if (si)
 		service_info_clean(si);
-	if (ns_hash)
-		g_hash_table_destroy(ns_hash);
+	if (cluster_addr)
+		g_free(cluster_addr);
 	return rc;
 }
 
@@ -308,9 +317,6 @@ enable_debug(void)
 	str_enable = getenv("GS_DEBUG_ENABLE");
 	if (!str_enable)
 		return;
-
-	if (log4c_init())
-		g_printerr("GS_DEBUG_ENABLE environment variable is set but Log4c init failed\n");
 }
 
 int
@@ -327,7 +333,6 @@ main(int argc, char **argv)
 	gboolean has_clear_errors = FALSE;
 	gboolean has_list = FALSE;
 	gboolean has_erroneous_containers = FALSE;
-	gboolean has_log4c = FALSE;
 	gboolean has_set_score = FALSE;
 	gboolean has_unlock_score = FALSE;
 	gboolean has_service = FALSE;
@@ -451,12 +456,13 @@ main(int argc, char **argv)
 				has_raw = TRUE;
 				break;
 			case 'v':
-				has_log4c = TRUE;
+				logger_verbose();
 				break;
 			case 'a':
 				has_show_internals = TRUE;
 				break;
 			case 'h':
+				rc = 0;
 			case '?':
 			case 0:
 			default:
@@ -464,9 +470,6 @@ main(int argc, char **argv)
 				goto exit_label;
 		}
 	}
-
-	if (has_log4c)
-		log4c_init();
 
 	if (has_allcfg) {
 		GHashTable *ht_cfg = gridcluster_parse_config();
@@ -476,7 +479,7 @@ main(int argc, char **argv)
 		while (g_hash_table_iter_next(&iter, &k, &v))
 			g_print("%s=%s\n", (gchar*)k, (gchar*)v);
 		g_hash_table_destroy(ht_cfg);
-		goto exit_label;
+		goto success_label;
 	}
 
 	if (has_nslist) {
@@ -485,7 +488,7 @@ main(int argc, char **argv)
 		for (pns=allns; *pns ;pns++)
 			g_print("%s\n",*pns);
 		g_strfreev(allns);
-		goto exit_label;
+		goto success_label;
 	}
 
 	if (!has_list && !has_set_score && !has_list_task) {
@@ -658,8 +661,7 @@ main(int argc, char **argv)
 		else
 			print_formated_namespace(ns);
 
-		gchar *csurl = gridcluster_get_config(namespace, "conscience", GCLUSTER_CFG_LOCAL);
-
+		gchar *csurl = gridcluster_get_conscience(namespace);
 		if (!csurl) {
 			g_printerr("No conscience address known for [%s]\n", namespace);
 			goto exit_label;
@@ -727,8 +729,8 @@ main(int argc, char **argv)
 		}
 	}
 
+success_label:
 	rc = 0;
-
 exit_label:
 	if (ns)
 		namespace_info_free(ns);

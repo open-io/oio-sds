@@ -1,5 +1,24 @@
-#ifndef _RAWX_CONFIG_H_
-#define _RAWX_CONFIG_H_
+/*
+OpenIO SDS rawx-apache2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__rawx_apache2__src__rawx_config_h
+# define OIO_SDS__rawx_apache2__src__rawx_config_h 1
 
 // TODO FIXME replace with APR equivalent
 #include <openssl/md5.h>
@@ -169,7 +188,6 @@ apr_uint64_t server_get_reqperseq(dav_rawx_server_conf *conf);
  */
 apr_uint64_t server_get_reqavgtime(dav_rawx_server_conf *conf);
 
-
 /***************** UTILS FUNCTIONS *************************/
 
 /**
@@ -200,4 +218,4 @@ GSList * _get_acl(apr_pool_t *p, namespace_info_t *ns_info);
  */
 gboolean update_rawx_conf(apr_pool_t* p, rawx_conf_t **rawx_conf, const gchar* ns_name);
 
-#endif /*  _RAWX_CONFIG_H_ */
+#endif /*OIO_SDS__rawx_apache2__src__rawx_config_h*/

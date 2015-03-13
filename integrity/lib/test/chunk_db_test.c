@@ -1,3 +1,22 @@
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <glib.h>
@@ -91,7 +110,6 @@ void test_add_chunk_to_db()
 	test_dept_assert_equals_int(0, db_create(&content_db, NULL, 0));
 	test_dept_assert_equals_int(0, db_create(&container_db, NULL, 0));
 
-
 	/* Get on content db */
 	test_dept_assert_equals_int(0, content_db->open(content_db, NULL, content_db_path, NULL, DB_BTREE, 0, 0));
 	test_dept_assert_equals_int(0, content_db->cursor(content_db, NULL, &db_cursor, 0));
@@ -111,7 +129,6 @@ void test_add_chunk_to_db()
 
 	db_cursor->c_close(db_cursor);
 	content_db->close(content_db, 0);
-
 
 	/* Get on container db */
 	test_dept_assert_equals_int(0, container_db->open(container_db, NULL, container_db_path, NULL, DB_BTREE, 0, 0));

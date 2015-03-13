@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta2.disp"
 #endif
@@ -38,14 +57,13 @@ _meta2_event_add_raw_v1(gridcluster_event_t *event, meta2_raw_content_t *v1)
 	GByteArray *gba;
 
 	if (!(gba = meta2_maintenance_marshall_content(v1, NULL)))
-		return NEWERROR(500, "V1 serialisation error");
+		return NEWERROR(CODE_INTERNAL_ERROR, "V1 serialisation error");
 
 	gridcluster_event_add_buffer(event, META2_EVTFIELD_RAWCONTENT,
 			gba->data, gba->len);
 	g_byte_array_free(gba, TRUE);
 	return NULL;
 }
-
 
 static GError*
 _meta2_event_add_raw_v2(gridcluster_event_t *event, meta2_raw_content_v2_t *v2)
@@ -55,7 +73,7 @@ _meta2_event_add_raw_v2(gridcluster_event_t *event, meta2_raw_content_v2_t *v2)
 
 	singleton.data = v2;
 	if (!(gba = meta2_raw_content_v2_marshall_gba(&singleton, NULL)))
-		return NEWERROR(500, "V2 serialisation error");
+		return NEWERROR(CODE_INTERNAL_ERROR, "V2 serialisation error");
 
 	gridcluster_event_add_buffer(event, META2_EVTFIELD_RAWCONTENT_V2,
 			gba->data, gba->len);
@@ -69,14 +87,13 @@ _meta2_event_add_bean(gridcluster_event_t *event, const gchar *key, GSList* bean
 	GByteArray* gba = NULL;
 
 	if (!(gba = bean_sequence_marshall(bean_chunk)))
-		return NEWERROR(500, "V2 serialisation error");
+		return NEWERROR(CODE_INTERNAL_ERROR, "V2 serialisation error");
 
 	gridcluster_event_add_buffer(event, key, gba->data, gba->len);
 
 	g_byte_array_free(gba, TRUE);
 	return NULL;
 }
-
 
 static gint64
 get_id64(struct event_config_s *evt)
@@ -89,7 +106,6 @@ get_id64(struct event_config_s *evt)
 
     return res;
 }
-
 
 static gchar *
 ueid_generate(struct event_config_s *evt_config,
@@ -165,7 +181,6 @@ _build_event(struct meta2_backend_s *m2b, const gchar *str_type,
 	return event;
 }
 
-
 static GError*
 touch_v2_content(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		struct meta2_raw_content_v2_s *v2, const char *evt_type)
@@ -204,7 +219,6 @@ error:
 	return err;
 }
 
-
 static GError*
 touch_v2_content_chunkonly(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		GSList* beans, const char *evt_type)
@@ -237,7 +251,6 @@ error:
 	return err;
 }
 
-
 static GError *
 touch_ALIAS_beans(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		GSList *beans, const char *evt_type)
@@ -247,7 +260,7 @@ touch_ALIAS_beans(struct meta2_backend_s *m2b, struct hc_url_s *url,
 
 	v2 = raw_content_v2_from_m2v2_beans(hc_url_get_id(url), beans);
 	if (!v2)
-		err = NEWERROR(500, "Conversion error");
+		err = NEWERROR(CODE_INTERNAL_ERROR, "Conversion error");
 	else {
 		err = touch_v2_content(m2b, url, v2, evt_type);
 		meta2_raw_content_v2_clean(v2);
@@ -264,7 +277,6 @@ touch_ALIAS_chunk(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	//_bean_cleanl2(chunk);
 	return err;
 }
-
 
 static GError *
 touch_ALIAS(struct meta2_backend_s *m2b, struct hc_url_s *url,
@@ -286,7 +298,7 @@ touch_ALIAS(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	return err;
 }
 
-struct bean_ALIASES_s *
+static struct bean_ALIASES_s *
 _find_alias(GSList *beans)
 {
 	for (GSList *l = beans; l ; l = l->next) {
@@ -413,7 +425,6 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	return err;
 }
 
-
 static void
 _get_beans(gpointer udata, gpointer b)
 {
@@ -423,7 +434,6 @@ _get_beans(gpointer udata, gpointer b)
 
 	GRID_DEBUG("_get_beans: encore un beans (%d)", g_slist_length(ctx->l));
 }
-
 
 /**
  * if (bChunk_purged_only==TRUE) 
@@ -532,7 +542,6 @@ _notify_container_gridd(struct gridd_filter_ctx_s *ctx,
 			hc_url_get(url, HCURL_NS));
 	const gchar* m2url = meta2_backend_get_local_addr(m2b);
 
-
 	if(!event_is_enabled(evt_config)){
 		GRID_TRACE("Event not enabled");
 		return FILTER_OK;
@@ -545,7 +554,6 @@ _notify_container_gridd(struct gridd_filter_ctx_s *ctx,
 	 */
 	if (m2url)
 		gridcluster_event_add_string(event, META2_EVTFIELD_M2ADDR, m2url);
-
 
 	if (event_get_dir(evt_config)) {
 		if(NULL != (err = gridcluster_event_SaveNewEvent(evt_config, event))) {
@@ -620,7 +628,7 @@ meta2_filter_action_touch_content_v1(struct gridd_filter_ctx_s *ctx,
 	_bean_cleanl2(beans);
 
 	if (!err) {
-		reply->send_reply(200, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 		return FILTER_OK;
 	}
 	else {
@@ -649,7 +657,7 @@ meta2_filter_action_touch_container_v1(struct gridd_filter_ctx_s *ctx,
 	GPtrArray *aliases = g_ptr_array_new();
 	struct list_params_s lp;
 	memset(&lp, '\0', sizeof(struct list_params_s));
-	lp.type = DEFAULT;
+	lp.flag_nodeleted = ~0;
 	err = meta2_backend_list_aliases(m2b, url, &lp, _bean_buffer_cb, aliases);
 	if (err != NULL) {
 		meta2_filter_ctx_set_error(ctx, err);
@@ -677,7 +685,7 @@ meta2_filter_action_touch_container_v1(struct gridd_filter_ctx_s *ctx,
 	}
 
 	if (!err) {
-		reply->send_reply(200, "0K");
+		reply->send_reply(CODE_FINAL_OK, "0K");
 		return FILTER_OK;
 	}
 

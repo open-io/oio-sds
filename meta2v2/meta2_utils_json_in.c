@@ -1,8 +1,32 @@
-#include <glib.h>
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef G_LOG_DOMAIN
+# define G_LOG_DOMAIN "m2v2"
+#endif
+
 #include <json.h>
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metautils_errors.h>
+
+#include <glib.h>
 
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
@@ -10,8 +34,8 @@
 
 typedef GError* (*jbean_mapper) (struct json_object*, gpointer*);
 
-static GError*
-_alias2bean (struct json_object *j, gpointer *pbean)
+GError*
+m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 {
 	GError *err = NULL;
 	GByteArray *hid = NULL;
@@ -27,29 +51,29 @@ _alias2bean (struct json_object *j, gpointer *pbean)
 	jheader = json_object_object_get (j, "header");
 
 	if (!jname || !json_object_is_type(jname, json_type_string)) {
-		err = NEWERROR(400, "Invalid json name");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json name");
 		goto exit;
 	}
 	if (!jversion || !json_object_is_type(jversion, json_type_int)) {
-		err = NEWERROR(400, "Invalid json version");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json version");
 		goto exit;
 	}
 	if (!jctime || !json_object_is_type(jctime, json_type_int)) {
-		err = NEWERROR(400, "Invalid json ctime");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json ctime");
 		goto exit;
 	}
 	if (!jheader || !json_object_is_type(jheader, json_type_string)) {
-		err = NEWERROR(400, "Invalid json header");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json header");
 		goto exit;
 	}
 	if (!jmd || !json_object_is_type(jmd, json_type_string)) {
-		err = NEWERROR(400, "Invalid json metadata");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json metadata");
 		goto exit;
 	}
 
 	hid = metautils_gba_from_hexstring(json_object_get_string(jheader));
 	if (!hid) {
-		err = NEWERROR(400, "Invalid alias, not hexadecimal header_id");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid alias, not hexadecimal header_id");
 		goto exit;
 	}
 
@@ -73,8 +97,8 @@ exit:
 	return err;
 }
 
-static GError*
-_header2bean (struct json_object *j, gpointer *pbean)
+GError*
+m2v2_json_load_single_header (struct json_object *j, gpointer *pbean)
 {
 	GError *err = NULL;
 	GByteArray *id = NULL, *hash = NULL;
@@ -86,28 +110,28 @@ _header2bean (struct json_object *j, gpointer *pbean)
 
 	jid = json_object_object_get (j, "id");
 	if (!jid || !json_object_is_type(jid, json_type_string)) {
-		err = NEWERROR(400, "Invalid json id");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json id");
 		goto exit;
 	}
 	jhash = json_object_object_get (j, "hash");
 	if (!jhash || !json_object_is_type(jhash, json_type_string)) {
-		err = NEWERROR(400, "Invalid json hash");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json hash");
 		goto exit;
 	}
 	jsize = json_object_object_get (j, "size");
 	if (!jsize || !json_object_is_type(jsize, json_type_int)) {
-		err = NEWERROR(400, "Invalid json size");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json size");
 		goto exit;
 	}
 
 	id = metautils_gba_from_hexstring(json_object_get_string(jid));
 	if (!id) {
-		err = NEWERROR(400, "Invalid header, not hexa id");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid header, not hexa id");
 		goto exit;
 	}
 	hash = metautils_gba_from_hexstring(json_object_get_string(jhash));
 	if (!hash || hash->len != 16) {
-		err = NEWERROR(400, "Invalid header, not hexa16 hash");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid header, not hexa16 hash");
 		goto exit;
 	}
 
@@ -129,8 +153,8 @@ exit:
 	return err;
 }
 
-static GError*
-_content2bean (struct json_object *j, gpointer *pbean)
+GError*
+m2v2_json_load_single_content (struct json_object *j, gpointer *pbean)
 {
 	GError *err = NULL;
 	GByteArray *hid = NULL;
@@ -142,23 +166,23 @@ _content2bean (struct json_object *j, gpointer *pbean)
 
 	jhid = json_object_object_get (j, "hdr");
 	if (!jhid || !json_object_is_type(jhid, json_type_string)) {
-		err = NEWERROR(400, "Invalid json header id");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json header id");
 		goto exit;
 	}
 	jcid = json_object_object_get (j, "chunk");
 	if (!jcid || !json_object_is_type(jcid, json_type_string)) {
-		err = NEWERROR(400, "Invalid json chunk id");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json chunk id");
 		goto exit;
 	}
 	jpos = json_object_object_get (j, "pos");
 	if (!jpos || !json_object_is_type(jpos, json_type_string)) {
-		err = NEWERROR(400, "Invalid json position");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json position");
 		goto exit;
 	}
 
 	hid = metautils_gba_from_hexstring(json_object_get_string(jhid));
 	if (!hid) {
-		err = NEWERROR(400, "Invalid content, not hexa header id");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid content, not hexa header id");
 		goto exit;
 	}
 
@@ -178,8 +202,8 @@ exit:
 	return err;
 }
 
-static GError*
-_chunk2bean (struct json_object *j, gpointer *pbean)
+GError*
+m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean)
 {
 	GError *err = NULL;
 	GByteArray *hash = NULL;
@@ -191,23 +215,23 @@ _chunk2bean (struct json_object *j, gpointer *pbean)
 
 	jid = json_object_object_get (j, "id");
 	if (!jid || !json_object_is_type(jid, json_type_string)) {
-		err = NEWERROR(400, "Invalid json header id");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json chunk id");
 		goto exit;
 	}
 	jhash = json_object_object_get (j, "hash");
 	if (!jhash || !json_object_is_type(jhash, json_type_string)) {
-		err = NEWERROR(400, "Invalid json chunk hash");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json chunk hash");
 		goto exit;
 	}
 	jsize = json_object_object_get (j, "size");
 	if (!jsize || !json_object_is_type(jsize, json_type_int)) {
-		err = NEWERROR(400, "Invalid json size");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json size");
 		goto exit;
 	}
 
 	hash = metautils_gba_from_hexstring(json_object_get_string(jhash));
 	if (!hash) {
-		err = NEWERROR(400, "Invalid chunk, not hexa header id");
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid chunk, not hexa header id");
 		goto exit;
 	}
 
@@ -232,37 +256,93 @@ static GError *
 _jarray_to_beans (GSList **out, struct json_object *jv, jbean_mapper map)
 {
 	if (!json_object_is_type(jv, json_type_array))
-		return NEWERROR(400, "Invalid JSON, exepecting array of beans");
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid JSON, exepecting array of beans");
 
+	GSList *l = NULL;
 	int vlen = json_object_array_length (jv);
 	for (int i=0; i<vlen ;++i) {
 		struct json_object *j = json_object_array_get_idx (jv, i);
 		if (!json_object_is_type (j, json_type_object))
-			return NEWERROR(400, "Invalid JSON for a bean");
+			return NEWERROR(CODE_BAD_REQUEST, "Invalid JSON for a bean");
 		gpointer bean = NULL;
 		GError *err = map(j, &bean);
 		g_assert((bean != NULL) ^ (err != NULL));
-		if (err)
+		if (err) {
+			_bean_cleanl2 (l);
 			return err;
-		*out = g_slist_prepend(*out, bean);
+		}
+		l = g_slist_prepend(l, bean);
 	}
 
+	*out = g_slist_reverse (l);
 	return NULL;
 }
 
 GError *
-meta2_json_object_to_beans(GSList **beans, struct json_object *jbeans)
+m2v2_json_load_single_xbean (struct json_object *j, gpointer *pbean)
+{
+	if (!json_object_is_type (j, json_type_object))
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid object type");
+	struct json_object *jtype = NULL;
+	if (!json_object_object_get_ex (j, "type", &jtype))
+		return NEWERROR(CODE_BAD_REQUEST, "Missing 'type' field");
+	if (!json_object_is_type (jtype, json_type_string))
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid 'type' field");
+
+	const char *stype = json_object_get_string (jtype);
+	if (!g_ascii_strcasecmp(stype, "alias"))
+		return m2v2_json_load_single_alias (j, pbean);
+	if (!g_ascii_strcasecmp(stype, "header"))
+		return m2v2_json_load_single_header (j, pbean);
+	if (!g_ascii_strcasecmp(stype, "content"))
+		return m2v2_json_load_single_content (j, pbean);
+	if (!g_ascii_strcasecmp(stype, "chunk"))
+		return m2v2_json_load_single_chunk (j, pbean);
+
+	return NEWERROR(CODE_BAD_REQUEST, "Unexpected 'type' field");
+}
+
+GError *
+m2v2_json_load_setof_xbean (struct json_object *jv, GSList **out)
+{
+	if (!json_object_is_type(jv, json_type_array))
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid JSON, exepecting array of beans");
+
+	GSList *l = NULL;
+	int vlen = json_object_array_length (jv);
+	for (int i=0; i<vlen ;++i) {
+		struct json_object *j = json_object_array_get_idx (jv, i);
+		gpointer bean = NULL;
+		GError *err = m2v2_json_load_single_xbean(j, &bean);
+		g_assert((bean != NULL) ^ (err != NULL));
+		if (err) {
+			_bean_cleanl2 (l);
+			return err;
+		}
+		l = g_slist_prepend(l, bean);
+	}
+
+	*out = g_slist_reverse(l); // Serve the beans in the same order!
+	return NULL;
+}
+
+GError *
+meta2_json_load_setof_beans(struct json_object *jbeans, GSList **beans)
 {
 	static gchar* title[] = { "aliases", "headers", "contents", "chunks", NULL };
-	static jbean_mapper mapper[] = { _alias2bean, _header2bean, _content2bean,
-		_chunk2bean };
+	static jbean_mapper mapper[] = {
+		m2v2_json_load_single_alias,
+		m2v2_json_load_single_header,
+		m2v2_json_load_single_content,
+		m2v2_json_load_single_chunk
+	};
 
 	GError *err = NULL;
 	gchar **ptitle;
 	jbean_mapper *pmapper;
 	for (ptitle=title,pmapper=mapper; *ptitle ;++ptitle,++pmapper) {
-		struct json_object *jv = json_object_object_get (jbeans, *ptitle);
-		if (!jv)
+		struct json_object *jv = NULL;
+		if (!json_object_object_get_ex (jbeans, *ptitle, &jv))
 			continue;
 		err = _jarray_to_beans(beans, jv, *pmapper);
 		if (err != NULL) {

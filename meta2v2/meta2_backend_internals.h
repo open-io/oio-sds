@@ -1,5 +1,25 @@
-#ifndef META2V2_INTERNALS__H
-# define META2V2_INTERNALS__H 1
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__meta2v2__meta2_backend_internals_h
+# define OIO_SDS__meta2v2__meta2_backend_internals_h 1
+
 # include <stdlib.h>
 # include <unistd.h>
 # include <errno.h>
@@ -13,33 +33,42 @@
 # include <meta2v2/meta2_backend.h>
 # include <meta2v2/meta2_events.h>
 
-# ifndef M2V2_KEY_VERSION
-#  define M2V2_KEY_VERSION "m2vers"
+# ifndef M2V2_ADMIN_PREFIX_SYS
+# define M2V2_ADMIN_PREFIX_SYS SQLX_ADMIN_PREFIX_SYS "m2."
 # endif
 
-# ifndef M2V2_KEY_QUOTA
-#  define M2V2_KEY_QUOTA "quota"
+# ifndef M2V2_ADMIN_PREFIX_USER
+# define M2V2_ADMIN_PREFIX_USER SQLX_ADMIN_PREFIX_USER "m2."
 # endif
 
-# ifndef M2V2_KEY_NAMESPACE
-#  define M2V2_KEY_NAMESPACE "namespace"
+# ifndef M2V2_ADMIN_VERSION
+# define M2V2_ADMIN_VERSION M2V2_ADMIN_PREFIX_SYS "version"
 # endif
 
-# ifndef M2V2_KEY_SIZE
-#  define M2V2_KEY_SIZE "container_size"
+# ifndef M2V2_ADMIN_QUOTA
+# define M2V2_ADMIN_QUOTA M2V2_ADMIN_PREFIX_SYS "quota"
 # endif
 
-# ifndef M2V2_KEY_VERSIONING_POLICY
-#  define M2V2_KEY_VERSIONING_POLICY "versioning_policy"
+# ifndef M2V2_ADMIN_SIZE
+# define M2V2_ADMIN_SIZE M2V2_ADMIN_PREFIX_SYS "usage"
 # endif
 
-# ifndef M2V2_KEY_KEEP_DELETED_DELAY
-#  define M2V2_KEY_KEEP_DELETED_DELAY "keep_deleted_delay"
+# ifndef M2V2_ADMIN_VERSIONING_POLICY
+# define M2V2_ADMIN_VERSIONING_POLICY M2V2_ADMIN_PREFIX_SYS "policy.version"
+# endif
+
+# ifndef M2V2_ADMIN_STORAGE_POLICY
+# define M2V2_ADMIN_STORAGE_POLICY M2V2_ADMIN_PREFIX_SYS "policy.storage"
+# endif
+
+# ifndef M2V2_ADMIN_KEEP_DELETED_DELAY
+# define M2V2_ADMIN_KEEP_DELETED_DELAY "keep_deleted_delay"
 # endif
 
 # ifndef META2_INIT_FLAG
-#  define META2_INIT_FLAG "m2v2:init"
+# define META2_INIT_FLAG M2V2_ADMIN_PREFIX_SYS "init"
 # endif
+
 # ifndef META2_EVTFIELD_M2ADDR
 #  define META2_EVTFIELD_M2ADDR "M2ADDR"
 # endif
@@ -57,7 +86,7 @@
 
 struct transient_s
 {
-	GMutex *lock;
+	GMutex lock;
 	GTree *tree;
 };
 
@@ -67,7 +96,7 @@ struct meta2_backend_s
 
 	struct service_update_policies_s *policies;
 
-	GMutex *lock_transient;
+	GMutex lock_transient;
 	GHashTable *transient;
 
 	/* Must a BEANS generation request perform a pre-check on the ALIAS's
@@ -76,7 +105,7 @@ struct meta2_backend_s
 
 	// array of GSList* of addr_info_t*
 	GPtrArray *m0_mapping;
-	GMutex *modified_containers_lock;
+	GMutex modified_containers_lock;
 	GHashTable *modified_containers;
 
 	struct hc_resolver_s *resolver;
@@ -110,4 +139,4 @@ GError* m2b_transient_del(struct meta2_backend_s *m2b, const gchar *key, const g
 
 void m2b_transient_cleanup(struct meta2_backend_s *m2b);
 
-#endif /* META2V2_INTERNALS__H */
+#endif /*OIO_SDS__meta2v2__meta2_backend_internals_h*/

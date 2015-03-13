@@ -1,5 +1,25 @@
-#ifndef __REDCURRANT_metatype_m0info__h
-#define __REDCURRANT_metatype_m0info__h 1
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__metatype_m0info_h
+# define OIO_SDS__metautils__lib__metatype_m0info_h 1
+
 #include <glib/gtypes.h>
 
 /**
@@ -23,19 +43,16 @@
  */
 gsize meta0_info_to_string(const meta0_info_t * m0, gchar * dst, gsize dstsize);
 
-
 /**
  * @param m0
  */
 void meta0_info_clean(meta0_info_t *m0);
-
 
 /**
  * @param d
  * @param u
  */
 void meta0_info_gclean(gpointer d, gpointer u);
-
 
 /**
  * @param mL
@@ -44,7 +61,6 @@ void meta0_info_gclean(gpointer d, gpointer u);
  */
 GHashTable *meta0_info_list_map_by_addr(GSList * mL, GError ** err);
 
-
 /**
  * @param mL
  * @param err
@@ -52,14 +68,12 @@ GHashTable *meta0_info_list_map_by_addr(GSList * mL, GError ** err);
  */
 GHashTable *meta0_info_list_map_by_prefix(GSList * mL, GError ** err);
 
-
 /**
  * @param mL
  * @param err
  * @return
  */
 GSList *meta0_info_compress_prefixes(GSList * mL, GError ** err);
-
 
 /**
  * @param mL
@@ -70,4 +84,4 @@ GSList *meta0_info_uncompress_prefixes(GSList * mL, GError ** err);
 
 /** @} */
 
-#endif // __REDCURRANT_metatype_m0info__h
+#endif /*OIO_SDS__metautils__lib__metatype_m0info_h*/

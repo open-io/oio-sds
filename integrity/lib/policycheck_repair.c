@@ -1,3 +1,22 @@
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "polcheck"
 #endif
@@ -167,7 +186,6 @@ _gslist_poll_n(GSList **src, guint n)
 	return shuffled;
 }
 
-
 //------------------------------------------------------------------------------
 // HTTP helpers
 //------------------------------------------------------------------------------
@@ -182,13 +200,13 @@ _request_prepare(const gchar *m, const gchar *u, ne_session **ps, ne_request **p
 	ne_uri_parse(u, &uri);
 
 	if (!(*ps = ne_session_create("http", uri.host, uri.port)))
-		err = NEWERROR(500, "Cannot open a new WebDAV session");
+		err = NEWERROR(CODE_INTERNAL_ERROR, "Cannot open a new WebDAV session");
 	else {
 		ne_set_connect_timeout(*ps, 10);
 		ne_set_read_timeout(*ps, 30);
 
 		if (!(*pr = ne_request_create(*ps, m, uri.path))) {
-			err = NEWERROR(500, "Cannot open a new WebDAV session");
+			err = NEWERROR(CODE_INTERNAL_ERROR, "Cannot open a new WebDAV session");
 			ne_session_destroy(*ps);
 			*ps = NULL;
 		}
@@ -209,15 +227,15 @@ _request_dispatch(ne_session *session, ne_request *request)
 					"Download error: %s", ne_get_error(session));
 			return NULL;
 		case NE_ERROR:
-			return NEWERROR(500, "Caller error: %s", ne_get_error(session));
+			return NEWERROR(CODE_INTERNAL_ERROR, "Caller error: %s", ne_get_error(session));
 		case NE_TIMEOUT:
 			return NEWERROR(10060, "Timeout: %s", ne_get_error(session));
 		case NE_CONNECT:
 			return NEWERROR(10061, "Connection error: %s", ne_get_error(session));
 		case NE_AUTH:
-			return NEWERROR(500, "Authentication error: %s", ne_get_error(session));
+			return NEWERROR(CODE_INTERNAL_ERROR, "Authentication error: %s", ne_get_error(session));
 		default:
-			return NEWERROR(500, "Unexpected error: %s", ne_get_error(session));
+			return NEWERROR(CODE_INTERNAL_ERROR, "Unexpected error: %s", ne_get_error(session));
 	}
 }
 
@@ -863,7 +881,6 @@ _repair_single_flaw(struct policy_check_s *pc, struct m2v2_check_error_s *flaw)
 	}
 }
 
-
 //------------------------------------------------------------------------------
 // Initial test download
 //------------------------------------------------------------------------------
@@ -911,9 +928,9 @@ _check_chunk_bean(struct bean_CHUNKS_s *chunk, gboolean no_md5)
 
 	GByteArray *h = CHUNKS_get_hash(chunk);
 	if (buflen != h->len)
-		err = NEWERROR(500, "Hash mismatch (length)");
+		err = NEWERROR(CODE_INTERNAL_ERROR, "Hash mismatch (length)");
 	else if (0 != memcmp(h->data, buf, buflen))
-		err = NEWERROR(500, "Hash mismatch (value)");
+		err = NEWERROR(CODE_INTERNAL_ERROR, "Hash mismatch (value)");
 
 	// TODO Force the storage policy
 
@@ -1002,7 +1019,7 @@ policy_load_beans(struct policy_check_s *pc)
 	}
 
 	if (!done && !err)
-		err = NEWERROR(500, "META2 content location failure");
+		err = NEWERROR(CODE_INTERNAL_ERROR, "META2 content location failure");
 	if (err) {
 		if (pc->m2urlv) {
 			g_strfreev(pc->m2urlv);
@@ -1066,7 +1083,7 @@ policy_check_and_repair(struct policy_check_s *pc)
 	return err;
 }
 
-void
+static void
 _check_args_clean(struct check_args_s *args)
 {
 	grid_lbpool_destroy(args->lbpool);
@@ -1074,7 +1091,7 @@ _check_args_clean(struct check_args_s *args)
 	memset(args, 0, sizeof(struct check_args_s));
 }
 
-GError*
+static GError*
 _check_args_init(struct check_args_s *args, const gchar *ns)
 {
 	GError *err = NULL;
@@ -1163,9 +1180,6 @@ check_and_repair_content2(const gchar *namespace, const gchar *container_id,
 		guint32 flags, GError **error)
 {
 	gint retval = 0;
-
-	if (!g_thread_supported())
-		g_thread_init(NULL);
 
 	struct hc_url_s *url = hc_url_empty();
 	hc_url_set(url, HCURL_NS, namespace);

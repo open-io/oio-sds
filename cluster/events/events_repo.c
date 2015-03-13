@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gridcluster.events_repo"
 #endif
@@ -18,7 +37,6 @@
 
 #include <cluster/events/gridcluster_events.h>
 
-
 static void
 purify_basename(gchar *s)
 {
@@ -33,7 +51,6 @@ purify_basename(gchar *s)
 	}
 }
 
-
 // TODO: FIXME: duplicate function with meta2v2/meta2_filters_action_events.c...
 static gint64
 get_id64(struct event_config_s *evt)
@@ -46,7 +63,6 @@ get_id64(struct event_config_s *evt)
 
    return res;
 }
-
 
 /**
  * Write an event to the spool event manage directory
@@ -88,20 +104,20 @@ retry:
 		if (errno == ENOENT) {
 			while (!err && 0 != g_mkdir_with_parents(dirname, 0755)) {
 				if (errno != EEXIST)
-					err = NEWERROR(500, "Event error (mkdir) : errno=%d (%s)",
+					err = NEWERROR(CODE_INTERNAL_ERROR, "Event error (mkdir) : errno=%d (%s)",
 							errno, strerror(errno));
 				/* g_mkdir_with_parents() poorly manages concurency, so we try
 				 * as long as we got race conditions clues. */
 			}
 			goto retry;
 		}
-		err = NEWERROR(500, "Event write error (mkstemp) : errno=%d (%s)",
+		err = NEWERROR(CODE_INTERNAL_ERROR, "Event write error (mkstemp) : errno=%d (%s)",
 				errno, strerror(errno));
 	} else {
 		GRID_INFO("fd opened");
 		/* change file attribute */
 		if (0 != fchmod(fd, 0644))
-			err = NEWERROR(500, "Event error (chmod) : errno=%d (%s)",
+			err = NEWERROR(CODE_INTERNAL_ERROR, "Event error (chmod) : errno=%d (%s)",
 					errno, strerror(errno));
 
 		/* Set the file content */
@@ -109,14 +125,13 @@ retry:
 			GByteArray *gba;
 
 			if (!(gba = gridcluster_encode_event(evt, NULL)))
-				err = NEWERROR(500, "Event error (encoding)");
+				err = NEWERROR(CODE_INTERNAL_ERROR, "Event error (encoding)");
 			else {
 				write(fd, gba->data, gba->len);
 				g_byte_array_free(gba, TRUE);
 				GRID_INFO("Event written");
 			}
 		}
-
 
 		/* set extended attributes (XATTR) */
 		if (!err) {
@@ -130,7 +145,7 @@ retry:
 				|| (-1 == fsetxattr(fd, GRIDCLUSTER_EVENT_XATTR_SEQ,  str_seq, strlen(str_seq), 0))
 				|| (-1 == fsetxattr(fd, GRIDCLUSTER_EVENT_XATTR_CID, str_cid, strlen(str_cid), 0)))
 			{
-				err = NEWERROR(500, "Event error (setxattr) : errno=%d (%s)",
+				err = NEWERROR(CODE_INTERNAL_ERROR, "Event error (setxattr) : errno=%d (%s)",
 						errno, strerror(errno));
 			}
 			GRID_INFO("xattr ok");
@@ -140,7 +155,7 @@ retry:
 		if (!err) {
 			GRID_INFO("going to rename...");
 			if (0 != rename(tmppath, abspath)) {
-				err = NEWERROR(500, "Event error (rename) : errno=%d (%s)",
+				err = NEWERROR(CODE_INTERNAL_ERROR, "Event error (rename) : errno=%d (%s)",
 						errno, strerror(errno));
 				(void) unlink(tmppath);
 			}
@@ -158,7 +173,6 @@ retry:
 		g_free(str_cid);
 	return err;
 }
-
 
 int
 gridcluster_eventxattr_get_incoming_time(const gchar *path, time_t *t)
@@ -187,7 +201,6 @@ gridcluster_eventxattr_get_incoming_time(const gchar *path, time_t *t)
 	return 0;
 }
 
-
 int
 gridcluster_eventxattr_get_seq(const gchar *path, gint64 *i64)
 {
@@ -203,7 +216,6 @@ gridcluster_eventxattr_get_seq(const gchar *path, gint64 *i64)
 	errno = 0;
 	return 0;
 }
-
 
 int
 gridcluster_eventxattr_get_container_id(const gchar *path, container_id_t *id, gchar *str, gsize str_len)

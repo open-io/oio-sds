@@ -7,7 +7,6 @@ add_library(server SHARED
 		slab.c slab.h
 		network_server.c network_server.h
         transport_gridd.c transport_gridd.h
-        transport_http.c transport_http.h
 		grid_daemon.c grid_daemon.h
 		stats_holder.c stats_holder.h)
 
@@ -36,12 +35,6 @@ target_link_libraries(network_server_static
 		server metautils metacomm
 		${GLIB2_LIBRARIES})
 
-add_executable(network_server_http
-        network_server_http.c)
-target_link_libraries(network_server_http
-		server metautils metacomm
-		${GLIB2_LIBRARIES})
-
 add_executable(grid_daemon_test grid_daemon_test.c)
 target_link_libraries(grid_daemon_test
 		server metautils metacomm
@@ -57,7 +50,6 @@ install(FILES
 			network_server.h
 			slab.h
 			transport_gridd.h
-			transport_http.h
 		DESTINATION include/server
 		PERMISSIONS
 			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "metautils.tools"
 #endif
@@ -6,7 +25,6 @@
 
 #include "metautils.h"
 #include "metautils_internals.h"
-
 
 struct meta1_service_url_s*
 meta1_unpack_url(const gchar *url)
@@ -127,14 +145,11 @@ void
 meta1_service_url_encode_json (GString *gstr, struct meta1_service_url_s *m1u)
 {
 	if (!m1u) {
-		g_string_append(gstr, "nil");
+		g_string_append(gstr, "null");
 	} else {
-		g_string_append_printf(gstr, "{\"seq\":%"G_GINT64_FORMAT",",
-				m1u->seq);
-		g_string_append_printf(gstr, "\"type\":\"%.*s\",",
-				(int)sizeof(m1u->srvtype), m1u->srvtype);
-		g_string_append_printf(gstr, "\"host\":\"%.*s\",",
-				(int)sizeof(m1u->host), m1u->host);
+		g_string_append_printf(gstr, "{\"seq\":%"G_GINT64_FORMAT",", m1u->seq);
+		g_string_append_printf(gstr, "\"type\":\"%.*s\",", (int)sizeof(m1u->srvtype), m1u->srvtype);
+		g_string_append_printf(gstr, "\"host\":\"%.*s\",", (int)sizeof(m1u->host), m1u->host);
 		g_string_append_printf(gstr, "\"args\":\"%.*s\"}",
 				LIMIT_LENGTH_SRVARGS, m1u->args);
 	}

@@ -1,9 +1,25 @@
-/**
- * @file transport_gridd.h
- */
+/*
+OpenIO SDS server
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
-#ifndef GRID__TRANSPORT_GRIDD__H
-# define GRID__TRANSPORT_GRIDD__H 1
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__server__transport_gridd_h
+# define OIO_SDS__server__transport_gridd_h 1
+
 # include <glib.h>
 
 # ifndef INNER_STAT_NAME_REQ_COUNTER
@@ -84,7 +100,6 @@ struct gridd_reply_ctx_s
 
 	/* Return a data previously associated, or NULL if not found. */
 	gpointer (*get_cnx_data) (const gchar *key);
-
 
 	/* --------------------------------
 	 * Context belonging to the request
@@ -216,4 +231,4 @@ const struct gridd_request_descr_s* gridd_get_common_requests(void);
 
 /** @} */
 
-#endif
+#endif /*OIO_SDS__server__transport_gridd_h*/

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "m2v2.utils"
 #endif
@@ -12,7 +31,6 @@
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
-
 
 /* ------------------------ INTERNALS -----------------------*/
 
@@ -103,12 +121,12 @@ _fill_chunk_id(chunk_id_t *cid, gpointer chunk)
 			if(NULL != pa)
 				g_free(pa);
 		} else {
-			e = g_error_new(GQ(), 400, "Unparsable chunk id : [%s]", idv2);
+			e = NEWERROR(CODE_BAD_REQUEST, "Unparsable chunk id : [%s]", idv2);
 		}
 		if(NULL != tok_addr)
 			g_strfreev(tok_addr);
 	} else {
-		e = g_error_new(GQ(), 400, "Unparsable chunk id : [%s]", idv2);
+		e = NEWERROR(CODE_BAD_REQUEST, "Unparsable chunk id : [%s]", idv2);
 	}
 
 	if(NULL != url_tok)
@@ -612,7 +630,6 @@ raw_content_v2_from_m2v2_beans(const container_id_t cid, GSList *l)
 			rc->properties = g_slist_prepend(rc->properties,prop);
 		}
 	}
-
 
 	memcpy(&(rc->header.container_id), cid, sizeof(container_id_t));
 	rc->header.metadata = _extract_mdusr_from_props(prop_beans);

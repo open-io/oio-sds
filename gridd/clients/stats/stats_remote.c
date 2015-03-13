@@ -1,3 +1,22 @@
+/*
+OpenIO SDS gridd
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "stats.client.lib"
 #endif
@@ -85,8 +104,8 @@ gridd_stats_remote (addr_info_t *ai, gint ms, GError **err, const gchar *pattern
 	GHashTable *ht=NULL;
 	
 	struct code_handler_s codes [] = {
-		{ 200, REPSEQ_FINAL, NULL, field_extractor },
-		{ 206, 0, NULL, field_extractor },
+		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, field_extractor },
+		{ CODE_PARTIAL_CONTENT, 0, NULL, field_extractor },
 		{ 0, 0, NULL, NULL },
 	};
 	struct reply_sequence_data_s data = { &ht , 0 , codes };
@@ -116,14 +135,13 @@ gridd_stats_remote (addr_info_t *ai, gint ms, GError **err, const gchar *pattern
 		goto errorLabel;
 	}
 
-	message_destroy (request, NULL);	
+	message_destroy (request);	
 	return ht;
 	
 errorLabel:
 	if (ht)
 		g_hash_table_destroy (ht);
-	if (request)
-		message_destroy (request, NULL);
+	message_destroy (request);
 	return NULL;
 }
 

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta0v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta0.server"
 #endif
@@ -79,19 +98,19 @@ strv_filter(struct sqlx_service_s *ss, GSList *l)
 }
 
 static GError *
-_get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t,
+_get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
 	(void) nocache;
 	GSList *peers;
 	GError *err;
 
-	if (!n || !t || !result)
-		return NEWERROR(500, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
-	if (g_ascii_strcasecmp(t, META0_TYPE_NAME))
-		return NEWERROR(400, "Invalid type name");
-	if (g_ascii_strcasecmp(n, ss->ns_name))
-		return NEWERROR(400, "Invalid base name, expected [%s]", ss->ns_name);
+	if (!n || !result)
+		return NEWERROR(CODE_INTERNAL_ERROR, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
+	if (g_ascii_strcasecmp(n->type, META0_TYPE_NAME))
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name");
+	if (g_ascii_strcasecmp(n->base, ss->ns_name))
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name, expected [%s]", ss->ns_name);
 
 	err = list_zk_children_node(m0zkmanager, NULL, &peers);
 	if (err) {
@@ -105,7 +124,6 @@ _get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t,
 		return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
 	return NULL;
 }
-
 
 static void
 _callback_change(struct sqlx_sqlite3_s *sq3, gpointer u)

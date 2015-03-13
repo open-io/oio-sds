@@ -1,3 +1,22 @@
+/*
+OpenIO SDS rainx
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #undef PACKAGE_BUGREPORT
 #undef PACKAGE_NAME
 #undef PACKAGE_STRING
@@ -322,7 +341,6 @@ dav_rainx_get_resource(request_rec *r, const char *root_dir, const char *label,
 				subchunk_size, ns_chunk_size, resource->info->namespace));
 	}
 
-
 	*result_resource = resource;
 
 	return NULL;
@@ -478,7 +496,6 @@ end:
 	void *__rain_calloc(size_t nmemb, size_t size) { return apr_pcalloc(subpool, nmemb*size); }\
 	void __rain_free(void *ptr) { (void)ptr; }\
 	ENV = (struct rain_env_s){ __rain_malloc, __rain_calloc, __rain_free };
-
 
 static dav_error *
 rainx_repo_stream_create(const dav_resource *resource, dav_stream **result)
@@ -1967,7 +1984,6 @@ static const dav_provider dav_rainx_provider =
 	NULL,               /* search */
 	NULL                /* ctx */
 };
-
 
 void
 dav_rainx_register(apr_pool_t *p)

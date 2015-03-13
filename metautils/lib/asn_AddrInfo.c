@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metacomm.addr_info.asn"
 #endif
@@ -57,7 +76,6 @@ addr_info_ASN2API(const AddrInfo_t * asn, addr_info_t * api)
 	return TRUE;
 }
 
-
 gboolean
 addr_info_API2ASN(const addr_info_t * api, AddrInfo_t * asn)
 {
@@ -88,9 +106,7 @@ addr_info_API2ASN(const addr_info_t * api, AddrInfo_t * asn)
 	}
 
 	asn->port = NULL;
-	asn->port = g_try_new0(INTEGER_t, 1);
-	if (!asn->port)
-		return FALSE;
+	asn->port = g_malloc0(sizeof(INTEGER_t));
 
 	/*
 		For compatibility reasons with GRID V1 
@@ -102,7 +118,6 @@ addr_info_API2ASN(const addr_info_t * api, AddrInfo_t * asn)
 
 	return TRUE;
 }
-
 
 void
 addr_info_cleanASN(AddrInfo_t * asn, gboolean only_content)

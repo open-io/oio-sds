@@ -1,7 +1,25 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #include "./gs_internals.h"
 
 #define KEY_STG_POLICY "storage_policy"
-
 
 /* do not export this function, used only for code factoring
  * file descriptors leaks should be too easy with it */
@@ -41,7 +59,7 @@ _update_master(gs_container_t *c, char *master)
 static inline int
 _is_sql_error(const int errcode)
 {
-	return errcode > 500 && errcode < 600;
+	return errcode >= CODE_INTERNAL_ERROR && errcode < CODE_PLATFORM_ERROR;
 }
 
 static int
@@ -70,7 +88,7 @@ __create_in_meta2(addr_info_t *m1, gs_container_t *c, struct m2v2_create_params_
 		if( NULL != e) {
 			GSETCODE(err, e->code, "%s", e->message);
 		} else {
-			GSETCODE(err, 500, "Failed to link service meta2 , no error specified");
+			GSETCODE(err, CODE_INTERNAL_ERROR, "Failed to link service meta2 , no error specified");
 		}
 		rc = GS_ERROR;
 		goto cleanup_label;
@@ -176,7 +194,7 @@ _create (gs_container_t *container, struct m2v2_create_params_s *params,
 			INFO("META0 REFRESH on %s", g_error_get_message(*err));
 			gs_decache_all (container->info.gs);
 			return _create( container, params, err, nb+1, exclude, max );
-		} else if (code < 100) {
+		} else if (CODE_IS_NETWORK_ERROR(code)) {
 			*exclude = g_slist_prepend(*exclude, pM1);
 			DEBUG("Local/Network error, retrying the creation of [%s]", C0_NAME(container));
 			gs_decache_all (container->info.gs);
@@ -243,7 +261,7 @@ _get (gs_container_t *container, struct m2v2_create_params_s *params,
 
 	gs_decache_container (container->info.gs, C0_ID(container));
 
-	if ((*err)->code < 100)
+	if (CODE_IS_NETWORK_ERROR((*err)->code))
 		return _get( container, params, err, retry_count + 1, max_retries, ac );
 
 	GSETERROR(err,"Unmanageable error on ID=[%s]", C0_IDSTR(container));
@@ -389,7 +407,6 @@ error_label:
 	return NULL;
 }
 
-
 gs_container_t*
 gs_get_container_by_hexid (gs_grid_storage_t *gs, const char *hex_id, int auto_create, gs_error_t **gs_err)
 {
@@ -444,14 +461,12 @@ error_label:
         return NULL;
 }
 
-
 int
 gs_container_is_open (gs_container_t *container, gs_error_t **err)
 {
 	(void) err;
 	return container ? container->opened : -1;
 }
-
 
 gs_status_t
 gs_close_container (gs_container_t *container, gs_error_t **err)
@@ -500,7 +515,6 @@ _alias_to_path_info(gpointer alias)
 static GSList *
 _list_v2_wrapper(gs_container_t *c, const char *version, GError **e)
 {
-	GSList *beans = NULL;
 	GError *le = NULL;
 	GSList *l, *result = NULL;
 
@@ -514,11 +528,15 @@ _list_v2_wrapper(gs_container_t *c, const char *version, GError **e)
 	if (version != NULL)
 		hc_url_set(url, HCURL_SNAPORVERS, version);
 
-	le = m2v2_remote_execute_LIST(target, NULL, url, M2V2_FLAG_ALLVERSION, &beans);
+	struct list_result_s list_out = {NULL,NULL,FALSE};
+	struct list_params_s p;
+	memset(&p, 0, sizeof(p));
+	p.flag_allversion = ~0;
+	le = m2v2_remote_execute_LIST(target, NULL, url, &p, &list_out);
 
 	hc_url_clean(url);
 
-	if(NULL != le) {
+	if (NULL != le) {
 
 		if (!*e) {
 			*e = NEWERROR(le->code, "%s", le->message);
@@ -527,18 +545,19 @@ _list_v2_wrapper(gs_container_t *c, const char *version, GError **e)
 			(*e)->code = le->code;
 		}
 		g_clear_error(&le);
+		m2v2_list_result_clean (&list_out);
 		return NULL;
 	}
 
 	/* now we has aliases of all existing version of contents in the targeted container */
-	for(l = beans; l && l->data; l = l->next) {
+	for (l = list_out.beans; l && l->data; l = l->next) {
 		path_info_t *pi = _alias_to_path_info(l->data);
 		if(NULL != pi) {
 			result = g_slist_prepend(result, pi);
 		}
 	}
 
-	_bean_cleanl2(beans);
+	m2v2_list_result_clean (&list_out);
 	return result;
 }
 
@@ -593,7 +612,6 @@ gs_list_container_snapshot(gs_container_t *container, gs_content_t*** result,
 
 	if (localError)
 		g_clear_error(&localError);
-
 
 	/*
 	 * USE THE RESULT
@@ -756,7 +774,6 @@ gs_get_content_from_path_full (gs_container_t *container, const char *name, cons
 	return content;
 }
 
-
 static int
 gs_container_check_cnx (gs_container_t *container)
 {
@@ -869,7 +886,6 @@ gs_container_reconnect_and_refresh (gs_container_t *container, GError **err, gbo
 	return GS_OK;
 }
 
-
 gs_status_t
 gs_container_refresh (gs_container_t *container, GError **err)
 {
@@ -888,14 +904,12 @@ gs_container_refresh (gs_container_t *container, GError **err)
 	return rs;
 }
 
-
 gs_status_t
 gs_container_reconnect (gs_container_t *container, GError **err)
 {
 	gs_container_close_cnx (container);
 	return gs_container_reconnect_and_refresh (container, err, TRUE);
 }
-
 
 gs_status_t
 gs_container_reconnect_if_necessary (gs_container_t *container, GError **err)
@@ -974,7 +988,7 @@ _destroy_everywhere(gs_container_t *container, GSList **exclude, guint32 flags)
 			C0_ID(container), NULL, 0, exclude, &err);
 	if (!m1) {
 		if (!err)
-			err = NEWERROR(500, "Unknown error");
+			err = NEWERROR(CODE_INTERNAL_ERROR, "Unknown error");
 		g_prefix_error(&err, "META0/1 error: ");
 	}
 	else {
@@ -1026,7 +1040,6 @@ success:
 	g_slist_free_full(m1_exclude, g_free);
 	return GS_OK;
 }
-
 
 gs_status_t
 gs_flush_container (gs_container_t *container, gs_error_t **err)
@@ -1088,7 +1101,6 @@ gs_flush_container (gs_container_t *container, gs_error_t **err)
 		return GS_OK;
 	}
 }
-
 
 gs_status_t
 gs_container_get_info (const gs_container_t *container,
@@ -1303,7 +1315,6 @@ gs_get_storage_container (gs_grid_storage_t *gs, const char *container_name,
 			gs_err);
 }
 
-
 gs_container_t* 
 gs_get_storage_container_v2(gs_grid_storage_t *gs,
         const char *container_name, const char *stgpol, const char *verspol, 
@@ -1313,7 +1324,6 @@ gs_get_storage_container_v2(gs_grid_storage_t *gs,
     return gs_get_storage_container2(gs, container_name, &params, auto_create,
 	            gs_err);
 }
-
 
 char **
 hc_get_container_admin_entries(gs_container_t *container, gs_error_t **gs_err)
@@ -1353,7 +1363,7 @@ _hc_set_container_global_property(gs_container_t *container,
 		g_snprintf(buf, sizeof(buf) - 1, "Invalid parameter (%p | %s)",
 				container, prop_val);
 		result = g_malloc0(sizeof(gs_error_t));
-		result->code = 400;
+		result->code = CODE_BAD_REQUEST;
 		result->msg = g_strdup(buf);
 		return result;
 	}

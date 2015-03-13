@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <stdlib.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -17,19 +36,13 @@
 #include "lib/crawler_tools.h"
 #include "lib/crawlerCmd-glue.h"
 
-
-
-
-
 #define MAX_PIPE_LENGTH        512
-
 
 static GThread  *g_progress_thread; /* The thread listening to the system D-Bus for returned progress signals */
 static GThread  *g_timeout_thread;
 static gboolean g_stop_thread; /* Flag to stop the listening threads */
 static gboolean g_pending_command;
 static GString* g_console_command;
-
 
 static GMainLoop*   g_main_loop = NULL;
 static gchar        g_service_name[SERVICENAME_MAX_BYTES];
@@ -39,18 +52,9 @@ static gchar*       g_ctrl_command;
 static gint32       g_service_pid;
 static GString*     g_crawler_name;
 
-
-
-
-
-
-
-
 /*-------------------------------------------------------------------*/
 /* transport layer of crawler                                        */
 /*-------------------------------------------------------------------*/
-
-
 
 static GError* tl_init_command(TCrawlerBus* conn, TCrawlerReq** req, gchar* crawlerName)
 {
@@ -70,16 +74,12 @@ static GError* tl_init_command(TCrawlerBus* conn, TCrawlerReq** req, gchar* craw
 	return NULL;
 }
 
-
-
 static void tl_close(TCrawlerBus** conn)
 {
 	if (*conn)
 		crawler_bus_Close(conn);
 	*conn = NULL;
 }
-
-
 
 static char** tl_send_command_strv(TCrawlerBus* conn, gchar* crawlerName, gchar* cmd, gchar* alldata)
 {
@@ -108,7 +108,6 @@ static char** tl_send_command_strv(TCrawlerBus* conn, gchar* crawlerName, gchar*
 			GRID_ERROR("%s: Unknown command %s", __FUNCTION__, cmd);
 		}
 
-
 	} else {
 		GRID_ERROR("%s: Unknown command %s", __FUNCTION__, cmd);
 	}
@@ -117,9 +116,6 @@ static char** tl_send_command_strv(TCrawlerBus* conn, gchar* crawlerName, gchar*
 
 	return listnames;
 }
-
-
-
 
 static TCrawlerReq* tl_send_command(TCrawlerBus* conn, GError** error, 
 		gchar* crawlerName, gchar* cmd, gchar* alldata)
@@ -136,7 +132,6 @@ static TCrawlerReq* tl_send_command(TCrawlerBus* conn, GError** error,
 		return NULL;
 	}
 
-
 	err = tlc_Send_CmdProcEx(req, -1 /*MAX_ACTION_TIMEOUT*1000*/,
 			NULL, NULL, cmd, g_service_name, alldata );
 	if (err) {
@@ -147,12 +142,9 @@ static TCrawlerReq* tl_send_command(TCrawlerBus* conn, GError** error,
 	return req;
 }
 
-
-
 /*-------------------------------------------------------------------*/
 /* callback from transport layer                                     */
 /*-------------------------------------------------------------------*/
-
 
 gboolean crawlerCmd_ack(TCrawlerBusObject *obj, const char* cmd,
 		const char *alldata, GError **error)
@@ -187,7 +179,6 @@ gboolean crawlerCmd_ack(TCrawlerBusObject *obj, const char* cmd,
 			g_printf("0 action\n");
 		}
 
-
 	} else if (   (!g_strcmp0(CTRL_STOP,     cmd))
 			||(!g_strcmp0(CTRL_SLOW,     cmd))
 			||(!g_strcmp0(CTRL_PAUSE,    cmd))
@@ -215,12 +206,9 @@ gboolean crawlerCmd_ack(TCrawlerBusObject *obj, const char* cmd,
 	return TRUE;
 }
 
-
-
 /*-------------------------------------------------------------------*/
 /* thread                                                            */
 /*-------------------------------------------------------------------*/
-
 
 static void* thread_timeout()
 {
@@ -249,7 +237,6 @@ static void* thread_timeout()
 
 	return NULL;
 }
-
 
 static void* thread_command() 
 {
@@ -303,17 +290,12 @@ static void* thread_command()
 	return NULL;
 }
 
-
-
-
 static const gchar* main_usage(void) 
 {
 	return "./crawler_cmd [-Oname=<crawler_name>] -Ocommand=<command>]\n./crawler_cmd -Ocommand=help\n";
 }
 
-
-
-void usage(void) 
+static void usage(void) 
 {
 	g_print("Available commands list (general command):\n");
     g_print("------------------------\n");
@@ -340,20 +322,13 @@ void usage(void)
 	g_print("\n");
 }
 
-
-
-
-
 static void main_action(void) 
 {
-	int ret;
-
 	g_type_init();
 	g_main_loop = g_main_loop_new (NULL, FALSE);
 
 	if (!g_console_command) 
 		return;
-
 
 	//--------------
 	// check command
@@ -385,20 +360,19 @@ static void main_action(void)
 		g_pending_command = TRUE;
 
 		gboolean bresult = TRUE;
-		g_progress_thread = g_thread_create(thread_command, NULL, TRUE, NULL);
+		g_progress_thread = g_thread_try_new("command", thread_command, NULL, NULL);
 		if (!g_progress_thread) {
 			GRID_ERROR("%s (%d) : System D-Bus returned progress thread failed to start...", 
 					g_service_name, g_service_pid);
 			bresult = FALSE;
 		}
 
-		g_timeout_thread = g_thread_create(thread_timeout, NULL, TRUE, NULL);
+		g_timeout_thread = g_thread_try_new("timeout", thread_timeout, NULL, NULL);
 		if (!g_timeout_thread) {
 			GRID_ERROR("%s (%d) : timeout thread failed to start...",
 					g_service_name, g_service_pid);
 			bresult = FALSE;
 		}
-
 
 		if (bresult) {
 			g_main_loop_run(g_main_loop);
@@ -421,7 +395,6 @@ static gboolean main_configure(int argc, char **args)
 
 	return TRUE;
 }
-
 
 static struct grid_main_option_s *main_get_options(void) 
 {
@@ -460,7 +433,6 @@ static void main_specific_fini(void)
 
 	if (NULL != g_crawler_name)
 		g_string_free(g_crawler_name, TRUE);
-
 
 }
 

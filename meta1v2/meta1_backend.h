@@ -1,9 +1,24 @@
-/**
- * @file meta1_backend.h
- */
+/*
+OpenIO SDS meta1v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
-#ifndef GRIDSTORAGE__META1_BACKEND_H
-# define GRIDSTORAGE__META1_BACKEND_H 1
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__meta1v2__meta1_backend_h
+# define OIO_SDS__meta1v2__meta1_backend_h 1
 
 /**
  * @addtogroup meta1v2_backend
@@ -176,7 +191,6 @@ GError* meta1_backend_get_container_new_service(
 GError *meta1_backend_get_all_services(struct meta1_backend_s *m1,
 	const container_id_t cid, gchar ***result);
 
-
 /**
  * @param m1
  * @param cid
@@ -215,7 +229,6 @@ GError* meta1_backend_set_container_properties(struct meta1_backend_s *m1,
 GError* meta1_backend_del_container_properties(struct meta1_backend_s *m1,
 		const container_id_t cid, gchar **names);
 
-
 /**
  * @param m1
  * @param cid
@@ -243,14 +256,6 @@ GError* meta1_backend_set_service_arguments(struct meta1_backend_s *m1,
  */
 GError* meta1_backend_force_service(struct meta1_backend_s *m1,
 		const container_id_t cid, const gchar *packedurl);
-
-/**
- * @param m1
- * @param cid key member, not touched
- * @return
- */
-GError* meta1_backend_destroy_m2_container(struct meta1_backend_s *m1,
-		const container_id_t cid);
 
 /**
  * Ugly quirk
@@ -305,7 +310,6 @@ GError* meta1_backend_list_references(struct meta1_backend_s *m1,
 		const container_id_t cid,
 		m1b_ref_hook ref_hook, gpointer ref_hook_data);
 
-
 GError*
 meta1_backend_update_m1_policy(struct meta1_backend_s *m1, const gchar *ns, const container_id_t prefix,
                         const container_id_t cid, const gchar *srvtype,
@@ -356,6 +360,6 @@ const gchar* meta1_backend_get_local_addr(struct meta1_backend_s *m1);
 GError *meta1_backend_notify_services(struct meta1_backend_s *m1,
 		struct hc_url_s *url);
 
-
 /** @} */
-#endif
+
+#endif /*OIO_SDS__meta1v2__meta1_backend_h*/

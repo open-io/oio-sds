@@ -1,10 +1,24 @@
-/**
- * @file gs_manifest.h
- *
- */
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
-#ifndef  GS_MANIFEST__H
-# define GS_MANIFEST__H 1
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__metautils_manifest_h
+# define OIO_SDS__metautils__lib__metautils_manifest_h 1
 
 /**
  * @defgroup metautils_manifest Manifest 
@@ -53,4 +67,4 @@ extern GHashTable* gs_manifest_read(const gchar *path, const gchar *prefix, GErr
 
 /** @} */
 
-#endif /* GS_MANIFEST__H */
+#endif /*OIO_SDS__metautils__lib__metautils_manifest_h*/

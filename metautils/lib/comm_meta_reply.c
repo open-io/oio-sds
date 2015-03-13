@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metautils"
 #endif
@@ -23,22 +42,13 @@ gint
 metaXServer_reply_simple(MESSAGE * reply, MESSAGE request, gint code,
 		const gchar * message, GError ** err)
 {
-	MESSAGE tmpReply = NULL;
-
 	if (!reply || !request) {
 		GSETERROR(err, "Invalid parameter");
 		return 0;
 	}
 
-	if (!message_create(&tmpReply, err)) {
-		GSETERROR(err, "Cannot create message");
-		goto errorLabel;
-	}
-
-	if (!message_set_NAME(tmpReply, NAME_MSGNAME_METAREPLY, sizeof(NAME_MSGNAME_METAREPLY) - 1, err)) {
-		GSETERROR(err, "Cannot set the NAME of the message");
-		goto errorLabel;
-	}
+	MESSAGE tmpReply = message_create();
+	message_set_NAME(tmpReply, NAME_MSGNAME_METAREPLY, sizeof(NAME_MSGNAME_METAREPLY) - 1, NULL);
 
 	/*If the original request carries an identifier, we keep it in the reply */
 	if (0 < message_has_ID(request, NULL)) {
@@ -58,55 +68,31 @@ metaXServer_reply_simple(MESSAGE * reply, MESSAGE request, gint code,
 		gsize stampLen = 0;
 
 		switch (message_get_field(request, NAME_MSGKEY_TIMESTAMP, sizeof(NAME_MSGKEY_TIMESTAMP) - 1, &stamp,
-			&stampLen, err)) {
-		case 1:
-			if (!message_add_field(tmpReply, NAME_MSGKEY_TIMESTAMP, sizeof(NAME_MSGKEY_TIMESTAMP) - 1,
-				stamp, stampLen, err)) {
+					&stampLen, err)) {
+			case 1:
+				message_add_field(tmpReply, NAME_MSGKEY_TIMESTAMP, stamp, stampLen);
+			case 0:
+				break;
+			case -1:
 				GSETERROR(err, "Cannot copy the TIMESTAMP of the message");
 				goto errorLabel;
-			}
-		case 0:
-			break;
-		case -1:
-			GSETERROR(err, "Cannot copy the TIMESTAMP of the message");
-			goto errorLabel;
 		}
 	} while (0);
 
-	do {			/*ensures and formats the error code */
-		gchar bufCode[4];
+	/*ensures and formats the error code */
+	if (CODE_IS_NETWORK_ERROR(code))
+		code = CODE_PROXY_ERROR;
+	message_add_field_strint(tmpReply, NAME_MSGKEY_STATUS, code);
 
-		if (code < 100)
-			code = 598;
-		if (code > 699)
-			code = 699;
-		g_snprintf(bufCode, 4, "%03i", code);
-
-		if (!message_add_field(tmpReply, NAME_MSGKEY_STATUS, sizeof(NAME_MSGKEY_STATUS) - 1, bufCode, 3, err)) {
-			GSETERROR(err, "%s", "Cannot add the status in the reply");
-			goto errorLabel;
-		}
-	} while (0);
-
-	/*writes the message */
-	if (message) {
-		if (!message_add_field(tmpReply, NAME_MSGKEY_MESSAGE, sizeof(NAME_MSGKEY_MESSAGE) - 1, message,
-			strlen(message), err)) {
-			GSETERROR(err, "%s", "Cannot add the error-message in the reply");
-			goto errorLabel;
-		}
-	}
+	if (message)
+		message_add_field(tmpReply, NAME_MSGKEY_MESSAGE, message, strlen(message));
 
 	*reply = tmpReply;
-
 	return 1;
-      errorLabel:
-	if (tmpReply)
-		message_destroy(tmpReply, NULL);
-
+errorLabel:
+	message_destroy(tmpReply);
 	return 0;
 }
-
 
 gint
 metaXClient_reply_simple(MESSAGE reply, gint * status, gchar ** msg, GError ** err)
@@ -149,11 +135,7 @@ metaXClient_reply_simple(MESSAGE reply, gint * status, gchar ** msg, GError ** e
 		switch (message_get_field(reply, NAME_MSGKEY_MESSAGE, sizeof(NAME_MSGKEY_MESSAGE) - 1, (void *) &tmpMsg,
 			&tmpMsgSize, err)) {
 		case 1:
-			newMsg = g_try_malloc0(sizeof(gchar) * (tmpMsgSize + 1));
-			if (!newMsg) {
-				GSETERROR(err, "%s", "Memory allocation error");
-				goto errorLabel;
-			}
+			newMsg = g_malloc0(sizeof(gchar) * (tmpMsgSize + 1));
 			memcpy(newMsg, tmpMsg, tmpMsgSize);
 			newMsg[tmpMsgSize] = '\0';
 
@@ -202,7 +184,7 @@ metaXClient_reply_simple(MESSAGE reply, gint * status, gchar ** msg, GError ** e
 	}
 
 	return 1;
-      errorLabel:
+errorLabel:
 	if (*msg)
 		g_free(*msg);
 
@@ -239,7 +221,7 @@ rep_handler(gpointer u, struct message_s *reply)
 		return FALSE;
 
 	if (!(h = _find_handler(ctx->data, s64))) { // Unexpected reply received
-		ctx->err = NEWERROR(500, "Unexpected reply status [%"G_GINT64_FORMAT"]", s64);
+		ctx->err = NEWERROR(CODE_INTERNAL_ERROR, "Unexpected reply status [%"G_GINT64_FORMAT"]", s64);
 		return FALSE;
 	}
 
@@ -247,7 +229,7 @@ rep_handler(gpointer u, struct message_s *reply)
 	body = message_has_BODY(reply, NULL);
 
 	if ((h->flags & REPSEQ_BODYMANDATORY) && body <= 0) {
-		ctx->err = NEWERROR(500, "Missing body (mandatory for status " "[%"G_GINT64_FORMAT"])", s64);
+		ctx->err = NEWERROR(CODE_INTERNAL_ERROR, "Missing body (mandatory for status " "[%"G_GINT64_FORMAT"])", s64);
 		return FALSE;
 	}
 
@@ -258,7 +240,7 @@ rep_handler(gpointer u, struct message_s *reply)
 		rc = h->content_handler(&(ctx->err), ctx->data->udata, s64, b, blen);
 		if (!rc || ctx->err != NULL) {
 			if (!ctx->err)
-				ctx->err = NEWERROR(500, "Unknown content handler error for status [%"G_GINT64_FORMAT"]", s64);
+				ctx->err = NEWERROR(CODE_INTERNAL_ERROR, "Unknown content handler error for status [%"G_GINT64_FORMAT"]", s64);
 			return FALSE;
 		}
 	}
@@ -269,13 +251,13 @@ rep_handler(gpointer u, struct message_s *reply)
 		rc = h->msg_handler(&(ctx->err), ctx->data->udata, s64, reply);
 		if (!rc || ctx->err != NULL) {
 			if (!ctx->err)
-				ctx->err = NEWERROR(500, "Unknown reply handler error for status [%"G_GINT64_FORMAT"]", s64);
+				ctx->err = NEWERROR(CODE_INTERNAL_ERROR, "Unknown reply handler error for status [%"G_GINT64_FORMAT"]", s64);
 			return FALSE;
 		}
 	}
 
 	if (h->flags & REPSEQ_ERROR) {
-		ctx->err = NEWERROR(500, "ReplySequence error : explicit bad code [%"G_GINT64_FORMAT"]", s64);
+		ctx->err = NEWERROR(CODE_INTERNAL_ERROR, "ReplySequence error : explicit bad code [%"G_GINT64_FORMAT"]", s64);
 		return FALSE;
 	}
 
@@ -335,18 +317,15 @@ metaXClient_reply_sequence_run_context(GError ** err, struct metacnx_ctx_s *cnx,
 		return FALSE;
 
 	GError *e;
-
 	if (!(e = _repseq_run(request, cnx, h))) {
 		if (!(cnx->flags & METACNX_FLAGMASK_KEEPALIVE))
 			metacnx_close(cnx);
 		return TRUE;
-	}
-	else {
+	} else {
 		if (err && NULL == *err)
 			g_propagate_error(err, e);
 		else
 			g_clear_error(&e);
-
 		metacnx_close(cnx);
 		return FALSE;
 	}
@@ -415,10 +394,8 @@ metacnx_open(struct metacnx_ctx_s *ctx, GError ** err)
 		GSETERROR(err, "invalid parameter");
 		return FALSE;
 	}
-
 	if (metacnx_is_open(ctx))
 		metacnx_close(ctx);
-
 	ctx->fd = addrinfo_connect(&(ctx->addr), ctx->timeout.cnx, err);
 	return ctx->fd >= 0;
 }
@@ -443,17 +420,12 @@ metacnx_close(struct metacnx_ctx_s *ctx)
 }
 
 struct metacnx_ctx_s *
-metacnx_create(GError ** err)
+metacnx_create(void)
 {
 	gsize i;
 	struct metacnx_ctx_s *ctx;
 
-	ctx = g_try_malloc0(sizeof(struct metacnx_ctx_s));
-	if (!ctx) {
-		GSETERROR(err, "Memory allocation failure");
-		return NULL;
-	}
-
+	ctx = g_malloc0(sizeof(struct metacnx_ctx_s));
 	ctx->fd = -1;
 #define IDSIZE (4*sizeof(int))
 	ctx->id = g_byte_array_sized_new(IDSIZE);

@@ -37,7 +37,6 @@ add_executable(test_parser test_parser.c)
 target_link_libraries(test_parser
 		gridcluster-events metautils
 		${GLIB2_LIBRARIES})
-add_dependencies(test_parser gridcluster_client)
 
 install(FILES
 			gridcluster_events.h

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "metautils.stats"
 #endif
@@ -12,9 +31,6 @@
 #include "metautils.h"
 #include "grid_storage_client_stat.h"
 
-
-
-
 /***************************************************************************/
 /* THREADSAFE                                                              */
 /***************************************************************************/
@@ -26,7 +42,7 @@ static void *_gscstat_thread_init(void *);
 static GOnce g_gscstat_thread_init = G_ONCE_INIT;
 
 // mutex
-static GStaticMutex g_gscstat_lock = G_STATIC_MUTEX_INIT;
+static GMutex g_gscstat_lock;
 
 //add to each functions...
 #define GSCSTAT_TH_INIT(/*int*/status, /*(GError **)*/err) do {\
@@ -34,13 +50,10 @@ static GStaticMutex g_gscstat_lock = G_STATIC_MUTEX_INIT;
 	(void) g_once(&g_gscstat_thread_init, _gscstat_thread_init, NULL); \
 } while (0)
 
-#define GSCSTAT_TH_LOCK_INIT()     0
-#define GSCSTAT_TH_LOCK_DESTROY()  do {  } while (0)
-#define GSCSTAT_TH_LOCK()          g_static_mutex_lock(&g_gscstat_lock); do {
-#define GSCSTAT_TH_UNLOCK()        } while (0); g_static_mutex_unlock(&g_gscstat_lock)
-
-
-
+#define GSCSTAT_TH_LOCK_INIT()     do { g_mutex_init (&g_gscstat_lock); } while (0)
+#define GSCSTAT_TH_LOCK_DESTROY()  do { g_mutex_clear (&g_gscstat_lock); } while (0)
+#define GSCSTAT_TH_LOCK()          g_mutex_lock(&g_gscstat_lock); do {
+#define GSCSTAT_TH_UNLOCK()        } while (0); g_mutex_unlock(&g_gscstat_lock)
 
 /***************************************************************************/
 /* constante / structure                                                   */
@@ -51,15 +64,10 @@ static GStaticMutex g_gscstat_lock = G_STATIC_MUTEX_INIT;
 #define GSCSTAT_CALC(/*struct timeval*/ start, /*struct timeval*/ end) \
         ((end.tv_sec * 1000000 + end.tv_usec) - (start.tv_sec * 1000000 + start.tv_usec))
 
-
-
 typedef struct gscstat_s
 {
 	GSList *services;	// element: gscstat_service_info_t
 } gscstat_t;
-
-
-
 
 /***************************************************************************/
 /* function                                                                */
@@ -72,17 +80,11 @@ static char *_gscstat_dumpServiceByStruct(gscstat_service_info_t * pSvc,
 static void _gscstat_tags_clearByStruct(gscstat_service_info_t * pSvc,
     gscstat_service_tags_lst tag);
 
-
-
-
 /***************************************************************************/
 /* variables                                                               */
 /***************************************************************************/
 
 static gscstat_t g_gscstat_info;
-
-
-
 
 /***************************************************************************/
 /* Functions                                                               */
@@ -130,22 +132,14 @@ gscstat_initAndConfigureALLServices(GError ** err)
 	return result;
 }
 
-
 int
 gscstat_init(GError ** err)
 {
-	//init mutex
-	if (GSCSTAT_TH_LOCK_INIT() != 0) {
-		GSETERROR(err, "mutex init failed");
-		return -1;
-	}
-
-	//init global data
+	(void) err;
+	GSCSTAT_TH_LOCK_INIT();
 	memset(&g_gscstat_info, 0, sizeof(gscstat_t));
-
 	return 0;
 }
-
 
 void
 gscstat_free(void)
@@ -164,7 +158,6 @@ gscstat_free(void)
 
 	GSCSTAT_TH_LOCK_DESTROY();
 }
-
 
 int
 gscstat_addServiceAndTags(char *pServiceType,
@@ -194,7 +187,6 @@ gscstat_addServiceAndTags(char *pServiceType,
 	return 0;
 }
 
-
 int
 gscstat_addTagsToService(char *pServiceType,
     gscstat_service_tags_lst tagsEnabled, GError ** err)
@@ -217,7 +209,6 @@ gscstat_addTagsToService(char *pServiceType,
 
 	return 0;
 }
-
 
 /**
  * if tag == GSCSTAT_TAGS_REQPROCTIME: tagValue => (gscstat_service_tag_reqprctime_t*)
@@ -256,7 +247,6 @@ gscstat_getTagFromService(char *pServiceType, gscstat_service_tags_e tag,
 	return 0;
 }
 
-
 char *
 gscstat_dumpService(char *pServiceType, GError ** err)
 {
@@ -275,7 +265,6 @@ gscstat_dumpService(char *pServiceType, GError ** err)
 
 	return _gscstat_dumpServiceByStruct(pSvc, TRUE, GSCSTAT_TAGS_all);
 }
-
 
 char *
 gscstat_dumpAllServices(void)
@@ -308,7 +297,6 @@ gscstat_dumpAllServices(void)
 	return g_string_free(str, FALSE);;
 }
 
-
 void
 gscstat_tags_clearAllServices(gscstat_service_tags_lst tag)
 {
@@ -323,7 +311,6 @@ gscstat_tags_clearAllServices(gscstat_service_tags_lst tag)
 	if (status != 0)
 		return;
 
-
 	list = g_gscstat_info.services;
 	nbElt = g_slist_length(list);
 	for (i = 0; i < nbElt; i++) {
@@ -332,7 +319,6 @@ gscstat_tags_clearAllServices(gscstat_service_tags_lst tag)
 	}
 
 }
-
 
 void
 gscstat_tags_clear(char *pServiceType, gscstat_service_tags_lst tag)
@@ -347,7 +333,6 @@ gscstat_tags_clear(char *pServiceType, gscstat_service_tags_lst tag)
 
 	_gscstat_tags_clearByStruct(pSvc, tag);
 }
-
 
 void
 gscstat_tags_start(char *pServiceType, gscstat_service_tags_lst tag)
@@ -370,7 +355,6 @@ gscstat_tags_start(char *pServiceType, gscstat_service_tags_lst tag)
 	}
 
 }
-
 
 void
 gscstat_tags_end(char *pServiceType, gscstat_service_tags_lst tag)
@@ -401,23 +385,17 @@ gscstat_tags_end(char *pServiceType, gscstat_service_tags_lst tag)
 
 }
 
-
-
-
-
 /*========================================================================*/
 
 void *
 _gscstat_thread_init(void *ignored)
 {
 	GError *err = NULL;
-
 	gscstat_init(&err);
 	if (err)
 		g_clear_error(&err);
 	return ignored;
 }
-
 
 gscstat_service_info_t *
 _gscstat_getService(char *pServiceType, gscstat_service_tags_lst tagsEnabled)
@@ -442,7 +420,6 @@ _gscstat_getService(char *pServiceType, gscstat_service_tags_lst tagsEnabled)
 
 	return pSvcResult;
 }
-
 
 char *
 _gscstat_dumpServiceByStruct(gscstat_service_info_t * pSvc, gboolean bWithTitle,
@@ -474,11 +451,9 @@ _gscstat_dumpServiceByStruct(gscstat_service_info_t * pSvc, gboolean bWithTitle,
 		GSCSTAT_TH_UNLOCK();
 	}
 
-
 	return g_string_free(str, FALSE);
 
 }
-
 
 void
 _gscstat_tags_clearByStruct(gscstat_service_info_t * pSvc,
@@ -499,5 +474,4 @@ _gscstat_tags_clearByStruct(gscstat_service_info_t * pSvc,
 		GSCSTAT_TH_UNLOCK();
 	}
 }
-
 

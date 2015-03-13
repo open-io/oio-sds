@@ -1,9 +1,27 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metautils.l4v"
 #endif
 
 #include "metautils.h"
-
 
 gboolean
 l4v_extract(void *s, gsize ssize, void **d, gsize *dsize)
@@ -20,7 +38,6 @@ l4v_extract(void *s, gsize ssize, void **d, gsize *dsize)
 	*dsize = s4;
 	return 1;
 }
-
 
 gint
 l4v_fill(void *src, gsize srcSize, void *dst, gsize dstSize, GError ** error)
@@ -39,7 +56,6 @@ l4v_fill(void *src, gsize srcSize, void *dst, gsize dstSize, GError ** error)
 	g_memmove(((guint8 *) dst) + 4, src, srcSize);
 	return 1;
 }
-
 
 GByteArray *
 l4v_read_2to(int fd, gint ms1, gint msAll, GError ** err)
@@ -87,7 +103,6 @@ l4v_read_2to(int fd, gint ms1, gint msAll, GError ** err)
 
 	return gba;
 }
-
 
 GByteArray *
 l4v_read(int fd, gint ms, GError ** err)

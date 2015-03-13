@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "m2v2"
 #endif
@@ -377,7 +396,6 @@ static void _init_snapshot_db()
 	_add_primary_key(snapshot_table, M2V2_TABLE_FIELD_VERSION);
 }
 
-
 //---------------------------------------------------------------------
 //
 // FIELD TESTS (Type, format)
@@ -419,7 +437,6 @@ static gboolean _is_field_integer(const gchar *field_type)
 	return	0 == g_strcmp0(field_type, M2V2_TABLE_FIELD_TYPE_INTEGER) ||
 			0 == g_strcmp0(field_type, M2V2_TABLE_FIELD_TYPE_BOOL);
 }
-
 
 //---------------------------------------------------------------------
 //
@@ -536,7 +553,6 @@ static inline guint8* _hex_to_blob(const gchar *hex, const guint hexlen)
 	}
 	return res;
 }
-
 
 //---------------------------------------------------------------------
 //
@@ -763,7 +779,6 @@ static gboolean _generate_select_request(gchar *select_req, const t_m2v2_table_i
 	return TRUE;
 }
 
-
 //---------------------------------------------------------------------
 //
 // RESULT CREATION, COMPARISON & DESTRUCTION
@@ -888,13 +903,11 @@ static gboolean _sqlite3_result_equal(gconstpointer _res1, gconstpointer _res2)
 	return 0 == memcmp(res1->value->data, res2->value->data, res1->value->len);
 }
 
-
 //---------------------------------------------------------------------
 //
 // REQUEST EXECUTION
 //
 //---------------------------------------------------------------------
-
 
 static void
 _exec_adm(sqlite3 *db, const char *k, const char *v) {
@@ -1780,7 +1793,7 @@ static gboolean _insert_values(
 		if (_generate_create_request(req, tablename)) { \
 			GRID_TRACE("request generated successfully: [%s]", req); \
 		} else { \
-			err = NEWERROR(500, "error generating request [%s]", req); \
+			err = NEWERROR(CODE_INTERNAL_ERROR, "error generating request [%s]", req); \
 			goto error; \
 		} \
 		if (_execute_request(req, db, NULL, NULL, &err)) { \
@@ -1881,7 +1894,6 @@ m2_convert_db(sqlite3 *db)
 	CVDB_FREE_RETR_VAL(p_retrieved_values);
 	if (!ret)
 		goto error;
-
 
 	//-----------------------------------------------------------------
 	// CHUNK

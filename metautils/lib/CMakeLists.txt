@@ -2,16 +2,14 @@ include_directories(BEFORE . ../..
 		${CMAKE_CURRENT_BINARY_DIR}/../..)
 
 link_directories(
-		${ASN1C_LIBRARY_DIRS})
+		${ASN1C_LIBRARY_DIRS}
+		${EXPAT_LIBRARY_DIRS})
 
 include_directories(AFTER
 		${OPENSSL_INCLUDE_DIRS}
 		${RDKAFKA_INCLUDE_DIRS}
-		${JSONC_INCLUDE_DIRS})
-
-if (GLIB2_VERSION VERSION_LESS "2.30")
-	add_definitions(-DOLD_GLIB2)
-endif()
+		${JSONC_INCLUDE_DIRS}
+		${EXPAT_INCLUDE_DIRS})
 
 add_custom_command(
 	OUTPUT
@@ -29,7 +27,6 @@ add_custom_command(
 		ArrayList.c ArrayList.h
 		ChunkId.c ChunkId.h ChunkIdSequence.c ChunkIdSequence.h
 		ChunkInfo.c ChunkInfo.h ChunkInfoSequence.c ChunkInfoSequence.h
-		ContainerEvent.c ContainerEvent.h ContainerEventSequence.c ContainerEventSequence.h
 		ContentList.c ContentList.h
 		EventSequence.c EventSequence.h
 		Message.c Message.h
@@ -72,7 +69,7 @@ add_custom_command(
 		M2V2Snapshot.c M2V2Snapshot.h
 
 	PRE_BUILD
-	COMMAND ${ASN1C_EXECUTABLE} -fcompound-names -fskeletons-copy ${CMAKE_CURRENT_SOURCE_DIR}/description.asn
+	COMMAND ${ASN1C_EXECUTABLE} ${ASN1C_EXE_OPTS} -fcompound-names -fskeletons-copy ${CMAKE_CURRENT_SOURCE_DIR}/description.asn
 	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/description.asn
 	COMMENT "Generating asn1c types"
 	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/description.asn
@@ -125,7 +122,6 @@ add_library(metautils SHARED
 		volume_lock.h
 		utils_addr_info.c
 		utils_chunk_info.c
-		utils_container_event.c
 		utils_hash.c
 		utils_gba.c
 		utils_kv.c
@@ -150,10 +146,9 @@ add_library(metautils SHARED
 )
 
 target_link_libraries(metautils
-		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES}
-		${JSONC_LIBRARIES} ${RDKAFKA_LIBRARIES} -lm -lexpat)
-
-add_dependencies(metautils asn1c_generation)
+		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} ${JSONC_LIBRARIES} ${EXPAT_LIBRARIES}
+		${RDKAFKA_LIBRARIES} ${ASN1C_LIBRARIES}
+		-lm)
 
 add_library(metacomm SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/NativeEnumerated.c
@@ -193,10 +188,6 @@ add_library(metacomm SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/ChunkInfo.h
 		${CMAKE_CURRENT_BINARY_DIR}/ChunkInfoSequence.c
 		${CMAKE_CURRENT_BINARY_DIR}/ChunkInfoSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/ContainerEvent.c
-		${CMAKE_CURRENT_BINARY_DIR}/ContainerEvent.h
-		${CMAKE_CURRENT_BINARY_DIR}/ContainerEventSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/ContainerEventSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/ContentList.c
 		${CMAKE_CURRENT_BINARY_DIR}/ContentList.h
 		${CMAKE_CURRENT_BINARY_DIR}/EventSequence.c
@@ -303,8 +294,6 @@ add_library(metacomm SHARED
 		asn_AddrInfo.h
 		asn_ChunkInfo.c
 		asn_ChunkInfo.h
-		asn_ContainerEvent.c
-		asn_ContainerEvent.h
 		asn_Integer.c
 		asn_Meta0Info.c asn_Meta0Info.h
 		asn_Meta2Raw.c asn_Meta2Raw.h
@@ -318,7 +307,6 @@ add_library(metacomm SHARED
 		comm_abstract_sequence.c
 		comm_addr_info.c
 		comm_chunk_info.c
-		comm_container_event.c
 		comm_message.c
 		comm_meta0_info.c
 		comm_meta1_raw_container.c
@@ -339,12 +327,11 @@ include_directories(AFTER ${CMAKE_CURRENT_BINARY_DIR})
 set_target_properties(metacomm PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(metacomm
 		metautils
-		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} -lASN1)
+		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} ${ASN1C_LIBRARIES})
 add_dependencies(metacomm metautils)
 
 add_executable(gs_oid2cid oid_to_cid.c)
 bin_prefix(gs_oid2cid -oid2cid)
-bin_prefix_full(gs_oid2cid -utils-oid2cid)
 target_link_libraries(gs_oid2cid
 		metautils
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES})
@@ -352,14 +339,12 @@ add_dependencies(gs_oid2cid metacomm metautils)
 
 add_executable(gs_dump_addr addr_dump.c)
 bin_prefix(gs_dump_addr -dump-addr)
-bin_prefix_full(gs_dump_addr -utils-dump-addr)
 target_link_libraries(gs_dump_addr
 		metautils metacomm
-		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES})
+		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} ${ASN1C_LIBRARIES})
 
 add_executable(gs_same_hash gs_same_hash.c)
 bin_prefix(gs_same_hash -same-hash)
-bin_prefix_full(gs_dump_addr -utils-same-hash)
 target_link_libraries(gs_same_hash
 		metautils 
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES})
@@ -426,7 +411,6 @@ install(TARGETS metacomm metautils gs_oid2cid gs_dump_addr
 install(FILES
 			asn_AddrInfo.h
 			asn_ChunkInfo.h
-			asn_ContainerEvent.h
 			asn_ContainerInfo.h
 			asn_Meta0Info.h
 			asn_Meta2Raw.h

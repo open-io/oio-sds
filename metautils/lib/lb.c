@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.lb"
 #endif
@@ -42,7 +61,7 @@ struct grid_lb_s
 
 	void (*use_hook) (void);
 
-	GStaticRecMutex lock;
+	GRecMutex lock;
 	guint64 version;
 
 	GPtrArray *gpa;
@@ -99,11 +118,10 @@ struct grid_lb_iterator_s
 struct grid_lbpool_s
 {
 	gchar ns[LIMIT_LENGTH_NSNAME];
-	GStaticRWLock rwlock;
+	GRWLock rwlock;
 	GTree *pools;
 	GTree *iterators;
 };
-
 
 /* Various helpers */
 
@@ -178,19 +196,18 @@ sort_slots_by_score(gconstpointer p1, gconstpointer p2)
 	return CMP(SLOT(p2)->score, SLOT(p1)->score);
 }
 
-
 /* Pool features ----------------------------------------------------------- */
 
 static inline void
 grid_lb_lock(struct grid_lb_s *lb)
 {
-	g_static_rec_mutex_lock(&(lb->lock));
+	g_rec_mutex_lock(&(lb->lock));
 }
 
 static inline void
 grid_lb_unlock(struct grid_lb_s *lb)
 {
-	g_static_rec_mutex_unlock(&(lb->lock));
+	g_rec_mutex_unlock(&(lb->lock));
 }
 
 void
@@ -222,7 +239,7 @@ grid_lb_init(const gchar *ns, const gchar *srvtype)
 	lb->standard_deviation = FALSE;
 	lb->version = 1;
 	lb->use_hook = NULL;
-	g_static_rec_mutex_init(&(lb->lock));
+	g_rec_mutex_init(&(lb->lock));
 	lb->gpa = g_ptr_array_new();
 
 	lb->id_by_addr = g_hash_table_new(
@@ -277,7 +294,7 @@ grid_lb_clean(struct grid_lb_s *lb)
 	if (lb->sorted_by_score)
 		g_array_free(lb->sorted_by_score, TRUE);
 
-	g_static_rec_mutex_free(&(lb->lock));
+	g_rec_mutex_clear(&(lb->lock));
 
 	g_free(lb);
 }
@@ -536,7 +553,6 @@ grid_lb_count_all(struct grid_lb_s *lb)
 	return rc;
 }
 
-
 /* Pool iterator constructors */
 
 struct grid_lb_iterator_s*
@@ -784,8 +800,6 @@ grid_lb_iterator_configure(struct grid_lb_iterator_s *iter, const gchar *val)
 			break;
 	}
 }
-
-
 
 /* Pool iterators runner */
 
@@ -1256,7 +1270,7 @@ grid_lbpool_create(const gchar *ns)
 
 	struct grid_lbpool_s *glp = g_malloc0(sizeof(struct grid_lbpool_s));
 
-	g_static_rw_lock_init(&(glp->rwlock));
+	g_rw_lock_init(&(glp->rwlock));
 
 	metautils_strlcpy_physical_ns(glp->ns, ns, sizeof(glp->ns));
 
@@ -1273,15 +1287,15 @@ grid_lbpool_destroy(struct grid_lbpool_s *glp)
 	if (!glp)
 		return;
 
-	g_static_rw_lock_writer_lock(&(glp->rwlock));
+	g_rw_lock_writer_lock(&(glp->rwlock));
 
 	if (glp->iterators)
 		g_tree_destroy(glp->iterators);
 	if (glp->pools)
 		g_tree_destroy(glp->pools);
 
-	g_static_rw_lock_writer_unlock(&(glp->rwlock));
-	g_static_rw_lock_free(&(glp->rwlock));
+	g_rw_lock_writer_unlock(&(glp->rwlock));
+	g_rw_lock_clear(&(glp->rwlock));
 
 	memset(glp, 0, sizeof(struct grid_lbpool_s));
 	g_free(glp);
@@ -1340,7 +1354,6 @@ _configure_string(struct grid_lbpool_s *glp, const gchar *kv)
 	grid_lbpool_configure_string(glp, srvtype, val);
 }
 
-
 void
 grid_lbpool_reconfigure(struct grid_lbpool_s *glp,
 		struct namespace_info_s *ni)
@@ -1370,9 +1383,9 @@ grid_lbpool_get_lb (struct grid_lbpool_s *glp, const gchar *srvtype)
 	g_assert (glp != NULL);
 	g_assert (srvtype != NULL);
 
-	g_static_rw_lock_reader_lock(&(glp->rwlock));
+	g_rw_lock_reader_lock(&(glp->rwlock));
 	struct grid_lb_s *lb = g_tree_lookup(glp->pools, srvtype);
-	g_static_rw_lock_reader_unlock(&(glp->rwlock));
+	g_rw_lock_reader_unlock(&(glp->rwlock));
 
 	return lb;
 }
@@ -1384,9 +1397,9 @@ grid_lbpool_ensure_iterator (struct grid_lbpool_s *glp, const gchar *srvtype)
 	g_assert (glp != NULL);
 	g_assert (srvtype != NULL);
 
-	g_static_rw_lock_writer_lock(&(glp->rwlock));
+	g_rw_lock_writer_lock(&(glp->rwlock));
 	_ensure (glp, srvtype, NULL, &iterator);
-	g_static_rw_lock_writer_unlock(&(glp->rwlock));
+	g_rw_lock_writer_unlock(&(glp->rwlock));
 
 	return iterator;
 }
@@ -1398,9 +1411,9 @@ grid_lbpool_ensure_lb (struct grid_lbpool_s *glp, const gchar *srvtype)
 	g_assert (glp != NULL);
 	g_assert (srvtype != NULL);
 
-	g_static_rw_lock_writer_lock(&(glp->rwlock));
+	g_rw_lock_writer_lock(&(glp->rwlock));
 	_ensure (glp, srvtype, &lb, NULL);
-	g_static_rw_lock_writer_unlock(&(glp->rwlock));
+	g_rw_lock_writer_unlock(&(glp->rwlock));
 
 	return lb;
 }
@@ -1439,9 +1452,9 @@ grid_lbpool_get_iterator(struct grid_lbpool_s *glp, const gchar *srvtype)
 	g_assert(glp != NULL);
 	g_assert(srvtype != NULL);
 
-	g_static_rw_lock_reader_lock(&(glp->rwlock));
+	g_rw_lock_reader_lock(&(glp->rwlock));
 	struct grid_lb_iterator_s *iter = g_tree_lookup(glp->iterators, srvtype);
-	g_static_rw_lock_reader_unlock(&(glp->rwlock));
+	g_rw_lock_reader_unlock(&(glp->rwlock));
 
 	return iter;
 }

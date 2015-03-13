@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gridcluster.lib"
 #endif
@@ -16,7 +35,6 @@
 #include <cluster/remote/gridcluster_remote.h>
 
 #include "gridcluster.h"
-#include "connect.h"
 #include "message.h"
 
 #define MAX_REQ_LENGTH 1024
@@ -63,13 +81,6 @@ _gba_to_bool(GByteArray *gba, gboolean def)
 	return metautils_cfg_get_bool(str, def);
 }
 
-static gboolean
-gridagent_available(void)
-{
-	struct stat sock_stat;
-	return (stat(AGENT_SOCK_PATH, &sock_stat) == 0);
-}
-
 static void
 clear_request_and_reply( request_t *req, response_t *resp )
 {
@@ -87,66 +98,22 @@ clear_request_and_reply( request_t *req, response_t *resp )
 	}
 }
 
-/**
- * Get conscience address from configuration files.
- *
- * Do not forget to free the result (g_free).
- */
-static addr_info_t*
-_get_cs_addr(const char *ns_name, GError **error) {
-	addr_info_t *cs_addr;
-	GHashTable *ns_hash;
-
-	cs_addr = NULL;
-	ns_hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-
-	if (!parse_cluster_config(ns_hash, error)) {
-		g_hash_table_destroy(ns_hash);
-		GSETERROR(error, "Failed to parse cluster config");
-		return(NULL);
-	}
-
-	/* Need to truncate NS name => only physical NS NAME file exists */
-	gchar **tmp = NULL;
-	tmp =g_strsplit(ns_name , ".", 2);
-	cs_addr = g_hash_table_lookup(ns_hash, tmp[0]);
-	g_strfreev(tmp);
-
-	if (!cs_addr) {
-		GSETERROR(error, "No conscience addr found for namespace [%s]", ns_name);
-	} else {
-		cs_addr = g_memdup(cs_addr, sizeof(addr_info_t));
-	}
-
-	g_hash_table_destroy(ns_hash);
-	return cs_addr;
-}
-
 static namespace_info_t*
 _get_namespace_info_from_agent(const char *ns_name, GError **error)
 {
 	request_t req;
 	response_t resp;
 
-	gchar master_ns[512];
-	gchar *virt_ns = NULL;
-
 	if (!ns_name) {
 		GSETERROR(error,"Invalid parameter");
 		return 0;
 	}
 
-	virt_ns = strchr(ns_name, '.');
-	memset(master_ns, '\0', 512);
-	g_snprintf(master_ns, 512, "%.*s:%s",
-		virt_ns!=NULL? (gint) (virt_ns - ns_name) : (gint)strlen(ns_name), ns_name,
-		SHORT_API_VERSION);
-	
 	/* Build request */
 	memset(&req, 0, sizeof(request_t));
 	memset(&resp, 0, sizeof(response_t));
 	req.cmd = g_strdup(MSG_GETNS);
-	req.arg = g_strdup(master_ns);
+	req.arg = g_strdup(ns_name);
 	req.arg_size = strlen(req.arg);
 
 	if (!send_request(&req, &resp, error)) {
@@ -162,10 +129,10 @@ _get_namespace_info_from_agent(const char *ns_name, GError **error)
 			GSETERROR(error, "Failed to unserialize namespace_info");
 			return NULL;
 		}
-		if (virt_ns) {
-			memset(ns->name, '\0', LIMIT_LENGTH_NSNAME);
-			g_strlcpy(ns->name, ns_name, LIMIT_LENGTH_NSNAME);
-		}
+#if 0
+		memset(ns->name, '\0', LIMIT_LENGTH_NSNAME);
+		g_strlcpy(ns->name, ns_name, LIMIT_LENGTH_NSNAME);
+#endif
 		return ns;
 	}
 
@@ -182,21 +149,16 @@ _get_namespace_info_from_agent(const char *ns_name, GError **error)
 static namespace_info_t*
 _get_namespace_info_from_conscience(const char *ns_name, GError **error)
 {
-	GError *local_error = NULL;
-	namespace_info_t *res = NULL;
-	addr_info_t *addr = _get_cs_addr(ns_name, &local_error);
+	addr_info_t *addr = gridcluster_get_conscience_addr(ns_name);
 	if (addr == NULL) {
-		g_prefix_error(&local_error, "Failed to get conscience address: ");
-		*error = local_error;
-		res = NULL;
-	} else {
-		res = gcluster_get_namespace_info_full(addr,
-				CONNECT_TIMEOUT + SOCKET_TIMEOUT, error);
-		g_free(addr);
-		// In case we asked for a VNS
-		if (res)
-			g_strlcpy(res->name, ns_name, LIMIT_LENGTH_NSNAME);
+		GSETERROR(error, "Unknown namespace/conscience");
+		return NULL;
 	}
+	namespace_info_t *res = gcluster_get_namespace_info_full(addr,
+			CONNECT_TIMEOUT + SOCKET_TIMEOUT, error);
+	g_free(addr);
+	if (res)
+		g_strlcpy(res->name, ns_name, LIMIT_LENGTH_NSNAME);
 	return res;
 }
 
@@ -210,18 +172,16 @@ get_namespace_info(const char *ns_name, GError **error)
 	}
 }
 
-
 static meta0_info_t*
 get_meta0_info_from_conscience(const char *ns_name, long timeout_cnx, long timeout_req, GError **error)
 {
-	meta0_info_t *meta0;
-	addr_info_t *cs_addr;
+	addr_info_t *cs_addr = gridcluster_get_conscience_addr(ns_name);
+	if (!cs_addr) {
+		GSETERROR(error, "Unknown namespace/conscience");
+		return NULL;
+	}
 
-	cs_addr = _get_cs_addr(ns_name,error);
-	if(!cs_addr)
-		return(NULL);
-
-	meta0 = gcluster_get_meta0_2timeouts(cs_addr, timeout_cnx, timeout_req, error);
+	meta0_info_t *meta0 = gcluster_get_meta0_2timeouts(cs_addr, timeout_cnx, timeout_req, error);
 	if (!meta0)
 		GSETERROR(error, "Failed to retrieve meta0 infos from conscience of namespace [%s] timeout(%ld,%ld)",
 				ns_name, timeout_cnx, timeout_req);
@@ -232,22 +192,17 @@ get_meta0_info_from_conscience(const char *ns_name, long timeout_cnx, long timeo
 static meta0_info_t*
 get_meta0_info_from_agent(const char *ns_name, GError **error)
 {
-	struct service_info_s *si;
-	GSList *services;
-	meta0_info_t *meta0 = NULL;
-
-	/* Build request */
-	services = list_namespace_services(ns_name,"meta0",error);
+	GSList *services = list_namespace_services(ns_name,"meta0",error);
 	if (!services) {
 		GSETERROR(error,"No META0 found");
 		return NULL;
 	}
 
 	srand(time(NULL));
-	si = g_slist_nth_data(services,rand()%g_slist_length(services));
-	meta0 = g_try_malloc0(sizeof(meta0_info_t));
-	if (meta0)
-		memcpy( &(meta0->addr), &(si->addr), sizeof(addr_info_t));
+	struct service_info_s *si = g_slist_nth_data(services,rand()%g_slist_length(services));
+
+	meta0_info_t *meta0 = g_malloc0(sizeof(meta0_info_t));
+	memcpy( &(meta0->addr), &(si->addr), sizeof(addr_info_t));
 	g_slist_foreach( services, service_info_gclean, NULL);
 	g_slist_free( services );
 	return meta0;
@@ -352,15 +307,14 @@ _list_namespace_service_types_from_agent(const char *ns_name, GError **error)
 static GSList*
 _list_namespace_service_types_from_conscience(const char *ns_name, GError **error)
 {
-	addr_info_t *cs_addr;
-
-	cs_addr = _get_cs_addr(ns_name,error);
-	if(!cs_addr)
+	addr_info_t *cs_addr = gridcluster_get_conscience_addr(ns_name);
+	if (!cs_addr) {
+		GSETERROR(error, "Unknown namespace/conscience");
 		return(NULL);
+	}
 
 	GSList *types = gcluster_get_service_types(cs_addr,
 			CONNECT_TIMEOUT + SOCKET_TIMEOUT, error);
-
 	g_free(cs_addr);
 	return types;
 }
@@ -431,19 +385,17 @@ list_namespace_services2(const char *ns_name, const char *type, GError **error)
 		return NULL;
 	}
 
-	if (!gridagent_available()) {
-		// from conscience
-		addr_info_t *cs_addr;
-
-		cs_addr = _get_cs_addr(ns_name,error);
-		if(!cs_addr)
-			return(NULL);
+	if (!gridagent_available()) { // from conscience
+		addr_info_t *cs_addr = gridcluster_get_conscience_addr(ns_name);
+		if (!cs_addr) {
+			GSETERROR(error, "Unknown namespace/conscience");
+			return NULL;
+		}
 
 		GSList *res = gcluster_get_services2(cs_addr, 1000, 4000, type, error);
 		g_free(cs_addr);
 		return res;
-	} else {
-		// from agent
+	} else { // from agent
 		return list_namespace_services(ns_name,type,error);
 	}
 }
@@ -1346,7 +1298,7 @@ namespace_get_rules_path(const gchar *ns, const gchar *typename, gchar **path,
 		return FALSE;
 	}
 
-	*path = g_strdup_printf("/GRID/%s/common/conf/%s.rules.py", ns, typename);
+	*path = g_strdup_printf("%s/%s-%s.rules.py", GCLUSTER_ETC_DIR, ns, typename);
 	return TRUE;
 }
 
@@ -1491,14 +1443,15 @@ gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo,
 static void
 _evtcfg_preload_with_default(GHashTable *ht, gchar *ns, const gchar *srvtype)
 {
-	if (!g_ascii_strcasecmp(srvtype, "meta2"))
-		g_hash_table_insert(ht, g_strdup(ns), g_strdup(
-					"enabled=false;dir=/GRID/common/spool;aggregate=false"
-					";kafka_enabled=false;kafka_topic=redc.meta2"));
+	if (!g_ascii_strcasecmp(srvtype, NAME_SRVTYPE_META2)) {
+		gchar *v = g_strdup_printf("enabled=false;dir=%s;aggregate=false"
+				";kafka_enabled=false;kafka_topic=sds.%s",
+				GCLUSTER_SPOOL_DIR, NAME_SRVTYPE_META2);
+		g_hash_table_insert(ht, g_strdup(ns), v);
+	}
 	else
 		g_hash_table_insert(ht, g_strdup(ns), g_strdup(""));
 }
-
 
 GHashTable*
 gridcluster_get_event_config(struct namespace_info_s *nsinfo,

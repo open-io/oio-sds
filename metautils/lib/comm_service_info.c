@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metacomm.service_info"
 #endif
@@ -99,7 +118,7 @@ service_info_ASN2API(ServiceInfo_t * asn, service_info_t * api)
 			service_tag_t *api_tag;
 			ServiceTag_t *asn_tag;
 
-			api_tag = g_try_malloc0(sizeof(service_tag_t));
+			api_tag = g_malloc0(sizeof(service_tag_t));
 			asn_tag = asn->tags->list.array[i];
 			service_tag_ASN2API(asn_tag, api_tag);
 			g_ptr_array_add(api->tags, api_tag);
@@ -160,7 +179,6 @@ service_tag_API2ASN(service_tag_t * api, ServiceTag_t * asn)
 	}
 	return TRUE;
 }
-
 
 gboolean
 service_info_API2ASN(service_info_t * api, ServiceInfo_t * asn)

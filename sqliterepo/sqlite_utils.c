@@ -1,3 +1,22 @@
+/*
+OpenIO SDS sqliterepo
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "sqliterepo"
 #endif
@@ -49,7 +68,7 @@ sqlite_admin_entry_set(sqlite3 *db, const int repl, const gchar *k,
 			: "INSERT OR IGNORE  INTO admin (k,v) VALUES (?,?)"
 			, -1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)
-		err = NEWERROR(500, "DB error: (%d) %s", rc, sqlite3_errmsg(db));
+		err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s", rc, sqlite3_errmsg(db));
 	else {
 		sqlite3_bind_text(stmt, 1, k, -1, NULL);
 		if (v && vlen)
@@ -58,7 +77,7 @@ sqlite_admin_entry_set(sqlite3 *db, const int repl, const gchar *k,
 			sqlite3_bind_text(stmt, 2, "", 0, NULL);
 		sqlite3_step_debug_until_end(rc, stmt);
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)
-			err = NEWERROR(500, "DB error: (%d) %s", rc, sqlite3_errmsg(db));
+			err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s", rc, sqlite3_errmsg(db));
 		(void) sqlite3_finalize(stmt);
 	}
 
@@ -88,12 +107,12 @@ _admin_entry_del(sqlite3 *db, const gchar *k)
 
 	sqlite3_prepare_debug(rc, db, "DELETE FROM admin WHERE k = ?", -1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)
-		err = NEWERROR(500, "DB error: (%d) %s", rc, sqlite3_errmsg(db));
+		err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s", rc, sqlite3_errmsg(db));
 	else {
 		sqlite3_bind_text(stmt, 1, k, -1, NULL);
 		sqlite3_step_debug_until_end(rc, stmt);
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)
-			err = NEWERROR(500, "DB error: (%d) %s", rc, sqlite3_errmsg(db));
+			err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s", rc, sqlite3_errmsg(db));
 		(void) sqlite3_finalize(stmt);
 	}
 
@@ -259,14 +278,30 @@ sqlx_admin_inc_all_versions(struct sqlx_sqlite3_s *sq3, const int delta)
 	g_tree_foreach(sq3->admin, (GTraverseFunc)runner, NULL);
 }
 
-void sqlx_admin_set_status(struct sqlx_sqlite3_s *sq3, gint64 status)
+void
+sqlx_admin_set_status(struct sqlx_sqlite3_s *sq3, gint64 status)
 {
-	sqlx_admin_set_i64(sq3, ADMIN_STATUS_KEY, status);
+	sqlx_admin_set_i64(sq3, SQLX_ADMIN_STATUS, status);
 }
 
-gint64 sqlx_admin_get_status(struct sqlx_sqlite3_s *sq3)
+gint64
+sqlx_admin_get_status(struct sqlx_sqlite3_s *sq3)
 {
-	return sqlx_admin_get_i64(sq3, ADMIN_STATUS_KEY,
+	return sqlx_admin_get_i64(sq3, SQLX_ADMIN_STATUS,
 			(gint64)ADMIN_STATUS_ENABLED);
+}
+
+gchar**
+sqlx_admin_get_keys(struct sqlx_sqlite3_s *sq3)
+{
+	gboolean runner(gchar *k, GByteArray *v, GPtrArray *tmp) {
+		(void) v;
+		g_ptr_array_add (tmp, g_strdup(k));
+		return FALSE;
+	}
+
+	GPtrArray *tmp = g_ptr_array_new ();
+	g_tree_foreach (sq3->admin, (GTraverseFunc) runner, tmp);
+	return (gchar**) metautils_gpa_to_array (tmp, TRUE);
 }
 

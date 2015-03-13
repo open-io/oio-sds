@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "atos.grid.action"
 #endif
@@ -18,8 +37,6 @@
 
 #include "lib/action_common.h"
 
-
-
 struct SActionRulesMotorDataWork {
     gchar* source_path; // for all
     gchar* seq;     // for SQLX: sequence
@@ -27,8 +44,6 @@ struct SActionRulesMotorDataWork {
     gchar* type;    // for SQLX: type of bdd
     gchar* svc_url; // for all
 };
-
-
 
 // motor_env and rules_reload_time_interval declared in motor.h
 struct rules_motor_env_s* motor_env = NULL;
@@ -47,17 +62,13 @@ static int service_pid;
 static const gchar* occur_type1_string;
 static const gchar* occur_type2_string;
 
-
 /* Console parameters utils */
 static GString* console_log_path = NULL;
 /* ------- */
 
-
 static gchar     g_service_name[SERVICENAME_MAX_BYTES];
 static char*    g_dbusdaemon_address = NULL;
 static GMainLoop *g_main_loop = NULL;
-
-
 
 static gboolean
 chunk_check_attributes(struct chunk_textinfo_s *chunk, struct content_textinfo_s *content)
@@ -132,7 +143,6 @@ do_work(gchar* namespace, gint8 source_type, const struct SActionRulesMotorDataW
 		&& (   (NULL == data_work->svc_url)
 			 ||(!g_strcmp0("", data_work->svc_url)) )  ) 
 		return EXIT_FAILURE;
-
 
 	if (CHUNK_TYPE_ID == source_type) { /* If the source is a chunk */
 		// FIXME: there are probably memory leaks in this block
@@ -263,9 +273,6 @@ do_work(gchar* namespace, gint8 source_type, const struct SActionRulesMotorDataW
 	return EXIT_SUCCESS;
 }
 
-
-
-
 //==============================================================================
 // Listening message come from, and execute action function
 //==============================================================================
@@ -283,16 +290,14 @@ struct SParamMsgrx {
 	gchar* dryrun;
 };
 
-
-void init_paramMsgRx(struct SParamMsgrx* pParam)
+static void init_paramMsgRx(struct SParamMsgrx* pParam)
 {
 	if (pParam == NULL) return;
 
 	memset(pParam, 0, sizeof(struct SParamMsgrx));
 }
 
-
-void clean_paramMsgRx(struct SParamMsgrx* pParam)
+static void clean_paramMsgRx(struct SParamMsgrx* pParam)
 {
 	if (pParam == NULL) return;
 
@@ -301,8 +306,6 @@ void clean_paramMsgRx(struct SParamMsgrx* pParam)
 
 	init_paramMsgRx(pParam);
 }
-
-
 
 static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam,
 		struct SParamMsgrx* pParam)
@@ -316,7 +319,6 @@ static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam,
 			return FALSE;
 		}
 		/* ------- */
-
 
 		/* Source type extraction */
 		gchar* temp_source_type = get_argv_value(pActParam->argc, pActParam->argv, 
@@ -362,9 +364,6 @@ static gboolean extract_paramMsgRx(gboolean allParam,  TActParam* pActParam,
 	return TRUE;
 }
 
-
-
-
 gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
     const char *alldata, GError **error)
 {
@@ -385,7 +384,6 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
 		return FALSE;
 	}
 
-
 	/**/
 	/* Running the rules motor and sending the ACK signal */
 	char* temp_msg = (char*)g_malloc0((SHORT_BUFFER_SIZE * sizeof(char)) + sizeof(guint64));
@@ -400,7 +398,6 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
 	char *status = act_buildResponse(action_name, service_pid, actparam.context_id, temp_msg);
 	g_free(temp_msg);
 
-
     static TCrawlerReq* req = NULL;
     if (req)
         crawler_bus_req_clear(&req);
@@ -414,14 +411,12 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
     tlc_Send_Ack_noreply(req, NULL, ((!e)?ACK_OK:ACK_KO), status);
     g_free(status);
 
-
 	act_paramact_clean(&actparam);
 	clean_paramMsgRx(&msgRx);
 	g_variant_unref(param);
 
 	return TRUE;
 }
-
 
 gboolean action_command(TCrawlerBusObject *obj, const char* cmd, const char *alldata,
 		char** status, GError **error)
@@ -472,10 +467,6 @@ gboolean action_command(TCrawlerBusObject *obj, const char* cmd, const char *all
 
 	return TRUE;
 }
-
-
-
-
 
 /* GRID COMMON MAIN */
 static struct grid_main_option_s *

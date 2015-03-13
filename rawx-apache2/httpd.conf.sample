@@ -8,7 +8,7 @@ LoadModule dav_rawx_module   modules/mod_dav_rawx.so
 
 Listen 127.0.0.1:9000
 ServerRoot /GRID/@NS@/@STGDEV@/conf/rawx-@NB@
-ServerName w30176-rouge
+ServerName 127.0.0.1
 ServerSignature Off
 ServerTokens Prod
 # Not used here

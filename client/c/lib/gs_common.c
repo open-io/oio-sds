@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #include "./gs_internals.h"
 
 gint
@@ -285,7 +304,6 @@ gs_url_split(const gchar * url, gchar ** host, gchar ** port)
 	return TRUE;
 }
 
-
 void
 gs_grid_storage_free(gs_grid_storage_t * gs)
 {
@@ -308,7 +326,6 @@ gs_grid_storage_free(gs_grid_storage_t * gs)
 	free(gs);
 }
 
-
 void
 gs_container_free(gs_container_t * container)
 {
@@ -317,7 +334,6 @@ gs_container_free(gs_container_t * container)
 	gs_container_close_cnx(container);
 	free(container);
 }
-
 
 void
 gs_content_free(gs_content_t * content)
@@ -348,14 +364,12 @@ gs_content_free(gs_content_t * content)
 	free(content);
 }
 
-
 void
 gs_container_close_cnx(gs_container_t * container)
 {
 	if (container && container->meta2_cnx >= 0)
 		metautils_pclose(&(container->meta2_cnx));
 }
-
 
 const char *
 g_error_get_message(GError * err)
@@ -448,7 +462,6 @@ gs_grid_storage_set_timeout(gs_grid_storage_t * gs, gs_timeout_t to, int val, gs
 	GSERRORSET(err, "<%s> invalid time_out type : %d", __FUNCTION__, to);
 	return GS_ERROR;
 }
-
 
 int
 gs_grid_storage_get_timeout(gs_grid_storage_t * gs, gs_timeout_t to)

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta1v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta1.backend"
 #endif
@@ -23,8 +42,6 @@
 #include "./meta1_prefixes.h"
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"
-
-
 
 static GError *__get_container_all_services(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
         const gchar *srvtype, struct meta1_service_url_s ***result);
@@ -176,14 +193,14 @@ _policies(struct meta1_backend_s *m1, const char *ns_name)
 {
 	struct service_update_policies_s *pol;
 
-	g_static_rw_lock_reader_lock(&m1->rwlock_ns_policies);
+	g_rw_lock_reader_lock(&m1->rwlock_ns_policies);
 	pol = g_hash_table_lookup(m1->ns_policies, ns_name);
 	if (!pol) {
 		gchar *ns = meta1_backend_get_ns_name(m1);
 		pol = g_hash_table_lookup(m1->ns_policies, ns);
 		g_free(ns);
 	}
-	g_static_rw_lock_reader_unlock(&m1->rwlock_ns_policies);
+	g_rw_lock_reader_unlock(&m1->rwlock_ns_policies);
 
 	return pol;
 }
@@ -219,9 +236,6 @@ __del_container_srvtype_properties(struct sqlx_sqlite3_s *sq3,
 
 	return err;
 }
-
-
-
 
 static GError *
 __del_container_all_services(struct sqlx_sqlite3_s *sq3,
@@ -296,7 +310,7 @@ __del_container_services(struct meta1_backend_s *m1,
 			errno = 0;
 			seq = g_ascii_strtoll(*urlv, &end, 10);
 			if ((end == *urlv) || (!seq && errno==EINVAL))
-				err = NEWERROR(400, "line %u : Invalid number", line);
+				err = NEWERROR(CODE_BAD_REQUEST, "line %u : Invalid number", line);
 			else
 				err = __del_container_one_service(sq3, cid, srvtype, seq);
 		}
@@ -356,7 +370,7 @@ __configure_service(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
 			err = M1_SQLITE_GERROR(sq3->db, rc);
 		sqlite3_finalize_debug(rc, stmt);
 		if (!err && !sqlite3_changes(sq3->db))
-			err = NEWERROR(450, "Service not found");
+			err = NEWERROR(CODE_SRV_NOLINK, "Service not found");
 	}
 
 	return sqlx_transaction_end(repctx, err);
@@ -393,7 +407,6 @@ __insert_service(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
 
 	return sqlx_transaction_end(repctx, err);
 }
-
 
 static GError *
 __get_all_services(struct sqlx_sqlite3_s *sq3, struct meta1_service_url_s ***result)
@@ -436,8 +449,6 @@ __get_all_services(struct sqlx_sqlite3_s *sq3, struct meta1_service_url_s ***res
     *result = (struct meta1_service_url_s**) g_ptr_array_free(gpa, FALSE);
     return NULL;
 }
-
-
 
 static GError *
 __get_container_all_services(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
@@ -580,7 +591,7 @@ _get_iterator(struct meta1_backend_s *m1, struct compound_type_s *ct,
 
 	if (!r) {
 		*result = NULL;
-		return NEWERROR(460, "type [%s] not managed", ct->baretype);
+		return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "type [%s] not managed", ct->baretype);
 	}
 
 	*result = grid_lb_iterator_share(r);
@@ -849,8 +860,6 @@ __renew_container_service(struct sqlx_sqlite3_s *sq3,
 	return __get_container_service(sq3, url, srvtype, m1, result, mode);
 }
 
-
-
 /* ------------------------------------------------------------------------- */
 
 GError*
@@ -866,7 +875,7 @@ meta1_backend_set_service_arguments(struct meta1_backend_s *m1,
 	EXTRA_ASSERT(packedurl != NULL);
 
 	if (!(url = meta1_unpack_url(packedurl)))
-		return NEWERROR(400, "Invalid URL");
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid URL");
 
 	GRID_DEBUG("About to reconfigure [%s] [%"G_GINT64_FORMAT"] [%s] [%s]",
 			url->srvtype, url->seq, url->host, url->args);
@@ -909,7 +918,7 @@ meta1_backend_force_service(struct meta1_backend_s *m1,
 	EXTRA_ASSERT(packedurl != NULL);
 
 	if (!(url = meta1_unpack_url(packedurl)))
-		return NEWERROR(400, "Invalid URL");
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid URL");
 
 	err = _open_and_lock(m1, cid, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
@@ -935,8 +944,6 @@ meta1_backend_force_service(struct meta1_backend_s *m1,
 
 	return err;
 }
-
-
 
 GError *
 meta1_backend_get_all_services(struct meta1_backend_s *m1, const container_id_t cid, gchar ***result)
@@ -966,8 +973,6 @@ meta1_backend_get_all_services(struct meta1_backend_s *m1, const container_id_t 
 
     return err;
 }
-
-
 
 GError *
 meta1_backend_get_container_service_available(struct meta1_backend_s *m1,
@@ -1079,113 +1084,6 @@ meta1_backend_del_container_services(struct meta1_backend_s *m1,
 
 /* ------------------------------------------------------------------------- */
 
-static GError *
-__destroy_on_meta2(struct meta1_service_url_s *url, const container_id_t cid)
-{
-	struct addr_info_s m2addr;
-	GError *err = NULL;
-
-	GRID_DEBUG("Destruction attempt on META2 at [%s]", url->host);
-
-	if (!meta1_url_get_address(url, &m2addr))
-		return NEWERROR(500, "Invalid address [%s] (%d %s)",
-				url->host, errno, strerror(errno));
-
-	if (!meta2_remote_container_destroy(&m2addr, 30000, &err, cid)) {
-		if (!err)
-			return NEWERROR(502, "Unknown error when contacting META2");
-		g_prefix_error(&err, "META2 error : ");
-		return err;
-	}
-
-	return NULL;
-}
-
-static GError*
-_get_expanded(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
-		const gchar *srvtype, struct meta1_service_url_s ***result)
-{
-	struct meta1_service_url_s **services = NULL;
-	GError *err = __get_container_all_services(sq3, cid, srvtype, &services);
-	if (NULL != err)
-		return err;
-	*result = expand_urlv(services);
-	if (services)
-		free_urlv(services);
-	return NULL;
-}
-
-static void
-__del_container_meta2_noerror(struct meta1_backend_s *m1,
-		struct sqlx_sqlite3_s *sq3, const container_id_t cid)
-{
-	GError *err = __del_container_services(m1, sq3, cid, "meta2", NULL);
-	if (NULL != err) {
-		GRID_WARN("Failed to delete meta2 service links : (%d) %s",
-				err->code, err->message);
-		g_clear_error(&err);
-	}
-}
-
-static void
-__destroy_container_noerror(struct sqlx_sqlite3_s *sq3,
-		const container_id_t cid)
-{
-	gboolean done = FALSE;
-	GError *err = __destroy_container(sq3, cid, FALSE, &done);
-	if (NULL != err) {
-		GRID_WARN("Failed to destroy the container reference : (%d) %s",
-				err->code, err->message);
-		g_clear_error(&err);
-	}
-}
-
-GError*
-meta1_backend_destroy_m2_container(struct meta1_backend_s *m1,
-		const container_id_t cid)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct meta1_service_url_s **services = NULL;
-
-	EXTRA_ASSERT(m1 != NULL);
-	EXTRA_ASSERT(cid != NULL);
-
-	err = _open_and_lock(m1, cid, M1V2_OPENBASE_MASTERONLY, &sq3);
-	if (NULL != err)
-		return err;
-
-	if (!(err = __info_container(sq3, cid, NULL))) {
-		err = _get_expanded(sq3, cid, "meta2", &services);
-		if (NULL != err)
-			g_prefix_error(&err, "Query error: ");
-	}
-	if (!err) {
-		if (services && *services) {
-			for (struct meta1_service_url_s **p=services; !err && *p ;p++) {
-				if (NULL != (err = __destroy_on_meta2(*p, cid)))
-					break;
-			}
-			if (!err)
-				__del_container_meta2_noerror(m1, sq3, cid);
-		}
-		else // Not found
-			err = NEWERROR(431, "No meta2 linked with this reference");
-
-		if (!err)
-			__destroy_container_noerror(sq3, cid);
-	}
-
-	if (services)
-		meta1_service_url_vclean(services);
-
-	sqlx_repository_unlock_and_close_noerror(sq3);
-
-	return err;
-}
-
-/* ------------------------------------------------------------------------- */
-
 struct meta1_full_service_url_s
 {
 	container_id_t cid;
@@ -1289,8 +1187,6 @@ __get_services(struct sqlx_sqlite3_s *sq3, const gchar *excludeurl, const contai
 
 	return NULL;
 }
-
-
 
 static GHashTable*
 _update_m1_policy_set_services_hash(const gchar *ns, const gchar *type,
@@ -1444,7 +1340,7 @@ _update_m1_policy(struct meta1_backend_s *m1,
 		if (tag_name && tag_name[0]) {
 			si = g_hash_table_lookup(hash_srv, (*tmp)->host);
 			if (!si) {
-				err = NEWERROR(481,
+				err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
 						"FAILED to update reference %s, missing or invalid "
 						"tag %s in configured service %s",
 						str_cid, tag_name, (*tmp)->host);
@@ -1459,14 +1355,14 @@ _update_m1_policy(struct meta1_backend_s *m1,
 	}
 	//check replicas
 	if (url_count == 1 && excludesrvfound) {
-		err = NEWERROR(481,
+		err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
 				"FAILED to update reference %s, just one service configured, "
 				"imposible to replace it", str_cid);
 		goto failedend;
 	}
 
 	if (url_count > replica) {
-		err = NEWERROR(481,
+		err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
 				"Failed to update Reference %s, Number of service %s [%d] "
 				"greater than replicas [%d]",
 				str_cid, ct->type, url_count, replica);
@@ -1493,7 +1389,6 @@ _update_m1_policy(struct meta1_backend_s *m1,
 	if (requestedsrv && *requestedsrv)
 		service_info_cleanv(requestedsrv,FALSE);
 	requestedsrv = NULL;
-
 
 failedend:
 	if (args)
@@ -1591,7 +1486,6 @@ _update_m1_policy_by_prefix(struct meta1_backend_s *m1,
 		err = localerr;
 	}
 
-
 	free_full_urlv(m1_srv_urls);
 
 failedend:
@@ -1638,7 +1532,7 @@ meta1_backend_update_m1_policy(struct meta1_backend_s *m1, const gchar *ns,
 	}
 
 	if ( g_strcmp0("EXCLUDE", action) == 0 && !excludesrv ) {
-		err = NEWERROR(500,
+		err = NEWERROR(CODE_INTERNAL_ERROR,
 				"Missing excluded service url, Madatory with EXCLUDE action");
 		goto failedend;
 	}
@@ -1660,9 +1554,8 @@ meta1_backend_update_m1_policy(struct meta1_backend_s *m1, const gchar *ns,
 				excludesrv, excludeaddr, hash_srv, checkonly, result);
 	}
 	else {
-		err = NEWERROR(500, "Missing prefix or container parameter");
+		err = NEWERROR(CODE_INTERNAL_ERROR, "Missing prefix or container parameter");
 	}
-
 
 failedend:
 	if (tag_name)

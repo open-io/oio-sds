@@ -76,10 +76,10 @@ do { /* BLOCK get_arg_from_header */
 	data_size = 0;
 	switch (message_get_field({{msg}}, "{{arg.message_name}}", sizeof("{{arg.message_name}}")-1, &data, &data_size, {{err}})) {
 	case -1:
-		GSETCODE({{err}}, 400, "Invalid message, missing field [%s]", "{{arg.message_name}}");
+		GSETCODE({{err}}, CODE_BAD_REQUEST, "Invalid message, missing field [%s]", "{{arg.message_name}}");
 		goto error_label;
 	case 0:
-		{{IF arg.mandatory}}GSETCODE({{err}}, 400, "Invalid ASN.1 message, missing field [%s]", "{{arg.message_name}}");
+		{{IF arg.mandatory}}GSETCODE({{err}}, CODE_BAD_REQUEST, "Invalid ASN.1 message, missing field [%s]", "{{arg.message_name}}");
 		goto error_label;
 		{{ELSE}}DEBUG("Optional field [%s] not found", "{{arg.message_name}}");
 		break;{{END}}
@@ -108,11 +108,11 @@ do { /* BLOCK get_arg_from_body */
 	gsize data_size = 0;
 	switch (message_get_BODY({{msg}}, &data, &data_size, {{err}})) {
 	case -1:
-		GSETCODE({{err}}, 400, "Invalid ASN.1 message, failed to extract the body");
+		GSETCODE({{err}}, CODE_BAD_REQUEST, "Invalid ASN.1 message, failed to extract the body");
 		goto error_label;
 	case 0:
 		{{IF arg.mandatory-}}
-		GSETCODE({{err}}, 400, "Invalid ASN.1 message, missing body");
+		GSETCODE({{err}}, CODE_BAD_REQUEST, "Invalid ASN.1 message, missing body");
 		goto error_label;
 		{{ELSE-}}
 		DEBUG("Optional body not found");

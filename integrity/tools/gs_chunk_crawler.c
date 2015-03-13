@@ -1,3 +1,22 @@
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gs_chunk_crawler"
 #endif
@@ -50,14 +69,12 @@ static gchar ns_name[LIMIT_LENGTH_NSNAME] = "";
 
 static time_t interval_sleep = 200L;
 
-
 static gboolean flag_loop = FALSE;
 static gboolean flag_timestamp = FALSE;
 static gboolean flag_exit_on_error = FALSE;
 static gint  nbChunkMax = 0;
 
 /* ------------------------------------------------------------------------- */
-
 
 static gboolean
 chunk_path_is_valid(const gchar *fullpath)
@@ -164,7 +181,6 @@ accept_chunk(const gchar *dirname, const gchar *bn, void *data)
 	return metautils_str_ishexa(bn, len);  
 }
 
-
 static enum scanner_traversal_e
 manage_chunk(const gchar * chunk_path, void *data, struct rules_motor_env_s** motor)
 {
@@ -175,7 +191,6 @@ manage_chunk(const gchar * chunk_path, void *data, struct rules_motor_env_s** mo
 	struct chunk_textinfo_extra_s chunk_info_extra;
 	struct crawler_chunk_data_pack_s *data_block;
 	struct stat chunk_stat;
-
 
 	data_block = malloc(sizeof(struct crawler_chunk_data_pack_s));	
 	bzero(&chunk_info, sizeof(chunk_info));
@@ -197,8 +212,6 @@ manage_chunk(const gchar * chunk_path, void *data, struct rules_motor_env_s** mo
         	return SCAN_STOP_ALL;
 		}
 	}
-
-
 
 	/* Read content info from chunk attributes */
 	if (!get_rawx_info_in_attr(chunk_path, &local_error, &content_info, &chunk_info) ||\
@@ -247,7 +260,6 @@ label_exit:
 	return SCAN_CONTINUE;
 }
 
-
 static enum scanner_traversal_e
 manage_chunk_and_sleep(const gchar * chunk_path, void *data, struct rules_motor_env_s** motor)
 {
@@ -294,7 +306,6 @@ main_save_canonical_volume(const char *vol)
 
 	return TRUE;
 }
-
 
 /* ------------------------------------------------------------------------- */
 

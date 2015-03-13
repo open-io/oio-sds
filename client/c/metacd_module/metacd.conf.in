@@ -5,10 +5,10 @@ to_cnx=20000
 pidfile=/GRID/common/run/metacd.pid
 
 [Server.metacd]
-min_workers=100
-min_spare_workers=200
-max_spare_workers=400
-max_workers=400
+min_workers=2
+min_spare_workers=2
+max_spare_workers=100
+max_workers=100
 listen=/GRID/common/run/metacd.sock?mode=0666
 plugins=metacd,fallback
 

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gridcluster.agent.namespace_get_task_worker"
 #endif
@@ -63,7 +82,6 @@ error_handler(worker_t *worker, GError **error)
         return(1);
 }
 
-
 static int
 parse_namespace_info(worker_t *worker, GError **error)
 {
@@ -87,7 +105,8 @@ parse_namespace_info(worker_t *worker, GError **error)
 	}
 
 	if (asn1_session->resp_body != NULL) {
-		ns_info = namespace_info_unmarshall(asn1_session->resp_body, asn1_session->resp_body_size, error);
+		ns_info = namespace_info_unmarshall(asn1_session->resp_body,
+				asn1_session->resp_body_size, error);
 		if (ns_info == NULL) {
 			GSETERROR(error, "Failed to unmarshall namespace_info from ASN1 data");
 			return 0;
@@ -203,20 +222,20 @@ start_namespace_get_task(GError **error)
 namespace_data_t*
 get_namespace(const char *ns_name, GError **error)
 {
+	gchar ns[LIMIT_LENGTH_NSNAME];
 	namespace_data_t *ns_data = NULL;
-	const char *vns = strchr(ns_name, '.');
-	if (vns != NULL)
-		ns_name = g_strndup(ns_name, vns - ns_name);
+
+	metautils_strlcpy_physical_ns(ns, ns_name, sizeof(ns));
 
 	/* Get namespace data */
-	ns_data = g_hash_table_lookup(namespaces, ns_name);
+	ns_data = g_hash_table_lookup(namespaces, ns);
 	if (ns_data == NULL) {
-		GSETERROR(error, "Namespace [%s] unknown in config", ns_name);
+		GSETERROR(error, "Namespace [%s] unknown in config", ns);
 		goto end_label;
 	}
 
 	if (!ns_data->configured) {
-		GSETERROR(error, "Namespace [%s] unavailable", ns_name);
+		GSETERROR(error, "Namespace [%s] unavailable", ns);
 		ns_data = NULL;
 		goto end_label;
 	}
@@ -225,13 +244,11 @@ get_namespace(const char *ns_name, GError **error)
 		|| !ns_data->down_services
 		|| !ns_data->conscience)
 	{
-		GSETERROR(error,"Namespace [%s] misconfigured", ns_name);
+		GSETERROR(error,"Namespace [%s] misconfigured", ns);
 		ns_data = NULL;
 	}
 
 end_label:
-	if (vns != NULL)
-		g_free((gpointer)ns_name);
 	return ns_data;
 }
 
@@ -258,7 +275,6 @@ namespace_get_services(struct namespace_data_s *ns_data)
 	return result;
 }
 
-
 gboolean
 namespace_is_available(const struct namespace_data_s *ns_data)
 {
@@ -280,11 +296,6 @@ worker_ns_indirect_config(gpointer udata, GError **error)
 
 	TRACE_POSITION();
 	g_snprintf(task_id, sizeof(task_id), "%s.%s", TASK_PREFIX, ns_name);
-
-	if (!IS_FORKED_AGENT) {
-		GSETERROR(error, "CODE ERROR: a secondary task cannot be started within the main agent");
-		goto label_end;
-	}
 
 	if (!(ns_data = g_hash_table_lookup(namespaces, ns_name))) {
 		GSETERROR(error, "NS[%s] unknown", ns_name);
@@ -326,11 +337,6 @@ agent_start_indirect_ns_config(const gchar *ns_name, GError **error)
 	task_t *task;
 
 	TRACE_POSITION();
-
-	if (!IS_FORKED_AGENT) {
-		GSETERROR(error, "CODE ERROR: a secondary task cannot be started within the main agent");
-		return FALSE;
-	}
 
 	task_id = g_strconcat(TASK_PREFIX, ".", ns_name, NULL);
 	task = set_task_callbacks(create_task(period_get_ns, task_id),

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metacomm.namespace_info"
 #endif
@@ -28,9 +47,8 @@ write_in_gba(const void *b, gsize bSize, void *key)
 	return a ? 0 : -1;
 }
 
-
 GByteArray *
-namespace_info_marshall(namespace_info_t * namespace_info, const char *version, GError ** err)
+namespace_info_marshall(namespace_info_t * namespace_info, GError ** err)
 {
 	asn_enc_rval_t encRet;
 	GByteArray *result = NULL;
@@ -44,22 +62,8 @@ namespace_info_marshall(namespace_info_t * namespace_info, const char *version, 
 
 	memset(&asn1_namespace_info, 0x00, sizeof(NamespaceInfo_t));
 
-	/* convert version to an int to easy compare */
-	// FIXME ugly piece of code! 
-	gint64 versint64 = 0;
-	if(NULL != version) {
-		char *r = strchr(version,'.');
-		if(r) {
-			char tmp[256];
-			memset(tmp, '\0', 256);
-			g_snprintf(tmp, 256, "%.*s%s", (int)(r - version), version, r + 1);
-			versint64 = g_ascii_strtoll(tmp, NULL, 10);
-			TRACE("marshalling int64 : %"G_GINT64_FORMAT, versint64);
-		}
-	}
-
 	/*fills an ASN.1 structure */
-	if (!namespace_info_API2ASN(namespace_info, versint64, &asn1_namespace_info)) {
+	if (!namespace_info_API2ASN(namespace_info, &asn1_namespace_info)) {
 		GSETERROR(err, "API to ASN.1 mapping error");
 		goto error_mapping;
 	}
@@ -100,7 +104,7 @@ namespace_info_unmarshall(const guint8 * buf, gsize buf_len, GError ** err)
 
 	/*sanity checks */
 	if (!buf) {
-		GSETCODE(err, 500+EINVAL, "Invalid paremeter");
+		GSETCODE(err, ERRCODE_PARAM, "Invalid paremeter");
 		return NULL;
 	}
 
@@ -108,18 +112,14 @@ namespace_info_unmarshall(const guint8 * buf, gsize buf_len, GError ** err)
 	codecCtx.max_stack_size = 65536;
 	decRet = ber_decode(&codecCtx, &asn_DEF_NamespaceInfo, (void *) &asn1_namespace_info, buf, buf_len);
 	if (decRet.code != RC_OK) {
-		GSETCODE(err, 500, "Cannot deserialize: %s", (decRet.code == RC_WMORE)
+		GSETCODE(err, CODE_INTERNAL_ERROR, "Cannot deserialize: %s", (decRet.code == RC_WMORE)
 				? "uncomplete data" : "invalid data");
 		namespace_info_cleanASN(asn1_namespace_info, FALSE);
 		return NULL;
 	}
 
 	/*prepare the working structures */
-	if (!(result = g_try_malloc0(sizeof(namespace_info_t)))) {
-		GSETCODE(err, 500+ENOMEM, "Memory allocation failure");
-		namespace_info_cleanASN(asn1_namespace_info, FALSE);
-		return NULL;
-	}
+	result = g_malloc0(sizeof(namespace_info_t));
 
 	/*map the ASN.1 in a common structure */
 	int rc = namespace_info_ASN2API(asn1_namespace_info, result);
@@ -133,7 +133,7 @@ namespace_info_unmarshall(const guint8 * buf, gsize buf_len, GError ** err)
 	namespace_info_free(result);
 	result = NULL;
 
-	GSETCODE(err, 500, "ASN.1 to API mapping failure");
+	GSETCODE(err, CODE_INTERNAL_ERROR, "ASN.1 to API mapping failure");
 	return NULL;
 }
 

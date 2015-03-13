@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta1v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.meta1"
 #endif
@@ -69,11 +88,11 @@ _open_and_lock(struct meta1_backend_s *m1, const container_id_t cid,
 			((guint8*)cid)[0], ((guint8*)cid)[1]);
 
 	/* Now open/lock the base in a way suitable for our op */
-	err = sqlx_repository_open_and_lock(m1->backend.repo,
-			META1_TYPE_NAME, base, m1_to_sqlx(how), handle, NULL);
+	struct sqlx_name_s n = {.base=base, .type=META1_TYPE_NAME, .ns=m1->backend.ns_name};
+	err = sqlx_repository_open_and_lock(m1->backend.repo, &n, m1_to_sqlx(how), handle, NULL);
 
 	if (err != NULL) {
-		if (err->code < 300 || err->code > 399)
+		if (!CODE_IS_REDIRECT(err->code))
 			g_prefix_error(&err, "Open/Lock error: ");  
 		return err;
 	}
@@ -81,7 +100,7 @@ _open_and_lock(struct meta1_backend_s *m1, const container_id_t cid,
 	EXTRA_ASSERT(*handle != NULL);
 	GRID_TRACE("Opened and locked [%s][%s] -> [%s][%s]",
 			base, META1_TYPE_NAME,
-			(*handle)->logical_name, (*handle)->logical_type);
+			(*handle)->name.base, (*handle)->name.type);
 	return NULL;
 }
 

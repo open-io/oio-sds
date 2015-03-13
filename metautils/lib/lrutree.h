@@ -1,5 +1,25 @@
-#ifndef HC_lru_tree__h
-# define HC_lru_tree__h 1
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
+#ifndef OIO_SDS__metautils__lib__lrutree_h
+# define OIO_SDS__metautils__lib__lrutree_h 1
+
 # include <glib.h>
 
 #define LTO_NONE	0x00
@@ -117,4 +137,4 @@ void lru_tree_foreach_DEQ(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata
  */
 gint64 lru_tree_count(struct lru_tree_s *lt);
 
-#endif /* HC_lru_tree__h */
+#endif /*OIO_SDS__metautils__lib__lrutree_h*/

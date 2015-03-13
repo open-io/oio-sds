@@ -1,3 +1,22 @@
+/*
+OpenIO SDS sqlx
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.sqlx.server"
 #endif
@@ -62,30 +81,31 @@ filter_services_and_clean(struct sqlx_service_s *ss,
 }
 
 static GError *
-_get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t,
+_get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
-	if (!n || !t || !result)
-		return NEWERROR(500, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
+	EXTRA_ASSERT(ss != NULL);
+	EXTRA_ASSERT(result != NULL);
+	SQLXNAME_CHECK(n);
 
-	const gchar *sep = strchr(n, '@');
+	const gchar *sep = strchr(n->base, '@');
 	if (!sep)
-		return NEWERROR(400, "Invalid base name [%s]", n);
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name [%s]", n->base);
 
-	gint64 seq = g_ascii_strtoll(n, NULL, 10);
+	gint64 seq = g_ascii_strtoll(n->base, NULL, 10);
 	struct hc_url_s *u = hc_url_empty();
 	hc_url_set(u, HCURL_NS, ss->ns_name);
 	if (!hc_url_set(u, HCURL_HEXID, sep+1)) {
 		hc_url_clean(u);
-		return NEWERROR(400, "Invalid HEXID [%s]", sep+1);
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid HEXID [%s]", sep+1);
 	}
 
 	if (nocache) {
-		hc_decache_reference_service(ss->resolver, u, t);
+		hc_decache_reference_service(ss->resolver, u, n->type);
 	}
 
 	gchar **peers = NULL;
-	GError *err = hc_resolve_reference_service(ss->resolver, u, t, &peers);
+	GError *err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);
 	hc_url_clean(u);
 
 	if (NULL != err) {
@@ -93,7 +113,7 @@ _get_peers(struct sqlx_service_s *ss, const gchar *n, const gchar *t,
 		return err;
 	}
 
-	if (!(*result = filter_services_and_clean(ss, peers, seq, t)))
+	if (!(*result = filter_services_and_clean(ss, peers, seq, n->type)))
 		return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
 	return NULL;
 }

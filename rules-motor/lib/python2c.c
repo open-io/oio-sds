@@ -1,9 +1,27 @@
+/*
+OpenIO SDS rules-motor
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "rules-motor"
 #endif
 
 #include <grid_client.h>
-#include <meta2-mover/lib/meta2_mover.h>
 #include <integrity/lib/content_check.h>
 
 #include "motor.h"
@@ -86,43 +104,6 @@ motor_log(const char *domain, int lvl, const char *msg)
 {
 	(void) lvl;
 	g_log(domain, GRID_LOGLVL_INFO, msg);
-}
-
-int
-motor_move_container(const gchar * ns_name, const gchar * xcid)
-{
-	gs_error_t *gserr = NULL;
-	gs_grid_storage_t *cli;
-	GError *err = NULL;
-
-	cli = gs_grid_storage_init2(ns_name, 90000, 90000, &gserr);
-	if (!cli) {
-		ERROR("Grid init error : %s", gs_error_get_message(gserr));
-		gs_error_free(gserr);
-		return 0;
-	}
-
-	g_assert(gserr == NULL);
-	gs_grid_storage_set_timeout(cli, GS_TO_RAWX_CNX, 90000, NULL);
-	gs_grid_storage_set_timeout(cli, GS_TO_RAWX_OP, 90000, NULL);
-	gs_grid_storage_set_timeout(cli, GS_TO_M0_CNX, 90000, NULL);
-	gs_grid_storage_set_timeout(cli, GS_TO_M0_OP, 90000, NULL);
-	gs_grid_storage_set_timeout(cli, GS_TO_M1_CNX, 90000, NULL);
-	gs_grid_storage_set_timeout(cli, GS_TO_M1_OP, 90000, NULL);
-	gs_grid_storage_set_timeout(cli, GS_TO_M2_CNX, 90000, NULL);
-	gs_grid_storage_set_timeout(cli, GS_TO_M2_OP, 90000, NULL);
-	gs_grid_storage_set_timeout(cli, GS_TO_MCD_CNX, 90000, NULL);
-	gs_grid_storage_set_timeout(cli, GS_TO_MCD_OP, 90000, NULL);
-
-	err = meta2_mover_migrate(cli, xcid, NULL);
-	if (err) {
-		ERROR("Container migration error : %s", err->message);
-		g_clear_error(&err);
-		return 0;
-	}
-
-	gs_grid_storage_free(cli);
-	return 1;
 }
 
 /**

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.client"
 #endif
@@ -11,31 +30,15 @@ static void
 env_init (void)
 {
 	static volatile int init_done = 0;
-	char *enabled=NULL, *file=NULL, *str;
+	char *str;
 	char *glib=NULL;
 
 	if (!init_done) {
 
 		init_done = 1;
 
-		if (!g_thread_supported ())
-			g_thread_init (NULL);
-
-		/* Enables log4c logging */
-		if (NULL != (enabled = getenv(ENV_LOG4C_ENABLE))) {
-			if (enabled[0] != '0') { // I mean '0', not '\0'
-				if (log4c_init())
-					g_printerr("cannot load log4c\n");
-				else if ((file=getenv(ENV_LOG4C_LOAD)))
-					log4c_load(file);
-			}
-		}
-
 		if (NULL != (glib = getenv(ENV_GLIB2_ENABLE))) {
 			g_log_set_default_handler(logger_stderr, NULL);
-		}
-		else if (!enabled) {
-			g_log_set_default_handler(logger_noop, NULL);
 		}
 
 		/*configure the sleep time between two failed ADD actions*/
@@ -389,7 +392,8 @@ GSList* gs_resolve_meta2 (gs_grid_storage_t *gs,
 				/*in this case, no need to retry*/
 				return NULL;
 			} else if (CODE_REFRESH_META0(gErr->code) ||
-					gErr->code < 100 || gErr->code == 500) {
+					CODE_IS_NETWORK_ERROR(gErr->code) ||
+					gErr->code == CODE_INTERNAL_ERROR) {
 				gs_decache_all( gs);
 				return _try(exclude);
 			}
@@ -414,7 +418,6 @@ GSList* gs_resolve_meta2 (gs_grid_storage_t *gs,
 
 	return resList;
 }
-
 
 void gs_decache_container (gs_grid_storage_t *gs, container_id_t cID)
 {
@@ -635,13 +638,11 @@ _gs_locate_container_by_cid(gs_grid_storage_t *gs, container_id_t cid, char** ou
 	return location;
 }
 
-
 struct gs_container_location_s *
 gs_locate_container_by_hexid(gs_grid_storage_t *gs, const char *hexid, gs_error_t **gserr)
 {
 	return gs_locate_container_by_hexid_v2(gs, hexid, NULL, gserr);
 }
-
 
 struct gs_container_location_s *
 gs_locate_container_by_hexid_v2(gs_grid_storage_t *gs, const char *hexid, char** out_nsname_on_m1,
@@ -658,8 +659,6 @@ gs_locate_container_by_hexid_v2(gs_grid_storage_t *gs, const char *hexid, char**
 
     return _gs_locate_container_by_cid(gs, cid, out_nsname_on_m1, gserr);
 }
-
-
 
 struct gs_container_location_s *
 gs_locate_container_by_name(gs_grid_storage_t *gs, const char *name, gs_error_t **gserr)

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <string.h>
 #include <glib.h>
 
@@ -130,8 +149,7 @@ check_list_count(struct meta2_backend_s *m2, struct hc_url_s *url, guint expecte
 
 	struct list_params_s lp;
 	memset(&lp, '\0', sizeof(struct list_params_s));
-	lp.flags = M2V2_FLAG_ALLVERSION;
-	lp.type = DEFAULT;
+	lp.flag_allversion = ~0;
 
 	err = meta2_backend_list_aliases(m2, url, &lp, counter_cb, NULL);
 	g_assert_no_error(err);
@@ -291,7 +309,7 @@ _repo_failure(const gchar *ns)
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
 	err = meta2_backend_init(&backend, repository, ns, glp, resolver, NULL);
-	g_assert_error(err, GQ(), 400);
+	g_assert_error(err, GQ(), CODE_BAD_REQUEST);
 
 	meta2_backend_clean(backend);
 	sqlx_repository_clean(repository);
@@ -315,14 +333,8 @@ _container_wraper(container_test_f cf)
 		err = meta2_backend_create_container(m2, url, &params);
 		g_assert_no_error(err);
 
-		err = meta2_backend_open_container(m2, url);
-		g_assert_no_error(err);
-
 		if (cf)
 			cf(m2, url);
-
-		err = meta2_backend_close_container(m2, url);
-		g_assert_no_error(err);
 
 		hc_url_clean(url);
 	}
@@ -373,7 +385,6 @@ test_backend_strange_ns(void)
 	_repo_failure(ns_256);
 }
 
-
 static void
 test_container_create_destroy(void)
 {
@@ -396,7 +407,7 @@ test_content_put_no_beans(void)
 {
 	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
 		GError *err = meta2_backend_put_alias(m2, u, NULL, NULL, NULL);
-		g_assert_error(err, GQ(), 400);
+		g_assert_error(err, GQ(), CODE_BAD_REQUEST);
 		g_clear_error(&err);
 	}
 	_container_wraper(test);
@@ -535,7 +546,7 @@ test_content_append_empty(void)
 {
 	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
 		GError *err = meta2_backend_append_to_alias(m2, u, NULL, NULL, NULL);
-		g_assert_error(err, GQ(), 400);
+		g_assert_error(err, GQ(), CODE_BAD_REQUEST);
 		g_clear_error(&err);
 	}
 	_container_wraper(test);
@@ -664,7 +675,6 @@ test_content_append_not_found(void)
 
 		CHECK_ALIAS_VERSION(m2,u,3);
 
-
 		/* check we get nothing when looking for a valid version */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_NODELETED, _appender, tmp);
@@ -690,7 +700,7 @@ test_props_gotchas()
 		GSList *beans;
 
 		err = meta2_backend_set_properties(m2, u, NULL, NULL, NULL);
-		g_assert_error(err, GQ(), 400);
+		g_assert_error(err, GQ(), CODE_BAD_REQUEST);
 		g_clear_error(&err);
 
 		err = meta2_backend_get_properties(m2, u, 0, NULL, NULL);
@@ -778,13 +788,7 @@ test_props_set_deleted()
 int
 main(int argc, char **argv)
 {
-	if (!g_thread_supported())
-		g_thread_init(NULL);
-	g_set_prgname(argv[0]);
-
-	g_test_init (&argc, &argv, NULL);
-	g_log_set_default_handler(logger_stderr, NULL);
-	logger_init_level(GRID_LOGLVL_TRACE2);
+	HC_TEST_INIT(argc,argv);
 
 	container_counter = random();
 

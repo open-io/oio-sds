@@ -1,3 +1,22 @@
+/*
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "grid.url"
 #endif
@@ -37,9 +56,11 @@ struct hc_url_s
 
 /* ------------------------------------------------------------------------- */
 
-#define GRID_PREFIX "grid://"
-#define HC_PREFIX "hc://"
-#define REDC_PREFIX "redc://"
+static const gchar * prefixes [] =
+{
+	"sds://",
+	NULL
+};
 
 static void
 _parse_ns(struct hc_url_s *url)
@@ -119,14 +140,13 @@ _parse_url(struct hc_url_s *url, const gchar *str)
 {
 	const gchar *ns, *refname, *path, *options;
 
-	if(g_str_has_prefix(str, GRID_PREFIX))
-		ns = str + sizeof(GRID_PREFIX) - 1;
-	else if(g_str_has_prefix(str, HC_PREFIX))
-		ns = str + sizeof(HC_PREFIX) - 1;
-	else if(g_str_has_prefix(str, REDC_PREFIX))
-		ns = str + sizeof(REDC_PREFIX) - 1;
-	else
-		ns = str;
+	ns = str;
+	for (const gchar **p=prefixes; *p ;++p) {
+		if (g_str_has_prefix(ns, *p)) {
+			ns += strlen(*p);
+			break;
+		}
+	}
 
 	ns = metautils_lstrip(ns, '/');
 	if (!*ns)

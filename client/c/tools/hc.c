@@ -1,3 +1,22 @@
+/*
+OpenIO SDS client
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "hc.tools"
 #endif
@@ -114,7 +133,8 @@ __display_friendly_error(gs_error_t *error) {
 			}
 			break;
 		case CODE_CONTAINER_PROP_NOTFOUND:
-			g_printerr("This kind of service is not managed by your Honeycomb namespace.\n");
+			// FIXME the message is really decorelated from the error MACRO name
+			g_printerr("This kind of service is not managed by your namespace.\n");
 			break;
 		case CODE_CONTENT_PROP_NOTFOUND:
 			g_printerr("No more service of this type available. Please ensure your services are correctly started.\n");
@@ -135,7 +155,7 @@ __display_friendly_error(gs_error_t *error) {
 			g_printerr("Snapshot '%s' already exists\n",
 					hc_url_get(url, HCURL_SNAPORVERS));
 			break;
-		case 500:
+		case CODE_INTERNAL_ERROR:
 		default:
 			if(!flag_verbose) {
 				g_printerr("Unexpected server error, please run action with -v option for more informations.\n");
@@ -203,7 +223,6 @@ __dump_services(gchar **s)
 		g_print("</services>\n");
 	}
 }
-
 
 /* ---------------------------- Actions ----------------------------- */
 
@@ -586,7 +605,6 @@ func_propset(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-
 	if (! (e = hc_func_set_property(hc, url, (char **)action_args))) {
 		g_print("Properties have been set to %s %s\n",
 				container? "container" : "content", hc_url_get(url, HCURL_WHOLE));
@@ -622,7 +640,6 @@ end_propget:
 	if(result) {
 		g_strfreev(result);
 	}
-
 
 	return status;
 }
@@ -908,19 +925,19 @@ hc_action(void)
 		hc = gs_grid_storage_init(hc_url_get(url, HCURL_NS), &hc_error);
 
 		if (!hc) {
-			g_printerr("Failed to load namespace [%s]: %s\n"
-					"Please ensure /etc/gridstorage.conf.d/%s file exists.\n"
-					"If not, please contact your Honeycomb namespace administrator.\n",
-					hc_url_get(url, HCURL_NS), hc_error->msg, hc_url_get(url, HCURL_NS));
+			g_printerr("Failed to load namespace [%s]: (%d) %s\n",
+					hc_url_get(url, HCURL_NS),
+					gs_error_get_code(hc_error),
+					gs_error_get_message(hc_error));
 			action_result = -1;
 			return;
 		}
 
 		if (!_call_action(hc))
-			 action_result = -1;
+			action_result = -1;
 
 		gs_grid_storage_free(hc);
-        }
+	}
 }
 
 static struct grid_main_option_s *
@@ -987,7 +1004,6 @@ hc_specific_stop(void)
 {
 	/* no op */
 }
-
 
 static const gchar *
 hc_usage(void)
@@ -1082,14 +1098,5 @@ static struct grid_main_callbacks hcdir_callbacks =
 int
 main(int argc, char **args)
 {
-	int result = 0;
-
-	g_setenv("GS_DEBUG_GLIB2", "1", TRUE);
-	action_result = 0;
-
-	result = grid_main_cli(argc, args, &hcdir_callbacks);
-	if (result != 0)
-		action_result = result;
-
-	return action_result;
+	return grid_main_cli(argc, args, &hcdir_callbacks);
 }

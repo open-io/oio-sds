@@ -4,15 +4,11 @@ import os.path as ospath
 
 def move_chunk(path):
 	print "Moving chunk to another rawx"
-
+	return False
 
 def move_container(ns_name, cid):
-	print "Moving container " + cid + " to another meta2"
-	ns_name = ctypes.c_char_p(ns_name)
-	cid = ctypes.c_char_p(cid)
-	lib = ctypes.cdll.LoadLibrary("librulesmotorpy2c.so")
-	rc = lib.motor_move_container(ns_name, cid)
-	return bool(rc)
+	print "Moving container " + cid + " to another meta2 : not implemented"
+	return False
 
 def move_sqlx(ns_name, sqlx_addr, path, cid, type):
 	url=ospath.join(ns_name, cid);

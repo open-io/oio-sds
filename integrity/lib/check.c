@@ -1,3 +1,22 @@
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "integrity.lib.check"
 #endif
@@ -9,7 +28,7 @@
 #include <meta2v2/generic.h>
 #include <meta2v2/meta2_utils.h>
 
-#include "check.h"
+#include <integrity/lib/check.h>
 
 /**
  * List of meta2 for which a m2v1 request was successfully executed.
@@ -20,34 +39,28 @@ static GSList *m2v1_list = NULL;
 static GError*
 _init_meta2_connection(struct meta2_ctx_s *ctx)
 {
+	ctx->m2_cnx = metacnx_create();
+	ctx->m2_cnx->flags = METACNX_FLAGMASK_KEEPALIVE;
+	ctx->m2_cnx->timeout.cnx = 30000;
+	ctx->m2_cnx->timeout.req = 30000;
+
 	GError *result = NULL;
-
-	/* Create connection to meta2 */
-        if(!(ctx->m2_cnx = metacnx_create(&result)))
-		return result;
-
-        ctx->m2_cnx->flags = METACNX_FLAGMASK_KEEPALIVE;
-        ctx->m2_cnx->timeout.cnx = 30000;
-        ctx->m2_cnx->timeout.req = 30000;
-
-        if (!metacnx_init_with_url(ctx->m2_cnx, ctx->loc->m2_url[0], &result))
-                goto clean_up;
-
-        if (!metacnx_open(ctx->m2_cnx, &result))
-                goto clean_up;
+	if (!metacnx_init_with_url(ctx->m2_cnx, ctx->loc->m2_url[0], &result))
+		goto clean_up;
+	if (!metacnx_open(ctx->m2_cnx, &result))
+		goto clean_up;
 
 clean_up:
 	if(result) {
 		if(ctx->m2_cnx) {
-	        metacnx_close(ctx->m2_cnx);
-	        metacnx_destroy(ctx->m2_cnx);
-	        ctx->m2_cnx = NULL;
-	    }
+			metacnx_close(ctx->m2_cnx);
+			metacnx_destroy(ctx->m2_cnx);
+			ctx->m2_cnx = NULL;
+		}
 	}	
 
 	return result;
 }
-
 
 struct meta2_ctx_s *
 get_meta2_ctx(const gchar *ns_name, const gchar *container_hexid,
@@ -98,7 +111,6 @@ get_meta2_ctx(const gchar *ns_name, const gchar *container_hexid,
 				container_hexid, gs_error_get_message(gs_error));
 	}
 
-
 	// if nsname --> replace by realy VNS name
 	if (ct_ns_name) {
         if (g_strcmp0(ct_ns_name, ctx->ns) != 0) {
@@ -125,7 +137,6 @@ get_meta2_ctx(const gchar *ns_name, const gchar *container_hexid,
 		goto clean_up;
 
 	GRID_DEBUG("container located [%s/%s]", ctx->ns, ctx->loc->container_name);
-
 
 	if((local_error = _init_meta2_connection(ctx)) != NULL) {
 		GSETCODE(error, local_error->code,
@@ -309,7 +320,8 @@ void check_result_clear(check_result_t **p_res, void (*free_udata(gpointer)))
 	}
 }
 
-check_result_t *check_result_new()
+check_result_t *
+check_result_new (void)
 {
 	return g_malloc0(sizeof(check_result_t));
 }
@@ -456,7 +468,7 @@ is_m2v1(const gchar *meta2)
 }
 
 void
-free_m2v1_list()
+free_m2v1_list (void)
 {
 	if (m2v1_list)
 		g_slist_free_full(m2v1_list, g_free);
@@ -528,7 +540,7 @@ find_storage_policy_and_friend_chunks(const gchar* meta2,
 }
 
 GHashTable *
-check_option_new()
+check_option_new (void)
 {
 	return g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
 }

@@ -1,3 +1,22 @@
+/*
+OpenIO SDS gridd
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #define MODULE_NAME "acl"
 
 #ifndef G_LOG_DOMAIN
@@ -41,7 +60,6 @@ plugin_reply_error(struct request_context_s *req_ctx, int code, gchar *msg)
         reply_context_clear(&ctx, TRUE);
 }
 
-
 static gint
 plugin_matcher (MESSAGE m, void *params, GError **err)
 {
@@ -71,7 +89,7 @@ plugin_handler (struct request_context_s* ctx, GError **err)
 
 	if(!authorized_personal_only(dst, acl)) {
 		WARN("Remote addr [%s] not allowed to work with this server", dst);
-		plugin_reply_error(ctx, 403 , "Permission denied");
+		plugin_reply_error(ctx, CODE_NOT_ALLOWED , "Permission denied");
 		return 1;
 	}
 	
@@ -163,7 +181,6 @@ plugin_init (GHashTable* params, GError **error)
 	} else {
 		TRACE("No access deny in acl configuration");
 	}
-
 
 		
 	acl = parse_acl(acl_allow, TRUE);

@@ -1,5 +1,24 @@
-#ifndef _RAWX_H
-# define _RAWX_H
+/*
+OpenIO SDS rawx-lib
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__rawx_lib__src__rawx_h
+# define OIO_SDS__rawx_lib__src__rawx_h 1
 
 # include <metautils/lib/metatypes.h>
 
@@ -261,4 +280,4 @@ void rawx_conf_gclean(rawx_conf_t *c);
 /* stamp the last scanned time on a chunk */
 void stamp_a_chunk(const char *chunk_path, const char *attr_to_set);
 
-#endif	/* _RAWX_H */
+#endif /*OIO_SDS__rawx_lib__src__rawx_h*/

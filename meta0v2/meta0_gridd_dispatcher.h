@@ -1,9 +1,24 @@
-/**
- * @file meta0_gridd_dispatcher.h
- */
+/*
+OpenIO SDS meta0v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
-#ifndef GRID__META0_GRIDD_DISPATCHER__H
-# define GRID__META0_GRIDD_DISPATCHER__H 1
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__meta0v2__meta0_gridd_dispatcher_h
+# define OIO_SDS__meta0v2__meta0_gridd_dispatcher_h 1
 
 #include <sqliterepo/zk_manager.h>
 /**
@@ -15,7 +30,6 @@ struct gridd_request_descr_s;
 
 struct meta0_disp_s;
 
-
 /**
  * The easiest way to retrieve the set of exported function out of
  * the META0 backend.
@@ -26,12 +40,10 @@ struct meta0_disp_s;
  */
 const struct gridd_request_descr_s* meta0_gridd_get_requests(void);
 
-
 /**
  * @param m0disp
  */
 void meta0_gridd_free_dispatcher(struct meta0_disp_s *m0disp);
-
 
 /**
  * @param m0
@@ -43,5 +55,4 @@ void meta0_gridd_requested_reload(struct meta0_disp_s *m0disp);
 
 /** @} */
 
-#endif
-
+#endif /*OIO_SDS__meta0v2__meta0_gridd_dispatcher_h*/

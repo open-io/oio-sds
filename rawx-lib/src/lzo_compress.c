@@ -1,3 +1,22 @@
+/*
+OpenIO SDS rawx-lib
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "rawx.compress"
 #endif
@@ -29,7 +48,6 @@ static const unsigned char lzo_magic[7] =
 #define LZO_FLAG_CHECKSUM  0x00000001
 
 #define HEADER_SIZE (sizeof(lzo_magic) + sizeof(lzo_uint32) + sizeof(char) + sizeof(char) + sizeof(lzo_uint32))
-
 
 static gsize
 get_working_buffer_size(gsize uncompressed_size)
@@ -377,7 +395,6 @@ lzo_compressed_chunk_get_data(struct compressed_chunk_s *chunk, gsize offset, gu
 		DEBUG("Entering compressed_chunk_get_data, reusing data, max=%u buf_offset=%u data_len=%u\n",
 				(uint)buf_len, (uint)chunk->buf_offset, (uint)chunk->data_len);
 
-
 	if (!chunk->buf || !chunk->data_len) {
 		DEBUG("This must never happened\n");	
 		return -1;
@@ -445,7 +462,6 @@ lzo_compressed_chunk_init(struct compressed_chunk_s *chunk, const gchar *path)
 		r = 2;
 		goto err;
 	}
-
 
 	do { /* extract all headers */
 #define GETNEXTPTR(Res,Ptr,Type) do { Res = *((Type *)Ptr); Ptr = Ptr + sizeof(Type); } while (0)

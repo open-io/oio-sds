@@ -1,12 +1,27 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
 
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 
-
 #include "listener_remote.h"
-
-
 
 /******************************************************************************/
 /* error management                                                           */
@@ -46,7 +61,6 @@ void listener_remote_error_clean(TLstError* err)
 	g_free(err);
 }
 
-
 /******************************************************************************/
 /* ZMQ management                                                             */
 /******************************************************************************/
@@ -59,7 +73,6 @@ void* listener_remote_init(void)
 	return zmq_init(1);
 }
 
-
 /**
  * zmq_ctx: zmq contexts to close
  * zmq_sock: zmq socket to close
@@ -69,8 +82,6 @@ void  listener_remote_close(void* zmq_ctx, void* zmq_sock)
 	if (zmq_sock != NULL) zmq_close(zmq_sock);
     if (zmq_ctx != NULL)  zmq_term(zmq_ctx);
 }
-
-
 
 /**
  *  send a buffer to listener by zmq
@@ -99,7 +110,6 @@ TLstError* listener_remote_sendBuffer(void* zmq_sock, const char* buf, int bufle
 	return err;
 } 
 
-
 TLstError* listener_remote_sendJSON(void* zmq_sock, json_object* j_root)
 {
 	char* buf = listener_remote_json_getStr(j_root);
@@ -109,7 +119,6 @@ TLstError* listener_remote_sendJSON(void* zmq_sock, json_object* j_root)
 		return listener_remote_error_new(-1, "JSON build failed");
 	return NULL;
 }
-
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -122,7 +131,6 @@ TLstError* listener_remote_sendJSON(void* zmq_sock, json_object* j_root)
 void* listener_remote_connect(TLstError **err, void* zmq_ctx, const char* listenerUrl, int linger, int64_t hwm)
 {
     int rc = 0;
-    gboolean bInit = FALSE;
 	void* zmq_sock = NULL;
 
 	if (err == NULL)
@@ -154,17 +162,13 @@ void* listener_remote_connect(TLstError **err, void* zmq_ctx, const char* listen
 
         rc = zmq_connect(zmq_sock, tmp);
         if (rc == 0) {
-			bInit= TRUE;// good init
 		} else *err = listener_remote_error_new(-1, "zmq_connect failed (%d)", errno);
 	} else *err = listener_remote_error_new(-1, "zmq_socket failed (%d)", errno);
 
-
 	if (*err != NULL) {
 		listener_remote_closesocket(zmq_sock);	
-		bInit = FALSE;
 		return NULL;
 	}
-
 
     // "duree de vie des messages au moment du zmq_term()
     return zmq_sock;
@@ -178,14 +182,10 @@ void listener_remote_closesocket(void* zmq_sock)
 	}
 }
 
-
-
-
 /******************************************************************************/
 /* JSON management                                                             */
 /******************************************************************************/
 struct json_object * listener_remote_json_buildHEADObj(      TLstJSONHeader* msgH);
-
 
 struct json_object * listener_remote_json_init(TLstJSONHeader* msgH, unsigned char bAllDataSection)
 {
@@ -219,8 +219,6 @@ struct json_object * listener_remote_json_init(TLstJSONHeader* msgH, unsigned ch
 	return j_root;
 }
 
-
-
 struct json_object * listener_remote_json_buildHEADObj(TLstJSONHeader* msgH)
 {
     struct json_object *j_head;
@@ -239,7 +237,6 @@ struct json_object * listener_remote_json_buildHEADObj(TLstJSONHeader* msgH)
         return j_head;
 }
 
-
 TLstError*  listener_remote_json_addStringToSection(json_object* j_section, char* key, char* value)
 {
 	json_object* j_obj;
@@ -257,7 +254,6 @@ TLstError*  listener_remote_json_addStringToSection(json_object* j_section, char
 	return NULL;
 }
 
-
 TLstError*  listener_remote_json_addIntToSection(json_object* j_section, char* key, int value)
 {
     json_object* j_obj;
@@ -270,9 +266,6 @@ TLstError*  listener_remote_json_addIntToSection(json_object* j_section, char* k
 
     return NULL;
 }
-
-
-
 
 TLstError*  listener_remote_json_addSection(json_object* j_root, 
 		ELstSection section, json_object* j_section)
@@ -287,12 +280,10 @@ TLstError*  listener_remote_json_addSection(json_object* j_root,
 	return NULL;
 }
 
-
 json_object* listener_remote_json_newSection(void)
 {
 	return json_object_new_object();
 }
-
 
 void listener_remote_json_clean(json_object* j_obj)
 {
@@ -307,10 +298,4 @@ char* listener_remote_json_getStr(json_object* object)
 
     return NULL;
 }
-
-
-
-
-
-
 

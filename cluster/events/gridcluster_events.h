@@ -1,5 +1,24 @@
-#ifndef __GRIDCLUSTER_EVENTS_H__
-# define __GRIDCLUSTER_EVENTS_H__
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
+#ifndef OIO_SDS__cluster__events__gridcluster_events_h
+# define OIO_SDS__cluster__events__gridcluster_events_h 1
 
 # include <metautils/lib/metautils.h>
 
@@ -52,13 +71,11 @@ gridcluster_event_t* gridcluster_decode_event2( const guint8 * const encoded, gs
  */
 void gridcluster_destroy_event(gridcluster_event_t* event);
 
-
 /**
  * @param pevent
  * @param ignored
  */
 void gridcluster_event_gclean(gpointer pevent, gpointer ignored);
-
 
 /**
  * @param event
@@ -92,15 +109,11 @@ gsize gridcluster_event_get_type(gridcluster_event_t *event, gchar *dst_type, gs
  */
 void gridcluster_event_set_type(gridcluster_event_t *event, const gchar *str_type);
 
-
-
 /****************************************************************************/
-
 
 #define GRIDCLUSTER_EVENT_XATTR_CID   "user.grid.agent.incoming-container"
 #define GRIDCLUSTER_EVENT_XATTR_SEQ   "user.grid.agent.incoming-sequence"
 #define GRIDCLUSTER_EVENT_XATTR_TIME  "user.grid.agent.incoming-time"
-
 
 /**
  *
@@ -117,11 +130,8 @@ GError* gridcluster_event_SaveNewEvent(struct event_config_s *evt_config, gridcl
  */
 gchar* gridcluster_event_get_string(gridcluster_event_t *event, const gchar *key);
 
-
 int gridcluster_eventxattr_get_incoming_time(const gchar *path, time_t *t);
 int gridcluster_eventxattr_get_seq(const gchar *path, gint64 *i64);
 int gridcluster_eventxattr_get_container_id(const gchar *path, container_id_t *id, gchar *str, gsize str_len);
 
-
-
-#endif /*__GRIDCLUSTER_EVENTHANDLER_H__*/
+#endif /*OIO_SDS__cluster__events__gridcluster_events_h*/

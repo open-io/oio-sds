@@ -1,3 +1,22 @@
+/*
+OpenIO SDS cluster
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "conscience.api"
 #endif
@@ -25,7 +44,6 @@ _unlock_rw(GStaticRWLock * lock)
 	else
 		g_static_rw_lock_reader_unlock(lock);
 }
-
 
 struct conscience_srvtype_s *
 conscience_get_locked_srvtype(struct conscience_s *conscience, GError ** error,
@@ -107,9 +125,8 @@ conscience_create(void)
 {
 	struct conscience_s *conscience;
 
-	conscience = g_try_malloc0(sizeof(struct conscience_s));
-	if (!conscience)
-		return NULL;
+	conscience = g_malloc0(sizeof(struct conscience_s));
+	namespace_info_init (&conscience->ns_info);
 
 	g_static_rw_lock_init(&(conscience->rwlock_srv));
 	g_static_rec_mutex_init(&(conscience->srmut_brk));
@@ -152,8 +169,10 @@ conscience_create_named(const gchar *ns_name, GError **error)
 		return NULL;
 	}
 	
-	g_strlcpy(conscience->ns_info.name, ns_name, sizeof(conscience->ns_info.name));
-	conscience->event_handler = gridcluster_eventhandler_create(ns_name, error, NULL, NULL);
+	metautils_strlcpy_physical_ns(conscience->ns_info.name, ns_name,
+			sizeof(conscience->ns_info.name));
+	conscience->event_handler = gridcluster_eventhandler_create(
+			ns_name, error, NULL, NULL);
 	return conscience;
 }
 

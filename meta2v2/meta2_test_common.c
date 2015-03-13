@@ -1,3 +1,22 @@
+/*
+OpenIO SDS meta2v2
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #include <string.h>
 #include <glib.h>
 
@@ -18,7 +37,6 @@ static guint64 container_counter = 0;
 //static gint64 version = 0;
 static gint64 chunk_size = 3000;
 static gint64 chunks_count = 3;
-
 
 static void
 _init_nsinfo(struct namespace_info_s *nsinfo, const gchar *ns)
@@ -208,14 +226,8 @@ container_wrapper(container_test_f cf)
 		err = meta2_backend_create_container(m2, url, &params);
 		g_assert_no_error(err);
 
-		err = meta2_backend_open_container(m2, url);
-		g_assert_no_error(err);
-
 		if (cf)
 			cf(m2, url);
-
-		err = meta2_backend_close_container(m2, url);
-		g_assert_no_error(err);
 
 		hc_url_clean(url);
 	}

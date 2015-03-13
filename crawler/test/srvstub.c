@@ -1,3 +1,22 @@
+/*
+OpenIO SDS crawler
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "grid.test.service.stub"
 #endif
@@ -16,9 +35,6 @@
 #include <signal.h>
 #include <glib.h>
 
-
-
-
 #include "../../metautils/lib/metautils.h"
 
 #include "../../meta2v2/generic.h"
@@ -31,7 +47,6 @@
 
 #include "srvstub.h"
 
-
 static GError* g_err          = NULL;
 
 static void*   g_responsedata = NULL;
@@ -39,54 +54,44 @@ static char*   g_module_name  = NULL;
 
 #define SRVSTUB_PRINTF(...) /*fprintf(stdout, __VA_ARGS__);*/
 
-
-
 //------------------------------------------------------------------------------
 
-int meta2_filter_action_purge_container(struct gridd_filter_ctx_s *ctx,
+static int
+meta2_filter_action_purge_container(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	(void) reply;
-
+	(void) ctx;
 	SRVSTUB_PRINTF("packet received...PURGE");
-
-	// M2V2_MODE_DRYRUN, ...
-	guint32 flags = 0;
-	const char *fstr = NULL;
-	if (NULL != fstr)
-		flags = (guint32) g_ascii_strtoull(fstr, NULL, 10);
 
 	GSList* del_chunks_list = NULL;
 
 	if (NULL != g_err) {
 		GRID_DEBUG("Container purge failed (%d) : %s", g_err->code, g_err->message);
-		//meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;
 	}
 
-
 	reply->add_body(bean_sequence_marshall(g_responsedata));
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	_bean_cleanl2(del_chunks_list);
 	return FILTER_OK;
 }
 
-	int
+static int
 meta2_filter_action_deduplicate_container(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
+	(void) ctx;
 	GSList* result = NULL;   // list of list
 	GSList* common_prefixes = NULL;
 
 	SRVSTUB_PRINTF("packet received...DEDUP");
 
-	void send_result()
-	{
+	void send_result() {
 		GSList *list_of_lists = NULL;
 		list_of_lists = gslist_split(result, 32);
 		for (GSList *cursor = list_of_lists; cursor; cursor = cursor->next) {
 			reply->add_body(bean_sequence_marshall(cursor->data));
-			reply->send_reply(206, "Partial content");
+			reply->send_reply(CODE_PARTIAL_CONTENT, "Partial content");
 		}
 		if (NULL != common_prefixes) {
 			char **array = (char **)metautils_list_to_array(common_prefixes);
@@ -95,25 +100,22 @@ meta2_filter_action_deduplicate_container(struct gridd_filter_ctx_s *ctx,
 		}
 
 		/* TODO : max-keys, truncated */
-
-		reply->send_reply(200, "OK");
-
+		reply->send_reply(CODE_FINAL_OK, "OK");
 		gslist_chunks_destroy(list_of_lists, NULL);
 	}
 
-
 	send_result();
-
 	return FILTER_OK;
 }
 
-
 //------------------------------------------------------------------------------
-//
-static gboolean meta2_dispatch_all(struct gridd_reply_ctx_s *reply, gpointer gdata, gpointer hdata)
+
+static gboolean
+meta2_dispatch_all(struct gridd_reply_ctx_s *reply, gpointer gdata, gpointer hdata)
 {
+	(void) gdata, (void) hdata;
 	gridd_filter *fl;
-	struct gridd_filter_ctx_s *ctx;
+	struct gridd_filter_ctx_s *ctx = NULL;
 	guint loop;
 
 	fl = (gridd_filter*)hdata;
@@ -122,7 +124,7 @@ static gboolean meta2_dispatch_all(struct gridd_reply_ctx_s *reply, gpointer gda
 
 	if (!fl) {
 		GRID_INFO("No filter defined for this request, consider not yet implemented");
-		reply->send_reply(501, "NOT IMPLEMENTED");
+		reply->send_reply(CODE_NOT_IMPLEMENTED, "NOT IMPLEMENTED");
 	}
 	else {
 		for (loop=1; loop && *fl; fl++) {
@@ -147,16 +149,19 @@ static gboolean meta2_dispatch_all(struct gridd_reply_ctx_s *reply, gpointer gda
 	return TRUE;
 }
 
-static gboolean meta2_dispatch_ok(struct gridd_reply_ctx_s *reply, gpointer gdata, gpointer hdata)
+static gboolean
+meta2_dispatch_ok(struct gridd_reply_ctx_s *reply, gpointer gdata, gpointer hdata)
 {
+	(void) gdata, (void) hdata;
 	SRVSTUB_PRINTF("packet received...Send OK without data");
-	reply->send_reply(200, "OK");
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
-
-static gboolean meta2_dispatch_error(struct gridd_reply_ctx_s *reply, gpointer gdata, gpointer hdata)
+static gboolean
+meta2_dispatch_error(struct gridd_reply_ctx_s *reply, gpointer gdata, gpointer hdata)
 {
+	(void) gdata, (void) hdata;
 	GError* error = NULL;
 	error = NEWERROR(-1, "error from stub srv");
 	SRVSTUB_PRINTF("packet received...Send ERROR");
@@ -164,23 +169,22 @@ static gboolean meta2_dispatch_error(struct gridd_reply_ctx_s *reply, gpointer g
 	return TRUE;
 }
 
-static gboolean meta2_dispatch_none(struct gridd_reply_ctx_s *reply, gpointer gdata, gpointer hdata)
+static gboolean
+meta2_dispatch_none(struct gridd_reply_ctx_s *reply, gpointer gdata, gpointer hdata)
 {
+	(void) gdata, (void) hdata, (void) reply;
     return TRUE;
 }
 
-
-
 //------------------------------------------------------------------------------
-//
+
 static gridd_filter M2V2_PURGE_FILTERS[] = { meta2_filter_action_purge_container,       NULL };
 static gridd_filter M2V2_DEDUP_FILTERS[] = { meta2_filter_action_deduplicate_container, NULL };
 
-
-
-
 typedef gboolean (*hook) (struct gridd_reply_ctx_s *, gpointer, gpointer);
-const struct gridd_request_descr_s *_get_requests(ESrvStubCmd sscmd, char* name)
+
+static const struct gridd_request_descr_s *
+_get_requests(ESrvStubCmd sscmd, char* name)
 {
 	int i=0;
 	/* one-shot features */
@@ -209,37 +213,37 @@ const struct gridd_request_descr_s *_get_requests(ESrvStubCmd sscmd, char* name)
 	while (descriptions[i].name ) {	
 		descriptions[i].handler_data = NULL;
 		switch(sscmd) {
-		case SSCMD_ALL_OK: 	break;
-		case SSCMD_ALL_NONE:
+			case SSCMD_ALL_OK:
+				break;
+			case SSCMD_ALL_NONE:
 				descriptions[i].handler      = meta2_dispatch_none;
 				descriptions[i].handler_data = NULL;
 				break;
 
-		case SSCMD_ALL_OK_WITHOUTDATA:  
+			case SSCMD_ALL_OK_WITHOUTDATA:  
 				descriptions[i].handler      = meta2_dispatch_ok;
 				descriptions[i].handler_data = NULL;
 				break;
 
-		case SSCMD_ALL_ERR_WITHOUTDATA:
+			case SSCMD_ALL_ERR_WITHOUTDATA:
 				descriptions[i].handler      = meta2_dispatch_error;
 				descriptions[i].handler_data = NULL;
 				break;
 
-		case SSCMD_ONE_ERR_WITHOUTDATA:
+			case SSCMD_ONE_ERR_WITHOUTDATA:
 				if (g_strcmp0(descriptions[i].name, name)) {
 					descriptions[i].handler      = meta2_dispatch_error;
 					descriptions[i].handler_data = NULL;
 					break;
 				}
-		}i;
+			case SSCMD_max:
+				break;
+		}
 		i++;
 	}
 
 	return descriptions;
 }
-
-
-
 
 //------------------------------------------------------------------------------
 //
@@ -249,7 +253,6 @@ struct SSrvStubHandle {
 	guint                              max_connections;
 	struct gridd_request_dispatcher_s *dispatcher;
 };
-
 
 /**
  * responsedata: M2V2_PURGE: --> GSList*
@@ -292,7 +295,6 @@ TSrvStubHandle* srvstub_init(char* url, ESrvStubCmd sscmd, char* name, void* res
 	return s;
 }
 
-
 GError* srvstub_run(TSrvStubHandle* s)
 {
 	GError* err= NULL;
@@ -303,7 +305,6 @@ GError* srvstub_run(TSrvStubHandle* s)
 
 	return NULL;
 }
-
 
 int srvstub_close(TSrvStubHandle** s)
 {

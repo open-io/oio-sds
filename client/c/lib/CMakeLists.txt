@@ -9,7 +9,9 @@ include_directories(AFTER
 		${CURL_INCLUDE_DIRS})
 
 link_directories(
-		${SQLITE3_LIBRARY_DIRS})
+		${OPENSSL_LIBRARY_DIRS}
+		${NEON_LIBRARY_DIRS}
+		${CURL_LIBRARY_DIRS})
 
 add_library(gridclient SHARED
 		containers.c
@@ -21,8 +23,6 @@ add_library(gridclient SHARED
 		grid.c
 		grid_client.h
 		grid_client_shortcuts.h
-		grid_index.c
-		grid_services.c
 		gs_common.c
 		gs_internals.h
 		rawx.c rawx.h
@@ -46,7 +46,6 @@ target_link_libraries(gridclient
 		metautils metacomm
 		gridcluster
 		meta2remote
-		meta2servicesremote
 		meta2v2utils
 		meta2v2remote
 		meta0remote
@@ -55,15 +54,6 @@ target_link_libraries(gridclient
 		hcresolve
 		${NEON_LIBRARIES} ${GLIB2_LIBRARIES} ${CURL_LIBRARIES})
 
-
-add_library(solrutils SHARED solr_utils.c)
-target_link_libraries(solrutils
-		metautils metacomm gridclient
-		${GLIB2_LIBRARIES})
-
-#set_target_properties(solrutils PROPERTIES
-#		PUBLIC_HEADER "solr_utils.h"
-#		SOVERSION ${ABI_VERSION})
 
 add_executable(test_include test_include.c)
 target_link_libraries(test_include gridclient)
@@ -90,7 +80,7 @@ install(FILES
             OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
 install(TARGETS
-			gridclient solrutils
+			gridclient
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		PUBLIC_HEADER DESTINATION include)
 

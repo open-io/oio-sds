@@ -1,3 +1,22 @@
+/*
+OpenIO SDS integrity
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+
+This program is free software: you can redistribute it and/or modify
+it under the terms of the GNU Affero General Public License as
+published by the Free Software Foundation, either version 3 of the
+License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+GNU Affero General Public License for more details.
+
+You should have received a copy of the GNU Affero General Public License
+along with this program.  If not, see <http://www.gnu.org/licenses/>.
+*/
+
 #ifndef G_LOG_DOMAIN
 # define G_LOG_DOMAIN "gs-rebuild"
 #endif
@@ -20,12 +39,6 @@
 #include "../lib/chunk_db.h"
 
 # define RAW_CONTENT_GET_CID(R) (R)->container_id
-
-static int
-get_timeout(struct metacnx_ctx_s *ctx)
-{
-	return MAX(ctx->timeout.cnx, ctx->timeout.req);
-}
 
 static const char *
 check_attributes(struct chunk_textinfo_s *chunk, struct content_textinfo_s *content)
@@ -135,32 +148,6 @@ meta2_repair_from_raw_content(struct meta2_raw_content_s *raw,
 		goto label_error_close_cnx;
 	}
 
-	/* Open the container */
-	guint attempts = 2;
-	for (attempts=2 ; attempts ; attempts--) {
-		if (meta2_remote_container_open(&(ctx.addr), get_timeout(&ctx), error, RAW_CONTENT_GET_CID(raw)))
-			break;
-		if (CODE_CONTAINER_NOTFOUND == gerror_get_code(*error)) {
-			if (!metacnx_open(&ctx, error))
-				GSETERROR(error, "Cannot connect to the META2");
-			else if (meta2_remote_container_create_in_fd(&(ctx.fd), ctx.timeout.req, error,
-					raw->container_id, container_name))
-				GSETERROR(error, "CONTAINER recreated [%s]", container_name);
-			else {
-				GSETERROR(error, "Container cannot be recreated [%s]", container_name);
-				goto label_error_close_cnx;
-			}
-		}
-		else {
-			GSETERROR(error, "Cannot open container");
-			goto label_error_close_cnx;
-		}
-	}
-	if (!attempts) {
-		GSETERROR(error, "Container could not be recreated then located");
-		goto label_error_close_cnx;
-	}
-
 	/* Insertion without update */
 	/* Update content only if we have the chunk with position 0 */
 	gboolean local_rc = FALSE;
@@ -181,14 +168,11 @@ meta2_repair_from_raw_content(struct meta2_raw_content_s *raw,
 						"Reference insertion failed : %s", gerror_get_message(local_error));
 				else
 					g_clear_error(&local_error);
-				goto label_error_close_container;
+				goto label_error_close_cnx;
 		}
 	}
 
 	rc = TRUE;
-
-label_error_close_container:
-	meta2_remote_container_close(&(ctx.addr), get_timeout(&ctx), NULL, RAW_CONTENT_GET_CID(raw));
 
 label_error_close_cnx:
 	metacnx_close(&ctx);
