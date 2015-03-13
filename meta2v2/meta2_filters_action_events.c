@@ -365,7 +365,7 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 			}
 			event_data = g_string_sized_new(1024);
 			g_string_append_printf(event_data,
-					"\"url\": \"%s/%s/%s?version=%ld\", ",
+					"\"url\":\"%s/%s/%s?version=%ld\",",
 					hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE),
 					ALIASES_get_alias(alias)->str, ALIASES_get_version(alias));
 			meta2_json_dump_all_beans(event_data, sublist);
@@ -377,7 +377,7 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		g_slist_free(list_of_lists);
 	} else { // Container event
 		event_data = g_string_sized_new(1024);
-		g_string_append_printf(event_data, "\"url\": \"%s/%s\"",
+		g_string_append_printf(event_data, "\"url\":\"%s/%s\"",
 				hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE));
 		if (!strcmp(evt_type, META2_EVTTYPE_CREATE)) {
 			const gchar *storage_policy = meta2_filter_ctx_get_param(ctx,
@@ -386,11 +386,11 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 					M2_KEY_VERSION_POLICY);
 			if (storage_policy) {
 				g_string_append_printf(event_data,
-						", \"policy\": \"%s\"", storage_policy);
+						", \"policy\":\"%s\"", storage_policy);
 			}
 			if (versioning) {
 				g_string_append_printf(event_data,
-						", \"versioning\": \"%s\"", versioning);
+						", \"versioning\":\"%s\"", versioning);
 			}
 		}
 		events_data = g_slist_prepend(events_data,
@@ -398,28 +398,22 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	}
 
 	topic = event_get_notifier_topic_name(evt_config, META2_EVT_TOPIC);
-
-	if (!err) {
-		metautils_notifier_t *notifier = meta2_backend_get_notifier(m2b);
-		for (GSList *l = events_data; l != NULL; l = l->next) {
-			// Use first 4 bytes of CID for Kafka partitioning
-			GError *err2 = metautils_notifier_send_json(notifier, topic,
-					meta2_backend_get_local_addr(m2b), evt_type, l->data,
-					(const guint32*)hc_url_get_id(url));
-			if (err2) {
-				GRID_WARN("Failed to send event to Kafka: %s", err2->message);
-				if (!err) {
-					err = err2;
-				} else {
-					g_clear_error(&err2);
-				}
+	metautils_notif_pool_t *pool = meta2_backend_get_notifier(m2b);
+	for (GSList *l = events_data; l != NULL; l = l->next) {
+		// Use first 4 bytes of CID for Kafka partitioning
+		GError *err2 = metautils_notif_pool_send_json(pool, topic,
+				meta2_backend_get_local_addr(m2b), evt_type, l->data,
+				(const guint32*)hc_url_get_id(url));
+		if (err2) {
+			// Keep the first error, just warn about the others
+			GRID_WARN("Failed to send event to Kafka: %s", err2->message);
+			if (!err) {
+				err = err2;
+			} else {
+				g_clear_error(&err2);
 			}
 		}
-	} else {
-		GRID_WARN("%d events not sent: %s",
-				g_slist_length(events_data), err->message);
 	}
-
 	g_slist_free_full(events_data, g_free);
 
 	return err;

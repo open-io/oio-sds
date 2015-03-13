@@ -46,22 +46,16 @@ GError* meta2_backend_init(struct meta2_backend_s **result,
 /**  */
 void meta2_backend_clean(struct meta2_backend_s *m2);
 
-/** Initialize notification handle. No-op if already initialized.  */
-GError *meta2_backend_init_notifs(struct meta2_backend_s *m2);
-
-/** Free notification handle (and the topics, if not already freed).
- * Not thread safe.  */
-void meta2_backend_free_notifs(struct meta2_backend_s *m2);
-
-/** Initialize a topic and add it to the cache. Not thread safe. */
-GError *meta2_backend_prepare_notif_topic(struct meta2_backend_s *m2,
-		const gchar *name);
-
-/** Clear the topic cache. Not thread safe.  */
+/**
+ * Clear the topic cache.
+ * Not thread safe.
+ */
 void meta2_backend_clear_topic_cache(struct meta2_backend_s *m2);
 
-/** Get the metautils_notifier_t used by this Meta2. */
-metautils_notifier_t *meta2_backend_get_notifier(struct meta2_backend_s *m2);
+/**
+ * Get the metautils_notif_pool_t used by this Meta2.
+ */
+metautils_notif_pool_t *meta2_backend_get_notifier(struct meta2_backend_s *m2);
 
 /** Thread-safely set the internal nsinfo of the meta2_backend.
  * The backend is unusable until a valid NS-info has been provided. */

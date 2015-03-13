@@ -396,7 +396,7 @@ _check_policy(struct meta2_backend_s *m2, const gchar *polname)
 	return err;
 }
 
-metautils_notifier_t *
+metautils_notif_pool_t *
 meta2_backend_get_notifier(struct meta2_backend_s *m2)
 {
 	return event_config_repo_get_notifier(m2->backend.evt_repo);
@@ -406,27 +406,6 @@ struct event_config_repo_s *
 meta2_backend_get_evt_config_repo(const struct meta2_backend_s *m2)
 {
 	return m2->backend.evt_repo;
-}
-
-GError *
-meta2_backend_init_notifs(struct meta2_backend_s *m2)
-{
-	metautils_notifier_t *notifier = meta2_backend_get_notifier(m2);
-	return metautils_notifier_init_kafka(notifier);
-}
-
-void
-meta2_backend_free_notifs(struct meta2_backend_s *m2)
-{
-	metautils_notifier_t *notifier = meta2_backend_get_notifier(m2);
-	metautils_notifier_free_kafka(notifier);
-}
-
-GError *
-meta2_backend_prepare_notif_topic(struct meta2_backend_s *m2, const gchar *name)
-{
-	metautils_notifier_t *notifier = meta2_backend_get_notifier(m2);
-	return metautils_notifier_prepare_kafka_topic(notifier, name);
 }
 
 GError *

@@ -145,7 +145,7 @@ meta1_backend_get_evt_config_repo(const struct meta1_backend_s *m1)
 	return m1->backend.evt_repo;
 }
 
-metautils_notifier_t *
+metautils_notif_pool_t *
 meta1_backend_get_notifier(struct meta1_backend_s *m1)
 {
 	return event_config_repo_get_notifier(m1->backend.evt_repo);
@@ -155,14 +155,6 @@ struct event_config_s *
 meta1_backend_get_event_config(struct meta1_backend_s *m1, const char *ns_name)
 {
 	return event_config_repo_get(m1->backend.evt_repo, ns_name, TRUE);
-}
-
-// TODO: add another parameter with the wanted brokers (Kafka, AMQ...)
-GError *
-meta1_backend_init_notifs(struct meta1_backend_s *m1)
-{
-	metautils_notifier_t *notifier = meta1_backend_get_notifier(m1);
-	return metautils_notifier_init_kafka(notifier);
 }
 
 const gchar*
