@@ -1001,7 +1001,7 @@ action_m2_content_delete (struct req_args_s *args)
 			TRUE /*sync_del?! */ , &beans);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	return _reply_beans (args, err, beans);
+	return _reply_simplified_beans (args, err, beans, TRUE);
 }
 
 static enum http_rc_e
