@@ -1295,7 +1295,7 @@ agent_start_idle_actions(namespace_data_t *ns_data, guint max)
 
 /* ------------------------------------------------------------------------- */
 
-static inline void
+static void
 build_taskid(gchar *dst, gsize dst_size, const gchar *ns_name)
 {
 	g_snprintf(dst, dst_size, TASK_ID".%s", ns_name);

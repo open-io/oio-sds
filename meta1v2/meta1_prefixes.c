@@ -51,14 +51,14 @@ struct meta1_prefixes_set_s
 
 /* CACHE operations --------------------------------------------------------- */
 
-static inline void
+static void
 _cache_manage(guint8 *cache, const guint8 *prefix)
 {
 	guint16 slot = meta0_utils_bytes_to_prefix(prefix);
 	cache[ slot / 8 ] |= (0x01 << (slot % 8));
 }
 
-static inline gboolean
+static gboolean
 _cache_is_managed(guint8 *cache, const guint8 *prefix)
 {
 	guint16 slot = meta0_utils_bytes_to_prefix(prefix);

@@ -45,9 +45,6 @@ _init_nsinfo(struct namespace_info_s *nsinfo, const gchar *ns)
 	metautils_strlcpy_physical_ns(nsinfo->name, ns, sizeof(nsinfo->name));
 	nsinfo->chunk_size = chunk_size;
 
-	nsinfo->writable_vns = g_slist_prepend(nsinfo->writable_vns, g_strdup("NS.VNS0"));
-	nsinfo->writable_vns = g_slist_prepend(nsinfo->writable_vns, g_strdup("NS.VNS1"));
-
 	nsinfo->storage_policy = g_hash_table_new_full(g_str_hash, g_str_equal,
 			g_free, metautils_gba_unref);
 	nsinfo->data_security = g_hash_table_new_full(g_str_hash, g_str_equal,

@@ -318,7 +318,7 @@ time2double(time_t t)
 	return d;
 }
 
-static inline void
+static void
 gtv_init_ago(GTimeVal *ago, time_t delay)
 {
 	glong d;
@@ -435,19 +435,19 @@ _evt2str(enum event_type_e evt)
 
 /* XXX Member handling ----------------------------------------------------- */
 
-static inline req_id_t
+static req_id_t
 manager_next_reqid(struct election_manager_s *m)
 {
 	return ++ m->next_id;
 }
 
-static inline gboolean
+static gboolean
 member_has_action(struct election_member_s *m)
 {
 	return m->pending_GETVERS || m->pending_PIPEFROM || m->requested_PIPEFROM;
 }
 
-static inline const gchar*
+static const gchar*
 member_get_url(struct election_member_s *m)
 {
 	return sqlx_config_get_local_url(MCFG(m));
@@ -460,62 +460,62 @@ member_get_peers(struct election_member_s *m, gboolean nocache, gchar ***peers)
 			sqlx_name_mutable_to_const(&m->name), nocache, peers);
 }
 
-static inline void
+static void
 member_kickoff(struct election_member_s *m)
 {
 	transition(m, EVT_NONE, NULL);
 }
 
-static inline void
+static void
 member_ref(struct election_member_s *m)
 {
 	++ m->refcount;
 }
 
-static inline void
+static void
 member_unref(struct election_member_s *m)
 {
 	-- m->refcount;
 }
 
-static inline GCond*
+static GCond*
 member_get_cond(struct election_member_s *m)
 {
 	register guint h = hashstr_hash(m->key);
 	return MMANAGER(m)->conds + (h % COND_COUNT);
 }
 
-static inline GMutex*
+static GMutex*
 member_get_lock(struct election_member_s *m)
 {
 	return &(MMANAGER(m)->lock);
 }
 
-static inline void
+static void
 member_lock(struct election_member_s *m)
 {
 	g_mutex_lock(member_get_lock(m));
 }
 
-static inline void
+static void
 member_unlock(struct election_member_s *m)
 {
 	g_mutex_unlock(member_get_lock(m));
 }
 
-static inline void
+static void
 member_signal(struct election_member_s *m)
 {
 	g_cond_signal(member_get_cond(m));
 }
 
-static inline gboolean
+static gboolean
 member_wait(struct election_member_s *m, GTimeVal *max)
 {
 	return g_cond_timed_wait(member_get_cond(m), member_get_lock(m), max);
 }
 
-static inline void
+static void
 member_set_master_url(struct election_member_s *m, const gchar *u)
 {
 	metautils_str_replace(&(m->master_url), u);
@@ -523,14 +523,14 @@ member_set_master_url(struct election_member_s *m, const gchar *u)
 		member_debug(__FUNCTION__, "MASTER_URL", m);
 }
 
-static inline void
+static void
 member_reset_master(struct election_member_s *m)
 {
 	m->master_id = -1;
 	member_set_master_url(m, NULL);
 }
 
-static inline void
+static void
 member_reset_pending(struct election_member_s *m)
 {
 	m->sent_GETVERS = 0;
@@ -542,7 +542,7 @@ member_reset_pending(struct election_member_s *m)
 	m->pending_PIPEFROM = 0;
 }
 
-static inline void
+static void
 member_reset(struct election_member_s *m)
 {
 	member_reset_master(m);
@@ -550,7 +550,7 @@ member_reset(struct election_member_s *m)
 	m->myid = -1;
 }
 
-static inline void
+static void
 member_set_id(struct election_member_s *m, gint64 id)
 {
 	EXTRA_ASSERT(id >= 0);
@@ -559,7 +559,7 @@ member_set_id(struct election_member_s *m, gint64 id)
 	member_debug(__FUNCTION__, "ID", m);
 }
 
-static inline void
+static void
 member_set_status(struct election_member_s *m, enum election_step_e s)
 {
 	g_get_current_time(&(m->last_status));
@@ -573,7 +573,7 @@ member_set_status(struct election_member_s *m, enum election_step_e s)
 	}
 }
 
-static inline void
+static void
 member_set_master_id(struct election_member_s *m, gint64 i64)
 {
 	EXTRA_ASSERT(i64 >= 0);
@@ -1826,7 +1826,7 @@ defer_GETVERS(struct election_member_s *member)
 
 /* ------------------------------------------------------------------------ */
 
-static inline void
+static void
 member_RESYNC_if_not_pending(struct election_member_s *member)
 {
 	if (!member->pending_PIPEFROM)
@@ -1977,7 +1977,7 @@ member_finish_PRELEAD(struct election_member_s *member)
 	}
 }
 
-static inline time_t
+static time_t
 member_ping_delay(struct election_member_s *member)
 {
 	switch (member->step) {

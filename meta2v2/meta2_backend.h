@@ -92,15 +92,6 @@ GError* meta2_backend_poll_service(struct meta2_backend_s *m2,
 struct event_config_repo_s *meta2_backend_get_evt_config_repo(
 		const struct meta2_backend_s *m2b);
 
-/** Notifies all meta1 services of modified containers. */
-void meta2_backend_notify_modified_containers(struct meta2_backend_s *m2b);
-
-/** Builds m0_mapping field in m2b. */
-gboolean meta2_backend_build_meta0_prefix_mapping(struct meta2_backend_s *m2b);
-
-/** Returns whether quota is enabled. */
-gboolean meta2_backend_is_quota_enabled(struct meta2_backend_s *m2b);
-
 /** Return a string which contain m2_addr: "IP:PORT" */
 const gchar* meta2_backend_get_local_addr(struct meta2_backend_s *m2);
 

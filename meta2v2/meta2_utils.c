@@ -94,7 +94,7 @@ gvariant_unrefv(GVariant **v)
 	}
 }
 
-static inline gchar*
+static gchar*
 m2v2_flags(guint32 flags, gchar *d, gsize ds)
 {
 	memset(d, 0, ds);

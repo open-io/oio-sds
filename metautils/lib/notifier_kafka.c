@@ -87,7 +87,7 @@ kafka_send(struct kafka_handle_s *handle, const gchar *topic_name,
 	return err;
 }
 
-GError *
+static GError *
 _kafka_prepare_topic(struct kafka_handle_s *handle,
 		 const gchar *topic_name)
 {

@@ -308,13 +308,13 @@ chunk_path_is_valid(const gchar *bn)
 
 /* ------------------------------------------------------------------------- */
 
-static inline gboolean
+static gboolean
 rawx_addr_is_source(addr_info_t *ai)
 {
 	return addr_info_equal(ai, &rawx_addr);
 }
 
-static inline gboolean
+static gboolean
 rawx_srv_is_source(service_info_t *si)
 {
 	return rawx_addr_is_source(&(si->addr));

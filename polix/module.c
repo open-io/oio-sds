@@ -522,7 +522,8 @@ reply_error_label:
 
 /*************************************************/
 
-static inline struct cmd_s *module_find_handler(gchar * n, gsize l)
+static struct cmd_s *
+module_find_handler(gchar * n, gsize l)
 {
 	static struct cmd_s CMD[] = {
 		{REQ_EVT_PUSH,   handler_push_event,   &(module_stats.counters.push),   &(module_stats.times.push)},

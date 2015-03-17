@@ -59,7 +59,7 @@ sighandler_event_manager(int s)
 	signal(s,sighandler_event_manager);
 }
 
-static inline void
+static void
 set_sighandlers(void)
 {
 	signal(SIGPIPE, sighandler_event_manager);

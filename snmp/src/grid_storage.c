@@ -1290,7 +1290,7 @@ manage_csc(const gchar * ns_name)
 
 /* ------------------------------------------------------------------------- */
 
-static inline u_char*
+static u_char*
 __get_simple(const char *func, int magic,
 		struct variable * vp, oid * name, size_t * length,
 		int exact, size_t * var_len, WriteMethod ** write_method)

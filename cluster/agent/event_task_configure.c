@@ -351,41 +351,6 @@ agent_reply_event_configuration_worker(worker_t *worker, GError **error)
 	return __respond(worker, 1, gba_config, error);
 }
 
-int
-agent_reply_event_managed_patterns_worker(worker_t *worker, GError **error)
-{
-	gchar ns_name[LIMIT_LENGTH_NSNAME];
-	struct namespace_data_s *ns_data;
-	request_t *req;
-	GSList *list_of_patterns;
-	GByteArray *gba_config;
-
-	/*Find the namespace*/
-	req = (request_t*) worker->data.session;
-	memset(ns_name, 0x00, sizeof(ns_name));
-	if (req->arg && req->arg_size>0)
-		memcpy(ns_name, req->arg, MIN(req->arg_size,sizeof(ns_name)));
-	ns_data = get_namespace(ns_name,error);
-	if (!ns_data || !ns_data->configured)
-		return __respond_message(worker, 0, "NAMESPACE not found/ready", error);
-
-	/*extract the eventhandler configuration*/
-	if (!ns_data->conscience->event_handler)
-		return __respond(worker, 1, g_byte_array_new(), error);
-
-	list_of_patterns = gridcluster_eventhandler_get_patterns(ns_data->conscience->event_handler, NULL);
-	gba_config = strings_marshall_gba(list_of_patterns, error);
-	g_slist_foreach(list_of_patterns, g_free2, NULL);
-	g_slist_free(list_of_patterns);
-
-	if (!gba_config) {
-		GSETERROR(error,"Failed to serialize the eventhandler patterns for ns='%s'", ns_name);
-		return 0;
-	}
-
-	return __respond(worker, 1, gba_config, error);
-}
-
 /* Indirect configuration -------------------------------------------------- */
 
 #define TASK_PREFIX "event.indirect"

@@ -49,8 +49,6 @@ add_library(meta2v2utils SHARED
 		meta2_bean_utils.c
 		meta2_bean.h
 		meta2_macros.h
-		meta2_backend_dbconvert.h
-		meta2_backend_dbconvert.c
 		meta2_dedup_utils.h
 		meta2_dedup_utils.c
 		meta2_utils_json_in.c
@@ -126,7 +124,6 @@ target_link_libraries(test_meta2_check
 install(FILES
 			${CMAKE_CURRENT_BINARY_DIR}/autogen.h
 			generic.h
-			meta2_backend_dbconvert.h
 			meta2_backend.h
 			meta2_backend_internals.h
 			meta2_bean.h

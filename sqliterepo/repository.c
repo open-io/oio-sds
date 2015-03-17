@@ -49,7 +49,7 @@ License along with this library.
 			g_string_append_c((S), G_DIR_SEPARATOR); \
 } while (0)
 
-static inline gboolean
+static gboolean
 election_manager_configured(const struct election_manager_s *em)
 {
 	const struct replication_config_s *cfg;
@@ -105,21 +105,6 @@ label_end:
 		g_string_append(gstr, t);
 	}
 	return g_string_free(gstr, FALSE);
-}
-
-static inline const char const *
-__op2str(int op)
-{
-	switch (op) {
-		case SQLITE_INSERT:
-			return "INSERT";
-		case SQLITE_UPDATE:
-			return "UPDATE";
-		case SQLITE_DELETE:
-			return "DELETE";
-		default:
-			return "??????";
-	}
 }
 
 /* ------------------------------------------------------------------------- */

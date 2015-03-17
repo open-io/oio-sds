@@ -84,7 +84,7 @@ struct req_ctx_s
 	gboolean final_sent;
 };
 
-static inline int is_code_final(int code) { return CODE_IS_FINAL(code); }
+static int is_code_final(int code) { return CODE_IS_FINAL(code); }
 
 static int transport_gridd_notify_input(struct network_client_s *clt);
 
@@ -269,7 +269,7 @@ network_client_log_access(struct log_item_s *item)
 
 /* -------------------------------------------------------------------------- */
 
-static inline guint32
+static guint32
 _l4v_size(GByteArray *gba)
 {
 	guint32 size;
@@ -350,7 +350,7 @@ _ctx_reset(struct transport_client_context_s *ctx)
 	ctx->gba_l4v = NULL;
 }
 
-static inline void
+static void
 _cnx_data_reset(struct cnx_data_s *cd, gboolean key_only)
 {
 	if (cd->key)
@@ -537,7 +537,7 @@ transport_gridd_clean_context(struct transport_client_context_s *ctx)
 
 /* Request handling --------------------------------------------------------- */
 
-static inline void
+static void
 _notify_request(struct req_ctx_s *ctx,
 		const gchar *name_req, const gchar *name_time)
 {

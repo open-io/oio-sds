@@ -70,13 +70,13 @@ typedef struct single_check_s
 // accumulate a state between the calls.
 // -------------------------------------------------------------------------
 
-static inline gboolean
+static gboolean
 _check_is_not_last(single_check_t *check)
 {
 	return check->on_chunk || check->on_end;
 }
 
-static inline void
+static void
 _check_one_chunk(header_check_t *hc, single_check_t *pcheck, chunk_pair_t *pair)
 {
 	GRID_TRACE2("%s(%p)", __FUNCTION__, hc);
@@ -88,7 +88,7 @@ _check_one_chunk(header_check_t *hc, single_check_t *pcheck, chunk_pair_t *pair)
 	}
 }
 
-static inline void
+static void
 _perform_last_check(header_check_t *hc, single_check_t *pcheck)
 {
 	GRID_TRACE2("%s(%p)", __FUNCTION__, hc);
@@ -98,7 +98,7 @@ _perform_last_check(header_check_t *hc, single_check_t *pcheck)
 	}
 }
 
-static inline void
+static void
 _check_chunks_sequence(header_check_t *hc, single_check_t *checks)
 {
 	GRID_TRACE2("%s(%p,%p)", __FUNCTION__, hc, checks);
@@ -108,7 +108,7 @@ _check_chunks_sequence(header_check_t *hc, single_check_t *checks)
 	_perform_last_check(hc, checks);
 }
 
-static inline struct m2v2_check_error_s *
+static struct m2v2_check_error_s *
 m2v2_check_append_flaw(header_check_t *hc, int type, GError *error)
 {
 	if (!hc->check->flaws)
@@ -122,7 +122,7 @@ m2v2_check_append_flaw(header_check_t *hc, int type, GError *error)
 	return flaw;
 }
 
-static inline int
+static int
 _compare_int(register int p0, register int p1)
 {
 	return (p0 < p1) ? -1 : ((p0 > p1) ? 1 : 0);
@@ -605,7 +605,7 @@ struct ctx_rain_stgpol_s
 	const gchar *algo;
 };
 
-static inline void
+static void
 _alert_for_invalid_rain_stgpol(header_check_t *hc, struct ctx_rain_stgpol_s *ctx)
 {
 	struct m2v2_check_error_s *flaw;

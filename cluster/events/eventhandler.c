@@ -71,7 +71,7 @@ gridcluster_eventhandler_destroy(gridcluster_event_handler_t * h, gboolean conte
 		g_free(h);
 }
 
-static inline gboolean
+static gboolean
 gridcluster_event_execute_DROP(struct gridcluster_execution_context_s *ctx, GError ** err)
 {
 	ctx->running = FALSE;
@@ -84,7 +84,7 @@ gridcluster_event_execute_DROP(struct gridcluster_execution_context_s *ctx, GErr
 	return TRUE;
 }
 
-static inline gboolean
+static gboolean
 gridcluster_event_execute_EXIT(struct gridcluster_execution_context_s *ctx, GError **err)
 {
 	ctx->running = FALSE;
@@ -97,7 +97,7 @@ gridcluster_event_execute_EXIT(struct gridcluster_execution_context_s *ctx, GErr
 	return TRUE;
 }
 
-static inline gboolean
+static gboolean
 gridcluster_event_execute_ADDRESS(const addr_info_t *addr, struct gridcluster_execution_context_s *ctx, GError ** err)
 {
 	if (!ctx->hooks->on_address)
@@ -113,7 +113,7 @@ gridcluster_event_execute_ADDRESS(const addr_info_t *addr, struct gridcluster_ex
 	return TRUE;
 }
 
-static inline gboolean
+static gboolean
 gridcluster_event_execute_SERVICE(const gchar *srv_name, struct gridcluster_execution_context_s *ctx, GError **err)
 {
 	if (!ctx->hooks->on_service)

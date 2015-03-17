@@ -26,56 +26,6 @@ License along with this library.
 #include "./internals.h"
 #include "./meta1_remote.h"
 
-static gboolean
-kv_handler_list (GError **err, gpointer udata, gint code,
-		guint8 *body, gsize bodySize)
-{
-	(void) code;
-	GSList *list = NULL;
-	GHashTable **ppResL = NULL;
-	GHashTable *table = NULL;
-	gboolean status = FALSE;
-
-	if (!udata) {
-		GSETERROR(err,"Invalid parameter (%p)", udata);
-		return status;
-	}
-
-	if(code == CODE_FINAL_OK && (!body || bodySize <= 0)) {
-		GSETERROR(err,"Invalid parameter (%p, %p)", body, bodySize);
-		return status;
-	}
-
-	ppResL = (GHashTable**) udata;
-	if (!ppResL) {
-		GSETERROR(err,"invalid parameter");
-		return status;
-	}
-
-	if(code == CODE_FINAL_OK) {
-		DEBUG("Code = %u, unmarshalling", CODE_FINAL_OK);
-		if (0 >= key_value_pairs_unmarshall(&list, body, &bodySize, err)) {
-			GSETERROR (err, "Cannot unserialize the content of the reply");
-			goto errorLabel;
-		}
-
-		table = key_value_pairs_convert_to_map(list, err);
-		if (!table) {
-			GSETERROR (err, "Cannot unserialize the content of the reply");
-			goto errorLabel;
-		}
-
-		DEBUG("Response body parsed, %d elements", g_hash_table_size(table));
-
-		*ppResL = table;
-	}
-	status = TRUE;
-
-errorLabel:
-	g_slist_free_full(list, (GDestroyNotify) key_value_pair_clean);
-	return status;
-}
-
 static void
 meta1_container_request_common_v2 (MESSAGE m, const gchar *op, const container_id_t id,
 		const gchar *name, const gchar *virtual_namespace)
@@ -114,6 +64,7 @@ meta1_container_request_common (MESSAGE m, const gchar *op, const container_id_t
 
 /* M1V1 -------------------------------------------------------------------- */
 
+// TODO remove this as soon as the hunk_checker has been replaced
 gboolean 
 meta1_remote_create_container_v2 (addr_info_t *meta1, gint ms, GError **err, const char *cName, const char *virtualNs,
 		container_id_t cID, gdouble to_step, gdouble to_overall, gchar **master)
@@ -156,6 +107,7 @@ end_label:
 	return status;
 }
 
+// TODO to be removed as soon ad the C SDK has been rewriten
 struct meta1_raw_container_s* 
 meta1_remote_get_container_by_id( struct metacnx_ctx_s *ctx, container_id_t container_id, GError **err,
 		gdouble to_step, gdouble to_overall)
@@ -206,73 +158,6 @@ end_label:
 	g_byte_array_unref(packed);
 	gridd_client_free(client);
 	return(raw_container);
-}
-
-gboolean
-meta1_remote_update_containers(gchar *meta1_addr_str, GSList *list_of_containers,
-		gint ms, GError **err)
-{
-	(void) ms;
-
-	gboolean status = FALSE;
-	GByteArray *gba = NULL;
-	struct client_s *client;
-	GError *e = NULL;
-
-	if (!meta1_addr_str || !list_of_containers) {
-		GSETCODE(err, EINVAL, "Invalid parameter (%p %p)", meta1_addr_str, list_of_containers);
-		return FALSE;
-	}
-
-	do {
-		void *body = NULL;
-		gsize bodySize = 0;
-		MESSAGE request = message_create ();
-		meta1_container_request_common (request, NAME_MSGNAME_M1_UPDATE_CONTAINERS, NULL, NULL);
-		container_info_marshall(list_of_containers, &body, &bodySize, NULL);
-		message_set_BODY(request, body, bodySize, NULL);
-		gba = message_marshall_gba_and_clean(request);
-	} while (0);
-
-	client = gridd_client_create_idle(meta1_addr_str);
-	if(!client) {
-		e = NEWERROR(2, "errno=%d %s", errno, strerror(errno));
-	} else {
-		gridd_client_start(client);
-		e = gridd_client_request(client, gba, NULL, NULL);
-		if(!e){
-			if(!(e = gridd_client_loop(client)))
-				e = gridd_client_error(client);
-			if (!e)
-				status = TRUE;
-		}
-		gridd_client_free(client);
-	}
-
-	*err = e;
-	g_byte_array_free(gba, TRUE);
-	return status;
-}
-
-GHashTable*
-meta1_remote_get_virtual_ns_state(addr_info_t *meta1, gint ms, GError **err)
-{
-	static struct code_handler_s codes [] = {
-		{ CODE_TEMPORARY, 0, NULL, NULL },
-		{ CODE_FINAL_OK, REPSEQ_FINAL, &kv_handler_list, NULL },
-		{ CODE_PARTIAL_CONTENT, REPSEQ_FINAL, &kv_handler_list, NULL },
-		{ 0, 0, NULL, NULL },
-	};
-
-	GHashTable *result = NULL;
-	struct reply_sequence_data_s data = { &result , 0 , codes };
-
-	MESSAGE request = message_create ();
-	meta1_container_request_common (request, NAME_MSGNAME_M1_GET_VNS_STATE, NULL, NULL);
-	if (!metaXClient_reply_sequence_run_from_addrinfo (err, request, meta1, ms, &data))
-		GSETERROR(err, "An error occured while executing the VIRTUAL_NS_STATE request");
-	message_destroy(request);
-	return result;
 }
 
 /* M1V2 -------------------------------------------------------------------- */

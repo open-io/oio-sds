@@ -125,7 +125,7 @@ struct grid_lbpool_s
 
 /* Various helpers */
 
-static inline enum glbi_type_e
+static enum glbi_type_e
 _get_effective_type(struct grid_lb_iterator_s *it)
 {
 	if (unlikely(NULL == it))
@@ -135,7 +135,7 @@ _get_effective_type(struct grid_lb_iterator_s *it)
 	return it->type;
 }
 
-static inline struct service_info_s*
+static struct service_info_s*
 _get_raw(struct grid_lb_s *lb, guint idx)
 {
 	register guint len;
@@ -143,7 +143,7 @@ _get_raw(struct grid_lb_s *lb, guint idx)
 		: service_info_dup(lb->gpa->pdata[idx % len]);
 }
 
-static inline struct service_info_s*
+static struct service_info_s*
 _get_by_score(struct grid_lb_s *lb, guint idx)
 {
 	if (!lb->size_max)
@@ -155,7 +155,7 @@ _get_by_score(struct grid_lb_s *lb, guint idx)
 	return _get_raw(lb, slot->index);
 }
 
-static inline struct service_info_s*
+static struct service_info_s*
 _get_by_score_no_shorten(struct grid_lb_s *lb, guint idx)
 {
 	if (!lb->gpa->len)
@@ -167,7 +167,7 @@ _get_by_score_no_shorten(struct grid_lb_s *lb, guint idx)
 	return _get_raw(lb, slot->index);
 }
 
-static inline gint
+static gint
 _get_index_by_addr(struct grid_lb_s *lb, const addr_info_t *ai)
 {
 	gpointer p;
@@ -179,7 +179,7 @@ _get_index_by_addr(struct grid_lb_s *lb, const addr_info_t *ai)
 	return GPOINTER_TO_UINT(p) - 1;
 }
 
-static inline void
+static void
 _save_index_for_addr(struct grid_lb_s *lb, addr_info_t *ai, guint idx)
 {
 	gpointer p;
@@ -198,13 +198,13 @@ sort_slots_by_score(gconstpointer p1, gconstpointer p2)
 
 /* Pool features ----------------------------------------------------------- */
 
-static inline void
+static void
 grid_lb_lock(struct grid_lb_s *lb)
 {
 	g_rec_mutex_lock(&(lb->lock));
 }
 
-static inline void
+static void
 grid_lb_unlock(struct grid_lb_s *lb)
 {
 	g_rec_mutex_unlock(&(lb->lock));
@@ -431,7 +431,7 @@ grid_lb_reload(struct grid_lb_s *lb, service_provider_f provide)
 			lb->ns, lb->srvtype, lb->sorted_by_score->len, lb->size_max);
 }
 
-static inline struct service_info_s*
+static struct service_info_s*
 _get_service_from_addr(struct grid_lb_s *lb, const struct addr_info_s *ai)
 {
 	gint idx = _get_index_by_addr(lb, ai);
@@ -473,7 +473,7 @@ grid_lb_get_service_from_url(struct grid_lb_s *lb, const gchar *url)
 	return grid_lb_get_service_from_addr(lb, &ai);
 }
 
-static inline gboolean
+static gboolean
 _lb_is_addr_available(struct grid_lb_s *lb, const struct addr_info_s *ai)
 {
 	gint idx = _get_index_by_addr(lb, ai);
@@ -811,7 +811,7 @@ grid_lb_iterator_configure(struct grid_lb_iterator_s *iter, const gchar *val)
  * @return
  */
 
-static inline gboolean
+static gboolean
 _result(struct service_info_s **pi, struct service_info_s *si)
 {
 	if (!si) {
@@ -823,7 +823,7 @@ _result(struct service_info_s **pi, struct service_info_s *si)
 	return TRUE;
 }
 
-static inline gboolean
+static gboolean
 __next_SINGLE(struct grid_lb_s *lb, struct grid_lb_iterator_s *iter,
 		struct service_info_s **si)
 {
@@ -841,7 +841,7 @@ __next_SINGLE(struct grid_lb_s *lb, struct grid_lb_iterator_s *iter,
 	return _result(si, result);
 }
 
-static inline gboolean
+static gboolean
 __next_RR(struct grid_lb_s *lb, struct grid_lb_iterator_s *iter,
 		struct service_info_s **si, gboolean shorten)
 {
@@ -862,7 +862,7 @@ __next_RR(struct grid_lb_s *lb, struct grid_lb_iterator_s *iter,
 	return _result(si, result);
 }
 
-static inline gboolean
+static gboolean
 __next_SRR(struct grid_lb_s *lb, struct grid_lb_iterator_s *iter,
 		struct service_info_s **si)
 {
@@ -906,7 +906,7 @@ __next_SRR(struct grid_lb_s *lb, struct grid_lb_iterator_s *iter,
 	return _result(si, result);
 }
 
-static inline gboolean
+static gboolean
 __next_RAND(struct grid_lb_s *lb, struct service_info_s **si)
 {
 	struct service_info_s *result = NULL;
@@ -919,7 +919,7 @@ __next_RAND(struct grid_lb_s *lb, struct service_info_s **si)
 	return _result(si, result);
 }
 
-static inline gboolean
+static gboolean
 __next_SRAND(struct grid_lb_s *lb, struct service_info_s **si)
 {
 	GArray *ga = NULL;
@@ -961,7 +961,7 @@ __next_SRAND(struct grid_lb_s *lb, struct service_info_s **si)
 	return _result(si, result);
 }
 
-static inline gboolean
+static gboolean
 __next_SHARED(struct grid_lb_iterator_s *iter, struct service_info_s **si,
 		gboolean shorten)
 {
@@ -1059,7 +1059,7 @@ _distance_fits(guint reqdist, GTree *set, struct service_info_s *si)
 	return mindist >= reqdist;
 }
 
-static inline gboolean
+static gboolean
 _filter_matches(struct lb_next_opt_filter_s *f, struct service_info_s *si)
 {
 	return !f->hook || f->hook(si, f->data);

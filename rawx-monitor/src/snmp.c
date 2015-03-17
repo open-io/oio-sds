@@ -36,7 +36,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "filer_monitor.h"
 
-static inline void
+static void
 _gpa_free_all(GPtrArray *gpa)
 {
 	guint i;

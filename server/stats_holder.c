@@ -37,13 +37,13 @@ struct grid_stats_holder_s
 
 /* -------------------------------------------------------------------------- */
 
-static inline gboolean
+static gboolean
 _gsh_check(struct grid_stats_holder_s *gsh)
 {
 	return gsh && gsh->hashset;
 }
 
-static inline void
+static void
 _real_increment_h(GTree *hashset, hashstr_t *hn, guint64 v)
 {
 	gpointer old;
@@ -263,19 +263,19 @@ grid_single_rrd_set_default(struct grid_single_rrd_s *gsr, guint64 v)
 	gsr->flags |= RRD_FLAG_SHIFT_SET;
 }
 
-static inline void
+static void
 _rrd_set(struct grid_single_rrd_s *gsr, guint64 v)
 {
 	gsr->l0[gsr->last % gsr->period] = v;
 }
 
-static inline guint64
+static guint64
 _rrd_get(struct grid_single_rrd_s *gsr, time_t at)
 {
 	return gsr->l0[at % gsr->period];
 }
 
-static inline guint64
+static guint64
 _rrd_current(struct grid_single_rrd_s *gsr)
 {
 	return _rrd_get(gsr, gsr->last);

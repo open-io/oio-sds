@@ -31,7 +31,7 @@ License along with this library.
 #include "./gridd_client.h"
 #include "./gridd_client_ext.h"
 
-static inline gdouble
+static gdouble
 ms_to_s(int ms)
 {
 	gdouble dms = ms;

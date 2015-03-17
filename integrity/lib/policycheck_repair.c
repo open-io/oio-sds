@@ -139,7 +139,7 @@ _ga_splice(GArray *src, guint start, guint length,
 	*rout = out;
 }
 
-static inline guint
+static guint
 _quorum_length(guint len)
 {
 	return 1 + ((len % 2) ? len+1 : len) / 2;

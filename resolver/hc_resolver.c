@@ -38,7 +38,7 @@ gdouble rc_resolver_timeout_m0 = -1.0;
 gdouble rc_resolver_timeout_m1 = -1.0;
 
 /* Packing */
-static inline gsize
+static gsize
 _strv_total_length(gchar **v)
 {
 	register gsize total = 0;
@@ -48,7 +48,7 @@ _strv_total_length(gchar **v)
 }
 
 /* Packing */
-static inline void
+static void
 _strv_concat(register gchar *d, gchar **src)
 {
 	register gchar *s, c;
@@ -61,7 +61,7 @@ _strv_concat(register gchar *d, gchar **src)
 }
 
 /* Unpacking */
-static inline void
+static void
 _strv_pointers(gchar **dst, gchar *src, guint count)
 {
 	while (count--) {
@@ -187,7 +187,7 @@ hc_resolver_store(struct hc_resolver_s *r, struct lru_tree_s *lru,
 	g_mutex_unlock(&r->lock);
 }
 
-static inline void
+static void
 hc_resolver_forget(struct hc_resolver_s *r, struct lru_tree_s *lru,
 		const struct hashstr_s *k)
 {
@@ -665,10 +665,10 @@ hc_resolver_flush_services(struct hc_resolver_s *r)
 	g_mutex_unlock(&r->lock);
 }
 
-static inline void
+static void
 _LRU_set_max(struct lru_ext_s *l, guint v) { if (l) l->max = v; }
 
-static inline void
+static void
 _LRU_set_ttl(struct lru_ext_s *l, time_t v) { if (l) l->ttl = v; }
 
 void

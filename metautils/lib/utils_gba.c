@@ -39,7 +39,7 @@ metautils_gba_len(const GByteArray *gba)
 	return gba->len;
 }
 
-static inline int
+static int
 metautils_buffer_cmp(const guint8 * const d0, const guint l0,
 		const guint8 * const d1, const guint l1)
 {

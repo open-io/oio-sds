@@ -113,13 +113,13 @@ struct sqlx_cache_s
 
 /* ------------------------------------------------------------------------- */
 
-static inline gboolean
+static gboolean
 base_id_out(sqlx_cache_t *cache, gint bd)
 {
 	return (bd < 0) || ((guint)bd) >= cache->bases_count;
 }
 
-static inline const gchar *
+static const gchar *
 sqlx_status_to_str(enum sqlx_base_status_e status)
 {
 	switch (status) {
@@ -162,13 +162,13 @@ sqlx_base_debug_func(const gchar *from, sqlx_base_t *base)
 # define sqlx_base_debug(From,Base) do {  } while (0)
 #endif
 
-static inline sqlx_base_t *
+static sqlx_base_t *
 sqlx_get_by_id(sqlx_cache_t *cache, gint i)
 {
 	return base_id_out(cache, i) ? NULL : cache->bases + i;
 }
 
-static inline sqlx_base_t *
+static sqlx_base_t *
 sqlx_next_by_id(sqlx_cache_t *cache, gint i)
 {
 	sqlx_base_t *current;
@@ -178,7 +178,7 @@ sqlx_next_by_id(sqlx_cache_t *cache, gint i)
 		: NULL;
 }
 
-static inline sqlx_base_t *
+static sqlx_base_t *
 sqlx_prev_by_id(sqlx_cache_t *cache, gint i)
 {
 	sqlx_base_t *current;
@@ -188,13 +188,13 @@ sqlx_prev_by_id(sqlx_cache_t *cache, gint i)
 		: NULL;
 }
 
-static inline gint
+static gint
 sqlx_base_get_id(sqlx_base_t *base)
 {
 	return base ? base->index : -1;
 }
 
-static inline void
+static void
 SQLX_REMOVE(sqlx_cache_t *cache, sqlx_base_t *base,
 		struct beacon_s *beacon)
 {
@@ -221,7 +221,7 @@ SQLX_REMOVE(sqlx_cache_t *cache, sqlx_base_t *base,
 	base->link.next = -1;
 }
 
-static inline void
+static void
 SQLX_UNSHIFT(sqlx_cache_t *cache, sqlx_base_t *base,
 		struct beacon_s *beacon, enum sqlx_base_status_e status)
 {
@@ -242,21 +242,21 @@ SQLX_UNSHIFT(sqlx_cache_t *cache, sqlx_base_t *base,
 	g_get_current_time(&(base->last_update));
 }
 
-static inline void
+static void
 sqlx_save_id(sqlx_cache_t *cache, sqlx_base_t *base)
 {
 	gpointer pointer_index = GINT_TO_POINTER(base->index + 1);
 	g_tree_replace(cache->bases_by_name, base->name, pointer_index);
 }
 
-static inline gint
+static gint
 sqlx_lookup_id(sqlx_cache_t *cache, const hashstr_t *hs)
 {
 	gpointer lookup_result = g_tree_lookup(cache->bases_by_name, hs);
 	return !lookup_result ? -1 : (GPOINTER_TO_INT(lookup_result) - 1);
 }
 
-static inline void
+static void
 sqlx_base_remove_from_list(sqlx_cache_t *cache, sqlx_base_t *base)
 {
 	switch (base->status) {
@@ -279,7 +279,7 @@ sqlx_base_remove_from_list(sqlx_cache_t *cache, sqlx_base_t *base)
 	}
 }
 
-static inline void
+static void
 sqlx_base_add_to_list(sqlx_cache_t *cache, sqlx_base_t *base,
 		enum sqlx_base_status_e status)
 {
@@ -305,7 +305,7 @@ sqlx_base_add_to_list(sqlx_cache_t *cache, sqlx_base_t *base,
 	}
 }
 
-static inline void
+static void
 sqlx_base_move_to_list(sqlx_cache_t *cache, sqlx_base_t *base,
 		enum sqlx_base_status_e status)
 {
@@ -323,7 +323,7 @@ sqlx_base_move_to_list(sqlx_cache_t *cache, sqlx_base_t *base,
 			sqlx_status_to_str(status));
 }
 
-static inline sqlx_base_t*
+static sqlx_base_t*
 sqlx_poll_free_base(sqlx_cache_t *cache)
 {
 	sqlx_base_t *base;
@@ -337,7 +337,7 @@ sqlx_poll_free_base(sqlx_cache_t *cache)
 	return base;
 }
 
-static inline GError *
+static GError *
 sqlx_base_reserve(sqlx_cache_t *cache, const hashstr_t *hs,
 		sqlx_base_t **result)
 {

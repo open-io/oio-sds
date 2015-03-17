@@ -228,46 +228,6 @@ get_meta0_info(const char *ns_name, GError **error)
 	return get_meta0_info2(ns_name, 1000, 4000, error);
 }
 
-gint
-count_namespace_services(const char *ns_name, const char *type, GError **error)
-{
-	request_t req;
-	response_t resp;
-
-	if (!ns_name || !type) {
-		GSETERROR(error,"Invalid parameter");
-		return -1;
-	}
-
-	memset(&req, 0, sizeof(request_t));
-	memset(&resp, 0, sizeof(response_t));
-	req.cmd = g_strdup(MSG_SRV_CNT);
-	req.arg = g_strdup_printf("%s:%s",ns_name,type);
-	req.arg_size = strlen(req.arg);
-
-	if (!send_request(&req, &resp, error)) {
-		GSETERROR(error, "Request '%s' to agent failed", __FUNCTION__);
-		clear_request_and_reply(&req,&resp);
-		return -1;
-	}
-	if (resp.status == STATUS_OK) {
-		gchar wrkBuf[1024];
-		gint64 nbVol64;
-		gint32 nbVol32;
-	
-		memset( wrkBuf, 0x00, sizeof(wrkBuf) );
-		g_strlcpy( wrkBuf, resp.data, MAX(sizeof(wrkBuf)-1,resp.data_size));
-		nbVol64 = g_ascii_strtoll( wrkBuf, NULL, 10 );
-	
-		nbVol32 = nbVol64;
-		clear_request_and_reply(&req,&resp);
-		return nbVol32;
-	}
-
-	MANAGE_ERROR(req,resp,error);
-	return -1;
-}
-
 static GSList*
 _list_namespace_service_types_from_agent(const char *ns_name, GError **error)
 {
@@ -618,6 +578,88 @@ clear_namespace_services(const char *ns_name, const char *type, GError **error)
 	return 1;
 }
 
+GSList*
+list_tasks(GError **error)
+{
+	request_t req;
+	response_t resp;
+
+	/* Build request */
+	memset(&req, 0, sizeof(request_t));
+	memset(&resp, 0, sizeof(response_t));
+	req.cmd = g_strdup(MSG_LSTTASK);
+
+	if (!send_request(&req, &resp, error)) {
+		GSETERROR(error, "Request list tasks failed");
+		clear_request_and_reply(&req,&resp);
+		return NULL;
+	}
+
+	if (resp.status == STATUS_OK) {
+		size_t size_read = 0;
+		struct task_s task;
+		GSList *task_list = NULL;
+		while (size_read < resp.data_size) {
+			memset(&task, 0, sizeof(task));
+
+			memcpy(task.id, resp.data + size_read, sizeof(task.id));
+			size_read += sizeof(task.id);
+
+			memcpy(&(task.next_schedule), resp.data + size_read, sizeof(task.next_schedule));
+			size_read += sizeof(task.next_schedule);
+
+			memcpy(&(task.busy), resp.data + size_read, sizeof(task.busy));
+			size_read += sizeof(task.busy);
+
+			task_list = g_slist_prepend(task_list, g_memdup(&task, sizeof(struct task_s)));
+		}
+
+		clear_request_and_reply(&req,&resp);
+		return(task_list);
+
+	}
+
+	MANAGE_ERROR(req,resp,error);
+	return NULL;
+}
+
+GByteArray*
+event_get_configuration(const gchar *ns_name, GError **error)
+{
+	request_t req;
+	response_t resp;
+
+	if (!ns_name) {
+		GSETERROR(error,"Invalid parameter (%p)", ns_name);
+		return NULL;
+	}
+
+	memset(&req, 0, sizeof(request_t));
+	memset(&resp, 0, sizeof(response_t));
+	req.cmd = g_strdup(MSG_EVENTS_CONFIGURATION);
+	req.arg = g_strdup(ns_name);
+	req.arg_size = strlen(req.arg)+1;
+
+	if (!send_request(&req,&resp,error)) {
+		GSETERROR(error,"Failed to forward the event to the agent");
+		clear_request_and_reply(&req,&resp);
+		return NULL;
+	}
+
+	if (resp.status != STATUS_OK) {
+		MANAGE_ERROR(req,resp,error);
+		return NULL;
+	}
+	else {
+		GByteArray *result;
+
+		result = g_byte_array_append(g_byte_array_new(), resp.data, resp.data_size);
+		clear_request_and_reply(&req,&resp);
+		g_byte_array_append(result, (const guint8*)"", 1);
+		return result;
+	}
+}
+
 /* ------------------------------------------------------------------------- */
 
 int
@@ -927,211 +969,42 @@ flush_erroneous_elements( const char *ns_name, GError **error )
 	return(1);
 }
 
-GSList*
-list_tasks(GError **error)
-{
-	request_t req;
-	response_t resp;
-
-	/* Build request */
-	memset(&req, 0, sizeof(request_t));
-	memset(&resp, 0, sizeof(response_t));
-	req.cmd = g_strdup(MSG_LSTTASK);
-
-	if (!send_request(&req, &resp, error)) {
-		GSETERROR(error, "Request list tasks failed");
-		clear_request_and_reply(&req,&resp);
-		return NULL;
-	}
-
-	if (resp.status == STATUS_OK) {
-		size_t size_read = 0;
-		struct task_s task;
-		GSList *task_list = NULL;
-		while (size_read < resp.data_size) {
-			memset(&task, 0, sizeof(task));
-
-			memcpy(task.id, resp.data + size_read, sizeof(task.id));
-			size_read += sizeof(task.id);
-
-			memcpy(&(task.next_schedule), resp.data + size_read, sizeof(task.next_schedule));
-			size_read += sizeof(task.next_schedule);
-
-			memcpy(&(task.busy), resp.data + size_read, sizeof(task.busy));
-			size_read += sizeof(task.busy);
-
-			task_list = g_slist_prepend(task_list, g_memdup(&task, sizeof(struct task_s)));
-		}
-
-		clear_request_and_reply(&req,&resp);
-		return(task_list);
-
-	}
-
-	MANAGE_ERROR(req,resp,error);
-	return NULL;
-}
-
-GSList*
-event_get_managed_patterns(const gchar *ns_name, GError **error)
-{
-	request_t req;
-	response_t resp;
-
-	if (!ns_name) {
-		GSETERROR(error,"Invalid parameter (%p)", ns_name);
-		return NULL;
-	}
-
-	memset(&req, 0, sizeof(request_t));
-	memset(&resp, 0, sizeof(response_t));
-	req.cmd = g_strdup(MSG_EVENTS_PATTERNS);
-	req.arg = (void*)ns_name;
-	req.arg_size = strlen(ns_name)+1;
-
-	if (!send_request(&req,&resp,error)) {
-		GSETERROR(error,"Failed to forward the event to the agent");
-		clear_request_and_reply(&req,&resp);
-		return NULL;
-	}
-
-	if (resp.status != STATUS_OK) {
-		MANAGE_ERROR(req,resp,error);
-		return NULL;
-	}
-	else {
-		gsize resp_size;
-		GSList *result = NULL;
-		resp_size = resp.data_size;
-		if (!strings_unmarshall(&result, resp.data, &resp_size, error)) {
-			MANAGE_ERROR(req,resp,error);
-			return NULL;
-		}
-		clear_request_and_reply(&req,&resp);
-		return result;
-	}
-}
-
-GByteArray*
-event_get_configuration(const gchar *ns_name, GError **error)
-{
-	request_t req;
-	response_t resp;
-
-	if (!ns_name) {
-		GSETERROR(error,"Invalid parameter (%p)", ns_name);
-		return NULL;
-	}
-
-	memset(&req, 0, sizeof(request_t));
-	memset(&resp, 0, sizeof(response_t));
-	req.cmd = g_strdup(MSG_EVENTS_CONFIGURATION);
-	req.arg = g_strdup(ns_name);
-	req.arg_size = strlen(req.arg)+1;
-
-	if (!send_request(&req,&resp,error)) {
-		GSETERROR(error,"Failed to forward the event to the agent");
-		clear_request_and_reply(&req,&resp);
-		return NULL;
-	}
-
-	if (resp.status != STATUS_OK) {
-		MANAGE_ERROR(req,resp,error);
-		return NULL;
-	}
-	else {
-		GByteArray *result;
-
-		result = g_byte_array_append(g_byte_array_new(), resp.data, resp.data_size);
-		clear_request_and_reply(&req,&resp);
-		g_byte_array_append(result, (const guint8*)"", 1);
-		return result;
-	}
-}
-
-GByteArray*
-get_srvtype_configuration(const gchar *ns_name, const gchar *type_name, GError **error)
-{
-	request_t req;
-	response_t resp;
-
-	if (!ns_name || !type_name) {
-		GSETERROR(error,"Invalid parameter (%p,%p)", ns_name, type_name);
-		return NULL;
-	}
-
-	memset(&req, 0, sizeof(request_t));
-	memset(&resp, 0, sizeof(response_t));
-	req.cmd = g_strdup(MSG_SRVTYPE_CONFIG);
-	req.arg = g_strdup_printf("%s:%s",ns_name, type_name);
-	req.arg_size = strlen(req.arg)+1;
-
-	if (!send_request(&req,&resp,error)) {
-		GSETERROR(error,"Failed to forward the event to the agent");
-		clear_request_and_reply(&req,&resp);
-		return NULL;
-	}
-
-	if (resp.status != STATUS_OK) {
-		MANAGE_ERROR(req,resp,error);
-		return NULL;
-	}
-	else {
-		GByteArray *result;
-
-		result = g_byte_array_append(g_byte_array_new(), resp.data, resp.data_size);
-		clear_request_and_reply(&req,&resp);
-		g_byte_array_append(result, (const guint8*)"", 1);
-		return result;
-	}
-}
-
-gboolean
-event_send_to_agent( const gchar *ns_name, gridcluster_event_t *event, GError **error )
-{
-	request_t req;
-	response_t resp;
-	GByteArray *gba;
-
-	if (!ns_name || !event) {
-		GSETERROR(error,"Invalid parameter (%p,%p)", ns_name, event);
-		return FALSE;
-	}
-
-	gba = gridcluster_encode_event(event, error);
-	if (!gba) {
-		GSETERROR(error,"Failed to serialize the event");
-		return FALSE;
-	}
-	g_byte_array_prepend(gba, (const guint8*)ns_name, strlen(ns_name)+1);
-
-	memset(&req, 0, sizeof(request_t));
-	memset(&resp, 0, sizeof(response_t));
-	req.cmd = g_strdup(MSG_EVT_PUSH);
-	req.arg = (char*)gba->data;
-	req.arg_size = gba->len;
-	g_byte_array_free(gba,FALSE); gba = NULL;
-
-	if (!send_request(&req,&resp,error)) {
-		GSETERROR(error,"Failed to forward the event to the agent");
-		clear_request_and_reply(&req,&resp);
-		return FALSE;
-	}
-
-	if (resp.status != STATUS_OK) {
-		MANAGE_ERROR(req,resp,error);
-		return FALSE;
-	}
-
-	clear_request_and_reply(&req,&resp);
-	return TRUE;
-}
+/* -------------------------------------------------------------------------- */
 
 static GByteArray *
 namespace_param_gba(const namespace_info_t* ns_info, const gchar *ns_name,
 		const gchar *param_name)
 {
 	return namespace_info_get_srv_param_gba(ns_info, ns_name, NULL, param_name);
+}
+
+gchar*
+gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
+		const gchar *key, const gchar *def)
+{
+	GByteArray *value;
+
+	if (!nsinfo || !nsinfo->options)
+		return g_strdup(def);
+
+	value = g_hash_table_lookup(nsinfo->options, key);
+	if (!value)
+		return g_strdup(def);
+
+	return g_strndup((gchar*)value->data, value->len);
+}
+
+gint64
+gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
+		const gchar* key, gint64 def)
+{
+	return namespace_info_get_srv_param_i64(nsinfo, NULL, NULL, key, def);
+}
+
+static gsize
+namespace_get_size(namespace_info_t *ns_info, const gchar *name, gsize def)
+{
+	return (gsize) gridcluster_get_nsinfo_int64(ns_info, name, def);
 }
 
 gboolean
@@ -1261,16 +1134,6 @@ namespace_in_compression_mode(namespace_info_t* ns_info)
 	return res;
 }
 
-static gsize
-namespace_get_size(namespace_info_t *ns_info, const gchar *name, gsize def)
-{
-	if (!ns_info || !ns_info->options || !name)
-		return def;
-
-	GByteArray *val = namespace_param_gba(ns_info, NULL, name);
-	return (gsize) _gba_to_int64(val, def);
-}
-
 gsize
 namespace_get_autocontainer_src_offset(namespace_info_t* ns_info)
 {
@@ -1287,6 +1150,19 @@ gsize
 namespace_get_autocontainer_dst_bits(namespace_info_t* ns_info)
 {
 	return namespace_get_size(ns_info, "FLATNS_hash_bitlength", 17);
+}
+
+gint64
+gridcluster_get_container_max_versions(struct namespace_info_s *nsinfo)
+{
+	/* For backward compatibility, versioning is disabled by default */
+	return gridcluster_get_nsinfo_int64(nsinfo, "meta2_max_versions", 0);
+}
+
+gint64
+gridcluster_get_keep_deleted_delay(struct namespace_info_s *nsinfo)
+{
+	return gridcluster_get_nsinfo_int64(nsinfo, "meta2_keep_deleted_delay", -1);
 }
 
 gboolean
@@ -1469,29 +1345,6 @@ gridcluster_get_event_config(struct namespace_info_s *nsinfo,
 	return result;
 }
 
-gchar*
-gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
-		const gchar *key, const gchar *def)
-{
-	GByteArray *value;
-
-	if (!nsinfo || !nsinfo->options)
-		return g_strdup(def);
-
-	value = g_hash_table_lookup(nsinfo->options, key);
-	if (!value)
-		return g_strdup(def);
-
-	return g_strndup((gchar*)value->data, value->len);
-}
-
-gint64
-gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
-		const gchar* key, gint64 def)
-{
-	return namespace_info_get_srv_param_i64(nsinfo, NULL, NULL, key, def);
-}
-
 GError*
 gridcluster_reload_lbpool(struct grid_lbpool_s *glp)
 {
@@ -1564,19 +1417,5 @@ gridcluster_reconfigure_lbpool(struct grid_lbpool_s *glp)
 	}
 
 	return err;
-}
-
-gint64
-gridcluster_get_container_max_versions(struct namespace_info_s *nsinfo)
-{
-	/* For backward compatibility, versioning is disabled by default
-	 */
-	return gridcluster_get_nsinfo_int64(nsinfo, "meta2_max_versions", 0);
-}
-
-gint64
-gridcluster_get_keep_deleted_delay(struct namespace_info_s *nsinfo)
-{
-	return gridcluster_get_nsinfo_int64(nsinfo, "meta2_keep_deleted_delay", -1);
 }
 

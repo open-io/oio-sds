@@ -129,24 +129,6 @@ print_formatted_hashtable(GHashTable *ht, const gchar *name)
 }
 
 static void
-print_formatted_slist(GSList *slist, const gchar *name)
-{
-	guint n_elements = g_slist_length(slist);
-	guint i;
-	gchar* list_elements[n_elements + 1];
-	gchar *result_string;
-
-	if (n_elements > 0) {
-		for (i = 0; i < n_elements; i++)
-			list_elements[i] = (gchar*)(g_slist_nth(slist, i)->data);
-		list_elements[n_elements] = NULL;
-		result_string = g_strjoinv(",", list_elements);
-		g_print("%20s : %s\n", name, result_string);
-		g_free(result_string);
-	}
-}
-
-static void
 print_formated_namespace(namespace_info_t * ns)
 {
 	g_print("\n");
@@ -160,7 +142,6 @@ print_formated_namespace(namespace_info_t * ns)
 	print_formatted_hashtable(ns->storage_class, "Storage Class");
 	print_formatted_hashtable(ns->data_security, "Data Security");
 	print_formatted_hashtable(ns->data_treatments, "Data Treatments");
-	print_formatted_slist(ns->writable_vns, "Writable VNS");
 
 	g_print("\n");
 }

@@ -462,7 +462,7 @@ check_chunk_info(struct chunk_textinfo_s *chunk, GError **p_error)
 	return TRUE;
 }
 
-static inline void
+static void
 _set_or_free_error(GError *err, GError **p_err)
 {
 	if (err) {

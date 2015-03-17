@@ -42,7 +42,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	"INSERT INTO admin(k,v) VALUES (\"version:main.admin\",\"1:0\");"\
 	"VACUUM"
 
-static inline gchar **
+static gchar **
 filter_services(struct sqlx_service_s *ss, gchar **s, gint64 seq, const gchar *t)
 {
 	gboolean matched = FALSE;

@@ -32,24 +32,21 @@ License along with this library.
  * @{
  */
 
+// TODO remove this as soon as the hunk_checker has been replaced
 #define NAME_MSGNAME_M1_CREATE     "REQ_M1_CREATE"
-#define NAME_MSGNAME_M1_CONT_BY_ID   "REQ_M1_CONT_BY_ID"
-#define NAME_MSGNAME_M1_UPDATE_CONTAINERS "REQ_M1_UPDATECONTAINERS"
-#define NAME_MSGNAME_M1_GET_VNS_STATE     "REQ_M1_GET_VNS_STATE"
 
+// TODO remove this as soon as the hunk_checker has been replaced
 gboolean meta1_remote_create_container_v2 (addr_info_t *meta1, gint ms, GError **err,
 		const char *cName, const char *virtualNs, container_id_t cid,
 		gdouble to_step, gdouble to_overall, char **master);
 
+// TODO to be removed as soon ad the C SDK has been rewriten
+#define NAME_MSGNAME_M1_CONT_BY_ID   "REQ_M1_CONT_BY_ID"
+
+// TODO to be removed as soon ad the C SDK has been rewriten
 struct meta1_raw_container_s* meta1_remote_get_container_by_id(
 		struct metacnx_ctx_s *ctx, container_id_t cid, GError **err,
 		gdouble to_step, gdouble to_overall);
-
-gboolean meta1_remote_update_containers(gchar *meta1_addr_str,
-		GSList *list_of_containers, gint ms, GError **err);
-
-GHashTable* meta1_remote_get_virtual_ns_state(addr_info_t *meta1, gint ms,
-		GError **err);
 
 /** @} */
 

@@ -29,8 +29,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define MSG_SRV_LST "SRVLST"
 #define MSG_SRV_PSH "SRVPSH"
 #define MSG_SRV_CLR "SRVCLR"
-#define MSG_SRV_CNT "SRVCNT"
-#define MSG_EVT_PUSH "EVTPSH"
 #define MSG_GETNS   "GETNS"
 #define MSG_LSTSVC  "LSTSVC"
 #define MSG_LSTTASK "LSTTASK"
@@ -41,7 +39,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define MSG_ERRM2_UNREF "ERRM2_UNREF"
 
 #define MSG_EVENTS_CONFIGURATION "EVT_CONFIG"
-#define MSG_EVENTS_PATTERNS "EVT_PATTERNS"
 #define MSG_SRVTYPE_CONFIG "SRVTYPE_CONFIG"
 
 #define LIMIT_MAX_ERRCID 20000

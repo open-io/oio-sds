@@ -18,7 +18,6 @@ add_executable(gridagent
 	cpu_stat_task_worker.c cpu_stat_task_worker.h
 	event_common.c
 	event_forwarder_worker.c
-	event_receiver_worker.c
 	event_task_configure.c
 	event_workers.h
 	fs.c fs.h

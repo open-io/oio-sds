@@ -56,12 +56,6 @@ _update_master(gs_container_t *c, char *master)
 
 }
 
-static inline int
-_is_sql_error(const int errcode)
-{
-	return errcode >= CODE_INTERNAL_ERROR && errcode < CODE_PLATFORM_ERROR;
-}
-
 static int
 __create_in_meta2(addr_info_t *m1, gs_container_t *c, struct m2v2_create_params_s *params, GError **err)
 {

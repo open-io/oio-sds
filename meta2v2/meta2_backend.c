@@ -85,7 +85,7 @@ m2b_quota(struct meta2_backend_s *m2b, const gchar *vns)
 	return quota;
 }
 
-static inline gint64
+static gint64
 _quota(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
 	gchar *vns = m2db_get_namespace(sq3, m2b->backend.ns_name);
@@ -116,7 +116,7 @@ m2b_keep_deleted_delay(struct meta2_backend_s *m2b, const gchar *vns)
 	return delay;
 }
 
-static inline gint64
+static gint64
 _maxvers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
 	gchar *vns = m2db_get_namespace(sq3, m2b->backend.ns_name);
@@ -125,7 +125,7 @@ _maxvers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 	return res;
 }
 
-static inline gint64
+static gint64
 _retention_delay(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
 	gchar *vns = m2db_get_namespace(sq3, m2b->backend.ns_name);
@@ -349,13 +349,6 @@ m2b_transient_cleanup(struct meta2_backend_s *m2b)
 	g_mutex_unlock(&m2b->lock_transient);
 }
 
-static void
-_m0_mapping_gclean(gpointer _cid_list)
-{
-	GSList *cid_list = _cid_list;
-	g_slist_free_full(cid_list, g_free);
-}
-
 /* Backend ------------------------------------------------------------------ */
 
 void
@@ -408,6 +401,25 @@ meta2_backend_get_evt_config_repo(const struct meta2_backend_s *m2)
 	return m2->backend.evt_repo;
 }
 
+const gchar*
+meta2_backend_get_local_addr(struct meta2_backend_s *m2)
+{
+	return sqlx_repository_get_local_addr(m2->backend.repo);
+}
+
+struct event_config_s *
+meta2_backend_get_event_config2(struct meta2_backend_s *m2, const char *ns_name,
+		gboolean vns_fallback)
+{
+	return event_config_repo_get(m2->backend.evt_repo, ns_name, vns_fallback);
+}
+
+struct event_config_s *
+meta2_backend_get_event_config(struct meta2_backend_s *m2, const char *ns_name)
+{
+	return meta2_backend_get_event_config2(m2, ns_name, TRUE);
+}
+
 GError *
 meta2_backend_init(struct meta2_backend_s **result,
 		struct sqlx_repository_s *repo, const gchar *ns,
@@ -443,13 +455,6 @@ meta2_backend_init(struct meta2_backend_s **result,
 
 	m2->flag_precheck_on_generate = TRUE;
 
-	m2->m0_mapping = g_ptr_array_new_with_free_func(
-			(GDestroyNotify) _m0_mapping_gclean);
-	g_ptr_array_set_size(m2->m0_mapping, 65536);
-	g_mutex_init(&m2->modified_containers_lock);
-	m2->modified_containers = g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, g_free);
-
 	err = sqlx_repository_configure_type(m2->backend.repo, META2_TYPE_NAME,
 			NULL, schema);
 	if (NULL != err) {
@@ -468,19 +473,6 @@ meta2_backend_init(struct meta2_backend_s **result,
 	return NULL;
 }
 
-struct event_config_s *
-meta2_backend_get_event_config2(struct meta2_backend_s *m2, const char *ns_name,
-		gboolean vns_fallback)
-{
-	return event_config_repo_get(m2->backend.evt_repo, ns_name, vns_fallback);
-}
-
-struct event_config_s *
-meta2_backend_get_event_config(struct meta2_backend_s *m2, const char *ns_name)
-{
-	return meta2_backend_get_event_config2(m2, ns_name, TRUE);
-}
-
 void
 meta2_backend_clean(struct meta2_backend_s *m2)
 {
@@ -490,61 +482,16 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 	if (m2->policies) {
 		service_update_policies_destroy(m2->policies);
 	}
-	g_mutex_clear(&m2->backend.ns_info_lock);
-	if (m2->m0_mapping) {
-		g_ptr_array_free(m2->m0_mapping, TRUE);
-	}
 	if (m2->transient) {
 		g_hash_table_destroy(m2->transient);
-	}
-	if (m2->modified_containers) {
-		g_hash_table_destroy(m2->modified_containers);
 	}
 	if (m2->resolver) {
 		m2->resolver = NULL;
 	}
+	g_mutex_clear(&m2->backend.ns_info_lock);
 	g_mutex_clear(&m2->lock_transient);
-	g_mutex_clear(&m2->modified_containers_lock);
 	namespace_info_clear(&(m2->backend.ns_info));
 	g_free(m2);
-}
-
-static GSList*
-_extract_writable_vns(namespace_info_t *ns_info)
-{
-	if (!ns_info || !ns_info->options)
-		return NULL;
-
-	// KEY_WRITABLE_VNS = "writable_vns"
-	GByteArray *writable_gba;
-	writable_gba = g_hash_table_lookup(ns_info->options, "writable_vns");
-
-	if (!writable_gba || !writable_gba->len || !writable_gba->data) {
-		TRACE("writable namespace list not found in ns_options table");
-		return NULL;
-	}
-
-	/* Ensures the GByteArray's buffer is terminated by a '\0' */
-	g_byte_array_append(writable_gba, (guint8*)"", 1);
-	g_byte_array_set_size(writable_gba, writable_gba->len - 1);
-	TRACE("gba data from ns_info opt = %s", (gchar*)writable_gba->data);
-
-	gchar **tmp, **p;
-	GSList *l = NULL;
-
-	tmp = g_strsplit((gchar*)writable_gba->data,",", 0);
-	for (p=tmp; p && *p ;p++)
-		l = g_slist_prepend(l, g_strdup(*p));
-	g_strfreev(tmp);
-	return l;
-}
-
-static void
-_update_writable_vns_list(namespace_info_t *ns_info)
-{
-	if (ns_info->writable_vns)
-		g_slist_free_full(ns_info->writable_vns, g_free);
-	ns_info->writable_vns = _extract_writable_vns(ns_info);
 }
 
 void
@@ -556,7 +503,6 @@ meta2_backend_configure_nsinfo(struct meta2_backend_s *m2,
 
 	g_mutex_lock(&m2->backend.ns_info_lock);
 	(void) namespace_info_copy(ns_info, &(m2->backend.ns_info), NULL);
-	_update_writable_vns_list(&(m2->backend.ns_info));
 	g_mutex_unlock(&m2->backend.ns_info_lock);
 }
 
@@ -619,7 +565,7 @@ meta2_backend_initiated(struct meta2_backend_s *m2)
 
 /* Container -------------------------------------------------------------- */
 
-static inline enum sqlx_open_type_e
+static enum sqlx_open_type_e
 m2_to_sqlx(enum m2v2_open_type_e t)
 {
 	enum sqlx_open_type_e result = SQLX_OPEN_LOCAL;
@@ -1075,12 +1021,13 @@ meta2_backend_get_alias(struct meta2_backend_s *m2b,
 }
 
 static void
-meta2_backend_add_modified_container(struct meta2_backend_s *m2b, const gchar *strid, gint64 size)
+meta2_backend_add_modified_container(struct meta2_backend_s *m2b,
+		const gchar *strid, gint64 size)
 {
-	if (m2b && strid) {
-		g_mutex_lock(&m2b->modified_containers_lock);
-		g_hash_table_replace(m2b->modified_containers, g_strdup(strid), g_memdup(&size, sizeof(gint64)));
-		g_mutex_unlock(&m2b->modified_containers_lock);
+	EXTRA_ASSERT(m2b != NULL);
+	if (m2b->q_notify) {
+		gchar *tmp = g_strdup_printf("%s:%"G_GINT64_FORMAT, strid, size);
+		g_async_queue_push (m2b->q_notify, tmp);
 	}
 }
 
@@ -2112,278 +2059,5 @@ meta2_backend_get_content_urls_from_chunk_id(struct meta2_backend_s *m2b,
 	}
 
 	return err;
-}
-
-//------------------------------------------------------------------------------
-
-static void
-_meta2_backend_send_container_list_to_m1(gchar *strm1, GSList *cid_list, GError **err)
-{
-	DEBUG("Sending list with %d elements", g_slist_length(cid_list));
-
-	if (!meta1_remote_update_containers(strm1, cid_list, 4000, err)) {
-		if(err && *err) {
-			WARN("Request containers update to meta1 [%s] failed :%s", strm1, (*err)->message);
-		} else {
-			WARN("Request containers update to meta1 [%s] failed: no error", strm1);
-		}
-	}
-}
-
-static void
-_add_cinfo_to_modified_containers(gpointer _cinfo, gpointer _m2b)
-{
-	container_info_t *cinfo = _cinfo;
-	struct meta2_backend_s *m2b = _m2b;
-	gchar strid[65];
-
-	container_id_to_string(cinfo->id, strid, sizeof(strid));
-
-	g_mutex_lock(&m2b->modified_containers_lock);
-	if (g_hash_table_lookup(m2b->modified_containers, strid)) {
-		DEBUG("Container [%s] is already present in modified container list, "
-				"no need to replace it.", strid);
-	} else {
-		g_hash_table_insert(m2b->modified_containers,
-				g_strdup(strid), g_memdup(&(cinfo->size), sizeof(cinfo->size)));
-		DEBUG("Container [%s] is back in modified containers list with a size of %"G_GINT64_FORMAT,
-				strid, cinfo->size);
-	}
-	g_mutex_unlock(&m2b->modified_containers_lock);
-}
-
-static void
-_meta2_backend_process_containers_to_update(gpointer _p_prefix, gpointer _cinfo_list, gpointer _m2b)
-{
-	// k is actually a pointer to guint16
-	guint16 *p_prefix = _p_prefix;
-	const guint8 pfx0 = ((guint8*)_p_prefix)[0];
-	const guint8 pfx1 = ((guint8*)_p_prefix)[1];
-	GSList *cinfo_list = _cinfo_list;
-	struct meta2_backend_s *m2b = _m2b;
-	const guint nb_meta1 = g_slist_length(g_ptr_array_index(m2b->m0_mapping, 0));
-	guint m1_index_to_pick = 0U, nb_tries = 0U;
-	GError *err = NULL;
-	gchar strm1[64];
-	addr_info_t m1_addr;
-	GSList *m1_list;
-
-	// Get m1 address from m0_mapping and convert it to its string
-	// representation.  If m1 are replicated, pick one randomly among
-	// those available for this prefix.
-	if (nb_meta1 > 1)
-		m1_index_to_pick = g_random_int_range(0, nb_meta1);
-	m1_list = g_ptr_array_index(m2b->m0_mapping, *p_prefix);
-
-	do {
-		g_clear_error(&err);
-		memcpy (&m1_addr, g_slist_nth_data(m1_list, m1_index_to_pick), sizeof(addr_info_t));
-		addr_info_to_string(&m1_addr, strm1, sizeof(strm1));
-		nb_tries++;
-		DEBUG("Processing update of container sizes for prefix [%02X%02X] (try %u with meta1 [%s]).",
-				pfx0, pfx1, nb_tries, strm1);
-		_meta2_backend_send_container_list_to_m1(strm1, cinfo_list, &err);
-		m1_index_to_pick = (m1_index_to_pick + 1) % nb_meta1;
-	} while (err && nb_tries < nb_meta1);
-
-	if (err) {
-		WARN("Could not update modified container sizes for prefix [%02X%02X]."
-				"  Keeping track of modified containers for this prefix.",
-				pfx0, pfx1);
-		g_slist_foreach(cinfo_list, _add_cinfo_to_modified_containers, m2b);
-		g_clear_error(&err);
-	}
-}
-
-static GHashTable*
-_meta2_backend_renew_modified_containers(struct meta2_backend_s *m2b)
-{
-	GHashTable *ht = m2b->modified_containers;
-	m2b->modified_containers = g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, g_free);
-	return ht;
-}
-
-static void
-_free_container_list(gpointer _clist)
-{
-	GSList *clist = _clist;
-	g_slist_free_full(clist, g_free);
-}
-
-static void
-_add_to_update_container_ht(GHashTable *containers_ht,
-		container_info_t *p_ci, guint16 prefix)
-{
-	GSList *cid_list = NULL;
-	// prefixes stored in hash table are gints
-	gint *orig_prefix = NULL;
-	gint prefix_int = prefix;
-
-	// The g_hash_table_insert function calls destroy functions if the key
-	// is found.  Here the list is updated, so the pointer may change and
-	// we need to update the hash table, but we do not want the list to be
-	// destroyed. This is why the key is removed manually before insertion.
-	if (g_hash_table_lookup_extended(containers_ht, &prefix_int,
-			(gpointer*) &orig_prefix, (gpointer*) &cid_list)) {
-		// 'steal' removes a key without calling the destroy functions
-		g_assert(g_hash_table_steal(containers_ht, orig_prefix));
-		g_free(orig_prefix);
-	}
-
-	cid_list = g_slist_prepend(cid_list, g_memdup(p_ci, sizeof(*p_ci)));
-	g_hash_table_insert(containers_ht, g_memdup(&prefix_int, sizeof(prefix_int)), cid_list);
-}
-
-void
-meta2_backend_notify_modified_containers(struct meta2_backend_s *m2b)
-{
-	GHashTable *modified_containers, *containers_to_update;
-
-	void _add_container_to_update(gpointer _strci, gpointer _p_csize, gpointer _udata)
-	{
-		gchar *strci = _strci;
-		gint64 *p_csize = _p_csize;
-		container_info_t ci;
-		guint16 prefix;
-		(void) _udata;
-
-		// init container info
-		ci.size = *p_csize;
-		container_id_hex2bin(strci, strlen(strci), &(ci.id), NULL);
-		TRACE("Add container to update id=%s size=%"G_GINT64_FORMAT, strci, *p_csize);
-
-		// extract the prefix from the container id
-		prefix = meta0_utils_bytes_to_prefix(ci.id);
-
-		_add_to_update_container_ht(containers_to_update, &ci, prefix);
-	}
-
-	GRID_DEBUG("Sending modified containers list to concerned META1 services");
-
-	g_mutex_lock(&m2b->modified_containers_lock);
-	modified_containers = _meta2_backend_renew_modified_containers(m2b);
-	g_mutex_unlock(&m2b->modified_containers_lock);
-
-	// <prefix, [list of cid]>
-	containers_to_update = g_hash_table_new_full(g_int_hash, g_int_equal,
-			g_free, _free_container_list);
-
-	// k is the container id in hex string, v is the size of the container
-	g_hash_table_foreach(modified_containers, _add_container_to_update, NULL);
-	g_hash_table_destroy(modified_containers);
-
-	/* send containers list to update to m1 and free the list */
-	g_hash_table_foreach(containers_to_update, _meta2_backend_process_containers_to_update, m2b);
-	g_hash_table_destroy(containers_to_update);
-}
-
-#define CONNECT_RETRY_DELAY 10
-
-gboolean
-meta2_backend_build_meta0_prefix_mapping(struct meta2_backend_s *m2b)
-{
-	meta0_info_t* m0 = NULL;
-	GError *err_local = NULL;
-	GSList *m0_list = NULL;
-	guint nb_updates = 0;
-	gboolean status = FALSE;
-
-	void _meta0_mapping_fill(gpointer d, gpointer u)
-	{
-		size_t j, max;
-		guint16 prefix;
-		GSList *m1_addr_list = NULL;
-		meta0_info_t *mapping = (meta0_info_t*) d;
-		(void)u;
-
-		if (mapping->prefixes_size < 2)
-			return;
-
-		for (j=0, max=(mapping->prefixes_size-1); j<max ;j+=sizeof(guint16)) {
-			memcpy (&prefix, mapping->prefixes+j, sizeof(guint16));
-			prefix = GUINT16_FROM_LE(prefix);
-			m1_addr_list = g_ptr_array_index(m2b->m0_mapping, prefix);
-			m1_addr_list = g_slist_prepend(m1_addr_list,
-					g_memdup(&(mapping->addr), sizeof(mapping->addr)));
-			g_ptr_array_index(m2b->m0_mapping, prefix) = m1_addr_list;
-			nb_updates ++;
-		}
-	}
-	do {
-		/* Get meta0 addr */
-		err_local = NULL;
-		m0 = get_meta0_info(m2b->backend.ns_name, &err_local);
-		if (!m0) {
-			/* conscience or gridagent are probably not ready */
-			if(err_local) {
-				GRID_WARN("Cannot update containers in meta1, failed to get meta0 info from cluster: %s",
-						err_local->message);
-				g_clear_error(&err_local);
-			} else {
-				GRID_WARN("Cannot update containers in meta1, failed to get meta0 info from cluster: no_error");
-			}
-		} else {
-			/* meta0 info OK, load meta1 mapping */
-			err_local = NULL;
-			m0_list = meta0_remote_get_meta1_all(&(m0->addr), 4000, &err_local);
-			if (!m0_list) {
-				/* meta0 is probably not ready */
-				if (err_local) {
-					GRID_WARN("Cannot get meta1 informations from meta0: %s", err_local->message);
-					g_clear_error(&err_local);
-				} else {
-					GRID_WARN("Cannot get meta1 informations from meta0: no_error");
-				}
-				/* We must reload meta0 info each time in address in conscience changes. */
-				meta0_info_clean(m0);
-				m0 = NULL;
-			} else {
-				/* We got the list, we can leave the loop. */
-				break;
-			}
-		}
-
-		GRID_WARN("Retrying in %d seconds...", CONNECT_RETRY_DELAY);
-		sleep(CONNECT_RETRY_DELAY);
-
-	/* If we do not check that, meta2 won't die until meta0 actually answers */
-	} while (grid_main_is_running());
-
-	if (!grid_main_is_running()) {
-		GRID_INFO("Was asked to stop, abort loading meta1 mappings");
-		goto error_label;
-	}
-
-	g_slist_foreach (m0_list, _meta0_mapping_fill, NULL);
-	g_slist_foreach (m0_list, meta0_info_gclean, NULL);
-	g_slist_free (m0_list);
-
-	/*sanity check : verify the number of mappings loaded*/
-	if (nb_updates % 65536) {
-		ERROR("The number of META0 mappings should be a multiple of 65536: %u mappings set.", nb_updates);
-	} else {
-		INFO("%u META0 mappings have been set (ok if meta1 are replicated %u times).", nb_updates, nb_updates / 65536U);
-	}
-
-	status = TRUE;
-
-error_label:
-	if (m0)
-		meta0_info_clean(m0);
-	return status;
-
-}
-
-gboolean
-meta2_backend_is_quota_enabled(struct meta2_backend_s *m2b)
-{
-	return m2b && m2b->backend.ns_info.writable_vns;
-}
-
-const gchar*
-meta2_backend_get_local_addr(struct meta2_backend_s *m2)
-{
-	return sqlx_repository_get_local_addr(m2->backend.repo);
 }
 

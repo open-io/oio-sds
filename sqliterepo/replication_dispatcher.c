@@ -602,7 +602,7 @@ enum query_action_e
 	QA_ROLLBACK  = 0x20,
 };
 
-static inline gboolean
+static gboolean
 __is_in_array(register const gchar **p, register const gchar *needle)
 {
 	while (*p) {
@@ -612,7 +612,7 @@ __is_in_array(register const gchar **p, register const gchar *needle)
 	return FALSE;
 }
 
-static inline gboolean
+static gboolean
 _pragma_is_allowed(const gchar *pragma)
 {
 	static const gchar *allowed_pragmas[] = {
@@ -624,7 +624,7 @@ _pragma_is_allowed(const gchar *pragma)
 	return pragma ? __is_in_array(allowed_pragmas, pragma) : TRUE;
 }
 
-static inline gboolean
+static gboolean
 _function_is_allowed(const gchar *func)
 {
 	static const gchar *forbidden_funcs[] = {

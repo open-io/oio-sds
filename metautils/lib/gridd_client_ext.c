@@ -202,7 +202,7 @@ _clients_expire(struct client_s **clients, GTimeVal *now)
 	}
 }
 
-static inline int
+static int
 _client_to_pollfd(struct client_s *client, struct pollfd *pfd)
 {
 	int fd = gridd_client_fd(client);

@@ -77,10 +77,6 @@ int meta2_filter_check_ns_is_slave(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-/*! Check the ns is in the writable namespace list */
-int meta2_filter_check_ns_is_writable(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Check the parameter under the key "K" is prefixed by user. */
 int meta2_filter_check_prop_key_prefix(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);

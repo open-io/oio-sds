@@ -55,13 +55,13 @@ compute_thread_id(GThread *thread)
 	return (bulk.u[0] ^ bulk.u[1]) ^ (bulk.u[2] ^ bulk.u[3]);
 }
 
-static inline guint16
+static guint16
 get_thread_id(void)
 {
 	return compute_thread_id(g_thread_self());
 }
 
-static inline const gchar*
+static const gchar*
 glvl_to_str(GLogLevelFlags lvl)
 {
 	switch (lvl & G_LOG_LEVEL_MASK) {
@@ -98,7 +98,7 @@ glvl_to_str(GLogLevelFlags lvl)
 	}
 }
 
-static inline int
+static int
 glvl_to_lvl(GLogLevelFlags lvl)
 {
 	switch (lvl & G_LOG_LEVEL_MASK) {
@@ -132,7 +132,7 @@ glvl_to_lvl(GLogLevelFlags lvl)
 	}
 }
 
-static inline int
+static int
 get_facility(const gchar *domain)
 {
 	return (domain && *domain == 'a' && !g_ascii_strcasecmp(domain, "access"))
@@ -142,14 +142,14 @@ get_facility(const gchar *domain)
 #define REAL_LEVEL(L)   (guint32)((L) >> G_LOG_LEVEL_USER_SHIFT)
 #define ALLOWED_LEVEL() REAL_LEVEL(main_log_level)
 
-static inline gboolean
+static gboolean
 glvl_allowed(register GLogLevelFlags lvl)
 {
 	return (lvl & 0x7F)
 		|| (ALLOWED_LEVEL() >= REAL_LEVEL(lvl));
 }
 
-static inline void
+static void
 _purify(register gchar *s)
 {
 	static volatile gboolean done = FALSE;
@@ -171,7 +171,7 @@ _purify(register gchar *s)
 	*(s-1) = '\n';
 }
 
-static inline void
+static void
 _append_message(GString *gstr, const gchar *msg)
 {
 	if (!msg)
