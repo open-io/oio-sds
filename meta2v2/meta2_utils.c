@@ -654,7 +654,7 @@ m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, gpoin
 			params, _bean_buffer_cb, tmp);
 	gvariant_unrefv(params);
 
-	if (!tmp->len)
+	if (!tmp->len || err)
 		*result = NULL;
 	else {
 		*result = tmp->pdata[0];
@@ -686,7 +686,7 @@ m2db_latest_alias(struct sqlx_sqlite3_s *sq3,  struct hc_url_s *url, gpointer *r
 			params, _bean_buffer_cb, tmp);
 	g_variant_unref(params[0]);
 
-	if (!tmp->len)
+	if (!tmp->len || err)
 		*result = NULL;
 	else {
 		*result = tmp->pdata[0];
