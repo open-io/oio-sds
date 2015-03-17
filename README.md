@@ -1,10 +1,10 @@
 # OpenIO Software Defined Storage
 
-OpenIO SDS is a software solution for objects storage, targetting very large-scale unstructured data volumes.
+OpenIO SDS is a software solution for object storage, targeting very large-scale unstructured data volumes.
 
 ## Install
 
-Or you go from scratch (the source), or you download the packages for your Linux distribution, intall, and run!
+Either you go from scratch (the source) or you download the packages for your Linux distribution, install, and run!
 
 ## Getting Started
 
@@ -12,7 +12,7 @@ There is one simple script to execute:
 
   oio-reset.sh
 
-And if it succeed you wil have the joy to experiment your own little SDS instance. No root privileges are required!
+And if it succeeds you will have the joy to experiment your own little SDS instance. No root privileges are required!
 
 ## Build
 
