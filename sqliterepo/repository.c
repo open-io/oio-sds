@@ -1112,19 +1112,21 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 			g_assert_not_reached();
 	}
 
-	gint64 expected_status = how & SQLX_OPEN_STATUS;
-	if (expected_status) {
+	if (!err) {
+		gint64 expected_status = how & SQLX_OPEN_STATUS;
+		if (expected_status) {
 
-		gint64 flags = sqlx_admin_get_status(*result);
-		gint64 mode = SQLX_OPEN_ENABLED;
-		if (flags == ADMIN_STATUS_FROZEN)
-			mode = SQLX_OPEN_FROZEN;
-		else if (flags == ADMIN_STATUS_DISABLED)
-			mode = SQLX_OPEN_DISABLED;
+			gint64 flags = sqlx_admin_get_status(*result);
+			gint64 mode = SQLX_OPEN_ENABLED;
+			if (flags == ADMIN_STATUS_FROZEN)
+				mode = SQLX_OPEN_FROZEN;
+			else if (flags == ADMIN_STATUS_DISABLED)
+				mode = SQLX_OPEN_DISABLED;
 
-		if (!(mode & expected_status)) {
-			err = NEWERROR(CODE_CONTAINER_FROZEN, "Invalid status");
-			sqlx_repository_unlock_and_close_noerror(*result);
+			if (!(mode & expected_status)) {
+				err = NEWERROR(CODE_CONTAINER_FROZEN, "Invalid status");
+				sqlx_repository_unlock_and_close_noerror(*result);
+			}
 		}
 	}
 
