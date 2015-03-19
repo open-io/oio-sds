@@ -47,7 +47,7 @@ static void
 _display_err(gchar *msg, gs_error_t *err)
 {
 	if(!err->msg) {
-		g_printerr("Action 'hcadmin %s' failed, but no error specified.\n", action);
+		g_printerr("Action '%s %s' failed, but no error specified.\n", g_get_prgname(), action);
 		return;
 	}
 
@@ -73,7 +73,7 @@ static void
 help_meta1_policy_update() 
 {
 	g_printerr("\n");
-	g_printerr("usage: hcadmin meta1_policy_apply NS ALL|PREFIX|REFERENCE_ID [SRVTYPE]\n\n");
+	g_printerr("usage: %s meta1_policy_apply NS ALL|PREFIX|REFERENCE_ID [SRVTYPE]\n\n", g_get_prgname());
 	g_printerr("\t              NS : The namespace name\n");
 	g_printerr("\t             ALL : apply the meta1 policy to all references defined in the namespace\n");
 	g_printerr("\t          PREFIX : apply the meta1 policy only to the references defined for this prefix. (Prefix is defined by 4 hexadecimal digits)\n");
@@ -86,7 +86,7 @@ static void
 help_meta1_policy_exclude() 
 {
 	g_printerr("\n");
-	g_printerr("usage: hcadmin meta1_policy_exclude NS ALL|PREFIX|REFERENCE_ID SRV_URL\n\n");
+	g_printerr("usage: %s meta1_policy_exclude NS ALL|PREFIX|REFERENCE_ID SRV_URL\n\n", g_get_prgname());
 	g_printerr("\tThis action can be use to exclude a meta2 service and replace it by another service for the replication mechanism\n\n");
 	g_printerr("\t            NS : The namespace name\n");
 	g_printerr("\t           ALL : apply the meta1 policy to all references defined in the namespace\n");
@@ -100,8 +100,8 @@ static void
 help_touch(void)
 {
 	g_printerr("\n");
-	g_printerr("usage: hcadmin touch <NS>/<CONTAINER_NAME> [UPDATE_CSIZE|RECALC_CSIZE]\n");
-	g_printerr("or     hcadmin touch <NS>/<CONTAINER_NAME>/<CONTENT_NAME>\n\n");
+	g_printerr("usage: %s touch <NS>/<CONTAINER_NAME> [UPDATE_CSIZE|RECALC_CSIZE]\n", g_get_prgname());
+	g_printerr("or     %s touch <NS>/<CONTAINER_NAME>/<CONTENT_NAME>\n\n", g_get_prgname());
 	g_printerr("\tExecute a touch command on a container or on a simgle content\n\n");
 	g_printerr("\t             NS : The namespace name\n");
 	g_printerr("\t CONTAINER_NAME : The container to restore snapshot of\n");
@@ -253,12 +253,12 @@ static const gchar *
 hcadmin_usage(void)
 {
 	return "<command> NS[/Container/Content] [<args>]\n\n"
-		"The available hcadmin commands are:\n"
+		"The available commands are:\n"
 		"\tmeta1_policy_apply\tapply the meta1 policy of replication\n"
 		"\tmeta1_policy_exclude\texclude service on mechanism of meta1 replication\n"
 		"\ttouch             \texecute a touch command on a container or a content on a meta2\n"
 		"\n"
-		"See 'hcadmin help <command>' for more information on a specific command.\n\n";
+		"See 'help <command>' for more information on a specific command.\n\n";
 }
 
 static gboolean

@@ -27,7 +27,7 @@ License along with this library.
 void help_put(void)
 {
 	g_printerr("\n");
-	g_printerr("usage: hc put <NS>/<CONTAINER_NAME>[/<CONTENT_NAME>] [<PATH_TO_FILE>]\n\n");
+	g_printerr("usage: %s put <NS>/<CONTAINER_NAME>[/<CONTENT_NAME>] [<PATH_TO_FILE>]\n\n", g_get_prgname());
 	g_printerr("\tCreates a new container or upload a new content in a container.\n\n");
 	g_printerr("\t            NS : The namespace name\n");
 	g_printerr("\tCONTAINER_NAME : The container to create or to upload content in.\n");
@@ -39,7 +39,7 @@ void help_put(void)
 void help_get(void)
 {
 	g_printerr("\n");
-	g_printerr("usage: hc get <NS>/<CONTAINER_NAME>[/<CONTENT_NAME>][?version=<CONTENT_VERSION>] [<PATH_TO_FILE>]\n\n");
+	g_printerr("usage: %s get <NS>/<CONTAINER_NAME>[/<CONTENT_NAME>][?version=<CONTENT_VERSION>] [<PATH_TO_FILE>]\n\n", g_get_prgname());
 	g_printerr("\tList contents of a container or download a content from a container.\n\n");
 	g_printerr("\t             NS : The namespace name\n");
 	g_printerr("\t CONTAINER_NAME : The container to list contents from or which contains the content to download.\n");
@@ -52,7 +52,7 @@ void help_get(void)
 void help_delete(void)
 {
 	g_printerr("\n");
-	g_printerr("usage: hc delete <NS>/<CONTAINER_NAME>[/<CONTENT_NAME>][?version=<CONTENT_VERSION>]\n\n");
+	g_printerr("usage: %s delete <NS>/<CONTAINER_NAME>[/<CONTENT_NAME>][?version=<CONTENT_VERSION>]\n\n", g_get_prgname());
 	g_printerr("\tDestroy a container or a content.\n\n");
 	g_printerr("\t             NS : The namespace name\n");
 	g_printerr("\t CONTAINER_NAME : The container to destroy or which contains the content to delete.\n");
@@ -64,7 +64,7 @@ void help_delete(void)
 void help_append(void)
 {
 	g_printerr("\n");
-	g_printerr("usage: hc append <NS>/<CONTAINER_NAME>/<CONTENT_NAME> <PATH_TO_FILE>\n\n");
+	g_printerr("usage: %s append <NS>/<CONTAINER_NAME>/<CONTENT_NAME> <PATH_TO_FILE>\n\n", g_get_prgname());
 	g_printerr("\tAppend data to an existing content.\n\n");
 	g_printerr("\t            NS : The namespace name\n");
 	g_printerr("\tCONTAINER_NAME : The container which contains the content.\n");
@@ -76,7 +76,7 @@ void help_append(void)
 void help_info(void)
 {
 	g_printerr("\n");
-	g_printerr("usage: hc info <NS>/<CONTAINER_NAME>[/<CONTENT_NAME>][?version=<CONTENT_VERSION>]\n\n");
+	g_printerr("usage: %s info <NS>/<CONTAINER_NAME>[/<CONTENT_NAME>][?version=<CONTENT_VERSION>]\n\n", g_get_prgname());
 	g_printerr("\tShow informations about a container or a content\n\n");
 	g_printerr("\t             NS : The namespace name\n");
 	g_printerr("\t CONTAINER_NAME : The container to get informations from.\n");
@@ -87,7 +87,7 @@ void help_info(void)
 
 void help_stgpol(void)
 {
-	g_printerr("usage: hc stgpol <NS>/<CONTAINER_NAME>/<PATH> [STGPOL]\n\n");
+	g_printerr("usage: %s stgpol <NS>/<CONTAINER_NAME>/<PATH> [STGPOL]\n\n", g_get_prgname());
 	g_printerr("    NS: The namespace name\n");
 	g_printerr("    CONTAINER_NAME: The container you want to set the storage policy or which contain your content.\n");
 	g_printerr("    PATH: The targeted content path. If not specified, this command work on container storage policy\n");
@@ -96,14 +96,15 @@ void help_stgpol(void)
 
 void help_quota(void)
 {
-	g_printerr("usage: hc quota <NS>/<CONTAINER_NAME> QUOTA\n\n");
+	g_printerr("usage: %s quota <NS>/<CONTAINER_NAME> QUOTA\n\n", g_get_prgname());
 	g_printerr("    NS: The namespace name\n");
 	g_printerr("    CONTAINER_NAME: The container you want to set the storage policy or which contain your content.\n");
 	g_printerr("    QUOTA: The quota to set\n\n");
 }
+
 void help_version(void)
 {
-	g_printerr("usage: hc version <NS>/<CONTAINER_NAME> VERSIONING\n\n");
+	g_printerr("usage: %s version <NS>/<CONTAINER_NAME> VERSIONING\n\n", g_get_prgname());
 	g_printerr("    NS: The namespace name\n");
 	g_printerr("    CONTAINER_NAME: The container you want to set the storage policy or which contain your content.\n");
 	g_printerr("    VERSIONING: The versioning to set. There is 4 "
@@ -118,7 +119,7 @@ void help_version(void)
 
 void help_srvlist(void)
 {
-	g_printerr("usage: hcdir srvlist <NS>/<CONTAINER_NAME> <SRV_TYPE>\n\n");
+	g_printerr("usage: %s srvlist <NS>/<CONTAINER_NAME> <SRV_TYPE>\n\n", g_get_prgname());
 	g_printerr("    NS: The namespace name\n");
 	g_printerr("    CONTAINER_NAME: The container you want to list services.\n");
 	g_printerr("    SRV_TYPE: The type of service you want to list (set ALL if you want to get all service types linked).\n");
@@ -126,7 +127,7 @@ void help_srvlist(void)
 
 void help_srvlink(void)
 {
-	g_printerr("usage: hc srvlink <NS>/<CONTAINER> <SRV_TYPE>\n\n");
+	g_printerr("usage: %s srvlink <NS>/<CONTAINER> <SRV_TYPE>\n\n", g_get_prgname());
 	g_printerr("    NS: The namespace name\n");
 	g_printerr("    CONTAINER: The container you want to link service to.\n");
 	g_printerr("    SRV_TYPE: The type of service you want to link.\n");
@@ -134,7 +135,7 @@ void help_srvlink(void)
 
 void help_srvunlink(void)
 {
-	g_printerr("usage: hc srvunlink <NS>/<CONTAINER> <SRV_TYPE>\n\n");
+	g_printerr("usage: %s srvunlink <NS>/<CONTAINER> <SRV_TYPE>\n\n", g_get_prgname());
 	g_printerr("    NS: The namespace name\n");
 	g_printerr("    CONTAINER: The container you want to unlink service from.\n");
 	g_printerr("    SRV_TYPE: The type of service you want to unlink.\n");
@@ -142,14 +143,14 @@ void help_srvunlink(void)
 }
 
 void help_srvpoll(void) {
-	g_printerr("usage: hc srvpoll <NS>/<CONTAINER> <TYPE>\n\n");
+	g_printerr("usage: %s srvpoll <NS>/<CONTAINER> <TYPE>\n\n", g_get_prgname());
 	g_printerr("    NS: The namespace name\n");
 	g_printerr("    CONTAINER: The container you want to manage services.\n");
 	g_printerr("    TYPE: A type of service managed in the given namespace.\n");
 }
 
 void help_srvforce(void) {
-	g_printerr("usage: hc srvforce <NS>/<CONTAINER> '<SEQ>|<TYPE>|<URL>|<ARGS>'\n\n");
+	g_printerr("usage: %s srvforce <NS>/<CONTAINER> '<SEQ>|<TYPE>|<URL>|<ARGS>'\n\n", g_get_prgname());
 	g_printerr("    NS: The namespace name\n");
 	g_printerr("    CONTAINER: The container you want to work with.\n");
 	g_printerr("    SEQ: The sequence number for the given (service,container) association\n");
@@ -159,7 +160,7 @@ void help_srvforce(void) {
 }
 
 void help_srvconfig(void) {
-	g_printerr("usage: hc srvconfig <NS>/<REF> '<SEQ>|<TYPE>|<URL>|<ARGS>'\n\n");
+	g_printerr("usage: %s srvconfig <NS>/<REF> '<SEQ>|<TYPE>|<URL>|<ARGS>'\n\n", g_get_prgname());
 	g_printerr("    NS: The namespace name\n");
 	g_printerr("    REF: The container you want to work with.\n");
 	g_printerr("    SEQ: The sequence number for the given (service,container) association\n");
@@ -169,7 +170,7 @@ void help_srvconfig(void) {
 }
 
 void help_propset(void) {
-	g_printerr("usage: hc propset <NS>/<CONTAINER>/<CONTENT> <KEY> <VALUE>\n\n");
+	g_printerr("usage: %s propset <NS>/<CONTAINER>/<CONTENT> <KEY> <VALUE>\n\n", g_get_prgname());
 	g_printerr("    NS: The namespace name\n");
 	g_printerr("    CONTAINER: The container you want to work with.\n");
 	g_printerr("    CONTENT: The content you want to work with.\n");
@@ -178,14 +179,14 @@ void help_propset(void) {
 }
 
 void help_propget(void) {
-	g_printerr("usage: hc propget <NS>/<CONTAINER>/<CONTENT>\n\n");
+	g_printerr("usage: %s propget <NS>/<CONTAINER>/<CONTENT>\n\n", g_get_prgname());
 	g_printerr("    NS: The namespace name\n");
 	g_printerr("    CONTAINER: The container you want to work with.\n");
 	g_printerr("    CONTENT: The content you want to work with.\n");
 }
 
 void help_propdel(void) {
-	g_printerr("usage: hc propdel <NS>/<CONTAINER>/<CONTENT> <KEY> ....\n\n");
+	g_printerr("usage: %s propdel <NS>/<CONTAINER>/<CONTENT> <KEY> ....\n\n", g_get_prgname());
 	g_printerr("    NS: The namespace name\n");
 	g_printerr("    CONTAINER: The container you want to work with.\n");
 	g_printerr("    CONTENT: The content you want to work with.\n");
@@ -195,7 +196,7 @@ void help_propdel(void) {
 void help_snaplist(void)
 {
 	g_printerr("\n");
-	g_printerr("usage: hc snaplist <NS>/<CONTAINER_NAME>\n\n");
+	g_printerr("usage: %s snaplist <NS>/<CONTAINER_NAME>\n\n", g_get_prgname());
 	g_printerr("\tList snapshots of a container\n\n");
 	g_printerr("\t             NS: The namespace name\n");
 	g_printerr("\t CONTAINER_NAME: The container to list snapshots from\n");
@@ -205,7 +206,7 @@ void help_snaplist(void)
 void help_snaptake(void)
 {
 	g_printerr("\n");
-	g_printerr("usage: hc snaptake <NS>/<CONTAINER_NAME>?snapshot=<SNAPSHOT_NAME>\n\n");
+	g_printerr("usage: %s snaptake <NS>/<CONTAINER_NAME>?snapshot=<SNAPSHOT_NAME>\n\n", g_get_prgname());
 	g_printerr("\tTake a snapshot of a container\n\n");
 	g_printerr("\t             NS: The namespace name\n");
 	g_printerr("\t CONTAINER_NAME: The container to take a snapshot of\n");
@@ -215,7 +216,7 @@ void help_snaptake(void)
 void help_snapdel(void)
 {
 	g_printerr("\n");
-	g_printerr("usage: hc snapdel <NS>/<CONTAINER_NAME>?snapshot=<SNAPSHOT_NAME>\n\n");
+	g_printerr("usage: %s snapdel <NS>/<CONTAINER_NAME>?snapshot=<SNAPSHOT_NAME>\n\n", g_get_prgname());
 	g_printerr("\tDelete a snapshot\n\n");
 	g_printerr("\t             NS: The namespace name\n");
 	g_printerr("\t CONTAINER_NAME: The container to delete snapshot from\n");
@@ -225,8 +226,8 @@ void help_snapdel(void)
 void help_snaprestore(void)
 {
 	g_printerr("\n");
-	g_printerr("usage: hc snaprestore <NS>/<CONTAINER_NAME>?snapshot=<SNAPSHOT_NAME>\n");
-	g_printerr("or     hc snaprestore <NS>/<CONTAINER_NAME>/<CONTENT_NAME>?snapshot=<SNAPSHOT_NAME>\n\n");
+	g_printerr("usage: %s snaprestore <NS>/<CONTAINER_NAME>?snapshot=<SNAPSHOT_NAME>\n", g_get_prgname());
+	g_printerr("or     %s snaprestore <NS>/<CONTAINER_NAME>/<CONTENT_NAME>?snapshot=<SNAPSHOT_NAME>\n\n", g_get_prgname());
 	g_printerr("\tRestore a snapshot or a content from a snapshot\n\n");
 	g_printerr("\t             NS: The namespace name\n");
 	g_printerr("\t CONTAINER_NAME: The container to restore snapshot of\n");

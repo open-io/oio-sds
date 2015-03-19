@@ -661,7 +661,7 @@ static const gchar *
 hcdir_usage(void)
 {
 	return "<command> [<args>]\n"
-		"\nThe available hcdir commands are:\n"
+		"\nThe available commands are:\n"
 		"   create     Create a reference in a namespace\n"
 		"   has        Ensure a reference exists in a namespace\n"
 		"   delete     Delete a reference from a namespace\n"
@@ -679,7 +679,7 @@ hcdir_usage(void)
 		"   propset    Associates a property to a reference\n"
 		"   propdel    Dissociates (deletes) a property for a given reference\n"
 		"\n"
-		"See 'hcdir help <command>' for more information on a specific"
+		"See 'help <command>' for more information on a specific"
 		"command. (Not yet implemented)\n";
 }
 
