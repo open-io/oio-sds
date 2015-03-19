@@ -43,6 +43,12 @@ struct lb_next_opt_s;
 struct chunk_pair_s;
 struct sqlx_sqlite3_s;
 
+typedef struct m2v2_chunk_pair_s
+{
+	struct bean_CONTENTS_s *content;
+	struct bean_CHUNKS_s *chunk;
+} m2v2_chunk_pair_t;
+
 struct list_params_s
 {
 	gint64 maxkeys;
@@ -76,14 +82,11 @@ struct dup_alias_params_s
 	GSList *errors;
 };
 
-/*!  */
 gboolean m2v2_parse_chunk_position(const gchar *str, gint *ppos,
 		gboolean *ppar, gint *psub);
 
-/*!  */
 typedef void (*m2_onbean_cb) (gpointer u, gpointer bean);
 
-/*!  */
 typedef gboolean (*m2_onprop_cb) (gpointer u, const gchar *k,
 		const guint8 *v, gsize vlen);
 
@@ -97,10 +100,8 @@ guint64 m2db_get_container_size(sqlite3 *db, gboolean check_alias);
  */
 gchar *m2db_get_namespace(struct sqlx_sqlite3_s *sq3, const gchar *def);
 
-/*!  */
 gint64 m2db_get_max_versions(struct sqlx_sqlite3_s *sq3, gint64 def);
 
-/*!  */
 void m2db_set_max_versions(struct sqlx_sqlite3_s *sq3, gint64 max);
 
 /** Get the delay before actually deleting a content marked as deleted.  */
@@ -109,63 +110,46 @@ gint64 m2db_get_keep_deleted_delay(struct sqlx_sqlite3_s *sq3, gint64 def);
 /** Set the delay before actually deleting a content marked as deleted. */
 void m2db_set_keep_deleted_delay(struct sqlx_sqlite3_s *sq3, gint64 delay);
 
-/*!  */
 gint64 m2db_get_quota(struct sqlx_sqlite3_s *sq3, gint64 def);
 
-/*!  */
 void m2db_set_quota(struct sqlx_sqlite3_s *sq3, gint64 quota);
 
-/*!  */
 gint64 m2db_get_size(struct sqlx_sqlite3_s *sq3);
 
-/*!  */
 void m2db_set_size(struct sqlx_sqlite3_s *sq3, gint64 size);
 
-/*!  */
 gint64 m2db_get_version(struct sqlx_sqlite3_s *sq3);
 
-/*!  */
 void m2db_increment_version(struct sqlx_sqlite3_s *sq3);
 
-/*!  */
 GError* m2db_get_container_properties(struct sqlx_sqlite3_s *sq3,
 		guint32 flags, gpointer cb_data, m2_onprop_cb cb);
 
-/*!  */
 void m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url);
 
-/*!  */
 GError* m2db_set_container_properties(struct sqlx_sqlite3_s *sq3, guint32 flags,
 		GSList *props);
 
-/*!  */
 GError* m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname,
 		int repl);
 
-/*!  */
 GError* m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		guint32 flags, m2_onbean_cb cb, gpointer u);
 
-/*!  */
 GError* m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp,
 		m2_onbean_cb cb, gpointer u);
 
-/*!  */
 GError* m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		guint32 flags, m2_onbean_cb cb, gpointer u);
 
-/*!  */
 GError* m2db_get_property(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		const gchar *k, guint32 flags, m2_onbean_cb cb, gpointer u0);
 
-/*!  */
 GError* m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		gchar **namev);
 
-/*!  */
 GError* m2db_flush_property(struct sqlx_sqlite3_s *sq3, const gchar *k);
 
-/*!  */
 GError* m2db_set_properties(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		struct hc_url_s *url, GSList *beans, m2_onbean_cb cb, gpointer u0);
 
@@ -173,160 +157,14 @@ GError* m2db_set_properties(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 GError* m2db_latest_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		gpointer *result);
 
-/*!  */
 GError* m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		gpointer *result);
 
-/*!  */
 GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		struct hc_url_s *url, gboolean del_chunks, m2_onbean_cb cb, gpointer u0);
 
 /* ------------------------------------------------------------------------- */
 
-typedef struct m2v2_chunk_pair_s
-{
-	struct bean_CONTENTS_s *content;
-	struct bean_CHUNKS_s *chunk;
-} m2v2_chunk_pair_t;
-
-struct m2v2_check_error_s
-{
-	GError *original_error; // The optional error that raised this flaw.
-	struct bean_ALIASES_s *alias;
-	struct bean_CONTENTS_HEADERS_s *header;
-
-	enum m2v2_check_error_type_e {
-		M2CHK_CHUNK_DUPLI_BADPOS, // Bad format for position
-		M2CHK_CHUNK_DUPLI_GAP, // One position has no chunk at all
-		M2CHK_CHUNK_DUPLI_SIZE, // Size mismatch for the given position
-		M2CHK_CHUNK_DUPLI_HASH, // Hash mismatch for the given position
-		M2CHK_CHUNK_DUPLI_TOOMUCH, // Too many chunk at the same position
-		M2CHK_CHUNK_DUPLI_TOOFEW, // Too few chunk at the same position
-		M2CHK_CHUNK_DUPLI_BAD_DISTANCE,
-
-		M2CHK_CHUNK_RAIN_BADPOS, // Bad format for position
-		M2CHK_CHUNK_RAIN_TOOMUCH, // does not match the policy
-		M2CHK_CHUNK_RAIN_TOOFEW, // Too few but repairable
-		M2CHK_CHUNK_RAIN_LOST, // Too many chunks missing, reconstruction not possible
-		M2CHK_CHUNK_RAIN_BAD_DISTANCE,
-		M2CHK_CHUNK_RAIN_BAD_ALGO,
-
-		M2CHK_CONTENT_SIZE_MISMATCH,
-		M2CHK_CONTENT_STGCLASS,
-		M2CHK_RAWX_UNKNOWN, // RAWX not found in services
-	} type;
-
-	union {
-		// Duplication
-		struct {
-			m2v2_chunk_pair_t pair;
-		} dupli_badpos;
-		struct {
-			gint first_missing;
-			gint last_missing;
-		} dupli_gap;
-		struct {
-			GArray *pairs; // m2v2_chunk_pair_t
-		} chunk_dupli_hashes;
-		struct {
-			GArray *pairs; // m2v2_chunk_pair_t
-		} chunk_dupli_sizes;
-		struct {
-			GArray *pairs; // m2v2_chunk_pair_t
-			gint count; // nb exceeding chunks
-		} chunk_dupli_toomuch;
-		struct {
-			GArray *pairs; // m2v2_chunk_pair_t
-			gint count; // nb missing chunks
-			guint dist; // nb missing chunks
-		} chunk_dupli_toofew;
-		struct {
-			GArray *pairs; // m2v2_chunk_pair_t
-		} chunk_dupli_dist;
-
-		// RAIN
-		struct {
-			m2v2_chunk_pair_t pair;
-		} rain_badpos;
-		struct {
-			GArray *pairs_data; // m2v2_chunk_pair_t
-			GArray *pairs_parity; // m2v2_chunk_pair_t
-		} rain_toomuch;
-		struct {
-			GArray *pairs_data; // m2v2_chunk_pair_t
-			GArray *pairs_parity; // m2v2_chunk_pair_t
-			GArray *pairs_unavailable; // m2v2_chunk_pair_t
-			gint64 metachunk_pos;
-		} rain_toofew;
-		struct {
-			GArray *pairs_data; // m2v2_chunk_pair_t
-			GArray *pairs_parity; // m2v2_chunk_pair_t
-		} rain_lost;
-		struct {
-			GArray *pairs_data; // m2v2_chunk_pair_t
-			GArray *pairs_parity; // m2v2_chunk_pair_t
-		} rain_dist;
-
-		// COMMON
-		struct {
-			m2v2_chunk_pair_t pair;
-		} rawx_unknown;
-		struct {
-			GArray *bad_pairs; // m2v2_chunk_pair_t
-			GArray *all_pairs; // m2v2_chunk_pair_t
-		} stgclass;
-
-	} param;
-};
-
-#define M2V2_CHECK_GAPS 0x01
-#define M2V2_CHECK_DIST 0x02
-#define M2V2_CHECK_STGCLS 0x04
-#define M2V2_CHECK_SRVINFO 0x08
-
-struct check_args_s
-{
-	struct grid_lbpool_s *lbpool;
-	struct namespace_info_s *ns_info;
-	guint32 mask_checks;
-};
-
-struct m2v2_check_s
-{
-	struct namespace_info_s *ns_info;
-	struct grid_lbpool_s *lbpool;
-	struct hc_url_s *url;
-
-	GPtrArray *aliases; // <struct bean_ALIASES_s*>
-	GPtrArray *headers; // <struct bean_CONTENTS_HEADERS_s*>
-	GPtrArray *contents; // <struct bean_CONTENTS_s*>
-	GPtrArray *chunks; // <struct bean_CHUNKS_s*>
-	GPtrArray *props; // <struct bean_PROPERTIES_s*>
-
-	GPtrArray *unavail_chunks; // <struct bean_CHUNKS_s*>
-
-	GPtrArray *flaws; // <struct m2v2_check_error_s*>
-	guint8 flags; // Private use
-};
-
-guint32 m2db_get_mask_check_put(struct namespace_info_s *ni);
-
-struct m2v2_check_s* m2v2_check_create(struct hc_url_s *url,
-		struct check_args_s *args);
-
-void m2v2_check_feed_with_bean_list(struct m2v2_check_s *check, GSList *beans);
-
-GError* m2v2_check_consistency(struct m2v2_check_s *check);
-
-void m2v2_check_destroy(struct m2v2_check_s *check);
-
-/* ------------------------------------------------------------------------- */
-
-/*!  */
-GError* m2db_check_alias_beans_list(struct hc_url_s *url, GSList *beans,
-		struct check_args_s *args);
-
-/*!  */
 GError* m2db_get_alias_version(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		guint32 flags, gint64 *version);
 
@@ -339,27 +177,21 @@ struct m2db_put_args_s
 	struct grid_lbpool_s *lbpool;
 };
 
-/*!  */
 GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
-/*!  */
 GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *beans);
 
-/*!  */
 GError* m2db_copy_alias(struct m2db_put_args_s *args, const char *source);
 
-/*!  */
 GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 		gint64 max_versions, struct hc_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
-/*!  */
 GError* m2_generate_beans(struct hc_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
 		m2_onbean_cb cb, gpointer cb_data);
 
-/*!  */
 GError* m2_generate_beans_v1(struct hc_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, const char *mdsys, const char *mdusr,
 		struct grid_lb_iterator_s *iter, m2_onbean_cb cb, gpointer cb_data);
@@ -381,22 +213,17 @@ GError* m2_generate_conditionned_spare_chunks(struct grid_lb_iterator_s *iter,
 GError* m2_generate_conditionned_spare_chunks_beans(struct grid_lb_iterator_s *iter,
 		struct lb_next_opt_s *opt, service_filter filter, GSList **result);
 
-/*!  */
 GError* m2db_get_storage_policy(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		struct namespace_info_s *nsinfo, gboolean from_previous,
 		struct storage_policy_s **result);
 
-/*!  */
 GError* m2db_get_container_status(struct sqlx_sqlite3_s *sq3, guint32 *status);
 
-/*!  */
 GError* m2db_set_container_status(struct sqlx_sqlite3_s *sq3, guint32 r);
 
-/*!  */
 GError* m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct hc_url_s *url, GSList *beans, gboolean skip_checks);
+		struct hc_url_s *url, GSList *beans);
 
-/*!  */
 GError* m2db_purge_alias_being_deleted(struct sqlx_sqlite3_s *sq3, GSList *beans,
 		GSList **deleted);
 
@@ -425,7 +252,6 @@ GError* m2db_deduplicate_chunks(struct sqlx_sqlite3_s *sq3,
 GError* m2db_deduplicate_alias_chunks(struct sqlx_sqlite3_s *sq3,
 		namespace_info_t *nsinfo, struct hc_url_s *url);
 
-/**  */
 GError* m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3,
 		struct hc_url_s *url, guint32 flags, GString **status_message);
 

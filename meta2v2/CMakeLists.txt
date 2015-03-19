@@ -43,7 +43,6 @@ add_library(meta2v2utils SHARED
 		meta2_utils.c
 		meta2_type_converter.c
 		meta2_utils_snapshots.c
-		meta2_utils_check.c
 		meta2_utils.h
 		meta2_bean.c
 		meta2_bean_utils.c

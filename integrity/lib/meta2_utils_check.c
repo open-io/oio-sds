@@ -37,6 +37,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 
+#include "meta2_utils_check.h"
+
 #define M2CHK_FLAG_CLEAN_NSINFO 0x01
 #define M2CHK_FLAG_CLEAN_LBPOOL 0x02
 

@@ -18,6 +18,7 @@ link_directories(
 		${ATTR_LIBRARY_DIRS})
 
 add_library(integrity SHARED
+	meta2_utils_check.c meta2_utils_check.h
 	check.c check.h
 	chunk_db.c chunk_db.h
 	alert.c alert.h
