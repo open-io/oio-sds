@@ -78,7 +78,7 @@ __display_friendly_error(gs_error_t *error) {
 
 	/* debug info */
 	if(!error || !error->msg) {
-		g_printerr("Action 'hc %s' failed, but no error specified.", action);
+		g_printerr("Action '%s %s' failed, but no error specified.", g_get_prgname(), action);
 		return;
 	}
 
@@ -1009,7 +1009,7 @@ static const gchar *
 hc_usage(void)
 {
 	return "<command> [<args>]\n\n"
-		"The available hc commands are:\n"
+		"The available commands are:\n"
 		"\tput\t\tCreate a container or upload a content\n"
 		"\tget\t\tList a container or download a content\n"
 		"\tdelete\t\tDestroy a container or delete a content\n"
@@ -1035,8 +1035,7 @@ hc_usage(void)
 		"\tsnapdel\t\tDelete a snapshot\n"
 		"\tsnaprestore\tRestore a snapshot or a content from a snapshot\n"
 		"\tsnaplist\tList snapshots of a container\n"
-		"\n"
-		"See 'hc help <command>' for more information on a specific command.\n\n";
+		"\n";
 }
 
 static gboolean
