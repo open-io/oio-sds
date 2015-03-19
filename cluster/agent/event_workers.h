@@ -53,13 +53,6 @@ int agent_start_event_task_config(GError **error);
 
 /* REQUEST WORKERS --------------------------------------------------------- */
 
-/**
- *
- */
-int agent_receive_event_worker(worker_t *worker, GError **error);
-
-int agent_reply_event_managed_patterns_worker(worker_t *worker, GError **error);
-
 int agent_reply_event_configuration_worker(worker_t *worker, GError **error);
 
 /* Helpers ----------------------------------------------------------------- */

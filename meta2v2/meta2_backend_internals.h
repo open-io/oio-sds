@@ -76,10 +76,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #  define META2_EVTFIELD_CHUNKS "CHUNKS"
 # endif
 
-# ifndef CONNECT_RETRY_DELAY
-#  define CONNECT_RETRY_DELAY 10
-# endif
-
 # ifndef META2_URL_LOCAL_BASE
 #  define META2_URL_LOCAL_BASE "__M2V2_LOCAL_BASE__"
 # endif
@@ -96,19 +92,20 @@ struct meta2_backend_s
 
 	struct service_update_policies_s *policies;
 
+	// TODO remove this as soon as the C SDK has be refactored.
 	GMutex lock_transient;
+	// TODO remove this as soon as the C SDK has be refactored.
 	GHashTable *transient;
 
-	/* Must a BEANS generation request perform a pre-check on the ALIAS's
-	 * existence. */
+	// Not owned by the backend.
+	GAsyncQueue *q_notify;
+	
+	// Not owned by the backend
+	struct hc_resolver_s *resolver;
+
+	// Trigger pre-check on alias upon a BEANS generation request
 	gboolean flag_precheck_on_generate;
 
-	// array of GSList* of addr_info_t*
-	GPtrArray *m0_mapping;
-	GMutex modified_containers_lock;
-	GHashTable *modified_containers;
-
-	struct hc_resolver_s *resolver;
 };
 
 struct transient_element_s

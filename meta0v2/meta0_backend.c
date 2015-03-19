@@ -52,7 +52,7 @@ static void _unlock_and_close(struct sqlx_sqlite3_s *sq3);
 
 /* ------------------------------------------------------------------------- */
 
-static inline int
+static int
 m0_to_sqlx(enum m0v2_open_type_e t)
 {
 	switch (t & 0x03) {

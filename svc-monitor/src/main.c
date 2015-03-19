@@ -147,7 +147,7 @@ parse_output(const gchar *cmd, service_info_t *si)
 	fclose(stream_in);
 }
 
-void
+static void
 _add_custom_tags(service_info_t *si)
 {
 	struct service_tag_s *tag = NULL;

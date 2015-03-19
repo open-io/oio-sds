@@ -89,7 +89,7 @@ metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored)
 	return g_strcmp0(a, b);
 }
 
-static inline const gchar *
+static const gchar *
 strchr_guarded(const gchar *start, const gchar *end, gchar needle)
 {
 	for (; start < end ;start++) {
@@ -99,7 +99,7 @@ strchr_guarded(const gchar *start, const gchar *end, gchar needle)
 	return NULL;
 }
 
-static inline gboolean
+static gboolean
 strn_isprint(const gchar *start, const gchar *end)
 {
 	while (start < end) {
@@ -164,7 +164,7 @@ metautils_encode_lines(gchar **strv)
 	return gba;
 }
 
-static inline void
+static void
 _strv_pointers_concat(gchar **ptrs, gchar *d, gchar **src)
 {
 	gchar *s;
@@ -178,7 +178,7 @@ _strv_pointers_concat(gchar **ptrs, gchar *d, gchar **src)
 	}
 }
 
-static inline gsize
+static gsize
 _strv_total_length(gchar **v)
 {
 	gsize total = 0;

@@ -66,9 +66,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define KEY_SERIALIZE_SRVINFO_STATS  "serialize_srvinfo_stats"
 # define DEF_SERIALIZE_SRVINFO_STATS  FALSE
 
-#define KEY_VNS_LIST "vns_list"
-#define KEY_WRITABLE_VNS "writable_vns"
-
 # define DOMAIN_PERIODIC "conscience.dump"
 
 # define TIME_DEFAULT_ALERT_LIMIT 300L

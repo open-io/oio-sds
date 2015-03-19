@@ -95,7 +95,7 @@ struct http_parsing_result_s
 	enum { HPRC_SUCCESS = 0, HPRC_MORE, HPRC_ERROR } status;
 };
 
-static inline void
+static void
 gstr_chomp(GString *gstr)
 {
 	if (!gstr)
@@ -107,7 +107,7 @@ gstr_chomp(GString *gstr)
 		*(--end) = '\0';
 }
 
-static inline gboolean
+static gboolean
 _manage_and_renew_command(struct http_parser_s *parser, GString *buf)
 {
 	gchar *cmd, *selector, *version;
@@ -133,7 +133,7 @@ _manage_and_renew_command(struct http_parser_s *parser, GString *buf)
 	return TRUE;
 }
 
-static inline gboolean
+static gboolean
 _manage_and_renew_header(struct http_parser_s *parser, GString *buf)
 {
 	if (!buf->len)
@@ -597,7 +597,7 @@ http_manage_request(struct req_ctx_s *r)
 
 //------------------------------------------------------------------------------
 
-static inline void
+static void
 _lower(gchar *s)
 {
 	for (; *s ;++s)

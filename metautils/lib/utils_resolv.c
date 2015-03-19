@@ -110,7 +110,7 @@ grid_addrinfo_to_string(const struct addr_info_s *a, gchar *dst, gsize dst_size)
 	}
 }
 
-static inline gboolean
+static gboolean
 _port_parse(const gchar *start, const gchar *end, guint16 *res)
 {
 	gchar *sport_end = NULL;

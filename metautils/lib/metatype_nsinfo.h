@@ -147,15 +147,6 @@ gchar * namespace_info_get_data_treatments(struct namespace_info_s *ni,
 		const gchar *data_treat_key);
 
 /**
- * Returns whether the given VNS is writable or not.
- * @param ni namespace info
- * @param vns VNS name
- * @return TRUE if VNS is writable, FALSE otherwise
- */
-gboolean namespace_info_is_vns_writable(struct namespace_info_s *ni,
-		const gchar *vns);
-
-/**
  * Get the storage_class definition from the specified key
  */
 gchar * namespace_info_get_storage_class(struct namespace_info_s *ni,

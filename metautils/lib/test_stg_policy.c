@@ -32,7 +32,6 @@ _init_ns (struct namespace_info_s *ni)
 			"{"
 				"\"ns\":\"%s\","
 				"\"chunksize\":%i,"
-				"\"writable_vns\":[\"%s.VNS0\",\"%s.VNS1\"],"
 				"\"storage_policy\":{"
 					"\"rain32\":\"NONE:RAIN32:NONE\","
 					"\"dupli3\":\"NONE:DUPLI3:NONE\","
@@ -58,7 +57,7 @@ _init_ns (struct namespace_info_s *ni)
 				"},"
 				"\"options\":{"
 				"}"
-			"}", "NS", 1024, "NS", "NS");
+			"}", "NS", 1024);
 
 	memset(ni, 0, sizeof(struct namespace_info_s));
 	namespace_info_reset(ni);

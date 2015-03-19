@@ -23,42 +23,65 @@ License along with this library.
 #include <glib.h>
 #include <metautils/lib/metautils.h>
 
-// Kafka docs says that 10000 partitions is huge but should work
-#define MAX_TOPIC_PARTITIONS 16384
-
-struct metautils_notifier_s;
-typedef struct metautils_notifier_s metautils_notifier_t;
+/** Function type for notifier configuration or reconfiguration.
+ * handle is an in/out parameter. It is opaque to the caller. */
+typedef GError *(*notifier_configure)(const namespace_info_t *nsinfo,
+		struct grid_lbpool_s *lbpool, GSList *topics, gpointer *handle);
+/** Function type for sending a notification. */
+typedef GError *(*notifier_send)(gpointer handle, const gchar *topic,
+		const guint32 *key, GByteArray *data);
+/** Function type for freeing the notifier. */
+typedef void (*notifier_free)(gpointer handle);
 
 /**
- * Allocate and initialize a notification handle.
+ * Simple vtable for notifier usage.
  */
-void metautils_notifier_init(metautils_notifier_t **notifier,
+struct notifier_s
+{
+	/** Type of the notifier. It is used as a key, so there can be
+	 * only one notifier of each type per process. */
+	const gchar *type;
+	/** Opaque handle that can be set by the notifier. */
+	gpointer handle;
+	/** Configure or reconfigure the notifier. */
+	notifier_configure configure;
+	/** Free the notifier. */
+	notifier_free free;
+	/** Send a notification. */
+	notifier_send send;
+};
+
+
+/** A pool a notifiers. */
+struct metautils_notif_pool_s;
+typedef struct metautils_notif_pool_s metautils_notif_pool_t;
+
+/**
+ * Allocate and initialize a notifier pool.
+ */
+void metautils_notif_pool_init(metautils_notif_pool_t **pool,
 	const gchar *ns_name, struct grid_lbpool_s *lbpool);
 
 /**
- * Clear a notification handle.
+ * Clear a notifier pool.
  */
-void metautils_notifier_clear(metautils_notifier_t **notifier);
+void metautils_notif_pool_clear(metautils_notif_pool_t **notifier);
 
 /**
- * Configure the notifier to send notifications to Kafka.
+ * Configure or reconfigure a type of notifier inside the pool.
  *
- * @param notifier A notifier instance
+ * @param pool the notifier pool
+ * @param nsinfo the namespace information
+ * @param type the notifier type to configure (ex: "kafka")
+ * @param topics a list of topics the notifier must be prepared
+ *   to send notifications to
  */
-GError *metautils_notifier_init_kafka(metautils_notifier_t *notifier);
+GError *metautils_notif_pool_configure_type(metautils_notif_pool_t *pool,
+		namespace_info_t *nsinfo, const gchar *type, GSList *topics);
 
-/**
- * Free the Kafka notifier only. Other notifiers will continue to work.
- */
-void metautils_notifier_free_kafka(metautils_notifier_t *notifier);
-
-/**
- * Create a Kafka topic instance, and add it to the cache.
- * This will speed up the notification process and avoid allocating a topic
- * on each call to metautils_notifier_send().
- */
-GError *metautils_notifier_prepare_kafka_topic(metautils_notifier_t *notifier,
-		 const gchar *topic_name);
+/** Remove a notifier type from the notifier pool. */
+void metautils_notif_pool_clear_type(metautils_notif_pool_t *pool,
+		const gchar *type);
 
 /**
  * Send a raw notification to the specified topic.
@@ -66,7 +89,7 @@ GError *metautils_notifier_prepare_kafka_topic(metautils_notifier_t *notifier,
  * @param lb_key Pointer to a 32 bit integer helping for
  *   notification load balancing (can be NULL)
  */
-GError *metautils_notifier_send_raw(metautils_notifier_t *notifier,
+GError *metautils_notif_pool_send_raw(metautils_notif_pool_t *pool,
 	const gchar *topic, GByteArray *data, const guint32 *lb_key);
 
 /**
@@ -76,7 +99,7 @@ GError *metautils_notifier_send_raw(metautils_notifier_t *notifier,
  * @param lb_key Pointer to a 32 bit integer helping for
  *   notification load balancing (can be NULL)
  */
-GError *metautils_notifier_send_json(metautils_notifier_t *notifier,
+GError *metautils_notif_pool_send_json(metautils_notif_pool_t *pool,
 	const gchar *topic, const gchar *src_addr, const char *notif_type,
 	const gchar *notif_data, const guint32 *lb_key);
 

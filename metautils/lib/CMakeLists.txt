@@ -147,8 +147,20 @@ add_library(metautils SHARED
 
 target_link_libraries(metautils
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} ${JSONC_LIBRARIES} ${EXPAT_LIBRARIES}
-		${RDKAFKA_LIBRARIES} ${ASN1C_LIBRARIES}
+		${ASN1C_LIBRARIES}
 		-lm)
+
+if (RDKAFKA_FOUND)
+	# Build a static library dynamically linked to rdkafka
+	add_library(notifier_kafka STATIC notifier_kafka.c)
+	target_link_libraries(notifier_kafka
+			${RDKAFKA_LIBRARIES} ${GLIB2_LIBRARIES})
+	# Add this library as a dependency to metautils
+	target_link_libraries(metautils notifier_kafka)
+endif()
+
+
+#add_dependencies(metautils asn1c_generation)
 
 add_library(metacomm SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/NativeEnumerated.c

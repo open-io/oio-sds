@@ -27,14 +27,6 @@ License along with this library.
 
 #include "metautils.h"
 
-static void
-_copy_list_element(gpointer _elem, gpointer _p_dst_list)
-{
-	gchar *elem = _elem;
-	GSList **p_dst_list = _p_dst_list;
-	*p_dst_list = g_slist_prepend(*p_dst_list, g_strdup(elem));
-}
-
 static GHashTable *
 _copy_hash(GHashTable *src)
 {
@@ -56,25 +48,26 @@ gpointer
 namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
 		const gchar *param_name)
 {
+	gchar key[LIMIT_LENGTH_NSNAME+64] = {0};
+	gchar parent_ns[LIMIT_LENGTH_NSNAME] = {0};
 	gpointer *value = NULL;
-	gchar *parent_ns = g_strdup(ns_name);
+
+	g_strlcpy(parent_ns, ns_name, sizeof(parent_ns));
+
 	gchar *end = parent_ns;
 	end += strlen(parent_ns);
 
 	/* Check if a parameter was specified for the namespace, or its parents */
 	do {
 		*end = '\0';
-		gchar *key = NULL;
 		if (param_name && *param_name) {
-			key = g_strdup_printf("%*s_%s", (int)(end - parent_ns),
+			g_snprintf(key, sizeof(key), "%*s_%s", (int)(end - parent_ns),
 					parent_ns, param_name);
 		} else {
-			key = g_strndup(parent_ns, (int)(end - parent_ns));
+			strncpy(key, parent_ns, (int)(end - parent_ns));
 		}
 		value = g_hash_table_lookup(table, key);
-		g_free(key);
 	} while (!value && (end = strrchr(parent_ns, '.')) != NULL);
-	g_free((gpointer)parent_ns);
 
 	/* Fall back to the general parameter */
 	if (!value && param_name && *param_name) {
@@ -113,14 +106,6 @@ namespace_info_copy(namespace_info_t* src, namespace_info_t* dst, GError **error
 
 #undef NSI_COPY_TABLE_REF
 
-	if (src->writable_vns != NULL) {
-		GSList *old = dst->writable_vns;
-		dst->writable_vns = NULL;
-		g_slist_foreach (src->writable_vns, _copy_list_element, &(dst->writable_vns));
-		if (old)
-			g_slist_free_full(old, g_free);
-	}
-
 	errno = 0;
 	return TRUE;
 }
@@ -138,8 +123,6 @@ namespace_info_dup(namespace_info_t* src)
 	dst->data_security = _copy_hash(src->data_security);
 	dst->data_treatments = _copy_hash(src->data_treatments);
 	dst->storage_class = _copy_hash(src->storage_class);
-	if (src->writable_vns)
-		g_slist_foreach (src->writable_vns, _copy_list_element, &(dst->writable_vns));
 	return dst;
 }
 
@@ -156,8 +139,6 @@ namespace_info_clear(namespace_info_t* ns_info)
 		g_hash_table_unref(ns_info->data_security);
 	if (ns_info->data_treatments != NULL)
 		g_hash_table_unref(ns_info->data_treatments);
-	if (ns_info->writable_vns != NULL)
-		g_slist_free_full(ns_info->writable_vns, g_free);
 	if (ns_info->storage_class != NULL)
 		g_hash_table_unref(ns_info->storage_class);
 
@@ -258,15 +239,6 @@ namespace_info_get_data_treatments(namespace_info_t *ni, const gchar *data_treat
 	}
 
 	return NULL;
-}
-
-gboolean
-namespace_info_is_vns_writable(namespace_info_t *ni, const gchar *vns)
-{
-	if (ni && ni->writable_vns && vns) {
-		return NULL != g_slist_find_custom(ni->writable_vns, vns, (GCompareFunc) g_strcmp0);
-	}
-	return FALSE;
 }
 
 gchar *
@@ -381,19 +353,6 @@ namespace_info_init_json_object(struct json_object *obj,
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid 'chunksize' field");
 	ni->chunk_size = json_object_get_int64(sub);
 
-	// Optional fields
-	if (json_object_object_get_ex(obj, "writable_vns", &sub)) {
-		if (!json_object_is_type(sub, json_type_array))
-			return NEWERROR(CODE_BAD_REQUEST, "Invalid 'writable_vns' field");
-		for (int i=json_object_array_length(sub)-1; i>=0 ;--i) {
-			struct json_object *item = json_object_array_get_idx(sub, i);
-			g_assert(item != NULL);
-			g_assert(json_object_is_type(item, json_type_string));
-			ni->writable_vns = g_slist_prepend(ni->writable_vns,
-					g_strdup(json_object_get_string(item)));
-		}
-	}
-
 	GError *err;
 	if (NULL != (err = _load_hash(obj, "options", ni->options))
 			|| NULL != (err = _load_hash(obj, "storage_policy", ni->storage_policy))
@@ -459,14 +418,6 @@ namespace_info_encode_json(GString *out, struct namespace_info_s *ni)
 	g_string_append_printf(out, "\"ns\":\"%s\",", ni->name);
 	g_string_append_printf(out, "\"chunksize\":\"%"G_GINT64_FORMAT"\",",
 			ni->chunk_size);
-
-	g_string_append(out, "\"writable_vns\":[");
-	for (GSList *l=ni->writable_vns; l ;l=l->next) {
-		if (l != ni->writable_vns)
-			g_string_append_c(out, ',');
-		g_string_append_printf(out, "\"%s\"", (gchar*)(l->data));
-	}
-	g_string_append(out, "],");
 
 	_encode_json_properties(out, ni->options, "options");
 	g_string_append_c(out, ',');

@@ -68,7 +68,7 @@ init_io_scheduler(GError ** error)
 	return (1);
 }
 
-static inline long
+static long
 _delay(void)
 {
 	register long d0 = time_to_next_timed_out_worker();

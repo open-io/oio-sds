@@ -41,7 +41,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 int meta1_backend_log_level = 0;
 
-static inline GError*
+static GError*
 _range_not_managed(const container_id_t cid)
 {
 	return NEWERROR(CODE_RANGE_NOTFOUND,
@@ -49,7 +49,7 @@ _range_not_managed(const container_id_t cid)
 			((guint8*)cid)[0], ((guint8*)cid)[1]);
 }
 
-static inline int
+static int
 m1_to_sqlx(enum m1v2_open_type_e t)
 {
 	switch (t & 0x03) {

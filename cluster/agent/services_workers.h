@@ -42,8 +42,6 @@ int services_worker_list_local(worker_t *worker, GError **error);
 
 int services_worker_clear(worker_t *worker, GError **error);
 
-int services_worker_count(worker_t *worker, GError **error);
-
 int services_worker_get_one(worker_t *worker, GError **error);
 
 gboolean agent_choose_best_service(const gchar *ns_name, const gchar *srvname, struct service_info_s *si, GError **err);

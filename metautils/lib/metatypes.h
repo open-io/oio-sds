@@ -206,7 +206,6 @@ typedef struct namespace_info_s
 	GHashTable* data_security;	 /**< Data security definitions name = TYPE:OTHER_INFO */
 	GHashTable* data_treatments;	 /**< Data treatments definitions name = TYPE:OTHER_INFO */
 	GHashTable* storage_class;	 /**< Storage class definitions name = fallback_1:[...]:fallback_N */
-	GSList *writable_vns;		 /**< List of not full virtual namespaces */
 } namespace_info_t;
 
 /**

@@ -101,7 +101,7 @@ struct event_config_s* event_config_repo_get(
 	struct event_config_repo_s *conf, const char *ns_name,
 	gboolean vns_fallback);
 
-metautils_notifier_t *event_config_repo_get_notifier(
+metautils_notif_pool_t *event_config_repo_get_notifier(
 	struct event_config_repo_s *repo);
 
 /*! @} */

@@ -56,10 +56,6 @@ init_request_worker(GError **error)
 		return(0);
 	}
 
-	if (!register_request_handler(MSG_SRV_CNT, services_worker_count, error)) {
-		GSETERROR(error, "Failed to register services_worker_count worker in request_worker");
-		return(0);
-	}
 	if (!register_request_handler(MSG_SRV_LST, services_worker_list, error)) {
 		GSETERROR(error, "Failed to register services_worker_list worker in request_worker");
 		return(0);
@@ -104,16 +100,8 @@ init_request_worker(GError **error)
 		return(0);
 	}
 
-	if (!register_request_handler(MSG_EVT_PUSH, agent_receive_event_worker, error)) {
-		GSETERROR(error, "Failed to register agent_receive_event_worker worker in request_worker");
-		return 0;
-	}
 	if (!register_request_handler(MSG_EVENTS_CONFIGURATION, agent_reply_event_configuration_worker, error)) {
 		GSETERROR(error, "Failed to register agent_reply_configuration_worker worker in request_worker");
-		return 0;
-	}
-	if (!register_request_handler(MSG_EVENTS_PATTERNS, agent_reply_event_managed_patterns_worker, error)) {
-		GSETERROR(error, "Failed to register agent_reply_allowed_event_emitters worker in request_worker");
 		return 0;
 	}
 

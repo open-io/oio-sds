@@ -31,9 +31,7 @@ License along with this library.
 #include "metautils.h"
 #include "grid_storage_client_stat.h"
 
-/***************************************************************************/
-/* THREADSAFE                                                              */
-/***************************************************************************/
+/* THREADSAFE --------------------------------------------------------------- */
 
 // call 1 time by the first call of the first thread
 static void *_gscstat_thread_init(void *);
@@ -55,9 +53,7 @@ static GMutex g_gscstat_lock;
 #define GSCSTAT_TH_LOCK()          g_mutex_lock(&g_gscstat_lock); do {
 #define GSCSTAT_TH_UNLOCK()        } while (0); g_mutex_unlock(&g_gscstat_lock)
 
-/***************************************************************************/
-/* constante / structure                                                   */
-/***************************************************************************/
+/* constante / structure ---------------------------------------------------- */
 
 /*calcul od process time*/
 #define GSCSTAT_GETCLOCK(/*struct timeval*/ startorend) gettimeofday(&startorend, NULL)
@@ -69,9 +65,7 @@ typedef struct gscstat_s
 	GSList *services;	// element: gscstat_service_info_t
 } gscstat_t;
 
-/***************************************************************************/
-/* function                                                                */
-/***************************************************************************/
+/* function ----------------------------------------------------------------- */
 
 static gscstat_service_info_t *_gscstat_getService(char *pServiceType,
     gscstat_service_tags_lst tagsEnabled);
@@ -80,15 +74,11 @@ static char *_gscstat_dumpServiceByStruct(gscstat_service_info_t * pSvc,
 static void _gscstat_tags_clearByStruct(gscstat_service_info_t * pSvc,
     gscstat_service_tags_lst tag);
 
-/***************************************************************************/
-/* variables                                                               */
-/***************************************************************************/
+/* variables ---------------------------------------------------------------- */
 
 static gscstat_t g_gscstat_info;
 
-/***************************************************************************/
-/* Functions                                                               */
-/***************************************************************************/
+/* Functions ---------------------------------------------------------------- */
 
 int
 gscstat_initAndConfigureALLServices(GError ** err)
@@ -385,7 +375,7 @@ gscstat_tags_end(char *pServiceType, gscstat_service_tags_lst tag)
 
 }
 
-/*========================================================================*/
+/* -------------------------------------------------------------------------- */
 
 void *
 _gscstat_thread_init(void *ignored)

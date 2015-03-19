@@ -392,6 +392,4 @@ add_subdirectory(./sqlx)
 add_subdirectory(./svc-monitor/contrib)
 add_subdirectory(./svc-monitor/src)
 add_subdirectory(./tools)
-add_subdirectory(./vns-agent/lib)
-add_subdirectory(./vns-agent/module)
 

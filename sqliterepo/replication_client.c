@@ -132,7 +132,7 @@ peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 		}
 		if (err2 != NULL) {
 			GRID_ERROR("Failed to use result of dump: (%d) %s",
-					err->code, err->message);
+					err2->code, err2->message);
 			g_clear_error(&err2);
 			return FALSE;
 		}

@@ -27,7 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./conscience_srv.h"
 #include "./conscience.h"
 
-static inline void
+static void
 _lock_rw(GStaticRWLock * lock, char mode)
 {
 	if (mode == 'w' || mode == 'W')
@@ -36,7 +36,7 @@ _lock_rw(GStaticRWLock * lock, char mode)
 		g_static_rw_lock_reader_lock(lock);
 }
 
-static inline void
+static void
 _unlock_rw(GStaticRWLock * lock)
 {
 	if (lock->have_writer)

@@ -261,9 +261,9 @@ param_score_timeout=86400
 
 param_option.ns_status=MASTER
 param_option.WORM=false
-param_option.${NS}.V2_service_update_policy.meta1=meta2=NONE|1|1|tag.type=m2v2;solr=APPEND;meta1=REPLACE;sqlx=KEEP|1|1|
-param_option.${NS}._service_update_policy.meta1=meta2=NONE|1|1|tag.type=m2v2;solr=APPEND;meta1=REPLACE;sqlx=KEEP|1|1|
-param_option.service_update_policy.meta1=meta2=NONE|1|1|tag.type=m2v2;solr=APPEND;meta1=REPLACE;sqlx=KEEP|1|1|
+param_option.${NS}.V2_service_update_policy.meta1=meta2=NONE|3|1|tag.type=m2v2;solr=APPEND;meta1=REPLACE;sqlx=KEEP|1|1|
+param_option.${NS}._service_update_policy.meta1=meta2=NONE|3|1|tag.type=m2v2;solr=APPEND;meta1=REPLACE;sqlx=KEEP|1|1|
+param_option.service_update_policy.meta1=meta2=NONE|3|1|tag.type=m2v2;solr=APPEND;meta1=REPLACE;sqlx=KEEP|1|1|
 param_option.automatic_open=true
 param_option.meta2_max_versions=1
 param_option.storage_policy=SINGLE
@@ -272,7 +272,6 @@ param_option.meta2_check.put.GAPS=false
 param_option.meta2_check.put.DISTANCE=false
 param_option.meta2_check.put.STGCLASS=false
 param_option.meta2_check.put.SRVINFO=false
-param_option.vns_list=${NS}.VNS0,${NS}.VNS1
 
 param_storage_conf=${CFGDIR}/${NS}-conscience-policies.conf
 

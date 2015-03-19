@@ -1423,7 +1423,7 @@ errorLabel:
 	return 0;
 }
 
-static inline gint64
+static gint64
 server_has_thread(struct server_s *srv)
 {
 	gint64 rc;

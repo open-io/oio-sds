@@ -328,17 +328,7 @@ struct event_config_repo_s *meta1_backend_get_evt_config_repo(const struct meta1
  */
 struct event_config_s *meta1_backend_get_event_config(struct meta1_backend_s *m1, const char *ns_name);
 
-metautils_notifier_t *meta1_backend_get_notifier(struct meta1_backend_s *m1);
-
-/**
- * Initialize the notification system for Meta1
- */
-GError *meta1_backend_init_notifs(struct meta1_backend_s *m1);
-
-/**
- * Free the notifications system of Meta1
- */
-void meta1_backend_free_notifs(struct meta1_backend_s *m1);
+metautils_notif_pool_t *meta1_backend_get_notifier(struct meta1_backend_s *m1);
 
 /**
  * Initialize a topic and add it to the cache.

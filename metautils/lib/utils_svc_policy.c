@@ -74,7 +74,7 @@ _element_destroy(struct element_s *e)
 	g_free(e);
 }
 
-static inline GError*
+static GError*
 _get_from_array(const gchar *name, struct kv_s *pkv,
 		enum service_update_policy_e *result)
 {
@@ -90,7 +90,7 @@ _get_from_array(const gchar *name, struct kv_s *pkv,
 	return NEWERROR(0, "Invalid policy");
 }
 
-static inline GError*
+static GError*
 _get_by_name(const gchar *name, enum service_update_policy_e *result)
 {
 	static struct kv_s byname[] =
@@ -105,7 +105,7 @@ _get_by_name(const gchar *name, enum service_update_policy_e *result)
 	return _get_from_array(name, byname, result);
 }
 
-static inline const gchar *
+static const gchar *
 _pol2str(enum service_update_policy_e pol)
 {
 	switch (pol) {
@@ -122,7 +122,7 @@ _pol2str(enum service_update_policy_e pol)
 	return "INVALID";
 }
 
-static inline GTree *
+static GTree *
 _new_tree(void)
 {
 	return g_tree_new_full(hashstr_quick_cmpdata, NULL, g_free,

@@ -44,7 +44,7 @@ static struct stat pidfile_stat;
 
 /* ------------------------------------------------------------------------- */
 
-static inline const char*
+static const char*
 _set_opt(gchar **tokens)
 {
 	static gchar errbuff[1024];

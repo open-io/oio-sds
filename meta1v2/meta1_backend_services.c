@@ -1609,7 +1609,7 @@ __notify_services(struct meta1_backend_s *m1,
 	err = __get_container_all_services(sq3, hc_url_get_id(url), NULL, &services);
 	if (!err) {
 		services2 = expand_urlv(services);
-		metautils_notifier_t *notifier = meta1_backend_get_notifier(m1);
+		metautils_notif_pool_t *notifier = meta1_backend_get_notifier(m1);
 		GString *notif = g_string_sized_new(128);
 		g_string_append_printf(notif, "\"url\":\"%s/%s\",",
 				hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE));
@@ -1621,7 +1621,7 @@ __notify_services(struct meta1_backend_s *m1,
 		}
 		g_string_append(notif, "]");
 
-		err = metautils_notifier_send_json(notifier, topic,
+		err = metautils_notif_pool_send_json(notifier, topic,
 				meta1_backend_get_local_addr(m1),
 				"meta1.services", notif->str,
 				// Use first 4 bytes of CID for Kafka partitioning

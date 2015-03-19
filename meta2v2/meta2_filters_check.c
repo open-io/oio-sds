@@ -140,32 +140,6 @@ meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_check_ns_is_writable(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	const gchar *vns = hc_url_get(meta2_filter_ctx_get_url(ctx), HCURL_NS);
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	gboolean found = FALSE;
-
-	(void) reply;
-	TRACE_FILTER();
-
-	if (!m2b || !meta2_backend_is_quota_enabled(m2b))
-		return FILTER_OK;
-
-	g_mutex_lock(&m2b->backend.ns_info_lock);
-	found = namespace_info_is_vns_writable(&(m2b->backend.ns_info), vns);
-	g_mutex_unlock(&m2b->backend.ns_info_lock);
-
-	if (!found) {
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_NAMESPACE_FULL, "VNS full"));
-		return FILTER_KO;
-	}
-
-	return FILTER_OK;
-}
-
-int
 meta2_filter_check_prop_key_prefix(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {

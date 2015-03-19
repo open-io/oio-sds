@@ -124,17 +124,6 @@ meta0_info_t *get_meta0_info(const char *ns_name, GError **error);
 meta0_info_t *get_meta0_info2(const char *ns_name, long timeout_cnx, long timeout_req, GError **error);
 
 /**
- * Count the number of service of a given type in a namespace
- *
- * @param ns_name the namespace name
- * @param type the type of service to count
- * @param error
- *
- * @return the number of service or -1 if an error occured (error is set)
- */
-gint count_namespace_services(const char *ns_name, const char *type, GError **error);
-
-/**
  * List services of a given type in a namespace.
  * list_namespace_services() fails if gridagent not available,
  * list_namespace_services2() fallbacks on conscience.
@@ -170,14 +159,7 @@ struct service_info_s* get_one_namespace_service(const gchar *ns_name, const gch
  */
 GSList* list_namespace_service_types(const char *ns_name, GError **error);
 
-/**
- * Register a service in a namespace
- *
- * @param si the service to register
- * @param error
- *
- * @return 1 or 0 if an error occured (error is set)
- */
+/** Register a service in a namespace */
 int register_namespace_service(const struct service_info_s *si, GError **error);
 
 /**
@@ -292,31 +274,6 @@ GSList* fetch_erroneous_containers( const char *ns_name, GError **error );
 GSList *list_tasks(GError **error);
 
 /**
- * Encodes the event in a agent-suitable form and then call
- * send_encoded_event_to_agent().
- *
- * @param ns_name the namespace name
- * @param event the event to send
- * @param err
- *
- * @return TRUE or FALSE if an error occured
- */
-gboolean event_send_to_agent( const gchar *ns_name, gridcluster_event_t *event, GError **err );
-
-/**
- * Ask to the local agent the list of sercice-type names that have
- * an event handler configuration in the namespace. These are allowed
- * to send events, because all the events belonging to another service
- * type will fallback on a DROP action.
- *
- * @param ns_name the namespace name
- * @param err 
- *
- * @return a list of service types names or NULL if an error occured (err is set)
- */
-GSList* event_get_managed_patterns(const gchar *ns_name, GError **err);
-
-/**
  * Get the event handler configuration for a namespace
  *
  * @param ns_name the namespace name
@@ -325,11 +282,6 @@ GSList* event_get_managed_patterns(const gchar *ns_name, GError **err);
  * @return the configuration in string format
  */
 GByteArray* event_get_configuration(const gchar *ns_name, GError **err);
-
-/**
- * UNUSED !!!
- */
-GByteArray* get_srvtype_configuration(const gchar *ns_name, const gchar *type_name, GError **error);
 
 /**
  * Extract mode worm state from namespace_info
@@ -401,67 +353,28 @@ gchar* namespace_data_security_value(const namespace_info_t *ns_info, const gcha
  */
 gchar* namespace_storage_policy_value(const namespace_info_t *ns_info, const gchar *wanted_policy);
 
-/**
- * Extract mode compression state from namespace_info
- *
- * @param ns_info the namespace_info
- *
- * @return TRUE if namespace is in mode compression, FALSE otherwise
- */
+/** Extract mode compression state from namespace_info
+ * @return TRUE if namespace is in mode compression, FALSE otherwise */
 gboolean namespace_in_compression_mode(namespace_info_t* ns_info);
 
-/**
- * @param ns_info
- * @return
- */
 gsize namespace_get_autocontainer_src_offset(namespace_info_t* ns_info);
 
-/**
- * @param ns_info
- * @return
- */
 gsize namespace_get_autocontainer_src_size(namespace_info_t* ns_info);
 
-/**
- * @param ns_info
- * @return
- */
 gsize namespace_get_autocontainer_dst_bits(namespace_info_t* ns_info);
 
-/**
- * Only used by gridd
- * @param error
- * @return
- */
+/** Only used by gridd */
 typedef namespace_info_t* (*get_namespace_info_f) (GError **error);
 
-/**
- * Get the rules path from conscience
- * @param ns
- * @param srvtype
- * @param path
- * @param err
- * @return
- */
+/** Get the rules path from conscience */
 gboolean namespace_get_rules_path(const gchar *ns, const gchar *srvtype,
 		gchar **path, GError **err);
 
-/**
- * Get namespace rules
- * @param ns
- * @param srvtype
- * @param err
- * @return
- */
+/** Get namespace rules */
 GByteArray* namespace_get_rules(const gchar *ns, const gchar *srvtype,
 		GError **err);
 
-/**
- * @param ns
- * @param what
- * @param how
- * @return NULL if the NS was not found or the key not defined for the NS
- */
+/** @return NULL if the NS was not found or the key not defined for the NS */
 gchar* gridcluster_get_config(const gchar *ns, const gchar *what);
 #define gridcluster_get_conscience(ns) gridcluster_get_config((ns), GCLUSTER_CFG_CONSCIENCE)
 #define gridcluster_get_zookeeper(ns) gridcluster_get_config((ns), GCLUSTER_CFG_ZOOKEEPER)
@@ -485,14 +398,10 @@ gridcluster_get_conscience_addr(const char *ns_name)
 	return rc ? g_memdup(&addr, sizeof(addr_info_t)) : NULL;
 }
 
-/** List all the configuration variables locally set.
- * @return
- */
+/** List all the configuration variables locally set.  */
 GHashTable* gridcluster_parse_config(void);
 
-/** List all the namespaces locally known
- * @return
- */
+/** List all the namespaces locally known */
 gchar** gridcluster_list_ns(void);
 
 /** Returns the services update's configuration when the Load-Balancing
@@ -500,40 +409,19 @@ gchar** gridcluster_list_ns(void);
  *
  * Thus 'srvtype' is not the service type that is being load-balanced, but
  * the service doing the LB.
- *
- * @param nsinfo
- * @param srvtype
- * @return
  */
 GHashTable* gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo,
 		const gchar *srvtype);
 
-/**
- *
- *
- *
- */
 GHashTable* gridcluster_get_event_config(struct namespace_info_s *nsinfo,
 		const gchar *srvtype);
 
-/*!
- * @params nsinfo
- * @return
- */
 gint64 gridcluster_get_container_max_versions(struct namespace_info_s *nsinfo);
 
 struct grid_lbpool_s;
 
-/*!
- * @param glp
- * @return NULL in case of successes
- */
 GError* gridcluster_reload_lbpool(struct grid_lbpool_s *glp);
 
-/*!
- * @param glp
- * @return
- */
 GError* gridcluster_reconfigure_lbpool(struct grid_lbpool_s *glp);
 
 /**

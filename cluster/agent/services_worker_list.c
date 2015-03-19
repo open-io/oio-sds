@@ -73,22 +73,6 @@ services_runner(struct conscience_srv_s * srv, gpointer u)
 	return TRUE;
 }
 
-static guint
-count_known_services_list( struct namespace_data_s *ns_data, const gchar *type_name, GError **error)
-{
-	struct conscience_srvtype_s *srvtype;
-
-	TRACE_POSITION();
-	
-	srvtype = conscience_get_srvtype( ns_data->conscience, error, type_name, MODE_STRICT);
-	if (!srvtype) {
-		GSETERROR(error,"Service type not found");
-		return 0;
-	}
-
-	return conscience_srvtype_count_srv(srvtype,TRUE);
-}
-
 static GSList*
 build_known_services_list( struct namespace_data_s *ns_data, const gchar *type_name, GError **error)
 {
@@ -160,52 +144,6 @@ services_worker_list( worker_t *worker, GError **error )
 
 	if (!gba) {
 		GSETERROR(&error_local,"service_info list serialization error");
-		return 0;
-	}
-
-	return __respond(worker, 1, gba, error);
-}
-
-int
-services_worker_count( worker_t *worker, GError **error )
-{
-	struct namespace_data_s *ns_data;
-	gchar **tokens, ns_name[LIMIT_LENGTH_NSNAME], type_name[LIMIT_LENGTH_SRVTYPE], str_count[12];
-	guint services_count;
-	GByteArray *gba;
-	request_t *req;
-
-	TRACE_POSITION();
-
-	/*unpack the parameters and find the namespace*/	
-	req = (request_t*) worker->data.session;
-	tokens = buffer_split(req->arg, req->arg_size, ":", 3);
-
-	if (!tokens || g_strv_length(tokens)!=2) {
-		if (tokens)
-			g_strfreev(tokens);
-		return __respond_message(worker, 0, "Invalid format (not NS:TYPE)", error);
-	} else {
-		bzero(ns_name, sizeof(ns_name));
-		g_strlcpy(ns_name, tokens[0], sizeof(ns_name)-1);
-
-		bzero(type_name, sizeof(type_name));
-		g_strlcpy(type_name, tokens[1], sizeof(type_name)-1);
-
-		g_strfreev(tokens);
-	}
-
-	GError *e = NULL;
-	if (!(ns_data = get_namespace(ns_name, &e)))
-		return __respond_error(worker, e, error);
-
-	/*now compute and reply the service count*/
-	services_count = count_known_services_list(ns_data, type_name, error);
-	g_snprintf( str_count, sizeof(str_count), "%d", services_count);
-	gba = g_byte_array_append(g_byte_array_new(), (guint8*)str_count, strlen(str_count));
-
-	if (!gba) {
-		GSETERROR(error, "Memory allocation failure");
 		return 0;
 	}
 
