@@ -33,7 +33,7 @@ add_library(gridclient SHARED
 		metacd_remote.c metacd_remote.h
 		hc_directory.c
 		loc_context.c loc_context.h
-		hc_func.c hc_help.c hc.h
+		hc_func.c hc.h
 		hcadmin_func.c hcadmin.h
 		http_put.c http_put.h
 )

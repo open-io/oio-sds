@@ -276,9 +276,10 @@ hc_create_container(gs_grid_storage_t *hc, struct hc_url_s *url,
 	c = gs_get_storage_container2(hc, hc_url_get(url, HCURL_REFERENCE),
 			&params, 1, &e);
 
-	if (c)
-		GRID_INFO("Container [%s] created in namespace [%s].\n\n",
+	if (c) {
+		GRID_DEBUG("Container [%s] created in namespace [%s].\n\n",
 				hc_url_get(url, HCURL_REFERENCE), hc_url_get(url, HCURL_NS));
+	}
 
 end_label:
 	gs_container_free(c);
@@ -330,9 +331,8 @@ hc_upload_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *local
 			goto end_put;
 		}
 	}
-	GRID_INFO("Uploaded a new version of content [%s] in container [%s]\n\n",
+	GRID_DEBUG("Uploaded a new version of content [%s] in container [%s]\n\n",
 			hc_url_get(url, HCURL_PATH), hc_url_get(url, HCURL_REFERENCE));
-	GRID_DEBUG("Content successfully uploaded!\n");
 
 end_put:
 

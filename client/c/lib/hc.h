@@ -24,13 +24,7 @@ struct hc_url_s;
 
 /************** HC FUNCTIONS (hc_func.c **************/
 
-/**
- * Create a container on a namespace.
- *
- * @param hc
- * @param url the container url
- * @return 0 if an error occured, another value otherwise
- */
+/** Create a container on a namespace. */
 gs_error_t * hc_create_container(gs_grid_storage_t *hc, struct hc_url_s *url, const char *stgpol, const char *versioning);
 
 /**
@@ -71,92 +65,31 @@ gs_error_t * hc_append_content(gs_grid_storage_t *hc, struct hc_url_s *url, cons
 gs_error_t * hc_list_contents(gs_grid_storage_t *hc, struct hc_url_s *url, int output_xml, int show_info,
 		char **result);
 
-/**
- * Get a content. This function use features of meta1v2.
- * 
- * @param hc
- * @param url the content url
- * @param dest the path to store the downloaded data
- * @return a pointer.
- */
+/** Get a content. This function use features of meta1v2. */
 gs_error_t * hc_get_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *dest, int force, int cache, gchar *stgpol);
 
-/**
- * Download a content to writer specified in dl_info.
- *
- * @param hc
- * @param url
- * @param dl_info
- * @param cache
- * @param stgpol
- * @return
- */
+/** Download a content to writer specified in dl_info. */
 gs_error_t * hc_dl_content(gs_grid_storage_t *hc, struct hc_url_s *url, gs_download_info_t *dl_info, int cache, gchar *stgpol);
 
-/**
- * Delete a container. This function use features of meta1v2.
- * 
- * @param hc
- * @param url the container url
- * @param force if != 0, then destroy the container even if not empty (do flush before destroy)
- * @return a pointer.
- */
+/** Delete a container. This function use features of meta1v2. */
 gs_error_t * hc_delete_container(gs_grid_storage_t *hc, struct hc_url_s *url, int force, int flush);
 
-/**
- * Delete a content. This function use features of meta1v2.
- * 
- * @param hc
- * @param url the content url
- * @return a pointer.
- */
+/** Delete a content. This function use features of meta1v2.  */
 gs_error_t * hc_delete_content(gs_grid_storage_t *hc, struct hc_url_s *url);
 
-/**
- * Get information about an object (container or content)
- * 
- * @param hc
- * @param url the container or content url
- * @param xml if != 0, return info in xml format
- * @param result
- * @return a pointer to a gs_erorr_t if an error occured, NULL otherwise
- */
+/** Get information about an object (container or content) */
 gs_error_t * hc_object_info(gs_grid_storage_t *hc, struct hc_url_s *url, int xml, char **result);
 
-/**
- * Set a property to content or container. This function use features of meta2v2.
- * @param hc
- * @param url the content url
- * @param key
- * @param value
- * @return a pointer to a gs_erorr_t if an error occured, NULL otherwise
- */
+/** Set a property to content or container. This function use features of meta2v2. */
 gs_error_t * hc_func_set_property(gs_grid_storage_t *hc, struct hc_url_s *url, char **args);
 
-/**
- * Get properties to content. This function use features of meta2v2.
- * @param hc
- * @param url the content url
- * @return a pointer to a gs_erorr_t if an error occured, NULL otherwise
- */
+/** Get properties to content. This function use features of meta2v2. */
 gs_error_t * hc_func_get_content_properties(gs_grid_storage_t *hc, struct hc_url_s *url, char ***result);
 
-/**
- * Delete a property from content/container. This function use features of meta2v2.
- * @param hc
- * @param url the content url
- * @param key
- * @return a pointer to a gs_erorr_t if an error occured, NULL otherwise
- */
+/** Delete a property from content/container. This function use features of meta2v2. */
 gs_error_t * hc_func_delete_property(gs_grid_storage_t *hc, struct hc_url_s *url,char **keys);
 
-/**
- * Create a copy of a content (intra container). This function use features of meta2v2.
- * @param hc
- * @param url the content url
- * @param src
- * @return a pointer to a gs_erorr_t if an error occured, NULL otherwise
- */
+/** Create a copy of a content (intra container). This function use features of meta2v2. */
 gs_error_t * hc_func_copy_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *source);
 
 /**
@@ -171,126 +104,15 @@ gs_error_t * hc_func_copy_content(gs_grid_storage_t *hc, struct hc_url_s *url, c
 gs_error_t * hc_func_list_snapshots(gs_grid_storage_t *hc, struct hc_url_s *url,
 		int output_xml, int show_info, char **result);
 
-/**
- * Take a snapshot of a container.
- *
- * @param hc
- * @param url The URL of the container, with the snapshot name as a query string
- */
+/** Take a snapshot of a container. */
 gs_error_t *hc_func_take_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url);
 
-/**
- * Delete a snapshot from a container.
- *
- * @param hc
- * @param url The URL of the container, with the snapshot name as a query string
- */
+/** Delete a snapshot from a container. */
 gs_error_t *hc_func_delete_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url);
 
-/**
- * Restore the state of container or a content.
- *
- * @param hc
- * @param url The URL of the container or content, with the snapshot name as
- *   a query string
- * @param hard_restore If true, erase all contents more recent than the snapshot
- */
+/** Restore the state of container or a content. If <hard_restore> is true,
+ * erase all contents more recent than the snapshot */
 gs_error_t *hc_func_restore_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url,
 		int hard_restore);
-
-/************** HELPS (hc_help.c)*********************/
-
-/*
- * Display func_put help on stderr
- */
-void help_put(void);
-
-/*
- * Display func_get help on stderr
- */
-void help_get(void);
-
-/*
- * Display func_delete help on stderr
- */
-void help_delete(void);
-
-/*
- * Display func_append help on stderr
- */
-void help_append(void);
-
-/*
- * Display func_info help on stderr
- */
-void help_info(void);
-
-/*
- * Display func_put help on stderr
- */
-void help_stgpol(void);
-
-/*
- * Display versioning help on stderr
- */
-void help_version(void);
-
-/*
- * Display quota help on stderr
- */
-void help_quota(void);
-
-/*
- * Display func_put help on stderr
- */
-void help_srvlist(void);
-
-/*
- * Display func_put help on stderr
- */
-void help_srvlink(void);
-
-/*
- * Display func_put help on stderr
- */
-void help_srvunlink(void);
-
-/*
- * Display func_put help on stderr
- */
-void help_srvpoll(void);
-
-/*
- * Display func_put help on stderr
- */
-void help_srvforce(void);
-
-/*
- * Display func_put help on stderr
- */
-void help_srvconfig(void);
-
-/*
- * Display func_propset help on stderr
- */
-void help_propset(void);
-
-/*
- * Display func_propget help on stderr
- */
-void help_propget(void);
-
-/*
- * Display func_propdel help on stderr
- */
-void help_propdel(void);
-
-/*
- * Display func_snapXXX help on stderr
- */
-void help_snaplist(void);
-void help_snaptake(void);
-void help_snapdel(void);
-void help_snaprestore(void);
 
 #endif /*OIO_SDS__client__c__lib__hc_h*/

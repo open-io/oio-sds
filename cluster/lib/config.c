@@ -60,7 +60,7 @@ config_load_file(GHashTable *h, const gchar *source)
 	GError *err = NULL;
 	GKeyFile *kf = g_key_file_new();
 	if (!g_key_file_load_from_file(kf, source, 0, &err)) {
-		GRID_DEBUG("Failed to load [%s] : (%d) %s", source, err->code, err->message);
+		GRID_TRACE("Failed to load [%s] : (%d) %s", source, err->code, err->message);
 		g_clear_error(&err);
 	} else {
 		gchar **pg, **groups = NULL;
