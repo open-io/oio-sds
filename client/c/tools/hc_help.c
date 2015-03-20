@@ -18,11 +18,11 @@ License along with this library.
 */
 
 #ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "hc.tools"
+# define G_LOG_DOMAIN "client"
 #endif
 
-#include "./gs_internals.h"
-#include "./hc.h"
+#include <glib.h>
+#include "hc_help.h"
 
 void help_put(void)
 {

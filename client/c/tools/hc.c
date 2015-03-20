@@ -38,7 +38,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "../lib/gs_internals.h"
 #include "../lib/hc.h"
-#include "./gs_tools.h"
+#include "gs_tools.h"
+#include "hc_help.h"
 
 #ifndef FREEP
 # define FREEP(F,P) do { if (!(P)) return; F(P); (P) = NULL; } while (0)

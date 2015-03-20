@@ -16,11 +16,11 @@ macro(bin_prefix_local T N)
 	bin_prefix(${T} ${N})
 endmacro(bin_prefix_local)
 
-add_executable(hcdir hcdir.c)
+add_executable(hcdir hcdir.c hc_help.c)
 bin_prefix(hcdir "-dir")
 target_link_libraries(hcdir ${REQLIBS})
 
-add_executable(hc hc.c)
+add_executable(hc hc.c hc_help.c)
 bin_prefix(hc "")
 target_link_libraries(hc ${REQLIBS})
 
