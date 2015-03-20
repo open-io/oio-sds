@@ -480,7 +480,11 @@ def generate (ns, ip):
 			('sqlx',  EXE_PREFIX + '-sqlx-server', 2, next_port()),
 			('sqlx',  EXE_PREFIX + '-sqlx-server', 3, next_port()),
 	)
-	rawx = ((1,next_port()),)
+	rawx = (
+		(1,next_port()),
+		(2,next_port()),
+		(3,next_port()),
+	)
 	env = dict(IP=ip, NS=ns, HOME=HOME, EXE_PREFIX=EXE_PREFIX,
 			PATH=PATH, LIBDIR=LIBDIR,
 			SDSDIR=SDSDIR, TMPDIR=TMPDIR,
