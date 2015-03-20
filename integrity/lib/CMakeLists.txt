@@ -10,11 +10,13 @@ include_directories(AFTER
 		${LZO_INCLUDE_DIRS}
 		${ZLIB_INCLUDE_DIRS}
 		${ATTR_INCLUDE_DIRS}
+		${LIBRAIN_INCLUDE_DIRS}
 		${CURL_INCLUDE_DIRS})
 
 link_directories(
 		${LZO_LIBRARY_DIRS}
 		${ZLIB_LIBRARY_DIRS}
+		${LIBRAIN_LIBRARY_DIRS}
 		${ATTR_LIBRARY_DIRS})
 
 add_library(integrity SHARED
@@ -34,6 +36,12 @@ add_library(integrity SHARED
 set_target_properties(integrity
 	PROPERTIES SOVERSION ${ABI_VERSION})
 
+add_executable(test_meta2_check test_meta2_check.c)
+target_link_libraries(test_meta2_check
+		meta2v2utils metautils meta2v2remote
+		gridcluster integrity
+		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
+
 target_link_libraries(integrity
 		metautils metacomm gridclient gridcluster
 		meta0remote meta1remote meta2remote rawxclient rawx
@@ -42,4 +50,6 @@ target_link_libraries(integrity
 
 install(TARGETS integrity
 		LIBRARY DESTINATION ${LD_LIBDIR})
+
+add_test(NAME integrity/check COMMAND test_meta2_check)
 

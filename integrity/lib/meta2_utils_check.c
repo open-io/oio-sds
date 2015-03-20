@@ -124,23 +124,6 @@ m2v2_check_append_flaw(header_check_t *hc, int type, GError *error)
 	return flaw;
 }
 
-static int
-_compare_int(register int p0, register int p1)
-{
-	return (p0 < p1) ? -1 : ((p0 > p1) ? 1 : 0);
-}
-
-gint
-compare_pairs_positions(chunk_pair_t *c0, chunk_pair_t *c1)
-{
-	register int cmp;
-	if (0 != (cmp = _compare_int(c0->position.meta, c1->position.meta)))
-		return cmp;
-	if (0 != (cmp = _compare_int(c0->position.parity, c1->position.parity)))
-		return cmp;
-	return _compare_int(c0->position.rain, c1->position.rain);
-}
-
 static void
 _flaw_free(struct m2v2_check_error_s *flaw)
 {
@@ -839,33 +822,6 @@ _get_header(struct m2v2_check_s *check, GByteArray *id0)
 			return hdr;
 	}
 	return NULL;
-}
-
-static struct bean_CHUNKS_s *
-_get_chunk(GPtrArray *chunks, GString *id0)
-{
-	GRID_TRACE2("%s(%p,%p)", __FUNCTION__, chunks, id0);
-	for (guint i=0; i < chunks->len ;++i) {
-		struct bean_CHUNKS_s *chunk = g_ptr_array_index(chunks, i);
-		GString *id1 = CHUNKS_get_id(chunk);
-		if (g_string_equal(id0, id1))
-			return chunk;
-	}
-	return NULL;
-}
-
-void
-init_chunk_pair(GPtrArray *chunks, chunk_pair_t *pair, struct bean_CONTENTS_s *c0)
-{
-	GString *pos = c0 ? CONTENTS_get_position(c0) : NULL;
-
-	memset(pair, 0, sizeof(chunk_pair_t));
-	pair->content = c0;
-	pair->chunk = _get_chunk(chunks, CONTENTS_get_chunk_id(c0));
-	pair->position.meta = pair->position.rain = -1;
-
-	m2v2_parse_chunk_position(pos->str, &(pair->position.meta),
-			&(pair->position.parity), &(pair->position.rain));
 }
 
 static GError*

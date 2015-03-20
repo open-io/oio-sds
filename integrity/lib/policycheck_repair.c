@@ -44,6 +44,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "../lib/content_check.h"
 #include "../lib/http_pipe.h"
 #include "./policycheck_repair.h"
+#include "./meta2_utils_check.h"
 
 //------------------------------------------------------------------------------
 // Data-structures helpers
