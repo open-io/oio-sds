@@ -142,6 +142,15 @@ Currently suppported actions are:
   * **Spare** Generating additional places for a content, keeping a few, avoiding few others. The new set of places will respect the storage policy.
   * **Touch** : Touch a content
   * **SetStoragePolicy** : Change a content's storage policy
+  * **GetProperties** :
+    * Request body: ``{"action":"SetProperties","args":null}``
+    * Reply body: ``{"k0":"v0","k1":"v1"}``
+  * **SetProperties** :
+    * Request body: ``{"action":"SetProperties","args":{"k0":"v0","k1":"v1"}}``
+    * Reply body: none expected
+  * **DelProperties** :
+    * Request body: ``{"action":"SetProperties","args":["k0","k1"]}``
+    * Reply body: none expected
 
 ## SQLX
 
