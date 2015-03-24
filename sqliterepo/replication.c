@@ -320,7 +320,7 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 {
 	GError *err = NULL;
 	GByteArray *encoded;
-	struct client_s **clients, **pc;
+	struct gridd_client_s **clients, **pc;
 	guint count_errors = 0, count_success = 0;
 
 	dump_request(__FUNCTION__, peers, "SQLX_REPLICATE",

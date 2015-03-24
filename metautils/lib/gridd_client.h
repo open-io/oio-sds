@@ -40,7 +40,12 @@ License along with this library.
 #  define GRIDC_DEFAULT_TIMEOUT_OVERALL 30.0
 # endif
 
-#define client_s gridd_client_s
+/* -------------------------------------------------------------------------- */
+
+const char * gridd_get_reqid (void);
+void gridd_set_reqid (const char *reqid);
+
+/* -------------------------------------------------------------------------- */
 
 struct gridd_client_s;
 struct gridd_client_factory_s;

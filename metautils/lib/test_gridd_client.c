@@ -46,7 +46,7 @@ test_bad_addresses(void)
 {
 	void test(const gchar *url) {
 		GByteArray *req;
-		struct client_s *client;
+		struct gridd_client_s *client;
 		GError *err;
 
 		req = _generate_request();
@@ -72,7 +72,7 @@ test_good_addresses(void)
 {
 	void test(const gchar *url) {
 		GByteArray *req;
-		struct client_s *client;
+		struct gridd_client_s *client;
 		GError *err;
 
 		req = _generate_request();
@@ -97,7 +97,7 @@ test_failed_start_on_ignored_connect_error(void)
 {
 	void test(const gchar *url) {
 		GByteArray *req;
-		struct client_s *client;
+		struct gridd_client_s *client;
 		GError *err;
 
 		req = _generate_request();
@@ -127,7 +127,7 @@ test_loop_on_ignored_start_error(void)
 {
 	void test(const gchar *url) {
 		GByteArray *req;
-		struct client_s *client;
+		struct gridd_client_s *client;
 		GError *err;
 
 		req = _generate_request();

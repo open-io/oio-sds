@@ -276,7 +276,7 @@ _repseq_run(struct message_s *req, struct metacnx_ctx_s *cnx,
 	memset(&ctx, 0, sizeof(ctx));
 	ctx.data = data;
 
-	struct client_s *client = gridd_client_create_empty();
+	struct gridd_client_s *client = gridd_client_create_empty();
 
 	int keepalive = cnx->flags & METACNX_FLAGMASK_KEEPALIVE;
 	gridd_client_set_keepalive(client, keepalive);

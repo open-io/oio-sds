@@ -328,7 +328,7 @@ strfreev(char ***v)
 }
 
 static gint
-do_query(struct client_s *client, struct meta1_service_url_s *surl,
+do_query(struct gridd_client_s *client, struct meta1_service_url_s *surl,
 		const gchar *Q)
 {
 	gint rc = 0;
@@ -373,7 +373,7 @@ do_queryv(struct meta1_service_url_s *surl)
 {
 	gint rc;
 	gchar **pq;
-	struct client_s *client;
+	struct gridd_client_s *client;
 
 	GRID_DEBUG("Contacting SHARD[%"G_GINT64_FORMAT"] at [%s][%s]",
 			surl->seq, surl->host, surl->args);

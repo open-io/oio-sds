@@ -81,7 +81,7 @@ meta1_IsMaster(gchar* bddname)
 	gboolean master = FALSE;
 	struct sqlx_name_s n;
 	GByteArray* req = NULL;
-	struct client_s *client;
+	struct gridd_client_s *client;
 	gchar* message = NULL;
 
 	// received data function

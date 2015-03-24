@@ -38,7 +38,7 @@ sqlx_remote_execute_DESTROY(const gchar *target, GByteArray *sid,
 	GError *err = NULL;
 	GByteArray *req = sqlx_pack_DESTROY(name, local);
 
-	struct client_s *client = gridd_client_create(target, req, NULL, NULL);
+	struct gridd_client_s *client = gridd_client_create(target, req, NULL, NULL);
 	g_byte_array_unref(req);
 
 	gridd_client_start(client);
@@ -58,7 +58,7 @@ sqlx_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
 	GError *err = NULL;
 	GByteArray *req = sqlx_pack_DESTROY(name, TRUE);
 
-	struct client_s **clients = gridd_client_create_many(targets, req,
+	struct gridd_client_s **clients = gridd_client_create_many(targets, req,
 			NULL, NULL);
 	metautils_gba_unref(req);
 	req = NULL;
@@ -71,7 +71,7 @@ sqlx_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
 	gridd_clients_start(clients);
 	err = gridd_clients_loop(clients);
 
-	for (struct client_s **p = clients; !err && p && *p ;p++) {
+	for (struct gridd_client_s **p = clients; !err && p && *p ;p++) {
 		if (!(err = gridd_client_error(*p)))
 			continue;
 		GRID_DEBUG("Database destruction attempts failed: (%d) %s",

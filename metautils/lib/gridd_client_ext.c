@@ -43,10 +43,10 @@ License along with this library.
 #include "./gridd_client_ext.h"
 #include "./gridd_client.h"
 
-struct client_s *
+struct gridd_client_s *
 gridd_client_create_idle(const gchar *target)
 {
-	struct client_s *client = gridd_client_create_empty();
+	struct gridd_client_s *client = gridd_client_create_empty();
 	if (unlikely(NULL == client))
 		return NULL;
 
@@ -60,13 +60,13 @@ gridd_client_create_idle(const gchar *target)
 	return NULL;
 }
 
-struct client_s *
+struct gridd_client_s *
 gridd_client_create(const gchar *target, GByteArray *req, gpointer ctx,
                 client_on_reply cb)
 {
 	EXTRA_ASSERT(req != NULL);
 
-	struct client_s *client = gridd_client_create_idle(target);
+	struct gridd_client_s *client = gridd_client_create_idle(target);
 	if (!client)
 		return NULL;
 	GError *err = gridd_client_request(client, req, ctx, cb);
@@ -81,7 +81,7 @@ gridd_client_create(const gchar *target, GByteArray *req, gpointer ctx,
 }
 
 GError *
-gridd_client_loop(struct client_s *client)
+gridd_client_loop(struct gridd_client_s *client)
 {
 	while (!gridd_client_finished(client)) {
 		GError *err = gridd_client_step(client);
@@ -93,21 +93,21 @@ gridd_client_loop(struct client_s *client)
 	return NULL;
 }
 
-struct client_s **
+struct gridd_client_s **
 gridd_client_create_many(gchar **targets, GByteArray *req, gpointer ctx,
                 client_on_reply cb)
 {
 	gint i, max;
-	struct client_s **clients;
+	struct gridd_client_s **clients;
 
 	EXTRA_ASSERT(targets != NULL);
 	EXTRA_ASSERT(req != NULL);
 
 	max = (gint)g_strv_length(targets);
-	clients = g_malloc0(sizeof(struct client_s*) * (max+1));
+	clients = g_malloc0(sizeof(struct gridd_client_s*) * (max+1));
 
 	for (i = 0; i < max; i++) {
-		struct client_s *client = gridd_client_create(targets[i], req, ctx, cb);
+		struct gridd_client_s *client = gridd_client_create(targets[i], req, ctx, cb);
 		if (!client)
 			break;
 		clients[i] = client;
@@ -126,10 +126,10 @@ gridd_client_create_many(gchar **targets, GByteArray *req, gpointer ctx,
 }
 
 void
-gridd_clients_free(struct client_s **clients)
+gridd_clients_free(struct gridd_client_s **clients)
 {
 	if (clients) {
-		struct client_s **c;
+		struct gridd_client_s **c;
 		for (c=clients; *c ;c++)
 			gridd_client_free(*c);
 		g_free(clients);
@@ -137,10 +137,10 @@ gridd_clients_free(struct client_s **clients)
 }
 
 GError *
-gridd_clients_error(struct client_s **clients)
+gridd_clients_error(struct gridd_client_s **clients)
 {
 	if (NULL != clients) {
-		struct client_s *c;
+		struct gridd_client_s *c;
 		for (; (c = *clients) ;clients++) {
 			GError *e = gridd_client_error(c);
 			if (e != NULL)
@@ -152,17 +152,17 @@ gridd_clients_error(struct client_s **clients)
 }
 
 void
-gridd_clients_set_timeout(struct client_s **clients, gdouble to0, gdouble to1)
+gridd_clients_set_timeout(struct gridd_client_s **clients, gdouble to0, gdouble to1)
 {
 	for (; *clients ;++clients)
 		gridd_client_set_timeout(*clients, to0, to1);
 }
 
 gboolean
-gridd_clients_finished(struct client_s **clients)
+gridd_clients_finished(struct gridd_client_s **clients)
 {
 	if (clients) {
-		struct client_s *p;
+		struct gridd_client_s *p;
 		for (; NULL != (p = *clients) ;clients++) {
 			if (!gridd_client_finished(p))
 				return FALSE;
@@ -173,7 +173,7 @@ gridd_clients_finished(struct client_s **clients)
 }
 
 void
-gridd_clients_start(struct client_s **clients)
+gridd_clients_start(struct gridd_client_s **clients)
 {
 	if (unlikely(NULL == clients))
 		return;
@@ -192,10 +192,10 @@ gridd_clients_start(struct client_s **clients)
 }
 
 static void
-_clients_expire(struct client_s **clients, GTimeVal *now)
+_clients_expire(struct gridd_client_s **clients, GTimeVal *now)
 {
 	if (clients) {
-		struct client_s *c;
+		struct gridd_client_s *c;
 		for (; NULL != (c = *clients) ;++clients) {
 			gridd_client_expire(c, now);
 		}
@@ -203,7 +203,7 @@ _clients_expire(struct client_s **clients, GTimeVal *now)
 }
 
 static int
-_client_to_pollfd(struct client_s *client, struct pollfd *pfd)
+_client_to_pollfd(struct gridd_client_s *client, struct pollfd *pfd)
 {
 	int fd = gridd_client_fd(client);
 	int interest = gridd_client_interest(client);
@@ -222,7 +222,7 @@ _client_to_pollfd(struct client_s *client, struct pollfd *pfd)
 }
 
 GError*
-gridd_client_step(struct client_s *client)
+gridd_client_step(struct gridd_client_s *client)
 {
 	struct pollfd pfd = {-1, 0, 0};
 
@@ -252,10 +252,10 @@ gridd_client_step(struct client_s *client)
 }
 
 GError *
-gridd_clients_step(struct client_s **clients)
+gridd_clients_step(struct gridd_client_s **clients)
 {
-	struct client_s ** _lookup_client(int fd, struct client_s **ppc) {
-		struct client_s *c;
+	struct gridd_client_s ** _lookup_client(int fd, struct gridd_client_s **ppc) {
+		struct gridd_client_s *c;
 		for (; (c = *ppc) ;ppc++) {
 			if (gridd_client_fd(c) == fd)
 				return ppc;
@@ -265,7 +265,7 @@ gridd_clients_step(struct client_s **clients)
 
 	guint i, j;
 	int rc;
-	struct client_s *last, **plast;
+	struct gridd_client_s *last, **plast;
 	GTimeVal now;
 	guint nbclients;
 
@@ -319,7 +319,7 @@ gridd_clients_step(struct client_s **clients)
 }
 
 GError *
-gridd_clients_loop(struct client_s **clients)
+gridd_clients_loop(struct gridd_client_s **clients)
 {
 	while (!gridd_clients_finished(clients)) {
 		GError *err = gridd_clients_step(clients);

@@ -80,94 +80,28 @@ License along with this library.
  */
 GSList *meta0_remote_get_meta1_all(addr_info_t *m0a, gint ms, GError **err);
 
-/**
- * @param m0a
- * @param ms
- * @param prefix
- * @param err
- * @return
- */
+/** */
 GSList *meta0_remote_get_meta1_one(addr_info_t *m0a, gint ms,
 		const guint8 *prefix, GError **err);
 
-/**
- * Tell the distant reference META0 server to refresh its cache
- * immediately.
- *
- * For performances purposes, the reference meta0 server must cache
- * the answers it makes because these answers are the same for all
- * the clients if there is no change in the META0 reference itself.
- *
- * @param m0a the address of the remote meta0 reference server
- * @param ms the maximum number of times (in milli seconds) this operations
- *           should take in network latencies.
- * @param err a pointer to the error structure. It will be set if the
- *            function fails
- * @return 0 if the function fails, 1 in case of success.
- */
 gint meta0_remote_cache_refresh(addr_info_t *m0a, gint ms, GError **err);
 
-/**
- * @param m0a
- * @param ms
- * @param urls
- * @param nbreplicas
- * @param err
- * @return
- */
 gint meta0_remote_fill(addr_info_t *m0a, gint ms, gchar **urls,
 		guint nbreplicas, GError **err);
 
-/**
- * @param m0a
- * @param ms
- * @param nbreplicas
- * @param nodist true if the distance between every affected meta1 is not mandatory
- * @param err
- * @return
- */
-gint meta0_remote_fill_v2(addr_info_t *m0a, gint ms,
-		guint nbreplicas, gboolean nodist, GError **err);
+gint meta0_remote_fill_v2(addr_info_t *m0a, gint ms, guint nbreplicas,
+		gboolean nodist, GError **err);
 
-/**
- * @param m0a
- * @param ms
- * @param err
- * @return
- */
 gint meta0_remote_assign(addr_info_t *m0a, gint ms, gboolean nocheck,GError **err);
 
-/**
- * @param m0a
- * @param ms
- * @param urls
- * @param err
- * @return
- */
 gint meta0_remote_disable_meta1(addr_info_t *m0a, gint ms, gchar **urls,
 		 gboolean nocheck, GError **err);
 
 gchar ** meta0_remote_get_meta1_info(addr_info_t *m0a, gint ms, GError **err);
 
-/**
- * @param m0a
- * @param ms
- * @param urls
- * @param err
- * @return
- */
-gint
-meta0_remote_destroy_meta1ref(addr_info_t *m0a, gint ms, gchar *urls, GError **err);
+gint meta0_remote_destroy_meta1ref(addr_info_t *m0a, gint ms, gchar *urls, GError **err);
 
-/**
- * @param m0a
- * @param ms
- * @param urls
- * @param err
- * @return
- */
-gint
-meta0_remote_destroy_meta0zknode(addr_info_t *m0a, gint ms, gchar *urls, GError **err);
+gint meta0_remote_destroy_meta0zknode(addr_info_t *m0a, gint ms, gchar *urls, GError **err);
 
 /** @} */
 

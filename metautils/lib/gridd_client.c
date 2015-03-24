@@ -1031,3 +1031,20 @@ gridd_client_fail (struct gridd_client_s *self, GError *why)
 {
 	GRIDD_CALL(self,fail)(self,why);
 }
+
+/* -------------------------------------------------------------------------- */
+
+static GPrivate th_local_key_reqid = G_PRIVATE_INIT(g_free);
+
+const char *
+gridd_get_reqid (void)
+{
+	return g_private_get(&th_local_key_reqid);
+}
+
+void
+gridd_set_reqid (const char *reqid)
+{
+	 g_private_replace (&th_local_key_reqid, g_strdup (reqid));
+}
+

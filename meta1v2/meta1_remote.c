@@ -70,7 +70,7 @@ meta1_remote_create_container_v2 (addr_info_t *meta1, gint ms, GError **err, con
 		container_id_t cID, gdouble to_step, gdouble to_overall, gchar **master)
 {
 	(void) ms;
-	struct client_s *client = NULL;
+	struct gridd_client_s *client = NULL;
 	GByteArray *packed = NULL;
 	MESSAGE request=NULL;
 	gboolean status = FALSE;
@@ -113,7 +113,7 @@ meta1_remote_get_container_by_id( struct metacnx_ctx_s *ctx, container_id_t cont
 		gdouble to_step, gdouble to_overall)
 {
 	struct meta1_raw_container_s *raw_container = NULL;
-	struct client_s *client = NULL;
+	struct gridd_client_s *client = NULL;
 	GByteArray *packed = NULL;
 	gchar target[64];
 
@@ -146,7 +146,7 @@ meta1_remote_get_container_by_id( struct metacnx_ctx_s *ctx, container_id_t cont
 		goto end_label;
 
 	do{
-		struct client_s *clients[2];
+		struct gridd_client_s *clients[2];
 		clients[0] = client;
 		clients[1] = NULL;
 		if((*err = gridd_clients_error(clients)) != NULL)
@@ -184,7 +184,7 @@ list_request(const addr_info_t *a, gdouble to_step, gdouble to_overall, GError *
 		gchar **master)
 {
 	gchar stra[128];
-	struct client_s *client = NULL;
+	struct gridd_client_s *client = NULL;
 	GByteArray *gba;
 	GError *e = NULL;
 
@@ -644,7 +644,7 @@ gba_request(const addr_info_t *a, gdouble to_step, gdouble to_overall,
 	}
 
 	gchar stra[128];
-	struct client_s *client = NULL;
+	struct gridd_client_s *client = NULL;
 	GError *e = NULL;
 	gboolean gba_created = FALSE;
 

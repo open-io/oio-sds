@@ -429,7 +429,7 @@ _m2v2_request_ex(const gchar *url, GByteArray *req,
 
 	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
-	struct client_s *client = gridd_client_create_idle(url);
+	struct gridd_client_s *client = gridd_client_create_idle(url);
 	if (!client)
 		err = NEWERROR(2, "errno=%d %s", errno, strerror(errno));
 	else {
@@ -491,7 +491,7 @@ m2v2_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
 
 	// TODO: factorize with sqlx_remote_execute_DESTROY_many
 	GByteArray *req = m2v2_remote_pack_DESTROY(sid, url, flags | M2V2_DESTROY_LOCAL);
-	struct client_s **clients = gridd_client_create_many(targets, req, NULL, NULL);
+	struct gridd_client_s **clients = gridd_client_create_many(targets, req, NULL, NULL);
 	metautils_gba_unref(req);
 	req = NULL;
 
@@ -500,7 +500,7 @@ m2v2_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
 
 	gridd_clients_start(clients);
 	GError *err = gridd_clients_loop(clients);
-	for (struct client_s **p = clients; !err && p && *p ;p++) {
+	for (struct gridd_client_s **p = clients; !err && p && *p ;p++) {
 		if (!(err = gridd_client_error(*p)))
 			continue;
 		GRID_DEBUG("Database destruction attempts failed: (%d) %s",
@@ -595,7 +595,7 @@ GError*
 m2v2_remote_execute_DEDUP(const gchar *target, GByteArray *sid,
 		struct hc_url_s *url, gboolean dry_run, gchar **out)
 {
-	struct client_s *client;
+	struct gridd_client_s *client;
 	GError *err = NULL;
 
 	gboolean _cb(gpointer ctx, struct message_s *reply) {
@@ -728,7 +728,7 @@ m2v2_remote_execute_LIST(const gchar *target, GByteArray *sid,
 	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 
 	GByteArray *req = m2v2_remote_pack_LIST(sid, url, p);
-	struct client_s *client = gridd_client_create_idle(target);
+	struct gridd_client_s *client = gridd_client_create_idle(target);
 	if (!client)
 		err = NEWERROR(2, "errno=%d %s", errno, strerror(errno));
 	else {
