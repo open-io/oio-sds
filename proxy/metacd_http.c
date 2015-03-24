@@ -106,6 +106,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define PROXYD_HEADER_PREFIX "X-oio-"
 #endif
 
+#ifndef PROXYD_HEADER_REQID
+#define PROXYD_HEADER_REQID PROXYD_HEADER_PREFIX "req-id"
+#endif
+
+#ifndef PROXYD_HEADER_NOEMPTY
+#define PROXYD_HEADER_NOEMPTY PROXYD_HEADER_PREFIX "no-empty-list"
+#endif
+
 #define OPT(N)    _req_get_option(args,(N))
 #define TOK(N)    _req_get_token(args,(N))
 #define NS()      TOK("NS")
@@ -305,13 +313,16 @@ handler_action (gpointer u, struct http_request_s *rq,
 		rp->finalize ();
 		rc = HTTPRC_DONE;
 	} else {
-		struct req_args_s args = {NULL,NULL,NULL, NULL,NULL,0};
+		struct req_args_s args = {NULL,NULL,NULL, NULL,NULL, 0,NULL};
 		args.req_uri = &ruri;
 		args.matchings = matchings;
 		args.rq = rq;
 		args.rp = rp;
-		if (_boolhdr ("x-disallow-empty-service-list"))
+
+		if (_boolhdr (PROXYD_HEADER_NOEMPTY))
 			args.flags |= FLAG_NOEMPTY;
+		args.reqid = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_REQID);
+
 		args.url = url = _metacd_load_url (&args);
 		req_handler_f handler = path_matching_get_udata (*matchings);
 		rc = (*handler) (&args);

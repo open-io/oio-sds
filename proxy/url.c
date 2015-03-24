@@ -36,7 +36,9 @@ struct req_args_s {
 
 	struct http_request_s *rq;
 	struct http_reply_ctx_s *rp;
+
 	guint32 flags;
+	const char *reqid;
 };
 
 typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);

@@ -104,7 +104,9 @@ make DESTDIR=${install_dir} install
 | PROXYD_DEFAULT_MAX_SERVICES | 200000 | Idem for service entries. |
 | PROXYD_DIR_TIMEOUT_SINGLE | 30.0 | Timeout for directory operations (single request) |
 | PROXYD_DIR_TIMEOUT_GLOBAL | 30.0 | Timeout for directory operations (global operations) |
-| PROXYD_HEADER_PREFIX | "X-oio-" | Timeout for directory operations (global operations) |
+| PROXYD_HEADER_PREFIX | "X-oio-" | Prefix for all the headers sent to the proxy |
+| PROXYD_HEADER_REQID | PROXYD_HEADER_PREFIX "req-id" | Header whose value is printed in access log, destined to agregate several requests belonging to the same session. |
+| PROXYD_HEADER_NOEMPTY | PROXYD_HEADER_PREFIX "no-empty-list" | Flag sent to the proxy to turn empty list (results) into 404 not found. |
 | DAEMON_DEFAULT_TIMEOUT_READ | 1000 | How long a gridd will block on a recv() (in milliseconds) |
 | DAEMON_DEFAULT_TIMEOUT_ACCEPT | 1000 | How long a gridd will block on a accept() (in milliseconds) |
 | SQLX_ADMIN_PREFIX_SYS  | "sys." | Prefix used for keys used in admin table of sqlite bases |
