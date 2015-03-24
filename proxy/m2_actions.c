@@ -876,13 +876,10 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_PROP_SET (m2->host, NULL, args->url, 0, beans);
+		return m2v2_remote_execute_PROP_SET (m2->host, NULL, args->url, M2V2_FLAG_NOFORMATCHECK, beans);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	_bean_cleanl2 (beans);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND)
-		return _reply_forbidden_error (args, err);
-	return _reply_m2_error (args, err);
+	return _reply_properties (args, err, beans);
 }
 
 static enum http_rc_e
