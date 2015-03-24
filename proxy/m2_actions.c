@@ -59,6 +59,34 @@ _reply_m2_error (struct req_args_s *args, GError * err)
 }
 
 static enum http_rc_e
+_reply_properties (struct req_args_s *args, GError * err, GSList * beans)
+{
+	if (err) {
+		if (err->code == CODE_CONTAINER_NOTFOUND)
+			return _reply_forbidden_error (args, err);
+		if (err->code == CODE_CONTAINER_NOTFOUND)
+			return _reply_forbidden_error (args, err);
+		return _reply_system_error (args, err);
+	}
+
+	GString *gs = g_string_new("{");
+	for (GSList *l=beans; l ;l=l->next) {
+		if (DESCR(l->data) != &descr_struct_PROPERTIES)
+			continue;
+		if (l != beans)
+			g_string_append_c(gs, ',');
+		struct bean_PROPERTIES_s *bean = l->data;
+		g_string_append_printf(gs, "\"%s\":\"%.*s\"",
+				PROPERTIES_get_key(bean)->str,
+				PROPERTIES_get_value(bean)->len, PROPERTIES_get_value(bean)->data);
+	}
+	g_string_append_c(gs, '}');
+
+	_bean_cleanl2 (beans);
+	return _reply_success_json (args, gs);
+}
+
+static enum http_rc_e
 _reply_aliases (struct req_args_s *args, GError * err, GSList * beans)
 {
 	if (err)
@@ -896,13 +924,11 @@ action_m2_content_propget (struct req_args_s *args, struct json_object *jargs)
 	GSList *beans = NULL;
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_PROP_GET (m2->host, NULL, args->url, 0, &beans);
+		return m2v2_remote_execute_PROP_GET (m2->host, NULL, args->url,
+				M2V2_FLAG_ALLPROPS|M2V2_FLAG_NOFORMATCHECK, &beans);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	_bean_cleanl2 (beans);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND)
-		return _reply_forbidden_error (args, err);
-	return _reply_m2_error (args, err);
+	return _reply_properties (args, err, beans);
 }
 
 static enum http_rc_e
