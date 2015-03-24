@@ -736,6 +736,22 @@ action_m2_content_beans (struct req_args_s *args, struct json_object *jargs)
 			stgpol, size, 0, &beans);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+
+	// Patch the chunk size to ease putting contents with unknown size.
+	if (!err) {
+		gint64 chunk_size = 0;
+		NSINFO_DO(chunk_size = nsinfo.chunk_size);
+		chunk_size = MAX(chunk_size,1);
+		for (GSList *l=beans; l ;l=l->next) {
+			if (l->data && (DESCR(l->data) == &descr_struct_CHUNKS)) {
+				struct bean_CHUNKS_s *bean = l->data;
+				CHUNKS_set_size(bean, chunk_size);
+			}
+		}
+		args->rp->add_header(PROXYD_HEADER_PREFIX "ns-chunk-size",
+				g_strdup_printf("%"G_GINT64_FORMAT, chunk_size));
+	}
+
 	return _reply_simplified_beans (args, err, beans, TRUE);
 }
 
