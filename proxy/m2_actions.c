@@ -893,6 +893,11 @@ action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
 	(void) version;
 
 	// build the payload
+	for (int i=json_object_array_length(jargs); i>0 ;i--) {
+		json_object *item = json_object_array_get_idx (jargs, i-1);
+		if (!json_object_is_type(item, json_type_string))
+			return _reply_format_error(args, BADREQ ("string expected as property name"));
+	}
 	GSList *names = NULL;
 	for (int i=json_object_array_length(jargs); i>0 ;i--) {
 		json_object *item = json_object_array_get_idx (jargs, i-1);
