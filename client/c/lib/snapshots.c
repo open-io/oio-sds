@@ -89,7 +89,7 @@ redc_take_snapshot(gs_container_t *container, const char *snapshot_name)
 	_SNAPSHOT_FUNC_HEAD;
 
 	hc_url_set(url, HCURL_SNAPSHOT, snapshot_name);
-	err = m2v2_remote_execute_SNAP_TAKE(target, NULL, url);
+	err = m2v2_remote_execute_SNAP_TAKE(target, url);
 
 	_SNAPSHOT_FUNC_TAIL("Failed to take snapshot '%s' of container '%s': ");
 }
@@ -100,7 +100,7 @@ redc_delete_snapshot(gs_container_t *container, const char *snapshot_name)
 	_SNAPSHOT_FUNC_HEAD;
 
 	hc_url_set(url, HCURL_SNAPSHOT, snapshot_name);
-	err = m2v2_remote_execute_SNAP_DELETE(target, NULL, url);
+	err = m2v2_remote_execute_SNAP_DELETE(target, url);
 
 	_SNAPSHOT_FUNC_TAIL("Failed to delete snapshot '%s' of container '%s': ");
 }
@@ -112,8 +112,7 @@ redc_restore_snapshot(gs_container_t *container, const char *snapshot_name,
 	_SNAPSHOT_FUNC_HEAD;
 
 	hc_url_set(url, HCURL_SNAPSHOT, snapshot_name);
-	err = m2v2_remote_execute_SNAP_RESTORE(target, NULL, url,
-			(gboolean)hard_restore);
+	err = m2v2_remote_execute_SNAP_RESTORE(target, url, (gboolean)hard_restore);
 
 	_SNAPSHOT_FUNC_TAIL("Failed to restore snapshot '%s' of container '%s': ");
 }
@@ -126,7 +125,7 @@ redc_restore_snapshot_alias(gs_container_t *container, const char *alias,
 
 	hc_url_set(url, HCURL_SNAPSHOT, snapshot_name);
 	hc_url_set(url, HCURL_PATH, alias);
-	err = m2v2_remote_execute_SNAP_RESTORE(target, NULL, url, FALSE);
+	err = m2v2_remote_execute_SNAP_RESTORE(target, url, FALSE);
 
 	_SNAPSHOT_FUNC_TAIL("Failed to restore snapshot '%s' of container '%s': ");
 }
@@ -147,7 +146,7 @@ redc_list_snapshots(gs_container_t *container, redc_snapshot_t ***snapshots)
 	GSList *beans = NULL;
 	_SNAPSHOT_FUNC_HEAD;
 
-	err = m2v2_remote_execute_SNAP_LIST(target, NULL, url, &beans);
+	err = m2v2_remote_execute_SNAP_LIST(target, url, &beans);
 
 	if (err != NULL) {
 		GSERRORCAUSE(&gserr, err, "Failed to list snapshots of container '%s'",

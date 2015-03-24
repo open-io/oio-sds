@@ -33,68 +33,16 @@ License along with this library.
 
 # include <metautils/lib/metautils.h>
 
-/* A flag usable in metacnx_ctx_s.flags to keep the connection alive */
-#define METACNX_FLAGMASK_KEEPALIVE 0x00000001
-
-#define REPSEQ_FINAL         0x00000001
-#define REPSEQ_ERROR         0X00000002
-#define REPSEQ_BODYMANDATORY 0x00000004
-
-#define NAME_MSGNAME_METAREPLY "REPLY"
-#define NAME_MSGKEY_STATUS "STATUS"
-#define NAME_MSGKEY_MESSAGE "MSG"
-#define NAME_MSGKEY_FLAG "FLAG"
-#define NAME_MSGKEY_PREFIX "PREFIX"
-#define NAME_MSGKEY_WARNING "WARNING"
-#define NAME_MSGKEY_TIMESTAMP "TIMESTAMP"
-#define NAME_MSGKEY_CONTAINERID "CONTAINER_ID"
-#define NAME_MSGKEY_VIRTUALNAMESPACE "VIRTUAL_NAMESPACE"
-#define NAME_MSGKEY_NAMESPACE "NAMESPACE"
-#define NAME_MSGKEY_SRVTYPE "SRVTYPE"
-#define NAME_MSGKEY_CONTAINERNAME "CONTAINER_NAME"
-#define NAME_MSGKEY_CONTENTPATH "CONTENT_PATH"
-#define NAME_MSGKEY_CONTENTLENGTH "CONTENT_LENGTH"
-#define NAME_MSGKEY_CHUNKID "CHUNKID"
-#define NAME_MSGKEY_STGPOLICY "STORAGE_POLICY"
-#define NAME_MSGKEY_M1_MASTER "M1_MASTER"
-
 #define DECLARE_MARSHALLER(Name) \
-/**
- * @param l
- * @param d
- * @param dSize
- * @param err
- * @return
- */ \
 gint Name (GSList *l, void **d, gsize *dSize, GError **err)
 
 #define DECLARE_MARSHALLER_GBA(Name) \
-/**
- * @param l
- * @param err
- * @return
- */ \
 GByteArray* Name (GSList *l, GError **err)
 
 #define DECLARE_UNMARSHALLER(Name) \
-/**
- * @param l
- * @param s
- * @param sSize
- * @param err
- * @return
- */ \
 gint Name (GSList **l, const void *s, gsize *sSize, GError **err)
 
 #define DECLARE_BODY_MANAGER(Name) \
-/**
- * @param err
- * @param udata
- * @param code
- * @param body
- * @param bodySize
- * @return
- */ \
 gint Name (GError **err, gpointer udata, gint code, guint8 *body, gsize bodySize)
 
 typedef struct message_s *MESSAGE;
@@ -107,12 +55,19 @@ typedef struct message_s *MESSAGE;
  * @{
  */
 
+/* Returns the previously set threa-dlocal request-id. */
+const char * gridd_get_reqid (void);
+
+/* Set a thread-local variable with a copy of the given request id. */
+void gridd_set_reqid (const char *reqid);
+
+void gridd_set_random_reqid (void);
+
 struct metacnx_ctx_s;
 
 /** Struct to store a META connection context */
 struct metacnx_ctx_s
 {
-	GByteArray *id;		/**< The connection id */
 	addr_info_t addr;	/**< The connection server addr */
 	int fd;			/**< The connection fd */
 	guint8 flags;		/**< The connection configuration flags */
@@ -271,6 +226,8 @@ enum message_param_e
 
 /** Allocates all the internal structures of a hidden message. */
 MESSAGE message_create(void);
+
+MESSAGE message_create_named (const char *name);
 
 /** Frees all the internal structures of the pointed message. */
 void message_destroy(MESSAGE m);

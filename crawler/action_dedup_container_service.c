@@ -153,7 +153,7 @@ gboolean action_set_data_trip_ex(TCrawlerBusObject *obj, const char* sender,
     GRID_INFO("Sending DEDUP to container [%s]", hc_url_get(url, HCURL_WHOLE));
     gchar* result = NULL;
 
-    e = m2v2_remote_execute_DEDUP(msgRx.meta2_url, NULL, url, g_dryrun_mode, &result);
+    e = m2v2_remote_execute_DEDUP(msgRx.meta2_url, url, g_dryrun_mode, &result);
     if (NULL != result) {
     	GRID_INFO("Container [%s] deduplicated %s : %s", hc_url_get(url, HCURL_WHOLE),
                         ((g_dryrun_mode == TRUE)?"(DRYRUN mode)":""), result);

@@ -405,7 +405,7 @@ GError *rainx_reconstruct(struct hc_url_s *url, namespace_info_t *nsinfo,
 	if (!on_the_fly) {
 		// Get spare chunks
 		m1u = meta1_unpack_url(meta2_addrs[0]);
-		err = m2v2_remote_execute_SPARE(m1u->host, NULL, url,
+		err = m2v2_remote_execute_SPARE(m1u->host, url,
 				CONTENTS_HEADERS_get_policy(params->content_header)->str,
 				valid_chunks, reuse_broken? NULL : broken_chunks, &spare_chunks);
 		if (err != NULL)
@@ -442,7 +442,7 @@ GError *rainx_reconstruct(struct hc_url_s *url, namespace_info_t *nsinfo,
 				ALIASES_get_alias(params->alias)->str);
 		for (GSList *l = substitutions; l; l = l->next) {
 			struct bean_CHUNKS_s **subst = l->data;
-			err = m2v2_remote_execute_RAW_SUBST_single(m1u->host, NULL, url, subst[1], subst[0]);
+			err = m2v2_remote_execute_RAW_SUBST_single(m1u->host, url, subst[1], subst[0]);
 			if (err != NULL)
 				goto global_cleanup;
 		}
@@ -451,7 +451,7 @@ GError *rainx_reconstruct(struct hc_url_s *url, namespace_info_t *nsinfo,
 			// Remove broken chunks from meta2
 			GRID_DEBUG("Removing broken chunks from '%s'",
 					ALIASES_get_alias(params->alias)->str);
-			err = m2v2_remote_execute_RAW_DEL(m1u->host, NULL, url, broken_chunks);
+			err = m2v2_remote_execute_RAW_DEL(m1u->host, url, broken_chunks);
 		} else {
 			GRID_DEBUG("Some reconstructed chunks may still be unreferenced!");
 			// TODO: Chunk we repaired were unreferenced, so they are not in

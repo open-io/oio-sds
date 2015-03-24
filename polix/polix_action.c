@@ -202,8 +202,7 @@ gboolean polix_action_purge_byurl(struct hc_url_s *url, const char* meta2_url,
 			hc_url_get(url, HCURL_WHOLE));
 
 	// sending purge request
-	if(!(*error = m2v2_remote_execute_PURGE(meta2_url, NULL,
-					url, dryrun, 
+	if(!(*error = m2v2_remote_execute_PURGE(meta2_url, url, dryrun, 
 					(timeout_request > 0) ? timeout_request : -1,
 					(timeout_request > 0) ? timeout_request : -1,
 					&del_chunks_list))) {

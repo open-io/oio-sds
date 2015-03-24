@@ -742,7 +742,7 @@ static GError *_rainx_upload(struct hc_url_s *url, const gchar *target,
 			 */
 
 			/* Get spare beans */
-			error = m2v2_remote_execute_SPARE(target, NULL, url, stgpolicy, NULL, NULL, &spare_list);
+			error = m2v2_remote_execute_SPARE(target, url, stgpolicy, NULL, NULL, &spare_list);
 			if (error != NULL)
 				goto error_label;
 
@@ -906,7 +906,7 @@ static GError *_rawx_upload(struct hc_url_s *url, const gchar *target,
 			_debug_bean_chunk_list(broken_list, "FAILED");
 
 			/* Get spare beans */
-			error = m2v2_remote_execute_SPARE(target, NULL, url, stgpolicy, notin_list, broken_list, &spare_list);
+			error = m2v2_remote_execute_SPARE(target, url, stgpolicy, notin_list, broken_list, &spare_list);
 			if (error != NULL)
 				goto error_label;
 
@@ -1016,9 +1016,9 @@ static gs_status_t _gs_upload(gs_container_t *container,
 		gs_input_f feeder, void *user_data, const char *mdusr,
 		const char *sys_metadata, const char *stgpol, gs_error_t **err)
 {
-#define CONTENT_ADD_V2() m2v2_remote_execute_BEANS(target, NULL, url, actual_stgpol, content_size, append, &chunks)
-#define CONTENT_COMMIT() m2v2_remote_execute_PUT(target, NULL, url, chunks, &beans)
-#define APPEND_COMMIT() m2v2_remote_execute_APPEND(target, NULL, url, chunks, &beans)
+#define CONTENT_ADD_V2() m2v2_remote_execute_BEANS(target, url, actual_stgpol, content_size, append, &chunks)
+#define CONTENT_COMMIT() m2v2_remote_execute_PUT(target, url, chunks, &beans)
+#define APPEND_COMMIT() m2v2_remote_execute_APPEND(target, url, chunks, &beans)
 
 	int nb_attempts;
 

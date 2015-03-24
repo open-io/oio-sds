@@ -421,7 +421,7 @@ _duplicate_and_ref(struct policy_check_s *pc, struct m2v2_check_error_s *flaw)
 		beans = g_slist_prepend(beans, flaw->alias);
 		/* Send reconstruction informations to the META-2 */
 		m2u = meta1_unpack_url(pc->m2urlv[0]);
-		e = m2v2_remote_execute_OVERWRITE(m2u->host, NULL, pc->url, beans);
+		e = m2v2_remote_execute_OVERWRITE(m2u->host, pc->url, beans);
 	}
 
 	if (e != NULL) {
@@ -441,7 +441,7 @@ _unref_in_m2v2(gchar **urlv, struct hc_url_s *url, GSList *beans)
 {
 	struct meta1_service_url_s *m2u = NULL;
 	m2u = meta1_unpack_url(urlv[0]);
-	GError *err = m2v2_remote_execute_RAW_DEL(m2u->host, NULL, url, beans);
+	GError *err = m2v2_remote_execute_RAW_DEL(m2u->host, url, beans);
 	if (NULL != err) {
 		GRID_WARN("REPAIR failed : failed to unref %u contents : (%d) %s",
 				g_slist_length(beans), err->code, err->message);
@@ -650,15 +650,14 @@ _move_chunks(struct policy_check_s *pc, struct m2v2_check_error_s *flaw,
 
 	// Update alias with new chunk beans
 	m1u = meta1_unpack_url(pc->m2urlv[0]);
-	err = m2v2_remote_execute_OVERWRITE(m1u->host, NULL, pc->url, all_beans);
+	err = m2v2_remote_execute_OVERWRITE(m1u->host, pc->url, all_beans);
 	if (err != NULL) {
 		g_prefix_error(&err, "Failed to reference new chunks: ");
 		goto _move_chunks_cleanup;
 	}
 
 	// Unreference old chunk beans
-	err = m2v2_remote_execute_RAW_DEL(m1u->host, NULL, pc->url,
-			old_contents);
+	err = m2v2_remote_execute_RAW_DEL(m1u->host, pc->url, old_contents);
 	if (err != NULL) {
 		g_prefix_error(&err, "Failed to unreference old chunks: ");
 	}
@@ -1003,7 +1002,7 @@ policy_load_beans(struct policy_check_s *pc)
 		if (!*u || !(m1u = meta1_unpack_url(*u)))
 			continue;
 
-		err = m2v2_remote_execute_GET(m1u->host, NULL, pc->url, 0, &beans);
+		err = m2v2_remote_execute_GET(m1u->host, pc->url, 0, &beans);
 		meta1_service_url_clean(m1u);
 
 		if (NULL != err) {

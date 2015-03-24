@@ -85,20 +85,20 @@ License along with this library.
 #define NAME_HEADER_VERSIONPOLICY "VERSION_POLICY"
 
 GSList *meta2_remote_content_append_v2(struct metacnx_ctx_s *ctx, GError ** err,
-    gchar *virtual_namespace, const container_id_t container_id, const gchar * content_path, content_length_t content_length);
+		gchar *virtual_namespace, const container_id_t container_id, const gchar * content_path, content_length_t content_length);
 
 /** Get the list of contents of ths container. */
 GSList *meta2_remote_container_list(addr_info_t * m2_addr, gint ms, GError ** err, const container_id_t container_id);
 
 /** Creates a container on the distant META2 server. */
 gboolean meta2_remote_container_create(addr_info_t * m2_addr, gint ms, GError ** err, const container_id_t container_id,
-    const gchar * name);
+		const gchar * name);
 
 gboolean meta2_remote_container_create_v2(addr_info_t * m2_addr, gint ms, GError ** err, const container_id_t container_id,
-    const gchar * name, const gchar * virtual_namespace);
+		const gchar * name, const gchar * virtual_namespace);
 
 gboolean meta2_remote_container_create_v3 (const addr_info_t *m2, gint ms, const char *ns, const char *cname,
-                const container_id_t cid, const char *stgpol, GError **e);
+		const container_id_t cid, const char *stgpol, GError **e);
 
 /** Destroys the container with the given ID on the remote container */
 gboolean meta2_remote_container_destroy(addr_info_t * m2_addr, gint ms, GError ** err, const container_id_t container_id);

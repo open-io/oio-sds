@@ -599,7 +599,7 @@ _reload_content(gs_content_t *content, GSList **p_filtered, GSList **p_beans, GE
 
 	GSList *beans = NULL;
 
-	*err = m2v2_remote_execute_GET(target, NULL, url, flags, &beans);
+	*err = m2v2_remote_execute_GET(target, url, flags, &beans);
 
 	hc_url_clean(url);
 
@@ -790,7 +790,7 @@ gs_status_t gs_destroy_content (gs_content_t *content, gs_error_t **err)
 	}
 
 	for(nb_refreshes = MAX_ATTEMPTS_COMMIT; nb_refreshes > 0; nb_refreshes--) {
-		localError = m2v2_remote_execute_DEL(target, NULL, url, TRUE, &beans);
+		localError = m2v2_remote_execute_DEL(target, url, TRUE, &beans);
 		if(NULL != localError) {
 			if (localError->code==CODE_CONTENT_NOTFOUND && nb_refreshes<MAX_ATTEMPTS_COMMIT) {
 				/*content already removed*/
@@ -1102,7 +1102,7 @@ hc_set_content_property(gs_content_t *content, char ** props, gs_error_t **e)
 		beans = g_slist_prepend(beans,bp);
 	}
 
-	ge = m2v2_remote_execute_PROP_SET(target, NULL, url, 0, beans);
+	ge = m2v2_remote_execute_PROP_SET(target, url, 0, beans);
 
 	if(NULL != ge) {
 		GSERRORCAUSE(e, ge, "Failed to update propertes to content [%s]",
@@ -1135,7 +1135,7 @@ hc_get_content_properties(gs_content_t *content, char ***result, gs_error_t **e)
 	GSList *beans = NULL;
 	GSList *l;
 
-	ge = m2v2_remote_execute_PROP_GET(target, NULL, url, M2V2_FLAG_NODELETED, &beans);
+	ge = m2v2_remote_execute_PROP_GET(target, url, M2V2_FLAG_NODELETED, &beans);
 
 	if(NULL != ge) {
 		GSERRORCAUSE(e, ge, "Failed to get  properties of content [%s]", C1_PATH(content));
@@ -1191,7 +1191,7 @@ hc_delete_content_property(gs_content_t *content, char ** keys ,gs_error_t **e)
 	GSList *l;
 	struct bean_PROPERTIES_s *bp;
 
-	ge = m2v2_remote_execute_PROP_GET(target, NULL, url, M2V2_FLAG_NODELETED, &out_beans);
+	ge = m2v2_remote_execute_PROP_GET(target, url, M2V2_FLAG_NODELETED, &out_beans);
 	if(NULL != ge) {
 		GSERRORCAUSE(e, ge, "Failed to delete propertes of content [%s]", C1_PATH(content));
 		status= GS_ERROR;
@@ -1210,7 +1210,7 @@ hc_delete_content_property(gs_content_t *content, char ** keys ,gs_error_t **e)
 			}
 		}
 	}
-	ge = m2v2_remote_execute_PROP_SET(target, NULL, url, 0, in_beans);
+	ge = m2v2_remote_execute_PROP_SET(target, url, 0, in_beans);
 
 	if(NULL != ge) {
 		GSERRORCAUSE(e, ge, "Failed to delete propertes of content [%s]", C1_PATH(content));
@@ -1239,7 +1239,7 @@ hc_copy_content(gs_container_t *c, const char *src, const char *dst, gs_error_t 
 	bzero(target, 64);
 	addr_info_to_string(&(c->meta2_addr), target, 64);
 
-	ge = m2v2_remote_execute_COPY(target, NULL, url, src);
+	ge = m2v2_remote_execute_COPY(target, url, src);
 	if(NULL != ge) {
 		GSERRORCAUSE(e, ge, "Failed to create a copy of content [%s] to [%s]",
 			src, hc_url_get(url, HCURL_WHOLE));

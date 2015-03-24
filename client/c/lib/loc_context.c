@@ -347,7 +347,7 @@ _get_content(struct metacnx_ctx_s *cnx, struct hc_url_s *url, struct beans_conte
 	bzero(target, 64);
 	addr_info_to_string(&(cnx->addr), target, 64);
 
-	if(!(e = m2v2_remote_execute_GET(target, NULL, url, 0, &beans))) {
+	if(!(e = m2v2_remote_execute_GET(target, url, 0, &beans))) {
 		*content = _beans_to_content(beans);
 		g_slist_free_full(beans, _bean_clean);
 	}

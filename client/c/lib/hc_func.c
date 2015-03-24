@@ -255,7 +255,7 @@ hc_create_container(gs_grid_storage_t *hc, struct hc_url_s *url,
 	if (c != NULL) {
 		gchar m2[STRLEN_ADDRINFO] = {0};
 		addr_info_to_string(&(c->meta2_addr), m2, STRLEN_ADDRINFO);
-		err = m2v2_remote_execute_HAS(m2, NULL, url);
+		err = m2v2_remote_execute_HAS(m2, url);
 		if (err == NULL) {
 			e = gs_error_new(CODE_CONTAINER_EXISTS,
 					"Failed to create container [%s]: "

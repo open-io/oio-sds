@@ -422,19 +422,8 @@ metacnx_close(struct metacnx_ctx_s *ctx)
 struct metacnx_ctx_s *
 metacnx_create(void)
 {
-	gsize i;
-	struct metacnx_ctx_s *ctx;
-
-	ctx = g_malloc0(sizeof(struct metacnx_ctx_s));
+	struct metacnx_ctx_s *ctx = g_malloc0(sizeof(struct metacnx_ctx_s));
 	ctx->fd = -1;
-#define IDSIZE (4*sizeof(int))
-	ctx->id = g_byte_array_sized_new(IDSIZE);
-
-	for (i = sizeof(int); i < IDSIZE; i += sizeof(int)) {
-		int r = random();
-		g_byte_array_append(ctx->id, (guint8 *) (&r), sizeof(int));
-	}
-
 	return ctx;
 }
 
@@ -443,8 +432,6 @@ metacnx_destroy(struct metacnx_ctx_s *ctx)
 {
 	if (!ctx)
 		return;
-	if (ctx->id)
-		g_byte_array_free(ctx->id, TRUE);
 	g_free(ctx);
 }
 

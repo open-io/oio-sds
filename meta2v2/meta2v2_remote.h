@@ -75,105 +75,88 @@ struct m2v2_create_params_s
  * @{
  */
 
-GByteArray* m2v2_remote_pack_PURGE(GByteArray *sid, struct hc_url_s *url,
-		gboolean dry_run);
+GByteArray* m2v2_remote_pack_PURGE(struct hc_url_s *url, gboolean dry_run);
 
-GByteArray* m2v2_remote_pack_DEDUP(GByteArray *sid, struct hc_url_s *url,
-		gboolean dry_run);
+GByteArray* m2v2_remote_pack_DEDUP(struct hc_url_s *url, gboolean dry_run);
 
-GByteArray* m2v2_remote_pack_CREATE(GByteArray *sid, struct hc_url_s *url,
-		struct m2v2_create_params_s *pols);
+GByteArray* m2v2_remote_pack_CREATE(struct hc_url_s *url, struct m2v2_create_params_s *pols);
 
-GByteArray* m2v2_remote_pack_DESTROY(GByteArray *sid, struct hc_url_s *url,
-		guint32 flags);
+GByteArray* m2v2_remote_pack_DESTROY(struct hc_url_s *url, guint32 flags);
 
-GByteArray* m2v2_remote_pack_HAS(GByteArray *sid, struct hc_url_s *url);
+GByteArray* m2v2_remote_pack_HAS(struct hc_url_s *url);
 
-GByteArray* m2v2_remote_pack_PUT(GByteArray *sid, struct hc_url_s *url,
-		GSList *beans);
+GByteArray* m2v2_remote_pack_PUT(struct hc_url_s *url, GSList *beans);
 
-GByteArray* m2v2_remote_pack_OVERWRITE(GByteArray *sid, struct hc_url_s *url,
-		GSList *beans);
+GByteArray* m2v2_remote_pack_OVERWRITE(struct hc_url_s *url, GSList *beans);
 
-GByteArray* m2v2_remote_pack_APPEND(GByteArray *sid, struct hc_url_s *url,
-		GSList *beans);
+GByteArray* m2v2_remote_pack_APPEND(struct hc_url_s *url, GSList *beans);
 
-GByteArray* m2v2_remote_pack_COPY(GByteArray *sid, struct hc_url_s *url,
-		const char *src);
+GByteArray* m2v2_remote_pack_COPY(struct hc_url_s *url, const char *src);
 
-GByteArray* m2v2_remote_pack_BEANS(GByteArray *sid, struct hc_url_s *url,
+GByteArray* m2v2_remote_pack_BEANS(struct hc_url_s *url,
 		const gchar *pol, gint64 size, gboolean append);
 
-GByteArray* m2v2_remote_pack_SPARE(GByteArray *sid, struct hc_url_s *url,
+GByteArray* m2v2_remote_pack_SPARE(struct hc_url_s *url,
 		const gchar *pol, GSList *notin_list, GSList *broken_list);
 
-GByteArray* m2v2_remote_pack_DEL(GByteArray *sid, struct hc_url_s *url,
-		gboolean sync_del);
+GByteArray* m2v2_remote_pack_DEL(struct hc_url_s *url, gboolean sync_del);
 
-GByteArray* m2v2_remote_pack_RAW_ADD(GByteArray *sid, struct hc_url_s *url,
-		GSList *beans);
+GByteArray* m2v2_remote_pack_RAW_ADD(struct hc_url_s *url, GSList *beans);
 
-GByteArray* m2v2_remote_pack_RAW_DEL(GByteArray *sid, struct hc_url_s *url,
-		GSList *beans);
+GByteArray* m2v2_remote_pack_RAW_DEL(struct hc_url_s *url, GSList *beans);
 
-GByteArray* m2v2_remote_pack_RAW_SUBST(GByteArray *sid, struct hc_url_s *url,
+GByteArray* m2v2_remote_pack_RAW_SUBST(struct hc_url_s *url,
 		GSList *new_chunks, GSList *old_chunks);
 
-GByteArray* m2v2_remote_pack_GET(GByteArray *sid, struct hc_url_s *url,
-		guint32 flags);
+GByteArray* m2v2_remote_pack_GET(struct hc_url_s *url, guint32 flags);
 
-GByteArray* m2v2_remote_pack_GET_BY_CHUNK(GByteArray *sid,
-		struct hc_url_s *url, const gchar *chunk_id, gint64 limit);
+GByteArray* m2v2_remote_pack_GET_BY_CHUNK(struct hc_url_s *url, const gchar *chunk_id, gint64 limit);
 
-GByteArray* m2v2_remote_pack_LIST(GByteArray *sid, struct hc_url_s *url,
-		struct list_params_s *p);
+GByteArray* m2v2_remote_pack_LIST(struct hc_url_s *url, struct list_params_s *p);
 
-GByteArray* m2v2_remote_pack_PROP_DEL(GByteArray *sid, struct hc_url_s *url,
-		GSList *names);
+GByteArray* m2v2_remote_pack_PROP_DEL(struct hc_url_s *url, GSList *names);
 
-GByteArray* m2v2_remote_pack_PROP_SET(GByteArray *sid, struct hc_url_s *url,
-		guint32 flags, GSList *beans);
+GByteArray* m2v2_remote_pack_PROP_SET(struct hc_url_s *url, guint32 flags, GSList *beans);
 
-GByteArray* m2v2_remote_pack_PROP_GET(GByteArray *sid, struct hc_url_s *url,
-		guint32 flags);
+GByteArray* m2v2_remote_pack_PROP_GET(struct hc_url_s *url, guint32 flags);
 
-GByteArray* m2v2_remote_pack_STGPOL(GByteArray *sid, struct hc_url_s *url,
-		const char *pol);
+GByteArray* m2v2_remote_pack_STGPOL(struct hc_url_s *url, const char *pol);
 
-GByteArray* m2v2_remote_pack_EXITELECTION(GByteArray *sid, struct hc_url_s *url);
+GByteArray* m2v2_remote_pack_EXITELECTION(struct hc_url_s *url);
 
-GByteArray* m2v2_remote_pack_SNAP_TAKE(GByteArray *sid, struct hc_url_s *url);
+GByteArray* m2v2_remote_pack_SNAP_TAKE(struct hc_url_s *url);
 
-GByteArray* m2v2_remote_pack_SNAP_LIST(GByteArray *sid, struct hc_url_s *url);
+GByteArray* m2v2_remote_pack_SNAP_LIST(struct hc_url_s *url);
 
-GByteArray* m2v2_remote_pack_SNAP_RESTORE(GByteArray *sid, struct hc_url_s *url,
-		gboolean hard_restore);
+GByteArray* m2v2_remote_pack_SNAP_RESTORE(struct hc_url_s *url, gboolean hard_restore);
 
-GByteArray* m2v2_remote_pack_SNAP_DELETE(GByteArray *sid, struct hc_url_s *url);
+GByteArray* m2v2_remote_pack_SNAP_DELETE(struct hc_url_s *url);
 
-GByteArray* m2v2_remote_pack_TOUCH_content(GByteArray *sid, struct hc_url_s *url);
-GByteArray* m2v2_remote_pack_TOUCH_container(GByteArray *sid, struct hc_url_s *url, guint32 flags);
+GByteArray* m2v2_remote_pack_TOUCH_content(struct hc_url_s *url);
+
+GByteArray* m2v2_remote_pack_TOUCH_container(struct hc_url_s *url, guint32 flags);
+
 /**
  * @}
  */
 
 #define M2V2_MODE_DRYRUN  0x10000000
 
-GError* m2v2_remote_execute_PURGE(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, gboolean dry_run, 
-		gdouble timeout_to_step, gdouble timeout_to_overall, GSList **out);
+GError* m2v2_remote_execute_PURGE(const gchar *target, struct hc_url_s *url,
+		gboolean dry_run, gdouble timeout_to_step, gdouble timeout_to_overall,
+		GSList **out);
 
 /**
  * @param out A status message
  */
-GError* m2v2_remote_execute_DEDUP(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, gboolean dry_run, gchar **out);
+GError* m2v2_remote_execute_DEDUP(const gchar *target, struct hc_url_s *url,
+		gboolean dry_run, gchar **out);
 
-GError* m2v2_remote_execute_CREATE(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, struct m2v2_create_params_s *pols);
+GError* m2v2_remote_execute_CREATE(const gchar *target, struct hc_url_s *url,
+		struct m2v2_create_params_s *pols);
 
-GError* m2v2_remote_execute_DESTROY(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, guint32 flags);
+GError* m2v2_remote_execute_DESTROY(const gchar *target, struct hc_url_s *url,
+		guint32 flags);
 
 /**
  * Locally destroy a container on several services.
@@ -183,15 +166,13 @@ GError* m2v2_remote_execute_DESTROY(const gchar *target, GByteArray *sid,
  * @param url URL of the container to destroy
  * @param flags
  */
-GError* m2v2_remote_execute_DESTROY_many(gchar **targets, GByteArray *sid,
-		struct hc_url_s *url, guint32 flags);
+GError* m2v2_remote_execute_DESTROY_many(gchar **targets, struct hc_url_s *url,
+		guint32 flags);
 
-GError* m2v2_remote_execute_HAS(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url);
+GError* m2v2_remote_execute_HAS(const gchar *target, struct hc_url_s *url);
 
-GError* m2v2_remote_execute_BEANS(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, const gchar *pol, gint64 size,
-		gboolean append, GSList **out);
+GError* m2v2_remote_execute_BEANS(const gchar *target, struct hc_url_s *url,
+		const gchar *pol, gint64 size, gboolean append, GSList **out);
 
 /**
  * Get spare chunks. The number of spare chunks returned
@@ -212,25 +193,24 @@ GError* m2v2_remote_execute_BEANS(const gchar *target, GByteArray *sid,
  * @note notin_list and broken_list may contain beans other than
  *   (struct bean_CHUNKS_s *) with no harm (they will be ignored).
  */
-GError* m2v2_remote_execute_SPARE(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, const gchar *stgpol,
-		GSList *notin_list, GSList *broken_list,
+GError* m2v2_remote_execute_SPARE(const gchar *target, struct hc_url_s *url,
+		const gchar *stgpol, GSList *notin_list, GSList *broken_list,
 		GSList **out);
 
-GError* m2v2_remote_execute_PUT(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, GSList *in, GSList **out);
+GError* m2v2_remote_execute_PUT(const gchar *target, struct hc_url_s *url,
+		GSList *in, GSList **out);
 
-GError* m2v2_remote_execute_OVERWRITE(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, GSList *in);
+GError* m2v2_remote_execute_OVERWRITE(const gchar *target, struct hc_url_s *url,
+		GSList *in);
 
-GError* m2v2_remote_execute_APPEND(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, GSList *in, GSList **out);
+GError* m2v2_remote_execute_APPEND(const gchar *target, struct hc_url_s *url,
+		GSList *in, GSList **out);
 
-GError* m2v2_remote_execute_COPY(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, const char *src);
+GError* m2v2_remote_execute_COPY(const gchar *target, struct hc_url_s *url,
+		const char *src);
 
-GError* m2v2_remote_execute_GET(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, guint32 flags, GSList **out);
+GError* m2v2_remote_execute_GET(const gchar *target, struct hc_url_s *url,
+		guint32 flags, GSList **out);
 
 /**
  * Get aliases (and related beans) to which a chunk belongs.
@@ -240,63 +220,61 @@ GError* m2v2_remote_execute_GET(const gchar *target, GByteArray *sid,
  *   the whole chunk id, not just the hash part)
  * @param limit The maximum number of returned aliases (-1 means no limit)
  */
-GError* m2v2_remote_execute_GET_BY_CHUNK(const gchar *target, GByteArray *sid,
+GError* m2v2_remote_execute_GET_BY_CHUNK(const gchar *target, 
 		struct hc_url_s *url, const gchar *chunk_id, gint64 limit, GSList **out);
 
-GError* m2v2_remote_execute_DEL(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, gboolean sync_del, GSList **out);
+GError* m2v2_remote_execute_DEL(const gchar *target, struct hc_url_s *url,
+		gboolean sync_del, GSList **out);
 
-GError* m2v2_remote_execute_RAW_ADD(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, GSList *beans);
+GError* m2v2_remote_execute_RAW_ADD(const gchar *target, struct hc_url_s *url,
+		GSList *beans);
 
-GError* m2v2_remote_execute_RAW_DEL(const gchar *target, GByteArray *sid,
-		struct hc_url_s *url, GSList *beans);
+GError* m2v2_remote_execute_RAW_DEL(const gchar *target, struct hc_url_s *url,
+		GSList *beans);
 
 /** Substitute chunks by another one in meta2 database.
  * TODO: return number of substitutions */
-GError* m2v2_remote_execute_RAW_SUBST(const gchar *target, GByteArray *sid,
+GError* m2v2_remote_execute_RAW_SUBST(const gchar *target,
 		struct hc_url_s *url, GSList *new_chunks, GSList *old_chunks);
 
-GError* m2v2_remote_execute_RAW_SUBST_single(const gchar *target, GByteArray *sid,
+GError* m2v2_remote_execute_RAW_SUBST_single(const gchar *target,
 		struct hc_url_s *url,
 		struct bean_CHUNKS_s *new_chunk, struct bean_CHUNKS_s *old_chunk);
 
-GError* m2v2_remote_execute_LIST(const gchar *target, GByteArray *sid,
+GError* m2v2_remote_execute_LIST(const gchar *target,
 		struct hc_url_s *url, struct list_params_s *p,
 		struct list_result_s *out);
 
-GError* m2v2_remote_execute_PROP_DEL(const gchar *target, GByteArray *sid,
+GError* m2v2_remote_execute_PROP_DEL(const gchar *target,
 		struct hc_url_s *url, GSList *names);
 
-GError* m2v2_remote_execute_PROP_SET(const gchar *target, GByteArray *sid,
+GError* m2v2_remote_execute_PROP_SET(const gchar *target,
 		struct hc_url_s *url, guint32 flags, GSList *in);
 
-GError* m2v2_remote_execute_PROP_GET(const gchar *target, GByteArray *sid,
+GError* m2v2_remote_execute_PROP_GET(const gchar *target,
 		struct hc_url_s *url, guint32 flags, GSList **out);
 
-GError* m2v2_remote_execute_STGPOL(const gchar *target, GByteArray *sid,
+GError* m2v2_remote_execute_STGPOL(const gchar *target,
 		struct hc_url_s *url, const char *pol, GSList **out);
 
-GError* m2v2_remote_execute_EXITELECTION(const gchar *target, GByteArray *sid,
+GError* m2v2_remote_execute_EXITELECTION(const gchar *target,
                 struct hc_url_s *url);
 
-GError* m2v2_remote_execute_SNAP_TAKE(const gchar *target, GByteArray *sid,
+GError* m2v2_remote_execute_SNAP_TAKE(const gchar *target,
 		struct hc_url_s *url);
 
-GError* m2v2_remote_execute_SNAP_LIST(const gchar *target, GByteArray *sid,
+GError* m2v2_remote_execute_SNAP_LIST(const gchar *target,
 		struct hc_url_s *url, GSList **out);
 
-GError* m2v2_remote_execute_SNAP_RESTORE(const gchar *target, GByteArray *sid,
+GError* m2v2_remote_execute_SNAP_RESTORE(const gchar *target,
 		struct hc_url_s *url, gboolean hard_restore);
 
-GError* m2v2_remote_execute_SNAP_DELETE(const gchar *target, GByteArray *sid,
+GError* m2v2_remote_execute_SNAP_DELETE(const gchar *target,
 		struct hc_url_s *url);
 
-GError* m2v2_remote_touch_content(const gchar *target, GByteArray *sid,
-        struct hc_url_s *url);
+GError* m2v2_remote_touch_content(const gchar *target, struct hc_url_s *url);
 
-GError* m2v2_remote_touch_container_ex(const gchar *target, GByteArray *sid,
-        struct hc_url_s *url, guint32 flags);
+GError* m2v2_remote_touch_container_ex(const gchar *target, struct hc_url_s *url, guint32 flags);
 
 /**
  * Allows to send a request with custom timeouts.

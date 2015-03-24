@@ -21,17 +21,14 @@ License along with this library.
 # define G_LOG_DOMAIN "meta2.remote"
 #endif
 
+#include <metautils/lib/metautils.h>
+
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <metautils/lib/metautils.h>
-
-#include <glib.h>
-
 #include "meta2_remote.h"
-#include "internals.h"
 
 typedef enum meta2_operation_e
 {
@@ -109,10 +106,8 @@ meta2_remote_request_create(meta2_operation_t mop, const container_id_t id)
 	char *wrkBuf = NULL;
 
 	g_assert (id != NULL);
-
-	MESSAGE m = message_create();
 	__get_request_name2(mop, &wrkBuf, &wrkLen);
-	message_set_NAME(m, wrkBuf, wrkLen, NULL);
+	MESSAGE m = message_create_named(wrkBuf);
 	message_add_field(m, NAME_MSGKEY_CONTAINERID, id, sizeof(container_id_t));
 	return m;
 }
@@ -649,15 +644,11 @@ concat_contents (GError **err, gpointer udata, gint code, guint8 *body, gsize bo
 }
 
 static MESSAGE
-meta2raw_create_request(GByteArray *id, char *name, GByteArray *body, ...)
+meta2raw_create_request(char *name, GByteArray *body, ...)
 {
-	MESSAGE msg = message_create();
-	if (id)
-		message_set_ID (msg, id->data, id->len, NULL);
+	MESSAGE msg = message_create_named(name);
 	if (body)
 		message_set_BODY (msg, body->data, body->len, NULL);
-	if (name)
-		message_set_NAME (msg, name, strlen(name), NULL);
 
 	va_list args;
 	va_start(args,body);
@@ -696,10 +687,10 @@ meta2raw_remote_stat_content(struct metacnx_ctx_s *ctx, const container_id_t cid
 		goto exit_label;
 	}
 
-	CID_2_GBA(gba_cid,cid);
-	STRING_2_GBA(gba_path, (const guint8*)path, path_len);
-	STRING_2_GBA(gba_check, (guint8*)"1", 1);
-	request = meta2raw_create_request(ctx->id, NAME_MSGNAME_M2RAW_GETCHUNKS, NULL,
+	gba_cid = metautils_gba_from_cid(cid);
+	gba_path = metautils_gba_from_string (path);
+	gba_check = metautils_gba_from_string("1");
+	request = meta2raw_create_request(NAME_MSGNAME_M2RAW_GETCHUNKS, NULL,
 			NAME_MSGKEY_CONTAINERID, gba_cid,
 			NAME_MSGKEY_CONTENTPATH, gba_path,
 			NAME_HEADER_CHECKFLAGS, (check_flags ? gba_check : NULL),
@@ -755,7 +746,7 @@ meta2raw_remote_update_chunks(
 		goto error_alloc_body;
 	}
 
-	request = meta2raw_create_request(ctx->id,NAME_MSGNAME_M2RAW_SETCHUNKS,body,NULL);
+	request = meta2raw_create_request(NAME_MSGNAME_M2RAW_SETCHUNKS,body,NULL);
 
 	if (allow_update)
 		message_add_field(request, "ALLOW_UPDATE", "1", 1);
@@ -806,7 +797,7 @@ meta2raw_remote_update_content(
 		goto error_alloc_body;
 	}
 
-	request = meta2raw_create_request(ctx->id,NAME_MSGNAME_M2RAW_SETCONTENT,body,NULL);
+	request = meta2raw_create_request(NAME_MSGNAME_M2RAW_SETCONTENT,body,NULL);
 
 	if (allow_update)
 		message_add_field(request, "ALLOW_UPDATE", "1", 1);
@@ -854,7 +845,7 @@ meta2raw_remote_delete_chunks(
 		goto error_alloc_body;
 	}
 	
-	request = meta2raw_create_request(ctx->id,NAME_MSGNAME_M2RAW_DELCHUNKS,body,NULL);
+	request = meta2raw_create_request(NAME_MSGNAME_M2RAW_DELCHUNKS,body,NULL);
 
 	if (!metaXClient_reply_sequence_run_context (err, ctx, request, &data)) {
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
@@ -892,9 +883,9 @@ meta2raw_remote_get_content_from_name(
 		goto exit_label;
 	}
 
-	CID_2_GBA(gba_cid,container_id);
-	STRING_2_GBA(gba_path,(const guint8*)path,path_len);
-	request = meta2raw_create_request(ctx->id, NAME_MSGNAME_M2RAW_GETCONTENTBYPATH, NULL,
+	gba_cid = metautils_gba_from_cid (container_id);
+	gba_path = metautils_gba_from_string (path);
+	request = meta2raw_create_request(NAME_MSGNAME_M2RAW_GETCONTENTBYPATH, NULL,
 		NAME_MSGKEY_CONTAINERID, gba_cid,
 		NAME_MSGKEY_CONTENTPATH, gba_path,
 		NULL);
@@ -948,8 +939,8 @@ meta2raw_remote_get_contents_names(
 		goto exit_label;
 	}
 
-	CID_2_GBA(gba_cid,container_id);
-	request = meta2raw_create_request(ctx->id, NAME_MSGNAME_M2RAW_GETCONTENTS, NULL,
+	gba_cid = metautils_gba_from_cid(container_id);
+	request = meta2raw_create_request(NAME_MSGNAME_M2RAW_GETCONTENTS, NULL,
 		NAME_MSGKEY_CONTAINERID, gba_cid,
 		NULL);
 
@@ -992,10 +983,10 @@ meta2raw_remote_get_content_from_chunkid(
 		goto exit_label;
 	}
 
-	CID_2_GBA(gba_cid,container_id);
+	gba_cid = metautils_gba_from_cid(container_id);
 	gba_id = chunk_id_marshall(id, NULL);
 	
-	request = meta2raw_create_request(ctx->id, NAME_MSGNAME_M2RAW_GETCONTENTBYCHUNK, NULL,
+	request = meta2raw_create_request(NAME_MSGNAME_M2RAW_GETCONTENTBYCHUNK, NULL,
 		NAME_MSGKEY_CONTAINERID, gba_cid,
 		NAME_MSGKEY_CHUNKID, gba_id,
 		NULL);
@@ -1067,17 +1058,6 @@ meta2_remote_stat_content(struct metacnx_ctx_s *cnx, const container_id_t contai
 	return meta2raw_remote_stat_content(cnx, container_id, path, path_len, TRUE, err);
 }
 
-static MESSAGE
-_build_request(GByteArray *id, char *name)
-{
-	MESSAGE msg = message_create();
-	if (id)
-		message_set_ID (msg, id->data, id->len, NULL);
-	if (name)
-		message_set_NAME (msg, name, strlen(name), NULL);
-	return msg;
-}
-
 status_t
 meta2_remote_touch_content(struct metacnx_ctx_s *ctx,
 		const container_id_t var_0, const gchar* var_1, GError **err)
@@ -1096,7 +1076,7 @@ meta2_remote_touch_content(struct metacnx_ctx_s *ctx,
 	}
 
 	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-	MESSAGE request = _build_request(ctx->id, "REQ_M2RAW_TOUCH_CONTENT");
+	MESSAGE request = message_create_named("REQ_M2RAW_TOUCH_CONTENT");
 	do {
 		GByteArray *gba = metautils_gba_from_cid(var_0);
 		message_add_field(request, "CONTAINER_ID", gba->data, gba->len);
@@ -1139,7 +1119,7 @@ status_t meta2_remote_touch_container_ex(struct metacnx_ctx_s *ctx, const contai
 	}
 
 	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-	MESSAGE request = _build_request(ctx->id, "REQ_M2RAW_TOUCH_CONTAINER");
+	MESSAGE request = message_create_named("REQ_M2RAW_TOUCH_CONTAINER");
 
 	do {
 		GByteArray *gba = metautils_gba_from_cid(var_0);

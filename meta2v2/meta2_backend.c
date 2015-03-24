@@ -863,8 +863,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 					&n, &peers);
 			// peers may be NULL if no zookeeper URL is configured
 			if (!err && peers != NULL && g_strv_length(peers) > 0) {
-				err = m2v2_remote_execute_DESTROY_many(
-						peers, NULL, url, flags);
+				err = m2v2_remote_execute_DESTROY_many(peers, url, flags);
 				g_strfreev(peers);
 				peers = NULL;
 			}

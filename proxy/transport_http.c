@@ -31,6 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/stats_holder.h>
 
 #include "transport_http.h"
+#include "macros.h"
 
 struct transport_client_context_s
 {
@@ -397,6 +398,7 @@ static void
 _access_log(struct req_ctx_s *r, gint status, gsize out_len)
 {
 	struct timespec now, diff_total, diff_handler;
+	const gchar *reqid = g_tree_lookup(r->request->tree_headers, PROXYD_HEADER_REQID);
 
 	network_server_now(&now);
 	timespec_sub(&now, &r->tv_start, &diff_total);
@@ -409,11 +411,12 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len)
 	g_string_append(gstr, r->client->peer_name);
 
 	g_string_append_printf(gstr,
-			" %s %d %ld.%06ld %"G_GSIZE_FORMAT" - %s t=%ld.%06ld",
+			" %s %d %ld.%06ld %"G_GSIZE_FORMAT" %s %s t=%ld.%06ld",
 			r->request->cmd,
 			status,
 			diff_total.tv_sec, diff_total.tv_nsec / 1000,
 			out_len,
+			(reqid && *reqid) ? reqid : "-",
 			r->request->req_uri,
 			diff_handler.tv_sec, diff_handler.tv_nsec / 1000);
 
