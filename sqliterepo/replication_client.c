@@ -65,7 +65,7 @@ peer_restore(const gchar *target, struct sqlx_name_s *name,
 	}
 
 	GByteArray *encoded = _pack_RESTORE(name, dump);
-	struct client_s *client = gridd_client_create(target, encoded, NULL, NULL);
+	struct gridd_client_s *client = gridd_client_create(target, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
 
 	if (!client)
@@ -91,7 +91,7 @@ peers_restore(gchar **targets, struct sqlx_name_s *name,
 	}
 
 	GByteArray *encoded = _pack_RESTORE(name, dump);
-	struct client_s **clients = gridd_client_create_many(targets, encoded, NULL, NULL);
+	struct gridd_client_s **clients = gridd_client_create_many(targets, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
 	gridd_clients_set_timeout(clients, 5.0, 30.0);
 
@@ -111,7 +111,7 @@ GError *
 peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 		peer_dump_cb callback, gpointer cb_arg)
 {
-	struct client_s *client;
+	struct gridd_client_s *client;
 	GByteArray *encoded;
 	GError *err = NULL;
 

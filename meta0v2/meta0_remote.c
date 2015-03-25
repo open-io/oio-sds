@@ -55,7 +55,7 @@ meta0_remote_get_meta1_all(addr_info_t * meta0, gint ms, GError ** err)
 	GByteArray *gba = message_marshall_gba_and_clean(message_create_request(
 				NULL, NULL, NAME_MSGNAME_M0_GETALL, NULL, NULL));
 
-	struct client_s *client = gridd_client_create_empty();
+	struct gridd_client_s *client = gridd_client_create_empty();
 	e = gridd_client_request(client, gba, NULL, on_reply);
 	g_byte_array_unref(gba);
 	gba = NULL;
@@ -109,7 +109,7 @@ meta0_remote_get_meta1_one(addr_info_t *m0a, gint ms, const guint8 *prefix,
 			NULL));
 	g_byte_array_unref(hdr);
 
-	struct client_s *client = gridd_client_create_empty();
+	struct gridd_client_s *client = gridd_client_create_empty();
 	e = gridd_client_request(client, req, NULL, on_reply);
 	g_byte_array_unref(req);
 	req = NULL;
@@ -145,7 +145,7 @@ meta0_remote_cache_refresh(addr_info_t *m0a, gint ms, GError ** err)
 {
 	GError *e = NULL;
 
-	struct client_s *client = gridd_client_create_empty();
+	struct gridd_client_s *client = gridd_client_create_empty();
 
 	GByteArray *gba = message_marshall_gba_and_clean(message_create_request(
 				NULL, NULL, NAME_MSGNAME_M0_RELOAD, NULL, NULL));
@@ -180,7 +180,7 @@ meta0_remote_fill(addr_info_t *m0a, gint ms, gchar **urls,
 {
 	MESSAGE request = NULL;
 	GError *local_err = NULL;
-	struct client_s *client = NULL;
+	struct gridd_client_s *client = NULL;
 	gchar target[64];
 	GByteArray *packed = NULL;
 
@@ -241,7 +241,7 @@ meta0_remote_fill_v2(addr_info_t *m0a, gint ms,
 {
 	MESSAGE request = NULL;
 	GError *local_err = NULL;
-	struct client_s *client = NULL;
+	struct gridd_client_s *client = NULL;
 	gchar target[64];
 	GByteArray *packed = NULL;
 
@@ -290,7 +290,7 @@ meta0_remote_assign(addr_info_t *m0a, gint ms, gboolean nocheck, GError **err)
 {
         MESSAGE request = NULL;
         GError *local_err = NULL;
-	struct client_s *client = NULL;
+	struct gridd_client_s *client = NULL;
 	gchar target[64];
 	GByteArray *packed = NULL;
 
@@ -334,7 +334,7 @@ meta0_remote_disable_meta1(addr_info_t *m0a, gint ms, gchar **urls, gboolean noc
 {
 	MESSAGE request = NULL;
 	GError *local_err = NULL;
-	struct client_s *client = NULL;
+	struct gridd_client_s *client = NULL;
 	gchar target[64];
 	GByteArray *packed = NULL;
 
@@ -389,7 +389,7 @@ meta0_remote_get_meta1_info(addr_info_t *m0a, gint ms, GError **err)
 	GError *local_err = NULL;
 	gchar **result = NULL;
 	MESSAGE request = NULL;
-	struct client_s *client = NULL;
+	struct gridd_client_s *client = NULL;
 	gchar target[64];
 	GByteArray *packed = NULL;
 
@@ -462,7 +462,7 @@ meta0_remote_destroy_meta1ref(addr_info_t *m0a, gint ms, gchar *urls, GError **e
 {
 	MESSAGE request = NULL;
 	GError *local_err = NULL;
-	struct client_s *client = NULL;
+	struct gridd_client_s *client = NULL;
 	gchar target[64];
 	GByteArray *packed = NULL;
 
@@ -507,7 +507,7 @@ meta0_remote_destroy_meta0zknode(addr_info_t *m0a, gint ms, gchar *urls, GError 
 {
 	MESSAGE request = NULL;
 	GError *local_err = NULL;
-	struct client_s *client = NULL;
+	struct gridd_client_s *client = NULL;
 	gchar target[64];
 	GByteArray *packed = NULL;
 

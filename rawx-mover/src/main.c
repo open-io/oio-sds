@@ -725,8 +725,7 @@ validate_chunk_in_one_meta2(struct upload_info_s *info, const char *str_addr)
 
 		GRID_DEBUG("Call meta2 %s for substitution of %s by %s",
 				str_addr, old_url, new_url);
-		gerr = m2v2_remote_execute_RAW_SUBST_single(str_addr, NULL, url,
-				new, old);
+		gerr = m2v2_remote_execute_RAW_SUBST_single(str_addr, url, new, old);
 		if (gerr) {
 			// Host is meta2v1 but we didn't know
 			if (gerr->code == CODE_NOT_FOUND) {

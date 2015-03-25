@@ -45,66 +45,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/generic.h>
 #include <meta2/remote/meta2_services_remote.h>
 
+#include "macros.h"
 #include "path_parser.h"
 #include "transport_http.h"
 
 #define BADREQ(M,...) NEWERROR(CODE_BAD_REQUEST,M,##__VA_ARGS__)
-
-#ifndef PROXYD_DEFAULT_TTL_SERVICES
-#define PROXYD_DEFAULT_TTL_SERVICES 3600
-#endif
-
-#ifndef PROXYD_DEFAULT_MAX_SERVICES
-#define PROXYD_DEFAULT_MAX_SERVICES 200000
-#endif
-
-#ifndef PROXYD_DEFAULT_TTL_CSM0
-#define PROXYD_DEFAULT_TTL_CSM0 0
-#endif
-
-#ifndef PROXYD_DEFAULT_MAX_CSM0
-#define PROXYD_DEFAULT_MAX_CSM0 0
-#endif
-
-#ifndef PROXYD_PREFIX
-#define PROXYD_PREFIX "v1.0"
-#endif
-
-#ifndef PROXYD_PATH_MAXLEN
-#define PROXYD_PATH_MAXLEN 2048
-#endif
-
-#ifndef PROXYD_DIR_TIMEOUT_SINGLE
-#define PROXYD_DIR_TIMEOUT_SINGLE 10.0
-#endif
-
-#ifndef PROXYD_DIR_TIMEOUT_GLOBAL
-#define PROXYD_DIR_TIMEOUT_GLOBAL 30.0
-#endif
-
-#ifndef PROXYD_M2_TIMEOUT_SINGLE
-#define PROXYD_M2_TIMEOUT_SINGLE 10.0
-#endif
-
-#ifndef PROXYD_M2_TIMEOUT_GLOBAL
-#define PROXYD_M2_TIMEOUT_GLOBAL 30.0
-#endif
-
-#ifndef PROXYD_DEFAULT_TIMEOUT_CONSCIENCE
-#define PROXYD_DEFAULT_TIMEOUT_CONSCIENCE 5000 /*ms*/
-#endif
-
-#ifndef PROXYD_DEFAULT_PERIOD_DOWNSTREAM
-#define PROXYD_DEFAULT_PERIOD_DOWNSTREAM 10 /*s*/
-#endif
-
-#ifndef PROXYD_DEFAULT_PERIOD_UPSTREAM
-#define PROXYD_DEFAULT_PERIOD_UPSTREAM 1 /*s*/
-#endif
-
-#ifndef PROXYD_HEADER_PREFIX
-#define PROXYD_HEADER_PREFIX "X-oio-"
-#endif
 
 #define OPT(N)    _req_get_option(args,(N))
 #define TOK(N)    _req_get_token(args,(N))
@@ -287,8 +232,15 @@ handler_action (gpointer u, struct http_request_s *rq,
 			(gchar *) g_tree_lookup (rq->tree_headers, n), FALSE);
 	}
 
-	struct hc_url_s *url = NULL;
+	// Get a request id for the current request 
+	const gchar *reqid = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_REQID);
+	if (reqid)
+		gridd_set_reqid(reqid);
+	else
+		gridd_set_random_reqid();
 
+	// Then parse the request to find a handler
+	struct hc_url_s *url = NULL;
 	struct req_uri_s ruri = {NULL, NULL, NULL, NULL, NULL};
 	_req_uri_extract_components (rq->req_uri, &ruri);
 
@@ -305,13 +257,15 @@ handler_action (gpointer u, struct http_request_s *rq,
 		rp->finalize ();
 		rc = HTTPRC_DONE;
 	} else {
-		struct req_args_s args = {NULL,NULL,NULL, NULL,NULL,0};
+		struct req_args_s args = {NULL,NULL,NULL, NULL,NULL, 0};
 		args.req_uri = &ruri;
 		args.matchings = matchings;
 		args.rq = rq;
 		args.rp = rp;
-		if (_boolhdr ("x-disallow-empty-service-list"))
+
+		if (_boolhdr (PROXYD_HEADER_NOEMPTY))
 			args.flags |= FLAG_NOEMPTY;
+
 		args.url = url = _metacd_load_url (&args);
 		req_handler_f handler = path_matching_get_udata (*matchings);
 		rc = (*handler) (&args);

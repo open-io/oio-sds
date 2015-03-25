@@ -40,8 +40,6 @@ License along with this library.
 #  define GRIDC_DEFAULT_TIMEOUT_OVERALL 30.0
 # endif
 
-#define client_s gridd_client_s
-
 struct gridd_client_s;
 struct gridd_client_factory_s;
 

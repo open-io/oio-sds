@@ -59,6 +59,34 @@ _reply_m2_error (struct req_args_s *args, GError * err)
 }
 
 static enum http_rc_e
+_reply_properties (struct req_args_s *args, GError * err, GSList * beans)
+{
+	if (err) {
+		if (err->code == CODE_CONTAINER_NOTFOUND)
+			return _reply_forbidden_error (args, err);
+		if (err->code == CODE_CONTAINER_NOTFOUND)
+			return _reply_forbidden_error (args, err);
+		return _reply_system_error (args, err);
+	}
+
+	GString *gs = g_string_new("{");
+	for (GSList *l=beans; l ;l=l->next) {
+		if (DESCR(l->data) != &descr_struct_PROPERTIES)
+			continue;
+		if (l != beans)
+			g_string_append_c(gs, ',');
+		struct bean_PROPERTIES_s *bean = l->data;
+		g_string_append_printf(gs, "\"%s\":\"%.*s\"",
+				PROPERTIES_get_key(bean)->str,
+				PROPERTIES_get_value(bean)->len, PROPERTIES_get_value(bean)->data);
+	}
+	g_string_append_c(gs, '}');
+
+	_bean_cleanl2 (beans);
+	return _reply_success_json (args, gs);
+}
+
+static enum http_rc_e
 _reply_aliases (struct req_args_s *args, GError * err, GSList * beans)
 {
 	if (err)
@@ -437,7 +465,7 @@ action_m2_container_list (struct req_args_s *args)
 			p.flag_nodeleted = 0;
 		if (OPT("all"))
 			p.flag_allversion = ~0;
-		return m2v2_remote_execute_LIST (m2->host, NULL, args->url, &p, &list_out);
+		return m2v2_remote_execute_LIST (m2->host, args->url, &p, &list_out);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	if (!err) {
@@ -494,7 +522,7 @@ action_m2_container_create (struct req_args_s *args)
 			hc_url_get_option_value (args->url, "verpol"),
 			FALSE
 		};
-		return m2v2_remote_execute_CREATE (m2->host, NULL, args->url, &param);
+		return m2v2_remote_execute_CREATE (m2->host, args->url, &param);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	if (err && err->code == CODE_CONTAINER_NOTFOUND)	// The reference doesn't exist
@@ -509,7 +537,7 @@ action_m2_container_destroy (struct req_args_s *args)
 {
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_DESTROY (m2->host, NULL, args->url, 0);
+		return m2v2_remote_execute_DESTROY (m2->host, args->url, 0);
 	}
 
 	GError *err;
@@ -527,8 +555,8 @@ action_m2_container_purge (struct req_args_s *args, struct json_object *jargs)
 	GSList *beans = NULL;
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_PURGE (m2->host, NULL,
-			args->url, FALSE, m2_timeout_req, m2_timeout_all, &beans);
+		return m2v2_remote_execute_PURGE (m2->host, args->url, FALSE,
+				m2_timeout_req, m2_timeout_all, &beans);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	return _reply_beans (args, err, beans);
@@ -545,7 +573,7 @@ action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
 		(void) next;
 		gchar *msg = NULL;
 		GError *e =
-			m2v2_remote_execute_DEDUP (m2->host, NULL, args->url, 0, &msg);
+			m2v2_remote_execute_DEDUP (m2->host, args->url, 0, &msg);
 		if (msg) {
 			if (!first)
 				g_string_append_c (gstr, ',');
@@ -580,8 +608,7 @@ action_m2_container_stgpol (struct req_args_s *args, struct json_object *jargs)
 	GSList *beans = NULL;
 	GError *hook (struct meta1_service_url_s * m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_STGPOL (m2->host, NULL, args->url,
-			stgpol, &beans);
+		return m2v2_remote_execute_STGPOL (m2->host,  args->url, stgpol, &beans);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	if (NULL != err) {
@@ -602,7 +629,7 @@ action_m2_container_touch (struct req_args_s *args, struct json_object *jargs)
 	(void) jargs;
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_touch_container_ex (m2->host, NULL, args->url, 0);
+		return m2v2_remote_touch_container_ex (m2->host, args->url, 0);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	if (NULL != err) {
@@ -626,7 +653,7 @@ action_m2_container_raw_insert (struct req_args_s *args, struct json_object *jar
 
 	GError * hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_RAW_ADD (m2->host, NULL, args->url, beans);
+		return m2v2_remote_execute_RAW_ADD (m2->host, args->url, beans);
 	}
 	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	if (NULL != err) {
@@ -647,7 +674,7 @@ action_m2_container_raw_delete (struct req_args_s *args, struct json_object *jar
 
 	GError * hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_RAW_DEL (m2->host, NULL, args->url, beans);
+		return m2v2_remote_execute_RAW_DEL (m2->host, args->url, beans);
 	}
 	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	if (NULL != err) {
@@ -681,7 +708,7 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 
 	GError * hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_RAW_SUBST (m2->host, NULL, args->url, beans_new, beans_old);
+		return m2v2_remote_execute_RAW_SUBST (m2->host, args->url, beans_new, beans_old);
 	}
 	if (!err)
 		err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
@@ -732,10 +759,25 @@ action_m2_content_beans (struct req_args_s *args, struct json_object *jargs)
 	GSList *beans = NULL;
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_BEANS (m2->host, NULL, args->url,
-			stgpol, size, 0, &beans);
+		return m2v2_remote_execute_BEANS (m2->host, args->url, stgpol, size, 0, &beans);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+
+	// Patch the chunk size to ease putting contents with unknown size.
+	if (!err) {
+		gint64 chunk_size = 0;
+		NSINFO_DO(chunk_size = nsinfo.chunk_size);
+		chunk_size = MAX(chunk_size,1);
+		for (GSList *l=beans; l ;l=l->next) {
+			if (l->data && (DESCR(l->data) == &descr_struct_CHUNKS)) {
+				struct bean_CHUNKS_s *bean = l->data;
+				CHUNKS_set_size(bean, chunk_size);
+			}
+		}
+		args->rp->add_header(PROXYD_HEADER_PREFIX "ns-chunk-size",
+				g_strdup_printf("%"G_GINT64_FORMAT, chunk_size));
+	}
+
 	return _reply_simplified_beans (args, err, beans, TRUE);
 }
 
@@ -755,8 +797,9 @@ _m2_json_spare (struct hc_url_s *url, struct json_object *jbody, GSList ** out)
 	GSList *obeans = NULL;
 	GError *hook (struct meta1_service_url_s * m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_SPARE (m2->host, NULL, url,
-			hc_url_get_option_value (url, "stgpol"), notin, broken, &obeans);
+		return m2v2_remote_execute_SPARE (m2->host, url,
+				hc_url_get_option_value (url, "stgpol"),
+				notin, broken, &obeans);
 	}
 	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, url, hook);
 	_bean_cleanl2 (broken);
@@ -783,7 +826,7 @@ action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 	(void) jargs;
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_touch_content (m2->host, NULL, args->url);
+		return m2v2_remote_touch_content (m2->host, args->url);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	if (err && err->code == CODE_CONTAINER_NOTFOUND)
@@ -800,7 +843,7 @@ action_m2_content_stgpol (struct req_args_s *args, struct json_object *jargs)
 
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_STGPOL (m2->host, NULL, args->url, stgpol, NULL);
+		return m2v2_remote_execute_STGPOL (m2->host, args->url, stgpol, NULL);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	if (err && err->code == CODE_CONTAINER_NOTFOUND)
@@ -832,13 +875,10 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_PROP_SET (m2->host, NULL, args->url, 0, beans);
+		return m2v2_remote_execute_PROP_SET (m2->host, args->url, M2V2_FLAG_NOFORMATCHECK, beans);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	_bean_cleanl2 (beans);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND)
-		return _reply_forbidden_error (args, err);
-	return _reply_m2_error (args, err);
+	return _reply_properties (args, err, beans);
 }
 
 static enum http_rc_e
@@ -852,6 +892,11 @@ action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
 	(void) version;
 
 	// build the payload
+	for (int i=json_object_array_length(jargs); i>0 ;i--) {
+		json_object *item = json_object_array_get_idx (jargs, i-1);
+		if (!json_object_is_type(item, json_type_string))
+			return _reply_format_error(args, BADREQ ("string expected as property name"));
+	}
 	GSList *names = NULL;
 	for (int i=json_object_array_length(jargs); i>0 ;i--) {
 		json_object *item = json_object_array_get_idx (jargs, i-1);
@@ -860,7 +905,7 @@ action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
 
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_PROP_DEL (m2->host, NULL, args->url, names);
+		return m2v2_remote_execute_PROP_DEL (m2->host, args->url, names);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	g_slist_free_full (names, g_free0);
@@ -880,13 +925,11 @@ action_m2_content_propget (struct req_args_s *args, struct json_object *jargs)
 	GSList *beans = NULL;
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_PROP_GET (m2->host, NULL, args->url, 0, &beans);
+		return m2v2_remote_execute_PROP_GET (m2->host, args->url,
+				M2V2_FLAG_ALLPROPS|M2V2_FLAG_NOFORMATCHECK, &beans);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	_bean_cleanl2 (beans);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND)
-		return _reply_forbidden_error (args, err);
-	return _reply_m2_error (args, err);
+	return _reply_properties (args, err, beans);
 }
 
 static enum http_rc_e
@@ -932,8 +975,7 @@ action_m2_content_copy (struct req_args_s *args)
 
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_COPY (m2->host, NULL,
-				target_url, hc_url_get(args->url, HCURL_PATH));
+		return m2v2_remote_execute_COPY (m2->host, target_url, hc_url_get(args->url, HCURL_PATH));
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	hc_url_pclean(&target_url);
@@ -961,11 +1003,11 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 		GSList *obeans = NULL;
 		GError *e = NULL;
 		if (!g_ascii_strcasecmp(mode, "force"))
-			e = m2v2_remote_execute_OVERWRITE (m2->host, NULL, args->url, ibeans);
+			e = m2v2_remote_execute_OVERWRITE (m2->host, args->url, ibeans);
 		else if (!g_ascii_strcasecmp(mode, "append"))
-			e = m2v2_remote_execute_APPEND (m2->host, NULL, args->url, ibeans, &obeans);
+			e = m2v2_remote_execute_APPEND (m2->host, args->url, ibeans, &obeans);
 		else
-			e = m2v2_remote_execute_PUT (m2->host, NULL, args->url, ibeans, &obeans);
+			e = m2v2_remote_execute_PUT (m2->host, args->url, ibeans, &obeans);
 		_bean_cleanl2 (obeans);
 		return e;
 	}
@@ -997,7 +1039,7 @@ action_m2_content_delete (struct req_args_s *args)
 	GSList *beans = NULL;
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_DEL (m2->host, NULL, args->url,
+		return m2v2_remote_execute_DEL (m2->host, args->url,
 			TRUE /*sync_del?! */ , &beans);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
@@ -1010,7 +1052,7 @@ _m2_content_get (struct req_args_s *args, gboolean body)
 	GSList *beans = NULL;
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_GET (m2->host, NULL, args->url, 0, &beans);
+		return m2v2_remote_execute_GET (m2->host, args->url, 0, &beans);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	return _reply_simplified_beans (args, err, beans, body);

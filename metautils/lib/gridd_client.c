@@ -1031,3 +1031,35 @@ gridd_client_fail (struct gridd_client_s *self, GError *why)
 {
 	GRIDD_CALL(self,fail)(self,why);
 }
+
+/* -------------------------------------------------------------------------- */
+
+static GPrivate th_local_key_reqid = G_PRIVATE_INIT(g_free0);
+
+const char *
+gridd_get_reqid (void)
+{
+	return g_private_get(&th_local_key_reqid);
+}
+
+void
+gridd_set_reqid (const char *reqid)
+{
+	 g_private_replace (&th_local_key_reqid, g_strdup (reqid));
+}
+
+void
+gridd_set_random_reqid (void)
+{
+	struct {
+		pid_t pid:16;
+		guint8 buf[14];
+	} bulk;
+	bulk.pid = getpid();
+	metautils_randomize_buffer(bulk.buf, sizeof(bulk.buf));
+
+	char hex[33];
+	buffer2str((guint8*)&bulk, sizeof(bulk), hex, sizeof(hex));
+	gridd_set_reqid(hex);
+}
+

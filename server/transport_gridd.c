@@ -299,14 +299,16 @@ _request_get_name(struct message_s *req)
 static gchar *
 _req_get_hex_ID(MESSAGE req, gchar *d, gsize dsize)
 {
-	void *f;
-	gsize flen = 0;
-
-	*((int*)d) = 0;
+	memset(d, 0, dsize);
 	
-	if (0 >= message_get_ID(req, &f, &flen, NULL))
+	guint8 *f = NULL;
+	gsize flen = 0;
+	if (0 >= message_get_ID(req, (void**)&f, &flen, NULL))
 		*d = '-';
-	else {
+	else if (metautils_str_ishexa((gchar*)f, flen)) {
+		for (gchar *p=d; flen-- > 0 && dsize-- > 0;)
+			*(p++) = *(f++);
+	} else {
 		buffer2str(f, MIN(flen,dsize/2), d, dsize);
 	}
 
@@ -810,6 +812,7 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	req_ctx.reqname = _request_get_name(request);
 	req_ctx.uid = _request_get_cid(request);
 	req_ctx.reqid = _req_get_hex_ID(request, hexid, sizeof(hexid));
+	gridd_set_reqid(req_ctx.reqid);
 	rc = TRUE;
 
 	if (!req_ctx.reqname) {

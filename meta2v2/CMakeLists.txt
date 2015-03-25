@@ -43,7 +43,6 @@ add_library(meta2v2utils SHARED
 		meta2_utils.c
 		meta2_type_converter.c
 		meta2_utils_snapshots.c
-		meta2_utils_check.c
 		meta2_utils.h
 		meta2_bean.c
 		meta2_bean_utils.c
@@ -113,12 +112,6 @@ target_link_libraries(test_meta2_type_converter
 add_executable(test_meta2_dedup test_meta2_dedup.c meta2_test_common.c)
 target_link_libraries(test_meta2_dedup
 		meta2v2 meta2v2utils metautils meta2v2remote
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
-
-add_executable(test_meta2_check test_meta2_check.c)
-target_link_libraries(test_meta2_check
-		meta2v2utils metautils meta2v2remote
-		gridcluster 
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 install(FILES

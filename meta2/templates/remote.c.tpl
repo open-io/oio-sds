@@ -22,17 +22,6 @@
 #include <metautils/lib/metacomm.h>
 #include <meta2/remote/{{module_name}}_remote.h>
 
-static MESSAGE
-_build_request(GByteArray *id, char *name)
-{
-	MESSAGE msg = message_create();
-	if (id)
-		message_set_ID (msg, id->data, id->len, NULL);
-	if (name)
-		message_set_NAME (msg, name, strlen(name), NULL);
-	return msg;
-}
-
 {{FOREACH f IN module_functions}}
 
 {{IF f.has_out}}
@@ -146,7 +135,7 @@ error_label:
 		goto error_check;
 	}
 
-	request = _build_request(ctx->id, "{{f.request_name}}");
+	request = message_create_named("{{f.request_name}}");
 
 	/*prepare the request, fill all the fields*/
 	{{FOREACH arg IN f.in_args}}

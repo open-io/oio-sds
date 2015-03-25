@@ -129,7 +129,20 @@ __getParameter(MESSAGE m, enum message_param_e mp, OCTET_STRING_t ** os)
 MESSAGE
 message_create(void)
 {
-	return g_malloc0(sizeof(struct message_s));
+	const char *id = gridd_get_reqid ();
+	MESSAGE result = g_malloc0(sizeof(struct message_s));
+	if (id)
+		message_set_ID (result, id, strlen(id), NULL);
+	return result;
+}
+
+MESSAGE
+message_create_named (const char *name)
+{
+	MESSAGE result = message_create ();
+	if (name)
+		message_set_NAME (result, name, strlen(name), NULL);
+	return result;
 }
 
 void
@@ -140,19 +153,6 @@ message_destroy(MESSAGE m)
 	_clean_asn_message(m);
 	m->asnMsg = NULL;
 	g_free(m);
-}
-
-static void
-message_add_random_id(struct message_s *req)
-{
-	struct {
-		pid_t pid:16;
-		guint8 buf[14];
-	} bulk;
-
-	bulk.pid = getpid();
-	metautils_randomize_buffer(bulk.buf, sizeof(bulk.buf));
-	message_set_ID(req, (guint8*)&bulk, sizeof(bulk), NULL);
 }
 
 static int
@@ -179,8 +179,13 @@ message_marshall_gba(MESSAGE m, GError **err)
 		_alloc_asn_message(m, err);
 
 	/*set an ID if it is not present */
-	if (0 == message_has_ID(m, NULL))
-		message_add_random_id(m);
+	if (0 == message_has_ID(m, NULL)) {
+		const char *reqid = gridd_get_reqid ();
+		if (!reqid)
+			gridd_set_random_reqid ();
+		reqid = gridd_get_reqid ();
+		message_set_ID(m, (guint8*)reqid, strlen(reqid), NULL);
+	}
 
 	/*try to encode */
 	guint32 u32 = 0;

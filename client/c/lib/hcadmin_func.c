@@ -141,9 +141,9 @@ static gs_error_t* _m2_touch(struct hc_url_s *hcurl, guint32 flags)
 
 	/* execute touch command */
     if (content && strlen(content)>0) 
-		err = m2v2_remote_touch_content(str_addr, NULL, hcurl);
+		err = m2v2_remote_touch_content(str_addr, hcurl);
 	else 
-		err = m2v2_remote_touch_container_ex(str_addr, NULL, hcurl, flags);
+		err = m2v2_remote_touch_container_ex(str_addr, hcurl, flags);
 	
 	/* an error occurs ? */
 	if (err) {
@@ -296,7 +296,7 @@ hcadmin_meta1_policy_update(char *ns,gchar *action, gboolean checkonly, gchar **
 			struct hc_url_s *url = NULL;
 			url = hc_url_empty();
 			hc_url_set(url,HCURL_NS,ns);
-			m2v2_remote_execute_EXITELECTION(excludesrv,NULL,url);
+			m2v2_remote_execute_EXITELECTION(excludesrv, url);
 			hc_url_clean(url);
 		}
 		g_thread_pool_free(pool, FALSE, TRUE);
@@ -321,7 +321,7 @@ hcadmin_meta1_policy_update(char *ns,gchar *action, gboolean checkonly, gchar **
 					struct hc_url_s *url = NULL;
 					url = hc_url_empty();
 					hc_url_set(url,HCURL_NS,ns);
-					m2v2_remote_execute_EXITELECTION(excludesrv,NULL,url);
+					m2v2_remote_execute_EXITELECTION(excludesrv, url);
 					hc_url_clean(url);
 				}
 			}
@@ -343,7 +343,7 @@ hcadmin_meta1_policy_update(char *ns,gchar *action, gboolean checkonly, gchar **
 					url = hc_url_empty();
 					hc_url_set(url,HCURL_NS,ns);
 					hc_url_set(url,HCURL_HEXID,hexID);
-					m2v2_remote_execute_EXITELECTION(excludesrv,NULL,url);
+					m2v2_remote_execute_EXITELECTION(excludesrv, url);
 					hc_url_clean(url);
 				}
 			}

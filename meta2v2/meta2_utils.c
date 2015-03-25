@@ -1413,31 +1413,6 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 
 	gint64 size = m2db_patch_alias_beans_list(args, beans);
 
-#if 0
-	struct check_args_s check_args;
-	memset(&check_args, 0, sizeof(check_args));
-	check_args.ns_info = &args->nsinfo;
-	check_args.lbpool = args->lbpool;
-	check_args.mask_checks = m2db_get_mask_check_put(check_args.ns_info);
-	GRID_DEBUG("M2 PUT(%s) mask %08X", hc_url_get(args->url, HCURL_WHOLE),
-			check_args.mask_checks);
-
-	GString *gs = g_string_new(">>> beans");
-	for (GSList *l=beans; l ;l=l->next) {
-		g_string_append_c(gs, '\n');
-		gs = _bean_debug(gs, l->data);
-	}
-	GRID_WARN("%s", gs->str);
-	g_string_free(gs, TRUE);
-
-	err = m2db_check_alias_beans_list(args->url, beans, &check_args);
-	if (NULL != err) {
-		g_prefix_error(&err, "Invalid beans: ");
-		err->code = CODE_BAD_REQUEST;
-		return err;
-	}
-#endif
-
 	SHA256_randomized_buffer(uid, sizeof(uid));
 	args2.put_args = args;
 	args2.uid = uid;
@@ -1859,7 +1834,7 @@ _update_new_bean(struct update_alias_header_ctx_s *ctx, gpointer bean)
 
 GError*
 m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct hc_url_s *url, GSList *beans, gboolean skip_checks)
+		struct hc_url_s *url, GSList *beans)
 {
 	struct update_alias_header_ctx_s ctx;
 	struct bean_ALIASES_s *latest = NULL;
@@ -1873,23 +1848,6 @@ m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 
 	if (!hc_url_has(url, HCURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
-
-#if 0
-	if (!skip_checks) {
-		struct check_args_s check_args;
-		memset(&check_args, 0, sizeof(check_args));
-		check_args.mask_checks = ~0;
-
-		err = m2db_check_alias_beans_list(url, beans, &check_args);
-		if (NULL != err) {
-			g_prefix_error(&err, "Invalid beans: ");
-			err->code = CODE_BAD_REQUEST;
-			return err;
-		}
-	}
-#else
-	(void) skip_checks;
-#endif
 
 	memset(&ctx, 0, sizeof(ctx));
 	ctx.tmp = g_ptr_array_new();
@@ -2892,5 +2850,49 @@ m2db_dup_all_aliases(struct sqlx_sqlite3_s *sq3, gint64 src_c_version,
 	if (params[0] != NULL)
 		g_variant_unref(params[0]);
 	return err;
+}
+
+static struct bean_CHUNKS_s *
+_get_chunk(GPtrArray *chunks, GString *id0)
+{
+	GRID_TRACE2("%s(%p,%p)", __FUNCTION__, chunks, id0);
+	for (guint i=0; i < chunks->len ;++i) {
+		struct bean_CHUNKS_s *chunk = g_ptr_array_index(chunks, i);
+		GString *id1 = CHUNKS_get_id(chunk);
+		if (g_string_equal(id0, id1))
+			return chunk;
+	}
+	return NULL;
+}
+
+void
+init_chunk_pair(GPtrArray *chunks, chunk_pair_t *pair, struct bean_CONTENTS_s *c0)
+{
+	GString *pos = c0 ? CONTENTS_get_position(c0) : NULL;
+
+	memset(pair, 0, sizeof(chunk_pair_t));
+	pair->content = c0;
+	pair->chunk = _get_chunk(chunks, CONTENTS_get_chunk_id(c0));
+	pair->position.meta = pair->position.rain = -1;
+
+	m2v2_parse_chunk_position(pos->str, &(pair->position.meta),
+			&(pair->position.parity), &(pair->position.rain));
+}
+
+static int
+_compare_int(register int p0, register int p1)
+{
+	return (p0 < p1) ? -1 : ((p0 > p1) ? 1 : 0);
+}
+
+gint
+compare_pairs_positions(chunk_pair_t *c0, chunk_pair_t *c1)
+{
+	register int cmp;
+	if (0 != (cmp = _compare_int(c0->position.meta, c1->position.meta)))
+		return cmp;
+	if (0 != (cmp = _compare_int(c0->position.parity, c1->position.parity)))
+		return cmp;
+	return _compare_int(c0->position.rain, c1->position.rain);
 }
 

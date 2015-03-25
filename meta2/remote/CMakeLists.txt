@@ -15,7 +15,6 @@ add_custom_command(
 )
 
 add_library(meta2remote SHARED
-		utils.c
 		meta2_remote.c
 		meta2_remote.h
 		${CMAKE_CURRENT_BINARY_DIR}/meta2_services_remote.h

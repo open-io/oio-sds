@@ -36,9 +36,6 @@ struct network_client_s;
 /* Hidden type, internally defined */
 struct http_request_dispatcher_s;
 
-/**
- *
- */
 struct http_request_s
 {
 	struct network_client_s *client;
@@ -54,9 +51,6 @@ struct http_request_s
 	GByteArray *body;
 };
 
-/**
- *
- */
 struct http_reply_ctx_s
 {
 	void (*set_status) (int code, const gchar *msg);
@@ -72,9 +66,6 @@ struct http_reply_ctx_s
 
 enum http_rc_e { HTTPRC_DONE, HTTPRC_NEXT, HTTPRC_ABORT };
 
-/**
- *
- */
 struct http_request_descr_s
 {
 	const gchar *name;
@@ -84,48 +75,24 @@ struct http_request_descr_s
 		 struct http_reply_ctx_s *reply);
 };
 
-/**
- * Associates the given client to the given request dispatcher into
- * a transport object.
- *
- * @param dispatcher
- * @param client
- */
+/** Associates the given client to the given request dispatcher into
+ * a transport object. */
 void transport_http_factory0(struct http_request_dispatcher_s *dispatcher,
 		struct network_client_s *client);
 
-/**
- * Wrapper over transport_http_factory0() to provide a factory function,
- * without having to cast transport_http_factory0().
- *
- * @see transport_http_factory0()
- * @param dispatcher
- * @param client
- */
+/** Wrapper over transport_http_factory0() to provide a factory function
+ * without having to cast transport_http_factory0(). */
 static inline void
 transport_http_factory(gpointer dispatcher, struct network_client_s *client)
 {
 	transport_http_factory0(dispatcher, client);
 }
 
-/**
- * @param d
- */
 void http_request_dispatcher_clean(struct http_request_dispatcher_s *d);
 
-/**
- * @param u
- * @param descr
- * @return
- */
 struct http_request_dispatcher_s * transport_http_build_dispatcher(
 		gpointer u, const struct http_request_descr_s *descr);
 
-/**
- * @param req
- * @param n
- * @return
- */
 const gchar * http_request_get_header(struct http_request_s *req,
 		const gchar *n);
 

@@ -99,7 +99,7 @@ __create_in_meta2(addr_info_t *m1, gs_container_t *c, struct m2v2_create_params_
 	p = g_strndup(p, end - p);
 
 	g_clear_error(&e);
-	e = m2v2_remote_execute_CREATE(p, NULL, url, params);
+	e = m2v2_remote_execute_CREATE(p, url, params);
 
 	g_free(p);
 
@@ -526,7 +526,7 @@ _list_v2_wrapper(gs_container_t *c, const char *version, GError **e)
 	struct list_params_s p;
 	memset(&p, 0, sizeof(p));
 	p.flag_allversion = ~0;
-	le = m2v2_remote_execute_LIST(target, NULL, url, &p, &list_out);
+	le = m2v2_remote_execute_LIST(target, url, &p, &list_out);
 
 	hc_url_clean(url);
 
@@ -869,7 +869,7 @@ gs_container_reconnect_and_refresh (gs_container_t *container, GError **err, gbo
 	struct hc_url_s *url = hc_url_empty();
 	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs));
 	hc_url_set(url, HCURL_HEXID, container->str_cID);
-	*err = m2v2_remote_execute_HAS(addr, NULL, url);
+	*err = m2v2_remote_execute_HAS(addr, url);
 	hc_url_clean(url);
 	if (*err) {
 		metautils_pclose(&(container->meta2_cnx));
@@ -956,7 +956,7 @@ _destroy_on_allm2(gs_container_t *container, guint32 flags)
 	hc_url_set(url, HCURL_HEXID, container->str_cID);
 
 	// Starting from 1.8.3.10, destroy event is called on slaves by the master
-	err = m2v2_remote_execute_DESTROY(targets[0], NULL, url, flags);
+	err = m2v2_remote_execute_DESTROY(targets[0], url, flags);
 	g_strfreev(targets);
 	hc_url_clean(url);
 
@@ -1375,7 +1375,7 @@ _hc_set_container_global_property(gs_container_t *container,
 	}
 	beans = g_slist_prepend(beans, bp);
 
-	g_error = m2v2_remote_execute_PROP_SET(m2_url, NULL, url,
+	g_error = m2v2_remote_execute_PROP_SET(m2_url, url,
 			no_check? M2V2_FLAG_NOFORMATCHECK : 0, beans);
 
 	if (g_error) {
@@ -1418,7 +1418,7 @@ hc_get_container_global_properties(gs_container_t *container, char ***result)
 	addr_info_to_string(&(container->meta2_addr), m2_url, STRLEN_ADDRINFO);
 	fill_hcurl_from_container(container, &url);
 
-	g_error = m2v2_remote_execute_PROP_GET(m2_url, NULL, url, 0, &beans);
+	g_error = m2v2_remote_execute_PROP_GET(m2_url, url, 0, &beans);
 	if (g_error) {
 		err = g_malloc0(sizeof(gs_error_t));
 		err->code = g_error->code;
@@ -1455,8 +1455,7 @@ hc_set_container_storage_policy(gs_container_t *container,
 	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs));
 	hc_url_set(url, HCURL_REFERENCE, C0_NAME(container));
 
-	if (NULL != (ge = m2v2_remote_execute_STGPOL(target, NULL, url,
-			storage_policy, NULL))) {
+	if (NULL != (ge = m2v2_remote_execute_STGPOL(target, url, storage_policy, NULL))) {
 		gs_error_t *result = g_malloc0(sizeof(gs_error_t));
 		result->code = ge->code;
 		result->msg = g_strdup(ge->message);

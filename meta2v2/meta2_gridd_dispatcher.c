@@ -290,6 +290,7 @@ static gridd_filter M2V2_PROPDEL_FILTERS[] =
 	meta2_filter_extract_body_strings,
 	meta2_filter_action_has_container,
 	meta2_filter_action_del_content_properties,
+	meta2_filter_success_reply,
 	NULL
 };
 
