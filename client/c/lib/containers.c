@@ -17,6 +17,8 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <meta2v2/meta2_macros.h>
+
 #include "./gs_internals.h"
 
 #define KEY_STG_POLICY "storage_policy"
@@ -1475,21 +1477,21 @@ gs_error_t*
 hc_set_container_versioning(gs_container_t *container, const char *versioning)
 {
 	return _hc_set_container_global_property(container,
-			GS_CONTAINER_PROPERTY_VERSIONING, versioning, TRUE);
+			M2V2_ADMIN_VERSIONING_POLICY, versioning, TRUE);
 }
 
 gs_error_t*
 hc_del_container_versioning(gs_container_t *container)
 {
 	return _hc_set_container_global_property(container, 
-            GS_CONTAINER_PROPERTY_VERSIONING, NULL, TRUE);
+            M2V2_ADMIN_VERSIONING_POLICY, NULL, TRUE);
 }
 
 gs_error_t*
 hc_set_container_quota(gs_container_t *container, const char *quota)
 {
 	return _hc_set_container_global_property(container,
-			GS_CONTAINER_PROPERTY_QUOTA, quota, TRUE);
+			M2V2_ADMIN_QUOTA, quota, TRUE);
 }
 
 gs_container_t*

@@ -34,6 +34,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 
 #include <metautils/lib/metautils.h>
+#include <meta2v2/meta2_macros.h>
 #include <cluster/lib/gridcluster.h>
 
 #include "../lib/gs_internals.h"
@@ -388,7 +389,7 @@ func_stgpol(gs_grid_storage_t *hc)
 					g_print("%s\n", value);
 					status = TRUE;
 				} else {
-					g_printerr("Unknown \"%s\" property", GS_CONTAINER_PROPERTY_STORAGE_POLICY);
+					g_printerr("Unknown \"%s\" property", M2V2_ADMIN_STORAGE_POLICY);
 				}
 			} else {
 				g_printerr("Cannot load container data ");

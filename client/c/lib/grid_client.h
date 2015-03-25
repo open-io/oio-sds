@@ -105,11 +105,6 @@ typedef struct {
 #define GS_CODE_CONTENT_NOTFOUND      6
 #define GS_CODE_CONTENT_ERROR         7
 
-#define GS_CONTAINER_PROPERTY_STORAGE_POLICY "sys.storage_policy"
-#define GS_CONTAINER_PROPERTY_VERSIONING     "sys.versioning_policy"
-#define GS_CONTAINER_PROPERTY_QUOTA    "sys.quota"
-#define GS_CONTAINER_PROPERTY_SIZE     "sys.container_size"
-
 /**
  * frees the given gs_container_t structure and all the associated internal
  * data
