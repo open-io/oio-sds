@@ -21,27 +21,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 
 #include <string.h>
-#include <glib.h>
+#include <metautils/lib/metautils.h>
 #include "path_parser.h"
-
-struct path_matching_s {
-	const struct trie_node_s *last;
-	gchar **vars;
-};
-
-struct trie_node_s {
-	const struct trie_node_s *parent;
-	struct trie_node_s **next;
-	gchar *word;
-	gchar *var;
-	gpointer u;
-};
-
-struct path_parser_s {
-	struct trie_node_s **roots;
-};
-
-static gchar ** _strv_append (gchar **, gchar *);
 
 /* Allocates a node an initaite it with the given word and variable. */
 static struct trie_node_s * _node_init (const struct trie_node_s*,
@@ -219,16 +200,6 @@ path_matching_get_udata (struct path_matching_s *self)
 }
 
 /* ------------------------------------------------------------------------- */
-
-gchar **
-_strv_append (gchar **tab, gchar *s)
-{
-	gsize l = g_strv_length (tab);
-	tab = g_try_realloc (tab, (l+2) * sizeof(gchar*));
-	tab[l] = s;
-	tab[l+1] = NULL;
-	return tab;
-}
 
 struct path_matching_s *
 _match_dup (const struct path_matching_s *m0)
@@ -459,12 +430,19 @@ _trie_explore (struct trie_node_s **tab, gchar **needles,
 		} else { // Wildcard
 			struct path_matching_s *m = _match_dup (current_match);
 			m->last = *tab;
-			m->vars = _strv_append (m->vars, g_strdup_printf("%s=%s", (*tab)->var, *needles));
+			m->vars = metautils_strv_append (m->vars, g_strdup_printf("%s=%s", (*tab)->var, *needles));
 			step (m);
 		}
 			
 	}
 
 	return matches;
+}
+
+void
+path_matching_set_variable (struct path_matching_s *self, gchar *kv)
+{
+	EXTRA_ASSERT(self != NULL);
+	self->vars = metautils_strv_append(self->vars, kv);
 }
 

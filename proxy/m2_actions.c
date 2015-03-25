@@ -599,31 +599,6 @@ action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
 }
 
 static enum http_rc_e
-action_m2_container_stgpol (struct req_args_s *args, struct json_object *jargs)
-{
-	const gchar *stgpol = json_object_get_string (jargs);
-	if (!stgpol)
-		return _reply_format_error (args, BADREQ("Missing STGPOL"));
-
-	GSList *beans = NULL;
-	GError *hook (struct meta1_service_url_s * m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_STGPOL (m2->host,  args->url, stgpol, &beans);
-	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (NULL != err) {
-		if (err->code == CODE_CONTAINER_NOTFOUND)
-			return _reply_forbidden_error (args, err);
-		return _reply_m2_error (args, err);
-	}
-
-	GString *gstr = g_string_new ("");
-	_json_dump_all_beans (gstr, beans);
-	_bean_cleanl2 (beans);
-	return _reply_success_json (args, gstr);
-}
-
-static enum http_rc_e
 action_m2_container_touch (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
@@ -710,8 +685,7 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 		(void) next;
 		return m2v2_remote_execute_RAW_SUBST (m2->host, args->url, beans_new, beans_old);
 	}
-	if (!err)
-		err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	if (!err) err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	_bean_cleanl2 (beans_old);
 	_bean_cleanl2 (beans_new);
 
@@ -721,16 +695,76 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 }
 
 static enum http_rc_e
+action_m2_container_propget (struct req_args_s *args, struct json_object *jargs)
+{
+	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
+	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
+	return action_sqlx_propget(args, jargs);
+}
+
+static enum http_rc_e
+action_m2_container_propset (struct req_args_s *args, struct json_object *jargs)
+{
+	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
+	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
+	return action_sqlx_propset(args, jargs);
+}
+
+static enum http_rc_e
+action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
+{
+	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
+	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
+	return action_sqlx_propdel(args, jargs);
+}
+
+static enum http_rc_e
+action_m2_container_stgpol (struct req_args_s *args, struct json_object *jargs)
+{
+	if (!json_object_is_type(jargs, json_type_string))
+		return _reply_format_error (args, BADREQ ("Storage policy must be a string"));
+
+	struct json_object *fake_jargs = json_object_new_object();
+	json_object_object_add (fake_jargs, M2V2_ADMIN_STORAGE_POLICY, jargs);
+
+	enum http_rc_e rc = action_m2_container_propset (args, fake_jargs);
+	json_object_put (fake_jargs);
+	return rc;
+}
+
+static enum http_rc_e
+action_m2_container_setvers (struct req_args_s *args, struct json_object *jargs)
+{
+	if (!json_object_is_type(jargs, json_type_int))
+		return _reply_format_error (args, BADREQ ("Versioning policy must be an integer"));
+
+	struct json_object *fake_jargs = json_object_new_object();
+	json_object_object_add (fake_jargs, M2V2_ADMIN_STORAGE_POLICY, jargs);
+
+	enum http_rc_e rc = action_m2_container_propset (args, fake_jargs);
+	json_object_put (fake_jargs);
+	return rc;
+}
+
+static enum http_rc_e
 action_m2_container_action (struct req_args_s *args)
 {
 	struct sub_action_s actions[] = {
 		{"Purge", action_m2_container_purge},
 		{"Dedup", action_m2_container_dedup},
 		{"Touch", action_m2_container_touch},
-		{"SetStoragePolicy", action_m2_container_stgpol},
+
 		{"RawInsert", action_m2_container_raw_insert},
 		{"RawDelete", action_m2_container_raw_delete},
 		{"RawUpdate", action_m2_container_raw_update},
+
+		{"GetProperties", action_m2_container_propget},
+		{"SetProperties", action_m2_container_propset},
+		{"DelProperties", action_m2_container_propdel},
+
+		{"SetStoragePolicy", action_m2_container_stgpol},
+		{"SetVersioning", action_m2_container_setvers},
+
 		{NULL,NULL}
 	};
 	return abstract_action (args, actions);
@@ -837,6 +871,9 @@ action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 static enum http_rc_e
 action_m2_content_stgpol (struct req_args_s *args, struct json_object *jargs)
 {
+	if (!json_object_is_type (jargs, json_type_string))
+		return _reply_format_error (args, BADREQ ("the storage policy must be a string"));
+		
 	const gchar *stgpol = json_object_get_string (jargs);
 	if (!stgpol)
 		return _reply_format_error (args, BADREQ ("missing policy"));

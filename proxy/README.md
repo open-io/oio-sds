@@ -39,11 +39,11 @@ Destined for the **POST** method, the following actions are currently available:
 ### References actions ``/dir/{NS}/{REF}/action``
 Destined for the **POST** method, the following actions are currently available:
   * **GetProperties** : Returns a set of properties. The argument is expected to ba an array of strings (the names of the properties).
-    E.g. ``{ "action":"GetProperties", "args":["key1","key2"]}``
-  * **DeleteProperties** : Delete a set of properties. The argument is expected to ba an array of strings (the names of the properties).
-    E.g. ``{ "action":"DeleteProperties", "args":["key1","key2"]}``
+    * Request body: ``{ "action":"GetProperties", "args":["key1","key2"]}``
+  * **DelProperties** : Delete a set of properties. The argument is expected to ba an array of strings (the names of the properties).
+    * Request body: ``{ "action":"DelProperties", "args":["key1","key2"]}``
   * **SetProperties** : sets several properties. The argument is expected to be a JSON object mapping keys (strings) to their value (string).
-    E.g. ``{ "action":"SetProperties", "args":{"key1":"value1","key2":"value2"}}``
+    * Request body: ``{ "action":"SetProperties", "args":{"key1":"value1","key2":"value2"}}``
 
 ### Services ``/dir/{NS}/{REF}/{TYPE}``
   * **GET** List the associated services
@@ -85,6 +85,15 @@ The following actions are currently available:
     E.g. ``{"action":"Purge"}``
   * **SetStoragePolicy** : Change the default storage policy applied to new contents in the container
     E.g. ``{"action":"SetStoragePolicy", "args":"SOMESTORAGEPOLICY"}``
+  * **GetProperties** :
+    * Request body: ``{"action":"GetProperties","args":null}``
+    * Reply body: ``{"k0":"v0","k1":"v1"}``
+  * **SetProperties** :
+    * Request body: ``{"action":"SetProperties","args":{"k0":"v0","k1":"v1"}}``
+    * Reply body: none expected
+  * **DelProperties** :
+    * Request body: ``{"action":"DelProperties","args":["k0","k1"]}``
+    * Reply body: none expected
   * **RawInsert** : 
     E.g. ``{"action":"RawInsert", "args":[
       {"type":"alias", ...},
@@ -143,13 +152,13 @@ Currently suppported actions are:
   * **Touch** : Touch a content
   * **SetStoragePolicy** : Change a content's storage policy
   * **GetProperties** :
-    * Request body: ``{"action":"SetProperties","args":null}``
+    * Request body: ``{"action":"GetProperties","args":null}``
     * Reply body: ``{"k0":"v0","k1":"v1"}``
   * **SetProperties** :
     * Request body: ``{"action":"SetProperties","args":{"k0":"v0","k1":"v1"}}``
     * Reply body: none expected
   * **DelProperties** :
-    * Request body: ``{"action":"SetProperties","args":["k0","k1"]}``
+    * Request body: ``{"action":"DelProperties","args":["k0","k1"]}``
     * Reply body: none expected
 
 ## SQLX
@@ -167,12 +176,12 @@ Currently suppported actions are:
   * **CopyTo** : Copies the base from one of its current places to the given place. The target is the string provided as action argument.
     E.g. ``{"action":"CopyTo","args":"127.0.0.1:5000"}``
   * **SetProperties** : 
-    E.g. ``{"action":"PropSet","args":{"key0":"value0","key1":"value1"}}``
+    E.g. ``{"action":"SetProperties","args":{"key0":"value0","key1":"value1"}}``
   * **DeleteProperties** : 
-    E.g. ``{"action":"PropSet","args":["key0","key1"]}``
+    E.g. ``{"action":"DelProperties","args":["key0","key1"]}``
   * **GetProperties** : 
-    E.g. ``{"action":"PropSet","args":["key0","key1"]}``
-    E.g. ``{"action":"PropSet","args":null}``
+    E.g. ``{"action":"GetProperties","args":["key0","key1"]}``
+    E.g. ``{"action":"GetProperties","args":null}``
   * **Freeze** : 
   * **Enable** : 
   * **Disable** : 
