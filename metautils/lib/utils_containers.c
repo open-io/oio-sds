@@ -261,3 +261,21 @@ metautils_gtree_to_gpa(GTree *t, gboolean clean)
 	return tmp;
 }
 
+static gboolean
+_runner (gchar *k, gpointer v, GPtrArray *out)
+{
+	(void) v;
+	g_ptr_array_add(out, k);
+	return FALSE;
+}
+
+gchar **
+gtree_string_keys (GTree *t)
+{
+	GPtrArray *tmp = g_ptr_array_new ();
+	if (t) {
+		g_tree_foreach (t, (GTraverseFunc)_runner, tmp);
+	}
+	return (gchar**) metautils_gpa_to_array (tmp, TRUE);
+}
+

@@ -78,4 +78,9 @@ void g_slist_free_agregated(GSList * list2);
  * with the given user_data on each element. */
 void g_slist_foreach_agregated(GSList * list, GFunc callback, gpointer user_data);
 
+/** Return all the keys in the tree. They are supposed to be
+ * plain <gchar*>. They are not copied, free the result with
+ * g_free(), not g_strfreev(). */
+gchar** gtree_string_keys (GTree *t);
+
 #endif /*OIO_SDS__metautils__lib__metautils_containers_h*/
