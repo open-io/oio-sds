@@ -244,14 +244,6 @@ _meta2_filter_extract_path(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_header_path_f2(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	return _meta2_filter_extract_path(ctx, reply, "field_2");
-}
-
-int
 meta2_filter_extract_header_path_f1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
@@ -320,68 +312,6 @@ int meta2_filter_extract_header_optional_cid(struct gridd_filter_ctx_s *ctx,
 	}
 	container_id_to_string(cid, strcid, sizeof(strcid));
 	hc_url_set(url, HCURL_HEXID, strcid);
-	return FILTER_OK;
-}
-
-static int
-_meta2_filter_extract_srvtype(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply, const gchar *f)
-{
-	gchar srvtype[LIMIT_LENGTH_SRVTYPE];
-	GError *err;
-
-	memset(srvtype, 0, sizeof(srvtype));
-	err = message_extract_string(reply->request, f, srvtype, sizeof(srvtype));
-	if (err != NULL) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	meta2_filter_ctx_add_param(ctx, "SRVTYPE", srvtype);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_srvtype_f1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	return _meta2_filter_extract_srvtype(ctx, reply, "field_1");
-}
-
-int
-meta2_filter_extract_header_propname_f2(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	char buf[128];
-
-	TRACE_FILTER();
-	EXTRACT_STRING("field_2", FALSE);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_propvalue_f3(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	char buf[128];
-
-	TRACE_FILTER();
-	EXTRACT_STRING("field_3", FALSE);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_ref(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	char buf[128];
-
-	TRACE_FILTER();
-	EXTRACT_STRING(M2V1_KEY_CONTAINER_NAME, FALSE);
 	return FILTER_OK;
 }
 
@@ -654,18 +584,6 @@ meta2_filter_extract_body_chunk_info(struct gridd_filter_ctx_s *ctx,
 	}
 
 	meta2_filter_ctx_set_input_udata(ctx, l, _ci_list_clean);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_string_K_f1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	gchar buf[512];
-
-	TRACE_FILTER();
-	EXTRACT_STRING2("field_1", "K", 0);
 	return FILTER_OK;
 }
 

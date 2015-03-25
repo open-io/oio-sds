@@ -994,11 +994,17 @@ m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, gchar **na
 	if (!err) {
 		for (guint i=0; !err && i<tmp->len ;++i) {
 			struct bean_PROPERTIES_s *bean = tmp->pdata[i];
-			for (gchar **p=namev; *p ;++p) {
-				if (!strcmp(*p, PROPERTIES_get_key(bean)->str)) {
-					_db_delete_bean (sq3->db, bean);
-					break;
+			if (DESCR(bean) != &descr_struct_PROPERTIES)
+				continue;
+			if (namev && *namev) {
+				/* explicit properties to be deleted */
+				for (gchar **p=namev; *p ;++p) {
+					if (!strcmp(*p, PROPERTIES_get_key(bean)->str))
+						_db_delete_bean (sq3->db, bean);
 				}
+			} else {
+				/* all properties to be deleted */
+				_db_delete_bean (sq3->db, bean);
 			}
 		}
 	}
@@ -1152,6 +1158,8 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 			err = m2db_get_properties(sq3, url, 0, _bean_buffer_cb, tmp);
 			for (guint i=0; !err && i<tmp->len ;i++) {
 				struct bean_PROPERTIES_s *prop = tmp->pdata[i];
+				if (DESCR(prop) != &descr_struct_PROPERTIES)
+					continue;
 				PROPERTIES_set_alias_version(prop, alias_version);
 				PROPERTIES_set_deleted(prop, TRUE);
 				err = _db_save_bean(sq3->db, prop);

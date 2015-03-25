@@ -77,10 +77,6 @@ int meta2_filter_check_ns_is_slave(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-/*! Check the parameter under the key "K" is prefixed by user. */
-int meta2_filter_check_prop_key_prefix(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Check that a snapshot name is specified in URL query strings. */
 int meta2_filter_check_snapshot_name(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
@@ -123,11 +119,6 @@ int meta2_filter_extract_header_mdsys(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_extract_header_mdusr(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-/*! Extract the legacy field property name from a request. */
-int
-meta2_filter_extract_header_propname_f2(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Extract ACTION header from set content properties request. */
 int
 meta2_filter_extract_header_prop_action(struct gridd_filter_ctx_s *ctx,
@@ -137,11 +128,6 @@ meta2_filter_extract_header_prop_action(struct gridd_filter_ctx_s *ctx,
  * The extracted value, stored in udata, is an array with 2 lists of beans. */
 int
 meta2_filter_extract_header_chunk_beans(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Extract the legacy field property value from a request. */
-int
-meta2_filter_extract_header_propvalue_f3(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 /*! Extract the legacy field CID from a request */
@@ -156,10 +142,6 @@ int meta2_filter_extract_header_optional_cid(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_extract_header_cid_f0(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-/** */
-int meta2_filter_extract_header_srvtype_f1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*!  */
 int meta2_filter_extract_header_cname(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
@@ -168,16 +150,8 @@ int meta2_filter_extract_header_cname(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_extract_header_ns(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-/*! Extract the legacy field CNAME from a request */
-int meta2_filter_extract_header_ref(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Extract the legacy field PATH from a request */
 int meta2_filter_extract_header_path(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*!  */
-int meta2_filter_extract_header_path_f2(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 /*! Extract the storage policy field of the request */
@@ -202,14 +176,6 @@ int meta2_filter_extract_body_strings(struct gridd_filter_ctx_s *ctx,
 
 /*! Extract the chunk info encoded in the message body */
 int meta2_filter_extract_body_chunk_info(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*!  */
-int meta2_filter_extract_header_container_properties(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*!  */
-int meta2_filter_extract_header_string_K_f1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 /*!  */
