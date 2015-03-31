@@ -69,8 +69,6 @@ License along with this library.
 
 #include "./grid_client.h"
 #include "./meta_resolver_explicit.h"
-#include "./meta_resolver_metacd.h"
-#include "./metacd_remote.h"
 #include "./loc_context.h"
 #include "./grid_client_shortcuts.h"
 
@@ -189,7 +187,6 @@ struct gs_grid_storage_s {
 		} rawx;
 	} timeout;
 
-	struct metacd_s *metacd_resolver;
 	resolver_direct_t *direct_resolver;
 	char *full_vns;
 	char *physical_namespace;
@@ -207,7 +204,6 @@ struct gs_container_s {
 
 struct gs_content_s {
 	gs_content_info_t	info;
-	gboolean			loaded_from_cache;
 	GSList				*chunk_list;
 	GByteArray			*gba_md;
 	GByteArray			*gba_sysmd;
@@ -274,8 +270,9 @@ void gs_error_set_cause (gs_error_t **err, GError *ge, const char *format, ...);
 void gs_error_clear (gs_error_t **err);
 
 /* Reloads the internal chunk set of the given content */
-gboolean gs_content_reload (gs_content_t *content, gboolean allow_meta2, gboolean allow_cache, gs_error_t **err);
-gboolean gs_content_reload_with_filtered (gs_content_t *content, gboolean allow_meta2, gboolean allow_cache,
+gboolean gs_content_reload (gs_content_t *content, gs_error_t **err);
+
+gboolean gs_content_reload_with_filtered (gs_content_t *content,
 		GSList **p_filtered, GSList **p_beans, gs_error_t **err);
 
 /* sort the chunk_info_t following the ascending order of their positions */
@@ -389,8 +386,6 @@ struct meta2_raw_content_s* gs_resolve_content(gs_container_t *container, GError
 gs_status_t gs_container_reconnect_and_refresh (gs_container_t *container, GError **err, gboolean may_refresh);
 
 gs_status_t gs_check_chunk_agregate (GSList *agregate, gs_error_t **gserr);
-
-void gs_decache_chunks_in_metacd(gs_content_t *content);
 
 #define C1_ROLLBACK(C,E) meta2_remote_content_rollback_in_fd (C1_CNX(content), C1_M2TO(content), &localError, C1_ID(content), C1_PATH(content))
 

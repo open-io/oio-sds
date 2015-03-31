@@ -168,7 +168,7 @@ _my_content_filter(gs_content_t * content, void *user_data)
 
 	if(lc->show_info) {
 		/* load content info from meta2 */
-		if(!gs_content_reload(content, TRUE, FALSE, &err)) {
+		if(!gs_content_reload(content, &err)) {
 			g_printerr("Failed to get content informations from meta2 : (%s)\n", gs_error_get_message(err));
 			gs_error_free(err);
 			return -1;

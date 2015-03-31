@@ -207,72 +207,6 @@ static gs_status_t _gs_upload_content (meta2_content_add_f adder, gs_container_t
 
 static GMutex global_mutex = G_STATIC_MUTEX_INIT;
 
-/**
- * Update chunk extended attributes (position, content size, number of chunks)
- * which have changed during an append operation.
- *
- * @param beans List of all beans of the content
- * @return the version of the content
- */
-static content_version_t _get_vers_and_update_attr_if_needed(GSList *beans,
-		gboolean append)
-{
-	GError *err = NULL;
-	gint64 content_size = 0;
-	gint64 max_pos = 0;
-	content_version_t version = 0;
-
-	/* Compute number of chunks and get content size */
-	for (GSList *l = beans; l != NULL; l = l->next) {
-		if (DESCR(l->data) == &descr_struct_ALIASES) {
-			version = ALIASES_get_version(l->data);
-			DEBUG("version of the content: %"G_GINT64_FORMAT, version);
-		} else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
-			content_size = CONTENTS_HEADERS_get_size(l->data);
-		} else if (DESCR(l->data) == &descr_struct_CONTENTS) {
-			/* We may have several chunks at the same position,
-			 * we cannot just count the number of chunk beans,
-			 * so we search the highest position. */
-			gchar *str_pos = CONTENTS_get_position(l->data)->str;
-			gint pos = 0, subpos = 0;
-			gboolean par = FALSE;
-			m2v2_parse_chunk_position(str_pos, &pos, &par, &subpos);
-			if (pos > max_pos)
-				max_pos = pos;
-		}
-	}
-	/* Update chunk attributes */
-	if (append) {
-		for (GSList *l = beans; l != NULL; l = l->next) {
-			if (DESCR(l->data) != &descr_struct_CONTENTS)
-				continue;
-			gboolean res = TRUE;
-			GSList *attrs = NULL;
-			const gchar *url = CONTENTS_get_chunk_id(l->data)->str;
-			const gchar *pos = CONTENTS_get_position(l->data)->str;
-			struct chunk_attr_s attr_pos = {RAWX_ATTR_CHUNK_POSITION, pos};
-			struct chunk_attr_s attr_size = {RAWX_ATTR_CONTENT_SIZE,
-				g_strdup_printf("%"G_GINT64_FORMAT, content_size)};
-			struct chunk_attr_s attr_chunknb = {RAWX_ATTR_CONTENT_CHUNKNB,
-				g_strdup_printf("%"G_GINT64_FORMAT, max_pos+1)};
-			attrs = g_slist_prepend(attrs, &attr_pos);
-			attrs = g_slist_prepend(attrs, &attr_chunknb);
-			attrs = g_slist_prepend(attrs, &attr_size);
-			res = rawx_update_chunk_attrs(url, attrs, &err);
-			if (!res || err != NULL) {
-				GRID_WARN("Could not update extended attributes of chunk %s: %s",
-						url, err?err->message:"reason unknown");
-				g_clear_error(&err);
-			}
-			g_free((gpointer)attr_size.val);
-			g_free((gpointer)attr_chunknb.val);
-			g_slist_free(attrs);
-		}
-	}
-
-	return version;
-}
-
 static GError *_rawx_update_beans_hash_from_request(struct http_put_s *http_put)
 {
 	GSList *i_list = NULL, *beans;
@@ -1044,7 +978,6 @@ static gs_status_t _gs_upload(gs_container_t *container,
 	gchar *actual_stgpol = stgpol ? g_strdup(stgpol) : NULL;
 
 	gboolean is_rainx, tmp_is_rainx;
-	content_version_t content_version;
 
 	/*sanity checks*/
 	if (!container || !content_name || content_size<0 || !feeder) {
@@ -1257,69 +1190,6 @@ static gs_status_t _gs_upload(gs_container_t *container,
 		}
 	}
 
-	content_version = _get_vers_and_update_attr_if_needed(beans, append);
-
-	/* Try to save the chunk in the metacd. In case of failure this is
-	 * not an error for the whole upload. */
-	if (resolver_metacd_is_up(container->info.gs->metacd_resolver)) {
-		struct meta2_raw_content_s *raw_content;
-		GError *gerr_metacd = NULL;
-		gboolean rc = 0;
-
-		/* Register a fake content */
-		raw_content = meta2_maintenance_create_content(C0_ID(container), content_size,
-				0, 0, content_name, strlen(content_name));
-		if (!raw_content) {
-			GSETERROR(&gerr_metacd, "memory allocation failure");
-		}
-		else {
-			raw_content->version = content_version;
-			GSList *l;
-			for (l = chunks ; l ; l = l->next) {
-				chunk_id_t chunk_id;
-				struct bean_CHUNKS_s *ck = (struct bean_CHUNKS_s *) l->data;
-				struct bean_CONTENTS_s *ct;
-				struct meta2_raw_chunk_s *raw_chunk;
-				guint64 position;
-				gchar *endptr;
-				if(DESCR(l->data) != &descr_struct_CHUNKS)
-					continue;
-				ct = _bean_get_content_from_chunk(chunks, ck);
-				if (ct == NULL)
-					break;
-				fill_chunk_id_from_url(CHUNKS_get_id(ck)->str, &chunk_id);
-				position = g_ascii_strtoull(CONTENTS_get_position(ct)->str, &endptr, 10);
-				if (endptr != NULL && *endptr != '\0')
-					continue; /* found a spare chunk */
-				TRACE("Inserting chunk pos=[%"G_GUINT64_FORMAT"] size=[%"G_GINT64_FORMAT"] id=[%s] in metacd...", position, CHUNKS_get_size(ck), CHUNKS_get_id(ck)->str);
-				g_assert(CHUNKS_get_hash(ck)->len == sizeof(chunk_hash_t));
-				raw_chunk = meta2_maintenance_create_chunk(&chunk_id, CHUNKS_get_hash(ck)->data,
-						0x00, CHUNKS_get_size(ck), position);
-				meta2_maintenance_add_chunk(raw_content, raw_chunk);
-				meta2_raw_chunk_clean(raw_chunk);
-			}
-			if (l == NULL) { /* all chunks added to meta2_raw_content */
-				rc = resolver_metacd_put_content(container->info.gs->metacd_resolver,
-						raw_content, &gerr_metacd);
-			}
-			else {
-				GSETERROR(&gerr_metacd, "Not all chunks added to metacd content");
-			}
-			meta2_maintenance_destroy_content(raw_content);
-		}
-
-		if (!rc) {
-			GRID_WARN("Failed to save the chunks : %s",
-					(gerr_metacd ? gerr_metacd->message : "unknown error"));
-		}
-		else {
-			GRID_DEBUG("Chunks saved in the metacd for [%s/%s/%s]",
-					gs_get_full_vns(container->info.gs),
-					container->info.name, content_name);
-		}
-		if (gerr_metacd)
-			g_clear_error(&gerr_metacd);
-	}
 	g_mutex_unlock(&global_mutex);
 	if (!beans) {
 		GSETERROR(&local_error,"CONTENT_COMMIT error : too many attempts");

@@ -462,18 +462,6 @@ void resolver_direct_free (resolver_direct_t *r)
 resolver_direct_t*
 resolver_direct_create2 (const char * const config, gint to_cnx, gint to_req, GError **err)
 {
-	return resolver_direct_create_with_metacd(config, NULL, to_cnx, to_req, err);
-}
-
-resolver_direct_t*
-resolver_direct_create (const char * const config, GError **err)
-{
-	return resolver_direct_create2(config, CS_TOCNX_DEFAULT, CS_TOREQ_DEFAULT, err);
-}
-
-resolver_direct_t*
-resolver_direct_create_with_metacd(const gchar * const config, struct metacd_s *metacd, gint to_cnx, gint to_req, GError **err)
-{
 	resolver_direct_t *r = NULL;
 
 	r = calloc(1, sizeof(resolver_direct_t));
@@ -481,7 +469,6 @@ resolver_direct_create_with_metacd(const gchar * const config, struct metacd_s *
 		return NULL;
 	}
 
-	r->metacd = metacd;
 	r->mappings = NULL;
 	M0CACHE_INIT_LOCK(*r);
 	g_cond_init(&r->refresh_condition);
@@ -492,27 +479,6 @@ resolver_direct_create_with_metacd(const gchar * const config, struct metacd_s *
 	r->timeout.m1.op =  M1_TOREQ_DEFAULT;
 	r->timeout.m1.cnx = M1_TOCNX_DEFAULT;
 
-	/* Try to resolve the META0 with the metacd */
-	if (r->metacd && resolver_metacd_is_up(r->metacd)) {
-		GError *err_local = NULL;
-		addr_info_t *m0_addr = NULL;
-
-		m0_addr = resolver_metacd_get_meta0(r->metacd, &err_local);
-		if (m0_addr) {
-			memcpy(&(r->meta0), m0_addr, sizeof(addr_info_t));
-			g_free(m0_addr);
-			DEBUG("Explicit resolver created for %s (empty), META0 got from the metacd", config);
-			return r;
-		}
-		else {
-			DEBUG("META0 resolution failed with metacd : %s",
-				((err_local && err_local->message)? err_local->message : "unknown error"));
-			if (err_local)
-				g_error_free(err_local);
-		}
-	}
-
-	/* Not found with the metacd, try with the gridagent (through gridcluster) */
 	meta0_info_t *meta0_info = NULL;
 	meta0_info = get_meta0_info2(config, r->timeout.conscience.cnx, r->timeout.conscience.op, err);
 	if (meta0_info) {
@@ -522,8 +488,6 @@ resolver_direct_create_with_metacd(const gchar * const config, struct metacd_s *
 		return r;
 	}
 
-	/* Not found with gridcluster and metacd, then we assume the
-	 * config string is the META0 URL */
 	gchar *host = NULL;
 	gchar *port = NULL;
 

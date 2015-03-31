@@ -270,8 +270,6 @@ typedef enum gs_timeout_e {
 	GS_TO_M1_OP=5,
 	GS_TO_M2_CNX=6,
 	GS_TO_M2_OP=7,
-	GS_TO_MCD_CNX=8,
-	GS_TO_MCD_OP=9
 } gs_timeout_t;
 
 gs_status_t gs_grid_storage_set_timeout (gs_grid_storage_t *gs,

@@ -364,7 +364,6 @@ if (DOXYGEN_FOUND)
 endif ()
 
 add_subdirectory(./client/c/lib)
-add_subdirectory(./client/c/metacd_module)
 add_subdirectory(./client/c/tools)
 add_subdirectory(./cluster/agent)
 add_subdirectory(./cluster/conscience)

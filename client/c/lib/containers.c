@@ -757,7 +757,7 @@ gs_get_content_from_path_full (gs_container_t *container, const char *name, cons
 		content->version = g_strdup(version);
 	}
 
-	if (!gs_content_reload_with_filtered(content, TRUE, FALSE, p_filtered, p_beans, err)) {
+	if (!gs_content_reload_with_filtered(content, p_filtered, p_beans, err)) {
 		gs_content_free(content);
 		return NULL;
 	}
@@ -1149,38 +1149,8 @@ gs_download_content_by_name_full(gs_container_t *container, const char *name,
 	if (version && *version)
 		content->version = g_strdup(version);
 
-	/* If the content can be entirely loaded from the cache,
-	 * directly try the download */
-
-	if (gs_content_reload(content, FALSE, TRUE, &gserr_cache)) {
-		if(content->deleted) {
-			GSERRORCODE(err, CODE_CONTENT_NOTFOUND, "Content deleted");
-			gs_content_free(content);
-			return GS_ERROR;
-		} else{
-			INFO("Chunks loaded from the metacd");
-			if (gs_download_content_full(content, dl_info, stgpol, NULL, NULL, &gserr_cache)) {
-				/* SUCCESS */
-				gs_content_free(content);
-				if (gserr_cache)
-					gs_error_free(gserr_cache);
-				return GS_OK;
-			}
-			else {
-				/* FAILURE */
-				GSERRORSET(&gserr_cache, "dl error");
-				if (err)
-					*err = gserr_cache;
-				else if (gserr_cache)
-					gs_error_free(gserr_cache);
-				gs_content_free(content);
-				return GS_ERROR;
-			}
-		}
-	}
-
 	/* Regular download */
-	if (!gs_content_reload(content, TRUE, FALSE, err)) {
+	if (!gs_content_reload(content, err)) {
 		GSERRORSET(err, "Implicit content loading failure");
 		goto error_opened;
 	}
@@ -1220,7 +1190,7 @@ gs_delete_content_by_name(gs_container_t *container, const char *name, gs_error_
 	g_strlcpy(content->info.path, name, sizeof(content->info.path)-1);
 	content->info.container = container;
 
-	if (!gs_content_reload(content, TRUE, FALSE, err)) {
+	if (!gs_content_reload(content, err)) {
 		GSERRORSET(err, "Implicit content loading failure");
 		goto error_opened;
 	}

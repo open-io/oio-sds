@@ -29,8 +29,6 @@ add_library(gridclient SHARED
 		rainx.c rainx.h
 		rainx_remote.c rainx_remote.h
 		meta_resolver_explicit.c meta_resolver_explicit.h
-		meta_resolver_metacd.c meta_resolver_metacd.h
-		metacd_remote.c metacd_remote.h
 		hc_directory.c
 		loc_context.c loc_context.h
 		hc_func.c hc.h
@@ -61,9 +59,6 @@ target_link_libraries(test_include gridclient)
 
 add_executable(test_url test_url.c)
 target_link_libraries(test_url gridclient)
-
-add_executable(test_metacd test_metacd.c)
-target_link_libraries(test_metacd gridclient)
 
 if (MHD_FOUND)
 	include_directories(AFTER ${MHD_INCLUDE_DIRS})

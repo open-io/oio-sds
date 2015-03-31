@@ -328,9 +328,6 @@ get_grid_client(GError **err)
 	gs_grid_storage_set_timeout(gs_client, GS_TO_M1_OP, 90000, NULL);
 	gs_grid_storage_set_timeout(gs_client, GS_TO_M2_CNX, 30000, NULL);
 	gs_grid_storage_set_timeout(gs_client, GS_TO_M2_OP, 90000, NULL);
-	gs_grid_storage_set_timeout(gs_client, GS_TO_MCD_CNX, 30000, NULL);
-	gs_grid_storage_set_timeout(gs_client, GS_TO_MCD_OP, 90000, NULL);
-
 	return gs_client;
 }
 

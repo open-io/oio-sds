@@ -34,8 +34,6 @@ License along with this library.
 typedef struct prefix_info_s prefix_info_t;
 typedef struct resolver_direct_s resolver_direct_t;
 
-struct metacd_s;
-
 #define COND_MAXWAIT_MS 2000
 
 struct prefix_info_s
@@ -67,9 +65,6 @@ struct resolver_direct_s
 
 	addr_info_t meta0;
 	GPtrArray *mappings;
-
-	/* Maybe-NULL handle to a metacd (NULL -> metacd unavailable) */
-	struct metacd_s *metacd;
 };
 
 #define M0CACHE_LOCK(R)      g_mutex_lock (&((R).use_mutex))
@@ -79,11 +74,6 @@ struct resolver_direct_s
 
 resolver_direct_t* resolver_direct_create2 (const char * const config,
 	gint to_cnx, gint to_req, GError **err);
-
-resolver_direct_t* resolver_direct_create (const gchar * const url, GError **err);
-
-resolver_direct_t* resolver_direct_create_with_metacd(const gchar * const url,
-	struct metacd_s *metacd, gint to_cnx, gint to_req, GError **err);
 
 void resolver_direct_free (resolver_direct_t *r);
 

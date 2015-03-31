@@ -628,48 +628,18 @@ _reload_content(gs_content_t *content, GSList **p_filtered, GSList **p_beans, GE
 	return TRUE;
 }
 
-static gchar *
-_get_content_version(gs_content_t *content)
-{
-	gs_error_t *reloadErr = NULL;
-
-	if (content == NULL)
-		return NULL;
-
-	if (NULL == C1_VERSION(content)) {
-		// ask a reload to retrieve content version
-		if(!gs_content_reload(content, TRUE, FALSE, &reloadErr)) {
-			ERROR("Failed to get content informations from meta2 : (%s)\n", gs_error_get_message(reloadErr));
-			gs_error_free(reloadErr);
-			return NULL;
-		} else {
-			DEBUG("_get_content_version: found version [%s] for content [%s] from meta2",
-					C1_VERSION(content), C1_PATH(content));
-		}
-	} else {
-		DEBUG("_get_content_version: using given version [%s] for content [%s]",
-				C1_VERSION(content), C1_PATH(content));
-	}
-
-	return C1_VERSION(content);
-}
-
-/*
- *
- */
 gboolean
-gs_content_reload (gs_content_t *content, gboolean allow_meta2, gboolean allow_cache, gs_error_t **err)
+gs_content_reload (gs_content_t *content, gs_error_t **err)
 {
-	return gs_content_reload_with_filtered(content, allow_meta2, allow_cache, NULL, NULL, err);
+	return gs_content_reload_with_filtered(content, NULL, NULL, err);
 }
 
 gboolean
-gs_content_reload_with_filtered (gs_content_t *content, gboolean allow_meta2, gboolean allow_cache,
-		GSList **p_filtered, GSList **p_beans, gs_error_t **err)
+gs_content_reload_with_filtered (gs_content_t *content, GSList **p_filtered,
+		GSList **p_beans, gs_error_t **err)
 {
 	gboolean rc = FALSE;
 	GError *localError=NULL;
-	const gchar *metacd_path = NULL;
 
 	/*santy checks and cleanings*/
 	if (!content) {
@@ -687,42 +657,7 @@ gs_content_reload_with_filtered (gs_content_t *content, gboolean allow_meta2, gb
 		*p_filtered = NULL;
 	}
 
-	if (allow_cache) { /* Try with the METACD */
-		struct metacd_s *metacd = C1_C0(content)->info.gs->metacd_resolver;
-		if (resolver_metacd_is_up(metacd)) {
-			struct meta2_raw_content_s *raw_content;
-			metacd_path = make_metacd_path(C1_PATH(content), _get_content_version(content));
-			raw_content = resolver_metacd_get_content(metacd, C1_ID(content), metacd_path, &localError);
-			destroy_metacd_path(metacd_path);
-			if (!raw_content) {
-				if (localError && localError->code == CODE_CONTENT_NOTFOUND)
-					goto try_direct_label;
-				ERROR("METAcd seemed UP but could not give us our chunks: %s",
-					localError?localError->message:"unknown error");
-			}
-			else {
-				map_content_from_raw(content, raw_content);
-				meta2_maintenance_destroy_content(raw_content);
-			}
-			if (localError)
-				g_clear_error(&localError);
-		}
-		if (content->chunk_list) {
-			/* XXX */
-			INFO("Chunks loaded from the metacd");
-			content->loaded_from_cache = ~0;
-			return 1;
-		}
-	}
-
-try_direct_label:
 	/* Try with the META2 */
-	content->loaded_from_cache = 0;
-	if (!allow_meta2) {
-		GSERRORSET(err, "Not found");
-		goto end_label;
-	}
-
 	for (int nb_refreshes = 1; nb_refreshes >= 0; nb_refreshes--) {
 		if (!_reload_content(content, p_filtered, p_beans, &localError)) {
 			if (localError->code == CODE_CONTAINER_NOTFOUND) {
@@ -811,10 +746,6 @@ gs_status_t gs_destroy_content (gs_content_t *content, gs_error_t **err)
 	if (localError)
 		g_clear_error(&localError);
 
-	/* We are about to delete the chunks, and the content has been marked for removal,
-	 * we send the decache order to the metacd, it won't be possible to reload it */
-	/* gs_decache_chunks_in_metacd(content); */
-
 	/*delete the remote chunks*/
 
 	for (GSList *cursor = beans; cursor != NULL; cursor = cursor->next) {
@@ -875,7 +806,7 @@ gs_content_get_metadata(gs_content_t *content, uint8_t *dst, size_t *dst_size, g
 		return GS_ERROR;
 	}
 
-	if (!content->gba_md && !gs_content_reload(content, TRUE, TRUE, err)) {
+	if (!content->gba_md && !gs_content_reload(content, err)) {
 		GSERRORSET(err, "Content loading failure path=[%s]", C1_PATH(content));
 		return GS_ERROR;
 	}
@@ -898,7 +829,7 @@ gs_content_get_system_metadata(gs_content_t *content, uint8_t *dst, size_t *dst_
 		return GS_ERROR;
 	}
 
-	if (!content->gba_sysmd && !gs_content_reload(content, TRUE, TRUE, err)) {
+	if (!content->gba_sysmd && !gs_content_reload(content, err)) {
 		GSERRORSET(err, "Content loading failure path=[%s]", C1_PATH(content));
 		return GS_ERROR;
 	}
@@ -928,48 +859,6 @@ gs_content_get_size(gs_content_t *content)
 	if (!content)
 		return -1;
 	return content->info.size;
-}
-
-void
-gs_decache_chunks_in_metacd(gs_content_t *content)
-{
-	GError *flush_error = NULL;
-	gs_grid_storage_t *client;
-	struct metacd_s *metacd;
-	gs_container_t *container;
-	const gchar *metacd_path = NULL;
-
-	if (!content)
-		return;
-
-	container = C1_C0(content);
-	if (!container)
-		return;
-
-	client = container->info.gs;
-	if (!client)
-		return;
-
-	metacd = client->metacd_resolver;
-	if (!metacd)
-		return;
-
-	if (!resolver_metacd_is_up(metacd))
-		return;
-
-	/* send a decache order to the METACD */
-	metacd_path = make_metacd_path(C1_PATH(content), _get_content_version(content));
-	if (!resolver_metacd_del_content(metacd, C0_ID(container), metacd_path, &flush_error)) {
-		WARN("METACD flush failed for [%s/%s/%s] : %s",
-				gs_get_full_vns(client), C0_IDSTR(container), C1_PATH(content),
-				(flush_error ? flush_error->message : "unknown error"));
-	}
-	else
-		INFO("decache order sent to METACD for [%s/%s/%s]",
-				gs_get_full_vns(client), C0_IDSTR(container), C1_PATH(content));
-	destroy_metacd_path(metacd_path);
-	if (flush_error)
-		g_clear_error(&flush_error);
 }
 
 static void
