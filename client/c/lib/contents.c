@@ -601,13 +601,13 @@ _reload_content(gs_content_t *content, GSList **p_filtered, GSList **p_beans, GE
 
 	hc_url_clean(url);
 
-	if(NULL != *err) {
+	if (NULL != *err) {
 		GSETERROR(err, "Failed to get content");
 		return FALSE;
 	}
 
 	raw_content = g_malloc0(sizeof(struct meta2_raw_content_s));
-	if(!map_raw_content_from_beans(raw_content, beans, p_filtered, FALSE)) {
+	if (!map_raw_content_from_beans(raw_content, beans, p_filtered, FALSE)) {
 		/* content deleted */
 		_bean_cleanl2(beans);
 		GSETCODE(err, CODE_CONTENT_NOTFOUND, "Content deleted");

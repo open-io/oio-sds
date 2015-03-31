@@ -930,6 +930,16 @@ _bean_debug(GString *gstr, gpointer bean)
 }
 
 void
+_bean_debugl2 (GSList *beans)
+{
+	for (; beans ;beans=beans->next) {
+		GString *gs = _bean_debug (NULL, beans->data);
+		GRID_WARN (" BEAN > %s", gs->str);
+		g_string_free (gs, TRUE);
+	}
+}
+
+void
 _bean_randomize(gpointer bean, gboolean avoid_pk)
 {
 	const struct field_descriptor_s *fd;

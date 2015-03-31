@@ -314,19 +314,20 @@ _manage_header(sqlite3 *db, struct bean_CONTENTS_HEADERS_s *bean,
 
 static GError*
 _manage_alias(sqlite3 *db, struct bean_ALIASES_s *bean,
-		m2_onbean_cb cb, gpointer u0)
+		gboolean deeper, m2_onbean_cb cb, gpointer u0)
 {
-	GError *err = NULL;
-
-	/* Get the headers */
 	GPtrArray *tmp = g_ptr_array_new();
-	err = _db_get_FK_by_name_buffered(bean, "image", db, tmp);
+	GError *err = _db_get_FK_by_name_buffered(bean, "image", db, tmp);
 	if (!err) {
 		while (tmp->len > 0) {
 			struct bean_CONTENTS_HEADERS_s *header = tmp->pdata[0];
 			g_ptr_array_remove_index_fast(tmp, 0);
-			if (header)
+			if (!header)
+				continue;
+			if (deeper)
 				_manage_header(db, header, cb, u0);
+			else
+				cb(u0, header);
 		}
 	}
 
@@ -367,6 +368,10 @@ m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		guint32 flags, struct bean_ALIASES_s **out)
 {
 	g_assert (out != NULL);
+
+	flags &= ~(M2V2_FLAG_HEADERS|M2V2_FLAG_NOFORMATCHECK);
+	flags |= M2V2_FLAG_NOPROPS|M2V2_FLAG_NORECURSION;
+
 	GPtrArray *tmp = g_ptr_array_new ();
 	GError *err = m2db_get_alias(sq3, url, flags, _bean_buffer_cb, tmp);
 	if (!err) {
@@ -418,15 +423,14 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *u,
 	}
 	
 	/* recurse on headers if allowed */
-	if (!err && cb && !(flags && M2V2_FLAG_NORECURSION)) {
+	if (!err && cb && ((flags & M2V2_FLAG_HEADERS) || !(flags & M2V2_FLAG_NORECURSION))) {
 		for (guint i=0; !err && i<tmp->len ;i++) {
 			struct bean_ALIASES_s *alias = tmp->pdata[i];
 			if (!alias)
 				continue;
 			if ((flags & M2V2_FLAG_NODELETED) && ALIASES_get_deleted(alias))
-				_bean_clean(alias);
-			else
-				_manage_alias(sq3->db, alias, cb, u0);
+				continue;
+			_manage_alias(sq3->db, alias, !(flags & M2V2_FLAG_NORECURSION), cb, u0);
 		}
 	}
 
@@ -454,7 +458,10 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *u,
 			struct bean_ALIASES_s *alias = tmp->pdata[i];
 			if (!alias)
 				continue;
-			cb(u0, alias);
+			if ((flags & M2V2_FLAG_NODELETED) && ALIASES_get_deleted(alias))
+				_bean_clean(alias);
+			else
+				cb(u0, alias);
 			tmp->pdata[i] = NULL;
 		}
 	}

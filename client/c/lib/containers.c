@@ -1119,15 +1119,17 @@ gs_download_content_by_name(gs_container_t *container, const char *name,
 }
 
 gs_status_t
-gs_download_content_by_name_and_version(gs_container_t *container, const char *name, const char *version,
+gs_download_content_by_name_and_version(gs_container_t *container,
+		const char *name, const char *version,
 		gs_download_info_t *dl_info, gs_error_t **err)
 {
 	return gs_download_content_by_name_full(container, name, version, NULL, dl_info, err);
 }
 
 gs_status_t
-gs_download_content_by_name_full(gs_container_t *container, const char *name, const char *version,
-	const char *stgpol, gs_download_info_t *dl_info, gs_error_t **err)
+gs_download_content_by_name_full(gs_container_t *container, const char *name,
+		const char *version, const char *stgpol,
+		gs_download_info_t *dl_info, gs_error_t **err)
 {
 	int rc = GS_ERROR;
 	gs_content_t *content = NULL;

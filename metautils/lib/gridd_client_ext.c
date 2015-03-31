@@ -456,29 +456,30 @@ GError *
 gridd_client_exec_and_decode (const gchar *to, gdouble timeout,
 		GByteArray *req, GSList **out, body_decoder_f decode)
 {
-	EXTRA_ASSERT (out != NULL);
-	EXTRA_ASSERT (decode != NULL);
 	GByteArray ** bodies = NULL;
-	GError *err = gridd_client_exec4 (to, timeout, req, &bodies);
+	GError *err = gridd_client_exec4 (to, timeout, req,
+			out && decode ? &bodies : NULL);
 	if (err) {
 		metautils_gba_cleanv (bodies);
 		return err;
 	}
-	GSList *items = NULL;
-	for (GByteArray **pbody=bodies; pbody && *pbody && !err ;pbody++) {
-		GByteArray *body = *pbody;
-		if (!body->data || body->len<=0)
-			continue;
-		GSList *l = NULL;
-		gsize len = body->len;
-		if (!decode(&l, body->data, &len, &err)) {
-			g_prefix_error (&err, "Decoding error: ");
-			break;
+	if (out && decode && bodies) {
+		GSList *items = NULL;
+		for (GByteArray **pbody=bodies; pbody && *pbody && !err ;pbody++) {
+			GByteArray *body = *pbody;
+			if (!body->data || body->len<=0)
+				continue;
+			GSList *l = NULL;
+			gsize len = body->len;
+			if (!decode(&l, body->data, &len, &err)) {
+				g_prefix_error (&err, "Decoding error: ");
+				break;
+			}
+			items = g_slist_concat (l, items);
 		}
-		items = g_slist_concat (l, items);
+		*out = items;
 	}
 	metautils_gba_cleanv (bodies);
-	*out = items;
 	return err;
 }
 
