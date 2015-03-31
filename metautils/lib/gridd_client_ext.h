@@ -22,6 +22,7 @@ License along with this library.
 
 # include <glib.h>
 # include "metatypes.h"
+# include "metacomm.h"
 
 /**
  * @defgroup metautils_client_ext
@@ -50,6 +51,28 @@ struct gridd_client_s * gridd_client_create_idle(const gchar *target);
 // Wraps create_idle() and request()
 struct gridd_client_s * gridd_client_create(const gchar *target,
 		GByteArray *req, gpointer ctx, client_on_reply cb);
+
+/* wraps start(), loop() and error() */
+GError * gridd_client_run (struct gridd_client_s *self);
+
+/* wraps crate(), run(), free() */
+GError * gridd_client_exec4 (const gchar *to, gdouble timeout, GByteArray *req,
+		GByteArray ***replies);
+
+/* wraps gridd_client_exec4() */
+GError * gridd_client_exec (const gchar *to, gdouble timeout, GByteArray *req);
+
+/* wraps gridd_client_exec4() and decode each bodies as a sequence */
+GError * gridd_client_exec_and_decode (const gchar *to, gdouble timeout,
+		GByteArray *req, GSList **out, body_decoder_f decoder);
+
+/* wraps gridd_client_exec4() and concat the bodies */
+GError * gridd_client_exec_and_concat (const gchar *to, gdouble timeout,
+		GByteArray *req, GByteArray **out);
+
+/* wraps gridd_client_exec_and_concat() */
+GError * gridd_client_exec_and_concat_string (const gchar *to, gdouble timeout, GByteArray *req,
+		gchar **out);
 
 /* ------------------------------------------------------------------------- */
 /* Implementation specifics / array of structures -------------------------- */

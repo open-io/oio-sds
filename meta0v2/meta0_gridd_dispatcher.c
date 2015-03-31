@@ -30,11 +30,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/grid_daemon.h>
 #include <server/transport_gridd.h>
 
-#include "./meta0_backend.h"
-#include "./meta0_utils.h"
-#include "./meta0_prefixassign.h"
-#include "./meta0_gridd_dispatcher.h"
-#include "./internals.h"
+#include "meta0_backend.h"
+#include "meta0_utils.h"
+#include "meta0_prefixassign.h"
+#include "meta0_gridd_dispatcher.h"
+#include "internals.h"
 
 struct meta0_disp_s
 {
@@ -86,7 +86,7 @@ extract_nocheck(struct message_s *msg)
 	void *f;
         gsize f_size;
 
-	if (0 >= message_get_field(msg, "NOCHECK", sizeof("NOCHECK")-1, &f, &f_size, NULL)) {
+	if (0 >= message_get_field(msg, NAME_MSGKEY_NOCHECK, sizeof(NAME_MSGKEY_NOCHECK)-1, &f, &f_size, NULL)) {
 		return TRUE;
 	}
 
@@ -207,7 +207,7 @@ meta0_dispatch_v1_GETONE(struct gridd_reply_ctx_s *reply,
 	gchar **urlv = NULL;
 
 	(void) ignored;
-	err = extract_prefix(reply->request, "PREFIX", TRUE, prefix);
+	err = extract_prefix(reply->request, NAME_MSGKEY_PREFIX, TRUE, prefix);
 	if (NULL != err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
@@ -246,7 +246,7 @@ meta0_dispatch_v1_FILL(struct gridd_reply_ctx_s *reply,
 	guint nbreplicas = 1;
 
 	(void) ignored;
-	err = message_extract_struint(reply->request, "REPLICAS", &nbreplicas);
+	err = message_extract_struint(reply->request, NAME_MSGKEY_REPLICAS, &nbreplicas);
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
@@ -298,12 +298,12 @@ meta0_dispatch_v2_FILL(struct gridd_reply_ctx_s *reply,
 	guint nbreplicas = 1;
 	gboolean nodist = FALSE;
 
-	err = message_extract_struint(reply->request, "REPLICAS", &nbreplicas);
+	err = message_extract_struint(reply->request, NAME_MSGKEY_REPLICAS, &nbreplicas);
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
-	err = message_extract_struint(reply->request, "NODIST", (guint*)&nodist);
+	err = message_extract_struint(reply->request, NAME_MSGKEY_NODIST, (guint*)&nodist);
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
@@ -388,7 +388,7 @@ meta0_dispatch_v2_DESTROY_META1REF(struct gridd_reply_ctx_s *reply,
 	gchar meta1url[STRLEN_ADDRINFO];
 	(void) ignored;
 
-	err = message_extract_string(reply->request, "METAURL", meta1url, sizeof(meta1url));
+	err = message_extract_string(reply->request, NAME_MSGKEY_METAURL, meta1url, sizeof(meta1url));
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
@@ -414,7 +414,7 @@ meta0_dispatch_v2_DESTROY_ZKNODE(struct gridd_reply_ctx_s *reply,
 	gchar meta0url[STRLEN_ADDRINFO];
 	(void) ignored;
 
-	err = message_extract_string(reply->request, "METAURL", meta0url, sizeof(meta0url));
+	err = message_extract_string(reply->request, NAME_MSGKEY_METAURL, meta0url, sizeof(meta0url));
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
@@ -438,16 +438,16 @@ const struct gridd_request_descr_s *
 meta0_gridd_get_requests(void)
 {
 	static struct gridd_request_descr_s descriptions[] = {
-		{"REQ_M0_GETONE",  (hook) meta0_dispatch_v1_GETONE,  NULL},
-		{"REQ_M0_GETALL",  (hook) meta0_dispatch_v1_GETALL,  NULL},
-		{"REQ_M0_FILL",    (hook) meta0_dispatch_v1_FILL,    NULL},
-		{"REQ_M0_RELOAD",  (hook) meta0_dispatch_v1_RELOAD,  NULL},
-		{"REQ_M0_V2_ASSIGN_PREFIX", (hook)meta0_dispatch_v2_ASSIGN_PREFIX, NULL},
-		{"REQ_M0_V2_DISABLE_META1", (hook)meta0_dispatch_v2_DISABLE_META1, NULL},
-		{"REQ_M0_V2_FILL",   (hook) meta0_dispatch_v2_FILL, NULL},
-		{"REQ_M0_V2_GETMETA1INFO", (hook)meta0_dispatch_v2_META1_INFO, NULL},
-		{"REQ_M0_V2_DESTROY_META1REF", (hook)meta0_dispatch_v2_DESTROY_META1REF, NULL},
-		{"REQ_M0_V2_DESTROY_META0ZKNODE", (hook)meta0_dispatch_v2_DESTROY_ZKNODE, NULL},
+		{NAME_MSGNAME_M0_GETONE,              (hook) meta0_dispatch_v1_GETONE,  NULL},
+		{NAME_MSGNAME_M0_GETALL,              (hook) meta0_dispatch_v1_GETALL,  NULL},
+		{NAME_MSGNAME_M0_FILL,                (hook) meta0_dispatch_v1_FILL,    NULL},
+		{NAME_MSGNAME_M0_RELOAD,              (hook) meta0_dispatch_v1_RELOAD,  NULL},
+		{NAME_MSGNAME_M0_ASSIGN,              (hook) meta0_dispatch_v2_ASSIGN_PREFIX, NULL},
+		{NAME_MSGNAME_M0_DISABLE_META1,       (hook) meta0_dispatch_v2_DISABLE_META1, NULL},
+		{NAME_MSGNAME_M0_V2_FILL,             (hook) meta0_dispatch_v2_FILL, NULL},
+		{NAME_MSGNAME_M0_GET_META1_INFO,      (hook) meta0_dispatch_v2_META1_INFO, NULL},
+		{NAME_MSGNAME_M0_DESTROY_META1REF,    (hook) meta0_dispatch_v2_DESTROY_META1REF, NULL},
+		{NAME_MSGNAME_M0_DESTROY_META0ZKNODE, (hook) meta0_dispatch_v2_DESTROY_ZKNODE, NULL},
 		{NULL, NULL, NULL}
 	};
 

@@ -71,8 +71,14 @@ container_list_content_handler(GError ** error, gpointer udata, gint code, guint
 meta0_info_t *
 gcluster_get_meta0_2timeouts(addr_info_t * addr, long to_cnx, long to_req, GError ** error)
 {
+	gchar str[STRLEN_ADDRINFO];
+	if (!addr_info_to_string (addr, str, sizeof(str))) {
+		GSETCODE(error, ERRCODE_PARAM, "bad address");
+		return NULL;
+	}
+
 	meta0_info_t *m0 = NULL;
-	GSList *result = gcluster_get_services2(addr, to_cnx, to_req, "meta0", error);
+	GSList *result = gcluster_get_services(str, MAX(to_cnx,to_req), NAME_SRVTYPE_META0, FALSE, error);
 	if (result) {
 		m0 = service_info_convert_to_m0info(g_slist_nth_data(result,rand()%g_slist_length(result)));
 		g_slist_foreach(result, service_info_gclean, NULL);
@@ -340,64 +346,29 @@ error_reply:
 	return (NULL);
 }
 
-static GSList *
-_get_services(struct metacnx_ctx_s *ctx, const gchar * type,
-		GError ** error, gboolean full)
+GSList *
+gcluster_get_services(const char *target, gdouble timeout,
+		const gchar *type, gboolean full, GError ** error)
 {
-	GByteArray *gba0 = NULL, *gba1 = NULL;
-	GSList *result;
-
-	gba0 = metautils_gba_from_string(type);
-	if (full)
-		gba1 = metautils_gba_from_string("1");
-	result = service_info_sequence_request(ctx, error,
-			NAME_MSGNAME_CS_GET_SRV, NULL, "TYPENAME", gba0,
-			"FULL", gba1,
+	struct message_s *req = message_create_named(NAME_MSGNAME_CS_GET_SRV);
+	message_add_fields_str (req,
+			NAME_MSGKEY_TYPENAME, type,
+			NAME_MSGKEY_FULL, full?"1":NULL,
 			NULL);
 
-	g_byte_array_free(gba0, TRUE);
-	if (gba1)
-		g_byte_array_free(gba1, TRUE);
-
-	return result;
-}
-
-GSList *
-gcluster_get_services_from_ctx(struct metacnx_ctx_s *ctx, const gchar * type,
-		GError ** error)
-{
-	return _get_services(ctx, type, error, FALSE);
-}
-
-GSList *
-gcluster_get_services_full(struct metacnx_ctx_s *ctx, const gchar * type,
-		GError ** error)
-{
-	return _get_services(ctx, type, error, TRUE);
-}
-
-GSList *
-gcluster_get_services2(addr_info_t * addr, long to_cnx, long to_req,
-		const gchar * type, GError ** error)
-{
-	GSList *result;
-	struct metacnx_ctx_s cnx_ctx;
-
-	(void) type;
-	metacnx_clear(&cnx_ctx);
-	memcpy(&(cnx_ctx.addr), addr, sizeof(addr_info_t));
-	cnx_ctx.timeout.cnx = to_cnx;
-	cnx_ctx.timeout.req = to_req;
-
-	result = _get_services(&cnx_ctx, type, error, FALSE);
-	metacnx_close(&cnx_ctx);
-	return result;
-}
-
-GSList *
-gcluster_get_services(addr_info_t * addr, long timeout, const gchar * type, GError ** error)
-{
-	return gcluster_get_services2(addr, timeout, timeout, type, error);
+	GSList *out = NULL;	
+	GError *err = gridd_client_exec_and_decode (target, timeout,
+			message_marshall_gba_and_clean(req), &out, service_info_unmarshall);
+	if (err) {
+		if (error)
+			g_error_transmit(error, err);
+		else
+			g_clear_error(&err);
+		g_slist_free_full (out, (GDestroyNotify)service_info_clean);
+		return NULL;
+	} else {
+		return out;
+	}
 }
 
 GSList *
@@ -485,7 +456,7 @@ gcluster_get_srvtype_event_config(addr_info_t * addr, long to, gchar * name, GEr
 	}
 
 	MESSAGE req = build_request(NAME_MSGNAME_CS_GET_EVENT_CONFIG, NULL, 0);
-	message_add_field(req, "TYPENAME", name, strlen(name));
+	message_add_field(req, NAME_MSGKEY_TYPENAME, name, strlen(name));
 
 	result = g_byte_array_new();
 	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, to, &data)) {

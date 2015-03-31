@@ -257,12 +257,7 @@ meta2_filter_action_raw_chunks_get_v1(struct gridd_filter_ctx_s *ctx,
 
 	void _cb(gpointer u, gpointer bean) {
 		(void) u;
-		if (DESCR(bean) == &descr_struct_PROPERTIES && PROPERTIES_get_deleted(bean)) {
-			/* we don't want deleted props */
-			_bean_clean(bean);
-		} else {
 		beans = g_slist_prepend(beans, bean);
-		}
 	}
 
 	e = meta2_backend_get_alias(m2b, url, M2V2_FLAG_NODELETED | M2V2_FLAG_ALLPROPS, _cb, NULL);
@@ -613,21 +608,14 @@ int
 meta2_filter_action_get_content_properties(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	(void) reply;
 	GError *e = NULL;
-	guint32 flags = 0;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
-	const char *fstr = meta2_filter_ctx_get_param(ctx, M2_KEY_GET_FLAGS);
 
 	TRACE_FILTER();
-	if (NULL != fstr) {
-		flags = atoi(fstr);
-		flags = g_htonl(flags);
-	}
 
-	e = meta2_backend_get_properties(m2b, url, flags, _get_cb, obc);
+	e = meta2_backend_get_properties(m2b, url, _get_cb, obc);
 	if (NULL != e) {
 		_on_bean_ctx_clean(obc);
 		meta2_filter_ctx_set_error(ctx, e);
@@ -658,46 +646,6 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	}
-
-	return FILTER_OK;
-}
-
-int
-meta2_filter_action_modify_mdusr_v1(struct gridd_filter_ctx_s *ctx,
-                struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	GSList *props = NULL;
-
-	(void) reply;
-
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	const char *mdusr = meta2_filter_ctx_get_param(ctx, "V");
-
-	struct bean_PROPERTIES_s *prop = _bean_create(&descr_struct_PROPERTIES);
-	PROPERTIES_set2_alias(prop, hc_url_get(url, HCURL_PATH));
-	PROPERTIES_set_alias_version(prop, 1L);
-	PROPERTIES_set2_key(prop, MDUSR_PROPERTY_KEY);
-	if(NULL != mdusr) {
-		PROPERTIES_set2_value(prop, (guint8*)mdusr, strlen(mdusr));
-		PROPERTIES_set_deleted(prop, FALSE);
-	} else {
-		PROPERTIES_set2_value(prop, (guint8*)" ", 1);
-		PROPERTIES_set_deleted(prop, TRUE);
-	}
-
-	props = g_slist_prepend(props, prop);
-
-	e = meta2_backend_set_properties(m2b, url, props, NULL, NULL);
-	if(NULL != e) {
-		GRID_DEBUG("Error while setting mdsys : %s", e->message);
-		meta2_filter_ctx_set_error(ctx, e);
-		_bean_cleanl2(props);
-		return FILTER_KO;
-	}
-
-	_bean_cleanl2(props);
 
 	return FILTER_OK;
 }
@@ -753,7 +701,7 @@ meta2_filter_action_modify_mdsys_v1(struct gridd_filter_ctx_s *ctx,
 	beans = g_slist_prepend(g_slist_prepend(beans, header), alias);
 	if (e == NULL) {
 		// skip checks only when changing stgpol
-		e = meta2_backend_update_alias_header(m2b, url, beans, (sp != NULL));
+		e = meta2_backend_update_alias_header(m2b, url, beans);
 	}
 	_bean_cleanl2(beans);
 
@@ -889,7 +837,6 @@ _generate_chunks(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply
 		PROPERTIES_set_alias_version(prop, 1);
 		PROPERTIES_set2_key(prop, MDUSR_PROPERTY_KEY);
 		PROPERTIES_set2_value(prop, (const guint8*) mdusr, strlen(mdusr));
-		PROPERTIES_set_deleted(prop, FALSE);
 		beans = g_slist_prepend(beans, prop);
 	}
 
@@ -1096,7 +1043,7 @@ _call_for_all_versions(struct meta2_backend_s *m2b,
 		_bean_clean(bean);
 	}
 
-	err = meta2_backend_get_alias_version(m2b, url, 0, &maxvers);
+	err = meta2_backend_get_alias_version(m2b, url, &maxvers);
 	if (!err) {
 		for (gint64 v = 1; v <= maxvers && !err; v++) {
 			found_chunk = FALSE;

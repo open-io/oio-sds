@@ -215,8 +215,7 @@ GError* meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 
 /**  */
 GError* meta2_backend_get_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, guint32 flags,
-		m2_onbean_cb cb, gpointer u0);
+		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0);
 
 /**  */
 GError* meta2_backend_del_properties(struct meta2_backend_s *m2b,
@@ -236,7 +235,7 @@ GError* meta2_backend_get_content_urls_from_chunk_id(
 
 /**  */
 GError* meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, guint32 flags, gint64 *version);
+		struct hc_url_s *url, gint64 *version);
 
 /**  */
 GError* meta2_backend_generate_beans(struct meta2_backend_s *m2b,
@@ -254,8 +253,8 @@ GError* meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gint64 *result);
 
 /** */
-GError* meta2_backend_update_alias_header(struct meta2_backend_s *m2b, struct hc_url_s *url,
-		GSList *beans, gboolean skip_checks);
+GError* meta2_backend_update_alias_header(struct meta2_backend_s *m2b,
+		struct hc_url_s *url, GSList *beans);
 
 /** Generate spare chunk (in form of a chunk_info list). This function takes
  * care of the storage policy during the chunks generation (distance,

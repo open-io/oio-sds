@@ -218,11 +218,7 @@ thread_worker(gpointer p)
 	addr_info_to_string(&(td->target), str_target, sizeof(str_target));
 	GRID_DEBUG("Connecting to [%s]", str_target);
 
-	request = message_create_request(&err, NULL, "PING", NULL, NULL);
-	if (!request) {
-		GRID_ERROR("Request creation error : %s", err->message);
-		goto error_request;
-	}
+	request = message_create_named("PING");
 
 	metacnx_clear(&cnx);
 	if (!metacnx_init_with_addr(&cnx, &(td->target), &err)) {
@@ -268,7 +264,6 @@ thread_worker(gpointer p)
 	metacnx_clear(&cnx);
 error_cnx:
 	message_destroy(request);
-error_request:
 	if (err)
 		g_clear_error(&err);
 	return p;

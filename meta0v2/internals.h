@@ -20,6 +20,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta0v2__internals_h
 # define OIO_SDS__meta0v2__internals_h 1
 
-# include <metautils/lib/metautils.h>
+# define NAME_MSGNAME_M0_GETALL              "M0V2_GETALL"
+# define NAME_MSGNAME_M0_GETONE              "M0V2_GETONE"
+# define NAME_MSGNAME_M0_RELOAD              "M0V2_RELOAD"
+# define NAME_MSGNAME_M0_FILL                "M0V2_FILL"
+# define NAME_MSGNAME_M0_V2_FILL             "M0V2_V2FILL"
+# define NAME_MSGNAME_M0_ASSIGN              "M0V2_ASSIGN_PREFIX"
+# define NAME_MSGNAME_M0_DISABLE_META1       "M0V2_DISABLE_META1"
+# define NAME_MSGNAME_M0_GET_META1_INFO      "M0V2_GETMETA1INFO"
+# define NAME_MSGNAME_M0_DESTROY_META1REF    "M0V2_DESTROY_META1REF"
+# define NAME_MSGNAME_M0_DESTROY_META0ZKNODE "M0V2_DESTROY_META0ZKNODE"
 
 #endif /*OIO_SDS__meta0v2__internals_h*/

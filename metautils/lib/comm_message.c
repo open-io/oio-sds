@@ -384,10 +384,8 @@ message_set_param(MESSAGE m, enum message_param_e mp, const void *s, gsize sSize
 void
 message_add_field(MESSAGE m, const char *name, const void *value, gsize valueSize)
 {
-	if (!m || !name || !value) {
-		GRID_DEBUG("Invalid parameter (%p %s %p)", m, name, value);
+	if (!m || !name || !value)
 		return ;
-	}
 
 	if (!m->asnMsg)
 		_alloc_asn_message(m, NULL);
@@ -749,30 +747,37 @@ message_extract_flags32(struct message_s *msg, const gchar *n,
 GError *
 message_extract_body_gba(struct message_s *msg, GByteArray **result)
 {
-	int rc;
-	void *b = NULL;
-	gsize bsize = 0;
-
 	EXTRA_ASSERT(result != NULL);
 
-	rc = message_get_BODY(msg, &b, &bsize, NULL);
-	if (0 >= rc)
-		return NEWERROR(CODE_BAD_REQUEST, "Missing body");
+	void *b = NULL;
+	gsize bsize = 0;
+	GError *err = NULL;
+	if (0 > message_get_BODY(msg, &b, &bsize, &err)) {
+		g_prefix_error (&err, "Body error: ");
+		return err;
+	}
 
-	*result = g_byte_array_append(g_byte_array_new(), b, bsize);
+	*result = g_byte_array_new();
+	if (b && bsize)
+		g_byte_array_append(*result, b, bsize);
 	return NULL;
 }
 
 GError *
 message_extract_body_string(struct message_s *msg, gchar **result)
 {
-	int rc;
 	void *b = NULL;
 	gsize bsize = 0;
+	GError *err = NULL;
+	if (0 > message_get_BODY(msg, &b, &bsize, &err)) {
+		g_prefix_error (&err, "Body error: ");
+		return err;
+	}
 
-	rc = message_get_BODY(msg, &b, &bsize, NULL);
-	if (0 >= rc)
-		return NEWERROR(CODE_BAD_REQUEST, "Missing body");
+	if (!b || !bsize) {
+		*result = g_malloc0(sizeof(void*));
+		return NULL;
+	}
 
 	register gchar *c, *last;
 	for (c=b,last=b+bsize; c < last ;c++) {
@@ -910,8 +915,11 @@ message_extract_boolean(struct message_s *msg, const gchar *n,
 {
 	gchar tmp[32];
 	GError *err = message_extract_string(msg, n, tmp, sizeof(tmp));
-	if (err)
+	if (err) {
+		if (!mandatory)
+			g_clear_error(&err);
 		return err;
+	}
 	if (v)
 		*v = metautils_cfg_get_bool (tmp, *v);
 	return NULL;

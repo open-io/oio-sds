@@ -1225,7 +1225,6 @@ static gs_status_t _gs_upload(gs_container_t *container,
 		PROPERTIES_set_key(bp, g_string_new("sys.m2v1_mdusr"));
 		PROPERTIES_set_value(bp, g_byte_array_append(g_byte_array_new(),
 					(guint8*)g_strdup(mdusr), strlen(mdusr)));
-		PROPERTIES_set_deleted(bp, FALSE);
 		chunks = g_slist_prepend(chunks, bp);
 	}
 

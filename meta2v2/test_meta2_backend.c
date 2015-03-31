@@ -34,7 +34,7 @@ static gint64 chunks_count = 3;
 
 #define CHECK_ALIAS_VERSION(m2,u,v) do {\
 	gint64 _v = (v); \
-	err = meta2_backend_get_alias_version(m2, u, 0, &version); \
+	err = meta2_backend_get_alias_version(m2, u, &version); \
 	GRID_DEBUG("err=%d version=%"G_GINT64_FORMAT" expected=%"G_GINT64_FORMAT,\
 			err?err->code:0, version, _v); \
 	g_assert_no_error(err); \
@@ -90,7 +90,6 @@ _props_generate(struct hc_url_s *url, gint64 v, guint count)
 		PROPERTIES_set_alias_version(prop, v);
 		PROPERTIES_set2_key(prop, name);
 		PROPERTIES_set2_value(prop, (guint8*)"value", sizeof("value"));
-		PROPERTIES_set_deleted(prop, FALSE);
 		result = g_slist_prepend(result, prop);
 	}
 
@@ -700,7 +699,7 @@ test_props_gotchas()
 		g_assert_error(err, GQ(), CODE_BAD_REQUEST);
 		g_clear_error(&err);
 
-		err = meta2_backend_get_properties(m2, u, 0, NULL, NULL);
+		err = meta2_backend_get_properties(m2, u, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		g_clear_error(&err);
 
@@ -739,49 +738,6 @@ test_props_set_simple()
 	_container_wraper(test);
 }
 
-static void
-test_props_set_deleted()
-{
-	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
-		GError *err;
-		GSList *beans;
-
-		/* add a content */
-		beans = _create_alias(m2, u, NULL);
-		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL);
-		g_assert_no_error(err);
-		_bean_cleanl2(beans);
-
-		CHECK_ALIAS_VERSION(m2,u,1);
-
-		/* delete the content */
-		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
-		g_assert_no_error(err);
-
-		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?2:1));
-
-		/* set it properties */
-		beans = _props_generate(u, 1, 10);
-		err = meta2_backend_set_properties(m2, u, beans, NULL, NULL);
-		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
-		g_clear_error(&err);
-		_bean_cleanl2(beans);
-
-		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?2:1));
-
-		// XXX: why do we check a second time?
-		/* set it properties */
-		beans = _props_generate(u, 1, 10);
-		err = meta2_backend_set_properties(m2, u, beans, NULL, NULL);
-		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
-		g_clear_error(&err);
-		_bean_cleanl2(beans);
-
-		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?2:1));
-	}
-	_container_wraper(test);
-}
-
 int
 main(int argc, char **argv)
 {
@@ -811,8 +767,6 @@ main(int argc, char **argv)
 			test_content_append_not_found);
 	g_test_add_func("/meta2v2/backend/props/set_simple",
 			test_props_set_simple);
-	g_test_add_func("/meta2v2/backend/props/set_deleted",
-			test_props_set_deleted);
 	g_test_add_func("/meta2v2/backend/props/gotchas",
 			test_props_gotchas);
 

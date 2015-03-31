@@ -14,7 +14,7 @@ add_library(hcresolve SHARED
 		hc_resolver.h)
 
 target_link_libraries(hcresolve
-		meta0remote meta1remote metautils metacomm gridcluster
+		meta0remote meta1remote metautils gridcluster
 		${GLIB2_LIBRARIES})
 
 install(FILES

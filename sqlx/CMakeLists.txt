@@ -23,14 +23,14 @@ set_target_properties(sqlxsrv PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(sqlxsrv
 		server metautils gridcluster sqliterepo
 		hcresolve meta0remote meta1remote
-		server sqliterepo metautils metacomm gridcluster
+		server sqliterepo metautils gridcluster
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 
 add_executable(hcsqlx sqlx_client.c)
 bin_prefix(hcsqlx -sqlx)
 target_link_libraries(hcsqlx
-		gridclient metautils metacomm gridcluster sqlitereporemote
+		gridclient metautils gridcluster sqlitereporemote
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 		
 

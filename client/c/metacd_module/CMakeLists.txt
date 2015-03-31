@@ -11,7 +11,7 @@ add_library(metacd_module MODULE
 		metacd_module.c metacd_module.h)
 set_target_properties(metacd_module PROPERTIES PREFIX "" SUFFIX .so)
 target_link_libraries(metacd_module
-		metautils metacomm meta2remote meta0remote meta1remote
+		metautils meta2remote meta0remote meta1remote
 		gridcluster gridclient
 		${GLIB2_LIBRARIES})
 

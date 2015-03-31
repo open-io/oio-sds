@@ -30,8 +30,7 @@ License along with this library.
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "metautils_syscall.h"
-#include "metacomm.h"
+#include "metautils.h"
 
 gboolean
 metautils_addr_valid_for_bind(const struct addr_info_s *a)

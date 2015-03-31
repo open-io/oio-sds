@@ -31,7 +31,7 @@ License along with this library.
  * @{
  */
 
-# include <metautils/lib/metautils.h>
+#include <metautils/lib/metatypes.h>
 
 #define DECLARE_MARSHALLER(Name) \
 gint Name (GSList *l, void **d, gsize *dSize, GError **err)
@@ -480,9 +480,6 @@ DECLARE_BODY_MANAGER(   meta2_raw_chunk_concat);
  * @return NULL in case of error or a valid ASN.1 form of the given servccie_info
  */
 GByteArray* service_info_marshall_1(service_info_t *si, GError **err);
-
-GSList *service_info_sequence_request(struct metacnx_ctx_s *cnx, GError ** err,
-		const gchar * req_name, GByteArray * body, ...);
 
 GByteArray *meta1_raw_container_marshall(struct meta1_raw_container_s *container,
 		GError ** err);

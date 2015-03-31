@@ -21,7 +21,7 @@ add_library(meta2remote SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/meta2_services_remote.c)
 set_target_properties(meta2remote PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(meta2remote
-		metautils metacomm
+		metautils
 		${GLIB2_LIBRARIES})
 
 install(FILES

@@ -51,6 +51,7 @@ License along with this library.
 # include <metautils/lib/metautils_l4v.h>
 # include <metautils/lib/metautils_manifest.h>
 # include <metautils/lib/metautils_svc_policy.h>
+# include <metautils/lib/metautils_syscall.h>
 
 # include <metautils/lib/metatype_cid.h>
 # include <metautils/lib/metatype_m0info.h>
@@ -68,14 +69,16 @@ License along with this library.
 # include <metautils/lib/storage_policy.h>
 # include <metautils/lib/common_main.h>
 # include <metautils/lib/volume_lock.h>
-# include <metautils/lib/gridd_client.h>
-# include <metautils/lib/gridd_client_ext.h>
-# include <metautils/lib/gridd_client_pool.h>
 # include <metautils/lib/grid_storage_client_stat.h>
 # include <metautils/lib/expr.h>
 # include <metautils/lib/lb.h>
 # include <metautils/lib/notifications.h>
 # include <metautils/lib/event_config.h>
 # include <metautils/lib/meta_backend_common.h>
+
+# include <metautils/lib/metacomm.h>
+# include <metautils/lib/gridd_client.h>
+# include <metautils/lib/gridd_client_ext.h>
+# include <metautils/lib/gridd_client_pool.h>
 
 #endif /*OIO_SDS__metautils__lib__metautils_h*/

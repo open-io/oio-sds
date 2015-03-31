@@ -37,9 +37,6 @@ meta0_info_t* gcluster_get_meta0(addr_info_t *addr,
 meta0_info_t* gcluster_get_meta0_2timeouts(addr_info_t * addr,
 		long to_cnx, long to_req, GError ** error);
 
-meta0_info_t * gcluster_get_meta0_2tos(addr_info_t * addr,
-		long to_cnx, long to_req, GError ** error);
-
 /** Push a list of broken containers to the conscience */
 gint gcluster_push_broken_container(addr_info_t *addr, long to,
 		GSList *container_list, GError **error);
@@ -68,25 +65,15 @@ GSList *gcluster_get_broken_container(addr_info_t *addr, long to,
 		GError **error);
 
 /** Remove a list of broken containers from the conscience */
-GSList *gcluster_get_services( addr_info_t *addr, long to,
-		const gchar *type, GError **error);
+GSList *gcluster_get_services(const char *target, gdouble timeout,
+		const gchar *type, gboolean full, GError **error);
 
 /** Get the list of service types from conscience. */
 GSList *gcluster_get_service_types(addr_info_t *addr, long timeout,
 		GError **error);
 
-/** Get the full broken container list from the conscience */
-GSList *gcluster_get_services2( addr_info_t *addr, long to_cnx, long to_req,
-		const gchar *type, GError **error);
-
-GSList * gcluster_get_services_from_ctx(struct metacnx_ctx_s *ctx,
-		const gchar * type, GError ** error);
-
 gint gcluster_push_services(addr_info_t *addr, long to,
 		GSList *services_list, gboolean lock_action, GError **error);
-
-/*! With all the stats and all the tags.  */
-GSList* gcluster_get_services_full(struct metacnx_ctx_s *ctx, const gchar * type, GError **error);
 
 GByteArray* gcluster_get_srvtype_event_config(addr_info_t *addr, long to,
 		gchar *name, GError **error);

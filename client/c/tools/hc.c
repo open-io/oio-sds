@@ -76,7 +76,9 @@ typedef void (*help_func)(void);
 /* ------------------- Internals functions ------------------- */
 
 static void
-__display_friendly_error(gs_error_t *error) {
+__display_friendly_error(gs_error_t *error)
+{
+	grid_main_set_status (1);
 
 	/* debug info */
 	if(!error || !error->msg) {
@@ -626,8 +628,9 @@ func_propget(gs_grid_storage_t *hc)
 	gboolean status = FALSE;
 	gchar **result = NULL;
 
-	e = hc_func_get_content_properties(hc, url,&result);
-	if ( e != NULL ) {
+	e = hc_func_get_content_properties(hc, url, &result);
+	if (e != NULL) {
+		__display_friendly_error (e);
 		goto end_propget;
 	}
 
@@ -639,10 +642,8 @@ func_propget(gs_grid_storage_t *hc)
 
 end_propget:
 
-	if(result) {
+	if (result)
 		g_strfreev(result);
-	}
-
 	return status;
 }
 

@@ -1335,21 +1335,18 @@ meta2_backend_delete_chunks(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, guint32 flags, gint64 *version)
+		struct hc_url_s *url, gint64 *version)
 {
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
 	g_assert(m2b != NULL);
 	g_assert(url != NULL);
 
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	GError *err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
 			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
 	if (!err) {
-		err = m2db_get_alias_version(sq3, url, flags, version);
+		err = m2db_get_alias_version(sq3, url, version);
 		m2b_close(sq3);
 	}
-
 	return err;
 }
 
@@ -1391,22 +1388,18 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_get_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, guint32 flags,
-		m2_onbean_cb cb, gpointer u0)
+		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0)
 {
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
 	g_assert(m2b != NULL);
 	g_assert(url != NULL);
 
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	GError *err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
 			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
 	if (!err) {
-		err = m2db_get_properties(sq3, url, flags, cb, u0);
+		err = m2db_get_properties(sq3, url, cb, u0);
 		m2b_close(sq3);
 	}
-
 	return err;
 }
 
@@ -1442,7 +1435,6 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b,
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
-	gint64 max_versions;
 
 	GRID_TRACE("M2 GET(%s)", hc_url_get(url, HCURL_WHOLE));
 
@@ -1451,9 +1443,8 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		max_versions = _maxvers(sq3, m2b);
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_set_properties(sq3, max_versions, url, beans, cb, u0)))
+			if (!(err = m2db_set_properties(sq3, url, beans, cb, u0)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
@@ -1621,8 +1612,8 @@ meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 /* ------------------------------------------------------------------------- */
 
 GError*
-meta2_backend_update_alias_header(struct meta2_backend_s *m2b, struct hc_url_s *url,
-		GSList *beans, gboolean skip_checks)
+meta2_backend_update_alias_header(struct meta2_backend_s *m2b,
+		struct hc_url_s *url, GSList *beans)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;

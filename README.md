@@ -126,3 +126,7 @@ make DESTDIR=${install_dir} install
 | M2V2_ADMIN_STORAGE_POLICY | M2V2_ADMIN_PREFIX_SYS "policy.storage" |  |
 | M2V2_ADMIN_KEEP_DELETED_DELAY | M2V2_ADMIN_PREFIX_SYS "keep_deleted_delay" |  |
 | META2_INIT_FLAG | M2V2_ADMIN_PREFIX_SYS "init" |  |
+| CS_CLIENT_TIMEOUT | 10.0 | <double> value telling the default timeout for conscience requests, in seconds. |
+| M0V2_CLIENT_TIMEOUT | 10.0 | <double> value telling the default timeout for meta0 requests, in seconds. |
+| M1V2_CLIENT_TIMEOUT | 10.0 | <double> value telling the default timeout for meta1 requests, in seconds. |
+| M2V2_CLIENT_TIMEOUT | 10.0 | <double> value telling the default timeout for meta2 requests, in seconds. |

@@ -24,9 +24,11 @@ License along with this library.
 #include <errno.h>
 #include <glib.h>
 
-#include "./metacomm.h"
-#include "./Meta1RawContainer.h"
-#include "./asn_AddrInfo.h"
+#include "metacomm.h"
+#include "metautils_loggers.h"
+#include "metautils_errors.h"
+#include "Meta1RawContainer.h"
+#include "asn_AddrInfo.h"
 
 static void
 free_asn1_container(Meta1RawContainer_t * asn1_container, gboolean content_only)

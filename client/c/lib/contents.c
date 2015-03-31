@@ -411,10 +411,8 @@ map_properties_from_beans(GSList **properties, GSList *beans)
 	GSList *l = NULL;
 
 	for (l=beans; l && l->data; l=l->next) {
-		if(DESCR(l->data) == &descr_struct_PROPERTIES) {
+		if (DESCR(l->data) == &descr_struct_PROPERTIES) {
 			struct bean_PROPERTIES_s *bp = (struct bean_PROPERTIES_s *)l->data;
-			if ( PROPERTIES_get_deleted(bp) )
-				continue;
 			meta2_property_t *prop = g_malloc0(sizeof(meta2_property_t));
 
 			prop->name = g_strdup(PROPERTIES_get_key(bp)->str);
@@ -1097,7 +1095,6 @@ hc_set_content_property(gs_content_t *content, char ** props, gs_error_t **e)
 		PROPERTIES_set_key(bp, g_string_new(kv[0]));
 		PROPERTIES_set_value(bp, g_byte_array_append(g_byte_array_new(),
 				(guint8*)g_strdup(kv[1]), strlen(kv[1])));
-		PROPERTIES_set_deleted(bp, FALSE);
 
 		beans = g_slist_prepend(beans,bp);
 	}
@@ -1173,58 +1170,25 @@ enderror :
 }
 
 gs_status_t
-hc_delete_content_property(gs_content_t *content, char ** keys ,gs_error_t **e)
+hc_delete_content_property(gs_content_t *content, char ** keys, gs_error_t **e)
 {
-	GError *ge = NULL;
 	char target[64];
-	gs_status_t status= GS_OK;
-	guint i;
-
 	bzero(target, 64);
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
 	struct hc_url_s *url;
-	fill_hcurl_from_content(content,&url);
+	fill_hcurl_from_content(content, &url);
 
-	GSList *out_beans = NULL;
-	GSList *in_beans = NULL;
-	GSList *l;
-	struct bean_PROPERTIES_s *bp;
+	GSList *lkeys = metautils_array_to_list((void**)keys);
+	GError *ge = m2v2_remote_execute_PROP_DEL(target, url, lkeys);
+	g_slist_free(lkeys);
 
-	ge = m2v2_remote_execute_PROP_GET(target, url, M2V2_FLAG_NODELETED, &out_beans);
-	if(NULL != ge) {
-		GSERRORCAUSE(e, ge, "Failed to delete propertes of content [%s]", C1_PATH(content));
-		status= GS_ERROR;
-		goto enderror;
-	}
+	if (!ge)
+		return GS_OK;
 
-	for ( i=0; i < g_strv_length(keys); i++) {
-		for ( l=out_beans ; l && l->data ; l=l->next) {
-			if(DESCR(l->data) == &descr_struct_PROPERTIES) {
-				if ( g_ascii_strcasecmp(PROPERTIES_get_key((struct bean_PROPERTIES_s *)l->data)->str,keys[i]) == 0 ) {
-					bp = _bean_dup((struct bean_PROPERTIES_s *)l->data);
-					PROPERTIES_set_deleted(bp, TRUE);
-					in_beans = g_slist_prepend(in_beans,bp);
-					break;
-				}
-			}
-		}
-	}
-	ge = m2v2_remote_execute_PROP_SET(target, url, 0, in_beans);
-
-	if(NULL != ge) {
-		GSERRORCAUSE(e, ge, "Failed to delete propertes of content [%s]", C1_PATH(content));
-		status= GS_ERROR;
-	}
-
-enderror:
-	if (ge != NULL)
-		g_clear_error(&ge);
-	hc_url_clean(url);
-	_bean_cleanl2(out_beans);
-	_bean_cleanl2(in_beans);
-
-	return status;
+	GSERRORCAUSE(e, ge, "Failed to delete propertes of content [%s]",
+			C1_PATH(content));
+	return GS_ERROR;
 }
 
 gs_status_t

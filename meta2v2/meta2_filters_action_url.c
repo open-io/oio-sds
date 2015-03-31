@@ -128,7 +128,7 @@ _update_content_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_back
 	g_free(mdsys);
 
 	beans = g_slist_prepend(g_slist_prepend(beans, header), alias);
-	e = meta2_backend_update_alias_header(m2b, url, beans, TRUE);
+	e = meta2_backend_update_alias_header(m2b, url, beans);
 	_bean_cleanl2(beans);
 
 	if (NULL != e) {

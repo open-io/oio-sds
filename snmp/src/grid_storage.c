@@ -1265,7 +1265,8 @@ manage_csc(const gchar * ns_name)
 	}
 
 	/* Get service stats */
-	services = gcluster_get_services(&csc_addr, SOCK_TIMEOUT, NAME_SRVTYPE_RAWX, &error);
+	services = gcluster_get_services(snmp_data.addr, (1.0 * SOCK_TIMEOUT)/1000.0,
+			NAME_SRVTYPE_RAWX, TRUE, &error);
 	if (services == NULL) {
 		DEBUGMSGTL(("grid", "Failed to retrieve the list of RAWX in namespace [%s] : %s\n", ns_name, error->message));
 		g_clear_error(&error);

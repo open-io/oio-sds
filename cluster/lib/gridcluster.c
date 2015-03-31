@@ -346,15 +346,15 @@ list_namespace_services2(const char *ns_name, const char *type, GError **error)
 	}
 
 	if (!gridagent_available()) { // from conscience
-		addr_info_t *cs_addr = gridcluster_get_conscience_addr(ns_name);
-		if (!cs_addr) {
+		gchar *cs = gridcluster_get_conscience(ns_name);
+		if (!cs) {
 			GSETERROR(error, "Unknown namespace/conscience");
 			return NULL;
+		} else {
+			GSList *res = gcluster_get_services(cs, CS_CLIENT_TIMEOUT, type, FALSE, error);
+			g_free(cs);
+			return res;
 		}
-
-		GSList *res = gcluster_get_services2(cs_addr, 1000, 4000, type, error);
-		g_free(cs_addr);
-		return res;
 	} else { // from agent
 		return list_namespace_services(ns_name,type,error);
 	}

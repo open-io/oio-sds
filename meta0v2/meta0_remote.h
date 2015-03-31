@@ -29,36 +29,6 @@ License along with this library.
 
 #include <metautils/lib/metatypes.h>
 
-/** The request name when requesting the whole meta0 cache */
-#define NAME_MSGNAME_M0_GETALL "REQ_M0_GETALL"
-
-/** The request name when requesting only one meta0 entry */
-#define NAME_MSGNAME_M0_GETONE "REQ_M0_GETONE"
-
-/** The request name when requesting a server reload */
-#define NAME_MSGNAME_M0_RELOAD "REQ_M0_RELOAD"
-
-/** The request name when requesting a server init */
-#define NAME_MSGNAME_M0_FILL "REQ_M0_FILL"
-
-/** The request name when requesting a server init, version 2 */
-#define NAME_MSGNAME_M0_V2_FILL "REQ_M0_V2_FILL"
-
-/** The request name when requesting a reallocation of meta1 through all prefixes */
-#define NAME_MSGNAME_M0_ASSIGN "REQ_M0_V2_ASSIGN_PREFIX"
-
-/** The request name when requesting to disable meta1 services from prefix repartition */
-#define NAME_MSGNAME_M0_DISABLE_META1 "REQ_M0_V2_DISABLE_META1"
-
-/** The request name when requestingthe whole meta1 information */
-#define NAME_MSGNAME_M0_GET_META1_INFO "REQ_M0_V2_GETMETA1INFO"
-
-/** The request name when requesting to destroy the reférence of meta1 service, only if meta1 service is disable */
-#define NAME_MSGNAME_M0_DESTROY_META1REF "REQ_M0_V2_DESTROY_META1REF"
-
-/** The request name when requesting to destroy the zookeepeer node referencing the meta0 */
-#define NAME_MSGNAME_M0_DESTROY_META0ZKNODE "REQ_M0_V2_DESTROY_META0ZKNODE"
-
 /**
  * Fill the pointed hash table with a full representation of the
  * reference Meta0 hash table.

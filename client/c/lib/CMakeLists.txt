@@ -43,7 +43,7 @@ set_target_properties(gridclient PROPERTIES
 		SOVERSION ${ABI_VERSION})
 
 target_link_libraries(gridclient
-		metautils metacomm
+		metautils
 		gridcluster
 		meta2remote
 		meta2v2utils
@@ -52,6 +52,7 @@ target_link_libraries(gridclient
 		meta1remote
 		meta0utils
 		hcresolve
+		sqlitereporemote
 		${NEON_LIBRARIES} ${GLIB2_LIBRARIES} ${CURL_LIBRARIES})
 
 

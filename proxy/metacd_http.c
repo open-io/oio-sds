@@ -110,7 +110,6 @@ static guint dir_high_max = PROXYD_DEFAULT_MAX_CSM0;
 static gdouble dir_timeout_req = PROXYD_DIR_TIMEOUT_SINGLE;
 static gdouble dir_timeout_all = PROXYD_DIR_TIMEOUT_SINGLE;
 
-static gdouble m2_timeout_req = PROXYD_M2_TIMEOUT_SINGLE;
 static gdouble m2_timeout_all = PROXYD_M2_TIMEOUT_SINGLE;
 
 static gboolean validate_namespace (const gchar * ns);

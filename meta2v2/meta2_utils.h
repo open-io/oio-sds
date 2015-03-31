@@ -133,6 +133,9 @@ GError* m2db_set_container_properties(struct sqlx_sqlite3_s *sq3, guint32 flags,
 GError* m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname,
 		int repl);
 
+GError* m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+		guint32 flags, struct bean_ALIASES_s **out);
+
 GError* m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		guint32 flags, m2_onbean_cb cb, gpointer u);
 
@@ -140,22 +143,19 @@ GError* m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp,
 		m2_onbean_cb cb, gpointer u);
 
 GError* m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		guint32 flags, m2_onbean_cb cb, gpointer u);
-
-GError* m2db_get_property(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		const gchar *k, guint32 flags, m2_onbean_cb cb, gpointer u0);
+		m2_onbean_cb cb, gpointer u);
 
 GError* m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		gchar **namev);
 
 GError* m2db_flush_property(struct sqlx_sqlite3_s *sq3, const gchar *k);
 
-GError* m2db_set_properties(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct hc_url_s *url, GSList *beans, m2_onbean_cb cb, gpointer u0);
+GError* m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+		GSList *beans, m2_onbean_cb cb, gpointer u0);
 
 /*! Get an alias only */
 GError* m2db_latest_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		gpointer *result);
+		struct bean_ALIASES_s **out);
 
 GError* m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		gpointer *result);
@@ -166,7 +166,7 @@ GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 /* ------------------------------------------------------------------------- */
 
 GError* m2db_get_alias_version(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		guint32 flags, gint64 *version);
+		gint64 *version);
 
 struct m2db_put_args_s
 {

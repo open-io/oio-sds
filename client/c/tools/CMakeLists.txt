@@ -4,7 +4,7 @@ include_directories(BEFORE .
 		../../../metautils/lib)
 
 set(REQLIBS
-		gridclient metautils metacomm
+		gridclient metautils
 		gridcluster gridcluster-remote gridcluster-events
 		meta2remote meta1remote meta0remote
 		${GLIB2_LIBRARIES})

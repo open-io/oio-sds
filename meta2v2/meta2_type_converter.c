@@ -56,7 +56,6 @@ _generate_property_from_mdusr(const char *alias, GByteArray *mdusr)
 	PROPERTIES_set_alias_version(prop, 1L);
 	PROPERTIES_set2_key(prop, MDUSR_PROPERTY_KEY);
 	PROPERTIES_set2_value(prop, mdusr->data, mdusr->len);
-	PROPERTIES_set_deleted(prop, FALSE);
 
 	return prop;
 }
@@ -329,7 +328,6 @@ _generate_bean_from_meta2_prop(const char *alias, gint64 alias_version, meta2_pr
 
 	PROPERTIES_set2_alias(property, alias);
 	PROPERTIES_set_alias_version(property, alias_version);
-	PROPERTIES_set_deleted(property, FALSE);
 	PROPERTIES_set2_key(property, prop->name);
 	PROPERTIES_set_value(property, prop->value);
 
@@ -617,8 +615,6 @@ raw_content_v2_from_m2v2_beans(const container_id_t cid, GSList *l)
 	for (m=prop_beans; m && m->data; m=m->next) {
 		if(DESCR(m->data) == &descr_struct_PROPERTIES) {
 			struct bean_PROPERTIES_s *bp = (struct bean_PROPERTIES_s *)m->data;
-			if ( PROPERTIES_get_deleted(bp) )
-				continue;
 			meta2_property_t *prop = g_malloc0(sizeof(meta2_property_t));
 
 			prop->name = g_strdup(PROPERTIES_get_key(bp)->str);

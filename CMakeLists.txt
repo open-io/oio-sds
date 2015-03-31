@@ -184,6 +184,8 @@ dir2macro("M2V2_ADMIN_SIZE")
 dir2macro("M2V2_ADMIN_VERSIONING_POLICY")
 dir2macro("M2V2_ADMIN_STORAGE_POLICY")
 dir2macro("M2V2_ADMIN_KEEP_DELETED_DELAY")
+dir2macro("M2V2_CLIENT_TIMEOUT")
+
 dir2macro("META2_INIT_FLAG")
 
 ###-------------------------------------------------------------------------###

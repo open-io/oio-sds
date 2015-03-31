@@ -182,10 +182,6 @@ int meta2_filter_extract_body_chunk_info(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_extract_header_string_V_f2(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-/*!  */
-int meta2_filter_extract_opt_header_string_V_f2(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Extracts "FORCE" and parse it as a flag */
 int meta2_filter_extract_header_forceflag(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
@@ -228,18 +224,6 @@ int meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
 
 /*!  */
 int meta2_filter_extract_body_rawcontentv2(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*!  */
-int meta2_filter_extract_header_cid_dst(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*!  */
-int meta2_filter_extract_header_cid_src(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*!  */
-int meta2_filter_extract_header_addr_src(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 /*!  */

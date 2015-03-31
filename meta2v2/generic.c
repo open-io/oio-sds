@@ -708,10 +708,10 @@ _bean_cleanv2(GPtrArray *v)
 		return;
 	while (v->len) {
 		gpointer p = v->pdata[0];
-		if (!p)
-			continue;
+		v->pdata[0] = NULL;
 		g_ptr_array_remove_index_fast(v, 0);
-		_bean_clean(p);
+		if (p)
+			_bean_clean(p);
 	}
 	g_ptr_array_free(v, TRUE);
 }
@@ -725,6 +725,7 @@ _bean_cleanl2(GSList *v)
 		return;
 	for (l=v; l ;l=l->next) {
 		_bean_clean(l->data);
+		l->data = NULL;
 	}
 	g_slist_free(v);
 }

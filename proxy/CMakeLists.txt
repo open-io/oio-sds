@@ -17,7 +17,7 @@ add_executable(metacd_http metacd_http.c path_parser.c transport_http.c)
 bin_prefix(metacd_http -proxy)
 
 target_link_libraries(metacd_http
-		metautils metacomm server hcresolve
+		metautils server hcresolve
 		gridcluster gridcluster-remote
 		meta2v2remote meta2v2utils
 		meta1remote sqlitereporemote

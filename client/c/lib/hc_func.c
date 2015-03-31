@@ -653,19 +653,19 @@ hc_func_get_content_properties(gs_grid_storage_t *hc, struct hc_url_s *url, char
 	gs_content_t *content = NULL;
 
 	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, 0, &e);
-	if (NULL != c) {
-		if (hc_url_has(url, HCURL_PATH)) {
-			content = gs_get_content_from_path_and_version (c,
-					hc_url_get(url, HCURL_PATH), hc_url_get(url, HCURL_VERSION),
-					&e);
-			if(NULL != content) {
-				hc_get_content_properties(content,result,&e);
-				gs_content_free(content);
-			}
-		} else {
-			e = hc_get_container_global_properties(c, result);
+	if (!c)
+		return e;
+
+	if (hc_url_has(url, HCURL_PATH)) {
+		content = gs_get_content_from_path_and_version (c,
+				hc_url_get(url, HCURL_PATH), hc_url_get(url, HCURL_VERSION),
+				&e);
+		if(NULL != content) {
+			hc_get_content_properties(content, result, &e);
+			gs_content_free(content);
 		}
-		gs_container_free(c);
+	} else {
+		e = hc_get_container_global_properties(c, result);
 	}
 	return e;
 }

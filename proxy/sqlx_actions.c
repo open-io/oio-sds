@@ -337,7 +337,9 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 		return _reply_format_error (args, BADREQ("Bad names"));
 
 	// Query the services
-	GByteArray* packer (struct sqlx_name_s *n) { return sqlx_pack_PROPGET (n, namev); }
+	GByteArray* packer (struct sqlx_name_s *n) {
+		return sqlx_pack_PROPGET (n, (const gchar * const * )namev);
+	}
 	GByteArray **bodies = NULL;
 	err = _sqlx_action_bodyv (args, packer, &bodies);
 	g_strfreev (namev);
@@ -380,7 +382,7 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 		return _reply_format_error (args, BADREQ("Bad names"));
 
 	GByteArray * packer (struct sqlx_name_s *n) {
-		return sqlx_pack_PROPDEL (n, namev);
+		return sqlx_pack_PROPDEL (n, (const gchar * const * )namev);
 	}
 	enum http_rc_e rc = _sqlx_action_noreturn (args, packer);
 	g_strfreev (namev);

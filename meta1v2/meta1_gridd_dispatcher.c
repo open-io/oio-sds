@@ -53,7 +53,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 } while (0)
 
 #define EXTRACT_CID(CID) do { \
-	err = message_extract_cid(reply->request, "CONTAINER_ID", &CID); \
+	err = message_extract_cid(reply->request, NAME_MSGKEY_CONTAINERID, &CID); \
 	if (NULL != err) { \
 		reply->send_error(0, err); \
 		return TRUE; \
@@ -68,10 +68,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	} \
 } while (0)
 
-#define EXTRACT_CNAME(Dst) EXTRACT_STRING("CONTAINER_NAME", Dst, TRUE)
-#define EXTRACT_VNS(Dst) EXTRACT_STRING("VIRTUAL_NAMESPACE", Dst, FALSE)
-#define EXTRACT_NS(Dst) EXTRACT_STRING("NAMESPACE", Dst, TRUE)
-#define EXTRACT_SRVTYPE(Dst,Mandatory) EXTRACT_STRING("SRVTYPE", Dst, Mandatory)
+#define EXTRACT_CNAME(Dst) EXTRACT_STRING(NAME_MSGKEY_CONTAINERNAME, Dst, TRUE)
+#define EXTRACT_VNS(Dst) EXTRACT_STRING(NAME_MSGKEY_VIRTUALNAMESPACE, Dst, FALSE)
+#define EXTRACT_NS(Dst) EXTRACT_STRING(NAME_MSGKEY_NAMESPACE, Dst, TRUE)
+#define EXTRACT_SRVTYPE(Dst,Mandatory) EXTRACT_STRING(NAME_MSGKEY_SRVTYPE, Dst, Mandatory)
 
 static gsize m1b_bufsize_listbypref = 16384;
 
@@ -156,7 +156,7 @@ _stat_container(struct meta1_backend_s *m1, const container_id_t cid,
 		return err;
 
 	/* Get the meta2 services */
-	err = meta1_backend_get_container_all_services(m1, cid, "meta2", &allsrv);
+	err = meta1_backend_get_container_all_services(m1, cid, NAME_SRVTYPE_META2, &allsrv);
 	if (err != NULL) {
 		g_strfreev(names);
 		return err;
@@ -238,7 +238,7 @@ meta1_dispatch_v1_CREATE(struct gridd_reply_ctx_s *reply,
 	reply->subject("%s/%s|%s", vns, cname, strcid);
 
 	/* Test if the container exsists */
-	err = meta1_backend_get_container_all_services(m1, cid, "meta2", &result);
+	err = meta1_backend_get_container_all_services(m1, cid, NAME_SRVTYPE_META2, &result);
 	if (NULL != err) {
 		if (err->code != CODE_CONTAINER_NOTFOUND) {
 			hc_url_clean(url);
@@ -263,8 +263,8 @@ meta1_dispatch_v1_CREATE(struct gridd_reply_ctx_s *reply,
 	}
 	if (!result) {
 		GRID_TRACE("Meta2 election...");
-		err = meta1_backend_get_container_service_available(m1, url, "meta2",
-				FALSE, &result);
+		err = meta1_backend_get_container_service_available(m1, url,
+				NAME_SRVTYPE_META2, FALSE, &result);
 		if (NULL != err) {
 			hc_url_clean(url);
 			reply->send_error(0, err);
@@ -363,7 +363,7 @@ meta1_dispatch_v2_CREATE(struct gridd_reply_ctx_s *reply,
 	if (NULL != err)
 		reply->send_error(0, err);
 	else {
-		reply->add_header("CONTAINER_ID", metautils_gba_from_cid(_cid));
+		reply->add_header(NAME_MSGKEY_CONTAINERID, metautils_gba_from_cid(_cid));
 		reply->send_reply(CODE_FINAL_OK, "Created");
 	}
 	return TRUE;
@@ -383,7 +383,7 @@ meta1_dispatch_v2_DESTROY(struct gridd_reply_ctx_s *reply,
 	EXTRACT_CID(cid);
 	reply->subject("%s/%s|%d", ns, strcid, force);
 
-	if (NULL != (err = message_extract_flag(reply->request, "FORCE", FALSE, &force))) {
+	if (NULL != (err = message_extract_flag(reply->request, NAME_MSGKEY_FORCE, FALSE, &force))) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
@@ -616,7 +616,7 @@ meta1_dispatch_v2_SRV_GETALLonM1(struct gridd_reply_ctx_s *reply,
     prefix_size = sizeof(container_id_t);
 
 	EXTRACT_NS(ns);
-    if ((err = message_extract_prefix(reply->request, "PREFIX", prefix, &prefix_size))) {
+    if ((err = message_extract_prefix(reply->request, NAME_MSGKEY_PREFIX, prefix, &prefix_size))) {
 		reply->send_error(0, err); 
         return TRUE;
 	}
@@ -782,8 +782,8 @@ meta1_dispatch_v2_SRV_LISTPREF(struct gridd_reply_ctx_s *reply,
 	memset(prefix, 0, sizeof(container_id_t));
 	prefix_size = sizeof(container_id_t);
 
-	if (!(err = message_extract_prefix(reply->request, "PREFIX", prefix, &prefix_size))
-			&& !(err = message_extract_string(reply->request, "NAMESPACE", ns, sizeof(ns))))
+	if (!(err = message_extract_prefix(reply->request, NAME_MSGKEY_PREFIX, prefix, &prefix_size))
+			&& !(err = message_extract_string(reply->request, NAME_MSGKEY_NAMESPACE, ns, sizeof(ns))))
 	{
 		gchar strpfx[65];
 		container_id_to_string(prefix, strpfx, sizeof(strpfx));
@@ -813,10 +813,10 @@ meta1_dispatch_v2_SRV_LISTSERV(struct gridd_reply_ctx_s *reply,
 	memset(prefix, 0, sizeof(container_id_t));
 	prefix_size = sizeof(container_id_t);
 
-	if (!(err = message_extract_prefix(reply->request, "PREFIX", prefix, &prefix_size))
-			&& !(err = message_extract_string(reply->request, "NAMESPACE", ns, sizeof(ns)))
-			&& !(err = message_extract_string(reply->request, "SRVTYPE", srvtype, sizeof(srvtype)))
-			&& !(err = message_extract_string(reply->request, "URL", url, sizeof(url))))
+	if (!(err = message_extract_prefix(reply->request, NAME_MSGKEY_PREFIX, prefix, &prefix_size))
+			&& !(err = message_extract_string(reply->request, NAME_MSGKEY_NAMESPACE, ns, sizeof(ns)))
+			&& !(err = message_extract_string(reply->request, NAME_MSGKEY_SRVTYPE, srvtype, sizeof(srvtype)))
+			&& !(err = message_extract_string(reply->request, NAME_MSGKEY_URL, url, sizeof(url))))
 	{
 		gchar strpfx[65];
 		container_id_to_string(prefix, strpfx, sizeof(strpfx));
@@ -872,9 +872,9 @@ meta1_dispatch_v2_UPDATE_M1_POLICY(struct gridd_reply_ctx_s *reply,
 
 	EXTRACT_NS(ns);
 	EXTRACT_SRVTYPE(srvtype,TRUE);
-	EXTRACT_STRING("ACTION",action,TRUE);
+	EXTRACT_STRING(NAME_MSGKEY_ACTION,action,TRUE);
 
-	err = message_extract_prefix(reply->request, "PREFIX", prefix, &prefix_size);
+	err = message_extract_prefix(reply->request, NAME_MSGKEY_PREFIX, prefix, &prefix_size);
 	if ( NULL != err ) {
 		foundprefix=FALSE;
 		g_clear_error(&err);
@@ -882,7 +882,7 @@ meta1_dispatch_v2_UPDATE_M1_POLICY(struct gridd_reply_ctx_s *reply,
 	else
 		container_id_to_string(prefix, strcid, sizeof(strcid));
 
-	err = message_extract_prefix(reply->request, "CONTAINER_ID", cid, &prefix_size);
+	err = message_extract_prefix(reply->request, NAME_MSGKEY_CONTAINERID, cid, &prefix_size);
 	if ( NULL != err ) {
 		foundcontainer=FALSE;
 		g_clear_error(&err);
@@ -903,7 +903,7 @@ meta1_dispatch_v2_UPDATE_M1_POLICY(struct gridd_reply_ctx_s *reply,
 	}
 
 	EXTRACT_STRING("EXCLUDEURL",excludesrv,FALSE);
-	err = message_extract_flag(reply->request, "CHECKONLY", FALSE, &checkonly);
+	err = message_extract_flag(reply->request, NAME_MSGKEY_CHECKONLY, FALSE, &checkonly);
 	if ( NULL != err ) {
 		g_clear_error(&err);
 	}

@@ -667,19 +667,9 @@ main(int argc, char **argv)
 
 				/* Generate the list */
 				if (!has_flag_full || !has_raw) {
-					list_services = list_namespace_services(namespace,
-							str_type, &error);
-				}
-				else {
-					struct metacnx_ctx_s cnx;
-					metacnx_clear(&cnx);
-					if (metacnx_init_with_url(&cnx, csurl, &error)) {
-						if (metacnx_open(&cnx, &error)) {
-							list_services = gcluster_get_services_full(&cnx,
-									str_type, &error);
-							metacnx_close(&cnx);
-						}
-					}
+					list_services = list_namespace_services(namespace, str_type, &error);
+				} else {
+					list_services = gcluster_get_services(csurl, 0.0, str_type, TRUE, &error);
 				}
 
 				/* Dump the list */
