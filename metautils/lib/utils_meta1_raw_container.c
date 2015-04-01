@@ -37,10 +37,3 @@ meta1_raw_container_clean(struct meta1_raw_container_s *r)
 	g_free(r);
 }
 
-void
-meta1_raw_container_gclean(gpointer r, gpointer ignored)
-{
-	(void) ignored;
-	meta1_raw_container_clean(r);
-}
-

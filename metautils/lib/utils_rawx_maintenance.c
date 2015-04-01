@@ -56,16 +56,3 @@ content_textinfo_free_content(struct content_textinfo_s *cti)
 	memset(cti, 0x00, sizeof(struct content_textinfo_s));
 }
 
-int
-chunk_is_last(struct chunk_textinfo_s *chunk, struct content_textinfo_s *content)
-{
-	gint32 i_pos, i_nbr;
-
-	if (!chunk || !content)
-		return 0;
-	if (!chunk->position || !content->chunk_nb)
-		return 0;
-	i_pos = g_ascii_strtoll(chunk->position, NULL, 10);
-	i_nbr = g_ascii_strtoll(content->chunk_nb, NULL, 10);
-	return (i_pos + 1 >= i_nbr);
-}

@@ -51,14 +51,6 @@ chunk_id_to_string(const chunk_id_t * ci, gchar * dst, gsize dstSize)
 	return MIN(offset,dstSize);
 }
 
-void
-chunk_info_gclean(gpointer d, gpointer u)
-{
-	(void) u;
-	if (d)
-		g_free(d);
-}
-
 gchar *
 assemble_chunk_id(const gchar *straddr, const gchar *strvol, const gchar *strid)
 {
