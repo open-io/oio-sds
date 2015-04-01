@@ -1940,6 +1940,7 @@ sqlx_dispatch_PROPSET(struct gridd_reply_ctx_s *reply,
 					continue;
 				struct key_value_pair_s *kv = l->data;
 				sqlx_admin_set_gba (sq3, kv->key, kv->value);
+				kv->value = NULL;
 			}
 			if (!(flags&FLAG_LOCAL))
 				err = sqlx_transaction_end(repctx, err);
