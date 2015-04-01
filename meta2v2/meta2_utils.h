@@ -130,9 +130,6 @@ void m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url);
 GError* m2db_set_container_properties(struct sqlx_sqlite3_s *sq3, guint32 flags,
 		GSList *props);
 
-GError* m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname,
-		int repl);
-
 GError* m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		guint32 flags, struct bean_ALIASES_s **out);
 
@@ -212,6 +209,9 @@ GError* m2_generate_conditionned_spare_chunks(struct grid_lb_iterator_s *iter,
 /*! @param result A list of (struct bean_CHUNKS_s *) */
 GError* m2_generate_conditionned_spare_chunks_beans(struct grid_lb_iterator_s *iter,
 		struct lb_next_opt_s *opt, service_filter filter, GSList **result);
+
+GError* m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname,
+		int repl);
 
 GError* m2db_get_storage_policy(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		struct namespace_info_s *nsinfo, gboolean from_previous,
