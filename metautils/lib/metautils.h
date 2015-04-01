@@ -49,7 +49,6 @@ License along with this library.
 # include <metautils/lib/metautils_hashstr.h>
 # include <metautils/lib/metautils_task.h>
 # include <metautils/lib/metautils_l4v.h>
-# include <metautils/lib/metautils_manifest.h>
 # include <metautils/lib/metautils_svc_policy.h>
 # include <metautils/lib/metautils_syscall.h>
 

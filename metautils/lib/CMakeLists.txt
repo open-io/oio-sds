@@ -125,7 +125,6 @@ add_library(metautils SHARED
 		utils_resolv.c metautils_resolv.h
 		utils_loggers.c metautils_loggers.h
 		utils_task.c metautils_task.h
-		utils_manifest.c metautils_manifest.h
 		utils_addr_info.c
 		utils_chunk_info.c
 		utils_hash.c
@@ -457,7 +456,6 @@ install(FILES
 			metautils_l4v.h
 			metautils_loggers.h
 			metautils_macros.h
-			metautils_manifest.h
 			metautils_resolv.h
 			metautils_sockets.h
 			metautils_strings.h

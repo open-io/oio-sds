@@ -66,15 +66,8 @@ void chunk_info_gclean(gpointer d, gpointer u);
 
 /* ------------------------------------------------------------------------- */
 
-/**
- * @param raw
- */
 void meta1_raw_container_clean(struct meta1_raw_container_s *raw);
 
-/**
- * @param r
- * @param ignored
- */
 void meta1_raw_container_gclean(gpointer r, gpointer ignored);
 
 /* ------------------------------------------------------------------------- */
@@ -195,14 +188,6 @@ gboolean convert_content_raw_to_text(const struct meta2_raw_content_s* raw_conte
 /**
  * Allocates a new content structure, and fills the common fields with
  * a copy of the pointed parameters
- *
- * @param container_id
- * @param size
- * @param nb_chunks
- * @param flags
- * @param path
- * @param path_len
- * @return
  * @deprecated
  */
 struct meta2_raw_content_s *meta2_maintenance_create_content(
@@ -212,9 +197,6 @@ struct meta2_raw_content_s *meta2_maintenance_create_content(
 /**
  * prepend (order does not matter) to the list a copy of the given
  * chunk
- *
- * @param content
- * @param chunk
  * @deprecated
  */
 void meta2_maintenance_add_chunk(struct meta2_raw_content_s *content,
@@ -223,169 +205,39 @@ void meta2_maintenance_add_chunk(struct meta2_raw_content_s *content,
 /**
  * Frees the memory structures : the content pointed by the argument
  * and all the chunks listed in
- *
- * @param content
  * @deprecated
  */
 void meta2_maintenance_destroy_content(struct meta2_raw_content_s *content);
 
-/*!
- *
- * @param content
- * @deprecated
- */
-void meta2_maintenance_increment_chunks_count(struct meta2_raw_content_s *content);
-
 /**
- * @param content
  * @deprecated
  */
 void meta2_raw_content_clean(meta2_raw_content_t *content);
 
-/**
- * @param p
- * @param ignored
- * @deprecated
- */
-void meta2_raw_content_gclean(gpointer p, gpointer ignored);
-
-/**
- * @param chunk
- * @return
- */
 meta2_raw_chunk_t* meta2_raw_chunk_dup(meta2_raw_chunk_t *chunk);
 
-/**
- * @param chunk
- */
 void meta2_raw_chunk_clean(meta2_raw_chunk_t *chunk);
 
-/**
- * @param p
- * @param ignored
- */
 void meta2_raw_chunk_gclean(gpointer p, gpointer ignored);
 
-/**
- * @param r1
- * @param r2
- * @return
- */
-gint meta2_raw_chunk_cmp(const meta2_raw_chunk_t *r1, const meta2_raw_chunk_t *r2);
-
-/**
- * @param header
- * @return
- */
 gchar* meta2_raw_chunk_to_string(const meta2_raw_chunk_t *header);
 
-/**
- * @param chunk_id
- * @param hash
- * @param flags
- * @param size
- * @param position
- * @return
- */
 struct meta2_raw_chunk_s * meta2_maintenance_create_chunk(
 		const chunk_id_t * chunk_id, const chunk_hash_t hash,
 		guint32 flags, gint64 size, guint32 position);
 
-/**
- * @param chunk
- */
 void meta2_maintenance_destroy_chunk(struct meta2_raw_chunk_s *chunk);
 
-/**
- * @param p1
- * @param p2
- */
-void meta2_maintenance_chunk_gclean(gpointer p1, gpointer p2);
-
-/**
- * @param prop
- */
 void meta2_property_clean(meta2_property_t *prop);
 
-/**
- * @param prop
- * @param ignored
- */
 void meta2_property_gclean(gpointer prop, gpointer ignored);
 
-/**
- * @param p1
- * @param p2
- * @return
- */
-gint meta2_property_cmp(const meta2_property_t *p1, const meta2_property_t *p2);
-
-/**
- * @param prop
- * @return
- */
-gchar* meta2_property_to_string(const meta2_property_t *prop);
-
-/**
- * @param orig
- * @return
- */
-meta2_property_t* meta2_property_dup(meta2_property_t *orig);
-
-/**
- * @param content
- */
 void meta2_raw_content_header_clean(meta2_raw_content_header_t *content);
 
-/**
- * @param p
- * @param ignored
- */
-void meta2_raw_content_header_gclean(gpointer p, gpointer ignored);
-
-/**
- * @param r1
- * @param r2
- * @return
- */
-gint meta2_raw_content_header_cmp(const meta2_raw_content_header_t *r1, const meta2_raw_content_header_t *r2);
-
-/**
- * @param header
- * @return
- */
-gchar* meta2_raw_content_header_to_string(const meta2_raw_content_header_t *header);
-
-/**
- * @param prop
- */
 void meta2_raw_content_v2_clean(meta2_raw_content_v2_t *prop);
 
-/**
- * @param prop
- * @param ignored
- */
 void meta2_raw_content_v2_gclean(gpointer prop, gpointer ignored);
 
-/**
- * @param content
- * @return
- */
-gchar* meta2_raw_content_v2_to_string(const meta2_raw_content_v2_t *content);
-
-/**
- * @param v1
- * @param err
- * @return
- */
-meta2_raw_content_v2_t* meta2_raw_content_v1_get_v2(meta2_raw_content_t *v1,
-		GError **err);
-
-/**
- * @param v2
- * @param err
- * @return
- */
 meta2_raw_content_t* meta2_raw_content_v2_get_v1(const meta2_raw_content_v2_t *v2,
 		GError **err);
 
