@@ -443,12 +443,14 @@ _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 			_populate_headers_with_header (args, l->data);
 	}
 
+	gboolean first = TRUE;
 	GString *gs = g_string_new("{");
 	for (GSList *l=beans; l ;l=l->next) {
 		if (DESCR(l->data) != &descr_struct_PROPERTIES)
 			continue;
-		if (l != beans)
+		if (!first)
 			g_string_append_c(gs, ',');
+		first = FALSE;
 		struct bean_PROPERTIES_s *bean = l->data;
 		g_string_append_printf(gs, "\"%s\":\"%.*s\"",
 				PROPERTIES_get_key(bean)->str,
