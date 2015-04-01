@@ -149,8 +149,9 @@ GError* _db_count_FK_by_name(gpointer bean, const gchar *name,
 GError* _db_get_FK_by_name_buffered(gpointer bean, const gchar *name,
 		sqlite3 *db, GPtrArray *result);
 
-/** */
 GString* _bean_debug(GString *gstr, gpointer bean);
+
+void _bean_debugl2 (GSList *beans);
 
 /** */
 void _bean_randomize(gpointer bean, gboolean avoid_pk);

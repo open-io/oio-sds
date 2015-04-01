@@ -1797,7 +1797,8 @@ sqlx_dispatch_PROPDEL(struct gridd_reply_ctx_s *reply,
 	SQLXNAME_STACKIFY(name);
 
 	GSList *keys = NULL;
-	err = message_extract_body_encoded (reply->request, TRUE, &keys, strings_unmarshall);
+	err = message_extract_body_encoded (reply->request, TRUE, &keys,
+			strings_unmarshall);
 	if (NULL != err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
@@ -1816,8 +1817,19 @@ sqlx_dispatch_PROPDEL(struct gridd_reply_ctx_s *reply,
 	if (!(flags&FLAG_LOCAL))
 		err = sqlx_transaction_begin(sq3, &repctx);
 	if (!err) {
-		for (GSList *lk=keys; lk ;lk=lk->next)
-			sqlx_admin_del (sq3, lk->data);
+		if (!keys) {
+			gchar **k = gtree_string_keys(sq3->admin);
+			if (k) {
+				for (gchar **p=k; *p ;p++) {
+					if (g_str_has_prefix(*p, SQLX_ADMIN_PREFIX_USER))
+						sqlx_admin_del (sq3, *p);
+				}
+				g_free (k);
+			}
+		} else {
+			for (GSList *lk=keys; lk ;lk=lk->next)
+				sqlx_admin_del (sq3, lk->data);
+		}
 	}
 	if (repctx)
 		err = sqlx_transaction_end(repctx, err);
@@ -1928,6 +1940,7 @@ sqlx_dispatch_PROPSET(struct gridd_reply_ctx_s *reply,
 					continue;
 				struct key_value_pair_s *kv = l->data;
 				sqlx_admin_set_gba (sq3, kv->key, kv->value);
+				kv->value = NULL;
 			}
 			if (!(flags&FLAG_LOCAL))
 				err = sqlx_transaction_end(repctx, err);

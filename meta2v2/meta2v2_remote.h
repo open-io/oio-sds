@@ -28,8 +28,21 @@ License along with this library.
 #define M2V2_FLAG_NOPROPS          0x00000004
 #define M2V2_FLAG_NOFORMATCHECK    0x00000008
 #define M2V2_FLAG_ALLPROPS         0x00000010
+
+/* when listing */
 #define M2V2_FLAG_HEADERS          0x00000020
+
+/* when deleting */
 #define M2V2_FLAG_SYNCDEL          0x00000040
+
+/* when getting an alias, do not follow the foreign keys toward
+ * headers, contents and chunks. */
+#define M2V2_FLAG_NORECURSION      0x00000080
+
+/* when getting an alias, ignores the version in the URL and
+ * return the latest alias only. */
+#define M2V2_FLAG_LATEST           0x00000100
+
 
 #define M2V2_DESTROY_PURGE 0x01
 /* Flush the container before deleting it
@@ -143,12 +156,9 @@ GByteArray* m2v2_remote_pack_TOUCH_container(struct hc_url_s *url, guint32 flags
 #define M2V2_MODE_DRYRUN  0x10000000
 
 GError* m2v2_remote_execute_PURGE(const gchar *target, struct hc_url_s *url,
-		gboolean dry_run, gdouble timeout_to_step, gdouble timeout_to_overall,
-		GSList **out);
+		gboolean dry_run, gdouble timeout, GSList **out);
 
-/**
- * @param out A status message
- */
+/** @param out A status message */
 GError* m2v2_remote_execute_DEDUP(const gchar *target, struct hc_url_s *url,
 		gboolean dry_run, gchar **out);
 
@@ -245,12 +255,15 @@ GError* m2v2_remote_execute_LIST(const gchar *target,
 		struct hc_url_s *url, struct list_params_s *p,
 		struct list_result_s *out);
 
+/* works for contents only. for container props, @see sqlx_pack_PROPDEL() */
 GError* m2v2_remote_execute_PROP_DEL(const gchar *target,
 		struct hc_url_s *url, GSList *names);
 
+/* works for contents only. for container props, @see sqlx_pack_PROPSET() */
 GError* m2v2_remote_execute_PROP_SET(const gchar *target,
 		struct hc_url_s *url, guint32 flags, GSList *in);
 
+/* works for contents only. for container props, @see sqlx_pack_PROPGET() */
 GError* m2v2_remote_execute_PROP_GET(const gchar *target,
 		struct hc_url_s *url, guint32 flags, GSList **out);
 
@@ -258,7 +271,7 @@ GError* m2v2_remote_execute_STGPOL(const gchar *target,
 		struct hc_url_s *url, const char *pol, GSList **out);
 
 GError* m2v2_remote_execute_EXITELECTION(const gchar *target,
-                struct hc_url_s *url);
+		struct hc_url_s *url);
 
 GError* m2v2_remote_execute_SNAP_TAKE(const gchar *target,
 		struct hc_url_s *url);
@@ -276,11 +289,8 @@ GError* m2v2_remote_touch_content(const gchar *target, struct hc_url_s *url);
 
 GError* m2v2_remote_touch_container_ex(const gchar *target, struct hc_url_s *url, guint32 flags);
 
-/**
- * Allows to send a request with custom timeouts.
- */
-GError* m2v2_request(const gchar *url, GByteArray *req,
-		gdouble timeout_to_step, gdouble timeout_to_overall, GSList **out);
+/** Allows to send a request with a custom timeouts. */
+GError* m2v2_request(const gchar *url, GByteArray *req, gdouble timeout, GSList **out);
 
 /**
  * @}

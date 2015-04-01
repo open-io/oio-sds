@@ -126,7 +126,6 @@ _generate_api_prop(const M2V2Bean_t * asn)
 	PROPERTIES_set_alias_version(result, av);
 	PROPERTIES_set2_key(result, (const char *)asn->prop->key.buf);
 	PROPERTIES_set2_value(result, asn->prop->value.buf, asn->prop->value.size);
-	PROPERTIES_set_deleted(result, asn->prop->deleted);
 
 	return result;
 }
@@ -220,8 +219,6 @@ _property_to_asn(gpointer api, M2V2Bean_t *asn)
 
 	GByteArray *val = PROPERTIES_get_value(prop);
 	OCTET_STRING_fromBuf(&(asn->prop->value), (const char *)val->data, val->len);
-
-	asn->prop->deleted = PROPERTIES_get_deleted(prop);
 
 	return TRUE;
 }

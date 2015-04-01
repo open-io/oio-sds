@@ -21,8 +21,25 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # include <glib.h>
 
-struct path_parser_s;
-struct path_matching_s;
+struct path_matching_s
+{
+	const struct trie_node_s *last;
+	gchar **vars;
+};
+
+struct trie_node_s
+{
+	const struct trie_node_s *parent;
+	struct trie_node_s **next;
+	gchar *word;
+	gchar *var;
+	gpointer u;
+};
+
+struct path_parser_s
+{
+	struct trie_node_s **roots;
+};
 
 /* Creates a new parser */
 struct path_parser_s * path_parser_init (void);
@@ -50,6 +67,9 @@ gchar * path_matching_get_path (struct path_matching_s *self);
 /* Returns the variable captured during the matching process. */
 const gchar * path_matching_get_variable (struct path_matching_s *self,
 		const char *name);
+
+void path_matching_set_variable (struct path_matching_s *self,
+		gchar *kv);
 
 /* Returns the arbitrary pointer associated with the description matched. */
 gpointer path_matching_get_udata (struct path_matching_s *self);

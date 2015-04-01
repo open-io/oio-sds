@@ -21,6 +21,8 @@ License along with this library.
 # define G_LOG_DOMAIN "grid.location"
 #endif
 
+#include <meta2v2/meta2_macros.h>
+
 #include "./gs_internals.h"
 
 struct loc_context_s {
@@ -284,12 +286,12 @@ _get_container_global_property(gs_grid_storage_t *hc, struct metacnx_ctx_s *cnx,
 	g_slist_free_full(prop_list, g_free);
 
 	/* Ensure we have some mandatory properties */
-	if(!g_hash_table_lookup(*ht, GS_CONTAINER_PROPERTY_STORAGE_POLICY))
-		g_hash_table_insert(*ht, g_strdup(GS_CONTAINER_PROPERTY_STORAGE_POLICY), g_strdup("namespace default"));
-	if(!g_hash_table_lookup(*ht, GS_CONTAINER_PROPERTY_VERSIONING))
-		g_hash_table_insert(*ht, g_strdup(GS_CONTAINER_PROPERTY_VERSIONING), g_strdup("namespace default"));
-	if(!g_hash_table_lookup(*ht, GS_CONTAINER_PROPERTY_QUOTA))
-		g_hash_table_insert(*ht, g_strdup(GS_CONTAINER_PROPERTY_QUOTA), g_strdup("namespace default"));
+	if(!g_hash_table_lookup(*ht, M2V2_ADMIN_STORAGE_POLICY))
+		g_hash_table_insert(*ht, g_strdup(M2V2_ADMIN_STORAGE_POLICY), g_strdup("namespace default"));
+	if(!g_hash_table_lookup(*ht, M2V2_ADMIN_VERSIONING_POLICY))
+		g_hash_table_insert(*ht, g_strdup(M2V2_ADMIN_VERSIONING_POLICY), g_strdup("namespace default"));
+	if(!g_hash_table_lookup(*ht, M2V2_ADMIN_QUOTA))
+		g_hash_table_insert(*ht, g_strdup(M2V2_ADMIN_QUOTA), g_strdup("namespace default"));
 
 	return 1;
 }
@@ -1238,7 +1240,7 @@ char* loc_context_getstgpol_to_string(const struct loc_context_s *lc, gboolean b
 		if(NULL == lc->admin_info || g_hash_table_size(lc->admin_info) == 0)
 			return NULL;
 
-		return (char*) g_hash_table_lookup(lc->admin_info, GS_CONTAINER_PROPERTY_STORAGE_POLICY);
+		return (char*) g_hash_table_lookup(lc->admin_info, M2V2_ADMIN_STORAGE_POLICY);
 	}
 }
 

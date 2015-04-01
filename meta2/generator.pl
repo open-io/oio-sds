@@ -119,32 +119,6 @@ push @functions, {
 };
 
 push @functions, {
-	'name' => 'modify_metadatausr',
-	'real_name' => 'modify_metadatausr_wrapper',
-	'args' => [
-		{
-			'type'             => 'container_id_t',
-			'serializer'       => $SERIALIZE_ARRAY,
-			'message_location' => 'header',
-		},
-		{
-			'type'             => 'gchar*',
-			'serializer'       => $SERIALIZE_STRING,
-			'message_location' => 'header',
-		},
-		{
-			'type'             => 'gchar*',
-			'serializer'       => $SERIALIZE_STRING,
-			'message_location' => 'header',
-		},
-	],
-	'return' => {
-		'type'=>'status_t'
-	},
-	'flags' => 'REQ_MASTER_ALLOWED|REQ_WORM_ALLOWED|REQ_DROP_EVENTS',
-};
-
-push @functions, {
 	'name' => 'modify_metadatasys',
 	'args' => [
 		{

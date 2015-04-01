@@ -164,6 +164,8 @@ int metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored);
  * string (yes, true, on, yes, 1) */
 gboolean metautils_cfg_get_bool(const gchar *value, gboolean def);
 
+gchar ** metautils_strv_append (gchar **, gchar *);
+
 /** Fills 'buf' with buflen random bytes */
 void metautils_randomize_buffer(guint8 *bufn, gsize buflen);
 

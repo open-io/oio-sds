@@ -19,7 +19,7 @@ add_library(sqliteutils SHARED
 		sqlite_utils.c)
 
 set_target_properties(sqliteutils PROPERTIES SOVERSION ${ABI_VERSION})
-target_link_libraries(sqliteutils metautils metacomm
+target_link_libraries(sqliteutils metautils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 add_library(sqlitereporemote SHARED
@@ -28,7 +28,7 @@ add_library(sqlitereporemote SHARED
 		replication_client.c)
 
 set_target_properties(sqlitereporemote PROPERTIES SOVERSION ${ABI_VERSION})
-target_link_libraries(sqlitereporemote metautils metacomm
+target_link_libraries(sqlitereporemote metautils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 	
 add_library(sqliterepo SHARED
@@ -45,33 +45,29 @@ add_library(sqliterepo SHARED
 		upgrade.c)
 
 set_target_properties(sqliterepo PROPERTIES SOVERSION ${ABI_VERSION})
-target_link_libraries(sqliterepo metautils metacomm
+target_link_libraries(sqliterepo metautils
 		sqlitereporemote sqliteutils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${ZK_LIBRARIES})
 
-#add_executable(test_cache test_cache.c)
-#target_link_libraries(test_cache sqliterepo metautils metacomm
-#		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
-
 add_executable(test_repository test_repository.c)
 target_link_libraries(test_repository sqliterepo sqlitereporemote
-		metautils metacomm
+		metautils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 add_executable(test_sqliterepo test_sqliterepo.c)
 target_link_libraries(test_sqliterepo sqliterepo sqlitereporemote
-		metautils metacomm
+		metautils
 		${GLIB2_LIBRARIES})
 
 add_executable(test_version test_version.c)
 target_link_libraries(test_version sqliterepo 
-		metautils metacomm
+		metautils
 		${GLIB2_LIBRARIES})
 
 add_executable(gs_m1hash hash.h gs_m1hash.c)
 bin_prefix(gs_m1hash -m1hash)
 target_link_libraries(gs_m1hash
-		metautils metacomm sqliterepo
+		metautils sqliterepo
 		${GLIB2_LIBRARIES})
 
 install(FILES

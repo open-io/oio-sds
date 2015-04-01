@@ -59,34 +59,6 @@ _reply_m2_error (struct req_args_s *args, GError * err)
 }
 
 static enum http_rc_e
-_reply_properties (struct req_args_s *args, GError * err, GSList * beans)
-{
-	if (err) {
-		if (err->code == CODE_CONTAINER_NOTFOUND)
-			return _reply_forbidden_error (args, err);
-		if (err->code == CODE_CONTAINER_NOTFOUND)
-			return _reply_forbidden_error (args, err);
-		return _reply_system_error (args, err);
-	}
-
-	GString *gs = g_string_new("{");
-	for (GSList *l=beans; l ;l=l->next) {
-		if (DESCR(l->data) != &descr_struct_PROPERTIES)
-			continue;
-		if (l != beans)
-			g_string_append_c(gs, ',');
-		struct bean_PROPERTIES_s *bean = l->data;
-		g_string_append_printf(gs, "\"%s\":\"%.*s\"",
-				PROPERTIES_get_key(bean)->str,
-				PROPERTIES_get_value(bean)->len, PROPERTIES_get_value(bean)->data);
-	}
-	g_string_append_c(gs, '}');
-
-	_bean_cleanl2 (beans);
-	return _reply_success_json (args, gs);
-}
-
-static enum http_rc_e
 _reply_aliases (struct req_args_s *args, GError * err, GSList * beans)
 {
 	if (err)
@@ -188,6 +160,60 @@ _jbody_to_beans (GSList ** beans, struct json_object *jbody, const gchar * k)
 	return meta2_json_load_setof_beans (jbeans, beans);
 }
 
+static void
+_populate_headers_with_header (struct req_args_s *args, struct bean_CONTENTS_HEADERS_s *header)
+{
+	if (!header)
+		return;
+	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-length",
+			g_strdup_printf("%"G_GINT64_FORMAT, CONTENTS_HEADERS_get_size(header)));
+	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-policy",
+			g_strdup(CONTENTS_HEADERS_get_policy(header)->str));
+	args->rp->add_header_gstr(PROXYD_HEADER_PREFIX "content-meta-hash",
+			metautils_gba_to_hexgstr(NULL, CONTENTS_HEADERS_get_hash(header)));
+	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-hash-method",
+			g_strdup("md5"));
+}
+
+static void
+_populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *alias)
+{
+	if (!alias)
+		return;
+
+	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-name",
+			g_strdup(ALIASES_get_alias(alias)->str));
+	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-version",
+			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_version(alias)));
+	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-deleted",
+			g_strdup(ALIASES_get_deleted(alias) ? "True" : "False"));
+	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-ctime",
+			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_ctime(alias)));
+
+	gpointer _k, _v;
+	GHashTableIter iter;
+	GHashTable *md = metadata_unpack_string (ALIASES_get_mdsys(alias)->str, NULL);
+	if (md) {
+		g_hash_table_iter_init (&iter, md);
+		while (g_hash_table_iter_next (&iter, &_k, &_v)) {
+			const char *k = _k, *v = _v;
+			if (!g_ascii_strcasecmp (k, "mime-type")) {
+				args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-mime-type", g_strdup(v));
+			} else if (!g_ascii_strcasecmp (k, "chunk-method")) {
+				args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-chunk-method", g_strdup(v));
+			} else if (!g_ascii_strcasecmp (k, "storage-policy") ||
+					!g_ascii_strcasecmp(k, "creation-date")) {
+				continue;
+			} else {
+				gchar *rk = g_strdup_printf (PROXYD_HEADER_PREFIX "content-meta-X-%s", k);
+				args->rp->add_header (rk, g_strdup(v));
+				g_free (rk);
+			}
+		}
+		g_hash_table_destroy (md);
+	}
+}
+
 static enum http_rc_e
 _reply_simplified_beans (struct req_args_s *args, GError *err, GSList *beans, gboolean body)
 {
@@ -244,47 +270,8 @@ _reply_simplified_beans (struct req_args_s *args, GError *err, GSList *beans, gb
 		g_string_append_c (gstr, ']');
 
 	// Not set all the header
-	if (alias && header) {
-		args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-name",
-				g_strdup(ALIASES_get_alias(alias)->str));
-		args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-version",
-				g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_version(alias)));
-		args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-deleted",
-				g_strdup(ALIASES_get_deleted(alias) ? "True" : "False"));
-		args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-ctime",
-				g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_ctime(alias)));
-		args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-length",
-				g_strdup_printf("%"G_GINT64_FORMAT, CONTENTS_HEADERS_get_size(header)));
-		args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-policy",
-				g_strdup(CONTENTS_HEADERS_get_policy(header)->str));
-		args->rp->add_header_gstr(PROXYD_HEADER_PREFIX "content-meta-hash",
-				metautils_gba_to_hexgstr(NULL, CONTENTS_HEADERS_get_hash(header)));
-		args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-hash-method",
-				g_strdup("sha256"));
-
-		gpointer _k, _v;
-		GHashTableIter iter;
-		GHashTable *md = metadata_unpack_string (ALIASES_get_mdsys(alias)->str, NULL);
-		if (md) {
-			g_hash_table_iter_init (&iter, md);
-			while (g_hash_table_iter_next (&iter, &_k, &_v)) {
-				const char *k = _k, *v = _v;
-				if (!g_ascii_strcasecmp (k, "mime-type")) {
-					args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-mime-type", g_strdup(v));
-				} else if (!g_ascii_strcasecmp (k, "chunk-method")) {
-					args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-chunk-method", g_strdup(v));
-				} else if (!g_ascii_strcasecmp (k, "storage-policy") ||
-						!g_ascii_strcasecmp(k, "creation-date")) {
-					continue;
-				} else {
-					gchar *rk = g_strdup_printf (PROXYD_HEADER_PREFIX "content-meta-X-%s", k);
-					args->rp->add_header (rk, g_strdup(v));
-					g_free (rk);
-				}
-			}
-			g_hash_table_destroy (md);
-		}
-	}
+	_populate_headers_with_header (args, header);
+	_populate_headers_with_alias (args, alias);
 
 	_bean_cleanl2 (beans);
 	if (!body && gstr) {
@@ -379,7 +366,6 @@ _load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSL
 			struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES); 
 			PROPERTIES_set_alias (prop, ALIASES_get_alias(alias));
 			PROPERTIES_set_alias_version (prop, 0);
-			PROPERTIES_set_deleted (prop, FALSE);
 			PROPERTIES_set2_key (prop, rk);
 			PROPERTIES_set2_value (prop, (guint8*)v, strlen((gchar*)v));
 			return FALSE;
@@ -437,6 +423,43 @@ _container_props_to_headers (struct req_args_s *args, GSList *props)
 			g_free(k);
 		}
 	}
+}
+
+static enum http_rc_e
+_reply_properties (struct req_args_s *args, GError * err, GSList * beans)
+{
+	if (err) {
+		if (err->code == CODE_CONTAINER_NOTFOUND)
+			return _reply_forbidden_error (args, err);
+		if (err->code == CODE_CONTAINER_NOTFOUND)
+			return _reply_forbidden_error (args, err);
+		return _reply_system_error (args, err);
+	}
+
+	for (GSList *l=beans; l ;l=l->next) {
+		if (DESCR(l->data) == &descr_struct_ALIASES)
+			_populate_headers_with_alias (args, l->data);
+		else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS)
+			_populate_headers_with_header (args, l->data);
+	}
+
+	gboolean first = TRUE;
+	GString *gs = g_string_new("{");
+	for (GSList *l=beans; l ;l=l->next) {
+		if (DESCR(l->data) != &descr_struct_PROPERTIES)
+			continue;
+		if (!first)
+			g_string_append_c(gs, ',');
+		first = FALSE;
+		struct bean_PROPERTIES_s *bean = l->data;
+		g_string_append_printf(gs, "\"%s\":\"%.*s\"",
+				PROPERTIES_get_key(bean)->str,
+				PROPERTIES_get_value(bean)->len, PROPERTIES_get_value(bean)->data);
+	}
+	g_string_append_c(gs, '}');
+
+	_bean_cleanl2 (beans);
+	return _reply_success_json (args, gs);
 }
 
 /* CONTAINER resources ------------------------------------------------------ */
@@ -556,7 +579,7 @@ action_m2_container_purge (struct req_args_s *args, struct json_object *jargs)
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
 		return m2v2_remote_execute_PURGE (m2->host, args->url, FALSE,
-				m2_timeout_req, m2_timeout_all, &beans);
+				m2_timeout_all, &beans);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	return _reply_beans (args, err, beans);
@@ -595,31 +618,6 @@ action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
 	}
 
 	g_string_append (gstr, "]}");
-	return _reply_success_json (args, gstr);
-}
-
-static enum http_rc_e
-action_m2_container_stgpol (struct req_args_s *args, struct json_object *jargs)
-{
-	const gchar *stgpol = json_object_get_string (jargs);
-	if (!stgpol)
-		return _reply_format_error (args, BADREQ("Missing STGPOL"));
-
-	GSList *beans = NULL;
-	GError *hook (struct meta1_service_url_s * m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_STGPOL (m2->host,  args->url, stgpol, &beans);
-	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (NULL != err) {
-		if (err->code == CODE_CONTAINER_NOTFOUND)
-			return _reply_forbidden_error (args, err);
-		return _reply_m2_error (args, err);
-	}
-
-	GString *gstr = g_string_new ("");
-	_json_dump_all_beans (gstr, beans);
-	_bean_cleanl2 (beans);
 	return _reply_success_json (args, gstr);
 }
 
@@ -710,8 +708,7 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 		(void) next;
 		return m2v2_remote_execute_RAW_SUBST (m2->host, args->url, beans_new, beans_old);
 	}
-	if (!err)
-		err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	if (!err) err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	_bean_cleanl2 (beans_old);
 	_bean_cleanl2 (beans_new);
 
@@ -721,16 +718,76 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 }
 
 static enum http_rc_e
+action_m2_container_propget (struct req_args_s *args, struct json_object *jargs)
+{
+	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
+	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
+	return action_sqlx_propget(args, jargs);
+}
+
+static enum http_rc_e
+action_m2_container_propset (struct req_args_s *args, struct json_object *jargs)
+{
+	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
+	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
+	return action_sqlx_propset(args, jargs);
+}
+
+static enum http_rc_e
+action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
+{
+	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
+	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
+	return action_sqlx_propdel(args, jargs);
+}
+
+static enum http_rc_e
+action_m2_container_stgpol (struct req_args_s *args, struct json_object *jargs)
+{
+	if (!json_object_is_type(jargs, json_type_string))
+		return _reply_format_error (args, BADREQ ("Storage policy must be a string"));
+
+	struct json_object *fake_jargs = json_object_new_object();
+	json_object_object_add (fake_jargs, M2V2_ADMIN_STORAGE_POLICY, jargs);
+
+	enum http_rc_e rc = action_m2_container_propset (args, fake_jargs);
+	json_object_put (fake_jargs);
+	return rc;
+}
+
+static enum http_rc_e
+action_m2_container_setvers (struct req_args_s *args, struct json_object *jargs)
+{
+	if (!json_object_is_type(jargs, json_type_int))
+		return _reply_format_error (args, BADREQ ("Versioning policy must be an integer"));
+
+	struct json_object *fake_jargs = json_object_new_object();
+	json_object_object_add (fake_jargs, M2V2_ADMIN_STORAGE_POLICY, jargs);
+
+	enum http_rc_e rc = action_m2_container_propset (args, fake_jargs);
+	json_object_put (fake_jargs);
+	return rc;
+}
+
+static enum http_rc_e
 action_m2_container_action (struct req_args_s *args)
 {
 	struct sub_action_s actions[] = {
 		{"Purge", action_m2_container_purge},
 		{"Dedup", action_m2_container_dedup},
 		{"Touch", action_m2_container_touch},
-		{"SetStoragePolicy", action_m2_container_stgpol},
+
 		{"RawInsert", action_m2_container_raw_insert},
 		{"RawDelete", action_m2_container_raw_delete},
 		{"RawUpdate", action_m2_container_raw_update},
+
+		{"GetProperties", action_m2_container_propget},
+		{"SetProperties", action_m2_container_propset},
+		{"DelProperties", action_m2_container_propdel},
+
+		{"SetStoragePolicy", action_m2_container_stgpol},
+		{"SetVersioning", action_m2_container_setvers},
+
 		{NULL,NULL}
 	};
 	return abstract_action (args, actions);
@@ -837,6 +894,9 @@ action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 static enum http_rc_e
 action_m2_content_stgpol (struct req_args_s *args, struct json_object *jargs)
 {
+	if (!json_object_is_type (jargs, json_type_string))
+		return _reply_format_error (args, BADREQ ("the storage policy must be a string"));
+		
 	const gchar *stgpol = json_object_get_string (jargs);
 	if (!stgpol)
 		return _reply_format_error (args, BADREQ ("missing policy"));
@@ -867,7 +927,6 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 		struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES);
 		PROPERTIES_set2_key (prop, sk);
 		PROPERTIES_set2_value (prop, (guint8*)sv, strlen(sv));
-		PROPERTIES_set_deleted (prop, FALSE);
 		PROPERTIES_set2_alias (prop, hc_url_get (args->url, HCURL_PATH));
 		PROPERTIES_set_alias_version (prop, version);
 		beans = g_slist_prepend (beans, prop);

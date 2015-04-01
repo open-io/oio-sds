@@ -53,7 +53,7 @@ _update_container_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_ba
 	struct meta2_property_s m2p;
 
 	l.data = &m2p;
-	m2p.name = "sys.storage_policy";
+	m2p.name = M2V2_ADMIN_STORAGE_POLICY;
 	m2p.version = 0;
 	m2p.value = val;
 	e = meta2_backend_set_container_properties(m2b, url,
@@ -128,7 +128,7 @@ _update_content_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_back
 	g_free(mdsys);
 
 	beans = g_slist_prepend(g_slist_prepend(beans, header), alias);
-	e = meta2_backend_update_alias_header(m2b, url, beans, TRUE);
+	e = meta2_backend_update_alias_header(m2b, url, beans);
 	_bean_cleanl2(beans);
 
 	if (NULL != e) {

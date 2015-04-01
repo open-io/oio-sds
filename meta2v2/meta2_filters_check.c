@@ -140,25 +140,6 @@ meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_check_prop_key_prefix(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-
-	TRACE_FILTER();
-
-	const char *k = meta2_filter_ctx_get_param(ctx, "K");
-
-	if(!g_str_has_prefix(k, "user.") && !g_str_has_prefix(k, "sys.")) {
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_WRONG_PROP_PREFIX,
-				"Property must start with prefix user."));
-		return FILTER_KO;
-	}
-
-	return FILTER_OK;
-}
-
-int
 meta2_filter_check_snapshot_name(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {

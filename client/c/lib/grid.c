@@ -144,22 +144,12 @@ gs_grid_storage_init_flags(const gchar *ns, uint32_t flags,
 
 	if (!(flags & GSCLIENT_NOINIT)) {
 		GError *gErr = NULL;
-		gs->metacd_resolver = resolver_metacd_create (ns, &gErr);
-		if (!gs->metacd_resolver) {
-			GSERRORCAUSE(err,gErr,"Cannot init the metacd");
-			if (gErr)
-				g_clear_error(&gErr);
-			free(gs);
-			return NULL;
-		}
 
-		gs->direct_resolver = resolver_direct_create_with_metacd (ns,
-				gs->metacd_resolver, to_cnx, to_req, &gErr);
+		gs->direct_resolver = resolver_direct_create2 (ns, to_cnx, to_req, &gErr);
 		if (!gs->direct_resolver) {
 			GSERRORCAUSE(err,gErr,"Cannot init the direct resolver");
 			if (gErr)
 				g_clear_error(&gErr);
-			resolver_metacd_free(gs->metacd_resolver);
 			free(gs);
 			return NULL;
 		}
@@ -206,17 +196,6 @@ gs_update_meta1_master (gs_grid_storage_t *gs, const container_id_t cID,
 			return 0;
 		}
 
-		/* tries a metacd resolution, and if it succeeds, clears the direct resolver */
-		if (resolver_metacd_is_up (gs->metacd_resolver)) {
-			if(resolver_metacd_set_meta1_master (gs->metacd_resolver, cID, m1, &e)) {
-				resolver_direct_clear (gs->direct_resolver);
-				return 1;
-			}
-			DEBUG("METACD error: META1 update failure. cause:\r\n\t%s",(e ? e->message : "?"));
-			if(NULL != e)
-				g_clear_error(&e);
-		}
-
 		if(!resolver_direct_set_meta1_master (gs->direct_resolver, cID, m1, &e))
 			DEBUG("META1 update failure. cause:\r\n\t%s",(e ? e->message : "?"));
 			if(NULL != e)
@@ -236,7 +215,6 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 	gchar str_cid[STRLEN_CONTAINERID+1];
 	int attempts=NB_ATTEMPTS_RESOLVE_M1;
 	GError *gErr=NULL;
-	gboolean ref_exists = FALSE, metacd_is_up = FALSE;
 
 	addr_info_t* _try (void)
 	{
@@ -245,18 +223,6 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 		if ((attempts--)<=0) {
 			GSETERROR(&gErr,"too many attempts");
 			return NULL;
-		}
-
-		/* tries a metacd resolution, and if it succeeds, clears the direct resolver */
-		metacd_is_up = resolver_metacd_is_up (gs->metacd_resolver);
-		if (metacd_is_up) {
-			pA = resolver_metacd_get_meta1(gs->metacd_resolver, cID, read_only,
-					exclude? *exclude:NULL, &ref_exists, NULL);
-			if (pA) {
-				resolver_direct_clear (gs->direct_resolver);
-			} else {
-				DEBUG("METACD error: META1 resolution failure. cause:\r\n\t%s",(gErr?gErr->message:"?"));
-			}
 		}
 
 		if (NULL == pA) {
@@ -269,7 +235,6 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 		if (NULL == cname)
 			return pA;
 
-		if (!ref_exists || !metacd_is_up) {
 			if (has_before_create) {
 				if (meta1v2_remote_has_reference(pA, &gErr, gs_get_full_vns(gs),
 						cID, gs_grid_storage_get_to_sec(gs, GS_TO_M1_CNX),
@@ -305,8 +270,6 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 				} else {
 					DEBUG("METACD error creating reference [%s] in meta1: (%d) %s",
 							str_cid, gErr?gErr->code:0, gErr?gErr->message:"?");
-					if (metacd_is_up)
-						resolver_metacd_decache(gs->metacd_resolver, cID);
 					GSETERROR(&gErr,"Could not create reference");
 					if (exclude != NULL)
 						*exclude = g_slist_prepend(*exclude, pA);
@@ -314,7 +277,6 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 					return _try();
 				}
 			}
-		}
 
 		return pA;
 	}
@@ -363,21 +325,6 @@ GSList* gs_resolve_meta2 (gs_grid_storage_t *gs,
 			return NULL;
 		}
 
-		/* tries a metacd resolution, and if it succeeds, clears the
-		 * direct resolver */
-		if (resolver_metacd_is_up (gs->metacd_resolver)) {
-			pL = resolver_metacd_get_meta2 (gs->metacd_resolver, cID, &gErr);
-			if (pL) {
-				resolver_direct_clear (gs->direct_resolver);
-				return pL;
-			} else if (gErr && gErr->code==CODE_CONTAINER_NOTFOUND) {
-				return NULL;
-			}
-
-			if (!gErr)
-				GSETERROR(&gErr,"METACD Resolution error");
-		}
-
 		/* between two meta2 direct resolutions, we want to
 		 * be sure a metacd has not been spawned, so only
 		 * one try is made this turn */
@@ -421,28 +368,12 @@ GSList* gs_resolve_meta2 (gs_grid_storage_t *gs,
 
 void gs_decache_container (gs_grid_storage_t *gs, container_id_t cID)
 {
-	if (!gs || !cID) {
-		ALERT("invalid parameter");
-		return;
-	}
-	
-	if (resolver_metacd_is_up (gs->metacd_resolver)) {
-		/*resolver_direct_clear (gs->direct_resolver);*/
-		resolver_metacd_decache (gs->metacd_resolver, cID);
-	}
+	(void) gs, (void) cID;
 }
 
 void gs_decache_all (gs_grid_storage_t *gs)
 {
-	if (!gs) {
-		ALERT("invalid parameter");
-		return;
-	}
-	
-	if (resolver_metacd_is_up (gs->metacd_resolver))
-		resolver_metacd_decache_all (gs->metacd_resolver);
-	else
-		resolver_direct_decache_all (gs->direct_resolver);
+	resolver_direct_decache_all (gs->direct_resolver);
 }
 
 static void

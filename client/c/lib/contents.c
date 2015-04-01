@@ -411,10 +411,8 @@ map_properties_from_beans(GSList **properties, GSList *beans)
 	GSList *l = NULL;
 
 	for (l=beans; l && l->data; l=l->next) {
-		if(DESCR(l->data) == &descr_struct_PROPERTIES) {
+		if (DESCR(l->data) == &descr_struct_PROPERTIES) {
 			struct bean_PROPERTIES_s *bp = (struct bean_PROPERTIES_s *)l->data;
-			if ( PROPERTIES_get_deleted(bp) )
-				continue;
 			meta2_property_t *prop = g_malloc0(sizeof(meta2_property_t));
 
 			prop->name = g_strdup(PROPERTIES_get_key(bp)->str);
@@ -603,13 +601,13 @@ _reload_content(gs_content_t *content, GSList **p_filtered, GSList **p_beans, GE
 
 	hc_url_clean(url);
 
-	if(NULL != *err) {
+	if (NULL != *err) {
 		GSETERROR(err, "Failed to get content");
 		return FALSE;
 	}
 
 	raw_content = g_malloc0(sizeof(struct meta2_raw_content_s));
-	if(!map_raw_content_from_beans(raw_content, beans, p_filtered, FALSE)) {
+	if (!map_raw_content_from_beans(raw_content, beans, p_filtered, FALSE)) {
 		/* content deleted */
 		_bean_cleanl2(beans);
 		GSETCODE(err, CODE_CONTENT_NOTFOUND, "Content deleted");
@@ -630,48 +628,18 @@ _reload_content(gs_content_t *content, GSList **p_filtered, GSList **p_beans, GE
 	return TRUE;
 }
 
-static gchar *
-_get_content_version(gs_content_t *content)
-{
-	gs_error_t *reloadErr = NULL;
-
-	if (content == NULL)
-		return NULL;
-
-	if (NULL == C1_VERSION(content)) {
-		// ask a reload to retrieve content version
-		if(!gs_content_reload(content, TRUE, FALSE, &reloadErr)) {
-			ERROR("Failed to get content informations from meta2 : (%s)\n", gs_error_get_message(reloadErr));
-			gs_error_free(reloadErr);
-			return NULL;
-		} else {
-			DEBUG("_get_content_version: found version [%s] for content [%s] from meta2",
-					C1_VERSION(content), C1_PATH(content));
-		}
-	} else {
-		DEBUG("_get_content_version: using given version [%s] for content [%s]",
-				C1_VERSION(content), C1_PATH(content));
-	}
-
-	return C1_VERSION(content);
-}
-
-/*
- *
- */
 gboolean
-gs_content_reload (gs_content_t *content, gboolean allow_meta2, gboolean allow_cache, gs_error_t **err)
+gs_content_reload (gs_content_t *content, gs_error_t **err)
 {
-	return gs_content_reload_with_filtered(content, allow_meta2, allow_cache, NULL, NULL, err);
+	return gs_content_reload_with_filtered(content, NULL, NULL, err);
 }
 
 gboolean
-gs_content_reload_with_filtered (gs_content_t *content, gboolean allow_meta2, gboolean allow_cache,
-		GSList **p_filtered, GSList **p_beans, gs_error_t **err)
+gs_content_reload_with_filtered (gs_content_t *content, GSList **p_filtered,
+		GSList **p_beans, gs_error_t **err)
 {
 	gboolean rc = FALSE;
 	GError *localError=NULL;
-	const gchar *metacd_path = NULL;
 
 	/*santy checks and cleanings*/
 	if (!content) {
@@ -689,42 +657,7 @@ gs_content_reload_with_filtered (gs_content_t *content, gboolean allow_meta2, gb
 		*p_filtered = NULL;
 	}
 
-	if (allow_cache) { /* Try with the METACD */
-		struct metacd_s *metacd = C1_C0(content)->info.gs->metacd_resolver;
-		if (resolver_metacd_is_up(metacd)) {
-			struct meta2_raw_content_s *raw_content;
-			metacd_path = make_metacd_path(C1_PATH(content), _get_content_version(content));
-			raw_content = resolver_metacd_get_content(metacd, C1_ID(content), metacd_path, &localError);
-			destroy_metacd_path(metacd_path);
-			if (!raw_content) {
-				if (localError && localError->code == CODE_CONTENT_NOTFOUND)
-					goto try_direct_label;
-				ERROR("METAcd seemed UP but could not give us our chunks: %s",
-					localError?localError->message:"unknown error");
-			}
-			else {
-				map_content_from_raw(content, raw_content);
-				meta2_maintenance_destroy_content(raw_content);
-			}
-			if (localError)
-				g_clear_error(&localError);
-		}
-		if (content->chunk_list) {
-			/* XXX */
-			INFO("Chunks loaded from the metacd");
-			content->loaded_from_cache = ~0;
-			return 1;
-		}
-	}
-
-try_direct_label:
 	/* Try with the META2 */
-	content->loaded_from_cache = 0;
-	if (!allow_meta2) {
-		GSERRORSET(err, "Not found");
-		goto end_label;
-	}
-
 	for (int nb_refreshes = 1; nb_refreshes >= 0; nb_refreshes--) {
 		if (!_reload_content(content, p_filtered, p_beans, &localError)) {
 			if (localError->code == CODE_CONTAINER_NOTFOUND) {
@@ -813,10 +746,6 @@ gs_status_t gs_destroy_content (gs_content_t *content, gs_error_t **err)
 	if (localError)
 		g_clear_error(&localError);
 
-	/* We are about to delete the chunks, and the content has been marked for removal,
-	 * we send the decache order to the metacd, it won't be possible to reload it */
-	/* gs_decache_chunks_in_metacd(content); */
-
 	/*delete the remote chunks*/
 
 	for (GSList *cursor = beans; cursor != NULL; cursor = cursor->next) {
@@ -877,7 +806,7 @@ gs_content_get_metadata(gs_content_t *content, uint8_t *dst, size_t *dst_size, g
 		return GS_ERROR;
 	}
 
-	if (!content->gba_md && !gs_content_reload(content, TRUE, TRUE, err)) {
+	if (!content->gba_md && !gs_content_reload(content, err)) {
 		GSERRORSET(err, "Content loading failure path=[%s]", C1_PATH(content));
 		return GS_ERROR;
 	}
@@ -900,7 +829,7 @@ gs_content_get_system_metadata(gs_content_t *content, uint8_t *dst, size_t *dst_
 		return GS_ERROR;
 	}
 
-	if (!content->gba_sysmd && !gs_content_reload(content, TRUE, TRUE, err)) {
+	if (!content->gba_sysmd && !gs_content_reload(content, err)) {
 		GSERRORSET(err, "Content loading failure path=[%s]", C1_PATH(content));
 		return GS_ERROR;
 	}
@@ -930,48 +859,6 @@ gs_content_get_size(gs_content_t *content)
 	if (!content)
 		return -1;
 	return content->info.size;
-}
-
-void
-gs_decache_chunks_in_metacd(gs_content_t *content)
-{
-	GError *flush_error = NULL;
-	gs_grid_storage_t *client;
-	struct metacd_s *metacd;
-	gs_container_t *container;
-	const gchar *metacd_path = NULL;
-
-	if (!content)
-		return;
-
-	container = C1_C0(content);
-	if (!container)
-		return;
-
-	client = container->info.gs;
-	if (!client)
-		return;
-
-	metacd = client->metacd_resolver;
-	if (!metacd)
-		return;
-
-	if (!resolver_metacd_is_up(metacd))
-		return;
-
-	/* send a decache order to the METACD */
-	metacd_path = make_metacd_path(C1_PATH(content), _get_content_version(content));
-	if (!resolver_metacd_del_content(metacd, C0_ID(container), metacd_path, &flush_error)) {
-		WARN("METACD flush failed for [%s/%s/%s] : %s",
-				gs_get_full_vns(client), C0_IDSTR(container), C1_PATH(content),
-				(flush_error ? flush_error->message : "unknown error"));
-	}
-	else
-		INFO("decache order sent to METACD for [%s/%s/%s]",
-				gs_get_full_vns(client), C0_IDSTR(container), C1_PATH(content));
-	destroy_metacd_path(metacd_path);
-	if (flush_error)
-		g_clear_error(&flush_error);
 }
 
 static void
@@ -1097,7 +984,6 @@ hc_set_content_property(gs_content_t *content, char ** props, gs_error_t **e)
 		PROPERTIES_set_key(bp, g_string_new(kv[0]));
 		PROPERTIES_set_value(bp, g_byte_array_append(g_byte_array_new(),
 				(guint8*)g_strdup(kv[1]), strlen(kv[1])));
-		PROPERTIES_set_deleted(bp, FALSE);
 
 		beans = g_slist_prepend(beans,bp);
 	}
@@ -1173,58 +1059,25 @@ enderror :
 }
 
 gs_status_t
-hc_delete_content_property(gs_content_t *content, char ** keys ,gs_error_t **e)
+hc_delete_content_property(gs_content_t *content, char ** keys, gs_error_t **e)
 {
-	GError *ge = NULL;
 	char target[64];
-	gs_status_t status= GS_OK;
-	guint i;
-
 	bzero(target, 64);
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
 	struct hc_url_s *url;
-	fill_hcurl_from_content(content,&url);
+	fill_hcurl_from_content(content, &url);
 
-	GSList *out_beans = NULL;
-	GSList *in_beans = NULL;
-	GSList *l;
-	struct bean_PROPERTIES_s *bp;
+	GSList *lkeys = metautils_array_to_list((void**)keys);
+	GError *ge = m2v2_remote_execute_PROP_DEL(target, url, lkeys);
+	g_slist_free(lkeys);
 
-	ge = m2v2_remote_execute_PROP_GET(target, url, M2V2_FLAG_NODELETED, &out_beans);
-	if(NULL != ge) {
-		GSERRORCAUSE(e, ge, "Failed to delete propertes of content [%s]", C1_PATH(content));
-		status= GS_ERROR;
-		goto enderror;
-	}
+	if (!ge)
+		return GS_OK;
 
-	for ( i=0; i < g_strv_length(keys); i++) {
-		for ( l=out_beans ; l && l->data ; l=l->next) {
-			if(DESCR(l->data) == &descr_struct_PROPERTIES) {
-				if ( g_ascii_strcasecmp(PROPERTIES_get_key((struct bean_PROPERTIES_s *)l->data)->str,keys[i]) == 0 ) {
-					bp = _bean_dup((struct bean_PROPERTIES_s *)l->data);
-					PROPERTIES_set_deleted(bp, TRUE);
-					in_beans = g_slist_prepend(in_beans,bp);
-					break;
-				}
-			}
-		}
-	}
-	ge = m2v2_remote_execute_PROP_SET(target, url, 0, in_beans);
-
-	if(NULL != ge) {
-		GSERRORCAUSE(e, ge, "Failed to delete propertes of content [%s]", C1_PATH(content));
-		status= GS_ERROR;
-	}
-
-enderror:
-	if (ge != NULL)
-		g_clear_error(&ge);
-	hc_url_clean(url);
-	_bean_cleanl2(out_beans);
-	_bean_cleanl2(in_beans);
-
-	return status;
+	GSERRORCAUSE(e, ge, "Failed to delete propertes of content [%s]",
+			C1_PATH(content));
+	return GS_ERROR;
 }
 
 gs_status_t

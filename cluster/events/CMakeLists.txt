@@ -18,7 +18,7 @@ add_library(gridcluster-events SHARED
 		gridcluster_eventhandler.h
 		gridcluster_events.h)
 target_link_libraries(gridcluster-events
-		metautils metacomm
+		metautils
 		-lm ${GLIB2_LIBRARIES})
 set_target_properties(gridcluster-events PROPERTIES SOVERSION ${ABI_VERSION})
 
@@ -27,7 +27,7 @@ add_library(gridcluster-eventsremote SHARED
 		gridcluster_eventsremote.h
 		events_remote.c)
 target_link_libraries(gridcluster-eventsremote
-		metautils metacomm
+		metautils
 		${GLIB2_LIBRARIES})
 set_target_properties(gridcluster-eventsremote PROPERTIES SOVERSION ${ABI_VERSION})
 add_dependencies(gridcluster-eventsremote gridcluster-events)

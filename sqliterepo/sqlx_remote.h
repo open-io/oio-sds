@@ -84,9 +84,17 @@ GByteArray* sqlx_pack_FREEZE (struct sqlx_name_s *name);
 GByteArray* sqlx_pack_DISABLE (struct sqlx_name_s *name);
 GByteArray* sqlx_pack_DISABLE_DISABLED (struct sqlx_name_s *name);
 
-GByteArray* sqlx_pack_PROPGET (struct sqlx_name_s *name, gchar **k);
-GByteArray* sqlx_pack_PROPDEL (struct sqlx_name_s *name, gchar **k);
-GByteArray* sqlx_pack_PROPSET_tab (struct sqlx_name_s *name, gchar **kv);
+GByteArray* sqlx_pack_PROPGET (struct sqlx_name_s *name, const gchar * const *k);
+GByteArray* sqlx_pack_PROPDEL (struct sqlx_name_s *name, const gchar * const *k);
+
+/* @param kv a NULL-terminated array of strings, containing N pairs
+ * with for 0 <= i < N:
+ *   kv[2i] is the key
+ *   kv[2i+1] if the value.
+ */
+GByteArray* sqlx_pack_PROPSET_tab (struct sqlx_name_s *name, const gchar * const *kv);
+
+/* @param pairs GSList of <key_value_pair_s*> */
 GByteArray* sqlx_pack_PROPSET_pairs (struct sqlx_name_s *name, GSList *pairs);
 
 GByteArray* sqlx_pack_EXITELECTION(struct sqlx_name_s *name);

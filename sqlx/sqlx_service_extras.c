@@ -139,10 +139,9 @@ sqlx_task_reload_event_config(struct sqlx_service_s *ss)
 	}
 
 	notifier = event_config_repo_get_notifier(ss->extras->evt_repo);
-	ht = gridcluster_get_event_config(&(ss->nsinfo),
-			ss->service_config->srvtype);
+	ht = gridcluster_get_event_config(&(ss->nsinfo), ss->service_config->srvtype);
 	if (!ht)
-		err = NEWERROR(EINVAL, "Invalid parameter");
+		err = NEWERROR(EINVAL, "unknown error");
 	else {
 		g_hash_table_foreach(ht, _update_each, NULL);
 		g_hash_table_destroy(ht);

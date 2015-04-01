@@ -39,6 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/stats_holder.h>
 #include <resolver/hc_resolver.h>
 #include <meta1v2/meta1_remote.h>
+#include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/meta2_utils.h>
 #include <meta2v2/autogen.h>
@@ -109,7 +110,6 @@ static guint dir_high_max = PROXYD_DEFAULT_MAX_CSM0;
 static gdouble dir_timeout_req = PROXYD_DIR_TIMEOUT_SINGLE;
 static gdouble dir_timeout_all = PROXYD_DIR_TIMEOUT_SINGLE;
 
-static gdouble m2_timeout_req = PROXYD_M2_TIMEOUT_SINGLE;
 static gdouble m2_timeout_all = PROXYD_M2_TIMEOUT_SINGLE;
 
 static gboolean validate_namespace (const gchar * ns);

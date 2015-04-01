@@ -452,7 +452,6 @@ properties = generator.add_bean(Struct("properties") \
 	.field(Int("alias_version")) \
 	.field(Text("key")) \
 	.field(Blob("value")) \
-	.field(Bool("deleted")) \
 	.PK(("alias","alias_version","key")) \
 	.index('properties_index_by_header', ['alias']) \
 	.set_sql_name("properties_v2")).set_order(5)
@@ -490,9 +489,9 @@ snapshots = generator.add_bean(Struct("snapshots") \
 	.set_sql_name("snapshot_v2")).set_order(4)
 
 
-#generator.add_fk(ForeignKey(
-#		(properties, ('alias','alias_version'), "alias"),
-#		(alias, ('alias', 'version'), "properties")))
+generator.add_fk(ForeignKey(
+		(properties, ('alias','alias_version'), "alias"),
+		(alias, ('alias', 'version'), "properties")))
 
 generator.add_fk(ForeignKey(
 		(alias, ('content_id',), "image"),

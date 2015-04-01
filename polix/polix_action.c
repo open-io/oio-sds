@@ -204,7 +204,6 @@ gboolean polix_action_purge_byurl(struct hc_url_s *url, const char* meta2_url,
 	// sending purge request
 	if(!(*error = m2v2_remote_execute_PURGE(meta2_url, url, dryrun, 
 					(timeout_request > 0) ? timeout_request : -1,
-					(timeout_request > 0) ? timeout_request : -1,
 					&del_chunks_list))) {
 		polix_action_drop_chunks(dryrun, del_chunks_list, result, error);
 		_bean_cleanl2(del_chunks_list);

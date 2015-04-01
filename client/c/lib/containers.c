@@ -17,6 +17,8 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <meta2v2/meta2_macros.h>
+
 #include "./gs_internals.h"
 
 #define KEY_STG_POLICY "storage_policy"
@@ -755,7 +757,7 @@ gs_get_content_from_path_full (gs_container_t *container, const char *name, cons
 		content->version = g_strdup(version);
 	}
 
-	if (!gs_content_reload_with_filtered(content, TRUE, FALSE, p_filtered, p_beans, err)) {
+	if (!gs_content_reload_with_filtered(content, p_filtered, p_beans, err)) {
 		gs_content_free(content);
 		return NULL;
 	}
@@ -1117,15 +1119,17 @@ gs_download_content_by_name(gs_container_t *container, const char *name,
 }
 
 gs_status_t
-gs_download_content_by_name_and_version(gs_container_t *container, const char *name, const char *version,
+gs_download_content_by_name_and_version(gs_container_t *container,
+		const char *name, const char *version,
 		gs_download_info_t *dl_info, gs_error_t **err)
 {
 	return gs_download_content_by_name_full(container, name, version, NULL, dl_info, err);
 }
 
 gs_status_t
-gs_download_content_by_name_full(gs_container_t *container, const char *name, const char *version,
-	const char *stgpol, gs_download_info_t *dl_info, gs_error_t **err)
+gs_download_content_by_name_full(gs_container_t *container, const char *name,
+		const char *version, const char *stgpol,
+		gs_download_info_t *dl_info, gs_error_t **err)
 {
 	int rc = GS_ERROR;
 	gs_content_t *content = NULL;
@@ -1145,38 +1149,8 @@ gs_download_content_by_name_full(gs_container_t *container, const char *name, co
 	if (version && *version)
 		content->version = g_strdup(version);
 
-	/* If the content can be entirely loaded from the cache,
-	 * directly try the download */
-
-	if (gs_content_reload(content, FALSE, TRUE, &gserr_cache)) {
-		if(content->deleted) {
-			GSERRORCODE(err, CODE_CONTENT_NOTFOUND, "Content deleted");
-			gs_content_free(content);
-			return GS_ERROR;
-		} else{
-			INFO("Chunks loaded from the metacd");
-			if (gs_download_content_full(content, dl_info, stgpol, NULL, NULL, &gserr_cache)) {
-				/* SUCCESS */
-				gs_content_free(content);
-				if (gserr_cache)
-					gs_error_free(gserr_cache);
-				return GS_OK;
-			}
-			else {
-				/* FAILURE */
-				GSERRORSET(&gserr_cache, "dl error");
-				if (err)
-					*err = gserr_cache;
-				else if (gserr_cache)
-					gs_error_free(gserr_cache);
-				gs_content_free(content);
-				return GS_ERROR;
-			}
-		}
-	}
-
 	/* Regular download */
-	if (!gs_content_reload(content, TRUE, FALSE, err)) {
+	if (!gs_content_reload(content, err)) {
 		GSERRORSET(err, "Implicit content loading failure");
 		goto error_opened;
 	}
@@ -1216,7 +1190,7 @@ gs_delete_content_by_name(gs_container_t *container, const char *name, gs_error_
 	g_strlcpy(content->info.path, name, sizeof(content->info.path)-1);
 	content->info.container = container;
 
-	if (!gs_content_reload(content, TRUE, FALSE, err)) {
+	if (!gs_content_reload(content, err)) {
 		GSERRORSET(err, "Implicit content loading failure");
 		goto error_opened;
 	}
@@ -1340,163 +1314,129 @@ hc_get_container_admin_entries(gs_container_t *container, gs_error_t **gs_err)
 	return NULL;
 }
 
-static gs_error_t*
-_hc_set_container_global_property(gs_container_t *container,
-		const char *prop_name, const char *prop_val, gboolean no_check)
-{
-	gs_error_t *result = NULL;
-	GError *g_error = NULL;
-	struct hc_url_s *url = NULL;
-	gchar m2_url[STRLEN_ADDRINFO];
-	struct bean_PROPERTIES_s *bp = NULL;
-	GSList *beans = NULL;
-
-	if (!container) {
-		char buf[256];
-		bzero(buf, sizeof(buf));
-		g_snprintf(buf, sizeof(buf) - 1, "Invalid parameter (%p | %s)",
-				container, prop_val);
-		result = g_malloc0(sizeof(gs_error_t));
-		result->code = CODE_BAD_REQUEST;
-		result->msg = g_strdup(buf);
-		return result;
-	}
-
-	addr_info_to_string(&(container->meta2_addr), m2_url, STRLEN_ADDRINFO);
-	fill_hcurl_from_container(container, &url);
-
-	bp = _bean_create(&descr_struct_PROPERTIES);
-	PROPERTIES_set2_key(bp, prop_name);
-	if (prop_val != NULL) {
-		PROPERTIES_set2_value(bp, (guint8*)prop_val, strlen(prop_val));
-	} else {
-		PROPERTIES_set2_value(bp, (const guint8*)"", 0);
-		PROPERTIES_set_deleted(bp, TRUE);
-	}
-	beans = g_slist_prepend(beans, bp);
-
-	g_error = m2v2_remote_execute_PROP_SET(m2_url, url,
-			no_check? M2V2_FLAG_NOFORMATCHECK : 0, beans);
-
-	if (g_error) {
-		result = g_malloc0(sizeof(gs_error_t));
-		result->code = g_error->code;
-		result->msg = g_strdup(g_error->message);
-		g_clear_error(&g_error);
-	}
-
-	_bean_cleanl2(beans);
-	hc_url_clean(url);
-	return result;
-}
-
 gs_error_t*
 hc_set_container_global_property(gs_container_t *container,
 		const char *prop_name, const char *prop_val)
 {
-	return _hc_set_container_global_property(container, prop_name, prop_val,
-			FALSE);
+	gchar addr[STRLEN_ADDRINFO];
+	addr_info_to_string(&(container->meta2_addr), addr, STRLEN_ADDRINFO);
+
+	gchar *base = g_strdup_printf("1@%s", C0_IDSTR(container));
+	struct sqlx_name_s name = {
+			.ns = gs_get_namespace(container->info.gs),
+			.base = base,
+			.type = "meta2",
+	};
+
+	const gchar * const tab[3] = { prop_name, prop_val, NULL };
+	GByteArray *req = sqlx_pack_PROPSET_tab(&name, tab);
+	GError *err = gridd_client_exec(addr, M2V2_CLIENT_TIMEOUT, req);
+	g_byte_array_unref(req);
+	g_free(base);
+
+	if (!err)
+		return NULL;
+
+	gs_error_t *ge = NULL;
+	GSERRORCAUSE(&ge, err, "Client error");
+	g_clear_error (&err);
+	return ge;
 }
 
 gs_error_t*
 hc_del_container_global_property(gs_container_t *container,
 		const char *prop_name)
 {
-	return _hc_set_container_global_property(container, prop_name, NULL, FALSE);
+	gchar addr[STRLEN_ADDRINFO];
+	addr_info_to_string(&(container->meta2_addr), addr, STRLEN_ADDRINFO);
+
+	gchar *base = g_strdup_printf("1@%s", C0_IDSTR(container));
+	struct sqlx_name_s name = {
+			.ns = gs_get_namespace(container->info.gs),
+			.base = base,
+			.type = "meta2",
+	};
+
+	const gchar * const tab[2] = { prop_name, NULL };
+	GByteArray *req = sqlx_pack_PROPDEL(&name, tab);
+	GError *err = gridd_client_exec (addr, M2V2_CLIENT_TIMEOUT, req);
+	g_byte_array_unref(req);
+	g_free (base);
+
+	if (!err)
+		return NULL;
+
+	gs_error_t *ge = NULL;
+	GSERRORCAUSE(&ge, err, "Client error");
+	g_clear_error (&err);
+	return ge;
 }
 
 gs_error_t*
 hc_get_container_global_properties(gs_container_t *container, char ***result)
 {
-	GError *g_error = NULL;
-	struct hc_url_s *url = NULL;
-	gchar m2_url[STRLEN_ADDRINFO];
-	gs_error_t *err = NULL;
-	GSList *beans = NULL;
-	gint pos = 0;
+	gchar addr[STRLEN_ADDRINFO];
+	addr_info_to_string(&(container->meta2_addr), addr, STRLEN_ADDRINFO);
 
-	addr_info_to_string(&(container->meta2_addr), m2_url, STRLEN_ADDRINFO);
-	fill_hcurl_from_container(container, &url);
+	gchar *base = g_strdup_printf("1@%s", C0_IDSTR(container));
+	struct sqlx_name_s name = {
+			.ns = gs_get_namespace(container->info.gs),
+			.base = base,
+			.type = "meta2",
+	};
 
-	g_error = m2v2_remote_execute_PROP_GET(m2_url, url, 0, &beans);
-	if (g_error) {
-		err = g_malloc0(sizeof(gs_error_t));
-		err->code = g_error->code;
-		err->msg = g_strdup(g_error->message);
-		g_clear_error(&g_error);
-	} else {
-		*result = g_malloc0((g_slist_length(beans)+1) * sizeof(gchar *));
-		for (GSList *l = beans; l != NULL; l = l->next) {
-			GByteArray *val = PROPERTIES_get_value(l->data);
-			char buf[val->len + 1];
-			memset(buf, '\0', sizeof(buf));
-			g_snprintf(buf, sizeof(buf), "%s", val->data);
-			(*result)[pos++] = g_strdup_printf("%s=%s",
-					PROPERTIES_get_key(l->data)->str, buf);
+	GSList *pairs = NULL;
+	GByteArray *req = sqlx_pack_PROPGET(&name, NULL);
+	GError *err = gridd_client_exec_and_decode (addr, M2V2_CLIENT_TIMEOUT, req,
+			&pairs, key_value_pairs_unmarshall);
+	g_byte_array_unref(req);
+	g_free (base);
+
+	if (!err) {
+		GPtrArray *tmp = g_ptr_array_new();
+		for (GSList *l=pairs; l ;l=l->next) {
+			struct key_value_pair_s *kv = l->data;
+			g_ptr_array_add (tmp, g_strdup_printf("%s=%.*s", kv->key,
+					kv->value->len, kv->value->data));
 		}
-		_bean_cleanl2(beans);
+		*result = (gchar**) metautils_gpa_to_array (tmp, TRUE);
+		return NULL;
 	}
 
-	hc_url_clean(url);
-	return err;
+	gs_error_t *ge = NULL;
+	GSERRORCAUSE(&ge, err, "Client error");
+	g_clear_error (&err);
+	return ge;
 }
 
 gs_error_t*
-hc_set_container_storage_policy(gs_container_t *container,
-		const char *storage_policy)
+hc_set_container_storage_policy(gs_container_t *container, const char *v)
 {
-	GError *ge = NULL;
-	char target[64];
-	struct hc_url_s *url;
-
-	memset(target, '\0', 64);
-	addr_info_to_string(&(container->meta2_addr), target, 64);
-	url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs));
-	hc_url_set(url, HCURL_REFERENCE, C0_NAME(container));
-
-	if (NULL != (ge = m2v2_remote_execute_STGPOL(target, url, storage_policy, NULL))) {
-		gs_error_t *result = g_malloc0(sizeof(gs_error_t));
-		result->code = ge->code;
-		result->msg = g_strdup(ge->message);
-		g_clear_error(&ge);
-		hc_url_clean(url);
-		return result;
-	}
-
-	hc_url_clean(url);
-
-	/* TODO : update chunk xattr */
-
-	return NULL;
+	return hc_set_container_global_property (container, M2V2_ADMIN_STORAGE_POLICY, v);
 }
 
 gs_error_t*
-hc_set_container_versioning(gs_container_t *container, const char *versioning)
+hc_set_container_versioning(gs_container_t *container, const char *v)
 {
-	return _hc_set_container_global_property(container,
-			GS_CONTAINER_PROPERTY_VERSIONING, versioning, TRUE);
+	return hc_set_container_global_property (container, M2V2_ADMIN_VERSIONING_POLICY, v);
 }
 
 gs_error_t*
 hc_del_container_versioning(gs_container_t *container)
 {
-	return _hc_set_container_global_property(container, 
-            GS_CONTAINER_PROPERTY_VERSIONING, NULL, TRUE);
+	return hc_del_container_global_property(container, M2V2_ADMIN_VERSIONING_POLICY);
 }
 
 gs_error_t*
 hc_set_container_quota(gs_container_t *container, const char *quota)
 {
-	return _hc_set_container_global_property(container,
-			GS_CONTAINER_PROPERTY_QUOTA, quota, TRUE);
+	return hc_set_container_global_property(container, M2V2_ADMIN_QUOTA, quota);
 }
 
 gs_container_t*
 hc_resolve_meta2_entry(gs_grid_storage_t *gs, const char *container_name,
                 int auto_create, gs_error_t **gs_err)
 {
-	return gs_get_storage_container (gs,container_name, NULL, auto_create,
-			gs_err);
+	return gs_get_storage_container (gs,container_name, NULL, auto_create, gs_err);
 }
 

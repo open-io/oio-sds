@@ -64,7 +64,7 @@ _create_container(struct gridd_filter_ctx_s *ctx)
 
 	params.storage_policy = meta2_filter_ctx_get_param(ctx, M2_KEY_STORAGE_POLICY);
 	params.version_policy = meta2_filter_ctx_get_param(ctx, M2_KEY_VERSION_POLICY);
-	params.local = (meta2_filter_ctx_get_param(ctx, "LOCAL") != NULL);
+	params.local = (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LOCAL) != NULL);
 
 retry:
 	err = meta2_backend_create_container(m2b, url, &params);
@@ -133,10 +133,10 @@ meta2_filter_action_delete_container(struct gridd_filter_ctx_s *ctx,
 {
 	guint32 flags = 0;
 
-	flags |= meta2_filter_ctx_get_param(ctx, "FORCE") ? M2V2_DESTROY_FORCE : 0;
-	flags |= meta2_filter_ctx_get_param(ctx, "FLUSH") ? M2V2_DESTROY_FLUSH : 0;
-	flags |= meta2_filter_ctx_get_param(ctx, "PURGE") ? M2V2_DESTROY_PURGE : 0;
-	flags |= meta2_filter_ctx_get_param(ctx, "LOCAL") ? M2V2_DESTROY_LOCAL : 0;
+	flags |= meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FORCE) ? M2V2_DESTROY_FORCE : 0;
+	flags |= meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLUSH) ? M2V2_DESTROY_FLUSH : 0;
+	flags |= meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PURGE) ? M2V2_DESTROY_PURGE : 0;
+	flags |= meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LOCAL) ? M2V2_DESTROY_LOCAL : 0;
 
 	GError *err = meta2_backend_destroy_container(
 			meta2_filter_ctx_get_backend(ctx),
@@ -261,8 +261,8 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	S3_RESPONSE_HEADER(M2_KEY_PREFIX, lp->prefix);
 	S3_RESPONSE_HEADER(M2_KEY_MARKER, lp->marker_start);
 	S3_RESPONSE_HEADER(M2_KEY_MARKER_END, lp->marker_end);
-	S3_RESPONSE_HEADER("TRUNCATED", truncated ? "true" : "false");
-	S3_RESPONSE_HEADER("NEXT_MARKER", next_marker);
+	S3_RESPONSE_HEADER(NAME_MSGKEY_TRUNCATED, truncated ? "true" : "false");
+	S3_RESPONSE_HEADER(NAME_MSGKEY_NEXTMARKER, next_marker);
 	if (lp->maxkeys > 0) {
 		gchar tmp[64];	
 		g_snprintf(tmp, sizeof(tmp), "%"G_GINT64_FORMAT, lp->maxkeys - 1);
@@ -510,9 +510,9 @@ meta2_filter_action_setone_admin_v1(struct gridd_filter_ctx_s *ctx,
 
 	GByteArray *key = NULL, *value = NULL;
 
-	err = message_extract_header_gba(reply->request, "ADMIN_KEY", TRUE, &key);
+	err = message_extract_header_gba(reply->request, M2V1_KEY_ADMIN_KEY, TRUE, &key);
 	if (!err)
-		err = message_extract_header_gba(reply->request, "ADMIN_VALUE", TRUE, &value);
+		err = message_extract_header_gba(reply->request, M2V1_KEY_ADMIN_VALUE, TRUE, &value);
 	if (!err) {
 		GSList l = {.data=NULL, .next=NULL};
 		struct meta2_property_s m2p;

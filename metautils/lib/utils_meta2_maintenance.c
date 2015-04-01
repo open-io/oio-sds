@@ -73,13 +73,6 @@ meta2_raw_content_clean(meta2_raw_content_t *content)
 }
 
 void
-meta2_raw_content_gclean(gpointer p, gpointer ignored)
-{
-	(void) ignored;
-	meta2_raw_content_clean(p);
-}
-
-void
 meta2_maintenance_destroy_content(struct meta2_raw_content_s *content)
 {
 	meta2_raw_content_clean(content);
@@ -104,14 +97,6 @@ meta2_maintenance_add_chunk(struct meta2_raw_content_s *content, const struct me
 	}
 	/*add the chunk to the content */
 	content->raw_chunks = g_slist_prepend(content->raw_chunks, copy);
-}
-
-void
-meta2_maintenance_increment_chunks_count(struct meta2_raw_content_s *content)
-{
-	if (!content)
-		return;
-	content->nb_chunks++;
 }
 
 struct meta2_raw_chunk_s *
@@ -153,19 +138,6 @@ void
 meta2_maintenance_destroy_chunk(struct meta2_raw_chunk_s *chunk)
 {
 	meta2_raw_chunk_clean(chunk);
-}
-
-/**
-	Glib compatible raw chunk cleaner
- */
-void
-meta2_maintenance_chunk_gclean(gpointer p1, gpointer p2)
-{
-	struct meta2_raw_chunk_s *chunk = p1;
-
-	(void) p2;
-
-	meta2_maintenance_destroy_chunk(chunk);
 }
 
 #ifdef HAVE_UNUSED_CODE
@@ -316,13 +288,6 @@ meta2_raw_content_header_clean(meta2_raw_content_header_t *header)
 	errno = 0;
 }
 
-void
-meta2_raw_content_header_gclean(gpointer p, gpointer ignored)
-{
-	(void) ignored;
-	meta2_raw_content_header_clean(p);
-}
-
 void meta2_raw_content_v2_clean(meta2_raw_content_v2_t *content)
 {
 	if (!content) {
@@ -367,24 +332,6 @@ meta2_raw_content_v2_gclean(gpointer p, gpointer ignored)
 /* ------------------------------------------------------------------------- */
 
 gchar*
-meta2_raw_content_header_to_string(const meta2_raw_content_header_t *header)
-{
-	gchar str_cid[STRLEN_CONTAINERID];
-
-	if (!header)
-		return g_strdup("CONTENT_HEADER[NULL]");
-
-	container_id_to_string(header->container_id, str_cid, sizeof(str_cid));
-	return g_strdup_printf("CONTENT_HEADER[%.*s|%.*s|%04x|%u|%"G_GINT64_FORMAT"|%"G_GSIZE_FORMAT"|%"G_GSIZE_FORMAT"|%s]",
-		(int) sizeof(str_cid), str_cid,
-		(int) sizeof(header->path), header->path,
-		header->flags, header->nb_chunks,
-		header->size,
-		metautils_gba_len(header->metadata), metautils_gba_len(header->system_metadata),
-		header->policy ? header->policy : "none");
-}
-
-gchar*
 meta2_raw_chunk_to_string(const meta2_raw_chunk_t *chunk)
 {
 	gchar str_id[STRLEN_CHUNKID+1], str_hash[STRLEN_CHUNKHASH+1];
@@ -405,166 +352,7 @@ meta2_raw_chunk_to_string(const meta2_raw_chunk_t *chunk)
 		metautils_gba_len(chunk->metadata));
 }
 
-gchar*
-meta2_property_to_string(const meta2_property_t *prop)
-{
-	gchar str_data[128];
-
-	if (!prop)
-		return g_strdup("PROP[NULL]");
-
-	bzero(str_data, sizeof(str_data));
-	metautils_gba_data_to_string(prop->value, str_data, sizeof(str_data)-1);
-
-	return g_strdup_printf("PROP[%s|%"G_GSIZE_FORMAT":%s]",
-			prop->name, metautils_gba_len(prop->value), str_data);
-}
-
-gchar*
-meta2_raw_content_v2_to_string(const meta2_raw_content_v2_t *content)
-{
-	gchar *result = NULL, **tab = NULL;
-	gsize tab_max = 0, tab_count = 0;
-	GSList *l;
-
-	void _concat(gchar *s) {
-		if (!s)
-			return;
-		if (tab_count >= tab_max) {
-			tab_max += 4;
-			tab = g_realloc(tab, sizeof(gchar*) * (tab_max+1));
-		}
-		tab[tab_count ++] = s;
-		tab[tab_count] = NULL;
-	}
-
-	tab_max = 12;
-	tab_count = 0;
-	tab = g_malloc0(sizeof(gchar*) * (tab_max+1));
-
-	_concat(g_strdup("CONTENT["));
-	_concat(meta2_raw_content_header_to_string(&(content->header)));
-
-	_concat(g_strdup("CHUNKS["));
-	for (l=content->raw_chunks; l ;l=l->next)
-		_concat(meta2_raw_chunk_to_string(l->data));
-	_concat(g_strdup("]"));
-
-	_concat(g_strdup("PROPERTIES["));
-	for (l=content->properties; l ;l=l->next)
-		_concat(meta2_property_to_string(l->data));
-	_concat(g_strdup("]"));
-
-	_concat(g_strdup("]"));
-
-	result = g_strjoinv(";",tab);
-	g_strfreev(tab);
-	return result;
-}
-
-gint
-meta2_raw_chunk_cmp(const meta2_raw_chunk_t *r1, const meta2_raw_chunk_t *r2)
-{
-	meta2_raw_chunk_t c1, c2;
-	int i_cmp;
-
-	if (r1 == r2)
-		return 0;
-	if (!r1 && r2)
-		return 1;
-	if (r1 && !r2)
-		return -1;
-
-	memcpy(&c1, r1, sizeof(c1));
-	c1.metadata = NULL;
-	memcpy(&c2, r2, sizeof(c2));
-	c2.metadata = NULL;
-
-	return (i_cmp = memcmp(&c1, &c2, sizeof(meta2_raw_chunk_t)))
-		? i_cmp : metautils_gba_cmp(r1->metadata, r2->metadata);
-}
-
-gint
-meta2_property_cmp(const meta2_property_t *p1, const meta2_property_t *p2)
-{
-	int i_cmp;
-	if (p1 == p2)
-		return 0;
-	if (!p1 && p2)
-		return 1;
-	if (p1 && !p2)
-		return -1;
-
-	if (!p1->name && p2->name)
-		return 1;
-	if (p1->name && !p2->name)
-		return -1;
-	return (i_cmp = strcmp(p1->name, p2->name)) ? i_cmp : metautils_gba_cmp(p1->value, p2->value);
-}
-
-gint
-meta2_raw_content_header_cmp(const meta2_raw_content_header_t *r1, const meta2_raw_content_header_t *r2)
-{
-	meta2_raw_content_header_t c1, c2;
-	int i_cmp;
-
-	if (r1 == r2)
-		return 0;
-	if (!r1 && r2)
-		return 1;
-	if (r1 && !r2)
-		return -1;
-
-	memcpy(&c1, r1, sizeof(c1));
-	c1.metadata = NULL;
-	c1.system_metadata = NULL;
-	memcpy(&c2, r2, sizeof(c2));
-	c2.metadata = NULL;
-	c2.system_metadata = NULL;
-
-	if (0 != (i_cmp = memcmp(&c1, &c2, sizeof(c1))))
-		return i_cmp;
-	if (0 != (i_cmp = metautils_gba_cmp(r1->metadata, r2->metadata)))
-		return i_cmp;
-	if (0 != (i_cmp = metautils_gba_cmp(r1->system_metadata, r2->system_metadata)))
-		return i_cmp;
-	return 0;
-}
-
 /* ------------------------------------------------------------------------- */
-
-meta2_raw_content_v2_t*
-meta2_raw_content_v1_get_v2(meta2_raw_content_t *v1, GError **err)
-{
-	GSList *l;
-
-	if (!v1) {
-		GSETCODE(err, ERRCODE_PARAM, "Invalid parameter");
-		return NULL;
-	}
-	meta2_raw_content_v2_t *v2 = g_malloc0(sizeof(*v2));
-
-	/* Copy the header */
-	memcpy(v2->header.container_id, v1->container_id, sizeof(container_id_t));
-	g_strlcpy(v2->header.path, v1->path, sizeof(v2->header.path)-1);
-	v2->header.flags = v1->flags;
-	v2->header.nb_chunks = v1->nb_chunks;
-	v2->header.size = v1->size;
-	v2->header.version = v1->version;
-	v2->header.deleted = v1->deleted;
-	v2->header.metadata = metautils_gba_dup(v1->metadata);
-	v2->header.system_metadata = metautils_gba_dup(v1->system_metadata);
-
-	/* Copy the chunks */
-	for (l=v1->raw_chunks; l ;l=l->next) {
-		meta2_raw_chunk_t *chunk_copy = meta2_raw_chunk_dup(l->data);
-		if (chunk_copy)
-			v2->raw_chunks = g_slist_prepend(v2->raw_chunks, chunk_copy);
-	}
-	v2->raw_chunks = g_slist_reverse(v2->raw_chunks);
-
-	return v2;
-}
 
 meta2_raw_content_t*
 meta2_raw_content_v2_get_v1(const meta2_raw_content_v2_t *v2, GError **err)
@@ -609,18 +397,6 @@ meta2_raw_chunk_dup(meta2_raw_chunk_t *chunk)
 	g_memmove(copy, chunk, sizeof(*copy));
 	copy->metadata = metautils_gba_dup(chunk->metadata);
 	return copy;
-}
-
-meta2_property_t*
-meta2_property_dup(meta2_property_t *prop_orig)
-{
-	if (!prop_orig)
-		return NULL;
-	meta2_property_t *prop_copy = g_malloc0(sizeof(*prop_copy));
-	prop_copy->name = g_strdup(prop_orig->name);
-	prop_copy->version = prop_orig->version;
-	prop_copy->value = metautils_gba_dup(prop_orig->value);
-	return prop_copy;
 }
 
 gboolean

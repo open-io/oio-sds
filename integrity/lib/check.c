@@ -394,7 +394,7 @@ _find_sp_fc_m2v2(const gchar* meta2,
 
 	err = m2v2_request(meta2,
 			m2v2_remote_pack_GET_BY_CHUNK(url, chunk_id, 1),
-			m2to, m2to, &beans);
+			m2to, &beans);
 	if (err != NULL) {
 		g_prefix_error(&err, "Could not get contents referencing chunk %s: ",
 				chunk_id);

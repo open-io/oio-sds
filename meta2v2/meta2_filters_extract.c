@@ -142,7 +142,7 @@ meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	e = message_extract_cid(reply->request, "CONTAINER_ID", &cid);
+	e = message_extract_cid(reply->request, NAME_MSGKEY_CONTAINERID, &cid);
 	if (NULL != e) {
 		g_clear_error(&e);
 		if (metautils_str_ishexa(container, STRLEN_CONTAINERID-1)) {
@@ -244,19 +244,11 @@ _meta2_filter_extract_path(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_header_path_f2(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	return _meta2_filter_extract_path(ctx, reply, "field_2");
-}
-
-int
 meta2_filter_extract_header_path_f1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	TRACE_FILTER();
-	return _meta2_filter_extract_path(ctx, reply, "field_1");
+	return _meta2_filter_extract_path(ctx, reply, M2V1_KEY_FIELD_ONE);
 }
 
 static int
@@ -320,68 +312,6 @@ int meta2_filter_extract_header_optional_cid(struct gridd_filter_ctx_s *ctx,
 	}
 	container_id_to_string(cid, strcid, sizeof(strcid));
 	hc_url_set(url, HCURL_HEXID, strcid);
-	return FILTER_OK;
-}
-
-static int
-_meta2_filter_extract_srvtype(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply, const gchar *f)
-{
-	gchar srvtype[LIMIT_LENGTH_SRVTYPE];
-	GError *err;
-
-	memset(srvtype, 0, sizeof(srvtype));
-	err = message_extract_string(reply->request, f, srvtype, sizeof(srvtype));
-	if (err != NULL) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	meta2_filter_ctx_add_param(ctx, "SRVTYPE", srvtype);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_srvtype_f1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	return _meta2_filter_extract_srvtype(ctx, reply, "field_1");
-}
-
-int
-meta2_filter_extract_header_propname_f2(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	char buf[128];
-
-	TRACE_FILTER();
-	EXTRACT_STRING("field_2", FALSE);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_propvalue_f3(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	char buf[128];
-
-	TRACE_FILTER();
-	EXTRACT_STRING("field_3", FALSE);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_ref(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	char buf[128];
-
-	TRACE_FILTER();
-	EXTRACT_STRING(M2V1_KEY_CONTAINER_NAME, FALSE);
 	return FILTER_OK;
 }
 
@@ -566,7 +496,7 @@ meta2_filter_extract_header_prop_action(struct gridd_filter_ctx_s *ctx,
 	gchar buf[512];
 
 	TRACE_FILTER();
-	EXTRACT_STRING2("ACTION", "ACTION", 1);
+	EXTRACT_STRING2(NAME_MSGKEY_ACTION, "ACTION", 1);
 	if(NULL != meta2_filter_ctx_get_param(ctx, "ACTION")) {
 		meta2_filter_ctx_add_param(ctx, "BODY_OPT", "OK");
 	}
@@ -658,18 +588,6 @@ meta2_filter_extract_body_chunk_info(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_header_string_K_f1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	gchar buf[512];
-
-	TRACE_FILTER();
-	EXTRACT_STRING2("field_1", "K", 0);
-	return FILTER_OK;
-}
-
-int
 meta2_filter_extract_header_append(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
@@ -677,7 +595,7 @@ meta2_filter_extract_header_append(struct gridd_filter_ctx_s *ctx,
 	gchar buf[512];
 
 	TRACE_FILTER();
-	EXTRACT_STRING2("APPEND", "APPEND", 1);
+	EXTRACT_STRING2(NAME_MSGKEY_APPEND, "APPEND", 1);
 	return FILTER_OK;
 }
 
@@ -711,19 +629,7 @@ meta2_filter_extract_header_string_V_f2(struct gridd_filter_ctx_s *ctx,
 	gchar buf[1024];
 
 	TRACE_FILTER();
-	EXTRACT_STRING2("field_2", "V", 0);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_opt_header_string_V_f2(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	gchar buf[1024];
-
-	TRACE_FILTER();
-	EXTRACT_STRING2("field_2", "V", 1);
+	EXTRACT_STRING2(M2V1_KEY_FIELD_TWO, "V", 0);
 	return FILTER_OK;
 }
 
@@ -750,29 +656,29 @@ int
 meta2_filter_extract_header_forceflag(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	return _extract_header_flag("FORCE", ctx, reply);
+	return _extract_header_flag(NAME_MSGKEY_FORCE, ctx, reply);
 }
 
 int
 meta2_filter_extract_header_purgeflag(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	return _extract_header_flag("PURGE", ctx, reply);
+	return _extract_header_flag(NAME_MSGKEY_PURGE, ctx, reply);
 }
 
 int
 meta2_filter_extract_header_flushflag(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	return _extract_header_flag("FLUSH", ctx, reply);
+	return _extract_header_flag(NAME_MSGKEY_FLUSH, ctx, reply);
 }
 
 int
 meta2_filter_extract_header_localflag(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	int ret = _extract_header_flag("LOCAL", ctx, reply);
-	if (meta2_filter_ctx_get_param(ctx, "LOCAL")) {
+	int ret = _extract_header_flag(NAME_MSGKEY_LOCAL, ctx, reply);
+	if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LOCAL)) {
 		/* This is a hack to avoid changing every meta2_backend.h
 		 * function prototype. */
 		struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
@@ -790,7 +696,7 @@ meta2_filter_extract_header_flags32(struct gridd_filter_ctx_s *ctx,
 	gchar strflags[32];
 
 	TRACE_FILTER();
-	e = message_extract_flags32(reply->request, "FLAGS", FALSE, &flags);
+	e = message_extract_flags32(reply->request, NAME_MSGKEY_FLAGS, FALSE, &flags);
 	if (NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
@@ -930,78 +836,6 @@ meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
 	EXTRACT_OPT(M2_KEY_MARKER);
 	EXTRACT_OPT(M2_KEY_MARKER_END);
 	EXTRACT_OPT(M2_KEY_MAX_KEYS);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_cid_dst(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	return _meta2_filter_extract_cid(ctx, reply, "DST_CID");
-}
-
-int
-meta2_filter_extract_header_cid_src(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	GError *err;
-	container_id_t cid;
-	gchar strcid[STRLEN_CONTAINERID];
-
-	err = message_extract_cid(reply->request, "SRC_CID", &cid);
-	if (err != NULL) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	container_id_to_string(cid, strcid, sizeof(strcid));
-	meta2_filter_ctx_add_param(ctx, "SRC_CID", strcid);
-
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_addr_src(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	gint rc;
-	void *f = NULL;
-	size_t f_size = 0;
-	GSList *l = NULL;
-	GError *err = NULL;
-	addr_info_t *ai = NULL;
-
-	TRACE_FILTER();
-
-	rc = message_get_field(reply->request, "SRC_ADDR", 8, &f, &f_size, &err);
-	if (rc == 0) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-	if (rc < 0) {
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_INTERNAL_ERROR, "Invalid peer address"));
-		return FILTER_KO;
-	}
-
-	if (0 >= addr_info_unmarshall(&l, f, &f_size, &err)) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	if (!l) {
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST, "empty peer address list"));
-		return FILTER_KO;
-	}
-
-	ai = g_malloc0(sizeof(addr_info_t));
-
-	memcpy(ai, l->data, sizeof(addr_info_t));
-	meta2_filter_ctx_set_input_udata(ctx, ai, (GDestroyNotify)g_free);
-	g_slist_foreach(l, addr_info_gclean, NULL);
-	g_slist_free(l);
-
 	return FILTER_OK;
 }
 

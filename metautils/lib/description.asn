@@ -175,8 +175,7 @@ BEGIN
 		aliasName    [0] PrintableString,
 		aliasVersion [1] INTEGER,
 		key          [2] PrintableString,
-		value        [3] OCTET STRING,
-		deleted      [4] BOOLEAN
+		value        [3] OCTET STRING
 	}
 
 	M2V2Snapshot ::= SEQUENCE {

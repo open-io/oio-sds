@@ -149,9 +149,11 @@ dir2macro("GCLUSTER_CONFIG_FILE_PATH")
 dir2macro("GCLUSTER_CONFIG_DIR_PATH")
 dir2macro("GCLUSTER_CONFIG_LOCAL_PATH")
 dir2macro("GCLUSTER_AGENT_SOCK_PATH")
+
 dir2macro("GS_CONFIG_EVENT_DELAY")
 dir2macro("GS_CONFIG_EVENT_REFRESH")
 dir2macro("GS_CONFIG_NSINFO_REFRESH")
+
 dir2macro("PROXYD_PREFIX")
 dir2macro("PROXYD_PATH_MAXLEN")
 dir2macro("PROXYD_DEFAULT_TTL_CSM0")
@@ -161,8 +163,10 @@ dir2macro("PROXYD_DEFAULT_MAX_SERVICES")
 dir2macro("PROXYD_DIR_TIMEOUT_SINGLE")
 dir2macro("PROXYD_DIR_TIMEOUT_GLOBAL")
 dir2macro("PROXYD_HEADER_PREFIX")
+
 dir2macro("DAEMON_DEFAULT_TIMEOUT_READ")
 dir2macro("DAEMON_DEFAULT_TIMEOUT_ACCEPT")
+
 dir2macro("SQLX_ADMIN_PREFIX_SYS")
 dir2macro("SQLX_ADMIN_PREFIX_USER")
 dir2macro("SQLX_ADMIN_INITFLAG")
@@ -171,6 +175,18 @@ dir2macro("SQLX_ADMIN_REFERENCE")
 dir2macro("SQLX_ADMIN_BASENAME")
 dir2macro("SQLX_ADMIN_BASETYPE")
 dir2macro("SQLX_ADMIN_NAMESPACE")
+
+dir2macro("M2V2_ADMIN_PREFIX_SYS")
+dir2macro("M2V2_ADMIN_PREFIX_USER")
+dir2macro("M2V2_ADMIN_VERSION")
+dir2macro("M2V2_ADMIN_QUOTA")
+dir2macro("M2V2_ADMIN_SIZE")
+dir2macro("M2V2_ADMIN_VERSIONING_POLICY")
+dir2macro("M2V2_ADMIN_STORAGE_POLICY")
+dir2macro("M2V2_ADMIN_KEEP_DELETED_DELAY")
+dir2macro("M2V2_CLIENT_TIMEOUT")
+
+dir2macro("META2_INIT_FLAG")
 
 ###-------------------------------------------------------------------------###
 
@@ -348,7 +364,6 @@ if (DOXYGEN_FOUND)
 endif ()
 
 add_subdirectory(./client/c/lib)
-add_subdirectory(./client/c/metacd_module)
 add_subdirectory(./client/c/tools)
 add_subdirectory(./cluster/agent)
 add_subdirectory(./cluster/conscience)

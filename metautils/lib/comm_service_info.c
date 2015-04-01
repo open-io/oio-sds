@@ -256,20 +256,6 @@ DEFINE_UNMARSHALLER(service_info_unmarshall);
 DEFINE_MARSHALLER_GBA(service_info_marshall_gba);
 DEFINE_BODY_MANAGER(service_info_concat, service_info_unmarshall);
 
-GSList *
-service_info_sequence_request(struct metacnx_ctx_s *cnx, GError ** error,
-    const gchar * req_name, GByteArray * body, ...)
-{
-	GSList *result;
-	va_list args;
-
-	va_start(args, body);
-	result = abstract_sequence_request(cnx, error, &seq_descriptor, req_name, body, args);
-	va_end(args);
-
-	return result;
-}
-
 static int
 func_write(const void *b, gsize bSize, void *key)
 {

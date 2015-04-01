@@ -66,7 +66,7 @@ add_library(meta2v2remote SHARED
 		meta2_macros.h)
 
 target_link_libraries(meta2v2remote
-		meta2v2utils metacomm metautils
+		meta2v2utils metautils
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 add_library(meta2v2 SHARED
@@ -98,7 +98,7 @@ add_executable(meta2_server
 bin_prefix(meta2_server -meta2-server)
 
 target_link_libraries(meta2_server meta2v2
-        hcresolve metacomm metautils gridcluster server
+        hcresolve metautils gridcluster server
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 add_executable(test_meta2_backend test_meta2_backend.c)

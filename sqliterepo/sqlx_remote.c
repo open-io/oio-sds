@@ -46,7 +46,7 @@ struct asn_TYPE_descriptor_s;
 static MESSAGE
 make_request(const gchar *rn, struct sqlx_name_s *name)
 {
-	MESSAGE req = message_create_request(NULL, NULL, rn, NULL, NULL);
+	MESSAGE req = message_create_named(rn);
 	message_add_fields_str(req,
 				"BASE_NAME", name->base,
 				"BASE_TYPE", name->type,
@@ -318,7 +318,7 @@ sqlx_pack_DISABLE_DISABLED(struct sqlx_name_s *name)
 }
 
 GByteArray *
-sqlx_pack_PROPGET(struct sqlx_name_s *name, gchar **keys)
+sqlx_pack_PROPGET(struct sqlx_name_s *name, const gchar * const *keys)
 {
 	GSList *names = metautils_array_to_list((void**)keys);
 	GByteArray *body = strings_marshall_gba(names, NULL);
@@ -333,7 +333,7 @@ sqlx_pack_PROPGET(struct sqlx_name_s *name, gchar **keys)
 }
 
 GByteArray *
-sqlx_pack_PROPDEL(struct sqlx_name_s *name, gchar **keys)
+sqlx_pack_PROPDEL(struct sqlx_name_s *name, const gchar * const *keys)
 {
 	GSList *names = metautils_array_to_list((void**)keys);
 	GByteArray *body = strings_marshall_gba(names, NULL);
@@ -358,10 +358,10 @@ sqlx_pack_PROPSET_pairs(struct sqlx_name_s *name, GSList *pairs)
 }
 
 GByteArray *
-sqlx_pack_PROPSET_tab(struct sqlx_name_s *name, gchar **kv)
+sqlx_pack_PROPSET_tab(struct sqlx_name_s *name, gchar const * const *kv)
 {
 	GSList  *pairs = NULL;
-	for (gchar **p=kv; p && *p && *(p+1) ;p+=2) {
+	for (const gchar * const *p=kv; p && *p && *(p+1) ;p+=2) {
 		struct key_value_pair_s *tmp = key_value_pair_create (
 				*p, (guint8*)*(p+1), strlen(*(p+1)));
 		pairs = g_slist_prepend (pairs, tmp);

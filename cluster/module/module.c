@@ -1004,7 +1004,7 @@ handler_get_service(struct request_context_s *req_ctx)
 	sg.full = (0 < message_get_field(req_ctx->request,"FULL",4, &data, &data_size, NULL));
 
 	/* get the service type's name */
-	if (0 >= message_get_field(req_ctx->request, BUFLEN("TYPENAME"), &data, &data_size, &(reply_ctx.warning))) {
+	if (0 >= message_get_field(req_ctx->request, BUFLEN(NAME_MSGKEY_TYPENAME), &data, &data_size, &(reply_ctx.warning))) {
 		GSETCODE(&(reply_ctx.warning), CODE_BAD_REQUEST, "Bad request: no/invalid TYPENAME field");
 	} else {
 		gchar **array_types = buffer_split(data, data_size, ",", 0);
@@ -1303,7 +1303,7 @@ handler_rm_service(struct request_context_s *req_ctx)
 	data_size = 0;
 
 	/*Get the body and unpack it as a list of services */
-	if (0 < message_get_field(req_ctx->request,"TYPENAME",sizeof("TYPENAME")-1,&data,&data_size, NULL)) {
+	if (0 < message_get_field(req_ctx->request, NAME_MSGKEY_TYPENAME,sizeof(NAME_MSGKEY_TYPENAME)-1,&data,&data_size, NULL)) {
 		gchar str_type[LIMIT_LENGTH_SRVTYPE+1];
 		struct conscience_srvtype_s *srvtype;
 

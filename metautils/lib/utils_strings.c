@@ -24,6 +24,7 @@ License along with this library.
 #include <string.h>
 
 #include "metautils_bits.h"
+#include "metautils_macros.h"
 #include "metautils_errors.h"
 #include "metautils_strings.h"
 #include "metautils_containers.h"
@@ -305,5 +306,17 @@ metautils_str_ishexa(const gchar *s, gsize slen)
 			return FALSE;
 	}
 	return !*s && !slen;
+}
+
+gchar **
+metautils_strv_append (gchar **tab, gchar *s)
+{
+	EXTRA_ASSERT(tab != NULL);
+	EXTRA_ASSERT(s != NULL);
+	gsize l = g_strv_length (tab);
+	tab = g_try_realloc (tab, (l+2) * sizeof(gchar*));
+	tab[l] = s;
+	tab[l+1] = NULL;
+	return tab;
 }
 

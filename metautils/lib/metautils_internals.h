@@ -27,27 +27,12 @@ License along with this library.
 # include "metautils.h"
 # include "metacomm.h"
 
-/**
- * @param in
- * @param out
- * @return
- */
 typedef gboolean(*abstract_converter_f) (const void *in, void *out);
 
-/**
- * @param asn
- * @param only_content
- */
 typedef void (*abstract_asn_cleaner_f) (void *asn, gboolean only_content);
 
-/**
- * @param api
- */
 typedef void (*abstract_api_cleaner_f) (void *api);
 
-/**
- *
- */
 struct abstract_sequence_handler_s
 {
 	size_t asn1_size;                     /**< sizeof() on the ASN structure */
@@ -60,36 +45,13 @@ struct abstract_sequence_handler_s
 	const gchar const *type_name;         /**< Type name used in error messages */
 };
 
-/**
- * @param h
- * @param list
- * @param asn1_encoded
- * @param asn1_encoded_size
- * @param err
- * @return
- */
 gssize abstract_sequence_unmarshall(const struct abstract_sequence_handler_s *h,
     GSList ** list, const void *asn1_encoded, gsize asn1_encoded_size,
 	GError ** err);
 
-/**
- * @param h
- * @param api_sequence
- * @param err
- * @return
- */
 GByteArray *abstract_sequence_marshall(const struct abstract_sequence_handler_s *h,
     GSList * api_sequence, GError ** err);
 
-/**
- * @param cnx
- * @param error
- * @param h
- * @param req
- * @param body
- * @param args
- * @return
- */
 GSList *abstract_sequence_request(struct metacnx_ctx_s *cnx, GError ** error,
     const struct abstract_sequence_handler_s *h, const gchar * req,
 	GByteArray * body, va_list args);

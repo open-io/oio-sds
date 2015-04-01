@@ -22,13 +22,13 @@ add_library(meta1v2 SHARED
 
 set_target_properties(meta1v2 PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(meta1v2
-		meta0utils metacomm metautils meta2remote gridcluster meta0remote sqliterepo
+		meta0utils metautils meta2remote gridcluster meta0remote sqliterepo
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 add_library(meta1remote SHARED common.c meta1_remote.c meta1_remote.h)
 set_target_properties(meta1remote PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(meta1remote
-		metautils metacomm
+		metautils
 		${GLIB2_LIBRARIES})
 
 add_executable(meta1_backend_test meta1_backend_test.c)
@@ -38,7 +38,7 @@ target_link_libraries(meta1_backend_test
 add_executable(meta1_server meta1_gridd_dispatcher.c meta1_server.c)
 bin_prefix(meta1_server -meta1-server)
 target_link_libraries(meta1_server meta1v2
-        meta0utils metacomm metautils gridcluster server sqliterepo
+        meta0utils metautils gridcluster server sqliterepo
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
@@ -48,7 +48,7 @@ target_link_libraries(test_m1v2_list_refs
 
 add_executable(meta1_client meta1_client.c)
 bin_prefix(meta1_client -meta1-client)
-target_link_libraries(meta1_client metautils metacomm meta1remote)
+target_link_libraries(meta1_client metautils meta1remote)
 
 install(FILES
 			meta1_backend.h

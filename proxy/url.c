@@ -17,11 +17,13 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-enum {
+enum
+{
 	FLAG_NOEMPTY = 0x0001,
 };
 
-struct req_uri_s {
+struct req_uri_s
+{
 	const gchar *original;
 	gchar *path;
 	gchar *query;
@@ -29,7 +31,8 @@ struct req_uri_s {
 	gchar **query_tokens;
 };
 
-struct req_args_s {
+struct req_args_s
+{
 	struct req_uri_s *req_uri; // parsed URI
 	struct path_matching_s **matchings; // matched handlers
 	struct hc_url_s *url;

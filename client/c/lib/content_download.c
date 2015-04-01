@@ -260,9 +260,7 @@ reload_and_agregate_chunks(GSList **result, gs_content_t *content, gs_error_t **
 		*result = NULL;
 	}
 
-	gs_decache_chunks_in_metacd(content);
-
-	if (!gs_content_reload(content, TRUE, TRUE, err))
+	if (!gs_content_reload(content, err))
 		return FALSE;
 	if (!agregate_chunks(result, content, err))
 		return FALSE;
@@ -340,7 +338,7 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 
 	/* (lazy) reload of the content's chunks */
 	if (!content->chunk_list) {
-		if (!gs_content_reload_with_filtered(content, TRUE, TRUE, &local_filtered, &local_beans, err)) {
+		if (!gs_content_reload_with_filtered(content, &local_filtered, &local_beans, err)) {
 			GSERRORSET(err,"Cannot get the chunks of '%s'", content->info.path);
 			return GS_ERROR;
 		}

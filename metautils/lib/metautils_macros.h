@@ -39,10 +39,27 @@ License along with this library.
 # endif
 
 /* Some well known service types */
+
 # define NAME_SRVTYPE_META0 "meta0"
 # define NAME_SRVTYPE_META1 "meta1"
 # define NAME_SRVTYPE_META2 "meta2"
 # define NAME_SRVTYPE_RAWX  "rawx"
+
+# ifndef M2V2_CLIENT_TIMEOUT
+#  define M2V2_CLIENT_TIMEOUT 10.0
+# endif
+
+# ifndef M1V2_CLIENT_TIMEOUT
+#  define M1V2_CLIENT_TIMEOUT 10.0
+# endif
+
+# ifndef M0V2_CLIENT_TIMEOUT
+#  define M0V2_CLIENT_TIMEOUT 10.0
+# endif
+
+# ifndef CS_CLIENT_TIMEOUT
+#  define CS_CLIENT_TIMEOUT 10.0
+# endif
 
 /* Some well known service tags macro names */
 # define NAME_MACRO_SPACE_NAME "stat.space"
@@ -76,22 +93,42 @@ License along with this library.
 #define REPSEQ_ERROR         0X00000002
 #define REPSEQ_BODYMANDATORY 0x00000004
 
-#define NAME_MSGNAME_METAREPLY "REPLY"
-#define NAME_MSGKEY_STATUS "STATUS"
-#define NAME_MSGKEY_MESSAGE "MSG"
-#define NAME_MSGKEY_FLAG "FLAG"
-#define NAME_MSGKEY_PREFIX "PREFIX"
-#define NAME_MSGKEY_WARNING "WARNING"
-#define NAME_MSGKEY_TIMESTAMP "TIMESTAMP"
-#define NAME_MSGKEY_CONTAINERID "CONTAINER_ID"
-#define NAME_MSGKEY_VIRTUALNAMESPACE "VIRTUAL_NAMESPACE"
-#define NAME_MSGKEY_NAMESPACE "NAMESPACE"
-#define NAME_MSGKEY_SRVTYPE "SRVTYPE"
-#define NAME_MSGKEY_CONTAINERNAME "CONTAINER_NAME"
-#define NAME_MSGKEY_CONTENTPATH "CONTENT_PATH"
-#define NAME_MSGKEY_CONTENTLENGTH "CONTENT_LENGTH"
-#define NAME_MSGKEY_CHUNKID "CHUNKID"
-#define NAME_MSGKEY_STGPOLICY "STORAGE_POLICY"
-#define NAME_MSGKEY_M1_MASTER "M1_MASTER"
+#define NAME_MSGNAME_METAREPLY         "REPLY"
+#define NAME_MSGKEY_STATUS             "STATUS"
+#define NAME_MSGKEY_MESSAGE            "MSG"
+#define NAME_MSGKEY_HCURL              "HC_URL"
+#define NAME_MSGKEY_URL                "URL"
+#define NAME_MSGKEY_METAURL            "METAURL"
+#define NAME_MSGKEY_ACTION             "ACTION"
+#define NAME_MSGKEY_CHECKONLY          "CHECKONLY"
+#define NAME_MSGKEY_FLAG               "FLAG"
+#define NAME_MSGKEY_FLAGS              "FLAGS"
+#define NAME_MSGKEY_FLUSH              "FLUSH"
+#define NAME_MSGKEY_FULL               "FULL"
+#define NAME_MSGKEY_SPARE              "SPARE"
+#define NAME_MSGKEY_FORCE              "FORCE"
+#define NAME_MSGKEY_PURGE              "PURGE"
+#define NAME_MSGKEY_LOCAL              "LOCAL"
+#define NAME_MSGKEY_APPEND             "APPEND"
+#define NAME_MSGKEY_PREFIX             "PREFIX"
+#define NAME_MSGKEY_REPLICAS           "REPLICAS"
+#define NAME_MSGKEY_NODIST             "NODIST"
+#define NAME_MSGKEY_NOCHECK            "NOCHECK"
+#define NAME_MSGKEY_WARNING            "WARNING"
+#define NAME_MSGKEY_TIMESTAMP          "TIMESTAMP"
+#define NAME_MSGKEY_CONTAINERID        "CONTAINER_ID"
+#define NAME_MSGKEY_VIRTUALNAMESPACE   "VIRTUAL_NAMESPACE"
+#define NAME_MSGKEY_NAMESPACE          "NAMESPACE"
+#define NAME_MSGKEY_SRVTYPE            "SRVTYPE"
+#define NAME_MSGKEY_TYPENAME           "TYPENAME"
+#define NAME_MSGKEY_CONTAINERNAME      "CONTAINER_NAME"
+#define NAME_MSGKEY_CONTENTPATH        "CONTENT_PATH"
+#define NAME_MSGKEY_CONTENTLENGTH      "CONTENT_LENGTH"
+#define NAME_MSGKEY_CHUNKID            "CHUNKID"
+#define NAME_MSGKEY_STGPOLICY          "STORAGE_POLICY"
+#define NAME_MSGKEY_VERPOLICY          "VERSION_POLICY"
+#define NAME_MSGKEY_M1_MASTER          "M1_MASTER"
+#define NAME_MSGKEY_TRUNCATED          "TRUNCATED"
+#define NAME_MSGKEY_NEXTMARKER         "NEXT_MARKER"
 
 #endif /*OIO_SDS__metautils__lib__metautils_macros_h*/

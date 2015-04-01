@@ -313,9 +313,6 @@ gs_grid_storage_free(gs_grid_storage_t * gs)
 	if (gs->direct_resolver)
 		resolver_direct_free(gs->direct_resolver);
 
-	if (gs->metacd_resolver)
-		resolver_metacd_free(gs->metacd_resolver);
-
 	if (gs->full_vns)
 		free(gs->full_vns);
 	if (gs->physical_namespace)
@@ -399,7 +396,7 @@ gs_grid_storage_set_timeout(gs_grid_storage_t * gs, gs_timeout_t to, int val, gs
 	if ((int)to < (int)GS_TO_RAWX_CNX) {
 		int i, ok = ~0;
 
-		for (i = GS_TO_RAWX_CNX; i <= GS_TO_MCD_OP; i++) {
+		for (i = GS_TO_RAWX_CNX; i <= GS_TO_M2_OP; i++) {
 			ok &= gs_grid_storage_set_timeout(gs, i, to, NULL);
 			if (!ok) {
 				GSERRORSET(err, "<%s> some timeout haven't been set", __FUNCTION__);
@@ -450,12 +447,6 @@ gs_grid_storage_set_timeout(gs_grid_storage_t * gs, gs_timeout_t to, int val, gs
 		case GS_TO_M2_OP:
 			gs->timeout.m2.op = val;
 			return GS_OK;
-		case GS_TO_MCD_CNX:
-			gs->metacd_resolver->timeout.cnx = val;
-			return GS_OK;
-		case GS_TO_MCD_OP:
-			gs->metacd_resolver->timeout.op = val;
-			return GS_OK;
 		}
 	}
 
@@ -470,11 +461,11 @@ gs_grid_storage_get_timeout(gs_grid_storage_t * gs, gs_timeout_t to)
 		WARN("invalid parameter (%s)", "no client");
 		return -1;
 	}
-	if ((int)to < (int)GS_TO_RAWX_CNX || to > GS_TO_MCD_OP) {
+	if ((int)to < (int)GS_TO_RAWX_CNX || to > GS_TO_M2_OP) {
 		WARN("invalid parameter (%s)", "bad timeout");
 		return -1;
 	}
-	if (!gs->direct_resolver || !gs->metacd_resolver) {
+	if (!gs->direct_resolver) {
 		WARN("invalid parameter (%s)", "bad client");
 		return -1;
 	}
@@ -496,10 +487,6 @@ gs_grid_storage_get_timeout(gs_grid_storage_t * gs, gs_timeout_t to)
 		return gs->timeout.m2.cnx;
 	case GS_TO_M2_OP:
 		return gs->timeout.m2.op;
-	case GS_TO_MCD_CNX:
-		return gs->metacd_resolver->timeout.cnx;
-	case GS_TO_MCD_OP:
-		return gs->metacd_resolver->timeout.op;
 	}
 
 	WARN("No such timeout value '%d'", to);

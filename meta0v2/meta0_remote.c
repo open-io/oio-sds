@@ -31,159 +31,91 @@ License along with this library.
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 
-#include "./meta0_remote.h"
+#include "meta0_remote.h"
+#include "internals.h"
+
+static gboolean
+_m0_remote_no_return (addr_info_t *m0a, gint ms, GByteArray *req, GError **err)
+{
+	if (!m0a) {
+		GSETCODE(err, CODE_BAD_REQUEST, "Invalid meta0 address");
+		return FALSE;
+	}
+
+	gchar addr[STRLEN_ADDRINFO];
+	addr_info_to_string (m0a, addr, sizeof(addr));
+
+	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
+	GError *e = gridd_client_exec (addr, ms>0 ? ms/1000.0 : 60.0, req);
+	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
+
+	g_byte_array_unref (req);
+	if (!e)
+		return TRUE;
+	g_error_transmit(err, e);
+	return FALSE;
+}
+
+static GSList *
+_m0_remote_m0info (addr_info_t *m0a, gint ms, GByteArray *req, GError **err)
+{
+	if (!m0a) {
+		GSETCODE(err, CODE_BAD_REQUEST, "Invalid meta0 address");
+		return FALSE;
+	}
+
+	gchar addr[STRLEN_ADDRINFO];
+	addr_info_to_string (m0a, addr, sizeof(addr));
+
+	GSList *result = NULL;
+	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
+	GError *e = gridd_client_exec_and_decode (addr, ms>0 ? ms/1000.0 : 60.0, req,
+			&result, meta0_info_unmarshall);
+	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
+
+	g_byte_array_unref (req);
+	if (!e)
+		return result;
+
+	g_slist_free_full (result, (GDestroyNotify)meta0_info_clean);
+	g_error_transmit(err, e);
+	return FALSE;
+}
+
+/* ------------------------------------------------------------------------- */
 
 GSList *
-meta0_remote_get_meta1_all(addr_info_t * meta0, gint ms, GError ** err)
+meta0_remote_get_meta1_all(addr_info_t *m0a, gint ms, GError ** err)
 {
-	GSList *result = NULL;
-	GError *e = NULL;
-
-	gboolean on_reply(gpointer c1, MESSAGE reply) {
-		void *body = NULL;
-		gsize bsize = 0;
-		(void) c1;
-		if (0 < message_get_BODY(reply, &body, &bsize, NULL)) {
-			if (0 >= meta0_info_unmarshall(&result, body, &bsize, &e)) {
-				GSETERROR(err, "Decoder error (meta0_info_t)");
-				return FALSE;
-			}
-		}
-		return TRUE;
-	}
-
-	GByteArray *gba = message_marshall_gba_and_clean(message_create_request(
-				NULL, NULL, NAME_MSGNAME_M0_GETALL, NULL, NULL));
-
-	struct gridd_client_s *client = gridd_client_create_empty();
-	e = gridd_client_request(client, gba, NULL, on_reply);
-	g_byte_array_unref(gba);
-	gba = NULL;
-
-	if (!e) {
-		if (!(e = gridd_client_connect_addr(client, meta0))) {
-			gridd_client_set_timeout(client, ms, ms);
-			gridd_client_start(client);
-			if (!(e = gridd_client_loop(client)))
-				e = gridd_client_error(client);
-		}
-	}
-
-	if (e) {
-		if (result) {
-			g_slist_foreach(result, meta0_info_gclean, NULL);
-			g_slist_free(result);
-			result = NULL;
-		}
-		g_error_transmit(err, e);
-	}
-
-	gridd_client_free(client);
-	return result;
+	GByteArray *req = message_marshall_gba_and_clean (
+			message_create_named (NAME_MSGNAME_M0_GETALL));
+	return _m0_remote_m0info (m0a, ms, req, err);
 }
 
 GSList*
 meta0_remote_get_meta1_one(addr_info_t *m0a, gint ms, const guint8 *prefix,
 		GError ** err)
 {
-	GSList *result = NULL;
-	GError *e = NULL;
-
-	gboolean on_reply(gpointer c1, MESSAGE reply) {
-		void *body = NULL;
-		gsize bsize = 0;
-		(void) c1;
-		if (0 < message_get_BODY(reply, &body, &bsize, NULL)) {
-			if (0 >= meta0_info_unmarshall(&result, body, &bsize, err)) {
-				GSETERROR(err, "Decoder error (meta0_info_t)");
-				return FALSE;
-			}
-		}
-		return TRUE;
-	}
-
 	GByteArray *hdr = g_byte_array_append(g_byte_array_new(), prefix, 2);
 	GByteArray *req = message_marshall_gba_and_clean(message_create_request(
 			NULL, NULL, NAME_MSGNAME_M0_GETONE, NULL,
-			"PREFIX", hdr,
-			NULL));
+			NAME_MSGKEY_PREFIX, hdr, NULL));
 	g_byte_array_unref(hdr);
-
-	struct gridd_client_s *client = gridd_client_create_empty();
-	e = gridd_client_request(client, req, NULL, on_reply);
-	g_byte_array_unref(req);
-	req = NULL;
-
-	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
-
-	if (!e) {
-		if (!(e = gridd_client_connect_addr(client, m0a))) {
-			gridd_client_set_timeout(client, ms, ms);
-			gridd_client_start(client);
-			if (!(e = gridd_client_loop(client)))
-				e = gridd_client_error(client);
-		}
-	}
-
-	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
-
-	if (e) {
-		if (result) {
-			g_slist_foreach(result, meta0_info_gclean, NULL);
-			g_slist_free(result);
-			result = NULL;
-		}
-		g_error_transmit(err, e);
-	}
-
-	gridd_client_free(client);
-	return result;
+	return _m0_remote_m0info (m0a, ms, req, err);
 }
 
 gint
 meta0_remote_cache_refresh(addr_info_t *m0a, gint ms, GError ** err)
 {
-	GError *e = NULL;
-
-	struct gridd_client_s *client = gridd_client_create_empty();
-
-	GByteArray *gba = message_marshall_gba_and_clean(message_create_request(
-				NULL, NULL, NAME_MSGNAME_M0_RELOAD, NULL, NULL));
-	e = gridd_client_request(client, gba, NULL, NULL);
-	g_byte_array_unref(gba);
-	gba = NULL;
-
-	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
-
-	if (!e) {
-		if (!(e = gridd_client_connect_addr(client, m0a))) {
-			gridd_client_set_timeout(client, ms, ms);
-			gridd_client_start(client);
-			if (!(e = gridd_client_loop(client)))
-				e = gridd_client_error(client);
-		}
-	}
-
-	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
-
-	if (e) {
-		g_error_transmit(err, e);
-		return FALSE;
-	}
-
-	return TRUE;
+	GByteArray *gba = message_marshall_gba_and_clean (
+			message_create_named (NAME_MSGNAME_M0_RELOAD));
+	return _m0_remote_no_return (m0a, ms, gba, err);
 }
 
 gint
 meta0_remote_fill(addr_info_t *m0a, gint ms, gchar **urls,
 		guint nbreplicas, GError **err)
 {
-	MESSAGE request = NULL;
-	GError *local_err = NULL;
-	struct gridd_client_s *client = NULL;
-	gchar target[64];
-	GByteArray *packed = NULL;
-
 	if (nbreplicas < 1) {
 		GSETERROR(err, "Too few replicas");
 		return FALSE;
@@ -196,191 +128,80 @@ meta0_remote_fill(addr_info_t *m0a, gint ms, gchar **urls,
 		GSETERROR(err, "Too many replicas for the URL's set");
 		return FALSE;
 	}
-	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 
-	request = message_create();
-	message_set_NAME(request, NAME_MSGNAME_M0_FILL, sizeof(NAME_MSGNAME_M0_FILL)-1, NULL);
-	message_add_field_strint64(request, "REPLICAS", nbreplicas);
-	do {
-		gchar *body = g_strjoinv("\n", urls);
-		message_set_BODY(request, body, strlen(body), NULL);
-		g_free(body);
-	} while (0);
-
-	addr_info_to_string(m0a, target, sizeof(target));
-	packed = message_marshall_gba(request, NULL);
-	client = gridd_client_create(target, packed, NULL, NULL);
-	if ( ms > 0 ) {
-		gridd_client_set_timeout(client, ms, ms);
-	}
-
-	gridd_client_start(client);
-
-	if((local_err = gridd_client_loop(client)) != NULL)
-		goto end_label;
-	if((local_err = gridd_client_error(client)) != NULL)
-		goto end_label;
-
-end_label:
-	message_destroy(request);
-	if (packed) 
-		g_byte_array_free(packed, TRUE);
-
-	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
-
-	if (!local_err)
-		return TRUE;
-
-	*err = local_err;
-	return FALSE;
+	MESSAGE request = message_create_named(NAME_MSGNAME_M0_FILL);
+	message_add_field_strint64(request, NAME_MSGKEY_REPLICAS, nbreplicas);
+	gchar *body = g_strjoinv("\n", urls);
+	message_set_BODY(request, body, strlen(body), NULL);
+	g_free(body);
+	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
 
 gint
 meta0_remote_fill_v2(addr_info_t *m0a, gint ms,
                 guint nbreplicas, gboolean nodist, GError **err)
 {
-	MESSAGE request = NULL;
-	GError *local_err = NULL;
-	struct gridd_client_s *client = NULL;
-	gchar target[64];
-	GByteArray *packed = NULL;
-
 	if (nbreplicas < 1) {
 		GSETERROR(err, "Too few replicas");
 		return FALSE;
 	}
 
-	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
-
-	request = message_create();
-	message_set_NAME(request, NAME_MSGNAME_M0_V2_FILL, sizeof(NAME_MSGNAME_M0_V2_FILL)-1, NULL);
-	message_add_field_strint64(request, "REPLICAS", nbreplicas);
-	message_add_field_strint(request, "NODIST", nodist);
-
-	addr_info_to_string(m0a, target, sizeof(target));
-	packed = message_marshall_gba(request, NULL);
-	client = gridd_client_create(target, packed, NULL, NULL);
-	if ( ms > 0 ) {
-		gridd_client_set_timeout(client, ms, ms);
-	}
-
-	gridd_client_start(client);
-
-	if((local_err = gridd_client_loop(client)) != NULL)
-		goto end_label;
-	if((local_err = gridd_client_error(client)) != NULL)
-		goto end_label;
-
-end_label:
-	message_destroy(request);
-	if (packed) 
-		g_byte_array_free(packed, TRUE);
-
-	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
-
-	if (!local_err)
-		return TRUE;
-
-	*err = local_err;
-	return FALSE;
+	MESSAGE request = message_create_named(NAME_MSGNAME_M0_V2_FILL);
+	message_add_field_strint64(request, NAME_MSGKEY_REPLICAS, nbreplicas);
+	message_add_field_strint(request, NAME_MSGKEY_NODIST, nodist);
+	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
 
 gint
 meta0_remote_assign(addr_info_t *m0a, gint ms, gboolean nocheck, GError **err)
 {
-        MESSAGE request = NULL;
-        GError *local_err = NULL;
-	struct gridd_client_s *client = NULL;
-	gchar target[64];
-	GByteArray *packed = NULL;
-
-	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
-
-	request = message_create();
-        message_set_NAME(request,NAME_MSGNAME_M0_ASSIGN,sizeof(NAME_MSGNAME_M0_ASSIGN)-1, NULL);
+	MESSAGE request = message_create_named(NAME_MSGNAME_M0_ASSIGN);
 	if (nocheck)
-		message_add_field(request, "NOCHECK", "yes", 3);
-	
-	addr_info_to_string(m0a, target, sizeof(target));
-	packed = message_marshall_gba(request, NULL);
-	client = gridd_client_create(target, packed, NULL, NULL);
-	if ( ms > 0 ) {
-		gridd_client_set_timeout(client, ms, ms);
-	}
-
-	gridd_client_start(client);
-
-	if((local_err = gridd_client_loop(client)) != NULL) {
-		goto end_label;
-	}
-	if((local_err = gridd_client_error(client)) != NULL)
-		goto end_label;
-
-end_label:
-	message_destroy(request);
-	if (packed) 
-		g_byte_array_free(packed, TRUE);
-
-	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
-	if (!local_err)
-		return TRUE;
-
-	*err = local_err;
-	return FALSE;
-}	
+		message_add_field(request, NAME_MSGKEY_NOCHECK, "yes", 3);
+	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
+}
 
 gint
 meta0_remote_disable_meta1(addr_info_t *m0a, gint ms, gchar **urls, gboolean nocheck, GError **err)
 {
-	MESSAGE request = NULL;
-	GError *local_err = NULL;
-	struct gridd_client_s *client = NULL;
-	gchar target[64];
-	GByteArray *packed = NULL;
-
 	if (!urls || !*urls) {
 		GSETERROR(err, "Too few URL's");
 		return FALSE;
 	}
 
-	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
-
-	request = message_create();
-	message_set_NAME(request, NAME_MSGNAME_M0_DISABLE_META1, sizeof(NAME_MSGNAME_M0_DISABLE_META1)-1, NULL);
+	MESSAGE request = message_create_named(NAME_MSGNAME_M0_DISABLE_META1);
 	if (nocheck)
-		message_add_field(request, "NOCHECK", "yes", 3);
-	do {
-		gchar *body = g_strjoinv("\n", urls);
-		message_set_BODY(request, body, strlen(body), NULL);
-		g_free(body);
-	} while (0);
-	addr_info_to_string(m0a, target, sizeof(target));
-	packed = message_marshall_gba(request, NULL);
-	client = gridd_client_create(target, packed, NULL, NULL);
-	if ( ms > 0 ) {
-		gridd_client_set_timeout(client, ms, ms);
+		message_add_field(request, NAME_MSGKEY_NOCHECK, "yes", 3);
+	gchar *body = g_strjoinv("\n", urls);
+	message_set_BODY(request, body, strlen(body), NULL);
+	g_free(body);
+	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
+}
+
+gint
+meta0_remote_destroy_meta1ref(addr_info_t *m0a, gint ms, gchar *urls, GError **err)
+{
+	if (!urls || !*urls) {
+		GSETERROR(err, "Too few URL's");
+		return FALSE;
 	}
 
-	gridd_client_start(client);
+	MESSAGE request = message_create_named(NAME_MSGNAME_M0_DESTROY_META1REF);
+	message_add_field(request, NAME_MSGKEY_METAURL, urls, strlen(urls));
+	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
+}
 
-	if ((local_err = gridd_client_loop(client)) != NULL)
-		goto end_label;
-	if ((local_err = gridd_client_error(client)) != NULL)
-		goto end_label;
+gint
+meta0_remote_destroy_meta0zknode(addr_info_t *m0a, gint ms, gchar *urls, GError **err)
+{
+	if (!urls || !*urls) {
+		GSETERROR(err, "Too few URL's");
+		return FALSE;
+	}
 
-end_label:
-	message_destroy(request);
-	if (packed)
-		g_byte_array_free(packed, TRUE);
-
-	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
-
-	if (!local_err)
-		return TRUE;
-
-	*err = local_err;
-	return FALSE;
-
+	MESSAGE request = message_create_named(NAME_MSGNAME_M0_DESTROY_META0ZKNODE);
+	message_add_field(request, NAME_MSGKEY_METAURL, urls, strlen(urls));
+	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
 
 gchar **
@@ -388,10 +209,8 @@ meta0_remote_get_meta1_info(addr_info_t *m0a, gint ms, GError **err)
 {
 	GError *local_err = NULL;
 	gchar **result = NULL;
-	MESSAGE request = NULL;
 	struct gridd_client_s *client = NULL;
 	gchar target[64];
-	GByteArray *packed = NULL;
 
 	gboolean on_reply(gpointer c1, MESSAGE reply) {
 		void *body = NULL;
@@ -423,27 +242,18 @@ meta0_remote_get_meta1_info(addr_info_t *m0a, gint ms, GError **err)
 		return TRUE;
 	}
 
+	MESSAGE request = message_create_named(NAME_MSGNAME_M0_GET_META1_INFO);
+	GByteArray *packed = message_marshall_gba_and_clean(request);
+
+	addr_info_to_string(m0a, target, sizeof(target));
+
 	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 
-	request = message_create_request(NULL, NULL, NAME_MSGNAME_M0_GET_META1_INFO, NULL, NULL);
-	addr_info_to_string(m0a, target, sizeof(target));
-	packed = message_marshall_gba(request, NULL);
 	client = gridd_client_create(target, packed, NULL, on_reply);
-	if ( ms > 0 ) {
+	if ( ms > 0 )
 		gridd_client_set_timeout(client, ms, ms);
-	}
-
-	gridd_client_start(client);
-
-	if((local_err = gridd_client_loop(client)) != NULL)
-		goto end_label;
-	if((local_err = gridd_client_error(client)) != NULL)
-		goto end_label;
-
-end_label:
-	message_destroy(request);
-	if (packed)
-		g_byte_array_free(packed, TRUE);
+	local_err = gridd_client_run (client);
+	g_byte_array_free(packed, TRUE);
 
 	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 
@@ -455,95 +265,5 @@ end_label:
 		}
 	}
 	return result;
-}
-
-gint
-meta0_remote_destroy_meta1ref(addr_info_t *m0a, gint ms, gchar *urls, GError **err)
-{
-	MESSAGE request = NULL;
-	GError *local_err = NULL;
-	struct gridd_client_s *client = NULL;
-	gchar target[64];
-	GByteArray *packed = NULL;
-
-	if (!urls || !*urls) {
-		GSETERROR(err, "Too few URL's");
-		return FALSE;
-	}
-
-	request = message_create();
-	message_set_NAME(request, NAME_MSGNAME_M0_DESTROY_META1REF, sizeof(NAME_MSGNAME_M0_DESTROY_META1REF)-1, NULL);
-	message_add_field(request, "METAURL", urls, strlen(urls));
-
-	addr_info_to_string(m0a, target, sizeof(target));
-	packed = message_marshall_gba(request, NULL);
-	client = gridd_client_create(target, packed, NULL, NULL);
-	if ( ms > 0 ) {
-		gridd_client_set_timeout(client, ms, ms);
-	}
-
-	gridd_client_start(client);
-
-	if((local_err = gridd_client_loop(client)) != NULL) {
-		goto end_label;
-	}
-	if((local_err = gridd_client_error(client)) != NULL)
-		goto end_label;
-
-end_label:
-	message_destroy(request);
-	if (packed) 
-		g_byte_array_free(packed, TRUE);
-
-	if (local_err) {
-		*err = local_err;
-		return FALSE;
-	}
-	return TRUE;
-}
-
-gint
-meta0_remote_destroy_meta0zknode(addr_info_t *m0a, gint ms, gchar *urls, GError **err)
-{
-	MESSAGE request = NULL;
-	GError *local_err = NULL;
-	struct gridd_client_s *client = NULL;
-	gchar target[64];
-	GByteArray *packed = NULL;
-
-	if (!urls || !*urls) {
-		GSETERROR(err, "Too few URL's");
-		return FALSE;
-	}
-
-	request = message_create();
-	message_set_NAME(request, NAME_MSGNAME_M0_DESTROY_META0ZKNODE, sizeof(NAME_MSGNAME_M0_DESTROY_META0ZKNODE)-1, NULL);
-	message_add_field(request, "METAURL", urls, strlen(urls));
-
-	addr_info_to_string(m0a, target, sizeof(target));
-	packed = message_marshall_gba(request, NULL);
-	client = gridd_client_create(target, packed, NULL, NULL);
-	if ( ms > 0 ) {
-		gridd_client_set_timeout(client, ms, ms);
-	}
-
-	gridd_client_start(client);
-
-	if((local_err = gridd_client_loop(client)) != NULL) {
-		goto end_label;
-	}
-	if((local_err = gridd_client_error(client)) != NULL)
-		goto end_label;
-
-end_label:
-	message_destroy(request);
-	if (packed) 
-		g_byte_array_free(packed, TRUE);
-
-	if (local_err) {
-		*err = local_err;
-		return FALSE;
-	}
-	return TRUE;
 }
 

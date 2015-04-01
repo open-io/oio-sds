@@ -28,15 +28,15 @@ License along with this library.
 
 static void
 meta1_container_request_common_v2 (MESSAGE m, const gchar *op, const container_id_t id,
-		const gchar *name, const gchar *virtual_namespace)
+		const gchar *name, const gchar *vns)
 {
 	gsize nameSize;
-	gsize virtualNsSize;
+	gsize vnsSize;
 
 	g_assert(m != NULL);
 
 	nameSize = name ? strlen(name) : 0;
-	virtualNsSize = virtual_namespace ? strlen(virtual_namespace) : 0;
+	vnsSize = vns ? strlen(vns) : 0;
 	message_set_NAME (m, op, strlen(op), NULL);
 
 	if (id!=NULL || name!=NULL) {
@@ -44,15 +44,15 @@ meta1_container_request_common_v2 (MESSAGE m, const gchar *op, const container_i
 		if (id)
 			memcpy(usedID, id, sizeof(container_id_t));
 		else
-			meta1_name2hash(usedID, virtual_namespace, name);
+			meta1_name2hash(usedID, vns, name);
 		message_add_field (m, NAME_MSGKEY_CONTAINERID, usedID, sizeof(container_id_t));
 	}
 
 	if (name && nameSize>0)
 		message_add_field (m, NAME_MSGKEY_CONTAINERNAME, name, nameSize);
 
-	if (virtual_namespace && virtualNsSize>0)
-		message_add_field (m, NAME_MSGKEY_VIRTUALNAMESPACE, virtual_namespace, virtualNsSize);
+	if (vns && vnsSize>0)
+		message_add_field (m, NAME_MSGKEY_VIRTUALNAMESPACE, vns, vnsSize);
 }
 
 static void
@@ -66,22 +66,20 @@ meta1_container_request_common (MESSAGE m, const gchar *op, const container_id_t
 
 // TODO remove this as soon as the hunk_checker has been replaced
 gboolean 
-meta1_remote_create_container_v2 (addr_info_t *meta1, gint ms, GError **err, const char *cName, const char *virtualNs,
-		container_id_t cID, gdouble to_step, gdouble to_overall, gchar **master)
+meta1_remote_create_container_v2 (addr_info_t *meta1, gint ms, GError **err,
+		const char *cname, const char *vns, container_id_t cid,
+		gdouble to_step, gdouble to_overall, gchar **master)
 {
 	(void) ms;
 	struct gridd_client_s *client = NULL;
-	GByteArray *packed = NULL;
-	MESSAGE request=NULL;
 	gboolean status = FALSE;
+
+	MESSAGE request = message_create();
+	meta1_container_request_common_v2 (request, NAME_MSGNAME_M1_CREATE, cid, cname, vns);
+	GByteArray *packed = message_marshall_gba_and_clean(request);
+
 	gchar target[64];
-
-	request = message_create();
-
-	meta1_container_request_common_v2 (request, NAME_MSGNAME_M1_CREATE, cID, cName, virtualNs);
-
 	addr_info_to_string(meta1, target, sizeof(target));
-	packed = message_marshall_gba(request, NULL);
 	client = gridd_client_create(target, packed, NULL, NULL);
 
 	if(to_step > 0 && to_overall > 0)
@@ -100,7 +98,6 @@ meta1_remote_create_container_v2 (addr_info_t *meta1, gint ms, GError **err, con
 	status = TRUE;
 
 end_label:
-	message_destroy(request);
 	if (packed)
 		g_byte_array_unref(packed);
 	gridd_client_free(client);
@@ -109,13 +106,12 @@ end_label:
 
 // TODO to be removed as soon ad the C SDK has been rewriten
 struct meta1_raw_container_s* 
-meta1_remote_get_container_by_id( struct metacnx_ctx_s *ctx, container_id_t container_id, GError **err,
+meta1_remote_get_container_by_id (struct metacnx_ctx_s *ctx,
+		container_id_t container_id, GError **err,
 		gdouble to_step, gdouble to_overall)
 {
 	struct meta1_raw_container_s *raw_container = NULL;
 	struct gridd_client_s *client = NULL;
-	GByteArray *packed = NULL;
-	gchar target[64];
 
 	gboolean on_reply(gpointer c1, MESSAGE reply) {
 		void *b = NULL;
@@ -129,14 +125,15 @@ meta1_remote_get_container_by_id( struct metacnx_ctx_s *ctx, container_id_t cont
 
 	if (!ctx || !container_id) {
 		GSETERROR(err,"Invalid parameter (%p %p)", ctx, container_id);
-		goto end_label;
+		return NULL;
 	}
 
 	MESSAGE request = message_create ();
 	meta1_container_request_common (request, NAME_MSGNAME_M1_CONT_BY_ID, container_id, NULL);
+	GByteArray *packed = message_marshall_gba_and_clean(request);
 
+	gchar target[64];
 	addr_info_to_string(&(ctx->addr), target, sizeof(target));
-	packed = message_marshall_gba(request, NULL);
 	client = gridd_client_create(target, packed, NULL, on_reply);
 
 	if (to_step > 0 && to_overall > 0)
@@ -154,7 +151,6 @@ meta1_remote_get_container_by_id( struct metacnx_ctx_s *ctx, container_id_t cont
 	} while(0);
 
 end_label:
-	message_destroy(request);
 	g_byte_array_unref(packed);
 	gridd_client_free(client);
 	return(raw_container);
@@ -180,8 +176,8 @@ on_reply(gpointer ctx, MESSAGE reply)
 }
 
 static gchar **
-list_request(const addr_info_t *a, gdouble to_step, gdouble to_overall, GError **err, GByteArray *req,
-		gchar **master)
+list_request(const addr_info_t *a, gdouble to_step, gdouble to_overall,
+		GError **err, GByteArray *req, gchar **master)
 {
 	gchar stra[128];
 	struct gridd_client_s *client = NULL;
@@ -246,13 +242,12 @@ meta1v2_remote_create_reference (const addr_info_t *meta1, GError **err,
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_CREATE,
 			NULL,
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"CONTAINER_ID", gba_poolify(&pool, metautils_gba_from_cid(refid)),
-			"CONTAINER_NAME", gba_poolify(&pool, metautils_gba_from_string(refname)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_CONTAINERNAME, gba_poolify(&pool, metautils_gba_from_string(refname)),
 			NULL);
 	gchar **result = list_request(meta1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), master);
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), master);
 	gba_pool_clean(&pool);
 
 	if (!result)
@@ -263,7 +258,8 @@ meta1v2_remote_create_reference (const addr_info_t *meta1, GError **err,
 
 gboolean
 meta1v2_remote_has_reference (const addr_info_t *meta1, GError **err,
-		const char *ns, const container_id_t refid, gdouble to_step, gdouble to_overall)
+		const char *ns, const container_id_t refid,
+		gdouble to_step, gdouble to_overall)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(ns != NULL);
@@ -272,12 +268,11 @@ meta1v2_remote_has_reference (const addr_info_t *meta1, GError **err,
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_HAS,
 			NULL,
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"CONTAINER_ID", gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool, metautils_gba_from_cid(refid)),
 			NULL);
 	gchar **result = list_request(meta1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), NULL);
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), NULL);
 	gba_pool_clean(&pool);
 
 	if (!result)
@@ -288,7 +283,8 @@ meta1v2_remote_has_reference (const addr_info_t *meta1, GError **err,
 
 gboolean 
 meta1v2_remote_delete_reference (const addr_info_t *meta1, GError **err,
-		const char *ns, const container_id_t refid, gdouble to_step, gdouble to_overall,
+		const char *ns, const container_id_t refid,
+		gdouble to_step, gdouble to_overall,
 		char **master)
 {
 	EXTRA_ASSERT(meta1 != NULL);
@@ -298,12 +294,11 @@ meta1v2_remote_delete_reference (const addr_info_t *meta1, GError **err,
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_DESTROY,
 			NULL,
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"CONTAINER_ID", gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool, metautils_gba_from_cid(refid)),
 			NULL);
 	gchar **result = list_request(meta1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), master);
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), master);
 	gba_pool_clean(&pool);
 
 	if (!result)
@@ -313,8 +308,9 @@ meta1v2_remote_delete_reference (const addr_info_t *meta1, GError **err,
 }
 
 gchar** 
-meta1v2_remote_link_service(const addr_info_t *meta1, GError **err, const char *ns, const container_id_t refID,
-		const gchar *srvtype, gdouble to_step, gdouble to_overall, char **master)
+meta1v2_remote_link_service(const addr_info_t *meta1, GError **err,
+		const char *ns, const container_id_t refID, const gchar *srvtype,
+		gdouble to_step, gdouble to_overall, char **master)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(ns != NULL);
@@ -324,21 +320,20 @@ meta1v2_remote_link_service(const addr_info_t *meta1, GError **err, const char *
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_SRVAVAIL,
 			NULL,
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"CONTAINER_ID", gba_poolify(&pool, metautils_gba_from_cid(refID)),
-			"SRVTYPE", gba_poolify(&pool, metautils_gba_from_string(srvtype)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool, metautils_gba_from_cid(refID)),
+			NAME_MSGKEY_SRVTYPE, gba_poolify(&pool, metautils_gba_from_string(srvtype)),
 			NULL);
 	gchar **result = list_request(meta1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), master);
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), master);
 	gba_pool_clean(&pool);
-
 	return result;
 }
 
 gchar**
-meta1v2_remote_list_reference_services(const addr_info_t *meta1, GError **err, const char *ns, const container_id_t refid,
-		const gchar *srvtype, gdouble to_step, gdouble to_overall)
+meta1v2_remote_list_reference_services(const addr_info_t *meta1, GError **err,
+		const char *ns, const container_id_t refid, const gchar *srvtype,
+		gdouble to_step, gdouble to_overall)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(ns != NULL);
@@ -348,23 +343,20 @@ meta1v2_remote_list_reference_services(const addr_info_t *meta1, GError **err, c
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_SRVALL,
 			NULL,
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"CONTAINER_ID", gba_poolify(&pool, metautils_gba_from_cid(refid)),
-			"SRVTYPE", gba_poolify(&pool, metautils_gba_from_string(srvtype)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_SRVTYPE, gba_poolify(&pool, metautils_gba_from_string(srvtype)),
 			NULL);
 	gchar **result = list_request(meta1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), NULL);
-
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), NULL);
 	gba_pool_clean(&pool);
-
 	return result;
 }
 
 gboolean 
 meta1v2_remote_unlink_service(const addr_info_t *meta1, GError **err,
-		const char *ns, const container_id_t refid, const gchar *srvtype
-		, gdouble to_step, gdouble to_overall, char **master)
+		const char *ns, const container_id_t refid, const gchar *srvtype,
+		gdouble to_step, gdouble to_overall, char **master)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(ns != NULL);
@@ -374,13 +366,12 @@ meta1v2_remote_unlink_service(const addr_info_t *meta1, GError **err,
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_SRVDEL,
 			NULL,
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"CONTAINER_ID", gba_poolify(&pool, metautils_gba_from_cid(refid)),
-			"SRVTYPE", gba_poolify(&pool, metautils_gba_from_string(srvtype)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_SRVTYPE, gba_poolify(&pool, metautils_gba_from_string(srvtype)),
 			NULL);
 	gchar **result = list_request(meta1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), master);
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), master);
 	gba_pool_clean(&pool);
 
 	if (!result)
@@ -389,9 +380,10 @@ meta1v2_remote_unlink_service(const addr_info_t *meta1, GError **err,
 	return TRUE;
 }
 
-gboolean meta1v2_remote_unlink_one_service(const addr_info_t *meta1,
-		GError **err, const char *ns, const container_id_t refid,
-		const gchar *srvtype , gdouble to_step, gdouble to_overall,
+gboolean
+meta1v2_remote_unlink_one_service(const addr_info_t *meta1, GError **err,
+		const char *ns, const container_id_t refid, const gchar *srvtype,
+		gdouble to_step, gdouble to_overall,
 		char **master, gint64 seqid)
 {
 	GSList *pool = NULL;
@@ -426,13 +418,12 @@ gboolean meta1v2_remote_unlink_one_service(const addr_info_t *meta1,
 
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_SRVDEL,
 			body,
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"CONTAINER_ID", gba_poolify(&pool, metautils_gba_from_cid(refid)),
-			"SRVTYPE", gba_poolify(&pool, metautils_gba_from_string(srvtype)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_SRVTYPE, gba_poolify(&pool, metautils_gba_from_string(srvtype)),
 			NULL);
 	gchar **result = list_request(meta1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), master);
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), master);
 	gba_pool_clean(&pool);
 
 	if (!result)
@@ -444,7 +435,8 @@ gboolean meta1v2_remote_unlink_one_service(const addr_info_t *meta1,
 gchar **
 meta1v2_remote_poll_reference_service(const addr_info_t *meta1,
 		GError **err, const char *ns, const container_id_t refid,
-		const gchar *srvtype, gdouble to_step, gdouble to_overall, char **master)
+		const gchar *srvtype, gdouble to_step, gdouble to_overall,
+		char **master)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(ns != NULL);
@@ -454,22 +446,21 @@ meta1v2_remote_poll_reference_service(const addr_info_t *meta1,
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_SRVNEW,
 			NULL,
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"CONTAINER_ID", gba_poolify(&pool, metautils_gba_from_cid(refid)),
-			"SRVTYPE", gba_poolify(&pool, metautils_gba_from_string(srvtype)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_SRVTYPE, gba_poolify(&pool, metautils_gba_from_string(srvtype)),
 			NULL);
 	gchar **result = list_request(meta1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), master);
-
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), master);
 	gba_pool_clean(&pool);
 	return result;
 }
 
 gchar **
-meta1v2_remote_update_m1_policy(const addr_info_t *meta1,
-                GError **err, const char *ns,  const container_id_t prefix, const container_id_t refid,
-                const gchar *srvtype, const gchar* action, gboolean checkonly, const gchar *excludeurl, gdouble to_step, gdouble to_overall)
+meta1v2_remote_update_m1_policy(const addr_info_t *meta1, GError **err,
+		const char *ns,  const container_id_t prefix, const container_id_t refid,
+		const gchar *srvtype, const gchar* action, gboolean checkonly,
+		const gchar *excludeurl, gdouble to_step, gdouble to_overall)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(ns != NULL);
@@ -478,23 +469,24 @@ meta1v2_remote_update_m1_policy(const addr_info_t *meta1,
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_UPDATEM1POLICY,
 			NULL,
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"SRVTYPE", gba_poolify(&pool, metautils_gba_from_string(srvtype)),
-			"ACTION", gba_poolify(&pool, metautils_gba_from_string(action)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_SRVTYPE, gba_poolify(&pool, metautils_gba_from_string(srvtype)),
+			NAME_MSGKEY_ACTION, gba_poolify(&pool, metautils_gba_from_string(action)),
 			NULL);
 
 	if (prefix)
-		message_add_fields_gba(req,"PREFIX",gba_poolify(&pool,metautils_gba_from_cid(prefix)),NULL);
+		message_add_fields_gba(req,NAME_MSGKEY_PREFIX,gba_poolify(&pool,metautils_gba_from_cid(prefix)),NULL);
 	if (refid)
-		message_add_fields_gba(req,"CONTAINER_ID",gba_poolify(&pool,metautils_gba_from_cid(refid)),NULL);
+		message_add_fields_gba(req,NAME_MSGKEY_CONTAINERID,gba_poolify(&pool,metautils_gba_from_cid(refid)),NULL);
 	if (checkonly)
-		message_add_field( req,"CHECKONLY", "true", sizeof("true")-1);
+		message_add_field( req, NAME_MSGKEY_CHECKONLY, "true", sizeof("true")-1);
 	if( excludeurl )
-		message_add_fields_gba(req,"EXCLUDEURL",gba_poolify(&pool,metautils_gba_from_string(excludeurl)),NULL);
+		message_add_fields_gba(req,
+				"EXCLUDEURL", gba_poolify(&pool,metautils_gba_from_string(excludeurl)),
+				NULL);
 
 	gchar **result = list_request(meta1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), NULL);
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), NULL);
 	gba_pool_clean(&pool);
 	return result;
 }
@@ -512,12 +504,11 @@ meta1v2_remote_force_reference_service(const addr_info_t *meta1,
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_SRVSET,
 			gba_poolify(&pool, metautils_gba_from_string(url)),
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"CONTAINER_ID", gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool, metautils_gba_from_cid(refid)),
 			NULL);
 	gchar **result = list_request(meta1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), master);
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), master);
 	gba_pool_clean(&pool);
 
 	if (!result)
@@ -539,12 +530,11 @@ meta1v2_remote_configure_reference_service(const addr_info_t *meta1,
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_SRVSETARG,
 			gba_poolify(&pool, metautils_gba_from_string(url)),
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"CONTAINER_ID", gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool, metautils_gba_from_cid(refid)),
 			NULL);
 	gchar **result = list_request(meta1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), master);
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), master);
 	gba_pool_clean(&pool);
 
 	if (!result)
@@ -565,12 +555,11 @@ meta1v2_remote_reference_set_property(const addr_info_t *m1, GError **err,
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_CID_PROPSET,
 			gba_poolify(&pool, metautils_encode_lines(pairs)),
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"CONTAINER_ID", gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool, metautils_gba_from_cid(refid)),
 			NULL);
 	gchar **result = list_request(m1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), master);
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), master);
 	gba_pool_clean(&pool);
 
 	if (!result)
@@ -592,14 +581,12 @@ meta1v2_remote_reference_get_property(const addr_info_t *m1, GError **err,
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_CID_PROPGET,
 			gba_poolify(&pool, metautils_encode_lines(keys)),
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"CONTAINER_ID", gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool, metautils_gba_from_cid(refid)),
 			NULL);
 	*result = list_request(m1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), NULL);
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), NULL);
 	gba_pool_clean(&pool);
-
 	return *result != NULL;
 }
 
@@ -615,12 +602,11 @@ meta1v2_remote_reference_del_property(const addr_info_t *m1, GError **err,
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_CID_PROPDEL,
 			gba_poolify(&pool, metautils_encode_lines(keys)),
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"CONTAINER_ID", gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool, metautils_gba_from_cid(refid)),
 			NULL);
 	gchar **result = list_request(m1, to_step, to_overall, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), master);
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), master);
 	gba_pool_clean(&pool);
 
 	if (!result)
@@ -630,59 +616,17 @@ meta1v2_remote_reference_del_property(const addr_info_t *m1, GError **err,
 }
 
 static GError *
-gba_request(const addr_info_t *a, gdouble to_step, gdouble to_overall,
-		GByteArray **result, GByteArray *req)
+gba_request(const addr_info_t *a, gdouble timeout, GByteArray **result, GByteArray *req)
 {
-	gboolean _reply(gpointer ctx, MESSAGE reply) {
-		void *b = NULL;
-		gsize bsize = 0;
-		if (0 < message_get_BODY(reply, &b, &bsize, NULL)) {
-			if (b && bsize)
-				g_byte_array_append((GByteArray*)ctx, b, bsize);
-		}
-		return TRUE;
-	}
-
-	gchar stra[128];
-	struct gridd_client_s *client = NULL;
-	GError *e = NULL;
-	gboolean gba_created = FALSE;
-
-	EXTRA_ASSERT(req != NULL);
-
-	grid_addrinfo_to_string(a, stra, sizeof(stra));
-	if (!*result) {
-		*result = g_byte_array_new();
-		gba_created = TRUE;
-	}
-	client = gridd_client_create(stra, req, *result, _reply);
-
-	if (to_step > 0 && to_overall > 0)
-		gridd_client_set_timeout(client, to_step, to_overall);
-
-	gscstat_tags_start(GSCSTAT_SERVICE_META1, GSCSTAT_TAGS_REQPROCTIME);
-	gridd_client_start(client);
-	if (!(e = gridd_client_loop(client)))
-		e = gridd_client_error(client);
-	gscstat_tags_end(GSCSTAT_SERVICE_META1, GSCSTAT_TAGS_REQPROCTIME);
-
-	gridd_client_free(client);
-
-	if (!e)
-		return NULL;
-
-	if (gba_created) {
-		g_byte_array_free(*result, TRUE);
-		*result = NULL;
-	}
-	return e;
+	gchar str[STRLEN_ADDRINFO];
+	addr_info_to_string (a, str, sizeof(str));
+	return gridd_client_exec_and_concat (str, timeout>0.0 ? timeout : M1V2_CLIENT_TIMEOUT, req, result);
 }
 
 gchar**
 meta1v2_remote_list_services(const addr_info_t *m1, GError **err,
-        const gchar *ns, const container_id_t refid  )
+        const gchar *ns, const container_id_t refid)
 {
-
     EXTRA_ASSERT(m1 != NULL);
     EXTRA_ASSERT(ns != NULL);
     EXTRA_ASSERT(refid != NULL);
@@ -690,25 +634,20 @@ meta1v2_remote_list_services(const addr_info_t *m1, GError **err,
     GSList *pool = NULL;
     MESSAGE req = message_create_request(NULL, NULL,
             NAME_MSGNAME_M1V2_SRVALLONM1, NULL /* no body */,
-            "NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-            "PREFIX", gba_poolify(&pool, metautils_gba_from_cid(refid)),
+            NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+            NAME_MSGKEY_PREFIX, gba_poolify(&pool, metautils_gba_from_cid(refid)),
             NULL);
 
     gchar** result = list_request(m1,  60000, 60000, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), NULL);
-
-    message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), NULL);
     gba_pool_clean(&pool);
     return result;
 }
 
 GError *
-meta1v2_remote_list_references(const addr_info_t *m1,
-		const gchar *ns, const container_id_t refid,
-		GByteArray **result)
+meta1v2_remote_list_references(const addr_info_t *m1, const gchar *ns,
+		const container_id_t refid, GByteArray **result)
 {
-	GError *err;
-
 	EXTRA_ASSERT(m1 != NULL);
 	EXTRA_ASSERT(ns != NULL);
 	EXTRA_ASSERT(refid != NULL);
@@ -716,14 +655,12 @@ meta1v2_remote_list_references(const addr_info_t *m1,
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL,
 			NAME_MSGNAME_M1V2_LISTBYPREF, NULL /* no body */,
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"PREFIX", gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_PREFIX, gba_poolify(&pool, metautils_gba_from_cid(refid)),
 			NULL);
 
-	err = gba_request(m1, 60000, 60000, result,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)));
-
-	message_destroy(req);
+	GError *err = gba_request(m1, M1V2_CLIENT_TIMEOUT, result,
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)));
 	gba_pool_clean(&pool);
 	return err;
 }
@@ -734,8 +671,6 @@ meta1v2_remote_list_references_by_service(const addr_info_t *m1,
 		const gchar *srvtype, const gchar *url,
 		GByteArray **result)
 {
-	GError *err;
-
 	EXTRA_ASSERT(m1 != NULL);
 	EXTRA_ASSERT(ns != NULL);
 	EXTRA_ASSERT(refid != NULL);
@@ -743,35 +678,28 @@ meta1v2_remote_list_references_by_service(const addr_info_t *m1,
 	GSList *pool = NULL;
 	MESSAGE req = message_create_request(NULL, NULL,
 			NAME_MSGNAME_M1V2_LISTBYSERV, NULL /* no body */,
-			"NAMESPACE", gba_poolify(&pool, metautils_gba_from_string(ns)),
-			"PREFIX", gba_poolify(&pool, metautils_gba_from_cid(refid)),
-			"SRVTYPE", gba_poolify(&pool, metautils_gba_from_string(srvtype)),
-			"URL", gba_poolify(&pool, metautils_gba_from_string(url)),
+			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool, metautils_gba_from_string(ns)),
+			NAME_MSGKEY_PREFIX, gba_poolify(&pool, metautils_gba_from_cid(refid)),
+			NAME_MSGKEY_SRVTYPE, gba_poolify(&pool, metautils_gba_from_string(srvtype)),
+			NAME_MSGKEY_URL, gba_poolify(&pool, metautils_gba_from_string(url)),
 			NULL);
 
-	err = gba_request(m1, 60000, 60000, result,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)));
-
-	message_destroy(req);
+	GError *err = gba_request(m1, M1V2_CLIENT_TIMEOUT, result,
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)));
 	gba_pool_clean(&pool);
 	return err;
 }
 
 gboolean
-meta1v2_remote_get_prefixes(const addr_info_t *m1, GError **err,
-		gchar *** result)
+meta1v2_remote_get_prefixes(const addr_info_t *m1, GError **err, gchar *** result)
 {
 	EXTRA_ASSERT(m1 != NULL);
 
 	GSList *pool = NULL;
-	MESSAGE req = message_create_request(NULL, NULL, NAME_MSGNAME_M1V2_GETPREFIX,
-			NULL,
-			NULL);
+	MESSAGE req = message_create_named(NAME_MSGNAME_M1V2_GETPREFIX);
 	*result = list_request(m1, 60000, 60000, err,
-			gba_poolify(&pool, message_marshall_gba(req, NULL)), NULL);
-	message_destroy(req);
+			gba_poolify(&pool, message_marshall_gba_and_clean(req)), NULL);
 	gba_pool_clean(&pool);
-
 	return *result != NULL;
 }
 

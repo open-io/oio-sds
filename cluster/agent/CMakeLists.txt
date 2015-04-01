@@ -45,7 +45,7 @@ bin_prefix(gridagent -cluster-agent)
 
 target_link_libraries(gridagent
 	gridcluster gridcluster-events gridcluster-eventsremote gridcluster-remote gridcluster-conscience
-	metautils metacomm
+	metautils
 	-lm ${GLIB2_LIBRARIES})
 
 install(FILES

@@ -19,7 +19,7 @@ add_library(gridcluster-conscience SHARED
 set_target_properties(gridcluster-conscience PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(gridcluster-conscience
-		metautils metacomm 
+		metautils
 		gridcluster gridcluster-events gridcluster-remote
 		-lm ${GLIB2_LIBRARIES})
 

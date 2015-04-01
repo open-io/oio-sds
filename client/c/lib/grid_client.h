@@ -105,11 +105,6 @@ typedef struct {
 #define GS_CODE_CONTENT_NOTFOUND      6
 #define GS_CODE_CONTENT_ERROR         7
 
-#define GS_CONTAINER_PROPERTY_STORAGE_POLICY "sys.storage_policy"
-#define GS_CONTAINER_PROPERTY_VERSIONING     "sys.versioning_policy"
-#define GS_CONTAINER_PROPERTY_QUOTA    "sys.quota"
-#define GS_CONTAINER_PROPERTY_SIZE     "sys.container_size"
-
 /**
  * frees the given gs_container_t structure and all the associated internal
  * data
@@ -275,8 +270,6 @@ typedef enum gs_timeout_e {
 	GS_TO_M1_OP=5,
 	GS_TO_M2_CNX=6,
 	GS_TO_M2_OP=7,
-	GS_TO_MCD_CNX=8,
-	GS_TO_MCD_OP=9
 } gs_timeout_t;
 
 gs_status_t gs_grid_storage_set_timeout (gs_grid_storage_t *gs,

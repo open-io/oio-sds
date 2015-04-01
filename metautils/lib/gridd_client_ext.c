@@ -31,7 +31,7 @@ License along with this library.
 #include <poll.h>
 #include <sys/types.h>
 
-#include "./metautils_macros.h"
+#include "metautils_macros.h"
 
 #include <glib.h>
 
@@ -329,5 +329,157 @@ gridd_clients_loop(struct gridd_client_s **clients)
 		}
 	}
 	return NULL;
+}
+
+GError *
+gridd_client_run (struct gridd_client_s *self)
+{
+	if (!self)
+		return NEWERROR(CODE_INTERNAL_ERROR, "creation error");
+	if (!gridd_client_start(self))
+		return NEWERROR(CODE_INTERNAL_ERROR, "starting error");
+	GError *err;
+	if (NULL != (err = gridd_client_loop (self)))
+		return err;
+	if (NULL != (err = gridd_client_error (self)))
+		return err;
+	return NULL;
+}
+
+GError *
+gridd_client_exec (const gchar *to, gdouble timeout, GByteArray *req)
+{
+	return gridd_client_exec4 (to, timeout, req, NULL);
+}
+
+GError *
+gridd_client_exec4 (const gchar *to, gdouble timeout, GByteArray *req,
+		GByteArray ***out)
+{
+	gboolean _cb (GPtrArray *tmp, struct message_s *reply) {
+		GByteArray *body = NULL;
+		GError *e = message_extract_body_gba(reply, &body);
+		if (e) {
+			GRID_WARN("BUG/Corruption : (%d) %s", e->code, e->message);
+			g_clear_error (&e);
+			return FALSE;
+		} else {
+			g_ptr_array_add(tmp, body);
+			return TRUE;
+		}
+	}
+	GPtrArray *tmp = NULL;
+	if (out)
+		tmp = g_ptr_array_new();
+
+	struct gridd_client_s *client = gridd_client_create(to, req,
+			out ? tmp : NULL, out ? (client_on_reply)_cb : NULL);
+	if (!client)
+		return NEWERROR(CODE_INTERNAL_ERROR, "client creation");
+	if (timeout > 0.0)
+		gridd_client_set_timeout (client, timeout, timeout);
+	GError *err = gridd_client_run (client);
+	gridd_client_free (client);
+
+	if (!err && out) {
+		*out = (GByteArray**) metautils_gpa_to_array (tmp, TRUE);
+		tmp = NULL;
+	}
+	if (tmp) {
+		g_ptr_array_set_free_func (tmp, (GDestroyNotify)g_byte_array_unref);
+		g_ptr_array_free (tmp, TRUE);
+		tmp = NULL;
+	}
+	return err;
+}
+
+GError *
+gridd_client_exec_and_concat (const gchar *to, gdouble timeout, GByteArray *req,
+		GByteArray **out)
+{
+	gboolean _cb (GByteArray *tmp, struct message_s *reply) {
+		void *b = NULL;
+		gsize bsize = 0;
+		GError *err = NULL;
+		if (0 > message_get_BODY(reply, &b, &bsize, &err)) {
+			GRID_WARN("BUG/Corruption : (%d) %s", err->code, err->message);
+			g_clear_error (&err);
+			return FALSE;
+		} else {
+			if (b && bsize)
+				g_byte_array_append(tmp, b, bsize);
+			return TRUE;
+		}
+	}
+	GByteArray *tmp = NULL;
+	if (out)
+		tmp = g_byte_array_new();
+
+	struct gridd_client_s *client = gridd_client_create(to, req,
+			out ? tmp : NULL, out ? (client_on_reply)_cb : NULL);
+	if (!client)
+		return NEWERROR(CODE_INTERNAL_ERROR, "client creation");
+	if (timeout > 0.0)
+		gridd_client_set_timeout (client, timeout, timeout);
+	GError *err = gridd_client_run (client);
+	gridd_client_free (client);
+
+	if (!err && out) {
+		*out = tmp;
+		tmp = NULL;
+	}
+	if (tmp)
+		metautils_gba_unref (tmp);
+	return err;
+}
+
+GError *
+gridd_client_exec_and_concat_string (const gchar *to, gdouble timeout, GByteArray *req,
+		gchar **out)
+{
+	GByteArray *tmp = NULL;
+	GError *err = gridd_client_exec_and_concat (to, timeout, req, out ? &tmp : NULL);
+	
+	if (err) {
+		if (tmp)
+			g_byte_array_unref (tmp);
+		return err;
+	}
+	if (out) {
+		g_byte_array_append (tmp, (guint8*)"", 1);
+		*out = (gchar*) g_byte_array_free (tmp, FALSE);
+	}
+	return NULL;
+}
+
+GError *
+gridd_client_exec_and_decode (const gchar *to, gdouble timeout,
+		GByteArray *req, GSList **out, body_decoder_f decode)
+{
+	GByteArray ** bodies = NULL;
+	GError *err = gridd_client_exec4 (to, timeout, req,
+			out && decode ? &bodies : NULL);
+	if (err) {
+		metautils_gba_cleanv (bodies);
+		return err;
+	}
+	if (out && decode && bodies) {
+		GSList *items = NULL;
+		for (GByteArray **pbody=bodies; pbody && *pbody && !err ;pbody++) {
+			GByteArray *body = *pbody;
+			if (!body->data || body->len<=0)
+				continue;
+			GSList *l = NULL;
+			gsize len = body->len;
+			if (!decode(&l, body->data, &len, &err)) {
+				g_prefix_error (&err, "Decoding error: ");
+				break;
+			}
+			items = g_slist_concat (l, items);
+		}
+		*out = items;
+	}
+	metautils_gba_cleanv (bodies);
+	return err;
 }
 

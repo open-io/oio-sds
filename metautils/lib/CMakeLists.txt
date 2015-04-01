@@ -1,5 +1,6 @@
 include_directories(BEFORE . ../..
-		${CMAKE_CURRENT_BINARY_DIR}/../..)
+		${CMAKE_CURRENT_BINARY_DIR}/../..
+		${CMAKE_CURRENT_BINARY_DIR})
 
 link_directories(
 		${ASN1C_LIBRARY_DIRS}
@@ -91,8 +92,30 @@ add_custom_command(
 #	ARGS -d -s -oexpr.lex.c ${CMAKE_CURRENT_SOURCE_DIR}/expr.lex.l
 
 add_library(metautils SHARED
+		metacomm.h
+		metatypes.h
+		metautils.h
+		metautils_internals.h
 		metautils_bits.h
 		metautils_macros.h
+
+		volume_lock.c volume_lock.h
+		lb.c lb.h
+		common_main.c common_main.h
+		meta_backend_common.h
+		utils_syscall.c metautils_syscall.h
+		event_config.c event_config.h
+		grid_storage_client_stat.c
+		lrutree.c lrutree.h tree.h
+		storage_policy.c storage_policy.h
+		hc_url.c hc_url.h
+		notifications.c notifications.h
+		expr.2str.c
+		expr.clean.c
+		expr.eval.c
+		expr.lex.c expr.yacc.c expr.yacc.h
+		expr.h
+
 		utils_containers.c metautils_containers.h
 		utils_svc_policy.c metautils_svc_policy.h
 		utils_errors.c metautils_errors.h
@@ -102,24 +125,6 @@ add_library(metautils SHARED
 		utils_resolv.c metautils_resolv.h
 		utils_loggers.c metautils_loggers.h
 		utils_task.c metautils_task.h
-		utils_manifest.c metautils_manifest.h
-		metautils_syscall.h utils_syscall.c
-		event_config.c event_config.h
-		grid_storage_client_stat.c
-		lrutree.c lrutree.h tree.h
-		storage_policy.h storage_policy.c
-		hc_url.h hc_url.c
-		expr.2str.c
-		expr.clean.c
-		expr.eval.c
-		expr.lex.c expr.yacc.c expr.yacc.h
-		expr.h
-		metacomm.h
-		metatypes.h
-		metautils.h
-		metautils_internals.h
-		notifications.h notifications.c
-		volume_lock.h
 		utils_addr_info.c
 		utils_chunk_info.c
 		utils_hash.c
@@ -139,30 +144,11 @@ add_library(metautils SHARED
 		utils_service_info.c
 		utils_tools.c
 		utils_duplication.c
-		volume_lock.c
-		common_main.c common_main.h
-		lb.c lb.h
-		meta_backend_common.h
-)
 
-target_link_libraries(metautils
-		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} ${JSONC_LIBRARIES} ${EXPAT_LIBRARIES}
-		${ASN1C_LIBRARIES}
-		-lm)
+		gridd_client.c gridd_client.h
+		gridd_client_ext.c gridd_client_ext.h
+		gridd_client_pool.c gridd_client_pool.h
 
-if (RDKAFKA_FOUND)
-	# Build a static library dynamically linked to rdkafka
-	add_library(notifier_kafka STATIC notifier_kafka.c)
-	target_link_libraries(notifier_kafka
-			${RDKAFKA_LIBRARIES} ${GLIB2_LIBRARIES})
-	# Add this library as a dependency to metautils
-	target_link_libraries(metautils notifier_kafka)
-endif()
-
-
-#add_dependencies(metautils asn1c_generation)
-
-add_library(metacomm SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/NativeEnumerated.c
 		${CMAKE_CURRENT_BINARY_DIR}/NativeEnumerated.h
 		${CMAKE_CURRENT_BINARY_DIR}/NativeInteger.c
@@ -329,30 +315,36 @@ add_library(metacomm SHARED
 		comm_path_info.c
 		comm_service_info.c
 		comm_container_info.c
-
-		gridd_client.c gridd_client.h
-		gridd_client_ext.c gridd_client_ext.h
-		gridd_client_pool.c gridd_client_pool.h
 )
 
-include_directories(AFTER ${CMAKE_CURRENT_BINARY_DIR})
-set_target_properties(metacomm PROPERTIES SOVERSION ${ABI_VERSION})
-target_link_libraries(metacomm
-		metautils
-		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} ${ASN1C_LIBRARIES})
-add_dependencies(metacomm metautils)
+target_link_libraries(metautils
+		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} ${JSONC_LIBRARIES} ${EXPAT_LIBRARIES}
+		${ASN1C_LIBRARIES}
+		-lm)
+
+if (RDKAFKA_FOUND)
+	# Build a static library dynamically linked to rdkafka
+	add_library(notifier_kafka STATIC notifier_kafka.c)
+	target_link_libraries(notifier_kafka
+			${RDKAFKA_LIBRARIES} ${GLIB2_LIBRARIES})
+	# Add this library as a dependency to metautils
+	target_link_libraries(metautils notifier_kafka)
+endif()
+
+
+#add_dependencies(metautils asn1c_generation)
 
 add_executable(gs_oid2cid oid_to_cid.c)
 bin_prefix(gs_oid2cid -oid2cid)
 target_link_libraries(gs_oid2cid
 		metautils
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES})
-add_dependencies(gs_oid2cid metacomm metautils)
+add_dependencies(gs_oid2cid metautils metautils)
 
 add_executable(gs_dump_addr addr_dump.c)
 bin_prefix(gs_dump_addr -dump-addr)
 target_link_libraries(gs_dump_addr
-		metautils metacomm
+		metautils
 		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} ${ASN1C_LIBRARIES})
 
 add_executable(gs_same_hash gs_same_hash.c)
@@ -363,7 +355,7 @@ target_link_libraries(gs_same_hash
 
 add_executable(test_lb test_lb.c)
 target_link_libraries(test_lb
-		metautils metacomm
+		metautils
 		${GLIB2_LIBRARIES})
 
 add_executable(test_stg_policy test_stg_policy.c)
@@ -387,12 +379,12 @@ target_link_libraries(test_hc_url
 
 add_executable(test_addr test_addr.c)
 target_link_libraries(test_addr
-		metautils metacomm
+		metautils
 		${GLIB2_LIBRARIES})
 
 add_executable(test_gridd_client test_gridd_client.c)
 target_link_libraries(test_gridd_client
-		metautils metacomm
+		metautils
 		${GLIB2_LIBRARIES})
 
 add_executable(test_lrutree test_lrutree.c)
@@ -415,7 +407,7 @@ target_link_libraries(test_gba
 		metautils 
 		${GLIB2_LIBRARIES})
 
-install(TARGETS metacomm metautils gs_oid2cid gs_dump_addr
+install(TARGETS metautils gs_oid2cid gs_dump_addr
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin
 		PUBLIC_HEADER DESTINATION include)
@@ -464,7 +456,6 @@ install(FILES
 			metautils_l4v.h
 			metautils_loggers.h
 			metautils_macros.h
-			metautils_manifest.h
 			metautils_resolv.h
 			metautils_sockets.h
 			metautils_strings.h
