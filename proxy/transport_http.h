@@ -62,6 +62,7 @@ struct http_reply_ctx_s
 	void (*set_body_gba) (GByteArray *gstr);
 
 	void (*finalize) (void);
+	void (*access_tail) (const char *fmt, ...);
 };
 
 enum http_rc_e { HTTPRC_DONE, HTTPRC_NEXT, HTTPRC_ABORT };
