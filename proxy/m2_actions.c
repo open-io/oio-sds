@@ -430,9 +430,9 @@ _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 {
 	if (err) {
 		if (err->code == CODE_CONTAINER_NOTFOUND)
-			return _reply_forbidden_error (args, err);
-		if (err->code == CODE_CONTAINER_NOTFOUND)
-			return _reply_forbidden_error (args, err);
+			return _reply_notfound_error (args, err);
+		if (err->code == CODE_CONTENT_NOTFOUND)
+			return _reply_notfound_error (args, err);
 		return _reply_system_error (args, err);
 	}
 
