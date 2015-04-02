@@ -232,7 +232,7 @@ _resolve_meta0(struct hc_resolver_s *r, const gchar *ns, gchar ***result)
 		GSList *allm0;
 
 		/* Now attempt a real resolution */
-		if (!(allm0 = list_namespace_services2(ns, "meta0", &err))) {
+		if (!(allm0 = list_namespace_services(ns, NAME_SRVTYPE_META0, &err))) {
 			if (!err)
 				err = NEWERROR(CODE_INTERNAL_ERROR, "No meta0 available");
 			*result = NULL;

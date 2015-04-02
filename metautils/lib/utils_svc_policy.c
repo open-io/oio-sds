@@ -95,8 +95,8 @@ _get_by_name(const gchar *name, enum service_update_policy_e *result)
 {
 	static struct kv_s byname[] =
 	{
-		{"NONE", SVCUPD_NONE},
-		{"KEEP", SVCUPD_NONE},
+		{"NONE", SVCUPD_KEEP},
+		{"KEEP", SVCUPD_KEEP},
 		{"REPLACE", SVCUPD_REPLACE},
 		{"APPEND", SVCUPD_APPEND},
 		{NULL, SVCUPD_NOT_SPECIFIED},
@@ -111,8 +111,8 @@ _pol2str(enum service_update_policy_e pol)
 	switch (pol) {
 		case SVCUPD_NOT_SPECIFIED:
 			return "NOT_SPECIFIED";
-		case SVCUPD_NONE:
-			return "NONE";
+		case SVCUPD_KEEP:
+			return "KEEP";
 		case SVCUPD_APPEND:
 			return "APPEND";
 		case SVCUPD_REPLACE:
@@ -246,7 +246,7 @@ configure_kv(GTree *tree, const gchar *name,
 static  GError*
 configure_strkv(GTree *tree, gchar *name)
 {
-	enum service_update_policy_e policy = SVCUPD_NONE;
+	enum service_update_policy_e policy = SVCUPD_KEEP;
 	gchar *value, *tagname = NULL, *tagvalue = NULL;
 	guint step, reqdist = 0, replicas = 1;
 

@@ -40,7 +40,7 @@ struct event_config_s {
 
 struct event_config_repo_s {
 	GRWLock rwlock;
-	GHashTable *evt_config; /* <gchar*, struct event_config_s*> */
+	struct event_config_s *evt_config;
 	metautils_notif_pool_t *notifier;
 };
 
@@ -66,13 +66,9 @@ event_config_destroy(struct event_config_s *evt_config)
 {
 	if (!evt_config)
 		return;
-
 	g_mutex_clear(&evt_config->lock);
-
-	if (evt_config->dir)
-		g_free(evt_config->dir);
-
-	g_free(evt_config);
+	g_free0(evt_config->dir);
+	g_free0(evt_config);
 }
 
 gchar *
@@ -98,8 +94,7 @@ event_config_dump(struct event_config_s *evt_config)
 /* ------------------------------------------------------------------------- */
 
 GError*
-event_config_reconfigure(struct event_config_s *evt_config,
-		const gchar *cfg)
+event_config_reconfigure(struct event_config_s *evt_config, const gchar *cfg)
 {
 	gchar **tok = g_strsplit(cfg, ";", 0);
 	g_mutex_lock(&evt_config->lock);
@@ -130,9 +125,7 @@ event_config_reconfigure(struct event_config_s *evt_config,
 	}
 
 	g_mutex_unlock(&evt_config->lock);
-
 	g_strfreev(tok);
-
 	return NULL;
 }
 
@@ -151,11 +144,9 @@ event_is_notifier_enabled(struct event_config_s *evt_config)
 const gchar *
 event_get_notifier_topic_name(struct event_config_s *evt_config, const gchar *def)
 {
-	if (!evt_config || !evt_config->kafka_topic) {
+	if (!evt_config || !evt_config->kafka_topic)
 		return def;
-	} else {
-		return evt_config->kafka_topic;
-	}
+	return evt_config->kafka_topic;
 }
 
 gboolean
@@ -187,12 +178,8 @@ event_config_repo_create(const gchar *ns_name, struct grid_lbpool_s *lbpool)
 {
 	struct event_config_repo_s *conf = NULL;
 	conf = g_malloc0(sizeof(struct event_config_repo_s));
-	conf->evt_config = g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, (GDestroyNotify) event_config_destroy);
-
-	g_rw_lock_init(&(conf->rwlock));
+	conf->evt_config = event_config_create();
 	metautils_notif_pool_init(&(conf->notifier), ns_name, lbpool);
-
 	return conf;
 }
 
@@ -201,13 +188,13 @@ event_config_repo_clear(struct event_config_repo_s **repo)
 {
 	if (!repo || !*repo)
 		return;
+
 	struct event_config_repo_s *repo2 = *repo;
 	*repo = NULL;
+
 	metautils_notif_pool_clear(&(repo2->notifier));
-	if (repo2->evt_config) {
-		g_hash_table_destroy(repo2->evt_config);
-	}
-	g_rw_lock_clear(&(repo2->rwlock));
+	event_config_destroy (repo2->evt_config);
+
 	memset(repo2, 0, sizeof(struct event_config_repo_s));
 	g_free(repo2);
 }
@@ -215,27 +202,12 @@ event_config_repo_clear(struct event_config_repo_s **repo)
 metautils_notif_pool_t *
 event_config_repo_get_notifier(struct event_config_repo_s *repo)
 {
-	return repo->notifier;
+	return repo ? repo->notifier : NULL;
 }
 
 struct event_config_s*
-event_config_repo_get(struct event_config_repo_s *conf,
-	const char *ns_name, gboolean vns_fallback)
+event_config_repo_get(struct event_config_repo_s *conf)
 {
-	struct event_config_s *event = NULL;
-	if (conf != NULL) {
-		g_rw_lock_writer_lock(&conf->rwlock);
-		if (vns_fallback)
-			event = namespace_hash_table_lookup(conf->evt_config, ns_name, NULL);
-		else
-			event = g_hash_table_lookup(conf->evt_config, ns_name);
-		if (!event) {
-			GRID_DEBUG("Event config not found for %s, creating one", ns_name);
-			event = event_config_create();
-			g_hash_table_insert(conf->evt_config, g_strdup(ns_name), event);
-		}
-		g_rw_lock_writer_unlock(&conf->rwlock);
-	}
-	return event;
+	return conf ? conf->evt_config : NULL;
 }
 

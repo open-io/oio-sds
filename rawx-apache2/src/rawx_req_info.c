@@ -154,6 +154,7 @@ __gen_stats(const dav_resource *resource, apr_pool_t *pool)
 			apr_psprintf(pool, "rawx.avgetreqtime %"APR_UINT64_T_FMT"\n", r_get_time),
 			apr_psprintf(pool, "rawx.reqdelpersec %f\n", r_del_rate),
 			apr_psprintf(pool, "rawx.avdelreqtime %"APR_UINT64_T_FMT"\n", r_del_time),
+			apr_psprintf(pool, "rawx.volume %s\n", c->docroot),
 			NULL);
 }
 

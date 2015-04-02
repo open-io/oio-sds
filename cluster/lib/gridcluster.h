@@ -125,8 +125,6 @@ meta0_info_t *get_meta0_info2(const char *ns_name, long timeout_cnx, long timeou
 
 /**
  * List services of a given type in a namespace.
- * list_namespace_services() fails if gridagent not available,
- * list_namespace_services2() fallbacks on conscience.
  *
  * @param ns_name the namespace name
  * @param type the type of service to list
@@ -135,7 +133,6 @@ meta0_info_t *get_meta0_info2(const char *ns_name, long timeout_cnx, long timeou
  * @return a list of service_info_t or NULL if an error occured (error is set)
  */
 GSList* list_namespace_services(const char *ns_name, const char *type, GError **error);
-GSList* list_namespace_services2(const char *ns_name, const char *type, GError **error);
 
 /**
  * Get the first service of a given type in a namespace
@@ -405,15 +402,10 @@ GHashTable* gridcluster_parse_config(void);
 gchar** gridcluster_list_ns(void);
 
 /** Returns the services update's configuration when the Load-Balancing
- * is performed by a servce of type srvtype for each namespace and virtual namespace.
- *
- * Thus 'srvtype' is not the service type that is being load-balanced, but
- * the service doing the LB.
- */
-GHashTable* gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo,
-		const gchar *srvtype);
+ * is performed by a servce of type srvtype for each namespace and VNS. */
+gchar* gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo);
 
-GHashTable* gridcluster_get_event_config(struct namespace_info_s *nsinfo,
+gchar* gridcluster_get_event_config(struct namespace_info_s *nsinfo,
 		const gchar *srvtype);
 
 gint64 gridcluster_get_container_max_versions(struct namespace_info_s *nsinfo);

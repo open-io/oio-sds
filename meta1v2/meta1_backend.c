@@ -56,13 +56,11 @@ meta1_backend_init(const gchar *ns, struct sqlx_repository_s *repo,
 	m1 = g_malloc0(sizeof(*m1));
 	metautils_strlcpy_physical_ns(m1->backend.ns_name, ns,
 			sizeof(m1->backend.ns_name));
-	g_rw_lock_init(&m1->rwlock_ns_policies);
 	m1->backend.type = META1_TYPE_NAME;
 	m1->backend.lb = glp;
 	m1->backend.repo = repo;
 	m1->prefixes = meta1_prefixes_init();
-	m1->ns_policies = g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, (GDestroyNotify) service_update_policies_destroy);
+	m1->svcupdate = service_update_policies_create();
 
 	m1->backend.evt_repo = evt_repo;
 	return m1;
@@ -78,37 +76,27 @@ meta1_backend_clean(struct meta1_backend_s *m1)
 		meta1_prefixes_clean(m1->prefixes);
 	}
 
-	if (m1->ns_policies) {
-		g_hash_table_destroy(m1->ns_policies);
+	if (m1->svcupdate) {
+		service_update_policies_destroy (m1->svcupdate);
+		m1->svcupdate = NULL;
 	}
 
-	g_rw_lock_clear(&m1->rwlock_ns_policies);
 	memset(m1, 0, sizeof(*m1));
 	g_free(m1);
 }
 
 struct service_update_policies_s*
-meta1_backend_get_svcupdate(struct meta1_backend_s *m1, const char *ns_name)
+meta1_backend_get_svcupdate(struct meta1_backend_s *m1)
 {
-	struct service_update_policies_s* pol;
-
-	if(!m1)
-		return NULL;
-	g_rw_lock_writer_lock(&m1->rwlock_ns_policies);
-	if(!(pol = g_hash_table_lookup(m1->ns_policies, ns_name))) {
-		/* lazy init */
-		pol = service_update_policies_create();
-		g_hash_table_insert(m1->ns_policies, g_strdup(ns_name), pol);
-	}
-	g_rw_lock_writer_unlock(&m1->rwlock_ns_policies);
-	return pol;
+	EXTRA_ASSERT(m1 != NULL);
+	return m1 ? m1->svcupdate : NULL;
 }
 
 struct meta1_prefixes_set_s*
 meta1_backend_get_prefixes(struct meta1_backend_s *m1)
 {
 	EXTRA_ASSERT(m1 != NULL);
-	return m1->prefixes;
+	return m1 ? m1->prefixes : NULL;
 }
 
 GError*
@@ -152,9 +140,9 @@ meta1_backend_get_notifier(struct meta1_backend_s *m1)
 }
 
 struct event_config_s *
-meta1_backend_get_event_config(struct meta1_backend_s *m1, const char *ns_name)
+meta1_backend_get_event_config(struct meta1_backend_s *m1)
 {
-	return event_config_repo_get(m1->backend.evt_repo, ns_name, TRUE);
+	return event_config_repo_get(m1->backend.evt_repo);
 }
 
 const gchar*

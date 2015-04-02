@@ -266,24 +266,6 @@ convert_chunk_text_to_raw(const struct chunk_textinfo_s* text_chunk, struct meta
 	return TRUE;
 }
 
-static gboolean
-_chunk_hash_is_null(const chunk_hash_t chunk_hash)
-{
-	return data_is_zeroed(chunk_hash, sizeof(chunk_hash_t));
-}
-
-static gboolean
-_chunk_id_is_null(const chunk_id_t *chunk_id)
-{
-	return data_is_zeroed(chunk_id, sizeof(chunk_id_t));
-}
-
-static gboolean
-_container_id_is_null(const container_id_t container_id)
-{
-	return data_is_zeroed(container_id, sizeof(container_id_t));
-}
-
 gchar*
 key_value_pair_to_string(key_value_pair_t * kv)
 {

@@ -87,30 +87,6 @@ http {
 }
 """
 
-template_rawx_monitor = """
-[Default]
-daemon=false
-pidfile=${RUNDIR}/${NS}-${SRVTYPE}-monitor-${SRVNUM}.pid
-
-[Child]
-command=/usr/sbin/httpd -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf
-respawn=true
-rlimit.stack_size=262144
-rlimit.core_size=-1
-rlimit.max_files=256
-
-[Service]
-ns=${NS}
-type=${SRVTYPE}
-addr=${IP}:${PORT}
-location=localhost.${SRVTYPE}-${SRVNUM}
-
-[Volume]
-docroot=${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
-filer.user=${UID}
-filer.pwd=${GID}
-"""
-
 template_rawx_service = """
 LoadModule mpm_worker_module   modules/mod_mpm_worker.so
 LoadModule authz_core_module   modules/mod_authz_core.so
@@ -261,9 +237,7 @@ param_score_timeout=86400
 
 param_option.ns_status=MASTER
 param_option.WORM=false
-param_option.${NS}.V2_service_update_policy.meta1=meta2=NONE|3|1|tag.type=m2v2;solr=APPEND;meta1=REPLACE;sqlx=KEEP|1|1|
-param_option.${NS}._service_update_policy.meta1=meta2=NONE|3|1|tag.type=m2v2;solr=APPEND;meta1=REPLACE;sqlx=KEEP|1|1|
-param_option.service_update_policy.meta1=meta2=NONE|3|1|tag.type=m2v2;solr=APPEND;meta1=REPLACE;sqlx=KEEP|1|1|
+param_option.service_update_policy=meta2=NONE|3|1|tag.type=m2v2;meta1=REPLACE;sqlx=KEEP|1|1|
 param_option.automatic_open=true
 param_option.meta2_max_versions=1
 param_option.storage_policy=SINGLE
@@ -301,9 +275,9 @@ param_service.sqlx.score_timeout=120
 param_service.sqlx.score_variation_bound=5
 param_service.sqlx.score_expr=(num stat.cpu)
 
-param_service.solr.score_timeout=120
-param_service.solr.score_variation_bound=5
-param_service.solr.score_expr=(num stat.cpu)
+param_service.echo.score_timeout=120
+param_service.echo.score_variation_bound=5
+param_service.echo.score_expr=(num stat.cpu)
 """
 
 template_conscience_events = """
@@ -412,7 +386,7 @@ env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 template_gridinit_rawx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE}
-command=${EXE_PREFIX}-rawx-monitor ${CFGDIR}/${NS}-${SRVTYPE}-monitor-${SRVNUM}.conf ${CFGDIR}/${NS}-${SRVTYPE}-monitor-${SRVNUM}.log4crc
+command=${EXE_PREFIX}-svc-monitor -s SDS,${NS},${SRVTYPE},${SRVNUM} -p 1 -m '${EXE_PREFIX}-rawx-monitor.py' -i '${NS}|${SRVTYPE}|${IP}:${PORT}' -c '/usr/sbin/httpd -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf'
 enabled=true
 start_at_boot=false
 on_die=respawn
@@ -481,9 +455,10 @@ def generate (ns, ip):
 			('sqlx',  EXE_PREFIX + '-sqlx-server', 3, next_port()),
 	)
 	rawx = (
-		(1,next_port()),
-		(2,next_port()),
-		(3,next_port()),
+		(1, next_port()),
+		(2, next_port()),
+		(3, next_port()),
+		(4, next_port()),
 	)
 	env = dict(IP=ip, NS=ns, HOME=HOME, EXE_PREFIX=EXE_PREFIX,
 			PATH=PATH, LIBDIR=LIBDIR,
@@ -528,33 +503,30 @@ def generate (ns, ip):
 		env['PORT'] = port_proxy
 		tpl = Template(template_gridinit_ns)
 		f.write(tpl.safe_substitute(env))
+		tpl = Template(template_gridinit_service)
 		for t, e, n, p in services:
 			mkdir_noerror(DATADIR + '/' + ns + '-' + t + '-' + str(n))
 			env['SRVTYPE'] = t
 			env['SRVNUM'] = n
 			env['PORT'] = p
 			env['EXE'] = e
-			tpl = Template(template_gridinit_service)
 			f.write(tpl.safe_substitute(env))
 
 	# Generate the RAWX services
+	tpl = Template(template_gridinit_rawx)
 	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
 		for n,p in rawx:
 			mkdir_noerror(DATADIR + '/' + ns + '-rawx-' + str(n))
 			env['SRVTYPE'] = 'rawx'
 			env['SRVNUM'] = n
 			env['PORT'] = p
-			tpl = Template(template_gridinit_rawx)
 			f.write(tpl.safe_substitute(env))
+	tpl = Template(template_rawx_service)
 	for n,p in rawx:
 		env['SRVTYPE'] = 'rawx'
 		env['SRVNUM'] = n
 		env['PORT'] = p
 		with open(CFGDIR + '/' + ns + '-rawx-httpd-' + str(n) + '.conf', 'w+') as f:
-			tpl = Template(template_rawx_service)
-			f.write(tpl.safe_substitute(env))
-		with open(CFGDIR + '/' + ns + '-rawx-monitor-' + str(n) + '.conf', 'w+') as f:
-			tpl = Template(template_rawx_monitor)
 			f.write(tpl.safe_substitute(env))
 
 	# Central endpoint service

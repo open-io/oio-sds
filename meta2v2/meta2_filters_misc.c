@@ -58,9 +58,7 @@ void
 _on_bean_ctx_append_udata_list(struct on_bean_ctx_s *obc)
 {
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(obc->ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(obc->ctx);
-	struct event_config_s * evt_config = meta2_backend_get_event_config(m2b,
-			hc_url_get(url, HCURL_NS));
+	struct event_config_s * evt_config = meta2_backend_get_event_config(m2b);
 
 	if (event_is_enabled(evt_config) || event_is_notifier_enabled(evt_config)) {
 		if (obc->first) {
@@ -102,9 +100,7 @@ _on_bean_ctx_clean(struct on_bean_ctx_s *obc)
 		return;
 
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(obc->ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(obc->ctx);
-	struct event_config_s * evt_config = meta2_backend_get_event_config(m2b,
-			hc_url_get(url, HCURL_NS));
+	struct event_config_s * evt_config = meta2_backend_get_event_config(m2b);
 
 	if (obc->l) {
 		if (!(event_is_enabled(evt_config) || event_is_notifier_enabled(evt_config)))

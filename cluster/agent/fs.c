@@ -43,7 +43,7 @@ get_free_space(const char *path, long chunk_size)
 	gdouble blocks_max_d, block_size_d, blocks_avail_d;
 
 	if (statfs(path, &sfs) < 0) {
-		ERROR("Failed to get fs info on path %s : %s", path, strerror(errno));
+		ERROR("Failed to get fs info on path [%s] : %s", path, strerror(errno));
 		return (-1);
 	}
 

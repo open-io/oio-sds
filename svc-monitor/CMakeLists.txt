@@ -1,6 +1,6 @@
 #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
-include_directories(BEFORE . ../..)
+include_directories(BEFORE . ..)
 
 include_directories(AFTER
 		${GRIDINIT_INCLUDE_DIRS})

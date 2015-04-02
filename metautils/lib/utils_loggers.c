@@ -558,6 +558,7 @@ logger_syslog_open (void)
 		return;
 	syslog_opened = 1;
 	openlog(syslog_id, LOG_NDELAY, LOG_LOCAL0);
+	g_log_set_default_handler(logger_syslog, NULL);
 }
 
 static void

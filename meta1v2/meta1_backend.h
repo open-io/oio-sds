@@ -121,7 +121,7 @@ struct meta1_prefixes_set_s* meta1_backend_get_prefixes(
  * @return a pointer
  */
 struct service_update_policies_s* meta1_backend_get_svcupdate(
-		struct meta1_backend_s *m1, const char *ns_name);
+		struct meta1_backend_s *m1);
 
 /** Backend destructor.
  *
@@ -315,9 +315,6 @@ meta1_backend_update_m1_policy(struct meta1_backend_s *m1, const gchar *ns, cons
                         const container_id_t cid, const gchar *srvtype,
                         const gchar *excludesrv, gchar *action, gboolean checkonly, gchar **result);
 
-/**
- *
- */
 gchar* meta1_backend_get_ns_name(const struct meta1_backend_s *m1);
 
 struct event_config_repo_s *meta1_backend_get_evt_config_repo(const struct meta1_backend_s *m1);
@@ -326,7 +323,7 @@ struct event_config_repo_s *meta1_backend_get_evt_config_repo(const struct meta1
  * Get the event configuration for a specific namespace. Will fallback
  * on parent VNS if not found.
  */
-struct event_config_s *meta1_backend_get_event_config(struct meta1_backend_s *m1, const char *ns_name);
+struct event_config_s *meta1_backend_get_event_config(struct meta1_backend_s *m1);
 
 metautils_notif_pool_t *meta1_backend_get_notifier(struct meta1_backend_s *m1);
 

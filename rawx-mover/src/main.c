@@ -357,7 +357,7 @@ load_volumes(void)
 
 	GRID_INFO("Reloading the volume list");
 
-	new_services = list_namespace_services2(ns_name, "rawx", &err);
+	new_services = list_namespace_services(ns_name, NAME_SRVTYPE_RAWX, &err);
 	if (!new_services) {
 		GRID_WARN("Failed to reload volume list (not fatal)");
 	} else {
@@ -702,7 +702,7 @@ validate_chunk_in_one_meta2(struct upload_info_s *info, const char *str_addr)
 	MY_DEBUG(*info, "About to validate the reference in meta2 at [%s]", m2_descr);
 
 	// Call only if asked to dereference old chunk, and meta2v2
-	if (flag_dereference && !is_m2v1(str_addr)) {
+	if (flag_dereference) {
 		chunk_hash_t bin_hash;
 		gchar tmp[STRLEN_ADDRINFO];
 		gchar *new_url, *old_url;
@@ -726,13 +726,6 @@ validate_chunk_in_one_meta2(struct upload_info_s *info, const char *str_addr)
 		GRID_DEBUG("Call meta2 %s for substitution of %s by %s",
 				str_addr, old_url, new_url);
 		gerr = m2v2_remote_execute_RAW_SUBST_single(str_addr, url, new, old);
-		if (gerr) {
-			// Host is meta2v1 but we didn't know
-			if (gerr->code == CODE_NOT_FOUND) {
-				add_to_m2v1_list(str_addr);
-				g_clear_error(&gerr);
-			}
-		}
 		g_free(new_url);
 		g_free(old_url);
 	}
@@ -1664,8 +1657,6 @@ rawx_mover_fini(void)
 
 	if (patterns)
 		g_slist_free(patterns);
-
-	free_m2v1_list();
 }
 
 void

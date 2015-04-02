@@ -112,21 +112,12 @@ static void
 _task_reload_policies(gpointer p)
 {
 	GError *err = NULL;
-
-	void _update_each(gpointer k, gpointer v, gpointer ignored) {
-		(void) ignored;
-		if(!err)
-			err = service_update_reconfigure(
-				meta1_backend_get_svcupdate(m1, (char *)k), (char *)v);
-	}
-
-	GHashTable *ht = gridcluster_get_service_update_policy(
-			&(PSRV(p)->nsinfo), "meta1");
-	if (!ht)
+	gchar *cfg = gridcluster_get_service_update_policy(&(PSRV(p)->nsinfo));
+	if (!cfg)
 		err = NEWERROR(EINVAL, "Invalid parameter");
 	else {
-		g_hash_table_foreach(ht, _update_each, NULL);
-		g_hash_table_destroy(ht);
+		err = service_update_reconfigure(meta1_backend_get_svcupdate(m1), cfg);
+		g_free(cfg);
 	}
 
 	if (!err)
