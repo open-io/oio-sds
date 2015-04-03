@@ -38,6 +38,10 @@ License along with this library.
 #  define EXTRA_ASSERT(X)
 # endif
 
+# ifndef EVENT_TOPIC
+#  define EVENT_TOPIC "oio.sds"
+# endif
+
 /* Some well known service types */
 
 # define NAME_SRVTYPE_META0 "meta0"

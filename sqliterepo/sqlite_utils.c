@@ -130,7 +130,8 @@ _admin_entry_del_noerror(sqlite3 *db, const gchar *k)
 }
 
 void
-sqlx_admin_set_gba(struct sqlx_sqlite3_s *sq3, const gchar *k, GByteArray *gba)
+sqlx_admin_set_gba_and_clean(struct sqlx_sqlite3_s *sq3, const gchar *k,
+		GByteArray *gba)
 {
 	GByteArray *prev;
 
@@ -151,7 +152,7 @@ sqlx_admin_set_gba(struct sqlx_sqlite3_s *sq3, const gchar *k, GByteArray *gba)
 void
 sqlx_admin_set_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v)
 {
-	sqlx_admin_set_gba(sq3, k, metautils_gba_from_string(v));
+	sqlx_admin_set_gba_and_clean(sq3, k, metautils_gba_from_string(v));
 }
 
 void

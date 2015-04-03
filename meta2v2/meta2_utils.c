@@ -704,9 +704,10 @@ m2db_set_container_properties(struct sqlx_sqlite3_s *sq3, guint32 flags, GSList 
 			continue;
 		}
 
-		sqlx_admin_set_gba(sq3, m2p->name, metautils_gba_dup(m2p->value));
+		sqlx_admin_set_gba_and_clean(sq3, m2p->name, metautils_gba_dup(m2p->value));
 	}
 
+	/* TODO JFS : properties should not be deleted via a SET with NULL value */
 	/* Properties to be deleted */
 	if (delete) {
 		for (GSList *l = props; l; l=l->next) {

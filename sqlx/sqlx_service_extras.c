@@ -111,7 +111,6 @@ sqlx_task_reload_event_config(struct sqlx_service_s *ss)
 {
 	GError *err = NULL;
 	gboolean must_clear_events = TRUE;
-	GHashTable *ht = NULL;
 	metautils_notif_pool_t *notifier = NULL;
 
 	EXTRA_ASSERT(ss != NULL);
@@ -119,32 +118,25 @@ sqlx_task_reload_event_config(struct sqlx_service_s *ss)
 	if (!ss->extras || !ss->extras->evt_repo)
 		return;
 
-	void _update_each(gpointer k, gpointer v, gpointer ignored) {
-		(void) ignored;
-		if (!err) {
-			struct event_config_s *conf = event_config_repo_get(
-					ss->extras->evt_repo, (char *)k, FALSE);
-			err = event_config_reconfigure(conf, (char *)v);
-			if (!err && event_is_notifier_enabled(conf)) {
-				must_clear_events = FALSE;
-				err = _init_events(notifier, &(ss->nsinfo),
-						event_get_notifier_topic_name(conf, "redc"));
-				if (err) {
-					GRID_WARN("Failed to initialize notifications (will retry soon): %s",
-							err->message);
-					g_clear_error(&err);
-				}
-			}
-		}
-	}
-
 	notifier = event_config_repo_get_notifier(ss->extras->evt_repo);
-	ht = gridcluster_get_event_config(&(ss->nsinfo), ss->service_config->srvtype);
-	if (!ht)
+	gchar *cfg = gridcluster_get_event_config(&(ss->nsinfo),
+			ss->service_config->srvtype);
+	if (!cfg)
 		err = NEWERROR(EINVAL, "unknown error");
 	else {
-		g_hash_table_foreach(ht, _update_each, NULL);
-		g_hash_table_destroy(ht);
+		struct event_config_s *conf = event_config_repo_get(ss->extras->evt_repo);
+		err = event_config_reconfigure(conf, cfg);
+		if (!err && event_is_notifier_enabled(conf)) {
+			must_clear_events = FALSE;
+			err = _init_events(notifier, &(ss->nsinfo),
+					event_get_notifier_topic_name(conf, EVENT_TOPIC));
+			if (err) {
+				GRID_WARN("Failed to initialize notifications (will retry soon): %s",
+						err->message);
+				g_clear_error(&err);
+			}
+		}
+		g_free (cfg);
 	}
 
 	if (!err)

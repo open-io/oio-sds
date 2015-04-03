@@ -187,10 +187,6 @@ struct meta2_raw_content_s *meta2raw_remote_get_content_from_name(
 		struct metacnx_ctx_s *ctx, GError ** err,
 		const container_id_t container_id, const gchar * path, gsize path_len);
 
-struct meta2_raw_content_s *meta2raw_remote_get_content_from_chunkid(
-		struct metacnx_ctx_s *ctx, GError ** err,
-		const container_id_t container_id, const chunk_id_t * id);
-
 /** Get the contents elements including its chunks, nevermind its availability. */
 struct meta2_raw_content_s *meta2raw_remote_get_chunks(struct metacnx_ctx_s *ctx, GError ** err,
     const container_id_t container_id, const char *path, gsize path_len);

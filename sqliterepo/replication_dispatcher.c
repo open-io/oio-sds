@@ -1939,7 +1939,7 @@ sqlx_dispatch_PROPSET(struct gridd_reply_ctx_s *reply,
 				if (!l->data)
 					continue;
 				struct key_value_pair_s *kv = l->data;
-				sqlx_admin_set_gba (sq3, kv->key, kv->value);
+				sqlx_admin_set_gba_and_clean (sq3, kv->key, kv->value);
 				kv->value = NULL;
 			}
 			if (!(flags&FLAG_LOCAL))

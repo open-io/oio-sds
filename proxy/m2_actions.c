@@ -358,6 +358,25 @@ _load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSL
 		ALIASES_set2_alias (alias, PATH());
 		ALIASES_set2_content_id (alias, (guint8*)"0", 1);
 
+		gchar *s;
+		GString *mdsys = ALIASES_get_mdsys(alias);
+		// Extract the content-type
+		if (NULL != (s = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-type"))) {
+			if (mdsys->len > 0)
+				g_string_append_c (mdsys, ';');
+			g_string_append_printf (mdsys, "mime-type=%s", s);
+		} else if (NULL != (s = g_tree_lookup (args->rq->tree_headers, "content-type"))) {
+			if (mdsys->len > 0)
+				g_string_append_c (mdsys, ';');
+			g_string_append_printf (mdsys, "mime-type=%s", s);
+		}
+		// Extract the chunking method
+		if (NULL != (s = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-chunk-method"))) {
+			if (mdsys->len > 0)
+				g_string_append_c (mdsys, ';');
+			g_string_append_printf (mdsys, "chunk-method=%s", s);
+		}
+
 		gboolean run_headers (gpointer k, gpointer v, gpointer u) {
 			(void)u;
 			if (!g_str_has_prefix((gchar*)k, PROXYD_HEADER_PREFIX "content-meta-x-"))
@@ -430,9 +449,9 @@ _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 {
 	if (err) {
 		if (err->code == CODE_CONTAINER_NOTFOUND)
-			return _reply_forbidden_error (args, err);
-		if (err->code == CODE_CONTAINER_NOTFOUND)
-			return _reply_forbidden_error (args, err);
+			return _reply_notfound_error (args, err);
+		if (err->code == CODE_CONTENT_NOTFOUND)
+			return _reply_notfound_error (args, err);
 		return _reply_system_error (args, err);
 	}
 

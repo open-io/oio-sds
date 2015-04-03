@@ -139,7 +139,7 @@ _build_event(struct meta2_backend_s *m2b, const gchar *str_type,
 	g_assert(url != NULL);
 	g_assert(*str_type != '\0');
 
-	evt_config = meta2_backend_get_event_config(m2b, hc_url_get(url, HCURL_NS));
+	evt_config = meta2_backend_get_event_config(m2b);
 
 	event = gridcluster_create_event();
 	if (!event) {
@@ -188,8 +188,7 @@ touch_v2_content(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	GError *err = NULL;
 	gridcluster_event_t *event = NULL;
 
-	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b,
-			hc_url_get(url, HCURL_NS));
+	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b);
 
 	GRID_DEBUG("Touch v2 content [%s]", hc_url_get(url, HCURL_WHOLE));
 
@@ -226,8 +225,7 @@ touch_v2_content_chunkonly(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	GError *err = NULL;
 	gridcluster_event_t *event = NULL;
 
-	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b,
-			hc_url_get(url, HCURL_NS));
+	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b);
 	const gchar* m2url = meta2_backend_get_local_addr(m2b);
 
 	GRID_DEBUG("Touch v2 content [%s]", hc_url_get(url, HCURL_WHOLE));
@@ -319,8 +317,7 @@ _notify_kafka(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	GSList *events_data = NULL; // List of gchar*
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b,
-			hc_url_get(url, HCURL_NS));
+	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b);
 	const gchar *topic = NULL;
 
 	if (!event_is_notifier_enabled(evt_config) || metautils_cfg_get_bool(
@@ -447,8 +444,7 @@ _notify_content_gridd(struct gridd_filter_ctx_s *ctx,
 	GError *err = NULL;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b,
-			hc_url_get(url, HCURL_NS));
+	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b);
 	GSList *beans = (GSList*)meta2_filter_ctx_get_input_udata(ctx);
 
 	if (!event_is_enabled(evt_config)) {
@@ -532,8 +528,7 @@ _notify_container_gridd(struct gridd_filter_ctx_s *ctx,
 
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url        = meta2_filter_ctx_get_url(ctx);
-	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b,
-			hc_url_get(url, HCURL_NS));
+	struct event_config_s *evt_config = meta2_backend_get_event_config(m2b);
 	const gchar* m2url = meta2_backend_get_local_addr(m2b);
 
 	if(!event_is_enabled(evt_config)){

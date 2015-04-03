@@ -408,16 +408,9 @@ meta2_backend_get_local_addr(struct meta2_backend_s *m2)
 }
 
 struct event_config_s *
-meta2_backend_get_event_config2(struct meta2_backend_s *m2, const char *ns_name,
-		gboolean vns_fallback)
+meta2_backend_get_event_config(struct meta2_backend_s *m2)
 {
-	return event_config_repo_get(m2->backend.evt_repo, ns_name, vns_fallback);
-}
-
-struct event_config_s *
-meta2_backend_get_event_config(struct meta2_backend_s *m2, const char *ns_name)
-{
-	return meta2_backend_get_event_config2(m2, ns_name, TRUE);
+	return event_config_repo_get(m2->backend.evt_repo);
 }
 
 GError *

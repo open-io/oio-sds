@@ -43,6 +43,7 @@ abstract_action (struct req_args_s *args, struct sub_action_s *sub)
 			rc = _reply_forbidden_error (args, BADREQ ("No/Bad arguments"));
 		else {
 			const char *action = json_object_get_string (jaction);
+			args->rp->access_tail ("action=%s", action);
 			for (; sub->handler ;++sub) {
 				if (!strcmp(action, sub->verb)) {
 					rc = sub->handler(args, jargs);

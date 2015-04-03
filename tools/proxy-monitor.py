@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# metacd-monitor.py, a moniroting script as part of metacd-http.
+# metacd-monitor.py, a monitoring script for oio-proxy services
 # Copyright (C) 2014 Worldine, original work aside of Redcurrant
 # Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 # 

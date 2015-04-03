@@ -30,12 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <integrity/lib/check.h>
 
-/**
- * List of meta2 for which a m2v1 request was successfully executed.
- * This enables to skip sending m2v2 requests to this meta2.
- */
-static GSList *m2v1_list = NULL;
-
 static GError*
 _init_meta2_connection(struct meta2_ctx_s *ctx)
 {
@@ -209,57 +203,6 @@ clean_up:
 	return ctx;
 }
 
-static void
-_update_content_info(struct meta2_raw_content_s *p_raw_content,
-		struct content_textinfo_s *content_info)
-{
-	GHashTable *sysmd_ht = NULL;
-
-	content_info->storage_policy = g_strdup(p_raw_content->storage_policy);
-	if (!content_info->storage_policy) {
-		GRID_TRACE("Stgpol not found in meta2_raw_content, look into sysmd");
-		if (p_raw_content->system_metadata) {
-			sysmd_ht = metadata_unpack_gba(p_raw_content->system_metadata, NULL);
-			content_info->storage_policy = g_strdup(g_hash_table_lookup(sysmd_ht, "storage-policy"));
-			g_hash_table_destroy(sysmd_ht);
-		}
-	}
-	if (!content_info->storage_policy) {
-		GRID_DEBUG("Stgpol not found, neither in content nor in sysmd");
-	}
-	if (NULL == content_info->path)
-		content_info->path = g_strdup(p_raw_content->path);
-	content_info->version = g_strdup_printf("%"G_GINT64_FORMAT, p_raw_content->version);
-}
-
-static void
-_update_chunk_info(struct meta2_raw_content_s *p_raw_content,
-		struct chunk_textinfo_s *chunk_info, GSList **chunk_ids)
-{
-	gint given_chunk_pos;
-	gint _useless_sub;
-	gboolean _useless_par;
-
-	if (!m2v2_parse_chunk_position(chunk_info->position,
-			&given_chunk_pos, &_useless_par, &_useless_sub))
-		return;
-
-	void _find_chunks_at_given_pos(gpointer _raw_chunk, gpointer _unused)
-	{
-		struct meta2_raw_chunk_s *raw_chunk = _raw_chunk;
-		// position is cast from guint32 to gint
-		gint current_chunk_pos = raw_chunk->position;
-		(void) _unused;
-		if (current_chunk_pos == given_chunk_pos) {
-			gchar strid[1024], straddr[64];
-			chunk_id_to_string(&(raw_chunk->id), strid, sizeof(strid));
-			addr_info_to_string(&(raw_chunk->id.addr), straddr, sizeof(straddr));
-			*chunk_ids = g_slist_prepend(*chunk_ids, assemble_chunk_id(straddr, raw_chunk->id.vol, strid));
-		}
-	}
-	g_slist_foreach(p_raw_content->raw_chunks, _find_chunks_at_given_pos, NULL);
-}
-
 GError *
 generate_raw_chunk(check_info_t *info,
 		struct meta2_raw_chunk_s *p_raw_chunk)
@@ -324,52 +267,6 @@ check_result_t *
 check_result_new (void)
 {
 	return g_malloc0(sizeof(check_result_t));
-}
-
-static GError*
-_find_sp_fc_m2v1(const gchar* meta2, check_info_t *check_info,
-		GSList **chunk_ids, struct meta2_raw_content_s **p_raw_content)
-{
-	GError *err = NULL;
-	struct meta2_raw_content_s *raw_content = NULL;
-	struct metacnx_ctx_s ctx;
-	struct meta2_raw_chunk_s raw_chunk;
-	struct chunk_textinfo_s *chunk_info = check_info->ck_info;
-	struct content_textinfo_s *content_info = check_info->ct_info;
-	const gchar *strcid = content_info->container_id;
-	container_id_t cid;
-
-	if (NULL != (err = generate_raw_chunk(check_info, &raw_chunk))) {
-		return err;
-	}
-
-	g_strlcpy(raw_chunk.id.vol, check_info->rawx_vol, sizeof(raw_chunk.id.vol)-1);
-	grid_string_to_addrinfo(check_info->rawx_str_addr, NULL, &(raw_chunk.id.addr));
-
-	metacnx_clear(&ctx);
-	if (!metacnx_init_with_url(&ctx, meta2, &err)) {
-		return NEWERROR(ERRCODE_PARAM,
-				"Could not init metacnx from url [%s]", meta2);
-	}
-
-	if (!container_id_hex2bin(strcid, strlen(strcid), &cid, &err)) {
-		return NEWERROR(ERRCODE_PARAM,
-				"Could not convert container id to bin: [%s]", strcid);
-	}
-
-	raw_content = meta2raw_remote_get_content_from_chunkid(
-			&ctx, &err, cid, &(raw_chunk.id));
-
-	if (raw_content) {
-		_update_content_info(raw_content, content_info);
-		_update_chunk_info(raw_content, chunk_info, chunk_ids);
-		if (p_raw_content)
-			*p_raw_content = raw_content;
-		else
-			meta2_maintenance_destroy_content(raw_content);
-	}
-
-	return err;
 }
 
 static GError*
@@ -461,34 +358,13 @@ clean_up:
 	return err;
 }
 
-gboolean
-is_m2v1(const gchar *meta2)
-{
-	return NULL != g_slist_find_custom(m2v1_list, meta2, (GCompareFunc) g_strcmp0);
-}
-
-void
-free_m2v1_list (void)
-{
-	if (m2v1_list)
-		g_slist_free_full(m2v1_list, g_free);
-}
-
-void
-add_to_m2v1_list(const gchar *new_m2v1)
-{
-	m2v1_list = g_slist_prepend(m2v1_list, g_strdup(new_m2v1));
-}
-
 GError*
 find_storage_policy_and_friend_chunks_full(const gchar* meta2,
 		struct hc_url_s *url, check_info_t *check_info,
 		GSList **chunk_ids, struct meta2_raw_content_s **p_raw_content)
 {
 	GError *err = NULL, *err2 = NULL;
-	const gboolean is_v1 = is_m2v1(meta2);
 
-	if (!is_v1) {
 		GRID_DEBUG("Trying with M2V2 request on m2 [%s] for chunk [%s]",
 				meta2, check_info->ck_info->id);
 		err = _find_sp_fc_m2v2(meta2, url, check_info, chunk_ids);
@@ -501,27 +377,6 @@ find_storage_policy_and_friend_chunks_full(const gchar* meta2,
 			}
 			return err;
 		}
-	}
-	// CODE_NOT_FOUND error code can be thrown when processing M2V2_GET (by chunk):
-	//  - by m2v2 when no alias is found
-	//  - by m2v1 because the request is unknown
-	if (is_v1 || (err != NULL && err->code == CODE_NOT_FOUND)) {
-		// If error code is 404, try with M2V1 request
-		GRID_DEBUG("Trying with M2V1 request on m2 [%s] for chunk [%s]",
-				meta2, check_info->ck_info->id);
-		err2 = _find_sp_fc_m2v1(meta2, check_info, chunk_ids, p_raw_content);
-		if (err2) {
-			g_prefix_error(&err, "M2V1 request also failed: [%s] ", err2->message);
-			// CODE_NOT_IMPLEMENTED thrown by m2v2 answering REQ_M2RAW_CONTENT_GETBYCHUNK.
-			// In this case, keep the first error, else keep the second error.
-			if (err2->code == CODE_NOT_IMPLEMENTED)
-				g_clear_error(&err2);
-		} else {
-			g_clear_error(&err);
-			if (!is_v1)
-				add_to_m2v1_list(meta2);
-		}
-	}
 
 	if (err2) {
 		g_clear_error(&err);

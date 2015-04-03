@@ -192,7 +192,7 @@ get_meta0_info_from_conscience(const char *ns_name, long timeout_cnx, long timeo
 static meta0_info_t*
 get_meta0_info_from_agent(const char *ns_name, GError **error)
 {
-	GSList *services = list_namespace_services(ns_name,"meta0",error);
+	GSList *services = list_namespace_services(ns_name, NAME_SRVTYPE_META0, error);
 	if (!services) {
 		GSETERROR(error,"No META0 found");
 		return NULL;
@@ -289,8 +289,8 @@ list_namespace_service_types(const char *ns_name, GError **error)
 	}
 }
 
-GSList*
-list_namespace_services(const char *ns_name, const char *type, GError **error)
+static GSList*
+list_gridagent_services(const char *ns_name, const char *type, GError **error)
 {
 	request_t req;
 	response_t resp;
@@ -338,7 +338,7 @@ list_namespace_services(const char *ns_name, const char *type, GError **error)
 }
 
 GSList*
-list_namespace_services2(const char *ns_name, const char *type, GError **error)
+list_namespace_services(const char *ns_name, const char *type, GError **error)
 {
 	if (!ns_name || !type) {
 		GSETERROR(error,"Invalid parameter");
@@ -356,7 +356,7 @@ list_namespace_services2(const char *ns_name, const char *type, GError **error)
 			return res;
 		}
 	} else { // from agent
-		return list_namespace_services(ns_name,type,error);
+		return list_gridagent_services(ns_name,type,error);
 	}
 }
 
@@ -374,7 +374,7 @@ get_one_namespace_service(const gchar *ns_name, const gchar *type, GError **erro
 	if (!gridagent_available()) {
 		// Find best scored service. This is basically what's done in agent.
 		struct service_info_s *res = NULL;
-		GSList *services = list_namespace_services2(ns_name, type, error);
+		GSList *services = list_namespace_services(ns_name, type, error);
 		if (services) {
 			struct service_info_s *best = NULL;
 			for (GSList *l = services; l; l = l->next) {
@@ -1260,89 +1260,40 @@ namespace_get_rules(const gchar *ns, const gchar *typename, GError **err)
 	return gba;
 }
 
-static void
-_svcupd_preload_with_default(GHashTable *ht, gchar *ns, const gchar *srvtype)
+gchar *
+gridcluster_get_service_update_policy (struct namespace_info_s *nsinfo)
 {
-	if (!g_ascii_strcasecmp(srvtype, "meta1"))
-		g_hash_table_insert(ht, g_strdup(ns), g_strdup(
-					"meta2=NONE;solr=APPEND;redis=REPLACE"));
-	else if (!g_ascii_strcasecmp(srvtype, "meta2"))
-		g_hash_table_insert(ht, g_strdup(ns), g_strdup(
-					"solr=APPEND;rawx=NONE;tsmx=APPEND"));
-	else
-		g_hash_table_insert(ht, g_strdup(ns), g_strdup(""));
+	const gchar *def = "meta2=KEEP|1|1|;sqlx=KEEP|3|1|";
+
+	if (!nsinfo || !nsinfo->options)
+		return g_strdup(def);
+
+	return gridcluster_get_nsinfo_strvalue (nsinfo, "service_update_policy", def);
 }
 
-static void
-_complete_with_nsinfo(GHashTable *ht, struct namespace_info_s *ni,
-		const gchar *key_suffix, const gchar *srvtype)
+gchar *
+gridcluster_get_event_config(struct namespace_info_s *nsinfo, const gchar *srvtype)
 {
-	GHashTableIter iter;
-	gchar *k;
-	GByteArray *vba;
-
-	gchar *suffix = g_strdup_printf("%s.%s", key_suffix, srvtype);
-	gsize suffix_len = strlen(suffix);
-
-	g_hash_table_iter_init(&iter, ni->options);
-	while (g_hash_table_iter_next(&iter, (gpointer*)&k, (gpointer*)&vba)) {
-		if (g_str_has_suffix(k, suffix)) { // New key with NS
-			gchar *key = (strlen(k) == suffix_len) ? g_strdup(ni->name)
-				: g_strndup(k, strlen(k) - suffix_len);
-			gchar *value = g_strndup((const char *)vba->data, vba->len);
-			g_hash_table_insert(ht, key, value);
-		}
-		else if (0 == g_ascii_strcasecmp(k, suffix+1)) { // Old key without NS
-			gchar *value = g_strndup((const char *)vba->data, vba->len);
-			g_hash_table_insert(ht, g_strdup(ni->name), value);
-		}
+	gchar *getdef (void) {
+		if (!strcmp (srvtype, NAME_SRVTYPE_META2))
+			return g_strdup_printf("enabled=false;dir=%s;aggregate=false;kafka_enabled=false;kafka_topic=sds.%s",
+					GCLUSTER_SPOOL_DIR, NAME_SRVTYPE_META2);
+		return g_strdup("");
 	}
-	g_free(suffix);
-}
 
-GHashTable*
-gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo,
-	const gchar *srvtype)
-{
-	if (!nsinfo || !nsinfo->options || !srvtype) {
+	if (!nsinfo || !srvtype) {
 		errno = EINVAL;
 		return NULL;
 	}
+	if (!nsinfo->options)
+		return getdef();
 
-	GHashTable *result = g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, g_free);
-	_svcupd_preload_with_default(result, nsinfo->name, srvtype);
-	_complete_with_nsinfo(result, nsinfo, "_service_update_policy", srvtype);
-	return result;
-}
-
-static void
-_evtcfg_preload_with_default(GHashTable *ht, gchar *ns, const gchar *srvtype)
-{
-	if (!g_ascii_strcasecmp(srvtype, NAME_SRVTYPE_META2)) {
-		gchar *v = g_strdup_printf("enabled=false;dir=%s;aggregate=false"
-				";kafka_enabled=false;kafka_topic=sds.%s",
-				GCLUSTER_SPOOL_DIR, NAME_SRVTYPE_META2);
-		g_hash_table_insert(ht, g_strdup(ns), v);
-	}
-	else
-		g_hash_table_insert(ht, g_strdup(ns), g_strdup(""));
-}
-
-GHashTable*
-gridcluster_get_event_config(struct namespace_info_s *nsinfo,
-	const gchar *srvtype)
-{
-	if (!nsinfo || !nsinfo->options || !srvtype) {
-		errno = EINVAL;
-		return NULL;
-	}
-
-	GHashTable *result = g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, g_free);
-	_evtcfg_preload_with_default(result, nsinfo->name, srvtype);
-	_complete_with_nsinfo(result, nsinfo, "_event_config", srvtype);
-	return result;
+	gchar *vdef = getdef();
+	gchar *k = g_strconcat("event_config.", srvtype, NULL);
+	gchar *v = gridcluster_get_nsinfo_strvalue (nsinfo, k, vdef);
+	g_free(k);
+	g_free (vdef);
+	return v;
 }
 
 GError*
@@ -1350,7 +1301,7 @@ gridcluster_reload_lbpool(struct grid_lbpool_s *glp)
 {
 	gboolean _reload_srvtype(const gchar *ns, const gchar *srvtype) {
 		GError *err = NULL;
-		GSList *list_srv = list_namespace_services2(ns, srvtype, &err);
+		GSList *list_srv = list_namespace_services(ns, srvtype, &err);
 		if (err) {
 			GRID_WARN("Gridagent/conscience error: Failed to list the services"
 					" of type [%s]: code=%d %s", srvtype, err->code,

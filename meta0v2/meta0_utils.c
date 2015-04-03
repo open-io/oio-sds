@@ -403,7 +403,7 @@ meta0_utils_getMeta0addr(gchar *namespace, GSList **m0_lst, GSList *exclude)
 	addr_info_t *a = NULL;
 	if (*m0_lst  == NULL) {
 		GError *err = NULL;
-		*m0_lst = list_namespace_services2(namespace,NAME_SRVTYPE_META0, &err);
+		*m0_lst = list_namespace_services(namespace,NAME_SRVTYPE_META0, &err);
 		if (err) {
 			GRID_WARN("Failed to get Meta0 addresses to namespace %s: (%d) %s",
 					namespace, err->code, err->message);

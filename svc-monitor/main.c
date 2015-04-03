@@ -35,12 +35,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <math.h>
 #include <getopt.h>
 
-#include <glib.h>
-
-#include <gridinit-utils.h>
-
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
+
+#include <gridinit-utils.h>
 
 #define CHILD_KEY "SVC"
 #define DEFAULT_MONITOR_PERIOD 10
@@ -48,7 +46,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static char svc_id[1024] = {0,0,0};
 static char svc_mon[4096] = {0,0,0};
 static char svc_cmd[4096] = {0,0,0};
-// syslog_id declared as extern in metautils_loggers.h
 
 static GRegex *regex_tag = NULL;
 static GRegex *regex_svc = NULL;
@@ -92,14 +89,14 @@ parse_output(const gchar *cmd, service_info_t *si)
 	gchar cmd_with_args[4096] = {0,0,0};
 
 	g_snprintf(cmd_with_args, sizeof(cmd_with_args), "%s %s", cmd, svc_id);
-	INFO("Executing [%s]", cmd_with_args);
 	if (0 > (fd = command_get_pipe(cmd_with_args))) {
-		WARN("Exec failed: %s", strerror(errno));
+		GRID_WARN("Exec [%s] failed: %s", cmd_with_args, strerror(errno));
 		return;
 	}
+	GRID_DEBUG("Exec [%s]", cmd_with_args);
 
 	if (!(stream_in = fdopen(fd, "r"))) {
-		WARN("fdopen failed: %s", strerror(errno));
+		GRID_WARN("fdopen failed: %s", strerror(errno));
 		metautils_pclose(&fd);
 		return;
 	}
@@ -116,18 +113,28 @@ parse_output(const gchar *cmd, service_info_t *si)
 		my_chomp(line);
 
 		if (!g_regex_match(regex_tag, line, 0, &mi)) {
-			NOTICE("Unrecognized pattern for output line [%s]", line);
+			GRID_INFO("Unrecognized pattern for output line [%s]", line);
 		} else {
 			struct service_tag_s *tag;
-			gchar *str_type, *str_name, *str_value;
+			gchar *str_type, *str_name, *str_sub, *str_value;
 
 			str_name = g_match_info_fetch(mi, 1);
 			str_type = g_match_info_fetch(mi, 2);
+			str_sub = g_match_info_fetch(mi, 3);
 			str_value = g_match_info_fetch(mi, 4);
 
 			if (!g_ascii_strcasecmp(str_type, "tag")) {
 				tag = service_info_ensure_tag(si->tags, str_name);
 				service_tag_set_value_string(tag, str_value);
+
+				if (!g_ascii_strcasecmp(str_sub, "vol")) {
+					service_tag_set_value_macro(
+							service_info_ensure_tag (si->tags, "stat.space"),
+							"space", str_value);
+					service_tag_set_value_macro(
+							service_info_ensure_tag (si->tags, "stat.io"),
+							"io", str_value);
+				}
 			}
 			else if (!g_ascii_strcasecmp(str_type, "stat")) {
 				gdouble dval;
@@ -138,6 +145,7 @@ parse_output(const gchar *cmd, service_info_t *si)
 			}
 
 			g_free(str_value);
+			g_free(str_sub);
 			g_free(str_type);
 			g_free(str_name);
 		}
@@ -164,10 +172,10 @@ monitor_get_status(const gchar *monitor_cmd, service_info_t *si)
 	gchar *str_si;
 
 	if (strlen(monitor_cmd) > 0) {
-		TRACE("Collecting the service state");
+		GRID_TRACE("Collecting the service state");
 		parse_output(monitor_cmd, si);
 		str_si =  service_info_to_string(si);
-		DEBUG("SVC state: %s", str_si);
+		GRID_DEBUG("SVC state: %s", str_si);
 		g_free(str_si);
 	}
 }
@@ -201,6 +209,18 @@ init_srvinfo(const gchar *sid, service_info_t *si)
 
 	if (!si->tags)
 		si->tags = g_ptr_array_sized_new(6);
+
+	service_tag_set_value_macro(
+			service_info_ensure_tag (si->tags, "stat.cpu"),
+			"cpu", NULL);
+
+	service_tag_set_value_macro(
+			service_info_ensure_tag (si->tags, "stat.space"),
+			"space", NULL);
+
+	service_tag_set_value_macro(
+			service_info_ensure_tag (si->tags, "stat.io"),
+			"io", NULL);
 
 	return 0;
 }
@@ -248,9 +268,9 @@ monitoring_loop(service_info_t *si)
 	_add_custom_tags(si);
 
 	proc_count = supervisor_children_startall(NULL, NULL);
-	DEBUG("First started %u processes", proc_count);
+	GRID_DEBUG("First started %u processes", proc_count);
 
-	for (;;) { /* main loop */
+	while (flag_running) { /* main loop */
 		struct timeval tv_sleep;
 
 		if (flag_restart_children) {
@@ -259,10 +279,10 @@ monitoring_loop(service_info_t *si)
 				supervisor_children_enable(CHILD_KEY, TRUE);
 				proc_count = supervisor_children_startall(NULL,NULL);
 
-				DEBUG("Started %u processes", proc_count);
+				GRID_DEBUG("Started %u processes", proc_count);
 				flag_restart_children = !!proc_count;
 			} else {
-				DEBUG("One of my children died, I will die too (auto_restart_children=%d)", auto_restart_children);
+				GRID_DEBUG("One of my children died, I will die too (auto_restart_children=%d)", auto_restart_children);
 				break;
 			}
 		}
@@ -276,7 +296,7 @@ monitoring_loop(service_info_t *si)
 				_add_custom_tags(si);
 			}
 			if (!register_namespace_service(si, &error)) {
-				ERROR("Failed to register the service: %s", gerror_get_message(error));
+				GRID_ERROR("Failed to register the service: %s", gerror_get_message(error));
 				g_clear_error(&error);
 			}
 			g_timer_reset(timer);
@@ -294,10 +314,11 @@ monitoring_loop(service_info_t *si)
 	g_free(timer);
 }
 
-// TODO: convert this to use metautils' common_main
 int
 main(int argc, char ** argv)
 {
+	HC_PROC_INIT(argv,GRID_LOGLVL_INFO);
+
 	int rc = 1;
 	service_info_t *service = NULL;
 	setenv("GS_DEBUG_ENABLE", "0", TRUE);
@@ -403,11 +424,8 @@ main(int argc, char ** argv)
 		return 1;
 	}
 
-	if (*syslog_id) {
-		logger_init_level(GRID_LOGLVL_INFO);
+	if (*syslog_id)
 		logger_syslog_open();
-		g_log_set_default_handler(logger_syslog, NULL);
-	}
 
 	GError *error = NULL;
 	if (!supervisor_children_register(CHILD_KEY, svc_cmd, &error)) {
@@ -416,11 +434,11 @@ main(int argc, char ** argv)
 	}
 
 	if (0 != supervisor_children_set_limit(CHILD_KEY, SUPERV_LIMIT_THREAD_STACK, 8192 * 1024))
-		WARN("Limit on thread stack size cannot be set: %s", strerror(errno));
+		GRID_WARN("Limit on thread stack size cannot be set: %s", strerror(errno));
 	if (0 != supervisor_children_set_limit(CHILD_KEY, SUPERV_LIMIT_MAX_FILES, 32 * 1024))
-		WARN("Limit on max opened files cannot be set: %s", strerror(errno));
+		GRID_WARN("Limit on max opened files cannot be set: %s", strerror(errno));
 	if (0 != supervisor_children_set_limit(CHILD_KEY, SUPERV_LIMIT_CORE_SIZE, -1))
-		WARN("Limit on core file size cannot be set: %s", strerror(errno));
+		GRID_WARN("Limit on core file size cannot be set: %s", strerror(errno));
 
 	supervisor_children_set_respawn(CHILD_KEY, FALSE);
 	supervisor_children_set_working_directory(CHILD_KEY, "/tmp");
@@ -434,7 +452,7 @@ main(int argc, char ** argv)
 
 	freopen("/dev/null", "r", stdin);
 
-	NOTICE("%s restarted, pid=%d", argv[0], getpid());
+	GRID_NOTICE("%s restarted, pid=%d", argv[0], getpid());
 
 	signal(SIGQUIT, sighandler_supervisor);
 	signal(SIGTERM, sighandler_supervisor);

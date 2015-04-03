@@ -1,16 +1,33 @@
 #!/usr/bin/python
 
+# rainx-monitor.py, a monitoring script for rainx services
+# Copyright (C) 2014 Worldine, original work aside of Redcurrant
+# Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+# 
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU Affero General Public License as
+# published by the Free Software Foundation, either version 3 of the
+# License, or (at your option) any later version.
+# 
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU Affero General Public License for more details.
+# 
+# You should have received a copy of the GNU Affero General Public License
+# along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
 import sys
 import urllib2
 
 RAINX_STAT_KEYS = [
-	("rainx.reqpersec", "total_reqpersec"),
+	("rainx.reqpersec",    "total_reqpersec"),
 	("rainx.reqputpersec", "put_reqpersec"),
 	("rainx.reqgetpersec", "get_reqpersec"),
-	("rainx.avreqtime", "total_avreqtime"),
+	("rainx.avreqtime",    "total_avreqtime"),
 	("rainx.avputreqtime", "put_avreqtime"),
 	("rainx.avgetreqtime", "get_avreqtime"),
-	]
+]
 
 def parse_info(stream):
     data = {}
@@ -43,7 +60,6 @@ def main(args):
     stats_url = "http://%s/stat" % ip_port
     for stat in get_stat_lines(stats_url, RAINX_STAT_KEYS):
         print stat
-
 
 if __name__ == "__main__":
     main(sys.argv)

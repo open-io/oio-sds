@@ -145,7 +145,7 @@ action_cs_get (struct req_args_s *args)
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_notfound_error(args, err);
 
-	GSList *sl = list_namespace_services2 (NS(), TYPE(), &err);
+	GSList *sl = list_namespace_services (NS(), TYPE(), &err);
 	if (NULL != err) {
 		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
 		g_prefix_error (&err, "Agent error: ");

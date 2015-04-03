@@ -155,7 +155,7 @@ gboolean metaXClient_reply_sequence_run_from_addrinfo(GError ** err,
 
 /** @} */
 
-/* ------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
 
 /**
  * @defgroup metacomm_message Messages enveloppes
@@ -163,31 +163,18 @@ gboolean metaXClient_reply_sequence_run_from_addrinfo(GError ** err,
  * @{
  */
 
-/**
- * Builds a simple reply for the given request. This function
- * automates the copy of the required fields from the request,
- * and sets the appropriated fields with the given status and
- * message.
+/** Builds a simple reply for the given request. This function automates the
+ * copy of the required fields from the request, and sets the appropriated
+ * fields with the given status and message.
  *
- * The reply pointer wust be freed with message_destroy().
- *
- * @param reply
- * @param request
- * @param status
- * @param msg
- * @param err
- * @return
- */
+ * The reply pointer wust be freed with message_destroy(). */
 gint metaXServer_reply_simple(MESSAGE * reply, MESSAGE request, gint status,
 		const gchar * msg, GError ** err);
 
-/**
- * Performs the opposite operation : retrieves the core elements
- * of the message (supposed to be a reply).
- *
+/** Performs the opposite operation : retrieves the core elements of the
+ * message (supposed to be a reply). 
  * The message returned in the msg pointer is a copy of the original.
- * It is allocated with the g_lib and must be freed with g_free().
- */
+ * It is allocated with the g_lib and must be freed with g_free(). */
 gint metaXClient_reply_simple(MESSAGE reply, gint * status, gchar ** msg,
 		GError ** err);
 
@@ -271,45 +258,14 @@ gint message_get_param(MESSAGE m, enum message_param_e mp, void **s, gsize * sSi
 gint message_set_param(MESSAGE m, enum message_param_e mp,
 		const void *s, gsize sSize, GError ** error);
 
-/**
- * Adds a new custom field in the list of the message. Now check is made to
+/** Adds a new custom field in the list of the message. Now check is made to
  * know whether the given field is already present or not. The given new value
- * will be copied.
- *
- * @param m a pointer to a message. It may not be NULL.
- * @param name a not NULL pointer to the name of the new field.
- * @param value a pointer to the content of the new field.
- * @param valueSize the length of the new value of the field.
- */
+ * will be copied. */
 void message_add_field(MESSAGE m, const char *name, const void *value, gsize valueSize);
 
-/**
- * Retrieves a copy of the 
- *
- * @param m
- * @param name
- * @param nameSize
- * @param value
- * @param valueSize
- * @param error the error structure that will be set in case of failure
- * @return 1 on success and found, 0 on not found, 1 on error
- */
 gint message_get_field(MESSAGE m, const void *name, gsize nameSize,
 		void **value, gsize * valueSize, GError ** error);
 
-/**
- * Return the names of all the fields in the given message
- *
- * On success, it always return a not-NULL pointer to an array. If no stats
- * have been found, the first entry of the array will be NULL.
- *
- * @param m the message to be inspected.
- * @param error the error structure set in case of failure
- * @return a NULLL terminated array of NULL-terminated character arrays. It
- * has been allocated with g_malloc() calls and should be freed with
- * g_strfreev(). In case of failure, NULL is retrurned.
- * @see g_strfreev() in the glib documentation
- */
 gchar ** message_get_field_names(MESSAGE m, GError ** error);
 
 gint message_get_fields(MESSAGE m, GHashTable ** hash, GError ** error);
@@ -431,11 +387,6 @@ DECLARE_MARSHALLER_GBA(path_info_marshall_gba);
 DECLARE_UNMARSHALLER(path_info_unmarshall);
 DECLARE_BODY_MANAGER(path_info_concat);
 
-DECLARE_MARSHALLER(container_event_marshall);
-DECLARE_MARSHALLER_GBA(container_event_marshall_gba);
-DECLARE_UNMARSHALLER(container_event_unmarshall);
-DECLARE_BODY_MANAGER(container_event_concat);
-
 DECLARE_MARSHALLER(meta0_info_marshall);
 DECLARE_MARSHALLER_GBA(meta0_info_marshall_gba);
 DECLARE_UNMARSHALLER(meta0_info_unmarshall);
@@ -459,20 +410,10 @@ DECLARE_MARSHALLER(     meta2_property_marshall);
 DECLARE_UNMARSHALLER(   meta2_property_unmarshall);
 DECLARE_BODY_MANAGER(   meta2_property_concat);
 
-DECLARE_MARSHALLER_GBA( meta2_raw_content_header_marshall_gba);
-DECLARE_MARSHALLER(     meta2_raw_content_header_marshall);
-DECLARE_UNMARSHALLER(   meta2_raw_content_header_unmarshall);
-DECLARE_BODY_MANAGER(   meta2_raw_content_header_concat);
-
 DECLARE_MARSHALLER_GBA( meta2_raw_content_v2_marshall_gba);
 DECLARE_MARSHALLER(     meta2_raw_content_v2_marshall);
 DECLARE_UNMARSHALLER(   meta2_raw_content_v2_unmarshall);
 DECLARE_BODY_MANAGER(   meta2_raw_content_v2_concat);
-
-DECLARE_MARSHALLER_GBA( meta2_raw_chunk_marshall_gba);
-DECLARE_MARSHALLER(     meta2_raw_chunk_marshall);
-DECLARE_UNMARSHALLER(   meta2_raw_chunk_unmarshall);
-DECLARE_BODY_MANAGER(   meta2_raw_chunk_concat);
 
 /**
  * @param si the structure to be serialized. NULL is an error
@@ -496,47 +437,14 @@ GByteArray* simple_integer_marshall_gba(gint64 i64, GError **err);
 GByteArray *meta2_maintenance_marshall_content(
 		struct meta2_raw_content_s *content, GError ** err);
 
-/** Unserializes the ASN.1 encoded content structure. The returned
- * structure has to be freed with the meta2_maintenance_destroy_content()
- * function. */
-struct meta2_raw_content_s *meta2_maintenance_content_unmarshall_bytearray(
-		GByteArray * encoded_content, GError ** err);
-
 struct meta2_raw_content_s *meta2_maintenance_content_unmarshall_buffer(
 		guint8 * buf, gsize buf_size, GError ** err);
-
-GByteArray *chunk_id_marshall(const chunk_id_t * chunkId, GError ** err);
-
-gint chunk_id_unmarshall(chunk_id_t * chunkId, void *src, gsize srcSize, GError ** err);
-
-/** Returns the unserialized form of the String sequence as a linked list
- * of GByteArrays */
-GSList *meta2_maintenance_arrays_unmarshall_bytearray(
-		GByteArray * encoded_form, GError ** err);
-
-/** Returns the unserialized form of the String sequence as a linked list
- * of GByteArrays */
-GSList *meta2_maintenance_arrays_unmarshall_buffer(guint8 * buf, gsize buf_len, GError ** err);
-
-/** Returns the unserialized form of the String sequence as a linked list
- * of NULL-terminated character strings */
-GSList *meta2_maintenance_names_unmarshall_bytearray(GByteArray * encoded_form, GError ** err);
 
 /** Returns the unserialized form of the String sequence as a linked list
  * of NULL-terminated character strings */
 GSList *meta2_maintenance_names_unmarshall_buffer(const guint8 * buf, gsize buf_len, GError ** err);
 
 GByteArray *meta2_maintenance_names_marshall(GSList * names, GError ** err);
-
-GByteArray *meta2_maintenance_arrays_marshall(GSList * arrays, GError ** err);
-
-GSList *meta2_maintenance_sized_arrays_unmarshall_buffer(guint8 * buf, gsize buf_len, gsize array_size,
-		GError ** err);
-
-GSList *meta2_maintenance_sized_arrays_unmarshall_bytearray(GByteArray * encoded, gsize array_size, GError ** err);
-
-/** Serializes a list of arrays of fixed sized (given as the second argument) */
-GByteArray *meta2_maintenance_sized_arrays_marshall(GSList * arrays, gsize array_size, GError ** err);
 
 /** Serialize a namespace_info to ASN1 */
 GByteArray* namespace_info_marshall(struct namespace_info_s * namespace_info, GError ** err);

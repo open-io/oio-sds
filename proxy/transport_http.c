@@ -395,7 +395,7 @@ sender(gpointer k, gpointer v, gpointer u)
 }
 
 static void
-_access_log(struct req_ctx_s *r, gint status, gsize out_len)
+_access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 {
 	struct timespec now, diff_total, diff_handler;
 	const gchar *reqid = g_tree_lookup(r->request->tree_headers, PROXYD_HEADER_REQID);
@@ -420,6 +420,11 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len)
 			r->request->req_uri,
 			diff_handler.tv_sec, diff_handler.tv_nsec / 1000);
 
+	if (tail) {
+		g_string_append_c (gstr, ' ');
+		g_string_append (gstr, tail);
+	}
+
 	g_log("access", GRID_LOGLVL_INFO, "%s", gstr->str);
 	g_string_free(gstr, TRUE);
 }
@@ -429,7 +434,7 @@ http_manage_request(struct req_ctx_s *r)
 {
 	gboolean finalized = 0;
 	int code = HTTP_CODE_INTERNAL_ERROR;
-	gchar *msg = NULL;
+	gchar *msg = NULL, *access = NULL;
 	GTree *headers = NULL;
 	const gchar *content_type = "octet/stream";
 
@@ -439,15 +444,9 @@ http_manage_request(struct req_ctx_s *r)
 	} body;
 
 	void cleanup(void) {
-		if (msg) {
-			g_free(msg);
-			msg = NULL;
-		}
-		if (body.data) {
-			g_free(body.data);
-			body.data = NULL;
-			body.len = 0;
-		}
+		metautils_str_clean (&msg);
+		metautils_str_clean ((gchar**)&body.data);
+		body.len = 0;
 		if (headers) {
 			g_tree_destroy(headers);
 			headers = NULL;
@@ -536,9 +535,16 @@ http_manage_request(struct req_ctx_s *r)
 			network_client_send_slab(r->client,
 					data_slab_make_buffer(body.data, body.len));
 
-		_access_log(r, code, body.len);
+		_access_log(r, code, body.len, access);
 		body.data = NULL;
 		body.len = 0;
+	}
+	void access_tail (const char *fmt, ...) {
+		va_list args;
+		va_start(args, fmt);
+		gchar *s = g_strdup_vprintf (fmt, args);
+		va_end(args);
+		metautils_str_reuse (&access, s);
 	}
 
 	void final_error(int c_, const char *m_) {
@@ -561,6 +567,7 @@ http_manage_request(struct req_ctx_s *r)
 		.set_body_gba = set_body_gba,
 		.set_body_gstr = set_body_gstr,
 		.finalize = finalize,
+		.access_tail = access_tail,
 	};
 
 	finalized = FALSE;

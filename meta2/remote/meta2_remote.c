@@ -962,55 +962,6 @@ exit_label:
 	return NULL;
 }
 
-struct meta2_raw_content_s*
-meta2raw_remote_get_content_from_chunkid(
-	struct metacnx_ctx_s *ctx, GError **err,
-	const container_id_t container_id, const chunk_id_t *id)
-{
-	static struct code_handler_s codes [] = {
-		{ CODE_FINAL_OK, REPSEQ_FINAL|REPSEQ_BODYMANDATORY, concat_contents, NULL },
-		{ 0,0,NULL,NULL}
-	};
-	MESSAGE request=NULL;
-	GByteArray *gba_id, *gba_cid;
-	struct meta2_raw_content_s *result=NULL;
-	struct reply_sequence_data_s data = { &result , 0 , codes };
-
-	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-
-	if (!ctx || !container_id || !id) {
-		GSETERROR(err,"invalid parameter");
-		goto exit_label;
-	}
-
-	gba_cid = metautils_gba_from_cid(container_id);
-	gba_id = chunk_id_marshall(id, NULL);
-	
-	request = meta2raw_create_request(NAME_MSGNAME_M2RAW_GETCONTENTBYCHUNK, NULL,
-		NAME_MSGKEY_CONTAINERID, gba_cid,
-		NAME_MSGKEY_CHUNKID, gba_id,
-		NULL);
-
-	if (!metaXClient_reply_sequence_run_context (err, ctx, request, &data)) {
-		GSETERROR(err,"Cannot execute the query and receive all the responses");
-		goto error_meta;
-	}
-
-	message_destroy(request);
-	g_byte_array_free( gba_cid, TRUE);
-	g_byte_array_free( gba_id, TRUE);
-	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-	return result;
-
-error_meta:
-	message_destroy(request);
-	g_byte_array_free( gba_id, TRUE);
-	g_byte_array_free( gba_cid, TRUE);
-exit_label:
-	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-	return NULL;
-}
-
 GSList *
 meta2_remote_content_append_v2(struct metacnx_ctx_s *ctx, GError ** err, gchar *virtual_namespace, 
 	const container_id_t container_id, const gchar * content_path, content_length_t content_length)

@@ -38,26 +38,6 @@ typedef struct _check_result {
 	gpointer udata;
 } check_result_t;
 
-/**
- * Frees the m2v1 list.
- */
-void free_m2v1_list (void);
-
-/**
- * Returns whether the provided meta2 address is known as m2v1.
- * @param meta2 the address to test
- * @return TRUE if meta2 is a m2v1 address, FALSE otherwise
- */
-gboolean is_m2v1(const gchar *meta2);
-
-/**
- * Adds the meta2 address to the list of meta2v1 addresses.
- * Make sure that the address is not already stored in the list by calling
- * {@link is_m2v1} beforehand.
- * @param new_m2v1 the meta2 address to be added to the list
- */
-void add_to_m2v1_list(const gchar *new_m2v1);
-
 #define CHECK_ARG_POINTER(P,E) \
 	do { \
 		if (P == NULL) { \

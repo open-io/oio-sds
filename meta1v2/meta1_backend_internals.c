@@ -167,13 +167,9 @@ __info_container(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
 void
 gpa_str_free(GPtrArray *gpa)
 {
-	guint i;
 	if (!gpa)
 		return;
-	for (i=0; i<gpa->len ;i++) {
-		if (gpa->pdata[i])
-			g_free(gpa->pdata[i]);
-	}
+	g_ptr_array_set_free_func (gpa, g_free);
 	g_ptr_array_free(gpa, TRUE);
 }
 

@@ -71,7 +71,7 @@ usage(void)
 	g_printerr("  %-20s\t%s\n", "--clear-errors              ", "Clear all local erroneous containers references in the cluster");
 	g_printerr("  %-20s\t%s\n", "--config,                 -c", "Dump the event management configuration for the given namespace");
 	g_printerr("  %-20s\t%s\n", "--full,                     ", "Show full services.");
-	g_printerr("  %-20s\t%s\n", "--lb-config SRVTYPE,        ", "Prints to stdout the namespace LB configuration ");
+	g_printerr("  %-20s\t%s\n", "--lb-config,                ", "Prints to stdout the namespace LB configuration ");
 	g_printerr("  %-20s\t%s\n", "--local-cfg,              -A", "Prints to stdout the namespaces configuration values locally configured");
 	g_printerr("  %-20s\t%s\n", "--local-ns,               -L", "Prints to stdout the namespaces locally configured");
 	g_printerr("  %-20s\t%s\n", "--local-srv               -l", "List local services monitored on this server.");
@@ -330,13 +330,17 @@ main(int argc, char **argv)
 	namespace_info_t *ns = NULL;
 	GError *error = NULL;
 	static struct option long_options[] = {
+		/* long options only */
+		{"set-score",      1, 0, 4},
+		{"unlock-score",   0, 0, 5},
+		{"clear-errors",   0, 0, 6},
+		{"full",           0, 0, 7},
+
+		/* both long and short */
 		{"config",         0, 0, 'c'},
 		{"rules-path",     0, 0, 'P'},
 		{"rules",          0, 0, 'R'},
 		{"clear-services", 1, 0, 'C'},
-		{"set-score",      1, 0, 4},
-		{"unlock-score",   0, 0, 5},
-		{"clear-errors",   0, 0, 6},
 		{"service",        1, 0, 'S'},
 		{"local-cfg",      0, 0, 'A'},
 		{"local-ns",       0, 0, 'L'},
@@ -345,11 +349,10 @@ main(int argc, char **argv)
 		{"show",           0, 0, 's'},
 		{"show-internals", 0, 0, 'a'},
 		{"raw",            0, 0, 'r'},
-		{"full",           0, 0, 7},
 		{"help",           0, 0, 'h'},
 		{"errors",         0, 0, 'e'},
 		{"verbose",        0, 0, 'v'},
-		{"lb-config",      1, 0, 'B'},
+		{"lb-config",      0, 0, 'B'},
 		{0, 0, 0, 0}
 	};
 
@@ -359,7 +362,7 @@ main(int argc, char **argv)
 	memset(cid_str, 0x00, sizeof(cid_str));
 	enable_debug();
 
-	while ((c = getopt_long(argc, argv, "ALsvealtrcP:B:R:C:S:h?", long_options, &option_index)) > -1) {
+	while ((c = getopt_long(argc, argv, "ALsvealtrcPBRC:S:h", long_options, &option_index)) > -1) {
 
 		switch (c) {
 			case 'A':
@@ -367,7 +370,6 @@ main(int argc, char **argv)
 				break;
 			case 'B':
 				has_lbconfig = TRUE;
-				g_strlcpy(service_desc, optarg, sizeof(service_desc)-1);
 				break;
 			case 'L':
 				has_nslist = TRUE;
@@ -491,15 +493,16 @@ main(int argc, char **argv)
 	if (has_lbconfig) {
 		GError *err = NULL;
 		struct service_update_policies_s *pol;
-		GHashTable *cfg = gridcluster_get_service_update_policy(ns, service_desc);
+		gchar *cfg = gridcluster_get_service_update_policy(ns);
 		if (!cfg) {
-			g_printerr("Invalid NSINFO/SRVTYPE\n");
+			g_printerr("Invalid NSINFO\n");
 			goto exit_label;
 		}
 
 		pol = service_update_policies_create();
-		err = service_update_reconfigure(pol, g_hash_table_lookup(cfg, namespace));
-		g_hash_table_destroy(cfg);
+		err = service_update_reconfigure(pol, cfg);
+		g_free(cfg); cfg=NULL;
+
 		if (err) {
 			g_printerr("Invalid namespace configuration : (%d) %s\n",
 					err->code, err->message);

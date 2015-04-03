@@ -634,7 +634,6 @@ static void
 main_specific_fini(void) {
 	if (NULL != volume_path_table)
 		g_hash_table_destroy(volume_path_table);
-	free_m2v1_list();
 }
 
 static gboolean

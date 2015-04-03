@@ -72,13 +72,7 @@ gboolean meta2_backend_get_nsinfo(struct meta2_backend_s *m2,
 
 /** Get the event configuration of the specified namespace. If not defined,
  * look for its parent namespace configuration. */
-struct event_config_s * meta2_backend_get_event_config(struct meta2_backend_s *m2,
-		const gchar *ns_name);
-
-/** Same as previous, but you can prevent the fallback on parent namespace by
- * passing FALSE as the last argument. */
-struct event_config_s * meta2_backend_get_event_config2(struct meta2_backend_s *m2,
-		const gchar *ns_name, gboolean vns_fallback);
+struct event_config_s * meta2_backend_get_event_config(struct meta2_backend_s *m2);
 
 /** Tests if the backend has been fully initiated. I.e. it checks a
  * valid NSinfo has been provided. */

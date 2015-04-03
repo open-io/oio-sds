@@ -188,23 +188,6 @@ convert_url_to_serviceinfo(struct meta1_service_url_s *u, const gchar *excludeur
 	return (struct service_info_s**)g_ptr_array_free(tmp, FALSE);
 }
 
-static struct service_update_policies_s *
-_policies(struct meta1_backend_s *m1, const char *ns_name)
-{
-	struct service_update_policies_s *pol;
-
-	g_rw_lock_reader_lock(&m1->rwlock_ns_policies);
-	pol = g_hash_table_lookup(m1->ns_policies, ns_name);
-	if (!pol) {
-		gchar *ns = meta1_backend_get_ns_name(m1);
-		pol = g_hash_table_lookup(m1->ns_policies, ns);
-		g_free(ns);
-	}
-	g_rw_lock_reader_unlock(&m1->rwlock_ns_policies);
-
-	return pol;
-}
-
 //------------------------------------------------------------------------------
 
 static GError *
@@ -750,7 +733,7 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 	guint replicas;
 
 	struct service_update_policies_s *pol;
-	if (!(pol = _policies(m1, hc_url_get(url, HCURL_NS))))
+	if (!(pol = meta1_backend_get_svcupdate(m1)))
 		return NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Bad NS/Policy pair");
 	policy = service_howto_update(pol, ct->baretype);
 	replicas = service_howmany_replicas(pol, ct->baretype);
@@ -782,7 +765,7 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 
 	/* No service available, poll a new one */
 	if ((mode & M1V2_GETSRV_REUSE) && used &&
-			(policy == SVCUPD_NONE || policy == SVCUPD_NOT_SPECIFIED))
+			(policy == SVCUPD_KEEP || policy == SVCUPD_NOT_SPECIFIED))
 		*result = pack_urlv(used);
 	else {
 		gint seq;
@@ -1508,7 +1491,7 @@ meta1_backend_update_m1_policy(struct meta1_backend_s *m1, const gchar *ns,
 	GHashTable *hash_srv = NULL;
 	struct compound_type_s ct;
 	addr_info_t *excludeaddr = NULL;
-	struct service_update_policies_s *pol = _policies(m1, ns);
+	struct service_update_policies_s *pol = meta1_backend_get_svcupdate(m1);
 
 	EXTRA_ASSERT(m1 != NULL);
 	EXTRA_ASSERT(ns != NULL);
@@ -1594,8 +1577,7 @@ __notify_services(struct meta1_backend_s *m1,
 	GError *err = NULL;
 	const gchar *topic = NULL;
 	struct meta1_service_url_s **services = NULL, **services2 = NULL;
-	struct event_config_s *evt_config = meta1_backend_get_event_config(m1,
-			hc_url_get(url, HCURL_NS));
+	struct event_config_s *evt_config = meta1_backend_get_event_config(m1);
 
 	if (!event_is_notifier_enabled(evt_config))
 		return NULL;
