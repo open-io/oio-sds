@@ -40,6 +40,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V2_ADMIN_SIZE M2V2_ADMIN_PREFIX_SYS "usage"
 # endif
 
+# ifndef M2V2_ADMIN_CTIME
+# define M2V2_ADMIN_CTIME M2V2_ADMIN_PREFIX_SYS "ctime"
+# endif
+
 # ifndef M2V2_ADMIN_VERSIONING_POLICY
 # define M2V2_ADMIN_VERSIONING_POLICY M2V2_ADMIN_PREFIX_SYS "policy.version"
 # endif

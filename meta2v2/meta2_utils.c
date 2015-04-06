@@ -228,6 +228,12 @@ m2db_set_max_versions(struct sqlx_sqlite3_s *sq3, gint64 max)
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_VERSIONING_POLICY, max);
 }
 
+void
+m2db_set_ctime(struct sqlx_sqlite3_s *sq3, gint64 now)
+{
+	sqlx_admin_set_i64(sq3, M2V2_ADMIN_CTIME, now);
+}
+
 gint64
 m2db_get_keep_deleted_delay(struct sqlx_sqlite3_s *sq3, gint64 def)
 {
