@@ -63,18 +63,25 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 			headers = g_slist_prepend (headers, l->data);
 	}
 
-	gboolean first = TRUE;
-	GString *gstr = g_string_new ("[");
+	gboolean first;
+	GString *gstr = g_string_new ("{");
 
 	// Dump the prefixes
-	for (gchar **pp=prefixes; pp && *pp ;++pp) {
-		if (!first)
-			g_string_append_c(gstr, ',');
-		first = FALSE;
-		g_string_append_printf (gstr, "\"%s\"", *pp);
+	if (prefixes && *prefixes) {
+		g_string_append (gstr, "\"prefixes\":[");
+		first = TRUE;
+		for (gchar **pp=prefixes; pp && *pp ;++pp) {
+			if (!first)
+				g_string_append_c(gstr, ',');
+			first = FALSE;
+			g_string_append_printf (gstr, "\"%s\"", *pp);
+		}
+		g_string_append (gstr, "],");
 	}
 
 	// And now the beans
+	g_string_append (gstr, "\"objects\":[");
+	first = TRUE;
 	for (GSList *la = aliases; la ; la=la->next) {
 
 		if (!first)
@@ -125,7 +132,7 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 		}
 		g_string_append_c(gstr, '}');
 	}
-	g_string_append_c (gstr, ']');
+	g_string_append (gstr, "]}");
 	_bean_cleanl2 (beans);
 	
 	g_slist_free (aliases);

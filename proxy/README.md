@@ -64,13 +64,14 @@ Destined for the **POST** method, the following actions are currently available:
   * **HEAD** container existence check
   * **PUT** container creation. No input expected.
   * **GET** container listing. A few options a allowed as query options
-    * **prefix** list items lexically greater or equal to the prefix
     * **marker** list items lexically strictly greater than the marker (incompatible  with a prefix)
     * **marker_end** list items lexically lower than the marker
-    * **delimiter**
+    * **prefix** list items whose name is prefixed by the given value.
+    * **delimiter** single character to avoid in the portion of the name after the prefix. This helps emulating directory listing.
     * **max** limit to this number of keys
     * **deleted** also includ edeleted items (TRUE if present, FALSE if absent)
     * **all** also include past versions (TRUE if present, FALSE if absent)
+    * Output body : ``{"prefixes":["a/","b/","c/"],"objects":[...]}``
   * **DELETE** container existence check
 
 ### Containers actions ``/m2/{NS}/{REF}/action``
