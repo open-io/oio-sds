@@ -566,7 +566,7 @@ action_m2_container_list (struct req_args_s *args)
 		(void) next;
 		struct list_params_s in = list_in;
 		struct list_result_s out = {NULL,NULL,FALSE};
-		for (;;) {
+		do {
 			// patch the input parameters
 			if (list_in.maxkeys > 0)
 				in.maxkeys = list_in.maxkeys - count;
@@ -597,7 +597,7 @@ action_m2_container_list (struct req_args_s *args)
 				list_out.truncated = list_in.maxkeys ? out.truncated : FALSE;
 				return NULL;
 			}
-		}
+		} while (out.truncated);
 		return NULL;
 	}
 
