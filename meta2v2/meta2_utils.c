@@ -50,40 +50,6 @@ gpa_reverse (GPtrArray *gpa)
 }
 
 static void
-_list_params_to_sql_clause(struct list_params_s *lp, GString *clause, GVariant **params)
-{
-	int i = 0;
-	void set_param (GVariant *gv) { if (params[i]) g_variant_unref(params[i]); params[i]=gv; }
-	void add_param (GVariant *gv) { set_param(gv); i++; set_param(NULL); }
-	void lazy_and () { if (clause->len > 0) { g_string_append(clause, " AND"); } }
-
-	if (lp->marker_start) {
-		lazy_and();
-		g_string_append (clause, " alias > ?");
-		add_param (g_variant_new_string (lp->marker_start));
-	} else if (lp->prefix) {
-		lazy_and();
-		g_string_append (clause, " alias >= ?");
-		add_param (g_variant_new_string (lp->prefix));
-	}
-
-	if (lp->marker_end) {
-		lazy_and();
-		g_string_append (clause, " alias < ?");
-		add_param (g_variant_new_string (lp->marker_end));
-	}
-
-	if (clause->len == 0)
-		clause = g_string_append(clause, " 1");
-
-	if (!lp->flag_allversion || lp->maxkeys>0 || lp->marker_start || lp->marker_end)
-		g_string_append(clause, " ORDER BY alias ASC, version ASC");
-
-	if (lp->maxkeys > 0)
-		g_string_append_printf(clause, " LIMIT %"G_GINT64_FORMAT, lp->maxkeys);
-}
-
-static void
 gvariant_unrefv(GVariant **v)
 {
 	if (!v)
@@ -370,25 +336,6 @@ _get_alias_size(struct sqlx_sqlite3_s *sq3, struct bean_ALIASES_s *alias)
 }
 
 GError*
-m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		guint32 flags, struct bean_ALIASES_s **out)
-{
-	g_assert (out != NULL);
-
-	flags &= ~(M2V2_FLAG_HEADERS|M2V2_FLAG_NOFORMATCHECK);
-	flags |= M2V2_FLAG_NOPROPS|M2V2_FLAG_NORECURSION;
-
-	GPtrArray *tmp = g_ptr_array_new ();
-	GError *err = m2db_get_alias(sq3, url, flags, _bean_buffer_cb, tmp);
-	if (!err) {
-		*out = tmp->pdata[0];
-		tmp->pdata[0] = NULL;
-	}
-	_bean_cleanv2 (tmp);
-	return err;
-}
-
-GError*
 m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *u,
 		guint32 flags, m2_onbean_cb cb, gpointer u0)
 {
@@ -477,13 +424,103 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *u,
 }
 
 GError*
+m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+		guint32 flags, struct bean_ALIASES_s **out)
+{
+	g_assert (out != NULL);
+
+	flags &= ~(M2V2_FLAG_HEADERS|M2V2_FLAG_NOFORMATCHECK); // meaningless
+	flags |=  (M2V2_FLAG_NOPROPS|M2V2_FLAG_NORECURSION);   // only alias
+
+	GPtrArray *tmp = g_ptr_array_new ();
+	GError *err = m2db_get_alias(sq3, url, flags, _bean_buffer_cb, tmp);
+	if (!err) {
+		*out = tmp->pdata[0];
+		tmp->pdata[0] = NULL;
+	}
+	_bean_cleanv2 (tmp);
+	return err;
+}
+
+GError*
+m2db_get_alias_version(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+		gint64 *out)
+{
+	GError *err = NULL;
+	struct bean_ALIASES_s *latest = NULL;
+
+	if (NULL != (err = m2db_latest_alias(sq3, url, &latest))) {
+		g_prefix_error(&err, "Latest error: ");
+		return err;
+	}
+
+	if (!latest)
+		return NEWERROR(CODE_CONTENT_NOTFOUND, "Alias not found");
+
+	*out = ALIASES_get_version(latest);
+	_bean_clean(latest);
+	return NULL;
+}
+
+GError*
+m2db_latest_alias(struct sqlx_sqlite3_s *sq3,  struct hc_url_s *url,
+		struct bean_ALIASES_s **alias)
+{
+	return m2db_get_alias1(sq3, url, M2V2_FLAG_LATEST, alias);
+}
+
+GError*
+m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+		struct bean_ALIASES_s **alias)
+{
+	return m2db_get_alias1 (sq3, url, 0, alias);
+}
+
+/* LIST --------------------------------------------------------------------- */
+
+static void
+_list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
+		GVariant **params)
+{
+	int i = 0;
+	void set_param (GVariant *gv) { if (params[i]) g_variant_unref(params[i]); params[i]=gv; }
+	void add_param (GVariant *gv) { set_param(gv); i++; set_param(NULL); }
+	void lazy_and () { if (clause->len > 0) { g_string_append(clause, " AND"); } }
+
+	if (lp->marker_start) {
+		lazy_and();
+		g_string_append (clause, " alias > ?");
+		add_param (g_variant_new_string (lp->marker_start));
+	} else if (lp->prefix) {
+		lazy_and();
+		g_string_append (clause, " alias >= ?");
+		add_param (g_variant_new_string (lp->prefix));
+	}
+
+	if (lp->marker_end) {
+		lazy_and();
+		g_string_append (clause, " alias < ?");
+		add_param (g_variant_new_string (lp->marker_end));
+	}
+
+	if (clause->len == 0)
+		clause = g_string_append(clause, " 1");
+
+	if (!lp->flag_allversion || lp->maxkeys>0 || lp->marker_start || lp->marker_end)
+		g_string_append(clause, " ORDER BY alias ASC, version ASC");
+
+	if (lp->maxkeys > 0)
+		g_string_append_printf(clause, " LIMIT %"G_GINT64_FORMAT, lp->maxkeys);
+}
+
+GError*
 m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 		m2_onbean_cb cb, gpointer u)
 {
-	struct list_params_s lp = *lp0;
 	GError *err = NULL;
 	GSList *aliases = NULL;
 	guint count_aliases = 0;
+	struct list_params_s lp = *lp0;
 	gboolean done = FALSE;
 
 	while (!done && (lp.maxkeys <= 0 || count_aliases < lp.maxkeys)) {
@@ -491,6 +528,7 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 		void cleanup (void) {
 			g_ptr_array_set_free_func (tmp, _bean_clean);
 			g_ptr_array_free (tmp, TRUE);
+			tmp = NULL;
 		}
 
 		if (aliases)
@@ -510,8 +548,6 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 
 		gpa_reverse (tmp);
 
-		// Keep the aliases that do not exceed and that match the prefix
-		// backward-iterator to benefit from version-sorted items
 		for (guint i=tmp->len; i>0 ;i--) {
 			struct bean_ALIASES_s *alias = tmp->pdata[i-1];
 			const gchar *name = ALIASES_get_alias(alias)->str;
@@ -522,6 +558,7 @@ m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp0,
 			}
 
 			g_ptr_array_remove_index_fast (tmp, i-1);
+
 			if (!aliases || lp.flag_allversion) {
 				aliases = g_slist_prepend(aliases, alias);
 				++ count_aliases;
@@ -563,53 +600,6 @@ label_ok:
 label_error:
 	g_slist_free_full (aliases, _bean_clean);
 	return err;
-}
-
-GError*
-m2db_get_alias_version(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, gint64 *out)
-{
-	GError *err = NULL;
-	struct bean_ALIASES_s *latest = NULL;
-
-	if (NULL != (err = m2db_latest_alias(sq3, url, &latest))) {
-		g_prefix_error(&err, "Latest error: ");
-		return err;
-	}
-
-	if (!latest)
-		return NEWERROR(CODE_CONTENT_NOTFOUND, "Alias not found");
-
-	*out = ALIASES_get_version(latest);
-	_bean_clean(latest);
-	return NULL;
-}
-
-GError*
-m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, gpointer *result)
-{
-	g_assert(sq3 != NULL);
-	g_assert(url != NULL);
-	g_assert(result != NULL);
-
-	GPtrArray *tmp = g_ptr_array_new();
-	GError *err = m2db_get_alias (sq3, url,
-			M2V2_FLAG_NOPROPS|M2V2_FLAG_NORECURSION,
-			_bean_buffer_cb, tmp);
-
-	if (!err) {
-		*result = tmp->pdata[0];
-		g_ptr_array_remove_index_fast(tmp, 0);
-	}
-	_bean_cleanv2(tmp);
-	return err;
-}
-
-GError*
-m2db_latest_alias(struct sqlx_sqlite3_s *sq3,  struct hc_url_s *url,
-		struct bean_ALIASES_s **alias)
-{
-	return m2db_get_alias1(sq3, url, M2V2_FLAG_NOPROPS|M2V2_FLAG_NORECURSION
-			|M2V2_FLAG_LATEST, alias);
 }
 
 /* PROPERTIES --------------------------------------------------------------- */
@@ -1094,7 +1084,6 @@ m2db_patch_alias_beans_list(struct m2db_put_args_s *args,
 }
 
 GError*
-//m2db_force_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, GSList *beans)
 m2db_force_alias(struct m2db_put_args_s *args, GSList *beans)
 {
 	guint8 uid[33];
@@ -1116,7 +1105,7 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans)
 	if (hc_url_has(args->url, HCURL_VERSION)) {
 		const char *tmp = hc_url_get(args->url, HCURL_VERSION);
 		args2.version = g_ascii_strtoll(tmp, NULL, 10);
-		err = m2db_get_versioned_alias(args->sq3, args->url, (gpointer*)&latest);
+		err = m2db_get_versioned_alias(args->sq3, args->url, &latest);
 	} else {
 		err = m2db_latest_alias(args->sq3, args->url, &latest);
 	}
@@ -1257,7 +1246,7 @@ m2db_copy_alias(struct m2db_put_args_s *args, const char *source)
 	}
 
 	if (hc_url_has(orig, HCURL_VERSION)) {
-		err = m2db_get_versioned_alias(args->sq3, orig, (gpointer*)&latest);
+		err = m2db_get_versioned_alias(args->sq3, orig, &latest);
 	} else {
 		err = m2db_latest_alias(args->sq3, orig, &latest);
 	}

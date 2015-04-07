@@ -248,8 +248,10 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 			lp->flag_headers, lp->flag_allversion, lp->flag_nodeleted,
 			lp->prefix, lp->marker_start, lp->marker_end, lp->maxkeys);
 
-	if (lp->maxkeys > 0) lp->maxkeys ++;
-	e = meta2_backend_list_aliases(m2b, url, lp, lp->maxkeys>0 ? s3_list_cb : _get_cb, obc);
+	if (lp->maxkeys > 0)
+		lp->maxkeys ++;
+	e = meta2_backend_list_aliases(m2b, url, lp,
+			lp->maxkeys>0 ? s3_list_cb : _get_cb, obc);
 
 	if (NULL != e) {
 		GRID_DEBUG("Fail to return alias for url: %s", hc_url_get(url, HCURL_WHOLE));

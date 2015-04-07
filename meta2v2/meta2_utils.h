@@ -61,6 +61,13 @@ struct list_params_s
 	guint8 flag_headers:1;
 };
 
+struct list_result_s
+{
+	GSList *beans;
+	gchar *next_marker;
+	gboolean truncated;
+};
+
 typedef struct chunk_pair_s
 {
 	struct bean_CONTENTS_s *content;
@@ -157,7 +164,7 @@ GError* m2db_latest_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		struct bean_ALIASES_s **out);
 
 GError* m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		gpointer *result);
+		struct bean_ALIASES_s **out);
 
 GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		struct hc_url_s *url, gboolean del_chunks, m2_onbean_cb cb, gpointer u0);

@@ -61,17 +61,12 @@ License along with this library.
 struct hc_url_s;
 
 struct list_params_s;
+struct list_result_s;
 
 /**
  * @addtogroup meta2v2_remote
  * @{
  */
-
-struct list_result_s {
-	GSList *beans;
-	gchar *next_marker;
-	gboolean truncated;
-};
 
 void m2v2_list_result_clean (struct list_result_s *p);
 
