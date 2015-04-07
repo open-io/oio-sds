@@ -131,13 +131,7 @@ gint64 m2db_get_version(struct sqlx_sqlite3_s *sq3);
 
 void m2db_increment_version(struct sqlx_sqlite3_s *sq3);
 
-GError* m2db_get_container_properties(struct sqlx_sqlite3_s *sq3,
-		guint32 flags, gpointer cb_data, m2_onprop_cb cb);
-
 void m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url);
-
-GError* m2db_set_container_properties(struct sqlx_sqlite3_s *sq3, guint32 flags,
-		GSList *props);
 
 GError* m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		guint32 flags, struct bean_ALIASES_s **out);

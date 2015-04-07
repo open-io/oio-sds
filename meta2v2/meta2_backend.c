@@ -926,50 +926,6 @@ meta2_backend_purge_container(struct meta2_backend_s *m2,
 	return err;
 }
 
-GError*
-meta2_backend_set_container_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, guint32 flags, GSList *props)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-
-	GRID_DEBUG("PROPSET(%s,...)", hc_url_get(url, HCURL_WHOLE));
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
-	if (!err) {
-		struct sqlx_repctx_s *repctx = NULL;
-		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_set_container_properties(sq3, flags, props)))
-				m2db_increment_version(sq3);
-			err = sqlx_transaction_end(repctx, err);
-		}
-		m2b_close(sq3);
-	}
-
-	return err;
-}
-
-GError*
-meta2_backend_get_container_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, guint32 flags, gpointer cb_data, m2_onprop_cb cb)
-{
-	GError *err;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	GRID_DEBUG("PROPGET(%s)", hc_url_get(url, HCURL_WHOLE));
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
-			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
-	if (!err) {
-		g_assert(sq3 != NULL);
-		err = m2db_get_container_properties(sq3, flags, cb_data, cb);
-		m2b_close(sq3);
-	}
-
-	return err;
-}
-
 /* Contents --------------------------------------------------------------- */
 
 GError*
