@@ -46,6 +46,7 @@ License along with this library.
 #include "version.h"
 #include "election.h"
 #include "cache.h"
+#include "sqlx_macros.h"
 #include "sqlx_remote.h"
 #include "sqlx_remote_ex.h"
 #include "replication_dispatcher.h"
@@ -1276,45 +1277,49 @@ end_label:
 #define FLAG_NOREAL     0x04
 #define FLAG_NOCHECK    0x08
 #define FLAG_CHUNKED    0x10
+#define FLAG_FLUSH      0x20
 
 static GError *
 _load_sqlx_name (struct gridd_reply_ctx_s *ctx, struct sqlx_name_mutable_s *n, guint32 *pflags)
 {
 	GError *err;
 	gchar ns[LIMIT_LENGTH_NSNAME], base[256], type[256];
-	gboolean nocheck, noreal, local, autocreate, chunked;
+	gboolean flush, nocheck, noreal, local, autocreate, chunked;
 
-	noreal = local = autocreate = nocheck = chunked = FALSE;
+	flush = noreal = local = autocreate = nocheck = chunked = FALSE;
 	memset(n, 0, sizeof(*n));
 
-	err = message_extract_string(ctx->request, "NAMESPACE", ns, sizeof(ns));
+	err = message_extract_string(ctx->request, NAME_MSGKEY_NAMESPACE, ns, sizeof(ns));
 	if (NULL != err)
 		return err;
-	err = message_extract_string(ctx->request, "BASE_NAME", base, sizeof(base));
+	err = message_extract_string(ctx->request, NAME_MSGKEY_BASENAME, base, sizeof(base));
 	if (NULL != err)
 		return err;
-	err = message_extract_string(ctx->request, "BASE_TYPE", type, sizeof(type));
+	err = message_extract_string(ctx->request, NAME_MSGKEY_BASETYPE, type, sizeof(type));
 	if (NULL != err)
 		return err;
 
 	ctx->subject("%s.%s", base, type);
 
-	err = message_extract_flag(ctx->request, "LOCAL", FALSE, &local);
+	err = message_extract_flag(ctx->request, NAME_MSGKEY_LOCAL, FALSE, &local);
 	if (NULL != err)
 		return err;
 
 	ctx->subject("%s.%s|%s", base, type, local?"LOC":"REP");
 
-	err = message_extract_flag(ctx->request, "AUTOCREATE", FALSE, &autocreate);
+	err = message_extract_flag(ctx->request, NAME_MSGKEY_AUTOCREATE, FALSE, &autocreate);
 	if (NULL != err)
 		return err;
-	err = message_extract_flag(ctx->request, "NOCHECK", FALSE, &nocheck);
+	err = message_extract_flag(ctx->request, NAME_MSGKEY_NOCHECK, FALSE, &nocheck);
 	if (NULL != err)
 		return err;
-	err = message_extract_flag(ctx->request, "NOREAL", FALSE, &noreal);
+	err = message_extract_flag(ctx->request, NAME_MSGKEY_NOREAL, FALSE, &noreal);
 	if (NULL != err)
 		return err;
-	err = message_extract_flag(ctx->request, "CHUNKED", FALSE, &chunked);
+	err = message_extract_flag(ctx->request, NAME_MSGKEY_CHUNKED, FALSE, &chunked);
+	if (NULL != err)
+		return err;
+	err = message_extract_flag(ctx->request, NAME_MSGKEY_FLUSH, FALSE, &flush);
 	if (NULL != err)
 		return err;
 	
@@ -1328,6 +1333,7 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx, struct sqlx_name_mutable_s *n, g
 		*pflags |= (noreal ? FLAG_NOREAL : 0);
 		*pflags |= (nocheck ? FLAG_NOCHECK : 0);
 		*pflags |= (chunked ? FLAG_CHUNKED : 0);
+		*pflags |= (flush ? FLAG_FLUSH : 0);
 	}
 	return NULL;
 }
@@ -1817,16 +1823,9 @@ sqlx_dispatch_PROPDEL(struct gridd_reply_ctx_s *reply,
 	if (!(flags&FLAG_LOCAL))
 		err = sqlx_transaction_begin(sq3, &repctx);
 	if (!err) {
-		if (!keys) {
-			gchar **k = gtree_string_keys(sq3->admin);
-			if (k) {
-				for (gchar **p=k; *p ;p++) {
-					if (g_str_has_prefix(*p, SQLX_ADMIN_PREFIX_USER))
-						sqlx_admin_del (sq3, *p);
-				}
-				g_free (k);
-			}
-		} else {
+		if (!keys)
+			sqlx_admin_del_all_user (sq3);
+		else {
 			for (GSList *lk=keys; lk ;lk=lk->next)
 				sqlx_admin_del (sq3, lk->data);
 		}
@@ -1912,48 +1911,58 @@ sqlx_dispatch_PROPSET(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	// Action
+	// check the format
+	for (GSList *l=pairs; !err && l ;l=l->next) {
+		if (!l->data)
+			continue;
+		struct key_value_pair_s *kv = l->data;
+		if (!(flags & FLAG_NOCHECK)
+				&& !g_str_has_prefix (kv->key, SQLX_ADMIN_PREFIX_SYS)
+				&& !g_str_has_prefix(kv->key, SQLX_ADMIN_PREFIX_USER))
+			err = NEWERROR(CODE_BAD_REQUEST, "Invalid property name");
+	}
+	if (NULL != err)
+		goto label_exit;
+
+	// Open
 	err = sqlx_repository_open_and_lock(repo, CONST(&name),
 			(flags&FLAG_LOCAL) ? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE,
 			&sq3, NULL);
 	if (NULL != err) {
 		g_prefix_error(&err, "Open/lock: ");
-		reply->send_error(0, err);
-	} else {
-		struct sqlx_repctx_s *repctx = NULL;
-		if (!(flags & FLAG_LOCAL))
-			err = sqlx_transaction_begin(sq3, &repctx);
-		if (NULL == err) {
-			// check the format
-			for (GSList *l=pairs; !err && l ;l=l->next) {
-				if (!l->data)
-					continue;
-				struct key_value_pair_s *kv = l->data;
-				if (!(flags & FLAG_NOCHECK)
-						&& !g_str_has_prefix (kv->key, SQLX_ADMIN_PREFIX_SYS)
-						&& !g_str_has_prefix(kv->key, SQLX_ADMIN_PREFIX_USER))
-					err = NEWERROR(CODE_BAD_REQUEST, "Invalid property name");
-			}
-			// insertion
-			for (GSList *l=pairs; !err && l ;l=l->next) {
-				if (!l->data)
-					continue;
-				struct key_value_pair_s *kv = l->data;
-				sqlx_admin_set_gba_and_clean (sq3, kv->key, kv->value);
-				kv->value = NULL;
-			}
-			if (!(flags&FLAG_LOCAL))
-				err = sqlx_transaction_end(repctx, err);
-		}
-
-		if (NULL != err)
-			reply->send_error(0, err);
-		else
-			reply->send_reply(CODE_FINAL_OK, "OK");
-
-		sqlx_repository_unlock_and_close_noerror(sq3);
+		goto label_exit;
 	}
 
+	// Action
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(flags & FLAG_LOCAL))
+		err = sqlx_transaction_begin(sq3, &repctx);
+	if (NULL == err) {
+		if (flags & FLAG_FLUSH)
+			sqlx_admin_del_all_user (sq3);
+		// insertion
+		for (GSList *l=pairs; !err && l ;l=l->next) {
+			if (!l->data)
+				continue;
+			struct key_value_pair_s *kv = l->data;
+			if (kv->value && kv->value->data && kv->value->len) {
+				sqlx_admin_set_gba_and_clean (sq3, kv->key, kv->value);
+			} else {
+				sqlx_admin_del (sq3, kv->key);
+				metautils_gba_unref (kv->value);
+			}
+			kv->value = NULL;
+		}
+		if (!(flags&FLAG_LOCAL))
+			err = sqlx_transaction_end(repctx, err);
+	}
+	sqlx_repository_unlock_and_close_noerror(sq3);
+
+label_exit:
+	if (NULL != err)
+		reply->send_error(0, err);
+	else
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
 	return TRUE;
 }
@@ -2402,32 +2411,31 @@ const struct gridd_request_descr_s *
 sqlx_repli_gridd_get_requests(void)
 {
 	static struct gridd_request_descr_s descriptions[] = {
-		{"SQLX_HAS",              (hook) sqlx_dispatch_HAS,     NULL},
-		{"SQLX_PROPSET",          (hook) sqlx_dispatch_PROPSET, NULL},
-		{"SQLX_PROPGET",          (hook) sqlx_dispatch_PROPGET, NULL},
-		{"SQLX_PROPDEL",          (hook) sqlx_dispatch_PROPDEL, NULL},
-		{"SQLX_ENABLE",           (hook) sqlx_dispatch_ENABLE,  NULL},
-		{"SQLX_FREEZE",           (hook) sqlx_dispatch_FREEZE,  NULL},
-		{"SQLX_DISABLE",          (hook) sqlx_dispatch_DISABLE, NULL},
-		{"SQLX_DISABLE_DISABLED", (hook) sqlx_dispatch_DISABLE_DISABLED, NULL},
+		{NAME_MSGNAME_SQLX_HAS,              (hook) sqlx_dispatch_HAS,     NULL},
+		{NAME_MSGNAME_SQLX_PROPSET,          (hook) sqlx_dispatch_PROPSET, NULL},
+		{NAME_MSGNAME_SQLX_PROPGET,          (hook) sqlx_dispatch_PROPGET, NULL},
+		{NAME_MSGNAME_SQLX_PROPDEL,          (hook) sqlx_dispatch_PROPDEL, NULL},
+		{NAME_MSGNAME_SQLX_ENABLE,           (hook) sqlx_dispatch_ENABLE,  NULL},
+		{NAME_MSGNAME_SQLX_FREEZE,           (hook) sqlx_dispatch_FREEZE,  NULL},
+		{NAME_MSGNAME_SQLX_DISABLE,          (hook) sqlx_dispatch_DISABLE, NULL},
+		{NAME_MSGNAME_SQLX_DISABLE_DISABLED, (hook) sqlx_dispatch_DISABLE_DISABLED, NULL},
 
-		{"SQLX_STATUS",	   (hook) sqlx_dispatch_STATUS,    NULL},
-		{"SQLX_DESCR",	   (hook) sqlx_dispatch_DESCR,     NULL},
-		{"SQLX_ISMASTER",  (hook) sqlx_dispatch_ISMASTER,  NULL},
-		{"SQLX_USE",	   (hook) sqlx_dispatch_USE,       NULL},
-		{"SQLX_ELECTION",  (hook) sqlx_dispatch_USE,       NULL},
-		{"SQLX_EXITELECTION", (hook) sqlx_dispatch_EXITELECTION, NULL},
-		{"SQLX_PIPETO",	   (hook) sqlx_dispatch_PIPETO,    NULL},
-		{"SQLX_PIPEFROM",  (hook) sqlx_dispatch_PIPEFROM,  NULL},
-		{"SQLX_DUMP",	   (hook) sqlx_dispatch_DUMP,      NULL},
-		{"SQLX_RESTORE",   (hook) sqlx_dispatch_RESTORE,   NULL},
-		{"SQLX_REPLICATE", (hook) sqlx_dispatch_REPLICATE, NULL},
-		{"SQLX_GETVERS",   (hook) sqlx_dispatch_GETVERS,   NULL},
-		{"SQLX_RESYNC",    (hook) sqlx_dispatch_RESYNC,    NULL},
+		{NAME_MSGNAME_SQLX_STATUS,       (hook) sqlx_dispatch_STATUS,    NULL},
+		{NAME_MSGNAME_SQLX_DESCR,        (hook) sqlx_dispatch_DESCR,     NULL},
+		{NAME_MSGNAME_SQLX_ISMASTER,     (hook) sqlx_dispatch_ISMASTER,  NULL},
+		{NAME_MSGNAME_SQLX_USE,          (hook) sqlx_dispatch_USE,       NULL},
+		{NAME_MSGNAME_SQLX_ELECTION,     (hook) sqlx_dispatch_USE,       NULL},
+		{NAME_MSGNAME_SQLX_EXITELECTION, (hook) sqlx_dispatch_EXITELECTION, NULL},
+		{NAME_MSGNAME_SQLX_PIPETO,       (hook) sqlx_dispatch_PIPETO,    NULL},
+		{NAME_MSGNAME_SQLX_PIPEFROM,     (hook) sqlx_dispatch_PIPEFROM,  NULL},
+		{NAME_MSGNAME_SQLX_DUMP,         (hook) sqlx_dispatch_DUMP,      NULL},
+		{NAME_MSGNAME_SQLX_RESTORE,      (hook) sqlx_dispatch_RESTORE,   NULL},
+		{NAME_MSGNAME_SQLX_REPLICATE,    (hook) sqlx_dispatch_REPLICATE, NULL},
+		{NAME_MSGNAME_SQLX_GETVERS,      (hook) sqlx_dispatch_GETVERS,   NULL},
+		{NAME_MSGNAME_SQLX_RESYNC,       (hook) sqlx_dispatch_RESYNC,    NULL},
 
-		// Global action, do not target a base
-		{"SQLX_INFO",      (hook) sqlx_dispatch_INFO,      NULL},
-		{"SQLX_LEANIFY",   (hook) sqlx_dispatch_LEANIFY,   NULL},
+		{NAME_MSGNAME_SQLX_INFO,    (hook) sqlx_dispatch_INFO,      NULL},
+		{NAME_MSGNAME_SQLX_LEANIFY, (hook) sqlx_dispatch_LEANIFY,   NULL},
 
 		{NULL, NULL, NULL}
 	};
@@ -2439,8 +2447,8 @@ const struct gridd_request_descr_s *
 sqlx_sql_gridd_get_requests(void)
 {
 	static struct gridd_request_descr_s descriptions[] = {
-		{"SQLX_QUERY",   (hook) sqlx_dispatch_QUERY,   NULL},
-		{"SQLX_DESTROY", (hook) sqlx_dispatch_DESTROY, NULL},
+		{NAME_MSGNAME_SQLX_QUERY,   (hook) sqlx_dispatch_QUERY,   NULL},
+		{NAME_MSGNAME_SQLX_DESTROY, (hook) sqlx_dispatch_DESTROY, NULL},
 		{NULL, NULL, NULL}
 	};
 

@@ -435,10 +435,8 @@ meta2_filter_action_get_content(struct gridd_filter_ctx_s *ctx,
 	GSList *urls = NULL;
 
 	TRACE_FILTER();
-	if (NULL != fstr) {
+	if (NULL != fstr)
 		flags = atoi(fstr);
-		flags = g_ntohl(flags);
-	}
 	if (limit_str != NULL && limit_str[0] != '\0') {
 		limit = atoll(limit_str);
 	}
@@ -565,10 +563,16 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
+	guint32 flags = 0;
+	const char *fstr = meta2_filter_ctx_get_param(ctx, M2_KEY_GET_FLAGS);
+	if (NULL != fstr)
+		flags = atoi(fstr);
+	
 	if (!hc_url_has(url, HCURL_PATH))
 		e = NEWERROR(CODE_BAD_REQUEST, "Missing content path");
 	else
-		e = meta2_backend_set_properties(m2b, url, beans, _get_cb, obc);
+		e = meta2_backend_set_properties(m2b, url, BOOL(flags&M2V2_FLAG_FLUSH),
+				beans, _get_cb, obc);
 
 	if (NULL != e) {
 		GRID_DEBUG("Failed to set properties to [%s] : (%d) %s",

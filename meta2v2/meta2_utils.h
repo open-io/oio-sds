@@ -151,7 +151,7 @@ GError* m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 GError* m2db_flush_property(struct sqlx_sqlite3_s *sq3, const gchar *k);
 
 GError* m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		GSList *beans, m2_onbean_cb cb, gpointer u0);
+		gboolean flush, GSList *beans, m2_onbean_cb cb, gpointer u0);
 
 /*! Get an alias only */
 GError* m2db_latest_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,

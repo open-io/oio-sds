@@ -209,7 +209,7 @@ GError* meta2_backend_del_properties(struct meta2_backend_s *m2b,
 
 /** Helper for testing purpose */
 GError* meta2_backend_set_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *beans,
+		struct hc_url_s *url, gboolean flush, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
 /** Get a list of URLs of contents referencing a specific chunk id. */

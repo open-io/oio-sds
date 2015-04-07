@@ -43,6 +43,8 @@ License along with this library.
  * return the latest alias only. */
 #define M2V2_FLAG_LATEST           0x00000100
 
+/* flush the properties */
+#define M2V2_FLAG_FLUSH            0x00000200
 
 #define M2V2_DESTROY_PURGE 0x01
 /* Flush the container before deleting it

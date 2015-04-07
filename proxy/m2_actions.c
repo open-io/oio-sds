@@ -548,6 +548,8 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 			}
 		}
 	}
+
+	ctx->beans = g_slist_reverse (ctx->beans);
 }
 
 static enum http_rc_e
@@ -1056,18 +1058,29 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 	// build the set of properties
 	GSList *beans = NULL;
 	json_object_object_foreach(jargs,sk,jv) {
-		const char *sv = json_object_get_string (jv);
 		struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES);
 		PROPERTIES_set2_key (prop, sk);
-		PROPERTIES_set2_value (prop, (guint8*)sv, strlen(sv));
+		if (json_object_is_type (jv, json_type_null)) {
+			PROPERTIES_set2_value (prop, (guint8*)"", 0);
+		} else {
+			const char *sv = json_object_get_string (jv);
+			PROPERTIES_set2_value (prop, (guint8*)sv, strlen(sv));
+		}
 		PROPERTIES_set2_alias (prop, hc_url_get (args->url, HCURL_PATH));
 		PROPERTIES_set_alias_version (prop, version);
 		beans = g_slist_prepend (beans, prop);
 	}
 
+	guint32 flags = 0;
+	if (OPT("flush"))
+		flags |= M2V2_FLAG_FLUSH;
+
+	if (!beans)
+		return _reply_format_error (args, BADREQ("No property provided"));
+
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_PROP_SET (m2->host, args->url, M2V2_FLAG_NOFORMATCHECK, beans);
+		return m2v2_remote_execute_PROP_SET (m2->host, args->url, flags, beans);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	return _reply_properties (args, err, beans);

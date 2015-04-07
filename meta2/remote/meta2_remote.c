@@ -572,13 +572,13 @@ GSList* meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err, c
 	meta2_remote_request_add_path(request, content_path, FALSE, 0);
 
 	if (count > 0)
-		message_add_field_strint64(request, "COUNT", count);
+		message_add_field_strint64(request, NAME_MSGKEY_COUNT, count);
 	if (distance > 0)
-		message_add_field_strint64(request, "DISTANCE", distance);
+		message_add_field_strint64(request, NAME_MSGKEY_DISTANCE, distance);
 	if (notin && *notin)
-		message_add_field(request, "NOT-IN", notin, strlen(notin) + 1);
+		message_add_field(request, NAME_MSGKEY_NOTIN, notin, strlen(notin) + 1);
 	if (broken && *broken)
-		message_add_field(request, "BROKEN", broken, strlen(broken) + 1);
+		message_add_field(request, NAME_MSGKEY_BROKEN, broken, strlen(broken) + 1);
 
 	if (!metaXClient_reply_sequence_run (err, request, fd, ms, &data)) {
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
@@ -749,7 +749,7 @@ meta2raw_remote_update_chunks(
 	request = meta2raw_create_request(NAME_MSGNAME_M2RAW_SETCHUNKS,body,NULL);
 
 	if (allow_update)
-		message_add_field(request, "ALLOW_UPDATE", "1", 1);
+		message_add_field(request, NAME_MSGKEY_ALLOWUPDATE, "1", 1);
 
 	if (position_prefix)
 		message_add_field(request, "POSITION_PREFIX", position_prefix, strlen(position_prefix));
@@ -800,7 +800,7 @@ meta2raw_remote_update_content(
 	request = meta2raw_create_request(NAME_MSGNAME_M2RAW_SETCONTENT,body,NULL);
 
 	if (allow_update)
-		message_add_field(request, "ALLOW_UPDATE", "1", 1);
+		message_add_field(request, NAME_MSGKEY_ALLOWUPDATE, "1", 1);
 
 	/*send the request*/
 	if (!metaXClient_reply_sequence_run_context (err, ctx, request, &data)) {
@@ -1030,13 +1030,13 @@ meta2_remote_touch_content(struct metacnx_ctx_s *ctx,
 	MESSAGE request = message_create_named("REQ_M2RAW_TOUCH_CONTENT");
 	do {
 		GByteArray *gba = metautils_gba_from_cid(var_0);
-		message_add_field(request, "CONTAINER_ID", gba->data, gba->len);
+		message_add_field(request, NAME_MSGKEY_CONTAINERID, gba->data, gba->len);
 		g_byte_array_free(gba, TRUE);
 	} while (0);
 
 	do {
 		GByteArray *gba = metautils_gba_from_string(var_1);
-		message_add_field(request, "CONTENT_PATH", gba->data, gba->len);
+		message_add_field(request, NAME_MSGKEY_CONTENTPATH, gba->data, gba->len);
 		g_byte_array_free(gba, TRUE);
 	} while (0);
 
@@ -1074,14 +1074,14 @@ status_t meta2_remote_touch_container_ex(struct metacnx_ctx_s *ctx, const contai
 
 	do {
 		GByteArray *gba = metautils_gba_from_cid(var_0);
-		message_add_field(request, "CONTAINER_ID", gba->data, gba->len);
+		message_add_field(request, NAME_MSGKEY_CONTAINERID, gba->data, gba->len);
 		g_byte_array_free(gba, TRUE);
 	} while (0);
 
 	/*add flags...*/
 	if (flags) {
 		flags = g_htonl(flags);
-	    message_add_field(request, "FLAGS", &flags, sizeof(flags));
+	    message_add_field(request, NAME_MSGKEY_FLAGS, &flags, sizeof(flags));
 	}
 
 	/*Now send the request*/

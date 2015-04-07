@@ -623,7 +623,7 @@ m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 
 GError*
 m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		GSList *beans, m2_onbean_cb cb, gpointer u0)
+		gboolean flush, GSList *beans, m2_onbean_cb cb, gpointer u0)
 {
 	if (!beans)
 		return NEWERROR(CODE_BAD_REQUEST, "No property");
@@ -639,18 +639,33 @@ m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	const char *name = ALIASES_get_alias(alias)->str;
 	gint64 version = ALIASES_get_version(alias);
 
+	if (flush) {
+		const char *sql = "alias = ? AND alias_version = ?";
+		GVariant *params[3] = {NULL,NULL,NULL};
+		params[0] = g_variant_new_string (name);
+		params[1] = g_variant_new_int64 (ALIASES_get_version(alias));
+		err = _db_delete (&descr_struct_PROPERTIES, sq3->db, sql, params);
+		gvariant_unrefv (params);
+	}
+
 	for (; !err && beans ;beans=beans->next) {
 		struct bean_PROPERTIES_s *prop = beans->data;
 		if (DESCR(prop) != &descr_struct_PROPERTIES)
 			continue;
-		prop = _bean_dup(prop);
 		PROPERTIES_set2_alias(prop, name);
 		PROPERTIES_set_alias_version(prop, version);
-		err = _db_save_bean(sq3->db, prop);
-		if (err || !cb)
-			_bean_clean(prop);
-		else
-			cb(u0, prop);
+
+		GByteArray *v = PROPERTIES_get_value(prop);
+		if (!v || !v->len || !v->data) {
+			err = _db_delete_bean (sq3->db, prop);
+			_bean_clean (prop);
+		} else {
+			err = _db_save_bean (sq3->db, prop);
+			if (err || !cb)
+				_bean_clean(prop);
+			else
+				cb(u0, _bean_dup(prop));
+		}
 	}
 
 	_bean_clean(alias);

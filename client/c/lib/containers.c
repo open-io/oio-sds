@@ -1329,7 +1329,7 @@ hc_set_container_global_property(gs_container_t *container,
 	};
 
 	const gchar * const tab[3] = { prop_name, prop_val, NULL };
-	GByteArray *req = sqlx_pack_PROPSET_tab(&name, tab);
+	GByteArray *req = sqlx_pack_PROPSET_tab(&name, FALSE, tab);
 	GError *err = gridd_client_exec(addr, M2V2_CLIENT_TIMEOUT, req);
 	g_byte_array_unref(req);
 	g_free(base);

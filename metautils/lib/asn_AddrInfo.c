@@ -113,7 +113,7 @@ addr_info_API2ASN(const addr_info_t * api, AddrInfo_t * asn)
 		we need to handle 32bits port
 		this should be removed in GRID V2
 	*/
-	if (0 != asn_uint32_to_INTEGER(asn->port, ntohl(api->port)))
+	if (0 != asn_uint32_to_INTEGER(asn->port, g_ntohl(api->port)))
 		return FALSE;
 
 	return TRUE;
