@@ -21,18 +21,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/autogen.h>
 #include <meta2v2/generic.h>
 
-#if 0
-static void _bean_debug_list (const gchar *tag, GSList *l) {
-	GString *gstr = g_string_sized_new(256);
-	for (; l ;l=l->next) {
-		g_string_truncate (gstr, 0);
-		_bean_debug (gstr, l->data);
-		GRID_WARN ("%s > %s", tag, gstr->str);
-	}
-	g_string_free (gstr, TRUE);
-}
-#endif
-
 static void
 _json_dump_all_beans (GString * gstr, GSList * beans)
 {
@@ -59,7 +47,8 @@ _reply_m2_error (struct req_args_s *args, GError * err)
 }
 
 static enum http_rc_e
-_reply_aliases (struct req_args_s *args, GError * err, GSList * beans)
+_reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
+		gchar **prefixes)
 {
 	if (err)
 		return _reply_m2_error (args, err);
@@ -73,16 +62,25 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans)
 		else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS)
 			headers = g_slist_prepend (headers, l->data);
 	}
-#if 0
-	_bean_debug_list ("ALIAS ", aliases);
-	_bean_debug_list ("HEADER", headers);
-#endif
 
-	GString *gstr = g_string_new ("");
-	g_string_append_c (gstr, '[');
-	for (GSList *la = aliases; la ; la=la->next) {
-		if (aliases != la)
+	gboolean first = TRUE;
+	GString *gstr = g_string_new ("[");
+
+	// Dump the prefixes
+	for (gchar **pp=prefixes; pp && *pp ;++pp) {
+		if (!first)
 			g_string_append_c(gstr, ',');
+		first = FALSE;
+		g_string_append_printf (gstr, "\"%s\"", *pp);
+	}
+
+	// And now the beans
+	for (GSList *la = aliases; la ; la=la->next) {
+
+		if (!first)
+			g_string_append_c(gstr, ',');
+		first = FALSE;
+
 		struct bean_ALIASES_s *a = la->data;
 		// Look for the matching header
 		// TODO optimize this with a tree or a hashmap
@@ -93,6 +91,7 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans)
 				break;
 			}
 		}
+
 		g_string_append_c(gstr, '{');
 		g_string_append_printf(gstr,
 				"\"name\":\"%s\",\"ver\":%"G_GINT64_FORMAT","
@@ -121,7 +120,8 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans)
 				g_string_append(gstr, "null");
 			}
 
-			g_string_append_printf(gstr, ",\"size\":%"G_GINT64_FORMAT, CONTENTS_HEADERS_get_size(h));
+			g_string_append_printf(gstr, ",\"size\":%"G_GINT64_FORMAT,
+					CONTENTS_HEADERS_get_size(h));
 		}
 		g_string_append_c(gstr, '}');
 	}
@@ -483,33 +483,132 @@ _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 
 /* CONTAINER resources ------------------------------------------------------ */
 
-// TODO manage snapshot ?
+static char
+_delimiter (struct req_args_s *args)
+{
+	const char *s = OPT("delimiter");
+	return s ? *s : 0;
+}
+
+static gint64
+_max (struct req_args_s *args)
+{
+	const char *s = OPT("max");
+	return s ? atoi(s) : 0;
+}
+
+struct filter_ctx_s
+{
+	GSList *beans;
+	GTree *prefixes;
+	guint count; // aliases in <beans>
+	const char *prefix;
+	char delimiter;
+};
+
+static void
+_filter (struct filter_ctx_s *ctx, GSList *l)
+{
+	void prepend (GSList *p) { p->next = ctx->beans; ctx->beans = p; }
+	gsize prefix_len = ctx->prefix ? strlen(ctx->prefix) : 0;
+
+	for (GSList *tmp; l ;l=tmp) {
+		tmp = l->next;
+		if (!l->data) {
+			g_slist_free1 (l);
+		} else {
+			if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+				prepend (l);
+			} else if (DESCR(l->data) == &descr_struct_ALIASES) {
+				const char *name = ALIASES_get_alias(l->data)->str;
+				if (ctx->delimiter) {
+					const char *p = strchr(name+prefix_len, ctx->delimiter);
+					if (p) {
+						g_tree_insert(ctx->prefixes, g_strndup(name, p-name+1), GINT_TO_POINTER(1));
+						_bean_clean (l->data);
+						g_slist_free1 (l);
+					} else {
+						prepend (l);
+						ctx->count ++;
+					}
+				} else {
+					prepend (l);
+					ctx->count ++;
+				}
+			} else {
+				_bean_clean (l->data);
+				g_slist_free1 (l);
+			}
+		}
+	}
+}
+
 static enum http_rc_e
 action_m2_container_list (struct req_args_s *args)
 {
 	struct list_result_s list_out = {NULL,NULL,FALSE};
+	struct list_params_s list_in;
+	GError *err = NULL;
+	guint count = 0;
+	char delimiter = 0;
+	GTree *tree_prefixes = NULL;
+
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		struct list_params_s p;
-		memset(&p, 0, sizeof(p));
-		p.flag_headers = ~0;
-		p.flag_nodeleted = ~0;
-		p.snapshot = OPT("snapshot");
-		p.prefix = OPT("prefix");
-		p.marker_start = OPT("marker");
-		p.marker_end = OPT("marker_end");
-		do {
-			const gchar *max  = OPT("max");
-			if (max)
-				p.maxkeys = atoi(max);
-		} while (0);
-		if (OPT("deleted"))
-			p.flag_nodeleted = 0;
-		if (OPT("all"))
-			p.flag_allversion = ~0;
-		return m2v2_remote_execute_LIST (m2->host, args->url, &p, &list_out);
+		struct list_params_s in = list_in;
+		struct list_result_s out = {NULL,NULL,FALSE};
+		for (;;) {
+			// patch the input parameters
+			if (list_in.maxkeys > 0)
+				in.maxkeys = list_in.maxkeys - count;
+			if (list_out.beans)
+				in.marker_start = ALIASES_get_alias(list_out.beans->data)->str;
+
+			GError *e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out);
+			if (e)
+				return e;
+
+			// transmit the output
+			metautils_str_reuse (&list_out.next_marker, out.next_marker);
+			out.next_marker = NULL;
+			if (out.beans) {
+				struct filter_ctx_s ctx;
+				ctx.beans = list_out.beans;
+				ctx.prefixes = tree_prefixes;
+				ctx.count = count;
+				ctx.prefix = list_in.prefix;
+				ctx.delimiter = delimiter;
+				_filter (&ctx, out.beans);
+				count = ctx.count;
+				list_out.beans = ctx.beans;
+			}
+
+			// and maybe return
+			if (!list_in.maxkeys || list_in.maxkeys <= count) {
+				list_out.truncated = list_in.maxkeys ? out.truncated : FALSE;
+				return NULL;
+			}
+		}
+		return NULL;
 	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+
+	memset(&list_in, 0, sizeof(list_in));
+	list_in.flag_headers = ~0;
+	list_in.flag_nodeleted = ~0;
+	list_in.snapshot = OPT("snapshot");
+	list_in.prefix = OPT("prefix");
+	list_in.marker_start = OPT("marker");
+	list_in.marker_end = OPT("marker_end");
+	list_in.maxkeys = _max (args);
+	delimiter = _delimiter (args);
+	if (OPT("deleted"))
+		list_in.flag_nodeleted = 0;
+	if (OPT("all"))
+		list_in.flag_allversion = ~0;
+
+	tree_prefixes = g_tree_new_full (metautils_strcmp3, NULL, g_free, NULL);
+	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+
 	if (!err) {
 		args->rp->add_header(PROXYD_HEADER_PREFIX "list-truncated",
 				g_strdup(list_out.truncated ? "true" : "false"));
@@ -518,8 +617,16 @@ action_m2_container_list (struct req_args_s *args)
 					g_strdup(list_out.next_marker));
 		}
 	}
+
+	gchar **tab = NULL;
+	if (!err)
+		tab = gtree_string_keys (tree_prefixes);
+	enum http_rc_e rc = _reply_aliases (args, err, list_out.beans, tab);
+	if (tab)
+		g_free (tab);
+	g_tree_destroy (tree_prefixes);
 	metautils_str_clean (&list_out.next_marker);
-	return _reply_aliases (args, err, list_out.beans);
+	return rc;
 }
 
 static enum http_rc_e
