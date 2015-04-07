@@ -610,9 +610,7 @@ m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 {
 	GPtrArray *tmp = g_ptr_array_new ();
 
-	/* get the bean with the right version, then follow the foreign key on
-	 * properties. */
-	GError *err = m2db_get_alias(sq3, url, M2V2_FLAG_NORECURSION, _bean_buffer_cb, tmp);
+	GError *err = m2db_get_alias(sq3, url, M2V2_FLAG_HEADERS|M2V2_FLAG_NORECURSION, _bean_buffer_cb, tmp);
 	if (err)
 		_bean_cleanv2(tmp);
 	else {
