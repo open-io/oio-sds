@@ -475,7 +475,11 @@ gridd_client_exec_and_decode (const gchar *to, gdouble timeout,
 				g_prefix_error (&err, "Decoding error: ");
 				break;
 			}
-			items = g_slist_concat (l, items);
+			for (GSList *tmp; l ;l=tmp) { // Faster than g_slist_concat
+				tmp = l->next;
+				l->next = items;
+				items = l;
+			}
 		}
 		*out = items;
 	}

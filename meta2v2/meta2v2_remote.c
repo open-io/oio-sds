@@ -657,8 +657,13 @@ m2v2_remote_execute_LIST(const gchar *target, struct hc_url_s *url,
 		GSList *l = NULL;
 		GError *e = message_extract_body_encoded(reply, FALSE, &l, bean_sequence_decoder);
 		if (!e) {
-			if (l)
-				out->beans = g_slist_concat(out->beans, l);
+
+			for (GSList *tmp; l ;l=tmp) { // faster than g_slist_concat
+				tmp = l->next;
+				l->next = out->beans;
+				out->beans = l;
+			}
+
 			e = message_extract_boolean (reply, NAME_MSGKEY_TRUNCATED, FALSE, &out->truncated);
 			if (e)
 				g_clear_error (&e);
