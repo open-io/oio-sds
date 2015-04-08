@@ -94,31 +94,6 @@ push @functions, {
 };
 
 push @functions, {
-	'name' => 'get_container_size',
-	'args' => [
-		{
-			'type'             => 'container_id_t',
-			'serializer'       => $SERIALIZE_ARRAY,
-			'message_location' => 'header',
-		},
-		{
-			'type'             => 'gchar*',
-			'serializer'       => $SERIALIZE_STRING,
-			'message_location' => 'header',
-		},
-		{
-			'type'             => 'gint64',
-			'serializer'       => $SERIALIZE_INTEGER,
-			'message_location' => 'header',
-			'is_out'           => 1,
-		},
-	],
-	'return' => {
-		'type'=>'status_t'
-	},
-};
-
-push @functions, {
 	'name' => 'modify_metadatasys',
 	'args' => [
 		{
