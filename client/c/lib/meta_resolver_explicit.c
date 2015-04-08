@@ -479,8 +479,7 @@ resolver_direct_create2 (const char * const config, gint to_cnx, gint to_req, GE
 	r->timeout.m1.op =  M1_TOREQ_DEFAULT;
 	r->timeout.m1.cnx = M1_TOCNX_DEFAULT;
 
-	meta0_info_t *meta0_info = NULL;
-	meta0_info = get_meta0_info2(config, r->timeout.conscience.cnx, r->timeout.conscience.op, err);
+	meta0_info_t *meta0_info = get_meta0_info(config, err);
 	if (meta0_info) {
 		memcpy(&(r->meta0), &(meta0_info->addr), sizeof(addr_info_t));
 		g_free(meta0_info);

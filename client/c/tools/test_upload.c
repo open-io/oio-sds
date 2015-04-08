@@ -123,6 +123,7 @@ feed_from_fd(void *uData, char *b, size_t bSize)
 
 int main (int argc, char ** args)
 {
+	HC_PROC_INIT(args,GRID_LOGLVL_INFO);
 	int rc = -1;
 
 	gs_error_t *err = NULL;
@@ -136,8 +137,6 @@ int main (int argc, char ** args)
 	char path[60];
 	char *source_path;
 	struct stat64 local_stats;
-
-	srand(time(NULL));
 
 	if (argc != 3) {
 		g_error("Usage: %s NS local_path\n", args[0]);

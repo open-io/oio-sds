@@ -226,7 +226,6 @@ int
 main(int argc, char **argv)
 {
 	memset(zk_url, 0, sizeof(zk_url));
-	srand(time(0) ^ getpid());
 	HC_PROC_INIT(argv, GRID_LOGLVL_TRACE2);
 	g_test_init (&argc, &argv, NULL);
 
