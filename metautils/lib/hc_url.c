@@ -283,14 +283,6 @@ hc_url_dup(struct hc_url_s *u)
 	return result;
 }
 
-void
-hc_url_gclean(gpointer u, gpointer ignored)
-{
-	(void) ignored;
-	if (u)
-		hc_url_clean(u);
-}
-
 struct hc_url_s*
 hc_url_set(struct hc_url_s *u, enum hc_url_field_e f, const char *v)
 {
