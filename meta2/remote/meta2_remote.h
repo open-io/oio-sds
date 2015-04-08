@@ -37,19 +37,25 @@ License along with this library.
  * ---------------------------
  */
 
-#define NAME_MSGNAME_M2_CREATE  "REQ_M2_CREATE"
-#define NAME_MSGNAME_M2_DESTROY "REQ_M2_DESTROY"
-#define NAME_MSGNAME_M2_LIST    "REQ_M2_LIST"
-#define NAME_MSGNAME_M2_SETFLAG "REQ_M2_SETFLAG"
-#define NAME_MSGNAME_M2_CONTENTSPARE    "REQ_M2_CONTENTSPARE"
-#define NAME_MSGNAME_M2_CONTENTADD      "REQ_M2_CONTENTADD"
-#define NAME_MSGNAME_M2_CONTENTREMOVE   "REQ_M2_CONTENTREMOVE"
-#define NAME_MSGNAME_M2_CONTENTRETRIEVE "REQ_M2_CONTENTRETRIEVE"
-#define NAME_MSGNAME_M2_CONTENTCOMMIT   "REQ_M2_CONTENTCOMMIT"
-#define NAME_MSGNAME_M2_CONTENTROLLBACK "REQ_M2_CONTENTROLLBACK"
-#define NAME_MSGNAME_M2_CONTENTAPPEND   "REQ_M2_CONTENTAPPEND"
+#define NAME_MSGNAME_M2_CREATE               "REQ_M2_CREATE"
+#define NAME_MSGNAME_M2_DESTROY              "REQ_M2_DESTROY"
+#define NAME_MSGNAME_M2_LIST                 "REQ_M2_LIST"
+#define NAME_MSGNAME_M2_SETFLAG              "REQ_M2_SETFLAG"
+#define NAME_MSGNAME_M2_CONTENTSPARE         "REQ_M2_CONTENTSPARE"
+#define NAME_MSGNAME_M2_CONTENTADD           "REQ_M2_CONTENTADD"
+#define NAME_MSGNAME_M2_CONTENTREMOVE        "REQ_M2_CONTENTREMOVE"
+#define NAME_MSGNAME_M2_CONTENTCOMMIT        "REQ_M2_CONTENTCOMMIT"
+#define NAME_MSGNAME_M2_CONTENTROLLBACK      "REQ_M2_CONTENTROLLBACK"
+#define NAME_MSGNAME_M2_CONTENTAPPEND        "REQ_M2_CONTENTAPPEND"
+#define NAME_MSGNAME_M2_CHUNK_COMMIT         "REQ_M2_CHUNK_COMMIT"
+#define NAME_MSGNAME_M2RAW_GETCONTENTS       "REQ_M2RAW_CONTENT_GETALL"
+#define NAME_MSGNAME_M2RAW_GETCONTENTBYPATH  "REQ_M2RAW_CONTENT_GETBYPATH"
+#define NAME_MSGNAME_M2RAW_SETCONTENT        "REQ_M2RAW_CONTENT_SET"
+#define NAME_MSGNAME_M2RAW_DELCONTENT        "REQ_M2RAW_CONTENT_DEL"
+#define NAME_MSGNAME_M2RAW_GETCHUNKS         "REQ_M2RAW_CHUNKS_GET"
+#define NAME_MSGNAME_M2RAW_SETCHUNKS         "REQ_M2RAW_CHUNKS_SET"
+#define NAME_MSGNAME_M2RAW_DELCHUNKS         "REQ_M2RAW_CHUNKS_DEL"
 
-#define NAME_MSGNAME_M2_CHUNK_COMMIT   "REQ_M2_CHUNK_COMMIT"
 
 #define REMOTECONTAINER_FLAG_OK       0x00000000
 #define REMOTECONTAINER_FLAG_FROZEN   0x00000001
@@ -57,19 +63,6 @@ License along with this library.
 
 #define META2TOUCH_FLAGS_UPDATECSIZE     0x00000001
 #define META2TOUCH_FLAGS_RECALCCSIZE     0x00000002
-
-#define NAME_MSGNAME_M2RAW_GETCONTENTS "REQ_M2RAW_CONTENT_GETALL"
-#define NAME_MSGNAME_M2RAW_GETCONTENTBYPATH  "REQ_M2RAW_CONTENT_GETBYPATH"
-#define NAME_MSGNAME_M2RAW_GETCONTENTBYCHUNK "REQ_M2RAW_CONTENT_GETBYCHUNK"
-#define NAME_MSGNAME_M2RAW_SETCONTENT  "REQ_M2RAW_CONTENT_SET"
-#define NAME_MSGNAME_M2RAW_DELCONTENT  "REQ_M2RAW_CONTENT_DEL"
-#define NAME_MSGNAME_M2RAW_GETCHUNKS   "REQ_M2RAW_CHUNKS_GET"
-#define NAME_MSGNAME_M2RAW_SETCHUNKS   "REQ_M2RAW_CHUNKS_SET"
-#define NAME_MSGNAME_M2RAW_DELCHUNKS   "REQ_M2RAW_CHUNKS_DEL"
-#define NAME_MSGNAME_M2RAW_MARK_REPAIRED  "REQ_M2RAW_MARK_REPAIRED"
-
-#define NAME_MSGNAME_M2ADMIN_GETALL "REQ_M2RAW_ADMIN_GETALL"
-#define NAME_MSGNAME_M2ADMIN_SETONE "REQ_M2RAW_ADMIN_SETONE"
 
 #define NAME_HEADER_METADATA_USR "METADATA_USR"
 #define NAME_HEADER_METADATA_SYS "METADATA_SYS"
@@ -84,9 +77,6 @@ License along with this library.
 #define NAME_HEADER_STORAGEPOLICY "STORAGE_POLICY"
 #define NAME_HEADER_VERSIONPOLICY "VERSION_POLICY"
 
-GSList *meta2_remote_content_append_v2(struct metacnx_ctx_s *ctx, GError ** err,
-		gchar *virtual_namespace, const container_id_t container_id, const gchar * content_path, content_length_t content_length);
-
 /** Get the list of contents of ths container. */
 GSList *meta2_remote_container_list(addr_info_t * m2_addr, gint ms, GError ** err, const container_id_t container_id);
 
@@ -99,9 +89,6 @@ gboolean meta2_remote_container_create_v2(addr_info_t * m2_addr, gint ms, GError
 
 gboolean meta2_remote_container_create_v3 (const addr_info_t *m2, gint ms, const char *ns, const char *cname,
 		const container_id_t cid, const char *stgpol, GError **e);
-
-/** Destroys the container with the given ID on the remote container */
-gboolean meta2_remote_container_destroy(addr_info_t * m2_addr, gint ms, GError ** err, const container_id_t container_id);
 
 /** Add a new content in the container (identified by the container ID) on the
  * distant META2 server. A NULL return well indicates an error, because even
@@ -163,10 +150,6 @@ GSList* meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err,
 gboolean meta2_remote_content_rollback_in_fd(int *fd, gint ms, GError ** err,
 		const container_id_t container_id, const gchar * content_path);
 
-GSList *meta2_remote_content_append_in_fd_v2(int *fd, gint ms, GError ** err,
-		const container_id_t container_id, const gchar * content_path,
-		content_length_t content_length, GByteArray **sys_metadata);
-
 /* ------------------------------------------------------------------------- */
 
 GSList *meta2_remote_content_append(struct metacnx_ctx_s *ctx, GError ** err,
@@ -186,10 +169,6 @@ gboolean meta2raw_remote_delete_chunks(struct metacnx_ctx_s *ctx, GError ** err,
 struct meta2_raw_content_s *meta2raw_remote_get_content_from_name(
 		struct metacnx_ctx_s *ctx, GError ** err,
 		const container_id_t container_id, const gchar * path, gsize path_len);
-
-/** Get the contents elements including its chunks, nevermind its availability. */
-struct meta2_raw_content_s *meta2raw_remote_get_chunks(struct metacnx_ctx_s *ctx, GError ** err,
-    const container_id_t container_id, const char *path, gsize path_len);
 
 /** Returns a list of contents names known in the given container,  nevermind
  * their availability. */
