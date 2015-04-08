@@ -554,6 +554,8 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 	}
 }
 
+/** @todo TODO FIXME ensure we get a correct result if we have to loop
+ * toward several meta2 servers */
 static enum http_rc_e
 action_m2_container_list (struct req_args_s *args)
 {
@@ -572,7 +574,8 @@ action_m2_container_list (struct req_args_s *args)
 			// patch the input parameters
 			if (list_in.maxkeys > 0)
 				in.maxkeys = list_in.maxkeys - count;
-			in.marker_start = list_out.next_marker;
+			if (out.next_marker)
+				in.marker_start = out.next_marker;
 
 			// Action
 			GError *e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out);
