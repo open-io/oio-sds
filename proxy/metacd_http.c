@@ -60,6 +60,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define REF()     TOK("REF")
 #define PATH()    TOK("PATH")
 #define SEQ()     TOK("SEQ")
+#define VERSION() OPT("version")
 
 #define PUSH_DO(Action) do { \
 	g_mutex_lock(&push_mutex); \
@@ -218,8 +219,11 @@ _metacd_load_url (struct req_args_s *args)
 		hc_url_set (url, HCURL_NS, s);
 	if (NULL != (s = REF()))
 		hc_url_set (url, HCURL_REFERENCE, s);
-	if (NULL != (s = PATH()))
+	if (NULL != (s = PATH())) {
 		hc_url_set (url, HCURL_PATH, s);
+		if (NULL != (s = VERSION()))
+			hc_url_set (url, HCURL_VERSION, s);
+	}
 
 	return url;
 }
