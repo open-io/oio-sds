@@ -100,10 +100,7 @@ static void
 hcres_specific_fini(void)
 {
 	GRID_DEBUG("Exiting");
-	if (url_list) {
-		g_slist_foreach(url_list, hc_url_gclean, NULL);
-		g_slist_free(url_list);
-	}
+	g_slist_free_full(url_list, (GDestroyNotify)hc_url_clean);
 }
 
 static void
