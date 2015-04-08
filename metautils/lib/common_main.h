@@ -29,12 +29,14 @@ License along with this library.
  */
 
 #define HC_PROC_INIT(argv,LVL) do { \
+	grid_main_srand(); \
 	grid_main_set_prgname(argv[0]); \
 	g_log_set_default_handler(logger_stderr, NULL); \
 	logger_init_level(LVL); \
 } while (0)
 
 #define HC_TEST_INIT(argc,argv) do { \
+	grid_main_srand(); \
 	g_test_init (&argc, &argv, NULL); \
 	grid_main_set_prgname(argv[0]); \
 	g_log_set_default_handler(logger_stderr, NULL); \
@@ -109,5 +111,7 @@ void grid_main_set_status(int rc);
 /** Use this to set the name of the current command, this let the HC API
  * apply the same filter on it (e.g. keep the basename) */
 void grid_main_set_prgname(const gchar *cmd);
+
+void grid_main_srand(void);
 
 #endif /*OIO_SDS__metautils__lib__common_main_h*/

@@ -649,3 +649,9 @@ grid_main_set_status(int rc)
 	grid_main_rc = rc;
 }
 
+void
+grid_main_srand(void)
+{
+	srand(time(0) ^ getpid());
+}
+

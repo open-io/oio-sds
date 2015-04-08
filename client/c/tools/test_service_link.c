@@ -31,6 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 int main (int argc, char ** args)
 {
+	HC_PROC_INIT(args,GRID_LOGLVL_INFO);
 	int rc = -1;
 
 	gs_error_t *err = NULL;
@@ -38,8 +39,6 @@ int main (int argc, char ** args)
 	gs_container_t *container;
 	char *ns;
 	char cname[60];
-
-	srand(time(NULL));
 
 	if (argc != 2) {
 		g_error("Usage: %s NS\n", args[0]);
