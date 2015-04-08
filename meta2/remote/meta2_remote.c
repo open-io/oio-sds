@@ -41,7 +41,6 @@ typedef enum meta2_operation_e
 	M2_OP_CONTENT_SPARE,
 	M2_OP_CONTENT_ADD,
 	M2_OP_CONTENT_REMOVE,
-	M2_OP_CONTENT_RETRIEVE,
 	M2_OP_CONTENT_COMMIT,
 	M2_OP_CONTENT_ROLLBACK,
 
@@ -64,7 +63,6 @@ __get_request_name2 (meta2_operation_t mo, gchar **str, gsize *len)
 		case M2_OP_CONTENT_SPARE:    SETSTR(NAME_MSGNAME_M2_CONTENTSPARE);    return ;
 		case M2_OP_CONTENT_ADD:      SETSTR(NAME_MSGNAME_M2_CONTENTADD);      return ;
 		case M2_OP_CONTENT_REMOVE:   SETSTR(NAME_MSGNAME_M2_CONTENTREMOVE);   return ;
-		case M2_OP_CONTENT_RETRIEVE: SETSTR(NAME_MSGNAME_M2_CONTENTRETRIEVE); return ;
 		case M2_OP_CONTENT_COMMIT:   SETSTR(NAME_MSGNAME_M2_CONTENTCOMMIT);   return ;
 		case M2_OP_CONTENT_ROLLBACK: SETSTR(NAME_MSGNAME_M2_CONTENTROLLBACK); return ;
 
@@ -89,14 +87,6 @@ meta2_remote_request_add_path(MESSAGE m, const gchar * path,
 		gsize wrkLen = g_snprintf(wrkBuf, 31, "%"G_GINT64_FORMAT, content_length);
 		message_add_field(m, NAME_MSGKEY_CONTENTLENGTH, wrkBuf, wrkLen);
 	}
-}
-
-static void
-meta2_remote_request_add_vns(MESSAGE m, const gchar *vns) 
-{
-	g_assert (m != NULL);
-	g_assert (vns!= NULL);
-	message_add_field(m, NAME_MSGKEY_VIRTUALNAMESPACE, vns, strlen(vns));
 }
 
 static MESSAGE
@@ -171,11 +161,6 @@ meta2_remote_container_common(const char *caller, addr_info_t * m2_addr, gint ms
 }
 
 /* ------------------------------------------------------------------------- */
-
-gboolean meta2_remote_container_destroy (addr_info_t *m2_addr, gint ms, GError **err, const container_id_t container_id)
-{
-	return meta2_remote_container_common (__FUNCTION__, m2_addr, ms, err, M2_OP_CONTAINER_DESTROY, container_id, NULL);
-}
 
 gboolean meta2_remote_container_create (addr_info_t *m2_addr, gint ms, GError **err, const container_id_t container_id, const gchar *name)
 {
@@ -309,35 +294,6 @@ errorLabel:
 	message_destroy(request);
 	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return 0;
-}
-
-GSList* meta2_remote_content_retrieve (addr_info_t *m2_addr, gint ms, GError **err, const container_id_t container_id, const gchar *content_path)
-{
-	static struct code_handler_s codes [] = {
-		{ CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, chunk_info_concat, NULL },
-		{ CODE_FINAL_OK, REPSEQ_FINAL,         chunk_info_concat, NULL },
-		{ 0, 0, NULL, NULL }
-	};
-	GSList *result = NULL;
-	struct reply_sequence_data_s data = { &result , 0 , codes };
-
-	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-	MESSAGE request = meta2_remote_request_create (M2_OP_CONTENT_RETRIEVE, container_id);
-	meta2_remote_request_add_path(request, content_path, FALSE, 0);
-
-	if (!metaXClient_reply_sequence_run_from_addrinfo (err, request, m2_addr, ms, &data)) {
-		GSETERROR(err,"Cannot execute the query and receive all the responses");
-		goto errorLabel;
-	}
-
-	message_destroy(request);
-	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-	return result;
-errorLabel:
-	message_destroy(request);
-	g_slist_free_full (result, (GDestroyNotify) chunk_info_clean);
-	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-	return NULL;
 }
 
 GSList* meta2_remote_content_add (addr_info_t *m2_addr, gint ms, GError **err,
@@ -494,67 +450,6 @@ GSList* meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
 	return meta2_remote_content_add_in_fd_v2(fd, ms, err, container_id, content_path, content_length, NULL, system_metadata, new_system_metadata);
 }
 
-GSList *meta2_remote_content_append_in_fd_v2(int *fd, gint ms, GError ** err,
-	    const container_id_t container_id, const gchar * content_path,
-		content_length_t content_length, GByteArray **sys_metadata)
-{
-	gboolean get_sys_metadata (GError **err0, gpointer udata, gint code, MESSAGE rep) {
-			(void)udata, (void)code;
-
-			if (!rep)
-				return FALSE;
-			if (!sys_metadata)
-				return TRUE;
-			void *field=NULL;
-			gsize fieldLen=0;
-			int rc = message_get_field (rep, NAME_HEADER_METADATA_SYS,
-					sizeof(NAME_HEADER_METADATA_SYS)-1, &field, &fieldLen, err0);
-			switch (rc) {
-				case 1:
-					*sys_metadata = g_byte_array_append( g_byte_array_new(), field, fieldLen);
-					return TRUE;
-				case 0:
-					*sys_metadata = NULL;
-					return TRUE;
-			}
-			GSETERROR(err0, "Cannot lookup the updated systemetadata");
-			return FALSE;
-	}
-
-	struct code_handler_s codes[] = {
-		{CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, chunk_info_concat, NULL},
-		{CODE_FINAL_OK, REPSEQ_FINAL,         chunk_info_concat, get_sys_metadata },
-		{0, 0, NULL, NULL}
-	};
-	GSList *result = NULL;
-	struct reply_sequence_data_s data = { &result, 0, codes };
-
-	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-
-	if (!container_id || !content_path || !content_length) {
-		GSETERROR(err, "Invalid parameter");
-		goto errorLabel;
-	}
-
-	MESSAGE request = meta2_remote_request_create(M2_OP_CONTENT_APPEND, container_id);
-	meta2_remote_request_add_path(request, content_path, TRUE, content_length);
-
-	if (!metaXClient_reply_sequence_run (err, request, fd, ms, &data)) {
-		GSETERROR(err,"Cannot execute the query and receive all the responses");
-		goto errorLabel;
-	}
-
-	message_destroy(request);
-	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-	return result;
-
-errorLabel:
-	message_destroy(request);
-	g_slist_free_full (result, (GDestroyNotify) chunk_info_clean);
-	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-	return NULL;
-}
-
 GSList* meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err, const container_id_t container_id,
 		const gchar *content_path, gint count, gint distance, const gchar *notin, const gchar *broken)
 {
@@ -646,23 +541,13 @@ concat_contents (GError **err, gpointer udata, gint code, guint8 *body, gsize bo
 static MESSAGE
 meta2raw_create_request(char *name, GByteArray *body, ...)
 {
-	MESSAGE msg = message_create_named(name);
+	va_list args;
+	MESSAGE msg = message_create_named (name);
 	if (body)
 		message_set_BODY (msg, body->data, body->len, NULL);
-
-	va_list args;
-	va_start(args,body);
-	for (;;) {
-		char *k;
-		GByteArray *v;
-		k = va_arg(args,char*);
-		if (!k) break;
-		v = va_arg(args,GByteArray*);
-		if (!v) break;
-		message_add_field(msg, k, v->data, v->len);
-	}
+	va_start (args,body);
+	message_add_fieldv_gba (msg, args);
 	va_end(args);
-	
 	return msg;
 }
 
@@ -910,13 +795,6 @@ exit_label:
 	return NULL;
 }
 
-struct meta2_raw_content_s*
-meta2raw_remote_get_chunks(struct metacnx_ctx_s *ctx, GError **err,
-		const container_id_t container_id, const char *path, gsize path_len)
-{
-	return meta2raw_remote_stat_content(ctx, container_id, path, path_len, FALSE, err);
-}
-
 GSList*
 meta2raw_remote_get_contents_names(
 	struct metacnx_ctx_s *ctx, GError **err,
@@ -958,46 +836,6 @@ error_meta:
 	message_destroy(request);
 	g_byte_array_free( gba_cid, TRUE);
 exit_label:
-	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-	return NULL;
-}
-
-GSList *
-meta2_remote_content_append_v2(struct metacnx_ctx_s *ctx, GError ** err, gchar *virtual_namespace, 
-	const container_id_t container_id, const gchar * content_path, content_length_t content_length)
-{
-	static struct code_handler_s codes[] = {
-		{CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, chunk_info_concat, NULL},
-		{CODE_FINAL_OK, REPSEQ_FINAL, chunk_info_concat, NULL},
-		{0, 0, NULL, NULL}
-	};
-	GSList *result = NULL;
-	struct reply_sequence_data_s data = { &result, 0, codes };
-
-	if (!ctx || !container_id || !content_path || !content_length) {
-		GSETERROR(err, "Invalid parameter");
-		return NULL;
-	}
-
-	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);	
-
-	MESSAGE request = meta2_remote_request_create(M2_OP_CONTENT_APPEND, container_id);
-	meta2_remote_request_add_path(request, content_path, TRUE, content_length);
-	if(virtual_namespace)
-		meta2_remote_request_add_vns(request, virtual_namespace);
-
-	if (!metaXClient_reply_sequence_run_context(err, ctx, request, &data)) {
-		GSETERROR(err, "Cannot execute the query and receive all the responses");
-		goto errorLabel;
-	}
-
-	message_destroy(request);
-	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-	return result;
-errorLabel:
-	if (request)
-		message_destroy(request);
-	g_slist_free_full(result, (GDestroyNotify) chunk_info_clean);
 	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	return NULL;
 }
