@@ -61,6 +61,13 @@ struct list_params_s
 	guint8 flag_headers:1;
 };
 
+struct list_result_s
+{
+	GSList *beans;
+	gchar *next_marker;
+	gboolean truncated;
+};
+
 typedef struct chunk_pair_s
 {
 	struct bean_CONTENTS_s *content;
@@ -104,6 +111,8 @@ gint64 m2db_get_max_versions(struct sqlx_sqlite3_s *sq3, gint64 def);
 
 void m2db_set_max_versions(struct sqlx_sqlite3_s *sq3, gint64 max);
 
+void m2db_set_ctime(struct sqlx_sqlite3_s *sq3, gint64 now);
+
 /** Get the delay before actually deleting a content marked as deleted.  */
 gint64 m2db_get_keep_deleted_delay(struct sqlx_sqlite3_s *sq3, gint64 def);
 
@@ -122,13 +131,7 @@ gint64 m2db_get_version(struct sqlx_sqlite3_s *sq3);
 
 void m2db_increment_version(struct sqlx_sqlite3_s *sq3);
 
-GError* m2db_get_container_properties(struct sqlx_sqlite3_s *sq3,
-		guint32 flags, gpointer cb_data, m2_onprop_cb cb);
-
 void m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url);
-
-GError* m2db_set_container_properties(struct sqlx_sqlite3_s *sq3, guint32 flags,
-		GSList *props);
 
 GError* m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		guint32 flags, struct bean_ALIASES_s **out);
@@ -148,14 +151,14 @@ GError* m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 GError* m2db_flush_property(struct sqlx_sqlite3_s *sq3, const gchar *k);
 
 GError* m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		GSList *beans, m2_onbean_cb cb, gpointer u0);
+		gboolean flush, GSList *beans, m2_onbean_cb cb, gpointer u0);
 
 /*! Get an alias only */
 GError* m2db_latest_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		struct bean_ALIASES_s **out);
 
 GError* m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		gpointer *result);
+		struct bean_ALIASES_s **out);
 
 GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		struct hc_url_s *url, gboolean del_chunks, m2_onbean_cb cb, gpointer u0);

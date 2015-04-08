@@ -92,10 +92,10 @@ GByteArray* sqlx_pack_PROPDEL (struct sqlx_name_s *name, const gchar * const *k)
  *   kv[2i] is the key
  *   kv[2i+1] if the value.
  */
-GByteArray* sqlx_pack_PROPSET_tab (struct sqlx_name_s *name, const gchar * const *kv);
+GByteArray* sqlx_pack_PROPSET_tab (struct sqlx_name_s *name, gboolean flush, const gchar * const *kv);
 
 /* @param pairs GSList of <key_value_pair_s*> */
-GByteArray* sqlx_pack_PROPSET_pairs (struct sqlx_name_s *name, GSList *pairs);
+GByteArray* sqlx_pack_PROPSET_pairs (struct sqlx_name_s *name, gboolean flush, GSList *pairs);
 
 GByteArray* sqlx_pack_EXITELECTION(struct sqlx_name_s *name);
 GByteArray* sqlx_pack_USE(struct sqlx_name_s *name);
@@ -108,7 +108,6 @@ GByteArray* sqlx_pack_PIPEFROM(struct sqlx_name_s *name, const gchar *source);
 GByteArray* sqlx_pack_PIPETO(struct sqlx_name_s *name, const gchar *target);
 GByteArray* sqlx_pack_RESYNC(struct sqlx_name_s *name);
 
-GByteArray* sqlx_pack_LOAD(struct sqlx_name_s *name, GByteArray *dump);
 GByteArray* sqlx_pack_DUMP(struct sqlx_name_s *name, gboolean chunked);
 GByteArray* sqlx_pack_RESTORE(struct sqlx_name_s *name, const guint8 *raw, gsize rawsize);
 

@@ -169,6 +169,19 @@ sqlx_admin_del(struct sqlx_sqlite3_s *sq3, const gchar *k)
 	g_tree_remove(sq3->admin, k);
 }
 
+void
+sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3)
+{
+	gchar **k = gtree_string_keys(sq3->admin);
+	if (!k)
+		return;
+	for (gchar **p=k; *p ;p++) {
+		if (g_str_has_prefix(*p, SQLX_ADMIN_PREFIX_USER))
+			sqlx_admin_del (sq3, *p);
+	}
+	g_free (k);
+}
+
 int
 sqlx_admin_has(struct sqlx_sqlite3_s *sq3, const gchar *k)
 {

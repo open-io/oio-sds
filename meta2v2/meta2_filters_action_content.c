@@ -435,10 +435,8 @@ meta2_filter_action_get_content(struct gridd_filter_ctx_s *ctx,
 	GSList *urls = NULL;
 
 	TRACE_FILTER();
-	if (NULL != fstr) {
+	if (NULL != fstr)
 		flags = atoi(fstr);
-		flags = g_ntohl(flags);
-	}
 	if (limit_str != NULL && limit_str[0] != '\0') {
 		limit = atoll(limit_str);
 	}
@@ -559,41 +557,26 @@ int
 meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	guint32 flags = 0;
 	GError *e = NULL;
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
-	GSList *props = NULL;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
+
+	guint32 flags = 0;
 	const char *fstr = meta2_filter_ctx_get_param(ctx, M2_KEY_GET_FLAGS);
-	if (fstr != NULL) {
-		flags = (guint32)atoi(fstr);
-	}
-
-	if (hc_url_has(url, HCURL_PATH)) {
-		e = meta2_backend_set_properties(m2b, url, beans, _get_cb, obc);
-	} else {
-		for (GSList *l = beans; l != NULL; l = l->next) {
-			if (DESCR(l->data) == &descr_struct_PROPERTIES) {
-				props = g_slist_prepend(props, bean_to_meta2_prop(l->data));
-			}
-		}
-		e = meta2_backend_set_container_properties(m2b, url, flags, props);
-		if (e == NULL) {
-			for (GSList *l = beans; l != NULL; l = l->next) {
-				if (DESCR(l->data) == &descr_struct_PROPERTIES) {
-					obc->l = g_slist_prepend(obc->l, _bean_dup(l->data));
-				}
-			}
-		}
-
-		g_slist_free_full(props, (GDestroyNotify)meta2_property_clean);
-	}
+	if (NULL != fstr)
+		flags = atoi(fstr);
+	
+	if (!hc_url_has(url, HCURL_PATH))
+		e = NEWERROR(CODE_BAD_REQUEST, "Missing content path");
+	else
+		e = meta2_backend_set_properties(m2b, url, BOOL(flags&M2V2_FLAG_FLUSH),
+				beans, _get_cb, obc);
 
 	if (NULL != e) {
-		GRID_DEBUG("Failed to set properties to (%s)",
-				hc_url_get(url, HCURL_WHOLE));
+		GRID_DEBUG("Failed to set properties to [%s] : (%d) %s",
+				hc_url_get(url, HCURL_WHOLE), e->code, e->message);
 		_on_bean_ctx_clean(obc);
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;

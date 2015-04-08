@@ -308,18 +308,34 @@ action_sqlx_propset (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type (jargs, json_type_object))
 		return _reply_format_error (args, BADREQ("Missing pairs"));
+
+	enum http_rc_e rc;
+	GError *err = NULL;
 	GSList *pairs = NULL;
+
 	json_object_object_foreach(jargs,sk,jv) {
-		if (!json_object_is_type (jv, json_type_string))
-			return _reply_format_error (args, BADREQ("Invalid value for [%s]", sk));
-		struct key_value_pair_s *kv = key_value_pair_create (sk,
-				(guint8*) json_object_get_string(jv), json_object_get_string_len(jv));
-		pairs = g_slist_prepend (pairs, kv);
+		if (json_object_is_type (jv, json_type_string)) {
+			struct key_value_pair_s *kv = key_value_pair_create (sk,
+					(guint8*) json_object_get_string(jv), json_object_get_string_len(jv));
+			pairs = g_slist_prepend (pairs, kv);
+		} else if (json_object_is_type (jv, json_type_null)) {
+			struct key_value_pair_s *kv = key_value_pair_create (sk, NULL, 0);
+			pairs = g_slist_prepend (pairs, kv);
+		} else {
+			err = BADREQ("Invalid value for [%s]", sk);
+			break;
+		}
 	}
-	GByteArray * packer (struct sqlx_name_s *n) {
-		return sqlx_pack_PROPSET_pairs (n, pairs);
+
+	if (!err) {
+		gboolean flush = NULL != OPT("flush");
+		GByteArray * packer (struct sqlx_name_s *n) {
+			return sqlx_pack_PROPSET_pairs (n, flush, pairs);
+		}
+		rc = _sqlx_action_noreturn (args, packer);
+	} else {
+		rc = _reply_format_error (args, err);
 	}
-	enum http_rc_e rc = _sqlx_action_noreturn (args, packer);
 	g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
 	return rc;
 }

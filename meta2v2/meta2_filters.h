@@ -413,12 +413,6 @@ int meta2_filter_action_flush_content_services(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_action_raw_list_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-int meta2_filter_action_getall_admin_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_setone_admin_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 int meta2_filter_action_touch_content_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 

@@ -115,6 +115,9 @@ static gdouble m2_timeout_all = PROXYD_M2_TIMEOUT_SINGLE;
 static gboolean validate_namespace (const gchar * ns);
 static gboolean validate_srvtype (const gchar * n);
 
+struct req_args_s;
+enum http_rc_e _reply_not_implemented (struct req_args_s *args);
+
 #include "url.c"
 #include "reply.c"
 #include "common.c"

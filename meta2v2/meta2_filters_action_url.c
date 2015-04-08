@@ -43,33 +43,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <resolver/hc_resolver.h>
 
 static int
-_update_container_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_backend_s *m2b,
-		struct hc_url_s *url, const char *stgpol)
-{
-	GError *e = NULL;
-	GByteArray *val = g_byte_array_append(g_byte_array_new(), (const guint8*)stgpol, strlen(stgpol));
-
-	GSList l = {.data=NULL, .next=NULL};
-	struct meta2_property_s m2p;
-
-	l.data = &m2p;
-	m2p.name = M2V2_ADMIN_STORAGE_POLICY;
-	m2p.version = 0;
-	m2p.value = val;
-	e = meta2_backend_set_container_properties(m2b, url,
-			M2V2_FLAG_NOFORMATCHECK, &l);
-
-	g_byte_array_free(val, TRUE);
-
-	if (NULL != e) {
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	return FILTER_OK;
-}
-
-static int
 _update_content_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_backend_s *m2b,
 		struct hc_url_s *url, const char *stgpol)
 {
@@ -90,7 +63,10 @@ _update_content_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_back
 			_bean_clean(bean);
 	}
 
-	e = meta2_backend_get_alias(m2b, url, M2V2_FLAG_NODELETED, _get_alias_header_cb, NULL);
+	if (!hc_url_has(url, HCURL_PATH))
+		e = NEWERROR(CODE_BAD_REQUEST, "No content path");
+	if (!e)
+		e = meta2_backend_get_alias(m2b, url, M2V2_FLAG_NODELETED, _get_alias_header_cb, NULL);
 	if (NULL != e) {
 		GRID_DEBUG("Failed to get alias : %s", e->message);
 		meta2_filter_ctx_set_error(ctx, e);
@@ -162,11 +138,7 @@ meta2_filter_action_update_storage_policy(struct gridd_filter_ctx_s *ctx,
 
 	namespace_info_clear(&ni);
 	storage_policy_clean(sp);
-
-	if(hc_url_has(url, HCURL_PATH))
-		return _update_content_storage_policy(ctx, m2b, url, stgpol);
-	return _update_container_storage_policy(ctx, m2b, url, stgpol);
-
+	return _update_content_storage_policy(ctx, m2b, url, stgpol);
 }
 
 int

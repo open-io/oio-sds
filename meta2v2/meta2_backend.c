@@ -745,8 +745,10 @@ _create_container_init_phase(struct sqlx_sqlite3_s *sq3,
 		gint64 max = g_ascii_strtoll(params->version_policy, NULL, 10);
 		m2db_set_max_versions(sq3, max);
 	}
-	if (!err)
+	if (!err) {
+		m2db_set_ctime (sq3, time(0));
 		sqlx_admin_init_i64(sq3, META2_INIT_FLAG, 1);
+	}
 	if (!params->local)
 		err = sqlx_transaction_end(repctx, err);
 	return err;
@@ -918,50 +920,6 @@ meta2_backend_purge_container(struct meta2_backend_s *m2,
 					_retention_delay(sq3, m2), flags, cb, u0);
 			err = sqlx_transaction_end(repctx, err);
 		}
-		m2b_close(sq3);
-	}
-
-	return err;
-}
-
-GError*
-meta2_backend_set_container_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, guint32 flags, GSList *props)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-
-	GRID_DEBUG("PROPSET(%s,...)", hc_url_get(url, HCURL_WHOLE));
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
-	if (!err) {
-		struct sqlx_repctx_s *repctx = NULL;
-		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_set_container_properties(sq3, flags, props)))
-				m2db_increment_version(sq3);
-			err = sqlx_transaction_end(repctx, err);
-		}
-		m2b_close(sq3);
-	}
-
-	return err;
-}
-
-GError*
-meta2_backend_get_container_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, guint32 flags, gpointer cb_data, m2_onprop_cb cb)
-{
-	GError *err;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	GRID_DEBUG("PROPGET(%s)", hc_url_get(url, HCURL_WHOLE));
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
-			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
-	if (!err) {
-		g_assert(sq3 != NULL);
-		err = m2db_get_container_properties(sq3, flags, cb_data, cb);
 		m2b_close(sq3);
 	}
 
@@ -1421,9 +1379,8 @@ meta2_backend_del_properties(struct meta2_backend_s *m2b,
 }
 
 GError*
-meta2_backend_set_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *beans,
-		m2_onbean_cb cb, gpointer u0)
+meta2_backend_set_properties(struct meta2_backend_s *m2b, struct hc_url_s *url,
+		gboolean flush, GSList *beans, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1437,7 +1394,7 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_set_properties(sq3, url, beans, cb, u0)))
+			if (!(err = m2db_set_properties(sq3, url, flush, beans, cb, u0)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}

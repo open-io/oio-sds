@@ -37,6 +37,7 @@ License along with this library.
 #include <der_encoder.h>
 
 #include "sqliterepo.h"
+#include "sqlx_macros.h"
 #include "sqlx_remote.h"
 #include "version.h"
 #include "internals.h"
@@ -48,10 +49,10 @@ make_request(const gchar *rn, struct sqlx_name_s *name)
 {
 	MESSAGE req = message_create_named(rn);
 	message_add_fields_str(req,
-				"BASE_NAME", name->base,
-				"BASE_TYPE", name->type,
-				"NAMESPACE", name->ns,
-				"VIRTUAL_NAMESPACE", name->ns,
+				NAME_MSGKEY_BASENAME, name->base,
+				NAME_MSGKEY_BASETYPE, name->type,
+				NAME_MSGKEY_NAMESPACE, name->ns,
+				NAME_MSGKEY_VIRTUALNAMESPACE, name->ns,
 				NULL);
 	return req;
 }
@@ -103,87 +104,87 @@ sqlx_encode_RowSet(struct RowSet *rows, GError **err)
 GByteArray*
 sqlx_pack_USE(struct sqlx_name_s *name)
 {
-	MESSAGE req = make_request("SQLX_USE", name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_USE, name);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_DESCR(struct sqlx_name_s *name)
 {
-	MESSAGE req = make_request("SQLX_DESCR", name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_DESCR, name);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_INFO(struct sqlx_name_s *name)
 {
-	MESSAGE req = make_request("SQLX_INFO", name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_INFO, name);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_LEANIFY(struct sqlx_name_s *name)
 {
-	MESSAGE req = make_request("SQLX_LEANIFY", name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_LEANIFY, name);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_RESYNC(struct sqlx_name_s *name)
 {
-	MESSAGE req = make_request("SQLX_RESYNC", name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_RESYNC, name);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_STATUS(struct sqlx_name_s *name)
 {
-    MESSAGE req = make_request("SQLX_STATUS", name);
+    MESSAGE req = make_request(NAME_MSGNAME_SQLX_STATUS, name);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_EXITELECTION(struct sqlx_name_s *name)
 {
-    MESSAGE req = make_request("SQLX_EXITELECTION", name);
+    MESSAGE req = make_request(NAME_MSGNAME_SQLX_EXITELECTION, name);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_ISMASTER(struct sqlx_name_s *name)
 {
-	MESSAGE req = make_request("SQLX_ISMASTER", name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_ISMASTER, name);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_PIPEFROM(struct sqlx_name_s *name, const gchar *source)
 {
-	MESSAGE req = make_request("SQLX_PIPEFROM", name);
-	message_add_fields_str(req, "SRC", source, NULL);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPEFROM, name);
+	message_add_fields_str(req, NAME_MSGKEY_SRC, source, NULL);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_PIPETO(struct sqlx_name_s *name, const gchar *target)
 {
-	MESSAGE req = make_request("SQLX_PIPETO", name);
-	message_add_fields_str(req, "DST", target, NULL);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPETO, name);
+	message_add_fields_str(req, NAME_MSGKEY_DST, target, NULL);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_DUMP(struct sqlx_name_s *name, gboolean chunked)
 {
-	MESSAGE req = make_request("SQLX_DUMP", name);
-	message_add_field(req, "CHUNKED", &chunked, 1);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_DUMP, name);
+	message_add_field(req, NAME_MSGKEY_CHUNKED, &chunked, 1);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_RESTORE(struct sqlx_name_s *name, const guint8 *raw, gsize rawsize)
 {
-	MESSAGE req = make_request("SQLX_RESTORE", name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_RESTORE, name);
 	message_set_BODY(req, raw, rawsize, NULL);
 	return message_marshall_gba_and_clean(req);
 }
@@ -204,7 +205,7 @@ sqlx_pack_REPLICATE(struct sqlx_name_s *name, struct TableSequence *tabseq)
 		return NULL;
 	}
 
-	MESSAGE req = make_request("SQLX_REPLICATE", name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_REPLICATE, name);
 	message_set_BODY(req, body->data, body->len, NULL);
 	encoded = message_marshall_gba(req, NULL);
 	g_byte_array_free(body, TRUE);
@@ -217,7 +218,7 @@ GByteArray*
 sqlx_pack_GETVERS(struct sqlx_name_s *name)
 {
 	EXTRA_ASSERT(name != NULL);
-	MESSAGE req = make_request("SQLX_GETVERS", name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_GETVERS, name);
 	return message_marshall_gba_and_clean(req);
 }
 
@@ -229,9 +230,9 @@ sqlx_pack_QUERY(struct sqlx_name_s *name, const gchar *query,
 	EXTRA_ASSERT(query != NULL);
 
 	guint8 ac = (guint8) autocreate;
-	MESSAGE req = make_request("SQLX_QUERY", name);
-	message_add_field(req, "AUTOCREATE", &ac, 1);
-	message_add_fields_str(req, "QUERY", query, NULL);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_QUERY, name);
+	message_add_field(req, NAME_MSGKEY_AUTOCREATE, &ac, 1);
+	message_add_fields_str(req, NAME_MSGKEY_QUERY, query, NULL);
 
 	if (!params) {
 		GByteArray *body = sqlx_encode_TableSequence(params, NULL);
@@ -249,7 +250,7 @@ sqlx_pack_QUERY_single(struct sqlx_name_s *name, const gchar *query,
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(query != NULL);
 
-	MESSAGE req = make_request("SQLX_QUERY", name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_QUERY, name);
 	guint8 ac = (guint8) autocreate;
 	do {
 		Table_t *t;
@@ -266,7 +267,7 @@ sqlx_pack_QUERY_single(struct sqlx_name_s *name, const gchar *query,
 		body = sqlx_encode_TableSequence(ts, NULL);
 		g_assert(body != NULL);
 		message_set_BODY(req, body->data, body->len, NULL);
-		message_add_field(req, "AUTOCREATE", &ac, 1);
+		message_add_field(req, NAME_MSGKEY_AUTOCREATE, &ac, 1);
 
 		asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence, ts, FALSE);
 		g_byte_array_free(body, TRUE);
@@ -279,42 +280,34 @@ GByteArray *
 sqlx_pack_DESTROY(struct sqlx_name_s *name, gboolean local)
 {
 	gint8 local2 = BOOL(local);
-	MESSAGE req = make_request("SQLX_DESTROY", name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_DESTROY, name);
 	if (local)
-		message_add_field(req, "LOCAL", &local2, 1);
-	return message_marshall_gba_and_clean(req);
-}
-
-GByteArray *
-sqlx_pack_LOAD(struct sqlx_name_s *name, GByteArray *dump)
-{
-	MESSAGE req = make_request("SQLX_LOAD", name);
-	message_set_BODY(req, dump->data, dump->len, NULL);
+		message_add_field(req, NAME_MSGKEY_LOCAL, &local2, 1);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray *
 sqlx_pack_ENABLE(struct sqlx_name_s *name)
 {
-	return message_marshall_gba_and_clean(make_request("SQLX_ENABLE", name));
+	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_ENABLE, name));
 }
 
 GByteArray *
 sqlx_pack_DISABLE(struct sqlx_name_s *name)
 {
-	return message_marshall_gba_and_clean(make_request("SQLX_DISABLE", name));
+	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_DISABLE, name));
 }
 
 GByteArray *
 sqlx_pack_FREEZE(struct sqlx_name_s *name)
 {
-	return message_marshall_gba_and_clean(make_request("SQLX_FREEZE", name));
+	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_FREEZE, name));
 }
 
 GByteArray *
 sqlx_pack_DISABLE_DISABLED(struct sqlx_name_s *name)
 {
-	return message_marshall_gba_and_clean(make_request("SQLX_DISABLE_DISABLED", name));
+	return message_marshall_gba_and_clean(make_request(NAME_MSGNAME_SQLX_DISABLE_DISABLED, name));
 }
 
 GByteArray *
@@ -326,7 +319,7 @@ sqlx_pack_PROPGET(struct sqlx_name_s *name, const gchar * const *keys)
 	if (!body)
 		return NULL;
 
-	MESSAGE req = make_request("SQLX_PROPGET", name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPGET, name);
 	message_set_BODY(req, body->data, body->len, NULL);
 	g_byte_array_free (body, TRUE);
 	return message_marshall_gba_and_clean(req);
@@ -341,24 +334,26 @@ sqlx_pack_PROPDEL(struct sqlx_name_s *name, const gchar * const *keys)
 	if (!body)
 		return NULL;
 
-	MESSAGE req = make_request("SQLX_PROPDEL", name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPDEL, name);
 	message_set_BODY(req, body->data, body->len, NULL);
 	g_byte_array_free (body, TRUE);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray *
-sqlx_pack_PROPSET_pairs(struct sqlx_name_s *name, GSList *pairs)
+sqlx_pack_PROPSET_pairs(struct sqlx_name_s *name, gboolean flush, GSList *pairs)
 {
 	GByteArray *body = key_value_pairs_marshall_gba (pairs, NULL);
-	MESSAGE req = make_request("SQLX_PROPSET", name);
-	message_set_BODY(req, body->data, body->len, NULL);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPSET, name);
+	if (flush)
+		message_add_field_strint (req, NAME_MSGKEY_FLUSH, 1);
+	message_set_BODY (req, body->data, body->len, NULL);
 	g_byte_array_free (body, TRUE);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray *
-sqlx_pack_PROPSET_tab(struct sqlx_name_s *name, gchar const * const *kv)
+sqlx_pack_PROPSET_tab(struct sqlx_name_s *name, gboolean flush, gchar const * const *kv)
 {
 	GSList  *pairs = NULL;
 	for (const gchar * const *p=kv; p && *p && *(p+1) ;p+=2) {
@@ -366,7 +361,7 @@ sqlx_pack_PROPSET_tab(struct sqlx_name_s *name, gchar const * const *kv)
 				*p, (guint8*)*(p+1), strlen(*(p+1)));
 		pairs = g_slist_prepend (pairs, tmp);
 	}
-	GByteArray *body = sqlx_pack_PROPSET_pairs (name, pairs);
+	GByteArray *body = sqlx_pack_PROPSET_pairs (name, flush, pairs);
 	g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
 	return body;
 }

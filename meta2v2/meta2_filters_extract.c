@@ -691,9 +691,9 @@ int
 meta2_filter_extract_header_flags32(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
+	gchar strflags[16];
 	GError *e = NULL;
 	guint32 flags = 0;
-	gchar strflags[32];
 
 	TRACE_FILTER();
 	e = message_extract_flags32(reply->request, NAME_MSGKEY_FLAGS, FALSE, &flags);

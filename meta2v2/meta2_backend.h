@@ -125,14 +125,6 @@ GError* meta2_backend_flush_container(struct meta2_backend_s *m2,
 GError *meta2_backend_purge_container(struct meta2_backend_s *m2,
 		struct hc_url_s *url, guint32 flags, m2_onbean_cb cb, gpointer u0);
 
-/** @param flags Is only accepted M2V2_FLAG_NOFORMATCHECK */
-GError* meta2_backend_set_container_properties(struct meta2_backend_s *m2,
-		struct hc_url_s *url, guint32 flags, GSList *list_of_props);
-
-/**  */
-GError* meta2_backend_get_container_properties(struct meta2_backend_s *m2,
-		struct hc_url_s *url, guint32 flags, gpointer cb_data, m2_onprop_cb cb);
-
 /** Find and unreference duplicate content headers.  */
 GError* meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, guint32 flags, GString **status_message);
@@ -217,7 +209,7 @@ GError* meta2_backend_del_properties(struct meta2_backend_s *m2b,
 
 /** Helper for testing purpose */
 GError* meta2_backend_set_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *beans,
+		struct hc_url_s *url, gboolean flush, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
 /** Get a list of URLs of contents referencing a specific chunk id. */
