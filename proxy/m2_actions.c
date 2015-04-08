@@ -568,18 +568,18 @@ action_m2_container_list (struct req_args_s *args)
 
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
+		GError *e = NULL;
 		struct list_params_s in = list_in;
 		struct list_result_s out = {NULL,NULL,FALSE};
-		do {
+		while (grid_main_is_running()) {
 			// patch the input parameters
 			if (list_in.maxkeys > 0)
-				in.maxkeys = list_in.maxkeys - count;
+				in.maxkeys = list_in.maxkeys - (count + g_tree_nnodes(tree_prefixes));
 			if (out.next_marker)
 				in.marker_start = out.next_marker;
 
 			// Action
-			GError *e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out);
-			if (e)
+			if (NULL != (e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out)))
 				return e;
 
 			// transmit the output
@@ -598,16 +598,23 @@ action_m2_container_list (struct req_args_s *args)
 				list_out.beans = ctx.beans;
 			}
 
-			// and maybe return
-			if (!list_in.maxkeys || list_in.maxkeys <= count) {
-				list_out.truncated = list_in.maxkeys ? out.truncated : FALSE;
+			// enough elements received
+			if (list_in.maxkeys > 0 && list_in.maxkeys <= (count + g_tree_nnodes(tree_prefixes))) {
+				list_out.truncated = out.truncated;
 				return NULL;
 			}
-		} while (out.truncated && grid_main_is_running());
+			// no more elements expected, the meta2 told us
+			if (!out.truncated) {
+				list_out.truncated = FALSE;
+				return NULL;
+			}
+			if (out.truncated && !list_out.next_marker) {
+				GRID_ERROR("BUG : meta2 must return a ");
+				return NEWERROR(CODE_PLATFORM_ERROR, "BUG in meta2 : list truncated but no marker returned");
+			}
+		}
 
-		if (!grid_main_is_running())
-			return NEWERROR(CODE_INTERNAL_ERROR, "Interrupted");
-		return NULL;
+		return e;
 	}
 
 	memset(&list_in, 0, sizeof(list_in));
