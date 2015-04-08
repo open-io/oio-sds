@@ -516,40 +516,42 @@ struct filter_ctx_s
 static void
 _filter (struct filter_ctx_s *ctx, GSList *l)
 {
+	void forget (GSList *p) { if (p->data) _bean_clean (p->data); g_slist_free1 (p); }
 	void prepend (GSList *p) { p->next = ctx->beans; ctx->beans = p; }
-	gsize prefix_len = ctx->prefix ? strlen(ctx->prefix) : 0;
 
+	gsize prefix_len = ctx->prefix ? strlen(ctx->prefix) : 0;
 	for (GSList *tmp; l ;l=tmp) {
 		tmp = l->next;
+		l->next = NULL;
+
 		if (!l->data) {
-			g_slist_free1 (l);
-		} else {
-			if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
-				prepend (l);
-			} else if (DESCR(l->data) == &descr_struct_ALIASES) {
-				const char *name = ALIASES_get_alias(l->data)->str;
-				if (ctx->delimiter) {
-					const char *p = strchr(name+prefix_len, ctx->delimiter);
-					if (p) {
-						g_tree_insert(ctx->prefixes, g_strndup(name, p-name+1), GINT_TO_POINTER(1));
-						_bean_clean (l->data);
-						g_slist_free1 (l);
-					} else {
-						prepend (l);
-						ctx->count ++;
-					}
-				} else {
-					prepend (l);
-					ctx->count ++;
-				}
+			forget (l);
+			continue;
+		}
+		if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+			prepend (l);
+			continue;
+		}
+		if (DESCR(l->data) != &descr_struct_ALIASES) {
+			forget (l);
+			continue;
+		}
+
+		const char *name = ALIASES_get_alias(l->data)->str;
+		if (ctx->delimiter) {
+			const char *p = strchr(name+prefix_len, ctx->delimiter);
+			if (p) {
+				g_tree_insert(ctx->prefixes, g_strndup(name, p-name+1), GINT_TO_POINTER(1));
+				forget (l);
 			} else {
-				_bean_clean (l->data);
-				g_slist_free1 (l);
+				ctx->count ++;
+				prepend (l);
 			}
+		} else {
+			ctx->count ++;
+			prepend (l);
 		}
 	}
-
-	ctx->beans = g_slist_reverse (ctx->beans);
 }
 
 static enum http_rc_e
@@ -570,9 +572,9 @@ action_m2_container_list (struct req_args_s *args)
 			// patch the input parameters
 			if (list_in.maxkeys > 0)
 				in.maxkeys = list_in.maxkeys - count;
-			if (list_out.beans)
-				in.marker_start = ALIASES_get_alias(list_out.beans->data)->str;
+			in.marker_start = list_out.next_marker;
 
+			// Action
 			GError *e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out);
 			if (e)
 				return e;
@@ -588,6 +590,7 @@ action_m2_container_list (struct req_args_s *args)
 				ctx.prefix = list_in.prefix;
 				ctx.delimiter = delimiter;
 				_filter (&ctx, out.beans);
+				out.beans = NULL;
 				count = ctx.count;
 				list_out.beans = ctx.beans;
 			}
@@ -597,7 +600,10 @@ action_m2_container_list (struct req_args_s *args)
 				list_out.truncated = list_in.maxkeys ? out.truncated : FALSE;
 				return NULL;
 			}
-		} while (out.truncated);
+		} while (out.truncated && grid_main_is_running());
+
+		if (!grid_main_is_running())
+			return NEWERROR(CODE_INTERNAL_ERROR, "Interrupted");
 		return NULL;
 	}
 
