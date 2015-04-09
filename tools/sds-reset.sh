@@ -20,9 +20,35 @@ set -e
 
 PREFIX="@EXE_PREFIX@"
 NS=NS
+IP=127.0.0.1
 OIO=$HOME/.oio
 SDS=$OIO/sds
 GRIDINIT_SOCK=${SDS}/run/gridinit.sock
+
+REPLICATION_DIRECTORY=3
+REPLICATION_BUCKET=3
+STGPOL="SINGLE"
+VERSIONING=1
+
+while getopts ":D:B:S:V:N:I:" opt; do
+	case $opt in
+		D) REPLICATION_DIRECTORY="${OPTARG}" ;;
+		B) REPLICATION_BUCKET="${OPTARG}" ;;
+		S) STGPOL="${OPTARG}" ;;
+		V) VERSIONING="${OPTARG}" ;;
+		N) NS="${OPTARG}" ;;
+		I) IP="${OPTARG}" ;;
+		\?) ;;
+	esac
+done
+
+echo "$0" \
+	"-D \"${REPLICATION_DIRECTORY}\"" \
+	"-B \"${REPLICATION_BUCKET}\"" \
+	"-S \"${STGPOL}\"" \
+	"-V \"${VERSIONING}\"" \
+	"-N \"${NS}\"" \
+	"-I \"${IP}\""
 
 # Stop and clean everything
 while pkill --full -0 gridinit ; do
@@ -33,7 +59,11 @@ done
 mkdir -p "$OIO"
 ( cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs}))
 
-${PREFIX}-bootstrap.py
+${PREFIX}-bootstrap.py \
+		-B "$REPLICATION_BUCKET" \
+		-V "$VERSIONING" \
+		-S "$STGPOL" \
+		"$NS" "$IP"
 
 nice gridinit -s RC,gridinit -d ${SDS}/conf/gridinit.conf
 
@@ -65,7 +95,7 @@ done
 
 # Init the meta0's content
 ${PREFIX}-cluster -r "$NS" | awk -F\| '/meta0/{print $3}' | while read URL ; do
-	${PREFIX}-meta0-init -O NbReplicas=3 -O IgnoreDistance=on "$URL"
+	${PREFIX}-meta0-init -O "NbReplicas=${REPLICATION_DIRECTORY}" -O IgnoreDistance=on "$URL"
 	${PREFIX}-meta0-client "$URL" reload
 done
 
