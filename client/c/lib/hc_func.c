@@ -665,7 +665,7 @@ hc_func_get_content_properties(gs_grid_storage_t *hc, struct hc_url_s *url, char
 			gs_content_free(content);
 		}
 	} else {
-		e = hc_get_container_global_properties(c, result);
+		e = hc_get_container_properties(c, result);
 	}
 	return e;
 }

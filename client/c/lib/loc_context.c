@@ -150,7 +150,6 @@ _check_chunk(const char *cid)
 	return g_string_free(str, FALSE);
 }
 
-#if 0
 static status_t
 _get_container_user_properties(gs_grid_storage_t *hc, struct hc_url_s *url, container_id_t cid,
                 char ***props, gs_error_t **gserr)
@@ -205,6 +204,7 @@ _get_container_user_properties(gs_grid_storage_t *hc, struct hc_url_s *url, cont
 	return rc;
 }
 
+#if 0
 static status_t
 _get_container_global_property(gs_grid_storage_t *hc, struct metacnx_ctx_s *cnx, container_id_t cid,
 			GHashTable **ht, gs_error_t **gserr)
@@ -1105,14 +1105,13 @@ loc_context_init(gs_grid_storage_t *hc, struct hc_url_s *url, gs_error_t **p_e)
 		goto label_error;
 	}
 
-// XXX TODO FIXME repair this
-#if 0
 	if (!_get_container_user_properties(hc, url, cid, &ctx->container_props, &e)) {
 		gs_error_set(&e, e ? e->code : 0, "Container properties not found : %s\n",
 				gs_error_get_message(e));
 		goto label_error_close_cnx;
 	}
 
+#if 0
 	if (!_get_container_global_property(hc, &cnx, cid, &ctx->admin_info, &e)) {
 		gs_error_set(&e, e ? e->code : 0, "Container admin entries not found : %s\n",
 				gs_error_get_message(e));

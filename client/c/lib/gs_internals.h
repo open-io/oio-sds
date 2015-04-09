@@ -458,7 +458,7 @@ gs_error_t* hc_set_container_global_property(gs_container_t *container,
 gs_error_t* hc_del_container_global_property(gs_container_t *container,
 		const char *prop_name);
 
-gs_error_t *hc_get_container_global_properties(gs_container_t *container,
+gs_error_t *hc_get_container_properties(gs_container_t *container,
 		char ***result);
 
 #include "./rawx.h"
