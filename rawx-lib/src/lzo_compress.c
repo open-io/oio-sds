@@ -56,7 +56,7 @@ get_working_buffer_size(gsize uncompressed_size)
 }
 
 int
-lzo_write_compress_header(FILE *file, guint32 blocksize, gulong *checksum, guint32 *compressed_size)
+lzo_write_compress_header(FILE *file, guint32 blocksize, gulong *checksum, lzo_uint32 *compressed_size)
 {
 	lzo_uint32 flags = LZO_FLAG_CHECKSUM;       /* do compute a checksum */
 	char method = LZO_METHOD;
@@ -93,7 +93,7 @@ lzo_write_compress_header(FILE *file, guint32 blocksize, gulong *checksum, guint
 }
 
 int
-lzo_write_compress_eof(FILE *file, gulong checksum, guint32 *compressed_size)
+lzo_write_compress_eof(FILE *file, gulong checksum, lzo_uint32 *compressed_size)
 {
 	lzo_uint32 eof_marker = 0;
 	gsize written = 0;
@@ -346,7 +346,7 @@ lzo_compressed_chunk_check_integrity(struct compressed_chunk_s *chunk)
 	
 	lzo_uint32 checksum32 = 0;
 	checksum32 = chunk->checksum;
-	DEBUG("chunk->checksum : %d\n", checksum32);
+	DEBUG("chunk->checksum : %"G_GUINT32_FORMAT"\n", checksum32);
 	c = *((guint32*)(eof_info + sizeof(guint32)));	
 
 	DEBUG("c (get from file): %d\n", c);
