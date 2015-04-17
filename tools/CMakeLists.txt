@@ -32,7 +32,7 @@ add_custom_command(OUTPUT ${OUTPUT}
 				   COMMAND ${CMAKE_COMMAND} -E touch ${OUTPUT}
 				   DEPENDS ${DEPS})
 
-add_custom_target(target ALL DEPENDS ${OUTPUT})
+add_custom_target(tools ALL DEPENDS ${OUTPUT})
 
 install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} install --prefix=${CMAKE_INSTALL_PREFIX})")
 

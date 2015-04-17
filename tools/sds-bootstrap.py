@@ -443,9 +443,9 @@ def generate (ns, ip, options={}):
 			('meta2', EXE_PREFIX + '-meta2-server', 2, next_port()),
 			('meta2', EXE_PREFIX + '-meta2-server', 3, next_port()),
 
-			('sqlx',  EXE_PREFIX + '-sqlx-server', 1, next_port()),
-			('sqlx',  EXE_PREFIX + '-sqlx-server', 2, next_port()),
-			('sqlx',  EXE_PREFIX + '-sqlx-server', 3, next_port()),
+			#('sqlx',  EXE_PREFIX + '-sqlx-server', 1, next_port()),
+			#('sqlx',  EXE_PREFIX + '-sqlx-server', 2, next_port()),
+			#('sqlx',  EXE_PREFIX + '-sqlx-server', 3, next_port()),
 	)
 	rawx = (
 		(1, next_port()),

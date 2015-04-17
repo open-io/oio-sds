@@ -20,7 +20,7 @@
 import sys
 import urllib2
 
-RAWX_STAT_KEYS = {
+RAWX_STAT_KEYS = [
 	("rawx.reqpersec",	"stat.total_reqpersec"),
 	("rawx.reqputpersec", "stat.put_reqpersec"),
 	("rawx.reqgetpersec", "stat.get_reqpersec"),
@@ -28,7 +28,7 @@ RAWX_STAT_KEYS = {
 	("rawx.avputreqtime", "stat.put_avreqtime"),
 	("rawx.avgetreqtime", "stat.get_avreqtime"),
 	("rawx.volume", "tag.vol"),
-}
+]
 
 def parse_info(stream):
 	data = {}
