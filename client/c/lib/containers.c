@@ -1293,27 +1293,6 @@ gs_get_storage_container_v2(gs_grid_storage_t *gs,
 	            gs_err);
 }
 
-char **
-hc_get_container_admin_entries(gs_container_t *container, gs_error_t **gs_err)
-{
-	GError *localError = NULL;
-
-	/*sanity checks*/
-	if (!container) {
-		GSERRORSET(gs_err, "invalid parameter");
-		return NULL;
-	}
-	TRACE("get container admin entries [%s]", C0_NAME(container));
-
-	// FIXME TODO This function has been commented and does not do anything
-
-	if (!localError)
-		GSETERROR(&localError,"unknown error");
-	GSERRORCAUSE(gs_err,localError,"Failed to get container admin entries [%s]", C0_NAME(container));
-	g_clear_error(&localError);
-	return NULL;
-}
-
 gs_error_t*
 hc_set_container_global_property(gs_container_t *container,
 		const char *prop_name, const char *prop_val)
@@ -1373,7 +1352,7 @@ hc_del_container_global_property(gs_container_t *container,
 }
 
 gs_error_t*
-hc_get_container_global_properties(gs_container_t *container, char ***result)
+hc_get_container_properties(gs_container_t *container, char ***result)
 {
 	gchar addr[STRLEN_ADDRINFO];
 	addr_info_to_string(&(container->meta2_addr), addr, STRLEN_ADDRINFO);

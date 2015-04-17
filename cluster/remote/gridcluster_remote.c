@@ -68,32 +68,6 @@ container_list_content_handler(GError ** error, gpointer udata, gint code, guint
 	return (TRUE);
 }
 
-meta0_info_t *
-gcluster_get_meta0_2timeouts(addr_info_t * addr, long to_cnx, long to_req, GError ** error)
-{
-	gchar str[STRLEN_ADDRINFO];
-	if (!addr_info_to_string (addr, str, sizeof(str))) {
-		GSETCODE(error, ERRCODE_PARAM, "bad address");
-		return NULL;
-	}
-
-	meta0_info_t *m0 = NULL;
-	GSList *result = gcluster_get_services(str, MAX(to_cnx,to_req), NAME_SRVTYPE_META0, FALSE, error);
-	if (result) {
-		m0 = service_info_convert_to_m0info(g_slist_nth_data(result,rand()%g_slist_length(result)));
-		g_slist_foreach(result, service_info_gclean, NULL);
-		g_slist_free(result);
-	}
-
-	return m0;
-}
-
-meta0_info_t *
-gcluster_get_meta0(addr_info_t * addr, long timeout, GError ** error)
-{
-	return gcluster_get_meta0_2timeouts(addr, timeout, timeout, error);
-}
-
 namespace_info_t *
 gcluster_get_namespace_info_full(addr_info_t * addr, long timeout, GError ** error)
 {
@@ -147,51 +121,6 @@ gcluster_push_broken_container(addr_info_t * addr, long timeout, GSList * contai
 error_reply:
 	message_destroy(req);
 	g_byte_array_free(buf, TRUE);
-	return (0);
-}
-
-gint
-gcluster_push_virtual_ns_space_used(addr_info_t * addr, long timeout, GHashTable *space_used, GError ** error)
-{
-	static struct code_handler_s codes[] = {
-		{CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL},
-		{0, 0, NULL, NULL}
-	};
-	struct reply_sequence_data_s data = { NULL, 0, codes };
-	MESSAGE req = NULL;
-	GSList *kv_list = NULL;
-
-	/* send the hashtable in the body */
-	kv_list = key_value_pairs_convert_from_map(space_used, FALSE, error);
-	if (!kv_list) {
-		GSETERROR(error, "Conversion HashTable->List failure");
-		return (0);
-	}
-
-	/*encode the list */
-	GByteArray *buf = key_value_pairs_marshall_gba(kv_list, error);
-	if (!buf) {
-		GSETERROR(error, "Failed to marshall kv list");
-		goto error_marshall;
-	}
-
-	req = build_request(NAME_MSGNAME_CS_PUSH_VNS_SPACE_USED, buf->data, buf->len);
-	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, timeout, &data)) {
-		GSETERROR(error, "Cannot execute the query %s and receive all the responses",
-				NAME_MSGNAME_CS_PUSH_BROKEN_CONT);
-		goto error_reply;
-	}
-
-	message_destroy(req);
-	g_byte_array_free(buf, TRUE);
-	g_slist_free_full (kv_list, g_free0);
-	return (1);
-
-error_reply:
-	message_destroy(req);
-	g_byte_array_free(buf, TRUE);
-error_marshall:
-	g_slist_free_full(kv_list, g_free0);
 	return (0);
 }
 

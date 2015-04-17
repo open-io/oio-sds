@@ -42,26 +42,17 @@ enum hc_url_field_e
 };
 
 #define HCURL_LATEST_VERSION "LAST"
-/**
- * Forward declaration
- */
+
 struct hc_url_s;
 
-/**
- * @param url
- * @return
- */
+/** Calls hc_url_empty() then parse the given string. */
 struct hc_url_s * hc_url_init(const char *url);
 
-/**
- * Builds an empty URL
- * @return
- */
+/** Builds an empty URL */
 struct hc_url_s * hc_url_empty(void);
 
-/**
- * @param u
- */
+struct hc_url_s* hc_url_dup(struct hc_url_s *u);
+
 void hc_url_clean(struct hc_url_s *u);
 
 static inline void
@@ -73,53 +64,16 @@ hc_url_pclean(struct hc_url_s **pu)
 	pu = NULL;
 }
 
-/**
- * @param u
- * @return
- */
-struct hc_url_s* hc_url_dup(struct hc_url_s *u);
-
-/**
- * @param u
- * @param ignored
- */
-void hc_url_gclean(gpointer u, gpointer ignored);
-
-/**
- * @param u
- * @param f
- * @param v
- * @return u
- */
 struct hc_url_s* hc_url_set(struct hc_url_s *u,
 		enum hc_url_field_e f, const char *v);
 
-/**
- * @param u
- * @param f
- * @return
- */
 const char * hc_url_get(struct hc_url_s *u, enum hc_url_field_e f);
 
-/**
- * @param u
- * @param f
- * @return
- */
 int hc_url_has(struct hc_url_s *u, enum hc_url_field_e f);
 
-/**
- * @param u
- * @return
- */
 const guint8* hc_url_get_id(struct hc_url_s *u);
 
-/**
- * Returns the value of the given option.
- * @param u The url struct.
- * @param option_name The name of the option.
- * @return The value of the given option.
- */
+/** Returns the value of the given option. */
 const gchar* hc_url_get_option_value(struct hc_url_s *u,
 		const gchar *option_name);
 
@@ -131,16 +85,7 @@ gchar ** hc_url_get_option_names(struct hc_url_s *u);
  * NULL then an empty string will be saved. */
 void hc_url_set_option (struct hc_url_s *u,  const gchar *k, const gchar *v);
 
-/**
- * @param u
- * @return
- */
 size_t hc_url_get_id_size(struct hc_url_s *u);
-
-/**
- * @param u
- */
-void hc_url_dump(struct hc_url_s *u);
 
 /** @} */
 

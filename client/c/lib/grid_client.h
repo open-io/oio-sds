@@ -941,13 +941,6 @@ gs_error_t* hc_delete_reference_property(gs_grid_storage_t *hc,
 		const char *ref, char **keys);
 
 /**
- * @param container
- * @param gs_err
- * @return
- */
-char** hc_get_container_admin_entries(gs_container_t *container, gs_error_t **gs_err);
-
-/**
  * @param container the targeted container
  * @param storage_policy the storage policy to set to the container
  * @return an error their is an issue while setting the storage policy

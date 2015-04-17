@@ -237,10 +237,10 @@ param_score_timeout=86400
 
 param_option.ns_status=MASTER
 param_option.WORM=false
-param_option.service_update_policy=meta2=NONE|3|1|tag.type=m2v2;meta1=REPLACE;sqlx=KEEP|1|1|
+param_option.service_update_policy=meta2=NONE|${M2_REPLICAS}|1|tag.type=m2v2;meta1=REPLACE;sqlx=KEEP|1|1|
 param_option.automatic_open=true
-param_option.meta2_max_versions=1
-param_option.storage_policy=SINGLE
+param_option.meta2_max_versions=${VERSIONING}
+param_option.storage_policy=${STGPOL}
 
 param_option.meta2_check.put.GAPS=false
 param_option.meta2_check.put.DISTANCE=false
@@ -281,7 +281,6 @@ param_service.echo.score_expr=(num stat.cpu)
 """
 
 template_conscience_events = """
-meta2.*=service replicator;
 *=drop
 """
 
@@ -350,15 +349,6 @@ enabled=true
 start_at_boot=true
 #command=${EXE_PREFIX}-daemon -s SDS,${NS},conscience ${CFGDIR}/${NS}-conscience.conf
 command=${EXE_PREFIX}-daemon -q ${CFGDIR}/${NS}-conscience.conf
-env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
-
-[service.${NS}-vns]
-group=${NS},localhost,vns
-on_die=respawn
-enabled=false
-start_at_boot=false
-command=${EXE_PREFIX}-daemon -s SDS,${NS},vns ${CFGDIR}/vns-agent.conf
 env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 
@@ -436,7 +426,7 @@ def next_port ():
 	res, port = port, port + 1
 	return res
 
-def generate (ns, ip):
+def generate (ns, ip, options={}):
 	port_cs = next_port()
 	port_agent = next_port() # for TCP connection is use by Java applications
 	port_proxy = next_port()
@@ -444,15 +434,18 @@ def generate (ns, ip):
 	port_endpoint = next_port()
 	services = (
 			('meta0', EXE_PREFIX + '-meta0-server', 1, next_port()),
+
 			('meta1', EXE_PREFIX + '-meta1-server', 1, next_port()),
 			('meta1', EXE_PREFIX + '-meta1-server', 2, next_port()),
 			('meta1', EXE_PREFIX + '-meta1-server', 3, next_port()),
+
 			('meta2', EXE_PREFIX + '-meta2-server', 1, next_port()),
 			('meta2', EXE_PREFIX + '-meta2-server', 2, next_port()),
 			('meta2', EXE_PREFIX + '-meta2-server', 3, next_port()),
-			('sqlx',  EXE_PREFIX + '-sqlx-server', 1, next_port()),
-			('sqlx',  EXE_PREFIX + '-sqlx-server', 2, next_port()),
-			('sqlx',  EXE_PREFIX + '-sqlx-server', 3, next_port()),
+
+			#('sqlx',  EXE_PREFIX + '-sqlx-server', 1, next_port()),
+			#('sqlx',  EXE_PREFIX + '-sqlx-server', 2, next_port()),
+			#('sqlx',  EXE_PREFIX + '-sqlx-server', 3, next_port()),
 	)
 	rawx = (
 		(1, next_port()),
@@ -460,13 +453,26 @@ def generate (ns, ip):
 		(3, next_port()),
 		(4, next_port()),
 	)
+
+	versioning = 1
+	stgpol = "SINGLE"
+	replicas = 3
+
+	if options.M2_REPLICAS is not None:
+		versioning = int(options.M2_REPLICAS)
+	if options.M2_VERSIONS is not None:
+		versioning = int(options.M2_VERSIONS)
+	if options.M2_STGPOL is not None:
+		stgpol = str(options.M2_STGPOL)
+
 	env = dict(IP=ip, NS=ns, HOME=HOME, EXE_PREFIX=EXE_PREFIX,
 			PATH=PATH, LIBDIR=LIBDIR,
 			SDSDIR=SDSDIR, TMPDIR=TMPDIR,
 			DATADIR=DATADIR, CFGDIR=CFGDIR, RUNDIR=RUNDIR, SPOOLDIR=SPOOLDIR,
 			LOGDIR=LOGDIR, CODEDIR=CODEDIR,
-			UID=str(os.geteuid()), GID=str(os.getgid()),
-			USER=str(os.getlogin()))
+			UID=str(os.geteuid()), GID=str(os.getgid()), USER=str(os.getlogin()),
+			VERSIONING=versioning, STGPOL=stgpol, REPLICAS=replicas)
+
 	mkdir_noerror(SDSDIR)
 	mkdir_noerror(CODEDIR)
 	mkdir_noerror(DATADIR)
@@ -553,7 +559,19 @@ def generate (ns, ip):
 		f.write(tpl.safe_substitute(env))
 
 def main ():
-	generate('NS','127.0.0.1')
+	from optparse import OptionParser as OptionParser
+	parser = OptionParser()
+	parser.add_option("-B", "--bucket-replicas",
+			action="store", type="int", dest="M2_REPLICAS",
+			help="Number of containers replicas")
+	parser.add_option("-V", "--versioning",
+			action="store", type="int", dest="M2_VERSIONS",
+			help="Number of contents versions")
+	parser.add_option("-S", "--stgpol",
+			action="store", type="string", dest="M2_STGPOL",
+			help="How many replicas for META2")
+	options, args = parser.parse_args()
+	generate(args[0], args[1], options)
 
 if __name__ == '__main__':
 	main()

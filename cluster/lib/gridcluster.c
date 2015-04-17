@@ -172,25 +172,8 @@ get_namespace_info(const char *ns_name, GError **error)
 	}
 }
 
-static meta0_info_t*
-get_meta0_info_from_conscience(const char *ns_name, long timeout_cnx, long timeout_req, GError **error)
-{
-	addr_info_t *cs_addr = gridcluster_get_conscience_addr(ns_name);
-	if (!cs_addr) {
-		GSETERROR(error, "Unknown namespace/conscience");
-		return NULL;
-	}
-
-	meta0_info_t *meta0 = gcluster_get_meta0_2timeouts(cs_addr, timeout_cnx, timeout_req, error);
-	if (!meta0)
-		GSETERROR(error, "Failed to retrieve meta0 infos from conscience of namespace [%s] timeout(%ld,%ld)",
-				ns_name, timeout_cnx, timeout_req);
-	g_free(cs_addr);
-	return(meta0);
-}
-
-static meta0_info_t*
-get_meta0_info_from_agent(const char *ns_name, GError **error)
+meta0_info_t*
+get_meta0_info(const char *ns_name, GError **error)
 {
 	GSList *services = list_namespace_services(ns_name, NAME_SRVTYPE_META0, error);
 	if (!services) {
@@ -198,34 +181,13 @@ get_meta0_info_from_agent(const char *ns_name, GError **error)
 		return NULL;
 	}
 
-	srand(time(NULL));
-	struct service_info_s *si = g_slist_nth_data(services,rand()%g_slist_length(services));
+	struct service_info_s *si = g_slist_nth_data(services,
+			rand() % g_slist_length(services));
 
 	meta0_info_t *meta0 = g_malloc0(sizeof(meta0_info_t));
 	memcpy( &(meta0->addr), &(si->addr), sizeof(addr_info_t));
-	g_slist_foreach( services, service_info_gclean, NULL);
-	g_slist_free( services );
+	g_slist_free_full (services, (GDestroyNotify)service_info_clean);
 	return meta0;
-}
-
-meta0_info_t *
-get_meta0_info2(const char *ns_name, long timeout_cnx, long timeout_req, GError **error)
-{
-	if (!ns_name) {
-		GSETERROR(error,"Invalid parameter");
-		return NULL;
-	}
-
-	if (!gridagent_available())
-		return get_meta0_info_from_conscience(ns_name, timeout_cnx, timeout_req, error);
-	else
-		return get_meta0_info_from_agent(ns_name, error);
-}
-
-meta0_info_t*
-get_meta0_info(const char *ns_name, GError **error)
-{
-	return get_meta0_info2(ns_name, 1000, 4000, error);
 }
 
 static GSList*
@@ -264,28 +226,22 @@ _list_namespace_service_types_from_agent(const char *ns_name, GError **error)
 	return names;
 }
 
-static GSList*
-_list_namespace_service_types_from_conscience(const char *ns_name, GError **error)
-{
-	addr_info_t *cs_addr = gridcluster_get_conscience_addr(ns_name);
-	if (!cs_addr) {
-		GSETERROR(error, "Unknown namespace/conscience");
-		return(NULL);
-	}
-
-	GSList *types = gcluster_get_service_types(cs_addr,
-			CONNECT_TIMEOUT + SOCKET_TIMEOUT, error);
-	g_free(cs_addr);
-	return types;
-}
-
 GSList*
 list_namespace_service_types(const char *ns_name, GError **error)
 {
 	if (gridagent_available()) {
 		return _list_namespace_service_types_from_agent(ns_name, error);
 	} else {
-		return _list_namespace_service_types_from_conscience(ns_name, error);
+		addr_info_t *cs_addr = gridcluster_get_conscience_addr(ns_name);
+		if (!cs_addr) {
+			GSETERROR(error, "Unknown namespace/conscience");
+			return(NULL);
+		}
+
+		GSList *types = gcluster_get_service_types(cs_addr,
+				CONNECT_TIMEOUT + SOCKET_TIMEOUT, error);
+		g_free(cs_addr);
+		return types;
 	}
 }
 

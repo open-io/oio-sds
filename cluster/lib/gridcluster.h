@@ -110,20 +110,6 @@ namespace_info_t *get_namespace_info(const char *ns_name, GError **error);
 meta0_info_t *get_meta0_info(const char *ns_name, GError **error);
 
 /**
- * Get the META0 infos, and the network operations should not take longer
- * thanthe given number of milliseconds.
- *
- * @param ns_name the namespace name
- * @param timeout_cnx timeout on connect()
- * @param timeout_req timeout on read()/write()
- * @param error
- *
- * @return an allocated meta0_info_t or NULL if an error occured (error is set).
- * The returned meta0_info_t should be freed with g_free()
- */
-meta0_info_t *get_meta0_info2(const char *ns_name, long timeout_cnx, long timeout_req, GError **error);
-
-/**
  * List services of a given type in a namespace.
  *
  * @param ns_name the namespace name

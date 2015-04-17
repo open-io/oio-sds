@@ -567,20 +567,6 @@ static gridd_filter M2V2_FILTERS_modify_mdsys_v1[] =
 	NULL
 };
 
-static gridd_filter M2V2_FILTERS_retrieve_v1[] =
-{
-	meta2_filter_extract_header_optional_ns,
-	meta2_filter_extract_header_cid,
-	meta2_filter_extract_header_path,
-	meta2_filter_pack_url,
-	meta2_filter_fill_subject,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_retrieve_v1,
-	NULL
-};
-
 static gridd_filter M2V2_FILTERS_raw_list_v1[] =
 {
 	meta2_filter_extract_header_optional_ns,
@@ -746,40 +732,39 @@ meta2_gridd_get_v1_requests(void)
 	static struct gridd_request_descr_s descriptions[] = {
 
 		/* CONTAINER */
-		{"REQ_M2_CREATE", (hook) meta2_dispatch_all, M2V2_FILTERS_create_v1},
-		{"REQ_M2_DESTROY", (hook) meta2_dispatch_all, M2V2_FILTERS_destroy_v1},
-		{"REQ_M2_LIST", (hook) meta2_dispatch_all, M2V2_FILTERS_list_v1},
+		{NAME_MSGNAME_M2_CREATE,  (hook) meta2_dispatch_all, M2V2_FILTERS_create_v1},
+		{NAME_MSGNAME_M2_DESTROY, (hook) meta2_dispatch_all, M2V2_FILTERS_destroy_v1},
+		{NAME_MSGNAME_M2_LIST,    (hook) meta2_dispatch_all, M2V2_FILTERS_list_v1},
 
 		/* CONTENT LEVEL */
-		{"REQ_M2_CONTENTADD", (hook) meta2_dispatch_all, M2V2_FILTERS_add_v1},
-		{"REQ_M2_CHUNK_COMMIT", (hook) meta2_dispatch_all, M2V2_FILTERS_chunk_commit_v1},
-		{"REQ_M2_CONTENTREMOVE", (hook) meta2_dispatch_all, M2V2_FILTERS_remove_v1},
-		{"REQ_M2_CONTENTCOMMIT", (hook) meta2_dispatch_all, M2V2_FILTERS_content_commit_v1},
-		{"REQ_M2_CONTENTSPARE", (hook) meta2_dispatch_all, M2V2_FILTERS_spare_v1},
-		{"REQ_M2_CONTENTAPPEND", (hook) meta2_dispatch_all, M2V2_FILTERS_append_v1},
-		{"REQ_M2_CONTENTROLLBACK", (hook) meta2_dispatch_all, M2V2_FILTERS_content_rollback_v1},
+		{NAME_MSGNAME_M2_CONTENTADD,      (hook) meta2_dispatch_all, M2V2_FILTERS_add_v1},
+		{NAME_MSGNAME_M2_CHUNK_COMMIT,    (hook) meta2_dispatch_all, M2V2_FILTERS_chunk_commit_v1},
+		{NAME_MSGNAME_M2_CONTENTREMOVE,   (hook) meta2_dispatch_all, M2V2_FILTERS_remove_v1},
+		{NAME_MSGNAME_M2_CONTENTCOMMIT,   (hook) meta2_dispatch_all, M2V2_FILTERS_content_commit_v1},
+		{NAME_MSGNAME_M2_CONTENTSPARE,    (hook) meta2_dispatch_all, M2V2_FILTERS_spare_v1},
+		{NAME_MSGNAME_M2_CONTENTAPPEND,   (hook) meta2_dispatch_all, M2V2_FILTERS_append_v1},
+		{NAME_MSGNAME_M2_CONTENTROLLBACK, (hook) meta2_dispatch_all, M2V2_FILTERS_content_rollback_v1},
 
-		{"REQ_M2_CONTENTRETRIEVE", (hook) meta2_dispatch_all, M2V2_FILTERS_retrieve_v1},
 		{"META2_SERVICES_STAT_CONTENT_V2", (hook) meta2_dispatch_all, M2V2_FILTERS_statv2_v1},
 
-		{"REQ_M2RAW_CONTENT_GET", (hook) meta2_dispatch_all, M2V2_FILTERS_raw_chunks_get_v1},
-		{"REQ_M2RAW_CHUNKS_GET", (hook) meta2_dispatch_all, M2V2_FILTERS_raw_chunks_get_v1},
-		{"REQ_M2RAW_CONTENT_GETBYPATH", (hook) meta2_dispatch_all, M2V2_FILTERS_raw_chunks_get_v1},
-		{"REQ_M2RAW_CONTENT_GETALL", (hook) meta2_dispatch_all, M2V2_FILTERS_raw_list_v1},
+		{NAME_MSGNAME_M2RAW_GETCHUNKS,        (hook) meta2_dispatch_all, M2V2_FILTERS_raw_chunks_get_v1},
+		{NAME_MSGNAME_M2RAW_GETCONTENTBYPATH, (hook) meta2_dispatch_all, M2V2_FILTERS_raw_chunks_get_v1},
+		{NAME_MSGNAME_M2RAW_GETCONTENTS,      (hook) meta2_dispatch_all, M2V2_FILTERS_raw_list_v1},
 
-		{"REQ_M2RAW_CONTENT_DEL", (hook) meta2_dispatch_all, M2V2_FILTERS_del_raw_v1},
-		{"REQ_M2RAW_CHUNKS_DEL", (hook) meta2_dispatch_all, M2V2_FILTERS_del_raw_v1},
+		{NAME_MSGNAME_M2RAW_DELCONTENT, (hook) meta2_dispatch_all, M2V2_FILTERS_del_raw_v1},
+		{NAME_MSGNAME_M2RAW_DELCHUNKS,  (hook) meta2_dispatch_all, M2V2_FILTERS_del_raw_v1},
 
 		// Necessary to the rawx-mover
-		{"REQ_M2RAW_CONTENT_SET", (hook) meta2_dispatch_all, M2V2_FILTERS_set_raw_v1},
-		{"REQ_M2RAW_CHUNKS_SET", (hook) meta2_dispatch_all, M2V2_FILTERS_set_raw_v1},
+		{NAME_MSGNAME_M2RAW_SETCONTENT, (hook) meta2_dispatch_all, M2V2_FILTERS_set_raw_v1},
+		{NAME_MSGNAME_M2RAW_SETCHUNKS,  (hook) meta2_dispatch_all, M2V2_FILTERS_set_raw_v1},
 
 		/* CONTENT METADATA */
+		// TODO remove this as soon as the C client has been reworked. There is the onyl call.
 		{"META2_SERVICES_MODIFY_METADATASYS", (hook) meta2_dispatch_all, M2V2_FILTERS_modify_mdsys_v1},
 
 		/* AGENT EVENTS */
 		{NAME_MSGNAME_M2V1_TOUCH_CONTAINER, (hook) meta2_dispatch_all, M2V2_FILTERS_touch_container_v1},
-		{NAME_MSGNAME_M2V1_TOUCH_CONTENT, (hook) meta2_dispatch_all, M2V2_FILTERS_touch_content_v1},
+		{NAME_MSGNAME_M2V1_TOUCH_CONTENT,   (hook) meta2_dispatch_all, M2V2_FILTERS_touch_content_v1},
 
 		{NULL, NULL, NULL}
 	};

@@ -93,6 +93,7 @@ push @functions, {
 	},
 };
 
+# TODO remove this as soon as the C client has been reworked. There is the onyl call.
 push @functions, {
 	'name' => 'modify_metadatasys',
 	'args' => [

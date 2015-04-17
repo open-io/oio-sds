@@ -31,12 +31,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 namespace_info_t *gcluster_get_namespace_info_full(addr_info_t *addr,
 		long to, GError **error);
 
-meta0_info_t* gcluster_get_meta0(addr_info_t *addr,
-		long to, GError **error);
-
-meta0_info_t* gcluster_get_meta0_2timeouts(addr_info_t * addr,
-		long to_cnx, long to_req, GError ** error);
-
 /** Push a list of broken containers to the conscience */
 gint gcluster_push_broken_container(addr_info_t *addr, long to,
 		GSList *container_list, GError **error);
@@ -47,10 +41,6 @@ gint gcluster_v2_push_broken_container(struct metacnx_ctx_s *cnx,
 gint gcluster_v2_push_broken_content(struct metacnx_ctx_s *cnx,
 		const gchar *ns_name, const container_id_t cid, const gchar *path,
 		GError **error);
-
-/** Push a list of virtual namespace space used to the conscience */
-gint gcluster_push_virtual_ns_space_used(addr_info_t * addr,
-		long to, GHashTable *space_used, GError ** error);
 
 /** Tell the conscience that a rawx was fully scaned to repair these containers */
 gint gcluster_fix_broken_container(addr_info_t *addr, long to,
