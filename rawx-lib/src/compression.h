@@ -89,7 +89,7 @@ gboolean zlib_init_compress_checksum(gulong *checksum);
 
 // LZO FUNCTIONS //
 
-int lzo_write_compress_header(FILE *fd,lzo_uint32 blocksize, gulong *checksum, lzo_uint32 *compressed_size);
+int lzo_write_compress_header(FILE *fd, lzo_uint32 blocksize, gulong *checksum, lzo_uint32 *compressed_size);
 
 int lzo_write_compress_eof(FILE *fd, gulong checksum, lzo_uint32 *compressed_size);
 

@@ -56,7 +56,7 @@ get_working_buffer_size(gsize uncompressed_size)
 }
 
 int
-lzo_write_compress_header(FILE *file, guint32 blocksize, gulong *checksum, lzo_uint32 *compressed_size)
+lzo_write_compress_header(FILE *file, lzo_uint32 blocksize, gulong *checksum, lzo_uint32 *compressed_size)
 {
 	lzo_uint32 flags = LZO_FLAG_CHECKSUM;       /* do compute a checksum */
 	char method = LZO_METHOD;
