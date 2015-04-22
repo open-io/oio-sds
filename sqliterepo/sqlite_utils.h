@@ -47,6 +47,10 @@ License along with this library.
 #define SQLX_ADMIN_NAMESPACE SQLX_ADMIN_PREFIX_SYS "ns"
 #endif
 
+#ifndef SQLX_ADMIN_ACCOUNT
+#define SQLX_ADMIN_ACCOUNT SQLX_ADMIN_PREFIX_SYS "account"
+#endif
+
 #ifndef SQLX_ADMIN_REFERENCE
 #define SQLX_ADMIN_REFERENCE SQLX_ADMIN_PREFIX_SYS "reference"
 #endif

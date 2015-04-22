@@ -27,6 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/event_config.h>
 #include <cluster/lib/gridcluster.h>
 
+#include <sqliterepo/sqlite_utils.h>
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/election.h>
 
@@ -244,7 +245,7 @@ m2b_transient_put(struct meta2_backend_s *m2b, const gchar *key, const gchar * h
 	if (hexID != NULL) {
 		struct sqlx_name_s n = {
 			.base = hexID,
-			.type = META2_TYPE_NAME,
+			.type = NAME_SRVTYPE_META2,
 			.ns = m2b->backend.ns_name
 		};
 		err = sqlx_repository_status_base(m2b->backend.repo, &n);
@@ -281,7 +282,7 @@ m2b_transient_get(struct meta2_backend_s *m2b, const gchar *key, const gchar * h
 	if (hexID != NULL) {
 		struct sqlx_name_s n = {
 			.base = hexID,
-			.type = META2_TYPE_NAME,
+			.type = NAME_SRVTYPE_META2,
 			.ns = m2b->backend.ns_name,
 		};
 		local_err = sqlx_repository_status_base(m2b->backend.repo, &n);
@@ -317,7 +318,7 @@ m2b_transient_del(struct meta2_backend_s *m2b, const gchar *key, const gchar * h
 	if (hexID != NULL) {
 		struct sqlx_name_s n = {
 			.base = hexID,
-			.type = META2_TYPE_NAME,
+			.type = NAME_SRVTYPE_META2,
 			.ns = m2b->backend.ns_name,
 		};
 		err = sqlx_repository_status_base(m2b->backend.repo, &n);
@@ -436,7 +437,7 @@ meta2_backend_init(struct meta2_backend_s **result,
 		return NEWERROR(CODE_BAD_REQUEST, "Namespace too long");
 	}
 
-	m2->backend.type = META2_TYPE_NAME;
+	m2->backend.type = NAME_SRVTYPE_META2;
 	m2->backend.repo = repo;
 	m2->backend.lb = glp;
 	m2->backend.evt_repo = evt_repo;
@@ -448,7 +449,7 @@ meta2_backend_init(struct meta2_backend_s **result,
 
 	m2->flag_precheck_on_generate = TRUE;
 
-	err = sqlx_repository_configure_type(m2->backend.repo, META2_TYPE_NAME,
+	err = sqlx_repository_configure_type(m2->backend.repo, NAME_SRVTYPE_META2,
 			NULL, schema);
 	if (NULL != err) {
 		meta2_backend_clean(m2);
@@ -622,7 +623,7 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 
 	struct sqlx_name_s n = {
 		.base = hc_url_get(url, HCURL_HEXID),
-		.type = META2_TYPE_NAME,
+		.type = NAME_SRVTYPE_META2,
 		.ns = m2->backend.ns_name,
 	};
 	err = sqlx_repository_open_and_lock(m2->backend.repo, &n, m2_to_sqlx(how), &sq3, NULL);
@@ -709,7 +710,7 @@ meta2_backend_has_container(struct meta2_backend_s *m2,
 
 	struct sqlx_name_s n = {
 		.base = hc_url_get(url, HCURL_HEXID),
-		.type = META2_TYPE_NAME,
+		.type = NAME_SRVTYPE_META2,
 		.ns = m2->backend.ns_name,
 	};
 	err = sqlx_repository_has_base(m2->backend.repo, &n);
@@ -850,7 +851,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		if (!local) {
 			struct sqlx_name_s n = {
 				.base = hc_url_get(url, HCURL_HEXID),
-				.type = META2_TYPE_NAME,
+				.type = NAME_SRVTYPE_META2,
 				.ns = m2->backend.ns_name,
 			};
 			err = sqlx_config_get_peers(election_manager_get_config(
@@ -873,7 +874,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		// There is a get_peers() call in close callback that puts back
 		// the reference in the cache. But it MUST NOT stay in it if
 		// we want to recreate the container on another meta2.
-		hc_decache_reference_service(m2->resolver, url, META2_TYPE_NAME);
+		hc_decache_reference_service(m2->resolver, url, NAME_SRVTYPE_META2);
 	}
 
 	return err;
@@ -970,15 +971,49 @@ meta2_backend_get_alias(struct meta2_backend_s *m2b,
 	return err;
 }
 
+static gchar *
+_container_state (struct sqlx_sqlite3_s *sq3)
+{
+	void append_int64 (GString *gs, const char *k, gint64 v) {
+		if (gs->len > 1)
+			g_string_append_c (gs, ',');
+		g_string_append_printf (gs, "\"%s\":%"G_GINT64_FORMAT, k, v);
+	}
+	void append_const (GString *gs, const char *k, const char *v) {
+		if (gs->len > 1)
+			g_string_append_c (gs, ',');
+		if (v)
+			g_string_append_printf (gs, "\"%s\":\"%s\"", k, v);
+		else
+			g_string_append_printf (gs, "\"%s\":null", k);
+	}
+	void append (GString *gs, const char *k, gchar *v) {
+		append_const (gs, k, v);
+		g_free0 (v);
+	}
+
+	GString *gs = g_string_new("{");
+	append_const (gs, "event", NAME_SRVTYPE_META2 ".container.state");
+	append (gs, "ns", sqlx_admin_get_str(sq3, SQLX_ADMIN_NAMESPACE));
+	append (gs, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
+	append (gs, "reference", sqlx_admin_get_str(sq3, SQLX_ADMIN_REFERENCE));
+	append_const (gs, "type", sq3->name.type);
+	append_const (gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
+	append_int64 (gs, "ctime", m2db_get_ctime(sq3));
+	append_int64 (gs, "bytes-count", m2db_get_size(sq3));
+	append_int64 (gs, "object-count", 0);
+	g_string_append_c (gs, '}');
+
+	return g_string_free(gs, FALSE);
+}
+
 static void
 meta2_backend_add_modified_container(struct meta2_backend_s *m2b,
-		const gchar *strid, gint64 size)
+		struct sqlx_sqlite3_s *sq3)
 {
 	EXTRA_ASSERT(m2b != NULL);
-	if (m2b->q_notify) {
-		gchar *tmp = g_strdup_printf("%s:%"G_GINT64_FORMAT, strid, size);
-		g_async_queue_push (m2b->q_notify, tmp);
-	}
+	if (m2b->q_notify)
+		g_async_queue_push (m2b->q_notify, _container_state (sq3));
 }
 
 GError*
@@ -992,18 +1027,9 @@ meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 	g_assert(url != NULL);
 
 	if (!(err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY, &sq3))) {
-		guint64 sizeOrg = m2db_get_size(sq3);
-		guint64 sizeNew = sizeOrg;
-		if (bRecalc) {
-			sizeNew = m2db_get_container_size(sq3->db, FALSE);
-			GRID_DEBUG("sizeNew: F=%ld, T=%ld", sizeNew,
-					m2db_get_container_size(sq3->db, TRUE));
-			m2db_set_size(sq3, (gint64)sizeNew);
-		}
-
-		if (!err)
-			meta2_backend_add_modified_container(m2b,
-					hc_url_get(url, HCURL_HEXID), sizeNew);
+		if (bRecalc)
+			m2db_set_size(sq3, m2db_get_container_size(sq3->db, FALSE));
+		meta2_backend_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
 	}
 
@@ -1029,10 +1055,11 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_delete_alias(sq3, max_versions, url, sync_delete, cb, u0))) {
 				m2db_increment_version(sq3);
-				meta2_backend_add_modified_container(m2b, hc_url_get(url, HCURL_HEXID), m2db_get_size(sq3));
 			}
 			err = sqlx_transaction_end(repctx, err);
 		}
+		if (!err)
+			meta2_backend_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
 	}
 
@@ -1062,12 +1089,11 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		args.lbpool = m2b->backend.lb;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_put_alias(&args, beans, cb, u0))) {
+			if (!(err = m2db_put_alias(&args, beans, cb, u0)))
 				m2db_increment_version(sq3);
-				meta2_backend_add_modified_container(m2b,
-						hc_url_get(url, HCURL_HEXID), m2db_get_size(sq3));
-			}
 			err = sqlx_transaction_end(repctx, err);
+			if (!err)
+				meta2_backend_add_modified_container(m2b, sq3);
 		}
 		m2b_close(sq3);
 
@@ -1135,13 +1161,12 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b,
 		args.lbpool = m2b->backend.lb;
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
-			if (!(err = m2db_force_alias(&args, beans))) {
+			if (!(err = m2db_force_alias(&args, beans)))
 				m2db_increment_version(sq3);
-				meta2_backend_add_modified_container(m2b,
-	                       hc_url_get(url, HCURL_HEXID), m2db_get_size(sq3));
-			}
 			err = sqlx_transaction_end(repctx, err);
 		}
+		if (!err)
+			meta2_backend_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
 		namespace_info_clear(&(args.nsinfo));
 	}
@@ -1323,14 +1348,12 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 	if (!err) {
 		max_versions = _maxvers(sq3, m2b);
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_append_to_alias(sq3, &ni, max_versions, url, beans,
-							cb, u0))) {
+			if (!(err = m2db_append_to_alias(sq3, &ni, max_versions, url, beans, cb, u0)))
 				m2db_increment_version(sq3);
-				meta2_backend_add_modified_container(m2b,
-						hc_url_get(url, HCURL_HEXID), m2db_get_size(sq3));
-			}
 			err = sqlx_transaction_end(repctx, err);
 		}
+		if (!err)
+			meta2_backend_add_modified_container(m2b, sq3);
 		m2b_close(sq3);
 	}
 

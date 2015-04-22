@@ -153,11 +153,11 @@ meta2_filter_action_exit_election(struct gridd_filter_ctx_s *ctx,
 	if (hc_url_has(url,HCURL_HEXID)) {
 		struct sqlx_name_s n = {
 			.base = hc_url_get(url,HCURL_HEXID),
-			.type = META2_TYPE_NAME,
+			.type = NAME_SRVTYPE_META2,
 			.ns = m2b->backend.ns_name
 		};
 		GError *err = sqlx_repository_exit_election(m2b->backend.repo, &n);
-		hc_decache_reference_service(m2b->resolver, url, META2_TYPE_NAME);
+		hc_decache_reference_service(m2b->resolver, url, NAME_SRVTYPE_META2);
 		if (err) {
 			meta2_filter_ctx_set_error(ctx, err);
 			return FILTER_KO;

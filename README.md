@@ -20,7 +20,6 @@ And if it succeeds you will have the joy to experiment your own little SDS insta
 
 The build process of OpenIO SDS depends on:
 * cmake, make, cp, sed, bison, flex
-* perl, perl-Template-Toolkit: in its early years, these were used as code generators. This is a legacy code.
 * python: more recently, the code generators became pythonic scripts. Pure python, no dependency.
 * apr, apr-util-devel, apr-devel
 * [asn1c](https://github.com/vlm/asn1c)

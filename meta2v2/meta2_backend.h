@@ -20,10 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta2v2__meta2_backend_h
 # define OIO_SDS__meta2v2__meta2_backend_h 1
 
-# ifndef  META2_TYPE_NAME
-#  define META2_TYPE_NAME "meta2"
-# endif
-
 # include <meta2v2/meta2_utils.h>
 # include <glib.h>
 

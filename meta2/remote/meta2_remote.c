@@ -935,3 +935,171 @@ error_label:
 	return status;
 }
 
+
+struct arg_stat_content_v2_s {
+	meta2_raw_content_v2_t* var_2;
+};
+
+static gboolean
+msg_manager_stat_content_v2(GError ** err, gpointer udata, gint code, MESSAGE rep)
+{
+	struct arg_stat_content_v2_s *args;
+	if (!udata || !rep) {
+		GSETERROR(err,"Invalid parameter udata=%p rep=%p", (void*)udata, (void*)rep);
+		return FALSE;
+	}
+	args = udata;
+
+	if (CODE_IS_OK(code)) {
+		/* Get args->var_2 from the body */
+		gint has_body = message_has_BODY(rep,NULL);
+		if (code == CODE_PARTIAL_CONTENT && 0 > has_body) {
+			GSETERROR(err,"No body found in the reply");
+			goto error_label;
+		}
+		if (has_body > 0) { /*a body has been found in the message*/
+			void *data = NULL;
+			gsize data_size = 0;
+			switch (message_get_BODY(rep, &data, &data_size, err)) {
+				case -1:
+					GSETCODE(err, CODE_BAD_REQUEST, "Invalid ASN.1 message, failed to extract the body");
+					goto error_label;
+				case 0:
+					DEBUG("Optional body not found");
+					break;
+
+				default:
+					{
+						GError *error_local = NULL;
+						DEBUG("Found body [%"G_GSIZE_FORMAT"/%p]", data_size, data);
+
+						do { /* BLOCK unserialize_data */
+							GSList *l = NULL, *l_next = NULL;
+							meta2_raw_content_v2_unmarshall(&l, data, &data_size, &error_local);
+							if (l) {
+								(args-> var_2 ) = l->data;
+								l->data = NULL;
+								l_next = l->next;
+								l->next = NULL;
+								g_slist_free1(l);
+								if (l_next) {
+									g_slist_foreach(l_next, meta2_raw_content_v2_gclean, NULL);
+									g_slist_free(l_next);
+								}
+							}
+						} while (0);
+
+						if (error_local) {
+							GSETERROR(&error_local, "Cause: %s", gerror_get_message(error_local));
+							GSETERROR(&error_local, "Invalid ASN.1 message : ");
+							g_error_free(error_local);
+							goto error_label;
+						}
+					}
+					break;
+			}
+		}
+	}
+
+	return TRUE;
+error_label:
+	GSETERROR(err,"Reply management failure (code=%d)", code);
+	return FALSE;
+}
+
+status_t
+meta2_remote_stat_content_v2(struct metacnx_ctx_s *ctx, const container_id_t var_0, const gchar* var_1, meta2_raw_content_v2_t* *var_2, GError **err)
+{
+	static struct code_handler_s codes [] = {
+		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, msg_manager_stat_content_v2 },
+		{ CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, NULL, msg_manager_stat_content_v2 },
+		{ -1, REPSEQ_ERROR, NULL, msg_manager_stat_content_v2 },
+		{ 0,0,NULL,NULL}
+	};
+
+	struct arg_stat_content_v2_s args;
+	struct reply_sequence_data_s data = { &args , 0 , codes };
+
+	args.var_2 = 0;
+
+	if (!ctx || !var_0 || !var_1) {
+		GSETERROR(err,"Invalid parameter");
+		return 0;
+	}
+
+	MESSAGE request = message_create_named("META2_SERVICES_STAT_CONTENT_V2");
+	status_t status = 0;
+
+	do {
+		GByteArray *gba = metautils_gba_from_cid (var_0);
+		message_add_field(request, "field_0", gba->data, gba->len);
+		g_byte_array_free(gba, TRUE);
+	} while (0);
+
+	do {
+		GByteArray *gba = metautils_gba_from_string (var_1);
+		message_add_field(request, "field_1", gba->data, gba->len);
+		g_byte_array_free(gba, TRUE);
+	} while (0);
+
+	if (!metacnx_open(ctx, err)) {
+		GSETERROR(err,"Failed to open the connexion");
+	} else if (!metaXClient_reply_sequence_run_context (err, ctx, request, &data)) {
+		GSETERROR(err,"Cannot execute the query and receive all the responses");
+	} else {
+		status = 1;
+	}
+
+	message_destroy(request);
+	if (var_2)
+		*var_2 = args.var_2;
+	return status;
+}
+
+status_t
+meta2_remote_modify_metadatasys(struct metacnx_ctx_s *ctx, const container_id_t var_0, const gchar* var_1, const gchar* var_2, GError **err)
+{
+	static struct code_handler_s codes [] = {
+		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
+		{ 0,0,NULL,NULL}
+	};
+	struct reply_sequence_data_s data = { NULL , 0 , codes };
+
+	if (!ctx || !var_0 || !var_1 || !var_2) {
+		GSETERROR(err,"Invalid parameter");
+		return 0;
+	}
+
+	status_t status = 0;
+	MESSAGE request = message_create_named("META2_SERVICES_MODIFY_METADATASYS");
+
+	do {
+		GByteArray *gba = metautils_gba_from_cid (var_0);
+		message_add_field(request, "field_0", gba->data, gba->len);
+		g_byte_array_free(gba, TRUE);
+	} while (0);
+
+	do {
+		GByteArray *gba = metautils_gba_from_string (var_1);
+		message_add_field(request, "field_1", gba->data, gba->len);
+		g_byte_array_free(gba, TRUE);
+	} while (0);
+
+	do {
+		GByteArray *gba = metautils_gba_from_string (var_2);
+		message_add_field(request, "field_2", gba->data, gba->len);
+		g_byte_array_free(gba, TRUE);
+	} while (0);
+
+	if (metacnx_open(ctx, err)) {
+		GSETERROR(err,"Failed to open the connexion");
+	} else if (!metaXClient_reply_sequence_run_context (err, ctx, request, &data)) {
+		GSETERROR(err,"Cannot execute the query and receive all the responses");
+	} else {
+		status = 1;
+	}
+
+	message_destroy(request);
+	return status;
+}
+

@@ -28,8 +28,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/time.h>
 #include <sys/resource.h>
 
-#include <glib.h>
-
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
@@ -46,22 +44,68 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqlx/sqlx_service.h>
 #include <sqlx/sqlx_service_extras.h>
 
+#include <zmq.h>
+
 static GAsyncQueue *q_notify = NULL;
 static GThread *th_notify = NULL;
 
 static struct meta2_backend_s *m2 = NULL;
+static void *zmq_ctx = NULL;
 
 static gpointer
-_func_notify (gpointer p)
+_func_notify_account (gpointer p)
 {
-	while (grid_main_is_running()) {
-		gchar *tmp = (gchar*) g_async_queue_timeout_pop (q_notify, 1000000L);
-		if (tmp) {
-			GRID_INFO("Container usage [%s]", tmp);
-			g_free (tmp);
+	int rc, err;
+	void *zpush = NULL;
+
+	if (zmq_ctx) {
+		gchar *url =  gridcluster_get_accountagent (PSRV(p)->ns_name);
+		if (url) {
+			zpush = zmq_socket (zmq_ctx, ZMQ_PUSH);
+			if (!zpush) {
+				err = zmq_errno ();
+				GRID_WARN("ZMQ socket creation error : (%d) %s",
+						err, zmq_strerror(err));
+			} else {
+				if (0 > (rc = zmq_connect (zpush, url))) {
+					err = zmq_errno ();
+					GRID_WARN("ZMQ connection error (account-agent) : (%d) %s",
+							err, zmq_strerror (err));
+					zmq_close (zpush);
+					zpush = NULL;
+				}
+
+				int opt = 1000;
+				zmq_setsockopt (zpush, ZMQ_LINGER, &opt, sizeof(opt));
+			}
+			g_free (url);
 		}
 	}
-GRID_WARN("NOTIFY thread exiting");
+
+	while (grid_main_is_running()) {
+		gchar *tmp = (gchar*) g_async_queue_timeout_pop (q_notify, 1000000L);
+		if (!tmp)
+			continue;
+		if (zpush) {
+			rc = zmq_send (zpush, tmp, strlen(tmp), 0);
+			if (rc < 0) {
+				err = zmq_errno ();
+				GRID_WARN("Notification failed : container state %s: (%d) %s",
+						tmp, err, zmq_strerror(err));
+			} else {
+				GRID_DEBUG("Notified container state %s", tmp);
+			}
+		} else {
+			GRID_INFO("Container usage [%s]", tmp);
+		}
+		g_free (tmp);
+	}
+
+	if (zpush) {
+		zmq_close (zpush);
+		zpush = NULL;
+	}
+
 	return p;
 }
 
@@ -147,7 +191,7 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 	EXTRA_ASSERT(result != NULL);
 	SQLXNAME_CHECK(n);
 
-	if (!g_str_has_prefix(n->type, META2_TYPE_NAME))
+	if (!g_str_has_prefix(n->type, NAME_SRVTYPE_META2))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name: '%s'", n->type);
 
 	gint retries = 1;
@@ -199,7 +243,7 @@ meta2_on_close(struct sqlx_sqlite3_s *sq3, gboolean deleted, gpointer cb_data)
 		GRID_WARN("Invalid base name [%s]", sq3->name.base);
 		return;
 	}
-	hc_decache_reference_service(PSRV(cb_data)->resolver, u, META2_TYPE_NAME);
+	hc_decache_reference_service(PSRV(cb_data)->resolver, u, NAME_SRVTYPE_META2);
 	hc_url_clean(u);
 	u = NULL;
 }
@@ -243,7 +287,7 @@ _post_config(struct sqlx_service_s *ss)
 			(GDestroyNotify)sqlx_task_reload_lb, NULL, ss);
 
 	q_notify = g_async_queue_new();
-	th_notify = g_thread_try_new("notifier", _func_notify, NULL, &err);
+	th_notify = g_thread_try_new("notifier", _func_notify_account, ss, &err);
 	if (!th_notify) {
 		GRID_WARN("META2 notifier thread start failure: (%d) %s",
 				gerror_get_code(err), gerror_get_message(err));
@@ -259,9 +303,11 @@ int
 main(int argc, char **argv)
 {
 	struct sqlx_service_config_s cfg = {
-		META2_TYPE_NAME, "m2v2", "el/meta2", 2, 2, schema,
+		NAME_SRVTYPE_META2, "m2v2", "el/" NAME_SRVTYPE_META2, 2, 2, schema,
 		_get_peers, _post_config, NULL
 	};
+
+	zmq_ctx = zmq_ctx_new ();
 	int rc = sqlite_service_main (argc, argv, &cfg);
 	if (m2)
 		meta2_backend_clean (m2);
@@ -269,6 +315,10 @@ main(int argc, char **argv)
 		g_thread_join (th_notify);
 	if (q_notify)
 		g_async_queue_unref (q_notify);
+	if (zmq_ctx) {
+		zmq_ctx_term (zmq_ctx);
+		zmq_ctx = NULL;
+	}
 	return rc;
 }
 

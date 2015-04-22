@@ -7,7 +7,6 @@ include(CheckTypeSize)
 #include(FindFLEX)
 #include(FindBISON)
 include(FindCURL)
-include(FindPerl)
 include(FindPythonInterp)
 include(FindPythonLibs)
 include(FindEXPAT)
@@ -133,6 +132,16 @@ MESSAGE("SOCKET_LINGER_DELAY ${SOCKET_LINGER_DELAY}")
 
 ###-------------------------------------------------------------------------###
 
+macro (dir2macro2 N D)
+	if (${N})
+		add_definitions(-D${N}=${${N}})
+		MESSAGE("CFLAGS: ${N} = ${${N}}")
+	else ()
+		add_definitions(-D${N}=${D})
+		MESSAGE("CFLAGS: ${N} = ${D} (default)")
+	endif ()
+endmacro ()
+
 macro (dir2macro N)
 	if (${N})
 		add_definitions(-D${N}=${${N}})
@@ -141,9 +150,12 @@ macro (dir2macro N)
 		MESSAGE("CFLAGS: ${N} left to default")
 	endif ()
 endmacro ()
+
 dir2macro("GCLUSTER_SPOOL_DIR")
 dir2macro("GCLUSTER_RUN_DIR")
 dir2macro("GCLUSTER_ETC_DIR")
+
+dir2macro2("ACCOUNT_AGENT_PATH" "ipc:///var/run/account-agent.sock")
 
 dir2macro("GCLUSTER_CONFIG_FILE_PATH")
 dir2macro("GCLUSTER_CONFIG_DIR_PATH")
@@ -302,7 +314,7 @@ pkg_check_modules(LIBEVENT REQUIRED libevent)
 pkg_check_modules(NEON REQUIRED neon)
 pkg_check_modules(RDKAFKA rdkafka)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
-pkg_check_modules(ZMQ libzmq>=3.0.0)
+pkg_check_modules(ZMQ libzmq>=4.0.0)
 pkg_search_module(JSONC json json-c)
 
 # Load CLI-overriden configuration
@@ -405,5 +417,6 @@ add_subdirectory(./snmp/src)
 add_subdirectory(./sqliterepo)
 add_subdirectory(./sqlx)
 add_subdirectory(./svc-monitor)
+add_subdirectory(./python)
 add_subdirectory(./tools)
 

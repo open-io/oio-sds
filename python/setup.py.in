@@ -1,0 +1,12 @@
+
+from distutils.core import setup
+
+setup(name='oio.account',
+		version='@API_VERSION@',
+		package_dir= {
+			'' : '@CMAKE_CURRENT_SOURCE_DIR@',
+		},
+		packages=['oio', 'oio.account', 'oio.sds'],
+		install_requires=[ 'flask' ]
+)
+

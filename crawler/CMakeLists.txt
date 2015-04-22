@@ -12,7 +12,8 @@ include_directories(AFTER
 	${LZO_INCLUDE_DIRS}
 	${NEON_INCLUDE_DIRS}
 	${JSONC_INCLUDE_DIRS}
-	${ZK_INCLUDE_DIRS})
+	${ZK_INCLUDE_DIRS}
+	${ZMQ_INCLUDE_DIRS})
 
 link_directories(
 	${GLIB2_LIBRARY_DIRS}

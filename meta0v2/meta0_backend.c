@@ -157,7 +157,7 @@ meta0_backend_migrate(struct meta0_backend_s *m0)
 
 	struct sqlx_name_s n;
 	n.base = m0->ns;
-	n.type = META0_TYPE_NAME;
+	n.type = NAME_SRVTYPE_META0;
 	n.ns = m0->ns;
 	err = sqlx_repository_open_and_lock(m0->repository, &n, SQLX_OPEN_LOCAL, &handle, NULL);
 	if ( err )
@@ -450,7 +450,7 @@ _open_and_lock(struct meta0_backend_s *m0, enum m0v2_open_type_e how,
 
 	/* Now open/lock the base in a way suitable for our op */
 	guint flag = m0_to_sqlx(how);
-	struct sqlx_name_s n = {.base=m0->ns, .type=META0_TYPE_NAME, .ns=m0->ns};
+	struct sqlx_name_s n = {.base=m0->ns, .type=NAME_SRVTYPE_META0, .ns=m0->ns};
 	err = sqlx_repository_open_and_lock(m0->repository, &n, flag, handle, NULL);
 
 	if (err != NULL) {
@@ -460,7 +460,7 @@ _open_and_lock(struct meta0_backend_s *m0, enum m0v2_open_type_e how,
 	}
 
 	EXTRA_ASSERT(*handle != NULL);
-	GRID_TRACE("Opened and locked [%s/%s]", m0->id, META0_TYPE_NAME);
+	GRID_TRACE("Opened and locked [%s/%s]", m0->id, NAME_SRVTYPE_META0);
 
 	return NULL;
 }

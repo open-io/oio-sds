@@ -24,14 +24,35 @@ template_flask_gridinit = """
 group=${NS},localhost,flask
 on_die=respawn
 enabled=true
-start_at_boot=true
+start_at_boot=false
 command=/usr/bin/gunicorn --preload -w 2 -b ${IP}:${PORT} oio.sds.admin-flask:app
 env.PATH=${PATH}
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 """
 
-template_nginx_gridinit = """
+template_account_flask_gridinit = """
+[service.${NS}-account-front]
+group=${NS},localhost,account-front
+on_die=respawn
+enabled=true
+start_at_boot=false
+command=/usr/bin/gunicorn --preload -w 2 -b ${IP}:${PORT} oio.account.server:app
+env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
+env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
+"""
 
+template_proxy_gridinit = """
+[service.${NS}-proxy]
+group=${NS},localhost,proxy
+on_die=respawn
+enabled=true
+start_at_boot=false
+command=${EXE_PREFIX}-proxy -s SDS,${NS},proxy ${IP}:${PORT} ${NS}
+env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
+env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
+"""
+
+template_nginx_gridinit = """
 [service.${NS}-endpoint]
 group=${NS},localhost,endpoint
 on_die=respawn
@@ -44,7 +65,7 @@ env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 
 template_nginx_endpoint = """
 working_directory ${TMPDIR};
-error_log ${LOGDIR}/endpoint.log debug;
+error_log ${LOGDIR}/endpoint.log info;
 worker_processes 1;
 pid ${RUNDIR}/endpoint.pid;
 daemon off;
@@ -53,6 +74,7 @@ events {
 }
 
 http {
+	access_log ${LOGDIR}/endpoint.access;
 	default_type application/octet-stream;
 
 	client_body_temp_path ${TMPDIR} 1;
@@ -61,24 +83,37 @@ http {
 	uwsgi_temp_path       ${TMPDIR} 1;
 	scgi_temp_path        ${TMPDIR} 1;
 
-	access_log ${LOGDIR}/endpoint.access;
+	upstream admin {
+		server ${IP}:${FLASK};
+	}
+	upstream proxy {
+		server ${IP}:${PROXY};
+	}
+	upstream account {
+		server ${IP}:${ACCOUNT};
+	}
 
 	server {
 		listen *:${PORT};
 		listen [::]:${PORT};
 		server_name "";
 		location /v1.0/admin {
-			proxy_pass         http://127.0.0.1:${FLASK}/v1.0/admin;
+			proxy_pass         http://admin/v1.0/admin;
 			proxy_redirect     off;
-
+			proxy_set_header   Host             $host;
+			proxy_set_header   X-Real-IP        $remote_addr;
+			proxy_set_header   X-Forwarded-For  $proxy_add_x_forwarded_for;
+		}
+		location /v1.0/account {
+			proxy_pass         http://account/v1.0/account;
+			proxy_redirect     off;
 			proxy_set_header   Host             $host;
 			proxy_set_header   X-Real-IP        $remote_addr;
 			proxy_set_header   X-Forwarded-For  $proxy_add_x_forwarded_for;
 		}
 		location /v1.0 {
-			proxy_pass         http://127.0.0.1:${PROXY}/v1.0;
+			proxy_pass         http://proxy/v1.0;
 			proxy_redirect     off;
-
 			proxy_set_header   Host             $host;
 			proxy_set_header   X-Real-IP        $remote_addr;
 			proxy_set_header   X-Forwarded-For  $proxy_add_x_forwarded_for;
@@ -237,7 +272,7 @@ param_score_timeout=86400
 
 param_option.ns_status=MASTER
 param_option.WORM=false
-param_option.service_update_policy=meta2=NONE|${M2_REPLICAS}|1|tag.type=m2v2;meta1=REPLACE;sqlx=KEEP|1|1|
+param_option.service_update_policy=meta2=NONE|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|
 param_option.automatic_open=true
 param_option.meta2_max_versions=${VERSIONING}
 param_option.storage_policy=${STGPOL}
@@ -352,12 +387,12 @@ command=${EXE_PREFIX}-daemon -q ${CFGDIR}/${NS}-conscience.conf
 env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 
-[service.${NS}-proxy]
-group=${NS},localhost,proxy
+[service.${NS}-account-agent]
+group=${NS},localhost,account-agent
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-proxy -s SDS,${NS},proxy ${IP}:${PORT} ${NS}
+command=${EXE_PREFIX}-account-agent.py ${NS}
 env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 """
@@ -394,6 +429,7 @@ template_local_ns = """
 zookeeper=${IP}:2181
 conscience=${IP}:${PORT_CS}
 endpoint=${IP}:${PORT_ENDPOINT}
+account-agent=ipc://${RUNDIR}/account-agent.sock
 """
 
 HOME = str(os.environ['HOME'])
@@ -427,43 +463,48 @@ def next_port ():
 	return res
 
 def generate (ns, ip, options={}):
+	def getint(v,default):
+		if v is None:
+			return int(default)
+		return int(v)
+
 	port_cs = next_port()
 	port_agent = next_port() # for TCP connection is use by Java applications
 	port_proxy = next_port()
 	port_flask = next_port()
 	port_endpoint = next_port()
-	services = (
-			('meta0', EXE_PREFIX + '-meta0-server', 1, next_port()),
-
-			('meta1', EXE_PREFIX + '-meta1-server', 1, next_port()),
-			('meta1', EXE_PREFIX + '-meta1-server', 2, next_port()),
-			('meta1', EXE_PREFIX + '-meta1-server', 3, next_port()),
-
-			('meta2', EXE_PREFIX + '-meta2-server', 1, next_port()),
-			('meta2', EXE_PREFIX + '-meta2-server', 2, next_port()),
-			('meta2', EXE_PREFIX + '-meta2-server', 3, next_port()),
-
-			#('sqlx',  EXE_PREFIX + '-sqlx-server', 1, next_port()),
-			#('sqlx',  EXE_PREFIX + '-sqlx-server', 2, next_port()),
-			#('sqlx',  EXE_PREFIX + '-sqlx-server', 3, next_port()),
-	)
-	rawx = (
-		(1, next_port()),
-		(2, next_port()),
-		(3, next_port()),
-		(4, next_port()),
-	)
+	port_account = next_port()
+	rawx = []
+	services = []
 
 	versioning = 1
 	stgpol = "SINGLE"
-	replicas = 3
 
-	if options.M2_REPLICAS is not None:
-		versioning = int(options.M2_REPLICAS)
+	meta2_replicas = getint(options.M2_REPLICAS, 3)
+	sqlx_replicas = getint(options.SQLX_REPLICAS, 1)
+
 	if options.M2_VERSIONS is not None:
 		versioning = int(options.M2_VERSIONS)
 	if options.M2_STGPOL is not None:
 		stgpol = str(options.M2_STGPOL)
+
+	if options.NO_META0 is None:
+		for i in range(1, 1+getint(options.NB_META0,1)):
+			services.append(('meta0', EXE_PREFIX + '-meta0-server', i, next_port()))
+	if options.NO_META1 is None:
+		for i in range(1, 1+getint(options.NB_META1,3)):
+			services.append(('meta1', EXE_PREFIX + '-meta1-server', i, next_port()))
+	if options.NO_META2 is None:
+		for i in range(1, 1+getint(options.NB_META2, meta2_replicas)):
+			services.append(('meta2', EXE_PREFIX + '-meta2-server', i, next_port()))
+	if options.NO_SQLX is None:
+		for i in range(1, 1+getint(options.NB_SQLX, sqlx_replicas)):
+			services.append(('sqlx',  EXE_PREFIX + '-sqlx-server', i, next_port()))
+	if options.NO_RAWX is None:
+		for i in range(1, 1+getint(options.NB_RAWX, 3)):
+			rawx.append((i, next_port()))
+
+	print "Deploying", repr(services)
 
 	env = dict(IP=ip, NS=ns, HOME=HOME, EXE_PREFIX=EXE_PREFIX,
 			PATH=PATH, LIBDIR=LIBDIR,
@@ -471,7 +512,9 @@ def generate (ns, ip, options={}):
 			DATADIR=DATADIR, CFGDIR=CFGDIR, RUNDIR=RUNDIR, SPOOLDIR=SPOOLDIR,
 			LOGDIR=LOGDIR, CODEDIR=CODEDIR,
 			UID=str(os.geteuid()), GID=str(os.getgid()), USER=str(os.getlogin()),
-			VERSIONING=versioning, STGPOL=stgpol, REPLICAS=replicas)
+			VERSIONING=versioning, STGPOL=stgpol,
+			M2_REPLICAS=meta2_replicas, M2_DISTANCE=str(1),
+			SQLX_REPLICAS=sqlx_replicas, SQLX_DISTANCE=str(1))
 
 	mkdir_noerror(SDSDIR)
 	mkdir_noerror(CODEDIR)
@@ -539,6 +582,7 @@ def generate (ns, ip, options={}):
 	env['PORT'] = port_endpoint
 	env['FLASK'] = port_flask
 	env['PROXY'] = port_proxy
+	env['ACCOUNT'] = port_account
 	with open(CFGDIR + '/' + ns + '-endpoint.conf', 'w+') as f:
 		tpl = Template(template_nginx_endpoint)
 		f.write(tpl.safe_substitute(env))
@@ -546,10 +590,22 @@ def generate (ns, ip, options={}):
 		tpl = Template(template_nginx_gridinit)
 		f.write(tpl.safe_substitute(env))
 
-	# Central administration flask
+	# administration flask
 	env['PORT'] = port_flask
 	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
 		tpl = Template(template_flask_gridinit)
+		f.write(tpl.safe_substitute(env))
+
+	# metacd/proxy
+	env['PORT'] = port_proxy
+	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
+		tpl = Template(template_proxy_gridinit)
+		f.write(tpl.safe_substitute(env))
+
+	# account-front flask
+	env['PORT'] = port_account
+	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
+		tpl = Template(template_account_flask_gridinit)
 		f.write(tpl.safe_substitute(env))
 
 	# Central agent configuration
@@ -561,15 +617,32 @@ def generate (ns, ip, options={}):
 def main ():
 	from optparse import OptionParser as OptionParser
 	parser = OptionParser()
+
 	parser.add_option("-B", "--bucket-replicas",
 			action="store", type="int", dest="M2_REPLICAS",
 			help="Number of containers replicas")
+	parser.add_option("-X", "--sqlx-replicas",
+			action="store", type="int", dest="SQLX_REPLICAS",
+			help="Number of bases replicas")
 	parser.add_option("-V", "--versioning",
 			action="store", type="int", dest="M2_VERSIONS",
 			help="Number of contents versions")
 	parser.add_option("-S", "--stgpol",
 			action="store", type="string", dest="M2_STGPOL",
 			help="How many replicas for META2")
+
+	parser.add_option("--no-meta0", action="store_true", dest="NO_META0")
+	parser.add_option("--no-meta1", action="store_true", dest="NO_META1")
+	parser.add_option("--no-meta2", action="store_true", dest="NO_META2")
+	parser.add_option("--no-sqlx", action="store_true", dest="NO_SQLX")
+	parser.add_option("--no-rawx", action="store_true", dest="NO_RAWX")
+
+	parser.add_option("--nb-meta0", action="store", type="int", dest="NB_META0")
+	parser.add_option("--nb-meta1", action="store", type="int", dest="NB_META1")
+	parser.add_option("--nb-meta2", action="store", type="int", dest="NB_META2")
+	parser.add_option("--nb-sqlx",  action="store", type="int", dest="NB_SQLX")
+	parser.add_option("--nb-rawx",  action="store", type="int", dest="NB_RAWX")
+
 	options, args = parser.parse_args()
 	generate(args[0], args[1], options)
 

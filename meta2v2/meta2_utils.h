@@ -111,6 +111,8 @@ gint64 m2db_get_max_versions(struct sqlx_sqlite3_s *sq3, gint64 def);
 
 void m2db_set_max_versions(struct sqlx_sqlite3_s *sq3, gint64 max);
 
+gint64 m2db_get_ctime(struct sqlx_sqlite3_s *sq3);
+
 void m2db_set_ctime(struct sqlx_sqlite3_s *sq3, gint64 now);
 
 /** Get the delay before actually deleting a content marked as deleted.  */

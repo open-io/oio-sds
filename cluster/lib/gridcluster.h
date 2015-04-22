@@ -37,9 +37,11 @@ License along with this library.
 /**  */
 #define NS_ACL_DENY_OPTION "deny"
 
-#define GCLUSTER_CFG_CONSCIENCE "conscience"
-#define GCLUSTER_CFG_ZOOKEEPER "zookeeper"
-#define GCLUSTER_CFG_AGENT "agent"
+#define GCLUSTER_CFG_CONSCIENCE   "conscience"
+#define GCLUSTER_CFG_ZOOKEEPER    "zookeeper"
+#define GCLUSTER_CFG_AGENT        "agent"
+#define GCLUSTER_CFG_ACCOUNTAGENT "account-agent"
+#define GCLUSTER_CFG_ENDPOINT     "endpoint"
 
 #ifndef GCLUSTER_ETC_DIR
 # define GCLUSTER_ETC_DIR "/etc/oio"
@@ -359,8 +361,11 @@ GByteArray* namespace_get_rules(const gchar *ns, const gchar *srvtype,
 
 /** @return NULL if the NS was not found or the key not defined for the NS */
 gchar* gridcluster_get_config(const gchar *ns, const gchar *what);
-#define gridcluster_get_conscience(ns) gridcluster_get_config((ns), GCLUSTER_CFG_CONSCIENCE)
-#define gridcluster_get_zookeeper(ns) gridcluster_get_config((ns), GCLUSTER_CFG_ZOOKEEPER)
+
+#define gridcluster_get_conscience(ns)   gridcluster_get_config((ns), GCLUSTER_CFG_CONSCIENCE)
+#define gridcluster_get_zookeeper(ns)    gridcluster_get_config((ns), GCLUSTER_CFG_ZOOKEEPER)
+#define gridcluster_get_accountagent(ns) gridcluster_get_config((ns), GCLUSTER_CFG_ACCOUNTAGENT)
+#define gridcluster_get_endpoint(ns)     gridcluster_get_config((ns), GCLUSTER_CFG_ENDPOINT)
 
 static inline gchar *
 gridcluster_get_agent(void)
