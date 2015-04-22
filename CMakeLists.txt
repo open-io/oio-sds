@@ -287,7 +287,6 @@ test_CLI(CP_EXECUTABLE "cp")
 test_CLI(SED_EXECUTABLE "sed")
 test_CLI(FLEX_EXECUTABLE "flex")
 test_CLI(BISON_EXECUTABLE "bison")
-test_CLI(PERL_EXECUTABLE "perl")
 
 if (SSL_LIBDIR AND SSL_INCDIR)
 	set(OPENSSL_LIBRARIES "-lcrypto -lssl")
