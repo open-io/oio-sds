@@ -72,8 +72,4 @@ extern gint gs_tools_main_with_argument_check(int argc, gchar **argv,
 		const gchar *cmd, void (*helpcb) (void),
 		gboolean (*check_args)(t_gs_tools_options*, gchar**));
 
-void client_gscstat_init(void);
-
-void client_gscstat_close(void);
-
 #endif /*OIO_SDS__client__c__tools__gs_tools_h*/

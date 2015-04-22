@@ -68,7 +68,6 @@ License along with this library.
 # include <metautils/lib/storage_policy.h>
 # include <metautils/lib/common_main.h>
 # include <metautils/lib/volume_lock.h>
-# include <metautils/lib/grid_storage_client_stat.h>
 # include <metautils/lib/expr.h>
 # include <metautils/lib/lb.h>
 # include <metautils/lib/notifications.h>

@@ -105,7 +105,6 @@ add_library(metautils SHARED
 		meta_backend_common.h
 		utils_syscall.c metautils_syscall.h
 		event_config.c event_config.h
-		grid_storage_client_stat.c
 		lrutree.c lrutree.h tree.h
 		storage_policy.c storage_policy.h
 		hc_url.c hc_url.h
@@ -428,7 +427,6 @@ install(FILES
 			gridd_client.h
 			gridd_client_ext.h
 			gridd_client_pool.h
-			grid_storage_client_stat.h
 			hc_url.h
 			lb.h
 			lrutree.h
