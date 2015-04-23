@@ -318,7 +318,7 @@ main(int argc, char **argv)
 		_get_peers, _post_config, NULL
 	};
 
-	zmq_ctx = zmq_ctx_new ();
+	zmq_ctx = zmq_init (1);
 	int rc = sqlite_service_main (argc, argv, &cfg);
 	if (m2)
 		meta2_backend_clean (m2);
@@ -327,7 +327,7 @@ main(int argc, char **argv)
 	if (q_notify)
 		g_async_queue_unref (q_notify);
 	if (zmq_ctx) {
-		zmq_ctx_term (zmq_ctx);
+		zmq_term (zmq_ctx);
 		zmq_ctx = NULL;
 	}
 	return rc;
