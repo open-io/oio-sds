@@ -25,10 +25,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * @{
  */
 
-# ifndef  META1_TYPE_NAME
-#  define META1_TYPE_NAME "meta1"
-# endif
-
 # define META1_SCHEMA \
 	"CREATE TABLE IF NOT EXISTS containers ( "\
 		"cid BLOB NOT NULL PRIMARY KEY, "\

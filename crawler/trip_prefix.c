@@ -103,7 +103,7 @@ meta1_IsMaster(gchar* bddname)
 	// build request
 	n.ns   = "";
 	n.base = bddname;
-	n.type = META1_TYPE_NAME;
+	n.type = NAME_SRVTYPE_META1;
 
 	req = sqlx_pack_ISMASTER(&n);
 	client = gridd_client_create(meta1_url, req, NULL, on_reply);
@@ -198,7 +198,7 @@ int trip_start(int argc, char** argv)
 
 	TRIP_INFO("Initialize and scan directory [%s]... please Wait...", source_directory_path);
 
-	err = tc_sqliterepo_initRepository(source_directory_path, META1_TYPE_NAME, &global_repo);
+	err = tc_sqliterepo_initRepository(source_directory_path, NAME_SRVTYPE_META1, &global_repo);
 	if (err) {
 		TRIP_ERROR("Failed on repository init [%s] : %s", source_directory_path, err->message);
 		if (global_repo)
@@ -242,7 +242,7 @@ static GVariant*_sub_trip_next()
 		if (bAllPrefix == FALSE) {
 			if (file_name) {
 				// search prefix
-				prefixCt = tc_sqliterepo_admget(global_repo, META1_TYPE_NAME, file_name, "base_name");
+				prefixCt = tc_sqliterepo_admget(global_repo, NAME_SRVTYPE_META1, file_name, "base_name");
 				if (prefixCt==NULL) {
 					TRIPERR_ALLOC_AND_FORMAT(prefixCt, TRIPERR_BADBDD);
 				} else {

@@ -37,12 +37,9 @@ void resolver_direct_clear (resolver_direct_t *r)
 		return;
 
 	M0CACHE_LOCK(*r);
-	if (r->refresh_pending)
-	{
+	if (r->refresh_pending) {
 		DEBUG("META0 cache not cleared, a refresh is running");
-	}
-	else if (r->mappings)
-	{
+	} else if (r->mappings) {
 		g_ptr_array_foreach (r->mappings, _clean_cache_entry, NULL);
 		g_ptr_array_free (r->mappings, TRUE);
 		r->mappings = NULL;
@@ -59,8 +56,7 @@ build_meta0_cache (struct resolver_direct_s *r, GError **err)
 	GPtrArray *array=NULL;
 
 	/*now call the meta0 reference*/
-	if (!(m0_list = meta0_remote_get_meta1_all (&(r->meta0), r->timeout.m0.op, err)))
-	{
+	if (!(m0_list = meta0_remote_get_meta1_all (&(r->meta0), r->timeout.m0.op, err))) {
 		gchar str_addr[128];
 		memset(str_addr, 0x00, sizeof(str_addr));
 		addr_info_to_string(&(r->meta0), str_addr, sizeof(str_addr));
@@ -84,10 +80,8 @@ UNSAFE_resolver_direct_reload (struct resolver_direct_s *r, gboolean locked, GEr
 	int rc = 0;
 
 	DEBUG("META0 cache reload wanted");
-	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 	/*sanity checks*/
-	if (!r)
-	{
+	if (!r) {
 		GSETERROR(err, "invalid parameter");
 		goto exit_label;
 	}
@@ -95,11 +89,10 @@ UNSAFE_resolver_direct_reload (struct resolver_direct_s *r, gboolean locked, GEr
 	/*start a critical section to access the state of the resolver*/
 	if (!locked)
 		M0CACHE_LOCK(*r);
-	
-	if (r->refresh_pending)
-	{
+
+	if (r->refresh_pending) {
 		GTimeVal gtv;
-		
+
 		DEBUG("META0 cache already being refreshed");
 
 		g_get_current_time (&gtv);
@@ -115,11 +108,9 @@ UNSAFE_resolver_direct_reload (struct resolver_direct_s *r, gboolean locked, GEr
 			GSETERROR(err,"timeout on a pending refresh");
 			rc = 0;
 		}
-	}
-	else
-	{
+	} else {
 		GPtrArray *newMappings=NULL;
-		
+
 		/*mark the resolver as being refreshed and leave the critical section*/
 		r->refresh_pending = TRUE;
 
@@ -128,17 +119,16 @@ UNSAFE_resolver_direct_reload (struct resolver_direct_s *r, gboolean locked, GEr
 
 		/*contact meta0 and build a reference */
 		newMappings = build_meta0_cache (r, err);
-		
+
 		if (!locked)
 			M0CACHE_LOCK(*r);
-		
+
 		if (!newMappings) {
 			/*refresh error*/
 			ERROR("Cannot refresh the META0 cache");
 			rc=0;
 		} else {
-			if ( r->mappings )
-			{
+			if ( r->mappings ) {
 				g_ptr_array_foreach (r->mappings, _clean_cache_entry, NULL);
 				g_ptr_array_free (r->mappings, TRUE);
 				r->mappings = NULL;
@@ -152,16 +142,13 @@ UNSAFE_resolver_direct_reload (struct resolver_direct_s *r, gboolean locked, GEr
 		 * all the threads waiting on the condition. */
 		r->refresh_pending = FALSE;	
 		g_cond_broadcast (&r->refresh_condition);
-		
+
 		if (!locked)
 			M0CACHE_UNLOCK(*r);
 	}
 
 exit_label:	
-
-	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 	return rc;
-
 }
 
 void
@@ -169,21 +156,20 @@ resolver_direct_decache_all (resolver_direct_t *r)
 {
 	GError *gErr=NULL;
 
-	if (!r)
-	{
+	if (!r) {
 		ERROR("Invalid parameter");
 		return;
 	}
 
-	if (!UNSAFE_resolver_direct_reload (r, 0, &gErr))
-	{
+	if (!UNSAFE_resolver_direct_reload (r, 0, &gErr)) {
 		ERROR("Cannot decache");
 		WARN("Cause:%s", g_error_get_message(gErr));
 	}
 }
 
 static gboolean
-_is_usable_meta1(addr_info_t *addr, GSList *exclude) {
+_is_usable_meta1(addr_info_t *addr, GSList *exclude)
+{
 	GSList *l = NULL;
 	for (l = exclude; l && l->data; l=l->next) {
 		if(addr_info_equal(l->data, addr))
@@ -196,28 +182,26 @@ addr_info_t*
 resolver_direct_get_meta1 (resolver_direct_t *r, const container_id_t cID, int ro, GSList *exclude, GError **err)
 {
 	guint16 i;
-        addr_info_t *pA = NULL;
+	addr_info_t *pA = NULL;
 
-        if (!r || !cID) {
-                GSETERROR (err, "invalid parameter");
-                return NULL;
-        }
+	if (!r || !cID) {
+		GSETERROR (err, "invalid parameter");
+		return NULL;
+	}
 
-        memcpy(&i, cID, 2);
-        i = GUINT16_FROM_LE(i);
+	memcpy(&i, cID, 2);
+	i = GUINT16_FROM_LE(i);
 
-        /**/
-        M0CACHE_LOCK(*r);
-        if (!r->mappings)
-        {
-                TRACE("No META0 cache, trying a reload");
-                if (!UNSAFE_resolver_direct_reload(r, 1, err))
-                {
-                        M0CACHE_UNLOCK(*r);
-                        GSETERROR(err, "Cannot load the local META0 cache");
-                        return NULL;
-                }
-        }
+	/**/
+	M0CACHE_LOCK(*r);
+	if (!r->mappings) {
+		TRACE("No META0 cache, trying a reload");
+		if (!UNSAFE_resolver_direct_reload(r, 1, err)) {
+			M0CACHE_UNLOCK(*r);
+			GSETERROR(err, "Cannot load the local META0 cache");
+			return NULL;
+		}
+	}
 	gchar ** meta1_addresses = NULL;
 	gchar *addr_str = NULL;
 	meta1_addresses = r->mappings->pdata[i];
@@ -230,7 +214,7 @@ resolver_direct_get_meta1 (resolver_direct_t *r, const container_id_t cID, int r
 	guint nb_meta1 = g_strv_length(meta1_addresses);
 	guint tmp = rand()%nb_meta1;
 	guint try = 0;
-	if(g_slist_length(exclude) == nb_meta1) {
+	if (g_slist_length(exclude) == nb_meta1) {
 		goto end_label;
 	}
 
@@ -257,12 +241,10 @@ resolver_direct_get_meta1 (resolver_direct_t *r, const container_id_t cID, int r
 		pA = NULL;
 		try++;
 	}
-	
+
 end_label:
-
-        M0CACHE_UNLOCK(*r);
-
-        return pA;
+	M0CACHE_UNLOCK(*r);
+	return pA;
 }
 
 int
@@ -271,26 +253,24 @@ resolver_direct_set_meta1_master (resolver_direct_t *r, const container_id_t cid
 	guint16 i;
 	gchar **all = NULL;
 
-        if (!r || !cid || !master) {
-                GSETERROR (e, "Invalid parameter");
-                return 0;
-        }
+	if (!r || !cid || !master) {
+		GSETERROR (e, "Invalid parameter");
+		return 0;
+	}
 
-        memcpy(&i, cid, 2);
-        i = GUINT16_FROM_LE(i);
+	memcpy(&i, cid, 2);
+	i = GUINT16_FROM_LE(i);
 
-        /**/
-        M0CACHE_LOCK(*r);
-        if (!r->mappings)
-        {
-                TRACE("No META0 cache, trying a reload");
-                if (!UNSAFE_resolver_direct_reload(r, 1, e))
-                {
-                        M0CACHE_UNLOCK(*r);
-                        GSETERROR(e, "Cannot load the local META0 cache");
-                        return 0;
-                }
-        }
+	/**/
+	M0CACHE_LOCK(*r);
+	if (!r->mappings) {
+		TRACE("No META0 cache, trying a reload");
+		if (!UNSAFE_resolver_direct_reload(r, 1, e)) {
+			M0CACHE_UNLOCK(*r);
+			GSETERROR(e, "Cannot load the local META0 cache");
+			return 0;
+		}
+	}
 	all = r->mappings->pdata[i];
 	if(!all) {
 		M0CACHE_UNLOCK(*r);
@@ -316,9 +296,9 @@ resolver_direct_set_meta1_master (resolver_direct_t *r, const container_id_t cid
 		}
 	}
 
-        M0CACHE_UNLOCK(*r);
+	M0CACHE_UNLOCK(*r);
 
-        return 1;
+	return 1;
 }
 
 static GSList *
@@ -447,8 +427,7 @@ void resolver_direct_free (resolver_direct_t *r)
 	if (!r)
 		return;
 
-	if (r->mappings)
-	{
+	if (r->mappings) {
 		g_ptr_array_foreach (r->mappings, _clean_cache_entry, NULL);
 		g_ptr_array_free (r->mappings, TRUE);
 		r->mappings = NULL;

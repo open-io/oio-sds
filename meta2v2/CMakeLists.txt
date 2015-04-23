@@ -99,7 +99,7 @@ bin_prefix(meta2_server -meta2-server)
 
 target_link_libraries(meta2_server meta2v2
         hcresolve metautils gridcluster server
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
+		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${ZMQ_LIBRARIES})
 
 add_executable(test_meta2_backend test_meta2_backend.c)
 target_link_libraries(test_meta2_backend

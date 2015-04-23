@@ -56,7 +56,7 @@ meta1_backend_init(const gchar *ns, struct sqlx_repository_s *repo,
 	m1 = g_malloc0(sizeof(*m1));
 	metautils_strlcpy_physical_ns(m1->backend.ns_name, ns,
 			sizeof(m1->backend.ns_name));
-	m1->backend.type = META1_TYPE_NAME;
+	m1->backend.type = NAME_SRVTYPE_META1;
 	m1->backend.lb = glp;
 	m1->backend.repo = repo;
 	m1->prefixes = meta1_prefixes_init();
@@ -113,7 +113,7 @@ meta1_backend_base_already_created(struct meta1_backend_s *m1, const guint8 *pre
 	GError *err = NULL;
 
 	g_snprintf(base, sizeof(base), "%02X%02X", prefix[0], prefix[1]);
-	struct sqlx_name_s n = {.base=base, .type=META1_TYPE_NAME, .ns=m1->backend.ns_name};
+	struct sqlx_name_s n = {.base=base, .type=NAME_SRVTYPE_META1, .ns=m1->backend.ns_name};
 	err = sqlx_repository_has_base(m1->backend.repo, &n);
 	if (!err)
 		return TRUE;

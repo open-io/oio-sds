@@ -13,7 +13,7 @@ link_directories(
         ${GLIB2_LIBRARY_DIRS}
         ${DBUS_LIBRARY_DIRS}
 		${JSONC_LIBRARY_DIRS}
-		${ZMQ_LIBRAZY_DIRS})
+		${ZMQ_LIBRARY_DIRS})
 
 
 add_library(listenerremote SHARED

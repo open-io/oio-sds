@@ -398,9 +398,7 @@ static GError*
 _m2v2_request_ex(const gchar *url, GByteArray *req, gdouble timeout, GSList **out)
 {
 	EXTRA_ASSERT (req != NULL);
-	gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	GError *err = gridd_client_exec_and_decode (url, timeout, req, out, bean_sequence_decoder);
-	gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
 	g_byte_array_free(req, TRUE);
 	return err;
 }
@@ -689,11 +687,8 @@ m2v2_remote_execute_LIST(const gchar *target, struct hc_url_s *url,
 		err = NEWERROR(2, "errno=%d %s", errno, strerror(errno));
 	if (!err)
 		err = gridd_client_request(client, req, NULL, out ? _cb : NULL);
-	if (!err) {
-		gscstat_tags_start(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
+	if (!err)
 		err = gridd_client_run (client);
-		gscstat_tags_end(GSCSTAT_SERVICE_META2, GSCSTAT_TAGS_REQPROCTIME);
-	}
 	gridd_client_free(client);
 	g_byte_array_free(req, TRUE);
 

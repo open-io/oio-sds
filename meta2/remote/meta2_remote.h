@@ -181,6 +181,16 @@ status_t meta2_remote_touch_content(struct metacnx_ctx_s *ctx,
 status_t meta2_remote_touch_container_ex(struct metacnx_ctx_s *ctx,
 		const container_id_t var_0, unsigned int flags, GError **err);
 
+/* Code got from auto-generation
+ * FIXME function to be removed ASAP, as soon as the caller disappears */
+status_t meta2_remote_stat_content_v2(struct metacnx_ctx_s *ctx, const container_id_t var_0,
+		const gchar* var_1, meta2_raw_content_v2_t* *var_2, GError **err);
+
+/* Code got from auto-generation
+ * FIXME function to be removed ASAP, as soon as the caller disappears */
+status_t meta2_remote_modify_metadatasys(struct metacnx_ctx_s *ctx, const container_id_t var_0,
+		const gchar* var_1, const gchar* var_2, GError **err);
+
 /** @} */
 
 #endif /*OIO_SDS__meta2__remote__meta2_remote_h*/

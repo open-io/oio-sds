@@ -72,7 +72,7 @@ retry:
 			!g_strcmp0(err->message, meta2_backend_get_local_addr(m2b))) {
 		GRID_WARN("Redirecting on myself!?! Retrying request immediately");
 		g_clear_error(&err);
-		hc_decache_reference_service(m2b->resolver, url, META2_TYPE_NAME);
+		hc_decache_reference_service(m2b->resolver, url, NAME_SRVTYPE_META2);
 		goto retry;
 	}
 
@@ -119,7 +119,7 @@ meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
 		else
 			GRID_DEBUG("No such container (%s)", hc_url_get(url, HCURL_WHOLE));
 		if (e->code == CODE_CONTAINER_NOTFOUND) {
-			hc_decache_reference_service(m2b->resolver, url, META2_TYPE_NAME);
+			hc_decache_reference_service(m2b->resolver, url, NAME_SRVTYPE_META2);
 		}
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;

@@ -44,7 +44,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_utils.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/generic.h>
-#include <meta2/remote/meta2_services_remote.h>
 
 #include "macros.h"
 #include "path_parser.h"

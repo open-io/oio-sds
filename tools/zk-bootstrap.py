@@ -17,24 +17,25 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys, time, random, logging, traceback, itertools
-import threading
-
+import sys, logging, itertools, threading
+from time import time as now
 import zookeeper
+import oio.config
 
 PREFIX='/hc'
 PREFIX_NS=PREFIX+'/ns'
-default_expr = "pow(host['cpu_idle'] * host['netin_idle'] * host['netout_idle'] * volume['io_idle'] , 0.25)"
 hexa = '0123456789ABCDEF'
 acl_openbar = [{'perms':zookeeper.PERM_ALL, 'scheme':'world', 'id':'anyone'}]
+SRVTYPES = ( ('meta0',0,0), ('meta1',1,3), ('meta2',2,2), ('sqlx',2,2) )
 
-def batch_split (nodes):
+def batch_split (nodes, N):
+	"""Creates batches with a common prefixes, and a maximal size of N items"""
 	last = 0
 	batch = list()
 	for x in nodes:
 		current = x[0].count('/')
 		batch.append(x)
-		if len(batch) >= 2048 or last != current:
+		if len(batch) >= N or last != current:
 			yield batch
 			batch = list()
 		last = current
@@ -66,12 +67,14 @@ def batch_create (zh, batch):
 		sem.acquire()
 	return started, 0
 
-def create_tree (zh, nodes):
-	ok, ko = 0, 0
-	for batch in batch_split(nodes):
-		pre = time.time()
+def create_tree (zh, nodes, options):
+	N, ok, ko = 2048, 0, 0
+	if options.SLOW is not None and options.SLOW:
+		N = 256
+	for batch in batch_split(nodes, N):
+		pre = now()
 		o, k = batch_create(zh, batch)
-		post = time.time()
+		post = now()
 		print " > batch({0},{1}) in {2}s".format(o,k,post-pre)
 		ok, ko = ok+o, ko+k
 	print "Created nodes : ok", ok,"ko",ko
@@ -103,53 +106,21 @@ def hash_tree (d0, w0):
 		for x in depth(d):
 			yield '/'.join(x) 
 
-def namespace_tree (ns):
-	yield (PREFIX_NS+'/'+ns, str(time.time()))
-	yield (PREFIX_NS+'/'+ns+'/vns', '')
+def namespace_tree (ns, options):
+	yield (PREFIX_NS, '')
+	yield (PREFIX_NS+'/'+ns, str(now()))
 	yield (PREFIX_NS+'/'+ns+'/srv', '')
+	yield (PREFIX_NS+'/'+ns+'/srv/meta0', '')
 	yield (PREFIX_NS+'/'+ns+'/el', '')
-	for srvtype in [ 'meta0', 'meta1', 'meta2', 'rawx', 'solr', 'sqlx', 'tsmx', 'saver', 'replicator']:
-		yield (PREFIX_NS+'/'+ns+'/el/'+srvtype, '')
-		yield (PREFIX_NS+'/'+ns+'/srv/'+srvtype, '')
-		yield (PREFIX_NS+'/'+ns+'/srv/'+srvtype+'/list', '')
-	for srvtype,d,w in [ ('',1,3), ('/meta0',0,0), ('/meta1',1,3), ('/meta2',2,2), ('/sqlx',2,2) ]:
-		basedir = PREFIX_NS+'/'+ns+'/el'+srvtype
+	for srvtype,d,w in SRVTYPES:
+		if options.AVOID_TYPES is not None and srvtype in options.AVOID_TYPES:
+			continue
+		basedir = PREFIX_NS+'/'+ns+'/el/'+srvtype
+		yield (basedir, '')
 		for x in hash_tree(d,w):
 			yield (basedir+'/'+x, '')
 
-def boot_tree ():
-	yield (PREFIX+'/srv', default_expr)
-	yield (PREFIX+'/srv/meta0', '')
-	yield (PREFIX+'/srv/meta1', '')
-	yield (PREFIX+'/srv/meta2', '')
-	yield (PREFIX+'/srv/rawx', '')
-	yield (PREFIX+'/srv/solx', '')
-	yield (PREFIX+'/srv/solr', '')
-	yield (PREFIX+'/srv/tsmx', '')
-	yield (PREFIX+'/srv/saver', '')
-	yield (PREFIX+'/srv/replicator', '')
-	yield (PREFIX+'/srv/sqlx', '')
-	yield (PREFIX_NS, '')
-	yield (PREFIX+'/hosts', '')
-	yield (PREFIX+'/volumes', '')
-
 #-------------------------------------------------------------------------------
-
-def init_namespace(zh, ns):
-	create_tree(zh, namespace_tree(ns))
-
-def load_config():
-	import glob, os
-	import ConfigParser as configparser
-	def places():
-		yield "/etc/oio/sds.conf"
-		for f in glob.glob("/etc/oio/sds.conf.d/*"):
-			yield f
-		yield os.path.expanduser("~/.oio/sds.conf")
-
-	cfg = configparser.RawConfigParser()
-	cfg.read(places())
-	return cfg
 
 def main():
 	from optparse import OptionParser as OptionParser
@@ -157,6 +128,10 @@ def main():
 	parser = OptionParser()
 	parser.add_option('-v', '--verbose', action="store_true", dest="flag_verbose",
 		help='Triggers debugging traces')
+	parser.add_option('--slow', action="store_true", dest="SLOW",
+		help='Only play with small batches to avoid timeouts on slow hosts.')
+	parser.add_option('--avoid', action="append", type="string", dest="AVOID_TYPES",
+		help='Do not populate entries for the specified service types')
 
 	(options, args) = parser.parse_args(sys.argv)
 
@@ -176,16 +151,16 @@ def main():
 		raise ValueError("not enough CLI arguments")
 
 	ns = args[1]
-	cnxstr = load_config().get(ns, 'zookeeper')
-
+	cnxstr = oio.config.load().get(ns, 'zookeeper')
 	zookeeper.set_debug_level(zookeeper.LOG_LEVEL_INFO)
 	zh = zookeeper.init(cnxstr)
+
+	# synchronous creation of the root
 	try:
 		zookeeper.create(zh, PREFIX, '', acl_openbar, 0)
 	except zookeeper.NodeExistsException:
 		pass
-	create_tree(zh, boot_tree())
-	init_namespace(zh, ns)
+	create_tree(zh, namespace_tree(ns, options), options)
 	zookeeper.close(zh)
 
 if __name__ == '__main__':

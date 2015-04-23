@@ -29,15 +29,19 @@ REPLICATION_DIRECTORY=3
 REPLICATION_BUCKET=3
 STGPOL="SINGLE"
 VERSIONING=1
+AVOID=""
+ZKSLOW=0
 
-while getopts ":D:B:S:V:N:I:" opt; do
+while getopts ":D:B:S:V:N:I:X:Z" opt; do
 	case $opt in
+		X) AVOID="${AVOID} ${OPTARG}" ;;
 		D) REPLICATION_DIRECTORY="${OPTARG}" ;;
 		B) REPLICATION_BUCKET="${OPTARG}" ;;
 		S) STGPOL="${OPTARG}" ;;
 		V) VERSIONING="${OPTARG}" ;;
 		N) NS="${OPTARG}" ;;
 		I) IP="${OPTARG}" ;;
+		Z) ZKSLOW=1 ;;
 		\?) ;;
 	esac
 done
@@ -48,7 +52,9 @@ echo "$0" \
 	"-S \"${STGPOL}\"" \
 	"-V \"${VERSIONING}\"" \
 	"-N \"${NS}\"" \
-	"-I \"${IP}\""
+	"-I \"${IP}\"" \
+	"-X \"${AVOID}\"" \
+	"-Z \"${ZKSLOW}\""
 
 # Stop and clean everything
 while pkill --full -0 gridinit ; do
@@ -59,10 +65,13 @@ done
 mkdir -p "$OIO"
 ( cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs}))
 
+opts="--nb-meta1=$((REPLICATION_DIRECTORY+1)) --nb-meta2=$((REPLICATION_BUCKET+1))"
+for srvtype in ${AVOID} ; do opts="${opts} --no-${srvtype}"; done
 ${PREFIX}-bootstrap.py \
 		-B "$REPLICATION_BUCKET" \
 		-V "$VERSIONING" \
 		-S "$STGPOL" \
+		${opts} \
 		"$NS" "$IP"
 
 nice gridinit -s RC,gridinit -d ${SDS}/conf/gridinit.conf
@@ -70,7 +79,10 @@ nice gridinit -s RC,gridinit -d ${SDS}/conf/gridinit.conf
 ZK=$(${PREFIX}-cluster --local-cfg | grep "$NS/zookeeper" ; exit 0)
 if [ -n "$ZK" ] ; then
 	#zk-reset.py "$NS"
-	zk-bootstrap.py "$NS"
+	opts=
+	for srvtype in ${AVOID} ; do opts="${opts} --avoid=${srvtype}" ; done
+	if [ $ZKSLOW -ne 0 ] ; then opts="${opts} --slow" ; fi
+	zk-bootstrap.py $opts "$NS"
 fi
 
 # wait for the gridinit to startup

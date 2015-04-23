@@ -17,8 +17,9 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys, time, random, logging, traceback, itertools
+import sys, logging
 import zookeeper
+import oio.config
 
 def delete_tree (zh, path):
 	path = path.replace('//', '/')
@@ -28,19 +29,6 @@ def delete_tree (zh, path):
 		zookeeper.delete(zh, path)
 	except:
 		pass
-
-def load_config():
-	import glob, os
-	import ConfigParser as configparser
-	def places():
-		yield "/etc/oio/sds.conf"
-		for f in glob.glob("/etc/oio/sds.conf.d/*"):
-			yield f
-		yield os.path.expanduser("~/.oio/sds.conf")
-
-	cfg = configparser.RawConfigParser()
-	cfg.read(places())
-	return cfg
 
 def main():
 	from optparse import OptionParser as OptionParser
@@ -67,7 +55,7 @@ def main():
 		raise ValueError("not enough CLI arguments")
 
 	ns = args[1]
-	cnxstr = load_config().get(ns, 'zookeeper')
+	cnxstr = oio.config.load().get(ns, 'zookeeper')
 
 	zookeeper.set_debug_level(zookeeper.LOG_LEVEL_INFO)
 	zh = zookeeper.init(cnxstr)

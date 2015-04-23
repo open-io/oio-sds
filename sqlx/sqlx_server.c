@@ -136,7 +136,7 @@ int
 main(int argc, char ** argv)
 {
 	static struct sqlx_service_config_s cfg = {
-		"sqlx", "sqlxv1", "el/sqlx", 2, 2, SQLX_SCHEMA,
+		NAME_SRVTYPE_SQLX, "sqlxv1", "el/sqlx", 1, 3, SQLX_SCHEMA,
 		_get_peers, _post_config, _set_defaults
 	};
 	return sqlite_service_main(argc, argv, &cfg);

@@ -32,7 +32,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metacomm.h>
 #include <cluster/lib/gridcluster.h>
 #include <meta2/remote/meta2_remote.h>
-#include <meta2/remote/meta2_services_remote.h>
 #include <meta2v2/meta2_bean.h>
 #include <meta2v2/meta2_events.h>
 #include <meta2v2/generic.h>

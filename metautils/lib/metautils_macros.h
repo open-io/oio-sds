@@ -48,6 +48,7 @@ License along with this library.
 # define NAME_SRVTYPE_META1 "meta1"
 # define NAME_SRVTYPE_META2 "meta2"
 # define NAME_SRVTYPE_RAWX  "rawx"
+# define NAME_SRVTYPE_SQLX  "sqlx"
 
 # ifndef M2V2_CLIENT_TIMEOUT
 #  define M2V2_CLIENT_TIMEOUT 10.0

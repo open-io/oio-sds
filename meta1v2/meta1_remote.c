@@ -195,11 +195,9 @@ list_request(const addr_info_t *a, gdouble to_step, gdouble to_overall,
 	if(to_step > 0 && to_overall > 0)
 		gridd_client_set_timeout(client, to_step, to_overall);
 
-	gscstat_tags_start(GSCSTAT_SERVICE_META1, GSCSTAT_TAGS_REQPROCTIME);
 	gridd_client_start(client);
 	if (!(e = gridd_client_loop(client)))
 		e = gridd_client_error(client);
-	gscstat_tags_end(GSCSTAT_SERVICE_META1, GSCSTAT_TAGS_REQPROCTIME);
 
 	/* in RO request, we don't need this information */
 	if(NULL != master) {

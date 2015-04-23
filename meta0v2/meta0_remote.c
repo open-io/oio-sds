@@ -45,10 +45,7 @@ _m0_remote_no_return (addr_info_t *m0a, gint ms, GByteArray *req, GError **err)
 	gchar addr[STRLEN_ADDRINFO];
 	addr_info_to_string (m0a, addr, sizeof(addr));
 
-	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 	GError *e = gridd_client_exec (addr, ms>0 ? ms/1000.0 : 60.0, req);
-	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
-
 	g_byte_array_unref (req);
 	if (!e)
 		return TRUE;
@@ -68,10 +65,8 @@ _m0_remote_m0info (addr_info_t *m0a, gint ms, GByteArray *req, GError **err)
 	addr_info_to_string (m0a, addr, sizeof(addr));
 
 	GSList *result = NULL;
-	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 	GError *e = gridd_client_exec_and_decode (addr, ms>0 ? ms/1000.0 : 60.0, req,
 			&result, meta0_info_unmarshall);
-	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 
 	g_byte_array_unref (req);
 	if (!e)
@@ -247,15 +242,11 @@ meta0_remote_get_meta1_info(addr_info_t *m0a, gint ms, GError **err)
 
 	addr_info_to_string(m0a, target, sizeof(target));
 
-	gscstat_tags_start(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
-
 	client = gridd_client_create(target, packed, NULL, on_reply);
 	if ( ms > 0 )
 		gridd_client_set_timeout(client, ms, ms);
 	local_err = gridd_client_run (client);
 	g_byte_array_free(packed, TRUE);
-
-	gscstat_tags_end(GSCSTAT_SERVICE_META0, GSCSTAT_TAGS_REQPROCTIME);
 
 	if (local_err) {
 		*err = local_err;

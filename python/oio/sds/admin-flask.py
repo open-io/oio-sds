@@ -1,25 +1,16 @@
 #!/usr/bin/python
 
 # standard modules
-import traceback, json, os.path, glob
-import ConfigParser as cfg
-
-# third party imports
+import traceback, json
 import requests, flask
+import oio.config
 
 app = flask.Flask(__name__)
 
 class NotFound (Exception):
 	pass
 
-def places():
-	yield "/etc/oio/sds.conf"
-	for f in glob.glob("/etc/oio/sds.conf.d/*"):
-		yield f
-	yield os.path.expanduser("~/.oio/sds.conf")
-
-parser = cfg.RawConfigParser()
-parser.read(places())
+cfg = oio.config.load()
 
 def endpoint (ns):
 	return 'http://' + parser.get(ns, "endpoint")

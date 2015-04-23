@@ -88,7 +88,7 @@ _open_and_lock(struct meta1_backend_s *m1, const container_id_t cid,
 			((guint8*)cid)[0], ((guint8*)cid)[1]);
 
 	/* Now open/lock the base in a way suitable for our op */
-	struct sqlx_name_s n = {.base=base, .type=META1_TYPE_NAME, .ns=m1->backend.ns_name};
+	struct sqlx_name_s n = {.base=base, .type=NAME_SRVTYPE_META1, .ns=m1->backend.ns_name};
 	err = sqlx_repository_open_and_lock(m1->backend.repo, &n, m1_to_sqlx(how), handle, NULL);
 
 	if (err != NULL) {
@@ -99,7 +99,7 @@ _open_and_lock(struct meta1_backend_s *m1, const container_id_t cid,
 
 	EXTRA_ASSERT(*handle != NULL);
 	GRID_TRACE("Opened and locked [%s][%s] -> [%s][%s]",
-			base, META1_TYPE_NAME,
+			base, NAME_SRVTYPE_META1,
 			(*handle)->name.base, (*handle)->name.type);
 	return NULL;
 }

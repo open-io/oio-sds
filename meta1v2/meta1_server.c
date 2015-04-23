@@ -81,7 +81,7 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 				}
 			}
 			else { // Lost prefix managed
-				struct sqlx_name_s n = {.base=name, .type=META1_TYPE_NAME, .ns=ss->ns_name};
+				struct sqlx_name_s n = {.base=name, .type=NAME_SRVTYPE_META1, .ns=ss->ns_name};
 				err = election_exit(ss->election_manager, &n);
 				if (err) {
 					GRID_WARN("SQLX error : (%d) %s", err->code, err->message);
@@ -171,7 +171,7 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 
 	if (!n || !result)
 		return NEWERROR(CODE_INTERNAL_ERROR, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
-	if (!g_str_has_prefix(n->type, META1_TYPE_NAME))
+	if (!g_str_has_prefix(n->type, NAME_SRVTYPE_META1))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name");
 	if (!metautils_str_ishexa(n->base,4))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name");
@@ -244,7 +244,7 @@ int
 main(int argc, char ** argv)
 {
 	static struct sqlx_service_config_s cfg = {
-		"meta1", "m1v2", "el", 1, 3, META1_SCHEMA,
+		NAME_SRVTYPE_META1, "m1v2", "el/" NAME_SRVTYPE_META1, 1, 3, META1_SCHEMA,
 		_get_peers, _post_config, NULL
 	};
 	int rc = sqlite_service_main(argc, argv, &cfg);

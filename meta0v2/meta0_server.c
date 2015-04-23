@@ -107,7 +107,7 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 
 	if (!n || !result)
 		return NEWERROR(CODE_INTERNAL_ERROR, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
-	if (g_ascii_strcasecmp(n->type, META0_TYPE_NAME))
+	if (g_ascii_strcasecmp(n->type, NAME_SRVTYPE_META0))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name");
 	if (g_ascii_strcasecmp(n->base, ss->ns_name))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name, expected [%s]", ss->ns_name);
@@ -147,7 +147,7 @@ _post_config(struct sqlx_service_s *ss)
 	// Create the zookeeper poller
 	if (ss->zk_url) {
 		err = zk_srv_manager_create(ss->ns_name, ss->zk_url,
-				META0_TYPE_NAME, &m0zkmanager);
+				NAME_SRVTYPE_META0, &m0zkmanager);
 		if (err) {
 			GRID_WARN("Zk manager init failed : (%d) %s",err->code, err->message);
 			g_clear_error(&err);
@@ -186,7 +186,7 @@ int
 main(int argc, char ** argv)
 {
 	const struct sqlx_service_config_s cfg = {
-		"meta0", "m0v2", "el/meta0", 0, 0, META0_SCHEMA,
+		NAME_SRVTYPE_META0, "m0v2", "el/"NAME_SRVTYPE_META0, 0, 0, META0_SCHEMA,
 		_get_peers, _post_config, NULL
 	};
 	int rc = sqlite_service_main(argc, argv, &cfg);

@@ -139,8 +139,6 @@ gs_status_t rawx_delete (gs_chunk_t *chunk, GError **err)
 	chunk_getpath (chunk, cPath, sizeof(cPath));
 	DEBUG("about to delete %s on %s", str_ci, cPath);
 
-	gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
-
 	session = rawx_opensession (chunk, err);
 	if (!session)
 	{
@@ -197,8 +195,6 @@ gs_status_t rawx_delete (gs_chunk_t *chunk, GError **err)
 	
 	TRACE("%s deleted (ReqId:%s)", cPath, str_req_id);
 
-	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
-
 	return 1;
 error_label:
 	TRACE("could not delete %s", cPath);
@@ -206,8 +202,6 @@ error_label:
 		ne_request_destroy (request);
 	if (session)
 		ne_session_destroy (session);
-
-	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 
 	return 0;
 }
@@ -332,9 +326,7 @@ gboolean rawx_delete_v2(gpointer chunk, GError **err)
 	if (err && *err)
 		goto end;
 
-	gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 	_delete_request(host, port, cid_hex, err);
-	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 
 end:
 	g_free(host);
@@ -425,8 +417,6 @@ create_rawx_request_common(ne_request **req, ne_request_param_t *param, GError *
 	ne_print_request_header(request, "chunknb",     "%u", param->chunknb);
 	ne_print_request_header(request, "chunksize",   "%"G_GINT64_FORMAT, param->chunksize);
 	ne_print_request_header(request, "contentsize", "%"G_GINT64_FORMAT, param->contentsize);
-
-	gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 
 	/* Add request header */
 	add_req_id_header(request, str_req_id, sizeof(str_req_id)-1);
@@ -644,8 +634,6 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 	chunk_id2str (chunk, str_ci, sizeof(str_ci));
 	TRACE("about to download '%s' from '%s'", str_ci, cPath);
 
-	gscstat_tags_start(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
-
 	/*create a webdav session, a request with good headers */
 	session = rawx_opensession (chunk, err);
 	if (!session) {
@@ -728,8 +716,6 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 	ne_request_destroy (request);
 	ne_session_destroy (session);
 
-	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
-
 	return TRUE;
 
 error_label:
@@ -740,8 +726,6 @@ error_label:
 		ne_session_destroy (session);
 
 	INFO("could not download %s (%s)", cPath, str_req_id);
-
-	gscstat_tags_end(GSCSTAT_SERVICE_RAWX, GSCSTAT_TAGS_REQPROCTIME);
 
 	return FALSE;
 }
