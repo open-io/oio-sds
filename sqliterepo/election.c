@@ -2440,9 +2440,17 @@ sqlx_config_get_peers2(const struct replication_config_s *cfg, struct sqlx_name_
 			*result = NULL;
 		return NULL;
 	}
-	GError *err = cfg->get_peers(cfg->ctx, n, nocache, result);
-	if (!err)
+	gchar **peers = NULL;
+	GError *err = cfg->get_peers(cfg->ctx, n, nocache, &peers);
+	if (!err) {
+		*result = peers;
 		return NULL;
+	}
+	if (peers) {
+		g_strfreev (peers);
+		peers = NULL;
+	}
+
 	gchar msg[256];
 	g_snprintf(msg, sizeof(msg), "get_peers(%s,%s): ", n->base, n->type);
 	g_prefix_error(&err, msg);

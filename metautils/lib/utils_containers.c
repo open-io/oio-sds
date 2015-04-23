@@ -165,9 +165,7 @@ metautils_gpa_to_array(GPtrArray *orig, gboolean clean)
 {
 	if (!orig)
 		return NULL;
-	if (orig->len <= 0)
-		return g_malloc0(sizeof(void**));
-	if (NULL != orig->pdata[ orig->len - 1 ])
+	if (orig->len <= 0 || NULL != orig->pdata[ orig->len - 1 ])
 		g_ptr_array_add(orig, NULL);
 	return clean ? g_ptr_array_free(orig, FALSE) : orig->pdata;
 }

@@ -803,7 +803,6 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 {
 	GError *err = NULL;
 	gboolean local = flags & M2V2_DESTROY_LOCAL;
-	gchar **peers = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	guint counter = 0;
 
@@ -849,20 +848,22 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		}
 
 		if (!local) {
+			gchar **peers = NULL;
 			struct sqlx_name_s n = {
 				.base = hc_url_get(url, HCURL_HEXID),
 				.type = NAME_SRVTYPE_META2,
 				.ns = m2->backend.ns_name,
 			};
 			err = sqlx_config_get_peers(election_manager_get_config(
-					sqlx_repository_get_elections_manager(m2->backend.repo)),
+						sqlx_repository_get_elections_manager(m2->backend.repo)),
 					&n, &peers);
+
 			// peers may be NULL if no zookeeper URL is configured
-			if (!err && peers != NULL && g_strv_length(peers) > 0) {
+			if (!err && peers != NULL && g_strv_length(peers) > 0)
 				err = m2v2_remote_execute_DESTROY_many(peers, url, flags);
+			if (peers)
 				g_strfreev(peers);
-				peers = NULL;
-			}
+			peers = NULL;
 		}
 
 		if (!err) {

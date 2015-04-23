@@ -52,15 +52,34 @@ static GThread *th_notify = NULL;
 static struct meta2_backend_s *m2 = NULL;
 static void *zmq_ctx = NULL;
 
+static void
+_notification_manage (void *zpush, gchar *tmp)
+{
+	int rc, err;
+	if (zpush) {
+		rc = zmq_send (zpush, tmp, strlen(tmp), 0);
+		if (rc < 0) {
+			err = zmq_errno ();
+			GRID_WARN("Notification failed : container state %s: (%d) %s",
+					tmp, err, zmq_strerror(err));
+		} else {
+			GRID_DEBUG("Notified container state %s", tmp);
+		}
+	} else {
+		GRID_INFO("Container usage [%s]", tmp);
+	}
+	g_free (tmp);
+}
+
 static gpointer
 _func_notify_account (gpointer p)
 {
-	int rc, err;
 	void *zpush = NULL;
 
 	if (zmq_ctx) {
 		gchar *url =  gridcluster_get_accountagent (PSRV(p)->ns_name);
 		if (url) {
+			int rc, err;
 			zpush = zmq_socket (zmq_ctx, ZMQ_PUSH);
 			if (!zpush) {
 				err = zmq_errno ();
@@ -82,24 +101,15 @@ _func_notify_account (gpointer p)
 		}
 	}
 
+	gchar *tmp;
 	while (grid_main_is_running()) {
-		gchar *tmp = (gchar*) g_async_queue_timeout_pop (q_notify, 1000000L);
+		tmp = (gchar*) g_async_queue_timeout_pop (q_notify, 1000000L);
 		if (!tmp)
 			continue;
-		if (zpush) {
-			rc = zmq_send (zpush, tmp, strlen(tmp), 0);
-			if (rc < 0) {
-				err = zmq_errno ();
-				GRID_WARN("Notification failed : container state %s: (%d) %s",
-						tmp, err, zmq_strerror(err));
-			} else {
-				GRID_DEBUG("Notified container state %s", tmp);
-			}
-		} else {
-			GRID_INFO("Container usage [%s]", tmp);
-		}
-		g_free (tmp);
+		_notification_manage (zpush, tmp);
 	}
+	while (NULL != (tmp = g_async_queue_try_pop (q_notify)))
+		_notification_manage (zpush, tmp);
 
 	if (zpush) {
 		zmq_close (zpush);
@@ -133,20 +143,11 @@ filter_services(struct sqlx_service_s *ss,
 		meta1_service_url_clean(u);
 	}
 
-	if (matched) {
-		g_ptr_array_add(tmp, NULL);
-		return (gchar**)g_ptr_array_free(tmp, FALSE);
-	}
-	else {
-		g_ptr_array_add(tmp, NULL);
-		if (GRID_DEBUG_ENABLED()) {
-			gchar *peers = g_strjoinv(", ", (gchar**)tmp->pdata);
-			GRID_DEBUG("Peers: %s", peers);
-			g_free(peers);
-		}
-		g_strfreev((gchar**)g_ptr_array_free(tmp, FALSE));
-		return NULL;
-	}
+	gchar **out = (gchar**)metautils_gpa_to_array (tmp, TRUE);
+	if (matched)
+		return out;
+	g_strfreev (out);
+	return NULL;
 }
 
 static gchar **
@@ -208,6 +209,7 @@ retry:
 	if (nocache) {
 		hc_decache_reference_service(ss->resolver, u, n->type);
 	}
+	peers = NULL;
 	err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);
 
 	if (NULL != err) {
@@ -216,13 +218,22 @@ retry:
 		return err;
 	}
 
-	if (!(*result = filter_services_and_clean(ss, peers, seq, n->type))) {
+	gchar **out = filter_services_and_clean(ss, peers, seq, n->type);
+
+	if (!out) {
 		if (retries-- > 0) {
-			peers = NULL;
 			nocache = TRUE;
 			goto retry;
 		}
 		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not managed");
+	}
+
+	if (err) {
+		if (out)
+			g_strfreev (out);
+		*result = NULL;
+	} else {
+		*result = out;
 	}
 
 	hc_url_clean(u);

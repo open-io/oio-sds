@@ -236,6 +236,8 @@ _clear(struct sqlx_sync_s *ss)
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	_close(ss);
+	metautils_str_clean (&ss->zk_prefix);
+	metautils_str_clean (&ss->zk_url);
 	memset(ss, 0, sizeof(*ss));
 	g_free(ss);
 }
