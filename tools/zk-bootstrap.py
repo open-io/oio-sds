@@ -26,6 +26,7 @@ PREFIX='/hc'
 PREFIX_NS=PREFIX+'/ns'
 hexa = '0123456789ABCDEF'
 acl_openbar = [{'perms':zookeeper.PERM_ALL, 'scheme':'world', 'id':'anyone'}]
+SRVTYPES = ( ('meta0',0,0), ('meta1',1,3), ('meta2',2,2), ('sqlx',2,2) )
 
 def batch_split (nodes, N):
 	"""Creates batches with a common prefixes, and a maximal size of N items"""
@@ -104,9 +105,6 @@ def hash_tree (d0, w0):
 	for d in range(d0+1):
 		for x in depth(d):
 			yield '/'.join(x) 
-
-# all the service types and the default values for the ZK hash
-SRVTYPES = ( ('meta0',0,0), ('meta1',1,3), ('meta2',2,2), ('sqlx',2,2) )
 
 def namespace_tree (ns, options):
 	yield (PREFIX_NS, '')
