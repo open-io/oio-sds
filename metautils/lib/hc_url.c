@@ -23,10 +23,10 @@ License along with this library.
 
 #include <errno.h>
 #include <string.h>
-#include <glib.h>
 
-#include "./hc_url.h"
 #include "./metautils.h"
+#include "./hc_url.h"
+#include "./url.h"
 
 #define HCURL_OPTION_KEY_VERSION "version"
 #define HCURL_OPTION_KEY_SNAPSHOT "snapshot"
@@ -41,13 +41,13 @@ enum {
 struct hc_url_s
 {
 	/* primary */
-	gchar *ns;
-	gchar *refname;
+	gchar *ns; 
+	gchar *account; 
+	gchar *user;
+	gchar *type;
 	gchar *path;
 	GSList *options;
 	/* secondary */
-	gchar *pns;
-	gchar *vns;
 	gchar *whole;
 	guint8 id[32];
 	gchar hexid[65];
@@ -55,32 +55,6 @@ struct hc_url_s
 };
 
 /* ------------------------------------------------------------------------- */
-
-static const gchar * prefixes [] =
-{
-	"sds://",
-	NULL
-};
-
-static void
-_parse_ns(struct hc_url_s *url)
-{
-	gchar *dot;
-
-	if (!url->ns)
-		return;
-
-	if (!(dot = strchr(url->ns, '.')))
-		url->pns = g_strdup(url->ns);
-	else {
-		url->pns = g_strndup(url->ns, dot - url->ns);
-		url->vns = g_strdup(dot);
-	}
-
-	metautils_rstrip(url->ns, '/');
-	metautils_rstrip(url->pns, '/');
-	metautils_rstrip(url->vns, '/');
-}
 
 static void
 _options_reset (struct hc_url_s *u)
@@ -103,9 +77,9 @@ _options_get(struct hc_url_s *u, const gchar *k)
 }
 
 static void
-_add_option(struct hc_url_s *u, const gchar *option_str)
+_add_option(struct hc_url_s *u, const char *option_str)
 {
-	gchar *k, *cursor;
+	char *k, *cursor;
 	if (option_str) {
 		if (NULL != (cursor = strchr(option_str, '='))) {
 			k = g_strndup(option_str, cursor - option_str);
@@ -120,91 +94,64 @@ _add_option(struct hc_url_s *u, const gchar *option_str)
 	}
 }
 
-static void
-_parse_options(struct hc_url_s *u, const gchar *options)
-{
-	g_assert(u != NULL);
-	_options_reset(u);
-	if (!options || ! *options)
-		return;
-	gchar **strv = g_strsplit(options, "&", 0);
-	if (NULL != strv) {
-		for (gchar **p = strv; *p ;++p)
-			_add_option(u, *p);
-		g_strfreev(strv);
-	}
-}
-
 static int
-_parse_url(struct hc_url_s *url, const gchar *str)
+_parse_url(struct hc_url_s *url, const char *str)
 {
-	const gchar *ns, *refname, *path, *options;
+	struct req_uri_s ruri = {NULL, NULL, NULL, NULL};
 
-	ns = str;
-	for (const gchar **p=prefixes; *p ;++p) {
-		if (g_str_has_prefix(ns, *p)) {
-			ns += strlen(*p);
-			break;
+	if (metautils_requri_parse (str, &ruri)) { // Parse the path
+
+		gchar **path_tokens = g_strsplit (ruri.path, "/", 3);
+		if (path_tokens) {
+			if (path_tokens[0]) {
+				metautils_str_reuse (&url->ns, path_tokens[0]);
+				metautils_str_replace (&url->account, HCURL_DEFAULT_ACCOUNT);
+				if (path_tokens[1]) {
+					metautils_str_reuse (&url->user, path_tokens[1]);
+					metautils_str_replace (&url->type, HCURL_DEFAULT_TYPE);
+					if (path_tokens[2])
+						metautils_str_reuse (&url->path, path_tokens[2]);
+				}
+			}
+			g_free (path_tokens);
+		}
+
+		if (ruri.query_tokens) { // Parse the options
+			for (gchar **p=ruri.query_tokens; *p ;++p)
+				_add_option(url, *p);
 		}
 	}
 
-	ns = metautils_lstrip(ns, '/');
-	if (!*ns)
-		return 0;
-
-	refname = strchr(ns, '/');
-	if (refname)
-		refname = metautils_lstrip(refname+1, '/');
-
-	path = refname ? strchr(refname, '/') : NULL;
-	if (path) {
-		if (!*(++path))
-			path = NULL;
-	}
-
-	options = path ? strrchr(path, '?') : refname ? strrchr(refname, '?') : NULL;
-	if (options) {
-		if (!*(++options))
-			options = NULL;
-		_options_reset(url);
-		_parse_options(url, options);
-	}
-
-	if (refname) {
-		url->ns = g_strndup(ns, (refname-1)-ns);
-		if (path) {
-			url->refname = g_strndup(refname, (path-1)-refname);
-			if (options)
-				url->path = g_strndup(path, (options-1)-path);
-			else
-				url->path = g_strdup(path);
-		} else if (options) {
-			url->refname = g_strndup(refname, (options-1)-refname);
-		} else {
-			url->refname = g_strdup(refname);
-		}
-	}
-	else {
-		url->ns = g_strdup(ns);
-	}
-
-	_parse_ns(url);
-	// XXX We want trailing slashes, they are used by S3FS !
-	metautils_rstrip(url->refname, '/');
+	metautils_requri_clear (&ruri);
 	return 1;
 }
 
-static int
-_compute_id(struct hc_url_s *url)
+static void
+_clean_url (struct hc_url_s *u)
 {
-	if (!url->refname) {
+	metautils_str_clean(&u->ns);
+	metautils_str_clean(&u->account);
+	metautils_str_clean(&u->user);
+	metautils_str_clean(&u->type);
+	metautils_str_clean(&u->path);
+	metautils_str_clean(&u->whole);
+	memset (u->id, 0, sizeof(u->id));
+	memset (u->hexid, 0, sizeof(u->hexid));
+	u->flags = 0;
+	_options_reset(u);
+}
+
+static int
+_compute_id (struct hc_url_s *url)
+{
+	if (!url->ns || !url->user) {
 		errno = EINVAL;
 		return 0;
 	}
 
 	memset(url->hexid, 0, sizeof(url->hexid));
 	memset(url->id, 0, sizeof(url->id));
-	meta1_name2hash(url->id, url->ns, url->refname);
+	meta1_name2hash(url->id, url->ns, url->account, url->user);
 	buffer2str(url->id, sizeof(url->id), url->hexid, sizeof(url->hexid));
 	return 1;
 }
@@ -212,7 +159,7 @@ _compute_id(struct hc_url_s *url)
 /* ------------------------------------------------------------------------- */
 
 struct hc_url_s *
-hc_url_init(const char *url)
+hc_url_oldinit(const char *url)
 {
 	if (!url)
 		return NULL;
@@ -234,30 +181,21 @@ hc_url_clean(struct hc_url_s *u)
 {
 	if (!u)
 		return;
-
-	if (u->ns)
-		g_free(u->ns);
-	if (u->vns)
-		g_free(u->vns);
-	if (u->pns)
-		g_free(u->pns);
-	if (u->refname)
-		g_free(u->refname);
-	if (u->path)
-		g_free(u->path);
-	if (u->whole)
-		g_free(u->whole);
-
-	_options_reset(u);
-	memset(u, 0, sizeof(struct hc_url_s));
-	g_free(u);
+	_clean_url (u);
+	g_free (u);
 }
 
-#define STRDUP(Dst,Src,Field) \
-do { \
-	if (Src->Field) \
-		Dst->Field = g_strdup(Src->Field); \
-} while (0)
+void
+hc_url_cleanv (struct hc_url_s **tab)
+{
+	if (!tab)
+		return ;
+	for (struct hc_url_s **p=tab; *p ;++p)
+		hc_url_pclean (p);
+	g_free(tab);
+}
+
+#define STRDUP(Dst,Src,Field) do { if (Src->Field) Dst->Field = g_strdup(Src->Field); } while (0)
 
 struct hc_url_s *
 hc_url_dup(struct hc_url_s *u)
@@ -267,9 +205,9 @@ hc_url_dup(struct hc_url_s *u)
 
 	struct hc_url_s *result = g_memdup(u, sizeof(struct hc_url_s));
 	STRDUP(result, u, ns);
-	STRDUP(result, u, pns);
-	STRDUP(result, u, vns);
-	STRDUP(result, u, refname);
+	STRDUP(result, u, account);
+	STRDUP(result, u, user);
+	STRDUP(result, u, type);
 	STRDUP(result, u, path);
 	STRDUP(result, u, whole);
 
@@ -286,90 +224,53 @@ hc_url_dup(struct hc_url_s *u)
 struct hc_url_s*
 hc_url_set(struct hc_url_s *u, enum hc_url_field_e f, const char *v)
 {
-	if (!u) {
+	if (!u || !v || strchr(v, '/')) {
 		errno = EINVAL;
 		return NULL;
 	}
 
+	metautils_str_clean(&(u->whole));
+
 	switch (f) {
 		case HCURL_NS:
 			metautils_str_replace(&(u->ns), v);
-			metautils_str_clean(&(u->pns));
-			metautils_str_clean(&(u->vns));
-			metautils_str_clean(&(u->whole));
-			u->hexid[0] = 0;
-			_parse_ns(u);
-			return u;
-
-		case HCURL_NSPHYS:
-			metautils_str_clean(&(u->ns));
-			metautils_str_replace(&(u->pns), v);
-			u->ns = u->vns && u->pns
-				? g_strconcat(u->pns, ".", u->vns, NULL)
-				: g_strdup(u->pns);
-			metautils_str_clean(&(u->whole));
-			return u;
-
-		case HCURL_NSVIRT:
-			metautils_str_clean(&(u->ns));
-			metautils_str_replace(&(u->vns), v);
-			u->ns = u->vns && u->pns
-				? g_strconcat(u->pns, ".", u->vns, NULL)
-				: g_strdup(u->pns);
-			metautils_str_clean(&(u->whole));
 			u->hexid[0] = 0;
 			return u;
 
-		case HCURL_REFERENCE:
-			metautils_str_replace(&(u->refname), v);
-			metautils_str_clean(&(u->whole));
+		case HCURL_ACCOUNT:
+			metautils_str_replace(&(u->account), v);
+			u->hexid[0] = 0;
+			return u;
+
+		case HCURL_USER:
+			metautils_str_replace(&(u->user), v);
+			u->hexid[0] = 0;
+			return u;
+
+		case HCURL_TYPE:
+			metautils_str_replace(&(u->type), v);
 			u->hexid[0] = 0;
 			return u;
 
 		case HCURL_PATH:
 			metautils_str_replace(&(u->path), v);
-			metautils_str_clean(&(u->whole));
 			return u;
 
-		case HCURL_OPTIONS:
-			_parse_options(u, v);
-			return u;
-
-		case HCURL_SNAPORVERS:
 		case HCURL_VERSION:
 			hc_url_set_option(u, HCURL_OPTION_KEY_VERSION, v);
 			return u;
 
-		case HCURL_SNAPSHOT:
-			hc_url_set_option(u, HCURL_OPTION_KEY_SNAPSHOT, v);
-			return u;
-
 		case HCURL_WHOLE:
-			metautils_str_clean(&(u->ns));
-			metautils_str_clean(&(u->pns));
-			metautils_str_clean(&(u->vns));
-			metautils_str_clean(&(u->refname));
-			metautils_str_clean(&(u->path));
-			metautils_str_clean(&(u->whole));
-			u->hexid[0] = 0;
-			if (!_parse_url(u, v))
-				return NULL;
-			return u;
+			errno = ENOTSUP;
+			return NULL;
 
 		case HCURL_HEXID:
-			metautils_str_clean(&(u->refname));
-			metautils_str_clean(&(u->whole));
 			u->hexid[0] = 0;
-
-			if (!metautils_str_ishexa(v,64)) {
+			if (!metautils_str_ishexa(v,64) || !hex2bin(v, u->id, sizeof(u->id), NULL)) {
 				errno = EINVAL;
 				return NULL;
 			}
 			memcpy(u->hexid, v, 64);
-			if (!hex2bin(u->hexid, u->id, sizeof(u->id), NULL)) {
-				errno = EINVAL;
-				return NULL;
-			}
 			return u;
 	}
 
@@ -380,59 +281,65 @@ hc_url_set(struct hc_url_s *u, enum hc_url_field_e f, const char *v)
 int
 hc_url_has(struct hc_url_s *u, enum hc_url_field_e f)
 {
-	if (!f)
+	if (!f || !u)
 		return 0;
 
 	switch (f) {
 		case HCURL_NS:
 			return NULL != u->ns;
-		case HCURL_NSPHYS:
-			return NULL != u->pns;
-		case HCURL_NSVIRT:
-			return NULL != u->vns;
-		case HCURL_REFERENCE:
-			return NULL != u->refname;
+		case HCURL_ACCOUNT:
+			// the account has a default value
+			return TRUE;
+		case HCURL_USER:
+			return NULL != u->user;
+		case HCURL_TYPE:
+			// the type has a default value
+			return TRUE;
 		case HCURL_PATH:
 			return NULL != u->path;
-		case HCURL_OPTIONS:
-			return NULL != u->options;
 		case HCURL_VERSION:
 			return NULL != _options_get(u, HCURL_OPTION_KEY_VERSION);
-		case HCURL_SNAPSHOT:
-			return NULL != _options_get(u, HCURL_OPTION_KEY_SNAPSHOT);
-
 		case HCURL_WHOLE:
-			return u->whole || (u->ns && u->refname);
+			return TRUE;
 		case HCURL_HEXID:
-			return u->hexid[0] != '\0' || u->refname != NULL;
-		case HCURL_SNAPORVERS:
-			return hc_url_has(u, HCURL_SNAPSHOT) || hc_url_has(u, HCURL_VERSION);
+			return (u->ns && u->hexid[0]) || (u->ns && u->user);
 	}
 
 	g_assert_not_reached();
 	return 0;
 }
 
-static GString *
-_append_url(GString *gs, struct hc_url_s *u)
+int
+hc_url_has_fq_path (struct hc_url_s *u)
 {
+	return hc_url_has (u, HCURL_PATH) && hc_url_has_fq_container (u);
+}
+
+int
+hc_url_has_fq_container (struct hc_url_s *u)
+{
+	return hc_url_has (u, HCURL_NS) && hc_url_has (u, HCURL_ACCOUNT) && hc_url_has (u, HCURL_USER);
+}
+
+static GString *
+_pack_url(struct hc_url_s *u)
+{
+	GString *gs = g_string_new ("");
 	if (u->ns)
-		g_string_append(gs, u->ns);
-
-	if (hc_url_has(u, HCURL_REFERENCE)) {
-		g_string_append(gs, "/");
-		g_string_append(gs, hc_url_get(u, HCURL_REFERENCE));
+		g_string_append (gs, u->ns);
+	g_string_append_c (gs, '/');
+	if (u->account)
+		g_string_append (gs, u->account);
+	g_string_append_c (gs, '/');
+	if (u->user)
+		g_string_append (gs, u->user);
+	g_string_append_c (gs, '/');
+	if (u->type)
+		g_string_append (gs, u->type);
+	if (hc_url_has (u, HCURL_PATH)) {
+		g_string_append_c (gs, '/');
+		g_string_append   (gs, hc_url_get(u, HCURL_PATH));
 	}
-	else if (hc_url_has(u, HCURL_HEXID)) {
-		g_string_append(gs, "/");
-		g_string_append(gs, hc_url_get(u, HCURL_HEXID));
-	}
-
-	if (u->path) {
-		g_string_append(gs, "/");
-		g_string_append(gs, u->path);
-	}
-
 	return gs;
 }
 
@@ -452,38 +359,27 @@ _append_options(GString *gs, struct hc_url_s *u)
 const char*
 hc_url_get(struct hc_url_s *u, enum hc_url_field_e f)
 {
-	if (!u)
+	if (!u || !f)
 		return NULL;
 
 	switch (f) {
 		case HCURL_NS:
 			return u->ns;
-		case HCURL_NSPHYS:
-			return u->pns;
-		case HCURL_NSVIRT:
-			return u->vns;
-		case HCURL_REFERENCE:
-			return u->refname;
+		case HCURL_ACCOUNT:
+			return u->account ? u->account : HCURL_DEFAULT_ACCOUNT;
+		case HCURL_USER:
+			return u->user;
+		case HCURL_TYPE:
+			return u->type ? u->type : HCURL_DEFAULT_TYPE;
 		case HCURL_PATH:
 			return u->path;
-		case HCURL_OPTIONS:
-			return NULL;
+
 		case HCURL_VERSION:
 			return hc_url_get_option_value(u, HCURL_OPTION_KEY_VERSION);
-		case HCURL_SNAPSHOT:
-			return hc_url_get_option_value(u, HCURL_OPTION_KEY_SNAPSHOT);
 
 		case HCURL_WHOLE:
-			if (!u->whole) {
-				if (!hc_url_has(u, HCURL_NS) || (
-							!hc_url_has(u, HCURL_REFERENCE) &&
-							!hc_url_has(u, HCURL_HEXID)))
-					return NULL;
-				GString *gs = g_string_new("");
-				gs = _append_url(gs, u);
-				gs = _append_options(gs, u);
-				u->whole = g_string_free(gs, FALSE);
-			}
+			if (!u->whole)
+				u->whole = g_string_free(_append_options(_pack_url(u), u), FALSE);
 			return u->whole;
 
 		case HCURL_HEXID:
@@ -494,14 +390,6 @@ hc_url_get(struct hc_url_s *u, enum hc_url_field_e f)
 				u->hexid[sizeof(u->hexid)-1] = '\0';
 			}
 			return u->hexid;
-
-		case HCURL_SNAPORVERS:
-			if (hc_url_has(u, HCURL_SNAPSHOT))
-				return hc_url_get(u, HCURL_SNAPSHOT);
-			else if (hc_url_has(u, HCURL_VERSION))
-				return hc_url_get(u, HCURL_VERSION);
-			else
-				return NULL;
 	}
 
 	g_assert_not_reached();
@@ -515,15 +403,28 @@ hc_url_get_id(struct hc_url_s *u)
 		errno = EINVAL;
 		return NULL;
 	}
-
-	if (!u->hexid[0] && !_compute_id(u))
+	if (!u->hexid[0] && !_compute_id(u)) {
+		errno = EAGAIN;
 		return NULL;
-
+	}
 	return u->id;
 }
 
-const gchar*
-hc_url_get_option_value(struct hc_url_s *u, const gchar *k)
+void
+hc_url_set_id (struct hc_url_s *u, const guint8 *id)
+{
+	if (!u)
+		return;
+	u->hexid[0] = 0;
+	metautils_str_clean(&(u->whole));
+	if (id) {
+		memcpy (u->id, id, 32);
+		buffer2str (u->id, sizeof(u->id), u->hexid, sizeof(u->hexid));
+	}
+}
+
+const char*
+hc_url_get_option_value(struct hc_url_s *u, const char *k)
 {
 	if (!u) {
 		errno = EINVAL;
@@ -549,7 +450,7 @@ hc_url_get_option_names(struct hc_url_s *u)
 }
 
 void
-hc_url_set_option (struct hc_url_s *u,  const gchar *k, const gchar *v)
+hc_url_set_option (struct hc_url_s *u,  const char *k, const gchar *v)
 {
 	g_assert (u != NULL);
 	g_assert (k != NULL);
@@ -568,5 +469,14 @@ size_t
 hc_url_get_id_size(struct hc_url_s *u)
 {
 	return u ? sizeof(u->id) : 0;
+}
+
+void
+hc_url_set_oldns(struct hc_url_s *u, const char *ns)
+{
+	char pns[LIMIT_LENGTH_NSNAME];
+	gsize s = metautils_strlcpy_physical_ns (pns, ns, sizeof(pns));
+	hc_url_set (u, HCURL_NS, pns);
+	hc_url_set (u, HCURL_ACCOUNT, ns[s-1] ? ns+s : HCURL_DEFAULT_ACCOUNT);
 }
 

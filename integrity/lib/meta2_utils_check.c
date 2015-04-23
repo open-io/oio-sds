@@ -958,14 +958,14 @@ _init_m2v2_check(struct m2v2_check_s *check, struct hc_url_s *url,
 	if (args && args->ns_info)
 		check->ns_info = namespace_info_dup(args->ns_info);
 	else {
-		check->ns_info = get_namespace_info(hc_url_get(check->url, HCURL_NSPHYS), NULL);
+		check->ns_info = get_namespace_info(hc_url_get(check->url, HCURL_NS), NULL);
 	}
 
 	if (args && args->lbpool)
 		check->lbpool = args->lbpool;
 	else {
 		check->flags |= M2CHK_FLAG_CLEAN_LBPOOL;
-		check->lbpool = grid_lbpool_create(hc_url_get(check->url, HCURL_NSPHYS));
+		check->lbpool = grid_lbpool_create(hc_url_get(check->url, HCURL_NS));
 		grid_lbpool_reconfigure(check->lbpool, check->ns_info);
 		GError *err = gridcluster_reload_lbpool(check->lbpool);
 		if (err != NULL) {

@@ -26,8 +26,6 @@ License along with this library.
 #include "./gs_internals.h"
 #include "./hc.h"
 
-#define ERR_MISSING_SNAPSHOT_IN_URL "Missing snapshot name in URL"
-
 struct ls_utils_s {
 	char *path;
 	gint64 version;
@@ -57,11 +55,10 @@ _dl_nocache(gs_container_t *c, struct hc_url_s *url,
 
 	/*find the content*/
 	content  = gs_get_content_from_path_full(c, hc_url_get(url, HCURL_PATH),
-			hc_url_get(url, HCURL_SNAPORVERS), &filtered, &beans, &e);
+			hc_url_get(url, HCURL_VERSION), &filtered, &beans, &e);
 
 	if(NULL != content) {
-		GRID_DEBUG("Content %s found in container %s\n",
-				hc_url_get(url, HCURL_PATH), hc_url_get(url, HCURL_REFERENCE));
+		GRID_DEBUG("Content found %s\n", hc_url_get(url, HCURL_WHOLE));
 
 		ni = get_namespace_info(hc_url_get(url, HCURL_NS), &err);
 		if (!ni) {
@@ -85,7 +82,7 @@ _dl_nocache(gs_container_t *c, struct hc_url_s *url,
 	}
 
 	g_printerr("'%s' not found in '%s'\n", hc_url_get(url, HCURL_PATH),
-			hc_url_get(url, HCURL_REFERENCE));
+			hc_url_get(url, HCURL_USER));
 	return e;
 }
 
@@ -249,7 +246,7 @@ hc_create_container(gs_grid_storage_t *hc, struct hc_url_s *url,
 	gs_container_t *c = NULL;
 	struct m2v2_create_params_s params = {stgpol, versioning, FALSE};
 
-	c = gs_get_storage_container2(hc, hc_url_get(url, HCURL_REFERENCE),
+	c = gs_get_storage_container2(hc, hc_url_get(url, HCURL_USER),
 			&params, 0, &e);
 
 	if (c != NULL) {
@@ -260,7 +257,7 @@ hc_create_container(gs_grid_storage_t *hc, struct hc_url_s *url,
 			e = gs_error_new(CODE_CONTAINER_EXISTS,
 					"Failed to create container [%s]: "
 					"container already exists in namespace [%s]\n",
-					hc_url_get(url, HCURL_REFERENCE), hc_url_get(url, HCURL_NS));
+					hc_url_get(url, HCURL_USER), hc_url_get(url, HCURL_NS));
 			goto end_label;
 		} else if (err->code != CODE_CONTAINER_NOTFOUND) {
 			GSERRORCAUSE(&e, err,
@@ -273,12 +270,12 @@ hc_create_container(gs_grid_storage_t *hc, struct hc_url_s *url,
 
 	gs_error_free(e);
 	e = NULL;
-	c = gs_get_storage_container2(hc, hc_url_get(url, HCURL_REFERENCE),
+	c = gs_get_storage_container2(hc, hc_url_get(url, HCURL_USER),
 			&params, 1, &e);
 
 	if (c) {
 		GRID_DEBUG("Container [%s] created in namespace [%s].\n\n",
-				hc_url_get(url, HCURL_REFERENCE), hc_url_get(url, HCURL_NS));
+				hc_url_get(url, HCURL_USER), hc_url_get(url, HCURL_NS));
 	}
 
 end_label:
@@ -314,9 +311,9 @@ hc_upload_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *local
 	}
 	GRID_DEBUG("Local path %s found and opened\n", local_path);
 
-	if(!(c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, ac, &e))) {
+	if(!(c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, ac, &e))) {
 		g_printerr("Failed to resolve and/or create meta2 entry for reference %s\n",
-				hc_url_get(url, HCURL_REFERENCE));
+				hc_url_get(url, HCURL_USER));
 		goto end_put;
 	}
 
@@ -332,7 +329,7 @@ hc_upload_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *local
 		}
 	}
 	GRID_DEBUG("Uploaded a new version of content [%s] in container [%s]\n\n",
-			hc_url_get(url, HCURL_PATH), hc_url_get(url, HCURL_REFERENCE));
+			hc_url_get(url, HCURL_PATH), hc_url_get(url, HCURL_USER));
 
 end_put:
 
@@ -361,7 +358,7 @@ hc_func_copy_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *so
 	gs_error_t *e = NULL;
 	gs_container_t *c = NULL;
 
-	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, 0, &e);
+	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, 0, &e);
 	if(NULL != c) {
 		hc_copy_content(c, source, hc_url_get(url, HCURL_PATH), &e); 
 		gs_container_free(c);
@@ -416,13 +413,12 @@ hc_list_contents(gs_grid_storage_t *hc, struct hc_url_s *url, int output_xml, in
 {
 	gs_error_t *e = NULL;
 	gs_container_t *c = NULL;
-	const gchar *snapshot = hc_url_get(url, HCURL_SNAPORVERS);
 	struct list_content_s lc;
 
-	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, 0, &e);
+	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, 0, &e);
 
 	if (NULL != c) {
-		GRID_DEBUG("%s found\n", hc_url_get(url, HCURL_REFERENCE));
+		GRID_DEBUG("%s found\n", hc_url_get(url, HCURL_USER));
 
 		lc.nb_elts = 0;
 		lc.xml = output_xml;
@@ -435,25 +431,24 @@ hc_list_contents(gs_grid_storage_t *hc, struct hc_url_s *url, int output_xml, in
 					"<Container>\n"
 					" <Name>%s</Name>\n"
 					" <Contents>\n",
-					hc_url_get(url, HCURL_REFERENCE));
+					hc_url_get(url, HCURL_USER));
 		} else {
-			g_string_append_printf(lc.buffer, "#Listing container=[%s]\n", hc_url_get(url, HCURL_REFERENCE));
+			g_string_append_printf(lc.buffer, "#Listing container=[%s]\n", hc_url_get(url, HCURL_USER));
 		}
 
-		if (!gs_list_container_snapshot(c, NULL, _my_content_filter, &lc,
-				snapshot, &e)) {
-			g_printerr("Cannot list %s\n", hc_url_get(url, HCURL_REFERENCE));
+		if (!gs_list_container(c, NULL, _my_content_filter, &lc, &e)) {
+			g_printerr("Cannot list %s\n", hc_url_get(url, HCURL_USER));
 			g_string_free(lc.buffer, TRUE);
 		} else {
 			_sort_listed(&lc);
-			GRID_DEBUG("%s listed\n", hc_url_get(url, HCURL_REFERENCE));
+			GRID_DEBUG("%s listed\n", hc_url_get(url, HCURL_USER));
 			if(output_xml) {
 				lc.buffer = g_string_append(lc.buffer,
 					" </Contents>\n"
 					"</Container>\n");
 			} else {
 				g_string_append_printf(lc.buffer, "#Total in [%s]: %i elements\n",
-						hc_url_get(url, HCURL_REFERENCE), lc.nb_elts);
+						hc_url_get(url, HCURL_USER), lc.nb_elts);
 			}
 			*result = g_string_free(lc.buffer, FALSE);
 		}
@@ -462,7 +457,7 @@ hc_list_contents(gs_grid_storage_t *hc, struct hc_url_s *url, int output_xml, in
 		return e;
 	}
 
-	g_printerr("Cannot find %s\n", hc_url_get(url, HCURL_REFERENCE));
+	g_printerr("Cannot find %s\n", hc_url_get(url, HCURL_USER));
 	return e;
 }
 
@@ -472,18 +467,18 @@ hc_dl_content(gs_grid_storage_t *hc, struct hc_url_s *url, gs_download_info_t *d
 	gs_error_t *e = NULL;
 	gs_container_t *c = NULL;
 
-	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, 0, &e);
+	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, 0, &e);
 	if (c) {
 		if (cache) {
 			gs_download_content_by_name_full(c, hc_url_get(url, HCURL_PATH),
-					hc_url_get(url, HCURL_SNAPORVERS), stgpol, dl_info, &e);
+					hc_url_get(url, HCURL_VERSION), stgpol, dl_info, &e);
 		} else {
 			e = _dl_nocache(c, url, dl_info, stgpol);
 		}
 		gs_container_free(c);
 	} else {
 		g_printerr("Failed to resolve meta2 entry for reference %s\n",
-				hc_url_get(url, HCURL_REFERENCE));
+				hc_url_get(url, HCURL_USER));
 	}
 
 	return e;
@@ -513,7 +508,7 @@ hc_get_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *local_pa
 		if (e) {
 			g_printerr("Cannot download %s from %s (into %s)\n",
 					hc_url_get(url, HCURL_PATH),
-					hc_url_get(url, HCURL_REFERENCE),
+					hc_url_get(url, HCURL_USER),
 					local_path ? local_path : "<stdout>");
 		} else {
 			GRID_DEBUG("Download done from %s to %s\n",
@@ -555,7 +550,7 @@ hc_delete_content(gs_grid_storage_t *hc, struct hc_url_s *url)
 	gs_container_t *c = NULL;
 	gs_content_t *content = NULL;
 
-	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE),NULL, 0, &e);
+	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER),NULL, 0, &e);
 	if(NULL != c) {
 		const gchar *version = hc_url_get(url, HCURL_VERSION);
 		// First try
@@ -593,7 +588,7 @@ hc_delete_container(gs_grid_storage_t *hc, struct hc_url_s *url, int force, int 
 	// to flush by meta2, but without event generated
 	//if (flush) flags |= M2V2_DESTROY_FLUSH;
 
-	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, 0, &e);
+	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, 0, &e);
 	if(NULL != c) {
 
 		// to flush by this process, but with event generated
@@ -622,8 +617,7 @@ hc_func_set_property(gs_grid_storage_t *hc, struct hc_url_s *url,
 	gs_container_t *c = NULL;
 	gs_content_t *content = NULL;
 
-	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE),
-			NULL, 0, &e);
+	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, 0, &e);
 	if (NULL != c) {
 		if (hc_url_has(url, HCURL_PATH)) {
 			content = gs_get_content_from_path_and_version (c,
@@ -652,7 +646,7 @@ hc_func_get_content_properties(gs_grid_storage_t *hc, struct hc_url_s *url, char
 	gs_container_t *c = NULL;
 	gs_content_t *content = NULL;
 
-	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, 0, &e);
+	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, 0, &e);
 	if (!c)
 		return e;
 
@@ -677,8 +671,7 @@ hc_func_delete_property(gs_grid_storage_t *hc, struct hc_url_s *url, char **keys
 	gs_container_t *c = NULL;
 	gs_content_t *content = NULL;
 
-	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, 0,
-			&e);
+	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, 0, &e);
 	if (NULL != c) {
 		if (hc_url_has(url, HCURL_PATH)) {
 			content = gs_get_content_from_path_and_version (c,
@@ -694,132 +687,5 @@ hc_func_delete_property(gs_grid_storage_t *hc, struct hc_url_s *url, char **keys
 		gs_container_free(c);
 	}
 	return e;
-}
-
-gs_error_t *
-hc_func_list_snapshots(gs_grid_storage_t *hc, struct hc_url_s *url,
-		int output_xml, int show_info, char **result)
-{
-	gs_error_t *e = NULL;
-	gs_container_t *c = NULL;
-	struct list_content_s lc;
-	redc_snapshot_t **snapshots = NULL;
-
-	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE),
-			NULL, 0, &e);
-	if (c != NULL) {
-		lc.nb_elts = 0;
-		lc.xml = output_xml;
-		lc.show_info = show_info;
-		lc.buffer = g_string_new("");
-		lc.listed = NULL;
-
-		e = redc_list_snapshots(c, &snapshots);
-		if (e == NULL) {
-			int i = 0;
-			redc_snapshot_t *snap = snapshots[i];
-			if (output_xml) {
-				g_string_append_printf(lc.buffer,
-						"<Container>\n"
-						" <Name>%s</Name>\n"
-						" <Snapshots>\n",
-					hc_url_get(url, HCURL_REFERENCE));
-			} else {
-				g_string_append_printf(lc.buffer,
-						"#Listing snapshots of container=[%s]\n",
-						hc_url_get(url, HCURL_REFERENCE));
-			}
-			for (; snap != NULL; ++i, snap = snapshots[i]) {
-				const char *name = redc_snapshot_get_name(snap);
-				lc.nb_elts++;
-				if (lc.xml) {
-					g_string_append_printf(lc.buffer, "  <Snapshot>\n");
-					g_string_append_printf(lc.buffer, "   <Name>%s</Name>\n"
-							"  </Snapshot>\n", name);
-				} else {
-					g_string_append_printf(lc.buffer, "%s\n", name);
-				}
-			}
-			if (output_xml) {
-				g_string_append_printf(lc.buffer,
-						" </Snapshots>\n"
-						"</Container>\n");
-			} else {
-				g_string_append_printf(lc.buffer,
-						"#Total in [%s]: %i elements\n",
-						hc_url_get(url, HCURL_REFERENCE), lc.nb_elts);
-			}
-			*result = g_string_free(lc.buffer, FALSE);
-			redc_snapshot_array_clean(snapshots);
-		}
-		gs_container_free(c);
-	}
-	return e;
-}
-
-typedef gs_error_t* (*snap_func)(gs_container_t *container,
-		const char *snapshot_name, void *param);
-
-/* Generic function to avoid code duplication */
-static gs_error_t *
-_hc_func_snapshot_generic(snap_func func, gs_grid_storage_t *hc,
-		struct hc_url_s *url, void *param)
-{
-	gs_error_t *e = NULL;
-	gs_container_t *c = NULL;
-	const gchar *snap_name = hc_url_get(url, HCURL_SNAPORVERS);
-	if (snap_name == NULL) {
-		GSERRORSET(&e, ERR_MISSING_SNAPSHOT_IN_URL);
-	} else {
-		c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE),
-				NULL, 0, &e);
-		if (c != NULL) {
-			e = func(c, snap_name, param);
-			gs_container_free(c);
-		}
-	}
-	return e;
-}
-
-gs_error_t *
-hc_func_take_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url)
-{
-	gs_error_t* wrap_redc_take_snapshot(gs_container_t *c,
-			const char *snap, void *param) {
-		(void) param;
-		return redc_take_snapshot(c, snap);
-	}
-
-	return _hc_func_snapshot_generic(wrap_redc_take_snapshot, hc, url, NULL);
-}
-
-gs_error_t *
-hc_func_delete_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url)
-{
-	gs_error_t* wrap_redc_delete_snapshot(gs_container_t *c,
-			const char *snap, void *param) {
-		(void) param;
-		return redc_delete_snapshot(c, snap);
-	}
-
-	return _hc_func_snapshot_generic(wrap_redc_delete_snapshot, hc, url, NULL);
-}
-
-gs_error_t *
-hc_func_restore_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url,
-		int hard_restore)
-{
-	const char *content = hc_url_get(url, HCURL_PATH);
-	gs_error_t* wrap_redc_restore_snapshot(gs_container_t *c,
-			const char *snap, void *param) {
-		// FIXME
-		if (content != NULL)
-			return redc_restore_snapshot_alias(c, content, snap);
-		else
-			return redc_restore_snapshot(c, snap, *(int*)param);
-	}
-
-	return _hc_func_snapshot_generic(wrap_redc_restore_snapshot, hc, url,
-			&hard_restore);
 }
 

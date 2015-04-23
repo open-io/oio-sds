@@ -24,7 +24,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/event_config.h>
 #include <cluster/lib/gridcluster.h>
 
 #include <sqliterepo/sqlite_utils.h>
@@ -38,12 +37,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
+#include <meta2v2/meta2_remote.h>
 #include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2_utils_lb.h>
 #include <meta2v2/meta2_backend_internals.h>
-
-#include <meta2/remote/meta2_remote.h>
 
 #include <resolver/hc_resolver.h>
 
@@ -390,35 +388,16 @@ _check_policy(struct meta2_backend_s *m2, const gchar *polname)
 	return err;
 }
 
-metautils_notif_pool_t *
-meta2_backend_get_notifier(struct meta2_backend_s *m2)
-{
-	return event_config_repo_get_notifier(m2->backend.evt_repo);
-}
-
-struct event_config_repo_s *
-meta2_backend_get_evt_config_repo(const struct meta2_backend_s *m2)
-{
-	return m2->backend.evt_repo;
-}
-
 const gchar*
 meta2_backend_get_local_addr(struct meta2_backend_s *m2)
 {
 	return sqlx_repository_get_local_addr(m2->backend.repo);
 }
 
-struct event_config_s *
-meta2_backend_get_event_config(struct meta2_backend_s *m2)
-{
-	return event_config_repo_get(m2->backend.evt_repo);
-}
-
 GError *
 meta2_backend_init(struct meta2_backend_s **result,
 		struct sqlx_repository_s *repo, const gchar *ns,
-		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver,
-		struct event_config_repo_s *evt_repo)
+		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver)
 {
 	GError *err = NULL;
 	struct meta2_backend_s *m2 = NULL;
@@ -440,7 +419,6 @@ meta2_backend_init(struct meta2_backend_s **result,
 	m2->backend.type = NAME_SRVTYPE_META2;
 	m2->backend.repo = repo;
 	m2->backend.lb = glp;
-	m2->backend.evt_repo = evt_repo;
 	m2->policies = service_update_policies_create();
 	g_mutex_init(&m2->backend.ns_info_lock);
 	g_mutex_init(&m2->lock_transient);
@@ -649,16 +627,19 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 	}
 
 	// Complete URL with full VNS and container name
-	if (!hc_url_has(url, HCURL_REFERENCE)) {
-		gchar *ref = sqlx_admin_get_str(sq3, SQLX_ADMIN_REFERENCE);
-		gchar *full_vns = sqlx_admin_get_str(sq3, SQLX_ADMIN_NAMESPACE);
-		if (ref && full_vns) {
-			hc_url_set(url, HCURL_NS, full_vns);
-			hc_url_set(url, HCURL_REFERENCE, ref);
+	void set(gchar *k, int f) {
+		if (hc_url_has(url, f))
+			return;
+		gchar *s = sqlx_admin_get_str (sq3, k);
+		if (s) {
+			hc_url_set (url, f, s);
+			g_free (s);
 		}
-		g_free0(ref);
-		g_free0(full_vns);
 	}
+	set (SQLX_ADMIN_NAMESPACE, HCURL_NS);
+	set (SQLX_ADMIN_ACCOUNT, HCURL_ACCOUNT);
+	set (SQLX_ADMIN_USERNAME, HCURL_USER);
+	set (SQLX_ADMIN_USERTYPE, HCURL_TYPE);
 
 	*result = sq3;
 	return NULL;
@@ -997,8 +978,9 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 	append_const (gs, "event", NAME_SRVTYPE_META2 ".container.state");
 	append (gs, "ns", sqlx_admin_get_str(sq3, SQLX_ADMIN_NAMESPACE));
 	append (gs, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
-	append (gs, "reference", sqlx_admin_get_str(sq3, SQLX_ADMIN_REFERENCE));
+	append (gs, "user", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
 	append_const (gs, "type", sq3->name.type);
+
 	append_const (gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
 	append_int64 (gs, "ctime", m2db_get_ctime(sq3));
 	append_int64 (gs, "bytes-count", m2db_get_size(sq3));
@@ -1013,8 +995,8 @@ meta2_backend_add_modified_container(struct meta2_backend_s *m2b,
 		struct sqlx_sqlite3_s *sq3)
 {
 	EXTRA_ASSERT(m2b != NULL);
-	if (m2b->q_notify)
-		g_async_queue_push (m2b->q_notify, _container_state (sq3));
+	if (m2b->notify.hook)
+		m2b->notify.hook(m2b->notify.udata, _container_state (sq3));
 }
 
 GError*
@@ -1835,173 +1817,6 @@ meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct hc_url_s *url
 
 	if (pol)
 		storage_policy_clean(pol);
-	return err;
-}
-
-/* --------------- SNAPSHOTS -------------------- */
-GError*
-meta2_backend_take_snapshot(struct meta2_backend_s *m2b, struct hc_url_s *url,
-		const char *snapshot_name)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
-	struct bean_SNAPSHOTS_s *snapshot = NULL;
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
-	if (!err) {
-		GRID_INFO("Taking snapshot of '%s' with name '%s'",
-				hc_url_get(url, HCURL_REFERENCE), snapshot_name);
-		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!SNAPSHOTS_ENABLED(_maxvers(sq3, m2b))) {
-				err = NEWERROR(CODE_BAD_REQUEST,
-						"Versioning disabled, cannot take snapshot");
-			}
-			if (err == NULL) {
-				err = m2db_get_snapshot_by_name(sq3, snapshot_name, &snapshot);
-			}
-			if (err == NULL) {
-				err = NEWERROR(CODE_SNAPSHOT_EXISTS, "Snapshot '%s' already exists",
-						snapshot_name);
-				_bean_clean(snapshot);
-			} else if (err->code == CODE_SNAPSHOT_NOTFOUND) {
-				g_clear_error(&err);
-			}
-			if (err == NULL)
-				err = m2db_take_snapshot(sq3, snapshot_name, NULL, NULL);
-			if (err == NULL) {
-				m2db_increment_version(sq3);
-				GRID_INFO("Finished taking snapshot");
-			} else {
-				GRID_WARN("Got error while taking snapshot: %s", err->message);
-			}
-		}
-		err = sqlx_transaction_end(repctx, err);
-		m2b_close(sq3);
-	} else {
-		GRID_WARN("Got error when opening database: %s", err->message);
-	}
-	return err;
-}
-
-GError*
-meta2_backend_delete_snapshot(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, const char *snapshot_name)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
-	struct bean_SNAPSHOTS_s *snapshot = NULL;
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
-	if (!err) {
-		GRID_INFO("Deleting snapshot '%s' of '%s'",
-				snapshot_name, hc_url_get(url, HCURL_REFERENCE));
-		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			// Check if snapshot exists
-			err = m2db_get_snapshot_by_name(sq3, snapshot_name, &snapshot);
-			if (err == NULL)
-				err = m2db_delete_snapshot(sq3, snapshot);
-			if (err != NULL) {
-				GRID_WARN("Failed to delete snapshot '%s' of '%s'",
-						snapshot_name, hc_url_get(url, HCURL_REFERENCE));
-			} else {
-				m2db_increment_version(sq3);
-			}
-			err = sqlx_transaction_end(repctx, err);
-		}
-		m2b_close(sq3);
-		_bean_clean(snapshot);
-	} else {
-		GRID_WARN("Got error when opening database: %s", err->message);
-	}
-	return err;
-}
-
-GError*
-meta2_backend_list_snapshots(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
-			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN,
-			&sq3);
-	if (!err) {
-		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			err = m2db_get_snapshots(sq3, NULL, -1, cb, u0);
-			if (err != NULL) {
-				GRID_WARN("Failed to list snapshots: %s", err->message);
-			}
-			err = sqlx_transaction_end(repctx, err);
-		}
-		m2b_close(sq3);
-	} else {
-		GRID_WARN("Got error when opening database: %s", err->message);
-	}
-
-	return err;
-}
-
-GError*
-meta2_backend_restore_snapshot(struct meta2_backend_s *m2b,
-        struct hc_url_s *url, const gchar *snapshot_name, gboolean hard_restore)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
-	struct bean_SNAPSHOTS_s *snapshot = NULL;
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
-	if (!err) {
-		GRID_INFO("Restoring snapshot '%s' of '%s' (%s)",
-				snapshot_name, hc_url_get(url, HCURL_REFERENCE),
-				hc_url_get(url, HCURL_WHOLE));
-		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-
-			if (!SNAPSHOTS_ENABLED(_maxvers(sq3, m2b))) {
-				err = NEWERROR(CODE_BAD_REQUEST,
-						"Versioning disabled, cannot restore snapshot");
-				err = sqlx_transaction_end(repctx, err);
-				m2b_close(sq3);
-				return err;
-			}
-
-			err = m2db_get_snapshot_by_name(sq3, snapshot_name, &snapshot);
-			if (err == NULL) {
-				if (hc_url_has(url, HCURL_PATH)) {
-					err = m2db_restore_snapshot_alias(sq3, snapshot,
-							hc_url_get(url, HCURL_PATH));
-				} else {
-					err = m2db_restore_snapshot(sq3, snapshot, hard_restore);
-				}
-			}
-
-			if (err == NULL)
-				m2db_increment_version(sq3);
-
-			err = sqlx_transaction_end(repctx, err);
-		}
-		m2b_close(sq3);
-		_bean_clean(snapshot);
-		if (err != NULL) {
-			g_prefix_error(&err, "Failed to restore snapshot '%s': ",
-					snapshot_name);
-		}
-	} else {
-		GRID_WARN("Got error when opening database: %s", err->message);
-	}
-
 	return err;
 }
 

@@ -46,7 +46,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./agent.h"
 #include "./broken_workers.h"
 #include "./cpu_stat_task_worker.h"
-#include "./event_workers.h"
 #include "./gridagent.h"
 #include "./io_scheduler.h"
 #include "./io_stat_task_worker.h"
@@ -61,7 +60,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 gchar syslog_id[256] = "";
 gchar str_opt_config[1024] = "";
 GHashTable *namespaces = NULL;
-enum process_type_e agent_type = PT_REQ;
 
 gboolean gridagent_blank_undefined_srvtags = TRUE;
 
@@ -76,19 +74,6 @@ int unix_socket_backlog = UNIX_DEFAULT_BACKLOG;
 int unix_socket_mode = UNIX_DEFAULT_MODE;
 int unix_socket_uid = UNIX_DEFAULT_UID;
 int unix_socket_gid = UNIX_DEFAULT_GID;
-
-/* config for events */
-int event_file_mode = EVENTS_MODE_FILE_DEFAULT;
-int event_directory_mode = EVENTS_MODE_DIR_DEFAULT;
-gboolean event_queue_cleaning_allowed = TRUE;
-gchar path_configured_top_spool_dir[SPOOL_DIRNAME_LENGTH] = "";
-char event_enable_receive = EVENTS_RECEIVE_ENABLE_DEFAULT;
-char event_enable_manage = EVENTS_MANAGE_ENABLE_DEFAULT;
-guint max_events_actions_pending = EVENTS_MAXPENDING_ACTIONS_DEFAULT;
-guint max_events_pending = EVENTS_MAXPENDING_DEFAULT;
-
-char xattr_event_timestamp[256] = AGENT_DEFAULT_EVENT_XATTR;
-time_t event_delay = EVENTS_DELAY_INCOMING_DEFAULT;
 
 /* config for periodic tasks */
 gboolean flag_check_services = DEFAULT_SVC_CHECK;
@@ -110,20 +95,6 @@ static int flag_help = FALSE;
 static gchar ns_name[LIMIT_LENGTH_NSNAME];
 
 /* ------------------------------------------------------------------------- */
-
-static time_t
-get_config_time(namespace_data_t *ns_data, const gchar *key, time_t def)
-{
-	if (!ns_data)
-		return def;
-	return gridcluster_get_nsinfo_int64(&(ns_data->ns_info), key, def);
-}
-
-time_t
-get_event_delay(namespace_data_t *ns_data)
-{
-	return get_config_time(ns_data, GS_CONFIG_EVENT_DELAY, event_delay);
-}
 
 static void
 destroy_namespace_data(gpointer p)
@@ -169,13 +140,6 @@ create_namespace_data(const gchar * ns)
 			g_free, (GDestroyNotify) service_info_clean);
 	ns_data->down_services = g_hash_table_new_full(g_str_hash, g_str_equal,
 			g_free, (GDestroyNotify) service_info_clean);
-
-	g_snprintf(ns_data->queues.dir_incoming, sizeof(ns_data->queues.dir_incoming),
-		"%s/%s/"SUFFIX_SPOOL_INCOMING, path_configured_top_spool_dir, ns);
-	g_snprintf(ns_data->queues.dir_trash, sizeof(ns_data->queues.dir_trash),
-		"%s/%s/"SUFFIX_SPOOL_TRASH, path_configured_top_spool_dir, ns);
-	g_snprintf(ns_data->queues.dir_pending, sizeof(ns_data->queues.dir_pending),
-		"%s/%s/"SUFFIX_SPOOL_PENDING, path_configured_top_spool_dir, ns);
 
 	return ns_data;
 }
@@ -386,18 +350,9 @@ parse_configuration(const gchar *config, GError **error)
 	/* finer tuning */
 	int def = getint(SECTION_GENERAL, CS_DEFAULT_FREQ_KEY, DEFAULT_CS_UPDATE_FREQ);
 	period_get_ns = getint(SECTION_GENERAL, CS_GET_NS_PERIOD_KEY, def);
-	period_get_evtconfig = getint(SECTION_GENERAL, CS_GET_EVTCFG_PERIOD_KEY, def);
 	period_get_srvtype = getint(SECTION_GENERAL, CS_GET_SRVTYPE_PERIOD_KEY, def);
 	period_get_srvlist = getint(SECTION_GENERAL, CS_GET_SRVLIST_PERIOD_KEY, def);
 	period_push_srvlist = getint(SECTION_GENERAL, CS_PUSH_SRVLIST_PERIOD_KEY, def);
-
-	/*events configuration*/
-	event_enable_manage = getbool(SECTION_GENERAL, EVENTS_MANAGE_ENABLE_KEY, FALSE);
-	event_enable_receive = getbool(SECTION_GENERAL, EVENTS_RECEIVE_ENABLE_KEY, FALSE);
-	max_events_pending = getint(SECTION_GENERAL, EVENTS_MAXPENDING_KEY, EVENTS_MAXPENDING_DEFAULT);
-	event_delay = getint(SECTION_GENERAL, EVENTS_DELAY_INCOMING_KEY, EVENTS_DELAY_INCOMING_DEFAULT);
-	getstr(path_configured_top_spool_dir, sizeof(path_configured_top_spool_dir),
-		SECTION_GENERAL, EVENTS_SPOOL_DIR_KEY, GCLUSTER_SPOOL_DIR);
 
 	g_key_file_free(key_file);
 	key_file = NULL;
@@ -419,16 +374,10 @@ parse_configuration(const gchar *config, GError **error)
 	GRID_NOTICE("services.period_get_ns = %d", period_get_ns);
 	GRID_NOTICE("services.period_get_srvtype = %d", period_get_srvtype);
 	GRID_NOTICE("services.period_get_srvlist = %d", period_get_srvlist);
-	GRID_NOTICE("services.period_get_evtconfig = %d", period_get_evtconfig);
 	GRID_NOTICE("services.period_push_srvlist = %d", period_push_srvlist);
 	GRID_NOTICE("broken.manage streams = %s", flag_manage_broken ? "ON" : "OFF");
 	GRID_NOTICE("broken.period_push = %d", period_push_broken);
 	GRID_NOTICE("broken.period_get = %d", period_get_broken);
-	GRID_NOTICE("events.receive = %s", event_enable_receive?"ON":"OFF");
-	GRID_NOTICE("events.manage = %s", event_enable_manage?"ON":"OFF");
-	GRID_NOTICE("events.max_pending = %u", max_events_pending);
-	GRID_NOTICE("events.incoming_delay = %ld", event_delay);
-	GRID_NOTICE("events.spool_dir = %s", path_configured_top_spool_dir);
 
 	if (*user && *group && !change_user(user, group, error)) {
 		GSETERROR(error,"Failed to change user");
@@ -455,7 +404,6 @@ parse_options(int argc, char ** args, GError **error)
 		{"syslog",           1, 0, 's'},
 		{"help",             0, 0, 1},
 		{"child-req",        0, 0, 2},
-		{"child-evt",        1, 0, 3},
 		{0, 0, 0, 0}
 	};
 
@@ -478,12 +426,6 @@ parse_options(int argc, char ** args, GError **error)
 			flag_help = ~0;
 			break;
 		case 2:
-			agent_type = PT_REQ;
-			break;
-		case 3:
-			bzero(ns_name, sizeof(ns_name));
-			g_strlcpy(ns_name, optarg, sizeof(ns_name)-1);
-			agent_type = PT_EVT;
 			break;
 		case 's':
 			g_strlcpy(syslog_id, optarg, sizeof(syslog_id));
@@ -530,16 +472,7 @@ main(int argc, char **argv)
 	}
 
 	parse_namespaces();
-
-	switch (agent_type) {
-		case PT_EVT:
-			rc = main_event(ns_name);
-			break;
-		case PT_REQ:
-			rc = main_reqagent();
-			break;
-	}
-
+	rc = main_reqagent();
 	free_agent_structures();
 	return rc;
 }

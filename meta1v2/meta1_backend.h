@@ -84,262 +84,95 @@ struct hc_url_s;
 struct meta1_backend_s;
 
 /** Backend constructor.
- *
- * This creates an internal sqlx_repository_t constructor.
- *
- * @param result
- * @param ns
- * @param basedir
- * @return
- */
+ * This creates an internal sqlx_repository_t constructor. */
 struct meta1_backend_s * meta1_backend_init(const gchar *ns,
-		struct sqlx_repository_s *repo,
-		struct grid_lbpool_s *glp,
-		struct event_config_repo_s *evt_repo);
+		struct sqlx_repository_s *repo, struct grid_lbpool_s *glp);
 
 /** Returns the set of prefixes internally managed
- *
  * Please do not free the internal META1 prefixes set, this is done
- * in the meta1_backend_clean() function.
- *
- * @param m1
- * @return a pointer
- */
+ * in the meta1_backend_clean() function. */
 struct meta1_prefixes_set_s* meta1_backend_get_prefixes(
 		struct meta1_backend_s *m1);
 
 /** Returns the holder of LB update policy.
- *
  * Please do not free this internal structure, this is done
- * in the meta1_backend_clean() function.
- *
- * @param m1
- * @return a pointer
- */
+ * in the meta1_backend_clean() function. */
 struct service_update_policies_s* meta1_backend_get_svcupdate(
 		struct meta1_backend_s *m1);
 
 /** Backend destructor.
- *
- * Also cleans the SQLX repository inside.
- *
- * @param m1
- */
+ * Also cleans the SQLX repository inside. */
 void meta1_backend_clean(struct meta1_backend_s *m1);
 
 /* ------------------------------------------------------------------------- */
 
-/**
- * @param m1
- * @param vns
- * @param cname
- * @param cid
- * @return
- */
 GError* meta1_backend_create_container(struct meta1_backend_s *m1,
-		const gchar *vns, const gchar *cname, container_id_t *cid);
+		struct hc_url_s *url);
 
-/**
- * @param m1
- * @param cid
- * @param flush
- * @return
- */
 GError* meta1_backend_destroy_container(struct meta1_backend_s *m1,
-		const container_id_t cid, gboolean flush);
+		struct hc_url_s *url, gboolean flush);
 
-/**
- * @param m1
- * @param cid
- * @param result
- */
 GError* meta1_backend_info_container(struct meta1_backend_s *m1,
-		const container_id_t cid, gchar ***result);
+		struct hc_url_s *url, gchar ***result);
 
-/**
- * @param m1
- * @param cid
- * @param srvtype
- * @param result
- * @return
- */
 GError* meta1_backend_get_container_service_available(
 		struct meta1_backend_s *m1, struct hc_url_s *url,
 		const gchar *srvtype, gboolean dryrun, gchar ***result);
 
-/**
- * @param m1
- * @param cid
- * @param srvtype
- * @parem result
- * @return
- */
 GError* meta1_backend_get_container_new_service(
 		struct meta1_backend_s *m1, struct hc_url_s *url,
 		const gchar *srvtype, gboolean dryrun, gchar ***result);
 
-/**
- * @param m1
- * @param url
- * @param result
- * @return
- */
 GError *meta1_backend_get_all_services(struct meta1_backend_s *m1,
-	const container_id_t cid, gchar ***result);
+		struct hc_url_s *url, gchar ***result);
 
-/**
- * @param m1
- * @param cid
- * @param srvtype
- * @param result
- * @return
- */
 GError* meta1_backend_get_container_all_services(struct meta1_backend_s *m1,
-		const container_id_t cid, const gchar *srvtype, gchar ***result);
+		struct hc_url_s *url, const gchar *srvtype, gchar ***result);
 
-/**
- * @param m1
- * @param cid
- * @param srvtype
- * @param urlv
- * @return
- */
 GError* meta1_backend_del_container_services(struct meta1_backend_s *m1,
-		const container_id_t cid, const gchar *srvtype, gchar **urlv);
+		struct hc_url_s *url, const gchar *srvtype, gchar **urlv);
 
-/**
- * @param m1
- * @param cid
- * @param props
- * @return
- */
 GError* meta1_backend_set_container_properties(struct meta1_backend_s *m1,
-		const container_id_t cid, gchar **props);
+		struct hc_url_s *url, gchar **props);
 
-/**
- * @param m1
- * @param cid
- * @param names
- * @return
- */
 GError* meta1_backend_del_container_properties(struct meta1_backend_s *m1,
-		const container_id_t cid, gchar **names);
+		struct hc_url_s *url, gchar **names);
 
-/**
- * @param m1
- * @param cid
- * @param names
- * @param result
- * @return
- */
 GError* meta1_backend_get_container_properties(struct meta1_backend_s *m1,
-		const container_id_t cid, gchar **names, gchar ***result);
+		struct hc_url_s *url, gchar **names, gchar ***result);
 
-/**
- * @param m1
- * @param cid key member, not touched
- * @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS'
- * @return
- */
+/** @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
 GError* meta1_backend_set_service_arguments(struct meta1_backend_s *m1,
-		const container_id_t cid, const gchar *packedurl);
+		struct hc_url_s *url, const gchar *packedurl);
 
-/**
- * @param m1
- * @param cid key member, not touched
- * @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS'
- * @return
- */
+/** @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
 GError* meta1_backend_force_service(struct meta1_backend_s *m1,
-		const container_id_t cid, const gchar *packedurl);
+		struct hc_url_s *url, const gchar *packedurl);
 
-/**
- * Ugly quirk
- *
- * @param m1
- * @param cid
- * @param how
- * @param sq3
- * @return
- */
+/* Ugly quirk */
 GError* meta1_backend_open_base(struct meta1_backend_s *m1,
-		const container_id_t cid, enum m1v2_open_type_e how,
+		struct hc_url_s *url, enum m1v2_open_type_e how,
 		struct sqlx_sqlite3_s **sq3);
 
-/**
- * Returns whether the base associated to prefix was already created.
- * @param m1
- * @param prefix
- * @return
- */
-gboolean
-meta1_backend_base_already_created(struct meta1_backend_s *m1, const guint8 *prefix);
+/** Returns whether the base associated to prefix was already created. */
+gboolean meta1_backend_base_already_created(struct meta1_backend_s *m1,
+		const guint8 *prefix);
 
-/**
- * @param p
- * @param ns
- * @param ref
- */
 typedef void (*m1b_ref_hook) (gpointer p, const gchar *ns, const gchar *ref);
 
-/**
- * @param m1
- * @param cid
- * @param srvtype
- * @param url
- * @param ref_hook
- * @param ref_hook_data
- * @return
- */
 GError* meta1_backend_list_references_by_service(struct meta1_backend_s *m1,
-		const container_id_t cid, const gchar *srvtype, const gchar *url,
+		struct hc_url_s *url, const gchar *srvtype, const gchar *m1url,
 		m1b_ref_hook ref_hook, gpointer ref_hook_data);
 
-/**
- * @param m1
- * @param cid
- * @param ref_hook
- * @param ref_hook_data
- * @return
- */
-GError* meta1_backend_list_references(struct meta1_backend_s *m1,
-		const container_id_t cid,
-		m1b_ref_hook ref_hook, gpointer ref_hook_data);
-
-GError*
-meta1_backend_update_m1_policy(struct meta1_backend_s *m1, const gchar *ns, const container_id_t prefix,
-                        const container_id_t cid, const gchar *srvtype,
-                        const gchar *excludesrv, gchar *action, gboolean checkonly, gchar **result);
+GError* meta1_backend_list_references_by_prefix(struct meta1_backend_s *m1,
+		struct hc_url_s *url, m1b_ref_hook ref_hook, gpointer ref_hook_data);
 
 gchar* meta1_backend_get_ns_name(const struct meta1_backend_s *m1);
 
-struct event_config_repo_s *meta1_backend_get_evt_config_repo(const struct meta1_backend_s *m1);
-
-/**
- * Get the event configuration for a specific namespace. Will fallback
- * on parent VNS if not found.
- */
-struct event_config_s *meta1_backend_get_event_config(struct meta1_backend_s *m1);
-
-metautils_notif_pool_t *meta1_backend_get_notifier(struct meta1_backend_s *m1);
-
-/**
- * Initialize a topic and add it to the cache.
- * Not thread safe.
- *
- * @param name The name of the topic to initialize
- */
-GError *meta1_backend_prepare_notif_topic(struct meta1_backend_s *m1,
-	const gchar *topic);
-
-/**
- * Get the ip:port the current process is listening to.
- */
+/** Get the ip:port the current process is listening to. */
 const gchar* meta1_backend_get_local_addr(struct meta1_backend_s *m1);
 
-/**
- * Send a notification (if enabled) with the services linked to a container.
- */
+/** Send a notification (if enabled) with the services linked to a container. */
 GError *meta1_backend_notify_services(struct meta1_backend_s *m1,
 		struct hc_url_s *url);
 

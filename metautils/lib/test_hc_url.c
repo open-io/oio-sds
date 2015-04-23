@@ -35,71 +35,63 @@ test_configure_valid(void)
 	struct hc_url_s *url;
 
 	/* plain URL */
-	url = hc_url_init("hc://NS/REF/PATH");
+	url = hc_url_oldinit("hc://NS/REF/PATH");
 	g_assert(url != NULL);
 
 	g_assert(hc_url_has(url, HCURL_NS));
-	g_assert(hc_url_has(url, HCURL_NSPHYS));
-	g_assert(!hc_url_has(url, HCURL_NSVIRT));
-	g_assert(hc_url_has(url, HCURL_REFERENCE));
+	g_assert(!hc_url_has(url, HCURL_ACCOUNT));
+	g_assert(hc_url_has(url, HCURL_USER));
 	g_assert(hc_url_has(url, HCURL_PATH));
 
 	g_assert(!strcmp("NS", hc_url_get(url, HCURL_NS)));
-	g_assert(!strcmp("NS", hc_url_get(url, HCURL_NSPHYS)));
-	g_assert(NULL == hc_url_get(url, HCURL_NSVIRT));
-	g_assert(!strcmp("REF", hc_url_get(url, HCURL_REFERENCE)));
+	g_assert(NULL == hc_url_get(url, HCURL_ACCOUNT));
+	g_assert(!strcmp("REF", hc_url_get(url, HCURL_USER)));
 	g_assert(!strcmp("PATH", hc_url_get(url, HCURL_PATH)));
 	hc_url_clean(url);
 
 	/* partial URL */
-	url = hc_url_init("hc://NS/REF");
+	url = hc_url_oldinit("hc://NS/REF");
 	g_assert(url != NULL);
 
 	g_assert(hc_url_has(url, HCURL_NS));
-	g_assert(hc_url_has(url, HCURL_NSPHYS));
-	g_assert(!hc_url_has(url, HCURL_NSVIRT));
-	g_assert(hc_url_has(url, HCURL_REFERENCE));
+	g_assert(!hc_url_has(url, HCURL_ACCOUNT));
+	g_assert(hc_url_has(url, HCURL_USER));
 	g_assert(!hc_url_has(url, HCURL_PATH));
 
 	g_assert(!strcmp("NS", hc_url_get(url, HCURL_NS)));
-	g_assert(!strcmp("NS", hc_url_get(url, HCURL_NSPHYS)));
-	g_assert(NULL == hc_url_get(url, HCURL_NSVIRT));
-	g_assert(!strcmp("REF", hc_url_get(url, HCURL_REFERENCE)));
+	g_assert(NULL == hc_url_get(url, HCURL_ACCOUNT));
+	g_assert(!strcmp("REF", hc_url_get(url, HCURL_USER)));
 
 	hc_url_clean(url);
 
 	/* partial with trailing slashes */
-	url = hc_url_init("hc:////NS///REF///");
+	url = hc_url_oldinit("hc:////NS///REF///");
 	g_assert(url != NULL);
 
 	g_assert(hc_url_has(url, HCURL_NS));
-	g_assert(hc_url_has(url, HCURL_NSPHYS));
-	g_assert(!hc_url_has(url, HCURL_NSVIRT));
-	g_assert(hc_url_has(url, HCURL_REFERENCE));
+	g_assert(!hc_url_has(url, HCURL_ACCOUNT));
+	g_assert(hc_url_has(url, HCURL_USER));
 	g_assert(hc_url_has(url, HCURL_PATH));
 
 	g_assert(!strcmp("NS", hc_url_get(url, HCURL_NS)));
-	g_assert(!strcmp("NS", hc_url_get(url, HCURL_NSPHYS)));
-	g_assert(NULL == hc_url_get(url, HCURL_NSVIRT));
-	g_assert(!strcmp("REF", hc_url_get(url, HCURL_REFERENCE)));
+	g_assert(NULL == hc_url_get(url, HCURL_ACCOUNT));
+	g_assert(!strcmp("REF", hc_url_get(url, HCURL_USER)));
 	g_assert(!strcmp("//", hc_url_get(url, HCURL_PATH)));
 
 	hc_url_clean(url);
 
 	/* partial with trailing slashes */
-	url = hc_url_init("hc:////NS///REF///PATH");
+	url = hc_url_oldinit("hc:////NS///REF///PATH");
 	g_assert(url != NULL);
 
 	g_assert(hc_url_has(url, HCURL_NS));
-	g_assert(hc_url_has(url, HCURL_NSPHYS));
-	g_assert(!hc_url_has(url, HCURL_NSVIRT));
-	g_assert(hc_url_has(url, HCURL_REFERENCE));
+	g_assert(!hc_url_has(url, HCURL_ACCOUNT));
+	g_assert(hc_url_has(url, HCURL_USER));
 	g_assert(hc_url_has(url, HCURL_PATH));
 
 	g_assert(!strcmp("NS", hc_url_get(url, HCURL_NS)));
-	g_assert(!strcmp("NS", hc_url_get(url, HCURL_NSPHYS)));
-	g_assert(NULL == hc_url_get(url, HCURL_NSVIRT));
-	g_assert(!strcmp("REF", hc_url_get(url, HCURL_REFERENCE)));
+	g_assert(NULL == hc_url_get(url, HCURL_ACCOUNT));
+	g_assert(!strcmp("REF", hc_url_get(url, HCURL_USER)));
 	g_assert(!strcmp("//PATH", hc_url_get(url, HCURL_PATH)));
 
 	hc_url_clean(url);
@@ -111,7 +103,7 @@ test_configure_invalid(void)
 {
 	struct hc_url_s *url;
 
-	url = hc_url_init("");
+	url = hc_url_oldinit("");
 	g_assert(url == NULL);
 }
 
@@ -135,7 +127,7 @@ test_hash(void)
 	for (th=hash_data; th->url ;th++) {
 		struct hc_url_s *url;
 
-		url = hc_url_init(th->url);
+		url = hc_url_oldinit(th->url);
 		g_assert(url != NULL);
 		g_assert(NULL != hc_url_get_id(url));
 		g_assert(!g_ascii_strcasecmp(hc_url_get(url, HCURL_HEXID), th->hexa));
@@ -167,7 +159,7 @@ test_options (void)
 {
 	struct hc_url_s *url = hc_url_empty();
 	hc_url_set(url, HCURL_NS, "NS");
-	hc_url_set(url, HCURL_REFERENCE, "REF");
+	hc_url_set(url, HCURL_USER, "REF");
 	hc_url_set(url, HCURL_PATH, "PATH");
 
 	const gchar *v;

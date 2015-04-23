@@ -26,7 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <errno.h>
 
-#include <metautils/lib/metacomm.h>
+#include <metautils/lib/metautils.h>
 #include <cluster/module/module.h>
 
 #include "./agent.h"

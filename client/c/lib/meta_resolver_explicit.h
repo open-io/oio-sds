@@ -87,9 +87,9 @@ addr_info_t* resolver_direct_get_meta1 (resolver_direct_t *r, const container_id
 
 int resolver_direct_set_meta1_master (resolver_direct_t *r, const container_id_t cid, const char *master, GError **e);
 
-GSList* resolver_direct_get_meta2_once (resolver_direct_t *r, const char *ns, const container_id_t cID, GSList **exclude, GError **err);
+GSList* resolver_direct_get_meta2_once (resolver_direct_t *r, struct hc_url_s *url, GSList **exclude, GError **err);
 
-GSList* resolver_direct_get_meta2 (resolver_direct_t *r, const char *ns, const container_id_t cID, GError **err, int max_attempts);
+GSList* resolver_direct_get_meta2 (resolver_direct_t *r, struct hc_url_s *url, GError **err, int max_attempts);
 
 /** @} */
 

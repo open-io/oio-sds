@@ -47,7 +47,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cluster/lib/gridcluster.h>
 #include <grid_client.h>
 #include <rawx-lib/src/rawx.h>
-#include <meta2/remote/meta2_remote.h>
+#include <meta2v2/meta2_remote.h>
 
 #include "content_check.h"
 #include "check.h"
@@ -919,7 +919,15 @@ _check_duplicated_content_is_valid(struct meta2_ctx_s *ctx)
 	if(ctx->modified) {
 		GRID_DEBUG("Chunks modified, we need to update the content");
 		/* send chunk modification to the meta2 */
-		if(!meta2raw_remote_update_content(ctx->m2_cnx, &local_error, ctx->content, TRUE)) {
+
+		struct hc_url_s *url = hc_url_empty ();
+		hc_url_set (url, HCURL_NS, ctx->ns);
+		hc_url_set_id (url, ctx->content->container_id);
+		hc_url_set (url, HCURL_PATH, ctx->content->path);
+		gboolean rc = meta2raw_remote_update_content(ctx->m2_cnx, &local_error, url, ctx->content, TRUE);
+		hc_url_clean (url);
+
+		if(!rc) {
 			if(NULL != local_error)
 				GRID_DEBUG("Update content request failed (%d): %s", local_error->code, local_error->message);
 			/* addition failed, cannot perfom deletion */
@@ -936,7 +944,14 @@ _check_duplicated_content_is_valid(struct meta2_ctx_s *ctx)
 		GRID_DEBUG("Garbage of %d chunks to be deleted", g_slist_length(garbage));
 		ctx->content->raw_chunks = garbage;
 
-		if(!meta2raw_remote_delete_chunks(ctx->m2_cnx, &local_error, ctx->content)) {
+		struct hc_url_s *url = hc_url_empty ();
+		hc_url_set (url, HCURL_NS, ctx->ns);
+		hc_url_set_id (url, ctx->content->container_id);
+		hc_url_set (url, HCURL_PATH, ctx->content->path);
+		gboolean rc = meta2raw_remote_delete_chunks(ctx->m2_cnx, &local_error, url, ctx->content);
+		hc_url_clean (url);
+
+		if (!rc) {
 			GRID_DEBUG("Meta2 delete failed");
 			ctx->fail = TRUE;
 			goto clean_up;

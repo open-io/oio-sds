@@ -85,8 +85,8 @@ gs_get_virtual_namespace(gs_grid_storage_t *gs)
 const char*
 gs_get_full_vns(gs_grid_storage_t *gs)
 {
-	return !gs ? "(nil)" : gs->full_vns?
-			gs->full_vns : gs->physical_namespace;
+	if (!gs) return NULL;
+	return gs->full_vns ? gs->full_vns : gs->physical_namespace;
 }
 
 gs_grid_storage_t*
@@ -216,6 +216,9 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 	int attempts=NB_ATTEMPTS_RESOLVE_M1;
 	GError *gErr=NULL;
 
+	struct hc_url_s *url = fill_hcurl_from_client (gs);
+	hc_url_set (url, HCURL_USER, cname);
+
 	addr_info_t* _try (void)
 	{
 		addr_info_t *pA=NULL;
@@ -236,9 +239,7 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 			return pA;
 
 			if (has_before_create) {
-				if (meta1v2_remote_has_reference(pA, &gErr, gs_get_full_vns(gs),
-						cID, gs_grid_storage_get_to_sec(gs, GS_TO_M1_CNX),
-						gs_grid_storage_get_to_sec(gs, GS_TO_M1_OP))) {
+				if (meta1v2_remote_has_reference(pA, &gErr, url)) {
 					DEBUG("METACD reference already exists in meta1: [%s/%s]",
 							cname, str_cid);
 					return pA;
@@ -256,11 +257,7 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 				}
 				DEBUG("Creating reference in meta1: [%s/%s]", cname, str_cid);
 			}
-			if (meta1v2_remote_create_reference(pA, &gErr, gs_get_full_vns(gs),
-					cID, cname,
-					gs_grid_storage_get_to_sec(gs, GS_TO_M1_CNX),
-					gs_grid_storage_get_to_sec(gs, GS_TO_M1_OP),
-					NULL)) {
+			if (meta1v2_remote_create_reference(pA, &gErr, url)) {
 				DEBUG("METACD created reference in meta1: [%s/%s]",
 						cname, str_cid);
 			} else {
@@ -291,6 +288,7 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 		if (gErr)
 			g_error_free(gErr);
 	}
+	hc_url_clean (url);
 	return resAddr;
 }
 
@@ -303,14 +301,14 @@ gs_resolve_meta1v2 (gs_grid_storage_t *gs, const container_id_t cID, const gchar
 	return gs_resolve_meta1v2_v2(gs, cID, cname, read_only, exclude, FALSE, err);
 }
 
-addr_info_t* gs_resolve_meta1 (gs_grid_storage_t *gs,
-	container_id_t cID, GError **err)
+addr_info_t*
+gs_resolve_meta1 (gs_grid_storage_t *gs, container_id_t cID, GError **err)
 {
 	return gs_resolve_meta1v2(gs, cID, NULL, 0, NULL, err);
 }
 
-GSList* gs_resolve_meta2 (gs_grid_storage_t *gs,
-	container_id_t cID, GError **err)
+GSList*
+gs_resolve_meta2 (gs_grid_storage_t *gs, struct hc_url_s *url, GError **err)
 {
 	int attempts=NB_ATTEMPTS_RESOLVE_M2;
 	GError *gErr=NULL;
@@ -328,9 +326,7 @@ GSList* gs_resolve_meta2 (gs_grid_storage_t *gs,
 		/* between two meta2 direct resolutions, we want to
 		 * be sure a metacd has not been spawned, so only
 		 * one try is made this turn */
-		pL = resolver_direct_get_meta2_once (gs->direct_resolver,
-				gs_get_full_vns(gs), cID, exclude, &gErr);
-
+		pL = resolver_direct_get_meta2_once (gs->direct_resolver, url, exclude, &gErr);
 		if (pL)
 			return pL;
 
@@ -353,25 +349,22 @@ GSList* gs_resolve_meta2 (gs_grid_storage_t *gs,
 	if (!resList) {
 		if (err)
 			*err = gErr;
-		else if (gErr) {
+		else if (gErr)
 			g_error_free( gErr );
-		}
 	}
 
-	if(NULL != m1_exclude) {
-		g_slist_foreach(m1_exclude, addr_info_gclean, NULL);
-		g_slist_free(m1_exclude);
-	}
-
+	g_slist_free_full(m1_exclude, (GDestroyNotify) addr_info_clean);
 	return resList;
 }
 
-void gs_decache_container (gs_grid_storage_t *gs, container_id_t cID)
+void
+gs_decache_container (gs_grid_storage_t *gs, container_id_t cID)
 {
 	(void) gs, (void) cID;
 }
 
-void gs_decache_all (gs_grid_storage_t *gs)
+void
+gs_decache_all (gs_grid_storage_t *gs)
 {
 	resolver_direct_decache_all (gs->direct_resolver);
 }
@@ -440,6 +433,8 @@ gs_locate_container(gs_container_t *container, gs_error_t **gserr)
 		return NULL;
 	}
 
+	struct hc_url_s *url = fill_hcurl_from_container (container);
+
 	/* the names are already known*/
 	location->container_name = strdup(C0_NAME(container));
 	location->container_hexid = strdup(C0_IDSTR(container));
@@ -449,7 +444,7 @@ gs_locate_container(gs_container_t *container, gs_error_t **gserr)
 	location->m0_url = strdup(str_addr);
 	
 	/*resolve meta2*/
-	m2_list = gs_resolve_meta2(container->info.gs, C0_ID(container), NULL);
+	m2_list = gs_resolve_meta2(container->info.gs, url, NULL);
 	if (m2_list) {
 		addr_info_t *addr;
 		GSList *m2;
@@ -470,7 +465,7 @@ gs_locate_container(gs_container_t *container, gs_error_t **gserr)
 	}
 
 	_fill_meta1_tabs(&(location->m1_url), NULL, container->info.gs, C0_ID(container), C0_NAME(container));
-
+	hc_url_clean (url);
 	return location;
 }
 
@@ -493,6 +488,8 @@ _gs_locate_container_by_cid(gs_grid_storage_t *gs, container_id_t cid, char** ou
 
 	container_id_to_string(cid, str_cid, sizeof(str_cid));
 	location->container_hexid = strdup(str_cid);
+	struct hc_url_s *url = fill_hcurl_from_client (gs);
+	hc_url_set (url, HCURL_HEXID, location->container_hexid);
 
 	/*resolve meta0*/
 	addr_info_to_string(&(gs->direct_resolver->meta0), str_addr, sizeof(str_addr));
@@ -511,9 +508,7 @@ _gs_locate_container_by_cid(gs_grid_storage_t *gs, container_id_t cid, char** ou
 		memset(&cnx_tmp, 0x00, sizeof(cnx_tmp));
 		cnx_tmp.fd = -1;
 		memcpy(&(cnx_tmp.addr), &(m1_addr[m1_index]), sizeof(addr_info_t));
-		m1_raw = meta1_remote_get_container_by_id(&cnx_tmp, cid, &gerror_local,
-				gs_grid_storage_get_to_sec(gs, GS_TO_M1_CNX),
-				gs_grid_storage_get_to_sec(gs, GS_TO_M1_OP));
+		m1_raw = meta1_remote_get_container_by_id(&cnx_tmp, url, &gerror_local);
 		if (!m1_raw) {
 			GSERRORCAUSE(gserr, gerror_local, "Container ID=[%s] not found", str_cid);
 			g_clear_error(&gerror_local);
@@ -566,6 +561,7 @@ _gs_locate_container_by_cid(gs_grid_storage_t *gs, container_id_t cid, char** ou
 		gs_container_location_free(location);
 		location = NULL;
 	}
+	hc_url_clean (url);
 	return location;
 }
 
@@ -593,17 +589,14 @@ gs_locate_container_by_hexid_v2(gs_grid_storage_t *gs, const char *hexid, char**
 
 struct gs_container_location_s *
 gs_locate_container_by_name(gs_grid_storage_t *gs, const char *name, gs_error_t **gserr)
-
 {
-	container_id_t cid;
-
 	if (name == NULL) {
 		GSERRORSET(gserr, "No container name provided");
 		return NULL;
 	}
 	
-	meta1_name2hash(cid, gs_get_full_vns(gs), name);
-
+	container_id_t cid;
+	meta1_name2hash(cid, gs_get_namespace(gs), gs_get_virtual_namespace(gs), name);
 	return _gs_locate_container_by_cid(gs, cid, NULL, gserr);
 }
 
@@ -632,5 +625,13 @@ gs_container_location_free(struct gs_container_location_s *location)
 		free(location->container_name);
 	memset(location, 0x00, sizeof(*location));
 	free(location);
+}
+
+struct hc_url_s *
+fill_hcurl_from_client (gs_grid_storage_t *c)
+{
+	struct hc_url_s *url = hc_url_empty();
+	hc_url_set_oldns (url, gs_get_full_vns(c));
+	return url;
 }
 

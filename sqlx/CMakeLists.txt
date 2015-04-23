@@ -7,7 +7,8 @@ include_directories(BEFORE . ..
 
 include_directories(AFTER
 		${OPENSSL_INCLUDE_DIRS}
-		${ZK_INCLUDE_DIRS})
+		${ZK_INCLUDE_DIRS}
+		${ZMQ_INCLUDE_DIRS})
 
 link_directories(
 		${ZK_LIBRARY_DIRS}
@@ -15,8 +16,7 @@ link_directories(
 
 
 add_library(sqlxsrv SHARED
-		sqlx_service.c sqlx_service.h
-		sqlx_service_extras.c sqlx_service_extras.h)
+		sqlx_service.c sqlx_service.h)
 
 set_target_properties(sqlxsrv PROPERTIES SOVERSION ${ABI_VERSION})
 
@@ -24,7 +24,7 @@ target_link_libraries(sqlxsrv
 		server metautils gridcluster sqliterepo
 		hcresolve meta0remote meta1remote
 		server sqliterepo metautils gridcluster
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
+		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${ZMQ_LIBRARIES})
 
 
 add_executable(hcsqlx sqlx_client.c)

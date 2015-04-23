@@ -35,13 +35,6 @@ namespace_info_t *gcluster_get_namespace_info_full(addr_info_t *addr,
 gint gcluster_push_broken_container(addr_info_t *addr, long to,
 		GSList *container_list, GError **error);
 
-gint gcluster_v2_push_broken_container(struct metacnx_ctx_s *cnx,
-		const gchar *ns_name, const container_id_t cid, GError **error);
-
-gint gcluster_v2_push_broken_content(struct metacnx_ctx_s *cnx,
-		const gchar *ns_name, const container_id_t cid, const gchar *path,
-		GError **error);
-
 /** Tell the conscience that a rawx was fully scaned to repair these containers */
 gint gcluster_fix_broken_container(addr_info_t *addr, long to,
 		GSList *container_list, GError **error);
@@ -64,9 +57,6 @@ GSList *gcluster_get_service_types(addr_info_t *addr, long timeout,
 
 gint gcluster_push_services(addr_info_t *addr, long to,
 		GSList *services_list, gboolean lock_action, GError **error);
-
-GByteArray* gcluster_get_srvtype_event_config(addr_info_t *addr, long to,
-		gchar *name, GError **error);
 
 /** @} */
 

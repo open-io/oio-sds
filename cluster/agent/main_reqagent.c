@@ -34,7 +34,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./agent.h"
 #include "./broken_workers.h"
 #include "./cpu_stat_task_worker.h"
-#include "./event_workers.h"
 #include "./io_scheduler.h"
 #include "./io_stat_task_worker.h"
 #include "./namespace_get_task_worker.h"
@@ -154,13 +153,6 @@ main_reqagent(void)
 		}
 		INFO("Broken tasks successfully started");
 	}
-
-	/* Event tasks : config + incoming */
-	if (!agent_start_event_task_config(&error)) {
-		ERROR("Event handlers configuration task error : %s", gerror_get_message(error));
-		goto error_label;
-	}
-	INFO("Events tasks successfully started");
 
 	launch_io_scheduler();
 	rc = 0;

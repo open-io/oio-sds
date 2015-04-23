@@ -311,7 +311,6 @@ pkg_check_modules(GAMIN REQUIRED gamin)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0 gthread-2.0 gmodule-2.0)
 pkg_check_modules(LIBEVENT REQUIRED libevent)
 pkg_check_modules(NEON REQUIRED neon)
-pkg_check_modules(RDKAFKA rdkafka)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 pkg_check_modules(ZMQ libzmq>=4.0.0)
 pkg_search_module(JSONC json json-c)
@@ -331,7 +330,6 @@ option_or_system(NETSNMP netsnmp
 		net-snmp/agent/net-snmp-agent-includes.h
 		net-snmp/net-snmp-includes.h
 		net-snmp/net-snmp-config.h)
-option_or_system(RDKAFKA rdkafka librdkafka/rdkafka.h)
 option_or_system(ZK zookeeper_mt zookeeper.h)
 option_or_system(ZLIB z zlib.h)
 option_or_system(ZMQ zmq zmq.h zmq_utils.h)
@@ -346,7 +344,7 @@ set(ASN1C_EXE_OPTS "-fwide-types")
 
 # Check every required module is present
 check_found("APR" "APACHE2" "ASN1C" "ATTR" "CURL" "DB" "DBUS" "EXPAT" "GAMIN"
-		"GLIB2" "JSONC" "LIBEVENT" "LIBRAIN" "LZO" "NEON" "NETSNMP" "RDKAFKA"
+		"GLIB2" "JSONC" "LIBEVENT" "LIBRAIN" "LZO" "NEON" "NETSNMP"
 		"SQLITE3" "ZMQ" "ZK" "PYTHONINTERP")
 
 if (DEFINED APACHE2_MODDIR)
@@ -379,7 +377,6 @@ add_subdirectory(./client/c/lib)
 add_subdirectory(./client/c/tools)
 add_subdirectory(./cluster/agent)
 add_subdirectory(./cluster/conscience)
-add_subdirectory(./cluster/events)
 add_subdirectory(./cluster/lib)
 add_subdirectory(./cluster/module)
 add_subdirectory(./cluster/remote)
@@ -398,10 +395,8 @@ add_subdirectory(./integrity/lib)
 add_subdirectory(./integrity/tools)
 add_subdirectory(./meta0v2)
 add_subdirectory(./meta1v2)
-add_subdirectory(./meta2/remote)
 add_subdirectory(./meta2v2)
 add_subdirectory(./metautils/lib)
-add_subdirectory(./polix)
 add_subdirectory(./proxy)
 add_subdirectory(./rainx)
 add_subdirectory(./rawx-apache2/src)

@@ -30,7 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 #include <meta1v2/meta1_remote.h>
-#include <meta2/remote/meta2_remote.h>
+#include <meta2v2/meta2_remote.h>
 #include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
@@ -487,8 +487,12 @@ _create_container(struct meta2_ctx_s *ctx, container_id_t *p_cid, GError **p_err
 		goto clean_up;
 	}
 
-	gboolean rc = meta1_remote_create_container_v2(p_m1_addr, META1_TIMEOUT,
-			p_err, ctx->loc->container_name, ctx->ns, *p_cid, 0, 0, NULL);
+	struct hc_url_s *u = hc_url_empty ();
+	hc_url_set (u, HCURL_NS, ctx->ns);
+	hc_url_set (u, HCURL_USER, ctx->loc->container_name);
+	gboolean rc = meta1_remote_create_container_v2(p_m1_addr, p_err, u);
+	hc_url_clean (u);
+
 	if (!rc && p_err && *p_err)
 		goto clean_up;
 
@@ -529,7 +533,7 @@ _extract_date_from_sysmd(const guint8 *mdsys, gsize mdsys_len)
 }
 
 static gboolean
-_ensure_container_created_in_m2(struct meta2_ctx_s *ctx, container_id_t *p_cid,
+_ensure_container_created_in_m2(struct meta2_ctx_s *ctx,
 		gchar *stgpol, check_result_t *cres, GError **p_err)
 {
 	addr_info_t m2;
@@ -540,9 +544,13 @@ _ensure_container_created_in_m2(struct meta2_ctx_s *ctx, container_id_t *p_cid,
 
 	// suppose container does not exist: create it
 	grid_string_to_addrinfo(ctx->loc->m2_url[0], NULL, &m2);
-	ret = meta2_remote_container_create_v3 (&m2, META2_TIMEOUT,
-			ctx->ns, ctx->loc->container_name,
-			*p_cid, stgpol, &local_error);
+	do {
+		struct hc_url_s *url = hc_url_empty ();
+		hc_url_set (url, HCURL_NS, ctx->ns);
+		hc_url_set (url, HCURL_USER, ctx->loc->container_name);
+		ret = meta2_remote_container_create_v3 (&m2, META2_TIMEOUT, &local_error, url, stgpol);
+		hc_url_clean (url);
+	} while (0);
 
 	if (ret && !local_error) {
 		check_result_append_msg(cres, "Created container [%s]",
@@ -589,8 +597,7 @@ _ensure_container_created(struct meta2_ctx_s *ctx, check_info_t *check_info,
 		check_result_append_msg(cres, "Created container [%s]",
 				ct_info->container_id);
 	} else {
-		if (!_ensure_container_created_in_m2(ctx, &cid,
-				ct_info->storage_policy, cres, p_err))
+		if (!_ensure_container_created_in_m2(ctx, ct_info->storage_policy, cres, p_err))
 			goto clean_up;
 	}
 
@@ -729,7 +736,14 @@ _add_missing_chunk(struct meta2_ctx_s *ctx, check_info_t *check_info,
 				check_info->ct_info->container_id,
 				check_info->ct_info->path);
 	} else {
-		if (!meta2raw_remote_update_content(ctx->m2_cnx, p_err, ctx->content, TRUE)) {
+		struct hc_url_s *url = hc_url_empty ();
+		hc_url_set (url, HCURL_NS, check_info->ns_name);
+		hc_url_set_id (url, ctx->content->container_id);
+		hc_url_set (url, HCURL_PATH, ctx->content->path);
+ 		gboolean rc = meta2raw_remote_update_content(ctx->m2_cnx, p_err, url, ctx->content, TRUE);
+		hc_url_clean (url);
+
+		if (!rc) {
 			GRID_DEBUG("Error updating chunk [%s] in content [%s]",
 					check_info->ck_info->id, check_info->ct_info->path);
 			goto clean_up;
@@ -831,19 +845,27 @@ _content_remove(struct meta2_ctx_s *ctx, check_info_t *check_info,
 	grid_string_to_addrinfo(ctx->loc->m2_url[0], NULL, &m2);
 
 	//remove content
-	if (!meta2_remote_content_remove(&m2, META2_TIMEOUT, &local_error, cid, content_path)) {
+	struct hc_url_s *url = hc_url_empty ();
+	hc_url_set (url, HCURL_NS, ctx->ns);
+	hc_url_set (url, HCURL_USER, ctx->loc->container_name);
+	hc_url_set (url, HCURL_PATH, ctx->content->path);
+
+	if (!meta2_remote_content_remove(&m2, META2_TIMEOUT, &local_error, url)) {
 		if (!local_error)
 			GSETERROR(&local_error, "content_remove error");
+		hc_url_clean (url);
 		return local_error;
 	}
 
 	// content commit ?
-	if (!meta2_remote_content_commit(&m2, META2_TIMEOUT, &local_error, cid, content_path)) {
+	if (!meta2_remote_content_commit(&m2, META2_TIMEOUT, &local_error, url)) {
 		if (!local_error)
 			GSETERROR(&local_error, "content_remove, commit error");
+		hc_url_clean (url);
 		return local_error;
 	}
 
+	hc_url_clean (url);
 	return NULL;
 }
 
@@ -879,22 +901,32 @@ gboolean
 replace_chunk(struct meta2_ctx_s *ctx, struct meta2_raw_chunk_s *rc,
 		check_info_t *check_info, GError **p_err)
 {
-	if (!meta2raw_remote_delete_chunks(ctx->m2_cnx, p_err, ctx->content)) {
+	struct hc_url_s *url = hc_url_empty ();
+	hc_url_set (url, HCURL_NS, ctx->ns);
+	hc_url_set (url, HCURL_USER, ctx->loc->container_name);
+	hc_url_set (url, HCURL_PATH, ctx->content->path);
+
+	if (!meta2raw_remote_delete_chunks(ctx->m2_cnx, p_err, url, ctx->content)) {
 		GRID_DEBUG("Error deleting chunks in content [%s]",
 				check_info->ct_info->path);
+		hc_url_clean (url);
 		return FALSE;
 	}
 	if (!_fill_raw_chunk_with_info(rc, check_info, p_err)) {
 		GRID_DEBUG("Error updating raw chunks in content [%s]",
 				check_info->ct_info->path);
+		hc_url_clean (url);
 		return FALSE;
 	}
-	if (!meta2raw_remote_update_content(ctx->m2_cnx, p_err,
+	if (!meta2raw_remote_update_content(ctx->m2_cnx, p_err, url,
 			ctx->content, TRUE)) {
 		GRID_DEBUG("Error fixing chunk [%s] in content [%s]",
 				check_info->ck_info->id, check_info->ct_info->path);
+		hc_url_clean (url);
 		return FALSE;
 	}
+
+	hc_url_clean (url);
 	return TRUE;
 }
 

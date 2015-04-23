@@ -1131,7 +1131,7 @@ check_and_repair_content(struct hc_url_s *url,
 	struct check_args_s args;
 	struct policy_check_s policy_check;
 
-	err = _check_args_init(&args, hc_url_get(url, HCURL_NSPHYS));
+	err = _check_args_init(&args, hc_url_get(url, HCURL_NS));
 	if (!err) {
 		policy_check.flags = flags;
 		policy_check.url = url;
@@ -1186,7 +1186,7 @@ check_and_repair_content2(const gchar *namespace, const gchar *container_id,
 	hc_url_set(url, HCURL_HEXID, container_id);
 	hc_url_set(url, HCURL_PATH, content_name);
 	if (content_version != NULL)
-		hc_url_set(url, HCURL_SNAPORVERS, content_version);
+		hc_url_set(url, HCURL_VERSION, content_version);
 
 	retval = check_and_repair_content(url, flags, error);
 

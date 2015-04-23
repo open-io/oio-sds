@@ -49,7 +49,7 @@ _meta2_filter_check_ns_name(struct gridd_filter_ctx_s *ctx,
 	(void) reply;
 	TRACE_FILTER();
 	const struct meta2_backend_s *backend = meta2_filter_ctx_get_backend(ctx);
-	const char *req_ns = hc_url_get(meta2_filter_ctx_get_url(ctx), HCURL_NSPHYS);
+	const char *req_ns = hc_url_get(meta2_filter_ctx_get_url(ctx), HCURL_NS);
 
 	if (!backend || !backend->backend.ns_name[0]) {
 		GRID_DEBUG("Missing information for namespace checking");
@@ -136,46 +136,6 @@ meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 	(void) ctx;
 	(void) reply;
 	TRACE_FILTER();
-	return FILTER_OK;
-}
-
-int
-meta2_filter_check_snapshot_name(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	const gchar *snapshot_name = NULL;
-
-	TRACE_FILTER();
-
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	if (!hc_url_has(url, HCURL_SNAPSHOT)) {
-		if (!hc_url_has(url, HCURL_VERSION)) {
-			meta2_filter_ctx_set_error(ctx,
-					NEWERROR(CODE_BAD_REQUEST,
-						"Missing snapshot URL parameter: %s",
-						hc_url_get(url, HCURL_WHOLE)));
-			return FILTER_KO;
-		} else {
-			// Take snapshot name from version
-			hc_url_set(url, HCURL_SNAPSHOT, hc_url_get(url, HCURL_VERSION));
-		}
-	}
-
-	snapshot_name = hc_url_get(url, HCURL_SNAPSHOT);
-	if (strlen(snapshot_name) <= 0) {
-		meta2_filter_ctx_set_error(ctx,
-				NEWERROR(CODE_BAD_REQUEST, "Snapshot name is empty"));
-		return FILTER_KO;
-	} else if (snapshot_name[0] >= '0' && snapshot_name[0] <= '9') {
-		// snapshot names should not start with digits
-		meta2_filter_ctx_set_error(ctx,
-				NEWERROR(CODE_BAD_REQUEST, "Invalid snapshot name: '%s' (%s)",
-					hc_url_get(url, HCURL_SNAPSHOT),
-					"must not start with digits"));
-		return FILTER_KO;
-	}
-
 	return FILTER_OK;
 }
 

@@ -337,15 +337,14 @@ _resolve_meta1(struct hc_resolver_s *r, struct hc_url_s *u, gchar ***result)
 	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(u, HCURL_WHOLE));
 
 	hk = hashstr_printf("meta1|%s|%.4s",
-			hc_url_get(u, HCURL_NSPHYS),
-			hc_url_get(u, HCURL_HEXID));
+			hc_url_get(u, HCURL_NS), hc_url_get(u, HCURL_HEXID));
 
 	/* Try to hit the cache */
 	if (!(*result = hc_resolver_get_cached(r, r->csm0.cache, hk))) {
 		/* get a meta0, then store it in the cache */
 		gchar **m0urlv = NULL;
 
-		err = _resolve_meta0(r, hc_url_get(u, HCURL_NSPHYS), &m0urlv);
+		err = _resolve_meta0(r, hc_url_get(u, HCURL_NS), &m0urlv);
 		if (err != NULL)
 			g_prefix_error(&err, "M0 resolution error: ");
 		else {
@@ -372,10 +371,7 @@ _resolve_service_through_one_m1(const gchar *m1, struct hc_url_s *u,
 	GRID_TRACE2("%s(%s,%s,%s)", __FUNCTION__, m1, hc_url_get(u, HCURL_WHOLE), s);
 	meta1_strurl_get_address(m1, &ai);
 
-	*result = meta1v2_remote_list_reference_services(&ai, &err,
-			hc_url_get(u, HCURL_NS), hc_url_get_id(u), s,
-			_timeout(&rc_resolver_timeout_m1, 30.0),
-			_timeout(&rc_resolver_timeout_m1, 30.0));
+	*result = meta1v2_remote_list_reference_services(&ai, &err, u, s);
 	g_assert((err!=NULL) ^ (*result!=NULL));
 
 	return err;
@@ -498,7 +494,7 @@ hc_resolve_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
 		return NEWERROR(CODE_BAD_REQUEST, "Incomplete URL [%s]", hc_url_get(url, HCURL_WHOLE));
 
 	hk = hashstr_printf("%s|%s|%s", srvtype,
-			hc_url_get(url, HCURL_NSPHYS),
+			hc_url_get(url, HCURL_NS),
 			hc_url_get(url, HCURL_HEXID));
 	err = _resolve_reference_service(r, hk, url, srvtype, result);
 	g_free(hk);
@@ -518,11 +514,11 @@ hc_decache_reference(struct hc_resolver_s *r, struct hc_url_s *url)
 	if (r->flags & HC_RESOLVER_NOCACHE)
 		return;
 
-	hk = hashstr_printf("meta0|%s", hc_url_get(url, HCURL_NSPHYS));
+	hk = hashstr_printf("meta0|%s", hc_url_get(url, HCURL_NS));
 	hc_resolver_forget(r, r->csm0.cache, hk);
 	g_free(hk);
 
-	hk = hashstr_printf("meta1|%s|%.4s", hc_url_get(url, HCURL_NSPHYS),
+	hk = hashstr_printf("meta1|%s|%.4s", hc_url_get(url, HCURL_NS),
 			hc_url_get(url, HCURL_HEXID));
 	hc_resolver_forget(r, r->csm0.cache, hk);
 	g_free(hk);
@@ -543,8 +539,7 @@ hc_decache_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
 		return;
 
 	hk = hashstr_printf("%s|%s|%s", srvtype,
-			hc_url_get(url, HCURL_NSPHYS),
-			hc_url_get(url, HCURL_HEXID));
+			hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_HEXID));
 	hc_resolver_forget(r, r->services.cache, hk);
 	g_free(hk);
 }

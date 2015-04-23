@@ -33,7 +33,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metacomm.h>
 #include <cluster/lib/gridcluster.h>
 #include <rawx-lib/src/rawx.h>
-#include <meta2/remote/meta2_remote.h>
+#include <meta2v2/meta2_remote.h>
 
 #include "./repair.h"
 #include "../lib/chunk_db.h"
@@ -152,11 +152,17 @@ meta2_repair_from_raw_content(struct meta2_raw_content_s *raw,
 	/* Update content only if we have the chunk with position 0 */
 	gboolean local_rc = FALSE;
 	GError *local_error = NULL;
+
 	/* Get chunk */
+	struct hc_url_s *url = hc_url_empty ();
+	hc_url_set (url, HCURL_NS, gs_get_full_vns(gs_client));
+	hc_url_set (url, HCURL_USER, container_name);
 	if (raw->raw_chunks != NULL && raw->raw_chunks->data != NULL && ((struct meta2_raw_chunk_s*)raw->raw_chunks->data)->position == 0)
-		local_rc = meta2raw_remote_update_content(&ctx, &local_error, raw, FALSE);
+		local_rc = meta2raw_remote_update_content(&ctx, &local_error, url, raw, FALSE);
 	else
-		local_rc = meta2raw_remote_update_chunks(&ctx, &local_error, raw, FALSE, NULL);
+		local_rc = meta2raw_remote_update_chunks(&ctx, &local_error, url, raw, FALSE, NULL);
+	hc_url_clean (url);
+
 	if (local_rc == FALSE) {
 		switch (gerror_get_code(local_error)) {
 			case CODE_CONTENT_EXISTS:

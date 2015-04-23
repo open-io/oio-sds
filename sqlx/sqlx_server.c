@@ -123,6 +123,8 @@ _post_config(struct sqlx_service_s *ss)
 {
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,
 			sqlx_sql_gridd_get_requests(), ss->repository);
+
+	// TODO maybe enable notifications
 	return TRUE;
 }
 

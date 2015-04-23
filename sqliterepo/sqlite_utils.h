@@ -51,8 +51,12 @@ License along with this library.
 #define SQLX_ADMIN_ACCOUNT SQLX_ADMIN_PREFIX_SYS "account"
 #endif
 
-#ifndef SQLX_ADMIN_REFERENCE
-#define SQLX_ADMIN_REFERENCE SQLX_ADMIN_PREFIX_SYS "reference"
+#ifndef SQLX_ADMIN_USERNAME
+#define SQLX_ADMIN_USERNAME SQLX_ADMIN_PREFIX_SYS "user.name"
+#endif
+
+#ifndef SQLX_ADMIN_USERTYPE
+#define SQLX_ADMIN_USERTYPE SQLX_ADMIN_PREFIX_SYS "user.type"
 #endif
 
 #ifndef SQLX_ADMIN_BASENAME

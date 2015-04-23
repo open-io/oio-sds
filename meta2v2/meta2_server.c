@@ -42,82 +42,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_backend_internals.h>
 #include <meta2v2/meta2_events.h>
 #include <sqlx/sqlx_service.h>
-#include <sqlx/sqlx_service_extras.h>
-
-#include <zmq.h>
-
-static GAsyncQueue *q_notify = NULL;
-static GThread *th_notify = NULL;
 
 static struct meta2_backend_s *m2 = NULL;
-static void *zmq_ctx = NULL;
-
-static void
-_notification_manage (void *zpush, gchar *tmp)
-{
-	int rc, err;
-	if (zpush) {
-		rc = zmq_send (zpush, tmp, strlen(tmp), 0);
-		if (rc < 0) {
-			err = zmq_errno ();
-			GRID_WARN("Notification failed : container state %s: (%d) %s",
-					tmp, err, zmq_strerror(err));
-		} else {
-			GRID_DEBUG("Notified container state %s", tmp);
-		}
-	} else {
-		GRID_INFO("Container usage [%s]", tmp);
-	}
-	g_free (tmp);
-}
-
-static gpointer
-_func_notify_account (gpointer p)
-{
-	void *zpush = NULL;
-
-	if (zmq_ctx) {
-		gchar *url =  gridcluster_get_accountagent (PSRV(p)->ns_name);
-		if (url) {
-			int rc, err;
-			zpush = zmq_socket (zmq_ctx, ZMQ_PUSH);
-			if (!zpush) {
-				err = zmq_errno ();
-				GRID_WARN("ZMQ socket creation error : (%d) %s",
-						err, zmq_strerror(err));
-			} else {
-				if (0 > (rc = zmq_connect (zpush, url))) {
-					err = zmq_errno ();
-					GRID_WARN("ZMQ connection error (account-agent) : (%d) %s",
-							err, zmq_strerror (err));
-					zmq_close (zpush);
-					zpush = NULL;
-				}
-
-				int opt = 1000;
-				zmq_setsockopt (zpush, ZMQ_LINGER, &opt, sizeof(opt));
-			}
-			g_free (url);
-		}
-	}
-
-	gchar *tmp;
-	while (grid_main_is_running()) {
-		tmp = (gchar*) g_async_queue_timeout_pop (q_notify, 1000000L);
-		if (!tmp)
-			continue;
-		_notification_manage (zpush, tmp);
-	}
-	while (NULL != (tmp = g_async_queue_try_pop (q_notify)))
-		_notification_manage (zpush, tmp);
-
-	if (zpush) {
-		zmq_close (zpush);
-		zpush = NULL;
-	}
-
-	return p;
-}
 
 static void
 _task_reconfigure_m2(gpointer p)
@@ -197,11 +123,10 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 
 	gint retries = 1;
 	gint64 seq = 1;
-	struct hc_url_s *u = NULL;
 	gchar **peers = NULL;
 	GError *err = NULL;
 
-	u = _init_hc_url(ss, n, &seq);
+	struct hc_url_s *u = _init_hc_url(ss, n, &seq);
 	if (!u)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name [%s]", n->base);
 
@@ -264,7 +189,6 @@ _post_config(struct sqlx_service_s *ss)
 {
 	GError *err = NULL;
 
-	err = sqlx_service_extras_init(ss);
 	if (err != NULL) {
 		GRID_WARN("%s", err->message);
 		g_clear_error(&err);
@@ -272,8 +196,7 @@ _post_config(struct sqlx_service_s *ss)
 	}
 
 	// prepare a meta2 backend
-	err = meta2_backend_init(&m2, ss->repository, ss->ns_name, ss->extras->lb,
-			ss->resolver, ss->extras->evt_repo);
+	err = meta2_backend_init(&m2, ss->repository, ss->ns_name, ss->lb, ss->resolver);
 	if (err) {
 		GRID_WARN("META2 backend init failure: (%d) %s", err->code, err->message);
 		g_clear_error(&err);
@@ -291,23 +214,13 @@ _post_config(struct sqlx_service_s *ss)
 
 	// Register few meta2 tasks
 	grid_task_queue_register(ss->gtq_reload, 5,
-			(GDestroyNotify)sqlx_task_reload_event_config, NULL, ss);
-	grid_task_queue_register(ss->gtq_reload, 5,
 			_task_reconfigure_m2, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 10,
 			(GDestroyNotify)sqlx_task_reload_lb, NULL, ss);
 
-	q_notify = g_async_queue_new();
-	th_notify = g_thread_try_new("notifier", _func_notify_account, ss, &err);
-	if (!th_notify) {
-		GRID_WARN("META2 notifier thread start failure: (%d) %s",
-				gerror_get_code(err), gerror_get_message(err));
-		g_clear_error(&err);
-		return FALSE;
-	}
-	m2->q_notify = q_notify;
-
-	return TRUE;
+	m2->notify.udata = ss;
+	m2->notify.hook = sqlx_notify;
+	return sqlx_enable_notifier (ss);
 }
 
 int
@@ -318,18 +231,9 @@ main(int argc, char **argv)
 		_get_peers, _post_config, NULL
 	};
 
-	zmq_ctx = zmq_init (1);
 	int rc = sqlite_service_main (argc, argv, &cfg);
 	if (m2)
 		meta2_backend_clean (m2);
-	if (th_notify)
-		g_thread_join (th_notify);
-	if (q_notify)
-		g_async_queue_unref (q_notify);
-	if (zmq_ctx) {
-		zmq_term (zmq_ctx);
-		zmq_ctx = NULL;
-	}
 	return rc;
 }
 

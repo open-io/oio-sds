@@ -42,23 +42,21 @@ struct transient_s
 struct meta2_backend_s
 {
 	struct meta_backend_common_s backend;
-
 	struct service_update_policies_s *policies;
+	struct hc_resolver_s *resolver;
 
 	// TODO remove this as soon as the C SDK has be refactored.
 	GMutex lock_transient;
 	// TODO remove this as soon as the C SDK has be refactored.
 	GHashTable *transient;
 
-	// Not owned by the backend.
-	GAsyncQueue *q_notify;
-	
-	// Not owned by the backend
-	struct hc_resolver_s *resolver;
+	struct { // Not owned, not to be freed
+		gpointer udata;
+		GError* (*hook) (gpointer udata, gchar *msg);
+	} notify;
 
 	// Trigger pre-check on alias upon a BEANS generation request
 	gboolean flag_precheck_on_generate;
-
 };
 
 struct transient_element_s

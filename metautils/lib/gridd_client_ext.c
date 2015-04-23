@@ -31,17 +31,7 @@ License along with this library.
 #include <poll.h>
 #include <sys/types.h>
 
-#include "metautils_macros.h"
-
-#include <glib.h>
-
-#include "./metacomm.h"
-#include "./metautils_hashstr.h"
-#include "./metautils_resolv.h"
-#include "./metautils_internals.h"
-#include "./metautils_syscall.h"
-#include "./gridd_client_ext.h"
-#include "./gridd_client.h"
+#include "metautils.h"
 
 struct gridd_client_s *
 gridd_client_create_idle(const gchar *target)

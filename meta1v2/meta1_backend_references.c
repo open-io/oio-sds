@@ -40,8 +40,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_backend_internals.h"
 
 static GError*
-__create_container(struct sqlx_sqlite3_s *sq3, const gchar *vns,
-		const gchar *cname, const container_id_t cid)
+__create_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 {
 	static const gchar *sql = "INSERT INTO containers "
 		"('cid','vns','cname') VALUES (?,?,?)";
@@ -63,9 +62,9 @@ __create_container(struct sqlx_sqlite3_s *sq3, const gchar *vns,
 	if (rc != SQLITE_OK)
 		err = M1_SQLITE_GERROR(sq3->db, rc);
 	else {
-		(void) sqlite3_bind_blob(stmt, 1, cid, sizeof(container_id_t), NULL);
-		(void) sqlite3_bind_text(stmt, 2, vns, -1, NULL);
-		(void) sqlite3_bind_text(stmt, 3, cname, -1, NULL);
+		(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
+		(void) sqlite3_bind_text(stmt, 2, hc_url_get(url, HCURL_ACCOUNT), -1, NULL);
+		(void) sqlite3_bind_text(stmt, 3, hc_url_get(url, HCURL_USER), -1, NULL);
 
 		/* Run the results */
 		do { rc = sqlite3_step(stmt); } while (rc == SQLITE_ROW);
@@ -88,7 +87,7 @@ __create_container(struct sqlx_sqlite3_s *sq3, const gchar *vns,
 }
 
 static GError*
-__count_services(struct sqlx_sqlite3_s *sq3, const container_id_t cid, guint *count)
+__count_services(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, guint *count)
 {
 	gint rc;
 	guint _count = 0;
@@ -99,7 +98,7 @@ __count_services(struct sqlx_sqlite3_s *sq3, const container_id_t cid, guint *co
 	if (rc != SQLITE_OK)
 		return M1_SQLITE_GERROR(sq3->db, rc);
 
-	(void) sqlite3_bind_blob(stmt, 1, cid, sizeof(container_id_t), NULL);
+	(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id (url), hc_url_get_id_size (url), NULL);
 
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt)))
 		_count += sqlite3_column_int(stmt, 0);
@@ -116,7 +115,7 @@ __count_services(struct sqlx_sqlite3_s *sq3, const container_id_t cid, guint *co
 }
 
 GError*
-__destroy_container(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
+__destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		gboolean flush, gboolean *done)
 {
 	GError *err = NULL;
@@ -131,14 +130,13 @@ __destroy_container(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
 		return err;
 
 	if (flush) {
-		__exec_cid(sq3->db, "DELETE FROM services WHERE cid = ?", cid);
+		__exec_cid(sq3->db, "DELETE FROM services WHERE cid = ?", hc_url_get_id (url));
 		count_actions += sqlite3_changes(sq3->db);
-	}
-	else {
+	} else {
 		guint count_services = 0;
 
 		/* No flush, we count the services belonging to the container. */
-		err = __count_services(sq3, cid, &count_services);
+		err = __count_services(sq3, url, &count_services);
 
 		/* If any service is found, this is an error. */
 		if (!err && count_services > 0)
@@ -146,10 +144,10 @@ __destroy_container(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
 	}
 
 	if (!err) {
-		__exec_cid(sq3->db, "DELETE FROM properties WHERE cid = ?", cid);
+		__exec_cid(sq3->db, "DELETE FROM properties WHERE cid = ?", hc_url_get_id (url));
 		count_actions += sqlite3_changes(sq3->db);
 
-		__exec_cid(sq3->db, "DELETE FROM containers WHERE cid = ?", cid);
+		__exec_cid(sq3->db, "DELETE FROM containers WHERE cid = ?", hc_url_get_id (url));
 		count_actions += sqlite3_changes(sq3->db);
 	}
 
@@ -165,45 +163,23 @@ __destroy_container(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
 
 GError *
 meta1_backend_create_container(struct meta1_backend_s *m1,
-		const gchar *vns, const gchar *cname, container_id_t *_cid)
+		struct hc_url_s *url)
 {
-	GError *err = NULL;
-	container_id_t cid;
+	EXTRA_ASSERT(url != NULL);
+	if (!hc_url_has_fq_container (url))
+		return NEWERROR(CODE_BAD_REQUEST, "Partial URL");
+
 	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	GRID_TRACE2("%s(%p,%s,%s,%p)", __FUNCTION__, m1, vns, cname, _cid);
-
-	EXTRA_ASSERT(m1 != NULL);
-	EXTRA_ASSERT(cname != NULL);
-
-	if (vns && *vns && !g_str_has_prefix(vns, m1->backend.ns_name))
-		return NEWERROR(CODE_NAMESPACE_NOTMANAGED,
-				"Invalid NS/VNS, [%s] not a prefix of [%s]",
-				m1->backend.ns_name, vns);
-
-	meta1_name2hash(cid, vns, cname);
-
-	err = _open_and_lock(m1, cid, SQLX_OPEN_MASTERONLY, &sq3);
+	GError *err = _open_and_lock(m1, url, SQLX_OPEN_MASTERONLY, &sq3);
 	if (!err) {
-		err = __info_container(sq3, cid, NULL);
-		if (!err) {
-			err = NEWERROR(CODE_CONTAINER_EXISTS,
-					"Container already created");
-		}
+		if (!(err = __info_container(sq3, url, NULL)))
+			err = NEWERROR(CODE_CONTAINER_EXISTS, "Container already created");
 		else {
 			g_clear_error(&err);
-			err = __create_container(sq3,
-					(vns && *vns ? vns : m1->backend.ns_name),
-					cname, cid);
-			if (NULL != err)
+			if (NULL != (err = __create_user(sq3, url)))
 				g_prefix_error(&err, "Query error: ");
 		}
 		sqlx_repository_unlock_and_close_noerror(sq3);
-	}
-
-	if (!err) {
-		if (_cid)
-			memcpy(_cid, cid, sizeof(container_id_t));
 	}
 
 	return err;
@@ -211,19 +187,14 @@ meta1_backend_create_container(struct meta1_backend_s *m1,
 
 GError *
 meta1_backend_destroy_container(struct meta1_backend_s *m1,
-		const container_id_t cid, gboolean flush)
+		struct hc_url_s *url, gboolean flush)
 {
-	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	EXTRA_ASSERT(m1 != NULL);
-	EXTRA_ASSERT(cid != NULL);
-
-	err = _open_and_lock(m1, cid, SQLX_OPEN_MASTERONLY, &sq3);
+	GError *err = _open_and_lock(m1, url, SQLX_OPEN_MASTERONLY, &sq3);
 	if (!err) {
 		gboolean done = FALSE;
-		if (!(err = __info_container(sq3, cid, NULL)))
-			err = __destroy_container(sq3, cid, flush, &done);
+		if (!(err = __info_container(sq3, url, NULL)))
+			err = __destroy_container(sq3, url, flush, &done);
 		if (NULL != err)
 			g_prefix_error(&err, "Query error: ");  
 		sqlx_repository_unlock_and_close_noerror(sq3);
@@ -234,17 +205,24 @@ meta1_backend_destroy_container(struct meta1_backend_s *m1,
 
 GError *
 meta1_backend_info_container(struct meta1_backend_s *m1,
-		const container_id_t cid, gchar ***result)
+		struct hc_url_s *url, gchar ***result)
 {
-	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	EXTRA_ASSERT(m1 != NULL);
-	EXTRA_ASSERT(cid != NULL);
-
-	err = _open_and_lock(m1, cid, SQLX_OPEN_MASTERSLAVE, &sq3);
+	GError *err = _open_and_lock(m1, url, SQLX_OPEN_MASTERSLAVE, &sq3);
 	if (!err) {
-		err = __info_container(sq3, cid, result);
+		struct hc_url_s **urls = NULL;
+		if (!(err = __info_container(sq3, url, &urls))) {
+			if (result) {
+				if (!urls)
+					*result = g_malloc0(sizeof(struct hc_url_s*));
+				else {
+					*result = g_malloc0(sizeof(gchar*) * (1+g_strv_length((gchar**)urls)));
+					for (int i=0; urls[i] ;++i)
+						(*result)[i] = g_strdup(hc_url_get(urls[i], HCURL_WHOLE));
+				}
+			}
+		}
+		hc_url_cleanv (urls);
 		sqlx_repository_unlock_and_close_noerror(sq3);
 	}
 
@@ -283,7 +261,7 @@ __get_references_by_prefix(struct sqlx_sqlite3_s *sq3,
 
 static GError *
 __get_references_by_service(struct sqlx_sqlite3_s *sq3,
-		const gchar *type, const gchar *url,
+		const gchar *type, const gchar *m1url,
 		m1b_ref_hook ref_hook, gpointer ref_hook_data)
 {
 	GError *err = NULL;
@@ -301,7 +279,7 @@ __get_references_by_service(struct sqlx_sqlite3_s *sq3,
 		g_prefix_error(&err, "SQLITE error: ");
 	}
 	else {
-		gchar *urlfull = g_strdup_printf("%%%s%%",url);
+		gchar *urlfull = g_strdup_printf("%%%s%%",m1url);
 		sqlite3_bind_text(stmt, 1, type, -1, NULL);
 		sqlite3_bind_text(stmt, 2, urlfull, -1, NULL);
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
@@ -321,17 +299,11 @@ __get_references_by_service(struct sqlx_sqlite3_s *sq3,
 }
 
 GError*
-meta1_backend_list_references(struct meta1_backend_s *m1,
-		const container_id_t cid,
-		m1b_ref_hook ref_hook, gpointer ref_hook_data)
+meta1_backend_list_references_by_prefix(struct meta1_backend_s *m1,
+		struct hc_url_s *url, m1b_ref_hook ref_hook, gpointer ref_hook_data)
 {
-	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	EXTRA_ASSERT(m1 != NULL);
-	EXTRA_ASSERT(cid != NULL);
-
-	err = _open_and_lock(m1, cid, M1V2_OPENBASE_MASTERSLAVE, &sq3);
+	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
 	if (!err) {
 		err = __get_references_by_prefix(sq3, ref_hook, ref_hook_data);
 		if (NULL != err)
@@ -344,20 +316,15 @@ meta1_backend_list_references(struct meta1_backend_s *m1,
 
 GError*
 meta1_backend_list_references_by_service(struct meta1_backend_s *m1,
-		const container_id_t cid, const gchar *srvtype, const gchar *url,
+		struct hc_url_s *url, const gchar *srvtype, const gchar *m1url,
 		m1b_ref_hook ref_h, gpointer ref_hdata)
 {
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	EXTRA_ASSERT(m1 != NULL);
-	EXTRA_ASSERT(cid != NULL);
 	EXTRA_ASSERT(srvtype != NULL);
-	EXTRA_ASSERT(url != NULL);
-
-	err = _open_and_lock(m1, cid, M1V2_OPENBASE_MASTERSLAVE, &sq3);
+	EXTRA_ASSERT(m1url != NULL);
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
 	if (!err) {
-		err = __get_references_by_service(sq3, srvtype, url, ref_h, ref_hdata);
+		err = __get_references_by_service(sq3, srvtype, m1url, ref_h, ref_hdata);
 		if (NULL != err)
 			g_prefix_error(&err, "Query error: ");
 		sqlx_repository_unlock_and_close_noerror(sq3);

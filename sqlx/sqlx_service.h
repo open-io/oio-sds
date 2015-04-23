@@ -37,7 +37,6 @@ struct grid_single_rrd_s;
 struct sqlx_repo_config_s;
 struct sqlx_sync_s;
 struct replication_config_s;
-struct sqlx_service_extras_s;
 
 struct sqlx_service_config_s
 {
@@ -78,7 +77,13 @@ struct sqlx_service_s
 	struct network_server_s *server;
 	struct gridd_request_dispatcher_s *dispatcher;
 	struct hc_resolver_s *resolver;
-	struct sqlx_service_extras_s *extras;
+	struct grid_lbpool_s *lb;
+
+	struct {
+		GThread     *thread;
+		GAsyncQueue *queue;
+		void        *zctx;
+	} notify;
 
 	// The tasks under this queue always follow a reload of the
 	// nsinfo field, and can safely play with it. This is the place
@@ -143,11 +148,24 @@ struct sqlx_service_s
 	// TRUE :  ELECTION_MODE_QUORUM
 	// FALSE : ELECTION_MODE_NONE
 	gboolean flag_replicable;
-
 };
 
-// Public API
+/* -------------------------------------------------------------------------- */
+
 extern int sqlite_service_main(int argc, char **argv,
 		const struct sqlx_service_config_s *cfg);
+
+/** Enables the optional notification system. To be called during the
+ * post-config hook. */
+extern gboolean sqlx_enable_notifier (struct sqlx_service_s *ss);
+
+/** Sends a notification. If notifications are not configured, the
+ * message is dropped */
+extern GError * sqlx_notify (gpointer u, gchar *msg);
+
+/** Reloads the optional (grid_lbpool_s*). Exposed to let the
+ * server enable it in its post-config hook. This is destined to
+ * be registered in a task queue. */
+void sqlx_task_reload_lb(struct sqlx_service_s *ss);
 
 #endif /*OIO_SDS__sqlx__sqlx_service_h*/

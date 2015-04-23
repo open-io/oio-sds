@@ -27,10 +27,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/types.h>
 #include <unistd.h>
 
-#include <metautils/lib/metacomm.h>
+#include <metautils/lib/metautils.h>
 #include <cluster/module/module.h>
-#include <cluster/events/gridcluster_events.h>
-#include <cluster/events/gridcluster_eventsremote.h>
 
 #include "gridcluster_remote.h"
 
@@ -122,67 +120,6 @@ error_reply:
 	message_destroy(req);
 	g_byte_array_free(buf, TRUE);
 	return (0);
-}
-
-gint
-gcluster_v2_push_broken_container(struct metacnx_ctx_s *cnx, const gchar *ns_name, const container_id_t cid, GError **error)
-{
-	GError *event_error = NULL;
-	gchar str_ueid[256];
-	gboolean rc;
-	gridcluster_event_t *event;
-
-	event = gridcluster_create_event();
-	gridcluster_event_set_type(event, "broken.CONTAINER");
-	gridcluster_event_add_buffer(event,"CONTAINER", cid, sizeof(container_id_t));
-	gridcluster_event_add_string(event,"NAMESPACE", ns_name);
-	g_snprintf(str_ueid, sizeof(str_ueid), "%ld_%d_%p", random(), getpid(), &str_ueid);
-	rc = gridcluster_push_event(cnx, str_ueid, event, &event_error, error);
-	gridcluster_destroy_event(event);
-	if (!rc) {
-		GSETERROR(error,"Failed to push the broken container event with UEID=%s", str_ueid);
-		if (event_error)
-			g_error_free(event_error);
-		return FALSE;
-	}
-	if (!event_error) {
-		GSETERROR(error,"No status received for the event with UEID=%s", str_ueid);
-		return FALSE;
-	}
-	g_error_free(event_error);
-	DEBUG("Content marked broken, with UEID=[%s]", str_ueid);
-	return TRUE;
-}
-
-gint
-gcluster_v2_push_broken_content(struct metacnx_ctx_s *cnx, const gchar *ns_name, const container_id_t cid, const gchar *path, GError **error)
-{
-	GError *event_error = NULL;
-	gchar str_ueid[256];
-	gboolean rc;
-	gridcluster_event_t *event;
-
-	event = gridcluster_create_event();
-	gridcluster_event_set_type(event, "broken.CONTAINER");
-	gridcluster_event_add_string(event,"NAMESPACE", ns_name);
-	gridcluster_event_add_buffer(event,"CONTAINER", cid, sizeof(container_id_t));
-	gridcluster_event_add_string(event,"CONTENT", path);
-	g_snprintf(str_ueid, sizeof(str_ueid), "%ld_%d_%p", random(), getpid(), &str_ueid);
-	rc = gridcluster_push_event(cnx, str_ueid, event, &event_error, error);
-	gridcluster_destroy_event(event);
-	if (!rc) {
-		GSETERROR(error,"Failed to push the broken container event with UEID=%s", str_ueid);
-		if (event_error)
-			g_error_free(event_error);
-		return FALSE;
-	}
-	if (!event_error) {
-		GSETERROR(error,"No status received for the event with UEID=%s", str_ueid);
-		return FALSE;
-	}
-	g_error_free(event_error);
-	DEBUG("Content marked broken, with UEID=[%s]", str_ueid);
-	return TRUE;
 }
 
 gint
@@ -356,46 +293,5 @@ error_reply:
 	message_destroy(req);
 	g_byte_array_free(buf, TRUE);
 	return (0);
-}
-
-static gboolean
-body_to_gba_handler(GError ** error, gpointer udata, gint code, guint8 * body, gsize body_size)
-{
-	GByteArray **gba_result = (GByteArray **) udata;
-	(void) error, (void) code;
-	if (gba_result && *gba_result)
-		g_byte_array_free(*gba_result, TRUE);
-	*gba_result = g_byte_array_append(g_byte_array_new(), body, body_size);
-	return TRUE;
-}
-
-GByteArray *
-gcluster_get_srvtype_event_config(addr_info_t * addr, long to, gchar * name, GError ** error)
-{
-	static struct code_handler_s codes[] = {
-		{CODE_FINAL_OK, REPSEQ_FINAL, &body_to_gba_handler, NULL},
-		{0, 0, NULL, NULL}
-	};
-	GByteArray *result = NULL;
-	struct reply_sequence_data_s data = { &result, 0, codes };
-
-	if (!addr || !name || to<0L) {
-		GSETERROR(error,"Invalid parameter (%p %p)", addr, name);
-		return NULL;
-	}
-
-	MESSAGE req = build_request(NAME_MSGNAME_CS_GET_EVENT_CONFIG, NULL, 0);
-	message_add_field(req, NAME_MSGKEY_TYPENAME, name, strlen(name));
-
-	result = g_byte_array_new();
-	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, to, &data)) {
-		GSETERROR(error, "Cannot execute the query "NAME_MSGNAME_CS_GET_EVENT_CONFIG" and receive all the responses");
-		g_byte_array_free(result, TRUE);
-		message_destroy(req);
-		return NULL;
-	}
-
-	message_destroy(req);
-	return result;
 }
 

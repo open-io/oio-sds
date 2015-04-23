@@ -23,7 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
-#include <meta2/remote/meta2_remote.h>
+#include <meta2v2/meta2_remote.h>
 #include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/meta2_utils.h>
@@ -65,7 +65,6 @@ get_meta2_ctx(const gchar *ns_name, const gchar *container_hexid,
 	GError *local_error = NULL;
 	gs_error_t *gs_error = NULL;
 	struct meta2_ctx_s *ctx = NULL;
-	container_id_t cid;
 
 	/* load namespace info for storage policies definitions */
 	if(!(ns_info = get_namespace_info(ns_name, &local_error))) {
@@ -139,11 +138,14 @@ get_meta2_ctx(const gchar *ns_name, const gchar *container_hexid,
 		goto clean_up;
 	}
 
-	/* Try to find content */
-	if (!container_id_hex2bin(container_hexid, strlen(container_hexid), &cid, &local_error))
-		goto clean_up;
-	ctx->content = meta2_remote_stat_content(ctx->m2_cnx, cid, content_name, strlen(content_name),
-			&local_error);
+	do {
+		struct hc_url_s *url = hc_url_empty ();
+		hc_url_set (url, HCURL_NS, ns_name);
+		hc_url_set (url, HCURL_HEXID, container_hexid);
+		hc_url_set (url, HCURL_PATH, content_name);
+		ctx->content = meta2_remote_stat_content(ctx->m2_cnx, &local_error, url);
+		hc_url_clean (url);
+	} while (0);
 
 	if (!ctx->content) {
 		GRID_DEBUG("Content %s/%s/%s doesn't exist", ctx->ns,

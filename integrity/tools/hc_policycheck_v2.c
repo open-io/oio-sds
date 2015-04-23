@@ -129,7 +129,7 @@ polcheck_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	if (!(url = hc_url_init(argv[0]))) {
+	if (!(url = hc_url_oldinit(argv[0]))) {
 		GRID_ERROR("Invalid URL [%s]: %s", argv[0], "Format error");
 		return FALSE;
 	}
@@ -137,7 +137,7 @@ polcheck_configure(int argc, char **argv)
 		GRID_ERROR("Invalid URL [%s]: %s", argv[0], "missing NS");
 		return FALSE;
 	}
-	if (!hc_url_has(url, HCURL_REFERENCE)) {
+	if (!hc_url_has(url, HCURL_USER)) {
 		GRID_ERROR("Invalid URL [%s]: %s", argv[0], "missing REFERENCE");
 		return FALSE;
 	}
@@ -146,10 +146,9 @@ polcheck_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	if (metautils_str_ishexa(hc_url_get(url, HCURL_REFERENCE),
-			STRLEN_CONTAINERID - 1)) {
+	if (metautils_str_ishexa(hc_url_get(url, HCURL_USER), STRLEN_CONTAINERID-1)) {
 		gchar cid[STRLEN_CONTAINERID] = {0};
-		g_strlcpy(cid, hc_url_get(url, HCURL_REFERENCE), STRLEN_CONTAINERID);
+		g_strlcpy(cid, hc_url_get(url, HCURL_USER), STRLEN_CONTAINERID);
 		hc_url_set(url, HCURL_HEXID, cid);
 	}
 

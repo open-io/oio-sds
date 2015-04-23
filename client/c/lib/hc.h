@@ -92,27 +92,4 @@ gs_error_t * hc_func_delete_property(gs_grid_storage_t *hc, struct hc_url_s *url
 /** Create a copy of a content (intra container). This function use features of meta2v2. */
 gs_error_t * hc_func_copy_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *source);
 
-/**
- * List snapshots of a container.
- *
- * @param hc
- * @param url The URL of the container
- * @param output_xml Output result as an XML string instead of human-readable
- * @param show_info Display extended information about snapshots
- * @param[out] result Where to put the result string
- */
-gs_error_t * hc_func_list_snapshots(gs_grid_storage_t *hc, struct hc_url_s *url,
-		int output_xml, int show_info, char **result);
-
-/** Take a snapshot of a container. */
-gs_error_t *hc_func_take_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url);
-
-/** Delete a snapshot from a container. */
-gs_error_t *hc_func_delete_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url);
-
-/** Restore the state of container or a content. If <hard_restore> is true,
- * erase all contents more recent than the snapshot */
-gs_error_t *hc_func_restore_snapshot(gs_grid_storage_t *hc, struct hc_url_s *url,
-		int hard_restore);
-
 #endif /*OIO_SDS__client__c__lib__hc_h*/

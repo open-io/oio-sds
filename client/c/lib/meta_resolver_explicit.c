@@ -318,21 +318,20 @@ _service_array_to_slist(char **m2)
 }
 
 GSList *
-resolver_direct_get_meta2_once (resolver_direct_t *r, const char *ns, const container_id_t cid,
-			GSList **m1_exclude, GError **err)
+resolver_direct_get_meta2_once (resolver_direct_t *r, struct hc_url_s *url, GSList **m1_exclude, GError **err)
 {
 	char **m2 = NULL;
 	addr_info_t *m1 = NULL;
 	GError *e = NULL;
 	GSList *result = NULL;
 
-	if (!r || !cid) {
-		GSETERROR(err, "invalid parameter");
-		return NULL;
-	}
+	g_assert (r != NULL);
+	g_assert (url != NULL);
+	g_assert (hc_url_has (url, HCURL_HEXID));
+	g_assert (hc_url_has (url, HCURL_NS));
 
 	/*resolves meta1*/
-	m1 = resolver_direct_get_meta1 (r, cid, 1, *m1_exclude, &e);
+	m1 = resolver_direct_get_meta1 (r, hc_url_get_id(url), 1, *m1_exclude, &e);
 	if (!m1) {
 		GSETCODE (err, e ? e->code : CODE_INTERNAL_ERROR, "META1 Resolution error : %s", e ? e->message : "no error specified");
 		if (NULL != e)
@@ -341,7 +340,7 @@ resolver_direct_get_meta2_once (resolver_direct_t *r, const char *ns, const cont
 	}
 
 	/*call META1 to locate the right META2*/
-	m2 = meta1v2_remote_list_reference_services (m1, &e, ns, cid, "meta2", (r->timeout.m1.cnx)/1000, (r->timeout.m1.op)/1000);
+	m2 = meta1v2_remote_list_reference_services (m1, &e, url, NAME_SRVTYPE_META2);
 
 	DEBUG("Meta2 services listed");
 
@@ -373,8 +372,13 @@ resolver_direct_get_meta2_once (resolver_direct_t *r, const char *ns, const cont
 }
 
 GSList *
-resolver_direct_get_meta2 (resolver_direct_t *resolver, const char *ns, const container_id_t cID, GError **e, int max_attempts)
+resolver_direct_get_meta2 (resolver_direct_t *resolver, struct hc_url_s *url, GError **e, int max_attempts)
 {
+	if (!resolver || !url) {
+		GSETCODE (e, CODE_INTERNAL_ERROR, "Invalid parameter");
+		return NULL;
+	}
+
 	GSList *m1_exclude = NULL;
 	GSList *result = NULL;
 
@@ -382,11 +386,11 @@ resolver_direct_get_meta2 (resolver_direct_t *resolver, const char *ns, const co
 		GSList *m2 = NULL;
 
 		if (max_attempts-- <= 0) {
-			GSETERROR(err, "Too many meta2 resolution attempts");
+			GSETCODE(err, CODE_INTERNAL_ERROR, "Too many meta2 resolution attempts");
 			return NULL;
 		}
 
-		m2 = resolver_direct_get_meta2_once (r, ns, cID, exclude, err);
+		m2 = resolver_direct_get_meta2_once (r, url, exclude, err);
 
 		if (!m2) {
 			if (!err || !(*err)) {

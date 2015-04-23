@@ -24,16 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <unistd.h>
 
 # include <metautils/lib/metatypes.h>
-# include <cluster/events/gridcluster_eventhandler.h>
 # include <cluster/agent/gridagent.h>
-
-# ifndef GS_CONFIG_EVENT_DELAY
-#  define GS_CONFIG_EVENT_DELAY "event_delay"
-# endif
-
-# ifndef GS_CONFIG_EVENT_REFRESH
-#  define GS_CONFIG_EVENT_REFRESH "event_refresh"
-# endif
 
 # ifndef GS_CONFIG_NSINFO_REFRESH
 #  define GS_CONFIG_NSINFO_REFRESH "nsinfo_refresh"
@@ -81,17 +72,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define CS_GET_NS_PERIOD_KEY            "period_get_ns"
 # define CS_GET_SRVLIST_PERIOD_KEY       "period_get_srv"
 # define CS_GET_SRVTYPE_PERIOD_KEY       "period_get_srvtype"
-# define CS_GET_EVTCFG_PERIOD_KEY        "period_get_evtconfig"
 # define CS_PUSH_SRVLIST_PERIOD_KEY      "period_push_srv"
-
-# define EVENTS_MODE_FILE_KEY            "events.mode.file"
-# define EVENTS_MODE_DIR_KEY             "events.mode.dir"
-# define EVENTS_SPOOL_DIR_KEY            "events.spool.dir"
-# define EVENTS_SPOOL_SIZE_KEY           "events.spool.size"
-# define EVENTS_MANAGE_ENABLE_KEY        "events.manage.enable"
-# define EVENTS_RECEIVE_ENABLE_KEY       "events.receive.enable"
-# define EVENTS_MAXPENDING_KEY           "events.max_pending"
-# define EVENTS_DELAY_INCOMING_KEY       "events.incoming_delay"
 
 # define EVENTS_MODE_FILE_DEFAULT        0444
 # define EVENTS_MODE_DIR_DEFAULT         0755
@@ -142,7 +123,6 @@ extern int unix_socket_gid;
 
 /* refresh */
 extern int period_get_ns;
-extern int period_get_evtconfig;
 extern int period_get_srvtype;
 extern int period_get_srvlist;
 extern int period_push_srvlist;
@@ -152,32 +132,7 @@ extern gboolean flag_manage_broken;
 extern int period_push_broken;
 extern int period_get_broken;
 
-/* events */
-extern char xattr_event_timestamp[256];
-extern time_t event_delay;
-extern time_t events_refresh_delay;
-
-extern int event_file_mode;
-extern int event_directory_mode;
-extern gboolean event_queue_cleaning_allowed;
-extern gchar path_configured_top_spool_dir[SPOOL_DIRNAME_LENGTH];
-
-extern guint max_events_actions_pending;
-extern guint max_events_pending;
-
-extern char event_enable_receive;
-extern char event_enable_manage;
-
 /* ------------------------------------------------------------------------- */
-
-enum process_type_e {PT_EVT, PT_REQ};
-
-/*One directory for each queue*/
-struct event_queue_set_s {
-	gchar dir_incoming[SPOOL_DIRNAME_LENGTH + LIMIT_LENGTH_NSNAME + sizeof(SUFFIX_SPOOL_INCOMING)];
-	gchar dir_pending[SPOOL_DIRNAME_LENGTH + LIMIT_LENGTH_NSNAME + sizeof(SUFFIX_SPOOL_PENDING)];
-	gchar dir_trash[SPOOL_DIRNAME_LENGTH + LIMIT_LENGTH_NSNAME + sizeof(SUFFIX_SPOOL_TRASH)];
-};
 
 typedef struct namespace_data_s {
 	
@@ -190,9 +145,6 @@ typedef struct namespace_data_s {
 	/*services locally registered*/
 	GHashTable *local_services;/**< Maps (gchar*) to (struct service_info_s*)*/
 	GHashTable *down_services;/**< Maps (gchar*) to (struct service_info_s*)*/
-
-	/*Event data*/
-	struct event_queue_set_s queues;
 } namespace_data_t;
 
 void free_agent_structures(void);
@@ -201,23 +153,6 @@ void parse_namespaces(void);
 
 extern GHashTable *namespaces;
 
-/* ------------------------------------------------------------------------- */
-
-/**
- *
- */
-int main_event(const gchar *ns_name);
-
-/**
- *
- */
 int main_reqagent(void);
-
-/**
- * Returns the delayed configured for the given namespace.
- * The value is read in the namesapce options if it is present, or taken
- * from the default configuration in the gridagent configuration.
- */
-time_t get_event_delay(namespace_data_t *ns_data);
 
 #endif /*OIO_SDS__cluster__agent__agent_h*/

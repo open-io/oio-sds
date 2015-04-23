@@ -53,9 +53,11 @@ _get_cb(gpointer udata, gpointer bean)
 	ctx->l = g_slist_prepend(ctx->l, bean);
 }
 
-static int
-_create_container(struct gridd_filter_ctx_s *ctx)
+int
+meta2_filter_action_create_container(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
 {
+	(void) reply;
 	struct m2v2_create_params_s params;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
@@ -83,22 +85,6 @@ retry:
 }
 
 int
-meta2_filter_action_create_container(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	return _create_container(ctx);
-}
-
-int
-meta2_filter_action_create_container_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	return _create_container(ctx);
-}
-
-int
 meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
@@ -112,15 +98,11 @@ meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
 	}
 
 	GError *e = meta2_backend_has_container(m2b, url);
-	if(NULL != e) {
-		if (e->code == CODE_UNAVAILABLE)
-			GRID_DEBUG("Container %s exists but could not open it: %s",
-					hc_url_get(url, HCURL_WHOLE), e->message);
-		else
-			GRID_DEBUG("No such container (%s)", hc_url_get(url, HCURL_WHOLE));
-		if (e->code == CODE_CONTAINER_NOTFOUND) {
+	if (NULL != e) {
+		GRID_DEBUG("Container test error for [%s] : (%d) %s",
+					hc_url_get(url, HCURL_WHOLE), e->code, e->message);
+		if (e->code == CODE_CONTAINER_NOTFOUND)
 			hc_decache_reference_service(m2b->resolver, url, NAME_SRVTYPE_META2);
-		}
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	}
@@ -423,41 +405,6 @@ meta2_filter_action_list_v1(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_action_raw_list_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *err;
-	struct hc_url_s *url;
-	struct meta2_backend_s *m2b;
-
-	void cb(gpointer u, gpointer bean) {
-		GString *path = ALIASES_get_alias(bean);
-		*((GSList**)u) = g_slist_prepend(*((GSList**)u), g_strdup(path->str));
-	}
-
-	(void) reply;
-	TRACE_FILTER();
-	url = meta2_filter_ctx_get_url(ctx);
-	m2b = meta2_filter_ctx_get_backend(ctx);
-
-	struct list_params_s lp;
-	memset(&lp, '\0', sizeof(struct list_params_s));
-	lp.flag_nodeleted = ~0;
-
-	GSList *result = NULL;
-	err = meta2_backend_list_aliases(m2b, url, &lp, cb, &result);
-	if (err) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	reply->add_body(strings_marshall_gba(result, NULL));
-	g_slist_foreach(result, g_free1, NULL);
-	g_slist_free(result);
-	return FILTER_OK;
-}
-
-int
 meta2_filter_action_insert_beans(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
@@ -510,90 +457,5 @@ meta2_filter_action_update_beans(struct gridd_filter_ctx_s *ctx,
 	GRID_DEBUG("Failed to update beans : (%d) %s", err->code, err->message);
 	meta2_filter_ctx_set_error(ctx, err);
 	return FILTER_KO;
-}
-
-/* -------------- SNAPSHOT UTILITIES ----------------- */
-
-int
-meta2_filter_action_take_snapshot(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	GError *err = NULL;
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	const gchar *snap_name = hc_url_get(url, HCURL_SNAPSHOT);
-
-	err = meta2_backend_take_snapshot(m2b, url, snap_name);
-	if (err != NULL) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	return FILTER_OK;
-}
-
-int
-meta2_filter_action_list_snapshots(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *err = NULL;
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
-
-	err = meta2_backend_list_snapshots(m2b, url, _get_cb, obc);
-	if (err != NULL) {
-		GRID_DEBUG("Failed to list snapshots for %s",
-			hc_url_get(url, HCURL_WHOLE));
-		_on_bean_ctx_clean(obc);
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	_on_bean_ctx_send_list(obc, TRUE);
-	_on_bean_ctx_clean(obc);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_action_delete_snapshot(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	GError *err = NULL;
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	const gchar *snap_name = hc_url_get(url, HCURL_SNAPSHOT);
-
-	err = meta2_backend_delete_snapshot(m2b, url, snap_name);
-	if (err != NULL) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-	return FILTER_OK;
-}
-
-int
-meta2_filter_action_restore_snapshot(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	GError *err = NULL;
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	const gchar *snap_name = hc_url_get(url, HCURL_SNAPSHOT);
-	gboolean hard_restore = meta2_filter_ctx_get_param(ctx,
-			M2_KEY_SNAPSHOT_HARDRESTORE) != NULL;
-
-	err = meta2_backend_restore_snapshot(m2b, url, snap_name, hard_restore);
-	if (err != NULL) {
-		GRID_DEBUG("Failed to %srestore snapshot '%s' of %s",
-			hard_restore? "(hard)" : "", snap_name,
-			hc_url_get(url, HCURL_WHOLE));
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-	return FILTER_OK;
 }
 

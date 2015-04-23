@@ -83,10 +83,10 @@ get_maximum_spare_chunks ()
 	return res;
 }
 
-typedef GSList* (*meta2_content_add_f) (int *fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path,
+typedef GSList* (*meta2_content_add_f) (int *fd, gint ms, GError **err, struct hc_url_s *url,
 	content_length_t content_length, GByteArray *system_metadata, GByteArray **new_system_metadata);
 
-typedef GSList* (*meta2_content_add_v2_f) (int *fd, gint ms, GError **err, const container_id_t container_id, const gchar *content_path,
+typedef GSList* (*meta2_content_add_v2_f) (int *fd, gint ms, GError **err, struct hc_url_s *url,
 	content_length_t content_length, GByteArray *user_metadata, GByteArray *system_metadata, GByteArray **new_system_metadata);
 
 static gs_status_t _gs_upload_content (meta2_content_add_f adder, gs_container_t *container,
@@ -1006,9 +1006,7 @@ static gs_status_t _gs_upload(gs_container_t *container,
 	bzero(target, sizeof(target));
 	addr_info_to_string(&container->meta2_addr, target, 64);
 
-	url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs));
-	hc_url_set(url, HCURL_REFERENCE, C0_NAME(container));
+	url = fill_hcurl_from_container (container);
 	hc_url_set(url, HCURL_PATH, content_name);
 
 	/*get a list of chunks*/

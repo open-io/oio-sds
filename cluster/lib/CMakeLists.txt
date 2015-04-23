@@ -9,14 +9,13 @@ add_library(gridcluster SHARED config.c
 set_target_properties(gridcluster PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(gridcluster
-		metautils gridcluster-remote gridcluster-events
+		metautils gridcluster-remote
 		-lm ${GLIB2_LIBRARIES})
 
 add_executable(gridcluster_test test.c)
 
 target_link_libraries(gridcluster_test
-		gridcluster gridcluster-remote gridcluster-events gridcluster-eventsremote
-		metautils
+		metautils gridcluster gridcluster-remote
 		-lm ${GLIB2_LIBRARIES})
 
 add_dependencies(gridcluster_test gridcluster)

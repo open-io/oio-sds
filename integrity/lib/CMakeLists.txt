@@ -44,7 +44,7 @@ target_link_libraries(test_meta2_check
 
 target_link_libraries(integrity
 		metautils gridclient gridcluster
-		meta0remote meta1remote meta2remote rawxclient rawx
+		meta0remote meta1remote meta2v2remote rawxclient rawx
 		hcresolve meta2v2lbutils
 		${DB_LIBRARIES} ${SQLITE3_LIBRARIES} ${CURL_LIBRARIES} ${LIBEVENT_LIBRARIES})
 

@@ -262,7 +262,7 @@ _repo_wraper(const gchar *ns, repo_test_f fr)
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
 
-	err = meta2_backend_init(&backend, repository, ns, glp, resolver, NULL);
+	err = meta2_backend_init(&backend, repository, ns, glp, resolver);
 	g_assert_no_error(err);
 	meta2_backend_configure_nsinfo(backend, &nsinfo);
 
@@ -304,7 +304,7 @@ _repo_failure(const gchar *ns)
 	cfg.lock.srv = "test-meta2";
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
-	err = meta2_backend_init(&backend, repository, ns, glp, resolver, NULL);
+	err = meta2_backend_init(&backend, repository, ns, glp, resolver);
 	g_assert_error(err, GQ(), CODE_BAD_REQUEST);
 
 	meta2_backend_clean(backend);
@@ -323,7 +323,7 @@ _container_wraper(container_test_f cf)
 		gchar *strurl = g_strdup_printf(
 				"/NS/container-%"G_GUINT64_FORMAT"/content-%ld",
 				++container_counter, time(0));
-		url = hc_url_init(strurl);
+		url = hc_url_oldinit(strurl);
 		g_free(strurl);
 
 		err = meta2_backend_create_container(m2, url, &params);

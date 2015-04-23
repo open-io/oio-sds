@@ -34,7 +34,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 
 #include <gridd/main/plugin.h>
 #include <gridd/main/message_handler.h>
@@ -43,9 +42,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <gridd/main/srvstats.h>
 
 #include <cluster/lib/gridcluster.h>
-#include <cluster/events/gridcluster_events.h>
-#include <cluster/events/gridcluster_eventsremote.h>
-#include <cluster/events/gridcluster_eventhandler.h>
 #include <cluster/conscience/conscience.h>
 #include <cluster/conscience/conscience_broken_holder_common.h>
 
@@ -68,17 +64,11 @@ struct conscience_request_counters
 	} services;
 	struct
 	{
-		guint32 evt_push;
-		guint32 evt_status;
 		guint32 push;
 		guint32 get;
 		guint32 remove;
 		guint32 fix;
 	} broken;
-	struct
-	{
-		guint32 config;
-	} event;
 };
 
 /**
@@ -204,8 +194,6 @@ save_counters(gpointer u)
 	SAVE_COUNTER(broken.fix);
 	SAVE_COUNTER(broken.get);
 	SAVE_COUNTER(broken.remove);
-
-	SAVE_COUNTER(event.config);
 }
 
 static gboolean
@@ -359,37 +347,6 @@ timer_expire_services(gpointer u)
 }
 
 /* ------------------------------------------------------------------------- */
-static GNode*
-search_vns_in_tree(GNode *tree_root, const gchar *vns_name)
-{
-	GNode *node = tree_root;
-	do {
-		TRACE("Comparing [%s] || [%s]", ((struct vns_info_s*)node->data)->name, vns_name);
-		if(g_ascii_strcasecmp(((struct vns_info_s*)node->data)->name, vns_name) == 0) {
-			TRACE("VNS [%s] found in tree", vns_name);
-			break;
-		} else {
-			if(g_str_has_prefix(vns_name, ((struct vns_info_s*)node->data)->name)) {
-				if(node->children) {
-					node = node->children;
-				} else {
-					DEBUG("VNS [%s] not found in tree", vns_name);
-					node = NULL;
-					break;
-				}
-			} else {
-				if(!node->next) {
-					DEBUG("VNS [%s] not found in tree", vns_name);
-					node = NULL;
-					break;
-				} else
-					node = node->next;
-			}
-		}
-	} while(TRUE);
-
-	return node;
-}
 
 static gboolean
 request_body_matches_namespace(struct request_context_s *req_ctx, GError **err)
@@ -397,7 +354,6 @@ request_body_matches_namespace(struct request_context_s *req_ctx, GError **err)
 	void *body = NULL;
 	gsize body_size = 0;
 	GSList *list_ns = NULL;
-	gchar local_ns[LIMIT_LENGTH_NSNAME+1];
 	int rc;
 
 	rc = message_get_BODY(req_ctx->request, &body, &body_size, NULL);
@@ -420,14 +376,9 @@ request_body_matches_namespace(struct request_context_s *req_ctx, GError **err)
 		rc = FALSE;
 	}
 	else {
-		bzero(local_ns, sizeof(local_ns));
-		g_strlcpy(local_ns, conscience->ns_info.name, sizeof(conscience->ns_info.name)-1);
+		gchar local_ns[LIMIT_LENGTH_NSNAME];
+		g_strlcpy(local_ns, conscience->ns_info.name, sizeof(local_ns));
 		rc = (0 == g_ascii_strcasecmp(local_ns, (gchar*)list_ns->data));
-		if(!rc) {
-			GNode *vns_node = search_vns_in_tree(conscience->virtual_namespace_tree, (gchar*)list_ns->data);
-			if(vns_node)
-				rc = TRUE;
-		}
 	}
 
 	g_slist_foreach(list_ns, g_free1, NULL);
@@ -1372,45 +1323,6 @@ errorLabel:
 
 /* ------------------------------------------------------------------------- */
 
-static gint
-handler_get_eventhandler_configuration(struct request_context_s *req_ctx)
-{
-	struct reply_context_s ctx;
-	GByteArray *gba_config;
-
-	init_reply_ctx_with_request(req_ctx, &(ctx));
-
-	/** @todo XXX there is no lock around around the event handler handling
-	 * because the conscience structure is not changed during the plugin lifecycle,
-	 * it is configured once at the boginning. */
-	gba_config = gridcluster_eventhandler_get_configuration(conscience->event_handler, &(ctx.warning));
-	if (!gba_config) {
-		GSETCODE(&(ctx.warning), CODE_INTERNAL_ERROR,"Failed to get the textual configuration of the eventhandler");
-		goto reply_error_label;
-	}
-	reply_context_set_body(&ctx, gba_config->data, gba_config->len, REPLYCTX_DESTROY_ON_CLEAN);
-	g_byte_array_free(gba_config,FALSE);
-	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
-	if (!reply_context_reply(&ctx,&(ctx.warning))) {
-		GSETCODE(&(ctx.warning), CODE_INTERNAL_ERROR, "Failed to reply to the client");
-		goto error_label;
-	}
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&ctx,TRUE);
-	return 1;
-
-reply_error_label:
-	reply_context_set_message(&ctx, gerror_get_code(ctx.warning), gerror_get_message(ctx.warning));
-error_label:
-	ERROR("[NS=%s] Failed to serve the event handlers configuration for : %s",
-		conscience_get_namespace(conscience), gerror_get_message(ctx.warning));
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&ctx,TRUE);
-	return 0;
-}
-
-/* ------------------------------------------------------------------------- */
-
 static struct cmd_s *
 module_find_handler(gchar * n, gsize l)
 {
@@ -1425,7 +1337,6 @@ module_find_handler(gchar * n, gsize l)
 		{NAME_MSGNAME_CS_GET_BROKEN_CONT, handler_get_broken_containers, &(stats.broken.get)},
 		{NAME_MSGNAME_CS_RM_BROKEN_CONT, handler_rm_broken_containers, &(stats.broken.remove)},
 		{NAME_MSGNAME_CS_FIX_BROKEN_CONT, handler_fix_broken_containers, &(stats.broken.fix)},
-		{NAME_MSGNAME_CS_GET_EVENT_CONFIG, handler_get_eventhandler_configuration, &(stats.event.config)},
 		{NULL, NULL, NULL}
 	};
 
@@ -1502,77 +1413,6 @@ plugin_handler(MESSAGE m, gint cnx, void *param, GError ** err)
 }
 
 /* ------------------------------------------------------------------------- */
-
-static gboolean
-module_check_event_handler(const gchar * cName, const gchar * cfg, gsize cfg_size, GError ** err)
-{
-	gridcluster_event_handler_t *event_handler;
-	gboolean rc = FALSE;
-
-	event_handler = gridcluster_eventhandler_create(cName, err, NULL, NULL);
-	if (!event_handler) {
-		GSETERROR(err, "Failed to init a new EventHandler");
-		goto error_init;
-	}
-
-	if (!gridcluster_eventhandler_configure(event_handler, cfg, cfg_size, err)) {
-		GSETERROR(err, "Invalid configuration");
-		goto error_configure;
-	}
-
-	rc = TRUE;
-
-      error_configure:
-	gridcluster_eventhandler_destroy(event_handler, FALSE);
-      error_init:
-	return rc;
-}
-
-static gboolean
-module_set_conscience_eventhandlers(struct conscience_s *cs, GError ** err, const gchar * raw_path)
-{
-	gchar *data = NULL, path[1024];
-	gsize size = 0;
-
-	/*purifies the given path */
-	if (!raw_path || !cs) {
-		GSETERROR(err, "Invalid parameter (%p,%p)", cs, raw_path);
-		return FALSE;
-	}
-	else {
-		const gchar *ptr;
-		for (ptr=raw_path; *ptr && (g_ascii_isspace(*ptr) || (*ptr=='/' && *(ptr+1)=='/')); ptr++);
-		g_strlcpy(path, ptr, sizeof(path));
-	}
-
-	if (!g_file_get_contents(path, &data, &size, err)) {
-		GSETERROR(err, "[NS=%s] Cannot load the configuration file [%s]", conscience_get_namespace(cs), path);
-		return FALSE;
-	}
-
-	if (!module_check_event_handler(cs->ns_info.name, data, size, err)) {
-		GSETERROR(err, "[NS=%s] Failed to configure an EventHandler with the content of [%s]",
-		    conscience_get_namespace(cs), path);
-		goto error_label;
-	}
-
-	if (!cs->event_handler)
-		cs->event_handler = gridcluster_eventhandler_create(conscience_get_namespace(cs), err, NULL, NULL);
-	if (data) {
-		if (!gridcluster_eventhandler_configure(cs->event_handler, data, size, err)) {
-			GSETERROR(err,"[NS=%s] Failed to configure the event handling rules", conscience_get_namespace(cs));
-			goto error_label;
-		}
-	}
-
-	INFO("[NS=%s] successfully configured an EventHandler with the content of [%s]", cs->ns_info.name, path);
-	g_free(data);
-	return TRUE;
-
-error_label:
-	g_free(data);
-	return FALSE;
-}
 
 static gboolean
 module_configure_srvtype(struct conscience_s *cs, GError ** err,
@@ -2012,16 +1852,6 @@ plugin_init(GHashTable * params, GError ** err)
 		goto error;
 	}
 
-	/*EVENTS initiaition*/
-	if (!(str = g_hash_table_lookup(params,KEY_EVENT_HANDLERS)))
-		INFO("[NS=%s] no event handler configured", conscience->ns_info.name);
-	else if (!module_set_conscience_eventhandlers(conscience, err, str)) {
-		GSETERROR(err,"[NS=%s] failed to loaded the event handler from [%s]", conscience_get_namespace(conscience), str);
-		goto error;
-	}
-	else
-		NOTICE("[NS=%s] event handlers successfully loaded from [%s]", conscience->ns_info.name, str);
-
 	/* Plugin/server stuff */
 	if (!srvtimer_register_regular("conscience.expire", timer_expire_services, NULL, conscience, 5LL)) {
 		GSETERROR(err, "Failed to register the conscience's dump callback");
@@ -2100,18 +1930,6 @@ plugin_reload(GHashTable * params, GError ** err)
 	g_hash_table_foreach(conscience->ns_info.options, _debug_print_hash, NULL);
 
 	NOTICE("[NS=%s] virtual namespaces reloaded", conscience->ns_info.name);
-
-	/*EVENTS initiaition*/
-	if (!(str = g_hash_table_lookup(params,KEY_EVENT_HANDLERS))) {
-		if(conscience->event_handler)
-			gridcluster_eventhandler_destroy(conscience->event_handler, FALSE);
-		INFO("[NS=%s] no event handler configured", conscience->ns_info.name);
-	} else if (!module_set_conscience_eventhandlers(conscience, err, str)) {
-		GSETERROR(err,"[NS=%s] failed to loaded the event handler from [%s]", conscience_get_namespace(conscience), str);
-		goto error;
-	}
-	else
-		NOTICE("[NS=%s] event handlers successfully reloaded from [%s]", conscience->ns_info.name, str);
 
 	g_rec_mutex_unlock(&conscience_nsinfo_mutex);
 

@@ -70,33 +70,6 @@ _dump_arrays(gchar **arrays)
 }
 
 static void
-help_meta1_policy_update() 
-{
-	g_printerr("\n");
-	g_printerr("usage: %s meta1_policy_apply NS ALL|PREFIX|REFERENCE_ID [SRVTYPE]\n\n", g_get_prgname());
-	g_printerr("\t              NS : The namespace name\n");
-	g_printerr("\t             ALL : apply the meta1 policy to all references defined in the namespace\n");
-	g_printerr("\t          PREFIX : apply the meta1 policy only to the references defined for this prefix. (Prefix is defined by 4 hexadecimal digits)\n");
-	g_printerr("\t    REFERENCE_ID : apply the meta1 policy only to this reference. (REFERENCE_ID is defined by 32 hexadecimal digits)\n");
-	g_printerr("\t        [SRVTYPE : the service type to be updated (defaults to \"meta2\")]\n");
-	g_printerr("\n");
-}
-
-static void
-help_meta1_policy_exclude() 
-{
-	g_printerr("\n");
-	g_printerr("usage: %s meta1_policy_exclude NS ALL|PREFIX|REFERENCE_ID SRV_URL\n\n", g_get_prgname());
-	g_printerr("\tThis action can be use to exclude a meta2 service and replace it by another service for the replication mechanism\n\n");
-	g_printerr("\t            NS : The namespace name\n");
-	g_printerr("\t           ALL : apply the meta1 policy to all references defined in the namespace\n");
-	g_printerr("\t        PREFIX : apply the meta1 policy only to the references defined for this prefix. (Prefix is defined by 4 hexadecimal digits)\n");
-	g_printerr("\t  REFERENCE_ID : apply the meta1 policy only to this reference. (REFERENCE_ID is defined by 32 hexadecimal digits)\n");
-	g_printerr("\t       SRV_URL : URL of the ecluded service\n");
-	g_printerr("\n");
-}
-
-static void
 help_touch(void)
 {
 	g_printerr("\n");
@@ -114,25 +87,6 @@ help_touch(void)
 
 /* ---------------------------------------- */
 
-static gboolean
-_func_meta1_policy_update(void)
-{
-	gs_error_t *err=NULL;
-	gchar **result=NULL;
-	gchar *globalresult= NULL;
-	err =  hcadmin_meta1_policy_update(g_url,action,flag_checkonly,&globalresult,&result,action_args);
-
-	if ( err != NULL )
-	{
-		_display_err("Failed to apply meta1 policy ",err);
-	} else {
-		if ( globalresult)
-			g_print("%s\n",globalresult);
-		_dump_arrays(result);
-	}
-
-	return TRUE;
-}
 
 static gboolean
 _func_touch(void)
@@ -167,16 +121,12 @@ struct help_s {
 };
 
 static struct action_s actions[] = {
-	{"meta1_policy_apply",  _func_meta1_policy_update},
-	{"meta1_policy_exclude",_func_meta1_policy_update},
 	{"touch", _func_touch},
 	{NULL,          NULL},
 };
 
 static struct help_s helps[] =
 {
-	{"meta1_policy_apply",   help_meta1_policy_update},
-	{"meta1_policy_exclude", help_meta1_policy_exclude},
 	{"touch", help_touch},
 	{NULL,		NULL},
 };

@@ -36,7 +36,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/transport_gridd.h>
 #include <server/gridd_dispatcher_filters.h>
 #include <cluster/lib/gridcluster.h>
-#include <cluster/events/gridcluster_events.h>
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2_filter_context.h>
 #include <meta2v2/meta2_filters.h>
@@ -1054,8 +1053,7 @@ _has_versioning(struct meta2_backend_s *m2b, struct hc_url_s *url)
 	GError *err = meta2_backend_get_max_versions(m2b, url, &maxvers);
 	if (err) {
 		GRID_ERROR("Failed getting max versions for ref [%s]: %s",
-				hc_url_get(url, HCURL_REFERENCE),
-				err->message);
+				hc_url_get(url, HCURL_WHOLE), err->message);
 		g_clear_error(&err);
 		return FALSE;
 	}

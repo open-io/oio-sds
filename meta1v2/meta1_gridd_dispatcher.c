@@ -29,7 +29,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metacomm.h>
 #include <cluster/lib/gridcluster.h>
 #include <sqliterepo/sqliterepo.h>
-#include <meta2/remote/meta2_remote.h>
+#include <meta2v2/meta2_remote.h>
 #include <server/grid_daemon.h>
 #include <server/transport_gridd.h>
 
@@ -38,40 +38,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_remote.h"
 #include "./meta1_gridd_dispatcher.h"
 #include "./internals.h"
-
-#define EXTRACT_STRING(Name,Dst,Mandatory) do { \
-	err = message_extract_string(reply->request, Name, Dst, sizeof(Dst)); \
-	if (NULL != err) { \
-		if (!(Mandatory)) { \
-			g_clear_error(&err); \
-			memset((Dst), 0, sizeof(Dst)); \
-		} else { \
-			reply->send_error(0, err); \
-			return TRUE; \
-		} \
-	} \
-} while (0)
-
-#define EXTRACT_CID(CID) do { \
-	err = message_extract_cid(reply->request, NAME_MSGKEY_CONTAINERID, &CID); \
-	if (NULL != err) { \
-		reply->send_error(0, err); \
-		return TRUE; \
-	} else { container_id_to_string(cid, strcid, sizeof(strcid)); }\
-} while (0)
-
-#define EXTRACT_FLAG(Name,Flag) do { \
-	err = message_extract_flag(reply->request, Name, FALSE, &(Flag)); \
-	if (NULL != err) { \
-		reply->send_error(0, err); \
-		return TRUE; \
-	} \
-} while (0)
-
-#define EXTRACT_CNAME(Dst) EXTRACT_STRING(NAME_MSGKEY_CONTAINERNAME, Dst, TRUE)
-#define EXTRACT_VNS(Dst) EXTRACT_STRING(NAME_MSGKEY_VIRTUALNAMESPACE, Dst, FALSE)
-#define EXTRACT_NS(Dst) EXTRACT_STRING(NAME_MSGKEY_NAMESPACE, Dst, TRUE)
-#define EXTRACT_SRVTYPE(Dst,Mandatory) EXTRACT_STRING(NAME_MSGKEY_SRVTYPE, Dst, Mandatory)
 
 static gsize m1b_bufsize_listbypref = 16384;
 
@@ -133,17 +99,18 @@ marshall_addrl(GSList *l, GError **err)
 }
 
 static GByteArray *
-marshall_stringv(gchar **v)
+marshall_stringv_and_clean(gchar ***pv)
 {
-	GByteArray *result = metautils_encode_lines(v);
-	g_strfreev(v);
+	GByteArray *result = metautils_encode_lines(*pv);
+	g_strfreev(*pv);
+	*pv = NULL;
 	return result;
 }
 
 /* -------------------------------------------------------------------------- */
 
 static GError *
-_stat_container(struct meta1_backend_s *m1, const container_id_t cid,
+_stat_container(struct meta1_backend_s *m1, struct hc_url_s *url,
 		struct meta1_raw_container_s **result)
 {
 	GError *err;
@@ -151,12 +118,12 @@ _stat_container(struct meta1_backend_s *m1, const container_id_t cid,
 	gchar **names, **allsrv;
 
 	/* Get the meta1 name */
-	err = meta1_backend_info_container(m1, cid, &names);
+	err = meta1_backend_info_container(m1, url, &names);
 	if (err != NULL)
 		return err;
 
 	/* Get the meta2 services */
-	err = meta1_backend_get_container_all_services(m1, cid, NAME_SRVTYPE_META2, &allsrv);
+	err = meta1_backend_get_container_all_services(m1, url, NAME_SRVTYPE_META2, &allsrv);
 	if (err != NULL) {
 		g_strfreev(names);
 		return err;
@@ -164,7 +131,7 @@ _stat_container(struct meta1_backend_s *m1, const container_id_t cid,
 	
 	/* OK, we have all the data */
 	raw = g_malloc0(sizeof(*raw));
-	memcpy(raw->id, cid, sizeof(container_id_t));
+	memcpy(raw->id, hc_url_get_id(url), sizeof(container_id_t));
 	g_strlcpy(raw->name, names[0], sizeof(raw->name)-1);
 	g_strfreev(names);
 	raw->meta2 = convert_urlv_to_addrl(allsrv);
@@ -174,45 +141,20 @@ _stat_container(struct meta1_backend_s *m1, const container_id_t cid,
 }
 
 static GError *
-_create_on_meta2(const gchar *srv, const gchar *vns, const gchar *cname,
-		container_id_t cid, struct addr_info_s *m2addr)
+_create_on_meta2(const gchar *srv, struct hc_url_s *url, struct addr_info_s *m2addr)
 {
-	gboolean rc;
-	GError *err = NULL;
-
 	GRID_DEBUG("Creation attempt on META2 at [%s]", srv);
-
 	if (!srv_to_addr(srv, m2addr))
 		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid address (%d %s)", errno, strerror(errno));
 
-	rc = vns && *vns
-		? meta2_remote_container_create_v2(m2addr, 30000, &err, cid, cname, vns)
-		: meta2_remote_container_create(m2addr, 30000, &err, cid, cname);
-
-	if (!rc) {
+	GError *err = NULL;
+	if (!meta2_remote_container_create_v3(m2addr, 30000, &err, url, NULL)) {
 		if (!err)
 			return NEWERROR(CODE_PROXY_ERROR, "Unknown error when contacting META2");
 		g_prefix_error(&err, "META2 error : ");
 		return err;
 	}
-
 	return NULL;
-}
-
-static struct hc_url_s *
-_forge_url(struct meta1_backend_s *m1, const char *vns, const char *hexid)
-{
-	struct hc_url_s *url = hc_url_empty();
-	if(vns) {
-		hc_url_set(url, HCURL_NS, vns);
-	} else {
-		char *ns = meta1_backend_get_ns_name(m1);
-		hc_url_set(url, HCURL_NS, ns);
-		g_free(ns);
-	}
-	hc_url_set(url, HCURL_HEXID, hexid);
-
-	return url;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -223,22 +165,14 @@ meta1_dispatch_v1_CREATE(struct gridd_reply_ctx_s *reply,
 {
 	GError *err;
 	struct addr_info_s m2addr;
-	container_id_t cid;
 	gchar **result = NULL;
-	gchar strcid[65], cname[256], vns[256];
-	struct hc_url_s *url = NULL;
 
-	/* Unpack the request */
+	struct hc_url_s *url = message_extract_url (reply->request);
+	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
-	EXTRACT_CID(cid);
-	EXTRACT_CNAME(cname);
-	EXTRACT_VNS(vns);
-	url = _forge_url(m1, vns, strcid);
-
-	reply->subject("%s/%s|%s", vns, cname, strcid);
 
 	/* Test if the container exsists */
-	err = meta1_backend_get_container_all_services(m1, cid, NAME_SRVTYPE_META2, &result);
+	err = meta1_backend_get_container_all_services(m1, url, NAME_SRVTYPE_META2, &result);
 	if (NULL != err) {
 		if (err->code != CODE_CONTAINER_NOTFOUND) {
 			hc_url_clean(url);
@@ -248,7 +182,7 @@ meta1_dispatch_v1_CREATE(struct gridd_reply_ctx_s *reply,
 		g_clear_error(&err);
 
 		GRID_DEBUG("Creating the container reference");
-		err = meta1_backend_create_container(m1, vns, cname, NULL);
+		err = meta1_backend_create_container(m1, url);
 		if (NULL != err) {
 			hc_url_clean(url);
 			reply->send_error(0, err);
@@ -276,7 +210,7 @@ meta1_dispatch_v1_CREATE(struct gridd_reply_ctx_s *reply,
 	gchar **p_url;
 	for (p_url=result; *p_url ;p_url++) {
 
-		err = _create_on_meta2(*p_url, vns, cname, cid, &m2addr);
+		err = _create_on_meta2(*p_url, url, &m2addr);
 		if (!err) {
 			GRID_DEBUG("Container created on META2");
 			break;
@@ -320,16 +254,12 @@ static gboolean
 meta1_dispatch_v1_BYID(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
-	GError *err;
-	container_id_t cid;
-	gchar strcid[65];
-	struct meta1_raw_container_s *raw = NULL;
-
+	struct hc_url_s *url = message_extract_url (reply->request);
+	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
-	EXTRACT_CID(cid);
-	reply->subject("%s", strcid);
 
-	err = _stat_container(m1, cid, &raw);
+	struct meta1_raw_container_s *raw = NULL;
+	GError *err = _stat_container(m1, url, &raw);
 	if (NULL != err)
 		reply->send_error(0, err);
 	else {
@@ -339,6 +269,7 @@ meta1_dispatch_v1_BYID(struct gridd_reply_ctx_s *reply,
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
+	hc_url_clean (url);
 	return TRUE;
 }
 
@@ -348,24 +279,17 @@ static gboolean
 meta1_dispatch_v2_CREATE(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
-	GError *err;
-	container_id_t cid, _cid;
-	gchar strcid[65], ns[256], cname[256];
-
 	(void) ignored;
-	EXTRACT_NS(ns);
-	EXTRACT_CID(cid);
-	EXTRACT_CNAME(cname);
-	reply->subject("%s/%s|%s", ns, cname, strcid);
+	struct hc_url_s *url = message_extract_url (reply->request);
+	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 
-	memset(_cid, 0, sizeof(_cid));
-	err = meta1_backend_create_container(m1, ns, cname, &_cid);
+	GError *err = meta1_backend_create_container(m1, url);
 	if (NULL != err)
 		reply->send_error(0, err);
-	else {
-		reply->add_header(NAME_MSGKEY_CONTAINERID, metautils_gba_from_cid(_cid));
+	else
 		reply->send_reply(CODE_FINAL_OK, "Created");
-	}
+
+	hc_url_clean (url);
 	return TRUE;
 }
 
@@ -373,26 +297,18 @@ static gboolean
 meta1_dispatch_v2_DESTROY(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
-	GError *err;
-	container_id_t cid;
-	gboolean force = FALSE;
-	gchar strcid[65], ns[256];
-
+	struct hc_url_s *url = message_extract_url (reply->request);
+	gboolean force = message_extract_flag(reply->request, NAME_MSGKEY_FORCE, FALSE);
+	reply->subject("%s|%s|%d", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), force);
 	(void) ignored;
-	EXTRACT_NS(ns);
-	EXTRACT_CID(cid);
-	reply->subject("%s/%s|%d", ns, strcid, force);
 
-	if (NULL != (err = message_extract_flag(reply->request, NAME_MSGKEY_FORCE, FALSE, &force))) {
-		reply->send_error(CODE_BAD_REQUEST, err);
-		return TRUE;
-	}
-
-	err = meta1_backend_destroy_container(m1, cid, force);
+	GError *err = meta1_backend_destroy_container(m1, url, force);
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
+
+	hc_url_clean (url);
 	return TRUE;
 }
 
@@ -401,24 +317,20 @@ meta1_dispatch_v2_HAS(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
-	container_id_t cid;
 	gchar **info = NULL;
-	gchar strcid[65], ns[256];
-
+	struct hc_url_s *url = message_extract_url (reply->request);
+	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
-	EXTRACT_CID(cid);
-	EXTRACT_NS(ns);
-	reply->subject("%s/%s", ns, strcid);
 	
-	if (NULL != (err = meta1_backend_info_container(m1, cid, &info))) {
+	if (NULL != (err = meta1_backend_info_container(m1, url, &info)))
 		reply->send_error(0, err);
-		return TRUE;
-	}
 	else {
-		reply->add_body(marshall_stringv(info));
+		reply->add_body(marshall_stringv_and_clean(&info));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
+	if (info) g_strfreev (info);
+	hc_url_clean (url);
 	return TRUE;
 }
 
@@ -426,33 +338,25 @@ static gboolean
 meta1_dispatch_v2_SRV_GETAVAIL(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
-	GError *err;
-	container_id_t cid;
-	gboolean dryrun = FALSE;
-	gchar strcid[65], srvtype[256], ns[256];
-	gchar **result = NULL;
-	struct hc_url_s *url = NULL;
-
+	struct hc_url_s *url = message_extract_url (reply->request);
+	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_SRVTYPE);
+	gboolean dryrun = message_extract_flag(reply->request, NAME_HEADER_DRYRUN, FALSE);
+	reply->subject("%s|%s|%s|%d", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype, dryrun);
 	(void) ignored;
-	EXTRACT_CID(cid);
-	EXTRACT_NS(ns);
-	EXTRACT_SRVTYPE(srvtype, TRUE);
-	EXTRACT_FLAG(NAME_HEADER_DRYRUN, dryrun);
-	url = _forge_url(m1, ns, strcid);
 
-	reply->subject("%s/%s|%s", ns, strcid, srvtype);
-
-	err = meta1_backend_get_container_service_available(m1, url, srvtype,
-			dryrun, &result);
-
+	gchar **result = NULL;
+	GError *err = meta1_backend_get_container_service_available(m1, url,
+			srvtype, dryrun, &result);
 	if (NULL != err)
 		reply->send_error(0, err);
 	else {
-		reply->add_body(marshall_stringv(result));
+		reply->add_body(marshall_stringv_and_clean(&result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
+	if (result) g_strfreev (result);
 	hc_url_clean(url);
+	g_free0 (srvtype);
 	return TRUE;
 }
 
@@ -460,31 +364,25 @@ static gboolean
 meta1_dispatch_v2_SRV_NEW(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
-	GError *err;
-	container_id_t cid;
-	gboolean dryrun = FALSE;
-	gchar strcid[65], srvtype[256], ns[256];
-	gchar **result = NULL;
-	struct hc_url_s *url = NULL;
-
+	struct hc_url_s *url = message_extract_url (reply->request);
+	gboolean dryrun = message_extract_flag(reply->request, NAME_HEADER_DRYRUN, FALSE);
+	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_SRVTYPE);
+	reply->subject("%s|%s|%s|%d", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype, dryrun);
 	(void) ignored;
-	EXTRACT_CID(cid);
-	EXTRACT_NS(ns);
-	EXTRACT_SRVTYPE(srvtype, TRUE);
-	EXTRACT_FLAG(NAME_HEADER_DRYRUN, dryrun);
-	reply->subject("%s/%s|%s", ns, strcid, srvtype);
-	url = _forge_url(m1, ns, strcid);
 
-	err = meta1_backend_get_container_new_service(m1, url, srvtype, dryrun,
-			&result);
-
+	gchar **result = NULL;
+	GError *err = meta1_backend_get_container_new_service(m1, url, srvtype,
+			dryrun, &result);
 	if (NULL != err)
 		reply->send_error(0, err);
 	else {
-		reply->add_body(marshall_stringv(result));
+		reply->add_body(marshall_stringv_and_clean(&result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
+
+	if (result) g_strfreev (result);
 	hc_url_clean(url);
+	g_free0 (srvtype);
 	return TRUE;
 }
 
@@ -493,26 +391,20 @@ meta1_dispatch_v2_SRV_SET(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
-	container_id_t cid;
-	gchar strcid[65], ns[LIMIT_LENGTH_NSNAME], *url = NULL;
-
+	gchar *m1url = NULL;
+	struct hc_url_s *url = message_extract_url (reply->request);
+	reply->subject("%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), m1url);
 	(void) ignored;
-	EXTRACT_NS(ns);
-	EXTRACT_CID(cid);
-	if (NULL != (err = message_extract_body_string(reply->request, &url))) {
+
+	if (NULL != (err = message_extract_body_string(reply->request, &m1url)))
 		reply->send_error(CODE_BAD_REQUEST, err);
-		return TRUE;
-	}
-	reply->subject("%s/%s|%s", ns, strcid, url);
-
-	err = meta1_backend_force_service(m1, cid, url);
-	g_free(url);
-
-	if (NULL != err)
+	else if (NULL != (err = meta1_backend_force_service(m1, url, m1url)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_BAD_REQUEST, "OK");
 
+	g_free0 (m1url);
+	hc_url_clean (url);
 	return TRUE;
 }
 
@@ -521,26 +413,20 @@ meta1_dispatch_v2_SRV_SETARG(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
-	container_id_t cid;
-	gchar strcid[65], ns[LIMIT_LENGTH_NSNAME], *url = NULL;
-
+	gchar *m1url = NULL;
+	struct hc_url_s *url = message_extract_url (reply->request);
+	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
-	EXTRACT_NS(ns);
-	EXTRACT_CID(cid);
-	reply->subject("%s/%s|%s", ns, strcid, url);
-	if (NULL != (err = message_extract_body_string(reply->request, &url))) {
+
+	if (NULL != (err = message_extract_body_string(reply->request, &m1url)))
 		reply->send_error(CODE_BAD_REQUEST, err);
-		return TRUE;
-	}
-
-	err = meta1_backend_set_service_arguments(m1, cid, url);
-	g_free(url);
-
-	if (NULL != err)
+	else if (NULL != (err = meta1_backend_set_service_arguments(m1, url, m1url)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
 
+	g_free0 (m1url);
+	hc_url_clean (url);
 	return TRUE;
 }
 
@@ -548,30 +434,27 @@ static gboolean
 meta1_dispatch_v2_SRV_DELETE(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
+	gchar **urlv = NULL;
 	GError *err;
-	container_id_t cid;
-	gchar strcid[65], srvtype[256], ns[256], **urlv = NULL;
-
+	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_SRVTYPE);
+	struct hc_url_s *url = message_extract_url (reply->request);
+	reply->subject("%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype);
 	(void) ignored;
-	EXTRACT_NS(ns);
-	EXTRACT_CID(cid);
-	EXTRACT_SRVTYPE(srvtype, TRUE);
-	reply->subject("%s/%s|%s", ns, strcid, srvtype);
-	if (NULL != (err = message_extract_body_strv(reply->request, &urlv))) {
+
+	if (!srvtype)
+		reply->send_error(0, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
+	else if (NULL != (err = message_extract_body_strv(reply->request, &urlv)))
 		reply->send_error(CODE_BAD_REQUEST, err);
-		return TRUE;
-	}
-
-	EXTRA_ASSERT(urlv != NULL);
-	GRID_TRACE("%u services to be deleted", g_strv_length(urlv));
-
-	err = meta1_backend_del_container_services(m1, cid, srvtype, urlv);
-	if (NULL != err)
+	else if (!srvtype)
+		reply->send_error(CODE_BAD_REQUEST, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
+	else if (NULL != (err = meta1_backend_del_container_services(m1, url, srvtype, urlv)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
 
-	g_strfreev(urlv);
+	if (urlv) g_strfreev (urlv);
+	hc_url_clean (url);
+	g_free0 (srvtype);
 	return TRUE;
 }
 
@@ -580,23 +463,24 @@ meta1_dispatch_v2_SRV_GETALL(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
-	container_id_t cid;
-	gchar strcid[65], srvtype[256], ns[256];
 	gchar **result = NULL;
-	
+	struct hc_url_s *url = message_extract_url (reply->request);
+	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_SRVTYPE);
+	reply->subject("%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype);
 	(void) ignored;
-	EXTRACT_CID(cid);
-	EXTRACT_NS(ns);
-	EXTRACT_SRVTYPE(srvtype, FALSE);
-	reply->subject("%s/%s|%s", ns, strcid, srvtype);
 
-	err = meta1_backend_get_container_all_services(m1, cid, srvtype, &result);
-	if (NULL != err)
+	if (!srvtype)
+		reply->send_error (0, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
+	else if (NULL != (err = meta1_backend_get_container_all_services(m1, url, srvtype, &result)))
 		reply->send_error(0, err);
 	else {
-		reply->add_body(marshall_stringv(result));
+		reply->add_body(marshall_stringv_and_clean(&result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
+
+	if (result) g_strfreev (result);
+	hc_url_clean (url);
+	g_free0 (srvtype);
 	return TRUE;
 }
 
@@ -604,35 +488,22 @@ static gboolean
 meta1_dispatch_v2_SRV_GETALLonM1(struct gridd_reply_ctx_s *reply,
         struct meta1_backend_s *m1, gpointer ignored)
 {
-    GError *err;
-    gchar ns[LIMIT_LENGTH_NSNAME];
-    container_id_t prefix;
-    gsize prefix_size;
+	GError *err;
 	gchar **result = NULL;
-
+	struct hc_url_s *url = message_extract_url (reply->request);
+    reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
+    reply->send_reply(CODE_TEMPORARY, "Received");
     (void) ignored;
 
-    memset(prefix, 0, sizeof(container_id_t));
-    prefix_size = sizeof(container_id_t);
-
-	EXTRACT_NS(ns);
-    if ((err = message_extract_prefix(reply->request, NAME_MSGKEY_PREFIX, prefix, &prefix_size))) {
-		reply->send_error(0, err); 
-        return TRUE;
-	}
-
-    gchar strpfx[65];
-    container_id_to_string(prefix, strpfx, sizeof(strpfx));
-    reply->subject("%s/%s", ns, strpfx);
-    reply->send_reply(CODE_TEMPORARY, "Received");
-	err = meta1_backend_get_all_services(m1, prefix, &result); 
-    if (NULL != err)
+	if (NULL != (err = meta1_backend_get_all_services(m1, url, &result)))
         reply->send_error(0, err);
     else {
-        reply->add_body(marshall_stringv(result));
+        reply->add_body(marshall_stringv_and_clean(&result));
         reply->send_reply(CODE_FINAL_OK, "OK");
     }
-	
+
+	if (result) g_strfreev (result);
+	hc_url_clean (url);
     return TRUE;
 }
 
@@ -641,28 +512,24 @@ meta1_dispatch_v2_CID_PROPGET(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
-	container_id_t cid;
-	gchar strcid[65], ns[256], **strv = NULL, **result = NULL;
+	gchar **strv = NULL, **result = NULL;
+	struct hc_url_s *url = message_extract_url (reply->request);
+	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 
 	(void) ignored;
-	EXTRACT_CID(cid);
-	EXTRACT_NS(ns);
-	reply->subject("%s/%s", ns, strcid);
-	if (NULL != (err = message_extract_body_strv(reply->request, &strv))) {
+
+	if (NULL != (err = message_extract_body_strv(reply->request, &strv)))
 		reply->send_error(CODE_BAD_REQUEST, err);
-		return TRUE;
-	}
-
-	err = meta1_backend_get_container_properties(m1, cid, strv, &result);
-	g_strfreev(strv);
-	strv = NULL;
-
-	if (NULL != err)
+	else if (NULL != (err = meta1_backend_get_container_properties(m1, url, strv, &result)))
 		reply->send_error(0, err);
 	else {
-		reply->add_body(marshall_stringv(result));
+		reply->add_body(marshall_stringv_and_clean(&result));
 		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
+
+	if (strv) g_strfreev (strv);
+	if (result) g_strfreev (result);
+	hc_url_clean (url);
 	return TRUE;
 }
 
@@ -671,25 +538,20 @@ meta1_dispatch_v2_CID_PROPSET(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
-	container_id_t cid;
-	gchar strcid[65], ns[256], **strv = NULL;
-
+	gchar **strv = NULL;
+	struct hc_url_s *url = message_extract_url (reply->request);
+	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
-	EXTRACT_CID(cid);
-	EXTRACT_NS(ns);
-	reply->subject("%s/%s", ns, strcid);
-	if (NULL != (err = message_extract_body_strv(reply->request, &strv))) {
+
+	if (NULL != (err = message_extract_body_strv(reply->request, &strv)))
 		reply->send_error(CODE_BAD_REQUEST, err);
-		return TRUE;
-	}
-
-	err = meta1_backend_set_container_properties(m1, cid, strv);
-	if (NULL != err) {
+	else if (NULL != (err = meta1_backend_set_container_properties(m1, url, strv)))
 		reply->send_error(0, err);
-		return TRUE;
-	}
+	else
+		reply->send_reply(CODE_FINAL_OK, "OK");
 
-	reply->send_reply(CODE_FINAL_OK, "OK");
+	if (strv) g_strfreev (strv);
+	hc_url_clean (url);
 	return TRUE;
 }
 
@@ -698,26 +560,20 @@ meta1_dispatch_v2_CID_PROPDEL(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
-	container_id_t cid;
-	gchar strcid[65], ns[256], **strv = NULL;
-
+	gchar **strv = NULL;
+	struct hc_url_s *url = message_extract_url (reply->request);
+	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
-	EXTRACT_CID(cid);
-	EXTRACT_NS(ns);
-	reply->subject("%s/%s", ns, strcid);
 
-	if (NULL != (err = message_extract_body_strv(reply->request, &strv))) {
+	if (NULL != (err = message_extract_body_strv(reply->request, &strv)))
 		reply->send_error(CODE_BAD_REQUEST, err);
-		return TRUE;
-	}
-
-	err = meta1_backend_del_container_properties(m1, cid, strv);
-	if (NULL != err) {
+	else if (NULL != (err = meta1_backend_del_container_properties(m1, url, strv)))
 		reply->send_error(0, err);
-		return TRUE;
-	}
+	else 
+		reply->send_reply(CODE_FINAL_OK, "OK");
 
-	reply->send_reply(CODE_FINAL_OK, "OK");
+	if (strv) g_strfreev (strv);
+	hc_url_clean (url);
 	return TRUE;
 }
 
@@ -769,30 +625,25 @@ static gboolean
 meta1_dispatch_v2_SRV_LISTPREF(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
-	struct reflist_ctx_s reflist_ctx;
-	GError *err;
-	gchar ns[LIMIT_LENGTH_NSNAME];
-	container_id_t prefix;
-	gsize prefix_size;
-
+	struct hc_url_s *url = message_extract_url (reply->request);
+	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_SRVTYPE);
+	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
 
-	reflist_ctx.gba = NULL;
-	reflist_ctx.reply = reply;
-	memset(prefix, 0, sizeof(container_id_t));
-	prefix_size = sizeof(container_id_t);
-
-	if (!(err = message_extract_prefix(reply->request, NAME_MSGKEY_PREFIX, prefix, &prefix_size))
-			&& !(err = message_extract_string(reply->request, NAME_MSGKEY_NAMESPACE, ns, sizeof(ns))))
-	{
-		gchar strpfx[65];
-		container_id_to_string(prefix, strpfx, sizeof(strpfx));
-		reply->subject("%s/%s", ns, strpfx);
+	if (!srvtype)
+		reply->send_error (0, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
+	else {
+		struct reflist_ctx_s reflist_ctx;
+		reflist_ctx.gba = NULL;
+		reflist_ctx.reply = reply;
 		reply->send_reply(CODE_TEMPORARY, "Received");
-		err = meta1_backend_list_references(m1, prefix, reflist_hook, &reflist_ctx);
+		GError *err = meta1_backend_list_references_by_prefix(m1, url,
+				reflist_hook, &reflist_ctx);
+		reflist_final(&reflist_ctx, err);
 	}
 
-	reflist_final(&reflist_ctx, err);
+	hc_url_clean (url);
+	g_free0 (srvtype);
 	return TRUE;
 }
 
@@ -800,33 +651,29 @@ static gboolean
 meta1_dispatch_v2_SRV_LISTSERV(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
-	GError *err;
-	gchar ns[LIMIT_LENGTH_NSNAME], srvtype[LIMIT_LENGTH_SRVTYPE], url[256];
-	container_id_t prefix;
-	gsize prefix_size;
-	struct reflist_ctx_s reflist_ctx;
-
+	struct hc_url_s *url = message_extract_url (reply->request);
+	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_SRVTYPE);
+	gchar *m1url = message_extract_string_copy (reply->request, NAME_MSGKEY_URL);
+	reply->subject("%s|%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype, m1url);
 	(void) ignored;
 
-	reflist_ctx.gba = NULL;
-	reflist_ctx.reply = reply;
-	memset(prefix, 0, sizeof(container_id_t));
-	prefix_size = sizeof(container_id_t);
-
-	if (!(err = message_extract_prefix(reply->request, NAME_MSGKEY_PREFIX, prefix, &prefix_size))
-			&& !(err = message_extract_string(reply->request, NAME_MSGKEY_NAMESPACE, ns, sizeof(ns)))
-			&& !(err = message_extract_string(reply->request, NAME_MSGKEY_SRVTYPE, srvtype, sizeof(srvtype)))
-			&& !(err = message_extract_string(reply->request, NAME_MSGKEY_URL, url, sizeof(url))))
-	{
-		gchar strpfx[65];
-		container_id_to_string(prefix, strpfx, sizeof(strpfx));
-		reply->subject("%s/%s/%s/%s", ns, strpfx, srvtype, url);
+	if (!srvtype)
+		reply->send_error (0, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
+	else if (m1url)
+		reply->send_error (0, NEWERROR(CODE_BAD_REQUEST, "Missing srvurl"));
+	else {
+		struct reflist_ctx_s reflist_ctx;
+		reflist_ctx.gba = NULL;
+		reflist_ctx.reply = reply;
 		reply->send_reply(CODE_TEMPORARY, "Received");
-		err = meta1_backend_list_references_by_service(m1, prefix,
-				srvtype, url, reflist_hook, &reflist_ctx);
+		GError *err = meta1_backend_list_references_by_service(m1, url,
+				srvtype, m1url, reflist_hook, &reflist_ctx);
+		reflist_final(&reflist_ctx, err);
 	}
 
-	reflist_final(&reflist_ctx, err);
+	g_free0 (srvtype);
+	g_free0 (m1url);
+	hc_url_clean (url);
 	return TRUE;
 }
 
@@ -834,104 +681,13 @@ static gboolean
 meta1_dispatch_v2_GET_PREFIX(struct gridd_reply_ctx_s *reply,
 	struct meta1_backend_s *m1, gpointer ignored)
 {
-	gchar **result = NULL;
-	struct meta1_prefixes_set_s *m1ps;
-
 	(void) ignored;
-
-	m1ps = meta1_backend_get_prefixes(m1);
-	result = meta1_prefixes_get_all(m1ps);
-
-	if ( result )
-		reply->add_body(marshall_stringv(result));
+	struct meta1_prefixes_set_s *m1ps = meta1_backend_get_prefixes(m1);
+	gchar **result = result = meta1_prefixes_get_all(m1ps);
+	if (result)
+		reply->add_body(marshall_stringv_and_clean(&result));
 	reply->send_reply(CODE_FINAL_OK, "OK");
-	
 	return TRUE;
-}
-
-static gboolean
-meta1_dispatch_v2_UPDATE_M1_POLICY(struct gridd_reply_ctx_s *reply,
-	struct meta1_backend_s *m1, gpointer ignored)
-{
-	gchar ns[LIMIT_LENGTH_NSNAME], srvtype[LIMIT_LENGTH_SRVTYPE], excludesrv[65], action[65];
-	container_id_t prefix;
-	container_id_t cid;
-	gchar *result = NULL;
-	gboolean checkonly = FALSE;
-	GError *err = NULL;
-	gboolean foundcontainer = TRUE, foundprefix=TRUE;
-	gsize prefix_size = sizeof(container_id_t);
-	gchar strcid[65];
-
-	(void) ignored;
-
-	memset(excludesrv, 0, sizeof(excludesrv));
-	memset(&prefix,0, sizeof(container_id_t));
-	memset(&cid,0, sizeof(container_id_t));
-	memset(strcid, '\0', sizeof(strcid));
-
-	EXTRACT_NS(ns);
-	EXTRACT_SRVTYPE(srvtype,TRUE);
-	EXTRACT_STRING(NAME_MSGKEY_ACTION,action,TRUE);
-
-	err = message_extract_prefix(reply->request, NAME_MSGKEY_PREFIX, prefix, &prefix_size);
-	if ( NULL != err ) {
-		foundprefix=FALSE;
-		g_clear_error(&err);
-	}
-	else
-		container_id_to_string(prefix, strcid, sizeof(strcid));
-
-	err = message_extract_prefix(reply->request, NAME_MSGKEY_CONTAINERID, cid, &prefix_size);
-	if ( NULL != err ) {
-		foundcontainer=FALSE;
-		g_clear_error(&err);
-	}
-	else
-		container_id_to_string(cid, strcid, sizeof(strcid));
-
-	/* Update ns from meta1 to support vns */
-	if (foundcontainer) {
-		gchar **names = NULL;
-		if (NULL == (err = meta1_backend_info_container(m1, cid, &names))) {
-			GRID_DEBUG("Found vns from meta1 : %s", names[0]);
-			gchar *slash = g_strrstr(names[0], "/");
-			memset(ns, '\0', sizeof(ns));
-			g_strlcpy(ns, names[0], MIN(sizeof(ns), 1 + strlen(names[0]) - strlen(slash)));
-			g_strfreev(names);
-		}
-	}
-
-	EXTRACT_STRING("EXCLUDEURL",excludesrv,FALSE);
-	err = message_extract_flag(reply->request, NAME_MSGKEY_CHECKONLY, FALSE, &checkonly);
-	if ( NULL != err ) {
-		g_clear_error(&err);
-	}
-
-	reply->subject("%s/%s/%s", ns, strcid, srvtype);
-
-	// FVE: the next function can answer CODE_REDIRECT so it's weird to answer CODE_TEMPORARY now
-	// reply->send_reply(CODE_TEMPORARY, "Received");
-
-	err = meta1_backend_update_m1_policy(m1, ns,
-			(foundprefix? prefix : NULL),(foundcontainer? cid : NULL),
-			srvtype, excludesrv, action, checkonly, &result);
-
-	if (NULL != err)
-		reply->send_error(0, err);
-	else {
-		GByteArray *gba = g_byte_array_new();
-                g_byte_array_append(gba, (guint8*)result, strlen(result));
-		g_byte_array_append(gba, (guint8*)"", 1);
-		g_byte_array_set_size(gba, gba->len - 1);
-		reply->add_body(gba);
-		reply->send_reply(CODE_FINAL_OK, "OK");
-	}
-
-	g_free(result);
-
-	return TRUE;
-
 }
 
 /* ------------------------------------------------------------------------- */
@@ -960,7 +716,6 @@ meta1_gridd_get_requests(void)
 		{NAME_MSGNAME_M1V2_GETPREFIX,	(hook) meta1_dispatch_v2_GET_PREFIX,    NULL},
 		{NAME_MSGNAME_M1V2_LISTBYPREF,  (hook) meta1_dispatch_v2_SRV_LISTPREF,  NULL},
 		{NAME_MSGNAME_M1V2_LISTBYSERV,  (hook) meta1_dispatch_v2_SRV_LISTSERV,  NULL},
-		{NAME_MSGNAME_M1V2_UPDATEM1POLICY,(hook) meta1_dispatch_v2_UPDATE_M1_POLICY, NULL},
 
 		/* Old fashoned meta2-orentied requests */
 		{NAME_MSGNAME_M1_CREATE,        (hook) meta1_dispatch_v1_CREATE,   NULL},

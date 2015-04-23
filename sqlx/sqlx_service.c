@@ -28,25 +28,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/time.h>
 #include <sys/resource.h>
 
-#include <glib.h>
-
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
 #include <server/grid_daemon.h>
 #include <server/stats_holder.h>
 #include <server/transport_gridd.h>
-
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/cache.h>
 #include <sqliterepo/election.h>
 #include <sqliterepo/synchro.h>
 #include <sqliterepo/replication_dispatcher.h>
-
 #include <resolver/hc_resolver.h>
 
+#include <glib.h>
+#include <zmq.h>
+
 #include "sqlx_service.h"
-#include "sqlx_service_extras.h"
 
 // common_main hooks
 static struct grid_main_option_s * sqlx_service_get_options(void);
@@ -64,6 +62,8 @@ static void _task_expire_resolver(gpointer p);
 static void _task_retry_elections(gpointer p);
 static void _task_reload_nsinfo(gpointer p);
 static void _task_reload_workers(gpointer p);
+
+static gpointer _worker_notify_account (gpointer p);
 static gpointer _worker_clients(gpointer p);
 
 // Static variables
@@ -140,6 +140,13 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 	}
 	GRID_NOTICE("NS configured to [%s]", ss->ns_name);
 
+	ss->lb = grid_lbpool_create (ss->ns_name);
+	if (!ss->lb) {
+		GRID_WARN("LB allocation failure");
+		return FALSE;
+	}
+	GRID_NOTICE("LB allocated");
+
 	s = g_strlcpy(ss->volume, argv[1], sizeof(ss->volume));
 	if (s >= sizeof(ss->volume)) {
 		GRID_WARN("Volume name too long (given=%"G_GSIZE_FORMAT" max=%lu)",
@@ -193,6 +200,7 @@ _init_configless_structures(struct sqlx_service_s *ss)
 	if (!(ss->server = network_server_init())
 			|| !(ss->dispatcher = transport_gridd_build_empty_dispatcher())
 			|| !(ss->si = g_malloc0(sizeof(struct service_info_s)))
+			|| !(ss->notify.zctx = zmq_init(1))
 			|| !(ss->clients_pool = gridd_client_pool_create())
 			|| !(ss->gsr_reqtime = grid_single_rrd_create(network_server_bogonow(ss->server), 8))
 			|| !(ss->gsr_reqcounter = grid_single_rrd_create(network_server_bogonow(ss->server),8))
@@ -203,6 +211,7 @@ _init_configless_structures(struct sqlx_service_s *ss)
 		GRID_WARN("SERVICE init error : memory allocation failure");
 		return FALSE;
 	}
+
 	return TRUE;
 }
 
@@ -312,6 +321,7 @@ _configure_tasks(struct sqlx_service_s *ss)
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_retry_elections, NULL, ss);
+
 	return TRUE;
 }
 
@@ -425,6 +435,12 @@ sqlx_service_action(void)
 	if (!SRV.thread_client)
 		return _action_report_error(err, "Failed to start the CLIENT thread");
 
+	if (SRV.notify.queue) {
+		SRV.notify.thread = g_thread_try_new("notifier", _worker_notify_account, &SRV, &err);
+		if (!SRV.notify.thread)
+			return _action_report_error(err, "Failed to start the NOTIFY thread");
+	}
+
 	/* SERVER/GRIDD main run loop */
 	if (!grid_main_is_running())
 		return;
@@ -515,6 +531,11 @@ sqlx_service_specific_fini(void)
 	if (SRV.thread_client)
 		g_thread_join(SRV.thread_client);
 
+	if (SRV.notify.thread) {
+		g_thread_join(SRV.notify.thread);
+		SRV.notify.thread = NULL;
+	}
+
 	if (SRV.repository) {
 		sqlx_repository_stop(SRV.repository);
 		struct sqlx_cache_s *cache = sqlx_repository_get_cache(SRV.repository);
@@ -562,8 +583,14 @@ sqlx_service_specific_fini(void)
 	if (SRV.zk_url)
 		metautils_str_clean(&SRV.zk_url);
 
-	if (SRV.extras)
-		sqlx_service_extras_clear(&SRV);
+	if (SRV.lb)
+		grid_lbpool_destroy (SRV.lb);
+	if (SRV.notify.queue) {
+		g_async_queue_unref (SRV.notify.queue);
+		SRV.notify.queue = NULL;
+	}
+	if (SRV.notify.zctx)
+		zmq_term (SRV.notify.zctx);
 
 	namespace_info_clear(&SRV.nsinfo);
 }
@@ -635,7 +662,8 @@ sqlite_service_main(int argc, char **argv,
 	memset(&replication_config, 0, sizeof(replication_config));
 	SRV.replication_config = &replication_config;
 	SRV.service_config = cfg;
-	return grid_main(argc, argv, &sqlx_service_callbacks);
+	int rc = grid_main(argc, argv, &sqlx_service_callbacks);
+	return rc;
 }
 
 // Tasks -----------------------------------------------------------------------
@@ -757,3 +785,111 @@ _task_reload_workers(gpointer p)
 	network_server_set_max_workers(PSRV(p)->server, (guint) max_workers);
 }
 
+void
+sqlx_task_reload_lb (struct sqlx_service_s *ss)
+{
+	GError *err;
+
+	EXTRA_ASSERT(ss != NULL);
+
+	if (!ss->lb)
+		return;
+
+	if (NULL != (err = gridcluster_reload_lbpool(ss->lb))) {
+		GRID_WARN("Failed to reload the LB pool services: (%d) %s",
+				err->code, err->message);
+		g_clear_error(&err);
+	}
+
+	// ss->nsinfo is reloaded by _task_reload_nsinfo()
+	grid_lbpool_reconfigure(ss->lb, &(ss->nsinfo));
+}
+
+GError *
+sqlx_notify (gpointer udata, gchar *msg)
+{
+	struct sqlx_service_s *ss = udata;
+	if (ss->notify.queue && ss->notify.thread)
+		g_async_queue_push (ss->notify.queue, msg);
+	else
+		g_free(msg);
+	return NULL;
+}
+
+gboolean
+sqlx_enable_notifier (struct sqlx_service_s *ss)
+{
+	EXTRA_ASSERT(ss != NULL);
+	EXTRA_ASSERT(ss->notify.queue == NULL);
+	if (!ss->notify.queue)
+		ss->notify.queue = g_async_queue_new();
+	return TRUE;
+}
+
+static void
+_notification_manage (void *zpush, gchar *tmp)
+{
+	int rc, err;
+	if (zpush) {
+		rc = zmq_send (zpush, tmp, strlen(tmp), 0);
+		if (rc < 0) {
+			err = zmq_errno ();
+			GRID_WARN("Notification failed : container state %s: (%d) %s",
+					tmp, err, zmq_strerror(err));
+		} else {
+			GRID_DEBUG("Notified container state %s", tmp);
+		}
+	} else {
+		GRID_INFO("Container usage [%s]", tmp);
+	}
+	g_free (tmp);
+}
+
+static gpointer
+_worker_notify_account (gpointer p)
+{
+	struct sqlx_service_s *ss = p;
+	void *zpush = NULL;
+
+	if (ss->notify.zctx) {
+		gchar *url =  gridcluster_get_accountagent (PSRV(p)->ns_name);
+		if (url) {
+			int rc, err;
+			zpush = zmq_socket (ss->notify.zctx, ZMQ_PUSH);
+			if (!zpush) {
+				err = zmq_errno ();
+				GRID_WARN("ZMQ socket creation error : (%d) %s",
+						err, zmq_strerror(err));
+			} else {
+				if (0 > (rc = zmq_connect (zpush, url))) {
+					err = zmq_errno ();
+					GRID_WARN("ZMQ connection error (account-agent) : (%d) %s",
+							err, zmq_strerror (err));
+					zmq_close (zpush);
+					zpush = NULL;
+				}
+
+				int opt = 1000;
+				zmq_setsockopt (zpush, ZMQ_LINGER, &opt, sizeof(opt));
+			}
+			g_free (url);
+		}
+	}
+
+	gchar *tmp;
+	while (grid_main_is_running()) {
+		tmp = (gchar*) g_async_queue_timeout_pop (ss->notify.queue, 1000000L);
+		if (!tmp)
+			continue;
+		_notification_manage (zpush, tmp);
+	}
+	while (NULL != (tmp = g_async_queue_try_pop (ss->notify.queue)))
+		_notification_manage (zpush, tmp);
+
+	if (zpush) {
+		zmq_close (zpush);
+		zpush = NULL;
+	}
+
+	return p;
+}

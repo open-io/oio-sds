@@ -812,7 +812,7 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		return NEWERROR(CODE_CONTENT_NOTFOUND, "No content to delete");
 	}
 
-	gboolean is_in_a_snapshot_b = is_in_a_snapshot(sq3, alias);
+	gboolean is_in_a_snapshot_b = FALSE;
 
 	GRID_TRACE("CONTENT [%s] uses [%u] beans",
 			hc_url_get(url, HCURL_WHOLE), g_slist_length(beans));
@@ -1122,6 +1122,7 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 			g_prefix_error(&err, "Version error: ");
 	}
 	else if (latest) { /* alias present  */
+		gboolean in_a_snapshot = FALSE;
 		gint64 count_versions = _m2db_count_alias_versions(args->sq3, args->url);
 		args2.version = ALIASES_get_version(latest);
 
@@ -1133,8 +1134,7 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 		}
 		else { /* versioning enabled */
 			if (VERSIONS_SUSPENDED(args->max_versions) ||
-					(ALIASES_get_deleted(latest) &&
-					 !is_in_a_snapshot(args->sq3, latest))) {
+					(ALIASES_get_deleted(latest) && !in_a_snapshot)) {
 				args2.version -= 1; // Overwrite the deleted/unique version
 				if (VERSIONS_SUSPENDED(args->max_versions))
 					size -= _get_alias_size(args->sq3, latest);
@@ -1180,10 +1180,10 @@ m2db_copy_alias(struct m2db_put_args_s *args, const char *source)
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
 	// Try to use source as an URL
-	orig = hc_url_init(source);
+	orig = hc_url_oldinit(source);
 	if (!orig || !hc_url_has(orig, HCURL_PATH)) {
 		// Source is just the name of the content to copy
-		orig = hc_url_init(hc_url_get(args->url, HCURL_WHOLE));
+		orig = hc_url_oldinit(hc_url_get(args->url, HCURL_WHOLE));
 		hc_url_set(orig, HCURL_PATH, source);
 	}
 
@@ -1966,17 +1966,20 @@ m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname, int re
 void
 m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 {
-	const gchar *v;
-
 	sqlx_admin_init_str(sq3, M2V2_ADMIN_VERSION, "0");
 
-	v = hc_url_get(url, HCURL_REFERENCE);
-	if (v != NULL)
-		sqlx_admin_init_str(sq3, SQLX_ADMIN_REFERENCE, v);
-
-	v = hc_url_get(url, HCURL_NS);
-	if (v != NULL)
-		sqlx_admin_init_str(sq3, SQLX_ADMIN_NAMESPACE, v);
+	struct map_s { const char *f; int k; } map[] = {
+		{SQLX_ADMIN_NAMESPACE, HCURL_NS},
+		{SQLX_ADMIN_ACCOUNT, HCURL_ACCOUNT},
+		{SQLX_ADMIN_USERNAME, HCURL_USER},
+		{SQLX_ADMIN_USERTYPE, HCURL_TYPE},
+		{NULL,0},
+	};
+	for (struct map_s *p = map; p->f ; ++p) {
+		const gchar *v = hc_url_get(url, p->k);
+		if (v != NULL)
+			sqlx_admin_init_str(sq3, p->f, v);
+	}
 }
 
 GError*
@@ -2328,7 +2331,7 @@ m2db_deduplicate_chunks(struct sqlx_sqlite3_s *sq3, namespace_info_t *nsinfo,
 		(void) user_data;
 		GError *err2 = NULL;
 		GString *alias_str = ALIASES_get_alias(alias);
-		struct hc_url_s *url2 = hc_url_init(hc_url_get(url, HCURL_WHOLE));
+		struct hc_url_s *url2 = hc_url_oldinit(hc_url_get(url, HCURL_WHOLE));
 		hc_url_set(url2, HCURL_PATH, alias_str->str);
 		err2 = m2db_deduplicate_alias_chunks(sq3, nsinfo, url2);
 		if (err2 != NULL) {

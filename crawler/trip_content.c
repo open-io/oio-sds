@@ -29,7 +29,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metacomm.h>
 #include <metautils/lib/metautils.h>
-#include <meta2/remote/meta2_remote.h>
+#include <meta2v2/meta2_remote.h>
 
 #include <glib.h>
 
@@ -38,6 +38,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "lib/lib_trip.h"
 #include "lib/dir_explorer.h"
 
+#if 0
 static gchar* trip_name = "trip_content";
 static gchar* source_cmd_opt_name = "s";
 static gchar* infinite_cmd_opt_name = "infinite";
@@ -52,12 +53,13 @@ static dir_explorer_t dir_explorer_handle;
 
 static gboolean infinite = FALSE;
 
-static void refresh_current_content_list(const gchar* container_path)
+
+static void
+refresh_current_content_list(const gchar* container_path)
 {
 	GError* error = NULL;
 	addr_info_t meta2_addr;
 	gchar* container_id_str = NULL;
-	container_id_t container_id;
 
 	if (NULL == container_path || NULL != current_content_list)
 		return;
@@ -72,16 +74,19 @@ static void refresh_current_content_list(const gchar* container_path)
 		current_content_list = NULL; /* Just to make sure */
 	} else {
 		container_id_str = g_path_get_basename(container_path);
-		container_id_hex2bin(container_id_str, strlen(container_id_str),
-				&container_id, &error);
 		if (NULL != error) {
 			GRID_ERROR("Failed to read container id: %s", error->message);
 			g_clear_error(&error);
 			current_content_list = NULL; /* Just to make sure */
 			g_free(container_id_str);
 		} else {
+			struct hc_url_s *url = hc_url_empty ();
+			hc_url_set (url, HCURL_HEXID, container_id_str);
+			hc_url_set (url, HCURL_PATH, 
 			current_content_list = meta2_remote_container_list(&meta2_addr,
-					META2_CONNECTION_TIMEOUT * 1000, &error, container_id);
+					META2_CONNECTION_TIMEOUT * 1000, &error, url);
+			hc_url_clean (url);
+
 			if (NULL != error) {
 				GRID_ERROR("Failed to list contents of container %s: %s",
 						container_id_str, error->message);
@@ -97,16 +102,23 @@ static void refresh_current_content_list(const gchar* container_path)
 		}
 	}
 }
+#endif
 
 int
 trip_progress(void)
 {
+#if 0
 	return dir_progress(&dir_explorer_handle);
+#endif
+	return 100;
 }
 
 int
 trip_start(int argc, char** argv)
 {
+	(void) argc, (void) argv;
+	return EXIT_FAILURE;
+#if 0
 	GError *err = NULL;
 	memset(meta2_url, 0, sizeof(meta2_url));
 	memset(&dir_explorer_handle, 0, sizeof(dir_explorer_t));
@@ -147,8 +159,10 @@ trip_start(int argc, char** argv)
     }
 
 	return EXIT_SUCCESS;
+#endif
 }
 
+#if 0
 // FIXME: similar to trip_container
 static gboolean
 _reset_infinite(void)
@@ -191,6 +205,7 @@ _trip_next_content(void)
 static GVariant*
 _sub_trip_next(void)
 {
+	return NULL;
 	gchar* file_path = NULL;
 	while (current_content_list == NULL) {
 		// Look for a valid container
@@ -215,10 +230,18 @@ trip_next(void)
 {
 	return _sub_trip_next();
 }
+#endif
+
+GVariant*
+trip_next(void)
+{
+	return NULL;
+}
 
 void
 trip_end(void)
 {
+#if 0
 	dir_explorer_clean(&dir_explorer_handle);
 
 	if (NULL != current_content_list)
@@ -226,4 +249,5 @@ trip_end(void)
 
 	if (NULL != source_directory_path_ref)
 		g_free(source_directory_path_ref);
+#endif
 }

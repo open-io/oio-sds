@@ -69,7 +69,6 @@ usage(void)
 	g_printerr("  %-20s\t%s\n", "--errors,                 -e", "Shows erroneous container identifiers");
 	g_printerr("  %-20s\t%s\n", "--clear-services SERVICE    ", "Clear all local RAWX reference in cluster.");
 	g_printerr("  %-20s\t%s\n", "--clear-errors              ", "Clear all local erroneous containers references in the cluster");
-	g_printerr("  %-20s\t%s\n", "--config,                 -c", "Dump the event management configuration for the given namespace");
 	g_printerr("  %-20s\t%s\n", "--full,                     ", "Show full services.");
 	g_printerr("  %-20s\t%s\n", "--lb-config,                ", "Prints to stdout the namespace LB configuration ");
 	g_printerr("  %-20s\t%s\n", "--local-cfg,              -A", "Prints to stdout the namespaces configuration values locally configured");
@@ -318,7 +317,6 @@ main(int argc, char **argv)
 	gboolean has_unlock_score = FALSE;
 	gboolean has_service = FALSE;
 	gboolean has_list_task = FALSE;
-	gboolean has_config = FALSE;
 	gboolean has_rules = FALSE;
 	gboolean has_rules_path = FALSE;
 	gboolean has_lbconfig = FALSE;
@@ -362,7 +360,7 @@ main(int argc, char **argv)
 	memset(cid_str, 0x00, sizeof(cid_str));
 	enable_debug();
 
-	while ((c = getopt_long(argc, argv, "ALsvealtrcPBRC:S:h", long_options, &option_index)) > -1) {
+	while ((c = getopt_long(argc, argv, "ALsvealtrPBRC:S:h", long_options, &option_index)) > -1) {
 
 		switch (c) {
 			case 'A':
@@ -389,9 +387,6 @@ main(int argc, char **argv)
 				}
 				g_strlcpy(service_desc, optarg, sizeof(service_desc)-1);
 				has_rules = TRUE;
-				break;
-			case 'c':
-				has_config = TRUE;
 				break;
 			case 'C':
 				if (!optarg) {
@@ -537,15 +532,6 @@ main(int argc, char **argv)
 		}
 		gba_write(1, gba_rules);
 		g_byte_array_free(gba_rules, TRUE);
-	}
-	else if (has_config) {
-		GByteArray *gba_config = event_get_configuration(namespace, &error);
-		if (!gba_config) {
-			g_printerr("No event configuration found for namespace '%s'", namespace);
-			goto exit_label;
-		}
-		gba_write(1, gba_config);
-		g_byte_array_free(gba_config, TRUE);
 	}
 	else if (has_clear_services) {
 

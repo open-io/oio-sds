@@ -171,8 +171,6 @@ conscience_create_named(const gchar *ns_name, GError **error)
 	
 	metautils_strlcpy_physical_ns(conscience->ns_info.name, ns_name,
 			sizeof(conscience->ns_info.name));
-	conscience->event_handler = gridcluster_eventhandler_create(
-			ns_name, error, NULL, NULL);
 	return conscience;
 }
 

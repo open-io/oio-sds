@@ -27,7 +27,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <errno.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 #include <cluster/conscience/conscience.h>
 
 #include "module/module.h"

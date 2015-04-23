@@ -381,39 +381,6 @@ message_set_param(MESSAGE m, enum message_param_e mp, const void *s, gsize sSize
 	}
 }
 
-void
-message_add_field(MESSAGE m, const char *name, const void *value, gsize valueSize)
-{
-	if (!m || !name || !value)
-		return ;
-
-	if (!m->asnMsg)
-		_alloc_asn_message(m, NULL);
-
-	void *pList = &(m->asnMsg->content.list);
-	Parameter_t *pMember = g_malloc0(sizeof(Parameter_t));
-
-	if (0 != OCTET_STRING_fromBuf(&(pMember->name), name, strlen(name))) {
-		GRID_WARN("Cannot copy the parameter name");
-		goto errorLABEL;
-	}
-	if (0 != OCTET_STRING_fromBuf(&(pMember->value), value, valueSize)) {
-		GRID_WARN("Cannot copy the parameter value");
-		goto errorLABEL;
-	}
-	if (0 != asn_set_add(pList, pMember)) {
-		GRID_WARN("Cannot add the parameter to the message");
-		goto errorLABEL;
-	}
-
-	return ;
-
-errorLABEL:
-	ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, &(pMember->name));
-	ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, &(pMember->value));
-	g_free(pMember);
-}
-
 gint
 message_get_field(MESSAGE m, const void *name, gsize name_size, void **value, gsize * valueSize, GError ** error)
 {
@@ -524,11 +491,51 @@ message_get_fields(MESSAGE m, GHashTable ** hash, GError ** error)
 }
 
 void
+message_add_field(MESSAGE m, const char *name, const void *value, gsize valueSize)
+{
+	if (!m || !name || !value)
+		return ;
+
+	if (!m->asnMsg)
+		_alloc_asn_message(m, NULL);
+
+	void *pList = &(m->asnMsg->content.list);
+	Parameter_t *pMember = g_malloc0(sizeof(Parameter_t));
+
+	if (0 != OCTET_STRING_fromBuf(&(pMember->name), name, strlen(name))) {
+		GRID_WARN("Cannot copy the parameter name");
+		goto errorLABEL;
+	}
+	if (0 != OCTET_STRING_fromBuf(&(pMember->value), value, valueSize)) {
+		GRID_WARN("Cannot copy the parameter value");
+		goto errorLABEL;
+	}
+	if (0 != asn_set_add(pList, pMember)) {
+		GRID_WARN("Cannot add the parameter to the message");
+		goto errorLABEL;
+	}
+
+	return ;
+
+errorLABEL:
+	ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, &(pMember->name));
+	ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, &(pMember->value));
+	g_free(pMember);
+}
+
+void
+message_add_field_str(MESSAGE m, const char *name, const char *value)
+{
+	if (value)
+		message_add_field (m, name, value, strlen(value));
+}
+
+void
 message_add_field_strint64(MESSAGE m, const char *name, gint64 v)
 {
 	gchar tmp[64];
 	g_snprintf(tmp, sizeof(tmp), "%"G_GINT64_FORMAT, v);
-	return message_add_fields_str(m, name, tmp, NULL);
+	return message_add_field_str(m, name, tmp);
 }
 
 void
@@ -538,16 +545,13 @@ message_add_fieldv_str(MESSAGE m, va_list args)
 		return;
 
 	for (;;) {
-		char *k, *v;
-
-		k = va_arg(args, char *);
+		char *k = va_arg(args, char *);
 		if (!k)
 			break;
-
-		v = va_arg(args, char *);
+		char *v = va_arg(args, char *);
 		if (!v)
 			break;
-		message_add_field(m, k, v, strlen(v));
+		message_add_field_str(m, k, v);
 	}
 }
 
@@ -593,6 +597,79 @@ message_add_fields_gba(MESSAGE m, ...)
 	va_start(args, m);
 	message_add_fieldv_gba(m, args);
 	va_end(args);
+}
+
+static struct map_s {
+	const char *f;
+	int u;
+	const char *avoid;
+} url2msg_map[] = {
+	{NAME_MSGKEY_NAMESPACE,   HCURL_NS,      NULL},
+	{NAME_MSGKEY_ACCOUNT,     HCURL_ACCOUNT, HCURL_DEFAULT_ACCOUNT},
+	{NAME_MSGKEY_USER,        HCURL_USER,    NULL},
+	{NAME_MSGKEY_TYPENAME,    HCURL_TYPE,    HCURL_DEFAULT_TYPE},
+	{NAME_MSGKEY_CONTENTPATH, HCURL_PATH,    NULL},
+	{NAME_MSGKEY_VERSION,     HCURL_VERSION, NULL},
+	{NULL,0,NULL},
+};
+
+void
+message_add_url (MESSAGE m, struct hc_url_s *url)
+{
+	if (!m)
+		return;
+	for (struct map_s *p = url2msg_map; p->f ;++p) {
+		if (hc_url_has (url, p->u)) {
+			const char *s = hc_url_get (url, p->u);
+			if (!p->avoid || strcmp(p->avoid, s))
+				message_add_field_str(m, p->f, s);
+		}
+	}
+
+	const guint8 *id = hc_url_get_id (url);
+	if (id)
+		message_add_field (m, NAME_MSGKEY_CONTAINERID, id, hc_url_get_id_size (url));
+}
+
+struct hc_url_s *
+message_extract_url (MESSAGE m)
+{
+	struct hc_url_s *url = hc_url_empty ();
+	for (struct map_s *p = url2msg_map; p->f ;++p) {
+		// TODO call really often, so make it zero-copy
+		gchar *s = message_extract_string_copy (m, p->f);
+		if (s) {
+			if (!p->avoid || strcmp(p->avoid, s))
+				hc_url_set (url, p->u, s);
+			g_free0 (s);
+		}
+	}
+
+	container_id_t cid;
+	GError *e = message_extract_cid (m, NAME_MSGKEY_CONTAINERID, &cid);
+	if (e)
+		g_clear_error (&e);
+	else
+		hc_url_set_id (url, cid);
+
+	return url;
+}
+
+void
+message_add_cid (MESSAGE m, const char *f, const container_id_t cid)
+{
+	if (m && f && cid)
+		message_add_field (m, f, cid, sizeof(container_id_t));
+}
+
+void
+message_add_body_unref (MESSAGE m, GByteArray *body)
+{
+	if (body) {
+		if (body->len && body->data)
+			message_set_BODY (m, body->data, body->len, NULL);
+		g_byte_array_unref (body);
+	}
 }
 
 MESSAGE
@@ -684,41 +761,30 @@ message_extract_string(struct message_s *msg, const gchar *n, gchar *dst,
 	return NULL;
 }
 
-GError *
-message_extract_string_copy(struct message_s *msg, const gchar *n, gchar **dst)
+gchar *
+message_extract_string_copy(struct message_s *msg, const gchar *n)
 {
-	void *f;
-	gsize f_size;
-
+	void *f = NULL;
+	gsize f_size = 0;
 	int rc = message_get_field(msg, n, strlen(n), &f, &f_size, NULL);
 	if (0 >= rc)
-		return NEWERROR(CODE_BAD_REQUEST, "Missing field '%s'", n);
-
-	*dst = g_strndup(f, f_size);
-	return NULL;
+		return NULL;
+	return g_strndup(f, f_size);
 }
 
-GError *
-message_extract_flag(struct message_s *msg, const gchar *n,
-		gboolean mandatory, gboolean *flag)
+gboolean
+message_extract_flag(struct message_s *msg, const gchar *n, gboolean def)
 {
 	gsize f_size;
 	void *f;
-	int rc;
-
-	rc = message_get_field(msg, n, strlen(n), &f, &f_size, NULL);
-	if (0 >= rc) {
-		if (mandatory)
-			return NEWERROR(CODE_BAD_REQUEST, "Missing field '%s'", n);
-		return NULL;
-	}
+	int rc = message_get_field(msg, n, strlen(n), &f, &f_size, NULL);
+	if (0 >= rc)
+		return def;
 
 	guint8 *b, _flag = 0;
 	for (b=(guint8*)f + f_size; b > (guint8*)f;)
 		_flag |= *(--b);
-
-	*flag = _flag;
-	return NULL;
+	return _flag;
 }
 
 GError*

@@ -30,8 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <cluster/conscience/conscience_broken_holder.h>
 # include <cluster/conscience/conscience_srvtype.h>
 # include <cluster/conscience/conscience_srv.h>
-# include <cluster/events/gridcluster_events.h>
-# include <cluster/events/gridcluster_eventhandler.h>
 
 /**
  * Provide this value OR'ed in the conscience_srvtype_run_all() flags to
@@ -78,11 +76,6 @@ struct conscience_s
 	GStaticRWLock rwlock_srv;
 	GHashTable *srvtypes;/**<Maps (gchar*) to (struct conscience_srvtype_s*)*/
 	struct conscience_srvtype_s *default_srvtype;
-
-	/* The raw textual form of the event handler configuration */
-	gridcluster_event_handler_t *event_handler;
-
-	GNode *virtual_namespace_tree;
 };
 
 /**  */

@@ -179,12 +179,14 @@ alcs_meta1_GetListContainer(gchar* namespace, addr_info_t *m1addr,
 	if (result == NULL)
 		return NULL;
 
+	struct hc_url_s *u = hc_url_empty ();
+	hc_url_set (u, HCURL_NS, namespace);
+	hc_url_set_id (u, *prefix);
 	if (bAllelseByService == TRUE) 
-		err = meta1v2_remote_list_references(m1addr, namespace, *prefix, result);
-
+		err = meta1v2_remote_list_references_by_prefix(m1addr, u, result);
 	else 
-		err = meta1v2_remote_list_references_by_service(m1addr, namespace,
-				*prefix, srvtype, srvurl, result);
+		err = meta1v2_remote_list_references_by_service(m1addr, u, srvtype, srvurl, result);
+	hc_url_clean (u);
 
 	if (err) {
 		ALCS_WARN("M1V2 error : (%d) %s", err->code, err->message);
@@ -206,7 +208,12 @@ alcs_meta1_GetListContainer(gchar* namespace, addr_info_t *m1addr,
 static gchar** alcs_meta1_GetListServices(gchar* namespace, addr_info_t *m1addr,
         container_id_t *cid, GError** err)
 {
-    gchar** result = meta1v2_remote_list_services(m1addr, err, namespace, *cid);
+	struct hc_url_s *u = hc_url_empty ();
+	hc_url_set (u, HCURL_NS, namespace);
+	hc_url_set_id (u, *cid);
+    gchar** result = meta1v2_remote_list_services_by_prefix(m1addr, err, u);
+	hc_url_clean (u);
+
 	if (err && *err) {
 		ALCS_WARN("M1V2 error : (%d) %s", (*err)->code, (*err)->message);
 		g_free(result);

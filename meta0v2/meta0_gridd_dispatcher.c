@@ -438,8 +438,8 @@ const struct gridd_request_descr_s *
 meta0_gridd_get_requests(void)
 {
 	static struct gridd_request_descr_s descriptions[] = {
-		{NAME_MSGNAME_M0_GETONE,              (hook) meta0_dispatch_v1_GETONE,  NULL},
 		{NAME_MSGNAME_M0_GETALL,              (hook) meta0_dispatch_v1_GETALL,  NULL},
+		{NAME_MSGNAME_M0_GETONE,              (hook) meta0_dispatch_v1_GETONE,  NULL},
 		{NAME_MSGNAME_M0_FILL,                (hook) meta0_dispatch_v1_FILL,    NULL},
 		{NAME_MSGNAME_M0_RELOAD,              (hook) meta0_dispatch_v1_RELOAD,  NULL},
 		{NAME_MSGNAME_M0_ASSIGN,              (hook) meta0_dispatch_v2_ASSIGN_PREFIX, NULL},

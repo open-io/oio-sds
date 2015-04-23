@@ -32,7 +32,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/generic.h>
 #include <rules-motor/lib/motor.h>
 #include <rawx-lib/src/rawx.h>
-#include <polix/polix_action.h>
 
 #include <glib.h>
 #include <dbus/dbus.h>
@@ -156,54 +155,11 @@ extract_paramMsgRx(gboolean allParam, TActParam* pActParam,
 	return TRUE;
 }
 
-static struct hc_url_s *
-_url_from_msg(struct SParamMsgrx *msg)
-{
-        char* hexid = strrchr(msg->source_path, '/');
-        if(!hexid || strlen(hexid) != 65)
-		return NULL;
-
-	struct hc_url_s *url = hc_url_empty();
-        hc_url_set(url, HCURL_NS, msg->namespace);
-        hc_url_set(url, HCURL_HEXID, hexid + 1);
-
-	return url;
-}
-
 static GError *
 _do_purge(struct SParamMsgrx *msgRx)
 {
-	GError *error = NULL;
-	struct hc_url_s *url = NULL;
-
-	if(!(url = _url_from_msg(msgRx)))
-		return NEWERROR(1, "Invalid source path (%s)", msgRx->source_path);
-
-	GRID_DEBUG("Sending PURGE to container [%s]",
-			hc_url_get(url, HCURL_WHOLE));
-
-	polix_action_purge_result_t result;
-	memset(&result, 0, sizeof(polix_action_purge_result_t));
-	if (polix_action_purge_byurl(url, msgRx->meta2_url, msgRx->timeout_request, 
-							g_dryrun_mode, &result, &error)) {
-	    if(0 < result.nb_del) {
-	        GRID_INFO("%s%"G_GUINT32_FORMAT" chunks deleted ("
-		                "%"G_GINT64_FORMAT" bytes deleted) from %s",
-	                ((g_dryrun_mode == TRUE)?"(DRYRUN mode) ":""),
-	                result.nb_del, result.del_size, hc_url_get(url, HCURL_WHOLE));
-	    } else {
-	        GRID_DEBUG("No chunks deleted from %"G_GINT64_FORMAT" sized chunk's list of %s",
-	                result.del_size, hc_url_get(url, HCURL_WHOLE));
-	    }
-	} else {
-		if (error) 
-			GRID_ERROR("ERROR: (%d) %s", gerror_get_code(error), gerror_get_message(error));
-		
-	}
-
-	hc_url_clean(url);
-
-	return error;
+	(void) msgRx;
+	return NEWERROR(CODE_NOT_IMPLEMENTED, "PURGE not reimplemented after polix removal");
 }
 
 static GError *

@@ -8,7 +8,6 @@ link_directories(
 
 include_directories(AFTER
 		${OPENSSL_INCLUDE_DIRS}
-		${RDKAFKA_INCLUDE_DIRS}
 		${JSONC_INCLUDE_DIRS}
 		${EXPAT_INCLUDE_DIRS})
 
@@ -104,11 +103,10 @@ add_library(metautils SHARED
 		common_main.c common_main.h
 		meta_backend_common.h
 		utils_syscall.c metautils_syscall.h
-		event_config.c event_config.h
 		lrutree.c lrutree.h tree.h
 		storage_policy.c storage_policy.h
+		url.c url.h
 		hc_url.c hc_url.h
-		notifications.c notifications.h
 		expr.2str.c
 		expr.clean.c
 		expr.eval.c
@@ -321,16 +319,6 @@ target_link_libraries(metautils
 		${ASN1C_LIBRARIES}
 		-lm)
 
-if (RDKAFKA_FOUND)
-	# Build a static library dynamically linked to rdkafka
-	add_library(notifier_kafka STATIC notifier_kafka.c)
-	target_link_libraries(notifier_kafka
-			${RDKAFKA_LIBRARIES} ${GLIB2_LIBRARIES})
-	# Add this library as a dependency to metautils
-	target_link_libraries(metautils notifier_kafka)
-endif()
-
-
 #add_dependencies(metautils asn1c_generation)
 
 add_executable(gs_oid2cid oid_to_cid.c)
@@ -431,7 +419,6 @@ install(FILES
 			lb.h
 			lrutree.h
 			metacomm.h
-			event_config.h
 			metatype_acl.h
 			metatype_addrinfo.h
 			metatype_cid.h
@@ -463,7 +450,6 @@ install(FILES
 			test_addr.h
 			tree.h
 			volume_lock.h
-			notifications.h
 			meta_backend_common.h
 		DESTINATION include/metautils/lib
 		PERMISSIONS

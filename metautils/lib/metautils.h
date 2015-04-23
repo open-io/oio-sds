@@ -70,8 +70,6 @@ License along with this library.
 # include <metautils/lib/volume_lock.h>
 # include <metautils/lib/expr.h>
 # include <metautils/lib/lb.h>
-# include <metautils/lib/notifications.h>
-# include <metautils/lib/event_config.h>
 # include <metautils/lib/meta_backend_common.h>
 
 # include <metautils/lib/metacomm.h>

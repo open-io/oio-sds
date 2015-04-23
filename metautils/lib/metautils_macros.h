@@ -127,6 +127,8 @@ License along with this library.
 #define NAME_MSGKEY_TIMESTAMP          "TIMESTAMP"
 #define NAME_MSGKEY_CONTAINERID        "CONTAINER_ID"
 #define NAME_MSGKEY_VIRTUALNAMESPACE   "VIRTUAL_NAMESPACE"
+#define NAME_MSGKEY_ACCOUNT            "ACCOUNT"
+#define NAME_MSGKEY_USER               "USER"
 #define NAME_MSGKEY_NAMESPACE          "NAMESPACE"
 #define NAME_MSGKEY_SRVTYPE            "SRVTYPE"
 #define NAME_MSGKEY_TYPENAME           "TYPENAME"
@@ -136,6 +138,7 @@ License along with this library.
 #define NAME_MSGKEY_CHUNKID            "CHUNKID"
 #define NAME_MSGKEY_STGPOLICY          "STORAGE_POLICY"
 #define NAME_MSGKEY_VERPOLICY          "VERSION_POLICY"
+#define NAME_MSGKEY_VERSION            "VERSION"
 #define NAME_MSGKEY_M1_MASTER          "M1_MASTER"
 #define NAME_MSGKEY_TRUNCATED          "TRUNCATED"
 #define NAME_MSGKEY_NEXTMARKER         "NEXT_MARKER"
@@ -148,5 +151,8 @@ License along with this library.
 #define NAME_MSGKEY_NOTIN              "NOT-IN"
 #define NAME_MSGKEY_BROKEN             "BROKEN"
 #define NAME_MSGKEY_ALLOWUPDATE        "ALLOW_UPDATE"
+
+#define HCURL_DEFAULT_ACCOUNT ""
+#define HCURL_DEFAULT_TYPE    ""
 
 #endif /*OIO_SDS__metautils__lib__metautils_macros_h*/

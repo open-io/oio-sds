@@ -34,7 +34,6 @@ struct meta_backend_common_s {
 
 	// Managed by sqlx_service_extra, do not allocate/free
 	struct grid_lbpool_s *lb;
-	struct event_config_repo_s *evt_repo;
 };
 
 #endif /*OIO_SDS__metautils__lib__meta_backend_common_h*/

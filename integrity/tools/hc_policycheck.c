@@ -102,7 +102,7 @@ polcheck_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	url = hc_url_init(argv[0]);
+	url = hc_url_oldinit(argv[0]);
 	if(!hc_url_has(url, HCURL_NS) || !hc_url_has(url, HCURL_REFERENCE) 
 			|| !hc_url_has(url, HCURL_PATH)) { 
 		GRID_ERROR("Invalid url : [%s]", argv[0]);

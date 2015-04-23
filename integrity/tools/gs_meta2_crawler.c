@@ -27,7 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <attr/xattr.h>
 
 #include <metautils/lib/metautils.h>
-#include <meta2/remote/meta2_remote.h>
+#include <meta2v2/meta2_remote.h>
 #include <rawx-lib/src/rawx.h>
 #include <rules-motor/lib/motor.h>
 

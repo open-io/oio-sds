@@ -40,7 +40,7 @@ add_library(trip_content SHARED
 		lib/crawler_tools.h
 		trip_content.c)
 target_link_libraries(trip_content
-		meta2remote
+		meta2v2remote
 		crawler_tools)
 
 
@@ -109,7 +109,7 @@ add_executable(action_rules_motor_service
 		lib/crawler_tools.h
 		action_rules_motor_service.c)
 target_link_libraries(action_rules_motor_service
-		meta2remote
+		meta2v2remote
 		metautils
 		rulesmotorc2py
 		action_common
@@ -147,7 +147,6 @@ target_link_libraries(action_purge_container_service
 		action_common
 		transp_layer
 		crawler_tools
-		gridpolix
 		${GLIB2_LIBRARIES}
 		${DBUS_LIBRARIES}
 		${NEON_LIBRARIES}

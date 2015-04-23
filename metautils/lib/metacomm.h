@@ -64,6 +64,7 @@ void gridd_set_reqid (const char *reqid);
 void gridd_set_random_reqid (void);
 
 struct metacnx_ctx_s;
+struct hc_url_s;
 
 /** Struct to store a META connection context */
 struct metacnx_ctx_s
@@ -150,7 +151,7 @@ gboolean metaXClient_reply_sequence_run(GError ** err, MESSAGE request,
 
 /** Wrapper around metaXClient_reply_sequence_run_context() */
 gboolean metaXClient_reply_sequence_run_from_addrinfo(GError ** err,
-		MESSAGE request, addr_info_t * addr, gint ms,
+		MESSAGE request, const addr_info_t * addr, gint ms,
 		struct reply_sequence_data_s *data);
 
 /** @} */
@@ -263,6 +264,13 @@ gint message_set_param(MESSAGE m, enum message_param_e mp,
  * will be copied. */
 void message_add_field(MESSAGE m, const char *name, const void *value, gsize valueSize);
 
+void message_add_cid (MESSAGE m, const char *f, const container_id_t cid);
+
+void message_add_url (MESSAGE m, struct hc_url_s *url);
+
+/* wraps message_set_BODY() and g_bytes_array_unref() */
+void message_add_body_unref (MESSAGE m, GByteArray *body);
+
 gint message_get_field(MESSAGE m, const void *name, gsize nameSize,
 		void **value, gsize * valueSize, GError ** error);
 
@@ -273,6 +281,8 @@ gint message_get_fields(MESSAGE m, GHashTable ** hash, GError ** error);
 /** @param ... a NULL-terminated va_list of GByteArray* */
 MESSAGE message_create_request(GError ** err, GByteArray * id,
 		const char *name, GByteArray * body, ...);
+
+void message_add_field_str(MESSAGE m, const char *name, const char *value);
 
 void message_add_field_strint64(MESSAGE m, const char *n, gint64 v);
 
@@ -308,8 +318,7 @@ GError* message_extract_cid(struct message_s *msg, const gchar *n,
 GError* message_extract_prefix(struct message_s *msg, const gchar *n,
 		guint8 *d, gsize *dsize);
 
-GError* message_extract_flag(struct message_s *msg, const gchar *n,
-		gboolean mandatory, gboolean *flag);
+gboolean message_extract_flag(struct message_s *m, const gchar *n, gboolean d);
 
 GError* message_extract_flags32(struct message_s *msg, const gchar *n,
 		gboolean mandatory, guint32 *flags);
@@ -317,8 +326,7 @@ GError* message_extract_flags32(struct message_s *msg, const gchar *n,
 GError* message_extract_string(struct message_s *msg, const gchar *n, gchar *dst,
 		gsize dst_size);
 
-GError* message_extract_string_copy(struct message_s *msg, const gchar *n,
-		gchar **dst);
+gchar* message_extract_string_copy(struct message_s *msg, const gchar *n);
 
 GError* message_extract_strint64(struct message_s *msg, const gchar *n,
 		gint64 *i64);
@@ -348,6 +356,8 @@ GError* metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
 
 GError* message_extract_body_encoded(struct message_s *msg, gboolean mandatory,
 		GSList **result, body_decoder_f decoder);
+
+struct hc_url_s * message_extract_url (MESSAGE m);
 
 /** @} */
 
