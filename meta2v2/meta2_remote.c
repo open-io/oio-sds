@@ -177,54 +177,23 @@ meta2_remote_content_rollback (const addr_info_t *m2, gint ms, GError **err,
 GSList*
 meta2_remote_content_add (const addr_info_t *m2, gint ms, GError **err,
 		struct hc_url_s *url, content_length_t content_length,
-		GByteArray *system_metadata, GByteArray **new_system_metadata)
+		GByteArray *metadata, GByteArray **new_metadata)
 {
-	gboolean get_sys_metadata (GError **err0, gpointer udata, gint code, MESSAGE rep) {
-		void *field=NULL;
-		gsize fieldLen=0;
-		(void)code, (void)udata;
-
-		if (!rep)
-			return FALSE;
-		if (!new_system_metadata)
-			return TRUE;
-		int rc = message_get_field (rep, NAME_HEADER_METADATA_SYS, sizeof(NAME_HEADER_METADATA_SYS)-1, &field, &fieldLen, err0);
-		switch (rc) {
-			case 1:
-				*new_system_metadata = g_byte_array_append( g_byte_array_new(), field, fieldLen);
-				return TRUE;
-			case 0:
-				*new_system_metadata = NULL;
-				return TRUE;
-		}
-		GSETERROR(err0, "Cannot lookup the updated systemetadata");
-		return FALSE;
-	}
-
-	struct code_handler_s codes [] = {
-		{ CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, chunk_info_concat, NULL },
-		{ CODE_FINAL_OK, REPSEQ_FINAL,         chunk_info_concat, get_sys_metadata },
-		{ 0,0,NULL,NULL}
-	};
 	GSList *result = NULL;
-	struct reply_sequence_data_s data = { &result , 0 , codes };
-
-	EXTRA_ASSERT (m2 != NULL);
-	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2_CONTENTADD);
-	message_add_url (request, url);
-	message_add_field_strint64 (request, NAME_MSGKEY_CONTENTLENGTH, content_length);
-
-	if (system_metadata && system_metadata->data && system_metadata->len>0)
-		message_add_field (request, NAME_HEADER_METADATA_SYS, system_metadata->data, system_metadata->len);
-
-	if (!metaXClient_reply_sequence_run_from_addrinfo (err, request, m2, ms, &data)) {
-		GSETERROR(err,"Cannot execute the query and receive all the responses");
-		g_slist_free_full (result, (GDestroyNotify) chunk_info_clean);
-		result = NULL;
+	struct metacnx_ctx_s cnx;
+	metacnx_clear (&cnx);
+	if (!metacnx_init_with_addr (&cnx, m2, err))
+		GSETERROR(err, "Address error");
+	else if (!metacnx_open(&cnx, err))
+		GSETERROR(err, "Socket error");
+	else {
+		cnx.timeout.cnx = ms;
+		cnx.timeout.req = ms;
+		result = meta2_remote_content_add_in_fd (&cnx.fd, ms, err, url, content_length, metadata, new_metadata);
 	}
+	metacnx_close (&cnx);
+	metacnx_clear (&cnx);
 
-	message_destroy(request);
 	return result;
 }
 
@@ -253,25 +222,25 @@ meta2_remote_content_rollback_in_fd (int *fd, gint ms, GError **err,
 }
 
 GSList*
-meta2_remote_content_add_in_fd_v2 (int *fd, gint ms, GError **err,
+meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
 		struct hc_url_s *url, content_length_t content_length,
-		GByteArray *user_metadata, GByteArray *system_metadata, GByteArray **new_system_metadata)
+		GByteArray *metadata, GByteArray **new_metadata)
 {
 	gboolean get_sys_metadata (GError **err0, gpointer udata, gint code, MESSAGE rep) {
 		(void)udata, (void)code;
 		if (!rep)
 			return FALSE;
-		if (!new_system_metadata)
+		if (!new_metadata)
 			return TRUE;
 		void *field=NULL;
 		gsize fieldLen=0;
 		int rc = message_get_field (rep, NAME_HEADER_METADATA_SYS, sizeof(NAME_HEADER_METADATA_SYS)-1, &field, &fieldLen, err0);
 		switch (rc) {
 			case 1:
-				*new_system_metadata = g_byte_array_append( g_byte_array_new(), field, fieldLen);
+				*new_metadata = g_byte_array_append( g_byte_array_new(), field, fieldLen);
 				return TRUE;
 			case 0:
-				*new_system_metadata = NULL;
+				*new_metadata = NULL;
 				return TRUE;
 		}
 		GSETERROR(err0, "Cannot lookup the updated systemetadata");
@@ -292,10 +261,8 @@ meta2_remote_content_add_in_fd_v2 (int *fd, gint ms, GError **err,
 	message_add_url (request, url);
 	message_add_field_strint64 (request, NAME_MSGKEY_CONTENTLENGTH, content_length);
 
-	if (system_metadata)
-		message_add_field (request, NAME_HEADER_METADATA_SYS, system_metadata->data, system_metadata->len);
-	if (user_metadata)
-		message_add_field (request, NAME_HEADER_METADATA_USR, user_metadata->data, user_metadata->len);
+	if (metadata)
+		message_add_field (request, NAME_HEADER_METADATA_SYS, metadata->data, metadata->len);
 	if (!metaXClient_reply_sequence_run (err, request, fd, ms, &data)) {
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
 		g_slist_free_full(result, (GDestroyNotify) chunk_info_clean);
@@ -304,16 +271,6 @@ meta2_remote_content_add_in_fd_v2 (int *fd, gint ms, GError **err,
 
 	message_destroy(request);
 	return result;
-}
-
-GSList*
-meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
-		struct hc_url_s *url, content_length_t content_length,
-		GByteArray *system_metadata, GByteArray **new_system_metadata)
-{
-	EXTRA_ASSERT (fd != NULL);
-	EXTRA_ASSERT (url != NULL);
-	return meta2_remote_content_add_in_fd_v2 (fd, ms, err, url, content_length, NULL, system_metadata, new_system_metadata);
 }
 
 GSList*
@@ -622,9 +579,9 @@ meta2_remote_modify_metadatasys(struct metacnx_ctx_s *ctx, GError **err,
 	EXTRA_ASSERT (url != NULL);
 	EXTRA_ASSERT (var_2 != NULL);
 
-	MESSAGE request = message_create_named("META2_SERVICES_MODIFY_METADATASYS");
+	MESSAGE request = message_create_named(NAME_MSGNAME_M2RAW_SETMDSYS);
 	message_add_url (request, url);
-	message_add_field_str (request, "field_2", var_2);
+	message_add_field_str (request, NAME_MSGKEY_VALUE, var_2);
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
 		GSETERROR(err,"Cannot execute the query and receive all the responses");

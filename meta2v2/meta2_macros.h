@@ -115,6 +115,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define NAME_MSGNAME_M2RAW_GETCHUNKS         "REQ_M2RAW_CHUNKS_GET"
 #define NAME_MSGNAME_M2RAW_SETCHUNKS         "REQ_M2RAW_CHUNKS_SET"
 #define NAME_MSGNAME_M2RAW_DELCHUNKS         "REQ_M2RAW_CHUNKS_DEL"
+#define NAME_MSGNAME_M2RAW_SETMDSYS          "META2_SERVICES_MODIFY_METADATASYS"
 
 
 /* -------------------------------------------------------------------------- */
@@ -154,19 +155,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /* LEGACY CONSTANTS --------------------------------------------------------- */
 
-# define M2_KEY_SNAPSHOT_HARDRESTORE "HARD_RESTORE"
-
-# define M2V1_KEY_VNS               "VIRTUAL_NAMESPACE"
-# define M2V1_KEY_REF               "CONTAINER_NAME"
-# define M2V1_KEY_REFID             "CONTAINER_ID"
-# define M2V1_KEY_PATH              "CONTENT_PATH"
-# define M2V1_KEY_METADATA_USR      "METADATA_USR"
-# define M2V1_KEY_WARNING           "WARNING"
 # define M2V1_KEY_TIMESTAMP         "TIMESTAMP"
-# define M2V1_KEY_VIRTUAL_NAMESPACE "VIRTUAL_NAMESPACE"
-# define M2V1_KEY_METADATA_USER     "METADATA_USR"
 # define M2V1_KEY_METADATA_SYS      "METADATA_SYS"
-# define M2V1_KEY_CONTAINER_ID      "CONTAINER_ID"
 # define M2V1_KEY_CONTAINER_NAME    "CONTAINER_NAME"
 # define M2V1_KEY_CONTENT_PATH      "CONTENT_PATH"
 # define M2V1_KEY_CONTENT_LENGTH    "CONTENT_LENGTH"
@@ -174,11 +164,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V1_KEY_PROPERTY_VALUE    "PROPERTY_VALUE"
 # define M2V1_KEY_ADMIN_KEY         "ADMIN_KEY"
 # define M2V1_KEY_ADMIN_VALUE       "ADMIN_VALUE"
-# define M2V1_KEY_FIELD_ZERO        "field_0"
-# define M2V1_KEY_FIELD_ONE         "field_1"
-# define M2V1_KEY_FIELD_TWO         "field_2"
-# define M2V1_KEY_FIELD_THREE       "field_3"
-# define M2V1_KEY_FIELD_FOUR        "field_4"
 
 # ifndef MDUSR_PROPERTY_KEY
 #  define MDUSR_PROPERTY_KEY M2V2_ADMIN_PREFIX_SYS "v1.mdusr"

@@ -26,10 +26,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
 # define META1_SCHEMA \
-	"CREATE TABLE IF NOT EXISTS containers ( "\
+	"CREATE TABLE IF NOT EXISTS users ( "\
 		"cid BLOB NOT NULL PRIMARY KEY, "\
-		"vns TEXT NOT NULL, "\
-		"cname TEXT NOT NULL); "\
+		"account TEXT NOT NULL, "\
+		"user TEXT NOT NULL); "\
 	"CREATE TABLE IF NOT EXISTS services ( "\
 		"cid BLOB NOT NULL, "\
 		"srvtype TEXT NOT NULL, "\
@@ -47,7 +47,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     "INSERT OR IGNORE INTO admin(k,v) " \
 		"VALUES (\"version:main.admin\",\"1:0\");" \
     "INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"version:main.containers\",\"1:0\");" \
+		"VALUES (\"version:main.users\",\"1:0\");" \
     "INSERT OR IGNORE INTO admin(k,v) " \
 		"VALUES (\"version:main.services\",\"1:0\");" \
     "INSERT OR IGNORE INTO admin(k,v) " \

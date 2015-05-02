@@ -112,7 +112,7 @@ __info_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 
 	/* Prepare the statement */
-	sqlite3_prepare_debug(rc, sq3->db, "SELECT vns,cname FROM containers WHERE cid = ?", -1, &stmt, NULL);
+	sqlite3_prepare_debug(rc, sq3->db, "SELECT account,user FROM users WHERE cid = ?", -1, &stmt, NULL);
 	if (rc != SQLITE_OK)
 		return M1_SQLITE_GERROR(sq3->db, rc);
 	(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id (url), hc_url_get_id_size (url), NULL);

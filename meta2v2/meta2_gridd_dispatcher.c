@@ -399,7 +399,6 @@ static gridd_filter M2V2_FILTERS_add_v1[] =
 	meta2_filter_check_ns_name,
 	meta2_filter_extract_header_string_size,
 	meta2_filter_extract_header_mdsys,
-	meta2_filter_extract_header_mdusr,
 	meta2_filter_action_has_container,
 	meta2_filter_action_generate_chunks,
 	NULL
@@ -655,7 +654,7 @@ meta2_gridd_get_v1_requests(void)
 
 		/* CONTENT METADATA */
 		// TODO remove this as soon as the C client has been reworked. There is the onyl call.
-		{"META2_SERVICES_MODIFY_METADATASYS", (hook) meta2_dispatch_all, M2V2_FILTERS_modify_mdsys_v1},
+		{NAME_MSGNAME_M2RAW_SETMDSYS,   (hook) meta2_dispatch_all, M2V2_FILTERS_modify_mdsys_v1},
 
 		/* AGENT EVENTS */
 		{NAME_MSGNAME_M2V1_TOUCH_CONTAINER, (hook) meta2_dispatch_all, M2V2_FILTERS_touch_container_v1},

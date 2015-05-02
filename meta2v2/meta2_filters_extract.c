@@ -125,18 +125,6 @@ meta2_filter_extract_header_mdsys(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_header_mdusr(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	char buf[8192];
-
-	TRACE_FILTER();
-	EXTRACT_STRING(M2V1_KEY_METADATA_USER, TRUE);
-	return FILTER_OK;
-}
-
-int
 meta2_filter_extract_header_version_policy(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
@@ -399,7 +387,7 @@ meta2_filter_extract_header_string_V_f2(struct gridd_filter_ctx_s *ctx,
 	gchar buf[1024];
 
 	TRACE_FILTER();
-	EXTRACT_STRING2(M2V1_KEY_FIELD_TWO, "V", 0);
+	EXTRACT_STRING2(NAME_MSGKEY_VALUE, "V", 0);
 	return FILTER_OK;
 }
 

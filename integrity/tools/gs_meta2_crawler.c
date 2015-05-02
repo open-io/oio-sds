@@ -332,23 +332,26 @@ manage_meta2(const gchar *container_path, void *data, struct rules_motor_env_s**
 
 	/* Start content crawling */
 	if (flag_crawl_content) {
-		container_id_t container_id;
 		addr_info_t meta2_addr;
-		gchar *container_id_str = NULL;
 		GSList *contents_list = NULL;
 		gint meta2_connection_timeout = 500;
 		struct content_textinfo_s content_info;
 
 		memset(&meta2_addr, 0x00, sizeof(addr_info_t));
 		l4_address_init_with_url(&meta2_addr, meta2_url, &err);
-		container_id_str = g_path_get_basename(container_path);
-		container_id_hex2bin(container_id_str, strlen(container_id_str), &container_id, &err);
 
-		contents_list = meta2_remote_container_list(&meta2_addr, meta2_connection_timeout, &err, container_id);
+		struct hc_url_s *url = hc_url_empty ();
+		do {
+			gchar *s = g_path_get_basename(container_path);
+			hc_url_set (url, HCURL_HEXID, s);
+			g_free (s);
+		} while (0);
+
+		contents_list = meta2_remote_container_list(&meta2_addr, meta2_connection_timeout, &err, url);
 		if (err != NULL) {
-			GRID_ERROR("Failed to list contents of container [%s] : %s", container_id_str, err->message);
+			GRID_ERROR("Failed to list contents of container [%s] : %s", hc_url_get(url, HCURL_HEXID), err->message);
 			g_clear_error(&err);
-			g_free(container_id_str);
+			hc_url_pclean (&url);
 			return SCAN_CONTINUE;
 		}
 
@@ -358,7 +361,7 @@ manage_meta2(const gchar *container_path, void *data, struct rules_motor_env_s**
 
 			/* Create content_info from path_info */
 			bzero(&content_info, sizeof(struct content_textinfo_s));
-			content_info.container_id = g_strdup(container_id_str);
+			content_info.container_id = g_strdup(hc_url_get (url, HCURL_HEXID));
 			content_info.path = g_strdup(info->path);
 			content_info.size = g_strdup_printf("%"G_GINT64_FORMAT, info->size);
 			if (info->user_metadata)
@@ -384,7 +387,8 @@ manage_meta2(const gchar *container_path, void *data, struct rules_motor_env_s**
 			g_slist_foreach(contents_list, path_info_gclean, NULL);
 			g_slist_free(contents_list);
 		}
-		g_free(container_id_str);
+
+		hc_url_pclean (&url);
 	}
 
 	stats->container_success++;

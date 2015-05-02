@@ -92,10 +92,6 @@ int meta2_filter_extract_header_copy(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_extract_header_mdsys(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-/*! Extract the legacy field path from a request. */
-int meta2_filter_extract_header_mdusr(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Extract ACTION header from set content properties request. */
 int meta2_filter_extract_header_prop_action(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);

@@ -42,8 +42,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static GError*
 __create_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 {
-	static const gchar *sql = "INSERT INTO containers "
-		"('cid','vns','cname') VALUES (?,?,?)";
+	static const gchar *sql = "INSERT INTO users "
+		"('cid','account','user') VALUES (?,?,?)";
 
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
@@ -147,7 +147,7 @@ __destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		__exec_cid(sq3->db, "DELETE FROM properties WHERE cid = ?", hc_url_get_id (url));
 		count_actions += sqlite3_changes(sq3->db);
 
-		__exec_cid(sq3->db, "DELETE FROM containers WHERE cid = ?", hc_url_get_id (url));
+		__exec_cid(sq3->db, "DELETE FROM users WHERE cid = ?", hc_url_get_id (url));
 		count_actions += sqlite3_changes(sq3->db);
 	}
 
@@ -237,7 +237,7 @@ __get_references_by_prefix(struct sqlx_sqlite3_s *sq3,
 	sqlite3_stmt *stmt = NULL;
 	int rc;
 
-	sqlite3_prepare_debug(rc, sq3->db, "SELECT vns, cname FROM containers",
+	sqlite3_prepare_debug(rc, sq3->db, "SELECT account, user FROM users",
 			-1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
 		err = M1_SQLITE_GERROR(sq3->db, rc);
@@ -268,8 +268,8 @@ __get_references_by_service(struct sqlx_sqlite3_s *sq3,
 	sqlite3_stmt *stmt = NULL;
 	int rc;
 
-	sqlite3_prepare_debug(rc, sq3->db, "SELECT c.vns, c.cname "
-			"FROM containers AS c, services AS s "
+	sqlite3_prepare_debug(rc, sq3->db, "SELECT c.account, c.user "
+			"FROM users AS c, services AS s "
 			"WHERE c.cid = s.cid "
 			"AND s.srvtype = ? "
 			"AND s.url LIKE ?", -1,

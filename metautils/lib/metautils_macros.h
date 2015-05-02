@@ -151,6 +151,7 @@ License along with this library.
 #define NAME_MSGKEY_NOTIN              "NOT-IN"
 #define NAME_MSGKEY_BROKEN             "BROKEN"
 #define NAME_MSGKEY_ALLOWUPDATE        "ALLOW_UPDATE"
+#define NAME_MSGKEY_VALUE              "V"
 
 #define HCURL_DEFAULT_ACCOUNT ""
 #define HCURL_DEFAULT_TYPE    ""

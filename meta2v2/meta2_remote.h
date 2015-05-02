@@ -64,7 +64,7 @@ gboolean meta2_remote_container_create_v3 (const addr_info_t *m2, gint ms, GErro
  * the empty contents contains at least one chunk whom size is zero. */
 GSList *meta2_remote_content_add(const addr_info_t *m2, gint ms, GError **err,
     struct hc_url_s *url, content_length_t content_length,
-    GByteArray * system_metadata, GByteArray ** new_system_metadata);
+    GByteArray * metadata, GByteArray ** new_metadata);
 
 /** Mark for removal the give content from the given container, on the
  * targeted META2 server. Currently, there is no management of META2
@@ -100,13 +100,7 @@ struct meta2_raw_content_s *meta2_remote_stat_content(struct metacnx_ctx_s *cnx,
 
 /** @see meta2_remote_content_add() */
 GSList *meta2_remote_content_add_in_fd(int *fd, gint ms, GError **err, struct hc_url_s *url,
-		content_length_t content_length, GByteArray * system_metadata,
-		GByteArray ** new_system_metadata);
-
-/** @see meta2_remote_content_add() */
-GSList *meta2_remote_content_add_in_fd_v2(int *fd, gint ms, GError **err, struct hc_url_s *url,
-		content_length_t content_length, GByteArray *user_metadata,
-		GByteArray * system_metadata, GByteArray ** new_system_metadata);
+		content_length_t content_length, GByteArray * metadata, GByteArray ** new_metadata);
 
 /** @see meta2_remote_content_add() */
 GSList* meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err, struct hc_url_s *url,

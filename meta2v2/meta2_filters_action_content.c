@@ -790,7 +790,6 @@ _generate_chunks(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	const char *size_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CONTENTLENGTH);
 	const char *mdsys = meta2_filter_ctx_get_param(ctx, M2V1_KEY_METADATA_SYS);
-	const char *mdusr = meta2_filter_ctx_get_param(ctx, M2V1_KEY_METADATA_USR);
 
 	char *out_mdsys = NULL;
 
@@ -810,16 +809,6 @@ _generate_chunks(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply
 		GRID_DEBUG("Failed to return alias for url: %s", hc_url_get(url, HCURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
-	}
-
-	/* */
-	if(NULL != mdusr && !append) {
-		gpointer prop = _bean_create(&descr_struct_PROPERTIES);
-		PROPERTIES_set2_alias(prop, hc_url_get(url, HCURL_PATH));
-		PROPERTIES_set_alias_version(prop, 1);
-		PROPERTIES_set2_key(prop, MDUSR_PROPERTY_KEY);
-		PROPERTIES_set2_value(prop, (const guint8*) mdusr, strlen(mdusr));
-		beans = g_slist_prepend(beans, prop);
 	}
 
 	/* store in transient to commit later */
