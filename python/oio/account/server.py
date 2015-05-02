@@ -75,7 +75,7 @@ def key_container(account, user, container):
 	return '|'.join((account, user, container))
 
 def update_item (cursor, k, v):
-	cursor.execute("UPDATE OR ABORT items SET value=? WHERE k=?",(v,k))
+	cursor.execute("INSERT OR UPDATE INTO items VALUES (?,?)", (k,v))
 
 def create_item (cursor, k, v):
 	cursor.execute("INSERT OR ABORT INTO items VALUES (?,?)", (k,v))
@@ -139,16 +139,8 @@ def status ():
 			items.append("account.items.count = " + str(t[0]))
 	return flask.Response("\n".join(items), mimetype='text/json')
 
-@app.route('/v1.0/account/<ns>/<account>', methods=['PUT'])
+@app.route('/v1.0/account/<ns>/<account>', methods=['PUT', 'POST'])
 def account_create(ns, account):
-	decoded = flask.request.get_json(force=True)
-	with DB() as db:
-		create_item(db.cursor(), key_account(account), json.dumps(decoded))
-		db.commit()
-	return ""
-
-@app.route('/v1.0/account/<ns>/<account>', methods=['POST'])
-def account_update(ns, account):
 	decoded = flask.request.get_json(force=True)
 	with DB() as db:
 		update_item(db.cursor(), key_account(account), json.dumps(decoded))
@@ -192,19 +184,8 @@ def account_list_containers(ns, account):
 
 # Users ------------------------------------------------------------------------
 
-@app.route('/v1.0/account/<ns>/<account>/<user>', methods=['PUT'])
+@app.route('/v1.0/account/<ns>/<account>/<user>', methods=['PUT', 'POST'])
 def user_create(ns, account, user):
-		decoded = flask.request.get_json(force=True)
-		check_user_content (decoded)
-		with DB() as db:
-			cursor = db.cursor()
-			check_account_presence (cursor, account)
-			create_item (cursor, key_user(account, user), json.dumps(decoded))
-			db.commit()
-		return ""
-
-@app.route('/v1.0/account/<ns>/<account>/<user>', methods=['POST'])
-def user_update(ns, account, user):
 		decoded = flask.request.get_json(force=True)
 		check_user_content (decoded)
 		with DB() as db:
@@ -253,20 +234,7 @@ def container_info(ns, account, user, container):
 		return "Container not found", 404
 	return "DB not found", CODE_SYSTEM_ERROR
 
-@app.route('/v1.0/account/<ns>/<account>/<user>/<container>', methods=['PUT'])
-def container_create(ns, account, user, container):
-	decoded = flask.request.get_json(force=True)
-	check_container_content (decoded)
-	with DB() as db:
-		cursor = db.cursor()
-		check_account_presence (cursor, account)
-		check_user_presence (cursor, account, user)
-		create_item (cursor, key_container (account, user, container),
-				json.dumps(decoded))
-		db.commit()
-	return ""
-
-@app.route('/v1.0/account/<ns>/<account>/<user>/<container>', methods=['POST'])
+@app.route('/v1.0/account/<ns>/<account>/<user>/<container>', methods=['PUT', 'POST'])
 def container_update(ns, account, user, container):
 	try:
 		decoded = flask.request.get_json(force=True)
