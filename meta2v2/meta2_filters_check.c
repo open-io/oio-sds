@@ -59,9 +59,8 @@ _meta2_filter_check_ns_name(struct gridd_filter_ctx_s *ctx,
 	}
 
 	if (!req_ns) {
-		if (optional) {
+		if (optional)
 			return FILTER_OK;
-		}
 		GRID_DEBUG("Missing namespace name in request");
 		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST,
 					"Bad Request: Missing namespace name information"));
@@ -137,5 +136,17 @@ meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 	(void) reply;
 	TRACE_FILTER();
 	return FILTER_OK;
+}
+
+int
+meta2_filter_check_url_cid (struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	TRACE_FILTER();
+	if (url && hc_url_has(url, HCURL_HEXID))
+		return FILTER_OK;
+	meta2_filter_ctx_set_error (ctx, NEWERROR(CODE_BAD_REQUEST, "No/partial URL"));
+	return FILTER_KO;
 }
 

@@ -21,7 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define OIO_SDS__meta2v2__meta2_filters_h 1
 
 #if 0
-#define TRACE_FILTER() GRID_TRACE2("%s", __FUNCTION__)
+#define TRACE_FILTER() GRID_TRACE("FILTER %s:%d %s", __FILE__, __LINE__, __FUNCTION__)
 #else
 #define TRACE_FILTER()
 #endif
@@ -48,6 +48,9 @@ void _on_bean_ctx_send_list(struct on_bean_ctx_s *obc, gboolean final);
 void _on_bean_ctx_clean(struct on_bean_ctx_s *obc);
 
 /* ------------ CHECK --------------- */
+
+int meta2_filter_check_url_cid (struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply);
 
 /*! Check the ns send in the request fields match with the ns of the meta2
  * backend */

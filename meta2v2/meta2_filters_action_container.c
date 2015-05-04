@@ -94,7 +94,8 @@ meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
 
 	if (!url) {
 		GRID_WARN("BUG : Checking container's presence : URL not set");
-		return FILTER_OK;
+		meta2_filter_ctx_set_error (ctx, NEWERROR(CODE_BAD_REQUEST, "No URL"));
+		return FILTER_KO;
 	}
 
 	GError *e = meta2_backend_has_container(m2b, url);
@@ -106,6 +107,7 @@ meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	}
+
 	return FILTER_OK;
 }
 

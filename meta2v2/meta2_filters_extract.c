@@ -426,6 +426,7 @@ int
 meta2_filter_extract_header_localflag(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
+	TRACE_FILTER();
 	int ret = _extract_header_flag(NAME_MSGKEY_LOCAL, ctx, reply);
 	if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LOCAL)) {
 		/* This is a hack to avoid changing every meta2_backend.h
