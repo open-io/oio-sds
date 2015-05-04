@@ -21,15 +21,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define G_LOG_DOMAIN "gs_meta2_crawler"
 #endif
 
+#include <rules-motor/lib/motor.h>
+#include <metautils/lib/metautils.h>
+#include <meta2v2/meta2_remote.h>
+#include <rawx-lib/src/rawx.h>
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/types.h>
 #include <attr/xattr.h>
-
-#include <metautils/lib/metautils.h>
-#include <meta2v2/meta2_remote.h>
-#include <rawx-lib/src/rawx.h>
-#include <rules-motor/lib/motor.h>
 
 #include "./lock.h"
 #include "./volume_scanner.h"

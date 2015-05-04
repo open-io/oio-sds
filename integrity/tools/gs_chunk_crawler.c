@@ -21,17 +21,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define G_LOG_DOMAIN "gs_chunk_crawler"
 #endif
 
-#include <stdlib.h>
-#include <string.h>
-#include <strings.h>
+#include <rules-motor/lib/motor.h>
+#include <metautils/lib/metautils.h>
+#include <rawx-lib/src/rawx.h>
+
 #include <unistd.h>
 #include <sys/types.h>
 #include <signal.h>
 #include <attr/xattr.h>
-
-#include <metautils/lib/metautils.h>
-#include <rawx-lib/src/rawx.h>
-#include <rules-motor/lib/motor.h>
 
 #include "./lock.h"
 #include "./volume_scanner.h"
