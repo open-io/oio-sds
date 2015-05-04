@@ -21,17 +21,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define G_LOG_DOMAIN "atos.grid.action"
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#include <metautils/lib/metautils.h>
 #include <rules-motor/lib/motor.h>
+#include <metautils/lib/metautils.h>
 #include <rawx-lib/src/rawx.h>
 #include <integrity/lib/check.h>
 #include <integrity/lib/chunk_check.h>
 #include <integrity/lib/content_check.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include <sqlite3.h>
 #include <glib.h>
@@ -587,8 +587,6 @@ main_get_options(void) {
 static void main_action(void) 
 {
     GError* error = NULL;
-
-    g_type_init();
 
     g_main_loop = g_main_loop_new (NULL, FALSE);
 

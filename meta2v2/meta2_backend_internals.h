@@ -78,12 +78,12 @@ void transient_cleanup(struct transient_s *t);
 
 /* ------------------------------------------------------------------------- */
 
-GError* m2b_transient_put(struct meta2_backend_s *m2b, const gchar *key, const gchar *hexid,
+GError* m2b_transient_put(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		gpointer what, GDestroyNotify cleanup);
 
-gpointer m2b_transient_get(struct meta2_backend_s *m2b, const gchar *key, const gchar *hexid , GError **err);
+gpointer m2b_transient_get(struct meta2_backend_s *m2b, struct hc_url_s *url, GError **err);
 
-GError* m2b_transient_del(struct meta2_backend_s *m2b, const gchar *key, const gchar *hexid);
+GError* m2b_transient_del(struct meta2_backend_s *m2b, struct hc_url_s *url);
 
 void m2b_transient_cleanup(struct meta2_backend_s *m2b);
 

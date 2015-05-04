@@ -334,15 +334,13 @@ do_query(struct gridd_client_s *client, struct meta1_service_url_s *surl,
 	gint rc = 0;
 	GError *err;
 	GByteArray *req;
-	struct sqlx_name_s name;
+	struct sqlx_name_mutable_s name;
 
 	GRID_DEBUG("Querying [%s]", Q);
 
-	name.ns = hc_url_get(url, HCURL_NS);
-	name.base = g_strdup_printf("%"G_GINT64_FORMAT"@%s", surl->seq, hc_url_get(url, HCURL_HEXID));
-	name.type = type;
+	sqlx_name_fill (&name, url, NAME_SRVTYPE_SQLX, surl->seq);
 
-	req = sqlx_pack_QUERY_single(&name, Q, flag_auto_link);
+	req = sqlx_pack_QUERY_single(sqlx_name_mutable_to_const(&name), Q, flag_auto_link);
 	err = gridd_client_request(client, req, NULL, _on_reply);
 	g_byte_array_unref(req);
 
@@ -365,6 +363,7 @@ do_query(struct gridd_client_s *client, struct meta1_service_url_s *surl,
 		}
 	}
 
+	sqlx_name_clean (&name);
 	return rc;
 }
 
@@ -399,16 +398,11 @@ do_destroy2(gs_grid_storage_t *hc, struct meta1_service_url_s *srv_url)
 {
 	gint rc = 1;
 	gs_error_t *hc_err = NULL;
-
 	const gchar *target = srv_url->host;
-	gchar *base = g_strdup_printf("%"G_GINT64_FORMAT"@%s", srv_url->seq, hc_url_get(url, HCURL_HEXID));
-	struct sqlx_name_s name = {
-		.base = base,
-		.type = srv_url->srvtype,
-		.ns = gs_get_full_vns(hc),
-	};
-	GError *err = sqlx_remote_execute_DESTROY(target, NULL, &name, FALSE);
-	g_free0 (base);
+	struct sqlx_name_mutable_s name;
+
+	sqlx_name_fill (&name, url, NAME_SRVTYPE_SQLX, srv_url->seq);
+	GError *err = sqlx_remote_execute_DESTROY(target, NULL, sqlx_name_mutable_to_const(&name), FALSE);
 
 	if (err != NULL) {
 		GRID_ERROR("Failed to destroy database: %s", err->message);
@@ -424,6 +418,7 @@ do_destroy2(gs_grid_storage_t *hc, struct meta1_service_url_s *srv_url)
 end_label:
 	g_clear_error(&err);
 	gs_error_free(hc_err);
+	sqlx_name_clean (&name);
 	return rc;
 }
 

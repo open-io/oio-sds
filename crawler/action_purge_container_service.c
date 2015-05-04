@@ -21,16 +21,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define G_LOG_DOMAIN "atos.grid.action"
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <unistd.h>
-
+#include <rules-motor/lib/motor.h>
 #include <metautils/lib/metautils.h>
 #include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/meta2_utils.h>
 #include <meta2v2/generic.h>
-#include <rules-motor/lib/motor.h>
 #include <rawx-lib/src/rawx.h>
 
 #include <glib.h>
@@ -40,6 +35,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <neon/ne_basic.h>
 #include <neon/ne_request.h>
 #include <neon/ne_session.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
 
 #include "lib/action_common.h"
 
@@ -299,8 +299,6 @@ static struct grid_main_option_s *main_get_options(void)
 static void main_action(void)
 {
 	GError* error = NULL;
-
-	g_type_init();
 
 	g_main_loop = g_main_loop_new (NULL, FALSE);
 

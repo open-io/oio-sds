@@ -27,13 +27,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/types.h>
 
 #include <sqlite3.h>
-
 #include <glib.h>
 #include <gmodule.h>
 #include <dbus/dbus.h>
 
 #include <grid_client.h>
-
 #include <metautils/lib/metautils.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/generic.h>
@@ -1401,8 +1399,6 @@ static void main_action(void)
 {
 	GError* error = NULL;
 	//TCrawlerBus* conn = NULL;
-
-	g_type_init();
 
 	g_main_loop = g_main_loop_new (NULL, FALSE);
 

@@ -231,23 +231,22 @@ transient_tree_cleanup(GTree *tree)
 /* -------------------------------------------------------------------------- */
 
 GError *
-m2b_transient_put(struct meta2_backend_s *m2b, const gchar *key, const gchar * hexID,
+m2b_transient_put(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		gpointer what, GDestroyNotify cleanup)
 {
 	g_assert(m2b != NULL);
-	g_assert(key != NULL);
+	g_assert(url != NULL);
 	g_assert(what != NULL);
 
+	const gchar *key = hc_url_get (url, HCURL_WHOLE);
+	const gchar * hexID = hc_url_get (url, HCURL_HEXID);
 	GError *err = NULL;
 
-	if (hexID != NULL) {
-		struct sqlx_name_s n = {
-			.base = hexID,
-			.type = NAME_SRVTYPE_META2,
-			.ns = m2b->backend.ns_name
-		};
-		err = sqlx_repository_status_base(m2b->backend.repo, &n);
-	}
+	struct sqlx_name_mutable_s n;
+	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
+	err = sqlx_repository_status_base(m2b->backend.repo, sqlx_name_mutable_to_const(&n));
+	sqlx_name_clean (&n);
+
 	if ( !err ) {
 		struct transient_s *trans = NULL;
 
@@ -268,23 +267,22 @@ m2b_transient_put(struct meta2_backend_s *m2b, const gchar *key, const gchar * h
 }
 
 gpointer
-m2b_transient_get(struct meta2_backend_s *m2b, const gchar *key, const gchar * hexID, GError ** err)
+m2b_transient_get(struct meta2_backend_s *m2b, struct hc_url_s *url, GError ** err)
 {
 	struct transient_s *trans = NULL;
 
 	g_assert(m2b != NULL);
-	g_assert(key != NULL);
+	g_assert(url != NULL);
 
+	const gchar *key = hc_url_get (url, HCURL_WHOLE);
+	const gchar * hexID = hc_url_get (url, HCURL_HEXID);
 	GError *local_err = NULL;
 
-	if (hexID != NULL) {
-		struct sqlx_name_s n = {
-			.base = hexID,
-			.type = NAME_SRVTYPE_META2,
-			.ns = m2b->backend.ns_name,
-		};
-		local_err = sqlx_repository_status_base(m2b->backend.repo, &n);
-	}
+	struct sqlx_name_mutable_s n;
+	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
+	local_err = sqlx_repository_status_base(m2b->backend.repo, sqlx_name_mutable_to_const(&n));
+	sqlx_name_clean (&n);
+
 	if (local_err) {
 		*err = local_err;
 		return NULL;
@@ -306,21 +304,19 @@ m2b_transient_get(struct meta2_backend_s *m2b, const gchar *key, const gchar * h
 }
 
 GError *
-m2b_transient_del(struct meta2_backend_s *m2b, const gchar *key, const gchar * hexID)
+m2b_transient_del(struct meta2_backend_s *m2b, struct hc_url_s *url)
 {
 	g_assert(m2b != NULL);
-	g_assert(key != NULL);
+	g_assert(url != NULL);
 
+	const gchar *key = hc_url_get (url, HCURL_WHOLE);
+	const gchar * hexID = hc_url_get (url, HCURL_HEXID);
 	GError *err = NULL;
 
-	if (hexID != NULL) {
-		struct sqlx_name_s n = {
-			.base = hexID,
-			.type = NAME_SRVTYPE_META2,
-			.ns = m2b->backend.ns_name,
-		};
-		err = sqlx_repository_status_base(m2b->backend.repo, &n);
-	}
+	struct sqlx_name_mutable_s n;
+	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
+	err = sqlx_repository_status_base(m2b->backend.repo, sqlx_name_mutable_to_const(&n));
+	sqlx_name_clean (&n);
 
 	if ( !err ) {
 		struct transient_s *trans = NULL;
@@ -349,21 +345,6 @@ m2b_transient_cleanup(struct meta2_backend_s *m2b)
 }
 
 /* Backend ------------------------------------------------------------------ */
-
-void
-meta2_file_locator(gpointer ignored, struct sqlx_name_s *n, GString *result)
-{
-	SQLXNAME_CHECK(n);
-	EXTRA_ASSERT(result != NULL);
-	(void) ignored;
-
-	g_string_truncate(result, 0);
-	gchar *sep = strchr(n->base, '@');
-	if (!sep)
-		g_string_append(result, n->base);
-	else
-		g_string_append(result, sep+1);
-}
 
 static GError*
 _check_policy(struct meta2_backend_s *m2, const gchar *polname)
@@ -435,7 +416,6 @@ meta2_backend_init(struct meta2_backend_s **result,
 		return err;
 	}
 
-	sqlx_repository_set_locator(m2->backend.repo, meta2_file_locator, NULL);
 	m2->resolver = resolver;
 
 	GRID_DEBUG("M2V2 backend created for NS[%s] and repo[%p]",
@@ -599,12 +579,12 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 		how |= M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK;
 	}
 
-	struct sqlx_name_s n = {
-		.base = hc_url_get(url, HCURL_HEXID),
-		.type = NAME_SRVTYPE_META2,
-		.ns = m2->backend.ns_name,
-	};
-	err = sqlx_repository_open_and_lock(m2->backend.repo, &n, m2_to_sqlx(how), &sq3, NULL);
+	struct sqlx_name_mutable_s n;
+	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
+	err = sqlx_repository_open_and_lock(m2->backend.repo,
+			sqlx_name_mutable_to_const(&n), m2_to_sqlx(how), &sq3, NULL);
+	sqlx_name_clean (&n);
+
 	if (NULL != err) {
 		if (err->code == CODE_CONTAINER_NOTFOUND)
 			err->domain = g_quark_from_static_string(G_LOG_DOMAIN);
@@ -689,12 +669,11 @@ meta2_backend_has_container(struct meta2_backend_s *m2,
 	EXTRA_ASSERT(url != NULL);
 	GRID_DEBUG("HAS(%s)", hc_url_get(url, HCURL_WHOLE));
 
-	struct sqlx_name_s n = {
-		.base = hc_url_get(url, HCURL_HEXID),
-		.type = NAME_SRVTYPE_META2,
-		.ns = m2->backend.ns_name,
-	};
-	err = sqlx_repository_has_base(m2->backend.repo, &n);
+	struct sqlx_name_mutable_s n;
+	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
+	err = sqlx_repository_has_base(m2->backend.repo, sqlx_name_mutable_to_const(&n));
+	sqlx_name_clean (&n);
+
 	if (NULL != err) {
 		g_prefix_error(&err, "File error: ");
 		return err;
@@ -830,14 +809,13 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 
 		if (!local) {
 			gchar **peers = NULL;
-			struct sqlx_name_s n = {
-				.base = hc_url_get(url, HCURL_HEXID),
-				.type = NAME_SRVTYPE_META2,
-				.ns = m2->backend.ns_name,
-			};
+
+			struct sqlx_name_mutable_s n;
+			sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
 			err = sqlx_config_get_peers(election_manager_get_config(
 						sqlx_repository_get_elections_manager(m2->backend.repo)),
-					&n, &peers);
+					sqlx_name_mutable_to_const(&n), &peers);
+			sqlx_name_clean (&n);
 
 			// peers may be NULL if no zookeeper URL is configured
 			if (!err && peers != NULL && g_strv_length(peers) > 0)

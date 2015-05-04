@@ -68,7 +68,7 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 			GRID_INFO("RELOAD prefix, nb updated prefixes %d",updated_prefixes->len);
 		guint i , max;
 		guint16 prefix;
-		gchar name[8];
+		gchar name[5];
 		max = updated_prefixes->len;
 
 		for ( i=0; i < max ; i++) {
@@ -236,7 +236,9 @@ int
 main(int argc, char ** argv)
 {
 	static struct sqlx_service_config_s cfg = {
-		NAME_SRVTYPE_META1, "m1v2", "el/" NAME_SRVTYPE_META1, 1, 3, META1_SCHEMA,
+		NAME_SRVTYPE_META1, "m1v2",
+		"el/" NAME_SRVTYPE_META1, 1, 3,
+		META1_SCHEMA, 1, 2,
 		_get_peers, _post_config, NULL
 	};
 	int rc = sqlite_service_main(argc, argv, &cfg);

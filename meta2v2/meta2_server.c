@@ -87,53 +87,28 @@ filter_services_and_clean(struct sqlx_service_s *ss,
 	return result;
 }
 
-static struct hc_url_s *
-_init_hc_url(struct sqlx_service_s *ss, struct sqlx_name_s *n, gint64 *pseq)
-{
-	gint64 seq = 1;
-	struct hc_url_s *u = hc_url_empty();
-
-	hc_url_set(u, HCURL_NS, ss->ns_name);
-
-	const gchar *sep = strchr(n->base, '@');
-	if (!sep)
-		sep = n->base;
-	else {
-		seq = g_ascii_strtoll(n->base, NULL, 10);
-		++ sep;
-	}
-	if (!hc_url_set(u, HCURL_HEXID, sep)) {
-		hc_url_clean(u);
-		return NULL;
-	}
-	*pseq = seq;
-	return u;
-}
-
 static GError *
 _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(result != NULL);
-	SQLXNAME_CHECK(n);
-
-	if (!g_str_has_prefix(n->type, NAME_SRVTYPE_META2))
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name: '%s'", n->type);
 
 	gint retries = 1;
-	gint64 seq = 1;
 	gchar **peers = NULL;
 	GError *err = NULL;
 
-	struct hc_url_s *u = _init_hc_url(ss, n, &seq);
-	if (!u)
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name [%s]", n->base);
+	gint64 seq = 1;
+	struct hc_url_s *u = hc_url_empty ();
+	hc_url_set(u, HCURL_NS, ss->ns_name);
+	if (!sqlx_name_extract (n, u, NAME_SRVTYPE_META2, &seq)) {
+		hc_url_pclean (&u);
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name: '%s'", n->type);
+	}
 
 retry:
-	if (nocache) {
+	if (nocache)
 		hc_decache_reference_service(ss->resolver, u, n->type);
-	}
 	peers = NULL;
 	err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);
 
@@ -174,14 +149,14 @@ meta2_on_close(struct sqlx_sqlite3_s *sq3, gboolean deleted, gpointer cb_data)
 	if (!deleted)
 		return;
 
-	struct hc_url_s *u = _init_hc_url(PSRV(cb_data), sqlx_name_mutable_to_const(&sq3->name), &seq);
-	if (!u) {
+	struct hc_url_s *u = hc_url_empty ();
+	hc_url_set (u, HCURL_NS, PSRV(cb_data)->ns_name);
+	if (!sqlx_name_extract ((struct sqlx_name_s*)&sq3->name, u, NAME_SRVTYPE_META2, &seq)) {
 		GRID_WARN("Invalid base name [%s]", sq3->name.base);
 		return;
 	}
 	hc_decache_reference_service(PSRV(cb_data)->resolver, u, NAME_SRVTYPE_META2);
-	hc_url_clean(u);
-	u = NULL;
+	hc_url_pclean(&u);
 }
 
 static gboolean
@@ -227,7 +202,9 @@ int
 main(int argc, char **argv)
 {
 	struct sqlx_service_config_s cfg = {
-		NAME_SRVTYPE_META2, "m2v2", "el/" NAME_SRVTYPE_META2, 2, 2, schema,
+		NAME_SRVTYPE_META2, "m2v2",
+		"el/" NAME_SRVTYPE_META2, 2, 2,
+		schema, 1, 3,
 		_get_peers, _post_config, NULL
 	};
 

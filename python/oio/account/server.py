@@ -75,7 +75,7 @@ def key_container(account, user, container):
 	return '|'.join((account, user, container))
 
 def update_item (cursor, k, v):
-	cursor.execute("INSERT OR UPDATE INTO items VALUES (?,?)", (k,v))
+	cursor.execute("REPLACE INTO items VALUES (?,?)", (k,v))
 
 def create_item (cursor, k, v):
 	cursor.execute("INSERT OR ABORT INTO items VALUES (?,?)", (k,v))

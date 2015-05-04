@@ -304,7 +304,11 @@ _configure_backend(struct sqlx_service_s *ss)
 		return FALSE;
 	}
 
-	sqlx_repository_configure_open_timeout(ss->repository, ss->open_timeout);
+	sqlx_repository_configure_open_timeout (ss->repository, ss->open_timeout);
+
+	sqlx_repository_configure_hash (ss->repository,
+			ss->service_config->repo_hash_width, 
+			ss->service_config->repo_hash_depth);
 
 	GRID_TRACE("SQLX repository initiated");
 	return TRUE;

@@ -30,9 +30,6 @@ struct sqlx_repository_s;
 struct m2v2_create_params_s;
 struct hc_resolver_s;
 
-/** Fills 'result' with a valid filename to be used by the sqlx repository.  */
-void meta2_file_locator(gpointer ignored, struct sqlx_name_s *n, GString *result);
-
 /** Builds a meta2 backend for the given NAMESPACE.  */
 GError* meta2_backend_init(struct meta2_backend_s **result,
 		struct sqlx_repository_s *repo, const gchar *ns_name,

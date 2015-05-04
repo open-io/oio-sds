@@ -1239,26 +1239,25 @@ hc_set_container_global_property(gs_container_t *container,
 {
 	gchar addr[STRLEN_ADDRINFO];
 	addr_info_to_string(&(container->meta2_addr), addr, STRLEN_ADDRINFO);
+	struct sqlx_name_mutable_s name;
 
-	gchar *base = g_strdup_printf("1@%s", C0_IDSTR(container));
-	struct sqlx_name_s name = {
-			.ns = gs_get_namespace(container->info.gs),
-			.base = base,
-			.type = "meta2",
-	};
+	do {
+		struct hc_url_s *url = fill_hcurl_from_container (container);
+		sqlx_name_fill (&name, url, NAME_SRVTYPE_META2, 1);
+		hc_url_pclean (&url);
+	} while (0);
 
 	const gchar * const tab[3] = { prop_name, prop_val, NULL };
-	GByteArray *req = sqlx_pack_PROPSET_tab(&name, FALSE, tab);
+	GByteArray *req = sqlx_pack_PROPSET_tab(sqlx_name_mutable_to_const(&name), FALSE, tab);
 	GError *err = gridd_client_exec(addr, M2V2_CLIENT_TIMEOUT, req);
 	g_byte_array_unref(req);
-	g_free(base);
-
-	if (!err)
-		return NULL;
 
 	gs_error_t *ge = NULL;
-	GSERRORCAUSE(&ge, err, "Client error");
-	g_clear_error (&err);
+	if (err) {
+		GSERRORCAUSE(&ge, err, "Client error");
+		g_clear_error (&err);
+	}
+	sqlx_name_clean (&name);
 	return ge;
 }
 
@@ -1268,26 +1267,25 @@ hc_del_container_global_property(gs_container_t *container,
 {
 	gchar addr[STRLEN_ADDRINFO];
 	addr_info_to_string(&(container->meta2_addr), addr, STRLEN_ADDRINFO);
+	struct sqlx_name_mutable_s name;
 
-	gchar *base = g_strdup_printf("1@%s", C0_IDSTR(container));
-	struct sqlx_name_s name = {
-			.ns = gs_get_namespace(container->info.gs),
-			.base = base,
-			.type = "meta2",
-	};
+	do {
+		struct hc_url_s *url = fill_hcurl_from_container (container);
+		sqlx_name_fill (&name, url, NAME_SRVTYPE_META2, 1);
+		hc_url_pclean (&url);
+	} while (0);
 
 	const gchar * const tab[2] = { prop_name, NULL };
-	GByteArray *req = sqlx_pack_PROPDEL(&name, tab);
+	GByteArray *req = sqlx_pack_PROPDEL(sqlx_name_mutable_to_const(&name), tab);
 	GError *err = gridd_client_exec (addr, M2V2_CLIENT_TIMEOUT, req);
 	g_byte_array_unref(req);
-	g_free (base);
-
-	if (!err)
-		return NULL;
 
 	gs_error_t *ge = NULL;
-	GSERRORCAUSE(&ge, err, "Client error");
-	g_clear_error (&err);
+	if (err) {
+		GSERRORCAUSE(&ge, err, "Client error");
+		g_clear_error (&err);
+	}
+	sqlx_name_clean (&name);
 	return ge;
 }
 
@@ -1296,21 +1294,21 @@ hc_get_container_properties(gs_container_t *container, char ***result)
 {
 	gchar addr[STRLEN_ADDRINFO];
 	addr_info_to_string(&(container->meta2_addr), addr, STRLEN_ADDRINFO);
+	struct sqlx_name_mutable_s name;
 
-	gchar *base = g_strdup_printf("1@%s", C0_IDSTR(container));
-	struct sqlx_name_s name = {
-			.ns = gs_get_namespace(container->info.gs),
-			.base = base,
-			.type = "meta2",
-	};
+	do {
+		struct hc_url_s *url = fill_hcurl_from_container (container);
+		sqlx_name_fill (&name, url, NAME_SRVTYPE_META2, 1);
+		hc_url_pclean (&url);
+	} while (0);
 
 	GSList *pairs = NULL;
-	GByteArray *req = sqlx_pack_PROPGET(&name, NULL);
+	GByteArray *req = sqlx_pack_PROPGET(sqlx_name_mutable_to_const(&name), NULL);
 	GError *err = gridd_client_exec_and_decode (addr, M2V2_CLIENT_TIMEOUT, req,
 			&pairs, key_value_pairs_unmarshall);
 	g_byte_array_unref(req);
-	g_free (base);
 
+	gs_error_t *ge = NULL;
 	if (!err) {
 		GPtrArray *tmp = g_ptr_array_new();
 		for (GSList *l=pairs; l ;l=l->next) {
@@ -1319,12 +1317,12 @@ hc_get_container_properties(gs_container_t *container, char ***result)
 					kv->value->len, kv->value->data));
 		}
 		*result = (gchar**) metautils_gpa_to_array (tmp, TRUE);
-		return NULL;
+	} else {
+		GSERRORCAUSE(&ge, err, "Client error");
+		g_clear_error (&err);
 	}
 
-	gs_error_t *ge = NULL;
-	GSERRORCAUSE(&ge, err, "Client error");
-	g_clear_error (&err);
+	sqlx_name_clean (&name);
 	return ge;
 }
 

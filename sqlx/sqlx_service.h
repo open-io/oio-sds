@@ -42,10 +42,14 @@ struct sqlx_service_config_s
 {
 	const gchar *srvtype;
 	const gchar *srvtag;
+
 	const gchar *zk_prefix;
 	const guint zk_hash_depth;
 	const guint zk_hash_width;
+
 	const gchar *schema;
+	const guint repo_hash_depth;
+	const guint repo_hash_width;
 
 	GError* (*get_peers) (struct sqlx_service_s *ss,
 			struct sqlx_name_s *n, gboolean nocache,

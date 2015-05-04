@@ -542,8 +542,7 @@ meta2_filter_action_remove_v1(struct gridd_filter_ctx_s *ctx,
 	TRACE_FILTER();
 
 	/* store in transient */
-	e = m2b_transient_put(m2b, hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), _get_content_info(NULL, DELETE),
-			(GDestroyNotify)_content_info_clean);
+	e = m2b_transient_put(m2b, url, _get_content_info(NULL, DELETE), (GDestroyNotify)_content_info_clean);
 	if(NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
@@ -812,9 +811,9 @@ _generate_chunks(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply
 	}
 
 	/* store in transient to commit later */
-	e = m2b_transient_put(m2b, hc_url_get(url, HCURL_WHOLE),
-			hc_url_get(url, HCURL_HEXID), _get_content_info(beans, (append
-					? APPEND : PUT)), (GDestroyNotify) _content_info_clean);
+	e = m2b_transient_put(m2b, url,
+			_get_content_info(beans, (append ? APPEND : PUT)),
+			(GDestroyNotify) _content_info_clean);
 	if (NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
@@ -905,8 +904,7 @@ meta2_filter_action_update_chunk_md5(struct gridd_filter_ctx_s *ctx,
 	}
 
 	struct content_info_s *ci = (struct content_info_s *) m2b_transient_get(
-			m2b, hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID),
-			&err);
+			m2b, url, &err);
 
 	if (!ci) {
 		meta2_filter_ctx_set_error(ctx, err);
@@ -1236,7 +1234,7 @@ meta2_filter_action_content_commit_v1(struct gridd_filter_ctx_s *ctx,
 
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct content_info_s *ci = (struct content_info_s *)m2b_transient_get(m2b, hc_url_get(url, HCURL_WHOLE),hc_url_get(url, HCURL_HEXID),&e);
+	struct content_info_s *ci = (struct content_info_s *)m2b_transient_get(m2b, url, &e);
 	if(NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
@@ -1264,7 +1262,7 @@ meta2_filter_action_content_commit_v1(struct gridd_filter_ctx_s *ctx,
 			break;
 	}
 
-	m2b_transient_del(m2b, hc_url_get(url, HCURL_WHOLE),hc_url_get(url, HCURL_HEXID));
+	m2b_transient_del(m2b, url);
 
 	if(NULL != e) {
 		GRID_DEBUG("Content commit failed : %s", e->message);
@@ -1290,7 +1288,7 @@ meta2_filter_action_content_rollback_v1(struct gridd_filter_ctx_s *ctx,
 	}
 
 	/* we don't take care of any error */
-	e= m2b_transient_del(m2b, hc_url_get(url, HCURL_WHOLE),hc_url_get(url, HCURL_HEXID));
+	e = m2b_transient_del(m2b, url);
 	if(NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
