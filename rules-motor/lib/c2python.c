@@ -21,8 +21,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define G_LOG_DOMAIN "rules_motor"
 #endif
 
-#include <glib.h>
-
 #include "./motor.h"
 
 PyThreadState * mainThreadState = NULL;
