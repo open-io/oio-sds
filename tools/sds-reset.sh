@@ -65,7 +65,7 @@ done
 mkdir -p "$OIO"
 ( cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs}))
 
-opts="--nb-meta1=$((REPLICATION_DIRECTORY+1)) --nb-meta2=$((REPLICATION_BUCKET+1))"
+opts="--nb-meta1=${REPLICATION_DIRECTORY} --nb-meta2=${REPLICATION_BUCKET}"
 for srvtype in ${AVOID} ; do opts="${opts} --no-${srvtype}"; done
 ${PREFIX}-bootstrap.py \
 		-B "$REPLICATION_BUCKET" \

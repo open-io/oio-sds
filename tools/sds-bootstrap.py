@@ -489,10 +489,10 @@ def generate (ns, ip, options={}):
 		stgpol = str(options.M2_STGPOL)
 
 	if options.NO_META0 is None:
-		for i in range(1, 1+getint(options.NB_META0,1)):
+		for i in range(1, 1+getint(options.NB_META0, 1)):
 			services.append(('meta0', EXE_PREFIX + '-meta0-server', i, next_port()))
 	if options.NO_META1 is None:
-		for i in range(1, 1+getint(options.NB_META1,3)):
+		for i in range(1, 1+getint(options.NB_META1, 3)):
 			services.append(('meta1', EXE_PREFIX + '-meta1-server', i, next_port()))
 	if options.NO_META2 is None:
 		for i in range(1, 1+getint(options.NB_META2, meta2_replicas)):
