@@ -179,7 +179,6 @@ _post_config(struct sqlx_service_s *ss)
 	grid_task_queue_register(ss->gtq_register, 3,
 			_task_zk_registration, NULL, ss);
 
-	// TODO maybe enable notifications
 	return TRUE;
 }
 
