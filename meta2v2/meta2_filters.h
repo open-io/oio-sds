@@ -355,15 +355,6 @@ int meta2_filter_action_update_chunk_md5(struct gridd_filter_ctx_s *ctx,
 
 /* -------------------- Events --------------------*/
 
-int meta2_filter_action_notify_content_PUT(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_notify_content_DELETE(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_notify_content_DELETE_v2(struct gridd_filter_ctx_s *ctx,
-    struct gridd_reply_ctx_s *reply, struct on_bean_ctx_s *purged_chunk);
-
 int meta2_filter_action_notify_container_CREATE(struct gridd_filter_ctx_s *ctx,
         struct gridd_reply_ctx_s *reply);
 

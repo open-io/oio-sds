@@ -42,6 +42,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_backend_internals.h>
 #include <meta2v2/meta2_bean.h>
 #include <meta2v2/meta2v2_remote.h>
+#include <meta2v2/meta2_utils_json.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 
@@ -58,7 +59,8 @@ struct content_info_s
 	GSList *beans;
 };
 
-struct all_vers_cb_args {
+struct all_vers_cb_args
+{
 	const gchar *contentid;
 	gconstpointer udata_in;
 	gpointer udata_out;
@@ -70,7 +72,24 @@ typedef GError* (*all_vers_cb) (struct meta2_backend_s *m2b,
 		struct hc_url_s *url,
 		struct all_vers_cb_args *cbargs);
 
-static void _content_info_clean(gpointer p)
+static void
+_notify_beans (struct meta2_backend_s *m2b, struct hc_url_s *url,
+		struct on_bean_ctx_s *obc)
+{
+	if (!m2b->notify.hook)
+		return;
+	GString *gs = g_string_new ("{");
+	g_string_append_printf (gs, "\"event\":\"%s\"", NAME_SRVTYPE_META2 ".put");
+	g_string_append (gs, ",\"data\":{");
+	g_string_append_printf (gs, "\"url\":\"%s\"", hc_url_get(url, HCURL_WHOLE));
+	g_string_append (gs, ",\"beans\":[");
+	meta2_json_dump_all_xbeans (gs, obc->l);
+	g_string_append (gs, "]}}");
+	m2b->notify.hook (m2b->notify.udata, g_string_free (gs, FALSE));
+}
+
+static void
+_content_info_clean(gpointer p)
 {
 	if(!p)
 		return;
@@ -337,6 +356,7 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 		meta2_filter_ctx_set_error(ctx, e);
 		rc = FILTER_KO;
 	} else {
+		_notify_beans (m2b, url, obc);
 		_on_bean_ctx_send_list(obc, TRUE);
 		rc = FILTER_OK;
 	}
@@ -381,7 +401,7 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 	const char *copy_source = meta2_filter_ctx_get_param(ctx, M2_KEY_COPY_SOURCE);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 
-	if(NULL != copy_source) {
+	if (NULL != copy_source) {
 		reply->subject("%s|%s|COPY(%s)", hc_url_get(url, HCURL_WHOLE),
 				hc_url_get(url, HCURL_HEXID), copy_source);
 		return _copy_alias(ctx, reply, copy_source);
@@ -411,6 +431,7 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
+	_notify_beans (m2b, url, obc);
 	_on_bean_ctx_send_list(obc, TRUE);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -515,15 +536,8 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	// This is required for Kafka notifications to work
+	_notify_beans(m2b, url, obc);
 	_on_bean_ctx_send_list(obc, FALSE);
-
-	// generate notification before send reply,
-	// besause a destroy container should executes
-	// before realy generated events was created on disk
-	// and no chunk on it ! no purge by polix!
-	meta2_filter_action_notify_content_DELETE_v2(ctx, reply, obc);
-
 	_on_bean_ctx_send_list(obc, TRUE);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;

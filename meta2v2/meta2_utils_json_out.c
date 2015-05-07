@@ -121,7 +121,7 @@ _json_BEAN_only(GString *gstr, GSList *l, gconstpointer selector,
 		first = FALSE;
 		g_string_append_c (gstr, '{');
 		if (extend)
-			g_string_append_printf (gstr, "\"type\":\"%s\"",
+			g_string_append_printf (gstr, "\"type\":\"%s\",",
 					DESCR(l->data)->name);
 		encoder(gstr, l->data);
 		g_string_append_c (gstr, '}');

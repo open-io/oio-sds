@@ -71,6 +71,8 @@ struct sqlx_service_s
 	struct replication_config_s *replication_config;
 	const struct sqlx_service_config_s *service_config;
 
+	GRand *prng;
+
 	GString *url;
 	GString *announce;
 	gchar *zk_url;
@@ -84,9 +86,23 @@ struct sqlx_service_s
 	struct grid_lbpool_s *lb;
 
 	struct {
-		GThread     *thread;
+		// A queue to transmit events from request workers to the events worker.
+		// A pointer to the queue is given to the service backends.
 		GAsyncQueue *queue;
+		// Runs the converter for GAsyncQueue to ZMQ
+		GThread     *th_gq2zmq;
+		// Runs the events worker
+		GThread     *thread;
+		// Context data specific to the ZMQ context
 		void        *zctx;
+		// Pair of interconnected sockets between the gq2zmq thread and the notifier thread
+		void        *zpush; // write only
+		void        *zpull; // read only
+		// ZMQ socket to the agent
+		void        *zagent;
+		guint16     procid;
+		guint       counter;
+		GPtrArray   *pending_events;
 	} notify;
 
 	// The tasks under this queue always follow a reload of the

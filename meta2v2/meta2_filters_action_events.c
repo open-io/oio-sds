@@ -47,31 +47,44 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/autogen.h>
 #include <meta2v2/meta2_utils_json.h>
 
-int
-meta2_filter_action_notify_content_PUT(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
+static void
+_append_url (GString *gs, struct hc_url_s *url)
 {
-	return FILTER_OK;
-}
-
-int
-meta2_filter_action_notify_content_DELETE(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	return FILTER_OK;
-}
-
-int
-meta2_filter_action_notify_content_DELETE_v2(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply, struct on_bean_ctx_s *purged_chunk)
-{
-	return FILTER_OK;
+	void _append (const char *n, const char *v) {
+		if (v)
+			g_string_append_printf (gs, "\"%s\":\"%s\"", n, v);
+		else
+			g_string_append_printf (gs, "\"%s\":null", n, v);
+	}
+	_append ("ns", hc_url_get(url, HCURL_NS));
+	g_string_append_c (gs, ',');
+	_append ("account", hc_url_get(url, HCURL_ACCOUNT));
+	g_string_append_c (gs, ',');
+	_append ("user", hc_url_get(url, HCURL_USER));
+	g_string_append_c (gs, ',');
+	_append ("type", hc_url_get(url, HCURL_TYPE));
+	g_string_append_c (gs, ',');
+	_append ("id", hc_url_get(url, HCURL_HEXID));
 }
 
 int
 meta2_filter_action_notify_container_CREATE(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+
+	if (!m2b->notify.hook)
+		return FILTER_OK;
+
+	GString *gs = g_string_new ("{");
+	g_string_append_printf (gs, "\"event\":\"%s\"", NAME_SRVTYPE_META2 ".create");
+	g_string_append (gs, ",\"data\":{");
+	g_string_append (gs, "\"url\":{");
+	_append_url (gs, url);
+	g_string_append (gs, "}}");
+	m2b->notify.hook (m2b->notify.udata, g_string_free (gs, FALSE));
+
 	return FILTER_OK;
 }
 
@@ -79,6 +92,20 @@ int
 meta2_filter_action_notify_container_DESTROY(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+
+	if (!m2b->notify.hook)
+		return FILTER_OK;
+
+	GString *gs = g_string_new ("{");
+	g_string_append_printf (gs, "\"event\":\"%s\"", NAME_SRVTYPE_META2 ".destroy");
+	g_string_append (gs, ",\"data\":{");
+	g_string_append (gs, "\"url\":{");
+	_append_url (gs, url);
+	g_string_append (gs, "}}");
+	m2b->notify.hook (m2b->notify.udata, g_string_free (gs, FALSE));
+
 	return FILTER_OK;
 }
 

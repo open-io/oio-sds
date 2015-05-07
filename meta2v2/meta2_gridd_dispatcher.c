@@ -146,7 +146,6 @@ static gridd_filter M2V2_PURGE_FILTERS[] =
 	meta2_filter_check_ns_is_master,
 	meta2_filter_action_has_container,
 	meta2_filter_action_purge_container,
-	meta2_filter_action_notify_content_DELETE,
 	NULL
 };
 
@@ -212,7 +211,6 @@ static gridd_filter M2V2_PUT_FILTERS[] =
 	meta2_filter_extract_body_beans,
 	meta2_filter_action_has_container,
 	meta2_filter_action_put_content,
-	meta2_filter_action_notify_content_PUT,
 	NULL
 };
 
@@ -229,7 +227,6 @@ static gridd_filter M2V2_APPEND_FILTERS[] =
 	meta2_filter_extract_header_storage_policy,
 	meta2_filter_action_has_container,
 	meta2_filter_action_append_content,
-	meta2_filter_action_notify_content_PUT,
 	NULL
 };
 
@@ -262,7 +259,6 @@ static gridd_filter M2V2_DELETE_FILTERS[] =
 	meta2_filter_extract_header_flags32,
 	meta2_filter_action_has_container,
 	meta2_filter_action_delete_content,
-	//meta2_filter_action_notify_content_DELETE,
 	NULL
 };
 
@@ -556,9 +552,6 @@ static gridd_filter M2V2_FILTERS_del_raw_v1[] =
 	meta2_filter_action_has_container,
 	meta2_filter_action_remove_raw_v1,
 	meta2_filter_success_reply,
-	// This request is used to remove a chunk from a content.
-	// The notification has to be PUT with the updated set of chunks.
-	meta2_filter_action_notify_content_PUT,
 	NULL
 };
 
@@ -573,7 +566,6 @@ static gridd_filter M2V2_FILTERS_set_raw_v1[] =
 	meta2_filter_action_has_container,
 	meta2_filter_action_add_raw_v1,
 	meta2_filter_success_reply,
-	meta2_filter_action_notify_content_PUT,
 	NULL
 };
 
