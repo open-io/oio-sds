@@ -1,0 +1,3 @@
+[eventagent]
+bind_addr = ipc:///tmp/run/event-agent.sock
+workers = 1
