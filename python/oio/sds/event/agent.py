@@ -22,16 +22,16 @@ class EventAgent(Daemon):
         def worker(id_worker, socket):
             while True:
                 m = socket.recv_multipart()
-                print('worker id: ' + id_worker + ' event: ' + m)
+                print('worker id: %s event: %s' % (id_worker, m))
                 socket.send_multipart(m[0])
 
-        nb_workers = self.conf.get('workers', 1)
+        nb_workers = int(self.conf.get('workers', '1'))
         worker_pool = GreenPool(nb_workers)
 
         for i in range(0, nb_workers):
             worker_socket = context.socket(zmq.REP)
             worker_socket.connect('inproc://event-front')
-            worker_pool.spawn(worker, i, worker_socket)
+            worker_pool.spawn_n(worker, i, worker_socket)
 
         def proxy(socket_from, socket_to):
             while True:
@@ -39,8 +39,8 @@ class EventAgent(Daemon):
                 socket_to.send_multipart(m)
 
         boss_pool = GreenPool(1)
-        boss_pool.spawn(proxy, server, backend)
-        boss_pool.spawn(proxy, backend, server)
+        boss_pool.spawn_n(proxy, server, backend)
+        boss_pool.spawn_n(proxy, backend, server)
 
         boss_pool.waitall()
 
