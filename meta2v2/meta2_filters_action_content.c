@@ -76,15 +76,40 @@ static void
 _notify_beans (struct meta2_backend_s *m2b, struct hc_url_s *url,
 		struct on_bean_ctx_s *obc)
 {
+	void sep (GString *gs) {
+		if (gs->len > 1 && gs->str[gs->len-1] != ',')
+			g_string_append_c (gs, ',');
+	}
+	void append_int64 (GString *gs, const char *k, gint64 v) {
+		sep (gs);
+		g_string_append_printf (gs, "\"%s\":%"G_GINT64_FORMAT, k, v);
+	}
+	void append_const (GString *gs, const char *k, const char *v) {
+		sep (gs);
+		if (v)
+			g_string_append_printf (gs, "\"%s\":\"%s\"", k, v);
+		else
+			g_string_append_printf (gs, "\"%s\":null", k);
+	}
+	void append (GString *gs, const char *k, gchar *v) {
+		append_const (gs, k, v);
+		g_free0 (v);
+	}
+
 	if (!m2b->notify.hook)
 		return;
+
 	GString *gs = g_string_new ("{");
-	g_string_append_printf (gs, "\"event\":\"%s\"", NAME_SRVTYPE_META2 ".put");
-	g_string_append (gs, ",\"data\":{");
-	g_string_append_printf (gs, "\"url\":\"%s\"", hc_url_get(url, HCURL_WHOLE));
-	g_string_append (gs, ",\"beans\":[");
+	g_string_append_printf (gs, "\"event\":\"%s\"", NAME_SRVTYPE_META2 ".content.new");
+	append_int64 (gs, "when", g_get_real_time());
+	g_string_append (gs, ",\"url\":{");
+	append_const (gs, "ns", hc_url_get(url, HCURL_NS));
+	append_const (gs, "account", hc_url_get(url, HCURL_ACCOUNT));
+	append_const (gs, "user", hc_url_get(url, HCURL_USER));
+	append_const (gs, "type", hc_url_get(url, HCURL_TYPE));
+	g_string_append (gs, "},\"data\":[");
 	meta2_json_dump_all_xbeans (gs, obc->l);
-	g_string_append (gs, "]}}");
+	g_string_append (gs, "]}");
 	m2b->notify.hook (m2b->notify.udata, g_string_free (gs, FALSE));
 }
 

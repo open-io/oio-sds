@@ -934,14 +934,16 @@ meta2_backend_get_alias(struct meta2_backend_s *m2b,
 static gchar *
 _container_state (struct sqlx_sqlite3_s *sq3)
 {
-	void append_int64 (GString *gs, const char *k, gint64 v) {
-		if (gs->len > 1)
+	void sep (GString *gs) {
+		if (gs->len > 1 && gs->str[gs->len-1] != ',')
 			g_string_append_c (gs, ',');
+	}
+	void append_int64 (GString *gs, const char *k, gint64 v) {
+		sep (gs);
 		g_string_append_printf (gs, "\"%s\":%"G_GINT64_FORMAT, k, v);
 	}
 	void append_const (GString *gs, const char *k, const char *v) {
-		if (gs->len > 1)
-			g_string_append_c (gs, ',');
+		sep (gs);
 		if (v)
 			g_string_append_printf (gs, "\"%s\":\"%s\"", k, v);
 		else
@@ -954,16 +956,19 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 
 	GString *gs = g_string_new("{");
 	append_const (gs, "event", NAME_SRVTYPE_META2 ".container.state");
+	append_int64 (gs, "when", g_get_real_time());
+	g_string_append (gs, "\"url\":{");
 	append (gs, "ns", sqlx_admin_get_str(sq3, SQLX_ADMIN_NAMESPACE));
 	append (gs, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
 	append (gs, "user", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
 	append_const (gs, "type", sq3->name.type);
+	g_string_append (gs, "}, \"data\":{");
 
 	append_const (gs, "policy", sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY));
 	append_int64 (gs, "ctime", m2db_get_ctime(sq3));
 	append_int64 (gs, "bytes-count", m2db_get_size(sq3));
 	append_int64 (gs, "object-count", 0);
-	g_string_append_c (gs, '}');
+	g_string_append_c (gs, '}}');
 
 	return g_string_free(gs, FALSE);
 }
