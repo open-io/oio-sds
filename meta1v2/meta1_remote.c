@@ -348,7 +348,6 @@ meta1v2_remote_reference_get_property(const addr_info_t *m1, GError **err,
 {
 	EXTRA_ASSERT(m1 != NULL);
 	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(keys != NULL);
 	EXTRA_ASSERT(result != NULL);
 
 	MESSAGE req = message_create_named(NAME_MSGNAME_M1V2_CID_PROPGET);
@@ -365,7 +364,6 @@ meta1v2_remote_reference_del_property(const addr_info_t *m1, GError **err,
 {
 	EXTRA_ASSERT(m1 != NULL);
 	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(keys != NULL);
 
 	MESSAGE req = message_create_named(NAME_MSGNAME_M1V2_CID_PROPDEL);
 	message_add_url (req, url);
