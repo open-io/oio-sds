@@ -19,14 +19,16 @@
 import glob, os
 import ConfigParser as configparser
 
+
 def places():
-	yield "/etc/oio/sds.conf"
-	for f in glob.glob("/etc/oio/sds.conf.d/*"):
-		yield f
-	yield os.path.expanduser("~/.oio/sds.conf")
+    yield "/etc/oio/sds.conf"
+    for f in glob.glob("/etc/oio/sds.conf.d/*"):
+        yield f
+    yield os.path.expanduser("~/.oio/sds.conf")
+
 
 def load():
-	cfg = configparser.RawConfigParser()
-	cfg.read(places())
-	return cfg
+    cfg = configparser.RawConfigParser()
+    cfg.read(places())
+    return cfg
 
