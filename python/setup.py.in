@@ -1,5 +1,6 @@
 
 from setuptools import setup
+from oio import __version__
 
 setup(
 	name='oio',
@@ -8,7 +9,7 @@ setup(
 	package_dir={
 		'': '@CMAKE_CURRENT_SOURCE_DIR@'
 	},
-	packages=['oio', 'oio.account', 'oio.sds'],
-	install_requires=[ 'flask' ]
+	packages=['oio', 'oio.account', 'oio.common', 'oio.sds', 'oio.sds.event'],
+	install_requires=[ 'flask', 'eventlet', 'pyzmq' ]
 )
 
