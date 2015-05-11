@@ -914,7 +914,7 @@ struct event_s
 static void
 _send_event (struct sqlx_service_s *ss, struct event_s *evt)
 {
-	zmq_send_const (ss->notify.zagent, "", 0, ZMQ_SNDMORE|ZMQ_MORE|ZMQ_DONTWAIT);
+	zmq_send (ss->notify.zagent, "", 0, ZMQ_SNDMORE|ZMQ_MORE|ZMQ_DONTWAIT);
 	zmq_send (ss->notify.zagent, evt, HEADER_SIZE, ZMQ_MORE|ZMQ_SNDMORE|ZMQ_DONTWAIT);
 	int rc = zmq_send (ss->notify.zagent, evt->message, evt->size, ZMQ_DONTWAIT);
 	evt->last_sent = network_server_bogonow (ss->server);
@@ -988,7 +988,7 @@ static gpointer
 _worker_notify_event (gpointer p)
 {
 	struct sqlx_service_s *ss = p;
-	struct zmq_pollitem_t pi[2] = {
+	zmq_pollitem_t pi[2] = {
 		{ss->notify.zpull, -1, ZMQ_POLLIN, 0},
 		{ss->notify.zagent, -1, ZMQ_POLLIN, 0},
 	};
