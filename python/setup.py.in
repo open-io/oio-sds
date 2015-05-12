@@ -1,6 +1,4 @@
-
 from setuptools import setup
-from oio import __version__
 
 setup(
 	name='oio',
