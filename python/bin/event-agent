@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 from oio.sds.event.agent import EventAgent
 from oio.common.daemon import run_daemon
 from oio.common.utils import parse_options
