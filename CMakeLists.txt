@@ -155,7 +155,7 @@ dir2macro("GCLUSTER_SPOOL_DIR")
 dir2macro("GCLUSTER_RUN_DIR")
 dir2macro("GCLUSTER_ETC_DIR")
 
-dir2macro2("ACCOUNT_AGENT_PATH" "ipc:///var/run/account-agent.sock")
+dir2macro2("ACCOUNT_AGENT_PATH" "ipc:///var/run/event-agent.sock")
 
 dir2macro("GCLUSTER_CONFIG_FILE_PATH")
 dir2macro("GCLUSTER_CONFIG_DIR_PATH")
