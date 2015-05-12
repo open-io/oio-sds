@@ -660,16 +660,12 @@ m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 			continue;
 		PROPERTIES_set2_alias(prop, name);
 		PROPERTIES_set_alias_version(prop, version);
-
 		GByteArray *v = PROPERTIES_get_value(prop);
 		if (!v || !v->len || !v->data) {
 			err = _db_delete_bean (sq3->db, prop);
-			_bean_clean (prop);
 		} else {
 			err = _db_save_bean (sq3->db, prop);
-			if (err || !cb)
-				_bean_clean(prop);
-			else
+			if (!err && cb)
 				cb(u0, _bean_dup(prop));
 		}
 	}

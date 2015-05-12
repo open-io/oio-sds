@@ -344,7 +344,7 @@ set(ASN1C_EXE_OPTS "-fwide-types")
 
 # Check every required module is present
 check_found("APR" "APACHE2" "ASN1C" "ATTR" "CURL" "DB" "DBUS" "EXPAT" "GAMIN"
-		"GLIB2" "JSONC" "LIBEVENT" "LIBRAIN" "LZO" "NEON" "NETSNMP"
+		"GLIB2" "GRIDINIT" "JSONC" "LIBEVENT" "LIBRAIN" "LZO" "NEON" "NETSNMP"
 		"SQLITE3" "ZMQ" "ZK" "PYTHONINTERP")
 
 if (DEFINED APACHE2_MODDIR)
