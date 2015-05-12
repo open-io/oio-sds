@@ -30,28 +30,12 @@ struct sqlx_repository_s;
 struct m2v2_create_params_s;
 struct hc_resolver_s;
 
-/** Fills 'result' with a valid filename to be used by the sqlx repository.  */
-void meta2_file_locator(gpointer ignored, struct sqlx_name_s *n, GString *result);
-
 /** Builds a meta2 backend for the given NAMESPACE.  */
 GError* meta2_backend_init(struct meta2_backend_s **result,
 		struct sqlx_repository_s *repo, const gchar *ns_name,
-		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver,
-		struct event_config_repo_s *evt_repo);
+		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver);
 
-/**  */
 void meta2_backend_clean(struct meta2_backend_s *m2);
-
-/**
- * Clear the topic cache.
- * Not thread safe.
- */
-void meta2_backend_clear_topic_cache(struct meta2_backend_s *m2);
-
-/**
- * Get the metautils_notif_pool_t used by this Meta2.
- */
-metautils_notif_pool_t *meta2_backend_get_notifier(struct meta2_backend_s *m2);
 
 /** Thread-safely set the internal nsinfo of the meta2_backend.
  * The backend is unusable until a valid NS-info has been provided. */
@@ -66,36 +50,24 @@ void meta2_backend_configure_nsinfo(struct meta2_backend_s *m2,
 gboolean meta2_backend_get_nsinfo(struct meta2_backend_s *m2,
 		struct namespace_info_s *dst);
 
-/** Get the event configuration of the specified namespace. If not defined,
- * look for its parent namespace configuration. */
-struct event_config_s * meta2_backend_get_event_config(struct meta2_backend_s *m2);
-
 /** Tests if the backend has been fully initiated. I.e. it checks a
  * valid NSinfo has been provided. */
 gboolean meta2_backend_initiated(struct meta2_backend_s *m2);
 
-/**  */
 GError* meta2_backend_poll_service(struct meta2_backend_s *m2,
 		const gchar *type, struct service_info_s **si);
-
-/** Get the event/notification configuration repo from a Meta2 backend. */
-struct event_config_repo_s *meta2_backend_get_evt_config_repo(
-		const struct meta2_backend_s *m2b);
 
 /** Return a string which contain m2_addr: "IP:PORT" */
 const gchar* meta2_backend_get_local_addr(struct meta2_backend_s *m2);
 
 /* -------------------------------------------------------------------------- */
 
-/**  */
 GError *meta2_backend_has_master_container(struct meta2_backend_s *m2,
 		struct hc_url_s *url);
 
-/**  */
 GError *meta2_backend_has_container(struct meta2_backend_s *m2,
 		struct hc_url_s *url);
 
-/**  */
 GError *meta2_backend_create_container(struct meta2_backend_s *m2,
 		struct hc_url_s *url, struct m2v2_create_params_s *params);
 
@@ -107,7 +79,6 @@ GError *meta2_backend_create_container(struct meta2_backend_s *m2,
 								   still present */
 #define M2V2_DESTROY_LOCAL 0x08 /* Destroy only the local base */
 
-/**  */
 GError* meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		struct hc_url_s *url, guint32 flags);
 
@@ -117,7 +88,6 @@ GError* meta2_backend_flush_container(struct meta2_backend_s *m2,
 
 #define M2V2_MODE_DRYRUN  0x10000000
 
-/**  */
 GError *meta2_backend_purge_container(struct meta2_backend_s *m2,
 		struct hc_url_s *url, guint32 flags, m2_onbean_cb cb, gpointer u0);
 
@@ -135,7 +105,6 @@ GError* meta2_backend_deduplicate_alias_chunks(struct meta2_backend_s *m2b,
 
 /* -------------------------------------------------------------------------- */
 
-/**  */
 GError* meta2_backend_list_aliases(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, struct list_params_s *lp,
 		m2_onbean_cb cb, gpointer u0);
@@ -172,34 +141,27 @@ GError* meta2_backend_update_beans(struct meta2_backend_s *m2b,
 GError* meta2_backend_delete_chunks(struct meta2_backend_s *m2b,
                 struct hc_url_s *url, GSList *beans);
 
-/**  */
 GError* meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 				struct hc_url_s *url, gboolean bRecalc);
 
-/**  */
 GError* meta2_backend_put_alias(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
-/**  */
 GError* meta2_backend_copy_alias(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, const char *src);
 
-/**  */
 GError* meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
-/**  */
 GError* meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gboolean sync_del,
 		m2_onbean_cb cb, gpointer u0);
 
-/**  */
 GError* meta2_backend_get_properties(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0);
 
-/**  */
 GError* meta2_backend_del_properties(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gchar **propv);
 
@@ -215,26 +177,21 @@ GError* meta2_backend_get_content_urls_from_chunk_id(
 
 /* TESTING ------------------------------------------------------------------ */
 
-/**  */
 GError* meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gint64 *version);
 
-/**  */
 GError* meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gint64 size, const gchar *polname,
 		gboolean append, m2_onbean_cb cb, gpointer cb_data);
 
-/**  */
 GError* meta2_backend_generate_beans_v1(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gint64 size, const gchar *polname,
 		gboolean append, const char *mdsys, const char *mdusr,
 		m2_onbean_cb cb, gpointer cb_data);
 
-/**  */
 GError* meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gint64 *result);
 
-/** */
 GError* meta2_backend_update_alias_header(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, GSList *beans);
 
@@ -259,23 +216,5 @@ GError* meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 GError* meta2_backend_get_conditionned_spare_chunks_v2(
 		struct meta2_backend_s *m2b, struct hc_url_s *url, const gchar *stgpol,
 		GSList *notin, GSList *broken, GSList **result);
-
-/** Take a snapshot of the current state of a container.  */
-GError* meta2_backend_take_snapshot(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, const char *snapshot_name);
-
-/** Delete a snapshot. */
-GError* meta2_backend_delete_snapshot(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, const char *snapshot_name);
-
-/** Get the list of snapshots. */
-GError* meta2_backend_list_snapshots(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0);
-
-/** Restore a snapshot by copying all aliases of this snapshot, and putting
- * a deleted flag on all aliases more recent than the snapshot. */
-GError* meta2_backend_restore_snapshot(struct meta2_backend_s *m2b,
-        struct hc_url_s *url, const gchar *snapshot_name,
-		gboolean hard_restore);
 
 #endif /*OIO_SDS__meta2v2__meta2_backend_h*/

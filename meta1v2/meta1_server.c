@@ -38,10 +38,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/election.h>
 #include <sqliterepo/replication_dispatcher.h>
 #include <sqlx/sqlx_service.h>
-#include <sqlx/sqlx_service_extras.h>
 
 #include "./internals.h"
 #include "./meta1_backend.h"
+#include "./meta1_backend_internals.h"
 #include "./meta1_prefixes.h"
 #include "./meta1_gridd_dispatcher.h"
 
@@ -68,7 +68,7 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 			GRID_INFO("RELOAD prefix, nb updated prefixes %d",updated_prefixes->len);
 		guint i , max;
 		guint16 prefix;
-		gchar name[8];
+		gchar name[5];
 		max = updated_prefixes->len;
 
 		for ( i=0; i < max ; i++) {
@@ -197,15 +197,7 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 static gboolean
 _post_config(struct sqlx_service_s *ss)
 {
-	GError *err = sqlx_service_extras_init(ss);
-	if (err != NULL) {
-		GRID_WARN("%s", err->message);
-		g_clear_error(&err);
-		return FALSE;
-	}
-
-	if (!(m1 = meta1_backend_init(ss->ns_name, ss->repository,
-				ss->extras->lb, ss->extras->evt_repo))) {
+	if (!(m1 = meta1_backend_init(ss->ns_name, ss->repository, ss->lb))) {
 		GRID_WARN("META1 backend init failure");
 		return FALSE;
 	}
@@ -217,7 +209,7 @@ _post_config(struct sqlx_service_s *ss)
 		/* Preloads the prefixes locally managed: It happens often that
 		 * meta1 starts before gridagent, and _reload_prefixes() fails
 		 * for this reason. */
-		err = _reload_prefixes(ss, TRUE);
+		GError *err = _reload_prefixes(ss, TRUE);
 		if (NULL == err) {
 			done = TRUE;
 		} else {
@@ -229,22 +221,24 @@ _post_config(struct sqlx_service_s *ss)
 	}
 
 	grid_task_queue_register(ss->gtq_reload, 5,
-			(GDestroyNotify)sqlx_task_reload_event_config, NULL, ss);
-	grid_task_queue_register(ss->gtq_reload, 5,
 			_task_reload_policies, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 11,
 			(GDestroyNotify)sqlx_task_reload_lb, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 31,
 			_task_reload_prefixes, NULL, ss);
 
-	return TRUE;
+	m1->notify.udata = ss;
+	m1->notify.hook = sqlx_notify;
+	return sqlx_enable_notifier (ss);
 }
 
 int
 main(int argc, char ** argv)
 {
 	static struct sqlx_service_config_s cfg = {
-		NAME_SRVTYPE_META1, "m1v2", "el/" NAME_SRVTYPE_META1, 1, 3, META1_SCHEMA,
+		NAME_SRVTYPE_META1, "m1v2",
+		"el/" NAME_SRVTYPE_META1, 1, 3,
+		META1_SCHEMA, 1, 2,
 		_get_peers, _post_config, NULL
 	};
 	int rc = sqlite_service_main(argc, argv, &cfg);

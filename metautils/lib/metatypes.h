@@ -37,6 +37,10 @@ License along with this library.
 /** The maximum length of a namespace name */
 #define LIMIT_LENGTH_NSNAME 256
 
+#define LIMIT_LENGTH_ACCOUNT 256
+
+#define LIMIT_LENGTH_USER 256
+
 /** The maximum length of a storage policy name */
 #define LIMIT_LENGTH_STGPOLICY 256
 
@@ -124,7 +128,8 @@ typedef gint64 content_version_t;
 /**
  * The list of address types
  */
-enum id_addr_type_e {
+enum id_addr_type_e
+{
 	TADDR_V4,	/**< An IPv4 address */
 	TADDR_V6	/**< An IPv6 address */
 };
@@ -132,7 +137,8 @@ enum id_addr_type_e {
 /**
  * A network address binary representation
  */
-union ip_addr_u {
+union ip_addr_u
+{
 	guint32 v4;	/**< The IPv4 representation */
 	guint8 v6[16];	/**< The IPv6 representation */
 };
@@ -175,8 +181,8 @@ typedef struct chunk_info_s
  */
 typedef struct container_info_s
 {
-        container_id_t id;				/**< The container id */
-        gint64 size;					/**< The container size */
+	container_id_t id;				/**< The container id */
+	gint64 size;					/**< The container size */
 } container_info_t;
 
 /**
@@ -307,12 +313,12 @@ typedef struct service_info_s
  */
 typedef struct meta2_raw_chunk_s
 {
-        chunk_id_t id;        /**< The chunk id */
-        chunk_hash_t hash;    /**< The chunk hash */
-        guint32 flags;        /**< The state flags */
-        gint64 size;          /**< The chunk size */
-        guint32 position;     /**< The chunk position */
-        GByteArray *metadata; /**< The chunk metadata */
+	chunk_id_t id;        /**< The chunk id */
+	chunk_hash_t hash;    /**< The chunk hash */
+	guint32 flags;        /**< The state flags */
+	gint64 size;          /**< The chunk size */
+	guint32 position;     /**< The chunk position */
+	GByteArray *metadata; /**< The chunk metadata */
 } meta2_raw_chunk_t;
 
 /**
@@ -320,14 +326,14 @@ typedef struct meta2_raw_chunk_s
  */
 typedef struct meta2_raw_content_s
 {
-        container_id_t container_id; /**< The container id */
-        gchar path[LIMIT_LENGTH_CONTENTPATH + 1]; /**< The content name */
-        guint32 flags;               /**< The state flags */
-        guint32 nb_chunks;           /**< The number of chunks */
-        gint64 size;                 /**< The content size */
-        GByteArray *metadata;        /**< The content metadata */
-        GByteArray *system_metadata; /**< The content system metadata */
-        GSList *raw_chunks;          /**< The list of chunks */
+	container_id_t container_id; /**< The container id */
+	gchar path[LIMIT_LENGTH_CONTENTPATH + 1]; /**< The content name */
+	guint32 flags;               /**< The state flags */
+	guint32 nb_chunks;           /**< The number of chunks */
+	gint64 size;                 /**< The content size */
+	GByteArray *metadata;        /**< The content metadata */
+	GByteArray *system_metadata; /**< The content system metadata */
+	GSList *raw_chunks;          /**< The list of chunks */
 	content_version_t version;   /**< The content version */
 	gboolean deleted;	     /**< True if the content is flagged deleted */
 	gchar *storage_policy;	/**< The storage policy */
@@ -338,10 +344,10 @@ typedef struct meta2_raw_content_s
  */
 typedef struct meta1_raw_container_s
 {
-        container_id_t id;  /**< The container id */
-        gchar name[LIMIT_LENGTH_CONTAINERNAME + 1];	/**< The container name */
-        GSList *meta2;      /**< The list of META2 addresses hosting this container */
-        guint32 flags;      /**< The stat flags */
+	container_id_t id;  /**< The container id */
+	gchar name[LIMIT_LENGTH_CONTAINERNAME + 1];	/**< The container name */
+	GSList *meta2;      /**< The list of META2 addresses hosting this container */
+	guint32 flags;      /**< The stat flags */
 } meta1_raw_container_t;
 
 /**
@@ -349,13 +355,13 @@ typedef struct meta1_raw_container_s
  */
 typedef struct chunk_textinfo_s
 {
-        gchar *id;           /**< The chunk id */
-        gchar *path;         /**< The chunk path */
-        gchar *size;         /**< The chunk size */
-        gchar *position;     /**< The chunk position */
-        gchar *hash;         /**< The chunk hash */
-        gchar *metadata;     /**< The chunk metadata */
-        gchar *container_id; /**< The container id */
+	gchar *id;           /**< The chunk id */
+	gchar *path;         /**< The chunk path */
+	gchar *size;         /**< The chunk size */
+	gchar *position;     /**< The chunk position */
+	gchar *hash;         /**< The chunk hash */
+	gchar *metadata;     /**< The chunk metadata */
+	gchar *container_id; /**< The container id */
 } chunk_textinfo_t;
 
 /**
@@ -363,12 +369,12 @@ typedef struct chunk_textinfo_s
  */
 typedef struct content_textinfo_s
 {
-        gchar *container_id;    /**< The container id */
-        gchar *path;            /**< The content name */
-        gchar *size;            /**< The content size */
-        gchar *chunk_nb;        /**< The number of chunks */
-        gchar *metadata;        /**< The user metadata */
-        gchar *system_metadata; /**< The system metadata */
+	gchar *container_id;    /**< The container id */
+	gchar *path;            /**< The content name */
+	gchar *size;            /**< The content size */
+	gchar *chunk_nb;        /**< The number of chunks */
+	gchar *metadata;        /**< The user metadata */
+	gchar *system_metadata; /**< The system metadata */
 	gchar *storage_policy;	/**< The storage policy */
 	gchar *rawx_list; /**< The rawx list (introduced by the rainx service) */
 	gchar *spare_rawx_list; /**< The rawx list for reconstruction (introduced by the rainx service) */
@@ -403,13 +409,13 @@ typedef struct meta2_property_s
  */
 typedef struct meta2_raw_content_header_s
 {
-        container_id_t container_id; /**< The container id */
-        gchar path[LIMIT_LENGTH_CONTENTPATH + 1];	/**< The content name */
-        guint32 flags;               /**< The state flags */
-        guint32 nb_chunks;           /**< The number of chunks */
-        gint64 size;                 /**< The content size */
-        GByteArray *metadata;        /**< The content metadata */
-        GByteArray *system_metadata; /**< The content system metadata */
+	container_id_t container_id; /**< The container id */
+	gchar path[LIMIT_LENGTH_CONTENTPATH + 1];	/**< The content name */
+	guint32 flags;               /**< The state flags */
+	guint32 nb_chunks;           /**< The number of chunks */
+	gint64 size;                 /**< The content size */
+	GByteArray *metadata;        /**< The content metadata */
+	GByteArray *system_metadata; /**< The content system metadata */
 	content_version_t version;   /**< The content version */
 	gboolean deleted;	     /**< The content deleted flag */
 	char *policy;			 /**< The content policy */
@@ -421,9 +427,9 @@ typedef struct meta2_raw_content_header_s
 typedef struct meta2_raw_content_v2_s
 {
 	struct meta2_raw_content_header_s header;
-        GSList *raw_chunks;    /**< The list of (meta2_raw_chunk_s*) */
-        GSList *raw_services;  /**< The list of (service_info_t*) */
-        GSList *properties;    /**< The list of (meta2_property_t*) */
+	GSList *raw_chunks;    /**< The list of (meta2_raw_chunk_s*) */
+	GSList *raw_services;  /**< The list of (service_info_t*) */
+	GSList *properties;    /**< The list of (meta2_property_t*) */
 } meta2_raw_content_v2_t;
 
 /**
@@ -434,7 +440,6 @@ typedef struct addr_rule_s
 	gchar* network_addr; /**< IPv4 in decimal dotted notation */
 	gchar* network_mask; /**< IPv4 in decimal dotted notation */
 	gboolean authorize;  /**< Allow (TRUE) or deny (FALSE) */
-
 } addr_rule_t;
 
 /** @} */

@@ -264,40 +264,6 @@ metautils_cfg_get_bool(const gchar *value, gboolean def)
 	return def;
 }
 
-void
-build_hash_path(const char *file_name, int hash_depth, int hash_size, char **hash_path)
-{
-	int file_len;
-	char *file = g_strdup(file_name);
-	char *ptr;
-	int i;
-
-	file_len = strlen(file);
-	if (file_len < hash_depth * hash_size)
-		return;
-
-	*hash_path = g_malloc0(hash_depth * (hash_size + 1) + file_len + 1);
-
-	/* Remove the starting / from file */
-	if (file[0] == '/')
-		ptr = file + 1;
-	else
-		ptr = file;
-
-	for (i = 0; i < hash_depth; i++) {
-
-		/* Add a / */
-		g_strlcat(*hash_path, "/", strlen(*hash_path) + 2);
-
-		/* Add a hash level */
-		g_strlcat(*hash_path, ptr, strlen(*hash_path) + hash_size + 1);
-
-		ptr = ptr + hash_size;
-	}
-
-	g_free(file);
-}
-
 gboolean
 metautils_str_ishexa(const gchar *s, gsize slen)
 {

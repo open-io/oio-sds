@@ -20,7 +20,7 @@ License along with this library.
 #ifndef OIO_SDS__client__c__lib__hcadmin_h
 # define OIO_SDS__client__c__lib__hcadmin_h 1
 
-gs_error_t * hcadmin_meta1_policy_update(char *ns, gchar *action, gboolean checkonly, gchar **globalresult, gchar ***result, char ** args);
-gs_error_t * hcadmin_touch(              char *url,gchar *action, gboolean checkonly, gchar **globalresult, gchar ***result, char ** args);
+gs_error_t * hcadmin_touch (char *url, gchar *action, gboolean checkonly,
+		gchar **globalresult, gchar ***result, char ** args);
 
 #endif /*OIO_SDS__client__c__lib__hcadmin_h*/

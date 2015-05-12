@@ -37,16 +37,19 @@ struct grid_single_rrd_s;
 struct sqlx_repo_config_s;
 struct sqlx_sync_s;
 struct replication_config_s;
-struct sqlx_service_extras_s;
 
 struct sqlx_service_config_s
 {
 	const gchar *srvtype;
 	const gchar *srvtag;
+
 	const gchar *zk_prefix;
 	const guint zk_hash_depth;
 	const guint zk_hash_width;
+
 	const gchar *schema;
+	const guint repo_hash_depth;
+	const guint repo_hash_width;
 
 	GError* (*get_peers) (struct sqlx_service_s *ss,
 			struct sqlx_name_s *n, gboolean nocache,
@@ -68,6 +71,8 @@ struct sqlx_service_s
 	struct replication_config_s *replication_config;
 	const struct sqlx_service_config_s *service_config;
 
+	GRand *prng;
+
 	GString *url;
 	GString *announce;
 	gchar *zk_url;
@@ -78,7 +83,27 @@ struct sqlx_service_s
 	struct network_server_s *server;
 	struct gridd_request_dispatcher_s *dispatcher;
 	struct hc_resolver_s *resolver;
-	struct sqlx_service_extras_s *extras;
+	struct grid_lbpool_s *lb;
+
+	struct {
+		// A queue to transmit events from request workers to the events worker.
+		// A pointer to the queue is given to the service backends.
+		GAsyncQueue *queue;
+		// Runs the converter for GAsyncQueue to ZMQ
+		GThread     *th_gq2zmq;
+		// Runs the events worker
+		GThread     *thread;
+		// Context data specific to the ZMQ context
+		void        *zctx;
+		// Pair of interconnected sockets between the gq2zmq thread and the notifier thread
+		void        *zpush; // write only
+		void        *zpull; // read only
+		// ZMQ socket to the agent
+		void        *zagent;
+		guint16     procid;
+		guint       counter;
+		GPtrArray   *pending_events;
+	} notify;
 
 	// The tasks under this queue always follow a reload of the
 	// nsinfo field, and can safely play with it. This is the place
@@ -143,11 +168,24 @@ struct sqlx_service_s
 	// TRUE :  ELECTION_MODE_QUORUM
 	// FALSE : ELECTION_MODE_NONE
 	gboolean flag_replicable;
-
 };
 
-// Public API
+/* -------------------------------------------------------------------------- */
+
 extern int sqlite_service_main(int argc, char **argv,
 		const struct sqlx_service_config_s *cfg);
+
+/** Enables the optional notification system. To be called during the
+ * post-config hook. */
+extern gboolean sqlx_enable_notifier (struct sqlx_service_s *ss);
+
+/** Sends a notification. If notifications are not configured, the
+ * message is dropped */
+extern GError * sqlx_notify (gpointer u, gchar *msg);
+
+/** Reloads the optional (grid_lbpool_s*). Exposed to let the
+ * server enable it in its post-config hook. This is destined to
+ * be registered in a task queue. */
+void sqlx_task_reload_lb(struct sqlx_service_s *ss);
 
 #endif /*OIO_SDS__sqlx__sqlx_service_h*/

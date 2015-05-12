@@ -47,24 +47,22 @@ License along with this library.
 #include <sys/un.h>
 #include <sys/poll.h>
 
-#include <neon/ne_basic.h>
-#include <neon/ne_request.h>
-#include <neon/ne_session.h>
-
-#include <metautils/lib/metatypes.h>
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 
 #include <cluster/lib/gridcluster.h>
 #include <meta0v2/meta0_remote.h>
 #include <meta0v2/meta0_utils.h>
 #include <meta1v2/meta1_remote.h>
-#include <meta2/remote/meta2_remote.h>
 #include <meta2v2/meta2_utils.h>
 #include <meta2v2/meta2v2_remote.h>
+#include <meta2v2/meta2_remote.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/generic.h>
 #include <resolver/hc_resolver.h>
+
+#include <neon/ne_basic.h>
+#include <neon/ne_request.h>
+#include <neon/ne_session.h>
 
 #include "./grid_client.h"
 #include "./meta_resolver_explicit.h"
@@ -365,7 +363,8 @@ void gs_decache_all (gs_grid_storage_t *gs);
  *
  * @return a list of META2 addr_info_t or NULL if an error occured (err is set)
  */
-GSList* gs_resolve_meta2 (gs_grid_storage_t *gs, container_id_t cID, GError **err);
+GSList* gs_resolve_meta2 (gs_grid_storage_t *gs, struct hc_url_s *url,
+		GError **err);
 
 /* Run the resolvers for a meta1 address list */
 addr_info_t* gs_resolve_meta1 (gs_grid_storage_t *gs, container_id_t cID, GError **err);
@@ -386,8 +385,6 @@ gs_status_t gs_container_reconnect_and_refresh (gs_container_t *container, GErro
 
 gs_status_t gs_check_chunk_agregate (GSList *agregate, gs_error_t **gserr);
 
-#define C1_ROLLBACK(C,E) meta2_remote_content_rollback_in_fd (C1_CNX(content), C1_M2TO(content), &localError, C1_ID(content), C1_PATH(content))
-
 #define CONTAINER_REFRESH(C,Error,Label,Msg) do\
 { if (GS_OK != gs_manage_container_error(C,__FILE__,__LINE__,&Error)) goto Label; } while (0)
 
@@ -402,8 +399,10 @@ gboolean map_properties_from_beans(GSList **properties, GSList *beans);
 gboolean map_policy_from_beans(gchar **policy, GSList *beans);
 struct bean_CHUNKS_s *get_chunk_matching_content(GSList *beans, struct bean_CONTENTS_s *content);
 void fill_chunk_id_from_url(const char * const url, chunk_id_t *ci);
-void fill_hcurl_from_container(gs_container_t *c, struct hc_url_s **url);
-void fill_hcurl_from_content(gs_content_t *content, struct hc_url_s **url);
+struct hc_url_s* fill_hcurl_from_client (gs_grid_storage_t *client);
+struct hc_url_s* fill_hcurl_from_container (gs_container_t *c);
+struct hc_url_s* fill_hcurl_from_content (gs_content_t *c);
+struct hc_url_s* fill_hcurl_from_content2 (gs_container_t *c, const char *p);
 
 struct dl_status_s {
 	struct gs_download_info_s dl_info;/*< as transmitted by the client */

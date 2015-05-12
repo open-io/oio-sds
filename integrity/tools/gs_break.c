@@ -54,7 +54,7 @@ main_action(void)
 	gchar str_cid[STRLEN_CONTAINERID+1];
 
 	local_err = NULL;
-	meta1_name2hash(cid, ns_name, container_name);
+	meta1_name2hash(cid, ns_name, HCURL_DEFAULT_ACCOUNT, container_name);
 	container_id_to_string(cid, str_cid, sizeof(str_cid));
  
 	if (*content_path) {

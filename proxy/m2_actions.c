@@ -1178,7 +1178,7 @@ action_m2_content_copy (struct req_args_s *args)
 	if (!target)
 		return _reply_format_error(args, BADREQ("Missing target header"));
 
-	struct hc_url_s *target_url = hc_url_init(target);
+	struct hc_url_s *target_url = hc_url_oldinit(target);
 	if (!target_url)
 		return _reply_format_error(args, BADREQ("Invalid URL in target header"));
 

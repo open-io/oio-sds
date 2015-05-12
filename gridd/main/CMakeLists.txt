@@ -19,7 +19,7 @@ add_executable(gridd
 )
 bin_prefix(gridd -daemon)
 target_link_libraries(gridd
-		metautils gridcluster gridcluster-events gridcluster-remote
+		metautils gridcluster
 		${GLIB2_LIBRARIES})
 
 install(FILES

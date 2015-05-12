@@ -94,6 +94,29 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # define NAME_MSGNAME_M2V1_TOUCH_CONTENT   "REQ_M2RAW_TOUCH_CONTENT"
 # define NAME_MSGNAME_M2V1_TOUCH_CONTAINER "REQ_M2RAW_TOUCH_CONTAINER"
+# define NAME_MSGNAME_M2V1_STAT "META2_SERVICES_STAT_CONTENT_V2"
+
+/* ------------------------------------------------------------------------- */
+
+#define NAME_MSGNAME_M2_CREATE               "REQ_M2_CREATE"
+#define NAME_MSGNAME_M2_DESTROY              "REQ_M2_DESTROY"
+#define NAME_MSGNAME_M2_LIST                 "REQ_M2_LIST"
+#define NAME_MSGNAME_M2_SETFLAG              "REQ_M2_SETFLAG"
+#define NAME_MSGNAME_M2_CONTENTSPARE         "REQ_M2_CONTENTSPARE"
+#define NAME_MSGNAME_M2_CONTENTADD           "REQ_M2_CONTENTADD"
+#define NAME_MSGNAME_M2_CONTENTREMOVE        "REQ_M2_CONTENTREMOVE"
+#define NAME_MSGNAME_M2_CONTENTCOMMIT        "REQ_M2_CONTENTCOMMIT"
+#define NAME_MSGNAME_M2_CONTENTROLLBACK      "REQ_M2_CONTENTROLLBACK"
+#define NAME_MSGNAME_M2_CONTENTAPPEND        "REQ_M2_CONTENTAPPEND"
+#define NAME_MSGNAME_M2_CHUNK_COMMIT         "REQ_M2_CHUNK_COMMIT"
+#define NAME_MSGNAME_M2RAW_GETCONTENTBYPATH  "REQ_M2RAW_CONTENT_GETBYPATH"
+#define NAME_MSGNAME_M2RAW_SETCONTENT        "REQ_M2RAW_CONTENT_SET"
+#define NAME_MSGNAME_M2RAW_DELCONTENT        "REQ_M2RAW_CONTENT_DEL"
+#define NAME_MSGNAME_M2RAW_GETCHUNKS         "REQ_M2RAW_CHUNKS_GET"
+#define NAME_MSGNAME_M2RAW_SETCHUNKS         "REQ_M2RAW_CHUNKS_SET"
+#define NAME_MSGNAME_M2RAW_DELCHUNKS         "REQ_M2RAW_CHUNKS_DEL"
+#define NAME_MSGNAME_M2RAW_SETMDSYS          "META2_SERVICES_MODIFY_METADATASYS"
+
 
 /* -------------------------------------------------------------------------- */
 
@@ -132,19 +155,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /* LEGACY CONSTANTS --------------------------------------------------------- */
 
-# define M2_KEY_SNAPSHOT_HARDRESTORE "HARD_RESTORE"
-
-# define M2V1_KEY_VNS               "VIRTUAL_NAMESPACE"
-# define M2V1_KEY_REF               "CONTAINER_NAME"
-# define M2V1_KEY_REFID             "CONTAINER_ID"
-# define M2V1_KEY_PATH              "CONTENT_PATH"
-# define M2V1_KEY_METADATA_USR      "METADATA_USR"
-# define M2V1_KEY_WARNING           "WARNING"
 # define M2V1_KEY_TIMESTAMP         "TIMESTAMP"
-# define M2V1_KEY_VIRTUAL_NAMESPACE "VIRTUAL_NAMESPACE"
-# define M2V1_KEY_METADATA_USER     "METADATA_USR"
 # define M2V1_KEY_METADATA_SYS      "METADATA_SYS"
-# define M2V1_KEY_CONTAINER_ID      "CONTAINER_ID"
 # define M2V1_KEY_CONTAINER_NAME    "CONTAINER_NAME"
 # define M2V1_KEY_CONTENT_PATH      "CONTENT_PATH"
 # define M2V1_KEY_CONTENT_LENGTH    "CONTENT_LENGTH"
@@ -152,11 +164,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define M2V1_KEY_PROPERTY_VALUE    "PROPERTY_VALUE"
 # define M2V1_KEY_ADMIN_KEY         "ADMIN_KEY"
 # define M2V1_KEY_ADMIN_VALUE       "ADMIN_VALUE"
-# define M2V1_KEY_FIELD_ZERO        "field_0"
-# define M2V1_KEY_FIELD_ONE         "field_1"
-# define M2V1_KEY_FIELD_TWO         "field_2"
-# define M2V1_KEY_FIELD_THREE       "field_3"
-# define M2V1_KEY_FIELD_FOUR        "field_4"
 
 # ifndef MDUSR_PROPERTY_KEY
 #  define MDUSR_PROPERTY_KEY M2V2_ADMIN_PREFIX_SYS "v1.mdusr"

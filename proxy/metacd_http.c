@@ -33,6 +33,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
+#include <metautils/lib/url.h>
 #include <cluster/lib/gridcluster.h>
 #include <cluster/remote/gridcluster_remote.h>
 #include <server/network_server.h>
@@ -107,9 +108,6 @@ static guint dir_low_max = PROXYD_DEFAULT_MAX_SERVICES;
 static guint dir_high_ttl = PROXYD_DEFAULT_TTL_CSM0;
 static guint dir_high_max = PROXYD_DEFAULT_MAX_CSM0;
 
-static gdouble dir_timeout_req = PROXYD_DIR_TIMEOUT_SINGLE;
-static gdouble dir_timeout_all = PROXYD_DIR_TIMEOUT_SINGLE;
-
 static gdouble m2_timeout_all = PROXYD_M2_TIMEOUT_SINGLE;
 
 static gboolean validate_namespace (const gchar * ns);
@@ -118,7 +116,51 @@ static gboolean validate_srvtype (const gchar * n);
 struct req_args_s;
 enum http_rc_e _reply_not_implemented (struct req_args_s *args);
 
-#include "url.c"
+enum
+{
+	FLAG_NOEMPTY = 0x0001,
+};
+
+struct req_args_s
+{
+	struct req_uri_s *req_uri; // parsed URI
+	struct path_matching_s **matchings; // matched handlers
+	struct hc_url_s *url;
+
+	struct http_request_s *rq;
+	struct http_reply_ctx_s *rp;
+
+	guint32 flags;
+};
+
+typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);
+
+//------------------------------------------------------------------------------
+
+static const gchar *
+_req_get_option (struct req_args_s *args, const gchar *name)
+{
+	gsize namelen = strlen(name);
+	gchar *needle = g_alloca(namelen+2);
+	memcpy(needle, name, namelen);
+	needle[namelen] = '=';
+	needle[namelen+1] = 0;
+
+	if (args->req_uri->query_tokens) {
+		for (gchar **p=args->req_uri->query_tokens; *p ;++p) {
+			if (g_str_has_prefix(*p, needle))
+				return (*p) + namelen + 1;
+		}
+	}
+	return NULL;
+}
+
+static const gchar *
+_req_get_token (struct req_args_s *args, const gchar *name)
+{
+	return path_matching_get_variable (args->matchings[0], name);
+}
+
 #include "reply.c"
 #include "common.c"
 
@@ -214,10 +256,13 @@ _metacd_load_url (struct req_args_s *args)
 	const gchar *s;
 	struct hc_url_s *url = hc_url_empty();
 	
-	if (NULL != (s = NS()))
-		hc_url_set (url, HCURL_NS, s);
-	if (NULL != (s = REF()))
-		hc_url_set (url, HCURL_REFERENCE, s);
+	if (NULL != (s = NS())) // Manage encoded VNS
+		hc_url_set_oldns (url, s);
+
+	if (NULL != (s = REF())) {
+		hc_url_set (url, HCURL_USER, s);
+		hc_url_set (url, HCURL_TYPE, HCURL_DEFAULT_TYPE);
+	}
 	if (NULL != (s = PATH())) {
 		hc_url_set (url, HCURL_PATH, s);
 		if (NULL != (s = VERSION()))
@@ -247,8 +292,8 @@ handler_action (gpointer u, struct http_request_s *rq,
 
 	// Then parse the request to find a handler
 	struct hc_url_s *url = NULL;
-	struct req_uri_s ruri = {NULL, NULL, NULL, NULL, NULL};
-	_req_uri_extract_components (rq->req_uri, &ruri);
+	struct req_uri_s ruri = {NULL, NULL, NULL, NULL};
+	metautils_requri_parse (rq->req_uri, &ruri);
 
 	struct path_matching_s **matchings = _metacd_match (rq->cmd, ruri.path);
 
@@ -278,7 +323,7 @@ handler_action (gpointer u, struct http_request_s *rq,
 	}
 
 	path_matching_cleanv (matchings);
-	_req_uri_free_components (&ruri);
+	metautils_requri_clear (&ruri);
 	hc_url_pclean (&url);
 	return rc;
 }

@@ -247,8 +247,15 @@ rainx_get_spare_chunks(gs_container_t *container, gchar *content_path, gint64 co
 	notin_str = create_rawxlist_from_chunk_list(notin_list);
 	broken_str = create_rawxlist_from_chunk_list(broken_rawx_list);
 	(void) gs_container_reconnect_if_necessary (container,NULL);
-	new_spare = meta2_remote_content_spare_in_fd_full(C0_CNX(container), C0_M2TO(container), &local_gerr,
-			C0_ID(container), content_path, count, distance, notin_str, broken_str);
+
+	do {
+		struct hc_url_s *url = fill_hcurl_from_container (container);
+		hc_url_set (url, HCURL_PATH, content_path);
+		new_spare = meta2_remote_content_spare_in_fd_full(C0_CNX(container), C0_M2TO(container), &local_gerr,
+				url, count, distance, notin_str, broken_str);
+		hc_url_clean (url);
+	} while (0);
+
 	g_free(notin_str);
 	g_free(broken_str);
 	if (!new_spare) {
@@ -590,14 +597,24 @@ _commit_reconstruct(gs_content_t *content, GSList *beans, GSList *spare_chunks, 
 	raw_co = _create_meta2_raw_content(beans, content, metachunkpos, spare_chunks);
 
 	/* Delete the old chunk */
-	if (FALSE == (ret = meta2raw_remote_delete_chunks(&ctx, &local_gerr, raw_co)))
+	do {
+		struct hc_url_s *url = fill_hcurl_from_content (content);
+		ret = meta2raw_remote_delete_chunks(&ctx, &local_gerr, url, raw_co);
+		hc_url_clean (url);
+	} while (0);
+	if (FALSE == ret)
 		goto label_error;
 
 	/* Insert the new chunk */
 	_change_raw_content_id(raw_co, spare_chunks);
 	bzero(pos_prefix, sizeof(pos_prefix));
 	g_snprintf(pos_prefix, sizeof(pos_prefix), "%"G_GUINT32_FORMAT".", metachunkpos);
-	if (FALSE == (ret = meta2raw_remote_update_chunks(&ctx, &local_gerr, raw_co, TRUE, pos_prefix)))
+	do {
+		struct hc_url_s *url = fill_hcurl_from_content (content);
+		ret = meta2raw_remote_update_chunks(&ctx, &local_gerr, url, raw_co, TRUE, pos_prefix);
+		hc_url_clean (url);
+	} while (0);
+	if (FALSE == ret)
 		goto label_error;
 
 	g_clear_error(&local_gerr);

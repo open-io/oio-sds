@@ -37,8 +37,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_CS_PUSH_SRV     "REQ_PUSH_SRV"
 # define NAME_MSGNAME_CS_RM_SRV       "REQ_RM_SRV"
 
-# define NAME_MSGNAME_CS_GET_EVENT_CONFIG "REQ_EVENT_CONFIG"
-
 # define NAME_GROUPNAME_STORAGE_POLICY		"STORAGE_POLICY"
 # define NAME_GROUPNAME_DATA_SECURITY		"DATA_SECURITY"
 # define NAME_GROUPNAME_DATA_TREATMENTS		"DATA_TREATMENTS"
@@ -51,7 +49,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define KEY_META0 "meta0"
 # define KEY_SCORE_TIMEOUT "score_timeout"
 # define KEY_SCORE_EXPR "score_expr"
-# define KEY_EVENT_HANDLERS "events"
 # define KEY_STG_CONF "storage_conf"
 # define KEY_SCORE_VARBOUND "score_variation_bound"
 

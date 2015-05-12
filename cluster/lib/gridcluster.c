@@ -1227,31 +1227,6 @@ gridcluster_get_service_update_policy (struct namespace_info_s *nsinfo)
 	return gridcluster_get_nsinfo_strvalue (nsinfo, "service_update_policy", def);
 }
 
-gchar *
-gridcluster_get_event_config(struct namespace_info_s *nsinfo, const gchar *srvtype)
-{
-	gchar *getdef (void) {
-		if (!strcmp (srvtype, NAME_SRVTYPE_META2))
-			return g_strdup_printf("enabled=false;dir=%s;aggregate=false;kafka_enabled=false;kafka_topic=sds.%s",
-					GCLUSTER_SPOOL_DIR, NAME_SRVTYPE_META2);
-		return g_strdup("");
-	}
-
-	if (!nsinfo || !srvtype) {
-		errno = EINVAL;
-		return NULL;
-	}
-	if (!nsinfo->options)
-		return getdef();
-
-	gchar *vdef = getdef();
-	gchar *k = g_strconcat("event_config.", srvtype, NULL);
-	gchar *v = gridcluster_get_nsinfo_strvalue (nsinfo, k, vdef);
-	g_free(k);
-	g_free (vdef);
-	return v;
-}
-
 GError*
 gridcluster_reload_lbpool(struct grid_lbpool_s *glp)
 {

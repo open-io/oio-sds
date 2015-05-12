@@ -879,8 +879,6 @@ void init_bus(void)
 
 static void main_action(void)
 {
-	g_type_init();
-
 	g_main_loop = g_main_loop_new (NULL, FALSE);
 
 	init_bus();

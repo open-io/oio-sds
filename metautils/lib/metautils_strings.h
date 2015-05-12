@@ -85,12 +85,6 @@ GByteArray* metautils_encode_lines(gchar **strv);
 gsize metautils_hash_content_path(const gchar *src, gsize src_size,
 	gchar *dst, gsize dst_size, gsize dst_bitlength);
 
-/** Fills the hash_path argument with a hash of the given file_name.
- * The hash is a sequence of hash_depth subdirectories, whose each
- * directory's name is hash_size long. */
-void build_hash_path(const char *file_name, int hash_depth, int hash_size,
-		char **hash_path);
-
 /** Calls g_strcmp0(a,b) and ignores its third argument. */
 int metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored);
 

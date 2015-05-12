@@ -28,25 +28,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/time.h>
 #include <sys/resource.h>
 
-#include <glib.h>
-
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
 #include <server/grid_daemon.h>
 #include <server/stats_holder.h>
 #include <server/transport_gridd.h>
-
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/cache.h>
 #include <sqliterepo/election.h>
 #include <sqliterepo/synchro.h>
 #include <sqliterepo/replication_dispatcher.h>
-
 #include <resolver/hc_resolver.h>
 
+#include <glib.h>
+#include <zmq.h>
+
 #include "sqlx_service.h"
-#include "sqlx_service_extras.h"
 
 // common_main hooks
 static struct grid_main_option_s * sqlx_service_get_options(void);
@@ -64,6 +62,9 @@ static void _task_expire_resolver(gpointer p);
 static void _task_retry_elections(gpointer p);
 static void _task_reload_nsinfo(gpointer p);
 static void _task_reload_workers(gpointer p);
+
+static gpointer _worker_notify_gq2zmq (gpointer p);
+static gpointer _worker_notify_event (gpointer p);
 static gpointer _worker_clients(gpointer p);
 
 // Static variables
@@ -140,6 +141,13 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 	}
 	GRID_NOTICE("NS configured to [%s]", ss->ns_name);
 
+	ss->lb = grid_lbpool_create (ss->ns_name);
+	if (!ss->lb) {
+		GRID_WARN("LB allocation failure");
+		return FALSE;
+	}
+	GRID_NOTICE("LB allocated");
+
 	s = g_strlcpy(ss->volume, argv[1], sizeof(ss->volume));
 	if (s >= sizeof(ss->volume)) {
 		GRID_WARN("Volume name too long (given=%"G_GSIZE_FORMAT" max=%lu)",
@@ -190,7 +198,13 @@ _configure_limits(struct sqlx_service_s *ss)
 static gboolean
 _init_configless_structures(struct sqlx_service_s *ss)
 {
-	if (!(ss->server = network_server_init())
+	ss->notify.procid = getpid();
+	ss->notify.counter = 0;
+
+	if (!(ss->prng = g_rand_new())
+			|| !(ss->notify.zctx = zmq_init(1))
+			|| !(ss->notify.pending_events = g_ptr_array_sized_new(64))
+			|| !(ss->server = network_server_init())
 			|| !(ss->dispatcher = transport_gridd_build_empty_dispatcher())
 			|| !(ss->si = g_malloc0(sizeof(struct service_info_s)))
 			|| !(ss->clients_pool = gridd_client_pool_create())
@@ -203,6 +217,7 @@ _init_configless_structures(struct sqlx_service_s *ss)
 		GRID_WARN("SERVICE init error : memory allocation failure");
 		return FALSE;
 	}
+
 	return TRUE;
 }
 
@@ -295,7 +310,11 @@ _configure_backend(struct sqlx_service_s *ss)
 		return FALSE;
 	}
 
-	sqlx_repository_configure_open_timeout(ss->repository, ss->open_timeout);
+	sqlx_repository_configure_open_timeout (ss->repository, ss->open_timeout);
+
+	sqlx_repository_configure_hash (ss->repository,
+			ss->service_config->repo_hash_width, 
+			ss->service_config->repo_hash_depth);
 
 	GRID_TRACE("SQLX repository initiated");
 	return TRUE;
@@ -312,6 +331,7 @@ _configure_tasks(struct sqlx_service_s *ss)
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_retry_elections, NULL, ss);
+
 	return TRUE;
 }
 
@@ -425,6 +445,18 @@ sqlx_service_action(void)
 	if (!SRV.thread_client)
 		return _action_report_error(err, "Failed to start the CLIENT thread");
 
+	if (SRV.notify.queue) {
+		SRV.notify.th_gq2zmq = g_thread_try_new("notifier-gq2zmq", _worker_notify_gq2zmq, &SRV, &err);
+		if (!SRV.notify.th_gq2zmq)
+			return _action_report_error(err, "Failed to start the NOTIFY-GQ2ZMQ thread");
+	}
+
+	if (SRV.notify.zpull) {
+		SRV.notify.thread = g_thread_try_new("notifier-req", _worker_notify_event, &SRV, &err);
+		if (!SRV.notify.thread)
+			return _action_report_error(err, "Failed to start the NOTIFY-REQ thread");
+	}
+
 	/* SERVER/GRIDD main run loop */
 	if (!grid_main_is_running())
 		return;
@@ -515,6 +547,11 @@ sqlx_service_specific_fini(void)
 	if (SRV.thread_client)
 		g_thread_join(SRV.thread_client);
 
+	if (SRV.notify.thread)
+		g_thread_join(SRV.notify.thread);
+	if (SRV.notify.th_gq2zmq)
+		g_thread_join(SRV.notify.th_gq2zmq);
+
 	if (SRV.repository) {
 		sqlx_repository_stop(SRV.repository);
 		struct sqlx_cache_s *cache = sqlx_repository_get_cache(SRV.repository);
@@ -562,8 +599,22 @@ sqlx_service_specific_fini(void)
 	if (SRV.zk_url)
 		metautils_str_clean(&SRV.zk_url);
 
-	if (SRV.extras)
-		sqlx_service_extras_clear(&SRV);
+	if (SRV.lb)
+		grid_lbpool_destroy (SRV.lb);
+
+	if (SRV.notify.queue)
+		g_async_queue_unref (SRV.notify.queue);
+	if (SRV.notify.zpush)
+		zmq_close (SRV.notify.zpush);
+	if (SRV.notify.zpull)
+		zmq_close (SRV.notify.zpull);
+	if (SRV.notify.zagent)
+		zmq_close (SRV.notify.zagent);
+	if (SRV.notify.zctx)
+		zmq_term (SRV.notify.zctx);
+
+	if (SRV.prng)
+		g_rand_free (SRV.prng);
 
 	namespace_info_clear(&SRV.nsinfo);
 }
@@ -635,7 +686,8 @@ sqlite_service_main(int argc, char **argv,
 	memset(&replication_config, 0, sizeof(replication_config));
 	SRV.replication_config = &replication_config;
 	SRV.service_config = cfg;
-	return grid_main(argc, argv, &sqlx_service_callbacks);
+	int rc = grid_main(argc, argv, &sqlx_service_callbacks);
+	return rc;
 }
 
 // Tasks -----------------------------------------------------------------------
@@ -755,5 +807,244 @@ _task_reload_workers(gpointer p)
 			NULL, PSRV(p)->service_config->srvtype, "max_workers",
 			SRV.cfg_max_workers);
 	network_server_set_max_workers(PSRV(p)->server, (guint) max_workers);
+}
+
+void
+sqlx_task_reload_lb (struct sqlx_service_s *ss)
+{
+	GError *err;
+
+	EXTRA_ASSERT(ss != NULL);
+
+	if (!ss->lb)
+		return;
+
+	if (NULL != (err = gridcluster_reload_lbpool(ss->lb))) {
+		GRID_WARN("Failed to reload the LB pool services: (%d) %s",
+				err->code, err->message);
+		g_clear_error(&err);
+	}
+
+	// ss->nsinfo is reloaded by _task_reload_nsinfo()
+	grid_lbpool_reconfigure(ss->lb, &(ss->nsinfo));
+}
+
+GError *
+sqlx_notify (gpointer udata, gchar *msg)
+{
+	struct sqlx_service_s *ss = udata;
+	if (ss->notify.queue && ss->notify.thread)
+		g_async_queue_push (ss->notify.queue, msg);
+	else
+		g_free(msg);
+	return NULL;
+}
+
+gboolean
+sqlx_enable_notifier (struct sqlx_service_s *ss)
+{
+	int rc, err, opt;
+	EXTRA_ASSERT(ss != NULL);
+	EXTRA_ASSERT(ss->notify.queue == NULL);
+
+	if (!ss->notify.queue)
+		ss->notify.queue = g_async_queue_new();
+
+	if (!ss->notify.zagent) {
+		ss->notify.zagent = zmq_socket (ss->notify.zctx, ZMQ_DEALER);
+		opt = 1000;
+		zmq_setsockopt (SRV.notify.zagent, ZMQ_LINGER, &opt, sizeof(opt));
+		opt = 64 * 1024;
+		zmq_setsockopt (SRV.notify.zagent, ZMQ_SNDBUF, &opt, sizeof(opt));
+		zmq_setsockopt (SRV.notify.zagent, ZMQ_RCVBUF, &opt, sizeof(opt));
+		opt = 16;
+		zmq_setsockopt (SRV.notify.zagent, ZMQ_SNDHWM, &opt, sizeof(opt));
+		zmq_setsockopt (SRV.notify.zagent, ZMQ_RCVHWM, &opt, sizeof(opt));
+
+		gchar *url =  gridcluster_get_accountagent (SRV.ns_name);
+		if (url) {
+			if (0 > (rc = zmq_connect (SRV.notify.zagent, url))) {
+				err = zmq_errno ();
+				GRID_WARN("ZMQ connection error (account-agent) : (%d) %s",
+						err, zmq_strerror (err));
+			}
+			g_free (url);
+		}
+	}
+
+	if (!ss->notify.zpush) {
+		ss->notify.zpush = zmq_socket(ss->notify.zctx, ZMQ_PUSH);
+		zmq_bind (ss->notify.zpush, "inproc://events");
+		opt = 1000;
+		zmq_setsockopt (ss->notify.zpush, ZMQ_LINGER, &opt, sizeof(opt));
+		opt = 64 * 1024;
+		zmq_setsockopt (ss->notify.zpush, ZMQ_SNDBUF, &opt, sizeof(opt));
+		opt = 2;
+		zmq_setsockopt (SRV.notify.zpull, ZMQ_SNDHWM, &opt, sizeof(opt));
+	}
+
+	if (!ss->notify.zpull) {
+		ss->notify.zpull = zmq_socket(ss->notify.zctx, ZMQ_PULL);
+		zmq_connect (SRV.notify.zpull, "inproc://events");
+		opt = 64 * 1024;
+		zmq_setsockopt (SRV.notify.zpull, ZMQ_RCVBUF, &opt, sizeof(opt));
+		opt = 2;
+		zmq_setsockopt (SRV.notify.zpull, ZMQ_RCVHWM, &opt, sizeof(opt));
+	}
+
+	return TRUE;
+}
+
+#define HEADER_SIZE 14
+
+struct event_s
+{
+	// 3 fields used as unique key
+	guint32 rand;
+	guint32 recv_time;
+	guint32 evtid;
+	guint16 procid;
+
+	// and then the payload
+	guint16 size;
+	gint64 last_sent;
+	guint8 message[];
+};
+
+static void
+_send_event (struct sqlx_service_s *ss, struct event_s *evt)
+{
+	zmq_send (ss->notify.zagent, "", 0, ZMQ_SNDMORE|ZMQ_MORE|ZMQ_DONTWAIT);
+	zmq_send (ss->notify.zagent, evt, HEADER_SIZE, ZMQ_MORE|ZMQ_SNDMORE|ZMQ_DONTWAIT);
+	int rc = zmq_send (ss->notify.zagent, evt->message, evt->size, ZMQ_DONTWAIT);
+	evt->last_sent = network_server_bogonow (ss->server);
+	if (rc < 0) {
+		int err = zmq_errno ();
+		if (err != EINTR && err != ETERM && err != EAGAIN) {
+			gchar tmp[1+ 2*HEADER_SIZE];
+			buffer2str(evt, HEADER_SIZE, tmp, sizeof(tmp));
+			GRID_WARN("Event error %s : (%d) %s", tmp, err, zmq_strerror(err));
+		}
+	}
+}
+
+static void
+_manage_event (struct sqlx_service_s *ss, zmq_msg_t *msg)
+{
+	if (!ss->notify.zagent)
+		return;
+
+	struct event_s *evt = g_malloc (sizeof(struct event_s) + zmq_msg_size(msg));
+	memcpy (evt->message, zmq_msg_data(msg), zmq_msg_size(msg));
+	evt->rand = g_rand_int (ss->prng);
+	evt->evtid = ss->notify.counter ++;
+	evt->procid = ss->notify.procid;
+	evt->size = zmq_msg_size (msg);
+	evt->last_sent = network_server_bogonow (ss->server);
+	evt->recv_time = evt->last_sent;
+	g_ptr_array_add (ss->notify.pending_events, evt);
+
+	gchar tmp[1+ 2*HEADER_SIZE];
+	buffer2str(evt, HEADER_SIZE, tmp, sizeof(tmp));
+	GRID_INFO("EVT:DEF %s %.*s", tmp, evt->size, evt->message);
+
+	_send_event (ss, evt);
+}
+
+static void
+_manage_ack (struct sqlx_service_s *ss, zmq_msg_t *msg)
+{
+	if (zmq_msg_size (msg) != HEADER_SIZE)
+		return;
+
+	void *d = zmq_msg_data (msg);
+	for (guint i=0; i<ss->notify.pending_events->len ;i++) {
+		struct event_s *evt = g_ptr_array_index(ss->notify.pending_events, i);
+		if (!memcmp(evt, d, HEADER_SIZE)) {
+			g_free (evt);
+			g_ptr_array_remove_index_fast (ss->notify.pending_events, i);
+
+			gchar tmp[1+ 2*HEADER_SIZE];
+			buffer2str(evt, HEADER_SIZE, tmp, sizeof(tmp));
+			GRID_INFO("EVT:ACK %s", tmp);
+
+			return;
+		}
+	}
+}
+
+static void
+_retry_events (struct sqlx_service_s *ss)
+{
+	const time_t now = network_server_bogonow (ss->server);
+	for (guint i=0; i<ss->notify.pending_events->len ;i++) {
+		struct event_s *evt = g_ptr_array_index (ss->notify.pending_events, i);
+		if (evt->last_sent < now-9)
+			_send_event (ss, evt);
+	}
+}
+
+static gpointer
+_worker_notify_event (gpointer p)
+{
+	struct sqlx_service_s *ss = p;
+	zmq_pollitem_t pi[2] = {
+		{ss->notify.zpull, -1, ZMQ_POLLIN, 0},
+		{ss->notify.zagent, -1, ZMQ_POLLIN, 0},
+	};
+
+	while (grid_main_is_running ()) {
+		zmq_msg_t msg;
+		int rc = zmq_poll (pi, 2, 1000000);
+		if (rc < 0) {
+			int err = zmq_errno();
+			if (err != ETERM && err != EINTR)
+				GRID_WARN("ZMQ poll error : (%d) %s", err, zmq_strerror(err));
+			if (err != EINTR)
+				break;
+		}
+		if (pi[1].revents) { // ack ready
+			for (rc=0; rc>=0 ;) {
+				zmq_msg_init (&msg);
+				rc = zmq_msg_recv (&msg, ss->notify.zagent, ZMQ_DONTWAIT);
+				if (rc > 0)
+					_manage_ack (ss, &msg);
+				zmq_msg_close (&msg);
+			}
+		}
+		_retry_events (ss);
+		if (pi[0].revents) { // event ready
+			for (rc=0; rc>=0 ;) {
+				zmq_msg_init (&msg);
+				rc = zmq_msg_recv (&msg, ss->notify.zpull, ZMQ_DONTWAIT);
+				if (rc > 0)
+					_manage_event (ss, &msg);
+				zmq_msg_close (&msg);
+			}
+		}
+	}
+
+	return p;
+}
+
+static gpointer
+_worker_notify_gq2zmq (gpointer p)
+{
+	struct sqlx_service_s *ss = p;
+	gchar *tmp;
+	while (grid_main_is_running()) {
+		tmp = (gchar*) g_async_queue_timeout_pop (ss->notify.queue, 1000000L);
+		if (!tmp)
+			continue;
+		if (ss->notify.zpush)
+			zmq_send (ss->notify.zpush, tmp, strlen(tmp), 0);
+		g_free (tmp);
+	}
+	while (NULL != (tmp = g_async_queue_try_pop (ss->notify.queue))) {
+		if (ss->notify.zpush)
+			zmq_send (ss->notify.zpush, tmp, strlen(tmp), 0);
+		g_free (tmp);
+	}
+	return p;
 }
 

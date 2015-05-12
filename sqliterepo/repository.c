@@ -70,7 +70,7 @@ _close_handle(sqlite3 **pdb)
 }
 
 static gchar*
-compute_path(sqlx_repository_t *repo, const hashstr_t *hn, const gchar *t)
+_compute_path_hash(sqlx_repository_t *repo, const hashstr_t *hn, const gchar *t)
 {
 	guint w, d, i = 0;
 	gsize nlen;
@@ -305,6 +305,18 @@ __get_schema(sqlx_repository_t *repo, const gchar *type, GByteArray **res)
 	return NULL;
 }
 
+static void
+_default_locator (gpointer ignored, struct sqlx_name_s *n, GString *result)
+{
+	SQLXNAME_CHECK(n);
+	EXTRA_ASSERT(result != NULL);
+	(void) ignored;
+
+	g_string_append (result, n->base);
+	g_string_append_c (result, '.');
+	g_string_append (result, n->type);
+}
+
 /* ------------------------------------------------------------------------- */
 
 GError *
@@ -365,8 +377,8 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 
 	repo = g_malloc0(sizeof(struct sqlx_repository_s));
 	g_strlcpy(repo->basedir, vol, sizeof(repo->basedir)-1);
-	repo->hash_depth = 2;
-	repo->hash_width = 2;
+	repo->hash_depth = 1;
+	repo->hash_width = 3;
 
 	repo->schemas = g_hash_table_new_full(
 			(GHashFunc)hashstr_hash, (GEqualFunc)hashstr_equal,
@@ -389,6 +401,9 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 		repo->sync_mode_solo = SQLX_SYNC_NORMAL;
 		repo->sync_mode_repli = SQLX_SYNC_NORMAL;
 	}
+
+	repo->locator = _default_locator;
+	repo->locator_data = NULL;
 
 	repo->running = BOOL(TRUE);
 	*result = repo;
@@ -439,24 +454,16 @@ sqlx_repository_clean(sqlx_repository_t *repo)
 }
 
 void
-sqlx_repository_configure_hash(sqlx_repository_t *repo,
-		guint width, guint depth)
+sqlx_repository_configure_hash(sqlx_repository_t *repo, guint w, guint d)
 {
 	EXTRA_ASSERT(repo != NULL);
 	EXTRA_ASSERT(repo->running);
+	EXTRA_ASSERT(4 >= (w * d));
 
-	/* some sanity checks */
-	if (width > 4)
-		GRID_WARN("width = %u be careful to the number of files in each level", width);
-	if (depth > 4)
-		GRID_WARN("depth = %u be careful to the number of directores", depth);
-	if (width * depth > 6)
-		GRID_WARN("strange hash size (%u)", width * depth);
-
-	repo->hash_depth = depth;
-	repo->hash_width = width;
+	repo->hash_depth = d;
+	repo->hash_width = w;
 	GRID_INFO("Repository path hash configured : depth=%u width=%u",
-		repo->hash_depth, repo->hash_width);
+			repo->hash_depth, repo->hash_width);
 }
 
 void
@@ -733,6 +740,7 @@ _open_fill_args(struct open_args_s *args, struct sqlx_repository_s *repo,
 {
 	EXTRA_ASSERT(args != NULL);
 	EXTRA_ASSERT(repo != NULL);
+	EXTRA_ASSERT(repo->locator != NULL);
 	SQLXNAME_CHECK(n);
 
 	memset(args, 0, sizeof(struct open_args_s));
@@ -742,17 +750,11 @@ _open_fill_args(struct open_args_s *args, struct sqlx_repository_s *repo,
 	args->name.base = n->base;
 	args->name.ns = n->ns;
 
-	if (!repo->locator) {
-		args->realname = sqliterepo_hash_name(n);
-		args->realpath = compute_path(repo, args->realname, n->type);
-	}
-	else {
-		GString *fn = g_string_new("");
-		repo->locator(repo->locator_data, n, fn);
-		args->realname = hashstr_create_from_gstring(fn);
-		g_string_free(fn, TRUE);
-		args->realpath = compute_path(repo, args->realname, NULL);
-	}
+	GString *fn = g_string_new("");
+	repo->locator(repo->locator_data, n, fn);
+	args->realname = hashstr_create_from_gstring(fn);
+	args->realpath = _compute_path_hash(repo, args->realname, NULL);
+	g_string_free(fn, TRUE);
 
 	return __get_schema(repo, args->name.type, &(args->raw));
 }

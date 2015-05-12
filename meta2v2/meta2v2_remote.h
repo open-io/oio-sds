@@ -134,14 +134,6 @@ GByteArray* m2v2_remote_pack_STGPOL(struct hc_url_s *url, const char *pol);
 
 GByteArray* m2v2_remote_pack_EXITELECTION(struct hc_url_s *url);
 
-GByteArray* m2v2_remote_pack_SNAP_TAKE(struct hc_url_s *url);
-
-GByteArray* m2v2_remote_pack_SNAP_LIST(struct hc_url_s *url);
-
-GByteArray* m2v2_remote_pack_SNAP_RESTORE(struct hc_url_s *url, gboolean hard_restore);
-
-GByteArray* m2v2_remote_pack_SNAP_DELETE(struct hc_url_s *url);
-
 GByteArray* m2v2_remote_pack_TOUCH_content(struct hc_url_s *url);
 
 GByteArray* m2v2_remote_pack_TOUCH_container(struct hc_url_s *url, guint32 flags);
@@ -268,18 +260,6 @@ GError* m2v2_remote_execute_STGPOL(const gchar *target,
 		struct hc_url_s *url, const char *pol, GSList **out);
 
 GError* m2v2_remote_execute_EXITELECTION(const gchar *target,
-		struct hc_url_s *url);
-
-GError* m2v2_remote_execute_SNAP_TAKE(const gchar *target,
-		struct hc_url_s *url);
-
-GError* m2v2_remote_execute_SNAP_LIST(const gchar *target,
-		struct hc_url_s *url, GSList **out);
-
-GError* m2v2_remote_execute_SNAP_RESTORE(const gchar *target,
-		struct hc_url_s *url, gboolean hard_restore);
-
-GError* m2v2_remote_execute_SNAP_DELETE(const gchar *target,
 		struct hc_url_s *url);
 
 GError* m2v2_remote_touch_content(const gchar *target, struct hc_url_s *url);

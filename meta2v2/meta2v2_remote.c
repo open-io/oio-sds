@@ -34,34 +34,16 @@ License along with this library.
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 
-static GByteArray *
-_url_2_gba(struct hc_url_s *url)
-{
-	GByteArray *gba = g_byte_array_new();
-	if (hc_url_get_id(url))
-		g_byte_array_append(gba, hc_url_get_id(url), hc_url_get_id_size(url));
-	return gba;
-}
-
 static MESSAGE
 _m2v2_build_request(const gchar *name, struct hc_url_s *url, GByteArray *body)
 {
-	GSList *pool = NULL;
-
+	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(url != NULL);
-	struct message_s *msg = message_create_request(NULL, NULL, name,
-			body ? gba_poolify(&pool, body) : NULL,
-			NAME_MSGKEY_HCURL, gba_poolify(&pool,
-				metautils_gba_from_string(hc_url_get(url, HCURL_WHOLE))),
-			NAME_MSGKEY_NAMESPACE, gba_poolify(&pool,
-				metautils_gba_from_string(hc_url_get(url, HCURL_NS))),
-			NAME_MSGKEY_CONTAINERID, gba_poolify(&pool,
-				_url_2_gba(url)),
-			NAME_MSGKEY_CONTENTPATH, gba_poolify(&pool, metautils_gba_from_string(
-					hc_url_get(url, HCURL_PATH))),
-			NULL);
-	gba_pool_clean(&pool);
 
+	struct message_s *msg = message_create_named(name);
+	message_add_url (msg, url);
+	if (body)
+		message_add_body_unref (msg, body);
 	return msg;
 }
 
@@ -79,8 +61,8 @@ static GByteArray *
 _m2v2_pack_request_with_flags(const gchar *name, struct hc_url_s *url,
 		GByteArray *body, guint32 flags)
 {
-	return message_marshall_gba_and_clean(_m2v2_build_request_with_flags(
-				name, url, body, flags));
+	return message_marshall_gba_and_clean(
+			_m2v2_build_request_with_flags (name, url, body, flags));
 }
 
 static GByteArray *
@@ -106,9 +88,9 @@ m2v2_remote_pack_CREATE(struct hc_url_s *url, struct m2v2_create_params_s *pols)
 {
 	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_CREATE, url, NULL);
 	if (pols && pols->storage_policy)
-		message_add_field(msg, M2_KEY_STORAGE_POLICY, pols->storage_policy, strlen(pols->storage_policy));
+		message_add_field_str(msg, M2_KEY_STORAGE_POLICY, pols->storage_policy);
 	if (pols && pols->version_policy)
-		message_add_field(msg, M2_KEY_VERSION_POLICY, pols->version_policy, strlen(pols->version_policy));
+		message_add_field_str(msg, M2_KEY_VERSION_POLICY, pols->version_policy);
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -117,13 +99,13 @@ m2v2_remote_pack_DESTROY(struct hc_url_s *url, guint32 flags)
 {
 	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DESTROY, url, NULL);
 	if (flags & M2V2_DESTROY_FORCE)
-		message_add_fields_str(msg, NAME_MSGKEY_FORCE, "1", NULL);
+		message_add_field_str(msg, NAME_MSGKEY_FORCE, "1");
 	if (flags & M2V2_DESTROY_FLUSH)
-		message_add_fields_str(msg, NAME_MSGKEY_FLUSH, "1", NULL);
+		message_add_field_str(msg, NAME_MSGKEY_FLUSH, "1");
 	if (flags & M2V2_DESTROY_PURGE)
-		message_add_fields_str(msg, NAME_MSGKEY_PURGE, "1", NULL);
+		message_add_field_str(msg, NAME_MSGKEY_PURGE, "1");
 	if (flags & M2V2_DESTROY_LOCAL)
-		message_add_fields_str(msg, NAME_MSGKEY_LOCAL, "1", NULL);
+		message_add_field_str(msg, NAME_MSGKEY_LOCAL, "1");
 
 	return message_marshall_gba_and_clean(msg);
 }
@@ -164,7 +146,7 @@ m2v2_remote_pack_OVERWRITE(struct hc_url_s *url, GSList *beans)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
 	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, body);
-	message_add_field(msg, M2_KEY_OVERWRITE, "1", 1);
+	message_add_field_str(msg, M2_KEY_OVERWRITE, "1");
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -179,7 +161,7 @@ GByteArray*
 m2v2_remote_pack_COPY(struct hc_url_s *url, const gchar *src)
 {
 	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, NULL);
-	message_add_field(msg, M2_KEY_COPY_SOURCE, src, strlen(src));
+	message_add_field_str(msg, M2_KEY_COPY_SOURCE, src);
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -215,6 +197,8 @@ m2v2_remote_pack_RAW_SUBST(struct hc_url_s *url,
 			M2_KEY_NEW_CHUNKS, new_chunks_gba,
 			M2_KEY_OLD_CHUNKS, old_chunks_gba,
 			NULL);
+	g_byte_array_unref (new_chunks_gba);
+	g_byte_array_unref (old_chunks_gba);
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -228,11 +212,11 @@ GByteArray*
 m2v2_remote_pack_GET_BY_CHUNK(struct hc_url_s *url,
 		const gchar *chunk_id, gint64 limit)
 {
-	gchar limit_str[16];
-	g_snprintf(limit_str, 16, "%"G_GINT64_FORMAT, limit);
+	gchar limit_str[32];
+	g_snprintf(limit_str, sizeof(limit_str), "%"G_GINT64_FORMAT, limit);
 	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_GET, url, NULL);
-	message_add_fields_str(msg, M2_KEY_CHUNK_ID, chunk_id,
-			M2_KEY_MAX_KEYS, limit_str, NULL);
+	message_add_field_str (msg, M2_KEY_CHUNK_ID, chunk_id);
+	message_add_field_str (msg, M2_KEY_MAX_KEYS, limit_str);
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -249,10 +233,10 @@ m2v2_remote_pack_LIST(struct hc_url_s *url, struct list_params_s *p)
 
 	struct message_s *msg = _m2v2_build_request_with_flags(NAME_MSGNAME_M2V2_LIST, url, NULL, flags);
 
-	message_add_fields_str(msg, M2_KEY_SNAPSHOT, p->snapshot, NULL);
-	message_add_fields_str(msg, M2_KEY_PREFIX, p->prefix, NULL);
-	message_add_fields_str(msg, M2_KEY_MARKER, p->marker_start, NULL);
-	message_add_fields_str(msg, M2_KEY_MARKER_END, p->marker_end, NULL);
+	message_add_field_str(msg, M2_KEY_SNAPSHOT, p->snapshot);
+	message_add_field_str(msg, M2_KEY_PREFIX, p->prefix);
+	message_add_field_str(msg, M2_KEY_MARKER, p->marker_start);
+	message_add_field_str(msg, M2_KEY_MARKER_END, p->marker_end);
 	if (p->maxkeys > 0)
 		message_add_field_strint64(msg, M2_KEY_MAX_KEYS, p->maxkeys);
 
@@ -283,16 +267,14 @@ m2v2_remote_pack_PROP_GET(struct hc_url_s *url, guint32 flags)
 GByteArray*
 m2v2_remote_pack_BEANS(struct hc_url_s *url, const gchar *pol, gint64 size, gboolean append)
 {
-	gchar strsize[128];
-	g_snprintf(strsize, sizeof(strsize), "%"G_GINT64_FORMAT, size);
 	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_BEANS, url, NULL);
-	if(!append)
-		message_add_fields_str(msg, NAME_MSGKEY_CONTENTLENGTH, strsize,
-				NAME_MSGKEY_STGPOLICY, pol, NULL);
-	else
-		message_add_fields_str(msg, NAME_MSGKEY_CONTENTLENGTH, strsize,
-				NAME_MSGKEY_APPEND, "true",
-				NAME_MSGKEY_STGPOLICY, pol, NULL);
+	gchar strsize[32];
+	g_snprintf(strsize, sizeof(strsize), "%"G_GINT64_FORMAT, size);
+	message_add_field_str (msg, NAME_MSGKEY_CONTENTLENGTH, strsize);
+	message_add_field_str (msg, NAME_MSGKEY_STGPOLICY, pol);
+	if (append)
+		message_add_field_str (msg, NAME_MSGKEY_APPEND, "true");
+
 	/* si policy est NULL, le paramètre ne sera pas ajouté. On profite que
 	 * ce soit ldernier argument de la liste */
 	return message_marshall_gba_and_clean(msg);
@@ -332,10 +314,8 @@ m2v2_remote_pack_SPARE(struct hc_url_s *url, const gchar *pol,
 		body = bean_sequence_marshall(beans);
 
 	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_BEANS, url, body);
-	message_add_fields_str(msg,
-			M2_KEY_STORAGE_POLICY, pol,
-			M2_KEY_SPARE, spare_type,
-			NULL);
+	message_add_field_str (msg, M2_KEY_STORAGE_POLICY, pol);
+	message_add_field_str (msg, M2_KEY_SPARE, spare_type);
 	_bean_cleanl2(beans);
 	return message_marshall_gba_and_clean(msg);
 }
@@ -344,7 +324,7 @@ GByteArray*
 m2v2_remote_pack_STGPOL(struct hc_url_s *url, const gchar *pol)
 {
 	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_STGPOL, url, NULL);
-	message_add_fields_str(msg, NAME_MSGKEY_STGPOLICY, pol, NULL);
+	message_add_field_str(msg, NAME_MSGKEY_STGPOLICY, pol);
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -352,32 +332,6 @@ GByteArray*
 m2v2_remote_pack_EXITELECTION(struct hc_url_s *url)
 {
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_EXITELECTION, url, NULL);
-}
-
-GByteArray*
-m2v2_remote_pack_SNAP_TAKE(struct hc_url_s *url)
-{
-	return _m2v2_pack_request(NAME_MSGNAME_M2V2_SNAP_TAKE, url, NULL);
-}
-
-GByteArray*
-m2v2_remote_pack_SNAP_LIST(struct hc_url_s *url)
-{
-	return _m2v2_pack_request(NAME_MSGNAME_M2V2_SNAP_LIST, url, NULL);
-}
-
-GByteArray*
-m2v2_remote_pack_SNAP_RESTORE(struct hc_url_s *url, gboolean hard_restore)
-{
-	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_SNAP_RESTORE, url, NULL);
-	message_add_field(msg, M2_KEY_SNAPSHOT_HARDRESTORE, (guint8*)&hard_restore, sizeof(guint8));
-	return message_marshall_gba_and_clean(msg);
-}
-
-GByteArray*
-m2v2_remote_pack_SNAP_DELETE(struct hc_url_s *url)
-{
-	return _m2v2_pack_request(NAME_MSGNAME_M2V2_SNAP_DEL, url, NULL);
 }
 
 GByteArray*
@@ -608,30 +562,6 @@ m2v2_remote_execute_PROP_GET(const gchar *target, struct hc_url_s *url, guint32 
 }
 
 GError*
-m2v2_remote_execute_SNAP_TAKE(const gchar *target, struct hc_url_s *url)
-{
-	return _m2v2_request(target, m2v2_remote_pack_SNAP_TAKE(url), NULL);
-}
-
-GError*
-m2v2_remote_execute_SNAP_LIST(const gchar *target, struct hc_url_s *url, GSList **out)
-{
-	return _m2v2_request(target, m2v2_remote_pack_SNAP_LIST(url), out);
-}
-
-GError*
-m2v2_remote_execute_SNAP_RESTORE(const gchar *target, struct hc_url_s *url, gboolean hard_restore)
-{
-	return _m2v2_request(target, m2v2_remote_pack_SNAP_RESTORE(url, hard_restore), NULL);
-}
-
-GError*
-m2v2_remote_execute_SNAP_DELETE(const gchar *target, struct hc_url_s *url)
-{
-	return _m2v2_request(target, m2v2_remote_pack_SNAP_DELETE(url), NULL);
-}
-
-GError*
 m2v2_remote_touch_content(const gchar *target, struct hc_url_s *url)
 {
 	return _m2v2_request(target, m2v2_remote_pack_TOUCH_content(url), NULL);
@@ -666,9 +596,7 @@ m2v2_remote_execute_LIST(const gchar *target, struct hc_url_s *url,
 			if (e)
 				g_clear_error (&e);
 			gchar *tok = NULL;
-			e = message_extract_string_copy (reply, NAME_MSGKEY_NEXTMARKER, &tok);
-			if (e)
-				g_clear_error (&e);
+			tok = message_extract_string_copy (reply, NAME_MSGKEY_NEXTMARKER);
 			metautils_str_reuse (&out->next_marker, tok);
 			return TRUE;
 		} else {

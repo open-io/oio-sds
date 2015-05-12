@@ -27,7 +27,6 @@ License along with this library.
 
 #include <metautils/lib/metatypes.h>
 #include <cluster/agent/gridagent.h>
-#include <cluster/events/gridcluster_eventhandler.h>
 
 /** The path to the grid config file */
 
@@ -395,9 +394,6 @@ gchar** gridcluster_list_ns(void);
 /** Returns the services update's configuration when the Load-Balancing
  * is performed by a servce of type srvtype for each namespace and VNS. */
 gchar* gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo);
-
-gchar* gridcluster_get_event_config(struct namespace_info_s *nsinfo,
-		const gchar *srvtype);
 
 gint64 gridcluster_get_container_max_versions(struct namespace_info_s *nsinfo);
 

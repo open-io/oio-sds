@@ -66,7 +66,7 @@ _sqlx_action_noreturn (struct req_args_s *args,
 		GByteArray* (*reqbuilder) (struct sqlx_name_s *))
 {
 	gboolean _on_status_reply (gpointer ctx, struct message_s *reply) {
-		message_extract_string_copy(reply, "MSG", (gchar**)ctx);
+		*((gchar**)ctx) = message_extract_string_copy(reply, "MSG");
 		return TRUE;
 	}
 	GString *out = g_string_new("{");

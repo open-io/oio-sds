@@ -73,7 +73,7 @@ test_content_dedup(gconstpointer test_data)
 			/* Suffix the base url */
 			gchar *url_str = g_strdup_printf("%s_%d", hc_url_get(url, HCURL_WHOLE),
 					counter);
-			struct hc_url_s *url2 = hc_url_init(url_str);
+			struct hc_url_s *url2 = hc_url_oldinit(url_str);
 			g_free(url_str);
 			GSList *beans2 = create_alias(m2, url2, NULL);
 			change_chunk_hash(beans2, counter);

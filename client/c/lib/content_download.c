@@ -372,7 +372,7 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 		return GS_ERROR;
 	}
 
-	fill_hcurl_from_content(content, &url);
+	url = fill_hcurl_from_content (content);
 
 	/* Now we can start working. First agregate the known chunks, then iterate
 	 * on them */

@@ -29,17 +29,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 struct meta1_backend_s
 {
 	struct meta_backend_common_s backend;
-
 	struct service_update_policies_s *svcupdate;
 	struct meta1_prefixes_set_s *prefixes;
+
+	struct { // Not owned, not to be freed
+		gpointer udata;
+		GError* (*hook) (gpointer udata, gchar *msg);
+	} notify;
 };
 
 /*!  */
-GError * __info_container(struct sqlx_sqlite3_s *sq3,
-		const container_id_t cid, gchar ***result);
+GError * __info_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+		struct hc_url_s ***result);
 
 /*! Open and lock the META1 base responsible for the given container. */
-GError* _open_and_lock(struct meta1_backend_s *m1, const container_id_t cid,
+GError* _open_and_lock(struct meta1_backend_s *m1, struct hc_url_s *url,
 		enum m1v2_open_type_e how, struct sqlx_sqlite3_s **handle);
 
 void gpa_str_free(GPtrArray *gpa);
@@ -47,6 +51,10 @@ void gpa_str_free(GPtrArray *gpa);
 /*! Necessarily exported because the old meta1 DESTROY request needs it and
  * the new destroy func needs it too. And they are in different files. */
 GError* __destroy_container(struct sqlx_sqlite3_s *sq3,
-		const container_id_t cid, gboolean flush, gboolean *done);
+		struct hc_url_s *url, gboolean flush, gboolean *done);
+
+gboolean m1b_check_ns (struct meta1_backend_s *m1, const char *ns);
+
+gboolean m1b_check_ns_url (struct meta1_backend_s *m1, struct hc_url_s *url);
 
 #endif /*OIO_SDS__meta1v2__meta1_backend_internals_h*/

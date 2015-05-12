@@ -93,7 +93,7 @@ init_text_context(struct test_ctx_s *ctx, const gchar *polname)
 	ctx->stgpol = storage_policy_init(ctx->nsinfo, polname);
 	g_assert(ctx->stgpol != NULL);
 
-	ctx->url = hc_url_init("/NS/JFS/content");
+	ctx->url = hc_url_oldinit("/NS/JFS/content");
 	g_assert(ctx->url != NULL);
 
 	grid_lbpool_reconfigure(ctx->lbpool, ctx->nsinfo);

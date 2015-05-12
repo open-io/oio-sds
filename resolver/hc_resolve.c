@@ -126,7 +126,7 @@ hcres_configure(int argc, char **argv)
 	}
 
 	for (; argc>0 && *argv ;argv++,argc--) {
-		struct hc_url_s *url = hc_url_init(*argv);
+		struct hc_url_s *url = hc_url_oldinit(*argv);
 		if (!url) {
 			g_printerr("Invalid reference name, expected VNS/REFNAME");
 			return FALSE;

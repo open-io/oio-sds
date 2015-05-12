@@ -50,8 +50,7 @@ _create_friendly_error(GError *local_error)
 	return NULL;
 }
 
-typedef GError* (*request_cb) (addr_info_t *a, const container_id_t ref_id,
-		gchar **master);
+typedef GError* (*request_cb) (addr_info_t *a, struct hc_url_s *url);
 
 static gs_error_t*
 _m1v2_request(gs_grid_storage_t *hc, const gchar *refname, request_cb cb)
@@ -60,24 +59,19 @@ _m1v2_request(gs_grid_storage_t *hc, const gchar *refname, request_cb cb)
 	GError *local_error = NULL;
 	gs_error_t *result = NULL;
 	addr_info_t *meta1_addr = NULL;
-	container_id_t ref_id;
 
-	meta1_name2hash(ref_id, gs_get_full_vns(hc), refname);
+	struct hc_url_s *url = fill_hcurl_from_client (hc);
+	hc_url_set (url, HCURL_USER, refname);
 
 	for (;;) {
-		meta1_addr = gs_resolve_meta1v2 (hc, ref_id, NULL, 0,
-				&excluded, &local_error);
+		meta1_addr = gs_resolve_meta1v2 (hc, hc_url_get_id(url), NULL, 0, &excluded, &local_error);
 
 		if (!meta1_addr) {
 			result = gs_error_new(CODE_INTERNAL_ERROR, "No META1 found for [%s]", refname);
 			break;
 		}
 
-		gchar *master = NULL;
-		local_error = cb(meta1_addr, ref_id, &master);
-		gs_update_meta1_master(hc, ref_id, master);
-		g_free(master);
-		master = NULL;
+		local_error = cb(meta1_addr, url);
 
 		if (!local_error)
 			break;
@@ -104,6 +98,7 @@ _m1v2_request(gs_grid_storage_t *hc, const gchar *refname, request_cb cb)
 	if (local_error)
 		g_clear_error(&local_error);
 
+	hc_url_clean (url);
 	return result;
 }
 
@@ -112,13 +107,9 @@ _m1v2_request(gs_grid_storage_t *hc, const gchar *refname, request_cb cb)
 gs_error_t*
 hc_create_reference(gs_grid_storage_t *hc, const char *reference)
 {
-	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
+	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		gint rc = meta1v2_remote_create_reference(a, &e,
-				gs_get_full_vns(hc), ref_id, reference,
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
-				master);
+		gint rc = meta1v2_remote_create_reference(a, &e, url);
 		(void) rc;
 		return e;
 	}
@@ -129,13 +120,9 @@ hc_create_reference(gs_grid_storage_t *hc, const char *reference)
 gs_error_t*
 hc_delete_reference(gs_grid_storage_t *hc, const char *reference)
 {
-	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
+	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		gint rc = meta1v2_remote_delete_reference(a, &e,
-				gs_get_full_vns(hc), ref_id,
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
-				master);
+		gint rc = meta1v2_remote_delete_reference(a, &e, url);
 		(void) rc;
 		return e;
 	}
@@ -146,13 +133,9 @@ hc_delete_reference(gs_grid_storage_t *hc, const char *reference)
 gs_error_t*
 hc_link_service_to_reference(gs_grid_storage_t *hc, const char *reference, const char *srv_type, char ***result)
 {
-	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
+	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		*result = meta1v2_remote_link_service(a, &e,
-				gs_get_full_vns(hc), ref_id, srv_type,
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
-				master);
+		*result = meta1v2_remote_link_service(a, &e, url, srv_type);
 		return e;
 	}
 
@@ -162,13 +145,9 @@ hc_link_service_to_reference(gs_grid_storage_t *hc, const char *reference, const
 gs_error_t*
 hc_list_reference_services(gs_grid_storage_t *hc, const char *reference, const char *srv_type, char ***result)
 {
-	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
+	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		(void) master;
-		*result = meta1v2_remote_list_reference_services(a, &e,
-				gs_get_full_vns(hc), ref_id, srv_type,
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP));
+		*result = meta1v2_remote_list_reference_services(a, &e, url, srv_type);
 		return e;
 	}
 
@@ -178,25 +157,17 @@ hc_list_reference_services(gs_grid_storage_t *hc, const char *reference, const c
 gs_error_t*
 hc_unlink_reference_service(gs_grid_storage_t *hc, const char *reference, const char *srv_type)
 {
-	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
+	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		if(!strchr(srv_type, '|')) {
-			meta1v2_remote_unlink_service(a, &e,
-					gs_get_full_vns(hc), ref_id, srv_type,
-					gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
-					gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
-					master);
+		if (!strchr(srv_type, '|')) {
+			meta1v2_remote_unlink_service(a, &e, url, srv_type);
 		} else {
 			char **toks = g_strsplit(srv_type, "|", 0);
 			gint64 seq = 0;
-			if((g_strv_length(toks) < 2) || (0 >= (seq = g_ascii_strtoll(toks[0], NULL, 10)))) {
+			if ((g_strv_length(toks) < 2) || (0 >= (seq = g_ascii_strtoll(toks[0], NULL, 10)))) {
 				e = NEWERROR(CODE_BAD_REQUEST, "Invalid service description [%s]", srv_type);
 			} else {
-				meta1v2_remote_unlink_one_service(a, &e,
-						gs_get_full_vns(hc), ref_id, toks[1],
-						gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
-						gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
-						master, seq);
+				meta1v2_remote_unlink_one_service(a, &e, url, toks[1], seq);
 			}
 			g_strfreev(toks);
 
@@ -210,14 +181,10 @@ hc_unlink_reference_service(gs_grid_storage_t *hc, const char *reference, const 
 gs_error_t*
 hc_has_reference(gs_grid_storage_t *hc, const char *reference)
 {
-	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
+	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		gint rc = meta1v2_remote_has_reference(a, &e,
-				gs_get_full_vns(hc), ref_id,
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP));
+		gint rc = meta1v2_remote_has_reference(a, &e, url);
 		(void) rc;
-		(void) master;
 		return e;
 	}
 
@@ -225,15 +192,11 @@ hc_has_reference(gs_grid_storage_t *hc, const char *reference)
 }
 
 gs_error_t*
-hc_force_service(gs_grid_storage_t *hc, const char *reference, const char *url)
+hc_force_service(gs_grid_storage_t *hc, const char *reference, const char *m1url)
 {
-	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
+	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		gint rc = meta1v2_remote_force_reference_service(a, &e,
-				gs_get_full_vns(hc), ref_id, url,
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
-				master);
+		gint rc = meta1v2_remote_force_reference_service(a, &e, url, m1url);
 		(void) rc;
 		return e;
 	}
@@ -245,13 +208,9 @@ gs_error_t*
 hc_poll_service(gs_grid_storage_t *hc, const char *reference,
 		const char *srvtype, char **srv)
 {
-	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
+	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		gchar **urlv = meta1v2_remote_poll_reference_service(a, &e,
-				gs_get_full_vns(hc), ref_id, srvtype,
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
-				master);
+		gchar **urlv = meta1v2_remote_poll_reference_service(a, &e, url, srvtype);
 		if (urlv) {
 			*srv = g_strdup(urlv[0]);
 			g_strfreev(urlv);
@@ -264,15 +223,11 @@ hc_poll_service(gs_grid_storage_t *hc, const char *reference,
 
 gs_error_t*
 hc_configure_service(gs_grid_storage_t *hc, const char *reference,
-		const char *url)
+		const char *m1url)
 {
-	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
+	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		gint rc = meta1v2_remote_configure_reference_service(a, &e,
-				gs_get_full_vns(hc), ref_id, url,
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
-				master);
+		gint rc = meta1v2_remote_configure_reference_service(a, &e, url, m1url);
 		(void) rc;
 		return e;
 	}
@@ -284,15 +239,11 @@ gs_error_t*
 hc_set_reference_property(gs_grid_storage_t *hc, const char *reference,
 		const char *key, const char *value)
 {
-	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
+	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		char *pairs[] = {NULL,NULL};
 		GError *e = NULL;
 		pairs[0] = g_strdup_printf("%s=%s", key, value);
-		gint rc = meta1v2_remote_reference_set_property(a, &e,
-				gs_get_full_vns(hc), ref_id, pairs,
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX), 
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
-				master);
+		gint rc = meta1v2_remote_reference_set_property(a, &e, url, pairs);
 		g_free(pairs[0]);
 		(void) rc;
 		return e;
@@ -305,14 +256,10 @@ gs_error_t*
 hc_get_reference_property(gs_grid_storage_t *hc, const char *reference,
 		char **keys, char ***result)
 {
-	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
+	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		gint rc = meta1v2_remote_reference_get_property(a, &e,
-				gs_get_full_vns(hc), ref_id, keys, result,
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP));
+		gint rc = meta1v2_remote_reference_get_property(a, &e, url, keys, result);
 		(void) rc;
-		(void) master;
 		return e;
 	}
 
@@ -323,13 +270,9 @@ gs_error_t*
 hc_delete_reference_property(gs_grid_storage_t *hc, const char *reference,
 		char **keys)
 {
-	GError* cb(addr_info_t *a, const container_id_t ref_id, gchar **master) {
+	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		gint rc = meta1v2_remote_reference_del_property(a, &e,
-				gs_get_full_vns(hc), ref_id, keys,
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_CNX),
-				gs_grid_storage_get_to_sec(hc, GS_TO_M1_OP),
-				master);
+		gint rc = meta1v2_remote_reference_del_property(a, &e, url, keys);
 		(void) rc;
 		return e;
 	}

@@ -33,7 +33,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metacomm.h>
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/election.h>
-#include <meta2/remote/meta2_remote.h>
+#include <meta2v2/meta2_remote.h>
 #include <cluster/lib/gridcluster.h>
 
 #include "./internals.h"
@@ -44,7 +44,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 struct meta1_backend_s *
 meta1_backend_init(const gchar *ns, struct sqlx_repository_s *repo,
-		struct grid_lbpool_s *glp, struct event_config_repo_s *evt_repo)
+		struct grid_lbpool_s *glp)
 {
 	struct meta1_backend_s *m1;
 
@@ -62,7 +62,6 @@ meta1_backend_init(const gchar *ns, struct sqlx_repository_s *repo,
 	m1->prefixes = meta1_prefixes_init();
 	m1->svcupdate = service_update_policies_create();
 
-	m1->backend.evt_repo = evt_repo;
 	return m1;
 }
 
@@ -74,6 +73,7 @@ meta1_backend_clean(struct meta1_backend_s *m1)
 
 	if (m1->prefixes) {
 		meta1_prefixes_clean(m1->prefixes);
+		m1->prefixes = NULL;
 	}
 
 	if (m1->svcupdate) {
@@ -100,10 +100,10 @@ meta1_backend_get_prefixes(struct meta1_backend_s *m1)
 }
 
 GError*
-meta1_backend_open_base(struct meta1_backend_s *m1, const container_id_t cid,
+meta1_backend_open_base(struct meta1_backend_s *m1, struct hc_url_s *url,
 		enum m1v2_open_type_e how, struct sqlx_sqlite3_s **sq3)
 {
-	return _open_and_lock(m1, cid, how, sq3);
+	return _open_and_lock(m1, url, how, sq3);
 }
 
 gboolean
@@ -125,24 +125,6 @@ gchar *
 meta1_backend_get_ns_name(const struct meta1_backend_s *m1)
 {
 	return g_strdup(m1->backend.ns_name);
-}
-
-struct event_config_repo_s *
-meta1_backend_get_evt_config_repo(const struct meta1_backend_s *m1)
-{
-	return m1->backend.evt_repo;
-}
-
-metautils_notif_pool_t *
-meta1_backend_get_notifier(struct meta1_backend_s *m1)
-{
-	return event_config_repo_get_notifier(m1->backend.evt_repo);
-}
-
-struct event_config_s *
-meta1_backend_get_event_config(struct meta1_backend_s *m1)
-{
-	return event_config_repo_get(m1->backend.evt_repo);
 }
 
 const gchar*

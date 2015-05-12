@@ -49,7 +49,7 @@ main(int argc, char ** args)
 
 	for (i=1; i<argc ;i++) {
 
-		struct hc_url_s *url = hc_url_init(args[i]);
+		struct hc_url_s *url = hc_url_oldinit(args[i]);
 
 		if (url && NULL != hc_url_get_id(url)) {
 			memset(str_id, 0, sizeof(str_id));

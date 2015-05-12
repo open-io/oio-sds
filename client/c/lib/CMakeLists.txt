@@ -19,7 +19,6 @@ add_library(gridclient SHARED
 		content_shortcuts.c
 		content_upload.c
 		contents.c
-		snapshots.c
 		grid.c
 		grid_client.h
 		grid_client_shortcuts.h
@@ -43,7 +42,6 @@ set_target_properties(gridclient PROPERTIES
 target_link_libraries(gridclient
 		metautils
 		gridcluster
-		meta2remote
 		meta2v2utils
 		meta2v2remote
 		meta0remote

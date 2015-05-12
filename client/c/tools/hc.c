@@ -104,23 +104,23 @@ __display_friendly_error(gs_error_t *error)
 		case CODE_CONTENT_NOTFOUND:
 			g_printerr("Content [%s] not found in container [%s]\n",
 					copy_source != NULL? copy_source->str : hc_url_get(url, HCURL_PATH),
-					hc_url_get(url, HCURL_REFERENCE));
+					hc_url_get(url, HCURL_USER));
 			break;
 		case CODE_CONTENT_EXISTS:
 			g_printerr("Content [%s] already exists in container [%s]\n",
-					hc_url_get(url, HCURL_PATH), hc_url_get(url, HCURL_REFERENCE));
+					hc_url_get(url, HCURL_PATH), hc_url_get(url, HCURL_USER));
 			break;
 		case CODE_CONTAINER_NOTFOUND:
 		case CODE_CONTAINER_CLOSED:
 			g_printerr("Container [%s] not found in namespace [%s].\n",
-					hc_url_get(url, HCURL_REFERENCE), hc_url_get(url, HCURL_NS));
+					hc_url_get(url, HCURL_USER), hc_url_get(url, HCURL_NS));
 			break;
 		case CODE_CONTAINER_EXISTS:
 			g_printerr("Container [%s] already exists in namespace [%s].\n",
-					hc_url_get(url, HCURL_REFERENCE), hc_url_get(url, HCURL_NS));
+					hc_url_get(url, HCURL_USER), hc_url_get(url, HCURL_NS));
 			break;
 		case CODE_CONTAINER_NOTEMPTY:
-			g_printerr("Container [%s] not empty [%s].\n", hc_url_get(url, HCURL_REFERENCE),
+			g_printerr("Container [%s] not empty [%s].\n", hc_url_get(url, HCURL_USER),
 					hc_url_get(url, HCURL_NS));
 			break;
 		case CODE_CONTAINER_FULL:
@@ -128,13 +128,8 @@ __display_friendly_error(gs_error_t *error)
 					hc_url_get(url, HCURL_WHOLE));
 			break;
 		case CODE_NAMESPACE_FULL:
-			if (hc_url_has(url, HCURL_NSVIRT)) {
-				g_printerr("Quota of namespace [%s%s] has been reached.\n",
-						hc_url_get(url, HCURL_NSPHYS), hc_url_get(url, HCURL_NSVIRT));
-			} else {
-				g_printerr("Quota of namespace [%s] has been reached.\n",
-						hc_url_get(url, HCURL_NSPHYS));
-			}
+			g_printerr("Quota of ns/account [%s/%s] has been reached.\n",
+					hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_USER));
 			break;
 		case CODE_CONTAINER_PROP_NOTFOUND:
 			// FIXME the message is really decorelated from the error MACRO name
@@ -145,19 +140,17 @@ __display_friendly_error(gs_error_t *error)
 			break;
 		case CODE_POLICY_NOT_SUPPORTED:
 			g_printerr("This storage policy is not managed by namespace %s.\n",
-					hc_url_get(url, HCURL_NSPHYS));
+					hc_url_get(url, HCURL_NS));
 			break;
 		case CODE_POLICY_NOT_SATISFIABLE:
 			g_printerr("The storage policy could not be satisfied by namespace. %s\n",
-					hc_url_get(url, HCURL_NSPHYS));
+					hc_url_get(url, HCURL_NS));
 			break;
 		case CODE_SNAPSHOT_NOTFOUND:
-			g_printerr("Snapshot '%s' not found\n",
-					hc_url_get(url, HCURL_SNAPORVERS));
+			g_printerr("Snapshot not found [%s]\n", hc_url_get(url, HCURL_WHOLE));
 			break;
 		case CODE_SNAPSHOT_EXISTS:
-			g_printerr("Snapshot '%s' already exists\n",
-					hc_url_get(url, HCURL_SNAPORVERS));
+			g_printerr("Snapshot already exists [%s]\n", hc_url_get(url, HCURL_WHOLE));
 			break;
 		case CODE_INTERNAL_ERROR:
 		default:
@@ -357,7 +350,7 @@ func_delete(gs_grid_storage_t *hc)
 			return FALSE;
 		}
 		GRID_INFO("Container [%s] deleted from namespace [%s].\n",
-				hc_url_get(url, HCURL_REFERENCE), hc_url_get(url, HCURL_NS));
+				hc_url_get(url, HCURL_USER), hc_url_get(url, HCURL_NS));
 	}
 
 	return TRUE;
@@ -374,7 +367,7 @@ func_stgpol(gs_grid_storage_t *hc)
 		sp = action_args[0];
 	}
 
-	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, 0, &e);
+	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, 0, &e);
 	if (NULL != c) {
 		if (sp == NULL) {
 			//////////////////////////////////////////////
@@ -407,7 +400,7 @@ func_stgpol(gs_grid_storage_t *hc)
 			if((!hc_set_content_storage_policy(c, hc_url_get(url, HCURL_PATH), sp, &e))) {
 				__display_friendly_error(e);
 			} else {
-				GRID_DEBUG("Storage policy %s set to content %s/%s\n" , sp, hc_url_get(url, HCURL_REFERENCE),
+				GRID_DEBUG("Storage policy %s set to content %s/%s\n" , sp, hc_url_get(url, HCURL_USER),
 						hc_url_get(url, HCURL_PATH));
 			}
 		} else {
@@ -415,7 +408,7 @@ func_stgpol(gs_grid_storage_t *hc)
 			if((e = hc_set_container_storage_policy(c, sp))) {
 				__display_friendly_error(e);
 			} else {
-				GRID_DEBUG("Storage policy %s set to container %s\n" , sp, hc_url_get(url, HCURL_REFERENCE));
+				GRID_DEBUG("Storage policy %s set to container %s\n" , sp, hc_url_get(url, HCURL_USER));
 			}
 		}
 		gs_container_free(c);
@@ -459,7 +452,7 @@ func_srvlist(gs_grid_storage_t *hc)
 	gs_error_t *e = NULL;
 	char **services = NULL;
 
-	e = hc_list_reference_services(hc, hc_url_get(url, HCURL_REFERENCE), action_args[0], &services);
+	e = hc_list_reference_services(hc, hc_url_get(url, HCURL_USER), action_args[0], &services);
 	if (NULL != e) {
 		__display_friendly_error(e);
 		gs_error_free(e);
@@ -470,16 +463,16 @@ func_srvlist(gs_grid_storage_t *hc)
 		gchar *tab[] = {NULL};
 
 		if (action_args[0])
-			g_printerr("No service [%s] linked to container [%s].\n", action_args[0], hc_url_get(url, HCURL_REFERENCE));
+			g_printerr("No service [%s] linked to container [%s].\n", action_args[0], hc_url_get(url, HCURL_USER));
 		else
-			g_printerr("No service linked to container [%s].\n", hc_url_get(url, HCURL_REFERENCE));
+			g_printerr("No service linked to container [%s].\n", hc_url_get(url, HCURL_USER));
 		__dump_services(tab);
 	}
 	else {
 		if (action_args[0])
-			g_printerr("Container [%s], services [%s] linked:\n", hc_url_get(url, HCURL_REFERENCE), action_args[0]);
+			g_printerr("Container [%s], services [%s] linked:\n", hc_url_get(url, HCURL_USER), action_args[0]);
 		else
-			g_printerr("Container [%s], all services linked:\n", hc_url_get(url, HCURL_REFERENCE));
+			g_printerr("Container [%s], all services linked:\n", hc_url_get(url, HCURL_USER));
 
 		__dump_services(services);
 	}
@@ -499,14 +492,14 @@ func_srvlink(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	e = hc_link_service_to_reference(hc, hc_url_get(url, HCURL_REFERENCE), action_args[0], &urlv);
+	e = hc_link_service_to_reference(hc, hc_url_get(url, HCURL_USER), action_args[0], &urlv);
 	if (NULL != e) {
 		__display_friendly_error(e);
 		gs_error_free(e);
 		return FALSE;
 	}
 
-	g_printerr("Service [%s] linked to reference [%s]\n", urlv[0], hc_url_get(url, HCURL_REFERENCE));
+	g_printerr("Service [%s] linked to reference [%s]\n", urlv[0], hc_url_get(url, HCURL_USER));
 
 	g_strfreev(urlv);
 	return TRUE;
@@ -522,8 +515,8 @@ func_srvunlink(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	if (!(e = hc_unlink_reference_service(hc, hc_url_get(url, HCURL_REFERENCE), action_args[0]))) {
-		GRID_DEBUG("Services [%s] unlinked from reference [%s]\n", action_args[0], hc_url_get(url, HCURL_REFERENCE));
+	if (!(e = hc_unlink_reference_service(hc, hc_url_get(url, HCURL_USER), action_args[0]))) {
+		GRID_DEBUG("Services [%s] unlinked from reference [%s]\n", action_args[0], hc_url_get(url, HCURL_USER));
 		return TRUE;
 	}	
 
@@ -543,7 +536,7 @@ func_srvpoll(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	if (!(e = hc_poll_service(hc, hc_url_get(url, HCURL_REFERENCE), action_args[0], &u))) {
+	if (!(e = hc_poll_service(hc, hc_url_get(url, HCURL_USER), action_args[0], &u))) {
 		char *urlv[2] = {NULL,NULL};
 		urlv[0] = u;
 		__dump_services(urlv);
@@ -566,13 +559,13 @@ func_srvforce(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	if (NULL != (e = hc_force_service(hc, hc_url_get(url, HCURL_REFERENCE), action_args[0]))) {
+	if (NULL != (e = hc_force_service(hc, hc_url_get(url, HCURL_USER), action_args[0]))) {
 		__display_friendly_error(e);
 		gs_error_free(e);
 		return FALSE;
 	}
 
-	GRID_DEBUG("Service [%s] forced for reference [%s]\n", action_args[0], hc_url_get(url, HCURL_REFERENCE));
+	GRID_DEBUG("Service [%s] forced for reference [%s]\n", action_args[0], hc_url_get(url, HCURL_USER));
 	return TRUE;
 }
 
@@ -586,9 +579,9 @@ func_srvconfig(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	if (!(e = hc_configure_service(hc, hc_url_get(url, HCURL_REFERENCE), action_args[0]))) {
+	if (!(e = hc_configure_service(hc, hc_url_get(url, HCURL_USER), action_args[0]))) {
 		GRID_DEBUG("Service [%s] reconfigured for reference [%s]\n",
-				action_args[0], hc_url_get(url, HCURL_REFERENCE));
+				action_args[0], hc_url_get(url, HCURL_USER));
 		return TRUE;
 	}
 
@@ -689,7 +682,7 @@ func_quota(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, 0, &e);
+	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, 0, &e);
 
 	if(NULL != c) {
 		e = hc_set_container_quota(c, action_args[0]);
@@ -731,7 +724,7 @@ func_version(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_REFERENCE), NULL, 0, &e);
+	c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, 0, &e);
 
 	if(NULL != c) {
 		if (VERSIONING_NS_DEFAULT_VALUE >= i64_versionning) {
@@ -755,68 +748,6 @@ func_version(gs_grid_storage_t *hc)
 	gs_error_free(e);
 
 	return FALSE;
-}
-
-static gboolean
-func_snaplist(gs_grid_storage_t *hc)
-{
-	gs_error_t *e = NULL;
-	gchar *result = NULL;
-	e = hc_func_list_snapshots(hc, url, flag_xml, flag_info, &result);
-	if (e != NULL) {
-		__display_friendly_error(e);
-		gs_error_free(e);
-		return FALSE;
-	}
-
-	g_print("%s", result);
-	g_free(result);
-	return TRUE;
-}
-
-static gboolean
-func_snaptake(gs_grid_storage_t *hc)
-{
-	gs_error_t *e = NULL;
-	e = hc_func_take_snapshot(hc, url);
-	if (e != NULL) {
-		__display_friendly_error(e);
-		gs_error_free(e);
-		return FALSE;
-	} else if (!flag_quiet) {
-		g_print("Snapshot taken\n");
-	}
-	return TRUE;
-}
-
-static gboolean
-func_snapdel(gs_grid_storage_t *hc)
-{
-	gs_error_t *e = NULL;
-	e = hc_func_delete_snapshot(hc, url);
-	if (e != NULL) {
-		__display_friendly_error(e);
-		gs_error_free(e);
-		return FALSE;
-	} else if (!flag_quiet) {
-		g_print("Snapshot deleted\n");
-	}
-	return TRUE;
-}
-
-static gboolean
-func_snaprestore(gs_grid_storage_t *hc)
-{
-	gs_error_t *e = NULL;
-	e = hc_func_restore_snapshot(hc, url, flag_hardrestore);
-	if (e != NULL) {
-		__display_friendly_error(e);
-		gs_error_free(e);
-		return FALSE;
-	} else if (!flag_quiet) {
-		g_print("Snapshot restored\n");
-	}
-	return TRUE;
 }
 
 /* ---------------------------------------- */
@@ -849,10 +780,6 @@ static struct action_s actions[] = {
 	{"propdel",   func_propdel},
 	{"quota",     func_quota},
 	{"version",   func_version},
-	{"snaplist",  func_snaplist},
-	{"snaptake",  func_snaptake},
-	{"snapdel",   func_snapdel},
-	{"snaprestore", func_snaprestore},
 	{NULL,        NULL},
 };
 
@@ -1071,7 +998,7 @@ hc_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	if (!(url = hc_url_init(argv[1]))) {
+	if (!(url = hc_url_oldinit(argv[1]))) {
 		g_printerr("Invalid URL : %s\n", argv[1]);
 		return FALSE;
 	}

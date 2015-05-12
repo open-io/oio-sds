@@ -197,16 +197,22 @@ _free_content_internals(gs_content_t *content)
 	content->version = NULL;
 }
 
-void
-fill_hcurl_from_content(gs_content_t *content, struct hc_url_s **url)
+struct hc_url_s *
+fill_hcurl_from_content2 (gs_container_t *container, const char *path)
 {
-	*url = hc_url_empty();
-	hc_url_set(*url, HCURL_NS, gs_get_full_vns(C1_C0(content)->info.gs));
-	hc_url_set(*url, HCURL_REFERENCE, C0_NAME(C1_C0(content)));
-	hc_url_set(*url, HCURL_PATH, C1_PATH(content));
-	if (content->version)
-		hc_url_set(*url, HCURL_VERSION, content->version);
+	struct hc_url_s *url = fill_hcurl_from_container (container);
+	hc_url_set(url, HCURL_PATH, path);
+	g_assert (hc_url_has_fq_path (url));
+	return url;
+}
 
+struct hc_url_s *
+fill_hcurl_from_content (gs_content_t *content)
+{
+	struct hc_url_s *url = fill_hcurl_from_content2 (content->info.container, C1_PATH(content));
+	if (content->version)
+		hc_url_set(url, HCURL_VERSION, content->version);
+	return url;
 }
 
 void
@@ -491,7 +497,6 @@ g_strfreev2(gchar ***v)
 gboolean
 gs_relink_container(gs_container_t *container, GError **err)
 {
-	struct meta1_service_url_s *url;
 	gboolean link_needed = FALSE;
 	gchar **tmp = NULL;
 	gs_error_t *e;
@@ -524,17 +529,18 @@ gs_relink_container(gs_container_t *container, GError **err)
 		return FALSE;
 	}
 
-	url = meta1_unpack_url(*tmp);
-	rc = l4_address_init_with_url(&(container->meta2_addr), url->host, err);
-	g_strfreev2(&tmp);
-	g_free(url);
+	do {
+		struct meta1_service_url_s *url = meta1_unpack_url(*tmp);
+		rc = l4_address_init_with_url(&(container->meta2_addr), url->host, err);
+		g_strfreev2(&tmp);
+		g_free(url);
+	} while (0);
 
 	/* Now create the meta2 entry */
 	if (rc && link_needed) {
-		rc = meta2_remote_container_create_v2(&(container->meta2_addr), 3000,
-				err, C0_ID(container), C0_NAME(container),
-				gs_get_virtual_namespace(container->info.gs));
-
+		struct hc_url_s *url = fill_hcurl_from_container (container);
+		rc = meta2_remote_container_create_v3(&(container->meta2_addr), 3000, err, url, NULL);
+		hc_url_pclean (&url);
 		if (!rc) { /* don't take care of 433 code */
 			if ((*err)->code != CODE_CONTAINER_EXISTS)
 				return FALSE;
@@ -548,21 +554,19 @@ gs_relink_container(gs_container_t *container, GError **err)
 gboolean
 gs_reload_container(gs_container_t *container, GError **err)
 {
-	gboolean rc = TRUE;
+	struct hc_url_s *url = fill_hcurl_from_container (container);
+	GSList *meta2 = gs_resolve_meta2(container->info.gs, url, err);
+	hc_url_pclean (&url);
 
-	GSList *meta2 = gs_resolve_meta2(container->info.gs, C0_ID(container), err);
-	if(!meta2) {
+	if (!meta2) {
 		GSETERROR(err,"Resolution error for NAME=[%s] ID=[%s]", C0_NAME(container), C0_IDSTR(container));
-		return GS_ERROR;
+		return FALSE;
 	}
 
 	memcpy(&(container->meta2_addr), meta2->data, sizeof(addr_info_t));
 	g_slist_foreach (meta2, addr_info_gclean, NULL);
 	g_slist_free (meta2);
-
-	if (!rc)
-		GSETERROR(err, "Invalid META2 address");
-	return rc;
+	return TRUE;
 }
 
 static gboolean
@@ -581,14 +585,10 @@ _reload_content(gs_content_t *content, GSList **p_filtered, GSList **p_beans, GE
 	bzero(target, 64);
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
-	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, gs_get_full_vns(C1_C0(content)->info.gs));
-	hc_url_set(url, HCURL_REFERENCE, C0_NAME(C1_C0(content)));
-	hc_url_set(url, HCURL_PATH, C1_PATH(content));
+	struct hc_url_s *url = fill_hcurl_from_content (content);
 	if (!content->version) {
 		flags |= M2V2_FLAG_NODELETED;
-	} else if (g_ascii_strcasecmp(content->version,
-			HCURL_LATEST_VERSION) != 0) {
+	} else if (g_ascii_strcasecmp(content->version, HCURL_LATEST_VERSION) != 0) {
 		hc_url_set(url, HCURL_VERSION, content->version);
 	} else {
 		/* Do not set M2V2_FLAG_NODELETED but do not specify version,
@@ -596,10 +596,8 @@ _reload_content(gs_content_t *content, GSList **p_filtered, GSList **p_beans, GE
 	}
 
 	GSList *beans = NULL;
-
 	*err = m2v2_remote_execute_GET(target, url, flags, &beans);
-
-	hc_url_clean(url);
+	hc_url_pclean(&url);
 
 	if (NULL != *err) {
 		GSETERROR(err, "Failed to get content");
@@ -686,6 +684,15 @@ end_label:
 	return rc;
 }
 
+static gboolean
+_content_rollback (gs_content_t *content, GError **err)
+{
+	struct hc_url_s *url = fill_hcurl_from_content (content);
+	gboolean rc = meta2_remote_content_rollback_in_fd (C1_CNX(content), C1_M2TO(content), err, url);
+	hc_url_pclean (&url);
+	return rc;
+}
+
 gs_status_t gs_destroy_content (gs_content_t *content, gs_error_t **err)
 {
 	int nb_refreshes=1;
@@ -738,9 +745,7 @@ gs_status_t gs_destroy_content (gs_content_t *content, gs_error_t **err)
 			break;
 		}
 	}
-
-	if(NULL != url)
-		hc_url_clean(url);
+	hc_url_pclean(&url);
 
 	TRACE("COMMIT path=%s %s/%s", C1_PATH(content), C1_NAME(content), C1_IDSTR(content));
 	if (localError)
@@ -769,7 +774,7 @@ end_label:
 	if (remove_done)
 	{
 		(void) gs_container_reconnect_if_necessary (C1_C0(content),NULL);
-		for (nb_refreshes=MAX_ATTEMPTS_ROLLBACK_DELETE; !C1_ROLLBACK(content,&localError) && nb_refreshes>0 ; nb_refreshes--)
+		for (nb_refreshes=MAX_ATTEMPTS_ROLLBACK_DELETE; !_content_rollback(content,&localError) && nb_refreshes>0 ; nb_refreshes--)
 		{
 			CONTAINER_REFRESH(C1_C0(content),localError,error_label,C1_PATH(content));
 		}
@@ -897,7 +902,11 @@ hc_set_content_storage_policy(gs_container_t *c, const char *path, const char *s
 	ctx.timeout.cnx = M2_TOCNX_DEFAULT;
 	ctx.timeout.req = M2_TOREQ_DEFAULT;
 
-	rc = meta2_remote_stat_content(&ctx, C0_ID(c), path, strlen(path), &ge);
+	do {
+		struct hc_url_s *url = fill_hcurl_from_content2 (c, path);
+		rc = meta2_remote_stat_content(&ctx, &ge, url);
+		hc_url_pclean (&url);
+	} while (0);
 	c->meta2_cnx = ctx.fd;
 
 	if (!rc) {
@@ -935,7 +944,13 @@ hc_set_content_storage_policy(gs_container_t *c, const char *path, const char *s
 		return GS_ERROR;
 	}
 
-	int r0 = meta2_remote_modify_metadatasys(&ctx,  C0_ID(c), path, metadata_str, &ge);
+	int r0;
+	do {
+		struct hc_url_s *url = fill_hcurl_from_content2 (c, path);
+		r0 = meta2_remote_modify_metadatasys(&ctx, &ge, url, metadata_str);
+		hc_url_pclean (&url);
+	} while (0);
+
 	c->meta2_cnx = ctx.fd;
 	if (!r0) {
 		GSERRORCAUSE(e, ge, "Failed to update system metadata of content [%s]", stgpol, path);
@@ -962,11 +977,9 @@ hc_set_content_property(gs_content_t *content, char ** props, gs_error_t **e)
 	gs_status_t status = GS_OK;
 	guint i;
 
+	struct hc_url_s *url = fill_hcurl_from_content (content);
 	bzero(target, 64);
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
-
-	struct hc_url_s *url;
-	fill_hcurl_from_content(content, &url);
 
 	for ( i=0; i < g_strv_length(props); i++) {
 		struct bean_PROPERTIES_s *bp;
@@ -998,8 +1011,8 @@ hc_set_content_property(gs_content_t *content, char ** props, gs_error_t **e)
 	}
 
 enderror :
-	hc_url_clean(url);
-	_bean_cleanl2(beans);
+	hc_url_pclean (&url);
+	_bean_cleanl2 (beans);
 	return status;
 }
 
@@ -1010,16 +1023,13 @@ hc_get_content_properties(gs_content_t *content, char ***result, gs_error_t **e)
 	char target[64];
 	gchar **final;
 	guint max;
-	gs_status_t status = GS_OK;
-
-	bzero(target, 64);
-	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
-
-	struct hc_url_s *url;
-	fill_hcurl_from_content(content,&url);
-
 	GSList *beans = NULL;
 	GSList *l;
+	gs_status_t status = GS_OK;
+
+	struct hc_url_s *url = fill_hcurl_from_content (content);
+	bzero(target, 64);
+	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
 	ge = m2v2_remote_execute_PROP_GET(target, url, M2V2_FLAG_NODELETED, &beans);
 
@@ -1052,9 +1062,8 @@ hc_get_content_properties(gs_content_t *content, char ***result, gs_error_t **e)
 	*result=final;
 
 enderror :
-	hc_url_clean(url);
+	hc_url_pclean (&url);
 	_bean_cleanl2(beans);
-
 	return status;
 }
 
@@ -1065,8 +1074,7 @@ hc_delete_content_property(gs_content_t *content, char ** keys, gs_error_t **e)
 	bzero(target, 64);
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
-	struct hc_url_s *url;
-	fill_hcurl_from_content(content, &url);
+	struct hc_url_s *url = fill_hcurl_from_content(content);
 
 	GSList *lkeys = metautils_array_to_list((void**)keys);
 	GError *ge = m2v2_remote_execute_PROP_DEL(target, url, lkeys);
@@ -1083,12 +1091,10 @@ hc_delete_content_property(gs_content_t *content, char ** keys, gs_error_t **e)
 gs_status_t
 hc_copy_content(gs_container_t *c, const char *src, const char *dst, gs_error_t **e)
 {
-	GError *ge = NULL;
 	char target[64];
-	struct hc_url_s *url;
-	fill_hcurl_from_container(c, &url);
-	hc_url_set(url, HCURL_PATH, dst);
+	GError *ge = NULL;
 
+	struct hc_url_s *url = fill_hcurl_from_content2 (c, dst);
 	bzero(target, 64);
 	addr_info_to_string(&(c->meta2_addr), target, 64);
 
@@ -1104,12 +1110,11 @@ hc_copy_content(gs_container_t *c, const char *src, const char *dst, gs_error_t 
 }
 
 static struct hc_url_s *
-_init_url(const char *ns, const char *container, const char *content)
+_init_url(gs_grid_storage_t *hc, const char *container, const char *content)
 {
-	struct hc_url_s *url = hc_url_empty();
-	(void) hc_url_set(url, HCURL_NS, ns);
-	(void) hc_url_set(url, HCURL_REFERENCE, container);
-	(void) hc_url_set(url, HCURL_PATH, content);
+	struct hc_url_s *url = fill_hcurl_from_client (hc);
+	hc_url_set(url, HCURL_USER, container);
+	hc_url_set(url, HCURL_PATH, content);
 	return url;
 }
 
@@ -1117,17 +1122,11 @@ gs_status_t
 hc_dl_content_to_file(gs_grid_storage_t *hc, const char *container,
 		const char *content, const char *dest, gs_error_t **e)
 {
-	struct hc_url_s *url = _init_url(hc->full_vns, container, content);
-
+	struct hc_url_s *url = _init_url(hc, container, content);
 	gs_error_t *err = hc_get_content(hc, url, dest, FALSE, FALSE, NULL);
 	gs_status_t status = err == NULL ? GS_OK : GS_ERROR;
-
-	if (e)
-		*e = err;
-	else
-		gs_error_free(err);
-
-	hc_url_clean(url);
+	if (e) *e = err; else gs_error_free(err);
+	hc_url_pclean(&url);
 	return status;
 }
 
@@ -1135,16 +1134,10 @@ gs_status_t
 hc_dl_content_custom(gs_grid_storage_t *hc, const char *container,
 		const char *content, gs_download_info_t *dl_info, gs_error_t **e)
 {
-	struct hc_url_s *url = _init_url(hc->full_vns, container, content);
-
+	struct hc_url_s *url = _init_url(hc, container, content);
 	gs_error_t *err = hc_dl_content(hc, url, dl_info, FALSE, NULL);
 	gs_status_t status = err == NULL ? GS_OK : GS_ERROR;
-
-	if (e)
-		*e = err;
-	else
-		gs_error_free(err);
-
-	hc_url_clean(url);
+	if (e) *e = err; else gs_error_free(err);
+	hc_url_pclean (&url);
 	return status;
 }

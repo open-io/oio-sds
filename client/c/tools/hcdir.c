@@ -135,7 +135,7 @@ func_list(gs_grid_storage_t *hc)
 	gs_error_t *e = NULL;
 	gchar **services = NULL;
 
-	e = hc_list_reference_services(hc, hc_url_get(url, HCURL_REFERENCE),
+	e = hc_list_reference_services(hc, hc_url_get(url, HCURL_USER),
 			action_args[0], &services);
 	if (NULL != e) {
 		g_printerr("%s", e->msg);
@@ -148,19 +148,19 @@ func_list(gs_grid_storage_t *hc)
 
 		if (action_args[0])
 			g_printerr("No service [%s] linked to reference [%s].\n",
-					action_args[0], hc_url_get(url, HCURL_REFERENCE));
+					action_args[0], hc_url_get(url, HCURL_USER));
 		else
 			g_printerr("No service linked to reference [%s].\n",
-					hc_url_get(url, HCURL_REFERENCE));
+					hc_url_get(url, HCURL_USER));
 		dump_services(tab);
 	}
 	else {
 		if (action_args[0])
 			g_printerr("Reference [%s], services [%s] linked:\n",
-					hc_url_get(url, HCURL_REFERENCE), action_args[0]);
+					hc_url_get(url, HCURL_USER), action_args[0]);
 		else
 			g_printerr("Reference [%s], all services linked:\n",
-					hc_url_get(url, HCURL_REFERENCE));
+					hc_url_get(url, HCURL_USER));
 
 		dump_services(services);
 	}
@@ -190,7 +190,7 @@ func_link(gs_grid_storage_t *hc)
 	}
 
 	e = hc_link_service_to_reference(hc,
-			hc_url_get(url, HCURL_REFERENCE),
+			hc_url_get(url, HCURL_USER),
 			action_args[0],
 			&urlv);
 	if (NULL != e) {
@@ -200,7 +200,7 @@ func_link(gs_grid_storage_t *hc)
 	}
 
 	g_printerr("Service [%s] linked to reference [%s]\n", urlv[0],
-			hc_url_get(url, HCURL_REFERENCE));
+			hc_url_get(url, HCURL_USER));
 	freev(urlv);
 	return TRUE;
 }
@@ -226,10 +226,10 @@ func_unlink(gs_grid_storage_t *hc)
 	}
 
 	if (!(e = hc_unlink_reference_service(hc,
-					hc_url_get(url, HCURL_REFERENCE),
+					hc_url_get(url, HCURL_USER),
 					action_args[0]))) {
 		g_printerr("Services [%s] unlinked from reference [%s]\n",
-				action_args[0], hc_url_get(url, HCURL_REFERENCE));
+				action_args[0], hc_url_get(url, HCURL_USER));
 		return TRUE;
 	}
 
@@ -256,8 +256,8 @@ func_has(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	if (!(e = hc_has_reference(hc, hc_url_get(url, HCURL_REFERENCE)))) {
-		g_printerr("Reference %s exists\n", hc_url_get(url, HCURL_REFERENCE));
+	if (!(e = hc_has_reference(hc, hc_url_get(url, HCURL_USER)))) {
+		g_printerr("Reference %s exists\n", hc_url_get(url, HCURL_USER));
 		return TRUE;
 	}
 
@@ -265,7 +265,7 @@ func_has(gs_grid_storage_t *hc)
 		g_printerr("%s", e->msg);
 	else
 		g_print("Reference %s does not exist\n",
-				hc_url_get(url, HCURL_REFERENCE));
+				hc_url_get(url, HCURL_USER));
 
 	gs_error_free(e);
 	return FALSE;
@@ -284,8 +284,8 @@ func_delete(gs_grid_storage_t *hc)
 {
 	gs_error_t *e;
 
-	if (!(e = hc_delete_reference(hc, hc_url_get(url, HCURL_REFERENCE)))) {
-		g_print("Reference [%s] deleted\n", hc_url_get(url, HCURL_REFERENCE));
+	if (!(e = hc_delete_reference(hc, hc_url_get(url, HCURL_USER)))) {
+		g_print("Reference [%s] deleted\n", hc_url_get(url, HCURL_USER));
 		return TRUE;
 	}
 
@@ -307,8 +307,8 @@ func_create(gs_grid_storage_t *hc)
 {
 	gs_error_t *e;
 
-	if (!(e = hc_create_reference(hc, hc_url_get(url, HCURL_REFERENCE)))) {
-		g_print("Reference [%s] created\n", hc_url_get(url, HCURL_REFERENCE));
+	if (!(e = hc_create_reference(hc, hc_url_get(url, HCURL_USER)))) {
+		g_print("Reference [%s] created\n", hc_url_get(url, HCURL_USER));
 		return TRUE;
 	}
 
@@ -338,7 +338,7 @@ func_poll(gs_grid_storage_t *hc)
 	}
 
 	if (!(e = hc_poll_service(hc,
-					hc_url_get(url, HCURL_REFERENCE),
+					hc_url_get(url, HCURL_USER),
 					action_args[0],
 					&u))) {
 		char *urlv[2] = {NULL,NULL};
@@ -376,7 +376,7 @@ func_force(gs_grid_storage_t *hc)
 	}
 
 	if (NULL != (e = hc_force_service(hc,
-					hc_url_get(url, HCURL_REFERENCE),
+					hc_url_get(url, HCURL_USER),
 					action_args[0]))) {
 		g_printerr("%s", e->msg);
 		gs_error_free(e);
@@ -384,7 +384,7 @@ func_force(gs_grid_storage_t *hc)
 	}
 
 	g_print("Service [%s] forced for reference [%s]\n",
-			action_args[0], hc_url_get(url, HCURL_REFERENCE));
+			action_args[0], hc_url_get(url, HCURL_USER));
 	return TRUE;
 }
 
@@ -412,10 +412,10 @@ func_srvconfig(gs_grid_storage_t *hc)
 	}
 
 	if (!(e = hc_configure_service(hc,
-					hc_url_get(url, HCURL_REFERENCE),
+					hc_url_get(url, HCURL_USER),
 					action_args[0]))) {
 		g_printerr("Service [%s] reconfigured for reference [%s]\n",
-				action_args[0], hc_url_get(url, HCURL_REFERENCE));
+				action_args[0], hc_url_get(url, HCURL_USER));
 		return TRUE;
 	}
 
@@ -445,7 +445,7 @@ func_propset(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	if (!(e = hc_set_reference_property(hc, hc_url_get(url, HCURL_REFERENCE),
+	if (!(e = hc_set_reference_property(hc, hc_url_get(url, HCURL_USER),
 					action_args[0], action_args[1]))) {
 		g_print("Key [%s] updated for reference [%s]\n", action_args[0],
 				action_args[1]);
@@ -473,11 +473,11 @@ func_propget(gs_grid_storage_t *hc)
 	gs_error_t *e;
 	gchar **values = NULL;
 
-	if (!(e = hc_get_reference_property(hc, hc_url_get(url, HCURL_REFERENCE),
+	if (!(e = hc_get_reference_property(hc, hc_url_get(url, HCURL_USER),
 					action_args, &values))) {
 		if (!*values)
 			g_printerr("No property associated to the reference [%s]\n",
-					hc_url_get(url, HCURL_REFERENCE));
+					hc_url_get(url, HCURL_USER));
 		dump_properties(values);
 		g_strfreev(values);
 		values = NULL;
@@ -509,10 +509,10 @@ func_propdel(gs_grid_storage_t *hc)
 		return FALSE;
 	}
 
-	if (!(e = hc_delete_reference_property(hc, hc_url_get(url, HCURL_REFERENCE),
+	if (!(e = hc_delete_reference_property(hc, hc_url_get(url, HCURL_USER),
 					action_args))) {
 		g_printerr("Properties deleted for reference [%s]\n",
-				hc_url_get(url, HCURL_REFERENCE));
+				hc_url_get(url, HCURL_USER));
 		return TRUE;
 	}
 
@@ -710,7 +710,7 @@ hcdir_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	if (!(url = hc_url_init(argv[1]))) {
+	if (!(url = hc_url_oldinit(argv[1]))) {
 		g_printerr("Invalid reference name, expected VNS/REFNAME");
 		return FALSE;
 	}

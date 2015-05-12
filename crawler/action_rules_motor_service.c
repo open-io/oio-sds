@@ -21,19 +21,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define G_LOG_DOMAIN "atos.grid.action"
 #endif
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#include <metautils/lib/metautils.h>
 #include <rules-motor/lib/motor.h>
+#include <metautils/lib/metautils.h>
 #include <rawx-lib/src/rawx.h>
-#include <meta2/remote/meta2_remote.h>
+#include <meta2v2/meta2_remote.h>
 #include <integrity/lib/chunk_check.h>
 #include <integrity/lib/content_check.h>
 
 #include <dbus/dbus.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <unistd.h>
 
 #include "lib/action_common.h"
 
@@ -77,11 +77,11 @@ chunk_check_attributes(struct chunk_textinfo_s *chunk, struct content_textinfo_s
 }
 
 static struct meta2_raw_content_s*
-get_content_info(const gchar* meta2_url, gchar* container_id_str, gchar* content_name) {
+get_content_info(const char* meta2_url, const char *ns, gchar* container_id_str, gchar* content_name)
+{
 	GError* error = NULL;
 	addr_info_t meta2_addr;
 	struct metacnx_ctx_s cnx;
-	container_id_t container_id;
 
 	if (NULL == meta2_url || NULL == container_id_str || NULL == content_name)
 		return NULL;
@@ -102,8 +102,13 @@ get_content_info(const gchar* meta2_url, gchar* container_id_str, gchar* content
 		return NULL;
 	}
 
-	container_id_hex2bin(container_id_str, strlen(container_id_str), &container_id, &error);
-	struct meta2_raw_content_s* ret = meta2_remote_stat_content(&cnx, container_id, content_name, strlen(content_name), &error);
+	struct hc_url_s *url = hc_url_empty ();
+	hc_url_set (url, HCURL_NS, ns);
+	hc_url_set (url, HCURL_HEXID, container_id_str);
+	hc_url_set (url, HCURL_PATH, content_name);
+	struct meta2_raw_content_s* ret = meta2_remote_stat_content(&cnx, &error, url);
+	hc_url_clean (url);
+
 	if (NULL != error) {
 		g_clear_error(&error);
 		metacnx_close(&cnx);
@@ -124,8 +129,7 @@ do_work(gchar* namespace, gint8 source_type, const struct SActionRulesMotorDataW
 	if (NULL == data_work)
 		return EXIT_FAILURE;
 
-	if (  (NULL == data_work->source_path)
-		||(NULL == namespace)  )
+	if (!data_work->source_path ||!namespace)
 		return EXIT_FAILURE;
 
 	if (META2_TYPE_ID == source_type) {
@@ -241,7 +245,7 @@ do_work(gchar* namespace, gint8 source_type, const struct SActionRulesMotorDataW
 
 		struct content_textinfo_s content_info;
 		bzero(&content_info, sizeof(struct content_textinfo_s));
-		struct meta2_raw_content_s* raw_info = get_content_info(data_work->svc_url, my_tokens[0], my_tokens[1]);
+		struct meta2_raw_content_s* raw_info = get_content_info(data_work->svc_url, namespace, my_tokens[0], my_tokens[1]);
 		if (NULL == raw_info) {
 			if (NULL != my_tokens)
 				g_strfreev(my_tokens);
@@ -493,8 +497,6 @@ main_action(void) {
 	}
 
     GError* error = NULL;
-
-    g_type_init();
 
     g_main_loop = g_main_loop_new (NULL, FALSE);
 

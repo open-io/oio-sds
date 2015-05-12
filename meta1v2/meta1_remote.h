@@ -32,21 +32,19 @@ License along with this library.
  * @{
  */
 
-// TODO remove this as soon as the hunk_checker has been replaced
+// TODO remove this as soon as the chunk_checker has been replaced
 #define NAME_MSGNAME_M1_CREATE     "REQ_M1_CREATE"
-
-// TODO remove this as soon as the hunk_checker has been replaced
-gboolean meta1_remote_create_container_v2 (addr_info_t *meta1, gint ms, GError **err,
-		const char *cName, const char *virtualNs, container_id_t cid,
-		gdouble to_step, gdouble to_overall, char **master);
-
 // TODO to be removed as soon ad the C SDK has been rewriten
 #define NAME_MSGNAME_M1_CONT_BY_ID   "REQ_M1_CONT_BY_ID"
 
+
+// TODO remove this as soon as the chunk_checker has been replaced
+gboolean meta1_remote_create_container_v2 (addr_info_t *meta1,
+		GError **err, struct hc_url_s *url);
+
 // TODO to be removed as soon ad the C SDK has been rewriten
 struct meta1_raw_container_s* meta1_remote_get_container_by_id(
-		struct metacnx_ctx_s *ctx, container_id_t cid, GError **err,
-		gdouble to_step, gdouble to_overall);
+		struct metacnx_ctx_s *ctx, struct hc_url_s *url, GError **err);
 
 /** @} */
 
@@ -56,79 +54,57 @@ struct meta1_raw_container_s* meta1_remote_get_container_by_id(
  */
 
 gboolean meta1v2_remote_create_reference (const addr_info_t *meta1,
-		GError **err, const gchar *ns, const container_id_t refid,
-		const gchar *refname, gdouble to_step, gdouble to_overall,
-		char **master);
+		GError **err, struct hc_url_s *url);
 
 gboolean meta1v2_remote_delete_reference(const addr_info_t *meta1,
-		GError **err, const gchar *ns, const container_id_t refid
-		, gdouble to_step, gdouble to_overall, char **master);
+		GError **err, struct hc_url_s *url);
 
 gboolean meta1v2_remote_has_reference(const addr_info_t *meta1,
-		GError **err, const gchar *ns, const container_id_t refid,
-		gdouble to_step, gdouble to_overall);
+		GError **err, struct hc_url_s *url);
 
-gchar ** meta1v2_remote_link_service(const addr_info_t *meta1, GError **err,
-		const char *ns, const container_id_t refID,
-		const gchar *service_type, gdouble to_step, gdouble to_overall, char **master);
+gchar ** meta1v2_remote_link_service(const addr_info_t *meta1,
+		GError **err, struct hc_url_s *url, const gchar *srvtype);
 
 gboolean meta1v2_remote_unlink_service(const addr_info_t *meta1,
-		GError **err, const char *ns, const container_id_t refid,
-		const gchar *srvtype, gdouble to_step, gdouble to_overall, char **master);
+		GError **err, struct hc_url_s *url, const gchar *srvtype);
 
 gboolean meta1v2_remote_unlink_one_service(const addr_info_t *meta1,
-		GError **err, const char *ns, const container_id_t refid,
-		const gchar *srvtype , gdouble to_step, gdouble to_overall, char **master,
-		gint64 seqid);
+		GError **err, struct hc_url_s *url, const gchar *srvtype, gint64 seqid);
 
 gchar ** meta1v2_remote_list_reference_services(const addr_info_t *meta1,
-		GError **err, const char *ns, const container_id_t refid,
-		const gchar *srvtype, gdouble to_step, gdouble to_overall);
+		GError **err, struct hc_url_s *url, const gchar *srvtype);
 
 gchar** meta1v2_remote_poll_reference_service(const addr_info_t *meta1,
-		GError **err, const char *ns, const container_id_t refid,
-		const gchar *srvtype, gdouble to_step, gdouble to_overall, char **master);
-
-gchar ** meta1v2_remote_update_m1_policy(const addr_info_t *meta1,
-		GError **err, const char *ns,  const container_id_t prefix,
-		const container_id_t refid, const gchar *srvtype,
-		const gchar* action, gboolean checkonly, const gchar *excludeurl,
-		gdouble to_step, gdouble to_overall);
+		GError **err, struct hc_url_s *url, const gchar *srvtype);
 
 gboolean meta1v2_remote_force_reference_service(const addr_info_t *meta1,
-		GError **err, const char *ns, const container_id_t refid,
-		const gchar *url, gdouble to_step, gdouble to_overall, char **master);
+		GError **err, struct hc_url_s *url, const gchar *m1url);
 
 gboolean meta1v2_remote_configure_reference_service(const addr_info_t *meta1,
-		GError **err, const char *ns, const container_id_t refid,
-		const gchar *url, gdouble to_step, gdouble to_overall, char **master);
+		GError **err, struct hc_url_s *url, const gchar *m1url);
 
 gboolean meta1v2_remote_reference_get_property(const addr_info_t *m1,
-		GError **err, const gchar *ns, const container_id_t refid,
-		gchar **keys, gchar ***result, gdouble to_step, gdouble to_overall);
+		GError **err, struct hc_url_s *url, gchar **keys, gchar ***result);
 
 gboolean meta1v2_remote_reference_set_property(const addr_info_t *m1,
-		GError **err, const gchar *ns, const container_id_t refid,
-		gchar **pairs, gdouble to_step, gdouble to_overall, char **master);
+		GError **err, struct hc_url_s *url, gchar **pairs);
 
 gboolean meta1v2_remote_reference_del_property(const addr_info_t *m1,
-		GError **err, const gchar *ns, const container_id_t refid,
-		gchar **keys, gdouble to_step, gdouble to_overall, char **master);
+		GError **err, struct hc_url_s *url,
+		gchar **keys);
 
-gchar** meta1v2_remote_list_services(const addr_info_t *m1, GError **err,
-        const gchar *ns, const container_id_t refid  );
+gchar** meta1v2_remote_list_services_by_prefix(const addr_info_t *m1, GError **err,
+        struct hc_url_s *url);
 
-GError * meta1v2_remote_list_references(const addr_info_t *m1,
-		const gchar *ns, const container_id_t refid,
-		GByteArray **result);
+GError * meta1v2_remote_list_references_by_prefix(const addr_info_t *m1,
+		struct hc_url_s *url, GByteArray **result);
 
 GError * meta1v2_remote_list_references_by_service(const addr_info_t *m1,
-		const gchar *ns, const container_id_t refid,
-		const gchar *srvtype, const gchar *url,
-		GByteArray **result);
+		struct hc_url_s *url, const gchar *srvtype,
+		const gchar *m1url, GByteArray **result);
 
 gboolean meta1v2_remote_get_prefixes(const addr_info_t *m1,
-		GError **err, gchar ***result );
+		GError **err, gchar ***result);
 
 /** @} */
 

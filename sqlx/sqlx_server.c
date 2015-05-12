@@ -88,25 +88,20 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 	EXTRA_ASSERT(result != NULL);
 	SQLXNAME_CHECK(n);
 
-	const gchar *sep = strchr(n->base, '@');
-	if (!sep)
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name [%s]", n->base);
-
-	gint64 seq = g_ascii_strtoll(n->base, NULL, 10);
+	gint64 seq = 1;
 	struct hc_url_s *u = hc_url_empty();
 	hc_url_set(u, HCURL_NS, ss->ns_name);
-	if (!hc_url_set(u, HCURL_HEXID, sep+1)) {
+	if (!sqlx_name_extract (n, u, NAME_SRVTYPE_SQLX, &seq)) {
 		hc_url_clean(u);
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid HEXID [%s]", sep+1);
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name");
 	}
 
-	if (nocache) {
+	if (nocache)
 		hc_decache_reference_service(ss->resolver, u, n->type);
-	}
 
 	gchar **peers = NULL;
 	GError *err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);
-	hc_url_clean(u);
+	hc_url_pclean(&u);
 
 	if (NULL != err) {
 		g_prefix_error(&err, "Peer resolution error");
@@ -123,6 +118,8 @@ _post_config(struct sqlx_service_s *ss)
 {
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,
 			sqlx_sql_gridd_get_requests(), ss->repository);
+
+	// TODO maybe initiate a events context
 	return TRUE;
 }
 
@@ -136,7 +133,9 @@ int
 main(int argc, char ** argv)
 {
 	static struct sqlx_service_config_s cfg = {
-		NAME_SRVTYPE_SQLX, "sqlxv1", "el/sqlx", 1, 3, SQLX_SCHEMA,
+		NAME_SRVTYPE_SQLX, "sqlxv1",
+		"el/"NAME_SRVTYPE_SQLX, 1, 3,
+		SQLX_SCHEMA, 1, 3,
 		_get_peers, _post_config, _set_defaults
 	};
 	return sqlite_service_main(argc, argv, &cfg);

@@ -34,7 +34,6 @@ The build process of OpenIO SDS depends on:
 * json-c, json-c-devel
 * libevent-devel
 * [librain](https://github.com/open-io/redcurrant-librain)
-* [librdkafka](https://github.com/edenhill/librdkafka): buid it from the source, it is easy and without dependency.
 * lzo, lzo-devel
 * neon, neon-devel
 * net-snmp, net-snmp-devel
@@ -70,7 +69,7 @@ In addition to common cmake options, these specific options are also available:
 | SOCKET\_LINGER\_ONOFF | (integer value) triggers the onoff value of the SO\_LINGER configuration. |
 | SOCKET\_LINGER\_DELAY | (integer value) set it to the delay in milliseconds, this will the delay part of the SO\_LINGER configuration. |
 
-In addition, some options axist to specify uncommon installation paths. Their format is ``${DEP}_INCDIR`` or ``${DEP}_LIBDIR``, and ``DEP`` might take the given values ``APACHE2``, ``ASN1C``, ``ATTR``, ``CURL``, ``DB``, ``GRIDINIT``, ``JSONC``, ``LIBRAIN``, ``LZO``, ``MICROHTTPD``, ``NETSNMP``, ``RDKAFKA``, ``ZK``, ``ZLIB``, ``ZMQ``
+In addition, some options axist to specify uncommon installation paths. Their format is ``${DEP}_INCDIR`` or ``${DEP}_LIBDIR``, and ``DEP`` might take the given values ``APACHE2``, ``ASN1C``, ``ATTR``, ``CURL``, ``DB``, ``GRIDINIT``, ``JSONC``, ``LIBRAIN``, ``LZO``, ``MICROHTTPD``, ``NETSNMP``, ``ZK``, ``ZLIB``, ``ZMQ``
 
 ### Building
 

@@ -41,14 +41,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 int meta1_backend_log_level = 0;
 
-static GError*
-_range_not_managed(const container_id_t cid)
-{
-	return NEWERROR(CODE_RANGE_NOTFOUND,
-			"prefix [%02X%02X] not managed",
-			((guint8*)cid)[0], ((guint8*)cid)[1]);
-}
-
 static int
 m1_to_sqlx(enum m1v2_open_type_e t)
 {
@@ -68,28 +60,31 @@ m1_to_sqlx(enum m1v2_open_type_e t)
 }
 
 GError*
-_open_and_lock(struct meta1_backend_s *m1, const container_id_t cid,
+_open_and_lock(struct meta1_backend_s *m1, struct hc_url_s *url,
 		enum m1v2_open_type_e how, struct sqlx_sqlite3_s **handle)
 {
-	gchar base[5];
-	GError *err = NULL;
-
-	GRID_TRACE2("%s(%p,%p,%d,%p)", __FUNCTION__, (void*)m1,
-			(void*)cid, how, (void*)handle);
-
 	EXTRA_ASSERT(m1 != NULL);
+	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(handle != NULL);
 
-	if (!meta1_prefixes_is_managed(m1->prefixes, cid))
-		return _range_not_managed(cid);
+	GRID_TRACE2("%s(%p,%p,%d,%p)", __FUNCTION__, (void*)m1,
+			hc_url_get (url, HCURL_HEXID), how, (void*)handle);
 
-	/* Get the Hexa representation of the prefix */
-	g_snprintf(base, sizeof(base), "%02X%02X",
-			((guint8*)cid)[0], ((guint8*)cid)[1]);
+	if (!hc_url_has (url, HCURL_HEXID))
+		return NEWERROR (CODE_BAD_REQUEST, "Partial URL (missing HEXID)");
+	if (!m1b_check_ns_url (m1, url))
+		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid NS");
+
+	gchar base[5];
+	const guint8 *cid = hc_url_get_id(url);
+	g_snprintf(base, sizeof(base), "%02X%02X", cid[0], cid[1]);
+
+	if (!meta1_prefixes_is_managed(m1->prefixes, cid))
+		return NEWERROR(CODE_RANGE_NOTFOUND, "prefix [%s] not managed", base);
 
 	/* Now open/lock the base in a way suitable for our op */
 	struct sqlx_name_s n = {.base=base, .type=NAME_SRVTYPE_META1, .ns=m1->backend.ns_name};
-	err = sqlx_repository_open_and_lock(m1->backend.repo, &n, m1_to_sqlx(how), handle, NULL);
+	GError *err = sqlx_repository_open_and_lock(m1->backend.repo, &n, m1_to_sqlx(how), handle, NULL);
 
 	if (err != NULL) {
 		if (!CODE_IS_REDIRECT(err->code))
@@ -105,34 +100,34 @@ _open_and_lock(struct meta1_backend_s *m1, const container_id_t cid,
 }
 
 GError*
-__info_container(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
-		gchar ***result)
+__info_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+		struct hc_url_s ***result)
 {
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
-	GPtrArray *gpa = NULL;
 	int rc;
 
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(sq3->db != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	/* Prepare the statement */
-	sqlite3_prepare_debug(rc, sq3->db, "SELECT vns,cname FROM containers WHERE cid = ?", -1, &stmt, NULL);
+	sqlite3_prepare_debug(rc, sq3->db, "SELECT account,user FROM users WHERE cid = ?", -1, &stmt, NULL);
 	if (rc != SQLITE_OK)
 		return M1_SQLITE_GERROR(sq3->db, rc);
-	(void) sqlite3_bind_blob(stmt, 1, cid, sizeof(container_id_t), NULL);
+	(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id (url), hc_url_get_id_size (url), NULL);
 
 	/* Run the results */
-	gpa = g_ptr_array_new();
-	do {
-		rc = sqlite3_step(stmt);
-		if (rc == SQLITE_ROW) {
-			gchar *value = g_strdup_printf("%.*s/%.*s",
-				 sqlite3_column_bytes(stmt, 0), sqlite3_column_text(stmt, 0),
-				 sqlite3_column_bytes(stmt, 1), sqlite3_column_text(stmt, 1));
-			g_ptr_array_add(gpa, value);
-		}
-	} while (rc == SQLITE_ROW);
+	gboolean found = FALSE;
+	GPtrArray *gpa = result ? g_ptr_array_new() : NULL;
+	do { if (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+		found = TRUE;
+		if (!gpa) continue;
+		struct hc_url_s *u = hc_url_empty ();
+		hc_url_set (u, HCURL_ACCOUNT, (char*)sqlite3_column_text(stmt, 0));
+		hc_url_set (u, HCURL_USER, (char*)sqlite3_column_text(stmt, 1));
+		g_ptr_array_add(gpa, u);
+	} } while (rc == SQLITE_ROW);
 
 	if (rc != SQLITE_DONE && rc != SQLITE_OK) {
 		err = M1_SQLITE_GERROR(sq3->db, rc);
@@ -141,26 +136,20 @@ __info_container(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
 
 	sqlite3_finalize_debug(rc,stmt);
 
-	/* an error occured */
 	if (err) {
-		gpa_str_free(gpa);
+		if (gpa) {
+			g_ptr_array_set_free_func (gpa, (GDestroyNotify)hc_url_clean);
+			g_ptr_array_free (gpa, TRUE);
+		}
 		return err;
 	}
 
-	/* empty result */
-	if (gpa->len <= 0) {
-		g_ptr_array_free(gpa, TRUE);
+	if (!found) {
+		if (gpa) g_ptr_array_free (gpa, TRUE);
 		return NEWERROR(CODE_CONTAINER_NOTFOUND, "no such container");
 	}
-
-	/* success */
-	if (!result)
-		gpa_str_free(gpa);
-	else {
-		g_ptr_array_add(gpa, NULL);
-		*result = (gchar**) g_ptr_array_free(gpa, FALSE);
-	}
-
+	if (gpa)
+		*result = (struct hc_url_s**) metautils_gpa_to_array(gpa, TRUE);
 	return NULL;
 }
 
@@ -171,5 +160,21 @@ gpa_str_free(GPtrArray *gpa)
 		return;
 	g_ptr_array_set_free_func (gpa, g_free);
 	g_ptr_array_free(gpa, TRUE);
+}
+
+gboolean
+m1b_check_ns (struct meta1_backend_s *m1, const char *ns)
+{
+	if (!m1 || !ns)
+		return FALSE;
+	return 0 == strcmp (m1->backend.ns_name, ns);
+}
+
+gboolean
+m1b_check_ns_url (struct meta1_backend_s *m1, struct hc_url_s *url)
+{
+	if (!url)
+		return FALSE;
+	return m1b_check_ns (m1, hc_url_get (url, HCURL_NS));
 }
 

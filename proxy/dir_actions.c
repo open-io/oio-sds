@@ -183,8 +183,7 @@ action_dir_srv_unlink (struct req_args_s *args)
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *err = NULL;
-		meta1v2_remote_unlink_service (&m1a, &err, hc_url_get (args->url, HCURL_NS),
-				hc_url_get_id (args->url), type, dir_timeout_req, dir_timeout_all, NULL);
+		meta1v2_remote_unlink_service (&m1a, &err, args->url, type);
 		return err;
 	}
 
@@ -213,8 +212,7 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *err = NULL;
-		urlv = meta1v2_remote_link_service (&m1a, &err, hc_url_get (args->url, HCURL_NS),
-				hc_url_get_id (args->url), type, dir_timeout_req, dir_timeout_all, NULL);
+		urlv = meta1v2_remote_link_service (&m1a, &err, args->url, type);
 		return err;
 	}
 
@@ -245,8 +243,7 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *e = NULL;
-		meta1v2_remote_force_reference_service (&m1a, &e, hc_url_get (args->url, HCURL_NS),
-				hc_url_get_id (args->url), "", dir_timeout_req, dir_timeout_all, NULL);
+		meta1v2_remote_force_reference_service (&m1a, &e, args->url, "");
 		return e;
 	}
 
@@ -282,10 +279,7 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *err = NULL;
-		urlv = meta1v2_remote_poll_reference_service (&m1a, &err,
-				hc_url_get (args->url, HCURL_NS),
-				hc_url_get_id (args->url), type,
-				dir_timeout_req, dir_timeout_all, NULL);
+		urlv = meta1v2_remote_poll_reference_service (&m1a, &err, args->url, type);
 		return err;
 	}
 
@@ -330,9 +324,7 @@ action_dir_ref_list (struct req_args_s *args)
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *err = NULL;
-		urlv = meta1v2_remote_list_reference_services (&m1a, &err,
-			hc_url_get (args->url, HCURL_NS), hc_url_get_id (args->url),
-			NULL, dir_timeout_req, dir_timeout_all);
+		urlv = meta1v2_remote_list_reference_services (&m1a, &err, args->url, NULL);
 		g_assert ((err!=NULL) ^ (urlv!=NULL));
 		return err;
 	}
@@ -368,9 +360,7 @@ action_dir_ref_has (struct req_args_s *args)
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *err = NULL;
-		meta1v2_remote_has_reference (&m1a, &err,
-			hc_url_get (args->url, HCURL_NS), hc_url_get_id (args->url),
-			dir_timeout_req, dir_timeout_all);
+		meta1v2_remote_has_reference (&m1a, &err, args->url);
 		return err;
 	}
 	GError *err = _m1_locate_and_action (args, hook);
@@ -389,10 +379,7 @@ action_dir_ref_create (struct req_args_s *args)
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *err = NULL;
-		meta1v2_remote_create_reference (&m1a, &err,
-			hc_url_get (args->url, HCURL_NS), hc_url_get_id (args->url),
-			hc_url_get (args->url, HCURL_REFERENCE),
-			dir_timeout_req, dir_timeout_all, NULL);
+		meta1v2_remote_create_reference (&m1a, &err, args->url);
 		return err;
 	}
 	GError *err = _m1_locate_and_action (args, hook);
@@ -411,9 +398,7 @@ action_dir_ref_destroy (struct req_args_s *args)
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *err = NULL;
-		meta1v2_remote_delete_reference (&m1a, &err,
-			hc_url_get (args->url, HCURL_NS), hc_url_get_id (args->url),
-			dir_timeout_req, dir_timeout_all, NULL);
+		meta1v2_remote_delete_reference (&m1a, &err, args->url);
 		return err;
 	}
 	GError *err = _m1_locate_and_action (args, hook);
@@ -448,9 +433,8 @@ action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *e = NULL;
-		meta1v2_remote_reference_get_property (&m1a, &e,
-			hc_url_get (args->url, HCURL_NS), hc_url_get_id (args->url),
-			*keys ? keys : NULL, &pairs, dir_timeout_req, dir_timeout_all);
+		meta1v2_remote_reference_get_property (&m1a, &e, args->url,
+				(*keys ? keys : NULL), &pairs);
 		return e;
 	}
 
@@ -494,9 +478,7 @@ action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *e = NULL;
-		meta1v2_remote_reference_set_property (&m1a, &e,
-			hc_url_get (args->url, HCURL_NS), hc_url_get_id (args->url),
-			pairs, dir_timeout_req, dir_timeout_all, NULL);
+		meta1v2_remote_reference_set_property (&m1a, &e, args->url, pairs);
 		return e;
 	}
 
@@ -521,9 +503,7 @@ action_dir_prop_del (struct req_args_s *args, struct json_object *jargs)
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *e = NULL;
-		meta1v2_remote_reference_del_property (&m1a, &e,
-			hc_url_get (args->url, HCURL_NS), hc_url_get_id (args->url),
-			keys, dir_timeout_req, dir_timeout_all, NULL);
+		meta1v2_remote_reference_del_property (&m1a, &e, args->url, keys);
 		return e;
 	}
 

@@ -186,7 +186,9 @@ int
 main(int argc, char ** argv)
 {
 	const struct sqlx_service_config_s cfg = {
-		NAME_SRVTYPE_META0, "m0v2", "el/"NAME_SRVTYPE_META0, 0, 0, META0_SCHEMA,
+		NAME_SRVTYPE_META0, "m0v2",
+		"el/"NAME_SRVTYPE_META0, 0, 0,
+		META0_SCHEMA, 0, 0,
 		_get_peers, _post_config, NULL
 	};
 	int rc = sqlite_service_main(argc, argv, &cfg);

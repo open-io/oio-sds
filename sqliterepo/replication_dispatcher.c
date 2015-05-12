@@ -1299,29 +1299,14 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx, struct sqlx_name_mutable_s *n, g
 	if (NULL != err)
 		return err;
 
-	ctx->subject("%s.%s", base, type);
-
-	err = message_extract_flag(ctx->request, NAME_MSGKEY_LOCAL, FALSE, &local);
-	if (NULL != err)
-		return err;
+	local = message_extract_flag(ctx->request, NAME_MSGKEY_LOCAL, FALSE);
+	autocreate = message_extract_flag(ctx->request, NAME_MSGKEY_AUTOCREATE, FALSE);
+	nocheck = message_extract_flag(ctx->request, NAME_MSGKEY_NOCHECK, FALSE);
+	noreal = message_extract_flag(ctx->request, NAME_MSGKEY_NOREAL, FALSE);
+	chunked = message_extract_flag(ctx->request, NAME_MSGKEY_CHUNKED, FALSE);
+	flush = message_extract_flag(ctx->request, NAME_MSGKEY_FLUSH, FALSE);
 
 	ctx->subject("%s.%s|%s", base, type, local?"LOC":"REP");
-
-	err = message_extract_flag(ctx->request, NAME_MSGKEY_AUTOCREATE, FALSE, &autocreate);
-	if (NULL != err)
-		return err;
-	err = message_extract_flag(ctx->request, NAME_MSGKEY_NOCHECK, FALSE, &nocheck);
-	if (NULL != err)
-		return err;
-	err = message_extract_flag(ctx->request, NAME_MSGKEY_NOREAL, FALSE, &noreal);
-	if (NULL != err)
-		return err;
-	err = message_extract_flag(ctx->request, NAME_MSGKEY_CHUNKED, FALSE, &chunked);
-	if (NULL != err)
-		return err;
-	err = message_extract_flag(ctx->request, NAME_MSGKEY_FLUSH, FALSE, &flush);
-	if (NULL != err)
-		return err;
 	
 	metautils_str_replace(&n->ns, ns);
 	metautils_str_replace(&n->base, base);

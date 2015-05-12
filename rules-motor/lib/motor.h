@@ -20,24 +20,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__rules_motor__lib__motor_h
 # define OIO_SDS__rules_motor__lib__motor_h 1
 
-#include <stddef.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <string.h>
-
-#include <attr/xattr.h>
-
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
-#include <rawx-lib/src/compression.h>
-
 #ifdef _GNU_SOURCE
 # undef _GNU_SOURCE
 #endif
 #ifdef _POSIX_C_SOURCE
 # undef _POSIX_C_SOURCE
 #endif
+
 #include <Python.h>
+
+#include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
+#include <rawx-lib/src/compression.h>
+
+#include <glib.h>
+
+#include <stdlib.h>
+#include <stddef.h>
+#include <string.h>
+#include <sys/types.h>
+#include <attr/xattr.h>
 
 # define ATTR_NAME_MAX_LENGTH 64
 

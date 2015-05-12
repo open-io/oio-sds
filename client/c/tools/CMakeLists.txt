@@ -5,8 +5,8 @@ include_directories(BEFORE .
 
 set(REQLIBS
 		gridclient metautils
-		gridcluster gridcluster-remote gridcluster-events
-		meta2remote meta1remote meta0remote
+		gridcluster gridcluster-remote
+		meta2v2remote meta1remote meta0remote
 		${GLIB2_LIBRARIES})
 
 set(SOLRLIBS solrutils)

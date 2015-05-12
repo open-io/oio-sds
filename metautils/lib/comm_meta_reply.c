@@ -333,7 +333,7 @@ metaXClient_reply_sequence_run_context(GError ** err, struct metacnx_ctx_s *cnx,
 
 gboolean
 metaXClient_reply_sequence_run_from_addrinfo(GError ** err, MESSAGE request,
-		addr_info_t * addr, gint ms, struct reply_sequence_data_s * h)
+		const addr_info_t * addr, gint ms, struct reply_sequence_data_s * h)
 {
 	struct metacnx_ctx_s cnx;
 	gboolean rc;

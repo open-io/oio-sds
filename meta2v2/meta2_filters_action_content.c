@@ -36,13 +36,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/transport_gridd.h>
 #include <server/gridd_dispatcher_filters.h>
 #include <cluster/lib/gridcluster.h>
-#include <cluster/events/gridcluster_events.h>
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2_filter_context.h>
 #include <meta2v2/meta2_filters.h>
 #include <meta2v2/meta2_backend_internals.h>
 #include <meta2v2/meta2_bean.h>
 #include <meta2v2/meta2v2_remote.h>
+#include <meta2v2/meta2_utils_json.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 
@@ -59,7 +59,8 @@ struct content_info_s
 	GSList *beans;
 };
 
-struct all_vers_cb_args {
+struct all_vers_cb_args
+{
 	const gchar *contentid;
 	gconstpointer udata_in;
 	gpointer udata_out;
@@ -71,7 +72,49 @@ typedef GError* (*all_vers_cb) (struct meta2_backend_s *m2b,
 		struct hc_url_s *url,
 		struct all_vers_cb_args *cbargs);
 
-static void _content_info_clean(gpointer p)
+static void
+_notify_beans (struct meta2_backend_s *m2b, struct hc_url_s *url,
+		struct on_bean_ctx_s *obc)
+{
+	void sep (GString *gs) {
+		if (gs->len > 1 && gs->str[gs->len-1] != ',')
+			g_string_append_c (gs, ',');
+	}
+	void append_int64 (GString *gs, const char *k, gint64 v) {
+		sep (gs);
+		g_string_append_printf (gs, "\"%s\":%"G_GINT64_FORMAT, k, v);
+	}
+	void append_const (GString *gs, const char *k, const char *v) {
+		sep (gs);
+		if (v)
+			g_string_append_printf (gs, "\"%s\":\"%s\"", k, v);
+		else
+			g_string_append_printf (gs, "\"%s\":null", k);
+	}
+	void append (GString *gs, const char *k, gchar *v) {
+		append_const (gs, k, v);
+		g_free0 (v);
+	}
+
+	if (!m2b->notify.hook)
+		return;
+
+	GString *gs = g_string_new ("{");
+	g_string_append_printf (gs, "\"event\":\"%s\"", NAME_SRVTYPE_META2 ".content.new");
+	append_int64 (gs, "when", g_get_real_time());
+	g_string_append (gs, ",\"url\":{");
+	append_const (gs, "ns", hc_url_get(url, HCURL_NS));
+	append_const (gs, "account", hc_url_get(url, HCURL_ACCOUNT));
+	append_const (gs, "user", hc_url_get(url, HCURL_USER));
+	append_const (gs, "type", hc_url_get(url, HCURL_TYPE));
+	g_string_append (gs, "},\"data\":[");
+	meta2_json_dump_all_xbeans (gs, obc->l);
+	g_string_append (gs, "]}");
+	m2b->notify.hook (m2b->notify.udata, g_string_free (gs, FALSE));
+}
+
+static void
+_content_info_clean(gpointer p)
 {
 	if(!p)
 		return;
@@ -338,6 +381,7 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 		meta2_filter_ctx_set_error(ctx, e);
 		rc = FILTER_KO;
 	} else {
+		_notify_beans (m2b, url, obc);
 		_on_bean_ctx_send_list(obc, TRUE);
 		rc = FILTER_OK;
 	}
@@ -382,7 +426,7 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 	const char *copy_source = meta2_filter_ctx_get_param(ctx, M2_KEY_COPY_SOURCE);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 
-	if(NULL != copy_source) {
+	if (NULL != copy_source) {
 		reply->subject("%s|%s|COPY(%s)", hc_url_get(url, HCURL_WHOLE),
 				hc_url_get(url, HCURL_HEXID), copy_source);
 		return _copy_alias(ctx, reply, copy_source);
@@ -412,6 +456,7 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
+	_notify_beans (m2b, url, obc);
 	_on_bean_ctx_send_list(obc, TRUE);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -516,15 +561,8 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	// This is required for Kafka notifications to work
+	_notify_beans(m2b, url, obc);
 	_on_bean_ctx_send_list(obc, FALSE);
-
-	// generate notification before send reply,
-	// besause a destroy container should executes
-	// before realy generated events was created on disk
-	// and no chunk on it ! no purge by polix!
-	meta2_filter_action_notify_content_DELETE_v2(ctx, reply, obc);
-
 	_on_bean_ctx_send_list(obc, TRUE);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -543,8 +581,7 @@ meta2_filter_action_remove_v1(struct gridd_filter_ctx_s *ctx,
 	TRACE_FILTER();
 
 	/* store in transient */
-	e = m2b_transient_put(m2b, hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), _get_content_info(NULL, DELETE),
-			(GDestroyNotify)_content_info_clean);
+	e = m2b_transient_put(m2b, url, _get_content_info(NULL, DELETE), (GDestroyNotify)_content_info_clean);
 	if(NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
@@ -791,7 +828,6 @@ _generate_chunks(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	const char *size_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CONTENTLENGTH);
 	const char *mdsys = meta2_filter_ctx_get_param(ctx, M2V1_KEY_METADATA_SYS);
-	const char *mdusr = meta2_filter_ctx_get_param(ctx, M2V1_KEY_METADATA_USR);
 
 	char *out_mdsys = NULL;
 
@@ -813,20 +849,10 @@ _generate_chunks(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply
 		return FILTER_KO;
 	}
 
-	/* */
-	if(NULL != mdusr && !append) {
-		gpointer prop = _bean_create(&descr_struct_PROPERTIES);
-		PROPERTIES_set2_alias(prop, hc_url_get(url, HCURL_PATH));
-		PROPERTIES_set_alias_version(prop, 1);
-		PROPERTIES_set2_key(prop, MDUSR_PROPERTY_KEY);
-		PROPERTIES_set2_value(prop, (const guint8*) mdusr, strlen(mdusr));
-		beans = g_slist_prepend(beans, prop);
-	}
-
 	/* store in transient to commit later */
-	e = m2b_transient_put(m2b, hc_url_get(url, HCURL_WHOLE),
-			hc_url_get(url, HCURL_HEXID), _get_content_info(beans, (append
-					? APPEND : PUT)), (GDestroyNotify) _content_info_clean);
+	e = m2b_transient_put(m2b, url,
+			_get_content_info(beans, (append ? APPEND : PUT)),
+			(GDestroyNotify) _content_info_clean);
 	if (NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
@@ -917,8 +943,7 @@ meta2_filter_action_update_chunk_md5(struct gridd_filter_ctx_s *ctx,
 	}
 
 	struct content_info_s *ci = (struct content_info_s *) m2b_transient_get(
-			m2b, hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID),
-			&err);
+			m2b, url, &err);
 
 	if (!ci) {
 		meta2_filter_ctx_set_error(ctx, err);
@@ -1054,8 +1079,7 @@ _has_versioning(struct meta2_backend_s *m2b, struct hc_url_s *url)
 	GError *err = meta2_backend_get_max_versions(m2b, url, &maxvers);
 	if (err) {
 		GRID_ERROR("Failed getting max versions for ref [%s]: %s",
-				hc_url_get(url, HCURL_REFERENCE),
-				err->message);
+				hc_url_get(url, HCURL_WHOLE), err->message);
 		g_clear_error(&err);
 		return FALSE;
 	}
@@ -1249,7 +1273,7 @@ meta2_filter_action_content_commit_v1(struct gridd_filter_ctx_s *ctx,
 
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct content_info_s *ci = (struct content_info_s *)m2b_transient_get(m2b, hc_url_get(url, HCURL_WHOLE),hc_url_get(url, HCURL_HEXID),&e);
+	struct content_info_s *ci = (struct content_info_s *)m2b_transient_get(m2b, url, &e);
 	if(NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
@@ -1277,7 +1301,7 @@ meta2_filter_action_content_commit_v1(struct gridd_filter_ctx_s *ctx,
 			break;
 	}
 
-	m2b_transient_del(m2b, hc_url_get(url, HCURL_WHOLE),hc_url_get(url, HCURL_HEXID));
+	m2b_transient_del(m2b, url);
 
 	if(NULL != e) {
 		GRID_DEBUG("Content commit failed : %s", e->message);
@@ -1303,7 +1327,7 @@ meta2_filter_action_content_rollback_v1(struct gridd_filter_ctx_s *ctx,
 	}
 
 	/* we don't take care of any error */
-	e= m2b_transient_del(m2b, hc_url_get(url, HCURL_WHOLE),hc_url_get(url, HCURL_HEXID));
+	e = m2b_transient_del(m2b, url);
 	if(NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;

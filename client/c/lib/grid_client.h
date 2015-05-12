@@ -435,15 +435,6 @@ gs_status_t gs_list_container (gs_container_t *container, gs_content_t*** result
 	gs_content_filter_f filter, void *user_data, gs_error_t **err);
 
 /**
- * Same as gs_list_container but takes a snapshot parameter.
- *
- * @param snapshot List only contents belonging to this snapshot
- */
-gs_status_t gs_list_container_snapshot(gs_container_t *container,
-		gs_content_t*** result, gs_content_filter_f filter, void *user_data,
-		const char *snapshot, gs_error_t **err);
-
-/**
  * Puts a new content in the given remote container
  *
  * The pointer to the newly uploaded content might be obtained with
@@ -1037,84 +1028,6 @@ gs_status_t hc_dl_content_custom(gs_grid_storage_t *hc, const char *container,
  */
 gs_status_t hc_dl_content_to_file(gs_grid_storage_t *hc, const char *container,
 		const char *content, const char *dest, gs_error_t **e);
-
-/* Snapshots --------------------------------------------------------------- */
-
-/**
- * The hidden type that represents a snapshot.
- */
-typedef struct redc_snapshot_s redc_snapshot_t;
-
-/**
- * Take a snapshot of a container.
- *
- * @param container The targeted container
- * @param snapshot_name A name for the snapshot (must not start with a digit)
- * @return An error if there is an issue while taking the snapshot, NULL otherwise
- */
-gs_error_t* redc_take_snapshot(gs_container_t *container,
-		const char *snapshot_name);
-
-/**
- * Delete a snapshot.
- *
- * @param container The targeted container
- * @param snapshot_name The name of the snapshot to delete
- * @return An error if there is an issue while deleting the snapshot, NULL otherwise
- */
-gs_error_t* redc_delete_snapshot(gs_container_t *container,
-		const char *snapshot_name);
-
-/**
- * Restore a snapshot.
- *
- * @param container The targeted container
- * @param snapshot_name The name of the snapshot to restore
- * @param hard_restore If true, erase all contents and snapshots more recent
- *   than the specified snapshot (instead of just making contents reappear)
- * @return An error if there is an issue while restoring the snapshot, NULL otherwise
- */
-gs_error_t* redc_restore_snapshot(gs_container_t *container,
-		const char *snapshot_name, int hard_restore);
-
-/**
- * Restore a content from snapshot.
- *
- * @param container The targeted container
- * @param content The name of the content to restore
- * @param snapshot_name The name of the snapshot to restore from
- * @return An error if there is an issue while restoring the snapshot, NULL otherwise
- */
-gs_error_t* redc_restore_snapshot_alias(gs_container_t *container,
-		const char *content, const char *snapshot_name);
-
-/**
- * Get the list of snapshots of a container.
- *
- * @param container The targeted container
- * @param[out] snapshots A pointer where to store the snapshots
- * @return An error if there is an issue while listing snapshots, NULL otherwise
- *
- * @note The snapshots array is NULL-terminated,
- *   and should be freed by redc_snapshot_array_clean
- */
-gs_error_t* redc_list_snapshots(gs_container_t *container,
-		redc_snapshot_t ***snapshots);
-
-/**
- * Get the name of a snapshot.
- *
- * @param snapshot The snapshot to get name of
- * @return The name of the snapshot
- */
-const char* redc_snapshot_get_name(redc_snapshot_t *snapshot);
-
-/**
- * Clean an array of snapshots.
- *
- * @param snapshots The array of snapshots to clean.
- */
-void redc_snapshot_array_clean(redc_snapshot_t **snapshots);
 
 /** @} */
 

@@ -106,8 +106,15 @@ tc_sqliterepo_admget(sqlx_repository_t* repo, gchar* type_, gchar* bddnameWithEx
 	gchar *value = NULL;
 
 	/* Now open/lock the base in a way suitable for our op */
-	struct sqlx_name_s n = {.base=bddnameWithExtension, .type=type_, .ns=""};
-	err = sqlx_repository_open_and_lock(repo, &n, SQLX_OPEN_LOCAL, &sq3, NULL);
+	(void) type_;
+	gchar **tokens = g_strsplit (bddnameWithExtension, ".", 4);
+	struct sqlx_name_mutable_s  n;
+	n.base = g_strconcat (tokens[0], ".", tokens[1], NULL);
+	n.type = g_strconcat (tokens[2], ".", tokens[3], NULL);
+	n.ns = g_strdup ("");
+	err = sqlx_repository_open_and_lock(repo, sqlx_name_mutable_to_const (&n), SQLX_OPEN_LOCAL, &sq3, NULL);
+	sqlx_name_clean (&n);
+	g_strfreev (tokens);
 
 	if (err != NULL) {
 		if (!CODE_IS_REDIRECT(err->code))

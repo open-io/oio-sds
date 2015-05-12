@@ -267,8 +267,6 @@ static void main_action(void)
 {
     GError* error = NULL;
 
-    g_type_init();
-
     g_main_loop = g_main_loop_new (NULL, FALSE);
 
     /* DBus connexion */

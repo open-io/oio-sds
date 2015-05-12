@@ -16,7 +16,7 @@ add_executable(gs-rawx-mover main.c lock.c lock.h)
 bin_prefix(gs-rawx-mover -rawx-mover)
 target_link_libraries(gs-rawx-mover
 	metautils gridclient meta2v2remote rawx hcresolve
-	gridcluster-remote gridcluster-events gridcluster integrity
+	gridcluster-remote gridcluster integrity
 	${NEON_LIBRARIES} ${GLIB2_LIBRARIES} -lattr -lm -lcrypto)
 
 install(TARGETS gs-rawx-mover

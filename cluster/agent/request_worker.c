@@ -28,7 +28,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 
 #include "./broken_workers.h"
-#include "./event_workers.h"
 #include "./get_ns_worker.h"
 #include "./gridagent.h"
 #include "./io_scheduler.h"
@@ -98,11 +97,6 @@ init_request_worker(GError **error)
 	if (!register_request_handler(MSG_LSTTASK, list_tasks_worker, error)) {
 		GSETERROR(error, "Failed to register list_tasks_worker worker in request_worker");
 		return(0);
-	}
-
-	if (!register_request_handler(MSG_EVENTS_CONFIGURATION, agent_reply_event_configuration_worker, error)) {
-		GSETERROR(error, "Failed to register agent_reply_configuration_worker worker in request_worker");
-		return 0;
 	}
 
 	return(1);

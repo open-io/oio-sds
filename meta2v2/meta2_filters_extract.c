@@ -77,94 +77,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 } while(0)
 
 int
-meta2_filter_extract_header_ns(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *err;
-	gchar ns[LIMIT_LENGTH_NSNAME];
-	struct hc_url_s *url;
-
-	TRACE_FILTER();
-	err = message_extract_string(reply->request, NAME_MSGKEY_NAMESPACE,
-			ns, sizeof(ns));
-	if (err != NULL) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	if (!(url = meta2_filter_ctx_get_url(ctx))) {
-		url = hc_url_empty();
-		meta2_filter_ctx_set_url(ctx, url);
-	}
-	hc_url_set(url, HCURL_NS, ns);
-	return FILTER_OK;
-}
-
-int
 meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	GError *e = NULL;
-	struct hc_url_s *url = NULL;
-	char buf[LIMIT_LENGTH_HCURL];
-	container_id_t cid;
-	gchar strcid[STRLEN_CONTAINERID];
-	const gchar *container, *path;
-
 	TRACE_FILTER();
-	e = message_extract_string(reply->request, M2_KEY_URL, buf, sizeof(buf));
-	if(NULL != e) {
-		GRID_DEBUG("Failed to get url field from input message");
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	GRID_DEBUG("URL from header: %s", buf);
-
-	if(!(url = hc_url_init(buf))) {
-		GRID_DEBUG("Failed to init url from message field (%s)", buf);
-		e = NEWERROR(CODE_BAD_REQUEST, "Bad HC url format [%s]", buf);
-	} else if (strlen(hc_url_get(url, HCURL_NS)) > LIMIT_LENGTH_NSNAME) {
-		e = NEWERROR(CODE_BAD_REQUEST, "namespace name is too long");
-	}
-
-	container = hc_url_get(url, HCURL_REFERENCE);
-	path = hc_url_get(url, HCURL_PATH);
-	if (container && strlen(container) > LIMIT_LENGTH_CONTAINERNAME) {
-		e = NEWERROR(CODE_BAD_REQUEST, "container name is too long");
-	} else if (path && strlen(path) > LIMIT_LENGTH_CONTENTPATH) {
-		e = NEWERROR(CODE_BAD_REQUEST, "content path is too long");
-	}
-
-	if (e != NULL) {
-		meta2_filter_ctx_set_error(ctx, e);
-		hc_url_clean(url);
-		return FILTER_KO;
-	}
-
-	e = message_extract_cid(reply->request, NAME_MSGKEY_CONTAINERID, &cid);
-	if (NULL != e) {
-		g_clear_error(&e);
-		if (metautils_str_ishexa(container, STRLEN_CONTAINERID-1)) {
-			GRID_DEBUG("Refname in url looks like container id, "
-					"and no container id specified in header");
-			g_strlcpy(strcid, container, sizeof(strcid));
-			hc_url_set(url, HCURL_HEXID, strcid);
-		} else {
-			GRID_DEBUG("No container id, continue with the base url");
-		}
-		GRID_DEBUG("Initialized url = %s", hc_url_get(url, HCURL_WHOLE));
-	} else {
-		container_id_to_string(cid, strcid, sizeof(strcid));
-		if (0 != g_ascii_strcasecmp(strcid, hc_url_get(url, HCURL_HEXID))) {
-			GRID_DEBUG("Container hexid != url hexid, replace it");
-			hc_url_set(url, HCURL_HEXID, strcid);
-		}
-	}
-
-	GRID_DEBUG("Initialized url = %s", hc_url_get(url, HCURL_WHOLE));
+	struct hc_url_s *url = message_extract_url (reply->request);
 	meta2_filter_ctx_set_url(ctx, url);
-
 	return FILTER_OK;
 }
 
@@ -177,153 +95,8 @@ meta2_filter_extract_header_copy(struct gridd_filter_ctx_s *ctx,
 
 	TRACE_FILTER();
 	EXTRACT_STRING(M2_KEY_COPY_SOURCE, TRUE);
-	if(NULL != meta2_filter_ctx_get_param(ctx, M2_KEY_COPY_SOURCE)) {
+	if (NULL != meta2_filter_ctx_get_param(ctx, M2_KEY_COPY_SOURCE))
 		meta2_filter_ctx_add_param(ctx, "BODY_OPT", "OK");
-	}
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_vns(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	char buf[128];
-
-	TRACE_FILTER();
-	EXTRACT_STRING(M2V1_KEY_VIRTUAL_NAMESPACE, TRUE);
-	return FILTER_OK;
-}
-
-static int
-_meta2_filter_extract_cname(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply, const gchar *fname)
-{
-	GError *e;
-	gchar buf[1024];
-	struct hc_url_s *url;
-
-	EXTRACT_STRING(fname, 1);
-
-	if (!(url = meta2_filter_ctx_get_url(ctx))) {
-		url = hc_url_empty();
-		meta2_filter_ctx_set_url(ctx, url);
-	}
-
-	hc_url_set(url, HCURL_REFERENCE, buf);
-
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_cname(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	return _meta2_filter_extract_cname(ctx, reply, NAME_MSGKEY_CONTAINERNAME);
-}
-
-static int
-_meta2_filter_extract_path(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply, const gchar *fname)
-{
-	GError *e;
-	gchar buf[1024];
-	struct hc_url_s *url;
-
-	EXTRACT_STRING(fname, 1);
-
-	if (!(url = meta2_filter_ctx_get_url(ctx))) {
-		url = hc_url_empty();
-		meta2_filter_ctx_set_url(ctx, url);
-	}
-
-	hc_url_set(url, HCURL_PATH, buf);
-
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_path_f1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	return _meta2_filter_extract_path(ctx, reply, M2V1_KEY_FIELD_ONE);
-}
-
-static int
-_meta2_filter_extract_cid(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply, const gchar *fname)
-{
-	GError *err;
-	container_id_t cid;
-	gchar strcid[STRLEN_CONTAINERID];
-	struct hc_url_s *url;
-
-	err = message_extract_cid(reply->request, fname, &cid);
-	if (err != NULL) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	if (!(url = meta2_filter_ctx_get_url(ctx))) {
-		url = hc_url_empty();
-		meta2_filter_ctx_set_url(ctx, url);
-	}
-	container_id_to_string(cid, strcid, sizeof(strcid));
-	hc_url_set(url, HCURL_HEXID, strcid);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_cid(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	return _meta2_filter_extract_cid(ctx, reply, NAME_MSGKEY_CONTAINERID);
-}
-
-int
-meta2_filter_extract_header_cid_f0(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	return _meta2_filter_extract_cid(ctx, reply, "field_0");
-}
-
-int meta2_filter_extract_header_optional_cid(struct gridd_filter_ctx_s *ctx,
-                struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	GError *err;
-	container_id_t cid;
-	gchar strcid[STRLEN_CONTAINERID];
-	struct hc_url_s *url;
-
-	err = message_extract_cid(reply->request, NAME_MSGKEY_CONTAINERID, &cid);
-	if (err != NULL) {
-		g_clear_error(&err);
-		return FILTER_OK;
-	}
-
-	if (!(url = meta2_filter_ctx_get_url(ctx))) {
-		url = hc_url_empty();
-		meta2_filter_ctx_set_url(ctx, url);
-	}
-	container_id_to_string(cid, strcid, sizeof(strcid));
-	hc_url_set(url, HCURL_HEXID, strcid);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_path(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	char buf[128];
-
-	TRACE_FILTER();
-	EXTRACT_STRING(M2V1_KEY_PATH, FALSE);
 	return FILTER_OK;
 }
 
@@ -348,18 +121,6 @@ meta2_filter_extract_header_mdsys(struct gridd_filter_ctx_s *ctx,
 
 	TRACE_FILTER();
 	EXTRACT_STRING(M2V1_KEY_METADATA_SYS, TRUE);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_mdusr(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	char buf[8192];
-
-	TRACE_FILTER();
-	EXTRACT_STRING(M2V1_KEY_METADATA_USER, TRUE);
 	return FILTER_OK;
 }
 
@@ -472,14 +233,11 @@ meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
 	/* Defines a container id in context url if body raw content is the only
 	 * information we have about the targeted container (the url is mandatory
 	 * for potential has_container filter called later, so this action prevent
-	 * from null url and ugly meta2 behaviour
-	 */
-	if (!(url = meta2_filter_ctx_get_url(ctx))) {
-		url = hc_url_empty();
-		meta2_filter_ctx_set_url(ctx, url);
-	}
+	 * from null url and ugly meta2 behaviour */
+	url = meta2_filter_ctx_get_url(ctx);
+	g_assert (url != NULL);
 
-	if(!hc_url_get(url, HCURL_HEXID)) {
+	if (!hc_url_get(url, HCURL_HEXID)) {
 		gchar strcid[STRLEN_CONTAINERID];
 		container_id_to_string(content->container_id, strcid, sizeof(strcid));
 		hc_url_set(url, HCURL_HEXID, strcid);
@@ -629,7 +387,7 @@ meta2_filter_extract_header_string_V_f2(struct gridd_filter_ctx_s *ctx,
 	gchar buf[1024];
 
 	TRACE_FILTER();
-	EXTRACT_STRING2(M2V1_KEY_FIELD_TWO, "V", 0);
+	EXTRACT_STRING2(NAME_MSGKEY_VALUE, "V", 0);
 	return FILTER_OK;
 }
 
@@ -637,17 +395,8 @@ static int
 _extract_header_flag(const gchar *n, struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	GError *e = NULL;
-	gboolean flag = 0;
-
 	TRACE_FILTER();
-	e = message_extract_flag(reply->request, n, 0, &flag);
-	if (NULL != e) {
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	if (flag)
+	if (message_extract_flag(reply->request, n, 0))
 		meta2_filter_ctx_add_param(ctx, n, "1");
 	return FILTER_OK;
 }
@@ -677,6 +426,7 @@ int
 meta2_filter_extract_header_localflag(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
+	TRACE_FILTER();
 	int ret = _extract_header_flag(NAME_MSGKEY_LOCAL, ctx, reply);
 	if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LOCAL)) {
 		/* This is a hack to avoid changing every meta2_backend.h
@@ -745,42 +495,6 @@ meta2_filter_extract_header_string_size(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_header_optional_ns(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *err;
-	gchar ns[LIMIT_LENGTH_NSNAME];
-	struct hc_url_s *url;
-
-	TRACE_FILTER();
-
-	memset(ns, 0, sizeof(ns));
-	err = message_extract_string(reply->request, NAME_MSGKEY_NAMESPACE,
-			ns, sizeof(ns));
-	if (err) {
-		g_clear_error(&err);
-		err = message_extract_string(reply->request, NAME_MSGKEY_VIRTUALNAMESPACE,
-				ns, sizeof(ns));
-		if (err) {
-			g_clear_error(&err);
-		}
-	}
-
-	if (!*ns) {
-		const struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-		g_strlcpy(ns, m2b->backend.ns_name, sizeof(ns));
-	}
-
-	if (!(url = meta2_filter_ctx_get_url(ctx))) {
-		url = hc_url_empty();
-		meta2_filter_ctx_set_url(ctx, url);
-	}
-	hc_url_set(url, HCURL_NS, ns);
-
-	return FILTER_OK;
-}
-
-int
 meta2_filter_extract_header_optional_position_prefix(struct gridd_filter_ctx_s *ctx,
         struct gridd_reply_ctx_s *reply)
 {
@@ -831,19 +545,10 @@ meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
 	GError *e = NULL;
 	gchar buf[1024];
 	TRACE_FILTER();
-	EXTRACT_OPT(M2_KEY_SNAPSHOT);
 	EXTRACT_OPT(M2_KEY_PREFIX);
 	EXTRACT_OPT(M2_KEY_MARKER);
 	EXTRACT_OPT(M2_KEY_MARKER_END);
 	EXTRACT_OPT(M2_KEY_MAX_KEYS);
 	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_snapshot_hardrestore(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	return _extract_header_flag(M2_KEY_SNAPSHOT_HARDRESTORE, ctx, reply);
 }
 

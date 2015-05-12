@@ -117,45 +117,24 @@ container_id_to_string(const container_id_t id, gchar * dst, gsize dstsize)
 }
 
 void
-name_to_id(const gchar * name, gsize nameLen, hash_sha256_t * id)
+meta1_name2hash(container_id_t cid, const char *ns, const char *account, const char *user)
 {
-	SHA256((unsigned char *) name, nameLen, (unsigned char *) id);
-}
+	EXTRA_ASSERT (ns != NULL);
+	EXTRA_ASSERT (*ns != 0);
+	EXTRA_ASSERT (user != NULL);
+	EXTRA_ASSERT (*user != 0);
 
-void
-name_to_id_v2(const gchar * name, gsize nameLen, const gchar *vns, hash_sha256_t * id)
-{
-	if (!vns || !strchr(vns,'.')) {
-		/* old school client */
-		name_to_id(name, nameLen, id);
-		return;
+	guint8 zero = 0;
+	GChecksum *sum = g_checksum_new(G_CHECKSUM_SHA256);
+
+	if (account && 0 != strcmp(account, HCURL_DEFAULT_ACCOUNT)) {
+		g_checksum_update(sum, (guint8*)account, strlen(account));
+		g_checksum_update(sum, &zero, 1);
 	}
-
-	gchar *full_name = g_strconcat(vns, "/", name, NULL);
-
-	SHA256((unsigned char *) full_name, strlen(full_name), (unsigned char *) id);
-
-	if(full_name)
-		g_free(full_name);
-}
-
-void
-meta1_name2hash(container_id_t cid, const gchar *ns, const gchar *cname)
-{
-	gsize s;
-	GChecksum *sum = NULL;
-
-	sum = g_checksum_new(G_CHECKSUM_SHA256);
-
-	if (ns && strchr(ns, '.')) {
-		g_checksum_update(sum, (guint8*)ns, strlen(ns));
-		g_checksum_update(sum, (guint8*)"/", 1);
-	}
-	if (cname)
-		g_checksum_update(sum, (guint8*)cname, strlen(cname));
+	g_checksum_update(sum, (guint8*)user, strlen(user));
 
 	memset(cid, 0, sizeof(container_id_t));
-	s = sizeof(container_id_t);
+	gsize s = sizeof(container_id_t);
 	g_checksum_get_digest(sum, (guint8*)cid, &s);
 	g_checksum_free(sum);
 }

@@ -20,7 +20,7 @@ add_library(rawx SHARED
 set_target_properties(rawx PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(rawx
-		metautils gridcluster gridcluster-events gridcluster-remote
+		metautils gridcluster gridcluster-remote
 		${NEON_LIBRARIES} ${ATTR_LIBRARIES} ${ZLIB_LIBRARIES} ${LZO_LIBRARIES})
 
 install(FILES

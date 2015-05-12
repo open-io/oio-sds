@@ -58,9 +58,8 @@ void
 _on_bean_ctx_append_udata_list(struct on_bean_ctx_s *obc)
 {
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(obc->ctx);
-	struct event_config_s * evt_config = meta2_backend_get_event_config(m2b);
 
-	if (event_is_enabled(evt_config) || event_is_notifier_enabled(evt_config)) {
+	if (m2b->notify.hook) {
 		if (obc->first) {
 			obc->first = FALSE;
 			meta2_filter_ctx_set_input_udata(obc->ctx, obc->l,
@@ -100,10 +99,9 @@ _on_bean_ctx_clean(struct on_bean_ctx_s *obc)
 		return;
 
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(obc->ctx);
-	struct event_config_s * evt_config = meta2_backend_get_event_config(m2b);
 
 	if (obc->l) {
-		if (!(event_is_enabled(evt_config) || event_is_notifier_enabled(evt_config)))
+		if (!m2b->notify.hook)
 			_bean_cleanl2(obc->l);
 		obc->l = NULL;
 	}
@@ -116,16 +114,9 @@ int
 meta2_filter_fill_subject(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	struct hc_url_s *url;
-
 	TRACE_FILTER();
-	url = meta2_filter_ctx_get_url(ctx);
-	if (hc_url_has(url, HCURL_REFERENCE))
-		reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE),
-				hc_url_get(url, HCURL_HEXID));
-	else
-		reply->subject("%s|%s", hc_url_get(url, HCURL_NS),
-				hc_url_get(url, HCURL_HEXID));
+	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	return FILTER_OK;
 }
 
@@ -136,54 +127,6 @@ meta2_filter_fill_subject(struct gridd_filter_ctx_s *ctx,
 		tmp = NULL; \
 	} \
 } while(0)
-
-int
-meta2_filter_pack_url(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	struct hc_url_s *url = NULL;
-	const char *tmp = NULL;
-	char *hexid = NULL;
-
-	TRACE_FILTER();
-	(void) reply;
-
-	if (!(url = meta2_filter_ctx_get_url(ctx))) {
-		GRID_DEBUG("URL NOT FOUND in CONTEXT, create it");
-		url = hc_url_empty();
-		meta2_filter_ctx_set_url(ctx, url);
-	}
-
-	GRID_DEBUG("HEXID : %s", hc_url_get(url, HCURL_HEXID));
-	if(hc_url_has(url, HCURL_HEXID)) {
-		hexid = g_strdup(hc_url_get(url, HCURL_HEXID));
-	}
-
-	FILL_URL_FIELD(M2V1_KEY_VIRTUAL_NAMESPACE, HCURL_NS);
-	FILL_URL_FIELD(M2V1_KEY_REF, HCURL_REFERENCE);
-	FILL_URL_FIELD(M2V1_KEY_REFID, HCURL_HEXID);
-	FILL_URL_FIELD(M2V1_KEY_PATH, HCURL_PATH);
-
-	if(!hc_url_has(url, HCURL_NS))  {
-		const struct meta2_backend_s *backend = meta2_filter_ctx_get_backend(ctx);
-		url = hc_url_set(url, HCURL_NS, backend->backend.ns_name);
-	}
-
-	if(NULL != hexid) {
-		hc_url_set(url, HCURL_HEXID, hexid);
-		g_free(hexid);
-	}
-
-	// Hack in case there was "?version=XXX" in M2V1_KEY_PATH
-	struct hc_url_s *url2 = hc_url_init(hc_url_get(url, HCURL_WHOLE));
-	hc_url_set(url, HCURL_PATH, hc_url_get(url2, HCURL_PATH));
-	if (hc_url_has(url2, HCURL_SNAPORVERS)) {
-		hc_url_set(url, HCURL_SNAPORVERS, hc_url_get(url2, HCURL_SNAPORVERS));
-	}
-	hc_url_clean(url2);
-
-	return FILTER_OK;
-}
 
 int
 meta2_filter_fail_reply(struct gridd_filter_ctx_s *ctx,

@@ -79,7 +79,6 @@ meta1_IsMaster(gchar* bddname)
 {
 	GError* err = NULL;
 	gboolean master = FALSE;
-	struct sqlx_name_s n;
 	GByteArray* req = NULL;
 	struct gridd_client_s *client;
 	gchar* message = NULL;
@@ -101,10 +100,10 @@ meta1_IsMaster(gchar* bddname)
 	}
 
 	// build request
+	struct sqlx_name_s n;
 	n.ns   = "";
 	n.base = bddname;
 	n.type = NAME_SRVTYPE_META1;
-
 	req = sqlx_pack_ISMASTER(&n);
 	client = gridd_client_create(meta1_url, req, NULL, on_reply);
 	g_byte_array_unref(req);

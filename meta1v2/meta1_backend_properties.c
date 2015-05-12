@@ -42,19 +42,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static GError * __check_property_format(gchar **strv);
 
 static GError * __del_container_properties(struct sqlx_sqlite3_s *sq3,
-		const container_id_t cid, gchar **names);
+		struct hc_url_s *url, gchar **names);
 
 static GError * __set_container_properties(struct sqlx_sqlite3_s *sq3,
-		const container_id_t cid, gchar **props);
+		struct hc_url_s *url, gchar **props);
 
 static GError * __get_container_properties(struct sqlx_sqlite3_s *sq3,
-		const container_id_t cid, gchar **names, gchar ***result);
+		struct hc_url_s *url, gchar **names, gchar ***result);
 
 /* ------------------------------------------------------------------------- */
 
 static GError *
-__del_container_properties(struct sqlx_sqlite3_s *sq3,
-		const container_id_t cid, gchar **names)
+__del_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+		gchar **names)
 {
 	GError *err = NULL;
 	gchar **p_name;
@@ -64,9 +64,8 @@ __del_container_properties(struct sqlx_sqlite3_s *sq3,
 	if (NULL != err)
 		return err;
 
-	if (!names || !*names) {
-		__exec_cid(sq3->db, "DELETE FROM properties WHERE cid = ?", cid);
-	}
+	if (!names || !*names)
+		__exec_cid(sq3->db, "DELETE FROM properties WHERE cid = ?", hc_url_get_id(url));
 	else {
 		for (p_name=names; !err && p_name && *p_name ;p_name++) {
 			sqlite3_stmt *stmt = NULL;
@@ -76,9 +75,9 @@ __del_container_properties(struct sqlx_sqlite3_s *sq3,
 			if (rc != SQLITE_OK && rc != SQLITE_DONE)
 				err = M1_SQLITE_GERROR(sq3->db, rc);
 			else {
-				(void) sqlite3_bind_blob(stmt, 1, cid, sizeof(container_id_t), NULL);
-					(void) sqlite3_bind_text(stmt, 2, *p_name, strlen(*p_name), NULL);
-				rc = sqlite3_step(stmt);
+				(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
+				(void) sqlite3_bind_text(stmt, 2, *p_name, strlen(*p_name), NULL);
+				sqlite3_step_debug_until_end (rc, stmt);
 				if (rc != SQLITE_DONE)
 					GRID_WARN("SQLite error rc=%d", rc);
 				sqlite3_finalize_debug(rc, stmt);
@@ -90,7 +89,7 @@ __del_container_properties(struct sqlx_sqlite3_s *sq3,
 }
 
 static GError *
-__replace_property(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
+__replace_property(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		const gchar *name, const gchar *value)
 {
 	GError *err = NULL;
@@ -108,10 +107,8 @@ __replace_property(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
 	else {
 		(void) sqlite3_bind_text(stmt, 1, name, -1, NULL);
 		(void) sqlite3_bind_text(stmt, 2, value, -1, NULL);
-		(void) sqlite3_bind_blob(stmt, 3, cid, sizeof(container_id_t), NULL);
-		do {
-			rc = sqlite3_step(stmt);
-		} while (rc == SQLITE_ROW);
+		(void) sqlite3_bind_blob(stmt, 3, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
+		sqlite3_step_debug_until_end (rc, stmt);
 		if (rc != SQLITE_DONE && rc != SQLITE_OK)
 			err = M1_SQLITE_GERROR(sq3->db, rc);
 		sqlite3_finalize_debug(rc, stmt);
@@ -121,25 +118,21 @@ __replace_property(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
 }
 
 static GError *
-__set_container_properties(struct sqlx_sqlite3_s *sq3,
-		const container_id_t cid, gchar **props)
+__set_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+		gchar **props)
 {
-	gchar *p;
-	GError *err = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
-
-	err = sqlx_transaction_begin(sq3, &repctx);
+	GError *err = sqlx_transaction_begin(sq3, &repctx);
 	if (NULL != err)
 		return err;
-
-	for (; !err && (p = *props) ;props++) {
+	for (gchar *p; !err && (p = *props) ;props++) {
 		gchar *name, *eq, *value;
 
 		name = p;
 		eq = strchr(name, '=');
 		value = eq + 1;
 		*eq = '\0';
-		err = __replace_property(sq3, cid, name, value);
+		err = __replace_property(sq3, url, name, value);
 	}
 
 	return sqlx_transaction_end(repctx, err);
@@ -149,18 +142,15 @@ static gchar *
 __pack_property(const unsigned char *n, int n_size,
 		const unsigned char *v, int v_size)
 {
-	GString *gstr;
-
-	gstr = g_string_sized_new(n_size + v_size + 2);
+	GString *gstr = g_string_sized_new(n_size + v_size + 2);
 	g_string_append_len(gstr, (gchar*)n, n_size);
 	g_string_append_c(gstr, '=');
 	g_string_append_len(gstr, (gchar*)v, v_size);
-
 	return g_string_free(gstr, FALSE);
 }
 
 static GError *
-__get_all_container_properties(struct sqlx_sqlite3_s *sq3, const container_id_t cid, GPtrArray *gpa)
+__get_all_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, GPtrArray *gpa)
 {
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
@@ -171,16 +161,13 @@ __get_all_container_properties(struct sqlx_sqlite3_s *sq3, const container_id_t 
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)
 		err = M1_SQLITE_GERROR(sq3->db, rc);
 	else {
-		(void) sqlite3_bind_blob(stmt, 1, cid, sizeof(container_id_t), NULL);
-		do {
-			rc = sqlite3_step(stmt);
-			if (rc == SQLITE_ROW) {
-				gchar *prop = __pack_property(
-						sqlite3_column_text(stmt, 0), sqlite3_column_bytes(stmt, 0),
-						sqlite3_column_text(stmt, 1), sqlite3_column_bytes(stmt, 1));
-				g_ptr_array_add(gpa, prop);
-			}
-		} while (rc == SQLITE_ROW);
+		(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
+		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+			gchar *prop = __pack_property(
+					sqlite3_column_text(stmt, 0), sqlite3_column_bytes(stmt, 0),
+					sqlite3_column_text(stmt, 1), sqlite3_column_bytes(stmt, 1));
+			g_ptr_array_add(gpa, prop);
+		}
 		if (rc != SQLITE_DONE && rc != SQLITE_OK)
 			err = M1_SQLITE_GERROR(sq3->db, rc);
 		sqlite3_finalize_debug(rc, stmt);
@@ -190,7 +177,7 @@ __get_all_container_properties(struct sqlx_sqlite3_s *sq3, const container_id_t 
 }
 
 static GError *
-__get_one_property(struct sqlx_sqlite3_s *sq3, const container_id_t cid, const gchar *name, GPtrArray *gpa)
+__get_one_property(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, const gchar *name, GPtrArray *gpa)
 {
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
@@ -204,18 +191,14 @@ __get_one_property(struct sqlx_sqlite3_s *sq3, const container_id_t cid, const g
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)
 		err = M1_SQLITE_GERROR(sq3->db, rc);
 	else {
-		(void) sqlite3_bind_blob(stmt, 1, cid, sizeof(container_id_t), NULL);
+		(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
 		(void) sqlite3_bind_text(stmt, 2, name, -1, NULL);
-
-		do {
-			rc = sqlite3_step(stmt);
-			if (rc == SQLITE_ROW) {
-				gchar *prop = __pack_property(
-						sqlite3_column_text(stmt, 0), sqlite3_column_bytes(stmt, 0),
-						sqlite3_column_text(stmt, 1), sqlite3_column_bytes(stmt, 1));
-				g_ptr_array_add(gpa, prop);
-			}
-		} while (rc == SQLITE_ROW);
+		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+			gchar *prop = __pack_property(
+					sqlite3_column_text(stmt, 0), sqlite3_column_bytes(stmt, 0),
+					sqlite3_column_text(stmt, 1), sqlite3_column_bytes(stmt, 1));
+			g_ptr_array_add(gpa, prop);
+		}
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)
 			err = M1_SQLITE_GERROR(sq3->db, rc);
 		sqlite3_finalize_debug(rc, stmt);
@@ -225,7 +208,7 @@ __get_one_property(struct sqlx_sqlite3_s *sq3, const container_id_t cid, const g
 }
 
 static GError *
-__get_container_properties(struct sqlx_sqlite3_s *sq3, const container_id_t cid, gchar **names, gchar ***result)
+__get_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, gchar **names, gchar ***result)
 {
 	GError *err = NULL;
 	GPtrArray *gpa;
@@ -233,11 +216,11 @@ __get_container_properties(struct sqlx_sqlite3_s *sq3, const container_id_t cid,
 	gpa = g_ptr_array_new();
 
 	if (!names || !*names)
-		err = __get_all_container_properties(sq3, cid, gpa);
+		err = __get_all_container_properties(sq3, url, gpa);
 	else {
 		gchar **p;
 		for (p=names; !err && *p ;p++)
-			err = __get_one_property(sq3, cid, *p, gpa);
+			err = __get_one_property(sq3, url, *p, gpa);
 	}
 
 	if (err) {
@@ -275,24 +258,21 @@ __check_property_format(gchar **strv)
 
 GError *
 meta1_backend_set_container_properties(struct meta1_backend_s *m1,
-		const container_id_t cid, gchar **props)
+		struct hc_url_s *url, gchar **props)
 {
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	EXTRA_ASSERT(m1 != NULL);
-	EXTRA_ASSERT(cid != NULL);
 	EXTRA_ASSERT(props != NULL);
-
+ 
+	GError *err;
 	if ((err = __check_property_format(props)) != NULL) {
 		g_prefix_error(&err, "Malformed properties: ");
 		return err;
 	}
 
-	err = _open_and_lock(m1, cid, M1V2_OPENBASE_MASTERONLY, &sq3);
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
-		if (!(err = __info_container(sq3, cid, NULL))) {
-			err = __set_container_properties(sq3, cid, props);
+		if (!(err = __info_container(sq3, url, NULL))) {
+			err = __set_container_properties(sq3, url, props);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
@@ -304,19 +284,15 @@ meta1_backend_set_container_properties(struct meta1_backend_s *m1,
 
 GError *
 meta1_backend_del_container_properties(struct meta1_backend_s *m1,
-		const container_id_t cid, gchar **names)
+		struct hc_url_s *url, gchar **names)
 {
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	EXTRA_ASSERT(m1 != NULL);
-	EXTRA_ASSERT(cid != NULL);
 	EXTRA_ASSERT(names != NULL);
 
-	err = _open_and_lock(m1, cid, M1V2_OPENBASE_MASTERONLY, &sq3);
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
-		if (!(err = __info_container(sq3, cid, NULL))) {
-			err = __del_container_properties(sq3, cid, names);
+		if (!(err = __info_container(sq3, url, NULL))) {
+			err = __del_container_properties(sq3, url, names);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
@@ -328,19 +304,15 @@ meta1_backend_del_container_properties(struct meta1_backend_s *m1,
 
 GError *
 meta1_backend_get_container_properties(struct meta1_backend_s *m1,
-		const container_id_t cid, gchar **names, gchar ***result)
+		struct hc_url_s *url, gchar **names, gchar ***result)
 {
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	EXTRA_ASSERT(m1 != NULL);
-	EXTRA_ASSERT(cid != NULL);
 	EXTRA_ASSERT(result != NULL);
 
-	err = _open_and_lock(m1, cid, M1V2_OPENBASE_MASTERSLAVE, &sq3);
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
 	if (!err) {
-		if (!(err = __info_container(sq3, cid, NULL))) {
-			err = __get_container_properties(sq3, cid, names, result);
+		if (!(err = __info_container(sq3, url, NULL))) {
+			err = __get_container_properties(sq3, url, names, result);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
@@ -349,3 +321,4 @@ meta1_backend_get_container_properties(struct meta1_backend_s *m1,
 
 	return err;
 }
+

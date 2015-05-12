@@ -21,10 +21,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define G_LOG_DOMAIN "rules-motor"
 #endif
 
+#include "motor.h"
 #include <grid_client.h>
 #include <integrity/lib/content_check.h>
 
-#include "motor.h"
 
 /****************************************************************
  * chunks compression/decompression functions

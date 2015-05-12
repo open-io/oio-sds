@@ -151,27 +151,27 @@ _check_chunk(const char *cid)
 }
 
 static status_t
-_get_container_user_properties(gs_grid_storage_t *hc, struct hc_url_s *url, container_id_t cid,
-                char ***props, gs_error_t **gserr)
+_get_container_user_properties(gs_grid_storage_t *hc, struct hc_url_s *url,
+		char ***props, gs_error_t **gserr)
 {
 	GError *gerr = NULL;
 	gboolean rc;
 	addr_info_t *m1 = NULL;
-	gs_container_t *c = NULL;
 	GSList *excluded = NULL;
-	c = gs_get_container(hc, hc_url_get(url, HCURL_REFERENCE), 0, gserr);
+
+	gs_container_t *c = gs_get_container(hc, hc_url_get(url, HCURL_USER), 0, gserr);
 	if(!c)
 		return 0;
 	for (;;) {
 
-		m1 = gs_resolve_meta1v2(hc, cid, c->info.name, 1, &excluded, &gerr);
+		m1 = gs_resolve_meta1v2(hc, hc_url_get_id(url), c->info.name, 1, &excluded, &gerr);
 
 		if (!m1) {
-			*gserr = gs_error_new(CODE_INTERNAL_ERROR, "No META1 found for [%s]", hc_url_get(url, HCURL_REFERENCE));
+			*gserr = gs_error_new(CODE_INTERNAL_ERROR, "No META1 found for [%s]", hc_url_get(url, HCURL_USER));
 			break;
 		}
 
-		rc = meta1v2_remote_reference_get_property(m1, &gerr, hc_url_get(url, HCURL_NS), cid, NULL, props, -1, -1);
+		rc = meta1v2_remote_reference_get_property (m1, &gerr, url, NULL, props);
 
 		if (!rc) {
 			excluded = g_slist_prepend(excluded, m1);
@@ -1056,7 +1056,7 @@ loc_context_init(gs_grid_storage_t *hc, struct hc_url_s *url, gs_error_t **p_e)
 {
 	gs_error_t *e = NULL;
 	struct loc_context_s *ctx = NULL;
-	char *ref_name = g_strdup(hc_url_get(url, HCURL_REFERENCE));
+	char *ref_name = g_strdup(hc_url_get(url, HCURL_USER));
 
 	if(!url)
 		return NULL;
@@ -1072,7 +1072,7 @@ loc_context_init(gs_grid_storage_t *hc, struct hc_url_s *url, gs_error_t **p_e)
 		GRID_DEBUG("Considering %s is a hexadecimal container id\n", ref_name);
 		ctx->loc = gs_locate_container_by_hexid(hc, ref_name, &e);
 		if (ctx->loc)
-			hc_url_set(url, HCURL_REFERENCE, ctx->loc->container_name);
+			hc_url_set(url, HCURL_USER, ctx->loc->container_name);
 	}
 	else {
 		GRID_DEBUG("Considering %s is a regular container id\n", ref_name);
@@ -1105,7 +1105,7 @@ loc_context_init(gs_grid_storage_t *hc, struct hc_url_s *url, gs_error_t **p_e)
 		goto label_error;
 	}
 
-	if (!_get_container_user_properties(hc, url, cid, &ctx->container_props, &e)) {
+	if (!_get_container_user_properties(hc, url, &ctx->container_props, &e)) {
 		gs_error_set(&e, e ? e->code : 0, "Container properties not found : %s\n",
 				gs_error_get_message(e));
 		goto label_error_close_cnx;

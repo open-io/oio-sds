@@ -334,15 +334,13 @@ do_query(struct gridd_client_s *client, struct meta1_service_url_s *surl,
 	gint rc = 0;
 	GError *err;
 	GByteArray *req;
-	struct sqlx_name_s name;
+	struct sqlx_name_mutable_s name;
 
 	GRID_DEBUG("Querying [%s]", Q);
 
-	name.ns = hc_url_get(url, HCURL_NS);
-	name.base = g_strdup_printf("%"G_GINT64_FORMAT"@%s", surl->seq, hc_url_get(url, HCURL_HEXID));
-	name.type = type;
+	sqlx_name_fill (&name, url, NAME_SRVTYPE_SQLX, surl->seq);
 
-	req = sqlx_pack_QUERY_single(&name, Q, flag_auto_link);
+	req = sqlx_pack_QUERY_single(sqlx_name_mutable_to_const(&name), Q, flag_auto_link);
 	err = gridd_client_request(client, req, NULL, _on_reply);
 	g_byte_array_unref(req);
 
@@ -365,6 +363,7 @@ do_query(struct gridd_client_s *client, struct meta1_service_url_s *surl,
 		}
 	}
 
+	sqlx_name_clean (&name);
 	return rc;
 }
 
@@ -399,23 +398,18 @@ do_destroy2(gs_grid_storage_t *hc, struct meta1_service_url_s *srv_url)
 {
 	gint rc = 1;
 	gs_error_t *hc_err = NULL;
-
 	const gchar *target = srv_url->host;
-	gchar *base = g_strdup_printf("%"G_GINT64_FORMAT"@%s", srv_url->seq, hc_url_get(url, HCURL_HEXID));
-	struct sqlx_name_s name = {
-		.base = base,
-		.type = srv_url->srvtype,
-		.ns = gs_get_full_vns(hc),
-	};
-	GError *err = sqlx_remote_execute_DESTROY(target, NULL, &name, FALSE);
-	g_free0 (base);
+	struct sqlx_name_mutable_s name;
+
+	sqlx_name_fill (&name, url, NAME_SRVTYPE_SQLX, srv_url->seq);
+	GError *err = sqlx_remote_execute_DESTROY(target, NULL, sqlx_name_mutable_to_const(&name), FALSE);
 
 	if (err != NULL) {
 		GRID_ERROR("Failed to destroy database: %s", err->message);
 		rc = 0;
 		goto end_label;
 	}
-	hc_err = hc_unlink_reference_service(hc, hc_url_get(url, HCURL_REFERENCE), type);
+	hc_err = hc_unlink_reference_service(hc, hc_url_get(url, HCURL_USER), type);
 	if (hc_err) {
 		GRID_ERROR("Failed to unlink service: %s", hc_err->msg);
 		rc = 0;
@@ -424,6 +418,7 @@ do_destroy2(gs_grid_storage_t *hc, struct meta1_service_url_s *srv_url)
 end_label:
 	g_clear_error(&err);
 	gs_error_free(hc_err);
+	sqlx_name_clean (&name);
 	return rc;
 }
 
@@ -444,15 +439,12 @@ cli_action(void)
 	}
 
 	/* Use the client to get a sqlx service */
-	GRID_DEBUG("Locating NS[%s] CNAME[%s] CID[%s]",
-			hc_url_get(url, HCURL_NS),
-			hc_url_get(url, HCURL_REFERENCE),
+	GRID_DEBUG("Locating [%s] CID[%s]", hc_url_get(url, HCURL_WHOLE),
 			hc_url_get(url, HCURL_HEXID));
 
 retry:
 	strfreev(&srvurlv);
-	hc_error = hc_list_reference_services(hc,
-			hc_url_get(url, HCURL_REFERENCE), type, &srvurlv);
+	hc_error = hc_list_reference_services(hc, hc_url_get(url, HCURL_USER), type, &srvurlv);
 	if (hc_error != NULL) {
 		if (hc_error->code != CODE_CONTAINER_NOTFOUND || !flag_auto_ref) {
 			g_printerr("Service not located: (%d) %s\n", hc_error->code, hc_error->msg);
@@ -460,9 +452,8 @@ retry:
 		} else {
 			gs_error_free(hc_error);
 			hc_error = NULL;
-			g_printerr("Reference [%s/%s] does not exists, creating it\n",
-					hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_REFERENCE));
-			hc_error = hc_create_reference(hc, hc_url_get(url, HCURL_REFERENCE));
+			g_printerr("Reference [%s] does not exists, creating it\n", hc_url_get(url, HCURL_WHOLE));
+			hc_error = hc_create_reference(hc, hc_url_get(url, HCURL_USER));
 			if (hc_error != NULL) {
 				g_printerr("Failed to create reference: (%d) %s\n",
 						hc_error->code, hc_error->msg);
@@ -480,8 +471,7 @@ retry:
 			goto exit;
 		}
 
-		hc_error = hc_link_service_to_reference(hc,
-				hc_url_get(url, HCURL_REFERENCE), type, &srvurlv);
+		hc_error = hc_link_service_to_reference(hc, hc_url_get(url, HCURL_USER), type, &srvurlv);
 		if (!hc_error) {
 			g_printerr("No service affected for type [%s],"
 					" allocated [%s]\n", type, srvurlv[0]);
@@ -586,7 +576,7 @@ cli_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	if (!(url = hc_url_init(argv[0]))) {
+	if (!(url = hc_url_oldinit(argv[0]))) {
 		g_printerr("Invalid hc URL (%s)\n", strerror(errno));
 		return FALSE;
 	}
