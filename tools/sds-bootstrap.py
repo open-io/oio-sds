@@ -368,14 +368,6 @@ env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 """
 
 template_gridinit_ns = """
-[service.${NS}-gridevents]
-group=${NS},localhost,events
-on_die=respawn
-enabled=false
-start_at_boot=false
-command=${EXE_PREFIX}-cluster-agent -s SDS,${NS},events--child-evt=${NS} ${CFGDIR}/agent.conf
-env.PATH=${PATH}
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 
 [service.${NS}-conscience]
 group=${NS},localhost,conscience
@@ -388,11 +380,11 @@ env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 
 [service.${NS}-account-agent]
-group=${NS},localhost,account-agent
+group=${NS},localhost,events
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-account-agent.py ${NS}
+command=${EXE_PREFIX}-event-agent ${CFGDIR}/events-agent.conf
 env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 """
@@ -429,7 +421,13 @@ template_local_ns = """
 zookeeper=${IP}:2181
 conscience=${IP}:${PORT_CS}
 endpoint=${IP}:${PORT_ENDPOINT}
-account-agent=ipc://${RUNDIR}/account-agent.sock
+account-agent=ipc://${RUNDIR}/event-agent.sock
+"""
+
+template_events_agent = """
+[eventagent]
+bind_addr = ipc://${RUNDIR}/event-agent.sock
+workers = 5
 """
 
 HOME = str(os.environ['HOME'])
@@ -606,6 +604,11 @@ def generate (ns, ip, options={}):
 	env['PORT'] = port_account
 	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
 		tpl = Template(template_account_flask_gridinit)
+		f.write(tpl.safe_substitute(env))
+
+	# Events agent configuration
+	with open(CFGDIR + '/' + 'events-agent.conf', 'w+') as f:
+		tpl = Template(template_events_agent)
 		f.write(tpl.safe_substitute(env))
 
 	# Central agent configuration
