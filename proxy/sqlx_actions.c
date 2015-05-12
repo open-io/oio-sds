@@ -65,7 +65,7 @@ static enum http_rc_e
 _sqlx_action_noreturn (struct req_args_s *args,
 		GByteArray* (*reqbuilder) (struct sqlx_name_s *))
 {
-	gboolean _on_status_reply (gpointer ctx, struct message_s *reply) {
+	gboolean _on_status_reply (gpointer ctx, MESSAGE reply) {
 		*((gchar**)ctx) = message_extract_string_copy(reply, "MSG");
 		return TRUE;
 	}
@@ -155,7 +155,7 @@ _sqlx_action_bodyv (struct req_args_s *args,
 		GByteArray* (*reqbuilder) (struct sqlx_name_s *),
 		GByteArray ***out)
 {
-	gboolean _on_reply (gpointer ctx, struct message_s *reply) {
+	gboolean _on_reply (gpointer ctx, MESSAGE reply) {
 		GByteArray **pgba = ctx;
 		message_extract_body_gba (reply, pgba);
 		return TRUE;

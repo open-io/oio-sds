@@ -19,6 +19,9 @@
 from string import Template
 import os, errno
 
+#env.G_DEBUG=fatal_warnings
+#env.G_SLICE=debug-blocks
+
 template_flask_gridinit = """
 [service.${NS}-flask]
 group=${NS},localhost,flask

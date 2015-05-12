@@ -264,7 +264,7 @@ _dump_table_json(struct Table *table)
 }
 
 static gboolean
-_on_reply(gpointer u, struct message_s *reply)
+_on_reply(gpointer u, MESSAGE reply)
 {
 	int i;
 	GError *err = NULL;

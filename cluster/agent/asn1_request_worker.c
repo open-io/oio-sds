@@ -306,13 +306,10 @@ write_request(worker_t *worker, GError **error)
 			gsize ds = 0;
 			if (!message_marshall(req, &(data->buffer), &ds, error)) {
 				GSETERROR(error, "Failed to marshall asn1 message");
-				message_destroy(req);
 				goto error_marshall_message;
 			}
 			data->buffer_size = ds;
 		} while (0);
-
-		message_destroy(req);
 
 	} else if (data->done >= data->buffer_size) {
 
@@ -338,12 +335,15 @@ write_request(worker_t *worker, GError **error)
 		data->done += wl;
 	}
 
+	message_destroy(req);
+	req = NULL;
 	return(1);
 
 error_sched:
 error_write:
 error_marshall_message:
 	message_destroy(req);
+	req = NULL;
 	asn1_session->error_handler(worker, error);
 	free_asn1_worker( worker, 0 );
 	return 0;
@@ -404,7 +404,6 @@ read_response(worker_t *worker, GError **error)
 	MESSAGE resp = NULL;
 	gint status = CODE_INTERNAL_ERROR;
 	gchar *msg = NULL;
-	gsize msg_size;
 
 	TRACE_POSITION();
 
@@ -430,11 +429,8 @@ read_response(worker_t *worker, GError **error)
 
 		TRACE("Data available : (done=%d) >= (size=%d)", data->done, data->buffer_size);
 
-		resp = message_create();
-
-		msg_size = data->buffer_size;
-
-		if (!message_unmarshall(resp, data->buffer, &msg_size, error)) {
+		resp = message_unmarshall(data->buffer, data->buffer_size, error);
+		if (!resp) {
 			GSETERROR(error, "Failed to unmarshall response");
 			goto error_unmarshall;
 		}
@@ -481,6 +477,7 @@ read_response(worker_t *worker, GError **error)
 
 		g_free(msg);
 		message_destroy(resp);
+		resp = NULL;
 
 		if (status==CODE_FINAL_OK || !rc) {
 			TRACE("Reply sequence terminated (status=%d rc=%d)", status, rc);
@@ -513,6 +510,7 @@ error_status:
 error_decode:
 error_unmarshall:
 	message_destroy(resp);
+	resp = NULL;
 error_read:
 	asn1_session->error_handler(worker, error);
 	free_asn1_worker( worker, 0 );

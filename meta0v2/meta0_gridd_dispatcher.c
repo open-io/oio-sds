@@ -60,7 +60,7 @@ urlv_to_tree(const guint8 *prefix, gchar **urlv)
 }
 
 static GError *
-extract_prefix(struct message_s *msg, const gchar *n,
+extract_prefix(MESSAGE msg, const gchar *n,
 		gboolean mandatory, guint8 *prefix)
 {
 	void *f;
@@ -81,7 +81,7 @@ extract_prefix(struct message_s *msg, const gchar *n,
 }
 
 static gboolean
-extract_nocheck(struct message_s *msg)
+extract_nocheck(MESSAGE msg)
 {
 	void *f;
         gsize f_size;

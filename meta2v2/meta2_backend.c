@@ -968,7 +968,7 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 	append_int64 (gs, "ctime", m2db_get_ctime(sq3));
 	append_int64 (gs, "bytes-count", m2db_get_size(sq3));
 	append_int64 (gs, "object-count", 0);
-	g_string_append_c (gs, '}}');
+	g_string_append (gs, "}}");
 
 	return g_string_free(gs, FALSE);
 }
