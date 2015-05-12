@@ -861,11 +861,11 @@ sqlx_enable_notifier (struct sqlx_service_s *ss)
 		zmq_setsockopt (SRV.notify.zagent, ZMQ_SNDHWM, &opt, sizeof(opt));
 		zmq_setsockopt (SRV.notify.zagent, ZMQ_RCVHWM, &opt, sizeof(opt));
 
-		gchar *url =  gridcluster_get_accountagent (SRV.ns_name);
+		gchar *url =  gridcluster_get_eventagent (SRV.ns_name);
 		if (url) {
 			if (0 > (rc = zmq_connect (SRV.notify.zagent, url))) {
 				err = zmq_errno ();
-				GRID_WARN("ZMQ connection error (account-agent) : (%d) %s",
+				GRID_WARN("ZMQ connection error (event-agent) : (%d) %s",
 						err, zmq_strerror (err));
 			}
 			g_free (url);

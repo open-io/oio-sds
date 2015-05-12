@@ -39,7 +39,7 @@ License along with this library.
 #define GCLUSTER_CFG_CONSCIENCE   "conscience"
 #define GCLUSTER_CFG_ZOOKEEPER    "zookeeper"
 #define GCLUSTER_CFG_AGENT        "agent"
-#define GCLUSTER_CFG_ACCOUNTAGENT "account-agent"
+#define GCLUSTER_CFG_ACCOUNTAGENT "event-agent"
 #define GCLUSTER_CFG_ENDPOINT     "endpoint"
 
 #ifndef GCLUSTER_ETC_DIR
@@ -363,7 +363,7 @@ gchar* gridcluster_get_config(const gchar *ns, const gchar *what);
 
 #define gridcluster_get_conscience(ns)   gridcluster_get_config((ns), GCLUSTER_CFG_CONSCIENCE)
 #define gridcluster_get_zookeeper(ns)    gridcluster_get_config((ns), GCLUSTER_CFG_ZOOKEEPER)
-#define gridcluster_get_accountagent(ns) gridcluster_get_config((ns), GCLUSTER_CFG_ACCOUNTAGENT)
+#define gridcluster_get_eventagent(ns) gridcluster_get_config((ns), GCLUSTER_CFG_ACCOUNTAGENT)
 #define gridcluster_get_endpoint(ns)     gridcluster_get_config((ns), GCLUSTER_CFG_ENDPOINT)
 
 static inline gchar *

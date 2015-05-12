@@ -418,10 +418,10 @@ agent=${RUNDIR}/agent.sock
 
 template_local_ns = """
 [${NS}]
-zookeeper=${IP}:2181
+${NOZK}zookeeper=${IP}:2181
 conscience=${IP}:${PORT_CS}
 endpoint=${IP}:${PORT_ENDPOINT}
-account-agent=ipc://${RUNDIR}/event-agent.sock
+event-agent=ipc://${RUNDIR}/event-agent.sock
 """
 
 template_events_agent = """
@@ -527,6 +527,8 @@ def generate (ns, ip, options={}):
 		f.write(tpl.safe_substitute(env))
 		env['PORT_CS'] = port_cs
 		env['PORT_ENDPOINT'] = port_endpoint
+		if options.NO_ZOOKEEPER is not None:
+			env['NOZK'] = '#'
 		tpl = Template(template_local_ns)
 		f.write(tpl.safe_substitute(env))
 
@@ -633,6 +635,8 @@ def main ():
 	parser.add_option("-S", "--stgpol",
 			action="store", type="string", dest="M2_STGPOL",
 			help="How many replicas for META2")
+
+	parser.add_option("--no-zookeeper", action="store_true", dest="NO_ZOOKEEPER")
 
 	parser.add_option("--no-meta0", action="store_true", dest="NO_META0")
 	parser.add_option("--no-meta1", action="store_true", dest="NO_META1")
