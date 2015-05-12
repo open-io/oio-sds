@@ -2279,7 +2279,7 @@ sqlx_dispatch_LEANIFY(struct gridd_reply_ctx_s *reply,
 /* ------------------------------------------------------------------------- */
 
 static GError*
-_extract_params(struct message_s *msg, TableSequence_t **params)
+_extract_params(MESSAGE msg, TableSequence_t **params)
 {
 	gint rc;
 	void *b = NULL;

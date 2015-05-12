@@ -45,7 +45,8 @@ gint Name (GSList **l, const void *s, gsize *sSize, GError **err)
 #define DECLARE_BODY_MANAGER(Name) \
 gint Name (GError **err, gpointer udata, gint code, guint8 *body, gsize bodySize)
 
-typedef struct message_s *MESSAGE;
+typedef struct Message Message_t;
+typedef Message_t* MESSAGE;
 
 /* ------------------------------------------------------------------------- */
 
@@ -303,7 +304,7 @@ gint message_marshall(MESSAGE m, void **s, gsize * sSize, GError ** error);
 GByteArray* message_marshall_gba(MESSAGE m, GError **err);
 
 /** Allocates a new message and Unserializes the given buffer. */
-gint message_unmarshall(MESSAGE m, void *s, gsize * sSize, GError ** error);
+MESSAGE message_unmarshall(void *s, gsize sSize, GError ** error);
 
 struct Message;
 
@@ -312,49 +313,49 @@ GByteArray* message_marshall_gba_and_clean(MESSAGE m);
 
 typedef gint (body_decoder_f)(GSList **res, const void *b, gsize *bs, GError **err);
 
-GError* message_extract_cid(struct message_s *msg, const gchar *n,
+GError* message_extract_cid(MESSAGE msg, const gchar *n,
 		container_id_t *cid);
 
-GError* message_extract_prefix(struct message_s *msg, const gchar *n,
+GError* message_extract_prefix(MESSAGE msg, const gchar *n,
 		guint8 *d, gsize *dsize);
 
-gboolean message_extract_flag(struct message_s *m, const gchar *n, gboolean d);
+gboolean message_extract_flag(MESSAGE m, const gchar *n, gboolean d);
 
-GError* message_extract_flags32(struct message_s *msg, const gchar *n,
+GError* message_extract_flags32(MESSAGE msg, const gchar *n,
 		gboolean mandatory, guint32 *flags);
 
-GError* message_extract_string(struct message_s *msg, const gchar *n, gchar *dst,
+GError* message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
 		gsize dst_size);
 
-gchar* message_extract_string_copy(struct message_s *msg, const gchar *n);
+gchar* message_extract_string_copy(MESSAGE msg, const gchar *n);
 
-GError* message_extract_strint64(struct message_s *msg, const gchar *n,
+GError* message_extract_strint64(MESSAGE msg, const gchar *n,
 		gint64 *i64);
 
-GError* message_extract_struint(struct message_s *msg, const gchar *n,
+GError* message_extract_struint(MESSAGE msg, const gchar *n,
 		guint *u);
 
-GError* message_extract_boolean(struct message_s *msg,
+GError* message_extract_boolean(MESSAGE msg,
 		const gchar *n, gboolean mandatory, gboolean *v);
 
-GError* message_extract_header_encoded(struct message_s *msg,
+GError* message_extract_header_encoded(MESSAGE msg,
 		const gchar *n, gboolean mandatory,
 		GSList **result, body_decoder_f decoder);
 
-GError* message_extract_header_gba(struct message_s *msg, const gchar *n,
+GError* message_extract_header_gba(MESSAGE msg, const gchar *n,
 		gboolean mandatory, GByteArray **result);
 
-GError* message_extract_body_gba(struct message_s *msg, GByteArray **result);
+GError* message_extract_body_gba(MESSAGE msg, GByteArray **result);
 
 /** Upon success, ensures result will be a printable string with a trailing \0 */
-GError* message_extract_body_string(struct message_s *msg, gchar **result);
+GError* message_extract_body_string(MESSAGE msg, gchar **result);
 
-GError* message_extract_body_strv(struct message_s *msg, gchar ***result);
+GError* message_extract_body_strv(MESSAGE msg, gchar ***result);
 
 GError* metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
 		body_decoder_f decoder);
 
-GError* message_extract_body_encoded(struct message_s *msg, gboolean mandatory,
+GError* message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
 		GSList **result, body_decoder_f decoder);
 
 struct hc_url_s * message_extract_url (MESSAGE m);

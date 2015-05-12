@@ -178,17 +178,8 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 	if (sq3->admin)
 		g_tree_destroy(sq3->admin);
 
-	memset(sq3, 0, sizeof(*sq3));
 	sq3->bd = -1;
-	g_free(sq3);
-}
-
-static void
-__clean_schema(gpointer v)
-{
-	if (!v)
-		return;
-	g_byte_array_free((GByteArray*)v, TRUE);
+	g_slice_free(struct sqlx_sqlite3_s, sq3);
 }
 
 static GError*
@@ -382,7 +373,7 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 
 	repo->schemas = g_hash_table_new_full(
 			(GHashFunc)hashstr_hash, (GEqualFunc)hashstr_equal,
-			g_free, __clean_schema);
+			g_free, metautils_gba_unref);
 
 	repo->flag_autocreate = !cfg ? TRUE : BOOL(cfg->flags & SQLX_REPO_AUTOCREATE);
 	repo->flag_autovacuum = !cfg ? FALSE : BOOL(cfg->flags & SQLX_REPO_VACUUM);
@@ -901,7 +892,7 @@ retry:
 	sqlx_exec(handle, "PRAGMA foreign_keys = OFF");
 	sqlx_exec(handle, "BEGIN");
 
-	sq3 = g_malloc0(sizeof(*sq3));
+	sq3 = g_slice_new0(struct sqlx_sqlite3_s);
 	sq3->db = handle;
 	sq3->bd = -1;
 	sq3->repo = args->repo;
@@ -1009,9 +1000,7 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 				break;
 		}
 
-		if (url)
-			g_free(url);
-		url = NULL;
+		g_free0(url);
 	}
 
 	if (!err) {
@@ -1245,8 +1234,7 @@ sqlx_repository_status_base(sqlx_repository_t *repo, struct sqlx_name_s *n)
 			break;
 	}
 
-	if (url)
-		g_free(url);
+	g_free0(url);
 	return err;
 }
 

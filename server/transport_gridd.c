@@ -72,7 +72,7 @@ struct req_ctx_s
 {
 	struct timespec tv_start, tv_parsed, tv_end;
 
-	struct message_s *request;
+	MESSAGE request;
 	struct network_client_s *client;
 	struct transport_client_context_s *clt_ctx;
 	struct network_transport_s *transport;
@@ -282,7 +282,7 @@ _l4v_size(GByteArray *gba)
 }
 
 static struct hashstr_s *
-_request_get_name(struct message_s *req)
+_request_get_name(MESSAGE req)
 {
 	void *name;
 	gsize name_len;
@@ -563,7 +563,7 @@ _notify_request(struct req_ctx_s *ctx,
 }
 
 static gboolean
-_reply_message(struct network_client_s *clt, struct message_s *reply)
+_reply_message(struct network_client_s *clt, MESSAGE reply)
 {
 	GByteArray *encoded = message_marshall_gba_and_clean(reply);
 	network_client_send_slab(clt, data_slab_make_gba(encoded));
@@ -629,7 +629,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		body = b;
 	}
 	void _send_reply(gint code, gchar *msg) {
-		struct message_s *answer = NULL;
+		MESSAGE answer = NULL;
 
 		EXTRA_ASSERT(!req_ctx->final_sent);
 		GRID_DEBUG("fd=%d REPLY code=%d message=%s", req_ctx->client->fd, code, msg);
@@ -754,7 +754,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 }
 
 static gchar *
-_request_get_cid (struct message_s *request)
+_request_get_cid (MESSAGE request)
 {
 	container_id_t cid;
 	gchar strcid[STRLEN_CONTAINERID];
@@ -774,13 +774,11 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	struct req_ctx_s req_ctx;
 	gboolean rc = FALSE;
 	GError *err = NULL;
-	gsize offset;
 
 	EXTRA_ASSERT(gba != NULL);
 	EXTRA_ASSERT(client != NULL);
 	memset(&req_ctx, 0, sizeof(req_ctx));
 
-	MESSAGE request = message_create();
 	req_ctx.uid = NULL;
 	req_ctx.subject = NULL;
 	req_ctx.final_sent = FALSE;
@@ -789,14 +787,13 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	req_ctx.clt_ctx = req_ctx.transport->client_context;
 	req_ctx.disp = req_ctx.clt_ctx->dispatcher;
 
-	offset = gba->len;
-	int asn1_rc = message_unmarshall(request, gba->data, &offset, &err);
+	MESSAGE request = message_unmarshall(gba->data, gba->len, &err);
 
 	// take the encoding into account
 	memcpy(&req_ctx.tv_start, &client->time.evt_in, sizeof(req_ctx.tv_start));
 	network_server_now(&req_ctx.tv_parsed);
 
-	if (!asn1_rc) {
+	if (!request) {
 		struct log_item_s item;
 		item.req_ctx = &req_ctx;
 		item.code = 400;

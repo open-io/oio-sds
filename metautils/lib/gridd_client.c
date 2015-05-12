@@ -45,7 +45,7 @@ License along with this library.
 # define URL_MAXLEN 32
 #endif
 
-#define EVENT_BUFFER_SIZE 4096
+#define EVENT_BUFFER_SIZE 2048
 
 enum client_step_e
 {
@@ -338,19 +338,13 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 static GError *
 _client_manage_reply_data(struct gridd_client_s *client)
 {
-	gsize s = 0;
 	GError *err = NULL;
-
-	s = client->reply->len;
-
-	MESSAGE reply = message_create();
-	if (!message_unmarshall(reply, client->reply->data, &s, &err)) {
+	MESSAGE reply = message_unmarshall(client->reply->data,
+			client->reply->len, &err);
+	if (!reply)
 		g_prefix_error(&err, "Decoding error: ");
-		message_destroy(reply);
-		return err;
-	}
-
-	err = _client_manage_reply(client, reply);
+	else
+		err = _client_manage_reply(client, reply);
 	message_destroy(reply);
 	return err;
 }
@@ -465,11 +459,11 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 static GError *
 _client_manage_event(struct gridd_client_s *client)
 {
-	guint8 *d = g_malloc(EVENT_BUFFER_SIZE);
+	guint8 *d = g_slice_alloc(EVENT_BUFFER_SIZE);
 	if (!d)
 		return NEWERROR(ENOMEM, "Memory allocation failure");
 	GError *err = _client_manage_event_in_buffer(client, d, EVENT_BUFFER_SIZE);
-	g_free(d);
+	g_slice_free1 (EVENT_BUFFER_SIZE, d);
 	return err;
 }
 
@@ -585,7 +579,7 @@ _client_free(struct gridd_client_s *client)
 		g_string_free(client->past_url, TRUE);
 	memset(client, 0, sizeof(*client));
 	client->fd = -1;
-	g_free(client);
+	g_slice_free (struct gridd_client_s, client);
 }
 
 static void
@@ -894,7 +888,7 @@ _factory_create_client (struct gridd_client_factory_s *factory)
 struct gridd_client_s *
 gridd_client_create_empty(void)
 {
-	struct gridd_client_s *client = g_malloc0(sizeof(*client));
+	struct gridd_client_s *client = g_slice_new0(struct gridd_client_s);
 	if (unlikely(NULL == client))
 		return NULL;
 

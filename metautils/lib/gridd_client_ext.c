@@ -346,7 +346,7 @@ GError *
 gridd_client_exec4 (const gchar *to, gdouble timeout, GByteArray *req,
 		GByteArray ***out)
 {
-	gboolean _cb (GPtrArray *tmp, struct message_s *reply) {
+	gboolean _cb (GPtrArray *tmp, MESSAGE reply) {
 		GByteArray *body = NULL;
 		GError *e = message_extract_body_gba(reply, &body);
 		if (e) {
@@ -387,7 +387,7 @@ GError *
 gridd_client_exec_and_concat (const gchar *to, gdouble timeout, GByteArray *req,
 		GByteArray **out)
 {
-	gboolean _cb (GByteArray *tmp, struct message_s *reply) {
+	gboolean _cb (GByteArray *tmp, MESSAGE reply) {
 		void *b = NULL;
 		gsize bsize = 0;
 		GError *err = NULL;

@@ -25,12 +25,8 @@ License along with this library.
 #include <string.h>
 #include <stdio.h>
 
-#include "metautils_loggers.h"
-#include "hc_url.h"
-#include "common_main.h"
+#include "metautils.h"
 #include "test_addr.h"
-#include "gridd_client.h"
-#include "gridd_client_ext.h"
 
 static GByteArray *
 _generate_request(void)

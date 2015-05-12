@@ -1743,7 +1743,7 @@ on_end_GETVERS(struct event_client_s *mc)
 }
 
 static gboolean
-on_reply_GETVERS(gpointer ctx, struct message_s *reply)
+on_reply_GETVERS(gpointer ctx, MESSAGE reply)
 {
 	struct event_client_s *ec;
 	struct udata_GETVERS_s *udata;

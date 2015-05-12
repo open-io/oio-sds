@@ -32,11 +32,6 @@ License along with this library.
 #include "./Parameter.h"
 #include "./Message.h"
 
-struct message_s
-{
-	Message_t *asnMsg;
-};
-
 static void
 __octetString_array_free(Parameter_t * p)
 {
@@ -53,73 +48,26 @@ __octetString_array_free(Parameter_t * p)
 	g_free(p);
 }
 
-static void
-_clean_asn_message(MESSAGE m)
-{
-	if (!m || !m->asnMsg)
-		return ;
-
-	/*quick parameters */
-	if (m->asnMsg->id != NULL) {
-		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->asnMsg->id);
-		m->asnMsg->id = NULL;
-	}
-
-	if (m->asnMsg->body != NULL) {
-		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->asnMsg->body);
-		m->asnMsg->body = NULL;
-	}
-
-	if (m->asnMsg->version != NULL) {
-		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->asnMsg->version);
-		m->asnMsg->version = NULL;
-	}
-
-	if (m->asnMsg->name != NULL) {
-		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->asnMsg->name);
-		m->asnMsg->name = NULL;
-	}
-
-	m->asnMsg->content.list.free = __octetString_array_free;
-	asn_set_empty(&(m->asnMsg->content.list));
-
-	memset(m->asnMsg, 0x00, sizeof(Message_t));
-	g_free(m->asnMsg);
-
-	m->asnMsg = NULL;
-}
-
-static gint
-_alloc_asn_message(MESSAGE m, GError ** err)
-{
-	if (!m) {
-		GSETERROR(err, "Invalid parameter");
-		return 0;
-	}
-	m->asnMsg = g_malloc0(sizeof(Message_t));
-	return 1;
-}
-
 static gint
 __getParameter(MESSAGE m, enum message_param_e mp, OCTET_STRING_t ** os)
 {
-	if (!m || !m->asnMsg || !os)
+	if (!m || !os)
 		return 0;
 
 	*os = NULL;
 
 	switch (mp) {
 	case MP_ID:
-		*os = m->asnMsg->id;
+		*os = m->id;
 		return 1;
 	case MP_NAME:
-		*os = m->asnMsg->name;
+		*os = m->name;
 		return 1;
 	case MP_VERSION:
-		*os = m->asnMsg->version;
+		*os = m->version;
 		return 1;
 	case MP_BODY:
-		*os = m->asnMsg->body;
+		*os = m->body;
 		return 1;
 	}
 
@@ -130,7 +78,7 @@ MESSAGE
 message_create(void)
 {
 	const char *id = gridd_get_reqid ();
-	MESSAGE result = g_malloc0(sizeof(struct message_s));
+	MESSAGE result = g_malloc0(sizeof(Message_t));
 	if (id)
 		message_set_ID (result, id, strlen(id), NULL);
 	return result;
@@ -148,10 +96,21 @@ message_create_named (const char *name)
 void
 message_destroy(MESSAGE m)
 {
-	if (unlikely(NULL == m))
-		return;
-	_clean_asn_message(m);
-	m->asnMsg = NULL;
+	if (!m)
+		return ;
+
+	if (m->id != NULL)
+		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->id);
+	if (m->body != NULL)
+		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->body);
+	if (m->version != NULL)
+		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->version);
+	if (m->name != NULL)
+		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->name);
+
+	m->content.list.free = __octetString_array_free;
+	asn_set_empty(&(m->content.list));
+
 	g_free(m);
 }
 
@@ -175,9 +134,6 @@ message_marshall_gba(MESSAGE m, GError **err)
 		return NULL;
 	}
 
-	if (!m->asnMsg)
-		_alloc_asn_message(m, err);
-
 	/*set an ID if it is not present */
 	if (0 == message_has_ID(m, NULL)) {
 		const char *reqid = gridd_get_reqid ();
@@ -191,7 +147,7 @@ message_marshall_gba(MESSAGE m, GError **err)
 	guint32 u32 = 0;
 	result = g_byte_array_sized_new(256);
 	g_byte_array_append(result, (guint8*)&u32, sizeof(u32));
-	encRet = der_encode(&asn_DEF_Message, m->asnMsg, write_gba, result);
+	encRet = der_encode(&asn_DEF_Message, m, write_gba, result);
 
 	if (encRet.encoded < 0) {
 		g_byte_array_free(result, TRUE);
@@ -230,73 +186,59 @@ message_marshall(MESSAGE m, void **s, gsize * sSize, GError ** error)
 	return 1;
 }
 
-gint
-message_unmarshall(MESSAGE m, void *s, gsize * sSize, GError ** error)
+MESSAGE
+message_unmarshall(void *s, gsize sSize, GError ** error)
 {
+	MESSAGE m = NULL;
 	asn_dec_rval_t decRet;
 	asn_codec_ctx_t codecCtx;
 
 	guint8 *rawS = NULL;
 	gsize rawSSize = 0;
 
-	if (!m || !s || !sSize || *sSize < 4) {
-		GSETERROR(error, "Invalid parameter (m=%p s=%p sSize=%p/%i)", m, s, sSize, sSize ? *sSize : ~0U);
-		return 0;
+	if (!s || sSize < 4) {
+		GSETERROR(error, "Invalid parameter");
+		return NULL;
 	}
-
-	_clean_asn_message(m);
-
-	/*extract the real buffer from the L4V capsule */
-	if (!l4v_extract(s, *sSize, (void *) &rawS, &rawSSize)) {
+	if (!l4v_extract(s, sSize, (void *) &rawS, &rawSSize)) {
 		GSETERROR(error, "Cannot extract the L4V encapsulated data");
-		return 0;
+		return NULL;
 	}
 
-	/*tries the real unmarshalling work */
+	void *ptr = NULL;
 	codecCtx.max_stack_size = 0;
-
-	do {/*appease gcc with its ugly strict aliasing rules*/
-		void *ptr = NULL;
-		decRet = ber_decode(&codecCtx, &asn_DEF_Message, &ptr, rawS, rawSSize);
-		m->asnMsg = ptr;
-	} while (0);
+	decRet = ber_decode(&codecCtx, &asn_DEF_Message, &ptr, rawS, rawSSize);
+	m = ptr;
 
 	switch (decRet.code) {
-	case RC_OK:
-		break;
-
-	case RC_FAIL:
-		GSETERROR(error, "Cannot deserialize: %s (%d bytes consumed)",
-				"invalid content", decRet.consumed);
-		goto errorLABEL;
-
-	case RC_WMORE:
-		GSETERROR(error, "Cannot deserialize: %s (%d bytes consumed)",
-				"uncomplete content", decRet.consumed);
-		goto errorLABEL;
+		case RC_OK:
+			break;
+		case RC_FAIL:
+			GSETERROR(error, "Cannot deserialize: %s (%d bytes consumed)",
+					"invalid content", decRet.consumed);
+			goto errorLABEL;
+		case RC_WMORE:
+			GSETERROR(error, "Cannot deserialize: %s (%d bytes consumed)",
+					"uncomplete content", decRet.consumed);
+			goto errorLABEL;
 	}
 
-	*sSize = decRet.consumed + 4;
+	return m;
 
-	return 1;
-      errorLABEL:
-	_clean_asn_message(m);
-	return 0;
+errorLABEL:
+	message_destroy (m);
+	return NULL;
 }
 
 gint
 message_has_param(MESSAGE m, enum message_param_e mp, GError ** error)
 {
-	OCTET_STRING_t *os;
-
 	if (!m) {
 		GSETERROR(error, "Invalid parameter");
 		return -1;
 	}
 
-	if (!m->asnMsg)
-		return 0;
-
+	OCTET_STRING_t *os = NULL;
 	return (__getParameter(m, mp, &os) && os && os->buf) ? 1 : 0;
 }
 
@@ -310,9 +252,6 @@ message_get_param(MESSAGE m, enum message_param_e mp, void **s, gsize * sSize, G
 		GSETERROR(error, "Invalid parameter");
 		return -1;
 	}
-
-	if (!m->asnMsg)
-		_alloc_asn_message(m, error);
 
 	switch (mp) {
 		case MP_ID : name_mp = "MP_ID"; break;
@@ -350,9 +289,6 @@ message_set_param(MESSAGE m, enum message_param_e mp, const void *s, gsize sSize
 		return 0;
 	}
 
-	if (!m->asnMsg)
-		_alloc_asn_message(m, error);
-
 	if (!__getParameter(m, mp, &os)) {
 		GSETERROR(error, "Invalid message parameter type");
 		return 0;
@@ -365,16 +301,16 @@ message_set_param(MESSAGE m, enum message_param_e mp, const void *s, gsize sSize
 
 	switch (mp) {
 		case MP_ID:
-			m->asnMsg->id = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
+			m->id = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
 			return 1;
 		case MP_NAME:
-			m->asnMsg->name = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
+			m->name = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
 			return 1;
 		case MP_VERSION:
-			m->asnMsg->version = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
+			m->version = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
 			return 1;
 		case MP_BODY:
-			m->asnMsg->body = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
+			m->body = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
 			return 1;
 		default:
 			return 1;
@@ -392,21 +328,18 @@ message_get_field(MESSAGE m, const void *name, gsize name_size, void **value, gs
 		return -1;
 	}
 
-	if (!m->asnMsg)
-		_alloc_asn_message(m, error);
-
-	if (!m->asnMsg->content.list.array || m->asnMsg->content.list.count<=0) {
+	if (!m->content.list.array || m->content.list.count<=0) {
 		return 0;
 	}
 
 	name_real_size = strlen_len(name, name_size);
 
 	/*run the list and find a matching field */
-	max = m->asnMsg->content.list.count;
+	max = m->content.list.count;
 	for (i = 0; i < max ; i++) {
 		Parameter_t *p;
 
-		p = m->asnMsg->content.list.array[i];
+		p = m->content.list.array[i];
 		if (!p)
 			continue;
 		if (p->name.size != name_real_size)
@@ -428,12 +361,12 @@ message_get_field_names(MESSAGE m, GError ** error)
 	gchar **array;
 	gint max, nb, i;
 
-	if (!m || !m->asnMsg) {
+	if (!m) {
 		GSETERROR(error, "invalid message parameter");
 		return NULL;
 	}
 
-	max = m->asnMsg->content.list.count;
+	max = m->content.list.count;
 	if (max < 0) {
 		GSETERROR(error, "invalid message field count : %d", max);
 		return NULL;
@@ -444,7 +377,7 @@ message_get_field_names(MESSAGE m, GError ** error)
 	TRACE("found %d fields", max);
 
 	for (nb = 0, i = 0; i < max; i++) {
-		Parameter_t *p = m->asnMsg->content.list.array[i];
+		Parameter_t *p = m->content.list.array[i];
 
 		if (p && p->name.buf) {
 			array[nb] = g_strndup((const gchar*)p->name.buf, p->name.size);
@@ -461,7 +394,7 @@ message_get_fields(MESSAGE m, GHashTable ** hash, GError ** error)
 	gchar **field_names, **fn_ptr;
 	GByteArray *field_value = NULL;
 
-	if (!m || !m->asnMsg) {
+	if (!m) {
 		GSETERROR(error, "invalid message parameter");
 		return (0);
 	}
@@ -496,10 +429,7 @@ message_add_field(MESSAGE m, const char *name, const void *value, gsize valueSiz
 	if (!m || !name || !value)
 		return ;
 
-	if (!m->asnMsg)
-		_alloc_asn_message(m, NULL);
-
-	void *pList = &(m->asnMsg->content.list);
+	void *pList = &(m->content.list);
 	Parameter_t *pMember = g_malloc0(sizeof(Parameter_t));
 
 	if (0 != OCTET_STRING_fromBuf(&(pMember->name), name, strlen(name))) {
@@ -693,7 +623,7 @@ message_create_request(GError ** err, GByteArray * id, const char *name,
 }
 
 GError *
-message_extract_body_strv(struct message_s *msg, gchar ***result)
+message_extract_body_strv(MESSAGE msg, gchar ***result)
 {
 	int rc;
 	void *b = NULL;
@@ -709,7 +639,7 @@ message_extract_body_strv(struct message_s *msg, gchar ***result)
 }
 
 GError *
-message_extract_prefix(struct message_s *msg, const gchar *n,
+message_extract_prefix(MESSAGE msg, const gchar *n,
 		guint8 *d, gsize *dsize)
 {
 	void *f;
@@ -727,7 +657,7 @@ message_extract_prefix(struct message_s *msg, const gchar *n,
 }
 
 GError *
-message_extract_cid(struct message_s *msg, const gchar *n, container_id_t *cid)
+message_extract_cid(MESSAGE msg, const gchar *n, container_id_t *cid)
 {
 	void *f;
 	gsize f_size;
@@ -741,7 +671,7 @@ message_extract_cid(struct message_s *msg, const gchar *n, container_id_t *cid)
 }
 
 GError *
-message_extract_string(struct message_s *msg, const gchar *n, gchar *dst,
+message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
 		gsize dst_size)
 {
 	int rc;
@@ -762,7 +692,7 @@ message_extract_string(struct message_s *msg, const gchar *n, gchar *dst,
 }
 
 gchar *
-message_extract_string_copy(struct message_s *msg, const gchar *n)
+message_extract_string_copy(MESSAGE msg, const gchar *n)
 {
 	void *f = NULL;
 	gsize f_size = 0;
@@ -773,7 +703,7 @@ message_extract_string_copy(struct message_s *msg, const gchar *n)
 }
 
 gboolean
-message_extract_flag(struct message_s *msg, const gchar *n, gboolean def)
+message_extract_flag(MESSAGE msg, const gchar *n, gboolean def)
 {
 	gsize f_size;
 	void *f;
@@ -788,7 +718,7 @@ message_extract_flag(struct message_s *msg, const gchar *n, gboolean def)
 }
 
 GError*
-message_extract_flags32(struct message_s *msg, const gchar *n,
+message_extract_flags32(MESSAGE msg, const gchar *n,
 		gboolean mandatory, guint32 *flags)
 {
 	void *f = NULL;
@@ -811,7 +741,7 @@ message_extract_flags32(struct message_s *msg, const gchar *n,
 }
 
 GError *
-message_extract_body_gba(struct message_s *msg, GByteArray **result)
+message_extract_body_gba(MESSAGE msg, GByteArray **result)
 {
 	EXTRA_ASSERT(result != NULL);
 
@@ -830,7 +760,7 @@ message_extract_body_gba(struct message_s *msg, GByteArray **result)
 }
 
 GError *
-message_extract_body_string(struct message_s *msg, gchar **result)
+message_extract_body_string(MESSAGE msg, gchar **result)
 {
 	void *b = NULL;
 	gsize bsize = 0;
@@ -875,7 +805,7 @@ metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
 }
 
 GError *
-message_extract_body_encoded(struct message_s *msg, gboolean mandatory,
+message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
 		GSList **result, body_decoder_f decoder)
 {
 	int rc;
@@ -906,8 +836,7 @@ message_extract_body_encoded(struct message_s *msg, gboolean mandatory,
 }
 
 GError*
-message_extract_header_encoded(struct message_s *msg,
-		const gchar *n, gboolean mandatory,
+message_extract_header_encoded(MESSAGE msg, const gchar *n, gboolean mandatory,
 		GSList **result, body_decoder_f decoder)
 {
 	int rc;
@@ -938,7 +867,7 @@ message_extract_header_encoded(struct message_s *msg,
 }
 
 GError *
-message_extract_strint64(struct message_s *msg, const gchar *n, gint64 *i64)
+message_extract_strint64(MESSAGE msg, const gchar *n, gint64 *i64)
 {
 	gchar *end, dst[32];
 	GError *err;
@@ -963,7 +892,7 @@ message_extract_strint64(struct message_s *msg, const gchar *n, gint64 *i64)
 }
 
 GError*
-message_extract_struint(struct message_s *msg, const gchar *n, guint *u)
+message_extract_struint(MESSAGE msg, const gchar *n, guint *u)
 {
 	gint64 i64;
 	GError *err;
@@ -976,7 +905,7 @@ message_extract_struint(struct message_s *msg, const gchar *n, guint *u)
 }
 
 GError*
-message_extract_boolean(struct message_s *msg, const gchar *n,
+message_extract_boolean(MESSAGE msg, const gchar *n,
 		gboolean mandatory, gboolean *v)
 {
 	gchar tmp[32];
@@ -992,7 +921,7 @@ message_extract_boolean(struct message_s *msg, const gchar *n,
 }
 
 GError*
-message_extract_header_gba(struct message_s *msg, const gchar *n,
+message_extract_header_gba(MESSAGE msg, const gchar *n,
 		gboolean mandatory, GByteArray **result)
 {
 	int rc;

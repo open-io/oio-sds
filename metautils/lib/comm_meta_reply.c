@@ -209,7 +209,7 @@ _find_handler(struct reply_sequence_data_s *data, int code)
 }
 
 static gboolean
-rep_handler(gpointer u, struct message_s *reply)
+rep_handler(gpointer u, MESSAGE reply)
 {
 	struct repseq_ctx_s *ctx = u;
 	int rc=TRUE, body;
@@ -265,7 +265,7 @@ rep_handler(gpointer u, struct message_s *reply)
 }
 
 static GError*
-_repseq_run(struct message_s *req, struct metacnx_ctx_s *cnx,
+_repseq_run(MESSAGE req, struct metacnx_ctx_s *cnx,
 		struct reply_sequence_data_s *data)
 {
 	struct repseq_ctx_s ctx;

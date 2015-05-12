@@ -163,7 +163,7 @@ hc_url_oldinit(const char *url)
 {
 	if (!url)
 		return NULL;
-	struct hc_url_s *result = g_malloc0(sizeof(*result));
+	struct hc_url_s *result = g_slice_new0(struct hc_url_s);
 	if (_parse_url(result, url))
 		return result;
 	hc_url_clean(result);
@@ -173,7 +173,7 @@ hc_url_oldinit(const char *url)
 struct hc_url_s *
 hc_url_empty(void)
 {
-	return g_malloc0(sizeof(struct hc_url_s));
+	return g_slice_new0(struct hc_url_s);
 }
 
 void
@@ -182,7 +182,7 @@ hc_url_clean(struct hc_url_s *u)
 	if (!u)
 		return;
 	_clean_url (u);
-	g_free (u);
+	g_slice_free (struct hc_url_s, u);
 }
 
 void

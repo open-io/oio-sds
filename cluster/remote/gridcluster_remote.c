@@ -216,7 +216,7 @@ GSList *
 gcluster_get_services(const char *target, gdouble timeout,
 		const gchar *type, gboolean full, GError ** error)
 {
-	struct message_s *req = message_create_named(NAME_MSGNAME_CS_GET_SRV);
+	MESSAGE req = message_create_named(NAME_MSGNAME_CS_GET_SRV);
 	message_add_fields_str (req,
 			NAME_MSGKEY_TYPENAME, type,
 			NAME_MSGKEY_FULL, full?"1":NULL,
