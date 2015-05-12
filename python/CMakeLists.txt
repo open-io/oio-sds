@@ -3,9 +3,12 @@ set(SETUP_PY_IN "${CMAKE_CURRENT_SOURCE_DIR}/setup.py.in")
 set(SETUP_PY    "${CMAKE_CURRENT_BINARY_DIR}/setup.py")
 set(DEPS        ${SETUP_PY_IN}
 		 "${CMAKE_CURRENT_SOURCE_DIR}/oio/__init__.py"
+		 "${CMAKE_CURRENT_SOURCE_DIR}/oio/account/__init__.py"
+		 "${CMAKE_CURRENT_SOURCE_DIR}/oio/common/__init__.py"
 		 "${CMAKE_CURRENT_SOURCE_DIR}/oio/sds/__init__.py"
-		 "${CMAKE_CURRENT_SOURCE_DIR}/oio/account/__init__.py")
-set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/.timestamp")
+		 "${CMAKE_CURRENT_SOURCE_DIR}/oio/sds/event/__init__.py")
+
+set(OUTPUT      "${CMAKE_CURRENT_BINAYR_DIR}/.timestamp")
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/setup.py.in
 		${CMAKE_CURRENT_BINARY_DIR}/setup.py
