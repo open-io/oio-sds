@@ -27,3 +27,12 @@
 *.i*86
 *.x86_64
 *.hex
+
+# Python objects
+*.pyc
+*.pyo
+dist
+build
+*.egg
+*.egg-info
+

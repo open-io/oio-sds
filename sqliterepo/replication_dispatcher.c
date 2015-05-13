@@ -1874,6 +1874,7 @@ sqlx_dispatch_PROPGET(struct gridd_reply_ctx_s *reply,
 				continue;
 			struct key_value_pair_s *kv = key_value_pair_create (*p, (guint8*)v, strlen(v));
 			pairs = g_slist_prepend (pairs, kv);
+			g_free (v);
 		}
 		g_strfreev (keys);
 		GByteArray *body = key_value_pairs_marshall_gba(pairs, NULL);
