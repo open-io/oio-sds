@@ -67,9 +67,6 @@ int meta2_filter_check_backend(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_check_ns_is_master(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-int meta2_filter_check_ns_is_slave(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Check the ns is not in worm mode */
 int meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
@@ -95,10 +92,6 @@ int meta2_filter_extract_header_copy(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_extract_header_mdsys(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-/*! Extract ACTION header from set content properties request. */
-int meta2_filter_extract_header_prop_action(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Extract "NEW_CHUNKS" and "OLD_CHUNKS" headers from SUBST_CHUNK request.
  * The extracted value, stored in udata, is an array with 2 lists of beans. */
 int meta2_filter_extract_header_chunk_beans(struct gridd_filter_ctx_s *ctx,
@@ -121,10 +114,6 @@ int meta2_filter_extract_body_beans(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 int meta2_filter_extract_body_strings(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Extract the chunk info encoded in the message body */
-int meta2_filter_extract_body_chunk_info(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 int meta2_filter_extract_header_string_V_f2(struct gridd_filter_ctx_s *ctx,
@@ -152,19 +141,10 @@ int meta2_filter_extract_header_flags32(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_extract_header_append(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-int meta2_filter_extract_body_flags32(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 int meta2_filter_extract_header_string_size(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-int meta2_filter_extract_body_strlist(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 int meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_extract_body_rawcontentv2(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 int meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
@@ -227,14 +207,6 @@ int meta2_filter_action_generate_append_chunks(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_action_get_spare_chunks(struct gridd_filter_ctx_s *ctx,
 		                struct gridd_reply_ctx_s *reply);
 
-/*! Call backend and rollback an operation on a content using informations in filter context */
-int meta2_filter_action_content_commit_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Call backend and delete a content using informations in filter context */
-int meta2_filter_action_remove_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Call backend and list content of a container with informations available in
  * filter context */
 int meta2_filter_action_list_contents(struct gridd_filter_ctx_s *ctx,
@@ -243,10 +215,6 @@ int meta2_filter_action_list_contents(struct gridd_filter_ctx_s *ctx,
 /*! Call backend and list contents of a container with informations available
  * in filter context. Return informations in "old style meta2" format. */
 int meta2_filter_action_list_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Call backend and retrieve the content with informations available in filter context */
-int meta2_filter_action_retrieve_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 /*! Call backend and retrieve the content with informations available in filter context */
@@ -281,28 +249,10 @@ int meta2_filter_action_get_content_properties(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-int meta2_filter_action_modify_mdusr_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 int meta2_filter_action_modify_mdsys_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 int meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_enable(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_disable(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_freeze(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_disable_frozen(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_list_content_services(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 int meta2_filter_action_remove_raw_v1(struct gridd_filter_ctx_s *ctx,
@@ -311,24 +261,12 @@ int meta2_filter_action_remove_raw_v1(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_action_add_raw_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-int meta2_filter_action_list_all_content_services(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_del_content_services(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_flush_content_services(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 int meta2_filter_action_touch_content_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 #define META2TOUCH_FLAGS_UPDATECSIZE     0x00000001
 #define META2TOUCH_FLAGS_RECALCCSIZE     0x00000002
 int meta2_filter_action_touch_container_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_replicate_content_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 int meta2_filter_action_insert_beans(struct gridd_filter_ctx_s *ctx,
@@ -340,13 +278,7 @@ int meta2_filter_action_delete_beans(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_action_update_beans(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-int meta2_filter_action_restore_container(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 int meta2_filter_action_statv2_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_update_chunk_md5(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 /* -------------------- Events --------------------*/

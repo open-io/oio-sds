@@ -33,22 +33,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <meta2v2/meta2_backend.h>
 # include <meta2v2/meta2_events.h>
 
-struct transient_s
-{
-	GMutex lock;
-	GTree *tree;
-};
-
 struct meta2_backend_s
 {
 	struct meta_backend_common_s backend;
 	struct service_update_policies_s *policies;
 	struct hc_resolver_s *resolver;
-
-	// TODO remove this as soon as the C SDK has be refactored.
-	GMutex lock_transient;
-	// TODO remove this as soon as the C SDK has be refactored.
-	GHashTable *transient;
 
 	struct { // Not owned, not to be freed
 		gpointer udata;
@@ -58,33 +47,5 @@ struct meta2_backend_s
 	// Trigger pre-check on alias upon a BEANS generation request
 	gboolean flag_precheck_on_generate;
 };
-
-struct transient_element_s
-{
-	time_t expiration;
-	GDestroyNotify cleanup;
-	gpointer what;
-};
-
-void transient_put(GTree *t, const gchar *key, gpointer what, GDestroyNotify cleanup);
-
-gpointer transient_get(GTree *t, const gchar *key);
-
-void transient_del(GTree *t, const gchar *key);
-
-void transient_tree_cleanup(GTree *t);
-
-void transient_cleanup(struct transient_s *t);
-
-/* ------------------------------------------------------------------------- */
-
-GError* m2b_transient_put(struct meta2_backend_s *m2b, struct hc_url_s *url,
-		gpointer what, GDestroyNotify cleanup);
-
-gpointer m2b_transient_get(struct meta2_backend_s *m2b, struct hc_url_s *url, GError **err);
-
-GError* m2b_transient_del(struct meta2_backend_s *m2b, struct hc_url_s *url);
-
-void m2b_transient_cleanup(struct meta2_backend_s *m2b);
 
 #endif /*OIO_SDS__meta2v2__meta2_backend_internals_h*/

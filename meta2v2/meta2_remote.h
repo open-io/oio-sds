@@ -66,24 +66,6 @@ GSList *meta2_remote_content_add(const addr_info_t *m2, gint ms, GError **err,
     struct hc_url_s *url, content_length_t content_length,
     GByteArray * metadata, GByteArray ** new_metadata);
 
-/** Mark for removal the give content from the given container, on the
- * targeted META2 server. Currently, there is no management of META2
- * replications in the removal operations. After this step a COMMIT or
- * a ROLLBACK on the content is necessary. Before this step, the content
- * won't be accessible. */
-gboolean meta2_remote_content_remove(const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url);
-
-/** Commit (approve) the last operation on the given content in the given container. */
-gboolean meta2_remote_content_commit(const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url);
-
-/** Get the chunks locations of the given content in the givan container.
- * To be successful, the retrieval must target an opened container and
- * an online content. */
-GSList* meta2_remote_content_retrieve(const addr_info_t * m2, gint ms, GError **err,
-		struct hc_url_s *url);
-
 /** Returns all the information about the content with the given path in the
  * given container. This content must be available. The returned structure is
  * the same as those returned by meta2raw_remote_get_chunks() on an available
@@ -93,18 +75,15 @@ struct meta2_raw_content_s *meta2_remote_stat_content(struct metacnx_ctx_s *cnx,
 
 /* ------------------------------------------------------------------------- */
 
-/** @see meta2_remote_content_add() */
-GSList *meta2_remote_content_add_in_fd(int *fd, gint ms, GError **err, struct hc_url_s *url,
-		content_length_t content_length, GByteArray * metadata, GByteArray ** new_metadata);
+GSList* meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
+		struct hc_url_s *url, content_length_t content_length,
+		GByteArray *metadata, GByteArray **new_metadata);
 
 /** @see meta2_remote_content_add() */
 GSList* meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err, struct hc_url_s *url,
 		gint count, gint distance, const gchar *notin, const gchar *broken);
 
 /* ------------------------------------------------------------------------- */
-
-GSList *meta2_remote_content_append(struct metacnx_ctx_s *ctx, GError **err,
-		struct hc_url_s *url, content_length_t content_length);
 
 gboolean meta2raw_remote_update_chunks(struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url, struct meta2_raw_content_s *content,
