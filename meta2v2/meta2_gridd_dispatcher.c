@@ -250,13 +250,13 @@ static gridd_filter M2V2_DELETE_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_localflag,
+	meta2_filter_extract_header_flags32,
 	meta2_filter_fill_subject,
 	meta2_filter_check_url_cid,
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_check_ns_is_master,
 	meta2_filter_check_ns_not_wormed,
-	meta2_filter_extract_header_flags32,
 	meta2_filter_action_has_container,
 	meta2_filter_action_delete_content,
 	NULL
@@ -476,20 +476,6 @@ static gridd_filter M2V2_FILTERS_content_commit_v1[] =
 	NULL
 };
 
-static gridd_filter M2V2_FILTERS_content_rollback_v1[] =
-{
-	meta2_filter_extract_header_url,
-	meta2_filter_fill_subject,
-	meta2_filter_check_url_cid,
-	meta2_filter_check_backend,
-	meta2_filter_check_ns_name,
-	meta2_filter_check_ns_is_master,
-	meta2_filter_action_has_container,
-	meta2_filter_action_content_rollback_v1,
-	meta2_filter_success_reply,
-	NULL
-};
-
 static gridd_filter M2V2_FILTERS_list_v1[] =
 {
 	meta2_filter_extract_header_url,
@@ -665,7 +651,6 @@ meta2_gridd_get_v1_requests(void)
 		{NAME_MSGNAME_M2_CONTENTCOMMIT,   (hook) meta2_dispatch_all, M2V2_FILTERS_content_commit_v1},
 		{NAME_MSGNAME_M2_CONTENTSPARE,    (hook) meta2_dispatch_all, M2V2_FILTERS_spare_v1},
 		{NAME_MSGNAME_M2_CONTENTAPPEND,   (hook) meta2_dispatch_all, M2V2_FILTERS_append_v1},
-		{NAME_MSGNAME_M2_CONTENTROLLBACK, (hook) meta2_dispatch_all, M2V2_FILTERS_content_rollback_v1},
 
 		{NAME_MSGNAME_M2V1_STAT, (hook) meta2_dispatch_all, M2V2_FILTERS_statv2_v1},
 

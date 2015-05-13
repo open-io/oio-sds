@@ -86,15 +86,15 @@ static gchar hexa[] =
 /* ------------------------------------------------------------------------- */
 
 static gsize
-_buffer2str(const guint8 *s, size_t sS, char *d, size_t dS)
+_buffer2str(const guint8 *s, const size_t sS, char *d, const size_t dS)
 {
 	gsize i, j;
 
 	if (!s || !sS || !d || !dS)
 		return 0;
 
-	for (i=j=0; i<sS && j<(dS-1) ;i++) {
-		register const gchar *h = b2h[((guint8*)s)[i]];
+	for (i=j=0; i<sS && j<(dS-1) ;) {
+		register const gchar *h = b2h[((guint8*)s)[i++]];
 		d[j++] = h[0];
 		d[j++] = h[1];
 	}

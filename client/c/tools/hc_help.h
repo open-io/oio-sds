@@ -37,9 +37,5 @@ void help_srvconfig(void);
 void help_propset(void);
 void help_propget(void);
 void help_propdel(void);
-void help_snaplist(void);
-void help_snaptake(void);
-void help_snapdel(void);
-void help_snaprestore(void);
 
 #endif /*OIO_SDS__client__c__tools__hc_help_h*/

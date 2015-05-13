@@ -112,8 +112,7 @@ int
 meta2_filter_check_ns_is_master(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	(void) ctx;
-	(void) reply;
+	(void) ctx, (void) reply;
 	TRACE_FILTER();
 	return FILTER_OK;
 }
@@ -122,8 +121,7 @@ int
 meta2_filter_check_ns_is_slave(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	(void) ctx;
-	(void) reply;
+	(void) ctx, (void) reply;
 	TRACE_FILTER();
 	return FILTER_OK;
 }
@@ -132,8 +130,7 @@ int
 meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	(void) ctx;
-	(void) reply;
+	(void) ctx, (void) reply;
 	TRACE_FILTER();
 	return FILTER_OK;
 }
@@ -142,6 +139,7 @@ int
 meta2_filter_check_url_cid (struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
+	(void) reply;
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	TRACE_FILTER();
 	if (url && hc_url_has(url, HCURL_HEXID))

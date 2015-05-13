@@ -961,13 +961,11 @@ _manage_ack (struct sqlx_service_s *ss, zmq_msg_t *msg)
 	for (guint i=0; i<ss->notify.pending_events->len ;i++) {
 		struct event_s *evt = g_ptr_array_index(ss->notify.pending_events, i);
 		if (!memcmp(evt, d, HEADER_SIZE)) {
+			gchar tmp[1+(2*HEADER_SIZE)];
+			buffer2str(evt, HEADER_SIZE, tmp, sizeof(tmp));
 			g_free (evt);
 			g_ptr_array_remove_index_fast (ss->notify.pending_events, i);
-
-			gchar tmp[1+ 2*HEADER_SIZE];
-			buffer2str(evt, HEADER_SIZE, tmp, sizeof(tmp));
 			GRID_INFO("EVT:ACK %s", tmp);
-
 			return;
 		}
 	}
