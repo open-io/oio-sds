@@ -137,63 +137,6 @@ meta2_filter_extract_header_version_policy(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_body_strlist(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	void cleanup(gpointer p) {
-		if (!p)
-			return;
-		g_slist_foreach((GSList*)p, g_free1, NULL);
-		g_slist_free((GSList*)p);
-	}
-	GError *err;
-	GSList *names = NULL;
-
-	err = message_extract_body_encoded(reply->request, TRUE, &names, strings_unmarshall);
-	if (err != NULL) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	meta2_filter_ctx_set_input_udata(ctx, names, cleanup);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_body_rawcontentv2(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	void cleanup(gpointer p) {
-		if (!p)
-			return;
-		g_slist_foreach((GSList*)p, meta2_raw_content_v2_gclean, NULL);
-		g_slist_free((GSList*)p);
-	}
-	GSList *result = NULL;
-	GError *err;
-
-	err = message_extract_body_encoded(reply->request, TRUE, &result,
-		meta2_raw_content_v2_unmarshall);
-
-	if (!err) {
-		if (!result) {
-			meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST, "No content"));
-			return FILTER_KO;
-		}
-		else {
-			meta2_filter_ctx_set_input_udata(ctx, result->data,
-					(GDestroyNotify) meta2_raw_content_v2_clean);
-			result->data = NULL;
-			cleanup(result);
-			return FILTER_OK;
-		}
-	}
-
-	cleanup(result);
-	return FILTER_KO;
-}
-
-int
 meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
@@ -241,22 +184,6 @@ meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
 		gchar strcid[STRLEN_CONTAINERID];
 		container_id_to_string(content->container_id, strcid, sizeof(strcid));
 		hc_url_set(url, HCURL_HEXID, strcid);
-	}
-
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_prop_action(struct gridd_filter_ctx_s *ctx,
-                struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	gchar buf[512];
-
-	TRACE_FILTER();
-	EXTRACT_STRING2(NAME_MSGKEY_ACTION, "ACTION", 1);
-	if(NULL != meta2_filter_ctx_get_param(ctx, "ACTION")) {
-		meta2_filter_ctx_add_param(ctx, "BODY_OPT", "OK");
 	}
 
 	return FILTER_OK;
@@ -318,30 +245,6 @@ meta2_filter_extract_body_strings(struct gridd_filter_ctx_s *ctx,
 	}
 
 	meta2_filter_ctx_set_input_udata(ctx, l, g_free0);
-	return FILTER_OK;
-}
-
-static void
-_ci_list_clean(gpointer cil)
-{
-	g_slist_free_full ((GSList*)cil, (GDestroyNotify)chunk_info_clean);
-}
-
-int
-meta2_filter_extract_body_chunk_info(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GSList *l = NULL;
-
-	TRACE_FILTER();
-
-	GError *err = message_extract_body_encoded (reply->request, TRUE, &l, chunk_info_unmarshall);
-	if (err) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	meta2_filter_ctx_set_input_udata(ctx, l, _ci_list_clean);
 	return FILTER_OK;
 }
 
@@ -454,30 +357,6 @@ meta2_filter_extract_header_flags32(struct gridd_filter_ctx_s *ctx,
 
 	g_snprintf(strflags, sizeof(strflags), "%"G_GUINT32_FORMAT, flags);
 	meta2_filter_ctx_add_param(ctx, M2_KEY_GET_FLAGS, strflags);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_body_flags32(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	GByteArray *body = NULL;
-
-	TRACE_FILTER();
-	e = message_extract_body_gba(reply->request, &body);
-	if (NULL != e) {
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	meta2_filter_ctx_set_input_udata(ctx, body, (GDestroyNotify)metautils_gba_unref);
-	if (body->len != 4) {
-		e = NEWERROR(CODE_BAD_REQUEST, "Invalid flags in body");
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
 	return FILTER_OK;
 }
 

@@ -108,75 +108,6 @@ meta2_remote_container_list (const addr_info_t *m2, gint ms, GError **err,
 
 /* ------------------------------------------------------------------------- */
 
-gboolean
-meta2_remote_content_remove (const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url)
-{
-	static struct code_handler_s codes [] = {
-		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
-		{ 0, 0, NULL, NULL },
-	};
-	struct reply_sequence_data_s data = { NULL , 0 , codes };
-
-	EXTRA_ASSERT (m2 != NULL);
-	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2_CONTENTREMOVE);
-	message_add_url (request, url);
-
-	gboolean rc = metaXClient_reply_sequence_run_from_addrinfo (err, request, m2, ms, &data);
-	if (!rc)
-		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
-	return rc;
-}
-
-gboolean
-meta2_remote_content_commit (const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url)
-{
-	static struct code_handler_s codes [] = {
-		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
-		{ 0,0,NULL,NULL}
-	};
-	struct reply_sequence_data_s data = { NULL , 0 , codes };
-
-	EXTRA_ASSERT (m2 != NULL);
-	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2_CONTENTCOMMIT);
-	message_add_url (request, url);
-
-	gboolean rc = metaXClient_reply_sequence_run_from_addrinfo (err, request, m2, ms, &data);
-	if (!rc)
-		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
-	return rc;
-}
-
-GSList*
-meta2_remote_content_add (const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url, content_length_t content_length,
-		GByteArray *metadata, GByteArray **new_metadata)
-{
-	GSList *result = NULL;
-	struct metacnx_ctx_s cnx;
-	metacnx_clear (&cnx);
-	if (!metacnx_init_with_addr (&cnx, m2, err))
-		GSETERROR(err, "Address error");
-	else if (!metacnx_open(&cnx, err))
-		GSETERROR(err, "Socket error");
-	else {
-		cnx.timeout.cnx = ms;
-		cnx.timeout.req = ms;
-		result = meta2_remote_content_add_in_fd (&cnx.fd, ms, err, url, content_length, metadata, new_metadata);
-	}
-	metacnx_close (&cnx);
-	metacnx_clear (&cnx);
-
-	return result;
-}
-
-/* ------------------------------------------------------------------------- */
-
 GSList*
 meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
 		struct hc_url_s *url, content_length_t content_length,
@@ -228,6 +159,32 @@ meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
 	message_destroy(request);
 	return result;
 }
+
+GSList*
+meta2_remote_content_add (const addr_info_t *m2, gint ms, GError **err,
+		struct hc_url_s *url, content_length_t content_length,
+		GByteArray *metadata, GByteArray **new_metadata)
+{
+	GSList *result = NULL;
+	struct metacnx_ctx_s cnx;
+	metacnx_clear (&cnx);
+	if (!metacnx_init_with_addr (&cnx, m2, err))
+		GSETERROR(err, "Address error");
+	else if (!metacnx_open(&cnx, err))
+		GSETERROR(err, "Socket error");
+	else {
+		cnx.timeout.cnx = ms;
+		cnx.timeout.req = ms;
+		result = meta2_remote_content_add_in_fd (&cnx.fd, ms, err, url, content_length, metadata, new_metadata);
+	}
+	metacnx_close (&cnx);
+	metacnx_clear (&cnx);
+
+	return result;
+}
+
+/* ------------------------------------------------------------------------- */
+
 
 GSList*
 meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err,

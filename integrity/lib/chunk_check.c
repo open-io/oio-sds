@@ -841,32 +841,17 @@ _content_remove(struct meta2_ctx_s *ctx, check_info_t *check_info,
 	if (!container_id_hex2bin(hexid, strlen(hexid), &cid, &local_error))
 		return local_error;
 
-	addr_info_t m2;
-	grid_string_to_addrinfo(ctx->loc->m2_url[0], NULL, &m2);
-
 	//remove content
 	struct hc_url_s *url = hc_url_empty ();
 	hc_url_set (url, HCURL_NS, ctx->ns);
 	hc_url_set (url, HCURL_USER, ctx->loc->container_name);
 	hc_url_set (url, HCURL_PATH, ctx->content->path);
 
-	if (!meta2_remote_content_remove(&m2, META2_TIMEOUT, &local_error, url)) {
-		if (!local_error)
-			GSETERROR(&local_error, "content_remove error");
-		hc_url_clean (url);
-		return local_error;
-	}
-
-	// content commit ?
-	if (!meta2_remote_content_commit(&m2, META2_TIMEOUT, &local_error, url)) {
-		if (!local_error)
-			GSETERROR(&local_error, "content_remove, commit error");
-		hc_url_clean (url);
-		return local_error;
-	}
-
+	local_error = m2v2_remote_execute_DEL (ctx->loc->m2_url[0], url);
+	if (local_error)
+		GSETERROR(&local_error, "Remove error: ");
 	hc_url_clean (url);
-	return NULL;
+	return local_error;
 }
 
 static gboolean

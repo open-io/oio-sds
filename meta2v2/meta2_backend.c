@@ -134,216 +134,6 @@ _retention_delay(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 	return res;
 }
 
-/* ------------------------------------------------------------------------- */
-
-void
-transient_put(GTree *tree, const gchar *key, gpointer what, GDestroyNotify cleanup)
-{
-	struct transient_element_s *elt;
-
-	g_assert(tree != NULL);
-	g_assert(key != NULL);
-	g_assert(what != NULL);
-
-	elt = g_tree_lookup(tree, key);
-	if (elt) {
-		if (elt->what && elt->cleanup)
-			elt->cleanup(elt->what);
-	}
-	else {
-		elt = g_malloc0(sizeof(*elt));
-		g_tree_insert(tree, g_strdup(key), elt);
-	}
-
-	elt->expiration = time(0) + 3600;
-	elt->what = what;
-	elt->cleanup = cleanup;
-}
-
-gpointer
-transient_get(GTree *tree, const gchar *key)
-{
-	struct transient_element_s *elt;
-
-	g_assert(tree != NULL);
-	g_assert(key != NULL);
-
-	elt = g_tree_lookup(tree, key);
-	if (elt) {
-		elt->expiration = time(0) + 3600;
-		return elt->what;
-	}
-
-	return NULL;
-}
-
-void
-transient_del(GTree *tree, const gchar *key)
-{
-	g_assert(tree != NULL);
-	g_assert(key != NULL);
-
-	g_tree_remove(tree, key);
-}
-
-void
-transient_cleanup(struct transient_s *transient)
-{
-	g_assert(transient != NULL);
-
-	g_mutex_clear(&transient->lock);
-	transient_tree_cleanup(transient->tree);
-	g_free(transient);
-}
-
-void
-transient_tree_cleanup(GTree *tree)
-{
-	struct arg_s {
-		GSList *to_delete;
-		time_t expiration;
-	};
-
-	gboolean cb(gpointer k, gpointer v, gpointer u) {
-		struct arg_s *parg = u;
-		struct transient_element_s *elt = v;
-		if (elt->expiration < parg->expiration)
-			parg->to_delete = g_slist_prepend(parg->to_delete, k);
-		return FALSE;
-	}
-
-	struct arg_s arg;
-	arg.to_delete = NULL;
-	arg.expiration = time(0) - 3600;
-
-	g_tree_foreach(tree, cb, &arg);
-
-	if (arg.to_delete) {
-		GSList *l;
-		for (l=arg.to_delete; l ;l=l->next) {
-			g_tree_remove(tree, l->data);
-			l->data = NULL;
-		}
-		g_slist_free(arg.to_delete);
-	}
-}
-
-/* -------------------------------------------------------------------------- */
-
-GError *
-m2b_transient_put(struct meta2_backend_s *m2b, struct hc_url_s *url,
-		gpointer what, GDestroyNotify cleanup)
-{
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-	g_assert(what != NULL);
-
-	const gchar *key = hc_url_get (url, HCURL_WHOLE);
-	const gchar * hexID = hc_url_get (url, HCURL_HEXID);
-	GError *err = NULL;
-
-	struct sqlx_name_mutable_s n;
-	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
-	err = sqlx_repository_status_base(m2b->backend.repo, sqlx_name_mutable_to_const(&n));
-	sqlx_name_clean (&n);
-
-	if ( !err ) {
-		struct transient_s *trans = NULL;
-
-		g_mutex_lock(&m2b->lock_transient);
-		trans = g_hash_table_lookup(m2b->transient, hexID);
-		if (trans == NULL) {
-			trans = g_new0(struct transient_s, 1);
-			g_mutex_init(&trans->lock);
-			trans->tree = g_tree_new_full(metautils_strcmp3, NULL, g_free, NULL);
-			g_hash_table_insert(m2b->transient, g_strdup(hexID), trans);
-		}
-		g_mutex_unlock(&m2b->lock_transient);
-		g_mutex_lock(&trans->lock);
-		transient_put(trans->tree, key, what, cleanup);
-		g_mutex_unlock(&trans->lock);
-	}
-	return err;
-}
-
-gpointer
-m2b_transient_get(struct meta2_backend_s *m2b, struct hc_url_s *url, GError ** err)
-{
-	struct transient_s *trans = NULL;
-
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-
-	const gchar *key = hc_url_get (url, HCURL_WHOLE);
-	const gchar * hexID = hc_url_get (url, HCURL_HEXID);
-	GError *local_err = NULL;
-
-	struct sqlx_name_mutable_s n;
-	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
-	local_err = sqlx_repository_status_base(m2b->backend.repo, sqlx_name_mutable_to_const(&n));
-	sqlx_name_clean (&n);
-
-	if (local_err) {
-		*err = local_err;
-		return NULL;
-	}
-
-	g_mutex_lock(&m2b->lock_transient);
-	trans = g_hash_table_lookup(m2b->transient, hexID);
-	g_mutex_unlock(&m2b->lock_transient);
-	if (trans == NULL) {
-		*err = NEWERROR(CODE_INTERNAL_ERROR, "Transient data not found in hash");
-		return NULL;
-	}
-
-	gpointer result;
-	g_mutex_lock(&trans->lock);
-	result = transient_get(trans->tree, key);
-	g_mutex_unlock(&trans->lock);
-	return result;
-}
-
-GError *
-m2b_transient_del(struct meta2_backend_s *m2b, struct hc_url_s *url)
-{
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-
-	const gchar *key = hc_url_get (url, HCURL_WHOLE);
-	const gchar * hexID = hc_url_get (url, HCURL_HEXID);
-	GError *err = NULL;
-
-	struct sqlx_name_mutable_s n;
-	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
-	err = sqlx_repository_status_base(m2b->backend.repo, sqlx_name_mutable_to_const(&n));
-	sqlx_name_clean (&n);
-
-	if ( !err ) {
-		struct transient_s *trans = NULL;
-
-		g_mutex_lock(&m2b->lock_transient);
-		trans = g_hash_table_lookup(m2b->transient, hexID);
-		g_mutex_unlock(&m2b->lock_transient);
-		if (trans == NULL)
-			return NEWERROR(CODE_INTERNAL_ERROR, "Transient data not found in hash");
-
-		g_mutex_lock(&trans->lock);
-		transient_del(trans->tree, key);
-		g_mutex_unlock(&trans->lock);
-	}
-	return err;
-}
-
-void
-m2b_transient_cleanup(struct meta2_backend_s *m2b)
-{
-	g_assert(m2b != NULL);
-
-	g_mutex_lock(&m2b->lock_transient);
-	g_hash_table_destroy(m2b->transient);
-	g_mutex_unlock(&m2b->lock_transient);
-}
-
 /* Backend ------------------------------------------------------------------ */
 
 static GError*
@@ -402,9 +192,6 @@ meta2_backend_init(struct meta2_backend_s **result,
 	m2->backend.lb = glp;
 	m2->policies = service_update_policies_create();
 	g_mutex_init(&m2->backend.ns_info_lock);
-	g_mutex_init(&m2->lock_transient);
-	m2->transient = g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, (GDestroyNotify) transient_cleanup);
 
 	m2->flag_precheck_on_generate = TRUE;
 
@@ -434,14 +221,10 @@ meta2_backend_clean(struct meta2_backend_s *m2)
 	if (m2->policies) {
 		service_update_policies_destroy(m2->policies);
 	}
-	if (m2->transient) {
-		g_hash_table_destroy(m2->transient);
-	}
 	if (m2->resolver) {
 		m2->resolver = NULL;
 	}
 	g_mutex_clear(&m2->backend.ns_info_lock);
-	g_mutex_clear(&m2->lock_transient);
 	namespace_info_clear(&(m2->backend.ns_info));
 	g_free(m2);
 }

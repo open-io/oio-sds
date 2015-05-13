@@ -118,15 +118,6 @@ meta2_filter_check_ns_is_master(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_check_ns_is_slave(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) ctx, (void) reply;
-	TRACE_FILTER();
-	return FILTER_OK;
-}
-
-int
 meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
