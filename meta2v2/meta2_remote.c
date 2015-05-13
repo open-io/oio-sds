@@ -152,28 +152,6 @@ meta2_remote_content_commit (const addr_info_t *m2, gint ms, GError **err,
 	return rc;
 }
 
-gboolean
-meta2_remote_content_rollback (const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url)
-{
-	static struct code_handler_s codes [] = {
-		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
-		{ 0,0,NULL,NULL}
-	};
-	struct reply_sequence_data_s data = { NULL , 0 , codes };
-
-	EXTRA_ASSERT (m2 != NULL);
-	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2_CONTENTROLLBACK);
-	message_add_url (request, url);
-
-	gboolean rc = metaXClient_reply_sequence_run_from_addrinfo (err, request, m2, ms, &data);
-	if (!rc)
-		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
-	return rc;
-}
-
 GSList*
 meta2_remote_content_add (const addr_info_t *m2, gint ms, GError **err,
 		struct hc_url_s *url, content_length_t content_length,
@@ -198,28 +176,6 @@ meta2_remote_content_add (const addr_info_t *m2, gint ms, GError **err,
 }
 
 /* ------------------------------------------------------------------------- */
-
-gboolean
-meta2_remote_content_rollback_in_fd (int *fd, gint ms, GError **err,
-		struct hc_url_s *url)
-{
-	static struct code_handler_s codes [] = {
-		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
-		{ 0,0,NULL,NULL}
-	};
-	struct reply_sequence_data_s data = { NULL , 0 , codes };
-
-	EXTRA_ASSERT (fd != NULL);
-	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2_CONTENTROLLBACK);
-	message_add_url(request, url);
-
-	gboolean rc = metaXClient_reply_sequence_run (err, request, fd, ms, &data);
-	if (!rc)
-		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
-	return rc;
-}
 
 GSList*
 meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,

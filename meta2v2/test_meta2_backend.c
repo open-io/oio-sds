@@ -391,7 +391,7 @@ static void
 test_content_delete_not_found(void)
 {
 	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
-		GError *err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		GError *err = meta2_backend_delete_alias(m2, u, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		g_clear_error(&err);
 	}
@@ -447,7 +447,7 @@ test_content_put_prop_get(void)
 		_bean_cleanv2(tmp);
 
 		/* delete the bean */
-		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
 		g_assert_no_error(err);
 
 		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?3:1));
@@ -463,7 +463,7 @@ test_content_put_prop_get(void)
 		_bean_cleanv2(tmp);
 
 		/* Check we can undelete (by deleting deleted version) */
-		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
 		g_assert_no_error(err);
 
 		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?2:1));
@@ -500,7 +500,7 @@ test_content_put_get_delete(void)
 		check_list_count(m2,u,1);
 
 		/* delete the bean */
-		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
 		g_assert_no_error(err);
 
 		CHECK_ALIAS_VERSION(m2,u,2); // v1: original, v2: copy with 'deleted' flag
@@ -528,7 +528,7 @@ test_content_put_get_delete(void)
 
 		/* Check we can undelete (by deleting deleted version) */
 		tmp = g_ptr_array_new();
-		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
 		g_assert_no_error(err);
 		_bean_cleanv2(tmp);
 
@@ -594,7 +594,7 @@ test_content_append(void)
 		_bean_cleanv2(tmp);
 
 		/* delete the bean */
-		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
 		g_assert_no_error(err);
 
 		CHECK_ALIAS_VERSION(m2,u,3);
@@ -666,7 +666,7 @@ test_content_append_not_found(void)
 		_bean_cleanv2(tmp);
 
 		/* delete the bean */
-		err = meta2_backend_delete_alias(m2, u, FALSE, NULL, NULL);
+		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
 		g_assert_no_error(err);
 
 		CHECK_ALIAS_VERSION(m2,u,3);

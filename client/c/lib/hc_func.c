@@ -566,7 +566,7 @@ hc_delete_content(gs_grid_storage_t *hc, struct hc_url_s *url)
 			content = gs_get_content_from_path_and_version (c, hc_url_get(url, HCURL_PATH), version, &e);
 		}
 		if (NULL != content) {
-			if(gs_destroy_content (content, &e)) {
+			if (gs_destroy_content (content, &e)) {
 				GRID_DEBUG("Content %s deleted\n", hc_url_get(url, HCURL_PATH));
 			}
 			gs_content_free(content);

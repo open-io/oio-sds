@@ -156,8 +156,7 @@ GError* meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 		m2_onbean_cb cb, gpointer u0);
 
 GError* meta2_backend_delete_alias(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gboolean sync_del,
-		m2_onbean_cb cb, gpointer u0);
+		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0);
 
 GError* meta2_backend_get_properties(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0);

@@ -74,7 +74,7 @@ typedef GError* (*all_vers_cb) (struct meta2_backend_s *m2b,
 
 static void
 _notify_beans (struct meta2_backend_s *m2b, struct hc_url_s *url,
-		struct on_bean_ctx_s *obc)
+		struct on_bean_ctx_s *obc, const char *name)
 {
 	void sep (GString *gs) {
 		if (gs->len > 1 && gs->str[gs->len-1] != ',')
@@ -100,7 +100,7 @@ _notify_beans (struct meta2_backend_s *m2b, struct hc_url_s *url,
 		return;
 
 	GString *gs = g_string_new ("{");
-	g_string_append_printf (gs, "\"event\":\"%s\"", NAME_SRVTYPE_META2 ".content.new");
+	g_string_append_printf (gs, "\"event\":\"%s.%s\"", NAME_SRVTYPE_META2, name);
 	append_int64 (gs, "when", g_get_real_time());
 	g_string_append (gs, ",\"url\":{");
 	append_const (gs, "ns", hc_url_get(url, HCURL_NS));
@@ -381,7 +381,7 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 		meta2_filter_ctx_set_error(ctx, e);
 		rc = FILTER_KO;
 	} else {
-		_notify_beans (m2b, url, obc);
+		_notify_beans (m2b, url, obc, "content.new");
 		_on_bean_ctx_send_list(obc, TRUE);
 		rc = FILTER_OK;
 	}
@@ -456,7 +456,7 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_notify_beans (m2b, url, obc);
+	_notify_beans (m2b, url, obc, "content.append");
 	_on_bean_ctx_send_list(obc, TRUE);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -540,20 +540,13 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	(void) reply;
-	guint32 flags = 0;
-	gboolean sync_del = FALSE;
 	GError *e = NULL;
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
-	const char *fstr = meta2_filter_ctx_get_param(ctx, M2_KEY_GET_FLAGS);
-	if (fstr != NULL) {
-		flags = (guint32)atoi(fstr);
-	}
-	sync_del = BOOL(flags & M2V2_FLAG_SYNCDEL);
 
 	TRACE_FILTER();
-	e = meta2_backend_delete_alias(m2b, url, sync_del, _get_cb, obc);
+	e = meta2_backend_delete_alias(m2b, url, _get_cb, obc);
 	if(NULL != e) {
 		GRID_DEBUG("Fail to delete alias for url: %s", hc_url_get(url, HCURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
@@ -561,8 +554,7 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_notify_beans(m2b, url, obc);
-	_on_bean_ctx_send_list(obc, FALSE);
+	_notify_beans(m2b, url, obc, "content.deleted");
 	_on_bean_ctx_send_list(obc, TRUE);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -1297,7 +1289,7 @@ meta2_filter_action_content_commit_v1(struct gridd_filter_ctx_s *ctx,
 			break;
 		case DELETE:
 			GRID_DEBUG("Performing delete_alias on [%s]", hc_url_get(url, HCURL_WHOLE));
-			e = meta2_backend_delete_alias(m2b, url, FALSE, _cb, NULL);
+			e = meta2_backend_delete_alias(m2b, url, _cb, NULL);
 			break;
 	}
 
@@ -1305,30 +1297,6 @@ meta2_filter_action_content_commit_v1(struct gridd_filter_ctx_s *ctx,
 
 	if(NULL != e) {
 		GRID_DEBUG("Content commit failed : %s", e->message);
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	return FILTER_OK;
-}
-
-int
-meta2_filter_action_content_rollback_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	GError *e = NULL;
-
-	if (NULL != (e = meta2_backend_has_master_container(m2b, url))) {
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	/* we don't take care of any error */
-	e = m2b_transient_del(m2b, url);
-	if(NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	}

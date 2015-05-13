@@ -332,7 +332,7 @@ func_delete(gs_grid_storage_t *hc)
 {
 	gs_error_t *e = NULL;
 
-	if(hc_url_has(url, HCURL_PATH)) {
+	if (hc_url_has(url, HCURL_PATH)) {
 		/* content delete */
 		e = hc_delete_content(hc, url);
 		if(NULL != e) {
@@ -801,10 +801,6 @@ static struct help_s helps[] = {
 	{"propdel",   help_propdel},
 	{"quota",     help_quota},
 	{"version",   help_version},
-	{"snaplist",  help_snaplist},
-	{"snaptake",  help_snaptake},
-	{"snapdel",   help_snapdel},
-	{"snaprestore", help_snaprestore},
 	{NULL,        NULL},
 };
 

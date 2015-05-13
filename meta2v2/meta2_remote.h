@@ -78,11 +78,6 @@ gboolean meta2_remote_content_remove(const addr_info_t *m2, gint ms, GError **er
 gboolean meta2_remote_content_commit(const addr_info_t *m2, gint ms, GError **err,
 		struct hc_url_s *url);
 
-/** Rollback on the last operation performed on the given content in the
- * given container. */
-gboolean meta2_remote_content_rollback(const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url);
-
 /** Get the chunks locations of the given content in the givan container.
  * To be successful, the retrieval must target an opened container and
  * an online content. */
@@ -105,9 +100,6 @@ GSList *meta2_remote_content_add_in_fd(int *fd, gint ms, GError **err, struct hc
 /** @see meta2_remote_content_add() */
 GSList* meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err, struct hc_url_s *url,
 		gint count, gint distance, const gchar *notin, const gchar *broken);
-
-/** @see meta2_remote_content_rollback() */
-gboolean meta2_remote_content_rollback_in_fd(int *fd, gint ms, GError **err, struct hc_url_s *url);
 
 /* ------------------------------------------------------------------------- */
 

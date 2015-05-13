@@ -231,10 +231,6 @@ int meta2_filter_action_get_spare_chunks(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_action_content_commit_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-/*! Call backend and rollback an operation on a content using informations in filter context */
-int meta2_filter_action_content_rollback_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Call backend and delete a content using informations in filter context */
 int meta2_filter_action_remove_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);

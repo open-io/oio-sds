@@ -163,7 +163,7 @@ GError* m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *ur
 		struct bean_ALIASES_s **out);
 
 GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct hc_url_s *url, gboolean del_chunks, m2_onbean_cb cb, gpointer u0);
+		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0);
 
 /* ------------------------------------------------------------------------- */
 
@@ -228,9 +228,6 @@ GError* m2db_set_container_status(struct sqlx_sqlite3_s *sq3, guint32 r);
 
 GError* m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		struct hc_url_s *url, GSList *beans);
-
-GError* m2db_purge_alias_being_deleted(struct sqlx_sqlite3_s *sq3, GSList *beans,
-		GSList **deleted);
 
 /**
  * @param db

@@ -930,13 +930,17 @@ _bean_debug(GString *gstr, gpointer bean)
 }
 
 void
-_bean_debugl2 (GSList *beans)
+_bean_debugl2 (const char *tag, GSList *beans)
 {
+	if (!GRID_DEBUG_ENABLED())
+		return;
+	GString *gs = g_string_new("");
 	for (; beans ;beans=beans->next) {
-		GString *gs = _bean_debug (NULL, beans->data);
-		GRID_WARN (" BEAN > %s", gs->str);
-		g_string_free (gs, TRUE);
+		g_string_set_size (gs, 0);
+		gs = _bean_debug (gs, beans->data);
+		GRID_DEBUG (" %s > %s", tag, gs->str);
 	}
+	g_string_free (gs, TRUE);
 }
 
 void

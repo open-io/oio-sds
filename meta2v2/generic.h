@@ -151,7 +151,7 @@ GError* _db_get_FK_by_name_buffered(gpointer bean, const gchar *name,
 
 GString* _bean_debug(GString *gstr, gpointer bean);
 
-void _bean_debugl2 (GSList *beans);
+void _bean_debugl2 (const char *tag, GSList *beans);
 
 /** */
 void _bean_randomize(gpointer bean, gboolean avoid_pk);

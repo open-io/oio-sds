@@ -166,10 +166,9 @@ m2v2_remote_pack_COPY(struct hc_url_s *url, const gchar *src)
 }
 
 GByteArray*
-m2v2_remote_pack_DEL(struct hc_url_s *url, gboolean sync_del)
+m2v2_remote_pack_DEL(struct hc_url_s *url)
 {
-	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_DEL, url, NULL,
-			sync_del? M2V2_FLAG_SYNCDEL : 0);
+	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_DEL, url, NULL, 0);
 }
 
 GByteArray*
@@ -504,10 +503,9 @@ m2v2_remote_execute_GET_BY_CHUNK(const gchar *target, struct hc_url_s *url,
 }
 
 GError*
-m2v2_remote_execute_DEL(const gchar *target, struct hc_url_s *url,
-		gboolean sync_del, GSList **out)
+m2v2_remote_execute_DEL(const gchar *target, struct hc_url_s *url)
 {
-	return _m2v2_request(target, m2v2_remote_pack_DEL(url, sync_del), out);
+	return _m2v2_request(target, m2v2_remote_pack_DEL(url), NULL);
 }
 
 GError*
