@@ -125,7 +125,6 @@ write_gba(const void *b, gsize bSize, void *key)
 GByteArray*
 message_marshall_gba(MESSAGE m, GError **err)
 {
-	GByteArray *result = NULL;
 	asn_enc_rval_t encRet;
 
 	/*sanity check */
@@ -145,7 +144,7 @@ message_marshall_gba(MESSAGE m, GError **err)
 
 	/*try to encode */
 	guint32 u32 = 0;
-	result = g_byte_array_sized_new(256);
+	GByteArray *result = g_byte_array_sized_new(256);
 	g_byte_array_append(result, (guint8*)&u32, sizeof(u32));
 	encRet = der_encode(&asn_DEF_Message, m, write_gba, result);
 
@@ -748,6 +747,8 @@ message_extract_body_gba(MESSAGE msg, GByteArray **result)
 	void *b = NULL;
 	gsize bsize = 0;
 	GError *err = NULL;
+
+	*result = NULL;
 	if (0 > message_get_BODY(msg, &b, &bsize, &err)) {
 		g_prefix_error (&err, "Body error: ");
 		return err;
