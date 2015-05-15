@@ -19,6 +19,9 @@
 from string import Template
 import os, errno
 
+#env.G_DEBUG=fatal_warnings
+#env.G_SLICE=debug-blocks
+
 template_flask_gridinit = """
 [service.${NS}-flask]
 group=${NS},localhost,flask
@@ -368,14 +371,6 @@ env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 """
 
 template_gridinit_ns = """
-[service.${NS}-gridevents]
-group=${NS},localhost,events
-on_die=respawn
-enabled=false
-start_at_boot=false
-command=${EXE_PREFIX}-cluster-agent -s SDS,${NS},events--child-evt=${NS} ${CFGDIR}/agent.conf
-env.PATH=${PATH}
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 
 [service.${NS}-conscience]
 group=${NS},localhost,conscience
@@ -388,11 +383,11 @@ env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 
 [service.${NS}-account-agent]
-group=${NS},localhost,account-agent
+group=${NS},localhost,events
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-account-agent.py ${NS}
+command=${EXE_PREFIX}-event-agent ${CFGDIR}/events-agent.conf
 env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 """
@@ -426,10 +421,16 @@ agent=${RUNDIR}/agent.sock
 
 template_local_ns = """
 [${NS}]
-zookeeper=${IP}:2181
+${NOZK}zookeeper=${IP}:2181
 conscience=${IP}:${PORT_CS}
 endpoint=${IP}:${PORT_ENDPOINT}
-account-agent=ipc://${RUNDIR}/account-agent.sock
+event-agent=ipc://${RUNDIR}/event-agent.sock
+"""
+
+template_events_agent = """
+[eventagent]
+bind_addr = ipc://${RUNDIR}/event-agent.sock
+workers = 5
 """
 
 HOME = str(os.environ['HOME'])
@@ -489,10 +490,10 @@ def generate (ns, ip, options={}):
 		stgpol = str(options.M2_STGPOL)
 
 	if options.NO_META0 is None:
-		for i in range(1, 1+getint(options.NB_META0,1)):
+		for i in range(1, 1+getint(options.NB_META0, 1)):
 			services.append(('meta0', EXE_PREFIX + '-meta0-server', i, next_port()))
 	if options.NO_META1 is None:
-		for i in range(1, 1+getint(options.NB_META1,3)):
+		for i in range(1, 1+getint(options.NB_META1, 3)):
 			services.append(('meta1', EXE_PREFIX + '-meta1-server', i, next_port()))
 	if options.NO_META2 is None:
 		for i in range(1, 1+getint(options.NB_META2, meta2_replicas)):
@@ -529,6 +530,8 @@ def generate (ns, ip, options={}):
 		f.write(tpl.safe_substitute(env))
 		env['PORT_CS'] = port_cs
 		env['PORT_ENDPOINT'] = port_endpoint
+		if options.NO_ZOOKEEPER is not None:
+			env['NOZK'] = '#'
 		tpl = Template(template_local_ns)
 		f.write(tpl.safe_substitute(env))
 
@@ -608,6 +611,11 @@ def generate (ns, ip, options={}):
 		tpl = Template(template_account_flask_gridinit)
 		f.write(tpl.safe_substitute(env))
 
+	# Events agent configuration
+	with open(CFGDIR + '/' + 'events-agent.conf', 'w+') as f:
+		tpl = Template(template_events_agent)
+		f.write(tpl.safe_substitute(env))
+
 	# Central agent configuration
 	env['PORT'] = port_agent
 	with open(CFGDIR + '/'+ 'agent.conf', 'w+') as f:
@@ -630,6 +638,8 @@ def main ():
 	parser.add_option("-S", "--stgpol",
 			action="store", type="string", dest="M2_STGPOL",
 			help="How many replicas for META2")
+
+	parser.add_option("--no-zookeeper", action="store_true", dest="NO_ZOOKEEPER")
 
 	parser.add_option("--no-meta0", action="store_true", dest="NO_META0")
 	parser.add_option("--no-meta1", action="store_true", dest="NO_META1")
