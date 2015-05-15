@@ -125,7 +125,8 @@ _gba_request (struct meta1_service_url_s *m1u,
 {
 	gboolean _on_reply (gpointer ctx, MESSAGE reply) {
 		GByteArray **pgba = ctx;
-		message_extract_body_gba (reply, pgba);
+		GError *e = message_extract_body_gba (reply, pgba);
+		if (e) g_clear_error (&e);
 		return TRUE;
 	}
 
