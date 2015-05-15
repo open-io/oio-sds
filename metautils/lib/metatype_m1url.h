@@ -46,7 +46,7 @@ void meta1_service_url_clean(struct meta1_service_url_s *u);
 /**
  * @param uv
  */
-void meta1_service_url_vclean(struct meta1_service_url_s **uv);
+void meta1_service_url_cleanv(struct meta1_service_url_s **uv);
 
 /**
  * @param u

@@ -67,22 +67,6 @@ meta1_url_dup(struct meta1_service_url_s *u)
 	return result;
 }
 
-static void
-free_urlv(struct meta1_service_url_s **uv)
-{
-	struct meta1_service_url_s **p;
-
-	if (!uv)
-		return;
-
-	for (p=uv; *p ;p++) {
-		if (*p)
-			g_free(*p);
-	}
-
-	g_free(uv);
-}
-
 static gint
 urlv_get_max_seq(struct meta1_service_url_s **uv)
 {
@@ -183,8 +167,7 @@ convert_url_to_serviceinfo(struct meta1_service_url_s *u, const gchar *excludeur
 	}
 
 	g_ptr_array_add(tmp, NULL);
-	if ( extracted )
-		free_urlv(extracted);
+	meta1_service_url_cleanv(extracted);
 	return (struct service_info_s**)g_ptr_array_free(tmp, FALSE);
 }
 
@@ -197,7 +180,6 @@ __del_container_srvtype_properties(struct sqlx_sqlite3_s *sq3,
    GError *err = NULL;
     gint rc;
     sqlite3_stmt *stmt = NULL;
-    gchar* tmp_name = NULL;
 
     sqlite3_prepare_debug(rc, sq3->db,
         "DELETE FROM properties WHERE cid = ? AND name LIKE ?", -1, &stmt, NULL);
@@ -205,15 +187,16 @@ __del_container_srvtype_properties(struct sqlx_sqlite3_s *sq3,
         err = M1_SQLITE_GERROR(sq3->db, rc);
     else {
         int len = strlen(srvtype)+10;
-        tmp_name = g_malloc0(sizeof(gchar)*len);
-        if (tmp_name) {
+        gchar *tmp_name = g_malloc0(sizeof(gchar)*len);
+		if (tmp_name) {
 			g_snprintf(tmp_name, len, "%s.%%", srvtype);
 			(void) sqlite3_bind_blob(stmt, 1, cid, sizeof(container_id_t), NULL);
 			(void) sqlite3_bind_text(stmt, 2, tmp_name, strlen(tmp_name), NULL);
-			 do { rc = sqlite3_step(stmt); } while (rc == SQLITE_ROW);
-			 if (rc != SQLITE_OK && rc != SQLITE_DONE)
-			 	err = M1_SQLITE_GERROR(sq3->db, rc);
+			do { rc = sqlite3_step(stmt); } while (rc == SQLITE_ROW);
+			if (rc != SQLITE_OK && rc != SQLITE_DONE)
+				err = M1_SQLITE_GERROR(sq3->db, rc);
 			sqlite3_finalize_debug(rc, stmt);
+			g_free (tmp_name);
 		}
 	}
 
@@ -313,6 +296,8 @@ __del_container_services(struct meta1_backend_s *m1,
 				__del_container_srvtype_properties(sq3, cid, srvtype);
 			}
 		}
+		meta1_service_url_cleanv (used);
+
 		GError *err2 = __notify_services_by_cid(m1, sq3, cid);
 		if (err2 != NULL) {
 			gchar buf[128] = {0};
@@ -705,7 +690,7 @@ __get_services_up(struct meta1_backend_s *m1, struct meta1_service_url_s **src)
 				g_ptr_array_add(gpa, meta1_url_dup(*pe));
 		}
 
-		free_urlv(extracted);
+		meta1_service_url_cleanv(extracted);
 		extracted = NULL;
 	}
 
@@ -756,11 +741,11 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 		struct meta1_service_url_s **up = __get_services_up(m1, used);
 		if (up && *up) {
 			*result = pack_urlv(up);
-			free_urlv(up);
-			free_urlv(used);
+			meta1_service_url_cleanv(up);
+			meta1_service_url_cleanv(used);
 			return NULL;
 		}
-		free_urlv(up);
+		meta1_service_url_cleanv(up);
 	}
 
 	/* No service available, poll a new one */
@@ -774,8 +759,7 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 		seq = urlv_get_max_seq(used);
 		seq = (seq<0 ? 1 : seq+1);
 
-		if (NULL != (m1_url = __poll_services(m1, replicas, ct, seq,
-				used, &err))) {
+		if (NULL != (m1_url = __poll_services(m1, replicas, ct, seq, used, &err))) {
 			if (!(mode & M1V2_GETSRV_DRYRUN)) {
 				struct sqlx_repctx_s *repctx = NULL;
 				err = sqlx_transaction_begin(sq3, &repctx);
@@ -791,7 +775,7 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 			if (!err && result) {
 				struct meta1_service_url_s **unpacked = expand_url(m1_url);
 				*result = pack_urlv(unpacked);
-				free_urlv(unpacked);
+				meta1_service_url_cleanv(unpacked);
 
 				GError *err2 = __notify_services(m1, sq3, url);
 				if (err2 != NULL) {
@@ -805,7 +789,7 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 		}
 	}
 
-	free_urlv(used);
+	meta1_service_url_cleanv(used);
 	return err;
 }
 
@@ -947,8 +931,8 @@ meta1_backend_get_all_services(struct meta1_backend_s *m1, const container_id_t 
                 struct meta1_service_url_s **expanded;
                 expanded = expand_urlv(used);
                 *result = pack_urlv(expanded);
-                free_urlv(expanded);
-                free_urlv(used); 			
+                meta1_service_url_cleanv(expanded);
+                meta1_service_url_cleanv(used); 			
 		}
 
         sqlx_repository_unlock_and_close_noerror(sq3);
@@ -1030,8 +1014,8 @@ meta1_backend_get_container_all_services(struct meta1_backend_s *m1,
 				struct meta1_service_url_s **expanded;
 				expanded = expand_urlv(uv);
 				*result = pack_urlv(expanded);
-				free_urlv(expanded);
-				free_urlv(uv);
+				meta1_service_url_cleanv(expanded);
+				meta1_service_url_cleanv(uv);
 			}
 		}
 		sqlx_repository_unlock_and_close_noerror(sq3);
@@ -1376,7 +1360,7 @@ _update_m1_policy(struct meta1_backend_s *m1,
 failedend:
 	if (args)
 		g_free(args);
-	free_urlv(m1_srv_url);
+	meta1_service_url_cleanv(m1_srv_url);
 
 	return err;
 }
@@ -1610,8 +1594,8 @@ __notify_services(struct meta1_backend_s *m1,
 				(const guint32 *)hc_url_get_id(url));
 
 		g_string_free(notif, TRUE);
-		free_urlv(services2);
-		free_urlv(services);
+		meta1_service_url_cleanv(services2);
+		meta1_service_url_cleanv(services);
 	}
 	return err;
 }
