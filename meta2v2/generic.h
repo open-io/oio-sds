@@ -153,7 +153,6 @@ GString* _bean_debug(GString *gstr, gpointer bean);
 
 void _bean_debugl2 (const char *tag, GSList *beans);
 
-/** */
 void _bean_randomize(gpointer bean, gboolean avoid_pk);
 
 /** Returns a newly allocated blank bean of the goven type */
@@ -176,6 +175,10 @@ void _bean_set_field_value(gpointer bean, guint pos, gpointer pv);
 
 /** Appends the bean into 'gpa'.  */
 void _bean_buffer_cb(gpointer gpa, gpointer bean);
+
+/** Prepends the bean to the GSList pointed (2x) by plist, and
+ * sets <plist> with the new list.  */
+void _bean_list_cb(gpointer plist, gpointer bean);
 
 #define _bean_has_field(bean,pos) (HDR(bean)->fields & (1<<(pos)))
 #define _bean_set_field(bean,pos) (HDR(bean)->fields |= (1<<(pos)))

@@ -74,7 +74,7 @@ typedef GError* (*all_vers_cb) (struct meta2_backend_s *m2b,
 
 static void
 _notify_beans (struct meta2_backend_s *m2b, struct hc_url_s *url,
-		struct on_bean_ctx_s *obc, const char *name)
+		GSList *beans, const char *name)
 {
 	void sep (GString *gs) {
 		if (gs->len > 1 && gs->str[gs->len-1] != ',')
@@ -108,7 +108,7 @@ _notify_beans (struct meta2_backend_s *m2b, struct hc_url_s *url,
 	append_const (gs, "user", hc_url_get(url, HCURL_USER));
 	append_const (gs, "type", hc_url_get(url, HCURL_TYPE));
 	g_string_append (gs, "},\"data\":[");
-	meta2_json_dump_all_xbeans (gs, obc->l);
+	meta2_json_dump_all_xbeans (gs, beans);
 	g_string_append (gs, "]}");
 	m2b->notify.hook (m2b->notify.udata, g_string_free (gs, FALSE));
 }
@@ -294,18 +294,17 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
+	GSList *added = NULL, *deleted = NULL;
+
 	GRID_DEBUG("Putting %d beans in [%s]%s", g_slist_length(beans),
 			hc_url_get(url, HCURL_WHOLE),
 			meta2_filter_ctx_get_param(ctx, M2_KEY_OVERWRITE)?
 			" (overwrite)":"");
 
 	if (NULL != meta2_filter_ctx_get_param(ctx, M2_KEY_OVERWRITE)) {
-		e = meta2_backend_force_alias(m2b, url, beans);
-		if (!e) {
-			e = meta2_backend_get_alias(m2b, url, 0, _get_cb, obc);
-		}
+		e = meta2_backend_force_alias(m2b, url, beans, &deleted, &added);
 	} else {
-		e = meta2_backend_put_alias(m2b, url, beans, _get_cb, obc);
+		e = meta2_backend_put_alias(m2b, url, beans, &deleted, &added);
 	}
 
 	if (NULL != e) {
@@ -313,11 +312,14 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 		meta2_filter_ctx_set_error(ctx, e);
 		rc = FILTER_KO;
 	} else {
-		_notify_beans (m2b, url, obc, "content.new");
+		_notify_beans (m2b, url, added, "content.new");
+		_notify_beans (m2b, url, deleted, "content.deleted");
 		_on_bean_ctx_send_list(obc, TRUE);
 		rc = FILTER_OK;
 	}
 
+	_bean_cleanl2 (added);
+	_bean_cleanl2 (deleted);
 	_on_bean_ctx_clean(obc);
 	return rc;
 }
@@ -341,9 +343,8 @@ _copy_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		// For notification purposes, we need to load all the beans
 		struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 		e = meta2_backend_get_alias(m2b, url, M2V2_FLAG_NOPROPS, _get_cb, obc);
-		if (!e) {
+		if (!e)
 			_on_bean_ctx_send_list(obc, TRUE);
-		}
 		_on_bean_ctx_clean(obc);
 	}
 
@@ -388,7 +389,7 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_notify_beans (m2b, url, obc, "content.append");
+	_notify_beans (m2b, url, obc->l, "content.append");
 	_on_bean_ctx_send_list(obc, TRUE);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -486,7 +487,7 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_notify_beans(m2b, url, obc, "content.deleted");
+	_notify_beans(m2b, url, obc->l, "content.deleted");
 	_on_bean_ctx_send_list(obc, TRUE);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -798,12 +799,11 @@ _add_beans(struct meta2_backend_s *m2b,
 		const gchar *pos_pfx)
 {
 	GError *err = NULL;
-	GSList *beans;
+	GSList *beans = NULL, *added = NULL, *deleted = NULL;
 
 	/* Map the raw content into beans */
 	if (pos_pfx) {
-		char* _make_subpos(guint32 pos, void *udata)
-		{
+		char* _make_subpos(guint32 pos, void *udata) {
 			char *prefix = udata;
 			return g_strdup_printf("%s%u", prefix, pos);
 		}
@@ -814,7 +814,11 @@ _add_beans(struct meta2_backend_s *m2b,
 	}
 
 	/* force the alias beans to be saved */
-	err = meta2_backend_force_alias(m2b, url, beans);
+	err = meta2_backend_force_alias(m2b, url, beans, &deleted, &added);
+	_notify_beans (m2b, url, added, "content.new");
+	_notify_beans (m2b, url, deleted, "content.del");
+	_bean_cleanl2(added);
+	_bean_cleanl2(deleted);
 	_bean_cleanl2(beans);
 
 	return err;

@@ -816,7 +816,7 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
-		GSList *beans, m2_onbean_cb cb, gpointer u0)
+		GSList *in, GSList **out_deleted, GSList **out_added)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -824,6 +824,8 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 
 	g_assert(m2b != NULL);
 	g_assert(url != NULL);
+	g_assert(out_deleted != NULL);
+	g_assert(out_added != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -837,7 +839,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		args.lbpool = m2b->backend.lb;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_put_alias(&args, beans, cb, u0)))
+			if (!(err = m2db_put_alias(&args, in, out_deleted, out_added)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 			if (!err)
@@ -887,8 +889,8 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 }
 
 GError*
-meta2_backend_force_alias(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *beans)
+meta2_backend_force_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
+		GSList *in, GSList **out_deleted, GSList **out_added)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -896,6 +898,8 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b,
 
 	g_assert(m2b != NULL);
 	g_assert(url != NULL);
+	g_assert(out_deleted != NULL);
+	g_assert(out_added != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -909,7 +913,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b,
 		args.lbpool = m2b->backend.lb;
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
-			if (!(err = m2db_force_alias(&args, beans)))
+			if (!(err = m2db_force_alias(&args, in, out_deleted, out_added)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
