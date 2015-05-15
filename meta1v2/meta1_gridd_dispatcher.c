@@ -469,9 +469,7 @@ meta1_dispatch_v2_SRV_GETALL(struct gridd_reply_ctx_s *reply,
 	reply->subject("%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype);
 	(void) ignored;
 
-	if (!srvtype)
-		reply->send_error (0, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
-	else if (NULL != (err = meta1_backend_get_container_all_services(m1, url, srvtype, &result)))
+	if (NULL != (err = meta1_backend_get_container_all_services(m1, url, srvtype, &result)))
 		reply->send_error(0, err);
 	else {
 		reply->add_body(marshall_stringv_and_clean(&result));
