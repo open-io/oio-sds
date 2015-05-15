@@ -874,6 +874,14 @@ _bean_buffer_cb(gpointer gpa, gpointer bean)
 	g_ptr_array_add((GPtrArray*)gpa, bean);
 }
 
+void
+_bean_list_cb(gpointer plist, gpointer bean)
+{
+	g_assert(plist != NULL);
+	g_assert(bean != NULL);
+	*((GSList**)plist) = g_slist_prepend (*((GSList**)plist), bean);
+}
+
 /* -------------------------------------------------------------------------- */
 
 GString*

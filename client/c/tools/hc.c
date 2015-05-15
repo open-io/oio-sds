@@ -228,7 +228,7 @@ func_put(gs_grid_storage_t *hc)
 {
 	gs_error_t *e = NULL;
 
-	if(hc_url_has(url, HCURL_PATH)) {
+	if (hc_url_has(url, HCURL_PATH)) {
 		if (NULL != copy_source) {
 			/* copy content */
 			e = hc_func_copy_content(hc, url, copy_source->str);
