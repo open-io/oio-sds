@@ -72,7 +72,7 @@ meta1_service_url_clean(struct meta1_service_url_s *u)
 }
 
 void
-meta1_service_url_vclean(struct meta1_service_url_s **uv)
+meta1_service_url_cleanv(struct meta1_service_url_s **uv)
 {
 	struct meta1_service_url_s **p;
 

@@ -157,7 +157,8 @@ _sqlx_action_bodyv (struct req_args_s *args,
 {
 	gboolean _on_reply (gpointer ctx, struct message_s *reply) {
 		GByteArray **pgba = ctx;
-		message_extract_body_gba (reply, pgba);
+		GError *e = message_extract_body_gba (reply, pgba);
+		if (e) g_clear_error (&e);
 		return TRUE;
 	}
 
