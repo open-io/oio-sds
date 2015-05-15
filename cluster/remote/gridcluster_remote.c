@@ -216,15 +216,17 @@ GSList *
 gcluster_get_services(const char *target, gdouble timeout,
 		const gchar *type, gboolean full, GError ** error)
 {
-	MESSAGE req = message_create_named(NAME_MSGNAME_CS_GET_SRV);
-	message_add_fields_str (req,
-			NAME_MSGKEY_TYPENAME, type,
-			NAME_MSGKEY_FULL, full?"1":NULL,
-			NULL);
+	struct message_s *req = message_create_named(NAME_MSGNAME_CS_GET_SRV);
+	message_add_field (req, NAME_MSGKEY_TYPENAME, type, strlen(type));
+	if (full)
+		message_add_field_struint (req, NAME_MSGKEY_FULL, 1);
+	GByteArray *gba = message_marshall_gba_and_clean(req);
 
 	GSList *out = NULL;	
 	GError *err = gridd_client_exec_and_decode (target, timeout,
-			message_marshall_gba_and_clean(req), &out, service_info_unmarshall);
+			gba, &out, service_info_unmarshall);
+	g_byte_array_unref(gba);
+
 	if (err) {
 		if (error)
 			g_error_transmit(error, err);
