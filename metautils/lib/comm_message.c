@@ -755,6 +755,8 @@ message_extract_body_gba(MESSAGE msg, GByteArray **result)
 	}
 
 	*result = g_byte_array_new();
+	if (err)
+		g_clear_error (&err);
 	if (b && bsize)
 		g_byte_array_append(*result, b, bsize);
 	return NULL;
@@ -770,6 +772,8 @@ message_extract_body_string(MESSAGE msg, gchar **result)
 		g_prefix_error (&err, "Body error: ");
 		return err;
 	}
+	if (err)
+		g_clear_error (&err);
 
 	if (!b || !bsize) {
 		*result = g_malloc0(sizeof(void*));

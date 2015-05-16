@@ -396,6 +396,8 @@ gridd_client_exec_and_concat (const gchar *to, gdouble timeout, GByteArray *req,
 			g_clear_error (&err);
 			return FALSE;
 		} else {
+			if (err)
+				g_clear_error (&err);
 			if (b && bsize)
 				g_byte_array_append(tmp, b, bsize);
 			return TRUE;
