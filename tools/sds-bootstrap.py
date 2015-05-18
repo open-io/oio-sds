@@ -516,6 +516,10 @@ def generate (ns, ip, options={}):
 			VERSIONING=versioning, STGPOL=stgpol,
 			M2_REPLICAS=meta2_replicas, M2_DISTANCE=str(1),
 			SQLX_REPLICAS=sqlx_replicas, SQLX_DISTANCE=str(1))
+	if options.NO_ZOOKEEPER is not None:
+		env['NOZK'] = '#'
+	else:
+		env['NOZK'] = ''
 
 	mkdir_noerror(SDSDIR)
 	mkdir_noerror(CODEDIR)
@@ -530,8 +534,6 @@ def generate (ns, ip, options={}):
 		f.write(tpl.safe_substitute(env))
 		env['PORT_CS'] = port_cs
 		env['PORT_ENDPOINT'] = port_endpoint
-		if options.NO_ZOOKEEPER is not None:
-			env['NOZK'] = '#'
 		tpl = Template(template_local_ns)
 		f.write(tpl.safe_substitute(env))
 
