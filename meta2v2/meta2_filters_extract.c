@@ -141,20 +141,12 @@ meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	GError *err = NULL;
-	void *b = NULL;
-	gsize blen = 0;
 	struct hc_url_s *url = NULL;
 
-	if (0 >= message_get_BODY(reply->request, &b, &blen, &err)) {
-		if (!err)
-			err = NEWERROR(CODE_BAD_REQUEST, "Missing Body");
-		g_prefix_error(&err, "No content: ");
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	if (!b || blen<=0) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid body");
+	gsize blen = 0;
+	void *b = message_get_BODY(reply->request, &blen);
+	if (!b || blen <= 0) {
+		err = NEWERROR(CODE_BAD_REQUEST, "Missing Body");
 		meta2_filter_ctx_set_error(ctx, err);
 		return FILTER_KO;
 	}

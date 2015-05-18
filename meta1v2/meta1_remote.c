@@ -68,15 +68,16 @@ meta1_remote_get_container_by_id (struct metacnx_ctx_s *ctx, struct hc_url_s *ur
 	struct gridd_client_s *client = NULL;
 
 	gboolean on_reply(gpointer c1, MESSAGE reply) {
-		void *b = NULL;
-		gsize bsize = 0;
 		(void) c1;
-		if (0 < message_get_BODY(reply, &b, &bsize, NULL)) {
-			raw_container = meta1_raw_container_unmarshall(b, bsize, err);
+		gsize bsize = 0;
+		void *b = message_get_BODY(reply, &bsize);
+		if (b && bsize) {
+			if (raw_container)
+				meta1_raw_container_clean (raw_container);
+			raw_container = meta1_raw_container_unmarshall(b, bsize, NULL);
 		}
 		return TRUE;
 	}
-
 
 	MESSAGE request = message_create_named (NAME_MSGNAME_M1_CONT_BY_ID);
 	message_add_url (request, url);
@@ -90,7 +91,7 @@ meta1_remote_get_container_by_id (struct metacnx_ctx_s *ctx, struct hc_url_s *ur
 	if ((*err = gridd_client_loop(client)) != NULL)
 		goto end_label;
 
-	do{
+	do {
 		struct gridd_client_s *clients[2];
 		clients[0] = client;
 		clients[1] = NULL;
@@ -101,7 +102,7 @@ meta1_remote_get_container_by_id (struct metacnx_ctx_s *ctx, struct hc_url_s *ur
 end_label:
 	g_byte_array_unref(packed);
 	gridd_client_free(client);
-	return(raw_container);
+	return raw_container;
 }
 
 /* M1V2 -------------------------------------------------------------------- */
@@ -110,10 +111,9 @@ static gboolean
 on_reply(gpointer ctx, MESSAGE reply)
 {
 	GByteArray *out = ctx;
-	void *b = NULL;
 	gsize bsize = 0;
-
-	if (0 < message_get_BODY(reply, &b, &bsize, NULL)) {
+	void *b = message_get_BODY(reply, &bsize);
+	if (b) {
 		if (out != NULL)
 			g_byte_array_append(out, b, bsize);
 	}

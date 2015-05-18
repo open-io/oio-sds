@@ -86,16 +86,18 @@ meta1_IsMaster(gchar* bddname)
 	// received data function
 	gboolean on_reply(gpointer ctx, MESSAGE reply) {
 		(void) ctx;
-		int status = 0;
+		guint status = 0;
 		gchar* msg = NULL;
 
 		TRIP_TRACE("%s(%p)", __FUNCTION__, reply);
 
-		if (0 < metaXClient_reply_simple(reply, &status, &msg, NULL)) {
-			TRIP_TRACE("%s(%d)(%s)", __FUNCTION__, status, msg);
+		GError *e = metaXClient_reply_simple(reply, &status, &msg);
+		if (e)
+			g_clear_error (&e);
+		if (msg)
 			message = msg;
-		}
 
+		TRIP_TRACE("%s(%d)(%s)", __FUNCTION__, status, msg);
 		return TRUE;
 	}
 

@@ -1747,8 +1747,6 @@ on_reply_GETVERS(gpointer ctx, MESSAGE reply)
 {
 	struct event_client_s *ec;
 	struct udata_GETVERS_s *udata;
-	void *b = NULL;
-	gsize bsize = 0;
 
 	GRID_TRACE2("%s(%p,%p)", __FUNCTION__, ctx, reply);
 	EXTRA_ASSERT(reply != NULL);
@@ -1757,7 +1755,9 @@ on_reply_GETVERS(gpointer ctx, MESSAGE reply)
 	udata = ec->udata;
 	EXTRA_ASSERT(udata != NULL);
 
-	if (0 < message_get_BODY(reply, &b, &bsize, NULL)) {
+	gsize bsize = 0;
+	void *b = message_get_BODY(reply, &bsize);
+	if (b) {
 		GTree *version;
 
 		if (!(version = version_decode(b, bsize))) {

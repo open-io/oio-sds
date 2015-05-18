@@ -388,20 +388,11 @@ gridd_client_exec_and_concat (const gchar *to, gdouble timeout, GByteArray *req,
 		GByteArray **out)
 {
 	gboolean _cb (GByteArray *tmp, MESSAGE reply) {
-		void *b = NULL;
 		gsize bsize = 0;
-		GError *err = NULL;
-		if (0 > message_get_BODY(reply, &b, &bsize, &err)) {
-			GRID_WARN("BUG/Corruption : (%d) %s", err->code, err->message);
-			g_clear_error (&err);
-			return FALSE;
-		} else {
-			if (err)
-				g_clear_error (&err);
-			if (b && bsize)
-				g_byte_array_append(tmp, b, bsize);
-			return TRUE;
-		}
+		void *b = message_get_BODY(reply, &bsize);
+		if (b && bsize)
+			g_byte_array_append(tmp, b, bsize);
+		return TRUE;
 	}
 	GByteArray *tmp = NULL;
 	if (out)

@@ -35,30 +35,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static gint
 plugin_matcher(MESSAGE m, void *param, GError ** err)
 {
-	gchar *name;
-	gsize nameLen;
-
-	(void)param;
-	if (!m) {
-		GSETERROR(err, "Invalid parameter");
-		return -1;
-	}
-
-	if (!message_has_NAME(m, err))
+	(void)param, (void)err;
+	gsize len = 0;
+	void *n = message_get_NAME(m, &len);
+	if (!n || len != 4)
 		return 0;
-
-	message_get_NAME(m, (void *) &name, &nameLen, err);
-	if (!name || nameLen <= 0) {
-		INFO("The message contains an invalid NAME parameter");
-		return 0;
-	}
-
-	return ((nameLen >= 4)
-	    && (*(name) == 'P' || *(name) == 'p')
-	    && (*(name + 1) == 'I' || *(name + 1) == 'i')
-	    && (*(name + 2) == 'N' || *(name + 2) == 'n')
-	    && (*(name + 3) == 'G' || *(name + 3) == 'g')
-	    )? 1 : 0;
+	return 0 == memcmp(n, "PING", 4);
 }
 
 static gint

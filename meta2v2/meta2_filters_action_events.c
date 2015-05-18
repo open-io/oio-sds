@@ -54,7 +54,7 @@ _append_url (GString *gs, struct hc_url_s *url)
 		if (v)
 			g_string_append_printf (gs, "\"%s\":\"%s\"", n, v);
 		else
-			g_string_append_printf (gs, "\"%s\":null", n, v);
+			g_string_append_printf (gs, "\"%s\":null", n);
 	}
 	_append ("ns", hc_url_get(url, HCURL_NS));
 	g_string_append_c (gs, ',');

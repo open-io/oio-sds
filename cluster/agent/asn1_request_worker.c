@@ -285,9 +285,9 @@ write_request(worker_t *worker, GError **error)
 	if (data->buffer == NULL) {
 
 		req = message_create();
-		message_set_NAME(req, asn1_session->req_name, strlen(asn1_session->req_name), NULL);
+		message_set_NAME(req, asn1_session->req_name, strlen(asn1_session->req_name));
 		if (asn1_session->req_body)
-			message_set_BODY(req, asn1_session->req_body, asn1_session->req_body_size, NULL);
+			message_set_BODY(req, asn1_session->req_body, asn1_session->req_body_size);
 
 		if (asn1_session->req_headers) {
 			GList *key = NULL;
@@ -402,7 +402,7 @@ read_response(worker_t *worker, GError **error)
 	worker_data_t *data = NULL;
 	asn1_session_t *asn1_session = NULL;
 	MESSAGE resp = NULL;
-	gint status = CODE_INTERNAL_ERROR;
+	guint status = CODE_INTERNAL_ERROR;
 	gchar *msg = NULL;
 
 	TRACE_POSITION();
@@ -435,8 +435,9 @@ read_response(worker_t *worker, GError **error)
 			goto error_unmarshall;
 		}
 
-		if (!metaXClient_reply_simple(resp, &status, &msg, error)) {
-			GSETERROR(error, "Failed to decode response");
+		GError *e = metaXClient_reply_simple(resp, &status, &msg);
+		if (e) {
+			g_propagate_error (error, e);
 			goto error_decode;
 		}
 
@@ -446,26 +447,19 @@ read_response(worker_t *worker, GError **error)
 		}
 
 		/*free the old headers and get the new*/
-		if (asn1_session->resp_headers) {
+		if (asn1_session->resp_headers)
 			g_hash_table_destroy(asn1_session->resp_headers);
-			asn1_session->resp_headers = NULL;
-		}
-		if (!message_get_fields(resp, &(asn1_session->resp_headers), error)) {
+		asn1_session->resp_headers = message_get_fields(resp);
+		if (!asn1_session->resp_headers) {
 			GSETERROR(error, "Failed to extract headers from message");
 			goto error_headers;
 		}
 
 		/*free the old body and get the new*/
-		asn1_session->resp_body = NULL;
 		asn1_session->resp_body_size = 0;
-		if (message_has_BODY(resp, error)) {
-			if (!message_get_BODY(resp, &(asn1_session->resp_body), &(asn1_session->resp_body_size), error)) {
-				GSETERROR(error, "Failed to extract body from message");
-				goto error_body;
-			}
-		}
+		asn1_session->resp_body = message_get_BODY(resp, &(asn1_session->resp_body_size));
 
-		rc = asn1_session->response_handler( worker, error );
+		rc = asn1_session->response_handler (worker, error);
 		asn1_session->resp_body_size = 0;
 		asn1_session->resp_body = NULL;
 
@@ -503,7 +497,6 @@ read_response(worker_t *worker, GError **error)
 	/*worker is left unchanged, wa wait for the remaining of the reply*/
 	return(1);
 
-error_body:
 error_headers:
 error_status:
 	g_free(msg);

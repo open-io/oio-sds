@@ -82,14 +82,11 @@ _log_time(GString *gs, struct request_context_s *req_ctx)
 static void
 _log_reqid(GString *gs, MESSAGE req)
 {
-	void *field=NULL;
-	gsize field_len=0;
-
 	g_string_append_c(gs, ' ');
 
-	if (0 >= message_get_ID(req, &field, &field_len, NULL))
-		g_string_append_c(gs, '_');
-	else if (!field_len)
+	gsize field_len=0;
+	void *field = message_get_ID(req, &field_len);
+	if (!field || !field_len)
 		g_string_append_c(gs, '_');
 	else {
 		gsize max = field_len * 2 + 2;
@@ -105,10 +102,9 @@ _log_reqid(GString *gs, MESSAGE req)
 static void
 _log_reqname(GString *gs, MESSAGE req)
 {
-	void *field=NULL;
 	gsize field_len=0;
-
-	if (0 > message_get_NAME(req, &field, &field_len, NULL)) {
+	void *field = message_get_NAME(req, &field_len);
+	if (!field) {
 		g_string_append_c(gs, ' ');
 		g_string_append_c(gs, '-');
 	}

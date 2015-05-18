@@ -257,11 +257,11 @@ static GError *
 _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 {
 	GError *err;
-	gint status = 0;
+	guint status = 0;
 	gchar *message = NULL;
 
-	if (!metaXClient_reply_simple(reply, &status, &message, NULL))
-		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid reply");
+	if (NULL != (err = metaXClient_reply_simple(reply, &status, &message)))
+		return err;
 
 	if (CODE_IS_NETWORK_ERROR(status)) {
 		err = NEWERROR(status, "net error: %s", message);

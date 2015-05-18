@@ -351,20 +351,13 @@ timer_expire_services(gpointer u)
 static gboolean
 request_body_matches_namespace(struct request_context_s *req_ctx, GError **err)
 {
-	void *body = NULL;
-	gsize body_size = 0;
 	GSList *list_ns = NULL;
 	int rc;
 
-	rc = message_get_BODY(req_ctx->request, &body, &body_size, NULL);
-	/* No body, consider the namespace matches, for backward compatibility
-	 * with old clients */
-	if (rc == 0)
+	gsize body_size = 0;
+	void *body = message_get_BODY(req_ctx->request, &body_size);
+	if (!body)
 		return TRUE;
-	if (rc < 0) {
-		GSETERROR(err, "Invalid request");
-		return FALSE;
-	}
 
 	if (!strings_unmarshall(&list_ns, body, &body_size, err)) {
 		GSETERROR(err, "Invalid request body");
@@ -438,20 +431,15 @@ static gint
 handler_rm_broken_containers(struct request_context_s *req_ctx)
 {
 	struct reply_context_s ctx;
-	void *data = NULL;
-	gsize data_size;
 	GSList *elements = NULL, *list = NULL;
 
 	init_reply_ctx_with_request(req_ctx, &ctx);
 
-	if (message_has_BODY(req_ctx->request,NULL)) {
+	gsize data_size;
+	void *data = message_get_BODY(req_ctx->request, &data_size);
+	if (data) {
 		guint counter;
 
-		/* Extract MESSAGE from request */
-		if (0 >= message_get_BODY(req_ctx->request, &data, &data_size, &(ctx.warning))) {
-			GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad request : no body");
-			goto errorLabel;
-		}
 		if (!strings_unmarshall(&elements, data, &data_size, &(ctx.warning))) {
 			GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad request : failed to unmarshall broken container list");
 			goto errorLabel;
@@ -512,14 +500,14 @@ handler_fix_broken_containers(struct request_context_s *req_ctx)
 {
 	gint rc;
 	struct reply_context_s ctx;
-	void *data = NULL;
-	gsize data_size;
 	GSList *containers = NULL, *list = NULL;
 
 	init_reply_ctx_with_request(req_ctx, &ctx);
 
 	/* Extract MESSAGE from request */
-	if (0 >= message_get_BODY(req_ctx->request, &data, &data_size, &(ctx.warning))) {
+	gsize data_size;
+	void *data = message_get_BODY(req_ctx->request, &data_size);
+	if (!data) {
 		GSETCODE(&(ctx.warning),CODE_BAD_REQUEST,"Invalid request - missing body");
 		goto errorLabel;
 	}
@@ -572,15 +560,15 @@ static gint
 handler_push_broken_containers(struct request_context_s *req_ctx)
 {
 	struct reply_context_s ctx;
-	void *data = NULL;
-	gsize data_size;
 	GSList *elements = NULL, *list = NULL;
 
 	init_reply_ctx_with_request(req_ctx, &ctx);
 	reply_context_set_body(&ctx, NULL, 0, 0);
 
 	/* Extract MESSAGE from request */
-	if (0 >= message_get_BODY(req_ctx->request, &data, &data_size, &(ctx.warning))) {
+	gsize data_size;
+	void *data = message_get_BODY(req_ctx->request, &data_size);
+	if (!data) {
 		GSETCODE(&(ctx.warning),CODE_BAD_REQUEST,"Invalid request - missing body");
 		goto errorLabel;
 	}
@@ -945,17 +933,17 @@ static gint
 handler_get_service(struct request_context_s *req_ctx)
 {
 	gboolean rc = 0;
-	void *data;
-	gsize data_size;
+
 	struct srvget_s sg;
-	struct reply_context_s reply_ctx;
-
 	memset(&sg, 0x00, sizeof(sg));
-	init_reply_ctx_with_request(req_ctx, &reply_ctx);
-	sg.full = (0 < message_get_field(req_ctx->request,"FULL",4, &data, &data_size, NULL));
+	sg.full = message_extract_flag(req_ctx->request, NAME_MSGKEY_FULL, FALSE);
 
-	/* get the service type's name */
-	if (0 >= message_get_field(req_ctx->request, BUFLEN(NAME_MSGKEY_TYPENAME), &data, &data_size, &(reply_ctx.warning))) {
+	struct reply_context_s reply_ctx;
+	init_reply_ctx_with_request(req_ctx, &reply_ctx);
+
+	gsize data_size = 0;
+	void *data = message_get_field(req_ctx->request, NAME_MSGKEY_TYPENAME, &data_size);
+	if (!data) {
 		GSETCODE(&(reply_ctx.warning), CODE_BAD_REQUEST, "Bad request: no/invalid TYPENAME field");
 	} else {
 		gchar **array_types = buffer_split(data, data_size, ",", 0);
@@ -967,10 +955,8 @@ handler_get_service(struct request_context_s *req_ctx)
 				array_types, prepare_response_bodies, &sg);
 		/* XXX end of critical section */
 
-		if (rc) {
+		if (rc)
 			rc = reply_services(&reply_ctx, sg.response_bodies);
-		}
-
 		g_strfreev(array_types);
 	}
 
@@ -1097,21 +1083,14 @@ push_service(struct conscience_s *cs, struct service_info_s *si, gboolean lock_s
 static gint
 handler_push_service(struct request_context_s *req_ctx)
 {
-	gboolean lock_action = FALSE;
-	gint counter;
-	GSList *list_srvinfo, *l;
-	void *data;
-	struct reply_context_s ctx;
-	gsize data_size;
+	GSList *list_srvinfo = NULL;
 
-	list_srvinfo = NULL;
+	struct reply_context_s ctx;
 	init_reply_ctx_with_request(req_ctx, &(ctx));
 
-	/*check if we must work on the lock*/
-	lock_action = (0 < message_get_field(req_ctx->request,"LOCK",sizeof("LOCK")-1, &data, &data_size, NULL));
-
-	/*Get the body and unpack it as a list of services */
-	if (0 >= message_get_BODY(req_ctx->request, &data, &data_size, &(ctx.warning))) {
+	gsize data_size = 0;
+	void *data = message_get_BODY(req_ctx->request, &data_size);
+	if (!data) {
 		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad requets : no body");
 		goto errorLabel;
 	}
@@ -1120,10 +1099,13 @@ handler_push_service(struct request_context_s *req_ctx)
 		goto errorLabel;
 	}
 
-	DEBUG("[%d] services to be pushed in namespace [%s]", g_slist_length(list_srvinfo), conscience_get_namespace(conscience));
+	DEBUG("[%d] services to be pushed in namespace [%s]",
+			g_slist_length(list_srvinfo), conscience_get_namespace(conscience));
 
 	/*Now push each service and reply the success */
-	for (counter = 0, l = list_srvinfo; l; l = g_slist_next(l)) {
+	gboolean lock_action = message_extract_flag(req_ctx->request, NAME_MSGKEY_LOCK, FALSE);
+	gint counter = 0;
+	for (GSList *l = list_srvinfo; l; l = g_slist_next(l)) {
 		if (l->data) {
 			push_service(conscience, (struct service_info_s *) (l->data), lock_action);
 			service_info_clean(l->data);
@@ -1243,7 +1225,7 @@ rm_service(struct conscience_s *cs, struct service_info_s *si)
 static gint
 handler_rm_service(struct request_context_s *req_ctx)
 {
-	gint counter;
+	gint counter = 0;
 	struct reply_context_s ctx;
 
 	void *data;
@@ -1254,7 +1236,8 @@ handler_rm_service(struct request_context_s *req_ctx)
 	data_size = 0;
 
 	/*Get the body and unpack it as a list of services */
-	if (0 < message_get_field(req_ctx->request, NAME_MSGKEY_TYPENAME,sizeof(NAME_MSGKEY_TYPENAME)-1,&data,&data_size, NULL)) {
+	data = message_get_field(req_ctx->request, NAME_MSGKEY_TYPENAME, &data_size);
+	if (!data) {
 		gchar str_type[LIMIT_LENGTH_SRVTYPE+1];
 		struct conscience_srvtype_s *srvtype;
 
@@ -1274,11 +1257,11 @@ handler_rm_service(struct request_context_s *req_ctx)
 		NOTICE("[NS=%s][SRVTYPE=%s] flush done!", conscience_get_namespace(conscience), srvtype->type_name);
 		reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	}
-	else if (0 < message_has_BODY(req_ctx->request,NULL)) {
-		GSList *list_srvinfo, *l;
+	else if (message_has_BODY(req_ctx->request)) {
+		GSList *list_srvinfo = NULL;
 
-		list_srvinfo = NULL;
-		if (0 >= message_get_BODY(req_ctx->request, &data, &data_size, &(ctx.warning))) {
+ 		data = message_get_BODY(req_ctx->request, &data_size);
+		if (!data) {
 			GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "No body");
 			goto errorLabel;
 		}
@@ -1290,7 +1273,7 @@ handler_rm_service(struct request_context_s *req_ctx)
 		NOTICE("[NS=%s] [%d] services to be removed", conscience_get_namespace(conscience), g_slist_length(list_srvinfo));
 
 		/*Now push each service and reply the success */
-		for (counter = 0, l = list_srvinfo; l; l = g_slist_next(l)) {
+		for (GSList *l = list_srvinfo; l; l = g_slist_next(l)) {
 			if (l->data) {
 				rm_service(conscience, (struct service_info_s *) (l->data));
 				g_free(l->data);
@@ -1361,14 +1344,9 @@ plugin_matcher(MESSAGE m, void *param, GError ** err)
 		return -1;
 	}
 
-	if (!message_has_NAME(m, err))
+	name = message_get_NAME(m, &nameLen);
+	if (!name || nameLen <= 0)
 		return 0;
-
-	message_get_NAME(m, (void *) &name, &nameLen, err);
-	if (!name || nameLen <= 0) {
-		INFO("The message contains an invalid NAME parameter");
-		return 0;
-	}
 
 	c = module_find_handler(name, nameLen);
 	return (c ? 1 : 0);
@@ -1388,7 +1366,7 @@ plugin_handler(MESSAGE m, gint cnx, void *param, GError ** err)
 		return -1;
 	}
 
-	message_get_NAME(m, (void *) &name, &nameLen, err);
+	name = message_get_NAME(m, &nameLen);
 	if (!name || nameLen <= 6) {
 		GSETERROR(err, "The message contains an invalid NAME parameter");
 		return -1;

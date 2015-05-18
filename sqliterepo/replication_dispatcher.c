@@ -1385,8 +1385,6 @@ sqlx_dispatch_REPLICATE(struct gridd_reply_ctx_s *reply,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_name_mutable_s name;
 	GError *err = NULL;
-	void *b = NULL;
-	gsize bsize = 0;
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1395,9 +1393,10 @@ sqlx_dispatch_REPLICATE(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
-	if (0 >= message_get_BODY(reply->request, &b, &bsize, NULL)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "missing body");
-		reply->send_error(CODE_BAD_REQUEST, err);
+	gsize bsize = 0;
+	void *b = message_get_BODY(reply->request, &bsize);
+	if (!b) {
+		reply->send_error(CODE_BAD_REQUEST, NEWERROR(CODE_BAD_REQUEST, "missing body"));
 		return TRUE;
 	}
 
@@ -1666,8 +1665,6 @@ sqlx_dispatch_RESTORE(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
-	guint8 *dump;
-	gsize dump_size;
 	struct sqlx_name_mutable_s name;
 
 	(void) ignored;
@@ -1678,11 +1675,13 @@ sqlx_dispatch_RESTORE(struct gridd_reply_ctx_s *reply,
 	SQLXNAME_STACKIFY(name);
 
 	/* The body is the raw base */
-	if (0 >= message_get_BODY(reply->request, (void**)&dump, &dump_size, NULL)) {
+	gsize dump_size = 0;
+	guint8 *dump = message_get_BODY(reply->request, &dump_size);
+	if (!dump) {
 		reply->send_error(0, NEWERROR(CODE_BAD_REQUEST, "Missing body"));
 		return TRUE;
 	}
-	if (!dump || dump_size < 1024) {
+	if (dump_size < 1024) {
 		reply->send_error(0, NEWERROR(CODE_BAD_REQUEST, "Body too short"));
 		return TRUE;
 	}
@@ -2282,25 +2281,17 @@ sqlx_dispatch_LEANIFY(struct gridd_reply_ctx_s *reply,
 static GError*
 _extract_params(MESSAGE msg, TableSequence_t **params)
 {
-	gint rc;
-	void *b = NULL;
 	gsize bsize = 0;
-	asn_dec_rval_t rv;
-	asn_codec_ctx_t ctx;
-
-	rc = message_get_BODY(msg, &b, &bsize, NULL);
-
-	if (0 > rc)
+	void *b = message_get_BODY(msg, &bsize);
+	if (!b)
 		return NEWERROR(CODE_BAD_REQUEST, "Bad body");
 
-	if (rc > 0) {
-		memset(&ctx, 0, sizeof(ctx));
-		ctx.max_stack_size = 8192;
-		rv = ber_decode(&ctx, &asn_DEF_TableSequence, (void**)params, b, bsize);
-		if (rv.code != RC_OK)
-			return NEWERROR(CODE_BAD_REQUEST, "body decoding error");
-	}
-
+	asn_codec_ctx_t ctx;
+	memset(&ctx, 0, sizeof(ctx));
+	ctx.max_stack_size = 8192;
+	asn_dec_rval_t rv = ber_decode(&ctx, &asn_DEF_TableSequence, (void**)params, b, bsize);
+	if (rv.code != RC_OK)
+		return NEWERROR(CODE_BAD_REQUEST, "body decoding error");
 	return NULL;
 }
 

@@ -117,7 +117,6 @@ peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 
 	gboolean on_reply(gpointer ctx, MESSAGE reply) {
 		GError *err2 = NULL;
-		void *b = NULL;
 		gsize bsize = 0;
 		gint64 remaining = -1;
 		(void) ctx;
@@ -125,7 +124,8 @@ peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 		err2 = message_extract_strint64(reply, "remaining", &remaining);
 		g_clear_error(&err2);
 
-		if (0 < message_get_BODY(reply, &b, &bsize, NULL)) {
+		void *b = message_get_BODY(reply, &bsize);
+		if (!b) {
 			GByteArray *dump = g_byte_array_new();
 			g_byte_array_append(dump, b, bsize);
 			err2 = callback(dump, remaining, cb_arg);

@@ -63,10 +63,9 @@ static GError *
 extract_prefix(MESSAGE msg, const gchar *n,
 		gboolean mandatory, guint8 *prefix)
 {
-	void *f;
 	gsize f_size;
-
-	if (0 >= message_get_field(msg, n, strlen(n), &f, &f_size, NULL)) {
+	void *f = message_get_field(msg, n, &f_size);
+	if (!f) {
 		if (mandatory)
 			return NEWERROR(CODE_BAD_REQUEST, "Missing field '%s'", n);
 		return NULL;
@@ -78,19 +77,6 @@ extract_prefix(MESSAGE msg, const gchar *n,
 	prefix[1] = ((guint8*)f)[1];
 	GRID_TRACE("Got header [%s] <- [%02X%02X]", n, prefix[0], prefix[1]);
 	return NULL;
-}
-
-static gboolean
-extract_nocheck(MESSAGE msg)
-{
-	void *f;
-        gsize f_size;
-
-	if (0 >= message_get_field(msg, NAME_MSGKEY_NOCHECK, sizeof(NAME_MSGKEY_NOCHECK)-1, &f, &f_size, NULL)) {
-		return TRUE;
-	}
-
-	return FALSE;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -324,11 +310,9 @@ static gboolean
 meta0_dispatch_v2_ASSIGN_PREFIX(struct gridd_reply_ctx_s *reply,
 		struct meta0_disp_s *m0disp, gpointer ignored)
 {
-	GError *err;
-
 	(void) ignored;
-	err = meta0_assign_prefix_to_meta1(m0disp->m0, m0disp->ns_name,
-			extract_nocheck(reply->request));
+	GError *err = meta0_assign_prefix_to_meta1(m0disp->m0, m0disp->ns_name,
+			message_extract_flag(reply->request, NAME_MSGKEY_NOCHECK, FALSE));
 	if (NULL != err) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -343,12 +327,9 @@ static gboolean
 meta0_dispatch_v2_DISABLE_META1(struct gridd_reply_ctx_s *reply,
 		struct meta0_disp_s *m0disp, gpointer ignored)
 {
-	GError *err;
-	gchar **urls = NULL;
-
 	(void) ignored;
-
-	err = message_extract_body_strv(reply->request, &urls);
+	gchar **urls = NULL;
+	GError *err = message_extract_body_strv(reply->request, &urls);
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
@@ -357,7 +338,7 @@ meta0_dispatch_v2_DISABLE_META1(struct gridd_reply_ctx_s *reply,
 	reply->subject("m1=%u", g_strv_length(urls));
 
 	err = meta0_assign_disable_meta1(m0disp->m0, m0disp->ns_name, urls,
-			extract_nocheck(reply->request));
+			message_extract_flag(reply->request, NAME_MSGKEY_NOCHECK, FALSE));
 	if (NULL != err) {
 		g_prefix_error(&err, "disable meta1 error:");
 		reply->send_error(0, err);

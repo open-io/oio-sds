@@ -37,9 +37,9 @@ build_request(gchar * req_name, void *body, gsize body_size)
 {
 	MESSAGE req = message_create();
 	if (body)
-		message_set_BODY(req, body, body_size, NULL);
-	message_set_NAME(req, req_name, strlen(req_name), NULL);
-	return (req);
+		message_set_BODY(req, body, body_size);
+	message_set_NAME(req, req_name, strlen(req_name));
+	return req;
 }
 
 static gboolean

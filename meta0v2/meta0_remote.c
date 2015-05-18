@@ -92,9 +92,9 @@ meta0_remote_get_meta1_one(addr_info_t *m0a, gint ms, const guint8 *prefix,
 		GError ** err)
 {
 	GByteArray *hdr = g_byte_array_append(g_byte_array_new(), prefix, 2);
-	GByteArray *req = message_marshall_gba_and_clean(message_create_request(
-			NULL, NULL, NAME_MSGNAME_M0_GETONE, NULL,
-			NAME_MSGKEY_PREFIX, hdr, NULL));
+	MESSAGE request = message_create_named (NAME_MSGNAME_M0_GETONE);
+	message_add_fields_gba (request, NAME_MSGKEY_PREFIX, hdr, NULL);
+	GByteArray *req = message_marshall_gba_and_clean (request);
 	g_byte_array_unref(hdr);
 	return _m0_remote_m0info (m0a, ms, req, err);
 }
@@ -127,7 +127,7 @@ meta0_remote_fill(addr_info_t *m0a, gint ms, gchar **urls,
 	MESSAGE request = message_create_named(NAME_MSGNAME_M0_FILL);
 	message_add_field_strint64(request, NAME_MSGKEY_REPLICAS, nbreplicas);
 	gchar *body = g_strjoinv("\n", urls);
-	message_set_BODY(request, body, strlen(body), NULL);
+	message_set_BODY(request, body, strlen(body));
 	g_free(body);
 	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
@@ -168,7 +168,7 @@ meta0_remote_disable_meta1(addr_info_t *m0a, gint ms, gchar **urls, gboolean noc
 	if (nocheck)
 		message_add_field(request, NAME_MSGKEY_NOCHECK, "yes", 3);
 	gchar *body = g_strjoinv("\n", urls);
-	message_set_BODY(request, body, strlen(body), NULL);
+	message_set_BODY(request, body, strlen(body));
 	g_free(body);
 	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
@@ -202,37 +202,36 @@ meta0_remote_destroy_meta0zknode(addr_info_t *m0a, gint ms, gchar *urls, GError 
 gchar **
 meta0_remote_get_meta1_info(addr_info_t *m0a, gint ms, GError **err)
 {
-	GError *local_err = NULL;
+	GError *e = NULL;
 	gchar **result = NULL;
 	struct gridd_client_s *client = NULL;
 	gchar target[64];
 
 	gboolean on_reply(gpointer c1, MESSAGE reply) {
-		void *body = NULL;
-		gsize bsize = 0;
 		(void) c1;
 
-		if (0 < message_get_BODY(reply, &body, &bsize, NULL)) {
-			gchar **tmpResult = NULL;
-			tmpResult=metautils_decode_lines((gchar *)body , ((gchar *)body) + bsize);
-
-			if (tmpResult) {
-				guint len,resultlen,i;
-				gchar **v0;
-				if ( result != NULL )
-					resultlen=g_strv_length(result);
-				else
-					resultlen=0;
-				len = g_strv_length(tmpResult);
-				v0 = g_realloc(result, sizeof(gchar*) * (len + resultlen+1));
-				for ( i=0; i<len ; i++) {
-					v0[resultlen+i] = g_strdup(tmpResult[i]);
-				}
-				v0[len+resultlen]=NULL;
-				result = g_strdupv(v0);
-				g_strfreev(v0);
-				g_strfreev(tmpResult);
+		gchar **tmpResult = NULL;
+		if (NULL != (e = message_extract_body_strv (reply, &tmpResult))) {
+			GRID_WARN("GetMeta1Info : invalid reply");
+			g_clear_error (&e);
+			return FALSE;
+		}
+		if (tmpResult) {
+			guint len,resultlen,i;
+			gchar **v0;
+			if ( result != NULL )
+				resultlen=g_strv_length(result);
+			else
+				resultlen=0;
+			len = g_strv_length(tmpResult);
+			v0 = g_realloc(result, sizeof(gchar*) * (len + resultlen+1));
+			for ( i=0; i<len ; i++) {
+				v0[resultlen+i] = g_strdup(tmpResult[i]);
 			}
+			v0[len+resultlen]=NULL;
+			result = g_strdupv(v0);
+			g_strfreev(v0);
+			g_strfreev(tmpResult);
 		}
 		return TRUE;
 	}
@@ -245,11 +244,11 @@ meta0_remote_get_meta1_info(addr_info_t *m0a, gint ms, GError **err)
 	client = gridd_client_create(target, packed, NULL, on_reply);
 	if ( ms > 0 )
 		gridd_client_set_timeout(client, ms, ms);
-	local_err = gridd_client_run (client);
+	e = gridd_client_run (client);
 	g_byte_array_free(packed, TRUE);
 
-	if (local_err) {
-		*err = local_err;
+	if (e) {
+		*err = e;
 		if (result) {
 			g_strfreev(result);
 			result = NULL;

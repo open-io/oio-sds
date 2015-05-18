@@ -266,28 +266,18 @@ _dump_table_json(struct Table *table)
 static gboolean
 _on_reply(gpointer u, MESSAGE reply)
 {
-	int i;
-	GError *err = NULL;
-	void *b = NULL;
-	size_t bsize = 0;
-	struct TableSequence *ts = NULL;
-
 	(void) u;
+	size_t bsize = 0;
+	void *b = message_get_BODY(reply, &bsize);
+	if (!b || !bsize)
+		return TRUE;
 
-	if (0 < message_get_BODY(reply, &b, &bsize, &err)) {
-		if (err) {
-			g_printerr("Could not get body : (%d) %s\n", err->code, err->message);
-			g_clear_error(&err);
-			return TRUE;
-		}
-	}
-
-	asn_dec_rval_t rv;
 	asn_codec_ctx_t ctx;
-
 	memset(&ctx, 0, sizeof(ctx));
-	ctx.max_stack_size = 512 * 1024;
-	rv = ber_decode(&ctx, &asn_DEF_TableSequence, (void**)&ts, b, bsize);
+	ctx.max_stack_size = 8 * 1024;
+
+	struct TableSequence *ts = NULL;
+	asn_dec_rval_t rv = ber_decode(&ctx, &asn_DEF_TableSequence, (void**)&ts, b, bsize);
 	if (rv.code != RC_OK) {
 		g_printerr("Invalid reply from SQLX: bad body, decoding error\n");
 		return FALSE;
@@ -295,18 +285,18 @@ _on_reply(gpointer u, MESSAGE reply)
 
 	if (flag_json) {
 		g_print("{ \"result\" : [\n");
-		for (i=0; i < ts->list.count ; i++)
+		for (int i=0; i < ts->list.count ; i++)
 			_dump_table_json(ts->list.array[i]);
 		g_print(" ]\n}");
 	}
 	else if (flag_xml) {
 		g_print("<result>\n");
-		for (i=0; i < ts->list.count ; i++)
+		for (int i=0; i < ts->list.count ; i++)
 			_dump_table_xml(ts->list.array[i]);
 		g_print("</result>");
 	}
 	else {
-		for (i=0; i < ts->list.count ; i++)
+		for (int i=0; i < ts->list.count ; i++)
 			_dump_table_text(ts->list.array[i]);
 	}
 

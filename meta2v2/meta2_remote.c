@@ -114,24 +114,17 @@ meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
 		GByteArray *metadata, GByteArray **new_metadata)
 {
 	gboolean get_sys_metadata (GError **err0, gpointer udata, gint code, MESSAGE rep) {
-		(void)udata, (void)code;
+		(void)udata, (void)code, (void)err0;
 		if (!rep)
 			return FALSE;
 		if (!new_metadata)
 			return TRUE;
-		void *field=NULL;
+		*new_metadata = NULL;
 		gsize fieldLen=0;
-		int rc = message_get_field (rep, NAME_HEADER_METADATA_SYS, sizeof(NAME_HEADER_METADATA_SYS)-1, &field, &fieldLen, err0);
-		switch (rc) {
-			case 1:
-				*new_metadata = g_byte_array_append( g_byte_array_new(), field, fieldLen);
-				return TRUE;
-			case 0:
-				*new_metadata = NULL;
-				return TRUE;
-		}
-		GSETERROR(err0, "Cannot lookup the updated systemetadata");
-		return FALSE;
+		void *field = message_get_field (rep, NAME_HEADER_METADATA_SYS, &fieldLen);
+		if (field)
+			*new_metadata = g_byte_array_append( g_byte_array_new(), field, fieldLen);
+		return TRUE;
 	}
 
 	struct code_handler_s codes [] = {
