@@ -445,6 +445,7 @@ install(FILES
 			metautils_sockets.h
 			metautils_strings.h
 			metautils_svc_policy.h
+			metautils_syscall.h
 			metautils_task.h
 			storage_policy.h
 			test_addr.h
