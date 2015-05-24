@@ -868,12 +868,20 @@ gs_container_reconnect_and_refresh (gs_container_t *container, GError **err, gbo
 	// we must check if container is there.
 	gchar addr[STRLEN_ADDRINFO];
 	addr_info_to_string(&(container->meta2_addr), addr, STRLEN_ADDRINFO);
-	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, gs_get_full_vns(container->info.gs));
-	hc_url_set(url, HCURL_HEXID, container->str_cID);
-	*err = m2v2_remote_execute_HAS(addr, url);
-	hc_url_clean(url);
-	if (*err) {
+	do {
+		struct hc_url_s *url = hc_url_empty ();
+		hc_url_set (url, HCURL_NS, gs_get_full_vns(container->info.gs));
+		hc_url_set (url, HCURL_HEXID, container->str_cID);
+		GError *e = m2v2_remote_execute_HAS (addr, url);
+		hc_url_pclean (&url);
+		if (err && e) {
+			*err = e;
+			e = NULL;
+		}
+		if (e)
+			g_clear_error (&e);
+	} while (0);
+	if (err && *err) {
 		metautils_pclose(&(container->meta2_cnx));
 		return GS_ERROR;
 	}

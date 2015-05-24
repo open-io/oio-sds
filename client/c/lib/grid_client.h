@@ -779,11 +779,11 @@ struct gs_container_location_s * gs_locate_container_by_hexid(gs_grid_storage_t 
 	const char *hexid, gs_error_t **gserr);
 
 /**
- *  * @param client
- *   * @param hexid
- *    * @param gserr
- *     * @return
- *      */
+ * @param client
+ * @param hexid
+ * @param gserr
+ * @return
+ */
 struct gs_container_location_s * gs_locate_container_by_hexid_v2(gs_grid_storage_t *client,
     const char *hexid, char** out_nsname_on_m1, gs_error_t **gserr);
 

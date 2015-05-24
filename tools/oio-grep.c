@@ -40,14 +40,30 @@ _reset_matcher (struct matcher_s *matcher)
 }
 
 static void
+_check_and_dump (struct matcher_s *matcher)
+{
+	if (strstr (matcher->line, pattern))
+		fprintf(stdout, "%s:%s:%s\n", matcher->container, matcher->content, matcher->line);
+}
+
+static void
 _write_matches (struct matcher_s *matcher, const char *b, const size_t bSize)
 {
+	if (!b || !bSize)  { /* final tail call */
+		_check_and_dump (matcher);
+		_reset_matcher (matcher);
+		return;
+	}
+
 	for (size_t i=0; i<bSize ;i++) {
 		if (b[i] == '\n') {
-			if (strstr (matcher->line, pattern))
-				fprintf(stdout, "%s:%s:%s\n", matcher->container, matcher->content, matcher->line);
+			_check_and_dump (matcher);
 			_reset_matcher (matcher);
 		} else {
+			if (i >= sizeof(matcher->line)-1) {
+				_check_and_dump (matcher);
+				_reset_matcher (matcher);
+			}
 			if (b[i] != '\r')
 				matcher->line[ matcher->index++ ] = b[i];
 		}
