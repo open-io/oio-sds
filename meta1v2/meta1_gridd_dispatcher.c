@@ -39,8 +39,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_gridd_dispatcher.h"
 #include "./internals.h"
 
-static gsize m1b_bufsize_listbypref = 16384;
-
 static gboolean
 srv_to_addr(const gchar *srv, struct addr_info_s *a)
 {
@@ -575,106 +573,6 @@ meta1_dispatch_v2_CID_PROPDEL(struct gridd_reply_ctx_s *reply,
 	return TRUE;
 }
 
-struct reflist_ctx_s
-{
-	struct gridd_reply_ctx_s *reply;
-	GByteArray *gba;
-};
-
-static void
-reflist_hook(gpointer p, const gchar *ns, const gchar *ref)
-{
-	struct reflist_ctx_s *ctx = p;
-
-	if (!ctx->gba)
-		ctx->gba = g_byte_array_new();
-
-	g_byte_array_append(ctx->gba, (guint8*)ns, strlen(ns));
-	g_byte_array_append(ctx->gba, (guint8*)"/", 1);
-	g_byte_array_append(ctx->gba, (guint8*)ref, strlen(ref));
-	g_byte_array_append(ctx->gba, (guint8*)"\n", 1);
-
-	if (ctx->gba->len > m1b_bufsize_listbypref) {
-		ctx->reply->add_body(ctx->gba);
-		ctx->gba = NULL;
-		ctx->reply->send_reply(CODE_PARTIAL_CONTENT, "Partial content");
-	}
-}
-
-static void
-reflist_final(struct reflist_ctx_s *ctx, GError *err)
-{
-	if (err) {
-		if (ctx->gba)
-			g_byte_array_free(ctx->gba, TRUE);
-		ctx->reply->send_error(0, err);
-	}
-	else {
-		if (ctx->gba)
-			ctx->reply->add_body(ctx->gba);
-		ctx->reply->send_reply(CODE_FINAL_OK, "OK");
-	}
-
-	ctx->gba = NULL;
-	ctx->reply = NULL;
-}
-
-static gboolean
-meta1_dispatch_v2_SRV_LISTPREF(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
-{
-	struct hc_url_s *url = message_extract_url (reply->request);
-	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_SRVTYPE);
-	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
-	(void) ignored;
-
-	if (!srvtype)
-		reply->send_error (0, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
-	else {
-		struct reflist_ctx_s reflist_ctx;
-		reflist_ctx.gba = NULL;
-		reflist_ctx.reply = reply;
-		reply->send_reply(CODE_TEMPORARY, "Received");
-		GError *err = meta1_backend_list_references_by_prefix(m1, url,
-				reflist_hook, &reflist_ctx);
-		reflist_final(&reflist_ctx, err);
-	}
-
-	hc_url_clean (url);
-	g_free0 (srvtype);
-	return TRUE;
-}
-
-static gboolean
-meta1_dispatch_v2_SRV_LISTSERV(struct gridd_reply_ctx_s *reply,
-		struct meta1_backend_s *m1, gpointer ignored)
-{
-	struct hc_url_s *url = message_extract_url (reply->request);
-	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_SRVTYPE);
-	gchar *m1url = message_extract_string_copy (reply->request, NAME_MSGKEY_URL);
-	reply->subject("%s|%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype, m1url);
-	(void) ignored;
-
-	if (!srvtype)
-		reply->send_error (0, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
-	else if (m1url)
-		reply->send_error (0, NEWERROR(CODE_BAD_REQUEST, "Missing srvurl"));
-	else {
-		struct reflist_ctx_s reflist_ctx;
-		reflist_ctx.gba = NULL;
-		reflist_ctx.reply = reply;
-		reply->send_reply(CODE_TEMPORARY, "Received");
-		GError *err = meta1_backend_list_references_by_service(m1, url,
-				srvtype, m1url, reflist_hook, &reflist_ctx);
-		reflist_final(&reflist_ctx, err);
-	}
-
-	g_free0 (srvtype);
-	g_free0 (m1url);
-	hc_url_clean (url);
-	return TRUE;
-}
-
 static gboolean
 meta1_dispatch_v2_GET_PREFIX(struct gridd_reply_ctx_s *reply,
 	struct meta1_backend_s *m1, gpointer ignored)
@@ -712,8 +610,6 @@ meta1_gridd_get_requests(void)
 		{NAME_MSGNAME_M1V2_CID_PROPSET, (hook) meta1_dispatch_v2_CID_PROPSET,   NULL},
 		{NAME_MSGNAME_M1V2_CID_PROPDEL, (hook) meta1_dispatch_v2_CID_PROPDEL,   NULL},
 		{NAME_MSGNAME_M1V2_GETPREFIX,	(hook) meta1_dispatch_v2_GET_PREFIX,    NULL},
-		{NAME_MSGNAME_M1V2_LISTBYPREF,  (hook) meta1_dispatch_v2_SRV_LISTPREF,  NULL},
-		{NAME_MSGNAME_M1V2_LISTBYSERV,  (hook) meta1_dispatch_v2_SRV_LISTSERV,  NULL},
 
 		/* Old fashoned meta2-orentied requests */
 		{NAME_MSGNAME_M1_CREATE,        (hook) meta1_dispatch_v1_CREATE,   NULL},

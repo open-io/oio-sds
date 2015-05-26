@@ -21,25 +21,23 @@ And if it succeeds you will have the joy to experiment your own little SDS insta
 The build process of OpenIO SDS depends on:
 * cmake, make, cp, sed, bison, flex
 * python: more recently, the code generators became pythonic scripts. Pure python, no dependency.
+* python-devel: required for the integrityloop
+* python-distutils-extra: required for the installation process
+* httpd, httpd-devel
 * apr, apr-util-devel, apr-devel
 * [asn1c](https://github.com/vlm/asn1c)
 * attr, libattr-devel
-* curl, libcurl, libcurl-devel
-* dbus, dbus-devel, dbus-glib-devel
 * expat, expat-devel
-* gamin, gamin-devel
 * glib2, glib2-devel
 * [gridinit](https://github.com/open-io/gridinit)
-* httpd, httpd-devel
 * json-c, json-c-devel
 * libevent-devel
 * [librain](https://github.com/open-io/redcurrant-librain)
 * lzo, lzo-devel
+* curl, libcurl, libcurl-devel
 * neon, neon-devel
 * net-snmp, net-snmp-devel
 * openssl, openssl-devel
-* python-devel: required for the integrityloop
-* python-distutils-extra: required for the installation process
 * sqlite, sqlite-devel
 * zeromq3, zeromq3-devel
 * zookeeper-devel, libzookeeper\_mt.so : building with distribution's zookeeper client is OK, but the package ships with a lot of dependencies, including the openjdk. We recommand to use the official Oracle/Su JDK, and to build your own zookeeper client from the source to avoid a huge waste of space and bandwith.
