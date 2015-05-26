@@ -21,7 +21,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 
 #include <grid_client.h>
-#include <metautils/lib/metautils.h>
 
 static char *ns;
 static char *pattern;
@@ -104,8 +103,6 @@ _download (gs_grid_storage_t *gs, const char *container, const char *content)
 int
 main (int argc, char **args)
 {
-	HC_PROC_INIT (args, GRID_LOGLVL_WARN);
-
 	if (argc < 3) {
 		fprintf (stderr, "Usage: %s NAMESPACE PATTERN [CONTAINER/CONTENT]...\n", args[0]);
 		return 1;

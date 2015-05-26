@@ -110,28 +110,18 @@ License along with this library.
 # define CRIT_DOMAIN(D,FMT,...)    g_log((D), GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
 # define ALERT_DOMAIN(D,FMT,...)   g_log((D), GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
 
-/**
- * Cruising debug level. 
- *
- * Should not be altered by the application after the program has started.
- */
+/** Cruising debug level. 
+ * Should not be altered by the application after the program has started. */
 extern int main_log_level_default;
 
-/**
- * Current (transitional) debug level.
- *
- * May be altered by the application, signals, etc.
- */
+/** Current (transitional) debug level.
+ * May be altered by the application, signals, etc. */
 extern int main_log_level;
 
-/**
- * Number of seconds since Epoch when the debug level has been updated.
- */
+/** Number of seconds since Epoch when the debug level has been updated. */
 extern time_t main_log_level_update;
 
-/**
- * Should the logging system try to reduce the prefix of each line
- */
+/** Should the logging system try to reduce the prefix of each line */
 extern int main_log_flags;
 
 extern gchar syslog_id[256];
@@ -140,77 +130,38 @@ extern gchar syslog_id[256];
 #define LOG_FLAG_PURIFY 0x02
 #define LOG_FLAG_COLUMNIZE 0x04
 
-/**
- * @return
- */
+/* emulates log4c's init function */
 int log4c_init(void);
 
-/**
- * @param path
- * @return
- */
 int log4c_load(const char *path);
 
-/**
- * @return 
- */
 int log4c_fini(void);
 
-/**
- *
- */
 void logger_verbose(void);
 
-/**
- *
- */
 void logger_verbose_default(void);
 
-/**
- *
- */
 void logger_quiet(void);
 
-/**
- *
- * @param
- */
 void logger_init_level(int l);
 
 void logger_init_level_from_env(const gchar *k);
 
-/**
- *
- */
+void logger_lazy_init (void);
+
+/** If the level had been temporarily changed, reset it to the initial value. */
 void logger_reset_level(void);
 
 /** Writes the layed out message to stderr (not fd=2) with complete and
- * compact layout.
- *
- * @param log_domain
- * @param log_level
- * @param message
- * @param user_data
- */
+ * compact layout. */
 void logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data);
 
-/** Does nothing
- *
- * @param log_domain
- * @param log_level
- * @param message
- * @param user_data
- */
+/** Does nothing */
 void logger_noop(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data);
 
-/** Send the mesage though /dev/syslog, with simple layout
- * @param log_domain
- * @param log_level
- * @param message
- * @param user_data
- */
+/** Send the mesage though /dev/syslog, with simple layout */
 void logger_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data);
 

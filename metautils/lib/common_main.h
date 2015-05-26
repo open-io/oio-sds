@@ -31,17 +31,19 @@ License along with this library.
 #define HC_PROC_INIT(argv,LVL) do { \
 	grid_main_srand(); \
 	grid_main_set_prgname(argv[0]); \
-	g_log_set_default_handler(logger_stderr, NULL); \
+	logger_lazy_init (); \
 	logger_init_level(LVL); \
+	g_log_set_default_handler(logger_stderr, NULL); \
 } while (0)
 
 #define HC_TEST_INIT(argc,argv) do { \
 	grid_main_srand(); \
 	g_test_init (&argc, &argv, NULL); \
 	grid_main_set_prgname(argv[0]); \
-	g_log_set_default_handler(logger_stderr, NULL); \
+	logger_lazy_init (); \
 	logger_init_level(GRID_LOGLVL_INFO); \
 	logger_init_level_from_env("G_DEBUG_LEVEL"); \
+	g_log_set_default_handler(logger_stderr, NULL); \
 } while (0)
 
 /**

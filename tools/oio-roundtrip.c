@@ -20,9 +20,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
 
-#include <metautils/lib/metautils.h>
 #include <grid_client.h>
 #include <glib.h>
 
@@ -134,8 +136,6 @@ _delete (gs_grid_storage_t *gs, const char *container, const char *content)
 int
 main (int argc, char **args)
 {
-	HC_PROC_INIT (args, GRID_LOGLVL_WARN);
-
 	if (argc != 5) {
 		fprintf (stderr, "Usage: %s NAMESPACE CONTAINER CONTENT PATHLOCAL\n", args[0]);
 		return 1;
