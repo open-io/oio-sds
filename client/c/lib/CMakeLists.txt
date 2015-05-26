@@ -1,7 +1,6 @@
 include_directories(BEFORE .
 		 ../../..
-		${CMAKE_CURRENT_BINARY_DIR}/../../..
-		../../../metautils/lib)
+		${CMAKE_CURRENT_BINARY_DIR}/../../..)
 
 include_directories(AFTER
 		${OPENSSL_INCLUDE_DIRS}
