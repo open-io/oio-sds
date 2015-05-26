@@ -160,13 +160,6 @@ gboolean meta1_backend_base_already_created(struct meta1_backend_s *m1,
 
 typedef void (*m1b_ref_hook) (gpointer p, const gchar *ns, const gchar *ref);
 
-GError* meta1_backend_list_references_by_service(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *srvtype, const gchar *m1url,
-		m1b_ref_hook ref_hook, gpointer ref_hook_data);
-
-GError* meta1_backend_list_references_by_prefix(struct meta1_backend_s *m1,
-		struct hc_url_s *url, m1b_ref_hook ref_hook, gpointer ref_hook_data);
-
 gchar* meta1_backend_get_ns_name(const struct meta1_backend_s *m1);
 
 /** Get the ip:port the current process is listening to. */

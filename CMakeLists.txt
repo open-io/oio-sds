@@ -306,8 +306,6 @@ set(ATTR_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/attr")
 
 # check system configuration
 pkg_check_modules(APR REQUIRED apr-1)
-pkg_check_modules(DBUS REQUIRED dbus-1 dbus-glib-1)
-pkg_check_modules(GAMIN REQUIRED gamin)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0 gthread-2.0 gmodule-2.0)
 pkg_check_modules(LIBEVENT REQUIRED libevent)
 pkg_check_modules(NEON REQUIRED neon)
@@ -343,7 +341,7 @@ MESSAGE("asn1c at ${ASN1C_EXECUTABLE}")
 set(ASN1C_EXE_OPTS "-fwide-types")
 
 # Check every required module is present
-check_found("APR" "APACHE2" "ASN1C" "ATTR" "CURL" "DB" "DBUS" "EXPAT" "GAMIN"
+check_found("APR" "APACHE2" "ASN1C" "ATTR" "CURL" "DB" "EXPAT"
 		"GLIB2" "GRIDINIT" "JSONC" "LIBEVENT" "LIBRAIN" "LZO" "NEON" "NETSNMP"
 		"SQLITE3" "ZMQ" "ZK" "PYTHONINTERP")
 
@@ -381,9 +379,6 @@ add_subdirectory(./cluster/lib)
 add_subdirectory(./cluster/module)
 add_subdirectory(./cluster/remote)
 add_subdirectory(./cluster/tools)
-add_subdirectory(./crawler)
-add_subdirectory(./crawler/lib)
-add_subdirectory(./crawler/listener)
 add_subdirectory(./gridd/clients/ping)
 add_subdirectory(./gridd/clients/stats)
 add_subdirectory(./gridd/main)
