@@ -55,57 +55,22 @@ struct delta_debug_s
 	char *dump;
 };
 
-/**
- *
- *
- *
- */
 struct rawx_stats_rrd_s * rawx_stats_rrd_create(apr_pool_t *pool, time_t period);
 
-/**
- *
- *
- *
- */
 void rawx_stats_rrd_init(struct rawx_stats_rrd_s *rsr);
 
 void rawx_stats_rrd_lock(struct rawx_stats_rrd_s *rsr);
 
 void rawx_stats_rrd_unlock(struct rawx_stats_rrd_s *rsr);
 
-/**
- *
- *
- *
- */
 struct rawx_stats_rrd_s * rawx_stats_rrd_dup(apr_pool_t *pool, struct rawx_stats_rrd_s *rrd);
 
-/**
- *
- *
- *
- */
 void rawx_stats_rrd_push(struct rawx_stats_rrd_s *rsr, apr_uint32_t v);
 
-/**
- *
- *
- *
- */
 apr_uint32_t rawx_stats_rrd_get(struct rawx_stats_rrd_s *rsr);
 
-/**
- *
- *
- *
- */
 apr_uint32_t rawx_stats_rrd_get_delta(struct rawx_stats_rrd_s *rsr, time_t period);
 
-/**
- *
- *
- *
- */
 struct delta_debug_s *rawx_stats_rrd_debug_get_delta(struct rawx_stats_rrd_s *rsr, apr_pool_t *p, time_t period);
 
 char *rawx_stats_rrd_dump_values(struct rawx_stats_rrd_s *str, apr_pool_t *p);

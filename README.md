@@ -36,7 +36,6 @@ The build process of OpenIO SDS depends on:
 * curl, libcurl, libcurl-devel
 * neon, neon-devel
 * net-snmp, net-snmp-devel
-* openssl, openssl-devel
 * sqlite, sqlite-devel
 * zeromq3, zeromq3-devel
 * zookeeper-devel, libzookeeper\_mt.so : building with distribution's zookeeper client is OK, but the package ships with a lot of dependencies, including the openjdk. We recommand to use the official Oracle/Su JDK, and to build your own zookeeper client from the source to avoid a huge waste of space and bandwith.

@@ -24,9 +24,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <syslog.h>
 #include <time.h>
 
-// TODO FIXME replace with GLib equivalent
-#include <openssl/md5.h>
-
 #include <../lib/gs_internals.h>
 
 int main (int argc, char ** args)

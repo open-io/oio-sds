@@ -23,9 +23,6 @@ License along with this library.
 
 #include "./gs_internals.h"
 
-// TODO FIXME replace by the GLib equivalent
-#include <openssl/md5.h>
-
 #include <metautils/lib/metautils.h>
 #include <meta2v2/meta2_utils.h>
 

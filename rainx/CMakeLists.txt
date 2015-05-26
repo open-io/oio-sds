@@ -3,7 +3,6 @@
 include_directories(BEFORE . ..)
 
 include_directories(AFTER
-		${OPENSSL_INCLUDE_DIRS}
 		${APACHE2_INCLUDE_DIRS}
 		${APR_INCLUDE_DIRS}
 		${ATTR_INCLUDE_DIRS}
@@ -40,7 +39,7 @@ set_target_properties(mod_dav_rainx PROPERTIES PREFIX "" SUFFIX .so)
 
 target_link_libraries(mod_dav_rainx
 		metautils rawx
-		${APR_LIBRARIES} ${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES}
+		${APR_LIBRARIES} ${GLIB2_LIBRARIES}
 		${LIBRAIN_LIBRARIES} ${ZLIB_LIBRARIES} ${LZO_LIBRARIES})
 
 install(TARGETS mod_dav_rainx

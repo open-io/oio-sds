@@ -32,9 +32,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <librain.h>
 
-// TODO FIXME replace this by the APR equivalent
-#include <openssl/md5.h>
-
 #include <metautils/lib/metautils.h>
 #include <rawx-lib/src/rawx.h>
 #include <rawx-lib/src/compression.h>
@@ -109,7 +106,7 @@ struct dav_stream {
 
 	struct req_params_store** data_put_params; /* List of thread references for data */
 
-	MD5_CTX md5_ctx;
+	GChecksum *md5;
 };
 
 #endif /*OIO_SDS__rainx__rainx_repository_h*/

@@ -23,9 +23,6 @@ License along with this library.
 
 #include "./gs_internals.h"
 
-// TODO FIXME replace with GLib equivalent
-#include <openssl/md5.h>
-
 #include <neon/ne_basic.h>
 #include <neon/ne_request.h>
 #include <neon/ne_session.h>
@@ -589,7 +586,8 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 	int ne_rc;
 
 	int flag_md5 = 0;
-	MD5_CTX md5_ctx;
+	hash_md5_t md5;
+	GChecksum *checksum = NULL;
 
 	int output_wrapper (void *uData, const char *b, const size_t bSize) {
 		size_t offset;
@@ -599,7 +597,7 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 			return 0;
 
 		if (flag_md5)
-			MD5_Update(&md5_ctx, b, bSize);
+			g_checksum_update (checksum, (guint8*)b, bSize);
 
 		if (status->caller_stopped) { /* for looping puposes */
 			rawx_dl_advance_status(status, bSize);
@@ -650,7 +648,7 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 	add_req_id_header(request, str_req_id, sizeof(str_req_id)-1);
 	ne_add_request_header(request,  "containerid", C1_IDSTR(chunk->content));
 	ne_print_request_header(request, "Range", "bytes=%"G_GINT64_FORMAT"-%"G_GINT64_FORMAT, status->chunk_dl_offset,
-		status->chunk_dl_offset + status->chunk_dl_size - 1);
+			status->chunk_dl_offset + status->chunk_dl_size - 1);
 	ne_add_response_body_reader(request, ne_accept_2xx, output_wrapper, status->dl_info.user_data);
 
 	/* if the whole chunk is to be downloaded, check we may compute
@@ -658,7 +656,7 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 	flag_md5 = (status->chunk_dl_offset == 0) &&
 		(status->chunk_dl_size == chunk->ci->size);
 	if (flag_md5)
-		MD5_Init(&md5_ctx);
+		checksum = g_checksum_new (G_CHECKSUM_MD5);
 
 	/* Now send the request */
 	switch (ne_rc=ne_request_dispatch(request)) {
@@ -670,20 +668,11 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 				goto error_label;
 			}
 			if (flag_md5) {
-				unsigned char md5[MD5_DIGEST_LENGTH];
-
-				bzero(md5, sizeof(md5));
-				MD5_Final(md5, &md5_ctx);
-				if (memcmp(chunk->ci->hash, md5, MD5_DIGEST_LENGTH) != 0) {
-					char hash_str[MD5_DIGEST_LENGTH*2+1];
-					char md5_str[MD5_DIGEST_LENGTH*2+1];
-					bzero(hash_str, sizeof(hash_str));
-					bzero(md5_str, sizeof(md5_str));
-					buffer2str(chunk->ci->hash, sizeof(chunk->ci->hash), hash_str, sizeof(hash_str));
-					buffer2str(md5, sizeof(md5), md5_str, sizeof(md5_str));
-					GSETCODE(err, CODE_CONTENT_CORRUPTED, "Chunk downloaded [%s] was corrupted"
-							" (md5 does not match meta2) : %s/%s (%s)", cPath, hash_str,
-							md5_str, str_req_id);
+				gsize md5_len = sizeof(hash_md5_t);
+				g_checksum_get_digest (checksum, md5, &md5_len);
+				if (memcmp(chunk->ci->hash, md5, md5_len)) {
+					GSETCODE(err, CODE_CONTENT_CORRUPTED, "%s Chunk downloaded corrupted [%s] :"
+							" checksum mismatch", str_req_id, cPath);
 					*p_broken_rawx_list = g_slist_prepend(*p_broken_rawx_list, chunk->ci);
 					goto error_label;
 				}
@@ -715,6 +704,10 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 	/*destroy the webdav structures*/
 	ne_request_destroy (request);
 	ne_session_destroy (session);
+	if (checksum) {
+		g_checksum_free (checksum);
+		checksum = NULL;
+	}
 
 	return TRUE;
 
@@ -724,6 +717,10 @@ error_label:
 		ne_request_destroy (request);
 	if (session)
 		ne_session_destroy (session);
+	if (checksum) {
+		g_checksum_free (checksum);
+		checksum = NULL;
+	}
 
 	INFO("could not download %s (%s)", cPath, str_req_id);
 

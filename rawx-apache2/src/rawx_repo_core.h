@@ -30,8 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <apr_global_mutex.h>
 #include <mod_dav.h>
 
-#include <openssl/md5.h>
-
 #include <metautils/lib/metautils.h>
 #include <rawx-lib/src/rawx.h>
 #include <rawx-lib/src/compression.h>
@@ -81,102 +79,35 @@ struct dav_stream {
 	char *metadata_compress;
 	struct compression_ctx_s comp_ctx;
 
-	GChecksum *gchecksum;
-	MD5_CTX md5_ctx;
+	GChecksum *md5;
 };
 
-/**
- *
- *
- *
- */
 dav_error * resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf);
 
-/**
- *
- *
- *
- */
 void resource_stat_chunk(dav_resource *resource, int xattr_too);
 
-/**
- *
- *
- *
- */
 void request_load_chunk_info(request_rec *request, dav_resource *resource);
 
-/**
- *
- *
- *
- */
 void request_parse_query(request_rec *r, dav_resource *resource);
 
-/**
- *
- *
- *
- */
 void chunk_textinfo_fill_headers(request_rec *r, struct chunk_textinfo_s *cti);
 
-/**
- *
- *
- *
- */
 void content_textinfo_fill_headers(request_rec *r, struct content_textinfo_s *cti);
 
-/**************** repository internals functions ************************/
 
-/**
- *
- *
- *
- */
 dav_error * rawx_repo_check_request(request_rec *req, const char *root_dir, const char *label,
 		int use_checked_in, dav_resource_private *ctx, dav_resource **result_resource);
 
-/**
- *
- *
- *
- */
 dav_error * rawx_repo_configure_hash_dir(request_rec *req, dav_resource_private *ctx);
 
-/**
- *
- *
- *
- */
 dav_error * rawx_repo_write_last_data_crumble(dav_stream *stream);
 
-/**
- *
- *
- *
- */
 dav_error * rawx_repo_rollback_upload(dav_stream *stream);
 
-/**
- *
- *
- *
- */
 dav_error * rawx_repo_commit_upload(dav_stream *stream);
 
-/**
- *
- *
- *
- */
 dav_error * rawx_repo_ensure_directory(const dav_resource *resource);
 
-/**
- *
- *
- *
- */
 dav_error * rawx_repo_stream_create(const dav_resource *resource, dav_stream **result);
 
 #endif /*OIO_SDS__rawx_apache2__src__rawx_repo_core_h*/

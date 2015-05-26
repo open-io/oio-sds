@@ -28,9 +28,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
  * @{
  */
 
-#ifndef _DAV_FS_REPOS_H_
-#define _DAV_FS_REPOS_H_
-
 /* the subdirectory to hold all DAV-related information for a directory */
 #define DAV_FS_STATE_FILE_FOR_DIR       ".state_for_dir"
 #define DAV_FS_LOCK_NULL_FILE           ".locknull"
@@ -66,8 +63,6 @@ void dav_rawx_insert_all_liveprops(request_rec *r, const dav_resource *resource,
 
 void dav_rawx_register(apr_pool_t *p);
 
-/* ------------------------------------------------------------------------- */
-
 /* Properties callbacks */
 extern const dav_hooks_db dav_hooks_db_dbm;
 
@@ -82,8 +77,6 @@ extern const dav_hooks_repository dav_hooks_repository_chunkupdate;
 
 /* extern const dav_hooks_repository dav_hooks_repository_rawx; */
 
-/* ------------------------------------------------------------------------- */
-
 extern dav_error * dav_rawx_stat_get_resource(request_rec *r,
 	const char *root_dir, const char *label, int use_checked_in,
 	dav_resource **result_resource);
@@ -92,9 +85,6 @@ extern dav_error * dav_rawx_info_get_resource(request_rec *r,
 	const char *root_dir, const char *label, int use_checked_in,
 	dav_resource **result_resource);
 
-/* ------------------------------------------------------------------------- */
-
-#endif /* _DAV_FS_REPOS_H_ */
 /** @} */
 
 #endif /*OIO_SDS__rawx_apache2__src__mod_dav_rawx_h*/

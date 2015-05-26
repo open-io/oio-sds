@@ -21,9 +21,6 @@ License along with this library.
 # define G_LOG_DOMAIN "client.c.rainx"
 #endif
 
-// TODO FIXME replace by the GLib equivalent
-#include <openssl/md5.h>
-
 #include "./gs_internals.h"
 
 gboolean
@@ -116,18 +113,18 @@ static gchar*
 _chunk_to_sparerawxlist_element(chunk_info_t *chunk_in_error)
 {
 	GString *res = g_string_new(NULL);
-	char tmpstr[33];
 	gchar *rawxlist_element = _chunk_to_rawxlist_element(chunk_in_error);
 
 	g_string_append(res, rawxlist_element);
 	g_string_append(res, "|");
 	g_string_append_printf(res, "%"G_GUINT32_FORMAT, chunk_in_error->position);
 	g_string_append(res, "|");
-	memset(tmpstr, 0, sizeof(tmpstr));
-	buffer2str(chunk_in_error->hash, MD5_DIGEST_LENGTH, tmpstr, sizeof(tmpstr));
-	g_string_append(res, tmpstr);
-	g_free(rawxlist_element);
 
+	char tmpstr[STRLEN_CHUNKHASH];
+	buffer2str(chunk_in_error->hash, sizeof(chunk_hash_t), tmpstr, STRLEN_CHUNKHASH);
+	g_string_append(res, tmpstr);
+
+	g_free(rawxlist_element);
 	return g_string_free(res, FALSE);
 }
 

@@ -6,7 +6,6 @@ include_directories(BEFORE . ..
 		${CMAKE_CURRENT_BINARY_DIR}/../metautils/lib)
 
 include_directories(AFTER
-		${OPENSSL_INCLUDE_DIRS}
 		${ZK_INCLUDE_DIRS}
 		${ZMQ_INCLUDE_DIRS})
 

@@ -30,8 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <sys/stat.h>
 
-#include <openssl/md5.h>
-
 #include <apr.h>
 #include <apr_file_io.h>
 #include <apr_strings.h>
@@ -348,7 +346,12 @@ dav_rawx_close_stream(dav_stream *stream, int commit)
 	}
 
 	/* stats update */
-	server_inc_request_stat(resource_get_server_config(stream->r), RAWX_STATNAME_REQ_CHUNKPUT, request_get_duration(stream->r->info->request));
+	server_inc_request_stat(resource_get_server_config(stream->r),
+			RAWX_STATNAME_REQ_CHUNKPUT, request_get_duration(stream->r->info->request));
+	if (stream->md5) {
+		g_checksum_free (stream->md5);
+		stream->md5 = NULL;
+	}
 	return e;
 }
 
@@ -418,7 +421,7 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 	stream->compress_checksum = checksum;
 	
 	/* update the hash and the stats */
-	MD5_Update(&(stream->md5_ctx), buf, bufsize);
+	g_checksum_update(stream->md5, buf, bufsize);
 	server_add_stat(resource_get_server_config(stream->r), RAWX_STATNAME_REP_BWRITTEN, bufsize, 0);
 	return NULL;
 }

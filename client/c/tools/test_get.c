@@ -24,53 +24,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <syslog.h>
 
-// TODO FIXME replacce with GLib equivalent
-#include <openssl/md5.h>
-
 #include <../lib/gs_internals.h>
 
 static void
-md5_dump_hex(MD5_CTX *md5_ctx, const gchar *tag)
+md5_dump_hex(GChecksum *md5, const gchar *tag)
 {
-	unsigned char md5[MD5_DIGEST_LENGTH];
-	char md5_str[MD5_DIGEST_LENGTH*2+1], *c;
-
-	bzero(md5_str, sizeof(md5_str));
-	bzero(md5, sizeof(md5));
-
-	MD5_Final(md5, md5_ctx);
-	buffer2str(md5, sizeof(md5), md5_str, sizeof(md5_str));
-	for (c=md5_str; *c ;c++)
-		*c = g_ascii_tolower(*c);
-	g_print("%s %s\n", md5_str, tag);
-}
-
-static size_t
-random_size(size_t max)
-{
-	return 1 + (random() % max);
+	g_print("%s %s\n", g_checksum_get_string (md5), tag);
 }
 
 static ssize_t
 output_normal(void *uData, const char *b, const size_t bSize)
 {
-	MD5_CTX *md5_ctx;
-	ssize_t managed;
-
-	md5_ctx = uData;
-	managed = bSize;
-
-	g_printerr("# %"G_GSIZE_FORMAT" bytes received pointer=%p\n", bSize, b);
-	MD5_Update(md5_ctx, b, bSize);
-	return managed;
+	if (b && bSize)
+		g_checksum_update ((GChecksum*)uData, (guint8*)b, bSize);
+	return (ssize_t)bSize;
 }
 
 static ssize_t
 output_partial(void *uData, const char *b, const size_t bSize)
 {
-	if (!bSize)
-		return 0;
-	return output_normal(uData, b, random_size(bSize));
+	return output_normal(uData, b, g_random_int_range(1,bSize));
 }
 
 static ssize_t
@@ -128,7 +101,7 @@ main_title(const gchar *fmt, ...)
 int main (int argc, char ** args)
 {
 	int rc = -1;
-	MD5_CTX md5_ctx;
+	GChecksum *md5 = NULL;
 
 	gs_error_t *err = NULL;
 	gs_status_t status;
@@ -172,58 +145,54 @@ int main (int argc, char ** args)
 
 	/* Try some GET cases */
 	main_title("download NORMAL");
-	bzero(&md5_ctx, sizeof(md5_ctx));
-	MD5_Init(&md5_ctx);
-	dl_info.user_data = &md5_ctx;
+	md5 = g_checksum_new (G_CHECKSUM_MD5);
+	dl_info.user_data = md5;
 	dl_info.writer = &output_normal;
 	status = gs_download_content_by_name(container, cPath, &dl_info, &err );
 	g_printerr("# gs_download_content_by_name(%s,%s,%s,offset=%"G_GINT64_FORMAT",size=%"G_GINT64_FORMAT",TOTAL) %d %s\n",
 		ns, cName, cPath, dl_info.offset, dl_info.size,
 		gs_error_get_code(err), gs_error_get_message(err));
+	md5_dump_hex (md5, "TOTAL");
+	g_checksum_free (md5);
 	if (!status || err!=NULL)
 		goto error_get;
-	md5_dump_hex(&md5_ctx, "TOTAL");
 	
-	bzero(&md5_ctx, sizeof(md5_ctx));
-	MD5_Init(&md5_ctx);
-
 	main_title("download by parts");
-	bzero(&md5_ctx, sizeof(md5_ctx));
-	MD5_Init(&md5_ctx);
-	dl_info.user_data = &md5_ctx;
+	md5 = g_checksum_new (G_CHECKSUM_MD5);
+	dl_info.user_data = md5;
 	dl_info.writer = &output_partial;
 	status = gs_download_content_by_name(container, cPath, &dl_info, &err );
 	g_printerr("# gs_download_content_by_name(%s,%s,%s,offset=%"G_GINT64_FORMAT",size=%"G_GINT64_FORMAT",PARTIAL) %d %s\n",
 		ns, cName, cPath, dl_info.offset, dl_info.size,
 		gs_error_get_code(err), gs_error_get_message(err));
+	md5_dump_hex (md5a ,"PARTS");
 	if (!status || err!=NULL)
 		goto error_get;
-	md5_dump_hex(&md5_ctx,"PARTS");
 
 	main_title("download the first bytes");
-	bzero(&md5_ctx, sizeof(md5_ctx));
-	MD5_Init(&md5_ctx);
-	dl_info.user_data = &md5_ctx;
+	md5 = g_checksum_new (G_CHECKSUM_MD5);
+	dl_info.user_data = md5;
 	dl_info.writer = &output_firstbytes;
 	status = gs_download_content_by_name(container, cPath, &dl_info, &err );
 	g_printerr("# gs_download_content_by_name(%s,%s,%s,offset=%"G_GINT64_FORMAT",size=%"G_GINT64_FORMAT",FIRST_BYTES) %d %s\n",
 		ns, cName, cPath, dl_info.offset, dl_info.size,
 		gs_error_get_code(err), gs_error_get_message(err));
+	g_checksum_free (md5);
 	if (!status || err!=NULL)
 		goto error_get;
 
 	main_title("download that should fail");
-	bzero(&md5_ctx, sizeof(md5_ctx));
-	MD5_Init(&md5_ctx);
-	dl_info.user_data = &md5_ctx;
+	md5 = g_checksum_new (G_CHECKSUM_MD5);
+	dl_info.user_data = md5;
 	dl_info.writer = &output_fail;
 	status = gs_download_content_by_name(container, cPath, &dl_info, &err );
 	g_printerr("# gs_download_content_by_name(%s,%s,%s,offset=%"G_GINT64_FORMAT",size=%"G_GINT64_FORMAT",FIRST_BYTES) %d %s\n",
 		ns, cName, cPath, dl_info.offset, dl_info.size,
 		gs_error_get_code(err), gs_error_get_message(err));
+	md5_dump_hex (md5, "FAIL");
+	g_checksum_free (md5);
 	if (!status)
 		goto error_get;
-	md5_dump_hex(&md5_ctx,"FAIL");
 
 	main_title("ALL TESTS PASSED");
 	rc = 0;

@@ -22,7 +22,6 @@ License along with this library.
 #endif
 
 #include <ctype.h>
-#include <openssl/sha.h>
 
 #include "metautils.h"
 #include "metautils_internals.h"
@@ -135,7 +134,7 @@ meta1_name2hash(container_id_t cid, const char *ns, const char *account, const c
 
 	memset(cid, 0, sizeof(container_id_t));
 	gsize s = sizeof(container_id_t);
-	g_checksum_get_digest(sum, (guint8*)cid, &s);
+	g_checksum_get_digest(sum, cid, &s);
 	g_checksum_free(sum);
 }
 

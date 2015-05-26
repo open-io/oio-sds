@@ -72,25 +72,13 @@ __set_header(request_rec *r, apr_uint32_t h_scheme, const char *n, const char *v
 static dav_error *
 _set_chunk_extended_attributes(dav_stream *stream)
 {
-	unsigned char md5_hash[16];
-	char str_hash[33];
 	GError *ge = NULL;
 	dav_error *e = NULL;
 
-	/* Save the new Chunk'hash in the XATTR, in upppercase! */
-	bzero(md5_hash, sizeof(md5_hash));
-	bzero(str_hash, sizeof(str_hash));
-	MD5_Final(md5_hash, &(stream->md5_ctx));
-	g_snprintf(str_hash, sizeof(str_hash),
-			"%02X%02X%02X%02X"
-			"%02X%02X%02X%02X"
-			"%02X%02X%02X%02X"
-			"%02X%02X%02X%02X"
-			,md5_hash[0],  md5_hash[1],  md5_hash[2],  md5_hash[3]
-			,md5_hash[4],  md5_hash[5],  md5_hash[6],  md5_hash[7]
-			,md5_hash[8],  md5_hash[9],  md5_hash[10], md5_hash[11]
-			,md5_hash[12], md5_hash[13], md5_hash[14], md5_hash[15]);
-	stream->r->info->chunk.hash = apr_pstrdup(stream->p, str_hash);
+	/* Save the new Chunk's hash in the XATTR, in upppercase! */
+	gchar *hex = g_ascii_strup (g_checksum_get_string(stream->md5), -1);
+	stream->r->info->chunk.hash = apr_pstrdup(stream->p, hex);
+	g_free (hex);
 
 	if(stream->compressed_size) {
 		char size[32];
@@ -812,7 +800,7 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 		ds->compress_checksum = checksum;
 	}
 
-	MD5_Init(&(ds->md5_ctx));
+	ds->md5 = g_checksum_new (G_CHECKSUM_MD5);
 
 	*result = ds;
 

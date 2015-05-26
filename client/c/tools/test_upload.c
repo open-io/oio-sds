@@ -29,9 +29,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/types.h>
 #include <unistd.h>
 
-// TODO FIXME replace with GLib equivalent
-#include <openssl/md5.h>
-
 #include "../lib/gs_internals.h"
 
 static int input_fd = 0;

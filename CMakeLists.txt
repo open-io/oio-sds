@@ -286,14 +286,6 @@ test_CLI(SED_EXECUTABLE "sed")
 test_CLI(FLEX_EXECUTABLE "flex")
 test_CLI(BISON_EXECUTABLE "bison")
 
-if (SSL_LIBDIR AND SSL_INCDIR)
-	set(OPENSSL_LIBRARIES "-lcrypto -lssl")
-	set(OPENSSL_LIBRARY_DIRS ${SSL_LIBDIR})
-	set(OPENSSL_INCLUDE_DIRS ${SSL_INCDIR})
-else()
-	pkg_check_modules(OPENSSL REQUIRED libssl libcrypto)
-endif()
-
 # Set defaults 
 set(DEFAULT_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
 set(DEFAULT_INCLUDE_DIRS "/usr/include")
@@ -354,9 +346,7 @@ set(CMAKE_INCLUDE_PATH "")
 include_directories(AFTER
 		${GLIB2_INCLUDE_DIRS})
 
-link_directories(
-		${OPENSSL_LIBRARY_DIRS}
-		${GLIB2_LIBRARY_DIRS})
+link_directories(${GLIB2_LIBRARY_DIRS})
 
 ENABLE_TESTING()
 
