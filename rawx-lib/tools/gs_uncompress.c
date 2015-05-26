@@ -89,9 +89,7 @@ parse_opt(int argc, char **args)
 			keep_pending = TRUE;
 			break;
 		case 'l':
-			if (log4c_load(optarg) != 0) {
-				PRINT_ERROR("Failed to load %s\n", optarg);
-			}
+			PRINT_ERROR("LOG4C not supported anymore");
 			break;
 		case 'v':
 			flag_verbose++;
@@ -117,7 +115,6 @@ int
 main(int argc, char** args)
 {
 	int rc = -1;
-	log4c_init();
 
 	if (argc <= 1) {
 		help(argc, args);

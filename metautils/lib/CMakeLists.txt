@@ -3,13 +3,11 @@ include_directories(BEFORE . ../..
 		${CMAKE_CURRENT_BINARY_DIR})
 
 link_directories(
-		${ASN1C_LIBRARY_DIRS}
-		${EXPAT_LIBRARY_DIRS})
+		${ASN1C_LIBRARY_DIRS})
 
 include_directories(AFTER
 		${OPENSSL_INCLUDE_DIRS}
-		${JSONC_INCLUDE_DIRS}
-		${EXPAT_INCLUDE_DIRS})
+		${JSONC_INCLUDE_DIRS})
 
 add_custom_command(
 	OUTPUT
@@ -315,7 +313,7 @@ add_library(metautils SHARED
 )
 
 target_link_libraries(metautils
-		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} ${JSONC_LIBRARIES} ${EXPAT_LIBRARIES}
+		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} ${JSONC_LIBRARIES}
 		${ASN1C_LIBRARIES}
 		-lm)
 

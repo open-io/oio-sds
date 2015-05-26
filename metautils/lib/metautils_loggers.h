@@ -130,13 +130,6 @@ extern gchar syslog_id[256];
 #define LOG_FLAG_PURIFY 0x02
 #define LOG_FLAG_COLUMNIZE 0x04
 
-/* emulates log4c's init function */
-int log4c_init(void);
-
-int log4c_load(const char *path);
-
-int log4c_fini(void);
-
 void logger_verbose(void);
 
 void logger_verbose_default(void);

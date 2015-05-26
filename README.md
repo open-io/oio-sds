@@ -27,7 +27,6 @@ The build process of OpenIO SDS depends on:
 * apr, apr-util-devel, apr-devel
 * [asn1c](https://github.com/vlm/asn1c)
 * attr, libattr-devel
-* expat, expat-devel
 * glib2, glib2-devel
 * [gridinit](https://github.com/open-io/gridinit)
 * json-c, json-c-devel

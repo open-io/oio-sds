@@ -9,10 +9,8 @@ include(CheckTypeSize)
 include(FindCURL)
 include(FindPythonInterp)
 include(FindPythonLibs)
-include(FindEXPAT)
 include(FindZLIB)
 find_package(PkgConfig)
-find_package(EXPAT REQUIRED)
 find_package(Doxygen)
 
 set(Grid_VERSION_MAJOR 0)
@@ -341,7 +339,7 @@ MESSAGE("asn1c at ${ASN1C_EXECUTABLE}")
 set(ASN1C_EXE_OPTS "-fwide-types")
 
 # Check every required module is present
-check_found("APR" "APACHE2" "ASN1C" "ATTR" "CURL" "DB" "EXPAT"
+check_found("APR" "APACHE2" "ASN1C" "ATTR" "CURL" "DB"
 		"GLIB2" "GRIDINIT" "JSONC" "LIBEVENT" "LIBRAIN" "LZO" "NEON" "NETSNMP"
 		"SQLITE3" "ZMQ" "ZK" "PYTHONINTERP")
 
