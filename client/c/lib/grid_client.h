@@ -126,7 +126,7 @@ void gs_content_free (gs_content_t *content);
  * data.
  *
  * @param gs a pointer to a gs_grid_storage_t, initiated by a
- *           call to gs_init_grid_storage().
+ *           call to gs_grid_storage_init().
  */
 void gs_grid_storage_free (gs_grid_storage_t *gs);
 
@@ -245,7 +245,7 @@ typedef struct gs_download_info_s
  * the location of a META0 refname directory.
  *
  * @param meta0_url the url of the META0 refname. It must have one of
- * the followinf formats:<ul>
+ * the following formats:<ul>
  * <li>HOST:PORT where HOST is a resolvable fully qualified domain name</li>
  * <li>[IP]:PORT for IPv6 and IPv4 addresses</li>
  * <li>IP:PORT only for IPv4 addresses</li>
