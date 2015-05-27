@@ -1,7 +1,8 @@
 import os
 import sys
-import logging
 import signal
+from re import sub
+from oio.common.utils import get_logger
 
 from oio.common.utils import read_conf
 
@@ -25,9 +26,10 @@ class Daemon(object):
 
 def run_daemon(klass, conf_file, section_name=None, **kwargs):
     if section_name is None:
-        section_name = klass.__name__.lower()
+        section_name = sub(r'([a-z])([A-Z])', r'\1-\2', klass.__name__).lower()
     conf = read_conf(conf_file, section_name)
-    logger = logging.getLogger(__name__)
+    logger = get_logger(conf, section_name,
+                        verbose=kwargs.pop('verbose', False))
     try:
         klass(conf).start(**kwargs)
     except KeyboardInterrupt:

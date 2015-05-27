@@ -382,14 +382,15 @@ command=${EXE_PREFIX}-daemon -q ${CFGDIR}/${NS}-conscience.conf
 env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 
-[service.${NS}-account-agent]
-group=${NS},localhost,events
+[service.${NS}-event-agent]
+group=${NS},localhost,event
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-event-agent ${CFGDIR}/events-agent.conf
+command=${EXE_PREFIX}-event-agent ${CFGDIR}/event-agent.conf
 env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
+env.PYTHONPATH=${CODEDIR}/lib/python2.7/site-packages
 """
 
 template_gridinit_service = """
@@ -427,10 +428,14 @@ endpoint=${IP}:${PORT_ENDPOINT}
 event-agent=ipc://${RUNDIR}/event-agent.sock
 """
 
-template_events_agent = """
-[eventagent]
+template_event_agent = """
+[event-agent]
 bind_addr = ipc://${RUNDIR}/event-agent.sock
 workers = 5
+log_facility = LOG_LOCAL0
+log_level = INFO
+log_name = event-agent
+log_address = /dev/log
 """
 
 HOME = str(os.environ['HOME'])
@@ -613,9 +618,9 @@ def generate (ns, ip, options={}):
 		tpl = Template(template_account_flask_gridinit)
 		f.write(tpl.safe_substitute(env))
 
-	# Events agent configuration
-	with open(CFGDIR + '/' + 'events-agent.conf', 'w+') as f:
-		tpl = Template(template_events_agent)
+	# Event agent configuration
+	with open(CFGDIR + '/' + 'event-agent.conf', 'w+') as f:
+		tpl = Template(template_event_agent)
 		f.write(tpl.safe_substitute(env))
 
 	# Central agent configuration
