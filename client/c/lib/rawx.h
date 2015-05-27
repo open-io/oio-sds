@@ -46,18 +46,6 @@ struct chunk_attr_s {
 	const char *val;
 };
 
-/* delete one remote chunk */
-gs_status_t rawx_delete (gs_chunk_t *chunk, GError **err);
-
-/**
- * Delete a chunk from a RawX
- *
- * @param chunk a pointer to a (struct bean_CHUNKS_s*) or (struct bean_CONTENTS_s*)
- * @param err a pointer to a GError (must not be NULL)
- * @return FALSE in case of error
- */
-gboolean rawx_delete_v2(gpointer chunk, GError **err);
-
 /**
  * Tell a RawX a chunk is corrupted (rename it with ".corrupted" extension),
  * so future GET will return 404 instead of corrupted data.

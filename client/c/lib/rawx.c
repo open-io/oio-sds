@@ -40,21 +40,16 @@ License along with this library.
 static void add_req_id_header(ne_request *request, gchar *dst, gsize dst_size);
 static void add_req_system_metadata_header (ne_request *request, GByteArray *system_metadata);
 
-static void chunk_id2str (const gs_chunk_t *chunk, char *d, size_t dS)
+static void
+chunk_id2str (const gs_chunk_t *chunk, char *d, size_t dS)
 {
 	MYASSERT(chunk);
 	MYASSERT(d);
 	buffer2str (chunk->ci->id.id, sizeof(chunk->ci->id.id), d, dS);
 }
 
-static void chunk_gethash (const gs_chunk_t *chunk, char *d, size_t dS)
-{
-	MYASSERT(chunk);
-	MYASSERT(d);
-	buffer2str (chunk->ci->hash, sizeof(chunk->ci->hash), d, dS);
-}
-
-static void chunk_getpath (const gs_chunk_t *chunk, char *cPath, size_t s)
+static void
+chunk_getpath (const gs_chunk_t *chunk, char *cPath, size_t s)
 {
 	size_t cPathLen;
 
@@ -103,108 +98,16 @@ opensession_common(const addr_info_t *addr_info,
 static ne_session* rawx_opensession (gs_chunk_t *chunk, GError **err)
 {
 	/**@todo TODO manage a proxy HERE*/
-	register int to_cnx, to_op;
-	to_cnx = C1_RAWX_TO_CNX(chunk->content)/1000;
-	to_op = MAX(C1_RAWX_TO_OP(chunk->content)/1000, 1);
-
+	int to_cnx = MAX(C1_RAWX_TO_CNX(chunk->content)/1000, 1);
+	int to_op = MAX(C1_RAWX_TO_OP(chunk->content)/1000, 1);
 	return opensession_common(&(chunk->ci->id.addr), to_cnx, to_op, err);
 }
 
 /* ------------------------------------------------------------------------- */
 
-gs_status_t rawx_delete (gs_chunk_t *chunk, GError **err)
-{
-	char str_req_id [1024];
-	char str_addr [STRLEN_ADDRINFO];
-	char str_ci [STRLEN_CHUNKID];
-	char cPath [CI_FULLPATHLEN];
-	char str_hash[STRLEN_CHUNKHASH];
-
-	ne_request *request=NULL;
-	ne_session *session=NULL;
-	
-	memset(str_req_id, 0x00, sizeof(str_req_id));
-
-	if (!chunk || !chunk->ci || !chunk->content)
-	{
-		GSETERROR (err,"Invalid parameter (bad chunk structure)");
-		goto error_label;
-	}
-
-	addr_info_to_string (&(chunk->ci->id.addr), str_addr, sizeof(str_addr));
-	chunk_id2str(chunk, str_ci, sizeof(str_ci));
-	chunk_getpath (chunk, cPath, sizeof(cPath));
-	DEBUG("about to delete %s on %s", str_ci, cPath);
-
-	session = rawx_opensession (chunk, err);
-	if (!session)
-	{
-		GSETERROR (err, "Cannot open a webdav session");
-		goto error_label;
-	}
-
-	/*Create a webdav request*/
-	do {
-		request = ne_request_create (session, RAWX_DELETE, cPath);
-		if (!request)
-		{
-			GSETERROR (err, "cannot create a %s WebDAV request", RAWX_DELETE);
-			goto error_label;
-		}
-
-	} while (0);
-
-	chunk_id2str (chunk, str_ci, sizeof(str_ci));
-	chunk_gethash (chunk, str_hash, sizeof(str_hash));
-
-	/* Add request header */
-	add_req_id_header(request, str_req_id, sizeof(str_req_id)-1);
-
-	ne_add_request_header  (request, "chunkid",     str_ci);
-	ne_add_request_header  (request, "chunkhash",   str_hash);
-	ne_add_request_header  (request, "containerid", C1_IDSTR(chunk->content));
-	ne_add_request_header  (request, "contentpath", chunk->content->info.path);
-	ne_print_request_header(request, "chunkpos",    "%"G_GUINT32_FORMAT, chunk->ci->position);
-	ne_print_request_header(request, "chunknb",     "%"G_GUINT32_FORMAT, chunk->ci->nb);
-	ne_print_request_header(request, "chunksize",   "%"G_GINT64_FORMAT, chunk->ci->size);
-	ne_print_request_header(request, "contentsize", "%"G_GINT64_FORMAT, chunk->content->info.size);
-
-	/*now perform the request*/
-	switch (ne_request_dispatch (request))
-	{
-		case NE_OK:
-			if (ne_get_status(request)->klass != 2) {
-				GSETERROR (err, "cannot delete '%s' (%s) (ReqId:%s)", cPath, ne_get_error(session), str_req_id);
-				goto error_label;
-			}
-			DEBUG("chunk deletion finished (success) : %s", cPath);
-			break;
-		case NE_AUTH:
-		case NE_CONNECT:
-		case NE_TIMEOUT:
-		case NE_ERROR:
-			GSETERROR (err, "unexpected error from the WebDAV server (%s) (ReqId:%s)", ne_get_error(session), str_req_id);
-			goto error_label;
-	}
-
-	ne_request_destroy (request);
-	ne_session_destroy (session);
-	
-	TRACE("%s deleted (ReqId:%s)", cPath, str_req_id);
-
-	return 1;
-error_label:
-	TRACE("could not delete %s", cPath);
-	if (request)
-		ne_request_destroy (request);
-	if (session)
-		ne_session_destroy (session);
-
-	return 0;
-}
-
-static void split_chunk_url(const gchar *url,
-		gchar **host, gint *port, gchar **chunk_hexid, GError **err)
+static void
+split_chunk_url(const gchar *url, gchar **host, gint *port,
+		gchar **chunk_hexid, GError **err)
 {
 	gchar **toks = NULL;
 	gchar **hp = NULL;
@@ -240,8 +143,8 @@ end:
  * @param[out] chunk_hexid The chunk hexadecimal id (with leading '/')
  * @param[out] err
  */
-static void extract_chunk_url(gpointer bean,
-		gchar **host, gint *port, gchar **chunk_hexid, GError **err)
+static void
+extract_chunk_url(gpointer bean, gchar **host, gint *port, gchar **chunk_hexid, GError **err)
 {
 	gchar *cid_url = NULL;
 	if (DESCR(bean) == &descr_struct_CHUNKS) {
@@ -258,7 +161,8 @@ static void extract_chunk_url(gpointer bean,
 	return split_chunk_url(cid_url, host, port, chunk_hexid, err);
 }
 
-static gboolean _ne_request(const char *host, int port, const char *target,
+static gboolean
+_ne_request(const char *host, int port, const char *target,
 		const char *method, GSList *headers, GError **err)
 {
 	GRID_TRACE("%s", __FUNCTION__);
@@ -301,34 +205,6 @@ static gboolean _ne_request(const char *host, int port, const char *target,
 	}
 	ne_session_destroy (session);
 	return result;
-}
-
-static gboolean _delete_request(const char *host, int port,
-		const char *target, GError **err)
-{
-	return _ne_request(host, port, target, "DELETE", NULL, err);
-}
-
-gboolean rawx_delete_v2(gpointer chunk, GError **err)
-{
-	gchar *cid_hex = NULL;
-	gchar *host = NULL;
-	gint port = 0;
-
-	g_assert(chunk != NULL);
-	g_assert(err != NULL);
-	g_clear_error(err);
-
-	extract_chunk_url(chunk, &host, &port, &cid_hex, err);
-	if (err && *err)
-		goto end;
-
-	_delete_request(host, port, cid_hex, err);
-
-end:
-	g_free(host);
-	g_free(cid_hex);
-	return (*err == NULL);
 }
 
 static void
