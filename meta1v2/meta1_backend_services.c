@@ -1003,14 +1003,17 @@ __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 	if (!err) {
 		services2 = expand_urlv(services);
 		GString *notif = g_string_sized_new(128);
-		g_string_append_printf(notif, "\"url\":\"%s\",", hc_url_get(url, HCURL_WHOLE));
-		g_string_append(notif, "\"services\":[");
+		g_string_append (notif, "{\"event\":\""NAME_SRVTYPE_META1".account.services\"");
+		g_string_append_printf (notif, ",\"when\":%"G_GINT64_FORMAT, g_get_real_time());
+		g_string_append (notif, ",\"data\":{");
+		g_string_append_printf (notif, "\"url\":\"%s\"", hc_url_get(url, HCURL_WHOLE));
+		g_string_append (notif, ",\"services\":[");
 		for (struct meta1_service_url_s **svc = services2; svc && *svc; svc++) {
 			if (svc != services2) // not at the beginning
 				g_string_append(notif, ",");
 			meta1_service_url_encode_json(notif, *svc);
 		}
-		g_string_append(notif, "]");
+		g_string_append(notif, "]}}");
 
 		m1->notify.hook (m1->notify.udata, g_string_free(notif, FALSE));
 
