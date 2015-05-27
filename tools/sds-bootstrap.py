@@ -19,6 +19,9 @@
 from string import Template
 import os, errno
 
+#env.G_DEBUG=fatal_warnings
+#env.G_SLICE=debug-blocks
+
 template_flask_gridinit = """
 [service.${NS}-flask]
 group=${NS},localhost,flask
@@ -418,10 +421,10 @@ agent=${RUNDIR}/agent.sock
 
 template_local_ns = """
 [${NS}]
-zookeeper=${IP}:2181
+${NOZK}zookeeper=${IP}:2181
 conscience=${IP}:${PORT_CS}
 endpoint=${IP}:${PORT_ENDPOINT}
-account-agent=ipc://${RUNDIR}/event-agent.sock
+event-agent=ipc://${RUNDIR}/event-agent.sock
 """
 
 template_events_agent = """
@@ -513,6 +516,10 @@ def generate (ns, ip, options={}):
 			VERSIONING=versioning, STGPOL=stgpol,
 			M2_REPLICAS=meta2_replicas, M2_DISTANCE=str(1),
 			SQLX_REPLICAS=sqlx_replicas, SQLX_DISTANCE=str(1))
+	if options.NO_ZOOKEEPER is not None:
+		env['NOZK'] = '#'
+	else:
+		env['NOZK'] = ''
 
 	mkdir_noerror(SDSDIR)
 	mkdir_noerror(CODEDIR)
@@ -633,6 +640,8 @@ def main ():
 	parser.add_option("-S", "--stgpol",
 			action="store", type="string", dest="M2_STGPOL",
 			help="How many replicas for META2")
+
+	parser.add_option("--no-zookeeper", action="store_true", dest="NO_ZOOKEEPER")
 
 	parser.add_option("--no-meta0", action="store_true", dest="NO_META0")
 	parser.add_option("--no-meta1", action="store_true", dest="NO_META1")

@@ -27,9 +27,6 @@ License along with this library.
  */
 
 #include <metautils/lib/metatypes.h>
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
-#include <glib.h>
 
 #define REMOTECONTAINER_FLAG_OK       0x00000000
 #define REMOTECONTAINER_FLAG_FROZEN   0x00000001
@@ -38,18 +35,7 @@ License along with this library.
 #define META2TOUCH_FLAGS_UPDATECSIZE     0x00000001
 #define META2TOUCH_FLAGS_RECALCCSIZE     0x00000002
 
-#define NAME_HEADER_METADATA_USR "METADATA_USR"
 #define NAME_HEADER_METADATA_SYS "METADATA_SYS"
-#define NAME_HEADER_NAMESPACE "NS"
-#define NAME_HEADER_CONFIGURATION "CFG"
-#define NAME_HEADER_CONTAINERNAME "CONTAINER_NAME"
-#define NAME_HEADER_VIRTUALNAMESPACE "VIRTUAL_NAMESPACE"
-#define NAME_HEADER_ADMIN_KEY "ADMIN_KEY"
-#define NAME_HEADER_ADMIN_VALUE "ADMIN_VALUE"
-#define NAME_HEADER_ADMIN_VALUE_SIZE "ADMIN_VALUE_SIZE"
-#define NAME_HEADER_CHECKFLAGS "CHECK_FLAGS"
-#define NAME_HEADER_STORAGEPOLICY "STORAGE_POLICY"
-#define NAME_HEADER_VERSIONPOLICY "VERSION_POLICY"
 
 /** Get the list of contents of ths container. */
 GSList *meta2_remote_container_list (const addr_info_t *m2, gint ms, GError **err,
@@ -66,29 +52,6 @@ GSList *meta2_remote_content_add(const addr_info_t *m2, gint ms, GError **err,
     struct hc_url_s *url, content_length_t content_length,
     GByteArray * metadata, GByteArray ** new_metadata);
 
-/** Mark for removal the give content from the given container, on the
- * targeted META2 server. Currently, there is no management of META2
- * replications in the removal operations. After this step a COMMIT or
- * a ROLLBACK on the content is necessary. Before this step, the content
- * won't be accessible. */
-gboolean meta2_remote_content_remove(const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url);
-
-/** Commit (approve) the last operation on the given content in the given container. */
-gboolean meta2_remote_content_commit(const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url);
-
-/** Rollback on the last operation performed on the given content in the
- * given container. */
-gboolean meta2_remote_content_rollback(const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url);
-
-/** Get the chunks locations of the given content in the givan container.
- * To be successful, the retrieval must target an opened container and
- * an online content. */
-GSList* meta2_remote_content_retrieve(const addr_info_t * m2, gint ms, GError **err,
-		struct hc_url_s *url);
-
 /** Returns all the information about the content with the given path in the
  * given container. This content must be available. The returned structure is
  * the same as those returned by meta2raw_remote_get_chunks() on an available
@@ -98,21 +61,15 @@ struct meta2_raw_content_s *meta2_remote_stat_content(struct metacnx_ctx_s *cnx,
 
 /* ------------------------------------------------------------------------- */
 
-/** @see meta2_remote_content_add() */
-GSList *meta2_remote_content_add_in_fd(int *fd, gint ms, GError **err, struct hc_url_s *url,
-		content_length_t content_length, GByteArray * metadata, GByteArray ** new_metadata);
+GSList* meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
+		struct hc_url_s *url, content_length_t content_length,
+		GByteArray *metadata, GByteArray **new_metadata);
 
 /** @see meta2_remote_content_add() */
 GSList* meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err, struct hc_url_s *url,
 		gint count, gint distance, const gchar *notin, const gchar *broken);
 
-/** @see meta2_remote_content_rollback() */
-gboolean meta2_remote_content_rollback_in_fd(int *fd, gint ms, GError **err, struct hc_url_s *url);
-
 /* ------------------------------------------------------------------------- */
-
-GSList *meta2_remote_content_append(struct metacnx_ctx_s *ctx, GError **err,
-		struct hc_url_s *url, content_length_t content_length);
 
 gboolean meta2raw_remote_update_chunks(struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url, struct meta2_raw_content_s *content,

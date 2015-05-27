@@ -72,7 +72,7 @@ struct req_ctx_s
 {
 	struct timespec tv_start, tv_parsed, tv_end;
 
-	struct message_s *request;
+	MESSAGE request;
 	struct network_client_s *client;
 	struct transport_client_context_s *clt_ctx;
 	struct network_transport_s *transport;
@@ -272,26 +272,19 @@ network_client_log_access(struct log_item_s *item)
 static guint32
 _l4v_size(GByteArray *gba)
 {
-	guint32 size;
-
 	EXTRA_ASSERT(gba != NULL);
 	EXTRA_ASSERT(gba->len >= 4);
 
-	size = *((guint32*)gba->data);
+	guint32 size = *((guint32*)gba->data);
 	return g_ntohl(size);
 }
 
 static struct hashstr_s *
-_request_get_name(struct message_s *req)
+_request_get_name(MESSAGE req)
 {
-	void *name;
-	gsize name_len;
-
-	if (0 >= message_get_NAME(req, &name, &name_len, NULL))
-		return hashstr_create("");
-	if (!name || !name_len || !((guint8*)name))
-		return hashstr_create("");
-	if (!*((guint8*)name) || !name_len)
+	gsize name_len = 0;
+	void *name = message_get_NAME(req, &name_len);
+	if (!name || !name_len)
 		return hashstr_create("");
 	return hashstr_create_len((gchar*)name, name_len);
 }
@@ -301,9 +294,9 @@ _req_get_hex_ID(MESSAGE req, gchar *d, gsize dsize)
 {
 	memset(d, 0, dsize);
 	
-	guint8 *f = NULL;
 	gsize flen = 0;
-	if (0 >= message_get_ID(req, (void**)&f, &flen, NULL))
+	guint8 *f = message_get_ID(req, &flen);
+	if (!f || !flen)
 		*d = '-';
 	else if (metautils_str_ishexa((gchar*)f, flen)) {
 		for (gchar *p=d; flen-- > 0 && dsize-- > 0;)
@@ -563,7 +556,7 @@ _notify_request(struct req_ctx_s *ctx,
 }
 
 static gboolean
-_reply_message(struct network_client_s *clt, struct message_s *reply)
+_reply_message(struct network_client_s *clt, MESSAGE reply)
 {
 	GByteArray *encoded = message_marshall_gba_and_clean(reply);
 	network_client_send_slab(clt, data_slab_make_gba(encoded));
@@ -573,8 +566,6 @@ _reply_message(struct network_client_s *clt, struct message_s *reply)
 static gboolean
 _client_reply_fixed(struct req_ctx_s *req_ctx, gint code, const gchar *msg)
 {
-	MESSAGE reply = NULL;
-
 	EXTRA_ASSERT(!req_ctx->final_sent);
 	if ((req_ctx->final_sent = is_code_final(code))) {
 		struct log_item_s item;
@@ -584,8 +575,8 @@ _client_reply_fixed(struct req_ctx_s *req_ctx, gint code, const gchar *msg)
 		item.out_len = 0;
 		network_client_log_access(&item);
 	}
-	return metaXServer_reply_simple(&reply, req_ctx->request, code, msg, NULL)
-		&& _reply_message(req_ctx->client, reply);
+	MESSAGE reply = metaXServer_reply_simple(req_ctx->request, code, msg);
+	return _reply_message(req_ctx->client, reply);
 }
 
 static void
@@ -594,9 +585,10 @@ _client_send_error(struct network_client_s *clt)
 	GError *err = clt->current_error;
 	if (!err)
 		return;
-	MESSAGE reply = NULL, request = message_create ();
-	if (metaXServer_reply_simple(&reply, request, err->code, err->message, NULL))
-		(void) _reply_message(clt, reply);
+	/* TODO FIXME WTF!? */
+	MESSAGE request = message_create ();
+	MESSAGE reply = metaXServer_reply_simple(request, err->code, err->message);
+	(void) _reply_message(clt, reply);
 	message_destroy(request);
 }
 
@@ -629,21 +621,12 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		body = b;
 	}
 	void _send_reply(gint code, gchar *msg) {
-		struct message_s *answer = NULL;
-
 		EXTRA_ASSERT(!req_ctx->final_sent);
 		GRID_DEBUG("fd=%d REPLY code=%d message=%s", req_ctx->client->fd, code, msg);
 
-		/* Create the request */
-		if (!metaXServer_reply_simple(&answer, req_ctx->request, code, msg, NULL)) {
-			g_error("Memory allocation faire");
-			return ;
-		}
-
-		/* add the body and the headers */
+		MESSAGE answer = metaXServer_reply_simple(req_ctx->request, code, msg);
 		if (body) {
-			message_set_BODY(answer, body->data, body->len, NULL);
-			metautils_gba_unref(body);
+			message_add_body_unref(answer, body);
 			body = NULL;
 		}
 		if (headers) {
@@ -656,7 +639,6 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 				message_add_field(answer, (gchar*)n, ((GByteArray*)v)->data, ((GByteArray*)v)->len);
 			}
 		}
-
 		/* encode and send */
 		if ((req_ctx->final_sent = is_code_final(code))) {
 			struct log_item_s item;
@@ -754,7 +736,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 }
 
 static gchar *
-_request_get_cid (struct message_s *request)
+_request_get_cid (MESSAGE request)
 {
 	container_id_t cid;
 	gchar strcid[STRLEN_CONTAINERID];
@@ -774,13 +756,11 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	struct req_ctx_s req_ctx;
 	gboolean rc = FALSE;
 	GError *err = NULL;
-	gsize offset;
 
 	EXTRA_ASSERT(gba != NULL);
 	EXTRA_ASSERT(client != NULL);
 	memset(&req_ctx, 0, sizeof(req_ctx));
 
-	MESSAGE request = message_create();
 	req_ctx.uid = NULL;
 	req_ctx.subject = NULL;
 	req_ctx.final_sent = FALSE;
@@ -789,14 +769,13 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	req_ctx.clt_ctx = req_ctx.transport->client_context;
 	req_ctx.disp = req_ctx.clt_ctx->dispatcher;
 
-	offset = gba->len;
-	int asn1_rc = message_unmarshall(request, gba->data, &offset, &err);
+	MESSAGE request = message_unmarshall(gba->data, gba->len, &err);
 
 	// take the encoding into account
 	memcpy(&req_ctx.tv_start, &client->time.evt_in, sizeof(req_ctx.tv_start));
 	network_server_now(&req_ctx.tv_parsed);
 
-	if (!asn1_rc) {
+	if (!request) {
 		struct log_item_s item;
 		item.req_ctx = &req_ctx;
 		item.code = 400;

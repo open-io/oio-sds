@@ -160,7 +160,6 @@ reply_ctx_header_adder (gpointer k, gpointer v, gpointer u)
 gint
 reply_context_reply (struct reply_context_s *ctx, GError **err)
 {
-	MESSAGE answer = NULL;
 	gsize bufMLen = 0;
 	void *bufM = NULL;
 
@@ -170,12 +169,7 @@ reply_context_reply (struct reply_context_s *ctx, GError **err)
 	}
 
 	register gchar *ptr_msg = ctx->header.msg ? ctx->header.msg : "NOMSG";
-	if (!metaXServer_reply_simple (&answer, ctx->req_ctx->request,
-			ctx->header.code, ptr_msg, err))
-	{
-		g_prefix_error(err, "Cannot create the answer structure: ");
-		goto errorLabel;
-	}
+	MESSAGE answer = metaXServer_reply_simple (ctx->req_ctx->request, ctx->header.code, ptr_msg);
 
 	/*add the extra headers*/
 	if (ctx->extra_headers) {
@@ -185,11 +179,7 @@ reply_context_reply (struct reply_context_s *ctx, GError **err)
 
 	if (ctx->body.buffer && (ctx->body.size > 0)) {
 		GRID_TRACE("body set to %p %"G_GSIZE_FORMAT, ctx->body.buffer, ctx->body.size);
-		if (0 >= message_set_BODY(answer, ctx->body.buffer, ctx->body.size, err))
-		{
-			g_prefix_error(err, "Cannot set the body of the answer: ");
-			goto errorLabel;
-		}
+		message_set_BODY(answer, ctx->body.buffer, ctx->body.size);
 	}
 
 	if (!message_marshall(answer, &bufM, &bufMLen, err)) {

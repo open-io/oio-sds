@@ -22,7 +22,6 @@ License along with this library.
 #endif
 
 #include <ctype.h>
-#include <openssl/sha.h>
 
 #include "metautils.h"
 #include "metautils_internals.h"
@@ -86,15 +85,15 @@ static gchar hexa[] =
 /* ------------------------------------------------------------------------- */
 
 static gsize
-_buffer2str(const guint8 *s, size_t sS, char *d, size_t dS)
+_buffer2str(const guint8 *s, const size_t sS, char *d, const size_t dS)
 {
 	gsize i, j;
 
 	if (!s || !sS || !d || !dS)
 		return 0;
 
-	for (i=j=0; i<sS && j<(dS-1) ;i++) {
-		register const gchar *h = b2h[((guint8*)s)[i]];
+	for (i=j=0; i<sS && j<(dS-1) ;) {
+		register const gchar *h = b2h[((guint8*)s)[i++]];
 		d[j++] = h[0];
 		d[j++] = h[1];
 	}
@@ -135,7 +134,7 @@ meta1_name2hash(container_id_t cid, const char *ns, const char *account, const c
 
 	memset(cid, 0, sizeof(container_id_t));
 	gsize s = sizeof(container_id_t);
-	g_checksum_get_digest(sum, (guint8*)cid, &s);
+	g_checksum_get_digest(sum, cid, &s);
 	g_checksum_free(sum);
 }
 

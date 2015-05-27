@@ -51,17 +51,6 @@ main(int argc, char **argv)
 	(void) argc;
 	(void) argv;
 
-	/* init log4c */
-	log4c_init();
-
-	/* Init thread system */
-	if (!g_thread_supported())
-		g_thread_init(NULL);
-	else {
-		ERROR("Threads unavailable in glib");
-		return -1;
-	}
-
 	/* Init config */
 	if (!load_config(&config, &error)) {
 		ERROR("Failed to load config : %s", error->message);

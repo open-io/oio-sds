@@ -311,7 +311,7 @@ hc_upload_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *local
 	}
 	GRID_DEBUG("Local path %s found and opened\n", local_path);
 
-	if(!(c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, ac, &e))) {
+	if (!(c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, ac, &e))) {
 		g_printerr("Failed to resolve and/or create meta2 entry for reference %s\n",
 				hc_url_get(url, HCURL_USER));
 		goto end_put;
@@ -566,7 +566,7 @@ hc_delete_content(gs_grid_storage_t *hc, struct hc_url_s *url)
 			content = gs_get_content_from_path_and_version (c, hc_url_get(url, HCURL_PATH), version, &e);
 		}
 		if (NULL != content) {
-			if(gs_destroy_content (content, &e)) {
+			if (gs_destroy_content (content, &e)) {
 				GRID_DEBUG("Content %s deleted\n", hc_url_get(url, HCURL_PATH));
 			}
 			gs_content_free(content);

@@ -4,12 +4,10 @@ include_directories(BEFORE . ..
 		${CMAKE_CURRENT_BINARY_DIR}/../metautils/lib)
 
 include_directories(AFTER
-		${OPENSSL_INCLUDE_DIRS}
 		${ZK_INCLUDE_DIRS}
 		${SQLITE3_INCLUDE_DIRS})
 
 link_directories(
-		${OPENSSL_LIBRARY_DIRS}
 		${ZK_LIBRARY_DIRS}
 		${SQLITE3_LIBRARY_DIRS})
 

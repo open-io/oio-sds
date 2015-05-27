@@ -530,8 +530,7 @@ sqlx_replication_free_context(struct sqlx_repctx_s *ctx)
 		g_tree_destroy(ctx->pending);
 	if (ctx->resync_todo)
 		g_ptr_array_free(ctx->resync_todo, TRUE);
-	memset(ctx, 0, sizeof(*ctx));
-	g_free(ctx);
+	g_slice_free(struct sqlx_repctx_s, ctx);
 }
 
 static void
@@ -541,9 +540,14 @@ sqlx_transaction_changes(struct sqlx_repctx_s *ctx)
 	EXTRA_ASSERT(ctx->sq3 != NULL);
 	EXTRA_ASSERT(ctx->sq3->db != NULL);
 
-	if (sqlite3_total_changes(ctx->sq3->db) != ctx->changes) {
-		GRID_DEBUG("HUGE change detected [%s][%s]", ctx->sq3->name.base, ctx->sq3->name.type);
-		ctx->huge = 1;
+	if (!ctx->hollow) {
+		int changes = sqlite3_total_changes(ctx->sq3->db);
+		if (changes != ctx->changes) {
+			GRID_DEBUG("HUGE change detected [%s][%s] (%d vs %d)",
+					ctx->sq3->name.base, ctx->sq3->name.type,
+					changes, ctx->changes);
+			ctx->huge = 1;
+		}
 	}
 
 	if (!ctx->hollow && !ctx->huge) {
@@ -583,7 +587,7 @@ sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 		}
 	}
 
-	struct sqlx_repctx_s *repctx = g_malloc0(sizeof(*repctx));
+	struct sqlx_repctx_s *repctx = g_slice_new0(struct sqlx_repctx_s);
 	repctx->hollow = !has;
 	repctx->sq3 = sq3;
 	repctx->changes = sqlite3_total_changes(sq3->db);

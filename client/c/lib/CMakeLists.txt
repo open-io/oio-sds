@@ -1,15 +1,12 @@
 include_directories(BEFORE .
 		 ../../..
-		${CMAKE_CURRENT_BINARY_DIR}/../../..
-		../../../metautils/lib)
+		${CMAKE_CURRENT_BINARY_DIR}/../../..)
 
 include_directories(AFTER
-		${OPENSSL_INCLUDE_DIRS}
 		${NEON_INCLUDE_DIRS}
 		${CURL_INCLUDE_DIRS})
 
 link_directories(
-		${OPENSSL_LIBRARY_DIRS}
 		${NEON_LIBRARY_DIRS}
 		${CURL_LIBRARY_DIRS})
 

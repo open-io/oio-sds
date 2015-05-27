@@ -68,15 +68,16 @@ meta1_remote_get_container_by_id (struct metacnx_ctx_s *ctx, struct hc_url_s *ur
 	struct gridd_client_s *client = NULL;
 
 	gboolean on_reply(gpointer c1, MESSAGE reply) {
-		void *b = NULL;
-		gsize bsize = 0;
 		(void) c1;
-		if (0 < message_get_BODY(reply, &b, &bsize, NULL)) {
-			raw_container = meta1_raw_container_unmarshall(b, bsize, err);
+		gsize bsize = 0;
+		void *b = message_get_BODY(reply, &bsize);
+		if (b && bsize) {
+			if (raw_container)
+				meta1_raw_container_clean (raw_container);
+			raw_container = meta1_raw_container_unmarshall(b, bsize, NULL);
 		}
 		return TRUE;
 	}
-
 
 	MESSAGE request = message_create_named (NAME_MSGNAME_M1_CONT_BY_ID);
 	message_add_url (request, url);
@@ -90,7 +91,7 @@ meta1_remote_get_container_by_id (struct metacnx_ctx_s *ctx, struct hc_url_s *ur
 	if ((*err = gridd_client_loop(client)) != NULL)
 		goto end_label;
 
-	do{
+	do {
 		struct gridd_client_s *clients[2];
 		clients[0] = client;
 		clients[1] = NULL;
@@ -101,7 +102,7 @@ meta1_remote_get_container_by_id (struct metacnx_ctx_s *ctx, struct hc_url_s *ur
 end_label:
 	g_byte_array_unref(packed);
 	gridd_client_free(client);
-	return(raw_container);
+	return raw_container;
 }
 
 /* M1V2 -------------------------------------------------------------------- */
@@ -110,10 +111,9 @@ static gboolean
 on_reply(gpointer ctx, MESSAGE reply)
 {
 	GByteArray *out = ctx;
-	void *b = NULL;
 	gsize bsize = 0;
-
-	if (0 < message_get_BODY(reply, &b, &bsize, NULL)) {
+	void *b = message_get_BODY(reply, &bsize);
+	if (b) {
 		if (out != NULL)
 			g_byte_array_append(out, b, bsize);
 	}
@@ -170,16 +170,6 @@ oneway_request (const addr_info_t *a, GError **err, GByteArray *req)
 		return FALSE;
 	g_strfreev(result);
 	return TRUE;
-}
-
-static GError *
-gba_request(const addr_info_t *a, GByteArray **result, GByteArray *req)
-{
-	gchar str[STRLEN_ADDRINFO];
-	addr_info_to_string (a, str, sizeof(str));
-	GError *err = gridd_client_exec_and_concat (str, M1V2_CLIENT_TIMEOUT, req, result);
-	g_byte_array_unref (req);
-	return err;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -384,39 +374,6 @@ meta1v2_remote_list_services_by_prefix(const addr_info_t *m1, GError **err,
 	message_add_cid (req, NAME_MSGKEY_PREFIX, hc_url_get_id(url));
 
     return list_request(m1, err, message_marshall_gba_and_clean(req));
-}
-
-GError *
-meta1v2_remote_list_references_by_prefix(const addr_info_t *m1, struct hc_url_s *url,
-		GByteArray **result)
-{
-	EXTRA_ASSERT(m1 != NULL);
-	EXTRA_ASSERT(url != NULL);
-
-	MESSAGE req = message_create_named (NAME_MSGNAME_M1V2_LISTBYPREF);
-	message_add_url (req, url);
-	message_add_cid (req, NAME_MSGKEY_PREFIX, hc_url_get_id(url));
-
-	return gba_request(m1, result, message_marshall_gba_and_clean(req));
-}
-
-GError *
-meta1v2_remote_list_references_by_service(const addr_info_t *m1,
-		struct hc_url_s *url, const gchar *srvtype, const gchar *m1url,
-		GByteArray **result)
-{
-	EXTRA_ASSERT(m1 != NULL);
-	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(srvtype != NULL);
-	EXTRA_ASSERT(m1url != NULL);
-
-	MESSAGE req = message_create_named (NAME_MSGNAME_M1V2_LISTBYSERV);
-	message_add_url (req, url);
-	message_add_cid (req, NAME_MSGKEY_PREFIX, hc_url_get_id(url));
-	message_add_field_str (req, NAME_MSGKEY_SRVTYPE, srvtype);
-	message_add_field_str (req, NAME_MSGKEY_URL, m1url);
-
-	return gba_request(m1, result, message_marshall_gba_and_clean(req));
 }
 
 gboolean

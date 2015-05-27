@@ -37,9 +37,9 @@ build_request(gchar * req_name, void *body, gsize body_size)
 {
 	MESSAGE req = message_create();
 	if (body)
-		message_set_BODY(req, body, body_size, NULL);
-	message_set_NAME(req, req_name, strlen(req_name), NULL);
-	return (req);
+		message_set_BODY(req, body, body_size);
+	message_set_NAME(req, req_name, strlen(req_name));
+	return req;
 }
 
 static gboolean
@@ -216,15 +216,17 @@ GSList *
 gcluster_get_services(const char *target, gdouble timeout,
 		const gchar *type, gboolean full, GError ** error)
 {
-	struct message_s *req = message_create_named(NAME_MSGNAME_CS_GET_SRV);
-	message_add_fields_str (req,
-			NAME_MSGKEY_TYPENAME, type,
-			NAME_MSGKEY_FULL, full?"1":NULL,
-			NULL);
+	MESSAGE req = message_create_named(NAME_MSGNAME_CS_GET_SRV);
+	message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
+	if (full)
+		message_add_field_str(req, NAME_MSGKEY_FULL, "1");
+	GByteArray *gba = message_marshall_gba_and_clean(req);
 
 	GSList *out = NULL;	
 	GError *err = gridd_client_exec_and_decode (target, timeout,
-			message_marshall_gba_and_clean(req), &out, service_info_unmarshall);
+			gba, &out, service_info_unmarshall);
+	g_byte_array_unref(gba);
+
 	if (err) {
 		if (error)
 			g_error_transmit(error, err);
@@ -278,7 +280,7 @@ gcluster_push_services(addr_info_t * addr, long timeout, GSList * services_list,
 
 	MESSAGE req = build_request(NAME_MSGNAME_CS_PUSH_SRV, buf->data, buf->len);
 	if (lock_action)
-		message_add_field(req, "LOCK", "true", sizeof("true") - 1);
+		message_add_field_str(req, NAME_MSGKEY_LOCK, "true");
 
 	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, timeout, &data)) {
 		GSETERROR(error, "Cannot execute the query %s and receive all the responses", NAME_MSGNAME_CS_PUSH_SRV);

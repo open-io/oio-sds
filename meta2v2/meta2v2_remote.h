@@ -32,9 +32,6 @@ License along with this library.
 /* when listing */
 #define M2V2_FLAG_HEADERS          0x00000020
 
-/* when deleting */
-#define M2V2_FLAG_SYNCDEL          0x00000040
-
 /* when getting an alias, do not follow the foreign keys toward
  * headers, contents and chunks. */
 #define M2V2_FLAG_NORECURSION      0x00000080
@@ -109,7 +106,7 @@ GByteArray* m2v2_remote_pack_BEANS(struct hc_url_s *url,
 GByteArray* m2v2_remote_pack_SPARE(struct hc_url_s *url,
 		const gchar *pol, GSList *notin_list, GSList *broken_list);
 
-GByteArray* m2v2_remote_pack_DEL(struct hc_url_s *url, gboolean sync_del);
+GByteArray* m2v2_remote_pack_DEL(struct hc_url_s *url);
 
 GByteArray* m2v2_remote_pack_RAW_ADD(struct hc_url_s *url, GSList *beans);
 
@@ -222,8 +219,7 @@ GError* m2v2_remote_execute_GET(const gchar *target, struct hc_url_s *url,
 GError* m2v2_remote_execute_GET_BY_CHUNK(const gchar *target, 
 		struct hc_url_s *url, const gchar *chunk_id, gint64 limit, GSList **out);
 
-GError* m2v2_remote_execute_DEL(const gchar *target, struct hc_url_s *url,
-		gboolean sync_del, GSList **out);
+GError* m2v2_remote_execute_DEL(const gchar *target, struct hc_url_s *url);
 
 GError* m2v2_remote_execute_RAW_ADD(const gchar *target, struct hc_url_s *url,
 		GSList *beans);

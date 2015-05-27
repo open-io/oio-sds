@@ -44,9 +44,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <evhttp.h>
 #include <evutil.h>
 
-// TODO FIXME replace the MD5 computation by the GLib way
-#include <openssl/md5.h>
-
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 #include <cluster/lib/gridcluster.h>
@@ -551,28 +548,23 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 	ne_session *session=NULL;
 	ne_request *request=NULL;
 	ne_request *request_update=NULL;
-	char chunk_hash_str[128];
 	char *update_uri = NULL;
+	gchar dst[128];
 	int ne_rc;
+	guint16 port = 0;
 
-	MD5_CTX md5_ctx;
+	hash_md5_t md5;
+	GChecksum *checksum;
 
 	int data_handler (void *uData, const char *b, const size_t bSize) {
-
 		(void) uData;
-		if (bSize==0)
-			return 0;
-
-		MD5_Update(&md5_ctx, b, bSize);
-
+		if (b && bSize)
+			g_checksum_update(checksum, (guint8*)b, bSize);
 		return 0;
 	}
 
-	gchar dst[128];
-	guint16 port = 0;
-
+	checksum = g_checksum_new (G_CHECKSUM_MD5);
 	addr_info_get_addr(&(rc->id.addr), dst, sizeof(dst), &port);
-
 	session = ne_session_create("http", dst, port);
 
 	if (!session) {
@@ -583,10 +575,9 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 	ne_set_connect_timeout(session, 10);
 	ne_set_read_timeout(session, 30);
 
-	bzero(chunk_hash_str, sizeof(chunk_hash_str));
+	char chunk_hash_str[1 + STRLEN_CHUNKID];
 	chunk_hash_str[0] = '/';
-	buffer2str(rc->id.id, sizeof(rc->id.id), chunk_hash_str + 1, sizeof(chunk_hash_str) - 2);
-
+	buffer2str(rc->id.id, sizeof(rc->id.id), chunk_hash_str + 1, sizeof(chunk_hash_str) - 1);
 	request = ne_request_create (session, "GET", chunk_hash_str);
 	if (!request) {
 		GSETCODE(&result, CODE_INTERNAL_ERROR, "WebDAV request creation error (%s)", ne_get_error(session));
@@ -594,8 +585,6 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 	}
 
 	ne_add_response_body_reader(request, ne_accept_2xx, data_handler, NULL);
-
-	MD5_Init(&md5_ctx);
 
 	/* Now send the request */
 	switch (ne_rc = ne_request_dispatch(request)) {
@@ -607,22 +596,13 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 				GRID_DEBUG("Error while downloading chunk");
 				goto error_label;
 			}
-			unsigned char md5[MD5_DIGEST_LENGTH];
 
-			bzero(md5, sizeof(md5));
-			MD5_Final(md5, &md5_ctx);
-			char hash_str[MD5_DIGEST_LENGTH*2+1];
-			char md5_str[MD5_DIGEST_LENGTH*2+1];
-			bzero(hash_str, sizeof(hash_str));
-			bzero(md5_str, sizeof(md5_str));
-			buffer2str(rc->hash, sizeof(rc->hash), hash_str, sizeof(hash_str));
-			buffer2str(md5, sizeof(md5), md5_str, sizeof(md5_str));
+			gsize md5_len = sizeof(hash_md5_t);
+			g_checksum_get_digest (checksum, md5, &md5_len);
 
-			GRID_DEBUG("md5 calculated for downloaded chunk = %s, get from meta2 = %s", md5_str, hash_str);
-
-			if (memcmp(rc->hash, md5, MD5_DIGEST_LENGTH) != 0) {
-				GSETCODE(&result, CODE_CONTENT_CORRUPTED, "Chunk downloaded [%s] was corrupted"
-						" (md5 does not match meta2) : %s/%s", chunk_hash_str, hash_str, md5_str);
+			if (memcmp(rc->hash, md5, md5_len)) {
+				GSETCODE(&result, CODE_CONTENT_CORRUPTED, "Chunk corrupted [%s] :"
+						" checksum mismatch", chunk_hash_str);
 				goto error_label;
 			}
 			break;

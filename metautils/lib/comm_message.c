@@ -32,11 +32,6 @@ License along with this library.
 #include "./Parameter.h"
 #include "./Message.h"
 
-struct message_s
-{
-	Message_t *asnMsg;
-};
-
 static void
 __octetString_array_free(Parameter_t * p)
 {
@@ -53,86 +48,31 @@ __octetString_array_free(Parameter_t * p)
 	g_free(p);
 }
 
-static void
-_clean_asn_message(MESSAGE m)
+static OCTET_STRING_t *
+__getParameter(MESSAGE m, enum message_param_e mp)
 {
-	if (!m || !m->asnMsg)
-		return ;
-
-	/*quick parameters */
-	if (m->asnMsg->id != NULL) {
-		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->asnMsg->id);
-		m->asnMsg->id = NULL;
-	}
-
-	if (m->asnMsg->body != NULL) {
-		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->asnMsg->body);
-		m->asnMsg->body = NULL;
-	}
-
-	if (m->asnMsg->version != NULL) {
-		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->asnMsg->version);
-		m->asnMsg->version = NULL;
-	}
-
-	if (m->asnMsg->name != NULL) {
-		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->asnMsg->name);
-		m->asnMsg->name = NULL;
-	}
-
-	m->asnMsg->content.list.free = __octetString_array_free;
-	asn_set_empty(&(m->asnMsg->content.list));
-
-	memset(m->asnMsg, 0x00, sizeof(Message_t));
-	g_free(m->asnMsg);
-
-	m->asnMsg = NULL;
-}
-
-static gint
-_alloc_asn_message(MESSAGE m, GError ** err)
-{
-	if (!m) {
-		GSETERROR(err, "Invalid parameter");
-		return 0;
-	}
-	m->asnMsg = g_malloc0(sizeof(Message_t));
-	return 1;
-}
-
-static gint
-__getParameter(MESSAGE m, enum message_param_e mp, OCTET_STRING_t ** os)
-{
-	if (!m || !m->asnMsg || !os)
-		return 0;
-
-	*os = NULL;
-
 	switch (mp) {
-	case MP_ID:
-		*os = m->asnMsg->id;
-		return 1;
-	case MP_NAME:
-		*os = m->asnMsg->name;
-		return 1;
-	case MP_VERSION:
-		*os = m->asnMsg->version;
-		return 1;
-	case MP_BODY:
-		*os = m->asnMsg->body;
-		return 1;
+		case MP_ID:
+			return m->id;
+		case MP_NAME:
+			return m->name;
+		case MP_VERSION:
+			return m->version;
+		case MP_BODY:
+			return m->body;
+		default:
+			g_assert_not_reached();
+			return NULL;
 	}
-
-	return 0;
 }
 
 MESSAGE
 message_create(void)
 {
 	const char *id = gridd_get_reqid ();
-	MESSAGE result = g_malloc0(sizeof(struct message_s));
+	MESSAGE result = g_malloc0(sizeof(Message_t));
 	if (id)
-		message_set_ID (result, id, strlen(id), NULL);
+		message_set_ID (result, id, strlen(id));
 	return result;
 }
 
@@ -141,17 +81,28 @@ message_create_named (const char *name)
 {
 	MESSAGE result = message_create ();
 	if (name)
-		message_set_NAME (result, name, strlen(name), NULL);
+		message_set_NAME (result, name, strlen(name));
 	return result;
 }
 
 void
 message_destroy(MESSAGE m)
 {
-	if (unlikely(NULL == m))
-		return;
-	_clean_asn_message(m);
-	m->asnMsg = NULL;
+	if (!m)
+		return ;
+
+	if (m->id != NULL)
+		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->id);
+	if (m->body != NULL)
+		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->body);
+	if (m->version != NULL)
+		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->version);
+	if (m->name != NULL)
+		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->name);
+
+	m->content.list.free = __octetString_array_free;
+	asn_set_empty(&(m->content.list));
+
 	g_free(m);
 }
 
@@ -166,7 +117,6 @@ write_gba(const void *b, gsize bSize, void *key)
 GByteArray*
 message_marshall_gba(MESSAGE m, GError **err)
 {
-	GByteArray *result = NULL;
 	asn_enc_rval_t encRet;
 
 	/*sanity check */
@@ -175,23 +125,20 @@ message_marshall_gba(MESSAGE m, GError **err)
 		return NULL;
 	}
 
-	if (!m->asnMsg)
-		_alloc_asn_message(m, err);
-
 	/*set an ID if it is not present */
-	if (0 == message_has_ID(m, NULL)) {
+	if (!message_has_ID(m)) {
 		const char *reqid = gridd_get_reqid ();
 		if (!reqid)
 			gridd_set_random_reqid ();
 		reqid = gridd_get_reqid ();
-		message_set_ID(m, (guint8*)reqid, strlen(reqid), NULL);
+		message_set_ID(m, (guint8*)reqid, strlen(reqid));
 	}
 
 	/*try to encode */
 	guint32 u32 = 0;
-	result = g_byte_array_sized_new(256);
+	GByteArray *result = g_byte_array_sized_new(256);
 	g_byte_array_append(result, (guint8*)&u32, sizeof(u32));
-	encRet = der_encode(&asn_DEF_Message, m->asnMsg, write_gba, result);
+	encRet = der_encode(&asn_DEF_Message, m, write_gba, result);
 
 	if (encRet.encoded < 0) {
 		g_byte_array_free(result, TRUE);
@@ -230,192 +177,124 @@ message_marshall(MESSAGE m, void **s, gsize * sSize, GError ** error)
 	return 1;
 }
 
-gint
-message_unmarshall(MESSAGE m, void *s, gsize * sSize, GError ** error)
+MESSAGE
+message_unmarshall(void *s, gsize sSize, GError ** error)
 {
+	MESSAGE m = NULL;
 	asn_dec_rval_t decRet;
 	asn_codec_ctx_t codecCtx;
 
 	guint8 *rawS = NULL;
 	gsize rawSSize = 0;
 
-	if (!m || !s || !sSize || *sSize < 4) {
-		GSETERROR(error, "Invalid parameter (m=%p s=%p sSize=%p/%i)", m, s, sSize, sSize ? *sSize : ~0U);
-		return 0;
+	if (!s || sSize < 4) {
+		GSETERROR(error, "Invalid parameter");
+		return NULL;
 	}
-
-	_clean_asn_message(m);
-
-	/*extract the real buffer from the L4V capsule */
-	if (!l4v_extract(s, *sSize, (void *) &rawS, &rawSSize)) {
+	if (!l4v_extract(s, sSize, (void *) &rawS, &rawSSize)) {
 		GSETERROR(error, "Cannot extract the L4V encapsulated data");
-		return 0;
+		return NULL;
 	}
 
-	/*tries the real unmarshalling work */
+	void *ptr = NULL;
 	codecCtx.max_stack_size = 0;
-
-	do {/*appease gcc with its ugly strict aliasing rules*/
-		void *ptr = NULL;
-		decRet = ber_decode(&codecCtx, &asn_DEF_Message, &ptr, rawS, rawSSize);
-		m->asnMsg = ptr;
-	} while (0);
+	decRet = ber_decode(&codecCtx, &asn_DEF_Message, &ptr, rawS, rawSSize);
+	m = ptr;
 
 	switch (decRet.code) {
-	case RC_OK:
-		break;
-
-	case RC_FAIL:
-		GSETERROR(error, "Cannot deserialize: %s (%d bytes consumed)",
-				"invalid content", decRet.consumed);
-		goto errorLABEL;
-
-	case RC_WMORE:
-		GSETERROR(error, "Cannot deserialize: %s (%d bytes consumed)",
-				"uncomplete content", decRet.consumed);
-		goto errorLABEL;
+		case RC_OK:
+			break;
+		case RC_FAIL:
+			GSETERROR(error, "Cannot deserialize: %s (%d bytes consumed)",
+					"invalid content", decRet.consumed);
+			goto errorLABEL;
+		case RC_WMORE:
+			GSETERROR(error, "Cannot deserialize: %s (%d bytes consumed)",
+					"uncomplete content", decRet.consumed);
+			goto errorLABEL;
 	}
 
-	*sSize = decRet.consumed + 4;
+	return m;
 
-	return 1;
-      errorLABEL:
-	_clean_asn_message(m);
-	return 0;
+errorLABEL:
+	message_destroy (m);
+	return NULL;
 }
 
-gint
-message_has_param(MESSAGE m, enum message_param_e mp, GError ** error)
+gboolean
+message_has_param(MESSAGE m, enum message_param_e mp)
 {
-	OCTET_STRING_t *os;
-
-	if (!m) {
-		GSETERROR(error, "Invalid parameter");
-		return -1;
-	}
-
-	if (!m->asnMsg)
-		return 0;
-
-	return (__getParameter(m, mp, &os) && os && os->buf) ? 1 : 0;
+	if (!m)
+		return FALSE;
+	OCTET_STRING_t *os = __getParameter(m, mp);
+	return (os && os->buf);
 }
 
-gint
-message_get_param(MESSAGE m, enum message_param_e mp, void **s, gsize * sSize, GError ** error)
+void*
+message_get_param(MESSAGE m, enum message_param_e mp, gsize *sSize)
 {
-	const char *name_mp;
-	OCTET_STRING_t *os;
+	EXTRA_ASSERT (m != NULL);
+	EXTRA_ASSERT (sSize != NULL);
 
-	if (!m || !s || !sSize) {
-		GSETERROR(error, "Invalid parameter");
-		return -1;
-	}
-
-	if (!m->asnMsg)
-		_alloc_asn_message(m, error);
-
-	switch (mp) {
-		case MP_ID : name_mp = "MP_ID"; break;
-		case MP_NAME : name_mp = "MP_NAME"; break;
-		case MP_VERSION : name_mp = "MP_VERSION"; break;
-		case MP_BODY : name_mp = "MP_BODY"; break;
-		default : name_mp = "***invalid***"; break;
-	}
-
-	switch (message_has_param(m, mp, error)) {
-		case -1:
-			/*error is set */
-			return -1;
-		case 0:
-			GSETERROR(error, "Type not set (%d/%s)", mp, name_mp);
-			return 0;
-	}
-
-	if (__getParameter(m, mp, &os) && os) {
+	OCTET_STRING_t *os = __getParameter(m, mp);
+	if (!os || !os->buf) {
+		*sSize = 0;
+		return NULL;
+	} else {
 		*sSize = os->size;
-		*s = os->buf;
-		return 1;
+		return os->buf;
 	}
-
-	return 0;
 }
 
-gint
-message_set_param(MESSAGE m, enum message_param_e mp, const void *s, gsize sSize, GError ** error)
+void
+message_set_param(MESSAGE m, enum message_param_e mp, const void *s, gsize sSize)
 {
-	OCTET_STRING_t *os;
-
-	if (!m || !s || sSize < 1) {
-		GSETERROR(error, "Invalid parameter (%p %p %d)", m, s, sSize);
-		return 0;
+	void _set (OCTET_STRING_t **pos) {
+		if (*pos)
+			OCTET_STRING_fromBuf(*pos, s, sSize);
+		else
+			*pos = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
 	}
 
-	if (!m->asnMsg)
-		_alloc_asn_message(m, error);
-
-	if (!__getParameter(m, mp, &os)) {
-		GSETERROR(error, "Invalid message parameter type");
-		return 0;
-	}
-
-	if (os != NULL) {
-		OCTET_STRING_fromBuf(os, s, sSize);
-		return 1;
-	}
+	if (!m || !s || sSize < 1)
+		return ;
 
 	switch (mp) {
 		case MP_ID:
-			m->asnMsg->id = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
-			return 1;
+			return _set(&m->id);
 		case MP_NAME:
-			m->asnMsg->name = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
-			return 1;
+			return _set(&m->name);
 		case MP_VERSION:
-			m->asnMsg->version = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
-			return 1;
+			return _set(&m->version);
 		case MP_BODY:
-			m->asnMsg->body = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
-			return 1;
+			return _set(&m->body);
 		default:
-			return 1;
+			g_assert_not_reached();
+			return;
 	}
 }
 
-gint
-message_get_field(MESSAGE m, const void *name, gsize name_size, void **value, gsize * valueSize, GError ** error)
+void*
+message_get_field(MESSAGE m, const char *name, gsize *vsize)
 {
-	int i, max, name_real_size;
+	if (!m || !name || !vsize)
+		return NULL;
+	if (!m->content.list.array || m->content.list.count<=0)
+		return NULL;
 
-	/*sanity checks */
-	if (!m || !name || name_size < 1 || !value || !valueSize) {
-		GSETERROR(error, "Invalid parameter");
-		return -1;
-	}
+	*vsize = 0;
+	gssize nlen = strlen(name);
 
-	if (!m->asnMsg)
-		_alloc_asn_message(m, error);
-
-	if (!m->asnMsg->content.list.array || m->asnMsg->content.list.count<=0) {
-		return 0;
-	}
-
-	name_real_size = strlen_len(name, name_size);
-
-	/*run the list and find a matching field */
-	max = m->asnMsg->content.list.count;
-	for (i = 0; i < max ; i++) {
-		Parameter_t *p;
-
-		p = m->asnMsg->content.list.array[i];
+	for (int i = 0, max = m->content.list.count; i < max ; i++) {
+		Parameter_t *p = m->content.list.array[i];
 		if (!p)
 			continue;
-		if (p->name.size != name_real_size)
+		if (p->name.size != nlen)
 			continue;
 
-		if (!memcmp(p->name.buf, name, name_real_size)) {
-			*value = p->value.buf;
-			*valueSize = p->value.size;
-			return 1;
+		if (!memcmp(p->name.buf, name, nlen)) {
+			*vsize = p->value.size;
+			return p->value.buf;
 		}
 	}
 
@@ -423,71 +302,43 @@ message_get_field(MESSAGE m, const void *name, gsize name_size, void **value, gs
 }
 
 gchar **
-message_get_field_names(MESSAGE m, GError ** error)
+message_get_field_names(MESSAGE m)
 {
-	gchar **array;
-	gint max, nb, i;
-
-	if (!m || !m->asnMsg) {
-		GSETERROR(error, "invalid message parameter");
+	if (!m)
 		return NULL;
-	}
 
-	max = m->asnMsg->content.list.count;
-	if (max < 0) {
-		GSETERROR(error, "invalid message field count : %d", max);
+	int max = m->content.list.count;
+	if (max < 0)
 		return NULL;
-	}
 
-	array = g_malloc0(sizeof(gchar *) * (max + 1));
-
-	TRACE("found %d fields", max);
-
-	for (nb = 0, i = 0; i < max; i++) {
-		Parameter_t *p = m->asnMsg->content.list.array[i];
-
-		if (p && p->name.buf) {
-			array[nb] = g_strndup((const gchar*)p->name.buf, p->name.size);
-			nb++;
-		}
+	gchar **array = g_malloc0(sizeof(gchar *) * (max + 1));
+	for (int nb=0,i=0; i<max; i++) {
+		Parameter_t *p = m->content.list.array[i];
+		if (p && p->name.buf)
+			array[nb++] = g_strndup((const gchar*)p->name.buf, p->name.size);
 	}
 
 	return array;
 }
 
-gint
-message_get_fields(MESSAGE m, GHashTable ** hash, GError ** error)
+GHashTable*
+message_get_fields (MESSAGE m)
 {
-	gchar **field_names, **fn_ptr;
-	GByteArray *field_value = NULL;
+	if (!m)
+		return NULL;
 
-	if (!m || !m->asnMsg) {
-		GSETERROR(error, "invalid message parameter");
-		return (0);
-	}
+	GHashTable *hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_clean);
 
-	field_names = message_get_field_names(m, error);
-	if (field_names == NULL) {
-		GSETERROR(error, "Failed to get fiels names");
-		return (0);
-	}
-
-	*hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_clean);
-
-	for (fn_ptr = field_names; *fn_ptr; fn_ptr++) {
-		void *value;
-		gsize value_size;
-
-		if (message_get_field(m, *fn_ptr, strlen(*fn_ptr), &value, &value_size, error) > 0) {
-			field_value = g_byte_array_new();
-			field_value = g_byte_array_append(field_value, value, value_size);
-			g_hash_table_insert(*hash, *fn_ptr, field_value);
+	for (int i=0,max=m->content.list.count; i<max; i++) {
+		Parameter_t *p = m->content.list.array[i];
+		if (p && p->name.buf && p->value.buf) {
+			g_hash_table_replace (hash,
+					g_strndup ((const gchar*)p->name.buf, p->name.size),
+					g_byte_array_append (g_byte_array_new(), p->value.buf, p->value.size));
 		}
 	}
 
-	g_free(field_names);
-
-	return (1);
+	return hash;
 }
 
 void
@@ -496,10 +347,7 @@ message_add_field(MESSAGE m, const char *name, const void *value, gsize valueSiz
 	if (!m || !name || !value)
 		return ;
 
-	if (!m->asnMsg)
-		_alloc_asn_message(m, NULL);
-
-	void *pList = &(m->asnMsg->content.list);
+	void *pList = &(m->content.list);
 	Parameter_t *pMember = g_malloc0(sizeof(Parameter_t));
 
 	if (0 != OCTET_STRING_fromBuf(&(pMember->name), name, strlen(name))) {
@@ -667,39 +515,17 @@ message_add_body_unref (MESSAGE m, GByteArray *body)
 {
 	if (body) {
 		if (body->len && body->data)
-			message_set_BODY (m, body->data, body->len, NULL);
+			message_set_BODY (m, body->data, body->len);
 		g_byte_array_unref (body);
 	}
 }
 
-MESSAGE
-message_create_request(GError ** err, GByteArray * id, const char *name,
-		GByteArray * body, ...)
-{
-	MESSAGE msg = message_create();
-	if (name != NULL)
-		message_set_NAME(msg, name, strlen(name), err);
-	if (id != NULL)
-		message_set_ID(msg, id->data, id->len, NULL);
-	if (body != NULL)
-		message_set_BODY(msg, body->data, body->len, NULL);
-
-	va_list args;
-	va_start(args, body);
-	message_add_fieldv_gba(msg, args);
-	va_end(args);
-
-	return msg;
-}
-
 GError *
-message_extract_body_strv(struct message_s *msg, gchar ***result)
+message_extract_body_strv(MESSAGE msg, gchar ***result)
 {
-	int rc;
-	void *b = NULL;
 	gsize bsize = 0;
-
-	if (0 >= (rc = message_get_BODY(msg, &b, &bsize, NULL))) {
+	void *b = message_get_BODY(msg, &bsize);
+	if (!b) {
 		*result = g_malloc0(sizeof(gchar*));
 		return NULL;
 	}
@@ -709,13 +535,12 @@ message_extract_body_strv(struct message_s *msg, gchar ***result)
 }
 
 GError *
-message_extract_prefix(struct message_s *msg, const gchar *n,
+message_extract_prefix(MESSAGE msg, const gchar *n,
 		guint8 *d, gsize *dsize)
 {
-	void *f;
-	gsize fsize;
-
-	if (0 >= message_get_field(msg, n, strlen(n), &f, &fsize, NULL))
+	gsize fsize = 0;
+	void *f = message_get_field(msg, n, &fsize);
+	if (!f || fsize)
 		return NEWERROR(CODE_BAD_REQUEST, "Missing ID prefix at '%s'", n);
 	if (fsize > *dsize)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid ID prefix at '%s'", n);
@@ -727,83 +552,77 @@ message_extract_prefix(struct message_s *msg, const gchar *n,
 }
 
 GError *
-message_extract_cid(struct message_s *msg, const gchar *n, container_id_t *cid)
+message_extract_cid(MESSAGE msg, const gchar *n, container_id_t *cid)
 {
-	void *f;
-	gsize f_size;
-
-	if (0 >= message_get_field(msg, n, strlen(n), &f, &f_size, NULL))
+	gsize fsize;
+	void *f = message_get_field(msg, n, &fsize);
+	if (!f || !fsize)
 		return NEWERROR(CODE_BAD_REQUEST, "Missing container ID at '%s'", n);
-	if (f_size != sizeof(container_id_t))
+	if (fsize != sizeof(container_id_t))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid container ID at '%s'", n);
 	memcpy(cid, f, sizeof(container_id_t));
 	return NULL;
 }
 
 GError *
-message_extract_string(struct message_s *msg, const gchar *n, gchar *dst,
+message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
 		gsize dst_size)
 {
-	int rc;
-	void *f;
-	gsize f_size;
-
-	rc = message_get_field(msg, n, strlen(n), &f, &f_size, NULL);
-	if (0 >= rc)
+	gsize fsize;
+	void *f = message_get_field(msg, n, &fsize);
+	if (!f || !fsize)
 		return NEWERROR(CODE_BAD_REQUEST, "Missing field '%s'", n);
-	if (f_size >= dst_size)
+	if (fsize >= dst_size)
 		return NEWERROR(CODE_BAD_REQUEST,
 				"Invalid field '%s': value too long (%"G_GSIZE_FORMAT")",
-				n, f_size);
+				n, fsize);
 
-	memcpy(dst, f, f_size);
-	memset(dst+f_size, 0, dst_size-f_size);
+	memcpy(dst, f, fsize);
+	memset(dst+fsize, 0, dst_size-fsize);
 	return NULL;
 }
 
 gchar *
-message_extract_string_copy(struct message_s *msg, const gchar *n)
+message_extract_string_copy(MESSAGE msg, const gchar *n)
 {
-	void *f = NULL;
-	gsize f_size = 0;
-	int rc = message_get_field(msg, n, strlen(n), &f, &f_size, NULL);
-	if (0 >= rc)
+	gsize fsize = 0;
+	void *f = message_get_field(msg, n, &fsize);
+	if (!f || !fsize)
 		return NULL;
-	return g_strndup(f, f_size);
+	return g_strndup(f, fsize);
 }
 
 gboolean
-message_extract_flag(struct message_s *msg, const gchar *n, gboolean def)
+message_extract_flag(MESSAGE msg, const gchar *n, gboolean def)
 {
-	gsize f_size;
-	void *f;
-	int rc = message_get_field(msg, n, strlen(n), &f, &f_size, NULL);
-	if (0 >= rc)
+	gsize fsize;
+	void *f = message_get_field(msg, n, &fsize);
+	if (!f || !fsize)
 		return def;
 
 	guint8 *b, _flag = 0;
-	for (b=(guint8*)f + f_size; b > (guint8*)f;)
+	for (b=(guint8*)f + fsize; b > (guint8*)f;)
 		_flag |= *(--b);
 	return _flag;
 }
 
 GError*
-message_extract_flags32(struct message_s *msg, const gchar *n,
+message_extract_flags32(MESSAGE msg, const gchar *n,
 		gboolean mandatory, guint32 *flags)
 {
-	void *f = NULL;
-	gsize f_size = 0;
 
 	EXTRA_ASSERT(flags != NULL);
 	*flags = 0;
 
-	if (0 >= message_get_field(msg, n, strlen(n), &f, &f_size, NULL)) {
+	gsize fsize = 0;
+	void *f = message_get_field(msg, n, &fsize);
+	if (!f || !fsize) {
 		if (mandatory)
 			return NEWERROR(CODE_BAD_REQUEST, "Missing field '%s'", n);
 		return NULL;
 	}
 
-	if (f_size != 4)
+	if (fsize != 4)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid 32bit flag set");
 
 	*flags = g_ntohl(*((guint32*)f));
@@ -811,17 +630,15 @@ message_extract_flags32(struct message_s *msg, const gchar *n,
 }
 
 GError *
-message_extract_body_gba(struct message_s *msg, GByteArray **result)
+message_extract_body_gba(MESSAGE msg, GByteArray **result)
 {
 	EXTRA_ASSERT(result != NULL);
 
-	void *b = NULL;
 	gsize bsize = 0;
-	GError *err = NULL;
-	if (0 > message_get_BODY(msg, &b, &bsize, &err)) {
-		g_prefix_error (&err, "Body error: ");
-		return err;
-	}
+	*result = NULL;
+	void *b = message_get_BODY(msg, &bsize);
+	if (!b)
+		return NEWERROR(CODE_BAD_REQUEST, "No body");
 
 	*result = g_byte_array_new();
 	if (b && bsize)
@@ -830,15 +647,12 @@ message_extract_body_gba(struct message_s *msg, GByteArray **result)
 }
 
 GError *
-message_extract_body_string(struct message_s *msg, gchar **result)
+message_extract_body_string(MESSAGE msg, gchar **result)
 {
-	void *b = NULL;
 	gsize bsize = 0;
-	GError *err = NULL;
-	if (0 > message_get_BODY(msg, &b, &bsize, &err)) {
-		g_prefix_error (&err, "Body error: ");
-		return err;
-	}
+	void *b = message_get_BODY(msg, &bsize);
+	if (!b)
+		return NEWERROR(CODE_BAD_REQUEST, "No body");
 
 	if (!b || !bsize) {
 		*result = g_malloc0(sizeof(void*));
@@ -875,26 +689,22 @@ metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
 }
 
 GError *
-message_extract_body_encoded(struct message_s *msg, gboolean mandatory,
+message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
 		GSList **result, body_decoder_f decoder)
 {
-	int rc;
-	void *b = NULL;
-	gsize bsize = 0;
-	GError *err = NULL;
-
 	EXTRA_ASSERT(result != NULL);
 	EXTRA_ASSERT(decoder != NULL);
 
-	rc = message_get_BODY(msg, &b, &bsize, NULL);
-	if (0 >= rc) {
+	gsize bsize = 0;
+	void *b = message_get_BODY(msg, &bsize);
+	if (!b) {
 		if (mandatory)
 			return NEWERROR(CODE_BAD_REQUEST, "Missing body");	
-		*result = NULL;
 		return NULL;
-	}
+    }
 
-	rc = decoder(result, b, &bsize, &err);
+	GError *err = NULL;
+	int rc = decoder(result, b, &bsize, &err);
 	if (rc <= 0) {
 		EXTRA_ASSERT(err != NULL);
 		err->code = CODE_BAD_REQUEST;
@@ -906,27 +716,23 @@ message_extract_body_encoded(struct message_s *msg, gboolean mandatory,
 }
 
 GError*
-message_extract_header_encoded(struct message_s *msg,
-		const gchar *n, gboolean mandatory,
+message_extract_header_encoded(MESSAGE msg, const gchar *n, gboolean mandatory,
 		GSList **result, body_decoder_f decoder)
 {
-	int rc;
-	void *b = NULL;
-	gsize bsize = 0;
-	GError *err = NULL;
-
 	EXTRA_ASSERT(result != NULL);
 	EXTRA_ASSERT(decoder != NULL);
 
-	rc = message_get_field(msg, n, strlen(n), &b, &bsize, NULL);
-	if (0 >= rc) {
+	gsize bsize = 0;
+	void *b = message_get_field(msg, n, &bsize);
+	if (!b || !bsize) {
 		*result = NULL;
 		if (mandatory)
 			return NEWERROR(CODE_BAD_REQUEST, "Missing header [%s]", n);
 		return NULL;
 	} 
 
-	rc = decoder(result, b, &bsize, &err);
+	GError *err = NULL;
+	int rc = decoder(result, b, &bsize, &err);
 	if (rc <= 0) {
 		EXTRA_ASSERT(err != NULL);
 		err->code = CODE_BAD_REQUEST;
@@ -938,7 +744,7 @@ message_extract_header_encoded(struct message_s *msg,
 }
 
 GError *
-message_extract_strint64(struct message_s *msg, const gchar *n, gint64 *i64)
+message_extract_strint64(MESSAGE msg, const gchar *n, gint64 *i64)
 {
 	gchar *end, dst[32];
 	GError *err;
@@ -963,7 +769,7 @@ message_extract_strint64(struct message_s *msg, const gchar *n, gint64 *i64)
 }
 
 GError*
-message_extract_struint(struct message_s *msg, const gchar *n, guint *u)
+message_extract_struint(MESSAGE msg, const gchar *n, guint *u)
 {
 	gint64 i64;
 	GError *err;
@@ -976,7 +782,7 @@ message_extract_struint(struct message_s *msg, const gchar *n, guint *u)
 }
 
 GError*
-message_extract_boolean(struct message_s *msg, const gchar *n,
+message_extract_boolean(MESSAGE msg, const gchar *n,
 		gboolean mandatory, gboolean *v)
 {
 	gchar tmp[32];
@@ -992,22 +798,17 @@ message_extract_boolean(struct message_s *msg, const gchar *n,
 }
 
 GError*
-message_extract_header_gba(struct message_s *msg, const gchar *n,
+message_extract_header_gba(MESSAGE msg, const gchar *n,
 		gboolean mandatory, GByteArray **result)
 {
-	int rc;
-	void *f;
-	gsize fsize;
-
 	g_assert(msg != NULL);
 	g_assert(n != NULL);
 	g_assert(result != NULL);
 
-	rc = message_get_field(msg, n, strlen(n), &f, &fsize, NULL);
+	gsize fsize = 0;
+	void *f = message_get_field(msg, n, &fsize);
 
-	if (rc < 0)
-		return NEWERROR(CODE_BAD_REQUEST, "Missing ID prefix at '%s'", n);
-	if (!rc) {
+	if (!f || !fsize) {
 		if (mandatory)
 			return NEWERROR(CODE_BAD_REQUEST, "Missing ID prefix at '%s'", n);
 		*result = NULL;

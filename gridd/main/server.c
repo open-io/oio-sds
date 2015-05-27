@@ -600,54 +600,17 @@ get_network_socket (message_handler_f h, char **addr, int *port, GError **error)
 	return(0);
 }
 
-static void
-trace_message (MESSAGE m)
-{
-	GError *err = NULL;
-	void *ptr=NULL;
-	gsize ptrSize=0;
-	gchar idStr[256], nameStr[256];
-
-	if (!DEBUG_ENABLED())
-		return;
-
-	memset(idStr, 0, sizeof(idStr));
-	memset(nameStr, 0, sizeof(nameStr));
-
-	if (0 < message_has_ID(m, &err)) {
-		message_get_ID (m, &ptr, &ptrSize, &err);
-		if (ptr && ptrSize < sizeof(idStr)/2)
-			buffer2str(ptr, ptrSize, idStr, sizeof(idStr)-1);
-	}
-
-	if (0 < message_has_NAME(m,&err)) {
-		message_get_NAME(m,&ptr,&ptrSize,&err);
-		g_strlcpy(nameStr, ptr, sizeof(nameStr)-1);
-	}
-
-	DEBUG("message received : NAME='%s' ID='%s'", nameStr, idStr);
-	if (err) {
-		DEBUG("failed to retrieved the {id,name} of the message : %s", err->message ? err->message : "unknown error");
-		g_error_free(err);
-	}
-}
-
 static gint
 manage_message (SERVER srv, GByteArray *gba, struct request_context_s* ctx, GError **err)
 {
 	gint found=0;
-	gsize tmpOffset=0;
 	gint i=0;
 
-	tmpOffset = gba->len;
-
-	/*create and parse a message*/
-	MESSAGE m = message_create ();
-	if (!message_unmarshall(m, gba->data, &tmpOffset, err)) {
+	MESSAGE m = message_unmarshall(gba->data, gba->len, err);
+	if (!m) {
 		GSETERROR(err, "Cannot unmarshal the message");
 		goto errorLabel;
 	}
-	trace_message (m);
 
 	gettimeofday(&(ctx->tv_start), NULL);
 	ctx->request = m;

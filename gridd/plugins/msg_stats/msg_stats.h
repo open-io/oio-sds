@@ -20,8 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__gridd__plugins__msg_stats__msg_stats_h
 # define OIO_SDS__gridd__plugins__msg_stats__msg_stats_h 1
 
-#define MSG_NAME "REQ_STATS"
-
 #define MSGKEY_PATTERN "PATTERN"
 
 #define MSGFIELD_STATPREFIX "stat:"

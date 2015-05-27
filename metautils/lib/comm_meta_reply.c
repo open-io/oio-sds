@@ -38,157 +38,42 @@ ms_to_s(int ms)
 	return dms / 1000.0;
 }
 
-gint
-metaXServer_reply_simple(MESSAGE * reply, MESSAGE request, gint code,
-		const gchar * message, GError ** err)
+MESSAGE
+metaXServer_reply_simple(MESSAGE request, gint code, const gchar *message)
 {
-	if (!reply || !request) {
-		GSETERROR(err, "Invalid parameter");
-		return 0;
-	}
+	EXTRA_ASSERT (request != NULL);
+	MESSAGE reply = message_create_named(NAME_MSGNAME_METAREPLY);
 
-	MESSAGE tmpReply = message_create();
-	message_set_NAME(tmpReply, NAME_MSGNAME_METAREPLY, sizeof(NAME_MSGNAME_METAREPLY) - 1, NULL);
+	gsize mIDSize = 0;
+	void *mID = message_get_ID (request, &mIDSize);
+	if (mID && mIDSize)
+		message_set_ID (reply, mID, mIDSize);
 
-	/*If the original request carries an identifier, we keep it in the reply */
-	if (0 < message_has_ID(request, NULL)) {
-		void *mID;
-		gsize mIDSize;
-
-		mID = NULL;
-		mIDSize = 0;
-		if (0>=message_get_ID(request, &mID, &mIDSize, err) || 0>=message_set_ID(tmpReply, mID, mIDSize, err)) {
-			GSETERROR(err, "Cannot copy the ID of the message");
-			goto errorLabel;
-		}
-	}
-
-	do {			/*If the original request carries a timestamp, we keep it in the reply */
-		void *stamp = NULL;
-		gsize stampLen = 0;
-
-		switch (message_get_field(request, NAME_MSGKEY_TIMESTAMP, sizeof(NAME_MSGKEY_TIMESTAMP) - 1, &stamp,
-					&stampLen, err)) {
-			case 1:
-				message_add_field(tmpReply, NAME_MSGKEY_TIMESTAMP, stamp, stampLen);
-			case 0:
-				break;
-			case -1:
-				GSETERROR(err, "Cannot copy the TIMESTAMP of the message");
-				goto errorLabel;
-		}
-	} while (0);
-
-	/*ensures and formats the error code */
 	if (CODE_IS_NETWORK_ERROR(code))
 		code = CODE_PROXY_ERROR;
-	message_add_field_strint(tmpReply, NAME_MSGKEY_STATUS, code);
+	message_add_field_strint(reply, NAME_MSGKEY_STATUS, code);
 
 	if (message)
-		message_add_field(tmpReply, NAME_MSGKEY_MESSAGE, message, strlen(message));
-
-	*reply = tmpReply;
-	return 1;
-errorLabel:
-	message_destroy(tmpReply);
-	return 0;
+		message_add_field_str (reply, NAME_MSGKEY_MESSAGE, message);
+	return reply;
 }
 
-gint
-metaXClient_reply_simple(MESSAGE reply, gint * status, gchar ** msg, GError ** err)
+GError *
+metaXClient_reply_simple(MESSAGE reply, guint * status, gchar ** msg)
 {
-	/*sanity checks */
-	if (!reply || !status || !msg) {
-		GSETERROR(err, "%s", "Invalid parameter");
-		return 0;
+	EXTRA_ASSERT (reply != NULL);
+	EXTRA_ASSERT (status != NULL);
+	EXTRA_ASSERT (msg != NULL);
+
+	GError *err = message_extract_struint(reply, NAME_MSGKEY_STATUS, status);
+	if (err) {
+		g_prefix_error (&err, "Invalid reply: no status: ");
+		return err;
 	}
-
-	*msg = NULL;
-	*status = 0;
-
-	/*check it is an answer */
-	{
-		gsize nameSize = 0;
-		gchar *name = NULL;
-
-		switch (message_has_NAME(reply, NULL)) {
-		case 0:
-			GSETERROR(err, "The message cannot be a reply (%s)", "no name is present");
-		case -1:
-			goto errorLabel;
-		}
-
-		if (!message_get_NAME(reply, (void *) &name, &nameSize, err))
-			goto errorLabel;
-
-		if (0 != g_ascii_strncasecmp(name, NAME_MSGNAME_METAREPLY, MIN(sizeof(NAME_MSGNAME_METAREPLY) - 1, nameSize))) {
-			GSETERROR(err, "The message cannot be a reply (%s)",
-			    "invalid message name, '" NAME_MSGNAME_METAREPLY "' expected");
-			goto errorLabel;
-		}
-	}
-
-	{			/*get the message (copy) if present */
-		gchar *tmpMsg = NULL, *newMsg = NULL;
-		gsize tmpMsgSize = 0, i;
-
-		switch (message_get_field(reply, NAME_MSGKEY_MESSAGE, sizeof(NAME_MSGKEY_MESSAGE) - 1, (void *) &tmpMsg,
-			&tmpMsgSize, err)) {
-		case 1:
-			newMsg = g_malloc0(sizeof(gchar) * (tmpMsgSize + 1));
-			memcpy(newMsg, tmpMsg, tmpMsgSize);
-			newMsg[tmpMsgSize] = '\0';
-
-			/*check the message is pure ASCII */
-			for (i = 0; i < tmpMsgSize; i++) {
-				if (!g_ascii_isprint(newMsg[i]) && !g_ascii_isspace(newMsg[i]))
-					newMsg[i] = '?';
-			}
-
-			*msg = newMsg;
-			break;
-		case 0:
-			*msg = NULL;
-			break;
-		case -1:
-			*msg = NULL;
-			goto errorLabel;
-		}
-	}
-
-	{			/*XXX MANDATORY XXX get the status */
-		gchar *tmpStatus = NULL, *end = NULL, wrkStatus[4] = { 0, 0, 0, 0 };
-		gsize tmpStatusSize = 0;
-
-		switch (message_get_field(reply, NAME_MSGKEY_STATUS, sizeof(NAME_MSGKEY_STATUS) - 1,
-			(void *) &tmpStatus, &tmpStatusSize, err)) {
-		case 0:
-			GSETERROR(err, "%s", "Status not found");
-		case -1:
-			goto errorLabel;
-		}
-
-		if (tmpStatusSize != 3) {
-			GSETERROR(err, "Status has a bad size : [%d]", tmpStatusSize);
-			goto errorLabel;
-		}
-
-		wrkStatus[0] = tmpStatus[0];
-		wrkStatus[1] = tmpStatus[1];
-		wrkStatus[2] = tmpStatus[2];
-		*status = (gint) g_ascii_strtoull(wrkStatus, &end, 10);
-		if (end != wrkStatus + 3) {
-			GSETERROR(err, "%s", "Invalid status format");
-			goto errorLabel;
-		}
-	}
-
-	return 1;
-errorLabel:
-	if (*msg)
-		g_free(*msg);
-
-	return 0;
+	*msg = message_extract_string_copy(reply, NAME_MSGKEY_MESSAGE);
+	if (!*msg)
+		*msg = g_strdup("?");
+	return NULL;
 }
 
 struct repseq_ctx_s
@@ -209,10 +94,10 @@ _find_handler(struct reply_sequence_data_s *data, int code)
 }
 
 static gboolean
-rep_handler(gpointer u, struct message_s *reply)
+rep_handler(gpointer u, MESSAGE reply)
 {
 	struct repseq_ctx_s *ctx = u;
-	int rc=TRUE, body;
+	int rc=TRUE;
 	gint64 s64 = 0;
 	struct code_handler_s *h;
 
@@ -226,18 +111,16 @@ rep_handler(gpointer u, struct message_s *reply)
 	}
 
 	/* BODY management */
-	body = message_has_BODY(reply, NULL);
+	gsize bodylen = 0;
+	void *body = message_get_BODY(reply, &bodylen);
 
-	if ((h->flags & REPSEQ_BODYMANDATORY) && body <= 0) {
+	if ((h->flags & REPSEQ_BODYMANDATORY) && (!body || !bodylen)) {
 		ctx->err = NEWERROR(CODE_INTERNAL_ERROR, "Missing body (mandatory for status " "[%"G_GINT64_FORMAT"])", s64);
 		return FALSE;
 	}
 
-	if (body > 0 && h->content_handler) { // call the body handler
-		void *b = NULL;
-		gsize blen = 0;
-		message_get_BODY(reply, &b, &blen, NULL);
-		rc = h->content_handler(&(ctx->err), ctx->data->udata, s64, b, blen);
+	if (body && bodylen && h->content_handler) { // call the body handler
+		rc = h->content_handler(&(ctx->err), ctx->data->udata, s64, body, bodylen);
 		if (!rc || ctx->err != NULL) {
 			if (!ctx->err)
 				ctx->err = NEWERROR(CODE_INTERNAL_ERROR, "Unknown content handler error for status [%"G_GINT64_FORMAT"]", s64);
@@ -265,7 +148,7 @@ rep_handler(gpointer u, struct message_s *reply)
 }
 
 static GError*
-_repseq_run(struct message_s *req, struct metacnx_ctx_s *cnx,
+_repseq_run(MESSAGE req, struct metacnx_ctx_s *cnx,
 		struct reply_sequence_data_s *data)
 {
 	struct repseq_ctx_s ctx;

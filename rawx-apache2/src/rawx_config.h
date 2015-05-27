@@ -20,9 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__rawx_apache2__src__rawx_config_h
 # define OIO_SDS__rawx_apache2__src__rawx_config_h 1
 
-// TODO FIXME replace with APR equivalent
-#include <openssl/md5.h>
-
 #include <httpd.h>
 #include <http_config.h>
 #include <http_log.h>
@@ -111,111 +108,34 @@ struct dav_rawx_server_conf_s {
 	ssize_t FILE_buffer_size; /**< negative or zero means 'unset', positive set the buffer size to this value, but we force a maximum of '131072' */
 };
 
-/**
- *
- *
- *
- */
 apr_status_t server_init_master_stat(dav_rawx_server_conf *conf, apr_pool_t *pool, apr_pool_t *plog);
 
-/**
- *
- *
- *
- */
 void server_master_stat_fini(dav_rawx_server_conf *conf, apr_pool_t *plog);
 
-/**
- *
- *
- *
- */
 apr_status_t server_init_child_stat(dav_rawx_server_conf *conf, apr_pool_t *pool, apr_pool_t *plog);
 
-/**
- *
- *
- *
- */
 apr_status_t server_child_stat_fini(dav_rawx_server_conf *conf, apr_pool_t *plog);
 
-/**
- *
- *
- *
- */
 void server_add_stat(dav_rawx_server_conf *conf, const char *n, apr_uint32_t value, apr_uint32_t duration);
 
-/**
- *
- *
- *
- */
 void server_inc_stat(dav_rawx_server_conf *conf, const char *n, apr_time_t duration);
 
-/**
- *
- *
- *
- */
 void server_inc_request_stat(dav_rawx_server_conf *conf, const char *n, apr_time_t duration);
 
-/**
- *
- *
- *
- */
 void server_inc_daverror_stat(dav_rawx_server_conf *conf, dav_error *derr);
 
-/**
- *
- *
- *
- */
 dav_error *server_create_and_stat_error(dav_rawx_server_conf *conf, apr_pool_t *p, int status, int error_id, const char *desc);
 
-/**
- *
- *
- *
- */
 apr_uint64_t server_get_reqperseq(dav_rawx_server_conf *conf);
 
-/**
- *
- *
- *
- */
 apr_uint64_t server_get_reqavgtime(dav_rawx_server_conf *conf);
 
-/***************** UTILS FUNCTIONS *************************/
-
-/**
- *
- *
- *
- */
 char * _get_compression_algorithm(apr_pool_t *p, namespace_info_t *ns_info);
 
-/**
- *
- *
- *
- */
 apr_int64_t _get_compression_block_size(apr_pool_t *p, namespace_info_t *ns_info);
 
-/**
- *
- *
- *
- */
 GSList * _get_acl(apr_pool_t *p, namespace_info_t *ns_info);
 
-/**
- *
- *
- *
- */
 gboolean update_rawx_conf(apr_pool_t* p, rawx_conf_t **rawx_conf, const gchar* ns_name);
 
 #endif /*OIO_SDS__rawx_apache2__src__rawx_config_h*/

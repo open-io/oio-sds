@@ -3,13 +3,10 @@ include_directories(BEFORE . ../..
 		${CMAKE_CURRENT_BINARY_DIR})
 
 link_directories(
-		${ASN1C_LIBRARY_DIRS}
-		${EXPAT_LIBRARY_DIRS})
+		${ASN1C_LIBRARY_DIRS})
 
 include_directories(AFTER
-		${OPENSSL_INCLUDE_DIRS}
-		${JSONC_INCLUDE_DIRS}
-		${EXPAT_INCLUDE_DIRS})
+		${JSONC_INCLUDE_DIRS})
 
 add_custom_command(
 	OUTPUT
@@ -315,7 +312,7 @@ add_library(metautils SHARED
 )
 
 target_link_libraries(metautils
-		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} ${JSONC_LIBRARIES} ${EXPAT_LIBRARIES}
+		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES}
 		${ASN1C_LIBRARIES}
 		-lm)
 
@@ -325,20 +322,20 @@ add_executable(gs_oid2cid oid_to_cid.c)
 bin_prefix(gs_oid2cid -oid2cid)
 target_link_libraries(gs_oid2cid
 		metautils
-		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES})
+		${GLIB2_LIBRARIES})
 add_dependencies(gs_oid2cid metautils metautils)
 
 add_executable(gs_dump_addr addr_dump.c)
 bin_prefix(gs_dump_addr -dump-addr)
 target_link_libraries(gs_dump_addr
 		metautils
-		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES} ${ASN1C_LIBRARIES})
+		${GLIB2_LIBRARIES} ${ASN1C_LIBRARIES})
 
 add_executable(gs_same_hash gs_same_hash.c)
 bin_prefix(gs_same_hash -same-hash)
 target_link_libraries(gs_same_hash
 		metautils 
-		${OPENSSL_LIBRARIES} ${GLIB2_LIBRARIES})
+		${GLIB2_LIBRARIES})
 
 add_executable(test_lb test_lb.c)
 target_link_libraries(test_lb
@@ -445,6 +442,7 @@ install(FILES
 			metautils_sockets.h
 			metautils_strings.h
 			metautils_svc_policy.h
+			metautils_syscall.h
 			metautils_task.h
 			storage_policy.h
 			test_addr.h

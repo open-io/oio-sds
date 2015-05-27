@@ -285,9 +285,9 @@ write_request(worker_t *worker, GError **error)
 	if (data->buffer == NULL) {
 
 		req = message_create();
-		message_set_NAME(req, asn1_session->req_name, strlen(asn1_session->req_name), NULL);
+		message_set_NAME(req, asn1_session->req_name, strlen(asn1_session->req_name));
 		if (asn1_session->req_body)
-			message_set_BODY(req, asn1_session->req_body, asn1_session->req_body_size, NULL);
+			message_set_BODY(req, asn1_session->req_body, asn1_session->req_body_size);
 
 		if (asn1_session->req_headers) {
 			GList *key = NULL;
@@ -306,13 +306,10 @@ write_request(worker_t *worker, GError **error)
 			gsize ds = 0;
 			if (!message_marshall(req, &(data->buffer), &ds, error)) {
 				GSETERROR(error, "Failed to marshall asn1 message");
-				message_destroy(req);
 				goto error_marshall_message;
 			}
 			data->buffer_size = ds;
 		} while (0);
-
-		message_destroy(req);
 
 	} else if (data->done >= data->buffer_size) {
 
@@ -338,12 +335,15 @@ write_request(worker_t *worker, GError **error)
 		data->done += wl;
 	}
 
+	message_destroy(req);
+	req = NULL;
 	return(1);
 
 error_sched:
 error_write:
 error_marshall_message:
 	message_destroy(req);
+	req = NULL;
 	asn1_session->error_handler(worker, error);
 	free_asn1_worker( worker, 0 );
 	return 0;
@@ -402,9 +402,8 @@ read_response(worker_t *worker, GError **error)
 	worker_data_t *data = NULL;
 	asn1_session_t *asn1_session = NULL;
 	MESSAGE resp = NULL;
-	gint status = CODE_INTERNAL_ERROR;
+	guint status = CODE_INTERNAL_ERROR;
 	gchar *msg = NULL;
-	gsize msg_size;
 
 	TRACE_POSITION();
 
@@ -430,17 +429,15 @@ read_response(worker_t *worker, GError **error)
 
 		TRACE("Data available : (done=%d) >= (size=%d)", data->done, data->buffer_size);
 
-		resp = message_create();
-
-		msg_size = data->buffer_size;
-
-		if (!message_unmarshall(resp, data->buffer, &msg_size, error)) {
+		resp = message_unmarshall(data->buffer, data->buffer_size, error);
+		if (!resp) {
 			GSETERROR(error, "Failed to unmarshall response");
 			goto error_unmarshall;
 		}
 
-		if (!metaXClient_reply_simple(resp, &status, &msg, error)) {
-			GSETERROR(error, "Failed to decode response");
+		GError *e = metaXClient_reply_simple(resp, &status, &msg);
+		if (e) {
+			g_propagate_error (error, e);
 			goto error_decode;
 		}
 
@@ -450,26 +447,19 @@ read_response(worker_t *worker, GError **error)
 		}
 
 		/*free the old headers and get the new*/
-		if (asn1_session->resp_headers) {
+		if (asn1_session->resp_headers)
 			g_hash_table_destroy(asn1_session->resp_headers);
-			asn1_session->resp_headers = NULL;
-		}
-		if (!message_get_fields(resp, &(asn1_session->resp_headers), error)) {
+		asn1_session->resp_headers = message_get_fields(resp);
+		if (!asn1_session->resp_headers) {
 			GSETERROR(error, "Failed to extract headers from message");
 			goto error_headers;
 		}
 
 		/*free the old body and get the new*/
-		asn1_session->resp_body = NULL;
 		asn1_session->resp_body_size = 0;
-		if (message_has_BODY(resp, error)) {
-			if (!message_get_BODY(resp, &(asn1_session->resp_body), &(asn1_session->resp_body_size), error)) {
-				GSETERROR(error, "Failed to extract body from message");
-				goto error_body;
-			}
-		}
+		asn1_session->resp_body = message_get_BODY(resp, &(asn1_session->resp_body_size));
 
-		rc = asn1_session->response_handler( worker, error );
+		rc = asn1_session->response_handler (worker, error);
 		asn1_session->resp_body_size = 0;
 		asn1_session->resp_body = NULL;
 
@@ -481,6 +471,7 @@ read_response(worker_t *worker, GError **error)
 
 		g_free(msg);
 		message_destroy(resp);
+		resp = NULL;
 
 		if (status==CODE_FINAL_OK || !rc) {
 			TRACE("Reply sequence terminated (status=%d rc=%d)", status, rc);
@@ -506,13 +497,13 @@ read_response(worker_t *worker, GError **error)
 	/*worker is left unchanged, wa wait for the remaining of the reply*/
 	return(1);
 
-error_body:
 error_headers:
 error_status:
 	g_free(msg);
 error_decode:
 error_unmarshall:
 	message_destroy(resp);
+	resp = NULL;
 error_read:
 	asn1_session->error_handler(worker, error);
 	free_asn1_worker( worker, 0 );

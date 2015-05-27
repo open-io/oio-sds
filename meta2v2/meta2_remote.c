@@ -48,7 +48,7 @@ meta2_remote_container_common_fd_v2 (int *fd, gint ms, GError ** err, const char
 	MESSAGE request = message_create_named(op);
 	message_add_url (request, url);
 	if (stgpol)
-	    message_add_field_str(request, NAME_HEADER_STORAGEPOLICY, stgpol);
+	    message_add_field_str(request, NAME_MSGKEY_STGPOLICY, stgpol);
 
 	gboolean rc = metaXClient_reply_sequence_run(err, request, fd, ms, &data);
 	message_destroy(request);
@@ -108,143 +108,23 @@ meta2_remote_container_list (const addr_info_t *m2, gint ms, GError **err,
 
 /* ------------------------------------------------------------------------- */
 
-gboolean
-meta2_remote_content_remove (const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url)
-{
-	static struct code_handler_s codes [] = {
-		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
-		{ 0, 0, NULL, NULL },
-	};
-	struct reply_sequence_data_s data = { NULL , 0 , codes };
-
-	EXTRA_ASSERT (m2 != NULL);
-	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2_CONTENTREMOVE);
-	message_add_url (request, url);
-
-	gboolean rc = metaXClient_reply_sequence_run_from_addrinfo (err, request, m2, ms, &data);
-	if (!rc)
-		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
-	return rc;
-}
-
-gboolean
-meta2_remote_content_commit (const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url)
-{
-	static struct code_handler_s codes [] = {
-		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
-		{ 0,0,NULL,NULL}
-	};
-	struct reply_sequence_data_s data = { NULL , 0 , codes };
-
-	EXTRA_ASSERT (m2 != NULL);
-	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2_CONTENTCOMMIT);
-	message_add_url (request, url);
-
-	gboolean rc = metaXClient_reply_sequence_run_from_addrinfo (err, request, m2, ms, &data);
-	if (!rc)
-		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
-	return rc;
-}
-
-gboolean
-meta2_remote_content_rollback (const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url)
-{
-	static struct code_handler_s codes [] = {
-		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
-		{ 0,0,NULL,NULL}
-	};
-	struct reply_sequence_data_s data = { NULL , 0 , codes };
-
-	EXTRA_ASSERT (m2 != NULL);
-	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2_CONTENTROLLBACK);
-	message_add_url (request, url);
-
-	gboolean rc = metaXClient_reply_sequence_run_from_addrinfo (err, request, m2, ms, &data);
-	if (!rc)
-		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
-	return rc;
-}
-
-GSList*
-meta2_remote_content_add (const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url, content_length_t content_length,
-		GByteArray *metadata, GByteArray **new_metadata)
-{
-	GSList *result = NULL;
-	struct metacnx_ctx_s cnx;
-	metacnx_clear (&cnx);
-	if (!metacnx_init_with_addr (&cnx, m2, err))
-		GSETERROR(err, "Address error");
-	else if (!metacnx_open(&cnx, err))
-		GSETERROR(err, "Socket error");
-	else {
-		cnx.timeout.cnx = ms;
-		cnx.timeout.req = ms;
-		result = meta2_remote_content_add_in_fd (&cnx.fd, ms, err, url, content_length, metadata, new_metadata);
-	}
-	metacnx_close (&cnx);
-	metacnx_clear (&cnx);
-
-	return result;
-}
-
-/* ------------------------------------------------------------------------- */
-
-gboolean
-meta2_remote_content_rollback_in_fd (int *fd, gint ms, GError **err,
-		struct hc_url_s *url)
-{
-	static struct code_handler_s codes [] = {
-		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
-		{ 0,0,NULL,NULL}
-	};
-	struct reply_sequence_data_s data = { NULL , 0 , codes };
-
-	EXTRA_ASSERT (fd != NULL);
-	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2_CONTENTROLLBACK);
-	message_add_url(request, url);
-
-	gboolean rc = metaXClient_reply_sequence_run (err, request, fd, ms, &data);
-	if (!rc)
-		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
-	return rc;
-}
-
 GSList*
 meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
 		struct hc_url_s *url, content_length_t content_length,
 		GByteArray *metadata, GByteArray **new_metadata)
 {
 	gboolean get_sys_metadata (GError **err0, gpointer udata, gint code, MESSAGE rep) {
-		(void)udata, (void)code;
+		(void)udata, (void)code, (void)err0;
 		if (!rep)
 			return FALSE;
 		if (!new_metadata)
 			return TRUE;
-		void *field=NULL;
+		*new_metadata = NULL;
 		gsize fieldLen=0;
-		int rc = message_get_field (rep, NAME_HEADER_METADATA_SYS, sizeof(NAME_HEADER_METADATA_SYS)-1, &field, &fieldLen, err0);
-		switch (rc) {
-			case 1:
-				*new_metadata = g_byte_array_append( g_byte_array_new(), field, fieldLen);
-				return TRUE;
-			case 0:
-				*new_metadata = NULL;
-				return TRUE;
-		}
-		GSETERROR(err0, "Cannot lookup the updated systemetadata");
-		return FALSE;
+		void *field = message_get_field (rep, NAME_HEADER_METADATA_SYS, &fieldLen);
+		if (field)
+			*new_metadata = g_byte_array_append( g_byte_array_new(), field, fieldLen);
+		return TRUE;
 	}
 
 	struct code_handler_s codes [] = {
@@ -272,6 +152,32 @@ meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
 	message_destroy(request);
 	return result;
 }
+
+GSList*
+meta2_remote_content_add (const addr_info_t *m2, gint ms, GError **err,
+		struct hc_url_s *url, content_length_t content_length,
+		GByteArray *metadata, GByteArray **new_metadata)
+{
+	GSList *result = NULL;
+	struct metacnx_ctx_s cnx;
+	metacnx_clear (&cnx);
+	if (!metacnx_init_with_addr (&cnx, m2, err))
+		GSETERROR(err, "Address error");
+	else if (!metacnx_open(&cnx, err))
+		GSETERROR(err, "Socket error");
+	else {
+		cnx.timeout.cnx = ms;
+		cnx.timeout.req = ms;
+		result = meta2_remote_content_add_in_fd (&cnx.fd, ms, err, url, content_length, metadata, new_metadata);
+	}
+	metacnx_close (&cnx);
+	metacnx_clear (&cnx);
+
+	return result;
+}
+
+/* ------------------------------------------------------------------------- */
+
 
 GSList*
 meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err,
@@ -332,7 +238,7 @@ meta2raw_remote_update_chunks (struct metacnx_ctx_s *ctx, GError **err,
 	if (allow_update)
 		message_add_field_str(request, NAME_MSGKEY_ALLOWUPDATE, "1");
 	if (position_prefix)
-		message_add_field_str(request, "POSITION_PREFIX", position_prefix);
+		message_add_field_str(request, NAME_MSGKEY_POSITIONPREFIX, position_prefix);
 
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
@@ -458,7 +364,7 @@ meta2raw_remote_stat_content(struct metacnx_ctx_s *ctx, GError **err,
 	MESSAGE request = message_create_named (NAME_MSGNAME_M2RAW_GETCHUNKS);
 	message_add_url (request, url);
 	if (check_flags)
-		message_add_field_str (request, NAME_HEADER_CHECKFLAGS, "1");
+		message_add_field_str (request, NAME_MSGKEY_CHECK, "1");
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
 		GSETERROR(err,"Cannot execute the query and receive all the responses");

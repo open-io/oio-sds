@@ -1260,8 +1260,7 @@ action_m2_content_delete (struct req_args_s *args)
 	GSList *beans = NULL;
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_DEL (m2->host, args->url,
-			TRUE /*sync_del?! */ , &beans);
+		return m2v2_remote_execute_DEL (m2->host, args->url);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	return _reply_simplified_beans (args, err, beans, TRUE);

@@ -30,9 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <sys/stat.h>
 
-// TODO FIXME replace with APR equivalent
-#include <openssl/md5.h>
-
 #include <apr.h>
 #include <apr_file_io.h>
 #include <apr_strings.h>

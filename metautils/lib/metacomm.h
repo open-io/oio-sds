@@ -45,7 +45,8 @@ gint Name (GSList **l, const void *s, gsize *sSize, GError **err)
 #define DECLARE_BODY_MANAGER(Name) \
 gint Name (GError **err, gpointer udata, gint code, guint8 *body, gsize bodySize)
 
-typedef struct message_s *MESSAGE;
+typedef struct Message Message_t;
+typedef Message_t* MESSAGE;
 
 /* ------------------------------------------------------------------------- */
 
@@ -169,15 +170,13 @@ gboolean metaXClient_reply_sequence_run_from_addrinfo(GError ** err,
  * fields with the given status and message.
  *
  * The reply pointer wust be freed with message_destroy(). */
-gint metaXServer_reply_simple(MESSAGE * reply, MESSAGE request, gint status,
-		const gchar * msg, GError ** err);
+MESSAGE metaXServer_reply_simple(MESSAGE request, gint status, const gchar *msg);
 
 /** Performs the opposite operation : retrieves the core elements of the
  * message (supposed to be a reply). 
  * The message returned in the msg pointer is a copy of the original.
  * It is allocated with the g_lib and must be freed with g_free(). */
-gint metaXClient_reply_simple(MESSAGE reply, gint * status, gchar ** msg,
-		GError ** err);
+GError* metaXClient_reply_simple(MESSAGE reply, guint * status, gchar ** msg);
 
 /**
  * Altough the list of fixed parameters is quite small, we do not want a set of
@@ -197,20 +196,20 @@ enum message_param_e
 	/**<Specify an action on the BODY parameter*/
 };
 
-#define message_get_ID(M,V,L,E)      message_get_param((M),MP_ID,(V),(L),(E))
-#define message_get_NAME(M,V,L,E)    message_get_param((M),MP_NAME,(V),(L),(E))
-#define message_get_VERSION(M,V,L,E) message_get_param((M),MP_VERSION,(V),(L),(E))
-#define message_get_BODY(M,V,L,E)    message_get_param((M),MP_BODY,(V),(L),(E))
+#define message_get_ID(M,L)      message_get_param((M),MP_ID,(L))
+#define message_get_NAME(M,L)    message_get_param((M),MP_NAME,(L))
+#define message_get_VERSION(M,L) message_get_param((M),MP_VERSION,(L))
+#define message_get_BODY(M,L)    message_get_param((M),MP_BODY,(L))
 
-#define message_set_ID(M,V,L,E)      message_set_param((M),MP_ID,(V),(L),(E))
-#define message_set_NAME(M,V,L,E)    message_set_param((M),MP_NAME,(V),(L),(E))
-#define message_set_VERSION(M,V,L,E) message_set_param((M),MP_VERSION,(V),(L),(E))
-#define message_set_BODY(M,V,L,E)    message_set_param((M),MP_BODY,(V),(L),(E))
+#define message_set_ID(M,V,L)      message_set_param((M),MP_ID,(V),(L))
+#define message_set_NAME(M,V,L)    message_set_param((M),MP_NAME,(V),(L))
+#define message_set_VERSION(M,V,L) message_set_param((M),MP_VERSION,(V),(L))
+#define message_set_BODY(M,V,L)    message_set_param((M),MP_BODY,(V),(L))
 
-#define message_has_ID(M,E)      message_has_param((M),MP_ID,(E))
-#define message_has_NAME(M,E)    message_has_param((M),MP_NAME,(E))
-#define message_has_VERSION(M,E) message_has_param((M),MP_VERSION,(E))
-#define message_has_BODY(M,E)    message_has_param((M),MP_BODY,(E))
+#define message_has_ID(M)      message_has_param((M),MP_ID)
+#define message_has_NAME(M)    message_has_param((M),MP_NAME)
+#define message_has_VERSION(M) message_has_param((M),MP_VERSION)
+#define message_has_BODY(M)    message_has_param((M),MP_BODY)
 
 /** Allocates all the internal structures of a hidden message. */
 MESSAGE message_create(void);
@@ -220,8 +219,21 @@ MESSAGE message_create_named (const char *name);
 /** Frees all the internal structures of the pointed message. */
 void message_destroy(MESSAGE m);
 
+/** Perform the serialization of the message. */
+gint message_marshall(MESSAGE m, void **s, gsize * sSize, GError ** error);
+
+GByteArray* message_marshall_gba(MESSAGE m, GError **err);
+
+/** Allocates a new message and Unserializes the given buffer. */
+MESSAGE message_unmarshall(void *s, gsize sSize, GError ** error);
+
+/** Calls message_marshall_gba() then message_destroy() on 'm'. */
+GByteArray* message_marshall_gba_and_clean(MESSAGE m);
+
+typedef gint (body_decoder_f)(GSList **res, const void *b, gsize *bs, GError **err);
+
 /** Returns wether the given message has the targeted parameter or not.  */
-gint message_has_param(MESSAGE m, enum message_param_e mp, GError ** error);
+gboolean message_has_param(MESSAGE m, enum message_param_e mp);
 
 /**
  * @brief Finds and returns a pointer to a given quick parameter in the given
@@ -231,16 +243,11 @@ gint message_has_param(MESSAGE m, enum message_param_e mp, GError ** error);
  *
  * @param m a pointer to the inspected message
  * @param mp the code of the targeted parameter
- * @param s a pointer destined to hold the pointer to the real parameter buffer.
- * Warning, at exit, this value is not a copy. Any change is the returned buffer
- * really acts on the message. It cannot be NULL.
  * @param sSize a holder pointer to store the size of the parameter buffer. It
  * cannot be NULL.
- * @param error the error structure that will be set in case of failure. It can
- * be NULL.
- * @return 1 on success, 0 on error
+ * @return a pointer to the data (NOT A COPY)
  */
-gint message_get_param(MESSAGE m, enum message_param_e mp, void **s, gsize * sSize, GError ** error);
+void* message_get_param(MESSAGE m, enum message_param_e mp, gsize * sSize);
 
 /**
  * @brief Sets a new value for the given parameter, in the given message.
@@ -253,11 +260,9 @@ gint message_get_param(MESSAGE m, enum message_param_e mp, void **s, gsize * sSi
  * @param mp thet code of the targeted quick parameter
  * @param s a pointer to a memory buffer holding the new value of the parameter.
  * @param sSize the size of the given memory buffer holding the value.
- * @param error the error structure that will be set in case of failure
- * @return 1 on success, 0 on error
  */
-gint message_set_param(MESSAGE m, enum message_param_e mp,
-		const void *s, gsize sSize, GError ** error);
+void message_set_param(MESSAGE m, enum message_param_e mp, const void *s,
+		gsize sSize);
 
 /** Adds a new custom field in the list of the message. Now check is made to
  * know whether the given field is already present or not. The given new value
@@ -270,17 +275,6 @@ void message_add_url (MESSAGE m, struct hc_url_s *url);
 
 /* wraps message_set_BODY() and g_bytes_array_unref() */
 void message_add_body_unref (MESSAGE m, GByteArray *body);
-
-gint message_get_field(MESSAGE m, const void *name, gsize nameSize,
-		void **value, gsize * valueSize, GError ** error);
-
-gchar ** message_get_field_names(MESSAGE m, GError ** error);
-
-gint message_get_fields(MESSAGE m, GHashTable ** hash, GError ** error);
-
-/** @param ... a NULL-terminated va_list of GByteArray* */
-MESSAGE message_create_request(GError ** err, GByteArray * id,
-		const char *name, GByteArray * body, ...);
 
 void message_add_field_str(MESSAGE m, const char *name, const char *value);
 
@@ -297,64 +291,55 @@ void message_add_fieldv_str(MESSAGE m, va_list args);
 
 void message_add_fields_str(MESSAGE m, ...);
 
-/** Perform the serialization of the message. */
-gint message_marshall(MESSAGE m, void **s, gsize * sSize, GError ** error);
+void* message_get_field(MESSAGE m, const char *name, gsize *vsize);
 
-GByteArray* message_marshall_gba(MESSAGE m, GError **err);
+gchar ** message_get_field_names(MESSAGE m);
 
-/** Allocates a new message and Unserializes the given buffer. */
-gint message_unmarshall(MESSAGE m, void *s, gsize * sSize, GError ** error);
+GHashTable* message_get_fields(MESSAGE m);
 
-struct Message;
-
-/** Calls message_marshall_gba() then message_destroy() on 'm'. */
-GByteArray* message_marshall_gba_and_clean(MESSAGE m);
-
-typedef gint (body_decoder_f)(GSList **res, const void *b, gsize *bs, GError **err);
-
-GError* message_extract_cid(struct message_s *msg, const gchar *n,
+GError* message_extract_cid(MESSAGE msg, const gchar *n,
 		container_id_t *cid);
 
-GError* message_extract_prefix(struct message_s *msg, const gchar *n,
+GError* message_extract_prefix(MESSAGE msg, const gchar *n,
 		guint8 *d, gsize *dsize);
 
-gboolean message_extract_flag(struct message_s *m, const gchar *n, gboolean d);
+gboolean message_extract_flag(MESSAGE m, const gchar *n, gboolean d);
 
-GError* message_extract_flags32(struct message_s *msg, const gchar *n,
+GError* message_extract_flags32(MESSAGE msg, const gchar *n,
 		gboolean mandatory, guint32 *flags);
 
-GError* message_extract_string(struct message_s *msg, const gchar *n, gchar *dst,
+GError* message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
 		gsize dst_size);
 
-gchar* message_extract_string_copy(struct message_s *msg, const gchar *n);
+gchar* message_extract_string_copy(MESSAGE msg, const gchar *n);
 
-GError* message_extract_strint64(struct message_s *msg, const gchar *n,
+GError* message_extract_strint64(MESSAGE msg, const gchar *n,
 		gint64 *i64);
 
-GError* message_extract_struint(struct message_s *msg, const gchar *n,
+GError* message_extract_struint(MESSAGE msg, const gchar *n,
 		guint *u);
 
-GError* message_extract_boolean(struct message_s *msg,
+GError* message_extract_boolean(MESSAGE msg,
 		const gchar *n, gboolean mandatory, gboolean *v);
 
-GError* message_extract_header_encoded(struct message_s *msg,
+GError* message_extract_header_encoded(MESSAGE msg,
 		const gchar *n, gboolean mandatory,
 		GSList **result, body_decoder_f decoder);
 
-GError* message_extract_header_gba(struct message_s *msg, const gchar *n,
+GError* message_extract_header_gba(MESSAGE msg, const gchar *n,
 		gboolean mandatory, GByteArray **result);
 
-GError* message_extract_body_gba(struct message_s *msg, GByteArray **result);
+GError* message_extract_body_gba(MESSAGE msg, GByteArray **result);
 
 /** Upon success, ensures result will be a printable string with a trailing \0 */
-GError* message_extract_body_string(struct message_s *msg, gchar **result);
+GError* message_extract_body_string(MESSAGE msg, gchar **result);
 
-GError* message_extract_body_strv(struct message_s *msg, gchar ***result);
+GError* message_extract_body_strv(MESSAGE msg, gchar ***result);
 
 GError* metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
 		body_decoder_f decoder);
 
-GError* message_extract_body_encoded(struct message_s *msg, gboolean mandatory,
+GError* message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
 		GSList **result, body_decoder_f decoder);
 
 struct hc_url_s * message_extract_url (MESSAGE m);

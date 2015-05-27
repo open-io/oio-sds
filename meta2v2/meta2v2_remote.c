@@ -40,7 +40,7 @@ _m2v2_build_request(const gchar *name, struct hc_url_s *url, GByteArray *body)
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	struct message_s *msg = message_create_named(name);
+	MESSAGE msg = message_create_named(name);
 	message_add_url (msg, url);
 	if (body)
 		message_add_body_unref (msg, body);
@@ -52,7 +52,7 @@ _m2v2_build_request_with_flags (const gchar *name, struct hc_url_s *url,
 		GByteArray *body, guint32 flags)
 {
 	flags = g_htonl(flags);
-	struct message_s *msg = _m2v2_build_request(name, url, body);
+	MESSAGE msg = _m2v2_build_request(name, url, body);
 	message_add_field(msg, NAME_MSGKEY_FLAGS, &flags, sizeof(flags));
 	return msg;
 }
@@ -86,7 +86,7 @@ m2v2_list_result_clean (struct list_result_s *p)
 GByteArray*
 m2v2_remote_pack_CREATE(struct hc_url_s *url, struct m2v2_create_params_s *pols)
 {
-	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_CREATE, url, NULL);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_CREATE, url, NULL);
 	if (pols && pols->storage_policy)
 		message_add_field_str(msg, M2_KEY_STORAGE_POLICY, pols->storage_policy);
 	if (pols && pols->version_policy)
@@ -97,7 +97,7 @@ m2v2_remote_pack_CREATE(struct hc_url_s *url, struct m2v2_create_params_s *pols)
 GByteArray*
 m2v2_remote_pack_DESTROY(struct hc_url_s *url, guint32 flags)
 {
-	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DESTROY, url, NULL);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DESTROY, url, NULL);
 	if (flags & M2V2_DESTROY_FORCE)
 		message_add_field_str(msg, NAME_MSGKEY_FORCE, "1");
 	if (flags & M2V2_DESTROY_FLUSH)
@@ -145,7 +145,7 @@ GByteArray*
 m2v2_remote_pack_OVERWRITE(struct hc_url_s *url, GSList *beans)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
-	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, body);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, body);
 	message_add_field_str(msg, M2_KEY_OVERWRITE, "1");
 	return message_marshall_gba_and_clean(msg);
 }
@@ -160,16 +160,15 @@ m2v2_remote_pack_APPEND(struct hc_url_s *url, GSList *beans)
 GByteArray*
 m2v2_remote_pack_COPY(struct hc_url_s *url, const gchar *src)
 {
-	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, NULL);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, NULL);
 	message_add_field_str(msg, M2_KEY_COPY_SOURCE, src);
 	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*
-m2v2_remote_pack_DEL(struct hc_url_s *url, gboolean sync_del)
+m2v2_remote_pack_DEL(struct hc_url_s *url)
 {
-	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_DEL, url, NULL,
-			sync_del? M2V2_FLAG_SYNCDEL : 0);
+	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_DEL, url, NULL, 0);
 }
 
 GByteArray*
@@ -192,7 +191,7 @@ m2v2_remote_pack_RAW_SUBST(struct hc_url_s *url,
 {
 	GByteArray *new_chunks_gba = bean_sequence_marshall(new_chunks);
 	GByteArray *old_chunks_gba = bean_sequence_marshall(old_chunks);
-	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_RAW_SUBST, url, NULL);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_RAW_SUBST, url, NULL);
 	message_add_fields_gba(msg,
 			M2_KEY_NEW_CHUNKS, new_chunks_gba,
 			M2_KEY_OLD_CHUNKS, old_chunks_gba,
@@ -212,11 +211,9 @@ GByteArray*
 m2v2_remote_pack_GET_BY_CHUNK(struct hc_url_s *url,
 		const gchar *chunk_id, gint64 limit)
 {
-	gchar limit_str[32];
-	g_snprintf(limit_str, sizeof(limit_str), "%"G_GINT64_FORMAT, limit);
-	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_GET, url, NULL);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_GET, url, NULL);
 	message_add_field_str (msg, M2_KEY_CHUNK_ID, chunk_id);
-	message_add_field_str (msg, M2_KEY_MAX_KEYS, limit_str);
+	message_add_field_strint64 (msg, M2_KEY_MAX_KEYS, limit);
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -231,7 +228,7 @@ m2v2_remote_pack_LIST(struct hc_url_s *url, struct list_params_s *p)
 	if (p->flag_nodeleted)
 		flags |= M2V2_FLAG_NODELETED;
 
-	struct message_s *msg = _m2v2_build_request_with_flags(NAME_MSGNAME_M2V2_LIST, url, NULL, flags);
+	MESSAGE msg = _m2v2_build_request_with_flags(NAME_MSGNAME_M2V2_LIST, url, NULL, flags);
 
 	message_add_field_str(msg, M2_KEY_SNAPSHOT, p->snapshot);
 	message_add_field_str(msg, M2_KEY_PREFIX, p->prefix);
@@ -267,10 +264,8 @@ m2v2_remote_pack_PROP_GET(struct hc_url_s *url, guint32 flags)
 GByteArray*
 m2v2_remote_pack_BEANS(struct hc_url_s *url, const gchar *pol, gint64 size, gboolean append)
 {
-	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_BEANS, url, NULL);
-	gchar strsize[32];
-	g_snprintf(strsize, sizeof(strsize), "%"G_GINT64_FORMAT, size);
-	message_add_field_str (msg, NAME_MSGKEY_CONTENTLENGTH, strsize);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_BEANS, url, NULL);
+	message_add_field_strint64 (msg, NAME_MSGKEY_CONTENTLENGTH, size);
 	message_add_field_str (msg, NAME_MSGKEY_STGPOLICY, pol);
 	if (append)
 		message_add_field_str (msg, NAME_MSGKEY_APPEND, "true");
@@ -313,7 +308,7 @@ m2v2_remote_pack_SPARE(struct hc_url_s *url, const gchar *pol,
 	if (beans != NULL)
 		body = bean_sequence_marshall(beans);
 
-	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_BEANS, url, body);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_BEANS, url, body);
 	message_add_field_str (msg, M2_KEY_STORAGE_POLICY, pol);
 	message_add_field_str (msg, M2_KEY_SPARE, spare_type);
 	_bean_cleanl2(beans);
@@ -323,7 +318,7 @@ m2v2_remote_pack_SPARE(struct hc_url_s *url, const gchar *pol,
 GByteArray*
 m2v2_remote_pack_STGPOL(struct hc_url_s *url, const gchar *pol)
 {
-	struct message_s *msg = _m2v2_build_request(NAME_MSGNAME_M2V2_STGPOL, url, NULL);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_STGPOL, url, NULL);
 	message_add_field_str(msg, NAME_MSGKEY_STGPOLICY, pol);
 	return message_marshall_gba_and_clean(msg);
 }
@@ -504,10 +499,9 @@ m2v2_remote_execute_GET_BY_CHUNK(const gchar *target, struct hc_url_s *url,
 }
 
 GError*
-m2v2_remote_execute_DEL(const gchar *target, struct hc_url_s *url,
-		gboolean sync_del, GSList **out)
+m2v2_remote_execute_DEL(const gchar *target, struct hc_url_s *url)
 {
-	return _m2v2_request(target, m2v2_remote_pack_DEL(url, sync_del), out);
+	return _m2v2_request(target, m2v2_remote_pack_DEL(url), NULL);
 }
 
 GError*
@@ -580,7 +574,7 @@ m2v2_remote_execute_LIST(const gchar *target, struct hc_url_s *url,
 {
 	GError *err = NULL;
 
-	gboolean _cb(gpointer ctx, struct message_s *reply) {
+	gboolean _cb(gpointer ctx, MESSAGE reply) {
 		(void) ctx;
 		GSList *l = NULL;
 		GError *e = message_extract_body_encoded(reply, FALSE, &l, bean_sequence_decoder);

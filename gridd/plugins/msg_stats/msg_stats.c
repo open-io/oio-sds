@@ -41,29 +41,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static gint
 plugin_matcher (MESSAGE m, void *param, GError **err)
 {
-	void *field = NULL;
-	gsize nameLen=0;
-	
-	(void) param;
-
-	if (!m) {
-		GSETERROR(err, "invalid parameter");
-		return -1;
-	}
-	
-	if (!message_has_NAME(m,err)) {
-		DEBUG("the message has no NAME field");
+	(void)param, (void)err;
+	gsize len = 0;
+	void *n = message_get_NAME(m, &len);
+	if (!n || len != sizeof("REQ_STATS")-1)
 		return 0;
-	}
-	
-	message_get_NAME(m, &field, &nameLen, err);
-	if (!field || nameLen<=0) {
-		INFO("cannot get the NAME field of the message");
-		return 0;
-	}
-	
-	return (nameLen==sizeof(MSG_NAME)-1)
-		&& !g_ascii_strncasecmp((gchar*)field, MSG_NAME, sizeof(MSG_NAME)-1);
+	return 0 == memcmp(n, "REQ_STATS", sizeof("REQ_STATS")-1);
 }
 
 static gint
@@ -105,41 +88,22 @@ handler_get_stats(struct request_context_s *req_ctx, const char* pattern, GError
 static gint
 plugin_handler (MESSAGE m, gint fd, void *param, GError **err)
 {
-	gint rc;
-	gchar tmpPattern[256];
-	void *pattern=NULL;
-	gsize patternLen=0;
-	struct request_context_s ctx;
-
 	(void) param;
-	memset(tmpPattern, 0X00, sizeof(tmpPattern));
+	struct request_context_s ctx;
 	memset(&ctx, 0x00, sizeof(struct request_context_s));
 	gettimeofday(&(ctx.tv_start), NULL);
 	ctx.fd = fd;
 	ctx.request = m;
 
-	rc = message_get_field(m, MSGKEY_PATTERN, sizeof(MSGKEY_PATTERN)-1, &pattern, &patternLen, err);
-	switch (rc) {
-
-		case -1:
-			GSETERROR(err,"Cannot lookup the parameter %s", MSGKEY_PATTERN);
-			return 0;
-		case 0:
-			GSETERROR(err,"no pattern provided %s", MSGKEY_PATTERN);
-			return 0;
-		case 1:
-			DEBUG("pattern found under key %s : %.*s (length=%"G_GSIZE_FORMAT")",
-				MSGKEY_PATTERN, (int)patternLen, (char*)pattern, patternLen);
-			if (patternLen > sizeof(tmpPattern)-1) {
-				GSETERROR(err,"pattern too long, maximum %u characters", sizeof(tmpPattern)-1);
-				return 0;
-			}
-			memcpy(tmpPattern, pattern, patternLen);
-			return handler_get_stats (&ctx, tmpPattern, err);
+	gchar *pattern = message_extract_string_copy(m, MSGKEY_PATTERN);
+	if (!pattern) {
+		GSETERROR(err,"no pattern provided %s", MSGKEY_PATTERN);
+		return 0;
+	} else {
+		gint rc = handler_get_stats (&ctx, pattern, err);
+		g_free (pattern);
+		return rc;
 	}
-
-	GSETERROR(err,"bad return code from message_get_field : %d", rc);
-	return 0;
 }
 
 /* ------------------------------------------------------------------------- */

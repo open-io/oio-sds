@@ -30,8 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <apr_global_mutex.h>
 #include <mod_dav.h>
 
-#include <openssl/md5.h>
-
 #include <rawx-lib/src/rawx.h>
 #include "mod_dav_rawx.h"
 #include "rawx_config.h"
@@ -103,21 +101,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define SHM_HANDLE_KEY "rawx_shm_master_handle"
 
-/******************** RESOURCE UTILY FUNCTIONS *******************/
-
 dav_rawx_server_conf * resource_get_server_config(const dav_resource *resource);
 
 apr_pool_t * resource_get_pool(const dav_resource *resource);
 
 const char * resource_get_pathname(const dav_resource *resource);
 
-/******************** REQUEST UTILITY FUNCTIONS ******************/
 
 dav_rawx_server_conf * request_get_server_config(const request_rec *r);
 
 apr_uint64_t request_get_duration(const request_rec *req);
 
-/******************** OTHER ***************************************/
 
 void str_replace_by_pooled_str(apr_pool_t *pool, char ** pstr);
 

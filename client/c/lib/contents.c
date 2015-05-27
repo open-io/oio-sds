@@ -684,39 +684,20 @@ end_label:
 	return rc;
 }
 
-static gboolean
-_content_rollback (gs_content_t *content, GError **err)
+gs_status_t
+gs_destroy_content (gs_content_t *content, gs_error_t **err)
 {
-	struct hc_url_s *url = fill_hcurl_from_content (content);
-	gboolean rc = meta2_remote_content_rollback_in_fd (C1_CNX(content), C1_M2TO(content), err, url);
-	hc_url_pclean (&url);
-	return rc;
-}
-
-gs_status_t gs_destroy_content (gs_content_t *content, gs_error_t **err)
-{
-	int nb_refreshes=1;
+	char target[64];
 	GError *localError=NULL;
-	gs_status_t remove_done=0;
-	struct meta2_raw_content_s *raw_content = NULL;
+	int nb_refreshes=1;
 
-	if (!content)
-	{
+	if (!content) {
 		GSERRORSET (err, "Invalid parameter");
 		return GS_ERROR;
 	}
 
-	/*loads the chunk's list*/
-
-	/*mark the content for removal*/
 	(void) gs_container_reconnect_if_necessary (C1_C0(content),NULL);
 
-	/*commit the removal*/
-#define MAX_ATTEMPTS_COMMIT 2
-
-	GSList *beans = NULL;
-
-	char target[64];
 	memset(target, '\0', 64);
 	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
 
@@ -729,64 +710,27 @@ gs_status_t gs_destroy_content (gs_content_t *content, gs_error_t **err)
 		hc_url_set(url, HCURL_VERSION, content->version);
 	}
 
-	for(nb_refreshes = MAX_ATTEMPTS_COMMIT; nb_refreshes > 0; nb_refreshes--) {
-		localError = m2v2_remote_execute_DEL(target, url, TRUE, &beans);
-		if(NULL != localError) {
-			if (localError->code==CODE_CONTENT_NOTFOUND && nb_refreshes<MAX_ATTEMPTS_COMMIT) {
-				/*content already removed*/
-				break;
-			}
-		CONTAINER_REFRESH(C1_C0(content),localError,end_label,C1_PATH(content));
-		} else {
-			raw_content = g_malloc0(sizeof(struct meta2_raw_content_s));
-			map_raw_content_from_beans(raw_content, beans, NULL, FALSE);
-			map_content_from_raw(content, raw_content);
-			meta2_raw_content_clean(raw_content);
+	for (nb_refreshes = 2; nb_refreshes > 0; nb_refreshes--) {
+		if (localError)
+			g_clear_error(&localError);
+		localError = m2v2_remote_execute_DEL(target, url);
+		if (!localError)
 			break;
+		if (NULL != localError) {
+			if (localError->code==CODE_CONTENT_NOTFOUND && nb_refreshes<2)
+				break;
+			CONTAINER_REFRESH(C1_C0(content),localError,end_label,C1_PATH(content));
 		}
 	}
 	hc_url_pclean(&url);
 
-	TRACE("COMMIT path=%s %s/%s", C1_PATH(content), C1_NAME(content), C1_IDSTR(content));
-	if (localError)
-		g_clear_error(&localError);
-
-	/*delete the remote chunks*/
-
-	for (GSList *cursor = beans; cursor != NULL; cursor = cursor->next) {
-		if (DESCR(cursor->data) == &descr_struct_CHUNKS) {
-			if (!rawx_delete_v2(cursor->data, &localError)) {
-				gchar *cid = CHUNKS_get_id((struct bean_CHUNKS_s*)cursor->data)->str;
-				GRID_ERROR("Failed to delete chunk %s", cid);
-				g_clear_error(&localError);
-			}
-		}
-	}
-
-	if(NULL != beans)
-		_bean_cleanl2(beans);
-
-	if (localError)
-		g_clear_error(&localError);
-	return GS_OK;
-
 end_label:
-	if (remove_done)
-	{
-		(void) gs_container_reconnect_if_necessary (C1_C0(content),NULL);
-		for (nb_refreshes=MAX_ATTEMPTS_ROLLBACK_DELETE; !_content_rollback(content,&localError) && nb_refreshes>0 ; nb_refreshes--)
-		{
-			CONTAINER_REFRESH(C1_C0(content),localError,error_label,C1_PATH(content));
-		}
+	if (localError) {
+		GSERRORCAUSE(err, localError, "Removal failed");
+		g_clear_error(&localError);
+		return GS_ERROR;
 	}
-
-error_label:
-	if (!localError)
-		GSETERROR(&localError,"unknown error");
-	GSERRORCAUSE(err, localError, "Cannot destroy %s in %s/%s: ",
-			C1_PATH(content), C1_NAME(content), C1_IDSTR(content));
-	g_clear_error (&localError);
-	return GS_ERROR;
+	return GS_OK;
 }
 
 gs_status_t gs_content_get_info (const gs_content_t *content, gs_content_info_t *info, gs_error_t **err)

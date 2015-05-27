@@ -29,7 +29,6 @@ License along with this library.
  */
 
 /* Some forward declarations to avoid useless includes */
-struct message_s;
 struct network_server_s;
 struct gridd_request_dispatcher_s;
 

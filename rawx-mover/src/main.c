@@ -35,9 +35,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <fnmatch.h>
 #include <math.h>
 
-// TODO FIXME replce by the GLib equivalent
-#include <openssl/md5.h>
-
 #include <neon/ne_basic.h>
 #include <neon/ne_request.h>
 #include <neon/ne_session.h>
@@ -810,7 +807,7 @@ static int
 ne_reader__md5_computer(void *userdata, const char *buf, size_t len)
 {
 	if (buf && len)
-		MD5_Update((MD5_CTX*)userdata, buf, len);
+		g_checksum_update((GChecksum*)userdata, (guint8*)buf, len);
 	return 0;
 }
 
@@ -818,22 +815,18 @@ static int
 download_and_check_chunk(struct upload_info_s *info)
 {
 	int rc = 0;
-	MD5_CTX md5_ctx;
-	ne_session *session;
-	ne_request *request;
 
 	MY_DEBUG(*info, "Downloading dst[%s]", info->dst_descr);
 
-	session = ne_session_create("http", info->dst_host, info->dst_port);
+	GChecksum *checksum = g_checksum_new (G_CHECKSUM_MD5);
+	ne_session *session = ne_session_create("http", info->dst_host, info->dst_port);
 	ne_set_connect_timeout(session, 60);
 	ne_set_read_timeout(session, 60);
 
-	request = ne_request_create(session, "GET", info->dst_path);
+	ne_request *request = ne_request_create(session, "GET", info->dst_path);
 	populate_request_headers(request, &(info->chunk), &(info->content));
-	ne_add_response_body_reader(request, ne_accept_2xx,
-			ne_reader__md5_computer, &md5_ctx);
+	ne_add_response_body_reader(request, ne_accept_2xx, ne_reader__md5_computer, checksum);
 
-	MD5_Init(&md5_ctx);
 	switch (ne_request_dispatch(request)) {
 		case NE_OK:
 			if (ne_get_status(request)->klass == 2) {
@@ -861,15 +854,10 @@ download_and_check_chunk(struct upload_info_s *info)
 	}
 
 	if (rc) {
-		guint8 md5_hash[16];
-		gchar md5_hash_str[33];
-		bzero(md5_hash, sizeof(md5_hash));
-		bzero(md5_hash_str, sizeof(md5_hash_str));
-		MD5_Final(md5_hash, &md5_ctx);
-		buffer2str(md5_hash, sizeof(md5_hash), md5_hash_str, sizeof(md5_hash_str));
-		if (0 != g_ascii_strcasecmp(md5_hash_str, info->chunk.hash)) {
+		const gchar *hex = g_checksum_get_string (checksum);
+		if (0 != g_ascii_strcasecmp(hex, info->chunk.hash)) {
 			FINAL_ERROR(*info, "MD5SUM mismatch (%s/%s) src[%s] dst[%s]",
-				info->chunk.hash, md5_hash_str, info->src_descr, info->dst_descr);
+				info->chunk.hash, hex, info->src_descr, info->dst_descr);
 			rc = 0;
 		}
 		else
@@ -878,6 +866,7 @@ download_and_check_chunk(struct upload_info_s *info)
 
 	ne_request_destroy(request);
 	ne_session_destroy(session);
+	g_checksum_free (checksum);
 	return rc;
 }
 

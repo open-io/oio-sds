@@ -52,7 +52,6 @@ make_request(const gchar *rn, struct sqlx_name_s *name)
 				NAME_MSGKEY_BASENAME, name->base,
 				NAME_MSGKEY_BASETYPE, name->type,
 				NAME_MSGKEY_NAMESPACE, name->ns,
-				NAME_MSGKEY_VIRTUALNAMESPACE, name->ns,
 				NULL);
 	return req;
 }
@@ -185,33 +184,19 @@ GByteArray*
 sqlx_pack_RESTORE(struct sqlx_name_s *name, const guint8 *raw, gsize rawsize)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_RESTORE, name);
-	message_set_BODY(req, raw, rawsize, NULL);
+	message_set_BODY(req, raw, rawsize);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_REPLICATE(struct sqlx_name_s *name, struct TableSequence *tabseq)
 {
-	GError *err = NULL;
-	GByteArray *body, *encoded;
-
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(tabseq != NULL);
 
-	body = sqlx_encode_TableSequence(tabseq, &err);
-	if (!body) {
-		GRID_WARN("Transaction encoding error : (%d) %s",
-				err->code, err->message);
-		return NULL;
-	}
-
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_REPLICATE, name);
-	message_set_BODY(req, body->data, body->len, NULL);
-	encoded = message_marshall_gba(req, NULL);
-	g_byte_array_free(body, TRUE);
-	message_destroy(req);
-
-	return encoded;
+	message_add_body_unref(req, sqlx_encode_TableSequence(tabseq, NULL));
+	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
@@ -233,13 +218,8 @@ sqlx_pack_QUERY(struct sqlx_name_s *name, const gchar *query,
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_QUERY, name);
 	message_add_field(req, NAME_MSGKEY_AUTOCREATE, &ac, 1);
 	message_add_fields_str(req, NAME_MSGKEY_QUERY, query, NULL);
-
-	if (!params) {
-		GByteArray *body = sqlx_encode_TableSequence(params, NULL);
-		message_set_BODY(req, body->data, body->len, NULL);
-		g_byte_array_free(body, TRUE);
-	}
-
+	if (!params)
+		message_add_body_unref (req, sqlx_encode_TableSequence(params, NULL));
 	return message_marshall_gba_and_clean(req);
 }
 
@@ -253,24 +233,16 @@ sqlx_pack_QUERY_single(struct sqlx_name_s *name, const gchar *query,
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_QUERY, name);
 	guint8 ac = (guint8) autocreate;
 	do {
-		Table_t *t;
-		TableSequence_t *ts;
-		GByteArray *body;
-
-		t = g_malloc0(sizeof(Table_t));
-		g_assert(t != NULL);
-		ts = g_malloc0(sizeof(TableSequence_t));
-		g_assert(ts != NULL);
-
+		Table_t *t = g_malloc0(sizeof(Table_t));
 		OCTET_STRING_fromBuf(&(t->name), query, strlen(query));
+
+		TableSequence_t *ts = g_malloc0(sizeof(TableSequence_t));
 		asn_sequence_add(&(ts->list), t);
-		body = sqlx_encode_TableSequence(ts, NULL);
-		g_assert(body != NULL);
-		message_set_BODY(req, body->data, body->len, NULL);
+
+		message_add_body_unref(req, sqlx_encode_TableSequence(ts, NULL));
 		message_add_field(req, NAME_MSGKEY_AUTOCREATE, &ac, 1);
 
 		asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence, ts, FALSE);
-		g_byte_array_free(body, TRUE);
 	} while (0);
 
 	return message_marshall_gba_and_clean(req);
@@ -316,12 +288,9 @@ sqlx_pack_PROPGET(struct sqlx_name_s *name, const gchar * const *keys)
 	GSList *names = metautils_array_to_list((void**)keys);
 	GByteArray *body = strings_marshall_gba(names, NULL);
 	g_slist_free(names);
-	if (!body)
-		return NULL;
 
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPGET, name);
-	message_set_BODY(req, body->data, body->len, NULL);
-	g_byte_array_free (body, TRUE);
+	message_add_body_unref(req, body);
 	return message_marshall_gba_and_clean(req);
 }
 
@@ -331,24 +300,19 @@ sqlx_pack_PROPDEL(struct sqlx_name_s *name, const gchar * const *keys)
 	GSList *names = metautils_array_to_list((void**)keys);
 	GByteArray *body = strings_marshall_gba(names, NULL);
 	g_slist_free(names);
-	if (!body)
-		return NULL;
 
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPDEL, name);
-	message_set_BODY(req, body->data, body->len, NULL);
-	g_byte_array_free (body, TRUE);
+	message_add_body_unref(req, body);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray *
 sqlx_pack_PROPSET_pairs(struct sqlx_name_s *name, gboolean flush, GSList *pairs)
 {
-	GByteArray *body = key_value_pairs_marshall_gba (pairs, NULL);
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPSET, name);
 	if (flush)
 		message_add_field_strint (req, NAME_MSGKEY_FLUSH, 1);
-	message_set_BODY (req, body->data, body->len, NULL);
-	g_byte_array_free (body, TRUE);
+	message_add_body_unref (req, key_value_pairs_marshall_gba (pairs, NULL));
 	return message_marshall_gba_and_clean(req);
 }
 

@@ -375,7 +375,7 @@ grid_main_init(int argc, char **args)
 	memset(pidfile_path, 0, sizeof(pidfile_path));
 
 	for (;;) {
-		int c = getopt(argc, args, "O:hdvl:qp:s:");
+		int c = getopt(argc, args, "O:hdvqp:s:");
 		if (c == -1)
 			break;
 		switch (c) {
@@ -395,12 +395,6 @@ grid_main_init(int argc, char **args)
 			case 'h':
 				grid_main_usage();
 				exit(0);
-				break;
-			case 'l':
-				if (!flag_quiet) {
-					log4c_init();
-					log4c_load(optarg);
-				}
 				break;
 			case 'p':
 				memset(pidfile_path, 0, sizeof(pidfile_path));
@@ -530,7 +524,7 @@ grid_main_cli_init(int argc, char **args)
 	memset(pidfile_path, 0, sizeof(pidfile_path));
 
 	for (;;) {
-		int c = getopt(argc, args, "O:hvl:q");
+		int c = getopt(argc, args, "O:hvq");
 		if (c == -1)
 			break;
 		switch (c) {
@@ -547,12 +541,6 @@ grid_main_cli_init(int argc, char **args)
 			case 'h':
 				grid_main_cli_usage();
 				exit(0);
-				break;
-			case 'l':
-				if (!flag_quiet) {
-					log4c_init();
-					log4c_load(optarg);
-				}
 				break;
 			case 'q':
 				logger_quiet();

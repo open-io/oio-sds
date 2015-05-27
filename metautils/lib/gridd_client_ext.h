@@ -20,9 +20,8 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__gridd_client_ext_h
 # define OIO_SDS__metautils__lib__gridd_client_ext_h 1
 
-# include <glib.h>
-# include "metatypes.h"
-# include "metacomm.h"
+# include "metautils.h"
+# include "gridd_client.h"
 
 /**
  * @defgroup metautils_client_ext

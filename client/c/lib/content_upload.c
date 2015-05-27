@@ -23,9 +23,6 @@ License along with this library.
 
 #include "./gs_internals.h"
 
-// TODO FIXME replace by the GLib equivalent
-#include <openssl/md5.h>
-
 #include <metautils/lib/metautils.h>
 #include <meta2v2/meta2_utils.h>
 
@@ -947,8 +944,8 @@ static gs_status_t _gs_upload(gs_container_t *container,
 		const char *sys_metadata, const char *stgpol, gs_error_t **err)
 {
 #define CONTENT_ADD_V2() m2v2_remote_execute_BEANS(target, url, actual_stgpol, content_size, append, &chunks)
-#define CONTENT_COMMIT() m2v2_remote_execute_PUT(target, url, chunks, &beans)
-#define APPEND_COMMIT() m2v2_remote_execute_APPEND(target, url, chunks, &beans)
+#define CONTENT_COMMIT() m2v2_remote_execute_PUT(target, url, chunks, NULL)
+#define APPEND_COMMIT() m2v2_remote_execute_APPEND(target, url, chunks, NULL)
 
 	int nb_attempts;
 
@@ -969,7 +966,6 @@ static gs_status_t _gs_upload(gs_container_t *container,
 		*spare=NULL,            /*free: structure only*/
 		*fixed=NULL,            /*free: structure only*/
 		*cursor=NULL;           /*do not free*/
-	GSList *beans = NULL;
 	long timeout_cnx, timeout_op;
 	gchar *actual_stgpol = stgpol ? g_strdup(stgpol) : NULL;
 
@@ -1144,7 +1140,7 @@ static gs_status_t _gs_upload(gs_container_t *container,
 	// TODO handle error cases occurring in upload_thread
 	GRID_DEBUG("whole upload successful");
 
-	/* Pack mdusr into M2V2_PROPERTY beans */
+	/* Pack mdusr into M2V2_PROPERTY */
 	if(mdusr &&  0 < strlen(mdusr)) {
 		struct bean_PROPERTIES_s *bp = _bean_create(&descr_struct_PROPERTIES);
 		PROPERTIES_set2_alias(bp, hc_url_get(url, HCURL_PATH));
@@ -1185,12 +1181,6 @@ static gs_status_t _gs_upload(gs_container_t *container,
 	}
 
 	g_mutex_unlock(&global_mutex);
-	if (!beans) {
-		GSETERROR(&local_error,"CONTENT_COMMIT error : too many attempts");
-		goto error_label;
-	}
-
-	_bean_cleanl2(beans);
 
 	UPLOAD_CLEAN_MAIN_THREAD();
 	UPLOAD_CLEAN();

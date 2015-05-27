@@ -31,8 +31,8 @@ meta1_create_message(const gchar *reqname, const container_id_t cid)
 	g_assert(cid != NULL);
 
 	MESSAGE result = message_create();
-	message_set_NAME(result, reqname, strlen(reqname), NULL);
-	message_add_field(result, NAME_MSGKEY_CONTAINERID, cid, sizeof(container_id_t));
+	message_set_NAME(result, reqname, strlen(reqname));
+	message_add_cid(result, NAME_MSGKEY_CONTAINERID, cid);
 	return result;
 }
 

@@ -445,6 +445,7 @@ http_manage_request(struct req_ctx_s *r)
 
 	void cleanup(void) {
 		metautils_str_clean (&msg);
+		metautils_str_clean (&access);
 		metautils_str_clean ((gchar**)&body.data);
 		body.len = 0;
 		if (headers) {
@@ -456,9 +457,7 @@ http_manage_request(struct req_ctx_s *r)
 	void set_status(int c, const gchar *m) {
 		EXTRA_ASSERT(m != NULL);
 		code = c;
-		if (msg)
-			g_free(msg);
-		msg = g_strdup(m);
+		metautils_str_replace (&msg, m);
 	}
 
 	void set_content_type(const gchar *type) {

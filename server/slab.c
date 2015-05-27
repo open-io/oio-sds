@@ -134,7 +134,7 @@ data_slab_free(struct data_slab_s *ds)
 			break;
 	}
 	ds->next = NULL;
-	g_free(ds);
+	g_slice_free (struct data_slab_s, ds);
 }
 
 void
@@ -416,66 +416,68 @@ data_slab_sequence_size(struct data_slab_sequence_s *dss)
 
 //------------------------------------------------------------------------------
 
+static struct data_slab_s * _slab (void) { return g_slice_new0 (struct data_slab_s); }
+
 struct data_slab_s *
 data_slab_make_empty(gsize alloc)
 {
-	struct data_slab_s ds;
-	ds.type = STYPE_BUFFER;
-	ds.data.buffer.buff = g_malloc(alloc);
-	ds.data.buffer.start = 0;
-	ds.data.buffer.end = 0;
-	ds.data.buffer.alloc = alloc;
-	ds.next = NULL;
-	return g_memdup(&ds, sizeof(ds));
+	struct data_slab_s *ds = _slab();
+	ds->type = STYPE_BUFFER;
+	ds->data.buffer.buff = g_malloc(alloc);
+	ds->data.buffer.start = 0;
+	ds->data.buffer.end = 0;
+	ds->data.buffer.alloc = alloc;
+	ds->next = NULL;
+	return ds;
 }
 
 struct data_slab_s *
 data_slab_make_eof(void)
 {
-	struct data_slab_s ds;
-	ds.type = STYPE_EOF;
-	ds.next = NULL;
-	return g_memdup(&ds, sizeof(ds));
+	struct data_slab_s *ds = _slab();
+	ds->type = STYPE_EOF;
+	ds->next = NULL;
+	return ds;
 }
 
 struct data_slab_s *
 data_slab_make_file(int fd, off_t start, off_t end)
 {
-	struct data_slab_s ds;
-	ds.type = STYPE_FILE;
-	ds.data.file.start = start;
-	ds.data.file.end = end;
-	ds.data.file.fd = fd;
-	ds.next = NULL;
-	return g_memdup(&ds, sizeof(ds));
+	struct data_slab_s *ds = _slab();
+	ds->type = STYPE_FILE;
+	ds->data.file.start = start;
+	ds->data.file.end = end;
+	ds->data.file.fd = fd;
+	ds->next = NULL;
+	return ds;
 }
 
 struct data_slab_s *
 data_slab_make_path2(const gchar *path, off_t start, off_t end)
 {
-	struct data_slab_s ds;
-	ds.type = STYPE_PATH;
-	ds.data.path.path = g_strdup(path);
-	ds.data.path.start = start;
-	ds.data.path.end = end;
-	ds.data.path.fd = -1;
-	ds.data.path.flags = FLAG_OFFSET|FLAG_END;
-	ds.next = NULL;
-	return g_memdup(&ds, sizeof(ds));
+	struct data_slab_s *ds = _slab();
+	ds->type = STYPE_PATH;
+	ds->data.path.path = g_strdup(path);
+	ds->data.path.start = start;
+	ds->data.path.end = end;
+	ds->data.path.fd = -1;
+	ds->data.path.flags = FLAG_OFFSET|FLAG_END;
+	ds->next = NULL;
+	return ds;
 }
 
 struct data_slab_s *
 data_slab_make_path(const gchar *path, gboolean must_unlink)
 {
-	struct data_slab_s ds;
-	ds.type = STYPE_PATH;
-	ds.data.path.path = g_strdup(path);
-	ds.data.path.start = 0;
-	ds.data.path.end = 0;
-	ds.data.path.fd = -1;
-	ds.data.path.flags = must_unlink ? FLAG_UNLINK : 0;
-	ds.next = NULL;
-	return g_memdup(&ds, sizeof(ds));
+	struct data_slab_s *ds = _slab();
+	ds->type = STYPE_PATH;
+	ds->data.path.path = g_strdup(path);
+	ds->data.path.start = 0;
+	ds->data.path.end = 0;
+	ds->data.path.fd = -1;
+	ds->data.path.flags = must_unlink ? FLAG_UNLINK : 0;
+	ds->next = NULL;
+	return ds;
 }
 
 struct data_slab_s *
@@ -488,13 +490,13 @@ struct data_slab_s *
 data_slab_make_buffer2(guint8 *buff, gboolean tobefreed, gsize start,
 		gsize end, gsize alloc)
 {
-	struct data_slab_s ds;
-	ds.type = tobefreed ? STYPE_BUFFER : STYPE_BUFFER_STATIC;
-	ds.data.buffer.start = start;
-	ds.data.buffer.end = end;
-	ds.data.buffer.alloc = alloc;
-	ds.data.buffer.buff = buff;
-	ds.next = NULL;
-	return g_memdup(&ds, sizeof(ds));
+	struct data_slab_s *ds = _slab();
+	ds->type = tobefreed ? STYPE_BUFFER : STYPE_BUFFER_STATIC;
+	ds->data.buffer.start = start;
+	ds->data.buffer.end = end;
+	ds->data.buffer.alloc = alloc;
+	ds->data.buffer.buff = buff;
+	ds->next = NULL;
+	return ds;
 }
 

@@ -31,9 +31,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <mod_dav.h>
 
-// TODO FIXME replace this by the APR equivalent
-#include <openssl/md5.h>
-
 #include <rainx/rainx_config.h>
 #include <rainx/mod_dav_rainx.h>
 
@@ -102,19 +99,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define MAP_IO2HTTP(e) (APR_STATUS_IS_ENOSPC(e) ? HTTP_INSUFFICIENT_STORAGE : \
 		HTTP_INTERNAL_SERVER_ERROR)
 
-/******************** RESOURCE UTILY FUNCTIONS *******************/
 
 dav_rainx_server_conf * resource_get_server_config(const dav_resource *resource);
 
 apr_pool_t * resource_get_pool(const dav_resource *resource);
 
-/******************** REQUEST UTILITY FUNCTIONS ******************/
 
 dav_rainx_server_conf * request_get_server_config(const request_rec *r);
 
 apr_uint64_t request_get_duration(const request_rec *req);
 
-/******************** OTHER ***************************************/
 
 void str_replace_by_pooled_str(apr_pool_t *pool, char ** pstr);
 

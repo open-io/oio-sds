@@ -96,13 +96,6 @@ gboolean meta1v2_remote_reference_del_property(const addr_info_t *m1,
 gchar** meta1v2_remote_list_services_by_prefix(const addr_info_t *m1, GError **err,
         struct hc_url_s *url);
 
-GError * meta1v2_remote_list_references_by_prefix(const addr_info_t *m1,
-		struct hc_url_s *url, GByteArray **result);
-
-GError * meta1v2_remote_list_references_by_service(const addr_info_t *m1,
-		struct hc_url_s *url, const gchar *srvtype,
-		const gchar *m1url, GByteArray **result);
-
 gboolean meta1v2_remote_get_prefixes(const addr_info_t *m1,
 		GError **err, gchar ***result);
 

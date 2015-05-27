@@ -9,10 +9,8 @@ include(CheckTypeSize)
 include(FindCURL)
 include(FindPythonInterp)
 include(FindPythonLibs)
-include(FindEXPAT)
 include(FindZLIB)
 find_package(PkgConfig)
-find_package(EXPAT REQUIRED)
 find_package(Doxygen)
 
 set(Grid_VERSION_MAJOR 0)
@@ -155,7 +153,7 @@ dir2macro("GCLUSTER_SPOOL_DIR")
 dir2macro("GCLUSTER_RUN_DIR")
 dir2macro("GCLUSTER_ETC_DIR")
 
-dir2macro2("ACCOUNT_AGENT_PATH" "ipc:///var/run/account-agent.sock")
+dir2macro2("ACCOUNT_AGENT_PATH" "ipc:///var/run/event-agent.sock")
 
 dir2macro("GCLUSTER_CONFIG_FILE_PATH")
 dir2macro("GCLUSTER_CONFIG_DIR_PATH")
@@ -288,14 +286,6 @@ test_CLI(SED_EXECUTABLE "sed")
 test_CLI(FLEX_EXECUTABLE "flex")
 test_CLI(BISON_EXECUTABLE "bison")
 
-if (SSL_LIBDIR AND SSL_INCDIR)
-	set(OPENSSL_LIBRARIES "-lcrypto -lssl")
-	set(OPENSSL_LIBRARY_DIRS ${SSL_LIBDIR})
-	set(OPENSSL_INCLUDE_DIRS ${SSL_INCDIR})
-else()
-	pkg_check_modules(OPENSSL REQUIRED libssl libcrypto)
-endif()
-
 # Set defaults 
 set(DEFAULT_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
 set(DEFAULT_INCLUDE_DIRS "/usr/include")
@@ -306,8 +296,6 @@ set(ATTR_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/attr")
 
 # check system configuration
 pkg_check_modules(APR REQUIRED apr-1)
-pkg_check_modules(DBUS REQUIRED dbus-1 dbus-glib-1)
-pkg_check_modules(GAMIN REQUIRED gamin)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0 gthread-2.0 gmodule-2.0)
 pkg_check_modules(LIBEVENT REQUIRED libevent)
 pkg_check_modules(NEON REQUIRED neon)
@@ -343,7 +331,7 @@ MESSAGE("asn1c at ${ASN1C_EXECUTABLE}")
 set(ASN1C_EXE_OPTS "-fwide-types")
 
 # Check every required module is present
-check_found("APR" "APACHE2" "ASN1C" "ATTR" "CURL" "DB" "DBUS" "EXPAT" "GAMIN"
+check_found("APR" "APACHE2" "ASN1C" "ATTR" "CURL" "DB"
 		"GLIB2" "GRIDINIT" "JSONC" "LIBEVENT" "LIBRAIN" "LZO" "NEON" "NETSNMP"
 		"SQLITE3" "ZMQ" "ZK" "PYTHONINTERP")
 
@@ -358,9 +346,7 @@ set(CMAKE_INCLUDE_PATH "")
 include_directories(AFTER
 		${GLIB2_INCLUDE_DIRS})
 
-link_directories(
-		${OPENSSL_LIBRARY_DIRS}
-		${GLIB2_LIBRARY_DIRS})
+link_directories(${GLIB2_LIBRARY_DIRS})
 
 ENABLE_TESTING()
 
@@ -381,9 +367,6 @@ add_subdirectory(./cluster/lib)
 add_subdirectory(./cluster/module)
 add_subdirectory(./cluster/remote)
 add_subdirectory(./cluster/tools)
-add_subdirectory(./crawler)
-add_subdirectory(./crawler/lib)
-add_subdirectory(./crawler/listener)
 add_subdirectory(./gridd/clients/ping)
 add_subdirectory(./gridd/clients/stats)
 add_subdirectory(./gridd/main)

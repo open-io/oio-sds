@@ -92,10 +92,10 @@ struct sqlx_service_s
 		// Runs the converter for GAsyncQueue to ZMQ
 		GThread     *th_gq2zmq;
 		// Runs the events worker
-		GThread     *thread;
+		GThread     *th_zmq2agent;
 		// Context data specific to the ZMQ context
 		void        *zctx;
-		// Pair of interconnected sockets between the gq2zmq thread and the notifier thread
+		// Pair of interconnected sockets between the gq2zmq thread and the zmq2agent thread
 		void        *zpush; // write only
 		void        *zpull; // read only
 		// ZMQ socket to the agent

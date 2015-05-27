@@ -74,10 +74,10 @@ typedef GError* (*all_vers_cb) (struct meta2_backend_s *m2b,
 
 static void
 _notify_beans (struct meta2_backend_s *m2b, struct hc_url_s *url,
-		struct on_bean_ctx_s *obc)
+		GSList *beans, const char *name)
 {
 	void sep (GString *gs) {
-		if (gs->len > 1 && gs->str[gs->len-1] != ',')
+		if (gs->len > 1 && !strchr(",[{", gs->str[gs->len-1]))
 			g_string_append_c (gs, ',');
 	}
 	void append_int64 (GString *gs, const char *k, gint64 v) {
@@ -100,7 +100,7 @@ _notify_beans (struct meta2_backend_s *m2b, struct hc_url_s *url,
 		return;
 
 	GString *gs = g_string_new ("{");
-	g_string_append_printf (gs, "\"event\":\"%s\"", NAME_SRVTYPE_META2 ".content.new");
+	g_string_append_printf (gs, "\"event\":\"%s.%s\"", NAME_SRVTYPE_META2, name);
 	append_int64 (gs, "when", g_get_real_time());
 	g_string_append (gs, ",\"url\":{");
 	append_const (gs, "ns", hc_url_get(url, HCURL_NS));
@@ -108,32 +108,9 @@ _notify_beans (struct meta2_backend_s *m2b, struct hc_url_s *url,
 	append_const (gs, "user", hc_url_get(url, HCURL_USER));
 	append_const (gs, "type", hc_url_get(url, HCURL_TYPE));
 	g_string_append (gs, "},\"data\":[");
-	meta2_json_dump_all_xbeans (gs, obc->l);
+	meta2_json_dump_all_xbeans (gs, beans);
 	g_string_append (gs, "]}");
 	m2b->notify.hook (m2b->notify.udata, g_string_free (gs, FALSE));
-}
-
-static void
-_content_info_clean(gpointer p)
-{
-	if(!p)
-		return;
-
-	struct content_info_s *ci = (struct content_info_s *)p;
-
-	if(NULL != ci->beans)
-		_bean_cleanl2(ci->beans);
-
-	g_free(ci);
-}
-
-static struct content_info_s *
-_get_content_info(GSList *beans, enum content_action_e action)
-{
-	struct content_info_s *ci = g_malloc0(sizeof(struct content_info_s));
-	ci->action = action;
-	ci->beans = beans;
-	return ci;
 }
 
 static void
@@ -184,51 +161,6 @@ _reply_chunk_info_list(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s 
 	reply->send_reply(CODE_FINAL_OK, "OK");
 
 	gslist_chunks_destroy(list_of_lists, NULL);
-
-	return FILTER_OK;
-}
-
-int
-meta2_filter_action_retrieve_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	GSList *beans = NULL;
-	GSList *result = NULL;
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	char *mdsys = NULL;
-
-	void _cb(gpointer u, gpointer bean) {
-		(void) u;
-		beans = g_slist_prepend(beans, bean);
-	}
-
-	e = meta2_backend_get_alias(m2b, url, M2V2_FLAG_NODELETED, _cb, NULL);
-	if(NULL != e) {
-		GRID_DEBUG("Fail to return alias for url: %s", hc_url_get(url, HCURL_WHOLE));
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	if(!beans) {
-		GRID_DEBUG("No beans returned by get_alias for: %s",
-				hc_url_get(url, HCURL_WHOLE));
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_CONTENT_NOTFOUND,
-				"Content not found (deleted) (%s)", hc_url_get(url, HCURL_WHOLE)));
-		return FILTER_KO;
-	}
-
-	result = chunk_info_list_from_m2v2_beans(beans, &mdsys);
-	_bean_cleanl2(beans);
-
-	_reply_chunk_info_list(ctx, reply, result, mdsys);
-
-	if(NULL != mdsys)
-		g_free(mdsys);
-
-	g_slist_foreach(result, chunk_info_gclean, NULL);
-	g_slist_free(result);
 
 	return FILTER_OK;
 }
@@ -362,18 +294,17 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
+	GSList *added = NULL, *deleted = NULL;
+
 	GRID_DEBUG("Putting %d beans in [%s]%s", g_slist_length(beans),
 			hc_url_get(url, HCURL_WHOLE),
 			meta2_filter_ctx_get_param(ctx, M2_KEY_OVERWRITE)?
 			" (overwrite)":"");
 
 	if (NULL != meta2_filter_ctx_get_param(ctx, M2_KEY_OVERWRITE)) {
-		e = meta2_backend_force_alias(m2b, url, beans);
-		if (!e) {
-			e = meta2_backend_get_alias(m2b, url, 0, _get_cb, obc);
-		}
+		e = meta2_backend_force_alias(m2b, url, beans, &deleted, &added);
 	} else {
-		e = meta2_backend_put_alias(m2b, url, beans, _get_cb, obc);
+		e = meta2_backend_put_alias(m2b, url, beans, &deleted, &added);
 	}
 
 	if (NULL != e) {
@@ -381,11 +312,15 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 		meta2_filter_ctx_set_error(ctx, e);
 		rc = FILTER_KO;
 	} else {
-		_notify_beans (m2b, url, obc);
+		_notify_beans (m2b, url, added, "content.new");
+		if (deleted)
+			_notify_beans (m2b, url, deleted, "content.deleted");
 		_on_bean_ctx_send_list(obc, TRUE);
 		rc = FILTER_OK;
 	}
 
+	_bean_cleanl2 (added);
+	_bean_cleanl2 (deleted);
 	_on_bean_ctx_clean(obc);
 	return rc;
 }
@@ -409,9 +344,8 @@ _copy_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		// For notification purposes, we need to load all the beans
 		struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 		e = meta2_backend_get_alias(m2b, url, M2V2_FLAG_NOPROPS, _get_cb, obc);
-		if (!e) {
+		if (!e)
 			_on_bean_ctx_send_list(obc, TRUE);
-		}
 		_on_bean_ctx_clean(obc);
 	}
 
@@ -456,7 +390,7 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_notify_beans (m2b, url, obc);
+	_notify_beans (m2b, url, obc->l, "content.append");
 	_on_bean_ctx_send_list(obc, TRUE);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
@@ -540,20 +474,13 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	(void) reply;
-	guint32 flags = 0;
-	gboolean sync_del = FALSE;
 	GError *e = NULL;
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
-	const char *fstr = meta2_filter_ctx_get_param(ctx, M2_KEY_GET_FLAGS);
-	if (fstr != NULL) {
-		flags = (guint32)atoi(fstr);
-	}
-	sync_del = BOOL(flags & M2V2_FLAG_SYNCDEL);
 
 	TRACE_FILTER();
-	e = meta2_backend_delete_alias(m2b, url, sync_del, _get_cb, obc);
+	e = meta2_backend_delete_alias(m2b, url, _get_cb, obc);
 	if(NULL != e) {
 		GRID_DEBUG("Fail to delete alias for url: %s", hc_url_get(url, HCURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
@@ -561,32 +488,9 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_notify_beans(m2b, url, obc);
-	_on_bean_ctx_send_list(obc, FALSE);
+	_notify_beans(m2b, url, obc->l, "content.deleted");
 	_on_bean_ctx_send_list(obc, TRUE);
 	_on_bean_ctx_clean(obc);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_action_remove_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	GError *e = NULL;
-
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-
-	TRACE_FILTER();
-
-	/* store in transient */
-	e = m2b_transient_put(m2b, url, _get_content_info(NULL, DELETE), (GDestroyNotify)_content_info_clean);
-	if(NULL != e) {
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
 	return FILTER_OK;
 }
 
@@ -849,15 +753,6 @@ _generate_chunks(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply
 		return FILTER_KO;
 	}
 
-	/* store in transient to commit later */
-	e = m2b_transient_put(m2b, url,
-			_get_content_info(beans, (append ? APPEND : PUT)),
-			(GDestroyNotify) _content_info_clean);
-	if (NULL != e) {
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
 	GRID_DEBUG("nb beans generated : %d", g_slist_length(beans));
 
 	cil = chunk_info_list_from_m2v2_beans(beans, &out_mdsys);
@@ -886,80 +781,6 @@ meta2_filter_action_generate_chunks(struct gridd_filter_ctx_s *ctx,
 	return _generate_chunks(ctx, reply, FALSE);
 }
 
-static GSList*
-_keep_chunks(GSList *in_place, GSList *tmp)
-{
-	GSList *result = NULL;
-	GByteArray *cid = NULL;
-	/* drop content / chunks in place, save content id */
-	for(; in_place; in_place = in_place->next) {
-		if(!in_place->data)
-			continue;
-		if( DESCR(in_place->data) == &descr_struct_CONTENTS ||
-			DESCR(in_place->data) == &descr_struct_CHUNKS) {
-			_bean_clean(in_place->data);
-		} else {
-			if(DESCR(in_place->data) == &descr_struct_ALIASES) {
-				cid = ALIASES_get_content_id(in_place->data);
-			}
-			result = g_slist_prepend(result, in_place->data);
-		}
-	}
-
-	g_slist_free(in_place);
-
-	/* update contents with kept content id, add contents and chunks to the list */
-	for(; tmp ; tmp = tmp->next) {
-		if(!tmp->data)
-			continue;
-		if(DESCR(tmp->data) == &descr_struct_CONTENTS) {
-			/* replace content id */
-			CONTENTS_set2_content_id(tmp->data, cid->data, cid->len);
-			result = g_slist_prepend(result, tmp->data);
-		} else if (DESCR(tmp->data) == &descr_struct_CHUNKS) {
-			result = g_slist_prepend(result, tmp->data);
-		} else {
-			_bean_clean(tmp->data);
-		}
-	}
-
-	g_slist_free(tmp);
-
-	return result;
-}
-
-int
-meta2_filter_action_update_chunk_md5(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	GError *err = NULL;
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-
-	if (NULL != (err = meta2_backend_has_master_container(m2b, url))) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	struct content_info_s *ci = (struct content_info_s *) m2b_transient_get(
-			m2b, url, &err);
-
-	if (!ci) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	GSList *cil = meta2_filter_ctx_get_input_udata(ctx);
-	GSList *tmp = m2v2_beans_from_chunk_info_list(NULL,
-			hc_url_get(url, HCURL_PATH), cil);
-
-	/* keep contents & chunks (lists free'd inside) */
-	ci->beans = _keep_chunks(ci->beans, tmp);
-
-	return FILTER_OK;
-}
-
 static void
 _update_url_version_from_content(struct meta2_raw_content_s *content,
 		struct hc_url_s *url)
@@ -979,12 +800,11 @@ _add_beans(struct meta2_backend_s *m2b,
 		const gchar *pos_pfx)
 {
 	GError *err = NULL;
-	GSList *beans;
+	GSList *beans = NULL, *added = NULL, *deleted = NULL;
 
 	/* Map the raw content into beans */
 	if (pos_pfx) {
-		char* _make_subpos(guint32 pos, void *udata)
-		{
+		char* _make_subpos(guint32 pos, void *udata) {
 			char *prefix = udata;
 			return g_strdup_printf("%s%u", prefix, pos);
 		}
@@ -995,7 +815,12 @@ _add_beans(struct meta2_backend_s *m2b,
 	}
 
 	/* force the alias beans to be saved */
-	err = meta2_backend_force_alias(m2b, url, beans);
+	err = meta2_backend_force_alias(m2b, url, beans, &deleted, &added);
+	_notify_beans (m2b, url, added, "content.new");
+	if (deleted)
+		_notify_beans (m2b, url, deleted, "content.del");
+	_bean_cleanl2(added);
+	_bean_cleanl2(deleted);
 	_bean_cleanl2(beans);
 
 	return err;
@@ -1136,7 +961,8 @@ meta2_filter_action_add_raw_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	TRACE_FILTER();
-	const char *position_prefix = meta2_filter_ctx_get_param(ctx, "POSITION_PREFIX");
+	const char *position_prefix = meta2_filter_ctx_get_param(ctx,
+			NAME_MSGKEY_POSITIONPREFIX);
 	gchar content_id[64];
 	memset(content_id, 0, sizeof(content_id));
 	SHA256_randomized_string(content_id, sizeof(content_id));
@@ -1257,121 +1083,6 @@ meta2_filter_action_remove_raw_v1(struct gridd_filter_ctx_s *ctx,
 {
 	TRACE_FILTER();
 	return _update_beans(ctx, reply, _delete_beans_cb, NULL);
-}
-
-	int
-meta2_filter_action_content_commit_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	GError *e = NULL;
-
-	void _cb(gpointer udata, gpointer bean) {
-		(void) udata;
-		_bean_clean(bean);
-	}
-
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct content_info_s *ci = (struct content_info_s *)m2b_transient_get(m2b, url, &e);
-	if(NULL != e) {
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	if(!ci) {
-		GRID_DEBUG("Cannot commit content, cannot find informations in m2b_transient about it!");
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST, "Cannot find any information"
-					" about content to commit (%s)", hc_url_get(url, HCURL_WHOLE)));
-		return FILTER_KO;
-	}
-
-	switch(ci->action) {
-		case PUT:
-			GRID_DEBUG("Performing put_alias on [%s]", hc_url_get(url, HCURL_WHOLE));
-			e = meta2_backend_put_alias(m2b, url, ci->beans, _cb, NULL);
-			break;
-		case APPEND:
-			GRID_DEBUG("Performing append_alias on [%s]", hc_url_get(url, HCURL_WHOLE));
-			e = meta2_backend_append_to_alias(m2b, url, ci->beans, _cb, NULL);
-			break;
-		case DELETE:
-			GRID_DEBUG("Performing delete_alias on [%s]", hc_url_get(url, HCURL_WHOLE));
-			e = meta2_backend_delete_alias(m2b, url, FALSE, _cb, NULL);
-			break;
-	}
-
-	m2b_transient_del(m2b, url);
-
-	if(NULL != e) {
-		GRID_DEBUG("Content commit failed : %s", e->message);
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	return FILTER_OK;
-}
-
-int
-meta2_filter_action_content_rollback_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) reply;
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	GError *e = NULL;
-
-	if (NULL != (e = meta2_backend_has_master_container(m2b, url))) {
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	/* we don't take care of any error */
-	e = m2b_transient_del(m2b, url);
-	if(NULL != e) {
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	return FILTER_OK;
-}
-
-int
-meta2_filter_action_replicate_content_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct meta2_raw_content_v2_s *v2 = meta2_filter_ctx_get_input_udata(ctx);
-	GSList *beans;
-
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-	g_assert(v2 != NULL);
-
-	/* complete the URL portions */
-	gchar hexid[STRLEN_CONTAINERID+1];
-	container_id_to_string(v2->header.container_id, hexid, sizeof(hexid));
-	hc_url_set(url, HCURL_HEXID, hexid);
-	hc_url_set(url, HCURL_PATH, v2->header.path);
-
-	beans = m2v2_beans_from_raw_content_v2(hc_url_get(url, HCURL_HEXID), v2);
-	if (!beans) {
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_INTERNAL_ERROR, "Beans conversion error"));
-		return FILTER_KO;
-	}
-
-	GError *err = meta2_backend_force_alias(m2b, url, beans);
-	_bean_cleanl2(beans);
-
-	if (err) {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-	else {
-		reply->send_reply(CODE_FINAL_OK, "OK");
-		return FILTER_OK;
-	}
 }
 
 int

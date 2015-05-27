@@ -20,6 +20,7 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__gridd_client_h
 # define OIO_SDS__metautils__lib__gridd_client_h 1
 
+# include "metautils.h"
 # include <glib.h>
 # include <sys/time.h>
 
@@ -43,7 +44,6 @@ License along with this library.
 struct gridd_client_s;
 struct gridd_client_factory_s;
 
-struct message_s;
 struct addr_info_s;
 
 enum client_interest_e
@@ -52,7 +52,7 @@ enum client_interest_e
 	CLIENT_WR = 0x02
 };
 
-typedef gboolean (*client_on_reply)(gpointer ctx, struct message_s *reply);
+typedef gboolean (*client_on_reply)(gpointer ctx, MESSAGE reply);
 
 struct gridd_client_vtable_s
 {
