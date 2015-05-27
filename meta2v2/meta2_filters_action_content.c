@@ -77,7 +77,7 @@ _notify_beans (struct meta2_backend_s *m2b, struct hc_url_s *url,
 		GSList *beans, const char *name)
 {
 	void sep (GString *gs) {
-		if (gs->len > 1 && gs->str[gs->len-1] != ',')
+		if (gs->len > 1 && !strchr(",[{", gs->str[gs->len-1]))
 			g_string_append_c (gs, ',');
 	}
 	void append_int64 (GString *gs, const char *k, gint64 v) {

@@ -78,7 +78,7 @@ meta2_filter_action_notify_container_CREATE(struct gridd_filter_ctx_s *ctx,
 		return FILTER_OK;
 
 	GString *gs = g_string_new ("{");
-	g_string_append_printf (gs, "\"event\":\"%s\"", NAME_SRVTYPE_META2 ".create");
+	g_string_append_printf (gs, "\"event\":\"%s\"", NAME_SRVTYPE_META2 ".container.create");
 	g_string_append (gs, ",\"data\":{");
 	g_string_append (gs, "\"url\":{");
 	_append_url (gs, url);
@@ -99,7 +99,7 @@ meta2_filter_action_notify_container_DESTROY(struct gridd_filter_ctx_s *ctx,
 		return FILTER_OK;
 
 	GString *gs = g_string_new ("{");
-	g_string_append_printf (gs, "\"event\":\"%s\"", NAME_SRVTYPE_META2 ".destroy");
+	g_string_append_printf (gs, "\"event\":\"%s\"", NAME_SRVTYPE_META2 ".container.destroy");
 	g_string_append (gs, ",\"data\":{");
 	g_string_append (gs, "\"url\":{");
 	_append_url (gs, url);
