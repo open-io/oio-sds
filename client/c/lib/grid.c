@@ -29,24 +29,22 @@ long unsigned int wait_on_add_failed = 1000LU;
 static void
 env_init (void)
 {
-	static volatile int init_done = 0;
-	char *str;
-	char *glib=NULL;
+	static volatile guint lazy_init = 1;
 
-	if (!init_done) {
+	if (lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
+			const gchar *s;
 
-		init_done = 1;
+			if (NULL != (s = getenv(ENV_GLIB2_ENABLE)))
+				g_log_set_default_handler(logger_stderr, NULL);
 
-		if (NULL != (glib = getenv(ENV_GLIB2_ENABLE))) {
-			g_log_set_default_handler(logger_stderr, NULL);
-		}
-
-		/*configure the sleep time between two failed ADD actions*/
-		wait_on_add_failed = 10000UL;
-		if ((str = getenv(ENV_WAIT_ON_FAILED_ADD))) {
-			gint64 i64 = g_ascii_strtoll( str, NULL, 10 );
-			if (i64>=0LL && i64<=10000LL)
-				wait_on_add_failed = i64;
+			/*configure the sleep time between two failed ADD actions*/
+			wait_on_add_failed = 10000UL;
+			if (NULL != (s = getenv(ENV_WAIT_ON_FAILED_ADD))) {
+				gint64 i64 = g_ascii_strtoll (s, NULL, 10 );
+				if (i64>=0LL && i64<=10000LL)
+					wait_on_add_failed = i64;
+			}
 		}
 	}
 }
@@ -97,6 +95,7 @@ gs_grid_storage_init_flags(const gchar *ns, uint32_t flags,
 	register const gchar *sep;
 	namespace_info_t *ni;
 
+	logger_lazy_init ();
 	env_init();
 
 	/*parse the arguments*/

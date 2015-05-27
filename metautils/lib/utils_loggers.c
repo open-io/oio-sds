@@ -685,3 +685,15 @@ log4c_load(const char *path)
 	return 1;
 }
 
+void
+logger_lazy_init (void)
+{
+	static volatile guint lazy_init = 1;
+	if (lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
+			g_log_set_default_handler(logger_noop, NULL);
+			logger_init_level(GRID_LOGLVL_WARN);
+		}
+	}
+}
+

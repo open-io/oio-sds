@@ -1,4 +1,16 @@
 
+include_directories(BEFORE ../client/c/lib)
+
+add_executable(tool-grep oio-grep.c)
+bin_prefix(tool-grep "-grep")
+target_link_libraries(tool-grep gridclient)
+
+add_executable(tool-roundtrip oio-roundtrip.c)
+bin_prefix(tool-roundtrip "-roundtrip")
+target_link_libraries(tool-roundtrip gridclient)
+
+
+
 set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/.timestamp")
 
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/sds-reset.sh

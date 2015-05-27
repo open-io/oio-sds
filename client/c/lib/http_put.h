@@ -20,8 +20,7 @@ License along with this library.
 #ifndef OIO_SDS__client__c__lib__http_put_h
 # define OIO_SDS__client__c__lib__http_put_h 1
 
-# include <glib.h>
-# include <metatypes.h>
+# include <metautils/lib/metautils.h>
 
 struct http_put_s;
 
