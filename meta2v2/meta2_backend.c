@@ -718,7 +718,7 @@ static gchar *
 _container_state (struct sqlx_sqlite3_s *sq3)
 {
 	void sep (GString *gs) {
-		if (gs->len > 1 && gs->str[gs->len-1] != ',')
+		if (gs->len > 1 && !strchr(",[{", gs->str[gs->len-1]))
 			g_string_append_c (gs, ',');
 	}
 	void append_int64 (GString *gs, const char *k, gint64 v) {
@@ -740,7 +740,7 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 	GString *gs = g_string_new("{");
 	append_const (gs, "event", NAME_SRVTYPE_META2 ".container.state");
 	append_int64 (gs, "when", g_get_real_time());
-	g_string_append (gs, "\"url\":{");
+	g_string_append (gs, ",\"url\":{");
 	append (gs, "ns", sqlx_admin_get_str(sq3, SQLX_ADMIN_NAMESPACE));
 	append (gs, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));
 	append (gs, "user", sqlx_admin_get_str(sq3, SQLX_ADMIN_USERNAME));
