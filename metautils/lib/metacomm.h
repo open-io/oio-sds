@@ -219,6 +219,19 @@ MESSAGE message_create_named (const char *name);
 /** Frees all the internal structures of the pointed message. */
 void message_destroy(MESSAGE m);
 
+/** Perform the serialization of the message. */
+gint message_marshall(MESSAGE m, void **s, gsize * sSize, GError ** error);
+
+GByteArray* message_marshall_gba(MESSAGE m, GError **err);
+
+/** Allocates a new message and Unserializes the given buffer. */
+MESSAGE message_unmarshall(void *s, gsize sSize, GError ** error);
+
+/** Calls message_marshall_gba() then message_destroy() on 'm'. */
+GByteArray* message_marshall_gba_and_clean(MESSAGE m);
+
+typedef gint (body_decoder_f)(GSList **res, const void *b, gsize *bs, GError **err);
+
 /** Returns wether the given message has the targeted parameter or not.  */
 gboolean message_has_param(MESSAGE m, enum message_param_e mp);
 
@@ -263,12 +276,6 @@ void message_add_url (MESSAGE m, struct hc_url_s *url);
 /* wraps message_set_BODY() and g_bytes_array_unref() */
 void message_add_body_unref (MESSAGE m, GByteArray *body);
 
-void* message_get_field(MESSAGE m, const char *name, gsize *vsize);
-
-gchar ** message_get_field_names(MESSAGE m);
-
-GHashTable* message_get_fields(MESSAGE m);
-
 void message_add_field_str(MESSAGE m, const char *name, const char *value);
 
 void message_add_field_strint64(MESSAGE m, const char *n, gint64 v);
@@ -284,20 +291,11 @@ void message_add_fieldv_str(MESSAGE m, va_list args);
 
 void message_add_fields_str(MESSAGE m, ...);
 
-/** Perform the serialization of the message. */
-gint message_marshall(MESSAGE m, void **s, gsize * sSize, GError ** error);
+void* message_get_field(MESSAGE m, const char *name, gsize *vsize);
 
-GByteArray* message_marshall_gba(MESSAGE m, GError **err);
+gchar ** message_get_field_names(MESSAGE m);
 
-/** Allocates a new message and Unserializes the given buffer. */
-MESSAGE message_unmarshall(void *s, gsize sSize, GError ** error);
-
-struct Message;
-
-/** Calls message_marshall_gba() then message_destroy() on 'm'. */
-GByteArray* message_marshall_gba_and_clean(MESSAGE m);
-
-typedef gint (body_decoder_f)(GSList **res, const void *b, gsize *bs, GError **err);
+GHashTable* message_get_fields(MESSAGE m);
 
 GError* message_extract_cid(MESSAGE msg, const gchar *n,
 		container_id_t *cid);
