@@ -5,14 +5,28 @@ set(DEPS        ${SETUP_PY_IN}
                  "${CMAKE_CURRENT_SOURCE_DIR}/oio/__init__.py"
                  "${CMAKE_CURRENT_SOURCE_DIR}/oio/config.py"
                  "${CMAKE_CURRENT_SOURCE_DIR}/oio/account/__init__.py"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/oio/account/backend.py"
                  "${CMAKE_CURRENT_SOURCE_DIR}/oio/account/server.py"
                  "${CMAKE_CURRENT_SOURCE_DIR}/oio/common/__init__.py"
                  "${CMAKE_CURRENT_SOURCE_DIR}/oio/common/daemon.py"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/oio/common/http.py"
                  "${CMAKE_CURRENT_SOURCE_DIR}/oio/common/utils.py"
                  "${CMAKE_CURRENT_SOURCE_DIR}/oio/sds/__init__.py"
                  "${CMAKE_CURRENT_SOURCE_DIR}/oio/sds/admin-flask.py"
                  "${CMAKE_CURRENT_SOURCE_DIR}/oio/sds/event/__init__.py"
-                 "${CMAKE_CURRENT_SOURCE_DIR}/oio/sds/event/agent.py")
+                 "${CMAKE_CURRENT_SOURCE_DIR}/oio/sds/event/agent.py"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/__init__.py"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/functional/__init__.py"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/functional/account/__init__.py"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/functional/account/test_backend.py"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/__init__.py"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/account/__init__.py"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/common/__init__.py"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/common/test_utils.py"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/sds/__init__.py"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/sds/event/__init__.py"
+                 "${CMAKE_CURRENT_SOURCE_DIR}/tests/unit/sds/event/test_agent.py")
+
 
 set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/.timestamp")
 
