@@ -64,8 +64,8 @@ static void _task_reload_nsinfo(gpointer p);
 static void _task_reload_workers(gpointer p);
 
 static gpointer _worker_notify_gq2zmq (gpointer p);
-static gpointer _worker_notify_event (gpointer p);
-static gpointer _worker_clients(gpointer p);
+static gpointer _worker_notify_zmq2agent (gpointer p);
+static gpointer _worker_clients (gpointer p);
 
 // Static variables
 static struct sqlx_service_s SRV;
@@ -452,9 +452,9 @@ sqlx_service_action(void)
 	}
 
 	if (SRV.notify.zpull) {
-		SRV.notify.thread = g_thread_try_new("notifier-req", _worker_notify_event, &SRV, &err);
-		if (!SRV.notify.thread)
-			return _action_report_error(err, "Failed to start the NOTIFY-REQ thread");
+		SRV.notify.th_zmq2agent = g_thread_try_new("notifier-req", _worker_notify_zmq2agent, &SRV, &err);
+		if (!SRV.notify.th_zmq2agent)
+			return _action_report_error(err, "Failed to start the NOTIFY-ZMQ2AGENT thread");
 	}
 
 	/* SERVER/GRIDD main run loop */
@@ -547,10 +547,10 @@ sqlx_service_specific_fini(void)
 	if (SRV.thread_client)
 		g_thread_join(SRV.thread_client);
 
-	if (SRV.notify.thread)
-		g_thread_join(SRV.notify.thread);
 	if (SRV.notify.th_gq2zmq)
 		g_thread_join(SRV.notify.th_gq2zmq);
+	if (SRV.notify.th_zmq2agent)
+		g_thread_join(SRV.notify.th_zmq2agent);
 
 	if (SRV.repository) {
 		sqlx_repository_stop(SRV.repository);
@@ -833,7 +833,7 @@ GError *
 sqlx_notify (gpointer udata, gchar *msg)
 {
 	struct sqlx_service_s *ss = udata;
-	if (ss->notify.queue && ss->notify.thread)
+	if (ss->notify.queue && ss->notify.th_zmq2agent)
 		g_async_queue_push (ss->notify.queue, msg);
 	else
 		g_free(msg);
@@ -982,8 +982,38 @@ _retry_events (struct sqlx_service_s *ss)
 	}
 }
 
+static void
+_receive_acks (struct sqlx_service_s *ss)
+{
+	int rc;
+	zmq_msg_t msg;
+	do {
+		zmq_msg_init (&msg);
+		rc = zmq_msg_recv (&msg, ss->notify.zagent, ZMQ_DONTWAIT);
+		if (rc > 0)
+			_manage_ack (ss, &msg);
+		zmq_msg_close (&msg);
+	} while (rc >= 0);
+}
+
+static gboolean
+_receive_events (struct sqlx_service_s *ss)
+{
+	int rc, ended = 0;
+	do {
+		zmq_msg_t msg;
+		zmq_msg_init (&msg);
+		rc = zmq_msg_recv (&msg, ss->notify.zpull, ZMQ_DONTWAIT);
+		ended = (rc == 0); // empty frame is an EOF
+		if (rc > 0)
+			_manage_event (ss, &msg);
+		zmq_msg_close (&msg);
+	} while (rc > 0);
+	return !ended;
+}
+
 static gpointer
-_worker_notify_event (gpointer p)
+_worker_notify_zmq2agent (gpointer p)
 {
 	struct sqlx_service_s *ss = p;
 	zmq_pollitem_t pi[2] = {
@@ -991,8 +1021,7 @@ _worker_notify_event (gpointer p)
 		{ss->notify.zagent, -1, ZMQ_POLLIN, 0},
 	};
 
-	while (grid_main_is_running ()) {
-		zmq_msg_t msg;
+	for (gboolean run = TRUE; run ;) {
 		int rc = zmq_poll (pi, 2, 1000000);
 		if (rc < 0) {
 			int err = zmq_errno();
@@ -1001,27 +1030,14 @@ _worker_notify_event (gpointer p)
 			if (err != EINTR)
 				break;
 		}
-		if (pi[1].revents) { // ack ready
-			for (rc=0; rc>=0 ;) {
-				zmq_msg_init (&msg);
-				rc = zmq_msg_recv (&msg, ss->notify.zagent, ZMQ_DONTWAIT);
-				if (rc > 0)
-					_manage_ack (ss, &msg);
-				zmq_msg_close (&msg);
-			}
-		}
+		if (pi[1].revents)
+			_receive_acks (ss);
 		_retry_events (ss);
-		if (pi[0].revents) { // event ready
-			for (rc=0; rc>=0 ;) {
-				zmq_msg_init (&msg);
-				rc = zmq_msg_recv (&msg, ss->notify.zpull, ZMQ_DONTWAIT);
-				if (rc > 0)
-					_manage_event (ss, &msg);
-				zmq_msg_close (&msg);
-			}
-		}
+		if (pi[0].revents)
+			run = _receive_events (ss);
 	}
 
+	GRID_INFO ("Thread stopping [NOTIFY-ZMQ2AGENT]");
 	return p;
 }
 
@@ -1043,6 +1059,10 @@ _worker_notify_gq2zmq (gpointer p)
 			zmq_send (ss->notify.zpush, tmp, strlen(tmp), 0);
 		g_free (tmp);
 	}
+
+	// Empty frame is an EOF
+	zmq_send (ss->notify.zpush, "", 0, 0);
+	GRID_INFO ("Thread stopping [NOTIFY-GQ2ZMQ]");
 	return p;
 }
 
