@@ -959,7 +959,8 @@ meta2_filter_action_add_raw_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	TRACE_FILTER();
-	const char *position_prefix = meta2_filter_ctx_get_param(ctx, "POSITION_PREFIX");
+	const char *position_prefix = meta2_filter_ctx_get_param(ctx,
+			NAME_MSGKEY_POSITIONPREFIX);
 	gchar content_id[64];
 	memset(content_id, 0, sizeof(content_id));
 	SHA256_randomized_string(content_id, sizeof(content_id));

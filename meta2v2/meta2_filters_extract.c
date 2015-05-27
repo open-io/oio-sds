@@ -372,7 +372,7 @@ meta2_filter_extract_header_optional_position_prefix(struct gridd_filter_ctx_s *
 	GError *e = NULL;
 	gchar buf[64];
 	TRACE_FILTER();
-	EXTRACT_STRING("POSITION_PREFIX", TRUE);
+	EXTRACT_STRING(NAME_MSGKEY_POSITIONPREFIX, TRUE);
 	return FILTER_OK;
 }
 

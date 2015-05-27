@@ -52,7 +52,6 @@ make_request(const gchar *rn, struct sqlx_name_s *name)
 				NAME_MSGKEY_BASENAME, name->base,
 				NAME_MSGKEY_BASETYPE, name->type,
 				NAME_MSGKEY_NAMESPACE, name->ns,
-				NAME_MSGKEY_VIRTUALNAMESPACE, name->ns,
 				NULL);
 	return req;
 }

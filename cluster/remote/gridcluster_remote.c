@@ -217,9 +217,9 @@ gcluster_get_services(const char *target, gdouble timeout,
 		const gchar *type, gboolean full, GError ** error)
 {
 	MESSAGE req = message_create_named(NAME_MSGNAME_CS_GET_SRV);
-	message_add_field (req, NAME_MSGKEY_TYPENAME, type, strlen(type));
+	message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
 	if (full)
-		message_add_field_struint (req, NAME_MSGKEY_FULL, 1);
+		message_add_field_str(req, NAME_MSGKEY_FULL, "1");
 	GByteArray *gba = message_marshall_gba_and_clean(req);
 
 	GSList *out = NULL;	
@@ -280,7 +280,7 @@ gcluster_push_services(addr_info_t * addr, long timeout, GSList * services_list,
 
 	MESSAGE req = build_request(NAME_MSGNAME_CS_PUSH_SRV, buf->data, buf->len);
 	if (lock_action)
-		message_add_field(req, "LOCK", "true", sizeof("true") - 1);
+		message_add_field_str(req, NAME_MSGKEY_LOCK, "true");
 
 	if (!metaXClient_reply_sequence_run_from_addrinfo(error, req, addr, timeout, &data)) {
 		GSETERROR(error, "Cannot execute the query %s and receive all the responses", NAME_MSGNAME_CS_PUSH_SRV);

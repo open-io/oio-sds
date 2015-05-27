@@ -152,7 +152,7 @@ meta0_remote_assign(addr_info_t *m0a, gint ms, gboolean nocheck, GError **err)
 {
 	MESSAGE request = message_create_named(NAME_MSGNAME_M0_ASSIGN);
 	if (nocheck)
-		message_add_field(request, NAME_MSGKEY_NOCHECK, "yes", 3);
+		message_add_field_str (request, NAME_MSGKEY_NOCHECK, "yes");
 	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
 
@@ -166,7 +166,7 @@ meta0_remote_disable_meta1(addr_info_t *m0a, gint ms, gchar **urls, gboolean noc
 
 	MESSAGE request = message_create_named(NAME_MSGNAME_M0_DISABLE_META1);
 	if (nocheck)
-		message_add_field(request, NAME_MSGKEY_NOCHECK, "yes", 3);
+		message_add_field_str(request, NAME_MSGKEY_NOCHECK, "yes");
 	gchar *body = g_strjoinv("\n", urls);
 	message_set_BODY(request, body, strlen(body));
 	g_free(body);
@@ -182,7 +182,7 @@ meta0_remote_destroy_meta1ref(addr_info_t *m0a, gint ms, gchar *urls, GError **e
 	}
 
 	MESSAGE request = message_create_named(NAME_MSGNAME_M0_DESTROY_META1REF);
-	message_add_field(request, NAME_MSGKEY_METAURL, urls, strlen(urls));
+	message_add_field_str (request, NAME_MSGKEY_METAURL, urls);
 	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
 
@@ -195,7 +195,7 @@ meta0_remote_destroy_meta0zknode(addr_info_t *m0a, gint ms, gchar *urls, GError 
 	}
 
 	MESSAGE request = message_create_named(NAME_MSGNAME_M0_DESTROY_META0ZKNODE);
-	message_add_field(request, NAME_MSGKEY_METAURL, urls, strlen(urls));
+	message_add_field_str (request, NAME_MSGKEY_METAURL, urls);
 	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
 

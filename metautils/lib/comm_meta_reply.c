@@ -54,8 +54,7 @@ metaXServer_reply_simple(MESSAGE request, gint code, const gchar *message)
 	message_add_field_strint(reply, NAME_MSGKEY_STATUS, code);
 
 	if (message)
-		message_add_field(reply, NAME_MSGKEY_MESSAGE, message, strlen(message));
-
+		message_add_field_str (reply, NAME_MSGKEY_MESSAGE, message);
 	return reply;
 }
 

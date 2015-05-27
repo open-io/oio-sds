@@ -48,7 +48,7 @@ meta2_remote_container_common_fd_v2 (int *fd, gint ms, GError ** err, const char
 	MESSAGE request = message_create_named(op);
 	message_add_url (request, url);
 	if (stgpol)
-	    message_add_field_str(request, NAME_HEADER_STORAGEPOLICY, stgpol);
+	    message_add_field_str(request, NAME_MSGKEY_STGPOLICY, stgpol);
 
 	gboolean rc = metaXClient_reply_sequence_run(err, request, fd, ms, &data);
 	message_destroy(request);
@@ -238,7 +238,7 @@ meta2raw_remote_update_chunks (struct metacnx_ctx_s *ctx, GError **err,
 	if (allow_update)
 		message_add_field_str(request, NAME_MSGKEY_ALLOWUPDATE, "1");
 	if (position_prefix)
-		message_add_field_str(request, "POSITION_PREFIX", position_prefix);
+		message_add_field_str(request, NAME_MSGKEY_POSITIONPREFIX, position_prefix);
 
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
@@ -364,7 +364,7 @@ meta2raw_remote_stat_content(struct metacnx_ctx_s *ctx, GError **err,
 	MESSAGE request = message_create_named (NAME_MSGNAME_M2RAW_GETCHUNKS);
 	message_add_url (request, url);
 	if (check_flags)
-		message_add_field_str (request, NAME_HEADER_CHECKFLAGS, "1");
+		message_add_field_str (request, NAME_MSGKEY_CHECK, "1");
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
 		GSETERROR(err,"Cannot execute the query and receive all the responses");

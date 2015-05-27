@@ -27,9 +27,6 @@ License along with this library.
  */
 
 #include <metautils/lib/metatypes.h>
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
-#include <glib.h>
 
 #define REMOTECONTAINER_FLAG_OK       0x00000000
 #define REMOTECONTAINER_FLAG_FROZEN   0x00000001
@@ -38,18 +35,7 @@ License along with this library.
 #define META2TOUCH_FLAGS_UPDATECSIZE     0x00000001
 #define META2TOUCH_FLAGS_RECALCCSIZE     0x00000002
 
-#define NAME_HEADER_METADATA_USR "METADATA_USR"
 #define NAME_HEADER_METADATA_SYS "METADATA_SYS"
-#define NAME_HEADER_NAMESPACE "NS"
-#define NAME_HEADER_CONFIGURATION "CFG"
-#define NAME_HEADER_CONTAINERNAME "CONTAINER_NAME"
-#define NAME_HEADER_VIRTUALNAMESPACE "VIRTUAL_NAMESPACE"
-#define NAME_HEADER_ADMIN_KEY "ADMIN_KEY"
-#define NAME_HEADER_ADMIN_VALUE "ADMIN_VALUE"
-#define NAME_HEADER_ADMIN_VALUE_SIZE "ADMIN_VALUE_SIZE"
-#define NAME_HEADER_CHECKFLAGS "CHECK_FLAGS"
-#define NAME_HEADER_STORAGEPOLICY "STORAGE_POLICY"
-#define NAME_HEADER_VERSIONPOLICY "VERSION_POLICY"
 
 /** Get the list of contents of ths container. */
 GSList *meta2_remote_container_list (const addr_info_t *m2, gint ms, GError **err,

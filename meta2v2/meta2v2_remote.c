@@ -211,11 +211,9 @@ GByteArray*
 m2v2_remote_pack_GET_BY_CHUNK(struct hc_url_s *url,
 		const gchar *chunk_id, gint64 limit)
 {
-	gchar limit_str[32];
-	g_snprintf(limit_str, sizeof(limit_str), "%"G_GINT64_FORMAT, limit);
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_GET, url, NULL);
 	message_add_field_str (msg, M2_KEY_CHUNK_ID, chunk_id);
-	message_add_field_str (msg, M2_KEY_MAX_KEYS, limit_str);
+	message_add_field_strint64 (msg, M2_KEY_MAX_KEYS, limit);
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -267,9 +265,7 @@ GByteArray*
 m2v2_remote_pack_BEANS(struct hc_url_s *url, const gchar *pol, gint64 size, gboolean append)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_BEANS, url, NULL);
-	gchar strsize[32];
-	g_snprintf(strsize, sizeof(strsize), "%"G_GINT64_FORMAT, size);
-	message_add_field_str (msg, NAME_MSGKEY_CONTENTLENGTH, strsize);
+	message_add_field_strint64 (msg, NAME_MSGKEY_CONTENTLENGTH, size);
 	message_add_field_str (msg, NAME_MSGKEY_STGPOLICY, pol);
 	if (append)
 		message_add_field_str (msg, NAME_MSGKEY_APPEND, "true");
