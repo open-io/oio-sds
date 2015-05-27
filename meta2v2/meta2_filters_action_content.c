@@ -313,7 +313,8 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 		rc = FILTER_KO;
 	} else {
 		_notify_beans (m2b, url, added, "content.new");
-		_notify_beans (m2b, url, deleted, "content.deleted");
+		if (deleted)
+			_notify_beans (m2b, url, deleted, "content.deleted");
 		_on_bean_ctx_send_list(obc, TRUE);
 		rc = FILTER_OK;
 	}
@@ -816,7 +817,8 @@ _add_beans(struct meta2_backend_s *m2b,
 	/* force the alias beans to be saved */
 	err = meta2_backend_force_alias(m2b, url, beans, &deleted, &added);
 	_notify_beans (m2b, url, added, "content.new");
-	_notify_beans (m2b, url, deleted, "content.del");
+	if (deleted)
+		_notify_beans (m2b, url, deleted, "content.del");
 	_bean_cleanl2(added);
 	_bean_cleanl2(deleted);
 	_bean_cleanl2(beans);
