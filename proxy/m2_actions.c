@@ -658,16 +658,14 @@ static enum http_rc_e
 action_m2_container_check (struct req_args_s *args)
 {
 	GError *err = NULL;
-	gchar *bn = g_strdup_printf("1@%s", hc_url_get(args->url, HCURL_HEXID));
-	struct sqlx_name_s n = {NULL,NULL,NULL};
-	n.ns = NS();
-	n.base = bn;
-	n.type = NAME_SRVTYPE_META2;
-
 	GByteArray **bodies = NULL;
-	GByteArray* packer () { return sqlx_pack_PROPGET (&n, NULL); }
+
+	struct sqlx_name_mutable_s n = {NULL,NULL,NULL};
+	sqlx_name_fill (&n, args->url, NAME_SRVTYPE_META2, 1);
+	GByteArray* packer () { return sqlx_pack_PROPGET (sqlx_name_mutable_to_const(&n), NULL); }
 	err = _gbav_request (n.type, 0, args->url, packer, NULL, &bodies);
-	g_free(bn);
+	sqlx_name_clean(&n);
+
 	if (err) {
 		metautils_gba_cleanv (bodies);
 		return _reply_m2_error (args, err);

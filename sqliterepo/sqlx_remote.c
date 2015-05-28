@@ -372,22 +372,23 @@ sqlx_name_extract (struct sqlx_name_s *n, struct hc_url_s *url,
 	EXTRA_ASSERT (srvtype != NULL);
 	EXTRA_ASSERT (pseq != NULL);
 
-	gboolean rc;
+	int rc = 0;
 	gchar **tokens;
 
-	tokens = g_strsplit (n->type, ".", 2);
-	rc = BOOL(!strcmp(tokens[0], srvtype));
-	if (tokens[1])
-		hc_url_set (url, HCURL_TYPE, tokens[1]);
-	else
-		hc_url_set (url, HCURL_TYPE, HCURL_DEFAULT_TYPE);
-	g_strfreev (tokens);
+	if (NULL != (tokens = g_strsplit (n->type, ".", 2))) {
+		if (tokens[0])
+			rc = !strcmp(tokens[0], srvtype);
+		hc_url_set (url, HCURL_TYPE, tokens[1] ? tokens[1] : HCURL_DEFAULT_TYPE);
+		g_strfreev (tokens);
+	}
 
-	tokens = g_strsplit (n->base, ".", 2);
-	hc_url_set (url, HCURL_HEXID, tokens[0]);
-	*pseq = g_ascii_strtoll (tokens[1], NULL, 10);
-	g_strfreev (tokens);
+	if (NULL != (tokens = g_strsplit (n->base, ".", 2))) {
+		if (tokens[0])
+			hc_url_set (url, HCURL_HEXID, tokens[0]);
+		*pseq = tokens[1] ? g_ascii_strtoll (tokens[1], NULL, 10) : 1;
+		g_strfreev (tokens);
+	}
 
-	return rc;
+	return BOOL(rc);
 }
 
