@@ -1,4 +1,5 @@
 [event-agent]
+user = openio
 bind_addr = ipc:///tmp/run/event-agent.sock
 workers = 2
 log_facility = LOG_LOCAL0

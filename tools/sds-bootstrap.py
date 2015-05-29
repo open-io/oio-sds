@@ -431,6 +431,7 @@ event-agent=ipc://${RUNDIR}/event-agent.sock
 
 template_event_agent = """
 [event-agent]
+user = ${UID}
 bind_addr = ipc://${RUNDIR}/event-agent.sock
 workers = 5
 log_facility = LOG_LOCAL0
