@@ -17,6 +17,7 @@ class TestDirectoryFunctional(unittest.TestCase):
 
     def _load_config(self):
         config = load_functest_config()
+
         self.proxyd_uri = config.get('func_test', 'proxyd_uri') + "/v1.0/dir/"
         self.proxyd_uri2 = config.get('func_test', 'proxyd_uri') + "/v1.0/cs/"
         self.namespace = config.get('func_test', 'namespace')

@@ -16,6 +16,7 @@ class TestConscienceFunctional(unittest.TestCase):
 
     def _load_config(self):
         config = load_functest_config()
+
         self.proxyd_uri = config.get('func_test', 'proxyd_uri') + "/v1.0/cs/"
         self.namespace = config.get('func_test', 'namespace')
         self.basic_addr = urlparse.urlsplit(self.proxyd_uri).hostname + ":"
@@ -142,7 +143,7 @@ class TestConscienceFunctional(unittest.TestCase):
         time.sleep(3)
 
         resp = self.session.delete(self.addr_type)
-        print resp.text
+
         self.assertEqual(resp.status_code, 200)
 
         time.sleep(3)
@@ -161,14 +162,14 @@ class TestConscienceFunctional(unittest.TestCase):
                                  self.valid_lock_service)
         self.assertEqual(resp.status_code, 200)
 
-        time.sleep(2)
+        time.sleep(2.5)
         score = \
             [session["score"] for session in
              self.session.get(self.addr_type).json() if
              session["addr"] == self.addr1][0]
         self.assertEqual(score, self.score_rand)
 
-    def test_services_pool_actions_unlock(self):  # to be improved
+    def test_services_pool_actions_unlock(self):
 
         self.session.post(self.addr_type + "/action", self.valid_lock_service)
 
@@ -177,7 +178,7 @@ class TestConscienceFunctional(unittest.TestCase):
                                  self.valid_unlock_service)
         self.assertEqual(resp.status_code, 200)
 
-        time.sleep(1.5)
+        time.sleep(2.5)
         service = [session for session in
                    self.session.get(self.addr_type).json() if
                    session["addr"] == self.addr1]
