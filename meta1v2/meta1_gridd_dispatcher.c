@@ -399,7 +399,7 @@ meta1_dispatch_v2_SRV_SET(struct gridd_reply_ctx_s *reply,
 	else if (NULL != (err = meta1_backend_force_service(m1, url, m1url)))
 		reply->send_error(0, err);
 	else
-		reply->send_reply(CODE_BAD_REQUEST, "OK");
+		reply->send_reply(200, "OK");
 
 	g_free0 (m1url);
 	hc_url_clean (url);
