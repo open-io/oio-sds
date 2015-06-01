@@ -124,7 +124,7 @@ meta2_filter_action_update_storage_policy(struct gridd_filter_ctx_s *ctx,
 
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	const char *stgpol = meta2_filter_ctx_get_param(ctx, M2_KEY_STORAGE_POLICY);
+	const char *stgpol = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_STGPOLICY);
 	struct storage_policy_s *sp = NULL;
 	struct namespace_info_s ni;
 	memset(&ni, 0, sizeof(ni));

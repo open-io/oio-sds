@@ -347,6 +347,8 @@ gridd_client_exec4 (const gchar *to, gdouble timeout, GByteArray *req,
 		GByteArray ***out)
 {
 	gboolean _cb (GPtrArray *tmp, MESSAGE reply) {
+		if (!message_has_BODY (reply))
+			return TRUE;
 		GByteArray *body = NULL;
 		GError *e = message_extract_body_gba(reply, &body);
 		if (e) {

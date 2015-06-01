@@ -104,7 +104,7 @@ int meta2_filter_extract_header_storage_policy(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_extract_header_version_policy(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-/*! Extract the spare method specified in header M2_KEY_SPARE, if specified.
+/*! Extract the spare method specified in header NAME_MSGKEY_SPARE, if specified.
  * Can be M2V2_SPARE_BY_BLACKLIST or M2V2_SPARE_BY_STGPOL. */
 int meta2_filter_extract_header_spare(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);

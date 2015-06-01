@@ -121,7 +121,7 @@ meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
 			return TRUE;
 		*new_metadata = NULL;
 		gsize fieldLen=0;
-		void *field = message_get_field (rep, NAME_HEADER_METADATA_SYS, &fieldLen);
+		void *field = message_get_field (rep, NAME_MSGKEY_MDSYS, &fieldLen);
 		if (field)
 			*new_metadata = g_byte_array_append( g_byte_array_new(), field, fieldLen);
 		return TRUE;
@@ -142,7 +142,7 @@ meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
 	message_add_field_strint64 (request, NAME_MSGKEY_CONTENTLENGTH, content_length);
 
 	if (metadata)
-		message_add_field (request, NAME_HEADER_METADATA_SYS, metadata->data, metadata->len);
+		message_add_field (request, NAME_MSGKEY_MDSYS, metadata->data, metadata->len);
 	if (!metaXClient_reply_sequence_run (err, request, fd, ms, &data)) {
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
 		g_slist_free_full(result, (GDestroyNotify) chunk_info_clean);
