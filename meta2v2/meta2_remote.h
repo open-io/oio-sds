@@ -35,8 +35,6 @@ License along with this library.
 #define META2TOUCH_FLAGS_UPDATECSIZE     0x00000001
 #define META2TOUCH_FLAGS_RECALCCSIZE     0x00000002
 
-#define NAME_HEADER_METADATA_SYS "METADATA_SYS"
-
 /** Get the list of contents of ths container. */
 GSList *meta2_remote_container_list (const addr_info_t *m2, gint ms, GError **err,
 		struct hc_url_s *url);

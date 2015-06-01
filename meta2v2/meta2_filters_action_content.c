@@ -155,7 +155,7 @@ _reply_chunk_info_list(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s 
 		reply->send_reply(CODE_PARTIAL_CONTENT, "Partial content");
 	}
 	if (NULL != mdsys) {
-		reply->add_header("METADATA_SYS", g_byte_array_append(g_byte_array_new(),
+		reply->add_header(NAME_MSGKEY_MDSYS, g_byte_array_append(g_byte_array_new(),
 				(const guint8*)mdsys, strlen(mdsys)));
 	}
 	reply->send_reply(CODE_FINAL_OK, "OK");
@@ -298,10 +298,10 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 
 	GRID_DEBUG("Putting %d beans in [%s]%s", g_slist_length(beans),
 			hc_url_get(url, HCURL_WHOLE),
-			meta2_filter_ctx_get_param(ctx, M2_KEY_OVERWRITE)?
+			meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)?
 			" (overwrite)":"");
 
-	if (NULL != meta2_filter_ctx_get_param(ctx, M2_KEY_OVERWRITE)) {
+	if (NULL != meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)) {
 		e = meta2_backend_force_alias(m2b, url, beans, &deleted, &added);
 	} else {
 		e = meta2_backend_put_alias(m2b, url, beans, &deleted, &added);
@@ -357,7 +357,7 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	TRACE_FILTER();
-	const char *copy_source = meta2_filter_ctx_get_param(ctx, M2_KEY_COPY_SOURCE);
+	const char *copy_source = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_COPY);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 
 	if (NULL != copy_source) {
@@ -408,9 +408,9 @@ meta2_filter_action_get_content(struct gridd_filter_ctx_s *ctx,
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
-	const char *fstr = meta2_filter_ctx_get_param(ctx, M2_KEY_GET_FLAGS);
-	const gchar *chunk_id = meta2_filter_ctx_get_param(ctx, M2_KEY_CHUNK_ID);
-	const gchar *limit_str = meta2_filter_ctx_get_param(ctx, M2_KEY_MAX_KEYS);
+	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
+	const gchar *chunk_id = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CHUNKID);
+	const gchar *limit_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MAX_KEYS);
 	GSList *urls = NULL;
 
 	TRACE_FILTER();
@@ -505,7 +505,7 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
 	guint32 flags = 0;
-	const char *fstr = meta2_filter_ctx_get_param(ctx, M2_KEY_GET_FLAGS);
+	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
 	if (NULL != fstr)
 		flags = atoi(fstr);
 	
@@ -587,7 +587,7 @@ meta2_filter_action_modify_mdsys_v1(struct gridd_filter_ctx_s *ctx,
 
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	const char *mdsys = meta2_filter_ctx_get_param(ctx, "V");
+	const char *mdsys = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_VALUE);
 
 	void _get_alias_header_cb(gpointer udata, gpointer bean) {
 		(void) udata;
@@ -676,10 +676,10 @@ meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 	const char *size_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CONTENTLENGTH);
-	const char *policy_str = meta2_filter_ctx_get_param(ctx, M2_KEY_STORAGE_POLICY);
-	const char *mdsys = meta2_filter_ctx_get_param(ctx, M2V1_KEY_METADATA_SYS);
-	const char *spare_type = meta2_filter_ctx_get_param(ctx, M2_KEY_SPARE);
-	gboolean append = (NULL != meta2_filter_ctx_get_param(ctx, "APPEND"));
+	const char *policy_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_STGPOLICY);
+	const char *mdsys = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MDSYS);
+	const char *spare_type = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_SPARE);
+	gboolean append = (NULL != meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_APPEND));
 
 	TRACE_FILTER();
 	if (NULL != size_str)
@@ -731,7 +731,7 @@ _generate_chunks(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	const char *size_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CONTENTLENGTH);
-	const char *mdsys = meta2_filter_ctx_get_param(ctx, M2V1_KEY_METADATA_SYS);
+	const char *mdsys = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MDSYS);
 
 	char *out_mdsys = NULL;
 
@@ -1142,19 +1142,19 @@ _spare_special(struct gridd_reply_ctx_s *reply, struct meta2_backend_s *m2b,
 		char notin[1024];
 		memset(broken, '\0', 1024);
 		memset(notin, '\0', 1024);
-		if(NULL != (e = message_extract_strint64(reply->request, "COUNT", &nb)) || 0 == nb) {
+		if(NULL != (e = message_extract_strint64(reply->request, NAME_MSGKEY_COUNT, &nb)) || 0 == nb) {
 			g_clear_error(&e);
 			nb = 1;
 		}
-		if(NULL != (e = message_extract_strint64(reply->request, "DISTANCE", &dist)) || 0 == dist) {
+		if(NULL != (e = message_extract_strint64(reply->request, NAME_MSGKEY_DISTANCE, &dist)) || 0 == dist) {
 			g_clear_error(&e);
 			dist = 1;
 		}
-		if(NULL != (e = message_extract_string(reply->request, "BROKEN", broken, 1024))) {
+		if(NULL != (e = message_extract_string(reply->request, NAME_MSGKEY_BROKEN, broken, 1024))) {
 			g_clear_error(&e);
 			broken[0] = '\0';
 		}
-		if(NULL != (e = message_extract_string(reply->request, "NOT-IN", notin, 1024))) {
+		if(NULL != (e = message_extract_string(reply->request, NAME_MSGKEY_NOTIN, notin, 1024))) {
 			g_clear_error(&e);
 			notin[0] = '\0';
 		}
@@ -1193,7 +1193,7 @@ meta2_filter_action_get_spare_chunks(struct gridd_filter_ctx_s *ctx,
 	GError *e = NULL;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	const char *polname = meta2_filter_ctx_get_param(ctx, M2_KEY_STORAGE_POLICY);
+	const char *polname = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_STGPOLICY);
 	GSList *cil = NULL;
 
 	if (NULL != polname) {

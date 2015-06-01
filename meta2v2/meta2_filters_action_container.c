@@ -64,8 +64,8 @@ meta2_filter_action_create_container(struct gridd_filter_ctx_s *ctx,
 	GError *err = NULL;
 	int retry = 2;
 
-	params.storage_policy = meta2_filter_ctx_get_param(ctx, M2_KEY_STORAGE_POLICY);
-	params.version_policy = meta2_filter_ctx_get_param(ctx, M2_KEY_VERSION_POLICY);
+	params.storage_policy = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_STGPOLICY);
+	params.version_policy = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_VERPOLICY);
 	params.local = (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LOCAL) != NULL);
 
 retry:
@@ -144,7 +144,7 @@ meta2_filter_action_purge_container(struct gridd_filter_ctx_s *ctx,
 	// M2V2_MODE_DRYRUN, ...
     guint32 flags = 0;
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
-    const char *fstr = meta2_filter_ctx_get_param(ctx, M2_KEY_GET_FLAGS);
+    const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
     if (NULL != fstr)
         flags = (guint32) g_ascii_strtoull(fstr, NULL, 10);
 
@@ -171,7 +171,7 @@ meta2_filter_action_deduplicate_container(struct gridd_filter_ctx_s *ctx,
 
 	// M2V2_MODE_DRYRUN, ...
 	guint32 flags = 0;
-	const char *fstr = meta2_filter_ctx_get_param(ctx, M2_KEY_GET_FLAGS);
+	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
 	if (NULL != fstr)
 		flags = (guint32) g_ascii_strtoull(fstr, NULL, 10);
 	
@@ -244,15 +244,15 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		return FILTER_KO;
 	}
 
-	S3_RESPONSE_HEADER(M2_KEY_PREFIX, lp->prefix);
-	S3_RESPONSE_HEADER(M2_KEY_MARKER, lp->marker_start);
-	S3_RESPONSE_HEADER(M2_KEY_MARKER_END, lp->marker_end);
+	S3_RESPONSE_HEADER(NAME_MSGKEY_PREFIX, lp->prefix);
+	S3_RESPONSE_HEADER(NAME_MSGKEY_MARKER, lp->marker_start);
+	S3_RESPONSE_HEADER(NAME_MSGKEY_MARKER_END, lp->marker_end);
 	S3_RESPONSE_HEADER(NAME_MSGKEY_TRUNCATED, truncated ? "true" : "false");
 	S3_RESPONSE_HEADER(NAME_MSGKEY_NEXTMARKER, next_marker);
 	if (lp->maxkeys > 0) {
 		gchar tmp[64];	
 		g_snprintf(tmp, sizeof(tmp), "%"G_GINT64_FORMAT, lp->maxkeys - 1);
-		reply->add_header(M2_KEY_MAX_KEYS, metautils_gba_from_string(tmp));
+		reply->add_header(NAME_MSGKEY_MAX_KEYS, metautils_gba_from_string(tmp));
 	}
 
 	_on_bean_ctx_send_list(obc, TRUE);
@@ -270,7 +270,7 @@ meta2_filter_action_list_contents(struct gridd_filter_ctx_s *ctx,
 	struct list_params_s lp;
 	memset(&lp, '\0', sizeof(struct list_params_s));
 
-	const char *fstr = meta2_filter_ctx_get_param(ctx, M2_KEY_GET_FLAGS);
+	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
 	if (NULL != fstr) {
 		guint32 flags = atoi(fstr);
 		lp.flag_headers = BOOL(flags & M2V2_FLAG_HEADERS);
@@ -278,10 +278,10 @@ meta2_filter_action_list_contents(struct gridd_filter_ctx_s *ctx,
 		lp.flag_allversion = BOOL(flags & M2V2_FLAG_ALLVERSION);
 	}
 
-	lp.prefix = meta2_filter_ctx_get_param(ctx, M2_KEY_PREFIX);
-	lp.marker_start = meta2_filter_ctx_get_param(ctx, M2_KEY_MARKER);
-	lp.marker_end = meta2_filter_ctx_get_param(ctx, M2_KEY_MARKER_END);
-	const char *maxkeys_str = meta2_filter_ctx_get_param(ctx, M2_KEY_MAX_KEYS);
+	lp.prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);
+	lp.marker_start = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER);
+	lp.marker_end = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER_END);
+	const char *maxkeys_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MAX_KEYS);
 	if (NULL != maxkeys_str)
 		lp.maxkeys = g_ascii_strtoll(maxkeys_str, NULL, 10);
 
@@ -382,10 +382,10 @@ meta2_filter_action_list_v1(struct gridd_filter_ctx_s *ctx,
 	struct list_params_s lp;
 	memset(&lp, '\0', sizeof(struct list_params_s));
 	lp.flag_nodeleted = lp.flag_headers = ~0;
-	lp.prefix = meta2_filter_ctx_get_param(ctx, M2_KEY_PREFIX);
-	lp.marker_start = meta2_filter_ctx_get_param(ctx, M2_KEY_MARKER);
-	lp.marker_end = meta2_filter_ctx_get_param(ctx, M2_KEY_MARKER_END);
-	const char *maxkeys_str = meta2_filter_ctx_get_param(ctx, M2_KEY_MAX_KEYS);
+	lp.prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);
+	lp.marker_start = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER);
+	lp.marker_end = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER_END);
+	const char *maxkeys_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MAX_KEYS);
 	if(NULL != maxkeys_str)
 		lp.maxkeys = g_ascii_strtoll(maxkeys_str, NULL, 10);
 
