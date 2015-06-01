@@ -81,7 +81,7 @@ __create_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 	}
 
 	if (err)
-		GRID_DEBUG("Container creation failed : (%d) %s", err->code, err->message);
+		GRID_DEBUG("User creation failed : (%d) %s", err->code, err->message);
 
 	return sqlx_transaction_end(repctx, err);
 }
@@ -140,7 +140,7 @@ __destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 
 		/* If any service is found, this is an error. */
 		if (!err && count_services > 0)
-			err = NEWERROR(CODE_CONTAINER_INUSE, "container in use");
+			err = NEWERROR(CODE_CONTAINER_INUSE, "User still linked to services");
 	}
 
 	if (!err) {
@@ -154,7 +154,7 @@ __destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	*done = !err && (count_actions > 0);
 
 	if (!err && !*done)
-		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Container not found");
+		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "User not found");
 
 	return sqlx_transaction_end(repctx, err);
 }
@@ -173,7 +173,7 @@ meta1_backend_create_container(struct meta1_backend_s *m1,
 	GError *err = _open_and_lock(m1, url, SQLX_OPEN_MASTERONLY, &sq3);
 	if (!err) {
 		if (!(err = __info_container(sq3, url, NULL)))
-			err = NEWERROR(CODE_CONTAINER_EXISTS, "Container already created");
+			err = NEWERROR(CODE_CONTAINER_EXISTS, "User already created");
 		else {
 			g_clear_error(&err);
 			if (NULL != (err = __create_user(sq3, url)))
