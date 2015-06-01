@@ -237,29 +237,32 @@ static enum http_rc_e
 action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 {
 	const gchar *type = TYPE();
+	struct meta1_service_url_s *m1u = NULL;
 
 	GError *hook (const gchar * m1) {
 		struct addr_info_s m1a;
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *e = NULL;
-		meta1v2_remote_force_reference_service (&m1a, &e, args->url, "");
+		gchar *packed = meta1_pack_url (m1u);
+		meta1v2_remote_force_reference_service (&m1a, &e, args->url, packed);
+		g_free (packed);
 		return e;
 	}
 
-	struct meta1_service_url_s *m1u = NULL;
 	GError *err = meta1_service_url_load_json_object (jargs, &m1u);
+
+	if (!err)
+		err = _m1_locate_and_action (args, hook);
+	if (m1u) {
+		meta1_service_url_clean (m1u);
+		m1u = NULL;
+	}
+
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
 		 * and it will probably silently succeed  */
 		hc_decache_reference_service (resolver, args->url, type);
-	}
-
-	if (!err) {
-		gchar *m1url = meta1_pack_url (m1u);
-		meta1_service_url_clean (m1u);
-		err = _m1_locate_and_action (args, hook);
-		metautils_str_clean(&m1url);
 	}
 
 	if (err)
