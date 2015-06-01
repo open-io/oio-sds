@@ -10,6 +10,9 @@ bin_prefix(tool-roundtrip "-roundtrip")
 target_link_libraries(tool-roundtrip gridclient)
 
 
+install(TARGETS tool-grep tool-roundtrip
+		RUNTIME DESTINATION bin)
+
 
 set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/.timestamp")
 
