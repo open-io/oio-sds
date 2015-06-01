@@ -14,8 +14,9 @@ Then there is a convention to encode the ation : the body of the request contain
 
 ### Services pools ``/cs/{NS}/{TYPE}``
 Plays on collection on services. What identifies a collection is the NS it belongs to and its type name.
-  * **PUT** registers a list of services in the given collection
-    * input body : a JSON encoded array of services. The given score will be ignored. (cf. below)
+  * **PUT** registers a single service in the given collection
+    * input body : a JSON encoded service description. The given score will be ignored.
+    E.g. ``{"ns":"NS","type":"meta2","addr":"127.0.0.1:6002","score":0, "tags":{"tag.k":"value"}}``
   * **GET** get the list of services in the collection.
     * output body : a JSON encoded array of services.
   * **HEAD** Check the service type is known for this namespace
@@ -23,10 +24,12 @@ Plays on collection on services. What identifies a collection is the NS it belon
 
 ### Services pools actions ``/cs/{NS}/{TYPE}/action``
 Destined for the **POST** method, the following actions are currently available:
-  * **Lock** : Lock a service, the argument is expected to be a service description.
-    E.g. ``{ "action":"Lock", "args":{"addr":"127.0.0.1:22", "score":1, "tags":{"tag.up":true}}}``
-  * **Unlock** : Unlock a service, the argument is expected to be a service description.
-    E.g. ``{ "action":"Unlock", "srv":{"addr":"127.0.0.1:22", "score":1, "tags":{"tag.up":true}}}``
+  * **Lock** : Lock a service, the argument is expected to be a full service description (as expect by the PUT).
+    Locking a service consist in forcing its score to a given value, so that is won't be updated nor expired.
+    E.g. ``{ "action":"Lock", "args":{"ns":"NS","type":"meta2","addr":"127.0.0.1:6002","score":0, "tags":{"tag.k":"value"}}}``
+  * **Unlock** : Unlock a service, the argument is expected to be a full service description (as expected by the PUT).
+    Unlocking a service consist in letting it expire and be updated.
+    E.g. ``{ "action":"Unlock", "args":{"ns":"NS","type":"meta2","addr":"127.0.0.1:6002","score":0, "tags":{"tag.k":"value"}}}``
 
 ## Directory resources
 
@@ -101,14 +104,14 @@ The following actions are currently available:
       {"type":"header", ...},
       {"type":"content", ...},
       {"type":"chunk", ...}
-	]}``
+]}``
   * **RawDelete** : 
     E.g. ``{"action":"RawDelete", "args":[
       {"type":"alias", ...},
       {"type":"header", ...},
       {"type":"content", ...},
       {"type":"chunk", ...}
-	]}``
+]}``
   * **RawUpdate** : 
     E.g. ``{
     "action": "RawUpdate",
