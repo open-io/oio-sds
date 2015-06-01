@@ -17,8 +17,8 @@ class TestDirectoryFunctional(unittest.TestCase):
 
     def _load_config(self):
         config = load_functest_config()
-        self.proxyd_uri = config.get('func_test', 'proxyd_uri') + "dir/"
-        self.proxyd_uri2 = config.get('func_test', 'proxyd_uri') + "cs/"
+        self.proxyd_uri = config.get('func_test', 'proxyd_uri') + "/v1.0/dir/"
+        self.proxyd_uri2 = config.get('func_test', 'proxyd_uri') + "/v1.0/cs/"
         self.namespace = config.get('func_test', 'namespace')
         self.basic_addr = urlparse.urlsplit(self.proxyd_uri).hostname + ":"
 
@@ -193,17 +193,11 @@ class TestDirectoryFunctional(unittest.TestCase):
 
         time.sleep(5)
 
-        print "linked : ", self.session.get(self.addr_RefSet_type2).json()
-        print "linkable : ", self.session.get(self.address_cs).json()[0]["addr"]
-
         resp = self.session.post(self.addr_RefSet_type_action2, json.dumps(
             {"action": "Link", "args": None}
         ))
         self.assertEqual(resp.status_code, 200)
         resp = self.session.get(self.addr_RefSet_type2).json()[0]["host"]
-
-        print "linked after action : ", \
-        self.session.get(self.addr_RefSet_type2).json()[0]["host"]
 
         self.assertEqual(self.addr1, resp)
 
@@ -213,19 +207,10 @@ class TestDirectoryFunctional(unittest.TestCase):
                           json.dumps({"action": "Lock", "args": self.service2}))
         time.sleep(5)
 
-        print "linked : ", [service["host"] for service in
-                            self.session.get(self.addr_RefSet_type).json()]
-        print "linkable : ", [service["addr"] for service in
-                              self.session.get(self.address_cs).json()]
-
         resp = self.session.post(self.addr_RefSet_type_action, json.dumps(
             {"action": "Link", "args": None}
         ))
         self.assertEqual(resp.status_code, 200)
-
-        print "linked after action : ", [service["host"] for service in
-                                         self.session.get(
-                                             self.addr_RefSet_type).json()]
 
         resp = [service["host"] for service in
                 self.session.get(self.addr_RefSet_type).json()]
@@ -237,19 +222,10 @@ class TestDirectoryFunctional(unittest.TestCase):
                           json.dumps({"action": "Lock", "args": self.service2}))
         time.sleep(5)
 
-        print "linked : ", [service["host"] for service in
-                            self.session.get(self.addr_RefSet_type).json()]
-        print "linkable : ", [service["addr"] for service in
-                              self.session.get(self.address_cs).json()]
-
         resp = self.session.post(self.addr_RefSet_type_action, json.dumps(
             {"action": "Renew", "args": None}
         ))
         self.assertEqual(resp.status_code, 200)
-
-        print "linked after action : ", [service["host"] for service in
-                                         self.session.get(
-                                             self.addr_RefSet_type).json()]
 
         resp = [service["host"] for service in
                 self.session.get(self.addr_RefSet_type).json()]
@@ -259,18 +235,10 @@ class TestDirectoryFunctional(unittest.TestCase):
 
         time.sleep(5)
 
-        print "linked : ", self.session.get(self.addr_RefSet_type2).json()
-        print "linkable : ", [service["addr"] for service in
-                              self.session.get(self.address_cs).json()]
-
         resp = self.session.post(self.addr_RefSet_type_action2, json.dumps(
             {"action": "Renew", "args": None}
         ))
         self.assertEqual(resp.status_code, 200)
-
-        print "linked after action : ", [service["host"] for service in
-                                         self.session.get(
-                                             self.addr_RefSet_type2).json()]
 
         resp = [service["host"] for service in
                 self.session.get(self.addr_RefSet_type2).json()]

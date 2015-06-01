@@ -16,7 +16,7 @@ class TestConscienceFunctional(unittest.TestCase):
 
     def _load_config(self):
         config = load_functest_config()
-        self.proxyd_uri = config.get('func_test', 'proxyd_uri') + "cs/"
+        self.proxyd_uri = config.get('func_test', 'proxyd_uri') + "/v1.0/cs/"
         self.namespace = config.get('func_test', 'namespace')
         self.basic_addr = urlparse.urlsplit(self.proxyd_uri).hostname + ":"
         self.session = requests.session()
@@ -46,6 +46,7 @@ class TestConscienceFunctional(unittest.TestCase):
 
         self.service["tags"]["tag.vol"] = "changed"
         self.valid_service2 = json.dumps(self.service)
+
         self.service["tags"]["tag.vol"] = "True"
 
         self.invalid_service = json.dumps(
@@ -73,17 +74,17 @@ class TestConscienceFunctional(unittest.TestCase):
 
     def test_namespace_get(self):
 
-        resp_v = self.session.get(self.valid_addr)
-        self.assertEqual(type(resp_v.json()), dict)
-        resp_f = self.session.get(self.invalid_addr)
-        self.assertEqual(resp_f.status_code, 404)
+        resp_true = self.session.get(self.valid_addr)
+        self.assertEqual(type(resp_true.json()), dict)
+        resp_false = self.session.get(self.invalid_addr)
+        self.assertEqual(resp_false.status_code, 404)
 
     def test_namespace_head(self):
 
-        resp_v = self.session.head(self.valid_addr)
-        self.assertEqual(resp_v.status_code, 204)
-        resp_f = self.session.head(self.invalid_addr)
-        self.assertEqual(resp_f.status_code, 404)
+        resp_true = self.session.head(self.valid_addr)
+        self.assertEqual(resp_true.status_code, 204)
+        resp_false = self.session.head(self.invalid_addr)
+        self.assertEqual(resp_false.status_code, 404)
 
     def test_service_pool_get(self):
 
@@ -141,6 +142,7 @@ class TestConscienceFunctional(unittest.TestCase):
         time.sleep(3)
 
         resp = self.session.delete(self.addr_type)
+        print resp.text
         self.assertEqual(resp.status_code, 200)
 
         time.sleep(3)
