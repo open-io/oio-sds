@@ -78,6 +78,7 @@ _upload (gs_grid_storage_t *gs, const char *container, const char *content,
 		return 0;
 	}
 
+	/* XXX */
 	gs_status_t rc;
 	gs_error_t *err = NULL;
 	gs_container_t *c = gs_get_container (gs, container, 1/*autocreate*/, &err);
@@ -87,6 +88,8 @@ _upload (gs_grid_storage_t *gs, const char *container, const char *content,
 		_gs_error_clear (&err);
 		rc = GS_ERROR;
 	} else {
+
+		/* XXX */
 		rc = gs_upload_content_v2 (c,
 				content, st.st_size, (gs_input_f)_reader, &fd,
 				"", "", &err);
@@ -98,6 +101,8 @@ _upload (gs_grid_storage_t *gs, const char *container, const char *content,
 			fprintf (stderr, "OIO upload done on [%s]/[%s]\n", container, content);
 		}
 
+		/* XXX
+		 * whatever, don't forget to clean the structures. */
 		gs_container_free (c);
 		c = NULL;
 	}
@@ -111,12 +116,19 @@ _delete (gs_grid_storage_t *gs, const char *container, const char *content)
 {
 	gs_status_t rc;
 	gs_error_t *err = NULL;
+
+	/* XXX
+	 * The container should exist (altough it could have been destroy in the
+	 * meantime) but we ask for an autocreation to get rid of errors like
+	 * "container not found". */
 	gs_container_t *c = gs_get_container (gs, container, 1/*autocreate*/, &err);
 	if (!c) {
 		fprintf (stderr, "OIO container error on [%s]/[%s] : (%d) %s\n",
 				container, content, err->code, err->msg);
 		rc = GS_ERROR;
 	} else {
+
+		/* XXX */
 		rc = gs_delete_content_by_name (c, content, &err);
 		if (rc != GS_OK) {
 			fprintf (stderr, "OIO delete error on [%s]/[%s] : (%d) %s\n",
@@ -126,6 +138,8 @@ _delete (gs_grid_storage_t *gs, const char *container, const char *content)
 			fprintf (stderr, "OIO delete done on [%s]/[%s]\n", container, content);
 		}
 
+		/* XXX
+		 * whatever, don't forget to clean the structures. */
 		gs_container_free (c);
 		c = NULL;
 	}
@@ -145,7 +159,10 @@ main (int argc, char **args)
 
 	int rc = 0;
 
-	/* XXX */
+	/* XXX
+	 * The only information necessary to initiate a new SDS client is the name 
+	 * of the namespace. Internally, it will be resolved into the conscience's
+	 * ip/port couple. */
 	gs_error_t *err = NULL;
 	gs_grid_storage_t *gs = gs_grid_storage_init (ns, &err);
 	if (!gs) {
@@ -179,6 +196,8 @@ main (int argc, char **args)
 		_delete (gs, container, content);
 	}
 	
+	/* XXX
+	 * whatever, don't forget to clean the structures. */
 	gs_grid_storage_free (gs);
 	gs = NULL;
 	return rc;

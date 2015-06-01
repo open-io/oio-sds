@@ -45,13 +45,17 @@ _check_and_dump (struct matcher_s *matcher)
 		fprintf(stdout, "%s:%s:%s\n", matcher->container, matcher->content, matcher->line);
 }
 
-static void
+/* XXX
+ * In this example we perform a 'custom' download. This means we manage the
+ * data. This function is responsible to return the number of bytes actually
+ * managed. Return something negative to notify the API there was an error. */
+static ssize_t
 _write_matches (struct matcher_s *matcher, const char *b, const size_t bSize)
 {
 	if (!b || !bSize)  { /* final tail call */
 		_check_and_dump (matcher);
 		_reset_matcher (matcher);
-		return;
+		return 0;
 	}
 
 	for (size_t i=0; i<bSize ;i++) {
@@ -67,6 +71,8 @@ _write_matches (struct matcher_s *matcher, const char *b, const size_t bSize)
 				matcher->line[ matcher->index++ ] = b[i];
 		}
 	}
+
+	return (ssize_t)bSize;
 }
 
 static void
@@ -83,7 +89,10 @@ _download (gs_grid_storage_t *gs, const char *container, const char *content)
 	context.user_data = matcher;
 	context.writer = (gs_output_f) _write_matches;
 
-	/* XXX */
+	/* XXX
+	 * Once the client has been initiated, there is a simple API call to
+	 * perform a download. This will manage the container's location, the
+	 * chunks locations, etc. By default, no autocreation is asked. */
 	gs_error_t *err = NULL;
 	gs_status_t gsrc = hc_dl_content_custom (gs, container, content, &context, &err);
 	if (gsrc != GS_OK) {
@@ -113,7 +122,10 @@ main (int argc, char **args)
 
 	int rc = 0;
 
-	/* XXX */
+	/* XXX
+	 * The only information necessary to initiate a new SDS client is the name 
+	 * of the namespace. Internally, it will be resolved into the conscience's
+	 * ip/port couple. */
 	gs_error_t *err = NULL;
 	gs_grid_storage_t *gs = gs_grid_storage_init (ns, &err);
 	if (!gs) {
@@ -126,13 +138,19 @@ main (int argc, char **args)
 			char *container, *separator, *content;
 			container = strdup(args[i]);
 			separator = strchr(container, '/');
-			*separator = 0;
-			content = separator + 1;
-			_download (gs, container, content);
+			if (!separator) {
+				fprintf (stderr, "LOCAL format error for [%s] : expecting CONTAINER/CONTENT path\n", container);
+			} else {
+				*separator = 0;
+				content = separator + 1;
+				_download (gs, container, content);
+			}
 			free(container);
 		}
 
-		/* XXX */
+		/* XXX
+		 * This will free all the data internally linked to the gs_grid_storage_t
+		 * structure. */
 		gs_grid_storage_free (gs);
 		gs = NULL;
 	}

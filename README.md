@@ -26,7 +26,7 @@ The build process of OpenIO SDS depends on:
 * python-distutils-extra: required for the installation process
 * httpd, httpd-devel : server base for RAWX and RAINX services
 * apr, apr-util-devel, apr-devel : internally used by RAINX and RAWX modules
-* [asn1c](https://github.com/vlm/asn1c) : our ASN.1 codec.
+* [asn1c](https://github.com/open-io/asn1c) : our ASN.1 codec, forked from [Lev Walkin's excellent ASN.1 codec](https://github.com/vlm/asn1c). The purpose of our fork is simply to provide codec for explicitely sized integers (int{8,16,32,64} instead of long int).
 * attr, libattr-devel : we use xattr a lot to stamp RAWX chunks and repositories base directory.
 * [gridinit](https://github.com/open-io/gridinit)
 * json-c, json-c-devel
