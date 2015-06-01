@@ -517,7 +517,7 @@ def generate (ns, ip, options={}):
 			SDSDIR=SDSDIR, TMPDIR=TMPDIR,
 			DATADIR=DATADIR, CFGDIR=CFGDIR, RUNDIR=RUNDIR, SPOOLDIR=SPOOLDIR,
 			LOGDIR=LOGDIR, CODEDIR=CODEDIR,
-			UID=str(os.geteuid()), GID=str(os.getgid()), USER=str(pwd.getpwuid(os.getuid())),
+			UID=str(os.geteuid()), GID=str(os.getgid()), USER=str(pwd.getpwuid(os.getuid()).pw_name),
 			VERSIONING=versioning, STGPOL=stgpol,
 			M2_REPLICAS=meta2_replicas, M2_DISTANCE=str(1),
 			SQLX_REPLICAS=sqlx_replicas, SQLX_DISTANCE=str(1))
