@@ -31,7 +31,7 @@ BEGIN
 			ipv4 OCTET STRING(SIZE(4)),
 			ipv6 OCTET STRING(SIZE(16))
 		},
-		port INTEGER OPTIONAL
+		port INTEGER
 	}
 
 	AddrInfoSequence ::= SEQUENCE OF AddrInfo
