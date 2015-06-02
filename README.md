@@ -30,7 +30,7 @@ The build process of OpenIO SDS depends on:
 * attr, libattr-devel : we use xattr a lot to stamp RAWX chunks and repositories base directory.
 * [gridinit](https://github.com/open-io/gridinit)
 * json-c, json-c-devel
-* [librain](https://github.com/open-io/redcurrant-librain)
+* [librain](https://github.com/open-io/librain)
 * lzo, lzo-devel : RAWX compression
 * curl, libcurl, libcurl-devel 
 * net-snmp, net-snmp-devel
