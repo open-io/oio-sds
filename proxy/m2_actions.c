@@ -322,21 +322,32 @@ _load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSL
 			err = BADREQ("JSON: invalid chunk's field");
 		} else {
 			GByteArray *h = metautils_gba_from_hexstring(json_object_get_string(jhash));
-			struct timespec ts;
-			clock_gettime(CLOCK_REALTIME_COARSE, &ts);
-			struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
-			CHUNKS_set2_id (chunk, json_object_get_string(jurl));
-			CHUNKS_set_hash (chunk, h);
-			CHUNKS_set_size (chunk, json_object_get_int64(jsize));
-			CHUNKS_set_ctime (chunk, ts.tv_sec);
-			struct bean_CONTENTS_s *content = _bean_create(&descr_struct_CONTENTS);
-			CONTENTS_set2_position (content, json_object_get_string(jpos));
-			CONTENTS_set2_chunk_id (content, json_object_get_string(jurl));
-			CONTENTS_set2_content_id (content, (guint8*)"0", 1);
+			if (!h) {
+				err = BADREQ("JSON: invalid chunk hash: not hexa");
+			} else {
+				if (h->len != g_checksum_type_get_length(G_CHECKSUM_MD5)
+						&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA256)
+						&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA512)
+						&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA1)) {
+					err = BADREQ("JSON: invalid chunk hash: invalid length");
+				} else {
+					struct timespec ts;
+					clock_gettime(CLOCK_REALTIME_COARSE, &ts);
+					struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
+					CHUNKS_set2_id (chunk, json_object_get_string(jurl));
+					CHUNKS_set_hash (chunk, h);
+					CHUNKS_set_size (chunk, json_object_get_int64(jsize));
+					CHUNKS_set_ctime (chunk, ts.tv_sec);
+					struct bean_CONTENTS_s *content = _bean_create(&descr_struct_CONTENTS);
+					CONTENTS_set2_position (content, json_object_get_string(jpos));
+					CONTENTS_set2_chunk_id (content, json_object_get_string(jurl));
+					CONTENTS_set2_content_id (content, (guint8*)"0", 1);
 
-			beans = g_slist_prepend(beans, chunk);
-			beans = g_slist_prepend(beans, content);
-			g_byte_array_free (h, TRUE);
+					beans = g_slist_prepend(beans, chunk);
+					beans = g_slist_prepend(beans, content);
+				}
+				g_byte_array_free (h, TRUE);
+			}
 		}
 	}
 

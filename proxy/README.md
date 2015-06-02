@@ -142,6 +142,13 @@ The following actions are currently available:
   * **GET** Fetch the locations of the chunks belonging to the specified content. Some options are available:
     * **deleted** : set to (yes|true|1|on) to ignore the "deleted" flag set on contents. If not set or set to another value, a deleted content will be considered missing and trigger a 404 error reply.
   * **PUT** Store a new set of beans. This set of beans must be a coherent set of aliases.
+    * Mandatory Header **X-oio-content-meta-length: XXX**
+	* Optional Header **X-oio-content-meta-chunk-method: XXX**
+	* Optional Header **X-oio-content-meta-type: XXX**
+	* Optional Header **X-oio-content-type: XXX**
+    * Optional Header **X-oio-content-meta-policy: XXX**
+    * Optional Header **X-oio-content-meta-hash: XXX**
+	* Optional Header **X-oio-content-meta-x-Key: Value**
     * Optional Header **X-oio-mode: force**
     * Optional Header **X-oio-mode: append**
   * **DELETE** 
