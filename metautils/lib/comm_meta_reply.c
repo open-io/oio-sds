@@ -101,7 +101,7 @@ rep_handler(gpointer u, MESSAGE reply)
 	gint64 s64 = 0;
 	struct code_handler_s *h;
 
-	ctx->err = message_extract_strint64(reply, "STATUS", &s64);
+	ctx->err = message_extract_strint64(reply, NAME_MSGKEY_STATUS, &s64);
 	if (ctx->err != NULL)
 		return FALSE;
 

@@ -220,7 +220,7 @@ meta1v2_remote_link_service(const addr_info_t *meta1, GError **err,
 
 	MESSAGE req = message_create_named(NAME_MSGNAME_M1V2_SRVAVAIL);
 	message_add_url (req, url);
-	message_add_field_str (req, NAME_MSGKEY_SRVTYPE, srvtype);
+	message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
 
 	return list_request(meta1, err, message_marshall_gba_and_clean(req));
 }
@@ -235,7 +235,7 @@ meta1v2_remote_list_reference_services(const addr_info_t *meta1, GError **err,
 	MESSAGE req = message_create_named(NAME_MSGNAME_M1V2_SRVALL);
 	message_add_url (req, url);
 	if (srvtype)
-		message_add_field_str (req, NAME_MSGKEY_SRVTYPE, srvtype);
+		message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
 
 	return list_request(meta1, err, message_marshall_gba_and_clean(req));
 }
@@ -250,7 +250,7 @@ meta1v2_remote_unlink_service(const addr_info_t *meta1, GError **err,
 
 	MESSAGE req = message_create_named(NAME_MSGNAME_M1V2_SRVDEL);
 	message_add_url (req, url);
-	message_add_field_str (req, NAME_MSGKEY_SRVTYPE, srvtype);
+	message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
 	return oneway_request(meta1, err, message_marshall_gba_and_clean(req));
 }
 
@@ -263,7 +263,7 @@ meta1v2_remote_unlink_one_service(const addr_info_t *meta1, GError **err,
 	EXTRA_ASSERT(srvtype != NULL);
 
 	MESSAGE req = message_create_named(NAME_MSGNAME_M1V2_SRVDEL);
-	message_add_field_str (req, NAME_MSGKEY_SRVTYPE, srvtype);
+	message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
 	if (seqid > 0) {
 		gchar str[32];
 		g_snprintf(str, sizeof(str), "%"G_GINT64_FORMAT"\n", seqid);
@@ -283,7 +283,7 @@ meta1v2_remote_poll_reference_service(const addr_info_t *meta1, GError **err,
 
 	MESSAGE req = message_create_named(NAME_MSGNAME_M1V2_SRVNEW);
 	message_add_url (req, url);
-	message_add_field_str (req, NAME_MSGKEY_SRVTYPE, srvtype);
+	message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
 
 	return list_request(meta1, err, message_marshall_gba_and_clean(req));
 }

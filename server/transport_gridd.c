@@ -740,7 +740,7 @@ _request_get_cid (MESSAGE request)
 {
 	container_id_t cid;
 	gchar strcid[STRLEN_CONTAINERID];
-	GError *err = message_extract_cid(request, "CONTAINER_ID", &cid);
+	GError *err = message_extract_cid(request, NAME_MSGKEY_CONTAINERID, &cid);
 	if (err) {
 		g_clear_error(&err);
 		return NULL;

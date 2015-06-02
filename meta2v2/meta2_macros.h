@@ -113,53 +113,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define NAME_MSGNAME_M2RAW_DELCHUNKS         "REQ_M2RAW_CHUNKS_DEL"
 #define NAME_MSGNAME_M2RAW_SETMDSYS          "META2_SERVICES_MODIFY_METADATASYS"
 
-
 /* -------------------------------------------------------------------------- */
-
-# ifndef META2_EVTFIELD_M2ADDR
-#  define META2_EVTFIELD_M2ADDR "M2ADDR"
-# endif
-# ifndef META2_EVTFIELD_CHUNKS
-#  define META2_EVTFIELD_CHUNKS "CHUNKS"
-# endif
 
 # ifndef META2_URL_LOCAL_BASE
 #  define META2_URL_LOCAL_BASE "__M2V2_LOCAL_BASE__"
 # endif
 
-/* -------------------------------------------------------------------------- */
-
-# define M2_KEY_STORAGE_POLICY  NAME_MSGKEY_STGPOLICY
-# define M2_KEY_VERSION_POLICY  NAME_MSGKEY_VERPOLICY
-# define M2_KEY_URL             NAME_MSGKEY_HCURL
-# define M2_KEY_SPARE           NAME_MSGKEY_SPARE
-# define M2_KEY_GET_FLAGS       "GET_ALIAS_FLAGS"
-# define M2_KEY_ALIAS_VERSION   "ALIAS_VERSION"
-# define M2_KEY_COPY_SOURCE     "COPY_SOURCE"
-# define M2_KEY_CHUNK_ID        "CHUNK_ID"
-# define M2_KEY_OVERWRITE       "OVERWRITE"
-# define M2_KEY_NEW_CHUNKS      "NEW_CHUNKS"
-# define M2_KEY_OLD_CHUNKS      "OLD_CHUNKS"
-
-/* LIST params -------------------------------------------------------------- */
-
-# define M2_KEY_SNAPSHOT   "SNAPSHOT"
-# define M2_KEY_PREFIX     "PREFIX"
-# define M2_KEY_MARKER     "MARKER"
-# define M2_KEY_MARKER_END "MARKER_END"
-# define M2_KEY_MAX_KEYS   "MAX_KEYS"
-
 /* LEGACY CONSTANTS --------------------------------------------------------- */
-
-# define M2V1_KEY_TIMESTAMP         "TIMESTAMP"
-# define M2V1_KEY_METADATA_SYS      "METADATA_SYS"
-# define M2V1_KEY_CONTAINER_NAME    "CONTAINER_NAME"
-# define M2V1_KEY_CONTENT_PATH      "CONTENT_PATH"
-# define M2V1_KEY_CONTENT_LENGTH    "CONTENT_LENGTH"
-# define M2V1_KEY_PROPERTY_NAME     "PROPERTY_NAME"
-# define M2V1_KEY_PROPERTY_VALUE    "PROPERTY_VALUE"
-# define M2V1_KEY_ADMIN_KEY         "ADMIN_KEY"
-# define M2V1_KEY_ADMIN_VALUE       "ADMIN_VALUE"
 
 # ifndef MDUSR_PROPERTY_KEY
 #  define MDUSR_PROPERTY_KEY M2V2_ADMIN_PREFIX_SYS "v1.mdusr"
