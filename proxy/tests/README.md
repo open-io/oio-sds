@@ -6,17 +6,19 @@ The test repository contains useful tools to be sure that the OIO-SDS proxy func
 
 To launch the tests functions, the user needs to already possess the SDS environnement ready to run, as well as a Python development tool (Pycharm, ...), then do the following steps on his terminal :
 
-  * Install nosetests to run the tests on the terminal
-  * Create a "test.conf" file in the /.oio/sds/conf repository containing the following fields :
-    ``[func_test]``
-    ``proxyd_uri=<user's proxyd_uri>`` E.g. http://192.168.0.0:6000
-    ``namespace=<user's openio namespace>`` E.g. OPEN_NS
+  * Install nosetests (pip install nose) to run the tests
+  * Create a "test.conf" file in the .oio/sds/conf repository containing the following fields :
+	[func_test]
+	proxyd_uri=<user's proxyd_uri> # E.g. http://192.168.0.0:6000
+	namespace=<user's openio namespace> # E.g. OPENIO_NS
 
 The user is now ready to run the tests.
 
 ## Launching
 
   * To launch the procedure, the user must go in the oio-sds/proxy/tests repository and run the .functests file
+
+**Note : to keep the environment clean, it is recommended to run the oio-reset procedure before and after the tests
 
 Results of the tests will progressively appear on the line following the instruction.
   * A ``.`` means the tested function is operational
