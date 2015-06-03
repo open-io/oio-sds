@@ -27,8 +27,7 @@ License along with this library.
 #include <unistd.h>
 #include <sys/types.h>
 
-#include "./metautils.h"
-#include "./metacomm.h"
+#include "metautils.h"
 #include "./Parameter.h"
 #include "./Message.h"
 
@@ -279,6 +278,7 @@ message_get_field(MESSAGE m, const char *name, gsize *vsize)
 {
 	if (!m || !name || !vsize)
 		return NULL;
+
 	if (!m->content.list.array || m->content.list.count<=0)
 		return NULL;
 
@@ -298,7 +298,7 @@ message_get_field(MESSAGE m, const char *name, gsize *vsize)
 		}
 	}
 
-	return 0;
+	return NULL;
 }
 
 gchar **
@@ -568,11 +568,11 @@ GError *
 message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
 		gsize dst_size)
 {
-	gsize fsize;
+	gsize fsize = 0;
 	void *f = message_get_field(msg, n, &fsize);
 	if (!f || !fsize)
 		return NEWERROR(CODE_BAD_REQUEST, "Missing field '%s'", n);
-	if (fsize >= dst_size)
+	if ((gssize)fsize < 0 || fsize >= dst_size)
 		return NEWERROR(CODE_BAD_REQUEST,
 				"Invalid field '%s': value too long (%"G_GSIZE_FORMAT")",
 				n, fsize);
@@ -771,7 +771,7 @@ message_extract_strint64(MESSAGE msg, const gchar *n, gint64 *i64)
 GError*
 message_extract_struint(MESSAGE msg, const gchar *n, guint *u)
 {
-	gint64 i64;
+	gint64 i64 = 0;
 	GError *err;
 
 	err = message_extract_strint64(msg, n, &i64);
