@@ -81,7 +81,7 @@ _dl_nocache(gs_container_t *c, struct hc_url_s *url,
 		return e;
 	}
 
-	g_printerr("'%s' not found in '%s'\n", hc_url_get(url, HCURL_PATH),
+	GRID_WARN("[%s] not found in [%s]", hc_url_get(url, HCURL_PATH),
 			hc_url_get(url, HCURL_USER));
 	return e;
 }
@@ -92,7 +92,7 @@ _feed_from_fd(void *uData, char *b, size_t bSize)
 	ssize_t nbRead;
 
 	if (!b || !bSize) {
-		g_printerr("Invalid buffer for reading\n");
+		GRID_WARN("Invalid buffer for reading");
 		return -1;
 	}
 	nbRead = read(*((int *) uData), b, bSize);
@@ -158,7 +158,7 @@ _my_content_filter(gs_content_t * content, void *user_data)
 		return -1;
 
 	if (!gs_content_get_info(content, &info, &err)) {
-		g_printerr("cannot read the information about a content (%s)\n", gs_error_get_message(err));
+		GRID_WARN("cannot read the information about a content (%s)\n", gs_error_get_message(err));
 		gs_error_free(err);
 		return -1;
 	}
@@ -166,7 +166,7 @@ _my_content_filter(gs_content_t * content, void *user_data)
 	if(lc->show_info) {
 		/* load content info from meta2 */
 		if(!gs_content_reload(content, &err)) {
-			g_printerr("Failed to get content informations from meta2 : (%s)\n", gs_error_get_message(err));
+			GRID_WARN("Failed to get content informations from meta2 : (%s)\n", gs_error_get_message(err));
 			gs_error_free(err);
 			return -1;
 		}
@@ -209,14 +209,14 @@ _open_destination(const char *local_path, int force, int *out)
 			if (errno == ENOENT) {
 				*out = open(local_path, O_WRONLY | O_CREAT | O_EXCL, file_perms);
 				if (-1 == *out) {
-					g_printerr("Cannot create and open the local file %s (%s)\n", local_path,
+					GRID_WARN("Cannot create and open the local file %s (%s)\n", local_path,
 					    strerror(errno));
 					return 0;
 				} else {
-					g_printerr("Local path %s created\n", local_path);
+					GRID_INFO("Local path %s created\n", local_path);
 				}
 			} else {
-				g_printerr("Cannot open the local file %s (%s)\n", local_path, strerror(errno));
+				GRID_WARN("Cannot open the local file %s (%s)\n", local_path, strerror(errno));
 				return 0;
 			}
 		} else {
@@ -312,7 +312,7 @@ hc_upload_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *local
 	GRID_DEBUG("Local path %s found and opened\n", local_path);
 
 	if (!(c = gs_get_storage_container(hc, hc_url_get(url, HCURL_USER), NULL, ac, &e))) {
-		g_printerr("Failed to resolve and/or create meta2 entry for reference %s\n",
+		GRID_WARN("Failed to resolve and/or create meta2 entry for reference %s\n",
 				hc_url_get(url, HCURL_USER));
 		goto end_put;
 	}
@@ -437,7 +437,7 @@ hc_list_contents(gs_grid_storage_t *hc, struct hc_url_s *url, int output_xml, in
 		}
 
 		if (!gs_list_container(c, NULL, _my_content_filter, &lc, &e)) {
-			g_printerr("Cannot list %s\n", hc_url_get(url, HCURL_USER));
+			GRID_WARN("Cannot list %s\n", hc_url_get(url, HCURL_USER));
 			g_string_free(lc.buffer, TRUE);
 		} else {
 			_sort_listed(&lc);
@@ -457,7 +457,7 @@ hc_list_contents(gs_grid_storage_t *hc, struct hc_url_s *url, int output_xml, in
 		return e;
 	}
 
-	g_printerr("Cannot find %s\n", hc_url_get(url, HCURL_USER));
+	GRID_WARN("Cannot find %s", hc_url_get(url, HCURL_USER));
 	return e;
 }
 
@@ -477,7 +477,7 @@ hc_dl_content(gs_grid_storage_t *hc, struct hc_url_s *url, gs_download_info_t *d
 		}
 		gs_container_free(c);
 	} else {
-		g_printerr("Failed to resolve meta2 entry for reference %s\n",
+		GRID_WARN("Failed to resolve meta2 entry for reference %s\n",
 				hc_url_get(url, HCURL_USER));
 	}
 
@@ -506,7 +506,7 @@ hc_get_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *local_pa
 			metautils_pclose(&out);
 		}
 		if (e) {
-			g_printerr("Cannot download %s from %s (into %s)\n",
+			GRID_WARN("Cannot download %s from %s (into %s)\n",
 					hc_url_get(url, HCURL_PATH),
 					hc_url_get(url, HCURL_USER),
 					local_path ? local_path : "<stdout>");
