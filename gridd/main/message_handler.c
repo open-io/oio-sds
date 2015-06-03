@@ -110,22 +110,10 @@ reply_context_add_bufheader_in_reply(struct reply_context_s *ctx, const char *k,
 	GByteArray *newV=NULL;
 	if (!ctx || !k || !v || !vlen)
 		return;
-	if (!ctx->extra_headers) {
+	if (!ctx->extra_headers)
 		ctx->extra_headers = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_clean);
-		if (!ctx->extra_headers) {
-			ALERT("Memory allocation failure");
-			return;
-		}
-	}
-	if (!(newK = g_strdup(k))) {
-		ALERT("memory allocation failure");
-		return;
-	}
-	if (!(newV = g_byte_array_append(g_byte_array_new(), v, vlen))) {
-		ALERT("memory allocation failure");
-		g_free( newK);
-		return;
-	}
+	newK = g_strdup(k);
+	newV = g_byte_array_append(g_byte_array_new(), v, vlen);
 	g_hash_table_insert( ctx->extra_headers, newK, newV);
 }
 
@@ -172,15 +160,11 @@ reply_context_reply (struct reply_context_s *ctx, GError **err)
 	MESSAGE answer = metaXServer_reply_simple (ctx->req_ctx->request, ctx->header.code, ptr_msg);
 
 	/*add the extra headers*/
-	if (ctx->extra_headers) {
-		GRID_TRACE("Extra-Headers have been set, ading them to %p", answer);
+	if (ctx->extra_headers)
 		g_hash_table_foreach(ctx->extra_headers, reply_ctx_header_adder, answer);
-	}
 
-	if (ctx->body.buffer && (ctx->body.size > 0)) {
-		GRID_TRACE("body set to %p %"G_GSIZE_FORMAT, ctx->body.buffer, ctx->body.size);
+	if (ctx->body.buffer && (ctx->body.size > 0))
 		message_set_BODY(answer, ctx->body.buffer, ctx->body.size);
-	}
 
 	if (!message_marshall(answer, &bufM, &bufMLen, err)) {
 		g_prefix_error(err, "Cannot serialize the answer: ");
