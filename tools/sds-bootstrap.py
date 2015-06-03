@@ -227,7 +227,7 @@ events.max_incoming_per_round=50
 port=${PORT}
 
 [server.unix]
-mode=0600
+mode=0666
 uid=${UID}
 gid=${GID}
 path=${RUNDIR}/agent.sock
