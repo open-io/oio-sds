@@ -481,14 +481,6 @@ chunks = generator.add_bean(Struct("chunks") \
 	.PK(("id",)) \
 	.set_sql_name("chunk_v2")).set_order(3)
 
-snapshots = generator.add_bean(Struct("snapshots") \
-	.field(Int("version")) \
-	.field(Text("name")) \
-	.PK(("version",)) \
-	.index('snapshot_index_by_name', ['name']) \
-	.set_sql_name("snapshot_v2")).set_order(4)
-
-
 generator.add_fk(ForeignKey(
 		(properties, ('alias','alias_version'), "alias"),
 		(alias, ('alias', 'version'), "properties")))
