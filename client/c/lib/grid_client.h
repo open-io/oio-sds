@@ -1018,7 +1018,14 @@ gs_status_t hc_dl_content_custom(gs_grid_storage_t *hc, const char *container,
  * @return GS_OK or GS_ERROR
  */
 gs_status_t hc_dl_content_to_file(gs_grid_storage_t *hc, const char *container,
-		const char *content, const char *dest, gs_error_t **e);
+		const char *content, const char *dst, gs_error_t **e);
+
+/**
+ * Uploads the local file at path <src> into the content <content> for the
+ * container <container> of the namespace represented by <hc>. 
+ */
+gs_status_t hc_ul_content_from_file (gs_grid_storage_t *hc, const char *container,
+		const char *content, const char *src, gs_error_t **e);
 
 /** @} */
 

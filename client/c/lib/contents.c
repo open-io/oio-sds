@@ -1085,3 +1085,49 @@ hc_dl_content_custom(gs_grid_storage_t *hc, const char *container,
 	hc_url_pclean (&url);
 	return status;
 }
+
+static ssize_t
+_reader (int *pfd, char *b, size_t max)
+{
+	/* fill <b> with the data available. At most <max> bytes are expected in <b>. */
+	return read (*pfd, b, max);
+}
+
+gs_status_t
+hc_ul_content_from_file (gs_grid_storage_t *hc, const char *container,
+		const char *content, const char *src, gs_error_t **err)
+{
+	struct stat st;
+	int fd;
+
+	if (0 > (fd = open (src, O_RDONLY))) {
+		GRID_WARN("LOCAL open error on [%s] : (%d) %s\n", src, errno, strerror(errno));
+		return 0;
+	}
+	if (0 > fstat (fd, &st)) {
+		GRID_WARN("LOCAL stat error on [%s] : (%d) %s\n", src, errno, strerror(errno));
+		close (fd);
+		return 0;
+	}
+
+	gs_status_t rc;
+	gs_container_t *c = gs_get_container (hc, container, 1/*autocreate*/, err);
+	if (!c) {
+		rc = GS_ERROR;
+	} else {
+
+		rc = gs_upload_content_v2 (c,
+				content, st.st_size, (gs_input_f)_reader, &fd,
+				"", "", err);
+		if (rc != GS_OK) {
+			GRID_WARN ("upload error on [%s]/[%s]", container, content);
+		}
+
+		gs_container_free (c);
+		c = NULL;
+	}
+
+	close (fd);
+	return rc;
+}
+
