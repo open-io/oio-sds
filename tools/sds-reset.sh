@@ -113,5 +113,5 @@ done
 
 # then start all the services
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}"
-
+find $SDS -type d | xargs chmod a+rx
 
