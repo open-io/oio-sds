@@ -130,21 +130,6 @@ _generate_api_prop(const M2V2Bean_t * asn)
 	return result;
 }
 
-static gpointer
-_generate_api_snapshot(const M2V2Bean_t * asn)
-{
-	gpointer result = NULL;
-	gint64 version;
-	result = _bean_create(&descr_struct_SNAPSHOTS);
-
-	asn_INTEGER_to_int64(&(asn->snapshot->version), &version);
-
-	SNAPSHOTS_set_version(result, version);
-	SNAPSHOTS_set2_name(result, (const char *)asn->snapshot->name.buf);
-
-	return result;
-}
-
 static gboolean
 _header_to_asn(gpointer api, M2V2Bean_t *asn)
 {
@@ -248,20 +233,6 @@ _alias_to_asn(gpointer api, M2V2Bean_t *asn)
 	return TRUE;
 }
 
-static gboolean
-_snapshot_to_asn(gpointer api, M2V2Bean_t *asn)
-{
-	struct bean_SNAPSHOTS_s *snap = (struct bean_SNAPSHOTS_s *) api;
-	asn->snapshot = g_malloc0(sizeof(M2V2Snapshot_t));
-
-	GString *name = SNAPSHOTS_get_name(snap);
-	OCTET_STRING_fromBuf(&(asn->snapshot->name), name->str, name->len);
-
-	asn_int64_to_INTEGER(&(asn->snapshot->version), SNAPSHOTS_get_version(snap));
-
-	return TRUE;
-}
-
 /* ---------------------------------------------------------------- */
 
 gpointer
@@ -285,9 +256,6 @@ bean_ASN2API(const M2V2Bean_t * asn)
 	if (asn->prop)
 		return _generate_api_prop(asn);
 
-	if (asn->snapshot)
-		return _generate_api_snapshot(asn);
-
 	return NULL;
 }
 
@@ -308,9 +276,6 @@ bean_API2ASN(gpointer * api, M2V2Bean_t * asn)
 		return _content_to_asn(api, asn);
 	if (DESCR(api) == &descr_struct_PROPERTIES)
 		return _property_to_asn(api, asn);
-	if (DESCR(api) == &descr_struct_SNAPSHOTS)
-		return _snapshot_to_asn(api, asn);
-
 	return FALSE;
 }
 

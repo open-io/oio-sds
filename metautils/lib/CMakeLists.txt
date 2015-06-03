@@ -63,7 +63,6 @@ add_custom_command(
 		M2V2Content.c M2V2Content.h
 		M2V2ContentHeader.c M2V2ContentHeader.h
 		M2V2Property.c M2V2Property.h
-		M2V2Snapshot.c M2V2Snapshot.h
 
 	PRE_BUILD
 	COMMAND ${ASN1C_EXECUTABLE} ${ASN1C_EXE_OPTS} -fcompound-names -fskeletons-copy ${CMAKE_CURRENT_SOURCE_DIR}/description.asn
@@ -278,9 +277,6 @@ add_library(metautils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2ContentHeader.c
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Property.h
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Property.c
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Snapshot.h
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Snapshot.c
-
 
 		asn_AddrInfo.c
 		asn_AddrInfo.h
