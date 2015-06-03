@@ -192,7 +192,7 @@ class TestDirectoryFunctional(unittest.TestCase):
 
     def test_services_actions_link(self):
 
-        time.sleep(5)
+        time.sleep(4)
 
         resp = self.session.post(self.addr_RefSet_type_action2, json.dumps(
             {"action": "Link", "args": None}
@@ -206,7 +206,7 @@ class TestDirectoryFunctional(unittest.TestCase):
 
         self.session.post(self.address_cs + "/action",
                           json.dumps({"action": "Lock", "args": self.service2}))
-        time.sleep(5)
+        time.sleep(4)
 
         resp = self.session.post(self.addr_RefSet_type_action, json.dumps(
             {"action": "Link", "args": None}
@@ -221,7 +221,7 @@ class TestDirectoryFunctional(unittest.TestCase):
 
         self.session.post(self.address_cs + "/action",
                           json.dumps({"action": "Lock", "args": self.service2}))
-        time.sleep(5)
+        time.sleep(4)
 
         resp = self.session.post(self.addr_RefSet_type_action, json.dumps(
             {"action": "Renew", "args": None}
@@ -234,7 +234,7 @@ class TestDirectoryFunctional(unittest.TestCase):
 
     def test_service_action_renew_not_linked(self):
 
-        time.sleep(5)
+        time.sleep(4)
 
         resp = self.session.post(self.addr_RefSet_type_action2, json.dumps(
             {"action": "Renew", "args": None}
@@ -244,3 +244,21 @@ class TestDirectoryFunctional(unittest.TestCase):
         resp = [service["host"] for service in
                 self.session.get(self.addr_RefSet_type2).json()]
         self.assertEqual([self.addr1], resp)
+
+    def test_service_actions_force(self):
+
+        self.session.post(self.address_cs + "/action",
+                          json.dumps({"action": "Lock", "args": self.service2}))
+        time.sleep(4)
+
+        resp = self.session.post(self.addr_RefSet_type_action2, json.dumps(
+            {"action": "Force", "args": {"seq": 1, "type": "echo",
+                                         "host": self.addr2,
+                                         "args": ""}}
+        ))
+        self.assertEqual(resp.status_code, 204)
+
+        resp = [service["host"] for service in
+                self.session.get(self.addr_RefSet_type2).json()]
+
+        self.assertEqual(resp, [self.addr2])

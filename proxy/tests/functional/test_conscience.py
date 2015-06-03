@@ -42,6 +42,9 @@ class TestConscienceFunctional(unittest.TestCase):
         self.valid_service = json.dumps(self.service)
         self.valid_lock_service = json.dumps(
             {"action": "Lock", "args": self.service})
+        self.service["score"] = 100-self.score_rand
+        self.valid_lock_service2 = json.dumps(
+            {"action": "Lock", "args": self.service})
         self.valid_unlock_service = json.dumps(
             {"action": "Unlock", "args": self.service})
 
@@ -128,17 +131,17 @@ class TestConscienceFunctional(unittest.TestCase):
                service["addr"] == self.addr2][0]
         self.assertEqual(tag, "changed")
 
-    def test_service_pool_put_invalid_addr(self):  # to be improved
+    def test_service_pool_put_invalid_addr(self):
 
         resp = self.session.put(self.addr_type, self.invalid_service)
-        self.assertFalse((resp.status_code == 200))
+        self.assertEqual(resp.status_code, 400)
 
     def test_service_pool_put_missing_info(self):
 
         resp = self.session.put(self.addr_type, self.service_missing_infos)
         self.assertEqual(resp.status_code, 400)
 
-    def test_service_pool_delete(self):  # not stable
+    def test_service_pool_delete(self):
 
         time.sleep(3)
 
@@ -168,6 +171,41 @@ class TestConscienceFunctional(unittest.TestCase):
              self.session.get(self.addr_type).json() if
              session["addr"] == self.addr1][0]
         self.assertEqual(score, self.score_rand)
+
+    def test_service_pool_actions_lock_and_reput(self):
+
+        self.session.post(self.addr_type + "/action",
+                                 self.valid_lock_service)
+
+        time.sleep(2.5)
+
+        self.session.put(self.addr_type, self.valid_service)
+
+        time.sleep(2.5)
+
+        score = \
+            [session["score"] for session in
+             self.session.get(self.addr_type).json() if
+             session["addr"] == self.addr1][0]
+        self.assertEqual(score, self.score_rand)
+
+    def test_service_pool_actions_lock_and_relock(self):
+
+        self.session.post(self.addr_type + "/action",
+                                 self.valid_lock_service)
+
+        time.sleep(2.5)
+
+        self.session.post(self.addr_type + "/action",
+                                 self.valid_lock_service2)
+
+        time.sleep(2.5)
+
+        score = \
+            [session["score"] for session in
+             self.session.get(self.addr_type).json() if
+             session["addr"] == self.addr1][0]
+        self.assertEqual(score, 100-self.score_rand)
 
     def test_services_pool_actions_unlock(self):
 
