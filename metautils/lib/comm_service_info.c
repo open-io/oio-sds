@@ -98,13 +98,7 @@ service_info_ASN2API(ServiceInfo_t * asn, service_info_t * api)
 	memcpy(api->ns_name, asn->nsName.buf, MIN((size_t) asn->nsName.size, sizeof(api->ns_name)));
 	memcpy(api->type, asn->type.buf, MIN((size_t) asn->type.size, sizeof(api->type)));
 	addr_info_ASN2API(&(asn->addr), &(api->addr));
-
-	if (asn->score)
-		score_ASN2API(asn->score, &(api->score));
-	else {
-		api->score.value = -2;
-		api->score.timestamp = time(0);
-	}
+	score_ASN2API(&asn->score, &api->score);
 
 	/*tags */
 	if (!asn->tags) {
@@ -192,11 +186,7 @@ service_info_API2ASN(service_info_t * api, ServiceInfo_t * asn)
 	OCTET_STRING_fromBuf(&(asn->type), api->type, strlen_len((const guint8*)api->type, sizeof(api->type)));
 	OCTET_STRING_fromBuf(&(asn->nsName), api->ns_name, strlen_len((const guint8*)api->ns_name, sizeof(api->ns_name)));
 	addr_info_API2ASN(&(api->addr), &(asn->addr));
-
-	if (api->score.value >= -1) {
-		asn->score = calloc(1, sizeof(Score_t));
-		score_API2ASN(&(api->score), asn->score);
-	}
+	score_API2ASN(&api->score, &asn->score);
 
 	/*tags */
 	if (api->tags) {
