@@ -9,8 +9,12 @@ add_executable(tool-roundtrip oio-roundtrip.c)
 bin_prefix(tool-roundtrip "-roundtrip")
 target_link_libraries(tool-roundtrip gridclient)
 
+add_executable(tool-roundtrip2 oio-roundtrip2.c)
+bin_prefix(tool-roundtrip2 "-roundtrip2")
+target_link_libraries(tool-roundtrip2 gridclient)
 
-install(TARGETS tool-grep tool-roundtrip
+
+install(TARGETS tool-grep tool-roundtrip tool-roundtrip2
 		RUNTIME DESTINATION bin)
 
 
