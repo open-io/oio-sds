@@ -61,7 +61,6 @@ build_meta0_cache (struct resolver_direct_s *r, GError **err)
 		memset(str_addr, 0x00, sizeof(str_addr));
 		addr_info_to_string(&(r->meta0), str_addr, sizeof(str_addr));
 		GSETERROR (err,"META0 error : Cannot get the reference from %s", str_addr);
-		WARN ("Cannot get the META0 reference from %s", str_addr);
 		return NULL;
 	}
 

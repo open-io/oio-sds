@@ -189,7 +189,7 @@ manage_chunk(const gchar * chunk_path, void *data, struct rules_motor_env_s** mo
 	struct crawler_chunk_data_pack_s *data_block;
 	struct stat chunk_stat;
 
-	data_block = malloc(sizeof(struct crawler_chunk_data_pack_s));	
+	data_block = g_malloc0(sizeof(struct crawler_chunk_data_pack_s));
 	bzero(&chunk_info, sizeof(chunk_info));
 	bzero(&content_info, sizeof(content_info));
 	bzero(&chunk_stat, sizeof(chunk_stat));
@@ -253,7 +253,7 @@ label_exit:
 	chunk_textinfo_free_content(&chunk_info);
 	chunk_textinfo_extra_free_content(&chunk_info_extra);
 	content_textinfo_free_content(&content_info);
-	free(data_block);
+	g_free(data_block);
 	return SCAN_CONTINUE;
 }
 
