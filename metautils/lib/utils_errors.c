@@ -44,7 +44,7 @@ g_error_trace(GError ** e, const char *dom, int code,
 	va_end(localVA);
 
 	if (!*e)
-		*e = g_error_new(g_quark_from_static_string(dom), code, gstr->str);
+		*e = g_error_new(g_quark_from_static_string(dom), code, "%s", gstr->str);
 	else {
 		g_string_append(gstr, "\n\t");
 		g_prefix_error(e, gstr->str);
