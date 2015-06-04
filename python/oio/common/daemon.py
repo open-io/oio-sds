@@ -1,18 +1,26 @@
-import os
 import sys
 import signal
+
+import os
 from re import sub
-from oio.common.utils import get_logger
 
 from oio.common.utils import read_conf
+from oio.common.utils import drop_privileges
+from oio.common.utils import redirect_stdio
+from oio.common.utils import get_logger
 
 
 class Daemon(object):
+    def __init__(self, conf):
+        self.conf = conf
+        self.logger = get_logger(conf)
 
     def run(self, *args, **kwargs):
         raise NotImplementedError('run not implemented')
 
     def start(self, **kwargs):
+        drop_privileges(self.conf.get('user', 'openio'))
+        redirect_stdio(self.logger)
 
         def kill_children(*args):
             signal.signal(signal.SIGTERM, signal.SIG_IGN)

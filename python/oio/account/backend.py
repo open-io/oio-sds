@@ -1,7 +1,9 @@
-import redis
 import time
 import uuid
 import math
+
+import redis
+
 
 CODE_SYSTEM_ERROR = 501
 CODE_ACCOUNT_NOTFOUND = 431
@@ -89,8 +91,6 @@ def release_lock(conn, lockname, identifier):
 
 class AccountBackend(object):
     def __init__(self, conf, conn=None):
-        if not conf:
-            conf = {}
         self.conf = conf
         if not conn:
             redis_host = conf.get('redis_host', '127.0.0.1')
@@ -144,7 +144,7 @@ class AccountBackend(object):
 
         return conn.hgetall('account:%s' % account_id)
 
-    def update_container(self, account_id, name, data):
+    def update_container(self, account_id, name, record):
         conn = self.conn
         if not account_id or not name:
             return None
@@ -153,6 +153,16 @@ class AccountBackend(object):
         if not account_id:
             return None
 
+        # TODO merge items !
+
+        data = conn.hgetall('container:%s:%s' % (account_id, name))
+
+        if data:
+            for r in ['name', 'mtime', 'object_count', 'bytes']:
+                if record[r] is None and data[r] is not None:
+                    record[r] = data[r]
+            if data['mtime'] > record['mtime']:
+                record['mtime'] = data['mtime']
 
         data.update({
             'name': name,
@@ -167,16 +177,64 @@ class AccountBackend(object):
 
         return name
 
-    def list_containers(self, account_id, page=1, count=100):
-        conn = self.conn
-        start = (page - 1) * count
-        end = page * count - 1
-
-        containers = conn.zrange('containers:%s' % account_id, start, end)
-        pipeline = conn.pipeline(True)
-        for container_id in containers:
-            pipeline.hgetall('container:%s:%s' % (account_id, container_id))
+    def _list_containers(self, account_id, container_ids):
+        pipeline = self.conn.pipeline(True)
+        for container_id in container_ids:
+            pipeline.hgetall('containers:%s:%s' % (account_id, container_id))
         return pipeline.execute()
+
+    def list_containers(self, account_id, limit=1000, marker=None,
+                        end_marker=None, prefix=None, delimiter=None):
+        conn = self.conn
+        if delimiter and not prefix:
+            prefix = ''
+        orig_marker = marker
+
+        results = []
+        while len(results) < limit:
+            min = '-'
+            max = '+'
+            if end_marker:
+                max = '(' + end_marker
+            if marker and marker >= prefix:
+                min = '(' + marker
+            elif prefix:
+                min = '[' + prefix
+
+            offset = 0
+
+            container_ids = conn.zrangebylex('containers:%s' % account_id, min,
+                                             max, offset, limit - len(results))
+
+            if prefix is None:
+                containers = [{'name': c_id} for c_id in container_ids]
+                return containers
+            if not delimiter:
+                if not prefix:
+                    containers = [{'name': c_id} for c_id in container_ids]
+                    return containers
+                else:
+                    containers = [{'name': c_id} for c_id in container_ids if
+                                  c_id.startswith(prefix)]
+                    return containers
+
+            count = 0
+            for container_id in container_ids:
+                count += 1
+                marker = container_id
+                if len(results) >= limit or not container_id.startswith(prefix):
+                    return results
+                end = container_id.find(delimiter, len(prefix))
+                if end > 0:
+                    marker = container_id[:end] + chr(ord(delimiter) + 1)
+                    dir_name = container_id[:end + 1]
+                    if dir_name != orig_marker:
+                        results.append({'name': dir_name})
+                    break
+                results.append({'name': container_id})
+            if not count:
+                break
+        return results
 
     def status(self):
         conn = self.conn

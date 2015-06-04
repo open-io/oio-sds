@@ -1,11 +1,99 @@
 import sys
+import grp
 import socket
 import errno
-import os
+import pwd
 import logging
 from logging.handlers import SysLogHandler
 from optparse import OptionParser
 from ConfigParser import ConfigParser
+
+import os
+from gunicorn.app.base import BaseApplication
+
+
+class Application(BaseApplication):
+    def __init__(self, app, conf):
+        self.conf = conf
+        self.application = app
+        super(Application, self).__init__()
+
+    def load_config(self):
+        config = dict([(k, v) for k, v in self.conf.iteritems() if k in
+                       self.cfg.settings and v is not None])
+        for k, v in config.iteritems():
+            self.cfg.set(k.lower(), v)
+
+    def load(self):
+        return self.application
+
+
+class NullLogger(object):
+    def write(self, *args):
+        pass
+
+
+class StreamToLogger(object):
+    def __init__(self, logger, log_type='STDOUT'):
+        self.logger = logger
+        self.log_type = log_type
+
+    def write(self, value):
+        value = value.strip()
+        if value:
+            self.logger.error('%s : %s', self.log_type, value)
+
+    def writelines(self, values):
+        self.logger.error('%s : %s', self.log_type, '#012'.join(values))
+
+    def close(self):
+        pass
+
+    def flush(self):
+        pass
+
+
+def drop_privileges(user):
+    if os.geteuid() == 0:
+        groups = [g.gr_gid for g in grp.getgrall() if user in g.gr_mem]
+        os.setgroups(groups)
+    user_entry = pwd.getpwnam(user)
+    os.setgid(user_entry[3])
+    os.setuid(user_entry[2])
+    os.environ['HOME'] = user_entry[5]
+    try:
+        os.setsid()
+    except OSError:
+        pass
+    os.chdir('/')
+    os.umask(0o22)
+
+
+def redirect_stdio(logger):
+    """
+    Close stdio, redirect stdout and stderr.
+
+    :param logger:
+    """
+    stdio_fd = [sys.stdin, sys.stdout, sys.stderr]
+    console_fds = [h.stream.fileno() for _, h in getattr(
+        get_logger, 'console_handler4logger', {}).items()]
+    stdio_fd = [fd for fd in stdio_fd if fd.fileno() not in console_fds]
+
+    with open(os.devnull, 'r+b') as nullfile:
+        for fd in stdio_fd:
+            try:
+                fd.flush()
+            except IOError:
+                pass
+
+            try:
+                os.dup2(nullfile.fileno(), fd.fileno())
+            except OSError:
+                pass
+
+    sys.stdout = StreamToLogger(logger)
+    sys.stderr = StreamToLogger(logger, 'STDERR')
 
 
 def get_logger(conf, name=None, verbose=False, fmt="%(message)s"):
