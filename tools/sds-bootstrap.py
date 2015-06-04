@@ -19,8 +19,6 @@
 from string import Template
 import os, errno, pwd
 
-#env.G_DEBUG=fatal_warnings
-#env.G_SLICE=debug-blocks
 
 template_flask_gridinit = """
 [service.${NS}-flask]
@@ -29,8 +27,6 @@ on_die=respawn
 enabled=true
 start_at_boot=false
 command=/usr/bin/gunicorn --preload -w 2 -b ${IP}:${PORT} oio.sds.admin-flask:app
-env.PATH=${PATH}
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 """
 
 template_account_flask_gridinit = """
@@ -40,8 +36,6 @@ on_die=respawn
 enabled=true
 start_at_boot=false
 command=/usr/bin/gunicorn --preload -w 2 -b ${IP}:${PORT} oio.account.server:app
-env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 """
 
 template_proxy_gridinit = """
@@ -51,8 +45,6 @@ on_die=respawn
 enabled=true
 start_at_boot=false
 command=${EXE_PREFIX}-proxy -s SDS,${NS},proxy ${IP}:${PORT} ${NS}
-env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 """
 
 template_nginx_gridinit = """
@@ -62,8 +54,6 @@ on_die=respawn
 enabled=true
 start_at_boot=true
 command=/usr/sbin/nginx -p ${CFGDIR} -c ${NS}-endpoint.conf
-env.PATH=${PATH}
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 """
 
 template_nginx_endpoint = """
@@ -350,7 +340,8 @@ pidfile=${RUNDIR}/gridinit.pid
 uid=${UID}
 gid=${GID}
 working_dir=${TMPDIR}
-env.PATH=${PATH}
+inherit_env=1
+env.PATH=${PATH}:${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 
 limit.core_size=-1
@@ -365,8 +356,6 @@ on_die=respawn
 enabled=true
 start_at_boot=true
 command=${EXE_PREFIX}-cluster-agent -s SDS,${NS},agent ${CFGDIR}/agent.conf
-env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 
 """
 
@@ -379,8 +368,6 @@ enabled=true
 start_at_boot=true
 #command=${EXE_PREFIX}-daemon -s SDS,${NS},conscience ${CFGDIR}/${NS}-conscience.conf
 command=${EXE_PREFIX}-daemon -q ${CFGDIR}/${NS}-conscience.conf
-env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 
 [service.${NS}-event-agent]
 group=${NS},localhost,event
@@ -388,8 +375,6 @@ on_die=respawn
 enabled=true
 start_at_boot=false
 command=${EXE_PREFIX}-event-agent ${CFGDIR}/event-agent.conf
-env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 env.PYTHONPATH=${CODEDIR}/lib/python2.7/site-packages
 """
 
@@ -400,8 +385,6 @@ on_die=respawn
 enabled=true
 start_at_boot=false
 command=${EXE} -s SDS,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
-env.PATH=${PATH}
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 """
 
 template_gridinit_rawx = """
@@ -411,8 +394,6 @@ command=${EXE_PREFIX}-svc-monitor -s SDS,${NS},${SRVTYPE},${SRVNUM} -p 1 -m '${E
 enabled=true
 start_at_boot=false
 on_die=respawn
-env.PATH=${PATH}
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 """
 
 template_local_header = """
