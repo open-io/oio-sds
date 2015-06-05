@@ -296,7 +296,7 @@ monitoring_loop(service_info_t *si)
 				_add_custom_tags(si);
 			}
 			if (!register_namespace_service(si, &error)) {
-				GRID_ERROR("Failed to register the service: %s", gerror_get_message(error));
+				GRID_WARN("Failed to register the service: %s", gerror_get_message(error));
 				g_clear_error(&error);
 			}
 			g_timer_reset(timer);
