@@ -33,6 +33,10 @@ set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/.timestamp")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/setup.py.in
                 ${CMAKE_CURRENT_BINARY_DIR}/setup.py
                 @ONLY)
+
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/bin/account-server
+                ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-account-server
+                @ONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/bin/event-agent
                 ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-event-agent
                 @ONLY)
@@ -47,5 +51,7 @@ add_custom_target(account ALL DEPENDS ${OUTPUT})
 install(CODE "execute_process(COMMAND ${PYTHON_EXECUTABLE} ${SETUP_PY} install --prefix=${CMAKE_INSTALL_PREFIX})")
 
 
-install(PROGRAMS    ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-event-agent
+install(PROGRAMS
+                    ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-account-server
+                    ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-event-agent
                 DESTINATION bin)

@@ -33,15 +33,16 @@ env.PATH=${PATH}
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 """
 
-template_account_flask_gridinit = """
-[service.${NS}-account-front]
-group=${NS},localhost,account-front
+template_account_server_gridinit = """
+[service.${NS}-account-server]
+group=${NS},localhost,account-server
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=/usr/bin/gunicorn --preload -w 2 -b ${IP}:${PORT} oio.account.server:app
+command=${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf
 env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
+env.PYTHONPATH=${CODEDIR}/lib/python2.7/site-packages
 """
 
 template_proxy_gridinit = """
@@ -438,6 +439,16 @@ log_name = event-agent
 log_address = /dev/log
 """
 
+template_account_server = """
+[account-server]
+bind = ${IP}:${PORT}
+workers = 2
+log_facility = LOG_LOCAL0
+log_level = INFO
+log_name = account-server
+log_address = /dev/log
+"""
+
 HOME = str(os.environ['HOME'])
 EXE_PREFIX = "@EXE_PREFIX@"
 OIODIR = HOME + '/.oio'
@@ -612,10 +623,13 @@ def generate (ns, ip, options={}):
 		tpl = Template(template_proxy_gridinit)
 		f.write(tpl.safe_substitute(env))
 
-	# account-front flask
+	# account-server
 	env['PORT'] = port_account
+	with open(CFGDIR + '/' + ns + '-account-server.conf', 'w+') as f:
+		tpl = Template(template_account_server)
+		f.write(tpl.safe_substitute(env))
 	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-		tpl = Template(template_account_flask_gridinit)
+		tpl = Template(template_account_server_gridinit)
 		f.write(tpl.safe_substitute(env))
 
 	# Event agent configuration
