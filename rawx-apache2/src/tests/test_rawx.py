@@ -14,7 +14,7 @@ import io
 import binascii
 import re
 
-httpd_binary = '/usr/sbin/httpd'
+httpd_binary = '/usr/sbin/httpd' if os.path.exists('/usr/sbin/httpd') else '/usr/sbin/apache2'
 namespace = 'DEVREMI'
 rawx_module = '/home/fr19895/src/autotools/rawx-apache2/src/.libs/mod_dav_rawx.so'
 rawx_url = ("127.0.0.1", "65535")
