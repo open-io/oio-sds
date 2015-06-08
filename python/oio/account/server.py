@@ -16,60 +16,82 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import json
+
 import flask
 from flask import request
+
 from oio.account.backend import AccountBackend
 from oio.account.backend import AccountException
-from oio.account.backend import CODE_ACCOUNT_NOTFOUND, CODE_SYSTEM_ERROR, CODE_USER_NOTFOUND
-app = flask.Flask(__name__)
+from oio.account.backend import CODE_ACCOUNT_NOTFOUND, CODE_USER_NOTFOUND
 
-backend = AccountBackend(None)
+
 
 # Accounts ---------------------------------------------------------------------
 
-@app.route('/status', methods=['GET'])
+account_api = flask.Blueprint('account_api', __name__)
+
+
+@account_api.route('/status', methods=['GET'])
 def status():
     status = backend.status()
     return flask.Response(json.dumps(status), mimetype='text/json')
 
 
-@app.route('/v1.0/account/create', methods=['PUT'])
+@account_api.route('/v1.0/account/create', methods=['PUT'])
 def account_create():
     account_id = request.args.get('id')
+    if not account_id:
+        return flask.Response('Missing Account ID', 400)
     id = backend.create_account(account_id)
     return id
 
 
-
-@app.route('/v1.0/account/update', methods=['POST'])
+@account_api.route('/v1.0/account/update', methods=['POST'])
 def account_update():
     account_id = request.args.get('id')
+    if not account_id:
+        return flask.Response('Missing Account ID', 400)
     decoded = flask.request.get_json(force=True)
     backend.update_account(account_id, decoded)
     return ""
 
 
-
-@app.route('/v1.0/account/show', methods=['HEAD'])
+@account_api.route('/v1.0/account/show', methods=['HEAD', 'GET'])
 def account_info():
     account_id = request.args.get('id')
+    if not account_id:
+        return flask.Response('Missing Account ID', 400)
     raw = backend.info_account(account_id)
     if raw is not None:
         return flask.Response(json.dumps(raw), mimetype='text/json')
     return "Account not found", 404
 
-@app.route('/v1.0/account/containers', methods=['GET'])
+
+@account_api.route('/v1.0/account/containers', methods=['GET'])
 def account_list_containers():
     account_id = request.args.get('id')
-    user_list = backend.list_containers(account_id)
+    if not account_id:
+        return flask.Response('Missing Account ID', 400)
+    marker = request.args.get('marker', '')
+    end_marker = request.args.get('end_marker', '')
+    prefix = request.args.get('prefix', '')
+    limit = int(request.args.get('limit', '1000'))
+    delimiter = request.args.get('delimiter', '')
+
+    user_list = backend.list_containers(account_id, limit=limit,
+                                        marker=marker, end_marker=end_marker,
+                                        prefix=prefix, delimiter=delimiter)
     result = json.dumps(user_list)
     return flask.Response(result, mimetype='text/json')
 
+
 # Containers -------------------------------------------------------------------
 
-@app.route('/v1.0/account/container/update', methods=['POST'])
+@account_api.route('/v1.0/account/container/update', methods=['POST'])
 def container_update():
     account_id = request.args.get('id')
+    if not account_id:
+        return flask.Response('Missing Account ID', 400)
     try:
         d = flask.request.get_json(force=True)
         container = d.get('name')
@@ -78,7 +100,7 @@ def container_update():
             'object_count': d.get('object_count'),
             'bytes': d.get('bytes'),
             'storage_policy': d.get('storage_policy')
-            }
+        }
         result = backend.update_container(account_id, container, data)
     except AccountException as e:
         code = 404
@@ -87,4 +109,11 @@ def container_update():
         return repr(e.to_dict()), code
     return ""
 
-app.run(debug=True)
+
+def create_app(conf, **kwargs):
+    app = flask.Flask(__name__)
+    global backend
+    backend = AccountBackend(conf)
+    app.register_blueprint(account_api)
+    return app
+
