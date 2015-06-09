@@ -268,13 +268,13 @@ _on_reply(gpointer u, MESSAGE reply)
 {
 	(void) u;
 	size_t bsize = 0;
-	void *b = message_get_BODY(reply, &bsize);
+	void *b = metautils_message_get_BODY(reply, &bsize);
 	if (!b || !bsize)
 		return TRUE;
 
 	asn_codec_ctx_t ctx;
 	memset(&ctx, 0, sizeof(ctx));
-	ctx.max_stack_size = 8 * 1024;
+	ctx.max_stack_size = ASN1C_MAX_STACK;
 
 	struct TableSequence *ts = NULL;
 	asn_dec_rval_t rv = ber_decode(&ctx, &asn_DEF_TableSequence, (void**)&ts, b, bsize);

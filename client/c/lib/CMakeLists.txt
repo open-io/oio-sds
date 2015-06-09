@@ -17,19 +17,16 @@ add_library(gridclient SHARED
 		content_upload.c
 		contents.c
 		grid.c
-		grid_client.h
-		grid_client_shortcuts.h
 		gs_common.c
-		gs_internals.h
-		rawx.c rawx.h
-		rainx.c rainx.h
-		rainx_remote.c rainx_remote.h
-		meta_resolver_explicit.c meta_resolver_explicit.h
+		rawx.c
+		rainx.c
+		rainx_remote.c
+		meta_resolver_explicit.c
 		hc_directory.c
-		loc_context.c loc_context.h
-		hc_func.c hc.h
-		hcadmin_func.c hcadmin.h
-		http_put.c http_put.h
+		loc_context.c
+		hc_func.c
+		hcadmin_func.c
+		http_put.c
 )
 
 set_target_properties(gridclient PROPERTIES

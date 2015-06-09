@@ -44,7 +44,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cluster/module/module.h>
 
 #include "./agent.h"
-#include "./broken_workers.h"
 #include "./cpu_stat_task_worker.h"
 #include "./gridagent.h"
 #include "./io_scheduler.h"
@@ -57,8 +56,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /* GLOBALS */
 
-gchar syslog_id[256] = "";
-gchar str_opt_config[1024] = "";
+gchar syslog_id[64] = "";
+gchar str_opt_config[512] = "";
 GHashTable *namespaces = NULL;
 
 gboolean gridagent_blank_undefined_srvtags = TRUE;
@@ -68,7 +67,7 @@ int inet_socket_backlog = INET_DEFAULT_BACKLOG;
 int inet_socket_timeout = INET_DEFAULT_TIMEOUT;
 int inet_socket_port = INET_DEFAULT_PORT;
 
-gchar unix_socket_path[1024] = UNIX_DEFAULT_PATH;
+gchar unix_socket_path[512] = UNIX_DEFAULT_PATH;
 int unix_socket_timeout = UNIX_DEFAULT_TIMEOUT;
 int unix_socket_backlog = UNIX_DEFAULT_BACKLOG;
 int unix_socket_mode = UNIX_DEFAULT_MODE;
@@ -84,10 +83,6 @@ int period_get_ns = DEFAULT_CS_UPDATE_FREQ;
 int period_get_srvtype = DEFAULT_CS_UPDATE_FREQ;
 int period_get_srvlist = DEFAULT_CS_UPDATE_FREQ;
 int period_push_srvlist = DEFAULT_CS_UPDATE_FREQ;
-
-gboolean flag_manage_broken = DEFAULT_BROKEN_MANAGE;
-int period_push_broken = DEFAULT_BROKEN_FREQ;
-int period_get_broken = DEFAULT_BROKEN_FREQ;
 
 /* ------------------------------------------------------------------------- */
 
@@ -107,10 +102,6 @@ destroy_namespace_data(gpointer p)
 
 	if (ns_data->conscience)
 		conscience_destroy(ns_data->conscience);
-	if (ns_data->list_broken) {
-		g_slist_foreach(ns_data->list_broken, g_free1, NULL);
-		g_slist_free(ns_data->list_broken);
-	}
 	if (ns_data->local_services)
 		g_hash_table_destroy(ns_data->local_services);
 	if (ns_data->down_services)
@@ -318,14 +309,6 @@ parse_configuration(const gchar *config, GError **error)
 	gridagent_blank_undefined_srvtags = getbool(SECTION_GENERAL, SVC_PUSH_BLANK_KEY,
 			DEFAULT_SVC_PUSH_BLANK);
 
-	/* broken elements streams */
-	flag_manage_broken = getbool(SECTION_GENERAL, KEY_BROKEN_MANAGE,
-			DEFAULT_BROKEN_MANAGE);
-	period_push_broken = getint(SECTION_GENERAL, KEY_BROKEN_FREQ_PUSH,
-			DEFAULT_BROKEN_FREQ);
-	period_get_broken = getint(SECTION_GENERAL, KEY_BROKEN_FREQ_GET,
-			DEFAULT_BROKEN_FREQ);
-
 	/* networking config */
 	inet_socket_port = getint(SECTION_SERVER_INET, KEY_PORT,
 			INET_DEFAULT_PORT);
@@ -375,9 +358,6 @@ parse_configuration(const gchar *config, GError **error)
 	GRID_NOTICE("services.period_get_srvtype = %d", period_get_srvtype);
 	GRID_NOTICE("services.period_get_srvlist = %d", period_get_srvlist);
 	GRID_NOTICE("services.period_push_srvlist = %d", period_push_srvlist);
-	GRID_NOTICE("broken.manage streams = %s", flag_manage_broken ? "ON" : "OFF");
-	GRID_NOTICE("broken.period_push = %d", period_push_broken);
-	GRID_NOTICE("broken.period_get = %d", period_get_broken);
 
 	if (*user && *group && !change_user(user, group, error)) {
 		GSETERROR(error,"Failed to change user");
@@ -393,8 +373,6 @@ usage(const char * prog_name)
 	g_printerr("Usage: %s (--help|OPTIONS <path_config> <path_log>)\n", prog_name);
 	g_printerr("OPTIONS:\n");
 	g_printerr("  --help               : display this help section\n");
-	g_printerr("  --child-req          : Starts a request agent.\n");
-	g_printerr("  --child-evt=<NS>     : start a processus only repsonsible for the event requests\n");
 }
 
 static int
@@ -403,7 +381,6 @@ parse_options(int argc, char ** args, GError **error)
 	static struct option long_options[] = {
 		{"syslog",           1, 0, 's'},
 		{"help",             0, 0, 1},
-		{"child-req",        0, 0, 2},
 		{0, 0, 0, 0}
 	};
 
@@ -424,8 +401,6 @@ parse_options(int argc, char ** args, GError **error)
 		switch (c) {
 		case 1:
 			flag_help = ~0;
-			break;
-		case 2:
 			break;
 		case 's':
 			g_strlcpy(syslog_id, optarg, sizeof(syslog_id));

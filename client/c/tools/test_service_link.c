@@ -28,13 +28,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 int main (int argc, char ** args)
 {
+	char url[256];
 	HC_PROC_INIT(args,GRID_LOGLVL_INFO);
 	int rc = -1;
 
 	gs_error_t *err = NULL;
 	gs_grid_storage_t *hc;
 	gs_container_t *container;
-	char *ns;
 	char cname[60];
 
 	if (argc != 2) {
@@ -42,9 +42,7 @@ int main (int argc, char ** args)
 		return rc;
 	}
 
-	ns = args[1];
-
-	bzero(cname, sizeof(cname));
+	const char *ns = args[1];
 	g_snprintf(cname, sizeof(cname), "SOLR%d", rand());
 
 	printf("Working with container [%s]\n", cname);
@@ -63,8 +61,6 @@ int main (int argc, char ** args)
 
 	gs_service_t **srv_array = NULL;
 	srv_array = gs_container_service_get_available(container, "meta0", &err);
-	char url[256];
-	bzero(url, sizeof(url));
 	gs_service_get_url(srv_array[0], url, sizeof(url));
 	printf("New service linked\n");
 	printf("service url = [%s]\n", url);
@@ -74,7 +70,6 @@ int main (int argc, char ** args)
 	
 	srv_array = gs_container_service_get_all(container, "meta0", &err);
 
-	bzero(url, sizeof(url));
 	gs_service_get_url(srv_array[0], url, sizeof(url));
 	printf("Already linked service :\n");
 	printf("service url = [%s]\n", url);

@@ -27,24 +27,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 MESSAGE
 meta1_create_message(const gchar *reqname, const container_id_t cid)
 {
-	g_assert(reqname != NULL);
-	g_assert(cid != NULL);
-
-	MESSAGE result = message_create();
-	message_set_NAME(result, reqname, strlen(reqname));
-	message_add_cid(result, NAME_MSGKEY_CONTAINERID, cid);
+	EXTRA_ASSERT(reqname != NULL);
+	EXTRA_ASSERT(cid != NULL);
+	MESSAGE result = metautils_message_create_named(reqname);
+	metautils_message_add_cid(result, NAME_MSGKEY_CONTAINERID, cid);
 	return result;
 }
 
 void
 meta1_enheader_addr_list(MESSAGE req, const gchar *fname, GSList *addr)
 {
-	g_assert(req != NULL);
-	g_assert(fname != NULL);
-	g_assert(addr != NULL);
+	EXTRA_ASSERT(req != NULL);
+	EXTRA_ASSERT(fname != NULL);
+	EXTRA_ASSERT(addr != NULL);
 
 	GByteArray *encoded = addr_info_marshall_gba(addr, NULL);
-	message_add_field(req, fname, encoded->data, encoded->len);
+	metautils_message_add_field(req, fname, encoded->data, encoded->len);
 	g_byte_array_free(encoded, TRUE);
 }
 

@@ -113,7 +113,6 @@ free_asn1_session( asn1_session_t *asn1_session)
 	if (asn1_session->req_name)
 		g_free(asn1_session->req_name);
 
-	memset( asn1_session, 0x00, sizeof(asn1_session_t));
 	g_free(asn1_session);
 }
 
@@ -139,7 +138,6 @@ asn1_worker_liberator(worker_t *worker)
 	/*saving the fd helps to detect more easily wich worker it was*/
 	memset(worker,0x00,sizeof(worker_t));
 	worker->data.fd = fd;
-
 	remove_fd_from_io_scheduler(worker, NULL);
 }
 
@@ -284,10 +282,9 @@ write_request(worker_t *worker, GError **error)
 
 	if (data->buffer == NULL) {
 
-		req = message_create();
-		message_set_NAME(req, asn1_session->req_name, strlen(asn1_session->req_name));
+		req = metautils_message_create_named(asn1_session->req_name);
 		if (asn1_session->req_body)
-			message_set_BODY(req, asn1_session->req_body, asn1_session->req_body_size);
+			metautils_message_set_BODY(req, asn1_session->req_body, asn1_session->req_body_size);
 
 		if (asn1_session->req_headers) {
 			GList *key = NULL;
@@ -296,21 +293,19 @@ write_request(worker_t *worker, GError **error)
 			for (key = keys; key && key->data; key = key->next) {
 				GByteArray *value = (GByteArray*)g_hash_table_lookup(
 						asn1_session->req_headers, key->data);
-				message_add_field(req, (char*)key->data, value->data, value->len);
+				metautils_message_add_field(req, (char*)key->data, value->data, value->len);
 			}
 
 			g_list_free(keys);
 		}
 
-		do {
-			gsize ds = 0;
-			if (!message_marshall(req, &(data->buffer), &ds, error)) {
+			GByteArray *encoded = message_marshall_gba(req, error);
+			if (!encoded)
 				GSETERROR(error, "Failed to marshall asn1 message");
-				goto error_marshall_message;
+			else {
+				data->buffer_size = encoded->len;
+				data->buffer = g_byte_array_free (encoded, FALSE);
 			}
-			data->buffer_size = ds;
-		} while (0);
-
 	} else if (data->done >= data->buffer_size) {
 
 		CLEAR_WORKER_DATA(data);
@@ -335,14 +330,13 @@ write_request(worker_t *worker, GError **error)
 		data->done += wl;
 	}
 
-	message_destroy(req);
+	metautils_message_destroy(req);
 	req = NULL;
 	return(1);
 
 error_sched:
 error_write:
-error_marshall_message:
-	message_destroy(req);
+	metautils_message_destroy(req);
 	req = NULL;
 	asn1_session->error_handler(worker, error);
 	free_asn1_worker( worker, 0 );
@@ -449,7 +443,7 @@ read_response(worker_t *worker, GError **error)
 		/*free the old headers and get the new*/
 		if (asn1_session->resp_headers)
 			g_hash_table_destroy(asn1_session->resp_headers);
-		asn1_session->resp_headers = message_get_fields(resp);
+		asn1_session->resp_headers = metautils_message_get_fields(resp);
 		if (!asn1_session->resp_headers) {
 			GSETERROR(error, "Failed to extract headers from message");
 			goto error_headers;
@@ -457,7 +451,7 @@ read_response(worker_t *worker, GError **error)
 
 		/*free the old body and get the new*/
 		asn1_session->resp_body_size = 0;
-		asn1_session->resp_body = message_get_BODY(resp, &(asn1_session->resp_body_size));
+		asn1_session->resp_body = metautils_message_get_BODY(resp, &(asn1_session->resp_body_size));
 
 		rc = asn1_session->response_handler (worker, error);
 		asn1_session->resp_body_size = 0;
@@ -470,7 +464,7 @@ read_response(worker_t *worker, GError **error)
 		}
 
 		g_free(msg);
-		message_destroy(resp);
+		metautils_message_destroy(resp);
 		resp = NULL;
 
 		if (status==CODE_FINAL_OK || !rc) {
@@ -502,7 +496,7 @@ error_status:
 	g_free(msg);
 error_decode:
 error_unmarshall:
-	message_destroy(resp);
+	metautils_message_destroy(resp);
 	resp = NULL;
 error_read:
 	asn1_session->error_handler(worker, error);

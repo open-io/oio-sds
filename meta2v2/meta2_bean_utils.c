@@ -165,7 +165,7 @@ bean_sequence_decoder(GSList **l, const void *buf, gsize *buf_len, GError **err)
 		return -1;
 	}
 
-	codecCtx.max_stack_size = 1 << 19;
+	codecCtx.max_stack_size = ASN1C_MAX_STACK;
 	decRet = ber_decode(&codecCtx, &asn_DEF_M2V2BeanSequence, &(result), buf, *buf_len);
 
 	switch (decRet.code) {

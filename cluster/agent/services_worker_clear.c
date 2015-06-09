@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "gridcluster.agent.broken"
+# define G_LOG_DOMAIN "gridcluster.agent"
 #endif
 #include <string.h>
 
@@ -28,7 +28,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "./agent.h"
 #include "./asn1_request_worker.h"
-#include "./broken_workers.h"
 #include "./gridagent.h"
 #include "./io_scheduler.h"
 #include "./message.h"
@@ -54,7 +53,7 @@ asn1_error_handler( worker_t *worker, GError **error )
 {
 	worker_t *original_worker;
 	TRACE_POSITION();
-	GSETERROR(error, "Failed to send the 'erroneous containers flush' order");
+	GSETERROR(error, "Failed to send the 'remove services' order");
 	original_worker = asn1_worker_get_session_data(worker);
 	if (!original_worker) {
 		GSETERROR(error,"Failed to reply due to invalid worker");

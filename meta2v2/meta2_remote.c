@@ -35,7 +35,7 @@ static gint
 meta2_remote_container_common_fd_v2 (int *fd, gint ms, GError ** err, const char *op,
     struct hc_url_s *url, const char *stgpol)
 {
-	static struct code_handler_s codes[] = {
+	struct code_handler_s codes[] = {
 		{CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL},
 		{0, 0, NULL, NULL}
 	};
@@ -45,13 +45,13 @@ meta2_remote_container_common_fd_v2 (int *fd, gint ms, GError ** err, const char
 	EXTRA_ASSERT (op != NULL);
 	EXTRA_ASSERT (url != NULL);
 
-	MESSAGE request = message_create_named(op);
-	message_add_url (request, url);
+	MESSAGE request = metautils_message_create_named(op);
+	metautils_message_add_url (request, url);
 	if (stgpol)
-	    message_add_field_str(request, NAME_MSGKEY_STGPOLICY, stgpol);
+	    metautils_message_add_field_str(request, NAME_MSGKEY_STGPOLICY, stgpol);
 
 	gboolean rc = metaXClient_reply_sequence_run(err, request, fd, ms, &data);
-	message_destroy(request);
+	metautils_message_destroy(request);
 	if (!rc)
 		GSETERROR(err, "An error occured while executing the request");
 	return rc;
@@ -84,7 +84,7 @@ GSList*
 meta2_remote_container_list (const addr_info_t *m2, gint ms, GError **err,
 		struct hc_url_s *url)
 {
-	static struct code_handler_s codes [] = {
+	struct code_handler_s codes [] = {
 		{ CODE_FINAL_OK, REPSEQ_FINAL,         &path_info_concat, NULL},
 		{ CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, &path_info_concat, NULL},
 		{ 0, 0, NULL, NULL},
@@ -94,15 +94,15 @@ meta2_remote_container_list (const addr_info_t *m2, gint ms, GError **err,
 
 	EXTRA_ASSERT (m2 != NULL);
 	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2_CREATE);
-	message_add_url (request, url);
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M2_CREATE);
+	metautils_message_add_url (request, url);
 
 	if (!metaXClient_reply_sequence_run_from_addrinfo (err, request, m2, ms, &data)) {
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
 		g_slist_free_full(result, (GDestroyNotify) path_info_clean);
 		result = NULL;
 	}
-	message_destroy(request);
+	metautils_message_destroy(request);
 	return result;
 }
 
@@ -121,7 +121,7 @@ meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
 			return TRUE;
 		*new_metadata = NULL;
 		gsize fieldLen=0;
-		void *field = message_get_field (rep, NAME_MSGKEY_MDSYS, &fieldLen);
+		void *field = metautils_message_get_field (rep, NAME_MSGKEY_MDSYS, &fieldLen);
 		if (field)
 			*new_metadata = g_byte_array_append( g_byte_array_new(), field, fieldLen);
 		return TRUE;
@@ -137,19 +137,19 @@ meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
 
 	EXTRA_ASSERT (fd != NULL);
 	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2_CONTENTADD);
-	message_add_url (request, url);
-	message_add_field_strint64 (request, NAME_MSGKEY_CONTENTLENGTH, content_length);
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M2_CONTENTADD);
+	metautils_message_add_url (request, url);
+	metautils_message_add_field_strint64 (request, NAME_MSGKEY_CONTENTLENGTH, content_length);
 
 	if (metadata)
-		message_add_field (request, NAME_MSGKEY_MDSYS, metadata->data, metadata->len);
+		metautils_message_add_field (request, NAME_MSGKEY_MDSYS, metadata->data, metadata->len);
 	if (!metaXClient_reply_sequence_run (err, request, fd, ms, &data)) {
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
 		g_slist_free_full(result, (GDestroyNotify) chunk_info_clean);
 		result = NULL;
 	}
 
-	message_destroy(request);
+	metautils_message_destroy(request);
 	return result;
 }
 
@@ -184,7 +184,7 @@ meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err,
 		struct hc_url_s *url, gint count, gint distance,
 		const gchar *notin, const gchar *broken)
 {
-	static struct code_handler_s codes [] = {
+	struct code_handler_s codes [] = {
 		{ CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, chunk_info_concat, NULL },
 		{ CODE_FINAL_OK, REPSEQ_FINAL, chunk_info_concat, NULL },
 		{ 0,0,NULL,NULL}
@@ -194,17 +194,17 @@ meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err,
 
 	EXTRA_ASSERT (fd != NULL);
 	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2_CONTENTSPARE);
-	message_add_url (request, url);
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M2_CONTENTSPARE);
+	metautils_message_add_url (request, url);
 
 	if (count > 0)
-		message_add_field_strint64(request, NAME_MSGKEY_COUNT, count);
+		metautils_message_add_field_strint64(request, NAME_MSGKEY_COUNT, count);
 	if (distance > 0)
-		message_add_field_strint64(request, NAME_MSGKEY_DISTANCE, distance);
+		metautils_message_add_field_strint64(request, NAME_MSGKEY_DISTANCE, distance);
 	if (notin && *notin)
-		message_add_field_str(request, NAME_MSGKEY_NOTIN, notin);
+		metautils_message_add_field_str(request, NAME_MSGKEY_NOTIN, notin);
 	if (broken && *broken)
-		message_add_field_str(request, NAME_MSGKEY_BROKEN, broken);
+		metautils_message_add_field_str(request, NAME_MSGKEY_BROKEN, broken);
 
 	if (!metaXClient_reply_sequence_run (err, request, fd, ms, &data)) {
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
@@ -212,7 +212,7 @@ meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err,
 		result = NULL;
 	}
 
-	message_destroy(request);
+	metautils_message_destroy(request);
 	return result;
 }
 
@@ -223,7 +223,7 @@ meta2raw_remote_update_chunks (struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url, struct meta2_raw_content_s *content,
 		gboolean allow_update, char *position_prefix)
 {
-	static struct code_handler_s codes [] = {
+	struct code_handler_s codes [] = {
 		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
 		{ 0,0,NULL,NULL}
 	};
@@ -232,18 +232,18 @@ meta2raw_remote_update_chunks (struct metacnx_ctx_s *ctx, GError **err,
 	EXTRA_ASSERT (ctx != NULL);
 	EXTRA_ASSERT (url != NULL);
 	EXTRA_ASSERT (content != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2RAW_SETCHUNKS);
-	message_add_url (request, url);
-	message_add_body_unref (request, meta2_maintenance_marshall_content (content, NULL));
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M2RAW_SETCHUNKS);
+	metautils_message_add_url (request, url);
+	metautils_message_add_body_unref (request, meta2_maintenance_marshall_content (content, NULL));
 	if (allow_update)
-		message_add_field_str(request, NAME_MSGKEY_ALLOWUPDATE, "1");
+		metautils_message_add_field_str(request, NAME_MSGKEY_ALLOWUPDATE, "1");
 	if (position_prefix)
-		message_add_field_str(request, NAME_MSGKEY_POSITIONPREFIX, position_prefix);
+		metautils_message_add_field_str(request, NAME_MSGKEY_POSITIONPREFIX, position_prefix);
 
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
+	metautils_message_destroy(request);
 	return rc;
 }
 
@@ -252,7 +252,7 @@ meta2raw_remote_update_content (struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url, struct meta2_raw_content_s *content,
 		gboolean allow_update)
 {
-	static struct code_handler_s codes [] = {
+	struct code_handler_s codes [] = {
 		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
 		{ 0,0,NULL,NULL}
 	};
@@ -261,15 +261,15 @@ meta2raw_remote_update_content (struct metacnx_ctx_s *ctx, GError **err,
 	EXTRA_ASSERT (ctx != NULL);
 	EXTRA_ASSERT (url != NULL);
 	EXTRA_ASSERT (content != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2RAW_SETCONTENT);
-	message_add_body_unref (request, meta2_maintenance_marshall_content (content, err));
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M2RAW_SETCONTENT);
+	metautils_message_add_body_unref (request, meta2_maintenance_marshall_content (content, err));
 	if (allow_update)
-		message_add_field_str (request, NAME_MSGKEY_ALLOWUPDATE, "1");
+		metautils_message_add_field_str (request, NAME_MSGKEY_ALLOWUPDATE, "1");
 
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
+	metautils_message_destroy(request);
 	return rc;
 }
 
@@ -277,7 +277,7 @@ gboolean
 meta2raw_remote_delete_chunks(struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url, struct meta2_raw_content_s *content)
 {
-	static struct code_handler_s codes [] = {
+	struct code_handler_s codes [] = {
 		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
 		{ 0,0,NULL,NULL}
 	};
@@ -286,14 +286,14 @@ meta2raw_remote_delete_chunks(struct metacnx_ctx_s *ctx, GError **err,
 	EXTRA_ASSERT (ctx != NULL);
 	EXTRA_ASSERT (url != NULL);
 	EXTRA_ASSERT (content != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2RAW_DELCHUNKS);
-	message_add_url (request, url);
-	message_add_body_unref (request, meta2_maintenance_marshall_content (content, NULL));
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M2RAW_DELCHUNKS);
+	metautils_message_add_url (request, url);
+	metautils_message_add_body_unref (request, meta2_maintenance_marshall_content (content, NULL));
 	
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy (request);
+	metautils_message_destroy (request);
 	return rc;
 }
 
@@ -329,7 +329,7 @@ struct meta2_raw_content_s*
 meta2raw_remote_get_content_from_name(struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url)
 {
-	static struct code_handler_s codes [] = {
+	struct code_handler_s codes [] = {
 		{ CODE_FINAL_OK, REPSEQ_FINAL|REPSEQ_BODYMANDATORY, concat_contents, NULL },
 		{ 0,0,NULL,NULL}
 	};
@@ -338,12 +338,12 @@ meta2raw_remote_get_content_from_name(struct metacnx_ctx_s *ctx, GError **err,
 
 	EXTRA_ASSERT (ctx != NULL);
 	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2RAW_GETCONTENTBYPATH);
-	message_add_url (request, url);
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M2RAW_GETCONTENTBYPATH);
+	metautils_message_add_url (request, url);
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
+	metautils_message_destroy(request);
 	return result;
 }
 
@@ -351,7 +351,7 @@ static struct meta2_raw_content_s*
 meta2raw_remote_stat_content(struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url, gboolean check_flags)
 {
-	static struct code_handler_s codes [] = {
+	struct code_handler_s codes [] = {
 		{ CODE_FINAL_OK, REPSEQ_FINAL|REPSEQ_BODYMANDATORY, concat_contents, NULL },
 		{ CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, concat_contents, NULL },
 		{ 0,0,NULL,NULL}
@@ -361,14 +361,14 @@ meta2raw_remote_stat_content(struct metacnx_ctx_s *ctx, GError **err,
 
 	EXTRA_ASSERT (ctx != NULL);
 	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M2RAW_GETCHUNKS);
-	message_add_url (request, url);
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M2RAW_GETCHUNKS);
+	metautils_message_add_url (request, url);
 	if (check_flags)
-		message_add_field_str (request, NAME_MSGKEY_CHECK, "1");
+		metautils_message_add_field_str (request, NAME_MSGKEY_CHECK, "1");
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
+	metautils_message_destroy(request);
 	return result;
 }
 
@@ -382,7 +382,7 @@ meta2_remote_stat_content(struct metacnx_ctx_s *cnx, GError **err,
 gboolean
 meta2_remote_touch_content(struct metacnx_ctx_s *ctx, GError **err, struct hc_url_s *url)
 {
-	static struct code_handler_s codes [] = {
+	struct code_handler_s codes [] = {
 		{ CODE_FINAL_OK, REPSEQ_FINAL,         NULL, NULL },
 		{ 0,0,NULL,NULL}
 	};
@@ -390,12 +390,12 @@ meta2_remote_touch_content(struct metacnx_ctx_s *ctx, GError **err, struct hc_ur
 
 	EXTRA_ASSERT (ctx != NULL);
 	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named(NAME_MSGNAME_M2V1_TOUCH_CONTENT);
-	message_add_url (request, url);
+	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M2V1_TOUCH_CONTENT);
+	metautils_message_add_url (request, url);
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
+	metautils_message_destroy(request);
 	return rc;
 }
 
@@ -403,7 +403,7 @@ gboolean
 meta2_remote_touch_container_ex(struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url, unsigned int flags)
 {
-	static struct code_handler_s codes [] = {
+	struct code_handler_s codes [] = {
 		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
 		{ 0,0,NULL,NULL}
 	};
@@ -411,16 +411,16 @@ meta2_remote_touch_container_ex(struct metacnx_ctx_s *ctx, GError **err,
 	
 	EXTRA_ASSERT (ctx != NULL);
 	EXTRA_ASSERT (url != NULL);
-	MESSAGE request = message_create_named(NAME_MSGNAME_M2V1_TOUCH_CONTAINER);
-	message_add_url (request, url);
+	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M2V1_TOUCH_CONTAINER);
+	metautils_message_add_url (request, url);
 	if (flags) {
 		flags = g_htonl(flags);
-	    message_add_field (request, NAME_MSGKEY_FLAGS, &flags, sizeof(flags));
+	    metautils_message_add_field (request, NAME_MSGKEY_FLAGS, &flags, sizeof(flags));
 	}
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
+	metautils_message_destroy(request);
 	return rc;
 }
 
@@ -433,7 +433,7 @@ msg_manager_stat_content_v2(GError ** err, gpointer udata, gint code, MESSAGE re
 	EXTRA_ASSERT (rep != NULL);
 
 	GSList *l = NULL;
-	GError *e = message_extract_body_encoded (rep, FALSE, &l, meta2_raw_content_v2_unmarshall);
+	GError *e = metautils_message_extract_body_encoded (rep, FALSE, &l, meta2_raw_content_v2_unmarshall);
 	if (e) {
 		g_slist_foreach (l, meta2_raw_content_v2_gclean, NULL);
 		g_slist_free (l);
@@ -452,7 +452,7 @@ gboolean
 meta2_remote_stat_content_v2(struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url, meta2_raw_content_v2_t **result)
 {
-	static struct code_handler_s codes [] = {
+	struct code_handler_s codes [] = {
 		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, msg_manager_stat_content_v2 },
 		{ CODE_PARTIAL_CONTENT, REPSEQ_BODYMANDATORY, NULL, msg_manager_stat_content_v2 },
 		{ 0,0,NULL,NULL}
@@ -462,12 +462,12 @@ meta2_remote_stat_content_v2(struct metacnx_ctx_s *ctx, GError **err,
 	EXTRA_ASSERT (ctx != NULL);
 	EXTRA_ASSERT (url != NULL);
 
-	MESSAGE request = message_create_named(NAME_MSGNAME_M2V1_STAT);
-	message_add_url (request, url);
+	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M2V1_STAT);
+	metautils_message_add_url (request, url);
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
+	metautils_message_destroy(request);
 	return rc;
 }
 
@@ -475,7 +475,7 @@ gboolean
 meta2_remote_modify_metadatasys(struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url, const gchar* var_2)
 {
-	static struct code_handler_s codes [] = {
+	struct code_handler_s codes [] = {
 		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
 		{ 0,0,NULL,NULL}
 	};
@@ -485,13 +485,13 @@ meta2_remote_modify_metadatasys(struct metacnx_ctx_s *ctx, GError **err,
 	EXTRA_ASSERT (url != NULL);
 	EXTRA_ASSERT (var_2 != NULL);
 
-	MESSAGE request = message_create_named(NAME_MSGNAME_M2RAW_SETMDSYS);
-	message_add_url (request, url);
-	message_add_field_str (request, NAME_MSGKEY_VALUE, var_2);
+	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M2RAW_SETMDSYS);
+	metautils_message_add_url (request, url);
+	metautils_message_add_field_str (request, NAME_MSGKEY_VALUE, var_2);
 	gboolean rc = metaXClient_reply_sequence_run_context (err, ctx, request, &data);
 	if (!rc)
 		GSETERROR(err,"Cannot execute the query and receive all the responses");
-	message_destroy(request);
+	metautils_message_destroy(request);
 	return rc;
 }
 

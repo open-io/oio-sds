@@ -70,7 +70,7 @@ _sqlx_action_noreturn (struct req_args_s *args,
 		GByteArray* (*reqbuilder) (struct sqlx_name_s *))
 {
 	gboolean _on_status_reply (gpointer ctx, MESSAGE reply) {
-		*((gchar**)ctx) = message_extract_string_copy(reply, "MSG");
+		*((gchar**)ctx) = metautils_message_extract_string_copy(reply, "MSG");
 		return TRUE;
 	}
 	GString *out = g_string_new("{");
@@ -161,7 +161,7 @@ _sqlx_action_bodyv (struct req_args_s *args,
 {
 	gboolean _on_reply (gpointer ctx, MESSAGE reply) {
 		GByteArray **pgba = ctx;
-		GError *e = message_extract_body_gba (reply, pgba);
+		GError *e = metautils_message_extract_body_gba (reply, pgba);
 		if (e) g_clear_error (&e);
 		return TRUE;
 	}
@@ -277,7 +277,7 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 
 	GError *hook (struct sqlx_name_s *n, struct meta1_service_url_s *m1u) {
 		GByteArray *req = sqlx_pack_PIPEFROM(n, m1u->host);
-		g_assert(req != NULL);
+		EXTRA_ASSERT(req != NULL);
 		struct gridd_client_s *c = gridd_client_create(to, req, NULL, NULL);
 		g_byte_array_unref (req);
 		gridd_client_start (c);

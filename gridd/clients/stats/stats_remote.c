@@ -43,7 +43,7 @@ field_extractor(GError **e, gpointer u, gint code, MESSAGE r)
 		return FALSE;
 	}
 
-	gchar **fields = message_get_field_names (r);
+	gchar **fields = metautils_message_get_field_names (r);
 	if (fields) {
 		for (gchar **field=fields; *field ;field++) {
 			gchar *str_val = NULL;
@@ -51,7 +51,7 @@ field_extractor(GError **e, gpointer u, gint code, MESSAGE r)
 
 			if (!g_str_has_prefix(*field, MSGFIELD_STATPREFIX))
 				continue;
-			if (!(str_val = message_extract_string_copy(r, *field)))
+			if (!(str_val = metautils_message_extract_string_copy(r, *field)))
 				continue;
 
 			if (strchr(str_val, '.'))
@@ -98,8 +98,8 @@ gridd_stats_remote (addr_info_t *ai, gint ms, GError **err, const gchar *pattern
 
 	/*create and fill the request*/
 	GByteArray *gba_pattern = g_byte_array_append(g_byte_array_new(), (guint8*)pattern, strlen(pattern));
-	MESSAGE request = message_create_named("REQ_STATS");
-	message_add_fields_gba (request, MSGKEY_PATTERN, gba_pattern, NULL);
+	MESSAGE request = metautils_message_create_named("REQ_STATS");
+	metautils_message_add_fields_gba (request, MSGKEY_PATTERN, gba_pattern, NULL);
 	g_byte_array_free(gba_pattern, TRUE);
 
 	if (!request) {
@@ -113,13 +113,13 @@ gridd_stats_remote (addr_info_t *ai, gint ms, GError **err, const gchar *pattern
 		goto errorLabel;
 	}
 
-	message_destroy (request);	
+	metautils_message_destroy (request);	
 	return ht;
 	
 errorLabel:
 	if (ht)
 		g_hash_table_destroy (ht);
-	message_destroy (request);
+	metautils_message_destroy (request);
 	return NULL;
 }
 

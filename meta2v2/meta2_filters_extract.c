@@ -43,7 +43,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/autogen.h>
 
 #define EXTRACT_STRING2(FieldName,VarName,Opt) do { \
-	e = message_extract_string(reply->request, FieldName, buf, sizeof(buf)); \
+	e = metautils_message_extract_string(reply->request, FieldName, buf, sizeof(buf)); \
 	if(NULL != e) { \
 		if(!Opt) { \
 			meta2_filter_ctx_set_error(ctx, e); \
@@ -60,7 +60,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define EXTRACT_OPT(Name) do { \
 	memset(buf, 0, sizeof(buf)); \
-	e = message_extract_string(reply->request, Name, buf, sizeof(buf)); \
+	e = metautils_message_extract_string(reply->request, Name, buf, sizeof(buf)); \
 	if (NULL != e) { \
 		g_clear_error(&e); \
 	} else { \
@@ -69,7 +69,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 } while (0)
 
 #define EXTRACT_HEADER_BEANS(FieldName,Variable) do {\
-	GError *err = message_extract_header_encoded(reply->request, FieldName, TRUE, &Variable, bean_sequence_decoder);\
+	GError *err = metautils_message_extract_header_encoded(reply->request, FieldName, TRUE, &Variable, bean_sequence_decoder);\
 	if (err) { \
 		meta2_filter_ctx_set_error(ctx, err);\
 		return FILTER_KO;\
@@ -81,7 +81,7 @@ meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	TRACE_FILTER();
-	struct hc_url_s *url = message_extract_url (reply->request);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
 	meta2_filter_ctx_set_url(ctx, url);
 	return FILTER_OK;
 }
@@ -144,7 +144,7 @@ meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
 	struct hc_url_s *url = NULL;
 
 	gsize blen = 0;
-	void *b = message_get_BODY(reply->request, &blen);
+	void *b = metautils_message_get_BODY(reply->request, &blen);
 	if (!b || blen <= 0) {
 		err = NEWERROR(CODE_BAD_REQUEST, "Missing Body");
 		meta2_filter_ctx_set_error(ctx, err);
@@ -170,7 +170,7 @@ meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
 	 * for potential has_container filter called later, so this action prevent
 	 * from null url and ugly meta2 behaviour */
 	url = meta2_filter_ctx_get_url(ctx);
-	g_assert (url != NULL);
+	EXTRA_ASSERT (url != NULL);
 
 	if (!hc_url_get(url, HCURL_HEXID)) {
 		gchar strcid[STRLEN_CONTAINERID];
@@ -208,7 +208,7 @@ meta2_filter_extract_body_beans(struct gridd_filter_ctx_s *ctx,
 	TRACE_FILTER();
 
 	/* get the message body */
-	GError *err = message_extract_body_encoded (reply->request, (opt==NULL), &l, bean_sequence_decoder);
+	GError *err = metautils_message_extract_body_encoded (reply->request, (opt==NULL), &l, bean_sequence_decoder);
 	if (err) {
 		_bean_cleanl2 (l);
 		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST,
@@ -229,7 +229,7 @@ meta2_filter_extract_body_strings(struct gridd_filter_ctx_s *ctx,
 
 	TRACE_FILTER();
 
-	GError *err = message_extract_body_encoded (reply->request, (opt==NULL), &l, strings_unmarshall);
+	GError *err = metautils_message_extract_body_encoded (reply->request, (opt==NULL), &l, strings_unmarshall);
 	if (err) {
 		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST,
 					"Invalid request, Empty / Invalid body"));
@@ -291,7 +291,7 @@ _extract_header_flag(const gchar *n, struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	TRACE_FILTER();
-	if (message_extract_flag(reply->request, n, 0))
+	if (metautils_message_extract_flag(reply->request, n, 0))
 		meta2_filter_ctx_add_param(ctx, n, "1");
 	return FILTER_OK;
 }
@@ -341,7 +341,7 @@ meta2_filter_extract_header_flags32(struct gridd_filter_ctx_s *ctx,
 	guint32 flags = 0;
 
 	TRACE_FILTER();
-	e = message_extract_flags32(reply->request, NAME_MSGKEY_FLAGS, FALSE, &flags);
+	e = metautils_message_extract_flags32(reply->request, NAME_MSGKEY_FLAGS, FALSE, &flags);
 	if (NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;

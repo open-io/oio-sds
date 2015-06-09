@@ -101,10 +101,7 @@ task_worker(gpointer p, GError ** error)
 	TRACE_POSITION();
 
 	/*prepare a session and a worker for the ASN.1 request */
-	bzero(sdata.ns, sizeof(sdata.ns));
 	g_strlcpy(sdata.ns, (gchar*)p, sizeof(sdata.ns)-1);
-
-	bzero(sdata.task_id, sizeof(sdata.task_id));
 	g_snprintf(sdata.task_id, sizeof(sdata.task_id), TASK_ID".%s", (gchar*)p);
 
 	ns_data = get_namespace((gchar*)p, error);

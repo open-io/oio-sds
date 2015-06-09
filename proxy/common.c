@@ -72,7 +72,7 @@ _resolve_service_and_do (const gchar *t, gint64 seq, struct hc_url_s *u,
 	else
 		err = hc_resolve_reference_service (resolver, u, t, &uv);
 
-	g_assert(BOOL(uv!=NULL) ^ BOOL(err!=NULL));
+	EXTRA_ASSERT(BOOL(uv!=NULL) ^ BOOL(err!=NULL));
 
 	if (NULL != err) {
 		g_prefix_error (&err, "Resolution error: ");
@@ -125,7 +125,7 @@ _gba_request (struct meta1_service_url_s *m1u,
 {
 	gboolean _on_reply (gpointer ctx, MESSAGE reply) {
 		GByteArray **pgba = ctx;
-		GError *e = message_extract_body_gba (reply, pgba);
+		GError *e = metautils_message_extract_body_gba (reply, pgba);
 		if (e) g_clear_error (&e);
 		return TRUE;
 	}

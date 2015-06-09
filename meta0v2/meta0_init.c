@@ -87,7 +87,7 @@ meta0_action(void)
 			rc = meta0_remote_fill(m0addr, 60000, urls, nbreplicas, &err);
 		else
 			rc = meta0_remote_fill_v2(m0addr, 60000, nbreplicas, nodist, &err);
-		g_assert((err != NULL) ^ (BOOL(rc)));
+		EXTRA_ASSERT((err != NULL) ^ (BOOL(rc)));
 
 		if (!rc) {
 			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);

@@ -17,7 +17,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
@@ -129,10 +128,7 @@ int main (int argc, char ** args)
 	gs_container_t *container = NULL;
 	gs_container_t *container_bis = NULL;
 	gs_download_info_t dl_info;
-	char *ns;
-	char cname[60];
-	char path[60];
-	char *source_path;
+	char cname[60], path[60];
 	struct stat64 local_stats;
 
 	if (argc != 3) {
@@ -142,11 +138,8 @@ int main (int argc, char ** args)
 
 	memset(&dl_info, 0x00, sizeof(dl_info));
 
-	ns = args[1];
-	source_path = args[2];
-
-	bzero(cname, sizeof(cname));
-	bzero(path, sizeof(path));
+	const char *ns = args[1];
+	const char *source_path = args[2];
 	g_snprintf(cname, sizeof(cname), "SOLR%d", rand());
 	g_snprintf(path, sizeof(path), "CONTENT%d", rand());
 

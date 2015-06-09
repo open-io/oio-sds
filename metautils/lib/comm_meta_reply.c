@@ -42,19 +42,19 @@ MESSAGE
 metaXServer_reply_simple(MESSAGE request, gint code, const gchar *message)
 {
 	EXTRA_ASSERT (request != NULL);
-	MESSAGE reply = message_create_named(NAME_MSGNAME_METAREPLY);
+	MESSAGE reply = metautils_message_create_named(NAME_MSGNAME_METAREPLY);
 
 	gsize mIDSize = 0;
-	void *mID = message_get_ID (request, &mIDSize);
+	void *mID = metautils_message_get_ID (request, &mIDSize);
 	if (mID && mIDSize)
-		message_set_ID (reply, mID, mIDSize);
+		metautils_message_set_ID (reply, mID, mIDSize);
 
 	if (CODE_IS_NETWORK_ERROR(code))
 		code = CODE_PROXY_ERROR;
-	message_add_field_strint(reply, NAME_MSGKEY_STATUS, code);
+	metautils_message_add_field_strint(reply, NAME_MSGKEY_STATUS, code);
 
 	if (message)
-		message_add_field_str (reply, NAME_MSGKEY_MESSAGE, message);
+		metautils_message_add_field_str (reply, NAME_MSGKEY_MESSAGE, message);
 	return reply;
 }
 
@@ -65,12 +65,12 @@ metaXClient_reply_simple(MESSAGE reply, guint * status, gchar ** msg)
 	EXTRA_ASSERT (status != NULL);
 	EXTRA_ASSERT (msg != NULL);
 
-	GError *err = message_extract_struint(reply, NAME_MSGKEY_STATUS, status);
+	GError *err = metautils_message_extract_struint(reply, NAME_MSGKEY_STATUS, status);
 	if (err) {
-		g_prefix_error (&err, "Invalid reply: no status: ");
+		g_prefix_error (&err, "status: ");
 		return err;
 	}
-	*msg = message_extract_string_copy(reply, NAME_MSGKEY_MESSAGE);
+	*msg = metautils_message_extract_string_copy(reply, NAME_MSGKEY_MESSAGE);
 	if (!*msg)
 		*msg = g_strdup("?");
 	return NULL;
@@ -101,7 +101,7 @@ rep_handler(gpointer u, MESSAGE reply)
 	gint64 s64 = 0;
 	struct code_handler_s *h;
 
-	ctx->err = message_extract_strint64(reply, NAME_MSGKEY_STATUS, &s64);
+	ctx->err = metautils_message_extract_strint64(reply, NAME_MSGKEY_STATUS, &s64);
 	if (ctx->err != NULL)
 		return FALSE;
 
@@ -112,7 +112,7 @@ rep_handler(gpointer u, MESSAGE reply)
 
 	/* BODY management */
 	gsize bodylen = 0;
-	void *body = message_get_BODY(reply, &bodylen);
+	void *body = metautils_message_get_BODY(reply, &bodylen);
 
 	if ((h->flags & REPSEQ_BODYMANDATORY) && (!body || !bodylen)) {
 		ctx->err = NEWERROR(CODE_INTERNAL_ERROR, "Missing body (mandatory for status " "[%"G_GINT64_FORMAT"])", s64);
@@ -255,7 +255,6 @@ metaXClient_reply_sequence_run(GError ** err, MESSAGE req, int *fd, gint ms,
 	*fd = cnx.fd;
 	cnx.fd = -1;
 	metacnx_clear(&cnx);
-
 	return rc;
 }
 
@@ -266,7 +265,7 @@ metacnx_clear(struct metacnx_ctx_s *ctx)
 {
 	if (!ctx)
 		return;
-	memset(ctx, 0x00, sizeof(struct metacnx_ctx_s));
+	memset(ctx, 0, sizeof(struct metacnx_ctx_s));
 	ctx->fd = -1;
 }
 

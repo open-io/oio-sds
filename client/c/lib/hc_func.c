@@ -68,13 +68,14 @@ _dl_nocache(gs_container_t *c, struct hc_url_s *url,
 			return e;
 		}
 
-		namespace_info_copy(ni, &(content->info.container->info.gs->ni), &err);
+		namespace_info_free (content->info.container->info.gs->ni);
+		content->info.container->info.gs->ni = ni;
+		ni = NULL;
 
 		/*download the content*/
 		(void) gs_download_content_full (content, dlinfo, stgpol, filtered,
 				beans, &e);
-		namespace_info_clear(ni);
-		g_free(ni);
+
 		gs_content_free (content);
 		g_slist_free(filtered);
 		_bean_cleanl2(beans);
@@ -151,7 +152,7 @@ static int
 _my_content_filter(gs_content_t * content, void *user_data)
 {
 	gs_error_t *err = NULL;
-	static gs_content_info_t info;
+	gs_content_info_t info;
 	struct list_content_s *lc = (struct list_content_s *)user_data;
 
 	if (!content)
@@ -517,7 +518,6 @@ hc_get_content(gs_grid_storage_t *hc, struct hc_url_s *url, const char *local_pa
 		}
 	} else {
 		gchar tmp[256];
-		bzero(tmp, sizeof(tmp));
 		g_snprintf(tmp, sizeof(tmp), "Failed to open the destination file descriptor to path=%s\n", local_path ? local_path : "<stdout>");
 		e = g_malloc0(sizeof(gs_error_t));
 		e->code = 0;

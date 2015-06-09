@@ -1057,7 +1057,6 @@ _server_count_procs(void)
 
 	in = fopen("/proc/cpuinfo", "r");
 	if (in) {
-		memset(line, 0, sizeof(line));
 		while (fgets(line, sizeof(line), in)) {
 			if (g_str_has_prefix(line, "processor"))
 				count ++;
@@ -1320,7 +1319,7 @@ _client_clean(struct network_server_s *srv, struct network_client_s *clt)
 	clt->local_stats = NULL;
 	clt->main_stats = NULL;
 	clt->flags = clt->events = 0;
-	bzero(&(clt->time), sizeof(clt->time));
+	memset(&(clt->time), 0, sizeof(clt->time));
 
 	data_slab_sequence_clean_data(&(clt->input));
 	data_slab_sequence_clean_data(&(clt->output));

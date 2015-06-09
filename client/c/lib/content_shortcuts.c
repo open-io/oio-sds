@@ -60,7 +60,7 @@ gs_content_t*
 gs_container_get_content_from_raw(gs_grid_storage_t *client,
 		struct meta2_raw_content_s *raw, gs_error_t **gserr)
 {
-	gchar str_hex[STRLEN_CONTAINERID+1];
+	gchar str_hex[STRLEN_CONTAINERID];
 	struct gs_container_location_s *location;
 	gs_content_t *result = NULL;
 
@@ -70,8 +70,7 @@ gs_container_get_content_from_raw(gs_grid_storage_t *client,
 	}
 
 	/* Now locates the content's container */
-	bzero(str_hex, sizeof(str_hex));
-	buffer2str(raw->container_id, sizeof(container_id_t), str_hex, sizeof(str_hex));
+	container_id_to_string(raw->container_id, str_hex, sizeof(str_hex));
 	location = gs_locate_container_by_hexid(client, str_hex, gserr);
 	if (!location) {
 		GSERRORSET(gserr, "Container reference not found for CID[%s]", str_hex);

@@ -59,12 +59,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define DEFAULT_SVC_CHECK_FREQ  1
 # define DEFAULT_SVC_PUSH_BLANK  TRUE
 
-# define DEFAULT_BROKEN_MANAGE   TRUE
-# define DEFAULT_BROKEN_FREQ     30
-# define KEY_BROKEN_MANAGE       "enable_broken_elements"
-# define KEY_BROKEN_FREQ_PUSH    "period_broken_push"
-# define KEY_BROKEN_FREQ_GET     "period_broken_get"
-
 // Default value for the next 5
 # define DEFAULT_CS_UPDATE_FREQ           5
 # define CS_DEFAULT_FREQ_KEY              "cluster_update_freq"
@@ -102,8 +96,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /* GLOBALS ----------------------------------------------------------------- */
 
 /* main config */
-extern gchar str_opt_config[1024];
-extern gchar str_opt_log[1024];
+extern gchar str_opt_config[512];
 extern enum process_type_e agent_type;
 extern gboolean flag_check_services;
 extern int period_check_services;
@@ -114,7 +107,7 @@ extern int inet_socket_backlog;
 extern int inet_socket_timeout;
 extern int inet_socket_port;
 
-extern char unix_socket_path[1024];
+extern char unix_socket_path[512];
 extern int unix_socket_timeout;
 extern int unix_socket_backlog;
 extern int unix_socket_mode;
@@ -127,11 +120,6 @@ extern int period_get_srvtype;
 extern int period_get_srvlist;
 extern int period_push_srvlist;
 
-/* broken items */
-extern gboolean flag_manage_broken;
-extern int period_push_broken;
-extern int period_get_broken;
-
 /* ------------------------------------------------------------------------- */
 
 typedef struct namespace_data_s {
@@ -140,7 +128,6 @@ typedef struct namespace_data_s {
 	namespace_info_t ns_info;
 	gboolean configured;
 	struct conscience_s *conscience;
-	GSList *list_broken;
 	
 	/*services locally registered*/
 	GHashTable *local_services;/**< Maps (gchar*) to (struct service_info_s*)*/

@@ -234,8 +234,8 @@ conscience_srv_fill_srvinfo_header(struct service_info_s *dst,
 	if (!dst || !src)
 		return;
 
-	g_assert(src->srvtype != NULL);
-	g_assert(sizeof(dst->type) == sizeof(src->srvtype->type_name));
+	EXTRA_ASSERT(src->srvtype != NULL);
+	EXTRA_ASSERT(sizeof(dst->type) == sizeof(src->srvtype->type_name));
 
 	memset(dst->type, 0x00, sizeof(dst->type));
 	memset(dst->ns_name, 0x00, sizeof(dst->ns_name));

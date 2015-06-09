@@ -81,39 +81,38 @@ fill_scanning_info_for_chunk_checker(struct volume_scanning_info_s *scanning_inf
 {
 	gchar volume_path[LIMIT_LENGTH_VOLUMENAME];
 	struct chunk_checker_data_s cc_data;
-        struct service_tag_s *tag = NULL;
+	struct service_tag_s *tag = NULL;
 
-        CHECK_ARG_POINTER(scanning_info, error);
-        CHECK_ARG_POINTER(service_info, error);
-        CHECK_ARG_POINTER(config, error);
+	CHECK_ARG_POINTER(scanning_info, error);
+	CHECK_ARG_POINTER(service_info, error);
+	CHECK_ARG_POINTER(config, error);
 
-	bzero(volume_path, sizeof(volume_path));
-	bzero(scanning_info, sizeof(*scanning_info));
-	bzero(&cc_data, sizeof(cc_data));
+	memset(scanning_info, 0, sizeof(*scanning_info));
+	memset(&cc_data, 0, sizeof(cc_data));
 
-        tag = service_info_get_tag(service_info->tags, NAME_TAGNAME_RAWX_VOL);
-        if (tag == NULL) {
-                GSETERROR(error, "Failed to retrieve tag [%s]", NAME_TAGNAME_RAWX_VOL);
-                return FALSE;
-        }
+	tag = service_info_get_tag(service_info->tags, NAME_TAGNAME_RAWX_VOL);
+	if (tag == NULL) {
+		GSETERROR(error, "Failed to retrieve tag [%s]", NAME_TAGNAME_RAWX_VOL);
+		return FALSE;
+	}
 
-        /* Fill volume_path */
-        if (!service_tag_get_value_string(tag, volume_path, sizeof(volume_path), error)) {
-                GSETERROR(error, "Failed to extract string value from tag [%s]", NAME_TAGNAME_RAWX_VOL);
-                return FALSE;
-        }
+	/* Fill volume_path */
+	if (!service_tag_get_value_string(tag, volume_path, sizeof(volume_path), error)) {
+		GSETERROR(error, "Failed to extract string value from tag [%s]", NAME_TAGNAME_RAWX_VOL);
+		return FALSE;
+	}
 
-        /* Fill callback and callback data */
+	/* Fill callback and callback data */
 	scanning_info->volume_path = g_strdup(volume_path);
-        scanning_info->file_action = check_chunk_and_sleep;
+	scanning_info->file_action = check_chunk_and_sleep;
 	scanning_info->dir_exit = sleep_after_directory;
 
 	cc_data.volume_path = g_strdup(volume_path);
-        cc_data.sleep_time = config->chunk_checker_sleep_time;
+	cc_data.sleep_time = config->chunk_checker_sleep_time;
 	cc_data.si = service_info_dup(service_info);
 	scanning_info->callback_data = g_memdup(&cc_data, sizeof(cc_data));
 
-        return TRUE;
+	return TRUE;
 }
 
 gboolean

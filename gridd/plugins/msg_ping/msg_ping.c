@@ -37,7 +37,7 @@ plugin_matcher(MESSAGE m, void *param, GError ** err)
 {
 	(void)param, (void)err;
 	gsize len = 0;
-	void *n = message_get_NAME(m, &len);
+	void *n = metautils_message_get_NAME(m, &len);
 	if (!n || len != 4)
 		return 0;
 	return 0 == memcmp(n, "PING", 4);

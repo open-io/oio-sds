@@ -84,9 +84,8 @@ fill_scanning_info_for_chunk_crawler(struct volume_scanning_info_s *scanning_inf
 	CHECK_ARG_POINTER(service_info, error);
 	CHECK_ARG_POINTER(config, error);
 
-	bzero(volume_path, sizeof(volume_path));
-	bzero(scanning_info, sizeof(*scanning_info));
-	bzero(&cc_data, sizeof(cc_data));
+	memset(scanning_info, 0, sizeof(*scanning_info));
+	memset(&cc_data, 0, sizeof(cc_data));
 
 	tag = service_info_get_tag(service_info->tags, NAME_TAGNAME_RAWX_VOL);
 	if (tag == NULL) {

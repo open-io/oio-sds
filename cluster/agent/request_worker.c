@@ -27,7 +27,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 
-#include "./broken_workers.h"
 #include "./get_ns_worker.h"
 #include "./gridagent.h"
 #include "./io_scheduler.h"
@@ -77,23 +76,6 @@ init_request_worker(GError **error)
 		return(0);
 	}
 
-	if (!register_request_handler(MSG_ERRCID_STORE, agent_store_erroneous_container, error)) {
-		GSETERROR(error, "Failed to register agent_store_erroneous_container worker in request_worker");
-		return(0);
-	}
-	if (!register_request_handler(MSG_ERRCID_FETCH, agent_fetch_broken_all_elements, error)) {
-		GSETERROR(error, "Failed to register agent_fetch_broken_all_elements worker in request_worker");
-		return(0);
-	}
-	if (!register_request_handler(MSG_ERRCID_FLUSH, agent_flush_erroneous_container, error)) {
-		GSETERROR(error, "Failed to register agent_flush_erroneous_container worker in request_worker");
-		return(0);
-	}
-	if (!register_request_handler(MSG_ERRCID_FIXED, agent_fixed_erroneous_container, error)) {
-		GSETERROR(error, "Failed to register agent_fixed_erroneous_container worker in request_worker");
-		return(0);
-	}
-
 	if (!register_request_handler(MSG_LSTTASK, list_tasks_worker, error)) {
 		GSETERROR(error, "Failed to register list_tasks_worker worker in request_worker");
 		return(0);
@@ -124,8 +106,8 @@ int request_worker(worker_t *worker, GError **error) {
 
 	TRACE_POSITION();
 
-	g_assert(worker != NULL);
-	g_assert(worker->data.session != NULL);
+	EXTRA_ASSERT(worker != NULL);
+	EXTRA_ASSERT(worker->data.session != NULL);
 
 	request = g_malloc0(sizeof(request_t));
 

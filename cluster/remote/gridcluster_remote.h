@@ -31,23 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 namespace_info_t *gcluster_get_namespace_info_full(addr_info_t *addr,
 		long to, GError **error);
 
-/** Push a list of broken containers to the conscience */
-gint gcluster_push_broken_container(addr_info_t *addr, long to,
-		GSList *container_list, GError **error);
-
-/** Tell the conscience that a rawx was fully scaned to repair these containers */
-gint gcluster_fix_broken_container(addr_info_t *addr, long to,
-		GSList *container_list, GError **error);
-
-/** Remove a list of broken containers from the conscience */
-gint gcluster_rm_broken_container(addr_info_t *addr, long to,
-		GSList *container_list, GError **error);
-
-/** Get the full broken container list from the conscience */
-GSList *gcluster_get_broken_container(addr_info_t *addr, long to,
-		GError **error);
-
-/** Remove a list of broken containers from the conscience */
+/** Get the list of services for the given types */
 GSList *gcluster_get_services(const char *target, gdouble timeout,
 		const gchar *type, gboolean full, GError **error);
 

@@ -83,10 +83,7 @@ struct dav_resource_private {
 static const char *
 __gen_info(const dav_resource *resource, apr_pool_t *pool)
 {
-	dav_rawx_server_conf *conf;
-
-	conf = resource->info->conf;
-
+	dav_rawx_server_conf *conf = resource->info->conf;
 	return apr_pstrcat(pool, "namespace ", conf->ns_name, "\npath ", conf->docroot, "\n", NULL);
 }
 
@@ -97,7 +94,7 @@ __gen_stats(const dav_resource *resource, apr_pool_t *pool)
 
 	DAV_XDEBUG_POOL(pool, 0, "%s()", __FUNCTION__);
 
-	bzero(&stats, sizeof(stats));
+	memset(&stats, 0, sizeof(stats));
 	dav_rawx_server_conf *c = NULL;
 	c = resource_get_server_config(resource);
 	apr_global_mutex_lock(c->lock.handle);

@@ -465,7 +465,7 @@ sqlx_repository_configure_maxbases(sqlx_repository_t *repo, guint max)
 	EXTRA_ASSERT(repo->bases_count == 0);
 
 	GRID_TRACE2("%s(%p,%u)", __FUNCTION__, repo, max);
-	g_assert(max >= 4);
+	EXTRA_ASSERT(max >= 4);
 
 	if (repo->cache)
 		sqlx_cache_set_max_bases(repo->cache, max);

@@ -104,10 +104,8 @@ parse_output(const gchar *cmd, service_info_t *si)
 	while (!feof(stream_in) && !ferror(stream_in)) {
 		GMatchInfo *mi = NULL;
 
-		bzero(line, sizeof(line));
-		if (!fgets(line, sizeof(line), stream_in)) {
+		if (!fgets(line, sizeof(line), stream_in))
 			break;
-		}
 
 		/* chomp the line */
 		my_chomp(line);

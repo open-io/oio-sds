@@ -54,7 +54,7 @@ License along with this library.
 #include "restoration.h"
 
 #define EXTRACT_STRING(Name,Dst) do { \
-	err = message_extract_string(reply->request, Name, Dst, sizeof(Dst)); \
+	err = metautils_message_extract_string(reply->request, Name, Dst, sizeof(Dst)); \
 	if (NULL != err) { \
 		reply->send_error(0, err); \
 		return TRUE; \
@@ -231,7 +231,7 @@ replicate_table_deletes(struct sqlx_sqlite3_s *sq3, Table_t *table)
 static GError*
 _table_name_check(Table_t *table)
 {
-	static guint8 bad[256];
+	static guint8 bad[256] = {0};
 
 	if (!bad[1]) { /* lazy init */
 		guint8 i = 255;
@@ -258,7 +258,7 @@ _table_name_check(Table_t *table)
 	} while (0);
 
 	GRID_TRACE("Table name validated size=%u name[%.*s]",
-				table->name.size, table->name.size, table->name.buf);
+			table->name.size, table->name.size, table->name.buf);
 	return NULL;
 }
 
@@ -386,8 +386,7 @@ replicate_body_parse(struct sqlx_sqlite3_s *sq3, guint8 *body, gsize bodysize)
 	TableSequence_t *seq = NULL;
 	GError *err = NULL;
 
-	memset(&ctx, 0, sizeof(ctx));
-	ctx.max_stack_size = 32 * 1024;
+	ctx.max_stack_size = ASN1C_MAX_STACK;
 	rv = ber_decode(&ctx, &asn_DEF_TableSequence, (void**)&seq,
 			body, bodysize);
 	if (rv.code != RC_OK)
@@ -616,7 +615,7 @@ __is_in_array(register const gchar **p, register const gchar *needle)
 static gboolean
 _pragma_is_allowed(const gchar *pragma)
 {
-	static const gchar *allowed_pragmas[] = {
+	const gchar *allowed_pragmas[] = {
 		"table_info", "index_info", "index_list",
 		"page_count", "quick_check", "collation_list",
 		"database_list", "freelist_count",
@@ -628,7 +627,7 @@ _pragma_is_allowed(const gchar *pragma)
 static gboolean
 _function_is_allowed(const gchar *func)
 {
-	static const gchar *forbidden_funcs[] = {
+	const gchar *forbidden_funcs[] = {
 		"load_extension", "sqlite_compileoption_get",
 		"sqlite_compileoption_get", "sqlite_source_id",
 		NULL
@@ -1283,28 +1282,28 @@ static GError *
 _load_sqlx_name (struct gridd_reply_ctx_s *ctx, struct sqlx_name_mutable_s *n, guint32 *pflags)
 {
 	GError *err;
-	gchar ns[LIMIT_LENGTH_NSNAME], base[256], type[256];
+	gchar ns[LIMIT_LENGTH_NSNAME], base[LIMIT_LENGTH_BASENAME], type[LIMIT_LENGTH_BASETYPE];
 	gboolean flush, nocheck, noreal, local, autocreate, chunked;
 
 	flush = noreal = local = autocreate = nocheck = chunked = FALSE;
 	memset(n, 0, sizeof(*n));
 
-	err = message_extract_string(ctx->request, NAME_MSGKEY_NAMESPACE, ns, sizeof(ns));
+	err = metautils_message_extract_string(ctx->request, NAME_MSGKEY_NAMESPACE, ns, sizeof(ns));
 	if (NULL != err)
 		return err;
-	err = message_extract_string(ctx->request, NAME_MSGKEY_BASENAME, base, sizeof(base));
+	err = metautils_message_extract_string(ctx->request, NAME_MSGKEY_BASENAME, base, sizeof(base));
 	if (NULL != err)
 		return err;
-	err = message_extract_string(ctx->request, NAME_MSGKEY_BASETYPE, type, sizeof(type));
+	err = metautils_message_extract_string(ctx->request, NAME_MSGKEY_BASETYPE, type, sizeof(type));
 	if (NULL != err)
 		return err;
 
-	local = message_extract_flag(ctx->request, NAME_MSGKEY_LOCAL, FALSE);
-	autocreate = message_extract_flag(ctx->request, NAME_MSGKEY_AUTOCREATE, FALSE);
-	nocheck = message_extract_flag(ctx->request, NAME_MSGKEY_NOCHECK, FALSE);
-	noreal = message_extract_flag(ctx->request, NAME_MSGKEY_NOREAL, FALSE);
-	chunked = message_extract_flag(ctx->request, NAME_MSGKEY_CHUNKED, FALSE);
-	flush = message_extract_flag(ctx->request, NAME_MSGKEY_FLUSH, FALSE);
+	local = metautils_message_extract_flag(ctx->request, NAME_MSGKEY_LOCAL, FALSE);
+	autocreate = metautils_message_extract_flag(ctx->request, NAME_MSGKEY_AUTOCREATE, FALSE);
+	nocheck = metautils_message_extract_flag(ctx->request, NAME_MSGKEY_NOCHECK, FALSE);
+	noreal = metautils_message_extract_flag(ctx->request, NAME_MSGKEY_NOREAL, FALSE);
+	chunked = metautils_message_extract_flag(ctx->request, NAME_MSGKEY_CHUNKED, FALSE);
+	flush = metautils_message_extract_flag(ctx->request, NAME_MSGKEY_FLUSH, FALSE);
 
 	ctx->subject("%s.%s|%s", base, type, local?"LOC":"REP");
 	
@@ -1394,7 +1393,7 @@ sqlx_dispatch_REPLICATE(struct gridd_reply_ctx_s *reply,
 	SQLXNAME_STACKIFY(name);
 
 	gsize bsize = 0;
-	void *b = message_get_BODY(reply->request, &bsize);
+	void *b = metautils_message_get_BODY(reply->request, &bsize);
 	if (!b) {
 		reply->send_error(CODE_BAD_REQUEST, NEWERROR(CODE_BAD_REQUEST, "missing body"));
 		return TRUE;
@@ -1517,7 +1516,7 @@ sqlx_dispatch_DESCR(struct gridd_reply_ctx_s *reply,
 {
 	GError *err = NULL;
 	struct sqlx_name_mutable_s name;
-	gchar descr[512];
+	gchar descr[512] = "?";
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1526,8 +1525,6 @@ sqlx_dispatch_DESCR(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
-	memset(descr, 0, sizeof(descr));
-	descr[0] = '?';
 	election_manager_whatabout(sqlx_repository_get_elections_manager(repo),
 			CONST(&name), descr, sizeof(descr));
 	reply->add_body(metautils_gba_from_string(descr));
@@ -1583,7 +1580,7 @@ sqlx_dispatch_PIPETO(struct gridd_reply_ctx_s *reply,
 {
 	GError *err = NULL;
 	GByteArray *dump = NULL;
-	gchar target[256];
+	gchar target[STRLEN_ADDRINFO];
 	struct sqlx_name_mutable_s name;
 
 	(void) ignored;
@@ -1676,7 +1673,7 @@ sqlx_dispatch_RESTORE(struct gridd_reply_ctx_s *reply,
 
 	/* The body is the raw base */
 	gsize dump_size = 0;
-	guint8 *dump = message_get_BODY(reply->request, &dump_size);
+	guint8 *dump = metautils_message_get_BODY(reply->request, &dump_size);
 	if (!dump) {
 		reply->send_error(0, NEWERROR(CODE_BAD_REQUEST, "Missing body"));
 		return TRUE;
@@ -1787,7 +1784,7 @@ sqlx_dispatch_PROPDEL(struct gridd_reply_ctx_s *reply,
 	SQLXNAME_STACKIFY(name);
 
 	GSList *keys = NULL;
-	err = message_extract_body_encoded (reply->request, TRUE, &keys,
+	err = metautils_message_extract_body_encoded (reply->request, TRUE, &keys,
 			strings_unmarshall);
 	if (NULL != err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
@@ -1890,7 +1887,7 @@ sqlx_dispatch_PROPSET(struct gridd_reply_ctx_s *reply,
 	SQLXNAME_STACKIFY(name);
 
 	GSList *pairs = NULL;
-	err = message_extract_body_encoded (reply->request, TRUE, &pairs, key_value_pairs_unmarshall);
+	err = metautils_message_extract_body_encoded (reply->request, TRUE, &pairs, key_value_pairs_unmarshall);
 	if (NULL != err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
@@ -2282,13 +2279,13 @@ static GError*
 _extract_params(MESSAGE msg, TableSequence_t **params)
 {
 	gsize bsize = 0;
-	void *b = message_get_BODY(msg, &bsize);
+	void *b = metautils_message_get_BODY(msg, &bsize);
 	if (!b)
 		return NEWERROR(CODE_BAD_REQUEST, "Bad body");
 
 	asn_codec_ctx_t ctx;
 	memset(&ctx, 0, sizeof(ctx));
-	ctx.max_stack_size = 8192;
+	ctx.max_stack_size = ASN1C_MAX_STACK;
 	asn_dec_rval_t rv = ber_decode(&ctx, &asn_DEF_TableSequence, (void**)params, b, bsize);
 	if (rv.code != RC_OK)
 		return NEWERROR(CODE_BAD_REQUEST, "body decoding error");

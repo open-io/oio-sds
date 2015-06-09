@@ -169,7 +169,7 @@ gboolean metaXClient_reply_sequence_run_from_addrinfo(GError ** err,
  * copy of the required fields from the request, and sets the appropriated
  * fields with the given status and message.
  *
- * The reply pointer wust be freed with message_destroy(). */
+ * The reply pointer wust be freed with metautils_message_destroy(). */
 MESSAGE metaXServer_reply_simple(MESSAGE request, gint status, const gchar *msg);
 
 /** Performs the opposite operation : retrieves the core elements of the
@@ -178,171 +178,119 @@ MESSAGE metaXServer_reply_simple(MESSAGE request, gint status, const gchar *msg)
  * It is allocated with the g_lib and must be freed with g_free(). */
 GError* metaXClient_reply_simple(MESSAGE reply, guint * status, gchar ** msg);
 
-/**
- * Altough the list of fixed parameters is quite small, we do not want a set of
- * accessor and modifier for each parameter.
- * So the parameter's accessor, modifier and deleter take one argument to specify
- * the parameter on wich the action is made.
- */
-enum message_param_e
-{
-	MP_ID,
-	/**<Specify an action on the ID parameter*/
-	MP_NAME,
-	/**<Specify an action on the NAME parameter*/
-	MP_VERSION,
-	/**<Specify an action on the VERSION parameter*/
-	MP_BODY
-	/**<Specify an action on the BODY parameter*/
-};
+void* metautils_message_get_ID (MESSAGE m, gsize *l);
+void* metautils_message_get_NAME (MESSAGE m, gsize *l);
+void* metautils_message_get_VERSION (MESSAGE m, gsize *l);
+void* metautils_message_get_BODY (MESSAGE m, gsize *l);
 
-#define message_get_ID(M,L)      message_get_param((M),MP_ID,(L))
-#define message_get_NAME(M,L)    message_get_param((M),MP_NAME,(L))
-#define message_get_VERSION(M,L) message_get_param((M),MP_VERSION,(L))
-#define message_get_BODY(M,L)    message_get_param((M),MP_BODY,(L))
+void metautils_message_set_ID (MESSAGE m, const void *b, gsize l);
+void metautils_message_set_NAME (MESSAGE m, const void *b, gsize l);
+void metautils_message_set_VERSION (MESSAGE m, const void *b, gsize l);
+void metautils_message_set_BODY (MESSAGE m, const void *b, gsize l);
 
-#define message_set_ID(M,V,L)      message_set_param((M),MP_ID,(V),(L))
-#define message_set_NAME(M,V,L)    message_set_param((M),MP_NAME,(V),(L))
-#define message_set_VERSION(M,V,L) message_set_param((M),MP_VERSION,(V),(L))
-#define message_set_BODY(M,V,L)    message_set_param((M),MP_BODY,(V),(L))
-
-#define message_has_ID(M)      message_has_param((M),MP_ID)
-#define message_has_NAME(M)    message_has_param((M),MP_NAME)
-#define message_has_VERSION(M) message_has_param((M),MP_VERSION)
-#define message_has_BODY(M)    message_has_param((M),MP_BODY)
+gboolean metautils_message_has_ID (MESSAGE m);
+gboolean metautils_message_has_NAME (MESSAGE m);
+gboolean metautils_message_has_VERSION (MESSAGE m);
+gboolean metautils_message_has_BODY (MESSAGE m);
 
 /** Allocates all the internal structures of a hidden message. */
-MESSAGE message_create(void);
+MESSAGE metautils_message_create(void);
 
-MESSAGE message_create_named (const char *name);
+MESSAGE metautils_message_create_named (const char *name);
 
 /** Frees all the internal structures of the pointed message. */
-void message_destroy(MESSAGE m);
+void metautils_message_destroy(MESSAGE m);
 
 /** Perform the serialization of the message. */
-gint message_marshall(MESSAGE m, void **s, gsize * sSize, GError ** error);
-
 GByteArray* message_marshall_gba(MESSAGE m, GError **err);
 
 /** Allocates a new message and Unserializes the given buffer. */
-MESSAGE message_unmarshall(void *s, gsize sSize, GError ** error);
+MESSAGE message_unmarshall(const guint8 *buf, gsize len, GError ** error);
 
-/** Calls message_marshall_gba() then message_destroy() on 'm'. */
+/** Calls message_marshall_gba() then metautils_message_destroy() on 'm'. */
 GByteArray* message_marshall_gba_and_clean(MESSAGE m);
 
 typedef gint (body_decoder_f)(GSList **res, const void *b, gsize *bs, GError **err);
 
-/** Returns wether the given message has the targeted parameter or not.  */
-gboolean message_has_param(MESSAGE m, enum message_param_e mp);
-
-/**
- * @brief Finds and returns a pointer to a given quick parameter in the given
- * message.
- *
- * The case where the target parameter is not present is cansidered as an error.
- *
- * @param m a pointer to the inspected message
- * @param mp the code of the targeted parameter
- * @param sSize a holder pointer to store the size of the parameter buffer. It
- * cannot be NULL.
- * @return a pointer to the data (NOT A COPY)
- */
-void* message_get_param(MESSAGE m, enum message_param_e mp, gsize * sSize);
-
-/**
- * @brief Sets a new value for the given parameter, in the given message.
- * The given new value will be copied.
- *
- * If this parameter is already present, the existing buffer will be freed
- * and discarded.
- *
- * @param m the inspected message
- * @param mp thet code of the targeted quick parameter
- * @param s a pointer to a memory buffer holding the new value of the parameter.
- * @param sSize the size of the given memory buffer holding the value.
- */
-void message_set_param(MESSAGE m, enum message_param_e mp, const void *s,
-		gsize sSize);
-
 /** Adds a new custom field in the list of the message. Now check is made to
  * know whether the given field is already present or not. The given new value
  * will be copied. */
-void message_add_field(MESSAGE m, const char *name, const void *value, gsize valueSize);
+void metautils_message_add_field(MESSAGE m, const char *name, const void *value, gsize valueSize);
 
-void message_add_cid (MESSAGE m, const char *f, const container_id_t cid);
+void metautils_message_add_cid (MESSAGE m, const char *f, const container_id_t cid);
 
-void message_add_url (MESSAGE m, struct hc_url_s *url);
+void metautils_message_add_url (MESSAGE m, struct hc_url_s *url);
 
 /* wraps message_set_BODY() and g_bytes_array_unref() */
-void message_add_body_unref (MESSAGE m, GByteArray *body);
+void metautils_message_add_body_unref (MESSAGE m, GByteArray *body);
 
-void message_add_field_str(MESSAGE m, const char *name, const char *value);
+void metautils_message_add_field_str(MESSAGE m, const char *name, const char *value);
 
-void message_add_field_strint64(MESSAGE m, const char *n, gint64 v);
+void metautils_message_add_field_strint64(MESSAGE m, const char *n, gint64 v);
 
-static inline void message_add_field_strint(MESSAGE m, const char *n, gint v) { return message_add_field_strint64(m,n,v); }
-static inline void message_add_field_struint(MESSAGE m, const char *n, guint v) { return message_add_field_strint64(m,n,v); }
+static inline void metautils_message_add_field_strint(MESSAGE m, const char *n, gint v) { return metautils_message_add_field_strint64(m,n,v); }
+static inline void metautils_message_add_field_struint(MESSAGE m, const char *n, guint v) { return metautils_message_add_field_strint64(m,n,v); }
 
-void message_add_fieldv_gba(MESSAGE m, va_list args);
+void metautils_message_add_fieldv_gba(MESSAGE m, va_list args);
 
-void message_add_fields_gba(MESSAGE m, ...);
+void metautils_message_add_fields_gba(MESSAGE m, ...);
 
-void message_add_fieldv_str(MESSAGE m, va_list args);
+void metautils_message_add_fieldv_str(MESSAGE m, va_list args);
 
-void message_add_fields_str(MESSAGE m, ...);
+void metautils_message_add_fields_str(MESSAGE m, ...);
 
-void* message_get_field(MESSAGE m, const char *name, gsize *vsize);
+void* metautils_message_get_field(MESSAGE m, const char *name, gsize *vsize);
 
-gchar ** message_get_field_names(MESSAGE m);
+gchar ** metautils_message_get_field_names(MESSAGE m);
 
-GHashTable* message_get_fields(MESSAGE m);
+GHashTable* metautils_message_get_fields(MESSAGE m);
 
-GError* message_extract_cid(MESSAGE msg, const gchar *n,
+GError* metautils_message_extract_cid(MESSAGE msg, const gchar *n,
 		container_id_t *cid);
 
-GError* message_extract_prefix(MESSAGE msg, const gchar *n,
+GError* metautils_message_extract_prefix(MESSAGE msg, const gchar *n,
 		guint8 *d, gsize *dsize);
 
-gboolean message_extract_flag(MESSAGE m, const gchar *n, gboolean d);
+gboolean metautils_message_extract_flag(MESSAGE m, const gchar *n, gboolean d);
 
-GError* message_extract_flags32(MESSAGE msg, const gchar *n,
+GError* metautils_message_extract_flags32(MESSAGE msg, const gchar *n,
 		gboolean mandatory, guint32 *flags);
 
-GError* message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
+GError* metautils_message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
 		gsize dst_size);
 
-gchar* message_extract_string_copy(MESSAGE msg, const gchar *n);
+gchar* metautils_message_extract_string_copy(MESSAGE msg, const gchar *n);
 
-GError* message_extract_strint64(MESSAGE msg, const gchar *n,
+GError* metautils_message_extract_strint64(MESSAGE msg, const gchar *n,
 		gint64 *i64);
 
-GError* message_extract_struint(MESSAGE msg, const gchar *n,
+GError* metautils_message_extract_struint(MESSAGE msg, const gchar *n,
 		guint *u);
 
-GError* message_extract_boolean(MESSAGE msg,
+GError* metautils_message_extract_boolean(MESSAGE msg,
 		const gchar *n, gboolean mandatory, gboolean *v);
 
-GError* message_extract_header_encoded(MESSAGE msg,
+GError* metautils_message_extract_header_encoded(MESSAGE msg,
 		const gchar *n, gboolean mandatory,
 		GSList **result, body_decoder_f decoder);
 
-GError* message_extract_header_gba(MESSAGE msg, const gchar *n,
+GError* metautils_message_extract_header_gba(MESSAGE msg, const gchar *n,
 		gboolean mandatory, GByteArray **result);
 
-GError* message_extract_body_gba(MESSAGE msg, GByteArray **result);
+GError* metautils_message_extract_body_gba(MESSAGE msg, GByteArray **result);
 
 /** Upon success, ensures result will be a printable string with a trailing \0 */
-GError* message_extract_body_string(MESSAGE msg, gchar **result);
+GError* metautils_message_extract_body_string(MESSAGE msg, gchar **result);
 
-GError* message_extract_body_strv(MESSAGE msg, gchar ***result);
+GError* metautils_message_extract_body_strv(MESSAGE msg, gchar ***result);
 
 GError* metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
 		body_decoder_f decoder);
 
-GError* message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
+GError* metautils_message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
 		GSList **result, body_decoder_f decoder);
 
-struct hc_url_s * message_extract_url (MESSAGE m);
+struct hc_url_s * metautils_message_extract_url (MESSAGE m);
 
 /** @} */
 
@@ -354,61 +302,35 @@ struct hc_url_s * message_extract_url (MESSAGE m);
  * @{
  */
 
-gint namespace_info_unmarshall_one(struct namespace_info_s **ni,
-		const void *s, gsize *sSize, GError **err);
-
-DECLARE_MARSHALLER(namespace_info_list_marshall);
-DECLARE_MARSHALLER_GBA(namespace_info_list_marshall_gba);
-DECLARE_UNMARSHALLER(namespace_info_list_unmarshall);
-DECLARE_BODY_MANAGER(namespace_info_concat);
-
-DECLARE_MARSHALLER(chunk_info_marshall);
 DECLARE_MARSHALLER_GBA(chunk_info_marshall_gba);
 DECLARE_UNMARSHALLER(chunk_info_unmarshall);
 DECLARE_BODY_MANAGER(chunk_info_concat);
 
-DECLARE_MARSHALLER(container_info_marshall);
-DECLARE_MARSHALLER_GBA(container_info_marshall_gba);
-DECLARE_UNMARSHALLER(container_info_unmarshall);
-DECLARE_BODY_MANAGER(container_info_concat);
-
-DECLARE_MARSHALLER(addr_info_marshall);
 DECLARE_MARSHALLER_GBA(addr_info_marshall_gba);
 DECLARE_UNMARSHALLER(addr_info_unmarshall);
-DECLARE_BODY_MANAGER(addr_info_concat);
 
-DECLARE_MARSHALLER(path_info_marshall);
 DECLARE_MARSHALLER_GBA(path_info_marshall_gba);
 DECLARE_UNMARSHALLER(path_info_unmarshall);
 DECLARE_BODY_MANAGER(path_info_concat);
 
-DECLARE_MARSHALLER(meta0_info_marshall);
 DECLARE_MARSHALLER_GBA(meta0_info_marshall_gba);
 DECLARE_UNMARSHALLER(meta0_info_unmarshall);
 
-DECLARE_MARSHALLER(key_value_pairs_marshall);
 DECLARE_MARSHALLER_GBA(key_value_pairs_marshall_gba);
 DECLARE_UNMARSHALLER(key_value_pairs_unmarshall);
-DECLARE_BODY_MANAGER(key_value_pairs_concat);
 
 DECLARE_MARSHALLER_GBA(strings_marshall_gba);
 DECLARE_UNMARSHALLER(strings_unmarshall);
 DECLARE_BODY_MANAGER(strings_concat);
 
-DECLARE_MARSHALLER(service_info_marshall);
 DECLARE_UNMARSHALLER(service_info_unmarshall);
 DECLARE_MARSHALLER_GBA(service_info_marshall_gba);
-DECLARE_BODY_MANAGER(service_info_concat);
 
 DECLARE_MARSHALLER_GBA( meta2_property_marshall_gba);
-DECLARE_MARSHALLER(     meta2_property_marshall);
 DECLARE_UNMARSHALLER(   meta2_property_unmarshall);
-DECLARE_BODY_MANAGER(   meta2_property_concat);
 
 DECLARE_MARSHALLER_GBA( meta2_raw_content_v2_marshall_gba);
-DECLARE_MARSHALLER(     meta2_raw_content_v2_marshall);
 DECLARE_UNMARSHALLER(   meta2_raw_content_v2_unmarshall);
-DECLARE_BODY_MANAGER(   meta2_raw_content_v2_concat);
 
 /**
  * @param si the structure to be serialized. NULL is an error

@@ -124,7 +124,7 @@ extern time_t main_log_level_update;
 /** Should the logging system try to reduce the prefix of each line */
 extern int main_log_flags;
 
-extern gchar syslog_id[256];
+extern gchar syslog_id[64];
 
 #define LOG_FLAG_TRIM_DOMAIN 0x01
 #define LOG_FLAG_PURIFY 0x02

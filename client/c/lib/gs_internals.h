@@ -32,7 +32,6 @@ License along with this library.
 # define G_LOG_DOMAIN "grid.client"
 #endif
 
-#include <assert.h>
 #include <errno.h>
 #include <netdb.h>
 #include <stdlib.h>
@@ -130,15 +129,6 @@ License along with this library.
 
 #define ZERO(A) memset((A), 0x00, sizeof(A));
 
-#ifndef NO_ASSERT
-# include <assert.h>
-# define MYASSERT(C) assert(C)
-#else
-# define MYASSERT(C)
-#endif
-
-#define ENV_LOG4C_ENABLE "GS_DEBUG_ENABLE"
-#define ENV_LOG4C_LOAD "GS_DEBUG_PATH"
 #define ENV_GLIB2_ENABLE "GS_DEBUG_GLIB2"
 #define ENV_WAIT_ON_FAILED_ADD "GS_RETRY_DELAY"
 
@@ -171,7 +161,11 @@ License along with this library.
  * There is currently no support for META1 redundancy
  */
 struct gs_grid_storage_s {
-	namespace_info_t ni;
+	gchar *ns;
+	gchar *physical_namespace;
+
+	namespace_info_t *ni;
+	resolver_direct_t *direct_resolver;
 	
 	struct {
 		struct {
@@ -183,10 +177,6 @@ struct gs_grid_storage_s {
 			gint op;
 		} rawx;
 	} timeout;
-
-	resolver_direct_t *direct_resolver;
-	char *full_vns;
-	char *physical_namespace;
 };
 
 struct gs_container_s {

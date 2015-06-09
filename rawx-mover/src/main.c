@@ -240,7 +240,7 @@ get_volume_usage(gdouble *result)
 	if (!last_update || now > (last_update  + interval_update_statfs)) {
 		gdouble d_blocks, d_bavail;
 
-		bzero(&sfs, sizeof(sfs));
+		memset(&sfs, 0, sizeof(sfs));
 		if (-1 == statfs(rawx_vol, &sfs)) {
 			GRID_ERROR("statfs(%s) = %s", rawx_vol, strerror(errno));
 			return FALSE;
@@ -537,7 +537,6 @@ rawx_get_host(struct service_info_s *si)
 	if (!si)
 		return g_strdup("");
 
-	bzero(str_addr, sizeof(str_addr));
 	addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
 	str = strrchr(str_addr, ':');
 	if (str)
@@ -549,22 +548,22 @@ static int
 save_canonical_volume(const char *vol)
 {
 	int i, slash;
-	char *path;
-	size_t path_len;
-
-	path_len = strlen(vol)+1;
-	path = g_alloca(path_len);
-	bzero(path, path_len);
+	size_t path_len = strlen(vol)+1;
+	char *path = g_alloca(path_len);
 
 	/* skip intermediate sequences of path separators */
+	path[0] = '\0';
 	for (i=0,slash=0; *vol ; vol++) {
 		if (*vol != '/') {
 			path[i++] = *vol;
+			path[i] = 0;
 			slash = 0;
 		}
 		else {
-			if (!slash)
+			if (!slash) {
 				path[i++] = *vol;
+				path[i] = 0;
+			}
 			slash = 1;
 		}
 	}
@@ -691,10 +690,8 @@ validate_chunk_in_one_meta2(struct upload_info_s *info, const char *str_addr)
 	hc_url_set(url, HCURL_HEXID, info->content.container_id);
 	hc_url_set(url, HCURL_PATH, info->content.path);
 
-	bzero(m2_descr, sizeof(m2_descr));
 	g_snprintf(m2_descr, sizeof(m2_descr), "%s|meta2|%s|%s",
 			ns_name, str_addr, info->content.container_id);
-	//		ns_name, str_addr, info->location->container_name);
 
 	MY_DEBUG(*info, "About to validate the reference in meta2 at [%s]", m2_descr);
 
@@ -741,7 +738,7 @@ load_raw_chunk(const char *what, struct upload_info_s *info,
 
 	(void) what;
 	raw_content = g_malloc0(sizeof(*raw_content));
-	bzero(&raw_chunk, sizeof(raw_chunk));
+	memset(&raw_chunk, 0, sizeof(raw_chunk));
 
 	if (!convert_content_text_to_raw(check_info->ct_info, raw_content, &gerr)) {
 		MY_ERROR(*info, "Invalid content fields: %s", gerror_get_message(gerr));
@@ -1002,7 +999,6 @@ download_old_chunk(const gchar *path, struct upload_info_s *info)
 	gchar *str, str_addr[STRLEN_ADDRINFO];
 	guint16 src_port;
 
-	bzero(str_addr, sizeof(str_addr));
 	addr_info_to_string(&rawx_addr, str_addr, sizeof(str_addr));
 	str = strrchr(str_addr, ':');
 	if (str)
@@ -1754,8 +1750,6 @@ rawx_mover_set_defaults(void)
 	memset(rawx_vol, 0, LIMIT_LENGTH_VOLUMENAME);
 	memset(&rawx_addr, 0, sizeof(addr_info_t));
 	lock_xattr_name = g_string_new(VOLUME_LOCK_XATTR_NAME);
-
-	return;
 }
 
 static struct grid_main_callbacks rawx_mover_callbacks =
@@ -1772,9 +1766,6 @@ static struct grid_main_callbacks rawx_mover_callbacks =
 int
 main(int argc, char **argv)
 {
-	/* Prevents log disabling by gs_grid_storage_init2()
-	 * but does not enable log4c */
-	setenv(ENV_LOG4C_ENABLE, "0", TRUE);
 	return grid_main(argc, argv, &rawx_mover_callbacks);
 }
 

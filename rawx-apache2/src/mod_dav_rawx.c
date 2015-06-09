@@ -421,7 +421,7 @@ _create_shm_if_needed(char *shm_path, server_rec *server, apr_pool_t *plog)
 		/* Init the SHM */
 		void *ptr_counter = apr_shm_baseaddr_get(shm);
 		if (ptr_counter) {
-			bzero(ptr_counter, sizeof(struct shm_stats_s));
+			memset(ptr_counter, 0, sizeof(struct shm_stats_s));
 			/* init rrd's */
 			rawx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_req_sec));
 			rawx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_duration));

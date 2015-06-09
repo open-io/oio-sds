@@ -43,7 +43,7 @@ struct grid_task_queue_s
 struct grid_task_queue_s*
 grid_task_queue_create(const gchar *name)
 {
-	g_assert(name != NULL);
+	EXTRA_ASSERT(name != NULL);
 
 	struct grid_task_queue_s *gtq;
 	gtq = g_malloc0(sizeof(struct grid_task_queue_s));
@@ -83,15 +83,15 @@ grid_task_queue_destroy(struct grid_task_queue_s *gtq)
 void
 grid_task_queue_stop(struct grid_task_queue_s *gtq)
 {
-	g_assert(gtq != NULL);
+	EXTRA_ASSERT(gtq != NULL);
 	gtq->stopped = TRUE;
 }
 
 guint
 grid_task_queue_sleepticks(struct grid_task_queue_s *gtq)
 {
-	g_assert(gtq != NULL);
-	g_assert(gtq->tasks != NULL);
+	EXTRA_ASSERT(gtq != NULL);
+	EXTRA_ASSERT(gtq->tasks != NULL);
 
 	if (!gtq->tasks->len)
 		return 0;
@@ -117,8 +117,8 @@ grid_task_queue_fire(struct grid_task_queue_s *gtq)
 	guint i, max;
 	task_period_t current;
 
-	g_assert(gtq != NULL);
-	g_assert(gtq->tasks != NULL);
+	EXTRA_ASSERT(gtq != NULL);
+	EXTRA_ASSERT(gtq->tasks != NULL);
 	current = gtq->current ++;
 
 	for (i=0,max=gtq->tasks->len; i<max ;i++) {
@@ -135,8 +135,8 @@ void
 grid_task_queue_register(struct grid_task_queue_s *gtq, task_period_t period,
 		GDestroyNotify run, GDestroyNotify cleanup, gpointer udata)
 {
-	g_assert(gtq != NULL);
-	g_assert(gtq->tasks != NULL);
+	EXTRA_ASSERT(gtq != NULL);
+	EXTRA_ASSERT(gtq->tasks != NULL);
 
 	struct grid_task_s task;
 	task.next = gtq->current;

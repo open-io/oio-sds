@@ -69,7 +69,7 @@ _parse_args(struct compound_type_s *ct, gchar *s)
 GError*
 compound_type_parse(struct compound_type_s *ct, const gchar *srvtype)
 {
-	g_assert(ct != NULL);
+	EXTRA_ASSERT(ct != NULL);
 	memset(ct, 0, sizeof(struct compound_type_s));
 
 	if (!srvtype || !*srvtype || *srvtype == '.' || *srvtype == ';')

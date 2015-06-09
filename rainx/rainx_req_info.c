@@ -97,7 +97,7 @@ __gen_stats(const dav_resource *resource, apr_pool_t *pool)
 
 	DAV_XDEBUG_POOL(pool, 0, "%s()", __FUNCTION__);
 
-	bzero(&stats, sizeof(stats));
+	memset(&stats, 0, sizeof(stats));
 	dav_rainx_server_conf *c = NULL;
 	c = resource_get_server_config(resource);
 	apr_global_mutex_lock(c->lock.handle);
