@@ -80,7 +80,6 @@ usage(void)
 	g_printerr("  %-20s\t%s\n", "--rules-path,             -P", "Dump the logic rules for the given namespace");
 	g_printerr("  %-20s\t%s\n", "--service <service desc>, -S", "Select service described by desc.");
 	g_printerr("  %-20s\t%s\n", "--set-score <[0..100]>      ", "Set and lock score for the service specified by -S.");
-	g_printerr("  %-20s\t%s\n", "--show,                   -s", "Show elements of the cluster.");
 	g_printerr("  %-20s\t%s\n", "--unlock-score              ", "Unlock score for the service specified by -S.");
 	g_printerr("  %-20s\t%s\n", "--verbose,                -v", "Increases the verbosity");
 }
@@ -280,7 +279,6 @@ main(int argc, char **argv)
 	gchar *namespace = NULL;
 	gboolean has_allcfg = FALSE;
 	gboolean has_nslist = FALSE;
-	gboolean has_show = TRUE;
 	gboolean has_show_internals = FALSE;
 	gboolean has_raw = FALSE;
 	gboolean has_clear_services = FALSE;
@@ -390,9 +388,6 @@ main(int argc, char **argv)
 				break;
 			case 't':
 				has_list_task = TRUE;
-				break;
-			case 's':
-				has_show = TRUE;
 				break;
 			case 'r':
 				has_raw = TRUE;
@@ -557,7 +552,7 @@ main(int argc, char **argv)
 			g_print("Score of service [%s] has been successfully locked to %d\n", service_desc, score);
 
 	}
-	else if (has_show) {
+	else {
 
 		if (has_raw)
 			raw_print_namespace(ns);
