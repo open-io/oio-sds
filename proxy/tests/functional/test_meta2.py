@@ -30,21 +30,23 @@ class TestMeta2Functional(unittest.TestCase):
 
         self.chars = string.ascii_lowercase + string.ascii_uppercase + string.digits
 
+        self.id_generator = lambda n: ''.join(
+            random.choice(self.chars) for _ in range(n))
+
     def setUp(self):
         super(TestMeta2Functional, self).setUp()
 
-        def id_generator(n):
-            return ''.join(random.choice(self.chars) for _ in range(n))
+        self.list_paths = list()
 
-        self.idRef_rand = id_generator(6)
-        self.idRef_rand2 = id_generator(6)
-        self.prop = id_generator(8)
-        self.path_rand = id_generator(10)
-        self.path_rand2 = id_generator(10)
-        self.prop_rand = id_generator(12)
-        self.prop_rand2 = id_generator(12)
-        self.string_rand = id_generator(20)
-        self.string_rand2 = id_generator(20)
+        self.idRef_rand = self.id_generator(6)
+        self.idRef_rand2 = self.id_generator(6)
+        self.prop = self.id_generator(8)
+        self.path_rand = self.id_generator(10)
+        self.path_rand2 = self.id_generator(10)
+        self.prop_rand = self.id_generator(12)
+        self.prop_rand2 = self.id_generator(12)
+        self.string_rand = self.id_generator(20)
+        self.string_rand2 = self.id_generator(20)
 
         self.h.update(self.string_rand)
         self.hash_rand = self.h.hexdigest()
@@ -116,14 +118,86 @@ class TestMeta2Functional(unittest.TestCase):
             self.bean2["size"] = 80
             self.bean2["type"] = "chunk"
 
+    def post_bean(self):
+
+        self.session.put(self.addr_m2_ref_path,
+                         json.dumps([self.prepared_bean]),
+                         headers={
+                             'x-oio-content-meta-hash': self.hash_rand,
+                             'x-oio-content-meta-length': 40})
+
+    def prepare_bean_list(self, i):
+
+        j = 1
+
+        while j <= i:
+            self.path_rand = self.id_generator(10)
+            self.string_rand = self.id_generator(20)
+
+            self.h.update(self.string_rand)
+            self.hash_rand = self.h.hexdigest()
+
+            self.addr_m2_ref_path = self.addr_m2_ref + "/" + self.path_rand
+            self.addr_m2_ref_path_action = self.addr_m2_ref_path + "/action"
+
+            self.prepared_bean = \
+                self.session.post(self.addr_m2_ref_path_action, json.dumps(
+                    {"action": "Beans", "args": self.bean_void}
+                )).json()[0]
+            self.prepared_bean["id"] = self.prepared_bean["url"]
+            self.prepared_bean["hash"] = self.hash_rand
+            self.prepared_bean["size"] = 40
+            self.prepared_bean["type"] = "chunk"
+
+            self.post_bean()
+
+            self.list_paths.append(self.addr_m2_ref_path)
+            j += 1
+
+    def prepare_bean_listing(self):
+
+        self.prepared_bean = \
+            self.session.post(self.addr_m2_ref_path_action, json.dumps(
+                {"action": "Beans", "args": self.bean_void}
+            )).json()[0]
+        self.prepared_bean["hash"] = self.hash_rand
+        self.prepared_bean["size"] = 40
+        self.prepared_bean["type"] = "chunk"
+
+        for num1 in xrange(4):
+            for num2 in xrange(13):
+                self.addr_m2_ref_path = self.addr_m2_ref + '/%d-%02d' % (
+                    num1, num2)
+                self.addr_m2_ref_path_action = self.addr_m2_ref_path + "/action"
+                self.post_bean()
+                self.list_paths.append(self.addr_m2_ref_path)
+
+        for num in xrange(13):
+            self.addr_m2_ref_path = self.addr_m2_ref + '/2-05-%02d' % num
+            self.addr_m2_ref_path_action = self.addr_m2_ref_path + "/action"
+            self.post_bean()
+            self.list_paths.append(self.addr_m2_ref_path)
+
+        for num in xrange(13):
+            self.addr_m2_ref_path = self.addr_m2_ref + '/3-%02d-05' % num
+            self.addr_m2_ref_path_action = self.addr_m2_ref_path + "/action"
+            self.post_bean()
+            self.list_paths.append(self.addr_m2_ref_path)
+
+    def delete_bean_list(self):
+
+        for a in self.list_paths:
+            try:
+                self.session.delete(a)
+            except Exception:
+                pass
+        del self.list_paths
+
     def prepare_content(self):
 
         self.session.put(self.addr_m2_ref)
         self.prepare_bean(1)
-        self.session.put(self.addr_m2_ref_path, json.dumps([self.bean]),
-                         headers={
-                             'x-oio-content-meta-hash': self.hash_rand,
-                             'x-oio-content-meta-length': 40})
+        self.post_bean()
 
     def prepare_properties(self):
 
@@ -133,7 +207,7 @@ class TestMeta2Functional(unittest.TestCase):
              "args": {"prop1": self.prop_rand, "prop2": self.prop_rand2}}
         ))
 
-# Containers tests
+    # Containers tests
 
     def test_containers_put(self):
 
@@ -165,10 +239,267 @@ class TestMeta2Functional(unittest.TestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(type(resp.json()), dict)
 
+    def test_containers_get_marker(self):
+
+        self.session.put(self.addr_m2_ref)
+        self.prepare_bean_list(5)
+
+        before_mark = [bean["name"] for bean in
+                       self.session.get(self.addr_m2_ref,
+                                        params={'marker_end': 'W'}).json()[
+                           "objects"]]
+        after_mark = [bean["name"] for bean in
+                      self.session.get(self.addr_m2_ref,
+                                       params={'marker': 'W'}).json()[
+                          "objects"]]
+
+        for name in before_mark:
+            self.assertTrue(name <= 'W')
+        for name in after_mark:
+            self.assertTrue(name > 'W')
+
+        self.delete_bean_list()
+
+    def test_containers_get_prefix(self):
+
+        self.session.put(self.addr_m2_ref)
+        self.prepare_bean_list(2)
+
+        marker = self.session.get(self.addr_m2_ref).json()['objects'][0][
+                     'name'][0:3]
+
+        prefix_mark = [bean["name"] for bean in
+                       self.session.get(self.addr_m2_ref,
+                                        params={'prefix': marker}).json()[
+                           "objects"]]
+
+        for name in prefix_mark:
+            self.assertTrue(name[0:3] == marker)
+
+        self.delete_bean_list()
+
+    def test_containers_get_delimiter(self):
+
+        self.session.put(self.addr_m2_ref)
+        self.prepare_bean_list(5)
+
+        names = [bean['name'] for bean in
+                 self.session.get(self.addr_m2_ref).json()['objects']]
+
+        marker = self.session.get(self.addr_m2_ref).json()['objects'][0][
+                     'name'][2:3]
+
+        delimit_mark = [bean["name"] for bean in
+                        self.session.get(self.addr_m2_ref,
+                                         params={'delimiter': marker}).json()[
+                            "objects"]]
+
+        for bean in delimit_mark:
+            self.assertTrue(marker not in bean)
+        for bean in names:
+            if bean not in delimit_mark:
+                self.assertTrue(marker in bean)
+
+        self.delete_bean_list()
+
+    def test_containers_get_max(self):
+
+        self.session.put(self.addr_m2_ref)
+        self.prepare_bean_list(5)
+
+        max_mark = [bean["name"] for bean in
+                    self.session.get(self.addr_m2_ref,
+                                     params={'max': 3}).json()[
+                        "objects"]]
+
+        self.assertEqual(len(max_mark), 3)
+
+        self.delete_bean_list()
+
     def test_container_get_ref_link(self):
 
         resp = self.session.get(self.addr_m2_ref)
         self.assertEqual(resp.status_code, 404)
+
+    def test_container_get_listing(self):
+
+        self.session.put(self.addr_m2_ref)
+        self.prepare_bean_listing()
+
+        listing = self.session.get(self.addr_m2_ref, params={'max': 10}).json()[
+            "objects"]
+
+        self.assertEqual(len(listing), 10)
+        self.assertEqual(listing[0]['name'], '0-00')
+        self.assertEqual(listing[-1]['name'], '0-09')
+
+        listing = self.session.get(self.addr_m2_ref, params={'max': 10,
+                                                             'marker_end': '0-05'}).json()[
+            "objects"]
+
+        self.assertEqual(len(listing), 5)
+        self.assertEqual(listing[0]['name'], '0-00')
+        self.assertEqual(listing[-1]['name'], '0-04')
+
+        listing = self.session.get(self.addr_m2_ref, params={'max': 10,
+                                                             'marker': '0-09'}).json()[
+            "objects"]
+
+        self.assertEqual(len(listing), 10)
+        self.assertEqual(listing[0]['name'], '0-10')
+        self.assertEqual(listing[-1]['name'], '1-06')
+
+        listing = self.session.get(self.addr_m2_ref, params={'max': 6,
+                                                             'marker': '1-09'}).json()[
+            "objects"]
+
+        self.assertEqual(len(listing), 6)
+        self.assertEqual(listing[0]['name'], '1-10')
+        self.assertEqual(listing[-1]['name'], '2-02')
+
+        listing = self.session.get(self.addr_m2_ref, params={'max': 2,
+                                                             'prefix': '0-1'}).json()[
+            "objects"]
+
+        self.assertEqual(len(listing), 2)
+        self.assertEqual(listing[0]['name'], '0-10')
+        self.assertEqual(listing[-1]['name'], '0-11')
+
+        listing = \
+            self.session.get(self.addr_m2_ref,
+                             params={'max': 2, 'delimiter': '-',
+                                     'prefix': '0-1'}).json()[
+                "objects"]
+
+        self.assertEqual(len(listing), 2)
+        self.assertEqual(listing[0]['name'], '0-10')
+        self.assertEqual(listing[-1]['name'], '0-11')
+
+        listing = \
+            self.session.get(self.addr_m2_ref,
+                             params={'max': 5, 'delimiter': '-',
+                                     'prefix': '0-'}).json()[
+                "objects"]
+
+        self.assertEqual(len(listing), 5)
+        self.assertEqual(listing[0]['name'], '0-00')
+        self.assertEqual(listing[-1]['name'], '0-04')
+
+        #  test_get_listing2
+        #  test_get_listing3
+        #  test_get_listing4
+        #  test_get_listing5
+
+        listing = \
+            self.session.get(self.addr_m2_ref,
+                             params={'max': 10, 'prefix': '3-',
+                                     'marker': '3-05',
+                                     'delimiter': '-'}).json()
+
+        self.assertEqual(len(listing["objects"]), 5)
+        self.assertEqual(len(listing["prefixes"]), 5)
+        self.assertEqual([obj["name"] for obj in listing["objects"]],
+                         ['3-06', '3-07', '3-08', '3-09', '3-10'])
+        self.assertEqual(listing["prefixes"],
+                         ['3-05-', '3-06-', '3-07-', '3-08-', '3-09-'])
+
+        listing = \
+            self.session.get(self.addr_m2_ref,
+                             params={'max': 10, 'marker': '3-05'}).json()[
+                "objects"]
+
+        self.assertEqual(len(listing), 10)
+        self.assertEqual([obj["name"] for obj in listing],
+                         ['3-05-05', '3-06', '3-06-05', '3-07', '3-07-05',
+                          '3-08', '3-08-05', '3-09', '3-09-05', '3-10'])
+
+        #  test_get_listing6
+
+        self.delete_bean_list()
+
+    # Failed get_list tests
+
+    def test_container_get_listing2(self):
+
+        self.session.put(self.addr_m2_ref)
+        self.prepare_bean_listing()
+
+        listing = \
+            self.session.get(self.addr_m2_ref,
+                             params={'max': 10, 'delimiter': '-'}).json()
+
+        self.assertEqual(len(listing), 4)
+        self.assertEqual(listing, ['0-', '1-', '2-', '3-'])
+
+        self.delete_bean_list()
+
+    def test_container_get_listing3(self):
+
+        self.session.put(self.addr_m2_ref)
+        self.prepare_bean_listing()
+
+        listing = \
+            self.session.get(self.addr_m2_ref,
+                             params={'max': 10, 'marker': '2-',
+                                     'delimiter': '-'}).json()["prefixes"]
+
+        self.assertEqual(len(listing), 1)
+        self.assertEqual(listing, ['3-'])
+
+        self.delete_bean_list()
+
+    def test_container_get_listing4(self):
+
+        self.session.put(self.addr_m2_ref)
+        self.prepare_bean_listing()
+
+        listing = \
+            self.session.get(self.addr_m2_ref,
+                             params={'max': 10, 'prefix': '2',
+                                     'delimiter': '-'}).json()["prefixes"]
+
+        self.assertEqual(len(listing), 1)
+        self.assertEqual(listing, ['2-'])
+
+        self.delete_bean_list()
+
+    def test_container_get_listing5(self):
+
+        self.session.put(self.addr_m2_ref)
+        self.prepare_bean_listing()
+
+        listing = \
+            self.session.get(self.addr_m2_ref,
+                             params={'max': 6, 'prefix': '2-',
+                                     'marker': '2-04', 'delimiter': '-'}).json()
+
+        print listing
+
+        self.assertEqual(len(listing["objects"]), 6)
+        self.assertEqual(listing["objects"][0]['name'], '2-05')
+        self.assertEqual(listing["objects"][1]['name'], '2-06')
+        self.assertEqual(listing["objects"][-1]['name'], '2-09')
+        self.assertEqual(listing["prefixes"], ['2-05-'])
+
+        self.delete_bean_list()
+
+    def test_container_get_listing6(self):
+
+        self.session.put(self.addr_m2_ref)
+        self.prepare_bean_listing()
+
+        listing = \
+            self.session.get(self.addr_m2_ref,
+                             params={'max': 10, 'prefix': '3-05-',
+                                     'delimiter': "-"}).json()
+
+        self.assertEqual(len(listing["objects"]), 1)
+        self.assertEqual(listing["objects"][0]["name"], '3-05-05')
+        self.assertEqual(listing["prefixes"], ['3-05-'])
+
+        self.delete_bean_list()
+
+    # End of failed get_list tests
 
     def test_container_delete(self):
 
@@ -188,7 +519,7 @@ class TestMeta2Functional(unittest.TestCase):
         resp = self.session.delete(self.addr_m2_ref)
         self.assertEqual(resp.status_code, 404)
 
-# Containers Actions tests
+    # Containers Actions tests
 
     def test_containers_actions_touch(self):  # to be improved
 
@@ -373,7 +704,7 @@ class TestMeta2Functional(unittest.TestCase):
         ))
         self.assertTrue(resp.status_code, 404)
 
-# Content tests
+    # Content tests
 
     def test_content_head(self):
 
@@ -419,7 +750,8 @@ class TestMeta2Functional(unittest.TestCase):
         self.session.post(self.addr_alone_ref_type_action, json.dumps(
             {"action": "Link", "args": None}
         ))
-        resp = self.session.put(self.addr_m2_alone_ref_path, json.dumps([self.bean]),
+        resp = self.session.put(self.addr_m2_alone_ref_path,
+                                json.dumps([self.bean]),
                                 headers={
                                     'x-oio-content-meta-hash': self.hash_rand,
                                     'x-oio-content-meta-length': 40})
@@ -432,9 +764,9 @@ class TestMeta2Functional(unittest.TestCase):
         raisedException = False
         try:
             self.session.put(self.addr_m2_ref_path, json.dumps([self.bean]),
-                                    headers={
-                                        'x-oio-content-meta-hash': 'error',
-                                        'x-oio-content-meta-length': 40})
+                             headers={
+                                 'x-oio-content-meta-hash': 'error',
+                                 'x-oio-content-meta-length': 40})
         except Exception:
             raisedException = True
             pass
@@ -481,7 +813,7 @@ class TestMeta2Functional(unittest.TestCase):
         resp = self.session.send(req.prepare())
         self.assertTrue(resp.status_code, 400)
 
-# Content actions tests
+    # Content actions tests
 
     def test_contents_actions_beans(self):
 
