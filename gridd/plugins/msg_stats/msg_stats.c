@@ -43,7 +43,7 @@ plugin_matcher (MESSAGE m, void *param, GError **err)
 {
 	(void)param, (void)err;
 	gsize len = 0;
-	void *n = message_get_NAME(m, &len);
+	void *n = metautils_message_get_NAME(m, &len);
 	if (!n || len != sizeof("REQ_STATS")-1)
 		return 0;
 	return 0 == memcmp(n, "REQ_STATS", sizeof("REQ_STATS")-1);
@@ -95,7 +95,7 @@ plugin_handler (MESSAGE m, gint fd, void *param, GError **err)
 	ctx.fd = fd;
 	ctx.request = m;
 
-	gchar *pattern = message_extract_string_copy(m, MSGKEY_PATTERN);
+	gchar *pattern = metautils_message_extract_string_copy(m, MSGKEY_PATTERN);
 	if (!pattern) {
 		GSETERROR(err,"no pattern provided %s", MSGKEY_PATTERN);
 		return 0;

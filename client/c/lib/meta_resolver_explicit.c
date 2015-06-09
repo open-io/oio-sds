@@ -324,10 +324,10 @@ resolver_direct_get_meta2_once (resolver_direct_t *r, struct hc_url_s *url, GSLi
 	GError *e = NULL;
 	GSList *result = NULL;
 
-	g_assert (r != NULL);
-	g_assert (url != NULL);
-	g_assert (hc_url_has (url, HCURL_HEXID));
-	g_assert (hc_url_has (url, HCURL_NS));
+	EXTRA_ASSERT (r != NULL);
+	EXTRA_ASSERT (url != NULL);
+	EXTRA_ASSERT (hc_url_has (url, HCURL_HEXID));
+	EXTRA_ASSERT (hc_url_has (url, HCURL_NS));
 
 	/*resolves meta1*/
 	m1 = resolver_direct_get_meta1 (r, hc_url_get_id(url), 1, *m1_exclude, &e);
@@ -438,19 +438,13 @@ void resolver_direct_free (resolver_direct_t *r)
 
 	M0CACHE_FINI_LOCK(*r);
 	g_cond_clear (&r->refresh_condition);
-	free (r);
+	g_free (r);
 }
 
 resolver_direct_t*
 resolver_direct_create2 (const char * const config, gint to_cnx, gint to_req, GError **err)
 {
-	resolver_direct_t *r = NULL;
-
-	r = calloc(1, sizeof(resolver_direct_t));
-	if (!r) {
-		return NULL;
-	}
-
+	resolver_direct_t *r = g_malloc0(sizeof(resolver_direct_t));
 	r->mappings = NULL;
 	M0CACHE_INIT_LOCK(*r);
 	g_cond_init(&r->refresh_condition);
@@ -475,7 +469,7 @@ resolver_direct_create2 (const char * const config, gint to_cnx, gint to_req, GE
 	/*parse the URL*/
 	if (!gs_url_split(config, &host, &port)) {
 		GSETERROR(err, "META0 url not recognized '%s'", config);
-		free(r);
+		g_free(r);
 		return(NULL);
 	}
 
@@ -485,7 +479,7 @@ resolver_direct_create2 (const char * const config, gint to_cnx, gint to_req, GE
 			g_free(host);
 		if (port)
 			g_free(port);
-		free(r);
+		g_free(r);
 		return(NULL);
 	}
 
@@ -496,7 +490,7 @@ resolver_direct_create2 (const char * const config, gint to_cnx, gint to_req, GE
 				host, port, atoi(port));
 		g_free(host);
 		g_free(port);
-		free(r);
+		g_free(r);
 		return(NULL);
 	}
 

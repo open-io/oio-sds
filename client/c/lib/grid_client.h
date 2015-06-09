@@ -283,7 +283,7 @@ const char* gs_get_virtual_namespace(gs_grid_storage_t *gs);
 /**
  * Get the full virtual namespace name, including the physical namespace part.
  */
-const char* gs_get_full_vns(gs_grid_storage_t *gs);
+const char* gs_get_full_namespace(gs_grid_storage_t *gs);
 
 /* Allows to replace the configured NS by another virtual namespace in the
  * same physical namespace. */

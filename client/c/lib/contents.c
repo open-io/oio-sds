@@ -183,7 +183,7 @@ _free_content_internals(gs_content_t *content)
 	if (content->chunk_list) {
 
 		TRACE("Freeing %u old chunks in [grid://%s/%s/%s]", g_slist_length(content->chunk_list),
-				gs_get_full_vns(content->info.container->info.gs), C1_IDSTR(content), C1_PATH(content));
+				gs_get_full_namespace(content->info.container->info.gs), C1_IDSTR(content), C1_PATH(content));
 
 		g_slist_foreach (content->chunk_list, chunk_info_gclean, NULL);
 		g_slist_free (content->chunk_list);
@@ -202,7 +202,7 @@ fill_hcurl_from_content2 (gs_container_t *container, const char *path)
 {
 	struct hc_url_s *url = fill_hcurl_from_container (container);
 	hc_url_set(url, HCURL_PATH, path);
-	g_assert (hc_url_has_fq_path (url));
+	EXTRA_ASSERT (hc_url_has_fq_path (url));
 	return url;
 }
 
@@ -240,9 +240,8 @@ fill_chunk_id_from_url(const char * const url, chunk_id_t *ci)
 	container_id_hex2bin(id + 1 , strlen(id +1 ), &(ci->id), NULL);
 
 	/* debug: dump id */
-	char dst[65];
-	bzero(dst, 65);
-	container_id_to_string(ci->id, dst, 65);
+	char dst[STRLEN_CONTAINERID];
+	container_id_to_string(ci->id, dst, sizeof(dst));
 
 	if(NULL != e)
 		g_clear_error(&e);
@@ -478,8 +477,7 @@ map_content_from_raw(gs_content_t *content, struct meta2_raw_content_s *raw_cont
 	}
 
 	char tmp[64];
-	memset(tmp, '\0', 64);
-	g_snprintf(tmp, 64, "%"G_GINT64_FORMAT, raw_content->version);
+	g_snprintf(tmp, sizeof(tmp), "%"G_GINT64_FORMAT, raw_content->version);
 	content->version = g_strdup(tmp);
 	content->info.size = raw_content->size;
 	content->deleted = raw_content->deleted;
@@ -580,10 +578,9 @@ _reload_content(gs_content_t *content, GSList **p_filtered, GSList **p_beans, GE
 		return FALSE;
 	}
 
-	char target[64];
+	char target[STRLEN_ADDRINFO];
 	guint32 flags = 0;
-	bzero(target, 64);
-	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
+	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, sizeof(target));
 
 	struct hc_url_s *url = fill_hcurl_from_content (content);
 	if (!content->version) {
@@ -620,7 +617,7 @@ _reload_content(gs_content_t *content, GSList **p_filtered, GSList **p_beans, GE
 		_bean_cleanl2(beans);
 
 	TRACE("Content [grid://%s/%s/%s] reloaded (%u chunks)",
-		gs_get_full_vns(content->info.container->info.gs), C1_IDSTR(content), C1_PATH(content),
+		gs_get_full_namespace(content->info.container->info.gs), C1_IDSTR(content), C1_PATH(content),
 		g_slist_length(content->chunk_list));
 
 	return TRUE;
@@ -687,7 +684,7 @@ end_label:
 gs_status_t
 gs_destroy_content (gs_content_t *content, gs_error_t **err)
 {
-	char target[64];
+	char target[STRLEN_ADDRINFO];
 	GError *localError=NULL;
 	int nb_refreshes=1;
 
@@ -698,11 +695,10 @@ gs_destroy_content (gs_content_t *content, gs_error_t **err)
 
 	(void) gs_container_reconnect_if_necessary (C1_C0(content),NULL);
 
-	memset(target, '\0', 64);
-	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
+	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, sizeof(target));
 
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set(url, HCURL_NS, gs_get_full_vns(C1_C0(content)->info.gs));
+	hc_url_set(url, HCURL_NS, gs_get_full_namespace(C1_C0(content)->info.gs));
 	hc_url_set(url, HCURL_HEXID, C0_IDSTR(C1_C0(content)));
 	//hc_url_set(url, HCURL_REFERENCE, C0_NAME(C1_C0(content)));
 	hc_url_set(url, HCURL_PATH, C1_PATH(content));
@@ -916,14 +912,13 @@ gs_status_t
 hc_set_content_property(gs_content_t *content, char ** props, gs_error_t **e)
 {
 	GError *ge = NULL;
-	char target[64];
+	char target[STRLEN_ADDRINFO];
 	GSList *beans = NULL;
 	gs_status_t status = GS_OK;
 	guint i;
 
 	struct hc_url_s *url = fill_hcurl_from_content (content);
-	bzero(target, 64);
-	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
+	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, sizeof(target));
 
 	for ( i=0; i < g_strv_length(props); i++) {
 		struct bean_PROPERTIES_s *bp;
@@ -964,7 +959,7 @@ gs_status_t
 hc_get_content_properties(gs_content_t *content, char ***result, gs_error_t **e)
 {
 	GError *ge = NULL;
-	char target[64];
+	char target[STRLEN_ADDRINFO];
 	gchar **final;
 	guint max;
 	GSList *beans = NULL;
@@ -972,8 +967,7 @@ hc_get_content_properties(gs_content_t *content, char ***result, gs_error_t **e)
 	gs_status_t status = GS_OK;
 
 	struct hc_url_s *url = fill_hcurl_from_content (content);
-	bzero(target, 64);
-	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
+	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, sizeof(target));
 
 	ge = m2v2_remote_execute_PROP_GET(target, url, M2V2_FLAG_NODELETED, &beans);
 
@@ -996,7 +990,6 @@ hc_get_content_properties(gs_content_t *content, char ***result, gs_error_t **e)
 			GByteArray *val =PROPERTIES_get_value(bp);
 
 			char buf[val->len + 1];
-			memset(buf, '\0', sizeof(buf));
 			g_snprintf(buf, sizeof(buf), "%s", val->data);
 			final[max-1] = g_strdup_printf("%s=%s",PROPERTIES_get_key(bp)->str, buf);
 			final[max] = NULL;
@@ -1014,9 +1007,8 @@ enderror :
 gs_status_t
 hc_delete_content_property(gs_content_t *content, char ** keys, gs_error_t **e)
 {
-	char target[64];
-	bzero(target, 64);
-	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, 64);
+	char target[STRLEN_ADDRINFO];
+	addr_info_to_string(&(C1_C0(content)->meta2_addr), target, sizeof(target));
 
 	struct hc_url_s *url = fill_hcurl_from_content(content);
 
@@ -1035,14 +1027,11 @@ hc_delete_content_property(gs_content_t *content, char ** keys, gs_error_t **e)
 gs_status_t
 hc_copy_content(gs_container_t *c, const char *src, const char *dst, gs_error_t **e)
 {
-	char target[64];
-	GError *ge = NULL;
-
+	char target[STRLEN_ADDRINFO];
 	struct hc_url_s *url = fill_hcurl_from_content2 (c, dst);
-	bzero(target, 64);
-	addr_info_to_string(&(c->meta2_addr), target, 64);
+	addr_info_to_string(&(c->meta2_addr), target, sizeof(target));
 
-	ge = m2v2_remote_execute_COPY(target, url, src);
+	GError *ge = m2v2_remote_execute_COPY(target, url, src);
 	if(NULL != ge) {
 		GSERRORCAUSE(e, ge, "Failed to create a copy of content [%s] to [%s]",
 			src, hc_url_get(url, HCURL_WHOLE));

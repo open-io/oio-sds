@@ -413,9 +413,9 @@ zlib_compressed_chunk_init(struct compressed_chunk_s *chunk, const gchar *path)
 	struct chunk_textinfo_s cti;
 	struct compressed_chunk_s ck;
 
-	bzero(headers, sizeof(headers));
-	bzero(&cti, sizeof(cti));
-	bzero(&ck, sizeof(ck));
+	memset(headers, 0, sizeof(headers));
+	memset(&cti, 0, sizeof(cti));
+	memset(&ck, 0, sizeof(ck));
 	
 	/* Get chunk uncompressed size in his attr */
 	if (!get_chunk_info_in_attr(path, &error, &cti)){

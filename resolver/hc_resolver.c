@@ -92,7 +92,7 @@ hc_resolver_element_create(gchar **value)
 	gsize s;
 	struct cached_element_s *elt;
 
-	g_assert(value != NULL);
+	EXTRA_ASSERT(value != NULL);
 
 	s = offsetof(struct cached_element_s, s) + _strv_total_length(value);
 
@@ -313,7 +313,7 @@ _resolve_m1_through_many_m0(gchar **urlv, const guint8 *prefix, gchar ***result)
 		url = urlv[i];
 
 		GError *err = _resolve_m1_through_one_m0(url, prefix, result);
-		g_assert((err!=NULL) ^ (*result!=NULL));
+		EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
 		if (!err)
 			return NULL;
 		if (!CODE_IS_NETWORK_ERROR(err->code))
@@ -372,7 +372,7 @@ _resolve_service_through_one_m1(const gchar *m1, struct hc_url_s *u,
 	meta1_strurl_get_address(m1, &ai);
 
 	*result = meta1v2_remote_list_reference_services(&ai, &err, u, s);
-	g_assert((err!=NULL) ^ (*result!=NULL));
+	EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
 
 	return err;
 }
@@ -392,7 +392,7 @@ _resolve_service_through_many_meta1(gchar **urlv, struct hc_url_s *u,
 		url = urlv[i];
 
 		GError *err = _resolve_service_through_one_m1(url, u, s, result);
-		g_assert((err!=NULL) ^ (*result!=NULL));
+		EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
 		if (!err)
 			return NULL;
 		if (!CODE_IS_NETWORK_ERROR(err->code))
@@ -425,12 +425,12 @@ _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
 
 	/* now attempt a real resolution */
 	err = _resolve_meta1(r, u, &m1urlv);
-	g_assert((err!=NULL) ^ (m1urlv!=NULL));
+	EXTRA_ASSERT((err!=NULL) ^ (m1urlv!=NULL));
 	if (NULL != err)
 		return err;
 
 	err = _resolve_service_through_many_meta1(m1urlv, u, s, result);
-	g_assert((err!=NULL) ^ (*result!=NULL));
+	EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
 	if (!err) {
 		/* fill the cache */
 		if (!(r->flags & HC_RESOLVER_NOCACHE))
@@ -448,9 +448,9 @@ hc_resolve_reference_directory(struct hc_resolver_s *r, struct hc_url_s *url,
 		gchar ***result)
 {
 	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE));
-	g_assert(r != NULL);
-	g_assert(url != NULL);
-	g_assert(result != NULL);
+	EXTRA_ASSERT(r != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(result != NULL);
 	if (!hc_url_get_id(url) || !hc_url_has(url, HCURL_NS))
 		return NEWERROR(CODE_BAD_REQUEST, "Incomplete URL [%s]", hc_url_get(url, HCURL_WHOLE));
 
@@ -484,11 +484,11 @@ hc_resolve_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
 	struct hashstr_s *hk;
 
 	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE), srvtype);
-	g_assert(r != NULL);
-	g_assert(url != NULL);
-	g_assert(srvtype != NULL);
-	g_assert(result != NULL);
-	g_assert(*result == NULL);
+	EXTRA_ASSERT(r != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
+	EXTRA_ASSERT(result != NULL);
+	EXTRA_ASSERT(*result == NULL);
 
 	if (!hc_url_get_id(url) || !hc_url_has(url, HCURL_NS))
 		return NEWERROR(CODE_BAD_REQUEST, "Incomplete URL [%s]", hc_url_get(url, HCURL_WHOLE));
@@ -508,8 +508,8 @@ hc_decache_reference(struct hc_resolver_s *r, struct hc_url_s *url)
 	struct hashstr_s *hk;
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE));
-	g_assert(r != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(r != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	if (r->flags & HC_RESOLVER_NOCACHE)
 		return;
@@ -531,9 +531,9 @@ hc_decache_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
 	struct hashstr_s *hk;
 
 	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE), srvtype);
-	g_assert(r != NULL);
-	g_assert(url != NULL);
-	g_assert(srvtype != NULL);
+	EXTRA_ASSERT(r != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
 
 	if (r->flags & HC_RESOLVER_NOCACHE)
 		return;
@@ -547,7 +547,7 @@ hc_decache_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
 void
 hc_resolver_set_now(struct hc_resolver_s *r, time_t now)
 {
-	g_assert(r != NULL);
+	EXTRA_ASSERT(r != NULL);
 	g_mutex_lock(&r->lock);
 	r->bogonow = now;
 	g_mutex_unlock(&r->lock);

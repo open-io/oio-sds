@@ -45,36 +45,25 @@ static get_namespace_info_f get_ns_info = NULL;
 static void
 plugin_reply_error(struct request_context_s *req_ctx, int code, gchar *msg)
 {
-        struct reply_context_s ctx;
-        bzero(&ctx, sizeof(ctx));
-        ctx.req_ctx = req_ctx;
-
-        /* Reply now! */
-        reply_context_set_body(&ctx, NULL, 0, 0);
-
-	DEBUG("return code  = %d", code);
-        reply_context_set_message(&ctx, code, msg);
-
-        reply_context_reply(&ctx, NULL);
-
-        reply_context_clear(&ctx, TRUE);
+	struct reply_context_s ctx;
+	memset(&ctx, 0, sizeof(ctx));
+	ctx.req_ctx = req_ctx;
+	reply_context_set_body(&ctx, NULL, 0, 0);
+	reply_context_set_message(&ctx, code, msg);
+	reply_context_reply(&ctx, NULL);
+	reply_context_clear(&ctx, TRUE);
 }
 
 static gint
 plugin_matcher (MESSAGE m, void *params, GError **err)
 {
-	(void) m;
-	(void) params;
-	(void) err;
-	/* trap all requests */
+	(void) m, (void) params, (void) err;
 	return 1;
 }
 
 static gint
 plugin_handler (struct request_context_s* ctx, GError **err)
 {
-	/* Just check if the remote_addr allow to talk with us
-	   & update acl if too old */
 	if (!ctx || !ctx->remote_addr) {
 		GSETERROR(err, "Invalid parameters : %p | %p", ctx, ctx->remote_addr);
 		return 0;
@@ -150,7 +139,7 @@ plugin_init (GHashTable* params, GError **error)
 {
 	DEBUG("Init acl plugin");
 	get_ns_info = g_hash_table_lookup(params, NS_INFO_FUNC);
-	
+
 	if(!get_ns_info) {
 		ERROR("No ns_info_func passed in acl plugin");
 		return 0;
@@ -182,7 +171,7 @@ plugin_init (GHashTable* params, GError **error)
 		TRACE("No access deny in acl configuration");
 	}
 
-		
+
 	acl = parse_acl(acl_allow, TRUE);
 	g_slist_foreach(acl, acl_display, NULL);
 	acl = g_slist_concat(acl, parse_acl(acl_deny, FALSE));
@@ -211,11 +200,11 @@ plugin_init (GHashTable* params, GError **error)
 		acl_period_refresh_conf =
 			CLAMP(acl_period_refresh_conf, LIMIT_MIN_REFRESH_RATE, LIMIT_MAX_REFRESH_RATE);
 	}
-        NOTICE("acl_refresh_rate set to [%lu] s", acl_period_refresh_conf);
+	NOTICE("acl_refresh_rate set to [%lu] s", acl_period_refresh_conf);
 
 	srvtimer_register_regular(MODULE_NAME " refresh configuration",
-                        acl_refresh_conf, NULL, NULL,
-                        acl_period_refresh_conf);
+			acl_refresh_conf, NULL, NULL,
+			acl_period_refresh_conf);
 
 	return 1;
 }

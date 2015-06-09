@@ -1142,19 +1142,19 @@ _spare_special(struct gridd_reply_ctx_s *reply, struct meta2_backend_s *m2b,
 		char notin[1024];
 		memset(broken, '\0', 1024);
 		memset(notin, '\0', 1024);
-		if(NULL != (e = message_extract_strint64(reply->request, NAME_MSGKEY_COUNT, &nb)) || 0 == nb) {
+		if(NULL != (e = metautils_message_extract_strint64(reply->request, NAME_MSGKEY_COUNT, &nb)) || 0 == nb) {
 			g_clear_error(&e);
 			nb = 1;
 		}
-		if(NULL != (e = message_extract_strint64(reply->request, NAME_MSGKEY_DISTANCE, &dist)) || 0 == dist) {
+		if(NULL != (e = metautils_message_extract_strint64(reply->request, NAME_MSGKEY_DISTANCE, &dist)) || 0 == dist) {
 			g_clear_error(&e);
 			dist = 1;
 		}
-		if(NULL != (e = message_extract_string(reply->request, NAME_MSGKEY_BROKEN, broken, 1024))) {
+		if(NULL != (e = metautils_message_extract_string(reply->request, NAME_MSGKEY_BROKEN, broken, 1024))) {
 			g_clear_error(&e);
 			broken[0] = '\0';
 		}
-		if(NULL != (e = message_extract_string(reply->request, NAME_MSGKEY_NOTIN, notin, 1024))) {
+		if(NULL != (e = metautils_message_extract_string(reply->request, NAME_MSGKEY_NOTIN, notin, 1024))) {
 			g_clear_error(&e);
 			notin[0] = '\0';
 		}

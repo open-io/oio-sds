@@ -64,7 +64,6 @@ _get_compression_block_size(apr_pool_t *p, namespace_info_t *ns_info)
 {
 	GByteArray* bsize = NULL;
 	gchar bsize_buff[256];
-	int i_len;
 
 	(void) p;
 	if (!ns_info || !ns_info->options)
@@ -74,10 +73,8 @@ _get_compression_block_size(apr_pool_t *p, namespace_info_t *ns_info)
 	if (!bsize)
 		return DEFAULT_STREAM_BUFF_SIZE;
 
-	i_len = bsize->len;
-	bzero(bsize_buff, sizeof(bsize_buff));
+	int i_len = bsize->len;
 	apr_snprintf(bsize_buff, sizeof(bsize_buff), "%.*s", i_len, ((char*)bsize->data));
-
 	return g_ascii_strtoll(bsize_buff, NULL, 10);
 }
 

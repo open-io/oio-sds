@@ -225,7 +225,6 @@ _build_raw_chunks_list(GSList *chunks, GSList *contents, GSList ** meta2_raw_chu
 static void
 _fill_raw_content_v2_with_alias(meta2_raw_content_v2_t *rc, gpointer alias)
 {
-	memset(rc->header.path, '\0', sizeof(rc->header.path));
 	g_strlcpy(rc->header.path, ALIASES_get_alias(alias)->str,
 			sizeof(rc->header.path));
 
@@ -238,7 +237,6 @@ _fill_raw_content_v2_with_alias(meta2_raw_content_v2_t *rc, gpointer alias)
 static void
 _fill_raw_content_with_alias(meta2_raw_content_t *rc, gpointer alias)
 {
-	memset(rc->path, '\0', sizeof(rc->path));
 	g_strlcpy(rc->path, ALIASES_get_alias(alias)->str, sizeof(rc->path));
 
 	/* Map alias metadata on the system metadata */
@@ -278,21 +276,13 @@ _fill_raw_content_with_headers(meta2_raw_content_t *rc, gpointer headers)
 static GString *
 _forge_chunk_id_v2(chunk_id_t *cid)
 {
-	char str_addr[64];
-	char hexid[65];
+	char str_addr[STRLEN_ADDRINFO], hexid[STRLEN_CONTAINERID];
+	addr_info_to_string(&(cid->addr), str_addr, sizeof(str_addr));
+	container_id_to_string(cid->id, hexid, sizeof(hexid));
+
 	GString *result = g_string_new("http://");
-
-	memset(str_addr, '\0', 64);
-	memset(str_addr, '\0', 64);
-
-	addr_info_to_string(&(cid->addr), str_addr, 64);
-	buffer2str(cid->id, sizeof(cid->id), hexid, 65);
-
 	g_string_append_printf(result, "%s%s/", str_addr, cid->vol);
-	result = g_string_append(result, hexid);
-
-	return result;
-
+	return g_string_append(result, hexid);
 }
 
 static gpointer
@@ -687,9 +677,8 @@ m2v2_beans_from_chunk_info_list(GByteArray *id,
 		gpointer chunk = _bean_create(&descr_struct_CHUNKS);
 
 		GString *chunkid = _forge_chunk_id_v2(&(ci->id));
-		char pos[32];
-		memset(pos,'\0', 32);
-		g_snprintf(pos, 32, "%"G_GUINT32_FORMAT, ci->position);
+		char pos[24];
+		g_snprintf(pos, sizeof(pos), "%"G_GUINT32_FORMAT, ci->position);
 
 		if (id != NULL)
 			CONTENTS_set_content_id(content, id);

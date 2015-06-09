@@ -271,7 +271,7 @@ fill_hcurl_from_container(gs_container_t *c)
 {
 	struct hc_url_s *url = fill_hcurl_from_client (c->info.gs);
 	hc_url_set (url, HCURL_USER, c->info.name);
-	g_assert (hc_url_has_fq_container (url));
+	EXTRA_ASSERT (hc_url_has_fq_container (url));
 	return url;
 }
 
@@ -281,8 +281,8 @@ gs_init_container(gs_grid_storage_t *gs, const char *cname, int ac, gs_error_t *
 	gs_container_t *container = NULL;
 	size_t nLen;
 
-	g_assert(gs != NULL);
-	g_assert(cname != NULL);
+	EXTRA_ASSERT(gs != NULL);
+	EXTRA_ASSERT(cname != NULL);
 
 	nLen = strlen(cname);
 	if (nLen > sizeof(container->info.name)-1) {
@@ -436,7 +436,6 @@ _alias_to_path_info(gpointer alias)
 	}
 	struct bean_ALIASES_s *a = (struct bean_ALIASES_s *) alias;
 	path_info_t *pi = g_malloc0(sizeof(path_info_t));
-	memset(pi->path, '\0', sizeof(pi->path));
 	char * str = ALIASES_get_alias(a)->str;
 	g_snprintf(pi->path, sizeof(pi->path), "%s", str);
 	pi->size = 0;
@@ -444,8 +443,7 @@ _alias_to_path_info(gpointer alias)
 	pi->user_metadata = NULL;
 	pi->system_metadata = g_byte_array_append(g_byte_array_new(), (const guint8*)ALIASES_get_mdsys(alias)->str, ALIASES_get_mdsys(alias)->len);
 	char tmp[64];
-	memset(tmp, '\0', 64);
-	g_snprintf(tmp, 64, "%"G_GINT64_FORMAT, ALIASES_get_version(alias));
+	g_snprintf(tmp, sizeof(tmp), "%"G_GINT64_FORMAT, ALIASES_get_version(alias));
 	pi->version = g_strdup(tmp);
 	pi->deleted = ALIASES_get_deleted(alias);
 
@@ -459,9 +457,8 @@ _list_v2_wrapper(gs_container_t *c, GError **e)
 	GError *le = NULL;
 	GSList *l, *result = NULL;
 
-	char target[64];
-	bzero(target, sizeof(target));
-	addr_info_to_string(&(c->meta2_addr), target, 64);
+	char target[STRLEN_ADDRINFO];
+	addr_info_to_string(&(c->meta2_addr), target, sizeof(target));
 
 	struct hc_url_s *url = fill_hcurl_from_container (c);
 
@@ -805,7 +802,7 @@ gs_container_reconnect_and_refresh (gs_container_t *container, GError **err, gbo
 	addr_info_to_string(&(container->meta2_addr), addr, STRLEN_ADDRINFO);
 	do {
 		struct hc_url_s *url = hc_url_empty ();
-		hc_url_set (url, HCURL_NS, gs_get_full_vns(container->info.gs));
+		hc_url_set (url, HCURL_NS, gs_get_full_namespace(container->info.gs));
 		hc_url_set (url, HCURL_HEXID, container->str_cID);
 		GError *e = m2v2_remote_execute_HAS (addr, url);
 		hc_url_pclean (&url);

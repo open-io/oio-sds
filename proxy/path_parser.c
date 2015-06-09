@@ -167,15 +167,15 @@ path_matching_cleanv (struct path_matching_s **tab)
 gchar *
 path_matching_get_path (struct path_matching_s *self)
 {
-	g_assert (self != NULL);
+	EXTRA_ASSERT (self != NULL);
 	return g_string_free (_node_path (NULL, self->last), TRUE);
 }
 
 const gchar *
 path_matching_get_variable (struct path_matching_s *self, const char *name)
 {
-	g_assert (self != NULL);
-	g_assert (name != NULL);
+	EXTRA_ASSERT (self != NULL);
+	EXTRA_ASSERT (name != NULL);
 
 	gsize l = strlen (name);
 	gchar *key = g_alloca (l+2);
@@ -194,8 +194,8 @@ path_matching_get_variable (struct path_matching_s *self, const char *name)
 gpointer
 path_matching_get_udata (struct path_matching_s *self)
 {
-	g_assert (self != NULL);
-	g_assert (self->last != NULL);
+	EXTRA_ASSERT (self != NULL);
+	EXTRA_ASSERT (self->last != NULL);
 	return self->last->u;
 }
 
@@ -339,8 +339,8 @@ _nodev_append (struct trie_node_s **tab, struct trie_node_s *n)
 struct trie_node_s *
 _nodev_lookup (struct trie_node_s **tab, const gchar *word, const gchar *var)
 {
-	g_assert (tab != NULL);
-	g_assert ((word != NULL) ^ (var != NULL));
+	EXTRA_ASSERT (tab != NULL);
+	EXTRA_ASSERT ((word != NULL) ^ (var != NULL));
 
 	for (; *tab ;++tab) {
 		if (word && (*tab)->word && !strcmp (word, (*tab)->word))
@@ -372,9 +372,9 @@ struct trie_node_s **
 _trie_insert (const struct trie_node_s *parent, struct trie_node_s **tab, gchar **words,
 		gpointer u)
 {
-	g_assert (tab != NULL);
-	g_assert (words != NULL);
-	g_assert (*words != NULL);
+	EXTRA_ASSERT (tab != NULL);
+	EXTRA_ASSERT (words != NULL);
+	EXTRA_ASSERT (*words != NULL);
 
 	const gchar *word = NULL, *var = NULL;
 	if (**words == '$')
@@ -418,7 +418,7 @@ _trie_explore (struct trie_node_s **tab, gchar **needles,
 		}
 	}
 
-	g_assert (needles && *needles);
+	EXTRA_ASSERT (needles && *needles);
 
 	for (; *tab ;++tab) {
 		if ((*tab)->word) { // Explicit word

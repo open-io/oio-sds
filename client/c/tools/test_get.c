@@ -17,7 +17,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -89,7 +88,7 @@ main_title(const gchar *fmt, ...)
 	msg = g_strdup_vprintf(fmt, va);
 	va_end(va);
 
-	assert(msg);
+	g_assert(msg);
 	msg_len = strlen(msg);
 	g_printerr("\n################################################################################\n");
 	g_printerr("# %s\n", msg);

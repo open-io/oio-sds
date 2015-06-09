@@ -56,22 +56,20 @@ storage_policy_from_metadata(GByteArray *sys_metadata, gchar **storage_policy)
 	GError *result = NULL;
 	guint i = 0;
 
-	bzero(buf, sizeof(buf));
+	memset(buf, 0, sizeof(buf));
 	memcpy(buf, sys_metadata->data, sys_metadata->len);
-
 	metadata_tokens = g_strsplit(buf, ";", 0);
 
 	for(i = 0; i < g_strv_length(metadata_tokens); i++) {
 		if(!g_str_has_prefix(metadata_tokens[i], "storage-policy"))
 			continue;
 		gchar *p = strchr(metadata_tokens[i], '=');
-		if(p) {
+		if (p)
 			*storage_policy = g_strdup(p + 1);
-		} else {
+		else
 			result = NEWERROR(CODE_INTERNAL_ERROR,
 					"Failed to extract policy from metadata tokens: [%s]",
 					metadata_tokens[i]);
-		}
 		break;
 	}
 

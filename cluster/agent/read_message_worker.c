@@ -40,11 +40,11 @@ int read_message_data_worker(worker_t *worker, GError **error) {
 
 	TRACE_POSITION();
 
-	g_assert(worker->clean == message_cleanup);
+	EXTRA_ASSERT(worker->clean == message_cleanup);
 	data = &(worker->data);
 	message = (message_t*)data->session;
-	g_assert(message != NULL);
-	g_assert(message->length > 0);
+	EXTRA_ASSERT(message != NULL);
+	EXTRA_ASSERT(message->length > 0);
 
 	if (data->buffer == NULL) {
 		data->buffer_size = message->length;
@@ -100,11 +100,11 @@ int read_message_size_worker(worker_t *worker, GError **error) {
 	TRACE_POSITION();
 
 	data = &(worker->data);
-	g_assert(data->session == NULL);
+	EXTRA_ASSERT(data->session == NULL);
 
 	if (data->buffer == NULL) {
 		message_t dummy;
-		g_assert(data->buffer_size == 0);
+		EXTRA_ASSERT(data->buffer_size == 0);
 		data->done = 0;
 		data->buffer_size = sizeof(dummy.length);
 		data->buffer = g_malloc0(data->buffer_size);

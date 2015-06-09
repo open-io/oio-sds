@@ -123,9 +123,9 @@ http_put_add_dest(struct http_put_s *p, const gchar *url, gpointer user_data)
 {
 	struct http_put_dest_s *dest;
 
-	g_assert(p != NULL);
-	g_assert(url != NULL);
-	g_assert(user_data != NULL);
+	EXTRA_ASSERT(p != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(user_data != NULL);
 
 	dest = g_malloc0(sizeof(struct http_put_dest_s));
 
@@ -145,7 +145,7 @@ http_put_add_dest(struct http_put_s *p, const gchar *url, gpointer user_data)
 
 	p->dests = g_slist_append(p->dests, dest);
 
-	g_assert(g_hash_table_lookup(p->id2dests, user_data) == NULL);
+	EXTRA_ASSERT(g_hash_table_lookup(p->id2dests, user_data) == NULL);
 	g_hash_table_insert(p->id2dests, user_data, dest); 
 
 	/* Remove default header added automatically by libcurl as
@@ -163,9 +163,9 @@ http_put_dest_add_header(struct http_put_dest_s *dest, const gchar *key, const g
 	va_list ap;
 	gchar *val;
 
-	g_assert(dest != NULL);
-	g_assert(key != NULL);
-	g_assert(val_fmt != NULL);
+	EXTRA_ASSERT(dest != NULL);
+	EXTRA_ASSERT(key != NULL);
+	EXTRA_ASSERT(val_fmt != NULL);
 
 	va_start(ap, val_fmt);
 	g_vasprintf(&val, val_fmt, ap);
@@ -184,14 +184,14 @@ static void http_put_dest_destroy(gpointer destination)
 	struct http_put_dest_s *dest = destination;
 	CURLMcode rc;
 
-	g_assert(dest != NULL);
+	EXTRA_ASSERT(dest != NULL);
 
 	if (dest->url)
 		g_free(dest->url);
 	if (dest->handle)
 	{
 		rc = curl_multi_remove_handle(dest->http_put->mhandle, dest->handle);
-		g_assert(rc == CURLM_OK);
+		EXTRA_ASSERT(rc == CURLM_OK);
 		curl_easy_cleanup(dest->handle);
 	}
 	if (dest->headers)
@@ -214,7 +214,7 @@ void http_put_clear_dests(struct http_put_s *p)
 
 void http_put_destroy(struct http_put_s *p)
 {
-	g_assert(p != NULL);
+	EXTRA_ASSERT(p != NULL);
 
 	http_put_clear_dests(p);
 	if (p->id2dests)
@@ -327,8 +327,8 @@ static size_t cb_header(void *ptr, size_t size, size_t nmemb, struct http_put_de
 	gchar *header, *key, *value, *tmp;
 	int len;
 
-	g_assert(ptr != NULL);
-	g_assert(dest != NULL);
+	EXTRA_ASSERT(ptr != NULL);
+	EXTRA_ASSERT(dest != NULL);
 
 	header = ptr; /* /!\ not nul-terminated */
 	len = size * nmemb;
@@ -371,7 +371,7 @@ static void start_upload(struct http_put_s *p)
 		}
 
 		dest->handle = curl_easy_init();
-		g_assert(dest->handle != NULL);
+		EXTRA_ASSERT(dest->handle != NULL);
 
 #if 0
 		curl_easy_setopt(dest->handle, CURLOPT_VERBOSE, 1);
@@ -394,7 +394,7 @@ static void start_upload(struct http_put_s *p)
 		curl_easy_setopt(dest->handle, CURLOPT_HEADERDATA, dest);
 
 		rc = curl_multi_add_handle(p->mhandle, dest->handle);
-		g_assert(rc == CURLM_OK);
+		EXTRA_ASSERT(rc == CURLM_OK);
 	}
 }
 
@@ -416,7 +416,7 @@ check_multi_info(struct http_put_s *p)
 			dest = NULL;
 
 			curl_easy_getinfo(easy, CURLINFO_PRIVATE, &dest);
-			g_assert(easy == dest->handle);
+			EXTRA_ASSERT(easy == dest->handle);
 
 			curl_easy_getinfo(easy, CURLINFO_RESPONSE_CODE, &http_ret);
 
@@ -430,7 +430,7 @@ check_multi_info(struct http_put_s *p)
 			GRID_DEBUG("DONE! %s => HTTP ret: %ld => CURL ret: %s", dest->url, http_ret, curl_easy_strerror(curl_ret));
 
 			rc = curl_multi_remove_handle(p->mhandle, dest->handle);
-			g_assert(rc == CURLM_OK);
+			EXTRA_ASSERT(rc == CURLM_OK);
 			curl_easy_cleanup(dest->handle);
 			dest->handle = NULL;
 		}
@@ -440,7 +440,7 @@ check_multi_info(struct http_put_s *p)
 GError *
 http_put_run(struct http_put_s *p)
 {
-	g_assert(p != NULL);
+	EXTRA_ASSERT(p != NULL);
 
 	start_upload(p);
 
@@ -480,7 +480,7 @@ http_put_get_failure_number(struct http_put_s *p)
 	struct http_put_dest_s *dest;
 	guint ret = 0;
 
-	g_assert(p != NULL);
+	EXTRA_ASSERT(p != NULL);
 
 	for (GSList *l = p->dests ; NULL != l ; l = l->next)
 	{
@@ -499,7 +499,7 @@ _http_put_get_dests(struct http_put_s *p, gboolean success)
 	struct http_put_dest_s *dest;
 	GSList *list_ret = NULL;
 
-	g_assert(p != NULL);
+	EXTRA_ASSERT(p != NULL);
 
 	for (GSList *l = p->dests ; NULL != l ; l = l->next)
 	{
@@ -529,9 +529,9 @@ http_put_get_header(struct http_put_s *p, gpointer user_data, const gchar *heade
 {
 	struct http_put_dest_s *dest;
 
-	g_assert(p != NULL);
-	g_assert(user_data != NULL);
-	g_assert(header != NULL);
+	EXTRA_ASSERT(p != NULL);
+	EXTRA_ASSERT(user_data != NULL);
+	EXTRA_ASSERT(header != NULL);
 
 	dest = g_hash_table_lookup(p->id2dests, user_data);
 	if (dest == NULL)
@@ -545,8 +545,8 @@ http_put_get_http_code(struct http_put_s *p, gpointer user_data)
 {
 	struct http_put_dest_s *dest;
 
-	g_assert(p != NULL);
-	g_assert(user_data != NULL);
+	EXTRA_ASSERT(p != NULL);
+	EXTRA_ASSERT(user_data != NULL);
 
 	dest = g_hash_table_lookup(p->id2dests, user_data);
 	if (dest == NULL)
@@ -560,9 +560,9 @@ http_put_get_md5(struct http_put_s *p, guint8 *buffer, gsize size)
 {
 	GChecksum *checksum;
 
-	g_assert(p != NULL);
-	g_assert(buffer != NULL);
-	g_assert((gssize)size == g_checksum_type_get_length(G_CHECKSUM_MD5));
+	EXTRA_ASSERT(p != NULL);
+	EXTRA_ASSERT(buffer != NULL);
+	EXTRA_ASSERT((gssize)size == g_checksum_type_get_length(G_CHECKSUM_MD5));
 
 	checksum = g_checksum_new(G_CHECKSUM_MD5);
 	g_checksum_update(checksum, (const guchar *)p->buffer, p->buffer_length);
@@ -573,7 +573,7 @@ http_put_get_md5(struct http_put_s *p, guint8 *buffer, gsize size)
 void
 http_put_get_buffer(struct http_put_s *p, const gchar **buffer, gsize *size)
 {
-	g_assert(p->buffer_length == p->buffer_filled);
+	EXTRA_ASSERT(p->buffer_length == p->buffer_filled);
 
 	*buffer = p->buffer;
 	*size = p->buffer_length;

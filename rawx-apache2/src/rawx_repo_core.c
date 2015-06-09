@@ -82,7 +82,6 @@ _set_chunk_extended_attributes(dav_stream *stream)
 
 	if(stream->compressed_size) {
 		char size[32];
-		bzero(size, sizeof(size));
 		apr_snprintf(size, 32, "%d", stream->compressed_size);
 		if(!set_rawx_full_info_in_attr(stream->pathname, fileno(stream->f), &ge,
 					&(stream->r->info->content), &(stream->r->info->chunk),
@@ -226,7 +225,7 @@ resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf)
 	if(resource->info->compression){
 		// init compression method according to algo choice
 		char *algo = g_hash_table_lookup(comp_opt, NS_COMPRESS_ALGO_OPTION);
-		bzero(resource->info->compress_algo, sizeof(resource->info->compress_algo));
+		memset(resource->info->compress_algo, 0, sizeof(resource->info->compress_algo));
 		memcpy(resource->info->compress_algo, algo, MIN(strlen(algo), sizeof(resource->info->compress_algo)));
 		init_compression_ctx(&(resource->info->comp_ctx), algo); 
 		if (0 != resource->info->comp_ctx.chunk_initiator(&(resource->info->cp_chunk),
@@ -279,8 +278,8 @@ resource_stat_chunk(dav_resource *resource, int xattr_too)
 
 		DAV_DEBUG_RES(resource, 0, "Resource exists [%s]", resource_get_pathname(resource));
 
-		bzero(&(ctx->content), sizeof(ctx->content));
-		bzero(&(ctx->chunk), sizeof(ctx->chunk));
+		memset(&(ctx->content), 0, sizeof(ctx->content));
+		memset(&(ctx->chunk), 0, sizeof(ctx->chunk));
 		if (xattr_too) {
 			rc = get_rawx_info_in_attr(resource_get_pathname(resource), &err,
 					&(ctx->content), &(ctx->chunk));

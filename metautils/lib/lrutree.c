@@ -21,8 +21,9 @@ License along with this library.
 # define G_LOG_DOMAIN "grid.lrutree"
 #endif
 
-#include "./tree.h"
-#include "./lrutree.h"
+#include "metautils.h"
+#include "tree.h"
+#include "lrutree.h"
 
 struct _node_s
 {
@@ -171,9 +172,9 @@ lru_tree_insert(struct lru_tree_s *lt, gpointer k, gpointer v)
 {
     struct _node_s fake, *node;
 
-    g_assert(lt != NULL);
-    g_assert(k != NULL);
-    g_assert(v != NULL);
+    EXTRA_ASSERT(lt != NULL);
+    EXTRA_ASSERT(k != NULL);
+    EXTRA_ASSERT(v != NULL);
 
     fake.k = k;
     if (!(node = RB_FIND(_tree_s, lt, &(lt->base), &fake))) {
@@ -194,8 +195,8 @@ lru_tree_get(struct lru_tree_s *lt, gconstpointer k)
 {
     struct _node_s fake, *node;
 
-    g_assert(lt != NULL);
-    g_assert(k != NULL);
+    EXTRA_ASSERT(lt != NULL);
+    EXTRA_ASSERT(k != NULL);
 
     fake.k = k;
     node = RB_FIND(_tree_s, lt, &(lt->base), &fake);
@@ -216,8 +217,8 @@ lru_tree_remove(struct lru_tree_s *lt, gconstpointer k)
 {
     struct _node_s fake, *node;
 
-    g_assert(lt != NULL);
-    g_assert(k != NULL);
+    EXTRA_ASSERT(lt != NULL);
+    EXTRA_ASSERT(k != NULL);
 
     fake.k = k;
     if (!(node = RB_FIND(_tree_s, lt, &(lt->base), &fake)))
@@ -237,8 +238,8 @@ lru_tree_steal(struct lru_tree_s *lt, gconstpointer k)
     struct _node_s fake, *node;
     gpointer result;
 
-    g_assert(lt != NULL);
-    g_assert(k != NULL);
+    EXTRA_ASSERT(lt != NULL);
+    EXTRA_ASSERT(k != NULL);
 
     fake.k = k;
     if (!(node = RB_FIND(_tree_s, lt, &(lt->base), &fake)))
@@ -258,8 +259,8 @@ static gboolean
 _get(struct lru_tree_s *lt, gpointer *pk, gpointer *pv, struct _node_s *node,
         int steal)
 {
-    g_assert(pk != NULL);
-    g_assert(pv != NULL);
+    EXTRA_ASSERT(pk != NULL);
+    EXTRA_ASSERT(pv != NULL);
 
     if (!node)
         return FALSE;
@@ -286,28 +287,28 @@ _get(struct lru_tree_s *lt, gpointer *pk, gpointer *pv, struct _node_s *node,
 gboolean
 lru_tree_get_first(struct lru_tree_s *lt, gpointer *pk, gpointer *pv)
 {
-    g_assert(lt != NULL);
+    EXTRA_ASSERT(lt != NULL);
     return _get(lt, pk, pv, lt->first, 0);
 }
 
 gboolean
 lru_tree_steal_first(struct lru_tree_s *lt, gpointer *pk, gpointer *pv)
 {
-    g_assert(lt != NULL);
+    EXTRA_ASSERT(lt != NULL);
     return _get(lt, pk, pv, lt->first, 1);
 }
 
 gboolean
 lru_tree_get_last(struct lru_tree_s *lt, gpointer *pk, gpointer *pv)
 {
-    g_assert(lt != NULL);
+    EXTRA_ASSERT(lt != NULL);
     return _get(lt, pk, pv, lt->last, 0);
 }
 
 gboolean
 lru_tree_steal_last(struct lru_tree_s *lt, gpointer *pk, gpointer *pv)
 {
-    g_assert(lt != NULL);
+    EXTRA_ASSERT(lt != NULL);
     return _get(lt, pk, pv, lt->last, 1);
 }
 
@@ -316,8 +317,8 @@ lru_tree_foreach_TREE(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata)
 {
 	struct _node_s *node = NULL;
 
-	g_assert(lt != NULL);
-	g_assert(h != NULL);
+	EXTRA_ASSERT(lt != NULL);
+	EXTRA_ASSERT(h != NULL);
 
 	RB_FOREACH(node, _tree_s, &(lt->base)) {
 		if (h(node->k, node->v, hdata))
@@ -330,8 +331,8 @@ lru_tree_foreach_DEQ(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata)
 {
 	struct _node_s *node = NULL;
 
-	g_assert(lt != NULL);
-	g_assert(h != NULL);
+	EXTRA_ASSERT(lt != NULL);
+	EXTRA_ASSERT(h != NULL);
 
 	for (node = lt->first; node ;node=node->next) {
 		if (h(node->k, node->v, hdata))
@@ -342,7 +343,7 @@ lru_tree_foreach_DEQ(struct lru_tree_s *lt, GTraverseFunc h, gpointer hdata)
 gint64
 lru_tree_count(struct lru_tree_s *lt)
 {
-	g_assert(lt != NULL);
+	EXTRA_ASSERT(lt != NULL);
 	return lt->count;
 }
 

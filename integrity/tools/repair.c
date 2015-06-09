@@ -123,11 +123,8 @@ static gchar*
 meta2_locate(struct metacnx_ctx_s *ctx, struct meta2_raw_content_s *raw,
 		gs_grid_storage_t *gs_client, GError **error)
 {
-	gchar str_cid[STRLEN_CONTAINERID+1];
-
-	bzero(str_cid, sizeof(str_cid));
+	gchar str_cid[STRLEN_CONTAINERID];
 	container_id_to_string(raw->container_id, str_cid, sizeof(str_cid));
-
 	return meta2_locate_recursive(2, ctx, str_cid, gs_client, error);
 }
 
@@ -139,7 +136,7 @@ meta2_repair_from_raw_content(struct meta2_raw_content_s *raw,
 	struct metacnx_ctx_s ctx;
 	gchar *container_name = NULL;
 
-	bzero(&ctx, sizeof(ctx));
+	metacnx_clear(&ctx);
 
 	/* Locate the container */
 	container_name = meta2_locate(&ctx, raw, gs_client, error);
@@ -155,7 +152,7 @@ meta2_repair_from_raw_content(struct meta2_raw_content_s *raw,
 
 	/* Get chunk */
 	struct hc_url_s *url = hc_url_empty ();
-	hc_url_set (url, HCURL_NS, gs_get_full_vns(gs_client));
+	hc_url_set (url, HCURL_NS, gs_get_full_namespace(gs_client));
 	hc_url_set (url, HCURL_USER, container_name);
 	if (raw->raw_chunks != NULL && raw->raw_chunks->data != NULL && ((struct meta2_raw_chunk_s*)raw->raw_chunks->data)->position == 0)
 		local_rc = meta2raw_remote_update_content(&ctx, &local_error, url, raw, FALSE);
@@ -219,8 +216,8 @@ rawx_load_raw_content(const gchar *path, const gchar *rawx_vol,
 	struct meta2_raw_chunk_s *raw_chunk;
 	struct meta2_raw_content_s *raw_content;
 
-	bzero(&txt_content, sizeof(txt_content));
-	bzero(&txt_chunk, sizeof(txt_chunk));
+	memset(&txt_content, 0, sizeof(txt_content));
+	memset(&txt_chunk, 0, sizeof(txt_chunk));
 	raw_chunk = g_malloc0(sizeof(*raw_chunk));
 	raw_content = g_malloc0(sizeof(*raw_content));
 

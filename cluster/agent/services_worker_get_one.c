@@ -131,10 +131,8 @@ services_worker_get_one(worker_t *worker, GError **error)
 		return __respond_message(worker,0,"Invalid format (not NS:TYPE)", error);
 	}
 	else {
-		bzero(ns_name, sizeof(ns_name));
-		bzero(type_name, sizeof(type_name));
-		g_strlcpy(ns_name, tokens[0], sizeof(ns_name)-1);
-		g_strlcpy(type_name, tokens[1], sizeof(type_name)-1);
+		g_strlcpy(ns_name, tokens[0], sizeof(ns_name));
+		g_strlcpy(type_name, tokens[1], sizeof(type_name));
 		g_strfreev(tokens);
 	}
 	si = g_malloc0(sizeof(struct service_info_s));

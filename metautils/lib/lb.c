@@ -327,7 +327,7 @@ _lb_relink_services(struct grid_lb_s *lb)
 		_save_index_for_addr(lb, &si->addr, i);
 	}
 
-	g_assert(lb->sorted_by_score->len == lb->gpa->len);
+	EXTRA_ASSERT(lb->sorted_by_score->len == lb->gpa->len);
 	g_array_sort(lb->sorted_by_score, sort_slots_by_score);
 }
 
@@ -447,7 +447,7 @@ _get_service_from_addr(struct grid_lb_s *lb, const struct addr_info_s *ai)
 struct service_info_s*
 grid_lb_get_service_from_addr(struct grid_lb_s *lb, const struct addr_info_s *ai)
 {
-	g_assert(ai != NULL);
+	EXTRA_ASSERT(ai != NULL);
 
 	if (!lb)
 		return NULL;
@@ -489,8 +489,8 @@ _lb_is_addr_available(struct grid_lb_s *lb, const struct addr_info_s *ai)
 gboolean
 grid_lb_is_addr_available(struct grid_lb_s *lb, const struct addr_info_s *ai)
 {
-	g_assert(lb != NULL);
-	g_assert(ai != NULL);
+	EXTRA_ASSERT(lb != NULL);
+	EXTRA_ASSERT(ai != NULL);
 
 	grid_lb_lock(lb);
 	gboolean rc = _lb_is_addr_available(lb, ai);
@@ -501,11 +501,11 @@ grid_lb_is_addr_available(struct grid_lb_s *lb, const struct addr_info_s *ai)
 gboolean
 grid_lb_is_srv_available(struct grid_lb_s *lb, const struct service_info_s *si)
 {
-	g_assert(si != NULL);
-	g_assert(lb != NULL);
+	EXTRA_ASSERT(si != NULL);
+	EXTRA_ASSERT(lb != NULL);
 
-	g_assert(!g_ascii_strncasecmp(si->type, lb->srvtype, sizeof(si->type)));
-	g_assert(!g_ascii_strncasecmp(si->ns_name, lb->ns, sizeof(si->ns_name)));
+	EXTRA_ASSERT(!g_ascii_strncasecmp(si->type, lb->srvtype, sizeof(si->type)));
+	EXTRA_ASSERT(!g_ascii_strncasecmp(si->ns_name, lb->ns, sizeof(si->ns_name)));
 
 	return grid_lb_is_addr_available(lb, &(si->addr));
 }
@@ -560,7 +560,7 @@ grid_lb_iterator_share(struct grid_lb_iterator_s *sub)
 {
 	struct grid_lb_iterator_s *iter;
 
-	g_assert(sub != NULL);
+	EXTRA_ASSERT(sub != NULL);
 
 	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
 	iter->lb = sub->lb;
@@ -575,7 +575,7 @@ grid_lb_iterator_single_run(struct grid_lb_s *lb)
 {
 	struct grid_lb_iterator_s *iter;
 
-	g_assert(lb != NULL);
+	EXTRA_ASSERT(lb != NULL);
 
 	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
 	iter->lb = lb;
@@ -590,7 +590,7 @@ grid_lb_iterator_round_robin(struct grid_lb_s *lb)
 {
 	struct grid_lb_iterator_s *iter;
 
-	g_assert(lb != NULL);
+	EXTRA_ASSERT(lb != NULL);
 
 	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
 	iter->lb = lb;
@@ -604,7 +604,7 @@ grid_lb_iterator_weighted_round_robin(struct grid_lb_s *lb)
 {
 	struct grid_lb_iterator_s *iter;
 
-	g_assert(lb != NULL);
+	EXTRA_ASSERT(lb != NULL);
 
 	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
 	iter->lb = lb;
@@ -618,7 +618,7 @@ grid_lb_iterator_random(struct grid_lb_s *lb)
 {
 	struct grid_lb_iterator_s *iter;
 
-	g_assert(lb != NULL);
+	EXTRA_ASSERT(lb != NULL);
 
 	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
 	iter->lb = lb;
@@ -632,7 +632,7 @@ grid_lb_iterator_weighted_random(struct grid_lb_s *lb)
 {
 	struct grid_lb_iterator_s *iter;
 
-	g_assert(lb != NULL);
+	EXTRA_ASSERT(lb != NULL);
 
 	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
 	iter->lb = lb;
@@ -672,7 +672,7 @@ gboolean
 grid_lb_iterator_is_srv_available(struct grid_lb_iterator_s *iter,
 		const struct service_info_s *si)
 {
-	g_assert(iter != NULL);
+	EXTRA_ASSERT(iter != NULL);
 	return grid_lb_is_srv_available(iter->lb, si);
 }
 
@@ -680,7 +680,7 @@ gboolean
 grid_lb_iterator_is_addr_available(struct grid_lb_iterator_s *iter,
 		const struct addr_info_s *ai)
 {
-	g_assert(iter != NULL);
+	EXTRA_ASSERT(iter != NULL);
 	return grid_lb_is_addr_available(iter->lb, ai);
 }
 
@@ -731,8 +731,8 @@ grid_lb_configure_pair(struct grid_lb_s *lb, const gchar *k, gsize l)
 static const gchar *
 _next(const gchar *p, const gchar *sep)
 {
-	g_assert(p != NULL);
-	g_assert(sep != NULL);
+	EXTRA_ASSERT(p != NULL);
+	EXTRA_ASSERT(sep != NULL);
 	for (; *p ; p++) {
 		if (strchr(sep, *p))
 			return p + 1;
@@ -1012,7 +1012,7 @@ grid_lb_iterator_next_shorten(struct grid_lb_iterator_s *iter,
 		return FALSE;
 
 	lb = iter->lb;
-	g_assert(lb != NULL);
+	EXTRA_ASSERT(lb != NULL);
 
 	if (lb->use_hook)
 		lb->use_hook();
@@ -1214,7 +1214,7 @@ _ext_opt_filter(struct service_info_s *si, struct lb_next_opt_ext_s *opt_ext)
 {
 	GSList *l;
 	struct service_info_s *si0;
-	g_assert(opt_ext != NULL);
+	EXTRA_ASSERT(opt_ext != NULL);
 
 	// Check if the service is not forbidden
 	for (l = opt_ext->srv_forbidden; l ;l=l->next) {
@@ -1266,7 +1266,7 @@ grid_lb_iterator_next_set2(struct grid_lb_iterator_s *iter,
 struct grid_lbpool_s*
 grid_lbpool_create(const gchar *ns)
 {
-	g_assert(ns != NULL);
+	EXTRA_ASSERT(ns != NULL);
 
 	struct grid_lbpool_s *glp = g_malloc0(sizeof(struct grid_lbpool_s));
 
@@ -1328,9 +1328,9 @@ void
 grid_lbpool_configure_string(struct grid_lbpool_s *glp, const gchar *srvtype,
 		const gchar *cfg)
 {
-	g_assert(glp != NULL);
-	g_assert(srvtype != NULL);
-	g_assert(cfg != NULL);
+	EXTRA_ASSERT(glp != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
+	EXTRA_ASSERT(cfg != NULL);
 	grid_lb_iterator_configure (grid_lbpool_ensure_iterator(glp, srvtype), cfg);
 }
 
@@ -1380,8 +1380,8 @@ grid_lbpool_reconfigure(struct grid_lbpool_s *glp,
 struct grid_lb_s *
 grid_lbpool_get_lb (struct grid_lbpool_s *glp, const gchar *srvtype)
 {
-	g_assert (glp != NULL);
-	g_assert (srvtype != NULL);
+	EXTRA_ASSERT (glp != NULL);
+	EXTRA_ASSERT (srvtype != NULL);
 
 	g_rw_lock_reader_lock(&(glp->rwlock));
 	struct grid_lb_s *lb = g_tree_lookup(glp->pools, srvtype);
@@ -1394,8 +1394,8 @@ struct grid_lb_iterator_s *
 grid_lbpool_ensure_iterator (struct grid_lbpool_s *glp, const gchar *srvtype)
 {
 	struct grid_lb_iterator_s *iterator =  NULL;
-	g_assert (glp != NULL);
-	g_assert (srvtype != NULL);
+	EXTRA_ASSERT (glp != NULL);
+	EXTRA_ASSERT (srvtype != NULL);
 
 	g_rw_lock_writer_lock(&(glp->rwlock));
 	_ensure (glp, srvtype, NULL, &iterator);
@@ -1408,8 +1408,8 @@ struct grid_lb_s *
 grid_lbpool_ensure_lb (struct grid_lbpool_s *glp, const gchar *srvtype)
 {
 	struct grid_lb_s *lb =  NULL;
-	g_assert (glp != NULL);
-	g_assert (srvtype != NULL);
+	EXTRA_ASSERT (glp != NULL);
+	EXTRA_ASSERT (srvtype != NULL);
 
 	g_rw_lock_writer_lock(&(glp->rwlock));
 	_ensure (glp, srvtype, &lb, NULL);
@@ -1422,9 +1422,9 @@ void
 grid_lbpool_reload(struct grid_lbpool_s *glp, const gchar *srvtype,
 		service_provider_f provider)
 {
-	g_assert(glp != NULL);
-	g_assert(srvtype != NULL);
-	g_assert(provider != NULL);
+	EXTRA_ASSERT(glp != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
+	EXTRA_ASSERT(provider != NULL);
 	return grid_lb_reload(grid_lbpool_ensure_lb(glp, srvtype), provider);
 }
 
@@ -1432,8 +1432,8 @@ GError*
 grid_lbpool_reload_json(struct grid_lbpool_s *glp, const gchar *srvtype,
 		const gchar *encoded)
 {
-	g_assert(glp != NULL);
-	g_assert(srvtype != NULL);
+	EXTRA_ASSERT(glp != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
 	return grid_lb_reload_json(grid_lbpool_ensure_lb(glp, srvtype), encoded);
 }
 
@@ -1441,16 +1441,16 @@ GError*
 grid_lbpool_reload_json_object(struct grid_lbpool_s *glp, const gchar *srvtype,
 		struct json_object *obj)
 {
-	g_assert(glp != NULL);
-	g_assert(srvtype != NULL);
+	EXTRA_ASSERT(glp != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
 	return grid_lb_reload_json_object(grid_lbpool_ensure_lb(glp, srvtype), obj);
 }
 
 struct grid_lb_iterator_s*
 grid_lbpool_get_iterator(struct grid_lbpool_s *glp, const gchar *srvtype)
 {
-	g_assert(glp != NULL);
-	g_assert(srvtype != NULL);
+	EXTRA_ASSERT(glp != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
 
 	g_rw_lock_reader_lock(&(glp->rwlock));
 	struct grid_lb_iterator_s *iter = g_tree_lookup(glp->iterators, srvtype);
@@ -1462,7 +1462,7 @@ grid_lbpool_get_iterator(struct grid_lbpool_s *glp, const gchar *srvtype)
 const gchar*
 grid_lbpool_namespace(struct grid_lbpool_s *glp)
 {
-	g_assert(glp != NULL);
+	EXTRA_ASSERT(glp != NULL);
 	return glp->ns;
 }
 
@@ -1470,9 +1470,9 @@ struct service_info_s*
 grid_lbpool_get_service_from_url(struct grid_lbpool_s *glp,
 		const gchar *srvtype, const gchar *url)
 {
-	g_assert(glp != NULL);
-	g_assert(srvtype != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(glp != NULL);
+	EXTRA_ASSERT(srvtype != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	return grid_lb_get_service_from_url(grid_lbpool_get_lb(glp, srvtype), url);
 }

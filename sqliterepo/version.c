@@ -215,7 +215,7 @@ version_decode(guint8 *raw, gsize rawsize)
 	GRID_TRACE2("%s(%p,%"G_GSIZE_FORMAT")", __FUNCTION__, raw, rawsize);
 
 	memset(&ctx, 0, sizeof(ctx));
-	ctx.max_stack_size = 512 * 1024;
+	ctx.max_stack_size = ASN1C_MAX_STACK;
 	rv = ber_decode(&ctx, &asn_DEF_BaseVersion, (void**)&bv, raw, rawsize);
 	if (rv.code != RC_OK) {
 		GRID_WARN("Decoder error (BaseVersion)");

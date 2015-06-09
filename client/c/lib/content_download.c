@@ -28,7 +28,6 @@ License along with this library.
 static void
 download_debug(struct dl_status_s *status, gs_content_t *content, const gchar *msg)
 {
-#if 1
 	if (!DEBUG_ENABLED())
 		return;
 
@@ -40,16 +39,6 @@ download_debug(struct dl_status_s *status, gs_content_t *content, const gchar *m
 			status->dl_info.offset, status->dl_info.size, status->content_dl, 
 			status->chunk_start_offset, status->chunk_dl_offset, status->chunk_dl_size, status->chunk_dl,
 			status->last_position, status->last_position_attempts);
-#else
-	syslog(LOG_DEBUG, "GRID download : %s [%s/%s]"
-		" content{offset=%"G_GINT64_FORMAT";size=%"G_GINT64_FORMAT";already=%"G_GINT64_FORMAT"}"
-		" chunk{start=%"G_GINT64_FORMAT";dl_offset=%"G_GINT64_FORMAT";dl_size=%"G_GINT64_FORMAT";total=%"G_GINT64_FORMAT"}"
-		" retry{pos=%d;attempts=%d}",
-			msg, C1_NAME(content), C1_PATH(content),
-			status->dl_info.offset, status->dl_info.size, status->content_dl, 
-			status->chunk_start_offset, status->chunk_dl_offset, status->chunk_dl_size, status->chunk_dl,
-			status->last_position, status->last_position_attempts);
-#endif
 }
 
 /**
@@ -333,7 +322,7 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 
 	/* If zero/negative size is specified, download the whole content */
 	agregated_chunks = NULL;
-	bzero(&status, sizeof(status));
+	memset(&status, 0, sizeof(status));
 	memcpy(&(status.dl_info), dl_info, sizeof(status.dl_info));
 
 	/* (lazy) reload of the content's chunks */
@@ -346,7 +335,7 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 
 	/* Overwrite storage policy by the real one */
 	stgpol = content->policy;
-	is_rainx = stg_pol_is_rainx(&(content->info.container->info.gs->ni), stgpol);
+	is_rainx = stg_pol_is_rainx(content->info.container->info.gs->ni, stgpol);
 
 	/* Sanity checks on the data boundaries. These checks must be performed
 	 * after the (lazy) chunks reload because the content's size might be
@@ -385,13 +374,13 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 	failed_chunks = g_hash_table_new_full(g_int_hash, g_int_equal, g_free, NULL);
 
 	if (is_rainx) {
-		if (stg_pol_rainx_get_param(&(content->info.container->info.gs->ni), stgpol, DS_KEY_K, &k_signed))
+		if (stg_pol_rainx_get_param(content->info.container->info.gs->ni, stgpol, DS_KEY_K, &k_signed))
 			k = k_signed;
-		if (stg_pol_rainx_get_param(&(content->info.container->info.gs->ni), stgpol, DS_KEY_M, &m_signed))
+		if (stg_pol_rainx_get_param(content->info.container->info.gs->ni, stgpol, DS_KEY_M, &m_signed))
 			m = m_signed;
 	} else {
 		struct storage_policy_s *sp = storage_policy_init(
-				&(content->info.container->info.gs->ni), stgpol);
+				content->info.container->info.gs->ni, stgpol);
 		const gchar *nb_copy = data_security_get_param(
 				storage_policy_get_data_security(sp), "nb_copy");
 		// In case of duplication, we have one base chunk
@@ -550,8 +539,7 @@ gs_download_content_full (gs_content_t *content, gs_download_info_t *dl_info,
 					local_beans? local_beans : beans,
 					broken_chunks, status.last_position / k);
 
-			local_gerr = rainx_reconstruct(url,
-					&(content->info.container->info.gs->ni),
+			local_gerr = rainx_reconstruct(url, content->info.container->info.gs->ni,
 					rainx_params, &rainx_writer, TRUE, TRUE);
 
 			rainx_rec_params_free(rainx_params);

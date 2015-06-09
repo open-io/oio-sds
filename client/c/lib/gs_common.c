@@ -309,18 +309,12 @@ gs_grid_storage_free(gs_grid_storage_t * gs)
 {
 	if (!gs)
 		return;
-
 	if (gs->direct_resolver)
 		resolver_direct_free(gs->direct_resolver);
-
-	if (gs->full_vns)
-		free(gs->full_vns);
-	if (gs->physical_namespace)
-		free(gs->physical_namespace);
-
-	namespace_info_clear(&(gs->ni));
-
-	free(gs);
+	metautils_str_clean (&gs->ns);
+	metautils_str_clean (&gs->physical_namespace);
+	namespace_info_free(gs->ni);
+	g_free(gs);
 }
 
 void

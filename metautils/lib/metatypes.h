@@ -74,6 +74,13 @@ License along with this library.
 /** The maximum length of a URL query string (including '?') */
 #define LIMIT_LENGTH_HCURL_OPTIONS 512
 
+#define LIMIT_LENGTH_CHUNKURL 512
+
+#define LIMIT_LENGTH_REQID 128
+
+#define LIMIT_LENGTH_BASENAME 256
+#define LIMIT_LENGTH_BASETYPE 32
+
 /** The maximum length of a URL
  * (namespace, container, content, options, separators) */
 #define LIMIT_LENGTH_HCURL (LIMIT_LENGTH_NSNAME +\

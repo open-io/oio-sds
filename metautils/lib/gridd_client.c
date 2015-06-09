@@ -30,16 +30,7 @@ License along with this library.
 #include <errno.h>
 #include <sys/types.h>
 
-#include "./metautils_macros.h"
-
-#include <glib.h>
-
-#include "./metacomm.h"
-#include "./metautils_hashstr.h"
-#include "./metautils_resolv.h"
-#include "./metautils_internals.h"
-#include "./metautils_syscall.h"
-#include "./gridd_client.h"
+#include "metautils.h"
 
 #ifndef URL_MAXLEN
 # define URL_MAXLEN 32
@@ -149,8 +140,6 @@ _connect(const gchar *url, GError **err)
 {
 	struct addr_info_s ai;
 
-	memset(&ai, 0, sizeof(ai));
-
 	if (!grid_string_to_addrinfo(url, NULL, &ai)) {
 		*err = NEWERROR(EINVAL, "invalid URL");
 		return -1;
@@ -178,7 +167,7 @@ _client_connect(struct gridd_client_s *client)
 	client->fd = _connect(client->url, &err);
 
 	if (client->fd < 0) {
-		g_assert(err != NULL);
+		EXTRA_ASSERT(err != NULL);
 		g_prefix_error(&err, "Connect error: ");
 		return err;
 	}
@@ -260,8 +249,10 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 	guint status = 0;
 	gchar *message = NULL;
 
-	if (NULL != (err = metaXClient_reply_simple(reply, &status, &message)))
+	if (NULL != (err = metaXClient_reply_simple(reply, &status, &message))) {
+		g_prefix_error (&err, "reply: ");
 		return err;
+	}
 
 	if (CODE_IS_NETWORK_ERROR(status)) {
 		err = NEWERROR(status, "net error: %s", message);
@@ -336,16 +327,15 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 }
 
 static GError *
-_client_manage_reply_data(struct gridd_client_s *client)
+_client_manage_reply_data(struct gridd_client_s *c)
 {
 	GError *err = NULL;
-	MESSAGE reply = message_unmarshall(client->reply->data,
-			client->reply->len, &err);
-	if (!reply)
-		g_prefix_error(&err, "Decoding error: ");
-	else
-		err = _client_manage_reply(client, reply);
-	message_destroy(reply);
+	MESSAGE r = message_unmarshall(c->reply->data, c->reply->len, &err);
+	if (!r)
+		g_prefix_error(&err, "Decoding: ");
+	else if (NULL != (err = _client_manage_reply(c, r)))
+		g_prefix_error(&err, "Handling: ");
+	metautils_message_destroy(r);
 	return err;
 }
 
@@ -357,7 +347,7 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 	switch (client->step) {
 
 		case CONNECTING:
-			g_assert(client->fd >= 0);
+			EXTRA_ASSERT(client->fd >= 0);
 			client->step = client->request ? REQ_SENDING : CONNECTED;
 			return NULL;
 
@@ -396,7 +386,7 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 
 			if (client->reply->len < 4) {
 				/* Continue reading the size */
-				rc = metautils_syscall_read(client->fd, d, ds);
+				rc = metautils_syscall_read(client->fd, d, (4 - client->reply->len));
 				if (rc < 0)
 					return (errno == EINTR || errno == EAGAIN) ? NULL :
 						NEWERROR(errno, "read error (%s)", strerror(errno));
@@ -410,6 +400,7 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 				}
 			}
 
+			EXTRA_ASSERT (client->reply->len == 4);
 			client->size = l4v_get_size(client->reply->data);
 
 		case REP_READING_DATA:
@@ -418,8 +409,13 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 			g_get_current_time(&(client->tv_step));
 			rc = 0;
 
-			if (client->reply->len < client->size+4) {
-				rc = metautils_syscall_read(client->fd, d, ds);
+			EXTRA_ASSERT (client->reply->len <= client->size + 4);
+			if (client->reply->len < client->size + 4) {
+				gsize remaiming = client->size + 4 - client->reply->len;
+				gsize dmax = ds;
+				if (dmax > remaiming)
+					dmax = remaiming;
+				rc = metautils_syscall_read(client->fd, d, dmax);
 				if (rc < 0)
 					return (errno == EINTR || errno == EAGAIN) ? NULL :
 						NEWERROR(errno, "read error (%s)", strerror(errno));
@@ -427,7 +423,8 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 					g_byte_array_append(client->reply, d, rc);
 			}
 
-			if (client->reply->len >= client->size+4) {
+			EXTRA_ASSERT (client->reply->len <= client->size + 4);
+			if (client->reply->len == client->size + 4) {
 				GError *err = _client_manage_reply_data(client);
 				if (err) {
 					client->step = STATUS_FAILED;
@@ -436,8 +433,7 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 				else {
 					if (client->step != CONNECTING && client->step != STATUS_FAILED
 							&& client->step != STATUS_OK) {
-						client->reply = g_byte_array_remove_range(client->reply, 0,
-								client->size+4);
+						client->reply = g_byte_array_set_size(client->reply, 0);
 						client->step = REP_READING_SIZE;
 						client->size = 0;
 					}
@@ -459,11 +455,11 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 static GError *
 _client_manage_event(struct gridd_client_s *client)
 {
-	guint8 *d = g_slice_alloc(EVENT_BUFFER_SIZE);
+	guint8 *d = SLICE_ALLOC(EVENT_BUFFER_SIZE);
 	if (!d)
 		return NEWERROR(ENOMEM, "Memory allocation failure");
 	GError *err = _client_manage_event_in_buffer(client, d, EVENT_BUFFER_SIZE);
-	g_slice_free1 (EVENT_BUFFER_SIZE, d);
+	SLICE_FREE1 (EVENT_BUFFER_SIZE, d);
 	return err;
 }
 
@@ -532,7 +528,7 @@ _client_interest(struct gridd_client_s *client)
 		case CONNECTING:
 			return CLIENT_WR;
 		case CONNECTED:
-			g_assert(!client->request);
+			EXTRA_ASSERT(!client->request);
 			return 0;
 		case REQ_SENDING:
 			return client->request != NULL ?  CLIENT_WR : 0;
@@ -579,7 +575,7 @@ _client_free(struct gridd_client_s *client)
 		g_string_free(client->past_url, TRUE);
 	memset(client, 0, sizeof(*client));
 	client->fd = -1;
-	g_slice_free (struct gridd_client_s, client);
+	SLICE_FREE (struct gridd_client_s, client);
 }
 
 static void
@@ -657,7 +653,7 @@ _client_connect_url(struct gridd_client_s *client, const gchar *url)
 	if (!metautils_url_valid_for_connect(url))
 		return NEWERROR(CODE_BAD_REQUEST, "Bad address [%s]", url);
 
-	g_assert(client != NULL);
+	EXTRA_ASSERT(client != NULL);
 
 	_client_reset_cnx(client);
 	_client_reset_target(client);
@@ -679,7 +675,7 @@ _client_connect_addr(struct gridd_client_s *client,
 	if (NULL == ai || !ai->port)
 		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid parameter");
 
-	g_assert(client != NULL);
+	EXTRA_ASSERT(client != NULL);
 
 	_client_reset_cnx(client);
 	_client_reset_target(client);
@@ -815,7 +811,7 @@ _client_finished(struct gridd_client_s *client)
 		case REP_READING_DATA:
 			/* The only case where fd<0 is when an error occured,
 			 * and 'error' MUST have been set */
-			g_assert(client->fd >= 0);
+			EXTRA_ASSERT(client->fd >= 0);
 			return FALSE;
 		case STATUS_OK:
 		case STATUS_FAILED:
@@ -888,7 +884,7 @@ _factory_create_client (struct gridd_client_factory_s *factory)
 struct gridd_client_s *
 gridd_client_create_empty(void)
 {
-	struct gridd_client_s *client = g_slice_new0(struct gridd_client_s);
+	struct gridd_client_s *client = SLICE_NEW0(struct gridd_client_s);
 	if (unlikely(NULL == client))
 		return NULL;
 
@@ -911,9 +907,9 @@ gridd_client_factory_create(void)
 }
 
 #define VTABLE_CHECK(self,T,F) do { \
-	g_assert(self != NULL); \
-	g_assert(((T)self)->vtable != NULL); \
-	g_assert(((T)self)->vtable-> F != NULL); \
+	EXTRA_ASSERT(self != NULL); \
+	EXTRA_ASSERT(((T)self)->vtable != NULL); \
+	EXTRA_ASSERT(((T)self)->vtable-> F != NULL); \
 } while (0)
 
 #define VTABLE_CALL(self,T,F) \

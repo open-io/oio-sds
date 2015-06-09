@@ -989,7 +989,7 @@ policy_load_beans(struct policy_check_s *pc)
 	GError *err = NULL;
 
 	err = hc_resolve_reference_service(pc->resolver, pc->url, "meta2", &pc->m2urlv);
-	g_assert(err != NULL || pc->m2urlv != NULL);
+	EXTRA_ASSERT(err != NULL || pc->m2urlv != NULL);
 	if (err != NULL) {
 		g_prefix_error(&err, "Meta2 resolution error: ");
 		return err;

@@ -165,7 +165,7 @@ meta1_dispatch_v1_CREATE(struct gridd_reply_ctx_s *reply,
 	struct addr_info_s m2addr;
 	gchar **result = NULL;
 
-	struct hc_url_s *url = message_extract_url (reply->request);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
 
@@ -252,7 +252,7 @@ static gboolean
 meta1_dispatch_v1_BYID(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
-	struct hc_url_s *url = message_extract_url (reply->request);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
 
@@ -278,7 +278,7 @@ meta1_dispatch_v2_CREATE(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	(void) ignored;
-	struct hc_url_s *url = message_extract_url (reply->request);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 
 	GError *err = meta1_backend_create_container(m1, url);
@@ -295,8 +295,8 @@ static gboolean
 meta1_dispatch_v2_DESTROY(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
-	struct hc_url_s *url = message_extract_url (reply->request);
-	gboolean force = message_extract_flag(reply->request, NAME_MSGKEY_FORCE, FALSE);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
+	gboolean force = metautils_message_extract_flag(reply->request, NAME_MSGKEY_FORCE, FALSE);
 	reply->subject("%s|%s|%d", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), force);
 	(void) ignored;
 
@@ -316,7 +316,7 @@ meta1_dispatch_v2_HAS(struct gridd_reply_ctx_s *reply,
 {
 	GError *err;
 	gchar **info = NULL;
-	struct hc_url_s *url = message_extract_url (reply->request);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
 	
@@ -336,9 +336,9 @@ static gboolean
 meta1_dispatch_v2_SRV_GETAVAIL(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
-	struct hc_url_s *url = message_extract_url (reply->request);
-	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
-	gboolean dryrun = message_extract_flag(reply->request, NAME_HEADER_DRYRUN, FALSE);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
+	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
+	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_HEADER_DRYRUN, FALSE);
 	reply->subject("%s|%s|%s|%d", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype, dryrun);
 	(void) ignored;
 
@@ -362,9 +362,9 @@ static gboolean
 meta1_dispatch_v2_SRV_NEW(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
-	struct hc_url_s *url = message_extract_url (reply->request);
-	gboolean dryrun = message_extract_flag(reply->request, NAME_HEADER_DRYRUN, FALSE);
-	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
+	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_HEADER_DRYRUN, FALSE);
+	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
 	reply->subject("%s|%s|%s|%d", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype, dryrun);
 	(void) ignored;
 
@@ -390,11 +390,11 @@ meta1_dispatch_v2_SRV_SET(struct gridd_reply_ctx_s *reply,
 {
 	GError *err;
 	gchar *m1url = NULL;
-	struct hc_url_s *url = message_extract_url (reply->request);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), m1url);
 	(void) ignored;
 
-	if (NULL != (err = message_extract_body_string(reply->request, &m1url)))
+	if (NULL != (err = metautils_message_extract_body_string(reply->request, &m1url)))
 		reply->send_error(CODE_BAD_REQUEST, err);
 	else if (NULL != (err = meta1_backend_force_service(m1, url, m1url)))
 		reply->send_error(0, err);
@@ -412,11 +412,11 @@ meta1_dispatch_v2_SRV_SETARG(struct gridd_reply_ctx_s *reply,
 {
 	GError *err;
 	gchar *m1url = NULL;
-	struct hc_url_s *url = message_extract_url (reply->request);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
 
-	if (NULL != (err = message_extract_body_string(reply->request, &m1url)))
+	if (NULL != (err = metautils_message_extract_body_string(reply->request, &m1url)))
 		reply->send_error(CODE_BAD_REQUEST, err);
 	else if (NULL != (err = meta1_backend_set_service_arguments(m1, url, m1url)))
 		reply->send_error(0, err);
@@ -434,14 +434,14 @@ meta1_dispatch_v2_SRV_DELETE(struct gridd_reply_ctx_s *reply,
 {
 	gchar **urlv = NULL;
 	GError *err;
-	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
-	struct hc_url_s *url = message_extract_url (reply->request);
+	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype);
 	(void) ignored;
 
 	if (!srvtype)
 		reply->send_error(0, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
-	else if (NULL != (err = message_extract_body_strv(reply->request, &urlv)))
+	else if (NULL != (err = metautils_message_extract_body_strv(reply->request, &urlv)))
 		reply->send_error(CODE_BAD_REQUEST, err);
 	else if (!srvtype)
 		reply->send_error(CODE_BAD_REQUEST, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
@@ -462,8 +462,8 @@ meta1_dispatch_v2_SRV_GETALL(struct gridd_reply_ctx_s *reply,
 {
 	GError *err;
 	gchar **result = NULL;
-	struct hc_url_s *url = message_extract_url (reply->request);
-	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
+	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
 	reply->subject("%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype);
 	(void) ignored;
 
@@ -486,7 +486,7 @@ meta1_dispatch_v2_SRV_GETALLonM1(struct gridd_reply_ctx_s *reply,
 {
 	GError *err;
 	gchar **result = NULL;
-	struct hc_url_s *url = message_extract_url (reply->request);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
     reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
     reply->send_reply(CODE_TEMPORARY, "Received");
     (void) ignored;
@@ -509,12 +509,12 @@ meta1_dispatch_v2_CID_PROPGET(struct gridd_reply_ctx_s *reply,
 {
 	GError *err;
 	gchar **strv = NULL, **result = NULL;
-	struct hc_url_s *url = message_extract_url (reply->request);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 
 	(void) ignored;
 
-	if (NULL != (err = message_extract_body_strv(reply->request, &strv)))
+	if (NULL != (err = metautils_message_extract_body_strv(reply->request, &strv)))
 		reply->send_error(CODE_BAD_REQUEST, err);
 	else if (NULL != (err = meta1_backend_get_container_properties(m1, url, strv, &result)))
 		reply->send_error(0, err);
@@ -535,11 +535,11 @@ meta1_dispatch_v2_CID_PROPSET(struct gridd_reply_ctx_s *reply,
 {
 	GError *err;
 	gchar **strv = NULL;
-	struct hc_url_s *url = message_extract_url (reply->request);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
 
-	if (NULL != (err = message_extract_body_strv(reply->request, &strv)))
+	if (NULL != (err = metautils_message_extract_body_strv(reply->request, &strv)))
 		reply->send_error(CODE_BAD_REQUEST, err);
 	else if (NULL != (err = meta1_backend_set_container_properties(m1, url, strv)))
 		reply->send_error(0, err);
@@ -557,11 +557,11 @@ meta1_dispatch_v2_CID_PROPDEL(struct gridd_reply_ctx_s *reply,
 {
 	GError *err;
 	gchar **strv = NULL;
-	struct hc_url_s *url = message_extract_url (reply->request);
+	struct hc_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
 
-	if (NULL != (err = message_extract_body_strv(reply->request, &strv)))
+	if (NULL != (err = metautils_message_extract_body_strv(reply->request, &strv)))
 		reply->send_error(CODE_BAD_REQUEST, err);
 	else if (NULL != (err = meta1_backend_del_container_properties(m1, url, strv)))
 		reply->send_error(0, err);

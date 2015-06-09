@@ -87,11 +87,12 @@ main_specific_stop(void)
 }
 
 static void
-main_set_defaults(void){
-	bzero(path_root, sizeof(path_root));
-	bzero(meta2_str_addr, sizeof(meta2_str_addr));
-	bzero(meta2_url, LIMIT_LENGTH_URL);
-	bzero(ns_name, LIMIT_LENGTH_NSNAME);
+main_set_defaults(void)
+{
+	memset(path_root, 0, sizeof(path_root));
+	memset(meta2_str_addr, 0, sizeof(meta2_str_addr));
+	memset(meta2_url, 0, LIMIT_LENGTH_URL);
+	memset(ns_name, 0, LIMIT_LENGTH_NSNAME);
 }
 
 static struct grid_main_option_s*
@@ -115,14 +116,16 @@ main_get_options(void)
 }
 
 static const gchar*
-main_get_usage(void){
+main_get_usage(void)
+{
 	static gchar xtra_usage[] =
 		"\tExpected argument: an absolute path of a valid meta2 directory\n";
 	return xtra_usage;
 }
 
 static void
-main_specific_fini(void){
+main_specific_fini(void)
+{
 	if(volume_busy)
 		return;
 	if(*path_root && *lock_xattr_name) {
@@ -132,21 +135,18 @@ main_specific_fini(void){
 }
 
 static gboolean
-main_save_canonical_directory(const char *dir){
+main_save_canonical_directory(const char *dir)
+{
 	int i, slash;
-	char *path;
-	size_t path_len;
-
-	path_len = strlen(dir)+1;
-	path = g_alloca(path_len);
-	bzero(path, path_len);
+	size_t path_len = strlen(dir)+1;
+	char *path = g_alloca(path_len);
+	memset(path, 0, path_len);
 
 	for(i=0,slash=0; *dir; dir++){
 		if(*dir != '/'){
 			path[i++] = *dir;
 			slash = 0;
-		}
-		else{
+		} else {
 			if(!slash)
 				path[i++] = *dir;
 			slash = 1;
@@ -162,7 +162,8 @@ main_save_canonical_directory(const char *dir){
 }
 
 static gboolean
-meta2_get_lock_info(const char *vol, gchar *dst_host, gsize dst_host_size, GError **gerr){
+meta2_get_lock_info(const char *vol, gchar *dst_host, gsize dst_host_size, GError **gerr)
+{
 	ssize_t size;
 	size_t usize;
 
@@ -171,8 +172,8 @@ meta2_get_lock_info(const char *vol, gchar *dst_host, gsize dst_host_size, GErro
 		return FALSE;
 	}
 
-	bzero(dst_host, dst_host_size);
-	bzero(ns_name, LIMIT_LENGTH_NSNAME);
+	memset(dst_host, 0, dst_host_size);
+	memset(ns_name, 0, LIMIT_LENGTH_NSNAME);
 
 	switch(size = getxattr(vol, META2LOCK_ATTRNAME_URL, meta2_url, LIMIT_LENGTH_URL)) {
 		case -1:
@@ -223,7 +224,8 @@ meta2_get_lock_info(const char *vol, gchar *dst_host, gsize dst_host_size, GErro
 }
 
 static gboolean
-main_configure(int argc, char **args){
+main_configure(int argc, char **args)
+{
 	GError *local_error = NULL;
 
 	if(!argc){
@@ -250,7 +252,8 @@ main_configure(int argc, char **args){
 }
 
 static gboolean
-accept_meta2(const gchar *dirname, const gchar *bn, void *data){
+accept_meta2(const gchar *dirname, const gchar *bn, void *data)
+{
 	(void) dirname;
 	(void) data;
 
@@ -269,7 +272,8 @@ accept_meta2(const gchar *dirname, const gchar *bn, void *data){
 }
 
 static enum scanner_traversal_e
-manage_dir_enter(const gchar *path_dir, guint depth, gpointer data){
+manage_dir_enter(const gchar *path_dir, guint depth, gpointer data)
+{
 	(void) depth;
 	(void) data;
 
@@ -278,7 +282,8 @@ manage_dir_enter(const gchar *path_dir, guint depth, gpointer data){
 }
 
 static gboolean
-meta2_path_is_valid(const gchar *fullpath){
+meta2_path_is_valid(const gchar *fullpath)
+{
 	size_t len,i;
 	const gchar *ptr;
 
@@ -360,7 +365,7 @@ manage_meta2(const gchar *container_path, void *data, struct rules_motor_env_s**
 			GRID_DEBUG("Crawling content [%s]", info->path);
 
 			/* Create content_info from path_info */
-			bzero(&content_info, sizeof(struct content_textinfo_s));
+			memset(&content_info, 0, sizeof(struct content_textinfo_s));
 			content_info.container_id = g_strdup(hc_url_get (url, HCURL_HEXID));
 			content_info.path = g_strdup(info->path);
 			content_info.size = g_strdup_printf("%"G_GINT64_FORMAT, info->size);
@@ -428,8 +433,8 @@ main_action(void) {
 	struct meta2_crawler_stats_s scan_stats;
 	struct volume_scanning_info_s scan_info;
 
-	bzero(&scan_stats, sizeof(scan_stats));
-	bzero(&scan_info, sizeof(scan_info));
+	memset(&scan_stats, 0, sizeof(scan_stats));
+	memset(&scan_info,  0, sizeof(scan_info));
 
 	scan_info.volume_path = path_root;
 	scan_info.file_match = accept_meta2;
@@ -448,9 +453,9 @@ main_action(void) {
 
 	motor_env_init();
 
-	do{
+	do {
 		scan_volume(&scan_info, &motor_env);
-	}while(flag_loop && grid_main_is_running());
+	} while(flag_loop && grid_main_is_running());
 
 	destroy_motor_env(&motor_env);
 	if (*path_root && *lock_xattr_name) {

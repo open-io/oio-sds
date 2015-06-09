@@ -42,6 +42,16 @@ License along with this library.
 #  define EVENT_TOPIC "oio.sds"
 # endif
 
+#define SLICE_NEW0(T)    g_malloc0(sizeof(T))
+#define SLICE_NEW(T)     g_malloc(sizeof(T))
+#define SLICE_ALLOC(S)   g_malloc(S)
+#define SLICE_FREE(T,P)  g_free((P))
+#define SLICE_FREE1(S,P) g_free((P))
+
+/* size [in bytes] asn1c can require on the stack. Use 0 for as many bytes
+ * as necessary (with the risk of stack smashing). */
+#define ASN1C_MAX_STACK 0
+
 /* Some well known service types */
 
 # define NAME_SRVTYPE_META0 "meta0"

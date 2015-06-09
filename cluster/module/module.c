@@ -43,7 +43,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <cluster/lib/gridcluster.h>
 #include <cluster/conscience/conscience.h>
-#include <cluster/conscience/conscience_broken_holder_common.h>
 
 #include "alerting.h"
 #include "module.h"
@@ -62,25 +61,6 @@ struct conscience_request_counters
 		guint32 push_score;
 		guint32 push_vns;
 	} services;
-	struct
-	{
-		guint32 push;
-		guint32 get;
-		guint32 remove;
-		guint32 fix;
-	} broken;
-};
-
-/**
- * Used by handler_get_broken_containers() as tha arbitrary user
- * data passed to the callback appllied on each broken element.
- */
-struct brkget_s
-{
-	GError *error;
-	guint lines_length;
-	GSList *lines;
-	struct reply_context_s reply_ctx;
 };
 
 struct srvget_s
@@ -189,11 +169,6 @@ save_counters(gpointer u)
 	SAVE_COUNTER(services.remove);
 	SAVE_COUNTER(services.push_stat);
 	SAVE_COUNTER(services.push_score);
-
-	SAVE_COUNTER(broken.push);
-	SAVE_COUNTER(broken.fix);
-	SAVE_COUNTER(broken.get);
-	SAVE_COUNTER(broken.remove);
 }
 
 static gboolean
@@ -355,7 +330,7 @@ request_body_matches_namespace(struct request_context_s *req_ctx, GError **err)
 	int rc;
 
 	gsize body_size = 0;
-	void *body = message_get_BODY(req_ctx->request, &body_size);
+	void *body = metautils_message_get_BODY(req_ctx->request, &body_size);
 	if (!body)
 		return TRUE;
 
@@ -425,300 +400,6 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
 	reply_context_clear(&ctx, TRUE);
 	return (1);
-}
-
-static gint
-handler_rm_broken_containers(struct request_context_s *req_ctx)
-{
-	struct reply_context_s ctx;
-	GSList *elements = NULL, *list = NULL;
-
-	init_reply_ctx_with_request(req_ctx, &ctx);
-
-	gsize data_size;
-	void *data = message_get_BODY(req_ctx->request, &data_size);
-	if (data) {
-		guint counter;
-
-		if (!strings_unmarshall(&elements, data, &data_size, &(ctx.warning))) {
-			GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad request : failed to unmarshall broken container list");
-			goto errorLabel;
-		}
-		counter=0;
-
-		for (list = elements; list && list->data; list = list->next) {
-			if (list->data) {
-
-				/* XXX start of critical section*/
-				conscience_lock_broken_elements(conscience,'w');
-				broken_holder_remove_element(conscience->broken_elements, (gchar *) list->data);
-				conscience_unlock_broken_elements(conscience);
-				/* XXX end of critical section*/
-
-				g_free(list->data);
-				list->data = NULL;
-				counter ++;
-			}
-		}
-
-		g_slist_free(elements);
-		NOTICE("[NS=%s] %u broken elements have been flushed", conscience_get_namespace(conscience), counter);
-	}
-	else {
-		/* XXX start of critical section*/
-		conscience_lock_broken_elements(conscience,'w');
-		broken_holder_flush(conscience->broken_elements);
-		conscience_unlock_broken_elements(conscience);
-		/* XXX end of critical section*/
-
-		NOTICE("[NS=%s] all the broken elements have been flushed", conscience_get_namespace(conscience));
-	}
-
-	reply_context_clear(&ctx, TRUE);
-	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
-	if (!reply_context_reply(&ctx, &(ctx.warning))) {
-		GSETERROR(&(ctx.warning), "Broken elements removed, failed to reply");
-		goto errorLabel;
-	}
-
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&ctx, TRUE);
-	return (1);
-
-      errorLabel:
-	ERROR("An error occured : %s", gerror_get_message(ctx.warning));
-	reply_context_clear(&ctx,FALSE);
-	reply_context_set_message(&ctx, ctx.warning->code, gerror_get_message(ctx.warning));
-	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&ctx, TRUE);
-	return 1;
-}
-
-static gint
-handler_fix_broken_containers(struct request_context_s *req_ctx)
-{
-	gint rc;
-	struct reply_context_s ctx;
-	GSList *containers = NULL, *list = NULL;
-
-	init_reply_ctx_with_request(req_ctx, &ctx);
-
-	/* Extract MESSAGE from request */
-	gsize data_size;
-	void *data = message_get_BODY(req_ctx->request, &data_size);
-	if (!data) {
-		GSETCODE(&(ctx.warning),CODE_BAD_REQUEST,"Invalid request - missing body");
-		goto errorLabel;
-	}
-
-	containers = meta2_maintenance_names_unmarshall_buffer(data, data_size, &(ctx.warning));
-	if (!containers) {
-		GSETCODE(&(ctx.warning),CODE_BAD_REQUEST,"Invalid request - invalid body, deserialization eror");
-		goto errorLabel;
-	}
-
-	/* Update the container hash with this new values */
-	for (list = containers; list && list->data; list = list->next) {
-		if (list->data) {
-			typeof(errno) errsav;
-
-			/* XXX start of critical section*/
-			conscience_lock_broken_elements(conscience,'w');
-			errno = 0;
-			broken_holder_fix_element(conscience->broken_elements, list->data);
-			errsav = errno;
-			conscience_unlock_broken_elements(conscience);
-			/* XXX end of critical section*/
-
-			if (errsav)
-				INFO("Failed to fix [%s] : %s", (gchar*) list->data, strerror(errno));
-
-			g_free(list->data);
-			list->data = NULL;
-		}
-	}
-
-	g_slist_free(containers);
-
-	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
-	rc = reply_context_reply(&ctx, &(ctx.warning));
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&ctx, TRUE);
-	return rc;
-errorLabel:
-	ERROR("An error occured : %s", gerror_get_message(ctx.warning));
-	reply_context_clear(&ctx, FALSE);
-	reply_context_set_message(&ctx, ctx.warning->code, ctx.warning->message);
-	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&ctx, TRUE);
-	return 0;
-}
-
-static gint
-handler_push_broken_containers(struct request_context_s *req_ctx)
-{
-	struct reply_context_s ctx;
-	GSList *elements = NULL, *list = NULL;
-
-	init_reply_ctx_with_request(req_ctx, &ctx);
-	reply_context_set_body(&ctx, NULL, 0, 0);
-
-	/* Extract MESSAGE from request */
-	gsize data_size;
-	void *data = message_get_BODY(req_ctx->request, &data_size);
-	if (!data) {
-		GSETCODE(&(ctx.warning),CODE_BAD_REQUEST,"Invalid request - missing body");
-		goto errorLabel;
-	}
-
-	elements = meta2_maintenance_names_unmarshall_buffer(data, data_size, &(ctx.warning));
-	if (!elements) {
-		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST,"body unmarshalling error");
-		goto errorLabel;
-	}
-
-	if (DEBUG_ENABLED())
-		DEBUG("%d BROKEN elements received", g_slist_length(elements));
-
-	for (list = elements; list && list->data; list = list->next) {
-		if (list->data) {
-			/* XXX start of critical section*/
-			conscience_lock_broken_elements(conscience,'w');
-			broken_holder_add_element(conscience->broken_elements, (gchar *) (list->data));
-			conscience_unlock_broken_elements(conscience);
-			/* XXX end of critical section*/
-
-			TRACE("Broken element successfuly managed : [%s]", (gchar *) (list->data));
-			g_free(list->data);
-			list->data = NULL;
-		}
-	}
-	g_slist_free(elements);
-
-	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
-	reply_context_reply(&ctx, &(ctx.warning));
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&ctx, TRUE);
-	return (1);
-
-errorLabel:
-	ERROR("An error occured : %s", gerror_get_message(ctx.warning));
-	reply_context_clear(&ctx,FALSE);
-	reply_context_set_message(&ctx, ctx.warning->code, ctx.warning->message);
-	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&ctx, TRUE);
-	return 1;
-}
-
-/* ------------------------------------------------------------------------- */
-
-static void
-_clean_brkget_accumulator(struct brkget_s *data)
-{
-	if (data) {
-		if (data->lines) {
-			g_slist_foreach(data->lines, g_free1, NULL);
-			g_slist_free(data->lines);
-		}
-		data->lines = NULL;
-		data->lines_length = 0;
-	}
-}
-
-static gboolean
-_brkget_reply_do(struct brkget_s *data, gboolean is_last)
-{
-	/*Serializes the lines */
-	if (data->lines) {
-		GByteArray *gba = NULL;
-
-		gba = meta2_maintenance_names_marshall(data->lines, &(data->reply_ctx.warning));
-		if (!gba)
-			return FALSE;
-		reply_context_clear(&(data->reply_ctx), TRUE);
-		reply_context_set_message(&(data->reply_ctx), (is_last?CODE_FINAL_OK:CODE_PARTIAL_CONTENT), (is_last?"OK":"Partial content"));
-		reply_context_set_body(&(data->reply_ctx), gba->data, gba->len, REPLYCTX_DESTROY_ON_CLEAN|REPLYCTX_COPY);
-		g_byte_array_free(gba, TRUE);
-		if (!reply_context_reply(&(data->reply_ctx), &(data->reply_ctx.warning)))
-			return FALSE;
-	}
-
-	_clean_brkget_accumulator(data);
-	return TRUE;
-}
-
-static gboolean
-brkget_manage_m1(gpointer udata, struct broken_meta1_s *bm1)
-{
-	struct brkget_s *data = udata;
-
-	if (bm1) {
-		gchar *str = broken_holder_write_meta1(bm1);
-		if (str) {
-			data->lines = g_slist_prepend(data->lines, str);
-			data->lines_length++;
-		}
-	}
-	if (!bm1 || data->lines_length >= NB_BROKEN_LINES)
-		return _brkget_reply_do(data, FALSE);
-	return TRUE;
-}
-
-static gboolean
-brkget_manage_content(gpointer udata, struct broken_meta2_s *bm2, struct broken_content_s *bc)
-{
-	struct brkget_s *data = udata;
-
-	if (bm2) {
-		gchar *str;
-		if (bc)
-			str = broken_holder_write_content(bm2, bc);
-		else
-			str = broken_holder_write_meta2(bm2);
-		if (str) {
-			data->lines = g_slist_prepend(data->lines, str);
-			data->lines_length++;
-		}
-	}
-	if (!bm2 || data->lines_length >= NB_BROKEN_LINES)
-		return _brkget_reply_do(data, FALSE);
-	return TRUE;
-}
-
-static gint
-handler_get_broken_containers(struct request_context_s *req_ctx)
-{
-	gboolean rc;
-	struct brkget_s data;
-
-	memset(&data, 0x00, sizeof(data));
-	init_reply_ctx_with_request(req_ctx, &(data.reply_ctx));
-
-	/* XXX start of critical section */
-	conscience_lock_broken_elements(conscience,'r');
-	rc = broken_holder_run_elements(conscience->broken_elements, 0, (gpointer) & data, brkget_manage_m1, brkget_manage_content);
-	conscience_unlock_broken_elements(conscience);
-	/* XXX end of critical section */
-
-	if (!rc) {
-		WARN("Failed to run all the broken elements");
-		_clean_brkget_accumulator(&data);
-		_reply_ctx_set_error(&(data.reply_ctx));
-	}
-	else {
-		DEBUG("Broken elements successfuly ran");
-		_brkget_reply_do(&data, TRUE);
-		reply_context_clear(&(data.reply_ctx), FALSE);
-		reply_context_set_message(&(data.reply_ctx), CODE_FINAL_OK, "OK");
-	}
-
-	reply_context_reply(&(data.reply_ctx), &(data.reply_ctx.warning));
-	reply_context_log_access(&(data.reply_ctx), "NS=%s", conscience_get_namespace(conscience));
-	reply_context_clear(&(data.reply_ctx), TRUE);
-	return rc ? 1 : 0;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -936,13 +617,13 @@ handler_get_service(struct request_context_s *req_ctx)
 
 	struct srvget_s sg;
 	memset(&sg, 0x00, sizeof(sg));
-	sg.full = message_extract_flag(req_ctx->request, NAME_MSGKEY_FULL, FALSE);
+	sg.full = metautils_message_extract_flag(req_ctx->request, NAME_MSGKEY_FULL, FALSE);
 
 	struct reply_context_s reply_ctx;
 	init_reply_ctx_with_request(req_ctx, &reply_ctx);
 
 	gsize data_size = 0;
-	void *data = message_get_field(req_ctx->request, NAME_MSGKEY_TYPENAME, &data_size);
+	void *data = metautils_message_get_field(req_ctx->request, NAME_MSGKEY_TYPENAME, &data_size);
 	if (!data) {
 		GSETCODE(&(reply_ctx.warning), CODE_BAD_REQUEST, "Bad request: no/invalid TYPENAME field");
 	} else {
@@ -1089,7 +770,7 @@ handler_push_service(struct request_context_s *req_ctx)
 	init_reply_ctx_with_request(req_ctx, &(ctx));
 
 	gsize data_size = 0;
-	void *data = message_get_BODY(req_ctx->request, &data_size);
+	void *data = metautils_message_get_BODY(req_ctx->request, &data_size);
 	if (!data) {
 		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad requets : no body");
 		goto errorLabel;
@@ -1103,7 +784,7 @@ handler_push_service(struct request_context_s *req_ctx)
 			g_slist_length(list_srvinfo), conscience_get_namespace(conscience));
 
 	/*Now push each service and reply the success */
-	gboolean lock_action = message_extract_flag(req_ctx->request, NAME_MSGKEY_LOCK, FALSE);
+	gboolean lock_action = metautils_message_extract_flag(req_ctx->request, NAME_MSGKEY_LOCK, FALSE);
 	gint counter = 0;
 	for (GSList *l = list_srvinfo; l; l = g_slist_next(l)) {
 		if (l->data) {
@@ -1236,10 +917,10 @@ handler_rm_service(struct request_context_s *req_ctx)
 	data_size = 0;
 
 	/*Get the body and unpack it as a list of services */
-	if (message_has_BODY(req_ctx->request)) {
+	if (metautils_message_has_BODY(req_ctx->request)) {
 		GSList *list_srvinfo = NULL;
 
- 		data = message_get_BODY(req_ctx->request, &data_size);
+ 		data = metautils_message_get_BODY(req_ctx->request, &data_size);
 		if (!data) {
 			GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "No body");
 			goto errorLabel;
@@ -1265,7 +946,7 @@ handler_rm_service(struct request_context_s *req_ctx)
 	}
 	else {
 		/* if a srvtype is present in headers, remove all services of that type. */
-		if (data = message_get_field(req_ctx->request, NAME_MSGKEY_TYPENAME, &data_size)) {
+		if (NULL != (data = metautils_message_get_field(req_ctx->request, NAME_MSGKEY_TYPENAME, &data_size))) {
 			gchar str_type[LIMIT_LENGTH_SRVTYPE+1];
 			struct conscience_srvtype_s *srvtype;
 
@@ -1318,10 +999,6 @@ module_find_handler(gchar * n, gsize l)
 		{NAME_MSGNAME_CS_GET_SRVNAMES, handler_get_services_types, &(stats.services.get)},
 		{NAME_MSGNAME_CS_PUSH_SRV, handler_push_service, &(stats.services.push_stat)},
 		{NAME_MSGNAME_CS_RM_SRV, handler_rm_service, &(stats.services.remove)},
-		{NAME_MSGNAME_CS_PUSH_BROKEN_CONT, handler_push_broken_containers, &(stats.broken.push)},
-		{NAME_MSGNAME_CS_GET_BROKEN_CONT, handler_get_broken_containers, &(stats.broken.get)},
-		{NAME_MSGNAME_CS_RM_BROKEN_CONT, handler_rm_broken_containers, &(stats.broken.remove)},
-		{NAME_MSGNAME_CS_FIX_BROKEN_CONT, handler_fix_broken_containers, &(stats.broken.fix)},
 		{NULL, NULL, NULL}
 	};
 
@@ -1346,7 +1023,7 @@ plugin_matcher(MESSAGE m, void *param, GError ** err)
 		return -1;
 	}
 
-	name = message_get_NAME(m, &nameLen);
+	name = metautils_message_get_NAME(m, &nameLen);
 	if (!name || nameLen <= 0)
 		return 0;
 
@@ -1368,7 +1045,7 @@ plugin_handler(MESSAGE m, gint cnx, void *param, GError ** err)
 		return -1;
 	}
 
-	name = message_get_NAME(m, &nameLen);
+	name = metautils_message_get_NAME(m, &nameLen);
 	if (!name || nameLen <= 6) {
 		GSETERROR(err, "The message contains an invalid NAME parameter");
 		return -1;

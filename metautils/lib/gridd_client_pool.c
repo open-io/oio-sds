@@ -295,7 +295,7 @@ _manage_requests(struct gridd_client_pool_s *pool)
 			else {
 				GRID_WARN("STARTUP Client fd=%d [%s] : already started",
 						gridd_client_fd(ec->client), gridd_client_url(ec->client));
-				g_assert(err != NULL);
+				EXTRA_ASSERT(err != NULL);
 			}
 			event_client_free(ec);
 		}
@@ -397,7 +397,7 @@ _set_max(struct gridd_client_pool_s *pool, guint max)
 {
 	EXTRA_ASSERT(pool != NULL);
 	EXTRA_ASSERT(pool->vtable == &VTABLE);
-	g_assert(max > 3);
+	EXTRA_ASSERT(max > 3);
 	pool->active_max = max - 3;
 }
 

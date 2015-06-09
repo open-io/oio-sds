@@ -1756,7 +1756,7 @@ on_reply_GETVERS(gpointer ctx, MESSAGE reply)
 	EXTRA_ASSERT(udata != NULL);
 
 	gsize bsize = 0;
-	void *b = message_get_BODY(reply, &bsize);
+	void *b = metautils_message_get_BODY(reply, &bsize);
 	if (b) {
 		GTree *version;
 

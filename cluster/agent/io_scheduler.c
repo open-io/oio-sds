@@ -86,8 +86,6 @@ launch_io_scheduler(void)
 
 	while (!stopped) {
 
-		memset(events, 0, sizeof(events));
-		errno = 0;
 		int rc = epoll_wait(epfd, events, MAX_EVENTS, _delay());
 
 		if (rc < 0) {

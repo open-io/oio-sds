@@ -103,7 +103,7 @@ _m1_locate_and_action (struct req_args_s *args, GError * (*hook) ())
 		g_prefix_error (&err, "No META1: ");
 		return err;
 	}
-	g_assert (m1v != NULL);
+	EXTRA_ASSERT (m1v != NULL);
 	err = _m1_action (args, m1v, hook);
 	g_strfreev (m1v);
 	return err;
@@ -156,7 +156,7 @@ action_dir_srv_list (struct req_args_s *args)
 
 	gchar **urlv = NULL;
 	GError *err = hc_resolve_reference_service (resolver, args->url, type, &urlv);
-	g_assert ((err != NULL) ^ (urlv != NULL));
+	EXTRA_ASSERT ((err != NULL) ^ (urlv != NULL));
 
 	if (!err) {
 
@@ -229,7 +229,7 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 		return _reply_system_error (args, err);
 	}
 
-	g_assert (urlv != NULL);
+	EXTRA_ASSERT (urlv != NULL);
 	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, urlv));
 }
 
@@ -296,7 +296,7 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 
 	if (err)
 		return _reply_system_error (args, err);
-	g_assert (urlv != NULL);
+	EXTRA_ASSERT (urlv != NULL);
 	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, urlv));
 }
 
@@ -328,7 +328,7 @@ action_dir_ref_list (struct req_args_s *args)
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *err = NULL;
 		urlv = meta1v2_remote_list_reference_services (&m1a, &err, args->url, NULL);
-		g_assert ((err!=NULL) ^ (urlv!=NULL));
+		EXTRA_ASSERT ((err!=NULL) ^ (urlv!=NULL));
 		return err;
 	}
 	GError *err = _m1_locate_and_action (args, hook);

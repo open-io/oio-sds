@@ -149,9 +149,7 @@ metautils_decode_lines(const gchar *start, const gchar *end)
 GByteArray*
 metautils_encode_lines(gchar **strv)
 {
-	GByteArray *gba;
-
-	gba = g_byte_array_new();
+	GByteArray *gba = g_byte_array_new();
 	if (strv) {
 		gchar **p;
 		for (p=strv; *p ;++p) {
@@ -191,12 +189,8 @@ _strv_total_length(gchar **v)
 gchar **
 g_strdupv2(gchar **src)
 {
-	gsize header_size;
-	gchar *raw;
-
-	header_size = sizeof(void*) * (1+g_strv_length(src));
-
-	raw = g_malloc0(header_size + _strv_total_length(src));
+	gsize header_size = sizeof(void*) * (1+g_strv_length(src));
+	gchar *raw = g_malloc0(header_size + _strv_total_length(src));
 	_strv_pointers_concat((gchar**)raw, raw + header_size, src);
 	return (gchar**)raw;
 }
@@ -216,14 +210,14 @@ buffer_split(const void *buf, gsize buflen, const gchar *sep, gint max_tokens)
 }
 
 gsize
-strlen_len(const guint8 * s, gsize l)
+strlen_len(const void * s, const gsize l)
 {
 	gsize i = 0;
 
 	if (!s)
 		return 0;
 	for (i = 0; i < l; i++) {
-		if (!*(s + i))
+		if (!((guint8*)s)[i])
 			return i;
 	}
 	return i;
@@ -244,19 +238,18 @@ data_is_zeroed(const void *data, gsize data_size)
 gboolean
 metautils_cfg_get_bool(const gchar *value, gboolean def)
 {
-	static gchar *array_yes[] = {"yes", "true", "on", "enable", "enabled", NULL};
-	static gchar *array_no[] = {"no", "false", "off", "disable", "disabled", NULL};
-	gchar **s;
+	static const gchar *array_yes[] = {"yes", "true", "on", "enable", "enabled", NULL};
+	static const gchar *array_no[] = {"no", "false", "off", "disable", "disabled", NULL};
 
 	if (!value)
 		return def;
 
-	for (s=array_yes; *s ;s++) {
+	for (const gchar **s=array_yes; *s ;s++) {
 		if (!g_ascii_strcasecmp(value, *s))
 			return TRUE;
 	}
 
-	for (s=array_no; *s ;s++) {
+	for (const gchar **s=array_no; *s ;s++) {
 		if (!g_ascii_strcasecmp(value, *s))
 			return FALSE;
 	}

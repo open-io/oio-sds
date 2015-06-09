@@ -20,8 +20,8 @@ BEGIN
 		id      [0] OCTET STRING OPTIONAL,
 		name    [1] OCTET STRING OPTIONAL,
 		version [2] OCTET STRING OPTIONAL,
-		body    [3] OCTET STRING OPTIONAL,
-		content [4] SET OF Parameter
+		content [3] SET OF Parameter,
+		body    [4] OCTET STRING OPTIONAL
 	}
 
 	-- General network address information
@@ -237,12 +237,6 @@ BEGIN
 	}
 
 	Meta2RawContentV2Sequence ::= SEQUENCE OF Meta2RawContentV2
-
-	ContainerInfo ::= SEQUENCE {
-		id    [0] OCTET STRING(SIZE(32)),
-		size  [1] INTEGER
-	}
-	ContainerInfoSequence ::= SEQUENCE OF ContainerInfo
 
 	-- SQLX related structures
 

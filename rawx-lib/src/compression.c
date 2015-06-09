@@ -251,7 +251,6 @@ set_compress_attr(gchar* tmp_path, const gchar* algo, gint64 blocksize, GError *
 	gchar* metadata_compress = NULL;
 	gchar bs_str[sizeof(gint64)+1];
 	
-	bzero(bs_str, sizeof(bs_str));
 	g_snprintf(bs_str, sizeof(bs_str), "%"G_GINT64_FORMAT, blocksize);
 	
 	metadata_compress = g_strconcat(NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";",

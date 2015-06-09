@@ -397,8 +397,8 @@ _load_from_file_attr(struct attr_handle_s *attr_handle, GError ** error)
 	struct stat chunk_stats;
 	char lineBuf[65536];
 
-	g_assert(attr_handle != NULL);
-	g_assert(attr_handle->attr_hash != NULL);
+	EXTRA_ASSERT(attr_handle != NULL);
+	EXTRA_ASSERT(attr_handle->attr_hash != NULL);
 
 	/* stat the file */
 	if (0 > stat(attr_handle->attr_path, &chunk_stats)) {
@@ -451,8 +451,8 @@ _load_from_xattr(struct attr_handle_s *attr_handle, GError ** error)
 	register ssize_t i;
 	ssize_t s, size;
 
-	g_assert(attr_handle != NULL);
-	g_assert(attr_handle->attr_hash != NULL);
+	EXTRA_ASSERT(attr_handle != NULL);
+	EXTRA_ASSERT(attr_handle->attr_hash != NULL);
 
 	s = longest_xattr_list;
 	buf = g_malloc0(s);
@@ -588,7 +588,7 @@ static gboolean
 _get_attr_from_handle(struct attr_handle_s *attr_handle, GError ** error,
 		const char *domain, const char *attrname, char **result, gboolean opt)
 {
-	char attr_name_buf[ATTR_NAME_MAX_LENGTH], *value;
+	char key[ATTR_NAME_MAX_LENGTH], *value;
 
 	if (!attr_handle || !domain || !attrname || !result) {
 		SETERRCODE(error, EINVAL, "Invalid argument (%p %p %p %p)",
@@ -596,20 +596,17 @@ _get_attr_from_handle(struct attr_handle_s *attr_handle, GError ** error,
 		return FALSE;
 	}
 
-	memset(attr_name_buf, '\0', sizeof(attr_name_buf));
-	g_snprintf(attr_name_buf, sizeof(attr_name_buf), "%s.%s", domain, attrname);
+	g_snprintf(key, sizeof(key), "%s.%s", domain, attrname);
 
-	value = g_hash_table_lookup(attr_handle->attr_hash, attr_name_buf);
+	value = g_hash_table_lookup(attr_handle->attr_hash, key);
 
 	if (value)
 		*result = g_strdup(value);
 	else {
 		if(!opt)
-			INFO("Attribute [%s] not found for chunk [%s]",
-					attr_name_buf, attr_handle->chunk_path);
+			INFO("Attribute [%s] not found for chunk [%s]", key, attr_handle->chunk_path);
 		else
-			DEBUG("Attribute [%s] not found for chunk [%s]",
-					attr_name_buf, attr_handle->chunk_path);
+			DEBUG("Attribute [%s] not found for chunk [%s]", key, attr_handle->chunk_path);
 		*result = NULL;
 	}
 	return TRUE;
@@ -1213,8 +1210,8 @@ rawx_get_lock_info(const char *vol,
 		return FALSE;
 	}
 
-	bzero(dst_host, dst_host_size);
-	bzero(dst_ns, dst_ns_size);
+	memset(dst_host, 0, dst_host_size);
+	memset(dst_ns, 0, dst_ns_size);
 
 	switch (size = getxattr(vol, RAWXLOCK_ATTRNAME_URL, NULL, 0)) {
 		case -1:
@@ -1297,7 +1294,7 @@ rawx_lock_volume(const char *vol, const char *ns, const char *host, uint32_t fla
 enum lock_state_e
 rawx_get_volume_lock_state(const char *vol, const char *ns, const char *host, GError **err)
 {
-	gchar value_host[512], value_ns[512];
+	gchar value_host[STRLEN_ADDRINFO], value_ns[LIMIT_LENGTH_NSNAME];
 
 	memset(value_host, 0, sizeof(value_host));
 	memset(value_ns, 0, sizeof(value_ns));
@@ -1362,20 +1359,13 @@ rawx_conf_clean(rawx_conf_t* c)
 	}
 }
 
-#define REAL_TIME_BUF_SIZE 16
-/* stamp a chunk */
 void
-stamp_a_chunk(const char *chunk_path, const char *attr_to_set){
-	char attr_name_buf[ATTR_NAME_MAX_LENGTH];
-	int real_time;
-	char real_time_buf[REAL_TIME_BUF_SIZE];
+stamp_a_chunk(const char *chunk_path, const char *attr_to_set)
+{
+	char k[ATTR_NAME_MAX_LENGTH], v[24];
 	if (!attr_to_set)
 		return;
-	/* Concatenate the ATTR_DOMAIN and ATTR_NAME_CHUNK_LAST_SCANNED_TIME */
-	memset(attr_name_buf, '\0', sizeof(attr_name_buf));
-	snprintf(attr_name_buf, sizeof(attr_name_buf), "%s.%s", ATTR_DOMAIN, attr_to_set);
-	/* get time and stamp it g_get_real_time is available since 2.28 */
-	real_time = time((time_t *)NULL);
-	snprintf(real_time_buf, REAL_TIME_BUF_SIZE, "%d", real_time);
-	setxattr(chunk_path, attr_name_buf, real_time_buf, strlen(real_time_buf), 0);
+	g_snprintf(k, sizeof(k), "%s.%s", ATTR_DOMAIN, attr_to_set);
+	g_snprintf(v, sizeof(v), "%lu", time(0));
+	setxattr(chunk_path, k, v, strlen(v), 0);
 }

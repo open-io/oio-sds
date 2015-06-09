@@ -43,8 +43,8 @@ static void add_req_system_metadata_header (ne_request *request, GByteArray *sys
 static void
 chunk_id2str (const gs_chunk_t *chunk, char *d, size_t dS)
 {
-	MYASSERT(chunk);
-	MYASSERT(d);
+	EXTRA_ASSERT(chunk);
+	EXTRA_ASSERT(d);
 	buffer2str (chunk->ci->id.id, sizeof(chunk->ci->id.id), d, dS);
 }
 
@@ -53,8 +53,8 @@ chunk_getpath (const gs_chunk_t *chunk, char *cPath, size_t s)
 {
 	size_t cPathLen;
 
-	MYASSERT(chunk);
-	MYASSERT(cPath);
+	EXTRA_ASSERT(chunk);
+	EXTRA_ASSERT(cPath);
 
 	cPathLen = snprintf (cPath, MAX(s, sizeof(chunk->ci->id.vol)), "%s/",
 			chunk->ci->id.vol);
@@ -66,17 +66,15 @@ opensession_common(const addr_info_t *addr_info,
 		int connect_timeout, int read_timeout, GError **err)
 {
 	ne_session *session=NULL;
-	gchar host[1024];
-	guint16 port;
+	gchar host[STRLEN_ADDRINFO] = "";
+	guint16 port = 0;
 
 	if (!addr_info) {
 		GSETERROR (err, "Invalid parameter");
 		return NULL;
 	}
 
-	port = 0;
-	memset(host, 0x00, sizeof(host));
-	if (!addr_info_get_addr(addr_info, host, sizeof(host)-1, &port)) {
+	if (!addr_info_get_addr(addr_info, host, sizeof(host), &port)) {
 		GSETERROR(err, "AddrInfo printing error");
 		return NULL;
 	}
@@ -230,8 +228,8 @@ rawx_set_corrupted(gs_chunk_t *chunk, GError **err)
 	gchar host[128] = {0};
 	gint port = 0;
 
-	g_assert(chunk != NULL);
-	g_assert(err != NULL);
+	EXTRA_ASSERT(chunk != NULL);
+	EXTRA_ASSERT(err != NULL);
 	g_clear_error(err);
 
 	addr_info_get_addr(&(chunk->ci->id.addr), host, sizeof(host), (guint16*)&port);
@@ -248,8 +246,8 @@ rawx_set_corrupted_v2(gpointer chunk, GError **err)
 	gchar *host = NULL;
 	gint port = 0;
 
-	g_assert(chunk != NULL);
-	g_assert(err != NULL);
+	EXTRA_ASSERT(chunk != NULL);
+	EXTRA_ASSERT(err != NULL);
 	g_clear_error(err);
 
 	extract_chunk_url(chunk, &host, &port, &cid_hex, err);
@@ -267,9 +265,7 @@ char*
 create_rawx_request_common(ne_request **req, ne_request_param_t *param, GError **err)
 {
 	ne_request *request = NULL;
-	char str_req_id[1024];
-
-	memset(str_req_id, 0x00, sizeof(str_req_id));
+	char str_req_id[LIMIT_LENGTH_REQID];
 
 	if (NULL == param->session || NULL == param->method || NULL == param->cPath) {
 		GSETERROR(err, "Invalid parameter");
@@ -389,7 +385,6 @@ _rawx_update_chunk_attrs(chunk_id_t *cid, GSList *attrs, GError **err)
 	ne_set_read_timeout(s, 30);
 
 	req_str =g_string_new("/rawx/chunk/set/");
-	bzero(idstr, sizeof(idstr));
 	buffer2str(&(cid->id), sizeof(cid->id), idstr, sizeof(idstr));
 	req_str = g_string_append(req_str, idstr);
 	GRID_TRACE("Calling %s", req_str->str);
@@ -456,7 +451,7 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 {
 	char cPath[CI_FULLPATHLEN];
 	char str_ci[STRLEN_CHUNKID];
-	char str_req_id[1024];
+	char str_req_id[256];
 	ne_session *session=NULL;
 	ne_request *request=NULL;
 	int ne_rc;
@@ -499,10 +494,6 @@ rawx_download (gs_chunk_t *chunk, GError **err, struct dl_status_s *status,
 
 		return 0;
 	}
-
-	bzero(cPath, sizeof(cPath));
-	bzero(str_ci, sizeof(str_ci));
-	bzero(str_req_id, sizeof(str_req_id));
 
 	chunk_getpath (chunk, cPath, sizeof(cPath));
 	chunk_id2str (chunk, str_ci, sizeof(str_ci));
@@ -617,14 +608,13 @@ int rawx_init (void)
 void gen_req_id_header(gchar *dst, gsize dst_size) {
 	pid_t pid;
 	gsize i, s=16;
-	char idRequest[256];
+	char idRequest[LIMIT_LENGTH_REQID];
 	guint8 idBuf[s+sizeof(int)];
 
-	g_assert(dst != NULL);
-	g_assert(dst_size > 0);
+	EXTRA_ASSERT(dst != NULL);
+	EXTRA_ASSERT(dst_size > 0);
 
 	memset(idBuf, 0, sizeof(idBuf));
-	memset(idRequest, 0, sizeof(idRequest));
 
 	pid = getpid();
 	memcpy (idBuf, (guint8*)(&pid), sizeof(pid));
@@ -639,7 +629,7 @@ void gen_req_id_header(gchar *dst, gsize dst_size) {
 }
 
 void add_req_id_header(ne_request *request, gchar *dst, gsize dst_size) {
-	char idRequest[256];
+	char idRequest[LIMIT_LENGTH_REQID];
 
 	gen_req_id_header(idRequest, sizeof(idRequest));
 

@@ -167,88 +167,6 @@ GSList *list_local_services(GError **error);
 int clear_namespace_services(const char *ns_name, const char *type, GError **error);
 
 /**
- * Store an erroneous META1 alert in the conecience of a namespace
- *
- * @param ns_name the namespace name
- * @param m1_addr the address of the META1
- * @param error
- *
- * @return 1 or 0 if an error occured (error is set)
- */
-int store_erroneous_meta1( const char *ns_name, const addr_info_t *m1_addr, GError **error );
-
-/**
- * Store an erroneous container alert in the conecience of a namespace
- *
- * @param ns_name the namespace name
- * @param cID the container id
- * @param src_addr the address of the META2 which hosts the container
- * @param error
- *
- * @return 1 or 0 if an error occured (error is set)
- */
-int store_erroneous_container( const char *ns_name, const container_id_t cID,
-	addr_info_t *src_addr, GError **error );
-
-/**
- * Store an erroneous content alert in the conecience of a namespace
- *
- * @param ns_name the namespace name
- * @param cID the container id 
- * @param src_addr the address of the META2 which hosts the container
- * @param error
- * @param path the content name
- * @param cause a string (NULL-terminated) that is the cause of the content break (optional)
- *
- * @return 1 or 0 if an error occured (error is set)
- */
-int store_erroneous_content( const char *ns_name, const container_id_t cID,
-	addr_info_t *src_addr, GError **error, const gchar *path, const gchar *cause );
-
-/**
- * Tell the conscience of a namespace that everything was done locally to fix a META1
- *
- * @param ns_name the namespace name
- * @param error
- * @param m1_addr the META1 address
- *
- * @return 1 or 0 if an error occured (error is set)
- */
-int fixed_erroneous_meta1( const char *ns_name, GError **error, addr_info_t *m1_addr);
-
-/**
- * Tell the conscience of a namespace that everything was done locally to fix a container / content
- *
- * @param ns_name the namespace name
- * @param cID the container id
- * @param error
- * @param path the content name (optional : if not set we consider the container was fixed)
- *
- * @return 1 or 0 if an error occured (error is set)
- */
-int fixed_erroneous_content( const char *ns_name, const container_id_t cID, GError **error, const gchar *path);
-
-/**
- * Tells the conscience of a namespace to remove all broken alerts from its memory
- *
- * @param ns_name the namespace name
- * @param error
- *
- * @return 1 or 0 if an error occured (error is set)
- */
-int flush_erroneous_elements( const char *ns_name, GError **error );
-
-/**
- * Tells the conscience of a namespace to remove all broken containers alerts from its memory
- *
- * @param ns_name the namespace name
- * @param error
- *
- * @return 1 or 0 if an error occured (error is set)
- */
-GSList* fetch_erroneous_containers( const char *ns_name, GError **error );
-
-/**
  * List internal tasks of the agent
  *
  * @param error
@@ -256,16 +174,6 @@ GSList* fetch_erroneous_containers( const char *ns_name, GError **error );
  * @return a list of task_s or NULL if an error occured
  */
 GSList *list_tasks(GError **error);
-
-/**
- * Get the event handler configuration for a namespace
- *
- * @param ns_name the namespace name
- * @param err
- *
- * @return the configuration in string format
- */
-GByteArray* event_get_configuration(const gchar *ns_name, GError **err);
 
 /**
  * Extract mode worm state from namespace_info

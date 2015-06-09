@@ -1021,7 +1021,7 @@ _m2_json_spare (struct hc_url_s *url, struct json_object *jbody, GSList ** out)
 	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, url, hook);
 	_bean_cleanl2 (broken);
 	_bean_cleanl2 (notin);
-	g_assert ((err != NULL) ^ (obeans != NULL));
+	EXTRA_ASSERT ((err != NULL) ^ (obeans != NULL));
 	if (!err)
 		*out = obeans;
 	else

@@ -21,6 +21,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define G_LOG_DOMAIN "http.pipe"
 #endif
 
+#include <metautils/lib/metautils.h>
+
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
@@ -74,7 +76,7 @@ struct http_pipe_s
 void
 http_pipe_force_header(struct http_pipe_s *p, const gchar *n, const gchar *v)
 {
-	g_assert(p != NULL);
+	EXTRA_ASSERT(p != NULL);
 	gchar *formatted = g_strdup_printf("%s: %s", n, v);
 	p->forced_headers = g_slist_prepend(p->forced_headers, formatted);
 }
@@ -110,7 +112,7 @@ _endpoint_cleanup(struct http_pipe_end_s *e)
 void
 http_pipe_destroy(struct http_pipe_s *p)
 {
-	g_assert(p != NULL);
+	EXTRA_ASSERT(p != NULL);
 	_endpoint_cleanup(&p->to);
 	_endpoint_cleanup(&p->from);
 	if (p->mhandle)
@@ -128,7 +130,7 @@ void
 http_pipe_filter_headers(struct http_pipe_s *p, http_pipe_header_filter_cb f,
 		gpointer u)
 {
-	g_assert(p != NULL);
+	EXTRA_ASSERT(p != NULL);
 	p->header_filter = f;
 	p->header_filter_u = u;
 }
@@ -137,7 +139,7 @@ void
 http_pipe_filter_data(struct http_pipe_s *p, http_pipe_data_filter_cb f,
 		gpointer u)
 {
-	g_assert(p != NULL);
+	EXTRA_ASSERT(p != NULL);
 	p->data_filter = f;
 	p->data_filter_u = u;
 }
@@ -149,7 +151,7 @@ static void _start_download(struct http_pipe_s *p);
 GError *
 http_pipe_run(struct http_pipe_s *p)
 {
-	g_assert(p != NULL);
+	EXTRA_ASSERT(p != NULL);
 	_pipe_run(p);
 	return NULL;
 }
@@ -206,7 +208,7 @@ cb_dequeue(void *data, size_t s, size_t n, struct http_pipe_s *p)
 	}
 
 	slice = g_queue_pop_head(p->queue);
-	g_assert(slice);
+	EXTRA_ASSERT(slice);
 
 	size_t max = s * n;
 	if (max > slice->buf_len - slice->buf_read)
@@ -246,7 +248,7 @@ _start_download(struct http_pipe_s *p)
 {
 	g_debug("starting DOWNLOAD");
 	p->from.handle = curl_easy_init();
-	g_assert(p->from.handle != NULL);
+	EXTRA_ASSERT(p->from.handle != NULL);
 
 	curl_easy_setopt(p->from.handle, CURLOPT_PRIVATE, &p->from);
 	curl_easy_setopt(p->from.handle, CURLOPT_USERAGENT, "http_pipe/1.0");
@@ -257,16 +259,16 @@ _start_download(struct http_pipe_s *p)
 	curl_easy_setopt(p->from.handle, CURLOPT_HEADERFUNCTION, _parse_dl_headers);
 	curl_easy_setopt(p->from.handle, CURLOPT_HEADERDATA, p);
 	CURLMcode rc = curl_multi_add_handle(p->mhandle, p->from.handle);
-	g_assert(rc == CURLM_OK);
+	EXTRA_ASSERT(rc == CURLM_OK);
 }
 
 static void
 _start_upload(struct http_pipe_s *p)
 {
-	g_assert(!p->to.started);
+	EXTRA_ASSERT(!p->to.started);
 	g_debug("starting UPLOAD");
 	p->to.handle = curl_easy_init();
-	g_assert(p->to.handle != NULL);
+	EXTRA_ASSERT(p->to.handle != NULL);
 
 	// Recopy the headers from the DL side
 	long content_length = p->content_length;
@@ -296,7 +298,7 @@ _start_upload(struct http_pipe_s *p)
 	curl_easy_setopt(p->to.handle, CURLOPT_HTTPHEADER, p->to.headers);
 
 	CURLMcode rc = curl_multi_add_handle(p->mhandle, p->to.handle);
-	g_assert(rc == CURLM_OK);
+	EXTRA_ASSERT(rc == CURLM_OK);
 	p->to.started = TRUE;
 }
 
@@ -316,7 +318,7 @@ check_multi_info(struct http_pipe_s *p)
 			(void) res;
 			curl_easy_getinfo(easy, CURLINFO_PRIVATE, &end);
 			curl_easy_getinfo(easy, CURLINFO_EFFECTIVE_URL, &eff_url);
-			g_assert(easy == end->handle);
+			EXTRA_ASSERT(easy == end->handle);
 			g_debug("DONE! %s", end == &p->from ? "from" : "to");
 			if (end == &p->from && p->to.handle)
 				curl_easy_pause(p->to.handle, CURLPAUSE_SEND_CONT);
