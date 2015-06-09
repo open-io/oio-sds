@@ -14,9 +14,7 @@ There is one simple script to execute:
 
 And if it succeeds you will have the joy to experiment your own little SDS instance. No root privileges are required!
 
-## Build
-
-### Dependencies
+## Dependencies
 
 The build process of OpenIO SDS depends on:
 * cmake, make, cp, sed, bison, flex : involved in the build process.
@@ -41,6 +39,19 @@ The build process of OpenIO SDS depends on:
 Still required but the next thrid-party dependencies to leave:
 * neon, neon-devel : to be replaced by curl.
 * libevent-devel : used to pipe HTTP replies (GET) into HTTP requests (PUT). Definitely to be replaced by curl
+
+In addition, a few python modules are required at runtime:
+* python-redis
+* python-flask
+* python-gunicorn
+* python-zmq
+* python-eventlet
+* python-requests
+
+The account service will require an up and running backend:
+* redis
+
+## Build
 
 ### Configuration
 
