@@ -309,6 +309,10 @@ param_service.sqlx.score_expr=(num stat.cpu)
 param_service.echo.score_timeout=120
 param_service.echo.score_variation_bound=5
 param_service.echo.score_expr=(num stat.cpu)
+
+param_service.account.score_timeout=120
+param_service.account.score_variation_bound=5
+param_service.account.score_expr=(num stat.cpu)
 """
 
 template_conscience_events = """
