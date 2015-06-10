@@ -154,11 +154,8 @@ _purify(register gchar *s)
 {
 	static guint8 invalid[256] = {0};
 	if (!invalid[0]) {
-		guint8 i=0;
-		do { invalid[i] = !g_ascii_isprint(i); } while (i--);
-		invalid[(guint8)('\n')] = 1;
-		invalid[(guint8)('\r')] = 1;
-		invalid[(guint8)('\t')] = 1;
+		for (int i=0; i<256 ;i++)
+			invalid[i] = g_ascii_isspace(i) || !g_ascii_isprint(i);
 	}
 
 	for (gchar c; (c=*s) ; s++) {

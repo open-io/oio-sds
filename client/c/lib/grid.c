@@ -167,7 +167,7 @@ gs_update_meta1_master (gs_grid_storage_t *gs, const container_id_t cID,
 		}
 
 		if(!resolver_direct_set_meta1_master (gs->direct_resolver, cID, m1, &e))
-			DEBUG("META1 update failure. cause:\r\n\t%s",(e ? e->message : "?"));
+			DEBUG("META1 update failure. Cause: %s",(e ? e->message : "?"));
 			if(NULL != e)
 				g_clear_error(&e);
 			return _try();

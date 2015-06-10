@@ -36,8 +36,12 @@ g_error_trace(GError ** e, const char *dom, int code,
 
 	gstr = g_string_new("");
 
+#ifdef HAVE_EXTRA_DEBUG
 	if (line && func && file)
-		g_string_printf(gstr, "(code=%i) [%s:%d] ", (code?code:(*e?(*e)->code:0)), func, line);
+		g_string_printf(gstr, "(code=%i) %s,%d ", (code?code:(*e?(*e)->code:0)), func, line);
+	else
+#endif
+		g_string_printf(gstr, "(code=%i) - ", (code?code:(*e?(*e)->code:0)));
 
 	va_start(localVA, fmt);
 	g_string_append_vprintf(gstr, fmt, localVA);
@@ -46,7 +50,7 @@ g_error_trace(GError ** e, const char *dom, int code,
 	if (!*e)
 		*e = g_error_new(g_quark_from_static_string(dom), code, "%s", gstr->str);
 	else {
-		g_string_append(gstr, "\n\t");
+		g_string_append_c(gstr, ' ');
 		g_prefix_error(e, gstr->str);
 		if (code)
 			(*e)->code = code;
