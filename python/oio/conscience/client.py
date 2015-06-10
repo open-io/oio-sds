@@ -7,14 +7,17 @@ from eventlet import spawn_n
 
 from oio.common.http import requests
 from oio.common.utils import get_logger
+from oio.common.utils import validate_service_conf
+from oio.common.utils import load_namespace_conf
 
 
 class RegisterThread(object):
-    def __init__(self, conf, instance_info):
+    def __init__(self, conf, ns_conf, instance_info):
         self.conf = conf
         self.logger = get_logger(conf)
         self.instance_info = instance_info
-        self.proxyd_uri = self.conf.get('proxyd_uri')
+        self.proxy_addr = ns_conf.get('proxy')
+	self.ns = conf.get('namespace')
         self.register_interval = 5
         self.register_uri = None
 
@@ -29,9 +32,9 @@ class RegisterThread(object):
 
     def _register(self):
         if not self.register_uri:
-            self.register_uri = '%s/v1.0/cs/%s/%s' % (
-                self.proxyd_uri,
-                self.instance_info['ns'],
+            self.register_uri = 'http://%s/v1.0/cs/%s/%s' % (
+                self.proxy_addr,
+		self.ns,
                 self.instance_info['type']
             )
 
@@ -54,28 +57,29 @@ class RegisterThread(object):
 
 class ConscienceClient(object):
     def __init__(self, conf, register=False):
+        validate_service_conf(conf)
+	self.ns = conf.get('namespace')
+	ns_conf = load_namespace_conf(self.ns)
         self.conf = conf
         self.logger = get_logger(conf)
-        self.proxyd_uri = self.conf.get('proxyd_uri')
-        self.instance_info = {
-            'ns': conf.get('namespace'),
-            'score': 0,
-            'type': conf.get('type'),
-            'addr': '%s:%s' % (self.instance_info['bind_addr'],
-                               self.instance_info['bind_port']),
-            'tags': conf.get('tags')
-        }
-
+        self.proxy_addr = ns_conf.get('proxy')
         if register:
-            register_thread = RegisterThread(conf)
+            instance_info = {
+                'ns': conf.get('namespace'),
+                'score': 0,
+                'type': conf.get('type'),
+                'addr': '%s:%s' % (conf.get('bind_addr'),
+                                   conf.get('bind_port')),
+                'tags': conf.get('tags')
+            }
+            register_thread = RegisterThread(conf, ns_info, instance_info)
             spawn_n(register_thread.run)
 
     def next_instance(self, pool):
-        uri = '%s/v1.0/lb/%s/%s' % (self.proxyd_uri, self.instance_info['ns'],
-                                    pool)
+        uri = 'http://%s/v1.0/lb/%s/%s' % (self.proxy_addr, self.ns, pool)
         resp = requests.get(uri)
         if resp.status_code is 200:
-            return resp.json()
+            return resp.json()[0]
         else:
             raise Exception('Error while getting next instance')
 

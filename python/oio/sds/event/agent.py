@@ -10,6 +10,7 @@ from oio.common.daemon import Daemon
 from oio.common.http import requests
 from oio.common.utils import get_logger
 from oio.common.utils import int_value
+from oio.common.utils import validate_service_conf
 from oio.conscience.client import ConscienceClient
 
 
@@ -55,7 +56,7 @@ class EventWorker(object):
                     event = decode_msg(msg)
                     self.process_event(event)
                 except Exception as e:
-                    self.logger.exception(e)
+                    self.logger.exception('Unable to process event')
                     continue
             except Exception as e:
                 self.logger.exception(e)
@@ -63,7 +64,7 @@ class EventWorker(object):
                 try:
                     self.socket.send_multipart(ack)
                 except Exception as e:
-                    self.logger.exception(e)
+                    self.logger.exception('Unable to ack event')
 
     def process_event(self, event):
         handler = self.get_handler(event)
@@ -95,9 +96,14 @@ class EventWorker(object):
             try:
                 account_instance = self.cs.next_instance(ACCOUNT_SERVICE)
                 self._account_addr = account_instance.get('addr')
-            except Exception:
+            except Exception as e:
+                self.logger.warn('Unable to find account instance')
                 # fallback on conf
-                self._account_addr = self.conf.get('account_addr')
+               	account_addr = self.conf.get('account_addr')
+		if not account_addr:
+                        self.logger.warn('Unable to find fallback account instance in config')
+			raise Exception('Unable to find account instance')
+                self._account_addr = account_addr
         return self._account_addr
 
     def handle_container_put(self, event):
@@ -196,6 +202,7 @@ class EventWorker(object):
 
 class EventAgent(Daemon):
     def __init__(self, conf):
+	validate_service_conf(conf)
         self.conf = conf
         self.logger = get_logger(conf)
 
@@ -226,8 +233,4 @@ class EventAgent(Daemon):
         boss_pool.spawn_n(proxy, backend, server)
 
         worker_pool.waitall()
-
-
-
-
 

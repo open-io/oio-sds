@@ -1,4 +1,5 @@
 import sys
+import glob
 import grp
 import socket
 import errno
@@ -236,3 +237,40 @@ def int_value(value, default):
     except (TypeError, ValueError):
         raise
     return value
+
+class InvalidServiceConfigError(ValueError):
+	
+    def __str__(self):
+        return "namespace missing from service conf"
+
+def validate_service_conf(conf):
+    ns = conf.get('namespace')
+    if not ns:
+        raise InvalidServiceConfigError()
+
+
+def load_namespace_conf(namespace):
+    def places():
+        yield '/etc/oio/sds.conf'
+        for f in glob.glob('/etc/oio/sds/conf.d/*'):
+            yield f
+        yield os.path.expanduser('~/.oio/sds.conf')
+
+    c = ConfigParser({}) 
+    success = c.read(places())
+    if not success:
+        print('Unable to read namespace config')
+        sys.exit(1)
+    if c.has_section(namespace):
+        conf = dict(c.items(namespace))
+    else:
+        print('Unable to find [%s] section config' % namespace)
+        sys.exit(1)
+    for k in ['zookeeper', 'conscience', 'proxy', 'event-agent']:
+        v = conf.get(k)
+        if not v:
+	    print("Missing field '%s' in namespace config" % k)
+	    sys.exit(1)
+    return conf
+
+
