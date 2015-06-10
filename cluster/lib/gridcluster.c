@@ -129,10 +129,6 @@ _get_namespace_info_from_agent(const char *ns_name, GError **error)
 			GSETERROR(error, "Failed to unserialize namespace_info");
 			return NULL;
 		}
-#if 0
-		memset(ns->name, '\0', LIMIT_LENGTH_NSNAME);
-		g_strlcpy(ns->name, ns_name, LIMIT_LENGTH_NSNAME);
-#endif
 		return ns;
 	}
 
@@ -219,9 +215,8 @@ _list_namespace_service_types_from_agent(const char *ns_name, GError **error)
 	}
 
 	GSList *names = NULL;
-	names = meta2_maintenance_names_unmarshall_buffer(resp.data,resp.data_size,error);
-	if (!names)
-		GSETERROR(error,"Invalid reply from agent : bad names payload (deserialization error)");
+	if (!strings_unmarshall(&names, resp.data, resp.data_size, error))
+		GSETERROR(error, "Invalid reply from agent : bad names payload (deserialization error)");
 	clear_request_and_reply(&req,&resp);
 	return names;
 }
@@ -270,7 +265,6 @@ list_gridagent_services(const char *ns_name, const char *type, GError **error)
 
 	if (resp.status == STATUS_OK) {
 		GSList *services = NULL;
-		gsize body_size;
 
 		if (!resp.data || resp.data_size<=0) {
 			GSETERROR(error,"Empty content received from the gridagent");
@@ -278,8 +272,7 @@ list_gridagent_services(const char *ns_name, const char *type, GError **error)
 			return NULL;
 		}
 
-		body_size = resp.data_size;
-		if (0>service_info_unmarshall(&services,resp.data,&body_size,error)) {
+		if (0>service_info_unmarshall(&services, resp.data, resp.data_size,error)) {
 			GSETERROR(error,"Invalid content from the gridagent");
 			clear_request_and_reply(&req,&resp);
 			return NULL;
@@ -364,7 +357,6 @@ get_one_namespace_service(const gchar *ns_name, const gchar *type, GError **erro
 
 	if (resp.status == STATUS_OK) {
 		GSList *services = NULL;
-		gsize body_size;
 
 		if (!resp.data || resp.data_size<=0) {
 			GSETERROR(error,"Empty content received from the gridagent");
@@ -372,8 +364,7 @@ get_one_namespace_service(const gchar *ns_name, const gchar *type, GError **erro
 			return NULL;
 		}
 
-		body_size = resp.data_size;
-		if (0>service_info_unmarshall(&services,resp.data,&body_size,error)) {
+		if (0>service_info_unmarshall(&services,resp.data, resp.data_size,error)) {
 			GSETERROR(error,"Invalid content from the gridagent");
 			clear_request_and_reply(&req,&resp);
 			return NULL;
@@ -473,7 +464,6 @@ list_local_services(GError **error)
 	request_t req;
 	response_t resp;
 	GSList *srv_list = NULL;
-	gsize resp_size;
 
 	memset(&req, 0, sizeof(request_t));
 	memset(&resp, 0, sizeof(response_t));
@@ -490,8 +480,7 @@ list_local_services(GError **error)
 		return NULL;
 	}
 
-	resp_size = resp.data_size;
-	if (!service_info_unmarshall(&srv_list,resp.data,&resp_size,error)) {
+	if (!service_info_unmarshall(&srv_list,resp.data, resp.data_size,error)) {
 		GSETERROR(error,"Invalid answer from the agent");
 		clear_request_and_reply(&req,&resp);
 		return NULL;
@@ -914,16 +903,14 @@ gridcluster_reload_lbpool(struct grid_lbpool_s *glp)
 	}
 
 	GError *err = NULL;
-	GSList *l, *list_srvtypes;
-
-	list_srvtypes = list_namespace_service_types(grid_lbpool_namespace(glp), &err);
+	GSList *list_srvtypes = list_namespace_service_types(grid_lbpool_namespace(glp), &err);
 	if (err)
 		g_prefix_error(&err, "LB pool reload error: ");
 	else {
 		guint errors = 0;
 		const gchar *ns = grid_lbpool_namespace(glp);
 
-		for (l=list_srvtypes; l ;l=l->next) {
+		for (GSList *l=list_srvtypes; l ;l=l->next) {
 			if (!l->data)
 				continue;
 			if (!_reload_srvtype(ns, l->data))

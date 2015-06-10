@@ -49,25 +49,22 @@ parse_srv_list( worker_t *worker, GError **error )
 	asn1_session_t *asn1_session = NULL;
 	struct session_data_s *sdata;
 
-        TRACE_POSITION();
 
 	asn1_session = asn1_worker_get_session(worker);
-        sdata = asn1_worker_get_session_data(worker);
+	sdata = asn1_worker_get_session_data(worker);
 
 	if (asn1_session->resp_body != NULL) {
 		GSList *services = NULL;
-		if (service_info_unmarshall(&services, asn1_session->resp_body, &(asn1_session->resp_body_size), error) <= 0) {
+		if (service_info_unmarshall(&services, asn1_session->resp_body, asn1_session->resp_body_size, error) <= 0) {
 			GSETERROR(error, "[task_id=%s] Failed to unmarshall service_info list", sdata->task_id);
 			return 0;
 		} else {
 			DEBUG("[task_id=%s] Received %d services", sdata->task_id, g_slist_length( services ));
-			sdata->services = sdata->services
-				? g_slist_concat( sdata->services, services )
-				: services;
+			sdata->services = g_slist_concat(services, sdata->services);
 		}
 	}
 
-        return(1);
+	return(1);
 }
 
 static int
@@ -80,7 +77,6 @@ asn1_final_handler( worker_t *worker, GError **error)
 	gpointer k, v;
 	namespace_data_t *ns_data;
 
-	TRACE_POSITION();
 
 	sdata = asn1_worker_get_session_data( worker );
 	if (!sdata) {
@@ -144,7 +140,6 @@ static int
 asn1_error_handler( worker_t *worker, GError **error )
 {
 	struct session_data_s *sdata;
-	TRACE_POSITION();
 	sdata = asn1_worker_get_session_data( worker );
 	if (sdata) {
 		GSETERROR(error, "[task_id=%s] services request failed", sdata->task_id);
@@ -158,7 +153,6 @@ asn1_error_handler( worker_t *worker, GError **error )
 static void
 sdata_cleaner( struct session_data_s *sdata )
 {
-	TRACE_POSITION();
 	if (!sdata)
 		return;
 	task_done(sdata->task_id);
@@ -180,7 +174,6 @@ task_worker(gpointer p, GError **error)
         worker_t *asn1_worker;
 	struct namespace_data_s *ns_data;
 	
-	TRACE_POSITION();
 	sdata=NULL;
 	asn1_worker=NULL;
 
@@ -192,24 +185,22 @@ task_worker(gpointer p, GError **error)
 
 	list_types = conscience_get_srvtype_names(ns_data->conscience, error);
 	if (!list_types) {
-		GSETERROR(error,"No service type found in namespace [%s]", conscience_get_namespace(ns_data->conscience));
+		GSETERROR(error,"No service type found in namespace [%s]",
+				conscience_get_namespace(ns_data->conscience));
 		return 0;
 	}
-	else {
-		gchar *s;
 
-		s = list_types->data;
-		gba_types = g_byte_array_append(g_byte_array_new(), (guint8*)s, strlen(s));
-		for (l=list_types->next; l ;l=l->next) {
-			s = l->data;
-			if (s) {
-				g_byte_array_append(gba_types, (guint8*)",", 1);
-				g_byte_array_append(gba_types, (guint8*)s, strlen(s));
-			}
+	gchar *s = list_types->data;
+	gba_types = g_byte_array_append(g_byte_array_new(), (guint8*)s, strlen(s));
+	for (l=list_types->next; l ;l=l->next) {
+		s = l->data;
+		if (s) {
+			g_byte_array_append(gba_types, (guint8*)",", 1);
+			g_byte_array_append(gba_types, (guint8*)s, strlen(s));
 		}
-		g_slist_foreach(list_types, g_free1, NULL);
-		g_slist_free(list_types);
 	}
+	g_slist_foreach(list_types, g_free1, NULL);
+	g_slist_free(list_types);
 		
 	/*prepare the worker*/
 	sdata = g_malloc0(sizeof(struct session_data_s));
@@ -240,7 +231,6 @@ NAMESPACE_TASK_CREATOR(task_starter, TASK_ID, task_worker, period_get_srvlist);
 int
 services_task_get_services(GError **error)
 {
-	TRACE_POSITION();
 
 	task_t *task = create_task(2, TASK_ID);
 	task->task_handler = task_starter;

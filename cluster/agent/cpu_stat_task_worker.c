@@ -67,7 +67,6 @@ cpu_stat_task_worker(gpointer udata, GError ** error)
 	proc_stat_t pstat;
 
 	(void)udata;
-	TRACE_POSITION();
 
 	fd = open(PROC_STAT, O_RDONLY);
 	if (fd < 0) {

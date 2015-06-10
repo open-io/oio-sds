@@ -39,7 +39,6 @@ static int
 asn1_final_handler( worker_t *worker, GError **error )
 {
 	worker_t *original_worker;
-	TRACE_POSITION();
 	original_worker = asn1_worker_get_session_data(worker);
 	if (!original_worker) {
 		GSETERROR(error,"Request successful, failed to reply due to invalid worker");
@@ -52,7 +51,6 @@ static int
 asn1_error_handler( worker_t *worker, GError **error )
 {
 	worker_t *original_worker;
-	TRACE_POSITION();
 	GSETERROR(error, "Failed to send the 'remove services' order");
 	original_worker = asn1_worker_get_session_data(worker);
 	if (!original_worker) {
@@ -67,7 +65,6 @@ create_sub_worker( struct namespace_data_s *ns_data, const gchar *type_name, wor
 {
 	worker_t *asn1_worker;
 	
-	TRACE_POSITION();
 
 	asn1_worker=NULL;	
 
@@ -96,7 +93,6 @@ static void
 remove_local_services(struct namespace_data_s *ns_data, const gchar *type_name)
 {
 	(void)type_name;
-	TRACE_POSITION();
 	g_hash_table_remove_all(ns_data->local_services);
 	g_hash_table_remove_all(ns_data->down_services);
 }
@@ -108,7 +104,6 @@ services_worker_clear(worker_t *worker, GError **error)
 	struct namespace_data_s *ns_data = NULL;
 	char **tokens, ns_name[LIMIT_LENGTH_NSNAME+1], type_name[LIMIT_LENGTH_SRVTYPE+1];
 
-	TRACE_POSITION();
 
 	/*parse the request args, find the namespace*/
 	req = (request_t*) worker->data.session;

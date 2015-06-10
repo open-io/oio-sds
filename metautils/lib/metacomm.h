@@ -40,10 +40,10 @@ gint Name (GSList *l, void **d, gsize *dSize, GError **err)
 GByteArray* Name (GSList *l, GError **err)
 
 #define DECLARE_UNMARSHALLER(Name) \
-gint Name (GSList **l, const void *s, gsize *sSize, GError **err)
+gint Name (GSList **l, const void *buf, gsize len, GError **err)
 
 #define DECLARE_BODY_MANAGER(Name) \
-gint Name (GError **err, gpointer udata, gint code, guint8 *body, gsize bodySize)
+gint Name (GError **err, gpointer udata, gint code, guint8 *buf, gsize len)
 
 typedef struct Message Message_t;
 typedef Message_t* MESSAGE;
@@ -210,7 +210,7 @@ MESSAGE message_unmarshall(const guint8 *buf, gsize len, GError ** error);
 /** Calls message_marshall_gba() then metautils_message_destroy() on 'm'. */
 GByteArray* message_marshall_gba_and_clean(MESSAGE m);
 
-typedef gint (body_decoder_f)(GSList **res, const void *b, gsize *bs, GError **err);
+typedef gint (body_decoder_f)(GSList **r, const void *b, gsize l, GError **e);
 
 /** Adds a new custom field in the list of the message. Now check is made to
  * know whether the given field is already present or not. The given new value
@@ -321,7 +321,6 @@ DECLARE_UNMARSHALLER(key_value_pairs_unmarshall);
 
 DECLARE_MARSHALLER_GBA(strings_marshall_gba);
 DECLARE_UNMARSHALLER(strings_unmarshall);
-DECLARE_BODY_MANAGER(strings_concat);
 
 DECLARE_UNMARSHALLER(service_info_unmarshall);
 DECLARE_MARSHALLER_GBA(service_info_marshall_gba);
@@ -356,12 +355,6 @@ GByteArray *meta2_maintenance_marshall_content(
 
 struct meta2_raw_content_s *meta2_maintenance_content_unmarshall_buffer(
 		guint8 * buf, gsize buf_size, GError ** err);
-
-/** Returns the unserialized form of the String sequence as a linked list
- * of NULL-terminated character strings */
-GSList *meta2_maintenance_names_unmarshall_buffer(const guint8 * buf, gsize buf_len, GError ** err);
-
-GByteArray *meta2_maintenance_names_marshall(GSList * names, GError ** err);
 
 /** Serialize a namespace_info to ASN1 */
 GByteArray* namespace_info_marshall(struct namespace_info_s * namespace_info, GError ** err);

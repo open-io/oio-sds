@@ -39,8 +39,7 @@ GSList *gcluster_get_services(const char *target, gdouble timeout,
 GSList *gcluster_get_service_types(addr_info_t *addr, long timeout,
 		GError **error);
 
-gint gcluster_push_services(addr_info_t *addr, long to,
-		GSList *services_list, gboolean lock_action, GError **error);
+GError* gcluster_push_services(addr_info_t *addr, long to, GSList *ls);
 
 /** @} */
 

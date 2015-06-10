@@ -346,9 +346,7 @@ static GError*
 _m2v2_request_ex(const gchar *url, GByteArray *req, gdouble timeout, GSList **out)
 {
 	EXTRA_ASSERT (req != NULL);
-	GError *err = gridd_client_exec_and_decode (url, timeout, req, out, bean_sequence_decoder);
-	g_byte_array_free(req, TRUE);
-	return err;
+	return gridd_client_exec_and_decode (url, timeout, req, out, bean_sequence_decoder);
 }
 
 static GError*
@@ -477,10 +475,8 @@ GError*
 m2v2_remote_execute_DEDUP(const gchar *target, struct hc_url_s *url,
 		gboolean dry_run, gchar **out)
 {
-	GByteArray *req = m2v2_remote_pack_DEDUP(url, dry_run);
-	GError *err = gridd_client_exec_and_concat_string (target, M2V2_CLIENT_TIMEOUT, req, out);
-	g_byte_array_unref (req);
-	return err;
+	return gridd_client_exec_and_concat_string (target, M2V2_CLIENT_TIMEOUT,
+			m2v2_remote_pack_DEDUP(url, dry_run), out);
 }
 
 GError*

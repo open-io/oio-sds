@@ -43,6 +43,6 @@ GByteArray* bean_sequence_marshall(GSList *beans);
 
 GSList* bean_sequence_unmarshall(const guint8 *buf, gsize buf_len);
 
-gint bean_sequence_decoder(GSList **l, const void *buf, gsize *buf_len, GError **err);
+gint bean_sequence_decoder(GSList **l, const void *buf, gsize len, GError **err);
 
 #endif /*OIO_SDS__meta2v2__meta2_bean_h*/

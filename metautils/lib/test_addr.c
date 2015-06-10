@@ -42,8 +42,7 @@ test_codec (void)
 	GByteArray *gba = addr_info_marshall_gba (singleton, NULL);
 	g_assert (gba != NULL);
 	GSList *decoded = NULL;
-	gsize len = gba->len;
-	rc = addr_info_unmarshall (&decoded, gba->data, &len, NULL);
+	rc = addr_info_unmarshall (&decoded, gba->data, gba->len, NULL);
 	g_assert (BOOL(rc));
 	g_assert (decoded != NULL);
 

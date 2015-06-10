@@ -47,7 +47,6 @@ accept_worker(worker_t *worker, GError **error)
 	worker_t *mes_worker = NULL;
 
 	(void) error;
-	TRACE_POSITION();
 
 	memset(&remote, 0, sizeof(struct sockaddr_un));
 	remote_len = sizeof(remote);

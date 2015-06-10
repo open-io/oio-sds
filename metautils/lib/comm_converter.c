@@ -85,7 +85,7 @@ gint Name (GError **err, gpointer udata, gint code, guint8 *body, gsize bodySize
 		return FALSE;\
 	}\
 	list=NULL;\
-	if (0 >= Unmarshall (&list, body, &bodySize, err)) {\
+	if (0 >= Unmarshall (&list, body, bodySize, err)) {\
 		GSETERROR (err, "Cannot unserialize the content of the reply");\
 		return FALSE;\
 	}\
@@ -100,33 +100,13 @@ GByteArray *gba = abstract_sequence_marshall(Descr, list, err);\
 	return gba;\
 }
 
-#define DEFINE_SEQUENCE_MARSHALLER(Descr,Name) \
-gint Name (GSList *list, void **dst, gsize *dstSize, GError **err) {\
-	if (!dst || !dstSize) { GSETERROR(err,"Invalid parameter"); return 0; }\
-	GByteArray *gba = abstract_sequence_marshall(Descr, list, err);\
-	if (gba) {\
-		*dstSize = gba->len;\
-		*dst = gba->data;\
-		g_byte_array_free( gba, FALSE );\
-		return 1;\
-	}\
-	GSETERROR(err,"Marshalling error");\
-	return 0;\
-}
-
 #define DEFINE_SEQUENCE_UNMARSHALLER(Descr,Name) \
-gint Name (GSList **list, const void *source, gsize *sourceSize, GError **err) {\
-	gssize consumed;\
-	if (!list || !source || !sourceSize) {\
-		GSETERROR(err,"Invalid parameter (list=%p src=%p/%"G_GSIZE_FORMAT")", list, source, (sourceSize?*sourceSize:0));\
+gint Name (GSList **list, const void *buf, gsize len, GError **err) {\
+	if (!list || !buf || !len) {\
+		GSETERROR(err,"Invalid parameter (list=%p src=%p/%"G_GSIZE_FORMAT")", list, buf, len);\
 		return -1;\
 	}\
-	consumed = abstract_sequence_unmarshall(Descr, list, source, *sourceSize, err );\
-	if (consumed>0) {\
-		*sourceSize = consumed;\
-		return 1;\
-	}\
-	return 0;\
+	return 0 < abstract_sequence_unmarshall(Descr, list, buf, len, err);\
 }
 
 struct anonymous_sequence_s
@@ -898,111 +878,9 @@ DEFINE_SEQUENCE_UNMARSHALLER(&descr_Meta0Info, meta0_info_unmarshall)
 
 /* -------------------------------------------------------------------------- */
 
-/* ------------------------------------------------------------------------- */
-
-gboolean
-strings_concat(GError ** err, gpointer udata, gint code, guint8 * body, gsize bodySize)
-{
-	(void) code;
-	GSList **resL, *list;
-
-	resL = (GSList **) udata;
-
-	if (!udata || !body || bodySize <= 0) {
-		GSETERROR(err, "Invalid parameter (%p %p %u)", udata, body, bodySize);
-		return FALSE;
-	}
-	list = NULL;
-	list = meta2_maintenance_names_unmarshall_buffer(body, bodySize, err);
-	if (!list && err && *err) {
-		GSETERROR(err, "Cannot unserialize the content of the reply");
-		return FALSE;
-	}
-	DEBUG("Received [%d] elements", g_slist_length(list));
-	*resL = g_slist_concat(*resL, list);
-	return TRUE;
-}
-
-GSList *
-meta2_maintenance_names_unmarshall_buffer(const guint8 * buf, gsize buf_len, GError ** err)
-{
-	int i;
-	asn_dec_rval_t decRet;
-	asn_codec_ctx_t codecCtx;
-	GSList *result = NULL;
-	ContentList_t *result_asn = NULL;
-
-	/*sanity checks */
-	if (!buf || buf_len <= 0)
-		goto error_params;
-
-	/*decode the sequence */
-	codecCtx.max_stack_size = ASN1C_MAX_STACK;
-	decRet = ber_decode(&codecCtx, &asn_DEF_ContentList, (void *) &result_asn, buf, buf_len);
-	switch (decRet.code) {
-	case RC_OK:
-		break;
-	case RC_FAIL:
-		GSETERROR(err, "Cannot deserialize: %s", "invalid content");
-		goto error_decode;
-	case RC_WMORE:
-		GSETERROR(err, "Cannot deserialize: %s", "uncomplete content");
-		goto error_decode;
-	}
-	if (!result_asn)
-		goto error_decode;
-
-	/*fills the result list */
-	for (i = result_asn->list.count - 1; i >= 0; i--) {
-		char *str;
-		OCTET_STRING_t *osCursor = result_asn->list.array[i];
-
-		if (!osCursor) {
-			WARN("NULL ASN.1 name");
-			continue;
-		}
-
-		str = g_malloc0(osCursor->size + 1);
-		g_memmove(str, osCursor->buf, osCursor->size);
-		result = g_slist_prepend(result, str);
-	}
-
-	/*free the ASN.1 sequence of strings */
-	result_asn->list.free = free_OCTET_STRING;
-	ASN_STRUCT_FREE(asn_DEF_ContentList, result_asn);
-	return result;
-      error_decode:
-      error_params:
-	return NULL;
-}
-
 GByteArray *
 strings_marshall_gba(GSList * list, GError ** err)
 {
-	return meta2_maintenance_names_marshall(list, err);
-}
-
-gint
-strings_unmarshall(GSList ** l, const void *s, gsize * sSize, GError ** err)
-{
-	if (!l || !s || !sSize || !*sSize) {
-		GSETERROR(err, "Invalid parameter (l=%p s=%p sSize=%p)", l, s, sSize);
-		return 0;
-	}
-	*l = meta2_maintenance_names_unmarshall_buffer(s, *sSize, err);
-	if (!*l) {
-		if (err && *err) {
-			GSETERROR(err, "Wrapper failed");
-			return 0;
-		}
-	}
-	return 1;
-}
-
-GByteArray *
-meta2_maintenance_names_marshall(GSList * contents, GError ** err)
-{
-	GSList *lCursor;
 	ContentList_t list_asn;
 	asn_enc_rval_t encRet;
 	GByteArray *result = NULL;
@@ -1021,32 +899,65 @@ meta2_maintenance_names_marshall(GSList * contents, GError ** err)
 		return NULL;
 	}
 
-	/*fills the ASN.1 list */
-	for (lCursor = contents; lCursor; lCursor = lCursor->next) {
-		OCTET_STRING_t *os;
-		char *s = lCursor->data;
-
+	for (GSList *l = list; l; l=l->next) {
+		char *s = l->data;
 		if (!s)
 			continue;
-		os = OCTET_STRING_new_fromBuf(&asn_DEF_PrintableString, s, strlen(s));
+		OCTET_STRING_t *os = OCTET_STRING_new_fromBuf(&asn_DEF_PrintableString, s, strlen(s));
 		if (!os)
 			continue;
 		asn_set_add(&(list_asn.list), os);
 	}
 
-	/*serializes the list */
 	encRet = der_encode(&asn_DEF_ContentList, &list_asn, write_f, 0);
 	if (encRet.encoded == -1)
 		goto error_encode;
 
-	/*free the list */
 	list_asn.list.free = free_OCTET_STRING;
 	ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_ContentList, &list_asn);
 	return result;
 
-      error_encode:
+error_encode:
 	GSETERROR(err, "Failed to encode arrays");
 	return NULL;
+}
+
+gint
+strings_unmarshall(GSList ** l, const void *buf, gsize len, GError ** err)
+{
+	if (!l || !buf || !len) {
+		GSETERROR(err, "Invalid parameter (l=%p buf=%p len=%p)", l, buf, len);
+		return 0;
+	}
+
+	ContentList_t *asn = NULL;
+
+	asn_codec_ctx_t codecCtx;
+	codecCtx.max_stack_size = ASN1C_MAX_STACK;
+	asn_dec_rval_t decRet = ber_decode(&codecCtx, &asn_DEF_ContentList, (void**)&asn, buf, len);
+	switch (decRet.code) {
+		case RC_OK:
+			break;
+		case RC_FAIL:
+			GSETERROR(err, "Cannot deserialize: %s", "invalid content");
+			return 0;
+		case RC_WMORE:
+			GSETERROR(err, "Cannot deserialize: %s", "uncomplete content");
+			return 0;
+	}
+
+	GSList *result = NULL;
+	for (int i=0; i<asn->list.count ;i++) {
+		OCTET_STRING_t *s = asn->list.array[i];
+		if (!s)
+			continue;
+		result = g_slist_prepend(result, g_strndup((gchar*)s->buf, s->size));
+	}
+	*l = result;
+
+	asn->list.free = free_OCTET_STRING;
+	ASN_STRUCT_FREE(asn_DEF_ContentList, asn);
+	return 1;
 }
 
 /* ------------------------------------------------------------------------- */

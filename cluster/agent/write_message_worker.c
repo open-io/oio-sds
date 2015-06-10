@@ -39,7 +39,6 @@ int write_message_worker(worker_t *worker, GError **error) {
 	worker_data_t *data = NULL;
 	message_t *message = NULL;
 
-	TRACE_POSITION();
 
 	data = &(worker->data);
 	message = (message_t*)data->session;

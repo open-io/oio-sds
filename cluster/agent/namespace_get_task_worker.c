@@ -56,7 +56,6 @@ final_handler(worker_t *worker, GError **error)
 	gchar task_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_NSNAME+1];
 	
 	(void)error;
-	TRACE_POSITION();
 	ns_name = asn1_worker_get_session_data(worker);
 	g_snprintf(task_id, sizeof(task_id), TASK_ID".%s", ns_name);
 	task_done(task_id);
@@ -69,7 +68,6 @@ error_handler(worker_t *worker, GError **error)
 	gchar *ns_name;
 	gchar task_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_NSNAME+1];
 
-	TRACE_POSITION();
 
 	ns_name = asn1_worker_get_session_data(worker);
 	if (ns_name)
@@ -90,7 +88,6 @@ parse_namespace_info(worker_t *worker, GError **error)
 	namespace_data_t *ns_data;
 	namespace_info_t *ns_info = NULL;
 
-	TRACE_POSITION();
 
 	asn1_session = asn1_worker_get_session(worker);
 	ns_name = asn1_worker_get_session_data(worker);
@@ -179,7 +176,6 @@ task_starter(gpointer udata, GError **error)
 	gchar ns_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_NSNAME+1];
 	namespace_data_t *ns_data;
 
-	TRACE_POSITION();
 	(void)udata;
 	g_hash_table_iter_init(&ns_iterator, namespaces);
 	while (g_hash_table_iter_next(&ns_iterator,&ns_k,&ns_v)) {
@@ -294,7 +290,6 @@ worker_ns_indirect_config(gpointer udata, GError **error)
 	namespace_info_t *ns_info;
 	const gchar *ns_name = udata;
 
-	TRACE_POSITION();
 	g_snprintf(task_id, sizeof(task_id), "%s.%s", TASK_PREFIX, ns_name);
 
 	if (!(ns_data = g_hash_table_lookup(namespaces, ns_name))) {
@@ -336,7 +331,6 @@ agent_start_indirect_ns_config(const gchar *ns_name, GError **error)
 	gchar *task_id;
 	task_t *task;
 
-	TRACE_POSITION();
 
 	task_id = g_strconcat(TASK_PREFIX, ".", ns_name, NULL);
 	task = set_task_callbacks(create_task(period_get_ns, task_id),

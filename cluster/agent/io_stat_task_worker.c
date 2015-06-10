@@ -174,7 +174,6 @@ io_stat_task_worker(gpointer p, GError ** error)
 	char *diskstat = NULL;
 	GRegex *regex = NULL;
 
-	TRACE_POSITION();
 	(void)p;
 
 	diskstat = get_proc_stat_content(PROC_DISKSTAT, error);

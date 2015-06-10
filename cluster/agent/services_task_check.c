@@ -85,7 +85,6 @@ invalidate_conscience_service(struct namespace_data_s *ns_data, struct service_i
 	struct conscience_srv_s *srv;
 	struct conscience_srvid_s srvid;
 
-	TRACE_POSITION();
 	error = NULL;
 
 	srvtype = conscience_get_srvtype(ns_data->conscience, &error, si->type, MODE_STRICT);
@@ -173,7 +172,6 @@ _detect_obsolete_services(struct namespace_data_s *ns_data)
 	gchar *str_key;
 	struct service_info_s *si;
 
-	TRACE_POSITION();
 
 	time_now = time(0);
 	time_down = time_now - 5;
@@ -181,7 +179,6 @@ _detect_obsolete_services(struct namespace_data_s *ns_data)
 	counter = 0;
 	
 	if (!ns_data->configured) {
-		TRACE_POSITION();
 		return;
 	}
 
@@ -237,7 +234,6 @@ _check_tcp_service_worker_cleaner(worker_t *worker)
 {
 	struct workerdata_checksrv_s *wdata;
 
-	TRACE_POSITION();
 
 	wdata = worker->data.session;
 	task_done(wdata->task_name);
@@ -265,7 +261,6 @@ _check_tcp_service_worker_func(worker_t *worker, GError **error)
 	struct workerdata_checksrv_s *wdata;
 
 	(void) error;
-	TRACE_POSITION();
 	wdata = worker->data.session;
 	wdata->flag_connected = TRUE;
 
@@ -288,7 +283,6 @@ _check_tcp_service_task(gpointer udata, GError **error)
 	struct namespace_data_s *ns_data;
 	struct taskdata_checksrv_s *task_data;
 	
-	TRACE_POSITION();
 	task_data = udata;
 
 	ns_data = g_hash_table_lookup(namespaces, task_data->ns_name);
@@ -344,7 +338,6 @@ _check_tcp_service_task(gpointer udata, GError **error)
 		TRACE("TCP-connect tried to [%s] for [%s] (fd=%d)", task_data->srv_key, task_data->task_name, fd);
 	} while (0);
 
-	TRACE_POSITION();
         return 1;
 }
 
@@ -359,7 +352,6 @@ allservice_check_start_HT(struct namespace_data_s *ns_data, GHashTable *ht)
 	GHashTableIter iter_serv;
 	gpointer k, v;
 
-	TRACE_POSITION();
 
 	g_hash_table_iter_init(&iter_serv, ht);
 	while (g_hash_table_iter_next(&iter_serv, &k, &v)) {
@@ -394,7 +386,6 @@ allservice_check_start_HT(struct namespace_data_s *ns_data, GHashTable *ht)
 			task_t *task = NULL;
 			struct taskdata_checksrv_s *task_data;
 
-			TRACE_POSITION();
 
 			agent_get_service_key(si, td_scheme.srv_key, sizeof(td_scheme.srv_key));
 			g_strlcpy(td_scheme.srv_key, (gchar*)k, sizeof(td_scheme.srv_key)-1);
@@ -425,7 +416,6 @@ allservice_check_start_HT(struct namespace_data_s *ns_data, GHashTable *ht)
 				g_clear_error(&error_local);
 		}
 	}
-	TRACE_POSITION();
 }
 
 /**
@@ -437,7 +427,6 @@ allservices_check_starter(gpointer udata, GError **error)
 	GHashTableIter iter_ns;
 	gpointer k, v;
 
-	TRACE_POSITION();
 	(void) udata;
 	(void) error;
 	
@@ -452,7 +441,6 @@ allservices_check_starter(gpointer udata, GError **error)
 	}
 
 	task_done(TASK_ID);
-	TRACE_POSITION();
 	return 1;
 }
 
@@ -461,7 +449,6 @@ services_task_check(GError ** error)
 {
 	task_t *task = NULL;
 
-	TRACE_POSITION();
 
 	task = set_task_callbacks(create_task(2, TASK_ID),
 			allservices_check_starter, NULL, NULL);

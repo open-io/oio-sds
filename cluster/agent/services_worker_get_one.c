@@ -117,7 +117,6 @@ services_worker_get_one(worker_t *worker, GError **error)
 	request_t *req;
 	struct service_info_s *si = NULL;
 
-	TRACE_POSITION();
 
 	/*unpack the parameters and find the namespace*/	
 	req = (request_t*) worker->data.session;

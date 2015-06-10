@@ -99,7 +99,6 @@ read_request_from_message(message_t *message, request_t *req, GError **error)
 	char *data, *space;
 	guint32 length;
 
-	TRACE_POSITION();
 
 	if (message == NULL) {
 		GSETERROR(error,"Argument message can't be NULL");

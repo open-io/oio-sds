@@ -21,7 +21,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define G_LOG_DOMAIN "gridcluster.tools"
 #endif
 
-#define _GNU_SOURCE
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -202,64 +201,39 @@ raw_print_list_task(GSList * tasks)
 	}
 }
 
-static int
-set_service_score(const char *service_desc, int score, GError ** error)
+static GError *
+set_service_score(const char *service_desc, int score)
 {
-	int rc=0, nb_match;
-	struct service_info_s *si = NULL;
-	char *ns_name = NULL;
-	char *service_type = NULL;
-	char *remaining = NULL;
-	char *service_ip = NULL;
-	int service_port = 0;
-	GSList *list = NULL;
-	addr_info_t *cluster_addr = NULL;
+	gchar **tokens = g_strsplit(service_desc, "|", 4);
+	if (!tokens)
+		return NEWERROR(CODE_INTERNAL_ERROR, "split failed (OOM?)");
+	STRINGV_STACKIFY(tokens);
+	if (g_strv_length(tokens) < 3)
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid service description");
 
-	nb_match = sscanf(service_desc, "%a[^|]|%a[^|]|%a[^:]:%i|%as", &ns_name, &service_type, &service_ip, &service_port, &remaining);
-	if (nb_match < 4) {
-		GSETERROR(error, "Failed to scan service desc in string [%s] : only %d patterns", service_desc, nb_match);
-		goto exit_label;
-	}
+	addr_info_t *cluster_addr;
+	if (!(cluster_addr = gridcluster_get_conscience_addr(tokens[0])))
+		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Unknown namespace %s", tokens[0]);
+	BUFFER_STACKIFY(cluster_addr, sizeof(addr_info_t));
 
-	if (!(cluster_addr = gridcluster_get_conscience_addr(ns_name))) {
-		GSETERROR(error, "Unknown namespace");
-		goto exit_label;
-	}
-
-	si = g_malloc0(sizeof(struct service_info_s));
-
-	if (!service_info_set_address(si, service_ip, service_port, error)) {
-		GSETERROR(error, "Invalid service address ip=%s port=%i", service_ip, service_port);
-		goto exit_label;
-	}
-
-	g_strlcpy(si->ns_name, ns_name, sizeof(si->ns_name));
-	g_strlcpy(si->type, service_type, sizeof(si->type));
+	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
+	g_strlcpy(si->ns_name, tokens[0], sizeof(si->ns_name));
+	g_strlcpy(si->type, tokens[1], sizeof(si->type));
 	si->score.value = score;
 	si->score.timestamp = time(0);
 
-	list = g_slist_prepend(NULL, si);
-	/* whatever we want to lock or unlock, we say 'TRUE' to act on the lock.
-	 * we will unlock with a negative score */
-	rc = gcluster_push_services(cluster_addr, 4000, list, TRUE, error);
-	g_slist_free(list);
+	if (!l4_address_init_with_url(&si->addr, tokens[2], NULL)) {
+		service_info_clean (si);
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid service address %s", tokens[2]);
+	}
 
-	if (!rc)
-		GSETERROR(error, "Failed to lock the service");
-exit_label:
-	if (remaining)
-		free(remaining);
-	if (ns_name)
-		free(ns_name);
-	if (service_type)
-		free(service_type);
-	if (service_ip)
-		free(service_ip);
-	if (si)
-		service_info_clean(si);
-	if (cluster_addr)
-		g_free(cluster_addr);
-	return rc;
+	GSList *list = g_slist_prepend(NULL, si);
+	GError *err = gcluster_push_services(cluster_addr, 4000, list);
+	if (err)
+		g_prefix_error(&err, "Registration failed: ");
+	g_slist_free(list);
+	service_info_clean (si);
+	return err;
 }
 
 static void
@@ -381,7 +355,7 @@ main(int argc, char **argv)
 					g_printerr("The option '-S' requires an argument. Try %s -h\n", argv[0]);
 					abort();
 				}
-				g_strlcpy(service_desc, optarg, sizeof(service_desc)-1);
+				g_strlcpy(service_desc, optarg, sizeof(service_desc));
 				break;
 			case 'l':
 				has_list = TRUE;
@@ -517,6 +491,7 @@ main(int argc, char **argv)
 		}
 
 		print_raw_services(NULL, NULL, services, has_show_internals);
+		g_slist_free_full (services, (GDestroyNotify)service_info_clean);
 
 	}
 	else if (has_list_task) {
@@ -540,7 +515,9 @@ main(int argc, char **argv)
 			goto exit_label;
 		}
 
-		if (!set_service_score(service_desc, has_unlock_score ? -1 : score, &error)) {
+		score = CLAMP(score, SCORE_DOWN, SCORE_MAX);
+		error = set_service_score(service_desc, has_unlock_score ? SCORE_UNLOCK : score);
+		if (error) {
 			g_printerr("Failed to set score of service [%s] :\n", service_desc);
 			g_printerr("%s\n", error->message);
 			goto exit_label;
@@ -564,6 +541,7 @@ main(int argc, char **argv)
 			g_printerr("No conscience address known for [%s]\n", namespace);
 			goto exit_label;
 		}
+		STRING_STACKIFY(csurl);
 		GSList *services_types = list_namespace_service_types(namespace, &error);
 
 		if (!services_types) {
@@ -576,9 +554,7 @@ main(int argc, char **argv)
 			}
 		}
 		else {
-			GSList *st;
-
-			for (st = services_types; st; st = st->next) {
+			for (GSList *st = services_types; st; st = st->next) {
 				GSList *list_services = NULL;
 				gchar *str_type = st->data;
 
@@ -614,6 +590,7 @@ main(int argc, char **argv)
 					list_services = NULL;
 				}
 			}
+			g_slist_free_full (services_types, g_free);
 		}
 	}
 

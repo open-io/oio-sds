@@ -334,7 +334,7 @@ request_body_matches_namespace(struct request_context_s *req_ctx, GError **err)
 	if (!body)
 		return TRUE;
 
-	if (!strings_unmarshall(&list_ns, body, &body_size, err)) {
+	if (!strings_unmarshall(&list_ns, body, body_size, err)) {
 		GSETERROR(err, "Invalid request body");
 		return FALSE;
 	}
@@ -665,7 +665,7 @@ handler_get_service(struct request_context_s *req_ctx)
  * @param si
  */
 static void
-push_service(struct conscience_s *cs, struct service_info_s *si, gboolean lock_score)
+push_service(struct conscience_s *cs, struct service_info_s *si)
 {
 	gchar str_addr[STRLEN_ADDRINFO + 1], str_descr[LIMIT_LENGTH_SRVDESCR];
 	gint32 old_score=0;
@@ -702,34 +702,25 @@ push_service(struct conscience_s *cs, struct service_info_s *si, gboolean lock_s
 		memcpy(str_descr, srv->description, LIMIT_LENGTH_SRVDESCR);
 	}
 
-	if (conscience_srvtype_refresh(srvtype, &error_local, si, lock_score)) {
+	if (conscience_srvtype_refresh(srvtype, &error_local, si, si->score.value >= SCORE_DOWN)) {
 		if (srv) { /* refresh */
-			/* if the service was previously known, we may detect score down to zero
-			 * (new services comes with a zeroed score). */
-			if (lock_score) {
-				if (si->score.value >= 0) /* lock */
-					srv->locked = TRUE;
-				else { /* unlock */
-					srv->locked = FALSE;
-					srv->score.value = old_score;
-				}
-			}
-			else if (si->tags) {
+			if (si->score.value == SCORE_UNLOCK) { /*  unlock */
+				srv->locked = FALSE;
+				srv->score.value = old_score;
+			} else if (si->score.value == SCORE_UNSET) { /* simple push */
 				gboolean bval = FALSE;
 				struct service_tag_s *tag = service_info_get_tag(si->tags, "tag.up");
-				if (tag && service_tag_get_value_boolean(tag, &bval, NULL) && !bval) {
-					INFO("v1.4 service down");
+				if (tag && service_tag_get_value_boolean(tag, &bval, NULL) && !bval)
 					_alert_service_with_zeroed_score(srv);
-				}
+			} else { /* lock */
+				srv->locked = TRUE;
 			}
-
 			_conscience_srv_prepare_cache(srv);
 		}
 		else { /* first register */
 			srv = conscience_srvtype_get_srv(srvtype, (struct conscience_srvid_s*)&(si->addr));
 			if (srv) {
-				if (lock_score)
-					srv->locked = (si->score.value >= 0);
+				srv->locked = (si->score.value >= 0);
 				_conscience_srv_prepare_cache(srv);
 			}
 		}
@@ -775,20 +766,21 @@ handler_push_service(struct request_context_s *req_ctx)
 		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad requets : no body");
 		goto errorLabel;
 	}
-	if (0 >= service_info_unmarshall(&list_srvinfo, data, &data_size, &(ctx.warning))) {
+	if (0 >= service_info_unmarshall(&list_srvinfo, data, data_size, &(ctx.warning))) {
 		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad request : failed to deserialize the body");
 		goto errorLabel;
 	}
 
+	if (DEBUG_ENABLED()) {
 	DEBUG("[%d] services to be pushed in namespace [%s]",
 			g_slist_length(list_srvinfo), conscience_get_namespace(conscience));
+	}
 
 	/*Now push each service and reply the success */
-	gboolean lock_action = metautils_message_extract_flag(req_ctx->request, NAME_MSGKEY_LOCK, FALSE);
 	gint counter = 0;
 	for (GSList *l = list_srvinfo; l; l = g_slist_next(l)) {
 		if (l->data) {
-			push_service(conscience, (struct service_info_s *) (l->data), lock_action);
+			push_service(conscience, (struct service_info_s *) (l->data));
 			service_info_clean(l->data);
 			l->data = NULL;
 			counter++;
@@ -841,7 +833,7 @@ handler_get_services_types(struct request_context_s *req_ctx)
 		}
 	}
 
-	gba_names = meta2_maintenance_names_marshall(list_names, &(ctx.warning));
+	gba_names = strings_marshall_gba(list_names, &(ctx.warning));
 	conscience_unlock_srvtypes(conscience);
 	/* XXX end of critical section */
 
@@ -925,7 +917,7 @@ handler_rm_service(struct request_context_s *req_ctx)
 			GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "No body");
 			goto errorLabel;
 		}
-		if (0 >= service_info_unmarshall(&list_srvinfo, data, &data_size, &(ctx.warning))) {
+		if (0 >= service_info_unmarshall(&list_srvinfo, data, data_size, &(ctx.warning))) {
 			GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Invalid body: deserialization error");
 			goto errorLabel;
 		}

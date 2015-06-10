@@ -43,7 +43,6 @@ get_ns_worker(worker_t *worker, GError **error)
 	namespace_data_t *ns_data = NULL;
 	GByteArray* gba = NULL;
 
-	TRACE_POSITION();
 
 	GError *e = NULL;
 	if (!(ns_data = get_namespace(ns, &e))) {

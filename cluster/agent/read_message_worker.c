@@ -38,7 +38,6 @@ int read_message_data_worker(worker_t *worker, GError **error) {
 	message_t *message = NULL;
 	worker_data_t *data = NULL;
 
-	TRACE_POSITION();
 
 	EXTRA_ASSERT(worker->clean == message_cleanup);
 	data = &(worker->data);
@@ -97,7 +96,6 @@ int read_message_size_worker(worker_t *worker, GError **error) {
 	ssize_t rl = 0;
 	worker_data_t *data = NULL;
 
-	TRACE_POSITION();
 
 	data = &(worker->data);
 	EXTRA_ASSERT(data->session == NULL);
