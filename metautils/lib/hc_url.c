@@ -26,6 +26,7 @@ License along with this library.
 
 #include "./metautils.h"
 #include "./hc_url.h"
+#include "./hc_url_ext.h"
 #include "./url.h"
 
 #define HCURL_OPTION_KEY_VERSION "version"
@@ -396,7 +397,7 @@ hc_url_get(struct hc_url_s *u, enum hc_url_field_e f)
 	return NULL;
 }
 
-const guint8*
+const void*
 hc_url_get_id(struct hc_url_s *u)
 {
 	if (!u) {
@@ -411,7 +412,7 @@ hc_url_get_id(struct hc_url_s *u)
 }
 
 void
-hc_url_set_id (struct hc_url_s *u, const guint8 *id)
+hc_url_set_id (struct hc_url_s *u, const void *id)
 {
 	if (!u)
 		return;
