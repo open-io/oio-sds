@@ -46,7 +46,7 @@ _m0_remote_no_return (addr_info_t *m0a, gint ms, GByteArray *req, GError **err)
 	addr_info_to_string (m0a, addr, STRLEN_ADDRINFO);
 
 	GError *e = gridd_client_exec (addr, ms>0 ? ms/1000.0 : 60.0, req);
-	//g_byte_array_unref (req);
+	g_byte_array_unref (req);
 	if (!e)
 		return TRUE;
 	g_error_transmit(err, e);
@@ -68,7 +68,7 @@ _m0_remote_m0info (addr_info_t *m0a, gint ms, GByteArray *req, GError **err)
 	GError *e = gridd_client_exec_and_decode (addr, ms>0 ? ms/1000.0 : 60.0, req,
 			&result, meta0_info_unmarshall);
 
-	//g_byte_array_unref (req);
+	g_byte_array_unref (req);
 	if (!e)
 		return result;
 
