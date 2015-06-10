@@ -166,7 +166,6 @@ grid_string_to_addrinfo(const gchar *start, const gchar *end, struct addr_info_s
 		return 0;
 	}
 	a->port = g_htons(u16port);
-	a->protocol = 0;
 
 	// And now, parse the address
 	if (addr[0] == '[') {

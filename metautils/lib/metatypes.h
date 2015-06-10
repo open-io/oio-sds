@@ -148,10 +148,9 @@ union ip_addr_u
  */
 typedef struct addr_info_s
 {
-	enum id_addr_type_e type;	/**< The network address type */
-	union ip_addr_u addr;		/**< The network address bin */
-	guint16 port;			/**< The network port */
-	guint16 protocol;		/**< The network protocol */
+	union ip_addr_u addr; /**< The network address bin */
+	guint16 port; /**< The network port */
+	enum id_addr_type_e type : 8; /**< The network address type */
 } addr_info_t;
 
 /**

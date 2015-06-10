@@ -94,8 +94,8 @@ meta2_filter_extract_header_copy(struct gridd_filter_ctx_s *ctx,
 	char buf[512];
 
 	TRACE_FILTER();
-	EXTRACT_STRING(M2_KEY_COPY_SOURCE, TRUE);
-	if (NULL != meta2_filter_ctx_get_param(ctx, M2_KEY_COPY_SOURCE))
+	EXTRACT_STRING(NAME_MSGKEY_COPY, TRUE);
+	if (NULL != meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_COPY))
 		meta2_filter_ctx_add_param(ctx, "BODY_OPT", "OK");
 	return FILTER_OK;
 }
@@ -108,7 +108,7 @@ meta2_filter_extract_header_storage_policy(struct gridd_filter_ctx_s *ctx,
 	char buf[65];
 
 	TRACE_FILTER();
-	EXTRACT_STRING(M2_KEY_STORAGE_POLICY, TRUE);
+	EXTRACT_STRING(NAME_MSGKEY_STGPOLICY, TRUE);
 	return FILTER_OK;
 }
 
@@ -120,7 +120,7 @@ meta2_filter_extract_header_mdsys(struct gridd_filter_ctx_s *ctx,
 	char buf[1024];
 
 	TRACE_FILTER();
-	EXTRACT_STRING(M2V1_KEY_METADATA_SYS, TRUE);
+	EXTRACT_STRING(NAME_MSGKEY_MDSYS, TRUE);
 	return FILTER_OK;
 }
 
@@ -132,7 +132,7 @@ meta2_filter_extract_header_version_policy(struct gridd_filter_ctx_s *ctx,
 	char buf[65];
 
 	TRACE_FILTER();
-	EXTRACT_STRING(M2_KEY_VERSION_POLICY, TRUE);
+	EXTRACT_STRING(NAME_MSGKEY_STGPOLICY, TRUE);
 	return FILTER_OK;
 }
 
@@ -192,8 +192,8 @@ meta2_filter_extract_header_chunk_beans(struct gridd_filter_ctx_s *ctx,
 		// FIXME memleak with <lists> itself ?
 	}
 	GSList **lists = g_malloc0(2 * sizeof(GSList *));
-	EXTRACT_HEADER_BEANS(M2_KEY_NEW_CHUNKS, lists[0]);
-	EXTRACT_HEADER_BEANS(M2_KEY_OLD_CHUNKS, lists[1]);
+	EXTRACT_HEADER_BEANS(NAME_MSGKEY_NEW, lists[0]);
+	EXTRACT_HEADER_BEANS(NAME_MSGKEY_OLD, lists[1]);
 	meta2_filter_ctx_set_input_udata(ctx, lists, _cleaner);
 	return FILTER_OK;
 }
@@ -260,8 +260,8 @@ meta2_filter_extract_header_spare(struct gridd_filter_ctx_s *ctx,
 	gchar buf[512];
 
 	TRACE_FILTER();
-	EXTRACT_OPT(M2_KEY_SPARE);
-	const gchar *type = meta2_filter_ctx_get_param(ctx, M2_KEY_SPARE);
+	EXTRACT_OPT(NAME_MSGKEY_SPARE);
+	const gchar *type = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_SPARE);
 
 	if (type != NULL) {
 		/* No content length in spare request */
@@ -348,7 +348,7 @@ meta2_filter_extract_header_flags32(struct gridd_filter_ctx_s *ctx,
 	}
 
 	g_snprintf(strflags, sizeof(strflags), "%"G_GUINT32_FORMAT, flags);
-	meta2_filter_ctx_add_param(ctx, M2_KEY_GET_FLAGS, strflags);
+	meta2_filter_ctx_add_param(ctx, NAME_MSGKEY_FLAGS, strflags);
 	return FILTER_OK;
 }
 
@@ -383,7 +383,7 @@ meta2_filter_extract_header_optional_chunkid(struct gridd_filter_ctx_s *ctx,
 	GError *e = NULL;
 	gchar buf[1024]; // XXX: is there a maximum length for chunk ids?
 	TRACE_FILTER();
-	EXTRACT_STRING(M2_KEY_CHUNK_ID, TRUE);
+	EXTRACT_STRING(NAME_MSGKEY_CHUNKID, TRUE);
 	return FILTER_OK;
 }
 
@@ -394,7 +394,7 @@ meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
 	GError *e = NULL;
 	gchar buf[64];
 	TRACE_FILTER();
-	EXTRACT_STRING(M2_KEY_OVERWRITE, TRUE);
+	EXTRACT_STRING(NAME_MSGKEY_OVERWRITE, TRUE);
 	return FILTER_OK;
 }
 
@@ -405,7 +405,7 @@ meta2_filter_extract_header_optional_max_keys(struct gridd_filter_ctx_s *ctx,
 	GError *e = NULL;
 	gchar buf[64];
 	TRACE_FILTER();
-	EXTRACT_STRING(M2_KEY_MAX_KEYS, TRUE);
+	EXTRACT_STRING(NAME_MSGKEY_MAX_KEYS, TRUE);
 	return FILTER_OK;
 }
 
@@ -416,10 +416,10 @@ meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
 	GError *e = NULL;
 	gchar buf[1024];
 	TRACE_FILTER();
-	EXTRACT_OPT(M2_KEY_PREFIX);
-	EXTRACT_OPT(M2_KEY_MARKER);
-	EXTRACT_OPT(M2_KEY_MARKER_END);
-	EXTRACT_OPT(M2_KEY_MAX_KEYS);
+	EXTRACT_OPT(NAME_MSGKEY_PREFIX);
+	EXTRACT_OPT(NAME_MSGKEY_MARKER);
+	EXTRACT_OPT(NAME_MSGKEY_MARKER_END);
+	EXTRACT_OPT(NAME_MSGKEY_MAX_KEYS);
 	return FILTER_OK;
 }
 

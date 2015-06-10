@@ -337,7 +337,7 @@ meta1_dispatch_v2_SRV_GETAVAIL(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	struct hc_url_s *url = message_extract_url (reply->request);
-	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_SRVTYPE);
+	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
 	gboolean dryrun = message_extract_flag(reply->request, NAME_HEADER_DRYRUN, FALSE);
 	reply->subject("%s|%s|%s|%d", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype, dryrun);
 	(void) ignored;
@@ -364,7 +364,7 @@ meta1_dispatch_v2_SRV_NEW(struct gridd_reply_ctx_s *reply,
 {
 	struct hc_url_s *url = message_extract_url (reply->request);
 	gboolean dryrun = message_extract_flag(reply->request, NAME_HEADER_DRYRUN, FALSE);
-	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_SRVTYPE);
+	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
 	reply->subject("%s|%s|%s|%d", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype, dryrun);
 	(void) ignored;
 
@@ -399,7 +399,7 @@ meta1_dispatch_v2_SRV_SET(struct gridd_reply_ctx_s *reply,
 	else if (NULL != (err = meta1_backend_force_service(m1, url, m1url)))
 		reply->send_error(0, err);
 	else
-		reply->send_reply(CODE_BAD_REQUEST, "OK");
+		reply->send_reply(200, "OK");
 
 	g_free0 (m1url);
 	hc_url_clean (url);
@@ -434,7 +434,7 @@ meta1_dispatch_v2_SRV_DELETE(struct gridd_reply_ctx_s *reply,
 {
 	gchar **urlv = NULL;
 	GError *err;
-	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_SRVTYPE);
+	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
 	struct hc_url_s *url = message_extract_url (reply->request);
 	reply->subject("%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype);
 	(void) ignored;
@@ -463,7 +463,7 @@ meta1_dispatch_v2_SRV_GETALL(struct gridd_reply_ctx_s *reply,
 	GError *err;
 	gchar **result = NULL;
 	struct hc_url_s *url = message_extract_url (reply->request);
-	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_SRVTYPE);
+	gchar *srvtype = message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
 	reply->subject("%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype);
 	(void) ignored;
 

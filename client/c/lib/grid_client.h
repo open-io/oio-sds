@@ -238,28 +238,19 @@ typedef struct gs_download_info_s
 /* --- Grid Storage main operations ---------------------------------------- */
 
 /**
- * Creates allocates a new gs_grid_storage_t structure and inits it to be 
- * ready to refresh on the given.
+ * Initiates a new gs_grid_storage_t structure. The only information needed
+ * is the name of the namespace to work with.
  *
- * The only information needed by a grid storage to start its work is
- * the location of a META0 refname directory.
- *
- * @param meta0_url the url of the META0 refname. It must have one of
- * the following formats:<ul>
- * <li>HOST:PORT where HOST is a resolvable fully qualified domain name</li>
- * <li>[IP]:PORT for IPv6 and IPv4 addresses</li>
- * <li>IP:PORT only for IPv4 addresses</li>
- * </ul>
+ * @param ns the name of the namespace.
  * @param err a double pointer to an error structure, that will be set
  *            if the function fails.
  * @return NULL if the function fails (if the META0 refname cannot be
  *              joigned) or a pointer to a valid gs_grid_storage_t structure.
  */
-gs_grid_storage_t* gs_grid_storage_init (const char *meta0_url,
-	gs_error_t **err);
+gs_grid_storage_t* gs_grid_storage_init (const char *ns, gs_error_t **err);
 
-gs_grid_storage_t* gs_grid_storage_init2 (const char *meta0_url,
-	int to_cnx, int to_req, gs_error_t **err);
+gs_grid_storage_t* gs_grid_storage_init2 (const char *ns,
+		int to_cnx, int to_req, gs_error_t **err);
 
 typedef enum gs_timeout_e {
 	GS_TO_RAWX_CNX=0,

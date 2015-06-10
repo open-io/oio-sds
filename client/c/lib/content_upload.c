@@ -194,7 +194,8 @@ _get_chunk_matching_content(GSList *beans, struct bean_CONTENTS_s *content)
 }
 
 /* upload the given chunk from the retry buffer */
-static gs_status_t _gs_upload_content (meta2_content_add_f adder, gs_container_t *container,
+static gs_status_t
+_gs_upload_content (meta2_content_add_f adder, gs_container_t *container,
 		const char *content_name, const int64_t content_size,
 		gs_input_f feeder, void *user_data, gs_error_t **err)
 {
@@ -204,7 +205,8 @@ static gs_status_t _gs_upload_content (meta2_content_add_f adder, gs_container_t
 
 static GMutex global_mutex = G_STATIC_MUTEX_INIT;
 
-static GError *_rawx_update_beans_hash_from_request(struct http_put_s *http_put)
+static GError *
+_rawx_update_beans_hash_from_request(struct http_put_s *http_put)
 {
 	GSList *i_list = NULL, *beans;
 	struct bean_CHUNKS_s *bc;
@@ -245,7 +247,8 @@ end:
  *
  * @return CONTENT if found, NULL otherwise
  */
-static struct bean_CONTENTS_s *_bean_get_content_from_chunk(GSList *all_chunks, struct bean_CHUNKS_s *bc)
+static struct bean_CONTENTS_s *
+_bean_get_content_from_chunk(GSList *all_chunks, struct bean_CHUNKS_s *bc)
 {
 	GSList *i_list = NULL;
 	struct bean_CONTENTS_s *content;
@@ -274,7 +277,9 @@ static struct bean_CONTENTS_s *_bean_get_content_from_chunk(GSList *all_chunks, 
  *
  * @return NULL if ok, otherwise error
  */
-static GError * _rainx_update_chunks_with_response(GSList **all_chunks, GSList **chunks_by_pos, const gchar *header_chunklist)
+static GError *
+_rainx_update_chunks_with_response(GSList **all_chunks, GSList **chunks_by_pos,
+		const gchar *header_chunklist)
 {
 	gchar **split_header = NULL;
 	gchar **iter;
@@ -391,7 +396,8 @@ end:
  *          >=0: on RAINX mode for format position field "<chunkpos>.<subchunk>"
  *          used only if content_size == 0. no need parity format, only data format
  */
-static GError * _http_put_set_dest(struct http_put_s *http_put, const gchar *url,
+static GError *
+_http_put_set_dest(struct http_put_s *http_put, const gchar *url,
 		gpointer user_data,
 		const gchar *containerid, const gchar * chunkid, const gchar *contentpath,
 		gint64 contentsize, gint chunkpos, gint subchunk, guint chunknb, gint64 chunksize,
@@ -447,7 +453,8 @@ static GError * _http_put_set_dest(struct http_put_s *http_put, const gchar *url
  *          >=0: on RAINX mode for format position field "<chunkpos>.<subchunk>"
  *          used only if content_size == 0. no need parity format, only data format
  */
-static GError * _http_put_set_dests(struct http_put_s *http_put, GSList *bean_list,
+static GError *
+_http_put_set_dests(struct http_put_s *http_put, GSList *bean_list,
 		const gchar *containerid, const gchar *contentpath,
 		gint64 contentsize, gint chunkpos, gint subchunk, guint chunknb,
 		const gchar *metadata, const gchar *reqid)
@@ -484,7 +491,8 @@ static GError * _http_put_set_dests(struct http_put_s *http_put, GSList *bean_li
 
 /* Must have as least the same number of spare beans as broken beans
  */
-static GError *_update_broken_beans(GSList *all_beans, GSList *broken_beans, GSList *spare_beans)
+static GError *
+_update_broken_beans(GSList *all_beans, GSList *broken_beans, GSList *spare_beans)
 {
 	struct bean_CHUNKS_s *spare_bc;
 	struct bean_CHUNKS_s *broken_bc;
@@ -522,7 +530,8 @@ static GError *_update_broken_beans(GSList *all_beans, GSList *broken_beans, GSL
 	return NULL;
 }
 
-static gchar* _rainx_create_rawxlist_from_chunk_bean_list(GSList *bean_list)
+static gchar*
+_rainx_create_rawxlist_from_chunk_bean_list(GSList *bean_list)
 {
 	GString *res = NULL;
 	struct bean_CHUNKS_s *bc;
@@ -559,7 +568,8 @@ static gchar* _rainx_create_rawxlist_from_chunk_bean_list(GSList *bean_list)
 	return g_string_free(res, FALSE);
 }
 
-static GError *_rainx_get_url(const gchar *nsname, gchar *buffer, gsize buffer_size)
+static GError *
+_rainx_get_url(const gchar *nsname, gchar *buffer, gsize buffer_size)
 {
 	addr_info_t *rainx_addr = NULL;
 	gchar ip[256]; /* string representation of ipv6 address is 46 chars */
@@ -587,7 +597,8 @@ static GError *_rainx_get_url(const gchar *nsname, gchar *buffer, gsize buffer_s
 	return NULL;
 }
 
-static GError *_rainx_upload(struct hc_url_s *url, const gchar *target,
+static GError *
+_rainx_upload(struct hc_url_s *url, const gchar *target,
 		GSList **chunks, GHashTable *chunks_at_position,
 		gs_input_f feeder, void *feeder_user_data, const gchar *container_id,
 		const gchar *content_name, const gint64 content_size,
@@ -744,7 +755,8 @@ error_label:
 	return error;
 }
 
-static void _debug_bean_chunk_list(GSList *bck_list, const char * message)
+static void
+_debug_bean_chunk_list(GSList *bck_list, const char * message)
 {
 	GSList *i_list;
 
@@ -758,7 +770,8 @@ static void _debug_bean_chunk_list(GSList *bck_list, const char * message)
 /* is_rain =true when on rainx stgpol but the content_size==0.
  * rawx upload it's used, but extended attribute.position it's on already rainx mode 
  * */
-static GError *_rawx_upload(struct hc_url_s *url, const gchar *target,
+static GError *
+_rawx_upload(struct hc_url_s *url, const gchar *target,
 		GSList **chunks, GHashTable *chunks_at_position,
 		gs_input_f feeder, void *feeder_user_data, const gchar *container_id,
 		const gchar *content_name, const gint64 content_size,
@@ -915,7 +928,8 @@ error_label:
 	return error;
 }
 
-static gchar * _esc_gba(GByteArray *metadata)
+static gchar *
+_esc_gba(GByteArray *metadata)
 {
 	gchar *metadata_esc, *tmp;
 
@@ -929,7 +943,8 @@ static gchar * _esc_gba(GByteArray *metadata)
 }
 
 /* upload the given chunk */
-static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
+static gs_status_t
+_gs_upload_content_v2 (gs_container_t *container,
 		const char *content_name, gboolean append, const int64_t content_size,
 		gs_input_f feeder, void *user_data, const char *mdusr,
 		const char *sys_metadata, gs_error_t **err)
@@ -938,7 +953,8 @@ static gs_status_t _gs_upload_content_v2 (gs_container_t *container,
 			sys_metadata, NULL, err);
 }
 
-static gs_status_t _gs_upload(gs_container_t *container,
+static gs_status_t
+_gs_upload(gs_container_t *container,
 		const char *content_name, gboolean append, const int64_t content_size,
 		gs_input_f feeder, void *user_data, const char *mdusr,
 		const char *sys_metadata, const char *stgpol, gs_error_t **err)

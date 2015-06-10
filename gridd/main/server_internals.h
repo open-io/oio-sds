@@ -47,14 +47,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define NAME_MAX_WORKERS "max_workers"
 #define NAME_ALERT_PERIOD "alert_period"
 
-#define NAME_FATAL "fatal"
-#define NAME_ERROR "error"
-#define NAME_CRITICAL "critical"
-#define NAME_WARNING "warning"
-#define NAME_MESSAGE "message"
-#define NAME_INFO "info"
-#define NAME_DEBUG "debug"
-
 #define SIZE_SRVNAME 64
 #define SIZE_PLUGINNAME 64
 #define SIZE_MSGHANDLERNAME 64

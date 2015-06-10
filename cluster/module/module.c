@@ -1236,28 +1236,7 @@ handler_rm_service(struct request_context_s *req_ctx)
 	data_size = 0;
 
 	/*Get the body and unpack it as a list of services */
-	data = message_get_field(req_ctx->request, NAME_MSGKEY_TYPENAME, &data_size);
-	if (!data) {
-		gchar str_type[LIMIT_LENGTH_SRVTYPE+1];
-		struct conscience_srvtype_s *srvtype;
-
-		g_strlcpy(str_type, data, sizeof(str_type));
-
-		/* XXX start of critical section */
-		srvtype = conscience_get_locked_srvtype(conscience, &(ctx.warning), str_type, MODE_STRICT,'w');
-		if (!srvtype) {
-			GSETCODE(&(ctx.warning), CODE_SRVTYPE_NOTMANAGED,"srvtype=[%s] not found", str_type);
-			goto errorLabel;
-		}
-		counter = conscience_srvtype_count_srv(srvtype,TRUE);
-		conscience_srvtype_flush(srvtype);
-		conscience_release_locked_srvtype(srvtype);
-		/* XXX end ofcritical section */
-
-		NOTICE("[NS=%s][SRVTYPE=%s] flush done!", conscience_get_namespace(conscience), srvtype->type_name);
-		reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
-	}
-	else if (message_has_BODY(req_ctx->request)) {
+	if (message_has_BODY(req_ctx->request)) {
 		GSList *list_srvinfo = NULL;
 
  		data = message_get_BODY(req_ctx->request, &data_size);
@@ -1285,9 +1264,32 @@ handler_rm_service(struct request_context_s *req_ctx)
 		reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	}
 	else {
-		counter = 0;
-		GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad request : no service in the body, no service type in the fields");
-		goto errorLabel;
+		/* if a srvtype is present in headers, remove all services of that type. */
+		if (data = message_get_field(req_ctx->request, NAME_MSGKEY_TYPENAME, &data_size)) {
+			gchar str_type[LIMIT_LENGTH_SRVTYPE+1];
+			struct conscience_srvtype_s *srvtype;
+
+			g_strlcpy(str_type, data, sizeof(str_type));
+
+			/* XXX start of critical section */
+			srvtype = conscience_get_locked_srvtype(conscience, &(ctx.warning), str_type, MODE_STRICT,'w');
+			if (!srvtype) {
+				GSETCODE(&(ctx.warning), CODE_SRVTYPE_NOTMANAGED,"srvtype=[%s] not found", str_type);
+				goto errorLabel;
+			}
+			counter = conscience_srvtype_count_srv(srvtype,TRUE);
+			conscience_srvtype_flush(srvtype);
+			conscience_release_locked_srvtype(srvtype);
+			/* XXX end ofcritical section */
+
+			NOTICE("[NS=%s][SRVTYPE=%s] flush done!", conscience_get_namespace(conscience), srvtype->type_name);
+			reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
+		}
+		else {
+			counter = 0;
+			GSETCODE(&(ctx.warning), CODE_BAD_REQUEST, "Bad request : no service in the body, no service type in the fields");
+			goto errorLabel;
+		}
 	}
 
 	reply_context_reply(&ctx, NULL);

@@ -88,9 +88,9 @@ m2v2_remote_pack_CREATE(struct hc_url_s *url, struct m2v2_create_params_s *pols)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_CREATE, url, NULL);
 	if (pols && pols->storage_policy)
-		message_add_field_str(msg, M2_KEY_STORAGE_POLICY, pols->storage_policy);
+		message_add_field_str(msg, NAME_MSGKEY_STGPOLICY, pols->storage_policy);
 	if (pols && pols->version_policy)
-		message_add_field_str(msg, M2_KEY_VERSION_POLICY, pols->version_policy);
+		message_add_field_str(msg, NAME_MSGKEY_VERPOLICY, pols->version_policy);
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -146,7 +146,7 @@ m2v2_remote_pack_OVERWRITE(struct hc_url_s *url, GSList *beans)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, body);
-	message_add_field_str(msg, M2_KEY_OVERWRITE, "1");
+	message_add_field_str(msg, NAME_MSGKEY_OVERWRITE, "1");
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -161,7 +161,7 @@ GByteArray*
 m2v2_remote_pack_COPY(struct hc_url_s *url, const gchar *src)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, NULL);
-	message_add_field_str(msg, M2_KEY_COPY_SOURCE, src);
+	message_add_field_str(msg, NAME_MSGKEY_COPY, src);
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -193,8 +193,8 @@ m2v2_remote_pack_RAW_SUBST(struct hc_url_s *url,
 	GByteArray *old_chunks_gba = bean_sequence_marshall(old_chunks);
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_RAW_SUBST, url, NULL);
 	message_add_fields_gba(msg,
-			M2_KEY_NEW_CHUNKS, new_chunks_gba,
-			M2_KEY_OLD_CHUNKS, old_chunks_gba,
+			NAME_MSGKEY_NEW, new_chunks_gba,
+			NAME_MSGKEY_OLD, old_chunks_gba,
 			NULL);
 	g_byte_array_unref (new_chunks_gba);
 	g_byte_array_unref (old_chunks_gba);
@@ -212,8 +212,8 @@ m2v2_remote_pack_GET_BY_CHUNK(struct hc_url_s *url,
 		const gchar *chunk_id, gint64 limit)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_GET, url, NULL);
-	message_add_field_str (msg, M2_KEY_CHUNK_ID, chunk_id);
-	message_add_field_strint64 (msg, M2_KEY_MAX_KEYS, limit);
+	message_add_field_str (msg, NAME_MSGKEY_CHUNKID, chunk_id);
+	message_add_field_strint64 (msg, NAME_MSGKEY_MAX_KEYS, limit);
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -230,12 +230,11 @@ m2v2_remote_pack_LIST(struct hc_url_s *url, struct list_params_s *p)
 
 	MESSAGE msg = _m2v2_build_request_with_flags(NAME_MSGNAME_M2V2_LIST, url, NULL, flags);
 
-	message_add_field_str(msg, M2_KEY_SNAPSHOT, p->snapshot);
-	message_add_field_str(msg, M2_KEY_PREFIX, p->prefix);
-	message_add_field_str(msg, M2_KEY_MARKER, p->marker_start);
-	message_add_field_str(msg, M2_KEY_MARKER_END, p->marker_end);
+	message_add_field_str(msg, NAME_MSGKEY_PREFIX, p->prefix);
+	message_add_field_str(msg, NAME_MSGKEY_MARKER, p->marker_start);
+	message_add_field_str(msg, NAME_MSGKEY_MARKER_END, p->marker_end);
 	if (p->maxkeys > 0)
-		message_add_field_strint64(msg, M2_KEY_MAX_KEYS, p->maxkeys);
+		message_add_field_strint64(msg, NAME_MSGKEY_MAX_KEYS, p->maxkeys);
 
 	return message_marshall_gba_and_clean(msg);
 }
@@ -309,8 +308,8 @@ m2v2_remote_pack_SPARE(struct hc_url_s *url, const gchar *pol,
 		body = bean_sequence_marshall(beans);
 
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_BEANS, url, body);
-	message_add_field_str (msg, M2_KEY_STORAGE_POLICY, pol);
-	message_add_field_str (msg, M2_KEY_SPARE, spare_type);
+	message_add_field_str (msg, NAME_MSGKEY_STGPOLICY, pol);
+	message_add_field_str (msg, NAME_MSGKEY_SPARE, spare_type);
 	_bean_cleanl2(beans);
 	return message_marshall_gba_and_clean(msg);
 }

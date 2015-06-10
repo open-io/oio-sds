@@ -832,9 +832,13 @@ service_info_load_json_object(struct json_object *obj,
 		|| !json_object_is_type(score, json_type_int))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid field");
 
+	struct addr_info_s addr;
+	if (!grid_string_to_addrinfo(json_object_get_string(url), NULL, &addr))
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid address");
+
 	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
 	metautils_strlcpy_physical_ns(si->ns_name, json_object_get_string(ns), sizeof(si->ns_name));
-	grid_string_to_addrinfo(json_object_get_string(url), NULL, &si->addr);
+	memcpy (&si->addr, &addr, sizeof(struct addr_info_s));
 	g_strlcpy(si->type, json_object_get_string(type), sizeof(si->type));
 	si->score.value = json_object_get_int(score);
 

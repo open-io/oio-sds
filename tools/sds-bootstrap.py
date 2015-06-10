@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from string import Template
-import os, errno
+import os, errno, pwd
 
 #env.G_DEBUG=fatal_warnings
 #env.G_SLICE=debug-blocks
@@ -39,7 +39,7 @@ group=${NS},localhost,account-server
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf
+command=${EXE_PREFIX}-svc-monitor -s SDS,${NS},${SRVTYPE},${SRVNUM} -p 1 -m '${EXE_PREFIX}-account-monitor.py' -i '${NS}|${SRVTYPE}|${IP}:${PORT}' -c '${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf'
 env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 env.PYTHONPATH=${CODEDIR}/lib/python2.7/site-packages
@@ -408,7 +408,7 @@ env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 template_gridinit_rawx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE}
-command=${EXE_PREFIX}-svc-monitor -s SDS,${NS},${SRVTYPE},${SRVNUM} -p 1 -m '${EXE_PREFIX}-rawx-monitor.py' -i '${NS}|${SRVTYPE}|${IP}:${PORT}' -c '/usr/sbin/httpd -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf'
+command=${EXE_PREFIX}-svc-monitor -s SDS,${NS},${SRVTYPE},${SRVNUM} -p 1 -m '${EXE_PREFIX}-rawx-monitor.py' -i '${NS}|${SRVTYPE}|${IP}:${PORT}' -c '${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf'
 enabled=true
 start_at_boot=false
 on_die=respawn
@@ -464,6 +464,7 @@ CODEDIR = '@CMAKE_INSTALL_PREFIX@'
 LIBDIR = CODEDIR + '/@LD_LIBDIR@'
 PATH = HOME+"/.local/bin:@CMAKE_INSTALL_PREFIX@/bin"
 port = 6000
+HTTPD_BINARY = '/usr/sbin/httpd' if os.path.exists('/usr/sbin/httpd') else '/usr/sbin/apache2'
 
 def mkdir_noerror (d):
 	try:
@@ -529,10 +530,11 @@ def generate (ns, ip, options={}):
 			SDSDIR=SDSDIR, TMPDIR=TMPDIR,
 			DATADIR=DATADIR, CFGDIR=CFGDIR, RUNDIR=RUNDIR, SPOOLDIR=SPOOLDIR,
 			LOGDIR=LOGDIR, CODEDIR=CODEDIR,
-			UID=str(os.geteuid()), GID=str(os.getgid()), USER=str(os.getlogin()),
+			UID=str(os.geteuid()), GID=str(os.getgid()), USER=str(pwd.getpwuid(os.getuid()).pw_name),
 			VERSIONING=versioning, STGPOL=stgpol,
 			M2_REPLICAS=meta2_replicas, M2_DISTANCE=str(1),
-			SQLX_REPLICAS=sqlx_replicas, SQLX_DISTANCE=str(1))
+			SQLX_REPLICAS=sqlx_replicas, SQLX_DISTANCE=str(1),
+			HTTPD_BINARY=HTTPD_BINARY)
 	if options.NO_ZOOKEEPER is not None:
 		env['NOZK'] = '#'
 	else:

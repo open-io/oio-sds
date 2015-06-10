@@ -265,7 +265,7 @@ endmacro ()
 
 macro(bin_prefix T N)
 	if (NOT DEFINED EXE_PREFIX)
-		set(EXE_PREFIX "sds")
+		set(EXE_PREFIX "oio")
 	endif ()
 	set_target_properties(${T} PROPERTIES OUTPUT_NAME ${EXE_PREFIX}${N})
 endmacro ()
@@ -293,6 +293,7 @@ set(LZO_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/lzo")
 set(APACHE2_LIBRARY_DIRS "${DEFAULT_LIBRARY_DIRS}/httpd")
 set(APACHE2_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/httpd")
 set(ATTR_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/attr")
+set(ZK_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/zookeeper")
 
 # check system configuration
 pkg_check_modules(APR REQUIRED apr-1)

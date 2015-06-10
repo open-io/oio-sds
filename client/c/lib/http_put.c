@@ -118,7 +118,8 @@ http_put_create(http_put_input_f cb_input, gpointer cb_input_data, size_t data_l
 	return p;
 }
 
-struct http_put_dest_s *http_put_add_dest(struct http_put_s *p, const gchar *url, gpointer user_data)
+struct http_put_dest_s *
+http_put_add_dest(struct http_put_s *p, const gchar *url, gpointer user_data)
 {
 	struct http_put_dest_s *dest;
 
@@ -155,7 +156,8 @@ struct http_put_dest_s *http_put_add_dest(struct http_put_s *p, const gchar *url
 	return dest;
 }
 
-void http_put_dest_add_header(struct http_put_dest_s *dest, const gchar *key, const gchar *val_fmt, ...)
+void
+http_put_dest_add_header(struct http_put_dest_s *dest, const gchar *key, const gchar *val_fmt, ...)
 {
 	gchar *header;
 	va_list ap;
@@ -359,14 +361,11 @@ static void start_upload(struct http_put_s *p)
 	GRID_DEBUG("Starting UPLOAD");
 	CURLMcode rc;
 
-	for (GSList *l = p->dests ; NULL != l ; l = l->next)
-	{
+	for (GSList *l = p->dests ; NULL != l ; l = l->next) {
 		dest = l->data;
 
-		if (dest->success)
-		{
+		if (dest->success) {
 			/* Don't run successfully ended requests */
-
 			GRID_DEBUG("Ignore successful request %s", dest->url);
 			continue;
 		}
@@ -438,7 +437,8 @@ check_multi_info(struct http_put_s *p)
 	}
 }
 
-GError *http_put_run(struct http_put_s *p)
+GError *
+http_put_run(struct http_put_s *p)
 {
 	g_assert(p != NULL);
 
@@ -474,7 +474,8 @@ GError *http_put_run(struct http_put_s *p)
 	return NULL;
 }
 
-guint http_put_get_failure_number(struct http_put_s *p)
+guint
+http_put_get_failure_number(struct http_put_s *p)
 {
 	struct http_put_dest_s *dest;
 	guint ret = 0;
@@ -492,7 +493,8 @@ guint http_put_get_failure_number(struct http_put_s *p)
 	return ret;
 }
 
-static GSList *_http_put_get_dests(struct http_put_s *p, gboolean success)
+static GSList *
+_http_put_get_dests(struct http_put_s *p, gboolean success)
 {
 	struct http_put_dest_s *dest;
 	GSList *list_ret = NULL;
@@ -510,17 +512,20 @@ static GSList *_http_put_get_dests(struct http_put_s *p, gboolean success)
 	return list_ret;
 }
 
-GSList *http_put_get_success_dests(struct http_put_s *p)
+GSList *
+http_put_get_success_dests(struct http_put_s *p)
 {
 	return _http_put_get_dests(p, TRUE);
 }
 
-GSList *http_put_get_failure_dests(struct http_put_s *p)
+GSList *
+http_put_get_failure_dests(struct http_put_s *p)
 {
 	return _http_put_get_dests(p, FALSE);
 }
 
-const gchar *http_put_get_header(struct http_put_s *p, gpointer user_data, const gchar *header)
+const gchar *
+http_put_get_header(struct http_put_s *p, gpointer user_data, const gchar *header)
 {
 	struct http_put_dest_s *dest;
 
@@ -535,7 +540,8 @@ const gchar *http_put_get_header(struct http_put_s *p, gpointer user_data, const
 	return g_hash_table_lookup(dest->response_headers, header);
 }
 
-guint http_put_get_http_code(struct http_put_s *p, gpointer user_data)
+guint
+http_put_get_http_code(struct http_put_s *p, gpointer user_data)
 {
 	struct http_put_dest_s *dest;
 
@@ -549,7 +555,8 @@ guint http_put_get_http_code(struct http_put_s *p, gpointer user_data)
 	return dest->http_code;
 }
 
-void http_put_get_md5(struct http_put_s *p, guint8 *buffer, gsize size)
+void
+http_put_get_md5(struct http_put_s *p, guint8 *buffer, gsize size)
 {
 	GChecksum *checksum;
 
@@ -563,7 +570,8 @@ void http_put_get_md5(struct http_put_s *p, guint8 *buffer, gsize size)
 	g_checksum_free(checksum);
 }
 
-void http_put_get_buffer(struct http_put_s *p, const gchar **buffer, gsize *size)
+void
+http_put_get_buffer(struct http_put_s *p, const gchar **buffer, gsize *size)
 {
 	g_assert(p->buffer_length == p->buffer_filled);
 
