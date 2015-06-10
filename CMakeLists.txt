@@ -359,6 +359,7 @@ if (DOXYGEN_FOUND)
 		COMMENT "Generating API documentation with Doxygen" VERBATIM)
 endif ()
 
+add_subdirectory(./sdk)
 add_subdirectory(./client/c/lib)
 add_subdirectory(./client/c/tools)
 add_subdirectory(./cluster/agent)
