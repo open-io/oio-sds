@@ -86,7 +86,7 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 	assert (sds != NULL);
 	assert (url != NULL);
 	gs_error_t *e = NULL;
-	(void) hc_dl_content_to_file ((gs_grid_storage_t*)sds,
+	(void) hc_ul_content_from_file ((gs_grid_storage_t*)sds,
 			hc_url_get(url, HCURL_USER), hc_url_get(url, HCURL_PATH),
 			local, &e);
 	return (struct oio_error_s*)e;

@@ -63,7 +63,6 @@ endif(MHD_FOUND)
 install(FILES
 			grid_client_shortcuts.h
 			hc.h
-			oio_sds.h
         DESTINATION include
         PERMISSIONS
             OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
