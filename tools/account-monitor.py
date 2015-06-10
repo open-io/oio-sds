@@ -16,44 +16,23 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import sys, urllib2
+import sys
+import requests
 
-RAWX_STAT_KEYS = [
-	("account.items.count", "stat.count"),
+
+ACCOUNT_STAT_KEYS = [
+        ("account_count", "stat.account_count"),
 ]
-
-def parse_info(stream):
-	data = {}
-	for line in stream.readlines():
-		parts = line.split()
-		if len(parts) > 1:
-			# try to cast value to int or float
-			try:
-				value = int(parts[1])
-			except ValueError:
-				try:
-					value = float(parts[1])
-				except ValueError:
-					value = parts[1]
-			data[parts[0]] = value
-		else:
-			data[parts[0]] = None
-	return data
-
-def get_stat_lines(url, stat_keys):
-	stream = urllib2.urlopen(url)
-	data = parse_info(stream)
-	stream.close()
-	stats = [("%s = %s" % (k[1], str(data[k[0]])))
-			for k in stat_keys if k[0] in data]
-	return stats
 
 def main(args):
 	ip_port = str(args[1]).split("|")[2]
-	stats_url = "http://%s/stat" % ip_port
-	for stat in get_stat_lines(stats_url, RAWX_STAT_KEYS):
-		print stat
-
+	url = "http://%s/status" % ip_port
+	resp = requests.get(url)
+	stats = resp.json()
+	for key,stat in ACCOUNT_STAT_KEYS:
+		if key in stats:
+			print "%s = %s" % (stat, str(stats[key]))
+			
 if __name__ == "__main__":
 	main(sys.argv)
 

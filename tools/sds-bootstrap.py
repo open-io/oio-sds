@@ -35,7 +35,10 @@ group=${NS},localhost,account-server
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf
+command=${EXE_PREFIX}-svc-monitor -s SDS,${NS},${SRVTYPE},${SRVNUM} -p 1 -m '${EXE_PREFIX}-account-monitor.py' -i '${NS}|${SRVTYPE}|${IP}:${PORT}' -c '${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf'
+env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
+env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
+env.PYTHONPATH=${CODEDIR}/lib/python2.7/site-packages
 """
 
 template_proxy_gridinit = """
