@@ -39,28 +39,28 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static int
 path_get_incoming_time(const gchar *path, time_t *t)
 {
-        gint64 i64;
-        gssize str_len;
-        gchar str[128];
+	gint64 i64;
+	gssize str_len;
+	gchar str[128];
 
-        bzero(str, sizeof(str));
-        str_len = getxattr(path, "user.grid.agent.incoming-time", str, sizeof(str));
-        if (str_len < 0)
-                return -1;
-        if (str_len == 0) {
-                errno = ERANGE;
-                return -1;
-        }
+	memset(str, 0, sizeof(str));
+	str_len = getxattr(path, "user.grid.agent.incoming-time", str, sizeof(str));
+	if (str_len < 0)
+		return -1;
+	if (str_len == 0) {
+		errno = ERANGE;
+		return -1;
+	}
 
-        i64 = g_ascii_strtoll(str, NULL, 10);
-        if (i64 >= G_MAXLONG) {
-                errno = ERANGE;
-                return -1;
-        }
+	i64 = g_ascii_strtoll(str, NULL, 10);
+	if (i64 >= G_MAXLONG) {
+		errno = ERANGE;
+		return -1;
+	}
 
-        *t = i64;
-        errno = 0;
-        return 0;
+	*t = i64;
+	errno = 0;
+	return 0;
 }
 
 gboolean

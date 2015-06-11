@@ -32,7 +32,7 @@ License along with this library.
 
 static int syslog_opened = 0;
 
-gchar syslog_id[256] = "";
+gchar syslog_id[64] = "";
 
 int main_log_level_default = 0x7F;
 
@@ -103,7 +103,7 @@ glvl_to_lvl(GLogLevelFlags lvl)
 {
 	switch (lvl & G_LOG_LEVEL_MASK) {
 		case G_LOG_LEVEL_ERROR:
-			return LOG_CRIT;
+			return LOG_ERR;
 		case G_LOG_LEVEL_CRITICAL:
 			return LOG_ERR;
 		case G_LOG_LEVEL_WARNING:
@@ -136,7 +136,7 @@ static int
 get_facility(const gchar *domain)
 {
 	return (domain && *domain == 'a' && !g_ascii_strcasecmp(domain, "access"))
-		? LOG_LOCAL1 : LOG_LOCAL0;
+		? LOG_LOCAL1 : 0;
 }
 
 #define REAL_LEVEL(L)   (guint32)((L) >> G_LOG_LEVEL_USER_SHIFT)
@@ -152,19 +152,13 @@ glvl_allowed(register GLogLevelFlags lvl)
 static void
 _purify(register gchar *s)
 {
-	static volatile gboolean done = FALSE;
-	static guint8 invalid[256];
-
-	register gchar c;
-
-	if (!done) {
-		done = TRUE;
-		invalid[(guint8)('\n')] = 1;
-		invalid[(guint8)('\r')] = 1;
-		invalid[(guint8)('\t')] = 1;
+	static guint8 invalid[256] = {0};
+	if (!invalid[0]) {
+		for (int i=0; i<256 ;i++)
+			invalid[i] = g_ascii_isspace(i) || !g_ascii_isprint(i);
 	}
 
-	for (; (c=*s) ; s++) {
+	for (gchar c; (c=*s) ; s++) {
 		if (invalid[(guint8)c])
 			*s = ' ';
 	}
@@ -193,11 +187,14 @@ logger_noop(const gchar *log_domain, GLogLevelFlags log_level,
 	(void) user_data;
 }
 
-static void
-_logger_syslog(const gchar *log_domain, GLogLevelFlags log_level,
+void
+logger_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data)
 {
 	(void) user_data;
+
+	if (!glvl_allowed(log_level))
+		return;
 
 	GString *gstr = g_string_new("");
 
@@ -222,15 +219,6 @@ _logger_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 
 	syslog(get_facility(log_domain)|glvl_to_lvl(log_level), "%s", gstr->str);
 	g_string_free(gstr, TRUE);
-}
-
-void
-logger_syslog(const gchar *log_domain, GLogLevelFlags log_level,
-		const gchar *message, gpointer user_data)
-{
-	if (!glvl_allowed(log_level))
-		return;
-	_logger_syslog(log_domain, log_level, message, user_data);
 }
 
 static void
@@ -383,7 +371,10 @@ logger_lazy_init (void)
 	static volatile guint lazy_init = 1;
 	if (lazy_init) {
 		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
-			g_log_set_default_handler(logger_noop, NULL);
+			if (getuid() == 76 || geteuid() == 76)
+				g_log_set_default_handler(logger_syslog, NULL);
+			else
+				g_log_set_default_handler(logger_noop, NULL);
 			logger_init_level(GRID_LOGLVL_WARN);
 		}
 	}

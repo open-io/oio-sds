@@ -54,7 +54,7 @@ addr_info_get_addr(const addr_info_t * a, gchar *d, gsize dsize, guint16 *port)
 gssize
 grid_sockaddr_to_string(const struct sockaddr *s, gchar *dst, gsize dst_size)
 {
-	gchar tmp[256];
+	gchar tmp[STRLEN_ADDRINFO];
 	uint16_t port = 0;
 
 	if (NULL == s || NULL == dst || dst_size <= 0) {
@@ -62,8 +62,7 @@ grid_sockaddr_to_string(const struct sockaddr *s, gchar *dst, gsize dst_size)
 		return 0;
 	}
 
-	memset(dst, 0, dst_size);
-
+	*dst = '\0';
 	switch (s->sa_family) {
 		case AF_INET:
 			if (NULL == inet_ntop(AF_INET, &(((struct sockaddr_in*)s)->sin_addr),
@@ -85,7 +84,7 @@ grid_sockaddr_to_string(const struct sockaddr *s, gchar *dst, gsize dst_size)
 gsize
 grid_addrinfo_to_string(const struct addr_info_s *a, gchar *dst, gsize dst_size)
 {
-	gchar tmp[256];
+	gchar tmp[STRLEN_ADDRINFO];
 	uint16_t port = 0;
 
 	if (NULL == a || NULL == dst || dst_size <= 0) {
@@ -93,7 +92,7 @@ grid_addrinfo_to_string(const struct addr_info_s *a, gchar *dst, gsize dst_size)
 		return 0;
 	}
 
-	memset(dst, 0, dst_size);
+	*dst = '\0';
 	port = a->port;
 
 	switch (a->type) {
@@ -140,7 +139,7 @@ gboolean
 grid_string_to_addrinfo(const gchar *start, const gchar *end, struct addr_info_s *a)
 {
 	const gchar *colon;
-	gchar addr[256];
+	gchar addr[128];
 
 	if (NULL == start || NULL == a) {
 		errno = EINVAL;
@@ -157,7 +156,7 @@ grid_string_to_addrinfo(const gchar *start, const gchar *end, struct addr_info_s
 		return 0;
 	}
 
-	memset(addr, 0, sizeof(addr));
+	memset(addr, 0, sizeof(struct addr_info_s));
 	memcpy(addr, start, FUNC_MIN(sizeof(addr)-1, colon-start));
 
 	// Parse the port

@@ -283,7 +283,7 @@ static struct hashstr_s *
 _request_get_name(MESSAGE req)
 {
 	gsize name_len = 0;
-	void *name = message_get_NAME(req, &name_len);
+	void *name = metautils_message_get_NAME(req, &name_len);
 	if (!name || !name_len)
 		return hashstr_create("");
 	return hashstr_create_len((gchar*)name, name_len);
@@ -295,7 +295,7 @@ _req_get_hex_ID(MESSAGE req, gchar *d, gsize dsize)
 	memset(d, 0, dsize);
 	
 	gsize flen = 0;
-	guint8 *f = message_get_ID(req, &flen);
+	guint8 *f = metautils_message_get_ID(req, &flen);
 	if (!f || !flen)
 		*d = '-';
 	else if (metautils_str_ishexa((gchar*)f, flen)) {
@@ -586,10 +586,10 @@ _client_send_error(struct network_client_s *clt)
 	if (!err)
 		return;
 	/* TODO FIXME WTF!? */
-	MESSAGE request = message_create ();
+	MESSAGE request = metautils_message_create ();
 	MESSAGE reply = metaXServer_reply_simple(request, err->code, err->message);
 	(void) _reply_message(clt, reply);
-	message_destroy(request);
+	metautils_message_destroy(request);
 }
 
 static gboolean
@@ -626,7 +626,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 
 		MESSAGE answer = metaXServer_reply_simple(req_ctx->request, code, msg);
 		if (body) {
-			message_add_body_unref(answer, body);
+			metautils_message_add_body_unref(answer, body);
 			body = NULL;
 		}
 		if (headers) {
@@ -636,7 +636,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 			while (g_hash_table_iter_next(&iter, &n, &v)) {
 				if (!n || !v)
 					continue;
-				message_add_field(answer, (gchar*)n, ((GByteArray*)v)->data, ((GByteArray*)v)->len);
+				metautils_message_add_field(answer, (gchar*)n, ((GByteArray*)v)->data, ((GByteArray*)v)->len);
 			}
 		}
 		/* encode and send */
@@ -740,7 +740,7 @@ _request_get_cid (MESSAGE request)
 {
 	container_id_t cid;
 	gchar strcid[STRLEN_CONTAINERID];
-	GError *err = message_extract_cid(request, NAME_MSGKEY_CONTAINERID, &cid);
+	GError *err = metautils_message_extract_cid(request, NAME_MSGKEY_CONTAINERID, &cid);
 	if (err) {
 		g_clear_error(&err);
 		return NULL;
@@ -809,7 +809,7 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	}
 
 label_exit:
-	message_destroy(request);
+	metautils_message_destroy(request);
 	if (err)
 		g_clear_error(&err);
 	if (req_ctx.reqname)

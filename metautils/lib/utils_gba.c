@@ -90,7 +90,7 @@ metautils_gba_data_to_string(const GByteArray *gba, gchar *dst,
 	if (!gba->data || !gba->len)
 		return 0;
 
-	bzero(dst, dst_size);
+	memset(dst, 0, dst_size);
 	imax = MIN(gba->len,dst_size);
 	for (i=0,idst=0; i<imax && idst<dst_size-5 ;i++) {
 		gchar c = (gchar)(gba->data[i]);
@@ -162,8 +162,10 @@ void
 metautils_gba_cleanv(GByteArray **tab)
 {
 	if (tab) {
-		for (GByteArray **p=tab; *p ;++p)
-			metautils_gba_unref (*p);
+		for (GByteArray **p=tab; *p ;++p) {
+			g_byte_array_unref (*p);
+			*p = NULL;
+		}
 		g_free(tab);
 	}
 }

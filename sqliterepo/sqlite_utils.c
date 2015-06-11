@@ -59,9 +59,9 @@ sqlite_admin_entry_set(sqlite3 *db, const int repl, const gchar *k,
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
 
-	g_assert(db != NULL);
-	g_assert(k != NULL);
-	g_assert(*k != '\0');
+	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(k != NULL);
+	EXTRA_ASSERT(*k != '\0');
 
 	sqlite3_prepare_debug(rc, db, repl
 			? "INSERT OR REPLACE INTO admin (k,v) VALUES (?,?)"
@@ -101,9 +101,9 @@ _admin_entry_del(sqlite3 *db, const gchar *k)
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
 
-	g_assert(db != NULL);
-	g_assert(k != NULL);
-	g_assert(*k != '\0');
+	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(k != NULL);
+	EXTRA_ASSERT(*k != '\0');
 
 	sqlite3_prepare_debug(rc, db, "DELETE FROM admin WHERE k = ?", -1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)

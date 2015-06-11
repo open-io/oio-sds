@@ -495,7 +495,7 @@ _filter_tag(struct service_info_s *si, gpointer u)
 {
 	struct compound_type_s *ct = u;
 
-	g_assert(ct != NULL);
+	EXTRA_ASSERT(ct != NULL);
 	if (!ct->req.k)
 		return TRUE;
 
@@ -590,7 +590,7 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 		opt.filter.data = ct;
 
 		if (!grid_lb_iterator_next_set2(iter, &siv, &opt)) {
-			g_assert(siv == NULL);
+			EXTRA_ASSERT(siv == NULL);
 			*err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No service available");
 		}
 

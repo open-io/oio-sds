@@ -17,7 +17,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <assert.h>
 #include <stdio.h>
 #include <sys/time.h>
 
@@ -30,7 +29,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define NEWSTAT(N,V,F) do \
 {\
-	assert(srvstat_set (N,V));\
+	g_assert(srvstat_set (N,V));\
 	srvtimer_register_regular (N, stat_increment, NULL, N, F);\
 } while (0)
 
@@ -43,7 +42,7 @@ stat_increment(gpointer u)
 	if (srvstat_get(n, &v)) {
 		v += 0.1;
 		fprintf(stdout, "<%s> %s -> %f\r\n", __FUNCTION__, n, v);
-		assert(srvstat_set(n, v));
+		g_assert(srvstat_set(n, v));
 	}
 	else
 		fprintf(stdout, "<%s> %s not found\r\n", __FUNCTION__, n);

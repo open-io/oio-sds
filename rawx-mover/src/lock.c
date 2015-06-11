@@ -41,8 +41,7 @@ volume_lock_get(const gchar *path, const gchar *xattr_name)
 	int rc, pid;
 	char str_pid[16], str_pid_found[16];
 
-	bzero(str_pid, sizeof(str_pid));
-	bzero(str_pid_found, sizeof(str_pid_found));
+	memset(str_pid_found, 0, sizeof(str_pid_found));
 	g_snprintf(str_pid, sizeof(str_pid), "%d", getpid());
 
 	if (0 == setxattr(path, xattr_name, str_pid, strlen(str_pid), XATTR_CREATE)) {

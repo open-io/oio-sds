@@ -126,7 +126,7 @@ main_action(void)
 static void
 main_set_defaults(void)
 {
-	bzero(path_volume, sizeof(path_volume));
+	memset(path_volume, 0, sizeof(path_volume));
 }
 
 static gboolean

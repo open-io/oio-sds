@@ -17,14 +17,20 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef OIO_SDS__metautils__lib__asn_ContainerInfo_h
-# define OIO_SDS__metautils__lib__asn_ContainerInfo_h 1
+#ifndef OIO_SDS__metautils__lib__hc_url_ext_h
+# define OIO_SDS__metautils__lib__hc_url_ext_h 1
 
-#include "./metatypes.h"
-#include "./ContainerInfo.h"
+/**
+ * This file provides and API dependent from the GLib, with non essential features.
+ * Typically, this file is not destined to be included in external apps using the
+ * C SDK.
+ */
+#include <glib.h>
 
-gboolean container_info_ASN2API(const ContainerInfo_t * asn, container_info_t * api);
-gboolean container_info_API2ASN(const container_info_t * api, ContainerInfo_t * asn);
-void container_info_cleanASN(ContainerInfo_t * asn, gboolean only_content);
+struct hc_url_s;
 
-#endif /*OIO_SDS__metautils__lib__asn_ContainerInfo_h*/
+/** Return the names of all the options registered. Free the result
+ * with g_strfreev(). 'u' cannot be NULL. */
+gchar ** hc_url_get_option_names(struct hc_url_s *u);
+
+#endif /*OIO_SDS__metautils__lib__hc_url_ext_h*/

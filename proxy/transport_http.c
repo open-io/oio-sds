@@ -588,7 +588,7 @@ http_manage_request(struct req_ctx_s *r)
 		rc = h->handler(r->dispatcher->u, r->request, &reply);
 		switch (rc) {
 			case HTTPRC_DONE:
-				g_assert(finalized != FALSE);
+				EXTRA_ASSERT(finalized != FALSE);
 				cleanup();
 				return NULL;
 			case HTTPRC_NEXT:
@@ -599,7 +599,7 @@ http_manage_request(struct req_ctx_s *r)
 		}
 	}
 
-	g_assert(!finalized);
+	EXTRA_ASSERT(!finalized);
 	final_error(HTTP_CODE_NOT_FOUND, "No handler found");
 	return NULL;
 }

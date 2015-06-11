@@ -1028,7 +1028,7 @@ _hook_dispatch_beans(gpointer c, gpointer bean)
 struct m2v2_check_s*
 m2v2_check_create(struct hc_url_s *url, struct check_args_s *args)
 {
-	g_assert(url != NULL);
+	EXTRA_ASSERT(url != NULL);
 	struct m2v2_check_s *check = g_malloc0(sizeof(struct m2v2_check_s));
 	_init_m2v2_check(check, url, args);
 	return check;

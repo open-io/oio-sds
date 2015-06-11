@@ -17,21 +17,21 @@ BEGIN
 	EventSequence ::= SEQUENCE OF ParameterSequence
 
 	Message ::= SEQUENCE {
-		id OCTET STRING OPTIONAL,
-		name OCTET STRING OPTIONAL,
-		version OCTET STRING OPTIONAL,
-		body OCTET STRING OPTIONAL,
-		content SET OF Parameter
+		id      [0] OCTET STRING OPTIONAL,
+		name    [1] OCTET STRING OPTIONAL,
+		version [2] OCTET STRING OPTIONAL,
+		content [3] SET OF Parameter,
+		body    [4] OCTET STRING OPTIONAL
 	}
 
 	-- General network address information
 
 	AddrInfo ::= SEQUENCE {
-		ip CHOICE {
-			ipv4 OCTET STRING(SIZE(4)),
-			ipv6 OCTET STRING(SIZE(16))
+		ip   [0] CHOICE {
+			ipv4 [0] OCTET STRING(SIZE(4)),
+			ipv6 [1] OCTET STRING(SIZE(16))
 		},
-		port INTEGER
+		port [1] INTEGER
 	}
 
 	AddrInfoSequence ::= SEQUENCE OF AddrInfo
@@ -40,19 +40,19 @@ BEGIN
 	-- Content information
 
 	ChunkId ::= SEQUENCE {
-		id   OCTET STRING(SIZE(16)),
-		addr AddrInfo,
-		vol  PrintableString
+		id   [0] OCTET STRING(SIZE(16)),
+		addr [1] AddrInfo,
+		vol  [2] PrintableString
 	}
 
 	ChunkIdSequence ::= SET OF ChunkId
 
 	ChunkInfo ::= SEQUENCE {
-		id ChunkId,
-		size INTEGER,
-		position INTEGER,
-		nb INTEGER,
-		md5 OCTET STRING(SIZE(16))
+		id       [0] ChunkId,
+		size     [1] INTEGER,
+		position [2] INTEGER,
+		nb       [3] INTEGER,
+		md5      [4] OCTET STRING(SIZE(16))
 	}
 
 	ChunkInfoSequence ::= SET OF ChunkInfo
@@ -61,10 +61,10 @@ BEGIN
 	-- Container content list information
 
 	PathInfo ::= SEQUENCE {
-		path PrintableString,
-		size INTEGER OPTIONAL,
-		userMetadata OCTET STRING OPTIONAL,
-		systemMetadata OCTET STRING OPTIONAL
+		path           [0] PrintableString,
+		size           [1] INTEGER OPTIONAL,
+		userMetadata   [2] OCTET STRING OPTIONAL,
+		systemMetadata [3] OCTET STRING OPTIONAL
 	}
 
 	PathInfoSequence ::= SET OF PathInfo
@@ -76,14 +76,14 @@ BEGIN
 	NamespaceInfoValueList ::= SET OF Parameter
 
 	NamespaceInfo ::= SEQUENCE {
-		name		PrintableString,
-		addr		AddrInfo,
-		chunkSize	INTEGER,
-		options		    NamespaceInfoValueList,
-		storagePolicy	NamespaceInfoValueList,
-		dataSecurity	NamespaceInfoValueList,
-		dataTreatments	NamespaceInfoValueList,
-		storageClass	NamespaceInfoValueList
+		name           [0] PrintableString,
+		addr           [1] AddrInfo,
+		chunkSize      [2] INTEGER,
+		options        [3] NamespaceInfoValueList,
+		storagePolicy  [4] NamespaceInfoValueList,
+		dataSecurity   [5] NamespaceInfoValueList,
+		dataTreatments [6] NamespaceInfoValueList,
+		storageClass   [7] NamespaceInfoValueList
 	}
 
 	NamespaceInfoSequence ::= SET OF NamespaceInfo
@@ -91,8 +91,8 @@ BEGIN
 	-- meta0 mapping information
 
 	Meta0Info ::= SEQUENCE {
-		prefix OCTET STRING,
-		addr   AddrInfo
+		prefix [0] OCTET STRING,
+		addr   [1] AddrInfo
 	}
 
 	Meta0InfoSequence ::= SET OF Meta0Info
@@ -101,41 +101,40 @@ BEGIN
 	-- Meta1 raw management structures
 
 	Meta1RawContainer ::= SEQUENCE {
-		id   OCTET STRING(SIZE(32)),
-		name PrintableString,
-		meta2 SEQUENCE OF AddrInfo,
-		flags OCTET STRING(SIZE(4))
+		id    [0] OCTET STRING(SIZE(32)),
+		name  [1] PrintableString,
+		meta2 [2] SEQUENCE OF AddrInfo,
+		flags [3] OCTET STRING(SIZE(4))
 	}
 
 
 	-- Meta2 raw management structures
 
 	Meta2RawChunk ::= SEQUENCE {
-		id ChunkId,
-		hash OCTET STRING(SIZE(16)),
-		flags OCTET STRING(SIZE(4)),
-		size INTEGER,
-		position INTEGER,
-		metadata PrintableString OPTIONAL
+		id       [0] ChunkId,
+		hash     [1] OCTET STRING(SIZE(16)),
+		flags    [2] OCTET STRING(SIZE(4)),
+		size     [3] INTEGER,
+		position [4] INTEGER,
+		metadata [5] PrintableString OPTIONAL
 	}
 	Meta2RawChunkSequence ::= SEQUENCE OF Meta2RawChunk
 
 	Meta2RawContentHeader ::= SEQUENCE {
-		path PrintableString,
-		nbChunks INTEGER,
-		size INTEGER,
-		flags OCTET STRING(SIZE(4)),
-		cID OCTET STRING(SIZE(32)),
-		metadata OCTET STRING OPTIONAL,
-		systemMetadata OCTET STRING OPTIONAL,
-		version INTEGER OPTIONAL
-		--deleted BOOLEAN OPTIONAL
+		path           [0] PrintableString,
+		nbChunks       [1] INTEGER,
+		size           [2] INTEGER,
+		flags          [3] OCTET STRING(SIZE(4)),
+		cID            [4] OCTET STRING(SIZE(32)),
+		metadata       [5] OCTET STRING OPTIONAL,
+		systemMetadata [6] OCTET STRING OPTIONAL,
+		version        [7] INTEGER OPTIONAL
 	}
 	Meta2RawContentHeaderSequence ::= SEQUENCE OF Meta2RawContentHeader
 
 	Meta2RawContent ::= SEQUENCE {
-		header Meta2RawContentHeader,
-		chunks SEQUENCE OF Meta2RawChunk
+		header [0] Meta2RawContentHeader,
+		chunks [1] SEQUENCE OF Meta2RawChunk
 	}
 	Meta2RawContentSequence ::= SEQUENCE OF Meta2RawContent
 
@@ -178,18 +177,12 @@ BEGIN
 		value        [3] OCTET STRING
 	}
 
-	M2V2Snapshot ::= SEQUENCE {
-		version [0] INTEGER,
-		name    [1] PrintableString
-	}
-
 	M2V2Bean ::= SEQUENCE {
 		alias    [0] M2V2Alias OPTIONAL,
 		header   [1] M2V2ContentHeader OPTIONAL,
 		content  [2] M2V2Content OPTIONAL,
 		chunk    [3] M2V2Chunk OPTIONAL,
-		prop     [4] M2V2Property OPTIONAL,
-		snapshot [5] M2V2Snapshot OPTIONAL
+		prop     [4] M2V2Property OPTIONAL
 	}
 
 	M2V2BeanSequence ::= SEQUENCE OF M2V2Bean
@@ -197,30 +190,30 @@ BEGIN
 	-- Generic Service
 
 	Score ::= SEQUENCE {
-		value	  INTEGER,
-		timestamp INTEGER
+		value	  [0] INTEGER,
+		timestamp [1] INTEGER
 	}
 
 	ServiceTag ::= SEQUENCE {
-		name PrintableString,
-		value CHOICE {
-			b BOOLEAN,
-			i INTEGER,
-			r REAL,
-			s OCTET STRING,
-			macro SEQUENCE {
-				type PrintableString,
-				param PrintableString
+		name  [0] PrintableString,
+		value [1] CHOICE {
+			b     [0] BOOLEAN,
+			i     [1] INTEGER,
+			r     [2] REAL,
+			s     [3] OCTET STRING,
+			macro [4] SEQUENCE {
+				type  [0] PrintableString,
+				param [1] PrintableString
 			}
 		}
 	}
 
 	ServiceInfo ::= SEQUENCE {
-		nsName PrintableString,
-		type   PrintableString,
-		addr   AddrInfo,
-		score  Score OPTIONAL,
-		tags   SEQUENCE OF ServiceTag OPTIONAL
+		nsName [0] PrintableString,
+		type   [1] PrintableString,
+		addr   [2] AddrInfo,
+		score  [3] Score,
+		tags   [4] SEQUENCE OF ServiceTag OPTIONAL
 	}
 
 	ServiceInfoSequence ::= SEQUENCE OF ServiceInfo
@@ -233,6 +226,7 @@ BEGIN
 		version  [1] INTEGER,
 		value    [2] OCTET STRING
 	}
+
 	Meta2PropertySequence ::= SEQUENCE OF Meta2Property
 
 	Meta2RawContentV2 ::= SEQUENCE {
@@ -241,13 +235,8 @@ BEGIN
 		services    [2] ServiceInfoSequence,
 		properties  [3] Meta2PropertySequence
 	}
-	Meta2RawContentV2Sequence ::= SEQUENCE OF Meta2RawContentV2
 
-	ContainerInfo ::= SEQUENCE {
-		id    [0] OCTET STRING(SIZE(32)),
-		size  [1] INTEGER
-	}
-	ContainerInfoSequence ::= SEQUENCE OF ContainerInfo
+	Meta2RawContentV2Sequence ::= SEQUENCE OF Meta2RawContentV2
 
 	-- SQLX related structures
 

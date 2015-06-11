@@ -85,8 +85,6 @@ save_known_service_to_file(GArray *known_services, const char *file_name, GError
 	ssize_t wl;
 	struct grid_service_data *service;
 
-	memset(new_file_name, '\0', strlen(file_name) + strlen(NEW_EXT) + 1);
-
 	sprintf(new_file_name, "%s%s", file_name, NEW_EXT);
 
 	fd = open(new_file_name, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR);
@@ -132,10 +130,8 @@ int get_idx_of_service(const char *service_type, struct grid_service_data *servi
 	gboolean idx_found = FALSE;
 	int last_idx = 0;
 
-	memset(file_name, '\0', strlen(GCLUSTER_RUN_DIR) + strlen(service_type) +1);
-	memset(&file_stat, 0, sizeof(struct stat));
-
 	sprintf(file_name, "%s%s_snmp_idx.dat", GCLUSTER_RUN_DIR, service_type);
+	memset(&file_stat, 0, sizeof(struct stat));
 
 	rc = stat(file_name, &file_stat);
 	if (rc < 0 && errno != ENOENT && errno != ENOTDIR) {

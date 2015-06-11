@@ -29,22 +29,6 @@ License along with this library.
  */
 
 /**
- * Get a pointer to the start of the carried memory buffer.
- *
- * dst should be src+4 if the size is sufficient.
- *
- * @param src the source buffer
- * @param srcSize the size of the source buffer, must be > 4
- * @param dst a not-NULL pointer that will store the start of the payload
- *            data.
- * @param dstsize a not-NULL pointer that will hold the size of dst.
- * @param error an error structure set in case of error
- *
- * @return
- */
-gboolean l4v_extract(void *s, gsize ssize, void **d, gsize *dsize);
-
-/**
  * Copy src to dst+4 and prepend dstsize in dst.
  *
  * In theory, src and dst could even overlap.

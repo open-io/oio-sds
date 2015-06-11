@@ -72,13 +72,13 @@ const char * hc_url_get(struct hc_url_s *u, enum hc_url_field_e f);
 int hc_url_has(struct hc_url_s *u, enum hc_url_field_e f);
 
 /* <id> must be hc_url_get_id_size() bytes long */
-void hc_url_set_id(struct hc_url_s *u, const guint8 *id);
+void hc_url_set_id(struct hc_url_s *u, const void *id);
 
 /* @deprecated */
 void hc_url_set_oldns(struct hc_url_s *u, const char *ns);
 
 /* the returned value points to an array of hc_url_get_id_size() bytes long. */
-const guint8* hc_url_get_id(struct hc_url_s *u);
+const void* hc_url_get_id(struct hc_url_s *u);
 
 /* returns the number of bytes */
 size_t hc_url_get_id_size(struct hc_url_s *u);
@@ -86,10 +86,6 @@ size_t hc_url_get_id_size(struct hc_url_s *u);
 /** Returns the value of the given option. */
 const char* hc_url_get_option_value(struct hc_url_s *u,
 		const char *option_name);
-
-/** Return the names of all the options registered. Free the result
- * with g_strfreev(). 'u' cannot be NULL. */
-gchar ** hc_url_get_option_names(struct hc_url_s *u);
 
 /** Sets a new options in the URL. 'u' and 'k' cannot be NULL. If 'v' is
  * NULL then an empty string will be saved. */

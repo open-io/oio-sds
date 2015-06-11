@@ -27,25 +27,18 @@ License along with this library.
 #include <unistd.h>
 #include <sys/types.h>
 
-#include "./metautils.h"
-#include "./metacomm.h"
+#include "metautils.h"
 #include "./Parameter.h"
 #include "./Message.h"
 
+enum message_param_e { MP_ID, MP_NAME, MP_VERSION, MP_BODY };
+
 static void
-__octetString_array_free(Parameter_t * p)
+_free_Parameter(Parameter_t * p)
 {
 	if (!p)
 		return;
-	OCTET_STRING_free(&asn_DEF_OCTET_STRING, &(p->name), 1);
-	p->name.buf = NULL;
-	p->name.size = 0;
-
-	OCTET_STRING_free(&asn_DEF_OCTET_STRING, &(p->value), 1);
-	p->value.buf = NULL;
-	p->value.size = 0;
-
-	g_free(p);
+	ASN_STRUCT_FREE(asn_DEF_Parameter, p);
 }
 
 static OCTET_STRING_t *
@@ -67,26 +60,26 @@ __getParameter(MESSAGE m, enum message_param_e mp)
 }
 
 MESSAGE
-message_create(void)
+metautils_message_create(void)
 {
 	const char *id = gridd_get_reqid ();
-	MESSAGE result = g_malloc0(sizeof(Message_t));
+	MESSAGE result = calloc(1, sizeof(Message_t));
 	if (id)
-		message_set_ID (result, id, strlen(id));
+		metautils_message_set_ID (result, id, strlen(id));
 	return result;
 }
 
 MESSAGE
-message_create_named (const char *name)
+metautils_message_create_named (const char *name)
 {
-	MESSAGE result = message_create ();
+	MESSAGE result = metautils_message_create ();
 	if (name)
-		message_set_NAME (result, name, strlen(name));
+		metautils_message_set_NAME (result, name, strlen(name));
 	return result;
 }
 
 void
-message_destroy(MESSAGE m)
+metautils_message_destroy(MESSAGE m)
 {
 	if (!m)
 		return ;
@@ -100,10 +93,9 @@ message_destroy(MESSAGE m)
 	if (m->name != NULL)
 		ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, m->name);
 
-	m->content.list.free = __octetString_array_free;
+	m->content.list.free = _free_Parameter;
 	asn_set_empty(&(m->content.list));
-
-	g_free(m);
+	free(m);
 }
 
 static int
@@ -126,12 +118,12 @@ message_marshall_gba(MESSAGE m, GError **err)
 	}
 
 	/*set an ID if it is not present */
-	if (!message_has_ID(m)) {
+	if (!metautils_message_has_ID(m)) {
 		const char *reqid = gridd_get_reqid ();
 		if (!reqid)
 			gridd_set_random_reqid ();
 		reqid = gridd_get_reqid ();
-		message_set_ID(m, (guint8*)reqid, strlen(reqid));
+		metautils_message_set_ID(m, (guint8*)reqid, strlen(reqid));
 	}
 
 	/*try to encode */
@@ -157,117 +149,87 @@ message_marshall_gba_and_clean(MESSAGE m)
 
 	EXTRA_ASSERT(m != NULL);
 	result = message_marshall_gba(m, NULL);
-	message_destroy(m);
+	metautils_message_destroy(m);
 	return result;
 }
 
-gint
-message_marshall(MESSAGE m, void **s, gsize * sSize, GError ** error)
-{
-	if (!s || !sSize) {
-		GSETERROR(error, "Invalid parameter");
-		return 0;
-	}
-
-	GByteArray *encoded = message_marshall_gba(m, error);
-	if (!encoded)
-		return 0;
-	*sSize = encoded->len;
-	*s = g_byte_array_free(encoded, FALSE);
-	return 1;
-}
-
 MESSAGE
-message_unmarshall(void *s, gsize sSize, GError ** error)
+message_unmarshall(const guint8 *buf, gsize len, GError ** error)
 {
-	MESSAGE m = NULL;
-	asn_dec_rval_t decRet;
-	asn_codec_ctx_t codecCtx;
-
-	guint8 *rawS = NULL;
-	gsize rawSSize = 0;
-
-	if (!s || sSize < 4) {
+	if (!buf || len < 4) {
 		GSETERROR(error, "Invalid parameter");
 		return NULL;
 	}
-	if (!l4v_extract(s, sSize, (void *) &rawS, &rawSSize)) {
-		GSETERROR(error, "Cannot extract the L4V encapsulated data");
+
+	guint32 l0 = *((guint32*)buf);
+	l0 = g_ntohl(l0);
+
+	if (l0 > len-4) {
+		GSETERROR(error, "l4v: uncomplete");
 		return NULL;
 	}
 
-	void *ptr = NULL;
-	codecCtx.max_stack_size = 0;
-	decRet = ber_decode(&codecCtx, &asn_DEF_Message, &ptr, rawS, rawSSize);
-	m = ptr;
+	MESSAGE m = NULL;
+	asn_codec_ctx_t codec_ctx;
+	codec_ctx.max_stack_size = ASN1C_MAX_STACK;
+	size_t s = l0;
+	asn_dec_rval_t rc = ber_decode(&codec_ctx, &asn_DEF_Message, (void**)&m, buf+4, s);
 
-	switch (decRet.code) {
-		case RC_OK:
-			break;
-		case RC_FAIL:
-			GSETERROR(error, "Cannot deserialize: %s (%d bytes consumed)",
-					"invalid content", decRet.consumed);
-			goto errorLABEL;
-		case RC_WMORE:
-			GSETERROR(error, "Cannot deserialize: %s (%d bytes consumed)",
-					"uncomplete content", decRet.consumed);
-			goto errorLABEL;
-	}
+	if (rc.code == RC_OK)
+		return m;
 
-	return m;
+	if (rc.code == RC_WMORE)
+		GSETERROR(error, "%s (%d bytes consumed)", "uncomplete content", rc.consumed);
+	else
+		GSETERROR(error, "%s (%d bytes consumed)", "invalid content", rc.consumed);
 
-errorLABEL:
-	message_destroy (m);
+	metautils_message_destroy (m);
 	return NULL;
 }
 
-gboolean
-message_has_param(MESSAGE m, enum message_param_e mp)
-{
-	if (!m)
-		return FALSE;
-	OCTET_STRING_t *os = __getParameter(m, mp);
-	return (os && os->buf);
-}
-
-void*
+static void*
 message_get_param(MESSAGE m, enum message_param_e mp, gsize *sSize)
 {
 	EXTRA_ASSERT (m != NULL);
-	EXTRA_ASSERT (sSize != NULL);
 
 	OCTET_STRING_t *os = __getParameter(m, mp);
 	if (!os || !os->buf) {
-		*sSize = 0;
+		if (sSize) *sSize = 0;
 		return NULL;
 	} else {
-		*sSize = os->size;
+		if (sSize) *sSize = os->size;
 		return os->buf;
 	}
 }
 
-void
+static void
+_os_set (OCTET_STRING_t **pos, const void *s, gsize sSize)
+{
+	if (*pos)
+		OCTET_STRING_fromBuf(*pos, s, sSize);
+	else
+		*pos = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
+}
+
+static void
 message_set_param(MESSAGE m, enum message_param_e mp, const void *s, gsize sSize)
 {
-	void _set (OCTET_STRING_t **pos) {
-		if (*pos)
-			OCTET_STRING_fromBuf(*pos, s, sSize);
-		else
-			*pos = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING, s, sSize);
-	}
-
 	if (!m || !s || sSize < 1)
 		return ;
 
 	switch (mp) {
 		case MP_ID:
-			return _set(&m->id);
+			_os_set(&m->id, s, sSize);
+			return;
 		case MP_NAME:
-			return _set(&m->name);
+			_os_set(&m->name, s, sSize);
+			return;
 		case MP_VERSION:
-			return _set(&m->version);
+			_os_set(&m->version, s, sSize);
+			return;
 		case MP_BODY:
-			return _set(&m->body);
+			_os_set(&m->body, s, sSize);
+			return;
 		default:
 			g_assert_not_reached();
 			return;
@@ -275,17 +237,69 @@ message_set_param(MESSAGE m, enum message_param_e mp, const void *s, gsize sSize
 }
 
 void*
-message_get_field(MESSAGE m, const char *name, gsize *vsize)
+metautils_message_get_ID (MESSAGE m, gsize *l)
+{ return message_get_param(m, MP_ID, l); }
+
+void*
+metautils_message_get_NAME (MESSAGE m, gsize *l)
+{ return message_get_param(m, MP_NAME, l); }
+
+void*
+metautils_message_get_VERSION (MESSAGE m, gsize *l)
+{ return message_get_param(m, MP_VERSION, l); }
+
+void*
+metautils_message_get_BODY (MESSAGE m, gsize *l)
+{ return message_get_param(m, MP_BODY, l); }
+
+void
+metautils_message_set_ID (MESSAGE m, const void *b, gsize l)
+{ return message_set_param(m, MP_ID, b, l); }
+
+void
+metautils_message_set_NAME (MESSAGE m, const void *b, gsize l)
+{ return message_set_param(m, MP_NAME, b, l); }
+
+void
+metautils_message_set_VERSION (MESSAGE m, const void *b, gsize l)
+{ return message_set_param(m, MP_VERSION, b, l); }
+
+void
+metautils_message_set_BODY (MESSAGE m, const void *b, gsize l)
+{ return message_set_param(m, MP_BODY, b, l); }
+
+gboolean
+metautils_message_has_ID (MESSAGE m)
+{ return NULL != metautils_message_get_ID(m,NULL); }
+
+gboolean
+metautils_message_has_NAME (MESSAGE m)
+{ return NULL != metautils_message_get_NAME(m,NULL); }
+
+gboolean
+metautils_message_has_VERSION (MESSAGE m)
+{ return NULL != metautils_message_get_VERSION(m,NULL); }
+
+gboolean
+metautils_message_has_BODY (MESSAGE m)
+{ return NULL != metautils_message_get_BODY(m,NULL); }
+
+void*
+metautils_message_get_field(MESSAGE m, const char *name, gsize *vsize)
 {
-	if (!m || !name || !vsize)
-		return NULL;
-	if (!m->content.list.array || m->content.list.count<=0)
-		return NULL;
+	EXTRA_ASSERT (m != NULL);
+	EXTRA_ASSERT (name != NULL);
+	EXTRA_ASSERT (vsize != NULL);
 
 	*vsize = 0;
+
+	if (!m->content.list.array) {
+		return NULL;
+	}
+
 	gssize nlen = strlen(name);
 
-	for (int i = 0, max = m->content.list.count; i < max ; i++) {
+	for (int i = 0; i < m->content.list.count ;i++) {
 		Parameter_t *p = m->content.list.array[i];
 		if (!p)
 			continue;
@@ -298,22 +312,21 @@ message_get_field(MESSAGE m, const char *name, gsize *vsize)
 		}
 	}
 
-	return 0;
+	return NULL;
 }
 
 gchar **
-message_get_field_names(MESSAGE m)
+metautils_message_get_field_names(MESSAGE m)
 {
-	if (!m)
-		return NULL;
+	EXTRA_ASSERT(m != NULL);
 
-	int max = m->content.list.count;
+	int i, nb, max = m->content.list.count;
 	if (max < 0)
 		return NULL;
 
 	gchar **array = g_malloc0(sizeof(gchar *) * (max + 1));
-	for (int nb=0,i=0; i<max; i++) {
-		Parameter_t *p = m->content.list.array[i];
+	for (nb=0,i=0; i<max; ) {
+		Parameter_t *p = m->content.list.array[i++];
 		if (p && p->name.buf)
 			array[nb++] = g_strndup((const gchar*)p->name.buf, p->name.size);
 	}
@@ -322,10 +335,9 @@ message_get_field_names(MESSAGE m)
 }
 
 GHashTable*
-message_get_fields (MESSAGE m)
+metautils_message_get_fields (MESSAGE m)
 {
-	if (!m)
-		return NULL;
+	EXTRA_ASSERT(m != NULL);
 
 	GHashTable *hash = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_clean);
 
@@ -342,56 +354,38 @@ message_get_fields (MESSAGE m)
 }
 
 void
-message_add_field(MESSAGE m, const char *name, const void *value, gsize valueSize)
+metautils_message_add_field(MESSAGE m, const char *n, const void *v, gsize vs)
 {
-	if (!m || !name || !value)
+	EXTRA_ASSERT (m!=NULL);
+	EXTRA_ASSERT (n!=NULL);
+	if (!v || !vs)
 		return ;
-
-	void *pList = &(m->content.list);
-	Parameter_t *pMember = g_malloc0(sizeof(Parameter_t));
-
-	if (0 != OCTET_STRING_fromBuf(&(pMember->name), name, strlen(name))) {
-		GRID_WARN("Cannot copy the parameter name");
-		goto errorLABEL;
-	}
-	if (0 != OCTET_STRING_fromBuf(&(pMember->value), value, valueSize)) {
-		GRID_WARN("Cannot copy the parameter value");
-		goto errorLABEL;
-	}
-	if (0 != asn_set_add(pList, pMember)) {
-		GRID_WARN("Cannot add the parameter to the message");
-		goto errorLABEL;
-	}
-
-	return ;
-
-errorLABEL:
-	ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, &(pMember->name));
-	ASN_STRUCT_FREE(asn_DEF_OCTET_STRING, &(pMember->value));
-	g_free(pMember);
+	Parameter_t *pMember = calloc(1, sizeof(Parameter_t));
+	OCTET_STRING_fromBuf(&(pMember->name), n, strlen(n));
+	OCTET_STRING_fromBuf(&(pMember->value), v, vs);
+	asn_set_add(&(m->content.list), pMember);
 }
 
 void
-message_add_field_str(MESSAGE m, const char *name, const char *value)
+metautils_message_add_field_str(MESSAGE m, const char *name, const char *value)
 {
 	if (value)
-		message_add_field (m, name, value, strlen(value));
+		metautils_message_add_field (m, name, value, strlen(value));
 }
 
 void
-message_add_field_strint64(MESSAGE m, const char *name, gint64 v)
+metautils_message_add_field_strint64(MESSAGE m, const char *name, gint64 v)
 {
-	gchar tmp[64];
-	g_snprintf(tmp, sizeof(tmp), "%"G_GINT64_FORMAT, v);
-	return message_add_field_str(m, name, tmp);
+	gchar tmp[24];
+	g_snprintf(tmp, 24, "%"G_GINT64_FORMAT, v);
+	return metautils_message_add_field_str(m, name, tmp);
 }
 
 void
-message_add_fieldv_str(MESSAGE m, va_list args)
+metautils_message_add_fieldv_str(MESSAGE m, va_list args)
 {
 	if (!m)
 		return;
-
 	for (;;) {
 		char *k = va_arg(args, char *);
 		if (!k)
@@ -399,51 +393,45 @@ message_add_fieldv_str(MESSAGE m, va_list args)
 		char *v = va_arg(args, char *);
 		if (!v)
 			break;
-		message_add_field_str(m, k, v);
+		metautils_message_add_field_str(m, k, v);
 	}
 }
 
 void
-message_add_fields_str(MESSAGE m, ...)
+metautils_message_add_fields_str(MESSAGE m, ...)
 {
 	if (!m)
 		return;
-
 	va_list args;
 	va_start(args, m);
-	message_add_fieldv_str(m, args);
+	metautils_message_add_fieldv_str(m, args);
 	va_end(args);
 }
 
 void
-message_add_fieldv_gba(MESSAGE m, va_list args)
+metautils_message_add_fieldv_gba(MESSAGE m, va_list args)
 {
 	if (!m)
 		return;
-
 	for (;;) {
-		char *k;
-		GByteArray *v;
-		k = va_arg(args, char *);
-
+		char *k = va_arg(args, char *);
 		if (!k)
 			break;
-		v = va_arg(args, GByteArray *);
+		GByteArray *v = va_arg(args, GByteArray *);
 		if (!v)
 			break;
-		message_add_field(m, k, v->data, v->len);
+		metautils_message_add_field(m, k, v->data, v->len);
 	}
 }
 
 void
-message_add_fields_gba(MESSAGE m, ...)
+metautils_message_add_fields_gba(MESSAGE m, ...)
 {
 	if (!m)
 		return;
-
 	va_list args;
 	va_start(args, m);
-	message_add_fieldv_gba(m, args);
+	metautils_message_add_fieldv_gba(m, args);
 	va_end(args);
 }
 
@@ -462,7 +450,7 @@ static struct map_s {
 };
 
 void
-message_add_url (MESSAGE m, struct hc_url_s *url)
+metautils_message_add_url (MESSAGE m, struct hc_url_s *url)
 {
 	if (!m)
 		return;
@@ -470,22 +458,22 @@ message_add_url (MESSAGE m, struct hc_url_s *url)
 		if (hc_url_has (url, p->u)) {
 			const char *s = hc_url_get (url, p->u);
 			if (!p->avoid || strcmp(p->avoid, s))
-				message_add_field_str(m, p->f, s);
+				metautils_message_add_field_str(m, p->f, s);
 		}
 	}
 
 	const guint8 *id = hc_url_get_id (url);
 	if (id)
-		message_add_field (m, NAME_MSGKEY_CONTAINERID, id, hc_url_get_id_size (url));
+		metautils_message_add_field (m, NAME_MSGKEY_CONTAINERID, id, hc_url_get_id_size (url));
 }
 
 struct hc_url_s *
-message_extract_url (MESSAGE m)
+metautils_message_extract_url (MESSAGE m)
 {
 	struct hc_url_s *url = hc_url_empty ();
 	for (struct map_s *p = url2msg_map; p->f ;++p) {
 		// TODO call really often, so make it zero-copy
-		gchar *s = message_extract_string_copy (m, p->f);
+		gchar *s = metautils_message_extract_string_copy (m, p->f);
 		if (s) {
 			if (!p->avoid || strcmp(p->avoid, s))
 				hc_url_set (url, p->u, s);
@@ -494,7 +482,7 @@ message_extract_url (MESSAGE m)
 	}
 
 	container_id_t cid;
-	GError *e = message_extract_cid (m, NAME_MSGKEY_CONTAINERID, &cid);
+	GError *e = metautils_message_extract_cid (m, NAME_MSGKEY_CONTAINERID, &cid);
 	if (e)
 		g_clear_error (&e);
 	else
@@ -504,27 +492,27 @@ message_extract_url (MESSAGE m)
 }
 
 void
-message_add_cid (MESSAGE m, const char *f, const container_id_t cid)
+metautils_message_add_cid (MESSAGE m, const char *f, const container_id_t cid)
 {
-	if (m && f && cid)
-		message_add_field (m, f, cid, sizeof(container_id_t));
+	if (cid)
+		metautils_message_add_field (m, f, cid, sizeof(container_id_t));
 }
 
 void
-message_add_body_unref (MESSAGE m, GByteArray *body)
+metautils_message_add_body_unref (MESSAGE m, GByteArray *body)
 {
-	if (body) {
-		if (body->len && body->data)
-			message_set_BODY (m, body->data, body->len);
-		g_byte_array_unref (body);
-	}
+	if (!body)
+		return;
+	if (body->len && body->data)
+		metautils_message_set_BODY (m, body->data, body->len);
+	g_byte_array_unref (body);
 }
 
 GError *
-message_extract_body_strv(MESSAGE msg, gchar ***result)
+metautils_message_extract_body_strv(MESSAGE msg, gchar ***result)
 {
 	gsize bsize = 0;
-	void *b = message_get_BODY(msg, &bsize);
+	void *b = metautils_message_get_BODY(msg, &bsize);
 	if (!b) {
 		*result = g_malloc0(sizeof(gchar*));
 		return NULL;
@@ -535,11 +523,11 @@ message_extract_body_strv(MESSAGE msg, gchar ***result)
 }
 
 GError *
-message_extract_prefix(MESSAGE msg, const gchar *n,
+metautils_message_extract_prefix(MESSAGE msg, const gchar *n,
 		guint8 *d, gsize *dsize)
 {
 	gsize fsize = 0;
-	void *f = message_get_field(msg, n, &fsize);
+	void *f = metautils_message_get_field(msg, n, &fsize);
 	if (!f || fsize)
 		return NEWERROR(CODE_BAD_REQUEST, "Missing ID prefix at '%s'", n);
 	if (fsize > *dsize)
@@ -552,10 +540,10 @@ message_extract_prefix(MESSAGE msg, const gchar *n,
 }
 
 GError *
-message_extract_cid(MESSAGE msg, const gchar *n, container_id_t *cid)
+metautils_message_extract_cid(MESSAGE msg, const gchar *n, container_id_t *cid)
 {
-	gsize fsize;
-	void *f = message_get_field(msg, n, &fsize);
+	gsize fsize = 0;
+	void *f = metautils_message_get_field(msg, n, &fsize);
 	if (!f || !fsize)
 		return NEWERROR(CODE_BAD_REQUEST, "Missing container ID at '%s'", n);
 	if (fsize != sizeof(container_id_t))
@@ -565,38 +553,39 @@ message_extract_cid(MESSAGE msg, const gchar *n, container_id_t *cid)
 }
 
 GError *
-message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
+metautils_message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
 		gsize dst_size)
 {
-	gsize fsize;
-	void *f = message_get_field(msg, n, &fsize);
-	if (!f || !fsize)
-		return NEWERROR(CODE_BAD_REQUEST, "Missing field '%s'", n);
-	if (fsize >= dst_size)
-		return NEWERROR(CODE_BAD_REQUEST,
-				"Invalid field '%s': value too long (%"G_GSIZE_FORMAT")",
-				n, fsize);
+	gsize fsize = 0;
+	void *f = metautils_message_get_field(msg, n, &fsize);
+	if (!f)
+		return NEWERROR(CODE_BAD_REQUEST, "missing '%s'", n);
+	if (!fsize)
+		return NEWERROR(CODE_BAD_REQUEST, "empty '%s'", n);
+	if ((gssize)fsize < 0 || fsize >= dst_size)
+		return NEWERROR(CODE_BAD_REQUEST, "too long '%s' (%"G_GSIZE_FORMAT")", n, fsize);
 
-	memcpy(dst, f, fsize);
+	if (fsize)
+		memcpy(dst, f, fsize);
 	memset(dst+fsize, 0, dst_size-fsize);
 	return NULL;
 }
 
 gchar *
-message_extract_string_copy(MESSAGE msg, const gchar *n)
+metautils_message_extract_string_copy(MESSAGE msg, const gchar *n)
 {
 	gsize fsize = 0;
-	void *f = message_get_field(msg, n, &fsize);
+	void *f = metautils_message_get_field(msg, n, &fsize);
 	if (!f || !fsize)
 		return NULL;
 	return g_strndup(f, fsize);
 }
 
 gboolean
-message_extract_flag(MESSAGE msg, const gchar *n, gboolean def)
+metautils_message_extract_flag(MESSAGE msg, const gchar *n, gboolean def)
 {
-	gsize fsize;
-	void *f = message_get_field(msg, n, &fsize);
+	gsize fsize = 0;
+	void *f = metautils_message_get_field(msg, n, &fsize);
 	if (!f || !fsize)
 		return def;
 
@@ -607,15 +596,14 @@ message_extract_flag(MESSAGE msg, const gchar *n, gboolean def)
 }
 
 GError*
-message_extract_flags32(MESSAGE msg, const gchar *n,
+metautils_message_extract_flags32(MESSAGE msg, const gchar *n,
 		gboolean mandatory, guint32 *flags)
 {
-
 	EXTRA_ASSERT(flags != NULL);
 	*flags = 0;
 
 	gsize fsize = 0;
-	void *f = message_get_field(msg, n, &fsize);
+	void *f = metautils_message_get_field(msg, n, &fsize);
 	if (!f || !fsize) {
 		if (mandatory)
 			return NEWERROR(CODE_BAD_REQUEST, "Missing field '%s'", n);
@@ -630,13 +618,13 @@ message_extract_flags32(MESSAGE msg, const gchar *n,
 }
 
 GError *
-message_extract_body_gba(MESSAGE msg, GByteArray **result)
+metautils_message_extract_body_gba(MESSAGE msg, GByteArray **result)
 {
 	EXTRA_ASSERT(result != NULL);
 
 	gsize bsize = 0;
 	*result = NULL;
-	void *b = message_get_BODY(msg, &bsize);
+	void *b = metautils_message_get_BODY(msg, &bsize);
 	if (!b)
 		return NEWERROR(CODE_BAD_REQUEST, "No body");
 
@@ -647,10 +635,10 @@ message_extract_body_gba(MESSAGE msg, GByteArray **result)
 }
 
 GError *
-message_extract_body_string(MESSAGE msg, gchar **result)
+metautils_message_extract_body_string(MESSAGE msg, gchar **result)
 {
 	gsize bsize = 0;
-	void *b = message_get_BODY(msg, &bsize);
+	void *b = metautils_message_get_BODY(msg, &bsize);
 	if (!b)
 		return NEWERROR(CODE_BAD_REQUEST, "No body");
 
@@ -689,14 +677,14 @@ metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
 }
 
 GError *
-message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
+metautils_message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
 		GSList **result, body_decoder_f decoder)
 {
 	EXTRA_ASSERT(result != NULL);
 	EXTRA_ASSERT(decoder != NULL);
 
 	gsize bsize = 0;
-	void *b = message_get_BODY(msg, &bsize);
+	void *b = metautils_message_get_BODY(msg, &bsize);
 	if (!b) {
 		if (mandatory)
 			return NEWERROR(CODE_BAD_REQUEST, "Missing body");	
@@ -716,14 +704,14 @@ message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
 }
 
 GError*
-message_extract_header_encoded(MESSAGE msg, const gchar *n, gboolean mandatory,
+metautils_message_extract_header_encoded(MESSAGE msg, const gchar *n, gboolean mandatory,
 		GSList **result, body_decoder_f decoder)
 {
 	EXTRA_ASSERT(result != NULL);
 	EXTRA_ASSERT(decoder != NULL);
 
 	gsize bsize = 0;
-	void *b = message_get_field(msg, n, &bsize);
+	void *b = metautils_message_get_field(msg, n, &bsize);
 	if (!b || !bsize) {
 		*result = NULL;
 		if (mandatory)
@@ -744,14 +732,20 @@ message_extract_header_encoded(MESSAGE msg, const gchar *n, gboolean mandatory,
 }
 
 GError *
-message_extract_strint64(MESSAGE msg, const gchar *n, gint64 *i64)
+metautils_message_extract_strint64(MESSAGE msg, const gchar *n, gint64 *i64)
 {
-	gchar *end, dst[32];
-	GError *err;
+	gchar *end, dst[24];
 
-	err = message_extract_string(msg, n, dst, sizeof(dst));
-	if (err != NULL)
+	EXTRA_ASSERT (i64 != NULL);
+	*i64 = 0;
+
+	memset(dst, 0, sizeof(dst));
+	GError *err = metautils_message_extract_string(msg, n, dst, sizeof(dst));
+	if (err != NULL) {
+		g_prefix_error(&err, "field: ");
 		return err;
+	}
+
 	end = NULL;
 	*i64 = g_ascii_strtoll(dst, &end, 10);
 
@@ -769,24 +763,25 @@ message_extract_strint64(MESSAGE msg, const gchar *n, gint64 *i64)
 }
 
 GError*
-message_extract_struint(MESSAGE msg, const gchar *n, guint *u)
+metautils_message_extract_struint(MESSAGE msg, const gchar *n, guint *u)
 {
-	gint64 i64;
-	GError *err;
-
-	err = message_extract_strint64(msg, n, &i64);
-	if (err != NULL)
-		return err;
+	EXTRA_ASSERT (u != NULL);
+	*u = 0;
+	gint64 i64 = 0;
+	GError *err = metautils_message_extract_strint64(msg, n, &i64);
+	if (err) { g_prefix_error(&err, "struint: "); return err; }
+	if (i64<0) return NEWERROR(CODE_BAD_REQUEST, "[%s] is negative", n);
+	if (i64 > G_MAXUINT) return NEWERROR(CODE_BAD_REQUEST, "[%s] is too big", n);
 	*u = i64;
 	return NULL;
 }
 
 GError*
-message_extract_boolean(MESSAGE msg, const gchar *n,
+metautils_message_extract_boolean(MESSAGE msg, const gchar *n,
 		gboolean mandatory, gboolean *v)
 {
-	gchar tmp[32];
-	GError *err = message_extract_string(msg, n, tmp, sizeof(tmp));
+	gchar tmp[16];
+	GError *err = metautils_message_extract_string(msg, n, tmp, sizeof(tmp));
 	if (err) {
 		if (!mandatory)
 			g_clear_error(&err);
@@ -798,15 +793,15 @@ message_extract_boolean(MESSAGE msg, const gchar *n,
 }
 
 GError*
-message_extract_header_gba(MESSAGE msg, const gchar *n,
+metautils_message_extract_header_gba(MESSAGE msg, const gchar *n,
 		gboolean mandatory, GByteArray **result)
 {
-	g_assert(msg != NULL);
-	g_assert(n != NULL);
-	g_assert(result != NULL);
+	EXTRA_ASSERT(msg != NULL);
+	EXTRA_ASSERT(n != NULL);
+	EXTRA_ASSERT(result != NULL);
 
 	gsize fsize = 0;
-	void *f = message_get_field(msg, n, &fsize);
+	void *f = metautils_message_get_field(msg, n, &fsize);
 
 	if (!f || !fsize) {
 		if (mandatory)

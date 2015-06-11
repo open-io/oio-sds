@@ -313,8 +313,8 @@ _run_db(const gchar* db_path, GError **error, gboolean (*cb)(GByteArray *gba_k, 
 		return FALSE;
 	}
 
-	bzero(&db_key, sizeof(db_key));
-	bzero(&db_value, sizeof(db_value));
+	memset(&db_key, 0, sizeof(db_key));
+	memset(&db_value, 0, sizeof(db_value));
 	rc = db_cursor->c_get(db_cursor, &db_key, &db_value, DB_FIRST);
 	TRACE("db_cursor->c_get(...,DB_FIRST) = %d", rc);
 	if (rc != 0) {
@@ -340,8 +340,8 @@ _run_db(const gchar* db_path, GError **error, gboolean (*cb)(GByteArray *gba_k, 
 		(void) rc_cb;
 
 		/* Request db */
-		bzero(&db_key, sizeof(db_key));
-		bzero(&db_value, sizeof(db_value));
+		memset(&db_key, 0, sizeof(db_key));
+		memset(&db_value, 0, sizeof(db_value));
 		rc = db_cursor->c_get(db_cursor, &db_key, &db_value, DB_NEXT);
 		TRACE("db_cursor->c_get(...,DB_NEXT_DUP) = %d", rc);
 

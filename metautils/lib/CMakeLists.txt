@@ -40,8 +40,6 @@ add_custom_command(
 		Score.c Score.h
 		ServiceInfo.c ServiceInfo.h ServiceInfoSequence.c ServiceInfoSequence.h
 		ServiceTag.c ServiceTag.h
-		ContainerInfoSequence.c ContainerInfoSequence.h
-		ContainerInfo.c ContainerInfo.h
 
 		RowFieldValue.c RowFieldValue.h
 		RowField.c RowField.h
@@ -63,7 +61,6 @@ add_custom_command(
 		M2V2Content.c M2V2Content.h
 		M2V2ContentHeader.c M2V2ContentHeader.h
 		M2V2Property.c M2V2Property.h
-		M2V2Snapshot.c M2V2Snapshot.h
 
 	PRE_BUILD
 	COMMAND ${ASN1C_EXECUTABLE} ${ASN1C_EXE_OPTS} -fcompound-names -fskeletons-copy ${CMAKE_CURRENT_SOURCE_DIR}/description.asn
@@ -234,10 +231,6 @@ add_library(metautils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/ServiceInfoSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/ServiceTag.c
 		${CMAKE_CURRENT_BINARY_DIR}/ServiceTag.h
-		${CMAKE_CURRENT_BINARY_DIR}/ContainerInfoSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/ContainerInfoSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/ContainerInfo.c
-		${CMAKE_CURRENT_BINARY_DIR}/ContainerInfo.h
 
 		${CMAKE_CURRENT_BINARY_DIR}/RowFieldSequence.c
 		${CMAKE_CURRENT_BINARY_DIR}/RowFieldSequence.h
@@ -278,37 +271,10 @@ add_library(metautils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2ContentHeader.c
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Property.h
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Property.c
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Snapshot.h
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Snapshot.c
 
-
-		asn_AddrInfo.c
-		asn_AddrInfo.h
-		asn_ChunkInfo.c
-		asn_ChunkInfo.h
-		asn_Integer.c
-		asn_Meta0Info.c asn_Meta0Info.h
-		asn_Meta2Raw.c asn_Meta2Raw.h
-		asn_NamespaceInfo.c asn_NamespaceInfo.h
-		asn_Parameter.c asn_Parameter.h
-		asn_PathInfo.c asn_PathInfo.h
-		asn_Score.c asn_Score.h
-		asn_ServiceInfo.h
-		asn_ContainerInfo.c asn_ContainerInfo.h
-
-		comm_abstract_sequence.c
-		comm_addr_info.c
-		comm_chunk_info.c
 		comm_message.c
-		comm_meta0_info.c
-		comm_meta1_raw_container.c
-		comm_meta2_maintenance.c
+		comm_converter.c
 		comm_meta_reply.c
-		comm_namespace_info.c
-		comm_parameter.c
-		comm_path_info.c
-		comm_service_info.c
-		comm_container_info.c
 )
 
 target_link_libraries(metautils
@@ -397,16 +363,6 @@ install(TARGETS metautils gs_oid2cid gs_dump_addr
 		PUBLIC_HEADER DESTINATION include)
 
 install(FILES
-			asn_AddrInfo.h
-			asn_ChunkInfo.h
-			asn_ContainerInfo.h
-			asn_Meta0Info.h
-			asn_Meta2Raw.h
-			asn_NamespaceInfo.h
-			asn_Parameter.h
-			asn_PathInfo.h
-			asn_Score.h
-			asn_ServiceInfo.h
 			common_main.h
 			expr.h
 			gridd_client.h

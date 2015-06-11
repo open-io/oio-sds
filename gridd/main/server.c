@@ -172,7 +172,6 @@ _expand_gridd_macro(service_info_t *si, const service_tag_t *tag)
 	gchar** params = NULL;
 	gchar str_tag[128];
 
-	bzero(str_tag, sizeof(str_tag));
 	service_tag_to_string(tag, str_tag, sizeof(str_tag));
 
 	/* NAME_MACRO_SPECIAL_GRIDD param = type:map_entry */
@@ -648,12 +647,12 @@ manage_message (SERVER srv, GByteArray *gba, struct request_context_s* ctx, GErr
 		goto errorLabel;
 	}
 
-	message_destroy (m);
+	metautils_message_destroy (m);
 	ctx->request = NULL;
 	return 1;
 
 errorLabel:
-	message_destroy(m);
+	metautils_message_destroy(m);
 	ctx->request = NULL;
 	return 0;
 }
@@ -1010,7 +1009,7 @@ set_srv_addr(const gchar* url)
 	GError *local_error = NULL;
 	addr_info_t *newaddr;
 
-	g_assert(url != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	newaddr = g_malloc0(sizeof(addr_info_t));
 	if (!l4_address_init_with_url(newaddr, url, &local_error))

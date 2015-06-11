@@ -473,14 +473,14 @@ grid_main_is_running(void)
 }
 
 #define CHECK_CALLBACKS(CB) do { \
-	g_assert((CB) != NULL); \
-	g_assert((CB)->options != NULL); \
-	g_assert((CB)->action != NULL); \
-	g_assert((CB)->set_defaults != NULL); \
-	g_assert((CB)->specific_fini != NULL); \
-	g_assert((CB)->configure != NULL); \
-	g_assert((CB)->usage != NULL); \
-	g_assert((CB)->specific_stop != NULL); \
+	EXTRA_ASSERT((CB) != NULL); \
+	EXTRA_ASSERT((CB)->options != NULL); \
+	EXTRA_ASSERT((CB)->action != NULL); \
+	EXTRA_ASSERT((CB)->set_defaults != NULL); \
+	EXTRA_ASSERT((CB)->specific_fini != NULL); \
+	EXTRA_ASSERT((CB)->configure != NULL); \
+	EXTRA_ASSERT((CB)->usage != NULL); \
+	EXTRA_ASSERT((CB)->specific_stop != NULL); \
 } while (0)
 
 int

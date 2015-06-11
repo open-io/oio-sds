@@ -32,7 +32,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cluster/lib/message.h>
 
 #include "./agent.h"
-#include "./broken_workers.h"
 #include "./cpu_stat_task_worker.h"
 #include "./io_scheduler.h"
 #include "./io_stat_task_worker.h"
@@ -137,21 +136,6 @@ main_reqagent(void)
 			goto error_label;
 		}
 		INFO("Services tasks successfully started");
-	}
-
-	/* Conscience broken elements tasks */
-	if (flag_manage_broken) {
-		if (!agent_start_broken_task_get(&error)) {
-			ERROR("Failed to start broken containers GET task: %s",
-					gerror_get_message(error));
-			goto error_label;
-		}
-		if (!agent_start_broken_task_push(&error)) {
-			ERROR("Failed to start broken containers SEND task : %s",
-					gerror_get_message(error));
-			goto error_label;
-		}
-		INFO("Broken tasks successfully started");
 	}
 
 	launch_io_scheduler();

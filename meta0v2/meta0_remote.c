@@ -43,7 +43,7 @@ _m0_remote_no_return (addr_info_t *m0a, gint ms, GByteArray *req, GError **err)
 	}
 
 	gchar addr[STRLEN_ADDRINFO];
-	addr_info_to_string (m0a, addr, sizeof(addr));
+	addr_info_to_string (m0a, addr, STRLEN_ADDRINFO);
 
 	GError *e = gridd_client_exec (addr, ms>0 ? ms/1000.0 : 60.0, req);
 	g_byte_array_unref (req);
@@ -58,11 +58,11 @@ _m0_remote_m0info (addr_info_t *m0a, gint ms, GByteArray *req, GError **err)
 {
 	if (!m0a) {
 		GSETCODE(err, CODE_BAD_REQUEST, "Invalid meta0 address");
-		return FALSE;
+		return NULL;
 	}
 
 	gchar addr[STRLEN_ADDRINFO];
-	addr_info_to_string (m0a, addr, sizeof(addr));
+	addr_info_to_string (m0a, addr, STRLEN_ADDRINFO);
 
 	GSList *result = NULL;
 	GError *e = gridd_client_exec_and_decode (addr, ms>0 ? ms/1000.0 : 60.0, req,
@@ -74,7 +74,7 @@ _m0_remote_m0info (addr_info_t *m0a, gint ms, GByteArray *req, GError **err)
 
 	g_slist_free_full (result, (GDestroyNotify)meta0_info_clean);
 	g_error_transmit(err, e);
-	return FALSE;
+	return NULL;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -83,7 +83,7 @@ GSList *
 meta0_remote_get_meta1_all(addr_info_t *m0a, gint ms, GError ** err)
 {
 	GByteArray *req = message_marshall_gba_and_clean (
-			message_create_named (NAME_MSGNAME_M0_GETALL));
+			metautils_message_create_named (NAME_MSGNAME_M0_GETALL));
 	return _m0_remote_m0info (m0a, ms, req, err);
 }
 
@@ -92,8 +92,8 @@ meta0_remote_get_meta1_one(addr_info_t *m0a, gint ms, const guint8 *prefix,
 		GError ** err)
 {
 	GByteArray *hdr = g_byte_array_append(g_byte_array_new(), prefix, 2);
-	MESSAGE request = message_create_named (NAME_MSGNAME_M0_GETONE);
-	message_add_fields_gba (request, NAME_MSGKEY_PREFIX, hdr, NULL);
+	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M0_GETONE);
+	metautils_message_add_fields_gba (request, NAME_MSGKEY_PREFIX, hdr, NULL);
 	GByteArray *req = message_marshall_gba_and_clean (request);
 	g_byte_array_unref(hdr);
 	return _m0_remote_m0info (m0a, ms, req, err);
@@ -103,7 +103,7 @@ gint
 meta0_remote_cache_refresh(addr_info_t *m0a, gint ms, GError ** err)
 {
 	GByteArray *gba = message_marshall_gba_and_clean (
-			message_create_named (NAME_MSGNAME_M0_RELOAD));
+			metautils_message_create_named (NAME_MSGNAME_M0_RELOAD));
 	return _m0_remote_no_return (m0a, ms, gba, err);
 }
 
@@ -124,10 +124,10 @@ meta0_remote_fill(addr_info_t *m0a, gint ms, gchar **urls,
 		return FALSE;
 	}
 
-	MESSAGE request = message_create_named(NAME_MSGNAME_M0_FILL);
-	message_add_field_strint64(request, NAME_MSGKEY_REPLICAS, nbreplicas);
+	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_FILL);
+	metautils_message_add_field_strint64(request, NAME_MSGKEY_REPLICAS, nbreplicas);
 	gchar *body = g_strjoinv("\n", urls);
-	message_set_BODY(request, body, strlen(body));
+	metautils_message_set_BODY(request, body, strlen(body));
 	g_free(body);
 	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
@@ -141,18 +141,18 @@ meta0_remote_fill_v2(addr_info_t *m0a, gint ms,
 		return FALSE;
 	}
 
-	MESSAGE request = message_create_named(NAME_MSGNAME_M0_V2_FILL);
-	message_add_field_strint64(request, NAME_MSGKEY_REPLICAS, nbreplicas);
-	message_add_field_strint(request, NAME_MSGKEY_NODIST, nodist);
+	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_V2_FILL);
+	metautils_message_add_field_strint64(request, NAME_MSGKEY_REPLICAS, nbreplicas);
+	metautils_message_add_field_strint(request, NAME_MSGKEY_NODIST, nodist);
 	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
 
 gint
 meta0_remote_assign(addr_info_t *m0a, gint ms, gboolean nocheck, GError **err)
 {
-	MESSAGE request = message_create_named(NAME_MSGNAME_M0_ASSIGN);
+	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_ASSIGN);
 	if (nocheck)
-		message_add_field_str (request, NAME_MSGKEY_NOCHECK, "yes");
+		metautils_message_add_field_str (request, NAME_MSGKEY_NOCHECK, "yes");
 	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
 
@@ -164,11 +164,11 @@ meta0_remote_disable_meta1(addr_info_t *m0a, gint ms, gchar **urls, gboolean noc
 		return FALSE;
 	}
 
-	MESSAGE request = message_create_named(NAME_MSGNAME_M0_DISABLE_META1);
+	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_DISABLE_META1);
 	if (nocheck)
-		message_add_field_str(request, NAME_MSGKEY_NOCHECK, "yes");
+		metautils_message_add_field_str(request, NAME_MSGKEY_NOCHECK, "yes");
 	gchar *body = g_strjoinv("\n", urls);
-	message_set_BODY(request, body, strlen(body));
+	metautils_message_set_BODY(request, body, strlen(body));
 	g_free(body);
 	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
@@ -181,8 +181,8 @@ meta0_remote_destroy_meta1ref(addr_info_t *m0a, gint ms, gchar *urls, GError **e
 		return FALSE;
 	}
 
-	MESSAGE request = message_create_named(NAME_MSGNAME_M0_DESTROY_META1REF);
-	message_add_field_str (request, NAME_MSGKEY_METAURL, urls);
+	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_DESTROY_META1REF);
+	metautils_message_add_field_str (request, NAME_MSGKEY_METAURL, urls);
 	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
 
@@ -194,8 +194,8 @@ meta0_remote_destroy_meta0zknode(addr_info_t *m0a, gint ms, gchar *urls, GError 
 		return FALSE;
 	}
 
-	MESSAGE request = message_create_named(NAME_MSGNAME_M0_DESTROY_META0ZKNODE);
-	message_add_field_str (request, NAME_MSGKEY_METAURL, urls);
+	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_DESTROY_META0ZKNODE);
+	metautils_message_add_field_str (request, NAME_MSGKEY_METAURL, urls);
 	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
 }
 
@@ -211,7 +211,7 @@ meta0_remote_get_meta1_info(addr_info_t *m0a, gint ms, GError **err)
 		(void) c1;
 
 		gchar **tmpResult = NULL;
-		if (NULL != (e = message_extract_body_strv (reply, &tmpResult))) {
+		if (NULL != (e = metautils_message_extract_body_strv (reply, &tmpResult))) {
 			GRID_WARN("GetMeta1Info : invalid reply");
 			g_clear_error (&e);
 			return FALSE;
@@ -236,7 +236,7 @@ meta0_remote_get_meta1_info(addr_info_t *m0a, gint ms, GError **err)
 		return TRUE;
 	}
 
-	MESSAGE request = message_create_named(NAME_MSGNAME_M0_GET_META1_INFO);
+	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_GET_META1_INFO);
 	GByteArray *packed = message_marshall_gba_and_clean(request);
 
 	addr_info_to_string(m0a, target, sizeof(target));

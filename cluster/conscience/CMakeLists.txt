@@ -3,16 +3,10 @@
 include_directories(BEFORE . .. ../..)
 
 add_library(gridcluster-conscience SHARED
-	conscience_broken_holder.h
 	conscience.c conscience.h
-	conscience_broken_holder_common.h
 	conscience_srv.h
 	conscience_srvtype.h
 
-	conscience_broken_holder.c
-	conscience_broken_holder_add.c
-	conscience_broken_holder_remove.c
-	conscience_broken_holder_fix.c
 	conscience_srv.c
 	conscience_srvtype.c)
 
@@ -26,8 +20,6 @@ install(FILES
 			conscience.h
 			conscience_srv.h
 			conscience_srvtype.h
-			conscience_broken_holder.h
-			conscience_broken_holder_common.h
 		DESTINATION include/cluster/conscience
 		PERMISSIONS
 			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)

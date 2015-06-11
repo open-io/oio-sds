@@ -29,22 +29,17 @@ struct meta2_raw_content_s *
 meta2_maintenance_create_content(const container_id_t container_id, gint64 size,
     guint32 nb_chunks, guint32 flags, const gchar * path, gsize path_len)
 {
-	struct meta2_raw_content_s *result = NULL;
-
 	if (!path || size < 0LL || path_len > LIMIT_LENGTH_CONTENTPATH)
 		return NULL;
-
-	result = g_malloc0(sizeof(struct meta2_raw_content_s));
+	struct meta2_raw_content_s *result = g_malloc0(sizeof(struct meta2_raw_content_s));
 	g_memmove(result->container_id, container_id, sizeof(container_id_t));
 	g_memmove(result->path, path, MIN(path_len, sizeof(result->path) - 1));
-
 	result->nb_chunks = nb_chunks;
 	result->flags = flags;
 	result->size = size;
 	result->raw_chunks = NULL;
 	result->metadata = NULL;
 	result->system_metadata = NULL;
-
 	return result;
 }
 
@@ -53,22 +48,12 @@ meta2_raw_content_clean(meta2_raw_content_t *content)
 {
 	if (!content)
 		return;
-
-	if (content->raw_chunks) {
-		g_slist_foreach(content->raw_chunks, meta2_raw_chunk_gclean, NULL);
-		g_slist_free(content->raw_chunks);
-	}
-
+	g_slist_free_full(content->raw_chunks, (GDestroyNotify)meta2_raw_chunk_gclean);
+	g_free0(content->storage_policy);
 	if (content->metadata)
 		g_byte_array_free(content->metadata, TRUE);
-
 	if (content->system_metadata)
 		g_byte_array_free(content->system_metadata, TRUE);
-
-	if (content->storage_policy)
-		g_free(content->storage_policy);
-
-	bzero(content, sizeof(meta2_raw_content_t));
 	g_free(content);
 }
 
@@ -120,7 +105,6 @@ meta2_raw_chunk_clean(meta2_raw_chunk_t *chunk)
 		return;
 	if (chunk->metadata)
 		g_byte_array_free(chunk->metadata, TRUE);
-	bzero(chunk, sizeof(meta2_raw_chunk_t));
 	g_free(chunk);
 }
 
@@ -140,127 +124,15 @@ meta2_maintenance_destroy_chunk(struct meta2_raw_chunk_s *chunk)
 	meta2_raw_chunk_clean(chunk);
 }
 
-#ifdef HAVE_UNUSED_CODE
-static gchar *
-_metadata_to_str(GByteArray * metadata)
-{
-#define NULL_STR "null"
-
-	gchar *str = NULL;
-
-	if (metadata == NULL) {
-		str = g_try_malloc0(1 + sizeof(NULL_STR));
-		strncpy(str, NULL_STR, sizeof(NULL_STR));
-	}
-	else {
-		str = g_try_malloc0(1 + metadata->len);
-		memcpy(str, metadata->data, metadata->len);
-	}
-
-	return str;
-}
-
-/**
- * Diff the two given raw chunks field by field
- *
- * @param mismatch a list filled with mismatch fields
- *
- * @return TRUE or FALSE if we found a field mismatch
- */
-gboolean
-meta2_maintenance_diff_chunks(struct meta2_raw_chunk_s * chunk1, struct meta2_raw_chunk_s * chunk2, GSList ** mismatch,
-    GError ** error)
-{
-	gboolean result = TRUE;
-
-	/* cmp id */
-	if (0 != memcmp(&(chunk1->id), &(chunk2->id), sizeof(chunk_id_t))) {
-		gchar id1[sizeof(chunk_id_t) * 2 + 1], id2[sizeof(chunk_id_t) * 2 + 1];
-
-		memset(id1, '\0', sizeof(id1));
-		chunk_id_to_string(&(chunk1->id), id1, sizeof(id1));
-		memset(id2, '\0', sizeof(id2));
-		chunk_id_to_string(&(chunk2->id), id2, sizeof(id2));
-
-		GSETERROR(error, "id mismatch : %s/%s", id1, id2);
-		*mismatch = g_slist_prepend(*mismatch, "id");
-		result = FALSE;
-	}
-
-	/* cmp hash */
-	if (0 != memcmp(chunk1->hash, chunk2->hash, sizeof(chunk_hash_t))) {
-		gchar hash1[sizeof(chunk_hash_t) * 2 + 1], hash2[sizeof(chunk_hash_t) * 2 + 1];
-
-		memset(hash1, '\0', sizeof(hash1));
-		buffer2str(chunk1->hash, sizeof(chunk_hash_t), hash1, sizeof(hash1));
-		memset(hash2, '\0', sizeof(hash2));
-		buffer2str(chunk2->hash, sizeof(chunk_hash_t), hash2, sizeof(hash2));
-
-		GSETERROR(error, "hash mismatch : %s/%s", hash1, hash2);
-		*mismatch = g_slist_prepend(*mismatch, "hash");
-		result = FALSE;
-	}
-
-	/* cmp flags */
-	if (chunk1->flags != chunk2->flags) {
-		GSETERROR(error, "flags mismatch : %i/%i", chunk1->flags, chunk2->flags);
-		*mismatch = g_slist_prepend(*mismatch, "flags");
-		result = FALSE;
-	}
-
-	/* cmp size */
-	if (chunk1->size != chunk2->size) {
-		GSETERROR(error, "size mismatch : %lu/%lu", chunk1->size, chunk2->size);
-		*mismatch = g_slist_prepend(*mismatch, "size");
-		result = FALSE;
-	}
-
-	/* cmp position */
-	if (chunk1->position != chunk2->position) {
-		GSETERROR(error, "position mismatch : %i/%i", chunk1->position, chunk2->position);
-		*mismatch = g_slist_prepend(*mismatch, "position");
-		result = FALSE;
-	}
-
-	/* cmp metadata */
-	if (((chunk1->metadata == NULL && chunk2->metadata != NULL)
-		|| (chunk1->metadata != NULL && chunk2->metadata == NULL))
-	    || ((chunk1->metadata != NULL && chunk2->metadata != NULL)
-		&& (chunk1->metadata->len != chunk2->metadata->len
-		    || 0 != memcmp(chunk1->metadata->data, chunk2->metadata->data, chunk1->metadata->len)))) {
-
-		gchar *mdata1, *mdata2;
-
-		mdata1 = _metadata_to_str(chunk1->metadata);
-		mdata2 = _metadata_to_str(chunk2->metadata);
-
-		GSETERROR(error, "metadata mismatch : %s/%s", mdata1, mdata2);
-		*mismatch = g_slist_prepend(*mismatch, "metadata");
-		result = FALSE;
-
-		g_free(mdata1);
-		g_free(mdata2);
-	}
-
-	return result;
-}
-#endif /* HAVE_UNUSED_CODE */
-
 void
 meta2_property_clean(meta2_property_t *prop)
 {
-	if (!prop) {
-		errno = EINVAL;
+	if (!prop)
 		return;
-	}
-
-	if (prop->name)
-		g_free(prop->name);
+	g_free0(prop->name);
 	if (prop->value)
 		g_byte_array_free(prop->value, TRUE);
-	bzero(prop, sizeof(*prop));
 	g_free(prop);
-	errno = 0;
 }
 
 void
@@ -273,53 +145,28 @@ meta2_property_gclean(gpointer prop, gpointer ignored)
 void
 meta2_raw_content_header_clean(meta2_raw_content_header_t *header)
 {
-	if (!header) {
-		errno = EINVAL;
+	if (!header)
 		return ;
-	}
-
 	if (header->metadata)
 		g_byte_array_free(header->metadata, TRUE);
 	if (header->system_metadata)
 		g_byte_array_free(header->system_metadata, TRUE);
-
-	bzero(header, sizeof(meta2_raw_content_header_t));
 	g_free(header);
-	errno = 0;
 }
 
 void meta2_raw_content_v2_clean(meta2_raw_content_v2_t *content)
 {
-	if (!content) {
-		errno = EINVAL;
+	if (!content)
 		return ;
-	}
-
 	if (content->header.metadata)
 		g_byte_array_free(content->header.metadata, TRUE);
 	if (content->header.system_metadata)
 		g_byte_array_free(content->header.system_metadata, TRUE);
-	if (content->header.policy)
-		g_free(content->header.policy);
-
-	if (content->raw_chunks) {
-		g_slist_foreach(content->raw_chunks, meta2_raw_chunk_gclean, NULL);
-		g_slist_free(content->raw_chunks);
-	}
-
-	if (content->raw_services) {
-		g_slist_foreach(content->raw_services, service_info_gclean, NULL);
-		g_slist_free(content->raw_services);
-	}
-
-	if (content->properties) {
-		g_slist_foreach(content->properties, meta2_property_gclean, NULL);
-		g_slist_free(content->properties);
-	}
-
-	bzero(content, sizeof(meta2_raw_content_v2_t));
+	g_free0(content->header.policy);
+	g_slist_free_full(content->raw_chunks, (GDestroyNotify)meta2_raw_chunk_clean);
+	g_slist_free_full(content->raw_services, (GDestroyNotify)service_info_clean);
+	g_slist_free_full(content->properties, (GDestroyNotify)meta2_property_clean);
 	g_free(content);
-	errno = 0;
 }
 
 void
@@ -339,17 +186,14 @@ meta2_raw_chunk_to_string(const meta2_raw_chunk_t *chunk)
 	if (!chunk)
 		return g_strdup("CHUNK[NULL]");
 
-	bzero(str_id, sizeof(str_id));
-	chunk_id_to_string(&(chunk->id), str_id, sizeof(str_id)-1);
-
-	bzero(str_hash, sizeof(str_hash));
-	buffer2str(&(chunk->hash), sizeof(chunk->hash), &(str_hash[0]), sizeof(str_hash)-1);
+	chunk_id_to_string(&(chunk->id), str_id, sizeof(str_id));
+	buffer2str(&(chunk->hash), sizeof(chunk->hash), &(str_hash[0]), sizeof(str_hash));
 
 	return g_strdup_printf("CHUNK[%.*s|%.*s|%04x|%"G_GINT64_FORMAT"|%u|%"G_GSIZE_FORMAT"]",
-		(int) sizeof(str_id), str_id,
-		(int) sizeof(str_hash), str_hash,
-		chunk->flags, chunk->size, chunk->position,
-		metautils_gba_len(chunk->metadata));
+			(int) sizeof(str_id), str_id,
+			(int) sizeof(str_hash), str_hash,
+			chunk->flags, chunk->size, chunk->position,
+			metautils_gba_len(chunk->metadata));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -415,9 +259,7 @@ convert_content_text_to_raw(const struct content_textinfo_s* text_content,
 	}
 
 	if (text_content->path != NULL) {
-		gsize copied;
-		bzero(raw_content->path, sizeof(raw_content->path));
-		copied = g_strlcpy(raw_content->path, text_content->path, sizeof(raw_content->path)-1);
+		gsize copied = g_strlcpy(raw_content->path, text_content->path, sizeof(raw_content->path));
 		if (copied >= sizeof(raw_content->path)) {
 			GSETERROR(error, "Content path too long");
 			return FALSE;
@@ -425,16 +267,12 @@ convert_content_text_to_raw(const struct content_textinfo_s* text_content,
 	}
 	if (text_content->version != NULL)
 		raw_content->version = g_ascii_strtoll(text_content->version, NULL, 10);
-
 	if (text_content->size != NULL)
 		raw_content->size = g_ascii_strtoll(text_content->size, NULL, 10);
-
 	if (text_content->chunk_nb != NULL)
 		raw_content->nb_chunks = g_ascii_strtoull(text_content->chunk_nb, NULL, 10);
-
 	if (text_content->metadata != NULL)
 		raw_content->metadata = metautils_gba_from_string(text_content->metadata);
-
 	if (text_content->system_metadata != NULL)
 		raw_content->system_metadata = metautils_gba_from_string(text_content->system_metadata);
 

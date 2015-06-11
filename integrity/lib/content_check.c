@@ -80,7 +80,7 @@ tcpip_open(const gchar *h, const gchar *p)
 	sock_set_linger_default(fd);
 	sock_set_reuseaddr(fd, TRUE);
 
-	bzero(&ai_hint, sizeof(ai_hint));
+	memset(&ai_hint, 0, sizeof(ai_hint));
 	ai_hint.ai_flags = AI_NUMERICHOST;
 	ai_hint.ai_family = PF_INET;
 	ai_hint.ai_socktype = SOCK_STREAM;
@@ -90,7 +90,7 @@ tcpip_open(const gchar *h, const gchar *p)
 		return -1;
 	}
 
-	bzero(&ss, sizeof(ss));
+	memset(&ss, 0, sizeof(ss));
 	ss_len = ai_res->ai_addrlen;
 	g_memmove(&ss, (ai_res->ai_addr), ss_len);
 	evutil_freeaddrinfo(ai_res);
@@ -114,10 +114,8 @@ _extract_location(gpointer data, gpointer udata)
 {
 	GRID_DEBUG("extracting services locations");
 	struct service_tag_s * loc_tag = NULL;
-	gchar loc[1024];
+	gchar loc[LIMIT_LENGTH_LOCNAME];
 	GSList **used_loc = (GSList **) udata;
-
-	bzero(loc, sizeof(loc));
 
 	if(data)
 		loc_tag = service_info_get_tag(((service_info_t*)data)->tags, NAME_TAGNAME_RAWX_LOC);
@@ -128,7 +126,7 @@ _extract_location(gpointer data, gpointer udata)
 
 	service_tag_get_value_string(loc_tag, loc, sizeof(loc), NULL);
 
-	if(strlen(loc) > 0)
+	if (strlen(loc) > 0)
 		*used_loc = g_slist_prepend(*used_loc, g_strdup(loc));
 }
 
@@ -165,7 +163,7 @@ _find_matching_rawx(GSList *rawx, GSList *used_loc, gint64 distance,
 	GRID_DEBUG("Searching rawx distant of %"G_GINT64_FORMAT
 			" with storage class '%s'", distance, stg_class);
 	GSList *l = NULL;
-	gchar loc[1024];
+	gchar loc[LIMIT_LENGTH_LOCNAME];
 	struct service_tag_s * loc_tag = NULL;
 	GRID_DEBUG("Checking for an available rawx in a list of %d elements",
 			g_slist_length(rawx));
@@ -195,7 +193,6 @@ _find_matching_rawx(GSList *rawx, GSList *used_loc, gint64 distance,
 		}
 
 		/* ensure distance match with our policy */
-		bzero(loc, sizeof(loc));
 		loc_tag = service_info_get_tag(((service_info_t*)l->data)->tags, NAME_TAGNAME_RAWX_LOC);
 		GRID_DEBUG("service tag extracted");
 		if(!loc_tag) {
@@ -217,23 +214,23 @@ _find_matching_rawx(GSList *rawx, GSList *used_loc, gint64 distance,
 static void
 __dst_cb_out(struct bufferevent *bev, void *ctx)
 {
-        gint64 buffer_size;
+	gint64 buffer_size;
 
 	struct chunk_transfer_s *ct = (struct chunk_transfer_s *) ctx;
 
-        /* Called only because there are no bytes to write ... well,
-         * we choose to disable the event, that is the input request
-         * that will fill it and re-enable it */
+	/* Called only because there are no bytes to write ... well,
+	 * we choose to disable the event, that is the input request
+	 * that will fill it and re-enable it */
 
-        buffer_size = evbuffer_get_length(bufferevent_get_output(bev));
-        GRID_DEBUG("Output waiting for data. Low watermark reached "
-                        "with %"G_GINT64_FORMAT", %"G_GINT64_FORMAT" expected",
-                        buffer_size, ct->dst_size_remaining);
+	buffer_size = evbuffer_get_length(bufferevent_get_output(bev));
+	GRID_DEBUG("Output waiting for data. Low watermark reached "
+			"with %"G_GINT64_FORMAT", %"G_GINT64_FORMAT" expected",
+			buffer_size, ct->dst_size_remaining);
 
-        if (ct->dst_size_remaining <= 0) {
-                bufferevent_disable(bev, EV_WRITE|EV_READ);
-                bufferevent_enable(bev, EV_READ);
-        }
+	if (ct->dst_size_remaining <= 0) {
+		bufferevent_disable(bev, EV_WRITE|EV_READ);
+		bufferevent_enable(bev, EV_READ);
+	}
 }
 
 static void
@@ -345,13 +342,12 @@ __out_start(struct chunk_transfer_s *ct)
 	GRID_DEBUG("ok we have targets, prepare to send data");
 
 	for(l = ct->dst_rawx; l && l->data; l = l->next) {
-		gchar dst[128];
+		gchar dst[STRLEN_ADDRINFO];
 		gchar port_str[16];
 		guint16 port = 0;
 		struct bufferevent* bevent = NULL;
 
 		addr_info_get_addr(&(((service_info_t*)l->data)->addr), dst, sizeof(dst), &port);
-		bzero(port_str, sizeof(port_str));
 		g_snprintf(port_str, sizeof(port_str), "%d", port);
 
 		GRID_DEBUG("addr extracted: %s %s", dst, port_str);
@@ -383,8 +379,7 @@ __out_start(struct chunk_transfer_s *ct)
 	}
 
 	for (lc = ct->dst_chunks, lb = dsts_out; lc && lc->data && lb && lb->data; lc = lc->next, lb = lb->next) {
-		gchar idstr[65];
-		bzero(idstr, sizeof(idstr));
+		gchar idstr[STRLEN_CONTAINERID];
 		container_id_to_string(lc->data, idstr, sizeof(idstr));
 
 		evbuffer_add_printf(lb->data, "PUT /%s HTTP/1.0\r\n", idstr);
@@ -394,8 +389,7 @@ __out_start(struct chunk_transfer_s *ct)
 		evbuffer_add_printf(lb->data, "chunkpos: %"G_GUINT32_FORMAT"\n", ct->source_chunk->position);
 		evbuffer_add_printf(lb->data, "chunksize: %"G_GINT64_FORMAT"\n", ct->source_chunk->size);
 		/* container id str */
-		gchar cidstr[65];
-		bzero(cidstr, sizeof(cidstr));
+		gchar cidstr[STRLEN_CONTAINERID];
 		container_id_t cid;
 		chunk_transfer_get_container_id(ct, cid);
 		container_id_to_string(cid, cidstr, sizeof(cidstr));
@@ -564,12 +558,10 @@ _copy_chunk_data(meta2_raw_content_t *content, meta2_raw_chunk_t *src_chunk, GSL
 	chunk_attrinfo_t *attrs = NULL;
 	int req_status = -1;
 
-	gchar str[2048];
-	bzero(str, sizeof(str));
+	gchar str[LIMIT_LENGTH_CHUNKURL];
 	chunk_id_to_string(&(src_chunk->id), str, sizeof(str));
 	gchar **tokens = g_strsplit(str, ":", 2);
 	gchar uri[strlen(tokens[0]) + 2];
-	bzero(uri, sizeof(uri));
 	g_snprintf(uri, sizeof(uri), "/%s", tokens[0]);
 	/* Build attr infos */
 	attrs = build_chunk_attrinfo_from_content(content);
@@ -585,7 +577,7 @@ _copy_chunk_data(meta2_raw_content_t *content, meta2_raw_chunk_t *src_chunk, GSL
 	/* get chunk id's for the new chunks */
 	chunk_transfer_generate_chunks_path(ct);
 
-	gchar src[128];
+	gchar src[STRLEN_ADDRINFO];
 	guint16 port = 0;
 
 	addr_info_get_addr(&((&(src_chunk->id))->addr), src, sizeof(src), &port);

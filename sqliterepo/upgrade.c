@@ -77,10 +77,10 @@ sqlx_upgrader_register(struct sqlx_upgrader_s *su,
 {
 	struct sqlx_upgrade_step_s step;
 
-	g_assert(su != NULL);
-	g_assert(su->steps != NULL);
-	g_assert(p1 != NULL);
-	g_assert(cb != NULL);
+	EXTRA_ASSERT(su != NULL);
+	EXTRA_ASSERT(su->steps != NULL);
+	EXTRA_ASSERT(p1 != NULL);
+	EXTRA_ASSERT(cb != NULL);
 
 	memset(&step, 0, sizeof(step));
 	step.pre = p0 ? g_strdup(p0) : NULL;
@@ -95,10 +95,10 @@ GError*
 sqlx_upgrade_do(struct sqlx_upgrader_s *su, struct sqlx_sqlite3_s *sq3)
 {
 	GRID_TRACE2("%s", __FUNCTION__);
-	g_assert(su != NULL);
-	g_assert(su->steps != NULL);
-	g_assert(sq3 != NULL);
-	g_assert(sq3->db != NULL);
+	EXTRA_ASSERT(su != NULL);
+	EXTRA_ASSERT(su->steps != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(sq3->db != NULL);
 
 	guint i, max;
 	gchar *version = sqlx_admin_get_str(sq3, "schema_version");

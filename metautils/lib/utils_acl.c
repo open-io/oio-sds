@@ -133,7 +133,7 @@ _range2netmask(gchar* ip_range) {
 			last = 0;
 		}	
 	}
-	bzero(buf, sizeof(buf));
+	memset(buf, 0, sizeof(buf));
 	g_snprintf(buf, sizeof(buf), "%s %d.%d.%d.%d",ip_range_split[0], netmask[0], netmask[1], netmask[2], netmask[3]);
 	g_strfreev(ip_range_split);
 	return g_strdup(buf);
@@ -169,11 +169,10 @@ _parse_acl_bytes(const GByteArray* acl_byte)
 		/* regex matching [X.X.X.X/X xxxx] or [X.X.X.X X.X.X.X xxxx] or [xxxx X.X.X.X] */
 		if(g_str_has_prefix(access_rules[i], "host")) {
 			rule->authorize = TRUE;
-			gchar** splits = NULL;	
-			splits = g_strsplit(access_rules[i], " ", 2);	
+			gchar** splits = g_strsplit(access_rules[i], " ", 2);	
 			rule->network_addr = g_strdup(splits[1]);	
 			gchar buff[50];
-			bzero(buff, sizeof(buff));	
+			memset(buff, 0, sizeof(buff));	
 			g_snprintf(buff, sizeof(buff), "255.255.255.255");
 			rule->network_mask = g_strdup(buff); 
 			g_strfreev(splits);
@@ -309,7 +308,6 @@ gchar*
 access_rule_to_string(const addr_rule_t* addr_rule) {
 
 	gchar tmp[1024];
-	bzero(tmp, sizeof(tmp));
 	g_snprintf(tmp, sizeof(tmp), "network = [%s] | netmask = [%s] | authorize = [%d]",addr_rule->network_addr, 
 		addr_rule->network_mask, addr_rule->authorize);	
 	return g_strdup(tmp);

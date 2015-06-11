@@ -64,6 +64,7 @@ License along with this library.
 # include <metautils/lib/metatype_acl.h>
 
 # include <metautils/lib/hc_url.h>
+# include <metautils/lib/hc_url_ext.h>
 # include <metautils/lib/lrutree.h>
 # include <metautils/lib/storage_policy.h>
 # include <metautils/lib/common_main.h>

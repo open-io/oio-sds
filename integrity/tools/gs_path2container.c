@@ -102,7 +102,6 @@ hash_path_from_input()
 		int prc;
 		struct pollfd pfd;
 
-		bzero(path, sizeof(path));
 		if (feof(stdin)) {
 			GRID_DEBUG("End of input");
 			break;
@@ -126,10 +125,8 @@ hash_path_from_input()
 			}
 
 			chomp(path);
-
 			if (!*path)
 				continue;
-
 			hash_path(path);
 		}
 	}

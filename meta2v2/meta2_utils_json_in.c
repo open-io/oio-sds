@@ -266,7 +266,7 @@ _jarray_to_beans (GSList **out, struct json_object *jv, jbean_mapper map)
 			return NEWERROR(CODE_BAD_REQUEST, "Invalid JSON for a bean");
 		gpointer bean = NULL;
 		GError *err = map(j, &bean);
-		g_assert((bean != NULL) ^ (err != NULL));
+		EXTRA_ASSERT((bean != NULL) ^ (err != NULL));
 		if (err) {
 			_bean_cleanl2 (l);
 			return err;
@@ -314,7 +314,7 @@ m2v2_json_load_setof_xbean (struct json_object *jv, GSList **out)
 		struct json_object *j = json_object_array_get_idx (jv, i);
 		gpointer bean = NULL;
 		GError *err = m2v2_json_load_single_xbean(j, &bean);
-		g_assert((bean != NULL) ^ (err != NULL));
+		EXTRA_ASSERT((bean != NULL) ^ (err != NULL));
 		if (err) {
 			_bean_cleanl2 (l);
 			return err;

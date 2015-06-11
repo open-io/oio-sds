@@ -80,35 +80,8 @@ usage(void)
 	g_printerr("  %-20s\t%s\n", "--rules-path,             -P", "Dump the logic rules for the given namespace");
 	g_printerr("  %-20s\t%s\n", "--service <service desc>, -S", "Select service described by desc.");
 	g_printerr("  %-20s\t%s\n", "--set-score <[0..100]>      ", "Set and lock score for the service specified by -S.");
-	g_printerr("  %-20s\t%s\n", "--show,                   -s", "Show elements of the cluster.");
 	g_printerr("  %-20s\t%s\n", "--unlock-score              ", "Unlock score for the service specified by -S.");
 	g_printerr("  %-20s\t%s\n", "--verbose,                -v", "Increases the verbosity");
-}
-
-static void
-raw_print_errors(GSList * l)
-{
-	GSList *current;
-
-	for (current = l; current; current = g_slist_next(current)) {
-		if (current->data) {
-			g_print("ERR|%s\n", (gchar *) (current->data));
-		}
-	}
-}
-
-static void
-print_formated_errors(GSList * l)
-{
-	GSList *current;
-
-	g_print("\n-- Erroneous containers --\n\n");
-	for (current = l; current; current = g_slist_next(current)) {
-		if (current->data) {
-			g_print("\t%s\n", (gchar *) (current->data));
-		}
-	}
-	g_print("\n");
 }
 
 static void
@@ -306,13 +279,10 @@ main(int argc, char **argv)
 	gchar *namespace = NULL;
 	gboolean has_allcfg = FALSE;
 	gboolean has_nslist = FALSE;
-	gboolean has_show = TRUE;
 	gboolean has_show_internals = FALSE;
 	gboolean has_raw = FALSE;
 	gboolean has_clear_services = FALSE;
-	gboolean has_clear_errors = FALSE;
 	gboolean has_list = FALSE;
-	gboolean has_erroneous_containers = FALSE;
 	gboolean has_set_score = FALSE;
 	gboolean has_unlock_score = FALSE;
 	gboolean has_service = FALSE;
@@ -331,7 +301,6 @@ main(int argc, char **argv)
 		/* long options only */
 		{"set-score",      1, 0, 4},
 		{"unlock-score",   0, 0, 5},
-		{"clear-errors",   0, 0, 6},
 		{"full",           0, 0, 7},
 
 		/* both long and short */
@@ -348,7 +317,6 @@ main(int argc, char **argv)
 		{"show-internals", 0, 0, 'a'},
 		{"raw",            0, 0, 'r'},
 		{"help",           0, 0, 'h'},
-		{"errors",         0, 0, 'e'},
 		{"verbose",        0, 0, 'v'},
 		{"lb-config",      0, 0, 'B'},
 		{0, 0, 0, 0}
@@ -404,9 +372,6 @@ main(int argc, char **argv)
 				has_set_score = TRUE;
 				has_unlock_score = TRUE;
 				break;
-			case 6:
-				has_clear_errors = TRUE;
-				break;
 			case 7:
 				has_flag_full = TRUE;
 				break;
@@ -418,17 +383,11 @@ main(int argc, char **argv)
 				}
 				g_strlcpy(service_desc, optarg, sizeof(service_desc)-1);
 				break;
-			case 'e':
-				has_erroneous_containers = TRUE;
-				break;
 			case 'l':
 				has_list = TRUE;
 				break;
 			case 't':
 				has_list_task = TRUE;
-				break;
-			case 's':
-				has_show = TRUE;
 				break;
 			case 'r':
 				has_raw = TRUE;
@@ -547,17 +506,6 @@ main(int argc, char **argv)
 		}
 
 	}
-	else if (has_clear_errors) {
-
-		if (!flush_erroneous_elements(namespace, &error)) {
-			g_printerr("Failed to clear the erroneous conntainers :\n%s\n", error->message);
-			goto exit_label;
-		}
-		else {
-			g_print("CLEAR ERRONEOUS CONTAINERS order successfully sent to cluster.\n");
-		}
-
-	}
 	else if (has_list) {
 
 		GSList *services = list_local_services(&error);
@@ -604,27 +552,7 @@ main(int argc, char **argv)
 			g_print("Score of service [%s] has been successfully locked to %d\n", service_desc, score);
 
 	}
-	else if (has_erroneous_containers) {
-		GSList *errCID = NULL;
-
-		errCID = fetch_erroneous_containers(namespace, &error);
-		if (!errCID) {
-			if (error) {
-				g_printerr("Failed to get the list of the erroneous containers\n");
-				g_printerr("Cause: %s\n", error->message ? error->message : error->message);
-				goto exit_label;
-			}
-		}
-
-		if (has_raw) {
-			raw_print_errors(errCID);
-		}
-		else {
-			print_formated_errors(errCID);
-		}
-
-	}
-	else if (has_show) {
+	else {
 
 		if (has_raw)
 			raw_print_namespace(ns);

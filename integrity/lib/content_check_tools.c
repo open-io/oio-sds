@@ -313,22 +313,18 @@ chunk_transfer_get_dst_status(struct chunk_transfer_s *ct)
 	return ct->dst_status;
 }
 
+/** @TODO factorize this */
 static gchar *
 _get_volume_from_rawx(service_info_t *rawx)
 {
-        struct service_tag_s * vol_tag = NULL;
-        gchar vol[1024];
+	gchar vol[LIMIT_LENGTH_VOLUMENAME];
+	struct service_tag_s *tag = service_info_get_tag(rawx->tags, NAME_TAGNAME_RAWX_VOL);
 
-        bzero(vol, sizeof(vol));
-	vol_tag = service_info_get_tag(rawx->tags, NAME_TAGNAME_RAWX_VOL);
-
-	if(!vol_tag)
+	if (!tag)
 		return NULL;
-	service_tag_get_value_string(vol_tag, vol, sizeof(vol), NULL);
-
-        if(strlen(vol) > 0)
-                return g_strdup(vol);
-	
+	service_tag_get_value_string(tag, vol, sizeof(vol), NULL);
+	if (*vol)
+		return g_strdup(vol);
 	return NULL;
 }
 
@@ -677,7 +673,7 @@ delete_chunk(const meta2_raw_chunk_t *rc)
 	GError *result = NULL;
 	ne_session *session=NULL;
 	ne_request *request=NULL;
-	char chunk_hash_str[128];
+	char chunk_hash_str[STRLEN_CHUNKHASH+1];
 
 	gchar dst[128];
 	guint16 port = 0;
@@ -694,9 +690,8 @@ delete_chunk(const meta2_raw_chunk_t *rc)
 	ne_set_connect_timeout(session, 10);
 	ne_set_read_timeout(session, 30);
 
-	bzero(chunk_hash_str, sizeof(chunk_hash_str));
 	chunk_hash_str[0] = '/';
-	buffer2str(rc->id.id, sizeof(rc->id.id), chunk_hash_str + 1, sizeof(chunk_hash_str) - 2);
+	buffer2str(rc->id.id, sizeof(rc->id.id), chunk_hash_str + 1, sizeof(chunk_hash_str) - 1);
 
 	request = ne_request_create (session, "DELETE", chunk_hash_str);
 	if (!request) {

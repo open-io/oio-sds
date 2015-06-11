@@ -174,10 +174,10 @@ meta2_backend_init(struct meta2_backend_s **result,
 	struct meta2_backend_s *m2 = NULL;
 	gsize s;
 
-	g_assert(result != NULL);
-	g_assert(glp != NULL);
-	g_assert(repo != NULL);
-	g_assert(resolver != NULL);
+	EXTRA_ASSERT(result != NULL);
+	EXTRA_ASSERT(glp != NULL);
+	EXTRA_ASSERT(repo != NULL);
+	EXTRA_ASSERT(resolver != NULL);
 
 	m2 = g_malloc0(sizeof(struct meta2_backend_s));
 	s = metautils_strlcpy_physical_ns(m2->backend.ns_name, ns,
@@ -266,9 +266,9 @@ meta2_backend_poll_service(struct meta2_backend_s *m2,
 {
 	struct grid_lb_iterator_s *iter;
 
-	g_assert(m2 != NULL);
-	g_assert(type != NULL);
-	g_assert(si != NULL);
+	EXTRA_ASSERT(m2 != NULL);
+	EXTRA_ASSERT(type != NULL);
+	EXTRA_ASSERT(si != NULL);
 
 	if (!(iter = grid_lbpool_get_iterator(m2->backend.lb, type)))
 		return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "no such service");
@@ -565,7 +565,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 	err = m2b_open(m2, url, local? M2V2_OPEN_LOCAL : M2V2_OPEN_MASTERONLY,
 			&sq3);
 	if (!err) {
-		g_assert(sq3 != NULL);
+		EXTRA_ASSERT(sq3 != NULL);
 
 		// Performs checks only if client did not ask for a local destroy
 		if (!local)
@@ -633,7 +633,7 @@ meta2_backend_flush_container(struct meta2_backend_s *m2,
 
 	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		g_assert(sq3 != NULL);
+		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 			if (!(err = m2db_flush_container(sq3->db))) {
 				err = m2db_purge(sq3,
@@ -658,7 +658,7 @@ meta2_backend_purge_container(struct meta2_backend_s *m2,
 
 	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		g_assert(sq3 != NULL);
+		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 			err = m2db_purge(sq3, _maxvers(sq3, m2),
 					_retention_delay(sq3, m2), flags, cb, u0);
@@ -679,9 +679,9 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-	g_assert(lp != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(lp != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
 			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
@@ -701,8 +701,8 @@ meta2_backend_get_alias(struct meta2_backend_s *m2b,
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
 			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
@@ -772,8 +772,8 @@ meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
     GError *err = NULL;
     struct sqlx_sqlite3_s *sq3 = NULL;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	if (!(err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY, &sq3))) {
 		if (bRecalc)
@@ -793,8 +793,8 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	gint64 max_versions;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -822,10 +822,10 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-	g_assert(out_deleted != NULL);
-	g_assert(out_added != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(out_deleted != NULL);
+	EXTRA_ASSERT(out_added != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -862,9 +862,9 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	struct sqlx_repctx_s *repctx = NULL;
 	struct m2db_put_args_s args;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-	g_assert(src != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(src != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -896,10 +896,10 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-	g_assert(out_deleted != NULL);
-	g_assert(out_added != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(out_deleted != NULL);
+	EXTRA_ASSERT(out_added != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -934,8 +934,8 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -959,8 +959,8 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -997,8 +997,8 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct hc_url_s *url,
 			return NEWERROR(CODE_BAD_REQUEST, "BeanSet type mismatch");
 	}
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -1065,8 +1065,8 @@ GError*
 meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gint64 *version)
 {
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
@@ -1089,8 +1089,8 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 	struct namespace_info_s ni;
 	gint64 max_versions;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	memset(&ni, '\0', sizeof(struct namespace_info_s));
 
@@ -1116,8 +1116,8 @@ GError*
 meta2_backend_get_properties(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0)
 {
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
@@ -1137,8 +1137,8 @@ meta2_backend_del_properties(struct meta2_backend_s *m2b,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -1163,8 +1163,8 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b, struct hc_url_s *url,
 
 	GRID_TRACE("M2 GET(%s)", hc_url_get(url, HCURL_WHOLE));
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -1228,9 +1228,9 @@ meta2_backend_generate_beans_v1(struct meta2_backend_s *m2b,
 
 	GRID_TRACE("BEANS(%s,%"G_GINT64_FORMAT",%s)", hc_url_get(url, HCURL_WHOLE),
 			size, polname);
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-	g_assert(cb != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(cb != NULL);
 
 	memset(&nsinfo, 0, sizeof(nsinfo));
 	if (!meta2_backend_get_nsinfo(m2b, &nsinfo))
@@ -1320,9 +1320,9 @@ meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
-	g_assert(result != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(result != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
 			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
@@ -1345,8 +1345,8 @@ meta2_backend_update_alias_header(struct meta2_backend_s *m2b,
 	struct sqlx_repctx_s *repctx = NULL;
 	guint32 max_versions = 0;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -1368,8 +1368,8 @@ meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -1402,8 +1402,8 @@ meta2_backend_deduplicate_chunks(struct meta2_backend_s *m2b,
 	memset(&nsinfo, 0, sizeof(nsinfo));
 	meta2_backend_get_nsinfo(m2b, &nsinfo);
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -1428,8 +1428,8 @@ meta2_backend_deduplicate_alias_chunks(struct meta2_backend_s *m2b,
 	memset(&nsinfo, 0, sizeof(nsinfo));
 	meta2_backend_get_nsinfo(m2b, &nsinfo);
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -1576,7 +1576,7 @@ meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct hc_url_s *url
 	GError *err = NULL;
 
 	GRID_TRACE("SPARE(%s,%s)", hc_url_get(url, HCURL_WHOLE), polname);
-	g_assert(m2b != NULL);
+	EXTRA_ASSERT(m2b != NULL);
 
 	err = _load_storage_policy(m2b, url, polname, &pol);
 
@@ -1596,8 +1596,8 @@ meta2_backend_get_content_urls_from_chunk_id(struct meta2_backend_s *m2b,
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
-	g_assert(m2b != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE|
 			M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);

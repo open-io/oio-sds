@@ -341,13 +341,11 @@ static gs_error_t *
 _get_content(struct metacnx_ctx_s *cnx, struct hc_url_s *url, struct beans_content_s **content)
 {
 	GSList *beans = NULL;
-	char target[64];
+	char target[STRLEN_ADDRINFO];
 	GError *e = NULL;
 	gs_error_t *result = NULL;
 
-	/* Build target */
-	bzero(target, 64);
-	addr_info_to_string(&(cnx->addr), target, 64);
+	addr_info_to_string(&(cnx->addr), target, sizeof(target));
 
 	if(!(e = m2v2_remote_execute_GET(target, url, 0, &beans))) {
 		*content = _beans_to_content(beans);

@@ -32,10 +32,8 @@ chunk_id_to_string(const chunk_id_t * ci, gchar * dst, gsize dstSize)
 	if (!dst || !ci)
 		return 0;
 
-	bzero(str_addr, sizeof(str_addr));
 	addr_info_to_string(&(ci->addr), str_addr, sizeof(str_addr));
 
-	/*ecrire id.id */
 	offset = g_snprintf(dst, dstSize,
 			"%02X%02X%02X%02X%02X%02X%02X%02X"
 			"%02X%02X%02X%02X%02X%02X%02X%02X"

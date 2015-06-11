@@ -67,8 +67,8 @@ _m2db_count_alias_versions(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 	gint64 v;
 	sqlite3_stmt *stmt = NULL;
 
-	g_assert(sq3 != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	v = 0;
 	sqlite3_prepare_debug(rc, sq3->db,
@@ -95,9 +95,9 @@ m2v2_parse_chunk_position(const gchar *s, gint *pos, gboolean *par, gint *sub)
 	gboolean parity = FALSE;
 	gint64 p64, s64;
 
-	g_assert(pos != NULL);
-	g_assert(par != NULL);
-	g_assert(sub != NULL);
+	EXTRA_ASSERT(pos != NULL);
+	EXTRA_ASSERT(par != NULL);
+	EXTRA_ASSERT(sub != NULL);
 	if (!s)
 		return FALSE;
 
@@ -140,8 +140,7 @@ m2db_get_container_size(sqlite3 *db, gboolean check_alias)
 {
 	guint64 size = 0;
 	gchar tmp[512];
-	memset(tmp,'\0', 512);
-	g_snprintf(tmp, 512, "%s%s", "SELECT SUM(size) FROM content_header_v2",
+	g_snprintf(tmp, sizeof(tmp), "%s%s", "SELECT SUM(size) FROM content_header_v2",
 			!check_alias ? "" :
 			" WHERE EXISTS (SELECT content_id FROM alias_v2 WHERE content_id = id)");
 	const gchar *sql = tmp;
@@ -429,7 +428,7 @@ GError*
 m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		guint32 flags, struct bean_ALIASES_s **out)
 {
-	g_assert (out != NULL);
+	EXTRA_ASSERT (out != NULL);
 
 	flags &= ~(M2V2_FLAG_HEADERS|M2V2_FLAG_NOFORMATCHECK); // meaningless
 	flags |=  (M2V2_FLAG_NOPROPS|M2V2_FLAG_NORECURSION);   // only alias
@@ -676,9 +675,9 @@ m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, gchar **na
 	GError *err;
 	GPtrArray *tmp;
 
-	g_assert(sq3 != NULL);
-	g_assert(url != NULL);
-	g_assert(namev != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(namev != NULL);
 
 	tmp = g_ptr_array_new();
 	err = m2db_get_properties(sq3, url, _bean_buffer_cb, tmp);
@@ -977,7 +976,7 @@ m2db_merge_alias(struct m2db_put_args_s *m2db_args, struct bean_ALIASES_s *lates
 	GByteArray *gba = NULL;
 
 	/* Extract the CONTENT_HEADER id in place */
-	g_assert(latest != NULL);
+	EXTRA_ASSERT(latest != NULL);
 	if (NULL != (err = _db_get_FK_by_name(latest, "image", m2db_args->sq3->db, cb, &gba)))
 		g_prefix_error(&err, "DB error: ");
 	else {
@@ -1006,7 +1005,7 @@ m2db_patch_alias_beans_list(struct m2db_put_args_s *args,
 	GSList *l;
 	gint64 size = 0;
 
-	g_assert(args != NULL);
+	EXTRA_ASSERT(args != NULL);
 
 	/* ensure a storage policy and store the result */
 	for (l=beans; l ;l=l->next) {
@@ -1048,9 +1047,9 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 	struct bean_ALIASES_s *latest = NULL;
 	GError *err = NULL;
 
-	g_assert(args != NULL);
-	g_assert(args->sq3 != NULL);
-	g_assert(args->url != NULL);
+	EXTRA_ASSERT(args != NULL);
+	EXTRA_ASSERT(args->sq3 != NULL);
+	EXTRA_ASSERT(args->url != NULL);
 	if (!hc_url_has(args->url, HCURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
@@ -1106,9 +1105,9 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	GError *err = NULL;
 	gboolean purge_latest = FALSE;
 
-	g_assert(args != NULL);
-	g_assert(args->sq3 != NULL);
-	g_assert(args->url != NULL);
+	EXTRA_ASSERT(args != NULL);
+	EXTRA_ASSERT(args->sq3 != NULL);
+	EXTRA_ASSERT(args->url != NULL);
 	if (!hc_url_has(args->url, HCURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
@@ -1214,10 +1213,10 @@ m2db_copy_alias(struct m2db_put_args_s *args, const char *source)
 	GError *err = NULL;
 
 	GRID_TRACE("M2 COPY(%s FROM %s)", hc_url_get(args->url, HCURL_WHOLE), source);
-	g_assert(args != NULL);
-	g_assert(args->sq3 != NULL);
-	g_assert(args->url != NULL);
-	g_assert(source != NULL);
+	EXTRA_ASSERT(args != NULL);
+	EXTRA_ASSERT(args->sq3 != NULL);
+	EXTRA_ASSERT(args->url != NULL);
+	EXTRA_ASSERT(source != NULL);
 
 	if (!hc_url_has(args->url, HCURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
@@ -1424,8 +1423,8 @@ m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 
 	// Sanity checks
 	GRID_TRACE("M2 APPEND(%s)", hc_url_get(url, HCURL_WHOLE));
-	g_assert(sq3 != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(url != NULL);
 	if (!hc_url_has(url, HCURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
@@ -1576,8 +1575,8 @@ m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	// Sanity checks
 	GRID_TRACE("M2 UPDATE ALIAS HEADER(%s)", hc_url_get(url, HCURL_WHOLE));
 
-	g_assert(sq3 != NULL);
-	g_assert(url != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(url != NULL);
 
 	if (!hc_url_has(url, HCURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
@@ -1878,8 +1877,8 @@ m2_generate_beans_v1(struct hc_url_s *url, gint64 size, gint64 chunk_size,
 	struct gen_ctx_s ctx;
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE));
-	g_assert(url != NULL);
-	g_assert(iter != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(iter != NULL);
 
 	if (!hc_url_has(url, HCURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
@@ -1952,7 +1951,7 @@ _get_container_policy(struct sqlx_sqlite3_s *sq3, struct namespace_info_s *nsinf
 		struct storage_policy_s **result)
 {
 	gchar *pname;
-	g_assert(result != NULL);
+	EXTRA_ASSERT(result != NULL);
 
 	*result = NULL;
 	pname = sqlx_admin_get_str(sq3, M2V2_ADMIN_STORAGE_POLICY);
@@ -1973,10 +1972,10 @@ m2db_get_storage_policy(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	struct storage_policy_s *policy = NULL;
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE));
-	g_assert(sq3 != NULL);
-	g_assert(url != NULL);
-	g_assert(nsinfo != NULL);
-	g_assert(result != NULL);
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(nsinfo != NULL);
+	EXTRA_ASSERT(result != NULL);
 
 	if (from_previous)
 		err = _get_content_policy(sq3, url, nsinfo, &policy);

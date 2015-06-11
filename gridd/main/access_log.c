@@ -35,7 +35,7 @@ _log_addr(GString *gs, int fd)
 {
 	struct sockaddr_storage ss;
 	socklen_t ss_len;
-	char buf_addr[128];
+	char buf_addr[STRLEN_ADDRINFO];
 	char buf_port[8];
 
 	memset(&ss, 0, sizeof(ss));
@@ -85,7 +85,7 @@ _log_reqid(GString *gs, MESSAGE req)
 	g_string_append_c(gs, ' ');
 
 	gsize field_len=0;
-	void *field = message_get_ID(req, &field_len);
+	void *field = metautils_message_get_ID(req, &field_len);
 	if (!field || !field_len)
 		g_string_append_c(gs, '_');
 	else {
@@ -103,7 +103,7 @@ static void
 _log_reqname(GString *gs, MESSAGE req)
 {
 	gsize field_len=0;
-	void *field = message_get_NAME(req, &field_len);
+	void *field = metautils_message_get_NAME(req, &field_len);
 	if (!field) {
 		g_string_append_c(gs, ' ');
 		g_string_append_c(gs, '-');

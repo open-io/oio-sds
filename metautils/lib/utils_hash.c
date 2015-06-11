@@ -41,7 +41,6 @@ metautils_hash_content_path(const gchar *src, gsize src_size,
 	g_checksum_free (checksum);
 
 	/* Compute the hexadecimal form, with the last byte partially zeroed */
-	bzero(dst, dst_size);
 	buffer2str(h, h_len, dst, dst_size);
 	dst[dst_size-1]='\0';
 
@@ -56,7 +55,7 @@ metautils_hash_content_path(const gchar *src, gsize src_size,
 	/* Trim to the latest quartet */
 	register gsize result_quartets = (dst_bitlength / 4) + ((dst_bitlength % 4) ? 1 : 0);
 	if (dst_size > result_quartets)
-		bzero(dst+result_quartets, dst_size-result_quartets);
+		memset(dst+result_quartets, 0, dst_size-result_quartets);
 
 	return result_quartets;
 }

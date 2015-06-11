@@ -1,3 +1,6 @@
+if (NOT DEFINED EXE_PREFIX)
+	set(EXE_PREFIX "oio")
+endif ()
 
 set(SETUP_PY_IN "${CMAKE_CURRENT_SOURCE_DIR}/setup.py.in")
 set(SETUP_PY    "${CMAKE_CURRENT_BINARY_DIR}/setup.py")
@@ -55,3 +58,4 @@ install(PROGRAMS
                     ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-account-server
                     ${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-event-agent
                 DESTINATION bin)
+

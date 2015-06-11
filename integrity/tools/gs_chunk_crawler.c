@@ -189,10 +189,10 @@ manage_chunk(const gchar * chunk_path, void *data, struct rules_motor_env_s** mo
 	struct crawler_chunk_data_pack_s *data_block;
 	struct stat chunk_stat;
 
-	data_block = malloc(sizeof(struct crawler_chunk_data_pack_s));	
-	bzero(&chunk_info, sizeof(chunk_info));
-	bzero(&content_info, sizeof(content_info));
-	bzero(&chunk_stat, sizeof(chunk_stat));
+	data_block = g_malloc0(sizeof(struct crawler_chunk_data_pack_s));
+	memset(&chunk_info, 0, sizeof(chunk_info));
+	memset(&content_info, 0, sizeof(content_info));
+	memset(&chunk_stat, 0, sizeof(chunk_stat));
 	stats = data;
 
 	if (!chunk_path_is_valid(chunk_path)) {
@@ -253,7 +253,7 @@ label_exit:
 	chunk_textinfo_free_content(&chunk_info);
 	chunk_textinfo_extra_free_content(&chunk_info_extra);
 	content_textinfo_free_content(&content_info);
-	free(data_block);
+	g_free(data_block);
 	return SCAN_CONTINUE;
 }
 
@@ -274,22 +274,21 @@ static gboolean
 main_save_canonical_volume(const char *vol)
 {
 	int i, slash;
-	char *path;
-	size_t path_len;
-
-	path_len = strlen(vol)+1;
-	path = g_alloca(path_len);
-	bzero(path, path_len);
+	size_t path_len = strlen(vol)+1;
+	char *path = g_alloca(path_len);
 
 	/* skip intermediate sequences of path separators */
+	path[0] = 0;
 	for (i=0,slash=0; *vol ; vol++) {
 		if (*vol != '/') {
 			path[i++] = *vol;
+			path[i] = 0;
 			slash = 0;
-		}
-		else {
-			if (!slash)
+		} else {
+			if (!slash) {
 				path[i++] = *vol;
+				path[i] = 0;
+			}
 			slash = 1;
 		}
 	}
@@ -309,9 +308,9 @@ main_save_canonical_volume(const char *vol)
 static void
 main_set_defaults(void)
 {
-	bzero(path_root, sizeof(path_root));
-	bzero(rawx_str_addr, sizeof(rawx_str_addr));
-	bzero(ns_name, sizeof(ns_name));
+	memset(path_root, 0, sizeof(path_root));
+	memset(rawx_str_addr, 0, sizeof(rawx_str_addr));
+	memset(ns_name, 0, sizeof(ns_name));
 	lock_xattr_name = g_string_new(CHUNK_CRAWLER_XATTRLOCK);
 	stamp_xattr_name = g_string_new(CHUNK_CRAWLER_XATTR_STAMP);
 }
@@ -396,14 +395,14 @@ main_action(void)
 	struct crawler_stats_s scan_stats;
 	struct volume_scanning_info_s scan_info;
 
-	bzero(&scan_info, sizeof(scan_info));
+	memset(&scan_info, 0, sizeof(scan_info));
 	scan_info.volume_path = path_root;
 	scan_info.file_match = accept_chunk;
 	scan_info.file_action = manage_chunk_and_sleep;
 	scan_info.dir_enter = manage_dir_enter;
 	scan_info.dir_exit = manage_dir_exit;
 
-	bzero(&scan_stats, sizeof(scan_stats));
+	memset(&scan_stats, 0, sizeof(scan_stats));
 	scan_info.callback_data = &scan_stats;
 
 	if (*path_root && lock_xattr_name->str) {

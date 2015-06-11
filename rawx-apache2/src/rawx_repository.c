@@ -202,7 +202,7 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	memcpy(resource->info, &ctx, sizeof(ctx));
 	resource->hooks = &dav_hooks_repository_rawx;
 	resource->pool = r->pool;
-	bzero(&(resource->info->comp_ctx), sizeof(struct compression_ctx_s));
+	memset(&(resource->info->comp_ctx), 0, sizeof(struct compression_ctx_s));
 
 	resource->info->fullpath = apr_pstrcat(resource->pool,
 		resource->info->dirname, resource->info->hex_chunkid,

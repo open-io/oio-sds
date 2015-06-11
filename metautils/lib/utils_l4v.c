@@ -23,22 +23,6 @@ License along with this library.
 
 #include "metautils.h"
 
-gboolean
-l4v_extract(void *s, gsize ssize, void **d, gsize *dsize)
-{
-	if (!s || ssize < 4)
-		return 0;
-
-	register gsize s4 = l4v_get_size(s);
-
-	if (s4 > ssize - 4)
-		return 0;
-
-	*d = ((guint8 *) s) + 4;
-	*dsize = s4;
-	return 1;
-}
-
 gint
 l4v_fill(void *src, gsize srcSize, void *dst, gsize dstSize, GError ** error)
 {

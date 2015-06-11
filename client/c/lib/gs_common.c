@@ -18,6 +18,7 @@ License along with this library.
 */
 
 #include "./gs_internals.h"
+#define ERROR_SEPARATOR " "
 
 gint
 chunkinfo_sort_position_ASC(gconstpointer c1, gconstpointer c2)
@@ -83,19 +84,13 @@ gs_error_set_cause(gs_error_t ** err, GError * gErr, const char *format, ...)
 		return;
 	}
 
-#ifdef HAVE_ANNOYING_DEBUG_TRACES
-# define ERROR_SEPARATOR "\r\n\t--- directory error ---\r\n\t"
-#else
-# define ERROR_SEPARATOR " "
-#endif
-
 	if (*err && (*err)->msg) {
 		if (gErr && gErr->message)
 			tmpFinal =
-			    g_strconcat(tmpCode, tmpCause, "\r\n\t", gErr->message,
+			    g_strconcat(tmpCode, tmpCause, ERROR_SEPARATOR, gErr->message,
 						ERROR_SEPARATOR, (*err)->msg, NULL);
 		else
-			tmpFinal = g_strconcat(tmpCode, tmpCause, "\r\n\t", (*err)->msg, NULL);
+			tmpFinal = g_strconcat(tmpCode, tmpCause, ERROR_SEPARATOR, (*err)->msg, NULL);
 		free((*err)->msg);
 		(*err)->msg = NULL;
 	}
@@ -156,7 +151,7 @@ gs_error_vset(gs_error_t ** err, int code, const char *fmt, va_list args)
 	}
 
 	if (*err && (*err)->msg) {
-		tmpFinal = g_strconcat(tmpCode, tmpCause, "\r\n\t", (*err)->msg, NULL);
+		tmpFinal = g_strconcat(tmpCode, tmpCause, ERROR_SEPARATOR, (*err)->msg, NULL);
 		free((*err)->msg);
 		(*err)->msg = NULL;
 	}
@@ -309,18 +304,12 @@ gs_grid_storage_free(gs_grid_storage_t * gs)
 {
 	if (!gs)
 		return;
-
 	if (gs->direct_resolver)
 		resolver_direct_free(gs->direct_resolver);
-
-	if (gs->full_vns)
-		free(gs->full_vns);
-	if (gs->physical_namespace)
-		free(gs->physical_namespace);
-
-	namespace_info_clear(&(gs->ni));
-
-	free(gs);
+	metautils_str_clean (&gs->ns);
+	metautils_str_clean (&gs->physical_namespace);
+	namespace_info_free(gs->ni);
+	g_free(gs);
 }
 
 void
@@ -551,12 +540,7 @@ gs_manage_container_error_not_closed(gs_container_t * container,
 			return GS_OK;
 	}
 
-#ifdef HAVE_ANNOYING_DEBUG_TRACES
-	GSETERROR(err, "[from %s:%d] error not manageable for %s/%s", caller, line,
-			C0_NAME(container), C0_IDSTR(container));
-#endif
 	return GS_ERROR;
-	//return GS_OK;
 }
 
 gs_status_t
@@ -568,7 +552,7 @@ gs_manage_container_error(gs_container_t * container, const char *caller, guint 
 		return GS_ERROR;
 	}
 
-	TRACE("[from %s:%d] an error occured, %s/%s will be refreshed; cause:\r\n\t%s",
+	TRACE("[from %s:%d] an error occured, %s/%s will be refreshed; cause: %s",
 		caller, line, C0_NAME(container), C0_IDSTR(container), g_error_get_message(*err));
 
 	/*if closed, we try to re-open it */

@@ -27,7 +27,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # include <metautils/lib/metatypes.h>
 
-# include <cluster/conscience/conscience_broken_holder.h>
 # include <cluster/conscience/conscience_srvtype.h>
 # include <cluster/conscience/conscience_srv.h>
 
@@ -67,10 +66,6 @@ struct vns_info_s
 struct conscience_s
 {
 	namespace_info_t ns_info;
-
-	/*Data about the broken elements of a GridStorage */
-	GStaticRecMutex srmut_brk;
-	struct broken_holder_s *broken_elements;
 
 	/*Data about the configuration elements sent to each agent */
 	GStaticRWLock rwlock_srv;
@@ -138,20 +133,6 @@ void conscience_lock_srvtypes(struct conscience_s *conscience, char lock_mode);
  * @param conscience
  */
 void conscience_unlock_srvtypes(struct conscience_s *conscience);
-
-/**
- * @param conscience
- * @param lock_mode 'w','W','r','R'
- */
-void conscience_lock_broken_elements(struct conscience_s *conscience, char lock_mode);
-
-/**
- * Release the lock set on the conscience's broken elements storage, whatever
- * the rights acquired on it (read/write).
- *
- * @param conscience
- */
-void conscience_unlock_broken_elements(struct conscience_s *conscience);
 
 /* ------------------------------------------------------------------------- */
 

@@ -216,40 +216,40 @@ _stmt_apply_GV_parameter_simple(sqlite3_stmt *stmt, int pos, GVariant *p)
 	switch (*((gchar*)g_variant_get_type(p))) {
 		case 'b':
 			rc = sqlite3_bind_int64(stmt, pos, g_variant_get_boolean(p));
-			g_assert(rc == SQLITE_OK);
+			EXTRA_ASSERT(rc == SQLITE_OK);
 			return NULL;
 		case 'i':
 			rc = sqlite3_bind_int64(stmt, pos, g_variant_get_int32(p));
-			g_assert(rc == SQLITE_OK);
+			EXTRA_ASSERT(rc == SQLITE_OK);
 			return NULL;
 		case 'n':
 			rc = sqlite3_bind_int64(stmt, pos, g_variant_get_int16(p));
-			g_assert(rc == SQLITE_OK);
+			EXTRA_ASSERT(rc == SQLITE_OK);
 			return NULL;
 		case 'q':
 			rc = sqlite3_bind_int64(stmt, pos, g_variant_get_uint16(p));
-			g_assert(rc == SQLITE_OK);
+			EXTRA_ASSERT(rc == SQLITE_OK);
 			return NULL;
 		case 's': 
 			s = g_variant_get_string(p, &slen);
 			rc = sqlite3_bind_text(stmt, pos, s, slen, NULL);
-			g_assert(rc == SQLITE_OK);
+			EXTRA_ASSERT(rc == SQLITE_OK);
 			return NULL;
 		case 't':
 			rc = sqlite3_bind_int64(stmt, pos, g_variant_get_uint64(p));
-			g_assert(rc == SQLITE_OK);
+			EXTRA_ASSERT(rc == SQLITE_OK);
 			return NULL;
 		case 'u':
 			rc = sqlite3_bind_int64(stmt, pos, g_variant_get_uint32(p));
-			g_assert(rc == SQLITE_OK);
+			EXTRA_ASSERT(rc == SQLITE_OK);
 			return NULL;
 		case 'x':
 			rc = sqlite3_bind_int64(stmt, pos, g_variant_get_int64(p));
-			g_assert(rc == SQLITE_OK);
+			EXTRA_ASSERT(rc == SQLITE_OK);
 			return NULL;
 		case 'y':
 			rc = sqlite3_bind_int64(stmt, pos, g_variant_get_byte(p));
-			g_assert(rc == SQLITE_OK);
+			EXTRA_ASSERT(rc == SQLITE_OK);
 			return NULL;
 		/* XXX TODO manage the G_VARIANT_UNIT associtaed to NULL'd fields */
 		default:
@@ -318,7 +318,7 @@ _db_prepare_statement(sqlite3 *db, const gchar *sql, sqlite3_stmt **result)
 
 	if (rc != SQLITE_OK && rc != SQLITE_ROW)
 		return M2_SQLITE_GERROR(db,rc);
-	g_assert(stmt != NULL);
+	EXTRA_ASSERT(stmt != NULL);
 
 	*result = stmt;
 	return NULL;
@@ -420,10 +420,10 @@ _db_get_bean(const struct bean_descriptor_s *descr,
 	sqlite3_stmt *stmt = NULL;
 	gint rc;
 
-	g_assert(descr != NULL);
-	g_assert(db != NULL);
-	g_assert(params != NULL);
-	g_assert(cb != NULL);
+	EXTRA_ASSERT(descr != NULL);
+	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(params != NULL);
+	EXTRA_ASSERT(cb != NULL);
 
 	if (!clause || !*clause)
 		err = _db_prepare_statement(db, descr->sql_select, &stmt);
@@ -462,9 +462,9 @@ _db_count_bean(const struct bean_descriptor_s *descr,
 	sqlite3_stmt *stmt = NULL;
 	gint rc;
 
-	g_assert(descr != NULL);
-	g_assert(db != NULL);
-	g_assert(pcount != NULL);
+	EXTRA_ASSERT(descr != NULL);
+	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(pcount != NULL);
 
 	if (!clause || !*clause)
 		err = _db_prepare_statement(db, descr->sql_count, &stmt);
@@ -597,8 +597,8 @@ _db_save_bean(sqlite3 *db, gpointer bean)
 	GError *err;
 	GVariant **params = NULL;
 
-	g_assert(db != NULL);
-	g_assert(bean != NULL);
+	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(bean != NULL);
 
 	if (HDR(bean)->flags & BEAN_FLAG_TRANSIENT) {
 		params = _params_replace();
@@ -618,7 +618,7 @@ _db_save_beans_list(sqlite3 *db, GSList *list)
 {
 	GError *err = NULL;
 
-	g_assert(db != NULL);
+	EXTRA_ASSERT(db != NULL);
 	for (; !err && list ;list=list->next) {
 		if (!list->data)
 			continue;
@@ -637,8 +637,8 @@ _db_save_beans_array(sqlite3 *src, GPtrArray *tmp)
 {
 	GError *err = NULL;
 
-	g_assert(src != NULL);
-	g_assert(tmp != NULL);
+	EXTRA_ASSERT(src != NULL);
+	EXTRA_ASSERT(tmp != NULL);
 	for (guint i=0; !err && i<tmp->len; i++) {
 		if (GRID_TRACE_ENABLED()) {
 			GString *s = _bean_debug(NULL, tmp->pdata[i]);
@@ -775,14 +775,14 @@ _db_get_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db,
 {
 	const struct fk_descriptor_s *fk;
 
-	g_assert(name != NULL);
-	g_assert(bean != NULL);
-	g_assert(db != NULL);
-	g_assert(cb != NULL);
+	EXTRA_ASSERT(name != NULL);
+	EXTRA_ASSERT(bean != NULL);
+	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(cb != NULL);
 
 	for (fk=DESCR(bean)->fk; fk->name ;fk++) {
 		if (!g_ascii_strcasecmp(fk->name, name)) {
-			g_assert(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
+			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src)
 				return _db_get_FK(bean, fk->dst_fields, fk->dst,
 						fk->src_fields, db, cb, u);
@@ -839,13 +839,13 @@ _db_count_FK_by_name(gpointer bean, const gchar *name,
 {
 	const struct fk_descriptor_s *fk;
 
-	g_assert(name != NULL);
-	g_assert(bean != NULL);
-	g_assert(pcount != NULL);
+	EXTRA_ASSERT(name != NULL);
+	EXTRA_ASSERT(bean != NULL);
+	EXTRA_ASSERT(pcount != NULL);
 
 	for (fk=DESCR(bean)->fk; fk->name ;fk++) {
 		if (!g_ascii_strcasecmp(fk->name, name)) {
-			g_assert(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
+			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src)
 				return _db_count_FK(bean, fk->dst_fields, fk->dst,
 						fk->src_fields, db, pcount);
@@ -869,16 +869,16 @@ _db_get_FK_by_name_buffered(gpointer bean, const gchar *name,
 void
 _bean_buffer_cb(gpointer gpa, gpointer bean)
 {
-	g_assert(gpa != NULL);
-	g_assert(bean != NULL);
+	EXTRA_ASSERT(gpa != NULL);
+	EXTRA_ASSERT(bean != NULL);
 	g_ptr_array_add((GPtrArray*)gpa, bean);
 }
 
 void
 _bean_list_cb(gpointer plist, gpointer bean)
 {
-	g_assert(plist != NULL);
-	g_assert(bean != NULL);
+	EXTRA_ASSERT(plist != NULL);
+	EXTRA_ASSERT(bean != NULL);
 	*((GSList**)plist) = g_slist_prepend (*((GSList**)plist), bean);
 }
 
@@ -896,7 +896,7 @@ _bean_debug(GString *gstr, gpointer bean)
 
 	for (fd=DESCR(bean)->fields; fd->name ;fd++) {
 		register gpointer pf = FIELD(bean, fd->position);
-		g_assert(pf != NULL);
+		EXTRA_ASSERT(pf != NULL);
 
 		switch (fd->type) {
 			case FT_BOOL:
@@ -957,12 +957,12 @@ _bean_randomize(gpointer bean, gboolean avoid_pk)
 	const struct field_descriptor_s *fd;
 	GRand *r = g_rand_new();
 
-	g_assert(bean != NULL);
+	EXTRA_ASSERT(bean != NULL);
 	HDR(bean)->flags = BEAN_FLAG_DIRTY | (avoid_pk?0:BEAN_FLAG_TRANSIENT);
 
 	for (fd=DESCR(bean)->fields; fd->name ;fd++) {
 		register gpointer pf = FIELD(bean, fd->position);
-		g_assert(pf != NULL);
+		EXTRA_ASSERT(pf != NULL);
 
 		if (fd->pk && avoid_pk)
 			continue;
@@ -993,14 +993,14 @@ _bean_randomize(gpointer bean, gboolean avoid_pk)
 const gchar *
 _bean_get_typename(gpointer bean)
 {
-	g_assert(bean != NULL);
+	EXTRA_ASSERT(bean != NULL);
 	return DESCR(bean)->name;
 }
 
 gchar **
 _bean_get_FK_names(gpointer bean)
 {
-	g_assert(bean != NULL);
+	EXTRA_ASSERT(bean != NULL);
 	return DESCR(bean)->fk_names;
 }
 
@@ -1010,14 +1010,14 @@ _bean_create(const struct bean_descriptor_s *descr)
 	const struct field_descriptor_s *fd;
 	gpointer result;
 
-	g_assert(descr != NULL);
+	EXTRA_ASSERT(descr != NULL);
 	result = g_malloc0(descr->struct_size);
 	HDR(result)->descr = descr;
 	HDR(result)->flags = BEAN_FLAG_TRANSIENT|BEAN_FLAG_DIRTY;
 
 	for (fd=descr->fields; fd->name ;fd++) {
 		register gpointer pf = FIELD(result, fd->position);
-		g_assert(pf != NULL);
+		EXTRA_ASSERT(pf != NULL);
 
 		switch (fd->type) {
 			case FT_BOOL:
@@ -1045,8 +1045,8 @@ _bean_create_child(gpointer bean, const gchar *fkname)
 	const struct fk_descriptor_s *fk;
 	const struct bean_descriptor_s *src_descr, *dst_descr;
 
-	g_assert(bean != NULL);
-	g_assert(fkname != NULL);
+	EXTRA_ASSERT(bean != NULL);
+	EXTRA_ASSERT(fkname != NULL);
 	src_descr = DESCR(bean);
 
 	inline gpointer _build(struct fk_field_s *f0, struct fk_field_s *f1) {
@@ -1057,7 +1057,7 @@ _bean_create_child(gpointer bean, const gchar *fkname)
 
 			fd0 = src_descr->fields + f0->i;
 			fd1 = dst_descr->fields + f1->i;
-			g_assert(fd0->type == fd1->type);
+			EXTRA_ASSERT(fd0->type == fd1->type);
 
 			pf0 = FIELD(bean, f0->i);
 			pf1 = FIELD(res, f1->i);
@@ -1087,7 +1087,7 @@ _bean_create_child(gpointer bean, const gchar *fkname)
 
 	for (fk=DESCR(bean)->fk; fk->name ;fk++) {
 		if (!g_ascii_strcasecmp(fk->name, fkname)) {
-			g_assert(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
+			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
 			if (DESCR(bean) == fk->src) {
 				dst_descr = fk->dst;
 				return _build(fk->src_fields, fk->dst_fields);
@@ -1140,7 +1140,7 @@ gpointer
 _bean_dup(gpointer bean)
 {
 	const struct field_descriptor_s *fd;
-	g_assert(bean != NULL);
+	EXTRA_ASSERT(bean != NULL);
 	gpointer copy = _bean_create(DESCR(bean));
 	for (fd=DESCR(bean)->fields; fd->name ;fd++) {
 		if (_bean_has_field(bean, fd->position)) {

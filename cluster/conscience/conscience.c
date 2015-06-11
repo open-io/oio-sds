@@ -22,7 +22,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #endif
 
 #include <string.h>
-#include "./conscience_broken_holder.h"
 #include "./conscience_srvtype.h"
 #include "./conscience_srv.h"
 #include "./conscience.h"
@@ -103,21 +102,6 @@ conscience_unlock_srvtypes(struct conscience_s *conscience)
 	_unlock_rw(&(conscience->rwlock_srv));
 }
 
-void
-conscience_lock_broken_elements(struct conscience_s *conscience, char lock_mode)
-{
-	(void)lock_mode;
-	if (conscience)
-		g_static_rec_mutex_lock(&(conscience->srmut_brk));
-}
-
-void
-conscience_unlock_broken_elements(struct conscience_s *conscience)
-{
-	if (conscience)
-		g_static_rec_mutex_unlock(&(conscience->srmut_brk));
-}
-
 /* ------------------------------------------------------------------------- */
 
 struct conscience_s *
@@ -129,7 +113,6 @@ conscience_create(void)
 	namespace_info_init (&conscience->ns_info);
 
 	g_static_rw_lock_init(&(conscience->rwlock_srv));
-	g_static_rec_mutex_init(&(conscience->srmut_brk));
 
 	conscience->srvtypes = g_hash_table_new_full(g_str_hash, g_str_equal,
 			g_free, (GDestroyNotify) conscience_srvtype_destroy);
@@ -140,12 +123,6 @@ conscience_create(void)
 
 	conscience->default_srvtype = conscience_srvtype_create(conscience, "default");
 	if (!conscience->default_srvtype) {
-		conscience_destroy(conscience);
-		return NULL;
-	}
-
-	conscience->broken_elements = conscience_create_broken_holder(conscience);
-	if (!conscience->broken_elements) {
 		conscience_destroy(conscience);
 		return NULL;
 	}
@@ -181,13 +158,9 @@ conscience_destroy(struct conscience_s *conscience)
 		return;
 
 	g_static_rw_lock_free(&(conscience->rwlock_srv));
-	g_static_rec_mutex_free(&(conscience->srmut_brk));
 
 	if (conscience->srvtypes)
 		g_hash_table_destroy(conscience->srvtypes);
-
-	if (conscience->broken_elements)
-		conscience_destroy_broken_holder(conscience->broken_elements);
 
 	if (conscience->default_srvtype)
 		conscience_srvtype_destroy(conscience->default_srvtype);

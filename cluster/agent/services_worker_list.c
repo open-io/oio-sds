@@ -122,8 +122,6 @@ services_worker_list( worker_t *worker, GError **error )
 		return __respond_message(worker, 0, "Invalid format (not NS:TYPE)", error);
 	}
 	else {
-		bzero(ns_name, sizeof(ns_name));
-		bzero(type_name, sizeof(type_name));
 		g_strlcpy(ns_name, tokens[0], sizeof(ns_name)-1);
 		g_strlcpy(type_name, tokens[1], sizeof(type_name)-1);
 		g_strfreev(tokens);
@@ -161,8 +159,8 @@ services_types_worker_list( worker_t *worker, GError **error )
 	TRACE_POSITION();
 
 	/*unpack the parameters and find the namespace*/	
-	bzero(ns_name, sizeof(ns_name));
 	req = (request_t*) worker->data.session;
+	memset(ns_name, 0, sizeof(ns_name));
 	g_memmove(ns_name, req->arg, MIN(req->arg_size, sizeof(ns_name)-1));
 
 	GError *e = NULL;

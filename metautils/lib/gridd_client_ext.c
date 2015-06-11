@@ -60,9 +60,8 @@ gridd_client_create(const gchar *target, GByteArray *req, gpointer ctx,
 	if (!client)
 		return NULL;
 	GError *err = gridd_client_request(client, req, ctx, cb);
-	if (NULL == err) {
+	if (NULL == err)
 		return client;
-	}
 
 	GRID_WARN("gridd client creation error : (%d) %s", err->code, err->message);
 	g_clear_error(&err);
@@ -342,30 +341,33 @@ gridd_client_exec (const gchar *to, gdouble timeout, GByteArray *req)
 	return gridd_client_exec4 (to, timeout, req, NULL);
 }
 
+static gboolean
+_cb_exec4 (GPtrArray *tmp, MESSAGE reply)
+{
+	if (!metautils_message_has_BODY (reply))
+		return TRUE;
+	GByteArray *body = NULL;
+	GError *e = metautils_message_extract_body_gba(reply, &body);
+	if (e) {
+		GRID_WARN("BUG/Corruption : (%d) %s", e->code, e->message);
+		g_clear_error (&e);
+		return FALSE;
+	} else {
+		g_ptr_array_add(tmp, body);
+		return TRUE;
+	}
+}
+
 GError *
 gridd_client_exec4 (const gchar *to, gdouble timeout, GByteArray *req,
 		GByteArray ***out)
 {
-	gboolean _cb (GPtrArray *tmp, MESSAGE reply) {
-		if (!message_has_BODY (reply))
-			return TRUE;
-		GByteArray *body = NULL;
-		GError *e = message_extract_body_gba(reply, &body);
-		if (e) {
-			GRID_WARN("BUG/Corruption : (%d) %s", e->code, e->message);
-			g_clear_error (&e);
-			return FALSE;
-		} else {
-			g_ptr_array_add(tmp, body);
-			return TRUE;
-		}
-	}
 	GPtrArray *tmp = NULL;
 	if (out)
 		tmp = g_ptr_array_new();
 
 	struct gridd_client_s *client = gridd_client_create(to, req,
-			out ? tmp : NULL, out ? (client_on_reply)_cb : NULL);
+			(out ? tmp : NULL), out ? (client_on_reply)_cb_exec4 : NULL);
 	if (!client)
 		return NEWERROR(CODE_INTERNAL_ERROR, "client creation");
 	if (timeout > 0.0)
@@ -385,23 +387,26 @@ gridd_client_exec4 (const gchar *to, gdouble timeout, GByteArray *req,
 	return err;
 }
 
+static gboolean
+_cb_exec_and_concat (GByteArray *tmp, MESSAGE reply)
+{
+	gsize bsize = 0;
+	void *b = metautils_message_get_BODY(reply, &bsize);
+	if (b && bsize)
+		g_byte_array_append(tmp, b, bsize);
+	return TRUE;
+}
+
 GError *
 gridd_client_exec_and_concat (const gchar *to, gdouble timeout, GByteArray *req,
 		GByteArray **out)
 {
-	gboolean _cb (GByteArray *tmp, MESSAGE reply) {
-		gsize bsize = 0;
-		void *b = message_get_BODY(reply, &bsize);
-		if (b && bsize)
-			g_byte_array_append(tmp, b, bsize);
-		return TRUE;
-	}
 	GByteArray *tmp = NULL;
 	if (out)
 		tmp = g_byte_array_new();
 
 	struct gridd_client_s *client = gridd_client_create(to, req,
-			out ? tmp : NULL, out ? (client_on_reply)_cb : NULL);
+			out ? tmp : NULL, out ? (client_on_reply)_cb_exec_and_concat : NULL);
 	if (!client)
 		return NEWERROR(CODE_INTERNAL_ERROR, "client creation");
 	if (timeout > 0.0)
@@ -443,14 +448,14 @@ gridd_client_exec_and_decode (const gchar *to, gdouble timeout,
 {
 	GByteArray ** bodies = NULL;
 	GError *err = gridd_client_exec4 (to, timeout, req,
-			out && decode ? &bodies : NULL);
+			(out && decode) ? &bodies : NULL);
 	if (err) {
 		metautils_gba_cleanv (bodies);
 		return err;
 	}
 	if (out && decode && bodies) {
 		GSList *items = NULL;
-		for (GByteArray **pbody=bodies; pbody && *pbody && !err ;pbody++) {
+		for (GByteArray **pbody=bodies; *pbody && !err ;pbody++) {
 			GByteArray *body = *pbody;
 			if (!body->data || body->len<=0)
 				continue;
@@ -460,13 +465,11 @@ gridd_client_exec_and_decode (const gchar *to, gdouble timeout,
 				g_prefix_error (&err, "Decoding error: ");
 				break;
 			}
-			for (GSList *tmp; l ;l=tmp) { // Faster than g_slist_concat
-				tmp = l->next;
-				l->next = items;
-				items = l;
-			}
+			if (l)
+				items = g_slist_concat (l, items);
 		}
 		*out = items;
+		items = NULL;
 	}
 	metautils_gba_cleanv (bodies);
 	return err;

@@ -293,7 +293,7 @@ _rainx_update_chunks_with_response(GSList **all_chunks, GSList **chunks_by_pos,
 	struct bean_CONTENTS_s *content_to_remove;
 	GError *error = NULL;
 
-	g_assert(header_chunklist != NULL);
+	EXTRA_ASSERT(header_chunklist != NULL);
 
 	/* chunklist format: ip:port/chunk_id|chunk_size|chunk_hash;... */
 
@@ -347,7 +347,7 @@ _rainx_update_chunks_with_response(GSList **all_chunks, GSList **chunks_by_pos,
 		{
 			bc = i_list->data;
 			bean_id = g_strrstr(CHUNKS_get_id(bc)->str, "/");
-			g_assert(bean_id != NULL);
+			EXTRA_ASSERT(bean_id != NULL);
 			bean_id++;
 
 			if (g_strcmp0(bean_id, chunk_id) == 0)
@@ -501,7 +501,7 @@ _update_broken_beans(GSList *all_beans, GSList *broken_beans, GSList *spare_bean
 
 	while (broken_beans != NULL)
 	{
-		g_assert(spare_beans != NULL);
+		EXTRA_ASSERT(spare_beans != NULL);
 
 		broken_bc = broken_beans->data;
 		spare_bc = spare_beans->data;
@@ -538,7 +538,7 @@ _rainx_create_rawxlist_from_chunk_bean_list(GSList *bean_list)
 	const gchar *chunk_id;
 	const gchar *tok_begin, *tok_end;
 
-	g_assert(bean_list != NULL);
+	EXTRA_ASSERT(bean_list != NULL);
 
 	res = g_string_new("");
 
@@ -549,15 +549,15 @@ _rainx_create_rawxlist_from_chunk_bean_list(GSList *bean_list)
 		/* chunkid format: http://10.24.244.158:6032/DATA/CCANS/common/rawx-2/EC2E74D2A69A17C0CC099956E7C557CC5ED3D5C6881DF4BA0120FFACC91A6B11
 		 */
 		tok_begin = g_strstr_len(chunk_id, -1, "://"); /* ip:port */
-		g_assert(tok_begin != NULL);
+		EXTRA_ASSERT(tok_begin != NULL);
 		tok_begin += 3; /* skip :// */
 		tok_end = g_strstr_len(tok_begin, -1, "/");
-		g_assert(tok_end != NULL);
+		EXTRA_ASSERT(tok_end != NULL);
 		
 		g_string_append_len(res, tok_begin, tok_end - tok_begin);
 
 		tok_begin = g_strrstr(chunk_id, "/"); /* chunk id, keep the / */
-		g_assert(tok_begin != NULL);
+		EXTRA_ASSERT(tok_begin != NULL);
 
 		g_string_append(res, tok_begin);
 
@@ -576,8 +576,8 @@ _rainx_get_url(const gchar *nsname, gchar *buffer, gsize buffer_size)
 	guint16 port;
 	GError *error = NULL;
 
-	g_assert(nsname != NULL);
-	g_assert(buffer != NULL);
+	EXTRA_ASSERT(nsname != NULL);
+	EXTRA_ASSERT(buffer != NULL);
 
 	rainx_addr = get_rainx_from_conscience(nsname, &error);
 	if (error != NULL)
@@ -974,7 +974,7 @@ _gs_upload(gs_container_t *container,
 	GByteArray *orig_sys_metadata_gba=NULL;
 	guint iter_chunks = 0;
 	guint nb_copies = 0;
-	char target[64];
+	char target[STRLEN_ADDRINFO];
 	gchar reqid[1024];
 	struct hc_url_s *url = NULL;
 	GSList
@@ -997,7 +997,7 @@ _gs_upload(gs_container_t *container,
 	timeout_op = MAX(gs_grid_storage_get_timeout(container->info.gs, GS_TO_RAWX_OP) / 1000, 1);
 	GRID_DEBUG("Timeout cnx %ld s ; timeout op %ld s", timeout_cnx, timeout_op);
 
-	is_rainx = stg_pol_is_rainx(&(container->info.gs->ni), actual_stgpol);
+	is_rainx = stg_pol_is_rainx(container->info.gs->ni, actual_stgpol);
 
 	/* New meta1 purpose : ensure to be linked with a meta2 */
 	if(container->meta2_addr.port <= 0) {
@@ -1015,8 +1015,7 @@ _gs_upload(gs_container_t *container,
 		g_byte_array_append(orig_sys_metadata_gba, (guint8*)sys_metadata, strlen(sys_metadata));
 	}
 
-	bzero(target, sizeof(target));
-	addr_info_to_string(&container->meta2_addr, target, 64);
+	addr_info_to_string(&container->meta2_addr, target, sizeof(target));
 
 	url = fill_hcurl_from_container (container);
 	hc_url_set(url, HCURL_PATH, content_name);
@@ -1104,7 +1103,7 @@ _gs_upload(gs_container_t *container,
 	}
 
 	// Don't do RAIN with empty contents
-	tmp_is_rainx = stg_pol_is_rainx(&(container->info.gs->ni), actual_stgpol);
+	tmp_is_rainx = stg_pol_is_rainx(container->info.gs->ni, actual_stgpol);
 	is_rainx = (content_size > 0 && tmp_is_rainx);
 	if (is_rainx) {
 		GRID_DEBUG("'%s' of size %"G_GINT64_FORMAT" split into %u chunks (every chunk has %u sub-chunks, there are %u unique presets and %u spares)",

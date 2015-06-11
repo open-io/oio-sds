@@ -55,46 +55,38 @@ gs_set_namespace(gs_grid_storage_t *gs, const char *vns)
 	if (!gs)
 		return 0;
 
-	if (vns && !g_str_has_prefix(vns, gs->ni.name))
+	if (vns && !g_str_has_prefix(vns, gs->physical_namespace))
 		return 0;
 
-	if (gs->full_vns)
-		g_free(gs->full_vns);
-
-	gs->full_vns = vns ? g_strdup(vns) : NULL;
+	metautils_str_replace (&gs->ns, vns);
 	return 1;
 }
 
 const char*
 gs_get_namespace(gs_grid_storage_t *gs)
 {
-	return !gs ? "(nil)" : gs->physical_namespace;
+	return !gs ? NULL : gs->physical_namespace;
 }
 
 const char*
 gs_get_virtual_namespace(gs_grid_storage_t *gs)
 {
-	if (!gs)
-		return NULL;
-	char *s = strchr(gs->full_vns, '.');
+	if (!gs) return NULL;
+	char *s = strchr(gs->ns, '.');
 	return (s!=NULL) ? s+1 : NULL;
 }
 
 const char*
-gs_get_full_vns(gs_grid_storage_t *gs)
+gs_get_full_namespace(gs_grid_storage_t *gs)
 {
 	if (!gs) return NULL;
-	return gs->full_vns ? gs->full_vns : gs->physical_namespace;
+	return gs->ns ? gs->ns : gs->physical_namespace;
 }
 
 gs_grid_storage_t*
 gs_grid_storage_init_flags(const gchar *ns, uint32_t flags,
 		int to_cnx, int to_req, gs_error_t **err)
 {
-	gs_grid_storage_t *gs=NULL;
-	register const gchar *sep;
-	namespace_info_t *ni;
-
 	logger_lazy_init ();
 	env_init();
 
@@ -104,52 +96,37 @@ gs_grid_storage_init_flags(const gchar *ns, uint32_t flags,
 		return NULL;
 	}
 
-	DEBUG("Creating a new GridStorage client for namespace [%s]", ns);
+	gs_grid_storage_t *gs = g_malloc0(sizeof(gs_grid_storage_t));
 
-	/*inits a new gs_grid_storage_t*/
-	gs = calloc (1, sizeof(gs_grid_storage_t));
-	if (!gs) {
-		GSERRORSET(err,"Memory allocation failure");
-		return NULL;
-	}
-
+	/* inits a new gs_grid_storage_t */
 	if (!(flags & GSCLIENT_NOINIT)) {
-		GError *gErr = NULL;
-		ni = get_namespace_info(ns, &gErr);
-		if (!ni) {
-			GSERRORCAUSE(err,gErr,"Cannot get namespace info");
-			if (gErr)
-				g_clear_error(&gErr);
-			free(gs);
-			return NULL;
-		}
-		namespace_info_copy(ni, &(gs->ni), &gErr);
-		namespace_info_free(ni);
-		if (gErr != NULL) {
-			GSERRORCAUSE(err, gErr, "Failed to copy namespace info");
-			g_clear_error(&gErr);
-			free(gs);
+		GError *e = NULL;
+		gs->ni = get_namespace_info(ns, &e);
+		if (!gs->ni) {
+			GSERRORCAUSE(err,e,"Cannot get namespace info");
+			if (e)
+				g_clear_error(&e);
+			g_free(gs);
 			return NULL;
 		}
 	}
 
-	if (NULL != (sep = strchr(ns, '.'))) {
+	/* unpack NS and VNS if any */
+	const gchar *sep;
+	if (NULL != (sep = strchr(ns, '.')))
 		gs->physical_namespace = g_strndup(ns, sep-ns);
-	}
-	else {
+	else
 		gs->physical_namespace = g_strdup(ns);
-	}
-	gs->full_vns = g_strdup(ns);
+	gs->ns = g_strdup(ns);
 
 	if (!(flags & GSCLIENT_NOINIT)) {
-		GError *gErr = NULL;
-
-		gs->direct_resolver = resolver_direct_create2 (ns, to_cnx, to_req, &gErr);
+		GError *e = NULL;
+		gs->direct_resolver = resolver_direct_create2 (ns, to_cnx, to_req, &e);
 		if (!gs->direct_resolver) {
-			GSERRORCAUSE(err,gErr,"Cannot init the direct resolver");
-			if (gErr)
-				g_clear_error(&gErr);
-			free(gs);
+			GSERRORCAUSE(err,e,"Cannot init the direct resolver");
+			if (e)
+				g_clear_error(&e);
+			g_free(gs);
 			return NULL;
 		}
 	}
@@ -158,10 +135,6 @@ gs_grid_storage_init_flags(const gchar *ns, uint32_t flags,
 	gs->timeout.rawx.cnx = RAWX_TOCNX_DEFAULT;
 	gs->timeout.m2.op =   M2_TOREQ_DEFAULT;
 	gs->timeout.m2.cnx =  M2_TOCNX_DEFAULT;
-	g_strlcpy(gs->ni.name, ns, sizeof(gs->ni.name));
-
-	if (NULL != strchr(gs->ni.name, '.'))
-		* (strchr(gs->ni.name, '.')) = '\0';
 
 	return gs;
 }
@@ -173,11 +146,10 @@ gs_grid_storage_init2(const gchar *ns, int to_cnx, int to_req,
 	return gs_grid_storage_init_flags(ns, 0, to_cnx, to_req, err);
 }
 
-gs_grid_storage_t* gs_grid_storage_init (const gchar *ns,
-	gs_error_t **err)
+gs_grid_storage_t*
+gs_grid_storage_init (const gchar *ns, gs_error_t **err)
 {
-	return gs_grid_storage_init_flags(ns, 0,
-			CS_TOCNX_DEFAULT, CS_TOREQ_DEFAULT, err);
+	return gs_grid_storage_init_flags(ns, 0, CS_TOCNX_DEFAULT, CS_TOREQ_DEFAULT, err);
 }
 
 int
@@ -186,8 +158,7 @@ gs_update_meta1_master (gs_grid_storage_t *gs, const container_id_t cID,
 {
 	int attempts = NB_ATTEMPTS_UPDATE_M1;
 
-	int _try (void)
-	{
+	int _try (void) {
 		GError *e = NULL;
 
 		if ((attempts--) <= 0) {
@@ -196,7 +167,7 @@ gs_update_meta1_master (gs_grid_storage_t *gs, const container_id_t cID,
 		}
 
 		if(!resolver_direct_set_meta1_master (gs->direct_resolver, cID, m1, &e))
-			DEBUG("META1 update failure. cause:\r\n\t%s",(e ? e->message : "?"));
+			DEBUG("META1 update failure. Cause: %s",(e ? e->message : "?"));
 			if(NULL != e)
 				g_clear_error(&e);
 			return _try();
@@ -211,15 +182,14 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 		const gchar *cname, int read_only, GSList **exclude,
 		gboolean has_before_create, GError **err)
 {
-	gchar str_cid[STRLEN_CONTAINERID+1];
+	gchar str_cid[STRLEN_CONTAINERID];
 	int attempts=NB_ATTEMPTS_RESOLVE_M1;
 	GError *gErr=NULL;
 
 	struct hc_url_s *url = fill_hcurl_from_client (gs);
 	hc_url_set (url, HCURL_USER, cname);
 
-	addr_info_t* _try (void)
-	{
+	addr_info_t* _try (void) {
 		addr_info_t *pA=NULL;
 
 		if ((attempts--)<=0) {
@@ -277,8 +247,7 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 		return pA;
 	}
 
-	memset(str_cid, 0, sizeof(str_cid));
-	container_id_to_string(cID, str_cid, sizeof(str_cid)-1);
+	container_id_to_string(cID, str_cid, sizeof(str_cid));
 
 	addr_info_t *resAddr = _try();
 	if (!resAddr && err) {
@@ -504,8 +473,7 @@ _gs_locate_container_by_cid(gs_grid_storage_t *gs, container_id_t cid, char** ou
 		gchar *cname = NULL;
 
 		gerror_local = NULL;
-		memset(&cnx_tmp, 0x00, sizeof(cnx_tmp));
-		cnx_tmp.fd = -1;
+		metacnx_clear (&cnx_tmp);
 		memcpy(&(cnx_tmp.addr), &(m1_addr[m1_index]), sizeof(addr_info_t));
 		m1_raw = meta1_remote_get_container_by_id(&cnx_tmp, url, &gerror_local);
 		if (!m1_raw) {
@@ -574,15 +542,13 @@ struct gs_container_location_s *
 gs_locate_container_by_hexid_v2(gs_grid_storage_t *gs, const char *hexid, char** out_nsname_on_m1,
                               gs_error_t **gserr)
 {
-    container_id_t cid;
-
     if (hexid == NULL) {
         GSERRORSET(gserr, "No container id provided");
         return NULL;
     }
 
+    container_id_t cid;
 	container_id_hex2bin(hexid, strlen(hexid), &cid, NULL);
-
     return _gs_locate_container_by_cid(gs, cid, out_nsname_on_m1, gserr);
 }
 
@@ -622,7 +588,6 @@ gs_container_location_free(struct gs_container_location_s *location)
 		free(location->container_hexid);
 	if (location->container_name)
 		free(location->container_name);
-	memset(location, 0x00, sizeof(*location));
 	free(location);
 }
 
@@ -630,7 +595,7 @@ struct hc_url_s *
 fill_hcurl_from_client (gs_grid_storage_t *c)
 {
 	struct hc_url_s *url = hc_url_empty();
-	hc_url_set_oldns (url, gs_get_full_vns(c));
+	hc_url_set_oldns (url, gs_get_full_namespace(c));
 	return url;
 }
 

@@ -100,7 +100,7 @@ oid_to_string(oid *name, size_t name_len, char *dst, size_t dst_size)
 	size_t i, dst_i;
 
 	dst_i = 0;
-	bzero(dst, dst_size);
+	memset(dst, 0, dst_size);
 
 	for (i=0; i<name_len ;i++) {
 		gint64 i64 = name[i];
@@ -387,12 +387,12 @@ zero_local_services(void)
 		if (rplx_snmp_data[i])
 			g_free(rplx_snmp_data[i]);
 	}
-	bzero(saver_snmp_data, sizeof(saver_snmp_data));
-	bzero(rawx_snmp_data, sizeof(rawx_snmp_data));
-	bzero(meta2_snmp_data, sizeof(meta2_snmp_data));
-	bzero(tsmx_snmp_data, sizeof(tsmx_snmp_data));
-	bzero(solr_snmp_data, sizeof(solr_snmp_data));
-	bzero(rplx_snmp_data, sizeof(rplx_snmp_data));
+	memset(saver_snmp_data, 0, sizeof(saver_snmp_data));
+	memset(rawx_snmp_data,  0, sizeof(rawx_snmp_data));
+	memset(meta2_snmp_data, 0, sizeof(meta2_snmp_data));
+	memset(tsmx_snmp_data, 0, sizeof(tsmx_snmp_data));
+	memset(solr_snmp_data, 0, sizeof(solr_snmp_data));
+	memset(rplx_snmp_data, 0, sizeof(rplx_snmp_data));
 }
 
 /* Because the array stores services at their service-index and not
@@ -518,7 +518,7 @@ reload_events(void)
 		if (evt_snmp_data[i])
 			g_free(evt_snmp_data[i]);
 	}
-	bzero(evt_snmp_data, sizeof(evt_snmp_data));
+	memset(evt_snmp_data, 0, sizeof(evt_snmp_data));
 
 	/* List ns in spool dir */
 	ns = list_ns(evt_spool_dir);
@@ -557,7 +557,7 @@ reload_conscience(void)
 		if (csc_snmp_data[i])
 			g_free(csc_snmp_data[i]);
 	}
-	bzero(csc_snmp_data, sizeof(csc_snmp_data));
+	memset(csc_snmp_data, 0, sizeof(csc_snmp_data));
 
 	if (csc_ns_list)
 		for (l = csc_ns_list; l; l = l->next)
@@ -894,8 +894,8 @@ manage_saver(struct service_info_s *si)
 	GError *error = NULL;
 	struct grid_service_data index_data;
 
-	bzero(&snmp_data, sizeof(struct saver_snmp_data));
-	bzero(&index_data, sizeof(struct grid_service_data));
+	memset(&snmp_data, 0, sizeof(struct saver_snmp_data));
+	memset(&index_data, 0, sizeof(struct grid_service_data));
 	
 	/*set saver stats from the service_info*/
 	snmp_data.score = si->score.value;

@@ -26,6 +26,7 @@ License along with this library.
 
 #include "./metautils.h"
 #include "./hc_url.h"
+#include "./hc_url_ext.h"
 #include "./url.h"
 
 #define HCURL_OPTION_KEY_VERSION "version"
@@ -163,7 +164,7 @@ hc_url_oldinit(const char *url)
 {
 	if (!url)
 		return NULL;
-	struct hc_url_s *result = g_slice_new0(struct hc_url_s);
+	struct hc_url_s *result = SLICE_NEW0(struct hc_url_s);
 	if (_parse_url(result, url))
 		return result;
 	hc_url_clean(result);
@@ -173,7 +174,7 @@ hc_url_oldinit(const char *url)
 struct hc_url_s *
 hc_url_empty(void)
 {
-	return g_slice_new0(struct hc_url_s);
+	return SLICE_NEW0(struct hc_url_s);
 }
 
 void
@@ -182,7 +183,7 @@ hc_url_clean(struct hc_url_s *u)
 	if (!u)
 		return;
 	_clean_url (u);
-	g_slice_free (struct hc_url_s, u);
+	SLICE_FREE (struct hc_url_s, u);
 }
 
 void
@@ -396,7 +397,7 @@ hc_url_get(struct hc_url_s *u, enum hc_url_field_e f)
 	return NULL;
 }
 
-const guint8*
+const void*
 hc_url_get_id(struct hc_url_s *u)
 {
 	if (!u) {
@@ -411,7 +412,7 @@ hc_url_get_id(struct hc_url_s *u)
 }
 
 void
-hc_url_set_id (struct hc_url_s *u, const guint8 *id)
+hc_url_set_id (struct hc_url_s *u, const void *id)
 {
 	if (!u)
 		return;
@@ -437,7 +438,7 @@ hc_url_get_option_value(struct hc_url_s *u, const char *k)
 gchar **
 hc_url_get_option_names(struct hc_url_s *u)
 {
-	g_assert(u != NULL);
+	EXTRA_ASSERT(u != NULL);
 	guint i=0;
 	gchar **result = g_malloc(sizeof(gchar*)*(1+g_slist_length(u->options)));
 	for (GSList *l = u->options ; l ;l=l->next) {
@@ -452,8 +453,8 @@ hc_url_get_option_names(struct hc_url_s *u)
 void
 hc_url_set_option (struct hc_url_s *u,  const char *k, const gchar *v)
 {
-	g_assert (u != NULL);
-	g_assert (k != NULL);
+	EXTRA_ASSERT (u != NULL);
+	EXTRA_ASSERT (k != NULL);
 	gchar **pv, *packed = g_strdup_printf("%s=%s", k, v);
 	if (!(pv = _options_get(u, k)))
 		u->options = g_slist_prepend(u->options, packed);

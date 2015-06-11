@@ -434,15 +434,15 @@ _rainx_reconstruct_init(struct dl_status_s *dl_status, gs_content_t *content, GS
 	GSList *converted_filtered = NULL;
 	GSList *valid_chunks = NULL;
 
-	if (FALSE == stg_pol_rainx_get_param(&(content->info.container->info.gs->ni), storage_policy, DS_KEY_DISTANCE, &distance))
+	if (FALSE == stg_pol_rainx_get_param(content->info.container->info.gs->ni, storage_policy, DS_KEY_DISTANCE, &distance))
 		distance = 1;
 
-	if (stg_pol_rainx_get_param(&(content->info.container->info.gs->ni), storage_policy, DS_KEY_K, &k_signed))
+	if (stg_pol_rainx_get_param(content->info.container->info.gs->ni, storage_policy, DS_KEY_K, &k_signed))
 		k = k_signed;
 	else
 		return FALSE;
 
-	if (stg_pol_rainx_get_param(&(content->info.container->info.gs->ni), storage_policy, DS_KEY_M, &m_signed))
+	if (stg_pol_rainx_get_param(content->info.container->info.gs->ni, storage_policy, DS_KEY_M, &m_signed))
 		m = m_signed;
 	else
 		return FALSE;
@@ -577,13 +577,12 @@ _commit_reconstruct(gs_content_t *content, GSList *beans, GSList *spare_chunks, 
 {
 	GError *local_gerr = NULL;
 	gs_container_t *container = content->info.container;
-	char target[64], pos_prefix[32];
+	char target[STRLEN_ADDRINFO], pos_prefix[32];
 	meta2_raw_content_t *raw_co = NULL;
 	struct metacnx_ctx_s ctx;
 	gboolean ret = FALSE;
 
-	bzero(target, sizeof(target));
-	addr_info_to_string(&container->meta2_addr, target, 64);
+	addr_info_to_string(&container->meta2_addr, target, sizeof(target));
 
 	metacnx_clear(&ctx);
 	if (!metacnx_init_with_url(&ctx, target, &local_gerr))
@@ -604,7 +603,6 @@ _commit_reconstruct(gs_content_t *content, GSList *beans, GSList *spare_chunks, 
 
 	/* Insert the new chunk */
 	_change_raw_content_id(raw_co, spare_chunks);
-	bzero(pos_prefix, sizeof(pos_prefix));
 	g_snprintf(pos_prefix, sizeof(pos_prefix), "%"G_GUINT32_FORMAT".", metachunkpos);
 	do {
 		struct hc_url_s *url = fill_hcurl_from_content (content);

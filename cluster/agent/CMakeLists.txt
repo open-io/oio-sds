@@ -6,13 +6,6 @@ add_executable(gridagent
 	accept_worker.c accept_worker.h
 	agent.c agent.h
 	asn1_request_worker.c asn1_request_worker.h
-	broken_task_get.c
-	broken_task_push.c
-	broken_worker_clear.c
-	broken_worker_fetch.c
-	broken_worker_fix.c
-	broken_worker_store.c
-	broken_workers.h
 	cluster_conf_parser.c
 	cluster_conf_parser.h
 	cpu_stat_task_worker.c cpu_stat_task_worker.h

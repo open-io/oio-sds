@@ -251,7 +251,6 @@ _check_tcp_service_worker_cleaner(worker_t *worker)
 		WARN("Connection attempt failed to [%s/%s]", wdata->ns_name, wdata->srv_key);
 	}	
 
-	memset(wdata, 0x00, sizeof(*wdata));
 	g_free(wdata);
 }
 

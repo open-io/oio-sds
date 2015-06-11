@@ -73,7 +73,7 @@ server_init_master_stat(dav_rainx_server_conf *conf, apr_pool_t *pool, apr_pool_
 	/* Init the SHM */
 	void *ptr_counter = apr_shm_baseaddr_get(conf->shm.handle);
 	if (ptr_counter) {
-		bzero(ptr_counter, sizeof(struct shm_stats_s));
+		memset(ptr_counter, 0, sizeof(struct shm_stats_s));
 		/* init rrd's */
 		rainx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_req_sec));
 		rainx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_duration));
