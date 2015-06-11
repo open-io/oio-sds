@@ -21,7 +21,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define G_LOG_DOMAIN "gridcluster.agent.fs"
 #endif
 
-#include <errno.h>
 #include <math.h>
 #include <string.h>
 #include <sys/vfs.h>
@@ -42,10 +41,8 @@ get_free_space(const char *path, long chunk_size)
 	gdouble free_inodes_d, free_chunks_d, total_chunks_d, chunk_size_d;
 	gdouble blocks_max_d, block_size_d, blocks_avail_d;
 
-	if (statfs(path, &sfs) < 0) {
-		ERROR("Failed to get fs info on path [%s] : %s", path, strerror(errno));
-		return (-1);
-	}
+	if (statfs(path, &sfs) < 0)
+		return -1;
 
 	chunk_size_d = chunk_size;	/*type conversion */
 	free_inodes_d = sfs.f_ffree;	/*type conversion */

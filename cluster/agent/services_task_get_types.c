@@ -108,10 +108,6 @@ asn1_final_handler( worker_t *worker, GError **error)
 		if (!get_srvtype( sdata->ns, type_name, error ))
 			WARN("[task_id=%s] Failed to init service type [%s/%s] : %s",
 				sdata->task_id, sdata->ns, type_name, gerror_get_message(*error));
-		else {
-			INFO("[task_id=%s] service type initiated [%s/%s]",
-				sdata->task_id, sdata->ns, type_name);
-		}
 	}
 
 	return 1;
@@ -159,8 +155,6 @@ task_worker(gpointer p, GError **error )
 	struct session_data_s *sdata = g_malloc0(sizeof(struct session_data_s));
 	g_strlcpy(sdata->ns, ns_data->name, sizeof(sdata->ns)-1);
 	g_snprintf(sdata->task_id,sizeof(sdata->task_id), TASK_ID".%s",ns_data->name);
-
-	INFO("[task_id=%s] Starting ...", sdata->task_id);
 
 	worker_t *asn1_worker = create_asn1_worker(&(ns_data->ns_info.addr), NAME_MSGNAME_CS_GET_SRVNAMES);
 	asn1_worker_set_handlers(asn1_worker, parse_names_list, asn1_error_handler, asn1_final_handler);
