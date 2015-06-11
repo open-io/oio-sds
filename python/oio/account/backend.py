@@ -1,52 +1,17 @@
-import time
+from time import time, sleep
 import uuid
 import math
 
 import redis
+from oio.common.utils import Timestamp
+from oio.common.utils import int_value
 
 
-CODE_SYSTEM_ERROR = 501
-CODE_ACCOUNT_NOTFOUND = 431
-CODE_USER_NOTFOUND = 432
+account_fields = ['ns', 'name', 'ctime', 'containers', 'objects',
+                  'bytes', 'storage_policy']
 
-account_fields = ['ns', 'name', 'ctime', 'container_count', 'object_count',
-                  'bytes', 'storage_policy', 'properties']
-
-container_fields = [
-    'ns', 'account', 'reference', 'type', 'object_count', 'bytes',
-    'ctime', 'mtime']
-
-
-class AccountException(Exception):
-    def __init__(self, c=500, m="AccountException"):
-        Exception.__init__(self)
-        self.message = str(m)
-        self.status_code = c
-
-    def __str__(self):
-        return self.message
-
-    def __repr__(self):
-        return self.__class__.__name__ + '/' + repr(self.to_dict())
-
-    def to_dict(self):
-        return {"message": self.message, "status": self.status_code}
-
-
-def patch_dict(base, keys):
-    for k in keys:
-        if k not in base:
-            base[k] = None
-
-
-def check_account_content(h):
-    global account_fields
-    patch_dict(h, account_fields)
-
-
-def check_container_content(h):
-    global container_fields
-    patch_dict(h, container_fields)
+container_fields = ['ns', 'account', 'type', 'objects', 'bytes', 'ctime',
+                    'mtime', 'name']
 
 
 def acquire_lock_with_timeout(conn, lockname, acquire_timeout=10,
@@ -54,16 +19,16 @@ def acquire_lock_with_timeout(conn, lockname, acquire_timeout=10,
     identifier = str(uuid.uuid4())
     lockname = 'lock:' + lockname
     lock_timeout = int(math.ceil(lock_timeout))
-    end = time.time() + acquire_timeout
+    end = time() + acquire_timeout
 
-    while time.time() < end:
+    while time() < end:
         if conn.setnx(lockname, identifier):
             conn.expire(lockname, lock_timeout)
             return identifier
         elif not conn.ttl(lockname):
             conn.expire(lockname, lock_timeout)
 
-        time.sleep(.001)
+        sleep(.001)
     return False
 
 
@@ -102,26 +67,26 @@ class AccountBackend(object):
     def create_account(self, account_id):
         conn = self.conn
         account_id = account_id.lower()
-        lock = acquire_lock_with_timeout(conn, 'account:' + account_id, 1)
-        if not lock:
+        if conn.hget('accounts:', account_id):
             return None
 
-        if conn.hget('accounts:', account_id):
+        lock = acquire_lock_with_timeout(conn, 'account:%s' % account_id, 1)
+        if not lock:
             return None
 
         pipeline = conn.pipeline(True)
         pipeline.hset('accounts:', account_id, 1)
         pipeline.hmset('account:%s' % account_id, {
             'id': account_id,
-            'containers': 0,
             'bytes': 0,
-            'ctime': time.time()
+            'objects': 0,
+            'ctime': Timestamp(time()).normal
         })
         pipeline.execute()
-        release_lock(conn, 'account:' + account_id, lock)
+        release_lock(conn, 'account:%s' % account_id, lock)
         return account_id
 
-    def update_account(self, account_id, data):
+    def get_account_metadata(self, account_id):
         conn = self.conn
         if not account_id:
             return None
@@ -130,7 +95,24 @@ class AccountBackend(object):
         if not account_id:
             return None
 
-        conn.hmset('account:%s' % account_id, data)
+        meta = conn.hgetall('metadata:%s' % account_id)
+        return meta
+
+    def update_account_metadata(self, account_id, metadata, to_delete=None):
+        conn = self.conn
+        if not account_id:
+            return None
+        account_id = conn.hget('account:%s' % account_id, 'id')
+
+        if not account_id:
+            return None
+
+        pipeline = conn.pipeline(True)
+        if to_delete:
+            pipeline.hdel('metadata:%s' % account_id, *to_delete)
+        if metadata:
+            pipeline.hmset('metadata:%s' % account_id, metadata)
+        pipeline.execute()
         return account_id
 
     def info_account(self, account_id):
@@ -142,9 +124,20 @@ class AccountBackend(object):
         if not account_id:
             return None
 
-        return conn.hgetall('account:%s' % account_id)
+        pipeline = conn.pipeline(False)
+        pipeline.hgetall('account:%s' % account_id)
+        pipeline.zcard('containers:%s' % account_id)
+        pipeline.hgetall('metadata:%s' % account_id)
+        data = pipeline.execute()
+        info = data[0]
+        for r in ['bytes', 'objects']:
+            info[r] = int_value(info[r], 0)
+        info['containers'] = data[1]
+        info['metadata'] = data[2]
+        return info
 
-    def update_container(self, account_id, name, record):
+    def update_container(self, account_id, name, mtime, dtime, object_count,
+                         bytes_used):
         conn = self.conn
         if not account_id or not name:
             return None
@@ -153,28 +146,66 @@ class AccountBackend(object):
         if not account_id:
             return None
 
-        # TODO merge items !
+        lock = acquire_lock_with_timeout(conn, 'container:%s:%s' % (
+            account_id, name), 1)
+        if not lock:
+            return None
 
         data = conn.hgetall('container:%s:%s' % (account_id, name))
 
+        record = {'name': name, 'mtime': mtime, 'dtime': dtime,
+                  'objects': object_count, 'bytes': bytes_used}
+        deleted = False
         if data:
-            for r in ['name', 'mtime', 'object_count', 'bytes']:
+            data['mtime'] = Timestamp(data['mtime'])
+            data['dtime'] = Timestamp(data['dtime'])
+
+            for r in ['name', 'mtime', 'dtime', 'objects', 'bytes']:
                 if record[r] is None and data[r] is not None:
                     record[r] = data[r]
             if data['mtime'] > record['mtime']:
                 record['mtime'] = data['mtime']
+            if data['dtime'] > record['dtime']:
+                record['dtime'] = data['dtime']
 
-        data.update({
+        if record['dtime'] > record['mtime']:
+            deleted = True
+
+        if not deleted:
+            incr_bytes_used = int_value(record.get('bytes'), 0) - int_value(
+                data.get('bytes'), 0)
+            incr_object_count = int_value(record.get('objects'), 0) - int_value(
+                data.get('objects'), 0)
+        else:
+            incr_bytes_used = - int_value(data.get('bytes'), 0)
+            incr_object_count = - int_value(data.get('objects'), 0)
+
+        record.update({
             'name': name,
             'account_uid': account_id
         })
 
-        conn.hmset('container:%s:%s' % (account_id, name), data)
+        # replace None values
+        for r in ['bytes', 'objects', 'mtime', 'dtime']:
+            if record[r] is None:
+                record[r] = 0
 
         ct = {str(name): 0}
-
-        conn.zadd('containers:%s' % account_id, **ct)
-
+        pipeline = conn.pipeline(True)
+        if deleted:
+            pipeline.delete('container:%s:%s' % (account_id, name))
+            pipeline.zrem('containers:%s' % account_id, str(name))
+        else:
+            pipeline.hmset('container:%s:%s' % (account_id, name), record)
+            pipeline.zadd('containers:%s' % account_id, **ct)
+        if incr_object_count:
+            pipeline.hincrby('account:%s' % account_id, 'objects',
+                             incr_object_count)
+        if incr_bytes_used:
+            pipeline.hincrby('account:%s' % account_id, 'bytes',
+                             incr_bytes_used)
+        pipeline.execute()
+        release_lock(conn, 'container:%s:%s' % (account_id, name), lock)
         return name
 
     def _list_containers(self, account_id, container_ids):
@@ -239,4 +270,5 @@ class AccountBackend(object):
     def status(self):
         conn = self.conn
         account_count = conn.hlen('accounts:')
-        return account_count
+        status = {'account_count': account_count}
+        return status
