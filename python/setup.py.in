@@ -7,7 +7,9 @@ setup(
 	package_dir={
 		'': '@CMAKE_CURRENT_SOURCE_DIR@'
 	},
-	packages=['oio', 'oio.account', 'oio.common', 'oio.sds', 'oio.sds.event'],
+	packages=['oio', 'oio.account', 'oio.conscience', 'oio.common', 'oio.sds',
+	'oio.sds
+	.event'],
 	install_requires=[ 'flask', 'eventlet', 'pyzmq' , 'redis', 'requests',
 	'gunicorn']
 )
