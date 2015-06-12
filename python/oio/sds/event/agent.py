@@ -1,21 +1,28 @@
 import json
 import logging
-from oio.common.daemon import Daemon
-from oio.common.http import requests
-from oio.common.utils import get_logger
+
 from eventlet.green import zmq
 from eventlet import GreenPool
 from eventlet import GreenPile
 from eventlet import Timeout
 
+from oio.common.daemon import Daemon
+from oio.common.http import requests
+from oio.common.utils import get_logger
+from oio.common.utils import int_value
+from oio.conscience.client import ConscienceClient
+
+
 PARALLEL_CHUNKS_DELETE = 5
 CHUNK_TIMEOUT = 60
 ACCOUNT_SERVICE_TIMEOUT = 60
 
+ACCOUNT_SERVICE = 'account'
+
 
 class EventType(object):
-    CONTAINER_PUT = "meta2.create"
-    CONTAINER_DESTROY = "meta2.destroy"
+    CONTAINER_PUT = "meta2.container.create"
+    CONTAINER_DESTROY = "meta2.container.destroy"
     CONTAINER_UPDATE = "meta2.container.state"
     OBJECT_PUT = "meta2.content.new"
     OBJECT_DELETE = "meta2.content.deleted"
@@ -27,10 +34,14 @@ def decode_msg(msg):
 
 class EventWorker(object):
     def __init__(self, conf, context, **kwargs):
+        self.conf = conf
         socket = context.socket(zmq.REP)
         socket.connect('inproc://event-front')
         self.socket = socket
-        self.logger = get_logger(conf, verbose=kwargs.pop('verbose', False))
+        verbose = kwargs.pop('verbose', False)
+        self.logger = get_logger(self.conf, verbose=verbose)
+        self.cs = ConscienceClient(self.conf)
+        self._account_addr = None
 
     def run(self):
         while True:
@@ -38,7 +49,7 @@ class EventWorker(object):
                 msg = self.socket.recv_multipart()
                 if self.logger.isEnabledFor(logging.DEBUG):
                     self.logger.debug('msg: %s' % msg)
-                ack = [""]
+                ack = ['']
                 try:
                     ack = [msg[0]]
                     event = decode_msg(msg)
@@ -57,7 +68,7 @@ class EventWorker(object):
     def process_event(self, event):
         handler = self.get_handler(event)
         if not handler:
-            raise Exception("No handler found")
+            raise Exception('No handler found')
         handler(event)
 
     def get_handler(self, event):
@@ -78,13 +89,29 @@ class EventWorker(object):
         else:
             return None
 
+    @property
+    def account_addr(self):
+        if not self._account_addr:
+            try:
+                account_instance = self.cs.next_instance(ACCOUNT_SERVICE)
+                self._account_addr = account_instance.get('addr')
+            except Exception:
+                # fallback on conf
+                self._account_addr = self.conf.get('account_addr')
+        return self._account_addr
+
     def handle_container_put(self, event):
         """
         Handle container creation.
-        TODO
         :param event:
         """
-        pass
+        uri = 'http://%s/v1.0/account/container/update' % self.account_addr
+        mtime = event.get('when')
+        data = event.get('data')
+        name = data.get('url').get('user')
+
+        event = {'mtime': mtime, 'name': name}
+        requests.post(uri, params={'id': 'test'}, data=json.dumps(event))
 
     def handle_container_update(self, event):
         """
@@ -92,15 +119,33 @@ class EventWorker(object):
         TODO
         :param event:
         """
-        pass
+        uri = 'http://%s/v1.0/account/container/update' % self.account_addr
+        mtime = event.get('when')
+        data = event.get('data')
+        name = event.get('url').get('user')
+        bytes_count = data.get('bytes-count', 0)
+        object_count = data.get('object-count', 0)
+
+        event = {
+            'mtime': mtime,
+            'name': name,
+            'bytes': bytes_count,
+            'objects': object_count
+        }
+        requests.post(uri, params={'id': 'test'}, data=json.dumps(event))
 
     def handle_container_destroy(self, event):
         """
         Handle container destroy.
-        TODO
         :param event:
         """
-        pass
+        uri = 'http://%s/v1.0/account/container/update' % self.account_addr
+        dtime = event.get('when')
+        data = event.get('data')
+        name = data.get('url').get('user')
+
+        event = {'dtime': dtime, 'name': name}
+        requests.post(uri, params={'id': 'test'}, data=json.dumps(event))
 
     def handle_object_delete(self, event):
         """
@@ -113,15 +158,17 @@ class EventWorker(object):
         chunks = []
 
         for item in event.get('data'):
-            if item.get('type') == "chunks":
+            if item.get('type') == 'chunks':
                 chunks.append(item)
         if not len(chunks):
-            self.logger.warn("No chunks found in event data")
+            self.logger.warn('No chunks found in event data')
+            return
 
         def delete_chunk(chunk):
             resp = None
             try:
                 with Timeout(CHUNK_TIMEOUT):
+                    print chunk['id']
                     resp = requests.delete(chunk['id'])
             except (Exception, Timeout) as e:
                 self.logger.exception(e)
@@ -134,9 +181,9 @@ class EventWorker(object):
 
         for resp in resps:
             if resp.status_code == 204:
-                self.logger.info("deleted chunk %s" % resp.url)
+                self.logger.info('deleted chunk %s' % resp.url)
             else:
-                self.logger.warn("failed to delete chunk %s" % resp.url)
+                self.logger.warn('failed to delete chunk %s' % resp.url)
 
     def handle_object_put(self, event):
         """
@@ -162,7 +209,7 @@ class EventAgent(Daemon):
         backend = context.socket(zmq.DEALER)
         backend.bind('inproc://event-front')
 
-        nb_workers = int(self.conf.get('workers', '2'))
+        nb_workers = int_value(self.conf.get('workers'), 2)
         worker_pool = GreenPool(nb_workers)
 
         for i in range(0, nb_workers):
@@ -178,7 +225,7 @@ class EventAgent(Daemon):
         boss_pool.spawn_n(proxy, server, backend)
         boss_pool.spawn_n(proxy, backend, server)
 
-        boss_pool.waitall()
+        worker_pool.waitall()
 
 
 
