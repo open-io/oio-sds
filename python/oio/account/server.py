@@ -21,10 +21,6 @@ import flask
 from flask import request
 
 from oio.account.backend import AccountBackend
-from oio.account.backend import AccountException
-from oio.account.backend import CODE_ACCOUNT_NOTFOUND, CODE_USER_NOTFOUND
-
-
 
 # Accounts ---------------------------------------------------------------------
 
@@ -43,7 +39,10 @@ def account_create():
     if not account_id:
         return flask.Response('Missing Account ID', 400)
     id = backend.create_account(account_id)
-    return id
+    if id:
+        return flask.Response(id, 201)
+    else:
+        return flask.Response('', 202)
 
 
 @account_api.route('/v1.0/account/update', methods=['POST'])
@@ -52,7 +51,9 @@ def account_update():
     if not account_id:
         return flask.Response('Missing Account ID', 400)
     decoded = flask.request.get_json(force=True)
-    backend.update_account(account_id, decoded)
+    metadata = decoded.get('metadata')
+    to_delete = decoded.get('to_delete')
+    backend.update_account_metadata(account_id, metadata, to_delete)
     return ""
 
 
@@ -90,23 +91,15 @@ def account_list_containers():
 @account_api.route('/v1.0/account/container/update', methods=['POST'])
 def container_update():
     account_id = request.args.get('id')
-    if not account_id:
-        return flask.Response('Missing Account ID', 400)
-    try:
+    if account_id:
         d = flask.request.get_json(force=True)
-        container = d.get('name')
-        data = {
-            'mtime': d.get('mtime'),
-            'object_count': d.get('object_count'),
-            'bytes': d.get('bytes'),
-            'storage_policy': d.get('storage_policy')
-        }
-        result = backend.update_container(account_id, container, data)
-    except AccountException as e:
-        code = 404
-        if e.status_code in (CODE_ACCOUNT_NOTFOUND, CODE_USER_NOTFOUND):
-            code = 403
-        return repr(e.to_dict()), code
+        name = d.get('name')
+        mtime = d.get('mtime')
+        dtime = d.get('dtime')
+        object_count = d.get('objects')
+        bytes_used = d.get('bytes')
+        result = backend.update_container(account_id, name, mtime, dtime,
+                                          object_count, bytes_used)
     return ""
 
 

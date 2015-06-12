@@ -187,3 +187,52 @@ def read_conf(conf_path, section_name=None, defaults=None):
         for s in c.sections():
             conf.update({s: dict(c.items(s))})
     return conf
+
+
+TIMESTAMP_FORMAT = "%016.05f"
+
+
+class Timestamp(object):
+    def __init__(self, timestamp):
+        self.timestamp = float(timestamp)
+
+    def __repr__(self):
+        return self.normal
+
+    def __float__(self):
+        return self.timestamp
+
+    def __int__(self):
+        return int(self.timestamp)
+
+    def __nonzero__(self):
+        return bool(self.timestamp)
+
+    @property
+    def normal(self):
+        return TIMESTAMP_FORMAT % self.timestamp
+
+    def __eq__(self, other):
+        if not isinstance(other, Timestamp):
+            other = Timestamp(other)
+        return self.timestamp == other.timestamp
+
+    def __ne__(self, other):
+        if not isinstance(other, Timestamp):
+            other = Timestamp(other)
+        return self.timestamp != other.timestamp
+
+    def __cmp__(self, other):
+        if not isinstance(other, Timestamp):
+            other = Timestamp(other)
+        return cmp(self.timestamp, other.timestamp)
+
+
+def int_value(value, default):
+    if value in (None, 'None'):
+        return default
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        raise
+    return value
