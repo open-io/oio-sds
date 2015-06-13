@@ -125,13 +125,13 @@ bean_sequence_marshall(GSList *beans)
 }
 
 GSList *
-bean_sequence_unmarshall(const guint8 *buf, gsize buf_len)
+bean_sequence_unmarshall(const guint8 *buf, gsize len)
 {
 	GSList *l = NULL;
 	GError *err = NULL;
 	gint rc = 0;
 
-	rc = bean_sequence_decoder(&l, buf, &buf_len, &err);
+	rc = bean_sequence_decoder(&l, buf, len, &err);
 	if (rc <= 0) {
 		if (err)
 			GRID_ERROR("Decoder error: (%d) %s", err->code, err->message);
@@ -145,7 +145,7 @@ bean_sequence_unmarshall(const guint8 *buf, gsize buf_len)
 }
 
 gint
-bean_sequence_decoder(GSList **l, const void *buf, gsize *buf_len, GError **err)
+bean_sequence_decoder(GSList **l, const void *buf, gsize len, GError **err)
 {
 	void *result = NULL;
 	gint i = 0, max = 0;
@@ -160,13 +160,13 @@ bean_sequence_decoder(GSList **l, const void *buf, gsize *buf_len, GError **err)
 		bean_cleanASN(d, FALSE);
 	}
 
-	if (!buf || !buf_len || !*buf_len) {
+	if (!buf || !len) {
 		GRID_DEBUG("Invalid parameter, nothing to unmarshall");
 		return -1;
 	}
 
 	codecCtx.max_stack_size = ASN1C_MAX_STACK;
-	decRet = ber_decode(&codecCtx, &asn_DEF_M2V2BeanSequence, &(result), buf, *buf_len);
+	decRet = ber_decode(&codecCtx, &asn_DEF_M2V2BeanSequence, &(result), buf, len);
 
 	switch (decRet.code) {
 		case RC_OK:

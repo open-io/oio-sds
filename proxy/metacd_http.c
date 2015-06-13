@@ -446,8 +446,7 @@ _task_push (gpointer p)
 	if (!csaddr) {
 		GRID_ERROR("Push error: %s", "No/Invalid conscience for namespace NS");
 	} else {
-		GError *err = NULL;
-		gcluster_push_services (csaddr, timeout_cs_push, tmp, TRUE, &err);
+		GError *err = gcluster_push_services (csaddr, timeout_cs_push, tmp);
 		if (err != NULL) {
 			GRID_WARN("Push error: (%d) %s", err->code, err->message);
 			g_clear_error(&err);

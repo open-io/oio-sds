@@ -51,7 +51,6 @@ asn1_worker_get_session_data( worker_t *asn1_worker )
 {
 	asn1_session_t *asn1_session;
 	
-	TRACE_POSITION();
 	
 	asn1_session = asn1_worker_get_session(asn1_worker);
 	return asn1_session ? asn1_session->session_data : NULL;
@@ -62,7 +61,6 @@ asn1_worker_set_session_data(worker_t *asn1_worker, void* data, GDestroyNotify c
 {
 	asn1_session_t *asn1_session;
 
-	TRACE_POSITION();
 
 	asn1_session = asn1_worker ? asn1_worker_get_session(asn1_worker) : NULL;
 	if (asn1_session) {
@@ -77,7 +75,6 @@ asn1_worker_set_handlers(worker_t *asn1_worker, worker_func_f response,
 {
 	asn1_session_t *asn1_session;
 
-	TRACE_POSITION();
 
 	if (!asn1_worker)
 		return;
@@ -94,7 +91,6 @@ asn1_worker_set_handlers(worker_t *asn1_worker, worker_func_f response,
 static void
 free_asn1_session( asn1_session_t *asn1_session)
 {
-	TRACE_POSITION();
 
 	if (!asn1_session)
 		return;
@@ -121,7 +117,6 @@ asn1_worker_liberator(worker_t *worker)
 {
 	int fd;
 	
-	TRACE_POSITION();
 
 	if (!worker)
 		return;
@@ -147,7 +142,6 @@ create_asn1_worker(addr_info_t *addr, const gchar *req_name)
 	asn1_session_t *asn1_session;
 	worker_t *asn1_worker;
 
-	TRACE_POSITION();
 
 	asn1_session = g_malloc0(sizeof(asn1_session_t));
 	asn1_session->addr = g_memdup(addr, sizeof(addr_info_t));
@@ -238,7 +232,6 @@ asn1_request_worker(worker_t *worker, GError **error)
 	int fd;
 	asn1_session_t *asn1_session = NULL;
 
-	TRACE_POSITION();
 
 	asn1_session = asn1_worker_get_session(worker);
 	if (!asn1_session) {
@@ -275,7 +268,6 @@ write_request(worker_t *worker, GError **error)
 	asn1_session_t *asn1_session = NULL;
 	MESSAGE req = NULL;
 
-	TRACE_POSITION();
 
 	data = &(worker->data);
 	asn1_session = (asn1_session_t*)data->session;
@@ -351,7 +343,6 @@ read_response_size(worker_t *worker, GError **error)
 	worker_data_t *data = NULL;
 	asn1_session_t *asn1_session = NULL;
 
-	TRACE_POSITION();
 
 	data = &(worker->data);
 	asn1_session = (asn1_session_t*)data->session;
@@ -399,7 +390,6 @@ read_response(worker_t *worker, GError **error)
 	guint status = CODE_INTERNAL_ERROR;
 	gchar *msg = NULL;
 
-	TRACE_POSITION();
 
 	data = &(worker->data);
 	asn1_session = (asn1_session_t*)data->session;

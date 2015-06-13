@@ -104,7 +104,6 @@ int register_request_handler(const char *request_name, worker_func_f handler, GE
 int request_worker(worker_t *worker, GError **error) {
 	request_t *request = NULL;
 
-	TRACE_POSITION();
 
 	EXTRA_ASSERT(worker != NULL);
 	EXTRA_ASSERT(worker->data.session != NULL);

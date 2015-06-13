@@ -75,10 +75,13 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 	}
 
 	si->score.timestamp = network_server_bogonow(args->rq->client->server);
+
 	if (op == REGOP_PUSH)
-		si->score.value = 0;
+		si->score.value = SCORE_UNSET;
 	else if (op == REGOP_UNLOCK)
-		si->score.value = -1;
+		si->score.value = SCORE_UNLOCK;
+	else /* if (op == REGOP_LOCK) */
+		si->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
 
 	gchar *key = service_info_key(si);
 	PUSH_DO(lru_tree_insert(push_queue, key, si));

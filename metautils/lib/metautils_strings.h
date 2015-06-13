@@ -22,11 +22,23 @@ License along with this library.
 
 #include <glib.h>
 
+#define BUFFER_STACKIFY(P,L) do { \
+	gsize _l = (L); void *_t = (P); \
+	(P) = alloca(_l); memcpy((P), _t, _l); g_free(_t); \
+} while (0)
+
+/* Replaces the heap-allocated buffer at S by a stack-allocated copy */
 #define STRING_STACKIFY(S) do { \
-	gsize _s = strlen((S)); gchar *_t = (S); \
-	(S) = alloca(_s + 1); \
-	memcpy((S), _t, _s+1); \
-	g_free(_t); \
+	if (!(S)) break; \
+	BUFFER_STACKIFY((S),1+strlen(S)); \
+} while (0)
+
+/* Replaces the heap-allocated null-terminated strings array by a deep copy
+ * that is stack allocated. */
+#define STRINGV_STACKIFY(V) do { \
+	if (!(V)) break; \
+	BUFFER_STACKIFY((V), (1+g_strv_length(V))*sizeof(void*)); \
+	for (gchar **p=(V); *p ;++p) { STRING_STACKIFY(*p); } \
 } while (0)
 
 /**

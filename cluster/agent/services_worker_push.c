@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define G_LOG_DOMAIN "gridcluster.agent.service_register_worker"
 #endif
 
+#include <errno.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -46,7 +47,6 @@ agent_get_service_key(struct service_info_s *si, gchar * dst, gsize dst_size)
 {
 	gsize writen;
 
-	TRACE_POSITION();
 
 	writen = 0;
 	writen += g_snprintf(dst + writen, dst_size - writen, "%s:", si->type);
@@ -117,9 +117,12 @@ expand_service_tags(struct namespace_data_s *ns_data, struct service_info_s *si,
 			else if (!g_ascii_strcasecmp(tag->value.macro.type, NAME_MACRO_SPACE_TYPE)) {
 				long free_space;
 				gint64 free_space_i64;
-				free_space = get_free_space(tag->value.macro.param,ns_data->ns_info.chunk_size);
+				free_space = get_free_space(tag->value.macro.param, ns_data->ns_info.chunk_size);
 				free_space_i64 = free_space;
 				service_tag_set_value_i64(tag,free_space_i64);
+				if (free_space < 0)
+					WARN("Service [NS=%s][SRVTYPE=%s][@=%s] : free space expansion error for path [%s]: (%d) %s",
+							si->ns_name, si->type, str_addr, tag->value.macro.param, errno, strerror(errno));
 			}
 			else {
 				WARN("Service [NS=%s][SRVTYPE=%s][@=%s] : macro type not managed name=[%s] type=[%s]",
@@ -140,7 +143,6 @@ manage_service(struct service_info_s *si)
 	gsize key_size;
 	gchar key[LIMIT_LENGTH_SRVTYPE + 1 + STRLEN_ADDRINFO + 1], str_addr[STRLEN_ADDRINFO];
 
-	TRACE_POSITION();
 
 	if (!si) {
 		ERROR("Invalid parameter");
@@ -182,8 +184,7 @@ manage_service(struct service_info_s *si)
 		return FALSE;
 	}
 
-	/*Set the score to the "unset" value*/
-	si->score.value = -2;
+	si->score.value = SCORE_UNSET;
 	si->score.timestamp = time(0);
 
 	/*then keep the score */
@@ -211,15 +212,12 @@ int
 services_worker_push(worker_t * worker, GError ** error)
 {
 	gboolean rc;
-	gsize arg_size;
 	GSList *list_service_info = NULL, *l;
 
-	TRACE_POSITION();
 
 	/*extract the fields packed in the request's parameter */
 	request_t *req = (request_t *) worker->data.session;
-	arg_size = req->arg_size;
-	rc = service_info_unmarshall(&list_service_info, req->arg, &arg_size, error);
+	rc = service_info_unmarshall(&list_service_info, req->arg, req->arg_size, error);
 	
 	if (!rc) {
 		GSETERROR(error, "Invalid payload (service_info sequence expected)");
@@ -248,7 +246,7 @@ fill_service_info_score(struct conscience_s *conscience, struct service_info_s *
 	struct conscience_srv_s *srv;
 	struct conscience_srvtype_s *srvtype;
 
-	si->score.value = -1;
+	si->score.value = SCORE_UNSET;
 	srvtype = conscience_get_srvtype(conscience, NULL, si->type, MODE_STRICT);
 	if (srvtype) {
 		srv = conscience_srvtype_get_srv(srvtype, (struct conscience_srvid_s*)&(si->addr));
@@ -264,7 +262,6 @@ build_local_service_info_list(void)
 	gpointer srv_k, srv_v, ns_k, ns_v;
 	GSList *services;
 
-	TRACE_POSITION();
 
 	/* iterate over the locally registered services of all the namespaces
 	 * For all these services, we force their score to the only two values
@@ -294,7 +291,7 @@ build_local_service_info_list(void)
 			struct service_info_s *si;
 
 			si = srv_v;
-			si->score.value = 0;
+			si->score.value = SCORE_DOWN;
 			services = g_slist_prepend(services, si);
 		}
 	}
@@ -309,7 +306,6 @@ services_worker_list_local(worker_t * worker, GError ** error)
 	GByteArray *gba;
 	response_t response;
 
-	TRACE_POSITION();
 
 	memset(&response, 0, sizeof(response_t));
 

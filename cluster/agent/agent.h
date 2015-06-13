@@ -30,12 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #  define GS_CONFIG_NSINFO_REFRESH "nsinfo_refresh"
 # endif
 
-# ifdef HAVE_EXTRA_DEBUG
-#  define TRACE_POSITION() TRACE("At %s (%s %d)", __FUNCTION__, __FILE__, __LINE__)
-# else
-#  define TRACE_POSITION()
-# endif
-
 /* ------------------------------------------------------------------------- */
 
 # define SOCK_TIMEOUT 10000
@@ -67,16 +61,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define CS_GET_SRVLIST_PERIOD_KEY       "period_get_srv"
 # define CS_GET_SRVTYPE_PERIOD_KEY       "period_get_srvtype"
 # define CS_PUSH_SRVLIST_PERIOD_KEY      "period_push_srv"
-
-# define EVENTS_MODE_FILE_DEFAULT        0444
-# define EVENTS_MODE_DIR_DEFAULT         0755
-# define EVENTS_SPOOL_SIZE_DEFAULT       0
-# define EVENTS_SPOOL_SIZE_DEFAULT       0
-# define EVENTS_MANAGE_ENABLE_DEFAULT    1
-# define EVENTS_RECEIVE_ENABLE_DEFAULT   1
-# define EVENTS_MAXPENDING_ACTIONS_DEFAULT 500U
-# define EVENTS_MAXPENDING_DEFAULT         100U
-# define EVENTS_DELAY_INCOMING_DEFAULT   0L
 
 # define SECTION_GENERAL "General"
 # define SECTION_SERVER_INET  "server.inet"
@@ -123,7 +107,6 @@ extern int period_push_srvlist;
 /* ------------------------------------------------------------------------- */
 
 typedef struct namespace_data_s {
-	
 	char name[LIMIT_LENGTH_NSNAME];
 	namespace_info_t ns_info;
 	gboolean configured;

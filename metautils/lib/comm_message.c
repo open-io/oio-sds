@@ -666,8 +666,7 @@ metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
 	GSList *items = NULL;
 	for (GByteArray **p=bodyv; *p && !err ;++p) {
 		GSList *l = NULL;
-		gsize s = (*p)->len;
-		if (!decoder (&l, (*p)->data, &s, NULL))
+		if (!decoder (&l, (*p)->data, (*p)->len, NULL))
 			err = NEWERROR (CODE_PROXY_ERROR, "Bad payload from service");
 		else
 			items = g_slist_concat (items, l);
@@ -692,7 +691,7 @@ metautils_message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
     }
 
 	GError *err = NULL;
-	int rc = decoder(result, b, &bsize, &err);
+	int rc = decoder(result, b, bsize, &err);
 	if (rc <= 0) {
 		EXTRA_ASSERT(err != NULL);
 		err->code = CODE_BAD_REQUEST;
@@ -720,7 +719,7 @@ metautils_message_extract_header_encoded(MESSAGE msg, const gchar *n, gboolean m
 	} 
 
 	GError *err = NULL;
-	int rc = decoder(result, b, &bsize, &err);
+	int rc = decoder(result, b, bsize, &err);
 	if (rc <= 0) {
 		EXTRA_ASSERT(err != NULL);
 		err->code = CODE_BAD_REQUEST;

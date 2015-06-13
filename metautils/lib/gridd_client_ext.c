@@ -370,6 +370,7 @@ gridd_client_exec4 (const gchar *to, gdouble timeout, GByteArray *req,
 			(out ? tmp : NULL), out ? (client_on_reply)_cb_exec4 : NULL);
 	if (!client)
 		return NEWERROR(CODE_INTERNAL_ERROR, "client creation");
+	g_byte_array_unref (req);
 	if (timeout > 0.0)
 		gridd_client_set_timeout (client, timeout, timeout);
 	GError *err = gridd_client_run (client);
@@ -407,6 +408,7 @@ gridd_client_exec_and_concat (const gchar *to, gdouble timeout, GByteArray *req,
 
 	struct gridd_client_s *client = gridd_client_create(to, req,
 			out ? tmp : NULL, out ? (client_on_reply)_cb_exec_and_concat : NULL);
+	g_byte_array_unref (req);
 	if (!client)
 		return NEWERROR(CODE_INTERNAL_ERROR, "client creation");
 	if (timeout > 0.0)
@@ -460,8 +462,7 @@ gridd_client_exec_and_decode (const gchar *to, gdouble timeout,
 			if (!body->data || body->len<=0)
 				continue;
 			GSList *l = NULL;
-			gsize len = body->len;
-			if (!decode(&l, body->data, &len, &err)) {
+			if (!decode(&l, body->data, body->len, &err)) {
 				g_prefix_error (&err, "Decoding error: ");
 				break;
 			}

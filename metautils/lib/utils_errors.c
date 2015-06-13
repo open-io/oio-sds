@@ -65,14 +65,12 @@ g_error_transmit(GError **err, GError *e)
 	if (err) {
 		if (!*err) {
 			g_propagate_error(err, e);
-		}
-		else {
+		} else {
 			GSETRAW(err, e->code, e->message);
-			g_clear_error(&e);
+			g_error_free(e);
 		}
-	}
-	else {
-		g_clear_error(&e);
+	} else {
+		g_error_free(e);
 	}
 }
 

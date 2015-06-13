@@ -72,7 +72,6 @@ typedef struct response_s {
 #define NAMESPACES_TASK_WORKER(TaskId,NSWorkerCreator,Name) static int Name ( gpointer udata, GError **error) {\
 	gpointer ns_k, ns_v;\
 	GHashTableIter ns_iterator;\
-	TRACE_POSITION();\
 	(void)udata;\
 	/*Run all the namespaces currenly known*/\
 	g_hash_table_iter_init(&ns_iterator, namespaces);\
@@ -96,7 +95,6 @@ static int \
 Name ( gpointer udata, GError **error) {\
 	gpointer ns_k, ns_v;\
 	GHashTableIter ns_iterator;\
-	TRACE_POSITION();\
 	(void)udata;\
 	g_hash_table_iter_init(&ns_iterator, namespaces);\
 	while (g_hash_table_iter_next(&ns_iterator,&ns_k,&ns_v)) {\

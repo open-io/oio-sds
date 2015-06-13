@@ -46,7 +46,6 @@ struct request_data_s {
 static void
 free_services_list( GSList *list )
 {
-	TRACE_POSITION();
 	if (list) {
 		g_slist_foreach( list, service_info_gclean, NULL);
 		g_slist_free( list );
@@ -59,7 +58,6 @@ services_runner(struct conscience_srv_s * srv, gpointer u)
 	struct request_data_s *req_data;
 	struct service_info_s *si;
 	
-	TRACE_POSITION();
 	
 	if (!srv || !u)
 		return FALSE;
@@ -79,7 +77,6 @@ build_known_services_list( struct namespace_data_s *ns_data, const gchar *type_n
 	gchar **array_types;
 	struct request_data_s req_data;
 
-	TRACE_POSITION();
 
 	req_data.result = NULL;
 	array_types = g_strsplit(type_name,",",0);
@@ -108,7 +105,6 @@ services_worker_list( worker_t *worker, GError **error )
 	GByteArray *gba = NULL;
 	request_t *req;
 
-	TRACE_POSITION();
 
 	/*unpack the parameters and find the namespace*/	
 	req = (request_t*) worker->data.session;
@@ -156,7 +152,6 @@ services_types_worker_list( worker_t *worker, GError **error )
 	GByteArray *gba;
 	request_t *req;
 
-	TRACE_POSITION();
 
 	/*unpack the parameters and find the namespace*/	
 	req = (request_t*) worker->data.session;
@@ -170,10 +165,8 @@ services_types_worker_list( worker_t *worker, GError **error )
 	/*reply the service types names*/
 	do {
 		GSList *names = conscience_get_srvtype_names(ns_data->conscience, error);
-		gba = meta2_maintenance_names_marshall(names,error);
-		g_slist_foreach(names,g_free1,NULL);
-		g_slist_free(names);
-		names = NULL;
+		gba = strings_marshall_gba(names,error);
+		g_slist_free_full(names, g_free);
 	} while (0);
 
 	if (!gba) {

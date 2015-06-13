@@ -41,7 +41,7 @@ meta1_remote_create_container_v2 (addr_info_t *meta1, GError **err,
 	metautils_message_add_url (request, url);
 	GByteArray *packed = message_marshall_gba_and_clean(request);
 
-	gchar target[64];
+	gchar target[STRLEN_ADDRINFO];
 	addr_info_to_string(meta1, target, sizeof(target));
 	struct gridd_client_s *client = gridd_client_create(target, packed, NULL, NULL);
 	g_byte_array_unref(packed);
@@ -83,7 +83,7 @@ meta1_remote_get_container_by_id (struct metacnx_ctx_s *ctx, struct hc_url_s *ur
 	metautils_message_add_url (request, url);
 	GByteArray *packed = message_marshall_gba_and_clean(request);
 
-	gchar target[64];
+	gchar target[STRLEN_ADDRINFO];
 	addr_info_to_string(&(ctx->addr), target, sizeof(target));
 	client = gridd_client_create(target, packed, NULL, on_reply);
 
@@ -126,7 +126,7 @@ on_reply(gpointer ctx, MESSAGE reply)
 static gchar **
 list_request(const addr_info_t *a, GError **err, GByteArray *req)
 {
-	gchar stra[128];
+	gchar stra[STRLEN_ADDRINFO];
 	struct gridd_client_s *client = NULL;
 	GByteArray *gba;
 	GError *e = NULL;

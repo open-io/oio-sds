@@ -48,7 +48,6 @@ static struct conscience_srvtype_s*
 get_srvtype(const gchar *ns, const gchar *type, GError **error)
 {
 	namespace_data_t *ns_data;
-	TRACE_POSITION();
 	ns_data = g_hash_table_lookup( namespaces, ns);
 	if (!ns_data) {
 		GSETERROR(error,"Namespace %s disappeared", ns);
@@ -67,58 +66,50 @@ parse_names_list( worker_t *worker, GError **error )
 	struct session_data_s *sdata;
 	asn1_session_t *asn1_session;
 
-        TRACE_POSITION();
 
 	asn1_session = (asn1_session_t*) worker->data.session;
-        sdata = asn1_worker_get_session_data(worker);
+	sdata = asn1_worker_get_session_data(worker);
 
-	if (asn1_session->resp_body != NULL) {
-		GSList *names = meta2_maintenance_names_unmarshall_buffer(asn1_session->resp_body, asn1_session->resp_body_size, error);
-		if (!names) {
+	if (!asn1_session->resp_body || !asn1_session->resp_body_size) {
+		DEBUG("[task_id=%s] No body received", sdata->task_id);
+	} else {
+		GSList *names = NULL;
+		gint rc = strings_unmarshall(&names, asn1_session->resp_body,
+				asn1_session->resp_body_size, error);
+		if (!rc) {
 			GSETERROR(error, "Failed to unmarshall the service_types name list");
 			return 0;
 		} else {
-			DEBUG("Received %d names", g_slist_length( names ));
+			DEBUG("[task_id=%s] Received %d names", sdata->task_id, g_slist_length( names ));
 			sdata->names = g_slist_concat( names, sdata->names );
 		}
 	}
 
-        return(1);
+	return(1);
 }
 
 static int
 asn1_final_handler( worker_t *worker, GError **error)
 {
-	GSList *l;
-	struct session_data_s *sdata;
 
-	TRACE_POSITION();
-
-	sdata = asn1_worker_get_session_data( worker );
+	struct session_data_s *sdata = asn1_worker_get_session_data( worker );
 	if (!sdata) {
 		GSETERROR(error,"Invalid worker (NULL session data)");
 		return 0;
 	}
 	
 	task_done(sdata->task_id);
-	if (sdata->names) {
-		DEBUG("[task_id=%s] %d services names received, about to save them",
-			sdata->task_id, g_slist_length(sdata->names));
-	} else
-		DEBUG("[task_id=%s] No service name received", sdata->task_id );
+	DEBUG("[task_id=%s] terminated", sdata->task_id);
 
-	/*sets the new list*/
-	for (l=sdata->names; l ;l=g_slist_next(l)) {
-		gchar *type_name;
+	for (GSList *l=sdata->names; l ;l=l->next) {
 		if (!l->data)
 			continue;
-		type_name = l->data;
+		gchar *type_name = l->data;
 		if (!get_srvtype( sdata->ns, type_name, error ))
 			WARN("[task_id=%s] Failed to init service type [%s/%s] : %s",
 				sdata->task_id, sdata->ns, type_name, gerror_get_message(*error));
 	}
 
-	DEBUG("[task_id=%s] terminated", sdata->task_id);
 	return 1;
 }
 
@@ -126,7 +117,6 @@ static int
 asn1_error_handler( worker_t *worker, GError **error )
 {
 	struct session_data_s *sdata;
-	TRACE_POSITION();
 	sdata = asn1_worker_get_session_data( worker );
 	if (sdata) {
 		GSETERROR(error, "[task_id=%s] Failed to request volume list", sdata->task_id);
@@ -134,13 +124,12 @@ asn1_error_handler( worker_t *worker, GError **error )
 	}
 	else
 		GSETERROR(error, "[task_id="TASK_ID".?] Failed to request volume list");
-        return(0);
+	return(0);
 }
 
 static void
 sdata_cleaner(struct session_data_s *sdata)
 {
-	TRACE_POSITION();
 	if (!sdata)
 		return;
 	task_done(sdata->task_id);
@@ -156,7 +145,6 @@ sdata_cleaner(struct session_data_s *sdata)
 static int
 task_worker(gpointer p, GError **error )
 {
-	TRACE_POSITION();
 
 	struct namespace_data_s *ns_data = get_namespace((gchar*)p, error);
 	if (!ns_data) {
@@ -169,7 +157,7 @@ task_worker(gpointer p, GError **error )
 	g_snprintf(sdata->task_id,sizeof(sdata->task_id), TASK_ID".%s",ns_data->name);
 
 	worker_t *asn1_worker = create_asn1_worker(&(ns_data->ns_info.addr), NAME_MSGNAME_CS_GET_SRVNAMES);
-	asn1_worker_set_handlers(asn1_worker,parse_names_list,asn1_error_handler,asn1_final_handler);
+	asn1_worker_set_handlers(asn1_worker, parse_names_list, asn1_error_handler, asn1_final_handler);
 	asn1_worker_set_session_data(asn1_worker, sdata, (GDestroyNotify)sdata_cleaner);
 
 	if (!asn1_request_worker(asn1_worker, error)) {
@@ -189,7 +177,6 @@ NAMESPACE_TASK_CREATOR(task_starter,TASK_ID,task_worker,period_get_srvtype);
 int
 services_task_get_types(GError **error)
 {
-	TRACE_POSITION();
 
 	task_t *task = create_task(2, TASK_ID);
 	task->task_handler = task_starter;

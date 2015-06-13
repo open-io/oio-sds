@@ -1253,7 +1253,6 @@ hc_set_container_global_property(gs_container_t *container,
 	const gchar * const tab[3] = { prop_name, prop_val, NULL };
 	GByteArray *req = sqlx_pack_PROPSET_tab(sqlx_name_mutable_to_const(&name), FALSE, tab);
 	GError *err = gridd_client_exec(addr, M2V2_CLIENT_TIMEOUT, req);
-	g_byte_array_unref(req);
 
 	gs_error_t *ge = NULL;
 	if (err) {
@@ -1281,7 +1280,6 @@ hc_del_container_global_property(gs_container_t *container,
 	const gchar * const tab[2] = { prop_name, NULL };
 	GByteArray *req = sqlx_pack_PROPDEL(sqlx_name_mutable_to_const(&name), tab);
 	GError *err = gridd_client_exec (addr, M2V2_CLIENT_TIMEOUT, req);
-	g_byte_array_unref(req);
 
 	gs_error_t *ge = NULL;
 	if (err) {
@@ -1309,7 +1307,6 @@ hc_get_container_properties(gs_container_t *container, char ***result)
 	GByteArray *req = sqlx_pack_PROPGET(sqlx_name_mutable_to_const(&name), NULL);
 	GError *err = gridd_client_exec_and_decode (addr, M2V2_CLIENT_TIMEOUT, req,
 			&pairs, key_value_pairs_unmarshall);
-	g_byte_array_unref(req);
 
 	gs_error_t *ge = NULL;
 	if (!err) {

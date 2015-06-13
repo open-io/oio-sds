@@ -50,7 +50,6 @@ struct session_data_s
 static void
 asn1_cleaner(gpointer p)
 {
-	TRACE_POSITION();
 	if (!p)
 		return;
 	task_done(((struct session_data_s*)p)->task_id);
@@ -64,7 +63,6 @@ asn1_final_handler(worker_t * worker, GError ** error)
 	struct session_data_s *sdata;
 
 	(void)error;
-	TRACE_POSITION();
 	sdata = asn1_worker_get_session_data(worker);
 	if (sdata) {
 		DEBUG("[task_id=%s] Request successful", sdata->task_id);
@@ -78,7 +76,6 @@ asn1_error_handler(worker_t * worker, GError ** error)
 {
 	struct session_data_s *sdata;
 
-	TRACE_POSITION();
 	sdata = asn1_worker_get_session_data(worker);
 	if (sdata) {
 		GSETERROR(error, "[task_id=%s] Request failed ", sdata->task_id);
@@ -98,7 +95,6 @@ task_worker(gpointer p, GError ** error)
 	struct namespace_data_s *ns_data;
 	worker_t *asn1_worker;
 
-	TRACE_POSITION();
 
 	/*prepare a session and a worker for the ASN.1 request */
 	g_strlcpy(sdata.ns, (gchar*)p, sizeof(sdata.ns)-1);
@@ -158,7 +154,6 @@ NAMESPACE_TASK_CREATOR(task_starter,TASK_ID, task_worker, period_push_srvlist);
 int
 services_task_push(GError ** error)
 {
-	TRACE_POSITION();
 
 	task_t *task = create_task(1, TASK_ID);
 	task->task_handler = task_starter;
