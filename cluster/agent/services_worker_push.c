@@ -115,17 +115,24 @@ expand_service_tags(struct namespace_data_s *ns_data, struct service_info_s *si,
 				}
 			}
 			else if (!g_ascii_strcasecmp(tag->value.macro.type, NAME_MACRO_SPACE_TYPE)) {
-				long free_space;
-				gint64 free_space_i64;
-				free_space = get_free_space(tag->value.macro.param, ns_data->ns_info.chunk_size);
-				free_space_i64 = free_space;
-				service_tag_set_value_i64(tag,free_space_i64);
-				if (free_space < 0)
-					WARN("Service [NS=%s][SRVTYPE=%s][@=%s] : free space expansion error for path [%s]: (%d) %s",
-							si->ns_name, si->type, str_addr, tag->value.macro.param, errno, strerror(errno));
+				long free_space = get_free_space(tag->value.macro.param, ns_data->ns_info.chunk_size);
+				if (free_space >= 0) {
+					service_tag_set_value_i64(tag, free_space);
+				} else {
+					if (gridagent_blank_undefined_srvtags) {
+						DEBUG("Service [NS=%s][SRVTYPE=%s][@=%s] : nulled %s",
+								si->ns_name, si->type, str_addr, tag->name);
+						service_tag_set_value_i64(tag, 0);
+					} else {
+						GSETERROR(error, "Service [NS=%s][SRVTYPE=%s][@=%s] : "
+								"macro expansion failure name=[%s] value=[%s] : (%d) %s",
+								si->ns_name, si->type, str_addr, tag->name, str_tag, errno, strerror(errno));
+						return FALSE;
+					}
+				}
 			}
 			else {
-				WARN("Service [NS=%s][SRVTYPE=%s][@=%s] : macro type not managed name=[%s] type=[%s]",
+				NOTICE("Service [NS=%s][SRVTYPE=%s][@=%s] : macro type not managed name=[%s] type=[%s]",
 					si->ns_name, si->type, str_addr, tag->name, tag->value.macro.type);
 			}
 		}

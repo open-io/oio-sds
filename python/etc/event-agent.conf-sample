@@ -1,4 +1,5 @@
 [event-agent]
+namespace = OPENIO
 user = openio
 bind_addr = ipc:///tmp/run/event-agent.sock
 workers = 2

@@ -35,10 +35,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define PROXYD_DEFAULT_MAX_CSM0 0
 #endif
 
-#ifndef PROXYD_PREFIX
-#define PROXYD_PREFIX "v1.0"
-#endif
-
 #ifndef PROXYD_PATH_MAXLEN
 #define PROXYD_PATH_MAXLEN 2048
 #endif
@@ -69,18 +65,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #ifndef PROXYD_DEFAULT_PERIOD_UPSTREAM
 #define PROXYD_DEFAULT_PERIOD_UPSTREAM 1 /*s*/
-#endif
-
-#ifndef PROXYD_HEADER_PREFIX
-#define PROXYD_HEADER_PREFIX "X-oio-"
-#endif
-
-#ifndef PROXYD_HEADER_REQID
-#define PROXYD_HEADER_REQID PROXYD_HEADER_PREFIX "req-id"
-#endif
-
-#ifndef PROXYD_HEADER_NOEMPTY
-#define PROXYD_HEADER_NOEMPTY PROXYD_HEADER_PREFIX "no-empty-list"
 #endif
 
 #endif /*OIO_SDS__proxy__macros_h*/
