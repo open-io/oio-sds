@@ -93,17 +93,18 @@ make DESTDIR=${install_dir} install
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
-| GCLUSTER\_ETC\_DIR | "/etc/oio" | System-wide configuration directory |
-| GCLUSTER\_SPOOL\_DIR | "/var/spool" | Top-level directory for namespace spool dirs for events. |
-| GCLUSTER\_RUN\_DIR | "/var/run" | Prefix to spool. |
-| GCLUSTER\_CONFIG\_FILE\_PATH | "/etc/oio/sds.conf" | System-wide configuration file |
-| GCLUSTER\_CONFIG\_DIR\_PATH | "/etc/oio/sds.conf.d" | System-wide configuration directory for additional files. |
-| GCLUSTER\_CONFIG\_LOCAL\_PATH | ".oio/sds.conf" | Local configuration directory. |
-| GCLUSTER\_AGENT\_SOCK\_PATH | "/var/run/oio-sds-agent.sock" | Default path for agent's socket. |
-| GS\_CONFIG\_EVENT\_DELAY | "event\_delay" | Default pre-treatment delay applied to gridagent's events. |
-| GS\_CONFIG\_EVENT\_REFRESH | "event\_refresh" | Default refresh period for event's management configuration. |
-| GS\_CONFIG\_NSINFO\_REFRESH | "nsinfo\_refresh" | Default refresh period for 
-| PROXYD\_PREFIX | "/v1.0" | Prefix applied to proxyd's URL |
+| GCLUSTER_ETC_DIR | "/etc/oio" | System-wide configuration directory |
+| GCLUSTER_SPOOL_DIR | "/var/spool" | Top-level directory for namespace spool dirs for events. |
+| GCLUSTER_RUN_DIR | "/var/run" | Prefix to spool. |
+| GCLUSTER_CONFIG_FILE_PATH | "/etc/oio/sds.conf" | System-wide configuration file |
+| GCLUSTER_CONFIG_DIR_PATH | "/etc/oio/sds.conf.d" | System-wide configuration directory for additional files. |
+| GCLUSTER_CONFIG_LOCAL_PATH | ".oio/sds.conf" | Local configuration directory. |
+| GCLUSTER_AGENT_SOCK_PATH | "/var/run/oio-sds-agent.sock" | Default path for agent's socket. |
+| GS_CONFIG_EVENT_DELAY | "event_delay" | Default pre-treatment delay applied to gridagent's events. |
+| GS_CONFIG_EVENT_REFRESH | "event_refresh" | Default refresh period for event's management configuration. |
+| GS_CONFIG_NSINFO_REFRESH | "nsinfo_refresh" | Default refresh period for 
+| PROXYD_SOCK_PATH | GCLUSTER_RUN_DIR "/${NS}-proxy.sock" | '#' will we prelace by the namespace. |
+| PROXYD_PREFIX | "/v1.0" | Prefix applied to proxyd's URL |
 | PROXYD_PATH_MAXLEN | 2048 | Maximum length for path to be accepted in requests. |
 | PROXYD_DEFAULT_TTL_CSM0 | 0 | Maximum TTL (in seconds) for conscience entries in the proxyd cache. |
 | PROXYD_DEFAULT_TTL_SERVICES | 3600 | Idem for services entries. |

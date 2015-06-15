@@ -48,6 +48,13 @@ on_die=respawn
 enabled=true
 start_at_boot=false
 command=${EXE_PREFIX}-proxy -s SDS,${NS},proxy ${IP}:${PORT} ${NS}
+
+[service.${NS}-proxy-local]
+group=${NS},localhost,proxy
+on_die=respawn
+enabled=true
+start_at_boot=false
+command=${EXE_PREFIX}-proxy -s SDS,${NS},proxy ${RUNDIR}/${NS}-proxy.sock ${NS}
 """
 
 template_nginx_gridinit = """
@@ -409,6 +416,7 @@ template_local_ns = """
 ${NOZK}zookeeper=${IP}:2181
 conscience=${IP}:${PORT_CS}
 endpoint=${IP}:${PORT_ENDPOINT}
+proxy-local=${RUNDIR}/${NS}-proxy.sock
 event-agent=ipc://${RUNDIR}/event-agent.sock
 """
 
