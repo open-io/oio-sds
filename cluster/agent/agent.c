@@ -381,6 +381,7 @@ parse_options(int argc, char ** args, GError **error)
 	static struct option long_options[] = {
 		{"syslog",           1, 0, 's'},
 		{"verbose",          0, 0, 'v'},
+		{"quiet",            0, 0, 'q'},
 		{"help",             0, 0, 1},
 		{0, 0, 0, 0}
 	};
@@ -408,6 +409,9 @@ parse_options(int argc, char ** args, GError **error)
 			break;
 		case 'v':
 			logger_verbose();
+			break;
+		case 'q':
+			logger_quiet();
 			break;
 		case '?':
 			break;

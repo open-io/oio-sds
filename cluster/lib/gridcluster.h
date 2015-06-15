@@ -41,9 +41,14 @@ License along with this library.
 #define GCLUSTER_CFG_AGENT        "agent"
 #define GCLUSTER_CFG_ACCOUNTAGENT "event-agent"
 #define GCLUSTER_CFG_ENDPOINT     "endpoint"
+#define GCLUSTER_CFG_PROXYLOCAL   "proxy-local"
 
 #ifndef GCLUSTER_ETC_DIR
 # define GCLUSTER_ETC_DIR "/etc/oio"
+#endif
+
+#ifndef PROXYD_SOCK_PATH
+# define PROXYD_SOCK_PATH GCLUSTER_RUN_DIR "/#-proxy.sock"
 #endif
 
 #ifndef GCLUSTER_CONFIG_FILE_PATH
@@ -271,8 +276,9 @@ gchar* gridcluster_get_config(const gchar *ns, const gchar *what);
 
 #define gridcluster_get_conscience(ns)   gridcluster_get_config((ns), GCLUSTER_CFG_CONSCIENCE)
 #define gridcluster_get_zookeeper(ns)    gridcluster_get_config((ns), GCLUSTER_CFG_ZOOKEEPER)
-#define gridcluster_get_eventagent(ns) gridcluster_get_config((ns), GCLUSTER_CFG_ACCOUNTAGENT)
+#define gridcluster_get_eventagent(ns)   gridcluster_get_config((ns), GCLUSTER_CFG_ACCOUNTAGENT)
 #define gridcluster_get_endpoint(ns)     gridcluster_get_config((ns), GCLUSTER_CFG_ENDPOINT)
+#define gridcluster_get_proxylocal(ns)   gridcluster_get_config((ns), GCLUSTER_CFG_PROXYLOCAL)
 
 static inline gchar *
 gridcluster_get_agent(void)

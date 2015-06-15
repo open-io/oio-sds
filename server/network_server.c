@@ -37,6 +37,7 @@ License along with this library.
 #include <sys/socket.h>
 #include <sys/resource.h>
 #include <sys/epoll.h>
+#include <sys/un.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
@@ -133,9 +134,13 @@ enum
 	NETCLIENT_IN_PAUSED         = 0x0008,
 };
 
-static gboolean _endpoint_bind(struct endpoint_s *u, int port);
+static gboolean _endpoint_is_UNIX (struct endpoint_s *u);
+static gboolean _endpoint_is_INET6 (struct endpoint_s *u);
+static gboolean _endpoint_is_INET4 (struct endpoint_s *u);
+static gboolean _endpoint_is_INET (struct endpoint_s *u);
 
-static GError * _endpoint_open(struct endpoint_s *u);
+static GError * _endpoint_open (struct endpoint_s *u);
+static void _endpoint_close (struct endpoint_s *u);
 
 static struct network_client_s* _endpoint_manage_event(
 		struct network_server_s *srv, struct endpoint_s *e);
@@ -337,17 +342,13 @@ static void
 _bind_host(struct network_server_s *srv, const gchar *url, gpointer u,
 		network_transport_factory factory, guint32 flags)
 {
-	gchar *port;
-	struct endpoint_s *e;
-	gsize len;
-
 	EXTRA_ASSERT(srv != NULL);
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(factory != NULL);
 
 	/* endpoint creation */
-	len = strlen(url);
-	e = g_malloc0(sizeof(*e) + 1 + len);
+	gsize len = strlen(url);
+	struct endpoint_s *e = g_malloc0(sizeof(*e) + 1 + len);
 	e->magic = MAGIC_ENDPOINT;
 	e->fd = -1;
 	e->flags = flags;
@@ -355,14 +356,17 @@ _bind_host(struct network_server_s *srv, const gchar *url, gpointer u,
 	e->factory_hook = factory;
 	memcpy(e->url, url, len);
 
-	if (NULL != (port = strrchr(e->url, ':'))) {
-		*port = '\0';
-		++ port;
-		e->port_cfg = atoi(port);
+	if (*url == '/') {
+		GRID_DEBUG("URL configured : LOCAL endpoint=%s", e->url);
+	} else {
+		gchar *port;
+		if (NULL != (port = strrchr(e->url, ':'))) {
+			*port = '\0';
+			++ port;
+			e->port_cfg = atoi(port);
+		}
+		GRID_DEBUG("URL configured : INET port=%d endpoint=%s", e->port_cfg, e->url);
 	}
-
-	GRID_DEBUG("URL configured : fd=%d port=%d endpoint=%s",
-			e->fd, e->port_cfg, e->url);
 
 	/* append the endpoint to the array in the server */
 	len = g_strv_length((gchar**) srv->endpointv);
@@ -395,14 +399,9 @@ network_server_bind_host_throughput(struct network_server_s *srv, const gchar *u
 void
 network_server_close_servers(struct network_server_s *srv)
 {
-	struct endpoint_s **pu, *u;
-
 	EXTRA_ASSERT(srv != NULL);
-	for (pu=srv->endpointv; pu && (u = *pu) ;pu++) {
-		if (u->fd >= 0)
-			metautils_pclose(&(u->fd));
-		u->port_real = 0;
-	}
+	for (struct endpoint_s **pu=srv->endpointv; *pu ;pu++)
+		_endpoint_close (*pu);
 }
 
 GError *
@@ -726,35 +725,28 @@ network_server_now(struct timespec *ts)
 
 /* Endpoint features ------------------------------------------------------- */
 
-static gboolean
-_endpoint_bind(struct endpoint_s *u, int port)
+static gboolean _endpoint_is_UNIX (struct endpoint_s *u)
+{ return u->url[0] == '/'; }
+
+static gboolean _endpoint_is_INET6 (struct endpoint_s *u)
+{ return u->url[0] == '['; }
+
+static gboolean _endpoint_is_INET4 (struct endpoint_s *u)
+{ return !_endpoint_is_UNIX(u) && !_endpoint_is_INET6(u); }
+
+static gboolean _endpoint_is_INET (struct endpoint_s *u)
+{ return !_endpoint_is_UNIX(u); }
+
+static void
+_endpoint_close (struct endpoint_s *u)
 {
-	struct sockaddr_in ss;
-	socklen_t ss_len;
-
-	EXTRA_ASSERT(port >= 0 && port < 65536);
-
-	memset(&ss, 0, sizeof(ss));
-	ss_len = sizeof(ss);
-	ss.sin_family = AF_INET;
-	ss.sin_port = htons(port);
-	inet_pton(AF_INET, u->url, &(ss.sin_addr));
-
-	sock_set_reuseaddr(u->fd, TRUE);
-
-	if (0 > bind(u->fd, (struct sockaddr*)&ss, ss_len)) {
-		u->port_real = 0;
-		return FALSE;
+	if (!u) return;
+	if (u->fd >= 0) {
+		if (_endpoint_is_UNIX (u))
+			(void) unlink (u->url);
+		metautils_pclose(&(u->fd));
 	}
-
-	fcntl(u->fd, F_SETFL, (fcntl(u->fd, F_GETFL)|O_NONBLOCK));
-
-	memset(&ss, 0, sizeof(ss));
-	ss_len = sizeof(ss);
-	getsockname(u->fd, (struct sockaddr*)&ss, &ss_len);
-
-	u->port_real = ntohs(ss.sin_port);
-	return TRUE;
+	u->port_real = 0;
 }
 
 static GError *
@@ -762,18 +754,67 @@ _endpoint_open(struct endpoint_s *u)
 {
 	EXTRA_ASSERT(u != NULL);
 
-	u->fd = socket(AF_INET, SOCK_STREAM, 0);
+	struct sockaddr_storage ss;
+	socklen_t ss_len = sizeof(ss);
+	memset(&ss, 0, sizeof(ss));
+
+	/* patch some socket preferences that make sense only for INET sockets */
+	if (_endpoint_is_UNIX(u)) {
+		u->port_real = 0;
+		u->port_cfg = 0;
+		u->flags &= ~(NETSERVER_THROUGHPUT|NETSERVER_LATENCY);
+	}
+
+	/* Get a socket of the right type */
+	if (_endpoint_is_UNIX(u))
+		u->fd = socket(AF_UNIX, SOCK_STREAM, 0);
+	else if (_endpoint_is_INET6(u))
+		u->fd = socket(AF_INET6, SOCK_STREAM, 0);
+	else
+		u->fd = socket(AF_INET, SOCK_STREAM, 0);
 	if (u->fd < 0)
 		return NEWERROR(errno, "socket() = '%s'", strerror(errno));
 
-	sock_set_reuseaddr(u->fd, TRUE);
-	sock_set_non_blocking(u->fd, TRUE);
-
-	/* Bind the socket on our URL */
-	if (!_endpoint_bind(u, u->port_cfg))
+	/* Bind the socket the right way according to its type */
+	if (_endpoint_is_UNIX(u)) {
+		struct sockaddr_un *sun = (struct sockaddr_un*) &ss;
+		ss_len = sizeof(*sun);
+		sun->sun_family = AF_UNIX;
+		g_strlcpy(sun->sun_path, u->url, sizeof(sun->sun_path));
+	} else if (_endpoint_is_INET6(u)) {
+		struct sockaddr_in6 *s6 = (struct sockaddr_in6*) &ss;
+		ss_len = sizeof(*s6);
+		s6->sin6_family = AF_INET6;
+		s6->sin6_port = htons(u->port_cfg);
+		inet_pton(AF_INET6, u->url, &(s6->sin6_addr));
+	} else {
+		struct sockaddr_in *s4 = (struct sockaddr_in*) &ss;
+		ss_len = sizeof(*s4);
+		s4->sin_family = AF_INET;
+		s4->sin_port = htons(u->port_cfg);
+		inet_pton(AF_INET, u->url, &(s4->sin_addr));
+	}
+	if (0 > bind(u->fd, (struct sockaddr*)&ss, ss_len)) {
+		u->port_real = 0;
 		return NEWERROR(errno, "bind() = '%s'", strerror(errno));
+	}
 
-	/* make the socket listen to incoming connections */
+	/* for INET sockets, get the port really used */
+	if (_endpoint_is_INET(u)) {
+		memset(&ss, 0, sizeof(ss));
+		ss_len = sizeof(ss);
+		getsockname(u->fd, (struct sockaddr*)&ss, &ss_len);
+		if (_endpoint_is_INET4(u))
+			u->port_real = ntohs(((struct sockaddr_in*)&ss)->sin_port);
+		else
+			u->port_real = ntohs(((struct sockaddr_in6*)&ss)->sin6_port);
+	}
+
+	/* And finally set the mandatory fags. */
+	sock_set_non_blocking(u->fd, TRUE);
+	if (_endpoint_is_INET(u))
+		sock_set_reuseaddr(u->fd, TRUE);
+
 	if (0 > listen(u->fd, 32768))
 		return NEWERROR(errno, "listen() = '%s'", strerror(errno));
 

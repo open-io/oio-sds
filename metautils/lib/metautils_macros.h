@@ -181,4 +181,21 @@ enum {
 	SCORE_MAX = 100
 };
 
+#ifndef PROXYD_PREFIX
+#define PROXYD_PREFIX "v1.0"
+#endif
+
+#ifndef PROXYD_HEADER_PREFIX
+#define PROXYD_HEADER_PREFIX "X-oio-"
+#endif
+
+#ifndef PROXYD_HEADER_REQID
+#define PROXYD_HEADER_REQID PROXYD_HEADER_PREFIX "req-id"
+#endif
+
+#ifndef PROXYD_HEADER_NOEMPTY
+#define PROXYD_HEADER_NOEMPTY PROXYD_HEADER_PREFIX "no-empty-list"
+#endif
+
+
 #endif /*OIO_SDS__metautils__lib__metautils_macros_h*/
