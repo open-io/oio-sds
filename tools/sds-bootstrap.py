@@ -316,6 +316,10 @@ param_service.sqlx.score_expr=(num stat.cpu)
 param_service.echo.score_timeout=120
 param_service.echo.score_variation_bound=5
 param_service.echo.score_expr=(num stat.cpu)
+
+param_service.account.score_timeout=120
+param_service.account.score_variation_bound=5
+param_service.account.score_expr=(num stat.cpu)
 """
 
 template_conscience_events = """
@@ -417,11 +421,13 @@ ${NOZK}zookeeper=${IP}:2181
 conscience=${IP}:${PORT_CS}
 endpoint=${IP}:${PORT_ENDPOINT}
 proxy-local=${RUNDIR}/${NS}-proxy.sock
+proxy=${IP}:${PORT_PROXYD}
 event-agent=ipc://${RUNDIR}/event-agent.sock
 """
 
 template_event_agent = """
 [event-agent]
+namespace = ${NS}
 user = ${USER}
 bind_addr = ipc://${RUNDIR}/event-agent.sock
 workers = 5
@@ -543,7 +549,7 @@ def generate (ns, ip, options={}):
 		tpl = Template(template_local_header)
 		f.write(tpl.safe_substitute(env))
 		env['PORT_CS'] = port_cs
-		env['PORT_ENDPOINT'] = port_endpoint
+		env['PORT_PROXYD'] = port_proxy
 		tpl = Template(template_local_ns)
 		f.write(tpl.safe_substitute(env))
 
@@ -611,7 +617,7 @@ def generate (ns, ip, options={}):
 		tpl = Template(template_flask_gridinit)
 		f.write(tpl.safe_substitute(env))
 
-	# metacd/proxy
+	# proxy
 	env['PORT'] = port_proxy
 	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
 		tpl = Template(template_proxy_gridinit)
