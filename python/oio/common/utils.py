@@ -238,10 +238,11 @@ def int_value(value, default):
         raise
     return value
 
+
 class InvalidServiceConfigError(ValueError):
-	
     def __str__(self):
         return "namespace missing from service conf"
+
 
 def validate_service_conf(conf):
     ns = conf.get('namespace')
@@ -256,7 +257,7 @@ def load_namespace_conf(namespace):
             yield f
         yield os.path.expanduser('~/.oio/sds.conf')
 
-    c = ConfigParser({}) 
+    c = ConfigParser({})
     success = c.read(places())
     if not success:
         print('Unable to read namespace config')
@@ -269,8 +270,8 @@ def load_namespace_conf(namespace):
     for k in ['zookeeper', 'conscience', 'proxy', 'event-agent']:
         v = conf.get(k)
         if not v:
-	    print("Missing field '%s' in namespace config" % k)
-	    sys.exit(1)
+            print("Missing field '%s' in namespace config" % k)
+            sys.exit(1)
     return conf
 
 
