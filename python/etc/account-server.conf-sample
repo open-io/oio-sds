@@ -1,10 +1,11 @@
 [account-server]
-bind = 127.0.0.1:5000
+bind_addr = 127.0.0.1
+bind_port = 5000
 backlog = 2048
 workers = 2
 redis_host = 127.0.0.1
 redis_port = 6379
-log_facility = LOG_LOCAL0
 log_level = INFO
-log_name = event-agent
+log_facility = LOG_LOCAL0
 log_address = /dev/log
+syslog_prefix = OIO,OPENIO,account,1

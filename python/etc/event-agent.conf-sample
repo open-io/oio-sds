@@ -5,5 +5,5 @@ bind_addr = ipc:///tmp/run/event-agent.sock
 workers = 2
 log_facility = LOG_LOCAL0
 log_level = INFO
-log_name = event-agent
 log_address = /dev/log
+syslog_prefix = OIO,OPENIO,event-agent,1

@@ -35,7 +35,7 @@ group=${NS},localhost,account-server
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-svc-monitor -s SDS,${NS},account,1 -p 1 -m '${EXE_PREFIX}-account-monitor.py' -i '${NS}|account|${IP}:${PORT}' -c '${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf'
+command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},account,1 -p 1 -m '${EXE_PREFIX}-account-monitor.py' -i '${NS}|account|${IP}:${PORT}' -c '${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf'
 env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
 env.PYTHONPATH=${CODEDIR}/lib/python2.7/site-packages
@@ -47,14 +47,14 @@ group=${NS},localhost,proxy
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-proxy -s SDS,${NS},proxy ${IP}:${PORT} ${NS}
+command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
 
 [service.${NS}-proxy-local]
 group=${NS},localhost,proxy
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-proxy -s SDS,${NS},proxy ${RUNDIR}/${NS}-proxy.sock ${NS}
+command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy ${RUNDIR}/${NS}-proxy.sock ${NS}
 """
 
 template_nginx_gridinit = """
@@ -369,7 +369,7 @@ group=common,localhost,agent
 on_die=respawn
 enabled=true
 start_at_boot=true
-command=${EXE_PREFIX}-cluster-agent -s SDS,${NS},agent ${CFGDIR}/agent.conf
+command=${EXE_PREFIX}-cluster-agent -s OIO,${NS},agent ${CFGDIR}/agent.conf
 
 """
 
@@ -380,7 +380,7 @@ group=${NS},localhost,conscience
 on_die=respawn
 enabled=true
 start_at_boot=true
-#command=${EXE_PREFIX}-daemon -s SDS,${NS},conscience ${CFGDIR}/${NS}-conscience.conf
+#command=${EXE_PREFIX}-daemon -s OIO,${NS},conscience ${CFGDIR}/${NS}-conscience.conf
 command=${EXE_PREFIX}-daemon -q ${CFGDIR}/${NS}-conscience.conf
 
 [service.${NS}-event-agent]
@@ -398,13 +398,13 @@ group=${NS},localhost,${SRVTYPE}
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE} -s SDS,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
+command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 """
 
 template_gridinit_rawx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE}
-command=${EXE_PREFIX}-svc-monitor -s SDS,${NS},${SRVTYPE},${SRVNUM} -p 1 -m '${EXE_PREFIX}-rawx-monitor.py' -i '${NS}|${SRVTYPE}|${IP}:${PORT}' -c '${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf'
+command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},${SRVTYPE},${SRVNUM} -p 1 -m '${EXE_PREFIX}-rawx-monitor.py' -i '${NS}|${SRVTYPE}|${IP}:${PORT}' -c '${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf'
 enabled=true
 start_at_boot=false
 on_die=respawn
@@ -433,18 +433,19 @@ bind_addr = ipc://${RUNDIR}/event-agent.sock
 workers = 5
 log_facility = LOG_LOCAL0
 log_level = INFO
-log_name = event-agent
 log_address = /dev/log
+syslog_prefix = OIO,NS,event-agent
 """
 
 template_account_server = """
 [account-server]
-bind = ${IP}:${PORT}
+bind_addr = ${IP}
+bind_port = ${PORT}
 workers = 2
 log_facility = LOG_LOCAL0
 log_level = INFO
-log_name = account-server
 log_address = /dev/log
+syslog_prefix = OIO,${NS},account,1
 """
 
 HOME = str(os.environ['HOME'])
