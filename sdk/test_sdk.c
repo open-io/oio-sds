@@ -22,6 +22,7 @@ main(int argc, char **argv)
 	struct oio_error_s *err = NULL;
 	struct hc_url_s *url;
 	struct oio_sds_s *client = NULL;
+	int has = 0;
 
 	url = hc_url_oldinit(str_url);
 	if (!url) {
@@ -39,18 +40,48 @@ main(int argc, char **argv)
 		return 4;
 	}
 
+	err = oio_sds_has (client, url, &has);
+	if (err) {
+		g_printerr ("Check error: (%d) %s\n", oio_error_code(err),
+				oio_error_message(err));
+		return 5;
+	}
+	if (has) {
+		g_printerr ("File already present\n");
+		return 6;
+	}
+
 	err = oio_sds_upload_from_file (client, url, str_path);
 	if (err) {
 		g_printerr ("Upload error: (%d) %s\n", oio_error_code(err),
 				oio_error_message(err));
-		return 5;
+		return 7;
+	}
+
+	has = 0;
+	err = oio_sds_has (client, url, &has);
+	if (err) {
+		g_printerr ("Check error: (%d) %s\n", oio_error_code(err),
+				oio_error_message(err));
+		return 8;
+	}
+	if (!has) {
+		g_printerr ("File not present\n");
+		return 9;
 	}
 
 	err = oio_sds_download_to_file (client, url, "/tmp/XXX");
 	if (err) {
 		g_printerr ("Download error: (%d) %s\n", oio_error_code(err),
 				oio_error_message(err));
-		return 6;
+		return 10;
+	}
+
+	err = oio_sds_delete (client, url);
+	if (err) {
+		g_printerr ("Delete error: (%d) %s\n", oio_error_code(err),
+				oio_error_message(err));
+		return 11;
 	}
 
 	hc_url_pclean (&url);

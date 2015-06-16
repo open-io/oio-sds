@@ -23,6 +23,11 @@ License along with this library.
 struct oio_sds_s;
 struct oio_error_s;
 struct hc_url_s;
+enum oio_sds_config_e
+{
+	OIOSDS_CFG_TIMEOUT_PROXY = 1,
+	OIOSDS_CFG_TIMEOUT_RAWX
+};
 
 /* error management */
 void oio_error_free (struct oio_error_s *e);
@@ -34,17 +39,24 @@ const char * oio_error_message (const struct oio_error_s *e);
 struct oio_error_s * oio_sds_init (struct oio_sds_s **out, const char *ns);
 void oio_sds_free (struct oio_sds_s *sds);
 void oio_sds_pfree (struct oio_sds_s **psds);
+/* return 0 on success, or errno in case of error */
+int oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
+		void *pv, unsigned int vlen);
 
-/* works with fully qualified urls (content) */
+/* works with fully qualified urls (content) and local paths */
 struct oio_error_s* oio_sds_download_to_file (struct oio_sds_s *sds,
 		struct hc_url_s *u, const char *local);
 
-/* works with fully qualified urls (content) */
+/* works with fully qualified urls (content) and local paths */
 struct oio_error_s* oio_sds_upload_from_file (struct oio_sds_s *sds,
 		struct hc_url_s *u, const char *local);
 
 /* works with fully qualified urls (content) */
 struct oio_error_s* oio_sds_delete (struct oio_sds_s *sds,
 		struct hc_url_s *u);
+
+/* currently works with fully qualified urls (content) */
+struct oio_error_s* oio_sds_has (struct oio_sds_s *sds,
+		struct hc_url_s *url, int *phas);
 
 #endif /*OIO_SDS__client__c__lib__oio_sds_h*/

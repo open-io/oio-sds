@@ -28,6 +28,10 @@
 struct oio_sds_s
 {
 	gchar *ns;
+	struct {
+		int proxy;
+		int rawx;
+	} timeout;
 };
 
 struct oio_error_s;
@@ -329,6 +333,28 @@ oio_sds_pfree (struct oio_sds_s **psds)
 	*psds = NULL;
 }
 
+int
+oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
+		void *pv, unsigned int vlen)
+{
+	if (!sds || !pv)
+		return EFAULT;
+	switch (what) {
+		case OIOSDS_CFG_TIMEOUT_PROXY:
+			if (vlen != sizeof(int))
+				return EINVAL;
+			sds->timeout.proxy = *(int*)pv;
+			return 0;
+		case OIOSDS_CFG_TIMEOUT_RAWX:
+			if (vlen != sizeof(int))
+				return EINVAL;
+			sds->timeout.rawx = *(int*)pv;
+			return 0;
+		default:
+			return EBADSLT;
+	}
+}
+
 /* -------------------------------------------------------------------------- */
 
 static GError *
@@ -395,14 +421,21 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
 		rc = curl_easy_perform (h);
 		if (CURLE_OK != rc)
-			err = NEWERROR(0, "Proxy error: %s", curl_easy_strerror(rc));
+			err = NEWERROR(0, "Proxy: %s", curl_easy_strerror(rc));
+		else {
+			long code = 0;
+			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
+			if (2 != (code/100))
+				err = NEWERROR(0, "Get: (%ld)", code);
+		}
 	}
 
 	/* Parse the beans */
 	if (!err) {
 		GRID_DEBUG("Body: %s", reply_body->str);
 		struct json_tokener *tok = json_tokener_new ();
-		struct json_object *jbody = json_tokener_parse_ex (tok, reply_body->str, reply_body->len);
+		struct json_object *jbody = json_tokener_parse_ex (tok,
+				reply_body->str, reply_body->len);
 		json_tokener_free (tok);
 		if (!json_object_is_type(jbody, json_type_array)) {
 			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
@@ -572,6 +605,12 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		rc = curl_easy_perform (h);
 		if (rc != CURLE_OK)
 			err = NEWERROR(0, "Proxy: Beans: (%d) %s", rc, curl_easy_strerror(rc));
+		else {
+			long code = 0;
+			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
+			if (2 != (code/100))
+				err = NEWERROR(0, "Beans: (%ld)", code);
+		}
 		_headers_clean (&headers);
 	}
 
@@ -629,7 +668,13 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers);
 		rc = curl_easy_perform (h);
 		if (rc != CURLE_OK)
-			err = NEWERROR(0, "Proxy: Put: (%d) %s", rc, curl_easy_strerror(rc));
+			err = NEWERROR(0, "Proxy: (%d) %s", rc, curl_easy_strerror(rc));
+		else {
+			long code = 0;
+			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
+			if (2 != (code/100))
+				err = NEWERROR(0, "Put: (%ld)", code);
+		}
 		_headers_clean (&headers);
 	}
 
@@ -670,7 +715,52 @@ oio_sds_delete (struct oio_sds_s *sds, struct hc_url_s *url)
 	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers);
 	rc = curl_easy_perform (h);
 	if (CURLE_OK != rc)
+		err = NEWERROR(0, "Proxy: %s", curl_easy_strerror(rc));
+	else {
+		long code = 0;
+		rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
+		if (2 != (code/100))
+			err = NEWERROR(0, "Delete: (%ld)", code);
+	}
+	_headers_clean (&headers);
+
+	curl_easy_cleanup (h);
+	g_string_free (reply_body, TRUE);
+	return (struct oio_error_s*) err;
+}
+
+struct oio_error_s*
+oio_sds_has (struct oio_sds_s *sds, struct hc_url_s *url, int *phas)
+{
+	assert (sds != NULL);
+	assert (url != NULL);
+	assert (phas != NULL);
+
+	CURLcode rc;
+	GError *err = NULL;
+	
+	GString *reply_body = g_string_new("");
+	CURL *h = _curl_get_handle_proxy (hc_url_get(url, HCURL_NS));
+
+	do {
+		GString *http_url = _curl_set_url_content (url);
+		rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
+		g_string_free (http_url, TRUE);
+	} while (0);
+
+	struct headers_s headers = {NULL,NULL};
+	_headers_add (&headers, "Expect", "");
+	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_NOOP);
+	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "HEAD");
+	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers);
+	rc = curl_easy_perform (h);
+	if (CURLE_OK != rc)
 		err = NEWERROR(0, "Proxy: Delete: %s", curl_easy_strerror(rc));
+	else {
+		long code = 0;
+		rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
+		*phas = (2 == (code/100));
+	}
 	_headers_clean (&headers);
 
 	curl_easy_cleanup (h);
