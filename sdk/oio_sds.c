@@ -316,15 +316,15 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 void
 oio_sds_free (struct oio_sds_s *sds)
 {
-	if (!sds)
-		return;
+	if (!sds) return;
 	metautils_str_clean (&sds->ns);
+	g_free (sds);
 }
 
 void
 oio_sds_pfree (struct oio_sds_s **psds)
 {
-	if (!psds || !*psds) return;
+	if (!psds) return;
 	oio_sds_free (*psds);
 	*psds = NULL;
 }
@@ -367,8 +367,6 @@ _download_chunks (GSList *chunks, const char *local)
 	curl_easy_cleanup (h);
 	return err;
 }
-
-/* -------------------------------------------------------------------------- */
 
 struct oio_error_s*
 oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,

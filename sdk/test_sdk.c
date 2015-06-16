@@ -54,7 +54,7 @@ main(int argc, char **argv)
 	}
 
 	hc_url_pclean (&url);
-	oio_sds_free (client);
+	oio_sds_pfree (&client);
 	oio_error_pfree (&err);
 	return 0;
 }
