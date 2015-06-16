@@ -1,29 +1,53 @@
 import sys
 import glob
 import grp
-import socket
 import errno
 import pwd
-import logging
 from logging.handlers import SysLogHandler
+import logging
+
+import eventlet
+import eventlet.semaphore
+from eventlet.green import socket, threading
+
+
+logging.thread = eventlet.green.thread
+logging.threading = eventlet.green.threading
+logging._lock = logging.threading.RLock()
+
 from optparse import OptionParser
-from ConfigParser import ConfigParser
+from ConfigParser import SafeConfigParser
 
 import os
 from gunicorn.app.base import BaseApplication
 
 
 class Application(BaseApplication):
-    def __init__(self, app, conf):
+    access_log_fmt = '%(h)s %(u)s %(t)s "%(r)s" %(s)s %(b)s %(D)s'
+
+    def __init__(self, app, conf, logger_class=None):
         self.conf = conf
         self.application = app
+        self.logger_class = logger_class
         super(Application, self).__init__()
 
     def load_config(self):
-        config = dict([(k, v) for k, v in self.conf.iteritems() if k in
-                       self.cfg.settings and v is not None])
-        for k, v in config.iteritems():
-            self.cfg.set(k.lower(), v)
+        bind = '%s:%s' % (self.conf.get('bind_addr', '127.0.0.1'),
+                          self.conf.get('bind_port', '8000'))
+        self.cfg.set('bind', bind)
+        self.cfg.set('backlog', self.conf.get('backlog', 2048))
+        self.cfg.set('workers', self.conf.get('workers', 2))
+        self.cfg.set('worker_class', 'eventlet')
+        self.cfg.set('worker_connections', self.conf.get(
+            'worker_connections', 1000))
+        self.cfg.set('syslog_prefix', self.conf.get('syslog_prefix', ''))
+        self.cfg.set('syslog_addr', self.conf.get('log_address', '/dev/log'))
+        self.cfg.set('accesslog', '-')
+        self.cfg.set('access_log_format', self.conf.get('access_log_format',
+                                                        self.access_log_fmt))
+        if self.logger_class:
+            self.cfg.set('logger_class', self.logger_class)
+
 
     def load(self):
         return self.application
@@ -105,7 +129,13 @@ def get_logger(conf, name=None, verbose=False, fmt="%(message)s"):
     logger = logging.getLogger(name)
     logger.propagate = False
 
+    syslog_prefix = conf.get('syslog_prefix', '')
+
     formatter = logging.Formatter(fmt=fmt)
+    if syslog_prefix:
+        fmt = '%s: %s' % (syslog_prefix, fmt)
+
+    syslog_formatter = logging.Formatter(fmt=fmt)
 
     if not hasattr(get_logger, 'handler4logger'):
         get_logger.handler4logger = {}
@@ -123,7 +153,7 @@ def get_logger(conf, name=None, verbose=False, fmt="%(message)s"):
             raise e
         handler = SysLogHandler(facility=facility)
 
-    handler.setFormatter(formatter)
+    handler.setFormatter(syslog_formatter)
     logger.addHandler(handler)
     get_logger.handler4logger[logger] = handler
 
@@ -171,7 +201,7 @@ def parse_options(parser=None):
 def read_conf(conf_path, section_name=None, defaults=None):
     if defaults is None:
         defaults = {}
-    c = ConfigParser(defaults)
+    c = SafeConfigParser(defaults)
     success = c.read(conf_path)
     if not success:
         print("Unable to read config from %s" % conf_path)
@@ -238,10 +268,11 @@ def int_value(value, default):
         raise
     return value
 
+
 class InvalidServiceConfigError(ValueError):
-	
     def __str__(self):
         return "namespace missing from service conf"
+
 
 def validate_service_conf(conf):
     ns = conf.get('namespace')
@@ -256,7 +287,7 @@ def load_namespace_conf(namespace):
             yield f
         yield os.path.expanduser('~/.oio/sds.conf')
 
-    c = ConfigParser({}) 
+    c = SafeConfigParser({})
     success = c.read(places())
     if not success:
         print('Unable to read namespace config')
@@ -269,8 +300,8 @@ def load_namespace_conf(namespace):
     for k in ['zookeeper', 'conscience', 'proxy', 'event-agent']:
         v = conf.get(k)
         if not v:
-	    print("Missing field '%s' in namespace config" % k)
-	    sys.exit(1)
+            print("Missing field '%s' in namespace config" % k)
+            sys.exit(1)
     return conf
 
 

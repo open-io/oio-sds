@@ -99,10 +99,11 @@ class EventWorker(object):
             except Exception as e:
                 self.logger.warn('Unable to find account instance')
                 # fallback on conf
-               	account_addr = self.conf.get('account_addr')
-		if not account_addr:
-                        self.logger.warn('Unable to find fallback account instance in config')
-			raise Exception('Unable to find account instance')
+                account_addr = self.conf.get('account_addr')
+                if not account_addr:
+                    self.logger.warn(
+                        'Unable to find fallback account instance in config')
+                    raise Exception('Unable to find account instance')
                 self._account_addr = account_addr
         return self._account_addr
 
@@ -202,7 +203,7 @@ class EventWorker(object):
 
 class EventAgent(Daemon):
     def __init__(self, conf):
-	validate_service_conf(conf)
+        validate_service_conf(conf)
         self.conf = conf
         self.logger = get_logger(conf)
 

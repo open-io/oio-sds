@@ -19,8 +19,10 @@ import json
 
 import flask
 from flask import request
+from gunicorn.glogging import Logger
 
 from oio.account.backend import AccountBackend
+from oio.common.utils import get_logger
 
 # Accounts ---------------------------------------------------------------------
 
@@ -109,4 +111,24 @@ def create_app(conf, **kwargs):
     backend = AccountBackend(conf)
     app.register_blueprint(account_api)
     return app
+
+
+class AccountServiceLogger(Logger):
+    def __init__(self, cfg):
+        self.cfg = cfg
+        prefix = cfg.syslog_prefix if cfg.syslog_prefix else ''
+        address = cfg.syslog_addr if cfg.syslog_addr else '/dev/log'
+
+        error_conf = {'syslog_prefix': prefix,
+                      'log_facility': 'LOG_LOCAL1',
+                      'log_address': address
+        }
+
+        access_conf = {'syslog_prefix': prefix,
+                       'log_facility': 'LOG_LOCAL0',
+                       'log_address': address
+        }
+
+        self.error_log = get_logger(error_conf, 'account.error')
+        self.access_log = get_logger(access_conf, 'account.access')
 
