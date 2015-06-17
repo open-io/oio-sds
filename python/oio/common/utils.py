@@ -283,7 +283,7 @@ def validate_service_conf(conf):
 def load_namespace_conf(namespace):
     def places():
         yield '/etc/oio/sds.conf'
-        for f in glob.glob('/etc/oio/sds/conf.d/*'):
+        for f in glob.glob('/etc/oio/sds.conf.d/*'):
             yield f
         yield os.path.expanduser('~/.oio/sds.conf')
 
