@@ -17,7 +17,7 @@ class RegisterThread(object):
         self.logger = get_logger(conf)
         self.instance_info = instance_info
         self.proxy_addr = ns_conf.get('proxy')
-	self.ns = conf.get('namespace')
+        self.ns = conf.get('namespace')
         self.register_interval = 5
         self.register_uri = None
 
@@ -34,10 +34,9 @@ class RegisterThread(object):
         if not self.register_uri:
             self.register_uri = 'http://%s/v1.0/cs/%s/%s' % (
                 self.proxy_addr,
-		self.ns,
+                self.ns,
                 self.instance_info['type']
             )
-
         resp = requests.put(self.register_uri,
                             data=json.dumps(self.instance_info))
         if resp.status_code is not 200:
@@ -52,14 +51,17 @@ class RegisterThread(object):
         except (socket.error, Exception):
             self.logger.warn('Failed health check, setting instance'
                              'status to down')
-        self.instance_info['up'] = up
+        self._change_status(up)
+
+    def _change_status(self, status):
+        self.instance_info['up'] = status
 
 
 class ConscienceClient(object):
     def __init__(self, conf, register=False):
         validate_service_conf(conf)
-	self.ns = conf.get('namespace')
-	ns_conf = load_namespace_conf(self.ns)
+        self.ns = conf.get('namespace')
+        ns_conf = load_namespace_conf(self.ns)
         self.conf = conf
         self.logger = get_logger(conf)
         self.proxy_addr = ns_conf.get('proxy')
@@ -72,13 +74,13 @@ class ConscienceClient(object):
                                    conf.get('bind_port')),
                 'tags': conf.get('tags')
             }
-            register_thread = RegisterThread(conf, ns_info, instance_info)
+            register_thread = RegisterThread(conf, ns_conf, instance_info)
             spawn_n(register_thread.run)
 
     def next_instance(self, pool):
         uri = 'http://%s/v1.0/lb/%s/%s' % (self.proxy_addr, self.ns, pool)
         resp = requests.get(uri)
-        if resp.status_code is 200:
+        if resp.status_code == 200:
             return resp.json()[0]
         else:
             raise Exception('Error while getting next instance')
