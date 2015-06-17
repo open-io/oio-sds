@@ -20,6 +20,8 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__hc_url_h
 # define OIO_SDS__metautils__lib__hc_url_h 1
 
+#include <sys/types.h>
+
 /**
  * @defgroup client_url
  * @ingroup client
@@ -61,7 +63,7 @@ hc_url_pclean(struct hc_url_s **pu)
 	if (!pu)
 		return;
 	hc_url_clean(*pu);
-	*pu = NULL;
+	*pu = (void*)0;
 }
 
 struct hc_url_s* hc_url_set(struct hc_url_s *u,

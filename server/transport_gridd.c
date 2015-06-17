@@ -599,6 +599,17 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	GHashTable *headers = NULL;
 	GByteArray *body = NULL;
 
+	void _subject(const gchar *fmt, ...) {
+		va_list args;
+		va_start(args, fmt);
+		gchar *tail = g_strdup_vprintf(fmt, args);
+		va_end(args);
+
+		const gchar *old = req_ctx->subject;
+		gchar *s = g_strconcat (old?old:"", old?" ":"", tail, NULL);
+		metautils_str_reuse(&req_ctx->subject, s);
+		g_free0 (tail);
+	}
 	void _add_header(const gchar *n, GByteArray *v) {
 		EXTRA_ASSERT(!req_ctx->final_sent);
 		if (v) {
@@ -653,16 +664,17 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	void _send_error(gint code, GError *e) {
 		EXTRA_ASSERT(!req_ctx->final_sent);
 		if (!e) {
-			GRID_WARN("code=%d but no error", code);
+			_subject ("e=(0) NULL");
 			_send_reply(code, "OK");
 		}
 		else {
 			_add_body(NULL);
+			_subject ("e=(%d) %s", e->code, e->message);
 			if (code)
 				e->code = code;
 			if (CODE_IS_NETWORK_ERROR(e->code))
 				e->code = CODE_PROXY_ERROR;
-			if (CODE_IS_OK(e->code) || CODE_IS_TEMP(e->code))
+			else if (CODE_IS_OK(e->code) || CODE_IS_TEMP(e->code))
 				e->code = CODE_INTERNAL_ERROR;
 			_send_reply(e->code, e->message);
 			g_clear_error(&e);
@@ -672,12 +684,6 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		va_list args;
 		va_start(args, fmt);
 		metautils_str_reuse(&req_ctx->uid, g_strdup_vprintf(fmt, args));
-		va_end(args);
-	}
-	void _subject(const gchar *fmt, ...) {
-		va_list args;
-		va_start(args, fmt);
-		metautils_str_reuse(&req_ctx->subject, g_strdup_vprintf(fmt, args));
 		va_end(args);
 	}
 	void _register_cnx_data(const gchar *key, gpointer data,

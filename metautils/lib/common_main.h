@@ -20,7 +20,8 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__common_main_h
 # define OIO_SDS__metautils__lib__common_main_h 1
 
-# include <glib/gtypes.h>
+#include "metautils_macros.h"
+#include <glib.h>
 
 /**
  * @defgroup metautils_main Common Main
