@@ -50,6 +50,7 @@ struct oio_sds_s
 		int proxy;
 		int rawx;
 	} timeout;
+	gboolean sync_after_download;
 };
 
 struct oio_error_s;
@@ -314,6 +315,7 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	(*out)->ns = g_strdup (ns);
 	(*out)->proxy_local = gridcluster_get_proxylocal (ns);
 	(*out)->proxy = gridcluster_get_proxy (ns);
+	(*out)->sync_after_download = TRUE;
 	return NULL;
 }
 
@@ -352,6 +354,11 @@ oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 				return EINVAL;
 			sds->timeout.rawx = *(int*)pv;
 			return 0;
+		case OIOSDS_CFG_FLAG_SYNCATDOWNLOAD:
+			if (vlen != sizeof(int))
+				return EINVAL;
+			sds->sync_after_download = BOOL(*(int*)pv);
+			return 0;
 		default:
 			return EBADSLT;
 	}
@@ -360,7 +367,7 @@ oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 /* -------------------------------------------------------------------------- */
 
 static GError *
-_download_chunks (GSList *chunks, const char *local)
+_download_chunks (struct oio_sds_s *sds, GSList *chunks, const char *local)
 {
 	GError *err = NULL;
 	CURLcode rc;
@@ -368,6 +375,7 @@ _download_chunks (GSList *chunks, const char *local)
 	int fd = open (local, O_CREAT|O_EXCL|O_WRONLY, 0644);
 	if (fd < 0)
 		return NEWERROR(0, "open error [%s]: (%d) %s", local, errno, strerror(errno));
+	posix_fadvise (fd, 0, 0, POSIX_FADV_SEQUENTIAL);
 
 	FILE *out = fdopen(fd, "a");
 	if (!out) {
@@ -434,6 +442,11 @@ _download_chunks (GSList *chunks, const char *local)
 		}
 	}
 
+	
+	fflush(out);
+	if (sds->sync_after_download)
+		fsync(fd);
+	posix_fadvise (fd, 0, 0, POSIX_FADV_DONTNEED);
 	fclose(out);
 	curl_easy_cleanup (h);
 	return err;
@@ -496,7 +509,7 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 
 	/* download from the beans */
 	if (!err)
-		err = _download_chunks (chunks, local);
+		err = _download_chunks (sds, chunks, local);
 
 	/* cleanup and exit */
 	curl_easy_cleanup (h);
@@ -543,6 +556,7 @@ _upload_init (struct local_upload_s *upload, const char *path)
 	if (!(upload->in = fdopen(upload->fd, "r")))
 		return NEWERROR(0, "fdopen error [%s]: (%d) %s", upload->path, errno, strerror(errno));
 	upload->checksum_content = g_checksum_new (G_CHECKSUM_MD5);
+	posix_fadvise (upload->fd, 0, 0, POSIX_FADV_SEQUENTIAL|POSIX_FADV_WILLNEED);
 	return NULL;
 }
 

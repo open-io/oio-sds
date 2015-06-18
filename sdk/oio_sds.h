@@ -25,7 +25,8 @@ struct hc_url_s;
 enum oio_sds_config_e
 {
 	OIOSDS_CFG_TIMEOUT_PROXY = 1,
-	OIOSDS_CFG_TIMEOUT_RAWX
+	OIOSDS_CFG_TIMEOUT_RAWX,
+	OIOSDS_CFG_FLAG_SYNCATDOWNLOAD
 };
 
 /* error management */
