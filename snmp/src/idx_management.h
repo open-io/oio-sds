@@ -22,7 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
-#define MAX_DESC_LENGTH (MAX(STRLEN_ADDRINFO, LIMIT_LENGTH_VOLUMENAME) + LIMIT_LENGTH_NSNAME + 2)
+#define MAX_DESC_LENGTH (MAX(STRLEN_ADDRINFO, LIMIT_LENGTH_VOLUMENAME) + LIMIT_LENGTH_NSNAME)
 
 struct grid_service_data {
         int idx;

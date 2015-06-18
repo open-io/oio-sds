@@ -46,40 +46,42 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define VOL_SCORE_KEY "%d.score"
 #define VOL_NB_KEY "number"
 
-int parse_cluster_conf(const char *file_path, namespace_data_t *ns_data, GError **error) {
+int
+parse_cluster_conf(const char *file_path, namespace_data_t *ns_data, GError **error)
+{
 	GKeyFile *key_file = NULL;
 	gchar *value = NULL;
 
 	/* Load config file */
-        key_file = g_key_file_new();
-        if (!g_key_file_load_from_file(key_file, file_path, 0, error)) {
+	key_file = g_key_file_new();
+	if (!g_key_file_load_from_file(key_file, file_path, 0, error)) {
 		GSETERROR(error, "Failed to load key file %s", file_path);
 		return(0);
 	}
 
 	/* Parse namespace infos */
-        if (g_key_file_has_group(key_file, NS_KEY)) {
+	if (g_key_file_has_group(key_file, NS_KEY)) {
 
-                memset(&(ns_data->ns_info), 0, sizeof(namespace_info_t));
+		memset(&(ns_data->ns_info), 0, sizeof(namespace_info_t));
 
-                if (g_key_file_has_key(key_file, NS_KEY, NS_NAME_KEY, error)) {
+		if (g_key_file_has_key(key_file, NS_KEY, NS_NAME_KEY, error)) {
 			value = g_key_file_get_value(key_file, NS_KEY, NS_NAME_KEY, error);
-                        strncpy(ns_data->ns_info.name, value, LIMIT_LENGTH_NSNAME);
+			strncpy(ns_data->ns_info.name, value, sizeof(ns_data->ns_info.name));
 			g_free(value);
-                } else {
+		} else {
 			GSETERROR(error, "Namespace name is missing (add a %s= in %s group)", NS_NAME_KEY, NS_KEY);
 			return(0);
 		}
 
-                if (g_key_file_has_key(key_file, NS_KEY, NS_CHUNK_SIZE_KEY, error)) {
-                        ns_data->ns_info.chunk_size = g_key_file_get_integer(key_file, NS_KEY, NS_CHUNK_SIZE_KEY, error);
-                } else {
+		if (g_key_file_has_key(key_file, NS_KEY, NS_CHUNK_SIZE_KEY, error)) {
+			ns_data->ns_info.chunk_size = g_key_file_get_integer(key_file, NS_KEY, NS_CHUNK_SIZE_KEY, error);
+		} else {
 			GSETERROR(error, "Namespace chunk_size is missing (add a %s= in %s group)", NS_CHUNK_SIZE_KEY, NS_KEY);
 			return(0);
 		}
 
-                DEBUG("Set namespace info name(%s) chunk_size(%"G_GINT64_FORMAT") in conf", ns_data->ns_info.name, ns_data->ns_info.chunk_size);
-        } else {
+		DEBUG("Set namespace info name(%s) chunk_size(%"G_GINT64_FORMAT") in conf", ns_data->ns_info.name, ns_data->ns_info.chunk_size);
+	} else {
 		GSETERROR(error, "No namespace info found in config");
 		return(0);
 	}

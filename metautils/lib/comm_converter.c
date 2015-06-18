@@ -512,7 +512,7 @@ service_tag_ASN2API(ServiceTag_t * asn, service_tag_t * api)
 	memset(api, 0x00, sizeof(service_tag_t));
 
 	/*name */
-	memcpy(api->name, asn->name.buf, MIN((size_t) asn->name.size, sizeof(api->name)));
+	memcpy(api->name, asn->name.buf, MIN(asn->name.size, (int)sizeof(api->name)));
 
 	/*value */
 	switch (asn->value.present) {
@@ -553,8 +553,8 @@ service_info_ASN2API(ServiceInfo_t * asn, service_info_t * api)
 	memset(api, 0x00, sizeof(service_info_t));
 
 	/*header */
-	memcpy(api->ns_name, asn->nsName.buf, MIN((size_t) asn->nsName.size, sizeof(api->ns_name)));
-	memcpy(api->type, asn->type.buf, MIN((size_t) asn->type.size, sizeof(api->type)));
+	memcpy(api->ns_name, asn->nsName.buf, MIN(asn->nsName.size, (int)sizeof(api->ns_name)));
+	memcpy(api->type, asn->type.buf, MIN(asn->type.size, (int)sizeof(api->type)));
 	addr_info_ASN2API(&(asn->addr), &(api->addr));
 	score_ASN2API(&asn->score, &api->score);
 
@@ -756,9 +756,9 @@ chunk_id_ASN2API(const ChunkId_t * asn, chunk_id_t * api)
 {
 	EXTRA_ASSERT (asn != NULL);
 	EXTRA_ASSERT (api != NULL);
-	memcpy(&(api->id), asn->id.buf, MIN(sizeof(api->id), (size_t) asn->id.size));
+	memcpy(&(api->id), asn->id.buf, MIN((int)sizeof(api->id), asn->id.size));
 	addr_info_ASN2API(&(asn->addr), &(api->addr));
-	memcpy(api->vol, asn->vol.buf, MIN(LIMIT_LENGTH_VOLUMENAME, asn->vol.size));
+	memcpy(api->vol, asn->vol.buf, MIN((int)sizeof(api->vol), asn->vol.size));
 	return TRUE;
 }
 
@@ -771,11 +771,11 @@ chunk_info_ASN2API(const ChunkInfo_t * asn, chunk_info_t * api)
 	if (asn->id.vol.size <= 0 || !(asn->id.vol.buf))
 		return FALSE;
 
-	memcpy(&(api->id.id), asn->id.id.buf, MIN(sizeof(api->id.id), (size_t) asn->id.id.size));
+	memcpy(&(api->id.id), asn->id.id.buf, MIN((int)sizeof(api->id.id), asn->id.id.size));
 	addr_info_ASN2API(&(asn->id.addr), &(api->id.addr));
-	memcpy(api->id.vol, asn->id.vol.buf, MIN(LIMIT_LENGTH_VOLUMENAME, asn->id.vol.size));
+	memcpy(api->id.vol, asn->id.vol.buf, MIN((int)sizeof(api->id.vol), asn->id.vol.size));
 	memset(api->hash, 0x00, sizeof(chunk_hash_t));
-	memcpy(api->hash, asn->md5.buf, MIN(sizeof(chunk_hash_t), (size_t) asn->md5.size));
+	memcpy(api->hash, asn->md5.buf, MIN((int)sizeof(chunk_hash_t), asn->md5.size));
 	asn_INTEGER_to_uint32(&(asn->position), &(api->position));
 	asn_INTEGER_to_int64(&(asn->size), &(api->size));
 	asn_INTEGER_to_uint32(&(asn->nb), &(api->nb));
@@ -1487,7 +1487,7 @@ namespace_info_ASN2API(const NamespaceInfo_t *asn, namespace_info_t *api)
 	EXTRA_ASSERT (asn != NULL);
 
 	memset(api, 0, sizeof(*api));
-	memcpy(api->name, asn->name.buf, MIN(LIMIT_LENGTH_NSNAME, asn->name.size));
+	memcpy(api->name, asn->name.buf, MIN((int)sizeof(api->name), asn->name.size));
 	addr_info_ASN2API(&(asn->addr), &(api->addr));
 	asn_INTEGER_to_int64(&(asn->chunkSize), &(api->chunk_size));
 
@@ -1553,7 +1553,7 @@ namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
 	EXTRA_ASSERT (api != NULL);
 	EXTRA_ASSERT (asn != NULL);
 
-	OCTET_STRING_fromBuf(&(asn->name), api->name, MIN(strlen(api->name), LIMIT_LENGTH_NSNAME));
+	OCTET_STRING_fromBuf(&(asn->name), api->name, strlen(api->name));
 	addr_info_API2ASN(&(api->addr), &(asn->addr));
 	asn_int64_to_INTEGER(&(asn->chunkSize), api->chunk_size);
 
@@ -1686,8 +1686,8 @@ path_info_ASN2API(const PathInfo_t * asn, path_info_t * api)
 	EXTRA_ASSERT (api != NULL);
 	EXTRA_ASSERT (asn != NULL);
 
-	memset(api->path, 0x00, LIMIT_LENGTH_CONTENTPATH + 1);
-	memcpy(api->path, asn->path.buf, MIN(LIMIT_LENGTH_CONTENTPATH, asn->path.size));
+	memset(api->path, 0, sizeof(api->path));
+	memcpy(api->path, asn->path.buf, MIN((int)sizeof(api->path), asn->path.size));
 	api->size = 0;
 	if (asn->size) {
 		asn_INTEGER_to_int64(asn->size, &(api->size));

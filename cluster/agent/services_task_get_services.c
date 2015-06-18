@@ -39,7 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 struct session_data_s {
 	gchar ns[LIMIT_LENGTH_NSNAME];
-	gchar task_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_SRVTYPE+1+LIMIT_LENGTH_NSNAME+1];
+	gchar task_id[sizeof(TASK_ID) + LIMIT_LENGTH_SRVTYPE + LIMIT_LENGTH_NSNAME];
 	GSList *services;
 };
 

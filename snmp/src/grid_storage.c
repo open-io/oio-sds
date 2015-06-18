@@ -946,9 +946,10 @@ manage_rawx(struct service_info_s *si)
 	memset(&snmp_data, 0, sizeof(struct rawx_snmp_data));
 
 	/* Set rawx stat from the service definition*/
-	strncpy(snmp_data.namespace, si->ns_name, LIMIT_LENGTH_NSNAME);
+	strncpy(snmp_data.namespace, si->ns_name, sizeof(snmp_data.namespace));
 	addr_info_to_string(&(si->addr), snmp_data.addr, sizeof(snmp_data.addr));
-	strncpy(snmp_data.volume, get_string_tag_value(si, "tag.vol", snmp_data.addr), LIMIT_LENGTH_VOLUMENAME);
+	strncpy(snmp_data.volume, get_string_tag_value(si, "tag.vol", snmp_data.addr),
+			sizeof(snmp_data.volume));
 	snmp_data.score = si->score.value;
 	snmp_data.free_chunk = get_uint32_tag_value(si, "stat.space", 1);
 	snmp_data.io_idle = get_uint32_tag_value(si, "stat.io", 1);

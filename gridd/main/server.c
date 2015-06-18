@@ -660,7 +660,7 @@ errorLabel:
 static gpointer
 main_thread (gpointer arg)
 {
-	gchar str_addr_src[STRLEN_ADDRINFO+1];
+	gchar str_addr_src[STRLEN_ADDRINFO];
 	struct server_s *srv;
 
 	/*init variables*/

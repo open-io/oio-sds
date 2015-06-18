@@ -70,7 +70,7 @@ struct srvget_s
 	GByteArray *gba_body;
 	guint srv_list_size;
 	guint total_size;
-	gchar str_ns[LIMIT_LENGTH_NSNAME + 1];
+	gchar str_ns[LIMIT_LENGTH_NSNAME];
 
 	gboolean an_error_happened;
 
@@ -119,7 +119,7 @@ _alert_service_with_zeroed_score(struct conscience_srv_s *srv)
 {
 	gchar c;
 	gsize str_id_size, i;
-	gchar str_id[sizeof("conscience.%.*s.score") + LIMIT_LENGTH_SRVTYPE + 1];
+	gchar str_id[sizeof("conscience.%.*s.score") + LIMIT_LENGTH_SRVTYPE];
 	time_t now;
 
 	now = time(0);
@@ -667,7 +667,7 @@ handler_get_service(struct request_context_s *req_ctx)
 static void
 push_service(struct conscience_s *cs, struct service_info_s *si)
 {
-	gchar str_addr[STRLEN_ADDRINFO + 1], str_descr[LIMIT_LENGTH_SRVDESCR];
+	gchar str_addr[STRLEN_ADDRINFO], str_descr[LIMIT_LENGTH_SRVDESCR];
 	gint32 old_score=0;
 	GError *error_local=NULL;
 	struct conscience_srvtype_s *srvtype;
@@ -868,7 +868,7 @@ static void
 rm_service(struct conscience_s *cs, struct service_info_s *si)
 {
 	int str_desc_len;
-	gchar str_desc[LIMIT_LENGTH_NSNAME + 1 + LIMIT_LENGTH_SRVTYPE + 1 + STRLEN_ADDRINFO + 1];
+	gchar str_desc[LIMIT_LENGTH_NSNAME + LIMIT_LENGTH_SRVTYPE + STRLEN_ADDRINFO];
 	GError *error_local;
 	struct conscience_srvid_s srvid;
 	struct conscience_srvtype_s *srvtype;
@@ -939,7 +939,7 @@ handler_rm_service(struct request_context_s *req_ctx)
 	else {
 		/* if a srvtype is present in headers, remove all services of that type. */
 		if (NULL != (data = metautils_message_get_field(req_ctx->request, NAME_MSGKEY_TYPENAME, &data_size))) {
-			gchar str_type[LIMIT_LENGTH_SRVTYPE+1];
+			gchar str_type[LIMIT_LENGTH_SRVTYPE];
 			struct conscience_srvtype_s *srvtype;
 
 			g_strlcpy(str_type, data, sizeof(str_type));

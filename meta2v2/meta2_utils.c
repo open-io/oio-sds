@@ -1616,7 +1616,7 @@ struct gen_ctx_s
 	struct storage_policy_s *pol;
 	struct grid_lb_iterator_s *iter;
 	guint8 uid[32];
-	guint8 h[32];
+	guint8 h[16];
 	gint64 size;
 	gint64 chunk_size;
 	m2_onbean_cb cb;

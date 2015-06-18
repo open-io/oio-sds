@@ -74,7 +74,7 @@ _gen_chunk_info(struct service_info_s *si)
 	memcpy(&(ci->id.addr), &(si->addr), sizeof(addr_info_t));
 	g_strlcpy(ci->id.vol,
 		service_info_get_tag_value(si, NAME_TAGNAME_RAWX_VOL, "/"),
-		LIMIT_LENGTH_VOLUMENAME);
+		sizeof(ci->id.vol));
 	ci->size = 0;
 	ci->position = 0;
 	ci->nb = 0;

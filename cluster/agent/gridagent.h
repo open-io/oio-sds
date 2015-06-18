@@ -98,7 +98,7 @@ Name ( gpointer udata, GError **error) {\
 	(void)udata;\
 	g_hash_table_iter_init(&ns_iterator, namespaces);\
 	while (g_hash_table_iter_next(&ns_iterator,&ns_k,&ns_v)) {\
-		gchar ns_id[128+LIMIT_LENGTH_NSNAME+1];\
+		gchar ns_id[128+LIMIT_LENGTH_NSNAME];\
 		namespace_data_t *ns_data = ns_v;\
 		g_snprintf(ns_id,sizeof(ns_id),"%s.%s",TaskId,ns_data->name);\
 		if (!namespace_is_available(ns_data)) {\

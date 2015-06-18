@@ -95,7 +95,7 @@ repair_chunk_attr(const struct broken_event_s *broken_event, void *data, GError 
 				break;
 			case P_CHUNK_ID:
 				str_chunk_id = g_malloc0(sizeof(hash_sha256_t));
-				buffer2str(broken_element->reference_value, sizeof(hash_sha256_t), str_chunk_id, sizeof(STRLEN_CHUNKID));
+				buffer2str(broken_element->reference_value, sizeof(hash_sha256_t), str_chunk_id, sizeof(str_chunk_id));
 				infos->chunk_info.id = str_chunk_id;
 				break;
 			case P_CHUNK_SIZE:

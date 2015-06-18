@@ -74,6 +74,9 @@ void metautils_str_lower(register gchar *s);
 /* Returns FALSE if 's' is not 'slen' long and contains a non-hexa character. */
 gboolean metautils_str_ishexa(const gchar *s, gsize slen);
 
+/* Returns is 's' is an even number of hexadecimal characters */
+gboolean metautils_str_ishexa1(const gchar *s);
+
 gsize strlen_len(const void * s, const gsize l);
 
 /** Convert an hexa string to its binary form */

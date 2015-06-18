@@ -39,8 +39,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define TASK_ID "services_check"
 
-#define TASKNAME_LENGTH_MAX (sizeof(TASK_ID)+1+STRLEN_ADDRINFO)
-#define SRVKEY_LEN (LIMIT_LENGTH_SRVTYPE + 1 + STRLEN_ADDRINFO + 1)
+#define TASKNAME_LENGTH_MAX (sizeof(TASK_ID) + STRLEN_ADDRINFO)
+#define SRVKEY_LEN (LIMIT_LENGTH_SRVTYPE + STRLEN_ADDRINFO)
 
 struct taskdata_checksrv_s {
 	gchar task_name[TASKNAME_LENGTH_MAX];

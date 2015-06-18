@@ -92,7 +92,7 @@ main_set_defaults(void)
 	memset(path_root, 0, sizeof(path_root));
 	memset(meta2_str_addr, 0, sizeof(meta2_str_addr));
 	memset(meta2_url, 0, LIMIT_LENGTH_URL);
-	memset(ns_name, 0, LIMIT_LENGTH_NSNAME);
+	memset(ns_name, 0, sizeof(ns_name));
 }
 
 static struct grid_main_option_s*
@@ -173,7 +173,7 @@ meta2_get_lock_info(const char *vol, gchar *dst_host, gsize dst_host_size, GErro
 	}
 
 	memset(dst_host, 0, dst_host_size);
-	memset(ns_name, 0, LIMIT_LENGTH_NSNAME);
+	memset(ns_name, 0, sizeof(ns_name));
 
 	switch(size = getxattr(vol, META2LOCK_ATTRNAME_URL, meta2_url, LIMIT_LENGTH_URL)) {
 		case -1:

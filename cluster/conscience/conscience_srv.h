@@ -29,7 +29,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <cluster/conscience/conscience_srvtype.h>
 
 # ifndef LIMIT_LENGTH_SRVDESCR
-#  define LIMIT_LENGTH_SRVDESCR LIMIT_LENGTH_NSNAME+1+LIMIT_LENGTH_SRVTYPE+1+STRLEN_ADDRINFO+1
+#  define LIMIT_LENGTH_SRVDESCR LIMIT_LENGTH_NSNAME + LIMIT_LENGTH_SRVTYPE + STRLEN_ADDRINFO
 # endif
 
 /**
