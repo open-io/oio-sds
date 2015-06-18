@@ -121,26 +121,10 @@ _read_GString(void *b, size_t s, size_t n, struct view_GString_s *in)
 }
 
 static size_t
-_write_FILE(void *data, size_t s, size_t n, FILE *out)
-{
-	/* TODO compute a MD5SUM */
-	/* TODO guard against to many bytes received from the rawx */
-	return fwrite ((gchar*)data, s, n, out);
-}
-
-static size_t
 _write_NOOP(void *data, size_t s, size_t n, void *ignored)
 {
 	(void) data, (void) ignored;
 	return s*n;
-}
-
-static size_t
-_read_FILE(void *data, size_t s, size_t n, FILE *in)
-{
-	/* TODO compute a MD5SUM */
-	/* TODO guard against to many bytes received from the rawx */
-	return fread ((gchar*)data, s, n, in);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -190,6 +174,7 @@ struct chunk_s
 		guint intra;
 		gboolean parity : 8;
 	} position;
+	gchar hexhash[STRLEN_CHUNKHASH];
 	gchar url[1];
 };
 
@@ -247,21 +232,14 @@ _load_chunks (GSList **out, struct json_object *jtab)
 				|| !json_object_is_type(jhash, json_type_string)) {
 			err = NEWERROR(0, "JSON: invalid chunk's field");
 		} else {
-			GByteArray *h = metautils_gba_from_hexstring(json_object_get_string(jhash));
-			if (!h) {
-				err = NEWERROR(0, "JSON: invalid chunk hash: not hexa");
-			} else {
-				if (h->len != g_checksum_type_get_length(G_CHECKSUM_MD5)
-						&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA256)
-						&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA512)
-						&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA1)) {
-					err = NEWERROR(0, "JSON: invalid chunk hash: invalid length");
-				} else {
-					struct chunk_s *c = _load_one_chunk (jurl, jsize, jpos);
-					chunks = g_slist_prepend (chunks, c);
-				}
-				g_byte_array_free (h, TRUE);
-			}
+			const char *h = json_object_get_string(jhash);
+			if (!metautils_str_ishexa(h, 2*sizeof(chunk_hash_t)))
+				err = NEWERROR(0, "JSON: invalid chunk hash: not hexa of %"G_GSIZE_FORMAT,
+						2*sizeof(chunk_hash_t));
+			struct chunk_s *c = _load_one_chunk (jurl, jsize, jpos);
+			for (char *p = c->hexhash; *h ;) // copies the hash as uppercase
+				*(p++) = g_ascii_toupper (*(h++));
+			chunks = g_slist_prepend (chunks, c);
 		}
 	}
 
@@ -374,6 +352,22 @@ _download_chunks (GSList *chunks, const char *local)
 	}
 
 	CURL *h = _curl_get_handle ();
+	long code = 0, ok = 1;
+	size_t _write_FILE(void *data, size_t s, size_t n, FILE *f) {
+		if (!code) {
+			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
+			if (!(ok = (2 == (code / 100)))) {
+				rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, NULL);
+				rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, NULL);
+				return 0;
+			}
+		}
+		assert (BOOL(ok));
+		/* TODO compute a MD5SUM */
+		/* TODO guard against to many bytes received from the rawx */
+		return fwrite ((gchar*)data, s, n, f);
+	}
+
 	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
 
 	GRID_DEBUG("Download to [%s] from ...", local);
@@ -383,6 +377,10 @@ _download_chunks (GSList *chunks, const char *local)
 		rc = curl_easy_setopt (h, CURLOPT_URL, c->url);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_FILE);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, out);
+		if (GRID_TRACE_ENABLED()) {
+			curl_easy_setopt (h, CURLOPT_DEBUGFUNCTION, _trace);
+			curl_easy_setopt (h, CURLOPT_VERBOSE, 1L);
+		}
 		rc = curl_easy_perform (h);
 		if (rc != CURLE_OK)
 			err = NEWERROR(0, "CURL: download error [%s] : (%d) %s", c->url,
@@ -467,15 +465,26 @@ struct local_upload_s
 	FILE *in;
 	int fd;
 	struct stat st;
+	GChecksum *checksum_content;
+	GChecksum *checksum_chunk;
 };
 
 static void
 _upload_fini (struct local_upload_s *upload)
 {
 	if (upload->in) 
-		fclose (upload->in), upload->in = NULL;
+		fclose (upload->in);
 	if (upload->fd >= 0)
-		close (upload->fd), upload->fd = -1;
+		close (upload->fd);
+	if (upload->checksum_content)
+		g_checksum_free (upload->checksum_content);
+	if (upload->checksum_chunk)
+		g_checksum_free (upload->checksum_chunk);
+
+	upload->in = NULL;
+	upload->fd = -1;
+	upload->checksum_content = NULL;
+	upload->checksum_chunk = NULL;
 }
 
 static GError *
@@ -489,32 +498,69 @@ _upload_init (struct local_upload_s *upload, const char *path)
 		return NEWERROR(0, "stat error [%s]: (%d) %s", upload->path, errno, strerror(errno));
 	if (!(upload->in = fdopen(upload->fd, "r")))
 		return NEWERROR(0, "fdopen error [%s]: (%d) %s", upload->path, errno, strerror(errno));
+	upload->checksum_chunk = g_checksum_new (G_CHECKSUM_MD5);
+	upload->checksum_content = g_checksum_new (G_CHECKSUM_MD5);
 	return NULL;
 }
 
 static GError *
 _upload_chunks (GSList *chunks, struct local_upload_s *upload)
 {
+	char received[STRLEN_CHUNKHASH];
+	size_t _on_header (void *d, size_t s, size_t n, void *i) {
+		(void) i;
+		gsize len = (s*n);
+		gchar *tmp = alloca (len+1);
+		g_strlcpy (tmp, d, len+1);
+		if (!g_str_has_prefix(tmp, "chunk_hash: ")) /* chekc this is the hash */
+			return len;
+		for (gchar *p=tmp+len; p>=tmp ;p--) /* chomp trailing spaces */
+			if (g_ascii_isspace (*p)) { *p = '\0'; }
+		const gchar *h = tmp + sizeof("chunk_hash: ") - 1;
+		if (!metautils_str_ishexa (h, sizeof(received)-1)) {
+			GRID_DEBUG("Invalid hexadecimal chunk hash [%s]", h);
+			return len;
+		}
+		for (gchar *p=received; *h ;) /* copy the hash in  uppercase */
+			*(p++) = g_ascii_toupper (*(h++));
+		return len;
+	}
+	size_t _read_FILE(void *d, size_t s, size_t n, FILE *in) {
+		/* TODO guard against to many bytes received from the rawx */
+		size_t r = fread ((gchar*)d, s, n, in);
+		if (r > 0)
+			g_checksum_update (upload->checksum_chunk, d, r*s);
+		return r;
+	}
+
 	GError *err = NULL;
 	CURLcode rc;
 	struct { guint meta, intra; } last = {.meta=(guint)-1, .intra=(guint)-1};
 	off_t done = 0;
 
 	CURL *h = _curl_get_handle ();
+
 	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "PUT");
 	rc = curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
 
 	GRID_DEBUG("Upload from [%s] to ...", upload->path);
 	for (GSList *l=chunks; l && !err ;l=l->next) {
+		/* skip the chunks with the same position */
 		struct chunk_s *c = l->data;
 		if (c->position.parity)
 			continue;
 		if (c->position.meta == last.meta && c->position.intra == last.intra)
 			continue;
+
+		/* start a new upload */
+		memset (received, 0, sizeof(received));
+		g_checksum_reset (upload->checksum_chunk);
 		off_t local_size = upload->st.st_size - done;
 		local_size = MIN(local_size, c->size);
 		GRID_DEBUG(" > [%s] %u.%u %"G_GINT64_FORMAT, c->url, c->position.meta, c->position.intra, local_size);
 		rc = curl_easy_setopt (h, CURLOPT_URL, c->url);
+		rc = curl_easy_setopt (h, CURLOPT_HEADERFUNCTION, _on_header);
+		rc = curl_easy_setopt (h, CURLOPT_HEADERDATA, NULL);
 		rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_FILE);
 		rc = curl_easy_setopt (h, CURLOPT_READDATA, upload->in);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_NOOP);
@@ -530,6 +576,14 @@ _upload_chunks (GSList *chunks, struct local_upload_s *upload)
 			last.intra = c->position.intra;
 			c->size = local_size;
 		}
+
+		/* now check the hash match (received vs. computed) */
+		const char *computed = g_checksum_get_string (upload->checksum_chunk);
+		if (0 != g_ascii_strcasecmp (computed, received))
+			err = NEWERROR(0, "Possible corruption: chunk hash mismatch "
+					"computed[%s] received[%s]", computed, received);
+		else
+			memcpy (c->hexhash, received, sizeof(c->hexhash));
 	}
 
 	curl_easy_cleanup (h);
@@ -548,8 +602,8 @@ _chunks_pack (GString *gs, GSList *chunks)
 				"{\"url\":\"%s\","
 				"\"size\":%"G_GINT64_FORMAT","
 				"\"pos\":\"%u\","
-				"\"hash\":\"00000000000000000000000000000000\"}",
-				c->url, c->size, c->position.meta);
+				"\"hash\":\"%s\"}",
+				c->url, c->size, c->position.meta, c->hexhash);
 	}
 	g_string_append (gs, "]");
 }
