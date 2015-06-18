@@ -65,7 +65,6 @@ download_agregate(gs_content_t *content, GSList *agregate, struct dl_status_s *s
 {
 	GSList *l;
 	GError *local_gerr = NULL;
-	GError *local_gerr2 = NULL;
 	struct  dl_status_s statusTmp;
 
 	*may_reload = FALSE;
@@ -108,19 +107,8 @@ memcpy(&statusTmp, status, sizeof(struct dl_status_s));
 		/* then an error with the rawx happened, retry is possible */
 		switch (local_gerr->code) {
 			case CODE_CONTENT_CORRUPTED:
-				/* some bad bytes have been served to the client calback,
-				 * we cannot continue and think it is OK! */
-				rawx_set_corrupted(&dummy_chunk, &local_gerr2);
-				if (local_gerr2) {
-					g_propagate_prefixed_error(gerr, local_gerr2,
-						"corruption detected: %s, and rename failed: ",
-						local_gerr->message);
-					(*gerr)->code = CODE_CONTENT_CORRUPTED;
-				} else {
-					GSETCODE(gerr, CODE_CONTENT_CORRUPTED,
-							"corruption detected: %s", local_gerr->message);
-				}
-
+				GSETCODE(gerr, CODE_CONTENT_CORRUPTED,
+						"corruption detected: %s", local_gerr->message);
 				break;
 			case CODE_NETWORK_ERROR:
 				if ( previousError && (*gerr)->code != local_gerr->code) {
