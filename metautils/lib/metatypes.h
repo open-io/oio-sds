@@ -28,48 +28,27 @@ License along with this library.
  * @{
  */
 
-/** The maximum length of a container name */
-#define LIMIT_LENGTH_CONTAINERNAME 1024
-
 /** The maximum length of a volume name */
 #define LIMIT_LENGTH_VOLUMENAME 256
 
 /** The maximum length of a namespace name */
-#define LIMIT_LENGTH_NSNAME 256
+#define LIMIT_LENGTH_NSNAME 64
 
 #define LIMIT_LENGTH_ACCOUNT 256
 
 #define LIMIT_LENGTH_USER 256
 
-/** The maximum length of a storage policy name */
-#define LIMIT_LENGTH_STGPOLICY 256
-
 /** The maximum length of a content name */
 #define LIMIT_LENGTH_CONTENTPATH 1024
 
-/** The maximum length of a container event message */
-#define LIMIT_LENGTH_EVENTMESSAGE 2048
+/** The maximum length of a storage policy name */
+#define LIMIT_LENGTH_STGPOLICY 32
 
 /** The maximum length of a service tag name */
 #define LIMIT_LENGTH_TAGNAME 32
 
-/** The maximum length of a service type name */
-#define LIMIT_LENGTH_SRVTYPE 32
-
-/** The maximum length of service options */
-#define LIMIT_LENGTH_SRVARGS 256
-
-/** The maximum length of a service storage class */
-#define LIMIT_LENGTH_STGCLASS 32
-
 /** The maximum length of a location name */
 #define LIMIT_LENGTH_LOCNAME 64
-
-/** The maximum length of a container event type */
-#define LIMIT_LENGTH_TYPE 50
-
-/** The maximum length of a container event ref */
-#define LIMIT_LENGTH_REF 256
 
 /** The maximum length of a URL query string (including '?') */
 #define LIMIT_LENGTH_HCURL_OPTIONS 512
@@ -79,13 +58,21 @@ License along with this library.
 #define LIMIT_LENGTH_REQID 128
 
 #define LIMIT_LENGTH_BASENAME 256
+
 #define LIMIT_LENGTH_BASETYPE 32
+
+/** The maximum length of a service type name */
+#define LIMIT_LENGTH_SRVTYPE 32
+
+/** The maximum length of service options */
+#define LIMIT_LENGTH_SRVARGS 256
 
 /** The maximum length of a URL
  * (namespace, container, content, options, separators) */
 #define LIMIT_LENGTH_HCURL (LIMIT_LENGTH_NSNAME +\
-	LIMIT_LENGTH_CONTAINERNAME + LIMIT_LENGTH_CONTENTPATH +\
-	LIMIT_LENGTH_HCURL_OPTIONS + 2)
+	LIMIT_LENGTH_ACCOUNT + LIMIT_LENGTH_USER + \
+	LIMIT_LENGTH_BASETYPE + LIMIT_LENGTH_CONTENTPATH +\
+	LIMIT_LENGTH_HCURL_OPTIONS)
 
 /** The maximum length for values of 'admin' table */
 #define LIMIT_LENGTH_ADMIN_VALUE 1024
@@ -95,6 +82,7 @@ License along with this library.
 #define STRLEN_CONTAINERID TYPE_TO_STRLEN(container_id_t)
 #define STRLEN_CHUNKHASH   TYPE_TO_STRLEN(hash_md5_t)
 #define STRLEN_ADDRINFO    sizeof("[XXXX:XXXX:XXXX:XXXX:XXXX:XXXX]:SSSSS")
+#define STRLEN_SHA256      TYPE_TO_STRLEN(hash_sha256_t)
 
 /** Type to store a file size */
 typedef gint64 file_size_t;
@@ -196,7 +184,7 @@ typedef struct container_info_s
  */
 typedef struct path_info_s
 {
-	gchar path[LIMIT_LENGTH_CONTENTPATH + 1];	/**< The content name */
+	gchar path[LIMIT_LENGTH_CONTENTPATH];	/**< The content name */
 	content_length_t size;			/**< The content size */
 	gboolean hasSize;			/**< The has size flag */
 	GByteArray *user_metadata;		/**< The content user metadata */
@@ -238,23 +226,6 @@ typedef struct meta0_info_s
 	guint8 *prefixes;	/**< The list of container id prefixes in the META0 */
 	gsize prefixes_size;	/**< The size of the prefixes list */
 } meta0_info_t;
-
-/**
- * Type to store a container id prefix in META0
- */
-typedef struct prefix_s
-{
-	guint8 bytes[2];	/**< The prefix */
-} prefix_t;
-
-/**
- * Type to store a container id prefix in META1
- */
-typedef struct prefix_data_s
-{
-	guint32 flags;		/**< The state flags */
-	GSList *addr;		/**< A list of META1 address ? */
-} prefix_data_t;
 
 /**
  * Type to store a key/value pair
@@ -333,7 +304,7 @@ typedef struct meta2_raw_chunk_s
 typedef struct meta2_raw_content_s
 {
 	container_id_t container_id; /**< The container id */
-	gchar path[LIMIT_LENGTH_CONTENTPATH + 1]; /**< The content name */
+	gchar path[LIMIT_LENGTH_CONTENTPATH]; /**< The content name */
 	guint32 flags;               /**< The state flags */
 	guint32 nb_chunks;           /**< The number of chunks */
 	gint64 size;                 /**< The content size */
@@ -351,7 +322,7 @@ typedef struct meta2_raw_content_s
 typedef struct meta1_raw_container_s
 {
 	container_id_t id;  /**< The container id */
-	gchar name[LIMIT_LENGTH_CONTAINERNAME + 1];	/**< The container name */
+	gchar name[LIMIT_LENGTH_USER];	/**< The container name */
 	GSList *meta2;      /**< The list of META2 addresses hosting this container */
 	guint32 flags;      /**< The stat flags */
 } meta1_raw_container_t;
@@ -388,18 +359,6 @@ typedef struct content_textinfo_s
 } content_textinfo_t;
 
 /**
- * Represents a event on container stored in META2 database.
- */
-typedef struct container_event_s
-{
-	gint64 rowid;                     /**< The position of the event in db */
-	gint64 timestamp;                 /**< The date of message */
-	gchar type[LIMIT_LENGTH_TYPE +1]; /**< The type of event */
-	gchar ref[LIMIT_LENGTH_REF +1];   /**< A reference field, as requested by the ugly BU-men */
-	GByteArray *message;              /**< The message */
-} container_event_t;
-
-/**
  * Represents a versioned vey/value pair that can be associated to
  * either a container or a content in a META2 service.
  */
@@ -416,7 +375,7 @@ typedef struct meta2_property_s
 typedef struct meta2_raw_content_header_s
 {
 	container_id_t container_id; /**< The container id */
-	gchar path[LIMIT_LENGTH_CONTENTPATH + 1];	/**< The content name */
+	gchar path[LIMIT_LENGTH_CONTENTPATH];	/**< The content name */
 	guint32 flags;               /**< The state flags */
 	guint32 nb_chunks;           /**< The number of chunks */
 	gint64 size;                 /**< The content size */
