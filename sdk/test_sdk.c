@@ -8,8 +8,8 @@ int
 main(int argc, char **argv)
 {
 	logger_lazy_init ();
-	g_log_set_default_handler(logger_stderr, NULL);
-	logger_init_level (GRID_LOGLVL_TRACE2);
+	g_log_set_default_handler (logger_stderr, NULL);
+	logger_init_level (GRID_LOGLVL_TRACE);
 
 	if (argc != 3) {
 		g_printerr ("Usage: %s HCURL PATH\n", argv[0]);
