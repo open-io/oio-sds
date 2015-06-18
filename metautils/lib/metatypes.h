@@ -83,6 +83,7 @@ License along with this library.
 #define STRLEN_CHUNKHASH   TYPE_TO_STRLEN(hash_md5_t)
 #define STRLEN_ADDRINFO    sizeof("[XXXX:XXXX:XXXX:XXXX:XXXX:XXXX]:SSSSS")
 #define STRLEN_SHA256      TYPE_TO_STRLEN(hash_sha256_t)
+#define STRLEN_MD5         TYPE_TO_STRLEN(hash_md5_t)
 
 /** Type to store a file size */
 typedef gint64 file_size_t;

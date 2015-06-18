@@ -460,7 +460,7 @@ service_info_get_tag(GPtrArray * a, const gchar * name)
 		return NULL;
 
 	gsize len = strlen_len(name, LIMIT_LENGTH_TAGNAME);
-	for (int i=0; i<a->len ;i++) {
+	for (guint i=0; i<a->len ;i++) {
 		struct service_tag_s *pSrv = g_ptr_array_index(a, i);
 		if (!pSrv)
 			return NULL;
