@@ -205,23 +205,7 @@ cluster_update_freq=1
 period_get_ns=1
 period_get_srv=1
 period_get_srvtype=1
-#period_get_evtconfig=30
 period_push_srv=1
-
-#enable_broken_elements=false
-#period_broken_push=30
-#period_broken_get=30
-
-events.spool.dir=${SPOOLDIR}/${NS}-spool
-events.spool.size=9999
-events.mode.dir=755
-events.mode.file=644
-events.manage.enable=yes
-events.receive.enable=yes
-
-events.max_pushes_per_round=10
-events.max_status_per_round=20
-events.max_incoming_per_round=50
 
 [server.inet]
 port=${PORT}
@@ -287,8 +271,6 @@ param_option.meta2_check.put.SRVINFO=false
 
 param_storage_conf=${CFGDIR}/${NS}-conscience-policies.conf
 
-param_events=${CFGDIR}/${NS}-conscience-events.conf
-
 param_service.default.score_timeout=30
 param_service.default.score_variation_bound=5
 param_service.default.score_expr=100
@@ -320,10 +302,6 @@ param_service.echo.score_expr=(num stat.cpu)
 param_service.account.score_timeout=120
 param_service.account.score_variation_bound=5
 param_service.account.score_expr=(num stat.cpu)
-"""
-
-template_conscience_events = """
-*=drop
 """
 
 template_conscience_policies = """
@@ -558,9 +536,6 @@ def generate (ns, ip, options={}):
 	with open(CFGDIR + '/'+ns+'-conscience.conf', 'w+') as f:
 		env['PORT'] = port_cs
 		tpl = Template(template_conscience)
-		f.write(tpl.safe_substitute(env))
-	with open(CFGDIR + '/' + ns + '-conscience-events.conf', 'w+') as f:
-		tpl = Template(template_conscience_events)
 		f.write(tpl.safe_substitute(env))
 	with open(CFGDIR + '/' + ns + '-conscience-policies.conf', 'w+') as f:
 		tpl = Template(template_conscience_policies)
