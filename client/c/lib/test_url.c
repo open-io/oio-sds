@@ -19,7 +19,8 @@ License along with this library.
 
 #include "./gs_internals.h"
 
-struct test_data_s {
+struct test_data_s
+{
 	const char *ns;
 	const char *pns;
 	const char *vns;
@@ -27,8 +28,7 @@ struct test_data_s {
 	const char *refhexa;
 };
 
-struct test_data_s data[] =
-{
+struct test_data_s data[] = {
 	/* without VNS */
 	{"NS", "NS", NULL, "JFS",
 		"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
@@ -67,18 +67,17 @@ test_data(struct test_data_s *pdata)
 	g_assert((gs != NULL) ^ (gse != NULL));
 	if (!gs)
 		g_debug("gs_grid_storage_init_flags failed : (%d) %s\n",
-				gse->code, gse->msg);
+			gse->code, gse->msg);
 	g_assert(gse == NULL);
 
-	check_strings(pdata->ns,  gs_get_full_namespace(gs));
+	check_strings(pdata->ns, gs_get_full_namespace(gs));
 	check_strings(pdata->pns, gs_get_namespace(gs));
 	check_strings(pdata->vns, gs_get_virtual_namespace(gs));
 
 	container = gs_init_container(gs, pdata->refname, 0, &gse);
 	g_assert((container != NULL) ^ (gse != NULL));
 	if (!container)
-		g_debug("gs_init_container failed : (%d) %s\n",
-				gse->code, gse->msg);
+		g_debug("gs_init_container failed : (%d) %s\n", gse->code, gse->msg);
 	g_assert(gse == NULL);
 
 	check_strings(pdata->refname, container->info.name);
@@ -91,15 +90,14 @@ test_data(struct test_data_s *pdata)
 static void
 test_init(void)
 {
-	for (struct test_data_s *td=data; td->ns ;td++)
+	for (struct test_data_s * td = data; td->ns; td++)
 		test_data(td);
 }
 
 int
 main(int argc, char **argv)
 {
-	HC_TEST_INIT(argc,argv);
+	HC_TEST_INIT(argc, argv);
 	g_test_add_func("/client/lib/url/init", test_init);
 	return g_test_run();
 }
-
