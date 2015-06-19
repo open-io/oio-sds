@@ -248,78 +248,78 @@ class TestAccountBackend(unittest.TestCase):
         listing = backend.list_containers(account_id, marker='',
                                           delimiter='', limit=100)
         self.assertEqual(len(listing), 100)
-        self.assertEqual(listing[0]['name'], '0-0000')
-        self.assertEqual(listing[-1]['name'], '0-0099')
+        self.assertEqual(listing[0][0], '0-0000')
+        self.assertEqual(listing[-1][0], '0-0099')
 
         listing = backend.list_containers(account_id, marker='',
                                           end_marker='0-0050',
                                           delimiter='', limit=100)
         self.assertEqual(len(listing), 50)
-        self.assertEqual(listing[0]['name'], '0-0000')
-        self.assertEqual(listing[-1]['name'], '0-0049')
+        self.assertEqual(listing[0][0], '0-0000')
+        self.assertEqual(listing[-1][0], '0-0049')
 
         listing = backend.list_containers(account_id, marker='0-0099',
                                           delimiter='', limit=100)
         self.assertEqual(len(listing), 100)
-        self.assertEqual(listing[0]['name'], '0-0100')
-        self.assertEqual(listing[-1]['name'], '1-0074')
+        self.assertEqual(listing[0][0], '0-0100')
+        self.assertEqual(listing[-1][0], '1-0074')
 
         listing = backend.list_containers(account_id, marker='1-0074',
                                           delimiter='', limit=55)
         self.assertEqual(len(listing), 55)
-        self.assertEqual(listing[0]['name'], '1-0075')
-        self.assertEqual(listing[-1]['name'], '2-0004')
+        self.assertEqual(listing[0][0], '1-0075')
+        self.assertEqual(listing[-1][0], '2-0004')
 
         listing = backend.list_containers(account_id, marker='', prefix='0-01',
                                           delimiter='', limit=10)
         self.assertEqual(len(listing), 10)
-        self.assertEqual(listing[0]['name'], '0-0100')
-        self.assertEqual(listing[-1]['name'], '0-0109')
+        self.assertEqual(listing[0][0], '0-0100')
+        self.assertEqual(listing[-1][0], '0-0109')
 
         listing = backend.list_containers(account_id, marker='',
                                           prefix='0-01', delimiter='-',
                                           limit=10)
         self.assertEqual(len(listing), 10)
-        self.assertEqual(listing[0]['name'], '0-0100')
-        self.assertEqual(listing[-1]['name'], '0-0109')
+        self.assertEqual(listing[0][0], '0-0100')
+        self.assertEqual(listing[-1][0], '0-0109')
 
         listing = backend.list_containers(account_id, marker='',
                                           prefix='0-', delimiter='-',
                                           limit=10)
         self.assertEqual(len(listing), 10)
-        self.assertEqual(listing[0]['name'], '0-0000')
-        self.assertEqual(listing[-1]['name'], '0-0009')
+        self.assertEqual(listing[0][0], '0-0000')
+        self.assertEqual(listing[-1][0], '0-0009')
 
         listing = backend.list_containers(account_id, marker='',
                                           prefix='', delimiter='-',
                                           limit=10)
         self.assertEqual(len(listing), 4)
-        self.assertEqual([c['name'] for c in listing],
+        self.assertEqual([c[0] for c in listing],
                          ['0-', '1-', '2-', '3-'])
 
         listing = backend.list_containers(account_id, marker='2-',
                                           delimiter='-', limit=10)
         self.assertEqual(len(listing), 1)
-        self.assertEqual([c['name'] for c in listing], ['3-'])
+        self.assertEqual([c[0] for c in listing], ['3-'])
 
         listing = backend.list_containers(account_id, marker='', prefix='2',
                                           delimiter='-', limit=10)
         self.assertEqual(len(listing), 1)
-        self.assertEqual([c['name'] for c in listing], ['2-'])
+        self.assertEqual([c[0] for c in listing], ['2-'])
 
         listing = backend.list_containers(account_id, marker='2-0050',
                                           prefix='2-',
                                           delimiter='-', limit=10)
         self.assertEqual(len(listing), 10)
-        self.assertEqual(listing[0]['name'], '2-0051')
-        self.assertEqual(listing[1]['name'], '2-0051-')
-        self.assertEqual(listing[2]['name'], '2-0052')
-        self.assertEqual(listing[-1]['name'], '2-0059')
+        self.assertEqual(listing[0][0], '2-0051')
+        self.assertEqual(listing[1][0], '2-0051-')
+        self.assertEqual(listing[2][0], '2-0052')
+        self.assertEqual(listing[-1][0], '2-0059')
 
         listing = backend.list_containers(account_id, marker='3-0045',
                                           prefix='3-', delimiter='-', limit=10)
         self.assertEqual(len(listing), 10)
-        self.assertEqual([c['name'] for c in listing],
+        self.assertEqual([c[0] for c in listing],
                          ['3-0045-', '3-0046', '3-0046-', '3-0047',
                           '3-0047-', '3-0048', '3-0048-', '3-0049',
                           '3-0049-', '3-0050'])
@@ -329,7 +329,7 @@ class TestAccountBackend(unittest.TestCase):
                                  0, 0)
         listing = backend.list_containers(account_id, marker='3-0048', limit=10)
         self.assertEqual(len(listing), 10)
-        self.assertEqual([c['name'] for c in listing],
+        self.assertEqual([c[0] for c in listing],
                          ['3-0048-0049', '3-0049', '3-0049-', '3-0049-0049',
                           '3-0050', '3-0050-0049', '3-0051', '3-0051-0049',
                           '3-0052', '3-0052-0049'])
@@ -338,7 +338,7 @@ class TestAccountBackend(unittest.TestCase):
                                           prefix='3-',
                                           delimiter='-', limit=10)
         self.assertEqual(len(listing), 10)
-        self.assertEqual([c['name'] for c in listing],
+        self.assertEqual([c[0] for c in listing],
                          ['3-0048-', '3-0049', '3-0049-', '3-0050',
                           '3-0050-', '3-0051', '3-0051-', '3-0052',
                           '3-0052-', '3-0053'])
@@ -347,5 +347,5 @@ class TestAccountBackend(unittest.TestCase):
                                           prefix='3-0049-',
                                           delimiter='-', limit=10)
         self.assertEqual(len(listing), 2)
-        self.assertEqual([c['name'] for c in listing],
+        self.assertEqual([c[0] for c in listing],
                          ['3-0049-', '3-0049-0049'])
