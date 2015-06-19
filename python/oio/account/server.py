@@ -84,6 +84,7 @@ def account_list_containers():
     user_list = backend.list_containers(account_id, limit=limit,
                                         marker=marker, end_marker=end_marker,
                                         prefix=prefix, delimiter=delimiter)
+
     result = json.dumps(user_list)
     return flask.Response(result, mimetype='text/json')
 

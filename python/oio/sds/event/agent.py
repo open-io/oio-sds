@@ -36,13 +36,16 @@ def decode_msg(msg):
 class EventWorker(object):
     def __init__(self, conf, context, **kwargs):
         self.conf = conf
+        verbose = kwargs.pop('verbose', False)
+        self.logger = get_logger(self.conf, verbose=verbose)
+        self._configure_zmq(context)
+        self.cs = ConscienceClient(self.conf)
+        self._account_addr = None
+
+    def _configure_zmq(self, context):
         socket = context.socket(zmq.REP)
         socket.connect('inproc://event-front')
         self.socket = socket
-        verbose = kwargs.pop('verbose', False)
-        self.logger = get_logger(self.conf, verbose=verbose)
-        self.cs = ConscienceClient(self.conf)
-        self._account_addr = None
 
     def run(self):
         while True:
@@ -175,7 +178,6 @@ class EventWorker(object):
             resp = None
             try:
                 with Timeout(CHUNK_TIMEOUT):
-                    print chunk['id']
                     resp = requests.delete(chunk['id'])
             except (Exception, Timeout) as e:
                 self.logger.exception(e)
