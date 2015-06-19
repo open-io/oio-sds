@@ -119,9 +119,10 @@ class EventWorker(object):
         mtime = event.get('when')
         data = event.get('data')
         name = data.get('url').get('user')
+        account = data.get('url').get('account')
 
         event = {'mtime': mtime, 'name': name}
-        requests.post(uri, params={'id': 'test'}, data=json.dumps(event))
+        requests.post(uri, params={'id': account}, data=json.dumps(event))
 
     def handle_container_update(self, event):
         """
@@ -133,8 +134,10 @@ class EventWorker(object):
         mtime = event.get('when')
         data = event.get('data')
         name = event.get('url').get('user')
+        account = event.get('url').get('account')
         bytes_count = data.get('bytes-count', 0)
         object_count = data.get('object-count', 0)
+
 
         event = {
             'mtime': mtime,
@@ -142,7 +145,7 @@ class EventWorker(object):
             'bytes': bytes_count,
             'objects': object_count
         }
-        requests.post(uri, params={'id': 'test'}, data=json.dumps(event))
+        requests.post(uri, params={'id': account}, data=json.dumps(event))
 
     def handle_container_destroy(self, event):
         """
@@ -153,9 +156,10 @@ class EventWorker(object):
         dtime = event.get('when')
         data = event.get('data')
         name = data.get('url').get('user')
+        account = data.get('url').get('account')
 
         event = {'dtime': dtime, 'name': name}
-        requests.post(uri, params={'id': 'test'}, data=json.dumps(event))
+        requests.post(uri, params={'id': account}, data=json.dumps(event))
 
     def handle_object_delete(self, event):
         """

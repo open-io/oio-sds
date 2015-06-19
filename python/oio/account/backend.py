@@ -66,7 +66,7 @@ class AccountBackend(object):
 
     def create_account(self, account_id):
         conn = self.conn
-        account_id = account_id.lower()
+        account_id = account_id
         if conn.hget('accounts:', account_id):
             return None
 
