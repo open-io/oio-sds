@@ -545,7 +545,7 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 	ne_request *request=NULL;
 	ne_request *request_update=NULL;
 	char *update_uri = NULL;
-	gchar dst[128];
+	gchar dst[STRLEN_ADDRINFO];
 	int ne_rc;
 	guint16 port = 0;
 
@@ -674,7 +674,7 @@ delete_chunk(const meta2_raw_chunk_t *rc)
 	ne_request *request=NULL;
 	char chunk_hash_str[STRLEN_CHUNKHASH];
 
-	gchar dst[128];
+	gchar dst[STRLEN_ADDRINFO];
 	guint16 port = 0;
 
 	addr_info_get_addr(&(rc->id.addr), dst, sizeof(dst), &port);
@@ -744,7 +744,7 @@ is_rawx_reachable(const service_info_t *rawx)
 		return 0;
 	}
 
-	gchar dst[128];
+	gchar dst[STRLEN_ADDRINFO];
 	guint16 port = 0;
 
 	if (!addr_info_get_addr(&(rawx->addr), dst, sizeof(dst), &port)) {

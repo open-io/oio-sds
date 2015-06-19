@@ -57,18 +57,15 @@ build_meta0_cache (struct resolver_direct_s *r, GError **err)
 
 	/*now call the meta0 reference*/
 	if (!(m0_list = meta0_remote_get_meta1_all (&(r->meta0), r->timeout.m0.op, err))) {
-		gchar str_addr[128];
-		memset(str_addr, 0x00, sizeof(str_addr));
+		gchar str_addr[STRLEN_ADDRINFO];
 		addr_info_to_string(&(r->meta0), str_addr, sizeof(str_addr));
 		GSETERROR (err,"META0 error : Cannot get the reference from %s", str_addr);
 		return NULL;
 	}
 
 	array = meta0_utils_list_to_array(m0_list); 
-
 	g_slist_foreach (m0_list, meta0_info_gclean, NULL);
 	g_slist_free (m0_list);
-
 	return array;
 }
 

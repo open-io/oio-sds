@@ -724,7 +724,7 @@ service_info_encode_json(GString *gstr, struct service_info_s *si)
 {
 	if (!si)
 		return;
-	gchar straddr[128];
+	gchar straddr[STRLEN_ADDRINFO];
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
 	g_string_append_printf(gstr,
 			"{\"addr\":\"%s\",\"score\":%d,\"tags\":{",
