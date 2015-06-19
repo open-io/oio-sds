@@ -552,7 +552,7 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 		if (ctx->delimiter) {
 			const char *p = strchr(name+prefix_len, ctx->delimiter);
 			if (p) {
-				g_tree_insert(ctx->prefixes, g_strndup(name, p-name+1), GINT_TO_POINTER(1));
+				g_tree_insert(ctx->prefixes, g_strndup(name, (p-name)+1), GINT_TO_POINTER(1));
 				forget (l);
 			} else {
 				ctx->count ++;
@@ -583,11 +583,12 @@ action_m2_container_list (struct req_args_s *args)
 		struct list_params_s in = list_in;
 		struct list_result_s out = {NULL,NULL,FALSE};
 		while (grid_main_is_running()) {
+
 			// patch the input parameters
 			if (list_in.maxkeys > 0)
 				in.maxkeys = list_in.maxkeys - (count + g_tree_nnodes(tree_prefixes));
-			if (out.next_marker)
-				in.marker_start = out.next_marker;
+			if (list_out.next_marker)
+				in.marker_start = list_out.next_marker;
 
 			// Action
 			if (NULL != (e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out)))
@@ -631,7 +632,6 @@ action_m2_container_list (struct req_args_s *args)
 	memset(&list_in, 0, sizeof(list_in));
 	list_in.flag_headers = ~0;
 	list_in.flag_nodeleted = ~0;
-	list_in.snapshot = OPT("snapshot");
 	list_in.prefix = OPT("prefix");
 	list_in.marker_start = OPT("marker");
 	list_in.marker_end = OPT("marker_end");
@@ -641,6 +641,10 @@ action_m2_container_list (struct req_args_s *args)
 		list_in.flag_nodeleted = 0;
 	if (OPT("all"))
 		list_in.flag_allversion = ~0;
+
+	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%c prefix=%s marker=%s end=%s",
+			hc_url_get(args->url, HCURL_WHOLE), list_in.maxkeys, delimiter,
+			list_in.prefix, list_in.marker_start, list_in.marker_end);
 
 	tree_prefixes = g_tree_new_full (metautils_strcmp3, NULL, g_free, NULL);
 	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
