@@ -75,6 +75,11 @@ def account_list_containers():
     account_id = request.args.get('id')
     if not account_id:
         return flask.Response('Missing Account ID', 400)
+
+    info = backend.info_account(account_id)
+    if not info:
+        return "Account not found", 404
+
     marker = request.args.get('marker', '')
     end_marker = request.args.get('end_marker', '')
     prefix = request.args.get('prefix', '')
@@ -85,7 +90,8 @@ def account_list_containers():
                                         marker=marker, end_marker=end_marker,
                                         prefix=prefix, delimiter=delimiter)
 
-    result = json.dumps(user_list)
+    info['listing'] = user_list
+    result = json.dumps(info)
     return flask.Response(result, mimetype='text/json')
 
 
