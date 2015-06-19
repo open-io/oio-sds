@@ -52,6 +52,9 @@ target_link_libraries(test_include gridclient)
 add_executable(test_url test_url.c)
 target_link_libraries(test_url gridclient)
 
+add_executable(test_references test_references.c)
+target_link_libraries(test_references gridclient)
+
 add_executable(test_services test_services.c)
 target_link_libraries(test_services gridclient)
 
@@ -78,4 +81,5 @@ install(TARGETS
 add_test(NAME client/lib/inc COMMAND test_include)
 add_test(NAME client/lib/url COMMAND test_url)
 add_test(NAME client/metacd/get_container COMMAND test_metacd)
-add_test(NAME client/lib/serv COMMAND test_services)
+add_test(NAME client/lib/ref COMMAND test_references)
+add_test(NAME client/lib/ser COMMAND test_services)
