@@ -36,12 +36,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define EPOLL_TIMEOUT 1000
 #define MAX_EVENTS 64
 
-static void check_worker_timeout(gpointer data, gpointer user_data);
-static glong time_to_next_timed_out_worker(void);
-
 static int epfd;
 static gboolean stopped = TRUE;
 static GSList *workers = NULL;
+static gint64 first_timeout = 0;
+
+static gint64 _now () { return g_get_monotonic_time () / 1000; }
 
 static void
 abort_worker(worker_t *worker)
@@ -68,13 +68,93 @@ init_io_scheduler(GError ** error)
 	return (1);
 }
 
+static gboolean
+worker_has_timeout (worker_t *w)
+{
+	return w->timeout.activity > 0 || w->timeout.startup > 0;
+}
+
+static gint64
+worker_get_timeout (worker_t *w)
+{
+	gint64 timeout_startup = G_MAXINT64;
+	if (w->timeout.startup > 0)
+		timeout_startup = w->timepoint.startup + (w->timeout.startup * 1000);
+
+	gint64 timeout_activity = G_MAXINT64;
+	if (w->timeout.activity > 0)
+		timeout_activity = w->timepoint.activity + (w->timeout.activity * 1000);
+
+	return MACRO_MIN(timeout_activity,timeout_startup);
+}
+
+static gint64
+worker_first_timeout (void)
+{
+	gint64 next = G_MAXINT64;
+	for (GSList *l = workers; l ;l=l->next) {
+		worker_t *w = (worker_t *) l->data;
+		if (w) {
+			gint64 n = worker_get_timeout(w);
+			next = MIN(next, n);
+		}
+	}
+	return next;
+}
+
+static gint64
+time_to_next_timed_out_worker(gint64 now)
+{
+	if (now >= first_timeout)
+		first_timeout = worker_first_timeout();
+	return (first_timeout < now) ? 0 : (first_timeout - now);
+}
+
+static void
+worker_set_last_activity (worker_t *w, gint64 when)
+{
+	if (!w->timepoint.startup)
+		w->timepoint.startup = when;
+	w->timepoint.activity = when;
+
+	gint64 timeout = worker_get_timeout (w);
+	first_timeout = MIN(first_timeout,timeout);
+}
+
 static long
 _delay(void)
 {
-	register long d0 = time_to_next_timed_out_worker();
-	register long d1 = get_time_to_next_task_schedule();
+	gint64 now = _now();
+	gint64 d0 = time_to_next_timed_out_worker(now);
+	gint64 d1 = time_to_next_timed_out_task(now);
 	d0 = MACRO_MIN(d0, d1);
-	return 1000 * MACRO_MAX(0, d0);
+	return CLAMP(d0, 10, 5000);
+}
+
+static gboolean
+_workers_abort_timedout (gint64 now)
+{
+	GSList *to_abort = NULL;
+
+	for (GSList *l=workers; l ;l=l->next) {
+		worker_t *w = l->data;
+		if (!worker_has_timeout(w))
+			continue;
+		gint64 timeout = worker_get_timeout (w);
+		if (timeout <= now) {
+			to_abort = g_slist_prepend (to_abort, w);
+			GRID_WARN("Worker %p timeout (idle since %"G_GINT64_FORMAT"ms,"
+					" started since %"G_GINT64_FORMAT"ms)", w,
+					now - w->timepoint.activity,
+					now - w->timepoint.startup);
+		}
+	}
+
+	gboolean rc = (to_abort != NULL);
+	for (GSList *l=to_abort; l ;l=l->next)
+		abort_worker(l->data);
+	g_slist_free (to_abort);
+	return rc;
 }
 
 void
@@ -86,6 +166,7 @@ launch_io_scheduler(void)
 
 	while (!stopped) {
 
+		gboolean anything_aborted = FALSE;
 		int rc = epoll_wait(epfd, events, MAX_EVENTS, _delay());
 
 		if (rc < 0) {
@@ -104,17 +185,17 @@ launch_io_scheduler(void)
 					ERROR("An error occured on fd [%d], closing connection : %s",
 							worker->data.fd, strerror(sock_err));
 					abort_worker(worker);
+					anything_aborted = TRUE;
 				}
 				else {
 					GError *local_error = NULL;
-
-					gettimeofday(&(worker->timestamp), NULL);
+					worker_set_last_activity(worker, _now());
 
 					TRACE("Executing worker of fd [%d]", worker->data.fd);
 					if (!(worker->func(worker, &local_error))) {
-						if (local_error) {
+						anything_aborted = TRUE;
+						if (local_error)
 							ERROR("Failed to execute worker : %s", gerror_get_message(local_error));
-						}
 						abort_worker(worker);
 					}
 
@@ -124,8 +205,12 @@ launch_io_scheduler(void)
 			}
 		}
 
-		exec_tasks();
-		g_slist_foreach(workers, check_worker_timeout, NULL);
+		gint64 now = _now();
+		exec_tasks(now);
+		anything_aborted |= _workers_abort_timedout (now);
+
+		if (anything_aborted)
+			first_timeout = worker_first_timeout ();
 	}
 
 	INFO("IO scheduler stopped.");
@@ -156,14 +241,8 @@ add_fd_to_io_scheduler(worker_t * worker, __uint32_t events, GError ** error)
 		return (0);
 	}
 
-	/* Set timestamp to worker */
-	memset(&(worker->timestamp), 0, sizeof(struct timeval));
-	if (0 > gettimeofday(&(worker->timestamp), NULL))
-		ERROR("Failed to set timestamp in worker");
-
-	/* Append worker to the list */
+	worker_set_last_activity (worker, _now());
 	workers = g_slist_prepend(workers, worker);
-
 	return (1);
 }
 
@@ -173,7 +252,6 @@ change_fd_events_in_io_scheduler(worker_t * worker, __uint32_t events, GError **
 	struct epoll_event ev;
 
 	memset(&ev, 0, sizeof(struct epoll_event));
-
 	ev.events = events;
 	ev.data.ptr = worker;
 
@@ -182,86 +260,17 @@ change_fd_events_in_io_scheduler(worker_t * worker, __uint32_t events, GError **
 		return (0);
 	}
 
-	/* Set timestamp to worker */
-	memset(&(worker->timestamp), 0, sizeof(struct timeval));
-	if (0 > gettimeofday(&(worker->timestamp), NULL))
-		ERROR("Failed to set timestamp in worker");
-
+	worker_set_last_activity (worker, _now());
 	return (1);
 }
 
 int
-remove_fd_from_io_scheduler(worker_t * worker, GError ** error)
+remove_fd_from_io_scheduler(worker_t * w, GError ** error)
 {
 	(void) error;
-	worker_data_t *data = &(worker->data);
-	workers = g_slist_remove(workers, worker);
-	metautils_pclose(&(data->fd));
+	worker_data_t *data = &(w->data);
+	workers = g_slist_remove(workers, w);
+	metautils_pclose (&(data->fd));
 	return (1);
 }
 
-void
-check_worker_timeout(gpointer data, gpointer user_data)
-{
-	worker_t *worker = (worker_t *) data;
-	struct timeval tv, elapsed, timeout;
-
-	(void)user_data;
-	memset(&tv, 0, sizeof(struct timeval));
-	memset(&elapsed, 0, sizeof(struct timeval));
-	memset(&timeout, 0, sizeof(struct timeval));
-
-	if (worker == NULL || worker->timeout == 0)
-		return;
-
-	timeout.tv_sec = (worker->timeout) / 1000;
-	timeout.tv_usec = 1000 * (worker->timeout % 1000);
-
-	if (0 > gettimeofday(&tv, NULL))
-		return;
-
-	timersub(&tv, &(worker->timestamp), &elapsed);
-
-	if (timercmp(&elapsed, &timeout, >)) {
-		WARN("Worker %p timeout (elapsed %ldms)", worker,
-				elapsed.tv_sec * 1000 + elapsed.tv_usec / 1000);
-		abort_worker(worker);
-	}
-}
-
-glong
-time_to_next_timed_out_worker(void)
-{
-	GSList *list = NULL;
-	worker_t *worker = NULL;
-	long shortest = G_MAXLONG;
-	struct timeval tv, elapsed, timeout, rest;
-
-	memset(&tv, 0, sizeof(struct timeval));
-
-	if (0 > gettimeofday(&tv, NULL))
-		return (shortest);
-
-	for (list = workers; list && list->data; list = list->next) {
-		worker = (worker_t *) list->data;
-
-		if (worker->timeout == 0)
-			continue;
-
-		memset(&timeout, 0, sizeof(struct timeval));
-		memset(&elapsed, 0, sizeof(struct timeval));
-		memset(&rest, 0, sizeof(struct timeval));
-
-		timeout.tv_sec = (worker->timeout) / 1000;
-		timeout.tv_usec = 1000 * (worker->timeout % 1000);
-		
-		timersub(&tv, &(worker->timestamp), &elapsed);
-		timersub(&timeout, &elapsed, &rest);
-
-		if (rest.tv_sec < shortest)
-			shortest = rest.tv_sec;
-
-	}
-
-	return ((shortest < 1) ? 1 : shortest);
-}

@@ -90,9 +90,9 @@ License along with this library.
  * Struct to store an agent task description
  */
 struct task_s {
-	char id[MAX_TASKID_LENGTH];	/**< The task id */
-	long next_schedule;		/**< The date of the next execution of the task */
-	gboolean busy;			/**< A flag set to TRUE if the task is running */
+	char id[MAX_TASKID_LENGTH]; /**< The task id */
+	gint64 period;              /**< how many seconds between each run */
+	guint8 busy;                /**< TRUE if the task is currently running */
 };
 
 /**

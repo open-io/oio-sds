@@ -32,7 +32,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 /* ------------------------------------------------------------------------- */
 
-# define SOCK_TIMEOUT 10000
+# define GCLUSTER_AGENT_REQ_TIMEOUT 8
+# define GCLUSTER_AGENT_ACT_TIMEOUT 4
 
 # define KEY_USER             "user"
 # define KEY_GROUP            "group"

@@ -47,8 +47,14 @@ struct worker_s {
 	worker_func_f func;
 	worker_clean_f clean;
 	worker_data_t data;
-	long timeout;
-	struct timeval timestamp;
+	struct {
+		gint64 activity;
+		gint64 startup;
+	} timepoint;
+	struct {
+		gint64 activity;
+		gint64 startup;
+	} timeout;
 };
 
 int agent_worker_default_func( worker_t *worker, GError **error );

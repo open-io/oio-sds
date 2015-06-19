@@ -197,7 +197,7 @@ raw_print_list_task(GSList * tasks)
 	for (le = tasks; le && le->data; le = le->next) {
 		task = (struct task_s *) le->data;
 
-		g_print("%s|%li|%s\n", task->id, task->next_schedule, task->busy ? "running" : "waiting");
+		g_print("%s|%"G_GINT64_FORMAT"|%s\n", task->id, task->period, task->busy ? "running" : "waiting");
 	}
 }
 

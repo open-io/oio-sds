@@ -192,7 +192,7 @@ manage_service(struct service_info_s *si)
 	}
 
 	si->score.value = SCORE_UNSET;
-	si->score.timestamp = time(0);
+	si->score.timestamp = g_get_real_time() / 1000000;
 
 	/*then keep the score */
 	g_hash_table_remove(ns_data->down_services, key);

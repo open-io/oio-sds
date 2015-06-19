@@ -63,7 +63,7 @@ accept_worker(worker_t *worker, GError **error)
 	mes_worker = g_malloc0(sizeof(worker_t));
 	mes_worker->func = read_message_size_worker;
 	mes_worker->clean = NULL;
-	mes_worker->timeout = worker->data.sock_timeout;
+	mes_worker->timeout.activity = worker->data.sock_timeout;
 	mes_worker->data.fd = fd;
 	mes_worker->data.sock_timeout = worker->data.sock_timeout;
 	mes_worker->data.session = NULL;

@@ -122,14 +122,14 @@ _mark_service_state(const gchar *ns_name, const gchar *srv_key, gboolean is_up)
 			}
 		}
 		else {
-			si->score.timestamp = time(0);
+			si->score.timestamp = g_get_real_time() / 1000000;
 			DEBUG("Service [%s/%s] still UP", ns_name, srv_key);
 		}
 
 		/*ensure the UP tag on TRUE*/
 		if (si) {
 			service_tag_set_value_boolean(service_info_ensure_tag(si->tags,"tag.up"), TRUE);
-			si->score.timestamp = time(0);
+			si->score.timestamp = g_get_real_time() / 1000000;
 		}
 	}
 	else {
@@ -173,7 +173,7 @@ _detect_obsolete_services(struct namespace_data_s *ns_data)
 	struct service_info_s *si;
 
 
-	time_now = time(0);
+	time_now = g_get_real_time()/1000000;
 	time_down = time_now - 5;
 	time_broken = time_now - 30;
 	counter = 0;
@@ -321,7 +321,8 @@ _check_tcp_service_task(gpointer udata, GError **error)
 		worker_t *worker = g_malloc0(sizeof(worker_t));
 		worker->func = _check_tcp_service_worker_func;
 		worker->clean = _check_tcp_service_worker_cleaner;
-		worker->timeout = 1000;
+		worker->timeout.startup = 1000;
+		worker->timeout.activity = 1000;
 		worker->data.sock_timeout = 1000;
 		worker->data.fd = fd;
 		worker->data.session = wdata;

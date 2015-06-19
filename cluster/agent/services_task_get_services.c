@@ -105,7 +105,7 @@ asn1_final_handler( worker_t *worker, GError **error)
 	/*sets the new list*/
 	counter = 0;
 	for (l=sdata->services; l ;l=g_slist_next(l)) {
-		gchar str_addr[128];
+		gchar str_addr[STRLEN_ADDRINFO];
 		GError *error_local=NULL;
 		struct service_info_s *si;
 		struct conscience_srvtype_s *srvtype;
