@@ -268,7 +268,7 @@ class AccountBackend(object):
                                      delimiter=delimiter)
         pipeline = self.conn.pipeline(True)
         for container in raw_list:
-            pipeline.hmget('containers:%s:%s' % (account_id, container[0]),
+            pipeline.hmget('container:%s:%s' % (account_id, container[0]),
                            'objects', 'bytes')
         res = pipeline.execute()
 
