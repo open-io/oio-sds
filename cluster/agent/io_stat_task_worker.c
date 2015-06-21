@@ -303,7 +303,7 @@ get_major_minor(const gchar *path, int *pmaj, int *pmin, GError **err)
 		g_hash_table_insert(path_to_majmin, g_strdup(path), v);
 	}
 
-	time_t now = time(NULL);
+	time_t now = g_get_monotonic_time() / 1000000;
 	if (!v->last_update || v->last_update > now || v->last_update < now - 30) {
 		struct stat file_stat;
 		memset(&file_stat, 0, sizeof(file_stat));

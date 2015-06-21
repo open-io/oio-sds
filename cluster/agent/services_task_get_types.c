@@ -39,9 +39,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define TASK_ID "services_task_get_types"
 
 struct session_data_s {
-	gchar ns[LIMIT_LENGTH_NSNAME];
-	gchar task_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_NSNAME+1];
 	GSList *names;
+	gchar ns[LIMIT_LENGTH_NSNAME];
+	gchar task_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_NSNAME];
 };
 
 static struct conscience_srvtype_s*

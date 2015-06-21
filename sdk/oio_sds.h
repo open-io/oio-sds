@@ -1,7 +1,6 @@
 /*
 OpenIO SDS client
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -17,8 +16,8 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef OIO_SDS__client__c__lib__oio_sds_h
-#define OIO_SDS__client__c__lib__oio_sds_h 1
+#ifndef OIO_SDS__sdk__oio_sds_h
+#define OIO_SDS__sdk__oio_sds_h 1
 
 struct oio_sds_s;
 struct oio_error_s;
@@ -26,7 +25,8 @@ struct hc_url_s;
 enum oio_sds_config_e
 {
 	OIOSDS_CFG_TIMEOUT_PROXY = 1,
-	OIOSDS_CFG_TIMEOUT_RAWX
+	OIOSDS_CFG_TIMEOUT_RAWX,
+	OIOSDS_CFG_FLAG_SYNCATDOWNLOAD
 };
 
 /* error management */
@@ -59,4 +59,4 @@ struct oio_error_s* oio_sds_delete (struct oio_sds_s *sds,
 struct oio_error_s* oio_sds_has (struct oio_sds_s *sds,
 		struct hc_url_s *url, int *phas);
 
-#endif /*OIO_SDS__client__c__lib__oio_sds_h*/
+#endif /*OIO_SDS__sdk__oio_sds_h*/

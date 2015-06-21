@@ -35,7 +35,28 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 static gboolean task_scheduler_running = TRUE;
 static GHashTable *tasks = NULL;
-static volatile time_t global_last_schedule = 0;
+static gint64 next_schedule = 0;
+
+static gint64
+task_first_schedule (void)
+{
+	gpointer k, v;
+	GHashTableIter iter;
+	gint64 next = G_MAXINT64;
+	g_hash_table_iter_init(&iter, tasks);
+	while (g_hash_table_iter_next(&iter, &k, &v)) {
+		task_t *t = v;
+		next = MIN(t->next_schedule, next);
+	}
+	return next;
+}
+
+static void
+task_set_next_schedule (task_t *t, gint64 when)
+{
+	gint64 mod = when % 10;
+	t->next_schedule = when + (mod>0 ? (10 - mod) : 0);
+}
 
 static void
 task_cleaner(gpointer p)
@@ -56,7 +77,6 @@ void
 init_task_scheduler(void)
 {
 	tasks = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, task_cleaner);
-	global_last_schedule = 0;
 }
 
 void
@@ -68,14 +88,11 @@ stop_task_scheduler(void)
 int
 add_task_to_schedule(task_t * task, GError ** error)
 {
+	EXTRA_ASSERT (task != NULL);
+
 	if (!task_scheduler_running) {
 		GSETERROR(error,"The task scheduler has been stopped!");
 		return 0;
-	}
-
-	if (!task) {
-		GSETERROR(error, "Parameter <task> can't be NULL");
-		return (0);
 	}
 
 	if (g_hash_table_lookup(tasks, task->id)) {
@@ -83,8 +100,7 @@ add_task_to_schedule(task_t * task, GError ** error)
 		return (0);
 	}
 
-	task->next_schedule = global_last_schedule + 1;
-
+	task_set_next_schedule(task, 0);
 	g_hash_table_insert(tasks, task->id, task);
 	return (1);
 }
@@ -114,26 +130,34 @@ exec_scheduled_tasks(task_t *task)
 }
 
 void
-exec_tasks(void)
+exec_tasks (gint64 now)
 {
+	if (now <= next_schedule)
+		return;
+
 	if (!task_scheduler_running) {
 		DEBUG("The task_scheduler has been stopped");
 		return;
 	}
 
-	time_t now = time(NULL);
-	gboolean rolled = now < global_last_schedule;
+	gboolean fired = FALSE;
 
 	GList *list_of_keys = g_hash_table_get_keys(tasks);
 	for (GList *l=list_of_keys; l ;l=l->next) {
 		task_t *task = g_hash_table_lookup(tasks, l->data);
 
-		if (rolled || now >= task->next_schedule) {
-			task->next_schedule = now + task->period;
+		if (now >= task->next_schedule) {
+			/* advance the task */
+			if (task->busy)
+				task_set_next_schedule(task, now + 1000);
+			else
+				task_set_next_schedule(task, now + (task->period * 1000));
+
+			/* then execute it */
 			if (task->busy)
 				WARN("Task [%s] is busy", task->id);
 			else {
-				task->busy = TRUE;
+				fired = task->busy = TRUE;
 				exec_scheduled_tasks(task);
 			}
 		}
@@ -143,7 +167,8 @@ exec_tasks(void)
 	}
 	g_list_free(list_of_keys);
 
-	global_last_schedule = now;
+	if (fired)
+		next_schedule = task_first_schedule ();
 }
 
 void
@@ -157,10 +182,12 @@ clean_task_scheduler(void)
 	}
 }
 
-long
-get_time_to_next_task_schedule(void)
+gint64
+time_to_next_timed_out_task (gint64 now)
 {
-	return time(NULL) <= global_last_schedule;
+	if (now >= next_schedule)
+		next_schedule = task_first_schedule();
+	return (next_schedule < now) ? 0 : (next_schedule - now);
 }
 
 void
@@ -190,8 +217,10 @@ list_tasks_worker(worker_t * worker, GError ** error)
 {
 	struct bulk_s {
 		char id[MAX_TASKID_LENGTH];
-		long next_schedule;
-		gboolean busy;
+		gint64 period;
+		guint8 busy;
+		// used to compute the length of the structure without padding, with
+		// the help of offsetof().
 		gchar last[];
 	} bulk;
 	GHashTableIter iter;
@@ -205,8 +234,8 @@ list_tasks_worker(worker_t * worker, GError ** error)
 			continue;
 		memset(&bulk, 0, sizeof(bulk));
 		g_strlcpy(bulk.id, t->id, sizeof(bulk.id));
-		bulk.next_schedule = t->next_schedule;
-		bulk.busy = t->busy;
+		bulk.period = t->period;
+		bulk.busy = BOOL(t->busy);
 		g_byte_array_append(gba, (guint8*)&bulk, offsetof(struct bulk_s, last));
 	}
 

@@ -545,7 +545,7 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 	ne_request *request=NULL;
 	ne_request *request_update=NULL;
 	char *update_uri = NULL;
-	gchar dst[128];
+	gchar dst[STRLEN_ADDRINFO];
 	int ne_rc;
 	guint16 port = 0;
 
@@ -571,8 +571,7 @@ download_and_check_chunk(const meta2_raw_chunk_t *rc, struct storage_policy_s *s
 	ne_set_connect_timeout(session, 10);
 	ne_set_read_timeout(session, 30);
 
-	char chunk_hash_str[1 + STRLEN_CHUNKID];
-	chunk_hash_str[0] = '/';
+	char chunk_hash_str[STRLEN_CHUNKID] = "/";
 	buffer2str(rc->id.id, sizeof(rc->id.id), chunk_hash_str + 1, sizeof(chunk_hash_str) - 1);
 	request = ne_request_create (session, "GET", chunk_hash_str);
 	if (!request) {
@@ -673,9 +672,9 @@ delete_chunk(const meta2_raw_chunk_t *rc)
 	GError *result = NULL;
 	ne_session *session=NULL;
 	ne_request *request=NULL;
-	char chunk_hash_str[STRLEN_CHUNKHASH+1];
+	char chunk_hash_str[STRLEN_CHUNKHASH];
 
-	gchar dst[128];
+	gchar dst[STRLEN_ADDRINFO];
 	guint16 port = 0;
 
 	addr_info_get_addr(&(rc->id.addr), dst, sizeof(dst), &port);
@@ -745,7 +744,7 @@ is_rawx_reachable(const service_info_t *rawx)
 		return 0;
 	}
 
-	gchar dst[128];
+	gchar dst[STRLEN_ADDRINFO];
 	guint16 port = 0;
 
 	if (!addr_info_get_addr(&(rawx->addr), dst, sizeof(dst), &port)) {

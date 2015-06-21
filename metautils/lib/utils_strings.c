@@ -267,6 +267,17 @@ metautils_str_ishexa(const gchar *s, gsize slen)
 	return !*s && !slen;
 }
 
+gboolean
+metautils_str_ishexa1(const gchar *s)
+{
+	gsize len = 0;
+	for (; *s ;++s) {
+		if (!g_ascii_isxdigit(*s))
+			return FALSE;
+	}
+	return (len%2) == 0;
+}
+
 gchar **
 metautils_strv_append (gchar **tab, gchar *s)
 {

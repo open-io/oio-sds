@@ -77,7 +77,7 @@ extern const gchar * const loc_to_str[];
 struct broken_element_s
 {
 	container_id_t container_id;			/**< The container this element belongs to */
-	gchar content_name[LIMIT_LENGTH_CONTENTPATH + 1];	/**< The content this element belongs to */
+	gchar content_name[LIMIT_LENGTH_CONTENTPATH];	/**< The content this element belongs to */
 	hash_sha256_t chunk_id;				/**< The chunk this element belongs to */
 	enum broken_location_e location;		/**< The location of the broken element */
 	enum broken_property_e property;		/**< The property broken in this element */

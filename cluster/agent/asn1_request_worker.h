@@ -33,9 +33,9 @@ typedef struct asn1_session_s {
 	GHashTable *resp_headers;
 	gsize resp_body_size;
 	void *resp_body;
-        worker_func_f response_handler;
-        worker_func_f error_handler;
-        worker_func_f final_handler;
+	worker_func_f response_handler;
+	worker_func_f error_handler;
+	worker_func_f final_handler;
 	/**/
 	GDestroyNotify clear_session_data;
 	void *session_data;

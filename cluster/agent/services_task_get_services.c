@@ -39,7 +39,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 struct session_data_s {
 	gchar ns[LIMIT_LENGTH_NSNAME];
-	gchar task_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_SRVTYPE+1+LIMIT_LENGTH_NSNAME+1];
+	gchar task_id[sizeof(TASK_ID) + LIMIT_LENGTH_SRVTYPE + LIMIT_LENGTH_NSNAME];
 	GSList *services;
 };
 
@@ -105,7 +105,7 @@ asn1_final_handler( worker_t *worker, GError **error)
 	/*sets the new list*/
 	counter = 0;
 	for (l=sdata->services; l ;l=g_slist_next(l)) {
-		gchar str_addr[128];
+		gchar str_addr[STRLEN_ADDRINFO];
 		GError *error_local=NULL;
 		struct service_info_s *si;
 		struct conscience_srvtype_s *srvtype;

@@ -148,7 +148,7 @@ manage_service(struct service_info_s *si)
 	struct service_tag_s *tag_first = NULL;
 	struct namespace_data_s *ns_data;
 	gsize key_size;
-	gchar key[LIMIT_LENGTH_SRVTYPE + 1 + STRLEN_ADDRINFO + 1], str_addr[STRLEN_ADDRINFO];
+	gchar key[LIMIT_LENGTH_SRVTYPE + STRLEN_ADDRINFO], str_addr[STRLEN_ADDRINFO];
 
 
 	if (!si) {
@@ -192,7 +192,7 @@ manage_service(struct service_info_s *si)
 	}
 
 	si->score.value = SCORE_UNSET;
-	si->score.timestamp = time(0);
+	si->score.timestamp = g_get_real_time() / 1000000;
 
 	/*then keep the score */
 	g_hash_table_remove(ns_data->down_services, key);

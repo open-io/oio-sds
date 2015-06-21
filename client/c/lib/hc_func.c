@@ -251,8 +251,8 @@ hc_create_container(gs_grid_storage_t *hc, struct hc_url_s *url,
 			&params, 0, &e);
 
 	if (c != NULL) {
-		gchar m2[STRLEN_ADDRINFO] = {0};
-		addr_info_to_string(&(c->meta2_addr), m2, STRLEN_ADDRINFO);
+		gchar m2[STRLEN_ADDRINFO] = "";
+		addr_info_to_string(&(c->meta2_addr), m2, sizeof(m2));
 		err = m2v2_remote_execute_HAS(m2, url);
 		if (err == NULL) {
 			e = gs_error_new(CODE_CONTAINER_EXISTS,

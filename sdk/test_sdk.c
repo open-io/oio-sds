@@ -1,3 +1,20 @@
+/*
+OpenIO SDS client
+Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
 #include <oio_sds.h>
 #include <metautils/lib/common_main.h>
 #include <metautils/lib/metautils_loggers.h>
@@ -8,8 +25,8 @@ int
 main(int argc, char **argv)
 {
 	logger_lazy_init ();
-	g_log_set_default_handler(logger_stderr, NULL);
-	logger_init_level (GRID_LOGLVL_TRACE2);
+	g_log_set_default_handler (logger_stderr, NULL);
+	logger_init_level (GRID_LOGLVL_TRACE);
 
 	if (argc != 3) {
 		g_printerr ("Usage: %s HCURL PATH\n", argv[0]);

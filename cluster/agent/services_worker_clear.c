@@ -102,7 +102,7 @@ services_worker_clear(worker_t *worker, GError **error)
 {
 	request_t *req = NULL;
 	struct namespace_data_s *ns_data = NULL;
-	char **tokens, ns_name[LIMIT_LENGTH_NSNAME+1], type_name[LIMIT_LENGTH_SRVTYPE+1];
+	char **tokens, ns_name[LIMIT_LENGTH_NSNAME], type_name[LIMIT_LENGTH_SRVTYPE];
 
 
 	/*parse the request args, find the namespace*/

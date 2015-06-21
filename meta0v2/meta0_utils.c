@@ -109,8 +109,7 @@ meta0_utils_list_to_tree(GSList *list)
 		if (!(m0i = l->data))
 			continue;
 
-		gchar url[128];
-		url[0] = '\0';
+		gchar url[STRLEN_ADDRINFO];
 		grid_addrinfo_to_string(&(m0i->addr), url, sizeof(url));
 
 		gsize len = m0i->prefixes_size;
@@ -180,14 +179,13 @@ meta0_utils_list_to_array(GSList *list)
 	result = meta0_utils_array_create();
 
 	for (l=list; l ;l=l->next) {
-		gchar url[128];
 		guint16 *p, *max;
 		struct meta0_info_s *m0i;
 
 		if (!(m0i = l->data))
 			continue;
 
-		memset(url, 0, sizeof(url));
+		gchar url[STRLEN_ADDRINFO];
 		grid_addrinfo_to_string(&(m0i->addr), url, sizeof(url));
 
 		p = (guint16*) m0i->prefixes;

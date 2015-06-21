@@ -27,7 +27,7 @@ gint
 chunk_id_to_string(const chunk_id_t * ci, gchar * dst, gsize dstSize)
 {
 	gsize offset;
-	gchar str_addr[STRLEN_ADDRINFO+1];
+	gchar str_addr[STRLEN_ADDRINFO];
 
 	if (!dst || !ci)
 		return 0;
@@ -44,7 +44,7 @@ chunk_id_to_string(const chunk_id_t * ci, gchar * dst, gsize dstSize)
 			ci->id[16], ci->id[17], ci->id[18], ci->id[19], ci->id[20], ci->id[21], ci->id[22], ci->id[23],
 			ci->id[24], ci->id[25], ci->id[26], ci->id[27], ci->id[28], ci->id[29], ci->id[30], ci->id[31],
 			str_addr,
-			LIMIT_LENGTH_VOLUMENAME, ci->vol);
+			(int) sizeof(ci->vol), ci->vol);
 
 	return MIN(offset,dstSize);
 }

@@ -51,7 +51,6 @@ typedef struct m2v2_chunk_pair_s
 struct list_params_s
 {
 	gint64 maxkeys;
-	const char *snapshot;
 	const char *prefix;
 	const char *marker_start;
 	const char *marker_end;

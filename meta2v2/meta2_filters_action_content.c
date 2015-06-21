@@ -259,20 +259,6 @@ meta2_filter_action_raw_chunks_get_v1(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	if(g_slist_length(rc->raw_chunks) > 0) {
-		GSList *l = NULL;
-		for(l = rc->raw_chunks; l && l->data; l = l->next) {
-			meta2_raw_chunk_t *c = (meta2_raw_chunk_t*) l->data;
-			char buf[512];
-			memset(buf, '\0', 512);
-			chunk_id_to_string(&(c->id), buf, 512);
-			memset(buf, '\0', 512);
-			buffer2str(c->hash, sizeof(c->hash), buf, 512);
-		}
-	}
-
-	/******************/
-
 	if (!rc->raw_chunks) {
 		status = _reply_raw_content(ctx, reply, rc, CODE_FINAL_OK, "OK");
 	} else {
@@ -848,9 +834,7 @@ _version_contains_chunk(struct meta2_raw_content_s *content,
 		gchar strid[2048];
 		for (; l; l = l->next) {
 			chunk = l->data;
-			memset(strid, 0, sizeof(strid));
 			(void) chunk_id_to_string(&(chunk->id), strid, sizeof(strid));
-			strid[STRLEN_CHUNKID - 1] = '\0';
 			if (0 == g_strcmp0(strid, strrchr(id_from_bean->str, '/') + 1))
 				return TRUE;
 		}

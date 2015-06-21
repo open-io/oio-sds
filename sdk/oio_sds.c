@@ -1,3 +1,21 @@
+/*
+OpenIO SDS client
+Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "oio.sdk"
 #endif
@@ -20,56 +38,31 @@
 #include <curl/curlver.h>
 
 #include "oio_sds.h"
-
-#ifndef  OIOSDS_http_agent
-# define OIOSDS_http_agent "OpenIO-SDS/SDK-2.0"
-#endif
+#include "http_put.h"
+#include "http_internals.h"
 
 struct oio_sds_s
 {
 	gchar *ns;
+	gchar *proxy;
+	gchar *proxy_local;
 	struct {
 		int proxy;
 		int rawx;
 	} timeout;
+	gboolean sync_after_download;
 };
 
 struct oio_error_s;
 struct hc_url_s;
 
-static int
-_trace(CURL *h, curl_infotype t, char *data, size_t size, void *u)
-{
-	(void) h, (void) t, (void) u;
-	GRID_TRACE("CURL %.*s", (int)size, data);
-	return 0;
-}
-
 static CURL *
-_curl_get_handle (void)
-{
-	CURL *h = curl_easy_init ();
-	curl_easy_setopt (h, CURLOPT_USERAGENT, OIOSDS_http_agent);
-	curl_easy_setopt (h, CURLOPT_NOPROGRESS, 1L);
-	if (GRID_TRACE_ENABLED()) {
-		curl_easy_setopt (h, CURLOPT_DEBUGFUNCTION, _trace);
-		curl_easy_setopt (h, CURLOPT_VERBOSE, 1L);
-	}
-	return h;
-}
-
-static CURL *
-_curl_get_handle_proxy (const char *ns)
+_curl_get_handle_proxy (struct oio_sds_s *sds)
 {
 	CURL *h = _curl_get_handle ();
-
 #if (LIBCURL_VERSION_MAJOR >= 7) && (LIBCURL_VERSION_MINOR >= 40)
-	gchar *s = gridcluster_get_proxylocal (ns);
-	if (s) {
-		GRID_DEBUG("proxy [%s]", s);
-		curl_easy_setopt (h, CURLOPT_UNIX_SOCKET_PATH, s);
-		g_free (s);
-	}
+	if (sds->proxy_local)
+		curl_easy_setopt (h, CURLOPT_UNIX_SOCKET_PATH, sds->proxy_local);
 #endif
 	return h;
 }
@@ -109,7 +102,6 @@ struct view_GString_s
 static size_t
 _read_GString(void *b, size_t s, size_t n, struct view_GString_s *in)
 {
-	GRID_DEBUG(" + Feeding the upload with at most [%"G_GSIZE_FORMAT"] bytes", n*s);
 	size_t remaining = in->data->len - in->done;
 	size_t available = s * n;
 	size_t len = MIN(remaining,available);
@@ -117,15 +109,9 @@ _read_GString(void *b, size_t s, size_t n, struct view_GString_s *in)
 		memcpy(b, in->data->str, len);
 		in->done += len;
 	}
+	GRID_DEBUG(" + Feeding with [%"G_GSIZE_FORMAT"] -> [%"G_GSIZE_FORMAT"]"
+			" -> [%"G_GSIZE_FORMAT"]", available, remaining, len);
 	return len;
-}
-
-static size_t
-_write_FILE(void *data, size_t s, size_t n, FILE *out)
-{
-	/* TODO compute a MD5SUM */
-	/* TODO guard against to many bytes received from the rawx */
-	return fwrite ((gchar*)data, s, n, out);
 }
 
 static size_t
@@ -133,14 +119,6 @@ _write_NOOP(void *data, size_t s, size_t n, void *ignored)
 {
 	(void) data, (void) ignored;
 	return s*n;
-}
-
-static size_t
-_read_FILE(void *data, size_t s, size_t n, FILE *in)
-{
-	/* TODO compute a MD5SUM */
-	/* TODO guard against to many bytes received from the rawx */
-	return fread ((gchar*)data, s, n, in);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -190,6 +168,7 @@ struct chunk_s
 		guint intra;
 		gboolean parity : 8;
 	} position;
+	gchar hexhash[STRLEN_CHUNKHASH];
 	gchar url[1];
 };
 
@@ -200,6 +179,8 @@ _compare_chunks (const struct chunk_s *c0, const struct chunk_s *c1)
 	int c = CMP(c0->position.meta,c1->position.meta);
 	if (!c)
 		c = CMP(c0->position.intra,c1->position.intra);
+	if (!c)
+		c = CMP(c0->position.parity,c1->position.parity);
 	return c;
 }
 
@@ -215,7 +196,7 @@ _load_one_chunk (struct json_object *jurl, struct json_object *jsize,
 	result->position.meta = atoi(s);
 	if (NULL != (s = strchr(s, '.'))) {
 		if (*(s+1) == 'p') {
-			result->position.parity = ~0;
+			result->position.parity = 1;
 			result->position.intra = atoi(s+2);
 		} else {
 			result->position.intra = atoi(s+1);
@@ -230,6 +211,7 @@ _load_chunks (GSList **out, struct json_object *jtab)
 	GSList *chunks = NULL;
 	GError *err = NULL;
 
+	/* Decode the JSON description */
 	for (int i=json_object_array_length(jtab); i>0 && !err ;i--) {
 		struct json_object *jchunk = json_object_array_get_idx (jtab, i-1);
 		if (!json_object_is_type(jchunk, json_type_object))
@@ -247,22 +229,39 @@ _load_chunks (GSList **out, struct json_object *jtab)
 				|| !json_object_is_type(jhash, json_type_string)) {
 			err = NEWERROR(0, "JSON: invalid chunk's field");
 		} else {
-			GByteArray *h = metautils_gba_from_hexstring(json_object_get_string(jhash));
-			if (!h) {
-				err = NEWERROR(0, "JSON: invalid chunk hash: not hexa");
-			} else {
-				if (h->len != g_checksum_type_get_length(G_CHECKSUM_MD5)
-						&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA256)
-						&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA512)
-						&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA1)) {
-					err = NEWERROR(0, "JSON: invalid chunk hash: invalid length");
-				} else {
-					struct chunk_s *c = _load_one_chunk (jurl, jsize, jpos);
-					chunks = g_slist_prepend (chunks, c);
-				}
-				g_byte_array_free (h, TRUE);
-			}
+			const char *h = json_object_get_string(jhash);
+			if (!metautils_str_ishexa(h, 2*sizeof(chunk_hash_t)))
+				err = NEWERROR(0, "JSON: invalid chunk hash: not hexa of %"G_GSIZE_FORMAT,
+						2*sizeof(chunk_hash_t));
+			struct chunk_s *c = _load_one_chunk (jurl, jsize, jpos);
+			for (char *p = c->hexhash; *h ;) // copies the hash as uppercase
+				*(p++) = g_ascii_toupper (*(h++));
+			chunks = g_slist_prepend (chunks, c);
 		}
+	}
+
+	chunks = g_slist_sort (chunks, (GCompareFunc)_compare_chunks);
+
+	/* Check the chunk sequence has no gap */
+	struct { guint meta, intra; } last = {.meta=(guint)-1, .intra=(guint)-1};
+	for (GSList *l=chunks; !err && l ;l=l->next) {
+		const struct chunk_s *c = l->data;
+		if (c->position.parity)
+			continue;
+		if (c->position.meta == last.meta) {
+			if (c->position.intra != last.intra) {
+				if (c->position.intra != last.intra+1) {
+					err = NEWERROR(0, "Gap in the chunk sequence [%u.%u],[%u.%u]",
+							last.meta, last.intra,
+							c->position.meta, c->position.intra);
+				}
+			}
+		} else if (c->position.meta != last.meta+1)
+			err = NEWERROR(0, "Gap in the chunk sequence [%u.%u],[%u.%u]",
+					last.meta, last.intra,
+					c->position.meta, c->position.intra);
+		else
+			last.meta = c->position.meta, last.intra = c->position.intra;
 	}
 
 	if (!err)
@@ -314,6 +313,9 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	assert (ns != NULL);
 	*out = g_malloc0 (sizeof(struct oio_sds_s));
 	(*out)->ns = g_strdup (ns);
+	(*out)->proxy_local = gridcluster_get_proxylocal (ns);
+	(*out)->proxy = gridcluster_get_proxy (ns);
+	(*out)->sync_after_download = TRUE;
 	return NULL;
 }
 
@@ -322,6 +324,8 @@ oio_sds_free (struct oio_sds_s *sds)
 {
 	if (!sds) return;
 	metautils_str_clean (&sds->ns);
+	metautils_str_clean (&sds->proxy);
+	metautils_str_clean (&sds->proxy_local);
 	g_free (sds);
 }
 
@@ -350,6 +354,11 @@ oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 				return EINVAL;
 			sds->timeout.rawx = *(int*)pv;
 			return 0;
+		case OIOSDS_CFG_FLAG_SYNCATDOWNLOAD:
+			if (vlen != sizeof(int))
+				return EINVAL;
+			sds->sync_after_download = BOOL(*(int*)pv);
+			return 0;
 		default:
 			return EBADSLT;
 	}
@@ -358,7 +367,7 @@ oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 /* -------------------------------------------------------------------------- */
 
 static GError *
-_download_chunks (GSList *chunks, const char *local)
+_download_chunks (struct oio_sds_s *sds, GSList *chunks, const char *local)
 {
 	GError *err = NULL;
 	CURLcode rc;
@@ -366,6 +375,7 @@ _download_chunks (GSList *chunks, const char *local)
 	int fd = open (local, O_CREAT|O_EXCL|O_WRONLY, 0644);
 	if (fd < 0)
 		return NEWERROR(0, "open error [%s]: (%d) %s", local, errno, strerror(errno));
+	posix_fadvise (fd, 0, 0, POSIX_FADV_SEQUENTIAL);
 
 	FILE *out = fdopen(fd, "a");
 	if (!out) {
@@ -374,21 +384,69 @@ _download_chunks (GSList *chunks, const char *local)
 	}
 
 	CURL *h = _curl_get_handle ();
+	long code = 0, ok = 1;
+	size_t _write_FILE(void *data, size_t s, size_t n, FILE *f) {
+		if (!code) {
+			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
+			if (!(ok = (2 == (code / 100)))) {
+				rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, NULL);
+				rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, NULL);
+				return 0;
+			}
+		}
+		assert (BOOL(ok));
+		/* TODO compute a MD5SUM */
+		/* TODO guard against to many bytes received from the rawx */
+		return fwrite ((gchar*)data, s, n, f);
+	}
+
 	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
 
 	GRID_DEBUG("Download to [%s] from ...", local);
 	for (GSList *l=chunks; l && !err ;l=l->next) {
-		const struct chunk_s *c = l->data;
-		GRID_DEBUG(" < [%s] %u.%u %"G_GINT64_FORMAT, c->url, c->position.meta, c->position.intra, c->size);
-		rc = curl_easy_setopt (h, CURLOPT_URL, c->url);
+		struct chunk_s *c0 = l->data;
+
+		/* collect all the chunks at the same position */
+		GSList *chunkset = g_slist_prepend (NULL, c0);
+		for (; l->next ;l=l->next) {
+			struct chunk_s *c1 = l->next->data;
+			if (0 != memcmp(&c0->position, &c1->position, sizeof(c0->position)))
+				break;
+			chunkset = g_slist_prepend (chunkset, c1);
+		}
+
+		chunkset = metautils_gslist_shuffle (chunkset);
+		c0 = chunkset->data;
+
+		/* skip the chunks with the same position */
+		if (c0->position.parity) {
+			g_slist_free (chunkset);
+			continue;
+		}
+
+		/* start a new download */
+		GRID_DEBUG(" < [%s] %u.%u %"G_GINT64_FORMAT" among %u", c0->url,
+				c0->position.meta, c0->position.intra, c0->size,
+				g_slist_length(chunkset));
+		rc = curl_easy_setopt (h, CURLOPT_URL, c0->url);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_FILE);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, out);
 		rc = curl_easy_perform (h);
 		if (rc != CURLE_OK)
-			err = NEWERROR(0, "CURL: download error [%s] : (%d) %s", c->url,
+			err = NEWERROR(0, "CURL: download error [%s] : (%d) %s", c0->url,
 					rc, curl_easy_strerror(rc));
+		else {
+			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
+			if (2 != (code/100))
+				err = NEWERROR(0, "Beans: (%ld)", code);
+		}
 	}
 
+	
+	fflush(out);
+	if (sds->sync_after_download)
+		fsync(fd);
+	posix_fadvise (fd, 0, 0, POSIX_FADV_DONTNEED);
 	fclose(out);
 	curl_easy_cleanup (h);
 	return err;
@@ -406,7 +464,7 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 
 	GSList *chunks = NULL;
 	GString *reply_body = g_string_new("");
-	CURL *h = _curl_get_handle_proxy (hc_url_get(url, HCURL_NS));
+	CURL *h = _curl_get_handle_proxy (sds);
 
 	/* Get the beans */
 	if (!err) {
@@ -440,17 +498,18 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		if (!json_object_is_type(jbody, json_type_array)) {
 			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
 		} else {
-			if (NULL != (err = _load_chunks (&chunks, jbody)))
+			if (NULL != (err = _load_chunks (&chunks, jbody))) {
 				g_prefix_error (&err, "Parsing: ");
-			else
-				chunks = g_slist_sort (chunks, (GCompareFunc)_compare_chunks);
+			} else {
+				GRID_DEBUG("Got %u beans", g_slist_length (chunks));
+			}
 		}
 		json_object_put (jbody);
 	}
 
 	/* download from the beans */
 	if (!err)
-		err = _download_chunks (chunks, local);
+		err = _download_chunks (sds, chunks, local);
 
 	/* cleanup and exit */
 	curl_easy_cleanup (h);
@@ -467,15 +526,22 @@ struct local_upload_s
 	FILE *in;
 	int fd;
 	struct stat st;
+	GChecksum *checksum_content;
 };
 
 static void
 _upload_fini (struct local_upload_s *upload)
 {
 	if (upload->in) 
-		fclose (upload->in), upload->in = NULL;
+		fclose (upload->in);
 	if (upload->fd >= 0)
-		close (upload->fd), upload->fd = -1;
+		close (upload->fd);
+	if (upload->checksum_content)
+		g_checksum_free (upload->checksum_content);
+
+	upload->in = NULL;
+	upload->fd = -1;
+	upload->checksum_content = NULL;
 }
 
 static GError *
@@ -489,47 +555,113 @@ _upload_init (struct local_upload_s *upload, const char *path)
 		return NEWERROR(0, "stat error [%s]: (%d) %s", upload->path, errno, strerror(errno));
 	if (!(upload->in = fdopen(upload->fd, "r")))
 		return NEWERROR(0, "fdopen error [%s]: (%d) %s", upload->path, errno, strerror(errno));
+	upload->checksum_content = g_checksum_new (G_CHECKSUM_MD5);
+	posix_fadvise (upload->fd, 0, 0, POSIX_FADV_SEQUENTIAL|POSIX_FADV_WILLNEED);
 	return NULL;
 }
 
 static GError *
-_upload_chunks (GSList *chunks, struct local_upload_s *upload)
+_upload_chunks (struct oio_sds_s *sds, GSList *chunks, struct local_upload_s *upload)
 {
 	GError *err = NULL;
-	CURLcode rc;
-	struct { guint meta, intra; } last = {.meta=(guint)-1, .intra=(guint)-1};
 	off_t done = 0;
 
 	CURL *h = _curl_get_handle ();
-	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "PUT");
-	rc = curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
+	curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "PUT");
+	curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
 
 	GRID_DEBUG("Upload from [%s] to ...", upload->path);
 	for (GSList *l=chunks; l && !err ;l=l->next) {
-		struct chunk_s *c = l->data;
-		if (c->position.parity)
-			continue;
-		if (c->position.meta == last.meta && c->position.intra == last.intra)
-			continue;
-		off_t local_size = upload->st.st_size - done;
-		local_size = MIN(local_size, c->size);
-		GRID_DEBUG(" > [%s] %u.%u %"G_GINT64_FORMAT, c->url, c->position.meta, c->position.intra, local_size);
-		rc = curl_easy_setopt (h, CURLOPT_URL, c->url);
-		rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_FILE);
-		rc = curl_easy_setopt (h, CURLOPT_READDATA, upload->in);
-		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_NOOP);
-		rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, NULL);
-		rc = curl_easy_setopt (h, CURLOPT_INFILESIZE_LARGE, local_size);
-		rc = curl_easy_perform (h);
-		GRID_DEBUG("Upload rc=%d", rc);
-		if (rc != CURLE_OK)
-			err = NEWERROR(0, "CURL: upload error [%s] : (%d) %s", c->url,
-					rc, curl_easy_strerror(rc));
-		else {
-			last.meta = c->position.meta;
-			last.intra = c->position.intra;
-			c->size = local_size;
+		struct chunk_s *c0 = l->data;
+
+		/* collect all the chunks at the same position */
+		GSList *chunkset = g_slist_prepend (NULL, c0);
+		for (; l->next ;l=l->next) {
+			struct chunk_s *c1 = l->next->data;
+			if (0 != memcmp(&c0->position, &c1->position, sizeof(c0->position)))
+				break;
+			chunkset = g_slist_prepend (chunkset, c1);
 		}
+
+		chunkset = metautils_gslist_shuffle (chunkset);
+		c0 = chunkset->data;
+
+		/* skip the chunks with the same position */
+		if (c0->position.parity) {
+			g_slist_free (chunkset);
+			continue;
+		}
+
+		/* patch the chunksize */
+		off_t sz = upload->st.st_size - done;
+		for (GSList *l1=chunkset; l1 ;l1=l1->next) {
+			struct chunk_s *c1 = l1->data;
+			sz = (c1->size = MIN(c1->size, sz));
+		}
+
+		/* upload only the expected bytes */
+		off_t done_local = 0;
+		ssize_t _read_FILE(void *u, char *d, size_t max) {
+			size_t remaining = sz - done_local;
+			size_t r = fread ((gchar*)d, 1, MIN(max, remaining), (FILE*)u);
+			if (r > 0) {
+				done_local += r;
+				return r;
+			}
+			if (ferror((FILE*)u))
+				return -1;
+			return 0;
+		}
+
+		if (DEBUG_ENABLED()) {
+			for (GSList *l1=chunkset; l1 ;l1=l1->next) {
+				struct chunk_s *c1 = l1->data;
+				GRID_DEBUG(" > [%s] %u.%u%c %"G_GSIZE_FORMAT, c1->url,
+						c1->position.meta, c1->position.intra, c1->position.parity ? 'P' : ' ',
+						c1->size);
+			}
+		}
+
+		/* start a new upload */
+		GSList *destset = NULL;
+		struct http_put_s *put = http_put_create (_read_FILE, upload->in,
+				sz, sds->timeout.proxy, sds->timeout.proxy);
+		for (GSList *l1=chunkset; l1 ;l1=l1->next) {
+			struct chunk_s *c1 = l1->data;
+			struct http_put_dest_s *dest = http_put_add_dest (put, c1->url, c1);
+			destset = g_slist_append (destset, dest); 
+		}
+		err = http_put_run (put);
+
+		/* check at least one chunk succeeded */
+		if (!err) {
+			if (http_put_get_failure_number (put) >= g_slist_length (destset))
+				err = NEWERROR(0, "No chunk upload succeeded");
+		}
+
+		/* check the hash match (received vs. computed) */
+		if (!err) {
+			hash_md5_t bin;
+			char computed[STRLEN_MD5];
+			http_put_get_md5 (put, bin, sizeof(hash_md5_t));
+			buffer2str (bin, sizeof(hash_md5_t), computed, sizeof(computed));
+			for (GSList *l1=chunkset; !err && l1 ;l1=l1->next) {
+				const gchar *received = http_put_get_header (put, l1->data, "chunk_hash");
+				if (!received || g_ascii_strcasecmp(received, computed)) {
+					err = NEWERROR(0, "Possible corruption: chunk hash mismatch "
+						"computed[%s] received[%s]", computed, received);
+				} else {
+					struct chunk_s *c1 = l1->data;
+					memcpy (c1->hexhash, computed, sizeof(c1->hexhash));
+				}
+			}
+		}
+		http_put_destroy (put);
+
+		if (!err)
+			done += sz;
+		g_slist_free (chunkset);
+		g_slist_free (destset);
 	}
 
 	curl_easy_cleanup (h);
@@ -548,8 +680,8 @@ _chunks_pack (GString *gs, GSList *chunks)
 				"{\"url\":\"%s\","
 				"\"size\":%"G_GINT64_FORMAT","
 				"\"pos\":\"%u\","
-				"\"hash\":\"00000000000000000000000000000000\"}",
-				c->url, c->size, c->position.meta);
+				"\"hash\":\"%s\"}",
+				c->url, c->size, c->position.meta, c->hexhash);
 	}
 	g_string_append (gs, "]");
 }
@@ -573,7 +705,7 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 
 	GSList *chunks = NULL;
 	GString *request_body = g_string_new(""), *reply_body = g_string_new ("");
-	CURL *h = _curl_get_handle_proxy (hc_url_get(url, HCURL_NS));
+	CURL *h = _curl_get_handle_proxy (sds);
 	struct view_GString_s view_input = {.data=request_body, .done=0};
 
 	/* get the beans */
@@ -627,7 +759,6 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 			if (NULL != (err = _load_chunks (&chunks, jbody))) {
 				g_prefix_error (&err, "Parsing: ");
 			} else {
-				chunks = g_slist_sort (chunks, (GCompareFunc)_compare_chunks);
 				GRID_DEBUG("Got %u beans", g_slist_length (chunks));
 			}
 		}
@@ -636,7 +767,7 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 
 	/* upload the beans */
 	if (!err)
-		err = _upload_chunks (chunks, &upload);
+		err = _upload_chunks (sds, chunks, &upload);
 
 	/* save the beans */
 	g_string_set_size (request_body, 0);
@@ -699,7 +830,7 @@ oio_sds_delete (struct oio_sds_s *sds, struct hc_url_s *url)
 	GError *err = NULL;
 	
 	GString *reply_body = g_string_new("");
-	CURL *h = _curl_get_handle_proxy (hc_url_get(url, HCURL_NS));
+	CURL *h = _curl_get_handle_proxy (sds);
 
 	do {
 		GString *http_url = _curl_set_url_content (url);
@@ -740,7 +871,7 @@ oio_sds_has (struct oio_sds_s *sds, struct hc_url_s *url, int *phas)
 	GError *err = NULL;
 	
 	GString *reply_body = g_string_new("");
-	CURL *h = _curl_get_handle_proxy (hc_url_get(url, HCURL_NS));
+	CURL *h = _curl_get_handle_proxy (sds);
 
 	do {
 		GString *http_url = _curl_set_url_content (url);

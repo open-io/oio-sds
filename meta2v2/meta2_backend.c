@@ -571,6 +571,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		if (!local)
 			err = m2db_list_aliases(sq3, &lp, counter_cb, NULL);
 
+		/* XXX JKA : ce bloc est-il sur ? */
 		if (err) {
 			m2b_close(sq3);
 			return err;

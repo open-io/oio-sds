@@ -68,8 +68,8 @@ _build_chunk_path(const service_info_t * service_info, const struct broken_eleme
     gchar * chunk_path, gsize chunk_path_size, GError ** error)
 {
 	struct service_tag_s *tag = NULL;
-	gchar str_chunk_id[2 * sizeof(hash_sha256_t) + 1];
-	gchar str_rawx_addr[256];
+	gchar str_chunk_id[STRLEN_SHA256];
+	gchar str_rawx_addr[STRLEN_ADDRINFO];
 	gchar str_volume_path[LIMIT_LENGTH_VOLUMENAME];
 
 	if (broken_element == NULL) {
@@ -95,21 +95,14 @@ _build_chunk_path(const service_info_t * service_info, const struct broken_eleme
 
 	memset(str_volume_path, '\0', sizeof(str_volume_path));
 
-	if (!service_tag_get_value_string(tag, str_volume_path, LIMIT_LENGTH_VOLUMENAME - 1, error)) {
+	if (!service_tag_get_value_string(tag, str_volume_path, sizeof(str_volume_path), error)) {
 		GSETERROR(error, "Failed to extract string value from tag [%s]", NAME_TAGNAME_RAWX_VOL);
 		return FALSE;
 	}
 
-	memset(str_chunk_id, '\0', sizeof(str_chunk_id));
-
-	buffer2str(broken_element->chunk_id, sizeof(broken_element->chunk_id), str_chunk_id, sizeof(str_chunk_id) - 1);
-
-	memset(str_rawx_addr, '\0', sizeof(str_rawx_addr));
-
-	addr_info_to_string(&(service_info->addr), str_rawx_addr, sizeof(str_rawx_addr) - 1);
-
+	buffer2str(broken_element->chunk_id, sizeof(broken_element->chunk_id), str_chunk_id, sizeof(str_chunk_id));
+	addr_info_to_string(&(service_info->addr), str_rawx_addr, sizeof(str_rawx_addr));
 	snprintf(chunk_path, chunk_path_size - 1, "%s/%s@%s", str_volume_path, str_chunk_id, str_rawx_addr);
-
 	return TRUE;
 }
 
@@ -119,7 +112,7 @@ log_broken_event(const struct broken_event_s * broken_event, void *domain, GErro
 	GSList *l1 = NULL;
 	struct broken_element_s *broken_element = NULL;
 	gchar str_chunk[2048];
-	gchar str_container_id[2 * sizeof(container_id_t) + 1];
+	gchar str_container_id[STRLEN_CONTAINERID];
 
 	TRACE("Executing log_broken_event");
 
@@ -137,10 +130,8 @@ log_broken_event(const struct broken_event_s * broken_event, void *domain, GErro
 			continue;
 		}
 
-		memset(str_container_id, '\0', sizeof(str_container_id));
-
-		buffer2str(broken_element->container_id, sizeof(broken_element->container_id), str_container_id,
-		    sizeof(str_container_id) - 1);
+		buffer2str(broken_element->container_id, sizeof(broken_element->container_id),
+				str_container_id, sizeof(str_container_id));
 
 		if (!data_is_zeroed(broken_element->chunk_id, sizeof(hash_sha256_t))) {
 			memset(str_chunk, '\0', sizeof(str_chunk));

@@ -11,7 +11,7 @@ link_directories(
 		${CURL_LIBRARY_DIRS}
 		${JSONC_LIBRARY_DIRS})
 
-add_library(oiosds SHARED oio_sds.c)
+add_library(oiosds SHARED oio_sds.c http_put.c)
 
 target_link_libraries(oiosds
 		metautils gridcluster
