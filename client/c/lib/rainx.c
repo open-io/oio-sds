@@ -121,7 +121,7 @@ _chunk_to_sparerawxlist_element(chunk_info_t *chunk_in_error)
 	g_string_append(res, "|");
 
 	char tmpstr[STRLEN_CHUNKHASH];
-	buffer2str(chunk_in_error->hash, sizeof(chunk_hash_t), tmpstr, STRLEN_CHUNKHASH);
+	buffer2str(chunk_in_error->hash, sizeof(chunk_hash_t), tmpstr, sizeof(tmpstr));
 	g_string_append(res, tmpstr);
 
 	g_free(rawxlist_element);

@@ -33,9 +33,9 @@ int add_task_to_schedule(task_t * task, GError ** error);
 
 void remove_task(const char *task_id);
 
-void exec_tasks(void);
+void exec_tasks(gint64 now);
 
-long get_time_to_next_task_schedule(void);
+gint64 time_to_next_timed_out_task (gint64 now);
 
 void task_done(const char *id);
 

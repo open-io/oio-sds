@@ -193,9 +193,9 @@ static gint
 _chunk_id_comparator(gconstpointer _chunk, gconstpointer _str_id) {
 	const gchar *str_id = _str_id;
 	const struct meta2_raw_chunk_s *chunk = _chunk;
-	gchar id_from_chunk[STRLEN_CHUNKID];
-	buffer2str(chunk->id.id, sizeof(chunk->id.id), id_from_chunk, STRLEN_CHUNKID);
-	return g_strcmp0(id_from_chunk, str_id);
+	gchar id[STRLEN_CHUNKID];
+	buffer2str(chunk->id.id, sizeof(chunk->id.id), id, sizeof(id));
+	return g_strcmp0(id, str_id);
 }
 
 static gint
@@ -203,7 +203,7 @@ _chunk_hash_comparator(gconstpointer _chunk, gconstpointer _str_hash) {
 	const gchar *str_hash = _str_hash;
 	const struct meta2_raw_chunk_s *chunk = _chunk;
 	gchar hash_from_chunk[STRLEN_CHUNKHASH];
-	buffer2str(chunk->hash, sizeof(chunk->hash), hash_from_chunk, STRLEN_CHUNKHASH);
+	buffer2str(chunk->hash, sizeof(chunk->hash), hash_from_chunk, sizeof(hash_from_chunk));
 	return g_strcmp0(hash_from_chunk, str_hash);
 }
 
@@ -1429,7 +1429,7 @@ check_chunk_id_parsable(check_info_t *check_info, check_result_t *cres, GError *
 				"with chunk id regenerated from filename: [%s].", file_name);
 		previous_id = ci->ck_info->id;
 		// only copy the first 64 chars as there may be an extension
-		ci->ck_info->id = g_strndup(file_name, STRLEN_CHUNKID - 1);
+		ci->ck_info->id = g_strndup(file_name, STRLEN_CHUNKID);
 		g_clear_error(&err);
 		if (!hex2bin(ci->ck_info->id, &h, sizeof(h), &err))
 			goto end;

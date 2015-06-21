@@ -49,7 +49,7 @@ hash_path(const gchar *path)
 {
 	gsize size;
 	gsize path_len;
-	gchar container_name[LIMIT_LENGTH_CONTAINERNAME+1];
+	gchar container_name[LIMIT_LENGTH_USER];
 
 	path_len = strlen(path);
 
@@ -96,7 +96,7 @@ chomp(gchar *path)
 static void
 hash_path_from_input()
 {
-	gchar path[LIMIT_LENGTH_CONTENTPATH+1];
+	gchar path[LIMIT_LENGTH_CONTENTPATH];
 
 	for (;;) {
 		int prc;

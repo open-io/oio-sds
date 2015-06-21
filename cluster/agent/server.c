@@ -119,7 +119,8 @@ start_unix_server(GError **error)
 	wdata.sock_timeout = unix_socket_timeout;
 
 	worker_unix.func = accept_worker;
-	worker_unix.timeout = 0;
+	worker_unix.timeout.startup = 0;
+	worker_unix.timeout.activity = 0;
 	memcpy(&(worker_unix.data), &wdata, sizeof(worker_data_t));
 
 	/* Accept new connection */
@@ -177,7 +178,8 @@ start_inet_server(GError **error)
 	wdata.sock_timeout = inet_socket_timeout;
 
 	worker_inet.func = accept_worker;
-	worker_inet.timeout = 0;
+	worker_inet.timeout.startup = 0;
+	worker_inet.timeout.activity = 0;
 	memcpy(&(worker_inet.data), &wdata, sizeof(worker_data_t));
 
 	/* Accept new connection */

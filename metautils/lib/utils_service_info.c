@@ -239,7 +239,7 @@ service_tag_copy(struct service_tag_s *dst, struct service_tag_s *src)
 	if (!dst || !src)
 		return;
 
-	g_strlcpy(dst->name, src->name, LIMIT_LENGTH_TAGNAME);
+	g_strlcpy(dst->name, src->name, sizeof(dst->name));
 
 	switch (src->type) {
 	case STVT_I64:
@@ -456,18 +456,12 @@ service_info_convert_to_m0info(struct service_info_s * srv)
 struct service_tag_s *
 service_info_get_tag(GPtrArray * a, const gchar * name)
 {
-	gsize len;
-	register guint i, max;
-
 	if (!a || !name || !a->len)
 		return NULL;
 
-	len = MIN(strlen(name) + 1, LIMIT_LENGTH_TAGNAME);
-
-	for (i = 0, max = a->len; i < max; i++) {
-		struct service_tag_s *pSrv;
-
-		pSrv = g_ptr_array_index(a, i);
+	gsize len = strlen_len(name, LIMIT_LENGTH_TAGNAME);
+	for (guint i=0; i<a->len ;i++) {
+		struct service_tag_s *pSrv = g_ptr_array_index(a, i);
 		if (!pSrv)
 			return NULL;
 		if (!g_ascii_strncasecmp(pSrv->name, name, len))
@@ -730,7 +724,7 @@ service_info_encode_json(GString *gstr, struct service_info_s *si)
 {
 	if (!si)
 		return;
-	gchar straddr[128];
+	gchar straddr[STRLEN_ADDRINFO];
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
 	g_string_append_printf(gstr,
 			"{\"addr\":\"%s\",\"score\":%d,\"tags\":{",

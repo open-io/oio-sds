@@ -799,7 +799,7 @@ gs_container_reconnect_and_refresh (gs_container_t *container, GError **err, gbo
 	// Checking connection is not sufficient (is it even useful?),
 	// we must check if container is there.
 	gchar addr[STRLEN_ADDRINFO];
-	addr_info_to_string(&(container->meta2_addr), addr, STRLEN_ADDRINFO);
+	addr_info_to_string(&(container->meta2_addr), addr, sizeof(addr));
 	do {
 		struct hc_url_s *url = hc_url_empty ();
 		hc_url_set (url, HCURL_NS, gs_get_full_namespace(container->info.gs));
@@ -876,7 +876,7 @@ _allm2(gs_container_t *container, gchar ***targets)
 	for (l=allm2,p=*targets; l ;l=l->next,p++) {
 		struct addr_info_s *ai;
 		if (NULL != (ai = l->data)) {
-			gchar straddr[STRLEN_ADDRINFO+1];
+			gchar straddr[STRLEN_ADDRINFO];
 			addr_info_to_string(l->data, straddr, sizeof(straddr));
 			*p = g_strdup(straddr);
 		}

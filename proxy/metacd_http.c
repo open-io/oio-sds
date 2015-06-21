@@ -450,16 +450,20 @@ _task_push (gpointer p)
 	PUSH_DO(lru = push_queue; push_queue = _push_queue_create());
 	lru_tree_foreach_DEQ(lru, _list, NULL);
 
-	struct addr_info_s *csaddr = gridcluster_get_conscience_addr(nsname);
-	if (!csaddr) {
-		GRID_ERROR("Push error: %s", "No/Invalid conscience for namespace NS");
+	if (!tmp) {
+		GRID_TRACE("Push: no service to be pushed");
 	} else {
-		GError *err = gcluster_push_services (csaddr, timeout_cs_push, tmp);
-		if (err != NULL) {
-			GRID_WARN("Push error: (%d) %s", err->code, err->message);
-			g_clear_error(&err);
+		struct addr_info_s *csaddr = gridcluster_get_conscience_addr(nsname);
+		if (!csaddr) {
+			GRID_ERROR("Push error: %s", "No/Invalid conscience for namespace NS");
+		} else {
+			GError *err = gcluster_push_services (csaddr, timeout_cs_push, tmp);
+			if (err != NULL) {
+				GRID_WARN("Push error: (%d) %s", err->code, err->message);
+				g_clear_error(&err);
+			}
+			g_free(csaddr);
 		}
-		g_free(csaddr);
 	}
 
 	g_slist_free(tmp);

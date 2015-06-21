@@ -27,14 +27,13 @@ typedef int (*task_handler_f) (gpointer udata, GError **err);
 
 typedef struct {
 	char *id;
-	long period;
-	long next_schedule;
-	gboolean busy;
+	gint64 period; /* time in seconds */
+	gint64 next_schedule; /* monotonic time in seconds */
 	task_handler_f task_handler;
 	GDestroyNotify clean_udata;
 	gpointer udata;
-	/** allows */
-	char flag_destroy;
+	guint8 flag_destroy;
+	guint8 busy;
 } task_t;
 
 #endif /*OIO_SDS__cluster__agent__task_h*/

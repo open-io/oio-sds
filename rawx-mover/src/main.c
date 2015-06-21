@@ -59,16 +59,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define VOLUME_LOCK_XATTR_NAME "user.grid.rawx-mover.lock"
 #endif
 
-#ifndef  LIMIT_LENGTH_NSNAME
-# define LIMIT_LENGTH_NSNAME 32
-#endif
-
 #define RAW_CONTENT_GET_CID(R) (R)->container_id
 
 static GString *lock_xattr_name = NULL;
 static GString *forced_namespace = NULL;
 static addr_info_t rawx_addr;
-static gchar path_log4c[1024] = "";
 static gchar ns_name[LIMIT_LENGTH_NSNAME] = "";
 static gchar rawx_str_addr[STRLEN_ADDRINFO] = "";
 static gchar rawx_vol[LIMIT_LENGTH_VOLUMENAME] = "";
@@ -705,7 +700,7 @@ validate_chunk_in_one_meta2(struct upload_info_s *info, const char *str_addr)
 		struct bean_CHUNKS_s *new = _bean_create(&descr_struct_CHUNKS);
 		struct bean_CHUNKS_s *old = _bean_create(&descr_struct_CHUNKS);
 
-		g_snprintf(tmp, STRLEN_ADDRINFO, "%s:%d", info->dst_host, info->dst_port);
+		g_snprintf(tmp, sizeof(tmp), "%s:%d", info->dst_host, info->dst_port);
 		new_url = assemble_chunk_id(tmp, info->dst_volume, info->chunk.id);
 		// FIXME: binary hash is probably somewhere already
 		hex2bin(info->chunk.hash, bin_hash, sizeof(chunk_hash_t), NULL);
@@ -1578,7 +1573,7 @@ rawx_mover_init(void)
 					forced_namespace->str, ns_name);
 			return FALSE;
 		}
-		memcpy(ns_name, forced_namespace->str, LIMIT_LENGTH_NSNAME);
+		memcpy(ns_name, forced_namespace->str, sizeof(ns_name));
 	}
 
 	/* Now check the namespace is known locally */
@@ -1745,9 +1740,8 @@ rawx_mover_get_options(void)
 static void
 rawx_mover_set_defaults(void)
 {
-	memset(path_log4c, 0, sizeof(path_log4c));
-	memset(ns_name, 0, LIMIT_LENGTH_NSNAME);
-	memset(rawx_vol, 0, LIMIT_LENGTH_VOLUMENAME);
+	memset(ns_name, 0, sizeof(ns_name));
+	memset(rawx_vol, 0, sizeof(rawx_vol));
 	memset(&rawx_addr, 0, sizeof(addr_info_t));
 	lock_xattr_name = g_string_new(VOLUME_LOCK_XATTR_NAME);
 }

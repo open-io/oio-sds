@@ -181,7 +181,7 @@ meta2_raw_content_v2_gclean(gpointer p, gpointer ignored)
 gchar*
 meta2_raw_chunk_to_string(const meta2_raw_chunk_t *chunk)
 {
-	gchar str_id[STRLEN_CHUNKID+1], str_hash[STRLEN_CHUNKHASH+1];
+	gchar str_id[STRLEN_CHUNKID], str_hash[STRLEN_CHUNKHASH];
 
 	if (!chunk)
 		return g_strdup("CHUNK[NULL]");

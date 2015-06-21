@@ -145,12 +145,12 @@ create_asn1_worker(addr_info_t *addr, const gchar *req_name)
 
 	asn1_session = g_malloc0(sizeof(asn1_session_t));
 	asn1_session->addr = g_memdup(addr, sizeof(addr_info_t));
-        asn1_session->req_name = g_strdup(req_name);
-        asn1_session->req_body_size = 0;
-        asn1_session->req_body = NULL;
-        asn1_session->response_handler = agent_asn1_default_response_handler;
-        asn1_session->error_handler = agent_worker_default_func;
-        asn1_session->final_handler = agent_worker_default_func;
+	asn1_session->req_name = g_strdup(req_name);
+	asn1_session->req_body_size = 0;
+	asn1_session->req_body = NULL;
+	asn1_session->response_handler = agent_asn1_default_response_handler;
+	asn1_session->error_handler = agent_worker_default_func;
+	asn1_session->final_handler = agent_worker_default_func;
 
 	asn1_session->clear_session_data = NULL;
 	asn1_session->session_data = NULL;
@@ -159,10 +159,11 @@ create_asn1_worker(addr_info_t *addr, const gchar *req_name)
 	asn1_session->req_headers = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, metautils_gba_clean);
 
 	/*create the worker*/
-        asn1_worker = g_malloc0(sizeof(worker_t));
-	asn1_worker->timeout = SOCK_TIMEOUT;
+	asn1_worker = g_malloc0(sizeof(worker_t));
+	asn1_worker->timeout.activity = GCLUSTER_AGENT_ACT_TIMEOUT;
+	asn1_worker->timeout.startup = GCLUSTER_AGENT_REQ_TIMEOUT;
 	asn1_worker->clean = asn1_worker_liberator;
-	asn1_worker->data.sock_timeout = SOCK_TIMEOUT;
+	asn1_worker->data.sock_timeout = MAX(GCLUSTER_AGENT_REQ_TIMEOUT,GCLUSTER_AGENT_ACT_TIMEOUT);
 	asn1_worker->data.session = asn1_session;
 	return asn1_worker;
 }

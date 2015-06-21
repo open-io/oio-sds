@@ -123,8 +123,8 @@ update_rainx_conf_if_necessary(apr_pool_t* p, rawx_conf_t **rainx_conf)
 	time_t now = time(0);
 	if ((*rainx_conf)->last_update + RAINX_CONF_UPDATE_DELAY < now) {
 		// (*rainx_conf)->ni->name will be freed, we must make a copy
-		gchar ns_name[LIMIT_LENGTH_NSNAME] = {0};
-		g_strlcpy(ns_name, (*rainx_conf)->ni->name, LIMIT_LENGTH_NSNAME);
+		gchar ns_name[LIMIT_LENGTH_NSNAME] = "";
+		g_strlcpy(ns_name, (*rainx_conf)->ni->name, sizeof(ns_name));
 		gboolean res = update_rainx_conf(p, rainx_conf, ns_name);
 		return res;
 	}

@@ -41,7 +41,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static void
 session_data_cleaner(gpointer p)
 {
-	gchar task_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_NSNAME+1];
+	gchar task_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_NSNAME];
 	if (!p)
 		return;
 	g_snprintf(task_id, sizeof(task_id), TASK_ID".%s", (gchar*)p);
@@ -53,7 +53,7 @@ static int
 final_handler(worker_t *worker, GError **error)
 {
 	gchar *ns_name;
-	gchar task_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_NSNAME+1];
+	gchar task_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_NSNAME];
 	
 	(void)error;
 	ns_name = asn1_worker_get_session_data(worker);
@@ -66,7 +66,7 @@ static int
 error_handler(worker_t *worker, GError **error)
 {
 	gchar *ns_name;
-	gchar task_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_NSNAME+1];
+	gchar task_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_NSNAME];
 
 
 	ns_name = asn1_worker_get_session_data(worker);
@@ -173,7 +173,7 @@ task_starter(gpointer udata, GError **error)
 	GHashTableIter ns_iterator;
 
 	task_t *task;
-	gchar ns_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_NSNAME+1];
+	gchar ns_id[sizeof(TASK_ID)+1+LIMIT_LENGTH_NSNAME];
 	namespace_data_t *ns_data;
 
 	(void)udata;
@@ -284,7 +284,7 @@ namespace_is_available(const struct namespace_data_s *ns_data)
 static gboolean
 worker_ns_indirect_config(gpointer udata, GError **error)
 {
-	gchar task_id[sizeof(TASK_PREFIX)+1+LIMIT_LENGTH_NSNAME+1];
+	gchar task_id[sizeof(TASK_PREFIX)+1+LIMIT_LENGTH_NSNAME];
 	gboolean rc = FALSE;
 	namespace_data_t *ns_data;
 	namespace_info_t *ns_info;

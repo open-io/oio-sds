@@ -550,8 +550,8 @@ list_tasks(GError **error)
 			memcpy(task.id, resp.data + size_read, sizeof(task.id));
 			size_read += sizeof(task.id);
 
-			memcpy(&(task.next_schedule), resp.data + size_read, sizeof(task.next_schedule));
-			size_read += sizeof(task.next_schedule);
+			memcpy(&(task.period), resp.data + size_read, sizeof(task.period));
+			size_read += sizeof(task.period);
 
 			memcpy(&(task.busy), resp.data + size_read, sizeof(task.busy));
 			size_read += sizeof(task.busy);

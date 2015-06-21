@@ -187,8 +187,7 @@ meta0_info_list_map_by_prefix(GSList * mL, GError ** err)
 			m0i = g_hash_table_lookup(mH, &dummy);
 			if (m0i) {	/*prefix already present, we do nothing else a debug */
 				if (DEBUG_ENABLED()) {
-					char str_addr[128];
-
+					char str_addr[STRLEN_ADDRINFO];
 					addr_info_to_string(&(dummy.addr), str_addr, sizeof(str_addr));
 					DEBUG("double prefix found %02X%02X -> %s", dummy.prefixes[0], dummy.prefixes[1], str_addr);
 				}
