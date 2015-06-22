@@ -66,6 +66,7 @@ License along with this library.
 # include <metautils/lib/hc_url.h>
 # include <metautils/lib/hc_url_ext.h>
 # include <metautils/lib/lrutree.h>
+# include <metautils/lib/cache.h>
 # include <metautils/lib/storage_policy.h>
 # include <metautils/lib/common_main.h>
 # include <metautils/lib/volume_lock.h>

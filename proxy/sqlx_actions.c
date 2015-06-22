@@ -107,6 +107,8 @@ _sqlx_action_noreturn (struct req_args_s *args,
 
 	if (err) {
 		g_string_free(out, TRUE);
+		if (err->code == CODE_CONTAINER_NOTFOUND)
+			return _reply_notfound_error (args, err);
 		return _reply_system_error (args, err);
 	}
 	return _reply_success_json (args, out);
@@ -145,6 +147,8 @@ _sqlx_action_flatbody (struct req_args_s *args,
 
 	if (err) {
 		g_string_free(out, TRUE);
+		if (err->code == CODE_CONTAINER_NOTFOUND)
+			return _reply_notfound_error (args, err);
 		return _reply_system_error (args, err);
 	}
 
@@ -303,6 +307,8 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 
 	if (err) {
 		g_string_free(out, TRUE);
+		if (err->code == CODE_CONTAINER_NOTFOUND)
+			return _reply_notfound_error (args, err);
 		return _reply_system_error (args, err);
 	}
 	return _reply_success_json (args, out);
@@ -339,7 +345,10 @@ action_sqlx_propset (struct req_args_s *args, struct json_object *jargs)
 		}
 		rc = _sqlx_action_noreturn (args, packer);
 	} else {
-		rc = _reply_format_error (args, err);
+		if (err->code == CODE_CONTAINER_NOTFOUND)
+			rc = _reply_notfound_error (args, err);
+		else
+			rc = _reply_format_error (args, err);
 	}
 	g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
 	return rc;
@@ -364,8 +373,11 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	GByteArray **bodies = NULL;
 	err = _sqlx_action_bodyv (args, packer, &bodies);
 	g_strfreev (namev);
-	if (err)
+	if (err) {
+		if (err->code == CODE_CONTAINER_NOTFOUND)
+			return _reply_notfound_error(args, err);
 		return _reply_system_error(args, err);
+	}
 
 	// Decode the output of the services
 	GSList *pairs = NULL;

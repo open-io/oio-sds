@@ -47,14 +47,7 @@ group=${NS},localhost,proxy
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
-
-[service.${NS}-proxy-local]
-group=${NS},localhost,proxy
-on_die=respawn
-enabled=true
-start_at_boot=false
-command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy ${RUNDIR}/${NS}-proxy.sock ${NS}
+command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
 """
 
 template_nginx_gridinit = """

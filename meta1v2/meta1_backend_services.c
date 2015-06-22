@@ -310,38 +310,6 @@ __configure_service(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 }
 
 static GError *
-__insert_service(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		struct meta1_service_url_s *m1url)
-{
-	static const gchar *sql = "INSERT INTO services (cid,srvtype,seq,url,args)"
-		"VALUES (?,?,?,?,?)";
-	gint rc;
-	GError *err = NULL;
-	sqlite3_stmt *stmt = NULL;
-	struct sqlx_repctx_s *repctx;
-
-	if (NULL != (err = sqlx_transaction_begin(sq3, &repctx)))
-		return err;
-
-	sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, NULL);
-	if (rc != SQLITE_OK)
-		err = M1_SQLITE_GERROR(sq3->db, rc);
-	else {
-		(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
-		(void) sqlite3_bind_text(stmt, 2, m1url->srvtype, -1, NULL);
-		(void) sqlite3_bind_int64(stmt, 3, m1url->seq);
-		(void) sqlite3_bind_text(stmt, 4, m1url->host, -1, NULL);
-		(void) sqlite3_bind_text(stmt, 5, m1url->args, -1, NULL);
-		sqlite3_step_debug_until_end (rc, stmt);
-		if (rc != SQLITE_OK && rc != SQLITE_DONE)
-			err = M1_SQLITE_GERROR(sq3->db, rc);
-		sqlite3_finalize_debug(rc, stmt);
-	}
-
-	return sqlx_transaction_end(repctx, err);
-}
-
-static GError *
 __get_all_services(struct sqlx_sqlite3_s *sq3,
 		struct meta1_service_url_s ***result)
 {
@@ -439,15 +407,16 @@ __get_container_all_services(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 
 static GError *
 __save_service(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		struct meta1_service_url_s *m1url)
+		struct meta1_service_url_s *m1url, gboolean force)
 {
 	gint rc;
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
 
-	sqlite3_prepare_debug(rc, sq3->db,
-			"INSERT OR REPLACE INTO services (cid,srvtype,seq,url,args)"
-			" VALUES (?,?,?,?,?)", -1, &stmt, NULL);
+	sqlite3_prepare_debug(rc, sq3->db, force
+			? "INSERT OR REPLACE INTO services (cid,srvtype,seq,url,args) VALUES (?,?,?,?,?)"
+			: "INSERT            INTO services (cid,srvtype,seq,url,args) VALUES (?,?,?,?,?)",
+			-1, &stmt, NULL);
 	if (rc != SQLITE_OK)
 		return M1_SQLITE_GERROR(sq3->db, rc);
 
@@ -730,7 +699,7 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 					if (policy == SVCUPD_REPLACE)
 						err = __delete_service(sq3, url, ct->type);
 					if (NULL == err)
-						err = __save_service(sq3, url, m1_url);
+						err = __save_service(sq3, url, m1_url, TRUE);
 					err = sqlx_transaction_end(repctx, err);
 				}
 			}
@@ -828,7 +797,7 @@ meta1_backend_set_service_arguments(struct meta1_backend_s *m1,
 
 GError*
 meta1_backend_force_service(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *packedurl)
+		struct hc_url_s *url, const gchar *packedurl, gboolean force)
 {
 	struct meta1_service_url_s *m1url;
 	if (!(m1url = meta1_unpack_url(packedurl)))
@@ -837,11 +806,11 @@ meta1_backend_force_service(struct meta1_backend_s *m1,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
-		if (!(err = __info_container(sq3, url, NULL))) {
-			err = __insert_service(sq3, url, m1url);
-			if (NULL != err)
-				g_prefix_error(&err, "Query error: ");
-			else {
+		struct sqlx_repctx_s *repctx = NULL;
+		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
+			if (!(err = __info_container(sq3, url, NULL)))
+				err = __save_service(sq3, url, m1url, force);
+			if (!(err = sqlx_transaction_end(repctx, err))) {
 				GError *err2 = __notify_services_by_cid(m1, sq3, url);
 				if (err2 != NULL) {
 					GRID_WARN("Failed to notify forced service [%s] in [%s]:"

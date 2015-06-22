@@ -150,6 +150,7 @@ enum {
 	HTTP_CODE_CONFLICT           = 409,
 	HTTP_CODE_INTERNAL_ERROR     = 500,
 	HTTP_CODE_NOT_IMPLEMENTED    = 501,
+	HTTP_CODE_BAD_GATEWAY        = 502,
 };
 
 /** Sets the error structure pointed by the first argument, keeping trace of the

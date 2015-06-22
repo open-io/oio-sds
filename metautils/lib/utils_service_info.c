@@ -769,23 +769,20 @@ GError*
 service_info_load_json_object(struct json_object *obj,
 		struct service_info_s **out)
 {
-	*out = NULL;
-	if (!json_object_is_type(obj, json_type_object))
-		return NEWERROR(CODE_BAD_REQUEST, "Bad object");
+	EXTRA_ASSERT(out != NULL); *out = NULL;
 
-	// SAnity checks
 	struct json_object *ns, *type, *url, *score, *tags;
-	if (!json_object_object_get_ex(obj, "ns", &ns)
-		|| !json_object_object_get_ex(obj, "type", &type)
-		|| !json_object_object_get_ex(obj, "addr", &url)
-		|| !json_object_object_get_ex(obj, "score", &score))
-		return NEWERROR(CODE_BAD_REQUEST, "Missing field");
-	if (!json_object_is_type(ns, json_type_string)
-		|| !json_object_is_type(type, json_type_string)
-		|| !json_object_is_type(url, json_type_string)
-		|| !json_object_is_type(score, json_type_int))
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid field");
-
+	struct metautils_json_mapping_s mapping[] = {
+		{"ns",    &ns,    json_type_int,    1},
+		{"type",  &type,  json_type_string, 1},
+		{"addr",  &url,   json_type_string, 1},
+		{"score", &score, json_type_string, 1},
+		{"tags", &tags, json_type_object,   0},
+		{NULL, NULL, 0, 0}
+	};
+	GError *err = metautils_extract_json (obj, mapping);
+	if (err) return err;
+	
 	struct addr_info_s addr;
 	if (!grid_string_to_addrinfo(json_object_get_string(url), NULL, &addr))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid address");
@@ -796,14 +793,6 @@ service_info_load_json_object(struct json_object *obj,
 	g_strlcpy(si->type, json_object_get_string(type), sizeof(si->type));
 	si->score.value = json_object_get_int(score);
 
-	if (!json_object_object_get_ex(obj, "tags", &tags)) {
-		*out = si;
-		return NULL;
-	}
-	if (!json_object_is_type(tags, json_type_object)) {
-		*out = si;
-		return NULL;
-	}
 	json_object_object_foreach(tags,key,val) {
 		if (!g_str_has_prefix(key, "tag.") && !g_str_has_prefix(key, "stat."))
 			continue;

@@ -32,7 +32,6 @@ License along with this library.
 
 #include "metautils.h"
 #include "metautils_syscall.h"
-#include "metautils_internals.h"
 
 #ifndef SOCK_DEFAULT_LINGER_ONOFF
 # define SOCK_DEFAULT_LINGER_ONOFF 1
@@ -41,6 +40,27 @@ License along with this library.
 #ifndef SOCK_DEFAULT_LINGER_DELAY
 # define SOCK_DEFAULT_LINGER_DELAY 0
 #endif
+
+#define ERRNO_RESETBYPEER 104
+#define ERRNO_NOTCONNECTED 107
+#define ERRNO_CONNREFUSED 111
+#define ERRNO_NOROUTETOHOST 113
+
+static gint
+errno_to_errcode(int e)
+{
+	switch (e) {
+	case ERRNO_RESETBYPEER:
+		return ERRCODE_CONN_RESET;
+	case ERRNO_CONNREFUSED:
+		return ERRCODE_CONN_REFUSED;
+	case ERRNO_NOROUTETOHOST:
+		return ERRCODE_CONN_TIMEOUT;
+	case ERRNO_NOTCONNECTED:
+		return ERRCODE_CONN_NOTCONNECTED;
+	}
+	return 0;
+}
 
 static struct metautils_sockets_vtable_s VTABLE = {
 	NULL, NULL, NULL,

@@ -68,6 +68,12 @@ _reply_system_error (struct req_args_s *args, GError * err)
 	return _reply_json (args, HTTP_CODE_INTERNAL_ERROR, "Internal error", _create_status_error (err));
 }
 
+static enum http_rc_e
+_reply_bad_gateway (struct req_args_s *args, GError * err)
+{
+	return _reply_json (args, HTTP_CODE_BAD_GATEWAY, "Bad Gateway", _create_status_error (err));
+}
+
 enum http_rc_e
 _reply_not_implemented (struct req_args_s *args)
 {

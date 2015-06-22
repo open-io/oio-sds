@@ -21,10 +21,9 @@ License along with this library.
 # define G_LOG_DOMAIN "metautils.tools"
 #endif
 
-#include <ctype.h>
-
 #include "metautils.h"
-#include "metautils_internals.h"
+
+#include <json.h>
 
 static gchar b2h[][2] =
 {
@@ -315,5 +314,26 @@ metautils_randomize_buffer(guint8 *buf, gsize buflen)
 	}
 
 	g_rand_free(r);
+}
+
+GError *
+metautils_extract_json (struct json_object *obj,
+		struct metautils_json_mapping_s *tab)
+{
+	EXTRA_ASSERT(obj != NULL);
+	if (!json_object_is_type(obj, json_type_object))
+		return NEWERROR(CODE_BAD_REQUEST, "Not an object");
+	for (struct metautils_json_mapping_s *p=tab; p->out ;p++)
+		*(p->out) = NULL;
+	for (struct metautils_json_mapping_s *p=tab; p->out ;p++) {
+		if (!json_object_object_get_ex(obj, p->name, p->out)) {
+			if (!p->mandatory)
+				continue;
+			return NEWERROR(CODE_BAD_REQUEST, "Missing field [%s]", p->name);
+		}
+		if (!json_object_is_type(*(p->out), p->type))
+			return NEWERROR(CODE_BAD_REQUEST, "Invalid type for field [%s]", p->name);
+	}
+	return NULL;
 }
 

@@ -213,26 +213,20 @@ _load_chunks (GSList **out, struct json_object *jtab)
 
 	/* Decode the JSON description */
 	for (int i=json_object_array_length(jtab); i>0 && !err ;i--) {
-		struct json_object *jchunk = json_object_array_get_idx (jtab, i-1);
-		if (!json_object_is_type(jchunk, json_type_object))
-			err = NEWERROR(0, "JSON: expected object for chunk");
 		struct json_object *jurl = NULL, *jpos = NULL, *jsize = NULL, *jhash = NULL;
-		(void) json_object_object_get_ex(jchunk, "url", &jurl);
-		(void) json_object_object_get_ex(jchunk, "pos", &jpos);
-		(void) json_object_object_get_ex(jchunk, "size", &jsize);
-		(void) json_object_object_get_ex(jchunk, "hash", &jhash);
-		if (!jurl || !jpos || !jsize || !jhash)
-			err = NEWERROR(0, "JSON: missing chunk's field");
-		else if (!json_object_is_type(jurl, json_type_string)
-				|| !json_object_is_type(jpos, json_type_string)
-				|| !json_object_is_type(jsize, json_type_int)
-				|| !json_object_is_type(jhash, json_type_string)) {
-			err = NEWERROR(0, "JSON: invalid chunk's field");
-		} else {
-			const char *h = json_object_get_string(jhash);
-			if (!metautils_str_ishexa(h, 2*sizeof(chunk_hash_t)))
-				err = NEWERROR(0, "JSON: invalid chunk hash: not hexa of %"G_GSIZE_FORMAT,
-						2*sizeof(chunk_hash_t));
+		struct metautils_json_mapping_s m[] = {
+			{"url", &jurl, json_type_string, 1}, {"pos", &jpos, json_type_string, 1},
+			{"size", &jsize, json_type_int, 1}, {"hash", &jhash, json_type_string, 1},
+			{NULL,NULL,0,0}
+		};
+		err = metautils_extract_json (json_object_array_get_idx (jtab, i-1), m);
+		if (err) continue;
+
+		const char *h = json_object_get_string(jhash);
+		if (!metautils_str_ishexa(h, 2*sizeof(chunk_hash_t)))
+			err = NEWERROR(0, "JSON: invalid chunk hash: not hexa of %"G_GSIZE_FORMAT,
+					2*sizeof(chunk_hash_t));
+		else {
 			struct chunk_s *c = _load_one_chunk (jurl, jsize, jpos);
 			for (char *p = c->hexhash; *h ;) // copies the hash as uppercase
 				*(p++) = g_ascii_toupper (*(h++));

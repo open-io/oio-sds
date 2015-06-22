@@ -39,38 +39,22 @@ m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 {
 	GError *err = NULL;
 	GByteArray *hid = NULL;
-	struct bean_ALIASES_s *alias;
-	struct json_object *jname, *jversion, *jctime, *jmd, *jheader;
+	struct bean_ALIASES_s *alias = NULL;
 
 	*pbean = NULL;
+	struct json_object *jname, *jversion, *jctime, *jmd, *jheader;
+	struct metautils_json_mapping_s m[] = {
+		{"name",   &jname,    json_type_string, 1},
+		{"ver",    &jversion, json_type_int,    1},
+		{"ctime",  &jctime,   json_type_int,    1},
+		{"header", &jheader,  json_type_string, 1},
+		{"system_metadata", &jmd, json_type_string, 1},
+		{NULL, NULL, 0, 0}
+	};
+	if (NULL != (err = metautils_extract_json(j, m)))
+		goto exit;
+
 	alias = _bean_create (&descr_struct_ALIASES);
-	jname = json_object_object_get (j, "name");
-	jversion = json_object_object_get (j, "ver");
-	jctime = json_object_object_get (j, "ctime");
-	jmd = json_object_object_get (j, "system_metadata");
-	jheader = json_object_object_get (j, "header");
-
-	if (!jname || !json_object_is_type(jname, json_type_string)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json name");
-		goto exit;
-	}
-	if (!jversion || !json_object_is_type(jversion, json_type_int)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json version");
-		goto exit;
-	}
-	if (!jctime || !json_object_is_type(jctime, json_type_int)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json ctime");
-		goto exit;
-	}
-	if (!jheader || !json_object_is_type(jheader, json_type_string)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json header");
-		goto exit;
-	}
-	if (!jmd || !json_object_is_type(jmd, json_type_string)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json metadata");
-		goto exit;
-	}
-
 	hid = metautils_gba_from_hexstring(json_object_get_string(jheader));
 	if (!hid) {
 		err = NEWERROR(CODE_BAD_REQUEST, "Invalid alias, not hexadecimal header_id");

@@ -394,9 +394,10 @@ meta1_dispatch_v2_SRV_SET(struct gridd_reply_ctx_s *reply,
 	reply->subject("%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), m1url);
 	(void) ignored;
 
+	gboolean force = metautils_message_extract_flag (reply->request, NAME_MSGKEY_FORCE, FALSE);
 	if (NULL != (err = metautils_message_extract_body_string(reply->request, &m1url)))
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else if (NULL != (err = meta1_backend_force_service(m1, url, m1url)))
+	else if (NULL != (err = meta1_backend_force_service(m1, url, m1url, force)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(200, "OK");

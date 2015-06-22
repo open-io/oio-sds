@@ -238,6 +238,7 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 {
 	const gchar *type = TYPE();
 	struct meta1_service_url_s *m1u = NULL;
+	const char *mode = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "action-mode");
 
 	GError *hook (const gchar * m1) {
 		struct addr_info_s m1a;
@@ -245,7 +246,8 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *e = NULL;
 		gchar *packed = meta1_pack_url (m1u);
-		meta1v2_remote_force_reference_service (&m1a, &e, args->url, packed);
+		meta1v2_remote_force_reference_service (&m1a, &e, args->url, packed,
+				mode!=NULL && !g_ascii_strcasecmp(mode, "replace"));
 		g_free (packed);
 		return e;
 	}
