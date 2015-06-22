@@ -55,6 +55,10 @@ static enum http_rc_e
 _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *jsrv)
 {
 	GError *err;
+
+	if (!push_queue)
+		return _reply_bad_gateway(args, NEWERROR(CODE_INTERNAL_ERROR, "Service upstream disabled"));
+
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_notfound_error (args, err);
 
@@ -85,9 +89,6 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 
 	gchar *key = service_info_key(si);
 	PUSH_DO(lru_tree_insert(push_queue, key, si));
-
-	if (err)
-		return _reply_system_error (args, err);
 	GString *gstr = g_string_new ("");
 	service_info_encode_json (gstr, si);
 	return _reply_success_json (args, gstr);
