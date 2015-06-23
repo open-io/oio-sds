@@ -20,7 +20,6 @@ The build process of OpenIO SDS depends on:
 * cmake, make, cp, sed, bison, flex : involved in the build process.
 * glib2, glib2-devel : 
 * python: Pure python code generator (no dependency), and python modules.
-* python-devel: required for the integrityloop
 * python-distutils-extra: required for the installation process
 * httpd, httpd-devel : server base for RAWX and RAINX services
 * apr, apr-util-devel, apr-devel : internally used by RAINX and RAWX modules
@@ -38,7 +37,6 @@ The build process of OpenIO SDS depends on:
 
 Still required but the next thrid-party dependencies to leave:
 * neon, neon-devel : to be replaced by curl.
-* libevent-devel : used to pipe HTTP replies (GET) into HTTP requests (PUT). Definitely to be replaced by curl
 
 In addition, a few python modules are required at runtime:
 * python-redis
