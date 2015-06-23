@@ -22,7 +22,7 @@ License along with this library.
 #define G_LOG_DOMAIN "metautils"
 #endif
 
-#include "./metautils_internals.h"
+#include "metautils.h"
 
 #include "./AddrInfo.h"
 #include "./AddrInfoSequence.h"

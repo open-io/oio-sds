@@ -23,9 +23,9 @@ License along with this library.
 
 #include <errno.h>
 
-#include <json.h>
-
 #include "metautils.h"
+
+#include <json.h>
 
 static GHashTable *
 _copy_hash(GHashTable *src)
@@ -335,25 +335,18 @@ namespace_info_init_json_object(struct json_object *obj,
 {
 	EXTRA_ASSERT(ni != NULL);
 
-	if (!obj || !json_object_is_type(obj, json_type_object))
-		return NEWERROR(CODE_BAD_REQUEST, "Not a JSON object");
+	struct json_object *ns=NULL, *sz=NULL;
+	struct metautils_json_mapping_s mapping[] = {
+		{"ns",        &ns, json_type_string, 1},
+		{"chunksize", &sz, json_type_int,    1},
+		{NULL, NULL, 0, 0}
+	};
+	GError *err = metautils_extract_json (obj, mapping);
+	if (err) return err;
 
-	struct json_object *sub = NULL;
-	// Mandatory fields
-	if (!json_object_object_get_ex(obj, "ns", &sub))
-		return NEWERROR(CODE_BAD_REQUEST, "Missing 'ns' field");
-	if (!json_object_is_type(sub, json_type_string))
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid 'ns' field");
-	metautils_strlcpy_physical_ns(ni->name, json_object_get_string(sub),
-			sizeof(ni->name));
+	metautils_strlcpy_physical_ns(ni->name, json_object_get_string(ns), sizeof(ni->name));
+	ni->chunk_size = json_object_get_int64(sz);
 
-	if (!json_object_object_get_ex(obj, "chunksize", &sub))
-		return NEWERROR(CODE_BAD_REQUEST, "Missing 'chunksize' field");
-	if (!json_object_is_type(sub, json_type_int))
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid 'chunksize' field");
-	ni->chunk_size = json_object_get_int64(sub);
-
-	GError *err;
 	if (NULL != (err = _load_hash(obj, "options", ni->options))
 			|| NULL != (err = _load_hash(obj, "storage_policy", ni->storage_policy))
 			|| NULL != (err = _load_hash(obj, "data_security", ni->data_security))

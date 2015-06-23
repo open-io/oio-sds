@@ -26,7 +26,6 @@ License along with this library.
 #include <string.h>
 #include <unistd.h>
 #include "./metautils.h"
-#include "./hc_url.h"
 
 static gchar str_id[128];
 static gchar bad[] =

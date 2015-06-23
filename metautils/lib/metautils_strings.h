@@ -127,4 +127,16 @@ none(const gchar *src)
 	return src ? src : "null";
 }
 
+struct json_object;
+
+struct metautils_json_mapping_s {
+	const char *name;
+	struct json_object **out;
+	int type;
+	unsigned int mandatory;
+};
+
+GError * metautils_extract_json (struct json_object *j,
+		struct metautils_json_mapping_s *tab);
+
 #endif /*OIO_SDS__metautils__lib__metautils_strings_h*/

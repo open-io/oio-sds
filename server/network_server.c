@@ -775,6 +775,9 @@ _endpoint_open(struct endpoint_s *u)
 	if (u->fd < 0)
 		return NEWERROR(errno, "socket() = '%s'", strerror(errno));
 
+	if (_endpoint_is_INET(u))
+		sock_set_reuseaddr (u->fd, TRUE);
+
 	/* Bind the socket the right way according to its type */
 	if (_endpoint_is_UNIX(u)) {
 		struct sockaddr_un *sun = (struct sockaddr_un*) &ss;
@@ -795,8 +798,11 @@ _endpoint_open(struct endpoint_s *u)
 		inet_pton(AF_INET, u->url, &(s4->sin_addr));
 	}
 	if (0 > bind(u->fd, (struct sockaddr*)&ss, ss_len)) {
+		int errsave = errno;
 		u->port_real = 0;
-		return NEWERROR(errno, "bind() = '%s'", strerror(errno));
+		if (_endpoint_is_UNIX(u))
+			metautils_pclose (&u->fd);
+		return NEWERROR(errsave, "bind(%s) = '%s'", u->url, strerror(errsave));
 	}
 
 	/* for INET sockets, get the port really used */
@@ -812,8 +818,6 @@ _endpoint_open(struct endpoint_s *u)
 
 	/* And finally set the mandatory fags. */
 	sock_set_non_blocking(u->fd, TRUE);
-	if (_endpoint_is_INET(u))
-		sock_set_reuseaddr(u->fd, TRUE);
 
 	if (0 > listen(u->fd, 32768))
 		return NEWERROR(errno, "listen() = '%s'", strerror(errno));

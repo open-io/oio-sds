@@ -196,7 +196,7 @@ hc_force_service(gs_grid_storage_t *hc, const char *reference, const char *m1url
 {
 	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		gint rc = meta1v2_remote_force_reference_service(a, &e, url, m1url);
+		gint rc = meta1v2_remote_force_reference_service(a, &e, url, m1url, FALSE);
 		(void) rc;
 		return e;
 	}

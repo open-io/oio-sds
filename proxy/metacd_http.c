@@ -103,6 +103,9 @@ static gchar **srvtypes = NULL;
 static GMutex nsinfo_mutex;
 
 // Configuration
+
+static GSList *config_urlv = NULL;
+
 static gint timeout_cs_push = PROXYD_DEFAULT_TIMEOUT_CONSCIENCE;
 static gint lb_downstream_delay = PROXYD_DEFAULT_PERIOD_DOWNSTREAM;
 static guint lb_upstream_delay = PROXYD_DEFAULT_PERIOD_UPSTREAM;
@@ -523,11 +526,16 @@ grid_main_get_options (void)
 {
 	static struct grid_main_option_s options[] = {
 
+		{"Bind", OT_LIST, {.lst = &config_urlv},
+			"An additional URL to bind to (might be used several time).\n"
+			"\t\tAccepts UNIX and INET sockets." },
+
 		{"LbRefresh", OT_INT, {.i = &lb_downstream_delay},
 			"Interval between load-balancer service refreshes (seconds)\n"
 			"\t\t-1 to disable, 0 to never refresh"},
 		{"NsinfoRefresh", OT_UINT, {.u = &nsinfo_refresh_delay},
 			"Interval between NS configuration's refreshes (seconds)"},
+
 		{"SrvPush", OT_INT, {.u = &lb_upstream_delay},
 			"Interval between load-balancer service refreshes (seconds)\n"
 			"\t\t-1 to disable, 0 to never refresh"},
@@ -719,14 +727,17 @@ grid_main_configure (int argc, char **argv)
 		return FALSE;
 	}
 
+	const char *cfg_main_url = argv[0];
+	const char *cfg_namespace = argv[1];
+
 	g_mutex_init (&push_mutex);
 	g_mutex_init (&nsinfo_mutex);
 
-	nsname = g_strdup (argv[1]);
-	metautils_strlcpy_physical_ns (nsname, argv[1], strlen (nsname) + 1);
+	nsname = g_strdup (cfg_namespace);
+	metautils_strlcpy_physical_ns (nsname, cfg_namespace, strlen (nsname) + 1);
 
 	memset (&nsinfo, 0, sizeof (nsinfo));
-	metautils_strlcpy_physical_ns (nsinfo.name, argv[1], sizeof (nsinfo.name));
+	metautils_strlcpy_physical_ns (nsinfo.name, cfg_namespace, sizeof (nsinfo.name));
 	nsinfo.chunk_size = 1;
 
 	path_parser = path_parser_init ();
@@ -747,12 +758,12 @@ grid_main_configure (int argc, char **argv)
 	}
 
 	// Prepare a queue responsible for upstream to the conscience
-	push_queue = _push_queue_create();
-
-	upstream_gtq = grid_task_queue_create ("upstream");
-
-	grid_task_queue_register(upstream_gtq, (guint) lb_upstream_delay,
-			(GDestroyNotify) _task_push, NULL, NULL);
+	if (lb_upstream_delay > 0) {
+		push_queue = _push_queue_create();
+		upstream_gtq = grid_task_queue_create ("upstream");
+		grid_task_queue_register(upstream_gtq, (guint) lb_upstream_delay,
+				(GDestroyNotify) _task_push, NULL, NULL);
+	}
 
 	// Prepare a queue responsible for the downstream from the conscience
 	downstream_gtq = grid_task_queue_create ("downstream");
@@ -773,8 +784,9 @@ grid_main_configure (int argc, char **argv)
 	grid_task_queue_register (admin_gtq, nsinfo_refresh_delay,
 		(GDestroyNotify) _task_reload_srvtypes, NULL, NULL);
 
-	network_server_bind_host (server, argv[0],
-		dispatcher, transport_http_factory);
+	network_server_bind_host (server, cfg_main_url, dispatcher, transport_http_factory);
+	for (GSList *lu=config_urlv; lu ;lu=lu->next)
+		network_server_bind_host (server, lu->data, dispatcher, transport_http_factory);
 
 	return TRUE;
 }

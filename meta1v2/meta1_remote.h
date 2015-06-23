@@ -78,7 +78,7 @@ gchar** meta1v2_remote_poll_reference_service(const addr_info_t *meta1,
 		GError **err, struct hc_url_s *url, const gchar *srvtype);
 
 gboolean meta1v2_remote_force_reference_service(const addr_info_t *meta1,
-		GError **err, struct hc_url_s *url, const gchar *m1url);
+		GError **err, struct hc_url_s *url, const gchar *m1url, gboolean force);
 
 gboolean meta1v2_remote_configure_reference_service(const addr_info_t *meta1,
 		GError **err, struct hc_url_s *url, const gchar *m1url);

@@ -302,53 +302,44 @@ _load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSL
 
 	// Load the beans
 	for (int i=json_object_array_length(jbody); i>0 && !err ;i--) {
+		struct json_object *jurl=NULL, *jpos=NULL, *jsize=NULL, *jhash=NULL;
+		struct metautils_json_mapping_s m[] = {
+			{"url", &jurl, json_type_string, 1}, {"pos", &jpos, json_type_string, 1},
+			{"size", &jsize, json_type_int, 1}, {"hash", &jhash, json_type_string, 1},
+			{NULL, NULL, 0, 0}
+		};
 		GRID_TRACE("JSON: parsing chunk at %i", i-1);
-		struct json_object *jchunk = json_object_array_get_idx (jbody, i-1);
-		if (!json_object_is_type(jchunk, json_type_object)) {
-			err = BADREQ("JSON: expected object for chunk");
-			continue;
-		}
-		struct json_object *jurl = NULL, *jpos = NULL, *jsize = NULL, *jhash = NULL;
-		(void) json_object_object_get_ex(jchunk, "url", &jurl);
-		(void) json_object_object_get_ex(jchunk, "pos", &jpos);
-		(void) json_object_object_get_ex(jchunk, "size", &jsize);
-		(void) json_object_object_get_ex(jchunk, "hash", &jhash);
-		if (!jurl || !jpos || !jsize || !jhash) {
-			err = BADREQ("JSON: missing chunk's field");
-		} else if (!json_object_is_type(jurl, json_type_string)
-				|| !json_object_is_type(jpos, json_type_string)
-				|| !json_object_is_type(jsize, json_type_int)
-				|| !json_object_is_type(jhash, json_type_string)) {
-			err = BADREQ("JSON: invalid chunk's field");
-		} else {
-			GByteArray *h = metautils_gba_from_hexstring(json_object_get_string(jhash));
-			if (!h) {
-				err = BADREQ("JSON: invalid chunk hash: not hexa");
-			} else {
-				if (h->len != g_checksum_type_get_length(G_CHECKSUM_MD5)
-						&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA256)
-						&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA512)
-						&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA1)) {
-					err = BADREQ("JSON: invalid chunk hash: invalid length");
-				} else {
-					struct timespec ts;
-					clock_gettime(CLOCK_REALTIME_COARSE, &ts);
-					struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
-					CHUNKS_set2_id (chunk, json_object_get_string(jurl));
-					CHUNKS_set_hash (chunk, h);
-					CHUNKS_set_size (chunk, json_object_get_int64(jsize));
-					CHUNKS_set_ctime (chunk, ts.tv_sec);
-					struct bean_CONTENTS_s *content = _bean_create(&descr_struct_CONTENTS);
-					CONTENTS_set2_position (content, json_object_get_string(jpos));
-					CONTENTS_set2_chunk_id (content, json_object_get_string(jurl));
-					CONTENTS_set2_content_id (content, (guint8*)"0", 1);
+		err = metautils_extract_json (json_object_array_get_idx (jbody, i-1), m);
+		if (err) break;
 
-					beans = g_slist_prepend(beans, chunk);
-					beans = g_slist_prepend(beans, content);
-				}
-				g_byte_array_free (h, TRUE);
-			}
+		GByteArray *h = metautils_gba_from_hexstring(json_object_get_string(jhash));
+		if (!h) {
+			err = BADREQ("JSON: invalid chunk hash: not hexa");
+			break;
 		}
+
+		if (h->len != g_checksum_type_get_length(G_CHECKSUM_MD5)
+				&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA256)
+				&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA512)
+				&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA1)) {
+			err = BADREQ("JSON: invalid chunk hash: invalid length");
+		} else {
+			struct timespec ts;
+			clock_gettime(CLOCK_REALTIME_COARSE, &ts);
+			struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
+			CHUNKS_set2_id (chunk, json_object_get_string(jurl));
+			CHUNKS_set_hash (chunk, h);
+			CHUNKS_set_size (chunk, json_object_get_int64(jsize));
+			CHUNKS_set_ctime (chunk, ts.tv_sec);
+			struct bean_CONTENTS_s *content = _bean_create(&descr_struct_CONTENTS);
+			CONTENTS_set2_position (content, json_object_get_string(jpos));
+			CONTENTS_set2_chunk_id (content, json_object_get_string(jurl));
+			CONTENTS_set2_content_id (content, (guint8*)"0", 1);
+
+			beans = g_slist_prepend(beans, chunk);
+			beans = g_slist_prepend(beans, content);
+		}
+		g_byte_array_free (h, TRUE);
 	}
 
 	if (!err) {

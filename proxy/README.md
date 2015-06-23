@@ -60,6 +60,7 @@ Destined for the **POST** method, the following actions are currently available:
     E.g. ``{"action":"Renew", "args":null}``
   * **Force** : associates the given set of services to the reference, for the given type. The expected argument is a set of service encoded in the meta1-url form.
     E.g. : ``{"action":"Force", "args":{"seq":1, "type":"$TYPE", "host":"127.0.0.1:22,127.0.0.1:23","args:""}}``
+    * Optional Header **X-oio-action-mode: replace** If present, it allows the service to be replaced for the given reference and sequence number. If absent, it will be an error to insert the same entry twice.
 
 ## Meta2 resources
 
@@ -149,8 +150,8 @@ The following actions are currently available:
     * Optional Header **X-oio-content-meta-policy: XXX**
     * Optional Header **X-oio-content-meta-hash: XXX**
 	* Optional Header **X-oio-content-meta-x-Key: Value**
-    * Optional Header **X-oio-mode: force**
-    * Optional Header **X-oio-mode: append**
+    * Optional Header **X-oio-action-mode: force**
+    * Optional Header **X-oio-action-mode: append**
   * **DELETE** 
   * **COPY** Copy the content pointed by the URL to another pointed by the "Destination:" header.
 

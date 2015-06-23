@@ -24,7 +24,6 @@ License along with this library.
 #include <json.h>
 
 #include "metautils.h"
-#include "metautils_internals.h"
 
 struct meta1_service_url_s*
 meta1_unpack_url(const gchar *url)
@@ -111,25 +110,23 @@ meta1_strurl_get_address(const gchar *str, struct addr_info_s *dst)
 	return rc;
 }
 
-GError*
+GError *
 meta1_service_url_load_json_object(struct json_object *obj,
 		struct meta1_service_url_s **out)
 {
-	EXTRA_ASSERT(out != NULL);
-	if (!json_object_is_type(obj, json_type_object))
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid object type");
-	struct json_object *s, *t, *h, *a;
-	s = t = h = a = NULL;
-	if (!json_object_object_get_ex(obj, "seq", &s)
-		|| !json_object_object_get_ex(obj, "type", &t)
-		|| !json_object_object_get_ex(obj, "host", &h)
-		|| !json_object_object_get_ex(obj, "args", &a))
-		return NEWERROR(CODE_BAD_REQUEST, "Missing field");
-	if (!json_object_is_type(s, json_type_int)
-		|| !json_object_is_type(t, json_type_string)
-		|| !json_object_is_type(h, json_type_string)
-		|| !json_object_is_type(a, json_type_string))
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid field type");
+	EXTRA_ASSERT(out != NULL); *out = NULL;
+
+	struct json_object *s=NULL, *t=NULL, *h=NULL, *a=NULL;
+	struct metautils_json_mapping_s mapping[] = {
+		{"seq",  &s, json_type_int,    1},
+		{"type", &t, json_type_string, 1},
+		{"host", &h, json_type_string, 1},
+		{"args", &a, json_type_string, 1},
+		{NULL, NULL, 0, 0}
+	};
+	GError *err = metautils_extract_json (obj, mapping);
+	if (err) return err;
+
 	struct meta1_service_url_s *m1u;
 	size_t argslen = strlen(json_object_get_string(a));
 	m1u = g_malloc0(sizeof(struct meta1_service_url_s) + 1 + argslen),

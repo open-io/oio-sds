@@ -147,7 +147,7 @@ GError* meta1_backend_set_service_arguments(struct meta1_backend_s *m1,
 
 /** @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
 GError* meta1_backend_force_service(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *packedurl);
+		struct hc_url_s *url, const gchar *packedurl, gboolean force);
 
 /* Ugly quirk */
 GError* meta1_backend_open_base(struct meta1_backend_s *m1,

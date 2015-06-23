@@ -290,7 +290,7 @@ meta1v2_remote_poll_reference_service(const addr_info_t *meta1, GError **err,
 
 gboolean
 meta1v2_remote_force_reference_service(const addr_info_t *meta1, GError **err,
-		struct hc_url_s *url, const gchar *m1url)
+		struct hc_url_s *url, const gchar *m1url, gboolean force)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -299,6 +299,8 @@ meta1v2_remote_force_reference_service(const addr_info_t *meta1, GError **err,
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVSET);
 	metautils_message_add_url (req, url);
 	metautils_message_add_body_unref (req, metautils_gba_from_string(m1url));
+	if (force)
+		metautils_message_add_field_str (req, NAME_MSGKEY_FORCE, "1");
 
 	return oneway_request(meta1, err, message_marshall_gba_and_clean(req));
 }

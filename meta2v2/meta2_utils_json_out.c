@@ -19,7 +19,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
-#include <metautils/lib/hc_url.h>
 #include <metautils/lib/metautils.h>
 
 #include <meta2v2/generic.h>

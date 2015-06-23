@@ -88,7 +88,6 @@ add_library(metautils SHARED
 		metacomm.h
 		metatypes.h
 		metautils.h
-		metautils_internals.h
 		metautils_bits.h
 		metautils_macros.h
 
@@ -98,6 +97,7 @@ add_library(metautils SHARED
 		meta_backend_common.h
 		utils_syscall.c metautils_syscall.h
 		lrutree.c lrutree.h tree.h
+		cache.c cache.h
 		storage_policy.c storage_policy.h
 		url.c url.h
 		hc_url.c hc_url.h
@@ -369,6 +369,7 @@ install(FILES
 			gridd_client_ext.h
 			gridd_client_pool.h
 			hc_url.h
+			cache.h
 			lb.h
 			lrutree.h
 			metacomm.h
@@ -390,7 +391,6 @@ install(FILES
 			metautils_gba.h
 			metautils.h
 			metautils_hashstr.h
-			metautils_internals.h
 			metautils_l4v.h
 			metautils_loggers.h
 			metautils_macros.h
