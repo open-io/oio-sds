@@ -32,6 +32,7 @@ The build process of OpenIO SDS depends on:
 * lzo, lzo-devel : RAWX compression
 * curl, libcurl, libcurl-devel 
 * net-snmp, net-snmp-devel
+* libdb, libdb-devel : The BerkeleyDB API for C. Currently used in the integrity-loop.
 * sqlite, sqlite-devel : base storage for META{0,1,2} and SQLX services.
 * zeromq3, zeromq3-devel : communication of events between services and forward agents.
 * zookeeper-devel, libzookeeper\_mt.so : building with distribution's zookeeper client is OK, but the package ships with a lot of dependencies, including the openjdk. We recommand to use the official Oracle/Sun JDK, and to build your own zookeeper client from the source to avoid a huge waste of space and bandwith.
@@ -39,6 +40,7 @@ The build process of OpenIO SDS depends on:
 Still required but the next thrid-party dependencies to leave:
 * neon, neon-devel : to be replaced by curl.
 * libevent-devel : used to pipe HTTP replies (GET) into HTTP requests (PUT). Definitely to be replaced by curl
+* libdb, libdb-devel : only required in a module destined to be rewritten in Python, with a sqlite storage.
 
 In addition, a few python modules are required at runtime:
 * python-redis
