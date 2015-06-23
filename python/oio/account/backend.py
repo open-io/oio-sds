@@ -66,7 +66,7 @@ class AccountBackend(object):
 
     def create_account(self, account_id):
         conn = self.conn
-        account_id = account_id.lower()
+        account_id = account_id
         if conn.hget('accounts:', account_id):
             return None
 
@@ -208,14 +208,8 @@ class AccountBackend(object):
         release_lock(conn, 'container:%s:%s' % (account_id, name), lock)
         return name
 
-    def _list_containers(self, account_id, container_ids):
-        pipeline = self.conn.pipeline(True)
-        for container_id in container_ids:
-            pipeline.hgetall('containers:%s:%s' % (account_id, container_id))
-        return pipeline.execute()
-
-    def list_containers(self, account_id, limit=1000, marker=None,
-                        end_marker=None, prefix=None, delimiter=None):
+    def _raw_listing(self, account_id, limit, marker, end_marker, delimiter,
+                     prefix):
         conn = self.conn
         if delimiter and not prefix:
             prefix = ''
@@ -238,14 +232,14 @@ class AccountBackend(object):
                                              max, offset, limit - len(results))
 
             if prefix is None:
-                containers = [{'name': c_id} for c_id in container_ids]
+                containers = [[c_id, 0, 0, 0] for c_id in container_ids]
                 return containers
             if not delimiter:
                 if not prefix:
-                    containers = [{'name': c_id} for c_id in container_ids]
+                    containers = [[c_id, 0, 0, 0] for c_id in container_ids]
                     return containers
                 else:
-                    containers = [{'name': c_id} for c_id in container_ids if
+                    containers = [[c_id, 0, 0, 0] for c_id in container_ids if
                                   c_id.startswith(prefix)]
                     return containers
 
@@ -260,12 +254,32 @@ class AccountBackend(object):
                     marker = container_id[:end] + chr(ord(delimiter) + 1)
                     dir_name = container_id[:end + 1]
                     if dir_name != orig_marker:
-                        results.append({'name': dir_name})
+                        results.append([dir_name, 0, 0, 1])
                     break
-                results.append({'name': container_id})
+                results.append([container_id, 0, 0, 0])
             if not count:
                 break
         return results
+
+    def list_containers(self, account_id, limit=1000, marker=None,
+                        end_marker=None, prefix=None, delimiter=None):
+        raw_list = self._raw_listing(account_id, limit=limit, marker=marker,
+                                     end_marker=end_marker, prefix=prefix,
+                                     delimiter=delimiter)
+        pipeline = self.conn.pipeline(True)
+        for container in raw_list:
+            pipeline.hmget('container:%s:%s' % (account_id, container[0]),
+                           'objects', 'bytes')
+        res = pipeline.execute()
+
+        i = 0
+        for container in raw_list:
+            if not container[3]:
+                container[1] = int_value(res[i][0], 0)
+                container[2] = int_value(res[i][1], 0)
+                i += 1
+
+        return raw_list
 
     def status(self):
         conn = self.conn

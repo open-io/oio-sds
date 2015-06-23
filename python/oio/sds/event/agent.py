@@ -36,13 +36,16 @@ def decode_msg(msg):
 class EventWorker(object):
     def __init__(self, conf, context, **kwargs):
         self.conf = conf
+        verbose = kwargs.pop('verbose', False)
+        self.logger = get_logger(self.conf, verbose=verbose)
+        self._configure_zmq(context)
+        self.cs = ConscienceClient(self.conf)
+        self._account_addr = None
+
+    def _configure_zmq(self, context):
         socket = context.socket(zmq.REP)
         socket.connect('inproc://event-front')
         self.socket = socket
-        verbose = kwargs.pop('verbose', False)
-        self.logger = get_logger(self.conf, verbose=verbose)
-        self.cs = ConscienceClient(self.conf)
-        self._account_addr = None
 
     def run(self):
         while True:
@@ -116,9 +119,10 @@ class EventWorker(object):
         mtime = event.get('when')
         data = event.get('data')
         name = data.get('url').get('user')
+        account = data.get('url').get('account')
 
         event = {'mtime': mtime, 'name': name}
-        requests.post(uri, params={'id': 'test'}, data=json.dumps(event))
+        requests.post(uri, params={'id': account}, data=json.dumps(event))
 
     def handle_container_update(self, event):
         """
@@ -130,8 +134,10 @@ class EventWorker(object):
         mtime = event.get('when')
         data = event.get('data')
         name = event.get('url').get('user')
+        account = event.get('url').get('account')
         bytes_count = data.get('bytes-count', 0)
         object_count = data.get('object-count', 0)
+
 
         event = {
             'mtime': mtime,
@@ -139,7 +145,7 @@ class EventWorker(object):
             'bytes': bytes_count,
             'objects': object_count
         }
-        requests.post(uri, params={'id': 'test'}, data=json.dumps(event))
+        requests.post(uri, params={'id': account}, data=json.dumps(event))
 
     def handle_container_destroy(self, event):
         """
@@ -150,9 +156,10 @@ class EventWorker(object):
         dtime = event.get('when')
         data = event.get('data')
         name = data.get('url').get('user')
+        account = data.get('url').get('account')
 
         event = {'dtime': dtime, 'name': name}
-        requests.post(uri, params={'id': 'test'}, data=json.dumps(event))
+        requests.post(uri, params={'id': account}, data=json.dumps(event))
 
     def handle_object_delete(self, event):
         """
@@ -175,7 +182,6 @@ class EventWorker(object):
             resp = None
             try:
                 with Timeout(CHUNK_TIMEOUT):
-                    print chunk['id']
                     resp = requests.delete(chunk['id'])
             except (Exception, Timeout) as e:
                 self.logger.exception(e)
