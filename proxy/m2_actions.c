@@ -367,8 +367,10 @@ _load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSL
 	for (int i=json_object_array_length(jbody); i>0 && !err ;i--) {
 		struct json_object *jurl=NULL, *jpos=NULL, *jsize=NULL, *jhash=NULL;
 		struct metautils_json_mapping_s m[] = {
-			{"url", &jurl, json_type_string, 1}, {"pos", &jpos, json_type_string, 1},
-			{"size", &jsize, json_type_int, 1}, {"hash", &jhash, json_type_string, 1},
+			{"url",  &jurl,  json_type_string, 1},
+			{"pos",  &jpos,  json_type_string, 1},
+			{"size", &jsize, json_type_int,    1},
+			{"hash", &jhash, json_type_string, 1},
 			{NULL, NULL, 0, 0}
 		};
 		GRID_TRACE("JSON: parsing chunk at %i", i-1);

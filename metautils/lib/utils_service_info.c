@@ -773,11 +773,11 @@ service_info_load_json_object(struct json_object *obj,
 
 	struct json_object *ns, *type, *url, *score, *tags;
 	struct metautils_json_mapping_s mapping[] = {
-		{"ns",    &ns,    json_type_int,    1},
+		{"ns",    &ns,    json_type_string, 1},
 		{"type",  &type,  json_type_string, 1},
 		{"addr",  &url,   json_type_string, 1},
-		{"score", &score, json_type_string, 1},
-		{"tags", &tags, json_type_object,   0},
+		{"score", &score, json_type_int,    1},
+		{"tags",  &tags, json_type_object,  0},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = metautils_extract_json (obj, mapping);
