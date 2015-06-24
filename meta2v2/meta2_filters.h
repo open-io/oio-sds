@@ -29,7 +29,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 struct gridd_filter_ctx_s;
 struct gridd_reply_ctx_s;
 
-struct on_bean_ctx_s {
+struct on_bean_ctx_s
+{
 	GSList *l;
 	gboolean first;
 	struct gridd_reply_ctx_s *reply;
@@ -212,11 +213,6 @@ int meta2_filter_action_get_spare_chunks(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_action_list_contents(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-/*! Call backend and list contents of a container with informations available
- * in filter context. Return informations in "old style meta2" format. */
-int meta2_filter_action_list_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Call backend and retrieve the content with informations available in filter context */
 int meta2_filter_action_raw_chunks_get_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
@@ -276,9 +272,6 @@ int meta2_filter_action_delete_beans(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 int meta2_filter_action_update_beans(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_statv2_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 /* -------------------- Events --------------------*/

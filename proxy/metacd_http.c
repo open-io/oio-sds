@@ -75,10 +75,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	g_mutex_unlock(&nsinfo_mutex); \
 } while (0)
 
-#ifndef PROXYD_PREFIX2
-#define PROXYD_PREFIX2 "v2.0"
-#endif
-
 static struct path_parser_s *path_parser = NULL;
 static struct http_request_dispatcher_s *dispatcher = NULL;
 static struct network_server_s *server = NULL;

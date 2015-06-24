@@ -171,6 +171,8 @@ License along with this library.
 #define NAME_MSGKEY_VERSION            "VERSION"
 #define NAME_MSGKEY_WARNING            "WARNING"
 
+#define NAME_MSGKEY_PREFIX_PROPERTY    "P:"
+
 #define HCURL_DEFAULT_ACCOUNT ""
 #define HCURL_DEFAULT_TYPE    ""
 

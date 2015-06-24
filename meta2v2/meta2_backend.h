@@ -107,7 +107,7 @@ GError* meta2_backend_deduplicate_alias_chunks(struct meta2_backend_s *m2b,
 
 GError* meta2_backend_list_aliases(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, struct list_params_s *lp,
-		m2_onbean_cb cb, gpointer u0);
+		m2_onbean_cb cb, gpointer u0, gchar ***out_properties);
 
 /**
  * @param flags 0 or a combination (ORed) of M2V2_FLAG_ALLVERSION

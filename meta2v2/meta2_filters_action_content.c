@@ -1069,52 +1069,6 @@ meta2_filter_action_remove_raw_v1(struct gridd_filter_ctx_s *ctx,
 	return _update_beans(ctx, reply, _delete_beans_cb, NULL);
 }
 
-int
-meta2_filter_action_statv2_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-	struct meta2_raw_content_v2_s *v2 = NULL;
-	GError *e = NULL;
-	GSList *beans = NULL;
-
-	void _cb(gpointer u, gpointer bean) {
-		(void) u;
-		beans = g_slist_prepend(beans, bean);
-	}
-
-	e = meta2_backend_get_alias(m2b, url, M2V2_FLAG_NODELETED, _cb, NULL);
-	if (NULL != e) {
-		meta2_filter_ctx_set_error(ctx, e);
-		return FILTER_KO;
-	}
-
-	if(!beans) {
-		GRID_DEBUG("No beans returned by get_alias for: %s",
-				hc_url_get(url, HCURL_WHOLE));
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_CONTENT_NOTFOUND,
-				"Content not found (deleted) (%s)", hc_url_get(url, HCURL_WHOLE)));
-		return FILTER_KO;
-	}
-
-	v2 = raw_content_v2_from_m2v2_beans(hc_url_get_id(url), beans);
-	_bean_cleanl2(beans);
-
-	if (!v2) {
-		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_INTERNAL_ERROR, "Conversion failure"));
-		return FILTER_KO;
-	}
-
-	GSList singleton = {NULL, NULL};
-	singleton.data = v2;
-	reply->add_body(meta2_raw_content_v2_marshall_gba(&singleton, NULL));
-	reply->send_reply(CODE_FINAL_OK, "OK");
-	meta2_raw_content_v2_clean(v2);
-
-	return FILTER_OK;
-}
-
 static GError *
 _spare_special(struct gridd_reply_ctx_s *reply, struct meta2_backend_s *m2b,
 		struct hc_url_s *url, GSList **result, gboolean answer_beans)

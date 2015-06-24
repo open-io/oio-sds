@@ -158,6 +158,8 @@ gchar* sqlx_admin_get_str(struct sqlx_sqlite3_s *sq3, const gchar *k);
 
 gchar** sqlx_admin_get_keys(struct sqlx_sqlite3_s *sq3);
 
+gchar** sqlx_admin_get_keyvalues(struct sqlx_sqlite3_s *sq3);
+
 GByteArray* sqlx_admin_get_gba(struct sqlx_sqlite3_s *sq3, const gchar *k);
 
 /** Set an application-level status in admin table */

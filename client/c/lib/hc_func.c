@@ -245,7 +245,7 @@ hc_create_container(gs_grid_storage_t *hc, struct hc_url_s *url,
 	GError *err = NULL;
 	gs_error_t *e = NULL;
 	gs_container_t *c = NULL;
-	struct m2v2_create_params_s params = {stgpol, versioning, FALSE};
+	struct m2v2_create_params_s params = {stgpol, versioning, NULL, FALSE};
 
 	c = gs_get_storage_container2(hc, hc_url_get(url, HCURL_USER),
 			&params, 0, &e);

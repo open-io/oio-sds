@@ -30,9 +30,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <meta2v2/meta2_filter_context.h>
 
-/* ------------------------------------------------------------------------ */
-
-struct gridd_filter_input_data_s {
+struct gridd_filter_input_data_s
+{
 	struct hc_url_s *url;
 	struct meta2_backend_s *backend;
 	GHashTable *params;
@@ -40,16 +39,16 @@ struct gridd_filter_input_data_s {
 	GDestroyNotify cleaner;
 };
 
-struct gridd_filter_output_data_s {
+struct gridd_filter_output_data_s
+{
 	GError *error;
 };
 
-struct gridd_filter_ctx_s {
+struct gridd_filter_ctx_s
+{
 	struct gridd_filter_input_data_s *input_data;
 	struct gridd_filter_output_data_s *output_data;
 };
-
-/* ------------------------------------------------------------------------ */
 
 static void
 _input_data_clean(struct gridd_filter_input_data_s *input_data)

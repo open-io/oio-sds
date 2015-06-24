@@ -67,4 +67,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define PROXYD_DEFAULT_PERIOD_UPSTREAM 1 /*s*/
 #endif
 
+#ifndef PROXYD_PREFIX2
+#define PROXYD_PREFIX2 "v2.0"
+#endif
+
+#ifndef PROXYD_HEADER_MODE
+# define PROXYD_HEADER_MODE PROXYD_HEADER_PREFIX "action-mode"
+#endif
+
 #endif /*OIO_SDS__proxy__macros_h*/

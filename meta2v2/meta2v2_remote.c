@@ -91,6 +91,14 @@ m2v2_remote_pack_CREATE(struct hc_url_s *url, struct m2v2_create_params_s *pols)
 		metautils_message_add_field_str(msg, NAME_MSGKEY_STGPOLICY, pols->storage_policy);
 	if (pols && pols->version_policy)
 		metautils_message_add_field_str(msg, NAME_MSGKEY_VERPOLICY, pols->version_policy);
+	if (pols && pols->properties) {
+		for (gchar **p=pols->properties; *p && *(p+1) ;p+=2) {
+			gchar *k = g_strconcat (NAME_MSGKEY_PREFIX_PROPERTY, *p, NULL);
+			metautils_message_add_field_str (msg, k, *(p+1));
+			g_free (k);
+		}
+	}
+
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -564,35 +572,54 @@ m2v2_remote_touch_container_ex(const gchar *target, struct hc_url_s *url, guint3
 
 // Not factorized because we need to extract some headers from the replies
 GError*
-m2v2_remote_execute_LIST(const gchar *target, struct hc_url_s *url,
-		struct list_params_s *p, struct list_result_s *out)
+m2v2_remote_execute_LIST(const gchar *target,
+		struct hc_url_s *url, struct list_params_s *p,
+		struct list_result_s *out, gchar ***out_properties)
 {
 	GError *err = NULL;
-
+	GTree *props = NULL;
 	gboolean _cb(gpointer ctx, MESSAGE reply) {
 		(void) ctx;
+
+		/* Extract replied aliases */
 		GSList *l = NULL;
 		GError *e = metautils_message_extract_body_encoded(reply, FALSE, &l, bean_sequence_decoder);
-		if (!e) {
-
-			for (GSList *tmp; l ;l=tmp) { // faster than g_slist_concat
-				tmp = l->next;
-				l->next = out->beans;
-				out->beans = l;
-			}
-
-			e = metautils_message_extract_boolean (reply, NAME_MSGKEY_TRUNCATED, FALSE, &out->truncated);
-			if (e)
-				g_clear_error (&e);
-			gchar *tok = NULL;
-			tok = metautils_message_extract_string_copy (reply, NAME_MSGKEY_NEXTMARKER);
-			metautils_str_reuse (&out->next_marker, tok);
-			return TRUE;
-		} else {
+		if (e) {
 			GRID_DEBUG("Callback error : %s", e->message);
 			err = e;
 			return FALSE;
 		}
+
+		/* TODO factorizes this faster-than-g_slist_concat */
+		for (GSList *tmp; l ;l=tmp) {
+			tmp = l->next;
+			l->next = out->beans;
+			out->beans = l;
+		}
+
+		/* Extract list flags */
+		e = metautils_message_extract_boolean (reply,
+				NAME_MSGKEY_TRUNCATED, FALSE, &out->truncated);
+		if (e)
+			g_clear_error (&e);
+		gchar *tok = NULL;
+		tok = metautils_message_extract_string_copy (reply, NAME_MSGKEY_NEXTMARKER);
+		metautils_str_reuse (&out->next_marker, tok);
+
+		/* Extract properties and merge them into the temporary TreeSet. */
+		if (out_properties) {
+			gchar **names = metautils_message_get_field_names (reply);
+			for (gchar **n=names ; n && *n ;++n) {
+				if (!g_str_has_prefix (*n, NAME_MSGKEY_PREFIX_PROPERTY))
+					continue;
+				g_tree_replace (props,
+						g_strdup((*n) + sizeof(NAME_MSGKEY_PREFIX_PROPERTY) - 1),
+						metautils_message_extract_string_copy(reply, *n));
+			}
+			if (names) g_strfreev (names);
+		}
+
+		return TRUE;
 	}
 
 	EXTRA_ASSERT(url != NULL);
@@ -603,12 +630,27 @@ m2v2_remote_execute_LIST(const gchar *target, struct hc_url_s *url,
 	if (!client)
 		err = NEWERROR(2, "errno=%d %s", errno, strerror(errno));
 	if (!err)
-		err = gridd_client_request(client, req, NULL, out ? _cb : NULL);
-	if (!err)
+		err = gridd_client_request(client, req, props, out ? _cb : NULL);
+	if (!err) {
+		if (out_properties)
+			props = g_tree_new_full (metautils_strcmp3, NULL, g_free, g_free);
 		err = gridd_client_run (client);
+	}
+	if (!err && out_properties && props) {
+		gboolean _run (gchar *k, gchar *v, GPtrArray *tmp) {
+			g_ptr_array_add (tmp, g_strdup(k));
+			g_ptr_array_add (tmp, g_strdup(v));
+			return FALSE;
+		}
+		GPtrArray *tmp = g_ptr_array_new ();
+		g_tree_foreach (props, (GTraverseFunc)_run, tmp);
+		*out_properties = (gchar**) metautils_gpa_to_array (tmp, TRUE);
+		tmp = NULL;
+	}
+
 	gridd_client_free(client);
 	g_byte_array_free(req, TRUE);
-
+	if (props) g_tree_unref (props);
 	return err;
 }
 

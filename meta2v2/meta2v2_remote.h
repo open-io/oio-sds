@@ -71,8 +71,11 @@ void m2v2_list_result_clean (struct list_result_s *p);
 
 struct m2v2_create_params_s
 {
-	const gchar *storage_policy;
-	const gchar *version_policy;
+	const gchar *storage_policy; /**< Will override the (maybe present) stgpol property. */
+	const gchar *version_policy; /**< idem for the verpol property. */
+	gchar **properties; /**< A NULL-terminated sequence of strings where:
+						  * properties[i*2] is the i-th key and
+						  * properties[(i*2)+1] is the i-th value */
 	gboolean local; /**< Do not try to replicate, do not call get_peers() */
 };
 
@@ -86,7 +89,11 @@ GByteArray* m2v2_remote_pack_PURGE(struct hc_url_s *url, gboolean dry_run);
 
 GByteArray* m2v2_remote_pack_DEDUP(struct hc_url_s *url, gboolean dry_run);
 
-GByteArray* m2v2_remote_pack_CREATE(struct hc_url_s *url, struct m2v2_create_params_s *pols);
+/* The storage_policy, version_policy and all the properties are optional
+ * and plain ASCII strings, so they will be sent as HEADER of the message
+ * request instead of as a serialized body. */
+GByteArray* m2v2_remote_pack_CREATE(struct hc_url_s *url,
+		struct m2v2_create_params_s *pols);
 
 GByteArray* m2v2_remote_pack_DESTROY(struct hc_url_s *url, guint32 flags);
 
@@ -238,7 +245,7 @@ GError* m2v2_remote_execute_RAW_SUBST_single(const gchar *target,
 
 GError* m2v2_remote_execute_LIST(const gchar *target,
 		struct hc_url_s *url, struct list_params_s *p,
-		struct list_result_s *out);
+		struct list_result_s *out, gchar ***out_properties);
 
 /* works for contents only. for container props, @see sqlx_pack_PROPDEL() */
 GError* m2v2_remote_execute_PROP_DEL(const gchar *target,
