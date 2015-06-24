@@ -297,7 +297,7 @@ def load_namespace_conf(namespace):
     else:
         print('Unable to find [%s] section config' % namespace)
         sys.exit(1)
-    for k in ['zookeeper', 'conscience', 'proxy', 'event-agent']:
+    for k in ['proxy']:
         v = conf.get(k)
         if not v:
             print("Missing field '%s' in namespace config" % k)
