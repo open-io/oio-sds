@@ -188,3 +188,22 @@ _gbav_request (const gchar *t, gint64 seq, struct hc_url_s *u,
 	return e;
 }
 
+static gboolean
+_request_has_flag (struct req_args_s *args, const char *header,
+		const char *flag)
+{
+	const char *v = g_tree_lookup(args->rq->tree_headers, header);
+	gchar **tokens = g_strsplit (v, ",", -1);
+	if (!tokens) return FALSE;
+	gboolean rc = FALSE;
+	for (gchar **p=tokens; *p ;++p) {
+		*p = g_strstrip (*p);
+		if (!g_ascii_strcasecmp(flag, *p)) {
+			rc = TRUE;
+			break;
+		}
+	}
+	g_strfreev (tokens);
+	return rc;
+}
+

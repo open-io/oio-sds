@@ -35,65 +35,39 @@ License along with this library.
 #define META2TOUCH_FLAGS_UPDATECSIZE     0x00000001
 #define META2TOUCH_FLAGS_RECALCCSIZE     0x00000002
 
-/** Get the list of contents of ths container. */
-GSList *meta2_remote_container_list (const addr_info_t *m2, gint ms, GError **err,
-		struct hc_url_s *url);
-
-/** Creates a container on the distant META2 server with an explicit storage policy. */
+/** used in client/c/lib */
 gboolean meta2_remote_container_create_v3 (const addr_info_t *m2, gint ms, GError **err,
 		struct hc_url_s *url, const char *stgpol);
 
-/** Add a new content in the container (identified by the container ID) on the
- * distant META2 server. A NULL return well indicates an error, because even
- * the empty contents contains at least one chunk whom size is zero. */
-GSList *meta2_remote_content_add(const addr_info_t *m2, gint ms, GError **err,
-    struct hc_url_s *url, content_length_t content_length,
-    GByteArray * metadata, GByteArray ** new_metadata);
-
-/** Returns all the information about the content with the given path in the
- * given container. This content must be available. The returned structure is
- * the same as those returned by meta2raw_remote_get_chunks() on an available
- * content.  */
+/** used in client/c/lib */
 struct meta2_raw_content_s *meta2_remote_stat_content(struct metacnx_ctx_s *cnx,
 		GError **error, struct hc_url_s *url);
 
-/* ------------------------------------------------------------------------- */
-
+/** used in client/c/lib */
 GSList* meta2_remote_content_add_in_fd (int *fd, gint ms, GError **err,
 		struct hc_url_s *url, content_length_t content_length,
 		GByteArray *metadata, GByteArray **new_metadata);
 
-/** @see meta2_remote_content_add() */
+/** used in client/c/lib */
 GSList* meta2_remote_content_spare_in_fd_full (int *fd, gint ms, GError **err, struct hc_url_s *url,
 		gint count, gint distance, const gchar *notin, const gchar *broken);
 
-/* ------------------------------------------------------------------------- */
-
+/** used in client/c/lib for rainx purposes */
 gboolean meta2raw_remote_update_chunks(struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url, struct meta2_raw_content_s *content,
 		gboolean allow_update, char *position_prefix);
 
+/** used in client/c/lib for rainx purposes */
 gboolean meta2raw_remote_update_content(struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url, struct meta2_raw_content_s *content,
 		gboolean allow_update);
 
+/** used in client/c/lib for rainx purposes */
 gboolean meta2raw_remote_delete_chunks(struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url, struct meta2_raw_content_s *content);
 
-struct meta2_raw_content_s *meta2raw_remote_get_content_from_name(
-		struct metacnx_ctx_s *ctx, GError **err, struct hc_url_s *url);
-
-gboolean meta2_remote_touch_content(struct metacnx_ctx_s *ctx, GError **err, struct hc_url_s *url);
-
-gboolean meta2_remote_touch_container_ex(struct metacnx_ctx_s *ctx, GError **err,
-		struct hc_url_s *url, unsigned int flags);
-
-/* Code got from auto-generation
- * FIXME function to be removed ASAP, as soon as the caller disappears */
-gboolean meta2_remote_stat_content_v2(struct metacnx_ctx_s *ctx, GError **err,
-		struct hc_url_s *url, meta2_raw_content_v2_t* *var_2);
-
-/* Code got from auto-generation
+/* used in client/c/lib
+ * Code got from auto-generation
  * FIXME function to be removed ASAP, as soon as the caller disappears */
 gboolean meta2_remote_modify_metadatasys(struct metacnx_ctx_s *ctx, GError **err,
 		struct hc_url_s *url, const gchar* var_2);

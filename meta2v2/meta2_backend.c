@@ -674,8 +674,9 @@ meta2_backend_purge_container(struct meta2_backend_s *m2,
 /* Contents --------------------------------------------------------------- */
 
 GError*
-meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct hc_url_s *url,
-		struct list_params_s *lp, m2_onbean_cb cb, gpointer u0)
+meta2_backend_list_aliases(struct meta2_backend_s *m2b,
+		struct hc_url_s *url, struct list_params_s *lp,
+		m2_onbean_cb cb, gpointer u0, gchar ***out_properties)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -688,6 +689,8 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct hc_url_s *url,
 			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
 	if (!err) {
 		err = m2db_list_aliases(sq3, lp, cb, u0);
+		if (!err && out_properties)
+			*out_properties = sqlx_admin_get_keyvalues (sq3);
 		m2b_close(sq3);
 	}
 

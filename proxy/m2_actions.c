@@ -46,6 +46,69 @@ _reply_m2_error (struct req_args_s *args, GError * err)
 		return _reply_system_error (args, err);
 }
 
+static void
+_purify_header (gchar *k)
+{
+	for (gchar *p = k; *p ;++p) {
+		if (*p != '-' && !g_ascii_isalnum(*p))
+			*p = '-';
+	}
+}
+
+static void
+_container_single_prop_to_headers (struct req_args_s *args,
+		const char *pk, gchar *v)
+{
+	if (!g_ascii_strcasecmp(pk, "sys.container_name")) {
+		args->rp->add_header(PROXYD_HEADER_PREFIX "container-meta-name", v);
+	} else if (!g_ascii_strcasecmp(pk, "sys.container_size")) {
+		args->rp->add_header(PROXYD_HEADER_PREFIX "container-meta-size", v);
+	} else if (!g_ascii_strcasecmp(pk, "sys.m2vers")) {
+		args->rp->add_header(PROXYD_HEADER_PREFIX "container-meta-seq", v);
+	} else if (!g_ascii_strcasecmp(pk, "sys.namespace")) {
+		args->rp->add_header(PROXYD_HEADER_PREFIX "container-meta-ns", v);
+	} else if (g_str_has_prefix(pk, "sys.")) {
+		gchar *k = g_strdup_printf(PROXYD_HEADER_PREFIX "container-meta-sys-%s",
+				pk + sizeof("sys.") - 1);
+		_purify_header(k);
+		args->rp->add_header(k, v);
+		g_free(k);
+	} else if (g_str_has_prefix(pk, "user.")) {
+		gchar *k = g_strdup_printf(PROXYD_HEADER_PREFIX "container-meta-user-%s",
+				pk + sizeof("user.") - 1);
+		_purify_header(k);
+		args->rp->add_header(k, v);
+		g_free(k);
+	} else {
+		gchar *k = g_strdup_printf(PROXYD_HEADER_PREFIX "container-meta-x-%s", pk);
+		_purify_header(k);
+		args->rp->add_header(k, v);
+		g_free(k);
+	}
+}
+
+static void
+_container_old_props_to_headers (struct req_args_s *args, GSList *props)
+{
+	for (GSList *l = props; l ;l=l->next) {
+		const struct key_value_pair_s *kv = l->data;
+		GByteArray *gv = kv->value;
+		_container_single_prop_to_headers (args, kv->key, g_strndup(
+					(gchar*)(gv->data), gv->len));
+	}
+}
+
+static void
+_container_new_props_to_headers (struct req_args_s *args, GTree *props)
+{
+	gboolean _run (gchar *k, gchar *v, gpointer i) {
+		(void) i;
+		_container_single_prop_to_headers (args, k, g_strdup(v));
+		return FALSE;
+	}
+	g_tree_foreach (props, (GTraverseFunc)_run, NULL);
+}
+
 static enum http_rc_e
 _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 		gchar **prefixes)
@@ -212,7 +275,7 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 					!g_ascii_strcasecmp(k, "creation-date")) {
 				continue;
 			} else {
-				gchar *rk = g_strdup_printf (PROXYD_HEADER_PREFIX "content-meta-X-%s", k);
+				gchar *rk = g_strdup_printf (PROXYD_HEADER_PREFIX "content-meta-x-%s", k);
 				args->rp->add_header (rk, g_strdup(v));
 				g_free (rk);
 			}
@@ -304,8 +367,10 @@ _load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSL
 	for (int i=json_object_array_length(jbody); i>0 && !err ;i--) {
 		struct json_object *jurl=NULL, *jpos=NULL, *jsize=NULL, *jhash=NULL;
 		struct metautils_json_mapping_s m[] = {
-			{"url", &jurl, json_type_string, 1}, {"pos", &jpos, json_type_string, 1},
-			{"size", &jsize, json_type_int, 1}, {"hash", &jhash, json_type_string, 1},
+			{"url",  &jurl,  json_type_string, 1},
+			{"pos",  &jpos,  json_type_string, 1},
+			{"size", &jsize, json_type_int,    1},
+			{"hash", &jhash, json_type_string, 1},
 			{NULL, NULL, 0, 0}
 		};
 		GRID_TRACE("JSON: parsing chunk at %i", i-1);
@@ -390,7 +455,7 @@ _load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSL
 			(void)u;
 			if (!g_str_has_prefix((gchar*)k, PROXYD_HEADER_PREFIX "content-meta-x-"))
 				return FALSE;
-			const gchar *rk = ((gchar*)k) + sizeof(PROXYD_HEADER_PREFIX "content-meta-x-");
+			const gchar *rk = ((gchar*)k) + sizeof(PROXYD_HEADER_PREFIX "content-meta-x-") - 1;
 			struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES); 
 			PROPERTIES_set_alias (prop, ALIASES_get_alias(alias));
 			PROPERTIES_set_alias_version (prop, 0);
@@ -409,48 +474,31 @@ _load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSL
 	return err;
 }
 
-static void
-_purify_header (gchar *k)
+static gchar **
+_container_headers_to_props (struct req_args_s *args)
 {
-	for (gchar *p = k; *p ;++p) {
-		if (*p != '-' && !g_ascii_isalnum(*p))
-			*p = '-';
-	}
-}
-
-static void
-_container_props_to_headers (struct req_args_s *args, GSList *props)
-{
-	for (GSList *l = props; l ;l=l->next) {
-		const struct key_value_pair_s *kv = l->data;
-		const gchar *pk = kv->key;
-		GByteArray *gv = kv->value;
-		gchar *v = g_strndup((gchar*)(gv->data), gv->len);
-		if (!g_ascii_strcasecmp(pk, "sys.container_name")) {
-			args->rp->add_header(PROXYD_HEADER_PREFIX "container-meta-name", v);
-		} else if (!g_ascii_strcasecmp(pk, "sys.container_size")) {
-			args->rp->add_header(PROXYD_HEADER_PREFIX "container-meta-size", v);
-		} else if (!g_ascii_strcasecmp(pk, "sys.m2vers")) {
-			args->rp->add_header(PROXYD_HEADER_PREFIX "container-meta-seq", v);
-		} else if (!g_ascii_strcasecmp(pk, "sys.namespace")) {
-			args->rp->add_header(PROXYD_HEADER_PREFIX "container-meta-ns", v);
-		} else if (g_str_has_prefix(pk, "sys.")) {
-			gchar *k = g_strdup_printf(PROXYD_HEADER_PREFIX "container-meta-sys-%s", pk + sizeof("sys.") - 1);
-			_purify_header(k);
-			args->rp->add_header(k, v);
-			g_free(k);
-		} else if (g_str_has_prefix(pk, "user.")) {
-			gchar *k = g_strdup_printf(PROXYD_HEADER_PREFIX "container-meta-user-%s", pk + sizeof("user.") - 1);
-			_purify_header(k);
-			args->rp->add_header(k, v);
-			g_free(k);
-		} else {
-			gchar *k = g_strdup_printf(PROXYD_HEADER_PREFIX "container-meta-X-%s", pk);
-			_purify_header(k);
-			args->rp->add_header(k, v);
-			g_free(k);
+	GPtrArray *tmp;
+	gboolean run_headers (char *k, char *v, gpointer u) {
+		(void)u;
+		if (!g_str_has_prefix(k, PROXYD_HEADER_PREFIX "container-meta-"))
+			return FALSE;
+		k += sizeof(PROXYD_HEADER_PREFIX "content-meta-");
+		if (g_str_has_prefix (k, "user-")) {
+			k += sizeof("user-");
+			g_ptr_array_add (tmp, g_strconcat ("user.", k, NULL));
+			g_ptr_array_add (tmp, g_strdup (v));
+		} else if (g_str_has_prefix (k, "sys-")) {
+			k += sizeof("sys-");
+			g_ptr_array_add (tmp, g_strconcat ("sys.", k, NULL));
+			g_ptr_array_add (tmp, g_strdup (v));
 		}
+		/* no management here for properties with raw format. there are
+		 * other requests handlers for that kind of ugly tweaks. */
+		return FALSE;
 	}
+	tmp = g_ptr_array_new ();
+	g_tree_foreach (args->rq->tree_headers, (GTraverseFunc)run_headers, NULL);
+	return (gchar**) metautils_gpa_to_array (tmp, TRUE);
 }
 
 static enum http_rc_e
@@ -567,6 +615,7 @@ action_m2_container_list (struct req_args_s *args)
 	guint count = 0;
 	char delimiter = 0;
 	GTree *tree_prefixes = NULL;
+	GTree *tree_properties = NULL;
 
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
@@ -582,8 +631,15 @@ action_m2_container_list (struct req_args_s *args)
 				in.marker_start = list_out.next_marker;
 
 			// Action
-			if (NULL != (e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out)))
-				return e;
+			gchar **props = NULL;
+			e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out, &props);
+			if (NULL != e) return e;
+			if (props && tree_properties) {
+				for (gchar **p=props; *p && *(p+1) ;p+=2)
+					g_tree_replace (tree_properties, g_strdup(*p), g_strdup(*(p+1)));
+			}
+			if (props) g_strfreev (props);
+			props = NULL;
 
 			// transmit the output
 			metautils_str_reuse (&list_out.next_marker, out.next_marker);
@@ -632,6 +688,7 @@ action_m2_container_list (struct req_args_s *args)
 		list_in.flag_nodeleted = 0;
 	if (OPT("all"))
 		list_in.flag_allversion = ~0;
+	tree_properties = g_tree_new_full (metautils_strcmp3, NULL, g_free, g_free);
 
 	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%c prefix=%s marker=%s end=%s",
 			hc_url_get(args->url, HCURL_WHOLE), list_in.maxkeys, delimiter,
@@ -652,10 +709,12 @@ action_m2_container_list (struct req_args_s *args)
 	gchar **tab = NULL;
 	if (!err)
 		tab = gtree_string_keys (tree_prefixes);
+	_container_new_props_to_headers (args, tree_properties);
 	enum http_rc_e rc = _reply_aliases (args, err, list_out.beans, tab);
 	if (tab)
 		g_free (tab);
 	g_tree_destroy (tree_prefixes);
+	g_tree_destroy (tree_properties);
 	metautils_str_clean (&list_out.next_marker);
 	return rc;
 }
@@ -685,7 +744,7 @@ action_m2_container_check (struct req_args_s *args)
 		return _reply_system_error(args, err);
 	}
 
-	_container_props_to_headers (args, pairs);
+	_container_old_props_to_headers (args, pairs);
 	g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
 	return _reply_success_json (args, NULL);
 }
@@ -693,17 +752,26 @@ action_m2_container_check (struct req_args_s *args)
 static enum http_rc_e
 action_m2_container_create (struct req_args_s *args)
 {
+	/* TODO jfs: manage autocreation of the is specified in the headers. Autocreation
+	 * means creating the reference/user, linking a new service, reating the container. */
+	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
+	(void) autocreate;
+
+	gchar **properties = _container_headers_to_props (args);
+
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
 		struct m2v2_create_params_s param = {
 			hc_url_get_option_value (args->url, "stgpol"),
 			hc_url_get_option_value (args->url, "verpol"),
-			FALSE
+			properties, FALSE
 		};
 		return m2v2_remote_execute_CREATE (m2->host, args->url, &param);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND)	// The reference doesn't exist
+	g_strfreev (properties);
+
+	if (err && err->code == CODE_CONTAINER_NOTFOUND) // The reference doesn't exist
 		return _reply_forbidden_error (args, err);
 	if (err && err->code == CODE_CONTAINER_EXISTS)
 		return _reply_created(args);
@@ -1212,7 +1280,7 @@ action_m2_content_copy (struct req_args_s *args)
 static GError *
 _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 {
-	const char *mode = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "action-mode");
+	const char *mode = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_MODE);
 	if (!mode)
 		mode = "put";
 	GSList *ibeans = NULL;

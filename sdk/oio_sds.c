@@ -215,8 +215,10 @@ _load_chunks (GSList **out, struct json_object *jtab)
 	for (int i=json_object_array_length(jtab); i>0 && !err ;i--) {
 		struct json_object *jurl = NULL, *jpos = NULL, *jsize = NULL, *jhash = NULL;
 		struct metautils_json_mapping_s m[] = {
-			{"url", &jurl, json_type_string, 1}, {"pos", &jpos, json_type_string, 1},
-			{"size", &jsize, json_type_int, 1}, {"hash", &jhash, json_type_string, 1},
+			{"url",  &jurl,  json_type_string, 1},
+			{"pos",  &jpos,  json_type_string, 1},
+			{"size", &jsize, json_type_int,    1},
+			{"hash", &jhash, json_type_string, 1},
 			{NULL,NULL,0,0}
 		};
 		err = metautils_extract_json (json_object_array_get_idx (jtab, i-1), m);

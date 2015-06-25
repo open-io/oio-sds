@@ -773,11 +773,11 @@ service_info_load_json_object(struct json_object *obj,
 
 	struct json_object *ns, *type, *url, *score, *tags;
 	struct metautils_json_mapping_s mapping[] = {
-		{"ns",    &ns,    json_type_int,    1},
+		{"ns",    &ns,    json_type_string, 1},
 		{"type",  &type,  json_type_string, 1},
 		{"addr",  &url,   json_type_string, 1},
-		{"score", &score, json_type_string, 1},
-		{"tags", &tags, json_type_object,   0},
+		{"score", &score, json_type_int,    1},
+		{"tags",  &tags,  json_type_object, 0},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = metautils_extract_json (obj, mapping);
@@ -793,7 +793,7 @@ service_info_load_json_object(struct json_object *obj,
 	g_strlcpy(si->type, json_object_get_string(type), sizeof(si->type));
 	si->score.value = json_object_get_int(score);
 
-	json_object_object_foreach(tags,key,val) {
+	if (tags) { json_object_object_foreach(tags,key,val) {
 		if (!g_str_has_prefix(key, "tag.") && !g_str_has_prefix(key, "stat."))
 			continue;
 		struct service_tag_s *tag = _srvtag_load_json(key, val);
@@ -802,7 +802,7 @@ service_info_load_json_object(struct json_object *obj,
 				si->tags = g_ptr_array_new();
 			g_ptr_array_add(si->tags, tag);
 		}
-	}
+	} }
 	*out = si;
 	return NULL;
 }

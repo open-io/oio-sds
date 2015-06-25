@@ -238,7 +238,7 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 {
 	const gchar *type = TYPE();
 	struct meta1_service_url_s *m1u = NULL;
-	const char *mode = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "action-mode");
+	const char *mode = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_MODE);
 
 	GError *hook (const gchar * m1) {
 		struct addr_info_s m1a;

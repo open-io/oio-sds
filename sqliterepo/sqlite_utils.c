@@ -319,3 +319,21 @@ sqlx_admin_get_keys(struct sqlx_sqlite3_s *sq3)
 	return (gchar**) metautils_gpa_to_array (tmp, TRUE);
 }
 
+gchar**
+sqlx_admin_get_keyvalues (struct sqlx_sqlite3_s *sq3)
+{
+	gboolean runner(gchar *k, GByteArray *v, GPtrArray *tmp) {
+		(void) v;
+		g_ptr_array_add (tmp, g_strdup(k));
+		if (!v->len || !v->data)
+			g_ptr_array_add (tmp, g_strdup(""));
+		else
+			g_ptr_array_add (tmp, g_strndup((gchar*)v->data, v->len));
+		return FALSE;
+	}
+
+	GPtrArray *tmp = g_ptr_array_new ();
+	g_tree_foreach (sq3->admin, (GTraverseFunc) runner, tmp);
+	return (gchar**) metautils_gpa_to_array (tmp, TRUE);
+}
+

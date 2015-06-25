@@ -351,7 +351,7 @@ error_label:
 gs_container_t*
 gs_get_container_by_hexid (gs_grid_storage_t *gs, const char *hex_id, int auto_create, gs_error_t **gs_err)
 {
-	struct m2v2_create_params_s params = {NULL,NULL, FALSE};
+	struct m2v2_create_params_s params = {NULL,NULL,NULL, FALSE};
 	GError *localError = NULL;
         gs_container_t *container=NULL;
 
@@ -466,7 +466,7 @@ _list_v2_wrapper(gs_container_t *c, GError **e)
 	struct list_params_s p;
 	memset(&p, 0, sizeof(p));
 	p.flag_allversion = ~0;
-	le = m2v2_remote_execute_LIST(target, url, &p, &list_out);
+	le = m2v2_remote_execute_LIST(target, url, &p, &list_out, NULL);
 
 	hc_url_pclean(&url);
 
@@ -1221,7 +1221,7 @@ gs_container_t*
 gs_get_storage_container (gs_grid_storage_t *gs, const char *container_name,
 		const char *stgpol, int auto_create, gs_error_t **gs_err)
 {
-	struct m2v2_create_params_s params = {stgpol, NULL, FALSE};
+	struct m2v2_create_params_s params = {stgpol, NULL, NULL, FALSE};
 	return gs_get_storage_container2(gs, container_name, &params, auto_create,
 			gs_err);
 }
@@ -1231,7 +1231,7 @@ gs_get_storage_container_v2(gs_grid_storage_t *gs,
         const char *container_name, const char *stgpol, const char *verspol, 
 		int auto_create, gs_error_t **gs_err)
 {
-    struct m2v2_create_params_s params = {stgpol, verspol, FALSE};
+    struct m2v2_create_params_s params = {stgpol, verspol, NULL, FALSE};
     return gs_get_storage_container2(gs, container_name, &params, auto_create,
 	            gs_err);
 }

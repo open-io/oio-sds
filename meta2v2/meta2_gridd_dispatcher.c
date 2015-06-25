@@ -430,19 +430,6 @@ static gridd_filter M2V2_FILTERS_spare_v1[] =
 	NULL
 };
 
-static gridd_filter M2V2_FILTERS_list_v1[] =
-{
-	meta2_filter_extract_header_url,
-	meta2_filter_fill_subject,
-	meta2_filter_check_url_cid,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_extract_list_params,
-	meta2_filter_action_has_container,
-	meta2_filter_action_list_v1,
-	NULL
-};
-
 static gridd_filter M2V2_FILTERS_modify_mdsys_v1[] =
 {
 	meta2_filter_extract_header_url,
@@ -521,17 +508,6 @@ static gridd_filter M2V2_FILTERS_touch_container_v1[] =
 	NULL
 };
 
-static gridd_filter M2V2_FILTERS_statv2_v1[] =
-{
-	meta2_filter_extract_header_url,
-	meta2_filter_check_url_cid,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_has_container,
-	meta2_filter_action_statv2_v1,
-	NULL
-};
-
 /* ------------------------------------------------------------------------- */
 
 typedef gboolean (*hook) (struct gridd_reply_ctx_s *, gpointer, gpointer);
@@ -584,19 +560,14 @@ meta2_gridd_get_v1_requests(void)
 
 		/* CONTAINER */
 		{NAME_MSGNAME_M2_CREATE,  (hook) meta2_dispatch_all, M2V2_FILTERS_create_v1},
-		{NAME_MSGNAME_M2_LIST,    (hook) meta2_dispatch_all, M2V2_FILTERS_list_v1},
 
 		/* CONTENT LEVEL */
 		{NAME_MSGNAME_M2_CONTENTADD,      (hook) meta2_dispatch_all, M2V2_FILTERS_add_v1},
 		{NAME_MSGNAME_M2_CONTENTSPARE,    (hook) meta2_dispatch_all, M2V2_FILTERS_spare_v1},
 		{NAME_MSGNAME_M2_CONTENTAPPEND,   (hook) meta2_dispatch_all, M2V2_FILTERS_append_v1},
 
-		{NAME_MSGNAME_M2V1_STAT, (hook) meta2_dispatch_all, M2V2_FILTERS_statv2_v1},
-
 		{NAME_MSGNAME_M2RAW_GETCHUNKS,        (hook) meta2_dispatch_all, M2V2_FILTERS_raw_chunks_get_v1},
-		{NAME_MSGNAME_M2RAW_GETCONTENTBYPATH, (hook) meta2_dispatch_all, M2V2_FILTERS_raw_chunks_get_v1},
 
-		{NAME_MSGNAME_M2RAW_DELCONTENT, (hook) meta2_dispatch_all, M2V2_FILTERS_del_raw_v1},
 		{NAME_MSGNAME_M2RAW_DELCHUNKS,  (hook) meta2_dispatch_all, M2V2_FILTERS_del_raw_v1},
 
 		// Necessary to the rawx-mover
