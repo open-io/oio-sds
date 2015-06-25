@@ -21,6 +21,11 @@ License along with this library.
 
 #include <oio_sds.h>
 
+/* XXX JFS: only used to display the internal configuration, those should not
+ * be included by any application using the current client SDK */
+#include <metautils/lib/metautils.h>
+#include <cluster/lib/gridcluster.h>
+
 static void
 _strfreev (char **tab)
 {
@@ -41,7 +46,14 @@ main (int argc, char **argv)
 	_strfreev (tab);
 
 	g_print ("RUNTIME OPTIONS\n");
-	g_print ("\tcoming soon.\n");
+	GHashTable *live_config = gridcluster_parse_config ();
+	GHashTableIter iter;
+	gpointer k, v;
+	g_hash_table_iter_init(&iter, live_config);
+	while (g_hash_table_iter_next(&iter, &k, &v))
+		g_print("\t%s = %s\n", (gchar*)k, (gchar*)v);
+	g_hash_table_destroy (live_config);
+
 	return 0;
 }
 
