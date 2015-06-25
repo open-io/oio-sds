@@ -88,6 +88,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_RAW_ADD   "M2V2_RAW_ADD"
 # define NAME_MSGNAME_M2V2_RAW_SUBST "M2V2_RAW_SUBST"
 
+# define NAME_MSGNAME_M2V2_HDR_FOLLOW "M2V2_HDR_FOLLOW"
+
 # define NAME_MSGNAME_M2V2_EXITELECTION "M2V2_EXIT_ELECTION"
 
 # define NAME_MSGNAME_M2V2_STGPOL  "M2V2_STGPOL"

@@ -895,3 +895,56 @@ oio_sds_has (struct oio_sds_s *sds, struct hc_url_s *url, int *phas)
 	return (struct oio_error_s*) err;
 }
 
+char **
+oio_sds_get_compile_options (void)
+{
+	GPtrArray *tmp = g_ptr_array_new ();
+	void _add (const gchar *k, const gchar *v) {
+		g_ptr_array_add (tmp, g_strdup(k));
+		g_ptr_array_add (tmp, g_strdup(v));
+	}
+	void _add_double (const gchar *k, gdouble v) {
+		gchar s[32];
+		_add (k, g_ascii_dtostr (s, sizeof(s), v));
+	}
+	void _add_integer (const gchar *k, gint64 v) {
+		gchar s[24];
+		g_snprintf (s, sizeof(s), "%"G_GINT64_FORMAT, v);
+		_add (k, s);
+	}
+#define _ADD_STR(S) _add(#S,S)
+#define _ADD_DBL(S) _add_double(#S,S)
+#define _ADD_INT(S) _add_integer(#S,S)
+	_ADD_STR (PROXYD_PREFIX);
+	_ADD_STR (PROXYD_PREFIX2);
+	_ADD_STR (PROXYD_HEADER_PREFIX);
+	_ADD_STR (PROXYD_HEADER_REQID);
+	_ADD_STR (PROXYD_HEADER_NOEMPTY);
+	_ADD_INT (PROXYD_PATH_MAXLEN);
+	_ADD_DBL (PROXYD_DEFAULT_TTL_CSM0);
+	_ADD_DBL (PROXYD_DEFAULT_TTL_SERVICES);
+	_ADD_INT (PROXYD_DEFAULT_MAX_CSM0);
+	_ADD_INT (PROXYD_DEFAULT_MAX_SERVICES);
+	_ADD_DBL (PROXYD_DIR_TIMEOUT_GLOBAL);
+	_ADD_DBL (PROXYD_DIR_TIMEOUT_SINGLE);
+
+	_ADD_STR (GCLUSTER_RUN_DIR);
+	_ADD_STR (GCLUSTER_ETC_DIR);
+	_ADD_STR (GCLUSTER_CONFIG_FILE_PATH);
+	_ADD_STR (GCLUSTER_CONFIG_DIR_PATH);
+	_ADD_STR (GCLUSTER_CONFIG_LOCAL_PATH);
+	_ADD_STR (GCLUSTER_AGENT_SOCK_PATH);
+
+	_ADD_DBL (M0V2_CLIENT_TIMEOUT);
+	_ADD_DBL (M1V2_CLIENT_TIMEOUT);
+	_ADD_DBL (M2V2_CLIENT_TIMEOUT);
+
+	char **out = calloc (1+tmp->len, sizeof(void*));
+	for (guint i=0; i<tmp->len ;++i)
+		out[i] = strdup((char*) tmp->pdata[i]);
+	for (guint i=0; i<tmp->len ;++i)
+		g_free (tmp->pdata[i]);
+	g_ptr_array_free (tmp, TRUE);
+	return out;
+}
+

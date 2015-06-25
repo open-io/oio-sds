@@ -29,6 +29,13 @@ enum oio_sds_config_e
 	OIOSDS_CFG_FLAG_SYNCATDOWNLOAD
 };
 
+/** @return a NULL-terminated array of strings where
+ * result[(2*i)]   is the name of the i-th configuration directive 
+ * result[(2*i)+1] is the value of the i-th configuration directive.
+ * The output has to be freed with free().
+ */
+char ** oio_sds_get_compile_options (void);
+
 /* error management */
 void oio_error_free (struct oio_error_s *e);
 void oio_error_pfree (struct oio_error_s **pe);

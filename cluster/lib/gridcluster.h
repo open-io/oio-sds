@@ -44,48 +44,6 @@ License along with this library.
 #define GCLUSTER_CFG_PROXY        "proxy"
 #define GCLUSTER_CFG_PROXYLOCAL   "proxy-local"
 
-#ifndef GCLUSTER_ETC_DIR
-# define GCLUSTER_ETC_DIR "/etc/oio"
-#endif
-
-#ifndef PROXYD_SOCK_PATH
-# define PROXYD_SOCK_PATH GCLUSTER_RUN_DIR "/#-proxy.sock"
-#endif
-
-#ifndef GCLUSTER_CONFIG_FILE_PATH
-# define GCLUSTER_CONFIG_FILE_PATH GCLUSTER_ETC_DIR "/sds.conf"
-#endif
-
-#ifndef GCLUSTER_CONFIG_DIR_PATH
-# define GCLUSTER_CONFIG_DIR_PATH GCLUSTER_ETC_DIR "/sds.conf.d"
-#endif
-
-#ifndef GCLUSTER_CONFIG_LOCAL_PATH
-# define GCLUSTER_CONFIG_LOCAL_PATH ".oio/sds.conf"
-#endif
-
-#ifndef GCLUSTER_SPOOL_DIR
-# define GCLUSTER_SPOOL_DIR "/var/spool"
-#endif
-
-#ifndef GCLUSTER_RUN_DIR
-# define GCLUSTER_RUN_DIR "/var/run"
-#endif
-
-#ifndef GCLUSTER_AGENT_SOCK_PATH
-# define GCLUSTER_AGENT_SOCK_PATH GCLUSTER_RUN_DIR "/oio-sds-agent.sock"
-#endif
-
-/**
- * @see gridcluster_list_ns()
- */
-#define GCLUSTER_CFG_LOCAL 1
-
-/**
- * @see gridcluster_list_ns()
- */
-#define GCLUSTER_CFG_NS    2
-
 /**
  * Struct to store an agent task description
  */
