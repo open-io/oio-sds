@@ -729,7 +729,7 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		rc = curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
 		rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "POST");
 		rc = curl_easy_setopt (h, CURLOPT_INFILESIZE_LARGE, request_body->len);
-		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers);
+		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 		rc = curl_easy_perform (h);
 		if (rc != CURLE_OK)
 			err = NEWERROR(0, "Proxy: Beans: (%d) %s", rc, curl_easy_strerror(rc));
@@ -792,7 +792,7 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		rc = curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
 		rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "PUT");
 		rc = curl_easy_setopt (h, CURLOPT_INFILESIZE_LARGE, request_body->len);
-		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers);
+		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 		rc = curl_easy_perform (h);
 		if (rc != CURLE_OK)
 			err = NEWERROR(0, "Proxy: (%d) %s", rc, curl_easy_strerror(rc));
@@ -839,7 +839,7 @@ oio_sds_delete (struct oio_sds_s *sds, struct hc_url_s *url)
 	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
 	rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
 	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "DELETE");
-	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers);
+	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 	rc = curl_easy_perform (h);
 	if (CURLE_OK != rc)
 		err = NEWERROR(0, "Proxy: %s", curl_easy_strerror(rc));
@@ -879,7 +879,7 @@ oio_sds_has (struct oio_sds_s *sds, struct hc_url_s *url, int *phas)
 	_headers_add (&headers, "Expect", "");
 	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_NOOP);
 	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "HEAD");
-	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers);
+	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 	rc = curl_easy_perform (h);
 	if (CURLE_OK != rc)
 		err = NEWERROR(0, "Proxy: Delete: %s", curl_easy_strerror(rc));
