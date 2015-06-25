@@ -22,8 +22,13 @@ set_target_properties(oiosds PROPERTIES
 		SOVERSION ${ABI_VERSION})
 
 add_executable(test_sdk test_sdk.c)
-
 target_link_libraries(test_sdk oiosds)
+
+add_executable(test_config test_config.c)
+target_link_libraries(test_config oiosds)
+
+add_executable(test_ns test_ns.c)
+target_link_libraries(test_ns oiosds ${CURL_LIBRARIES})
 
 install(TARGETS
 			oiosds

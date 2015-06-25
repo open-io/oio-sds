@@ -46,7 +46,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/autogen.h>
 #include <meta2v2/generic.h>
 
-#include "macros.h"
 #include "path_parser.h"
 #include "transport_http.h"
 

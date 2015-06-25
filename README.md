@@ -92,16 +92,12 @@ make DESTDIR=${install_dir} install
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
 | GCLUSTER_ETC_DIR | "/etc/oio" | System-wide configuration directory |
-| GCLUSTER_SPOOL_DIR | "/var/spool" | Top-level directory for namespace spool dirs for events. |
 | GCLUSTER_RUN_DIR | "/var/run" | Prefix to spool. |
 | GCLUSTER_CONFIG_FILE_PATH | "/etc/oio/sds.conf" | System-wide configuration file |
 | GCLUSTER_CONFIG_DIR_PATH | "/etc/oio/sds.conf.d" | System-wide configuration directory for additional files. |
 | GCLUSTER_CONFIG_LOCAL_PATH | ".oio/sds.conf" | Local configuration directory. |
 | GCLUSTER_AGENT_SOCK_PATH | "/var/run/oio-sds-agent.sock" | Default path for agent's socket. |
-| GS_CONFIG_EVENT_DELAY | "event_delay" | Default pre-treatment delay applied to gridagent's events. |
-| GS_CONFIG_EVENT_REFRESH | "event_refresh" | Default refresh period for event's management configuration. |
 | GS_CONFIG_NSINFO_REFRESH | "nsinfo_refresh" | Default refresh period for 
-| PROXYD_SOCK_PATH | GCLUSTER_RUN_DIR "/${NS}-proxy.sock" | '#' will we prelace by the namespace. |
 | PROXYD_PREFIX | "/v1.0" | Prefix applied to proxyd's URL |
 | PROXYD_PATH_MAXLEN | 2048 | Maximum length for path to be accepted in requests. |
 | PROXYD_DEFAULT_TTL_CSM0 | 0 | Maximum TTL (in seconds) for conscience entries in the proxyd cache. |

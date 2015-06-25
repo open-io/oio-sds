@@ -96,7 +96,7 @@ _add_option(struct hc_url_s *u, const char *option_str)
 }
 
 static int
-_parse_url(struct hc_url_s *url, const char *str)
+_parse_oldurl(struct hc_url_s *url, const char *str)
 {
 	struct req_uri_s ruri = {NULL, NULL, NULL, NULL};
 
@@ -112,6 +112,42 @@ _parse_url(struct hc_url_s *url, const char *str)
 					metautils_str_replace (&url->type, HCURL_DEFAULT_TYPE);
 					if (path_tokens[2])
 						metautils_str_reuse (&url->path, path_tokens[2]);
+				}
+			}
+			g_free (path_tokens);
+		}
+
+		if (ruri.query_tokens) { // Parse the options
+			for (gchar **p=ruri.query_tokens; *p ;++p)
+				_add_option(url, *p);
+		}
+	}
+
+	metautils_requri_clear (&ruri);
+	return 1;
+}
+
+static int
+_parse_url(struct hc_url_s *url, const char *str)
+{
+	struct req_uri_s ruri = {NULL, NULL, NULL, NULL};
+
+	if (metautils_requri_parse (str, &ruri)) { // Parse the path
+
+		gchar **path_tokens = g_strsplit (ruri.path, "/", 5);
+		if (path_tokens) {
+			if (path_tokens[0]) {
+				metautils_str_reuse (&url->ns, path_tokens[0]);
+				if (path_tokens[1]) {
+					metautils_str_replace (&url->account, path_tokens[1]);
+					if (path_tokens[2]) {
+						metautils_str_reuse (&url->user, path_tokens[2]);
+						if (path_tokens[3]) {
+							metautils_str_replace (&url->type, path_tokens[3]);
+							if (path_tokens[4])
+								metautils_str_reuse (&url->path, path_tokens[4]);
+						}
+					}
 				}
 			}
 			g_free (path_tokens);
@@ -161,6 +197,18 @@ _compute_id (struct hc_url_s *url)
 
 struct hc_url_s *
 hc_url_oldinit(const char *url)
+{
+	if (!url)
+		return NULL;
+	struct hc_url_s *result = SLICE_NEW0(struct hc_url_s);
+	if (_parse_oldurl(result, url))
+		return result;
+	hc_url_clean(result);
+	return NULL;
+}
+
+struct hc_url_s *
+hc_url_init(const char *url)
 {
 	if (!url)
 		return NULL;

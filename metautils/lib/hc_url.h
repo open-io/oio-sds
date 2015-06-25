@@ -48,6 +48,8 @@ struct hc_url_s;
 /** Calls hc_url_empty() then parse the given string. */
 struct hc_url_s * hc_url_oldinit(const char *url);
 
+struct hc_url_s * hc_url_init(const char *url);
+
 /** Builds an empty URL */
 struct hc_url_s * hc_url_empty(void);
 

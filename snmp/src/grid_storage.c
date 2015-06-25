@@ -82,7 +82,6 @@ static void manage_evt(const gchar * ns_name);
 static struct evt_snmp_data *evt_snmp_data[MAX_SRV];
 static int evt_max_index = 0;
 static int evt_count = 0;
-static char evt_spool_dir[PATH_MAX];
 
 static void manage_csc(const gchar * ns_name);
 static struct csc_snmp_data *csc_snmp_data[MAX_SRV];
@@ -90,8 +89,6 @@ static int csc_max_index = 0;
 static int csc_count = 0;
 static GSList *csc_ns_list = NULL;
 
-/* ------------------------------------------------------------------------- */
-/* ------------------------------------------------------------------------- */
 /* ------------------------------------------------------------------------- */
 
 static void
@@ -127,9 +124,6 @@ config_parser(const char * key, char * value)
 			csc_ns_list = g_slist_prepend(csc_ns_list, g_strdup(ns_list[i]));
 		g_strfreev(ns_list);
 	}
-	else if (!g_ascii_strncasecmp(key, "GridEventSpoolDir", strlen("GridEventSpoolDir"))) {
-		g_strlcpy(evt_spool_dir, value, sizeof(evt_spool_dir));
-	}
 }
 
 static void
@@ -137,8 +131,6 @@ register_config(void)
 {
 	/* Init var and set defaults */
 	csc_ns_list = NULL;
-	memset(evt_spool_dir, '\0', sizeof(evt_spool_dir));
-	g_strlcpy(evt_spool_dir, GCLUSTER_SPOOL_DIR, sizeof(evt_spool_dir));
 
 	register_app_config_handler("CollectConscience", config_parser, NULL, "A coma separated list of ns names");
 	register_app_config_handler("GridEventSpoolDir", config_parser, NULL, "A path");
@@ -503,7 +495,6 @@ reload_events(void)
 {
 	static time_t last_update = 0;
 	time_t now;
-	GSList *ns = NULL, *l = NULL;
 	int i;
 
 	/*check we didn't reload the data recently*/
@@ -520,21 +511,19 @@ reload_events(void)
 	}
 	memset(evt_snmp_data, 0, sizeof(evt_snmp_data));
 
+/** XXX TODO to be reimplemented with a list of declared namespaces in the config */
+#if 0
 	/* List ns in spool dir */
-	ns = list_ns(evt_spool_dir);
-	if (ns)
-		for (l = ns; l; l = l->next)
-			if (l->data)
-				manage_evt(l->data);
+	GSList *ns = list_ns();
+	for (GSList *l = ns; l; l = l->next)
+		if (l->data) manage_evt(l->data);
+	g_slist_free_full(ns, g_free);
+#endif
 
 	/* Ensure stats */
 	for (i = 0; i <= evt_max_index; i++)
 		if (evt_snmp_data[i] == NULL)
 			evt_snmp_data[i] = g_try_new0(struct evt_snmp_data, 1);
-
-	/* Clean */
-	g_slist_foreach(ns, g_free1, NULL);
-	g_slist_free(ns);
 }
 
 static void
@@ -1170,7 +1159,6 @@ manage_evt(const gchar *ns_name)
 	struct grid_service_data index_data;
 	spooldir_stat_t incoming_stat;
 	spooldir_stat_t pending_stat;
-	gchar *fullpath = NULL;
 	GError *error = NULL;
 
 	memset(&snmp_data, 0, sizeof(struct evt_snmp_data));
@@ -1188,26 +1176,6 @@ manage_evt(const gchar *ns_name)
 		g_clear_error(&error);
 		return ;
 	}
-
-	/* Get stats for this ns evts */
-	fullpath = g_strconcat(evt_spool_dir, G_DIR_SEPARATOR_S, ns_name, G_DIR_SEPARATOR_S, "incoming", NULL);
-	if (stat_events(&incoming_stat, fullpath)) {
-		snmp_data.incoming_nb = incoming_stat.nb_evt;
-		if (incoming_stat.nb_evt > 0) {
-			snmp_data.incoming_age = incoming_stat.total_age / incoming_stat.nb_evt;
-			snmp_data.incoming_oldest = incoming_stat.oldest;
-		}
-	}
-	g_free(fullpath);
-	fullpath = g_strconcat(evt_spool_dir, G_DIR_SEPARATOR_S, ns_name, G_DIR_SEPARATOR_S, "pending", NULL);
-	if (stat_events(&pending_stat, fullpath)) {
-		snmp_data.pending_nb = pending_stat.nb_evt;
-		if (pending_stat.nb_evt > 0) {
-			snmp_data.pending_age = pending_stat.total_age / pending_stat.nb_evt;
-			snmp_data.pending_oldest = pending_stat.oldest;
-		}
-	}
-	g_free(fullpath);
 
 	/*then save the current information*/
 	if (evt_snmp_data[index_data.idx])
