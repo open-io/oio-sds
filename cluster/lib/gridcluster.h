@@ -222,14 +222,6 @@ gsize namespace_get_autocontainer_dst_bits(namespace_info_t* ns_info);
 /** Only used by gridd */
 typedef namespace_info_t* (*get_namespace_info_f) (GError **error);
 
-/** Get the rules path from conscience */
-gboolean namespace_get_rules_path(const gchar *ns, const gchar *srvtype,
-		gchar **path, GError **err);
-
-/** Get namespace rules */
-GByteArray* namespace_get_rules(const gchar *ns, const gchar *srvtype,
-		GError **err);
-
 /** @return NULL if the NS was not found or the key not defined for the NS */
 gchar* gridcluster_get_config(const gchar *ns, const gchar *what);
 

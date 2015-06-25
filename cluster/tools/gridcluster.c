@@ -44,24 +44,6 @@ prompt(void)
 #endif
 
 static void
-gba_write(int fd, GByteArray *gba)
-{
-	gsize written;
-	gssize w;
-
-	for (written=0; written < gba->len ;written+=w) {
-		w = write(fd, gba->data+written, gba->len-written);
-		if (w==0)
-			break;
-		if (w<0) {
-			g_printerr("write error : errno=%d (%s)", errno, strerror(errno));
-			return;
-		}
-		written += w;
-	}
-}
-
-static void
 usage(void)
 {
 	g_printerr("Usage: gridcluster [OPTION]... <NAMESPACE>...\n\n");
@@ -261,8 +243,6 @@ main(int argc, char **argv)
 	gboolean has_unlock_score = FALSE;
 	gboolean has_service = FALSE;
 	gboolean has_list_task = FALSE;
-	gboolean has_rules = FALSE;
-	gboolean has_rules_path = FALSE;
 	gboolean has_lbconfig = FALSE;
 	gboolean has_flag_full = FALSE;
 	int c = 0;
@@ -279,8 +259,6 @@ main(int argc, char **argv)
 
 		/* both long and short */
 		{"config",         0, 0, 'c'},
-		{"rules-path",     0, 0, 'P'},
-		{"rules",          0, 0, 'R'},
 		{"clear-services", 1, 0, 'C'},
 		{"service",        1, 0, 'S'},
 		{"local-cfg",      0, 0, 'A'},
@@ -302,7 +280,7 @@ main(int argc, char **argv)
 	memset(cid_str, 0x00, sizeof(cid_str));
 	enable_debug();
 
-	while ((c = getopt_long(argc, argv, "ALsvealtrPBRC:S:h", long_options, &option_index)) > -1) {
+	while ((c = getopt_long(argc, argv, "ALsvealtrBC:S:h", long_options, &option_index)) > -1) {
 
 		switch (c) {
 			case 'A':
@@ -313,22 +291,6 @@ main(int argc, char **argv)
 				break;
 			case 'L':
 				has_nslist = TRUE;
-				break;
-			case 'P':
-				if (!optarg) {
-					g_printerr("The option '-P' requires an argument. Try %s -h\n", argv[0]);
-					abort();
-				}
-				g_strlcpy(service_desc, optarg, sizeof(service_desc)-1);
-				has_rules_path = TRUE;
-				break;
-			case 'R':
-				if (!optarg) {
-					g_printerr("The option '-R' requires an argument. Try %s -h\n", argv[0]);
-					abort();
-				}
-				g_strlcpy(service_desc, optarg, sizeof(service_desc)-1);
-				has_rules = TRUE;
 				break;
 			case 'C':
 				if (!optarg) {
@@ -443,28 +405,6 @@ main(int argc, char **argv)
 		g_print("%s\n", tmp);
 		g_free(tmp);
 		service_update_policies_destroy(pol);
-	}
-	else if (has_rules_path) {
-		gchar *path = NULL;
-		if (!namespace_get_rules_path(namespace, service_desc, &path, &error)) {
-			g_printerr("Failed to get namespace rules :\n");
-			g_printerr("%s\n", error->message);
-			goto exit_label;
-		}
-		if (path) {
-			g_print("%s\n", path);
-			g_free(path);
-		}
-	}
-	else if (has_rules) {
-		GByteArray *gba_rules = namespace_get_rules(namespace, service_desc, &error);
-		if (!gba_rules) {
-			g_printerr("Failed to get namespace rules :\n");
-			g_printerr("%s\n", error->message);
-			goto exit_label;
-		}
-		gba_write(1, gba_rules);
-		g_byte_array_free(gba_rules, TRUE);
 	}
 	else if (has_clear_services) {
 
