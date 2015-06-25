@@ -147,23 +147,18 @@ macro (dir2macro N)
 	endif ()
 endmacro ()
 
-dir2macro("GCLUSTER_SPOOL_DIR")
 dir2macro("GCLUSTER_RUN_DIR")
 dir2macro("GCLUSTER_ETC_DIR")
-
-dir2macro2("ACCOUNT_AGENT_PATH" "ipc:///var/run/event-agent.sock")
 
 dir2macro("GCLUSTER_CONFIG_FILE_PATH")
 dir2macro("GCLUSTER_CONFIG_DIR_PATH")
 dir2macro("GCLUSTER_CONFIG_LOCAL_PATH")
 dir2macro("GCLUSTER_AGENT_SOCK_PATH")
 
-dir2macro("GS_CONFIG_EVENT_DELAY")
-dir2macro("GS_CONFIG_EVENT_REFRESH")
 dir2macro("GS_CONFIG_NSINFO_REFRESH")
 
-dir2macro("PROXYD_SOCK_PATH")
 dir2macro("PROXYD_PREFIX")
+dir2macro("PROXYD_PREFIX2")
 dir2macro("PROXYD_PATH_MAXLEN")
 dir2macro("PROXYD_DEFAULT_TTL_CSM0")
 dir2macro("PROXYD_DEFAULT_TTL_SERVICES")
@@ -173,6 +168,7 @@ dir2macro("PROXYD_DIR_TIMEOUT_SINGLE")
 dir2macro("PROXYD_DIR_TIMEOUT_GLOBAL")
 dir2macro("PROXYD_HEADER_PREFIX")
 dir2macro("PROXYD_HEADER_REQID")
+dir2macro("PROXYD_HEADER_NOEMPTY")
 
 dir2macro("DAEMON_DEFAULT_TIMEOUT_READ")
 dir2macro("DAEMON_DEFAULT_TIMEOUT_ACCEPT")
