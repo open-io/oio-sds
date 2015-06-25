@@ -31,7 +31,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/stats_holder.h>
 
 #include "transport_http.h"
-#include "macros.h"
 
 struct transport_client_context_s
 {
