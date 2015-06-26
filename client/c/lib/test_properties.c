@@ -305,7 +305,7 @@ test_set_content_storage_policy (gs_grid_storage_t * gs)
   char *nameRef = test_init (gs, "Ref_linked", NULL);
   char *nameCont = gen_random (7);
   gs_container_t *container = container_init (gs, nameCont);
-  hc_ul_content_from_file (gs, nameCont, "Content", "cmake_install.cmake",
+  hc_ul_content_from_file (gs, nameCont, "Content", "file_test.txt",
 			   err);
   gs_content_t *content =
     gs_get_content_from_path (container, "Content", err);
@@ -341,7 +341,7 @@ test_set_content_storage_policy_wrong (gs_grid_storage_t * gs)	// to be improved
   char *nameRef = test_init (gs, "Ref_linked", NULL);
   char *nameCont = gen_random (7);
   gs_container_t *container = container_init (gs, nameCont);
-  hc_ul_content_from_file (gs, nameCont, "Content", "cmake_install.cmake",
+  hc_ul_content_from_file (gs, nameCont, "Content", "file_test.txt",
 			   err);
   gs_content_t *content =
     gs_get_content_from_path (container, "Content", err);
@@ -363,7 +363,7 @@ test_set_content_property (gs_grid_storage_t * gs)
   char *nameRef = test_init (gs, "Ref_linked", NULL);
   char *nameCont = gen_random (7);
   gs_container_t *container = container_init (gs, nameCont);
-  hc_ul_content_from_file (gs, nameCont, "Content", "cmake_install.cmake",
+  hc_ul_content_from_file (gs, nameCont, "Content", "file_test.txt",
 			   err);
   gs_content_t *content =
     gs_get_content_from_path (container, "Content", err);
@@ -393,7 +393,7 @@ test_set_content_property_wrong (gs_grid_storage_t * gs)	// to be improved
   char *nameRef = test_init (gs, "Ref_linked", NULL);
   char *nameCont = gen_random (7);
   gs_container_t *container = container_init (gs, nameCont);
-  hc_ul_content_from_file (gs, nameCont, "Content", "cmake_install.cmake",
+  hc_ul_content_from_file (gs, nameCont, "Content", "file_test.txt",
 			   err);
   gs_content_t *content =
     gs_get_content_from_path (container, "Content", err);
@@ -419,7 +419,7 @@ test_set_content_property_again (gs_grid_storage_t * gs)
   char *nameRef = test_init (gs, "Ref_linked", NULL);
   char *nameCont = gen_random (7);
   gs_container_t *container = container_init (gs, nameCont);
-  hc_ul_content_from_file (gs, nameCont, "Content", "cmake_install.cmake",
+  hc_ul_content_from_file (gs, nameCont, "Content", "file_test.txt",
 			   err);
   gs_content_t *content =
     gs_get_content_from_path (container, "Content", err);
@@ -448,7 +448,7 @@ test_get_content_properties (gs_grid_storage_t * gs)
   char *nameRef = test_init (gs, "Ref_linked", NULL);
   char *nameCont = gen_random (7);
   gs_container_t *container = container_init (gs, nameCont);
-  hc_ul_content_from_file (gs, nameCont, "Content", "cmake_install.cmake",
+  hc_ul_content_from_file (gs, nameCont, "Content", "file_test.txt",
 			   err);
   gs_content_t *nameContent =
     gs_get_content_from_path (container, "Content", err);
@@ -470,7 +470,7 @@ test_delete_content_property (gs_grid_storage_t * gs)
   char *nameRef = test_init (gs, "Ref_linked", NULL);
   char *nameCont = gen_random (7);
   gs_container_t *container = container_init (gs, nameCont);
-  hc_ul_content_from_file (gs, nameCont, "Content", "cmake_install.cmake",
+  hc_ul_content_from_file (gs, nameCont, "Content", "file_test.txt",
 			   err);
   gs_content_t *nameContent =
     gs_get_content_from_path (container, "Content", err);
@@ -502,7 +502,7 @@ test_copy_content (gs_grid_storage_t * gs)
   char *nameCont = gen_random (7);
   gs_container_t *container = container_init (gs, nameCont);
 
-  hc_ul_content_from_file (gs, nameCont, "Content", "cmake_install.cmake",
+  hc_ul_content_from_file (gs, nameCont, "Content", "file_test.txt",
 			   err);
   gs_content_t *nameContent =
     gs_get_content_from_path (container, "Content", err);
