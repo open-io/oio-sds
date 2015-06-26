@@ -59,6 +59,26 @@ test_init (gs_grid_storage_t * gs, char *init_type, char **parameters)
     return NULL;
 }
 
+static int
+init_file ()
+{
+  FILE *file_test = fopen ("file_test.txt", "w");
+
+  if (file_test != NULL)
+    {
+      fprintf (file_test, "This is random data to be dl");
+      fclose (file_test);
+      return 0;
+    }
+  else
+    {
+      fprintf (stderr,
+	       "\nfile_test initialization has failed, tests won't be run \n");
+      return 1;
+    }
+
+}
+
 static gs_container_t *
 container_init (gs_grid_storage_t * gs, char *nameCont)
 {
@@ -502,83 +522,95 @@ test_copy_content (gs_grid_storage_t * gs)
 int
 main (int argc, char **argv)
 {
-  HC_TEST_INIT (argc, argv);
 
-  const char *ns = "NS";
+  int i = init_file ();
 
-  gs_error_t *err = NULL;
-  gs_grid_storage_t *gs = gs_grid_storage_init (ns, &err);
-  if (!gs)
+  if (!i)
     {
-      fprintf (stderr, "OIO init error : (%d) %s\n", err->code, err->msg);
-      _gs_error_clear (&err);
-      abort ();
-    }
+      HC_TEST_INIT (argc, argv);
 
-  g_test_set_nonfatal_assertions ();
+      const char *ns = "NS";
 
-  g_test_add_data_func ("/client/lib/prop/set_ref_prop", gs,
-			(GTestDataFunc) test_set_reference_property);
+      gs_error_t *err = NULL;
+      gs_grid_storage_t *gs = gs_grid_storage_init (ns, &err);
+      if (!gs)
+	{
+	  fprintf (stderr, "OIO init error : (%d) %s\n", err->code, err->msg);
+	  _gs_error_clear (&err);
+	  abort ();
+	}
 
-  g_test_add_data_func ("/client/lib/prop/get_ref_prop", gs,
-			(GTestDataFunc) test_get_reference_property);
-  g_test_add_data_func ("/client/lib/prop/get_ref_prop_v", gs,
-			(GTestDataFunc) test_get_reference_property_void);
-  g_test_add_data_func ("/client/lib/prop/get_ref_prop_w", gs,
-			(GTestDataFunc)
-			test_get_reference_property_wrong_key);
+      g_test_set_nonfatal_assertions ();
 
-  fprintf (stderr, "hc_delete_reference_property to be stabilized \n");
+      g_test_add_data_func ("/client/lib/prop/set_ref_prop", gs,
+			    (GTestDataFunc) test_set_reference_property);
+
+      g_test_add_data_func ("/client/lib/prop/get_ref_prop", gs,
+			    (GTestDataFunc) test_get_reference_property);
+      g_test_add_data_func ("/client/lib/prop/get_ref_prop_v", gs,
+			    (GTestDataFunc) test_get_reference_property_void);
+      g_test_add_data_func ("/client/lib/prop/get_ref_prop_w", gs,
+			    (GTestDataFunc)
+			    test_get_reference_property_wrong_key);
+
+      fprintf (stderr, "hc_delete_reference_property to be stabilized \n");
 //  g_test_add_data_func ("/client/lib/prop/del_ref_prop", gs,
 //                      (GTestDataFunc) test_delete_reference_property);
 
-  g_test_add_data_func ("/client/lib/prop/set_cont_strpol", gs,
-			(GTestDataFunc) test_set_container_storage_policy);
-  g_test_add_data_func ("/client/lib/prop/set_cont_strpol_wrong", gs,
-			(GTestDataFunc)
-			test_set_container_storage_policy_wrong);
+      g_test_add_data_func ("/client/lib/prop/set_cont_strpol", gs,
+			    (GTestDataFunc)
+			    test_set_container_storage_policy);
+      g_test_add_data_func ("/client/lib/prop/set_cont_strpol_wrong", gs,
+			    (GTestDataFunc)
+			    test_set_container_storage_policy_wrong);
 
-  g_test_add_data_func ("/client/lib/prop/set_cont_quot", gs,
-			(GTestDataFunc) test_set_container_quota);
+      g_test_add_data_func ("/client/lib/prop/set_cont_quot", gs,
+			    (GTestDataFunc) test_set_container_quota);
 
-  g_test_add_data_func ("/client/lib/prop/set_cont_vers", gs,
-			(GTestDataFunc) test_set_container_versioning);
+      g_test_add_data_func ("/client/lib/prop/set_cont_vers", gs,
+			    (GTestDataFunc) test_set_container_versioning);
 
-  g_test_add_data_func ("/client/lib/prop/del_cont_vers", gs,
-			(GTestDataFunc) test_del_container_versioning);
-  g_test_add_data_func ("/client/lib/prop/del_cont_vers_v", gs,
-			(GTestDataFunc) test_del_container_versioning_void);
+      g_test_add_data_func ("/client/lib/prop/del_cont_vers", gs,
+			    (GTestDataFunc) test_del_container_versioning);
+      g_test_add_data_func ("/client/lib/prop/del_cont_vers_v", gs,
+			    (GTestDataFunc)
+			    test_del_container_versioning_void);
 
-  g_test_add_data_func ("/client/lib/prop/set_content_strpol", gs,
-			(GTestDataFunc) test_set_content_storage_policy);
-  g_test_add_data_func ("/client/lib/prop/set_content_strpol_w_path", gs,
-			(GTestDataFunc)
-			test_set_content_storage_policy_bad_path);
-  g_test_add_data_func ("/client/lib/prop/set_content_strpol_w", gs,
-			(GTestDataFunc)
-			test_set_content_storage_policy_wrong);
+      g_test_add_data_func ("/client/lib/prop/set_content_strpol", gs,
+			    (GTestDataFunc) test_set_content_storage_policy);
+      g_test_add_data_func ("/client/lib/prop/set_content_strpol_w_path", gs,
+			    (GTestDataFunc)
+			    test_set_content_storage_policy_bad_path);
+      g_test_add_data_func ("/client/lib/prop/set_content_strpol_w", gs,
+			    (GTestDataFunc)
+			    test_set_content_storage_policy_wrong);
 
-  g_test_add_data_func ("/client/lib/prop/get_content_prop", gs,
-			(GTestDataFunc) test_get_content_properties);
+      g_test_add_data_func ("/client/lib/prop/get_content_prop", gs,
+			    (GTestDataFunc) test_get_content_properties);
 
-  g_test_add_data_func ("/client/lib/prop/set_content_prop", gs,
-			(GTestDataFunc) test_set_content_property);
-  g_test_add_data_func ("/client/lib/prop/set_content_prop_w", gs,
-			(GTestDataFunc) test_set_content_property_wrong);
-  g_test_add_data_func ("/client/lib/prop/set_content_prop_again", gs,
-			(GTestDataFunc) test_set_content_property_again);
+      g_test_add_data_func ("/client/lib/prop/set_content_prop", gs,
+			    (GTestDataFunc) test_set_content_property);
+      g_test_add_data_func ("/client/lib/prop/set_content_prop_w", gs,
+			    (GTestDataFunc) test_set_content_property_wrong);
+      g_test_add_data_func ("/client/lib/prop/set_content_prop_again", gs,
+			    (GTestDataFunc) test_set_content_property_again);
 
-  fprintf (stderr, "hc_delete_content_property to be stabilized \n");
+      fprintf (stderr, "hc_delete_content_property to be stabilized \n");
 //  g_test_add_data_func ("/client/lib/prop/del_content_prop", gs,
 //                      (GTestDataFunc) test_delete_content_property);
 
-  g_test_add_data_func ("/client/lib/prop/copy_content", gs,
-			(GTestDataFunc) test_copy_content);
+      g_test_add_data_func ("/client/lib/prop/copy_content", gs,
+			    (GTestDataFunc) test_copy_content);
 
-  int success = g_test_run ();
+      int success = g_test_run ();
 
-  gs_grid_storage_free (gs);
-  gs = NULL;
+      remove ("file_test.txt");
 
-  return success;
+      gs_grid_storage_free (gs);
+      gs = NULL;
+
+      return success;
+    }
+  else
+    return 0;
 }
