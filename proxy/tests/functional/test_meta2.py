@@ -108,6 +108,7 @@ class TestMeta2Functional(unittest.TestCase):
             self.bean["hash"] = self.hash_rand
             self.bean["size"] = 40
             self.bean["type"] = "chunk"
+            self.prepared_bean = self.bean
         if i == 2:
             self.bean2 = \
                 self.session.post(self.addr_m2_ref_path_action, json.dumps(
@@ -385,10 +386,39 @@ class TestMeta2Functional(unittest.TestCase):
         self.assertEqual(listing[0]['name'], '0-00')
         self.assertEqual(listing[-1]['name'], '0-04')
 
-        #  test_get_listing2
-        #  test_get_listing3
-        #  test_get_listing4
-        #  test_get_listing5
+        listing = \
+            self.session.get(self.addr_m2_ref,
+                             params={'max': 10, 'delimiter': '-'}).json()["prefixes"]
+
+        self.assertEqual(len(listing), 4)
+        self.assertEqual(listing, ['0-', '1-', '2-', '3-'])
+
+        listing = \
+            self.session.get(self.addr_m2_ref,
+                             params={'max': 10, 'marker': '2-',
+                                     'delimiter': '-'}).json()["prefixes"]
+
+        self.assertEqual(len(listing), 2)
+        self.assertEqual(listing, ['2-', '3-'])
+
+        listing = \
+            self.session.get(self.addr_m2_ref,
+                             params={'max': 10, 'prefix': '2',
+                                     'delimiter': '-'}).json()["prefixes"]
+
+        self.assertEqual(len(listing), 1)
+        self.assertEqual(listing, ['2-'])
+
+        listing = \
+            self.session.get(self.addr_m2_ref,
+                             params={'max': 6, 'prefix': '2-',
+                                     'marker': '2-04', 'delimiter': '-'}).json()
+
+        self.assertEqual(len(listing["objects"]), 5)
+        self.assertEqual(listing["objects"][0]['name'], '2-05')
+        self.assertEqual(listing["objects"][1]['name'], '2-06')
+        self.assertEqual(listing["objects"][-1]['name'], '2-09')
+        self.assertEqual(listing["prefixes"], ['2-05-'])
 
         listing = \
             self.session.get(self.addr_m2_ref,
@@ -418,70 +448,6 @@ class TestMeta2Functional(unittest.TestCase):
         self.delete_bean_list()
 
     # Failed get_list tests
-
-    def test_container_get_listing2(self):
-
-        self.session.put(self.addr_m2_ref)
-        self.prepare_bean_listing()
-
-        listing = \
-            self.session.get(self.addr_m2_ref,
-                             params={'max': 10, 'delimiter': '-'}).json()
-
-        self.assertEqual(len(listing), 4)
-        self.assertEqual(listing, ['0-', '1-', '2-', '3-'])
-
-        self.delete_bean_list()
-
-    def test_container_get_listing3(self):
-
-        self.session.put(self.addr_m2_ref)
-        self.prepare_bean_listing()
-
-        listing = \
-            self.session.get(self.addr_m2_ref,
-                             params={'max': 10, 'marker': '2-',
-                                     'delimiter': '-'}).json()["prefixes"]
-
-        self.assertEqual(len(listing), 1)
-        self.assertEqual(listing, ['3-'])
-
-        self.delete_bean_list()
-
-    def test_container_get_listing4(self):
-
-        self.session.put(self.addr_m2_ref)
-        self.prepare_bean_listing()
-
-        listing = \
-            self.session.get(self.addr_m2_ref,
-                             params={'max': 10, 'prefix': '2',
-                                     'delimiter': '-'}).json()["prefixes"]
-
-        self.assertEqual(len(listing), 1)
-        self.assertEqual(listing, ['2-'])
-
-        self.delete_bean_list()
-
-    def test_container_get_listing5(self):
-
-        self.session.put(self.addr_m2_ref)
-        self.prepare_bean_listing()
-
-        listing = \
-            self.session.get(self.addr_m2_ref,
-                             params={'max': 6, 'prefix': '2-',
-                                     'marker': '2-04', 'delimiter': '-'}).json()
-
-        print listing
-
-        self.assertEqual(len(listing["objects"]), 6)
-        self.assertEqual(listing["objects"][0]['name'], '2-05')
-        self.assertEqual(listing["objects"][1]['name'], '2-06')
-        self.assertEqual(listing["objects"][-1]['name'], '2-09')
-        self.assertEqual(listing["prefixes"], ['2-05-'])
-
-        self.delete_bean_list()
 
     def test_container_get_listing6(self):
 
@@ -521,7 +487,7 @@ class TestMeta2Functional(unittest.TestCase):
 
     # Containers Actions tests
 
-    def test_containers_actions_touch(self):  # to be improved
+    def test_containers_actions_touch(self):
 
         self.session.put(self.addr_m2_ref)
         resp = self.session.post(self.addr_m2_ref_action, json.dumps(
@@ -619,7 +585,6 @@ class TestMeta2Functional(unittest.TestCase):
         resp = self.session.post(self.addr_m2_ref_action, json.dumps(
             {"action": "SetProperties", "args": {"error": self.prop}}
         ))
-        print resp, resp.text
         self.assertFalse(resp.status_code == 500)
 
     def test_containers_actions_setProperties_ref_no_link(self):
@@ -869,13 +834,13 @@ class TestMeta2Functional(unittest.TestCase):
         ))
         self.assertEqual(resp.status_code, 404)
 
-    def test_contents_actions_touch(self):  # To be improved
+    def test_contents_actions_touch(self):
 
         self.prepare_content()
         resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
             {"action": "Touch", "args": self.direct_path}
         ))
-        self.assertFalse(resp.status_code == 500)
+        self.assertTrue(resp.status_code == 204)
 
     def test_contents_actions_setStoragePolicy(self):
 
