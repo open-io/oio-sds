@@ -311,7 +311,7 @@ action_dir_srv_action (struct req_args_s *args)
 		{"Force", action_dir_srv_force},
 		{NULL,NULL}
 	};
-	return abstract_action (args, actions);
+	return abstract_action ("directory services", args, actions);
 }
 
 //------------------------------------------------------------------------------
@@ -531,6 +531,6 @@ action_dir_ref_action (struct req_args_s *args)
 		{"DeleteProperties", action_dir_prop_del},
 		{NULL,NULL}
 	};
-	return abstract_action (args, actions);
+	return abstract_action ("directory references", args, actions);
 }
 

@@ -22,7 +22,7 @@ struct sub_action_s {
 };
 
 static enum http_rc_e
-abstract_action (struct req_args_s *args, struct sub_action_s *sub)
+abstract_action (const char *tag, struct req_args_s *args, struct sub_action_s *sub)
 {
 	struct json_tokener *parser;
 	struct json_object *jbody, *jargs, *jaction;
@@ -34,13 +34,13 @@ abstract_action (struct req_args_s *args, struct sub_action_s *sub)
 	jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
 			args->rq->body->len);
 	if (!json_object_is_type (jbody, json_type_object))
-		rc = _reply_format_error (args, BADREQ ("Invalid JSON object"));
+		rc = _reply_format_error (args, BADREQ ("Invalid JSON object (%s)", tag));
 	else {
 		if (!json_object_object_get_ex (jbody, "action", &jaction)
 				|| !json_object_is_type (jaction, json_type_string))
-			rc = _reply_forbidden_error (args, BADREQ ("No/Bad action"));
+			rc = _reply_forbidden_error (args, BADREQ ("No/Bad action (%s)", tag));
 		else if (!json_object_object_get_ex (jbody, "args", &jargs))
-			rc = _reply_forbidden_error (args, BADREQ ("No/Bad arguments"));
+			rc = _reply_forbidden_error (args, BADREQ ("No/Bad arguments (%s)", tag));
 		else {
 			const char *action = json_object_get_string (jaction);
 			args->rp->access_tail ("action=%s", action);
@@ -50,7 +50,7 @@ abstract_action (struct req_args_s *args, struct sub_action_s *sub)
 					goto exit;
 				}
 			}
-			rc = _reply_forbidden_error (args, BADREQ ("Unexpected action"));
+			rc = _reply_forbidden_error (args, BADREQ ("Unexpected action (%s)", tag));
 		}
 	}
 exit:

@@ -98,7 +98,8 @@ make DESTDIR=${install_dir} install
 | GCLUSTER_CONFIG_LOCAL_PATH | ".oio/sds.conf" | Local configuration directory. |
 | GCLUSTER_AGENT_SOCK_PATH | "/var/run/oio-sds-agent.sock" | Default path for agent's socket. |
 | GS_CONFIG_NSINFO_REFRESH | "nsinfo_refresh" | Default refresh period for 
-| PROXYD_PREFIX | "/v1.0" | Prefix applied to proxyd's URL |
+| PROXYD_PREFIX | "v1.0" | Prefix applied to proxyd's URL, first version (no account managed) |
+| PROXYD_PREFIX2 | "v2.0" | Prefix applied to proxyd's URL, second version (with accounts) |
 | PROXYD_PATH_MAXLEN | 2048 | Maximum length for path to be accepted in requests. |
 | PROXYD_DEFAULT_TTL_CSM0 | 0 | Maximum TTL (in seconds) for conscience entries in the proxyd cache. |
 | PROXYD_DEFAULT_TTL_SERVICES | 3600 | Idem for services entries. |
