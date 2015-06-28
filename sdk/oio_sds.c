@@ -75,16 +75,26 @@ _curl_set_url_content (struct hc_url_s *u)
 
 	gchar *s = gridcluster_get_proxy (ns);
 	if (!s)
-		g_string_append_printf (hu, "proxy.%s.ns.openio.io", ns);
+		g_string_append_printf (hu, "proxy.%s.ns.private.openio.io", ns);
 	else {
 		g_string_append (hu, s);
 		g_free (s);
 	}
 
-	g_string_append_printf (hu, "/%s/m2/%s/%s/%s", PROXYD_PREFIX, ns,
-			hc_url_get(u, HCURL_USER), hc_url_get (u, HCURL_PATH));
+	gchar *_n, *_a, *_u, *_p;
+	_n = g_uri_escape_string (hc_url_get (u, HCURL_NS), NULL, FALSE);
+	_a = g_uri_escape_string (hc_url_get (u, HCURL_ACCOUNT), NULL, FALSE);
+	_u = g_uri_escape_string (hc_url_get (u, HCURL_USER), NULL, FALSE);
+	_p = g_uri_escape_string (hc_url_get (u, HCURL_PATH), NULL, FALSE);
+	g_string_append_printf (hu, "/%s/m2/%s/%s/%s/%s", PROXYD_PREFIX2, _n, _a, _u, _p);
+	g_free (_n);
+	g_free (_a);
+	g_free (_u);
+	g_free (_p);
 	return hu;
 }
+
+/* Body helpers ------------------------------------------------------------- */
 
 static size_t
 _write_GString(void *b, size_t s, size_t n, GString *out)
@@ -109,8 +119,6 @@ _read_GString(void *b, size_t s, size_t n, struct view_GString_s *in)
 		memcpy(b, in->data->str, len);
 		in->done += len;
 	}
-	GRID_DEBUG(" + Feeding with [%"G_GSIZE_FORMAT"] -> [%"G_GSIZE_FORMAT"]"
-			" -> [%"G_GSIZE_FORMAT"]", available, remaining, len);
 	return len;
 }
 
@@ -121,7 +129,37 @@ _write_NOOP(void *data, size_t s, size_t n, void *ignored)
 	return s*n;
 }
 
-/* -------------------------------------------------------------------------- */
+static GError *
+_body_parse_error (GString *b)
+{
+	EXTRA_ASSERT (b != NULL);
+	struct json_tokener *tok = json_tokener_new ();
+	struct json_object *jbody = json_tokener_parse_ex (tok, b->str, b->len);
+	json_tokener_free (tok);
+	tok = NULL;
+
+	if (!jbody)
+		return NEWERROR(0, "No error explained");
+
+	struct json_object *jcode, *jmsg;
+	struct metautils_json_mapping_s map[] = {
+		{"status", &jcode, json_type_int,    0},
+		{"message",  &jmsg,  json_type_string, 0},
+		{NULL, NULL, 0, 0}
+	};
+	GError *err =  metautils_extract_json(jbody, map);
+	if (!err) {
+		int code = 0;
+		const char *msg = "Unknown error";
+		if (jcode) code = json_object_get_int64 (jcode);
+		if (jmsg) msg = json_object_get_string (jmsg);
+		err = NEWERROR(code, "(code=%d) %s", code, msg);
+	}
+	json_object_put (jbody);
+	return err;
+}
+
+/* Headers helpers ---------------------------------------------------------- */
 
 struct headers_s
 {
@@ -158,7 +196,7 @@ _headers_add_int64 (struct headers_s *h, const char *k, gint64 i64)
 	_headers_add (h, k, v);
 }
 
-/* -------------------------------------------------------------------------- */
+/* Chunk parsing helpers (JSON) --------------------------------------------- */
 
 struct chunk_s
 {
@@ -427,6 +465,7 @@ _download_chunks (struct oio_sds_s *sds, GSList *chunks, const char *local)
 		rc = curl_easy_setopt (h, CURLOPT_URL, c0->url);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_FILE);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, out);
+		/* TODO JFS: force a "Range:" header with the expected size */
 		rc = curl_easy_perform (h);
 		if (rc != CURLE_OK)
 			err = NEWERROR(0, "CURL: download error [%s] : (%d) %s", c0->url,
@@ -736,8 +775,11 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		else {
 			long code = 0;
 			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
-			if (2 != (code/100))
-				err = NEWERROR(0, "Beans: (%ld)", code);
+			if (2 != (code/100)) {
+				err = _body_parse_error (reply_body);
+				g_prefix_error (&err, "Beans: ");
+				err->code = code;
+			}
 		}
 		_headers_clean (&headers);
 	}

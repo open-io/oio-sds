@@ -222,12 +222,14 @@ _metacd_match (const gchar *method, const gchar *path)
 	gchar *key = g_alloca (lp + 2 + lm + 1);
 	gchar *pk = key;
 
-	// Purify the path
+	// Copy and purify the path
 	register int slash = 1;
 	for (register const gchar *p = path; *p ;++p) {
 		if (slash && *p == '/')
 			continue;
-		slash = ('/' == (*(pk++) = *p));
+		//slash = ('/' == (*(pk++) = *p));
+		slash = 0;
+		*(pk++) = *p;
 	}
 
 	// add a separator

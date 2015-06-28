@@ -1013,7 +1013,7 @@ action_m2_container_action (struct req_args_s *args)
 
 		{NULL,NULL}
 	};
-	return abstract_action (args, actions);
+	return abstract_action ("meta2 container", args, actions);
 }
 
 /* CONTENT action resource -------------------------------------------------- */
@@ -1238,7 +1238,7 @@ action_m2_content_action (struct req_args_s *args)
 		{"DelProperties", action_m2_content_propdel},
 		{NULL,NULL}
 	};
-	return abstract_action (args, actions);
+	return abstract_action ("meta2 content", args, actions);
 }
 
 /* CONTENT resources ------------------------------------------------------- */

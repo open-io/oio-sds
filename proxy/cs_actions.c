@@ -202,7 +202,7 @@ action_cs_action (struct req_args_s *args)
 		{"Unlock", action_cs_srv_unlock},
 		{NULL,NULL}
 	};
-	return abstract_action (args, actions);
+	return abstract_action ("conscience", args, actions);
 }
 
 static enum http_rc_e

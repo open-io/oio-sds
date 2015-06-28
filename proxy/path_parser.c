@@ -106,7 +106,7 @@ path_parser_match (struct path_parser_s *self, gchar **tokens)
 
 	struct path_matching_s **p, **result;
 	p = result = g_try_malloc0 ((1 + g_slist_length(lmatch)) * sizeof (struct path_matching_s*));
-	for (GSList *l=lmatch; l ;l=g_slist_next (l))
+	for (GSList *l=lmatch; l ;l=l->next)
 		(*p++) = l->data;
 	g_slist_free (lmatch);
 	return result;

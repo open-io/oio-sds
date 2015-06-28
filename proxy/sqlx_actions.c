@@ -475,6 +475,6 @@ action_sqlx_action (struct req_args_s *args)
 
 		{NULL,NULL},
 	};
-	return abstract_action (args, actions);
+	return abstract_action ("sqlx actions", args, actions);
 }
 
