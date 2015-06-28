@@ -127,36 +127,47 @@ _parse_oldurl(struct hc_url_s *url, const char *str)
 	return 1;
 }
 
+static void
+_replace (gchar **pp, const char *s)
+{
+	metautils_str_reuse (pp, g_uri_unescape_string (s, NULL));
+}
+
 static int
 _parse_url(struct hc_url_s *url, const char *str)
 {
 	struct req_uri_s ruri = {NULL, NULL, NULL, NULL};
 
-	if (metautils_requri_parse (str, &ruri)) { // Parse the path
+	if (!metautils_requri_parse (str, &ruri)) {
+		metautils_requri_clear (&ruri);
+		return 0;
+	}
 
-		gchar **path_tokens = g_strsplit (ruri.path, "/", 5);
-		if (path_tokens) {
-			if (path_tokens[0]) {
-				metautils_str_reuse (&url->ns, path_tokens[0]);
-				if (path_tokens[1]) {
-					metautils_str_replace (&url->account, path_tokens[1]);
-					if (path_tokens[2]) {
-						metautils_str_reuse (&url->user, path_tokens[2]);
-						if (path_tokens[3]) {
-							metautils_str_replace (&url->type, path_tokens[3]);
-							if (path_tokens[4])
-								metautils_str_reuse (&url->path, path_tokens[4]);
-						}
-					}
-				}
-			}
-			g_free (path_tokens);
-		}
+	gchar **path_tokens = g_strsplit (ruri.path, "/", 5);
+	do {
+		if (!path_tokens) break;
 
-		if (ruri.query_tokens) { // Parse the options
-			for (gchar **p=ruri.query_tokens; *p ;++p)
-				_add_option(url, *p);
-		}
+		if (!path_tokens[0]) break;
+		_replace (&url->ns, path_tokens[0]);
+
+		if (!path_tokens[1]) break;
+		_replace (&url->account, path_tokens[1]);
+
+		if (!path_tokens[2]) break;
+		_replace (&url->user, path_tokens[2]);
+
+		if (!path_tokens[3]) break;
+		_replace (&url->type, path_tokens[3]);
+
+		if (!path_tokens[4]) break;
+		_replace (&url->path, path_tokens[4]);
+	} while (0);
+
+	if (path_tokens) g_strfreev (path_tokens);
+
+	if (ruri.query_tokens) { // Parse the options
+		for (gchar **p=ruri.query_tokens; *p ;++p)
+			_add_option(url, *p);
 	}
 
 	metautils_requri_clear (&ruri);
@@ -370,24 +381,28 @@ hc_url_has_fq_container (struct hc_url_s *u)
 	return hc_url_has (u, HCURL_NS) && hc_url_has (u, HCURL_ACCOUNT) && hc_url_has (u, HCURL_USER);
 }
 
+static void
+_append (GString *gs, const char *s)
+{
+	gchar *v = g_uri_escape_string (s, NULL, FALSE);
+	g_string_append (gs, v);
+	g_free (v);
+}
+
 static GString *
 _pack_url(struct hc_url_s *u)
 {
 	GString *gs = g_string_new ("");
-	if (u->ns)
-		g_string_append (gs, u->ns);
+	if (u->ns) _append (gs, u->ns);
 	g_string_append_c (gs, '/');
-	if (u->account)
-		g_string_append (gs, u->account);
+	if (u->account) _append (gs, u->account);
 	g_string_append_c (gs, '/');
-	if (u->user)
-		g_string_append (gs, u->user);
+	if (u->user) _append (gs, u->user);
 	g_string_append_c (gs, '/');
-	if (u->type)
-		g_string_append (gs, u->type);
+	if (u->type) _append (gs, u->type);
 	if (hc_url_has (u, HCURL_PATH)) {
 		g_string_append_c (gs, '/');
-		g_string_append   (gs, hc_url_get(u, HCURL_PATH));
+		_append (gs, hc_url_get(u, HCURL_PATH));
 	}
 	return gs;
 }
