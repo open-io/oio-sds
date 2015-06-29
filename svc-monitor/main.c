@@ -111,7 +111,7 @@ parse_output(const gchar *cmd, service_info_t *si)
 		my_chomp(line);
 
 		if (!g_regex_match(regex_tag, line, 0, &mi)) {
-			GRID_INFO("Unrecognized pattern for output line [%s]", line);
+			GRID_DEBUG("Unrecognized pattern for output line [%s]", line);
 		} else {
 			struct service_tag_s *tag;
 			gchar *str_type, *str_name, *str_sub, *str_value;
