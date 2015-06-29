@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8)
-project (Grid C)
+project (OIOSDS C)
 
 include(CheckIncludeFile)
 include(CheckLibraryExists)
@@ -12,11 +12,13 @@ include(FindZLIB)
 find_package(PkgConfig)
 find_package(Doxygen)
 
-set(Grid_VERSION_MAJOR 0)
-set(Grid_VERSION_MINOR 1)
-set(Grid_RELEASE 0)
-set(API_VERSION "${Grid_VERSION_MAJOR}.${Grid_VERSION_MINOR}.${Grid_RELEASE}")
-set(SHORT_API_VERSION "${Grid_VERSION_MAJOR}.${Grid_VERSION_MINOR}")
+set(OIOSDS_VERSION_MAJOR 0)
+set(OIOSDS_VERSION_MINOR 7)
+set(OIOSDS_RELEASE 0)
+
+set(API_VERSION "${OIOSDS_VERSION_MAJOR}.${OIOSDS_VERSION_MINOR}.${OIOSDS_RELEASE}")
+set(SHORT_API_VERSION "${OIOSDS_VERSION_MAJOR}.${OIOSDS_VERSION_MINOR}")
+
 if (NOT ABI_VERSION)
 	set(ABI_VERSION 0)
 endif()
@@ -275,10 +277,6 @@ endif ()
 
 find_program(BISON_EXECUTABLE bison)
 find_program(FLEX_EXECUTABLE flex)
-find_program(SED_EXECUTABLE sed)
-find_program(CP_EXECUTABLE cp)
-test_CLI(CP_EXECUTABLE "cp")
-test_CLI(SED_EXECUTABLE "sed")
 test_CLI(FLEX_EXECUTABLE "flex")
 test_CLI(BISON_EXECUTABLE "bison")
 
@@ -292,20 +290,26 @@ set(ATTR_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/attr")
 set(ZK_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/zookeeper")
 
 # check system configuration
-pkg_check_modules(APR REQUIRED apr-1)
+pkg_search_module(JSONC json json-c)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0 gthread-2.0 gmodule-2.0)
+pkg_check_modules(CURL curl)
+
+if (NOT SDK_ONLY)
+pkg_check_modules(APR REQUIRED apr-1)
 pkg_check_modules(NEON REQUIRED neon)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 pkg_check_modules(ZMQ libzmq>=4.0.0)
-pkg_search_module(JSONC json json-c)
+endif (NOT SDK_ONLY)
 
 # Load CLI-overriden configuration
-option_or_system(APACHE2 modules/mod_webdav.so httpd.h)
 option_or_system(ASN1C asn1cskeletons)
-option_or_system(ATTR attr attr/xattr.h)
 option_or_system(CURL curl curl/curl.h)
-option_or_system(GRIDINIT gridinit-utils gridinit-utils.h)
 option_or_system(JSONC json-c json.h)
+
+if (NOT SDK_ONLY)
+option_or_system(APACHE2 modules/mod_webdav.so httpd.h)
+option_or_system(ATTR attr attr/xattr.h)
+option_or_system(GRIDINIT gridinit-utils gridinit-utils.h)
 option_or_system(LIBRAIN rain librain.h)
 option_or_system(LZO lzo2 lzo1.h lzo1x.h lzoutil.h)
 option_or_system(MICROHTTPD microhttpd microhttpd.h)
@@ -316,6 +320,7 @@ option_or_system(NETSNMP netsnmp
 option_or_system(ZK zookeeper_mt zookeeper.h)
 option_or_system(ZLIB z zlib.h)
 option_or_system(ZMQ zmq zmq.h zmq_utils.h)
+endif (NOT SDK_ONLY)
 
 if (ASN1C_EXE)
 	set(ASN1C_EXECUTABLE ${ASN1C_EXE})
@@ -326,8 +331,10 @@ MESSAGE("asn1c at ${ASN1C_EXECUTABLE}")
 set(ASN1C_EXE_OPTS "-fwide-types")
 
 # Check every required module is present
-check_found("APR" "APACHE2" "ASN1C" "ATTR" "CURL"
-		"GLIB2" "GRIDINIT" "JSONC" "LIBRAIN" "LZO" "NEON" "NETSNMP"
+check_found("ASN1C" "CURL" "GLIB2" "JSONC")
+
+if (NOT SDK_ONLY)
+check_found("APR" "APACHE2" "ATTR" "GRIDINIT" "LIBRAIN" "LZO" "NEON" "NETSNMP"
 		"SQLITE3" "ZMQ" "ZK" "PYTHONINTERP")
 
 if (DEFINED APACHE2_MODDIR)
@@ -335,6 +342,7 @@ if (DEFINED APACHE2_MODDIR)
 else ()
 	set (APACHE2_MODULES_DIRS ${APACHE2_LIBRARY_DIRS}/modules)
 endif ()
+endif (NOT SDK_ONLY)
 
 set(CMAKE_LIBRARY_PATH "")
 set(CMAKE_INCLUDE_PATH "")
@@ -355,13 +363,16 @@ if (DOXYGEN_FOUND)
 endif ()
 
 add_subdirectory(./sdk)
+add_subdirectory(./metautils/lib)
+add_subdirectory(./cluster/remote)
+add_subdirectory(./cluster/lib)
+
+if (NOT SDK_ONLY)
 add_subdirectory(./client/c/lib)
 add_subdirectory(./client/c/tools)
 add_subdirectory(./cluster/agent)
 add_subdirectory(./cluster/conscience)
-add_subdirectory(./cluster/lib)
 add_subdirectory(./cluster/module)
-add_subdirectory(./cluster/remote)
 add_subdirectory(./cluster/tools)
 add_subdirectory(./gridd/clients/ping)
 add_subdirectory(./gridd/clients/stats)
@@ -373,7 +384,6 @@ add_subdirectory(./gridd/plugins/msg_stats)
 add_subdirectory(./meta0v2)
 add_subdirectory(./meta1v2)
 add_subdirectory(./meta2v2)
-add_subdirectory(./metautils/lib)
 add_subdirectory(./proxy)
 add_subdirectory(./rainx)
 add_subdirectory(./rawx-apache2/src)
@@ -388,4 +398,5 @@ add_subdirectory(./sqlx)
 add_subdirectory(./svc-monitor)
 add_subdirectory(./python)
 add_subdirectory(./tools)
+endif (NOT SDK_ONLY)
 
