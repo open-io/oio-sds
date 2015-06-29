@@ -41,6 +41,7 @@ class EventWorker(object):
         self._configure_zmq(context)
         self.cs = ConscienceClient(self.conf)
         self._account_addr = None
+        self.session = requests.Session()
 
     def _configure_zmq(self, context):
         socket = context.socket(zmq.REP)
@@ -122,7 +123,7 @@ class EventWorker(object):
         account = data.get('url').get('account')
 
         event = {'mtime': mtime, 'name': name}
-        requests.post(uri, params={'id': account}, data=json.dumps(event))
+        self.session.post(uri, params={'id': account}, data=json.dumps(event))
 
     def handle_container_update(self, event):
         """
@@ -145,7 +146,7 @@ class EventWorker(object):
             'bytes': bytes_count,
             'objects': object_count
         }
-        requests.post(uri, params={'id': account}, data=json.dumps(event))
+        self.session.post(uri, params={'id': account}, data=json.dumps(event))
 
     def handle_container_destroy(self, event):
         """
@@ -159,7 +160,7 @@ class EventWorker(object):
         account = data.get('url').get('account')
 
         event = {'dtime': dtime, 'name': name}
-        requests.post(uri, params={'id': account}, data=json.dumps(event))
+        self.session.post(uri, params={'id': account}, data=json.dumps(event))
 
     def handle_object_delete(self, event):
         """
@@ -182,7 +183,7 @@ class EventWorker(object):
             resp = None
             try:
                 with Timeout(CHUNK_TIMEOUT):
-                    resp = requests.delete(chunk['id'])
+                    resp = self.session.delete(chunk['id'])
             except (Exception, Timeout) as e:
                 self.logger.exception(e)
             return resp
