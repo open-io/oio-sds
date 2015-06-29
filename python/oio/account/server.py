@@ -55,8 +55,9 @@ def account_update():
     decoded = flask.request.get_json(force=True)
     metadata = decoded.get('metadata')
     to_delete = decoded.get('to_delete')
-    backend.update_account_metadata(account_id, metadata, to_delete)
-    return ""
+    if backend.update_account_metadata(account_id, metadata, to_delete):
+        return flask.Response('', 204)
+    return 'Account not found', 404
 
 
 @account_api.route('/v1.0/account/show', methods=['HEAD', 'GET'])
