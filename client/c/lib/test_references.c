@@ -31,9 +31,7 @@ gen_random(size_t length)
 {
 	static char charset[] =
 		"abcdefghijklmnopqrstuvwxyz"
-		"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-		"0123456789"
-		",.-#'?!";
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZ" "0123456789" ",.-#'?!";
 	char *randomString = NULL;
 
 	if (length) {
