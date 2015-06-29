@@ -824,7 +824,7 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		_headers_add (&headers, "Expect", "");
 		_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-policy", "NONE");
 		_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-hash",
-				"00000000000000000000000000000000");
+				g_checksum_get_string (upload.checksum_content));
 		_headers_add_int64 (&headers, PROXYD_HEADER_PREFIX "content-meta-length",
 				upload.st.st_size);
 		rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
