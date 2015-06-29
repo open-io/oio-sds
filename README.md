@@ -16,27 +16,30 @@ And if it succeeds you will have the joy to experiment your own little SDS insta
 
 ## Dependencies
 
-The build process of OpenIO SDS depends on:
-* cmake, make, cp, sed, bison, flex : involved in the build process.
-* glib2, glib2-devel : 
+The build process of OpenIO SDS depends on several third-party projects.
+
+When building only the SDK, OpenIO only depends on:
+* cmake, make : involved in the build process.
+* bison, flex : generates expression parsers.
+* glib2, glib2-devel
+* curl, libcurl, libcurl-devel 
+* json-c, json-c-devel
+* [asn1c](https://github.com/open-io/asn1c) : our ASN.1 codec, forked from [Lev Walkin's excellent ASN.1 codec](https://github.com/vlm/asn1c). The purpose of our fork is simply to provide codec for explicitely sized integers (int{8,16,32,64} instead of long int).
+
+Building the entire project will require the SDK dependencies, but also:
 * python: Pure python code generator (no dependency), and python modules.
 * python-distutils-extra: required for the installation process
 * httpd, httpd-devel : server base for RAWX and RAINX services
 * apr, apr-util-devel, apr-devel : internally used by RAINX and RAWX modules
-* [asn1c](https://github.com/open-io/asn1c) : our ASN.1 codec, forked from [Lev Walkin's excellent ASN.1 codec](https://github.com/vlm/asn1c). The purpose of our fork is simply to provide codec for explicitely sized integers (int{8,16,32,64} instead of long int).
 * attr, libattr-devel : we use xattr a lot to stamp RAWX chunks and repositories base directory.
 * [gridinit](https://github.com/open-io/gridinit)
-* json-c, json-c-devel
 * [librain](https://github.com/open-io/librain)
 * lzo, lzo-devel : RAWX compression
-* curl, libcurl, libcurl-devel 
 * net-snmp, net-snmp-devel
 * sqlite, sqlite-devel : base storage for META{0,1,2} and SQLX services.
 * zeromq3, zeromq3-devel : communication of events between services and forward agents.
 * zookeeper-devel, libzookeeper\_mt.so : building with distribution's zookeeper client is OK, but the package ships with a lot of dependencies, including the openjdk. We recommand to use the official Oracle/Sun JDK, and to build your own zookeeper client from the source to avoid a huge waste of space and bandwith.
-
-Still required but the next thrid-party dependencies to leave:
-* neon, neon-devel : to be replaced by curl.
+* neon, neon-devel : to be replaced by curl, as soon as we have time to do that.
 
 In addition, a few python modules are required at runtime:
 * python-redis
