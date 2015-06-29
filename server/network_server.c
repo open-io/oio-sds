@@ -55,6 +55,12 @@ enum {
 	NETSERVER_LATENCY    = 0x0002,
 };
 
+enum {
+	EXCESS_NONE = 0,
+	EXCESS_SOFT,
+	EXCESS_HARD
+};
+
 #define MAGIC_ENDPOINT 0xFFFFFFFF
 
 struct endpoint_s
@@ -204,14 +210,17 @@ _client_send_pending_output(struct network_client_s *client)
 	return data_slab_sequence_send(&(client->output), client->fd);
 }
 
-static gboolean
+static int
 _cnx_notify_accept(struct network_server_s *srv)
 {
-	gboolean inxs;
+	int inxs = EXCESS_NONE;
 	g_mutex_lock(&srv->lock_threads);
 	++ srv->cnx_accept;
 	++ srv->cnx_clients;
-	inxs = 1 + srv->workers_active > srv->workers_maximum + srv->cnx_backlog ;
+	if (srv->cnx_clients > srv->cnx_max)
+		inxs = EXCESS_HARD;
+	else if (1 + srv->workers_active > srv->workers_maximum + srv->cnx_backlog)
+		inxs = EXCESS_SOFT;
 	g_mutex_unlock(&srv->lock_threads);
 	return inxs;
 }
@@ -865,8 +874,16 @@ retry:
 		return NULL;
 	}
 
-	if (_cnx_notify_accept(srv))
-		clt->current_error = NEWERROR(CODE_UNAVAILABLE, "Server overloaded.");
+	switch (_cnx_notify_accept(srv)) {
+		case EXCESS_SOFT:
+			clt->current_error = NEWERROR(CODE_UNAVAILABLE, "Server overloaded.");
+		case EXCESS_NONE:
+			break;
+		case EXCESS_HARD:
+			metautils_pclose(&fd);
+			_cnx_notify_close(srv);
+			return NULL;
+	}
 
 	clt->main_stats = srv->stats;
 	clt->server = srv;
