@@ -261,7 +261,6 @@ monitoring_loop(service_info_t *si)
 	GRID_DEBUG("First started %u processes", proc_count);
 
 	while (flag_running) { /* main loop */
-		struct timeval tv_sleep;
 
 		if (flag_restart_children) {
 			if (auto_restart_children) {
@@ -280,7 +279,8 @@ monitoring_loop(service_info_t *si)
 		if (!flag_running)
 			break;
 
-		if (g_timer_elapsed(timer, NULL) >= 1.0) {
+		gdouble elapsed = g_timer_elapsed(timer, NULL);
+		if (elapsed >= 1.0) {
 			if (!((++jiffies) % monitor_period)) {
 				monitor_get_status(svc_mon, si);
 				_add_custom_tags(si);
@@ -290,12 +290,10 @@ monitoring_loop(service_info_t *si)
 				g_clear_error(&error);
 			}
 			g_timer_reset(timer);
+			elapsed = 0.0;
 		}
 
-		tv_sleep.tv_sec = 1L;
-		tv_sleep.tv_usec = 0L;
-		select(0, NULL, NULL, NULL, &tv_sleep);
-		errno = 0;
+		g_usleep (1000000UL - ((gulong)elapsed));
 	}
 
 	supervisor_children_stopall(4);
