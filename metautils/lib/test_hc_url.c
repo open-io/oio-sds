@@ -29,73 +29,135 @@ License along with this library.
 #include "hc_url.h"
 #include "common_main.h"
 
+struct test_data_s {
+	const char *url;
+	const char *whole;
+
+	const char *ns;
+	const char *account;
+	const char *ref;
+	const char *type;
+	const char *path;
+
+	const char *hexa;
+};
+
+#define TEST_END {NULL,NULL, NULL,NULL,NULL,NULL,NULL, NULL}
+
 static void
-test_configure_valid(void)
+_test_field (const char *v, struct hc_url_s *u, enum hc_url_field_e f)
 {
-	struct hc_url_s *url;
+	if (v) {
+		g_assert (hc_url_has (u, f));
+		g_assert (!strcmp (v, hc_url_get (u, f)));
+	} else {
+		g_assert (!hc_url_has (u, f));
+		g_assert (NULL == hc_url_get (u, f));
+	}
+}
 
-	/* plain URL */
-	url = hc_url_oldinit("hc://NS/REF/PATH");
-	g_assert(url != NULL);
+static void
+_test_url (guint idx, struct hc_url_s *u, struct test_data_s *td)
+{
+	(void) idx;
+	_test_field (td->whole, u, HCURL_WHOLE);
+	_test_field (td->ns, u, HCURL_NS);
+	_test_field (td->account, u, HCURL_ACCOUNT);
+	_test_field (td->ref, u, HCURL_USER);
+	_test_field (td->type, u, HCURL_TYPE);
+	_test_field (td->path, u, HCURL_PATH);
+	if (td->hexa) {
+		g_assert (hc_url_has (u, HCURL_HEXID));
+		g_assert (NULL != hc_url_get_id (u));
+		g_assert (!g_ascii_strcasecmp (hc_url_get (u, HCURL_HEXID), td->hexa));
+	} else {
+		g_assert (!hc_url_has (u, HCURL_HEXID));
+		g_assert (NULL == hc_url_get_id (u));
+		g_assert (NULL == hc_url_get (u, HCURL_HEXID));
+	}
+}
 
-	g_assert(hc_url_has(url, HCURL_NS));
-	g_assert(!hc_url_has(url, HCURL_ACCOUNT));
-	g_assert(hc_url_has(url, HCURL_USER));
-	g_assert(hc_url_has(url, HCURL_PATH));
+static struct hc_url_s *
+_init_url (struct test_data_s *td)
+{
+	struct hc_url_s *url = hc_url_empty ();
+	if (td->ns) hc_url_set (url, HCURL_NS, td->ns);
+	if (td->account) hc_url_set (url, HCURL_ACCOUNT, td->account);
+	if (td->ref) hc_url_set (url, HCURL_USER, td->ref);
+	if (td->type) hc_url_set (url, HCURL_TYPE, td->type);
+	if (td->path) hc_url_set (url, HCURL_PATH, td->path);
+	return url;
+}
 
-	g_assert(!strcmp("NS", hc_url_get(url, HCURL_NS)));
-	g_assert(NULL == hc_url_get(url, HCURL_ACCOUNT));
-	g_assert(!strcmp("REF", hc_url_get(url, HCURL_USER)));
-	g_assert(!strcmp("PATH", hc_url_get(url, HCURL_PATH)));
-	hc_url_clean(url);
+static void
+test_configure_valid (void)
+{
+	static struct test_data_s tab[] = {
+		{ "/NS//JFS",
+			"NS//JFS/",
+			"NS", HCURL_DEFAULT_ACCOUNT, "JFS", HCURL_DEFAULT_TYPE, NULL,
+			"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
 
-	/* partial URL */
-	url = hc_url_oldinit("hc://NS/REF");
-	g_assert(url != NULL);
+		{ "NS//JFS//1.",
+			"NS//JFS//1.",
+			"NS", HCURL_DEFAULT_ACCOUNT, "JFS", HCURL_DEFAULT_TYPE, "1.",
+			"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
 
-	g_assert(hc_url_has(url, HCURL_NS));
-	g_assert(!hc_url_has(url, HCURL_ACCOUNT));
-	g_assert(hc_url_has(url, HCURL_USER));
-	g_assert(!hc_url_has(url, HCURL_PATH));
+		TEST_END
+	};
 
-	g_assert(!strcmp("NS", hc_url_get(url, HCURL_NS)));
-	g_assert(NULL == hc_url_get(url, HCURL_ACCOUNT));
-	g_assert(!strcmp("REF", hc_url_get(url, HCURL_USER)));
+	guint idx = 0;
+	for (struct test_data_s *th=tab; th->url ;th++) {
+		struct hc_url_s *url;
 
-	hc_url_clean(url);
+		url = hc_url_init(th->url);
+		g_assert(url != NULL);
+		_test_url (idx++, url, th);
+		hc_url_pclean (&url);
 
-	/* partial with trailing slashes */
-	url = hc_url_oldinit("hc:////NS///REF///");
-	g_assert(url != NULL);
+		url = _init_url (th);
+		g_assert(url != NULL);
+		_test_url (idx++, url, th);
+		hc_url_pclean (&url);
+	}
+}
 
-	g_assert(hc_url_has(url, HCURL_NS));
-	g_assert(!hc_url_has(url, HCURL_ACCOUNT));
-	g_assert(hc_url_has(url, HCURL_USER));
-	g_assert(hc_url_has(url, HCURL_PATH));
+static void
+test_configure_valid_old(void)
+{
+	static struct test_data_s tab[] = {
+		{ "/NS/JFS",
+			"NS//JFS/",
+			"NS", HCURL_DEFAULT_ACCOUNT, "JFS", HCURL_DEFAULT_TYPE, NULL,
+			"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
 
-	g_assert(!strcmp("NS", hc_url_get(url, HCURL_NS)));
-	g_assert(NULL == hc_url_get(url, HCURL_ACCOUNT));
-	g_assert(!strcmp("REF", hc_url_get(url, HCURL_USER)));
-	g_assert(!strcmp("//", hc_url_get(url, HCURL_PATH)));
+		{ "/NS/JFS/1.",
+			"NS//JFS//1.",
+			"NS", HCURL_DEFAULT_ACCOUNT, "JFS", HCURL_DEFAULT_TYPE, "1.",
+			"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
 
-	hc_url_clean(url);
+		{ "NS//JFS//1.",
+			"NS//JFS//%2F1.",
+			"NS", HCURL_DEFAULT_ACCOUNT, "JFS", HCURL_DEFAULT_TYPE, "/1.",
+			"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
 
-	/* partial with trailing slashes */
-	url = hc_url_oldinit("hc:////NS///REF///PATH");
-	g_assert(url != NULL);
+		TEST_END
+	};
 
-	g_assert(hc_url_has(url, HCURL_NS));
-	g_assert(!hc_url_has(url, HCURL_ACCOUNT));
-	g_assert(hc_url_has(url, HCURL_USER));
-	g_assert(hc_url_has(url, HCURL_PATH));
+	guint idx = 0;
+	for (struct test_data_s *th=tab; th->url ;th++) {
+		struct hc_url_s *url;
 
-	g_assert(!strcmp("NS", hc_url_get(url, HCURL_NS)));
-	g_assert(NULL == hc_url_get(url, HCURL_ACCOUNT));
-	g_assert(!strcmp("REF", hc_url_get(url, HCURL_USER)));
-	g_assert(!strcmp("//PATH", hc_url_get(url, HCURL_PATH)));
+		url = hc_url_oldinit(th->url);
+		g_assert(url != NULL);
+		_test_url (idx++, url, th);
+		hc_url_pclean (&url);
 
-	hc_url_clean(url);
-
+		url = _init_url (th);
+		g_assert(url != NULL);
+		_test_url (idx++, url, th);
+		hc_url_pclean (&url);
+	}
 }
 
 static void
@@ -105,53 +167,9 @@ test_configure_invalid(void)
 
 	url = hc_url_oldinit("");
 	g_assert(url == NULL);
-}
 
-struct test_hash_s {
-	const char *url;
-	const char *hexa;
-};
-
-static struct test_hash_s hash_data[] =
-{
-	{ "/NS/JFS",
-		"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
-	{NULL, NULL}
-};
-
-static void
-test_hash(void)
-{
-	struct test_hash_s *th;
-
-	for (th=hash_data; th->url ;th++) {
-		struct hc_url_s *url;
-
-		url = hc_url_oldinit(th->url);
-		g_assert(url != NULL);
-		g_assert(NULL != hc_url_get_id(url));
-		g_assert(!g_ascii_strcasecmp(hc_url_get(url, HCURL_HEXID), th->hexa));
-		hc_url_clean(url);
-	}
-}
-
-static void
-test_hexid(void)
-{
-	struct test_hash_s *th;
-
-	for (th=hash_data; th->url ;th++) {
-		struct hc_url_s *url;
-
-		url = hc_url_empty();
-		g_assert(url != NULL);
-		g_assert(NULL != hc_url_set(url, HCURL_NS, "NS"));
-		g_assert(NULL != hc_url_set(url, HCURL_HEXID, th->hexa));
-		g_assert(NULL != hc_url_get_id(url));
-		g_assert(NULL != hc_url_get(url, HCURL_HEXID));
-		g_assert(!g_ascii_strcasecmp(hc_url_get(url, HCURL_HEXID), th->hexa));
-		hc_url_clean(url);
-	}
+	url = hc_url_oldinit("/");
+	g_assert(url == NULL);
 }
 
 static void
@@ -180,12 +198,12 @@ int
 main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
+	g_test_add_func("/metautils/hc_url/configure/valid_old",
+			test_configure_valid_old);
 	g_test_add_func("/metautils/hc_url/configure/valid",
 			test_configure_valid);
 	g_test_add_func("/metautils/hc_url/configure/invalid",
 			test_configure_invalid);
-	g_test_add_func("/metautils/hc_url/hexid", test_hexid);
-	g_test_add_func("/metautils/hc_url/hash", test_hash);
 	g_test_add_func("/metautils/hc_url/options", test_options);
 	return g_test_run();
 }
