@@ -344,8 +344,9 @@ _select_dest_assign_m1(GList *lst, const struct meta0_assign_meta1_s *s_aM1, gui
 		sport=NULL;
 	}
 
-	if (!d_aM1)
+	if (!d_aM1) {
 		GRID_TRACE("NO meta1 dest found");
+	}
 	return d_aM1;
 }
 
