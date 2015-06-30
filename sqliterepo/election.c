@@ -2451,9 +2451,7 @@ sqlx_config_get_peers2(const struct replication_config_s *cfg, struct sqlx_name_
 		peers = NULL;
 	}
 
-	gchar msg[256];
-	g_snprintf(msg, sizeof(msg), "get_peers(%s,%s): ", n->base, n->type);
-	g_prefix_error(&err, msg);
+	g_prefix_error(&err, "get_peers(%s,%s): ", n->base, n->type);
 	return err;
 }
 
