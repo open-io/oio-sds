@@ -57,6 +57,16 @@ struct hc_url_s
 
 /* ------------------------------------------------------------------------- */
 
+static int
+_check_parsed_url (struct hc_url_s *u)
+{
+	if (!u->ns && !u->user) return 0;
+	if (u->ns && !u->ns[0]) return 0;
+	if (u->user && !u->user[0]) return 0;
+	if (u->path && !u->path[0]) return 0;
+	return 1;
+}
+
 static void
 _options_reset (struct hc_url_s *u)
 {
@@ -100,7 +110,23 @@ _parse_oldurl(struct hc_url_s *url, const char *str)
 {
 	struct req_uri_s ruri = {NULL, NULL, NULL, NULL};
 
-	if (metautils_requri_parse (str, &ruri)) { // Parse the path
+	// Purify the url
+	size_t len = strlen (str);
+	char *tmp = g_alloca (len+1);
+
+	do {
+		char *p = tmp;
+		for (; *str && *str == '/' ;++str) {} // skip the leading slashes
+		if (*str) { // Copy the NS
+			for (; *str && *str != '/' ;++str)
+				*(p++) = *str;
+		}
+		if (*str) *(p++) = '/'; // Copy a single separator
+		for (; *str && *str == '/' ;++str) {} // skip separators
+		if (*str) strcpy(p, str); // Copy what remains
+	} while (0);
+
+	if (metautils_requri_parse (tmp, &ruri)) { // Parse the path
 
 		gchar **path_tokens = g_strsplit (ruri.path, "/", 3);
 		if (path_tokens) {
@@ -124,7 +150,7 @@ _parse_oldurl(struct hc_url_s *url, const char *str)
 	}
 
 	metautils_requri_clear (&ruri);
-	return 1;
+	return _check_parsed_url (url);
 }
 
 static void
@@ -137,6 +163,8 @@ static int
 _parse_url(struct hc_url_s *url, const char *str)
 {
 	struct req_uri_s ruri = {NULL, NULL, NULL, NULL};
+
+	for (; *str && *str == '/' ;++str) {} // skip the leading slashes
 
 	if (!metautils_requri_parse (str, &ruri)) {
 		metautils_requri_clear (&ruri);
@@ -171,7 +199,7 @@ _parse_url(struct hc_url_s *url, const char *str)
 	}
 
 	metautils_requri_clear (&ruri);
-	return 1;
+	return _check_parsed_url (url);
 }
 
 static void
@@ -284,7 +312,7 @@ hc_url_dup(struct hc_url_s *u)
 struct hc_url_s*
 hc_url_set(struct hc_url_s *u, enum hc_url_field_e f, const char *v)
 {
-	if (!u || !v || strchr(v, '/')) {
+	if (!u || !v) {
 		errno = EINVAL;
 		return NULL;
 	}
@@ -326,7 +354,7 @@ hc_url_set(struct hc_url_s *u, enum hc_url_field_e f, const char *v)
 
 		case HCURL_HEXID:
 			u->hexid[0] = 0;
-			if (!metautils_str_ishexa(v,64) || !hex2bin(v, u->id, sizeof(u->id), NULL)) {
+			if (!metautils_str_ishexa(v,64) || !hex2bin(v, u->id, 32, NULL)) {
 				errno = EINVAL;
 				return NULL;
 			}

@@ -115,6 +115,8 @@ path_parser_match (struct path_parser_s *self, gchar **tokens)
 void
 path_parser_configure (struct path_parser_s *self, const char *descr, void *u)
 {
+	EXTRA_ASSERT (self != NULL);
+	EXTRA_ASSERT (descr != NULL);
 	gchar **tokens = g_strsplit (descr, "/", -1);
 	self->roots = _trie_insert (NULL, self->roots, tokens, u);
 	g_strfreev (tokens);
