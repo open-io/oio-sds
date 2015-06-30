@@ -86,10 +86,7 @@ asn1_final_handler( worker_t *worker, GError **error)
 	
 	task_done(sdata->task_id);
 
-	if (sdata->services)
-		DEBUG("[task_id=%s] Saving the %d services received from the conscience", sdata->task_id, g_slist_length(sdata->services));
-	else
-		INFO("[task_id=%s] No service received, forgetting all currently saved", sdata->task_id );
+	DEBUG("[task_id=%s] Saving the %d services received from the conscience", sdata->task_id, g_slist_length(sdata->services));
 
 	ns_data = get_namespace( sdata->ns, error);
 	if (!ns_data) {
