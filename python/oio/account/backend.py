@@ -107,6 +107,8 @@ class AccountBackend(object):
         if not account_id:
             return None
 
+        if not metadata and not to_delete:
+            return account_id
         pipeline = conn.pipeline(True)
         if to_delete:
             pipeline.hdel('metadata:%s' % account_id, *to_delete)
