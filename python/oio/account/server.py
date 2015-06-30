@@ -118,6 +118,8 @@ def create_app(conf, **kwargs):
     global backend
     backend = AccountBackend(conf)
     app.register_blueprint(account_api)
+    # we want exceptions to be logged
+    app.config['PROPAGATE_EXCEPTIONS'] = True
     return app
 
 

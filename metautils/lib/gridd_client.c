@@ -555,7 +555,7 @@ _client_error(struct gridd_client_s *client)
 		return NULL;
 	if (NULL == client->error)
 		return NULL;
-	return NEWERROR(client->error->code, client->error->message);
+	return NEWERROR(client->error->code, "%s", client->error->message);
 }
 
 static void
@@ -856,7 +856,7 @@ _client_fail(struct gridd_client_s *client, GError *why)
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 	if (client->error != NULL)
 		g_clear_error(&(client->error));
-	client->error = NEWERROR(why->code, why->message);
+	client->error = NEWERROR(why->code, "%s", why->message);
 }
 
 static void
