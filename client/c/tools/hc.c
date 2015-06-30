@@ -339,7 +339,7 @@ func_delete(gs_grid_storage_t *hc)
 			gs_error_free(e);
 			return FALSE;
 		}
-		GRID_INFO("Content [%s] deleted from namespace.\n",
+		GRID_DEBUG("Content [%s] deleted from namespace.\n",
 				hc_url_get(url, HCURL_WHOLE));
 	} else {
 		e = hc_delete_container(hc, url, flag_force, flag_flush);
@@ -348,7 +348,7 @@ func_delete(gs_grid_storage_t *hc)
 			gs_error_free(e);
 			return FALSE;
 		}
-		GRID_INFO("Container [%s] deleted from namespace [%s].\n",
+		GRID_DEBUG("Container [%s] deleted from namespace [%s].\n",
 				hc_url_get(url, HCURL_USER), hc_url_get(url, HCURL_NS));
 	}
 
@@ -799,7 +799,7 @@ static struct help_s helps[] = {
 	{"propget",   help_propget},
 	{"propdel",   help_propdel},
 	{"quota",     help_quota},
-	{"version",   help_version},
+	//{"version",   help_version},
 	{NULL,        NULL},
 };
 
@@ -943,7 +943,6 @@ hc_usage(void)
 		"\n"
 		"\tquota\t\tManage the quota of a container\n"
 		"\tstgpol\t\tManage the storage policy of a container or a content\n"
-		"\tversion\t\tManage the versioning policy of a container\n"
 		"\n"
 		"\tsrvlink\t\tAssociate a reference to a specified service type\n"
 		"\tsrvlist\t\tList services associated to a reference\n"
