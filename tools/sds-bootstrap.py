@@ -395,7 +395,7 @@ template_local_ns = """
 [${NS}]
 ${NOZK}zookeeper=${IP}:2181
 conscience=${IP}:${PORT_CS}
-endpoint=${IP}:${PORT_ENDPOINT}
+#endpoint=${IP}:${PORT_ENDPOINT}
 proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
 event-agent=ipc://${RUNDIR}/event-agent.sock
@@ -513,6 +513,9 @@ def generate (ns, ip, options={}):
 			LOGDIR=LOGDIR, CODEDIR=CODEDIR,
 			UID=str(os.geteuid()), GID=str(os.getgid()), USER=str(pwd.getpwuid(os.getuid()).pw_name),
 			VERSIONING=versioning, STGPOL=stgpol,
+			PORT_CS=port_cs,
+			PORT_PROXYD=port_proxy,
+			PORT_ENDPOINT=port_endpoint,
 			M2_REPLICAS=meta2_replicas, M2_DISTANCE=str(1),
 			SQLX_REPLICAS=sqlx_replicas, SQLX_DISTANCE=str(1),
 			APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
@@ -533,8 +536,6 @@ def generate (ns, ip, options={}):
 	with open(OIODIR + '/'+ 'sds.conf', 'w+') as f:
 		tpl = Template(template_local_header)
 		f.write(tpl.safe_substitute(env))
-		env['PORT_CS'] = port_cs
-		env['PORT_PROXYD'] = port_proxy
 		tpl = Template(template_local_ns)
 		f.write(tpl.safe_substitute(env))
 
@@ -581,17 +582,17 @@ def generate (ns, ip, options={}):
 		with open(CFGDIR + '/' + ns + '-rawx-httpd-' + str(n) + '.conf', 'w+') as f:
 			f.write(tpl.safe_substitute(env))
 
-	# Central endpoint service
-	env['PORT'] = port_endpoint
-	env['FLASK'] = port_flask
-	env['PROXY'] = port_proxy
-	env['ACCOUNT'] = port_account
-	with open(CFGDIR + '/' + ns + '-endpoint.conf', 'w+') as f:
-		tpl = Template(template_nginx_endpoint)
-		f.write(tpl.safe_substitute(env))
-	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-		tpl = Template(template_nginx_gridinit)
-		f.write(tpl.safe_substitute(env))
+	#	# Central endpoint service
+	#	env['PORT'] = port_endpoint
+	#	env['FLASK'] = port_flask
+	#	env['PROXY'] = port_proxy
+	#	env['ACCOUNT'] = port_account
+	#	with open(CFGDIR + '/' + ns + '-endpoint.conf', 'w+') as f:
+	#		tpl = Template(template_nginx_endpoint)
+	#		f.write(tpl.safe_substitute(env))
+	#	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
+	#		tpl = Template(template_nginx_gridinit)
+	#		f.write(tpl.safe_substitute(env))
 
 	# administration flask
 	env['PORT'] = port_flask
