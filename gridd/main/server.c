@@ -1559,8 +1559,7 @@ main_action (void)
 	/*wait forever and fire the registered timers*/
 	for (guint64 ticks=1; may_continue ;ticks++) {
 		srvtimer_fire (ticks);
-		struct timeval tv = {1L,0};
-		select (0,NULL,NULL,NULL,&tv);
+		g_usleep (1000000UL);
 	}
 }
 

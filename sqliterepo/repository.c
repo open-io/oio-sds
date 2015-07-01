@@ -1322,8 +1322,7 @@ _backup_main(sqlite3 *src, sqlite3 *dst)
 	backup = sqlite3_backup_init(dst, "main", src, "main");
 
 	if (!backup)
-		err = NEWERROR(sqlite3_errcode(dst),
-				sqlite3_errmsg(dst));
+		err = NEWERROR(sqlite3_errcode(dst), "%s", sqlite3_errmsg(dst));
 	else {
 		while (SQLITE_OK == (rc = sqlite3_backup_step(backup, 1))) {}
 		if (rc != SQLITE_DONE)

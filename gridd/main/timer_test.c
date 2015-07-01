@@ -66,8 +66,7 @@ main(int argc, char **args)
 	NEWSTAT(STATPREFIX "4", 4000.0, 4);
 
 	while (mayContinue) {
-		struct timeval tv = { 1, 0 };
-		select(0, NULL, NULL, NULL, &tv);
+		g_usleep (1000000UL);
 		srvtimer_fire(++ticks);
 	}
 

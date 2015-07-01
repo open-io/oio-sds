@@ -617,7 +617,7 @@ storage_policy_check_compat(struct storage_policy_s *old,
 				"you must re-upload content: ",
 				data_security_get_name(old_dsec),
 				data_security_get_name(new_dsec));
-		GRID_DEBUG(err->message);
+		GRID_DEBUG("%s", err->message);
 	}
 	return err;
 }

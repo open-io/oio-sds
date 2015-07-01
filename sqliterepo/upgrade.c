@@ -117,12 +117,8 @@ sqlx_upgrade_do(struct sqlx_upgrader_s *su, struct sqlx_sqlite3_s *sq3)
 				sqlx_admin_set_str(sq3, "schema_version", version);
 			}
 			else {
-				gchar *buf = g_strdup_printf("Conversion error from "
-						"[%s] to [%s]", version, step->post);
+				g_prefix_error(&err, "Conversion error from [%s] to [%s]", version, step->post);
 				metautils_str_clean(&version);
-				g_prefix_error(&err, buf);
-				g_free(buf);
-				buf = NULL;
 				return err;
 			}
 		}
