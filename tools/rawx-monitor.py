@@ -19,6 +19,7 @@
 
 import sys
 import urllib2
+import syslog
 
 RAWX_STAT_KEYS = [
 	("rawx.reqpersec",	"stat.total_reqpersec"),
@@ -49,12 +50,16 @@ def parse_info(stream):
 	return data
 
 def get_stat_lines(url, stat_keys):
-	stream = urllib2.urlopen(url)
-	data = parse_info(stream)
-	stream.close()
-	stats = [("%s = %s" % (k[1], str(data[k[0]])))
-			for k in stat_keys if k[0] in data]
-	return stats
+	try:
+		stream = urllib2.urlopen(url)
+		data = parse_info(stream)
+		stream.close()
+		stats = [("%s = %s" % (k[1], str(data[k[0]])))
+				for k in stat_keys if k[0] in data]
+		return stats
+	except urllib2.URLError as e:
+		syslog.syslog(syslog.LOG_ERR, "rawx-monitor could not connect to RAWX server at %s: %s" % (url, e.strerror))
+		sys.exit(1)
 
 def main(args):
 	ip_port = str(args[1]).split("|")[2]
