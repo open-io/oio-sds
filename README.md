@@ -70,7 +70,6 @@ In addition to common cmake options, these specific options are also available:
 | --------- | ---- |
 | LD\_LIBDIR | Path suffix to the installation prefix, to define the default directory for libraries. E.g. "lib" or "lib64", depending on the architecture. |
 | STACK\_PROTECTOR | Trigger stack protection code. Only active when CMAKE\_BUILD\_TYPE is set to "Debug" or "RelWithDebInfo" |
-| TRIP\_PATH | Installation directory for crawler plugins. |
 | GRIDD\_PLUGINS | Installation directory for gridd plugins. |
 | APACHE2\_MODDIR | Installation directory for apache2 modules. |
 | ALLOW\_DEPRECATED | define it to hide warnings for deprecated symbols from the GLib2. |
