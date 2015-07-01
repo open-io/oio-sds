@@ -37,8 +37,8 @@ enabled=true
 start_at_boot=false
 command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},account,1 -p 1 -m '${EXE_PREFIX}-account-monitor.py' -i '${NS}|account|${IP}:${PORT}' -c '${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf'
 env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
-env.PYTHONPATH=${CODEDIR}/lib/python2.7/site-packages
+env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
 template_proxy_gridinit = """
@@ -119,13 +119,18 @@ http {
 """
 
 template_rawx_service = """
-LoadModule mpm_worker_module   modules/mod_mpm_worker.so
-LoadModule authz_core_module   modules/mod_authz_core.so
-LoadModule unixd_module        modules/mod_unixd.so
-LoadModule dav_module          modules/mod_dav.so
-LoadModule log_config_module   modules/mod_log_config.so
-LoadModule mime_module         modules/mod_mime.so
+LoadModule mpm_worker_module   ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
+LoadModule authz_core_module   ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
+LoadModule dav_module          ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_dav.so
+LoadModule mime_module         ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mime.so
 LoadModule dav_rawx_module     @APACHE2_MODULES_DIRS@/mod_dav_rawx.so
+
+<IfModule !unixd_module>
+	LoadModule unixd_module        ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_unixd.so
+</IfModule>
+<IfModule !log_config_module>
+	LoadModule log_config_module   ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_log_config.so
+</IfModule>
 
 Listen ${IP}:${PORT}
 PidFile ${RUNDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.pid
@@ -327,7 +332,7 @@ gid=${GID}
 working_dir=${TMPDIR}
 inherit_env=1
 env.PATH=${PATH}:${HOME}/.local/bin:${CODEDIR}/bin
-env.LD_LIBRARY_PATH=${HOME}/.local/lib:${LIBDIR}
+env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 
 limit.core_size=-1
 limit.max_files=2048
@@ -360,7 +365,7 @@ on_die=respawn
 enabled=true
 start_at_boot=false
 command=${EXE_PREFIX}-event-agent ${CFGDIR}/event-agent.conf
-env.PYTHONPATH=${CODEDIR}/lib/python2.7/site-packages
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
 template_gridinit_service = """
@@ -433,7 +438,14 @@ CODEDIR = '@CMAKE_INSTALL_PREFIX@'
 LIBDIR = CODEDIR + '/@LD_LIBDIR@'
 PATH = HOME+"/.local/bin:@CMAKE_INSTALL_PREFIX@/bin"
 port = 6000
+
+# XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
+# environment. If not, we consider being in a Ubuntu/Debian environment.
+# Sorry for the others, we cannot manage everything in this helper script for
+# developers, so consider using the standard deployment tools for your
+# prefered Linux distribution.
 HTTPD_BINARY = '/usr/sbin/httpd' if os.path.exists('/usr/sbin/httpd') else '/usr/sbin/apache2'
+APACHE2_MODULES_SYSTEM_DIR = '' if os.path.exists('/usr/sbin/httpd') else '/usr/lib/apache2/'
 
 def mkdir_noerror (d):
 	try:
@@ -503,6 +515,7 @@ def generate (ns, ip, options={}):
 			VERSIONING=versioning, STGPOL=stgpol,
 			M2_REPLICAS=meta2_replicas, M2_DISTANCE=str(1),
 			SQLX_REPLICAS=sqlx_replicas, SQLX_DISTANCE=str(1),
+			APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
 			HTTPD_BINARY=HTTPD_BINARY)
 	if options.NO_ZOOKEEPER is not None:
 		env['NOZK'] = '#'
