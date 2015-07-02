@@ -22,10 +22,10 @@ import urllib2
 import syslog
 
 RAWX_STAT_KEYS = [
-	("rawx.reqpersec",	"stat.total_reqpersec"),
+	("rawx.reqpersec", "stat.total_reqpersec"),
 	("rawx.reqputpersec", "stat.put_reqpersec"),
 	("rawx.reqgetpersec", "stat.get_reqpersec"),
-	("rawx.avreqtime",	"stat.total_avreqtime"),
+	("rawx.avreqtime", "stat.total_avreqtime"),
 	("rawx.avputreqtime", "stat.put_avreqtime"),
 	("rawx.avgetreqtime", "stat.get_avreqtime"),
 	("rawx.volume", "tag.vol"),
