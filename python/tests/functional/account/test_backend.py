@@ -30,13 +30,13 @@ class TestAccountBackend(unittest.TestCase):
         del self.conn
 
     def test_create_account(self):
-        backend = AccountBackend(None, self.conn)
+        backend = AccountBackend({}, self.conn)
         account_id = 'a'
         self.assertEqual(backend.create_account(account_id), account_id)
         self.assertEqual(backend.create_account(account_id), None)
 
     def test_update_account_metadata(self):
-        backend = AccountBackend(None, self.conn)
+        backend = AccountBackend({}, self.conn)
         account_id = 'test'
         self.assertEqual(backend.create_account(account_id), account_id)
 
@@ -70,7 +70,7 @@ class TestAccountBackend(unittest.TestCase):
         self.assert_('b' not in metadata)
 
     def test_info_account(self):
-        backend = AccountBackend(None, self.conn)
+        backend = AccountBackend({}, self.conn)
         account_id = 'test'
         self.assertEqual(backend.create_account(account_id), account_id)
         info = backend.info_account(account_id)
@@ -125,7 +125,7 @@ class TestAccountBackend(unittest.TestCase):
         self.assertEqual(info['bytes'], 0)
 
     def test_delete_container(self):
-        backend = AccountBackend(None, self.conn)
+        backend = AccountBackend({}, self.conn)
         account_id = 'test'
         self.assertEqual(backend.create_account(account_id), account_id)
         name = 'c'
@@ -153,7 +153,7 @@ class TestAccountBackend(unittest.TestCase):
                                                                name)))
 
     def test_update_container(self):
-        backend = AccountBackend(None, self.conn)
+        backend = AccountBackend({}, self.conn)
         account_id = 'test'
         self.assertEqual(backend.create_account(account_id), account_id)
 
@@ -225,7 +225,7 @@ class TestAccountBackend(unittest.TestCase):
                                         (account_id, name), 'mtime'), mtime)
 
     def test_list_containers(self):
-        backend = AccountBackend(None, self.conn)
+        backend = AccountBackend({}, self.conn)
         account_id = 'test'
 
         backend.create_account(account_id)
