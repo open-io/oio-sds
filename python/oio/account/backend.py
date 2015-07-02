@@ -5,6 +5,7 @@ import math
 import redis
 from oio.common.utils import Timestamp
 from oio.common.utils import int_value
+from oio.common.utils import true_value
 
 
 account_fields = ['ns', 'name', 'ctime', 'containers', 'objects',
@@ -63,10 +64,12 @@ class AccountBackend(object):
             self.conn = redis.Redis(host=redis_host, port=redis_port)
         else:
             self.conn = conn
+        self.autocreate = true_value(conf.get('autocreate', 'true'))
 
     def create_account(self, account_id):
         conn = self.conn
-        account_id = account_id
+        if not account_id:
+            return None
         if conn.hget('accounts:', account_id):
             return None
 
@@ -102,10 +105,14 @@ class AccountBackend(object):
         conn = self.conn
         if not account_id:
             return None
-        account_id = conn.hget('account:%s' % account_id, 'id')
+        _account_id = conn.hget('account:%s' % account_id, 'id')
 
-        if not account_id:
-            return None
+        if not _account_id:
+            if self.autocreate:
+                print "autocreate account", account_id
+                self.create_account(account_id)
+            else:
+                return None
 
         if not metadata and not to_delete:
             return account_id
@@ -143,10 +150,13 @@ class AccountBackend(object):
         conn = self.conn
         if not account_id or not name:
             return None
-        account_id = conn.hget('account:%s' % account_id, 'id')
+        _account_id = conn.hget('account:%s' % account_id, 'id')
 
-        if not account_id:
-            return None
+        if not _account_id:
+            if self.autocreate:
+                self.create_account(account_id)
+            else:
+                return None
 
         lock = acquire_lock_with_timeout(conn, 'container:%s:%s' % (
             account_id, name), 1)
@@ -174,10 +184,10 @@ class AccountBackend(object):
             deleted = True
 
         if not deleted:
-            incr_bytes_used = int_value(record.get('bytes'), 0) - int_value(
-                data.get('bytes'), 0)
-            incr_object_count = int_value(record.get('objects'), 0) - int_value(
-                data.get('objects'), 0)
+            incr_bytes_used = int_value(record.get('bytes'), 0) -\
+                int_value(data.get('bytes'), 0)
+            incr_object_count = int_value(record.get('objects'), 0) -\
+                int_value(data.get('objects'), 0)
         else:
             incr_bytes_used = - int_value(data.get('bytes'), 0)
             incr_object_count = - int_value(data.get('objects'), 0)
@@ -249,7 +259,8 @@ class AccountBackend(object):
             for container_id in container_ids:
                 count += 1
                 marker = container_id
-                if len(results) >= limit or not container_id.startswith(prefix):
+                if len(results) >= limit\
+                        or not container_id.startswith(prefix):
                     return results
                 end = container_id.find(delimiter, len(prefix))
                 if end > 0:
