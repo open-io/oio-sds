@@ -25,13 +25,17 @@ ACCOUNT_STAT_KEYS = [
 ]
 
 def main(args):
-	ip_port = str(args[1]).split("|")[2]
-	url = "http://%s/status" % ip_port
-	resp = requests.get(url)
-	stats = resp.json()
-	for key,stat in ACCOUNT_STAT_KEYS:
-		if key in stats:
-			print "%s = %s" % (stat, str(stats[key]))
+	try:
+		ip_port = str(args[1]).split("|")[2]
+		url = "http://%s/status" % ip_port
+		resp = requests.get(url)
+		stats = resp.json()
+		for key,stat in ACCOUNT_STAT_KEYS:
+			if key in stats:
+				print "%s = %s" % (stat, str(stats[key]))
+	except Exception as e:
+		syslog.syslog(syslog.LOG_ERR, "account-monitor could not connect to ACCOUNT server at %s: %s" % (url, e.strerror))
+		sys.exit(1)
 			
 if __name__ == "__main__":
 	main(sys.argv)
