@@ -74,7 +74,7 @@ ${PREFIX}-bootstrap.py \
 		${opts} \
 		"$NS" "$IP"
 
-nice gridinit -s RC,gridinit -d ${SDS}/conf/gridinit.conf
+nice gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
 
 ZK=$(${PREFIX}-cluster --local-cfg | grep "$NS/zookeeper" ; exit 0)
 if [ -n "$ZK" ] ; then

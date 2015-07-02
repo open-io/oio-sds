@@ -166,7 +166,7 @@ http_parse(struct http_parser_s *parser, const guint8 *data, gsize available)
 	struct http_parsing_result_s _build_rc(int status, const gchar *msg) {
 		struct http_parsing_result_s rc;
 		if (msg)
-			parser->error = NEWERROR(0, msg);
+			parser->error = NEWERROR(0, "%s", msg);
 		rc.status = status;
 		rc.consumed = consumed;
 		return rc;
