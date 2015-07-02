@@ -1,10 +1,11 @@
-import sys
+import os
+import errno
 import glob
 import grp
-import errno
-import pwd
-from logging.handlers import SysLogHandler
 import logging
+import pwd
+import sys
+from logging.handlers import SysLogHandler
 
 import eventlet
 import eventlet.semaphore
@@ -18,7 +19,6 @@ logging._lock = logging.threading.RLock()
 from optparse import OptionParser
 from ConfigParser import SafeConfigParser
 
-import os
 from gunicorn.app.base import BaseApplication
 
 
@@ -47,7 +47,6 @@ class Application(BaseApplication):
                                                         self.access_log_fmt))
         if self.logger_class:
             self.cfg.set('logger_class', self.logger_class)
-
 
     def load(self):
         return self.application
@@ -269,6 +268,14 @@ def int_value(value, default):
     return value
 
 
+TRUE_VALUES = set(('true', '1', 'yes', 'on', 't', 'y'))
+
+
+def true_value(value):
+    return value is True or \
+        (isinstance(value, basestring) and value.lower() in TRUE_VALUES)
+
+
 class InvalidServiceConfigError(ValueError):
     def __str__(self):
         return "namespace missing from service conf"
@@ -303,5 +310,3 @@ def load_namespace_conf(namespace):
             print("Missing field '%s' in namespace config" % k)
             sys.exit(1)
     return conf
-
-

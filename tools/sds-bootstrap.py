@@ -418,6 +418,7 @@ template_account_server = """
 bind_addr = ${IP}
 bind_port = ${PORT}
 workers = 2
+autocreate = true
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
