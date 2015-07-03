@@ -53,7 +53,7 @@ class TestEventWorker(unittest.TestCase):
              "size": 1
             }
         ]}
-        with patch('oio.sds.event.agent.requests', new=Mock()) as requests:
-            self.worker.handle_object_delete(event)
-            for chunk in event.get('data'):
-                requests.delete.assert_any_call(chunk.get('id'))
+        self.worker.session.delete = Mock()
+        self.worker.handle_object_delete(event)
+        for chunk in event.get('data'):
+            self.worker.session.delete.assert_any_call(chunk.get('id'))
