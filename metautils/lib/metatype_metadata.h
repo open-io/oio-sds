@@ -108,7 +108,8 @@ void metadata_add_time(GHashTable *md, const gchar *key, GTimeVal *t);
  * @param fmt
  * @param ...
  */
-void metadata_add_printf(GHashTable *md, const gchar *key, const gchar *fmt, ...);
+void metadata_add_printf(GHashTable *md, const gchar *key, const gchar *fmt, ...)
+__attribute__ ((format (printf, 3, 4)));
 
 /** @} */
 

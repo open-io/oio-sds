@@ -63,6 +63,8 @@ _curl_get_handle_proxy (struct oio_sds_s *sds)
 #if (LIBCURL_VERSION_MAJOR >= 7) && (LIBCURL_VERSION_MINOR >= 40)
 	if (sds->proxy_local)
 		curl_easy_setopt (h, CURLOPT_UNIX_SOCKET_PATH, sds->proxy_local);
+#else
+	(void) sds;
 #endif
 	return h;
 }

@@ -44,7 +44,7 @@ License along with this library.
 #define LEN (sizeof(wrkParam)-writen-1)
 #define MANAGE_ERROR(Req,Resp,Error) do {\
 	if (Resp.data_size > 0 && Resp.data)\
-		GSETERROR(Error, "Error from agent : %.*s", Resp.data_size, Resp.data);\
+		GSETERROR(Error, "Error from agent : %.*s", Resp.data_size, (char*)(Resp.data));\
 	else\
 		GSETERROR(Error, "Error from agent : (no response)");\
 	clear_request_and_reply(&Req,&Resp);\

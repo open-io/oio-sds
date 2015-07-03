@@ -61,7 +61,7 @@ version_get(gboolean init, GTree *t, const struct hashstr_s *k)
 static struct object_version_s *
 version_getslen(gboolean init, GTree *t, const guint8 *ks, gsize ks_len)
 {
-	hashstr_t *k = hashstr_printf("%.*s", ks_len, ks);
+	hashstr_t *k = hashstr_printf("%.*s", (int)ks_len, ks);
 	struct object_version_s *o = version_get(init, t, k);
 	g_free(k);
 	return o;

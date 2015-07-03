@@ -81,7 +81,7 @@ gint Name (GError **err, gpointer udata, gint code, guint8 *body, gsize bodySize
 	GSList **resL, *list;\
 	resL = (GSList**) udata; (void)code;\
 	if (!udata || !body || !bodySize) {\
-		GSETERROR(err,"Invalid parameter (%p %p %u)", udata, body, bodySize);\
+		GSETERROR(err,"Invalid parameter (%p %p %"G_GSIZE_FORMAT")", udata, body, bodySize);\
 		return FALSE;\
 	}\
 	list=NULL;\
@@ -190,7 +190,7 @@ abstract_sequence_unmarshall(const struct abstract_sequence_handler_s *h,
 		return consumed;
 
 	case RC_FAIL:
-		GSETERROR(err, "sequence unmarshalling error (%i consumed)", decRet.consumed);
+		GSETERROR(err, "sequence unmarshalling error (%"G_GSIZE_FORMAT" consumed)", decRet.consumed);
 		return -1;
 
 	case RC_WMORE:
@@ -926,7 +926,7 @@ gint
 strings_unmarshall(GSList ** l, const void *buf, gsize len, GError ** err)
 {
 	if (!l || !buf || !len) {
-		GSETERROR(err, "Invalid parameter (l=%p buf=%p len=%p)", l, buf, len);
+		GSETERROR(err, "Invalid parameter (l=%p buf=%p len=%"G_GSIZE_FORMAT")", l, buf, len);
 		return 0;
 	}
 

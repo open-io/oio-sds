@@ -190,8 +190,8 @@ main(int argc, char **argv)
 {
 	HC_PROC_INIT(argv, GRID_LOGLVL_INFO);
 
-	freopen("/dev/null","r",stdin);
-	freopen("/dev/null","a",stdout);
+	stdin = freopen("/dev/null","r",stdin);
+	stdout = freopen("/dev/null","a",stdout);
 	list_reginfo = NULL;
 
 	GRID_DEBUG("Usage: %s ((unix|tcp:<PORT>):<NS>|<SRVTYPE>|<IP>:<PORT>)...", argv[0]);

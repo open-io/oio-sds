@@ -438,7 +438,7 @@ main(int argc, char ** argv)
 		goto label_error;
 	}
 
-	freopen("/dev/null", "r", stdin);
+	stdin = freopen("/dev/null", "r", stdin);
 
 	GRID_NOTICE("%s restarted, pid=%d", argv[0], getpid());
 

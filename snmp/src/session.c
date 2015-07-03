@@ -254,7 +254,7 @@ rawx_client_get_statistics(rawx_session_t * session, const gchar *url, GError **
 	case NE_AUTH:
 		str_addr_size = addr_info_to_string(&(session->addr), str_addr, sizeof(str_addr));
 		GSETERROR(err, "cannot download the stats from [%.*s]' (%s)",
-		    str_addr_size, str_addr, ne_get_error(session->neon_session));
+		    (int)str_addr_size, str_addr, ne_get_error(session->neon_session));
 		goto exit;
 	default:
 		GSETERROR(err, "Unexpected return code from the neon library : %d", rc);

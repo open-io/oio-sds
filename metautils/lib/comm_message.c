@@ -179,9 +179,9 @@ message_unmarshall(const guint8 *buf, gsize len, GError ** error)
 		return m;
 
 	if (rc.code == RC_WMORE)
-		GSETERROR(error, "%s (%d bytes consumed)", "uncomplete content", rc.consumed);
+		GSETERROR(error, "%s (%"G_GSIZE_FORMAT" bytes consumed)", "uncomplete content", rc.consumed);
 	else
-		GSETERROR(error, "%s (%d bytes consumed)", "invalid content", rc.consumed);
+		GSETERROR(error, "%s (%"G_GSIZE_FORMAT" bytes consumed)", "invalid content", rc.consumed);
 
 	metautils_message_destroy (m);
 	return NULL;

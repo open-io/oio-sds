@@ -484,7 +484,10 @@ end:
 				ut = g_malloc0(sizeof(struct utimbuf));
 				ut->actime = stat_buf->st_atime;
 				ut->modtime = stat_buf->st_mtime;
-				chown(tmp_path, stat_buf->st_uid, stat_buf->st_gid);
+				if (0 > chown(tmp_path, stat_buf->st_uid, stat_buf->st_gid)) {
+					GSETERROR(error, "chown error: (%d) %s", errno, strerror(errno));
+					status = 0;
+				}
 				if(utime(tmp_path, ut) != 0) {
 					GSETERROR(error, "Failed to set correct access time to new file");
 					status = 0;
@@ -697,7 +700,10 @@ end:
 			ut = g_malloc0(sizeof(struct utimbuf));
 			ut->actime = buf->st_atime;
 			ut->modtime = buf->st_mtime;
-			chown(tmp_path, buf->st_uid, buf->st_gid);
+			if (0 > chown(tmp_path, buf->st_uid, buf->st_gid)) {
+				GSETERROR(error, "chown error: (%d) %s", errno, strerror(errno));
+				status = 0;
+			}
 			if(utime(tmp_path, ut) != 0) {
 				GSETERROR(error, "Failed to set correct access time to new file");
 				status = 0;

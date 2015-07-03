@@ -173,7 +173,7 @@ sock_to_write(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 
 		if (rc_poll == -1) {	/*poll error */
 			if (errno != EINTR) {
-				GSETERROR(err, "Socket error (%s) after %i bytes written", strerror(errno), nbSent);
+				GSETERROR(err, "Socket error (%s) after %"G_GSIZE_FORMAT" bytes written", strerror(errno), nbSent);
 				return (-1);
 			}
 			else {
@@ -184,16 +184,16 @@ sock_to_write(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 
 		/*poll success */
 		if (p.revents & POLLNVAL) {
-			GSETERROR(err, "Socket (%d) is invalid after %i bytes sent", fd, nbSent);
+			GSETERROR(err, "Socket (%d) is invalid after %"G_GSIZE_FORMAT" bytes sent", fd, nbSent);
 			return -1;
 		}
 		if (p.revents & POLLERR) {
 			int sock_err = socket_get_errcode(fd);
-			GSETERROR(err, "Socket (%d) error after %i bytes written : (%d) %s", fd, nbSent, sock_err, strerror(sock_err));
+			GSETERROR(err, "Socket (%d) error after %"G_GSIZE_FORMAT" bytes written : (%d) %s", fd, nbSent, sock_err, strerror(sock_err));
 			return -1;
 		}
 		if ((p.revents & POLLHUP)) {
-			GSETCODE(err, ERRCODE_CONN_CLOSED, "Socket (%d) closed after %i bytes written", fd, nbSent);
+			GSETCODE(err, ERRCODE_CONN_CLOSED, "Socket (%d) closed after %"G_GSIZE_FORMAT" bytes written", fd, nbSent);
 			return -1;
 		}
 
@@ -282,11 +282,11 @@ sock_to_read_size(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 	while (nbRead < bufSize) {
 		int n = sock_to_read(fd, ms, ((guint8 *) buf) + nbRead, bufSize - nbRead, err);
 		if (n < 0) {
-			GSETERROR(err, "Read failed after %i bytes", nbRead);
+			GSETERROR(err, "Read failed after %"G_GSIZE_FORMAT" bytes", nbRead);
 			return n;
 		}
 		else if (n == 0) {
-			GSETERROR(err, "Socket closed after %i bytes read", nbRead);
+			GSETERROR(err, "Socket closed after %"G_GSIZE_FORMAT" bytes read", nbRead);
 			return n;
 		}
 		else

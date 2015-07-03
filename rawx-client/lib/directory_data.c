@@ -128,7 +128,7 @@ rawx_client_get_directory_data(rawx_session_t * session, hash_sha256_t chunk_id,
 		case NE_AUTH:
 			str_addr_size = addr_info_to_string(&(session->addr), str_addr, sizeof(str_addr));
 			GSETERROR(error, "cannot download the data from [%.*s]' (%s)",
-					str_addr_size, str_addr, ne_get_error(session->neon_session));
+					(int)str_addr_size, str_addr, ne_get_error(session->neon_session));
 			goto error;
 		default:
 			GSETERROR(error, "Unexpected return code from the neon library : %d", rc);

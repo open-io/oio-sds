@@ -203,7 +203,7 @@ bean_sequence_decoder(GSList **l, const void *buf, gsize len, GError **err)
 			return decRet.consumed;
 
 		case RC_FAIL:
-			GSETERROR(err, "sequence unmarshalling error (%i consumed)", decRet.consumed);
+			GSETERROR(err, "sequence unmarshalling error (%"G_GSIZE_FORMAT" consumed)", decRet.consumed);
 			return -1;
 
 		case RC_WMORE:
