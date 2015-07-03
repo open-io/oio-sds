@@ -22,6 +22,7 @@ ACCOUNT_SERVICE = 'account'
 
 
 class EventType(object):
+    REFERENCE_UPDATE = "meta1.account.services"
     CONTAINER_PUT = "meta2.container.create"
     CONTAINER_DESTROY = "meta2.container.destroy"
     CONTAINER_UPDATE = "meta2.container.state"
@@ -91,6 +92,8 @@ class EventWorker(object):
             return self.handle_object_put
         elif event_type == EventType.OBJECT_DELETE:
             return self.handle_object_delete
+        elif event_type == EventType.REFERENCE_UPDATE:
+            return self.handle_reference_update
         else:
             return None
 
@@ -100,7 +103,7 @@ class EventWorker(object):
             try:
                 account_instance = self.cs.next_instance(ACCOUNT_SERVICE)
                 self._account_addr = account_instance.get('addr')
-            except Exception as e:
+            except Exception:
                 self.logger.warn('Unable to find account instance')
                 # fallback on conf
                 account_addr = self.conf.get('account_addr')
@@ -138,7 +141,6 @@ class EventWorker(object):
         account = event.get('url').get('account')
         bytes_count = data.get('bytes-count', 0)
         object_count = data.get('object-count', 0)
-
 
         event = {
             'mtime': mtime,
@@ -207,6 +209,14 @@ class EventWorker(object):
         """
         pass
 
+    def handle_reference_update(self, event):
+        """
+        Handle reference update.
+        TODO
+        :param event
+        """
+        pass
+
 
 class EventAgent(Daemon):
     def __init__(self, conf):
@@ -241,4 +251,3 @@ class EventAgent(Daemon):
         boss_pool.spawn_n(proxy, backend, server)
 
         worker_pool.waitall()
-
