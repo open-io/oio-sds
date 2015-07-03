@@ -197,7 +197,7 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 	}
 	g_string_append (gstr, "]}");
 	_bean_cleanl2 (beans);
-	
+
 	g_slist_free (aliases);
 	g_slist_free (headers);
 	return _reply_success_json (args, gstr);
@@ -353,6 +353,26 @@ _reply_simplified_beans (struct req_args_s *args, GError *err, GSList *beans, gb
 }
 
 static GError *
+_get_hash (const char *s, GByteArray **out)
+{
+	*out = NULL;
+	GByteArray *h = metautils_gba_from_hexstring (s);
+	if (!h)
+		return BADREQ("JSON: invalid hash: not hexa");
+
+	if (h->len != g_checksum_type_get_length(G_CHECKSUM_MD5)
+			&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA256)
+			&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA512)
+			&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA1)) {
+		g_byte_array_free (h, TRUE);
+		return BADREQ("JSON: invalid hash: invalid length");
+	}
+
+	*out = h;
+	return NULL;
+}
+
+static GError *
 _load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSList **out)
 {
 	GError *err = NULL;
@@ -377,18 +397,8 @@ _load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSL
 		err = metautils_extract_json (json_object_array_get_idx (jbody, i-1), m);
 		if (err) break;
 
-		GByteArray *h = metautils_gba_from_hexstring(json_object_get_string(jhash));
-		if (!h) {
-			err = BADREQ("JSON: invalid chunk hash: not hexa");
-			break;
-		}
-
-		if (h->len != g_checksum_type_get_length(G_CHECKSUM_MD5)
-				&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA256)
-				&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA512)
-				&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA1)) {
-			err = BADREQ("JSON: invalid chunk hash: invalid length");
-		} else {
+		GByteArray *h = NULL;
+		if (!(err = _get_hash (json_object_get_string(jhash), &h))) {
 			struct timespec ts;
 			clock_gettime(CLOCK_REALTIME_COARSE, &ts);
 			struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
@@ -404,26 +414,50 @@ _load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSL
 			beans = g_slist_prepend(beans, chunk);
 			beans = g_slist_prepend(beans, content);
 		}
-		g_byte_array_free (h, TRUE);
+		if (h) g_byte_array_free (h, TRUE);
 	}
 
-	if (!err) {
-		gchar *s;
+	struct bean_CONTENTS_HEADERS_s *header = NULL;
 
-		struct bean_CONTENTS_HEADERS_s *header = _bean_create (&descr_struct_CONTENTS_HEADERS);
+	if (!err) {
+		header = _bean_create (&descr_struct_CONTENTS_HEADERS);
 		beans = g_slist_prepend (beans, header);
 		CONTENTS_HEADERS_set2_id (header, (guint8*)"0", 1);
-		if (NULL != (s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-policy")))
+
+		gchar *s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-policy");
+		if (NULL != s)
 			CONTENTS_HEADERS_set2_policy (header, s);
-		if (NULL != (s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-hash"))) {
-			GByteArray *h = metautils_gba_from_hexstring(s);
-			CONTENTS_HEADERS_set_hash (header, h);
-			g_byte_array_free(h, TRUE);
+	}
+
+	if (!err) { // Content hash
+		gchar *s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-hash");
+		if (NULL != s) {
+			GByteArray *h = NULL;
+			if (!(err = _get_hash (s, &h)))
+				CONTENTS_HEADERS_set_hash (header, h);
+			if (h) g_byte_array_free(h, TRUE);
 		}
-		if (NULL != (s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-length")))
-			CONTENTS_HEADERS_set_size (header, g_ascii_strtoll(s, NULL, 10));
-		else
+	}
+
+	if (!err) { // Content length
+		gchar *s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-length");
+		if (!s)
 			err = BADREQ("Header: missing content length");
+		else {
+			errno = 0;
+			gchar *end = NULL;
+			gint64 s64 = g_ascii_strtoll(s, &end, 10);
+			if (s64 < 0)
+				err = BADREQ("Header: negative content length");
+			else if (s64 == G_MAXINT64)
+				err = BADREQ("Header: content length overflow");
+			else if (s64 == 0 && end == s)
+				err = BADREQ("Header: invalid content length (parsing failed)");
+			else if (*end != 0)
+				err = BADREQ("Header: invalid content length (trailing characters)");
+			else
+				CONTENTS_HEADERS_set_size (header, s64);
+		}
 	}
 
 	if (!err) {
@@ -456,7 +490,7 @@ _load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSL
 			if (!g_str_has_prefix((gchar*)k, PROXYD_HEADER_PREFIX "content-meta-x-"))
 				return FALSE;
 			const gchar *rk = ((gchar*)k) + sizeof(PROXYD_HEADER_PREFIX "content-meta-x-") - 1;
-			struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES); 
+			struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES);
 			PROPERTIES_set_alias (prop, ALIASES_get_alias(alias));
 			PROPERTIES_set_alias_version (prop, 0);
 			PROPERTIES_set2_key (prop, rk);
@@ -1119,7 +1153,7 @@ action_m2_content_stgpol (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type (jargs, json_type_string))
 		return _reply_format_error (args, BADREQ ("the storage policy must be a string"));
-		
+
 	const gchar *stgpol = json_object_get_string (jargs);
 	if (!stgpol)
 		return _reply_format_error (args, BADREQ ("missing policy"));
@@ -1280,6 +1314,9 @@ action_m2_content_copy (struct req_args_s *args)
 static GError *
 _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 {
+	if (!jbody)
+		return BADREQ("Invalid JSON body");
+
 	const char *mode = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_MODE);
 	if (!mode)
 		mode = "put";
