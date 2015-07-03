@@ -64,7 +64,7 @@ void hashstr_lower(hashstr_t *hs);
  * @param ...
  * @return
  */
-hashstr_t* hashstr_printf(const gchar *fmt, ...);
+hashstr_t* hashstr_printf(const gchar *fmt, ...) __attribute__ ((format (printf, 1, 2))) ;
 
 /**
  * @param gstr

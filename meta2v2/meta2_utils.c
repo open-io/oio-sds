@@ -1651,7 +1651,7 @@ _generate_mdsys(struct gen_ctx_s *ctx)
 	if(!g_hash_table_lookup(unpacked, "mime-type"))
 		metadata_add_printf(unpacked, "mime-type", "octet/stream");
 	if(!g_hash_table_lookup(unpacked, "storage-policy"))
-		metadata_add_printf(unpacked, "storage-policy",
+		metadata_add_printf(unpacked, "storage-policy", "%s",
 			((ctx->pol) ? storage_policy_get_name(ctx->pol) : "none"));
 	if (!g_hash_table_lookup(unpacked,"creation-date"))
 		metadata_add_time(unpacked, "creation-date", NULL);

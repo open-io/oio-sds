@@ -86,7 +86,7 @@ __display_friendly_error(gs_error_t *error)
 	}
 
 	GRID_DEBUG("Technical error (code %d) message:", error->code);
-	GRID_DEBUG(error->msg);
+	GRID_DEBUG("%s", error->msg);
 
 	g_printerr("\nERROR: ");
 

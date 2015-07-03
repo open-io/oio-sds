@@ -498,14 +498,14 @@ grid_main(int argc, char ** argv, struct grid_main_callbacks * callbacks)
 	grid_main_install_sighandlers();
 
 	if (flag_daemon) {
-		freopen("/dev/null", "r", stdin);
+		stdin = freopen("/dev/null", "r", stdin);
 		if (-1 == daemon(1,0)) {
 			GRID_WARN("daemonize error : %s", strerror(errno));
 			grid_main_fini();
 			return 1;
 		}
-		freopen("/dev/null", "w", stdout);
-		freopen("/dev/null", "w", stderr);
+		stdout = freopen("/dev/null", "w", stdout);
+		stderr = freopen("/dev/null", "w", stderr);
 		grid_main_write_pid_file();
 	}
 

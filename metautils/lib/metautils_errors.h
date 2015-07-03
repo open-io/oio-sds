@@ -47,7 +47,7 @@ License along with this library.
 # define GSETCODE(e,C,FMT,...) g_error_trace (e, G_LOG_DOMAIN, (C), __LINE__, __FUNCTION__, __FILE__, FMT, ##__VA_ARGS__)
 
 # define GSETERROR(e,FMT,...)  g_error_trace (e, G_LOG_DOMAIN, 0,   __LINE__, __FUNCTION__, __FILE__, FMT, ##__VA_ARGS__)
-# define GSETRAW(e,CODE,MSG)  g_error_trace (e, G_LOG_DOMAIN, CODE, 0,0,0 , MSG)
+# define GSETRAW(e,CODE,MSG)  g_error_trace (e, G_LOG_DOMAIN, CODE, 0,0,0 , "%s", MSG)
 
 #define GQ() g_quark_from_static_string(G_LOG_DOMAIN)
 #define NEWERROR(CODE, FMT,...) g_error_new(GQ(), (CODE), FMT, ##__VA_ARGS__)
@@ -157,7 +157,7 @@ enum {
  * previous content of this structure. */
 void g_error_trace(GError ** e, const char *dom, int code,
 		int line, const char *func, const char *file,
-		const char *fmt, ...);
+		const char *fmt, ...) __attribute__ ((format (printf, 7, 8)));
 
 void g_error_transmit(GError **err, GError *e);
 

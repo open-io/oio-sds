@@ -1193,8 +1193,7 @@ parse_spare_rawx_list(const dav_resource *resource, int max,
 		if (!tok2) {
 			e = server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST,
 					0, "Bad spare rawx address(es) format");
-			DAV_DEBUG_REQ(resource->info->request,
-					0, e->desc);
+			DAV_DEBUG_REQ(resource->info->request, 0, "%s", e->desc);
 			goto end;
 		}
 		spare_rawx_list[spare_rawx_list_pos] = tok2;
@@ -1203,7 +1202,7 @@ parse_spare_rawx_list(const dav_resource *resource, int max,
 		if (!tok2) {
 			e = server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST,
 					0, "Bad spare rawx address(es) format");
-			DAV_DEBUG_REQ(resource->info->request, 0, e->desc);
+			DAV_DEBUG_REQ(resource->info->request, 0, "%s", e->desc);
 			goto end;
 		}
 
@@ -1214,7 +1213,7 @@ parse_spare_rawx_list(const dav_resource *resource, int max,
 					"Invalid chunk position: %s", tok2);
 			e = server_create_and_stat_error(conf, pool, HTTP_BAD_REQUEST,
 					0, msg);
-			DAV_DEBUG_REQ(resource->info->request, 0, msg);
+			DAV_DEBUG_REQ(resource->info->request, 0, "%s", msg);
 			goto end;
 		}
 		failure_array[position] = TRUE;
@@ -1225,7 +1224,7 @@ parse_spare_rawx_list(const dav_resource *resource, int max,
 					"Bad spare rawx hash: %s", tok2);
 			e = server_create_and_stat_error(
 					conf, pool, HTTP_BAD_REQUEST, 0, msg);
-			DAV_DEBUG_REQ(resource->info->request, 0, msg);
+			DAV_DEBUG_REQ(resource->info->request, 0, "%s", msg);
 			goto end;
 		}
 		spare_md5_list[spare_rawx_list_pos] = tok2;
@@ -1301,7 +1300,7 @@ check_reconstructed_data(const dav_resource *resource, gboolean* failure_array,
 						resource_get_pool(resource),
 						HTTP_INTERNAL_SERVER_ERROR, 0,
 						"Failed to reconstruct a coding chunk (MD5 differs)");
-				DAV_DEBUG_REQ(resource->info->request, 0, e->desc);
+				DAV_DEBUG_REQ(resource->info->request, 0, "%s", e->desc);
 				if (custom_chunkhash) {
 					g_free(custom_chunkhash);
 					custom_chunkhash = NULL;
@@ -1543,7 +1542,7 @@ _send_reconstructed_data(const dav_resource *resource, ap_filter_t *output,
 	}
 	if (ap_pass_brigade(output, bb) != APR_SUCCESS) {
 		char *err_msg = "could not write content to filter";
-		DAV_DEBUG_REQ(resource->info->request, 0, err_msg);
+		DAV_DEBUG_REQ(resource->info->request, 0, "%s", err_msg);
 		err = server_create_and_stat_error(resource_get_server_config(resource),
 				resource->pool, HTTP_FORBIDDEN, 0, err_msg);
 	} else {
@@ -1752,7 +1751,7 @@ dav_rainx_deliver(const dav_resource *resource, ap_filter_t *output)
 	if (!rain_rehydrate((uint8_t**)datachunks, (uint8_t**)codingchunks,
 			rain_params, &rain_env)) {
 		char *err_msg = apr_pstrdup(pool, "Failed to reconstruct the original data");
-		DAV_DEBUG_REQ(resource->info->request, 0, err_msg);
+		DAV_DEBUG_REQ(resource->info->request, 0, "%s", err_msg);
 		err = server_create_and_stat_error(conf, pool,
 				HTTP_INTERNAL_SERVER_ERROR, 0, err_msg);
 		goto end_deliver;

@@ -19,6 +19,7 @@
 
 import sys
 import redis
+import syslog
 
 stat_keys = ('db0.keys', 'used_memory', 'used_memory_rss')
 

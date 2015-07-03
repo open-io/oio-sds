@@ -18,6 +18,7 @@
 
 import sys
 import requests
+import syslog
 
 
 ACCOUNT_STAT_KEYS = [

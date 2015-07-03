@@ -95,7 +95,7 @@ _update_content_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_back
 	CONTENTS_HEADERS_set2_policy(header, stgpol);
 
 	GHashTable *unpacked = metadata_unpack_string(ALIASES_get_mdsys(alias)->str, &e);
-	metadata_add_printf(unpacked, "storage-policy", stgpol);
+	metadata_add_printf(unpacked, "storage-policy", "%s", stgpol);
 	GByteArray *pack = metadata_pack(unpacked, NULL);
 	g_hash_table_destroy(unpacked);
 	g_byte_array_append(pack, (const guint8*)"\0", 1);

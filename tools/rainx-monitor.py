@@ -19,6 +19,7 @@
 
 import sys
 import urllib2
+import syslog
 
 RAINX_STAT_KEYS = [
 	("rainx.reqpersec", "total_reqpersec"),

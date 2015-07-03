@@ -73,6 +73,7 @@ meta2_filter_action_notify_container_CREATE(struct gridd_filter_ctx_s *ctx,
 {
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	(void) reply;
 
 	if (!m2b->notify.hook)
 		return FILTER_OK;
@@ -95,6 +96,7 @@ meta2_filter_action_notify_container_DESTROY(struct gridd_filter_ctx_s *ctx,
 {
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	(void) reply;
 
 	if (!m2b->notify.hook)
 		return FILTER_OK;
@@ -115,6 +117,7 @@ int
 meta2_filter_action_touch_content_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
+	(void) ctx, (void) reply;
 	return FILTER_OK;
 }
 
@@ -122,6 +125,7 @@ int
 meta2_filter_action_touch_container_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
+	(void) ctx, (void) reply;
 	return FILTER_OK;
 }
 

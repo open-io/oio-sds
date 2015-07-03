@@ -1053,7 +1053,10 @@ _work_on_client(struct network_server_s *srv, struct network_client_s *clt)
 	}
 	else {
 		g_async_queue_push(srv->queue_monitor, clt);
-		write(srv->wakeup[1], "", 1);
+		ssize_t w = write(srv->wakeup[1], "", 1);
+		if (w != 1) {
+			GRID_DEBUG("Server: Event thread notification failed");
+		}
 	}
 }
 
