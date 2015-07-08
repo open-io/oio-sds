@@ -5,6 +5,8 @@ import grp
 import logging
 import pwd
 import sys
+import time
+import xattr
 from logging.handlers import SysLogHandler
 
 import eventlet
@@ -310,3 +312,35 @@ def load_namespace_conf(namespace):
             print("Missing field '%s' in namespace config" % k)
             sys.exit(1)
     return conf
+
+
+def ratelimit(run_time, max_rate, increment=1, rate_buffer=5):
+    if max_rate <= 0 or increment <= 0:
+        return run_time
+    clock_accuracy = 1000.0
+    now = time.time() * clock_accuracy
+    time_per_request = clock_accuracy * (float(increment) / max_rate)
+    if now - run_time > rate_buffer * clock_accuracy:
+        run_time = now
+    elif run_time - now > time_per_request:
+        eventlet.sleep((run_time - now) / clock_accuracy)
+    return run_time + time_per_request
+
+
+def paths_gen(volume_path):
+    for root, dirs, files in os.walk(volume_path):
+        for name in files:
+            yield os.path.join(root, name)
+
+
+def read_user_xattr(fd):
+    l = ()
+    try:
+        l = xattr.get_all(fd)
+    except IOError as e:
+        for err in 'ENOTSUP', 'EOPNOTSUPP':
+            if hasattr(errno, err) and e.errno == getattr(errno, err):
+                raise e
+
+    meta = {k[5:]: v for k, v in l if k.startswith('user.')}
+    return meta

@@ -1,0 +1,11 @@
+[blob-auditor]
+namespace =NS
+user = openio
+volume = /var/lib/oio/sds/vol1/NS/rawx-1/
+report_interval = 5
+bytes_per_second = 100000000
+chunks_per_second = 30
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,OPENIO,blob-auditor,1

@@ -15,7 +15,7 @@ from oio.common.utils import validate_service_conf
 from oio.conscience.client import ConscienceClient
 
 
-PARALLEL_CHUNKS_DELETE = 5
+PARALLEL_CHUNKS_DELETE = 2
 CHUNK_TIMEOUT = 60
 ACCOUNT_SERVICE_TIMEOUT = 60
 

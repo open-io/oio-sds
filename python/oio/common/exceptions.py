@@ -35,6 +35,10 @@ class FaultyChunk(ChunkException):
     pass
 
 
+class OrphanChunk(ChunkException):
+    pass
+
+
 _http_status_map = {404: NotFound}
 
 
