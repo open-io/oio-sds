@@ -67,6 +67,7 @@ Destined for the **POST** method, the following actions are currently available:
 ### Containers  ``/m2/{NS}/{REF}``
   * **HEAD** container existence check
   * **PUT** container creation. No input expected.
+    * Optional Header **X-oio-action-mode: autocreate**
   * **GET** container listing. A few options a allowed as query options
     * **marker** list items lexically strictly greater than the marker (incompatible  with a prefix)
     * **marker_end** list items lexically lower than the marker
@@ -150,8 +151,7 @@ The following actions are currently available:
     * Optional Header **X-oio-content-meta-policy: XXX**
     * Optional Header **X-oio-content-meta-hash: XXX**
 	* Optional Header **X-oio-content-meta-x-Key: Value**
-    * Optional Header **X-oio-action-mode: force**
-    * Optional Header **X-oio-action-mode: append**
+    * Optional Header **X-oio-action-mode: force, append, autocreate**
   * **DELETE** 
   * **COPY** Copy the content pointed by the URL to another pointed by the "Destination:" header.
 

@@ -742,15 +742,6 @@ __get_container_service(struct sqlx_sqlite3_s *sq3,
 }
 
 static GError *
-__reuse_container_service(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, const gchar *srvtype,
-		struct meta1_backend_s *m1, gboolean dryrun, gchar ***result)
-{
-	enum m1v2_getsrv_e mode = M1V2_GETSRV_REUSE|(dryrun? M1V2_GETSRV_DRYRUN:0);
-	return __get_container_service(sq3, url, srvtype, m1, result, mode);
-}
-
-static GError *
 __renew_container_service(struct sqlx_sqlite3_s *sq3,
 		struct hc_url_s *url, const gchar *srvtype,
 		struct meta1_backend_s *m1, gboolean dryrun, gchar ***result)
@@ -762,7 +753,7 @@ __renew_container_service(struct sqlx_sqlite3_s *sq3,
 /* ------------------------------------------------------------------------- */
 
 GError*
-meta1_backend_set_service_arguments(struct meta1_backend_s *m1,
+meta1_backend_services_config(struct meta1_backend_s *m1,
 		struct hc_url_s *url, const gchar *packedurl)
 {
 	struct meta1_service_url_s *m1url;
@@ -775,7 +766,7 @@ meta1_backend_set_service_arguments(struct meta1_backend_s *m1,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
-		if (!(err = __info_container(sq3, url, NULL))) {
+		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 			err = __configure_service(sq3, url, m1url);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
@@ -796,8 +787,9 @@ meta1_backend_set_service_arguments(struct meta1_backend_s *m1,
 }
 
 GError*
-meta1_backend_force_service(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *packedurl, gboolean force)
+meta1_backend_services_set(struct meta1_backend_s *m1,
+		struct hc_url_s *url, const gchar *packedurl,
+		gboolean autocreate, gboolean force)
 {
 	struct meta1_service_url_s *m1url;
 	if (!(m1url = meta1_unpack_url(packedurl)))
@@ -808,7 +800,7 @@ meta1_backend_force_service(struct meta1_backend_s *m1,
 	if (!err) {
 		struct sqlx_repctx_s *repctx = NULL;
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-			if (!(err = __info_container(sq3, url, NULL)))
+			if (!(err = __info_user(sq3, url, autocreate, NULL)))
 				err = __save_service(sq3, url, m1url, force);
 			if (!(err = sqlx_transaction_end(repctx, err))) {
 				GError *err2 = __notify_services_by_cid(m1, sq3, url);
@@ -828,7 +820,7 @@ meta1_backend_force_service(struct meta1_backend_s *m1,
 }
 
 GError *
-meta1_backend_get_all_services(struct meta1_backend_s *m1,
+meta1_backend_services_all(struct meta1_backend_s *m1,
 		struct hc_url_s *url, gchar ***result)
 {
     struct sqlx_sqlite3_s *sq3 = NULL;
@@ -851,15 +843,18 @@ meta1_backend_get_all_services(struct meta1_backend_s *m1,
 }
 
 GError *
-meta1_backend_get_container_service_available(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *srvtype, gboolean dryrun,
+meta1_backend_services_link (struct meta1_backend_s *m1,
+		struct hc_url_s *url, const gchar *srvtype,
+		gboolean dryrun, gboolean autocreate,
 		gchar ***result)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
-		if (!(err = __info_container(sq3, url, NULL))) {
-			err = __reuse_container_service(sq3, url, srvtype, m1, dryrun, result);
+		if (!(err = __info_user(sq3, url, autocreate, NULL))) {
+			enum m1v2_getsrv_e mode = M1V2_GETSRV_REUSE;
+			if (dryrun) mode |= M1V2_GETSRV_DRYRUN;
+			err = __get_container_service(sq3, url, srvtype, m1, result, mode);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
@@ -870,8 +865,9 @@ meta1_backend_get_container_service_available(struct meta1_backend_s *m1,
 }
 
 GError*
-meta1_backend_get_container_new_service(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *srvtype, gboolean dryrun,
+meta1_backend_services_poll(struct meta1_backend_s *m1,
+		struct hc_url_s *url, const gchar *srvtype,
+		gboolean dryrun, gboolean autocreate,
 		gchar ***result)
 {
 	EXTRA_ASSERT(srvtype != NULL);
@@ -879,7 +875,7 @@ meta1_backend_get_container_new_service(struct meta1_backend_s *m1,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
-		if (!(err = __info_container(sq3, url, NULL))) {
+		if (!(err = __info_user(sq3, url, autocreate, NULL))) {
 			err = __renew_container_service(sq3, url, srvtype, m1, dryrun,
 					result);
 			if (NULL != err)
@@ -892,13 +888,13 @@ meta1_backend_get_container_new_service(struct meta1_backend_s *m1,
 }
 
 GError *
-meta1_backend_get_container_all_services(struct meta1_backend_s *m1,
+meta1_backend_services_list(struct meta1_backend_s *m1,
 		struct hc_url_s *url, const gchar *srvtype, gchar ***result)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
 	if (!err) {
-		if (!(err = __info_container(sq3, url, NULL))) {
+		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 			struct meta1_service_url_s **uv = NULL;
 			err = __get_container_all_services(sq3, url, srvtype, &uv);
 			if (NULL != err)
@@ -918,14 +914,14 @@ meta1_backend_get_container_all_services(struct meta1_backend_s *m1,
 }
 
 GError*
-meta1_backend_del_container_services(struct meta1_backend_s *m1,
+meta1_backend_services_unlink(struct meta1_backend_s *m1,
 		struct hc_url_s *url, const gchar *srvtype, gchar **urlv)
 {
 	EXTRA_ASSERT(srvtype != NULL);
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
-		if (!(err = __info_container(sq3, url, NULL))) {
+		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 			err = __del_container_services(m1, sq3, url, srvtype, urlv);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
@@ -949,7 +945,7 @@ __notify_services_by_cid(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 		struct hc_url_s *url)
 {
 	struct hc_url_s **urls = NULL;
-	GError *err = __info_container(sq3, url, &urls);
+	GError *err = __info_user(sq3, url, FALSE, &urls);
 	if (!err) {
 		hc_url_set (urls[0], HCURL_NS, m1->backend.ns_name);
 		err = __notify_services(m1, sq3, url);

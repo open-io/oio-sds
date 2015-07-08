@@ -121,11 +121,10 @@ License along with this library.
 #define CODE_REFRESH_CONTAINER(C)  (\
 	   ((C)==CODE_CONTAINER_MIGRATED) \
 	|| ((C)==CODE_CONTAINER_NOTFOUND) \
+	|| ((C)==CODE_USER_NOTFOUND) \
 	|| ((C)==CODE_CONTAINER_DISABLED))
 
-#define CODE_REFRESH_META0(C)    (\
-	   ((C)==CODE_RANGE_MIGRATING) \
-	|| ((C)==CODE_RANGE_NOTFOUND) )
+#define CODE_REFRESH_META0(C) ((C)==CODE_RANGE_NOTFOUND)
 
 #define ZERO(A) memset((A), 0x00, sizeof(A));
 

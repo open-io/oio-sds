@@ -200,19 +200,22 @@ meta1v2_remote_has_reference (const addr_info_t *meta1, GError **err,
 
 gboolean 
 meta1v2_remote_delete_reference (const addr_info_t *meta1, GError **err,
-		struct hc_url_s *url)
+		struct hc_url_s *url, gboolean force)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(url != NULL);
 
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_DESTROY);
 	metautils_message_add_url (req, url);
+	if (force)
+		metautils_message_add_field_str (req, NAME_MSGKEY_FORCE, "1");
 	return oneway_request(meta1, err, message_marshall_gba_and_clean(req));
 }
 
 gchar** 
 meta1v2_remote_link_service(const addr_info_t *meta1, GError **err,
-		struct hc_url_s *url, const gchar *srvtype)
+		struct hc_url_s *url, const gchar *srvtype,
+		gboolean dryrun, gboolean autocreate)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -221,7 +224,10 @@ meta1v2_remote_link_service(const addr_info_t *meta1, GError **err,
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVAVAIL);
 	metautils_message_add_url (req, url);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
-
+	if (dryrun)
+		metautils_message_add_field_str (req, NAME_MSGKEY_DRYRUN, "1");
+	if (autocreate)
+		metautils_message_add_field_str (req, NAME_MSGKEY_AUTOCREATE, "1");
 	return list_request(meta1, err, message_marshall_gba_and_clean(req));
 }
 
@@ -275,7 +281,8 @@ meta1v2_remote_unlink_one_service(const addr_info_t *meta1, GError **err,
 
 gchar **
 meta1v2_remote_poll_reference_service(const addr_info_t *meta1, GError **err,
-		struct hc_url_s *url, const gchar *srvtype)
+		struct hc_url_s *url, const gchar *srvtype,
+		gboolean dryrun, gboolean autocreate)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -284,13 +291,18 @@ meta1v2_remote_poll_reference_service(const addr_info_t *meta1, GError **err,
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVNEW);
 	metautils_message_add_url (req, url);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
+	if (dryrun)
+		metautils_message_add_field_str (req, NAME_MSGKEY_DRYRUN, "1");
+	if (autocreate)
+		metautils_message_add_field_str (req, NAME_MSGKEY_AUTOCREATE, "1");
 
 	return list_request(meta1, err, message_marshall_gba_and_clean(req));
 }
 
 gboolean
 meta1v2_remote_force_reference_service(const addr_info_t *meta1, GError **err,
-		struct hc_url_s *url, const gchar *m1url, gboolean force)
+		struct hc_url_s *url, const gchar *m1url,
+		gboolean autocreate, gboolean force)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -299,6 +311,8 @@ meta1v2_remote_force_reference_service(const addr_info_t *meta1, GError **err,
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVSET);
 	metautils_message_add_url (req, url);
 	metautils_message_add_body_unref (req, metautils_gba_from_string(m1url));
+	if (autocreate)
+		metautils_message_add_field_str (req, NAME_MSGKEY_AUTOCREATE, "1");
 	if (force)
 		metautils_message_add_field_str (req, NAME_MSGKEY_FORCE, "1");
 

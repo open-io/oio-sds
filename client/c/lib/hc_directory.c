@@ -122,7 +122,7 @@ hc_delete_reference(gs_grid_storage_t *hc, const char *reference)
 {
 	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		gint rc = meta1v2_remote_delete_reference(a, &e, url);
+		gint rc = meta1v2_remote_delete_reference(a, &e, url, FALSE);
 		(void) rc;
 		return e;
 	}
@@ -135,7 +135,7 @@ hc_link_service_to_reference(gs_grid_storage_t *hc, const char *reference, const
 {
 	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		*result = meta1v2_remote_link_service(a, &e, url, srv_type);
+		*result = meta1v2_remote_link_service(a, &e, url, srv_type, FALSE, FALSE);
 		return e;
 	}
 
@@ -196,7 +196,7 @@ hc_force_service(gs_grid_storage_t *hc, const char *reference, const char *m1url
 {
 	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		gint rc = meta1v2_remote_force_reference_service(a, &e, url, m1url, FALSE);
+		gint rc = meta1v2_remote_force_reference_service(a, &e, url, m1url, FALSE, FALSE);
 		(void) rc;
 		return e;
 	}
@@ -210,7 +210,7 @@ hc_poll_service(gs_grid_storage_t *hc, const char *reference,
 {
 	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		gchar **urlv = meta1v2_remote_poll_reference_service(a, &e, url, srvtype);
+		gchar **urlv = meta1v2_remote_poll_reference_service(a, &e, url, srvtype, FALSE, FALSE);
 		if (urlv) {
 			*srv = g_strdup(urlv[0]);
 			g_strfreev(urlv);

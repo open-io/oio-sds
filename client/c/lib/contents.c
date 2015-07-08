@@ -655,7 +655,7 @@ gs_content_reload_with_filtered (gs_content_t *content, GSList **p_filtered,
 	/* Try with the META2 */
 	for (int nb_refreshes = 1; nb_refreshes >= 0; nb_refreshes--) {
 		if (!_reload_content(content, p_filtered, p_beans, &localError)) {
-			if (localError->code == CODE_CONTAINER_NOTFOUND) {
+			if (localError->code == CODE_CONTAINER_NOTFOUND || localError->code == CODE_USER_NOTFOUND) {
 				gs_container_t *container = content->info.container;
 				CONTAINER_REFRESH(container, localError, end_label,
 						"cannot delete content");

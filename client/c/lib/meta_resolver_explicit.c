@@ -346,7 +346,7 @@ resolver_direct_get_meta2_once (resolver_direct_t *r, struct hc_url_s *url, GSLi
 			memset(strm1, 0, sizeof(strm1));
 			addr_info_to_string(m1, strm1, sizeof(strm1));
 			GSETCODE(err, e->code, "Cannot directly resolve META2 : %s [META1=%s]", e->message, strm1);
-			if(CODE_CONTAINER_NOTFOUND != e->code) {
+			if (CODE_CONTAINER_NOTFOUND != e->code && CODE_USER_NOTFOUND != e->code) {
 				*m1_exclude = g_slist_prepend(*m1_exclude, m1);
 			} else {
 				g_free(m1);
@@ -392,7 +392,7 @@ resolver_direct_get_meta2 (resolver_direct_t *resolver, struct hc_url_s *url, GE
 			if (!err || !(*err)) {
 				GSETERROR(err, "Unknown error");
 				return NULL;
-			} else if ((*err)->code==CODE_CONTAINER_NOTFOUND) {
+			} else if ((*err)->code == CODE_CONTAINER_NOTFOUND || (*err)->code == CODE_USER_NOTFOUND) {
 				INFO("metacd: not found ok");
 				return NULL;
 			} else if (CODE_REFRESH_META0((*err)->code)) {

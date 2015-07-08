@@ -106,31 +106,41 @@ void meta1_backend_clean(struct meta1_backend_s *m1);
 
 /* ------------------------------------------------------------------------- */
 
-GError* meta1_backend_create_container(struct meta1_backend_s *m1,
+GError* meta1_backend_user_create(struct meta1_backend_s *m1,
 		struct hc_url_s *url);
 
-GError* meta1_backend_destroy_container(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gboolean flush);
+GError* meta1_backend_user_destroy(struct meta1_backend_s *m1,
+		struct hc_url_s *url, gboolean force);
 
-GError* meta1_backend_info_container(struct meta1_backend_s *m1,
+GError* meta1_backend_user_info(struct meta1_backend_s *m1,
 		struct hc_url_s *url, gchar ***result);
 
-GError* meta1_backend_get_container_service_available(
-		struct meta1_backend_s *m1, struct hc_url_s *url,
-		const gchar *srvtype, gboolean dryrun, gchar ***result);
 
-GError* meta1_backend_get_container_new_service(
-		struct meta1_backend_s *m1, struct hc_url_s *url,
-		const gchar *srvtype, gboolean dryrun, gchar ***result);
-
-GError *meta1_backend_get_all_services(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gchar ***result);
-
-GError* meta1_backend_get_container_all_services(struct meta1_backend_s *m1,
+GError* meta1_backend_services_list(struct meta1_backend_s *m1,
 		struct hc_url_s *url, const gchar *srvtype, gchar ***result);
 
-GError* meta1_backend_del_container_services(struct meta1_backend_s *m1,
+GError* meta1_backend_services_link (struct meta1_backend_s *m1,
+		struct hc_url_s *url, const gchar *srvtype,
+		gboolean dryrun, gboolean autocreate,
+		gchar ***result);
+
+GError* meta1_backend_services_unlink(struct meta1_backend_s *m1,
 		struct hc_url_s *url, const gchar *srvtype, gchar **urlv);
+
+GError* meta1_backend_services_poll (struct meta1_backend_s *m1,
+		struct hc_url_s *url, const gchar *srvtype,
+		gboolean dryrun, gboolean autocreate,
+		gchar ***result);
+
+/** @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
+GError* meta1_backend_services_config(struct meta1_backend_s *m1,
+		struct hc_url_s *url, const gchar *packedurl);
+
+/** @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
+GError* meta1_backend_services_set(struct meta1_backend_s *m1,
+		struct hc_url_s *url, const gchar *packedurl,
+		gboolean autocreate, gboolean force);
+
 
 GError* meta1_backend_set_container_properties(struct meta1_backend_s *m1,
 		struct hc_url_s *url, gchar **props);
@@ -141,13 +151,10 @@ GError* meta1_backend_del_container_properties(struct meta1_backend_s *m1,
 GError* meta1_backend_get_container_properties(struct meta1_backend_s *m1,
 		struct hc_url_s *url, gchar **names, gchar ***result);
 
-/** @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
-GError* meta1_backend_set_service_arguments(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *packedurl);
+/* -------------------------------------------------------------------------- */
 
-/** @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
-GError* meta1_backend_force_service(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *packedurl, gboolean force);
+GError *meta1_backend_services_all(struct meta1_backend_s *m1,
+		struct hc_url_s *url, gchar ***result);
 
 /* Ugly quirk */
 GError* meta1_backend_open_base(struct meta1_backend_s *m1,

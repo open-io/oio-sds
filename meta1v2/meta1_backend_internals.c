@@ -100,17 +100,70 @@ _open_and_lock(struct meta1_backend_s *m1, struct hc_url_s *url,
 }
 
 GError*
-__info_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+__create_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
+{
+	if (!hc_url_has_fq_container (url))
+		return NEWERROR(CODE_BAD_REQUEST, "Partial URL");
+
+	static const gchar *sql = "INSERT INTO users "
+		"('cid','account','user') VALUES (?,?,?)";
+
+	GError *err = NULL;
+	sqlite3_stmt *stmt = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+	int rc;
+
+	EXTRA_ASSERT(sq3 != NULL);
+	EXTRA_ASSERT(sq3->db != NULL);
+
+	err = sqlx_transaction_begin(sq3, &repctx);
+	if (NULL != err)
+		return err;
+
+	/* Prepare the statement */
+	sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, NULL);
+	if (rc != SQLITE_OK)
+		err = M1_SQLITE_GERROR(sq3->db, rc);
+	else {
+		(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
+		(void) sqlite3_bind_text(stmt, 2, hc_url_get(url, HCURL_ACCOUNT), -1, NULL);
+		(void) sqlite3_bind_text(stmt, 3, hc_url_get(url, HCURL_USER), -1, NULL);
+
+		/* Run the results */
+		do { rc = sqlite3_step(stmt); } while (rc == SQLITE_ROW);
+
+		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+			err = M1_SQLITE_GERROR(sq3->db, rc);
+			if (rc == SQLITE_CONSTRAINT) {
+				g_prefix_error(&err, "Already created? ");
+				err->code = CODE_CONTAINER_EXISTS;
+			}
+		}
+
+		sqlite3_finalize_debug(rc, stmt);
+	}
+
+	if (err)
+		GRID_DEBUG("User creation failed : (%d) %s", err->code, err->message);
+
+	return sqlx_transaction_end(repctx, err);
+}
+
+GError*
+__info_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, gboolean ac,
 		struct hc_url_s ***result)
 {
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
+	GPtrArray *gpa;
 	int rc;
+	gboolean found;
 
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(sq3->db != NULL);
 	EXTRA_ASSERT(url != NULL);
 
+retry:
 	/* Prepare the statement */
 	sqlite3_prepare_debug(rc, sq3->db, "SELECT account,user FROM users WHERE cid = ?", -1, &stmt, NULL);
 	if (rc != SQLITE_OK)
@@ -118,14 +171,15 @@ __info_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id (url), hc_url_get_id_size (url), NULL);
 
 	/* Run the results */
-	gboolean found = FALSE;
-	GPtrArray *gpa = result ? g_ptr_array_new() : NULL;
+	found = FALSE;
+ 	gpa = result ? g_ptr_array_new() : NULL;
 	do { if (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		found = TRUE;
 		if (!gpa) continue;
 		struct hc_url_s *u = hc_url_empty ();
 		hc_url_set (u, HCURL_ACCOUNT, (char*)sqlite3_column_text(stmt, 0));
 		hc_url_set (u, HCURL_USER, (char*)sqlite3_column_text(stmt, 1));
+		hc_url_set (u, HCURL_HEXID, hc_url_get (url, HCURL_HEXID));
 		g_ptr_array_add(gpa, u);
 	} } while (rc == SQLITE_ROW);
 
@@ -135,6 +189,7 @@ __info_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	}
 
 	sqlite3_finalize_debug(rc,stmt);
+	stmt = NULL;
 
 	if (err) {
 		if (gpa) {
@@ -146,7 +201,12 @@ __info_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 
 	if (!found) {
 		if (gpa) g_ptr_array_free (gpa, TRUE);
-		return NEWERROR(CODE_CONTAINER_NOTFOUND, "no such container");
+		if (ac) {
+			ac = FALSE; /* do not retry */
+			err = __create_user (sq3, url);
+			if (!err) goto retry;
+		}
+		return NEWERROR(CODE_USER_NOTFOUND, "no such container");
 	}
 	if (gpa)
 		*result = (struct hc_url_s**) metautils_gpa_to_array(gpa, TRUE);

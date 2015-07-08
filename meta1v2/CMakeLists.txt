@@ -26,7 +26,7 @@ target_link_libraries(meta1v2
 		meta0utils meta2v2remote meta0remote
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
-add_library(meta1remote SHARED common.c meta1_remote.c meta1_remote.h)
+add_library(meta1remote SHARED meta1_remote.c meta1_remote.h)
 set_target_properties(meta1remote PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(meta1remote
 		metautils

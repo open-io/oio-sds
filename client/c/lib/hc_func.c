@@ -260,7 +260,7 @@ hc_create_container(gs_grid_storage_t *hc, struct hc_url_s *url,
 					"container already exists in namespace [%s]\n",
 					hc_url_get(url, HCURL_USER), hc_url_get(url, HCURL_NS));
 			goto end_label;
-		} else if (err->code != CODE_CONTAINER_NOTFOUND) {
+		} else if (err->code != CODE_CONTAINER_NOTFOUND && err->code != CODE_USER_NOTFOUND) {
 			GSERRORCAUSE(&e, err,
 					"Failed to check container existence in meta2: ");
 			goto end_label;

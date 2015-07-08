@@ -40,7 +40,7 @@ __create_in_meta2(addr_info_t *m1, gs_container_t *c, struct m2v2_create_params_
 	int rc = GS_OK;
 	struct hc_url_s *url = fill_hcurl_from_container (c);
 
-	gchar **m2 = meta1v2_remote_link_service(m1, &e, url, NAME_SRVTYPE_META2);
+	gchar **m2 = meta1v2_remote_link_service(m1, &e, url, NAME_SRVTYPE_META2, FALSE, FALSE);
 	if (!m2 || 0 == g_strv_length(m2)) {
 		if (NULL != e) {
 			GSETCODE(err, e->code, "M1 error: %s", e->message);
@@ -182,7 +182,7 @@ _get (gs_container_t *container, struct m2v2_create_params_s *params,
 
 	TRACE("### container loading error %d", (*err)->code);
 
-	if ((*err)->code == CODE_CONTAINER_NOTFOUND) {
+	if ((*err)->code == CODE_CONTAINER_NOTFOUND || (*err)->code == CODE_USER_NOTFOUND) {
 		if (!ac) {
 			TRACE("No autocreation");
 			gs_decache_container (container->info.gs, C0_ID(container));
@@ -517,7 +517,7 @@ gs_list_container(gs_container_t *container, gs_content_t*** result,
 		g_clear_error(&localError);
 		contents = _list_v2_wrapper(container, &localError);
 		if (!contents && localError) {
-			if (localError->code == CODE_CONTAINER_NOTFOUND) {
+			if (localError->code == CODE_CONTAINER_NOTFOUND || localError->code == CODE_USER_NOTFOUND) {
 				GRID_DEBUG("Decaching container '%s'", container->info.name);
 				gs_decache_container(container->info.gs, C0_ID(container));
 			}

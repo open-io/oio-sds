@@ -212,7 +212,7 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 					DEBUG("METACD reference already exists in meta1: [%s/%s]",
 							cname, str_cid);
 					return pA;
-				} else if (gErr && gErr->code == CODE_CONTAINER_NOTFOUND) {
+				} else if (gErr && (gErr->code == CODE_CONTAINER_NOTFOUND || gErr->code == CODE_USER_NOTFOUND)) {
 					g_clear_error(&gErr);
 				} else if (gErr && CODE_IS_NETWORK_ERROR(gErr->code)) {
 					DEBUG("Network error (meta1 down?): %s", gErr->message);
@@ -299,7 +299,7 @@ gs_resolve_meta2 (gs_grid_storage_t *gs, struct hc_url_s *url, GError **err)
 			return pL;
 
 		if (gErr) {
-			if (gErr->code==CODE_CONTAINER_NOTFOUND) {
+			if (gErr->code == CODE_CONTAINER_NOTFOUND || gErr->code == CODE_USER_NOTFOUND) {
 				/*in this case, no need to retry*/
 				return NULL;
 			} else if (CODE_REFRESH_META0(gErr->code) ||

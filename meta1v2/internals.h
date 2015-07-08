@@ -52,12 +52,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define NAME_MSGNAME_M1V2_CID_PROPDEL "M1V2_CID_PROPDEL"
 #define NAME_MSGNAME_M1V2_GETPREFIX "M1V2_GET_PREFIXES"
 
-#define NAME_HEADER_DRYRUN "DRYRUN"
-
-MESSAGE meta1_create_message(const gchar *reqname, const container_id_t cid);
-
-void meta1_enheader_addr_list(MESSAGE req, const gchar *fname, GSList *addr);
-
 /** @} */
 
 #endif /*OIO_SDS__meta1v2__internals_h*/

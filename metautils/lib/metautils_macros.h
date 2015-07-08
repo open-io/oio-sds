@@ -129,6 +129,7 @@ License along with this library.
 #define NAME_MSGKEY_COPY               "COPY"
 #define NAME_MSGKEY_COUNT              "COUNT"
 #define NAME_MSGKEY_DISTANCE           "DISTANCE"
+#define NAME_MSGKEY_DRYRUN             "DRYRUN"
 #define NAME_MSGKEY_DST                "DST"
 #define NAME_MSGKEY_FLAGS              "FLAGS"
 #define NAME_MSGKEY_FLUSH              "FLUSH"

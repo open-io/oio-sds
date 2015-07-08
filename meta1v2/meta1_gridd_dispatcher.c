@@ -116,12 +116,12 @@ _stat_container(struct meta1_backend_s *m1, struct hc_url_s *url,
 	gchar **names, **allsrv;
 
 	/* Get the meta1 name */
-	err = meta1_backend_info_container(m1, url, &names);
+	err = meta1_backend_user_info(m1, url, &names);
 	if (err != NULL)
 		return err;
 
 	/* Get the meta2 services */
-	err = meta1_backend_get_container_all_services(m1, url, NAME_SRVTYPE_META2, &allsrv);
+	err = meta1_backend_services_list(m1, url, NAME_SRVTYPE_META2, &allsrv);
 	if (err != NULL) {
 		g_strfreev(names);
 		return err;
@@ -170,7 +170,7 @@ meta1_dispatch_v1_CREATE(struct gridd_reply_ctx_s *reply,
 	(void) ignored;
 
 	/* Test if the container exsists */
-	err = meta1_backend_get_container_all_services(m1, url, NAME_SRVTYPE_META2, &result);
+	err = meta1_backend_services_list(m1, url, NAME_SRVTYPE_META2, &result);
 	if (NULL != err) {
 		if (err->code != CODE_CONTAINER_NOTFOUND) {
 			hc_url_clean(url);
@@ -180,7 +180,7 @@ meta1_dispatch_v1_CREATE(struct gridd_reply_ctx_s *reply,
 		g_clear_error(&err);
 
 		GRID_DEBUG("Creating the container reference");
-		err = meta1_backend_create_container(m1, url);
+		err = meta1_backend_user_create(m1, url);
 		if (NULL != err) {
 			hc_url_clean(url);
 			reply->send_error(0, err);
@@ -195,8 +195,8 @@ meta1_dispatch_v1_CREATE(struct gridd_reply_ctx_s *reply,
 	}
 	if (!result) {
 		GRID_TRACE("Meta2 election...");
-		err = meta1_backend_get_container_service_available(m1, url,
-				NAME_SRVTYPE_META2, FALSE, &result);
+		err = meta1_backend_services_link (m1, url,
+				NAME_SRVTYPE_META2, FALSE, FALSE, &result);
 		if (NULL != err) {
 			hc_url_clean(url);
 			reply->send_error(0, err);
@@ -281,7 +281,7 @@ meta1_dispatch_v2_CREATE(struct gridd_reply_ctx_s *reply,
 	struct hc_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 
-	GError *err = meta1_backend_create_container(m1, url);
+	GError *err = meta1_backend_user_create(m1, url);
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
@@ -300,7 +300,7 @@ meta1_dispatch_v2_DESTROY(struct gridd_reply_ctx_s *reply,
 	reply->subject("%s|%s|%d", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), force);
 	(void) ignored;
 
-	GError *err = meta1_backend_destroy_container(m1, url, force);
+	GError *err = meta1_backend_user_destroy(m1, url, force);
 	if (NULL != err)
 		reply->send_error(0, err);
 	else
@@ -320,7 +320,7 @@ meta1_dispatch_v2_HAS(struct gridd_reply_ctx_s *reply,
 	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
 	
-	if (NULL != (err = meta1_backend_info_container(m1, url, &info)))
+	if (NULL != (err = meta1_backend_user_info(m1, url, &info)))
 		reply->send_error(0, err);
 	else {
 		reply->add_body(marshall_stringv_and_clean(&info));
@@ -333,18 +333,19 @@ meta1_dispatch_v2_HAS(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta1_dispatch_v2_SRV_GETAVAIL(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_SRV_LINK(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	struct hc_url_s *url = metautils_message_extract_url (reply->request);
 	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
-	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_HEADER_DRYRUN, FALSE);
+	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_MSGKEY_DRYRUN, FALSE);
+	gboolean autocreate = metautils_message_extract_flag(reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
 	reply->subject("%s|%s|%s|%d", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype, dryrun);
 	(void) ignored;
 
 	gchar **result = NULL;
-	GError *err = meta1_backend_get_container_service_available(m1, url,
-			srvtype, dryrun, &result);
+	GError *err = meta1_backend_services_link (m1, url,
+			srvtype, dryrun, autocreate, &result);
 	if (NULL != err)
 		reply->send_error(0, err);
 	else {
@@ -359,18 +360,18 @@ meta1_dispatch_v2_SRV_GETAVAIL(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta1_dispatch_v2_SRV_NEW(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_SRV_POLL(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	struct hc_url_s *url = metautils_message_extract_url (reply->request);
-	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_HEADER_DRYRUN, FALSE);
+	gboolean ac = metautils_message_extract_flag(reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
+	gboolean dryrun = metautils_message_extract_flag(reply->request, NAME_MSGKEY_DRYRUN, FALSE);
 	gchar *srvtype = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_TYPENAME);
 	reply->subject("%s|%s|%s|%d", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype, dryrun);
 	(void) ignored;
 
 	gchar **result = NULL;
-	GError *err = meta1_backend_get_container_new_service(m1, url, srvtype,
-			dryrun, &result);
+	GError *err = meta1_backend_services_poll(m1, url, srvtype, ac, dryrun, &result);
 	if (NULL != err)
 		reply->send_error(0, err);
 	else {
@@ -385,7 +386,7 @@ meta1_dispatch_v2_SRV_NEW(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta1_dispatch_v2_SRV_SET(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_SRV_FORCE(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
@@ -394,10 +395,11 @@ meta1_dispatch_v2_SRV_SET(struct gridd_reply_ctx_s *reply,
 	reply->subject("%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), m1url);
 	(void) ignored;
 
+	gboolean ac = metautils_message_extract_flag (reply->request, NAME_MSGKEY_AUTOCREATE, FALSE);
 	gboolean force = metautils_message_extract_flag (reply->request, NAME_MSGKEY_FORCE, FALSE);
 	if (NULL != (err = metautils_message_extract_body_string(reply->request, &m1url)))
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else if (NULL != (err = meta1_backend_force_service(m1, url, m1url, force)))
+	else if (NULL != (err = meta1_backend_services_set(m1, url, m1url, ac, force)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(200, "OK");
@@ -408,7 +410,7 @@ meta1_dispatch_v2_SRV_SET(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta1_dispatch_v2_SRV_SETARG(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_SRV_CONFIG(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
@@ -419,7 +421,7 @@ meta1_dispatch_v2_SRV_SETARG(struct gridd_reply_ctx_s *reply,
 
 	if (NULL != (err = metautils_message_extract_body_string(reply->request, &m1url)))
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else if (NULL != (err = meta1_backend_set_service_arguments(m1, url, m1url)))
+	else if (NULL != (err = meta1_backend_services_config(m1, url, m1url)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
@@ -430,7 +432,7 @@ meta1_dispatch_v2_SRV_SETARG(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta1_dispatch_v2_SRV_DELETE(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_SRV_UNLINK(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	gchar **urlv = NULL;
@@ -446,7 +448,7 @@ meta1_dispatch_v2_SRV_DELETE(struct gridd_reply_ctx_s *reply,
 		reply->send_error(CODE_BAD_REQUEST, err);
 	else if (!srvtype)
 		reply->send_error(CODE_BAD_REQUEST, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
-	else if (NULL != (err = meta1_backend_del_container_services(m1, url, srvtype, urlv)))
+	else if (NULL != (err = meta1_backend_services_unlink(m1, url, srvtype, urlv)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
@@ -458,7 +460,7 @@ meta1_dispatch_v2_SRV_DELETE(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta1_dispatch_v2_SRV_GETALL(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_SRV_LIST(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
@@ -468,7 +470,7 @@ meta1_dispatch_v2_SRV_GETALL(struct gridd_reply_ctx_s *reply,
 	reply->subject("%s|%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID), srvtype);
 	(void) ignored;
 
-	if (NULL != (err = meta1_backend_get_container_all_services(m1, url, srvtype, &result)))
+	if (NULL != (err = meta1_backend_services_list(m1, url, srvtype, &result)))
 		reply->send_error(0, err);
 	else {
 		reply->add_body(marshall_stringv_and_clean(&result));
@@ -482,7 +484,7 @@ meta1_dispatch_v2_SRV_GETALL(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean 
-meta1_dispatch_v2_SRV_GETALLonM1(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_SRV_ALLONM1(struct gridd_reply_ctx_s *reply,
         struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
@@ -492,7 +494,7 @@ meta1_dispatch_v2_SRV_GETALLonM1(struct gridd_reply_ctx_s *reply,
     reply->send_reply(CODE_TEMPORARY, "Received");
     (void) ignored;
 
-	if (NULL != (err = meta1_backend_get_all_services(m1, url, &result)))
+	if (NULL != (err = meta1_backend_services_all(m1, url, &result)))
         reply->send_error(0, err);
     else {
         reply->add_body(marshall_stringv_and_clean(&result));
@@ -597,20 +599,21 @@ meta1_gridd_get_requests(void)
 	static struct gridd_request_descr_s descriptions[] = {
 
 		/* META1 new fashion */
-		{NAME_MSGNAME_M1V2_HAS,         (hook) meta1_dispatch_v2_HAS,           NULL},
-		{NAME_MSGNAME_M1V2_CREATE,      (hook) meta1_dispatch_v2_CREATE,        NULL},
-		{NAME_MSGNAME_M1V2_DESTROY,     (hook) meta1_dispatch_v2_DESTROY,       NULL},
-		{NAME_MSGNAME_M1V2_SRVSET,      (hook) meta1_dispatch_v2_SRV_SET,       NULL},
-		{NAME_MSGNAME_M1V2_SRVNEW,      (hook) meta1_dispatch_v2_SRV_NEW,       NULL},
-		{NAME_MSGNAME_M1V2_SRVSETARG,   (hook) meta1_dispatch_v2_SRV_SETARG,    NULL},
-		{NAME_MSGNAME_M1V2_SRVDEL,      (hook) meta1_dispatch_v2_SRV_DELETE,    NULL},
-		{NAME_MSGNAME_M1V2_SRVALL,      (hook) meta1_dispatch_v2_SRV_GETALL,    NULL},
-		{NAME_MSGNAME_M1V2_SRVALLONM1,  (hook) meta1_dispatch_v2_SRV_GETALLonM1,NULL},
-		{NAME_MSGNAME_M1V2_SRVAVAIL,    (hook) meta1_dispatch_v2_SRV_GETAVAIL,  NULL},
-		{NAME_MSGNAME_M1V2_CID_PROPGET, (hook) meta1_dispatch_v2_CID_PROPGET,   NULL},
-		{NAME_MSGNAME_M1V2_CID_PROPSET, (hook) meta1_dispatch_v2_CID_PROPSET,   NULL},
-		{NAME_MSGNAME_M1V2_CID_PROPDEL, (hook) meta1_dispatch_v2_CID_PROPDEL,   NULL},
-		{NAME_MSGNAME_M1V2_GETPREFIX,	(hook) meta1_dispatch_v2_GET_PREFIX,    NULL},
+		{NAME_MSGNAME_M1V2_HAS,         (hook) meta1_dispatch_v2_HAS,         NULL},
+		{NAME_MSGNAME_M1V2_CREATE,      (hook) meta1_dispatch_v2_CREATE,      NULL},
+		{NAME_MSGNAME_M1V2_DESTROY,     (hook) meta1_dispatch_v2_DESTROY,     NULL},
+
+		{NAME_MSGNAME_M1V2_SRVALL,      (hook) meta1_dispatch_v2_SRV_LIST,    NULL},
+		{NAME_MSGNAME_M1V2_SRVAVAIL,    (hook) meta1_dispatch_v2_SRV_LINK,    NULL},
+		{NAME_MSGNAME_M1V2_SRVDEL,      (hook) meta1_dispatch_v2_SRV_UNLINK,  NULL},
+		{NAME_MSGNAME_M1V2_SRVSET,      (hook) meta1_dispatch_v2_SRV_FORCE,   NULL},
+		{NAME_MSGNAME_M1V2_SRVNEW,      (hook) meta1_dispatch_v2_SRV_POLL,    NULL},
+		{NAME_MSGNAME_M1V2_SRVSETARG,   (hook) meta1_dispatch_v2_SRV_CONFIG,  NULL},
+		{NAME_MSGNAME_M1V2_SRVALLONM1,  (hook) meta1_dispatch_v2_SRV_ALLONM1, NULL},
+		{NAME_MSGNAME_M1V2_CID_PROPGET, (hook) meta1_dispatch_v2_CID_PROPGET, NULL},
+		{NAME_MSGNAME_M1V2_CID_PROPSET, (hook) meta1_dispatch_v2_CID_PROPSET, NULL},
+		{NAME_MSGNAME_M1V2_CID_PROPDEL, (hook) meta1_dispatch_v2_CID_PROPDEL, NULL},
+		{NAME_MSGNAME_M1V2_GETPREFIX,	(hook) meta1_dispatch_v2_GET_PREFIX,  NULL},
 
 		/* Old fashoned meta2-orentied requests */
 		{NAME_MSGNAME_M1_CREATE,        (hook) meta1_dispatch_v1_CREATE,   NULL},

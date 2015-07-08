@@ -38,9 +38,11 @@ struct meta1_backend_s
 	} notify;
 };
 
-/*!  */
-GError * __info_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		struct hc_url_s ***result);
+GError* __create_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url);
+
+/*! check the container exists */
+GError * __info_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+		gboolean autocreate, struct hc_url_s ***result);
 
 /*! Open and lock the META1 base responsible for the given container. */
 GError* _open_and_lock(struct meta1_backend_s *m1, struct hc_url_s *url,

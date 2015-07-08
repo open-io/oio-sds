@@ -24,7 +24,6 @@ License along with this library.
 #include <unistd.h>
 
 #include <oio_sds.h>
-#include <metautils/lib/common_main.h>
 #include <metautils/lib/metautils_loggers.h>
 #include <metautils/lib/hc_url.h>
 
@@ -52,9 +51,10 @@ _randomize_string (char *d, const char *chars, size_t dlen)
 int
 main(int argc, char **argv)
 {
-	logger_lazy_init ();
-	g_log_set_default_handler (logger_stderr, NULL);
-	logger_init_level (GRID_LOGLVL_TRACE);
+	oio_log_to_stderr();
+	for (int i=0; i<3 ;i++)
+		oio_log_more ();
+
 	prng = g_rand_new ();
 
 	if (argc != 3) {

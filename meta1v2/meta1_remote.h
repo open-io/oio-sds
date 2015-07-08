@@ -57,13 +57,18 @@ gboolean meta1v2_remote_create_reference (const addr_info_t *meta1,
 		GError **err, struct hc_url_s *url);
 
 gboolean meta1v2_remote_delete_reference(const addr_info_t *meta1,
-		GError **err, struct hc_url_s *url);
+		GError **err, struct hc_url_s *url, gboolean force);
 
 gboolean meta1v2_remote_has_reference(const addr_info_t *meta1,
 		GError **err, struct hc_url_s *url);
 
-gchar ** meta1v2_remote_link_service(const addr_info_t *meta1,
+
+gchar ** meta1v2_remote_list_reference_services(const addr_info_t *meta1,
 		GError **err, struct hc_url_s *url, const gchar *srvtype);
+
+gchar ** meta1v2_remote_link_service(const addr_info_t *meta1,
+		GError **err, struct hc_url_s *url, const gchar *srvtype,
+		gboolean dryrun, gboolean autocreate);
 
 gboolean meta1v2_remote_unlink_service(const addr_info_t *meta1,
 		GError **err, struct hc_url_s *url, const gchar *srvtype);
@@ -71,17 +76,17 @@ gboolean meta1v2_remote_unlink_service(const addr_info_t *meta1,
 gboolean meta1v2_remote_unlink_one_service(const addr_info_t *meta1,
 		GError **err, struct hc_url_s *url, const gchar *srvtype, gint64 seqid);
 
-gchar ** meta1v2_remote_list_reference_services(const addr_info_t *meta1,
-		GError **err, struct hc_url_s *url, const gchar *srvtype);
-
 gchar** meta1v2_remote_poll_reference_service(const addr_info_t *meta1,
-		GError **err, struct hc_url_s *url, const gchar *srvtype);
+		GError **err, struct hc_url_s *url, const gchar *srvtype,
+		gboolean dryrun, gboolean autocreate);
 
 gboolean meta1v2_remote_force_reference_service(const addr_info_t *meta1,
-		GError **err, struct hc_url_s *url, const gchar *m1url, gboolean force);
+		GError **err, struct hc_url_s *url, const gchar *m1url,
+		gboolean autocreate, gboolean force);
 
 gboolean meta1v2_remote_configure_reference_service(const addr_info_t *meta1,
 		GError **err, struct hc_url_s *url, const gchar *m1url);
+
 
 gboolean meta1v2_remote_reference_get_property(const addr_info_t *m1,
 		GError **err, struct hc_url_s *url, gchar **keys, gchar ***result);

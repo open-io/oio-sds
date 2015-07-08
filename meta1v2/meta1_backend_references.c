@@ -39,84 +39,42 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"
 
-static GError*
-__create_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
-{
-	static const gchar *sql = "INSERT INTO users "
-		"('cid','account','user') VALUES (?,?,?)";
-
-	GError *err = NULL;
-	sqlite3_stmt *stmt = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
-	int rc;
-
-	EXTRA_ASSERT(sq3 != NULL);
-	EXTRA_ASSERT(sq3->db != NULL);
-
-	err = sqlx_transaction_begin(sq3, &repctx);
-	if (NULL != err)
-		return err;
-
-	/* Prepare the statement */
-	sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, NULL);
-	if (rc != SQLITE_OK)
-		err = M1_SQLITE_GERROR(sq3->db, rc);
-	else {
-		(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
-		(void) sqlite3_bind_text(stmt, 2, hc_url_get(url, HCURL_ACCOUNT), -1, NULL);
-		(void) sqlite3_bind_text(stmt, 3, hc_url_get(url, HCURL_USER), -1, NULL);
-
-		/* Run the results */
-		do { rc = sqlite3_step(stmt); } while (rc == SQLITE_ROW);
-
-		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-			err = M1_SQLITE_GERROR(sq3->db, rc);
-			if (rc == SQLITE_CONSTRAINT) {
-				g_prefix_error(&err, "Already created? ");
-				err->code = CODE_CONTAINER_EXISTS;
-			}
-		}
-
-		sqlite3_finalize_debug(rc, stmt);
-	}
-
-	if (err)
-		GRID_DEBUG("User creation failed : (%d) %s", err->code, err->message);
-
-	return sqlx_transaction_end(repctx, err);
-}
+#define FMT_COUNT "SELECT COUNT(*) FROM %s WHERE cid = ?"
 
 static GError*
-__count_services(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, guint *count)
+__count_FK (struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+		const char *table, guint *count)
 {
 	gint rc;
-	guint _count = 0;
-	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
 
-	sqlite3_prepare_debug(rc, sq3->db, "SELECT COUNT(*) FROM services WHERE cid = ?", -1, &stmt, NULL);
+	gchar sql[sizeof(FMT_COUNT)+32];
+	g_snprintf (sql, sizeof(sql), FMT_COUNT, table);
+
+	sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, NULL);
 	if (rc != SQLITE_OK)
 		return M1_SQLITE_GERROR(sq3->db, rc);
 
 	(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id (url), hc_url_get_id_size (url), NULL);
 
+	guint _count = 0;
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt)))
 		_count += sqlite3_column_int(stmt, 0);
 
+	GError *err = NULL;
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)
 		err = M1_SQLITE_GERROR(sq3->db, rc);
 	sqlite3_finalize_debug(rc, stmt);
 
 	if (err)
 		return err;
-
 	*count = _count;
 	return NULL;
 }
 
 GError*
 __destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		gboolean flush, gboolean *done)
+		gboolean force, gboolean *done)
 {
 	GError *err = NULL;
 	gint count_actions = 0;
@@ -129,24 +87,27 @@ __destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	if (NULL != err)
 		return err;
 
-	if (flush) {
-		__exec_cid(sq3->db, "DELETE FROM services WHERE cid = ?", hc_url_get_id (url));
+	if (force) {
+		__exec_cid (sq3->db, "DELETE FROM services WHERE cid = ?", hc_url_get_id (url));
+		count_actions += sqlite3_changes(sq3->db);
+		__exec_cid (sq3->db, "DELETE FROM properties WHERE cid = ?", hc_url_get_id (url));
 		count_actions += sqlite3_changes(sq3->db);
 	} else {
-		guint count_services = 0;
+		guint count_services = 0, count_properties = 0;
 
-		/* No flush, we count the services belonging to the container. */
-		err = __count_services(sq3, url, &count_services);
+		/* No forced op, we count the services belonging to the container. */
+		err = __count_FK(sq3, url, "services", &count_services);
+		if (!err)
+			err = __count_FK(sq3, url, "properties", &count_properties);
 
 		/* If any service is found, this is an error. */
 		if (!err && count_services > 0)
-			err = NEWERROR(CODE_CONTAINER_INUSE, "User still linked to services");
+			err = NEWERROR(CODE_USER_INUSE, "User still linked to services");
+		if (!err && count_properties > 0)
+			err = NEWERROR(CODE_USER_INUSE, "User still has properties");
 	}
 
 	if (!err) {
-		__exec_cid(sq3->db, "DELETE FROM properties WHERE cid = ?", hc_url_get_id (url));
-		count_actions += sqlite3_changes(sq3->db);
-
 		__exec_cid(sq3->db, "DELETE FROM users WHERE cid = ?", hc_url_get_id (url));
 		count_actions += sqlite3_changes(sq3->db);
 	}
@@ -154,7 +115,7 @@ __destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	*done = !err && (count_actions > 0);
 
 	if (!err && !*done)
-		err = NEWERROR(CODE_CONTAINER_NOTFOUND, "User not found");
+		err = NEWERROR(CODE_USER_NOTFOUND, "User not found");
 
 	return sqlx_transaction_end(repctx, err);
 }
@@ -162,7 +123,7 @@ __destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 /* ------------------------------------------------------------------------- */
 
 GError *
-meta1_backend_create_container(struct meta1_backend_s *m1,
+meta1_backend_user_create(struct meta1_backend_s *m1,
 		struct hc_url_s *url)
 {
 	EXTRA_ASSERT(url != NULL);
@@ -172,7 +133,7 @@ meta1_backend_create_container(struct meta1_backend_s *m1,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, SQLX_OPEN_MASTERONLY, &sq3);
 	if (!err) {
-		if (!(err = __info_container(sq3, url, NULL)))
+		if (!(err = __info_user(sq3, url, FALSE, NULL)))
 			err = NEWERROR(CODE_CONTAINER_EXISTS, "User already created");
 		else {
 			g_clear_error(&err);
@@ -186,15 +147,15 @@ meta1_backend_create_container(struct meta1_backend_s *m1,
 }
 
 GError *
-meta1_backend_destroy_container(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gboolean flush)
+meta1_backend_user_destroy(struct meta1_backend_s *m1,
+		struct hc_url_s *url, gboolean force)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, SQLX_OPEN_MASTERONLY, &sq3);
 	if (!err) {
 		gboolean done = FALSE;
-		if (!(err = __info_container(sq3, url, NULL)))
-			err = __destroy_container(sq3, url, flush, &done);
+		if (!(err = __info_user(sq3, url, FALSE, NULL)))
+			err = __destroy_container(sq3, url, force, &done);
 		if (NULL != err)
 			g_prefix_error(&err, "Query error: ");  
 		sqlx_repository_unlock_and_close_noerror(sq3);
@@ -204,14 +165,14 @@ meta1_backend_destroy_container(struct meta1_backend_s *m1,
 }
 
 GError *
-meta1_backend_info_container(struct meta1_backend_s *m1,
+meta1_backend_user_info(struct meta1_backend_s *m1,
 		struct hc_url_s *url, gchar ***result)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, SQLX_OPEN_MASTERSLAVE, &sq3);
 	if (!err) {
 		struct hc_url_s **urls = NULL;
-		if (!(err = __info_container(sq3, url, &urls))) {
+		if (!(err = __info_user(sq3, url, FALSE, &urls))) {
 			if (result) {
 				if (!urls)
 					*result = g_malloc0(sizeof(struct hc_url_s*));
