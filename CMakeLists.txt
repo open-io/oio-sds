@@ -359,7 +359,6 @@ add_subdirectory(./sdk)
 add_subdirectory(./metautils/lib)
 add_subdirectory(./cluster/remote)
 add_subdirectory(./cluster/lib)
-add_subdirectory(./python)
 
 if (NOT SDK_ONLY)
 add_subdirectory(./client/c/lib)
