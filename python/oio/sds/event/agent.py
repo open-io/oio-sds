@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 
 from eventlet.green import zmq
 from eventlet import GreenPool
@@ -41,7 +42,11 @@ class EventWorker(object):
         self.logger = get_logger(self.conf, verbose=verbose)
         self._configure_zmq(context)
         self.cs = ConscienceClient(self.conf)
-        self._account_addr = None
+        self._acct_addr = None
+        self.acct_update = 0
+        self.acct_refresh_interval = int_value(
+            conf.get('acct_refresh_interval'), 60
+        )
         self.session = requests.Session()
 
     def _configure_zmq(self, context):
@@ -98,28 +103,32 @@ class EventWorker(object):
             return None
 
     @property
-    def account_addr(self):
-        if not self._account_addr:
+    def acct_addr(self):
+        if not self._acct_addr or self.acct_refresh():
             try:
-                account_instance = self.cs.next_instance(ACCOUNT_SERVICE)
-                self._account_addr = account_instance.get('addr')
+                acct_instance = self.cs.next_instance(ACCOUNT_SERVICE)
+                self._acct_addr = acct_instance.get('addr')
+                self.acct_update = time.time()
             except Exception:
                 self.logger.warn('Unable to find account instance')
                 # fallback on conf
-                account_addr = self.conf.get('account_addr')
-                if not account_addr:
+                acct_addr = self.conf.get('acct_addr')
+                if not acct_addr:
                     self.logger.warn(
                         'Unable to find fallback account instance in config')
                     raise Exception('Unable to find account instance')
-                self._account_addr = account_addr
-        return self._account_addr
+                self._acct_addr = acct_addr
+        return self._acct_addr
+
+    def acct_refresh(self):
+        return (time.time() - self.acct_update) > self.acct_refresh_interval
 
     def handle_container_put(self, event):
         """
         Handle container creation.
         :param event:
         """
-        uri = 'http://%s/v1.0/account/container/update' % self.account_addr
+        uri = 'http://%s/v1.0/account/container/update' % self.acct_addr
         mtime = event.get('when')
         data = event.get('data')
         name = data.get('url').get('user')
@@ -134,7 +143,7 @@ class EventWorker(object):
         TODO
         :param event:
         """
-        uri = 'http://%s/v1.0/account/container/update' % self.account_addr
+        uri = 'http://%s/v1.0/account/container/update' % self.acct_addr
         mtime = event.get('when')
         data = event.get('data')
         name = event.get('url').get('user')
@@ -155,7 +164,7 @@ class EventWorker(object):
         Handle container destroy.
         :param event:
         """
-        uri = 'http://%s/v1.0/account/container/update' % self.account_addr
+        uri = 'http://%s/v1.0/account/container/update' % self.acct_addr
         dtime = event.get('when')
         data = event.get('data')
         name = data.get('url').get('user')
