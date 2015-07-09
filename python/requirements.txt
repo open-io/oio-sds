@@ -1,0 +1,7 @@
+pbr<2.0,>=0.11
+eventlet
+pyzmq
+requests
+flask
+redis
+gunicorn

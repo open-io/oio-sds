@@ -35,3 +35,4 @@ dist
 build
 *.egg
 *.egg-info
+python/.tox/

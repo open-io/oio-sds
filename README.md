@@ -41,6 +41,7 @@ Building the entire project will require the SDK dependencies, but also:
 * zookeeper-devel, libzookeeper\_mt.so : building with distribution's zookeeper client is OK, but the package ships with a lot of dependencies, including the openjdk. We recommand to use the official Oracle/Sun JDK, and to build your own zookeeper client from the source to avoid a huge waste of space and bandwith.
 * neon, neon-devel : to be replaced by curl, as soon as we have time to do that.
 * python-setuptools
+* python-pbr
 
 In addition, a few python modules are required at runtime:
 * python-redis
@@ -89,6 +90,12 @@ make
 make test
 make DESTDIR=${install_dir} install
 ```
+
+Install python module:
+```
+cd ${SRCDIR}/python; sudo python setup.py develop; cd -
+```
+
 
 ## Compile-time configuration
 
