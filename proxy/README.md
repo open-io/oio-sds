@@ -62,6 +62,11 @@ Destined for the **POST** method, the following actions are currently available:
     E.g. : ``{"action":"Force", "args":{"seq":1, "type":"$TYPE", "host":"127.0.0.1:22,127.0.0.1:23","args:""}}``
     * Optional Header **X-oio-action-mode: replace** If present, it allows the service to be replaced for the given reference and sequence number. If absent, it will be an error to insert the same entry twice.
 
+### Shortcuts resources
+
+#### ``/dir/{NS}/{CID}``
+  * **GET** resolves the URL components or this container ID. If you don't know what a contaier ID is, this route is not for you.
+
 ## Meta2 resources
 
 ### Containers  ``/m2/{NS}/{REF}``

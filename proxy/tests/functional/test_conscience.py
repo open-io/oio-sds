@@ -17,7 +17,7 @@ class TestConscienceFunctional(unittest.TestCase):
     def _load_config(self):
         config = load_functest_config()
 
-        self.proxyd_uri = config.get('func_test', 'proxyd_uri') + "/v1.0/cs/"
+        self.proxyd_uri = config.get('func_test', 'proxyd_uri') + "/v2.0/cs/"
         self.namespace = config.get('func_test', 'namespace')
         self.basic_addr = urlparse.urlsplit(self.proxyd_uri).hostname + ":"
         self.session = requests.session()

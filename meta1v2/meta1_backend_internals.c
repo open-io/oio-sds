@@ -177,6 +177,7 @@ retry:
 		found = TRUE;
 		if (!gpa) continue;
 		struct hc_url_s *u = hc_url_empty ();
+		hc_url_set (u, HCURL_NS, hc_url_get (url, HCURL_NS));
 		hc_url_set (u, HCURL_ACCOUNT, (char*)sqlite3_column_text(stmt, 0));
 		hc_url_set (u, HCURL_USER, (char*)sqlite3_column_text(stmt, 1));
 		hc_url_set (u, HCURL_HEXID, hc_url_get (url, HCURL_HEXID));

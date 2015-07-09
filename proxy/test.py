@@ -20,7 +20,7 @@
 import sys, json, httplib, urlparse
 
 CODE_NAMESPACE_NOTMANAGED = 418
-PREFIX = 'v1.0'
+PREFIX = 'v2.0'
 
 suite_cs  = [
 	( { 'method':'GET', 'url':'/cs', 'body':None },

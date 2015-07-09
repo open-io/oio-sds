@@ -313,7 +313,7 @@ void
 oio_log_to_syslog (void)
 {
 	logger_lazy_init ();
-	logger_syslog_open();
+	g_log_set_default_handler(logger_syslog, NULL);
 }
 
 void
@@ -321,7 +321,6 @@ oio_log_to_stderr (void)
 {
 	logger_lazy_init ();
 	g_log_set_default_handler (logger_stderr, NULL);
-	logger_init_level (GRID_LOGLVL_WARN);
 }
 
 void
@@ -329,6 +328,13 @@ oio_log_more (void)
 {
 	logger_lazy_init ();
 	logger_verbose_default ();
+}
+
+void
+oio_log_nothing (void)
+{
+	logger_lazy_init ();
+	logger_quiet ();
 }
 
 /* error management --------------------------------------------------------- */
@@ -1008,7 +1014,6 @@ oio_sds_get_compile_options (void)
 #define _ADD_STR(S) _add(#S,S)
 #define _ADD_DBL(S) _add_double(#S,S)
 #define _ADD_INT(S) _add_integer(#S,S)
-	_ADD_STR (PROXYD_PREFIX);
 	_ADD_STR (PROXYD_PREFIX2);
 	_ADD_STR (PROXYD_HEADER_PREFIX);
 	_ADD_STR (PROXYD_HEADER_REQID);

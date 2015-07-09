@@ -32,7 +32,7 @@ class RegisterThread(object):
 
     def _register(self):
         if not self.register_uri:
-            self.register_uri = 'http://%s/v1.0/cs/%s/%s' % (
+            self.register_uri = 'http://%s/v2.0/cs/%s/%s' % (
                 self.proxy_addr,
                 self.ns,
                 self.instance_info['type']
@@ -78,7 +78,7 @@ class ConscienceClient(object):
             spawn_n(register_thread.run)
 
     def next_instance(self, pool):
-        uri = 'http://%s/v1.0/lb/%s/%s' % (self.proxy_addr, self.ns, pool)
+        uri = 'http://%s/v2.0/lb/%s/%s' % (self.proxy_addr, self.ns, pool)
         resp = requests.get(uri)
         if resp.status_code == 200:
             return resp.json()[0]

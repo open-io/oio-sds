@@ -41,9 +41,17 @@ enum oio_sds_config_e
  * so this only sets a callback into GLib's system. The calling app
  * keeps the freedom to change this. */
 
-/* Set a specific output */
+/* Configures the GLib-2.0 to send the logging output to the syslog. This
+ * function does not call openlog() */
 void oio_log_to_syslog (void);
+
+/* Configures the GLib-2.0 to send the logging output to the standard error
+ * output. The format follow an internal rules of OpeIO. If the walling app
+ * wants to another format, it is its responsibility. */
 void oio_log_to_stderr (void);
+
+/* As the name suggests, it turns of the log output from the OpenIO's SDK */
+void oio_log_nothing (void);
 
 /* Increases the verbosity of the internal logging output.
  * OpenIO's log levels are ERROR, WARNING, NOTICE, INFO, DEBUG, TRACE.

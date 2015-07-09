@@ -38,7 +38,7 @@ _reply_m2_error (struct req_args_s *args, GError * err)
 	g_prefix_error (&err, "M2 error: ");
 	if (err->code == CODE_BAD_REQUEST)
 		return _reply_format_error (args, err);
-	else if (err->code == CODE_CONTAINER_NOTFOUND || err->code == CODE_CONTENT_NOTFOUND)
+	else if (CODE_IS_NOTFOUND(err->code))
 		return _reply_notfound_error (args, err);
 	else if (err->code == CODE_CONTAINER_NOTEMPTY)
 		return _reply_conflict_error (args, err);
@@ -539,9 +539,7 @@ static enum http_rc_e
 _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 {
 	if (err) {
-		if (err->code == CODE_CONTAINER_NOTFOUND)
-			return _reply_notfound_error (args, err);
-		if (err->code == CODE_CONTENT_NOTFOUND)
+		if (CODE_IS_NOTFOUND(err->code))
 			return _reply_notfound_error (args, err);
 		return _reply_system_error (args, err);
 	}
@@ -831,7 +829,7 @@ static enum http_rc_e
 action_m2_container_create (struct req_args_s *args)
 {
 	GError *err = _m2_container_create (args);
-	if (err && (err->code == CODE_USER_NOTFOUND || err->code == CODE_CONTAINER_NOTFOUND))
+	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	if (err && err->code == CODE_CONTAINER_EXISTS)
 		return _reply_created(args);
@@ -895,7 +893,7 @@ action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
 	if (NULL != err) {
 		g_string_free (gstr, TRUE);
 		g_prefix_error (&err, "M2 error: ");
-		if (err->code == CODE_CONTAINER_NOTFOUND)
+		if (CODE_IS_NOTFOUND(err->code))
 			return _reply_notfound_error (args, err);
 		return _reply_system_error (args, err);
 	}
@@ -914,7 +912,7 @@ action_m2_container_touch (struct req_args_s *args, struct json_object *jargs)
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	if (NULL != err) {
-		if (err->code == CODE_CONTAINER_NOTFOUND)
+		if (CODE_IS_NOTFOUND(err->code))
 			return _reply_forbidden_error (args, err);
 		return _reply_m2_error (args, err);
 	}
@@ -1169,7 +1167,7 @@ action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 		return m2v2_remote_touch_content (m2->host, args->url);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND)
+	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
@@ -1189,7 +1187,7 @@ action_m2_content_stgpol (struct req_args_s *args, struct json_object *jargs)
 		return m2v2_remote_execute_STGPOL (m2->host, args->url, stgpol, NULL);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND)
+	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
@@ -1262,7 +1260,7 @@ action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	g_slist_free_full (names, g_free0);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND)
+	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
@@ -1332,7 +1330,7 @@ action_m2_content_copy (struct req_args_s *args)
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	hc_url_pclean(&target_url);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND)
+	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
@@ -1386,7 +1384,7 @@ retry:
 	err = _m2_json_put (args, jbody);
 	json_object_put (jbody);
 	json_tokener_free (parser);
-	if (err && (err->code == CODE_CONTAINER_NOTFOUND || err->code == CODE_USER_NOTFOUND)) {
+	if (err && CODE_IS_NOTFOUND(err->code)) {
 		if (autocreate) {
 			autocreate = FALSE;
 			if (!TYPE())

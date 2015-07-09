@@ -60,7 +60,7 @@ gboolean meta1v2_remote_delete_reference(const addr_info_t *meta1,
 		GError **err, struct hc_url_s *url, gboolean force);
 
 gboolean meta1v2_remote_has_reference(const addr_info_t *meta1,
-		GError **err, struct hc_url_s *url);
+		GError **err, struct hc_url_s *url, struct hc_url_s ***out);
 
 
 gchar ** meta1v2_remote_list_reference_services(const addr_info_t *meta1,

@@ -208,7 +208,7 @@ gs_resolve_meta1v2_v2(gs_grid_storage_t *gs, const container_id_t cID,
 			return pA;
 
 			if (has_before_create) {
-				if (meta1v2_remote_has_reference(pA, &gErr, url)) {
+				if (meta1v2_remote_has_reference(pA, &gErr, url, NULL)) {
 					DEBUG("METACD reference already exists in meta1: [%s/%s]",
 							cname, str_cid);
 					return pA;

@@ -34,6 +34,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 #include <metautils/lib/url.h>
+#include <metautils/lib/hc_url.h>
+#include <metautils/lib/hc_url_ext.h>
 #include <cluster/lib/gridcluster.h>
 #include <cluster/remote/gridcluster_remote.h>
 #include <server/network_server.h>
@@ -53,6 +55,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define OPT(N)    _req_get_option(args,(N))
 #define TOK(N)    _req_get_token(args,(N))
+#define CID()     TOK("CID")
 #define NS()      TOK("NS")
 #define ACCOUNT() TOK("ACCOUNT")
 #define POOL()    TOK("POOL")
@@ -260,12 +263,12 @@ _metacd_load_url (struct req_args_s *args)
 {
 	const gchar *s;
 	struct hc_url_s *url = hc_url_empty();
-	
+
 	if (NULL != (s = NS()))
 		hc_url_set_oldns (url, s);
 
-        if (NULL != (s = ACCOUNT()))
-                hc_url_set (url, HCURL_ACCOUNT, s);
+	if (NULL != (s = ACCOUNT()))
+		hc_url_set (url, HCURL_ACCOUNT, s);
 
 	if (NULL != (s = REF())) {
 		hc_url_set (url, HCURL_USER, s);
@@ -276,6 +279,9 @@ _metacd_load_url (struct req_args_s *args)
 		if (NULL != (s = VERSION()))
 			hc_url_set (url, HCURL_VERSION, s);
 	}
+
+	if (NULL != (s = CID()))
+		hc_url_set (url, HCURL_HEXID, s);
 
 	return url;
 }
@@ -608,58 +614,6 @@ grid_main_specific_fini (void)
 static void
 configure_request_handlers (void)
 {
-	path_parser_configure (path_parser, PROXYD_PREFIX "/status/#GET", action_status);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cache/status/#GET", action_cache_status);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cache/flush/high/#POST", action_cache_flush_high);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cache/flush/low/#POST", action_cache_flush_low);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cache/ttl/low/$COUNT/#POST", action_cache_set_ttl_low);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cache/ttl/high/$COUNT/#POST", action_cache_set_ttl_high);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cache/max/low/$COUNT/#POST", action_cache_set_max_low);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cache/max/high/$COUNT/#POST", action_cache_set_max_high);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX "/lb/$NS/$POOL/$KEY/#GET", action_lb_hash);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/lb/$NS/$POOL/#GET", action_lb_def);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cs/types/$NS/#GET", action_cs_srvtypes);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cs/$NS/#HEAD", action_cs_nscheck);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cs/$NS/#GET", action_cs_info);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cs/$NS/$TYPE/#HEAD", action_cs_srvcheck);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cs/$NS/$TYPE/#GET", action_cs_get);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cs/$NS/$TYPE/#PUT", action_cs_put);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cs/$NS/$TYPE/#DELETE", action_cs_del);
-	// TODO maybe it should be interesting to provide "per-service" URL instead
-	// of "per pool". Especially to manage the actions below.
-	path_parser_configure (path_parser, PROXYD_PREFIX "/cs/$NS/$TYPE/action/#POST", action_cs_action);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX "/dir/$NS/$REF/#HEAD", action_dir_ref_has);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/dir/$NS/$REF/#GET", action_dir_ref_list);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/dir/$NS/$REF/#PUT", action_dir_ref_create);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/dir/$NS/$REF/#DELETE", action_dir_ref_destroy);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/dir/$NS/$REF/action/#POST", action_dir_ref_action);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX "/dir/$NS/$REF/$TYPE/#HEAD", action_dir_srv_list);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/dir/$NS/$REF/$TYPE/#GET", action_dir_srv_list);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/dir/$NS/$REF/$TYPE/#DELETE", action_dir_srv_unlink);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/dir/$NS/$REF/$TYPE/action/#POST", action_dir_srv_action);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX "/m2/$NS/$REF/#HEAD", action_m2_container_check);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/m2/$NS/$REF/#GET", action_m2_container_list);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/m2/$NS/$REF/#PUT", action_m2_container_create);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/m2/$NS/$REF/#DELETE", action_m2_container_destroy);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/m2/$NS/$REF/action/#POST", action_m2_container_action);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX "/m2/$NS/$REF/$PATH/#HEAD", action_m2_content_check);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/m2/$NS/$REF/$PATH/#GET", action_m2_content_get);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/m2/$NS/$REF/$PATH/#PUT", action_m2_content_put);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/m2/$NS/$REF/$PATH/#COPY", action_m2_content_copy);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/m2/$NS/$REF/$PATH/#DELETE", action_m2_content_delete);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/m2/$NS/$REF/$PATH/action/#POST", action_m2_content_action);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX "/sqlx/$NS/$REF/$TYPE/$SEQ/action/#POST", action_sqlx_action);
-
-	// prepare for account support
-
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/status/#GET", action_status);
 
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/status/#GET", action_cache_status);
@@ -695,6 +649,8 @@ configure_request_handlers (void)
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/dir/$NS/$ACCOUNT/$REF/$TYPE/#DELETE", action_dir_srv_unlink);
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/dir/$NS/$ACCOUNT/$REF/$TYPE/action/#POST", action_dir_srv_action);
 
+	path_parser_configure (path_parser, PROXYD_PREFIX2 "/dir/$NS/$CID/#GET", action_dir_resolve);
+
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/#HEAD", action_m2_container_check);
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/#GET", action_m2_container_list);
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/#PUT", action_m2_container_create);
@@ -708,7 +664,7 @@ configure_request_handlers (void)
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/$PATH/#DELETE", action_m2_content_delete);
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/$PATH/action/#POST", action_m2_content_action);
 
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/sqlx/$NS/$REF/$TYPE/$SEQ/action/#POST", action_sqlx_action);
+	path_parser_configure (path_parser, PROXYD_PREFIX2 "/sqlx/$NS/$ACCOUNT/$REF/$TYPE/$SEQ/action/#POST", action_sqlx_action);
 }
 
 static gboolean

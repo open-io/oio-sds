@@ -168,7 +168,7 @@ action_dir_srv_list (struct req_args_s *args)
 		return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, urlv));
 	}
 
-	if (err->code == CODE_CONTAINER_NOTFOUND)
+	if (CODE_IS_NOTFOUND(err->code))
 		return _reply_notfound_error (args, err);
 	return _reply_system_error (args, err);
 }
@@ -226,7 +226,7 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 	}
 
 	if (err) {
-		if (err->code == CODE_CONTAINER_NOTFOUND)
+		if (CODE_IS_NOTFOUND(err->code))
 			return _reply_notfound_error (args, err);
 		return _reply_system_error (args, err);
 	}
@@ -353,7 +353,7 @@ action_dir_ref_list (struct req_args_s *args)
 		g_string_append (out, "}");
 		return _reply_success_json (args, out);
 	}
-	if (err->code == CODE_CONTAINER_NOTFOUND)
+	if (CODE_IS_NOTFOUND(err->code))
 		return _reply_notfound_error (args, err);
 	return _reply_system_error (args, err);
 }
@@ -370,13 +370,13 @@ action_dir_ref_has (struct req_args_s *args)
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *err = NULL;
-		meta1v2_remote_has_reference (&m1a, &err, args->url);
+		meta1v2_remote_has_reference (&m1a, &err, args->url, NULL);
 		return err;
 	}
 	GError *err = _m1_locate_and_action (args, hook);
 	if (!err)
 		return _reply_success_json (args, NULL);
-	if (err->code == CODE_CONTAINER_NOTFOUND)
+	if (CODE_IS_NOTFOUND(err->code))
 		return _reply_notfound_error (args, err);
 	return _reply_system_error (args, err);
 }
@@ -425,7 +425,40 @@ action_dir_ref_destroy (struct req_args_s *args)
 	}
 	if (!err)
 		return _reply_nocontent (args);
-	if (err->code == CODE_CONTAINER_NOTFOUND)
+	if (CODE_IS_NOTFOUND(err->code))
+		return _reply_notfound_error (args, err);
+	return _reply_system_error (args, err);
+}
+
+//------------------------------------------------------------------------------
+
+static enum http_rc_e
+action_dir_resolve (struct req_args_s *args)
+{
+	struct hc_url_s **urlv = NULL;
+	GError *hook (const gchar * m1) {
+		struct addr_info_s m1a;
+		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
+			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
+		GError *err = NULL;
+		meta1v2_remote_has_reference (&m1a, &err, args->url, &urlv);
+		return err;
+	}
+	GError *err = _m1_locate_and_action (args, hook);
+	if (!err) {
+		GString *body = g_string_new ("");
+		g_string_append_c (body, '[');
+		for (struct hc_url_s **u=urlv; *u ;++u) {
+			if (u != urlv)
+				g_string_append_c (body, ',');
+			g_string_append_c (body, '{');
+			hc_url_to_json (body, *u);
+			g_string_append_c (body, '}');
+		}
+		g_string_append_c (body, ']');
+		return _reply_success_json (args, body);
+	}
+	if (CODE_IS_NOTFOUND(err->code))
 		return _reply_notfound_error (args, err);
 	return _reply_system_error (args, err);
 }

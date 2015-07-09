@@ -19,10 +19,11 @@ class TestMeta2Functional(unittest.TestCase):
         config = load_functest_config()
 
         self.namespace = config.get('func_test', 'namespace')
-        self.proxyd = config.get('func_test', 'proxyd_uri') + "/v1.0"
-        self.proxyd_cs = self.proxyd + "/cs/" + self.namespace
-        self.proxyd_dir = self.proxyd + "/dir/" + self.namespace
-        self.proxyd_m2 = self.proxyd + "/m2/" + self.namespace
+        self.account = config.get('func_test', 'account')
+        self.proxyd = config.get('func_test', 'proxyd_uri') + "/v2.0"
+        self.proxyd_cs = self.proxyd + "/cs/" + self.namespace 
+        self.proxyd_dir = self.proxyd + "/dir/" + self.namespace + '/' + self.account
+        self.proxyd_m2 = self.proxyd + "/m2/" + self.namespace + '/' + self.account
 
         self.session = requests.session()
 

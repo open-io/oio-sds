@@ -33,4 +33,6 @@ struct hc_url_s;
  * with g_strfreev(). 'u' cannot be NULL. */
 gchar ** hc_url_get_option_names(struct hc_url_s *u);
 
+void hc_url_to_json (GString *out, struct hc_url_s *u);
+
 #endif /*OIO_SDS__metautils__lib__hc_url_ext_h*/

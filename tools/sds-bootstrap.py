@@ -59,65 +59,6 @@ start_at_boot=true
 command=/usr/sbin/nginx -p ${CFGDIR} -c ${NS}-endpoint.conf
 """
 
-template_nginx_endpoint = """
-working_directory ${TMPDIR};
-error_log ${LOGDIR}/endpoint.log info;
-worker_processes 1;
-pid ${RUNDIR}/endpoint.pid;
-daemon off;
-
-events {
-}
-
-http {
-	access_log ${LOGDIR}/endpoint.access;
-	default_type application/octet-stream;
-
-	client_body_temp_path ${TMPDIR} 1;
-	proxy_temp_path       ${TMPDIR} 1;
-	fastcgi_temp_path     ${TMPDIR} 1;
-	uwsgi_temp_path       ${TMPDIR} 1;
-	scgi_temp_path        ${TMPDIR} 1;
-
-	upstream admin {
-		server ${IP}:${FLASK};
-	}
-	upstream proxy {
-		server ${IP}:${PROXY};
-	}
-	upstream account {
-		server ${IP}:${ACCOUNT};
-	}
-
-	server {
-		listen *:${PORT};
-		listen [::]:${PORT};
-		server_name "";
-		location /v1.0/admin {
-			proxy_pass         http://admin/v1.0/admin;
-			proxy_redirect     off;
-			proxy_set_header   Host             $host;
-			proxy_set_header   X-Real-IP        $remote_addr;
-			proxy_set_header   X-Forwarded-For  $proxy_add_x_forwarded_for;
-		}
-		location /v1.0/account {
-			proxy_pass         http://account/v1.0/account;
-			proxy_redirect     off;
-			proxy_set_header   Host             $host;
-			proxy_set_header   X-Real-IP        $remote_addr;
-			proxy_set_header   X-Forwarded-For  $proxy_add_x_forwarded_for;
-		}
-		location /v1.0 {
-			proxy_pass         http://proxy/v1.0;
-			proxy_redirect     off;
-			proxy_set_header   Host             $host;
-			proxy_set_header   X-Real-IP        $remote_addr;
-			proxy_set_header   X-Forwarded-For  $proxy_add_x_forwarded_for;
-		}
-	}
-}
-"""
-
 template_rawx_service = """
 LoadModule mpm_worker_module   ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
 LoadModule authz_core_module   ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
@@ -582,18 +523,6 @@ def generate (ns, ip, options={}):
 		env['PORT'] = p
 		with open(CFGDIR + '/' + ns + '-rawx-httpd-' + str(n) + '.conf', 'w+') as f:
 			f.write(tpl.safe_substitute(env))
-
-	#	# Central endpoint service
-	#	env['PORT'] = port_endpoint
-	#	env['FLASK'] = port_flask
-	#	env['PROXY'] = port_proxy
-	#	env['ACCOUNT'] = port_account
-	#	with open(CFGDIR + '/' + ns + '-endpoint.conf', 'w+') as f:
-	#		tpl = Template(template_nginx_endpoint)
-	#		f.write(tpl.safe_substitute(env))
-	#	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-	#		tpl = Template(template_nginx_gridinit)
-	#		f.write(tpl.safe_substitute(env))
 
 	# administration flask
 	env['PORT'] = port_flask

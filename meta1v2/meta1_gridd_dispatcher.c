@@ -274,7 +274,7 @@ meta1_dispatch_v1_BYID(struct gridd_reply_ctx_s *reply,
 /* ------------------------------------------------------------------------- */
 
 static gboolean
-meta1_dispatch_v2_CREATE(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_USERCREATE(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	(void) ignored;
@@ -292,7 +292,7 @@ meta1_dispatch_v2_CREATE(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta1_dispatch_v2_DESTROY(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_USERDESTROY(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	struct hc_url_s *url = metautils_message_extract_url (reply->request);
@@ -311,7 +311,7 @@ meta1_dispatch_v2_DESTROY(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta1_dispatch_v2_HAS(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_USERINFO(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
@@ -443,11 +443,9 @@ meta1_dispatch_v2_SRV_UNLINK(struct gridd_reply_ctx_s *reply,
 	(void) ignored;
 
 	if (!srvtype)
-		reply->send_error(0, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
+		reply->send_error(CODE_BAD_REQUEST, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
 	else if (NULL != (err = metautils_message_extract_body_strv(reply->request, &urlv)))
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else if (!srvtype)
-		reply->send_error(CODE_BAD_REQUEST, NEWERROR(CODE_BAD_REQUEST, "Missing srvtype"));
 	else if (NULL != (err = meta1_backend_services_unlink(m1, url, srvtype, urlv)))
 		reply->send_error(0, err);
 	else
@@ -507,7 +505,7 @@ meta1_dispatch_v2_SRV_ALLONM1(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta1_dispatch_v2_CID_PROPGET(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_PROPGET(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
@@ -533,7 +531,7 @@ meta1_dispatch_v2_CID_PROPGET(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta1_dispatch_v2_CID_PROPSET(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_PROPSET(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
@@ -555,7 +553,7 @@ meta1_dispatch_v2_CID_PROPSET(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta1_dispatch_v2_CID_PROPDEL(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_PROPDEL(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	GError *err;
@@ -598,21 +596,22 @@ meta1_gridd_get_requests(void)
 {
 	static struct gridd_request_descr_s descriptions[] = {
 
-		/* META1 new fashion */
-		{NAME_MSGNAME_M1V2_HAS,         (hook) meta1_dispatch_v2_HAS,         NULL},
-		{NAME_MSGNAME_M1V2_CREATE,      (hook) meta1_dispatch_v2_CREATE,      NULL},
-		{NAME_MSGNAME_M1V2_DESTROY,     (hook) meta1_dispatch_v2_DESTROY,     NULL},
+		{NAME_MSGNAME_M1V2_USERINFO,    (hook) meta1_dispatch_v2_USERINFO,    NULL},
+		{NAME_MSGNAME_M1V2_USERCREATE,  (hook) meta1_dispatch_v2_USERCREATE,  NULL},
+		{NAME_MSGNAME_M1V2_USERDESTROY, (hook) meta1_dispatch_v2_USERDESTROY, NULL},
 
-		{NAME_MSGNAME_M1V2_SRVALL,      (hook) meta1_dispatch_v2_SRV_LIST,    NULL},
-		{NAME_MSGNAME_M1V2_SRVAVAIL,    (hook) meta1_dispatch_v2_SRV_LINK,    NULL},
-		{NAME_MSGNAME_M1V2_SRVDEL,      (hook) meta1_dispatch_v2_SRV_UNLINK,  NULL},
+		{NAME_MSGNAME_M1V2_SRVLIST,     (hook) meta1_dispatch_v2_SRV_LIST,    NULL},
+		{NAME_MSGNAME_M1V2_SRVLINK,     (hook) meta1_dispatch_v2_SRV_LINK,    NULL},
+		{NAME_MSGNAME_M1V2_SRVUNLINK,   (hook) meta1_dispatch_v2_SRV_UNLINK,  NULL},
 		{NAME_MSGNAME_M1V2_SRVSET,      (hook) meta1_dispatch_v2_SRV_FORCE,   NULL},
-		{NAME_MSGNAME_M1V2_SRVNEW,      (hook) meta1_dispatch_v2_SRV_POLL,    NULL},
-		{NAME_MSGNAME_M1V2_SRVSETARG,   (hook) meta1_dispatch_v2_SRV_CONFIG,  NULL},
+		{NAME_MSGNAME_M1V2_SRVPOLL,     (hook) meta1_dispatch_v2_SRV_POLL,    NULL},
+		{NAME_MSGNAME_M1V2_SRVCONFIG,   (hook) meta1_dispatch_v2_SRV_CONFIG,  NULL},
+
+		{NAME_MSGNAME_M1V2_PROPGET,     (hook) meta1_dispatch_v2_PROPGET, NULL},
+		{NAME_MSGNAME_M1V2_PROPSET,     (hook) meta1_dispatch_v2_PROPSET, NULL},
+		{NAME_MSGNAME_M1V2_PROPDEL,     (hook) meta1_dispatch_v2_PROPDEL, NULL},
+
 		{NAME_MSGNAME_M1V2_SRVALLONM1,  (hook) meta1_dispatch_v2_SRV_ALLONM1, NULL},
-		{NAME_MSGNAME_M1V2_CID_PROPGET, (hook) meta1_dispatch_v2_CID_PROPGET, NULL},
-		{NAME_MSGNAME_M1V2_CID_PROPSET, (hook) meta1_dispatch_v2_CID_PROPSET, NULL},
-		{NAME_MSGNAME_M1V2_CID_PROPDEL, (hook) meta1_dispatch_v2_CID_PROPDEL, NULL},
 		{NAME_MSGNAME_M1V2_GETPREFIX,	(hook) meta1_dispatch_v2_GET_PREFIX,  NULL},
 
 		/* Old fashoned meta2-orentied requests */

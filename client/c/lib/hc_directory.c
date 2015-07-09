@@ -183,7 +183,7 @@ hc_has_reference(gs_grid_storage_t *hc, const char *reference)
 {
 	GError* cb(addr_info_t *a, struct hc_url_s *url) {
 		GError *e = NULL;
-		gint rc = meta1v2_remote_has_reference(a, &e, url);
+		gint rc = meta1v2_remote_has_reference(a, &e, url, NULL);
 		(void) rc;
 		return e;
 	}

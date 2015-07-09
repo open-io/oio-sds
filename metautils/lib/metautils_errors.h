@@ -58,6 +58,11 @@ License along with this library.
 #define CODE_IS_FINAL(C)         ((C) == CODE_FINAL_OK || (!CODE_IS_OK(C) && !CODE_IS_TEMP(C)))
 #define CODE_IS_REDIRECT(C) (((C) > CODE_BEACON_REDIRECT) && ((C) < CODE_BEACON_ERROR))
 
+#define CODE_IS_NOTFOUND(C) ((C)==CODE_CONTAINER_NOTFOUND \
+		|| (C)==CODE_USER_NOTFOUND \
+		|| (C)==CODE_ACCOUNT_NOTFOUND \
+		|| (C)==CODE_CONTENT_NOTFOUND)
+
 enum {
 	ERRCODE_UNKNOWN_ERROR = 0,
 	ERRCODE_PARAM = 1,
