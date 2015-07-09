@@ -189,29 +189,29 @@ test_get_reference_property_void(gs_grid_storage_t * gs)
 	test_end(gs, nameRef, NULL);
 }
 
-/*
 static void
-test_delete_reference_property (gs_grid_storage_t * gs)
+test_delete_reference_property(gs_grid_storage_t * gs)
 {
-  char **prop_array = parameters_init ();
-  char *nameRef = test_init (gs, "Ref_params", prop_array);
-  char *keys[] = { prop_array[0] };
-  gchar **result = NULL;
+	char **prop_array = parameters_init();
+	char *nameRef = test_init(gs, "Ref_params", prop_array);
+	char *deleted_key[] = { prop_array[0], NULL };
+	char *keys[] = { prop_array[0], prop_array[1], NULL };
+	gchar **result = NULL;
 
-  gs_error_t *err = hc_delete_reference_property (gs, nameRef, keys);
+	gs_error_t *err = hc_delete_reference_property(gs, nameRef, deleted_key);
 
-  if (err == NULL)
-    {
-      hc_get_reference_property (gs, nameRef, keys, &result);
-      g_assert_true (result[0] == NULL);
-    }
-  else
-    g_test_fail ();
+	if (err == NULL) {
+		hc_get_reference_property(gs, nameRef, keys, &result);
+		g_assert_true(result[1] == NULL);
+		g_assert_true(strstr(result[0], prop_array[3]) != NULL);
+	}
+	else
+		g_test_fail();
 
-  parameters_delete (prop_array);
-  test_end (gs, nameRef, NULL);
+	parameters_delete(prop_array);
+	test_end(gs, nameRef, NULL);
 }
-*/
+
 static void
 test_set_container_storage_policy(gs_grid_storage_t * gs)
 {
@@ -459,35 +459,35 @@ test_get_content_properties(gs_grid_storage_t * gs)
 
 /*
 static void
-test_delete_content_property (gs_grid_storage_t * gs)
+test_delete_content_property(gs_grid_storage_t * gs)
 {
-  gs_error_t **err = NULL;
-  gchar **result = NULL;
+	gs_error_t **err = NULL;
+	gchar **result = NULL;
 
-  char *nameRef = test_init (gs, "Ref_linked", NULL);
-  char *nameCont = gen_random (7);
-  gs_container_t *container = container_init (gs, nameCont);
-  hc_ul_content_from_file (gs, nameCont, "Content", "file_test.txt",
-			   err);
-  gs_content_t *nameContent =
-    gs_get_content_from_path (container, "Content", err);
+	char *nameRef = test_init(gs, "Ref_linked", NULL);
+	char *nameCont = gen_random(7);
+	gs_container_t *container = container_init(gs, nameCont);
 
-  char *props[] = { "key1=value1", "key2=value2" };
-  char *propDel = "key1";
-  hc_set_content_property (nameContent, props, err);
+	hc_ul_content_from_file(gs, nameCont, "Content", "file_test.txt", err);
+	gs_content_t *nameContent =
+		gs_get_content_from_path(container, "Content", err);
 
-  hc_delete_content_property (nameContent, &propDel, err);
-  g_assert_true (err == NULL);
+	char *props[] = { "key1=value1", "key2=value2", NULL };
+	char *propDel[] = { "key1", NULL };
+	hc_set_content_property(nameContent, props, err);
 
-  hc_get_content_properties (nameContent, &result, err);
-  g_assert_true (err == NULL);
-  if (result == NULL)
-    g_test_fail ();
-  else
-    g_assert_true (strcmp (result[0], "key2=value2") == 0);
+	hc_delete_content_property(nameContent, propDel, err);
+	g_assert_true(err == NULL);
 
-  gs_content_free (nameContent);
-  test_end (gs, nameRef, container);
+	hc_get_content_properties(nameContent, &result, err);
+	g_assert_true(err == NULL);
+	if (result == NULL)
+		g_test_fail();
+	else
+		g_assert_true(strcmp(result[0], "key2=value2") == 0);
+
+	gs_content_free(nameContent);
+	test_end(gs, nameRef, container);
 }
 */
 static void
@@ -548,9 +548,8 @@ main(int argc, char **argv)
 			(GTestDataFunc)
 			test_get_reference_property_wrong_key);
 
-		fprintf(stderr, "hc_delete_reference_property to be stabilized \n");
-//  g_test_add_data_func ("/client/lib/prop/del_ref_prop", gs,
-//                      (GTestDataFunc) test_delete_reference_property);
+		g_test_add_data_func("/client/lib/prop/del_ref_prop", gs,
+			(GTestDataFunc) test_delete_reference_property);
 
 		g_test_add_data_func("/client/lib/prop/set_cont_strpol", gs,
 			(GTestDataFunc)
@@ -590,9 +589,8 @@ main(int argc, char **argv)
 		g_test_add_data_func("/client/lib/prop/set_content_prop_again", gs,
 			(GTestDataFunc) test_set_content_property_again);
 
-		fprintf(stderr, "hc_delete_content_property to be stabilized \n");
-//  g_test_add_data_func ("/client/lib/prop/del_content_prop", gs,
-//                      (GTestDataFunc) test_delete_content_property);
+		//g_test_add_data_func("/client/lib/prop/del_content_prop", gs,
+		//  (GTestDataFunc) test_delete_content_property);
 
 		g_test_add_data_func("/client/lib/prop/copy_content", gs,
 			(GTestDataFunc) test_copy_content);

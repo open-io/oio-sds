@@ -245,7 +245,7 @@ class TestDirectoryFunctional(unittest.TestCase):
                 self.session.get(self.addr_RefSet_type2).json()]
         self.assertEqual([self.addr1], resp)
 
-    def test_service_actions_force(self):
+    def test_service_actions_force_no_header(self):
 
         self.session.post(self.address_cs + "/action",
                           json.dumps({"action": "Lock", "args": self.service2}))
@@ -256,9 +256,24 @@ class TestDirectoryFunctional(unittest.TestCase):
                                          "host": self.addr2,
                                          "args": ""}}
         ))
+        self.assertEqual(resp.status_code, 400)
+
+    def test_service_actions_force_valid(self):
+
+        self.session.post(self.address_cs + "/action",
+                          json.dumps({"action": "Lock", "args": self.service2}))
+        time.sleep(4)
+
+        resp = self.session.post(self.addr_RefSet_type_action2, json.dumps(
+            {"action": "Force", "args": {"seq": 1, "type": "echo",
+                                         "host": self.addr2,
+                                         "args": ""}}),
+                                 headers={'x-oio-action-mode': 'replace'}
+                                 )
         self.assertEqual(resp.status_code, 204)
 
         resp = [service["host"] for service in
                 self.session.get(self.addr_RefSet_type2).json()]
 
         self.assertEqual(resp, [self.addr2])
+
