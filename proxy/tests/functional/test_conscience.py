@@ -42,7 +42,7 @@ class TestConscienceFunctional(unittest.TestCase):
         self.valid_service = json.dumps(self.service)
         self.valid_lock_service = json.dumps(
             {"action": "Lock", "args": self.service})
-        self.service["score"] = 100-self.score_rand
+        self.service["score"] = 100 - self.score_rand
         self.valid_lock_service2 = json.dumps(
             {"action": "Lock", "args": self.service})
         self.valid_unlock_service = json.dumps(
@@ -175,7 +175,7 @@ class TestConscienceFunctional(unittest.TestCase):
     def test_service_pool_actions_lock_and_reput(self):
 
         self.session.post(self.addr_type + "/action",
-                                 self.valid_lock_service)
+                          self.valid_lock_service)
 
         time.sleep(2.5)
 
@@ -192,12 +192,12 @@ class TestConscienceFunctional(unittest.TestCase):
     def test_service_pool_actions_lock_and_relock(self):
 
         self.session.post(self.addr_type + "/action",
-                                 self.valid_lock_service)
+                          self.valid_lock_service)
 
         time.sleep(2.5)
 
         self.session.post(self.addr_type + "/action",
-                                 self.valid_lock_service2)
+                          self.valid_lock_service2)
 
         time.sleep(2.5)
 
@@ -205,7 +205,7 @@ class TestConscienceFunctional(unittest.TestCase):
             [session["score"] for session in
              self.session.get(self.addr_type).json() if
              session["addr"] == self.addr1][0]
-        self.assertEqual(score, 100-self.score_rand)
+        self.assertEqual(score, 100 - self.score_rand)
 
     def test_services_pool_actions_unlock(self):
 
@@ -221,3 +221,4 @@ class TestConscienceFunctional(unittest.TestCase):
                    self.session.get(self.addr_type).json() if
                    session["addr"] == self.addr1]
         self.assertEqual(service, [])
+

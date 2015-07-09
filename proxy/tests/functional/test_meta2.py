@@ -388,7 +388,8 @@ class TestMeta2Functional(unittest.TestCase):
 
         listing = \
             self.session.get(self.addr_m2_ref,
-                             params={'max': 10, 'delimiter': '-'}).json()["prefixes"]
+                             params={'max': 10, 'delimiter': '-'}).json()[
+                "prefixes"]
 
         self.assertEqual(len(listing), 4)
         self.assertEqual(listing, ['0-', '1-', '2-', '3-'])
@@ -722,20 +723,16 @@ class TestMeta2Functional(unittest.TestCase):
                                     'x-oio-content-meta-length': 40})
         self.assertEqual(resp.status_code, 404)
 
-    def test_contents_put_invalid_headers(self):  # to be improved
+    def test_contents_put_invalid_headers(self):
 
         self.session.put(self.addr_m2_ref)
         self.prepare_bean(1)
-        raisedException = False
-        try:
-            self.session.put(self.addr_m2_ref_path, json.dumps([self.bean]),
-                             headers={
-                                 'x-oio-content-meta-hash': 'error',
-                                 'x-oio-content-meta-length': 40})
-        except Exception:
-            raisedException = True
-            pass
-        self.assertFalse(raisedException)
+        resp = self.session.put(self.addr_m2_ref_path,
+                                json.dumps([self.bean]),
+                                headers={
+                                    'x-oio-content-meta-hash': 'error',
+                                    'x-oio-content-meta-length': 40})
+        self.assertEqual(resp.status_code, 400)
 
     def test_contents_delete(self):
 
@@ -929,3 +926,4 @@ class TestMeta2Functional(unittest.TestCase):
             {"action": "DelProperties", "args": ['prop1']}
         ))
         self.assertEqual(resp.status_code, 404)
+
