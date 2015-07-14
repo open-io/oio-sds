@@ -105,8 +105,8 @@ GError* meta2_backend_deduplicate_alias_chunks(struct meta2_backend_s *m2b,
 
 /* -------------------------------------------------------------------------- */
 
-GError* meta2_backend_list_aliases(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, struct list_params_s *lp,
+GError* meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct hc_url_s *url,
+		struct list_params_s *lp, GSList *headers,
 		m2_onbean_cb cb, gpointer u0, gchar ***out_properties);
 
 /**
@@ -170,10 +170,16 @@ GError* meta2_backend_set_properties(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gboolean flush, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
-/** Get a list of URLs of contents referencing a specific chunk id. */
-GError* meta2_backend_get_content_urls_from_chunk_id(
-		struct meta2_backend_s *m2b, struct hc_url_s *url,
-		const gchar* chunk_id, gint64 limit, GSList **urls);
+/* Back-Links listing ------------------------------------------------------- */
+
+/** Get a list of CONTENT_HEADER ownning the given chunk id. */
+GError* meta2_backend_content_from_chunkid (struct meta2_backend_s *m2b,
+		struct hc_url_s *url, const gchar* chunk_id,
+		m2_onbean_cb cb, gpointer u0);
+
+GError* meta2_backend_content_from_contenthash (struct meta2_backend_s *m2b,
+		struct hc_url_s *url, GBytes *h,
+		m2_onbean_cb cb, gpointer u0);
 
 /* TESTING ------------------------------------------------------------------ */
 

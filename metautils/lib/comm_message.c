@@ -669,7 +669,7 @@ metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
 		if (!decoder (&l, (*p)->data, (*p)->len, NULL))
 			err = NEWERROR (CODE_PROXY_ERROR, "Bad payload from service");
 		else
-			items = g_slist_concat (items, l);
+			items = metautils_gslist_precat (items, l);
 	}
 	*result = items;
 	return err;

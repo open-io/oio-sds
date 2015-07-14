@@ -93,12 +93,22 @@ _gba_assign(GByteArray *base, GByteArray *gba)
 GVariant*
 _gba_to_gvariant(GByteArray *gba)
 {
-	guint8 *b;
-	size_t i, max;
+	GBytes *gb = g_bytes_new_static (gba->data, gba->len);
+	GVariant *gv = _gb_to_gvariant (gb);
+	g_bytes_unref (gb);
+	return gv;
+}
+
+GVariant*
+_gb_to_gvariant(GBytes *gb)
+{
+	gsize max;
+	gconstpointer b = g_bytes_get_data(gb, &max);
+	const guint8 *b8 = b;
 
 	GVariantBuilder *builder = g_variant_builder_new(G_VARIANT_TYPE("ay"));
-	for (b=gba->data,max=gba->len,i=0; i<max ;i++)
-		g_variant_builder_add_value(builder, g_variant_new_byte(b[i]));
+	for (gsize i=0; i<max ;i++)
+		g_variant_builder_add_value(builder, g_variant_new_byte(b8[i]));
 	GVariant *result = g_variant_builder_end(builder);
 	g_variant_builder_unref(builder);
 	return result;

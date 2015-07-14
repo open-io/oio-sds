@@ -66,7 +66,7 @@ _on_bean_ctx_append_udata_list(struct on_bean_ctx_s *obc)
 					(GDestroyNotify)_bean_cleanl2);
 		} else {
 			meta2_filter_ctx_set_input_udata2(obc->ctx,
-					g_slist_concat(obc->l,
+					metautils_gslist_precat(obc->l,
 						(GSList*)meta2_filter_ctx_get_input_udata(obc->ctx)),
 					(GDestroyNotify) _bean_cleanl2, FALSE);
 		}

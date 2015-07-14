@@ -155,7 +155,7 @@ GError* m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *ur
 		struct bean_ALIASES_s **out);
 
 GError* m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp,
-		m2_onbean_cb cb, gpointer u);
+		GSList *headers, m2_onbean_cb cb, gpointer u);
 
 GError* m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		m2_onbean_cb cb, gpointer u);
@@ -260,11 +260,6 @@ GError* m2db_deduplicate_alias_chunks(struct sqlx_sqlite3_s *sq3,
 
 GError* m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3,
 		struct hc_url_s *url, guint32 flags, GString **status_message);
-
-/** Get a list of URLs of contents referencing a specific chunk id.  */
-GError* m2db_content_urls_from_chunk_id(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, const gchar* chunk_id, gint64 limit,
-		GSList **urls);
 
 /**
  * Create a new alias for each existing alias of the container, with

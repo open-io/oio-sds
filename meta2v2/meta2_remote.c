@@ -267,7 +267,7 @@ concat_contents (GError **err, gpointer udata, gint code, guint8 *body, gsize bo
 		*pContent = decoded;
 	else {
 		if ((*pContent)->raw_chunks)
-			(*pContent)->raw_chunks = g_slist_concat( (*pContent)->raw_chunks, decoded->raw_chunks);
+			(*pContent)->raw_chunks = metautils_gslist_precat( (*pContent)->raw_chunks, decoded->raw_chunks);
 		else
 			(*pContent)->raw_chunks = decoded->raw_chunks;
 		decoded->raw_chunks = NULL;

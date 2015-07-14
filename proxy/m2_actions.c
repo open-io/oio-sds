@@ -649,6 +649,17 @@ action_m2_container_list (struct req_args_s *args)
 	GTree *tree_prefixes = NULL;
 	GTree *tree_properties = NULL;
 
+	/* Triggers special listings */
+	const char *chunk_id = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "list-chunk-id");
+	const char *content_hash_hex = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "list-content-hash");
+	GBytes *content_hash = NULL;
+	if (content_hash_hex) {
+		GByteArray *gba = NULL;
+		if (NULL != (err = _get_hash (content_hash_hex, &gba)))
+			return _reply_format_error (args, BADREQ("Invalid content hash"));
+		content_hash = g_byte_array_free_to_bytes (gba);
+	}
+
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
 		GError *e = NULL;
@@ -664,8 +675,16 @@ action_m2_container_list (struct req_args_s *args)
 
 			// Action
 			gchar **props = NULL;
-			e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out, &props);
-			if (NULL != e) return e;
+			if (chunk_id)
+				e = m2v2_remote_execute_LIST_BY_CHUNKID (m2->host, args->url, chunk_id, &in, &out);
+			else if (content_hash)
+				e = m2v2_remote_execute_LIST_BY_HEADERHASH (m2->host, args->url, content_hash, &in, &out);
+			else
+				e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out, &props);
+
+			// Manage the output
+			if (NULL != e)
+				return e;
 			if (props && tree_properties) {
 				for (gchar **p=props; *p && *(p+1) ;p+=2)
 					g_tree_replace (tree_properties, g_strdup(*p), g_strdup(*(p+1)));
@@ -738,13 +757,13 @@ action_m2_container_list (struct req_args_s *args)
 		}
 	}
 
-	gchar **tab = NULL;
+	gchar **keys_prefixes = NULL;
 	if (!err)
-		tab = gtree_string_keys (tree_prefixes);
+		keys_prefixes = gtree_string_keys (tree_prefixes);
 	_container_new_props_to_headers (args, tree_properties);
-	enum http_rc_e rc = _reply_aliases (args, err, list_out.beans, tab);
-	if (tab)
-		g_free (tab);
+	enum http_rc_e rc = _reply_aliases (args, err, list_out.beans, keys_prefixes);
+	if (keys_prefixes)
+		g_free (keys_prefixes);
 	g_tree_destroy (tree_prefixes);
 	g_tree_destroy (tree_properties);
 	metautils_str_clean (&list_out.next_marker);

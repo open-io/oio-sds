@@ -73,7 +73,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_APPEND "M2V2_APPEND"
 # define NAME_MSGNAME_M2V2_GET    "M2V2_GET"
 # define NAME_MSGNAME_M2V2_DEL    "M2V2_DEL"
-# define NAME_MSGNAME_M2V2_LIST   "M2V2_LIST"
+
+/* list all aliases */
+# define NAME_MSGNAME_M2V2_LIST    "M2V2_LIST"
+
+/* list but filter by chunk */
+# define NAME_MSGNAME_M2V2_LCHUNK  "M2V2_LCHUNK"
+
+/* list but filter by header */
+# define NAME_MSGNAME_M2V2_LHEADER "M2V2_LHEADER"
 
 # define NAME_MSGNAME_M2V2_PROP_SET "M2V2_PROP_SET"
 # define NAME_MSGNAME_M2V2_PROP_GET "M2V2_PROP_GET"

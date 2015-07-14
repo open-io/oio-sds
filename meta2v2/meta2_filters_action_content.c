@@ -366,67 +366,28 @@ meta2_filter_action_get_content(struct gridd_filter_ctx_s *ctx,
 	int rc = FILTER_KO;
 	GError *e = NULL;
 	guint32 flags = 0;
-	gint64 limit = -1; // negative means unlimited
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
-	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
-	const gchar *chunk_id = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CHUNKID);
-	const gchar *limit_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MAX_KEYS);
-	GSList *urls = NULL;
 
 	TRACE_FILTER();
+
+	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
 	if (NULL != fstr)
 		flags = atoi(fstr);
-	if (limit_str != NULL && limit_str[0] != '\0') {
-		limit = atoll(limit_str);
-	}
 
-	if (chunk_id == NULL) {
-		urls = g_slist_prepend(urls, hc_url_dup(url));
-	} else {
-		// Search aliases referencing a specific chunk and build URLs
-		GRID_DEBUG("Searching aliases referencing chunk %s", chunk_id);
-		e = meta2_backend_get_content_urls_from_chunk_id(m2b, url, chunk_id,
-				limit, &urls);
-		if (e != NULL) {
-			GRID_ERROR("Failed getting aliases from chunk id: %s", e->message);
-			meta2_filter_ctx_set_error(ctx, e);
-			goto cleanup;
-		}
-
-		if (urls == NULL) {
-			e = NEWERROR(CODE_CONTENT_NOTFOUND,
-					"Did not find any matching alias for chunk %s",
-					chunk_id);
-			GRID_DEBUG("%s", e->message);
-			meta2_filter_ctx_set_error(ctx, e);
-			goto cleanup;
-		}
-		if (GRID_TRACE_ENABLED()) {
-			for (GSList *cursor = urls; cursor; cursor = cursor->next) {
-				GRID_TRACE("Found alias: %s",
-						hc_url_get(cursor->data, HCURL_WHOLE));
-			}
-		}
-	}
-
-	for (GSList *cursor = urls; cursor != NULL; cursor = cursor->next) {
-		struct hc_url_s *url2 = cursor->data;
-		e = meta2_backend_get_alias(m2b, url2, flags, _bean_list_cb, &obc->l);
-		if (NULL != e) {
-			GRID_DEBUG("Fail to return alias for url: %s",
-					hc_url_get(url2, HCURL_WHOLE));
-			meta2_filter_ctx_set_error(ctx, e);
-			goto cleanup;
-		}
+	e = meta2_backend_get_alias(m2b, url, flags, _bean_list_cb, &obc->l);
+	if (NULL != e) {
+		GRID_DEBUG("Fail to return alias for url: %s", hc_url_get(
+					url, HCURL_WHOLE));
+		meta2_filter_ctx_set_error(ctx, e);
+		goto cleanup;
 	}
 
 	_on_bean_ctx_send_list(obc, TRUE);
 	rc = FILTER_OK;
 
 cleanup:
-	g_slist_free_full(urls, (GDestroyNotify)hc_url_clean);
 	_on_bean_ctx_clean(obc);
 	return rc;
 }

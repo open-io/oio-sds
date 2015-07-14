@@ -569,7 +569,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 
 		// Performs checks only if client did not ask for a local destroy
 		if (!local)
-			err = m2db_list_aliases(sq3, &lp, counter_cb, NULL);
+			err = m2db_list_aliases(sq3, &lp, NULL, counter_cb, NULL);
 
 		/* XXX JKA : ce bloc est-il sur ? */
 		if (err) {
@@ -674,8 +674,8 @@ meta2_backend_purge_container(struct meta2_backend_s *m2,
 /* Contents --------------------------------------------------------------- */
 
 GError*
-meta2_backend_list_aliases(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, struct list_params_s *lp,
+meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct hc_url_s *url,
+		struct list_params_s *lp, GSList *headers,
 		m2_onbean_cb cb, gpointer u0, gchar ***out_properties)
 {
 	GError *err = NULL;
@@ -688,7 +688,7 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
 			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
 	if (!err) {
-		err = m2db_list_aliases(sq3, lp, cb, u0);
+		err = m2db_list_aliases(sq3, lp, headers, cb, u0);
 		if (!err && out_properties)
 			*out_properties = sqlx_admin_get_keyvalues (sq3);
 		m2b_close(sq3);
@@ -1594,8 +1594,9 @@ meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct hc_url_s *url
 }
 
 GError*
-meta2_backend_get_content_urls_from_chunk_id(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, const gchar* chunk_id, gint64 limit, GSList **urls)
+meta2_backend_content_from_chunkid(struct meta2_backend_s *m2b,
+		struct hc_url_s *url, const char *chunk_id,
+		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1606,7 +1607,37 @@ meta2_backend_get_content_urls_from_chunk_id(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE|
 			M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
 	if (!err) {
-		err = m2db_content_urls_from_chunk_id(sq3, url, chunk_id, limit, urls);
+		GVariant *params[2] = {NULL, NULL};
+		params[0] = g_variant_new_string(chunk_id);
+		err = CONTENTS_HEADERS_load (sq3->db, " id IN"
+				" (SELECT DISTINCT content_id"
+				"  FROM content_v2 "
+				"  WHERE chunk_id = ?)", params, cb, u0);
+		metautils_gvariant_unrefv(params);
+		m2b_close(sq3);
+	}
+
+	return err;
+}
+
+GError*
+meta2_backend_content_from_contenthash (struct meta2_backend_s *m2b,
+		struct hc_url_s *url, GBytes *h,
+		m2_onbean_cb cb, gpointer u0)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE|
+			M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
+	if (!err) {
+		GVariant *params[2] = {NULL, NULL};
+		params[0] = _gb_to_gvariant(h);
+		err = CONTENTS_HEADERS_load (sq3->db, " hash = ?", params, cb, u0);
+		metautils_gvariant_unrefv(params);
 		m2b_close(sq3);
 	}
 

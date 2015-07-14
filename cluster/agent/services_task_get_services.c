@@ -60,7 +60,7 @@ parse_srv_list( worker_t *worker, GError **error )
 			return 0;
 		} else {
 			DEBUG("[task_id=%s] Received %d services", sdata->task_id, g_slist_length( services ));
-			sdata->services = g_slist_concat(services, sdata->services);
+			sdata->services = metautils_gslist_precat(sdata->services, services);
 		}
 	}
 
