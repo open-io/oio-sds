@@ -803,7 +803,17 @@ action_m2_container_check (struct req_args_s *args)
 static GError *
 _m2_container_create (struct req_args_s *args)
 {
-	const gchar *type = TYPE();
+	const char *type = TYPE();
+	if (!type || !*type)
+		type = NAME_SRVTYPE_META2;
+	if (!g_str_has_prefix (type, NAME_SRVTYPE_META2))
+		return BADREQ("The service type is not a "NAME_SRVTYPE_META2);
+	else {
+		const char *sep = type + sizeof(NAME_SRVTYPE_META2) - 1;
+		if (*sep && *sep != '.')
+			return BADREQ("The service type is not a "NAME_SRVTYPE_META2);
+	}
+
 	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
 
 	gchar **properties = _container_headers_to_props (args);
@@ -1406,8 +1416,6 @@ retry:
 	if (err && CODE_IS_NOTFOUND(err->code)) {
 		if (autocreate) {
 			autocreate = FALSE;
-			if (!TYPE())
-				path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
 			if (!(err = _m2_container_create (args)))
 				goto retry;
 		}

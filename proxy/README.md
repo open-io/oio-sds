@@ -6,6 +6,9 @@ The interface tends to be as restful as possible, where each URL identifies a re
 When specific actions are proposed on a main resource, this is through POST methods on a special resource : the token "action" is suffixed to the path of the main resource.
 Then there is a convention to encode the ation : the body of the request contains a JSON object with (at least) two fields: "action" and "args". "action" is a string valued to the name of the action, and "args" is wathever expected by the action.
 
+All the route presented below are prefixed with a common prefix that denotes the version of the protocol.
+We are currently using the "/v2.0" prefix.
+
 ## Conscience resources
 
 ### Namespaces ``/cs/{NS}``
@@ -33,13 +36,13 @@ Destined for the **POST** method, the following actions are currently available:
 
 ## Directory resources
 
-### Reference ``/dir/{NS}/{REF}``
+### Reference ``/dir/{NS}/{ACCOUNT}/{REF}``
   * **PUT** Reference creation
   * **DELETE** Reference destruction
   * **HEAD** Reference presence check
   * **GET** Returns an abstract of all the services related to the given reference (user).
 
-### References actions ``/dir/{NS}/{REF}/action``
+### References actions ``/dir/{NS}/{ACCOUNT}/{REF}/action``
 Destined for the **POST** method, the following actions are currently available:
   * **GetProperties** : Returns a set of properties. The argument is expected to be an array of strings (the names of the properties) or the 'null' JSON object (considered as an empty array). An empty array will cause all the properties to be returned.
     * Request body: ``{ "action":"GetProperties", "args":["key1","key2"]}``
@@ -48,11 +51,11 @@ Destined for the **POST** method, the following actions are currently available:
   * **SetProperties** : sets several properties. The argument is expected to be a JSON object mapping keys (strings) to their value (string).
     * Request body: ``{ "action":"SetProperties", "args":{"key1":"value1","key2":"value2"}}``
 
-### Services ``/dir/{NS}/{REF}/{TYPE}``
+### Services ``/dir/{NS}/{ACCOUNT}/{REF}/{TYPE}``
   * **GET** List the services of the given type linked to the given 
   * **DELETE** Removes an associated service.
 
-### Services actions ``/dir/{NS}/{REF}/{TYPE}/action``
+### Services actions ``/dir/{NS}/{ACCOUNT}/{REF}/{TYPE}/action``
 Destined for the **POST** method, the following actions are currently available:
   * **Link** : polls and associates a new service to the reference. No argument expected (it will be ignored)
     E.g. ``{"action":"Link", "args":null}``
@@ -69,7 +72,7 @@ Destined for the **POST** method, the following actions are currently available:
 
 ## Meta2 resources
 
-### Containers  ``/m2/{NS}/{REF}``
+### Containers  ``/m2/{NS}/{ACCOUNT}/{REF}``
   * **HEAD** container existence check
   * **PUT** container creation. No input expected.
     * Optional Header **X-oio-action-mode: autocreate**
@@ -86,7 +89,7 @@ Destined for the **POST** method, the following actions are currently available:
     * Optional Header **X-oio-list-content-hash: XXX**
   * **DELETE** container existence check
 
-### Containers actions ``/m2/{NS}/{REF}/action``
+### Containers actions ``/m2/{NS}/{ACCOUNT}/{REF}/action``
 For **POST** methods only.
 
 The following actions are currently available:
@@ -146,7 +149,7 @@ The following actions are currently available:
     }
 }``
 
-### Contents ``/m2/{NS}/{REF}/{PATH}``
+### Contents ``/m2/{NS}/{ACCOUNT}/{REF}/{PATH}``
   * **HEAD** Check for the content presence
   * **GET** Fetch the locations of the chunks belonging to the specified content. Some options are available:
     * **deleted** : set to (yes|true|1|on) to ignore the "deleted" flag set on contents. If not set or set to another value, a deleted content will be considered missing and trigger a 404 error reply.
@@ -162,7 +165,7 @@ The following actions are currently available:
   * **DELETE** 
   * **COPY** Copy the content pointed by the URL to another pointed by the "Destination:" header.
 
-### Contents actions ``/m2/{NS}/{REF}/{PATH}/action``
+### Contents actions ``/m2/{NS}/{ACCOUNT}/{REF}/{PATH}/action``
 Only for **POST** requests.
 
 Currently suppported actions are:
@@ -182,7 +185,7 @@ Currently suppported actions are:
 
 ## SQLX
 
-### Administrative actions ``/sqlx/{NS}/{REF}/{TYPE}/{SEQ}/action``
+### Administrative actions ``/sqlx/{NS}/{ACCOUNT}/{REF}/{TYPE}/{SEQ}/action``
 Only for **POST** requests.
 
 Currently suppported actions are:
