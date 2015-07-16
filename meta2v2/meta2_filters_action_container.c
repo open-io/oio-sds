@@ -212,7 +212,7 @@ meta2_filter_action_deduplicate_container(struct gridd_filter_ctx_s *ctx,
 
 static int
 _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
-		struct list_params_s *lp)
+		struct list_params_s *lp, GSList *headers)
 {
 	GError *e = NULL;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
@@ -248,7 +248,7 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 
 	if (lp->maxkeys > 0)
 		lp->maxkeys ++;
-	e = meta2_backend_list_aliases(m2b, url, lp,
+	e = meta2_backend_list_aliases(m2b, url, lp, headers,
 			(lp->maxkeys>0 ? s3_list_cb : _get_cb), obc, &properties);
 
 	if (NULL != e) {
@@ -287,31 +287,111 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	return FILTER_OK;
 }
 
-int
-meta2_filter_action_list_contents(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
+static void
+_load_list_params (struct list_params_s *lp, struct gridd_filter_ctx_s *ctx)
 {
-	TRACE_FILTER();
-
-	struct list_params_s lp;
-	memset(&lp, '\0', sizeof(struct list_params_s));
+	memset(lp, '\0', sizeof(struct list_params_s));
 
 	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
 	if (NULL != fstr) {
 		guint32 flags = atoi(fstr);
-		lp.flag_headers = BOOL(flags & M2V2_FLAG_HEADERS);
-		lp.flag_nodeleted = BOOL(flags & M2V2_FLAG_NODELETED);
-		lp.flag_allversion = BOOL(flags & M2V2_FLAG_ALLVERSION);
+		lp->flag_headers = BOOL(flags & M2V2_FLAG_HEADERS);
+		lp->flag_nodeleted = BOOL(flags & M2V2_FLAG_NODELETED);
+		lp->flag_allversion = BOOL(flags & M2V2_FLAG_ALLVERSION);
 	}
 
-	lp.prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);
-	lp.marker_start = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER);
-	lp.marker_end = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER_END);
+	lp->prefix = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_PREFIX);
+	lp->marker_start = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER);
+	lp->marker_end = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MARKER_END);
 	const char *maxkeys_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MAX_KEYS);
 	if (NULL != maxkeys_str)
-		lp.maxkeys = g_ascii_strtoll(maxkeys_str, NULL, 10);
+		lp->maxkeys = g_ascii_strtoll(maxkeys_str, NULL, 10);
+}
 
-	return _list_S3(ctx, reply, &lp);
+int
+meta2_filter_action_list_contents(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	struct list_params_s lp;
+	_load_list_params (&lp, ctx);
+	return _list_S3(ctx, reply, &lp, NULL);
+}
+
+int
+meta2_filter_action_list_by_chunk_id(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GSList *headers = NULL;
+	GError *err = NULL;
+	gchar *c = NULL;
+	int rc = FILTER_KO;
+
+	struct list_params_s lp;
+	_load_list_params (&lp, ctx);
+
+	// Get the chunk id
+	c = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_KEY);
+	if (!c)
+		err = NEWERROR(CODE_BAD_REQUEST, "Missing content id at [%s]", NAME_MSGKEY_KEY);
+
+	// Use it to locate the headers
+	if (!err) {
+		struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+		struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+		err = meta2_backend_content_from_chunkid (m2b, url, c, _bean_list_cb, &headers);
+	}
+	if (!err && !headers)
+		err = NEWERROR(CODE_CONTENT_NOTFOUND, "No header linked");
+
+	// Perform the list on it
+	if (!err)
+		rc = _list_S3(ctx, reply, &lp, headers);
+	else
+		meta2_filter_ctx_set_error(ctx, err);
+
+	_bean_cleanl2 (headers);
+	g_free0 (c);
+	return rc;
+}
+
+int
+meta2_filter_action_list_by_header_hash(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GSList *headers = NULL;
+	GError *err = NULL;
+	GBytes *h = NULL;
+	int rc = FILTER_KO;
+
+	struct list_params_s lp;
+	_load_list_params (&lp, ctx);
+
+	// Get the header hash (binary form)
+	gsize hlen = 0;
+	void *hbuf = metautils_message_get_field (reply->request, NAME_MSGKEY_KEY, &hlen);
+	if (hbuf && hlen)
+		h = g_bytes_new_static (hbuf, hlen);
+	if (!h)
+		err = NEWERROR(CODE_BAD_REQUEST, "Missing content hash at [%s]", NAME_MSGKEY_KEY);
+
+	// Use it to locate the headers
+	if (!err) {
+		struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+		struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+		err = meta2_backend_content_from_contenthash (m2b, url, h, _bean_list_cb, &headers);
+	}
+	if (!err && !headers)
+		err = NEWERROR(CODE_CONTENT_NOTFOUND, "No header linked");
+
+	// Perform the list on it
+	if (!err)
+		rc = _list_S3(ctx, reply, &lp, headers);
+	else
+		meta2_filter_ctx_set_error(ctx, err);
+
+	_bean_cleanl2 (headers);
+	if (h) g_bytes_unref (h);
+	return rc;
 }
 
 int

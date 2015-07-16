@@ -1151,7 +1151,7 @@ loc_context_init_retry(gs_grid_storage_t *hc, struct hc_url_s *url, gs_error_t *
 	for (int nb_refreshes = 1; nb_refreshes >= 0; nb_refreshes--) {
 		gs_error_clear(&e);
 		if (!(lc = loc_context_init(hc, url, &e))) {
-			if (e && e->code == CODE_CONTAINER_NOTFOUND) {
+			if (e && (e->code == CODE_CONTAINER_NOTFOUND || e->code == CODE_USER_NOTFOUND)) {
 				container_id_t cid;
 				memcpy(&cid, hc_url_get_id(url), sizeof(container_id_t));
 				gs_decache_container(hc, cid);

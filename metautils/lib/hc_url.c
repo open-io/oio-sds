@@ -572,3 +572,34 @@ hc_url_set_oldns(struct hc_url_s *u, const char *ns)
 	hc_url_set (u, HCURL_ACCOUNT, ns[s-1] ? ns+s : HCURL_DEFAULT_ACCOUNT);
 }
 
+void
+hc_url_to_json (GString *out, struct hc_url_s *u)
+{
+	gboolean first = TRUE;
+	void separator (void) {
+	}
+
+	g_string_append_printf (out, "\"ns\":\"%s\"", hc_url_get (u, HCURL_NS));
+
+	first = FALSE;
+	if (hc_url_has (u, HCURL_ACCOUNT)) {
+		if (!first) g_string_append_c (out, ',');
+		g_string_append_printf (out, "\"account\":\"%s\"", hc_url_get (u, HCURL_ACCOUNT));
+		first = FALSE;
+	}
+	if (hc_url_has (u, HCURL_USER)) {
+		if (!first) g_string_append_c (out, ',');
+		g_string_append_printf (out, "\"user\":\"%s\"", hc_url_get (u, HCURL_USER));
+		first = FALSE;
+	}
+	if (hc_url_has (u, HCURL_TYPE)) {
+		if (!first) g_string_append_c (out, ',');
+		g_string_append_printf (out, "\"type\":\"%s\"", hc_url_get (u, HCURL_TYPE));
+		first = FALSE;
+	}
+	if (hc_url_has (u, HCURL_PATH)) {
+		if (!first) g_string_append_c (out, ',');
+		g_string_append_printf (out, "\"path\":\"%s\"", hc_url_get (u, HCURL_PATH));
+	}
+}
+

@@ -377,17 +377,6 @@ meta2_filter_extract_header_optional_position_prefix(struct gridd_filter_ctx_s *
 }
 
 int
-meta2_filter_extract_header_optional_chunkid(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	gchar buf[1024]; // XXX: is there a maximum length for chunk ids?
-	TRACE_FILTER();
-	EXTRACT_STRING(NAME_MSGKEY_CHUNKID, TRUE);
-	return FILTER_OK;
-}
-
-int
 meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
         struct gridd_reply_ctx_s *reply)
 {
@@ -395,17 +384,6 @@ meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
 	gchar buf[64];
 	TRACE_FILTER();
 	EXTRACT_STRING(NAME_MSGKEY_OVERWRITE, TRUE);
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_optional_max_keys(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	gchar buf[64];
-	TRACE_FILTER();
-	EXTRACT_STRING(NAME_MSGKEY_MAX_KEYS, TRUE);
 	return FILTER_OK;
 }
 

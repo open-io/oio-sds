@@ -94,32 +94,6 @@ def info_content (ns,ref,path):
 	except:
 		return traceback.format_exc(), 500
 
-@app.route('/v1.0/admin/container/<ns>/<ref>', methods=['POST'])
-def create_container (ns,ref):
-	try:
-		ENDPOINT = endpoint(ns)
-		session = requests.Session()
-		# creates the reference
-		r = session.put(ENDPOINT + '/v1.0/dir/{0}/{1}'.format(ns,ref))
-		if r.status_code / 100 != 2:
-			return r.text, 500
-		# Links a meta2
-		r = session.post(ENDPOINT + '/v1.0/dir/{0}/{1}/meta2/action'.format(ns,ref),
-				json.dumps({'action':'Link','args':None}))
-		if r.status_code / 100 != 2:
-			return r.text, 500
-		m2list = r.json()
-		for m2 in m2list:
-			r = session.put(ENDPOINT + '/v1.0/m2/{0}/{1}'.format(ns,ref))
-			if r.status_code == 502:
-				continue
-			if r.status_code / 100 != 2:
-				return r.text, 500
-			return json.dumps(m2list), 200
-		return "No meta2 answered", 600
-	except:
-		return traceback.format_exc(), 500
-
 @app.route('/v1.0/admin/container/<ns>/<ref>', methods=['MOVE'])
 def move_container (ns,ref):
 	try:

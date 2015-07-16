@@ -307,6 +307,36 @@ _load_chunks (GSList **out, struct json_object *jtab)
 	return err;
 }
 
+/* Logging helpers ---------------------------------------------------------- */
+
+void
+oio_log_to_syslog (void)
+{
+	logger_lazy_init ();
+	g_log_set_default_handler(logger_syslog, NULL);
+}
+
+void
+oio_log_to_stderr (void)
+{
+	logger_lazy_init ();
+	g_log_set_default_handler (logger_stderr, NULL);
+}
+
+void
+oio_log_more (void)
+{
+	logger_lazy_init ();
+	logger_verbose_default ();
+}
+
+void
+oio_log_nothing (void)
+{
+	logger_lazy_init ();
+	logger_quiet ();
+}
+
 /* error management --------------------------------------------------------- */
 
 void
@@ -516,12 +546,12 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
 		rc = curl_easy_perform (h);
 		if (CURLE_OK != rc)
-			err = NEWERROR(0, "Proxy: %s", curl_easy_strerror(rc));
+			err = NEWERROR(0, "Proxy error (get): (%d) %s", rc, curl_easy_strerror(rc));
 		else {
 			long code = 0;
 			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
 			if (2 != (code/100))
-				err = NEWERROR(0, "Get: (%ld)", code);
+				err = NEWERROR(0, "Get error: (%ld)", code);
 		}
 	}
 
@@ -727,15 +757,34 @@ struct oio_error_s*
 oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		const char *local)
 {
+	struct oio_source_s src = {
+		.autocreate = 0,
+		.type = OIO_SRC_FILE,
+		.data.path=local,
+	};
+	return oio_sds_upload_from_source (sds, url, &src);
+}
+
+struct oio_error_s*
+oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
+		struct oio_source_s *src)
+{
 	assert (sds != NULL);
 	assert (url != NULL);
+
+	if (!src)
+		return (struct oio_error_s*) NEWERROR(0, "Invalid argument: bad source");
+	if (src->type != OIO_SRC_FILE)
+		return (struct oio_error_s*) NEWERROR(0, "Invalid argument: source type not managed");
+	if (!src->data.path)
+		return (struct oio_error_s*) NEWERROR(0, "Invalid argument: no source");
 
 	GError *err = NULL;
 	CURLcode rc;
 
 	/* check the local file */
 	struct local_upload_s upload;
-	if (NULL != (err = _upload_init (&upload, local))) {
+	if (NULL != (err = _upload_init (&upload, src->data.path))) {
 		_upload_fini (&upload);
 		return (struct oio_error_s*) err;
 	}
@@ -763,6 +812,8 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		view_input.done = 0;
 		struct headers_s headers = {NULL,NULL};
 		_headers_add (&headers, "Expect", "");
+		if (src->autocreate)
+			_headers_add (&headers, PROXYD_HEADER_MODE, "autocreate");
 		rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
 		rc = curl_easy_setopt (h, CURLOPT_READDATA, &view_input);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
@@ -773,13 +824,13 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 		rc = curl_easy_perform (h);
 		if (rc != CURLE_OK)
-			err = NEWERROR(0, "Proxy: Beans: (%d) %s", rc, curl_easy_strerror(rc));
+			err = NEWERROR(0, "Proxy error (beans): (%d) %s", rc, curl_easy_strerror(rc));
 		else {
 			long code = 0;
 			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
 			if (2 != (code/100)) {
 				err = _body_parse_error (reply_body);
-				g_prefix_error (&err, "Beans: ");
+				g_prefix_error (&err, "Beans error: (%ld)", code);
 				err->code = code;
 			}
 		}
@@ -829,6 +880,8 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 				g_checksum_get_string (upload.checksum_content));
 		_headers_add_int64 (&headers, PROXYD_HEADER_PREFIX "content-meta-length",
 				upload.st.st_size);
+		if (src->autocreate)
+			_headers_add (&headers, PROXYD_HEADER_MODE, "autocreate");
 		rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
 		rc = curl_easy_setopt (h, CURLOPT_READDATA, &view_input);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
@@ -839,12 +892,12 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 		rc = curl_easy_perform (h);
 		if (rc != CURLE_OK)
-			err = NEWERROR(0, "Proxy: (%d) %s", rc, curl_easy_strerror(rc));
+			err = NEWERROR(0, "Proxy error (put): (%d) %s", rc, curl_easy_strerror(rc));
 		else {
 			long code = 0;
 			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
 			if (2 != (code/100))
-				err = NEWERROR(0, "Put: (%ld)", code);
+				err = NEWERROR(0, "Put error: (%ld)", code);
 		}
 		_headers_clean (&headers);
 	}
@@ -886,12 +939,12 @@ oio_sds_delete (struct oio_sds_s *sds, struct hc_url_s *url)
 	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 	rc = curl_easy_perform (h);
 	if (CURLE_OK != rc)
-		err = NEWERROR(0, "Proxy: %s", curl_easy_strerror(rc));
+		err = NEWERROR(0, "Proxy error (delete): %s", curl_easy_strerror(rc));
 	else {
 		long code = 0;
 		rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
 		if (2 != (code/100))
-			err = NEWERROR(0, "Delete: (%ld)", code);
+			err = NEWERROR(0, "Delete error: (%ld)", code);
 	}
 	_headers_clean (&headers);
 
@@ -926,11 +979,13 @@ oio_sds_has (struct oio_sds_s *sds, struct hc_url_s *url, int *phas)
 	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 	rc = curl_easy_perform (h);
 	if (CURLE_OK != rc)
-		err = NEWERROR(0, "Proxy: Delete: %s", curl_easy_strerror(rc));
+		err = NEWERROR(0, "Proxy error (head): %s", curl_easy_strerror(rc));
 	else {
 		long code = 0;
 		rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
 		*phas = (2 == (code/100));
+		if (!*phas && 404 != code)
+			err = NEWERROR(0, "Check error: (%ld)", code);
 	}
 	_headers_clean (&headers);
 
@@ -959,7 +1014,6 @@ oio_sds_get_compile_options (void)
 #define _ADD_STR(S) _add(#S,S)
 #define _ADD_DBL(S) _add_double(#S,S)
 #define _ADD_INT(S) _add_integer(#S,S)
-	_ADD_STR (PROXYD_PREFIX);
 	_ADD_STR (PROXYD_PREFIX2);
 	_ADD_STR (PROXYD_HEADER_PREFIX);
 	_ADD_STR (PROXYD_HEADER_REQID);

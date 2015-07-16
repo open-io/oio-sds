@@ -33,7 +33,7 @@ for ns in sys.argv[1:]:
 
 	# Get the list of RAWX
 	session = requests.Session()
-	r = session.get('http://'+str(url)+'/v1.0/cs/'+str(ns)+'/rawx')
+	r = session.get('http://'+str(url)+'/v2.0/cs/'+str(ns)+'/rawx')
 	if r.status_code / 100 != 2:
 		print "#", "NS="+str(ns), "Proxy error status="+str(r.status_code)
 		continue

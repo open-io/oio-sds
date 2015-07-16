@@ -81,7 +81,7 @@ parse_names_list( worker_t *worker, GError **error )
 			return 0;
 		} else {
 			DEBUG("[task_id=%s] Received %d names", sdata->task_id, g_slist_length( names ));
-			sdata->names = g_slist_concat( names, sdata->names );
+			sdata->names = metautils_gslist_precat(sdata->names, names);
 		}
 	}
 

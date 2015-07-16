@@ -416,7 +416,7 @@ _trie_explore (struct trie_node_s **tab, gchar **needles,
 			GSList *local_matches = _trie_explore ((*tab)->next, needles+1, m);
 			_match_free (m);
 			if (local_matches)
-				matches = g_slist_concat (matches, local_matches);
+				matches = metautils_gslist_precat (matches, local_matches);
 		}
 	}
 

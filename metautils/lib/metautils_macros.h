@@ -121,7 +121,6 @@ License along with this library.
 #define NAME_MSGKEY_CHECK              "CHECK_FLAGS"
 #define NAME_MSGKEY_CHECKONLY          "CHECKONLY"
 #define NAME_MSGKEY_CHUNKED            "CHUNKED"
-#define NAME_MSGKEY_CHUNKID            "CHUNKID"
 #define NAME_MSGKEY_CONTAINERID        "CID"
 #define NAME_MSGKEY_CONTAINERNAME      "CN"
 #define NAME_MSGKEY_CONTENTLENGTH      "CL"
@@ -129,12 +128,14 @@ License along with this library.
 #define NAME_MSGKEY_COPY               "COPY"
 #define NAME_MSGKEY_COUNT              "COUNT"
 #define NAME_MSGKEY_DISTANCE           "DISTANCE"
+#define NAME_MSGKEY_DRYRUN             "DRYRUN"
 #define NAME_MSGKEY_DST                "DST"
 #define NAME_MSGKEY_FLAGS              "FLAGS"
 #define NAME_MSGKEY_FLUSH              "FLUSH"
 #define NAME_MSGKEY_FORCE              "FORCE"
 #define NAME_MSGKEY_FULL               "FULL"
 #define NAME_MSGKEY_HCURL              "HC_URL"
+#define NAME_MSGKEY_KEY                "K"
 #define NAME_MSGKEY_LOCAL              "LOCAL"
 #define NAME_MSGKEY_LOCK               "LOCK"
 #define NAME_MSGKEY_MARKER             "MARKER"
@@ -182,10 +183,6 @@ enum {
 	SCORE_DOWN = 0,
 	SCORE_MAX = 100
 };
-
-#ifndef PROXYD_PREFIX
-#define PROXYD_PREFIX "v1.0"
-#endif
 
 #ifndef PROXYD_PREFIX2
 #define PROXYD_PREFIX2 "v2.0"

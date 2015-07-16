@@ -271,7 +271,7 @@ meta1_backend_set_container_properties(struct meta1_backend_s *m1,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
-		if (!(err = __info_container(sq3, url, NULL))) {
+		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 			err = __set_container_properties(sq3, url, props);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
@@ -291,7 +291,7 @@ meta1_backend_del_container_properties(struct meta1_backend_s *m1,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
-		if (!(err = __info_container(sq3, url, NULL))) {
+		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 			err = __del_container_properties(sq3, url, names);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
@@ -311,7 +311,7 @@ meta1_backend_get_container_properties(struct meta1_backend_s *m1,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
 	if (!err) {
-		if (!(err = __info_container(sq3, url, NULL))) {
+		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 			err = __get_container_properties(sq3, url, names, result);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");

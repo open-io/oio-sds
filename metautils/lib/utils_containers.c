@@ -277,3 +277,40 @@ gtree_string_keys (GTree *t)
 	return (gchar**) metautils_gpa_to_array (tmp, TRUE);
 }
 
+GSList *
+metautils_gslist_precat (GSList *l0, GSList *l1)
+{
+	GSList *tmp;
+	while (l1) {
+		tmp = l1->next;
+		l1->next = l0;
+		l0 = l1;
+		l1 = tmp;
+	}
+	return l0;
+}
+
+void
+metautils_gpa_reverse (GPtrArray *gpa)
+{
+	if (!gpa || gpa->len < 1)
+		return;
+	guint i, j;
+	for (i=0,j=gpa->len-1; i<j ;i++,j--) {
+		gpointer tmp = gpa->pdata[i];
+		gpa->pdata[i] = gpa->pdata[j];
+		gpa->pdata[j] = tmp;
+	}
+}
+
+void
+metautils_gvariant_unrefv(GVariant **v)
+{
+	if (!v)
+		return;
+	for (; *v ;v++) {
+		g_variant_unref(*v);
+		*v = NULL;
+	}
+}
+

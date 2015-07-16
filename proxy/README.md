@@ -62,11 +62,17 @@ Destined for the **POST** method, the following actions are currently available:
     E.g. : ``{"action":"Force", "args":{"seq":1, "type":"$TYPE", "host":"127.0.0.1:22,127.0.0.1:23","args:""}}``
     * Optional Header **X-oio-action-mode: replace** If present, it allows the service to be replaced for the given reference and sequence number. If absent, it will be an error to insert the same entry twice.
 
+### Shortcuts resources
+
+#### ``/dir/{NS}/{CID}``
+  * **GET** resolves the URL components or this container ID. If you don't know what a contaier ID is, this route is not for you.
+
 ## Meta2 resources
 
 ### Containers  ``/m2/{NS}/{REF}``
   * **HEAD** container existence check
   * **PUT** container creation. No input expected.
+    * Optional Header **X-oio-action-mode: autocreate**
   * **GET** container listing. A few options a allowed as query options
     * **marker** list items lexically strictly greater than the marker (incompatible  with a prefix)
     * **marker_end** list items lexically lower than the marker
@@ -76,6 +82,8 @@ Destined for the **POST** method, the following actions are currently available:
     * **deleted** also includ edeleted items (TRUE if present, FALSE if absent)
     * **all** also include past versions (TRUE if present, FALSE if absent)
     * Output body : ``{"prefixes":["a/","b/","c/"],"objects":[...]}``
+    * Optional Header **X-oio-list-chunk-id: XXX**
+    * Optional Header **X-oio-list-content-hash: XXX**
   * **DELETE** container existence check
 
 ### Containers actions ``/m2/{NS}/{REF}/action``
@@ -143,15 +151,14 @@ The following actions are currently available:
   * **GET** Fetch the locations of the chunks belonging to the specified content. Some options are available:
     * **deleted** : set to (yes|true|1|on) to ignore the "deleted" flag set on contents. If not set or set to another value, a deleted content will be considered missing and trigger a 404 error reply.
   * **PUT** Store a new set of beans. This set of beans must be a coherent set of aliases.
-    * Mandatory Header **X-oio-content-meta-length: XXX**
-	* Optional Header **X-oio-content-meta-chunk-method: XXX**
-	* Optional Header **X-oio-content-meta-type: XXX**
-	* Optional Header **X-oio-content-type: XXX**
-    * Optional Header **X-oio-content-meta-policy: XXX**
-    * Optional Header **X-oio-content-meta-hash: XXX**
-	* Optional Header **X-oio-content-meta-x-Key: Value**
-    * Optional Header **X-oio-action-mode: force**
-    * Optional Header **X-oio-action-mode: append**
+    * Mandatory header **X-oio-content-meta-length: XXX**
+	* Optional header **X-oio-content-meta-chunk-method: XXX**
+	* Optional header **X-oio-content-meta-type: XXX**
+	* Optional header **X-oio-content-type: XXX**
+    * Optional header **X-oio-content-meta-policy: XXX**
+    * Optional header **X-oio-content-meta-hash: XXX**
+	* Optional header **X-oio-content-meta-x-Key: Value**
+    * Optional header **X-oio-action-mode: force, append, autocreate**
   * **DELETE** 
   * **COPY** Copy the content pointed by the URL to another pointed by the "Destination:" header.
 

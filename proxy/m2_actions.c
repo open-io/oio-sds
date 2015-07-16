@@ -38,7 +38,7 @@ _reply_m2_error (struct req_args_s *args, GError * err)
 	g_prefix_error (&err, "M2 error: ");
 	if (err->code == CODE_BAD_REQUEST)
 		return _reply_format_error (args, err);
-	else if (err->code == CODE_CONTAINER_NOTFOUND || err->code == CODE_CONTENT_NOTFOUND)
+	else if (CODE_IS_NOTFOUND(err->code))
 		return _reply_notfound_error (args, err);
 	else if (err->code == CODE_CONTAINER_NOTEMPTY)
 		return _reply_conflict_error (args, err);
@@ -539,9 +539,7 @@ static enum http_rc_e
 _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 {
 	if (err) {
-		if (err->code == CODE_CONTAINER_NOTFOUND)
-			return _reply_notfound_error (args, err);
-		if (err->code == CODE_CONTENT_NOTFOUND)
+		if (CODE_IS_NOTFOUND(err->code))
 			return _reply_notfound_error (args, err);
 		return _reply_system_error (args, err);
 	}
@@ -651,6 +649,17 @@ action_m2_container_list (struct req_args_s *args)
 	GTree *tree_prefixes = NULL;
 	GTree *tree_properties = NULL;
 
+	/* Triggers special listings */
+	const char *chunk_id = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "list-chunk-id");
+	const char *content_hash_hex = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "list-content-hash");
+	GBytes *content_hash = NULL;
+	if (content_hash_hex) {
+		GByteArray *gba = NULL;
+		if (NULL != (err = _get_hash (content_hash_hex, &gba)))
+			return _reply_format_error (args, BADREQ("Invalid content hash"));
+		content_hash = g_byte_array_free_to_bytes (gba);
+	}
+
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
 		GError *e = NULL;
@@ -666,8 +675,16 @@ action_m2_container_list (struct req_args_s *args)
 
 			// Action
 			gchar **props = NULL;
-			e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out, &props);
-			if (NULL != e) return e;
+			if (chunk_id)
+				e = m2v2_remote_execute_LIST_BY_CHUNKID (m2->host, args->url, chunk_id, &in, &out);
+			else if (content_hash)
+				e = m2v2_remote_execute_LIST_BY_HEADERHASH (m2->host, args->url, content_hash, &in, &out);
+			else
+				e = m2v2_remote_execute_LIST (m2->host, args->url, &in, &out, &props);
+
+			// Manage the output
+			if (NULL != e)
+				return e;
 			if (props && tree_properties) {
 				for (gchar **p=props; *p && *(p+1) ;p+=2)
 					g_tree_replace (tree_properties, g_strdup(*p), g_strdup(*(p+1)));
@@ -740,13 +757,13 @@ action_m2_container_list (struct req_args_s *args)
 		}
 	}
 
-	gchar **tab = NULL;
+	gchar **keys_prefixes = NULL;
 	if (!err)
-		tab = gtree_string_keys (tree_prefixes);
+		keys_prefixes = gtree_string_keys (tree_prefixes);
 	_container_new_props_to_headers (args, tree_properties);
-	enum http_rc_e rc = _reply_aliases (args, err, list_out.beans, tab);
-	if (tab)
-		g_free (tab);
+	enum http_rc_e rc = _reply_aliases (args, err, list_out.beans, keys_prefixes);
+	if (keys_prefixes)
+		g_free (keys_prefixes);
 	g_tree_destroy (tree_prefixes);
 	g_tree_destroy (tree_properties);
 	metautils_str_clean (&list_out.next_marker);
@@ -783,17 +800,15 @@ action_m2_container_check (struct req_args_s *args)
 	return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
-action_m2_container_create (struct req_args_s *args)
+static GError *
+_m2_container_create (struct req_args_s *args)
 {
-	/* TODO jfs: manage autocreation of the is specified in the headers. Autocreation
-	 * means creating the reference/user, linking a new service, reating the container. */
+	const gchar *type = TYPE();
 	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
-	(void) autocreate;
 
 	gchar **properties = _container_headers_to_props (args);
 
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
+	GError *hook_m2 (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
 		struct m2v2_create_params_s param = {
 			hc_url_get_option_value (args->url, "stgpol"),
@@ -802,10 +817,38 @@ action_m2_container_create (struct req_args_s *args)
 		};
 		return m2v2_remote_execute_CREATE (m2->host, args->url, &param);
 	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	g_strfreev (properties);
 
-	if (err && err->code == CODE_CONTAINER_NOTFOUND) // The reference doesn't exist
+	GError *err;
+retry:
+	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook_m2);
+	if (err && err->code == CODE_USER_NOTFOUND) {
+		if (autocreate) {
+			autocreate = FALSE; /* autocreate just once */
+			g_clear_error (&err);
+			GError *hook_dir (const gchar *m1) {
+				struct addr_info_s m1a;
+				if (!grid_string_to_addrinfo (m1, NULL, &m1a))
+					return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
+				GError *e = NULL;
+				gchar **urlv = meta1v2_remote_link_service (&m1a, &e, args->url, type, FALSE, TRUE);
+				if (urlv) g_strfreev (urlv);
+				return e;
+			}
+			err = _m1_locate_and_action (args, hook_dir);
+			if (!err)
+				goto retry;
+		}
+	}
+
+	g_strfreev (properties);
+	return err;
+}
+
+static enum http_rc_e
+action_m2_container_create (struct req_args_s *args)
+{
+	GError *err = _m2_container_create (args);
+	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	if (err && err->code == CODE_CONTAINER_EXISTS)
 		return _reply_created(args);
@@ -869,7 +912,7 @@ action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
 	if (NULL != err) {
 		g_string_free (gstr, TRUE);
 		g_prefix_error (&err, "M2 error: ");
-		if (err->code == CODE_CONTAINER_NOTFOUND)
+		if (CODE_IS_NOTFOUND(err->code))
 			return _reply_notfound_error (args, err);
 		return _reply_system_error (args, err);
 	}
@@ -888,7 +931,7 @@ action_m2_container_touch (struct req_args_s *args, struct json_object *jargs)
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	if (NULL != err) {
-		if (err->code == CODE_CONTAINER_NOTFOUND)
+		if (CODE_IS_NOTFOUND(err->code))
 			return _reply_forbidden_error (args, err);
 		return _reply_m2_error (args, err);
 	}
@@ -1143,7 +1186,7 @@ action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 		return m2v2_remote_touch_content (m2->host, args->url);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND)
+	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
@@ -1163,7 +1206,7 @@ action_m2_content_stgpol (struct req_args_s *args, struct json_object *jargs)
 		return m2v2_remote_execute_STGPOL (m2->host, args->url, stgpol, NULL);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND)
+	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
@@ -1236,7 +1279,7 @@ action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	g_slist_free_full (names, g_free0);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND)
+	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
@@ -1306,7 +1349,7 @@ action_m2_content_copy (struct req_args_s *args)
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	hc_url_pclean(&target_url);
-	if (err && err->code == CODE_CONTAINER_NOTFOUND)
+	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
 }
@@ -1317,9 +1360,8 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 	if (!jbody)
 		return BADREQ("Invalid JSON body");
 
-	const char *mode = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_MODE);
-	if (!mode)
-		mode = "put";
+	gboolean append = _request_has_flag (args, PROXYD_HEADER_MODE, "append");
+	gboolean force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
 	GSList *ibeans = NULL;
 	GError *err;
 
@@ -1332,9 +1374,9 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 		(void) next;
 		GSList *obeans = NULL;
 		GError *e = NULL;
-		if (!g_ascii_strcasecmp(mode, "force"))
+		if (force)
 			e = m2v2_remote_execute_OVERWRITE (m2->host, args->url, ibeans);
-		else if (!g_ascii_strcasecmp(mode, "append"))
+		else if (append)
 			e = m2v2_remote_execute_APPEND (m2->host, args->url, ibeans, &obeans);
 		else
 			e = m2v2_remote_execute_PUT (m2->host, args->url, ibeans, &obeans);
@@ -1353,12 +1395,23 @@ action_m2_content_put (struct req_args_s *args)
 	struct json_object *jbody;
 	GError *err;
 
+	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
+retry:
 	parser = json_tokener_new ();
 	jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
 		args->rq->body->len);
 	err = _m2_json_put (args, jbody);
 	json_object_put (jbody);
 	json_tokener_free (parser);
+	if (err && CODE_IS_NOTFOUND(err->code)) {
+		if (autocreate) {
+			autocreate = FALSE;
+			if (!TYPE())
+				path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
+			if (!(err = _m2_container_create (args)))
+				goto retry;
+		}
+	}
 
 	return _reply_beans (args, err, NULL);
 }

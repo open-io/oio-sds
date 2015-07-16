@@ -531,9 +531,20 @@ http_put_get_buffer(struct http_put_s *p, const gchar **buffer, gsize *size)
 static int
 _trace(CURL *h, curl_infotype t, char *data, size_t size, void *u)
 {
-	(void) h, (void) t, (void) u;
-	GRID_TRACE2("CURL %.*s", (int)size, data);
-	return 0;
+	(void) h, (void) u;
+	switch (t) {
+		case CURLINFO_TEXT:
+			GRID_TRACE("CURL: %.*s", (int)size, data);
+			return 0;
+		case CURLINFO_HEADER_IN:
+			GRID_TRACE("CURL< %.*s", (int)size, data);
+			return 0;
+		case CURLINFO_HEADER_OUT:
+			GRID_TRACE("CURL> %.*s", (int)size, data);
+			return 0;
+		default:
+			return 0;
+	}
 }
 
 CURL *
@@ -542,7 +553,8 @@ _curl_get_handle (void)
 	CURL *h = curl_easy_init ();
 	curl_easy_setopt (h, CURLOPT_USERAGENT, OIOSDS_http_agent);
 	curl_easy_setopt (h, CURLOPT_NOPROGRESS, 1L);
-	if (GRID_TRACE2_ENABLED()) {
+	curl_easy_setopt (h, CURLOPT_PROXY, NULL);
+	if (GRID_TRACE_ENABLED()) {
 		curl_easy_setopt (h, CURLOPT_DEBUGFUNCTION, _trace);
 		curl_easy_setopt (h, CURLOPT_VERBOSE, 1L);
 	}

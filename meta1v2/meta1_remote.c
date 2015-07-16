@@ -181,47 +181,71 @@ meta1v2_remote_create_reference (const addr_info_t *meta1, GError **err,
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_CREATE);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_USERCREATE);
 	metautils_message_add_url (req, url);
 	return oneway_request(meta1, err, message_marshall_gba_and_clean(req));
 }
 
 gboolean
 meta1v2_remote_has_reference (const addr_info_t *meta1, GError **err,
-		struct hc_url_s *url)
+		struct hc_url_s *url, struct hc_url_s ***out)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_HAS);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_USERINFO);
 	metautils_message_add_url (req, url);
-	return oneway_request(meta1, err, message_marshall_gba_and_clean(req));
+	if (!out)
+		return oneway_request(meta1, err, message_marshall_gba_and_clean(req));
+
+	GError *e = NULL;
+	gchar **tab = list_request (meta1, &e, message_marshall_gba_and_clean(req));
+	if (!tab) {
+		*out = NULL;
+		return FALSE;
+	}
+
+	gsize len = g_strv_length (tab);
+	*out = g_malloc0 ((1 + len) * sizeof(void*));
+	struct hc_url_s **p = *out;
+	for (guint i=0; i<len ;i++) {
+		*p = hc_url_init (tab[i]);
+		if (*p) p++;
+	}
+	g_strfreev (tab);
+	return TRUE;
 }
 
 gboolean 
 meta1v2_remote_delete_reference (const addr_info_t *meta1, GError **err,
-		struct hc_url_s *url)
+		struct hc_url_s *url, gboolean force)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_DESTROY);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_USERDESTROY);
 	metautils_message_add_url (req, url);
+	if (force)
+		metautils_message_add_field_str (req, NAME_MSGKEY_FORCE, "1");
 	return oneway_request(meta1, err, message_marshall_gba_and_clean(req));
 }
 
 gchar** 
 meta1v2_remote_link_service(const addr_info_t *meta1, GError **err,
-		struct hc_url_s *url, const gchar *srvtype)
+		struct hc_url_s *url, const gchar *srvtype,
+		gboolean dryrun, gboolean autocreate)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(srvtype != NULL);
 
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVAVAIL);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVLINK);
 	metautils_message_add_url (req, url);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
-
+	if (dryrun)
+		metautils_message_add_field_str (req, NAME_MSGKEY_DRYRUN, "1");
+	if (autocreate)
+		metautils_message_add_field_str (req, NAME_MSGKEY_AUTOCREATE, "1");
 	return list_request(meta1, err, message_marshall_gba_and_clean(req));
 }
 
@@ -232,7 +256,7 @@ meta1v2_remote_list_reference_services(const addr_info_t *meta1, GError **err,
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVALL);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVLIST);
 	metautils_message_add_url (req, url);
 	if (srvtype)
 		metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
@@ -248,7 +272,7 @@ meta1v2_remote_unlink_service(const addr_info_t *meta1, GError **err,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(srvtype != NULL);
 
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVDEL);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVUNLINK);
 	metautils_message_add_url (req, url);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
 	return oneway_request(meta1, err, message_marshall_gba_and_clean(req));
@@ -262,7 +286,7 @@ meta1v2_remote_unlink_one_service(const addr_info_t *meta1, GError **err,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(srvtype != NULL);
 
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVDEL);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVUNLINK);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
 	if (seqid > 0) {
 		gchar str[32];
@@ -275,22 +299,28 @@ meta1v2_remote_unlink_one_service(const addr_info_t *meta1, GError **err,
 
 gchar **
 meta1v2_remote_poll_reference_service(const addr_info_t *meta1, GError **err,
-		struct hc_url_s *url, const gchar *srvtype)
+		struct hc_url_s *url, const gchar *srvtype,
+		gboolean dryrun, gboolean autocreate)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(srvtype != NULL);
 
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVNEW);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVPOLL);
 	metautils_message_add_url (req, url);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
+	if (dryrun)
+		metautils_message_add_field_str (req, NAME_MSGKEY_DRYRUN, "1");
+	if (autocreate)
+		metautils_message_add_field_str (req, NAME_MSGKEY_AUTOCREATE, "1");
 
 	return list_request(meta1, err, message_marshall_gba_and_clean(req));
 }
 
 gboolean
 meta1v2_remote_force_reference_service(const addr_info_t *meta1, GError **err,
-		struct hc_url_s *url, const gchar *m1url, gboolean force)
+		struct hc_url_s *url, const gchar *m1url,
+		gboolean autocreate, gboolean force)
 {
 	EXTRA_ASSERT(meta1 != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -299,6 +329,8 @@ meta1v2_remote_force_reference_service(const addr_info_t *meta1, GError **err,
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVSET);
 	metautils_message_add_url (req, url);
 	metautils_message_add_body_unref (req, metautils_gba_from_string(m1url));
+	if (autocreate)
+		metautils_message_add_field_str (req, NAME_MSGKEY_AUTOCREATE, "1");
 	if (force)
 		metautils_message_add_field_str (req, NAME_MSGKEY_FORCE, "1");
 
@@ -313,7 +345,7 @@ meta1v2_remote_configure_reference_service(const addr_info_t *meta1, GError **er
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(m1url != NULL);
 
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVSETARG);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVCONFIG);
 	metautils_message_add_url (req, url);
 	metautils_message_add_body_unref (req, metautils_gba_from_string(m1url));
 
@@ -327,7 +359,7 @@ meta1v2_remote_reference_set_property(const addr_info_t *m1, GError **err,
 	EXTRA_ASSERT(m1 != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_CID_PROPSET);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_PROPSET);
 	metautils_message_add_url (req, url);
 	metautils_message_add_body_unref (req, metautils_encode_lines(pairs));
 
@@ -342,7 +374,7 @@ meta1v2_remote_reference_get_property(const addr_info_t *m1, GError **err,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(result != NULL);
 
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_CID_PROPGET);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_PROPGET);
 	metautils_message_add_url (req, url);
 	metautils_message_add_body_unref (req, metautils_encode_lines(keys));
 
@@ -357,7 +389,7 @@ meta1v2_remote_reference_del_property(const addr_info_t *m1, GError **err,
 	EXTRA_ASSERT(m1 != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_CID_PROPDEL);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_PROPDEL);
 	metautils_message_add_url (req, url);
 	metautils_message_add_body_unref (req, metautils_encode_lines(keys));
 

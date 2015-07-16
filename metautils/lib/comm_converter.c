@@ -89,7 +89,7 @@ gint Name (GError **err, gpointer udata, gint code, guint8 *body, gsize bodySize
 		GSETERROR (err, "Cannot unserialize the content of the reply");\
 		return FALSE;\
 	}\
-	*resL = g_slist_concat (*resL,list);\
+	*resL = metautils_gslist_precat (*resL,list);\
 	return TRUE;\
 }
 
@@ -185,7 +185,7 @@ abstract_sequence_unmarshall(const struct abstract_sequence_handler_s *h,
 		free(abstract_sequence);
 		abstract_sequence = NULL;
 
-		*list = g_slist_concat(*list, api_result);
+		*list = metautils_gslist_precat(*list, api_result);
 		consumed = decRet.consumed;
 		return consumed;
 

@@ -467,7 +467,7 @@ m2v2_beans_from_raw_content_custom(const char *id, meta2_raw_content_t *rc,
 			_generate_m2v2_headers(id_gba, rc->size, rc->system_metadata));
 
 	for(l = rc->raw_chunks; l && l->data; l = l->next) {
-		beans = g_slist_concat(beans, _generate_beans_from_raw_chunk_custom(
+		beans = metautils_gslist_precat(beans, _generate_beans_from_raw_chunk_custom(
 				id_gba, (meta2_raw_chunk_t*) l->data, make_pos, udata));
 	}
 
@@ -548,7 +548,7 @@ m2v2_beans_from_raw_content_v2(const char *id, meta2_raw_content_v2_t *rc)
 			_generate_m2v2_headers(id_gba, rc->header.size, rc->header.system_metadata));
 
 	for(l = rc->raw_chunks; l && l->data; l = l->next) {
-		beans = g_slist_concat(beans, _generate_beans_from_raw_chunk(id_gba,
+		beans = metautils_gslist_precat(beans, _generate_beans_from_raw_chunk(id_gba,
 				(meta2_raw_chunk_t*) l->data));
 	}
 

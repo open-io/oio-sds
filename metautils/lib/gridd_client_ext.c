@@ -467,7 +467,7 @@ gridd_client_exec_and_decode (const gchar *to, gdouble timeout,
 				break;
 			}
 			if (l)
-				items = g_slist_concat (l, items);
+				items = metautils_gslist_precat (items, l);
 		}
 		*out = items;
 		items = NULL;

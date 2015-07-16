@@ -42,7 +42,7 @@ _check_ns (const char *ns)
 		goto out;
 	}
 
-	if (!(url = g_strdup_printf ("http://%s/v1.0/cs/%s", proxy, ns))) {
+	if (!(url = g_strdup_printf ("http://%s/"PROXYD_PREFIX2"/cs/%s", proxy, ns))) {
 		errmsg = "memory allocation failure";
 		goto out;
 	}

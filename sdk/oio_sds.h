@@ -22,12 +22,43 @@ License along with this library.
 struct oio_sds_s;
 struct oio_error_s;
 struct hc_url_s;
+
 enum oio_sds_config_e
 {
+	/* expects an <int> as a number of seconds */
 	OIOSDS_CFG_TIMEOUT_PROXY = 1,
+
+	/* expects an <int> as a number of seconds */
 	OIOSDS_CFG_TIMEOUT_RAWX,
-	OIOSDS_CFG_FLAG_SYNCATDOWNLOAD
+
+	/* expects an <int> used for its boolean value */
+	OIOSDS_CFG_FLAG_SYNCATDOWNLOAD,
 };
+
+/* API-global --------------------------------------------------------------- */
+
+/* OpenIO SDK internally relies on GLib-2.0 logging features,
+ * so this only sets a callback into GLib's system. The calling app
+ * keeps the freedom to change this. */
+
+/* Configures the GLib-2.0 to send the logging output to the syslog. This
+ * function does not call openlog() */
+void oio_log_to_syslog (void);
+
+/* Configures the GLib-2.0 to send the logging output to the standard error
+ * output. The format follow an internal rules of OpeIO. If the walling app
+ * wants to another format, it is its responsibility. */
+void oio_log_to_stderr (void);
+
+/* As the name suggests, it turns of the log output from the OpenIO's SDK */
+void oio_log_nothing (void);
+
+/* Increases the verbosity of the internal logging output.
+ * OpenIO's log levels are ERROR, WARNING, NOTICE, INFO, DEBUG, TRACE.
+ * The default level is WARNING.
+ * DEBUG: output the SDK behavior.
+ * TRACE: also outputs the licurl behavior. */
+void oio_log_more (void);
 
 /** @return a NULL-terminated array of strings where
  * result[(2*i)]   is the name of the i-th configuration directive 
@@ -36,16 +67,24 @@ enum oio_sds_config_e
  */
 char ** oio_sds_get_compile_options (void);
 
-/* error management */
+/* Error management --------------------------------------------------------- */
+
 void oio_error_free (struct oio_error_s *e);
 void oio_error_pfree (struct oio_error_s **pe);
 int oio_error_code (const struct oio_error_s *e);
 const char * oio_error_message (const struct oio_error_s *e);
 
-/* client management */
+/* Client-related features -------------------------------------------------- */
+
+/* constructor */
 struct oio_error_s * oio_sds_init (struct oio_sds_s **out, const char *ns);
+
+/* destructor */
 void oio_sds_free (struct oio_sds_s *sds);
+
+/* Calls oio_sds_free() on *psds, then set it to NULL */
 void oio_sds_pfree (struct oio_sds_s **psds);
+
 /* return 0 on success, or errno in case of error */
 int oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 		void *pv, unsigned int vlen);
@@ -54,9 +93,25 @@ int oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 struct oio_error_s* oio_sds_download_to_file (struct oio_sds_s *sds,
 		struct hc_url_s *u, const char *local);
 
-/* works with fully qualified urls (content) and local paths */
+/* Simply wraps oio_sds_upload_from_source() without the autocreation flag
+ * set. */
 struct oio_error_s* oio_sds_upload_from_file (struct oio_sds_s *sds,
 		struct hc_url_s *u, const char *local);
+
+struct oio_source_s {
+	int autocreate;
+	enum {
+		OIO_SRC_NONE = 0, /* do not use this */
+		OIO_SRC_FILE,
+	} type;
+	union {
+		const char *path;
+	} data;
+};
+
+/* works with fully qualified urls (content) and local paths */
+struct oio_error_s* oio_sds_upload_from_source (struct oio_sds_s *sds,
+		struct hc_url_s *u, struct oio_source_s *src);
 
 /* works with fully qualified urls (content) */
 struct oio_error_s* oio_sds_delete (struct oio_sds_s *sds,

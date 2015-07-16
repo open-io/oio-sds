@@ -77,10 +77,6 @@ int meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_extract_header_optional_position_prefix(struct gridd_filter_ctx_s *ctx,
         struct gridd_reply_ctx_s *reply);
 
-/*! Extract a chunk id from the request headers, if it is available */
-int meta2_filter_extract_header_optional_chunkid(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Extract an hc_url from a request */
 int meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
@@ -151,9 +147,6 @@ int meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
         struct gridd_reply_ctx_s *reply);
 
-int meta2_filter_extract_header_optional_max_keys(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply);
-
 int meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
         struct gridd_reply_ctx_s *reply);
 
@@ -211,6 +204,12 @@ int meta2_filter_action_get_spare_chunks(struct gridd_filter_ctx_s *ctx,
 /*! Call backend and list content of a container with informations available in
  * filter context */
 int meta2_filter_action_list_contents(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply);
+
+int meta2_filter_action_list_by_chunk_id(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply);
+
+int meta2_filter_action_list_by_header_hash(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 /*! Call backend and retrieve the content with informations available in filter context */
