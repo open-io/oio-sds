@@ -21,9 +21,8 @@ class TestDirectoryFunctional(unittest.TestCase):
         self.proxyd_uri = config.get('func_test', 'proxyd_uri') + "/v2.0/dir/"
         self.proxyd_uri2 = config.get('func_test', 'proxyd_uri') + "/v2.0/cs/"
         self.namespace = config.get('func_test', 'namespace')
-	self.account = config.get('func_test', 'account')
+        self.account = config.get('func_test', 'account')
         self.basic_addr = urlparse.urlsplit(self.proxyd_uri).hostname + ":"
-
         self.session = requests.session()
 
         self.chars = string.ascii_lowercase + string.ascii_uppercase + string.digits

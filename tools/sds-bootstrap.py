@@ -556,16 +556,19 @@ def generate (ns, ip, options={}):
 		tpl = Template(template_agent)
 		f.write(tpl.safe_substitute(env))
 
-	# Test agent configuration
-	listing={}
-	with open(CFGDIR + '/'+ 'test_py.conf', 'w+') as f:
-                listing["meta0"]=[str(ip)+':'+str(m[3]) for m in services if m[0]=='meta0']
-		listing["meta1"]=[str(ip)+':'+str(m[3]) for m in services if m[0]=='meta1']
-		listing["meta2"]=[str(ip)+':'+str(m[3]) for m in services if m[0]=='meta2']
-		listing["rawx"]=[str(ip)+':'+str(p[1]) for p in rawx]
-		f.write(json.dumps(listing))
-	with open(CFGDIR + '/'+ 'test.conf', 'w+') as f:
-		f.write("[func_test]\nnamespace=NS\naccount=test_account\n")
+        # Test agent configuration
+        listing = {}
+        with open(CFGDIR + '/' + 'test_py.conf', 'w+') as f:
+            listing["meta0"] = [str(ip) + ':' + str(m[3]) for m in services if
+                                m[0] == 'meta0']
+            listing["meta1"] = [str(ip) + ':' + str(m[3]) for m in services if
+                                m[0] == 'meta1']
+            listing["meta2"] = [str(ip) + ':' + str(m[3]) for m in services if
+                                m[0] == 'meta2']
+            listing["rawx"] = [str(ip) + ':' + str(p[1]) for p in rawx]
+            f.write(json.dumps(listing))
+        with open(CFGDIR + '/' + 'test.conf', 'w+') as f:
+            f.write("[func_test]\nnamespace=NS\naccount=test_account\n")
 
 def main ():
 	from optparse import OptionParser as OptionParser
