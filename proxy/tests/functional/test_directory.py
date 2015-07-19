@@ -18,11 +18,11 @@ class TestDirectoryFunctional(unittest.TestCase):
     def _load_config(self):
         config = load_functest_config()
 
-        self.proxyd_uri = config.get('func_test', 'proxyd_uri') + "/v1.0/dir/"
+        self.proxyd_uri = config.get('func_test', 'proxyd_uri') + "/v2.0/dir/"
         self.proxyd_uri2 = config.get('func_test', 'proxyd_uri') + "/v2.0/cs/"
         self.namespace = config.get('func_test', 'namespace')
+        self.account = config.get('func_test', 'account')
         self.basic_addr = urlparse.urlsplit(self.proxyd_uri).hostname + ":"
-
         self.session = requests.session()
 
         self.chars = string.ascii_lowercase + string.ascii_uppercase + string.digits
@@ -30,7 +30,7 @@ class TestDirectoryFunctional(unittest.TestCase):
     def setUp(self):
         super(TestDirectoryFunctional, self).setUp()
 
-        self.address = "{0}{1}".format(self.proxyd_uri, self.namespace)
+        self.address = "{0}{1}/{2}".format(self.proxyd_uri, self.namespace, self.account)
         self.address_cs = "{0}{1}/echo".format(self.proxyd_uri2, self.namespace)
 
         def id_generator(n):
