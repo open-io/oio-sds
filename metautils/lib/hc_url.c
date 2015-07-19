@@ -21,7 +21,6 @@ License along with this library.
 # define G_LOG_DOMAIN "grid.url"
 #endif
 
-#include <errno.h>
 #include <string.h>
 
 #include "./metautils.h"
@@ -220,10 +219,8 @@ _clean_url (struct hc_url_s *u)
 static int
 _compute_id (struct hc_url_s *url)
 {
-	if (!url->ns || !url->user) {
-		errno = EINVAL;
+	if (!url->ns || !*url->ns || !url->user || !*url->user)
 		return 0;
-	}
 
 	memset(url->hexid, 0, sizeof(url->hexid));
 	memset(url->id, 0, sizeof(url->id));
@@ -312,10 +309,8 @@ hc_url_dup(struct hc_url_s *u)
 struct hc_url_s*
 hc_url_set(struct hc_url_s *u, enum hc_url_field_e f, const char *v)
 {
-	if (!u || !v) {
-		errno = EINVAL;
+	if (!u || !v)
 		return NULL;
-	}
 
 	metautils_str_clean(&(u->whole));
 
@@ -349,15 +344,12 @@ hc_url_set(struct hc_url_s *u, enum hc_url_field_e f, const char *v)
 			return u;
 
 		case HCURL_WHOLE:
-			errno = ENOTSUP;
 			return NULL;
 
 		case HCURL_HEXID:
 			u->hexid[0] = 0;
-			if (!metautils_str_ishexa(v,64) || !hex2bin(v, u->id, 32, NULL)) {
-				errno = EINVAL;
+			if (!metautils_str_ishexa(v,64) || !hex2bin(v, u->id, 32, NULL))
 				return NULL;
-			}
 			memcpy(u->hexid, v, 64);
 			return u;
 	}
@@ -491,14 +483,10 @@ hc_url_get(struct hc_url_s *u, enum hc_url_field_e f)
 const void*
 hc_url_get_id(struct hc_url_s *u)
 {
-	if (!u) {
-		errno = EINVAL;
+	if (!u)
 		return NULL;
-	}
-	if (!u->hexid[0] && !_compute_id(u)) {
-		errno = EAGAIN;
+	if (!u->hexid[0] && !_compute_id(u))
 		return NULL;
-	}
 	return u->id;
 }
 
@@ -518,10 +506,8 @@ hc_url_set_id (struct hc_url_s *u, const void *id)
 const char*
 hc_url_get_option_value(struct hc_url_s *u, const char *k)
 {
-	if (!u) {
-		errno = EINVAL;
+	if (!u)
 		return NULL;
-	}
 	gchar **pv = _options_get(u, k);
 	return pv ? strchr(*pv,'=')+1 : NULL;
 }
