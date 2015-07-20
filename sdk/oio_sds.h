@@ -37,6 +37,8 @@ enum oio_sds_config_e
 
 /* API-global --------------------------------------------------------------- */
 
+extern volatile int oio_sds_default_autocreate;
+
 /* OpenIO SDK internally relies on GLib-2.0 logging features,
  * so this only sets a callback into GLib's system. The calling app
  * keeps the freedom to change this. */

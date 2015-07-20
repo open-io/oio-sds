@@ -56,6 +56,8 @@ struct oio_sds_s
 struct oio_error_s;
 struct hc_url_s;
 
+volatile int oio_sds_default_autocreate = 0;
+
 static CURL *
 _curl_get_handle_proxy (struct oio_sds_s *sds)
 {
@@ -69,30 +71,44 @@ _curl_get_handle_proxy (struct oio_sds_s *sds)
 	return h;
 }
 
+static void
+_append (GString *to, struct hc_url_s *url, int what)
+{
+	const char *original = hc_url_get (url, what);
+	if (!original) {
+		g_string_append_c (to, '/');
+	} else {
+		gchar *s = g_uri_escape_string (original, NULL, FALSE);
+		g_string_append_printf (to, "/%s", s);
+		g_free (s);
+	}
+}
+
 static GString *
 _curl_set_url_content (struct hc_url_s *u)
 {
-	const char *ns = hc_url_get (u, HCURL_NS);
 	GString *hu = g_string_new("http://");
 
-	gchar *s = gridcluster_get_proxy (ns);
-	if (!s)
-		g_string_append_printf (hu, "proxy.%s.ns.private.openio.io", ns);
-	else {
-		g_string_append (hu, s);
-		g_free (s);
+	const char *ns = hc_url_get (u, HCURL_NS);
+	if (!ns) {
+		GRID_WARN ("BUG No namespace configured!");
+		g_string_append (hu, "proxy");
+	} else {
+		gchar *s = gridcluster_get_proxy (ns);
+		if (!s) {
+			GRID_WARN ("No proxy configured!");
+			g_string_append (hu, "proxy");
+		} else {
+			g_string_append (hu, s);
+			g_free (s);
+		}
 	}
 
-	gchar *_n, *_a, *_u, *_p;
-	_n = g_uri_escape_string (hc_url_get (u, HCURL_NS), NULL, FALSE);
-	_a = g_uri_escape_string (hc_url_get (u, HCURL_ACCOUNT), NULL, FALSE);
-	_u = g_uri_escape_string (hc_url_get (u, HCURL_USER), NULL, FALSE);
-	_p = g_uri_escape_string (hc_url_get (u, HCURL_PATH), NULL, FALSE);
-	g_string_append_printf (hu, "/%s/m2/%s/%s/%s/%s", PROXYD_PREFIX2, _n, _a, _u, _p);
-	g_free (_n);
-	g_free (_a);
-	g_free (_u);
-	g_free (_p);
+	g_string_append_printf (hu, "/%s/m2", PROXYD_PREFIX2);
+	_append (hu, u, HCURL_NS);
+	_append (hu, u, HCURL_ACCOUNT);
+	_append (hu, u, HCURL_USER);
+	_append (hu, u, HCURL_PATH);
 	return hu;
 }
 
@@ -505,7 +521,7 @@ _download_chunks (struct oio_sds_s *sds, GSList *chunks, const char *local)
 		else {
 			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
 			if (2 != (code/100))
-				err = NEWERROR(0, "Beans: (%ld)", code);
+				err = NEWERROR(0, "Download: (%ld)", code);
 		}
 	}
 
@@ -758,7 +774,7 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		const char *local)
 {
 	struct oio_source_s src = {
-		.autocreate = 0,
+		.autocreate = oio_sds_default_autocreate,
 		.type = OIO_SRC_FILE,
 		.data.path=local,
 	};

@@ -1123,12 +1123,27 @@ action_m2_content_beans (struct req_args_s *args, struct json_object *jargs)
 	if ((end && *end) || errno == ERANGE || errno == EINVAL)
 		return _reply_format_error (args, BADREQ("Invalid size format"));
 
+	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
+	GError *err = NULL;
 	GSList *beans = NULL;
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
 		return m2v2_remote_execute_BEANS (m2->host, args->url, stgpol, size, 0, &beans);
 	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+
+retry:
+	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+
+	// Maybe manage autocreation
+	if (err && CODE_IS_NOTFOUND(err->code)) {
+		if (autocreate) {
+			GRID_DEBUG("Request failed because of resource not found, attempting autocreation");
+			autocreate = FALSE;
+			g_clear_error (&err);
+			if (!(err = _m2_container_create (args)))
+				goto retry;
+		}
+	}
 
 	// Patch the chunk size to ease putting contents with unknown size.
 	if (!err) {
@@ -1401,26 +1416,29 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 static enum http_rc_e
 action_m2_content_put (struct req_args_s *args)
 {
-	struct json_tokener *parser;
 	struct json_object *jbody;
 	GError *err;
 
-	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
-retry:
-	parser = json_tokener_new ();
+	struct json_tokener *parser = json_tokener_new ();
 	jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
 		args->rq->body->len);
-	err = _m2_json_put (args, jbody);
-	json_object_put (jbody);
 	json_tokener_free (parser);
+
+	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
+
+retry:
+	err = _m2_json_put (args, jbody);
 	if (err && CODE_IS_NOTFOUND(err->code)) {
 		if (autocreate) {
+			GRID_DEBUG("Request failed because of resource not found, attempting autocreation");
 			autocreate = FALSE;
+			g_clear_error (&err);
 			if (!(err = _m2_container_create (args)))
 				goto retry;
 		}
 	}
 
+	json_object_put (jbody);
 	return _reply_beans (args, err, NULL);
 }
 

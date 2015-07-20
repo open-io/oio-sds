@@ -52,6 +52,7 @@ int
 main(int argc, char **argv)
 {
 	oio_log_to_stderr();
+	oio_sds_default_autocreate = 1;
 	for (int i=0; i<3 ;i++)
 		oio_log_more ();
 

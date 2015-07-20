@@ -170,6 +170,7 @@ Only for **POST** requests.
 
 Currently suppported actions are:
   * **Beans** Generating places for a content.
+    * Optional header **X-oio-action-mode: autocreate** to triggers the container's autocreation if not present.
   * **Spare** Generating additional places for a content, keeping a few, avoiding few others. The new set of places will respect the storage policy.
   * **Touch** : Touch a content
   * **SetStoragePolicy** : Change a content's storage policy
