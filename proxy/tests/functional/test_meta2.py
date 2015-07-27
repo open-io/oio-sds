@@ -15,7 +15,7 @@ class TestMeta2Functional(unittest.TestCase):
         self._load_config()
 
     def _load_config(self):
-	self.test_dir = os.path.expanduser('~/.oio/sds/')
+        self.test_dir = os.path.expanduser('~/.oio/sds/')
         with open(self.test_dir + 'conf/test.conf') as f:
             self.conf = json.load(f)
         self.namespace = self.conf['namespace']
@@ -26,7 +26,7 @@ class TestMeta2Functional(unittest.TestCase):
 
         self.chars = string.ascii_lowercase + string.ascii_uppercase + string.digits
 
-        self.proxyd_cs = self.proxyd + "/cs/" + self.namespace 
+        self.proxyd_cs = self.proxyd + "/cs/" + self.namespace
         self.proxyd_dir = self.proxyd + "/dir/" + self.namespace + '/' + self.account
         self.proxyd_m2 = self.proxyd + "/m2/" + self.namespace + '/' + self.account
 

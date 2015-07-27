@@ -20,8 +20,8 @@ class TestConscienceFunctional(unittest.TestCase):
     def _load_config(self):
         self.test_dir = os.path.expanduser('~/.oio/sds/')
         with open(self.test_dir + 'conf/test.conf') as f:
-	    self.conf = json.load(f)
-	self.namespace = self.conf['namespace']
+            self.conf = json.load(f)
+        self.namespace = self.conf['namespace']
 
         self.rawx = 'http://' + self.conf["rawx"][0] + '/'
         self.session = requests.session()

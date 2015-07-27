@@ -559,18 +559,21 @@ def generate (ns, ip, options={}):
         # Test agent configuration
         listing = {}
         with open(CFGDIR + '/' + 'test.conf', 'w+') as f:
-	    listing["namespace"] = ns
-	    listing["account"] = 'test_account'
-	    listing["proxyd_uri"] = "http://"+str(ip)+":6002"
-            listing["meta0"] = [str(ip) + ':' + str(m[3]) for m in services if
-                                m[0] == 'meta0']
-            listing["meta1"] = [str(ip) + ':' + str(m[3]) for m in services if
-                                m[0] == 'meta1']
-            listing["meta2"] = [str(ip) + ':' + str(m[3]) for m in services if
-                                m[0] == 'meta2']
-            listing["rawx"] = [str(ip) + ':' + str(p[1]) for p in rawx]
-            f.write(json.dumps(listing))
-
+                listing["namespace"] = ns
+                listing["account"] = 'test_account'
+                listing["proxyd_uri"] = "http://" + str(ip) + ":6002"
+                listing["meta0"] = [str(ip) + ':' + str(m[3]) for m in services
+                                    if
+                                    m[0] == 'meta0']
+                listing["meta1"] = [str(ip) + ':' + str(m[3]) for m in services
+                                    if
+                                    m[0] == 'meta1']
+                listing["meta2"] = [str(ip) + ':' + str(m[3]) for m in services
+                                    if
+                                    m[0] == 'meta2']
+                listing["rawx"] = [str(ip) + ':' + str(p[1]) for p in rawx]
+                f.write(json.dumps(listing))
+ 
 def main ():
 	from optparse import OptionParser as OptionParser
 	parser = OptionParser()

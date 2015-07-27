@@ -14,11 +14,11 @@ class TestConscienceFunctional(unittest.TestCase):
         self._load_config()
 
     def _load_config(self):
-	self.test_dir = os.path.expanduser('~/.oio/sds/')
+        self.test_dir = os.path.expanduser('~/.oio/sds/')
         with open(self.test_dir + 'conf/test.conf') as f:
             self.conf = json.load(f)
         self.namespace = self.conf['namespace']
-	self.proxyd_uri = self.conf['proxyd_uri'] + "/v2.0/cs/"
+        self.proxyd_uri = self.conf['proxyd_uri'] + "/v2.0/cs/"
 
         self.basic_addr = urlparse.urlsplit(self.proxyd_uri).hostname + ":"
         self.session = requests.session()
