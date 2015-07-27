@@ -3,11 +3,10 @@ import unittest
 import random
 import string
 import hashlib
+import urlparse
+import os
 
-from requests import Request
 import requests
-
-from tests.functional import load_functest_config
 
 
 class TestMeta2Functional(unittest.TestCase):
@@ -16,20 +15,22 @@ class TestMeta2Functional(unittest.TestCase):
         self._load_config()
 
     def _load_config(self):
-        config = load_functest_config()
+	self.test_dir = os.path.expanduser('~/.oio/sds/')
+        with open(self.test_dir + 'conf/test.conf') as f:
+            self.conf = json.load(f)
+        self.namespace = self.conf['namespace']
+        self.proxyd = self.conf['proxyd_uri'] + "/v2.0"
+        self.account = self.conf['account']
 
-        self.namespace = config.get('func_test', 'namespace')
-        self.account = config.get('func_test', 'account')
-        self.proxyd = config.get('func_test', 'proxyd_uri') + "/v2.0"
+        self.session = requests.session()
+
+        self.chars = string.ascii_lowercase + string.ascii_uppercase + string.digits
+
         self.proxyd_cs = self.proxyd + "/cs/" + self.namespace 
         self.proxyd_dir = self.proxyd + "/dir/" + self.namespace + '/' + self.account
         self.proxyd_m2 = self.proxyd + "/m2/" + self.namespace + '/' + self.account
 
-        self.session = requests.session()
-
         self.h = hashlib.new('ripemd160')
-
-        self.chars = string.ascii_lowercase + string.ascii_uppercase + string.digits
 
         self.id_generator = lambda n: ''.join(
             random.choice(self.chars) for _ in range(n))

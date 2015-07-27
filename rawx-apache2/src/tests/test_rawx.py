@@ -1,454 +1,443 @@
-#!/usr/bin/python
-
+import unittest
+import json
 import os
+import string
+import random
+import md5
+import gzip
+import StringIO
 import tempfile
-import shutil
-import subprocess
-import time
-import httplib
-import hashlib
-from string import Template
-import pygrid.http
-import pygrid.services
-import io
-import binascii
-import re
 
-httpd_binary = '/usr/sbin/httpd' if os.path.exists('/usr/sbin/httpd') else '/usr/sbin/apache2'
-namespace = 'DEVREMI'
-rawx_module = '/home/fr19895/src/autotools/rawx-apache2/src/.libs/mod_dav_rawx.so'
-rawx_url = ("127.0.0.1", "65535")
-chunk_id = '353AB2556F45CD080A0F298230ED926EF378171C598ED765ED82DCB2EFD02640'
+import requests
 
-class fakeContent(object):
-        def __init__(self, path, size):
-                self.path = path
-                self.size = size
-        def get_container_id(self):
-                return '080EF86FEA45C8EB69565B3C2C012AD0A2BBAEAC9F8001DE92A2467091584A3B'
-        def get_path(self):
-                return self.path
-        def get_size(self):
-                return self.size
+import xattr
+
+class TestConscienceFunctional(unittest.TestCase):
+    def __init__(self, *args, **kwargs):
+        super(TestConscienceFunctional, self).__init__(*args, **kwargs)
+        self._load_config()
+
+    def _load_config(self):
+        self.test_dir = os.path.expanduser('~/.oio/sds/')
+        with open(self.test_dir + 'conf/test.conf') as f:
+	    self.conf = json.load(f)
+	self.namespace = self.conf['namespace']
+
+        self.rawx = 'http://' + self.conf["rawx"][0] + '/'
+        self.session = requests.session()
+        self.id_chars = string.digits + 'ABCDEF'
+        self.rand_chars = string.digits + string.ascii_lowercase + string.ascii_uppercase
+
+    def gen_rand(self, r_type, i):
+        if r_type == 'id':
+            return ''.join(random.choice(self.id_chars) for _ in range(64))
+        else:
+            return ''.join(random.choice(self.rand_chars) for _ in range(i))
+
+    class fakeContent(object):
+        def __init__(self, path, size, id_r):
+            self.path = path
+            self.size = size
+            self.cont_id = id_r
+
         def get_nb_chunks(self):
-                return 1
+            return 1
 
-class fakeChunk(object):
-        def __init__(self, size):
-                self.size = size
-        def get_chunk_id(self):
-                return binascii.unhexlify(chunk_id)
-        def get_size(self):
-                return self.size
+    class fakeChunk(object):
+        def __init__(self, size, id_r):
+            self.size = size
+            self.chunk_id = id_r
+
         def get_position(self):
-                return 0
+            return 0
+
         def get_md5(self):
-                return "f0419b9e3cd4c0da4dba99feb6233f54"
-
-class TestData(object):
-	def __init__(self):
-		self.httpd = None
-		self.testDir = tempfile.mkdtemp(dir='/tmp')
-
-def get_chunk_path(data):
-	return data.testDir + "/data/" + chunk_id[0:2] + "/" + chunk_id[2:4] + "/" + chunk_id
-
-def setup(data):
-	# prepare env
-	os.mkdir(data.testDir + '/conf')
-	os.mkdir(data.testDir + '/logs')
-	os.mkdir(data.testDir + '/run')
-	os.mkdir(data.testDir + '/core')
-	os.mkdir(data.testDir + '/data')
-	os.mkdir(data.testDir + '/root')
-	os.symlink('/usr/lib64/httpd/modules', data.testDir + '/modules')
-	print 'Created tmp dir in', data.testDir
-
-	# Create config file
-	src = open('httpd.conf')
-	dst = open(data.testDir + '/conf/httpd.conf', 'w')
-	template = Template(src.read())
-	dst.write(template.substitute(
-		HTTPD_IP=rawx_url[0],
-		HTTPD_PORT=rawx_url[1],
-		ROOTDIR=data.testDir,
-		NAMESPACE=namespace,
-		RAWX_MODULE=rawx_module))
-	dst.close()
-	src.close()
-
-	# Start httpd process and wait 5s
-	data.httpd = subprocess.Popen(args=[httpd_binary + " -D FOREGROUND -d " +data.testDir],
-			stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
-	time.sleep(5)
-	data.httpd.poll()
-	assert data.httpd.returncode is None, "Failed to start apache process (see logs in " + data.testDir + "/logs/httpd-error.log)" + "\nSTDERR :\n" + data.httpd.stdout.read()
-
-def teardown(data):
-	print "teardown"
-	# kill httpd server
-	data.httpd.terminate()
-	# delete test dir
-	shutil.rmtree(data.testDir)
-
-def test_put(data):
-	print "test_put :",
-
-	content_data = "azertyuiopqsdfghjklmwxcvbn"
-	content = fakeContent('c1', len(content_data))
-	chunk = fakeChunk(content.get_size())
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
-
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data))
-
-	# Check the chunk file
-	f = open(get_chunk_path(data))
-	chunk_data = f.read()
-	assert chunk_data == content_data, "Failed => Data in chunk file does not match data sent to apache"
-	print "OK"
-
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
-
-def test_put_empty(data):
-	print "test_put_empty :",
-
-	content_data = ""
-	content = fakeContent('c1', 0)
-	chunk = fakeChunk(0)
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
-
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data))
-
-	# Check the chunk file
-	info = os.stat(get_chunk_path(data))
-	assert info.st_size == 0, "Failed => Chunk file is not empty"
-	print "OK"
-
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
-
-def test_get(data):
-	print "test_get :",
-
-	content_data = "azertyuiopqsdfghjklmwxcvbn"
-	content = fakeContent('c1', len(content_data))
-	chunk = fakeChunk(content.get_size())
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
-
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data))
-
-	# Do the get
-	(headers, chunk_data) = rawx.download(chunk)
+            return "f0419b9e3cd4c0da4dba99feb6233f54"
+
+    def setUp(self):
+        super(TestConscienceFunctional, self).setUp()
+        self.content_data = self.gen_rand('data', 24)
+        self.content = self.fakeContent('c1', len(self.content_data),
+                                        self.gen_rand('id', 64))
+        self.chunk = self.fakeChunk(self.content.size, self.gen_rand('id', 64))
+
+        self.headers_put = {'content_path': self.content.path,
+                            'content_size': self.content.size,
+                            'content_chunksnb': self.content.get_nb_chunks(),
+                            'content_containerid': self.content.cont_id,
+                            'chunk_id': self.chunk.chunk_id,
+                            'chunk_size': self.chunk.size,
+                            'chunk_position': self.chunk.get_position()}
+        self.chunk_path = self.test_dir + 'data/NS-rawx-1/' + self.chunk.chunk_id[
+                                                              0:2] + "/" + self.chunk.chunk_id
+
+    def tearDown(self):
+        print ""
+        super(TestConscienceFunctional, self).tearDown()
+        try:
+            os.remove(self.chunk_path)
+        except Exception:
+            pass
+
+        try:
+            os.removedirs(
+                self.test_dir + 'data/NS-rawx-1/' + self.chunk.chunk_id[0:2])
+        except Exception:
+            pass
+
+        if not (os.path.isdir(self.test_dir + 'data/NS-rawx-1/')):
+            os.makedirs(self.test_dir + 'data/NS-rawx-1/')
+
+    def setup_again(self, length):
+
+        if length == 0:
+            self.content_data = ""
+        else:
+            self.content_data = self.gen_rand('data', length)
+        self.content = self.fakeContent('c1', len(self.content_data),
+                                        self.gen_rand('id', 64))
+        self.chunk = self.fakeChunk(self.content.size, self.gen_rand('id', 64))
+
+        self.headers_put = {'content_path': self.content.path,
+                            'content_size': self.content.size,
+                            'content_chunksnb': self.content.get_nb_chunks(),
+                            'content_containerid': self.content.cont_id,
+                            'chunk_id': self.chunk.chunk_id,
+                            'chunk_size': self.chunk.size,
+                            'chunk_position': self.chunk.get_position()}
+        self.chunk_path = self.test_dir + 'data/NS-rawx-1/' + self.chunk.chunk_id[
+                                                              0:2] + "/" + self.chunk.chunk_id
 
-	# Check the data
-	assert chunk_data == content_data, "FAILED => Data from apache does not match data sent to apache (" + chunk_data + "/" + content_data + ")"
-	print "OK"
+    def setup_compressed(self, tmpfile, length):
 
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
+        if length == 0:
+            self.content_data = ""
+        else:
+            self.content_data = self.gen_rand('data', length)
 
-def test_get_empty(data):
-	print "test_get_empty :",
+        gzip.GzipFile(fileobj=tmpfile, mode="wb").write(self.content_data)
+        tmpfile.seek(0, 0)
 
-	content_data = ""
-	content = fakeContent('c1', 0)
-	chunk = fakeChunk(0)
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
+        self.content = self.fakeContent('c1', tmpfile.tell(),
+                                        self.gen_rand('id', 64))
+        self.chunk = self.fakeChunk(self.content.size, self.gen_rand('id', 64))
 
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data))
+        self.headers_put = {'content_path': self.content.path,
+                            'content_size': self.content.size,
+                            'content_chunksnb': self.content.get_nb_chunks(),
+                            'content_containerid': self.content.cont_id,
+                            'chunk_id': self.chunk.chunk_id,
+                            'chunk_size': self.chunk.size,
+                            'chunk_position': self.chunk.get_position(),
+                            'Transfer_encoding': 'gzip'}
 
-	# Do the get
-	(headers, chunk_data) = rawx.download(chunk)
+        self.chunk_path = self.test_dir + 'data/NS-rawx-1/' + self.chunk.chunk_id[
+                                                              0:2] + "/" + self.chunk.chunk_id
 
-	# Check the data
-	assert chunk_data == "", "FAILED => Data from apache does not match data sent to apache (" + chunk_data + "/)"
-	print "OK"
+    def prepare_compressed(self, length):
 
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
+        with tempfile.NamedTemporaryFile(delete=True) as gzfile:
+            self.setup_compressed(gzfile, 24)
 
-def test_get_range(data):
-	print "test_get_range :",
+            resp = self.session.put(self.rawx + self.chunk.chunk_id,
+                                    data=gzfile, headers=self.headers_put)
+            self.assertEqual(resp.status_code, 201)
 
-	content_data = "azertyuiopqsdfghjklmwxcvbn"
-	content = fakeContent('c1', len(content_data))
-	chunk = fakeChunk(content.get_size())
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
+    def init_chunk(self):
+        resp = self.session.put(self.rawx + self.chunk.chunk_id,
+                                data=self.content_data,
+                                headers=self.headers_put)
 
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data))
+        return resp
 
-	# Do the range get
-	(headers, chunk_data) = rawx.download(chunk, (5, 5))
+    def test_put(self):
 
-	# check data
-	assert chunk_data == content_data[5:10], "FAILED => Ranged data from apache does not match data sent to apache (" + chunk_data + "/" + content_data[5:10] + ")"
-	print "OK"
+        resp = self.session.put(self.rawx + self.chunk.chunk_id,
+                                data=self.content_data,
+                                headers=self.headers_put)
+        self.assertEqual(resp.status_code, 201)
 
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
+        with open(self.chunk_path) as f:
+            self.chunk_data = f.read()
+        self.assertEqual(self.chunk_data, self.content_data)
 
-def test_get_range_empty(data):
-	print "test_get_range_empty :",
+    def test_put_empty(self):
 
-	content_data = ""
-	content = fakeContent('c1', 0)
-	chunk = fakeChunk(0)
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
+        self.setup_again(0)
 
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data))
+        p = self.session.put(self.rawx + self.chunk.chunk_id,
+                             data=self.content_data,
+                             headers=self.headers_put)
 
-	# Do the range get
-	(headers, chunk_data) = rawx.download(chunk, (5, 5))
+        with open(self.chunk_path) as f:
+            self.chunk_data = f.read()
+        self.assertEqual(self.chunk_data, "")
 
-	# check data
-	assert chunk_data == "", "FAILED => Ranged data from apache does not match data sent to apache (" + chunk_data + "/)"
-	print "OK"
+    def test_put_no_chunk_position(self):
 
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
+        del self.headers_put['chunk_position']
 
-def test_get_range_10M(data):
-	print "test_get_range_10M :",
+        resp = self.init_chunk()
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(os.path.isfile(self.chunk_path), True)
 
-	content_data = os.urandom(10485760)
-	content = fakeContent('c1', 10485760)
-	chunk = fakeChunk(10485760)
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
+        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
+        self.assertFalse('chunk_position' in resp.keys())
 
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data))
+    def test_put_no_chunk_size(self):
 
-	# Do the range get
-	(headers, chunk_data) = rawx.download(chunk, (5, 10000))
+        del self.headers_put['chunk_size']
 
-	# check data
-	assert chunk_data == content_data[5:10005], "FAILED => Ranged data from apache does not match data sent to apache (" + chunk_data + "/" + content_data[5:10005] + ")"
-	print "OK"
+        resp = self.init_chunk()
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(os.path.isfile(self.chunk_path), True)
 
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
+        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
+        self.assertFalse('chunk_size' in resp.keys())
 
-def test_get_compress(data):
-	print "test_get_compress :",
+    def test_put_no_chunk_id(self):
 
-	content_data = "azertyuiopqsdfghjklmwxcvbn"
-	content = fakeContent('c1', len(content_data))
-	chunk = fakeChunk(content.get_size())
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
+        del self.headers_put['chunk_id']
 
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data), ('ZLIB', 512000))
+        resp = self.init_chunk()
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(os.path.isfile(self.chunk_path), True)
 
-	# Do the range get
-	(headers, chunk_data) = rawx.download(chunk)
+        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
+        self.assertFalse('chunk_id' in resp.keys())
 
-	# check data
-	assert chunk_data == content_data, "FAILED => Data from apache does not match data sent to apache (" + chunk_data + "/" + content_data + ")"
-	print "OK"
+    def test_put_no_number_chunks(self):
 
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
+        del self.headers_put['content_chunksnb']
 
-def test_get_compress_empty(data):
-	print "test_get_compress_empty :",
+        resp = self.init_chunk()
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(os.path.isfile(self.chunk_path), True)
 
-	content_data = ""
-	content = fakeContent('c1', 0)
-	chunk = fakeChunk(content.get_size())
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
+        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
+        self.assertFalse('content_chunksnb' in resp.keys())
 
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data), ('ZLIB', 512000))
+    def test_put_no_container_id(self):
 
-	# Do the range get
-	(headers, chunk_data) = rawx.download(chunk)
+        del self.headers_put['content_containerid']
 
-	# check data
-	assert chunk_data == content_data, "FAILED => Data from apache does not match data sent to apache (" + chunk_data + "/" + content_data + ")"
-	print "OK"
+        resp = self.init_chunk()
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(os.path.isfile(self.chunk_path), True)
 
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
+        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
+        self.assertFalse('content_containerid' in resp.keys())
 
-def test_get_compress_10M(data):
-	print "test_get_compress_10M :",
+    def test_put_no_content_size(self):
 
-	content_data = os.urandom(10485760)
-	content = fakeContent('c1', 10485760)
-	chunk = fakeChunk(10485760)
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
+        del self.headers_put['content_size']
 
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data), ('ZLIB', 512000))
+        resp = self.init_chunk()
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(os.path.isfile(self.chunk_path), True)
 
-	# Do the range get
-	(headers, chunk_data) = rawx.download(chunk)
+        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
+        self.assertFalse('content_size' in resp.keys())
 
-	# check data
-	assert chunk_data == content_data, "FAILED => Ranged data from apache does not match data sent to apache (" + chunk_data + "/" + content_data + ")"
-	print "OK"
+    def test_put_no_content_path(self):
 
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
+        del self.headers_put['content_path']
 
-def test_get_compress_range(data):
-	print "test_get_compress_range :",
+        resp = self.init_chunk()
+        self.assertEqual(resp.status_code, 201)
+        self.assertEqual(os.path.isfile(self.chunk_path), True)
 
-	content_data = "azertyuiopqsdfghjklmwxcvbn"
-	content = fakeContent('c1', len(content_data))
-	chunk = fakeChunk(content.get_size())
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
+        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
+        self.assertFalse('content_path' in resp.keys())
 
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data), ('ZLIB', 512000))
+    def test_get(self):
 
-	# Do the range get
-	(headers, chunk_data) = rawx.download(chunk, (5, 5))
+        self.init_chunk()
 
-	# check data
-	assert chunk_data == content_data[5:10], "FAILED => Ranged data from apache does not match data sent to apache (" + chunk_data + "/" + content_data[5:10] + ")"
-	print "OK"
+        resp = self.session.get(self.rawx + self.chunk.chunk_id)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.content, self.content_data)
 
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
+    def test_get_empty(self):
 
-def test_get_compress_range_empty(data):
-	print "test_get_compress_range_empty :",
+        self.setup_again(0)
 
-	content_data = ""
-	content = fakeContent('c1', 0)
-	chunk = fakeChunk(0)
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
+        self.init_chunk()
 
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data), ('ZLIB', 512000))
+        resp = self.session.get(self.rawx + self.chunk.chunk_id)
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.content, "")
 
-	# Do the range get
-	(headers, chunk_data) = rawx.download(chunk, (5, 10000))
+    def test_get_range(self):
 
-	# check data
-	assert chunk_data == "", "FAILED => Ranged data from apache does not match data sent to apache (" + chunk_data + "/)"
-	print "OK"
+        self.init_chunk()
 
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
+        resp = self.session.get(self.rawx + self.chunk.chunk_id,
+                                headers={'Range': 'bytes=5-10'})
+        self.assertEqual(resp.status_code, 206)
+        self.assertEqual(resp.content, self.content_data[5:11])
 
-def test_get_compress_range5_10M(data):
-	print "test_get_compress_range5_10M :",
+    def test_get_range_empty(self):
 
-	content_data = os.urandom(10485760)
-	content = fakeContent('c1', 10485760)
-	chunk = fakeChunk(10485760)
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
+        self.setup_again(0)
 
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data), ('ZLIB', 512000))
+        self.init_chunk()
 
-	# Do the range get
-	(headers, chunk_data) = rawx.download(chunk, (5, 5))
+        resp = self.session.get(self.rawx + self.chunk.chunk_id,
+                                headers={'Range': 'bytes=5-10'})
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.content, "")
 
-	# check data
-	assert chunk_data == content_data[5:10], "FAILED => Ranged data from apache does not match data sent to apache (" + chunk_data + "/" + content_data[5:10] + ")"
-	print "OK"
+    def test_get_range_1M(self):
 
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
+        self.setup_again(1310720)
 
-def test_get_compress_range10000_10M(data):
-	print "test_get_compress_range10000_10M :",
+        self.init_chunk()
 
-	content_data = os.urandom(10485760)
-	content = fakeContent('c1', 10485760)
-	chunk = fakeChunk(10485760)
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
+        resp = self.session.get(self.rawx + self.chunk.chunk_id,
+                                headers={'Range': 'bytes=5-10005'})
+        self.assertEqual(resp.status_code, 206)
+        self.assertEqual(resp.content, self.content_data[5:10006])
 
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data), ('ZLIB', 512000))
+    def test_put_compress(self):
 
-	# Do the range get
-	(headers, chunk_data) = rawx.download(chunk, (5, 10000))
+        with tempfile.NamedTemporaryFile(delete=True) as gzfile:
+            self.setup_compressed(gzfile, 24)
 
-	# check data
-	assert chunk_data == content_data[5:10005], "FAILED => Ranged data from apache does not match data sent to apache (" + chunk_data + "/" + content_data[5:10005] + ")"
-	print "OK"
+            resp = self.session.put(self.rawx + self.chunk.chunk_id,
+                                    data=gzfile, headers=self.headers_put)
+            self.assertEqual(resp.status_code, 201)
 
-	# Clean chunk file
-	os.remove(get_chunk_path(data))
+        with open(self.chunk_path) as f:
+            data_to_decode = StringIO.StringIO(f.read())
+        self.assertEqual(gzip.GzipFile(fileobj=data_to_decode).read(),
+                         self.content_data)
 
-def test_delete(data):
-	print "test_delete :",
+    def test_get_compress(self):
 
-	content_data = "azertyuiopqsdfghjklmwxcvbn"
-	content = fakeContent('c1', len(content_data))
-	chunk = fakeChunk(content.get_size())
-	http = pygrid.http.make_http_client_from_url(':'.join(rawx_url))
-	rawx = pygrid.services.Rawx(namespace, http)
+        self.prepare_compressed(24)
 
-	# Do the put
-	rawx.upload(content, chunk, io.BytesIO(content_data))
+        resp = self.session.get(self.rawx + self.chunk.chunk_id,
+                                headers={'Accept-encoding': 'gzip'})
+        self.assertEqual(resp.status_code, 200)
+        data_to_decode = StringIO.StringIO(resp.content)
+        self.assertEqual(gzip.GzipFile(fileobj=data_to_decode).read(),
+                         self.content_data)
 
-	# Do the delete
-	rawx.delete(chunk)
+    def test_get_compress_empty(self):
 
-	# Check the chunk file
-	try:
-		f = open(get_chunk_path(data))
-		assert "Failed => Chunk was not deleted"
-	except IOError:
-		print "OK"
+        self.prepare_compressed(0)
 
-def test_access_status_code(data):
-	print "test_access_status_code :",
+        resp = self.session.get(self.rawx + self.chunk.chunk_id,
+                                headers={'Accept-encoding': 'gzip'})
+        self.assertEqual(resp.status_code, 200)
+        data_to_decode = StringIO.StringIO(resp.content)
+        self.assertEqual(gzip.GzipFile(fileobj=data_to_decode).read(),
+                         self.content_data)
 
-	file = open(data.testDir + "/logs/httpd-access.log", "r")
-	expr = re.compile(" 2.. ")
-	for line in file:
-		assert expr.search(line) != None, "FAILED => A test did not return a 2XX reponse (" + line + ")"
-	print "OK"
+    def test_get_compress_1M(self):
 
+        self.prepare_compressed(1310720)
 
-# Do the tests
-data = TestData()
-setup(data)
-try:
-	test_put(data)
-	test_put_empty(data)
-	test_get(data)
-	test_get_empty(data)
-	test_get_range(data)
-	test_get_range_empty(data)
-	test_get_range_10M(data)
-	test_get_compress(data)
-	test_get_compress_empty(data)
-	test_get_compress_10M(data)
-	test_get_compress_range(data)
-	test_get_compress_range_empty(data)
-	test_get_compress_range5_10M(data)
-	test_get_compress_range10000_10M(data)
-	test_delete(data)
-	test_access_status_code(data)
-except Exception as e:
-	print e
-finally:
-	teardown(data)
+        resp = self.session.get(self.rawx + self.chunk.chunk_id,
+                                headers={'Accept-encoding': 'gzip'})
+        self.assertEqual(resp.status_code, 200)
+        data_to_decode = StringIO.StringIO(resp.content)
+        self.assertEqual(gzip.GzipFile(fileobj=data_to_decode).read(),
+                         self.content_data)
+
+    def test_get_attr(self):
+
+        self.init_chunk()
+
+        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
+        self.assertEqual(resp["content_path"], self.content.path)
+        self.assertEqual(resp["content_size"], str(self.content.size))
+        self.assertEqual(resp["content_chunksnb"],
+                         str(self.content.get_nb_chunks()))
+        self.assertEqual(resp["content_containerid"], self.content.cont_id)
+        self.assertEqual(resp["chunk_id"], self.chunk.chunk_id)
+        self.assertEqual(resp["chunk_size"], str(self.chunk.size))
+        self.assertEqual(resp["chunk_position"], str(self.chunk.get_position()))
+
+    def test_check_attr(self):
+
+        self.init_chunk()
+
+        self.assertEqual(
+            xattr.getxattr(self.chunk_path, 'user.grid.content.path'),
+            self.content.path)
+        self.assertEqual(
+            xattr.getxattr(self.chunk_path, 'user.grid.content.nbchunk'),
+            str(self.content.get_nb_chunks()))
+        self.assertEqual(xattr.getxattr(self.chunk_path, 'user.grid.chunk.id'),
+                         self.chunk.chunk_id)
+        self.assertEqual(
+            xattr.getxattr(self.chunk_path, 'user.grid.chunk.size'),
+            str(self.chunk.size))
+        self.assertEqual(
+            xattr.getxattr(self.chunk_path, 'user.grid.content.size'),
+            str(self.content.size))
+        self.assertEqual(
+            xattr.getxattr(self.chunk_path, 'user.grid.chunk.position'),
+            str(self.chunk.get_position()))
+        self.assertEqual(
+            xattr.getxattr(self.chunk_path, 'user.grid.content.container'),
+            self.content.cont_id)
+
+    def test_get_hash(self):
+
+        self.init_chunk()
+        m = md5.new()
+        m.update(self.content_data)
+        handmade_hash = m.hexdigest().upper()
+
+        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers[
+            "chunk_hash"]
+        self.assertEqual(resp, handmade_hash)
+
+    def test_put_correct_hash(self):
+
+        m = md5.new()
+        m.update(self.content_data)
+        handmade_hash = m.hexdigest().upper()
+        self.headers_put['chunk_hash'] = handmade_hash
+
+        self.init_chunk()
+
+        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers[
+            "chunk_hash"]
+        self.assertEqual(resp, handmade_hash)
+
+        self.assertEqual(
+            xattr.getxattr(self.chunk_path, 'user.grid.chunk.hash'),
+            handmade_hash)
+
+    def test_put_wrong_hash(self):
+
+        self.headers_put['chunk_hash'] = '00000000000000000000000000000000'
+
+        self.init_chunk()
+
+        m = md5.new()
+        m.update(self.content_data)
+        handmade_hash = m.hexdigest().upper()
+
+        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers[
+            "chunk_hash"]
+        self.assertEqual(resp, handmade_hash)
+
+        self.assertEqual(
+            xattr.getxattr(self.chunk_path, 'user.grid.chunk.hash'),
+            handmade_hash)
+
+    def test_delete(self):
+
+        self.init_chunk()
+
+        resp = self.session.delete(self.rawx + self.chunk.chunk_id)
+        self.assertEqual(resp.status_code, 204)
+
+        resp = os.listdir(
+            self.test_dir + 'data/NS-rawx-1/' + self.chunk.chunk_id[0:2])
+        self.assertEqual(resp, [])
