@@ -16,12 +16,50 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-struct sub_action_s {
-	const gchar *verb;
-	enum http_rc_e (*handler) (struct req_args_s *, struct json_object *);
-};
+#include "common.h"
 
-static enum http_rc_e
+gboolean
+validate_namespace (const gchar * ns)
+{
+	return 0 == strcmp (ns, nsname);
+}
+
+gboolean
+validate_srvtype (const gchar * n)
+{
+	gboolean rc = FALSE;
+	NSINFO_DO(if (srvtypes) {
+		for (gchar ** p = srvtypes; !rc && *p; ++p)
+			rc = !strcmp (*p, n);
+	});
+	return rc;
+}
+
+const gchar *
+_req_get_option (struct req_args_s *args, const gchar *name)
+{
+	gsize namelen = strlen(name);
+	gchar *needle = g_alloca(namelen+2);
+	memcpy(needle, name, namelen);
+	needle[namelen] = '=';
+	needle[namelen+1] = 0;
+
+	if (args->req_uri->query_tokens) {
+		for (gchar **p=args->req_uri->query_tokens; *p ;++p) {
+			if (g_str_has_prefix(*p, needle))
+				return (*p) + namelen + 1;
+		}
+	}
+	return NULL;
+}
+
+const gchar *
+_req_get_token (struct req_args_s *args, const gchar *name)
+{
+	return path_matching_get_variable (args->matchings[0], name);
+}
+
+enum http_rc_e
 abstract_action (const char *tag, struct req_args_s *args, struct sub_action_s *sub)
 {
 	struct json_tokener *parser;
@@ -59,7 +97,25 @@ exit:
 	return rc;
 }
 
-static GError *
+enum http_rc_e
+rest_action (struct req_args_s *args,
+        enum http_rc_e (*handler) (struct req_args_s *, json_object *))
+{
+    enum http_rc_e rc;
+    json_object *jbody;
+    json_tokener *parser;
+    parser = json_tokener_new ();
+
+    jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
+            args->rq->body->len);
+    rc = handler(args, jbody);
+    json_object_put (jbody);
+    json_tokener_free (parser);
+    return rc;
+}
+
+
+GError *
 _resolve_service_and_do (const gchar *t, gint64 seq, struct hc_url_s *u,
 		GError * (*hook) (struct meta1_service_url_s *m1u, gboolean *next))
 {
@@ -118,7 +174,7 @@ exit:
 	return err;
 }
 
-static GError *
+GError *
 _gba_request (struct meta1_service_url_s *m1u,
 		GByteArray * (reqbuilder) (void),
 		GByteArray ** out)
@@ -148,7 +204,7 @@ _gba_request (struct meta1_service_url_s *m1u,
 	return e;
 }
 
-static GError *
+GError *
 _gbav_request (const gchar *t, gint64 seq, struct hc_url_s *u,
 		GByteArray * builder (void),
 		gchar ***outurl, GByteArray ***out)
@@ -184,11 +240,11 @@ _gbav_request (const gchar *t, gint64 seq, struct hc_url_s *u,
 	if (tmp) {
 		g_ptr_array_set_free_func (tmp, metautils_gba_unref);
 		g_ptr_array_free (tmp, TRUE);
-	}	
+	}
 	return e;
 }
 
-static gboolean
+gboolean
 _request_has_flag (struct req_args_s *args, const char *header,
 		const char *flag)
 {

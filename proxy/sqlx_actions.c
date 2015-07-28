@@ -16,7 +16,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <sqliterepo/sqlx_remote.h>
+#include "common.h"
+#include "actions.h"
 
 static GError *
 _abstract_sqlx_action (struct req_args_s *args, gboolean next,
@@ -218,56 +219,56 @@ _load_stringv (struct json_object *jargs)
 
 //------------------------------------------------------------------------------
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_leave (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
-	return _sqlx_action_noreturn(args, sqlx_pack_EXITELECTION);
+    return action_admin_leave (args);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_ping (struct req_args_s *args, struct json_object *jargs)
 {
-	(void) jargs;
-	return _sqlx_action_noreturn(args, sqlx_pack_USE);
+    (void) jargs;
+    return action_admin_ping (args);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_status (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
-	return _sqlx_action_noreturn(args, sqlx_pack_STATUS);
+    return action_admin_status (args);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_info (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
-	return _sqlx_action_flatbody(args, sqlx_pack_INFO);
+    return action_admin_info (args);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_leanify (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
-	return _sqlx_action_noreturn(args, sqlx_pack_LEANIFY);
+    return action_admin_drop_cache (args);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_resync (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
-	return _sqlx_action_noreturn(args, sqlx_pack_RESYNC);
+    return action_admin_sync (args);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_debug (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
-	return _sqlx_action_flatbody (args, sqlx_pack_DESCR);
+    return action_admin_debug (args);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type(jargs, json_type_string))
@@ -314,7 +315,7 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 	return _reply_success_json (args, out);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_propset (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type (jargs, json_type_object))
@@ -354,7 +355,7 @@ action_sqlx_propset (struct req_args_s *args, struct json_object *jargs)
 	return rc;
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 {
 	GError *err = NULL;
@@ -407,7 +408,7 @@ action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 	return _reply_success_json (args, out);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 {
 	gchar **namev = _load_stringv (jargs);
@@ -422,35 +423,35 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 	return rc;
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_freeze (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
 	return _sqlx_action_noreturn(args, sqlx_pack_FREEZE);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_enable (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
 	return _sqlx_action_noreturn(args, sqlx_pack_ENABLE);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_disable (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
 	return _sqlx_action_noreturn(args, sqlx_pack_DISABLE);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_disable_disabled (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
 	return _sqlx_action_noreturn(args, sqlx_pack_DISABLE_DISABLED);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_sqlx_action (struct req_args_s *args)
 {
 	struct sub_action_s actions[] = {
@@ -478,3 +479,86 @@ action_sqlx_action (struct req_args_s *args)
 	return abstract_action ("sqlx actions", args, actions);
 }
 
+enum http_rc_e
+action_admin_ping (struct req_args_s *args)
+{
+	return _sqlx_action_noreturn (args, sqlx_pack_USE);
+}
+
+enum http_rc_e
+action_admin_status (struct req_args_s *args)
+{
+	return _sqlx_action_noreturn (args, sqlx_pack_STATUS);
+}
+
+enum http_rc_e
+action_admin_info (struct req_args_s *args)
+{
+    return _sqlx_action_flatbody (args, sqlx_pack_INFO);
+}
+
+enum http_rc_e
+action_admin_drop_cache (struct req_args_s *args)
+{
+	return _sqlx_action_noreturn (args, sqlx_pack_LEANIFY);
+}
+
+enum http_rc_e
+action_admin_sync (struct req_args_s *args)
+{
+	return _sqlx_action_noreturn (args, sqlx_pack_RESYNC);
+}
+
+enum http_rc_e
+action_admin_leave (struct req_args_s *args)
+{
+	return _sqlx_action_noreturn (args, sqlx_pack_EXITELECTION);
+}
+
+enum http_rc_e
+action_admin_debug (struct req_args_s *args)
+{
+	return _sqlx_action_flatbody (args, sqlx_pack_DESCR);
+}
+
+enum http_rc_e
+action_admin_copy (struct req_args_s *args)
+{
+    return rest_action (args, action_sqlx_copyto);
+}
+
+enum http_rc_e
+action_admin_prop_get (struct req_args_s *args)
+{
+    return rest_action (args, action_sqlx_propget);
+}
+
+enum http_rc_e
+action_admin_prop_set (struct req_args_s *args)
+{
+    return rest_action (args, action_sqlx_propset);
+}
+
+enum http_rc_e
+action_admin_prop_del (struct req_args_s *args)
+{
+    return rest_action (args, action_sqlx_propdel);
+}
+
+enum http_rc_e
+action_admin_freeze (struct req_args_s *args)
+{
+	return _sqlx_action_noreturn(args, sqlx_pack_FREEZE);
+}
+
+enum http_rc_e
+action_admin_enable (struct req_args_s *args)
+{
+	return _sqlx_action_noreturn(args, sqlx_pack_ENABLE);
+}
+
+enum http_rc_e
+action_admin_disable (struct req_args_s *args)
+{
+	return _sqlx_action_noreturn(args, sqlx_pack_DISABLE);
+}

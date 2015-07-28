@@ -17,76 +17,16 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "common.h"
+#include "actions.h"
+
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metacd.http"
 #endif
 
-#include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <stdarg.h>
-
-#include <glib.h>
-#include <json.h>
-
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
-#include <metautils/lib/url.h>
-#include <metautils/lib/hc_url.h>
-#include <metautils/lib/hc_url_ext.h>
-#include <cluster/lib/gridcluster.h>
-#include <cluster/remote/gridcluster_remote.h>
-#include <server/network_server.h>
-#include <server/stats_holder.h>
-#include <resolver/hc_resolver.h>
-#include <meta1v2/meta1_remote.h>
-#include <meta2v2/meta2_macros.h>
-#include <meta2v2/meta2v2_remote.h>
-#include <meta2v2/meta2_utils.h>
-#include <meta2v2/autogen.h>
-#include <meta2v2/generic.h>
-
-#include "path_parser.h"
-#include "transport_http.h"
-
-#define BADREQ(M,...) NEWERROR(CODE_BAD_REQUEST,M,##__VA_ARGS__)
-
-#define OPT(N)    _req_get_option(args,(N))
-#define TOK(N)    _req_get_token(args,(N))
-#define CID()     TOK("CID")
-#define NS()      TOK("NS")
-#define ACCOUNT() TOK("ACCOUNT")
-#define POOL()    TOK("POOL")
-#define TYPE()    TOK("TYPE")
-#define REF()     TOK("REF")
-#define PATH()    TOK("PATH")
-#define SEQ()     TOK("SEQ")
-#define VERSION() OPT("version")
-
-#define PUSH_DO(Action) do { \
-	g_mutex_lock(&push_mutex); \
-	Action ; \
-	g_mutex_unlock(&push_mutex); \
-} while (0)
-
-#define NSINFO_DO(Action) do { \
-	g_mutex_lock(&nsinfo_mutex); \
-	Action ; \
-	g_mutex_unlock(&nsinfo_mutex); \
-} while (0)
-
 static struct path_parser_s *path_parser = NULL;
 static struct http_request_dispatcher_s *dispatcher = NULL;
 static struct network_server_s *server = NULL;
-
-static gchar *nsname = NULL;
-static struct hc_resolver_s *resolver = NULL;
-static struct grid_lbpool_s *lbpool = NULL;
-
-static struct lru_tree_s *push_queue = NULL;
-static GMutex push_mutex;
 
 static struct grid_task_queue_s *admin_gtq = NULL;
 static struct grid_task_queue_s *upstream_gtq = NULL;
@@ -95,10 +35,6 @@ static struct grid_task_queue_s *downstream_gtq = NULL;
 static GThread *admin_thread = NULL;
 static GThread *upstream_thread = NULL;
 static GThread *downstream_thread = NULL;
-
-static struct namespace_info_s nsinfo;
-static gchar **srvtypes = NULL;
-static GMutex nsinfo_mutex;
 
 // Configuration
 
@@ -114,68 +50,19 @@ static guint dir_low_max = PROXYD_DEFAULT_MAX_SERVICES;
 static guint dir_high_ttl = PROXYD_DEFAULT_TTL_CSM0;
 static guint dir_high_max = PROXYD_DEFAULT_MAX_CSM0;
 
-static gdouble m2_timeout_all = PROXYD_M2_TIMEOUT_SINGLE;
+struct grid_lbpool_s *lbpool = NULL;
+struct lru_tree_s *push_queue = NULL;
+GMutex push_mutex;
+gchar *nsname = NULL;
 
-static gboolean validate_namespace (const gchar * ns);
-static gboolean validate_srvtype (const gchar * n);
-
-struct req_args_s;
-enum http_rc_e _reply_not_implemented (struct req_args_s *args);
-
-enum
-{
-	FLAG_NOEMPTY = 0x0001,
-};
-
-struct req_args_s
-{
-	struct req_uri_s *req_uri; // parsed URI
-	struct path_matching_s **matchings; // matched handlers
-	struct hc_url_s *url;
-
-	struct http_request_s *rq;
-	struct http_reply_ctx_s *rp;
-
-	guint32 flags;
-};
-
-typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);
+struct namespace_info_s nsinfo;
+GMutex nsinfo_mutex;
+gchar **srvtypes = NULL;
+gdouble m2_timeout_all = PROXYD_M2_TIMEOUT_SINGLE;
+struct hc_resolver_s *resolver = NULL;
 
 //------------------------------------------------------------------------------
 
-static const gchar *
-_req_get_option (struct req_args_s *args, const gchar *name)
-{
-	gsize namelen = strlen(name);
-	gchar *needle = g_alloca(namelen+2);
-	memcpy(needle, name, namelen);
-	needle[namelen] = '=';
-	needle[namelen+1] = 0;
-
-	if (args->req_uri->query_tokens) {
-		for (gchar **p=args->req_uri->query_tokens; *p ;++p) {
-			if (g_str_has_prefix(*p, needle))
-				return (*p) + namelen + 1;
-		}
-	}
-	return NULL;
-}
-
-static const gchar *
-_req_get_token (struct req_args_s *args, const gchar *name)
-{
-	return path_matching_get_variable (args->matchings[0], name);
-}
-
-#include "reply.c"
-#include "common.c"
-
-#include "dir_actions.c"
-#include "lb_actions.c"
-#include "cs_actions.c"
-#include "sqlx_actions.c"
-#include "m2_actions.c"
-#include "cache_actions.c"
 
 // Misc. handlers --------------------------------------------------------------
 
@@ -297,7 +184,7 @@ handler_action (gpointer u, struct http_request_s *rq,
 			(gchar *) g_tree_lookup (rq->tree_headers, n), FALSE);
 	}
 
-	// Get a request id for the current request 
+	// Get a request id for the current request
 	const gchar *reqid = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_REQID);
 	if (reqid)
 		gridd_set_reqid(reqid);
@@ -339,23 +226,6 @@ handler_action (gpointer u, struct http_request_s *rq,
 	path_matching_cleanv (matchings);
 	metautils_requri_clear (&ruri);
 	hc_url_pclean (&url);
-	return rc;
-}
-
-static gboolean
-validate_namespace (const gchar * ns)
-{
-	return 0 == strcmp (ns, nsname);
-}
-
-static gboolean
-validate_srvtype (const gchar * n)
-{
-	gboolean rc = FALSE;
-	NSINFO_DO(if (srvtypes) {
-		for (gchar ** p = srvtypes; !rc && *p; ++p)
-			rc = !strcmp (*p, n);
-	});
 	return rc;
 }
 
@@ -665,6 +535,65 @@ configure_request_handlers (void)
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/$PATH/action/#POST", action_m2_content_action);
 
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/sqlx/$NS/$ACCOUNT/$REF/$TYPE/$SEQ/action/#POST", action_sqlx_action);
+
+    // New routes
+    //
+    // Directory
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/create/#POST", action_ref_create);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/destroy/#POST", action_ref_destroy);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/show/#GET", action_ref_show);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/get_properties/#POST", action_ref_prop_get);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/set_properties/#POST", action_ref_prop_set);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/del_properties/#POST", action_ref_prop_del);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/link/#POST", action_ref_link);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/unlink/#POST", action_ref_unlink);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/force/#POST", action_ref_force);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/renew/#POST", action_ref_renew);
+
+
+    // Meta2
+    // Container
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/create/#POST", action_container_create);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/destroy/#POST", action_container_destroy);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/show/#GET", action_container_show);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/list/#GET", action_container_list);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/get_properties/#POST", action_container_prop_get);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/set_properties/#POST", action_container_prop_set);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/del_properties/#POST", action_container_prop_del);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/touch/#POST", action_container_touch);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/dedup/#POST", action_container_dedup);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/purge/#POST", action_container_purge);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/raw_insert/#POST", action_container_raw_insert);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/raw_update/#POST", action_container_raw_update);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/raw_delete/#POST", action_container_raw_delete);
+
+    // Content
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/create/#POST", action_content_put);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/delete/#POST", action_content_delete);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/show/#GET", action_content_show);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/prepare/#POST", action_content_prepare);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/get_properties/#POST", action_content_prop_get);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/set_properties/#POST", action_content_prop_set);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/del_properties/#POST", action_content_prop_del);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/touch/#POST", action_content_touch);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/spare/#POST", action_content_spare);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/copy/#POST", action_content_copy);
+
+    // Admin
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/ping/#POST", action_admin_ping);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/status/#POST", action_admin_status);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/drop_cache/#POST", action_admin_drop_cache);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/sync/#POST", action_admin_sync);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/leave/#POST", action_admin_leave);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/debug/#POST", action_admin_debug);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/copy/#POST", action_admin_copy);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/get_properties/#POST", action_admin_prop_get);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/set_properties/#POST", action_admin_prop_set);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/del_properties/#POST", action_admin_prop_del);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/freeze/#POST", action_admin_freeze);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/enable/#POST", action_admin_enable);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/disable/#POST", action_admin_disable);
+
 }
 
 static gboolean

@@ -19,7 +19,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <meta2v2/meta2_utils_json.h>
 #include <meta2v2/autogen.h>
-#include <meta2v2/generic.h>
+
+#include "common.h"
+#include "actions.h"
 
 static void
 _json_dump_all_beans (GString * gstr, GSList * beans)
@@ -526,8 +528,8 @@ _container_headers_to_props (struct req_args_s *args)
 			g_ptr_array_add (tmp, g_strconcat ("sys.", k, NULL));
 			g_ptr_array_add (tmp, g_strdup (v));
 		}
-		/* no management here for properties with raw format. there are
-		 * other requests handlers for that kind of ugly tweaks. */
+        /* no management here for properties with raw format. there are
+         * other requests handlers for that kind of ugly tweaks. */
 		return FALSE;
 	}
 	tmp = g_ptr_array_new ();
@@ -636,9 +638,10 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 	}
 }
 
+
 /** @todo TODO FIXME ensure we get a correct result if we have to loop
  * toward several meta2 servers */
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_list (struct req_args_s *args)
 {
 	struct list_result_s list_out = {NULL,NULL,FALSE};
@@ -770,7 +773,7 @@ action_m2_container_list (struct req_args_s *args)
 	return rc;
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_check (struct req_args_s *args)
 {
 	GError *err = NULL;
@@ -844,7 +847,7 @@ retry:
 	return err;
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_create (struct req_args_s *args)
 {
 	GError *err = _m2_container_create (args);
@@ -855,7 +858,7 @@ action_m2_container_create (struct req_args_s *args)
 	return _reply_m2_error (args, err);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_destroy (struct req_args_s *args)
 {
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
@@ -871,7 +874,7 @@ action_m2_container_destroy (struct req_args_s *args)
 
 /* CONTAINER action resources ----------------------------------------------- */
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_purge (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
@@ -885,7 +888,7 @@ action_m2_container_purge (struct req_args_s *args, struct json_object *jargs)
 	return _reply_beans (args, err, beans);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
@@ -921,7 +924,7 @@ action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
 	return _reply_success_json (args, gstr);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_touch (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
@@ -939,7 +942,7 @@ action_m2_container_touch (struct req_args_s *args, struct json_object *jargs)
 	return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_raw_insert (struct req_args_s *args, struct json_object *jargs)
 {
 	GSList *beans = NULL;
@@ -960,7 +963,7 @@ action_m2_container_raw_insert (struct req_args_s *args, struct json_object *jar
 	return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_raw_delete (struct req_args_s *args, struct json_object *jargs)
 {
 	GSList *beans = NULL;
@@ -981,7 +984,7 @@ action_m2_container_raw_delete (struct req_args_s *args, struct json_object *jar
 	return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_raw_update (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type (jargs, json_type_object))
@@ -1017,7 +1020,7 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 	return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_propget (struct req_args_s *args, struct json_object *jargs)
 {
 	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
@@ -1025,7 +1028,7 @@ action_m2_container_propget (struct req_args_s *args, struct json_object *jargs)
 	return action_sqlx_propget(args, jargs);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_propset (struct req_args_s *args, struct json_object *jargs)
 {
 	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
@@ -1033,7 +1036,7 @@ action_m2_container_propset (struct req_args_s *args, struct json_object *jargs)
 	return action_sqlx_propset(args, jargs);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
 {
 	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
@@ -1041,7 +1044,7 @@ action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
 	return action_sqlx_propdel(args, jargs);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_stgpol (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type(jargs, json_type_string))
@@ -1055,7 +1058,7 @@ action_m2_container_stgpol (struct req_args_s *args, struct json_object *jargs)
 	return rc;
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_setvers (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type(jargs, json_type_int))
@@ -1069,7 +1072,7 @@ action_m2_container_setvers (struct req_args_s *args, struct json_object *jargs)
 	return rc;
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_container_action (struct req_args_s *args)
 {
 	struct sub_action_s actions[] = {
@@ -1093,9 +1096,89 @@ action_m2_container_action (struct req_args_s *args)
 	return abstract_action ("meta2 container", args, actions);
 }
 
+enum http_rc_e
+action_container_create (struct req_args_s *args)
+{
+    return action_m2_container_create (args);
+}
+
+enum http_rc_e
+action_container_destroy (struct req_args_s *args)
+{
+   return action_m2_container_destroy (args);
+}
+
+enum http_rc_e
+action_container_list (struct req_args_s *args)
+{
+    return action_m2_container_list (args);
+}
+
+enum http_rc_e
+action_container_show (struct req_args_s *args)
+{
+    return action_m2_container_check (args);
+}
+
+enum http_rc_e
+action_container_touch (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_container_touch);
+}
+
+enum http_rc_e
+action_container_dedup (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_container_dedup);
+}
+
+enum http_rc_e
+action_container_purge (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_container_purge);
+}
+
+enum http_rc_e
+action_container_prop_get (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_container_propget);
+}
+
+enum http_rc_e
+action_container_prop_set (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_container_propset);
+}
+
+enum http_rc_e
+action_container_prop_del (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_container_propdel);
+}
+
+enum http_rc_e
+action_container_raw_insert (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_container_raw_insert);
+}
+
+enum http_rc_e
+action_container_raw_update (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_container_raw_update);
+}
+
+enum http_rc_e
+action_container_raw_delete (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_container_raw_delete);
+}
+
+
 /* CONTENT action resource -------------------------------------------------- */
 
-static enum http_rc_e
+
+enum http_rc_e
 action_m2_content_beans (struct req_args_s *args, struct json_object *jargs)
 {
 	struct json_object *jsize = NULL, *jpol = NULL;
@@ -1169,7 +1252,7 @@ _m2_json_spare (struct hc_url_s *url, struct json_object *jbody, GSList ** out)
 	return err;
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_content_spare (struct req_args_s *args, struct json_object *jargs)
 {
 	GSList *beans = NULL;
@@ -1177,7 +1260,7 @@ action_m2_content_spare (struct req_args_s *args, struct json_object *jargs)
 	return _reply_beans (args, err, beans);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
@@ -1191,7 +1274,7 @@ action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 	return _reply_m2_error (args, err);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_content_stgpol (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type (jargs, json_type_string))
@@ -1211,7 +1294,7 @@ action_m2_content_stgpol (struct req_args_s *args, struct json_object *jargs)
 	return _reply_m2_error (args, err);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type(jargs, json_type_object))
@@ -1251,7 +1334,7 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 	return _reply_properties (args, err, beans);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type(jargs, json_type_array))
@@ -1284,7 +1367,7 @@ action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
 	return _reply_m2_error (args, err);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_content_propget (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
@@ -1302,7 +1385,7 @@ action_m2_content_propget (struct req_args_s *args, struct json_object *jargs)
 	return _reply_properties (args, err, beans);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_content_action (struct req_args_s *args)
 {
 	struct sub_action_s actions[] = {
@@ -1320,7 +1403,7 @@ action_m2_content_action (struct req_args_s *args)
 
 /* CONTENT resources ------------------------------------------------------- */
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_content_copy (struct req_args_s *args)
 {
 	const gchar *target = g_tree_lookup (args->rq->tree_headers, "destination");
@@ -1388,7 +1471,7 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 	return err;
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_content_put (struct req_args_s *args)
 {
 	struct json_tokener *parser;
@@ -1416,7 +1499,7 @@ retry:
 	return _reply_beans (args, err, NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_content_delete (struct req_args_s *args)
 {
 	GSList *beans = NULL;
@@ -1440,15 +1523,74 @@ _m2_content_get (struct req_args_s *args, gboolean body)
 	return _reply_simplified_beans (args, err, beans, body);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_content_check (struct req_args_s *args)
 {
 	return _m2_content_get (args, FALSE);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_m2_content_get (struct req_args_s *args)
 {
 	return _m2_content_get (args, TRUE);
 }
 
+enum http_rc_e
+action_content_put (struct req_args_s *args)
+{
+    return action_m2_content_put (args);
+}
+
+enum http_rc_e
+action_content_prepare (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_content_beans);
+}
+
+enum http_rc_e
+action_content_show (struct req_args_s *args)
+{
+    return action_m2_content_get (args);
+}
+
+enum http_rc_e
+action_content_delete (struct req_args_s *args)
+{
+    return action_m2_content_delete (args);
+}
+
+enum http_rc_e
+action_content_touch (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_content_touch);
+}
+
+enum http_rc_e
+action_content_spare (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_content_spare);
+}
+
+enum http_rc_e
+action_content_prop_get (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_content_propget);
+}
+
+enum http_rc_e
+action_content_prop_set (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_content_propset);
+}
+
+enum http_rc_e
+action_content_prop_del (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_content_propdel);
+}
+
+enum http_rc_e
+action_content_copy (struct req_args_s *args)
+{
+    return action_m2_content_copy (args);
+}

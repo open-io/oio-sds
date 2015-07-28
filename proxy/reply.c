@@ -17,7 +17,9 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-static GString *
+#include "common.h"
+
+GString *
 _create_status (gint code, const gchar * msg)
 {
 	GString *gstr = g_string_sized_new (256);
@@ -27,7 +29,7 @@ _create_status (gint code, const gchar * msg)
 	return gstr;
 }
 
-static GString *
+GString *
 _create_status_error (GError * e)
 {
 	GString *gstr;
@@ -40,7 +42,7 @@ _create_status_error (GError * e)
 	return gstr;
 }
 
-static enum http_rc_e
+enum http_rc_e
 _reply_json (struct req_args_s *args, int code, const gchar * msg,
 	GString * gstr)
 {
@@ -56,19 +58,19 @@ _reply_json (struct req_args_s *args, int code, const gchar * msg,
 	return HTTPRC_DONE;
 }
 
-static enum http_rc_e
+enum http_rc_e
 _reply_format_error (struct req_args_s *args, GError * err)
 {
 	return _reply_json (args, HTTP_CODE_BAD_REQUEST, "Bad request", _create_status_error (err));
 }
 
-static enum http_rc_e
+enum http_rc_e
 _reply_system_error (struct req_args_s *args, GError * err)
 {
 	return _reply_json (args, HTTP_CODE_INTERNAL_ERROR, "Internal error", _create_status_error (err));
 }
 
-static enum http_rc_e
+enum http_rc_e
 _reply_bad_gateway (struct req_args_s *args, GError * err)
 {
 	return _reply_json (args, HTTP_CODE_BAD_GATEWAY, "Bad Gateway", _create_status_error (err));
@@ -81,49 +83,49 @@ _reply_not_implemented (struct req_args_s *args)
 			_create_status_error (NEWERROR(CODE_NOT_IMPLEMENTED, "NYI")));
 }
 
-static enum http_rc_e
+enum http_rc_e
 _reply_notfound_error (struct req_args_s *args, GError * err)
 {
 	return _reply_json (args, HTTP_CODE_NOT_FOUND, "Not found", _create_status_error (err));
 }
 
-static enum http_rc_e
+enum http_rc_e
 _reply_forbidden_error (struct req_args_s *args, GError * err)
 {
 	return _reply_json (args, HTTP_CODE_FORBIDDEN, "Forbidden", _create_status_error (err));
 }
 
-static enum http_rc_e
+enum http_rc_e
 _reply_method_error (struct req_args_s *args)
 {
 	return _reply_json (args, HTTP_CODE_METHOD_NOT_ALLOWED, "Method not allowed", NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 _reply_conflict_error (struct req_args_s *args, GError * err)
 {
 	return _reply_json (args, HTTP_CODE_CONFLICT, "Conflict", _create_status_error (err));
 }
 
-static enum http_rc_e
+enum http_rc_e
 _reply_nocontent (struct req_args_s *args)
 {
 	return _reply_json (args, HTTP_CODE_NO_CONTENT, "No Content", NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 _reply_accepted (struct req_args_s *args)
 {
 	return _reply_json (args, HTTP_CODE_ACCEPTED, "Already Accepted", NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 _reply_created (struct req_args_s *args)
 {
 	return _reply_json (args, HTTP_CODE_CREATED, "Created", NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 _reply_success_json (struct req_args_s *args, GString * gstr)
 {
 	int code = gstr && gstr->len > 0 ? HTTP_CODE_OK : HTTP_CODE_NO_CONTENT;

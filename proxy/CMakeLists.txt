@@ -13,7 +13,19 @@ link_directories(
 		${GLIB2_LIBRARY_DIRS}
 		${JSONC_LIBRARY_DIRS})
 
-add_executable(metacd_http metacd_http.c path_parser.c transport_http.c)
+add_executable(metacd_http
+    metacd_http.c
+    common.c
+    cache_actions.c
+    cs_actions.c
+    lb_actions.c
+    dir_actions.c
+    m2_actions.c
+    sqlx_actions.c
+    reply.c
+    path_parser.c
+    transport_http.c)
+
 bin_prefix(metacd_http -proxy)
 
 target_link_libraries(metacd_http
