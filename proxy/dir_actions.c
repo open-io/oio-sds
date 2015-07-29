@@ -17,6 +17,9 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "common.h"
+#include "actions.h"
+
 static GString *
 _pack_m1url_list (GString *gstr, gchar ** urlv)
 {
@@ -94,7 +97,7 @@ _m1_action (struct req_args_s *args, gchar ** m1v,
 	return NEWERROR (CODE_UNAVAILABLE, "No meta1 answered");
 }
 
-static GError *
+GError *
 _m1_locate_and_action (struct req_args_s *args, GError * (*hook) ())
 {
 	gchar **m1v = NULL;
@@ -149,7 +152,7 @@ decode_json_string_array (gchar *** pkeys, struct json_object *j)
 
 //------------------------------------------------------------------------------
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_srv_list (struct req_args_s *args)
 {
 	const gchar *type = TYPE();
@@ -173,7 +176,7 @@ action_dir_srv_list (struct req_args_s *args)
 	return _reply_system_error (args, err);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_srv_unlink (struct req_args_s *args)
 {
 	const gchar *type = TYPE();
@@ -191,7 +194,7 @@ action_dir_srv_unlink (struct req_args_s *args)
 
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
-		 * and it will probably silently succeed  */
+         * and it will probably silently succeed  */
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
@@ -200,7 +203,7 @@ action_dir_srv_unlink (struct req_args_s *args)
 	return _reply_system_error (args, err);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
@@ -221,7 +224,7 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 	GError *err = _m1_locate_and_action (args, hook);
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
-		 * and it will probably silently succeed  */
+         * and it will probably silently succeed  */
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
@@ -235,7 +238,7 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, urlv));
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 {
 	const gchar *type = TYPE();
@@ -266,7 +269,7 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
-		 * and it will probably silently succeed  */
+         * and it will probably silently succeed  */
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
@@ -275,7 +278,7 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 	return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
@@ -297,7 +300,7 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
-		 * and it will probably silently succeed  */
+         * and it will probably silently succeed  */
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
@@ -307,7 +310,7 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, urlv));
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_srv_action (struct req_args_s *args)
 {
 	struct sub_action_s actions[] = {
@@ -321,7 +324,7 @@ action_dir_srv_action (struct req_args_s *args)
 
 //------------------------------------------------------------------------------
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_ref_list (struct req_args_s *args)
 {
 	if (!validate_namespace(NS()))
@@ -358,7 +361,7 @@ action_dir_ref_list (struct req_args_s *args)
 	return _reply_system_error (args, err);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_ref_has (struct req_args_s *args)
 {
 	if (!validate_namespace(NS()))
@@ -381,7 +384,7 @@ action_dir_ref_has (struct req_args_s *args)
 	return _reply_system_error (args, err);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_ref_create (struct req_args_s *args)
 {
 	GError *hook (const gchar * m1) {
@@ -400,7 +403,7 @@ action_dir_ref_create (struct req_args_s *args)
 	return _reply_system_error (args, err);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_ref_destroy (struct req_args_s *args)
 {
 	gboolean force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
@@ -416,7 +419,7 @@ action_dir_ref_destroy (struct req_args_s *args)
 	GError *err = _m1_locate_and_action (args, hook);
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
 		/* Also decache on timeout, a majority of request succeed,
-		 * and it will probably silently succeed  */
+         * and it will probably silently succeed  */
 		NSINFO_DO(if (srvtypes) {
 			for (gchar ** p = srvtypes; *p; ++p)
 				hc_decache_reference_service (resolver, args->url, *p);
@@ -432,7 +435,7 @@ action_dir_ref_destroy (struct req_args_s *args)
 
 //------------------------------------------------------------------------------
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_resolve (struct req_args_s *args)
 {
 	struct hc_url_s **urlv = NULL;
@@ -465,7 +468,7 @@ action_dir_resolve (struct req_args_s *args)
 
 //------------------------------------------------------------------------------
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)
 {
 	gchar **keys = NULL;
@@ -493,7 +496,7 @@ action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)
 	return _reply_system_error (args, err);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 {
 	GError *err = NULL;
@@ -536,7 +539,7 @@ action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 	return _reply_system_error (args, err);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_prop_del (struct req_args_s *args, struct json_object *jargs)
 {
 	gchar **keys = NULL;
@@ -562,7 +565,7 @@ action_dir_prop_del (struct req_args_s *args, struct json_object *jargs)
 	return _reply_system_error (args, err);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_dir_ref_action (struct req_args_s *args)
 {
 	struct sub_action_s actions[] = {
@@ -574,3 +577,62 @@ action_dir_ref_action (struct req_args_s *args)
 	return abstract_action ("directory references", args, actions);
 }
 
+enum http_rc_e
+action_ref_create (struct req_args_s *args)
+{
+    return action_dir_ref_create (args);
+}
+
+enum http_rc_e
+action_ref_show (struct req_args_s *args)
+{
+    return action_dir_ref_list (args);
+}
+
+enum http_rc_e
+action_ref_destroy (struct req_args_s *args)
+{
+    return action_dir_ref_destroy (args);
+}
+
+enum http_rc_e
+action_ref_link (struct req_args_s *args)
+{
+    return rest_action (args, action_dir_srv_link);
+}
+
+enum http_rc_e
+action_ref_unlink (struct req_args_s *args)
+{
+    return action_dir_srv_unlink (args);
+}
+
+enum http_rc_e
+action_ref_renew (struct req_args_s *args)
+{
+    return rest_action (args, action_dir_srv_renew);
+}
+
+enum http_rc_e
+action_ref_force (struct req_args_s *args)
+{
+    return rest_action (args, action_dir_srv_force);
+}
+
+enum http_rc_e
+action_ref_prop_get (struct req_args_s *args)
+{
+    return rest_action (args, action_dir_prop_get);
+}
+
+enum http_rc_e
+action_ref_prop_set (struct req_args_s *args)
+{
+    return rest_action (args, action_dir_prop_set);
+}
+
+enum http_rc_e
+action_ref_prop_del (struct req_args_s *args)
+{
+    return rest_action (args, action_dir_prop_del);
+}

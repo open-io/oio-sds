@@ -17,6 +17,9 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "common.h"
+#include "actions.h"
+
 static GError *
 _cs_check_tokens (struct req_args_s *args)
 {
@@ -27,129 +30,129 @@ _cs_check_tokens (struct req_args_s *args)
 	if (TYPE()) {
 		if (!validate_srvtype(TYPE()))
 			return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid srvtype");
-	}
-	return NULL;
+    }
+    return NULL;
 }
 
-static GString *
+    static GString *
 _cs_pack_and_free_srvinfo_list (GSList * svc)
 {
-	GString *gstr = g_string_new ("[");
-	for (GSList * l = svc; l; l = l->next) {
-		if (l != svc)
-			g_string_append_c (gstr, ',');
-		service_info_encode_json (gstr, l->data);
-	}
-	g_string_append (gstr, "]");
-	g_slist_free_full (svc, (GDestroyNotify) service_info_clean);
-	return gstr;
+    GString *gstr = g_string_new ("[");
+    for (GSList * l = svc; l; l = l->next) {
+        if (l != svc)
+            g_string_append_c (gstr, ',');
+        service_info_encode_json (gstr, l->data);
+    }
+    g_string_append (gstr, "]");
+    g_slist_free_full (svc, (GDestroyNotify) service_info_clean);
+    return gstr;
 }
 
 enum reg_op_e {
-	REGOP_PUSH,
-	REGOP_LOCK,
-	REGOP_UNLOCK,
+    REGOP_PUSH,
+    REGOP_LOCK,
+    REGOP_UNLOCK,
 };
 
-static enum http_rc_e
+    static enum http_rc_e
 _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *jsrv)
 {
-	GError *err;
+    GError *err;
 
-	if (!push_queue)
-		return _reply_bad_gateway(args, NEWERROR(CODE_INTERNAL_ERROR, "Service upstream disabled"));
+    if (!push_queue)
+        return _reply_bad_gateway(args, NEWERROR(CODE_INTERNAL_ERROR, "Service upstream disabled"));
 
-	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error (args, err);
+    if (NULL != (err = _cs_check_tokens(args)))
+        return _reply_notfound_error (args, err);
 
-	struct service_info_s *si = NULL;
-	err = service_info_load_json_object (jsrv, &si);
+    struct service_info_s *si = NULL;
+    err = service_info_load_json_object (jsrv, &si);
 
-	if (err) {
-		if (err->code == CODE_BAD_REQUEST)
-			return _reply_format_error (args, err);
-		else
-			return _reply_system_error (args, err);
-	}
+    if (err) {
+        if (err->code == CODE_BAD_REQUEST)
+            return _reply_format_error (args, err);
+        else
+            return _reply_system_error (args, err);
+    }
 
-	if (!validate_namespace (si->ns_name)) {
-		service_info_clean (si);
-		return _reply_system_error (args, NEWERROR (CODE_NAMESPACE_NOTMANAGED,
-				"Unexpected NS"));
-	}
+    if (!validate_namespace (si->ns_name)) {
+        service_info_clean (si);
+        return _reply_system_error (args, NEWERROR (CODE_NAMESPACE_NOTMANAGED,
+                    "Unexpected NS"));
+    }
 
-	si->score.timestamp = network_server_bogonow(args->rq->client->server);
+    si->score.timestamp = network_server_bogonow(args->rq->client->server);
 
-	if (op == REGOP_PUSH)
-		si->score.value = SCORE_UNSET;
-	else if (op == REGOP_UNLOCK)
-		si->score.value = SCORE_UNLOCK;
-	else /* if (op == REGOP_LOCK) */
-		si->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
+    if (op == REGOP_PUSH)
+        si->score.value = SCORE_UNSET;
+    else if (op == REGOP_UNLOCK)
+        si->score.value = SCORE_UNLOCK;
+    else /* if (op == REGOP_LOCK) */
+        si->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
 
-	gchar *key = service_info_key(si);
-	PUSH_DO(lru_tree_insert(push_queue, key, si));
-	GString *gstr = g_string_new ("");
-	service_info_encode_json (gstr, si);
-	return _reply_success_json (args, gstr);
+    gchar *key = service_info_key(si);
+    PUSH_DO(lru_tree_insert(push_queue, key, si));
+    GString *gstr = g_string_new ("");
+    service_info_encode_json (gstr, si);
+    return _reply_success_json (args, gstr);
 }
 
 //------------------------------------------------------------------------------
 
-static enum http_rc_e
+    enum http_rc_e
 action_cs_nscheck (struct req_args_s *args)
 {
-	GError *err;
-	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error (args, err);
+    GError *err;
+    if (NULL != (err = _cs_check_tokens(args)))
+        return _reply_notfound_error (args, err);
 
-	return _reply_success_json (args, NULL);
+    return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
+    enum http_rc_e
 action_cs_info (struct req_args_s *args)
 {
-	GError *err;
-	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error (args, err);
+    GError *err;
+    if (NULL != (err = _cs_check_tokens(args)))
+        return _reply_notfound_error (args, err);
 
-	struct namespace_info_s ni;
-	memset (&ni, 0, sizeof (ni));
-	NSINFO_DO(namespace_info_copy (&nsinfo, &ni, NULL));
+    struct namespace_info_s ni;
+    memset (&ni, 0, sizeof (ni));
+    NSINFO_DO(namespace_info_copy (&nsinfo, &ni, NULL));
 
-	GString *gstr = g_string_new ("");
-	namespace_info_encode_json (gstr, &ni);
-	namespace_info_clear (&ni);
-	return _reply_success_json (args, gstr);
+    GString *gstr = g_string_new ("");
+    namespace_info_encode_json (gstr, &ni);
+    namespace_info_clear (&ni);
+    return _reply_success_json (args, gstr);
 }
 
-static enum http_rc_e
+    enum http_rc_e
 action_cs_put (struct req_args_s *args)
 {
-	struct json_tokener *parser;
-	struct json_object *jbody;
-	enum http_rc_e rc;
+    struct json_tokener *parser;
+    struct json_object *jbody;
+    enum http_rc_e rc;
 
-	parser = json_tokener_new ();
-	jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
-		args->rq->body->len);
-	if (!json_object_is_type (jbody, json_type_object))
-		rc = _reply_format_error (args, BADREQ ("Invalid srv"));
-	else
-		rc = _registration (args, REGOP_PUSH, jbody);
-	json_object_put (jbody);
-	json_tokener_free (parser);
-	return rc;
+    parser = json_tokener_new ();
+    jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
+            args->rq->body->len);
+    if (!json_object_is_type (jbody, json_type_object))
+        rc = _reply_format_error (args, BADREQ ("Invalid srv"));
+    else
+        rc = _registration (args, REGOP_PUSH, jbody);
+    json_object_put (jbody);
+    json_tokener_free (parser);
+    return rc;
 }
 
-static enum http_rc_e
+    enum http_rc_e
 action_cs_get (struct req_args_s *args)
 {
-	GError *err;
-	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error(args, err);
+    GError *err;
+    if (NULL != (err = _cs_check_tokens(args)))
+        return _reply_notfound_error(args, err);
 
-	GSList *sl = list_namespace_services (NS(), TYPE(), &err);
+    GSList *sl = list_namespace_services (NS(), TYPE(), &err);
 	if (NULL != err) {
 		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
 		g_prefix_error (&err, "Agent error: ");
@@ -158,7 +161,7 @@ action_cs_get (struct req_args_s *args)
 	return _reply_success_json (args, _cs_pack_and_free_srvinfo_list (sl));
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_cs_srvcheck (struct req_args_s *args)
 {
 	GError *err;
@@ -168,7 +171,7 @@ action_cs_srvcheck (struct req_args_s *args)
 	return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_cs_del (struct req_args_s *args)
 {
 	GError *err;
@@ -182,19 +185,19 @@ action_cs_del (struct req_args_s *args)
 	return _reply_success_json (args, _create_status (CODE_FINAL_OK, "OK"));
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_cs_srv_lock (struct req_args_s *args, struct json_object *jargs)
 {
 	return _registration (args, REGOP_LOCK, jargs);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_cs_srv_unlock (struct req_args_s *args, struct json_object *jargs)
 {
 	return _registration (args, REGOP_UNLOCK, jargs);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_cs_action (struct req_args_s *args)
 {
 	struct sub_action_s actions[] = {
@@ -205,7 +208,7 @@ action_cs_action (struct req_args_s *args)
 	return abstract_action ("conscience", args, actions);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_cs_srvtypes (struct req_args_s *args)
 {
 	GError *err;

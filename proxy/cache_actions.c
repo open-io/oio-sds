@@ -17,49 +17,52 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-static enum http_rc_e
+#include "common.h"
+#include "actions.h"
+
+enum http_rc_e
 action_cache_flush_low (struct req_args_s *args)
 {
 	hc_resolver_flush_services (resolver);
 	return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_cache_flush_high (struct req_args_s *args)
 {
 	hc_resolver_flush_csm0 (resolver);
 	return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_cache_set_max_high (struct req_args_s *args)
 {
 	hc_resolver_set_max_csm0 (resolver, atoi (TOK ("COUNT")));
 	return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_cache_set_max_low (struct req_args_s *args)
 {
 	hc_resolver_set_max_services (resolver, atoi (TOK ("COUNT")));
 	return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_cache_set_ttl_high (struct req_args_s *args)
 {
 	hc_resolver_set_ttl_csm0 (resolver, atoi (TOK ("COUNT")));
 	return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_cache_set_ttl_low (struct req_args_s *args)
 {
 	hc_resolver_set_ttl_services (resolver, atoi (TOK ("COUNT")));
 	return _reply_success_json (args, NULL);
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_cache_status (struct req_args_s *args)
 {
 	struct hc_resolver_stats_s s;

@@ -17,6 +17,9 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include "common.h"
+#include "actions.h"
+
 static GError *
 _lb_check_tokens (struct req_args_s *args)
 {
@@ -103,7 +106,7 @@ _lb (struct req_args_s *args, struct grid_lb_iterator_s *iter)
 	}
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_lb_def (struct req_args_s *args)
 {
 	GError *err;
@@ -113,7 +116,7 @@ action_lb_def (struct req_args_s *args)
 	return _lb (args, grid_lbpool_ensure_iterator(lbpool, POOL()));
 }
 
-static enum http_rc_e
+enum http_rc_e
 action_lb_hash (struct req_args_s *args)
 {
 	GError *err;
