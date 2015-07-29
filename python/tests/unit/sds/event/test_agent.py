@@ -46,12 +46,12 @@ class TestEventWorker(unittest.TestCase):
              "id": "http://127.0.0.1:5000/AAAAAA",
              "hash": "00000000000000000000000000000000",
              "size": 1
-            },
+             },
             {"type": "chunks",
              "id": "http://127.0.0.1:5000/BBBBBB",
              "hash": "0000000000000000000000000000000",
              "size": 1
-            }
+             }
         ]}
         self.worker.session.delete = Mock()
         self.worker.handle_object_delete(event)

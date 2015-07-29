@@ -237,13 +237,13 @@ class TestAccountBackend(unittest.TestCase):
 
         for cont in xrange(125):
             name = '2-0051-%04d' % cont
-            backend.update_container(account_id, name, Timestamp(time()).normal,
-                                     0, 0, 0)
+            backend.update_container(
+                account_id, name, Timestamp(time()).normal, 0, 0, 0)
 
         for cont in xrange(125):
             name = '3-%04d-0049' % cont
-            backend.update_container(account_id, name, Timestamp(time()).normal,
-                                     0, 0, 0)
+            backend.update_container(
+                account_id, name, Timestamp(time()).normal, 0, 0, 0)
 
         listing = backend.list_containers(account_id, marker='',
                                           delimiter='', limit=100)
@@ -327,7 +327,8 @@ class TestAccountBackend(unittest.TestCase):
         name = '3-0049-'
         backend.update_container(account_id, name, Timestamp(time()).normal, 0,
                                  0, 0)
-        listing = backend.list_containers(account_id, marker='3-0048', limit=10)
+        listing = backend.list_containers(
+            account_id, marker='3-0048', limit=10)
         self.assertEqual(len(listing), 10)
         self.assertEqual([c[0] for c in listing],
                          ['3-0048-0049', '3-0049', '3-0049-', '3-0049-0049',

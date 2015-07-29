@@ -54,4 +54,3 @@ class TestAccountServer(unittest.TestCase):
         resp = self.app.get('/v1.0/account/show',
                             query_string={"id": self.account_id})
         self.assertEqual(resp.status_code, 200)
-

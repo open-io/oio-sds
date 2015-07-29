@@ -84,6 +84,3 @@ class ConscienceClient(object):
             return resp.json()[0]
         else:
             raise Exception('Error while getting next instance')
-
-
-
