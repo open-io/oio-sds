@@ -21,7 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define G_LOG_DOMAIN "m2v2"
 #endif
 
-#include <json.h>
+#include <json-c/json.h>
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metautils_errors.h>
