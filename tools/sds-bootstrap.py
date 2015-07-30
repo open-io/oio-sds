@@ -561,7 +561,8 @@ def generate (ns, ip, options={}):
         with open(CFGDIR + '/' + 'test.conf', 'w+') as f:
                 listing["namespace"] = ns
                 listing["account"] = 'test_account'
-                listing["proxyd_uri"] = "http://" + str(ip) + ":6002"
+                listing["account_addr"] = [str(ip) + ":" + str(port_account)]
+                listing["proxyd_uri"] = "http://" + str(ip) + ":" + str(port_proxy)
                 listing["meta0"] = [str(ip) + ':' + str(m[3]) for m in services
                                     if
                                     m[0] == 'meta0']
