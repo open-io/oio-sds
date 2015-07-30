@@ -21,7 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define OIO_SDS__meta2v2__meta2_utils_json_h 1
 
 #include <glib.h>
-#include <json/json.h>
+#include <json-c/json.h>
 
 GError* m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean);
 GError* m2v2_json_load_single_header (struct json_object *j, gpointer *pbean);

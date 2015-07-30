@@ -28,7 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdarg.h>
 
 #include <glib.h>
-#include <json/json.h>
+#include <json-c/json.h>
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
