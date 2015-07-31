@@ -17,6 +17,10 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#ifndef G_LOG_DOMAIN
+#define G_LOG_DOMAIN "proxy"
+#endif
+
 #include <meta2v2/meta2_utils_json.h>
 #include <meta2v2/autogen.h>
 
