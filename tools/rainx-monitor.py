@@ -50,7 +50,7 @@ def parse_info(stream):
 
 def get_stat_lines(url, stat_keys):
 	try:
-		stream = urllib2.urlopen(url)
+		stream = urllib2.urlopen(url, timeout=5)
 		data = parse_info(stream)
 		stream.close()
 		stats = [("stat.%s = %s" % (k[1], str(data[k[0]])))
