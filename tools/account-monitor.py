@@ -31,7 +31,7 @@ def main(args):
     ip_port = str(args[1]).split("|")[2]
     url = "http://%s/status" % ip_port
     try:
-        resp = requests.get(url)
+        resp = requests.get(url, timeout=5)
         stats = resp.json()
         for key, stat in ACCOUNT_STAT_KEYS:
             if key in stats:

@@ -36,7 +36,7 @@ else:
 
 body = None
 try:
-	cnx = httplib.HTTPConnection(svc)
+	cnx = httplib.HTTPConnection(svc, timeout=5)
 	cnx.request("GET", "/status")
 	resp = cnx.getresponse()
 	status, reason, body = resp.status, resp.reason, resp.read()
