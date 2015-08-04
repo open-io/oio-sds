@@ -275,9 +275,9 @@ inherit_env=1
 env.PATH=${PATH}:${HOME}/.local/bin:${CODEDIR}/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 
-limit.core_size=-1
-limit.max_files=2048
-limit.stack_size=256
+#limit.core_size=-1
+#limit.max_files=2048
+#limit.stack_size=256
 
 #include=${CFGDIR}/*-gridinit.conf
 
