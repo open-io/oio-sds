@@ -108,16 +108,14 @@ def account_list_containers():
 @account_api.route('/v1.0/account/container/update', methods=['POST'])
 def container_update():
     account_id = request.args.get('id')
-    if account_id:
-        d = flask.request.get_json(force=True)
-        name = d.get('name')
-        mtime = d.get('mtime')
-        dtime = d.get('dtime')
-        object_count = d.get('objects')
-        bytes_used = d.get('bytes')
-        result = get_backend().update_container(
-            account_id, name, mtime, dtime, object_count, bytes_used
-        )
+    d = flask.request.get_json(force=True)
+    name = d.get('name')
+    mtime = d.get('mtime')
+    dtime = d.get('dtime')
+    object_count = d.get('objects')
+    bytes_used = d.get('bytes')
+    result = get_backend().update_container(
+        account_id, name, mtime, dtime, object_count, bytes_used)
     return result
 
 
