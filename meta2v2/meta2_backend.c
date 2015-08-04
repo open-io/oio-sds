@@ -73,6 +73,26 @@ enum m2v2_open_type_e
 	if ((vns))\
 		g_strlcpy(nsinfo.name, (vns), LIMIT_LENGTH_NSNAME);
 
+static void
+_append_url (GString *gs, struct hc_url_s *url)
+{
+	void _append (const char *n, const char *v) {
+		if (v)
+			g_string_append_printf (gs, "\"%s\":\"%s\"", n, v);
+		else
+			g_string_append_printf (gs, "\"%s\":null", n);
+	}
+	_append ("ns", hc_url_get(url, HCURL_NS));
+	g_string_append_c (gs, ',');
+	_append ("account", hc_url_get(url, HCURL_ACCOUNT));
+	g_string_append_c (gs, ',');
+	_append ("user", hc_url_get(url, HCURL_USER));
+	g_string_append_c (gs, ',');
+	_append ("type", hc_url_get(url, HCURL_TYPE));
+	g_string_append_c (gs, ',');
+	_append ("id", hc_url_get(url, HCURL_HEXID));
+}
+
 static gint64
 m2b_quota(struct meta2_backend_s *m2b, const gchar *vns)
 {
@@ -534,6 +554,16 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 				m2b_destroy(sq3);
 				return err;
 			}
+			if (!params->local && sq3->election == ELECTION_LEADER && m2->notify.hook) {
+				GString *gs = g_string_new ("{");
+				g_string_append (gs, "\"event\":\""NAME_SRVTYPE_META2".container.create\"");
+				g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, g_get_real_time());
+				g_string_append (gs, ",\"data\":{");
+				g_string_append (gs, "\"url\":{");
+				_append_url (gs, url);
+				g_string_append (gs, "}}}");
+				m2->notify.hook (m2->notify.udata, g_string_free (gs, FALSE));
+			}
 		}
 		m2b_close(sq3);
 	}
@@ -568,32 +598,26 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		EXTRA_ASSERT(sq3 != NULL);
 
 		// Performs checks only if client did not ask for a local destroy
-		if (!local)
+		if (!local) { do {
 			err = m2db_list_aliases(sq3, &lp, NULL, counter_cb, NULL);
+			if (err)
+				break;
 
-		/* XXX JKA : ce bloc est-il sur ? */
-		if (err) {
-			m2b_close(sq3);
-			return err;
-		}
-
-		if (counter > 0 && !(flags & (M2V2_DESTROY_FORCE|M2V2_DESTROY_FLUSH))) {
-			m2b_close(sq3);
-			return NEWERROR(CODE_CONTAINER_NOTEMPTY,
-					"%d elements still in container", counter);
-		}
-
-		if (counter > 0 && flags & M2V2_DESTROY_FLUSH) {
-			err = m2db_flush_container(sq3->db);
-			if (err != NULL) {
-				GRID_WARN("Error flushing container: %s", err->message);
-				g_clear_error(&err);
+			if (counter > 0 && !(flags & (M2V2_DESTROY_FORCE|M2V2_DESTROY_FLUSH))) {
+				err = NEWERROR(CODE_CONTAINER_NOTEMPTY,
+						"%d elements still in container", counter);
+				break;
 			}
-		}
 
-		if (!local) {
+			if (counter > 0 && flags & M2V2_DESTROY_FLUSH) {
+				err = m2db_flush_container(sq3->db);
+				if (err != NULL) {
+					GRID_WARN("Error flushing container: %s", err->message);
+					g_clear_error(&err);
+				}
+			}
+
 			gchar **peers = NULL;
-
 			struct sqlx_name_mutable_s n;
 			sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
 			err = sqlx_config_get_peers(election_manager_get_config(
@@ -607,18 +631,25 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 			if (peers)
 				g_strfreev(peers);
 			peers = NULL;
-		}
+		} while (0); }
 
+		hc_decache_reference_service(m2->resolver, url, NAME_SRVTYPE_META2);
 		if (!err) {
+			GString *gs = g_string_new ("{");
+			g_string_append (gs, "\"event\":\"" NAME_SRVTYPE_META2 ".container.destroy\"");
+			g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, g_get_real_time());
+			g_string_append (gs, ",\"data\":{");
+			g_string_append (gs, "\"url\":{");
+			_append_url (gs, url);
+			g_string_append (gs, "}}}");
 			m2b_destroy(sq3);
+			if (!local && sq3->election == ELECTION_LEADER && m2->notify.hook)
+				m2->notify.hook (m2->notify.udata, g_string_free (gs, FALSE));
+			else
+				g_string_free (gs, TRUE);
 		} else {
 			m2b_close(sq3);
 		}
-
-		// There is a get_peers() call in close callback that puts back
-		// the reference in the cache. But it MUST NOT stay in it if
-		// we want to recreate the container on another meta2.
-		hc_decache_reference_service(m2->resolver, url, NAME_SRVTYPE_META2);
 	}
 
 	return err;
