@@ -73,7 +73,7 @@ In addition to common cmake options, these specific options are also available:
 | STACK\_PROTECTOR | Trigger stack protection code. Only active when CMAKE\_BUILD\_TYPE is set to "Debug" or "RelWithDebInfo" |
 | GRIDD\_PLUGINS | Installation directory for gridd plugins. |
 | APACHE2\_MODDIR | Installation directory for apache2 modules. |
-| ALLOW\_DEPRECATED | define it to hide warnings for deprecated symbols from the GLib2. |
+| FORBID\_DEPRECATED | define it to turn into errors the warnings for deprecated symbols from the GLib2. |
 | EXE\_PREFIX | Defines a prefix to all CLI tool. By default, set to "sds". |
 | MOCKS | Activate mocks to wrap syscalls. |
 | SOCKET\_OPTIMIZED | define if to use socket3 and accept4 syscalls |
