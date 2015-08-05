@@ -103,6 +103,10 @@ struct sqlx_service_s
 		guint16     procid;
 		guint       counter;
 		GPtrArray   *pending_events;
+		// how many events are received each time the queue becomes active.
+		// A low value helps preventing starvation but leads to more contexts
+		// switches.
+		guint16     max_recv_per_round;
 	} notify;
 
 	// The tasks under this queue always follow a reload of the
