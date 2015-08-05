@@ -333,8 +333,8 @@ _client_manage_reply_data(struct gridd_client_s *c)
 	MESSAGE r = message_unmarshall(c->reply->data, c->reply->len, &err);
 	if (!r)
 		g_prefix_error(&err, "Decoding: ");
-	else if (NULL != (err = _client_manage_reply(c, r)))
-		g_prefix_error(&err, "Handling: ");
+	else
+		err = _client_manage_reply(c, r);
 	metautils_message_destroy(r);
 	return err;
 }
