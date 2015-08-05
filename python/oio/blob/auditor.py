@@ -63,7 +63,7 @@ class BlobAuditorWorker(object):
 
         for path in paths:
             loop_time = time.time()
-            self.chunk_audit(path)
+            self.safe_chunk_audit(path)
             self.chunks_run_time = ratelimit(
                 self.chunks_run_time,
                 self.max_chunks_per_second
