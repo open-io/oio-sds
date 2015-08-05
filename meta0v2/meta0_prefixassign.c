@@ -430,7 +430,7 @@ _assign(GList *working_m1list,GSList *unref_m1list)
 				if ( ! d_aM1 ) {
 					d_aM1 =_select_dest_assign_m1(working_m1list,s_aM1,NULL,TRUE,TRUE);
 					if ( ! d_aM1 ) {
-						error = NEWERROR(0, "Failed to assign prefix from meta1 %s",s_aM1->addr);
+						error = NEWERROR(0, "Failed to assign prefix from meta1 %s : Not enough META1 to meet the requirements (distance, number)",s_aM1->addr);
 						return error;
 					}
 				}
@@ -797,7 +797,7 @@ meta0_assign_fill(struct meta0_backend_s *m0, gchar *ns_name, guint replicas,
 			working_m1list=g_list_sort(working_m1list,meta0_assign_sort_by_score);
 			d_aM1 =_select_dest_assign_m1(working_m1list,NULL,(guint8*)(&idx),TRUE, nodist);
 			if ( ! d_aM1 ) {
-				error = NEWERROR(0, "Failed to assign prefix %d to meta1",idx);
+				error = NEWERROR(0, "Not enough META1 to meet the requirements (distance, number) (happened at prefix %u)", idx);
 				goto errorLabel;
 			}
 
