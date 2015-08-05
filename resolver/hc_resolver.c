@@ -175,6 +175,8 @@ static void
 hc_resolver_store(struct hc_resolver_s *r, struct lru_tree_s *lru,
 		const struct hashstr_s *key, gchar **v)
 {
+	if (!v || !*v)
+		return;
 	if (r->flags & HC_RESOLVER_NOCACHE)
 		return;
 

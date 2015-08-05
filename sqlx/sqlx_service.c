@@ -198,12 +198,13 @@ _configure_limits(struct sqlx_service_s *ss)
 static gboolean
 _init_configless_structures(struct sqlx_service_s *ss)
 {
+	ss->notify.max_recv_per_round = 32;
 	ss->notify.procid = getpid();
 	ss->notify.counter = 0;
 
 	if (!(ss->prng = g_rand_new())
 			|| !(ss->notify.zctx = zmq_init(1))
-			|| !(ss->notify.pending_events = g_ptr_array_sized_new(64))
+			|| !(ss->notify.pending_events = g_ptr_array_sized_new(32))
 			|| !(ss->server = network_server_init())
 			|| !(ss->dispatcher = transport_gridd_build_empty_dispatcher())
 			|| !(ss->si = g_malloc0(sizeof(struct service_info_s)))
@@ -877,18 +878,14 @@ sqlx_enable_notifier (struct sqlx_service_s *ss)
 		zmq_bind (ss->notify.zpush, "inproc://events");
 		opt = 1000;
 		zmq_setsockopt (ss->notify.zpush, ZMQ_LINGER, &opt, sizeof(opt));
-		opt = 64 * 1024;
-		zmq_setsockopt (ss->notify.zpush, ZMQ_SNDBUF, &opt, sizeof(opt));
-		opt = 2;
+		opt = 16;
 		zmq_setsockopt (SRV.notify.zpull, ZMQ_SNDHWM, &opt, sizeof(opt));
 	}
 
 	if (!ss->notify.zpull) {
 		ss->notify.zpull = zmq_socket(ss->notify.zctx, ZMQ_PULL);
 		zmq_connect (SRV.notify.zpull, "inproc://events");
-		opt = 64 * 1024;
-		zmq_setsockopt (SRV.notify.zpull, ZMQ_RCVBUF, &opt, sizeof(opt));
-		opt = 2;
+		opt = 16;
 		zmq_setsockopt (SRV.notify.zpull, ZMQ_RCVHWM, &opt, sizeof(opt));
 	}
 
@@ -911,28 +908,40 @@ struct event_s
 	guint8 message[];
 };
 
-static void
+static gboolean
 _send_event (struct sqlx_service_s *ss, struct event_s *evt)
 {
-	zmq_send (ss->notify.zagent, "", 0, ZMQ_SNDMORE|ZMQ_MORE|ZMQ_DONTWAIT);
-	zmq_send (ss->notify.zagent, evt, HEADER_SIZE, ZMQ_MORE|ZMQ_SNDMORE|ZMQ_DONTWAIT);
-	int rc = zmq_send (ss->notify.zagent, evt->message, evt->size, ZMQ_DONTWAIT);
+	int rc;
+	gchar tmp[1+ 2*HEADER_SIZE];
+
 	evt->last_sent = network_server_bogonow (ss->server);
+	buffer2str(evt, HEADER_SIZE, tmp, sizeof(tmp));
+
+retry:
+	rc = zmq_send (ss->notify.zagent, "", 0, ZMQ_SNDMORE|ZMQ_MORE|ZMQ_DONTWAIT);
+	if (rc == 0) {
+		rc = zmq_send (ss->notify.zagent, evt, HEADER_SIZE, ZMQ_MORE|ZMQ_SNDMORE|ZMQ_DONTWAIT);
+		if (rc == HEADER_SIZE)
+			rc = zmq_send (ss->notify.zagent, evt->message, evt->size, ZMQ_DONTWAIT);
+	}
+
 	if (rc < 0) {
 		int err = zmq_errno ();
-		if (err != EINTR && err != ETERM && err != EAGAIN) {
-			gchar tmp[1+ 2*HEADER_SIZE];
-			buffer2str(evt, HEADER_SIZE, tmp, sizeof(tmp));
-			GRID_WARN("Event error %s : (%d) %s", tmp, err, zmq_strerror(err));
-		}
+		if (err == EINTR)
+			goto retry;
+		GRID_WARN("EVT:ERR %s (%d) %s", tmp, err, zmq_strerror(err));
+		return FALSE;
+	} else {
+		GRID_INFO("EVT:SNT %s", tmp);
+		return TRUE;
 	}
 }
 
-static void
+static gboolean
 _manage_event (struct sqlx_service_s *ss, zmq_msg_t *msg)
 {
 	if (!ss->notify.zagent)
-		return;
+		return TRUE;
 
 	struct event_s *evt = g_malloc (sizeof(struct event_s) + zmq_msg_size(msg));
 	memcpy (evt->message, zmq_msg_data(msg), zmq_msg_size(msg));
@@ -942,13 +951,16 @@ _manage_event (struct sqlx_service_s *ss, zmq_msg_t *msg)
 	evt->size = zmq_msg_size (msg);
 	evt->last_sent = network_server_bogonow (ss->server);
 	evt->recv_time = evt->last_sent;
+
 	g_ptr_array_add (ss->notify.pending_events, evt);
 
-	gchar tmp[1+ 2*HEADER_SIZE];
-	buffer2str(evt, HEADER_SIZE, tmp, sizeof(tmp));
-	GRID_INFO("EVT:DEF %s %.*s", tmp, evt->size, evt->message);
+	if (GRID_INFO_ENABLED()) {
+		gchar tmp[1+ 2*HEADER_SIZE];
+		buffer2str(evt, HEADER_SIZE, tmp, sizeof(tmp));
+		GRID_INFO("EVT:DEF %s (%u) %.*s", tmp, ss->notify.pending_events->len, evt->size, evt->message);
+	}
 
-	_send_event (ss, evt);
+	return _send_event (ss, evt);
 }
 
 static void
@@ -977,8 +989,10 @@ _retry_events (struct sqlx_service_s *ss)
 	const time_t now = network_server_bogonow (ss->server);
 	for (guint i=0; i<ss->notify.pending_events->len ;i++) {
 		struct event_s *evt = g_ptr_array_index (ss->notify.pending_events, i);
-		if (evt->last_sent < now-9)
-			_send_event (ss, evt);
+		if (evt->last_sent < now-29) {
+			if (!_send_event (ss, evt))
+				break;
+		}
 	}
 }
 
@@ -999,16 +1013,16 @@ _receive_acks (struct sqlx_service_s *ss)
 static gboolean
 _receive_events (struct sqlx_service_s *ss)
 {
-	int rc, ended = 0;
+	int i=0, rc, ended = 0;
 	do {
 		zmq_msg_t msg;
 		zmq_msg_init (&msg);
 		rc = zmq_msg_recv (&msg, ss->notify.zpull, ZMQ_DONTWAIT);
 		ended = (rc == 0); // empty frame is an EOF
-		if (rc > 0)
-			_manage_event (ss, &msg);
+		if (rc > 0 && !_manage_event (ss, &msg))
+			rc = 0; // make it break
 		zmq_msg_close (&msg);
-	} while (rc > 0);
+	} while (rc > 0 && i++ < ss->notify.max_recv_per_round);
 	return !ended;
 }
 
@@ -1022,7 +1036,7 @@ _worker_notify_zmq2agent (gpointer p)
 	};
 
 	for (gboolean run = TRUE; run ;) {
-		int rc = zmq_poll (pi, 2, 1000000);
+		int rc = zmq_poll (pi, 2, 1000);
 		if (rc < 0) {
 			int err = zmq_errno();
 			if (err != ETERM && err != EINTR)
@@ -1041,6 +1055,28 @@ _worker_notify_zmq2agent (gpointer p)
 	return p;
 }
 
+static gboolean
+_forward_event (struct sqlx_service_s *ss, gchar *encoded)
+{
+	gboolean rc = TRUE;
+	size_t len = strlen(encoded);
+	if (ss->notify.zpush) {
+retry:
+		if (0 > zmq_send (ss->notify.zpush, encoded, len, 0)) {
+			int err = zmq_errno();
+			if (err == EINTR)
+				goto retry;
+			if (err == ETERM)
+				rc = FALSE;
+			GRID_WARN("EVT:ERR - %s %s", encoded, zmq_strerror(err));
+		}
+	} else {
+		GRID_INFO("EVT:END - %s", encoded);
+	}
+	g_free (encoded);
+	return rc;
+}
+
 static gpointer
 _worker_notify_gq2zmq (gpointer p)
 {
@@ -1048,16 +1084,12 @@ _worker_notify_gq2zmq (gpointer p)
 	gchar *tmp;
 	while (grid_main_is_running()) {
 		tmp = (gchar*) g_async_queue_timeout_pop (ss->notify.queue, 1000000L);
-		if (!tmp)
-			continue;
-		if (ss->notify.zpush)
-			zmq_send (ss->notify.zpush, tmp, strlen(tmp), 0);
-		g_free (tmp);
+		if (tmp && !_forward_event (ss, tmp))
+			break;
 	}
 	while (NULL != (tmp = g_async_queue_try_pop (ss->notify.queue))) {
-		if (ss->notify.zpush)
-			zmq_send (ss->notify.zpush, tmp, strlen(tmp), 0);
-		g_free (tmp);
+		if (!_forward_event (ss, tmp))
+			break;
 	}
 
 	// Empty frame is an EOF

@@ -47,7 +47,7 @@ Destined for the **POST** method, the following actions are currently available:
   * **GetProperties** : Returns a set of properties. The argument is expected to be an array of strings (the names of the properties) or the 'null' JSON object (considered as an empty array). An empty array will cause all the properties to be returned.
     * Request body: ``{ "action":"GetProperties", "args":["key1","key2"]}``
   * **DeleteProperties** : Delete a set of properties. The argument is expected to ba an array of strings (the names of the properties).
-    * Request body: ``{ "action":"DelProperties", "args":["key1","key2"]}``
+    * Request body: ``{ "action":"DeleteProperties", "args":["key1","key2"]}``
   * **SetProperties** : sets several properties. The argument is expected to be a JSON object mapping keys (strings) to their value (string).
     * Request body: ``{ "action":"SetProperties", "args":{"key1":"value1","key2":"value2"}}``
 

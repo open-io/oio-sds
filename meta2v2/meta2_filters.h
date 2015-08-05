@@ -273,14 +273,6 @@ int meta2_filter_action_delete_beans(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_action_update_beans(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-/* -------------------- Events --------------------*/
-
-int meta2_filter_action_notify_container_CREATE(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_notify_container_DESTROY(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply);
-
 /* ---------------------- URL ---------------------*/
 
 /*! Update a container or a content storage policy */

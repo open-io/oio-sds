@@ -98,7 +98,6 @@ static gridd_filter M2V2_CREATE_FILTERS[] =
 	meta2_filter_extract_header_localflag,
 	meta2_filter_action_create_container,
 	meta2_filter_success_reply,
-	meta2_filter_action_notify_container_CREATE,
 	NULL
 };
 
@@ -117,7 +116,6 @@ static gridd_filter M2V2_DESTROY_FILTERS[] =
 	meta2_filter_check_ns_not_wormed,
 	meta2_filter_action_delete_container,
 	meta2_filter_success_reply,
-	meta2_filter_action_notify_container_DESTROY,
 	NULL
 };
 

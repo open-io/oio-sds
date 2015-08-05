@@ -31,16 +31,6 @@ License along with this library.
  * @{
  */
 
-/**
- *
- */
-enum election_status_e
-{
-	ELECTION_LOST = 1,   /**<  */
-	ELECTION_LEADER = 2, /**<  */
-	ELECTION_FAILED = 4  /**<  */
-};
-
 struct election_counts_s
 {
 	guint total;

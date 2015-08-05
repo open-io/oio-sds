@@ -952,6 +952,7 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		struct sqlx_sqlite3_s **result, gchar **pmaster)
 {
 	GError *err = NULL;
+	enum election_status_e status = 0;
 
 	gboolean election_configured = election_manager_configured(
 			args->repo->election_manager);
@@ -972,8 +973,8 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		GRID_TRACE("No status (%d) expected on [%s][%s] (peers found: %s)",
 				expected, args->name.base, args->name.type,
 				args->is_replicated ? "true" : "false");
+		status = ELECTION_LEADER;
 	} else {
-		enum election_status_e status;
 		gchar *url = NULL;
 
 		status = election_get_status(args->repo->election_manager, &args->name, &url);
@@ -1003,11 +1004,12 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		g_free0(url);
 	}
 
-	if (!err) {
+	if (!err)
 		err = args->repo->cache
 			? __open_maybe_cached(args, result)
 			: __open_not_cached(args, result);
-	}
+	if (!err)
+		(*result)->election = status;
 
 	return err;
 }
@@ -1022,6 +1024,8 @@ sqlx_repository_unlock_and_close2(struct sqlx_sqlite3_s *sq3, guint32 flags)
 
 	GRID_TRACE2("Closing bd=%d [%s][%s]", sq3->bd,
 			sq3->name.base, sq3->name.type);
+
+	sq3->election = 0;
 
 	if (!sq3->repo->flag_delete_on)
 		sq3->deleted = FALSE;

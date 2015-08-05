@@ -60,19 +60,31 @@ typedef void (*sqlx_repo_change_hook)(struct sqlx_sqlite3_s *sq3,
 typedef void (*sqlx_file_locator_f) (gpointer locator_data,
 		struct sqlx_name_s *n, GString *file_name);
 
-/**  */
-struct sqlx_sqlite3_s
+enum sqlx_open_type_e
 {
-	struct sqlx_repository_s *repo;
-	const struct replication_config_s *config;
-	struct sqlx_name_mutable_s name;
-	sqlite3 *db;
-	gchar *path;
+	SQLX_OPEN_LOCAL       = 0x00,
+	SQLX_OPEN_MASTERONLY  = 0x01,
+	SQLX_OPEN_SLAVEONLY   = 0x02,
+	SQLX_OPEN_MASTERSLAVE = 0x03,
+#define SQLX_OPEN_REPLIMODE 0x0F
 
-	GTree *admin; // <gchar*,GByteArray*>
-	gint bd; // ID in cache
-	gboolean deleted : 8;
-	gboolean no_peers : 8; // Prevent get_peers()
+	SQLX_OPEN_CREATE      = 0x10,
+	SQLX_OPEN_NOREFCHECK  = 0x20,
+#define SQLX_OPEN_FLAGS     0x0F0
+
+	// Set an OR'ed combination of the following flags to require
+	// a check on the container's status during the open phase.
+	// No flag set means no check.
+	SQLX_OPEN_ENABLED     = 0x100,
+	SQLX_OPEN_FROZEN      = 0x200,
+	SQLX_OPEN_DISABLED    = 0x400,
+#define SQLX_OPEN_STATUS    0xF00
+};
+
+enum sqlx_close_flag_e
+{
+	/** Close the base immediately, don't keep it in the cache */
+	SQLX_CLOSE_IMMEDIATELY = 0x01,
 };
 
 enum sqlx_repo_flag_e
@@ -89,6 +101,28 @@ enum sqlx_sync_mode_e
 	SQLX_SYNC_OFF=0,
 	SQLX_SYNC_NORMAL=1,
 	SQLX_SYNC_FULL=2
+};
+
+enum election_status_e
+{
+	ELECTION_LOST = 1,
+	ELECTION_LEADER = 2,
+	ELECTION_FAILED = 4
+};
+
+struct sqlx_sqlite3_s
+{
+	struct sqlx_repository_s *repo;
+	const struct replication_config_s *config;
+	struct sqlx_name_mutable_s name;
+	sqlite3 *db;
+	gchar *path;
+
+	GTree *admin; // <gchar*,GByteArray*>
+	gint bd; // ID in cache
+	enum election_status_e election; // set at open(), reset at close()
+	gboolean deleted : 8;
+	gboolean no_peers : 8; // Prevent get_peers()
 };
 
 struct sqlx_repo_config_s
@@ -197,33 +231,6 @@ void sqlx_repository_configure_change_callback(sqlx_repository_t *repo,
 void sqlx_repository_call_change_callback(struct sqlx_sqlite3_s *sq3);
 
 /* Bases operations -------------------------------------------------------- */
-
-enum sqlx_open_type_e
-{
-	SQLX_OPEN_LOCAL       = 0x00,
-	SQLX_OPEN_MASTERONLY  = 0x01,
-	SQLX_OPEN_SLAVEONLY   = 0x02,
-	SQLX_OPEN_MASTERSLAVE = 0x03,
-#define SQLX_OPEN_REPLIMODE 0x0F
-
-	SQLX_OPEN_CREATE      = 0x10,
-	SQLX_OPEN_NOREFCHECK  = 0x20,
-#define SQLX_OPEN_FLAGS     0x0F0
-
-	// Set an OR'ed combination of the following flags to require
-	// a check on the container's status during the open phase.
-	// No flag set means no check.
-	SQLX_OPEN_ENABLED     = 0x100,
-	SQLX_OPEN_FROZEN      = 0x200,
-	SQLX_OPEN_DISABLED    = 0x400,
-#define SQLX_OPEN_STATUS    0xF00
-};
-
-enum sqlx_close_flag_e
-{
-	/** Close the base immediately, don't keep it in the cache */
-	SQLX_CLOSE_IMMEDIATELY = 0x01,
-};
 
 /**  */
 GError* sqlx_repository_open_and_lock(sqlx_repository_t *repo,
