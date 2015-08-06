@@ -10,7 +10,7 @@ class TestEventWorker(unittest.TestCase):
     def setUp(self):
         context = Mock()
         with patch('oio.sds.event.agent.ConscienceClient', new=Mock()):
-            self.worker = EventWorker(None, context)
+            self.worker = EventWorker({}, context)
 
     def test_process_event(self):
         self.worker.handle_container_destroy = Mock()
@@ -49,6 +49,11 @@ class TestEventWorker(unittest.TestCase):
              },
             {"type": "chunks",
              "id": "http://127.0.0.1:5000/BBBBBB",
+             "hash": "0000000000000000000000000000000",
+             "size": 1
+             },
+            {"type": "chunks",
+             "id": "http://127.0.0.1:5000/CCCCCC",
              "hash": "0000000000000000000000000000000",
              "size": 1
              }
