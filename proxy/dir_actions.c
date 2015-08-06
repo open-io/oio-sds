@@ -204,6 +204,8 @@ action_dir_srv_unlink (struct req_args_s *args)
 
 	if (!err)
 		return _reply_success_json (args, NULL);
+	if (CODE_IS_NOTFOUND(err->code))
+		return _reply_notfound_error (args, err);
 	return _reply_system_error (args, err);
 }
 
@@ -277,8 +279,11 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
-	if (err)
+	if (err) {
+		if (CODE_IS_NOTFOUND(err->code))
+			return _reply_notfound_error (args, err);
 		return _reply_system_error (args, err);
+	}
 	return _reply_success_json (args, NULL);
 }
 
@@ -308,8 +313,11 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
-	if (err)
+	if (err) {
+		if (CODE_IS_NOTFOUND(err->code))
+				return _reply_notfound_error (args, err);
 		return _reply_system_error (args, err);
+	}
 	EXTRA_ASSERT (urlv != NULL);
 	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, urlv));
 }
@@ -497,6 +505,8 @@ action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)
 	}
 	if (!err)
 		return _reply_success_json (args, _pack_and_freev_pairs (pairs));
+	if (CODE_IS_NOTFOUND(err->code))
+		return _reply_notfound_error (args, err);
 	return _reply_system_error (args, err);
 }
 
@@ -540,6 +550,8 @@ action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 	}
 	if (!err)
 		return _reply_success_json (args, NULL);
+	if (CODE_IS_NOTFOUND(err->code))
+		return _reply_notfound_error (args, err);
 	return _reply_system_error (args, err);
 }
 
@@ -566,6 +578,8 @@ action_dir_prop_del (struct req_args_s *args, struct json_object *jargs)
 	}
 	if (!err)
 		return _reply_success_json (args, NULL);
+	if (CODE_IS_NOTFOUND(err->code))
+		return _reply_notfound_error (args, err);
 	return _reply_system_error (args, err);
 }
 

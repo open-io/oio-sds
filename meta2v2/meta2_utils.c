@@ -351,7 +351,7 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *u,
 			err = NEWERROR(CODE_CONTENT_NOTFOUND, "Alias deleted");
 		}
 	}
-	
+
 	/* recurse on headers if allowed */
 	if (!err && cb && ((flags & M2V2_FLAG_HEADERS) || !(flags & M2V2_FLAG_NORECURSION))) {
 		for (guint i=0; !err && i<tmp->len ;i++) {
@@ -481,7 +481,7 @@ _list_params_to_sql_clause(struct list_params_s *lp, GString *clause,
 	}
 
 	if (headers) {
-		lazy_and();	
+		lazy_and();
 		if (headers->next) {
 			g_string_append (clause, " content_id IN (");
 			for (GSList *l=headers; l ;l=l->next) {
@@ -618,7 +618,7 @@ m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		for (guint i=0; i<tmp->len; ++i)
 			cb(u0, tmp->pdata[i]);
 		g_ptr_array_free(tmp, TRUE);
-	}	
+	}
 	return err;
 }
 
@@ -1152,8 +1152,8 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 		}
 		else if (VERSIONS_SUSPENDED(args->max_versions)) {
 suspended:
-			if (!ALIASES_get_deleted(latest))
-				size -= _get_alias_size(args->sq3, latest);
+			// JFS: do not alter the size to manage the alias being removed,
+			// this will be done by the real purge of the latest.
 			purge_latest = TRUE;
 		}
 		else {
@@ -1195,7 +1195,7 @@ suspended:
 		gint64 count_versions = _m2db_count_alias_versions(args->sq3, args->url);
 		if (args->max_versions <= count_versions) {
 			/** XXX purge the oldest alias */
-GRID_WARN("GLOBAL PURGE necessary");
+			GRID_WARN("GLOBAL PURGE necessary");
 		}
 	}
 
@@ -2253,7 +2253,7 @@ _get_chunks_to_drop(sqlite3 *db, m2_onbean_cb cb, gpointer u0)
 }
 
 GError*
-m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions, gint64 retention_delay, 
+m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions, gint64 retention_delay,
 	guint32 flags, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err;
