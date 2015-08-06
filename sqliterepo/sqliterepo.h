@@ -144,6 +144,9 @@ struct sqlx_repo_config_s
 
 /* ------------------------------------------------------------------------- */
 
+/* <b> must be a valid pointer to a buffer of 12 characters (at least) */
+const char* sqlx_opentype_to_str (enum sqlx_open_type_e type, char *b);
+
 /** Constructor for repository structures.
  *
  * A new repository has no replication configured by default.
