@@ -63,7 +63,7 @@ class BlobAuditorWorker(object):
 
         for path in paths:
             loop_time = time.time()
-            self.chunk_audit(path)
+            self.safe_chunk_audit(path)
             self.chunks_run_time = ratelimit(
                 self.chunks_run_time,
                 self.max_chunks_per_second
@@ -77,7 +77,7 @@ class BlobAuditorWorker(object):
                     '%(passes)d '
                     '%(corrupted)d '
                     '%(faulty)d '
-                    '%(orphans)d'
+                    '%(orphans)d '
                     '%(errors)d '
                     '%(c_rate).2f '
                     '%(b_rate).2f '
@@ -103,6 +103,10 @@ class BlobAuditorWorker(object):
                 total_faulty += self.faulty_chunks
                 total_errors += self.errors
                 self.passes = 0
+                self.corrupted_chunks = 0
+                self.orphan_chunks = 0
+                self.faulty_chunks = 0
+                self.errors = 0
                 self.bytes_processed = 0
                 self.last_reported = now
             audit_time += (now - loop_time)
@@ -111,7 +115,7 @@ class BlobAuditorWorker(object):
             '%(elapsed).02f '
             '%(corrupted)d '
             '%(faulty)d '
-            '%(orphans)d'
+            '%(orphans)d '
             '%(errors)d '
             '%(chunk_rate).2f '
             '%(bytes_rate).2f '
