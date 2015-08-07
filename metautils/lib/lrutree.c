@@ -74,7 +74,7 @@ _node_compare(gpointer u, struct _node_s *n0, struct _node_s *n1)
 static struct _node_s*
 _node_create(gpointer k, gpointer v)
 {
-    struct _node_s *n = g_malloc0(sizeof(struct _node_s));
+    struct _node_s *n = SLICE_NEW0(struct _node_s);
     n->k = k;
     n->v = v;
     return n;
@@ -84,7 +84,7 @@ static void
 _node_destroy(struct lru_tree_s *lt, struct _node_s *node)
 {
     _node_cleanup(lt, node);
-    g_free(node);
+    SLICE_FREE(struct _node_s, node);
 }
 
 static void
@@ -141,7 +141,7 @@ struct lru_tree_s*
 lru_tree_create(GCompareFunc cmp, GDestroyNotify kfree, GDestroyNotify vfree,
         guint32 options)
 {
-    struct lru_tree_s *lt = g_malloc0(sizeof(struct lru_tree_s));
+    struct lru_tree_s *lt = SLICE_NEW0(struct lru_tree_s);
     lt->kcmp = cmp;
     lt->kfree = kfree;
     lt->vfree = vfree;
@@ -164,7 +164,7 @@ lru_tree_destroy(struct lru_tree_s *lt)
 		_node_destroy(lt, n);
 	}
 
-    g_free(lt);
+    SLICE_FREE(struct lru_tree_s, lt);
 }
 
 void

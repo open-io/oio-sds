@@ -42,11 +42,19 @@ License along with this library.
 #  define EVENT_TOPIC "oio.sds"
 # endif
 
-#define SLICE_NEW0(T)    g_malloc0(sizeof(T))
-#define SLICE_NEW(T)     g_malloc(sizeof(T))
-#define SLICE_ALLOC(S)   g_malloc(S)
-#define SLICE_FREE(T,P)  g_free((P))
-#define SLICE_FREE1(S,P) g_free((P))
+# ifdef HAVE_ALLOWED_SLICE
+#  define SLICE_NEW0(T)    g_slice_new0(T)
+#  define SLICE_NEW(T)     g_slice_new(T)
+#  define SLICE_ALLOC(S)   g_slice_alloc(S)
+#  define SLICE_FREE(T,P)  g_slice_free(T,(P))
+#  define SLICE_FREE1(S,P) g_slice_free1((S),(P))
+# else
+#  define SLICE_NEW0(T)    g_malloc0(sizeof(T))
+#  define SLICE_NEW(T)     g_malloc(sizeof(T))
+#  define SLICE_ALLOC(S)   g_malloc(S)
+#  define SLICE_FREE(T,P)  g_free((P))
+#  define SLICE_FREE1(S,P) g_free((P))
+# endif
 
 /* size [in bytes] asn1c can require on the stack. Use 0 for as many bytes
  * as necessary (with the risk of stack smashing). */
@@ -99,6 +107,10 @@ License along with this library.
 
 #ifndef RAWX_LOSTFOUND_FOLDER
 # define RAWX_LOSTFOUND_FOLDER "_lost+found"
+#endif
+
+#ifndef RAWX_HEADER_PREFIX
+# define RAWX_HEADER_PREFIX "X-oio-chunk-meta-"
 #endif
 
 /* A flag usable in metacnx_ctx_s.flags to keep the connection alive */
@@ -279,6 +291,5 @@ enum {
 #ifndef GCLUSTER_AGENT_SOCK_PATH
 # define GCLUSTER_AGENT_SOCK_PATH GCLUSTER_RUN_DIR "/oio-sds-agent.sock"
 #endif
-
 
 #endif /*OIO_SDS__metautils__lib__metautils_macros_h*/

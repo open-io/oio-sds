@@ -227,9 +227,7 @@ grid_lb_set_shorten_ratio(struct grid_lb_s *lb, gdouble ratio)
 struct grid_lb_s*
 grid_lb_init(const gchar *ns, const gchar *srvtype)
 {
-	struct grid_lb_s *lb;
-
-	lb = g_malloc0(sizeof(struct grid_lb_s));
+	struct grid_lb_s *lb = SLICE_NEW0(struct grid_lb_s);
 	if (!lb)
 		return NULL;
 
@@ -296,7 +294,7 @@ grid_lb_clean(struct grid_lb_s *lb)
 
 	g_rec_mutex_clear(&(lb->lock));
 
-	g_free(lb);
+	SLICE_FREE(struct grid_lb_s, lb);
 }
 
 static void
@@ -558,11 +556,8 @@ grid_lb_count_all(struct grid_lb_s *lb)
 struct grid_lb_iterator_s*
 grid_lb_iterator_share(struct grid_lb_iterator_s *sub)
 {
-	struct grid_lb_iterator_s *iter;
-
 	EXTRA_ASSERT(sub != NULL);
-
-	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
+	struct grid_lb_iterator_s *iter = SLICE_NEW0(struct grid_lb_iterator_s);
 	iter->lb = sub->lb;
 	iter->version = sub->version;
 	iter->type = LBIT_SHARED;
@@ -573,11 +568,8 @@ grid_lb_iterator_share(struct grid_lb_iterator_s *sub)
 struct grid_lb_iterator_s*
 grid_lb_iterator_single_run(struct grid_lb_s *lb)
 {
-	struct grid_lb_iterator_s *iter;
-
 	EXTRA_ASSERT(lb != NULL);
-
-	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
+	struct grid_lb_iterator_s *iter = SLICE_NEW0(struct grid_lb_iterator_s);
 	iter->lb = lb;
 	iter->version = lb->version;
 	iter->type = LBIT_SINGLE;
@@ -588,11 +580,8 @@ grid_lb_iterator_single_run(struct grid_lb_s *lb)
 struct grid_lb_iterator_s*
 grid_lb_iterator_round_robin(struct grid_lb_s *lb)
 {
-	struct grid_lb_iterator_s *iter;
-
 	EXTRA_ASSERT(lb != NULL);
-
-	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
+	struct grid_lb_iterator_s *iter = SLICE_NEW0(struct grid_lb_iterator_s);
 	iter->lb = lb;
 	iter->version = lb->version;
 	iter->type = LBIT_RR;
@@ -602,11 +591,8 @@ grid_lb_iterator_round_robin(struct grid_lb_s *lb)
 struct grid_lb_iterator_s*
 grid_lb_iterator_weighted_round_robin(struct grid_lb_s *lb)
 {
-	struct grid_lb_iterator_s *iter;
-
 	EXTRA_ASSERT(lb != NULL);
-
-	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
+	struct grid_lb_iterator_s *iter = SLICE_NEW0(struct grid_lb_iterator_s);
 	iter->lb = lb;
 	iter->version = lb->version;
 	iter->type = LBIT_WRR;
@@ -616,11 +602,8 @@ grid_lb_iterator_weighted_round_robin(struct grid_lb_s *lb)
 struct grid_lb_iterator_s*
 grid_lb_iterator_random(struct grid_lb_s *lb)
 {
-	struct grid_lb_iterator_s *iter;
-
 	EXTRA_ASSERT(lb != NULL);
-
-	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
+	struct grid_lb_iterator_s *iter = SLICE_NEW0(struct grid_lb_iterator_s);
 	iter->lb = lb;
 	iter->version = lb->version;
 	iter->type = LBIT_RAND;
@@ -630,11 +613,8 @@ grid_lb_iterator_random(struct grid_lb_s *lb)
 struct grid_lb_iterator_s*
 grid_lb_iterator_weighted_random(struct grid_lb_s *lb)
 {
-	struct grid_lb_iterator_s *iter;
-
 	EXTRA_ASSERT(lb != NULL);
-
-	iter = g_malloc0(sizeof(struct grid_lb_iterator_s));
+	struct grid_lb_iterator_s *iter = SLICE_NEW0(struct grid_lb_iterator_s);
 	iter->lb = lb;
 	iter->version = lb->version;
 	iter->type = LBIT_WRAND;
@@ -665,7 +645,7 @@ grid_lb_iterator_clean(struct grid_lb_iterator_s *iter)
 	if (!iter)
 		return;
 	memset(iter, 0, sizeof(struct grid_lb_iterator_s));
-	g_free(iter);
+	SLICE_FREE(struct grid_lb_iterator_s, iter);
 }
 
 gboolean
@@ -1268,7 +1248,7 @@ grid_lbpool_create(const gchar *ns)
 {
 	EXTRA_ASSERT(ns != NULL);
 
-	struct grid_lbpool_s *glp = g_malloc0(sizeof(struct grid_lbpool_s));
+	struct grid_lbpool_s *glp = SLICE_NEW0(struct grid_lbpool_s);
 
 	g_rw_lock_init(&(glp->rwlock));
 
@@ -1298,7 +1278,7 @@ grid_lbpool_destroy(struct grid_lbpool_s *glp)
 	g_rw_lock_clear(&(glp->rwlock));
 
 	memset(glp, 0, sizeof(struct grid_lbpool_s));
-	g_free(glp);
+	SLICE_FREE(struct grid_lbpool_s, glp);
 }
 
 static void
