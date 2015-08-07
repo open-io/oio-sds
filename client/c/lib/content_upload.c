@@ -401,25 +401,25 @@ _http_put_set_dest(struct http_put_s *http_put, const gchar *url,
 		return error;
 	}
 
-	http_put_dest_add_header(http_dest, PROXYD_HEADER_REQID, reqid);
-	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "container-id", containerid);
-	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "content-path", contentpath);
+	http_put_dest_add_header(http_dest, PROXYD_HEADER_REQID, "%s", reqid);
+	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "container-id", "%s", containerid);
+	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "content-path", "%s", contentpath);
 	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "content-size", "%"G_GINT64_FORMAT, contentsize);
 	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "content-chunksnb", "%u", chunknb);
-	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "content-metadata-sys", metadata);
+	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "content-metadata-sys", "%s", metadata);
 	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "chunk-size", "%"G_GINT64_FORMAT, chunksize);
 	if (subchunk >= 0)
 		http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "chunk-pos", "%d.%d", chunkpos, subchunk);
     else
 		http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "chunk-pos", "%d", chunkpos);
 	if (NULL != chunkid) /* No chunk id in case of rain */
-		http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "chunk-id", chunkid);
+		http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "chunk-id", "%s", chunkid);
 
 	if (rawxlist != NULL)
-		http_put_dest_add_header(http_dest, "rawxlist", rawxlist);
+		http_put_dest_add_header(http_dest, "rawxlist", "%s", rawxlist);
 
 	if (storagepolicy != NULL)
-		http_put_dest_add_header(http_dest, "storagepolicy", storagepolicy);
+		http_put_dest_add_header(http_dest, "storagepolicy", "%s", storagepolicy);
 
 	return NULL;
 }
