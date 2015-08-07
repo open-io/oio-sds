@@ -25,6 +25,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "actions.h"
 
 enum http_rc_e
+action_cache_flush_all (struct req_args_s *args)
+{
+	grid_lbpool_flush (lbpool);
+	hc_resolver_flush_csm0 (resolver);
+	hc_resolver_flush_services (resolver);
+	return _reply_success_json (args, NULL);
+}
+
+enum http_rc_e
 action_cache_flush_low (struct req_args_s *args)
 {
 	hc_resolver_flush_services (resolver);
