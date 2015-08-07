@@ -867,7 +867,7 @@ retry:
 			break;
 	}
 
-	struct network_client_s *clt = g_slice_new0(struct network_client_s);
+	struct network_client_s *clt = SLICE_NEW0(struct network_client_s);
 	if (NULL == clt) {
 		metautils_pclose(&fd);
 		_cnx_notify_close(srv);
@@ -1400,7 +1400,7 @@ _client_clean(struct network_server_s *srv, struct network_client_s *clt)
 	if (clt->current_error)
 		g_clear_error(&(clt->current_error));
 
-	g_slice_free(struct network_client_s, clt);
+	SLICE_FREE(struct network_client_s, clt);
 }
 
 static int

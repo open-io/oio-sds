@@ -54,16 +54,10 @@ apr_storage_policy_clean(void *p)
 }
 
 static void
-__set_header(request_rec *r, apr_uint32_t h_scheme, const char *n, const char *v)
+__set_header(request_rec *r, const char *n, const char *v)
 {
 	if (r && n && v) {
-		if (h_scheme & HEADER_SCHEME_V2) {
-			DAV_DEBUG_REQ(r, 0, "scheme v2 setting header"); 
-			apr_table_setn(r->headers_out, apr_pstrcat(r->pool, HEADER_PREFIX_GRID, n, NULL), apr_pstrdup(r->pool, v));
-		} else {
-			DAV_DEBUG_REQ(r, 0, "scheme v1 setting header"); 
-			apr_table_setn(r->headers_out, apr_pstrdup(r->pool, n), apr_pstrdup(r->pool, v));
-		}
+		apr_table_setn(r->headers_out, apr_pstrcat(r->pool, RAWX_HEADER_PREFIX, n, NULL), apr_pstrdup(r->pool, v));
 	} else {
 		DAV_DEBUG_REQ(r, 0, "pointers ko");  
 	}
@@ -310,71 +304,95 @@ resource_stat_chunk(dav_resource *resource, int xattr_too)
 }
 
 static void
-__load_one_header(request_rec *request, apr_uint32_t headers, const char *name, char **dst)
+__load_one_header(request_rec *request, const char *name, char **dst)
 {
-	const char *value;
-
-	if (headers & HEADER_SCHEME_V2) {
-		char new_name[strlen(name) + sizeof(HEADER_PREFIX_GRID)];
-		g_snprintf(new_name, sizeof(new_name), HEADER_PREFIX_GRID"%s", name);
-		if (NULL != (value = apr_table_get(request->headers_in, new_name))) {
-			*dst = apr_pstrdup(request->pool, value);
-			DAV_XDEBUG_REQ(request, 0, "Header found [%s]:[%s]", new_name, *dst);
-		}
-	}
-
-	if (headers & HEADER_SCHEME_V1) {
-		if (NULL != (value = apr_table_get(request->headers_in, name))) {
-			*dst = apr_pstrdup(request->pool, value);
-			DAV_XDEBUG_REQ(request, 0, "Header found [%s]:[%s]", name, *dst);
-		}
-	}
-
+	const char *value = apr_table_get(request->headers_in, name);
+	if (value)
+		*dst = apr_pstrdup(request->pool, value);
 }
 
-#define LOAD_HEADER(Set,Where,Name) __load_one_header(request, conf->headers_scheme, Name, &(resource->info-> Set . Where))
+#define LOAD_HEADER(Where,Name) __load_one_header(request, Name, &(resource->info->Where))
+#define DAMNED_UGLY_PREFIX "X-Grid-"
 
-void
+const char *
 request_load_chunk_info(request_rec *request, dav_resource *resource)
 {
-	dav_rawx_server_conf *conf;
+	/* XXX TODO FIXME remove these old-style headers (pre-1.4) */
+	LOAD_HEADER(content.path,            "contentpath");
+	LOAD_HEADER(content.size,            "contentsize");
+	LOAD_HEADER(content.chunk_nb,        "chunknb");
+	LOAD_HEADER(content.metadata,        "contentmetadata");
+	LOAD_HEADER(content.system_metadata, "contentmetadata-sys");
+	LOAD_HEADER(content.container_id,    "containerid");
 
-	conf = request_get_server_config(request);
+	LOAD_HEADER(chunk.id,           "chunkid");
+	LOAD_HEADER(chunk.path,         "contentpath");
+	LOAD_HEADER(chunk.size,         "chunksize");
+	LOAD_HEADER(chunk.hash,         "chunkhash");
+	LOAD_HEADER(chunk.position,     "chunkpos");
+	LOAD_HEADER(chunk.metadata,     "chunkmetadata");
+	LOAD_HEADER(chunk.container_id, "containerid");
 
-	/* These headers are used by the Integrity loop */
-	LOAD_HEADER(content, path,            "content_path");
-	LOAD_HEADER(content, size,            "content_size");
-	LOAD_HEADER(content, chunk_nb,        "content_chunksnb");
-	LOAD_HEADER(content, metadata,        "content_metadata");
-	LOAD_HEADER(content, system_metadata, "content_metadata-sys");
-	LOAD_HEADER(content, container_id,    "content_containerid");
+	/* XXX TODO FIXME remove these old-style headers (post-1.4) */
+	LOAD_HEADER(content.path,            "content_path");
+	LOAD_HEADER(content.size,            "content_size");
+	LOAD_HEADER(content.chunk_nb,        "content_chunksnb");
+	LOAD_HEADER(content.metadata,        "content_metadata");
+	LOAD_HEADER(content.system_metadata, "content_metadata-sys");
+	LOAD_HEADER(content.container_id,    "content_containerid");
 
-	LOAD_HEADER(chunk, id,           "chunk_id");
-	LOAD_HEADER(chunk, path,         "chunk_path");
-	LOAD_HEADER(chunk, size,         "chunk_size");
-	LOAD_HEADER(chunk, hash,         "chunk_hash");
-	LOAD_HEADER(chunk, position,     "chunk_position");
-	LOAD_HEADER(chunk, metadata,     "chunk_metadata");
-	LOAD_HEADER(chunk, container_id, "chunk_containerid");
+	LOAD_HEADER(chunk.id,           "chunk_id");
+	LOAD_HEADER(chunk.path,         "chunk_path");
+	LOAD_HEADER(chunk.size,         "chunk_size");
+	LOAD_HEADER(chunk.hash,         "chunk_hash");
+	LOAD_HEADER(chunk.position,     "chunk_position");
+	LOAD_HEADER(chunk.metadata,     "chunk_metadata");
+	LOAD_HEADER(chunk.container_id, "chunk_containerid");
 
-	if (conf->headers_scheme & HEADER_SCHEME_V1) {
-		/* There are the headers used by the common client.
-		 * This is an ugly clue of history and entropy */
-		LOAD_HEADER(chunk, id,           "chunkid");
-		LOAD_HEADER(chunk, path,         "contentpath");
-		LOAD_HEADER(chunk, size,         "chunksize");
-		LOAD_HEADER(chunk, hash,         "chunkhash");
-		LOAD_HEADER(chunk, position,     "chunkpos");
-		LOAD_HEADER(chunk, metadata,     "chunkmetadata");
-		LOAD_HEADER(chunk, container_id, "containerid");
+	/* XXX TODO FIXME remove these old-style headers (post-1.5) */
+	LOAD_HEADER(content.path,            DAMNED_UGLY_PREFIX "content_path");
+	LOAD_HEADER(content.size,            DAMNED_UGLY_PREFIX "content_size");
+	LOAD_HEADER(content.chunk_nb,        DAMNED_UGLY_PREFIX "content_chunksnb");
+	LOAD_HEADER(content.metadata,        DAMNED_UGLY_PREFIX "content_metadata");
+	LOAD_HEADER(content.system_metadata, DAMNED_UGLY_PREFIX "content_metadata-sys");
+	LOAD_HEADER(content.container_id,    DAMNED_UGLY_PREFIX "content_containerid");
 
-		LOAD_HEADER(content, path,            "contentpath");
-		LOAD_HEADER(content, size,            "contentsize");
-		LOAD_HEADER(content, chunk_nb,        "chunknb");
-		LOAD_HEADER(content, metadata,        "contentmetadata");
-		LOAD_HEADER(content, system_metadata, "contentmetadata-sys");
-		LOAD_HEADER(content, container_id,    "containerid");
-	}
+	LOAD_HEADER(chunk.id,           DAMNED_UGLY_PREFIX "chunk_id");
+	LOAD_HEADER(chunk.path,         DAMNED_UGLY_PREFIX "chunk_path");
+	LOAD_HEADER(chunk.size,         DAMNED_UGLY_PREFIX "chunk_size");
+	LOAD_HEADER(chunk.hash,         DAMNED_UGLY_PREFIX "chunk_hash");
+	LOAD_HEADER(chunk.position,     DAMNED_UGLY_PREFIX "chunk_position");
+	LOAD_HEADER(chunk.metadata,     DAMNED_UGLY_PREFIX "chunk_metadata");
+	LOAD_HEADER(chunk.container_id, DAMNED_UGLY_PREFIX "chunk_containerid");
+
+	/* override this with up-to-date headers */
+	LOAD_HEADER(content.path,            RAWX_HEADER_PREFIX "content-path");
+	LOAD_HEADER(content.size,            RAWX_HEADER_PREFIX "content-size");
+	LOAD_HEADER(content.chunk_nb,        RAWX_HEADER_PREFIX "content-chunksnb");
+	LOAD_HEADER(content.metadata,        RAWX_HEADER_PREFIX "content-metadata");
+	LOAD_HEADER(content.system_metadata, RAWX_HEADER_PREFIX "content-metadata-sys");
+	LOAD_HEADER(content.container_id,    RAWX_HEADER_PREFIX "container-id");
+
+	LOAD_HEADER(chunk.id,           RAWX_HEADER_PREFIX "chunk-id");
+	LOAD_HEADER(chunk.path,         RAWX_HEADER_PREFIX "content-path");
+	LOAD_HEADER(chunk.size,         RAWX_HEADER_PREFIX "chunk-size");
+	LOAD_HEADER(chunk.hash,         RAWX_HEADER_PREFIX "chunk-hash");
+	LOAD_HEADER(chunk.position,     RAWX_HEADER_PREFIX "chunk-pos");
+	LOAD_HEADER(chunk.metadata,     RAWX_HEADER_PREFIX "chunk-metadata");
+	LOAD_HEADER(chunk.container_id, RAWX_HEADER_PREFIX "container-id");
+
+	if (!resource->info->content.container_id) return "container-id";
+	if (!resource->info->chunk.container_id) return "container-id";
+
+	if (!resource->info->content.path) return "content-path";
+	if (!resource->info->content.size) return "content-size";
+	if (!resource->info->content.chunk_nb) return "content-chunksnb";
+
+	if (!resource->info->chunk.path) return "content-path";
+	//if (!resource->info->chunk.size) return "chunk-size";
+	if (!resource->info->chunk.position) return "chunk-pos";
+	
+	return NULL;
 }
 
 void
@@ -425,35 +443,22 @@ end:
 }
 
 void
-content_textinfo_fill_headers(request_rec *r, struct content_textinfo_s *cti)
+request_fill_headers(request_rec *r, struct content_textinfo_s *c0,
+		struct chunk_textinfo_s *c1)
 {
-	DAV_DEBUG_REQ(r, 0, "Filling headers with content textinfo");
-	dav_rawx_server_conf *conf;
-	if (!cti)
-		return;
-	conf = request_get_server_config(r);
-	__set_header(r, conf->headers_scheme, "content_path",         cti->path);
-	__set_header(r, conf->headers_scheme, "content_size",         cti->size);
-	__set_header(r, conf->headers_scheme, "content_chunksnb",     cti->chunk_nb);
-	__set_header(r, conf->headers_scheme, "content_metadata",     cti->metadata);
-	__set_header(r, conf->headers_scheme, "content_metadata-sys", cti->system_metadata);
-	__set_header(r, conf->headers_scheme, "content_containerid",  cti->container_id);
-}
+	__set_header(r, "container-id",  c0->container_id);
 
-void
-chunk_textinfo_fill_headers(request_rec *r, struct chunk_textinfo_s *cti)
-{
-	dav_rawx_server_conf *conf;
-	if (!cti)
-		return;
-	conf = request_get_server_config(r);
-	__set_header(r, conf->headers_scheme, "chunk_id",          cti->id);
-	__set_header(r, conf->headers_scheme, "chunk_path",        cti->path);
-	__set_header(r, conf->headers_scheme, "chunk_size",        cti->size);
-	__set_header(r, conf->headers_scheme, "chunk_hash",        cti->hash);
-	__set_header(r, conf->headers_scheme, "chunk_position",    cti->position);
-	__set_header(r, conf->headers_scheme, "chunk_metadata",    cti->metadata);
-	__set_header(r, conf->headers_scheme, "chunk_containerid", cti->container_id);
+	__set_header(r, "content-path",         c0->path);
+	__set_header(r, "content-size",         c0->size);
+	__set_header(r, "content-chunksnb",     c0->chunk_nb);
+	__set_header(r, "content-metadata",     c0->metadata);
+	__set_header(r, "content-metadata-sys", c0->system_metadata);
+
+	__set_header(r, "chunk-id",          c1->id);
+	__set_header(r, "chunk-size",        c1->size);
+	__set_header(r, "chunk-hash",        c1->hash);
+	__set_header(r, "chunk-position",    c1->position);
+	__set_header(r, "chunk-metadata",    c1->metadata);
 }
 
 /*************************************************************************/
@@ -630,9 +635,8 @@ rawx_repo_commit_upload(dav_stream *stream)
 		return e;
 	}
 
-	/* Now populate the reply headers with the chunk's attributes */
-	content_textinfo_fill_headers(stream->r->info->request, &(stream->r->info->content));
-	chunk_textinfo_fill_headers(stream->r->info->request, &(stream->r->info->chunk));
+	request_fill_headers(stream->r->info->request,
+			&(stream->r->info->content), &(stream->r->info->chunk));
 
 	return NULL;
 }

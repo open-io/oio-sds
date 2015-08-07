@@ -90,7 +90,6 @@ struct dav_rawx_server_conf_s {
 	int hash_depth;
 	int hash_width;
 	int fsync_on_close;
-	apr_uint32_t headers_scheme;
 
 	/* Statistics involved data */
 	struct {

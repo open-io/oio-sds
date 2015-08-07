@@ -602,7 +602,6 @@ sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
 	gint bd;
 	GError *err = NULL;
 	sqlx_base_t *base = NULL;
-	GTimeVal *deadline = g_alloca(sizeof(GTimeVal));
 
 	GRID_TRACE2("%s(%p,%s,%p)", __FUNCTION__, (void*)cache,
 			hname ? hashstr_str(hname) : "NULL", (void*)result);
@@ -610,12 +609,11 @@ sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
 	EXTRA_ASSERT(hname != NULL);
 	EXTRA_ASSERT(result != NULL);
 
+	gint64 deadline = g_get_monotonic_time();
 	if (cache->open_timeout >= 0) {
-		g_get_current_time(deadline);
-		g_time_val_add(deadline, cache->open_timeout * 1000);
+		deadline += cache->open_timeout * G_TIME_SPAN_MILLISECOND;
 	} else {
-		// wait forever
-		deadline = NULL;
+		deadline += 5 * G_TIME_SPAN_MINUTE;
 	}
 
 	g_mutex_lock(&cache->lock);
@@ -665,7 +663,7 @@ retry:
 					GRID_DEBUG("Base [%s] in use by another thread (%X), waiting...",
 							hashstr_str(hname), compute_thread_id(base->owner));
 					// The lock is held by another thread/request
-					if (g_cond_timed_wait(base->cond, &cache->lock, deadline)) {
+					if (g_cond_wait_until(base->cond, &cache->lock, deadline)) {
 						GRID_DEBUG("Retrying to open [%s]", hashstr_str(hname));
 						goto retry;
 					} else {
@@ -692,7 +690,7 @@ retry:
 			case SQLX_BASE_CLOSING:
 				EXTRA_ASSERT(base->owner != NULL);
 				// Just wait for a notification then retry
-				if (g_cond_timed_wait(base->cond, &cache->lock, deadline))
+				if (g_cond_wait_until(base->cond, &cache->lock, deadline))
 					goto retry;
 				else {
 					err = NEWERROR(CODE_UNAVAILABLE,

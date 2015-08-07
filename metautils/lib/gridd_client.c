@@ -864,7 +864,7 @@ _factory_clean(struct gridd_client_factory_s *self)
 {
 	EXTRA_ASSERT(self != NULL);
 	EXTRA_ASSERT(self->abstract.vtable == &VTABLE_FACTORY);
-	g_free(self);
+	SLICE_FREE(struct gridd_client_factory_s, self);
 }
 
 static struct gridd_client_s *
@@ -901,7 +901,7 @@ gridd_client_create_empty(void)
 struct gridd_client_factory_s *
 gridd_client_factory_create(void)
 {
-	struct gridd_client_factory_s *factory = g_malloc0(sizeof(*factory));
+	struct gridd_client_factory_s *factory = SLICE_NEW0(struct gridd_client_factory_s);
 	factory->abstract.vtable = &VTABLE_FACTORY;
 	return factory;
 }

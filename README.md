@@ -73,6 +73,7 @@ In addition to common cmake options, these specific options are also available:
 | STACK\_PROTECTOR | Trigger stack protection code. Only active when CMAKE\_BUILD\_TYPE is set to "Debug" or "RelWithDebInfo" |
 | GRIDD\_PLUGINS | Installation directory for gridd plugins. |
 | APACHE2\_MODDIR | Installation directory for apache2 modules. |
+| ALLOW\_SLICE | allows slice allocation in several places. |
 | FORBID\_DEPRECATED | define it to turn into errors the warnings for deprecated symbols from the GLib2. |
 | EXE\_PREFIX | Defines a prefix to all CLI tool. By default, set to "sds". |
 | MOCKS | Activate mocks to wrap syscalls. |
@@ -108,6 +109,7 @@ cd ${SRCDIR}/python; sudo python setup.py develop; cd -
 | GCLUSTER_CONFIG_LOCAL_PATH | ".oio/sds.conf" | Local configuration directory. |
 | GCLUSTER_AGENT_SOCK_PATH | "/var/run/oio-sds-agent.sock" | Default path for agent's socket. |
 | GS_CONFIG_NSINFO_REFRESH | "nsinfo_refresh" | Default refresh period for 
+| RAWX_HEADER_PREFIX | "X-oio-chunk-meta-" | Prefix applied to proxyd's URL, second version (with accounts) |
 | PROXYD_PREFIX2 | "v2.0" | Prefix applied to proxyd's URL, second version (with accounts) |
 | PROXYD_PATH_MAXLEN | 2048 | Maximum length for path to be accepted in requests. |
 | PROXYD_DEFAULT_TTL_CSM0 | 0 | Maximum TTL (in seconds) for conscience entries in the proxyd cache. |

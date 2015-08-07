@@ -134,7 +134,7 @@ data_slab_free(struct data_slab_s *ds)
 			break;
 	}
 	ds->next = NULL;
-	g_slice_free (struct data_slab_s, ds);
+	SLICE_FREE (struct data_slab_s, ds);
 }
 
 void
@@ -416,7 +416,7 @@ data_slab_sequence_size(struct data_slab_sequence_s *dss)
 
 //------------------------------------------------------------------------------
 
-static struct data_slab_s * _slab (void) { return g_slice_new0 (struct data_slab_s); }
+static struct data_slab_s * _slab (void) { return SLICE_NEW0(struct data_slab_s); }
 
 struct data_slab_s *
 data_slab_make_empty(gsize alloc)

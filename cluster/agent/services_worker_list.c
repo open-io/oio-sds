@@ -156,7 +156,7 @@ services_types_worker_list( worker_t *worker, GError **error )
 	/*unpack the parameters and find the namespace*/	
 	req = (request_t*) worker->data.session;
 	memset(ns_name, 0, sizeof(ns_name));
-	g_memmove(ns_name, req->arg, MIN(req->arg_size, sizeof(ns_name)-1));
+	memcpy(ns_name, req->arg, MIN(req->arg_size, sizeof(ns_name)-1));
 
 	GError *e = NULL;
 	if (!(ns_data = get_namespace(ns_name,&e)))

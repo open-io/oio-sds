@@ -203,38 +203,25 @@ _gs_upload_content (meta2_content_add_f adder, gs_container_t *container,
 	return _gs_upload_content_v2(container, content_name, FALSE, content_size, feeder, user_data, NULL, NULL, err);
 }
 
-static GMutex global_mutex = G_STATIC_MUTEX_INIT;
-
 static GError *
 _rawx_update_beans_hash_from_request(struct http_put_s *http_put)
 {
-	GSList *i_list = NULL, *beans;
-	struct bean_CHUNKS_s *bc;
-	const gchar *hash_str;
 	chunk_hash_t hash;
 	GError *error = NULL;
-	gboolean ret;
 
-	beans = http_put_get_success_dests(http_put);
-
-	for (i_list = beans; i_list != NULL ; i_list = g_slist_next(i_list)) {
-		bc = i_list->data;
-
-		hash_str = http_put_get_header(http_put, bc, "chunk_hash");
-		if (hash_str == NULL)
-		{
+	GSList *beans = http_put_get_success_dests(http_put);
+	for (GSList *l = beans; l != NULL ; l = l->next) {
+		struct bean_CHUNKS_s *bc = l->data;
+		const char *h = http_put_get_header(http_put, bc, RAWX_HEADER_PREFIX "chunk-hash");
+		if (!h) {
 			GSETERROR(&error,"Missing chunk hash in response from rawx");
-			goto end;
+			break;
 		}
-
-		ret = hex2bin(hash_str, hash, sizeof(hash), &error);
+		gboolean ret = hex2bin(h, hash, sizeof(hash), &error);
 		if (ret != TRUE)
-			goto end;
-
+			break;
 		CHUNKS_set2_hash(bc, hash, sizeof(hash));
 	}
-
-end:
 	g_slist_free(beans);
 	return error;
 }
@@ -414,30 +401,19 @@ _http_put_set_dest(struct http_put_s *http_put, const gchar *url,
 		return error;
 	}
 
-	http_put_dest_add_header(http_dest, "containerid", containerid);
-
-	http_put_dest_add_header(http_dest, "contentpath", contentpath);
-
-	if (subchunk >= 0) {
-		http_put_dest_add_header(http_dest, "chunkpos", "%d.%d", chunkpos, subchunk);
-    }else{
-		http_put_dest_add_header(http_dest, "chunkpos", "%d", chunkpos);
-	}
-
-	http_put_dest_add_header(http_dest, "chunknb", "%u", chunknb);
-
-	http_put_dest_add_header(http_dest, "chunksize", "%"G_GINT64_FORMAT, chunksize);
-
-	http_put_dest_add_header(http_dest, "contentsize", "%"G_GINT64_FORMAT, contentsize);
-
-	/* No chunk id in case of rain
-	 */
-	if (NULL != chunkid)
-		http_put_dest_add_header(http_dest, "chunkid", chunkid);
-
-	http_put_dest_add_header(http_dest, "contentmetadata-sys", metadata);
-
-	http_put_dest_add_header(http_dest, "GSReqId", reqid);
+	http_put_dest_add_header(http_dest, PROXYD_HEADER_REQID, reqid);
+	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "container-id", containerid);
+	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "content-path", contentpath);
+	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "content-size", "%"G_GINT64_FORMAT, contentsize);
+	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "content-chunksnb", "%u", chunknb);
+	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "content-metadata-sys", metadata);
+	http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "chunk-size", "%"G_GINT64_FORMAT, chunksize);
+	if (subchunk >= 0)
+		http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "chunk-pos", "%d.%d", chunkpos, subchunk);
+    else
+		http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "chunk-pos", "%d", chunkpos);
+	if (NULL != chunkid) /* No chunk id in case of rain */
+		http_put_dest_add_header(http_dest, RAWX_HEADER_PREFIX "chunk-id", chunkid);
 
 	if (rawxlist != NULL)
 		http_put_dest_add_header(http_dest, "rawxlist", rawxlist);
@@ -959,6 +935,14 @@ _gs_upload(gs_container_t *container,
 		gs_input_f feeder, void *user_data, const char *mdusr,
 		const char *sys_metadata, const char *stgpol, gs_error_t **err)
 {
+	static volatile guint lazy_init = 1;
+	static GMutex global_mutex;
+	if (lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
+			g_mutex_init(&global_mutex);
+		}
+	}
+
 #define CONTENT_ADD_V2() m2v2_remote_execute_BEANS(target, url, actual_stgpol, content_size, append, &chunks)
 #define CONTENT_COMMIT() m2v2_remote_execute_PUT(target, url, chunks, NULL)
 #define APPEND_COMMIT() m2v2_remote_execute_APPEND(target, url, chunks, NULL)

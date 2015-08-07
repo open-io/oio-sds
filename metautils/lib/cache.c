@@ -20,12 +20,15 @@ License along with this library.
 
 /* NOOP --------------------------------------------------------------------- */
 
-struct metautils_cache_NOOP_s;
+struct metautils_cache_NOOP_s
+{
+	const struct metautils_cache_vtable_s *vtable;
+};
 
 static void
 _noop_destroy (struct metautils_cache_s *self)
 {
-	g_free ((struct metautils_cache_NOOP_s*)self);
+	SLICE_FREE(struct metautils_cache_NOOP_s, (struct metautils_cache_NOOP_s*) self);
 }
 
 static void
@@ -52,15 +55,10 @@ static struct metautils_cache_vtable_s vtable_NOOP =
 	_noop_destroy, _noop_put, _noop_del, _noop_get
 };
 
-struct metautils_cache_NOOP_s
-{
-	const struct metautils_cache_vtable_s *vtable;
-};
-
 struct metautils_cache_s *
 metautils_cache_make_NOOP (void)
 {
-	struct metautils_cache_NOOP_s *self = g_malloc0 (sizeof(*self));
+	struct metautils_cache_NOOP_s *self = SLICE_NEW0 (struct metautils_cache_NOOP_s);
 	self->vtable = &vtable_NOOP;
 	return (struct metautils_cache_s*) self;
 }
@@ -89,7 +87,7 @@ struct metautils_cache_s *
 metautils_cache_make_LRU (struct lru_tree_s *lru)
 {
 	EXTRA_ASSERT (lru != NULL);
-	struct metautils_cache_LRU_s *self = g_malloc0 (sizeof(*self));
+	struct metautils_cache_LRU_s *self = SLICE_NEW0 (struct metautils_cache_LRU_s);
 	self->vtable = &vtable_LRU;
 	self->lru = lru;
 	return (struct metautils_cache_s*) self;
@@ -103,7 +101,7 @@ _lru_destroy (struct metautils_cache_s *self)
 		return;
 	lru_tree_destroy (l->lru);
 	l->lru = NULL;
-	g_free (l);
+	SLICE_FREE (struct metautils_cache_LRU_s, l);
 }
 
 static void

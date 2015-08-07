@@ -114,8 +114,8 @@ meta0_info_copy(meta0_info_t * src)
 	m0i->prefixes_size = src->prefixes_size;
 	m0i->prefixes = g_malloc0(m0i->prefixes_size);
 
-	g_memmove(&(m0i->addr), &(src->addr), sizeof(addr_info_t));
-	g_memmove(m0i->prefixes, src->prefixes, src->prefixes_size);
+	memcpy(&(m0i->addr), &(src->addr), sizeof(addr_info_t));
+	memcpy(m0i->prefixes, src->prefixes, src->prefixes_size);
 	errno = 0;
 	return m0i;
 }
@@ -147,7 +147,7 @@ meta0_info_list_map_by_addr(GSList * mL, GError ** err)
 
 			if (b) {
 				m0i->prefixes = b;
-				g_memmove(m0i->prefixes + m0i->prefixes_size, arg->prefixes, arg->prefixes_size);
+				memcpy(m0i->prefixes + m0i->prefixes_size, arg->prefixes, arg->prefixes_size);
 				m0i->prefixes_size += arg->prefixes_size;
 			}
 		}
@@ -180,10 +180,10 @@ meta0_info_list_map_by_prefix(GSList * mL, GError ** err)
 
 		dummy.prefixes_size = 2;
 		dummy.prefixes = g_try_malloc(dummy.prefixes_size);
-		g_memmove(&(dummy.addr), &(arg->addr), sizeof(addr_info_t));
+		memcpy(&(dummy.addr), &(arg->addr), sizeof(addr_info_t));
 
 		for (i = 1, max = arg->prefixes_size - 1; i < max; i += 2) {
-			g_memmove(dummy.prefixes, arg->prefixes + i - 1, 2);
+			memcpy(dummy.prefixes, arg->prefixes + i - 1, 2);
 			m0i = g_hash_table_lookup(mH, &dummy);
 			if (m0i) {	/*prefix already present, we do nothing else a debug */
 				if (DEBUG_ENABLED()) {

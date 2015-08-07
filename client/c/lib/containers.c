@@ -749,7 +749,7 @@ gs_container_load (gs_container_t *container, GError **err)
 		DEBUG("Trying to connect to meta2 [%s]", str_addr);
 
 		/*update the address of the container*/
-		g_memmove(&(container->meta2_addr), m2addr, sizeof(addr_info_t));
+		memcpy(&(container->meta2_addr), m2addr, sizeof(addr_info_t));
 
 		/*contact the META2*/
 		if (gs_container_reconnect_and_refresh(container,err,FALSE))

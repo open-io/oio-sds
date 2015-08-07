@@ -509,12 +509,6 @@ member_signal(struct election_member_s *m)
 	g_cond_signal(member_get_cond(m));
 }
 
-static gboolean
-member_wait(struct election_member_s *m, GTimeVal *max)
-{
-	return g_cond_timed_wait(member_get_cond(m), member_get_lock(m), max);
-}
-
 static void
 member_set_master_url(struct election_member_s *m, const gchar *u)
 {
@@ -1306,71 +1300,62 @@ _election_get_peers(struct election_manager_s *manager, struct sqlx_name_s *n,
 }
 
 static gboolean
-wait_for_final_status(struct election_member_s *member,
-		GTimeVal *pmax)
+wait_for_final_status(struct election_member_s *m, gint64 deadline)
 {
-	GTimeVal tmp;
+	while (!STATUS_FINAL(m->step)) {
 
-	while (!STATUS_FINAL(member->step)) {
+		member_kickoff(m);
 
-		member_kickoff(member);
-
-		g_get_current_time(&tmp);
-		if (gtv_bigger(&tmp, pmax)) {
-			GRID_WARN("TIMEOUT! (wait) [%s.%s]",
-					member->name.base, member->name.type);
+		gint64 tmp = g_get_monotonic_time();
+		if (tmp > deadline) {
+			GRID_WARN("TIMEOUT! (wait) [%s.%s]", m->name.base, m->name.type);
 			return FALSE;
 		}
 
-		if (member_pending_for_too_long(member)) {
-			GRID_WARN("TIMEOUT! (pending) [%s.%s]",
-					member->name.base, member->name.type);
+		if (member_pending_for_too_long(m)) {
+			GRID_WARN("TIMEOUT! (pending) [%s.%s]", m->name.base, m->name.type);
 			return FALSE;
 		}
 
 		GRID_TRACE("Still waiting for a final status on [%s.%s]",
-				member->name.base, member->name.type);
+				m->name.base, m->name.type);
 
-		g_time_val_add(&tmp, 1000000L);
-		member_wait(member, &tmp);
+		tmp += 1 * G_TIME_SPAN_SECOND;
+		g_cond_wait_until(member_get_cond(m), member_get_lock(m), tmp);
 	}
 
 	return TRUE;
 }
 
 static enum election_status_e
-_election_get_status(struct election_manager_s *m, struct sqlx_name_s *n, gchar **master_url)
+_election_get_status(struct election_manager_s *mgr, struct sqlx_name_s *n, gchar **master_url)
 {
-	GTimeVal max;
 	int rc;
 	gchar *url = NULL;
-	struct election_member_s *member;
 
-	MANAGER_CHECK(m);
+	MANAGER_CHECK(mgr);
 	EXTRA_ASSERT(n != NULL);
 
-	g_mutex_lock(&m->lock);
+	gint64 deadline = g_get_monotonic_time () + mgr->delay_max_wait * G_TIME_SPAN_SECOND;
+	g_mutex_lock(&mgr->lock);
 
-	g_get_current_time(&max);
-	g_time_val_add(&max, 1000000L * m->delay_max_wait);
+	struct election_member_s *m = manager_init_member(mgr, n, TRUE);
+	member_kickoff(m);
 
-	member = manager_init_member(m, n, TRUE);
-	member_kickoff(member);
-
-	if (!wait_for_final_status(member, &max)) // TIMEOUT!
+	if (!wait_for_final_status(m, deadline)) // TIMEOUT!
 		rc = STEP_FAILED;
 	else {
-		rc = member->step;
+		rc = m->step;
 		if (rc == STEP_LOST) {
-			if (member->master_url)
-				url = g_strdup(member->master_url);
+			if (m->master_url)
+				url = g_strdup(m->master_url);
 		}
 	}
 
-	member_unref(member);
+	member_unref(m);
 	if (rc == STEP_NONE || STATUS_FINAL(rc))
-		member_signal(member);
-	member_unlock(member);
+		member_signal(m);
+	member_unlock(m);
 
 	GRID_TRACE("STEP=%s/%d master=%s", _step2str(rc), rc, url);
 	switch (rc) {

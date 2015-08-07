@@ -79,7 +79,6 @@ dav_rawx_create_server_config(apr_pool_t *p, server_rec *s)
 	conf->pool = p;
 	conf->cleanup = NULL;
 	conf->hash_depth = conf->hash_width = 2;
-	conf->headers_scheme = HEADER_SCHEME_V1;
 	conf->fsync_on_close = FSYNC_ON_CHUNK;
 	conf->FILE_buffer_size = 0;
 
@@ -102,7 +101,6 @@ dav_rawx_merge_server_config(apr_pool_t *p, void *base, void *overrides)
 	newconf->hash_depth = child->hash_depth;
 	newconf->hash_width = child->hash_width;
 	newconf->fsync_on_close = child->fsync_on_close;
-	newconf->headers_scheme = child->headers_scheme;
 	newconf->FILE_buffer_size = child->FILE_buffer_size;
 	memcpy(newconf->docroot, child->docroot, sizeof(newconf->docroot));
 	memcpy(newconf->ns_name, child->ns_name, sizeof(newconf->ns_name));
@@ -219,32 +217,6 @@ dav_rawx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg1
 
 	if(local_error)
 		g_clear_error(&local_error);
-	return NULL;
-}
-
-static const char *
-dav_rawx_cmd_gridconfig_headers(cmd_parms *cmd, void *config, const char *arg1)
-{
-	dav_rawx_server_conf *conf;
-	(void) config;
-
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-
-	/* ensure a right default value */
-	conf->headers_scheme = HEADER_SCHEME_V1;
-
-	if (0 == apr_strnatcasecmp(arg1,"1"))
-		conf->headers_scheme = HEADER_SCHEME_V1;
-	else if (0 == apr_strnatcasecmp(arg1, "2"))
-		conf->headers_scheme = HEADER_SCHEME_V2;
-	else if (0 == apr_strnatcasecmp(arg1, "both"))
-		conf->headers_scheme = HEADER_SCHEME_V1 | HEADER_SCHEME_V2;
-	else
-		return apr_psprintf(cmd->pool,
-				"Grid Headers scheme: invalid value [%s]", arg1);
-
 	return NULL;
 }
 
@@ -468,13 +440,6 @@ rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp,
 	gerr = NULL;
 	conf = ap_get_module_config(server->module_config, &dav_rawx_module);
 
-	/* perform some options consistency checks */
-	if (!(conf->headers_scheme & HEADER_SCHEME_V1) &&
-			!(conf->headers_scheme & HEADER_SCHEME_V2)) {
-		DAV_ERROR_POOL(plog, 0, "You cannot disable both V1 and V2 header scheme");
-		return DONE;
-	}
-
 	DAV_XDEBUG_POOL(plog, 0, "Checking the docroot XATTR lock for [%s]",
 			conf->docroot);
 
@@ -584,7 +549,6 @@ static const command_rec dav_rawx_cmds[] =
     AP_INIT_TAKE1("grid_dir_run",     dav_rawx_cmd_gridconfig_dirrun,      NULL, RSRC_CONF, "run directory"),
     AP_INIT_TAKE1("grid_fsync",       dav_rawx_cmd_gridconfig_fsync,       NULL, RSRC_CONF, "do fsync on file close"),
     AP_INIT_TAKE1("grid_fsync_dir",   dav_rawx_cmd_gridconfig_fsync_dir,   NULL, RSRC_CONF, "do fsync on chunk direcory after renaming .pending"),
-    AP_INIT_TAKE1("grid_headers",     dav_rawx_cmd_gridconfig_headers,     NULL, RSRC_CONF, "which header scheme to adopt (1, 2, both)"),
     AP_INIT_TAKE1("grid_acl",         dav_rawx_cmd_gridconfig_acl,         NULL, RSRC_CONF, "enabled acl"),
     AP_INIT_TAKE1("grid_upload_blocksize",    dav_rawx_cmd_gridconfig_upblock,     NULL, RSRC_CONF, "upload block size"),
     AP_INIT_TAKE1(NULL,  NULL,  NULL, RSRC_CONF, NULL)

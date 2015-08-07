@@ -87,14 +87,11 @@ UNSAFE_resolver_direct_reload (struct resolver_direct_s *r, gboolean locked, GEr
 		M0CACHE_LOCK(*r);
 
 	if (r->refresh_pending) {
-		GTimeVal gtv;
 
 		DEBUG("META0 cache already being refreshed");
 
-		g_get_current_time (&gtv);
-		g_time_val_add (&gtv, COND_MAXWAIT_MS * 1000);
-
-		if (g_cond_timed_wait(&r->refresh_condition, &r->use_mutex, &gtv)) {
+		gint64 end = g_get_monotonic_time () + COND_MAXWAIT_MS * G_TIME_SPAN_MILLISECOND;
+		if (g_cond_wait_until(&r->refresh_condition, &r->use_mutex, end)) {
 			/*when signal is thrown, and g_condwait return, mutex is locked*/
 			if (!locked) M0CACHE_UNLOCK(*r);
 			rc = 1;

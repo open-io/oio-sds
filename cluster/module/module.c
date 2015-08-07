@@ -681,7 +681,7 @@ push_service(struct conscience_s *cs, struct service_info_s *si)
 
 		/* Set the meta0 in ns_info struct if it was not forced in config */
 		if ( &(cs->ns_info.addr) == NULL ) {
-			g_memmove(&(cs->ns_info.addr), &(si->addr), sizeof(addr_info_t));
+			memcpy(&(cs->ns_info.addr), &(si->addr), sizeof(addr_info_t));
 		}
 	}
 
@@ -1365,7 +1365,7 @@ module_init_meta0(struct conscience_s *cs, GHashTable * params, GError ** err)
 	}
 
 	/* Set this address in the conscience object */
-	g_memmove(&(cs->ns_info.addr), &(srvid.addr), sizeof(addr_info_t));
+	memcpy(&(cs->ns_info.addr), &(srvid.addr), sizeof(addr_info_t));
 
 	conscience_srv_lock_score(srv, 100);
 	NOTICE("[NS=%s][SRVTYPE=%s] new locked META0 service at [%s]", cs->ns_info.name, NAME_SRVTYPE_META0, str);

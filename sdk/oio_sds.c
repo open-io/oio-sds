@@ -389,11 +389,12 @@ oio_error_message (const struct oio_error_s *e)
 struct oio_error_s *
 oio_sds_init (struct oio_sds_s **out, const char *ns)
 {
+	gridd_set_random_reqid ();
 	logger_lazy_init ();
 
 	assert (out != NULL);
 	assert (ns != NULL);
-	*out = g_malloc0 (sizeof(struct oio_sds_s));
+	*out = SLICE_NEW0 (struct oio_sds_s);
 	(*out)->ns = g_strdup (ns);
 	(*out)->proxy_local = gridcluster_get_proxylocal (ns);
 	(*out)->proxy = gridcluster_get_proxy (ns);
@@ -408,7 +409,7 @@ oio_sds_free (struct oio_sds_s *sds)
 	metautils_str_clean (&sds->ns);
 	metautils_str_clean (&sds->proxy);
 	metautils_str_clean (&sds->proxy_local);
-	g_free (sds);
+	SLICE_FREE (struct oio_sds_s, sds);
 }
 
 void
@@ -523,6 +524,8 @@ _download_chunks (struct oio_sds_s *sds, GSList *chunks, const char *local)
 			if (2 != (code/100))
 				err = NEWERROR(0, "Download: (%ld)", code);
 		}
+
+		g_slist_free (chunkset);
 	}
 
 	
@@ -547,16 +550,20 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 
 	GSList *chunks = NULL;
 	GString *reply_body = g_string_new("");
-	CURL *h = _curl_get_handle_proxy (sds);
 
 	/* Get the beans */
 	if (!err) {
+		CURL *h = _curl_get_handle_proxy (sds);
 		g_string_set_size (reply_body, 0);
 		do {
 			GString *http_url = _curl_set_url_content (url);
 			rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
 			g_string_free (http_url, TRUE);
 		} while (0);
+		struct headers_s headers = {NULL,NULL};
+		_headers_add (&headers, "Expect", "");
+		_headers_add (&headers, PROXYD_HEADER_REQID, gridd_get_reqid());
+		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
 		rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
@@ -569,6 +576,8 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 			if (2 != (code/100))
 				err = NEWERROR(0, "Get error: (%ld)", code);
 		}
+		_headers_clean (&headers);
+		curl_easy_cleanup (h);
 	}
 
 	/* Parse the beans */
@@ -595,7 +604,6 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		err = _download_chunks (sds, chunks, local);
 
 	/* cleanup and exit */
-	curl_easy_cleanup (h);
 	g_string_free (reply_body, TRUE);
 	g_slist_free_full (chunks, g_free);
 	return (struct oio_error_s*)err;
@@ -610,6 +618,7 @@ struct local_upload_s
 	int fd;
 	struct stat st;
 	GChecksum *checksum_content;
+	struct hc_url_s *url;
 };
 
 static void
@@ -628,9 +637,10 @@ _upload_fini (struct local_upload_s *upload)
 }
 
 static GError *
-_upload_init (struct local_upload_s *upload, const char *path)
+_upload_init (struct local_upload_s *upload, struct hc_url_s *url, const char *path)
 {
 	memset (upload, 0, sizeof(*upload));
+	upload->url = url;
 	upload->path = path;
 	if (0 > (upload->fd = open (upload->path, O_RDONLY)))
 		return NEWERROR(0, "open error [%s]: (%d) %s", upload->path, errno, strerror(errno));
@@ -648,10 +658,6 @@ _upload_chunks (struct oio_sds_s *sds, GSList *chunks, struct local_upload_s *up
 {
 	GError *err = NULL;
 	off_t done = 0;
-
-	CURL *h = _curl_get_handle ();
-	curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "PUT");
-	curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
 
 	GRID_DEBUG("Upload from [%s] to ...", upload->path);
 	for (GSList *l=chunks; l && !err ;l=l->next) {
@@ -712,6 +718,14 @@ _upload_chunks (struct oio_sds_s *sds, GSList *chunks, struct local_upload_s *up
 		for (GSList *l1=chunkset; l1 ;l1=l1->next) {
 			struct chunk_s *c1 = l1->data;
 			struct http_put_dest_s *dest = http_put_add_dest (put, c1->url, c1);
+			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "container-id", "%s", hc_url_get(upload->url, HCURL_HEXID));
+			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-path", "%s", hc_url_get(upload->url, HCURL_PATH));
+			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-size", "%" G_GINT64_FORMAT, c1->size);
+			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-chunksnb", "%u", g_slist_length(chunkset));
+			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-metadata-sys", "%s", "");
+			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-id", "%s", strrchr(c1->url, '/')+1);
+			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos", "%u", c1->position.meta);
+			http_put_dest_add_header (dest, PROXYD_HEADER_REQID, "%s", gridd_get_reqid());
 			destset = g_slist_append (destset, dest); 
 		}
 		err = http_put_run (put);
@@ -729,7 +743,7 @@ _upload_chunks (struct oio_sds_s *sds, GSList *chunks, struct local_upload_s *up
 			http_put_get_md5 (put, bin, sizeof(hash_md5_t));
 			buffer2str (bin, sizeof(hash_md5_t), computed, sizeof(computed));
 			for (GSList *l1=chunkset; !err && l1 ;l1=l1->next) {
-				const gchar *received = http_put_get_header (put, l1->data, "chunk_hash");
+				const gchar *received = http_put_get_header (put, l1->data, RAWX_HEADER_PREFIX "chunk-hash");
 				if (!received || g_ascii_strcasecmp(received, computed)) {
 					err = NEWERROR(0, "Possible corruption: chunk hash mismatch "
 						"computed[%s] received[%s]", computed, received);
@@ -747,7 +761,6 @@ _upload_chunks (struct oio_sds_s *sds, GSList *chunks, struct local_upload_s *up
 		g_slist_free (destset);
 	}
 
-	curl_easy_cleanup (h);
 	return err;
 }
 
@@ -800,14 +813,13 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 
 	/* check the local file */
 	struct local_upload_s upload;
-	if (NULL != (err = _upload_init (&upload, src->data.path))) {
+	if (NULL != (err = _upload_init (&upload, url, src->data.path))) {
 		_upload_fini (&upload);
 		return (struct oio_error_s*) err;
 	}
 
 	GSList *chunks = NULL;
 	GString *request_body = g_string_new(""), *reply_body = g_string_new ("");
-	CURL *h = _curl_get_handle_proxy (sds);
 	struct view_GString_s view_input = {.data=request_body, .done=0};
 
 	/* get the beans */
@@ -815,6 +827,7 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 	g_string_set_size (reply_body, 0);
 	if (!err) {
 		GRID_DEBUG("Getting some BEANS from the proxy ...");
+		CURL *h = _curl_get_handle_proxy (sds);
 		do {
 			GString *http_url = _curl_set_url_content (url);
 			g_string_append (http_url, "/action");
@@ -828,6 +841,7 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 		view_input.done = 0;
 		struct headers_s headers = {NULL,NULL};
 		_headers_add (&headers, "Expect", "");
+		_headers_add (&headers, PROXYD_HEADER_REQID, gridd_get_reqid());
 		if (src->autocreate)
 			_headers_add (&headers, PROXYD_HEADER_MODE, "autocreate");
 		rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
@@ -850,6 +864,7 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 				err->code = code;
 			}
 		}
+		curl_easy_cleanup (h);
 		_headers_clean (&headers);
 	}
 
@@ -881,6 +896,7 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 	g_string_set_size (reply_body, 0);
 	if (!err) {
 		GRID_DEBUG("Saving the uploaded beans ...");
+		CURL *h = _curl_get_handle_proxy (sds);
 		do {
 			GString *http_url = _curl_set_url_content (url);
 			rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
@@ -891,6 +907,7 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 
 		struct headers_s headers = {NULL,NULL};
 		_headers_add (&headers, "Expect", "");
+		_headers_add (&headers, PROXYD_HEADER_REQID, gridd_get_reqid());
 		_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-policy", "NONE");
 		_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-hash",
 				g_checksum_get_string (upload.checksum_content));
@@ -898,6 +915,8 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 				upload.st.st_size);
 		if (src->autocreate)
 			_headers_add (&headers, PROXYD_HEADER_MODE, "autocreate");
+		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
+
 		rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
 		rc = curl_easy_setopt (h, CURLOPT_READDATA, &view_input);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
@@ -905,7 +924,6 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 		rc = curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
 		rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "PUT");
 		rc = curl_easy_setopt (h, CURLOPT_INFILESIZE_LARGE, request_body->len);
-		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 		rc = curl_easy_perform (h);
 		if (rc != CURLE_OK)
 			err = NEWERROR(0, "Proxy error (put): (%d) %s", rc, curl_easy_strerror(rc));
@@ -915,13 +933,13 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 			if (2 != (code/100))
 				err = NEWERROR(0, "Put error: (%ld)", code);
 		}
+		curl_easy_cleanup (h);
 		_headers_clean (&headers);
 	}
 
 	/* cleanup and exit */
 	g_string_free (request_body, TRUE);
 	g_string_free (reply_body, TRUE);
-	curl_easy_cleanup (h);
 	_upload_fini (&upload);
 	GRID_DEBUG("UPLOAD %s", err?"KO":"ok");
 	return (struct oio_error_s*) err;
@@ -949,10 +967,12 @@ oio_sds_delete (struct oio_sds_s *sds, struct hc_url_s *url)
 
 	struct headers_s headers = {NULL,NULL};
 	_headers_add (&headers, "Expect", "");
+	_headers_add (&headers, PROXYD_HEADER_REQID, gridd_get_reqid());
+	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
+
 	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
 	rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
 	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "DELETE");
-	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 	rc = curl_easy_perform (h);
 	if (CURLE_OK != rc)
 		err = NEWERROR(0, "Proxy error (delete): %s", curl_easy_strerror(rc));
@@ -962,9 +982,8 @@ oio_sds_delete (struct oio_sds_s *sds, struct hc_url_s *url)
 		if (2 != (code/100))
 			err = NEWERROR(0, "Delete error: (%ld)", code);
 	}
-	_headers_clean (&headers);
-
 	curl_easy_cleanup (h);
+	_headers_clean (&headers);
 	g_string_free (reply_body, TRUE);
 	return (struct oio_error_s*) err;
 }
@@ -990,9 +1009,11 @@ oio_sds_has (struct oio_sds_s *sds, struct hc_url_s *url, int *phas)
 
 	struct headers_s headers = {NULL,NULL};
 	_headers_add (&headers, "Expect", "");
+	_headers_add (&headers, PROXYD_HEADER_REQID, gridd_get_reqid());
+	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
+
 	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_NOOP);
 	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "HEAD");
-	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 	rc = curl_easy_perform (h);
 	if (CURLE_OK != rc)
 		err = NEWERROR(0, "Proxy error (head): %s", curl_easy_strerror(rc));
@@ -1003,9 +1024,8 @@ oio_sds_has (struct oio_sds_s *sds, struct hc_url_s *url, int *phas)
 		if (!*phas && 404 != code)
 			err = NEWERROR(0, "Check error: (%ld)", code);
 	}
-	_headers_clean (&headers);
-
 	curl_easy_cleanup (h);
+	_headers_clean (&headers);
 	g_string_free (reply_body, TRUE);
 	return (struct oio_error_s*) err;
 }

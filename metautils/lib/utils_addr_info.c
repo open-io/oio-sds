@@ -228,8 +228,8 @@ addr_info_compare(gconstpointer a, gconstpointer b)
 	memset(&addrA, 0, sizeof(addr_info_t));
 	memset(&addrB, 0, sizeof(addr_info_t));
 
-	g_memmove(&addrA, a, sizeof(addr_info_t));
-	g_memmove(&addrB, b, sizeof(addr_info_t));
+	memcpy(&addrA, a, sizeof(addr_info_t));
+	memcpy(&addrB, b, sizeof(addr_info_t));
 
 	if (addrA.type != addrB.type)
 		return CMP(addrB.type,addrA.type);
@@ -257,8 +257,8 @@ addr_info_equal(gconstpointer a, gconstpointer b)
 		return FALSE;
 	if (a == b)
 		return TRUE;
-	g_memmove(&addrA, a, sizeof(addr_info_t));
-	g_memmove(&addrB, b, sizeof(addr_info_t));
+	memcpy(&addrA, a, sizeof(addr_info_t));
+	memcpy(&addrB, b, sizeof(addr_info_t));
 
 	if (addrA.type != addrB.type)
 		return FALSE;
@@ -282,7 +282,7 @@ addr_info_hash(gconstpointer k)
 {
 	addr_info_t addr;
 
-	g_memmove(&addr, k, sizeof(addr_info_t));
+	memcpy(&addr, k, sizeof(addr_info_t));
 	/*forces a NULL's padding if the address if ipv4 */
 	if (addr.type == TADDR_V4)
 		memset(

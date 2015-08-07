@@ -229,30 +229,6 @@ m2db_set_quota(struct sqlx_sqlite3_s *sq3, gint64 quota)
 	sqlx_admin_set_i64(sq3, M2V2_ADMIN_QUOTA, quota);
 }
 
-/** Get the size of the contents of an alias (or 0 upon error). */
-static gint64
-_get_alias_size(struct sqlx_sqlite3_s *sq3, struct bean_ALIASES_s *alias)
-{
-	GError *err = NULL;
-	gint64 size = 0;
-
-	void _cb(gpointer u, gpointer bean) {
-		(void) u;
-		size = CONTENTS_HEADERS_get_size(bean);
-		_bean_clean(bean);
-	}
-
-	GVariant *params[] = {NULL, NULL};
-	gchar *clause = " id = ? ";
-	params[0] = _gba_to_gvariant(ALIASES_get_content_id(alias));
-	err = _db_get_bean(&descr_struct_CONTENTS_HEADERS, sq3->db,
-			clause, params, _cb, NULL);
-	g_variant_unref(params[0]);
-	if (err)
-		g_error_free(err); // I don't care
-	return size;
-}
-
 /* GET ---------------------------------------------------------------------- */
 
 static GError*

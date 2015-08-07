@@ -127,7 +127,7 @@ read_request_from_message(message_t *message, request_t *req, GError **error)
 		if ((post_space - data) < i_length) {
 			req->arg_size = i_length - (post_space - data);
 			req->arg = g_malloc0(req->arg_size + 1);
-			g_memmove(req->arg, post_space, req->arg_size);
+			memcpy(req->arg, post_space, req->arg_size);
 			req->arg[ req->arg_size ] = '\0';
 		}
 		else {

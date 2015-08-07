@@ -1065,6 +1065,42 @@ sqlx_repository_unlock_and_close_noerror(struct sqlx_sqlite3_s *sq3)
 	return sqlx_repository_unlock_and_close_noerror2(sq3, 0);
 }
 
+const char *
+sqlx_opentype_to_str (enum sqlx_open_type_e type, char *buf)
+{
+	char *p = buf;
+	void append(char c) { (*p++) = c; (*p) = '\0'; }
+	*buf = '\0';
+	switch (type & SQLX_OPEN_REPLIMODE) {
+		case SQLX_OPEN_LOCAL:
+			append('L');
+			break;
+		case SQLX_OPEN_MASTERONLY:
+			append('M');
+			break;
+		case SQLX_OPEN_SLAVEONLY:
+			append('S');
+			break;
+		case SQLX_OPEN_MASTERSLAVE:
+			append('M'), append('S');
+			break;
+	}
+
+	if (type & SQLX_OPEN_CREATE)
+		append('C');
+	if (type & SQLX_OPEN_NOREFCHECK)
+		append('N');
+
+	if (!(type & SQLX_OPEN_STATUS))
+		append('E'), append('F'), append('D');
+	else {
+		if (type & SQLX_OPEN_ENABLED) append ('E');
+		if (type & SQLX_OPEN_FROZEN) append ('F');
+		if (type & SQLX_OPEN_DISABLED) append ('D');
+	}
+	return buf;
+}
+
 GError*
 sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 		struct sqlx_name_s *n, enum sqlx_open_type_e how,
@@ -1074,7 +1110,6 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 	struct open_args_s args;
 
 	memset(&args, '\0', sizeof(struct open_args_s));
-
 	EXTRA_ASSERT(repo != NULL);
 	SQLXNAME_CHECK(n);
 	

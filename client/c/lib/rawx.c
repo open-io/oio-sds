@@ -122,12 +122,12 @@ create_rawx_request_common(ne_request **req, ne_request_param_t *param, GError *
 	}
 
 	/* add additionnal headers */
-	ne_add_request_header  (request, "containerid", param->containerid);
-	ne_add_request_header  (request, "contentpath", param->contentpath);
-	ne_print_request_header(request, "chunkpos",    "%u", param->chunkpos);
-	ne_print_request_header(request, "chunknb",     "%u", param->chunknb);
-	ne_print_request_header(request, "chunksize",   "%"G_GINT64_FORMAT, param->chunksize);
-	ne_print_request_header(request, "contentsize", "%"G_GINT64_FORMAT, param->contentsize);
+	ne_add_request_header  (request, RAWX_HEADER_PREFIX "container-id", param->containerid);
+	ne_add_request_header  (request, RAWX_HEADER_PREFIX "content-path", param->contentpath);
+	ne_print_request_header(request, RAWX_HEADER_PREFIX "content-size", "%"G_GINT64_FORMAT, param->contentsize);
+	ne_print_request_header(request, RAWX_HEADER_PREFIX "content-chunksnb", "%u", param->chunknb);
+	ne_print_request_header(request, RAWX_HEADER_PREFIX "chunk-pos",    "%u", param->chunkpos);
+	ne_print_request_header(request, RAWX_HEADER_PREFIX "chunk-size",   "%"G_GINT64_FORMAT, param->chunksize);
 
 	/* Add request header */
 	add_req_id_header(request, str_req_id, sizeof(str_req_id)-1);
@@ -477,7 +477,7 @@ void add_req_id_header(ne_request *request, gchar *dst, gsize dst_size) {
 
 	DEBUG("Adding ReqId header to HTTP request => [%s:%s]", "GSReqId", idRequest);
 
-	ne_add_request_header(request, "GSReqId", idRequest);
+	ne_add_request_header(request, PROXYD_HEADER_REQID, idRequest);
 	if (dst && dst_size>0)
 		g_strlcpy(dst, idRequest, dst_size);
 }
@@ -494,7 +494,7 @@ void add_req_system_metadata_header (ne_request *request, GByteArray *system_met
 
 	/* ensure the URL is NULL terminated */
 	unescaped = g_malloc0(system_metadata->len + 1);
-	g_memmove(unescaped, system_metadata->data, system_metadata->len);
+	memcpy(unescaped, system_metadata->data, system_metadata->len);
 
 	/*and add the escaped string as a header*/
 	escaped = g_strescape( unescaped, "");
