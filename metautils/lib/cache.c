@@ -25,11 +25,10 @@ struct metautils_cache_NOOP_s
 	const struct metautils_cache_vtable_s *vtable;
 };
 
-
 static void
 _noop_destroy (struct metautils_cache_s *self)
 {
-	SLICE_FREE(struct metautils_cache_NOOP_s, self);
+	SLICE_FREE(struct metautils_cache_NOOP_s, (struct metautils_cache_NOOP_s*) self);
 }
 
 static void
