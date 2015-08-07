@@ -56,6 +56,9 @@ struct grid_lb_s* grid_lb_init(const gchar *ns, const gchar *srvtype);
 /*! frees the structure and all ots components. lb is invalid after. */
 void grid_lb_clean(struct grid_lb_s *lb);
 
+/*! Remove all the items from the pool. */
+void grid_lb_flush(struct grid_lb_s *lb);
+
 /*! Configures the standard-deviation shortening. Shortens to the index where
  * the service's score is the average + standard deviation. When several
  * shortenings are configured, the strongest is taken into consideration. */
@@ -305,6 +308,9 @@ GError* grid_lbpool_reload_json(struct grid_lbpool_s *glp, const gchar *srvtype,
 struct service_info_s* grid_lbpool_get_service_from_url(
 		struct grid_lbpool_s *glp, const gchar *srvtype,
 		const gchar *url);
+
+/*! flush all the sets registered in the given pool */
+void grid_lbpool_flush(struct grid_lbpool_s *glp);
 
 /*! @} */
 

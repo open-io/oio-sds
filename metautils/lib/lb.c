@@ -415,6 +415,15 @@ _lb_reload(struct grid_lb_s *lb, service_provider_f provide)
 }
 
 void
+grid_lb_flush(struct grid_lb_s *lb)
+{
+	if (!lb) return;
+	grid_lb_lock(lb);
+	_lb_flush(lb);
+	grid_lb_unlock(lb);
+}
+
+void
 grid_lb_reload(struct grid_lb_s *lb, service_provider_f provide)
 {
 	if (!lb)
@@ -1496,5 +1505,20 @@ grid_lb_reload_json(struct grid_lb_s *lb, const gchar *encoded)
 	GError *err = grid_lb_reload_json_object(lb, obj);
 	json_object_put(obj);
 	return err;
+}
+
+void
+grid_lbpool_flush(struct grid_lbpool_s *glp)
+{
+	if (!glp) return;
+	gboolean _flush (gchar *srvtype, struct grid_lb_s *lb, gpointer ignored) {
+		(void) srvtype, (void) ignored;
+		grid_lb_flush (lb);
+		return FALSE;
+	}
+
+	g_rw_lock_reader_lock(&(glp->rwlock));
+	g_tree_foreach(glp->pools, (GTraverseFunc)_flush, NULL);
+	g_rw_lock_reader_unlock(&(glp->rwlock));
 }
 
