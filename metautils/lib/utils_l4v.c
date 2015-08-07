@@ -37,7 +37,7 @@ l4v_fill(void *src, gsize srcSize, void *dst, gsize dstSize, GError ** error)
 	}
 
 	l4v_prepend_size(dst, dstSize);
-	g_memmove(((guint8 *) dst) + 4, src, srcSize);
+	memcpy(((guint8 *) dst) + 4, src, srcSize);
 	return 1;
 }
 

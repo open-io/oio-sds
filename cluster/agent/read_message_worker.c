@@ -71,7 +71,7 @@ int read_message_data_worker(worker_t *worker, GError **error) {
 	 * So we have to read 4 more bytes */
 	if (data->done > sizeof(guint32) && ((gchar*)data->buffer)[0] == '\0') {
 		data->done -= sizeof(guint32);
-		g_memmove(data->buffer, data->buffer+sizeof(guint32), data->done);
+		memcpy(data->buffer, data->buffer+sizeof(guint32), data->done);
 		data->size_64 = TRUE;
 	}
 

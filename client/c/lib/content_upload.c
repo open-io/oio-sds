@@ -203,8 +203,6 @@ _gs_upload_content (meta2_content_add_f adder, gs_container_t *container,
 	return _gs_upload_content_v2(container, content_name, FALSE, content_size, feeder, user_data, NULL, NULL, err);
 }
 
-static GMutex global_mutex = G_STATIC_MUTEX_INIT;
-
 static GError *
 _rawx_update_beans_hash_from_request(struct http_put_s *http_put)
 {
@@ -937,6 +935,14 @@ _gs_upload(gs_container_t *container,
 		gs_input_f feeder, void *user_data, const char *mdusr,
 		const char *sys_metadata, const char *stgpol, gs_error_t **err)
 {
+	static volatile guint lazy_init = 1;
+	static GMutex global_mutex;
+	if (lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
+			g_mutex_init(&global_mutex);
+		}
+	}
+
 #define CONTENT_ADD_V2() m2v2_remote_execute_BEANS(target, url, actual_stgpol, content_size, append, &chunks)
 #define CONTENT_COMMIT() m2v2_remote_execute_PUT(target, url, chunks, NULL)
 #define APPEND_COMMIT() m2v2_remote_execute_APPEND(target, url, chunks, NULL)

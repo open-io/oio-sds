@@ -494,7 +494,7 @@ void add_req_system_metadata_header (ne_request *request, GByteArray *system_met
 
 	/* ensure the URL is NULL terminated */
 	unescaped = g_malloc0(system_metadata->len + 1);
-	g_memmove(unescaped, system_metadata->data, system_metadata->len);
+	memcpy(unescaped, system_metadata->data, system_metadata->len);
 
 	/*and add the escaped string as a header*/
 	escaped = g_strescape( unescaped, "");

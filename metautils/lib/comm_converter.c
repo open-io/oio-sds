@@ -1056,8 +1056,8 @@ meta2_raw_chunk_ASN2API(const Meta2RawChunk_t * src, struct meta2_raw_chunk_s * 
 	chunk_id_ASN2API(&(src->id), &(dst->id));
 	asn_INTEGER_to_uint32(&(src->position), &(dst->position));
 	asn_INTEGER_to_int64(&(src->size), &(dst->size));
-	g_memmove(&(dst->flags), src->flags.buf, src->flags.size);
-	g_memmove(&(dst->hash), src->hash.buf, src->hash.size);
+	memcpy(&(dst->flags), src->flags.buf, src->flags.size);
+	memcpy(&(dst->hash), src->hash.buf, src->hash.size);
 	if (src->metadata && src->metadata->buf && src->metadata->size > 0)
 		dst->metadata = g_byte_array_append(g_byte_array_new(), src->metadata->buf, src->metadata->size);
 	return TRUE;
@@ -1090,9 +1090,9 @@ meta2_raw_content_header_ASN2API(const Meta2RawContentHeader_t *asn,
 	memset(api, 0, sizeof(*api));
 	asn_INTEGER_to_uint32(&(asn->nbChunks), &(api->nb_chunks));
 	asn_INTEGER_to_int64(&(asn->size), &(api->size));
-	g_memmove(api->path, asn->path.buf, asn->path.size);
-	g_memmove(&(api->flags), asn->flags.buf, asn->flags.size);
-	g_memmove(api->container_id, asn->cID.buf, asn->cID.size);
+	memcpy(api->path, asn->path.buf, asn->path.size);
+	memcpy(&(api->flags), asn->flags.buf, asn->flags.size);
+	memcpy(api->container_id, asn->cID.buf, asn->cID.size);
 
 	if (asn->metadata) {
 		api->metadata = g_byte_array_sized_new(asn->metadata->size);
@@ -1244,9 +1244,9 @@ meta2_raw_content_ASN2API(const Meta2RawContent_t * src, struct meta2_raw_conten
 	/* asn_INTEGER_to_int64(&(src->header.version), &(dst->version)); */
 	if(NULL != src->header.version)
 		asn_INTEGER_to_int64(src->header.version, &(dst->version));
-	g_memmove(dst->path, src->header.path.buf, src->header.path.size);
-	g_memmove(&(dst->flags), src->header.flags.buf, src->header.flags.size);
-	g_memmove(dst->container_id, src->header.cID.buf, src->header.cID.size);
+	memcpy(dst->path, src->header.path.buf, src->header.path.size);
+	memcpy(&(dst->flags), src->header.flags.buf, src->header.flags.size);
+	memcpy(dst->container_id, src->header.cID.buf, src->header.cID.size);
 
 	if (src->header.metadata) {
 		dst->metadata = g_byte_array_sized_new(src->header.metadata->size);
@@ -1783,9 +1783,9 @@ container_asn1_to_api(Meta1RawContainer_t * src, struct meta1_raw_container_s *d
 	memset(dst, 0x00, sizeof(struct meta1_raw_container_s));
 
 	/*map the fields */
-	g_memmove(dst->id, src->id.buf, src->id.size);
-	g_memmove(dst->name, src->name.buf, src->name.size);
-	g_memmove(&(dst->flags), src->flags.buf, src->flags.size);
+	memcpy(dst->id, src->id.buf, src->id.size);
+	memcpy(dst->name, src->name.buf, src->name.size);
+	memcpy(&(dst->flags), src->flags.buf, src->flags.size);
 
 	/* map meta2 addr list */
 	for (i = src->meta2.list.count - 1; i >= 0; i--) {

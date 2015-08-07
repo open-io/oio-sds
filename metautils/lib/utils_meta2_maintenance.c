@@ -32,8 +32,8 @@ meta2_maintenance_create_content(const container_id_t container_id, gint64 size,
 	if (!path || size < 0LL || path_len > LIMIT_LENGTH_CONTENTPATH)
 		return NULL;
 	struct meta2_raw_content_s *result = g_malloc0(sizeof(struct meta2_raw_content_s));
-	g_memmove(result->container_id, container_id, sizeof(container_id_t));
-	g_memmove(result->path, path, MIN(path_len, sizeof(result->path) - 1));
+	memcpy(result->container_id, container_id, sizeof(container_id_t));
+	memcpy(result->path, path, MIN(path_len, sizeof(result->path) - 1));
 	result->nb_chunks = nb_chunks;
 	result->flags = flags;
 	result->size = size;
@@ -238,7 +238,7 @@ meta2_raw_chunk_dup(meta2_raw_chunk_t *chunk)
 	if (!chunk)
 		return NULL;
 	meta2_raw_chunk_t *copy = g_malloc0(sizeof(*copy));
-	g_memmove(copy, chunk, sizeof(*copy));
+	memcpy(copy, chunk, sizeof(*copy));
 	copy->metadata = metautils_gba_dup(chunk->metadata);
 	return copy;
 }
