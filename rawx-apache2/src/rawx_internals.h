@@ -34,8 +34,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "mod_dav_rawx.h"
 #include "rawx_config.h"
 
-#define HEADER_PREFIX_GRID "X-Grid-"
-
 #if MODULE_MAGIC_COOKIE == 0x41503234UL /* "AP24" */
 # define __ap_log_rerror(L,S,R,FMT,...) ap_log_rerror(__FILE__, __LINE__, 0, (L), (S), (R), FMT, ##__VA_ARGS__)
 # define __ap_log_perror(L,S,P,FMT,...) ap_log_perror(__FILE__, __LINE__, 0, (L), (S), (P), FMT, ##__VA_ARGS__)

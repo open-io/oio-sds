@@ -86,14 +86,12 @@ dav_error * resource_init_decompression(dav_resource *resource, dav_rawx_server_
 
 void resource_stat_chunk(dav_resource *resource, int xattr_too);
 
-void request_load_chunk_info(request_rec *request, dav_resource *resource);
+const char * request_load_chunk_info(request_rec *request, dav_resource *resource);
 
 void request_parse_query(request_rec *r, dav_resource *resource);
 
-void chunk_textinfo_fill_headers(request_rec *r, struct chunk_textinfo_s *cti);
-
-void content_textinfo_fill_headers(request_rec *r, struct content_textinfo_s *cti);
-
+void request_fill_headers(request_rec *r, struct content_textinfo_s *c0,
+		struct chunk_textinfo_s *c1);
 
 dav_error * rawx_repo_check_request(request_rec *req, const char *root_dir, const char *label,
 		int use_checked_in, dav_resource_private *ctx, dav_resource **result_resource);

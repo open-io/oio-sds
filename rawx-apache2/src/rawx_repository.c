@@ -221,7 +221,11 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	if (r->method_number == M_PUT || r->method_number == M_POST ||
 			r->method_number == M_MOVE ||
 			(r->method_number == M_GET && ctx.update_only)) {
-		request_load_chunk_info(r, resource);
+		const char *missing = request_load_chunk_info(r, resource);
+		if (missing != NULL) {
+			return server_create_and_stat_error(request_get_server_config(r), r->pool,
+				HTTP_BAD_REQUEST, 0, apr_pstrcat(r->pool, "Missing header ", missing, NULL));
+		}
 	}
 
 	if (r->method_number == M_POST || r->method_number == M_PUT) {
@@ -463,8 +467,8 @@ dav_rawx_set_headers(request_rec *r, const dav_resource *resource)
 	/* set up the Content-Length header */
 	ap_set_content_length(r, resource->info->finfo.size);
 
-	chunk_textinfo_fill_headers(r, &(resource->info->chunk));
-	content_textinfo_fill_headers(r, &(resource->info->content));
+	request_fill_headers(r, &(resource->info->content),
+			&(resource->info->chunk));
 
 	/* compute metadata_compress if compressed content */
 	if(resource->info->compression) {
@@ -745,7 +749,7 @@ dav_rawx_getetag(const dav_resource *resource)
 	return etag;
 }
 
-/* XXX JFS : rawx walks are dummy*/
+/* JFS : walks are not managed by this rawx */
 static dav_error *
 dav_rawx_walk(const dav_walk_params *params, int depth, dav_response **response)
 {
