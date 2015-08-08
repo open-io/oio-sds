@@ -50,6 +50,7 @@ In addition, a few python modules are required at runtime:
 * python-zmq
 * python-eventlet
 * python-requests
+* python-attr
 
 The account service will require an up and running backend:
 * redis
