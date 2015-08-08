@@ -336,7 +336,6 @@ template_local_ns = """
 [${NS}]
 ${NOZK}zookeeper=${IP}:2181
 conscience=${IP}:${PORT_CS}
-#endpoint=${IP}:${PORT_ENDPOINT}
 proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
 event-agent=ipc://${RUNDIR}/event-agent.sock
@@ -414,8 +413,8 @@ def generate (ns, ip, options={}):
 	port_agent = next_port() # for TCP connection is use by Java applications
 	port_proxy = next_port()
 	port_flask = next_port()
-	port_endpoint = next_port()
 	port_account = next_port()
+	port_event_agent = next_port()
 	rawx = []
 	services = []
 
@@ -457,7 +456,6 @@ def generate (ns, ip, options={}):
 			VERSIONING=versioning, STGPOL=stgpol,
 			PORT_CS=port_cs,
 			PORT_PROXYD=port_proxy,
-			PORT_ENDPOINT=port_endpoint,
 			M2_REPLICAS=meta2_replicas, M2_DISTANCE=str(1),
 			SQLX_REPLICAS=sqlx_replicas, SQLX_DISTANCE=str(1),
 			APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
@@ -546,6 +544,7 @@ def generate (ns, ip, options={}):
 		f.write(tpl.safe_substitute(env))
 
 	# Event agent configuration
+	env['PORT'] = port_event_agent
 	with open(CFGDIR + '/' + 'event-agent.conf', 'w+') as f:
 		tpl = Template(template_event_agent)
 		f.write(tpl.safe_substitute(env))

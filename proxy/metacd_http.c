@@ -61,9 +61,6 @@ gchar **srvtypes = NULL;
 gdouble m2_timeout_all = PROXYD_M2_TIMEOUT_SINGLE;
 struct hc_resolver_s *resolver = NULL;
 
-//------------------------------------------------------------------------------
-
-
 // Misc. handlers --------------------------------------------------------------
 
 static enum http_rc_e
@@ -487,6 +484,7 @@ configure_request_handlers (void)
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/status/#GET", action_status);
 
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/status/#GET", action_cache_status);
+	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/flush/#POST", action_cache_flush_all);
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/flush/high/#POST", action_cache_flush_high);
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/flush/low/#POST", action_cache_flush_low);
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/ttl/low/$COUNT/#POST", action_cache_set_ttl_low);

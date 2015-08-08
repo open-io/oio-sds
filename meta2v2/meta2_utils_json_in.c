@@ -40,8 +40,6 @@ m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 	GError *err = NULL;
 	GByteArray *hid = NULL;
 	struct bean_ALIASES_s *alias = NULL;
-
-	*pbean = NULL;
 	struct json_object *jname, *jversion, *jctime, *jmd, *jheader;
 	struct metautils_json_mapping_s m[] = {
 		{"name",   &jname,    json_type_string, 1},
@@ -51,16 +49,18 @@ m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 		{"system_metadata", &jmd, json_type_string, 1},
 		{NULL, NULL, 0, 0}
 	};
+
+	*pbean = NULL;
 	if (NULL != (err = metautils_extract_json(j, m)))
 		goto exit;
 
-	alias = _bean_create (&descr_struct_ALIASES);
 	hid = metautils_gba_from_hexstring(json_object_get_string(jheader));
 	if (!hid) {
 		err = NEWERROR(CODE_BAD_REQUEST, "Invalid alias, not hexadecimal header_id");
 		goto exit;
 	}
 
+	alias = _bean_create (&descr_struct_ALIASES);
 	ALIASES_set_deleted (alias, FALSE);
 	ALIASES_set_container_version (alias, 0);
 	ALIASES_set_ctime (alias, 0);
@@ -72,12 +72,8 @@ m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 	alias = NULL;
 
 exit:
-	if (hid)
-		g_byte_array_unref (hid);
-	if (alias) {
-		_bean_clean (alias);
-		alias = NULL;
-	}
+	metautils_gba_unref (hid);
+	_bean_clean (alias);
 	return err;
 }
 
@@ -86,27 +82,18 @@ m2v2_json_load_single_header (struct json_object *j, gpointer *pbean)
 {
 	GError *err = NULL;
 	GByteArray *id = NULL, *hash = NULL;
-	struct bean_CONTENTS_HEADERS_s *header;
+	struct bean_CONTENTS_HEADERS_s *header = NULL;
 	struct json_object *jid, *jhash, *jsize;
+	struct metautils_json_mapping_s mapping[] = {
+		{"id",    &jid,   json_type_string, 1},
+		{"hash",  &jhash, json_type_string, 1},
+		{"size",  &jsize, json_type_int, 1},
+		{NULL, NULL, 0, 0}
+	};
 
 	*pbean = NULL;
-	header = _bean_create (&descr_struct_CONTENTS_HEADERS);
-
-	jid = json_object_object_get (j, "id");
-	if (!jid || !json_object_is_type(jid, json_type_string)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json id");
-		goto exit;
-	}
-	jhash = json_object_object_get (j, "hash");
-	if (!jhash || !json_object_is_type(jhash, json_type_string)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json hash");
-		goto exit;
-	}
-	jsize = json_object_object_get (j, "size");
-	if (!jsize || !json_object_is_type(jsize, json_type_int)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json size");
-		goto exit;
-	}
+	if (NULL != (err = metautils_extract_json (j, mapping)))
+		return err;
 
 	id = metautils_gba_from_hexstring(json_object_get_string(jid));
 	if (!id) {
@@ -119,6 +106,7 @@ m2v2_json_load_single_header (struct json_object *j, gpointer *pbean)
 		goto exit;
 	}
 
+	header = _bean_create (&descr_struct_CONTENTS_HEADERS);
 	CONTENTS_HEADERS_set2_id (header, id->data, id->len);
 	CONTENTS_HEADERS_set2_hash (header, hash->data, hash->len);
 	CONTENTS_HEADERS_set_size (header, json_object_get_int64(jsize));
@@ -126,14 +114,9 @@ m2v2_json_load_single_header (struct json_object *j, gpointer *pbean)
 	header = NULL;
 
 exit:
-	if (id)
-		g_byte_array_unref (id);
-	if (hash)
-		g_byte_array_unref (hash);
-	if (header) {
-		_bean_clean (header);
-		header = NULL;
-	}
+	metautils_gba_unref (id);
+	metautils_gba_unref (hash);
+	_bean_clean (header);
 	return err;
 }
 
@@ -142,27 +125,18 @@ m2v2_json_load_single_content (struct json_object *j, gpointer *pbean)
 {
 	GError *err = NULL;
 	GByteArray *hid = NULL;
-	struct bean_CONTENTS_s *content;
+	struct bean_CONTENTS_s *content = NULL;
 	struct json_object *jhid, *jcid, *jpos;
+	struct metautils_json_mapping_s mapping[] = {
+		{"hdr",   &jhid, json_type_string, 1},
+		{"chunk", &jcid, json_type_string, 1},
+		{"pos",   &jpos, json_type_string, 1},
+		{NULL, NULL, 0, 0}
+	};
 
 	*pbean = NULL;
-	content = _bean_create (&descr_struct_CONTENTS);
-
-	jhid = json_object_object_get (j, "hdr");
-	if (!jhid || !json_object_is_type(jhid, json_type_string)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json header id");
-		goto exit;
-	}
-	jcid = json_object_object_get (j, "chunk");
-	if (!jcid || !json_object_is_type(jcid, json_type_string)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json chunk id");
-		goto exit;
-	}
-	jpos = json_object_object_get (j, "pos");
-	if (!jpos || !json_object_is_type(jpos, json_type_string)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json position");
-		goto exit;
-	}
+	if (NULL != (err = metautils_extract_json (j, mapping)))
+		return err;
 
 	hid = metautils_gba_from_hexstring(json_object_get_string(jhid));
 	if (!hid) {
@@ -170,6 +144,7 @@ m2v2_json_load_single_content (struct json_object *j, gpointer *pbean)
 		goto exit;
 	}
 
+	content = _bean_create (&descr_struct_CONTENTS);
 	CONTENTS_set2_content_id (content, hid->data, hid->len);
 	CONTENTS_set2_chunk_id (content, json_object_get_string (jcid));
 	CONTENTS_set2_position (content, json_object_get_string (jpos));
@@ -177,12 +152,8 @@ m2v2_json_load_single_content (struct json_object *j, gpointer *pbean)
 	content = NULL;
 
 exit:
-	if (hid)
-		g_byte_array_unref (hid);
-	if (content) {
-		_bean_clean (content);
-		content = NULL;
-	}
+	metautils_gba_unref (hid);
+	_bean_clean (content);
 	return err;
 }
 
@@ -191,27 +162,18 @@ m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean)
 {
 	GError *err = NULL;
 	GByteArray *hash = NULL;
-	struct bean_CHUNKS_s *chunk;
+	struct bean_CHUNKS_s *chunk = NULL;
 	struct json_object *jid, *jhash, *jsize;
+	struct metautils_json_mapping_s mapping[] = {
+		{"id",    &jid,   json_type_string, 1},
+		{"hash",  &jhash, json_type_string, 1},
+		{"size",  &jsize, json_type_int, 1},
+		{NULL, NULL, 0, 0}
+	};
 
 	*pbean = NULL;
-	chunk = _bean_create (&descr_struct_CHUNKS);
-
-	jid = json_object_object_get (j, "id");
-	if (!jid || !json_object_is_type(jid, json_type_string)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json chunk id");
-		goto exit;
-	}
-	jhash = json_object_object_get (j, "hash");
-	if (!jhash || !json_object_is_type(jhash, json_type_string)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json chunk hash");
-		goto exit;
-	}
-	jsize = json_object_object_get (j, "size");
-	if (!jsize || !json_object_is_type(jsize, json_type_int)) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Invalid json size");
-		goto exit;
-	}
+	if (NULL != (err = metautils_extract_json (j, mapping)))
+		return err;
 
 	hash = metautils_gba_from_hexstring(json_object_get_string(jhash));
 	if (!hash) {
@@ -219,6 +181,7 @@ m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean)
 		goto exit;
 	}
 
+	chunk = _bean_create (&descr_struct_CHUNKS);
 	CHUNKS_set2_id (chunk, json_object_get_string(jid));
 	CHUNKS_set2_hash (chunk, hash->data, hash->len);
 	CHUNKS_set_size (chunk, json_object_get_int64(jsize));
@@ -227,12 +190,8 @@ m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean)
 	chunk = NULL;
 
 exit:
-	if (hash)
-		g_byte_array_unref (hash);
-	if (chunk) {
-		_bean_clean (chunk);
-		chunk = NULL;
-	}
+	metautils_gba_unref (hash);
+	_bean_clean (chunk);
 	return err;
 }
 
