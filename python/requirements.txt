@@ -5,3 +5,4 @@ requests
 flask
 redis
 gunicorn
+xattr
