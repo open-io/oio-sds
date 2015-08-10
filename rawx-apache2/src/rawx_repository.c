@@ -426,6 +426,8 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 	
 	/* update the hash and the stats */
 	g_checksum_update(stream->md5, buf, bufsize);
+	/* update total_size */
+	stream->total_size += bufsize;
 	server_add_stat(resource_get_server_config(stream->r), RAWX_STATNAME_REP_BWRITTEN, bufsize, 0);
 	return NULL;
 }
