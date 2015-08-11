@@ -36,8 +36,6 @@ on_die=respawn
 enabled=true
 start_at_boot=false
 command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},account,1 -p 1 -m '${EXE_PREFIX}-account-monitor.py' -i '${NS}|account|${IP}:${PORT}' -c '${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf'
-env.PATH=${HOME}/.local/bin:${CODEDIR}/bin
-env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
@@ -193,7 +191,7 @@ path=${LIBDIR}/grid/msg_fallback.so
 [Plugin.conscience]
 path=${LIBDIR}/grid/msg_conscience.so
 param_namespace=${NS}
-param_chunk_size=10485760
+param_chunk_size=${CHUNK_SIZE}
 param_score_timeout=86400
 
 param_option.ns_status=MASTER
@@ -272,7 +270,7 @@ uid=${UID}
 gid=${GID}
 working_dir=${TMPDIR}
 inherit_env=1
-env.PATH=${PATH}:${HOME}/.local/bin:${CODEDIR}/bin
+env.PATH=${PATH}:${HOME}/.local/bin:${CODEDIR}/bin:/bin:/usr/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 
 #limit.core_size=-1
@@ -459,7 +457,8 @@ def generate (ns, ip, options={}):
 			M2_REPLICAS=meta2_replicas, M2_DISTANCE=str(1),
 			SQLX_REPLICAS=sqlx_replicas, SQLX_DISTANCE=str(1),
 			APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
-			HTTPD_BINARY=HTTPD_BINARY)
+			HTTPD_BINARY=HTTPD_BINARY,
+			CHUNK_SIZE=str(getint(options.CHUNK_SIZE, 1024*1024)))
 	if options.NO_ZOOKEEPER is not None:
 		env['NOZK'] = '#'
 	else:
@@ -591,6 +590,7 @@ def main ():
 			action="store", type="string", dest="M2_STGPOL",
 			help="How many replicas for META2")
 
+	parser.add_option("--chunk-size", action="store", type="int", dest="CHUNK_SIZE")
 	parser.add_option("--no-zookeeper", action="store_true", dest="NO_ZOOKEEPER")
 
 	parser.add_option("--no-meta0", action="store_true", dest="NO_META0")
