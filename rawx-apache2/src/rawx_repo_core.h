@@ -80,6 +80,7 @@ struct dav_stream {
 	struct compression_ctx_s comp_ctx;
 
 	GChecksum *md5;
+	apr_size_t total_size;
 };
 
 dav_error * resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf);
