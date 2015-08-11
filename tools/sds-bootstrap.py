@@ -19,6 +19,86 @@
 from string import Template
 import os, errno, pwd, json
 
+template_redis = """
+daemonize no
+pidfile ${RUNDIR}/redis.pid
+port ${PORT_REDIS}
+tcp-backlog 128
+bind ${IP}
+timeout 0
+tcp-keepalive 0
+loglevel notice
+#logfile ${LOGDIR}/redis.log
+syslog-enabled yes
+syslog-ident ${NS}-redis-${SRVNUM}
+syslog-facility local0
+databases 16
+save 900 1
+save 300 10
+save 60 32768
+stop-writes-on-bgsave-error yes
+rdbcompression yes
+rdbchecksum yes
+dbfilename dump.rdb
+dir ${DATADIR}/${NS}-redis-${SRVNUM}
+# slaveof <masterip> <masterport>
+# masterauth <master-password>
+slave-serve-stale-data yes
+slave-read-only yes
+repl-diskless-sync no
+repl-diskless-sync-delay 5
+# repl-ping-slave-period 10
+# repl-timeout 60
+repl-disable-tcp-nodelay no
+# repl-backlog-size 1mb
+# repl-backlog-ttl 3600
+slave-priority 100
+# min-slaves-to-write 3
+# min-slaves-max-lag 10
+# rename-command CONFIG ""
+maxclients 100
+maxmemory 10m
+maxmemory-policy volatile-lru
+# maxmemory-samples 3
+appendonly no
+# The name of the append only file (default: "appendonly.aof")
+appendfilename "appendonly.aof"
+# appendfsync always
+appendfsync everysec
+# appendfsync no
+no-appendfsync-on-rewrite no
+auto-aof-rewrite-percentage 100
+auto-aof-rewrite-min-size 64mb
+aof-load-truncated yes
+lua-time-limit 5000
+slowlog-log-slower-than 10000
+slowlog-max-len 128
+latency-monitor-threshold 0
+notify-keyspace-events ""
+hash-max-ziplist-entries 512
+hash-max-ziplist-value 64
+list-max-ziplist-entries 512
+list-max-ziplist-value 64
+set-max-intset-entries 512
+zset-max-ziplist-entries 128
+zset-max-ziplist-value 64
+hll-sparse-max-bytes 3000
+activerehashing yes
+client-output-buffer-limit normal 0 0 0
+client-output-buffer-limit slave 256mb 64mb 60
+client-output-buffer-limit pubsub 32mb 8mb 60
+hz 10
+aof-rewrite-incremental-fsync yes
+"""
+
+template_redis_gridinit = """
+[service.${NS}-redis-${SRVNUM}]
+group=${NS},localhost,redis
+on_die=respawn
+enabled=true
+start_at_boot=false
+command=redis-server ${CFGDIR}/${NS}-redis-${SRVNUM}.conf
+"""
 
 template_flask_gridinit = """
 [service.${NS}-flask]
@@ -407,6 +487,9 @@ def generate (ns, ip, options={}):
 			return int(default)
 		return int(v)
 
+	global port
+	port = getint(options.PORT_START, 6000)
+
 	port_cs = next_port()
 	port_agent = next_port() # for TCP connection is use by Java applications
 	port_proxy = next_port()
@@ -457,8 +540,11 @@ def generate (ns, ip, options={}):
 			M2_REPLICAS=meta2_replicas, M2_DISTANCE=str(1),
 			SQLX_REPLICAS=sqlx_replicas, SQLX_DISTANCE=str(1),
 			APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
-			HTTPD_BINARY=HTTPD_BINARY,
-			CHUNK_SIZE=str(getint(options.CHUNK_SIZE, 1024*1024)))
+			HTTPD_BINARY=HTTPD_BINARY)
+
+	env['CHUNK_SIZE'] = getint(options.CHUNK_SIZE, 1024*1024)
+	env['PORT_REDIS'] = 6379
+
 	if options.NO_ZOOKEEPER is not None:
 		env['NOZK'] = '#'
 	else:
@@ -527,6 +613,18 @@ def generate (ns, ip, options={}):
 		tpl = Template(template_flask_gridinit)
 		f.write(tpl.safe_substitute(env))
 
+	# redis
+	if options.ALLOW_REDIS is not None:
+		env['PORT'] = port_proxy
+		env['SRVNUM'] = 1
+		mkdir_noerror(DATADIR + '/' + str(env['NS']) + '-' + 'redis' + '-' + str(env['SRVNUM']))
+		with open(CFGDIR + '/' + ns + '-redis-'+ str(env['SRVNUM']) +'.conf', 'w+') as f:
+			tpl = Template(template_redis)
+			f.write(tpl.safe_substitute(env))
+		with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
+			tpl = Template(template_redis_gridinit)
+			f.write(tpl.safe_substitute(env))
+
 	# proxy
 	env['PORT'] = port_proxy
 	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
@@ -572,7 +670,7 @@ def generate (ns, ip, options={}):
                                     m[0] == 'meta2']
                 listing["rawx"] = [str(ip) + ':' + str(p[1]) for p in rawx]
                 f.write(json.dumps(listing))
- 
+
 def main ():
 	from optparse import OptionParser as OptionParser
 	parser = OptionParser()
@@ -590,8 +688,10 @@ def main ():
 			action="store", type="string", dest="M2_STGPOL",
 			help="How many replicas for META2")
 
+	parser.add_option("--port", action="store", type="int", dest="PORT_START")
 	parser.add_option("--chunk-size", action="store", type="int", dest="CHUNK_SIZE")
 	parser.add_option("--no-zookeeper", action="store_true", dest="NO_ZOOKEEPER")
+	parser.add_option("--allow-redis", action="store_true", dest="ALLOW_REDIS")
 
 	parser.add_option("--no-meta0", action="store_true", dest="NO_META0")
 	parser.add_option("--no-meta1", action="store_true", dest="NO_META1")

@@ -32,14 +32,18 @@ VERSIONING=1
 AVOID=""
 ZKSLOW=0
 CHUNKSIZE=
+REDIS=0
+PORT=
 
-while getopts ":C:D:B:S:V:N:I:X:Z" opt; do
+while getopts ":B:C:D:I:N:P:R:S:V:X:Z" opt; do
 	case $opt in
 		B) REPLICATION_BUCKET="${OPTARG}" ;;
 		C) CHUNKSIZE="${OPTARG}" ;;
 		D) REPLICATION_DIRECTORY="${OPTARG}" ;;
 		I) IP="${OPTARG}" ;;
 		N) NS="${OPTARG}" ;;
+		P) PORT="${OPTARG}" ;;
+		R) REDIS="${OPTARG}" ;;
 		S) STGPOL="${OPTARG}" ;;
 		V) VERSIONING="${OPTARG}" ;;
 		X) AVOID="${AVOID} ${OPTARG}" ;;
@@ -49,14 +53,16 @@ while getopts ":C:D:B:S:V:N:I:X:Z" opt; do
 done
 
 echo "$0" \
-	"-D \"${REPLICATION_DIRECTORY}\"" \
 	"-B \"${REPLICATION_BUCKET}\"" \
+	"-C \"${CHUNKSIZE}\"" \
+	"-D \"${REPLICATION_DIRECTORY}\"" \
+	"-I \"${IP}\"" \
+	"-N \"${NS}\"" \
+	"-P \"${PORT}\"" \
+	"-R \"${REDIS}\"" \
 	"-S \"${STGPOL}\"" \
 	"-V \"${VERSIONING}\"" \
-	"-N \"${NS}\"" \
-	"-I \"${IP}\"" \
 	"-X \"${AVOID}\"" \
-	"-C \"${CHUNKSIZE}\"" \
 	"-Z \"${ZKSLOW}\""
 
 # Stop and clean everything
@@ -69,7 +75,9 @@ mkdir -p "$OIO"
 ( cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs}))
 
 opts="--nb-meta1=${REPLICATION_DIRECTORY} --nb-meta2=${REPLICATION_BUCKET}"
+if [ -n "$PORT" ] ; then opts="${opts} --port=${PORT}" ; fi
 if [ -n "$CHUNKSIZE" ] ; then opts="${opts} --chunk-size=${CHUNKSIZE}" ; fi
+if [ "$REDIS" -gt 0 ] ; then opts="${opts} --allow-redis" ; fi
 for srvtype in ${AVOID} ; do opts="${opts} --no-${srvtype}"; done
 ${PREFIX}-bootstrap.py \
 		-B "$REPLICATION_BUCKET" \
