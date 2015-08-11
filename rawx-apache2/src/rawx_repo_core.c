@@ -74,6 +74,8 @@ _set_chunk_extended_attributes(dav_stream *stream)
 	stream->r->info->chunk.hash = apr_pstrdup(stream->p, hex);
 	g_free (hex);
 
+	stream->r->info->chunk.size = apr_psprintf(stream->r->pool, "%d", (int)stream->total_size);
+
 	if(stream->compressed_size) {
 		char size[32];
 		apr_snprintf(size, 32, "%d", stream->compressed_size);
