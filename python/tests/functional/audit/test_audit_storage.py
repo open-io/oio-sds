@@ -326,9 +326,8 @@ class TestFeaturesFunctional(unittest.TestCase):
 
     def test_content_bad_path(self):
 
-        true_path = self.content.path
         self.content.path = 'BAD_PATH'
         self.put_content_proxy()
 
-        with self.assertRaises(IOError):
-            self.auditor.chunk_audit(true_path)
+        with self.assertRaises(exc.OrphanChunk):
+            self.auditor.chunk_audit(self.chunk_path)
