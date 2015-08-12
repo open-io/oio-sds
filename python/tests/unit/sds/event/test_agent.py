@@ -21,11 +21,11 @@ class TestEventWorker(unittest.TestCase):
 
         event = {"event": "meta2.container.destroy"}
         self.worker.process_event(event)
-        self.worker.handle_container_destroy.assert_called_once(event)
+        self.worker.handle_container_destroy.assert_called_once_with(event)
 
         event = {"event": "meta2.container.create"}
         self.worker.process_event(event)
-        self.worker.handle_container_put.assert_called_once(event)
+        self.worker.handle_container_put.assert_called_once_with(event)
 
         event = {"event": "meta2.container.state"}
         self.worker.process_event(event)
@@ -33,11 +33,11 @@ class TestEventWorker(unittest.TestCase):
 
         event = {"event": "meta2.content.new"}
         self.worker.process_event(event)
-        self.worker.handle_object_put.assert_called_once(event)
+        self.worker.handle_object_put.assert_called_once_with(event)
 
         event = {"event": "meta2.content.deleted"}
         self.worker.process_event(event)
-        self.worker.handle_object_delete.assert_called_once(event)
+        self.worker.handle_object_delete.assert_called_once_with(event)
 
     def test_object_delete_handler(self):
 
