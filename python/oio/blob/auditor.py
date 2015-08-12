@@ -139,51 +139,6 @@ class BlobAuditorWorker(object):
         except Exception:
             self.errors += 1
             self.logger.exception('ERROR while auditing chunk %s', path)
-
-    def chunk_audit(self, path):
-        try:
-            with open(path) as f:
-                meta = read_user_xattr(f)
-                for k, v in chunk_xattr_keys.iteritems():
-                    if v not in meta:
-                        raise exc.FaultyChunk(
-                            'Missing extended attribute %s' % v)
-                size = int(meta['grid.chunk.size'])
-                md5_checksum = meta['grid.chunk.hash'].lower()
-                reader = ChunkReader(f, size, md5_checksum)
-                with closing(reader):
-                    for buf in reader:
-                        buf_len = len(buf)
-                        self.bytes_running_time = ratelimit(
-                            self.bytes_running_time,
-                            self.max_bytes_per_second,
-                            increment=buf_len)
-                        self.bytes_processed += buf_len
-                        self.total_bytes_processed += buf_len
-
-                try:
-                    content_cid = meta[chunk_xattr_keys['content_cid']]
-                    content_path = meta[chunk_xattr_keys['content_path']]
-                    data = self.container_client.content_show(
-                        cid=content_cid, path=content_path)
-                    chunk_data = None
-                    for c in data:
-                        if c['url'].endswith(meta['grid.chunk.id']):
-                            chunk_data = c
-                    if not chunk_data:
-                        raise exc.OrphanChunk('Not found in content')
-
-                    if chunk_data['size'] != int(meta['grid.chunk.size']):
-                        raise exc.FaultyChunk('Invalid chunk size found')
-
-                    if chunk_data['hash'] != meta['grid.chunk.hash']:
-                        raise exc.FaultyChunk('Invalid chunk hash found')
-
-                    if chunk_data['pos'] != meta['grid.chunk.position']:
-                        raise exc.FaultyChunk('Invalid chunk position found')
-                except exc.NotFound:
-                    raise exc.OrphanChunk('Chunk not found in container')
-
         except exc.FaultyChunk as err:
             self.faulty_chunks += 1
             self.logger.error('ERROR faulty chunk %s: %s', path, err)
@@ -195,6 +150,49 @@ class BlobAuditorWorker(object):
             self.logger.error('ERROR orphan chunk %s: %s', path, err)
 
         self.passes += 1
+
+    def chunk_audit(self, path):
+        with open(path) as f:
+            meta = read_user_xattr(f)
+            for k, v in chunk_xattr_keys.iteritems():
+                if v not in meta:
+                    raise exc.FaultyChunk(
+                        'Missing extended attribute %s' % v)
+            size = int(meta['grid.chunk.size'])
+            md5_checksum = meta['grid.chunk.hash'].lower()
+            reader = ChunkReader(f, size, md5_checksum)
+            with closing(reader):
+                for buf in reader:
+                    buf_len = len(buf)
+                    self.bytes_running_time = ratelimit(
+                        self.bytes_running_time,
+                        self.max_bytes_per_second,
+                        increment=buf_len)
+                    self.bytes_processed += buf_len
+                    self.total_bytes_processed += buf_len
+
+            try:
+                content_cid = meta[chunk_xattr_keys['content_cid']]
+                content_path = meta[chunk_xattr_keys['content_path']]
+                data = self.container_client.content_show(
+                    cid=content_cid, path=content_path)
+                chunk_data = None
+                for c in data:
+                    if c['url'].endswith(meta['grid.chunk.id']):
+                        chunk_data = c
+                if not chunk_data:
+                    raise exc.OrphanChunk('Not found in content')
+
+                if chunk_data['size'] != int(meta['grid.chunk.size']):
+                    raise exc.FaultyChunk('Invalid chunk size found')
+
+                if chunk_data['hash'] != meta['grid.chunk.hash']:
+                    raise exc.FaultyChunk('Invalid chunk hash found')
+
+                if chunk_data['pos'] != meta['grid.chunk.position']:
+                    raise exc.FaultyChunk('Invalid chunk position found')
+            except exc.NotFound:
+                raise exc.OrphanChunk('Chunk not found in container')
 
     def check_volume(self, volume_path):
         meta = read_user_xattr(volume_path)
