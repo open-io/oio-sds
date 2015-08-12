@@ -2,25 +2,14 @@ from contextlib import closing
 import hashlib
 import time
 
+from oio.blob.utils import check_volume, read_chunk_metadata
 from oio.container.client import ContainerClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
-from oio.common.utils import get_logger, int_value, ratelimit, paths_gen, \
-    read_user_xattr
+from oio.common.utils import get_logger, int_value, ratelimit, paths_gen
+
 
 SLEEP_TIME = 30
-
-
-chunk_xattr_keys = {'chunk_hash': 'grid.chunk.hash',
-                    'chunk_size': 'grid.chunk.size',
-                    'chunk_id': 'grid.chunk.id',
-                    'chunk_pos': 'grid.chunk.position',
-                    'content_size': 'grid.content.size',
-                    'content_cid': 'grid.content.container',
-                    'content_path': 'grid.content.path'}
-
-volume_xattr_keys = {'namespace': 'rawx_server.namespace',
-                     'address': 'rawx_server.address'}
 
 
 class BlobAuditorWorker(object):
@@ -49,7 +38,7 @@ class BlobAuditorWorker(object):
         self.container_client = ContainerClient(conf)
 
     def audit_pass(self):
-        self.check_volume(self.volume)
+        self.namespace, self.address = check_volume(self.volume)
 
         start_time = report_time = time.time()
 
@@ -136,9 +125,6 @@ class BlobAuditorWorker(object):
     def safe_chunk_audit(self, path):
         try:
             self.chunk_audit(path)
-        except Exception:
-            self.errors += 1
-            self.logger.exception('ERROR while auditing chunk %s', path)
         except exc.FaultyChunk as err:
             self.faulty_chunks += 1
             self.logger.error('ERROR faulty chunk %s: %s', path, err)
@@ -148,18 +134,21 @@ class BlobAuditorWorker(object):
         except exc.OrphanChunk as err:
             self.orphan_chunks += 1
             self.logger.error('ERROR orphan chunk %s: %s', path, err)
+        except Exception:
+            self.errors += 1
+            self.logger.exception('ERROR while auditing chunk %s', path)
 
         self.passes += 1
 
     def chunk_audit(self, path):
         with open(path) as f:
-            meta = read_user_xattr(f)
-            for k, v in chunk_xattr_keys.iteritems():
-                if v not in meta:
-                    raise exc.FaultyChunk(
-                        'Missing extended attribute %s' % v)
-            size = int(meta['grid.chunk.size'])
-            md5_checksum = meta['grid.chunk.hash'].lower()
+            try:
+                meta = read_chunk_metadata(f)
+            except exc.MissingAttribute as e:
+                raise exc.FaultyChunk(
+                    'Missing extended attribute %s' % e)
+            size = int(meta['chunk_size'])
+            md5_checksum = meta['chunk_hash'].lower()
             reader = ChunkReader(f, size, md5_checksum)
             with closing(reader):
                 for buf in reader:
@@ -172,36 +161,27 @@ class BlobAuditorWorker(object):
                     self.total_bytes_processed += buf_len
 
             try:
-                content_cid = meta[chunk_xattr_keys['content_cid']]
-                content_path = meta[chunk_xattr_keys['content_path']]
+                content_cid = meta['content_cid']
+                content_path = meta['content_path']
                 data = self.container_client.content_show(
                     cid=content_cid, path=content_path)
                 chunk_data = None
                 for c in data:
-                    if c['url'].endswith(meta['grid.chunk.id']):
+                    if c['url'].endswith(meta['chunk_id']):
                         chunk_data = c
                 if not chunk_data:
                     raise exc.OrphanChunk('Not found in content')
 
-                if chunk_data['size'] != int(meta['grid.chunk.size']):
+                if chunk_data['size'] != int(meta['chunk_size']):
                     raise exc.FaultyChunk('Invalid chunk size found')
 
-                if chunk_data['hash'] != meta['grid.chunk.hash']:
+                if chunk_data['hash'] != meta['chunk_hash']:
                     raise exc.FaultyChunk('Invalid chunk hash found')
 
-                if chunk_data['pos'] != meta['grid.chunk.position']:
+                if chunk_data['pos'] != meta['chunk_pos']:
                     raise exc.FaultyChunk('Invalid chunk position found')
             except exc.NotFound:
                 raise exc.OrphanChunk('Chunk not found in container')
-
-    def check_volume(self, volume_path):
-        meta = read_user_xattr(volume_path)
-        namespace = meta.get(volume_xattr_keys['namespace'])
-        address = meta.get(volume_xattr_keys['address'])
-        if namespace is None or address is None:
-            raise exc.OioException('Invalid rawx volume path')
-        self.namespace = namespace
-        self.address = address
 
 
 class BlobAuditor(Daemon):

@@ -23,6 +23,14 @@ class ConfigurationException(OioException):
     pass
 
 
+class MissingAttribute(OioException):
+    def __init__(self, attribute):
+        self.attribute = attribute
+
+    def __str__(self):
+        return '%s' % self.attribute
+
+
 class ChunkException(OioException):
     pass
 
