@@ -35,7 +35,6 @@ Building the entire project will require the SDK dependencies, but also:
 * [gridinit](https://github.com/open-io/gridinit)
 * [librain](https://github.com/open-io/librain)
 * lzo, lzo-devel : RAWX compression
-* net-snmp, net-snmp-devel
 * sqlite, sqlite-devel : base storage for META{0,1,2} and SQLX services.
 * zeromq3, zeromq3-devel : communication of events between services and forward agents.
 * zookeeper-devel, libzookeeper\_mt.so : building with distribution's zookeeper client is OK, but the package ships with a lot of dependencies, including the openjdk. We recommand to use the official Oracle/Sun JDK, and to build your own zookeeper client from the source to avoid a huge waste of space and bandwith.
@@ -82,7 +81,7 @@ In addition to common cmake options, these specific options are also available:
 | SOCKET\_LINGER\_ONOFF | (integer value) triggers the onoff value of the SO\_LINGER configuration. |
 | SOCKET\_LINGER\_DELAY | (integer value) set it to the delay in milliseconds, this will the delay part of the SO\_LINGER configuration. |
 
-In addition, some options axist to specify uncommon installation paths. Their format is ``${DEP}_INCDIR`` or ``${DEP}_LIBDIR``, and ``DEP`` might take the given values ``APACHE2``, ``ASN1C``, ``ATTR``, ``CURL``, ``DB``, ``GRIDINIT``, ``JSONC``, ``LIBRAIN``, ``LZO``, ``MICROHTTPD``, ``NETSNMP``, ``ZK``, ``ZLIB``, ``ZMQ``
+In addition, some options axist to specify uncommon installation paths. Their format is ``${DEP}_INCDIR`` or ``${DEP}_LIBDIR``, and ``DEP`` might take the given values ``APACHE2``, ``ASN1C``, ``ATTR``, ``CURL``, ``DB``, ``GRIDINIT``, ``JSONC``, ``LIBRAIN``, ``LZO``, ``MICROHTTPD``, ``ZK``, ``ZLIB``, ``ZMQ``
 
 ### Building
 
