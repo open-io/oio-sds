@@ -50,7 +50,7 @@ class OrphanChunk(ChunkException):
 _http_status_map = {404: NotFound}
 
 
-def from_response(resp, body):
+def from_response(resp, body=None):
     http_status = resp.status_code
     cls = _http_status_map.get(http_status, ClientException)
     if body:

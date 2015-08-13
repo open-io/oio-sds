@@ -344,3 +344,10 @@ def read_user_xattr(fd):
 
     meta = {k[5:]: v for k, v in l if k.startswith('user.')}
     return meta
+
+
+def statfs(volume):
+    st = os.statvfs(volume)
+    total = st.f_blocks * st.f_frsize
+    used = (st.f_blocks - st.f_bfree) * st.f_frsize
+    return used, total
