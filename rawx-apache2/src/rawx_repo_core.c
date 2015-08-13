@@ -34,6 +34,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <http_request.h>       /* for ap_update_mtime() */
 #include <mod_dav.h>
 
+#include <ctype.h>
+
 #include <metautils/lib/metautils.h>
 #include <rawx-lib/src/rawx.h>
 
@@ -305,51 +307,64 @@ resource_stat_chunk(dav_resource *resource, int xattr_too)
 	}
 }
 
-static void
+static int
 __load_one_header(request_rec *request, const char *name, char **dst)
 {
 	const char *value = apr_table_get(request->headers_in, name);
-	if (value)
-		*dst = apr_pstrdup(request->pool, value);
+	if (!value)
+		return 0;
+	*dst = apr_pstrdup(request->pool, value);
+	return 1;
 }
 
-#define LOAD_HEADER(Where,Name) __load_one_header(request, Name, &(resource->info->Where))
+static int
+__load_one_header_lc(request_rec *request, const char *name, char **dst)
+{
+	size_t len = strlen(name);
+	char *lc = alloca(len+1);
+	memcpy(lc, name, len+1);
+	for (char *p=lc+1; *p ;++p) *p = tolower(*p);
+
+	const char *value = apr_table_get(request->headers_in, lc);
+	if (!value)
+		return 0;
+	*dst = apr_pstrdup(request->pool, value);
+	return 1;
+}
+
+#define LOAD_HEADER(Where,Name) do { \
+	if (!resource->info->Where) { \
+		__load_one_header(request, Name, &(resource->info->Where)); \
+	} \
+} while (0)
+
+#define LOAD_HEADER2(Where,Name) do { \
+	if (!resource->info->Where) { \
+		if (!__load_one_header(request, Name, &(resource->info->Where))) \
+			__load_one_header_lc(request, Name, &(resource->info->Where)); \
+	} \
+} while (0)
+
 #define DAMNED_UGLY_PREFIX "X-Grid-"
 
 const char *
 request_load_chunk_info(request_rec *request, dav_resource *resource)
 {
-	/* XXX TODO FIXME remove these old-style headers (pre-1.4) */
-	LOAD_HEADER(content.path,            "contentpath");
-	LOAD_HEADER(content.size,            "contentsize");
-	LOAD_HEADER(content.chunk_nb,        "chunknb");
-	LOAD_HEADER(content.metadata,        "contentmetadata");
-	LOAD_HEADER(content.system_metadata, "contentmetadata-sys");
-	LOAD_HEADER(content.container_id,    "containerid");
+	/* XXX override this with up-to-date headers */
+	LOAD_HEADER2(content.path,            RAWX_HEADER_PREFIX "content-path");
+	LOAD_HEADER2(content.size,            RAWX_HEADER_PREFIX "content-size");
+	LOAD_HEADER2(content.chunk_nb,        RAWX_HEADER_PREFIX "content-chunksnb");
+	LOAD_HEADER2(content.metadata,        RAWX_HEADER_PREFIX "content-metadata");
+	LOAD_HEADER2(content.system_metadata, RAWX_HEADER_PREFIX "content-metadata-sys");
+	LOAD_HEADER2(content.container_id,    RAWX_HEADER_PREFIX "container-id");
 
-	LOAD_HEADER(chunk.id,           "chunkid");
-	LOAD_HEADER(chunk.path,         "contentpath");
-	LOAD_HEADER(chunk.size,         "chunksize");
-	LOAD_HEADER(chunk.hash,         "chunkhash");
-	LOAD_HEADER(chunk.position,     "chunkpos");
-	LOAD_HEADER(chunk.metadata,     "chunkmetadata");
-	LOAD_HEADER(chunk.container_id, "containerid");
-
-	/* XXX TODO FIXME remove these old-style headers (post-1.4) */
-	LOAD_HEADER(content.path,            "content_path");
-	LOAD_HEADER(content.size,            "content_size");
-	LOAD_HEADER(content.chunk_nb,        "content_chunksnb");
-	LOAD_HEADER(content.metadata,        "content_metadata");
-	LOAD_HEADER(content.system_metadata, "content_metadata-sys");
-	LOAD_HEADER(content.container_id,    "content_containerid");
-
-	LOAD_HEADER(chunk.id,           "chunk_id");
-	LOAD_HEADER(chunk.path,         "chunk_path");
-	LOAD_HEADER(chunk.size,         "chunk_size");
-	LOAD_HEADER(chunk.hash,         "chunk_hash");
-	LOAD_HEADER(chunk.position,     "chunk_position");
-	LOAD_HEADER(chunk.metadata,     "chunk_metadata");
-	LOAD_HEADER(chunk.container_id, "chunk_containerid");
+	LOAD_HEADER2(chunk.id,           RAWX_HEADER_PREFIX "chunk-id");
+	LOAD_HEADER2(chunk.path,         RAWX_HEADER_PREFIX "content-path");
+	LOAD_HEADER2(chunk.size,         RAWX_HEADER_PREFIX "chunk-size");
+	LOAD_HEADER2(chunk.hash,         RAWX_HEADER_PREFIX "chunk-hash");
+	LOAD_HEADER2(chunk.position,     RAWX_HEADER_PREFIX "chunk-pos");
+	LOAD_HEADER2(chunk.metadata,     RAWX_HEADER_PREFIX "chunk-metadata");
+	LOAD_HEADER2(chunk.container_id, RAWX_HEADER_PREFIX "container-id");
 
 	/* XXX TODO FIXME remove these old-style headers (post-1.5) */
 	LOAD_HEADER(content.path,            DAMNED_UGLY_PREFIX "content_path");
@@ -367,21 +382,37 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 	LOAD_HEADER(chunk.metadata,     DAMNED_UGLY_PREFIX "chunk_metadata");
 	LOAD_HEADER(chunk.container_id, DAMNED_UGLY_PREFIX "chunk_containerid");
 
-	/* override this with up-to-date headers */
-	LOAD_HEADER(content.path,            RAWX_HEADER_PREFIX "content-path");
-	LOAD_HEADER(content.size,            RAWX_HEADER_PREFIX "content-size");
-	LOAD_HEADER(content.chunk_nb,        RAWX_HEADER_PREFIX "content-chunksnb");
-	LOAD_HEADER(content.metadata,        RAWX_HEADER_PREFIX "content-metadata");
-	LOAD_HEADER(content.system_metadata, RAWX_HEADER_PREFIX "content-metadata-sys");
-	LOAD_HEADER(content.container_id,    RAWX_HEADER_PREFIX "container-id");
+	/* XXX TODO FIXME remove these old-style headers (post-1.4) */
+	LOAD_HEADER(content.path,            "content_path");
+	LOAD_HEADER(content.size,            "content_size");
+	LOAD_HEADER(content.chunk_nb,        "content_chunksnb");
+	LOAD_HEADER(content.metadata,        "content_metadata");
+	LOAD_HEADER(content.system_metadata, "content_metadata-sys");
+	LOAD_HEADER(content.container_id,    "content_containerid");
 
-	LOAD_HEADER(chunk.id,           RAWX_HEADER_PREFIX "chunk-id");
-	LOAD_HEADER(chunk.path,         RAWX_HEADER_PREFIX "content-path");
-	LOAD_HEADER(chunk.size,         RAWX_HEADER_PREFIX "chunk-size");
-	LOAD_HEADER(chunk.hash,         RAWX_HEADER_PREFIX "chunk-hash");
-	LOAD_HEADER(chunk.position,     RAWX_HEADER_PREFIX "chunk-pos");
-	LOAD_HEADER(chunk.metadata,     RAWX_HEADER_PREFIX "chunk-metadata");
-	LOAD_HEADER(chunk.container_id, RAWX_HEADER_PREFIX "container-id");
+	LOAD_HEADER(chunk.id,           "chunk_id");
+	LOAD_HEADER(chunk.path,         "chunk_path");
+	LOAD_HEADER(chunk.size,         "chunk_size");
+	LOAD_HEADER(chunk.hash,         "chunk_hash");
+	LOAD_HEADER(chunk.position,     "chunk_position");
+	LOAD_HEADER(chunk.metadata,     "chunk_metadata");
+	LOAD_HEADER(chunk.container_id, "chunk_containerid");
+
+	/* XXX TODO FIXME remove these old-style headers (pre-1.4) */
+	LOAD_HEADER(content.path,            "contentpath");
+	LOAD_HEADER(content.size,            "contentsize");
+	LOAD_HEADER(content.chunk_nb,        "chunknb");
+	LOAD_HEADER(content.metadata,        "contentmetadata");
+	LOAD_HEADER(content.system_metadata, "contentmetadata-sys");
+	LOAD_HEADER(content.container_id,    "containerid");
+
+	LOAD_HEADER(chunk.id,           "chunkid");
+	LOAD_HEADER(chunk.path,         "contentpath");
+	LOAD_HEADER(chunk.size,         "chunksize");
+	LOAD_HEADER(chunk.hash,         "chunkhash");
+	LOAD_HEADER(chunk.position,     "chunkpos");
+	LOAD_HEADER(chunk.metadata,     "chunkmetadata");
+	LOAD_HEADER(chunk.container_id, "containerid");
 
 	if (!resource->info->content.container_id) return "container-id";
 	if (!resource->info->chunk.container_id) return "container-id";

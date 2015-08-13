@@ -306,10 +306,6 @@ option_or_system(GRIDINIT gridinit-utils gridinit-utils.h)
 option_or_system(LIBRAIN rain librain.h)
 option_or_system(LZO lzo2 lzo1.h lzo1x.h lzoutil.h)
 option_or_system(MICROHTTPD microhttpd microhttpd.h)
-option_or_system(NETSNMP netsnmp
-		net-snmp/agent/net-snmp-agent-includes.h
-		net-snmp/net-snmp-includes.h
-		net-snmp/net-snmp-config.h)
 option_or_system(ZK zookeeper_mt zookeeper.h)
 option_or_system(ZLIB z zlib.h)
 option_or_system(ZMQ zmq zmq.h zmq_utils.h)
@@ -327,7 +323,7 @@ set(ASN1C_EXE_OPTS "-fwide-types")
 check_found("ASN1C" "CURL" "GLIB2" "JSONC")
 
 if (NOT SDK_ONLY)
-check_found("APR" "APACHE2" "ATTR" "GRIDINIT" "LIBRAIN" "LZO" "NEON" "NETSNMP"
+check_found("APR" "APACHE2" "ATTR" "GRIDINIT" "LIBRAIN" "LZO" "NEON"
 		"SQLITE3" "ZMQ" "ZK" "PYTHONINTERP")
 
 if (DEFINED APACHE2_MODDIR)
@@ -385,7 +381,6 @@ add_subdirectory(./rawx-lib/src)
 add_subdirectory(./rawx-lib/tools)
 add_subdirectory(./resolver)
 add_subdirectory(./server)
-add_subdirectory(./snmp/src)
 add_subdirectory(./sqliterepo)
 add_subdirectory(./sqlx)
 add_subdirectory(./svc-monitor)
