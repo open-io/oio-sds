@@ -199,7 +199,9 @@ def parse_options(parser=None):
     return config, options
 
 
-def read_conf(conf_path, section_name=None, defaults=None):
+def read_conf(conf_path, section_name=None, defaults=None, use_yaml=True):
+    if use_yaml:
+        return parse_config(conf_path)
     if defaults is None:
         defaults = {}
     c = SafeConfigParser(defaults)
@@ -218,6 +220,13 @@ def read_conf(conf_path, section_name=None, defaults=None):
         conf = {}
         for s in c.sections():
             conf.update({s: dict(c.items(s))})
+    return conf
+
+
+def parse_config(conf_path):
+    import yaml
+    with open(conf_path, 'r') as f:
+        conf = yaml.load(f)
     return conf
 
 
@@ -265,6 +274,16 @@ def int_value(value, default):
         return default
     try:
         value = int(value)
+    except (TypeError, ValueError):
+        raise
+    return value
+
+
+def float_value(value, default):
+    if value in (None, 'None'):
+        return default
+    try:
+        value = float(value)
     except (TypeError, ValueError):
         raise
     return value
@@ -351,3 +370,36 @@ def statfs(volume):
     total = st.f_blocks * st.f_frsize
     used = (st.f_blocks - st.f_bfree) * st.f_frsize
     return used, total
+
+
+class RingBuffer(list):
+    def __init__(self, size=1):
+        self._count = 0
+        self._zero = 0
+        self._size = size
+
+    def __index(self, key):
+        if not self._count:
+            raise IndexError('list index out of range')
+        return (key + self._zero) % self._count
+
+    def append(self, value):
+        if self._count < self._size:
+            super(RingBuffer, self).append(value)
+            self._count += 1
+        else:
+            super(RingBuffer, self).__setitem__(self._zero % self._size, value)
+            self._zero += 1
+
+    def __getitem__(self, key):
+        return super(RingBuffer, self).__getitem__(self.__index(key))
+
+    def __setitem__(self, key, value):
+        return super(RingBuffer, self).__setitem__(self.__index(key), value)
+
+    def __delitem__(self, key):
+        raise self.InvalidOperation('Delete impossible in RingBuffer')
+
+    def __iter__(self):
+        for i in xrange(0, self._count):
+            yield self[i]

@@ -1,0 +1,24 @@
+# Service host
+host: 127.0.0.1
+# Service port
+port: 8080
+# Service type
+type: rawx
+# Rise (number of consecutive successful checks to switch status to up)
+rise: 1
+# Fall (number of consecutive unsuccessful checks to switch status to down)
+fall: 1
+# Checks configuration
+checks:
+# General check configuration
+# timeout: 1.0, timeout for check
+# Http Check
+# Perform a GET on specified uri
+# Success if 200
+# uri: uri to check
+# Note: you can override host and port
+    - {type: http, uri: /info}
+# TCP Check
+# Perform a connect on specified host:port
+# Note: you can override host and port
+    - {type: tcp}
