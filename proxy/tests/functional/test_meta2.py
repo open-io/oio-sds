@@ -3,10 +3,10 @@ import unittest
 import random
 import string
 import hashlib
-import urlparse
 import os
 
 import requests
+from requests import Request
 
 
 class TestMeta2Functional(unittest.TestCase):
@@ -65,9 +65,9 @@ class TestMeta2Functional(unittest.TestCase):
         self.addr_Ref_type_action = self.addr_Ref_type + "/action"
         self.addr_m2_ref_path_action = self.addr_m2_ref_path + "/action"
 
-        self.direct_path = "NS/" + self.idRef_rand + "/" + self.path_rand
-        self.path_paste = "NS/" + self.idRef_rand + "/" + self.path_rand2
-        self.path_paste_wrong = "NS/" + self.idRef_rand2 + "/" + self.path_rand
+        self.direct_path = "NS/" + self.account + "/" + self.idRef_rand + "/" + self.path_rand
+        self.path_paste = "NS/" + self.account + "/" + self.idRef_rand + "/" + self.path_rand2
+        self.path_paste_wrong = "NS/" + self.account + "/" + self.idRef_rand2 + "/" + self.path_rand
 
         self.addr_alone_ref = self.proxyd_dir + "/" + self.idRef_rand2
         self.addr_alone_ref_type_action = self.addr_alone_ref + "meta2/action"
@@ -588,7 +588,7 @@ class TestMeta2Functional(unittest.TestCase):
         resp = self.session.post(self.addr_m2_ref_action, json.dumps(
             {"action": "SetProperties", "args": {"error": self.prop}}
         ))
-        self.assertFalse(resp.status_code == 500)
+        self.assertEqual(resp.status_code, 200)
 
     def test_containers_actions_setProperties_ref_no_link(self):
 
@@ -865,7 +865,7 @@ class TestMeta2Functional(unittest.TestCase):
         resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
             {"action": "SetStoragePolicy", "args": 'TWOCOPIES'}
         ))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 403)
 
     def test_contents_actions_getProperties(self):
 
@@ -927,5 +927,5 @@ class TestMeta2Functional(unittest.TestCase):
         resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
             {"action": "DelProperties", "args": ['prop1']}
         ))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 403)
 

@@ -1,16 +1,17 @@
 import unittest
 import json
-import os
 import string
 import random
-import md5
+import hashlib
 import gzip
 import StringIO
 import tempfile
 
+import os
 import requests
 
 import xattr
+
 
 class TestConscienceFunctional(unittest.TestCase):
     def __init__(self, *args, **kwargs):
@@ -26,53 +27,58 @@ class TestConscienceFunctional(unittest.TestCase):
         self.rawx = 'http://' + self.conf["rawx"][0] + '/'
         self.session = requests.session()
         self.id_chars = string.digits + 'ABCDEF'
-        self.rand_chars = string.digits + string.ascii_lowercase + string.ascii_uppercase
 
-    def gen_rand(self, r_type, i):
-        if r_type == 'id':
-            return ''.join(random.choice(self.id_chars) for _ in range(64))
-        else:
-            return ''.join(random.choice(self.rand_chars) for _ in range(i))
+        self.chars = string.ascii_lowercase + string.ascii_uppercase + string.digits
+        self.chars_id = string.digits + 'ABCDEF'
+
+        self.h = hashlib.new('md5')
+
+    def rand_generator(self, dictionary, n):
+
+        return ''.join(random.choice(dictionary) for _ in range(n))
 
     class fakeContent(object):
-        def __init__(self, path, size, id_r):
+        def __init__(self, path, size, id_r, nb_chunks):
             self.path = path
             self.size = size
-            self.cont_id = id_r
-
-        def get_nb_chunks(self):
-            return 1
+            self.id_container = id_r
+            self.nb_chunks = nb_chunks
 
     class fakeChunk(object):
-        def __init__(self, size, id_r):
+        def __init__(self, size, id_r, pos, md5):
             self.size = size
             self.chunk_id = id_r
-
-        def get_position(self):
-            return 0
-
-        def get_md5(self):
-            return "f0419b9e3cd4c0da4dba99feb6233f54"
+            self.pos = pos
+            self.md5 = md5
 
     def setUp(self):
-        super(TestConscienceFunctional, self).setUp()
-        self.content_data = self.gen_rand('data', 24)
-        self.content = self.fakeContent('c1', len(self.content_data),
-                                        self.gen_rand('id', 64))
-        self.chunk = self.fakeChunk(self.content.size, self.gen_rand('id', 64))
 
-        self.headers_put = {'content_path': self.content.path,
-                            'content_size': self.content.size,
-                            'content_chunksnb': self.content.get_nb_chunks(),
-                            'content_containerid': self.content.cont_id,
-                            'chunk_id': self.chunk.chunk_id,
-                            'chunk_size': self.chunk.size,
-                            'chunk_position': self.chunk.get_position()}
+        super(TestConscienceFunctional, self).setUp()
+
+        self.content_data = self.rand_generator(self.chars, 24)
+        self.url_rand = self.rand_generator(self.chars_id, 64)
+        self.h.update(self.content_data)
+        self.hash_rand = self.h.hexdigest().lower()
+
+        self.content = self.fakeContent(self.rand_generator(self.chars, 6),
+                                        len(self.content_data), self.url_rand,
+                                        1)
+        self.chunk = self.fakeChunk(self.content.size, self.url_rand, 0,
+                                    self.hash_rand)
+
+        self.headers_put = {'X-oio-chunk-meta-content-path': self.content.path,
+                            'X-oio-chunk-meta-content-size': self.content.size,
+                            'X-oio-chunk-meta-content-chunksnb': self.content.nb_chunks,
+                            'X-oio-chunk-meta-container-id': self.content.id_container,
+                            'X-oio-chunk-meta-chunk-id': self.chunk.chunk_id,
+                            'X-oio-chunk-meta-chunk-size': self.chunk.size,
+                            'X-oio-chunk-meta-chunk-pos': self.chunk.pos,
+                            'X-oio-chunk-meta-chunk-hash': self.hash_rand}
         self.chunk_path = self.test_dir + 'data/NS-rawx-1/' + self.chunk.chunk_id[
                                                               0:2] + "/" + self.chunk.chunk_id
 
     def tearDown(self):
-        print ""
+
         super(TestConscienceFunctional, self).tearDown()
         try:
             os.remove(self.chunk_path)
@@ -93,18 +99,23 @@ class TestConscienceFunctional(unittest.TestCase):
         if length == 0:
             self.content_data = ""
         else:
-            self.content_data = self.gen_rand('data', length)
-        self.content = self.fakeContent('c1', len(self.content_data),
-                                        self.gen_rand('id', 64))
-        self.chunk = self.fakeChunk(self.content.size, self.gen_rand('id', 64))
+            self.content_data = self.rand_generator(self.chars, length)
 
-        self.headers_put = {'content_path': self.content.path,
-                            'content_size': self.content.size,
-                            'content_chunksnb': self.content.get_nb_chunks(),
-                            'content_containerid': self.content.cont_id,
-                            'chunk_id': self.chunk.chunk_id,
-                            'chunk_size': self.chunk.size,
-                            'chunk_position': self.chunk.get_position()}
+        self.content.size = length
+        self.chunk.size = length
+
+        self.h.update(self.content_data)
+        self.hash_rand = self.h.hexdigest().lower()
+        self.chunk.md5 = self.hash_rand
+
+        self.headers_put = {'X-oio-chunk-meta-content-path': self.content.path,
+                            'X-oio-chunk-meta-content-size': self.content.size,
+                            'X-oio-chunk-meta-content-chunksnb': self.content.nb_chunks,
+                            'X-oio-chunk-meta-container-id': self.content.id_container,
+                            'X-oio-chunk-meta-chunk-id': self.chunk.chunk_id,
+                            'X-oio-chunk-meta-chunk-size': self.chunk.size,
+                            'X-oio-chunk-meta-chunk-pos': self.chunk.pos,
+                            'X-oio-chunk-meta-chunk-hash': self.hash_rand}
         self.chunk_path = self.test_dir + 'data/NS-rawx-1/' + self.chunk.chunk_id[
                                                               0:2] + "/" + self.chunk.chunk_id
 
@@ -113,24 +124,27 @@ class TestConscienceFunctional(unittest.TestCase):
         if length == 0:
             self.content_data = ""
         else:
-            self.content_data = self.gen_rand('data', length)
+            self.content_data = self.rand_generator('data', length)
 
         gzip.GzipFile(fileobj=tmpfile, mode="wb").write(self.content_data)
         tmpfile.seek(0, 0)
 
-        self.content = self.fakeContent('c1', tmpfile.tell(),
-                                        self.gen_rand('id', 64))
-        self.chunk = self.fakeChunk(self.content.size, self.gen_rand('id', 64))
+        self.content.size = tmpfile.tell()
+        self.chunk.size = self.content.size
 
-        self.headers_put = {'content_path': self.content.path,
-                            'content_size': self.content.size,
-                            'content_chunksnb': self.content.get_nb_chunks(),
-                            'content_containerid': self.content.cont_id,
-                            'chunk_id': self.chunk.chunk_id,
-                            'chunk_size': self.chunk.size,
-                            'chunk_position': self.chunk.get_position(),
+        self.h.update(self.content_data)
+        self.hash_rand = self.h.hexdigest().lower()
+        self.chunk.md5 = self.hash_rand
+
+        self.headers_put = {'X-oio-chunk-meta-content-path': self.content.path,
+                            'X-oio-chunk-meta-content-size': self.content.size,
+                            'X-oio-chunk-meta-content-chunksnb': self.content.nb_chunks,
+                            'X-oio-chunk-meta-container-id': self.content.id_container,
+                            'X-oio-chunk-meta-chunk-id': self.chunk.chunk_id,
+                            'X-oio-chunk-meta-chunk-size': self.chunk.size,
+                            'X-oio-chunk-meta-chunk-pos': self.chunk.pos,
+                            'X-oio-chunk-meta-chunk-hash': self.hash_rand,
                             'Transfer_encoding': 'gzip'}
-
         self.chunk_path = self.test_dir + 'data/NS-rawx-1/' + self.chunk.chunk_id[
                                                               0:2] + "/" + self.chunk.chunk_id
 
@@ -175,80 +189,59 @@ class TestConscienceFunctional(unittest.TestCase):
 
     def test_put_no_chunk_position(self):
 
-        del self.headers_put['chunk_position']
+        del self.headers_put['X-oio-chunk-meta-chunk-pos']
 
         resp = self.init_chunk()
-        self.assertEqual(resp.status_code, 201)
-        self.assertEqual(os.path.isfile(self.chunk_path), True)
-
-        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
-        self.assertFalse('chunk_position' in resp.keys())
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(os.path.isfile(self.chunk_path), False)
 
     def test_put_no_chunk_size(self):
 
-        del self.headers_put['chunk_size']
+        del self.headers_put['X-oio-chunk-meta-chunk-size']
 
         resp = self.init_chunk()
-        self.assertEqual(resp.status_code, 201)
-        self.assertEqual(os.path.isfile(self.chunk_path), True)
-
-        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
-        self.assertFalse('chunk_size' in resp.keys())
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(os.path.isfile(self.chunk_path), False)
 
     def test_put_no_chunk_id(self):
 
-        del self.headers_put['chunk_id']
+        del self.headers_put['X-oio-chunk-meta-chunk-id']
 
         resp = self.init_chunk()
-        self.assertEqual(resp.status_code, 201)
-        self.assertEqual(os.path.isfile(self.chunk_path), True)
-
-        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
-        self.assertFalse('chunk_id' in resp.keys())
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(os.path.isfile(self.chunk_path), False)
 
     def test_put_no_number_chunks(self):
 
-        del self.headers_put['content_chunksnb']
+        del self.headers_put['X-oio-chunk-meta-content-chunksnb']
 
         resp = self.init_chunk()
-        self.assertEqual(resp.status_code, 201)
-        self.assertEqual(os.path.isfile(self.chunk_path), True)
-
-        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
-        self.assertFalse('content_chunksnb' in resp.keys())
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(os.path.isfile(self.chunk_path), False)
 
     def test_put_no_container_id(self):
 
-        del self.headers_put['content_containerid']
+        del self.headers_put['X-oio-chunk-meta-container-id']
 
         resp = self.init_chunk()
-        self.assertEqual(resp.status_code, 201)
-        self.assertEqual(os.path.isfile(self.chunk_path), True)
-
-        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
-        self.assertFalse('content_containerid' in resp.keys())
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(os.path.isfile(self.chunk_path), False)
 
     def test_put_no_content_size(self):
 
-        del self.headers_put['content_size']
+        del self.headers_put['X-oio-chunk-meta-content-size']
 
         resp = self.init_chunk()
-        self.assertEqual(resp.status_code, 201)
-        self.assertEqual(os.path.isfile(self.chunk_path), True)
-
-        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
-        self.assertFalse('content_size' in resp.keys())
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(os.path.isfile(self.chunk_path), False)
 
     def test_put_no_content_path(self):
 
-        del self.headers_put['content_path']
+        del self.headers_put['X-oio-chunk-meta-content-path']
 
         resp = self.init_chunk()
-        self.assertEqual(resp.status_code, 201)
-        self.assertEqual(os.path.isfile(self.chunk_path), True)
-
-        resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
-        self.assertFalse('content_path' in resp.keys())
+        self.assertEqual(resp.status_code, 400)
+        self.assertEqual(os.path.isfile(self.chunk_path), False)
 
     def test_get(self):
 
@@ -351,14 +344,19 @@ class TestConscienceFunctional(unittest.TestCase):
         self.init_chunk()
 
         resp = self.session.get(self.rawx + self.chunk.chunk_id).headers
-        self.assertEqual(resp["content_path"], self.content.path)
-        self.assertEqual(resp["content_size"], str(self.content.size))
-        self.assertEqual(resp["content_chunksnb"],
-                         str(self.content.get_nb_chunks()))
-        self.assertEqual(resp["content_containerid"], self.content.cont_id)
-        self.assertEqual(resp["chunk_id"], self.chunk.chunk_id)
-        self.assertEqual(resp["chunk_size"], str(self.chunk.size))
-        self.assertEqual(resp["chunk_position"], str(self.chunk.get_position()))
+        self.assertEqual(resp["X-oio-chunk-meta-content-path"],
+                         self.content.path)
+        self.assertEqual(resp["X-oio-chunk-meta-content-size"],
+                         str(self.content.size))
+        self.assertEqual(resp["X-oio-chunk-meta-content-chunksnb"],
+                         str(self.content.nb_chunks))
+        self.assertEqual(resp["X-oio-chunk-meta-container-id"],
+                         self.content.id_container)
+        self.assertEqual(resp["X-oio-chunk-meta-chunk-id"], self.chunk.chunk_id)
+        self.assertEqual(resp["X-oio-chunk-meta-chunk-size"],
+                         str(self.chunk.size))
+        self.assertEqual(resp["X-oio-chunk-meta-chunk-pos"],
+                         str(self.chunk.pos))
 
     def test_check_attr(self):
 
@@ -369,7 +367,7 @@ class TestConscienceFunctional(unittest.TestCase):
             self.content.path)
         self.assertEqual(
             xattr.getxattr(self.chunk_path, 'user.grid.content.nbchunk'),
-            str(self.content.get_nb_chunks()))
+            str(self.content.nb_chunks))
         self.assertEqual(xattr.getxattr(self.chunk_path, 'user.grid.chunk.id'),
                          self.chunk.chunk_id)
         self.assertEqual(
@@ -380,33 +378,33 @@ class TestConscienceFunctional(unittest.TestCase):
             str(self.content.size))
         self.assertEqual(
             xattr.getxattr(self.chunk_path, 'user.grid.chunk.position'),
-            str(self.chunk.get_position()))
+            str(self.chunk.pos))
         self.assertEqual(
             xattr.getxattr(self.chunk_path, 'user.grid.content.container'),
-            self.content.cont_id)
+            self.content.id_container)
 
     def test_get_hash(self):
 
         self.init_chunk()
-        m = md5.new()
-        m.update(self.content_data)
-        handmade_hash = m.hexdigest().upper()
+        h = hashlib.new('md5')
+        h.update(self.content_data)
+        handmade_hash = h.hexdigest().upper()
 
         resp = self.session.get(self.rawx + self.chunk.chunk_id).headers[
-            "chunk_hash"]
+            "X-oio-chunk-meta-chunk-hash"]
         self.assertEqual(resp, handmade_hash)
 
     def test_put_correct_hash(self):
 
-        m = md5.new()
-        m.update(self.content_data)
-        handmade_hash = m.hexdigest().upper()
-        self.headers_put['chunk_hash'] = handmade_hash
+        h = hashlib.new('md5')
+        h.update(self.content_data)
+        handmade_hash = h.hexdigest().upper()
+        self.headers_put['X-oio-chunk-meta-chunk-hash'] = handmade_hash
 
         self.init_chunk()
 
         resp = self.session.get(self.rawx + self.chunk.chunk_id).headers[
-            "chunk_hash"]
+            "X-oio-chunk-meta-chunk-hash"]
         self.assertEqual(resp, handmade_hash)
 
         self.assertEqual(
@@ -415,16 +413,17 @@ class TestConscienceFunctional(unittest.TestCase):
 
     def test_put_wrong_hash(self):
 
-        self.headers_put['chunk_hash'] = '00000000000000000000000000000000'
+        self.headers_put[
+            'X-oio-chunk-meta-chunk-hash'] = '00000000000000000000000000000000'
 
         self.init_chunk()
 
-        m = md5.new()
-        m.update(self.content_data)
-        handmade_hash = m.hexdigest().upper()
+        h = hashlib.new('md5')
+        h.update(self.content_data)
+        handmade_hash = h.hexdigest().upper()
 
         resp = self.session.get(self.rawx + self.chunk.chunk_id).headers[
-            "chunk_hash"]
+            "X-oio-chunk-meta-chunk-hash"]
         self.assertEqual(resp, handmade_hash)
 
         self.assertEqual(
