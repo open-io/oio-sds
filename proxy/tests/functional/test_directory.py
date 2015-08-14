@@ -137,7 +137,7 @@ class TestDirectoryFunctional(unittest.TestCase):
         resp = self.session.post(self.addr_RefInvalid_type_action, json.dumps(
             {'action': 'GetProperties', 'args': None}
         ))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 403)
 
     def test_references_actions_setProperties(self):
         resp = self.session.post(self.addr_RefSet_action, json.dumps(
@@ -157,7 +157,7 @@ class TestDirectoryFunctional(unittest.TestCase):
             {'action': 'SetProperties',
              'args': {'prop1': self.property1, 'prop2': self.property2}}
         ))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 403)
 
     def test_references_actions_delProperties(self):
         resp = self.session.post(self.addr_RefSet_action, json.dumps(
@@ -173,7 +173,7 @@ class TestDirectoryFunctional(unittest.TestCase):
         resp = self.session.post(self.addr_RefInvalid_type_action, json.dumps(
             {'action': 'DeleteProperties', 'args': ['prop1']}
         ))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 403)
 
     def test_service_get(self):
         time.sleep(3)
@@ -246,18 +246,46 @@ class TestDirectoryFunctional(unittest.TestCase):
                 self.session.get(self.addr_RefSet_type2).json()]
         self.assertEqual([self.addr1], resp)
 
-    def test_service_actions_force_no_header(self):
+    def test_service_actions_force_replace_with_header(self):
 
         self.session.post(self.address_cs + "/action",
                           json.dumps({"action": "Lock", "args": self.service2}))
         time.sleep(4)
 
-        resp = self.session.post(self.addr_RefSet_type_action2, json.dumps(
+        self.session.post(self.addr_RefSet_type_action2, json.dumps(
             {"action": "Force", "args": {"seq": 1, "type": "echo",
                                          "host": self.addr2,
                                          "args": ""}}
         ))
-        self.assertEqual(resp.status_code, 400)
+
+        resp = self.session.post(self.addr_RefSet_type_action2, json.dumps(
+            {"action": "Force", "args": {"seq": 1, "type": "echo",
+                                         "host": self.addr2,
+                                         "args": ""}}),
+            headers={'x-oio-action-mode': 'replace'}
+        )
+
+        self.assertEqual(resp.status_code, 204)
+
+    def test_service_actions_force_replace_no_header(self):
+
+        self.session.post(self.address_cs + "/action",
+                          json.dumps({"action": "Lock", "args": self.service2}))
+        time.sleep(4)
+
+        self.session.post(self.addr_RefSet_type_action2, json.dumps(
+            {"action": "Force", "args": {"seq": 1, "type": "echo",
+                                         "host": self.addr2,
+                                         "args": ""}}
+        ))
+
+        resp = self.session.post(self.addr_RefSet_type_action2, json.dumps(
+            {"action": "Force", "args": {"seq": 1, "type": "echo",
+                                         "host": self.addr2,
+                                         "args": ""}})
+        )
+
+        self.assertEqual(resp.status_code, 403)
 
     def test_service_actions_force_valid(self):
 
@@ -268,8 +296,7 @@ class TestDirectoryFunctional(unittest.TestCase):
         resp = self.session.post(self.addr_RefSet_type_action2, json.dumps(
             {"action": "Force", "args": {"seq": 1, "type": "echo",
                                          "host": self.addr2,
-                                         "args": ""}}),
-                                 headers={'x-oio-action-mode': 'replace'}
+                                         "args": ""}})
                                  )
         self.assertEqual(resp.status_code, 204)
 

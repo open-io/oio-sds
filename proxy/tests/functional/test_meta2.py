@@ -3,7 +3,6 @@ import unittest
 import random
 import string
 import hashlib
-import urlparse
 import os
 
 import requests
@@ -588,7 +587,7 @@ class TestMeta2Functional(unittest.TestCase):
         resp = self.session.post(self.addr_m2_ref_action, json.dumps(
             {"action": "SetProperties", "args": {"error": self.prop}}
         ))
-        self.assertFalse(resp.status_code == 500)
+        self.assertEqual(resp.status_code, 200)
 
     def test_containers_actions_setProperties_ref_no_link(self):
 
@@ -753,7 +752,7 @@ class TestMeta2Functional(unittest.TestCase):
     def test_contents_copy(self):
 
         self.prepare_content()
-        req = Request('COPY', self.addr_m2_ref_path,
+        req = self.session.Request('COPY', self.addr_m2_ref_path,
                       headers={'Destination': self.path_paste})
         resp = self.session.send(req.prepare())
         self.assertEqual(resp.status_code, 204)
@@ -764,7 +763,7 @@ class TestMeta2Functional(unittest.TestCase):
     def test_contents_copy_no_aim(self):
 
         self.prepare_content()
-        req = Request('COPY', self.addr_m2_ref_path,
+        req = self.session.Request('COPY', self.addr_m2_ref_path,
                       headers={'Destination': self.path_paste_wrong})
         resp = self.session.send(req.prepare())
         self.assertTrue(resp.status_code, 400)
@@ -772,7 +771,7 @@ class TestMeta2Functional(unittest.TestCase):
     def test_contents_copy_no_content(self):
 
         self.session.put(self.addr_m2_ref)
-        req = Request('COPY', self.addr_m2_ref_path,
+        req = self.session.Request('COPY', self.addr_m2_ref_path,
                       headers={'Destination': self.path_paste_wrong})
         resp = self.session.send(req.prepare())
         self.assertTrue(resp.status_code, 400)
@@ -865,7 +864,7 @@ class TestMeta2Functional(unittest.TestCase):
         resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
             {"action": "SetStoragePolicy", "args": 'TWOCOPIES'}
         ))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 403)
 
     def test_contents_actions_getProperties(self):
 
@@ -927,5 +926,5 @@ class TestMeta2Functional(unittest.TestCase):
         resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
             {"action": "DelProperties", "args": ['prop1']}
         ))
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 403)
 
