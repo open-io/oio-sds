@@ -6,6 +6,7 @@ import hashlib
 import os
 
 import requests
+from requests import Request
 
 
 class TestMeta2Functional(unittest.TestCase):
@@ -64,9 +65,9 @@ class TestMeta2Functional(unittest.TestCase):
         self.addr_Ref_type_action = self.addr_Ref_type + "/action"
         self.addr_m2_ref_path_action = self.addr_m2_ref_path + "/action"
 
-        self.direct_path = "NS/" + self.idRef_rand + "/" + self.path_rand
-        self.path_paste = "NS/" + self.idRef_rand + "/" + self.path_rand2
-        self.path_paste_wrong = "NS/" + self.idRef_rand2 + "/" + self.path_rand
+        self.direct_path = "NS/" + self.account + "/" + self.idRef_rand + "/" + self.path_rand
+        self.path_paste = "NS/" + self.account + "/" + self.idRef_rand + "/" + self.path_rand2
+        self.path_paste_wrong = "NS/" + self.account + "/" + self.idRef_rand2 + "/" + self.path_rand
 
         self.addr_alone_ref = self.proxyd_dir + "/" + self.idRef_rand2
         self.addr_alone_ref_type_action = self.addr_alone_ref + "meta2/action"
@@ -752,7 +753,7 @@ class TestMeta2Functional(unittest.TestCase):
     def test_contents_copy(self):
 
         self.prepare_content()
-        req = self.session.Request('COPY', self.addr_m2_ref_path,
+        req = Request('COPY', self.addr_m2_ref_path,
                       headers={'Destination': self.path_paste})
         resp = self.session.send(req.prepare())
         self.assertEqual(resp.status_code, 204)
@@ -763,7 +764,7 @@ class TestMeta2Functional(unittest.TestCase):
     def test_contents_copy_no_aim(self):
 
         self.prepare_content()
-        req = self.session.Request('COPY', self.addr_m2_ref_path,
+        req = Request('COPY', self.addr_m2_ref_path,
                       headers={'Destination': self.path_paste_wrong})
         resp = self.session.send(req.prepare())
         self.assertTrue(resp.status_code, 400)
@@ -771,7 +772,7 @@ class TestMeta2Functional(unittest.TestCase):
     def test_contents_copy_no_content(self):
 
         self.session.put(self.addr_m2_ref)
-        req = self.session.Request('COPY', self.addr_m2_ref_path,
+        req = Request('COPY', self.addr_m2_ref_path,
                       headers={'Destination': self.path_paste_wrong})
         resp = self.session.send(req.prepare())
         self.assertTrue(resp.status_code, 400)
