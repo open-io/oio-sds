@@ -30,9 +30,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static void
 _json_dump_all_beans (GString * gstr, GSList * beans)
 {
-	g_string_append_c (gstr, '[');
+	g_string_append_c (gstr, '{');
 	meta2_json_dump_all_beans (gstr, beans);
-	g_string_append_c (gstr, ']');
+	g_string_append_c (gstr, '}');
 }
 
 static enum http_rc_e
@@ -223,19 +223,6 @@ _reply_beans (struct req_args_s *args, GError * err, GSList * beans)
 	return _reply_success_json (args, gstr);
 }
 
-static GError *
-_jbody_to_beans (GSList ** beans, struct json_object *jbody, const gchar * k)
-{
-	if (!json_object_is_type (jbody, json_type_object))
-		return BADREQ ("Body is not a valid JSON object");
-	struct json_object *jbeans = NULL;
-	if (!json_object_object_get_ex (jbody, k, &jbeans))
-		return BADREQ ("Section %s not found in JSON body", k);
-	if (!json_object_is_type (jbeans, json_type_object))
-		return BADREQ ("Section %s from body is not a JSON object", k);
-	return meta2_json_load_setof_beans (jbeans, beans);
-}
-
 static void
 _populate_headers_with_header (struct req_args_s *args, struct bean_CONTENTS_HEADERS_s *header)
 {
@@ -379,15 +366,13 @@ _get_hash (const char *s, GByteArray **out)
 }
 
 static GError *
-_load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSList **out)
+_load_simplified_chunks (struct json_object *jbody, GSList **out)
 {
 	GError *err = NULL;
 	GSList *beans = NULL;
 
 	if (!json_object_is_type(jbody, json_type_array))
 		return BADREQ ("JSON: Not an array");
-	if (json_object_array_length(jbody) <= 0)
-		return BADREQ ("JSON: Empty array");
 
 	// Load the beans
 	for (int i=json_object_array_length(jbody); i>0 && !err ;i--) {
@@ -422,6 +407,27 @@ _load_simplified_chunks (struct req_args_s *args, struct json_object *jbody, GSL
 		}
 		if (h) g_byte_array_free (h, TRUE);
 	}
+
+	if (err)
+		_bean_cleanl2 (beans);
+	else
+		*out = beans;
+
+	return err;
+
+}
+static GError *
+_load_simplified_content (struct req_args_s *args, struct json_object *jbody, GSList **out)
+{
+	GError *err = NULL;
+	GSList *beans = NULL;
+
+	if (!json_object_is_type(jbody, json_type_array))
+		return BADREQ ("JSON: Not an array");
+	if (json_object_array_length(jbody) <= 0)
+		return BADREQ ("JSON: Empty array");
+
+	err = _load_simplified_chunks (jbody, &beans);
 
 	struct bean_CONTENTS_HEADERS_s *header = NULL;
 
@@ -1251,13 +1257,22 @@ retry:
 }
 
 static GError *
-_m2_json_spare (struct hc_url_s *url, struct json_object *jbody, GSList ** out)
+_m2_json_spare (struct req_args_s *args, struct json_object *jbody, GSList ** out)
 {
 	GSList *notin = NULL, *broken = NULL;
+	json_object *jnotin = NULL, *jbroken = NULL;
 	GError *err;
 
-	if (NULL != (err = _jbody_to_beans (&notin, jbody, "notin"))
-		|| NULL != (err = _jbody_to_beans (&broken, jbody, "broken"))) {
+	if (!json_object_is_type (jbody, json_type_object))
+		return BADREQ ("Body is not a valid JSON object");
+
+	if (!json_object_object_get_ex (jbody, "notin", &jnotin))
+		return BADREQ("'notin' field missing");
+	if (!json_object_object_get_ex (jbody, "broken", &jbroken))
+		return BADREQ("'broken' field missing");
+
+	if (NULL != (err = _load_simplified_chunks (jnotin, &notin))
+		|| NULL != (err = _load_simplified_chunks (jbroken, &broken))) {
 		_bean_cleanl2 (notin);
 		_bean_cleanl2 (broken);
 		return err;
@@ -1266,11 +1281,11 @@ _m2_json_spare (struct hc_url_s *url, struct json_object *jbody, GSList ** out)
 	GSList *obeans = NULL;
 	GError *hook (struct meta1_service_url_s * m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_SPARE (m2->host, url,
-				hc_url_get_option_value (url, "stgpol"),
+		return m2v2_remote_execute_SPARE (m2->host, args->url,
+				hc_url_get_option_value (args->url, "stgpol"),
 				notin, broken, &obeans);
 	}
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, url, hook);
+	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	_bean_cleanl2 (broken);
 	_bean_cleanl2 (notin);
 	EXTRA_ASSERT ((err != NULL) ^ (obeans != NULL));
@@ -1285,7 +1300,7 @@ enum http_rc_e
 action_m2_content_spare (struct req_args_s *args, struct json_object *jargs)
 {
 	GSList *beans = NULL;
-	GError *err = _m2_json_spare (args->url, jargs, &beans);
+	GError *err = _m2_json_spare (args, jargs, &beans);
 	return _reply_beans (args, err, beans);
 }
 
@@ -1477,7 +1492,7 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 	GSList *ibeans = NULL;
 	GError *err;
 
-	if (NULL != (err = _load_simplified_chunks (args, jbody, &ibeans))) {
+	if (NULL != (err = _load_simplified_content (args, jbody, &ibeans))) {
 		_bean_cleanl2 (ibeans);
 		return err;
 	}
