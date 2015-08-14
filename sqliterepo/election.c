@@ -512,7 +512,7 @@ member_signal(struct election_member_s *m)
 static void
 member_set_master_url(struct election_member_s *m, const gchar *u)
 {
-	metautils_str_replace(&(m->master_url), u);
+	oio_str_replace(&(m->master_url), u);
 	if (u)
 		member_debug(__FUNCTION__, "MASTER_URL", m);
 }
@@ -718,7 +718,7 @@ member_destroy(struct election_member_s *member)
 	if (!member)
 		return;
 
-	metautils_str_clean (&member->master_url);
+	oio_str_clean (&member->master_url);
 	g_free0 (member->key);
 	sqlx_name_clean (&member->name);
 

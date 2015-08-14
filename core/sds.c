@@ -17,19 +17,17 @@ License along with this library.
 */
 
 #ifndef G_LOG_DOMAIN
-#define G_LOG_DOMAIN "oio.sdk"
+#define G_LOG_DOMAIN "oio.sds"
 #endif
 
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-
-#include "metautils/lib/metautils.h"
-#include "cluster/lib/gridcluster.h"
-#include "metautils/lib/hc_url.h"
 
 #include <glib.h>
 #include <json.h>
@@ -37,9 +35,13 @@ License along with this library.
 #include <curl/multi.h>
 #include <curl/curlver.h>
 
+#include "oio_core.h"
 #include "oio_sds.h"
 #include "http_put.h"
 #include "http_internals.h"
+
+// used for macros
+#include <metautils/lib/metautils.h>
 
 struct oio_sds_s
 {
@@ -94,7 +96,7 @@ _curl_set_url_content (struct hc_url_s *u)
 		GRID_WARN ("BUG No namespace configured!");
 		g_string_append (hu, "proxy");
 	} else {
-		gchar *s = gridcluster_get_proxy (ns);
+		gchar *s = oio_cfg_get_proxy_containers (ns);
 		if (!s) {
 			GRID_WARN ("No proxy configured!");
 			g_string_append (hu, "proxy");
@@ -150,7 +152,7 @@ _write_NOOP(void *data, size_t s, size_t n, void *ignored)
 static GError *
 _body_parse_error (GString *b)
 {
-	EXTRA_ASSERT (b != NULL);
+	g_assert (b != NULL);
 	struct json_tokener *tok = json_tokener_new ();
 	struct json_object *jbody = json_tokener_parse_ex (tok, b->str, b->len);
 	json_tokener_free (tok);
@@ -160,12 +162,12 @@ _body_parse_error (GString *b)
 		return NEWERROR(0, "No error explained");
 
 	struct json_object *jcode, *jmsg;
-	struct metautils_json_mapping_s map[] = {
+	struct oio_ext_json_mapping_s map[] = {
 		{"status", &jcode, json_type_int,    0},
 		{"message",  &jmsg,  json_type_string, 0},
 		{NULL, NULL, 0, 0}
 	};
-	GError *err =  metautils_extract_json(jbody, map);
+	GError *err =  oio_ext_extract_json(jbody, map);
 	if (!err) {
 		int code = 0;
 		const char *msg = "Unknown error";
@@ -233,11 +235,10 @@ _compare_chunks (const struct chunk_s *c0, const struct chunk_s *c1)
 {
 	assert(c0 != NULL && c1 != NULL);
 	int c = CMP(c0->position.meta,c1->position.meta);
-	if (!c)
-		c = CMP(c0->position.intra,c1->position.intra);
-	if (!c)
-		c = CMP(c0->position.parity,c1->position.parity);
-	return c;
+	if (c) return c;
+	c = CMP(c0->position.intra,c1->position.intra);
+	if (c) return c;
+	return CMP(c0->position.parity,c1->position.parity);
 }
 
 static struct chunk_s *
@@ -270,18 +271,18 @@ _load_chunks (GSList **out, struct json_object *jtab)
 	/* Decode the JSON description */
 	for (int i=json_object_array_length(jtab); i>0 && !err ;i--) {
 		struct json_object *jurl = NULL, *jpos = NULL, *jsize = NULL, *jhash = NULL;
-		struct metautils_json_mapping_s m[] = {
+		struct oio_ext_json_mapping_s m[] = {
 			{"url",  &jurl,  json_type_string, 1},
 			{"pos",  &jpos,  json_type_string, 1},
 			{"size", &jsize, json_type_int,    1},
 			{"hash", &jhash, json_type_string, 1},
 			{NULL,NULL,0,0}
 		};
-		err = metautils_extract_json (json_object_array_get_idx (jtab, i-1), m);
+		err = oio_ext_extract_json (json_object_array_get_idx (jtab, i-1), m);
 		if (err) continue;
 
 		const char *h = json_object_get_string(jhash);
-		if (!metautils_str_ishexa(h, 2*sizeof(chunk_hash_t)))
+		if (!oio_str_ishexa(h, 2*sizeof(chunk_hash_t)))
 			err = NEWERROR(0, "JSON: invalid chunk hash: not hexa of %"G_GSIZE_FORMAT,
 					2*sizeof(chunk_hash_t));
 		else {
@@ -328,29 +329,29 @@ _load_chunks (GSList **out, struct json_object *jtab)
 void
 oio_log_to_syslog (void)
 {
-	logger_lazy_init ();
-	g_log_set_default_handler(logger_syslog, NULL);
+	oio_log_lazy_init ();
+	g_log_set_default_handler(oio_log_syslog, NULL);
 }
 
 void
 oio_log_to_stderr (void)
 {
-	logger_lazy_init ();
-	g_log_set_default_handler (logger_stderr, NULL);
+	oio_log_lazy_init ();
+	g_log_set_default_handler (oio_log_stderr, NULL);
 }
 
 void
 oio_log_more (void)
 {
-	logger_lazy_init ();
-	logger_verbose_default ();
+	oio_log_lazy_init ();
+	oio_log_verbose_default ();
 }
 
 void
 oio_log_nothing (void)
 {
-	logger_lazy_init ();
-	logger_quiet ();
+	oio_log_lazy_init ();
+	oio_log_quiet ();
 }
 
 /* error management --------------------------------------------------------- */
@@ -389,15 +390,15 @@ oio_error_message (const struct oio_error_s *e)
 struct oio_error_s *
 oio_sds_init (struct oio_sds_s **out, const char *ns)
 {
-	gridd_set_random_reqid ();
-	logger_lazy_init ();
+	oio_ext_set_random_reqid ();
+	oio_log_lazy_init ();
 
 	assert (out != NULL);
 	assert (ns != NULL);
 	*out = SLICE_NEW0 (struct oio_sds_s);
 	(*out)->ns = g_strdup (ns);
-	(*out)->proxy_local = gridcluster_get_proxylocal (ns);
-	(*out)->proxy = gridcluster_get_proxy (ns);
+	(*out)->proxy_local = oio_cfg_get_proxylocal (ns);
+	(*out)->proxy = oio_cfg_get_proxy_containers (ns);
 	(*out)->sync_after_download = TRUE;
 	return NULL;
 }
@@ -406,9 +407,9 @@ void
 oio_sds_free (struct oio_sds_s *sds)
 {
 	if (!sds) return;
-	metautils_str_clean (&sds->ns);
-	metautils_str_clean (&sds->proxy);
-	metautils_str_clean (&sds->proxy_local);
+	oio_str_clean (&sds->ns);
+	oio_str_clean (&sds->proxy);
+	oio_str_clean (&sds->proxy_local);
 	SLICE_FREE (struct oio_sds_s, sds);
 }
 
@@ -498,7 +499,7 @@ _download_chunks (struct oio_sds_s *sds, GSList *chunks, const char *local)
 			chunkset = g_slist_prepend (chunkset, c1);
 		}
 
-		chunkset = metautils_gslist_shuffle (chunkset);
+		chunkset = oio_ext_gslist_shuffle (chunkset);
 		c0 = chunkset->data;
 
 		/* skip the chunks with the same position */
@@ -562,7 +563,7 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		} while (0);
 		struct headers_s headers = {NULL,NULL};
 		_headers_add (&headers, "Expect", "");
-		_headers_add (&headers, PROXYD_HEADER_REQID, gridd_get_reqid());
+		_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
 		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
@@ -725,7 +726,7 @@ _upload_chunks (struct oio_sds_s *sds, GSList *chunks, struct local_upload_s *up
 			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-metadata-sys", "%s", "");
 			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-id", "%s", strrchr(c1->url, '/')+1);
 			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos", "%u", c1->position.meta);
-			http_put_dest_add_header (dest, PROXYD_HEADER_REQID, "%s", gridd_get_reqid());
+			http_put_dest_add_header (dest, PROXYD_HEADER_REQID, "%s", oio_ext_get_reqid());
 			destset = g_slist_append (destset, dest); 
 		}
 		err = http_put_run (put);
@@ -741,7 +742,7 @@ _upload_chunks (struct oio_sds_s *sds, GSList *chunks, struct local_upload_s *up
 			hash_md5_t bin;
 			char computed[STRLEN_MD5];
 			http_put_get_md5 (put, bin, sizeof(hash_md5_t));
-			buffer2str (bin, sizeof(hash_md5_t), computed, sizeof(computed));
+			oio_str_bin2hex (bin, sizeof(hash_md5_t), computed, sizeof(computed));
 			for (GSList *l1=chunkset; !err && l1 ;l1=l1->next) {
 				const gchar *received = http_put_get_header (put, l1->data, RAWX_HEADER_PREFIX "chunk-hash");
 				if (!received || g_ascii_strcasecmp(received, computed)) {
@@ -841,7 +842,7 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 		view_input.done = 0;
 		struct headers_s headers = {NULL,NULL};
 		_headers_add (&headers, "Expect", "");
-		_headers_add (&headers, PROXYD_HEADER_REQID, gridd_get_reqid());
+		_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
 		if (src->autocreate)
 			_headers_add (&headers, PROXYD_HEADER_MODE, "autocreate");
 		rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
@@ -907,7 +908,7 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 
 		struct headers_s headers = {NULL,NULL};
 		_headers_add (&headers, "Expect", "");
-		_headers_add (&headers, PROXYD_HEADER_REQID, gridd_get_reqid());
+		_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
 		_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-policy", "NONE");
 		_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-hash",
 				g_checksum_get_string (upload.checksum_content));
@@ -967,7 +968,7 @@ oio_sds_delete (struct oio_sds_s *sds, struct hc_url_s *url)
 
 	struct headers_s headers = {NULL,NULL};
 	_headers_add (&headers, "Expect", "");
-	_headers_add (&headers, PROXYD_HEADER_REQID, gridd_get_reqid());
+	_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
 	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 
 	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
@@ -1009,7 +1010,7 @@ oio_sds_has (struct oio_sds_s *sds, struct hc_url_s *url, int *phas)
 
 	struct headers_s headers = {NULL,NULL};
 	_headers_add (&headers, "Expect", "");
-	_headers_add (&headers, PROXYD_HEADER_REQID, gridd_get_reqid());
+	_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
 	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 
 	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_NOOP);
@@ -1063,10 +1064,10 @@ oio_sds_get_compile_options (void)
 	_ADD_DBL (PROXYD_DIR_TIMEOUT_SINGLE);
 
 	_ADD_STR (GCLUSTER_RUN_DIR);
-	_ADD_STR (GCLUSTER_ETC_DIR);
-	_ADD_STR (GCLUSTER_CONFIG_FILE_PATH);
-	_ADD_STR (GCLUSTER_CONFIG_DIR_PATH);
-	_ADD_STR (GCLUSTER_CONFIG_LOCAL_PATH);
+	_ADD_STR (OIO_ETC_DIR);
+	_ADD_STR (OIO_CONFIG_FILE_PATH);
+	_ADD_STR (OIO_CONFIG_DIR_PATH);
+	_ADD_STR (OIO_CONFIG_LOCAL_PATH);
 	_ADD_STR (GCLUSTER_AGENT_SOCK_PATH);
 
 	_ADD_DBL (M0V2_CLIENT_TIMEOUT);

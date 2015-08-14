@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define G_LOG_DOMAIN "proxy"
 #endif
 
+#include <metautils/lib/metautils.h>
 #include <meta2v2/meta2_utils_json.h>
 #include <meta2v2/autogen.h>
 
@@ -706,7 +707,7 @@ action_m2_container_list (struct req_args_s *args)
 			props = NULL;
 
 			// transmit the output
-			metautils_str_reuse (&list_out.next_marker, out.next_marker);
+			oio_str_reuse (&list_out.next_marker, out.next_marker);
 			out.next_marker = NULL;
 			if (out.beans) {
 				struct filter_ctx_s ctx;
@@ -779,7 +780,7 @@ action_m2_container_list (struct req_args_s *args)
 		g_free (keys_prefixes);
 	g_tree_destroy (tree_prefixes);
 	g_tree_destroy (tree_properties);
-	metautils_str_clean (&list_out.next_marker);
+	oio_str_clean (&list_out.next_marker);
 	return rc;
 }
 

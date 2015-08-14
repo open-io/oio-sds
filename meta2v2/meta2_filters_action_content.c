@@ -45,6 +45,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_utils_json.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
+#include <core/hc_url_ext.h>
 
 enum content_action_e
 {

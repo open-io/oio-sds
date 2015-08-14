@@ -22,6 +22,8 @@ License along with this library.
 #endif
 
 #include <errno.h>
+#include <unistd.h>
+
 #include <glib.h>
 
 #include <metautils/lib/metautils.h>

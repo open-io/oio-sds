@@ -217,9 +217,10 @@ _rawx_update_beans_hash_from_request(struct http_put_s *http_put)
 			GSETERROR(&error,"Missing chunk hash in response from rawx");
 			break;
 		}
-		gboolean ret = hex2bin(h, hash, sizeof(hash), &error);
-		if (ret != TRUE)
+		if (!oio_str_hex2bin(h, hash, sizeof(hash))) {
+			GSETERROR(&error, "Hash is not hexa");
 			break;
+		}
 		CHUNKS_set2_hash(bc, hash, sizeof(hash));
 	}
 	g_slist_free(beans);
@@ -320,8 +321,7 @@ _rainx_update_chunks_with_response(GSList **all_chunks, GSList **chunks_by_pos,
 		}
 		chunk_hash[0] = '\0';
 		chunk_hash++;
-		if (!hex2bin(chunk_hash, hash, sizeof(hash), &error))
-		{
+		if (!oio_str_hex2bin(chunk_hash, hash, sizeof(hash))) {
 			GSETERROR(&error,"Bad format for chunklist header (hash hex)");
 			goto end;
 		}

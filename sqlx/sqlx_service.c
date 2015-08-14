@@ -598,7 +598,7 @@ sqlx_service_specific_fini(void)
 	if (SRV.url)
 		g_string_free(SRV.url, TRUE);
 	if (SRV.zk_url)
-		metautils_str_clean(&SRV.zk_url);
+		oio_str_clean(&SRV.zk_url);
 
 	if (SRV.lb)
 		grid_lbpool_destroy (SRV.lb);
@@ -915,7 +915,7 @@ _send_event (struct sqlx_service_s *ss, struct event_s *evt)
 	gchar tmp[1+ 2*HEADER_SIZE];
 
 	evt->last_sent = network_server_bogonow (ss->server);
-	buffer2str(evt, HEADER_SIZE, tmp, sizeof(tmp));
+	oio_str_bin2hex(evt, HEADER_SIZE, tmp, sizeof(tmp));
 
 retry:
 	rc = zmq_send (ss->notify.zagent, "", 0, ZMQ_SNDMORE|ZMQ_MORE|ZMQ_DONTWAIT);
@@ -956,7 +956,7 @@ _manage_event (struct sqlx_service_s *ss, zmq_msg_t *msg)
 
 	if (GRID_INFO_ENABLED()) {
 		gchar tmp[1+ 2*HEADER_SIZE];
-		buffer2str(evt, HEADER_SIZE, tmp, sizeof(tmp));
+		oio_str_bin2hex(evt, HEADER_SIZE, tmp, sizeof(tmp));
 		GRID_INFO("EVT:DEF %s (%u) %.*s", tmp, ss->notify.pending_events->len, evt->size, evt->message);
 	}
 
@@ -974,7 +974,7 @@ _manage_ack (struct sqlx_service_s *ss, zmq_msg_t *msg)
 		struct event_s *evt = g_ptr_array_index(ss->notify.pending_events, i);
 		if (!memcmp(evt, d, HEADER_SIZE)) {
 			gchar tmp[1+(2*HEADER_SIZE)];
-			buffer2str(evt, HEADER_SIZE, tmp, sizeof(tmp));
+			oio_str_bin2hex(evt, HEADER_SIZE, tmp, sizeof(tmp));
 			g_free (evt);
 			g_ptr_array_remove_index_fast (ss->notify.pending_events, i);
 			GRID_INFO("EVT:ACK %s", tmp);

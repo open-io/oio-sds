@@ -443,9 +443,9 @@ http_manage_request(struct req_ctx_s *r)
 	} body;
 
 	void cleanup(void) {
-		metautils_str_clean (&msg);
-		metautils_str_clean (&access);
-		metautils_str_clean ((gchar**)&body.data);
+		oio_str_clean (&msg);
+		oio_str_clean (&access);
+		oio_str_clean ((gchar**)&body.data);
 		body.len = 0;
 		if (headers) {
 			g_tree_destroy(headers);
@@ -456,7 +456,7 @@ http_manage_request(struct req_ctx_s *r)
 	void set_status(int c, const gchar *m) {
 		EXTRA_ASSERT(m != NULL);
 		code = c;
-		metautils_str_replace (&msg, m);
+		oio_str_replace (&msg, m);
 	}
 
 	void set_content_type(const gchar *type) {
@@ -542,7 +542,7 @@ http_manage_request(struct req_ctx_s *r)
 		va_start(args, fmt);
 		gchar *s = g_strdup_vprintf (fmt, args);
 		va_end(args);
-		metautils_str_reuse (&access, s);
+		oio_str_reuse (&access, s);
 	}
 
 	void final_error(int c_, const char *m_) {

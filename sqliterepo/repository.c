@@ -174,7 +174,7 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 
 	/* Clean the structure */
 	sqlx_name_clean(&sq3->name);
-	metautils_str_clean (&sq3->path);
+	oio_str_clean (&sq3->path);
 	if (sq3->admin)
 		g_tree_destroy(sq3->admin);
 

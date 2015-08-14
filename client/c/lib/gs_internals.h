@@ -47,7 +47,6 @@ License along with this library.
 #include <sys/poll.h>
 
 #include <metautils/lib/metautils.h>
-
 #include <cluster/lib/gridcluster.h>
 #include <meta0v2/meta0_remote.h>
 #include <meta0v2/meta0_utils.h>
@@ -57,6 +56,8 @@ License along with this library.
 #include <meta2v2/meta2_remote.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/generic.h>
+#include <sqliterepo/sqlite_utils.h>
+#include <sqliterepo/sqlx_remote.h>
 #include <resolver/hc_resolver.h>
 
 #include <neon/ne_basic.h>

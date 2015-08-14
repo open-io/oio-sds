@@ -19,8 +19,7 @@ License along with this library.
 
 #ifndef OIO_SDS__sdk__http_put_h
 # define OIO_SDS__sdk__http_put_h 1
-
-# include <metautils/lib/metautils.h>
+# include <glib.h>
 
 struct http_put_s;
 
@@ -64,7 +63,7 @@ struct http_put_s *http_put_create (http_put_input_f cb_input, gpointer cb_input
  *
  * @return handle on this destination
  */
-struct http_put_dest_s *http_put_add_dest(struct http_put_s *p, const gchar *url, gpointer user_data);
+struct http_put_dest_s *http_put_add_dest(struct http_put_s *p, const char *url, gpointer user_data);
 
 /**
  * Add a header for this destination.
@@ -74,8 +73,8 @@ struct http_put_dest_s *http_put_add_dest(struct http_put_s *p, const gchar *url
  * @val_fmt value of the key
  *
  */
-void http_put_dest_add_header(struct http_put_dest_s *dest, const gchar *key,
-		const gchar *val_fmt, ...) __attribute__ ((format (printf, 3, 4)));
+void http_put_dest_add_header(struct http_put_dest_s *dest, const char *key,
+		const char *val_fmt, ...) __attribute__ ((format (printf, 3, 4)));
 
 /**
  * Start all put requests.
@@ -123,7 +122,7 @@ void http_put_get_md5(struct http_put_s *p, guint8 *buffer, gsize size);
  * @param[out] buffer return a pointer on data sent
  * @param[out] size return the size of data sent
  */
-void http_put_get_buffer(struct http_put_s *p, const gchar **buffer, gsize *size);
+void http_put_get_buffer(struct http_put_s *p, const char **buffer, gsize *size);
 
 /**
  * Get all user_data linked to successful destinations.
@@ -156,7 +155,7 @@ GSList *http_put_get_failure_dests(struct http_put_s *p);
  * @note the return value must not be freed by caller, it will be free
  * during http_put_destroy.
  */
-const gchar *http_put_get_header(struct http_put_s *p, gpointer user_data, const gchar *header);
+const char *http_put_get_header(struct http_put_s *p, gpointer user_data, const char *header);
 
 /**
  * Get http code for destination represented its user_data.

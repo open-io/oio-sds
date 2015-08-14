@@ -57,41 +57,15 @@ gsize metautils_strlcpy_physical_ns(gchar *d, const gchar *s, gsize dlen);
  */
 gchar ** g_strdupv2(gchar **src);
 
-void metautils_str_reuse(gchar **dst, gchar *src);
-
-void metautils_str_clean(gchar **s);
-
-void metautils_str_replace(gchar **dst, const gchar *src);
-
-const char * metautils_lstrip(register const char *s, register char c);
-
-void metautils_rstrip(register gchar *src, register gchar c);
-
 void metautils_str_upper(register gchar *s);
 
 void metautils_str_lower(register gchar *s);
 
-/* Returns FALSE if 's' is not 'slen' long and contains a non-hexa character. */
-gboolean metautils_str_ishexa(const gchar *s, gsize slen);
-
-/* Returns is 's' is an even number of hexadecimal characters */
-gboolean metautils_str_ishexa1(const gchar *s);
-
 gsize strlen_len(const void * s, const gsize l);
-
-/** Convert an hexa string to its binary form */
-gboolean hex2bin(const gchar * src, void * dst, gsize dst_size, GError** error);
-
-/** Fills d (which size is dS) with the hexadecimal alpha-numerical
- * representation of the content of s (which size is sS) */
-void buffer2str(const void *s, size_t sS, char *d, size_t dS);
 
 /** Splits the given buffer (considered as a non NULL-terminated) into 
  * newly allocated tokens (wrapping g_strsplit()) */
 gchar **buffer_split(const void *buf, gsize buflen, const gchar * separator, gint max_tokens);
-
-/** Check a segment of data is filled with 0 */
-gboolean data_is_zeroed(const void *data, gsize data_size);
 
 gchar** metautils_decode_lines(const gchar *start, const gchar *end);
 
@@ -107,10 +81,7 @@ int metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored);
  * string (yes, true, on, yes, 1) */
 gboolean metautils_cfg_get_bool(const gchar *value, gboolean def);
 
-gchar ** metautils_strv_append (gchar **, gchar *);
-
-/** Fills 'buf' with buflen random bytes */
-void metautils_randomize_buffer(guint8 *bufn, gsize buflen);
+#define metautils_randomize_buffer oio_str_randomize
 
 /** Frees <p> if p is not NULL */
 void g_free0(gpointer p);
@@ -127,16 +98,7 @@ none(const gchar *src)
 	return src ? src : "null";
 }
 
-struct json_object;
-
-struct metautils_json_mapping_s {
-	const char *name;
-	struct json_object **out;
-	int type;
-	unsigned int mandatory;
-};
-
-GError * metautils_extract_json (struct json_object *j,
-		struct metautils_json_mapping_s *tab);
+#define metautils_json_mapping_s oio_ext_json_mapping_s
+#define metautils_extract_json   oio_ext_extract_json
 
 #endif /*OIO_SDS__metautils__lib__metautils_strings_h*/

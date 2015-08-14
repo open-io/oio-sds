@@ -83,62 +83,6 @@ gslist_chunks_destroy(GSList * list_of_lists, GDestroyNotify destroy_func)
 	g_slist_free(list_of_lists);
 }
 
-#define PREPEND(Result,List) do { \
-	next = (List)->next; \
-	List->next = (Result); \
-	(Result) = List; \
-	List = next; \
-} while (0)
-
-static GSList*
-gslist_merge_random(GSList *l1, GSList *l2)
-{
-	GSList *next, *result = NULL;
-
-	while (l1 || l2) {
-		if (l1 && l2) {
-			if (rand() % 2)
-				PREPEND(result,l1);
-			else
-				PREPEND(result,l2);
-		}
-		else {
-			if (l1)
-				PREPEND(result,l1);
-			else
-				PREPEND(result,l2);
-		}
-	}
-
-	return result;
-}
-
-static void
-gslist_split_in_two(GSList *src, GSList **r1, GSList **r2)
-{
-	GSList *next, *l1 = NULL, *l2 = NULL;
-
-	while (src) {
-		if (src)
-			PREPEND(l1, src);
-		if (src)
-			PREPEND(l2, src);
-	}
-
-	*r1 = l1, *r2 = l2;
-}
-
-GSList *
-metautils_gslist_shuffle(GSList *src)
-{
-	GSList *l1, *l2;
-
-	gslist_split_in_two(src, &l1, &l2);
-	return gslist_merge_random(
-		(l1 && l1->next) ? metautils_gslist_shuffle(l1) : l1,
-		(l2 && l2->next) ? metautils_gslist_shuffle(l2) : l2);
-}
-
 GSList*
 metautils_array_to_list(void **orig)
 {

@@ -187,7 +187,7 @@ meta2_raw_chunk_to_string(const meta2_raw_chunk_t *chunk)
 		return g_strdup("CHUNK[NULL]");
 
 	chunk_id_to_string(&(chunk->id), str_id, sizeof(str_id));
-	buffer2str(&(chunk->hash), sizeof(chunk->hash), &(str_hash[0]), sizeof(str_hash));
+	oio_str_bin2hex(&(chunk->hash), sizeof(chunk->hash), &(str_hash[0]), sizeof(str_hash));
 
 	return g_strdup_printf("CHUNK[%.*s|%.*s|%04x|%"G_GINT64_FORMAT"|%u|%"G_GSIZE_FORMAT"]",
 			(int) sizeof(str_id), str_id,
@@ -253,7 +253,7 @@ convert_content_text_to_raw(const struct content_textinfo_s* text_content,
 	}
 
 	if (text_content->container_id != NULL
-		&& !hex2bin(text_content->container_id, &(raw_content->container_id), sizeof(container_id_t), error)) {
+		&& !oio_str_hex2bin(text_content->container_id, raw_content->container_id, sizeof(container_id_t))) {
 			GSETERROR(error, "Failed to convert container_id from hex to bin");
 			return FALSE;
 	}

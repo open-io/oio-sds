@@ -18,6 +18,7 @@ License along with this library.
 */
 
 #include <metautils/lib/metautils.h>
+#include <sqliterepo/sqlx_remote.h>
 #include "hash.h"
 
 /** TODO manage namespaces */

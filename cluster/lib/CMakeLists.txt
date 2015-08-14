@@ -2,7 +2,7 @@
 
 include_directories(BEFORE . .. ../..)
 
-add_library(gridcluster SHARED config.c
+add_library(gridcluster SHARED
 		gridcluster.c
 		message.c)
 

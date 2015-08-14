@@ -23,10 +23,7 @@ License along with this library.
 
 #include <errno.h>
 
-#include "./metautils_macros.h"
-#include "./metautils_errors.h"
-#include "./metautils_hashstr.h"
-#include "./metautils_svc_policy.h"
+#include "metautils.h"
 
 struct service_update_policies_s
 {

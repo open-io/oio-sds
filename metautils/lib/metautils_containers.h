@@ -37,8 +37,7 @@ void** metautils_gpa_to_array(GPtrArray *orig, gboolean clean);
 
 GPtrArray* metautils_gtree_to_gpa(GTree *t, gboolean clean);
 
-/** merge-shuffle */
-GSList * metautils_gslist_shuffle(GSList *src);
+#define metautils_gslist_shuffle oio_ext_gslist_shuffle
 
 /** Concat both lists without any garanty on the output order.
  * Faster than g_slist_concat(). <l0> should be longer than <l1>.

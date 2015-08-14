@@ -103,7 +103,7 @@ _chunk_to_rawxlist_element(chunk_info_t *chunk_info)
 	addr_info_to_string(&(chunk_info->id.addr), tmpstr, sizeof(tmpstr));
 	g_string_append(res, tmpstr);
 	g_string_append(res, "/");
-	buffer2str(chunk_info->id.id, sizeof(chunk_info->id.id), tmpstr, sizeof(tmpstr));
+	oio_str_bin2hex(chunk_info->id.id, sizeof(chunk_info->id.id), tmpstr, sizeof(tmpstr));
 	g_string_append(res, tmpstr);
 
 	return g_string_free(res, FALSE);
@@ -121,7 +121,7 @@ _chunk_to_sparerawxlist_element(chunk_info_t *chunk_in_error)
 	g_string_append(res, "|");
 
 	char tmpstr[STRLEN_CHUNKHASH];
-	buffer2str(chunk_in_error->hash, sizeof(chunk_hash_t), tmpstr, sizeof(tmpstr));
+	oio_str_bin2hex(chunk_in_error->hash, sizeof(chunk_hash_t), tmpstr, sizeof(tmpstr));
 	g_string_append(res, tmpstr);
 
 	g_free(rawxlist_element);

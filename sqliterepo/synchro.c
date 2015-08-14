@@ -105,7 +105,7 @@ sqlx_sync_set_prefix(struct sqlx_sync_s *ss, const gchar *prefix)
 {
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
-	metautils_str_replace(&ss->zk_prefix, prefix);
+	oio_str_replace(&ss->zk_prefix, prefix);
 	GRID_NOTICE("SYNC prefix set to [%s]", prefix);
 }
 
@@ -236,8 +236,8 @@ _clear(struct sqlx_sync_s *ss)
 	EXTRA_ASSERT(ss != NULL);
 	EXTRA_ASSERT(ss->vtable == &VTABLE);
 	_close(ss);
-	metautils_str_clean (&ss->zk_prefix);
-	metautils_str_clean (&ss->zk_url);
+	oio_str_clean (&ss->zk_prefix);
+	oio_str_clean (&ss->zk_url);
 	memset(ss, 0, sizeof(*ss));
 	g_free(ss);
 }

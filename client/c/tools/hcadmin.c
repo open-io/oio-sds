@@ -216,7 +216,7 @@ hcadmin_configure(int argc, char **argv)
 {
 	GRID_DEBUG("Configuration");
 
-	gridd_set_random_reqid();
+	oio_ext_set_random_reqid();
 
 	if (argc < 1) {
 		g_printerr("Invalid arguments number\n");

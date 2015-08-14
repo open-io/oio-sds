@@ -372,7 +372,7 @@ gs_get_container_by_hexid (gs_grid_storage_t *gs, const char *hex_id, int auto_c
         {
                 /*copy the id of the container*/
                 g_strlcpy(container->str_cID, hex_id, sizeof(container->str_cID));
-                container_id_hex2bin(hex_id, strlen(hex_id), &(container->cID), NULL);
+                oio_str_hex2bin(hex_id, container->cID, sizeof(container_id_t));
 
                 /*link the container to its grid_storage client structure*/
                 container->info.gs = gs;

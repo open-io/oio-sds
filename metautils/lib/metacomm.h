@@ -56,14 +56,6 @@ typedef Message_t* MESSAGE;
  * @{
  */
 
-/* Returns the previously set threa-dlocal request-id. */
-const char * gridd_get_reqid (void);
-
-/* Set a thread-local variable with a copy of the given request id. */
-void gridd_set_reqid (const char *reqid);
-
-void gridd_set_random_reqid (void);
-
 struct metacnx_ctx_s;
 struct hc_url_s;
 

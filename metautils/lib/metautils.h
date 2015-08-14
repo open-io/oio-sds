@@ -36,6 +36,8 @@ License along with this library.
 # include <glib.h>
 # include <glib/gstdio.h>
 
+#include <core/oio_core.h>
+
 # include <metautils/lib/metatypes.h>
 
 # include <metautils/lib/metautils_bits.h>
@@ -45,7 +47,6 @@ License along with this library.
 # include <metautils/lib/metautils_containers.h>
 # include <metautils/lib/metautils_gba.h>
 # include <metautils/lib/metautils_resolv.h>
-# include <metautils/lib/metautils_loggers.h>
 # include <metautils/lib/metautils_hashstr.h>
 # include <metautils/lib/metautils_task.h>
 # include <metautils/lib/metautils_l4v.h>
@@ -63,8 +64,6 @@ License along with this library.
 # include <metautils/lib/metatype_metadata.h>
 # include <metautils/lib/metatype_acl.h>
 
-# include <metautils/lib/hc_url.h>
-# include <metautils/lib/hc_url_ext.h>
 # include <metautils/lib/lrutree.h>
 # include <metautils/lib/cache.h>
 # include <metautils/lib/storage_policy.h>
@@ -72,7 +71,6 @@ License along with this library.
 # include <metautils/lib/volume_lock.h>
 # include <metautils/lib/expr.h>
 # include <metautils/lib/lb.h>
-# include <metautils/lib/meta_backend_common.h>
 
 # include <metautils/lib/metacomm.h>
 # include <metautils/lib/gridd_client.h>

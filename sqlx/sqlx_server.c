@@ -33,6 +33,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/grid_daemon.h>
 #include <server/transport_gridd.h>
 #include <sqliterepo/replication_dispatcher.h>
+#include <sqliterepo/sqlx_remote.h>
 #include "sqlx_service.h"
 
 #define SQLX_TYPE "sqlx"

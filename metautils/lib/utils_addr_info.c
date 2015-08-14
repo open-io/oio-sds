@@ -32,6 +32,18 @@ License along with this library.
 
 #include "metautils.h"
 
+static gboolean
+_zeroed(const void *data, gsize data_size)
+{
+	if (data != NULL) {
+		for (gsize i=0; i<data_size ;++i) {
+			if (((guint8*)data)[i])
+				return FALSE;
+		}
+	}
+	return TRUE;
+}
+
 gboolean
 metautils_addr_valid_for_bind(const struct addr_info_s *a)
 {
@@ -45,7 +57,7 @@ metautils_addr_valid_for_connect(const struct addr_info_s *a)
 {
 	/* @todo TODO we should check the address is not broadcast (local
 	 * or global), not multicast, not network address, etc. */
-	return a->port != 0 && !data_is_zeroed(&(a->addr), sizeof(a->addr));
+	return a->port != 0 && !_zeroed(&(a->addr), sizeof(a->addr));
 }
 
 gboolean

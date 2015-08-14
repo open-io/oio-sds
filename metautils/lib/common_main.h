@@ -32,24 +32,21 @@ License along with this library.
 #define HC_PROC_INIT(argv,LVL) do { \
 	grid_main_srand(); \
 	grid_main_set_prgname(argv[0]); \
-	logger_lazy_init (); \
-	logger_init_level(LVL); \
-	g_log_set_default_handler(logger_stderr, NULL); \
+	oio_log_lazy_init (); \
+	oio_log_init_level(LVL); \
+	g_log_set_default_handler(oio_log_stderr, NULL); \
 } while (0)
 
 #define HC_TEST_INIT(argc,argv) do { \
 	grid_main_srand(); \
 	g_test_init (&argc, &argv, NULL); \
 	grid_main_set_prgname(argv[0]); \
-	logger_lazy_init (); \
-	logger_init_level(GRID_LOGLVL_INFO); \
-	logger_init_level_from_env("G_DEBUG_LEVEL"); \
-	g_log_set_default_handler(logger_stderr, NULL); \
+	oio_log_lazy_init (); \
+	oio_log_init_level(GRID_LOGLVL_INFO); \
+	oio_log_init_level_from_env("G_DEBUG_LEVEL"); \
+	g_log_set_default_handler(oio_log_stderr, NULL); \
 } while (0)
 
-/**
- *
- */
 struct grid_main_option_s {
 	const char *name;
 	enum {
@@ -75,6 +72,11 @@ struct grid_main_option_s {
 	const char *descr;
 };
 
+/** Number of seconds since Epoch when the debug level has been updated. */
+extern time_t main_log_level_update;
+
+extern char syslog_id[64];
+
 /**
  * Returns an array of extra options managed by the current process.
  *
@@ -95,6 +97,9 @@ struct grid_main_callbacks {
 
 /** Uses sigprocmask to block a lot of signals */
 void metautils_ignore_signals(void);
+
+/* Activate syslog logging */
+void logger_syslog_open (void);
 
 /** Stops the execution of the processus */
 void grid_main_stop(void);

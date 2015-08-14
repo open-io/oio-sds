@@ -30,44 +30,6 @@ License along with this library.
 #include "metautils_containers.h"
 
 void
-metautils_str_reuse(gchar **dst, gchar *src)
-{
-	metautils_pfree(dst, src);
-}
-
-void
-metautils_str_clean(gchar **s)
-{
-	metautils_pfree(s, NULL);
-}
-
-void
-metautils_str_replace(gchar **dst, const gchar *src)
-{
-	if (src)
-		metautils_str_reuse(dst, g_strdup(src));
-	else
-		metautils_str_reuse(dst, NULL);
-}
-
-void
-metautils_rstrip(register gchar *src, register gchar c)
-{
-	if (!src || !*src)
-		return;
-	for (gchar *s = src + strlen(src) - 1; s>=src && *s == c ;s--)
-		*s = '\0';
-}
-
-const char *
-metautils_lstrip(register const char *s, register char c)
-{
-	for (; *s == c; ++s) {
-	}
-	return s;
-}
-
-void
 metautils_str_upper(register gchar *s)
 {
 	for (; *s ;++s) {
@@ -163,35 +125,28 @@ metautils_encode_lines(gchar **strv)
 	return gba;
 }
 
-static void
-_strv_pointers_concat(gchar **ptrs, gchar *d, gchar **src)
+gchar **
+g_strdupv2(gchar **src)
 {
-	gchar *s;
-	register gchar c;
+	// get the tail size
+	gsize header = sizeof(void*) * (1+g_strv_length(src));
+	gsize tail = 0;
+	for (gchar **v=src; *v; v++)
+		tail += 1+strlen(*v);
+	gsize total = header + tail;
 
+	gchar *raw = g_malloc0(total);
+	gchar **ptrs = (gchar**)raw;
+	gchar *d = raw + header;
+	gchar *s = NULL;
 	while (NULL != (s = *(src++))) {
+		register gchar c;
 		*(ptrs++) = d;
 		do {
 			*(d++) = (c = *(s++));
 		} while (c);
 	}
-}
 
-static gsize
-_strv_total_length(gchar **v)
-{
-	gsize total = 0;
-	for (; *v; v++)
-		total += 1+strlen(*v);
-	return total;
-}
-
-gchar **
-g_strdupv2(gchar **src)
-{
-	gsize header_size = sizeof(void*) * (1+g_strv_length(src));
-	gchar *raw = g_malloc0(header_size + _strv_total_length(src));
-	_strv_pointers_concat((gchar**)raw, raw + header_size, src);
 	return (gchar**)raw;
 }
 
@@ -224,18 +179,6 @@ strlen_len(const void * s, const gsize l)
 }
 
 gboolean
-data_is_zeroed(const void *data, gsize data_size)
-{
-	if (data != NULL) {
-		for (gsize i=0; i<data_size ;++i) {
-			if (((guint8*)data)[i])
-				return FALSE;
-		}
-	}
-	return TRUE;
-}
-
-gboolean
 metautils_cfg_get_bool(const gchar *value, gboolean def)
 {
 	static const gchar *array_yes[] = {"yes", "true", "on", "enable", "enabled", NULL};
@@ -255,38 +198,5 @@ metautils_cfg_get_bool(const gchar *value, gboolean def)
 	}
 
 	return def;
-}
-
-gboolean
-metautils_str_ishexa(const gchar *s, gsize slen)
-{
-	for (; *s && slen > 0 ;++s,--slen) {
-		if (!g_ascii_isxdigit(*s))
-			return FALSE;
-	}
-	return !*s && !slen;
-}
-
-gboolean
-metautils_str_ishexa1(const gchar *s)
-{
-	gsize len = 0;
-	for (; *s ;++s) {
-		if (!g_ascii_isxdigit(*s))
-			return FALSE;
-	}
-	return (len%2) == 0;
-}
-
-gchar **
-metautils_strv_append (gchar **tab, gchar *s)
-{
-	EXTRA_ASSERT(tab != NULL);
-	EXTRA_ASSERT(s != NULL);
-	gsize l = g_strv_length (tab);
-	tab = g_try_realloc (tab, (l+2) * sizeof(gchar*));
-	tab[l] = s;
-	tab[l+1] = NULL;
-	return tab;
 }
 

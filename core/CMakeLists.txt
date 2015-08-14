@@ -1,5 +1,4 @@
-include_directories(BEFORE . ..
-		${CMAKE_CURRENT_BINARY_DIR}/..)
+include_directories(BEFORE . ..)
 
 include_directories(AFTER
 		${GLIB2_INCLUDE_DIRS}
@@ -11,15 +10,20 @@ link_directories(
 		${CURL_LIBRARY_DIRS}
 		${JSONC_LIBRARY_DIRS})
 
-add_library(oiosds SHARED oio_sds.c http_put.c)
+add_library(oiocore SHARED url.c cfg.c str.c ext.c log.c)
+target_link_libraries(oiocore
+		${JSONC_LIBRARIES} ${GLIB2_LIBRARIES})
+set_target_properties(oiocore PROPERTIES
+		PUBLIC_HEADER "oio_core.h"
+		SOVERSION ${ABI_VERSION})
 
-target_link_libraries(oiosds
-		metautils gridcluster
+add_library(oiosds SHARED sds.c http_put.c)
+target_link_libraries(oiosds oiocore
 		${GLIB2_LIBRARIES} ${CURL_LIBRARIES} ${JSONC_LIBRARIES})
-
 set_target_properties(oiosds PROPERTIES
 		PUBLIC_HEADER "oio_sds.h"
 		SOVERSION ${ABI_VERSION})
+
 
 add_executable(test_roundtrip test_roundtrip.c)
 target_link_libraries(test_roundtrip oiosds)
@@ -30,8 +34,17 @@ target_link_libraries(test_config oiosds)
 add_executable(test_ns test_ns.c)
 target_link_libraries(test_ns oiosds ${CURL_LIBRARIES})
 
-install(TARGETS
-			oiosds
+install(FILES
+		oiocfg.h
+		oioext.h
+		oiolog.h
+		oiostr.h
+		oiourl.h
+		DESTINATION include/core)
+
+install(TARGETS oiocore oiosds
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		PUBLIC_HEADER DESTINATION include)
+
+add_test(NAME metautils/url COMMAND test_hc_url)
 

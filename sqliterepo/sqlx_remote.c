@@ -334,9 +334,9 @@ void
 sqlx_name_clean (struct sqlx_name_mutable_s *n)
 {
 	if (!n) return;
-	metautils_str_clean(&n->ns);
-	metautils_str_clean(&n->base);
-	metautils_str_clean(&n->type);
+	oio_str_clean(&n->ns);
+	oio_str_clean(&n->base);
+	oio_str_clean(&n->type);
 }
 
 void

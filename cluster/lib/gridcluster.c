@@ -847,3 +847,22 @@ gridcluster_reconfigure_lbpool(struct grid_lbpool_s *glp)
 	return err;
 }
 
+struct addr_info_s *
+gridcluster_get_conscience_addr(const char *ns_name)
+{
+	addr_info_t addr;
+	gchar *cs = gridcluster_get_conscience(ns_name);
+	if (!cs)
+		return NULL;
+	gboolean rc = grid_string_to_addrinfo(cs, NULL, &addr);
+	g_free(cs);
+	return rc ? g_memdup(&addr, sizeof(addr_info_t)) : NULL;
+}
+
+gchar *
+gridcluster_get_agent(void)
+{
+	gchar *cfg = oio_cfg_get_value(NULL, OIO_CFG_AGENT);
+	return cfg ? cfg : g_strdup(GCLUSTER_AGENT_SOCK_PATH);
+}
+

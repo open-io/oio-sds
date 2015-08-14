@@ -1,5 +1,5 @@
 /*
-OpenIO SDS metautils
+OpenIO SDS core library
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
 Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
@@ -17,23 +17,15 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef OIO_SDS__metautils__lib__meta_backend_common_h
-# define OIO_SDS__metautils__lib__meta_backend_common_h 1
+#ifndef OIO_SDS__core__core_h
+# define OIO_SDS__core__core_h 1
 
-# include <glib.h>
-# include <metautils/lib/metautils.h>
+# define GQ() g_quark_from_static_string(G_LOG_DOMAIN)
+# define NEWERROR(CODE, FMT,...) g_error_new(GQ(), (CODE), FMT, ##__VA_ARGS__)
 
-# include <sqliterepo/sqliterepo.h>
-
-struct meta_backend_common_s {
-	gchar ns_name[LIMIT_LENGTH_NSNAME];
-	namespace_info_t ns_info;
-	GMutex ns_info_lock;
-	const gchar *type;
-	struct sqlx_repository_s *repo;
-
-	// Managed by sqlx_service_extra, do not allocate/free
-	struct grid_lbpool_s *lb;
-};
-
-#endif /*OIO_SDS__metautils__lib__meta_backend_common_h*/
+# include "core/oiocfg.h"
+# include "core/oioext.h"
+# include "core/oiolog.h"
+# include "core/oiostr.h"
+# include "core/oiourl.h"
+#endif /*OIO_SDS__core__core_h*/

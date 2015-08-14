@@ -429,7 +429,7 @@ _dump_chunks_xml_NORMAL(const struct loc_context_s *lc, GString **s)
 		current = &g_array_index(lc->rc->pairs, chunk_pair_t, i);
 		GByteArray *hash = CHUNKS_get_hash(current->chunk);
 		char str_hash[1 + sizeof(chunk_hash_t) * 2];
-		buffer2str(hash->data, hash->len, str_hash, sizeof(str_hash));
+		oio_str_bin2hex(hash->data, hash->len, str_hash, sizeof(str_hash));
 		char *loc = _chunk_location_row_xml(lc,
 			CHUNKS_get_id(current->chunk)->str, "");
 		g_string_append_printf(*s, 
@@ -461,7 +461,7 @@ _dump_chunks_xml_DUPLI(const struct loc_context_s *lc, GString **s)
 	void _append(void) {
 		GByteArray *hash = CHUNKS_get_hash(base->chunk);
 		char str_hash[1 + sizeof(chunk_hash_t) * 2];
-		buffer2str(hash->data, hash->len, str_hash, sizeof(str_hash));
+		oio_str_bin2hex(hash->data, hash->len, str_hash, sizeof(str_hash));
 		g_string_append_printf(*s,
 				"   <chunk>\n"
 				"    <nb-copies>%d</nb-copies>"
@@ -518,7 +518,7 @@ _dump_chunks_xml_RAIN(const struct loc_context_s *lc, GString **s)
 	void _append_subchunk(chunk_pair_t *pair) {
 		GByteArray *hash = CHUNKS_get_hash(pair->chunk);
 		char str_hash[1 + sizeof(chunk_hash_t) * 2];
-		buffer2str(hash->data, hash->len, str_hash, sizeof(str_hash));
+		oio_str_bin2hex(hash->data, hash->len, str_hash, sizeof(str_hash));
 		char *loc = _chunk_location_row_xml(lc,
 				CHUNKS_get_id(pair->chunk)->str, " ");
 		g_string_append_printf(*s,
@@ -570,7 +570,7 @@ __dump_content_xml(const struct loc_context_s *lc, GString **s)
 	sp = _init_storage_policy(lc->namespace, CONTENTS_HEADERS_get_policy(lc->rc->header)->str);
 	GByteArray *hash = CONTENTS_HEADERS_get_hash(lc->rc->header);
 	char str_hash[1 + sizeof(chunk_hash_t) * 2];
-	buffer2str(hash->data, hash->len, str_hash, sizeof(str_hash));
+	oio_str_bin2hex(hash->data, hash->len, str_hash, sizeof(str_hash));
 
 	g_string_append_printf(*s,
 			" <content>\n"
@@ -649,7 +649,7 @@ _dump_chunks_NORMAL(const struct loc_context_s *lc, GString **s)
 				CHUNKS_get_id(current->chunk)->str);
 		GByteArray *hash = CHUNKS_get_hash(current->chunk);
 		char str_hash[1 + sizeof(chunk_hash_t) * 2];
-		buffer2str(hash->data, hash->len, str_hash, sizeof(str_hash));
+		oio_str_bin2hex(hash->data, hash->len, str_hash, sizeof(str_hash));
 		char *avail = _check_chunk(CHUNKS_get_id(current->chunk)->str);
 		g_string_append_printf(*s,
 				"\t\t[ Chunk.%d ] %s\n"
@@ -677,7 +677,7 @@ _dump_chunks_DUPLI(const struct loc_context_s *lc, GString **s)
 	void _append(void) {
 		GByteArray *hash = CHUNKS_get_hash(base->chunk);
 		char str_hash[1 + sizeof(chunk_hash_t) * 2];
-		buffer2str(hash->data, hash->len, str_hash, sizeof(str_hash));
+		oio_str_bin2hex(hash->data, hash->len, str_hash, sizeof(str_hash));
 		g_string_append_printf(*s,
 				"\t\t[ Chunk.%d (%d copies) ]\n"
 				"%s"
@@ -732,7 +732,7 @@ _dump_chunks_RAIN(const struct loc_context_s *lc, GString **s)
 	void _append_subchunk(chunk_pair_t *pair) {
 		GByteArray *hash = CHUNKS_get_hash(pair->chunk);
 		char str_hash[1 + sizeof(chunk_hash_t) * 2];
-		buffer2str(hash->data, hash->len, str_hash, sizeof(str_hash));
+		oio_str_bin2hex(hash->data, hash->len, str_hash, sizeof(str_hash));
 		char *loc = _chunk_location_row(lc,
 				CHUNKS_get_id(pair->chunk)->str);
 		char *avail = _check_chunk(CHUNKS_get_id(pair->chunk)->str);
@@ -787,7 +787,7 @@ __dump_content(const struct loc_context_s *lc, GString **s)
 		if (hash != NULL && hash->len > 0) {
 			gint hash_len = 1 + sizeof(chunk_hash_t) * 2; // 2 digits per byte + '\0'
 			str_hash = g_alloca(hash_len);
-			buffer2str(hash->data, hash->len, str_hash, hash_len);
+			oio_str_bin2hex(hash->data, hash->len, str_hash, hash_len);
 		}
 	}
 

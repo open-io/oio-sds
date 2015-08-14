@@ -186,23 +186,12 @@ License along with this library.
 
 #define NAME_MSGKEY_PREFIX_PROPERTY    "P:"
 
-#define HCURL_DEFAULT_ACCOUNT ""
-#define HCURL_DEFAULT_TYPE    ""
-
 enum {
 	SCORE_UNSET = -2,
 	SCORE_UNLOCK = -1,
 	SCORE_DOWN = 0,
 	SCORE_MAX = 100
 };
-
-#ifndef PROXYD_PREFIX
-#define PROXYD_PREFIX "v3.0"
-#endif
-
-#ifndef PROXYD_PREFIX2
-#define PROXYD_PREFIX2 "v2.0"
-#endif
 
 #ifndef PROXYD_DEFAULT_TTL_SERVICES
 #define PROXYD_DEFAULT_TTL_SERVICES 3600
@@ -252,36 +241,8 @@ enum {
 #define PROXYD_DEFAULT_PERIOD_UPSTREAM 1 /*s*/
 #endif
 
-#ifndef PROXYD_HEADER_MODE
-# define PROXYD_HEADER_MODE PROXYD_HEADER_PREFIX "action-mode"
-#endif
-
-#ifndef PROXYD_HEADER_PREFIX
-#define PROXYD_HEADER_PREFIX "X-oio-"
-#endif
-
-#ifndef PROXYD_HEADER_REQID
-#define PROXYD_HEADER_REQID PROXYD_HEADER_PREFIX "req-id"
-#endif
-
 #ifndef PROXYD_HEADER_NOEMPTY
 #define PROXYD_HEADER_NOEMPTY PROXYD_HEADER_PREFIX "no-empty-list"
-#endif
-
-#ifndef GCLUSTER_ETC_DIR
-# define GCLUSTER_ETC_DIR "/etc/oio"
-#endif
-
-#ifndef GCLUSTER_CONFIG_FILE_PATH
-# define GCLUSTER_CONFIG_FILE_PATH GCLUSTER_ETC_DIR "/sds.conf"
-#endif
-
-#ifndef GCLUSTER_CONFIG_DIR_PATH
-# define GCLUSTER_CONFIG_DIR_PATH GCLUSTER_ETC_DIR "/sds.conf.d"
-#endif
-
-#ifndef GCLUSTER_CONFIG_LOCAL_PATH
-# define GCLUSTER_CONFIG_LOCAL_PATH ".oio/sds.conf"
 #endif
 
 #ifndef GCLUSTER_RUN_DIR

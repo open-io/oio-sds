@@ -36,13 +36,14 @@ License along with this library.
 /**  */
 #define NS_ACL_DENY_OPTION "deny"
 
-#define GCLUSTER_CFG_CONSCIENCE   "conscience"
-#define GCLUSTER_CFG_ZOOKEEPER    "zookeeper"
-#define GCLUSTER_CFG_AGENT        "agent"
-#define GCLUSTER_CFG_ACCOUNTAGENT "event-agent"
-#define GCLUSTER_CFG_ENDPOINT     "endpoint"
-#define GCLUSTER_CFG_PROXY        "proxy"
-#define GCLUSTER_CFG_PROXYLOCAL   "proxy-local"
+# define OIO_CFG_ZOOKEEPER    "zookeeper"
+# define OIO_CFG_CONSCIENCE   "conscience"
+# define OIO_CFG_AGENT        "agent"
+# define OIO_CFG_ACCOUNTAGENT "event-agent"
+
+# define gridcluster_get_zookeeper(ns)  oio_cfg_get_value((ns), OIO_CFG_ZOOKEEPER)
+# define gridcluster_get_eventagent(ns) oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)
+# define gridcluster_get_conscience(ns) oio_cfg_get_value((ns), OIO_CFG_CONSCIENCE)
 
 /**
  * Struct to store an agent task description
@@ -222,41 +223,6 @@ gsize namespace_get_autocontainer_dst_bits(namespace_info_t* ns_info);
 /** Only used by gridd */
 typedef namespace_info_t* (*get_namespace_info_f) (GError **error);
 
-/** @return NULL if the NS was not found or the key not defined for the NS */
-gchar* gridcluster_get_config(const gchar *ns, const gchar *what);
-
-#define gridcluster_get_conscience(ns)   gridcluster_get_config((ns), GCLUSTER_CFG_CONSCIENCE)
-#define gridcluster_get_zookeeper(ns)    gridcluster_get_config((ns), GCLUSTER_CFG_ZOOKEEPER)
-#define gridcluster_get_eventagent(ns)   gridcluster_get_config((ns), GCLUSTER_CFG_ACCOUNTAGENT)
-#define gridcluster_get_endpoint(ns)     gridcluster_get_config((ns), GCLUSTER_CFG_ENDPOINT)
-#define gridcluster_get_proxy(ns)        gridcluster_get_config((ns), GCLUSTER_CFG_PROXY)
-#define gridcluster_get_proxylocal(ns)   gridcluster_get_config((ns), GCLUSTER_CFG_PROXYLOCAL)
-
-static inline gchar *
-gridcluster_get_agent(void)
-{
-	gchar *cfg = gridcluster_get_config(NULL, GCLUSTER_CFG_AGENT);
-	return cfg ? cfg : g_strdup(GCLUSTER_AGENT_SOCK_PATH);
-}
-
-static inline struct addr_info_s *
-gridcluster_get_conscience_addr(const char *ns_name)
-{
-	addr_info_t addr;
-	gchar *cs = gridcluster_get_conscience(ns_name);
-	if (!cs)
-		return NULL;
-	gboolean rc = grid_string_to_addrinfo(cs, NULL, &addr);
-	g_free(cs);
-	return rc ? g_memdup(&addr, sizeof(addr_info_t)) : NULL;
-}
-
-/** List all the configuration variables locally set.  */
-GHashTable* gridcluster_parse_config(void);
-
-/** List all the namespaces locally known */
-gchar** gridcluster_list_ns(void);
-
 /** Returns the services update's configuration when the Load-Balancing
  * is performed by a servce of type srvtype for each namespace and VNS. */
 gchar* gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo);
@@ -282,6 +248,10 @@ gchar* gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
 
 gint64 gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
 		const gchar* key, gint64 def);
+
+struct addr_info_s * gridcluster_get_conscience_addr(const char *ns_name);
+
+gchar * gridcluster_get_agent(void);
 
 /** @} */
 

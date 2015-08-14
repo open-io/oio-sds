@@ -237,7 +237,7 @@ fill_chunk_id_from_url(const char * const url, chunk_id_t *ci)
 	g_strlcpy(ci->vol, vol, MIN(id - vol + 1 /* for '\0' */, (int)sizeof(ci->vol)));
 
 	/* id */
-	container_id_hex2bin(id + 1 , strlen(id +1 ), &(ci->id), NULL);
+	oio_str_hex2bin(id+1, ci->id, sizeof(container_id_t));
 
 	/* debug: dump id */
 	char dst[STRLEN_CONTAINERID];
