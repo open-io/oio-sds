@@ -224,6 +224,7 @@ gtree_string_keys (GTree *t)
 GSList *
 metautils_gslist_precat (GSList *l0, GSList *l1)
 {
+	if (!l0) return l1;
 	GSList *tmp;
 	while (l1) {
 		tmp = l1->next;
