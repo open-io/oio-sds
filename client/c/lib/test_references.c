@@ -128,6 +128,8 @@ main(int argc, char **argv)
 		abort();
 	}
 
+	g_test_set_nonfatal_assertions();
+
 	g_test_add_data_func("/client/lib/ref/create_ref", gs,
 		(GTestDataFunc) test_create_reference);
 	g_test_add_data_func("/client/lib/ref/has_ref", gs,

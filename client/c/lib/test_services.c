@@ -82,8 +82,18 @@ test_link_service_to_reference(gs_grid_storage_t * gs)
 
 	hc_list_reference_services(gs, nameRef, "meta2", &tmp2);
 
-	for (unsigned int i = 0; i < 3; i++)
-		g_assert_true(strcmp(tmp[i], tmp2[i]) == 0);
+	g_assert_true(tmp[0] != NULL);
+	int i = 0, next = 1, success = 1;
+
+	while (next && success) {
+		if (tmp[i] == NULL)
+			next = 0;
+		else
+			success = strcmp(tmp[i], tmp2[i]);
+		i++;
+	}
+	g_assert_true(success == 0);
+
 	test_end(gs, nameRef);
 }
 
@@ -226,15 +236,21 @@ test_poll_service(gs_grid_storage_t * gs)
 		"1|meta2|192.168.56.101:6011|",
 		"1|meta2|192.168.56.101:6012|"
 	};
-	int success = 1;
 
 	gs_error_t *err = hc_poll_service(gs, nameRef, "meta2", &serv);
 
 	g_assert_true(err == NULL);
 
-	for (unsigned int i = 0; i < 3; i++)
-		if (success)
+	g_assert_true(list_serv[0] != NULL);
+	int i = 0, next = 1, success = 1;
+
+	while (next && success) {
+		if (list_serv[i] == NULL)
+			next = 0;
+		else
 			success = strcmp(serv, list_serv[i]);
+		i++;
+	}
 	g_assert_true(!success);
 
 	test_end(gs, nameRef);
@@ -320,7 +336,6 @@ test_configure_service(gs_grid_storage_t * gs)
 {
 	char *nameRef = test_init(gs, "Ref_linked");
 	gchar **tmp = NULL;
-	int success = 1;
 
 	gs_error_t *err = hc_configure_service(gs, nameRef, "1|meta2||test|");
 
@@ -328,9 +343,16 @@ test_configure_service(gs_grid_storage_t * gs)
 
 	hc_list_reference_services(gs, nameRef, "meta2", &tmp);
 
-	for (unsigned int i = 0; i < 3; i++)
-		if (success)
-			success = strcmp(tmp[i], "1|meta2|192.168.56.101:6010|test|");
+	g_assert_true(tmp[0] != NULL);
+	int i = 0, next = 1, success = 1;
+
+	while (next && success) {
+		if (tmp[i] == NULL)
+			next = 0;
+		else
+			success = strcmp(tmp[i], "1|meta2|192.168.56.101:6008|test|");
+		i++;
+	}
 	g_assert_true(!success);
 
 	test_end(gs, nameRef);
