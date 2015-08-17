@@ -9,8 +9,9 @@ from oio.sds.event.agent import EventWorker
 class TestEventWorker(unittest.TestCase):
     def setUp(self):
         context = Mock()
+        conf = {'namespace': 'NS'}
         with patch('oio.sds.event.agent.ConscienceClient', new=Mock()):
-            self.worker = EventWorker({}, context)
+            self.worker = EventWorker(conf, "test", context)
 
     def test_process_event(self):
         self.worker.handle_container_destroy = Mock()

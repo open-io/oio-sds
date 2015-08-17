@@ -1,14 +1,16 @@
 import json
-import logging
+import sqlite3
 import time
 
-from eventlet.green import zmq
-from eventlet import GreenPool
 from eventlet import GreenPile
+from eventlet import GreenPool
 from eventlet import Timeout
+from eventlet import sleep
+from eventlet.green import zmq
 
 from oio.common.daemon import Daemon
 from oio.common.http import requests
+from oio.common.queue.sqlite import SqliteQueue
 from oio.common.utils import get_logger
 from oio.common.utils import int_value
 from oio.common.utils import validate_service_conf
@@ -29,6 +31,11 @@ class EventType(object):
     CONTAINER_UPDATE = "meta2.container.state"
     OBJECT_PUT = "meta2.content.new"
     OBJECT_DELETE = "meta2.content.deleted"
+    PING = "ping"
+
+
+def validate_msg(msg):
+    return len(msg) == 4
 
 
 def decode_msg(msg):
@@ -36,11 +43,12 @@ def decode_msg(msg):
 
 
 class EventWorker(object):
-    def __init__(self, conf, context, **kwargs):
+    def __init__(self, conf, name, context, **kwargs):
         self.conf = conf
+        self.name = name
         verbose = kwargs.pop('verbose', False)
         self.logger = get_logger(self.conf, verbose=verbose)
-        self._configure_zmq(context)
+        self.init_zmq(context)
         self.cs = ConscienceClient(self.conf)
         self._acct_addr = None
         self.acct_update = 0
@@ -48,33 +56,39 @@ class EventWorker(object):
             conf.get('acct_refresh_interval'), 60
         )
         self.session = requests.Session()
+        self.failed = False
 
-    def _configure_zmq(self, context):
+    def start(self):
+        self.logger.info('worker "%s" starting', self.name)
+        self.running = True
+        self.run()
+
+    def stop(self):
+        self.logger.info('worker "%s" stopping', self.name)
+        self.running = False
+
+    def init_zmq(self, context):
         socket = context.socket(zmq.REP)
         socket.connect('inproc://event-front')
         self.socket = socket
 
     def run(self):
-        while True:
-            try:
+        try:
+            while self.running:
                 msg = self.socket.recv_multipart()
-                if self.logger.isEnabledFor(logging.DEBUG):
-                    self.logger.debug('msg: %s' % msg)
-                ack = ['']
-                try:
-                    ack = [msg[0]]
-                    event = decode_msg(msg)
-                    self.process_event(event)
-                except Exception as e:
-                    self.logger.exception('Unable to process event')
-                    continue
-            except Exception as e:
-                self.logger.exception(e)
-            finally:
+                ack = [msg[0]]
+                event = decode_msg(msg)
+                self.process_event(event)
                 try:
                     self.socket.send_multipart(ack)
                 except Exception as e:
-                    self.logger.exception('Unable to ack event')
+                    self.logger.warn('Unable to ack event')
+        except Exception as e:
+            self.logger.warn('ERROR in worker "%s"', e)
+            self.failed = True
+            raise e
+        finally:
+            self.logger.info('worker "%s" stopped', self.name)
 
     def process_event(self, event):
         handler = self.get_handler(event)
@@ -99,6 +113,8 @@ class EventWorker(object):
             return self.handle_object_delete
         elif event_type == EventType.REFERENCE_UPDATE:
             return self.handle_reference_update
+        elif event_type == EventType.PING:
+            return self.handle_ping
         else:
             return None
 
@@ -128,6 +144,7 @@ class EventWorker(object):
         Handle container creation.
         :param event:
         """
+        self.logger.debug('worker "%s" handle container put', self.name)
         uri = 'http://%s/v1.0/account/container/update' % self.acct_addr
         mtime = event.get('when')
         data = event.get('data')
@@ -140,9 +157,9 @@ class EventWorker(object):
     def handle_container_update(self, event):
         """
         Handle container update.
-        TODO
         :param event:
         """
+        self.logger.debug('worker "%s" handle container update', self.name)
         uri = 'http://%s/v1.0/account/container/update' % self.acct_addr
         mtime = event.get('when')
         data = event.get('data')
@@ -164,6 +181,7 @@ class EventWorker(object):
         Handle container destroy.
         :param event:
         """
+        self.logger.debug('worker "%s" handle container destroy', self.name)
         uri = 'http://%s/v1.0/account/container/update' % self.acct_addr
         dtime = event.get('when')
         data = event.get('data')
@@ -179,6 +197,7 @@ class EventWorker(object):
         Delete the chunks of the object.
         :param event:
         """
+        self.logger.debug('worker "%s" handle object delete', self.name)
         pile = GreenPile(PARALLEL_CHUNKS_DELETE)
 
         chunks = []
@@ -216,7 +235,7 @@ class EventWorker(object):
         TODO
         :param event:
         """
-        pass
+        self.logger.debug('worker "%s" handle object put', self.name)
 
     def handle_reference_update(self, event):
         """
@@ -224,7 +243,14 @@ class EventWorker(object):
         TODO
         :param event
         """
-        pass
+        self.logger.debug('worker "%s" handle reference update', self.name)
+
+    def handle_ping(self, event):
+        """
+        Handle ping
+        :param event
+        """
+        self.logger.debug('worker "%s" handle ping', self.name)
 
 
 class EventAgent(Daemon):
@@ -232,31 +258,100 @@ class EventAgent(Daemon):
         validate_service_conf(conf)
         self.conf = conf
         self.logger = get_logger(conf)
+        self.running = False
+        self.retry_interval = int_value(conf.get('retry_interval'), 30)
+        self.last_retry = 0
+        self.init_zmq()
+        self.init_queue()
+        self.init_workers()
 
     def run(self, *args, **kwargs):
-        context = zmq.Context()
-        server = context.socket(zmq.ROUTER)
+        try:
+            self.logger.info('event agent: starting')
+
+            pool = GreenPool(len(self.workers))
+
+            for worker in self.workers:
+                pool.spawn(worker.start)
+
+            def front(server, backend):
+                while True:
+                    msg = server.recv_multipart()
+                    if validate_msg(msg):
+                        try:
+                            event_id = sqlite3.Binary(msg[2])
+                            data = msg[3]
+                            self.queue.put(event_id, data)
+                            event = ['', msg[2], msg[3]]
+                            backend.send_multipart(event)
+                        except Exception:
+                            pass
+                        finally:
+                            ack = msg[0:3]
+                            server.send_multipart(ack)
+
+            def back(backend):
+                while True:
+                    msg = backend.recv_multipart()
+                    event_id = msg[1]
+                    event_id = sqlite3.Binary(event_id)
+                    self.queue.delete(event_id)
+
+            boss_pool = GreenPool(2)
+            boss_pool.spawn_n(front, self.server, self.backend)
+            boss_pool.spawn_n(back, self.backend)
+            while True:
+                sleep(1)
+
+                now = time.time()
+                if now - self.last_retry > self.retry_interval:
+                    self.retry()
+                    self.last_retry = now
+
+                for w in self.workers:
+                    if w.failed:
+                        self.workers.remove(w)
+                        self.logger.warn('restart worker "%s"', w.name)
+                        new_w = EventWorker(self.conf, w.name, self.context)
+                        self.workers.append(new_w)
+                        pool.spawn(new_w.start)
+
+        except Exception as e:
+            self.logger.error('ERROR in main loop %s', e)
+            raise e
+        finally:
+            self.logger.warn('event agent: stopping')
+            self.stop_workers()
+
+    def init_zmq(self):
+        self.context = zmq.Context()
+        self.server = self.context.socket(zmq.ROUTER)
         bind_addr = self.conf.get('bind_addr',
                                   'ipc:///tmp/run/event-agent.sock')
-        server.bind(bind_addr)
+        self.server.bind(bind_addr)
+        self.backend = self.context.socket(zmq.DEALER)
+        self.backend.bind('inproc://event-front')
 
-        backend = context.socket(zmq.DEALER)
-        backend.bind('inproc://event-front')
+    def init_queue(self):
+        queue_location = self.conf.get(
+            'queue_location', '/tmp/oio-event-queue.db')
+        self.queue = SqliteQueue('oio_event', queue_location)
 
-        nb_workers = int_value(self.conf.get('workers'), 2)
-        worker_pool = GreenPool(nb_workers)
+    def init_workers(self):
+        nbworkers = int_value(self.conf.get('workers'), 2)
+        workers = []
+        for i in xrange(nbworkers):
+            workers.append(EventWorker(self.conf, str(i), self.context))
+        self.workers = workers
 
-        for i in range(0, nb_workers):
-            worker = EventWorker(self.conf, context)
-            worker_pool.spawn_n(worker.run)
+    def stop_workers(self):
+        for worker in self.workers:
+            worker.stop()
 
-        def proxy(socket_from, socket_to):
-            while True:
-                m = socket_from.recv_multipart()
-                socket_to.send_multipart(m)
+    def retry(self):
+        cursor = self.queue.load()
 
-        boss_pool = GreenPool(2)
-        boss_pool.spawn_n(proxy, server, backend)
-        boss_pool.spawn_n(proxy, backend, server)
-
-        worker_pool.waitall()
+        for event in cursor:
+            event_id, data = event
+            msg = ['', event_id, str(data)]
+            self.backend.send_multipart(msg)
