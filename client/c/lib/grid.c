@@ -36,7 +36,7 @@ env_init (void)
 			const gchar *s;
 
 			if (NULL != (s = getenv(ENV_GLIB2_ENABLE)))
-				g_log_set_default_handler(logger_stderr, NULL);
+				g_log_set_default_handler(oio_log_stderr, NULL);
 
 			/*configure the sleep time between two failed ADD actions*/
 			wait_on_add_failed = 10000UL;
@@ -58,7 +58,7 @@ gs_set_namespace(gs_grid_storage_t *gs, const char *vns)
 	if (vns && !g_str_has_prefix(vns, gs->physical_namespace))
 		return 0;
 
-	metautils_str_replace (&gs->ns, vns);
+	oio_str_replace (&gs->ns, vns);
 	return 1;
 }
 
@@ -87,7 +87,7 @@ gs_grid_storage_t*
 gs_grid_storage_init_flags(const gchar *ns, uint32_t flags,
 		int to_cnx, int to_req, gs_error_t **err)
 {
-	logger_lazy_init ();
+	oio_log_lazy_init ();
 	env_init();
 
 	/*parse the arguments*/
@@ -548,7 +548,7 @@ gs_locate_container_by_hexid_v2(gs_grid_storage_t *gs, const char *hexid, char**
     }
 
     container_id_t cid;
-	container_id_hex2bin(hexid, strlen(hexid), &cid, NULL);
+	oio_str_hex2bin(hexid, cid, sizeof(container_id_t));
     return _gs_locate_container_by_cid(gs, cid, out_nsname_on_m1, gserr);
 }
 

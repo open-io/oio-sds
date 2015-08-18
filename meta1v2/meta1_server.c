@@ -173,7 +173,7 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 		return NEWERROR(CODE_INTERNAL_ERROR, "BUG [%s:%s:%d]", __FUNCTION__, __FILE__, __LINE__);
 	if (!g_str_has_prefix(n->type, NAME_SRVTYPE_META1))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name");
-	if (!metautils_str_ishexa(n->base,4))
+	if (!oio_str_ishexa(n->base,4))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name");
 
 	memset(cid, 0, sizeof(container_id_t));

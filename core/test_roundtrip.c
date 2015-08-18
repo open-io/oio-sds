@@ -23,12 +23,11 @@ License along with this library.
 #include <string.h>
 #include <unistd.h>
 
-#include <oio_sds.h>
-#include <metautils/lib/metautils_loggers.h>
-#include <metautils/lib/hc_url.h>
-
 #include <glib.h>
 #include <glib/gstdio.h>
+
+#include "oio_core.h"
+#include "oio_sds.h"
 
 static const char random_chars[] =
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZ"

@@ -129,7 +129,7 @@ metautils_gba_from_hexstring(const gchar *str)
 		return NULL;
 	GByteArray *gba = g_byte_array_sized_new(len / 2);
 	g_byte_array_set_size(gba, len/2);
-	if (len && !hex2bin(str, gba->data, gba->len, NULL)) {
+	if (len && !oio_str_hex2bin(str, gba->data, gba->len)) {
 		g_byte_array_unref (gba);
 		return NULL;
 	}
@@ -197,7 +197,7 @@ metautils_gba_to_hexgstr(GString *gstr, GByteArray *gba)
 	len = gstr->len;
 	max = gba->len * 2;
 	g_string_set_size(gstr, max + len);
-	buffer2str(gba->data, gba->len, gstr->str + len, gstr->len - len + 1);
+	oio_str_bin2hex (gba->data, gba->len, gstr->str + len, gstr->len - len + 1);
 
 	return gstr;
 }

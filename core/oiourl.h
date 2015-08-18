@@ -17,15 +17,13 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef OIO_SDS__metautils__lib__hc_url_h
-# define OIO_SDS__metautils__lib__hc_url_h 1
+#ifndef OIO_SDS__core__oiourl_h
+# define OIO_SDS__core__oiourl_h 1
 
 #include <sys/types.h>
 
-/**
- * @defgroup client_url
- * @ingroup client
- */
+#define HCURL_DEFAULT_ACCOUNT ""
+#define HCURL_DEFAULT_TYPE    ""
 
 enum hc_url_field_e
 {
@@ -101,6 +99,4 @@ int hc_url_has_fq_path (struct hc_url_s *u);
 /** Returns wether all the mandatory components for a container are present */
 int hc_url_has_fq_container (struct hc_url_s *u);
 
-/** @} */
-
-#endif /*OIO_SDS__metautils__lib__hc_url_h*/
+#endif /*OIO_SDS__core__oiourl_h*/

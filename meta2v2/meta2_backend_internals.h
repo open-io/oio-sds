@@ -30,6 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <metautils/lib/metacomm.h>
 # include <sqliterepo/sqliterepo.h>
 # include <sqliterepo/sqlite_utils.h>
+# include <sqlx/sqlx_service.h>
 # include <meta2v2/meta2_backend.h>
 # include <meta2v2/meta2_events.h>
 

@@ -329,7 +329,7 @@ main(int argc, char **argv)
 				has_raw = TRUE;
 				break;
 			case 'v':
-				logger_verbose();
+				oio_log_verbose();
 				break;
 			case 'a':
 				has_show_internals = TRUE;
@@ -345,7 +345,7 @@ main(int argc, char **argv)
 	}
 
 	if (has_allcfg) {
-		GHashTable *ht_cfg = gridcluster_parse_config();
+		GHashTable *ht_cfg = oio_cfg_parse();
 		GHashTableIter iter;
 		gpointer k, v;
 		g_hash_table_iter_init(&iter, ht_cfg);
@@ -357,7 +357,7 @@ main(int argc, char **argv)
 
 	if (has_nslist) {
 		gchar **pns, **allns;
-		allns = gridcluster_list_ns();
+		allns = oio_cfg_list_ns();
 		for (pns=allns; *pns ;pns++)
 			g_print("%s\n",*pns);
 		g_strfreev(allns);

@@ -71,7 +71,7 @@ m2v2_list_result_clean (struct list_result_s *p)
 	if (!p) return;
 	_bean_cleanl2(p->beans);
 	p->beans = NULL;
-	metautils_str_clean(&p->next_marker);
+	oio_str_clean(&p->next_marker);
 	p->truncated = FALSE;
 }
 
@@ -593,7 +593,7 @@ _list (const char *target, GByteArray *request,
 			g_clear_error (&e);
 		gchar *tok = NULL;
 		tok = metautils_message_extract_string_copy (reply, NAME_MSGKEY_NEXTMARKER);
-		metautils_str_reuse (&out->next_marker, tok);
+		oio_str_reuse (&out->next_marker, tok);
 
 		/* Extract properties and merge them into the temporary TreeSet. */
 		if (out_properties) {

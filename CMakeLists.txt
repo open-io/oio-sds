@@ -268,10 +268,12 @@ endif ()
 
 ###-------------------------------------------------------------------------###
 
+if (NOT SDK_ONLY)
 find_program(BISON_EXECUTABLE bison)
 find_program(FLEX_EXECUTABLE flex)
 test_CLI(FLEX_EXECUTABLE "flex")
 test_CLI(BISON_EXECUTABLE "bison")
+endif(NOT SDK_ONLY)
 
 # Set defaults 
 set(DEFAULT_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
@@ -295,11 +297,11 @@ pkg_check_modules(ZMQ libzmq>=4.0.0)
 endif (NOT SDK_ONLY)
 
 # Load CLI-overriden configuration
-option_or_system(ASN1C asn1cskeletons)
 option_or_system(CURL curl curl/curl.h)
 option_or_system(JSONC json-c json.h)
 
 if (NOT SDK_ONLY)
+option_or_system(ASN1C asn1cskeletons)
 option_or_system(APACHE2 modules/mod_webdav.so httpd.h)
 option_or_system(ATTR attr attr/xattr.h)
 option_or_system(GRIDINIT gridinit-utils gridinit-utils.h)
@@ -309,7 +311,6 @@ option_or_system(MICROHTTPD microhttpd microhttpd.h)
 option_or_system(ZK zookeeper_mt zookeeper.h)
 option_or_system(ZLIB z zlib.h)
 option_or_system(ZMQ zmq zmq.h zmq_utils.h)
-endif (NOT SDK_ONLY)
 
 if (ASN1C_EXE)
 	set(ASN1C_EXECUTABLE ${ASN1C_EXE})
@@ -318,12 +319,13 @@ else()
 endif()
 MESSAGE("asn1c at ${ASN1C_EXECUTABLE}")
 set(ASN1C_EXE_OPTS "-fwide-types")
+endif (NOT SDK_ONLY)
 
 # Check every required module is present
-check_found("ASN1C" "CURL" "GLIB2" "JSONC")
+check_found("CURL" "GLIB2" "JSONC")
 
 if (NOT SDK_ONLY)
-check_found("APR" "APACHE2" "ATTR" "GRIDINIT" "LIBRAIN" "LZO" "NEON"
+check_found("APR" "APACHE2" "ASN1C" "ATTR" "GRIDINIT" "LIBRAIN" "LZO" "NEON"
 		"SQLITE3" "ZMQ" "ZK" "PYTHONINTERP")
 
 if (DEFINED APACHE2_MODDIR)
@@ -351,12 +353,13 @@ if (DOXYGEN_FOUND)
 		COMMENT "Generating API documentation with Doxygen" VERBATIM)
 endif ()
 
-add_subdirectory(./sdk)
+add_subdirectory(./core)
+
+if (NOT SDK_ONLY)
 add_subdirectory(./metautils/lib)
 add_subdirectory(./cluster/remote)
 add_subdirectory(./cluster/lib)
 
-if (NOT SDK_ONLY)
 add_subdirectory(./client/c/lib)
 add_subdirectory(./client/c/tools)
 add_subdirectory(./cluster/agent)

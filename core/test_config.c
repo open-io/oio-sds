@@ -19,12 +19,8 @@ License along with this library.
 
 #include <glib.h>
 
-#include <oio_sds.h>
-
-/* XXX JFS: only used to display the internal configuration, those should not
- * be included by any application using the current client SDK */
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
+#include <oio_core.h>
+#include "oio_sds.h"
 
 static void
 _strfreev (char **tab)
@@ -46,7 +42,7 @@ main (int argc, char **argv)
 	_strfreev (tab);
 
 	g_print ("RUNTIME OPTIONS\n");
-	GHashTable *live_config = gridcluster_parse_config ();
+	GHashTable *live_config = oio_cfg_parse ();
 	GHashTableIter iter;
 	gpointer k, v;
 	g_hash_table_iter_init(&iter, live_config);

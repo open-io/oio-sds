@@ -176,8 +176,8 @@ free_zknode(struct zk_node_s *n)
 {
 	if (!n)
 		return;
-	metautils_str_clean(&(n->path));
-	metautils_str_clean(&(n->content));
+	oio_str_clean(&(n->path));
+	oio_str_clean(&(n->content));
 	g_free(n);
 }
 

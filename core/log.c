@@ -18,47 +18,44 @@ License along with this library.
 */
 
 #ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "grid.loggers"
+# define G_LOG_DOMAIN "oio.core"
 #endif
 
 #include <errno.h>
 #include <stdio.h>
+#include <string.h>
+#include <unistd.h>
 #include <syslog.h>
 #include <sys/time.h>
 #include <sys/types.h>
-#include <unistd.h>
 
-#include "metautils.h"
+#include <glib.h>
 
-static int syslog_opened = 0;
+#include "oiolog.h"
 
-gchar syslog_id[64] = "";
+int oio_log_level_default = 0x7F;
 
-int main_log_level_default = 0x7F;
+int oio_log_level = 0x7F;
 
-int main_log_level = 0x7F;
-
-int main_log_flags = LOG_FLAG_TRIM_DOMAIN
+int oio_log_flags = LOG_FLAG_TRIM_DOMAIN
 		| LOG_FLAG_PURIFY | LOG_FLAG_COLUMNIZE;
 
-time_t main_log_level_update = 0;
-
-inline guint16
-compute_thread_id(GThread *thread)
+guint16
+oio_log_thread_id(GThread *thread)
 {
 	union {
 		void *p;
 		guint16 u[4];
 	} bulk;
-	memset(&bulk, 0, sizeof(bulk));
+	bulk.u[0] = bulk.u[1] = bulk.u[2] = bulk.u[3] = 0;
 	bulk.p = thread;
 	return (bulk.u[0] ^ bulk.u[1]) ^ (bulk.u[2] ^ bulk.u[3]);
 }
 
-static guint16
-get_thread_id(void)
+static inline guint16
+oio_log_current_thread_id(void)
 {
-	return compute_thread_id(g_thread_self());
+	return oio_log_thread_id(g_thread_self());
 }
 
 static const gchar*
@@ -140,7 +137,7 @@ get_facility(const gchar *domain)
 }
 
 #define REAL_LEVEL(L)   (guint32)((L) >> G_LOG_LEVEL_USER_SHIFT)
-#define ALLOWED_LEVEL() REAL_LEVEL(main_log_level)
+#define ALLOWED_LEVEL() REAL_LEVEL(oio_log_level)
 
 static gboolean
 glvl_allowed(register GLogLevelFlags lvl)
@@ -178,7 +175,7 @@ _append_message(GString *gstr, const gchar *msg)
 }
 
 void
-logger_noop(const gchar *log_domain, GLogLevelFlags log_level,
+oio_log_noop(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data)
 {
 	(void) log_domain;
@@ -188,7 +185,7 @@ logger_noop(const gchar *log_domain, GLogLevelFlags log_level,
 }
 
 void
-logger_syslog(const gchar *log_domain, GLogLevelFlags log_level,
+oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data)
 {
 	(void) user_data;
@@ -198,7 +195,7 @@ logger_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 
 	GString *gstr = g_string_new("");
 
-	g_string_append_printf(gstr, "%d %04X", getpid(), get_thread_id());
+	g_string_append_printf(gstr, "%d %04X", getpid(), oio_log_current_thread_id());
 
 	if (LOG_LOCAL1 == get_facility(log_domain)) {
 		g_string_append(gstr, " access ");
@@ -236,7 +233,7 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 
 	g_string_append_printf(gstr, "%ld.%03ld %d %04X ",
 			tv.tv_sec, tv.tv_usec/1000,
-			getpid(), get_thread_id());
+			getpid(), oio_log_current_thread_id());
 
 	if (!log_domain || !*log_domain)
 		log_domain = "-";
@@ -247,7 +244,7 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 		g_string_append_printf(gstr, "log %s ", glvl_to_str(log_level));
 
 		/* print the domain */
-		if (!(main_log_flags & LOG_FLAG_TRIM_DOMAIN))
+		if (!(oio_log_flags & LOG_FLAG_TRIM_DOMAIN))
 			g_string_append(gstr, log_domain);
 		else {
 			const gchar *p = log_domain;
@@ -263,7 +260,7 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 	}
 
 	/* prefix done, print a separator */
-	if (main_log_flags & LOG_FLAG_COLUMNIZE) {
+	if (oio_log_flags & LOG_FLAG_COLUMNIZE) {
 		longest_prefix = MAX(gstr->len+1,longest_prefix);
 		do {
 			g_string_append_c(gstr, ' ');
@@ -276,7 +273,7 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 	_append_message(gstr, message);
 	g_string_append_c(gstr, '\n');
 
-	if (main_log_flags & LOG_FLAG_PURIFY)
+	if (oio_log_flags & LOG_FLAG_PURIFY)
 		_purify(gstr->str);
 
 	/* send the buffer */
@@ -285,7 +282,7 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 }
 
 void
-logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
+oio_log_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data)
 {
 	if (!glvl_allowed(log_level))
@@ -294,85 +291,72 @@ logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 }
 
 void
-logger_verbose(void)
+oio_log_verbose(void)
 {
-	main_log_level = (main_log_level*2)+1;
-	main_log_level_update = time(0);
+	oio_log_level = (oio_log_level*2)+1;
 }
 
 void
-logger_verbose_default(void)
+oio_log_verbose_default(void)
 {
-	main_log_level_default = (main_log_level_default * 2) + 1;
-	main_log_level = main_log_level_default;
-	main_log_level_update = time(0);
+	oio_log_level_default = (oio_log_level_default * 2) + 1;
+	oio_log_level = oio_log_level_default;
 }
 
 void
-logger_init_level(int l)
+oio_log_init_level(int l)
 {
-	main_log_level_default = main_log_level = (l?(l|0x7F):0);
-	main_log_level_update = time(0);
+	oio_log_level_default = oio_log_level = (l?(l|0x7F):0);
 }
 
 void
-logger_init_level_from_env(const gchar *k)
+oio_log_init_level_from_env(const gchar *k)
 {
 	const gchar *v = g_getenv(k);
 	if (v) {
 		switch (g_ascii_toupper(*v)) {
 			case 'T':
-				logger_init_level(GRID_LOGLVL_TRACE2);
+				oio_log_init_level(GRID_LOGLVL_TRACE2);
 				return;
 			case 'D':
-				logger_init_level(GRID_LOGLVL_DEBUG);
+				oio_log_init_level(GRID_LOGLVL_DEBUG);
 				return;
 			case 'I':
-				logger_init_level(GRID_LOGLVL_INFO);
+				oio_log_init_level(GRID_LOGLVL_INFO);
 				return;
 			case 'N':
-				logger_init_level(GRID_LOGLVL_NOTICE);
+				oio_log_init_level(GRID_LOGLVL_NOTICE);
 				return;
 			case 'W':
-				logger_init_level(GRID_LOGLVL_WARN);
+				oio_log_init_level(GRID_LOGLVL_WARN);
 				return;
 			case 'E':
-				logger_init_level(GRID_LOGLVL_ERROR);
+				oio_log_init_level(GRID_LOGLVL_ERROR);
 				return;
 		}
 	}
 }
 
 void
-logger_reset_level(void)
+oio_log_reset_level(void)
 {
-	main_log_level = main_log_level_default;
+	oio_log_level = oio_log_level_default;
 }
 
 void
-logger_quiet(void)
+oio_log_quiet(void)
 {
-	logger_init_level(0);
+	oio_log_init_level(0);
 }
 
 void
-logger_syslog_open (void)
-{
-	if (syslog_opened)
-		return;
-	syslog_opened = 1;
-	openlog(syslog_id, LOG_NDELAY, LOG_LOCAL0);
-	g_log_set_default_handler(logger_syslog, NULL);
-}
-
-void
-logger_lazy_init (void)
+oio_log_lazy_init (void)
 {
 	static volatile guint lazy_init = 1;
 	if (lazy_init) {
 		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
-			g_log_set_default_handler(logger_noop, NULL);
-			logger_init_level(GRID_LOGLVL_ERROR);
+			g_log_set_default_handler(oio_log_noop, NULL);
+			oio_log_init_level(GRID_LOGLVL_ERROR);
 		}
 	}
 }

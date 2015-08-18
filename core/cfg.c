@@ -17,16 +17,12 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "gridcluster.lib"
-#endif
-
 #include <string.h>
 #include <stdlib.h>
 
-#include <metautils/lib/metautils.h>
+#include <glib.h>
 
-#include "gridcluster.h"
+#include "oio_core.h"
 
 static gchar *
 _get_key(const gchar *ns, const gchar *what)
@@ -92,58 +88,12 @@ config_load_dir(GHashTable *ht, const gchar *dirname, GDir *gdir)
 	}
 }
 
-GHashTable*
-gridcluster_parse_config(void)
-{
-	GHashTable *ht = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
-
-	// Load the system configuration
-	if (g_file_test(GCLUSTER_CONFIG_FILE_PATH, G_FILE_TEST_IS_REGULAR))
-		config_load_file(ht, GCLUSTER_CONFIG_FILE_PATH);
-
-	if (g_file_test(GCLUSTER_CONFIG_DIR_PATH, G_FILE_TEST_IS_DIR|G_FILE_TEST_EXISTS)) {
-		GDir *gdir = g_dir_open(GCLUSTER_CONFIG_DIR_PATH, 0, NULL);
-		if (gdir) {
-			config_load_dir(ht, GCLUSTER_CONFIG_DIR_PATH, gdir);
-			g_dir_close(gdir);
-		}
-	}
-
-	// Overwrite with the user configuration (if any) 
-	if (g_get_home_dir() && GCLUSTER_CONFIG_LOCAL_PATH) {
-		gchar *local = g_strdup_printf("%s/%s", g_get_home_dir(), GCLUSTER_CONFIG_LOCAL_PATH);
-		config_load_file(ht, local);
-		g_free(local);
-	}
-
-	return ht;
-}
-
-gchar *
-gridcluster_get_config(const gchar *ns, const gchar *what)
-{
-	if (!ns || !strcasecmp(ns, "default"))
-		ns = "default";
-
-	GHashTable *ht;
-	gchar *key = _get_key(ns, what);
-	gchar *value = NULL;
-	if (NULL != (ht = gridcluster_parse_config())) {
-		value = g_hash_table_lookup(ht, key);
-		if (value)
-			value = g_strdup(value);
-		g_hash_table_destroy(ht);
-	}
-	g_free(key);
-	return value;
-}
-
 gchar **
-gridcluster_list_ns(void)
+oio_cfg_list_ns(void)
 {
 	GHashTableIter iter;
 	gpointer k, v;
-	GHashTable *ht = gridcluster_parse_config();
+	GHashTable *ht = oio_cfg_parse();
 	GPtrArray *tmp = g_ptr_array_sized_new(4);
 	
 	g_hash_table_iter_init(&iter, ht);
@@ -157,6 +107,74 @@ gridcluster_list_ns(void)
 		g_ptr_array_add(tmp, ns);
 	}
 	g_hash_table_destroy(ht);
-	return (gchar**) metautils_gpa_to_array(tmp, TRUE);
+	g_ptr_array_add (tmp, NULL);
+	return (gchar**) g_ptr_array_free(tmp, FALSE);
+}
+
+GHashTable*
+oio_cfg_parse(void)
+{
+	GHashTable *ht = g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free);
+
+	// Load the system configuration
+	if (g_file_test(OIO_CONFIG_FILE_PATH, G_FILE_TEST_IS_REGULAR))
+		config_load_file(ht, OIO_CONFIG_FILE_PATH);
+
+	if (g_file_test(OIO_CONFIG_DIR_PATH, G_FILE_TEST_IS_DIR|G_FILE_TEST_EXISTS)) {
+		GDir *gdir = g_dir_open(OIO_CONFIG_DIR_PATH, 0, NULL);
+		if (gdir) {
+			config_load_dir(ht, OIO_CONFIG_DIR_PATH, gdir);
+			g_dir_close(gdir);
+		}
+	}
+
+	// Overwrite with the user configuration (if any) 
+	if (g_get_home_dir() && OIO_CONFIG_LOCAL_PATH) {
+		gchar *local = g_strdup_printf("%s/%s", g_get_home_dir(), OIO_CONFIG_LOCAL_PATH);
+		config_load_file(ht, local);
+		g_free(local);
+	}
+
+	return ht;
+}
+
+gchar *
+oio_cfg_get_value(const gchar *ns, const gchar *what)
+{
+	if (!ns || !strcasecmp(ns, "default"))
+		ns = "default";
+
+	GHashTable *ht;
+	gchar *key = _get_key(ns, what);
+	gchar *value = NULL;
+	if (NULL != (ht = oio_cfg_parse())) {
+		value = g_hash_table_lookup(ht, key);
+		if (value)
+			value = g_strdup(value);
+		g_hash_table_destroy(ht);
+	}
+	g_free(key);
+	return value;
+}
+
+gchar *
+oio_cfg_get_proxy_conscience (const char *ns)
+{
+	gchar *v = oio_cfg_get_value(ns, OIO_CFG_PROXY_CONSCIENCE);
+	return v ?: oio_cfg_get_proxy(ns);
+}
+
+gchar *
+oio_cfg_get_proxy_directory (const char *ns)
+{
+	gchar *v = oio_cfg_get_value(ns, OIO_CFG_PROXY_DIRECTORY);
+	return v ?: oio_cfg_get_proxy(ns);
+}
+
+gchar *
+oio_cfg_get_proxy_containers (const char *ns)
+{
+	gchar *v = oio_cfg_get_value(ns, OIO_CFG_PROXY_CONTAINERS);
+	return v ?: oio_cfg_get_proxy(ns);
 }
 

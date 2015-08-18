@@ -30,11 +30,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 #include <json-c/json.h>
 
+#include <core/hc_url_ext.h>
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
-#include <metautils/lib/url.h>
-#include <metautils/lib/hc_url.h>
-#include <metautils/lib/hc_url_ext.h>
 #include <cluster/lib/gridcluster.h>
 #include <cluster/remote/gridcluster_remote.h>
 #include <server/network_server.h>
@@ -46,6 +43,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_utils.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/generic.h>
+#include <sqliterepo/sqlx_remote.h>
+#include <sqliterepo/sqlite_utils.h>
 
 #include "path_parser.h"
 #include "transport_http.h"

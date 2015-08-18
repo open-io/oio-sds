@@ -24,10 +24,7 @@ License along with this library.
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "metautils_loggers.h"
-#include "metautils_hashstr.h"
-#include "metautils_svc_policy.h"
-#include "common_main.h"
+#include "metautils.h"
 
 static void
 test_tags(const gchar *str, ...)

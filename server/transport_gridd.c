@@ -298,11 +298,11 @@ _req_get_hex_ID(MESSAGE req, gchar *d, gsize dsize)
 	guint8 *f = metautils_message_get_ID(req, &flen);
 	if (!f || !flen)
 		*d = '-';
-	else if (metautils_str_ishexa((gchar*)f, flen)) {
+	else if (oio_str_ishexa((gchar*)f, flen)) {
 		for (gchar *p=d; flen-- > 0 && dsize-- > 0;)
 			*(p++) = *(f++);
 	} else {
-		buffer2str(f, MIN(flen,dsize/2), d, dsize);
+		oio_str_bin2hex(f, MIN(flen,dsize/2), d, dsize);
 	}
 
 	return d;
@@ -607,7 +607,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 
 		const gchar *old = req_ctx->subject;
 		gchar *s = g_strconcat (old?old:"", old?" ":"", tail, NULL);
-		metautils_str_reuse(&req_ctx->subject, s);
+		oio_str_reuse(&req_ctx->subject, s);
 		g_free0 (tail);
 	}
 	void _add_header(const gchar *n, GByteArray *v) {
@@ -683,7 +683,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	void _uid(const gchar *fmt, ...) {
 		va_list args;
 		va_start(args, fmt);
-		metautils_str_reuse(&req_ctx->uid, g_strdup_vprintf(fmt, args));
+		oio_str_reuse(&req_ctx->uid, g_strdup_vprintf(fmt, args));
 		va_end(args);
 	}
 	void _register_cnx_data(const gchar *key, gpointer data,
@@ -797,7 +797,7 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	req_ctx.reqname = _request_get_name(request);
 	req_ctx.uid = _request_get_cid(request);
 	req_ctx.reqid = _req_get_hex_ID(request, hexid, sizeof(hexid));
-	gridd_set_reqid(req_ctx.reqid);
+	oio_ext_set_reqid(req_ctx.reqid);
 	rc = TRUE;
 
 	if (!req_ctx.reqname) {
@@ -820,8 +820,8 @@ label_exit:
 		g_clear_error(&err);
 	if (req_ctx.reqname)
 		g_free(req_ctx.reqname);
-	metautils_str_clean(&req_ctx.subject);
-	metautils_str_clean(&req_ctx.uid);
+	oio_str_clean(&req_ctx.subject);
+	oio_str_clean(&req_ctx.uid);
 	memset(&req_ctx, 0, sizeof(req_ctx));
 	return rc;
 }

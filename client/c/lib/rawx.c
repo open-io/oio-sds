@@ -45,7 +45,7 @@ chunk_id2str (const gs_chunk_t *chunk, char *d, size_t dS)
 {
 	EXTRA_ASSERT(chunk);
 	EXTRA_ASSERT(d);
-	buffer2str (chunk->ci->id.id, sizeof(chunk->ci->id.id), d, dS);
+	oio_str_bin2hex (chunk->ci->id.id, sizeof(chunk->ci->id.id), d, dS);
 }
 
 static void
@@ -227,7 +227,7 @@ _rawx_update_chunk_attrs(chunk_id_t *cid, GSList *attrs, GError **err)
 	ne_set_read_timeout(s, 30);
 
 	req_str =g_string_new("/rawx/chunk/set/");
-	buffer2str(&(cid->id), sizeof(cid->id), idstr, sizeof(idstr));
+	oio_str_bin2hex (&(cid->id), sizeof(cid->id), idstr, sizeof(idstr));
 	req_str = g_string_append(req_str, idstr);
 	GRID_TRACE("Calling %s", req_str->str);
 
@@ -465,7 +465,7 @@ void gen_req_id_header(gchar *dst, gsize dst_size) {
 		memcpy(idBuf+i, (guint8*)(&r), sizeof(int));
 	}
 
-	buffer2str(idBuf, sizeof(idBuf), idRequest, sizeof(idRequest));
+	oio_str_bin2hex (idBuf, sizeof(idBuf), idRequest, sizeof(idRequest));
 
 	g_strlcpy(dst, idRequest, dst_size);
 }

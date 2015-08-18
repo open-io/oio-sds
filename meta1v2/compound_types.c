@@ -97,8 +97,8 @@ compound_type_update_arg(struct compound_type_s *ct,
 
 	if (service_update_tagfilter(pol, ct->baretype, &k, &v)) {
 		if (override || !ct->req.k) {
-			metautils_str_reuse(&(ct->req.k),  k);
-			metautils_str_reuse(&(ct->req.v),  v);
+			oio_str_reuse(&(ct->req.k),  k);
+			oio_str_reuse(&(ct->req.v),  v);
 			k = v = NULL;
 		}
 	}

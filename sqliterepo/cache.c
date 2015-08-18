@@ -661,7 +661,7 @@ retry:
 				EXTRA_ASSERT(base->owner != NULL);
 				if (base->owner != g_thread_self()) {
 					GRID_DEBUG("Base [%s] in use by another thread (%X), waiting...",
-							hashstr_str(hname), compute_thread_id(base->owner));
+							hashstr_str(hname), oio_log_thread_id(base->owner));
 					// The lock is held by another thread/request
 					if (g_cond_wait_until(base->cond, &cache->lock, deadline)) {
 						GRID_DEBUG("Retrying to open [%s]", hashstr_str(hname));
@@ -678,7 +678,7 @@ retry:
 						}
 						GRID_DEBUG("failed to open base: "
 								"in use by another request (thread %X)",
-								compute_thread_id(base->owner));
+								oio_log_thread_id(base->owner));
 						break;
 					}
 				}

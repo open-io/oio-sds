@@ -49,9 +49,6 @@ License along with this library.
 # define GSETERROR(e,FMT,...)  g_error_trace (e, G_LOG_DOMAIN, 0,   __LINE__, __FUNCTION__, __FILE__, FMT, ##__VA_ARGS__)
 # define GSETRAW(e,CODE,MSG)  g_error_trace (e, G_LOG_DOMAIN, CODE, 0,0,0 , "%s", MSG)
 
-#define GQ() g_quark_from_static_string(G_LOG_DOMAIN)
-#define NEWERROR(CODE, FMT,...) g_error_new(GQ(), (CODE), FMT, ##__VA_ARGS__)
-
 #define CODE_IS_NETWORK_ERROR(C) ((C) < CODE_TEMPORARY)
 #define CODE_IS_OK(C)            (((C) >= CODE_FINAL_OK) && ((C) < CODE_BEACON_REDIRECT))
 #define CODE_IS_TEMP(C)          (((C) >= CODE_TEMPORARY) && ((C) < CODE_FINAL_OK))

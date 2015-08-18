@@ -113,18 +113,18 @@ sqlx_upgrade_do(struct sqlx_upgrader_s *su, struct sqlx_sqlite3_s *sq3)
 			GRID_TRACE("Runnig upgrade step");
 			GError *err = step->cb(sq3, step->cb_data);
 			if (!err) {
-				metautils_str_replace(&version, step->post);
+				oio_str_replace(&version, step->post);
 				sqlx_admin_set_str(sq3, "schema_version", version);
 			}
 			else {
 				g_prefix_error(&err, "Conversion error from [%s] to [%s]", version, step->post);
-				metautils_str_clean(&version);
+				oio_str_clean(&version);
 				return err;
 			}
 		}
 	}
 
-	metautils_str_clean(&version);
+	oio_str_clean(&version);
 	return NULL;
 }
 

@@ -306,8 +306,8 @@ gs_grid_storage_free(gs_grid_storage_t * gs)
 		return;
 	if (gs->direct_resolver)
 		resolver_direct_free(gs->direct_resolver);
-	metautils_str_clean (&gs->ns);
-	metautils_str_clean (&gs->physical_namespace);
+	oio_str_clean (&gs->ns);
+	oio_str_clean (&gs->physical_namespace);
 	namespace_info_free(gs->ni);
 	g_free(gs);
 }

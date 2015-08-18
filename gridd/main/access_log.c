@@ -94,7 +94,7 @@ _log_reqid(GString *gs, MESSAGE req)
 		
 		hex = g_alloca(max);
 		memset(hex, 0, max);
-		buffer2str(field, field_len, hex, max);
+		oio_str_bin2hex(field, field_len, hex, max);
 		g_string_append(gs, (gchar*)hex);
 	}
 }

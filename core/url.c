@@ -1,5 +1,5 @@
 /*
-OpenIO SDS metautils
+OpenIO SDS oio core
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
 Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
@@ -18,26 +18,17 @@ License along with this library.
 */
 
 #ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "grid.url"
+# define G_LOG_DOMAIN "core"
 #endif
 
 #include <string.h>
 
-#include "./metautils.h"
-#include "./hc_url.h"
-#include "./hc_url_ext.h"
-#include "./url.h"
+#include "oio_core.h"
+#include "hc_url_ext.h"
 
 #define HCURL_OPTION_KEY_VERSION "version"
 #define HCURL_OPTION_KEY_SNAPSHOT "snapshot"
 
-enum {
-	FLAG_DIRTY_ID    = 0x01,
-	FLAG_DIRTY_NS    = 0X02,
-	FLAG_DIRTY_WHOLE = 0x04
-};
-
-// format: hc://namespace/container/content?option1=val1&option2=val2...
 struct hc_url_s
 {
 	/* primary */
@@ -53,6 +44,54 @@ struct hc_url_s
 	gchar hexid[65];
 	guint8 flags;
 };
+
+/* ------------------------------------------------------------------------- */
+
+gboolean
+oio_requri_parse (const char *str, struct req_uri_s *uri)
+{
+	if (!str || !uri)
+		return FALSE;
+
+	gchar *pq = strchr (str, '?');
+	gchar *pa = pq ? strchr (pq, '#') : strchr (str, '#');
+
+	// Extract the main components
+	if (pq || pa)
+		uri->path = g_strndup (str, (pq ? pq : pa) - str);
+	else
+		uri->path = g_strdup (str);
+
+	if (pq) {
+		if (pa)
+			uri->query = g_strndup (pq + 1, pa - pq);
+		else
+			uri->query = g_strdup (pq + 1);
+	} else
+		uri->query = g_strdup("");
+
+	if (pa)
+		uri->fragment = g_strdup (pa + 1);
+	else
+		uri->fragment = g_strdup("");
+
+	// Split compound components of interest
+	if (uri->query)
+		uri->query_tokens = g_strsplit(uri->query, "&", -1);
+	else
+		uri->query_tokens = g_malloc0(sizeof(void*));
+
+	return TRUE;
+}
+
+void
+oio_requri_clear (struct req_uri_s *uri)
+{
+	if (uri->path) g_free (uri->path);
+	if (uri->query) g_free (uri->query);
+	if (uri->fragment) g_free (uri->fragment);
+	g_strfreev(uri->query_tokens);
+}
 
 /* ------------------------------------------------------------------------- */
 
@@ -95,11 +134,6 @@ _add_option(struct hc_url_s *u, const char *option_str)
 			k = g_strndup(option_str, cursor - option_str);
 			hc_url_set_option(u, k, cursor+1);
 			g_free(k);
-		} else {
-			if (*option_str)
-				GRID_WARN("wrong url option syntax for token [%s]", option_str);
-			else
-				GRID_WARN("empty option in url");
 		}
 	}
 }
@@ -125,18 +159,18 @@ _parse_oldurl(struct hc_url_s *url, const char *str)
 		if (*str) strcpy(p, str); // Copy what remains
 	} while (0);
 
-	if (metautils_requri_parse (tmp, &ruri)) { // Parse the path
+	if (oio_requri_parse (tmp, &ruri)) { // Parse the path
 
 		gchar **path_tokens = g_strsplit (ruri.path, "/", 3);
 		if (path_tokens) {
 			if (path_tokens[0]) {
-				metautils_str_reuse (&url->ns, path_tokens[0]);
-				metautils_str_replace (&url->account, HCURL_DEFAULT_ACCOUNT);
+				oio_str_reuse (&url->ns, path_tokens[0]);
+				oio_str_replace (&url->account, HCURL_DEFAULT_ACCOUNT);
 				if (path_tokens[1]) {
-					metautils_str_reuse (&url->user, path_tokens[1]);
-					metautils_str_replace (&url->type, HCURL_DEFAULT_TYPE);
+					oio_str_reuse (&url->user, path_tokens[1]);
+					oio_str_replace (&url->type, HCURL_DEFAULT_TYPE);
 					if (path_tokens[2])
-						metautils_str_reuse (&url->path, path_tokens[2]);
+						oio_str_reuse (&url->path, path_tokens[2]);
 				}
 			}
 			g_free (path_tokens);
@@ -148,14 +182,14 @@ _parse_oldurl(struct hc_url_s *url, const char *str)
 		}
 	}
 
-	metautils_requri_clear (&ruri);
+	oio_requri_clear (&ruri);
 	return _check_parsed_url (url);
 }
 
 static void
 _replace (gchar **pp, const char *s)
 {
-	metautils_str_reuse (pp, g_uri_unescape_string (s, NULL));
+	oio_str_reuse (pp, g_uri_unescape_string (s, NULL));
 }
 
 static int
@@ -165,8 +199,8 @@ _parse_url(struct hc_url_s *url, const char *str)
 
 	for (; *str && *str == '/' ;++str) {} // skip the leading slashes
 
-	if (!metautils_requri_parse (str, &ruri)) {
-		metautils_requri_clear (&ruri);
+	if (!oio_requri_parse (str, &ruri)) {
+		oio_requri_clear (&ruri);
 		return 0;
 	}
 
@@ -197,19 +231,19 @@ _parse_url(struct hc_url_s *url, const char *str)
 			_add_option(url, *p);
 	}
 
-	metautils_requri_clear (&ruri);
+	oio_requri_clear (&ruri);
 	return _check_parsed_url (url);
 }
 
 static void
 _clean_url (struct hc_url_s *u)
 {
-	metautils_str_clean(&u->ns);
-	metautils_str_clean(&u->account);
-	metautils_str_clean(&u->user);
-	metautils_str_clean(&u->type);
-	metautils_str_clean(&u->path);
-	metautils_str_clean(&u->whole);
+	oio_str_clean(&u->ns);
+	oio_str_clean(&u->account);
+	oio_str_clean(&u->user);
+	oio_str_clean(&u->type);
+	oio_str_clean(&u->path);
+	oio_str_clean(&u->whole);
 	memset (u->id, 0, sizeof(u->id));
 	memset (u->hexid, 0, sizeof(u->hexid));
 	u->flags = 0;
@@ -224,8 +258,8 @@ _compute_id (struct hc_url_s *url)
 
 	memset(url->hexid, 0, sizeof(url->hexid));
 	memset(url->id, 0, sizeof(url->id));
-	meta1_name2hash(url->id, url->ns, url->account, url->user);
-	buffer2str(url->id, sizeof(url->id), url->hexid, sizeof(url->hexid));
+	oio_str_hash_name(url->id, url->ns, url->account, url->user);
+	oio_str_bin2hex(url->id, sizeof(url->id), url->hexid, sizeof(url->hexid));
 	return 1;
 }
 
@@ -236,7 +270,7 @@ hc_url_oldinit(const char *url)
 {
 	if (!url)
 		return NULL;
-	struct hc_url_s *result = SLICE_NEW0(struct hc_url_s);
+	struct hc_url_s *result = g_slice_new0(struct hc_url_s);
 	if (_parse_oldurl(result, url))
 		return result;
 	hc_url_clean(result);
@@ -248,7 +282,7 @@ hc_url_init(const char *url)
 {
 	if (!url)
 		return NULL;
-	struct hc_url_s *result = SLICE_NEW0(struct hc_url_s);
+	struct hc_url_s *result = g_slice_new0(struct hc_url_s);
 	if (_parse_url(result, url))
 		return result;
 	hc_url_clean(result);
@@ -258,7 +292,7 @@ hc_url_init(const char *url)
 struct hc_url_s *
 hc_url_empty(void)
 {
-	return SLICE_NEW0(struct hc_url_s);
+	return g_slice_new0(struct hc_url_s);
 }
 
 void
@@ -267,7 +301,7 @@ hc_url_clean(struct hc_url_s *u)
 	if (!u)
 		return;
 	_clean_url (u);
-	SLICE_FREE (struct hc_url_s, u);
+	g_slice_free (struct hc_url_s, u);
 }
 
 void
@@ -312,31 +346,31 @@ hc_url_set(struct hc_url_s *u, enum hc_url_field_e f, const char *v)
 	if (!u || !v)
 		return NULL;
 
-	metautils_str_clean(&(u->whole));
+	oio_str_clean(&(u->whole));
 
 	switch (f) {
 		case HCURL_NS:
-			metautils_str_replace(&(u->ns), v);
+			oio_str_replace(&(u->ns), v);
 			u->hexid[0] = 0;
 			return u;
 
 		case HCURL_ACCOUNT:
-			metautils_str_replace(&(u->account), v);
+			oio_str_replace(&(u->account), v);
 			u->hexid[0] = 0;
 			return u;
 
 		case HCURL_USER:
-			metautils_str_replace(&(u->user), v);
+			oio_str_replace(&(u->user), v);
 			u->hexid[0] = 0;
 			return u;
 
 		case HCURL_TYPE:
-			metautils_str_replace(&(u->type), v);
+			oio_str_replace(&(u->type), v);
 			u->hexid[0] = 0;
 			return u;
 
 		case HCURL_PATH:
-			metautils_str_replace(&(u->path), v);
+			oio_str_replace(&(u->path), v);
 			return u;
 
 		case HCURL_VERSION:
@@ -348,7 +382,7 @@ hc_url_set(struct hc_url_s *u, enum hc_url_field_e f, const char *v)
 
 		case HCURL_HEXID:
 			u->hexid[0] = 0;
-			if (!metautils_str_ishexa(v,64) || !hex2bin(v, u->id, 32, NULL))
+			if (!oio_str_ishexa(v,64) || !oio_str_hex2bin(v, u->id, 32))
 				return NULL;
 			memcpy(u->hexid, v, 64);
 			return u;
@@ -470,7 +504,7 @@ hc_url_get(struct hc_url_s *u, enum hc_url_field_e f)
 			if (!u->hexid[0]) {
 				if (!_compute_id(u))
 					return NULL;
-				buffer2str(u->id, sizeof(u->id), u->hexid, sizeof(u->hexid));
+				oio_str_bin2hex(u->id, sizeof(u->id), u->hexid, sizeof(u->hexid));
 				u->hexid[sizeof(u->hexid)-1] = '\0';
 			}
 			return u->hexid;
@@ -496,10 +530,10 @@ hc_url_set_id (struct hc_url_s *u, const void *id)
 	if (!u)
 		return;
 	u->hexid[0] = 0;
-	metautils_str_clean(&(u->whole));
+	oio_str_clean(&(u->whole));
 	if (id) {
 		memcpy (u->id, id, 32);
-		buffer2str (u->id, sizeof(u->id), u->hexid, sizeof(u->hexid));
+		oio_str_bin2hex (u->id, sizeof(u->id), u->hexid, sizeof(u->hexid));
 	}
 }
 
@@ -515,7 +549,7 @@ hc_url_get_option_value(struct hc_url_s *u, const char *k)
 gchar **
 hc_url_get_option_names(struct hc_url_s *u)
 {
-	EXTRA_ASSERT(u != NULL);
+	g_assert(u != NULL);
 	guint i=0;
 	gchar **result = g_malloc(sizeof(gchar*)*(1+g_slist_length(u->options)));
 	for (GSList *l = u->options ; l ;l=l->next) {
@@ -530,8 +564,8 @@ hc_url_get_option_names(struct hc_url_s *u)
 void
 hc_url_set_option (struct hc_url_s *u,  const char *k, const gchar *v)
 {
-	EXTRA_ASSERT (u != NULL);
-	EXTRA_ASSERT (k != NULL);
+	g_assert (u != NULL);
+	g_assert (k != NULL);
 	gchar **pv, *packed = g_strdup_printf("%s=%s", k, v);
 	if (!(pv = _options_get(u, k)))
 		u->options = g_slist_prepend(u->options, packed);
@@ -552,10 +586,14 @@ hc_url_get_id_size(struct hc_url_s *u)
 void
 hc_url_set_oldns(struct hc_url_s *u, const char *ns)
 {
-	char pns[LIMIT_LENGTH_NSNAME];
-	gsize s = metautils_strlcpy_physical_ns (pns, ns, sizeof(pns));
-	hc_url_set (u, HCURL_NS, pns);
-	hc_url_set (u, HCURL_ACCOUNT, ns[s-1] ? ns+s : HCURL_DEFAULT_ACCOUNT);
+	gchar **tokens = g_strsplit(ns, ".", 2);
+	if (!tokens) return;
+	if (tokens[0]) {
+		hc_url_set (u, HCURL_NS, tokens[0]);
+		if (tokens[1]) 
+			hc_url_set (u, HCURL_ACCOUNT, tokens[1]);
+	}
+	g_strfreev(tokens);
 }
 
 void

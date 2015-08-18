@@ -77,19 +77,19 @@ main_action(void)
 	test_round();
 
 	g_printerr("\n*** All flags enabled\n");
-	main_log_flags = ~0;
+	oio_log_flags = ~0;
 	test_round();
 
 	g_printerr("\n*** TRIM_DOMAIN disabled\n");
-	main_log_flags &= ~LOG_FLAG_TRIM_DOMAIN;
+	oio_log_flags &= ~LOG_FLAG_TRIM_DOMAIN;
 	test_round();
 
 	g_printerr("\n*** PURIFY disabled\n");
-	main_log_flags &= ~LOG_FLAG_PURIFY;
+	oio_log_flags &= ~LOG_FLAG_PURIFY;
 	test_round();
 
 	g_printerr("\n*** COLUMNIZE disabled\n");
-	main_log_flags &= ~LOG_FLAG_COLUMNIZE;
+	oio_log_flags &= ~LOG_FLAG_COLUMNIZE;
 	test_round();
 }
 

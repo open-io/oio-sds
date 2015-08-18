@@ -21,13 +21,7 @@ License along with this library.
 # define G_LOG_DOMAIN "grid.stgpol"
 #endif
 
-#include "metautils_containers.h"
-#include "metautils_macros.h"
-#include "metautils_errors.h"
-#include "metautils_loggers.h"
-#include "metautils_strings.h"
-#include "metatypes.h"
-#include "metatype_nsinfo.h"
+#include "metautils.h"
 
 #include "storage_policy_internals.h"
 
@@ -55,7 +49,7 @@ _data_security_clean(struct data_security_s *ds)
 	if (!ds)
 		return;
 
-	metautils_str_clean(&ds->name);
+	oio_str_clean(&ds->name);
 	if (NULL != ds->params)
 		g_hash_table_destroy(ds->params);
 	g_free(ds);
@@ -67,7 +61,7 @@ _data_treatments_clean(struct data_treatments_s *dt)
 	if (!dt)
 		return;
 
-	metautils_str_clean(&dt->name);
+	oio_str_clean(&dt->name);
 	if (NULL != dt->params)
 		g_hash_table_destroy(dt->params);
 	g_free(dt);
@@ -78,7 +72,7 @@ storage_class_clean(struct storage_class_s *sc)
 {
 	if (!sc)
 		return;
-	metautils_str_clean(&sc->name);
+	oio_str_clean(&sc->name);
 	g_slist_free_full(sc->fallbacks, g_free);
 	g_free(sc);
 }
@@ -96,7 +90,7 @@ storage_policy_clean(struct storage_policy_s *sp)
 	if (!sp)
 		return;
 
-	metautils_str_clean(&sp->name);
+	oio_str_clean(&sp->name);
 	if (NULL != sp->datasec)
 		_data_security_clean(sp->datasec);
 	if (NULL != sp->datatreat)

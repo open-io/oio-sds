@@ -443,7 +443,7 @@ meta0_configure(int argc, char **argv)
 			GRID_WARN("Missing prefix for the get command, see usage.");
 			return FALSE;
 		}
-		if (!hex2bin(argv[2], prefix, 2, NULL)) {
+		if (!oio_str_hex2bin(argv[2], prefix, 2)) {
 			GRID_WARN("Invalid prefix for the get command, see usage.");
 			return FALSE;
 		}

@@ -17,12 +17,12 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include "common.h"
-#include "actions.h"
-
 #ifndef G_LOG_DOMAIN
 #define G_LOG_DOMAIN "metacd.http"
 #endif
+
+#include "common.h"
+#include "actions.h"
 
 static struct path_parser_s *path_parser = NULL;
 static struct http_request_dispatcher_s *dispatcher = NULL;
@@ -135,7 +135,7 @@ _metacd_match (const gchar *method, const gchar *path)
 	gchar **tokens = g_strsplit (key, "/", -1);
 	for (gchar **p=tokens; *p ;++p) {
 		gchar *unescaped = g_uri_unescape_string(*p,NULL);
-		metautils_str_reuse(p, unescaped);
+		oio_str_reuse(p, unescaped);
 	}
 	struct path_matching_s **result = path_parser_match (path_parser, tokens);
 	g_strfreev (tokens);
@@ -184,14 +184,14 @@ handler_action (gpointer u, struct http_request_s *rq,
 	// Get a request id for the current request
 	const gchar *reqid = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_REQID);
 	if (reqid)
-		gridd_set_reqid(reqid);
+		oio_ext_set_reqid(reqid);
 	else
-		gridd_set_random_reqid();
+		oio_ext_set_random_reqid();
 
 	// Then parse the request to find a handler
 	struct hc_url_s *url = NULL;
 	struct req_uri_s ruri = {NULL, NULL, NULL, NULL};
-	metautils_requri_parse (rq->req_uri, &ruri);
+	oio_requri_parse (rq->req_uri, &ruri);
 
 	struct path_matching_s **matchings = _metacd_match (rq->cmd, ruri.path);
 
@@ -221,7 +221,7 @@ handler_action (gpointer u, struct http_request_s *rq,
 	}
 
 	path_matching_cleanv (matchings);
-	metautils_requri_clear (&ruri);
+	oio_requri_clear (&ruri);
 	hc_url_pclean (&url);
 	return rc;
 }
@@ -473,7 +473,7 @@ grid_main_specific_fini (void)
 		resolver = NULL;
 	}
 	namespace_info_clear (&nsinfo);
-	metautils_str_clean (&nsname);
+	oio_str_clean (&nsname);
 	g_mutex_clear(&nsinfo_mutex);
 	g_mutex_clear(&push_mutex);
 }

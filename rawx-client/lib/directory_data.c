@@ -94,7 +94,7 @@ rawx_client_get_directory_data(rawx_session_t * session, hash_sha256_t chunk_id,
 	}
 
 	memset(str_chunk_id, '\0', sizeof(str_chunk_id));
-	buffer2str(chunk_id, sizeof(hash_sha256_t), str_chunk_id, sizeof(str_chunk_id));
+	oio_str_bin2hex(chunk_id, sizeof(hash_sha256_t), str_chunk_id, sizeof(str_chunk_id));
 
 	memset(str_req, '\0', sizeof(str_req));
 	snprintf(str_req, sizeof(str_req) - 1, "%s/%s", RAWX_REQ_GET_DIRINFO, str_chunk_id);

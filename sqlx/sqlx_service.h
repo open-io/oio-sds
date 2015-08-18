@@ -25,18 +25,19 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 struct sqlx_service_config_s;
 struct sqlx_service_s;
 
-struct service_info_s;
-struct gridd_client_pool_s;
-struct sqlx_repository_s;
 struct election_manager_s;
-struct network_server_s;
+struct gridd_client_pool_s;
 struct gridd_request_dispatcher_s;
-struct hc_resolver_s;
-struct grid_task_queue_s;
 struct grid_single_rrd_s;
-struct sqlx_repo_config_s;
-struct sqlx_sync_s;
+struct grid_task_queue_s;
+struct hc_resolver_s;
+struct network_server_s;
 struct replication_config_s;
+struct service_info_s;
+struct sqlx_repo_config_s;
+struct sqlx_repository_s;
+struct sqlx_sync_s;
+struct sqlx_name_s;
 
 struct sqlx_service_config_s
 {
@@ -172,6 +173,17 @@ struct sqlx_service_s
 	// TRUE :  ELECTION_MODE_QUORUM
 	// FALSE : ELECTION_MODE_NONE
 	gboolean flag_replicable;
+};
+
+struct meta_backend_common_s {
+	gchar ns_name[LIMIT_LENGTH_NSNAME];
+	namespace_info_t ns_info;
+	GMutex ns_info_lock;
+	const gchar *type;
+	struct sqlx_repository_s *repo;
+
+	// Managed by sqlx_service_extra, do not allocate/free
+	struct grid_lbpool_s *lb;
 };
 
 /* -------------------------------------------------------------------------- */

@@ -40,7 +40,7 @@ _hex_string_to_byte_array(const gchar *src)
 	GByteArray *gba = g_byte_array_new();
 	size_t bufsize = strlen(src) / 2;
 	guint8 buf[bufsize];
-	hex2bin(src, buf, bufsize, NULL);
+	oio_str_hex2bin(src, buf, bufsize);
 	g_byte_array_append(gba, buf, bufsize);
 	return gba;
 }
@@ -115,7 +115,7 @@ _fill_chunk_id(chunk_id_t *cid, gpointer chunk)
 			addr_info_t *pa = build_addr_info(tok_addr[0], atoi(tok_addr[1]), &e);
 			if(NULL == e) {
 				memcpy(&(cid->addr), pa, sizeof(addr_info_t));
-				hex2bin(url_tok[g_strv_length(url_tok) - 1], cid->id, sizeof(cid->id), &e);
+				oio_str_hex2bin(url_tok[g_strv_length(url_tok) - 1], cid->id, sizeof(cid->id));
 			}
 			if(NULL != pa)
 				g_free(pa);

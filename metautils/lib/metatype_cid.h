@@ -28,9 +28,6 @@ License along with this library.
  * @{
  */
 
-gboolean container_id_hex2bin(const gchar *s, gsize slen,
-		container_id_t *dst, GError **error);
-
 guint container_id_hash(gconstpointer k);
 
 gboolean container_id_equal(gconstpointer k1, gconstpointer k2);
@@ -39,7 +36,7 @@ gboolean container_id_equal(gconstpointer k1, gconstpointer k2);
  * container_id. The destination buffer will always be NULL terminated. */
 gsize container_id_to_string(const container_id_t id, gchar * dst, gsize dstsize);
 
-void meta1_name2hash(container_id_t cid, const char *ns, const char *account, const char *user);
+#define meta1_name2hash oio_str_hash_name
 
 /** @} */
 

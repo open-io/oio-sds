@@ -35,4 +35,17 @@ gchar ** hc_url_get_option_names(struct hc_url_s *u);
 
 void hc_url_to_json (GString *out, struct hc_url_s *u);
 
+struct req_uri_s
+{
+	gchar *path;
+	gchar *query;
+	gchar *fragment;
+
+	gchar **query_tokens;
+};
+
+gboolean oio_requri_parse (const char *packed, struct req_uri_s *ruri);
+
+void oio_requri_clear (struct req_uri_s *ruri);
+
 #endif /*OIO_SDS__metautils__lib__hc_url_ext_h*/

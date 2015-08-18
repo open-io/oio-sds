@@ -32,6 +32,11 @@ License along with this library.
 #include "metautils.h"
 #include "metautils_syscall.h"
 
+char syslog_id[64] = "";
+static int syslog_opened = 0;
+time_t main_log_level_update = 0;
+
+
 static int grid_main_rc = 0;
 static volatile gboolean flag_running = FALSE;
 static volatile gboolean flag_daemon = FALSE;
@@ -43,6 +48,16 @@ static gchar pidfile_path[1024] = {0,0,0};
 static struct stat pidfile_stat;
 
 /* ------------------------------------------------------------------------- */
+
+void
+logger_syslog_open (void)
+{
+	if (syslog_opened)
+		return;
+	syslog_opened = 1;
+	openlog(syslog_id, LOG_NDELAY, LOG_LOCAL0);
+	g_log_set_default_handler(oio_log_syslog, NULL);
+}
 
 static const char*
 _set_opt(gchar **tokens)
@@ -273,7 +288,8 @@ grid_main_sighandler_noop(int s)
 static void
 grid_main_sighandler_USR1(int s)
 {
-	logger_verbose();
+	oio_log_verbose();
+	main_log_level_update = time(0);
 	alarm(900);
 	signal(s, grid_main_sighandler_USR1);
 }
@@ -282,7 +298,7 @@ static void
 grid_main_sighandler_USR2(int s)
 {
 	signal(s, grid_main_sighandler_USR2);
-	main_log_level = main_log_level_default;
+	oio_log_reset_level();
 	main_log_level_update = 0;
 }
 
@@ -291,7 +307,7 @@ grid_main_sighandler_ALRM(int s)
 {
 	signal(s, grid_main_sighandler_ALRM);
 	if (!main_log_level_update || main_log_level_update + 299 < time(0)) {
-		main_log_level = main_log_level_default;
+		oio_log_reset_level();
 		main_log_level_update = 0;
 	}
 }
@@ -406,7 +422,7 @@ grid_main_init(int argc, char **args)
 				GRID_DEBUG("Explicitely configured pidfile_path=[%s]", pidfile_path);
 				break;
 			case 'q':
-				logger_quiet();
+				oio_log_quiet();
 				flag_quiet = TRUE;
 				break;
 			case 's':
@@ -419,8 +435,10 @@ grid_main_init(int argc, char **args)
 				GRID_DEBUG("Explicitely configured syslog_id=[%s]", syslog_id);
 				break;
 			case 'v':
-				if (!flag_quiet)
-					logger_verbose_default();
+				if (!flag_quiet) {
+					oio_log_verbose_default();
+					main_log_level_update = time(0);
+				}
 				break;
 			case ':':
 				GRID_WARN("Unexpected option at position %d ('%c')", optind, optopt);
@@ -543,12 +561,12 @@ grid_main_cli_init(int argc, char **args)
 				exit(0);
 				break;
 			case 'q':
-				logger_quiet();
+				oio_log_quiet();
 				flag_quiet = TRUE;
 				break;
 			case 'v':
 				if (!flag_quiet)
-					logger_verbose_default();
+					oio_log_verbose_default();
 				break;
 			case ':':
 				GRID_WARN("Unexpected option at position %d ('%c')", optind, optopt);

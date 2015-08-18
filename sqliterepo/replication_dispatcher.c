@@ -1307,9 +1307,9 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx, struct sqlx_name_mutable_s *n, g
 
 	ctx->subject("%s.%s|%s", base, type, local?"LOC":"REP");
 	
-	metautils_str_replace(&n->ns, ns);
-	metautils_str_replace(&n->base, base);
-	metautils_str_replace(&n->type, type);
+	oio_str_replace(&n->ns, ns);
+	oio_str_replace(&n->base, base);
+	oio_str_replace(&n->type, type);
 	if (pflags) {
 		*pflags = 0;
 		*pflags |= (autocreate ? FLAG_AUTOCREATE : 0);

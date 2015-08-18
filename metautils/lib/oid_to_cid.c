@@ -52,7 +52,7 @@ main(int argc, char ** args)
 
 		if (url && NULL != hc_url_get_id(url)) {
 			memset(str_id, 0, sizeof(str_id));
-			buffer2str(hc_url_get_id(url), hc_url_get_id_size(url),
+			oio_str_bin2hex(hc_url_get_id(url), hc_url_get_id_size(url),
 					str_id, sizeof(str_id));
 			fputs(str_id, stdout);
 		}

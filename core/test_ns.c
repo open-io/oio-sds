@@ -16,16 +16,13 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 #include <stdlib.h>
+#include <string.h>
 
 #include <glib.h>
 #include <curl/curl.h>
 
-#include <oio_sds.h>
-
-/* XXX JFS: only used to display the internal configuration, those should not
- * be included by any application using the current client SDK */
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
+#include "oio_core.h"
+#include "oio_sds.h"
 
 static const char *
 _check_ns (const char *ns)
@@ -37,7 +34,7 @@ _check_ns (const char *ns)
 	CURL *h = NULL;
 	int rc;
 
-	if (!(proxy = gridcluster_get_proxy (ns))) {
+	if (!(proxy = oio_cfg_get_proxy_conscience (ns))) {
 		errmsg = "no proxy configured";
 		goto out;
 	}
@@ -108,7 +105,7 @@ main (int argc, char **argv)
 
 	int ok = ~0;
 	if (argc == 2 && !strcmp(argv[1], "-a")) {
-		gchar **tab_ns = gridcluster_list_ns ();
+		gchar **tab_ns = oio_cfg_list_ns ();
 		for (gchar **p=tab_ns; p && *p ;++p)
 			ok &= _check_ns_and_print (*p);
 		g_strfreev (tab_ns);

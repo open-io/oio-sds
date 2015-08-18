@@ -151,7 +151,7 @@ parse_namespaces(void)
 {
 	GHashTableIter iterator;
 	gpointer k, v;
-	GHashTable *ns_hash = gridcluster_parse_config();
+	GHashTable *ns_hash = oio_cfg_parse();
 
 	g_hash_table_iter_init(&iterator, ns_hash);
 	while (g_hash_table_iter_next(&iterator, &k, &v)) {
@@ -408,10 +408,10 @@ parse_options(int argc, char ** args, GError **error)
 			g_strlcpy(syslog_id, optarg, sizeof(syslog_id));
 			break;
 		case 'v':
-			logger_verbose();
+			oio_log_verbose();
 			break;
 		case 'q':
-			logger_quiet();
+			oio_log_quiet();
 			break;
 		case '?':
 			break;
@@ -427,7 +427,7 @@ parse_options(int argc, char ** args, GError **error)
 	}
 
 	if (*syslog_id) {
-		g_log_set_default_handler(logger_syslog, NULL);
+		g_log_set_default_handler(oio_log_syslog, NULL);
 		openlog(syslog_id, LOG_NDELAY, LOG_LOCAL0);
 	}
 

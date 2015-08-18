@@ -94,13 +94,10 @@ add_library(metautils SHARED
 		volume_lock.c volume_lock.h
 		lb.c lb.h
 		common_main.c common_main.h
-		meta_backend_common.h
 		utils_syscall.c metautils_syscall.h
 		lrutree.c lrutree.h tree.h
 		cache.c cache.h
 		storage_policy.c storage_policy.h
-		url.c url.h
-		hc_url.c hc_url.h
 		expr.2str.c
 		expr.clean.c
 		expr.eval.c
@@ -114,7 +111,6 @@ add_library(metautils SHARED
 		utils_strings.c metautils_strings.h
 		utils_hashstr.c metautils_hashstr.h
 		utils_resolv.c metautils_resolv.h
-		utils_loggers.c metautils_loggers.h
 		utils_task.c metautils_task.h
 		utils_addr_info.c
 		utils_chunk_info.c
@@ -278,6 +274,7 @@ add_library(metautils SHARED
 )
 
 target_link_libraries(metautils
+		oiocore
 		${GLIB2_LIBRARIES} ${JSONC_LIBRARIES}
 		${ASN1C_LIBRARIES}
 		-lm)
@@ -322,11 +319,6 @@ add_executable(test_logger test_logger.c)
 target_link_libraries(test_logger
 		metautils ${GLIB2_LIBRARIES})
 
-add_executable(test_hc_url test_hc_url.c)
-target_link_libraries(test_hc_url
-		metautils 
-		${GLIB2_LIBRARIES})
-
 add_executable(test_addr test_addr.c)
 target_link_libraries(test_addr
 		metautils
@@ -368,7 +360,6 @@ install(FILES
 			gridd_client.h
 			gridd_client_ext.h
 			gridd_client_pool.h
-			hc_url.h
 			cache.h
 			lb.h
 			lrutree.h
@@ -392,7 +383,6 @@ install(FILES
 			metautils.h
 			metautils_hashstr.h
 			metautils_l4v.h
-			metautils_loggers.h
 			metautils_macros.h
 			metautils_resolv.h
 			metautils_sockets.h
@@ -404,7 +394,6 @@ install(FILES
 			test_addr.h
 			tree.h
 			volume_lock.h
-			meta_backend_common.h
 		DESTINATION include/metautils/lib
 		PERMISSIONS
 			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
@@ -413,7 +402,6 @@ install(FILES
 add_test(NAME metautils/stgpol COMMAND test_stg_policy)
 add_test(NAME metautils/svc_policy COMMAND test_svc_policy)
 add_test(NAME metautils/lb COMMAND test_lb)
-add_test(NAME metautils/url COMMAND test_hc_url)
 add_test(NAME metautils/logger COMMAND test_logger)
 add_test(NAME metautils/lru COMMAND test_lrutree)
 add_test(NAME metautils/addr COMMAND test_addr)

@@ -1,5 +1,5 @@
 /*
-OpenIO SDS metautils
+OpenIO SDS oio core
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
 Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
@@ -17,16 +17,10 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef OIO_SDS__metautils__lib__metautils_loggers_h
-# define OIO_SDS__metautils__lib__metautils_loggers_h 1
+#ifndef OIO_SDS__core_oiolog_h
+# define OIO_SDS__core_oiolog_h 1
 
 # include <glib.h>
-
-/**
- * @defgroup metautils_loggers Logging V2 
- * @ingroup metautils_utils
- * @{
- */
 
 # define GRID_LOGLVL_TRACE2 (64 << G_LOG_LEVEL_USER_SHIFT)
 # define GRID_LOGLVL_TRACE  (32 << G_LOG_LEVEL_USER_SHIFT)
@@ -49,11 +43,11 @@ License along with this library.
 #  define      TRACE_ENABLED()  (0)
 # endif
 
-# define GRID_DEBUG_ENABLED()  (main_log_level > GRID_LOGLVL_DEBUG)
-# define GRID_INFO_ENABLED()   (main_log_level > GRID_LOGLVL_INFO)
-# define GRID_NOTICE_ENABLED() (main_log_level > GRID_LOGLVL_NOTICE)
-# define GRID_WARN_ENABLED()   (main_log_level > GRID_LOGLVL_WARN)
-# define GRID_ERROR_ENABLED()  (main_log_level > 0)
+# define GRID_DEBUG_ENABLED()  (oio_log_level > GRID_LOGLVL_DEBUG)
+# define GRID_INFO_ENABLED()   (oio_log_level > GRID_LOGLVL_INFO)
+# define GRID_NOTICE_ENABLED() (oio_log_level > GRID_LOGLVL_NOTICE)
+# define GRID_WARN_ENABLED()   (oio_log_level > GRID_LOGLVL_WARN)
+# define GRID_ERROR_ENABLED()  (oio_log_level > 0)
 
 # define DEBUG_ENABLED()       GRID_DEBUG_ENABLED()
 # define INFO_ENABLED()        GRID_INFO_ENABLED()
@@ -110,58 +104,48 @@ License along with this library.
 # define CRIT_DOMAIN(D,FMT,...)    g_log((D), GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
 # define ALERT_DOMAIN(D,FMT,...)   g_log((D), GRID_LOGLVL_ERROR, FMT, ##__VA_ARGS__)
 
-/** Cruising debug level. 
- * Should not be altered by the application after the program has started. */
-extern int main_log_level_default;
-
-/** Current (transitional) debug level.
- * May be altered by the application, signals, etc. */
-extern int main_log_level;
-
-/** Number of seconds since Epoch when the debug level has been updated. */
-extern time_t main_log_level_update;
-
-/** Should the logging system try to reduce the prefix of each line */
-extern int main_log_flags;
-
-extern gchar syslog_id[64];
-
 #define LOG_FLAG_TRIM_DOMAIN 0x01
 #define LOG_FLAG_PURIFY 0x02
 #define LOG_FLAG_COLUMNIZE 0x04
 
-void logger_verbose(void);
+/** Cruising debug level. 
+ * Should not be altered by the application after the program has started. */
+extern int oio_log_level_default;
 
-void logger_verbose_default(void);
+/** Current (transitional) debug level.
+ * May be altered by the application, signals, etc. */
+extern int oio_log_level;
 
-void logger_quiet(void);
+/** Should the logging system try to reduce the prefix of each line */
+extern int oio_log_flags;
 
-void logger_init_level(int l);
+void oio_log_lazy_init (void);
 
-void logger_init_level_from_env(const gchar *k);
+void oio_log_verbose(void);
 
-void logger_lazy_init (void);
+void oio_log_verbose_default(void);
 
-/** If the level had been temporarily changed, reset it to the initial value. */
-void logger_reset_level(void);
+void oio_log_quiet(void);
+
+void oio_log_reset_level (void);
+
+void oio_log_init_level(int l);
+
+void oio_log_init_level_from_env(const gchar *k);
 
 /** Writes the layed out message to stderr (not fd=2) with complete and
  * compact layout. */
-void logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
+void oio_log_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data);
 
 /** Does nothing */
-void logger_noop(const gchar *log_domain, GLogLevelFlags log_level,
+void oio_log_noop(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data);
 
 /** Send the mesage though /dev/syslog, with simple layout */
-void logger_syslog(const gchar *log_domain, GLogLevelFlags log_level,
+void oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data);
 
-/* Activate syslog logging */
-void logger_syslog_open (void);
+guint16 oio_log_thread_id(GThread *thread);
 
-guint16 compute_thread_id(GThread *thread);
-/** @} */
-
-#endif /*OIO_SDS__metautils__lib__metautils_loggers_h*/
+#endif /*OIO_SDS__core_oiolog_h*/

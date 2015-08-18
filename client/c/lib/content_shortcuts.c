@@ -32,8 +32,7 @@ gs_container_init_from_location(gs_grid_storage_t *client,
 
 	l4_address_init_with_url(&(container->meta2_addr), location->m2_url[0], NULL);
 
-	if (!container_id_hex2bin(location->container_hexid, strlen(location->container_hexid),
-			&(container->cID), &gerr)) {
+	if (!oio_str_hex2bin(location->container_hexid, container->cID, sizeof(container_id_t))) {
 		GSERRORCAUSE(gserr, gerr, "Invalid hexadecimal container ID");
 		g_error_free(gerr);
 		free(container);

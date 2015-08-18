@@ -41,7 +41,7 @@ metautils_hash_content_path(const gchar *src, gsize src_size,
 	g_checksum_free (checksum);
 
 	/* Compute the hexadecimal form, with the last byte partially zeroed */
-	buffer2str(h, h_len, dst, dst_size);
+	oio_str_bin2hex (h, h_len, dst, dst_size);
 	dst[dst_size-1]='\0';
 
 	dst_bitlength = MIN(dst_bitlength, 8 * sizeof(hash_sha256_t));
