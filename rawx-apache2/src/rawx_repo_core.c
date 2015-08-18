@@ -490,7 +490,7 @@ request_fill_headers(request_rec *r, struct content_textinfo_s *c0,
 	__set_header(r, "chunk-id",          c1->id);
 	__set_header(r, "chunk-size",        c1->size);
 	__set_header(r, "chunk-hash",        c1->hash);
-	__set_header(r, "chunk-position",    c1->position);
+	__set_header(r, "chunk-pos",         c1->position);
 	__set_header(r, "chunk-metadata",    c1->metadata);
 }
 
