@@ -17,10 +17,6 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "grid.utils.test"
-#endif
-
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>

@@ -17,10 +17,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "stats.client.lib"
-#endif
-
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>

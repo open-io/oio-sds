@@ -17,10 +17,6 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "metautils.test"
-#endif
-
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/storage_policy.h>
 #include <metautils/lib/storage_policy_internals.h>

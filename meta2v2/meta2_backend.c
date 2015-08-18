@@ -17,10 +17,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef G_LOG_DOMAIN
-#define G_LOG_DOMAIN "m2v2"
-#endif
-
 #include <glib.h>
 
 #include <metautils/lib/metautils.h>
@@ -390,7 +386,7 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 
 	if (NULL != err) {
 		if (err->code == CODE_CONTAINER_NOTFOUND)
-			err->domain = g_quark_from_static_string(G_LOG_DOMAIN);
+			err->domain = GQ();
 		return err;
 	}
 

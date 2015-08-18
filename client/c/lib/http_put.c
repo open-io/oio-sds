@@ -17,10 +17,6 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "http.put"
-#endif
-
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>

@@ -17,10 +17,6 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef G_LOG_DOMAIN
-#define G_LOG_DOMAIN "meta0.remote"
-#endif
-
 #include <errno.h>
 #include <netdb.h>
 #include <string.h>

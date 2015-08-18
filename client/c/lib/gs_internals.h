@@ -28,10 +28,6 @@ License along with this library.
  * @{
  */
 
-#ifndef  G_LOG_DOMAIN
-# define G_LOG_DOMAIN "grid.client"
-#endif
-
 #include <errno.h>
 #include <netdb.h>
 #include <stdlib.h>
