@@ -1,3 +1,5 @@
+add_definitions(-DG_LOG_DOMAIN="oio.rawx.httpd")
+
 include_directories(BEFORE . ../..)
 
 include_directories(AFTER

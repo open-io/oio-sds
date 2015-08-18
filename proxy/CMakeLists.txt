@@ -1,3 +1,4 @@
+add_definitions(-DG_LOG_DOMAIN="oio.proxy")
 
 add_definitions(-DHAVE_UGLY_RC_FUNCTIONS=1)
 

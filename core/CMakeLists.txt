@@ -1,3 +1,5 @@
+add_definitions(-DG_LOG_DOMAIN="oio.core")
+
 include_directories(BEFORE . ..)
 
 include_directories(AFTER

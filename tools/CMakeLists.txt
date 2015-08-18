@@ -1,3 +1,4 @@
+add_definitions(-DG_LOG_DOMAIN="oio.tools")
 
 include_directories(BEFORE ../client/c/lib)
 
