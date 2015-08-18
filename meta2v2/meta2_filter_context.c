@@ -49,17 +49,25 @@ struct gridd_filter_ctx_s
 static void
 _input_data_clean(struct gridd_filter_input_data_s *input_data)
 {
-	if(!input_data)
+	if (!input_data)
 		return;
 
-	if(NULL != input_data->url)
+	if (NULL != input_data->url) {
 		hc_url_clean(input_data->url);
+		input_data->url = NULL;
+	}
 
-	if(NULL != input_data->params)
+	if (NULL != input_data->params) {
 		g_hash_table_destroy(input_data->params);
+		input_data->params = NULL;
+	}
 
-	if(NULL != input_data->udata)
-		input_data->cleaner(input_data->udata);
+	if (NULL != input_data->udata) {
+		if (input_data->cleaner)
+			input_data->cleaner(input_data->udata);
+		input_data->udata = NULL;
+		input_data->cleaner = NULL;
+	}
 
 	g_free(input_data);
 }
@@ -107,13 +115,17 @@ meta2_filter_ctx_new(void)
 void
 meta2_filter_ctx_clean(struct gridd_filter_ctx_s *ctx)
 {
-	if(!ctx)
+	if (!ctx)
 		return;
-	if(NULL != ctx->input_data)
+	if (NULL != ctx->input_data) {
 		_input_data_clean(ctx->input_data);
+		ctx->input_data = NULL;
+	}
 	
-	if(NULL != ctx->output_data)
+	if (NULL != ctx->output_data) {
 		_output_data_clean(ctx->output_data);
+		ctx->output_data = NULL;
+	}
 	
 	g_free(ctx);
 }
