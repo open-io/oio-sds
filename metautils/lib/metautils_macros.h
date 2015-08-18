@@ -24,10 +24,6 @@ License along with this library.
 #  define LOG_DEFAULT_DOMAIN "default"
 # endif
 
-#ifndef G_LOG_DOMAIN
-#  define G_LOG_DOMAIN LOG_DEFAULT_DOMAIN
-#endif
-
 # ifndef API_VERSION
 #  define API_VERSION ((const char*)"")
 # endif

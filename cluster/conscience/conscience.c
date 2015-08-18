@@ -17,10 +17,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "conscience.api"
-#endif
-
 #include <string.h>
 #include "./conscience_srvtype.h"
 #include "./conscience_srv.h"

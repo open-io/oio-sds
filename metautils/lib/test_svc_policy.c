@@ -17,10 +17,6 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "metautils.svc"
-#endif
-
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -124,7 +120,7 @@ test_configure_str(gboolean expected, const gchar *str)
 		g_free(dump);
 	}
 	else {
-		g_assert_error(err, g_quark_from_static_string(G_LOG_DOMAIN), 0);
+		g_assert_error(err, GQ(), 0);
 		g_test_message("Expected error : (%d) %s",
 				err->code, err->message);
 		g_clear_error(&err);

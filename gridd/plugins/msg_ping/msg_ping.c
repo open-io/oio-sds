@@ -19,10 +19,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define MODULE_NAME "ping"
 
-#ifndef G_LOG_DOMAIN
-#define G_LOG_DOMAIN MODULE_NAME".plugin"
-#endif
-
 #include <string.h>
 #include <sys/time.h>
 

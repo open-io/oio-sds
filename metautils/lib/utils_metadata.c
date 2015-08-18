@@ -17,10 +17,6 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "grid.metautils"
-#endif
-
 #include "metautils.h"
 
 #define METADATA_HT_CREATE() g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free)

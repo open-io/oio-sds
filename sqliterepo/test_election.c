@@ -17,10 +17,6 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "test"
-#endif
-
 #include <metautils/lib/metautils.h>
 #include "election.h"
 #include "version.h"

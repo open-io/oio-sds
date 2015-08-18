@@ -18,9 +18,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #define MODULE_NAME "conscience"
-#ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN MODULE_NAME".plugin"
-#endif
 
 #include <stdlib.h>
 #include <string.h>

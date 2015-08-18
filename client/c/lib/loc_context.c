@@ -17,10 +17,6 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "grid.location"
-#endif
-
 #include <meta2v2/meta2_macros.h>
 
 #include "./gs_internals.h"

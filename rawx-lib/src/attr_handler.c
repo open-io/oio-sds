@@ -17,10 +17,6 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef G_LOG_DOMAIN
-# define G_LOG_DOMAIN "rawx.attr"
-#endif
-
 #include <stdlib.h>
 #include <stdint.h>
 #include <errno.h>
@@ -38,8 +34,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "rawx.h"
 
 // TODO FIXME factorise with the metautils equivalent
-#define SETERROR(e, m, ...) *(e) = g_error_new(g_quark_from_static_string(G_LOG_DOMAIN), 0, m, ##__VA_ARGS__);
-#define SETERRCODE(e, c, m, ...) *(e) = g_error_new(g_quark_from_static_string(G_LOG_DOMAIN), c, m, ##__VA_ARGS__);
+#define SETERROR(e, m, ...) *(e) = g_error_new(GQ(), 0, m, ##__VA_ARGS__);
+#define SETERRCODE(e, c, m, ...) *(e) = g_error_new(GQ(), c, m, ##__VA_ARGS__);
 
 struct attr_handle_s
 {

@@ -17,10 +17,6 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef G_LOG_DOMAIN
-#define G_LOG_DOMAIN "metacomm.meta1_raw_container"
-#endif
-
 #include <errno.h>
 
 #include "metautils.h"
