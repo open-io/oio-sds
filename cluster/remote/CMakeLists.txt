@@ -1,3 +1,5 @@
+add_definitions(-DG_LOG_DOMAIN="oio.cluster.remote")
+
 include_directories(BEFORE . .. ../..)
 
 add_library(gridcluster-remote SHARED

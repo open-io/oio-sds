@@ -1,4 +1,4 @@
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+add_definitions(-DG_LOG_DOMAIN="oio.m0v2")
 
 include_directories(BEFORE . ..)
 

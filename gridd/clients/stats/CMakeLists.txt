@@ -1,3 +1,5 @@
+add_definitions(-DG_LOG_DOMAIN="oio.gridd.cli")
+
 include_directories(BEFORE . ../.. ../../..)
 
 add_library(statsclient SHARED stats_remote.c stats_remote.h)

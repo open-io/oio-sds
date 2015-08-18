@@ -1,3 +1,5 @@
+add_definitions(-DG_LOG_DOMAIN="oio.client.cli")
+
 include_directories(BEFORE .
 		../../..
 		${CMAKE_CURRENT_BINARY_DIR}/../../..

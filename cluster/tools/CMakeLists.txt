@@ -1,3 +1,5 @@
+add_definitions(-DG_LOG_DOMAIN="oio.cluster.tools")
+
 include_directories(BEFORE . .. ../..)
 
 add_executable(gridcluster_cli

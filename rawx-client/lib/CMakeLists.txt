@@ -1,3 +1,5 @@
+add_definitions(-DG_LOG_DOMAIN="oio.rawx.client")
+
 include_directories(BEFORE . ../..)
 
 add_library(rawxclient SHARED

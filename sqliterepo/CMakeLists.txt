@@ -1,4 +1,4 @@
-#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+add_definitions(-DG_LOG_DOMAIN="oio.sqlite")
 
 include_directories(BEFORE . ..
 		${CMAKE_CURRENT_BINARY_DIR}/../metautils/lib)
