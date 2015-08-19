@@ -34,30 +34,39 @@ License along with this library.
 #define hc_url_clean            oio_url_clean
 #define hc_url_cleanv           oio_url_cleanv
 #define hc_url_pclean           oio_url_pclean
-#define hc_url_get              oio_url_get
 #define hc_url_has              oio_url_has
+#define hc_url_has_fq_path      oio_url_has_fq_path
+#define hc_url_has_fq_container oio_url_has_fq_container
 #define hc_url_set              oio_url_set
 #define hc_url_set_id           oio_url_set_id
 #define hc_url_set_option       oio_url_set_option
 #define hc_url_set_oldns        oio_url_set_oldns
+#define hc_url_get              oio_url_get
 #define hc_url_get_id           oio_url_get_id
 #define hc_url_get_id_size      oio_url_get_id_size
 #define hc_url_get_option_value oio_url_get_option_value
-#define hc_url_has_fq_path      oio_url_has_fq_path
-#define hc_url_has_fq_container oio_url_has_fq_container
+
+#define HCURL_NS      OIOURL_NS
+#define HCURL_ACCOUNT OIOURL_ACCOUNT
+#define HCURL_USER    OIOURL_USER
+#define HCURL_TYPE    OIOURL_TYPE
+#define HCURL_PATH    OIOURL_PATH
+#define HCURL_VERSION OIOURL_VERSION
+#define HCURL_WHOLE   OIOURL_WHOLE
+#define HCURL_HEXID   OIOURL_HEXID
 
 enum oio_url_field_e
 {
-	HCURL_NS=1,
-	HCURL_ACCOUNT,
-	HCURL_USER,
-	HCURL_TYPE,
-	HCURL_PATH,
+	OIOURL_NS=1,
+	OIOURL_ACCOUNT,
+	OIOURL_USER,
+	OIOURL_TYPE,
+	OIOURL_PATH,
 
-	HCURL_VERSION,
+	OIOURL_VERSION,
 
-	HCURL_WHOLE,
-	HCURL_HEXID,
+	OIOURL_WHOLE,
+	OIOURL_HEXID,
 };
 
 #define HCURL_LATEST_VERSION "LAST"
@@ -78,14 +87,7 @@ void oio_url_clean(struct oio_url_s *u);
 
 void oio_url_cleanv (struct oio_url_s **tab);
 
-static inline void
-oio_url_pclean(struct oio_url_s **pu)
-{
-	if (!pu)
-		return;
-	oio_url_clean(*pu);
-	*pu = (void*)0;
-}
+void oio_url_pclean(struct oio_url_s **pu);
 
 struct oio_url_s* oio_url_set(struct oio_url_s *u,
 		enum oio_url_field_e f, const char *v);

@@ -39,7 +39,7 @@ extern gdouble rc_resolver_timeout_m1;
 
 /* forward declarations */
 struct meta1_service_url_s;
-struct hc_url_s;
+struct oio_url_s;
 
 /* Hidden type */
 struct hc_resolver_s;
@@ -85,21 +85,21 @@ void hc_resolver_flush_services(struct hc_resolver_s *r);
 // meta1 associated with the reference, and not the meta1 that should have been
 // returned by hc_resolve_reference_directory().
 GError* hc_resolve_reference_service(struct hc_resolver_s *r,
-		struct hc_url_s *url, const gchar *srvtype, gchar ***result);
+		struct oio_url_s *url, const gchar *srvtype, gchar ***result);
 
 // Fills 'result' with a NULL-terminated array of IP:port couples, those
 // responsible for the given URL.
 GError* hc_resolve_reference_directory(struct hc_resolver_s *r,
-		struct hc_url_s *url, gchar ***result);
+		struct oio_url_s *url, gchar ***result);
 
 // Removes from the cache the services associated to the given references.
 // It doesn't touch the directory services belonging to the reference.
 void hc_decache_reference_service(struct hc_resolver_s *r,
-		struct hc_url_s *url, const gchar *srvtype);
+		struct oio_url_s *url, const gchar *srvtype);
 
 // Removes from the cache the directory services for the given references.
 // It doesn't touche the cache entries for the directory content.
-void hc_decache_reference(struct hc_resolver_s *r, struct hc_url_s *url);
+void hc_decache_reference(struct hc_resolver_s *r, struct oio_url_s *url);
 
 struct hc_resolver_stats_s
 {

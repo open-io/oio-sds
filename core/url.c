@@ -310,6 +310,15 @@ oio_url_cleanv (struct oio_url_s **tab)
 	g_free(tab);
 }
 
+void
+oio_url_pclean(struct oio_url_s **pu)
+{
+	if (!pu)
+		return;
+	oio_url_clean(*pu);
+	*pu = (void*)0;
+}
+
 #define STRDUP(Dst,Src,Field) do { if (Src->Field) Dst->Field = g_strdup(Src->Field); } while (0)
 
 struct oio_url_s *
