@@ -25,7 +25,28 @@ License along with this library.
 #define HCURL_DEFAULT_ACCOUNT ""
 #define HCURL_DEFAULT_TYPE    ""
 
-enum hc_url_field_e
+#define hc_url_field_e          oio_url_field_e
+#define hc_url_s                oio_url_s
+#define hc_url_init             oio_url_init
+#define hc_url_empty            oio_url_empty
+#define hc_url_oldinit          oio_url_oldinit
+#define hc_url_dup              oio_url_dup
+#define hc_url_clean            oio_url_clean
+#define hc_url_cleanv           oio_url_cleanv
+#define hc_url_pclean           oio_url_pclean
+#define hc_url_get              oio_url_get
+#define hc_url_has              oio_url_has
+#define hc_url_set              oio_url_set
+#define hc_url_set_id           oio_url_set_id
+#define hc_url_set_option       oio_url_set_option
+#define hc_url_set_oldns        oio_url_set_oldns
+#define hc_url_get_id           oio_url_get_id
+#define hc_url_get_id_size      oio_url_get_id_size
+#define hc_url_get_option_value oio_url_get_option_value
+#define hc_url_has_fq_path      oio_url_has_fq_path
+#define hc_url_has_fq_container oio_url_has_fq_container
+
+enum oio_url_field_e
 {
 	HCURL_NS=1,
 	HCURL_ACCOUNT,
@@ -41,62 +62,62 @@ enum hc_url_field_e
 
 #define HCURL_LATEST_VERSION "LAST"
 
-struct hc_url_s;
+struct oio_url_s;
 
-/** Calls hc_url_empty() then parse the given string. */
-struct hc_url_s * hc_url_oldinit(const char *url);
+/** Calls oio_url_empty() then parse the given string. */
+struct oio_url_s * oio_url_oldinit(const char *url);
 
-struct hc_url_s * hc_url_init(const char *url);
+struct oio_url_s * oio_url_init(const char *url);
 
 /** Builds an empty URL */
-struct hc_url_s * hc_url_empty(void);
+struct oio_url_s * oio_url_empty(void);
 
-struct hc_url_s* hc_url_dup(struct hc_url_s *u);
+struct oio_url_s* oio_url_dup(struct oio_url_s *u);
 
-void hc_url_clean(struct hc_url_s *u);
+void oio_url_clean(struct oio_url_s *u);
 
-void hc_url_cleanv (struct hc_url_s **tab);
+void oio_url_cleanv (struct oio_url_s **tab);
 
 static inline void
-hc_url_pclean(struct hc_url_s **pu)
+oio_url_pclean(struct oio_url_s **pu)
 {
 	if (!pu)
 		return;
-	hc_url_clean(*pu);
+	oio_url_clean(*pu);
 	*pu = (void*)0;
 }
 
-struct hc_url_s* hc_url_set(struct hc_url_s *u,
-		enum hc_url_field_e f, const char *v);
+struct oio_url_s* oio_url_set(struct oio_url_s *u,
+		enum oio_url_field_e f, const char *v);
 
-const char * hc_url_get(struct hc_url_s *u, enum hc_url_field_e f);
+const char * oio_url_get(struct oio_url_s *u, enum oio_url_field_e f);
 
-int hc_url_has(struct hc_url_s *u, enum hc_url_field_e f);
+int oio_url_has(struct oio_url_s *u, enum oio_url_field_e f);
 
-/* <id> must be hc_url_get_id_size() bytes long */
-void hc_url_set_id(struct hc_url_s *u, const void *id);
+/* <id> must be oio_url_get_id_size() bytes long */
+void oio_url_set_id(struct oio_url_s *u, const void *id);
 
 /* @deprecated */
-void hc_url_set_oldns(struct hc_url_s *u, const char *ns);
+void oio_url_set_oldns(struct oio_url_s *u, const char *ns);
 
-/* the returned value points to an array of hc_url_get_id_size() bytes long. */
-const void* hc_url_get_id(struct hc_url_s *u);
+/* the returned value points to an array of oio_url_get_id_size() bytes long. */
+const void* oio_url_get_id(struct oio_url_s *u);
 
 /* returns the number of bytes */
-size_t hc_url_get_id_size(struct hc_url_s *u);
+size_t oio_url_get_id_size(struct oio_url_s *u);
 
 /** Returns the value of the given option. */
-const char* hc_url_get_option_value(struct hc_url_s *u,
+const char* oio_url_get_option_value(struct oio_url_s *u,
 		const char *option_name);
 
 /** Sets a new options in the URL. 'u' and 'k' cannot be NULL. If 'v' is
  * NULL then an empty string will be saved. */
-void hc_url_set_option (struct hc_url_s *u,  const char *k, const char *v);
+void oio_url_set_option (struct oio_url_s *u,  const char *k, const char *v);
 
 /** Returns wether all the mandatory components for a path are present */
-int hc_url_has_fq_path (struct hc_url_s *u);
+int oio_url_has_fq_path (struct oio_url_s *u);
 
 /** Returns wether all the mandatory components for a container are present */
-int hc_url_has_fq_container (struct hc_url_s *u);
+int oio_url_has_fq_container (struct oio_url_s *u);
 
 #endif /*OIO_SDS__core__oiourl_h*/

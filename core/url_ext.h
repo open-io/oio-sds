@@ -27,15 +27,18 @@ License along with this library.
  */
 #include <glib.h>
 
-struct hc_url_s;
+#define hc_url_get_option_names oio_url_get_option_names
+#define hc_url_to_json          oio_url_to_json
+
+struct oio_url_s;
 
 /** Return the names of all the options registered. Free the result
  * with g_strfreev(). 'u' cannot be NULL. */
-gchar ** hc_url_get_option_names(struct hc_url_s *u);
+gchar ** oio_url_get_option_names(struct oio_url_s *u);
 
-void hc_url_to_json (GString *out, struct hc_url_s *u);
+void oio_url_to_json (GString *out, struct oio_url_s *u);
 
-struct req_uri_s
+struct oio_requri_s
 {
 	gchar *path;
 	gchar *query;
@@ -44,8 +47,8 @@ struct req_uri_s
 	gchar **query_tokens;
 };
 
-gboolean oio_requri_parse (const char *packed, struct req_uri_s *ruri);
+gboolean oio_requri_parse (const char *packed, struct oio_requri_s *ruri);
 
-void oio_requri_clear (struct req_uri_s *ruri);
+void oio_requri_clear (struct oio_requri_s *ruri);
 
 #endif /*OIO_SDS__metautils__lib__hc_url_ext_h*/

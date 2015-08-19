@@ -20,12 +20,12 @@ License along with this library.
 #include <string.h>
 
 #include "oio_core.h"
-#include "hc_url_ext.h"
+#include "url_ext.h"
 
 #define HCURL_OPTION_KEY_VERSION "version"
 #define HCURL_OPTION_KEY_SNAPSHOT "snapshot"
 
-struct hc_url_s
+struct oio_url_s
 {
 	/* primary */
 	gchar *ns; 
@@ -44,7 +44,7 @@ struct hc_url_s
 /* ------------------------------------------------------------------------- */
 
 gboolean
-oio_requri_parse (const char *str, struct req_uri_s *uri)
+oio_requri_parse (const char *str, struct oio_requri_s *uri)
 {
 	if (!str || !uri)
 		return FALSE;
@@ -81,7 +81,7 @@ oio_requri_parse (const char *str, struct req_uri_s *uri)
 }
 
 void
-oio_requri_clear (struct req_uri_s *uri)
+oio_requri_clear (struct oio_requri_s *uri)
 {
 	if (uri->path) g_free (uri->path);
 	if (uri->query) g_free (uri->query);
@@ -92,7 +92,7 @@ oio_requri_clear (struct req_uri_s *uri)
 /* ------------------------------------------------------------------------- */
 
 static int
-_check_parsed_url (struct hc_url_s *u)
+_check_parsed_url (struct oio_url_s *u)
 {
 	if (!u->ns && !u->user) return 0;
 	if (u->ns && !u->ns[0]) return 0;
@@ -102,14 +102,14 @@ _check_parsed_url (struct hc_url_s *u)
 }
 
 static void
-_options_reset (struct hc_url_s *u)
+_options_reset (struct oio_url_s *u)
 {
 	g_slist_free_full(u->options, g_free);
 	u->options = NULL;
 }
 
 static gchar **
-_options_get(struct hc_url_s *u, const gchar *k)
+_options_get(struct oio_url_s *u, const gchar *k)
 {
 	for (GSList *l = u->options; l ;l=l->next) {
 		gchar *packed = l->data;
@@ -122,22 +122,22 @@ _options_get(struct hc_url_s *u, const gchar *k)
 }
 
 static void
-_add_option(struct hc_url_s *u, const char *option_str)
+_add_option(struct oio_url_s *u, const char *option_str)
 {
 	char *k, *cursor;
 	if (option_str) {
 		if (NULL != (cursor = strchr(option_str, '='))) {
 			k = g_strndup(option_str, cursor - option_str);
-			hc_url_set_option(u, k, cursor+1);
+			oio_url_set_option(u, k, cursor+1);
 			g_free(k);
 		}
 	}
 }
 
 static int
-_parse_oldurl(struct hc_url_s *url, const char *str)
+_parse_oldurl(struct oio_url_s *url, const char *str)
 {
-	struct req_uri_s ruri = {NULL, NULL, NULL, NULL};
+	struct oio_requri_s ruri = {NULL, NULL, NULL, NULL};
 
 	// Purify the url
 	size_t len = strlen (str);
@@ -189,9 +189,9 @@ _replace (gchar **pp, const char *s)
 }
 
 static int
-_parse_url(struct hc_url_s *url, const char *str)
+_parse_url(struct oio_url_s *url, const char *str)
 {
-	struct req_uri_s ruri = {NULL, NULL, NULL, NULL};
+	struct oio_requri_s ruri = {NULL, NULL, NULL, NULL};
 
 	for (; *str && *str == '/' ;++str) {} // skip the leading slashes
 
@@ -232,7 +232,7 @@ _parse_url(struct hc_url_s *url, const char *str)
 }
 
 static void
-_clean_url (struct hc_url_s *u)
+_clean_url (struct oio_url_s *u)
 {
 	oio_str_clean(&u->ns);
 	oio_str_clean(&u->account);
@@ -247,7 +247,7 @@ _clean_url (struct hc_url_s *u)
 }
 
 static int
-_compute_id (struct hc_url_s *url)
+_compute_id (struct oio_url_s *url)
 {
 	if (!url->ns || !*url->ns || !url->user || !*url->user)
 		return 0;
@@ -261,64 +261,64 @@ _compute_id (struct hc_url_s *url)
 
 /* ------------------------------------------------------------------------- */
 
-struct hc_url_s *
-hc_url_oldinit(const char *url)
+struct oio_url_s *
+oio_url_oldinit(const char *url)
 {
 	if (!url)
 		return NULL;
-	struct hc_url_s *result = g_slice_new0(struct hc_url_s);
+	struct oio_url_s *result = g_slice_new0(struct oio_url_s);
 	if (_parse_oldurl(result, url))
 		return result;
-	hc_url_clean(result);
+	oio_url_clean(result);
 	return NULL;
 }
 
-struct hc_url_s *
-hc_url_init(const char *url)
+struct oio_url_s *
+oio_url_init(const char *url)
 {
 	if (!url)
 		return NULL;
-	struct hc_url_s *result = g_slice_new0(struct hc_url_s);
+	struct oio_url_s *result = g_slice_new0(struct oio_url_s);
 	if (_parse_url(result, url))
 		return result;
-	hc_url_clean(result);
+	oio_url_clean(result);
 	return NULL;
 }
 
-struct hc_url_s *
-hc_url_empty(void)
+struct oio_url_s *
+oio_url_empty(void)
 {
-	return g_slice_new0(struct hc_url_s);
+	return g_slice_new0(struct oio_url_s);
 }
 
 void
-hc_url_clean(struct hc_url_s *u)
+oio_url_clean(struct oio_url_s *u)
 {
 	if (!u)
 		return;
 	_clean_url (u);
-	g_slice_free (struct hc_url_s, u);
+	g_slice_free (struct oio_url_s, u);
 }
 
 void
-hc_url_cleanv (struct hc_url_s **tab)
+oio_url_cleanv (struct oio_url_s **tab)
 {
 	if (!tab)
 		return ;
-	for (struct hc_url_s **p=tab; *p ;++p)
-		hc_url_pclean (p);
+	for (struct oio_url_s **p=tab; *p ;++p)
+		oio_url_pclean (p);
 	g_free(tab);
 }
 
 #define STRDUP(Dst,Src,Field) do { if (Src->Field) Dst->Field = g_strdup(Src->Field); } while (0)
 
-struct hc_url_s *
-hc_url_dup(struct hc_url_s *u)
+struct oio_url_s *
+oio_url_dup(struct oio_url_s *u)
 {
 	if (!u)
 		return NULL;
 
-	struct hc_url_s *result = g_memdup(u, sizeof(struct hc_url_s));
+	struct oio_url_s *result = g_memdup(u, sizeof(struct oio_url_s));
 	STRDUP(result, u, ns);
 	STRDUP(result, u, account);
 	STRDUP(result, u, user);
@@ -336,8 +336,8 @@ hc_url_dup(struct hc_url_s *u)
 	return result;
 }
 
-struct hc_url_s*
-hc_url_set(struct hc_url_s *u, enum hc_url_field_e f, const char *v)
+struct oio_url_s*
+oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 {
 	if (!u || !v)
 		return NULL;
@@ -370,7 +370,7 @@ hc_url_set(struct hc_url_s *u, enum hc_url_field_e f, const char *v)
 			return u;
 
 		case HCURL_VERSION:
-			hc_url_set_option(u, HCURL_OPTION_KEY_VERSION, v);
+			oio_url_set_option(u, HCURL_OPTION_KEY_VERSION, v);
 			return u;
 
 		case HCURL_WHOLE:
@@ -389,7 +389,7 @@ hc_url_set(struct hc_url_s *u, enum hc_url_field_e f, const char *v)
 }
 
 int
-hc_url_has(struct hc_url_s *u, enum hc_url_field_e f)
+oio_url_has(struct oio_url_s *u, enum oio_url_field_e f)
 {
 	if (!f || !u)
 		return 0;
@@ -420,15 +420,15 @@ hc_url_has(struct hc_url_s *u, enum hc_url_field_e f)
 }
 
 int
-hc_url_has_fq_path (struct hc_url_s *u)
+oio_url_has_fq_path (struct oio_url_s *u)
 {
-	return hc_url_has (u, HCURL_PATH) && hc_url_has_fq_container (u);
+	return oio_url_has (u, HCURL_PATH) && oio_url_has_fq_container (u);
 }
 
 int
-hc_url_has_fq_container (struct hc_url_s *u)
+oio_url_has_fq_container (struct oio_url_s *u)
 {
-	return hc_url_has (u, HCURL_NS) && hc_url_has (u, HCURL_ACCOUNT) && hc_url_has (u, HCURL_USER);
+	return oio_url_has (u, HCURL_NS) && oio_url_has (u, HCURL_ACCOUNT) && oio_url_has (u, HCURL_USER);
 }
 
 static void
@@ -440,7 +440,7 @@ _append (GString *gs, const char *s)
 }
 
 static GString *
-_pack_url(struct hc_url_s *u)
+_pack_url(struct oio_url_s *u)
 {
 	GString *gs = g_string_new ("");
 	if (u->ns) _append (gs, u->ns);
@@ -450,15 +450,15 @@ _pack_url(struct hc_url_s *u)
 	if (u->user) _append (gs, u->user);
 	g_string_append_c (gs, '/');
 	if (u->type) _append (gs, u->type);
-	if (hc_url_has (u, HCURL_PATH)) {
+	if (oio_url_has (u, HCURL_PATH)) {
 		g_string_append_c (gs, '/');
-		_append (gs, hc_url_get(u, HCURL_PATH));
+		_append (gs, oio_url_get(u, HCURL_PATH));
 	}
 	return gs;
 }
 
 static GString *
-_append_options(GString *gs, struct hc_url_s *u)
+_append_options(GString *gs, struct oio_url_s *u)
 {
 	gboolean first = TRUE;
 	for (GSList *l=u->options; l ;l=l->next) {
@@ -471,7 +471,7 @@ _append_options(GString *gs, struct hc_url_s *u)
 }
 
 const char*
-hc_url_get(struct hc_url_s *u, enum hc_url_field_e f)
+oio_url_get(struct oio_url_s *u, enum oio_url_field_e f)
 {
 	if (!u || !f)
 		return NULL;
@@ -489,7 +489,7 @@ hc_url_get(struct hc_url_s *u, enum hc_url_field_e f)
 			return u->path;
 
 		case HCURL_VERSION:
-			return hc_url_get_option_value(u, HCURL_OPTION_KEY_VERSION);
+			return oio_url_get_option_value(u, HCURL_OPTION_KEY_VERSION);
 
 		case HCURL_WHOLE:
 			if (!u->whole)
@@ -511,7 +511,7 @@ hc_url_get(struct hc_url_s *u, enum hc_url_field_e f)
 }
 
 const void*
-hc_url_get_id(struct hc_url_s *u)
+oio_url_get_id(struct oio_url_s *u)
 {
 	if (!u)
 		return NULL;
@@ -521,7 +521,7 @@ hc_url_get_id(struct hc_url_s *u)
 }
 
 void
-hc_url_set_id (struct hc_url_s *u, const void *id)
+oio_url_set_id (struct oio_url_s *u, const void *id)
 {
 	if (!u)
 		return;
@@ -534,7 +534,7 @@ hc_url_set_id (struct hc_url_s *u, const void *id)
 }
 
 const char*
-hc_url_get_option_value(struct hc_url_s *u, const char *k)
+oio_url_get_option_value(struct oio_url_s *u, const char *k)
 {
 	if (!u)
 		return NULL;
@@ -543,7 +543,7 @@ hc_url_get_option_value(struct hc_url_s *u, const char *k)
 }
 
 gchar **
-hc_url_get_option_names(struct hc_url_s *u)
+oio_url_get_option_names(struct oio_url_s *u)
 {
 	g_assert(u != NULL);
 	guint i=0;
@@ -558,7 +558,7 @@ hc_url_get_option_names(struct hc_url_s *u)
 }
 
 void
-hc_url_set_option (struct hc_url_s *u,  const char *k, const gchar *v)
+oio_url_set_option (struct oio_url_s *u,  const char *k, const gchar *v)
 {
 	g_assert (u != NULL);
 	g_assert (k != NULL);
@@ -574,52 +574,50 @@ hc_url_set_option (struct hc_url_s *u,  const char *k, const gchar *v)
 }
 
 size_t
-hc_url_get_id_size(struct hc_url_s *u)
+oio_url_get_id_size(struct oio_url_s *u)
 {
 	return u ? sizeof(u->id) : 0;
 }
 
 void
-hc_url_set_oldns(struct hc_url_s *u, const char *ns)
+oio_url_set_oldns(struct oio_url_s *u, const char *ns)
 {
 	gchar **tokens = g_strsplit(ns, ".", 2);
 	if (!tokens) return;
 	if (tokens[0]) {
-		hc_url_set (u, HCURL_NS, tokens[0]);
+		oio_url_set (u, HCURL_NS, tokens[0]);
 		if (tokens[1]) 
-			hc_url_set (u, HCURL_ACCOUNT, tokens[1]);
+			oio_url_set (u, HCURL_ACCOUNT, tokens[1]);
 	}
 	g_strfreev(tokens);
 }
 
 void
-hc_url_to_json (GString *out, struct hc_url_s *u)
+oio_url_to_json (GString *out, struct oio_url_s *u)
 {
 	gboolean first = TRUE;
-	void separator (void) {
-	}
 
-	g_string_append_printf (out, "\"ns\":\"%s\"", hc_url_get (u, HCURL_NS));
+	g_string_append_printf (out, "\"ns\":\"%s\"", oio_url_get (u, HCURL_NS));
 
 	first = FALSE;
-	if (hc_url_has (u, HCURL_ACCOUNT)) {
+	if (oio_url_has (u, HCURL_ACCOUNT)) {
 		if (!first) g_string_append_c (out, ',');
-		g_string_append_printf (out, "\"account\":\"%s\"", hc_url_get (u, HCURL_ACCOUNT));
+		g_string_append_printf (out, "\"account\":\"%s\"", oio_url_get (u, HCURL_ACCOUNT));
 		first = FALSE;
 	}
-	if (hc_url_has (u, HCURL_USER)) {
+	if (oio_url_has (u, HCURL_USER)) {
 		if (!first) g_string_append_c (out, ',');
-		g_string_append_printf (out, "\"user\":\"%s\"", hc_url_get (u, HCURL_USER));
+		g_string_append_printf (out, "\"user\":\"%s\"", oio_url_get (u, HCURL_USER));
 		first = FALSE;
 	}
-	if (hc_url_has (u, HCURL_TYPE)) {
+	if (oio_url_has (u, HCURL_TYPE)) {
 		if (!first) g_string_append_c (out, ',');
-		g_string_append_printf (out, "\"type\":\"%s\"", hc_url_get (u, HCURL_TYPE));
+		g_string_append_printf (out, "\"type\":\"%s\"", oio_url_get (u, HCURL_TYPE));
 		first = FALSE;
 	}
-	if (hc_url_has (u, HCURL_PATH)) {
+	if (oio_url_has (u, HCURL_PATH)) {
 		if (!first) g_string_append_c (out, ',');
-		g_string_append_printf (out, "\"path\":\"%s\"", hc_url_get (u, HCURL_PATH));
+		g_string_append_printf (out, "\"path\":\"%s\"", oio_url_get (u, HCURL_PATH));
 	}
 }
 
