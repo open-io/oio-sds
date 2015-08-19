@@ -515,15 +515,20 @@ action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 	// Parse the <string>:<string> mapping.
 	GPtrArray *v = g_ptr_array_new ();
 	guint count = 0;
-	json_object_object_foreach (jargs, key, val) {
-		++count;
-		if (!json_object_is_type (val, json_type_string)) {
-			err = BADREQ ("Invalid property doc['pairs']['%s']", key);
-			break;
+	if (jargs) {
+		if (!json_object_is_type (jargs, json_type_object))
+			return _reply_format_error (args, BADREQ("Invalid pairs"));
+		json_object_object_foreach (jargs, key, val) {
+			++count;
+			if (!json_object_is_type (val, json_type_string)) {
+				err = BADREQ ("Invalid property doc['pairs']['%s']", key);
+				break;
+			}
+			g_ptr_array_add (v, g_strdup_printf ("%s=%s", key,
+						json_object_get_string (val)));
 		}
-		g_ptr_array_add (v, g_strdup_printf ("%s=%s", key,
-				json_object_get_string (val)));
 	}
+
 	if (!err) {
 		g_ptr_array_add (v, NULL);
 		pairs = (gchar **) g_ptr_array_free (v, FALSE);
