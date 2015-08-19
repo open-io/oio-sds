@@ -249,4 +249,8 @@ enum {
 # define GCLUSTER_AGENT_SOCK_PATH GCLUSTER_RUN_DIR "/oio-sds-agent.sock"
 #endif
 
+#ifndef OIO_M2V2_LISTRESULT_BATCH
+# define OIO_M2V2_LISTRESULT_BATCH 1000
+#endif
+
 #endif /*OIO_SDS__metautils__lib__metautils_macros_h*/

@@ -598,9 +598,6 @@ GError*
 m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		gboolean flush, GSList *beans, m2_onbean_cb cb, gpointer u0)
 {
-	if (!beans)
-		return NEWERROR(CODE_BAD_REQUEST, "No property");
-
 	struct bean_ALIASES_s *alias = NULL;
 	GError *err = m2db_get_alias1(sq3, url, M2V2_FLAG_NOPROPS
 			|M2V2_FLAG_NORECURSION, &alias);

@@ -42,7 +42,7 @@ struct on_bean_ctx_s *
 _on_bean_ctx_init(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	struct on_bean_ctx_s * obc = g_malloc0(sizeof(struct on_bean_ctx_s));
+	struct on_bean_ctx_s * obc = SLICE_NEW0(struct on_bean_ctx_s);
 	obc->l = NULL;
 	obc->first = TRUE;
 	obc->ctx = ctx;
@@ -91,7 +91,7 @@ _on_bean_ctx_send_list(struct on_bean_ctx_s *obc, gboolean final)
 void
 _on_bean_ctx_clean(struct on_bean_ctx_s *obc)
 {
-	if(!obc)
+	if (!obc)
 		return;
 
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(obc->ctx);
@@ -103,7 +103,7 @@ _on_bean_ctx_clean(struct on_bean_ctx_s *obc)
 	}
 	obc->reply = NULL;
 	obc->ctx = NULL;
-	g_free(obc);
+	SLICE_FREE(struct on_bean_ctx_s, obc);
 }
 
 int

@@ -39,16 +39,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
-static void
-_get_cb(gpointer udata, gpointer bean)
-{
-	struct on_bean_ctx_s *ctx = (struct on_bean_ctx_s*) udata;
-	if(ctx && ctx->l && g_slist_length(ctx->l) >= 32) {
-		_on_bean_ctx_send_list(ctx, FALSE);
-	}
-	ctx->l = g_slist_prepend(ctx->l, bean);
-}
-
 int
 meta2_filter_action_create_container(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
@@ -159,7 +149,7 @@ meta2_filter_action_purge_container(struct gridd_filter_ctx_s *ctx,
 
 	GError *err = meta2_backend_purge_container(
 			meta2_filter_ctx_get_backend(ctx),
-			meta2_filter_ctx_get_url(ctx), flags, _get_cb, obc);
+			meta2_filter_ctx_get_url(ctx), flags, _bean_list_cb, &obc->l);
 
 	if (NULL != err) {
 		GRID_DEBUG("Container purge failed (%d): %s", err->code, err->message);
@@ -218,6 +208,16 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	char *next_marker = NULL;
 	gchar **properties = NULL;
 
+	if (lp->maxkeys <= 0)
+		lp->maxkeys = OIO_M2V2_LISTRESULT_BATCH;
+
+	GRID_DEBUG("LP H:%d A:%d D:%d prefix:%s marker:%s end:%s max:%"G_GINT64_FORMAT,
+			lp->flag_headers, lp->flag_allversion, lp->flag_nodeleted,
+			lp->prefix, lp->marker_start, lp->marker_end, lp->maxkeys);
+
+	if (lp->maxkeys > 0)
+		lp->maxkeys ++;
+
 	// XXX the underlying meta2_backend_list_aliases() function MUST
 	// return headers before the associated alias.
 	gint64 max = lp->maxkeys;
@@ -225,11 +225,11 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		(void) ignored;
 		if (max > 0) {
 			if (DESCR(bean) == &descr_struct_ALIASES) {
-				_get_cb(obc, bean);
+				_bean_list_cb(&obc->l, bean);
 				if (0 == --max)
 					next_marker = g_strdup(ALIASES_get_alias(bean)->str);
 			} else {
-				_get_cb(obc, bean);
+				_bean_list_cb(&obc->l, bean);
 			}
 		} else {
 			if (DESCR(bean) == &descr_struct_ALIASES)
@@ -238,14 +238,8 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		}
 	}
 
-	GRID_DEBUG("LP H:%d A:%d D:%d prefix:%s marker:%s end:%s max:%"G_GINT64_FORMAT,
-			lp->flag_headers, lp->flag_allversion, lp->flag_nodeleted,
-			lp->prefix, lp->marker_start, lp->marker_end, lp->maxkeys);
-
-	if (lp->maxkeys > 0)
-		lp->maxkeys ++;
-	e = meta2_backend_list_aliases(m2b, url, lp, headers,
-			(lp->maxkeys>0 ? s3_list_cb : _get_cb), obc, &properties);
+	e = meta2_backend_list_aliases(m2b, url, lp, headers, s3_list_cb, NULL,
+			&properties);
 
 	if (NULL != e) {
 		GRID_DEBUG("Fail to return alias for url: %s", hc_url_get(url, HCURL_WHOLE));
