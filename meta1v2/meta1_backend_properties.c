@@ -54,11 +54,6 @@ __del_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 {
 	GError *err = NULL;
 	gchar **p_name;
-	struct sqlx_repctx_s *repctx = NULL;
-
-	err = sqlx_transaction_begin(sq3, &repctx);
-	if (NULL != err)
-		return err;
 
 	if (!names || !*names)
 		__exec_cid(sq3->db, "DELETE FROM properties WHERE cid = ?", hc_url_get_id(url));
@@ -81,7 +76,7 @@ __del_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		}
 	}
 
-	return sqlx_transaction_end(repctx, err);
+	return err;
 }
 
 static GError *
@@ -117,10 +112,8 @@ static GError *
 __set_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		gchar **props)
 {
-	struct sqlx_repctx_s *repctx = NULL;
-	GError *err = sqlx_transaction_begin(sq3, &repctx);
-	if (NULL != err)
-		return err;
+	GError *err = NULL;
+
 	for (gchar *p; !err && (p = *props) ;props++) {
 		gchar *name, *eq, *value;
 
@@ -131,7 +124,7 @@ __set_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		err = __replace_property(sq3, url, name, value);
 	}
 
-	return sqlx_transaction_end(repctx, err);
+	return err;
 }
 
 static gchar *
@@ -233,12 +226,9 @@ static GError *
 __check_property_format(gchar **strv)
 {
 	guint line = 1;
-	gchar *p_eq;
-
-	if (!strv)
-		return NEWERROR(CODE_BAD_REQUEST, "NULL array");
 
 	for (; *strv ; strv++, line++) {
+		gchar *p_eq;
 		if (!(p_eq = strchr(*strv, '=')))
 			return NEWERROR(CODE_BAD_REQUEST, "line %u : no equal symbol", line);
 		if (p_eq == *strv)
@@ -254,27 +244,37 @@ __check_property_format(gchar **strv)
 
 GError *
 meta1_backend_set_container_properties(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gchar **props)
+		struct hc_url_s *url, gchar **props, gboolean flush)
 {
 	EXTRA_ASSERT(props != NULL);
- 
+
 	GError *err;
-	if ((err = __check_property_format(props)) != NULL) {
+	if (NULL != (err = __check_property_format(props))) {
 		g_prefix_error(&err, "Malformed properties: ");
 		return err;
 	}
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+
 	err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
-	if (!err) {
+	if (err) return err;
+
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
-			err = __set_container_properties(sq3, url, props);
-			if (NULL != err)
-				g_prefix_error(&err, "Query error: ");
+			if (flush) {
+				err = __del_container_properties(sq3, url, NULL);
+				if (err) g_prefix_error(&err, "Flush error: ");
+			}
+			if (!err) {
+				err = __set_container_properties(sq3, url, props);
+				if (err) g_prefix_error(&err, "Set error: ");
+			}
 		}
-		sqlx_repository_unlock_and_close_noerror(sq3);
+		err = sqlx_transaction_end(repctx, err);
 	}
 
+	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
 
@@ -285,16 +285,20 @@ meta1_backend_del_container_properties(struct meta1_backend_s *m1,
 	EXTRA_ASSERT(names != NULL);
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
-	if (!err) {
+	if (err) return err;
+
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 			err = __del_container_properties(sq3, url, names);
-			if (NULL != err)
-				g_prefix_error(&err, "Query error: ");
+			if (err) g_prefix_error(&err, "Delete error: ");
 		}
-		sqlx_repository_unlock_and_close_noerror(sq3);
+		err = sqlx_transaction_end(repctx, err);
 	}
 
+	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
 
@@ -305,16 +309,20 @@ meta1_backend_get_container_properties(struct meta1_backend_s *m1,
 	EXTRA_ASSERT(result != NULL);
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
-	if (!err) {
+	if (err) return err;
+
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 			err = __get_container_properties(sq3, url, names, result);
-			if (NULL != err)
-				g_prefix_error(&err, "Query error: ");
+			if (err) g_prefix_error(&err, "Lookup error: ");
 		}
-		sqlx_repository_unlock_and_close_noerror(sq3);
+		err = sqlx_transaction_end(repctx, err);
 	}
 
+	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
 

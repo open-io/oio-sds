@@ -511,6 +511,7 @@ action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 {
 	GError *err = NULL;
 	gchar **pairs = NULL;
+	gboolean flush = NULL != OPT("flush");
 
 	// Parse the <string>:<string> mapping.
 	GPtrArray *v = g_ptr_array_new ();
@@ -541,7 +542,7 @@ action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
 			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 		GError *e = NULL;
-		meta1v2_remote_reference_set_property (&m1a, &e, args->url, pairs);
+		meta1v2_remote_reference_set_property (&m1a, &e, args->url, pairs, flush);
 		return e;
 	}
 

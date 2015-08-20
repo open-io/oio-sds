@@ -143,7 +143,7 @@ GError* meta1_backend_services_set(struct meta1_backend_s *m1,
 
 
 GError* meta1_backend_set_container_properties(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gchar **props);
+		struct hc_url_s *url, gchar **props, gboolean flush);
 
 GError* meta1_backend_del_container_properties(struct meta1_backend_s *m1,
 		struct hc_url_s *url, gchar **names);

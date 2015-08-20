@@ -350,13 +350,15 @@ meta1v2_remote_configure_reference_service(const addr_info_t *meta1, GError **er
 
 gboolean
 meta1v2_remote_reference_set_property(const addr_info_t *m1, GError **err,
-		struct hc_url_s *url, gchar **pairs)
+		struct hc_url_s *url, gchar **pairs, gboolean flush)
 {
 	EXTRA_ASSERT(m1 != NULL);
 	EXTRA_ASSERT(url != NULL);
 
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_PROPSET);
 	metautils_message_add_url (req, url);
+	if (flush)
+		metautils_message_add_field_str (req, NAME_MSGKEY_FLUSH, "1");
 	metautils_message_add_body_unref (req, metautils_encode_lines(pairs));
 
 	return oneway_request(m1, err, message_marshall_gba_and_clean(req));

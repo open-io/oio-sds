@@ -29,8 +29,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta0v2/meta0_remote.h>
 #include <meta0v2/meta0_utils.h>
 
-#include <meta1v2/meta1_remote.h>
-
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/meta2_remote.h>

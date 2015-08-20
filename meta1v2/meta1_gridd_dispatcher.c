@@ -533,12 +533,14 @@ meta1_dispatch_v2_PROPSET(struct gridd_reply_ctx_s *reply,
 	GError *err;
 	gchar **strv = NULL;
 	struct hc_url_s *url = metautils_message_extract_url (reply->request);
+	gboolean flush = metautils_message_extract_flag(reply->request,
+			NAME_MSGKEY_FLUSH, FALSE);
 	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
 	(void) ignored;
 
 	if (NULL != (err = metautils_message_extract_body_strv(reply->request, &strv)))
 		reply->send_error(CODE_BAD_REQUEST, err);
-	else if (NULL != (err = meta1_backend_set_container_properties(m1, url, strv)))
+	else if (NULL != (err = meta1_backend_set_container_properties(m1, url, strv, flush)))
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");

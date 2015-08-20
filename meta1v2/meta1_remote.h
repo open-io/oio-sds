@@ -92,7 +92,7 @@ gboolean meta1v2_remote_reference_get_property(const addr_info_t *m1,
 		GError **err, struct hc_url_s *url, gchar **keys, gchar ***result);
 
 gboolean meta1v2_remote_reference_set_property(const addr_info_t *m1,
-		GError **err, struct hc_url_s *url, gchar **pairs);
+		GError **err, struct hc_url_s *url, gchar **pairs, gboolean flush);
 
 gboolean meta1v2_remote_reference_del_property(const addr_info_t *m1,
 		GError **err, struct hc_url_s *url,
