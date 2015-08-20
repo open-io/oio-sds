@@ -59,8 +59,6 @@ target_link_libraries(meta2v2utils
 
 add_library(meta2v2remote SHARED
 		meta2_macros.h
-		meta2_remote.h
-		meta2_remote.c
 		meta2v2_remote.h
 		meta2v2_remote.c)
 
