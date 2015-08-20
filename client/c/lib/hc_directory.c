@@ -239,7 +239,7 @@ hc_set_reference_property(gs_grid_storage_t *hc, const char *reference,
 		char *pairs[] = {NULL,NULL};
 		GError *e = NULL;
 		pairs[0] = g_strdup_printf("%s=%s", key, value);
-		gint rc = meta1v2_remote_reference_set_property(a, &e, url, pairs);
+		gint rc = meta1v2_remote_reference_set_property(a, &e, url, pairs, FALSE);
 		g_free(pairs[0]);
 		(void) rc;
 		return e;
