@@ -29,7 +29,7 @@ target_link_libraries(sqlxsrv
 add_executable(hcsqlx sqlx_client.c)
 bin_prefix(hcsqlx -sqlx)
 target_link_libraries(hcsqlx
-		gridclient metautils gridcluster sqlitereporemote
+		metautils gridcluster sqlitereporemote hcresolve
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 		
 

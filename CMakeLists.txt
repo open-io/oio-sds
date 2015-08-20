@@ -360,8 +360,6 @@ add_subdirectory(./metautils/lib)
 add_subdirectory(./cluster/remote)
 add_subdirectory(./cluster/lib)
 
-add_subdirectory(./client/c/lib)
-add_subdirectory(./client/c/tools)
 add_subdirectory(./cluster/agent)
 add_subdirectory(./cluster/conscience)
 add_subdirectory(./cluster/module)

@@ -6,23 +6,7 @@ add_executable(tool-error oio-err.c)
 bin_prefix(tool-error "-err")
 target_link_libraries(tool-error ${GLIB2_LIBRARIES})
 
-add_executable(tool-grep oio-grep.c)
-bin_prefix(tool-grep "-grep")
-target_link_libraries(tool-grep gridclient)
-
-add_executable(tool-roundtrip oio-roundtrip.c)
-bin_prefix(tool-roundtrip "-roundtrip")
-target_link_libraries(tool-roundtrip gridclient)
-
-add_executable(tool-roundtrip2 oio-roundtrip2.c)
-bin_prefix(tool-roundtrip2 "-roundtrip2")
-target_link_libraries(tool-roundtrip2 gridclient)
-
 add_test(NAME tools/error COMMAND ${EXE_PREFIX}-err)
-
-install(TARGETS tool-grep tool-roundtrip tool-roundtrip2
-		RUNTIME DESTINATION bin)
-
 
 set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/.timestamp")
 
