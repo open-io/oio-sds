@@ -186,7 +186,7 @@ handler_action (gpointer u, struct http_request_s *rq,
 
 	// Then parse the request to find a handler
 	struct hc_url_s *url = NULL;
-	struct req_uri_s ruri = {NULL, NULL, NULL, NULL};
+	struct oio_requri_s ruri = {NULL, NULL, NULL, NULL};
 	oio_requri_parse (rq->req_uri, &ruri);
 
 	struct path_matching_s **matchings = _metacd_match (rq->cmd, ruri.path);

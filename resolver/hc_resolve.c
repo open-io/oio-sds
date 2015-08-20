@@ -31,7 +31,7 @@ static void
 _action(struct hc_resolver_s *resolver)
 {
 	for (GSList *l=url_list; l ;l=l->next) {
-		struct hc_url_s *url = l->data;
+		struct oio_url_s *url = l->data;
 		gchar **u, **urlv = NULL;
 		GError *err;
 
@@ -96,7 +96,7 @@ static void
 hcres_specific_fini(void)
 {
 	GRID_DEBUG("Exiting");
-	g_slist_free_full(url_list, (GDestroyNotify)hc_url_clean);
+	g_slist_free_full(url_list, (GDestroyNotify)oio_url_clean);
 }
 
 static void
@@ -122,7 +122,7 @@ hcres_configure(int argc, char **argv)
 	}
 
 	for (; argc>0 && *argv ;argv++,argc--) {
-		struct hc_url_s *url = hc_url_oldinit(*argv);
+		struct oio_url_s *url = oio_url_oldinit(*argv);
 		if (!url) {
 			g_printerr("Invalid reference name, expected VNS/REFNAME");
 			return FALSE;

@@ -26,6 +26,8 @@ set_target_properties(oiosds PROPERTIES
 		PUBLIC_HEADER "oio_sds.h"
 		SOVERSION ${ABI_VERSION})
 
+add_executable(test_oio_url test_url.c)
+target_link_libraries(test_oio_url oiocore)
 
 add_executable(test_roundtrip test_roundtrip.c)
 target_link_libraries(test_roundtrip oiosds)

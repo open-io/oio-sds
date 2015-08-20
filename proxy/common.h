@@ -30,7 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 #include <json-c/json.h>
 
-#include <core/hc_url_ext.h>
+#include <core/url_ext.h>
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 #include <cluster/remote/gridcluster_remote.h>
@@ -93,7 +93,7 @@ enum
 
 struct req_args_s
 {
-	struct req_uri_s *req_uri; // parsed URI
+	struct oio_requri_s *req_uri; // parsed URI
 	struct path_matching_s **matchings; // matched handlers
 	struct hc_url_s *url;
 
