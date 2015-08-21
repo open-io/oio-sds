@@ -485,7 +485,8 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 
 	gchar **namev = (gchar**) metautils_list_to_array (namel);
 	e = meta2_backend_del_properties(m2b, url, namev);
-	g_free(namev);
+	metautils_pfree(&namev);
+
 	if (NULL != e) {
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;

@@ -564,8 +564,8 @@ _resolver_expire(struct lru_tree_s *lru, time_t oldest)
 		if (oldest <= elt->use)
 			break;
 		lru_tree_steal_last(lru, (void**)&k, (void**)&elt);
-		metautils_pfree0(&k, NULL);
-		metautils_pfree0(&elt, NULL);
+		metautils_pfree(&k);
+		metautils_pfree(&elt);
 		++ count;
 	}
 	return count;

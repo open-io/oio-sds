@@ -232,7 +232,8 @@ meta2_filter_extract_body_strings(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	meta2_filter_ctx_set_input_udata(ctx, l, g_free0);
+	void list_clean (gpointer p) { g_slist_free_full(p, g_free0); }
+	meta2_filter_ctx_set_input_udata(ctx, l, list_clean);
 	return FILTER_OK;
 }
 
