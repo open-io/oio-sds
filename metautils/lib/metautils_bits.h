@@ -26,11 +26,6 @@ License along with this library.
  * A place for all the macros playing with integer bits
  */
 
-#define BUFSIZE(B)       (B),sizeof(B)
-#define BUFLEN(B)        (B),sizeof(B)-1
-
-#define ZERO(A) memset((A), 0x00, sizeof(A));
-
 // Return -1 if A<B, 0 if A==B, 1 if A>B
 #define CMP(a,b) (((a) > (b)) - ((a) < (b)))
 
@@ -80,35 +75,11 @@ djb_hash_str(const gchar * b)
 	return hl;
 }
 
-static inline int
-FUNC_SIGN(register int v)
-{
-    return SIGN(v);
-}
-
 static inline guint
 FUNC_CLAMP(register guint v, register guint lo, register guint hi)
 {
-	v = MACRO_MIN(v,hi);
-	return MACRO_MAX(v,lo);
-}
-
-static inline guint
-FUNC_MAX(register guint v0, register guint v1)
-{
-	return MACRO_MAX(v0,v1);
-}
-
-static inline guint
-FUNC_MIN(register guint v0, register guint v1)
-{
-	return MACRO_MIN(v0,v1);
-}
-
-static inline guint
-FUNC_COND(register guint c, register guint v0, register guint v1)
-{
-	return MACRO_COND(c,v0,v1);
+	v = MIN(v,hi);
+	return MAX(v,lo);
 }
 
 static inline guint64

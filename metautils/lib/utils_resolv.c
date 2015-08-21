@@ -153,7 +153,8 @@ grid_string_to_addrinfo(const gchar *start, const gchar *end, struct addr_info_s
 	}
 
 	memset(addr, 0, sizeof(struct addr_info_s));
-	memcpy(addr, start, FUNC_MIN(sizeof(addr)-1, colon-start));
+	size_t len = colon - start;
+	memcpy(addr, start, MIN(sizeof(addr)-1, len));
 
 	// Parse the port
 	guint16 u16port = 0;

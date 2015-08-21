@@ -47,8 +47,6 @@ void key_value_pair_gclean(gpointer p, gpointer u);
 struct key_value_pair_s* key_value_pair_create(const gchar *k,
 		const guint8 *v, gsize vs);
 
-gchar* key_value_pair_to_string(key_value_pair_t * kv);
-
 /** @} */
 
 #endif /*OIO_SDS__metautils__lib__metatype_kv_h*/

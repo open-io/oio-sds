@@ -22,17 +22,6 @@ License along with this library.
 
 #include <glib/gtypes.h>
 
-/**
- * @defgroup metautils_chunkinfo ChunkInfo
- * @ingroup metautils_utils
- * @{
- */
-
-#define chunk_info_clean  g_free0
-#define chunk_info_gclean g_free1
-
-/** @} */
-
 void chunk_textinfo_free_content(struct chunk_textinfo_s *cti);
 
 void content_textinfo_free_content(struct content_textinfo_s *cti);
