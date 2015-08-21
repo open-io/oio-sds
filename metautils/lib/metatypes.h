@@ -172,29 +172,6 @@ typedef struct chunk_info_s
 } chunk_info_t;
 
 /**
- * Type to store a container info
- */
-typedef struct container_info_s
-{
-	container_id_t id;				/**< The container id */
-	gint64 size;					/**< The container size */
-} container_info_t;
-
-/**
- * Type to store a path info
- */
-typedef struct path_info_s
-{
-	gchar path[LIMIT_LENGTH_CONTENTPATH];	/**< The content name */
-	content_length_t size;			/**< The content size */
-	gboolean hasSize;			/**< The has size flag */
-	GByteArray *user_metadata;		/**< The content user metadata */
-	GByteArray *system_metadata;		/**< The content system metadata */
-	gchar *version;				/**< */
-	gboolean deleted;			/**< */
-} path_info_t;
-
-/**
  * Type to store a namespace info
  */
 typedef struct namespace_info_s
@@ -287,48 +264,6 @@ typedef struct service_info_s
 } service_info_t;
 
 /**
- * Represents a chunk as it is stored in META2 database
- */
-typedef struct meta2_raw_chunk_s
-{
-	chunk_id_t id;        /**< The chunk id */
-	chunk_hash_t hash;    /**< The chunk hash */
-	guint32 flags;        /**< The state flags */
-	gint64 size;          /**< The chunk size */
-	guint32 position;     /**< The chunk position */
-	GByteArray *metadata; /**< The chunk metadata */
-} meta2_raw_chunk_t;
-
-/**
- * Represents a content as it it stored in the META2 database.
- */
-typedef struct meta2_raw_content_s
-{
-	container_id_t container_id; /**< The container id */
-	gchar path[LIMIT_LENGTH_CONTENTPATH]; /**< The content name */
-	guint32 flags;               /**< The state flags */
-	guint32 nb_chunks;           /**< The number of chunks */
-	gint64 size;                 /**< The content size */
-	GByteArray *metadata;        /**< The content metadata */
-	GByteArray *system_metadata; /**< The content system metadata */
-	GSList *raw_chunks;          /**< The list of chunks */
-	content_version_t version;   /**< The content version */
-	gboolean deleted;	     /**< True if the content is flagged deleted */
-	gchar *storage_policy;	/**< The storage policy */
-} meta2_raw_content_t;
-
-/**
-  * Represents a container as it is stored in META1 database
- */
-typedef struct meta1_raw_container_s
-{
-	container_id_t id;  /**< The container id */
-	gchar name[LIMIT_LENGTH_USER];	/**< The container name */
-	GSList *meta2;      /**< The list of META2 addresses hosting this container */
-	guint32 flags;      /**< The stat flags */
-} meta1_raw_container_t;
-
-/**
  * Represents a chunk info in text format
  */
 typedef struct chunk_textinfo_s
@@ -358,45 +293,6 @@ typedef struct content_textinfo_s
 	gchar *spare_rawx_list; /**< The rawx list for reconstruction (introduced by the rainx service) */
 	gchar *version; /**< The content version */
 } content_textinfo_t;
-
-/**
- * Represents a versioned vey/value pair that can be associated to
- * either a container or a content in a META2 service.
- */
-typedef struct meta2_property_s
-{
-	gchar *name;               /**<  */
-	content_version_t version; /**<  */
-	GByteArray *value;         /**<  */
-} meta2_property_t;
-
-/**
- * Represent the content-wide information
- */
-typedef struct meta2_raw_content_header_s
-{
-	container_id_t container_id; /**< The container id */
-	gchar path[LIMIT_LENGTH_CONTENTPATH];	/**< The content name */
-	guint32 flags;               /**< The state flags */
-	guint32 nb_chunks;           /**< The number of chunks */
-	gint64 size;                 /**< The content size */
-	GByteArray *metadata;        /**< The content metadata */
-	GByteArray *system_metadata; /**< The content system metadata */
-	content_version_t version;   /**< The content version */
-	gboolean deleted;	     /**< The content deleted flag */
-	char *policy;			 /**< The content policy */
-} meta2_raw_content_header_t;
-
-/**
- * Represents whole information stored about a content, in the meta2
- */
-typedef struct meta2_raw_content_v2_s
-{
-	struct meta2_raw_content_header_s header;
-	GSList *raw_chunks;    /**< The list of (meta2_raw_chunk_s*) */
-	GSList *raw_services;  /**< The list of (service_info_t*) */
-	GSList *properties;    /**< The list of (meta2_property_t*) */
-} meta2_raw_content_v2_t;
 
 /**
  * Represent an ACL rule

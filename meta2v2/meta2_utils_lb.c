@@ -91,7 +91,7 @@ _gen_chunk_bean(struct service_info_s *si)
 	SHA256_randomized_string(strid, sizeof(strid));
 	strvol = metautils_rawx_get_volume(si);
 	chunk = _bean_create(&descr_struct_CHUNKS);
-	chunk_id = assemble_chunk_id(straddr, strvol, strid);
+	chunk_id = g_strdup_printf("http://%s/%s", straddr, strid);
 	CHUNKS_set2_id(chunk, chunk_id);
 
 	g_free(strvol);

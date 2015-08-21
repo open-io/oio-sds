@@ -30,15 +30,8 @@ add_custom_command(
 		EventSequence.c EventSequence.h
 		Message.c Message.h
 		Meta0Info.c Meta0Info.h Meta0InfoSequence.c Meta0InfoSequence.h
-		Meta1RawContainer.c Meta1RawContainer.h
-		Meta2Property.c Meta2Property.h Meta2PropertySequence.c Meta2PropertySequence.h
-		Meta2RawChunk.c Meta2RawChunk.h Meta2RawChunkSequence.c Meta2RawChunkSequence.h
-		Meta2RawContent.c Meta2RawContent.h Meta2RawContentSequence.c Meta2RawContentSequence.h
-		Meta2RawContentHeader.c Meta2RawContentHeader.h Meta2RawContentHeaderSequence.c Meta2RawContentHeaderSequence.h
-		Meta2RawContentV2.c Meta2RawContentV2.h Meta2RawContentV2Sequence.c Meta2RawContentV2Sequence.h
 		NamespaceInfoValueList.c NamespaceInfoValueList.h NamespaceInfo.c NamespaceInfo.h NamespaceInfoSequence.c NamespaceInfoSequence.h
 		Parameter.c Parameter.h ParameterSequence.c ParameterSequence.h
-		PathInfo.c PathInfo.h PathInfoSequence.c PathInfoSequence.h
 		Score.c Score.h
 		ServiceInfo.c ServiceInfo.h ServiceInfoSequence.c ServiceInfoSequence.h
 		ServiceTag.c ServiceTag.h
@@ -115,7 +108,6 @@ add_library(metautils SHARED
 		utils_resolv.c metautils_resolv.h
 		utils_task.c metautils_task.h
 		utils_addr_info.c
-		utils_chunk_info.c
 		utils_hash.c
 		utils_gba.c
 		utils_kv.c
@@ -123,11 +115,8 @@ add_library(metautils SHARED
 		utils_l4v.c
 		utils_m1url.c
 		utils_meta0_info.c
-		utils_meta1_raw_container.c
-		utils_meta2_maintenance.c
 		utils_metadata.c
 		utils_namespace_info.c
-		utils_path_info.c
 		utils_rawx_maintenance.c
 		utils_score.c
 		utils_service_info.c
@@ -185,28 +174,6 @@ add_library(metautils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0Info.h
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0InfoSequence.c
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0InfoSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta1RawContainer.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta1RawContainer.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2Property.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2Property.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2PropertySequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2PropertySequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawChunk.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawChunk.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawChunkSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawChunkSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContent.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContent.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContentSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContentSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContentHeader.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContentHeader.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContentHeaderSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContentHeaderSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContentV2.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContentV2.h
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContentV2Sequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/Meta2RawContentV2Sequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfoValueList.c
 		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfoValueList.h
 		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfo.c
@@ -217,10 +184,6 @@ add_library(metautils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/Parameter.h
 		${CMAKE_CURRENT_BINARY_DIR}/ParameterSequence.c
 		${CMAKE_CURRENT_BINARY_DIR}/ParameterSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/PathInfo.c
-		${CMAKE_CURRENT_BINARY_DIR}/PathInfo.h
-		${CMAKE_CURRENT_BINARY_DIR}/PathInfoSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/PathInfoSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/Score.c
 		${CMAKE_CURRENT_BINARY_DIR}/Score.h
 		${CMAKE_CURRENT_BINARY_DIR}/ServiceInfo.c

@@ -1691,7 +1691,7 @@ _m2_generate_content_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
 	else
 		g_snprintf(strpos, sizeof(strpos), "%u", pos);
 
-	chunkid = assemble_chunk_id(straddr, strvol, strid);
+	chunkid = g_strdup_printf("http://%s/%s", straddr, strid);
 	g_free(strvol);
 
 	struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);

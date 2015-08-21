@@ -57,18 +57,6 @@ BEGIN
 
 	ChunkInfoSequence ::= SET OF ChunkInfo
 
-
-	-- Container content list information
-
-	PathInfo ::= SEQUENCE {
-		path           [0] PrintableString,
-		size           [1] INTEGER OPTIONAL,
-		userMetadata   [2] OCTET STRING OPTIONAL,
-		systemMetadata [3] OCTET STRING OPTIONAL
-	}
-
-	PathInfoSequence ::= SET OF PathInfo
-
 	-- Digested information spread by the cluster conscience
 
 	-- Namespace information
@@ -96,47 +84,6 @@ BEGIN
 	}
 
 	Meta0InfoSequence ::= SET OF Meta0Info
-
-
-	-- Meta1 raw management structures
-
-	Meta1RawContainer ::= SEQUENCE {
-		id    [0] OCTET STRING(SIZE(32)),
-		name  [1] PrintableString,
-		meta2 [2] SEQUENCE OF AddrInfo,
-		flags [3] OCTET STRING(SIZE(4))
-	}
-
-
-	-- Meta2 raw management structures
-
-	Meta2RawChunk ::= SEQUENCE {
-		id       [0] ChunkId,
-		hash     [1] OCTET STRING(SIZE(16)),
-		flags    [2] OCTET STRING(SIZE(4)),
-		size     [3] INTEGER,
-		position [4] INTEGER,
-		metadata [5] PrintableString OPTIONAL
-	}
-	Meta2RawChunkSequence ::= SEQUENCE OF Meta2RawChunk
-
-	Meta2RawContentHeader ::= SEQUENCE {
-		path           [0] PrintableString,
-		nbChunks       [1] INTEGER,
-		size           [2] INTEGER,
-		flags          [3] OCTET STRING(SIZE(4)),
-		cID            [4] OCTET STRING(SIZE(32)),
-		metadata       [5] OCTET STRING OPTIONAL,
-		systemMetadata [6] OCTET STRING OPTIONAL,
-		version        [7] INTEGER OPTIONAL
-	}
-	Meta2RawContentHeaderSequence ::= SEQUENCE OF Meta2RawContentHeader
-
-	Meta2RawContent ::= SEQUENCE {
-		header [0] Meta2RawContentHeader,
-		chunks [1] SEQUENCE OF Meta2RawChunk
-	}
-	Meta2RawContentSequence ::= SEQUENCE OF Meta2RawContent
 
 	-- Meta2V2 beans
 
@@ -217,26 +164,6 @@ BEGIN
 	}
 
 	ServiceInfoSequence ::= SEQUENCE OF ServiceInfo
-
-	-- Extended version of the Meta2RawContent, suitable for v1.5+ META2
-	-- contents representation.
-
-	Meta2Property ::= SEQUENCE {
-		name     [0] PrintableString,
-		version  [1] INTEGER,
-		value    [2] OCTET STRING
-	}
-
-	Meta2PropertySequence ::= SEQUENCE OF Meta2Property
-
-	Meta2RawContentV2 ::= SEQUENCE {
-		header      [0] Meta2RawContentHeader,
-		chunks      [1] Meta2RawChunkSequence,
-		services    [2] ServiceInfoSequence,
-		properties  [3] Meta2PropertySequence
-	}
-
-	Meta2RawContentV2Sequence ::= SEQUENCE OF Meta2RawContentV2
 
 	-- SQLX related structures
 

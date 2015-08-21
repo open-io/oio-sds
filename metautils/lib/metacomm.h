@@ -301,10 +301,6 @@ DECLARE_BODY_MANAGER(chunk_info_concat);
 DECLARE_MARSHALLER_GBA(addr_info_marshall_gba);
 DECLARE_UNMARSHALLER(addr_info_unmarshall);
 
-DECLARE_MARSHALLER_GBA(path_info_marshall_gba);
-DECLARE_UNMARSHALLER(path_info_unmarshall);
-DECLARE_BODY_MANAGER(path_info_concat);
-
 DECLARE_MARSHALLER_GBA(meta0_info_marshall_gba);
 DECLARE_UNMARSHALLER(meta0_info_unmarshall);
 
@@ -320,9 +316,6 @@ DECLARE_MARSHALLER_GBA(service_info_marshall_gba);
 DECLARE_MARSHALLER_GBA( meta2_property_marshall_gba);
 DECLARE_UNMARSHALLER(   meta2_property_unmarshall);
 
-DECLARE_MARSHALLER_GBA( meta2_raw_content_v2_marshall_gba);
-DECLARE_UNMARSHALLER(   meta2_raw_content_v2_unmarshall);
-
 /**
  * @param si the structure to be serialized. NULL is an error
  * @param err a pointer to the error structure being returned
@@ -330,23 +323,10 @@ DECLARE_UNMARSHALLER(   meta2_raw_content_v2_unmarshall);
  */
 GByteArray* service_info_marshall_1(service_info_t *si, GError **err);
 
-GByteArray *meta1_raw_container_marshall(struct meta1_raw_container_s *container,
-		GError ** err);
-
-struct meta1_raw_container_s *meta1_raw_container_unmarshall(guint8 * buf,
-		gsize buf_len, GError ** err);
-
 gboolean simple_integer_unmarshall(const guint8 * bytes, gsize size,
 		gint64 * result);
 
 GByteArray* simple_integer_marshall_gba(gint64 i64, GError **err);
-
-/** Serializes the content structure into its ASN.1 representation.  */
-GByteArray *meta2_maintenance_marshall_content(
-		struct meta2_raw_content_s *content, GError ** err);
-
-struct meta2_raw_content_s *meta2_maintenance_content_unmarshall_buffer(
-		guint8 * buf, gsize buf_size, GError ** err);
 
 /** Serialize a namespace_info to ASN1 */
 GByteArray* namespace_info_marshall(struct namespace_info_s * namespace_info, GError ** err);
