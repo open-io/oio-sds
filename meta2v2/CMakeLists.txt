@@ -39,7 +39,6 @@ add_library(meta2v2utils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.c
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.h
 		meta2_utils.c
-		meta2_type_converter.c
 		meta2_utils.h
 		meta2_bean.c
 		meta2_bean_utils.c
@@ -101,10 +100,6 @@ add_executable(test_meta2_backend test_meta2_backend.c)
 target_link_libraries(test_meta2_backend
 		meta2v2 ${GLIB2_LIBRARIES})
 
-add_executable(test_meta2_type_converter test_meta2_type_converter.c)
-target_link_libraries(test_meta2_type_converter
-		meta2v2 metautils ${GLIB2_LIBRARIES})
-
 add_executable(test_meta2_dedup test_meta2_dedup.c meta2_test_common.c)
 target_link_libraries(test_meta2_dedup
 		meta2v2 meta2v2utils metautils meta2v2remote
@@ -138,5 +133,4 @@ install(TARGETS meta2v2 meta2v2remote meta2_server meta2v2utils meta2v2lbutils
 		RUNTIME DESTINATION bin)
 
 add_test(NAME meta2/backend COMMAND test_meta2_backend)
-add_test(NAME meta2/converter COMMAND test_meta2_type_converter)
 

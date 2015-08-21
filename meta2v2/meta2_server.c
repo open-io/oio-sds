@@ -179,8 +179,6 @@ _post_config(struct sqlx_service_s *ss)
 
 	// Register meta2 requests handlers
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,
-			meta2_gridd_get_v1_requests(), m2);
-	transport_gridd_dispatcher_add_requests(ss->dispatcher,
 			meta2_gridd_get_v2_requests(), m2);
 
 	// Register few meta2 tasks

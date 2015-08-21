@@ -125,26 +125,6 @@ meta2_filter_fill_subject(struct gridd_filter_ctx_s *ctx,
 } while(0)
 
 int
-meta2_filter_fail_reply(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-
-	TRACE_FILTER();
-	e = meta2_filter_ctx_get_error(ctx);
-	if(NULL != e) {
-		GRID_DEBUG("Error defined by KO execution filter, return it");
-		reply->send_error(0, e);
-	} else {
-		GRID_DEBUG("Error not defined by KO execution filter, return %u", CODE_INTERNAL_ERROR);
-		reply->send_error(0, NEWERROR(CODE_INTERNAL_ERROR,
-					"Request execution failed : No error"));
-	}
-
-	return FILTER_OK;
-}
-
-int
 meta2_filter_success_reply(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
@@ -154,12 +134,3 @@ meta2_filter_success_reply(struct gridd_filter_ctx_s *ctx,
 	return FILTER_OK;
 }
 
-int
-meta2_filter_not_implemented_reply(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	TRACE_FILTER();
-	(void) ctx;
-	reply->send_reply(CODE_NOT_IMPLEMENTED, "NOT IMPLEMENTED");
-	return FILTER_OK;
-}

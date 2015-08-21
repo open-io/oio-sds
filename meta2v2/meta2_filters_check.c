@@ -90,39 +90,6 @@ meta2_filter_check_optional_ns_name(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_check_backend(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	struct meta2_backend_s *m2b;
-
-	(void) reply;
-	TRACE_FILTER();
-	m2b = meta2_filter_ctx_get_backend(ctx);
-	if (meta2_backend_initiated(m2b))
-		return FILTER_OK;
-	meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_INTERNAL_ERROR, "Backend not ready"));
-	return FILTER_KO;
-}
-
-int
-meta2_filter_check_ns_is_master(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) ctx, (void) reply;
-	TRACE_FILTER();
-	return FILTER_OK;
-}
-
-int
-meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	(void) ctx, (void) reply;
-	TRACE_FILTER();
-	return FILTER_OK;
-}
-
-int
 meta2_filter_check_url_cid (struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
