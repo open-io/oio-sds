@@ -87,7 +87,7 @@ _append_url (GString *gs, struct hc_url_s *url)
 }
 
 static gint64
-m2b_quota(struct meta2_backend_s *m2b, const gchar *vns)
+m2b_quota(struct meta2_backend_s *m2b, const char *vns)
 {
 	gint64 quota;
 	_M2B_GET_VNS_INFO(m2b, vns, nsinfo)
@@ -107,7 +107,7 @@ _quota(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 }
 
 static gint64
-m2b_max_versions(struct meta2_backend_s *m2b, const gchar *vns)
+m2b_max_versions(struct meta2_backend_s *m2b, const char *vns)
 {
 	gint64 max_versions;
 	_M2B_GET_VNS_INFO(m2b, vns, nsinfo)
@@ -118,7 +118,7 @@ m2b_max_versions(struct meta2_backend_s *m2b, const gchar *vns)
 }
 
 static gint64
-m2b_keep_deleted_delay(struct meta2_backend_s *m2b, const gchar *vns)
+m2b_keep_deleted_delay(struct meta2_backend_s *m2b, const char *vns)
 {
 	gint64 delay;
 	_M2B_GET_VNS_INFO(m2b, vns, nsinfo)
@@ -150,7 +150,7 @@ _retention_delay(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 /* Backend ------------------------------------------------------------------ */
 
 static GError*
-_check_policy(struct meta2_backend_s *m2, const gchar *polname)
+_check_policy(struct meta2_backend_s *m2, const char *polname)
 {
 	GError *err = NULL;
 	struct storage_policy_s *policy = NULL;
@@ -180,7 +180,7 @@ meta2_backend_get_local_addr(struct meta2_backend_s *m2)
 
 GError *
 meta2_backend_init(struct meta2_backend_s **result,
-		struct sqlx_repository_s *repo, const gchar *ns,
+		struct sqlx_repository_s *repo, const char *ns,
 		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver)
 {
 	GError *err = NULL;
@@ -275,7 +275,7 @@ meta2_backend_get_nsinfo(struct meta2_backend_s *m2,
 
 GError*
 meta2_backend_poll_service(struct meta2_backend_s *m2,
-		const gchar *type, struct service_info_s **si)
+		const char *type, struct service_info_s **si)
 {
 	struct grid_lb_iterator_s *iter;
 
@@ -1208,15 +1208,6 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	return err;
 }
 
-GError*
-meta2_backend_generate_beans(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 size, const gchar *polname,
-		gboolean append, m2_onbean_cb cb, gpointer cb_data)
-{
-	return meta2_backend_generate_beans_v1(m2b, url, size, polname, append,
-		NULL, NULL, cb, cb_data);
-}
-
 static GError*
 _check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 {
@@ -1244,9 +1235,8 @@ _check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 }
 
 GError*
-meta2_backend_generate_beans_v1(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 size, const gchar *polname,
-		gboolean append, const char *mdsys, const char *mdusr,
+meta2_backend_generate_beans(struct meta2_backend_s *m2b,
+		struct hc_url_s *url, gint64 size, const char *polname, gboolean append, 
 		m2_onbean_cb cb, gpointer cb_data)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1292,26 +1282,16 @@ meta2_backend_generate_beans_v1(struct meta2_backend_s *m2b,
 					err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
 							"Invalid policy [%s]", polname);
 			} else {
-				/* check polname not in mdsys */
-				char *polstr = storage_policy_from_mdsys_str(mdsys);
-				GRID_TRACE("Storage policy from sys md = %s", polstr);
-				if(NULL != polstr){
-					if (!(policy = storage_policy_init(&nsinfo, polstr)))
-						err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
-								"Invalid policy [%s]", polstr);
-					g_free(polstr);
-				} else {
-					err = m2db_get_storage_policy(sq3, url, &nsinfo, append, &policy);
-					if (err || !policy) {
-						gchar *default_ns_policy_name = 
-							namespace_storage_policy(&nsinfo, hc_url_get(url, HCURL_NS));
-						if (NULL != default_ns_policy_name) {
-							if (!(policy = storage_policy_init(&nsinfo,
-											default_ns_policy_name)))
-								err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
-										"Invalid policy [%s]", default_ns_policy_name);
-							g_free(default_ns_policy_name);
-						}
+				err = m2db_get_storage_policy(sq3, url, &nsinfo, append, &policy);
+				if (err || !policy) {
+					gchar *default_ns_policy_name = 
+						namespace_storage_policy(&nsinfo, hc_url_get(url, HCURL_NS));
+					if (NULL != default_ns_policy_name) {
+						if (!(policy = storage_policy_init(&nsinfo,
+										default_ns_policy_name)))
+							err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
+									"Invalid policy [%s]", default_ns_policy_name);
+						g_free(default_ns_policy_name);
 					}
 				}
 			}
@@ -1331,9 +1311,9 @@ meta2_backend_generate_beans_v1(struct meta2_backend_s *m2b,
 		if (!iter)
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No RAWX available");
 		else
-			err = m2_generate_beans_v1(url, size,
+			err = m2_generate_beans(url, size,
 					namespace_chunk_size(&nsinfo, hc_url_get(url, HCURL_NS)),
-					policy, mdsys, mdusr, iter, cb, cb_data);
+					policy, iter, cb, cb_data);
 	}
 
 	namespace_info_clear(&nsinfo);
@@ -1478,7 +1458,7 @@ meta2_backend_deduplicate_alias_chunks(struct meta2_backend_s *m2b,
 GError*
 meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gint64 count, gint64 dist, const char *notin,
-		const char *broken, GSList **result, gboolean answer_beans)
+		const char *broken, GSList **result)
 {
 	GError *err = NULL;
 	GSList *notin2 = NULL;
@@ -1527,8 +1507,7 @@ meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 	stgpol = storage_policy_init(&(m2b->backend.ns_info), NULL);
 
 	err = get_conditioned_spare_chunks(m2b->backend.lb, count, dist,
-			storage_policy_get_storage_class(stgpol), notin2, broken2, result,
-			answer_beans);
+			storage_policy_get_storage_class(stgpol), notin2, broken2, result);
 
 	g_slist_free_full(notin2, (GDestroyNotify) service_info_gclean);
 	g_slist_free_full(broken2, (GDestroyNotify) service_info_gclean);
@@ -1539,7 +1518,7 @@ meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 
 static GError*
 _load_storage_policy(struct meta2_backend_s *m2b, struct hc_url_s *url,
-		const gchar *polname, struct storage_policy_s **pol)
+		const char *polname, struct storage_policy_s **pol)
 {
 	GError *err = NULL;
 	namespace_info_t nsinfo;
@@ -1580,7 +1559,7 @@ _load_storage_policy(struct meta2_backend_s *m2b, struct hc_url_s *url,
 
 GError*
 meta2_backend_get_conditionned_spare_chunks_v2(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, const gchar *polname, GSList *notin,
+		struct hc_url_s *url, const char *polname, GSList *notin,
 		GSList *broken, GSList **result)
 {
 	GError *err = NULL;
@@ -1590,8 +1569,7 @@ meta2_backend_get_conditionned_spare_chunks_v2(struct meta2_backend_s *m2b,
 	if (err != NULL)
 		return err;
 
-	err = get_conditioned_spare_chunks2(m2b->backend.lb, pol, notin, broken,
-			result, TRUE);
+	err = get_conditioned_spare_chunks2(m2b->backend.lb, pol, notin, broken, result);
 
 	storage_policy_clean(pol);
 	return err;
@@ -1599,7 +1577,7 @@ meta2_backend_get_conditionned_spare_chunks_v2(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct hc_url_s *url,
-		const char *polname, GSList **result, gboolean use_beans)
+		const char *polname, GSList **result)
 {
 	struct storage_policy_s *pol = NULL;
 	GError *err = NULL;
@@ -1610,7 +1588,7 @@ meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct hc_url_s *url
 	err = _load_storage_policy(m2b, url, polname, &pol);
 
 	if (!err) {
-		err = get_spare_chunks(m2b->backend.lb, pol, result, use_beans);
+		err = get_spare_chunks(m2b->backend.lb, pol, result);
 	}
 
 	if (pol)

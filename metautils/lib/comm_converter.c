@@ -23,8 +23,6 @@ License along with this library.
 #include "./AddrInfo.h"
 #include "./AddrInfoSequence.h"
 #include "./ArrayList.h"
-#include "./ChunkInfo.h"
-#include "./ChunkInfoSequence.h"
 #include "./ContentList.h"
 #include "./INTEGER.h"
 #include "./Meta0Info.h"
@@ -714,70 +712,6 @@ DEFINE_SEQUENCE_MARSHALLER_GBA(&descr_ServiceInfo, service_info_marshall_gba);
 /* -------------------------------------------------------------------------- */
 
 static gboolean
-chunk_info_ASN2API(const ChunkInfo_t * asn, chunk_info_t * api)
-{
-	EXTRA_ASSERT (asn != NULL);
-	EXTRA_ASSERT (api != NULL);
-
-	if (asn->id.vol.size <= 0 || !(asn->id.vol.buf))
-		return FALSE;
-
-	memcpy(&(api->id.id), asn->id.id.buf, MIN((int)sizeof(api->id.id), asn->id.id.size));
-	addr_info_ASN2API(&(asn->id.addr), &(api->id.addr));
-	memcpy(api->id.vol, asn->id.vol.buf, MIN((int)sizeof(api->id.vol), asn->id.vol.size));
-	memset(api->hash, 0x00, sizeof(chunk_hash_t));
-	memcpy(api->hash, asn->md5.buf, MIN((int)sizeof(chunk_hash_t), asn->md5.size));
-	asn_INTEGER_to_uint32(&(asn->position), &(api->position));
-	asn_INTEGER_to_int64(&(asn->size), &(api->size));
-	asn_INTEGER_to_uint32(&(asn->nb), &(api->nb));
-	return TRUE;
-}
-
-static gboolean
-chunk_info_API2ASN(const chunk_info_t * api, ChunkInfo_t * asn)
-{
-	EXTRA_ASSERT (asn != NULL);
-	EXTRA_ASSERT (api != NULL);
-	OCTET_STRING_fromBuf(&(asn->id.id), (const char*)api->id.id, sizeof(api->id.id));
-	addr_info_API2ASN(&(api->id.addr), &(asn->id.addr));
-	OCTET_STRING_fromBuf(&(asn->id.vol), api->id.vol, strlen_len(api->id.vol, sizeof(api->id.vol)));
-	asn_uint32_to_INTEGER(&(asn->position), api->position);
-	asn_int64_to_INTEGER(&(asn->size), api->size);
-	asn_uint32_to_INTEGER(&(asn->nb), api->nb);
-	OCTET_STRING_fromBuf(&(asn->md5), (const char*)api->hash, sizeof(chunk_hash_t));
-	return TRUE;
-}
-
-static void
-chunk_info_cleanASN(ChunkInfo_t * asn, gboolean only_content)
-{
-	if (!asn)
-		return;
-	if (only_content)
-		ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_ChunkInfo, asn);
-	else
-		ASN_STRUCT_FREE(asn_DEF_ChunkInfo, asn);
-}
-
-static struct abstract_sequence_handler_s descr_ChunkInfo =
-{
-	sizeof(ChunkInfo_t),
-	sizeof(chunk_info_t),
-	&asn_DEF_ChunkInfoSequence,
-	(abstract_converter_f) chunk_info_ASN2API,
-	(abstract_converter_f) chunk_info_API2ASN,
-	(abstract_asn_cleaner_f) chunk_info_cleanASN,
-	(abstract_api_cleaner_f) g_free,
-	"chunk_info"
-};
-
-DEFINE_SEQUENCE_MARSHALLER_GBA(&descr_ChunkInfo, chunk_info_marshall_gba);
-DEFINE_SEQUENCE_UNMARSHALLER(&descr_ChunkInfo, chunk_info_unmarshall);
-DEFINE_BODY_MANAGER(chunk_info_concat, chunk_info_unmarshall);
-
-/* -------------------------------------------------------------------------- */
-
-static gboolean
 meta0_info_ASN2API(const Meta0Info_t * asn, meta0_info_t * api)
 {
 	EXTRA_ASSERT (api != NULL);
@@ -1155,6 +1089,4 @@ namespace_info_unmarshall(const guint8 * buf, gsize buf_len, GError ** err)
 	GSETCODE(err, CODE_INTERNAL_ERROR, "ASN.1 to API mapping failure");
 	return NULL;
 }
-
-/* -------------------------------------------------------------------------- */
 

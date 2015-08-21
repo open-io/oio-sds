@@ -36,29 +36,6 @@ BEGIN
 
 	AddrInfoSequence ::= SEQUENCE OF AddrInfo
 
-
-	-- Content information
-
-	ChunkId ::= SEQUENCE {
-		id   [0] OCTET STRING(SIZE(16)),
-		addr [1] AddrInfo,
-		vol  [2] PrintableString
-	}
-
-	ChunkIdSequence ::= SET OF ChunkId
-
-	ChunkInfo ::= SEQUENCE {
-		id       [0] ChunkId,
-		size     [1] INTEGER,
-		position [2] INTEGER,
-		nb       [3] INTEGER,
-		md5      [4] OCTET STRING(SIZE(16))
-	}
-
-	ChunkInfoSequence ::= SET OF ChunkInfo
-
-	-- Digested information spread by the cluster conscience
-
 	-- Namespace information
 
 	NamespaceInfoValueList ::= SET OF Parameter

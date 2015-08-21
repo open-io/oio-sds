@@ -288,16 +288,6 @@ struct hc_url_s * metautils_message_extract_url (MESSAGE m);
 
 /* ------------------------------------------------------------------------- */
 
-/**
- * @defgroup metacomm_structs ASN.1/BER Codec for various structures
- * @ingroup metautils_comm
- * @{
- */
-
-DECLARE_MARSHALLER_GBA(chunk_info_marshall_gba);
-DECLARE_UNMARSHALLER(chunk_info_unmarshall);
-DECLARE_BODY_MANAGER(chunk_info_concat);
-
 DECLARE_MARSHALLER_GBA(addr_info_marshall_gba);
 DECLARE_UNMARSHALLER(addr_info_unmarshall);
 
@@ -333,7 +323,5 @@ GByteArray* namespace_info_marshall(struct namespace_info_s * namespace_info, GE
 
 /** Unserialize a namespace_info from ASN1 */
 namespace_info_t* namespace_info_unmarshall(const guint8 * buf, gsize buf_len, GError ** err);
-
-/** @} */
 
 #endif /*OIO_SDS__metautils__lib__metacomm_h*/

@@ -150,28 +150,6 @@ typedef struct addr_info_s
 } addr_info_t;
 
 /**
- * Type to store a chunk id
- */
-typedef struct chunk_id_s
-{
-	hash_sha256_t id;			/**< The unique id */
-	addr_info_t addr;			/**< The RAWX addr on which the chunk is stored */
-	gchar vol[LIMIT_LENGTH_VOLUMENAME];	/**< The volume used by the RAWX on which the chunk is stored */
-} chunk_id_t;
-
-/**
- * Type to store a chunk info
- */
-typedef struct chunk_info_s
-{
-	chunk_id_t id;			/**< The chunk id */
-	chunk_size_t size;		/**< The chunk size */
-	chunk_position_t position;	/**< The chunk position */
-	chunk_hash_t hash;		/**< The chunk hash */
-	guint32 nb;			/**< The total number of chunks needed for the content this chunk belongs to */
-} chunk_info_t;
-
-/**
  * Type to store a namespace info
  */
 typedef struct namespace_info_s

@@ -1560,8 +1560,6 @@ struct gen_ctx_s
 	gint64 chunk_size;
 	m2_onbean_cb cb;
 	gpointer cb_data;
-	const char *mdsys;
-	const char *mdusr;
 };
 
 static guint
@@ -1600,15 +1598,6 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	CONTENTS_HEADERS_set2_policy(header, p);
 	CONTENTS_HEADERS_nullify_hash(header);
 	ctx->cb(ctx->cb_data, header);
-
-	if(NULL != ctx->mdusr) {
-		gpointer prop = _bean_create(&descr_struct_PROPERTIES);
-		PROPERTIES_set2_alias(prop, hc_url_get(ctx->url, HCURL_PATH));
-		PROPERTIES_set_alias_version(prop, 0);
-		PROPERTIES_set2_key(prop, MDUSR_PROPERTY_KEY);
-		PROPERTIES_set2_value(prop, (guint8*) ctx->mdusr, strlen(ctx->mdusr));
-		ctx->cb(ctx->cb_data, prop);
-	}
 }
 
 static void
@@ -1771,16 +1760,6 @@ m2_generate_beans(struct hc_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
 		m2_onbean_cb cb, gpointer cb_data)
 {
-	return m2_generate_beans_v1(url, size, chunk_size, pol, NULL, NULL,
-			iter, cb, cb_data);
-}
-
-GError*
-m2_generate_beans_v1(struct hc_url_s *url, gint64 size, gint64 chunk_size,
-		struct storage_policy_s *pol, const char *mdsys, const char *mdusr,
-		struct grid_lb_iterator_s *iter,
-		m2_onbean_cb cb, gpointer cb_data)
-{
 	struct gen_ctx_s ctx;
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE));
@@ -1804,8 +1783,6 @@ m2_generate_beans_v1(struct hc_url_s *url, gint64 size, gint64 chunk_size,
 	ctx.chunk_size = chunk_size;
 	ctx.cb = cb;
 	ctx.cb_data = cb_data;
-	ctx.mdsys = mdsys;
-	ctx.mdusr = mdusr;
 
 	if (!pol/* || size == 0*/)
 		return _m2_generate_DUPLI(&ctx);
@@ -1929,20 +1906,6 @@ m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 		if (v != NULL)
 			sqlx_admin_init_str(sq3, p->f, v);
 	}
-}
-
-GError*
-m2db_get_container_status(struct sqlx_sqlite3_s *sq3, guint32 *status)
-{
-	*status = sqlx_admin_get_i64(sq3, SQLX_ADMIN_STATUS, (gint64)CONTAINER_STATUS_ENABLED);
-	return NULL;
-}
-
-GError*
-m2db_set_container_status(struct sqlx_sqlite3_s *sq3, guint32 repl)
-{
-	sqlx_admin_set_i64(sq3, SQLX_ADMIN_STATUS, (gint64)repl);
-	return NULL;
 }
 
 /* ------------------------------------------------------------------------- */

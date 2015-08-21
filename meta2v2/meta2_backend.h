@@ -32,7 +32,7 @@ struct hc_resolver_s;
 
 /** Builds a meta2 backend for the given NAMESPACE.  */
 GError* meta2_backend_init(struct meta2_backend_s **result,
-		struct sqlx_repository_s *repo, const gchar *ns_name,
+		struct sqlx_repository_s *repo, const char *ns_name,
 		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver);
 
 void meta2_backend_clean(struct meta2_backend_s *m2);
@@ -55,7 +55,7 @@ gboolean meta2_backend_get_nsinfo(struct meta2_backend_s *m2,
 gboolean meta2_backend_initiated(struct meta2_backend_s *m2);
 
 GError* meta2_backend_poll_service(struct meta2_backend_s *m2,
-		const gchar *type, struct service_info_s **si);
+		const char *type, struct service_info_s **si);
 
 /** Return a string which contain m2_addr: "IP:PORT" */
 const gchar* meta2_backend_get_local_addr(struct meta2_backend_s *m2);
@@ -187,12 +187,7 @@ GError* meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gint64 *version);
 
 GError* meta2_backend_generate_beans(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 size, const gchar *polname,
-		gboolean append, m2_onbean_cb cb, gpointer cb_data);
-
-GError* meta2_backend_generate_beans_v1(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 size, const gchar *polname,
-		gboolean append, const char *mdsys, const char *mdusr,
+		struct hc_url_s *url, gint64 size, const char *polname, gboolean append,
 		m2_onbean_cb cb, gpointer cb_data);
 
 GError* meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
@@ -205,8 +200,7 @@ GError* meta2_backend_update_alias_header(struct meta2_backend_s *m2b,
  * care of the storage policy during the chunks generation (distance,
  * nb_chunks,...) */
 GError* meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, const char *polname, GSList **result,
-		gboolean answer_beans);
+		struct hc_url_s *url, const char *polname, GSList **result);
 
 /** Generate spare chunk (in form of a chunk_info list). This function
  * takes care of some informations: the number of wanted chunks, the distance
@@ -216,11 +210,11 @@ GError* meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b,
  * not work) */
 GError* meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gint64 count, gint64 dist, const char *notin,
-		const char * broken, GSList **result, gboolean answer_beans);
+		const char * broken, GSList **result);
 
 /** Generate spare chunks (in form of a bean_CHUNKS_s list).  */
 GError* meta2_backend_get_conditionned_spare_chunks_v2(
-		struct meta2_backend_s *m2b, struct hc_url_s *url, const gchar *stgpol,
+		struct meta2_backend_s *m2b, struct hc_url_s *url, const char *stgpol,
 		GSList *notin, GSList *broken, GSList **result);
 
 #endif /*OIO_SDS__meta2v2__meta2_backend_h*/

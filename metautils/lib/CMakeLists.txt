@@ -24,8 +24,6 @@ add_custom_command(
 
 		AddrInfo.c AddrInfo.h AddrInfoSequence.c AddrInfoSequence.h
 		ArrayList.c ArrayList.h
-		ChunkId.c ChunkId.h ChunkIdSequence.c ChunkIdSequence.h
-		ChunkInfo.c ChunkInfo.h ChunkInfoSequence.c ChunkInfoSequence.h
 		ContentList.c ContentList.h
 		EventSequence.c EventSequence.h
 		Message.c Message.h
@@ -155,14 +153,6 @@ add_library(metautils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/AddrInfoSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/ArrayList.c
 		${CMAKE_CURRENT_BINARY_DIR}/ArrayList.h
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkId.c
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkId.h
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkIdSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkIdSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkInfo.c
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkInfo.h
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkInfoSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/ChunkInfoSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/ContentList.c
 		${CMAKE_CURRENT_BINARY_DIR}/ContentList.h
 		${CMAKE_CURRENT_BINARY_DIR}/EventSequence.c

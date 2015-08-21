@@ -74,10 +74,6 @@ int meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_extract_header_copy(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-/*! Extract the legacy field path from a request. */
-int meta2_filter_extract_header_mdsys(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Extract "NEW_CHUNKS" and "OLD_CHUNKS" headers from SUBST_CHUNK request.
  * The extracted value, stored in udata, is an array with 2 lists of beans. */
 int meta2_filter_extract_header_chunk_beans(struct gridd_filter_ctx_s *ctx,

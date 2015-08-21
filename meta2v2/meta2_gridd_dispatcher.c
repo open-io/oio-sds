@@ -187,7 +187,6 @@ static gridd_filter M2V2_BEANS_FILTER[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_append,
-	meta2_filter_extract_header_mdsys,
 	meta2_filter_extract_header_spare,
 	meta2_filter_extract_header_storage_policy,
 	meta2_filter_extract_header_string_size,
