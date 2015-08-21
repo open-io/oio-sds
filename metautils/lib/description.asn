@@ -92,7 +92,6 @@ BEGIN
 		version          [1] INTEGER,
 		containerVersion [2] INTEGER,
 		contentId        [3] OCTET STRING,
-		mdsys            [4] PrintableString,
 		ctime            [5] INTEGER,
 		deleted          [6] BOOLEAN
 	}

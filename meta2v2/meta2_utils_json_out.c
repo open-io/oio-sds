@@ -33,12 +33,10 @@ encode_alias (GString *g, gpointer bean)
 			"\"name\":\"%s\","
 			"\"ver\":%"G_GINT64_FORMAT","
 			"\"ctime\":%"G_GINT64_FORMAT","
-			"\"system_metadata\":\"%s\","
 			"\"header\":\"",
 			ALIASES_get_alias(bean)->str,
 			ALIASES_get_version(bean),
-			ALIASES_get_ctime(bean),
-			ALIASES_get_mdsys(bean)->str);
+			ALIASES_get_ctime(bean));
 	metautils_gba_to_hexgstr(g, ALIASES_get_content_id(bean));
 	g_string_append_c(g, '"');
 }

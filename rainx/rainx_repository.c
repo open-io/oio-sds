@@ -226,8 +226,6 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 	LOAD_HEADER(content, path,            "content_path");
 	LOAD_HEADER(content, size,            "content_size");
 	LOAD_HEADER(content, chunk_nb,        "content_chunksnb");
-	LOAD_HEADER(content, metadata,        "content_metadata");
-	LOAD_HEADER(content, system_metadata, "content_metadata-sys");
 	LOAD_HEADER(content, container_id,    "content_containerid");
 
 	LOAD_HEADER(chunk, id,           "chunk_id");
@@ -235,7 +233,6 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 	LOAD_HEADER(chunk, size,         "chunk_size");
 	LOAD_HEADER(chunk, hash,         "chunk_hash");
 	LOAD_HEADER(chunk, position,     "chunk_position");
-	LOAD_HEADER(chunk, metadata,     "chunk_metadata");
 	LOAD_HEADER(chunk, container_id, "chunk_containerid");
 
 	if (conf->headers_scheme & HEADER_SCHEME_V1) {
@@ -246,14 +243,11 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 		LOAD_HEADER(chunk, size,         "chunksize");
 		LOAD_HEADER(chunk, hash,         "chunkhash");
 		LOAD_HEADER(chunk, position,     "chunkpos");
-		LOAD_HEADER(chunk, metadata,     "chunkmetadata");
 		LOAD_HEADER(chunk, container_id, "containerid");
 
 		LOAD_HEADER(content, path,            "contentpath");
 		LOAD_HEADER(content, size,            "contentsize");
 		LOAD_HEADER(content, chunk_nb,        "chunknb");
-		LOAD_HEADER(content, metadata,        "contentmetadata");
-		LOAD_HEADER(content, system_metadata, "contentmetadata-sys");
 		LOAD_HEADER(content, container_id,    "containerid");
 		LOAD_HEADER(content, storage_policy,    "storagepolicy");
 		LOAD_HEADER(content, rawx_list, "rawxlist");
@@ -710,14 +704,6 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 			"containerid: %s\nchunknb: %s\ncontentpath: %s\ncontentsize: %s",
 			temp_content.container_id, temp_content.chunk_nb,
 			temp_content.path, temp_content.size);
-	if (temp_content.metadata)
-		custom_header = apr_psprintf(stream->r->info->request->pool,
-				"%s\ncontentmetadata: %s", custom_header,
-				temp_content.metadata);
-	if (temp_content.system_metadata)
-		custom_header = apr_psprintf(stream->r->info->request->pool,
-				"%s\ncontentmetadata-sys: %s", custom_header,
-				temp_content.system_metadata);
 
 	/* Finalizing custom header */
 	int startid = strlen(
@@ -1014,13 +1000,6 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 			"containerid: %s\nchunknb: %s\ncontentpath: %s\ncontentsize: %s",
 			temp_content.container_id, temp_content.chunk_nb,
 			temp_content.path, temp_content.size);
-	if (temp_content.metadata)
-		custom_header = apr_psprintf(stream->r->info->request->pool,
-				"%s\ncontentmetadata: %s", custom_header, temp_content.metadata);
-	if (temp_content.system_metadata)
-		custom_header = apr_psprintf(stream->r->info->request->pool,
-				"%s\ncontentmetadata-sys: %s", custom_header,
-				temp_content.system_metadata);
 
 	data_subpools = (apr_pool_t**) apr_pcalloc(stream->r->info->request->pool,
 			rain_params->k * sizeof(apr_pool_t*));
@@ -1357,13 +1336,6 @@ upload_to_rawx(const dav_resource *resource, gboolean* failure_array,
 			"containerid: %s\nchunknb: %s\ncontentpath: %s\ncontentsize: %s",
 			temp_content.container_id, temp_content.chunk_nb,
 			temp_content.path, temp_content.size);
-	if (temp_content.metadata)
-		custom_header = apr_psprintf(resource->info->request->pool,
-				"%s\ncontentmetadata: %s", custom_header, temp_content.metadata);
-	if (temp_content.system_metadata)
-		custom_header = apr_psprintf(resource->info->request->pool,
-				"%s\ncontentmetadata-sys: %s", custom_header,
-				temp_content.system_metadata);
 
 	/* Data strips */
 	for (int i = 0; i < data_rawx_list_size; i++) {

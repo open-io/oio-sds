@@ -38,7 +38,6 @@ Building the entire project will require the SDK dependencies, but also:
 * sqlite, sqlite-devel : base storage for META{0,1,2} and SQLX services.
 * zeromq3, zeromq3-devel : communication of events between services and forward agents.
 * zookeeper-devel, libzookeeper\_mt.so : building with distribution's zookeeper client is OK, but the package ships with a lot of dependencies, including the openjdk. We recommand to use the official Oracle/Sun JDK, and to build your own zookeeper client from the source to avoid a huge waste of space and bandwith.
-* neon, neon-devel : to be replaced by curl, as soon as we have time to do that.
 * python-setuptools
 * python-pbr
 

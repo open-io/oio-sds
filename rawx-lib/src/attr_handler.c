@@ -645,6 +645,39 @@ _set_attr_in_handle(struct attr_handle_s *attr_handle, GError ** error,
 }
 
 /* --------------------------------------------------------------------------------------------------------------------------- */
+
+void
+chunk_textinfo_free_content(struct chunk_textinfo_s *cti)
+{
+	if (!cti)
+		return;
+	g_free0(cti->id);
+	g_free0(cti->path);
+	g_free0(cti->size);
+	g_free0(cti->hash);
+	g_free0(cti->position);
+	g_free0(cti->container_id);
+	memset(cti, 0x00, sizeof(struct chunk_textinfo_s));
+}
+
+void
+content_textinfo_free_content(struct content_textinfo_s *cti)
+{
+	if (!cti)
+		return;
+	g_free0(cti->path);
+	g_free0(cti->size);
+	g_free0(cti->chunk_nb);
+	g_free0(cti->container_id);
+	g_free0(cti->storage_policy);
+	g_free0(cti->rawx_list);
+	g_free0(cti->spare_rawx_list);
+	g_free0(cti->version);
+	memset(cti, 0x00, sizeof(struct content_textinfo_s));
+}
+
+/* --------------------------------------------------------------------------------------------------------------------------- */
+
 gboolean
 set_rawx_full_info_in_attr(const char *pathname, int filedes, GError ** error, struct content_textinfo_s * content,
     struct chunk_textinfo_s * chunk, char* compression_info, char* compressed_size)
@@ -669,9 +702,6 @@ set_rawx_full_info_in_attr(const char *pathname, int filedes, GError ** error, s
 	if (chunk->position
 	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_POS, chunk->position))
 		goto error_set_attr;
-	if (chunk->metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_METADATA, chunk->metadata))
-		goto error_set_attr;
 
 	if (content->path
 	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_PATH, content->path))
@@ -686,14 +716,6 @@ set_rawx_full_info_in_attr(const char *pathname, int filedes, GError ** error, s
 	if (content->container_id
 	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_CONTAINER,
 		content->container_id))
-		goto error_set_attr;
-	if (content->metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA,
-		content->metadata))
-		goto error_set_attr;
-	if (content->system_metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA_SYS,
-		content->system_metadata))
 		goto error_set_attr;
 
 	/* Compression info */
@@ -748,9 +770,6 @@ set_rawx_info_in_attr(const char *pathname, GError ** error, struct content_text
 	if (chunk->position
 	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_POS, chunk->position))
 		goto error_set_attr;
-	if (chunk->metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_METADATA, chunk->metadata))
-		goto error_set_attr;
 
 	if (content->path
 	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_PATH, content->path))
@@ -765,14 +784,6 @@ set_rawx_info_in_attr(const char *pathname, GError ** error, struct content_text
 	if (content->container_id
 	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_CONTAINER,
 		content->container_id))
-		goto error_set_attr;
-	if (content->metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA,
-		content->metadata))
-		goto error_set_attr;
-	if (content->system_metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA_SYS,
-		content->system_metadata))
 		goto error_set_attr;
 
 	if (!_commit_attr_handle(attr_handle, &local_error)) {
@@ -815,9 +826,6 @@ set_chunk_info_in_attr(const char *pathname, GError ** error, struct chunk_texti
 	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_HASH, cti->hash))
 		goto error_set_attr;
 	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_POS, cti->position))
-		goto error_set_attr;
-	if (cti->metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_METADATA, cti->metadata))
 		goto error_set_attr;
 	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_CONTAINER, cti->container_id))
 		goto error_set_attr;
@@ -862,13 +870,6 @@ set_content_info_in_attr(const char *pathname, GError ** error, struct content_t
 		goto error_set_attr;
 	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_CONTAINER,
 		cti->container_id))
-		goto error_set_attr;
-	if (cti->metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA, cti->metadata))
-		goto error_set_attr;
-	if (cti->system_metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA_SYS,
-		cti->system_metadata))
 		goto error_set_attr;
 
 	if (!_commit_attr_handle(attr_handle, &local_error)) {
@@ -1017,13 +1018,6 @@ get_rawx_info_in_attr(const char *pathname, GError ** error,
 				ATTR_NAME_CONTENT_CONTAINER, &(content->container_id), FALSE))
 		goto error_get_attr;
 	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_METADATA, &(content->metadata), TRUE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_METADATA_SYS,
-				&(content->system_metadata), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
 				ATTR_NAME_CHUNK_ID, &(chunk->id), FALSE))
 		goto error_get_attr;
 	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
@@ -1034,9 +1028,6 @@ get_rawx_info_in_attr(const char *pathname, GError ** error,
 		goto error_get_attr;
 	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
 				ATTR_NAME_CHUNK_HASH, &(chunk->hash), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CHUNK_METADATA, &(chunk->metadata), TRUE))
 		goto error_get_attr;
 	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
 				ATTR_NAME_CONTENT_PATH, &(chunk->path), FALSE))
@@ -1088,12 +1079,6 @@ get_content_info_in_attr(const char *pathname, GError ** error,
 	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
 				ATTR_NAME_CONTENT_CONTAINER, &(cti->container_id), FALSE))
 		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_METADATA, &(cti->metadata), TRUE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_METADATA_SYS, &(cti->system_metadata), FALSE))
-		goto error_get_attr;
 
 	_clean_attr_handle(attr_handle, FALSE);
 
@@ -1139,9 +1124,6 @@ get_chunk_info_in_attr(const char *pathname, GError ** error,
 		goto error_get_attr;
 	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
 				ATTR_NAME_CHUNK_HASH, &(cti->hash), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CHUNK_METADATA, &(cti->metadata), TRUE))
 		goto error_get_attr;
 	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
 				ATTR_NAME_CONTENT_CONTAINER, &(cti->container_id), FALSE))

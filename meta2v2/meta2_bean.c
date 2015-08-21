@@ -50,7 +50,6 @@ _generate_api_alias(const M2V2Bean_t * asn)
 	ALIASES_set_version(result, version);
 	ALIASES_set_container_version(result, container_version);
 	ALIASES_set2_content_id(result, asn->alias->contentId.buf, asn->alias->contentId.size);
-	ALIASES_set2_mdsys(result, (const char *)asn->alias->mdsys.buf);
 	ALIASES_set_ctime(result, ct);
 
 	/* deleted */
@@ -222,9 +221,6 @@ _alias_to_asn(gpointer api, M2V2Bean_t *asn)
 
 	GByteArray *id = ALIASES_get_content_id(alias);
 	OCTET_STRING_fromBuf(&(asn->alias->contentId), (const char *)id->data, id->len);
-
-	GString *mdsys = ALIASES_get_mdsys(alias);
-	OCTET_STRING_fromBuf(&(asn->alias->mdsys), mdsys->str, mdsys->len);
 
 	asn_int64_to_INTEGER(&(asn->alias->ctime), ALIASES_get_ctime(alias));
 

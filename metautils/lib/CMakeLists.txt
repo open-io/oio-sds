@@ -117,7 +117,6 @@ add_library(metautils SHARED
 		utils_meta0_info.c
 		utils_metadata.c
 		utils_namespace_info.c
-		utils_rawx_maintenance.c
 		utils_score.c
 		utils_service_info.c
 		utils_tools.c
@@ -339,7 +338,6 @@ install(FILES
 			metatype_nsinfo.h
 			metatypes.h
 			metatype_srvinfo.h
-			metatype_v140.h
 			metautils_bits.h
 			metautils_containers.h
 			metautils-doc.h

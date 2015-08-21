@@ -90,15 +90,6 @@ _update_content_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_back
 
 	CONTENTS_HEADERS_set2_policy(header, stgpol);
 
-	GHashTable *unpacked = metadata_unpack_string(ALIASES_get_mdsys(alias)->str, &e);
-	metadata_add_printf(unpacked, "storage-policy", "%s", stgpol);
-	GByteArray *pack = metadata_pack(unpacked, NULL);
-	g_hash_table_destroy(unpacked);
-	g_byte_array_append(pack, (const guint8*)"\0", 1);
-	char *mdsys = (char *)g_byte_array_free(pack, FALSE);
-	ALIASES_set2_mdsys(alias, mdsys);
-	g_free(mdsys);
-
 	beans = g_slist_prepend(g_slist_prepend(beans, header), alias);
 	e = meta2_backend_update_alias_header(m2b, url, beans);
 	_bean_cleanl2(beans);

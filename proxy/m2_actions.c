@@ -169,12 +169,11 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 		g_string_append_c(gstr, '{');
 		g_string_append_printf(gstr,
 				"\"name\":\"%s\",\"ver\":%"G_GINT64_FORMAT","
-				"\"ctime\":%"G_GINT64_FORMAT",\"system_metadata\":\"%s\","
+				"\"ctime\":%"G_GINT64_FORMAT","
 				"\"deleted\":%s",
 				ALIASES_get_alias(a)->str,
 				ALIASES_get_version(a),
 				ALIASES_get_ctime(a),
-				ALIASES_get_mdsys(a)->str,
 				ALIASES_get_deleted(a) ? "true" : "false");
 
 		if (h) {
@@ -251,28 +250,9 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-ctime",
 			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_ctime(alias)));
 
-	gpointer _k, _v;
-	GHashTableIter iter;
-	GHashTable *md = metadata_unpack_string (ALIASES_get_mdsys(alias)->str, NULL);
-	if (md) {
-		g_hash_table_iter_init (&iter, md);
-		while (g_hash_table_iter_next (&iter, &_k, &_v)) {
-			const char *k = _k, *v = _v;
-			if (!g_ascii_strcasecmp (k, "mime-type")) {
-				args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-mime-type", g_strdup(v));
-			} else if (!g_ascii_strcasecmp (k, "chunk-method")) {
-				args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-chunk-method", g_strdup(v));
-			} else if (!g_ascii_strcasecmp (k, "storage-policy") ||
-					!g_ascii_strcasecmp(k, "creation-date")) {
-				continue;
-			} else {
-				gchar *rk = g_strdup_printf (PROXYD_HEADER_PREFIX "content-meta-x-%s", k);
-				args->rp->add_header (rk, g_strdup(v));
-				g_free (rk);
-			}
-		}
-		g_hash_table_destroy (md);
-	}
+	// TODO manage the replacement of the lost metadata
+	//args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-mime-type", g_strdup(v));
+	//args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-chunk-method", g_strdup(v));
 }
 
 static enum http_rc_e
@@ -476,24 +456,9 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 		ALIASES_set2_alias (alias, PATH());
 		ALIASES_set2_content_id (alias, (guint8*)"0", 1);
 
-		gchar *s;
-		GString *mdsys = ALIASES_get_mdsys(alias);
-		// Extract the content-type
-		if (NULL != (s = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-type"))) {
-			if (mdsys->len > 0)
-				g_string_append_c (mdsys, ';');
-			g_string_append_printf (mdsys, "mime-type=%s", s);
-		} else if (NULL != (s = g_tree_lookup (args->rq->tree_headers, "content-type"))) {
-			if (mdsys->len > 0)
-				g_string_append_c (mdsys, ';');
-			g_string_append_printf (mdsys, "mime-type=%s", s);
-		}
-		// Extract the chunking method
-		if (NULL != (s = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-chunk-method"))) {
-			if (mdsys->len > 0)
-				g_string_append_c (mdsys, ';');
-			g_string_append_printf (mdsys, "chunk-method=%s", s);
-		}
+		// Extract the PROXYD_HEADER_PREFIX "content-meta-type"
+		// Extract the "content-type"
+		// Extract the PROXYD_HEADER_PREFIX "content-meta-chunk-method"
 
 		gboolean run_headers (gpointer k, gpointer v, gpointer u) {
 			(void)u;

@@ -719,7 +719,6 @@ _upload_chunks (struct oio_sds_s *sds, GSList *chunks, struct local_upload_s *up
 			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-path", "%s", hc_url_get(upload->url, HCURL_PATH));
 			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-size", "%" G_GINT64_FORMAT, c1->size);
 			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-chunksnb", "%u", g_slist_length(chunkset));
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-metadata-sys", "%s", "");
 			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-id", "%s", strrchr(c1->url, '/')+1);
 			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos", "%u", c1->position.meta);
 			http_put_dest_add_header (dest, PROXYD_HEADER_REQID, "%s", oio_ext_get_reqid());

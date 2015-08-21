@@ -436,7 +436,6 @@ alias = generator.add_bean(Struct("aliases") \
 	.field(Int( "version")) \
 	.field(Int( "container_version")) \
 	.field(Blob("content_id"), mandatory=False) \
-	.field(Text("mdsys")) \
 	.field(Int( "ctime")) \
 	.field(Bool("deleted")) \
 	.PK(("alias", "version")) \

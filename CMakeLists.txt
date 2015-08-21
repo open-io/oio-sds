@@ -291,7 +291,6 @@ pkg_check_modules(CURL curl)
 
 if (NOT SDK_ONLY)
 pkg_check_modules(APR REQUIRED apr-1)
-pkg_check_modules(NEON REQUIRED neon)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 pkg_check_modules(ZMQ libzmq>=4.0.0)
 endif (NOT SDK_ONLY)
@@ -325,7 +324,7 @@ endif (NOT SDK_ONLY)
 check_found("CURL" "GLIB2" "JSONC")
 
 if (NOT SDK_ONLY)
-check_found("APR" "APACHE2" "ASN1C" "ATTR" "GRIDINIT" "LIBRAIN" "LZO" "NEON"
+check_found("APR" "APACHE2" "ASN1C" "ATTR" "GRIDINIT" "LIBRAIN" "LZO"
 		"SQLITE3" "ZMQ" "ZK" "PYTHONINTERP")
 
 if (DEFINED APACHE2_MODDIR)
@@ -377,7 +376,6 @@ add_subdirectory(./meta2v2)
 add_subdirectory(./proxy)
 add_subdirectory(./rainx)
 add_subdirectory(./rawx-apache2/src)
-add_subdirectory(./rawx-client/lib)
 add_subdirectory(./rawx-lib/src)
 add_subdirectory(./rawx-lib/tools)
 add_subdirectory(./resolver)

@@ -62,7 +62,6 @@ m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 	ALIASES_set_ctime (alias, 0);
 	ALIASES_set2_alias (alias, json_object_get_string(jname));
 	ALIASES_set_version (alias, json_object_get_int64(jversion));
-	ALIASES_set2_mdsys (alias, json_object_get_string(jmd));
 	ALIASES_set2_content_id (alias, hid->data, hid->len);
 	*pbean = alias;
 	alias = NULL;

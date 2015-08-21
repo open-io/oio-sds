@@ -856,26 +856,6 @@ struct put_args_s
 	gboolean merge_only;
 };
 
-static void
-_patch_alias_metadata(struct bean_ALIASES_s *alias)
-{
-	GHashTable *ht;
-	GString *gstr = ALIASES_get_mdsys(alias);
-	ht = gstr ? metadata_unpack_string(gstr->str, NULL)
-		: metadata_create_empty();
-	if (!g_hash_table_lookup(ht,"creation-date"))
-		metadata_add_time(ht, "creation-date", NULL);
-	if (!g_hash_table_lookup(ht,"chunk-method"))
-		metadata_add_printf(ht,"chunk-method","chunk-size");
-	if (!g_hash_table_lookup(ht,"mime-type"))
-		metadata_add_printf(ht,"mime-type","octet/stream");
-	GByteArray *gba = metadata_pack(ht, NULL);
-	g_byte_array_append(gba, (guint8*)"", 1);
-	ALIASES_set2_mdsys(alias, (gchar*) gba->data);
-	g_byte_array_unref(gba);
-	g_hash_table_destroy(ht);
-}
-
 static GError*
 m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 {
@@ -900,7 +880,6 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 			ALIASES_set_container_version(bean, container_version);
 			ALIASES_set_deleted(bean, FALSE);
 			ALIASES_set_ctime(bean, time(0));
-			_patch_alias_metadata(bean);
 		}
 		else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
 			if (args->merge_only)
@@ -1257,7 +1236,6 @@ struct append_context_s
 	GPtrArray *tmp;
 	guint8 uid[32];
 	GByteArray *old_uid;
-	GString *md;
 	GString *policy;
 	gint64 container_version;
 	gint64 old_version;
@@ -1313,10 +1291,6 @@ _keep_old_bean(gpointer u, gpointer bean)
 					ctx->old_version -= 1;
 					ctx->fresh = TRUE;
 				}
-				/* get the most up-to-date metadata */
-				if (NULL != (gs = ALIASES_get_mdsys(bean))) {
-					g_string_assign(ctx->md, gs->str);
-				}
 			}
 		}
 		else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
@@ -1339,7 +1313,6 @@ _mangle_new_bean(struct append_context_s *ctx, gpointer bean)
 		ALIASES_set_container_version(bean, ctx->container_version);
 		ALIASES_set_version(bean, ((ctx->versioning) ? ctx->old_version + 1 : ctx->old_version));
 		ALIASES_set2_content_id(bean, ctx->uid, sizeof(ctx->uid));
-		ALIASES_set_mdsys(bean, ctx->md);
 		g_ptr_array_add(ctx->tmp, bean);
 		return FALSE;
 	}
@@ -1399,7 +1372,6 @@ m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 
 	memset(&ctx, 0, sizeof(ctx));
 	ctx.tmp = g_ptr_array_new();
-	ctx.md = g_string_new("");
 	ctx.policy = g_string_new("");
 	ctx.old_count = G_MININT64;
 	ctx.old_version = G_MININT64;
@@ -1434,10 +1406,9 @@ m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 		}
 		else {
 			GRID_TRACE("M2 already %u beans, version=%"G_GINT64_FORMAT
-					" position=%"G_GINT64_FORMAT" size=%"G_GINT64_FORMAT
-					" md=[%s]",
+					" position=%"G_GINT64_FORMAT" size=%"G_GINT64_FORMAT,
 					ctx.tmp->len, ctx.old_version, ctx.old_count,
-					ctx.old_size, ctx.md->str);
+					ctx.old_size);
 			gint64 append_size = 0;
 
 			ctx.container_version = 1 + m2db_get_version(sq3);
@@ -1482,7 +1453,6 @@ m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 		}
 	}
 
-	g_string_free(ctx.md, TRUE);
 	g_string_free(ctx.policy, TRUE);
 	_bean_cleanv2(ctx.tmp);
 	metautils_gba_unref(ctx.old_uid);
@@ -1606,33 +1576,6 @@ _policy_parameter(struct storage_policy_s *pol, const gchar *key, guint def)
 	return (guint) atoi(s);
 }
 
-static char *
-_generate_mdsys(struct gen_ctx_s *ctx)
-{
-	GHashTable *unpacked = NULL;
-
-	if(NULL != ctx->mdsys)
-		unpacked = metadata_unpack_string(ctx->mdsys, NULL);
-	else
-		unpacked = metadata_create_empty();
-	if(!g_hash_table_lookup(unpacked, "chunk-method"))
-		metadata_add_printf(unpacked, "chunk-method", "chunk-size");
-	if(!g_hash_table_lookup(unpacked, "mime-type"))
-		metadata_add_printf(unpacked, "mime-type", "octet/stream");
-	if(!g_hash_table_lookup(unpacked, "storage-policy"))
-		metadata_add_printf(unpacked, "storage-policy", "%s",
-			((ctx->pol) ? storage_policy_get_name(ctx->pol) : "none"));
-	if (!g_hash_table_lookup(unpacked,"creation-date"))
-		metadata_add_time(unpacked, "creation-date", NULL);
-
-	GByteArray *pack = metadata_pack(unpacked, NULL);
-	g_hash_table_destroy(unpacked);
-	char *mdsys = g_strndup((const char *)pack->data, pack->len);
-	g_byte_array_free(pack, TRUE);
-
-	return mdsys;
-}
-
 static void
 _m2_generate_alias_header(struct gen_ctx_s *ctx)
 {
@@ -1641,19 +1584,14 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(ctx->url, HCURL_WHOLE));
 
-	gchar *mdsys = _generate_mdsys(ctx);
-
 	struct bean_ALIASES_s *alias = _bean_create(&descr_struct_ALIASES);
 	ALIASES_set2_alias(alias, hc_url_get(ctx->url, HCURL_PATH));
 	ALIASES_set_version(alias, 0);
 	ALIASES_set_container_version(alias, 0);
 	ALIASES_set_ctime(alias, time(0));
 	ALIASES_set_deleted(alias, FALSE);
-	ALIASES_set2_mdsys(alias, mdsys);
 	ALIASES_set2_content_id(alias, ctx->uid, sizeof(ctx->uid));
 	ctx->cb(ctx->cb_data, alias);
-
-	g_free(mdsys);
 
 	struct bean_CONTENTS_HEADERS_s *header;
 	header = _bean_create(&descr_struct_CONTENTS_HEADERS);

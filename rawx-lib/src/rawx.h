@@ -51,6 +51,28 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define RAWX_CONF_TIMEOUT 10LLU
 #define NS_COMPRESSION_ON "on"
 
+typedef struct chunk_textinfo_s
+{
+	gchar *id;           /**< The chunk id */
+	gchar *path;         /**< The chunk path */
+	gchar *size;         /**< The chunk size */
+	gchar *position;     /**< The chunk position */
+	gchar *hash;         /**< The chunk hash */
+	gchar *container_id; /**< The container id */
+} chunk_textinfo_t;
+
+typedef struct content_textinfo_s
+{
+	gchar *container_id;    /**< The container id */
+	gchar *path;            /**< The content name */
+	gchar *size;            /**< The content size */
+	gchar *chunk_nb;        /**< The number of chunks */
+	gchar *storage_policy;	/**< The storage policy */
+	gchar *rawx_list; /**< The rawx list (introduced by the rainx service) */
+	gchar *spare_rawx_list; /**< The rawx list for reconstruction (introduced by the rainx service) */
+	gchar *version; /**< The content version */
+} content_textinfo_t;
+
 typedef struct rawx_conf_s rawx_conf_t;
 
 struct rawx_conf_s {
@@ -62,6 +84,10 @@ struct rawx_conf_s {
 	GSList* acl;
 	gint64 last_update;
 };
+
+void chunk_textinfo_free_content(struct chunk_textinfo_s *cti);
+
+void content_textinfo_free_content(struct content_textinfo_s *cti);
 
 /**
  * Write the attributes in the structure in the extended attributes of
