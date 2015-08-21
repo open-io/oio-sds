@@ -182,6 +182,7 @@ class ContainerClient(Client):
                       cid=None, **kwargs):
         uri = self._make_uri('content/spare')
         params = self._make_params(acct, ref, path, cid=cid)
+        data = json.dumps(data)
         resp, body = self._request(
             'POST', uri, data=data, params=params)
         return body
