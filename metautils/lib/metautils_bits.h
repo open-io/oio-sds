@@ -118,15 +118,6 @@ guint_to_guint64(guint u)
 	return u64;
 }
 
-#define metautils_pfree0(pp,repl) do { \
-	if (NULL != *(pp)) \
-		g_free(*pp); \
-	*(pp) = (repl); \
-} while (0)
-
-#define metautils_pfree(pp,repl) do { \
-	if (NULL != (pp)) \
-		metautils_pfree0(pp,repl); \
-} while (0)
+#define metautils_pfree(pp) do { g_free0(*pp); *(pp) = NULL; } while (0)
 
 #endif /*OIO_SDS__metautils__lib__metautils_bits_h*/

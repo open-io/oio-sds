@@ -531,8 +531,8 @@ static void
 cli_specific_fini(void)
 {
 	GRID_DEBUG("Exiting");
-	metautils_pfree0(&type, NULL);
-	metautils_pfree0(&query, NULL);
+	metautils_pfree(&type);
+	metautils_pfree(&query);
 
 	if (url) {
 		hc_url_clean(url);
