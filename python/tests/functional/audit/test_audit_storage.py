@@ -10,7 +10,6 @@ import requests
 import xattr
 from oio.common.utils import get_logger
 from oio.blob.auditor import BlobAuditorWorker
-from tests.functional.audit import load_functest_config
 from oio.common import exceptions as exc
 
 
@@ -20,8 +19,6 @@ class TestFeaturesFunctional(unittest.TestCase):
         self._load_config()
 
     def _load_config(self):
-
-        config = load_functest_config()
 
         self.test_dir = os.path.expanduser('~/.oio/sds/')
         with open(self.test_dir + 'conf/test.conf') as f:
@@ -43,8 +40,8 @@ class TestFeaturesFunctional(unittest.TestCase):
 
         self.h = hashlib.new('md5')
 
-        self.auditor = BlobAuditorWorker(config, get_logger(config),
-                                         config.get('volume'))
+        config={"namespace":self.namespace}
+        self.auditor = BlobAuditorWorker(config, get_logger(None),None)
 
     def rand_generator(self, dictionary, n):
 
