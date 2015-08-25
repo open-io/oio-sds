@@ -1,0 +1,23 @@
+# Namespace name
+namespace: NS
+# Run daemon as user
+# user: openio
+#
+# Logging configuration
+# log_level: INFO
+# log_facility: LOG_LOCAL0
+# log_address: /dev/log
+# syslog_prefix: OIO,OPENIO,conscience-agent,1
+#
+# Include path for services conf
+# # example service is provided in service-watch.yml
+# include_dir: /etc/oio/conscience/services/
+#
+# 
+# Global checks configuration
+# Check interval (in seconds)
+# check_interval: 1
+# Rise (number of consecutive successful checks to switch service status to up)
+# rise: 1
+# Fall (number of consecutive unsuccessful checks to switch service status to down)
+# fall: 1

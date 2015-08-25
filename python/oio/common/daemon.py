@@ -35,9 +35,10 @@ class Daemon(object):
 def run_daemon(klass, conf_file, section_name=None, **kwargs):
     if section_name is None:
         section_name = sub(r'([a-z])([A-Z])', r'\1-\2', klass.__name__).lower()
-    conf = read_conf(conf_file, section_name)
-    logger = get_logger(conf, section_name,
-                        verbose=kwargs.pop('verbose', False))
+    conf = read_conf(
+        conf_file, section_name, use_yaml=kwargs.pop('use_yaml', False))
+    logger = get_logger(
+        conf, section_name, verbose=kwargs.pop('verbose', False))
     try:
         klass(conf).start(**kwargs)
     except KeyboardInterrupt:

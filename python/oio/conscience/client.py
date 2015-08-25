@@ -1,3 +1,4 @@
+import json
 from oio.common.client import Client
 from oio.common.exceptions import OioException
 
@@ -18,3 +19,8 @@ class ConscienceClient(Client):
         else:
             raise OioException(
                 'ERROR while getting next instance %s' % pool)
+
+    def register(self, pool, service_definition):
+        uri = self._make_uri('cs', pool)
+        data = json.dumps(service_definition)
+        resp, body = self._request('PUT', uri, data=data)

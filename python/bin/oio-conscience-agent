@@ -1,0 +1,12 @@
+#!/usr/bin/python
+
+from oio.conscience.agent import ConscienceAgent
+from oio.common.daemon import run_daemon
+from oio.common.utils import parse_options
+from optparse import OptionParser
+
+if __name__ == '__main__':
+    parser = OptionParser("%prog CONFIG [options]")
+    config, options = parse_options(parser)
+    options.update({'use_yaml': True})
+    run_daemon(ConscienceAgent, config, **options)
