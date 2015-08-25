@@ -143,7 +143,7 @@ meta1_dispatch_v2_SRV_POLL(struct gridd_reply_ctx_s *reply,
 	(void) ignored;
 
 	gchar **result = NULL;
-	GError *err = meta1_backend_services_poll(m1, url, srvtype, ac, dryrun, &result);
+	GError *err = meta1_backend_services_poll(m1, url, srvtype, dryrun, ac, &result);
 	if (NULL != err)
 		reply->send_error(0, err);
 	else {

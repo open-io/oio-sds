@@ -664,7 +664,8 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 		used = NULL;
 	}
 
-	if ((mode & M1V2_GETSRV_REUSE) && used) { /* Only keep the services UP */
+	if ((mode != M1V2_GETSRV_RENEW) && used) {
+		/* Only keep the services UP, if not forced to renew */
 		struct meta1_service_url_s **up = __get_services_up(m1, used);
 		if (up && *up) {
 			*result = pack_urlv(up);
@@ -675,45 +676,45 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 		meta1_service_url_cleanv(up);
 	}
 
-	/* No service available, poll a new one */
-	if ((mode & M1V2_GETSRV_REUSE) && used &&
-			(policy == SVCUPD_KEEP || policy == SVCUPD_NOT_SPECIFIED))
+	if (used && (mode == M1V2_GETSRV_REUSE || policy == SVCUPD_KEEP || policy == SVCUPD_NOT_SPECIFIED)) {
+		/* Services used but unavailable, but we are told to reuse */
 		*result = pack_urlv(used);
-	else {
-		gint seq;
-		struct meta1_service_url_s *m1_url = NULL;
+		meta1_service_url_cleanv(used);
+		return err;
+	}
 
-		seq = urlv_get_max_seq(used);
-		seq = (seq<0 ? 1 : seq+1);
+	/* No service available, poll a new one */
+	struct meta1_service_url_s *m1_url = NULL;
+	gint seq = urlv_get_max_seq(used);
+	seq = (seq<0 ? 1 : seq+1);
 
-		if (NULL != (m1_url = __poll_services(m1, replicas, ct, seq, used, &err))) {
-			if (!(mode & M1V2_GETSRV_DRYRUN)) {
-				struct sqlx_repctx_s *repctx = NULL;
-				err = sqlx_transaction_begin(sq3, &repctx);
-				if (NULL == err) {
-					if (policy == SVCUPD_REPLACE)
-						err = __delete_service(sq3, url, ct->type);
-					if (NULL == err)
-						err = __save_service(sq3, url, m1_url, TRUE);
-					err = sqlx_transaction_end(repctx, err);
-				}
+	if (NULL != (m1_url = __poll_services(m1, replicas, ct, seq, used, &err))) {
+		if (mode != M1V2_GETSRV_DRYRUN) {
+			struct sqlx_repctx_s *repctx = NULL;
+			err = sqlx_transaction_begin(sq3, &repctx);
+			if (NULL == err) {
+				if (policy == SVCUPD_REPLACE)
+					err = __delete_service(sq3, url, ct->type);
+				if (NULL == err)
+					err = __save_service(sq3, url, m1_url, TRUE);
+				err = sqlx_transaction_end(repctx, err);
 			}
-
-			if (!err && result) {
-				struct meta1_service_url_s **unpacked = expand_url(m1_url);
-				*result = pack_urlv(unpacked);
-				meta1_service_url_cleanv(unpacked);
-
-				GError *err2 = __notify_services(m1, sq3, url);
-				if (err2 != NULL) {
-					GRID_WARN("Failed to notify [%s] service modifications"
-							" of [%s]: %s", ct->type,
-							hc_url_get(url, HCURL_WHOLE), err2->message);
-					g_clear_error(&err2);
-				}
-			}
-			g_free(m1_url);
 		}
+
+		if (!err && result) {
+			struct meta1_service_url_s **unpacked = expand_url(m1_url);
+			*result = pack_urlv(unpacked);
+			meta1_service_url_cleanv(unpacked);
+
+			GError *err2 = __notify_services(m1, sq3, url);
+			if (err2 != NULL) {
+				GRID_WARN("Failed to notify [%s] service modifications"
+						" of [%s]: %s", ct->type,
+						hc_url_get(url, HCURL_WHOLE), err2->message);
+				g_clear_error(&err2);
+			}
+		}
+		g_free(m1_url);
 	}
 
 	meta1_service_url_cleanv(used);
@@ -734,15 +735,6 @@ __get_container_service(struct sqlx_sqlite3_s *sq3,
 	err = __get_container_service2(sq3, url, &ct, m1, result, mode);
 	compound_type_clean(&ct);
 	return err;
-}
-
-static GError *
-__renew_container_service(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, const gchar *srvtype,
-		struct meta1_backend_s *m1, gboolean dryrun, gchar ***result)
-{
-	enum m1v2_getsrv_e mode = M1V2_GETSRV_RENEW|(dryrun? M1V2_GETSRV_DRYRUN:0);
-	return __get_container_service(sq3, url, srvtype, m1, result, mode);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -847,8 +839,7 @@ meta1_backend_services_link (struct meta1_backend_s *m1,
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
 		if (!(err = __info_user(sq3, url, autocreate, NULL))) {
-			enum m1v2_getsrv_e mode = M1V2_GETSRV_REUSE;
-			if (dryrun) mode |= M1V2_GETSRV_DRYRUN;
+			enum m1v2_getsrv_e mode = dryrun ? M1V2_GETSRV_DRYRUN : M1V2_GETSRV_REUSE;
 			err = __get_container_service(sq3, url, srvtype, m1, result, mode);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
@@ -871,8 +862,8 @@ meta1_backend_services_poll(struct meta1_backend_s *m1,
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
 		if (!(err = __info_user(sq3, url, autocreate, NULL))) {
-			err = __renew_container_service(sq3, url, srvtype, m1, dryrun,
-					result);
+			enum m1v2_getsrv_e mode = dryrun ? M1V2_GETSRV_DRYRUN : M1V2_GETSRV_RENEW;
+			err = __get_container_service(sq3, url, srvtype, m1, result, mode);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
