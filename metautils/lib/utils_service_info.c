@@ -439,16 +439,6 @@ service_info_equal_v2(const struct service_info_s * si1, const struct service_in
 	return service_info_equal(si1, si2);
 }
 
-meta0_info_t *
-service_info_convert_to_m0info(struct service_info_s * srv)
-{
-	if (!srv)
-		return NULL;
-	meta0_info_t *mi = g_malloc0(sizeof(meta0_info_t));
-	memcpy(&(mi->addr), &(srv->addr), sizeof(addr_info_t));
-	return mi;
-}
-
 struct service_tag_s *
 service_info_get_tag(GPtrArray * a, const gchar * name)
 {
@@ -510,53 +500,6 @@ service_info_remove_tag(GPtrArray * a, const gchar * name)
 	}
 }
 
-gboolean
-service_info_set_address(struct service_info_s * si, const gchar * host, int port, GError ** error)
-{
-	addr_info_t *addr;
-
-	if (!si || !host || port < 0 || port > 65535) {
-		GSETERROR(error, "Invalid parameter si=%p host=%p port=%i", si, host, port);
-		return FALSE;
-	}
-
-	addr = build_addr_info(host, port, error);
-	if (!addr) {
-		GSETERROR(error, "Invalid address");
-		return FALSE;
-	}
-
-	memcpy(&(si->addr), addr, sizeof(addr_info_t));
-
-	g_free(addr);
-
-	return TRUE;
-}
-
-GSList*
-service_info_extract_nsname(GSList *services, gboolean copy)
-{
-	struct service_info_s *si;
-	GHashTable *ht;
-	GHashTableIter iter;
-	GSList *l, *result;
-	gpointer k, v;
-
-	ht = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, NULL);
-	for (l=services; l ;l=l->next) {
-		si = l->data;
-		g_hash_table_insert(ht, si->ns_name, si->ns_name);
-	}
-
-	result = NULL;
-	g_hash_table_iter_init(&iter, ht);
-	while (g_hash_table_iter_next(&iter, &k, &v))
-		result = g_slist_prepend(result, copy ? g_strndup(k, LIMIT_LENGTH_NSNAME) : k);
-
-	g_hash_table_destroy(ht);
-	return result;
-}
-
 gchar *
 service_info_to_string(const service_info_t *si)
 {
@@ -578,7 +521,7 @@ service_info_to_string(const service_info_t *si)
 
 	/* header string */
 	concat(g_strdup_printf("%s|%s", si->ns_name, si->type));
-	addr_info_to_string(&(si->addr), tmp, sizeof(tmp));
+	grid_addrinfo_to_string(&(si->addr), tmp, sizeof(tmp));
 	concat(g_strdup(tmp));
 	concat(g_strdup_printf("score=%d", si->score.value));
 

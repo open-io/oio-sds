@@ -85,11 +85,11 @@ _props_generate(struct hc_url_s *url, gint64 v, guint count)
 	while (count-- > 0) {
 		gchar name[32];
 		g_snprintf(name, sizeof(name), "prop-%u", count);
-		struct bean_PROPERTIES_s *prop = _bean_create(&descr_struct_PROPERTIES);
-		PROPERTIES_set2_alias(prop, hc_url_get(url, HCURL_PATH));
-		PROPERTIES_set_alias_version(prop, v);
-		PROPERTIES_set2_key(prop, name);
-		PROPERTIES_set2_value(prop, (guint8*)"value", sizeof("value"));
+		struct bean_PROPERTY_s *prop = _bean_create(&descr_struct_PROPERTY);
+		PROPERTY_set2_alias(prop, hc_url_get(url, HCURL_PATH));
+		PROPERTY_set_version(prop, v);
+		PROPERTY_set2_key(prop, name);
+		PROPERTY_set2_value(prop, (guint8*)"value", sizeof("value"));
 		result = g_slist_prepend(result, prop);
 	}
 

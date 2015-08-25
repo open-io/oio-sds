@@ -63,7 +63,7 @@ run(void)
 				int fd;
 
 				g_snprintf(url,sizeof(url),"127.0.0.1:%d", ri->port);
-				if (!l4_address_init_with_url(&addr, url, &err))
+				if (!grid_string_to_addrinfo(url, NULL, &addr))
 					abort();
 				fd = addrinfo_connect(&addr, 2000, &err);
 				if (fd<0)
@@ -156,7 +156,7 @@ load_config(int argc, char **args)
 			si->score.timestamp = 0;
 			g_strlcpy(si->ns_name, str_ns, sizeof(si->ns_name));
 			g_strlcpy(si->type, str_type, sizeof(si->type));
-			if (!l4_address_init_with_url(&(si->addr), str_url, &error_local)) {
+			if (!grid_string_to_addrinfo(str_url, NULL, &si->addr)) {
 				GRID_ERROR("Failed to build the address : %s", gerror_get_message(error_local));
 				abort();
 			}

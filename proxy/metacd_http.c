@@ -36,7 +36,6 @@ static GThread *downstream_thread = NULL;
 
 static GSList *config_urlv = NULL;
 
-static gint timeout_cs_push = PROXYD_DEFAULT_TIMEOUT_CONSCIENCE;
 static gint lb_downstream_delay = PROXYD_DEFAULT_PERIOD_DOWNSTREAM;
 static guint lb_upstream_delay = PROXYD_DEFAULT_PERIOD_UPSTREAM;
 static guint nsinfo_refresh_delay = 5;
@@ -322,16 +321,16 @@ _task_push (gpointer p)
 	if (!tmp) {
 		GRID_TRACE("Push: no service to be pushed");
 	} else {
-		struct addr_info_s *csaddr = gridcluster_get_conscience_addr(nsname);
-		if (!csaddr) {
+		gchar *cs = gridcluster_get_conscience(nsname);
+		STRING_STACKIFY(cs);
+		if (!cs) {
 			GRID_ERROR("Push error: %s", "No/Invalid conscience for namespace NS");
 		} else {
-			GError *err = gcluster_push_services (csaddr, timeout_cs_push, tmp);
+			GError *err = gcluster_push_services (cs, tmp);
 			if (err != NULL) {
 				GRID_WARN("Push error: (%d) %s", err->code, err->message);
 				g_clear_error(&err);
 			}
-			g_free(csaddr);
 		}
 	}
 

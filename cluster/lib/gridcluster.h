@@ -249,8 +249,6 @@ gchar* gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
 gint64 gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
 		const gchar* key, gint64 def);
 
-struct addr_info_s * gridcluster_get_conscience_addr(const char *ns_name);
-
 gchar * gridcluster_get_agent(void);
 
 /** @} */

@@ -32,7 +32,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cluster/lib/gridcluster.h>
 
 #include "./internals.h"
-#include "./internals_sqlite.h"
 #include "./meta1_prefixes.h"
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"

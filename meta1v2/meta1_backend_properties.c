@@ -30,23 +30,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/sqliterepo.h>
 
 #include "./internals.h"
-#include "./internals_sqlite.h"
 #include "./meta1_prefixes.h"
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"
-
-static GError * __check_property_format(gchar **strv);
-
-static GError * __del_container_properties(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, gchar **names);
-
-static GError * __set_container_properties(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, gchar **props);
-
-static GError * __get_container_properties(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, gchar **names, gchar ***result);
-
-/* ------------------------------------------------------------------------- */
 
 static GError *
 __del_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
@@ -255,11 +241,10 @@ meta1_backend_set_container_properties(struct meta1_backend_s *m1,
 	}
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
-
 	err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (err) return err;
 
+	struct sqlx_repctx_s *repctx = NULL;
 	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 			if (flush) {
@@ -285,11 +270,10 @@ meta1_backend_del_container_properties(struct meta1_backend_s *m1,
 	EXTRA_ASSERT(names != NULL);
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
-
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
 	if (err) return err;
 
+	struct sqlx_repctx_s *repctx = NULL;
 	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 			err = __del_container_properties(sq3, url, names);
@@ -309,11 +293,10 @@ meta1_backend_get_container_properties(struct meta1_backend_s *m1,
 	EXTRA_ASSERT(result != NULL);
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
-
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
 	if (err) return err;
 
+	struct sqlx_repctx_s *repctx = NULL;
 	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 			err = __get_container_properties(sq3, url, names, result);

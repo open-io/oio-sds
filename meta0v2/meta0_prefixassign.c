@@ -236,6 +236,45 @@ _select_source_assign_m1(GList *lst, guint8 *treat_prefixes, const guint avgscor
 	return aM1;
 }
 
+static gboolean
+l4_address_split(const char * url, gchar ** host, gchar ** port)
+{
+	int len;
+	gchar wrkUrl[512];
+
+	if (!host || !port)
+		return FALSE;
+
+	g_strlcpy(wrkUrl, url, sizeof(wrkUrl));
+	len = strlen(wrkUrl);
+
+	if (*wrkUrl == '[') {	/*[IP]:PORT */
+		gchar *last_semicolon;
+
+		last_semicolon = g_strrstr(wrkUrl, ":");
+
+		if (!last_semicolon || last_semicolon - wrkUrl >= len)
+			return FALSE;
+
+		*(last_semicolon - 1) = '\0';
+		*port = g_strdup(last_semicolon + 1);
+		*host = g_strdup(wrkUrl + 1);
+	}
+	else {
+		gchar *last_semicolon;
+
+		last_semicolon = g_strrstr(wrkUrl, ":");
+
+		if (!last_semicolon || last_semicolon - wrkUrl >= len)
+			return FALSE;
+
+		*last_semicolon = '\0';
+		*port = g_strdup(last_semicolon + 1);
+		*host = g_strdup(wrkUrl);
+	}
+	return TRUE;
+}
+
 static struct meta0_assign_meta1_s*
 _select_dest_assign_m1(GList *lst, const struct meta0_assign_meta1_s *s_aM1, guint8 *prefixe, gboolean unref,gboolean force)
 {

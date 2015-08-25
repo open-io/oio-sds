@@ -100,14 +100,6 @@ hc_resolver_element_create(gchar **value)
 	return elt;
 }
 
-/* Timeout helpers --------------------------------------------------------- */
-
-static gdouble
-_timeout(gdouble *pd, gdouble def)
-{
-	return (!pd || *pd <= 0.001) ? def : *pd;
-}
-
 /* Public API -------------------------------------------------------------- */
 
 struct hc_resolver_s*
@@ -208,7 +200,7 @@ _srvlit_to_urlv(GSList *l)
 	tmp = g_ptr_array_new();
 	for (; l ;l=l->next) {
 		si = l->data;
-		addr_info_to_string(&(si->addr), str, sizeof(str));
+		grid_addrinfo_to_string(&(si->addr), str, sizeof(str));
 		g_ptr_array_add(tmp, g_strdup_printf("1|%s|%s|", si->type, str));
 	}
 
@@ -217,7 +209,7 @@ _srvlit_to_urlv(GSList *l)
 }
 
 static GError*
-_resolve_meta0(struct hc_resolver_s *r, const gchar *ns, gchar ***result)
+_resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result)
 {
 	struct hashstr_s *hk;
 	GError *err = NULL;
@@ -253,6 +245,15 @@ _resolve_meta0(struct hc_resolver_s *r, const gchar *ns, gchar ***result)
 
 /* ------------------------------------------------------------------------- */
 
+static gchar *
+meta1_strurl_get_address(const gchar *str)
+{
+	struct meta1_service_url_s *u = meta1_unpack_url(str);
+	gchar *s = g_strdup(u->host);
+	g_free(u);
+	return s;
+}
+
 static gchar **
 _m0list_to_urlv(GSList *l)
 {
@@ -262,7 +263,7 @@ _m0list_to_urlv(GSList *l)
 	tmp = g_ptr_array_new();
 	for (; l ;l=l->next) {
 		struct meta0_info_s *m0i = l->data;
-		addr_info_to_string(&(m0i->addr), str, sizeof(str));
+		grid_addrinfo_to_string(&(m0i->addr), str, sizeof(str));
 		g_ptr_array_add(tmp, g_strdup_printf("1|meta1|%s|", str));
 	}
 
@@ -271,28 +272,22 @@ _m0list_to_urlv(GSList *l)
 }
 
 static GError *
-_resolve_m1_through_one_m0(const gchar *m0, const guint8 *prefix, gchar ***result)
+_resolve_m1_through_one_m0(const char *m0, const guint8 *prefix, gchar ***result)
 {
 	GError *err = NULL;
-	struct addr_info_s ai;
 
 	GRID_TRACE2("%s(%s,%02X%02X)", __FUNCTION__, m0, prefix[0], prefix[1]);
-	meta1_strurl_get_address(m0, &ai);
+	gchar *url = meta1_strurl_get_address(m0);
+	STRING_STACKIFY(url);
 
 	do {
-		GSList *lmap = meta0_remote_get_meta1_one(&ai,
-				_timeout(&rc_resolver_timeout_m0, 30.0), prefix, &err);
-		if (!lmap) {
-			if (err)
-				return err;
-			return NEWERROR(CODE_INTERNAL_ERROR, "No meta1 found");
-		}
-		else {
-			*result = _m0list_to_urlv(lmap);
-			g_slist_foreach(lmap, meta0_info_gclean, NULL);
-			g_slist_free(lmap);
-			err = NULL;
-		}
+		GSList *lmap = NULL;
+		err = meta0_remote_get_meta1_one(url, prefix, &lmap);
+		if (err)
+			return err;
+		*result = _m0list_to_urlv(lmap);
+		g_slist_foreach(lmap, meta0_info_gclean, NULL);
+		g_slist_free(lmap);
 	} while (0);
 
 	return err;
@@ -360,24 +355,8 @@ _resolve_meta1(struct hc_resolver_s *r, struct hc_url_s *u, gchar ***result)
 /* ------------------------------------------------------------------------- */
 
 static GError *
-_resolve_service_through_one_m1(const gchar *m1, struct hc_url_s *u,
-		const gchar *s, gchar ***result)
-{
-	GError *err = NULL;
-	struct addr_info_s ai;
-
-	GRID_TRACE2("%s(%s,%s,%s)", __FUNCTION__, m1, hc_url_get(u, HCURL_WHOLE), s);
-	meta1_strurl_get_address(m1, &ai);
-
-	*result = meta1v2_remote_list_reference_services(&ai, &err, u, s);
-	EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
-
-	return err;
-}
-
-static GError *
 _resolve_service_through_many_meta1(gchar **urlv, struct hc_url_s *u,
-		const gchar *s, gchar ***result)
+		const char *s, gchar ***result)
 {
 	guint i, last;
 	gchar *url;
@@ -389,8 +368,7 @@ _resolve_service_through_many_meta1(gchar **urlv, struct hc_url_s *u,
 		i = rand() % last;
 		url = urlv[i];
 
-		GError *err = _resolve_service_through_one_m1(url, u, s, result);
-		EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
+		GError *err = meta1v2_remote_list_reference_services(url, u, s, result);
 		if (!err)
 			return NULL;
 		if (!CODE_IS_NETWORK_ERROR(err->code))
@@ -407,7 +385,7 @@ _resolve_service_through_many_meta1(gchar **urlv, struct hc_url_s *u,
 
 static GError*
 _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
-		struct hc_url_s *u, const gchar *s, gchar ***result)
+		struct hc_url_s *u, const char *s, gchar ***result)
 {
 	GError *err;
 	gchar **m1urlv = NULL;
@@ -476,7 +454,7 @@ hc_resolve_reference_directory(struct hc_resolver_s *r, struct hc_url_s *url,
 
 GError*
 hc_resolve_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
-		const gchar *srvtype, gchar ***result)
+		const char *srvtype, gchar ***result)
 {
 	GError *err;
 	struct hashstr_s *hk;
@@ -524,7 +502,7 @@ hc_decache_reference(struct hc_resolver_s *r, struct hc_url_s *url)
 
 void
 hc_decache_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
-		const gchar *srvtype)
+		const char *srvtype)
 {
 	struct hashstr_s *hk;
 

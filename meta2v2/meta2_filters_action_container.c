@@ -221,15 +221,15 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	void s3_list_cb(gpointer ignored, gpointer bean) {
 		(void) ignored;
 		if (max > 0) {
-			if (DESCR(bean) == &descr_struct_ALIASES) {
+			if (DESCR(bean) == &descr_struct_ALIAS) {
 				_bean_list_cb(&obc->l, bean);
 				if (0 == --max)
-					next_marker = g_strdup(ALIASES_get_alias(bean)->str);
+					next_marker = g_strdup(ALIAS_get_alias(bean)->str);
 			} else {
 				_bean_list_cb(&obc->l, bean);
 			}
 		} else {
-			if (DESCR(bean) == &descr_struct_ALIASES)
+			if (DESCR(bean) == &descr_struct_ALIAS)
 				truncated = TRUE;
 			_bean_clean(bean);
 		}

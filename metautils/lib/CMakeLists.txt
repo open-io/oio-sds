@@ -52,7 +52,6 @@ add_custom_command(
 		M2V2BeanSequence.c M2V2BeanSequence.h
 		M2V2Chunk.c M2V2Chunk.h
 		M2V2Content.c M2V2Content.h
-		M2V2ContentHeader.c M2V2ContentHeader.h
 		M2V2Property.c M2V2Property.h
 
 	PRE_BUILD
@@ -115,7 +114,6 @@ add_library(metautils SHARED
 		utils_meta0_info.c
 		utils_metadata.c
 		utils_namespace_info.c
-		utils_score.c
 		utils_service_info.c
 		utils_tools.c
 		utils_duplication.c
@@ -217,8 +215,6 @@ add_library(metautils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Content.c
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Chunk.h
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Chunk.c
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2ContentHeader.h
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2ContentHeader.c
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Property.h
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Property.c
 

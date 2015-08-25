@@ -188,6 +188,14 @@ enum {
 	SCORE_MAX = 100
 };
 
+#ifndef OIO_DEFAULT_CHUNK_METHOD
+#define OIO_DEFAULT_CHUNK_METHOD "byte"
+#endif
+
+#ifndef OIO_DEFAULT_MIME_TYPE
+#define OIO_DEFAULT_MIME_TYPE "octet/stream"
+#endif
+
 #ifndef PROXYD_DEFAULT_TTL_SERVICES
 #define PROXYD_DEFAULT_TTL_SERVICES 3600
 #endif

@@ -90,20 +90,7 @@ gboolean
 meta1_url_get_address(struct meta1_service_url_s *u,
 		struct addr_info_s *dst)
 {
-	return l4_address_init_with_url(dst, u->host, NULL);
-}
-
-gboolean
-meta1_strurl_get_address(const gchar *str, struct addr_info_s *dst)
-{
-	gboolean rc;
-	struct meta1_service_url_s *u;
-
-	u = meta1_unpack_url(str);
-	rc = meta1_url_get_address(u, dst);
-	g_free(u);
-
-	return rc;
+	return grid_string_to_addrinfo(u->host, NULL, dst);
 }
 
 GError *

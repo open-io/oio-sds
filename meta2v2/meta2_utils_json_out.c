@@ -34,70 +34,59 @@ encode_alias (GString *g, gpointer bean)
 			"\"ver\":%"G_GINT64_FORMAT","
 			"\"ctime\":%"G_GINT64_FORMAT","
 			"\"header\":\"",
-			ALIASES_get_alias(bean)->str,
-			ALIASES_get_version(bean),
-			ALIASES_get_ctime(bean));
-	metautils_gba_to_hexgstr(g, ALIASES_get_content_id(bean));
+			ALIAS_get_alias(bean)->str,
+			ALIAS_get_version(bean),
+			ALIAS_get_ctime(bean));
+	metautils_gba_to_hexgstr(g, ALIAS_get_content(bean));
 	g_string_append_c(g, '"');
-}
-
-static void
-encode_header (GString *g, gpointer bean)
-{
-	g_string_append(g, "\"id\":\"");
-	metautils_gba_to_hexgstr(g, CONTENTS_HEADERS_get_id(bean));
-	g_string_append_printf(g, "\",\"hash\":\"");
-	metautils_gba_to_hexgstr(g, CONTENTS_HEADERS_get_hash(bean));
-	g_string_append_printf(g, "\",\"size\":%"G_GINT64_FORMAT,
-			CONTENTS_HEADERS_get_size(bean));
-	g_string_append_printf(g, ",\"policy\":\"%s\"",
-			CONTENTS_HEADERS_get_policy(bean)->str);
 }
 
 static void
 encode_content (GString *g, gpointer bean)
 {
-	g_string_append(g, "\"hdr\":\"");
-	metautils_gba_to_hexgstr(g, CONTENTS_get_content_id(bean));
-	g_string_append_printf(g,
-			"\",\"chunk\":\"%s\",\"pos\":\"%s\"",
-			CONTENTS_get_chunk_id(bean)->str,
-			CONTENTS_get_position(bean)->str);
+	g_string_append(g, "\"id\":\"");
+	metautils_gba_to_hexgstr(g, CONTENT_get_id(bean));
+	g_string_append_printf(g, "\",\"hash\":\"");
+	metautils_gba_to_hexgstr(g, CONTENT_get_hash(bean));
+	g_string_append_printf(g, "\",\"size\":%"G_GINT64_FORMAT, CONTENT_get_size(bean));
+	g_string_append_printf(g, ",\"ctime\":\"%"G_GINT64_FORMAT"\"", CONTENT_get_ctime(bean));
+	g_string_append_printf(g, ",\"policy\":\"%s\"", CONTENT_get_policy(bean)->str);
+	g_string_append_printf(g, ",\"mime-type\":\"%s\"", CONTENT_get_mime_type(bean)->str);
+	g_string_append_printf(g, ",\"chunk_method\":\"%s\"", CONTENT_get_chunk_method(bean)->str);
 }
 
 static void
 encode_chunk (GString *g, gpointer bean)
 {
-	g_string_append_printf(g, "\"id\":\"%s\",\"hash\":\"",
-			CHUNKS_get_id(bean)->str);
-	metautils_gba_to_hexgstr(g, CHUNKS_get_hash(bean));
-	g_string_append_printf(g, "\",\"size\":%"G_GINT64_FORMAT,
-			CHUNKS_get_size(bean));
+	g_string_append_printf(g, "\"id\":\"%s\",\"hash\":\"", CHUNK_get_id(bean)->str);
+	metautils_gba_to_hexgstr(g, CHUNK_get_hash(bean));
+	g_string_append_printf(g, "\",\"size\":%"G_GINT64_FORMAT",\"content\":\"", CHUNK_get_size(bean));
+	metautils_gba_to_hexgstr(g, CHUNK_get_content(bean));
+	g_string_append_printf(g, "\",\"pos\":\"%s\"", CHUNK_get_position(bean)->str);
+	g_string_append_printf(g, ",\"ctime\":\"%"G_GINT64_FORMAT"\"", CHUNK_get_ctime(bean));
 }
 
 static void
 encode_property (GString *g, gpointer bean)
 {
-	g_string_append_printf(g, "\"alias\":\"%s\",", PROPERTIES_get_alias(bean)->str);
-	g_string_append_printf(g, "\"version\":%"G_GINT64_FORMAT",", PROPERTIES_get_alias_version(bean));
-	g_string_append_printf(g, "\"key\":\"%s\",", PROPERTIES_get_key(bean)->str);
+	g_string_append_printf(g, "\"alias\":\"%s\",", PROPERTY_get_alias(bean)->str);
+	g_string_append_printf(g, "\"version\":%"G_GINT64_FORMAT",", PROPERTY_get_version(bean));
+	g_string_append_printf(g, "\"key\":\"%s\",", PROPERTY_get_key(bean)->str);
 	g_string_append_printf(g, "\"value\":\"%.*s\"",
-			PROPERTIES_get_value(bean)->len,
-			(gchar*) PROPERTIES_get_value(bean)->data);
+			PROPERTY_get_value(bean)->len,
+			(gchar*) PROPERTY_get_value(bean)->data);
 }
 
 static void
 encode_bean (GString *g, gpointer bean)
 {
-	if (DESCR(bean) == &descr_struct_CHUNKS)
+	if (DESCR(bean) == &descr_struct_CHUNK)
 		return encode_chunk (g, bean);
-	if (DESCR(bean) == &descr_struct_CONTENTS)
+	if (DESCR(bean) == &descr_struct_CONTENT)
 		return encode_content (g, bean);
-	if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS)
-		return encode_header (g, bean);
-	if (DESCR(bean) == &descr_struct_ALIASES)
+	if (DESCR(bean) == &descr_struct_ALIAS)
 		return encode_alias (g, bean);
-	if (DESCR(bean) == &descr_struct_PROPERTIES)
+	if (DESCR(bean) == &descr_struct_PROPERTY)
 		return encode_property (g, bean);
 	g_assert_not_reached ();
 }
@@ -128,25 +117,19 @@ _json_BEAN_only(GString *gstr, GSList *l, gconstpointer selector,
 void
 meta2_json_alias_only(GString *gstr, GSList *l, gboolean extend)
 {
-	_json_BEAN_only(gstr, l, &descr_struct_ALIASES, extend, encode_alias);
-}
-
-void
-meta2_json_headers_only(GString *gstr, GSList *l, gboolean extend)
-{
-	_json_BEAN_only(gstr, l, &descr_struct_CONTENTS_HEADERS, extend, encode_header);
+	_json_BEAN_only(gstr, l, &descr_struct_ALIAS, extend, encode_alias);
 }
 
 void
 meta2_json_contents_only(GString *gstr, GSList *l, gboolean extend)
 {
-	_json_BEAN_only(gstr, l, &descr_struct_CONTENTS, extend, encode_content);
+	_json_BEAN_only(gstr, l, &descr_struct_CONTENT, extend, encode_content);
 }
 
 void
 meta2_json_chunks_only(GString *gstr, GSList *l, gboolean extend)
 {
-	_json_BEAN_only(gstr, l, &descr_struct_CHUNKS, extend, encode_chunk);
+	_json_BEAN_only(gstr, l, &descr_struct_CHUNK, extend, encode_chunk);
 }
 
 void
@@ -160,8 +143,7 @@ meta2_json_dump_all_beans(GString *gstr, GSList *beans)
 {
 	g_string_append(gstr, "\"aliases\":[");
 	meta2_json_alias_only(gstr, beans, FALSE);
-	g_string_append(gstr, "],\"headers\":[");
-	meta2_json_headers_only(gstr, beans, FALSE);
+
 	g_string_append(gstr, "],\"contents\":[");
 	meta2_json_contents_only(gstr, beans, FALSE);
 	g_string_append(gstr, "],\"chunks\":[");

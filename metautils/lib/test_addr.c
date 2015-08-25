@@ -31,7 +31,7 @@ test_codec (void)
 	struct addr_info_s addr;
 	const char *original = "127.0.0.1:6000";
 	char resolved[128];
-	rc = l4_address_init_with_url (&addr, original, NULL);
+	rc = grid_string_to_addrinfo (original, NULL, &addr);
 	g_assert (BOOL(rc));
 
 	GSList *singleton = g_slist_prepend (NULL, &addr);

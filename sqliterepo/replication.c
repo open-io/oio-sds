@@ -661,14 +661,19 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 			GRID_WARN("ROLLBACK failed! (%d/%s) %s", rc,
 					sqlite_strerror(rc), sqlite3_errmsg(ctx->sq3->db));
 		}
+
+		// not sure anymore about anything in the admin table ... reload it completely !
 		sqlx_admin_reload(ctx->sq3);
 	}
 	else {
 		// Ensure that newly created tables have versions now referenced
 		// in the admin table.
-		sqlx_admin_reload(ctx->sq3);
+		sqlx_admin_ensure_versions (ctx->sq3);
 
-		// Agregate the changes
+		// If anything changed in the admin table, then change it
+		sqlx_admin_save_lazy (ctx->sq3);
+
+		// Prepare the changes to be sent to the slave peers
 		sqlx_transaction_changes(ctx);
 
 		// Apply the changes on the slaves.

@@ -30,7 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/sqliterepo.h>
 
 #include "./internals.h"
-#include "./internals_sqlite.h"
 #include "./meta1_prefixes.h"
 #include "./meta1_backend.h"
 
@@ -89,21 +88,16 @@ _cache_from_m0l(GSList *l, const struct addr_info_s *ai)
 }
 
 static GError*
-_cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
-		const gchar *ns_name,
+_cache_load_from_m0(struct meta1_prefixes_set_s *m1ps, const char *m0,
 		const struct addr_info_s *local_addr,
-		struct addr_info_s *m0_addr,
 		GArray **updated_prefixes)
 {
 	GError *err = NULL;
 	GSList *m0info_list = NULL;
 
 	EXTRA_ASSERT(m1ps != NULL);
-	GRID_TRACE2("%s(%p,%s,%p,%p)", __FUNCTION__, m1ps, ns_name, local_addr,
-			m0_addr);
 
-	(void)ns_name;
-	m0info_list = meta0_remote_get_meta1_all(m0_addr, 10000, &err);
+	err = meta0_remote_get_meta1_all(m0, &m0info_list);
 	if (err) {
 		g_prefix_error(&err, "Remote error: ");
 		return err;
@@ -192,8 +186,9 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps,
 			continue;
 		}
 
-		err = _cache_load_from_m0(m1ps, ns_name, &local_ai,
-				&(si->addr),updated_prefixes);
+		char m0[STRLEN_ADDRINFO];
+		grid_addrinfo_to_string (&si->addr, m0, sizeof(m0));
+		err = _cache_load_from_m0(m1ps, m0, &local_ai, updated_prefixes);
 		if (!err) {
 			done = TRUE;
 			break;

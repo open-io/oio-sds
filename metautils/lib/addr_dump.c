@@ -30,7 +30,7 @@ main(int argc, char **args)
 		memset(&addr, 0, sizeof(addr));
 		if (grid_string_to_addrinfo(args[i], NULL, &addr)) {
 			memset(str, 0, sizeof(str));
-			addr_info_to_string(&addr, str, sizeof(str));
+			grid_addrinfo_to_string(&addr, str, sizeof(str));
 			memset(hexa, 0, sizeof(hexa));
 			oio_str_bin2hex(&addr, sizeof(addr), hexa, sizeof(hexa));
 			g_print("%s %s\n", str, hexa);

@@ -169,60 +169,6 @@ retry:
 	return -1;
 }
 
-void
-addr_info_clean(gpointer p)
-{
-	if (p)
-		g_free(p);
-}
-
-void
-addr_info_gclean(gpointer d, gpointer u)
-{
-	(void) u;
-	if (d)
-		g_free(d);
-}
-
-gboolean
-l4_address_split(const gchar * url, gchar ** host, gchar ** port)
-{
-	int len;
-	gchar wrkUrl[512];
-
-	if (!host || !port)
-		return FALSE;
-
-	g_strlcpy(wrkUrl, url, sizeof(wrkUrl));
-	len = strlen(wrkUrl);
-
-	if (*wrkUrl == '[') {	/*[IP]:PORT */
-		gchar *last_semicolon;
-
-		last_semicolon = g_strrstr(wrkUrl, ":");
-
-		if (!last_semicolon || last_semicolon - wrkUrl >= len)
-			return FALSE;
-
-		*(last_semicolon - 1) = '\0';
-		*port = g_strdup(last_semicolon + 1);
-		*host = g_strdup(wrkUrl + 1);
-	}
-	else {
-		gchar *last_semicolon;
-
-		last_semicolon = g_strrstr(wrkUrl, ":");
-
-		if (!last_semicolon || last_semicolon - wrkUrl >= len)
-			return FALSE;
-
-		*last_semicolon = '\0';
-		*port = g_strdup(last_semicolon + 1);
-		*host = g_strdup(wrkUrl);
-	}
-	return TRUE;
-}
-
 gint
 addr_info_compare(gconstpointer a, gconstpointer b)
 {
@@ -303,31 +249,17 @@ addr_info_hash(gconstpointer k)
 addr_info_t *
 addr_info_from_service_str(const gchar *service)
 {
-	gchar **t = NULL;
-	gchar **addr_tok = NULL;
-	GError *local_error = NULL;
-	addr_info_t* addr = NULL;
+	gchar **t = g_strsplit(service, "|", 3);
+	if (!t) return NULL;
 
-	t = g_strsplit(service, "|", 3);
-	if(g_strv_length(t) != 3) {
-		goto end_label;
+	if (g_strv_length(t) != 3) {
+		g_strfreev (t);
+		return NULL;
 	}
 
-	addr_tok = g_strsplit(t[2], ":", 2);
-	if(g_strv_length(addr_tok) != 2) {
-		goto end_label;
-	}
-
-	addr = build_addr_info(addr_tok[0], atoi(addr_tok[1]), &local_error);
-
-end_label:
-
-	if(local_error)
-		g_clear_error(&local_error);
-	if(addr_tok)
-		g_strfreev(addr_tok);
-	if(t)
-		g_strfreev(t);
-	return addr;
+	addr_info_t addr;
+	int rc = grid_string_to_addrinfo (t[2], NULL, &addr);
+	g_strfreev (t);
+	return !rc ? NULL : g_memdup(&addr, sizeof(addr));
 }
 

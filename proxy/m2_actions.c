@@ -123,9 +123,9 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 
 	GSList *aliases = NULL, *headers = NULL;
 	for (GSList *l=beans; l ;l=l->next) {
-		if (DESCR(l->data) == &descr_struct_ALIASES)
+		if (DESCR(l->data) == &descr_struct_ALIAS)
 			aliases = g_slist_prepend (aliases, l->data);
-		else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS)
+		else if (DESCR(l->data) == &descr_struct_CONTENT)
 			headers = g_slist_prepend (headers, l->data);
 	}
 
@@ -133,7 +133,7 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 	GString *gstr = g_string_new ("{");
 
 	// Dump the prefixes
-	if (prefixes && *prefixes) {
+	if (prefixes) {
 		g_string_append (gstr, "\"prefixes\":[");
 		first = TRUE;
 		for (gchar **pp=prefixes; pp && *pp ;++pp) {
@@ -155,12 +155,12 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 			g_string_append_c(gstr, ',');
 		first = FALSE;
 
-		struct bean_ALIASES_s *a = la->data;
+		struct bean_ALIAS_s *a = la->data;
 		// Look for the matching header
 		// TODO optimize this with a tree or a hashmap
-		struct bean_CONTENTS_HEADERS_s *h = NULL;
+		struct bean_CONTENT_s *h = NULL;
 		for (GSList *lh=headers; lh ; lh=lh->next) {
-			if (0 == metautils_gba_cmp(CONTENTS_HEADERS_get_id(lh->data), ALIASES_get_content_id(a))) {
+			if (0 == metautils_gba_cmp(CONTENT_get_id(lh->data), ALIAS_get_content(a))) {
 				h = lh->data;
 				break;
 			}
@@ -171,30 +171,21 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 				"\"name\":\"%s\",\"ver\":%"G_GINT64_FORMAT","
 				"\"ctime\":%"G_GINT64_FORMAT","
 				"\"deleted\":%s",
-				ALIASES_get_alias(a)->str,
-				ALIASES_get_version(a),
-				ALIASES_get_ctime(a),
-				ALIASES_get_deleted(a) ? "true" : "false");
+				ALIAS_get_alias(a)->str,
+				ALIAS_get_version(a),
+				ALIAS_get_ctime(a),
+				ALIAS_get_deleted(a) ? "true" : "false");
 
 		if (h) {
-			g_string_append_c (gstr, ',');
-			GString *pol = CONTENTS_HEADERS_get_policy(h);
-			GByteArray *hh = CONTENTS_HEADERS_get_hash(h);
+			GByteArray *hh = CONTENT_get_hash(h);
+			g_string_append_printf(gstr, ",\"hash\":\"");
+			metautils_gba_to_hexgstr(gstr, hh);
+			g_string_append_c (gstr, '"');
 
-			if (pol)
-				g_string_append_printf(gstr, "\"policy\":\"%s\",\"hash\":", pol->str);
-			else
-				g_string_append_printf(gstr, "\"policy\":null,\"hash\":");
-			if (hh) {
-				g_string_append_c (gstr, '"');
-				metautils_gba_to_hexgstr(gstr, hh);
-				g_string_append_c (gstr, '"');
-			} else {
-				g_string_append(gstr, "null");
-			}
-
-			g_string_append_printf(gstr, ",\"size\":%"G_GINT64_FORMAT,
-					CONTENTS_HEADERS_get_size(h));
+			g_string_append_printf(gstr, ",\"size\":%"G_GINT64_FORMAT, CONTENT_get_size(h));
+			g_string_append_printf(gstr, ",\"policy\":\"%s\"", CONTENT_get_policy(h)->str);
+			g_string_append_printf(gstr, ",\"mime-type\":\"%s\"", CONTENT_get_mime_type(h)->str);
+			g_string_append_printf(gstr, ",\"chunk-method\":\"%s\"", CONTENT_get_chunk_method(h)->str);
 		}
 		g_string_append_c(gstr, '}');
 	}
@@ -221,38 +212,38 @@ _reply_beans (struct req_args_s *args, GError * err, GSList * beans)
 }
 
 static void
-_populate_headers_with_header (struct req_args_s *args, struct bean_CONTENTS_HEADERS_s *header)
+_populate_headers_with_header (struct req_args_s *args, struct bean_CONTENT_s *header)
 {
 	if (!header)
 		return;
-	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-length",
-			g_strdup_printf("%"G_GINT64_FORMAT, CONTENTS_HEADERS_get_size(header)));
-	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-policy",
-			g_strdup(CONTENTS_HEADERS_get_policy(header)->str));
-	args->rp->add_header_gstr(PROXYD_HEADER_PREFIX "content-meta-hash",
-			metautils_gba_to_hexgstr(NULL, CONTENTS_HEADERS_get_hash(header)));
-	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-hash-method",
+	args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-length",
+			g_strdup_printf ("%"G_GINT64_FORMAT, CONTENT_get_size (header)));
+	args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-policy",
+			g_strdup (CONTENT_get_policy (header)->str));
+	args->rp->add_header_gstr (PROXYD_HEADER_PREFIX "content-meta-hash",
+			metautils_gba_to_hexgstr (NULL, CONTENT_get_hash (header)));
+	args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-hash-method",
 			g_strdup("md5"));
+	args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-mime-type",
+			g_strdup (CONTENT_get_mime_type (header)->str));
+	args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-chunk-method",
+			g_strdup (CONTENT_get_chunk_method (header)->str));
 }
 
 static void
-_populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *alias)
+_populate_headers_with_alias (struct req_args_s *args, struct bean_ALIAS_s *alias)
 {
 	if (!alias)
 		return;
 
 	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-name",
-			g_strdup(ALIASES_get_alias(alias)->str));
+			g_strdup(ALIAS_get_alias(alias)->str));
 	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-version",
-			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_version(alias)));
+			g_strdup_printf("%"G_GINT64_FORMAT, ALIAS_get_version(alias)));
 	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-deleted",
-			g_strdup(ALIASES_get_deleted(alias) ? "True" : "False"));
+			g_strdup(ALIAS_get_deleted(alias) ? "True" : "False"));
 	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-ctime",
-			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_ctime(alias)));
-
-	// TODO manage the replacement of the lost metadata
-	//args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-mime-type", g_strdup(v));
-	//args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-chunk-method", g_strdup(v));
+			g_strdup_printf("%"G_GINT64_FORMAT, ALIAS_get_ctime(alias)));
 }
 
 static enum http_rc_e
@@ -261,17 +252,18 @@ _reply_simplified_beans (struct req_args_s *args, GError *err, GSList *beans, gb
 	if (err)
 		return _reply_m2_error(args, err);
 
-	struct bean_ALIASES_s *alias = NULL;
-	struct bean_CONTENTS_HEADERS_s *header = NULL;
+	struct bean_ALIAS_s *alias = NULL;
+	struct bean_CONTENT_s *header = NULL;
+	gboolean allow_deleted = metautils_cfg_get_bool(OPT("deleted"),FALSE);
 	gboolean first = TRUE;
 	GString *gstr = body ? g_string_new ("[") : NULL;
 
 	beans = g_slist_sort(beans, _bean_compare_kind);
 
 	for (GSList *l0=beans; l0 ;l0=l0->next) {
-		if (&descr_struct_ALIASES == DESCR(l0->data)) {
+		if (&descr_struct_ALIAS == DESCR(l0->data)) {
 			alias = l0->data;
-			if (ALIASES_get_deleted(alias) && !metautils_cfg_get_bool(OPT("deleted"),FALSE)) {
+			if (ALIAS_get_deleted(alias) && !allow_deleted) {
 				if (gstr)
 					g_string_free (gstr, TRUE);
 				_bean_cleanl2(beans);
@@ -279,32 +271,22 @@ _reply_simplified_beans (struct req_args_s *args, GError *err, GSList *beans, gb
 			}
 			continue;
 		}
-		if (&descr_struct_CONTENTS_HEADERS == DESCR(l0->data)) {
+		if (&descr_struct_CONTENT == DESCR(l0->data)) {
 			header = l0->data;
 			continue;
 		}
-		if (&descr_struct_CHUNKS != DESCR(l0->data))
-			continue;
-		struct bean_CHUNKS_s *chunk = l0->data;
-		// TODO FIXME argl, inner loop
-		for (GSList *l1=beans; body && l1 ;l1=l1->next) {
-			if (&descr_struct_CONTENTS != DESCR(l1->data))
-				continue;
-			struct bean_CONTENTS_s *content = l1->data;
-			if (!g_ascii_strcasecmp(CHUNKS_get_id(chunk)->str, CONTENTS_get_chunk_id(content)->str)) {
-				// Separator
-				if (!first)
-					g_string_append_c (gstr, ',');
-				first = FALSE;
-				// Serialize the chunk
-				g_string_append_printf (gstr,
-						"{\"url\":\"%s\", \"pos\":\"%s\", \"size\":%"G_GINT64_FORMAT", \"hash\":\"",
-						CHUNKS_get_id (chunk)->str, CONTENTS_get_position (content)->str,
-						CHUNKS_get_size (chunk));
-				metautils_gba_to_hexgstr (gstr, CHUNKS_get_hash (chunk));
-				g_string_append (gstr, "\"}");
-				break;
-			}
+		if (gstr && &descr_struct_CHUNK == DESCR(l0->data)) {
+			struct bean_CHUNK_s *chunk = l0->data;
+			// Separator
+			if (!first) g_string_append_c (gstr, ',');
+			first = FALSE;
+			// Serialize the chunk
+			g_string_append_printf (gstr,
+					"{\"url\":\"%s\", \"pos\":\"%s\", \"size\":%"G_GINT64_FORMAT", \"hash\":\"",
+					CHUNK_get_id (chunk)->str, CHUNK_get_position (chunk)->str,
+					CHUNK_get_size (chunk));
+			metautils_gba_to_hexgstr (gstr, CHUNK_get_hash (chunk));
+			g_string_append (gstr, "\"}");
 		}
 	}
 	if (body)
@@ -368,20 +350,14 @@ _load_simplified_chunks (struct json_object *jbody, GSList **out)
 
 		GByteArray *h = NULL;
 		if (!(err = _get_hash (json_object_get_string(jhash), &h))) {
-			struct timespec ts;
-			clock_gettime(CLOCK_REALTIME_COARSE, &ts);
-			struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
-			CHUNKS_set2_id (chunk, json_object_get_string(jurl));
-			CHUNKS_set_hash (chunk, h);
-			CHUNKS_set_size (chunk, json_object_get_int64(jsize));
-			CHUNKS_set_ctime (chunk, ts.tv_sec);
-			struct bean_CONTENTS_s *content = _bean_create(&descr_struct_CONTENTS);
-			CONTENTS_set2_position (content, json_object_get_string(jpos));
-			CONTENTS_set2_chunk_id (content, json_object_get_string(jurl));
-			CONTENTS_set2_content_id (content, (guint8*)"0", 1);
-
+			struct bean_CHUNK_s *chunk = _bean_create(&descr_struct_CHUNK);
+			CHUNK_set2_id (chunk, json_object_get_string(jurl));
+			CHUNK_set_hash (chunk, h);
+			CHUNK_set_size (chunk, json_object_get_int64(jsize));
+			CHUNK_set_ctime (chunk, 0);
+			CHUNK_set2_position (chunk, json_object_get_string(jpos));
+			CHUNK_set2_content (chunk, (guint8*)"0", 1);
 			beans = g_slist_prepend(beans, chunk);
-			beans = g_slist_prepend(beans, content);
 		}
 		if (h) g_byte_array_free (h, TRUE);
 	}
@@ -392,8 +368,8 @@ _load_simplified_chunks (struct json_object *jbody, GSList **out)
 		*out = beans;
 
 	return err;
-
 }
+
 static GError *
 _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GSList **out)
 {
@@ -407,16 +383,16 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 
 	err = _load_simplified_chunks (jbody, &beans);
 
-	struct bean_CONTENTS_HEADERS_s *header = NULL;
+	struct bean_CONTENT_s *header = NULL;
 
 	if (!err) {
-		header = _bean_create (&descr_struct_CONTENTS_HEADERS);
+		header = _bean_create (&descr_struct_CONTENT);
 		beans = g_slist_prepend (beans, header);
-		CONTENTS_HEADERS_set2_id (header, (guint8*)"0", 1);
+		CONTENT_set2_id (header, (guint8*)"0", 1);
 
 		gchar *s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-policy");
 		if (NULL != s)
-			CONTENTS_HEADERS_set2_policy (header, s);
+			CONTENT_set2_policy (header, s);
 	}
 
 	if (!err) { // Content hash
@@ -424,7 +400,7 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 		if (NULL != s) {
 			GByteArray *h = NULL;
 			if (!(err = _get_hash (s, &h)))
-				CONTENTS_HEADERS_set_hash (header, h);
+				CONTENT_set_hash (header, h);
 			if (h) g_byte_array_free(h, TRUE);
 		}
 	}
@@ -446,15 +422,15 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 			else if (*end != 0)
 				err = BADREQ("Header: invalid content length (trailing characters)");
 			else
-				CONTENTS_HEADERS_set_size (header, s64);
+				CONTENT_set_size (header, s64);
 		}
 	}
 
 	if (!err) {
-		struct bean_ALIASES_s *alias = _bean_create (&descr_struct_ALIASES);
+		struct bean_ALIAS_s *alias = _bean_create (&descr_struct_ALIAS);
 		beans = g_slist_prepend (beans, alias);
-		ALIASES_set2_alias (alias, PATH());
-		ALIASES_set2_content_id (alias, (guint8*)"0", 1);
+		ALIAS_set2_alias (alias, PATH());
+		ALIAS_set2_content (alias, (guint8*)"0", 1);
 
 		// Extract the PROXYD_HEADER_PREFIX "content-meta-type"
 		// Extract the "content-type"
@@ -464,12 +440,12 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 			(void)u;
 			if (!g_str_has_prefix((gchar*)k, PROXYD_HEADER_PREFIX "content-meta-x-"))
 				return FALSE;
-			const gchar *rk = ((gchar*)k) + sizeof(PROXYD_HEADER_PREFIX "content-meta-x-") - 1;
-			struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES);
-			PROPERTIES_set_alias (prop, ALIASES_get_alias(alias));
-			PROPERTIES_set_alias_version (prop, 0);
-			PROPERTIES_set2_key (prop, rk);
-			PROPERTIES_set2_value (prop, (guint8*)v, strlen((gchar*)v));
+			const char *rk = ((gchar*)k) + sizeof(PROXYD_HEADER_PREFIX "content-meta-x-") - 1;
+			struct bean_PROPERTY_s *prop = _bean_create (&descr_struct_PROPERTY);
+			PROPERTY_set_alias (prop, ALIAS_get_alias(alias));
+			PROPERTY_set_version (prop, 0);
+			PROPERTY_set2_key (prop, rk);
+			PROPERTY_set2_value (prop, (guint8*)v, strlen((gchar*)v));
 			return FALSE;
 		}
 		g_tree_foreach (args->rq->tree_headers, run_headers, NULL);
@@ -520,24 +496,24 @@ _reply_properties (struct req_args_s *args, GError * err, GSList * beans)
 	}
 
 	for (GSList *l=beans; l ;l=l->next) {
-		if (DESCR(l->data) == &descr_struct_ALIASES)
+		if (DESCR(l->data) == &descr_struct_ALIAS)
 			_populate_headers_with_alias (args, l->data);
-		else if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS)
+		else if (DESCR(l->data) == &descr_struct_CONTENT)
 			_populate_headers_with_header (args, l->data);
 	}
 
 	gboolean first = TRUE;
 	GString *gs = g_string_new("{");
 	for (GSList *l=beans; l ;l=l->next) {
-		if (DESCR(l->data) != &descr_struct_PROPERTIES)
+		if (DESCR(l->data) != &descr_struct_PROPERTY)
 			continue;
 		if (!first)
 			g_string_append_c(gs, ',');
 		first = FALSE;
-		struct bean_PROPERTIES_s *bean = l->data;
+		struct bean_PROPERTY_s *bean = l->data;
 		g_string_append_printf(gs, "\"%s\":\"%.*s\"",
-				PROPERTIES_get_key(bean)->str,
-				PROPERTIES_get_value(bean)->len, PROPERTIES_get_value(bean)->data);
+				PROPERTY_get_key(bean)->str,
+				PROPERTY_get_value(bean)->len, PROPERTY_get_value(bean)->data);
 	}
 	g_string_append_c(gs, '}');
 
@@ -601,16 +577,16 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 			forget (l);
 			continue;
 		}
-		if (DESCR(l->data) == &descr_struct_CONTENTS_HEADERS) {
+		if (DESCR(l->data) == &descr_struct_CONTENT) {
 			prepend (l);
 			continue;
 		}
-		if (DESCR(l->data) != &descr_struct_ALIASES) {
+		if (DESCR(l->data) != &descr_struct_ALIAS) {
 			forget (l);
 			continue;
 		}
 
-		const char *name = ALIASES_get_alias(l->data)->str;
+		const char *name = ALIAS_get_alias(l->data)->str;
 		if (ctx->delimiter) {
 			const char *p = strchr(name+prefix_len, ctx->delimiter);
 			if (p) {
@@ -831,14 +807,8 @@ retry:
 		if (autocreate) {
 			autocreate = FALSE; /* autocreate just once */
 			g_clear_error (&err);
-			GError *hook_dir (const gchar *m1) {
-				struct addr_info_s m1a;
-				if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-					return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-				GError *e = NULL;
-				gchar **urlv = meta1v2_remote_link_service (&m1a, &e, args->url, type, FALSE, TRUE);
-				if (urlv) g_strfreev (urlv);
-				return e;
+			GError *hook_dir (const char *m1) {
+				return meta1v2_remote_link_service (m1, args->url, type, FALSE, TRUE, NULL);
 			}
 			err = _m1_locate_and_action (args, hook_dir);
 			if (!err)
@@ -871,8 +841,20 @@ action_m2_container_destroy (struct req_args_s *args)
 		return m2v2_remote_execute_DESTROY (m2->host, args->url, 0);
 	}
 
-	GError *err;
-	if (NULL != (err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook)))
+	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	if (NULL != err && err->code == CODE_CONTAINER_NOTFOUND) {
+		GRID_DEBUG("Meta2 linked but no container");
+		g_clear_error (&err);
+	}
+
+	if (!err) { /* now unlink the service */
+		/* XXX TODO patch with the compund type */
+		path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
+		path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
+		return action_dir_srv_unlink(args);
+	}
+
+	if (NULL != err)
 		return _reply_m2_error(args, err);
 	return _reply_nocontent (args);
 }
@@ -1025,6 +1007,7 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 enum http_rc_e
 action_m2_container_propget (struct req_args_s *args, struct json_object *jargs)
 {
+	/* XXX TODO patch with the compund type */
 	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
 	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
 	return action_sqlx_propget(args, jargs);
@@ -1033,6 +1016,7 @@ action_m2_container_propget (struct req_args_s *args, struct json_object *jargs)
 enum http_rc_e
 action_m2_container_propset (struct req_args_s *args, struct json_object *jargs)
 {
+	/* XXX TODO patch with the compund type */
 	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
 	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
 	return action_sqlx_propset(args, jargs);
@@ -1041,6 +1025,7 @@ action_m2_container_propset (struct req_args_s *args, struct json_object *jargs)
 enum http_rc_e
 action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
 {
+	/* XXX TODO patch with the compund type */
 	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
 	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
 	return action_sqlx_propdel(args, jargs);
@@ -1186,8 +1171,8 @@ action_m2_content_beans (struct req_args_s *args, struct json_object *jargs)
 	struct json_object *jsize = NULL, *jpol = NULL;
 	json_object_object_get_ex(jargs, "size", &jsize);
 	json_object_object_get_ex(jargs, "policy", &jpol);
-	const gchar *strsize = !jsize ? NULL : json_object_get_string (jsize);
-	const gchar *stgpol = !jpol ? NULL : json_object_get_string (jpol);
+	const char *strsize = !jsize ? NULL : json_object_get_string (jsize);
+	const char *stgpol = !jpol ? NULL : json_object_get_string (jpol);
 
 	if (!strsize)
 		return _reply_format_error (args, BADREQ("Missing size estimation"));
@@ -1218,21 +1203,6 @@ retry:
 			if (!(err = _m2_container_create (args)))
 				goto retry;
 		}
-	}
-
-	// Patch the chunk size to ease putting contents with unknown size.
-	if (!err) {
-		gint64 chunk_size = 0;
-		NSINFO_DO(chunk_size = nsinfo.chunk_size);
-		chunk_size = MAX(chunk_size,1);
-		for (GSList *l=beans; l ;l=l->next) {
-			if (l->data && (DESCR(l->data) == &descr_struct_CHUNKS)) {
-				struct bean_CHUNKS_s *bean = l->data;
-				CHUNKS_set_size(bean, chunk_size);
-			}
-		}
-		args->rp->add_header(PROXYD_HEADER_PREFIX "ns-chunk-size",
-				g_strdup_printf("%"G_GINT64_FORMAT, chunk_size));
 	}
 
 	return _reply_simplified_beans (args, err, beans, TRUE);
@@ -1306,7 +1276,7 @@ action_m2_content_stgpol (struct req_args_s *args, struct json_object *jargs)
 	if (!json_object_is_type (jargs, json_type_string))
 		return _reply_format_error (args, BADREQ ("the storage policy must be a string"));
 
-	const gchar *stgpol = json_object_get_string (jargs);
+	const char *stgpol = json_object_get_string (jargs);
 	if (!stgpol)
 		return _reply_format_error (args, BADREQ ("missing policy"));
 
@@ -1331,16 +1301,16 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 		if (!json_object_is_type(jargs, json_type_object))
 			return _reply_format_error (args, BADREQ("Object argument expected"));
 		json_object_object_foreach(jargs,sk,jv) {
-			struct bean_PROPERTIES_s *prop = _bean_create (&descr_struct_PROPERTIES);
-			PROPERTIES_set2_key (prop, sk);
+			struct bean_PROPERTY_s *prop = _bean_create (&descr_struct_PROPERTY);
+			PROPERTY_set2_key (prop, sk);
 			if (json_object_is_type (jv, json_type_null)) {
-				PROPERTIES_set2_value (prop, (guint8*)"", 0);
+				PROPERTY_set2_value (prop, (guint8*)"", 0);
 			} else {
 				const char *sv = json_object_get_string (jv);
-				PROPERTIES_set2_value (prop, (guint8*)sv, strlen(sv));
+				PROPERTY_set2_value (prop, (guint8*)sv, strlen(sv));
 			}
-			PROPERTIES_set2_alias (prop, hc_url_get (args->url, HCURL_PATH));
-			PROPERTIES_set_alias_version (prop, version);
+			PROPERTY_set2_alias (prop, hc_url_get (args->url, HCURL_PATH));
+			PROPERTY_set_version (prop, version);
 			beans = g_slist_prepend (beans, prop);
 		}
 	}
@@ -1429,7 +1399,7 @@ action_m2_content_action (struct req_args_s *args)
 enum http_rc_e
 action_m2_content_copy (struct req_args_s *args)
 {
-	const gchar *target = g_tree_lookup (args->rq->tree_headers, "destination");
+	const char *target = g_tree_lookup (args->rq->tree_headers, "destination");
 	if (!target)
 		return _reply_format_error(args, BADREQ("Missing target header"));
 

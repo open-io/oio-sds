@@ -67,45 +67,42 @@ BEGIN
 	M2V2Alias ::= SEQUENCE {
 		name             [0] PrintableString,
 		version          [1] INTEGER,
-		containerVersion [2] INTEGER,
-		contentId        [3] OCTET STRING,
-		ctime            [5] INTEGER,
-		deleted          [6] BOOLEAN
-	}
-
-	M2V2ContentHeader ::= SEQUENCE {
-		id     [0] OCTET STRING, 
-		hash   [1] OCTET STRING OPTIONAL,
-		policy [2] PrintableString OPTIONAL,
-		size   [3] INTEGER
-	}
-
-	M2V2Chunk ::= SEQUENCE {
-		hash  [0] OCTET STRING,
-		id    [1] PrintableString,
-		size  [2] INTEGER,
-		ctime [3] INTEGER
+		content          [3] OCTET STRING,
+		ctime            [4] INTEGER,
+		deleted          [5] BOOLEAN
 	}
 
 	M2V2Content ::= SEQUENCE {
-		contentId   [0] OCTET STRING,
-		chunkId     [1] PrintableString,
-		position    [2] PrintableString
+		id          [0] OCTET STRING, 
+		hash        [1] OCTET STRING OPTIONAL,
+		size        [2] INTEGER,
+		ctime       [3] INTEGER,
+		mimetype    [4] PrintableString,
+		chunkmethod [5] PrintableString,
+		policy      [6] PrintableString
+	}
+
+	M2V2Chunk ::= SEQUENCE {
+		id       [0] PrintableString,
+		content  [1] OCTET STRING,
+		position [2] PrintableString,
+		hash     [3] OCTET STRING,
+		size     [4] INTEGER,
+		ctime    [5] INTEGER
 	}
 
 	M2V2Property ::= SEQUENCE {
-		aliasName    [0] PrintableString,
-		aliasVersion [1] INTEGER,
-		key          [2] PrintableString,
-		value        [3] OCTET STRING
+		alias   [0] PrintableString,
+		version [1] INTEGER,
+		key     [2] PrintableString,
+		value   [3] OCTET STRING
 	}
 
 	M2V2Bean ::= SEQUENCE {
 		alias    [0] M2V2Alias OPTIONAL,
-		header   [1] M2V2ContentHeader OPTIONAL,
-		content  [2] M2V2Content OPTIONAL,
-		chunk    [3] M2V2Chunk OPTIONAL,
-		prop     [4] M2V2Property OPTIONAL
+		content  [1] M2V2Content OPTIONAL,
+		chunk    [2] M2V2Chunk OPTIONAL,
+		prop     [3] M2V2Property OPTIONAL
 	}
 
 	M2V2BeanSequence ::= SEQUENCE OF M2V2Bean

@@ -276,47 +276,6 @@ write_in_gba(const void *b, gsize bSize, void *key)
 	return a ? 0 : -1;
 }
 
-/* -------------------------------------------------------------------------- */
-
-gboolean
-simple_integer_unmarshall(const guint8 * bytes, gsize size, gint64 *api)
-{
-	EXTRA_ASSERT(api != NULL);
-
-	INTEGER_t *asn = NULL;
-	asn_codec_ctx_t codecCtx;
-	codecCtx.max_stack_size = ASN1C_MAX_STACK;
-	asn_dec_rval_t decRet = ber_decode(&codecCtx, &asn_DEF_INTEGER, (void**)&asn, bytes, size);
-	if (decRet.code != RC_OK)
-		return FALSE;
-
-	asn_INTEGER_to_int64(asn, api);
-	ASN_STRUCT_FREE(asn_DEF_INTEGER, asn);
-	return TRUE;
-}
-
-GByteArray*
-simple_integer_marshall_gba(gint64 i64, GError **err)
-{
-	INTEGER_t asn;
-	memset(&asn, 0, sizeof(INTEGER_t));
-	asn_int64_to_INTEGER(&asn, i64);
-
-	GByteArray *result = g_byte_array_new();
-	asn_enc_rval_t encRet = der_encode(&asn_DEF_INTEGER, &asn, write_in_gba, result);
-	ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_INTEGER, &asn);
-
-	if (encRet.encoded == -1) {
-		GSETERROR(err, "ASN.1 encoding error");
-		g_byte_array_free(result, TRUE);
-		return NULL;
-	}
-
-	return result;
-}
-
-/* -------------------------------------------------------------------------- */
-
 static gboolean
 key_value_pair_ASN2API(const Parameter_t * asn, key_value_pair_t * api)
 {

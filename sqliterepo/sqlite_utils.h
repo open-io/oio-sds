@@ -131,41 +131,42 @@ struct sqlx_sqlite3_s;
 void sqlx_admin_reload(struct sqlx_sqlite3_s *sq3);
 
 void sqlx_admin_del(struct sqlx_sqlite3_s *sq3, const gchar *k);
-
 void sqlx_admin_del_all_user(struct sqlx_sqlite3_s *sq3);
 
 int sqlx_admin_has(struct sqlx_sqlite3_s *sq3, const gchar *k);
 
-void sqlx_admin_init_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 v);
-
 void sqlx_admin_set_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 v);
+void sqlx_admin_set_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v);
+void sqlx_admin_set_gba_and_clean(struct sqlx_sqlite3_s *sq3, const gchar *k, GByteArray *gba);
+
+void sqlx_admin_init_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 v);
+void sqlx_admin_init_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v);
 
 void sqlx_admin_inc_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 delta);
 
-void sqlx_admin_inc_version(struct sqlx_sqlite3_s *sq3, const gchar *k, const int delta);
-
-void sqlx_admin_inc_all_versions(struct sqlx_sqlite3_s *sq3, const int delta);
-
-void sqlx_admin_set_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v);
-
-void sqlx_admin_init_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v);
-
-void sqlx_admin_set_gba_and_clean(struct sqlx_sqlite3_s *sq3, const gchar *k, GByteArray *gba);
-
 gint64 sqlx_admin_get_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 def);
-
 gchar* sqlx_admin_get_str(struct sqlx_sqlite3_s *sq3, const gchar *k);
-
 gchar** sqlx_admin_get_keys(struct sqlx_sqlite3_s *sq3);
-
 gchar** sqlx_admin_get_keyvalues(struct sqlx_sqlite3_s *sq3);
-
 GByteArray* sqlx_admin_get_gba(struct sqlx_sqlite3_s *sq3, const gchar *k);
 
-/** Set an application-level status in admin table */
-void sqlx_admin_set_status(struct sqlx_sqlite3_s *sq3, gint64 status);
+void sqlx_admin_inc_version(struct sqlx_sqlite3_s *sq3, const gchar *k, const int d);
+void sqlx_admin_inc_all_versions(struct sqlx_sqlite3_s *sq3, const int delta);
+void sqlx_admin_ensure_versions (struct sqlx_sqlite3_s *sq3);
 
-/** Get an application-level status from admin table */
+/* Returns the numer of items altered. It doesn't check the <sq3->admin_dirty>
+ * flag, and doesn't open/closes a transaction. This is intentional, to let
+ * sqlx_admin_save_lazy() take place in a transaction managed by the caller. */
+guint sqlx_admin_save (struct sqlx_sqlite3_s *sq3);
+
+/* calls sqlx_admin_save() if the handle is dirty */
+guint sqlx_admin_save_lazy (struct sqlx_sqlite3_s *sq3);
+
+/* if the handle is dirty, it calls sqlx_admin_save() in a transaction */
+guint sqlx_admin_save_lazy_tnx (struct sqlx_sqlite3_s *sq3);
+
+/* app-level */
+void sqlx_admin_set_status(struct sqlx_sqlite3_s *sq3, gint64 status);
 gint64 sqlx_admin_get_status(struct sqlx_sqlite3_s *sq3);
 
 #endif /*OIO_SDS__sqliterepo__sqlite_utils_h*/

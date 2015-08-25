@@ -32,7 +32,7 @@ static gboolean flag_flood = FALSE;
 static gint64 max_packets = 0;
 static gint nb_threads = 50;
 static gchar ns_name[LIMIT_LENGTH_NSNAME];
-static GArray *addresses = NULL;
+static GPtrArray *addresses = NULL;
 
 static const gchar*
 main_get_usage(void)
@@ -43,7 +43,7 @@ main_get_usage(void)
 static void
 main_set_defaults(void)
 {
-	addresses = g_array_sized_new(TRUE, TRUE, sizeof(addr_info_t), 16);
+	addresses = g_ptr_array_new();
 	memset(ns_name, 0, sizeof(ns_name));
 	GRID_DEBUG("Defaults set!");
 }
@@ -74,7 +74,7 @@ static void
 main_specific_fini(void)
 {
 	if (addresses)
-		g_array_free(addresses, TRUE);
+		g_ptr_array_free(addresses, TRUE);
 	addresses = NULL;
 	GRID_DEBUG("Finished!");
 }
@@ -82,21 +82,13 @@ main_specific_fini(void)
 static gboolean
 _config_single_address(const gchar *arg)
 {
-	addr_info_t ai;
-	GError *err = NULL;
-	gchar str_addr[STRLEN_ADDRINFO];
-
-	memset(&ai, 0, sizeof(ai));
-
-	if (!l4_address_init_with_url(&ai, arg, &err)) {
-		GRID_ERROR("Invalid address '%s' : %s", arg, err->message);
-		g_error_free(err);
+	if (!arg || !metautils_url_valid_for_connect(arg)) {
+		GRID_ERROR("Invalid adress: %s", arg);
 		return FALSE;
 	}
 
-	g_array_append_vals(addresses, &ai, 1);
-	addr_info_to_string(&ai, str_addr, sizeof(str_addr));
-	GRID_DEBUG("Configured '%s'", str_addr);
+	g_ptr_array_add(addresses, g_strdup(arg));
+	GRID_DEBUG("Configured '%s'", arg);
 	return TRUE;
 }
 
@@ -176,114 +168,45 @@ main_configure(int argc, char **args)
 
 /* ------------------------------------------------------------------------- */
 
-struct thread_data_s {
-	addr_info_t target;
-};
-
-static gboolean
-_send_request(struct metacnx_ctx_s *cnx, MESSAGE request, GError **err)
-{
-	struct code_handler_s codes [] = {
-		{ CODE_FINAL_OK, REPSEQ_FINAL, NULL, NULL },
-		{ 0, 0, NULL, NULL}
-	};
-	struct reply_sequence_data_s data = { NULL , 0 , codes };
-
-	EXTRA_ASSERT(cnx != NULL);
-	EXTRA_ASSERT(request != NULL);
-
-	if (!metaXClient_reply_sequence_run_context(err, cnx, request, &data)) {
-		GSETERROR(err, "request failure");
-		metacnx_close(cnx);
-		return FALSE;
-	}
-
-	if (!flag_reuse)
-		metacnx_close(cnx);
-	return TRUE;
-}
-
 static gpointer
 thread_worker(gpointer p)
 {
 	gint64 packets = 0;
-	struct thread_data_s *td = p;
-	GError *err = NULL;
-	MESSAGE request;
-	struct metacnx_ctx_s cnx;
-	GTimer *timer;
-	gchar str_target[STRLEN_ADDRINFO];
 
-	EXTRA_ASSERT(NULL != td);
-	addr_info_to_string(&(td->target), str_target, sizeof(str_target));
-	GRID_DEBUG("Connecting to [%s]", str_target);
-
-	request = metautils_message_create_named("PING");
-
-	metacnx_clear(&cnx);
-	if (!metacnx_init_with_addr(&cnx, &(td->target), &err)) {
-		GRID_ERROR("Connection init failure : %s", err->message);
-		goto error_cnx;
-	}
-	cnx.flags = METACNX_FLAGMASK_KEEPALIVE;
-	cnx.timeout.cnx = 120000;
-	cnx.timeout.req = 120000;
-
-	timer = g_timer_new();
-
+	GRID_DEBUG("Connecting to [%s]", (gchar*)p);
+	GByteArray *request = message_marshall_gba_and_clean(
+			metautils_message_create_named("PING"));
+	GTimer *timer = g_timer_new();
 	do {
-		gboolean rc;
-		gdouble elapsed;
-
-		err = NULL;
 		g_timer_reset(timer);
-		rc = _send_request(&cnx, request, &err);
-		elapsed = g_timer_elapsed(timer, NULL);
+		GError *err = gridd_client_exec((gchar*)p, 1.0, g_byte_array_ref(request));
+		gdouble elapsed = g_timer_elapsed(timer, NULL);
 
-		if (rc)
-			g_print("PONG %s %f\n", str_target, elapsed);
-		else {
-			g_print("ERROR %s %f\n", str_target, elapsed);
-			GRID_ERROR("PING request error from %s after %f seconds : %s",
-					str_target, elapsed, err->message);
-		}
+		g_print("%s %s %f\n", (err?"ERROR":"PONG"), (gchar*)p, elapsed);
 
-		if (err)
-			g_clear_error(&err);
-
+		if (err) g_clear_error(&err);
 		if (max_packets > 0 && (++packets) >= max_packets)
 			break;
-
 		if (!flag_flood)
 			usleep(1000000L);
 
 	} while (grid_main_is_running());
 
 	g_timer_destroy(timer);
-	metacnx_close(&cnx);
-	metacnx_clear(&cnx);
-error_cnx:
-	metautils_message_destroy(request);
-	if (err)
-		g_clear_error(&err);
+	metautils_gba_unref(request);
 	return p;
 }
 
 static GSList *
 thread_start_N(void)
 {
-	guint i;
 	GThread *th;
 	GError *err = NULL;
 	GSList *threads = NULL;
 
-	for (i=0; i<addresses->len;i++) {
-		struct thread_data_s *p;
-		
-		p = g_malloc0(sizeof(struct thread_data_s));
-		memcpy(&(p->target), &g_array_index(addresses, addr_info_t, i), sizeof(addr_info_t));
-
-		th = g_thread_try_new("worker", thread_worker, p, &err);
+	for (guint i=0; i<addresses->len;i++) {
+		gchar *url = g_strdup(addresses->pdata[i]);
+		th = g_thread_try_new("worker", thread_worker, url, &err);
 		if (th != NULL)
 			threads = g_slist_prepend(threads, th);
 		else {

@@ -39,14 +39,7 @@ struct storage_policy_s;
 struct hc_url_s;
 struct grid_lb_iterator_s;
 struct lb_next_opt_s;
-struct chunk_pair_s;
 struct sqlx_sqlite3_s;
-
-typedef struct m2v2_chunk_pair_s
-{
-	struct bean_CONTENTS_s *content;
-	struct bean_CHUNKS_s *chunk;
-} m2v2_chunk_pair_t;
 
 struct list_params_s
 {
@@ -65,17 +58,6 @@ struct list_result_s
 	gchar *next_marker;
 	gboolean truncated;
 };
-
-typedef struct chunk_pair_s
-{
-	struct bean_CONTENTS_s *content;
-	struct bean_CHUNKS_s *chunk;
-	struct {
-		gint meta;
-		gint rain;
-		gboolean parity;
-	} position;
-} chunk_pair_t;
 
 struct dup_alias_params_s
 {
@@ -135,7 +117,7 @@ void m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url);
 
 /* Get just the ALIAS, with version allowed */
 GError* m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		guint32 flags, struct bean_ALIASES_s **out);
+		guint32 flags, struct bean_ALIAS_s **out);
 
 /* Get the BEANS starting at the ALIAS pointed by <url>
  * with version and recursion allowed */
@@ -148,11 +130,11 @@ GError* m2db_get_alias_version(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 
 /*! Get just the alias with the latest version, whatever the version in <url> */
 GError* m2db_latest_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		struct bean_ALIASES_s **out);
+		struct bean_ALIAS_s **out);
 
 /* Get just the ALIAS with version allowed */
 GError* m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		struct bean_ALIASES_s **out);
+		struct bean_ALIAS_s **out);
 
 GError* m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp,
 		GSList *headers, m2_onbean_cb cb, gpointer u);
@@ -205,9 +187,6 @@ GError* m2db_get_storage_policy(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url
 		struct namespace_info_s *nsinfo, gboolean from_previous,
 		struct storage_policy_s **result);
 
-GError* m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct hc_url_s *url, GSList *beans);
-
 /**
  * @param db
  * @param max_versions Maximum number of versions to keep
@@ -225,28 +204,7 @@ GError* m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 /** Delete all aliases of the container, without doing any check.  */
 GError* m2db_flush_container(sqlite3 *db);
 
-/** Run a chunk deduplication cycle on the meta2 database.  */
-GError* m2db_deduplicate_chunks(struct sqlx_sqlite3_s *sq3,
-		namespace_info_t *nsinfo, struct hc_url_s *url);
-
-/** Run a chunk deduplication cycle on a specific alias of the meta2 database. */
-GError* m2db_deduplicate_alias_chunks(struct sqlx_sqlite3_s *sq3,
-		namespace_info_t *nsinfo, struct hc_url_s *url);
-
 GError* m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3,
 		struct hc_url_s *url, guint32 flags, GString **status_message);
-
-/**
- * Create a new alias for each existing alias of the container, with
- * incremented version number, so all aliases of the container share the same
- * container_version, and can be included in a snapshot.
- *
- * This function can also restore a snapshot by using the container_version
- * parameter. */
-GError* m2db_dup_all_aliases(struct sqlx_sqlite3_s *sq3,
-		gint64 container_version, gboolean set_deleted,
-		gboolean overwrite_latest);
-
-void m2v2_dup_alias(struct dup_alias_params_s *params, gpointer bean);
 
 #endif /*OIO_SDS__meta2v2__meta2_utils_h*/

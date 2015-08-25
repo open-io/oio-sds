@@ -167,14 +167,11 @@ meta0_utils_array_replace(GPtrArray *gpa, const guint8 *bytes, const gchar *s, c
 GPtrArray*
 meta0_utils_list_to_array(GSList *list)
 {
-	GSList *l;
-	GPtrArray *result = NULL;
-
 	EXTRA_ASSERT(list != NULL);
 
-	result = meta0_utils_array_create();
+	GPtrArray *result = meta0_utils_array_create();
 
-	for (l=list; l ;l=l->next) {
+	for (GSList *l=list; l ;l=l->next) {
 		guint16 *p, *max;
 		struct meta0_info_s *m0i;
 
@@ -269,11 +266,8 @@ meta0_utils_list_clean(GSList *list)
 GPtrArray *
 meta0_utils_array_create(void)
 {
-	guint i;
-	GPtrArray *array;
-
-	array = g_ptr_array_sized_new(65536);
-	for (i=0; i<65536 ;i++)
+	GPtrArray *array = g_ptr_array_new();
+	for (int i=0; i<65536 ;i++)
 		g_ptr_array_add(array, NULL);
 	return array;
 }

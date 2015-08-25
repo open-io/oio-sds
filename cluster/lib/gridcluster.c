@@ -141,16 +141,13 @@ _get_namespace_info_from_agent(const char *ns_name, GError **error)
 static namespace_info_t*
 _get_namespace_info_from_conscience(const char *ns_name, GError **error)
 {
-	addr_info_t *addr = gridcluster_get_conscience_addr(ns_name);
-	if (addr == NULL) {
-		GSETERROR(error, "Unknown namespace/conscience");
-		return NULL;
-	}
-	namespace_info_t *res = gcluster_get_namespace_info_full(addr,
-			CONNECT_TIMEOUT + SOCKET_TIMEOUT, error);
-	g_free(addr);
+	namespace_info_t *res = NULL;
+	gchar *cs = gridcluster_get_conscience(ns_name);
+	GError *err = gcluster_get_namespace_info_full(cs, &res);
+	g_free0(cs);
 	if (res)
 		g_strlcpy(res->name, ns_name, LIMIT_LENGTH_NSNAME);
+	g_error_transmit (error, err);
 	return res;
 }
 
@@ -223,15 +220,11 @@ list_namespace_service_types(const char *ns_name, GError **error)
 	if (gridagent_available()) {
 		return _list_namespace_service_types_from_agent(ns_name, error);
 	} else {
-		addr_info_t *cs_addr = gridcluster_get_conscience_addr(ns_name);
-		if (!cs_addr) {
-			GSETERROR(error, "Unknown namespace/conscience");
-			return(NULL);
-		}
-
-		GSList *types = gcluster_get_service_types(cs_addr,
-				CONNECT_TIMEOUT + SOCKET_TIMEOUT, error);
-		g_free(cs_addr);
+		GSList *types = NULL;
+		gchar *cs = gridcluster_get_conscience(ns_name);
+		GError *err = gcluster_get_service_types(cs, &types);
+		g_free0 (cs);
+		g_error_transmit (error, err);
 		return types;
 	}
 }
@@ -291,15 +284,12 @@ list_namespace_services(const char *ns_name, const char *type, GError **error)
 	}
 
 	if (!gridagent_available()) { // from conscience
+		GSList *res = NULL;
 		gchar *cs = gridcluster_get_conscience(ns_name);
-		if (!cs) {
-			GSETERROR(error, "Unknown namespace/conscience");
-			return NULL;
-		} else {
-			GSList *res = gcluster_get_services(cs, CS_CLIENT_TIMEOUT, type, FALSE, error);
-			g_free(cs);
-			return res;
-		}
+		GError *err = gcluster_get_services(cs, type, FALSE, &res);
+		g_free0 (cs);
+		g_error_transmit (error, err);
+		return res;
 	} else { // from agent
 		return list_gridagent_services(ns_name,type,error);
 	}
@@ -841,18 +831,6 @@ gridcluster_reconfigure_lbpool(struct grid_lbpool_s *glp)
 	}
 
 	return err;
-}
-
-struct addr_info_s *
-gridcluster_get_conscience_addr(const char *ns_name)
-{
-	addr_info_t addr;
-	gchar *cs = gridcluster_get_conscience(ns_name);
-	if (!cs)
-		return NULL;
-	gboolean rc = grid_string_to_addrinfo(cs, NULL, &addr);
-	g_free(cs);
-	return rc ? g_memdup(&addr, sizeof(addr_info_t)) : NULL;
 }
 
 gchar *

@@ -22,30 +22,8 @@ License along with this library.
 
 #include <glib/gtypes.h>
 
-/**
- * @defgroup metautils_addrinfo Addrinfo (IP:PORT) features
- * @ingroup metautils_utils
- * @{
- */
-
-/**
- * @param a
- * @param b
- * @return
- */
 gboolean addr_info_equal(gconstpointer a, gconstpointer b);
-
-/**
- * @param a
- * @param b
- * @return
- */
 gint addr_info_compare(gconstpointer a, gconstpointer b);
-
-/**
- * @param k
- * @return
- */
 guint addr_info_hash(gconstpointer k);
 
 /**
@@ -74,19 +52,8 @@ gint addrinfo_connect(const addr_info_t * a, gint ms, GError ** err);
  */
 addr_info_t * addr_info_from_service_str(const gchar *service);
 
-/**
- * @param p
- */
-void addr_info_clean(gpointer p);
-
-/**
- * Simple utility function intented to be used with g_slist_foreach().
- * to free whole lists of addr_info_t.
- *
- * @param d assumed to be a pointer to a addr_info_t*, freed if not NULL
- * @param u ignored
- */
-void addr_info_gclean(gpointer d, gpointer u);
+#define addr_info_clean  g_free0
+#define addr_info_gclean g_free1
 
 /** @} */
 

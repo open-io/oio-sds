@@ -47,122 +47,14 @@ gint Name (GError **err, gpointer udata, gint code, guint8 *buf, gsize len)
 
 typedef struct Message Message_t;
 typedef Message_t* MESSAGE;
-
-/* ------------------------------------------------------------------------- */
-
-/**
- * @defgroup metacomm_metacnx Connections to META services
- * @ingroup metautils_comm
- * @{
- */
-
-struct metacnx_ctx_s;
-struct hc_url_s;
-
-/** Struct to store a META connection context */
-struct metacnx_ctx_s
-{
-	addr_info_t addr;	/**< The connection server addr */
-	int fd;			/**< The connection fd */
-	guint8 flags;		/**< The connection configuration flags */
-	/**
-	 * Struct to store a connection timeout
-	 */
-	struct
-	{
-		int cnx;/*<! The connection timeout */
-		int req;/*<! The request timeout */
-	} timeout;		/*<! The timeouts */
-};
-
-/** Allocate a new instance of struct metacnx_ctx_s */
-struct metacnx_ctx_s *metacnx_create(void);
-
-/** Clear a struct metacnx_ctx_s (but does not free it) */
-void metacnx_clear(struct metacnx_ctx_s *ctx);
-
-/** Free a struct metacnx_ctx_s */
-void metacnx_destroy(struct metacnx_ctx_s *ctx);
-
-/** Initialize a struct metacnx_ctx_s with host and port */
-gboolean metacnx_init(struct metacnx_ctx_s *ctx, const gchar * host,
-		int port, GError ** err);
-
-/** Initialize a struct metacnx_ctx_s with URL IPv4:port or [IPv6]:port */
-gboolean metacnx_init_with_url(struct metacnx_ctx_s *ctx, const gchar *url,
-		GError ** err);
-
-/** Initialize a struct metacnx_ctx_s with addr_info_t */
-gboolean metacnx_init_with_addr(struct metacnx_ctx_s *ctx,
-		const addr_info_t* addr, GError** err);
-
-/** Open a connection to a META */
-gboolean metacnx_open(struct metacnx_ctx_s *ctx, GError ** err);
-
-/** Check if a connection to a META is opened */
-gboolean metacnx_is_open(struct metacnx_ctx_s *ctx);
-
-/** Close an opened connection to a METAX */
-void metacnx_close(struct metacnx_ctx_s *ctx);
-
-/** @} */
-
-/* ------------------------------------------------------------------------- */
-
-/**
- * @defgroup metacomm_replyseq Manager for sequences of replies
- * @ingroup metautils_comm
- * @{
- */
-
-typedef gboolean(*content_handler_f) (GError ** err, gpointer udata, gint code, guint8 * body, gsize bodySize);
-
-typedef gboolean(*msg_handler_f) (GError ** err, gpointer udata, gint code, MESSAGE rep);
-
-struct code_handler_s
-{
-	int code;                          /**<  */
-	guint32 flags;                     /**<  */
-	content_handler_f content_handler; /**<  */
-	msg_handler_f msg_handler;         /**<  */
-};
-
-struct reply_sequence_data_s
-{
-	gpointer udata;               /**<  */
-	int nbHandlers;               /**<  */
-	struct code_handler_s *codes; /**<  */
-};
-
-gboolean metaXClient_reply_sequence_run_context(GError ** err,
-		struct metacnx_ctx_s *ctx, MESSAGE request,
-		struct reply_sequence_data_s *handlers);
-
-/** Wrapper around metaXClient_reply_sequence_run_context() */
-gboolean metaXClient_reply_sequence_run(GError ** err, MESSAGE request,
-		int *fd, gint ms, struct reply_sequence_data_s *data);
-
-/** Wrapper around metaXClient_reply_sequence_run_context() */
-gboolean metaXClient_reply_sequence_run_from_addrinfo(GError ** err,
-		MESSAGE request, const addr_info_t * addr, gint ms,
-		struct reply_sequence_data_s *data);
-
-/** @} */
-
-/* -------------------------------------------------------------------------- */
-
-/**
- * @defgroup metacomm_message Messages enveloppes
- * @@ingroup metautils_comm
- * @{
- */
+struct oio_url_s;
 
 /** Builds a simple reply for the given request. This function automates the
  * copy of the required fields from the request, and sets the appropriated
  * fields with the given status and message.
  *
  * The reply pointer wust be freed with metautils_message_destroy(). */
-MESSAGE metaXServer_reply_simple(MESSAGE request, gint status, const gchar *msg);
+MESSAGE metaXServer_reply_simple(MESSAGE request, gint status, const char *msg);
 
 /** Performs the opposite operation : retrieves the core elements of the
  * message (supposed to be a reply). 
@@ -204,32 +96,22 @@ GByteArray* message_marshall_gba_and_clean(MESSAGE m);
 
 typedef gint (body_decoder_f)(GSList **r, const void *b, gsize l, GError **e);
 
+/* wraps message_set_BODY() and g_bytes_array_unref() */
+void metautils_message_add_body_unref (MESSAGE m, GByteArray *body);
+
 /** Adds a new custom field in the list of the message. Now check is made to
  * know whether the given field is already present or not. The given new value
  * will be copied. */
 void metautils_message_add_field(MESSAGE m, const char *name, const void *value, gsize valueSize);
-
 void metautils_message_add_cid (MESSAGE m, const char *f, const container_id_t cid);
-
-void metautils_message_add_url (MESSAGE m, struct hc_url_s *url);
-
-/* wraps message_set_BODY() and g_bytes_array_unref() */
-void metautils_message_add_body_unref (MESSAGE m, GByteArray *body);
-
+void metautils_message_add_url (MESSAGE m, struct oio_url_s *url);
 void metautils_message_add_field_str(MESSAGE m, const char *name, const char *value);
-
 void metautils_message_add_field_strint64(MESSAGE m, const char *n, gint64 v);
 
 static inline void metautils_message_add_field_strint(MESSAGE m, const char *n, gint v) { return metautils_message_add_field_strint64(m,n,v); }
 static inline void metautils_message_add_field_struint(MESSAGE m, const char *n, guint v) { return metautils_message_add_field_strint64(m,n,v); }
 
-void metautils_message_add_fieldv_gba(MESSAGE m, va_list args);
-
-void metautils_message_add_fields_gba(MESSAGE m, ...);
-
-void metautils_message_add_fieldv_str(MESSAGE m, va_list args);
-
-void metautils_message_add_fields_str(MESSAGE m, ...);
+void metautils_message_add_field_gba_and_unref(MESSAGE m, const char *n, GByteArray *gba);
 
 void* metautils_message_get_field(MESSAGE m, const char *name, gsize *vsize);
 
@@ -237,36 +119,36 @@ gchar ** metautils_message_get_field_names(MESSAGE m);
 
 GHashTable* metautils_message_get_fields(MESSAGE m);
 
-GError* metautils_message_extract_cid(MESSAGE msg, const gchar *n,
+GError* metautils_message_extract_cid(MESSAGE msg, const char *n,
 		container_id_t *cid);
 
-GError* metautils_message_extract_prefix(MESSAGE msg, const gchar *n,
+GError* metautils_message_extract_prefix(MESSAGE msg, const char *n,
 		guint8 *d, gsize *dsize);
 
-gboolean metautils_message_extract_flag(MESSAGE m, const gchar *n, gboolean d);
+gboolean metautils_message_extract_flag(MESSAGE m, const char *n, gboolean d);
 
-GError* metautils_message_extract_flags32(MESSAGE msg, const gchar *n,
+GError* metautils_message_extract_flags32(MESSAGE msg, const char *n,
 		gboolean mandatory, guint32 *flags);
 
-GError* metautils_message_extract_string(MESSAGE msg, const gchar *n, gchar *dst,
+GError* metautils_message_extract_string(MESSAGE msg, const char *n, gchar *dst,
 		gsize dst_size);
 
-gchar* metautils_message_extract_string_copy(MESSAGE msg, const gchar *n);
+gchar* metautils_message_extract_string_copy(MESSAGE msg, const char *n);
 
-GError* metautils_message_extract_strint64(MESSAGE msg, const gchar *n,
+GError* metautils_message_extract_strint64(MESSAGE msg, const char *n,
 		gint64 *i64);
 
-GError* metautils_message_extract_struint(MESSAGE msg, const gchar *n,
+GError* metautils_message_extract_struint(MESSAGE msg, const char *n,
 		guint *u);
 
 GError* metautils_message_extract_boolean(MESSAGE msg,
-		const gchar *n, gboolean mandatory, gboolean *v);
+		const char *n, gboolean mandatory, gboolean *v);
 
 GError* metautils_message_extract_header_encoded(MESSAGE msg,
-		const gchar *n, gboolean mandatory,
+		const char *n, gboolean mandatory,
 		GSList **result, body_decoder_f decoder);
 
-GError* metautils_message_extract_header_gba(MESSAGE msg, const gchar *n,
+GError* metautils_message_extract_header_gba(MESSAGE msg, const char *n,
 		gboolean mandatory, GByteArray **result);
 
 GError* metautils_message_extract_body_gba(MESSAGE msg, GByteArray **result);
@@ -282,9 +164,7 @@ GError* metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
 GError* metautils_message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
 		GSList **result, body_decoder_f decoder);
 
-struct hc_url_s * metautils_message_extract_url (MESSAGE m);
-
-/** @} */
+struct oio_url_s * metautils_message_extract_url (MESSAGE m);
 
 /* ------------------------------------------------------------------------- */
 
@@ -312,11 +192,6 @@ DECLARE_UNMARSHALLER(   meta2_property_unmarshall);
  * @return NULL in case of error or a valid ASN.1 form of the given servccie_info
  */
 GByteArray* service_info_marshall_1(service_info_t *si, GError **err);
-
-gboolean simple_integer_unmarshall(const guint8 * bytes, gsize size,
-		gint64 * result);
-
-GByteArray* simple_integer_marshall_gba(gint64 i64, GError **err);
 
 /** Serialize a namespace_info to ASN1 */
 GByteArray* namespace_info_marshall(struct namespace_info_s * namespace_info, GError ** err);

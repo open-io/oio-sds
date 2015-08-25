@@ -23,7 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <glib.h>
 # include <metautils/lib/metatypes.h>
 
-GHashTable* gridd_stats_remote (addr_info_t *ai, gint ms, GError **err,
-	const gchar *pattern);
+GError * gridd_stats_remote (const char *to, const char *pattern,
+		gchar ***out);
 
 #endif /*OIO_SDS__gridd__clients__stats__stats_remote_h*/

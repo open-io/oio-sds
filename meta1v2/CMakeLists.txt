@@ -18,7 +18,7 @@ add_library(meta1v2 SHARED
 		meta1_backend_properties.c
 		meta1_backend_references.c
 		meta1_prefixes.c meta1_prefixes.h
-		internals.h internals_sqlite.h)
+		internals.h)
 
 set_target_properties(meta1v2 PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(meta1v2

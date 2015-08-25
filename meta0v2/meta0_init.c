@@ -78,14 +78,14 @@ meta0_action(void)
 
 	m0addr = _getMeta0addr(&m0_lst,exclude);
 	while (m0addr) {
-		gboolean rc = FALSE;
+		gchar url[STRLEN_ADDRINFO];
+		grid_addrinfo_to_string(m0addr, url , sizeof(url));
 		if ( flag_fill_v1 )
-			rc = meta0_remote_fill(m0addr, 60000, urls, nbreplicas, &err);
+			err = meta0_remote_fill(url, urls, nbreplicas);
 		else
-			rc = meta0_remote_fill_v2(m0addr, 60000, nbreplicas, nodist, &err);
-		EXTRA_ASSERT((err != NULL) ^ (BOOL(rc)));
+			err = meta0_remote_fill_v2(url, nbreplicas, nodist);
 
-		if (!rc) {
+		if (err) {
 			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				exclude=g_slist_prepend(exclude,m0addr);

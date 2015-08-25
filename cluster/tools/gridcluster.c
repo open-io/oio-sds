@@ -120,7 +120,7 @@ print_formated_services(const gchar * type, GSList * services,
 				char str_score[32];
 				char str_addr[STRLEN_ADDRINFO];
 
-				addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
+				grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
 				g_snprintf(str_score, sizeof(str_score), "%d", si->score.value);
 				g_print("%20s\t%20s\n", str_addr, str_score);
 			}
@@ -145,7 +145,7 @@ print_raw_services(const gchar * ns, const gchar * type, GSList * services,
 		if (!si)
 			continue;
 		if(show_internals || !service_info_is_internal(si)) {
-			addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
+			grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
 			g_snprintf(str_score, sizeof(str_score), "%d", si->score.value);
 			g_print("%s|%s|%s|score=%d", ns ? ns : si->ns_name,
 					type ? type : si->type, str_addr, si->score.value);
@@ -189,10 +189,10 @@ set_service_score(const char *service_desc, int score)
 	if (g_strv_length(tokens) < 3)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid service description");
 
-	addr_info_t *cluster_addr;
-	if (!(cluster_addr = gridcluster_get_conscience_addr(tokens[0])))
+	gchar *cs = gridcluster_get_conscience (tokens[0]);
+	if (!cs) 
 		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Unknown namespace %s", tokens[0]);
-	BUFFER_STACKIFY(cluster_addr, sizeof(addr_info_t));
+	STRING_STACKIFY(cs);
 
 	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
 	g_strlcpy(si->ns_name, tokens[0], sizeof(si->ns_name));
@@ -200,13 +200,13 @@ set_service_score(const char *service_desc, int score)
 	si->score.value = score;
 	si->score.timestamp = time(0);
 
-	if (!l4_address_init_with_url(&si->addr, tokens[2], NULL)) {
+	if (!grid_string_to_addrinfo(tokens[2], NULL, &si->addr)) {
 		service_info_clean (si);
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid service address %s", tokens[2]);
 	}
 
 	GSList *list = g_slist_prepend(NULL, si);
-	GError *err = gcluster_push_services(cluster_addr, 4000, list);
+	GError *err = gcluster_push_services(cs, list);
 	if (err)
 		g_prefix_error(&err, "Registration failed: ");
 	g_slist_free(list);
@@ -498,7 +498,7 @@ main(int argc, char **argv)
 				if (!has_flag_full || !has_raw) {
 					list_services = list_namespace_services(namespace, str_type, &error);
 				} else {
-					list_services = gcluster_get_services(csurl, 0.0, str_type, TRUE, &error);
+					error = gcluster_get_services(csurl, str_type, TRUE, &list_services);
 				}
 
 				/* Dump the list */

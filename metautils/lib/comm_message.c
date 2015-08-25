@@ -378,57 +378,11 @@ metautils_message_add_field_strint64(MESSAGE m, const char *name, gint64 v)
 }
 
 void
-metautils_message_add_fieldv_str(MESSAGE m, va_list args)
+metautils_message_add_field_gba_and_unref (MESSAGE m, const char *n, GByteArray *gba)
 {
-	if (!m)
-		return;
-	for (;;) {
-		char *k = va_arg(args, char *);
-		if (!k)
-			break;
-		char *v = va_arg(args, char *);
-		if (!v)
-			break;
-		metautils_message_add_field_str(m, k, v);
-	}
-}
-
-void
-metautils_message_add_fields_str(MESSAGE m, ...)
-{
-	if (!m)
-		return;
-	va_list args;
-	va_start(args, m);
-	metautils_message_add_fieldv_str(m, args);
-	va_end(args);
-}
-
-void
-metautils_message_add_fieldv_gba(MESSAGE m, va_list args)
-{
-	if (!m)
-		return;
-	for (;;) {
-		char *k = va_arg(args, char *);
-		if (!k)
-			break;
-		GByteArray *v = va_arg(args, GByteArray *);
-		if (!v)
-			break;
-		metautils_message_add_field(m, k, v->data, v->len);
-	}
-}
-
-void
-metautils_message_add_fields_gba(MESSAGE m, ...)
-{
-	if (!m)
-		return;
-	va_list args;
-	va_start(args, m);
-	metautils_message_add_fieldv_gba(m, args);
-	va_end(args);
+	if (!gba) return;
+	if (m && n) metautils_message_add_field (m, n, gba->data, gba->len);
+	metautils_gba_unref (gba);
 }
 
 static struct map_s {

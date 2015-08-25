@@ -193,7 +193,7 @@ init_srvinfo(const gchar *sid, service_info_t *si)
 		g_free(str_type);
 		g_strlcpy(si->ns_name, str_ns, sizeof(si->ns_name)-1);
 		g_free(str_ns);
-		if (!l4_address_init_with_url(&(si->addr), str_addr, NULL)) {
+		if (!grid_string_to_addrinfo(str_addr, NULL, &(si->addr))) {
 			g_printerr("Invalid service address [%s]", str_addr);
 			return -1;
 		}

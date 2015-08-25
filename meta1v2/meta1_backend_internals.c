@@ -30,13 +30,33 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/sqliterepo.h>
 
 #include "./internals.h"
-#include "./internals_sqlite.h"
 #include "./meta1_prefixes.h"
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"
 
 int meta1_backend_log_level = 0;
 
+void
+__exec_cid(sqlite3 *handle, const gchar *sql, const container_id_t cid)
+{
+	int rc;
+	const char *next;
+	sqlite3_stmt *stmt = NULL;
+
+	while (sql && *sql) {
+
+		sqlite3_prepare_debug(rc, handle, sql, -1, &stmt, &next);
+		if (rc != SQLITE_OK)
+			continue;
+		sql = next;
+
+		(void) sqlite3_bind_blob(stmt, 1, cid, sizeof(container_id_t), NULL);
+
+		do { rc = sqlite3_step(stmt); } while (rc == SQLITE_ROW);
+
+		sqlite3_finalize_debug(rc, stmt);
+	}
+}
 static int
 m1_to_sqlx(enum m1v2_open_type_e t)
 {
@@ -101,29 +121,23 @@ __create_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 	if (!hc_url_has_fq_container (url))
 		return NEWERROR(CODE_BAD_REQUEST, "Partial URL");
 
-	static const gchar *sql = "INSERT INTO users "
-		"('cid','account','user') VALUES (?,?,?)";
+	static const gchar *sql = "INSERT INTO users ('cid','account','user') VALUES (?,?,?)";
 
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
 	int rc;
 
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(sq3->db != NULL);
-
-	err = sqlx_transaction_begin(sq3, &repctx);
-	if (NULL != err)
-		return err;
 
 	/* Prepare the statement */
 	sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, NULL);
 	if (rc != SQLITE_OK)
 		err = M1_SQLITE_GERROR(sq3->db, rc);
 	else {
-		(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
-		(void) sqlite3_bind_text(stmt, 2, hc_url_get(url, HCURL_ACCOUNT), -1, NULL);
-		(void) sqlite3_bind_text(stmt, 3, hc_url_get(url, HCURL_USER), -1, NULL);
+		sqlite3_bind_blob(stmt, 1, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
+		sqlite3_bind_text(stmt, 2, hc_url_get(url, HCURL_ACCOUNT), -1, NULL);
+		sqlite3_bind_text(stmt, 3, hc_url_get(url, HCURL_USER), -1, NULL);
 
 		/* Run the results */
 		do { rc = sqlite3_step(stmt); } while (rc == SQLITE_ROW);
@@ -142,7 +156,7 @@ __create_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 	if (err)
 		GRID_DEBUG("User creation failed : (%d) %s", err->code, err->message);
 
-	return sqlx_transaction_end(repctx, err);
+	return err;
 }
 
 GError*

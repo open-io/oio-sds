@@ -222,7 +222,6 @@ int meta2_filter_action_update_beans(struct gridd_filter_ctx_s *ctx,
 
 /* ---------------------- URL ---------------------*/
 
-/*! Update a container or a content storage policy */
 int meta2_filter_action_update_storage_policy(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 

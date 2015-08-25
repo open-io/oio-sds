@@ -460,9 +460,9 @@ meta0_gridd_free_dispatcher(struct meta0_disp_s *m0disp)
 	if (!m0disp)
 		return;
 	if (m0disp->encoded)
-		g_byte_array_unref(m0disp->encoded);
-	g_mutex_clear(&m0disp->lock);
-	memset(m0disp, 0, sizeof(*m0disp));
-	g_free(m0disp);
+		g_byte_array_unref (m0disp->encoded);
+	g_free0 (m0disp->ns_name);
+	g_mutex_clear (&m0disp->lock);
+	g_free (m0disp);
 }
 

@@ -95,14 +95,6 @@ GError *meta2_backend_purge_container(struct meta2_backend_s *m2,
 GError* meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, guint32 flags, GString **status_message);
 
-/** Find and unreference duplicate chunks of a container.  */
-GError* meta2_backend_deduplicate_chunks(struct meta2_backend_s *m2b,
-        struct hc_url_s *url);
-
-/** Find and unreference duplicate chunks of a content.  */
-GError* meta2_backend_deduplicate_alias_chunks(struct meta2_backend_s *m2b,
-        struct hc_url_s *url);
-
 /* -------------------------------------------------------------------------- */
 
 GError* meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct hc_url_s *url,
@@ -170,6 +162,9 @@ GError* meta2_backend_set_properties(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gboolean flush, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
+GError* meta2_backend_set_stgpol (struct meta2_backend_s *m2b,
+		struct hc_url_s *url, const char *stgpol);
+
 /* Back-Links listing ------------------------------------------------------- */
 
 /** Get a list of CONTENT_HEADER ownning the given chunk id. */
@@ -192,9 +187,6 @@ GError* meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 
 GError* meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gint64 *result);
-
-GError* meta2_backend_update_alias_header(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *beans);
 
 /** Generate spare chunk (in form of a chunk_info list). This function takes
  * care of the storage policy during the chunks generation (distance,

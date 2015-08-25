@@ -29,7 +29,7 @@ static gboolean flag_xml = FALSE;
 
 static GString *pattern = NULL;
 
-static GArray *addresses = NULL;
+static GPtrArray *addresses = NULL;
 
 /* ------------------------------------------------------------------------- */
 
@@ -42,7 +42,7 @@ static void
 main_specific_fini(void)
 {
 	if (addresses)
-		g_array_free(addresses, TRUE);
+		g_ptr_array_free(addresses, TRUE);
 	addresses = NULL;
 }
 
@@ -64,14 +64,14 @@ static void
 main_set_defaults(void)
 {
 	pattern = g_string_new("*");
-	addresses = g_array_sized_new(TRUE, TRUE, sizeof(addr_info_t), 4);
+	addresses = g_ptr_array_new();
 	GRID_DEBUG("Defaults set");
 }
 
-static const gchar*
+static const char*
 main_get_usage(void)
 {
-	static const gchar usage[] =
+	static const char usage[] =
 		"(<URL>|<SRV>)...\n"
 		"  with:\n"
 		"   <URL> : IP ':' PORT\n"
@@ -80,28 +80,20 @@ main_get_usage(void)
 }
 
 static gboolean
-_config_single_address(const gchar *arg)
+_config_single_address(const char *arg)
 {
-	addr_info_t ai;
-	GError *err = NULL;
-	gchar str_addr[STRLEN_ADDRINFO];
-
-	memset(&ai, 0, sizeof(ai));
-
-	if (!l4_address_init_with_url(&ai, arg, &err)) {
-		GRID_ERROR("Invalid address '%s' : %s", arg, err->message);
-		g_error_free(err);
+	if (!arg || !metautils_url_valid_for_connect(arg)) {
+		GRID_ERROR("Invalid adress: %s", arg);
 		return FALSE;
 	}
 
-	g_array_append_vals(addresses, &ai, 1);
-	addr_info_to_string(&ai, str_addr, sizeof(str_addr));
-	GRID_DEBUG("Configured '%s'", str_addr);
+	g_ptr_array_add(addresses, g_strdup(arg));
+	GRID_DEBUG("Configured '%s'", arg);
 	return TRUE;
 }
 
 static gboolean
-_config_single_service(const gchar *arg)
+_config_single_service(const char *arg)
 {
 	gchar **strv = g_strsplit(arg, "|", 4);
 
@@ -149,59 +141,52 @@ main_configure(int argc, char **args)
 /* ------------------------------------------------------------------------- */
 
 static void
-_stat_addr(addr_info_t *ai)
+_stat_addr(const char *url)
 {
-	gchar *escaped_format;
-	GHashTableIter iter;
-	gpointer k, v;
-	GHashTable *ht;
 	GError *err = NULL;
-	gchar str_addr[STRLEN_ADDRINFO];
+	gchar **tab = NULL;
 
-	addr_info_to_string(ai, str_addr, sizeof(str_addr));
-
-	ht = gridd_stats_remote(ai, 60000, &err, pattern->str);
-	if (!ht) {
-		GRID_ERROR("Stat failed for %s : %s", str_addr, err->message);
+	err = gridd_stats_remote(url, pattern->str, &tab);
+	if (err) {
+		GRID_ERROR("Stat failed for %s : (%d) %s", url, err->code, err->message);
 		g_error_free(err);
 		return;
 	}
 
-	escaped_format = g_strescape(pattern->str,"");
+	gchar *escaped_format = g_strescape(pattern->str,"");
 	if (flag_xml)
-		g_print("<stats addr=\"%s\" pattern=\"%s\">\n",
-				str_addr, escaped_format);
+		g_print("<stats addr=\"%s\" pattern=\"%s\">\n", url, escaped_format);
 	else {
-		g_print("STAT_ADDRESS='%s'\n", str_addr);
+		g_print("STAT_ADDRESS='%s'\n", url);
 		g_print("STAT_FORMAT=\"%s\"\n", escaped_format);
 	}
 
-	g_hash_table_iter_init(&iter, ht);
-	while (g_hash_table_iter_next(&iter, &k, &v)) {
-		gchar *escaped_name = g_strescape((gchar*)k,"");
-		if (flag_xml)
+	for (gchar **p=tab; *p ;p++) {
+		gchar *k = *p;
+		gchar *v = strchr(k,'=');
+		if (v) {
+			*v = '\0';
+			v++;
+		}
+		if (flag_xml) {
+			gchar *escaped_name = g_strescape(k,"");
 			g_print("\t<stat name=\"%s\" value=\"%f\"/>\n", escaped_name, *((gdouble*)v));
-		else
-			g_print("%s=%f\n", (char*)k, *((gdouble*)v));
-		g_free(escaped_name);
+			g_free(escaped_name);
+		} else {
+			g_print("%s=%s\n", k, v);
+		}
 	}
 
 	if (flag_xml)
 		g_print("</stats>\n");
 	g_free(escaped_format);
-	g_hash_table_destroy(ht);
 }
 
 static void
 main_action(void)
 {
-	guint i;
-	addr_info_t *ai;
-
-	for (i=0; i < addresses->len ;i++) {
-		ai = &g_array_index(addresses, addr_info_t, i);
-		_stat_addr(ai);
-	}
+	for (guint i=0; i < addresses->len ;i++)
+		_stat_addr(addresses->pdata[i]);
 }
 
 static struct grid_main_callbacks cb =

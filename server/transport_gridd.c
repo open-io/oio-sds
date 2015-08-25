@@ -875,19 +875,18 @@ static gboolean
 dispatch_STATS(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
+	(void) gdata, (void) hdata;
+	GByteArray *gba = g_byte_array_new();
 	gboolean runner(const gchar *n, guint64 v) {
-		gchar *name, value[64];
-		name = g_strdup_printf("stat:%s", n);
-		g_snprintf(value, sizeof(value), "%"G_GUINT64_FORMAT, v);
-		reply->add_header(name, metautils_gba_from_string(value));
-		g_free(name);
+		gchar *tmp = g_strdup_printf ("%s=%"G_GINT64_FORMAT"\n", n, v);
+		g_byte_array_append (gba, (guint8*)tmp, strlen(tmp));
+		g_free (tmp);
 		return TRUE;
 	}
 
-	(void) gdata;
-	(void) hdata;
 	grid_stats_holder_foreach(reply->client->main_stats, NULL, runner);	
-	reply->send_reply(CODE_FINAL_OK, "OK");
+	reply->add_body (gba);
+	reply->send_reply (CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 

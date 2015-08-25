@@ -195,39 +195,6 @@ grid_string_to_sockaddr(const gchar *src, const gchar *end,
 	return 0 != addrinfo_to_sockaddr(&ai, s, slen);
 }
 
-gboolean
-l4_address_init_with_url(addr_info_t * dst, const gchar * url, GError ** err)
-{
-	if (grid_string_to_addrinfo(url, NULL, dst))
-		return TRUE;
-	GSETCODE(err, 0, "AddrInfo parsing error");
-	return FALSE;
-}
-
-addr_info_t *
-build_addr_info(const gchar * ip, int port, GError ** err)
-{
-	if (NULL == ip || port < 0) {
-		GSETCODE(err, EINVAL, "Invalid parameter");
-		return NULL;
-	}
-
-	gchar buf[256];
-	struct addr_info_s ai;
-
-	if (NULL != strchr(ip, ':'))
-		g_snprintf(buf, sizeof(buf), "[%s]:%d", ip, port);
-	else
-		g_snprintf(buf, sizeof(buf), "%s:%d", ip, port);
-
-	if (!grid_string_to_addrinfo(buf, NULL, &ai)) {
-		GSETCODE(err, EINVAL, "Impossible conversion");
-		return NULL;
-	}
-
-	return g_memdup(&ai, sizeof(struct addr_info_s));
-}
-
 gint
 addrinfo_to_sockaddr(const addr_info_t * ai, struct sockaddr *sa, gsize * saSize)
 {

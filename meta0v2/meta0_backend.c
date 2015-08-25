@@ -27,8 +27,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/version.h>
 
 #include "./internals.h"
-#include "./meta0_utils.h"
 #include "./meta0_backend.h"
+#include "./meta0_utils.h"
 
 struct meta0_backend_s
 {
@@ -109,13 +109,13 @@ meta0_backend_clean(struct meta0_backend_s *m0)
 {
 	if (!m0)
 		return;
-	if (m0->id)
-		g_free(m0->id);
+	g_free0(m0->id);
+	g_free0(m0->ns);
 	if (m0->array_by_prefix)
 		meta0_utils_array_clean(m0->array_by_prefix);
 	if (m0->array_meta1_ref)
 		meta0_utils_array_meta1ref_clean(m0->array_meta1_ref);
-	memset(m0, 0, sizeof(struct meta0_backend_s));
+	g_rw_lock_clear(&(m0->rwlock));
 	g_free(m0);
 }
 
@@ -144,86 +144,23 @@ meta0_backend_reload_requested(struct meta0_backend_s *m0)
 
 /* ------------------------------------------------------------------------- */
 
-void
-meta0_backend_migrate(struct meta0_backend_s *m0)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *handle=NULL;
-	struct sqlx_sqlite3_s *oldhandle=NULL;
-
-	struct sqlx_name_s n;
-	n.base = m0->ns;
-	n.type = NAME_SRVTYPE_META0;
-	n.ns = m0->ns;
-	err = sqlx_repository_open_and_lock(m0->repository, &n, SQLX_OPEN_LOCAL, &handle, NULL);
-	if ( err )
-	{
-		// check if the erreur message is the ENOENT message ; DB doesn't exist
-		if  (  (strstr(err->message, strerror(ENOENT)) != NULL) ) {
-			g_clear_error(&err);
-			err = NULL;
-			err = sqlx_repository_open_and_lock(m0->repository, &n, SQLX_OPEN_LOCAL|SQLX_OPEN_CREATE,&handle, NULL);
-			if( !err ) {
-				// Migration (1.7 -> 1.8) from old meta0 database
-
-				n.base = m0->id;
-				err = sqlx_repository_open_and_lock(m0->repository, &n, SQLX_OPEN_LOCAL, &oldhandle,NULL);
-				if ( ! err ) {
-					GRID_INFO("Start Migrate meta0 database");
-					err = sqlx_repository_backup_base(oldhandle,handle);
-					if ( err ) {
-						GRID_ERROR("Failed to migrate meta0 database : (%d) %s",err->code,err->message);
-					} else {
-						sqlx_repository_unlock_and_close_noerror(oldhandle);
-						// APPLY schema
-						gint rc;
-						char *errmsg = NULL;
-						rc = sqlite3_exec(handle->db, META0_SCHEMA, NULL, NULL, &errmsg);
-						if (rc != SQLITE_OK && rc != SQLITE_DONE)  {
-							GRID_WARN("Failed to apply schema (%d) %s %s",rc,sqlite3_errmsg(handle->db), errmsg);
-						}
-						if(errmsg != NULL)
-							g_free(errmsg);
-
-						// set table version
-						GRID_INFO("Update version in database");
-						sqlx_admin_inc_all_versions(handle, 2);
-					}
-
-				} else {
-					// database 1.7  doesn't existe ; new grid
-					g_clear_error(&err);
-					err = NULL;
-				}
-			} else {
-				GRID_ERROR("Failed to create meta0 database :(%d) %s",err->code,err->message);
-			}
-		}
-	}
-	if ( handle)
-		sqlx_repository_unlock_and_close_noerror(handle);
-
-}
-
-/* ------------------------------------------------------------------------- */
-
 static GError*
 _load_from_base(struct sqlx_sqlite3_s *sq3, GPtrArray **result)
 {
 	GError *err = NULL;
-	GPtrArray *array;
 	sqlite3_stmt *stmt;
 	int rc;
 	guint count = 0;
 
+	*result = NULL;
 	sqlite3_prepare_debug(rc, sq3->db, "SELECT prefix,addr,ROWID FROM meta1",
 			-1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)
 		return SQLITE_GERROR(sq3->db, rc);
 
-	array = meta0_utils_array_create();
+	GPtrArray *array = meta0_utils_array_create();
 
-	for (;;) {
+	do {
 		rc = sqlite3_step(stmt);
 		if (rc == SQLITE_ROW) {
 			gint64 rowid;
@@ -244,80 +181,64 @@ _load_from_base(struct sqlx_sqlite3_s *sq3, GPtrArray **result)
 				count ++;
 			}
 		}
-		else if (rc == SQLITE_DONE || rc == SQLITE_OK)
-			break;
-		else if (rc == SQLITE_BUSY)
-			sleep(1);
-		else {
-			err = SQLITE_GERROR(sq3->db, rc);
-			break;
-		}
-	}
+	} while (rc == SQLITE_ROW);
 
+	if (!sqlx_code_good(rc))
+		err = SQLITE_GERROR(sq3->db, rc);
 	sqlite3_finalize_debug(rc, stmt);
 
-	if (!err) {
-		*result = array;
-		GRID_INFO("Reloaded %u prefixes in %p (%u)",
-				count, array, array->len);
+	if (err) {
+		meta0_utils_array_clean (array);
+		return err;
 	}
 
-	return err;
+	GRID_INFO("Reloaded %u prefixes in %p (%u)", count, array, array->len);
+	*result = array;
+	return NULL;
 }
 
 static GError*
 _load_meta1ref_from_base(struct sqlx_sqlite3_s *sq3, GPtrArray **result)
 {
-        GError *err = NULL;
-        GPtrArray *array;
-        sqlite3_stmt *stmt;
-        int rc;
-        guint count = 0;
+	GError *err = NULL;
+	sqlite3_stmt *stmt;
+	int rc;
+	guint count = 0;
 
-	array = g_ptr_array_new();
+	*result = NULL;
 
-        sqlite3_prepare_debug(rc, sq3->db, "SELECT addr,state,prefixes FROM meta1_ref",
-			 -1, &stmt, NULL);
-        if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-		if ( rc == SQLITE_ERROR ) {
-			GRID_DEBUG("Missing table meta1ref in DB");
-			*result = array;
-			return NULL;
-		}
-                return SQLITE_GERROR(sq3->db, rc);
-	}
+	sqlite3_prepare_debug(rc, sq3->db, "SELECT addr,state,prefixes FROM meta1_ref",
+			-1, &stmt, NULL);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE)
+		return SQLITE_GERROR(sq3->db, rc);
 
-	for (;;) {
-                rc = sqlite3_step(stmt);
-                if (rc == SQLITE_ROW) {
+	GPtrArray *array = g_ptr_array_new();
+	do {
+		rc = sqlite3_step(stmt);
+		if (rc == SQLITE_ROW) {
 			const unsigned char *url,*prefix_nb,*ref;
 			url = sqlite3_column_text(stmt,0);
 			ref = sqlite3_column_text(stmt,1);
 			prefix_nb = sqlite3_column_text(stmt,2);
 
-			GRID_INFO("url %s, ref %s,prefix_nb %s ",url,ref,prefix_nb);
-			g_ptr_array_add(array,meta0_utils_pack_meta1ref((gchar *)url,(gchar *)ref,(gchar *)prefix_nb));
+			g_ptr_array_add (array, meta0_utils_pack_meta1ref (
+						(gchar *)url, (gchar *)ref, (gchar *)prefix_nb));
 			count++;
 		}
-		else if (rc == SQLITE_DONE || rc == SQLITE_OK)
-                        break;
-                else if (rc == SQLITE_BUSY)
-                        sleep(1);
-                else {
-                        err = SQLITE_GERROR(sq3->db, rc);
-                        break;
-                }
+	} while (rc == SQLITE_ROW);
 
-	}
+	if (!sqlx_code_good(rc))
+		err = SQLITE_GERROR(sq3->db, rc);
 	sqlite3_finalize_debug(rc, stmt);
 
-        if (!err) {
-                *result = array;
-                GRID_INFO("Reloaded %u meta1 in %p (%u)",
-                                count, array, array->len);
-        }
+	if (err) {
+		meta0_utils_array_meta1ref_clean (array);
+		return err;
+	}
 
-        return err;
+	GRID_INFO("Reloaded %u meta1 in %p (%u)", count, array, array->len);
+	*result = array;
+	return NULL;
 }
 
 static GError*
@@ -339,7 +260,7 @@ _load(struct meta0_backend_s *m0)
 
 	err = _load_meta1ref_from_base(sq3, &(m0->array_meta1_ref));
 	if (err != NULL)
-                g_prefix_error(&err, "Query error: ");
+		g_prefix_error(&err, "Query error: ");
 
 	_unlock_and_close(sq3);
 	return err;

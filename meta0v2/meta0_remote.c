@@ -30,167 +30,136 @@ License along with this library.
 #include "meta0_remote.h"
 #include "internals.h"
 
-static gboolean
-_m0_remote_no_return (addr_info_t *m0a, gint ms, GByteArray *req, GError **err)
+static GError *
+_m0_remote_no_return (const char *m0, GByteArray *req)
 {
-	EXTRA_ASSERT (m0a != NULL);
-	gchar addr[STRLEN_ADDRINFO];
-	addr_info_to_string (m0a, addr, STRLEN_ADDRINFO);
-
-	GError *e = gridd_client_exec (addr, ms>0 ? ms/1000.0 : 60.0, req);
-	if (!e)
-		return TRUE;
-	g_error_transmit(err, e);
-	return FALSE;
+	EXTRA_ASSERT (m0 != NULL);
+	return gridd_client_exec (m0, 30.0, req);
 }
 
-static GSList *
-_m0_remote_m0info (addr_info_t *m0a, gint ms, GByteArray *req, GError **err)
+static GError *
+_m0_remote_m0info (const char *m0, GByteArray *req, GSList **out)
 {
-	EXTRA_ASSERT (m0a != NULL);
-	gchar addr[STRLEN_ADDRINFO];
-	addr_info_to_string (m0a, addr, STRLEN_ADDRINFO);
-
+	EXTRA_ASSERT (m0 != NULL);
+	EXTRA_ASSERT (out != NULL);
 	GSList *result = NULL;
-	GError *e = gridd_client_exec_and_decode (addr, ms>0 ? ms/1000.0 : 60.0, req,
-			&result, meta0_info_unmarshall);
-
-	if (!e)
-		return result;
-	g_slist_free_full (result, (GDestroyNotify)meta0_info_clean);
-	g_error_transmit(err, e);
-	return NULL;
+	GError *e = gridd_client_exec_and_decode (m0, 30.0, req, &result,
+			meta0_info_unmarshall);
+	if (!e) {
+		*out = result;
+		return NULL;
+	} else {
+		g_slist_free_full (result, (GDestroyNotify)meta0_info_clean);
+		*out = NULL;
+		return e;
+	}
 }
 
 /* ------------------------------------------------------------------------- */
 
-GSList *
-meta0_remote_get_meta1_all(addr_info_t *m0a, gint ms, GError ** err)
+GError *
+meta0_remote_get_meta1_all(const char *m0, GSList **out)
 {
 	GByteArray *req = message_marshall_gba_and_clean (
 			metautils_message_create_named (NAME_MSGNAME_M0_GETALL));
-	return _m0_remote_m0info (m0a, ms, req, err);
+	return _m0_remote_m0info (m0, req, out);
 }
 
-GSList*
-meta0_remote_get_meta1_one(addr_info_t *m0a, gint ms, const guint8 *prefix,
-		GError ** err)
+GError*
+meta0_remote_get_meta1_one(const char *m0, const guint8 *prefix,
+		GSList **out)
 {
-	GByteArray *hdr = g_byte_array_append(g_byte_array_new(), prefix, 2);
 	MESSAGE request = metautils_message_create_named (NAME_MSGNAME_M0_GETONE);
-	metautils_message_add_fields_gba (request, NAME_MSGKEY_PREFIX, hdr, NULL);
-	GByteArray *req = message_marshall_gba_and_clean (request);
-	g_byte_array_unref(hdr);
-	return _m0_remote_m0info (m0a, ms, req, err);
+	metautils_message_add_field (request, NAME_MSGKEY_PREFIX, prefix, 2);
+	return _m0_remote_m0info (m0, message_marshall_gba_and_clean (request), out);
 }
 
-gint
-meta0_remote_cache_refresh(addr_info_t *m0a, gint ms, GError ** err)
+GError*
+meta0_remote_cache_refresh(const char *m0)
 {
 	GByteArray *gba = message_marshall_gba_and_clean (
 			metautils_message_create_named (NAME_MSGNAME_M0_RELOAD));
-	return _m0_remote_no_return (m0a, ms, gba, err);
+	return _m0_remote_no_return (m0, gba);
 }
 
-gint
-meta0_remote_fill(addr_info_t *m0a, gint ms, gchar **urls,
-		guint nbreplicas, GError **err)
+GError*
+meta0_remote_fill(const char *m0, gchar **urls, guint nbreplicas)
 {
-	if (nbreplicas < 1) {
-		GSETERROR(err, "Too few replicas");
-		return FALSE;
-	}
-	if (!urls || !*urls) {
-		GSETERROR(err, "Too few URL's");
-		return FALSE;
-	}
-	if (nbreplicas > g_strv_length(urls)) {
-		GSETERROR(err, "Too many replicas for the URL's set");
-		return FALSE;
-	}
+	if (nbreplicas < 1)
+		return NEWERROR(CODE_BAD_REQUEST, "Too few replicas");
+	if (!urls || !*urls)
+		return NEWERROR(CODE_BAD_REQUEST, "Too few URL's");
+	if (nbreplicas > g_strv_length(urls))
+		return NEWERROR(CODE_BAD_REQUEST, "Too many replicas for the URL's set");
 
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_FILL);
 	metautils_message_add_field_strint64(request, NAME_MSGKEY_REPLICAS, nbreplicas);
 	gchar *body = g_strjoinv("\n", urls);
 	metautils_message_set_BODY(request, body, strlen(body));
 	g_free(body);
-	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
+	return _m0_remote_no_return (m0, message_marshall_gba_and_clean(request));
 }
 
-gint
-meta0_remote_fill_v2(addr_info_t *m0a, gint ms,
-                guint nbreplicas, gboolean nodist, GError **err)
+GError*
+meta0_remote_fill_v2(const char *m0, guint nbreplicas, gboolean nodist)
 {
-	if (nbreplicas < 1) {
-		GSETERROR(err, "Too few replicas");
-		return FALSE;
-	}
-
+	if (nbreplicas < 1)
+		return NEWERROR(CODE_BAD_REQUEST, "Too few replicas");
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_V2_FILL);
 	metautils_message_add_field_strint64(request, NAME_MSGKEY_REPLICAS, nbreplicas);
-	metautils_message_add_field_strint(request, NAME_MSGKEY_NODIST, nodist);
-	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
+	if (nodist)
+		metautils_message_add_field_struint(request, NAME_MSGKEY_NODIST, nodist);
+	return _m0_remote_no_return (m0, message_marshall_gba_and_clean(request));
 }
 
-gint
-meta0_remote_assign(addr_info_t *m0a, gint ms, gboolean nocheck, GError **err)
+GError*
+meta0_remote_assign(const char *m0, gboolean nocheck)
 {
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_ASSIGN);
 	if (nocheck)
 		metautils_message_add_field_str (request, NAME_MSGKEY_NOCHECK, "yes");
-	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
+	return _m0_remote_no_return (m0, message_marshall_gba_and_clean(request));
 }
 
-gint
-meta0_remote_disable_meta1(addr_info_t *m0a, gint ms, gchar **urls, gboolean nocheck, GError **err)
+GError*
+meta0_remote_disable_meta1(const char *m0, gchar **urls, gboolean nocheck)
 {
-	if (!urls || !*urls) {
-		GSETERROR(err, "Too few URL's");
-		return FALSE;
-	}
-
+	if (!urls || !*urls)
+		return NEWERROR(CODE_BAD_REQUEST, "Too few URL's");
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_DISABLE_META1);
 	if (nocheck)
 		metautils_message_add_field_str(request, NAME_MSGKEY_NOCHECK, "yes");
 	gchar *body = g_strjoinv("\n", urls);
 	metautils_message_set_BODY(request, body, strlen(body));
 	g_free(body);
-	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
+	return _m0_remote_no_return (m0, message_marshall_gba_and_clean(request));
 }
 
-gint
-meta0_remote_destroy_meta1ref(addr_info_t *m0a, gint ms, gchar *urls, GError **err)
+GError*
+meta0_remote_destroy_meta1ref(const char *m0, const char *urls)
 {
-	if (!urls || !*urls) {
-		GSETERROR(err, "Too few URL's");
-		return FALSE;
-	}
-
+	if (!urls || !*urls)
+		return NEWERROR(CODE_BAD_REQUEST, "Too few URL's");
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_DESTROY_META1REF);
 	metautils_message_add_field_str (request, NAME_MSGKEY_METAURL, urls);
-	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
+	return _m0_remote_no_return (m0, message_marshall_gba_and_clean(request));
 }
 
-gint
-meta0_remote_destroy_meta0zknode(addr_info_t *m0a, gint ms, gchar *urls, GError **err)
+GError*
+meta0_remote_destroy_meta0zknode(const char *m0, const char *urls)
 {
-	if (!urls || !*urls) {
-		GSETERROR(err, "Too few URL's");
-		return FALSE;
-	}
-
+	if (!urls || !*urls)
+		return NEWERROR(CODE_BAD_REQUEST, "Too few URL's");
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_DESTROY_META0ZKNODE);
 	metautils_message_add_field_str (request, NAME_MSGKEY_METAURL, urls);
-	return _m0_remote_no_return (m0a, ms, message_marshall_gba_and_clean(request), err);
+	return _m0_remote_no_return (m0, message_marshall_gba_and_clean(request));
 }
 
-gchar **
-meta0_remote_get_meta1_info(addr_info_t *m0a, gint ms, GError **err)
+GError*
+meta0_remote_get_meta1_info(const char *m0, gchar ***out)
 {
 	GError *e = NULL;
 	gchar **result = NULL;
-	struct gridd_client_s *client = NULL;
-	gchar target[64];
 
 	gboolean on_reply(gpointer c1, MESSAGE reply) {
 		(void) c1;
@@ -223,22 +192,16 @@ meta0_remote_get_meta1_info(addr_info_t *m0a, gint ms, GError **err)
 
 	MESSAGE request = metautils_message_create_named(NAME_MSGNAME_M0_GET_META1_INFO);
 	GByteArray *packed = message_marshall_gba_and_clean(request);
-
-	addr_info_to_string(m0a, target, sizeof(target));
-
-	client = gridd_client_create(target, packed, NULL, on_reply);
-	if ( ms > 0 )
-		gridd_client_set_timeout(client, ms, ms);
-	e = gridd_client_run (client);
+	struct gridd_client_s *client = gridd_client_create(m0, packed, NULL, on_reply);
 	g_byte_array_free(packed, TRUE);
+	e = gridd_client_run (client);
+	gridd_client_free(client);
 
 	if (e) {
-		*err = e;
-		if (result) {
-			g_strfreev(result);
-			result = NULL;
-		}
+		g_strfreev(result);
+		return e;
 	}
-	return result;
+	*out = result;
+	return NULL;
 }
 

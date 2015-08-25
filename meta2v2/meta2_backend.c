@@ -1038,10 +1038,10 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct hc_url_s *url,
 				err = _db_delete_bean (sq3->db, l0->data);
 				if (!err)
 					err = _db_save_bean (sq3->db, l1->data);
-				if (!err && DESCR(l0->data) == &descr_struct_CHUNKS) {
+				if (!err && DESCR(l0->data) == &descr_struct_CHUNK) {
 					gchar *stmt = g_strdup_printf(
 							"UPDATE content_v2 SET chunk_id = '%s' WHERE chunk_id = '%s'",
-							CHUNKS_get_id(l1->data)->str, CHUNKS_get_id(l0->data)->str);
+							CHUNK_get_id(l1->data)->str, CHUNK_get_id(l0->data)->str);
 					int rc = sqlx_exec(sq3->db, stmt);
 					g_free(stmt);
 					if (!sqlx_code_good(rc))
@@ -1077,7 +1077,7 @@ _filter_beans(GSList *beans, const struct bean_descriptor_s *descr)
 static GSList*
 _filter_contents(GSList *beans)
 {
-	return _filter_beans(beans, &descr_struct_CONTENTS);
+	return _filter_beans(beans, &descr_struct_CONTENT);
 }
 
 GError*
@@ -1346,31 +1346,6 @@ meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 /* ------------------------------------------------------------------------- */
 
 GError*
-meta2_backend_update_alias_header(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *beans)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
-	guint32 max_versions = 0;
-
-	EXTRA_ASSERT(m2b != NULL);
-	EXTRA_ASSERT(url != NULL);
-
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
-	if (!err) {
-		max_versions = _maxvers(sq3, m2b);
-		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			err = m2db_update_alias_header(sq3, max_versions, url, beans);
-			err = sqlx_transaction_end(repctx, err);
-		}
-		m2b_close(sq3);
-	}
-
-	return err;
-}
-
-GError*
 meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, guint32 flags, GString **status_message)
 {
@@ -1394,59 +1369,6 @@ meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(sq3);
-	} else {
-		GRID_WARN("Got error when opening database: %s", err->message);
-	}
-	return err;
-}
-
-GError*
-meta2_backend_deduplicate_chunks(struct meta2_backend_s *m2b,
-		struct hc_url_s *url)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	namespace_info_t nsinfo;
-	memset(&nsinfo, 0, sizeof(nsinfo));
-	meta2_backend_get_nsinfo(m2b, &nsinfo);
-
-	EXTRA_ASSERT(m2b != NULL);
-	EXTRA_ASSERT(url != NULL);
-
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
-	if (!err) {
-		GRID_INFO("Starting chunk deduplication on %s",
-				hc_url_get(url, HCURL_WHOLE));
-		err = m2db_deduplicate_chunks(sq3, &nsinfo, url);
-		GRID_INFO("Finished chunk deduplication");
-		m2b_close(sq3);
-	} else {
-		GRID_WARN("Got error when opening database: %s", err->message);
-	}
-	return err;
-}
-
-GError*
-meta2_backend_deduplicate_alias_chunks(struct meta2_backend_s *m2b,
-		struct hc_url_s *url)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	namespace_info_t nsinfo;
-	memset(&nsinfo, 0, sizeof(nsinfo));
-	meta2_backend_get_nsinfo(m2b, &nsinfo);
-
-	EXTRA_ASSERT(m2b != NULL);
-	EXTRA_ASSERT(url != NULL);
-
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
-	if (!err) {
-		GRID_INFO("Starting chunk deduplication on %s (%s)",
-				hc_url_get(url, HCURL_WHOLE),
-				hc_url_get(url, HCURL_PATH));
-		m2b_close(sq3);
-		err = m2db_deduplicate_alias_chunks(sq3, &nsinfo, url);
 	} else {
 		GRID_WARN("Got error when opening database: %s", err->message);
 	}
@@ -1612,10 +1534,8 @@ meta2_backend_content_from_chunkid(struct meta2_backend_s *m2b,
 	if (!err) {
 		GVariant *params[2] = {NULL, NULL};
 		params[0] = g_variant_new_string(chunk_id);
-		err = CONTENTS_HEADERS_load (sq3->db, " id IN"
-				" (SELECT DISTINCT content_id"
-				"  FROM content_v2 "
-				"  WHERE chunk_id = ?)", params, cb, u0);
+		err = CONTENT_load (sq3->db, " id IN (SELECT DISTINCT content"
+				"  FROM chunks WHERE id = ?)", params, cb, u0);
 		metautils_gvariant_unrefv(params);
 		m2b_close(sq3);
 	}
@@ -1639,11 +1559,61 @@ meta2_backend_content_from_contenthash (struct meta2_backend_s *m2b,
 	if (!err) {
 		GVariant *params[2] = {NULL, NULL};
 		params[0] = _gb_to_gvariant(h);
-		err = CONTENTS_HEADERS_load (sq3->db, " hash = ?", params, cb, u0);
+		err = CONTENT_load (sq3->db, " hash = ?", params, cb, u0);
 		metautils_gvariant_unrefv(params);
 		m2b_close(sq3);
 	}
 
+	return err;
+}
+
+GError*
+meta2_backend_set_stgpol(struct meta2_backend_s *m2b,
+		struct hc_url_s *url, const char *stgpol)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct bean_CONTENT_s *content = NULL;
+	void _cb (gpointer u, gpointer bean) { (void) u; content = bean; }
+
+	do {
+		struct namespace_info_s ni;
+		memset(&ni, 0, sizeof(ni));
+		meta2_backend_get_nsinfo(m2b, &ni);
+		struct storage_policy_s *sp = storage_policy_init(&ni, stgpol);
+		namespace_info_clear (&ni);
+		if (!sp)
+			return NEWERROR(CODE_BAD_REQUEST, "unknown storage policy");
+		storage_policy_clean (sp);
+	} while (0);
+
+	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
+	if (!err) {
+		if (hc_url_has_fq_path(url)) {
+			GVariant *params[3] = {NULL, NULL, NULL};
+			params[0] = g_variant_new_string(hc_url_get(url, HCURL_PATH));
+			const char *stmt = " id in (SELECT content FROM aliases"
+				" WHERE alias = ? ORDER BY version DESC LIMIT 1)";
+			if (hc_url_has (url, HCURL_VERSION)) {
+				params[1] = g_variant_new_string(hc_url_get(url, HCURL_VERSION));
+				stmt = " id in (SELECT content FROM aliases"
+						" WHERE alias = ? AND version = ? LIMIT 1)";
+			}
+			err = CONTENT_load (sq3->db, stmt, params, _cb, NULL);
+			if (!err) {
+				if (content) {
+					CONTENT_set2_policy (content, stgpol);
+					_db_save_bean (sq3->db, content);
+				} else {
+					err = NEWERROR(CODE_CONTENT_NOTFOUND, "no such alias");
+				}
+			}
+			metautils_gvariant_unrefv(params);
+		} else {
+			sqlx_admin_set_str(sq3, M2V2_ADMIN_STORAGE_POLICY, stgpol);
+		}
+		m2b_close (sq3);
+	}
 	return err;
 }
 

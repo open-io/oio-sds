@@ -99,11 +99,6 @@ add_executable(test_meta2_backend test_meta2_backend.c)
 target_link_libraries(test_meta2_backend
 		meta2v2 ${GLIB2_LIBRARIES})
 
-add_executable(test_meta2_dedup test_meta2_dedup.c meta2_test_common.c)
-target_link_libraries(test_meta2_dedup
-		meta2v2 meta2v2utils metautils meta2v2remote
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
-
 install(FILES
 			${CMAKE_CURRENT_BINARY_DIR}/autogen.h
 			generic.h

@@ -45,11 +45,9 @@ static MESSAGE
 make_request(const gchar *rn, struct sqlx_name_s *name)
 {
 	MESSAGE req = metautils_message_create_named(rn);
-	metautils_message_add_fields_str(req,
-				NAME_MSGKEY_BASENAME, name->base,
-				NAME_MSGKEY_BASETYPE, name->type,
-				NAME_MSGKEY_NAMESPACE, name->ns,
-				NULL);
+	metautils_message_add_field_str(req, NAME_MSGKEY_BASENAME, name->base);
+	metautils_message_add_field_str(req, NAME_MSGKEY_BASETYPE, name->type);
+	metautils_message_add_field_str(req, NAME_MSGKEY_NAMESPACE, name->ns);
 	return req;
 }
 
@@ -157,7 +155,7 @@ GByteArray*
 sqlx_pack_PIPEFROM(struct sqlx_name_s *name, const gchar *source)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPEFROM, name);
-	metautils_message_add_fields_str(req, NAME_MSGKEY_SRC, source, NULL);
+	metautils_message_add_field_str(req, NAME_MSGKEY_SRC, source);
 	return message_marshall_gba_and_clean(req);
 }
 
@@ -165,7 +163,7 @@ GByteArray*
 sqlx_pack_PIPETO(struct sqlx_name_s *name, const gchar *target)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPETO, name);
-	metautils_message_add_fields_str(req, NAME_MSGKEY_DST, target, NULL);
+	metautils_message_add_field_str(req, NAME_MSGKEY_DST, target);
 	return message_marshall_gba_and_clean(req);
 }
 
@@ -213,8 +211,9 @@ sqlx_pack_QUERY(struct sqlx_name_s *name, const gchar *query,
 
 	guint8 ac = (guint8) autocreate;
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_QUERY, name);
-	metautils_message_add_field(req, NAME_MSGKEY_AUTOCREATE, &ac, 1);
-	metautils_message_add_fields_str(req, NAME_MSGKEY_QUERY, query, NULL);
+	if (ac)
+		metautils_message_add_field_struint(req, NAME_MSGKEY_AUTOCREATE, ac);
+	metautils_message_add_field_str(req, NAME_MSGKEY_QUERY, query);
 	if (!params)
 		metautils_message_add_body_unref (req, sqlx_encode_TableSequence(params, NULL));
 	return message_marshall_gba_and_clean(req);
@@ -308,7 +307,7 @@ sqlx_pack_PROPSET_pairs(struct sqlx_name_s *name, gboolean flush, GSList *pairs)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPSET, name);
 	if (flush)
-		metautils_message_add_field_strint (req, NAME_MSGKEY_FLUSH, 1);
+		metautils_message_add_field_struint (req, NAME_MSGKEY_FLUSH, 1);
 	metautils_message_add_body_unref (req, key_value_pairs_marshall_gba (pairs, NULL));
 	return message_marshall_gba_and_clean(req);
 }

@@ -20,27 +20,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__cluster__remote__gridcluster_remote_h
 # define OIO_SDS__cluster__remote__gridcluster_remote_h 1
 
-/**
- * @addtogroup gridcluster_remote
- * @{
- */
-
 #include <metautils/lib/metacomm.h>
 
-/** Get infos about namespace */
-namespace_info_t *gcluster_get_namespace_info_full(addr_info_t *addr,
-		long to, GError **error);
+GError* gcluster_get_namespace_info_full(const char *cs, namespace_info_t **out);
 
-/** Get the list of services for the given types */
-GSList *gcluster_get_services(const char *target, gdouble timeout,
-		const gchar *type, gboolean full, GError **error);
+GError* gcluster_get_services(const char *cs, const char *type, gboolean full, GSList **out);
 
-/** Get the list of service types from conscience. */
-GSList *gcluster_get_service_types(addr_info_t *addr, long timeout,
-		GError **error);
+GError* gcluster_get_service_types(const char *cs, GSList **out);
 
-GError* gcluster_push_services(addr_info_t *addr, long to, GSList *ls);
-
-/** @} */
+GError* gcluster_push_services(const char *cs, GSList *ls);
 
 #endif /*OIO_SDS__cluster__remote__gridcluster_remote_h*/

@@ -1809,6 +1809,8 @@ sqlx_dispatch_PROPDEL(struct gridd_reply_ctx_s *reply,
 	}
 	if (repctx)
 		err = sqlx_transaction_end(repctx, err);
+	else
+		sqlx_admin_save_lazy_tnx (sq3);
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
 	if (err)
@@ -1933,6 +1935,8 @@ sqlx_dispatch_PROPSET(struct gridd_reply_ctx_s *reply,
 		}
 		if (!(flags&FLAG_LOCAL))
 			err = sqlx_transaction_end(repctx, err);
+		else
+			sqlx_admin_save_lazy_tnx (sq3);
 	}
 	sqlx_repository_unlock_and_close_noerror(sq3);
 
@@ -1980,6 +1984,8 @@ sqlx_dispatch_ENABLE(struct gridd_reply_ctx_s *reply,
 			err = NEWERROR(CODE_CONTAINER_ENABLED, "Already enabled");
 		if (!(flags&FLAG_LOCAL))
 			err = sqlx_transaction_end(repctx, err);
+		else
+			sqlx_admin_save_lazy_tnx (sq3);
 	}
 
 	if (NULL != err)
@@ -2029,6 +2035,8 @@ sqlx_dispatch_FREEZE(struct gridd_reply_ctx_s *reply,
 			err = NEWERROR(CODE_CONTAINER_DISABLED, "Container disabled");
 		if (!(flags&FLAG_LOCAL))
 			err = sqlx_transaction_end(repctx, err);
+		else
+			sqlx_admin_save_lazy_tnx (sq3);
 	}
 
 	if (NULL != err)
@@ -2078,6 +2086,8 @@ sqlx_dispatch_DISABLE(struct gridd_reply_ctx_s *reply,
 			err = NEWERROR(CODE_CONTAINER_DISABLED, "Container disabled");
 		if (!(flags&FLAG_LOCAL))
 			err = sqlx_transaction_end(repctx, err);
+		else
+			sqlx_admin_save_lazy_tnx (sq3);
 	}
 
 	if (NULL != err)
@@ -2125,6 +2135,8 @@ sqlx_dispatch_DISABLE_DISABLED(struct gridd_reply_ctx_s *reply,
 			sqlx_admin_set_status(sq3, ADMIN_STATUS_DISABLED);
 		if (!(flags&FLAG_LOCAL))
 			err = sqlx_transaction_end(repctx, err);
+		else
+			sqlx_admin_save_lazy_tnx (sq3);
 	}
 
 	if (NULL != err)

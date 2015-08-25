@@ -59,8 +59,6 @@ enum m0v2_open_type_e
 struct meta0_backend_s * meta0_backend_init(const gchar *ns, const gchar *id,
 		struct sqlx_repository_s *repo);
 
-void meta0_backend_migrate(struct meta0_backend_s *m0);
-
 void meta0_backend_clean(struct meta0_backend_s *m0);
 
 GError* meta0_backend_check(struct meta0_backend_s *m0);

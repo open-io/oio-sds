@@ -42,27 +42,9 @@ gboolean hash_equals(gconstpointer a, gconstpointer b);
  */
 guint32 bean_hash_to_guint32(gconstpointer key);
 
-/**
- * Substitute `new_chunk` in place of chunks of `old_chunks` in all matching
- * contents.
- *
- * @param db A pointer to the meta2 database
- * @param new_chunk The chunk to substitute
- * @param old_chunks The list of chunks that can be replaced by `new_chunk`
- * @param err A pointer to a GError
- * @return The number of deduplicated chunks
- */
-guint substitute_chunk(sqlite3 *db, struct bean_CHUNKS_s *new_chunk,
-		GSList *old_chunks, GError **err);
-
 GHashTable* get_dup_contents_headers_by_hash(sqlite3 *db, GError **err);
 
-guint64 substitute_content_header(sqlite3 *db, struct bean_CONTENTS_HEADERS_s *new_ch,
-		GSList *old_ch, gboolean dry_run, GSList **impacted_aliases, GError **err);
-
 void dedup_chunks_of_alias(sqlite3 *db, GString *alias, guint nb_copy, GError **err);
-
-void print_bean_hashtable(GHashTable *hashtable);
 
 /**
  * Find content headers sharing the same hash and content policy,

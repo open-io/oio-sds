@@ -83,7 +83,7 @@ strv_filter(struct sqlx_service_s *ss, GSList *l)
 		if (!g_ascii_strcasecmp(ss->url->str, zknode->content))
 			continue;
 		addr_info_t addr;
-		if (!l4_address_init_with_url(&addr, zknode->content, NULL))
+		if (!grid_string_to_addrinfo(zknode->content, NULL, &addr))
 			continue;
 		g_ptr_array_add(tmp, zknode->content);
 		zknode->content = NULL;
@@ -164,8 +164,6 @@ _post_config(struct sqlx_service_s *ss)
 
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,
 			meta0_gridd_get_requests(), m0disp);
-
-	meta0_backend_migrate(m0);
 
 	meta0_gridd_requested_reload(m0disp);
 

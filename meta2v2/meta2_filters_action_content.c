@@ -364,9 +364,9 @@ _spare_with_blacklist(struct meta2_backend_s *m2b,
 	GSList *notin = NULL, *broken = NULL;
 
 	for (; beans != NULL; beans = beans->next) {
-		if (DESCR(beans->data) != &descr_struct_CHUNKS)
+		if (DESCR(beans->data) != &descr_struct_CHUNK)
 			continue;
-		if (CHUNKS_get_size(beans->data) == -1)
+		if (CHUNK_get_size(beans->data) == -1)
 			broken = g_slist_prepend(broken, beans->data);
 		else
 			notin = g_slist_prepend(notin, beans->data);

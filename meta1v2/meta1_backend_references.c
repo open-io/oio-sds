@@ -30,7 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/sqliterepo.h>
 
 #include "./internals.h"
-#include "./internals_sqlite.h"
 #include "./meta1_prefixes.h"
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"
@@ -68,20 +67,15 @@ __count_FK (struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	return NULL;
 }
 
-GError*
+static GError*
 __destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		gboolean force, gboolean *done)
 {
 	GError *err = NULL;
 	gint count_actions = 0;
-	struct sqlx_repctx_s *repctx = NULL;
 
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(sq3->db != NULL);
-
-	err = sqlx_transaction_begin(sq3, &repctx);
-	if (NULL != err)
-		return err;
 
 	if (force) {
 		__exec_cid (sq3->db, "DELETE FROM services WHERE cid = ?", hc_url_get_id (url));
@@ -108,12 +102,13 @@ __destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		count_actions += sqlite3_changes(sq3->db);
 	}
 
-	*done = !err && (count_actions > 0);
+	if (done)
+		*done = !err && (count_actions > 0);
 
 	if (!err && !*done)
 		err = NEWERROR(CODE_USER_NOTFOUND, "User not found");
 
-	return sqlx_transaction_end(repctx, err);
+	return err;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -128,7 +123,10 @@ meta1_backend_user_create(struct meta1_backend_s *m1,
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, SQLX_OPEN_MASTERONLY, &sq3);
-	if (!err) {
+	if (err) return err;
+
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, FALSE, NULL)))
 			err = NEWERROR(CODE_CONTAINER_EXISTS, "User already created");
 		else {
@@ -136,9 +134,10 @@ meta1_backend_user_create(struct meta1_backend_s *m1,
 			if (NULL != (err = __create_user(sq3, url)))
 				g_prefix_error(&err, "Query error: ");
 		}
-		sqlx_repository_unlock_and_close_noerror(sq3);
+		err = sqlx_transaction_end(repctx, err);
 	}
 
+	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
 
@@ -148,15 +147,18 @@ meta1_backend_user_destroy(struct meta1_backend_s *m1,
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, SQLX_OPEN_MASTERONLY, &sq3);
-	if (!err) {
-		gboolean done = FALSE;
+	if (err) return err;
+
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, FALSE, NULL)))
-			err = __destroy_container(sq3, url, force, &done);
+			err = __destroy_container(sq3, url, force, NULL);
 		if (NULL != err)
 			g_prefix_error(&err, "Query error: ");  
-		sqlx_repository_unlock_and_close_noerror(sq3);
+		err = sqlx_transaction_end(repctx, err);
 	}
 
+	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
 
@@ -166,7 +168,10 @@ meta1_backend_user_info(struct meta1_backend_s *m1,
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, SQLX_OPEN_MASTERSLAVE, &sq3);
-	if (!err) {
+	if (err) return err;
+
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		struct hc_url_s **urls = NULL;
 		if (!(err = __info_user(sq3, url, FALSE, &urls))) {
 			if (result) {
@@ -179,10 +184,11 @@ meta1_backend_user_info(struct meta1_backend_s *m1,
 				}
 			}
 		}
+		err = sqlx_transaction_end(repctx, err);
 		hc_url_cleanv (urls);
-		sqlx_repository_unlock_and_close_noerror(sq3);
 	}
 
+	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
 

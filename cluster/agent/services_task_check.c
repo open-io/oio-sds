@@ -187,7 +187,7 @@ _detect_obsolete_services(struct namespace_data_s *ns_data)
 		if (si->score.timestamp < time_down) {
 			gchar str_addr[STRLEN_ADDRINFO];
 
-			addr_info_to_string(&(si->addr),str_addr,sizeof(str_addr));
+			grid_addrinfo_to_string(&(si->addr),str_addr,sizeof(str_addr));
 			DEBUG("Timeout on service [%s/%s/%s] (%"G_GINT32_FORMAT" < %ld) --> DOWN",
 				si->ns_name, si->type, str_addr, si->score.timestamp, time_down);
 
@@ -211,7 +211,7 @@ _detect_obsolete_services(struct namespace_data_s *ns_data)
 		if (si->score.timestamp < time_broken) {
 			gchar str_addr[STRLEN_ADDRINFO];
 
-			addr_info_to_string(&(si->addr),str_addr,sizeof(str_addr));
+			grid_addrinfo_to_string(&(si->addr),str_addr,sizeof(str_addr));
 			DEBUG("Service obsolete [%s/%s/%s] --> DELETED", si->ns_name, si->type, str_addr);
 
 			g_hash_table_iter_remove(&s_iterator);
@@ -372,7 +372,7 @@ allservice_check_start_HT(struct namespace_data_s *ns_data, GHashTable *ht)
 
 		memset(&td_scheme, 0x00, sizeof(td_scheme));
 		offset = g_snprintf(td_scheme.task_name, sizeof(td_scheme.task_name), "%s.", TASK_ID);
-		addr_info_to_string(&(si->addr), td_scheme.task_name+offset, sizeof(td_scheme.task_name)-offset);
+		grid_addrinfo_to_string(&(si->addr), td_scheme.task_name+offset, sizeof(td_scheme.task_name)-offset);
 		g_strlcpy(td_scheme.ns_name, ns_data->name, sizeof(td_scheme.ns_name)-1);
 
 		if (!srv_check_enabled) {

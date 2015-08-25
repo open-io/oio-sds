@@ -106,16 +106,6 @@ label_end:
 /* ------------------------------------------------------------------------- */
 
 static void
-_admin_entry_set_str_noerror(sqlite3 *db, const gchar *k, const gchar *v)
-{
-	GError *e = sqlite_admin_entry_set(db, 1, k, (guint8*)v, strlen(v));
-	if (e) {
-		GRID_WARN("SQLX failed to set admin [%s] to [%s]", k, v);
-		g_clear_error(&e);
-	}
-}
-
-static void
 __delete_base(struct sqlx_sqlite3_s *sq3)
 {
 	if (!sq3->path) {
@@ -241,8 +231,15 @@ __test_schema(const gchar *schema, const gchar *version, GByteArray **raw)
 		goto label_exit;
 	}
 
-	if (version && *version)
-		_admin_entry_set_str_noerror(db, "schema_version", version);
+	if (version && *version) {
+		GError *e = sqlite_admin_entry_set(db, 1, "schema_version",
+				(guint8*)version, strlen(version));
+		if (e) {
+			GRID_WARN("SQLX failed to set admin [%s] to [%s]",
+					"schema_version", version);
+			g_clear_error(&e);
+		}
+	}
 
 	/* Apply the schema in it */
 	if ((schema != NULL)&&(strlen(schema) > 0)) {
@@ -705,18 +702,6 @@ label_retry:
 			written += w;
 	}
 
-	/* Save the base admin fields */
-	do {
-		sqlite3 *h;
-		if (SQLITE_OK == sqlite3_open(path, &h)) {
-			sqlx_exec(h, "BEGIN");
-			_admin_entry_set_str_noerror(h, SQLX_ADMIN_BASENAME, args->name.base);
-			_admin_entry_set_str_noerror(h, SQLX_ADMIN_BASETYPE, args->name.type);
-			sqlx_exec(h, "COMMIT");
-			sqlite3_close(h);
-		}
-	} while (0);
-
 	metautils_pclose(&fd);
 	return NULL;
 }
@@ -771,30 +756,6 @@ _get_pragma_sync(register const int mode)
 }
 
 static void
-__admin_ensure_version(struct sqlx_sqlite3_s *sq3)
-{
-	sqlite3_stmt *stmt = NULL;
-	int rc;
-
-	sqlite3_prepare_debug(rc, sq3->db, "SELECT name FROM sqlite_master"
-			" WHERE type = 'table'", -1, &stmt, NULL);
-	if (rc == SQLITE_OK) {
-		EXTRA_ASSERT(stmt != NULL);
-		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-			const gchar *name = (const gchar*)sqlite3_column_text(stmt, 0);
-			gchar *k = g_strdup_printf("version:main.%s", name);
-			if (g_tree_lookup(sq3->admin, k))
-				g_free(k);
-			else {
-				_admin_entry_set_str_noerror(sq3->db, k, "1:0");
-				g_tree_replace(sq3->admin, k, metautils_gba_from_string("1:0"));
-			}
-		}
-		sqlite3_finalize(stmt);
-	}
-}
-
-static void
 __admin_load_from_table(struct sqlx_sqlite3_s *sq3)
 {
 	sqlite3_stmt *stmt = NULL;
@@ -814,6 +775,7 @@ __admin_load_from_table(struct sqlx_sqlite3_s *sq3)
 	}
 }
 
+/* XXX this should not be called during a transaction */
 void
 sqlx_admin_reload(struct sqlx_sqlite3_s *sq3)
 {
@@ -821,8 +783,9 @@ sqlx_admin_reload(struct sqlx_sqlite3_s *sq3)
 		g_tree_destroy(sq3->admin);
 	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL,
 			g_free, metautils_gba_unref);
-	__admin_load_from_table(sq3);
-	__admin_ensure_version(sq3);
+	__admin_load_from_table (sq3);
+	sqlx_admin_ensure_versions (sq3);
+	sqlx_admin_save_lazy_tnx (sq3);
 	GRID_TRACE("Loaded %u ADMIN from [%s.%s]", g_tree_nnodes(sq3->admin),
 			sq3->name.base, sq3->name.type);
 }
@@ -886,7 +849,6 @@ retry:
 		sqlx_exec(handle, _get_pragma_sync(args->repo->sync_mode_solo));
 	}
 	sqlx_exec(handle, "PRAGMA foreign_keys = OFF");
-	sqlx_exec(handle, "BEGIN");
 
 	sq3 = g_slice_new0(struct sqlx_sqlite3_s);
 	sq3->db = handle;
@@ -897,10 +859,17 @@ retry:
 	sq3->name.type = g_strdup(args->name.type);
 	sq3->name.ns = g_strdup(args->name.ns);
 	sq3->path = g_strdup(args->realpath);
+	sq3->admin_dirty = 0;
+	sq3->admin = g_tree_new_full(metautils_strcmp3, NULL,
+			g_free, metautils_gba_unref);
 
-	sqlx_admin_reload(sq3);
-
-	sqlx_exec(handle, "COMMIT");
+	sqlx_exec (handle, "BEGIN");
+	__admin_load_from_table (sq3);
+	sqlx_admin_ensure_versions (sq3);
+	sqlx_admin_set_str (sq3, SQLX_ADMIN_BASENAME, sq3->name.base);
+	sqlx_admin_set_str (sq3, SQLX_ADMIN_BASETYPE, sq3->name.type);
+	sqlx_admin_save_lazy (sq3);
+	sqlx_exec (handle, "COMMIT");
 
 	*result = sq3;
 	return NULL;
@@ -1018,10 +987,14 @@ sqlx_repository_unlock_and_close2(struct sqlx_sqlite3_s *sq3, guint32 flags)
 	GError * err=NULL;
 	EXTRA_ASSERT(sq3 != NULL);
 
-	GRID_TRACE2("Closing bd=%d [%s][%s]", sq3->bd,
-			sq3->name.base, sq3->name.type);
+	GRID_TRACE2("Closing bd=%d [%s][%s]", sq3->bd, sq3->name.base, sq3->name.type);
 
 	sq3->election = 0;
+
+	if (sq3->admin_dirty) {
+		GRID_ERROR("BUG: Trying to close [%s][%s] with dirty admin", sq3->name.base, sq3->name.type);
+		g_assert (!sq3->admin_dirty);
+	}
 
 	if (!sq3->repo->flag_delete_on)
 		sq3->deleted = FALSE;

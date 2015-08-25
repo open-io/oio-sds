@@ -190,7 +190,7 @@ GError* m2v2_remote_execute_BEANS(const char *target, struct hc_url_s *url,
  * @return A GError in case of error
  *
  * @note notin_list and broken_list may contain beans other than
- *   (struct bean_CHUNKS_s *) with no harm (they will be ignored).
+ *   (struct bean_CHUNK_s *) with no harm (they will be ignored).
  */
 GError* m2v2_remote_execute_SPARE(const char *target, struct hc_url_s *url,
 		const char *stgpol, GSList *notin_list, GSList *broken_list,
@@ -226,7 +226,7 @@ GError* m2v2_remote_execute_RAW_SUBST(const char *target,
 
 GError* m2v2_remote_execute_RAW_SUBST_single(const char *target,
 		struct hc_url_s *url,
-		struct bean_CHUNKS_s *new_chunk, struct bean_CHUNKS_s *old_chunk);
+		struct bean_CHUNK_s *new_chunk, struct bean_CHUNK_s *old_chunk);
 
 GError* m2v2_remote_execute_LIST(const char *target,
 		struct hc_url_s *url, struct list_params_s *p,

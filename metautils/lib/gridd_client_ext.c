@@ -358,6 +358,11 @@ GError *
 gridd_client_exec4 (const gchar *to, gdouble timeout, GByteArray *req,
 		GByteArray ***out)
 {
+	if (!to) {
+		g_byte_array_unref (req);
+		return NEWERROR(CODE_INTERNAL_ERROR, "No conscience");
+	}
+
 	GPtrArray *tmp = NULL;
 	if (out)
 		tmp = g_ptr_array_new();
@@ -398,6 +403,11 @@ GError *
 gridd_client_exec_and_concat (const gchar *to, gdouble timeout, GByteArray *req,
 		GByteArray **out)
 {
+	if (!to) {
+		g_byte_array_unref (req);
+		return NEWERROR(CODE_INTERNAL_ERROR, "No conscience");
+	}
+
 	GByteArray *tmp = NULL;
 	if (out)
 		tmp = g_byte_array_new();

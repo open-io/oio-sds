@@ -65,7 +65,7 @@ meta0_info_to_string(const meta0_info_t * m0i, gchar * dst, gsize dstSize)
 
 	offset = g_snprintf(dst, dstSize, "%"G_GSIZE_FORMAT":", m0i->prefixes_size);
 
-	offset += addr_info_to_string(&(m0i->addr), dst + offset, dstSize - offset);
+	offset += grid_addrinfo_to_string(&(m0i->addr), dst + offset, dstSize - offset);
 
 	offset += g_snprintf(dst + offset, dstSize - offset, ":");
 
@@ -184,7 +184,7 @@ meta0_info_list_map_by_prefix(GSList * mL, GError ** err)
 			if (m0i) {	/*prefix already present, we do nothing else a debug */
 				if (DEBUG_ENABLED()) {
 					char str_addr[STRLEN_ADDRINFO];
-					addr_info_to_string(&(dummy.addr), str_addr, sizeof(str_addr));
+					grid_addrinfo_to_string(&(dummy.addr), str_addr, sizeof(str_addr));
 					DEBUG("double prefix found %02X%02X -> %s", dummy.prefixes[0], dummy.prefixes[1], str_addr);
 				}
 			}

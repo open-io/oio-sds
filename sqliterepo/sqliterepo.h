@@ -121,6 +121,8 @@ struct sqlx_sqlite3_s
 	GTree *admin; // <gchar*,GByteArray*>
 	gint bd; // ID in cache
 	enum election_status_e election; // set at open(), reset at close()
+
+	gboolean admin_dirty : 8;
 	gboolean deleted : 8;
 	gboolean no_peers : 8; // Prevent get_peers()
 };

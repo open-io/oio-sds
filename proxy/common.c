@@ -250,8 +250,10 @@ _request_has_flag (struct req_args_s *args, const char *header,
 {
 	const char *v = g_tree_lookup(args->rq->tree_headers, header);
 	if (!v)	return FALSE;
+
 	gchar **tokens = g_strsplit (v, ",", -1);
 	if (!tokens) return FALSE;
+
 	gboolean rc = FALSE;
 	for (gchar **p=tokens; *p ;++p) {
 		*p = g_strstrip (*p);

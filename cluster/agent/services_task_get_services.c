@@ -106,7 +106,7 @@ asn1_final_handler( worker_t *worker, GError **error)
 		if (!l->data)
 			continue;
 		si = l->data;
-		addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
+		grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
 		
 		srvtype = conscience_get_srvtype( ns_data->conscience, &error_local, si->type, MODE_STRICT );
 		if (!srvtype) {

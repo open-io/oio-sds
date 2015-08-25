@@ -188,12 +188,8 @@ m2v2_remote_pack_RAW_SUBST(struct hc_url_s *url,
 	GByteArray *new_chunks_gba = bean_sequence_marshall(new_chunks);
 	GByteArray *old_chunks_gba = bean_sequence_marshall(old_chunks);
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_RAW_SUBST, url, NULL);
-	metautils_message_add_fields_gba(msg,
-			NAME_MSGKEY_NEW, new_chunks_gba,
-			NAME_MSGKEY_OLD, old_chunks_gba,
-			NULL);
-	g_byte_array_unref (new_chunks_gba);
-	g_byte_array_unref (old_chunks_gba);
+	metautils_message_add_field_gba_and_unref(msg, NAME_MSGKEY_NEW, new_chunks_gba);
+	metautils_message_add_field_gba_and_unref(msg, NAME_MSGKEY_OLD, old_chunks_gba);
 	return message_marshall_gba_and_clean(msg);
 }
 
@@ -297,18 +293,18 @@ m2v2_remote_pack_SPARE(struct hc_url_s *url, const char *pol,
 	if (notin_list != NULL) {
 		spare_type = M2V2_SPARE_BY_BLACKLIST;
 		for (GSList *l = notin_list; l != NULL; l = l->next) {
-			if (DESCR(l->data) != &descr_struct_CHUNKS)
+			if (DESCR(l->data) != &descr_struct_CHUNK)
 				continue;
 			beans = g_slist_prepend(beans, _bean_dup(l->data));
 		}
 	}
 
 	for (GSList *l = broken_list; l != NULL; l = l->next) {
-		if (DESCR(l->data) != &descr_struct_CHUNKS)
+		if (DESCR(l->data) != &descr_struct_CHUNK)
 			continue;
-		struct bean_CHUNKS_s *chunk = _bean_dup(l->data);
+		struct bean_CHUNK_s *chunk = _bean_dup(l->data);
 		// This makes difference between valid and broken chunks
-		CHUNKS_set_size(chunk, -1);
+		CHUNK_set_size(chunk, -1);
 		beans = g_slist_prepend(beans, chunk);
 	}
 
@@ -521,8 +517,8 @@ m2v2_remote_execute_RAW_SUBST(const char *target, struct hc_url_s *url,
 
 GError*
 m2v2_remote_execute_RAW_SUBST_single(const char *target, struct hc_url_s *url,
-		struct bean_CHUNKS_s *new_chunk,
-		struct bean_CHUNKS_s *old_chunk)
+		struct bean_CHUNK_s *new_chunk,
+		struct bean_CHUNK_s *old_chunk)
 {
 	GSList *new_chunks = g_slist_prepend(NULL, new_chunk);
 	GSList *old_chunks = g_slist_prepend(NULL, old_chunk);

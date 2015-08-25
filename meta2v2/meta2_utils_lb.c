@@ -62,19 +62,19 @@ static gpointer
 _gen_chunk_bean(struct service_info_s *si)
 {
 	gchar straddr[STRLEN_ADDRINFO], strid[STRLEN_CHUNKID];
-	gchar *strvol = NULL;
 	gchar *chunk_id = NULL;
-	struct bean_CHUNKS_s *chunk = NULL;
+	struct bean_CHUNK_s *chunk = NULL;
 
+	GByteArray *gba_zero = g_byte_array_new();
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
 	SHA256_randomized_string(strid, sizeof(strid));
-	strvol = metautils_rawx_get_volume(si);
-	chunk = _bean_create(&descr_struct_CHUNKS);
-	chunk_id = g_strdup_printf("http://%s/%s", straddr, strid);
-	CHUNKS_set2_id(chunk, chunk_id);
+	chunk = _bean_create(&descr_struct_CHUNK);
 
-	g_free(strvol);
+	chunk_id = g_strdup_printf("http://%s/%s", straddr, strid);
+	CHUNK_set2_id(chunk, chunk_id);
+
 	g_free(chunk_id);
+	metautils_gba_unref(gba_zero);
 	return (gpointer)chunk;
 }
 
@@ -166,11 +166,11 @@ convert_chunks_to_srvinfo(struct grid_lbpool_s *lbp, GSList *src)
 	GSList *result = NULL;
 
 	for (GSList *l=src; l ;l=l->next) {
-		if (!l->data || DESCR(l->data) != &descr_struct_CHUNKS)
+		if (!l->data || DESCR(l->data) != &descr_struct_CHUNK)
 			continue;
 
 		struct service_info_s *si = NULL;
-		GError *e = service_info_from_chunk_id(lbp, CHUNKS_get_id(l->data)->str, &si);
+		GError *e = service_info_from_chunk_id(lbp, CHUNK_get_id(l->data)->str, &si);
 		if (NULL != e) {
 			GRID_WARN("CHUNK -> ServiceInfo conversion error : (%d) %s",
 					e->code, e->message);

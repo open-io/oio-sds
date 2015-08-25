@@ -41,40 +41,38 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
 	gridd_filter *fl;
-	struct gridd_filter_ctx_s *ctx;
+
+	if (!(fl = (gridd_filter*)hdata)) {
+		GRID_INFO("No filter defined for this request, consider not yet implemented");
+		reply->send_reply(CODE_NOT_IMPLEMENTED, "NOT IMPLEMENTED");
+		return TRUE;
+	}
 
 	if (!meta2_backend_initiated(gdata)) {
 		reply->send_reply(CODE_UNAVAILABLE, "backend not yet ready");
 		return TRUE;
 	}
 
-	fl = (gridd_filter*)hdata;
-	ctx = meta2_filter_ctx_new();
+	struct gridd_filter_ctx_s *ctx = meta2_filter_ctx_new();
 	meta2_filter_ctx_set_backend(ctx, (struct meta2_backend_s *) gdata);
 
-	if (!fl) {
-		GRID_INFO("No filter defined for this request, consider not yet implemented");
-		reply->send_reply(CODE_NOT_IMPLEMENTED, "NOT IMPLEMENTED");
-	}
-	else {
-		GError *err = NULL;
-		for (guint loop=1; loop && *fl; fl++) {
-			switch ((*fl)(ctx, reply)) {
-				case FILTER_KO:
-					if (!(err = meta2_filter_ctx_get_error(ctx)))
-						err = NEWERROR(CODE_INTERNAL_ERROR, "BUG: no error set by the filter");
-				case FILTER_DONE:
-					loop = 0;
-				case FILTER_OK:
-					break;
-				default:
-					g_assert_not_reached();
-					break;
-			}
+	GError *err = NULL;
+	for (guint loop=1; loop && *fl; fl++) {
+		switch ((*fl)(ctx, reply)) {
+			case FILTER_KO:
+				if (!(err = meta2_filter_ctx_get_error(ctx)))
+					err = NEWERROR(CODE_INTERNAL_ERROR, "BUG: no error set by the filter");
+			case FILTER_DONE:
+				loop = 0;
+			case FILTER_OK:
+				break;
+			default:
+				g_assert_not_reached();
+				break;
 		}
-		if (err)
-			reply->send_error(0, err);
 	}
+	if (err)
+		reply->send_error(0, err);
 
 	meta2_filter_ctx_clean(ctx);
 	return TRUE;
