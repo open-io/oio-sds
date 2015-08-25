@@ -497,7 +497,7 @@ class TestMeta2Functional(unittest.TestCase):
     def test_container_delete_ref_link(self):
 
         resp = self.session.delete(self.addr_m2_ref)
-        self.assertEqual(resp.status_code, 404)
+        self.assertEqual(resp.status_code, 403)
 
     # Containers Actions tests
 
