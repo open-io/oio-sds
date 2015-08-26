@@ -2,6 +2,11 @@ import json
 from oio.common.client import Client
 
 
+def gen_headers():
+    hdrs = {'x-oio-action-mode': 'autocreate'}
+    return hdrs
+
+
 class ContainerClient(Client):
     def __init_(self, conf, **kwargs):
         super(ContainerClient, self).__init__(conf, **kwargs)
@@ -22,7 +27,8 @@ class ContainerClient(Client):
     def container_create(self, acct=None, ref=None, cid=None, **kwargs):
         uri = self._make_uri('container/create')
         params = self._make_params(acct, ref, cid=cid)
-        resp, body = self._request('POST', uri, params=params)
+        hdrs = gen_headers()
+        resp, body = self._request('POST', uri, params=params, headers=hdrs)
 
     def container_show(self, acct=None, ref=None, cid=None, **kwargs):
         uri = self._make_uri('container/show')
@@ -119,10 +125,11 @@ class ContainerClient(Client):
         uri = self._make_uri('content/create')
         params = self._make_params(acct, ref, path, cid=cid)
         data = json.dumps(data)
-        headers = {'x-oio-content-meta-length': size,
-                   'x-oio-content-meta-hash': checksum}
+        hdrs = gen_headers()
+        hdrs.update({'x-oio-content-meta-length': size,
+                     'x-oio-content-meta-hash': checksum})
         resp, body = self._request(
-            'POST', uri, data=data, params=params, headers=headers)
+            'POST', uri, data=data, params=params, headers=hdrs)
 
     def content_delete(self, acct=None, ref=None, path=None, cid=None,
                        **kwargs):
@@ -142,8 +149,9 @@ class ContainerClient(Client):
         params = self._make_params(acct, ref, path, cid=cid)
         data = {'size': size}
         data = json.dumps(data)
+        hdrs = gen_headers()
         resp, body = self._request(
-            'POST', uri, data=data, params=params)
+            'POST', uri, data=data, params=params, headers=hdrs)
         return body
 
     def content_get_properties(self, acct=None, ref=None, path=None,
