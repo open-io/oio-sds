@@ -15,7 +15,7 @@ from eventlet.green import socket, threading
 
 
 logging.thread = eventlet.green.thread
-logging.threading = eventlet.green.threading
+logging.threading = threading
 logging._lock = logging.threading.RLock()
 
 from optparse import OptionParser
