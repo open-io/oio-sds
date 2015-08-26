@@ -232,3 +232,44 @@ action_cs_srvtypes (struct req_args_s *args)
 	return _reply_success_json (args, out);
 }
 
+enum http_rc_e
+action_conscience_check (struct req_args_s *args)
+{
+    return action_cs_nscheck (args);
+}
+
+enum http_rc_e
+action_conscience_info (struct req_args_s *args)
+{
+	return action_cs_info (args);
+}
+
+enum http_rc_e
+action_conscience_list (struct req_args_s *args)
+{
+	return action_cs_get (args);
+}
+
+enum http_rc_e
+action_conscience_register (struct req_args_s *args)
+{
+	return action_cs_put (args);
+}
+
+enum http_rc_e
+action_conscience_deregister (struct req_args_s *args)
+{
+	return action_cs_del (args);
+}
+
+enum http_rc_e
+action_conscience_lock (struct req_args_s *args)
+{
+	return rest_action (args, action_cs_srv_lock);
+}
+
+enum http_rc_e
+action_conscience_unlock (struct req_args_s *args)
+{
+	return rest_action (args, action_cs_srv_unlock);
+}

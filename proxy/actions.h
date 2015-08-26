@@ -33,21 +33,17 @@ enum http_rc_e action_cache_set_max_high (struct req_args_s *args);
 
 // Load Balancing
 
-enum http_rc_e action_lb_hash (struct req_args_s *args);
-enum http_rc_e action_lb_def (struct req_args_s *args);
+enum http_rc_e action_lb_choose (struct req_args_s *args);
 
 // Conscience
 
-enum http_rc_e action_cs_srvtypes (struct req_args_s *args);
-enum http_rc_e action_cs_nscheck (struct req_args_s *args);
-enum http_rc_e action_cs_info (struct req_args_s *args);
-enum http_rc_e action_cs_srvcheck (struct req_args_s *args);
-enum http_rc_e action_cs_get (struct req_args_s *args);
-enum http_rc_e action_cs_put (struct req_args_s *args);
-enum http_rc_e action_cs_del (struct req_args_s *args);
-enum http_rc_e action_cs_srv_lock (struct req_args_s *args, struct json_object *jargs);
-enum http_rc_e action_cs_srv_unlock (struct req_args_s *args, struct json_object *jargs);
-enum http_rc_e action_cs_action (struct req_args_s *args);
+enum http_rc_e action_conscience_check (struct req_args_s *args);
+enum http_rc_e action_conscience_info (struct req_args_s *args);
+enum http_rc_e action_conscience_list (struct req_args_s *args);
+enum http_rc_e action_conscience_register (struct req_args_s *args);
+enum http_rc_e action_conscience_deregister (struct req_args_s *args);
+enum http_rc_e action_conscience_lock (struct req_args_s *args);
+enum http_rc_e action_conscience_unlock (struct req_args_s *args);
 
 // Reference
 
@@ -110,6 +106,25 @@ enum http_rc_e action_admin_disable (struct req_args_s *args);
 
 
 // Deprecated action handlers
+
+//lb
+
+enum http_rc_e action_lb_hash (struct req_args_s *args);
+enum http_rc_e action_lb_def (struct req_args_s *args);
+
+// cs
+
+enum http_rc_e action_cs_srvtypes (struct req_args_s *args);
+enum http_rc_e action_cs_nscheck (struct req_args_s *args);
+enum http_rc_e action_cs_info (struct req_args_s *args);
+enum http_rc_e action_cs_srvcheck (struct req_args_s *args);
+enum http_rc_e action_cs_get (struct req_args_s *args);
+enum http_rc_e action_cs_put (struct req_args_s *args);
+enum http_rc_e action_cs_del (struct req_args_s *args);
+enum http_rc_e action_cs_srv_lock (struct req_args_s *args, struct json_object *jargs);
+enum http_rc_e action_cs_srv_unlock (struct req_args_s *args, struct json_object *jargs);
+enum http_rc_e action_cs_action (struct req_args_s *args);
+
 // dir
 
 enum http_rc_e action_dir_ref_has (struct req_args_s *args);
