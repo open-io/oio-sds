@@ -10,3 +10,7 @@ script:
 after_failure:
   - for LOG in python/.tox/$TOX_ENV/log/*; do echo "$LOG\n"; cat "$LOG"; echo "\n\n"; done
   - echo "pip.log\n"; cat $HOME/.pip/pip.log
+addons:
+  apt:
+    packages:
+      - libattr1-dev
