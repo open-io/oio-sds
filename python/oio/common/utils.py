@@ -199,7 +199,7 @@ def parse_options(parser=None):
     return config, options
 
 
-def read_conf(conf_path, section_name=None, defaults=None, use_yaml=True):
+def read_conf(conf_path, section_name=None, defaults=None, use_yaml=False):
     if use_yaml:
         return parse_config(conf_path)
     if defaults is None:
