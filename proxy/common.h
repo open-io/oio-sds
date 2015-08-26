@@ -56,7 +56,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define CID()     TOK("CID") ?: OPT("cid")
 #define NS()      TOK("NS")
 #define ACCOUNT() TOK("ACCOUNT") ?: OPT("acct")
-#define POOL()    TOK("POOL")
+#define POOL()    TOK("POOL") ?: OPT("pool")
 #define TYPE()    (TOK("TYPE") ?: OPT("type"))
 #define REF()     TOK("REF") ?: OPT("ref")
 #define PATH()    TOK("PATH") ?: OPT("path")

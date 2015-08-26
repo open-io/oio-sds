@@ -532,6 +532,18 @@ configure_request_handlers (void)
 
     // New routes
     //
+	// Load Balancing
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/lb/choose/#GET", action_lb_choose);
+
+	// Conscience
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/check/#HEAD", action_conscience_check);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/info/#GET", action_conscience_info);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/list/#GET", action_conscience_list);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/register/#POST", action_conscience_register);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/deregister/#POST", action_conscience_deregister);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/lock/#POST", action_conscience_lock);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/unlock/#POST", action_conscience_unlock);
+
     // Directory
     path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/create/#POST", action_ref_create);
     path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/destroy/#POST", action_ref_destroy);

@@ -126,3 +126,8 @@ action_lb_hash (struct req_args_s *args)
 	return _reply_system_error(args, NEWERROR (CODE_INTERNAL_ERROR, "Not implemented"));
 }
 
+enum http_rc_e
+action_lb_choose (struct req_args_s *args)
+{
+	return action_lb_def (args);
+}
