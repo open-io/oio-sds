@@ -1,0 +1,12 @@
+language: python
+python: 2.7
+env:
+  - TOX_ENV=pep8
+  - TOX_ENV=py27
+install:
+  - pip install --upgrade pip setuptools tox virtualenv
+script:
+  - cd python && tox -v -v -e $TOX_ENV && cd -
+after_failure:
+  - for LOG in python/.tox/$TOX_ENV/log/*; do echo "$LOG\n"; cat "$LOG"; echo "\n\n"; done
+  - echo "pip.log\n"; cat $HOME/.pip/pip.log
