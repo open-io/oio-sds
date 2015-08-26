@@ -6,10 +6,9 @@ env:
 install:
   - pip install --upgrade pip setuptools tox virtualenv
 script:
-  - cd python && tox -v -v -e $TOX_ENV && cd -
+  - cd python && tox -v -v -e $TOX_ENV
 after_failure:
-  - for LOG in python/.tox/$TOX_ENV/log/*; do echo "$LOG\n"; cat "$LOG"; echo "\n\n"; done
-  - echo "pip.log\n"; cat $HOME/.pip/pip.log
+  - for LOG in .tox/$TOX_ENV/log/*; do echo "$LOG\n"; cat "$LOG"; echo "\n\n"; done
 addons:
   apt:
     packages:
