@@ -1,4 +1,5 @@
 from eventlet import connect
+from oio.common import exceptions as exc
 from oio.conscience.checker.base import BaseChecker
 
 

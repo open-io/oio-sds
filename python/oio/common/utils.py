@@ -2,6 +2,7 @@ import os
 import errno
 import glob
 import grp
+import hashlib
 import logging
 import pwd
 import sys
@@ -15,7 +16,7 @@ from eventlet.green import socket, threading
 
 
 logging.thread = eventlet.green.thread
-logging.threading = eventlet.green.threading
+logging.threading = threading
 logging._lock = logging.threading.RLock()
 
 from optparse import OptionParser
@@ -403,3 +404,10 @@ class RingBuffer(list):
     def __iter__(self):
         for i in xrange(0, self._count):
             yield self[i]
+
+
+def cid_from_name(account, ref):
+    h = hashlib.sha256()
+    for v in [account, '\0', ref]:
+        h.update(v)
+    return h.hexdigest()
