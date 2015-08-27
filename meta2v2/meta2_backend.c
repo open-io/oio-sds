@@ -111,7 +111,7 @@ m2b_max_versions(struct meta2_backend_s *m2b, const char *vns)
 {
 	gint64 max_versions;
 	_M2B_GET_VNS_INFO(m2b, vns, nsinfo)
-	max_versions = gridcluster_get_container_max_versions(&nsinfo);
+	max_versions = namespace_get_container_max_versions(&nsinfo);
 	namespace_info_clear(&nsinfo);
 
 	return max_versions;
@@ -122,7 +122,7 @@ m2b_keep_deleted_delay(struct meta2_backend_s *m2b, const char *vns)
 {
 	gint64 delay;
 	_M2B_GET_VNS_INFO(m2b, vns, nsinfo)
-	delay = gridcluster_get_keep_deleted_delay(&nsinfo);
+	delay = namespace_get_keep_deleted_delay(&nsinfo);
 	namespace_info_clear(&nsinfo);
 
 	return delay;

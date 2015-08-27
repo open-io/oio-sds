@@ -807,7 +807,7 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	req_ctx.reqname = _request_get_name(request);
 	req_ctx.uid = _request_get_cid(request);
 	req_ctx.reqid = _req_get_hex_ID(request, hexid, sizeof(hexid));
-	oio_ext_set_reqid(req_ctx.reqid);
+	oio_local_set_reqid(req_ctx.reqid);
 	rc = TRUE;
 
 	if (!req_ctx.reqname) {

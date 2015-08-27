@@ -58,7 +58,7 @@ __getParameter(MESSAGE m, enum message_param_e mp)
 MESSAGE
 metautils_message_create(void)
 {
-	const char *id = oio_ext_get_reqid ();
+	const char *id = oio_local_get_reqid ();
 	MESSAGE result = calloc(1, sizeof(Message_t));
 	if (id)
 		metautils_message_set_ID (result, id, strlen(id));
@@ -115,10 +115,10 @@ message_marshall_gba(MESSAGE m, GError **err)
 
 	/*set an ID if it is not present */
 	if (!metautils_message_has_ID(m)) {
-		const char *reqid = oio_ext_get_reqid ();
+		const char *reqid = oio_local_get_reqid ();
 		if (!reqid)
-			oio_ext_set_random_reqid ();
-		reqid = oio_ext_get_reqid ();
+			oio_local_set_random_reqid ();
+		reqid = oio_local_get_reqid ();
 		metautils_message_set_ID(m, (guint8*)reqid, strlen(reqid));
 	}
 

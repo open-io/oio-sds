@@ -48,7 +48,6 @@ list_request(const char *to, GByteArray *req, gchar ***out)
 	struct gridd_client_s *client = gridd_client_create(to, req, gba, on_reply);
 	g_byte_array_unref (req);
 
-	gridd_client_start(client);
 	GError *e = gridd_client_run(client);
 	gridd_client_free(client);
 

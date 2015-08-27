@@ -379,7 +379,7 @@ main(int argc, char **argv)
 	if (has_lbconfig) {
 		GError *err = NULL;
 		struct service_update_policies_s *pol;
-		gchar *cfg = gridcluster_get_service_update_policy(ns);
+		gchar *cfg = namespace_get_service_update_policy(ns);
 		if (!cfg) {
 			g_printerr("Invalid NSINFO\n");
 			goto exit_label;

@@ -64,7 +64,7 @@ _uconnect_path(const gchar *path, GError **err)
 int
 gridagent_connect(GError ** error)
 {
-	gchar *agent_sock = gridcluster_get_agent();
+	gchar *agent_sock = oio_cfg_get_agent();
 	int fd = _uconnect_path(agent_sock, error);
 	g_free(agent_sock);
 	return fd;
@@ -74,7 +74,7 @@ gboolean
 gridagent_available(void)
 {
 	struct stat sock_stat;
-	gchar *sock = gridcluster_get_agent();
+	gchar *sock = oio_cfg_get_agent();
 	gboolean rc = (stat(sock, &sock_stat) == 0);
 	g_free(sock);
 	return rc;

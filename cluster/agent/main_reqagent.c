@@ -60,7 +60,7 @@ gridagent_running(void)
 {
 	int sock = gridagent_connect(NULL);
 	if (sock < 0) {
-		gchar *path = gridcluster_get_agent();
+		gchar *path = oio_cfg_get_agent();
 		unlink(path);
 		g_free(path);
 		return 0;

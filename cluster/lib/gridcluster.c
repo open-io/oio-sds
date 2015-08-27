@@ -27,17 +27,11 @@ License along with this library.
 #include <sys/stat.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 #include <cluster/remote/gridcluster_remote.h>
 
 #include "gridcluster.h"
 #include "message.h"
 
-#define MAX_REQ_LENGTH 1024
-#define CONNECT_TIMEOUT 5000
-#define SOCKET_TIMEOUT 5000
-#define BUF (wrkParam+writen)
-#define LEN (sizeof(wrkParam)-writen-1)
 #define MANAGE_ERROR(Req,Resp,Error) do {\
 	if (Resp.data_size > 0 && Resp.data)\
 		GSETERROR(Error, "Error from agent : %.*s", Resp.data_size, (char*)(Resp.data));\
@@ -45,37 +39,6 @@ License along with this library.
 		GSETERROR(Error, "Error from agent : (no response)");\
 	clear_request_and_reply(&Req,&Resp);\
 } while (0)
-#define NS_WORM_OPT_NAME "worm"
-#define NS_CONTAINER_MAX_SIZE_NAME "container_max_size"
-#define NS_STORAGE_POLICY_NAME "storage_policy"
-#define NS_CHUNK_SIZE_NAME "chunk_size"
-#define NS_WORM_OPT_VALUE_ON "on"
-#define NS_COMPRESS_OPT_NAME "compression"
-#define NS_COMPRESS_OPT_VALUE_ON "on"
-
-static gint64
-_gba_to_int64(GByteArray *gba, gboolean def)
-{
-	if (!gba)
-		return def;
-	gchar *str = g_alloca(gba->len + 1);
-	memset(str, 0, gba->len + 1);
-	memcpy(str, gba->data, gba->len);
-	return g_ascii_strtoll(str, NULL, 10);
-}
-
-static gboolean
-_gba_to_bool(GByteArray *gba, gboolean def)
-{
-	if (!gba || !gba->data || !gba->len)
-		return def;
-	if (!gba->data[ gba->len - 1 ])
-		return metautils_cfg_get_bool((gchar*)gba->data, def);
-	gchar *str = g_alloca(gba->len + 1);
-	memset(str, 0, gba->len + 1);
-	memcpy(str, gba->data, gba->len);
-	return metautils_cfg_get_bool(str, def);
-}
 
 static void
 clear_request_and_reply( request_t *req, response_t *resp )
@@ -159,24 +122,6 @@ get_namespace_info(const char *ns_name, GError **error)
 	} else {
 		return _get_namespace_info_from_agent(ns_name, error);
 	}
-}
-
-meta0_info_t*
-get_meta0_info(const char *ns_name, GError **error)
-{
-	GSList *services = list_namespace_services(ns_name, NAME_SRVTYPE_META0, error);
-	if (!services) {
-		GSETERROR(error,"No META0 found");
-		return NULL;
-	}
-
-	struct service_info_s *si = g_slist_nth_data(services,
-			rand() % g_slist_length(services));
-
-	meta0_info_t *meta0 = g_malloc0(sizeof(meta0_info_t));
-	memcpy( &(meta0->addr), &(si->addr), sizeof(addr_info_t));
-	g_slist_free_full (services, (GDestroyNotify)service_info_clean);
-	return meta0;
 }
 
 static GSList*
@@ -293,84 +238,6 @@ list_namespace_services(const char *ns_name, const char *type, GError **error)
 	} else { // from agent
 		return list_gridagent_services(ns_name,type,error);
 	}
-}
-
-struct service_info_s*
-get_one_namespace_service(const gchar *ns_name, const gchar *type, GError **error)
-{
-	request_t req;
-	response_t resp;
-
-	if (!ns_name || !type) {
-		GSETERROR(error,"Invalid parameter");
-		return NULL;
-	}
-
-	if (!gridagent_available()) {
-		// Find best scored service. This is basically what's done in agent.
-		struct service_info_s *res = NULL;
-		GSList *services = list_namespace_services(ns_name, type, error);
-		if (services) {
-			struct service_info_s *best = NULL;
-			for (GSList *l = services; l; l = l->next) {
-				struct service_info_s *cur = l->data;
-				if (cur->score.value > 0 &&
-						(!best || cur->score.value > best->score.value)) {
-					best = cur;
-				}
-			}
-			res = service_info_dup(best); // NULL safe
-			g_slist_free_full(services, (GDestroyNotify)service_info_clean);
-		}
-		if (!res && error && !*error) {
-			*error = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
-					"No %s service found", type);
-		}
-		return res;
-	}
-
-	memset(&req, 0, sizeof(request_t));
-	memset(&resp, 0, sizeof(response_t));
-	req.cmd = g_strdup(MSG_SRV_GET1);
-	req.arg = g_strdup_printf("%s:%s", ns_name, type);
-	req.arg_size = strlen(req.arg);
-
-	if (!send_request(&req, &resp, error)) {
-		GSETERROR(error, "Request %s to agent failed", __FUNCTION__);
-		clear_request_and_reply(&req,&resp);
-		return NULL;
-	}
-
-	if (resp.status == STATUS_OK) {
-		GSList *services = NULL;
-
-		if (!resp.data || resp.data_size<=0) {
-			GSETERROR(error,"Empty content received from the gridagent");
-			clear_request_and_reply(&req,&resp);
-			return NULL;
-		}
-
-		if (0>service_info_unmarshall(&services,resp.data, resp.data_size,error)) {
-			GSETERROR(error,"Invalid content from the gridagent");
-			clear_request_and_reply(&req,&resp);
-			return NULL;
-		}
-		clear_request_and_reply(&req,&resp);
-		if (services) {
-			struct service_info_s *si;
-
-			si = service_info_dup(services->data);
-			g_slist_foreach(services, service_info_gclean, NULL);
-			g_slist_free(services);
-			return si;
-		}
-	
-		GSETERROR(error, "No service found for type=[%s] in namespace [%s]", type, ns_name);
-		return NULL;
-	}
-
-	MANAGE_ERROR(req,resp,error);
-	return NULL;
 }
 
 static GSList*
@@ -556,215 +423,10 @@ list_tasks(GError **error)
 
 /* ------------------------------------------------------------------------- */
 
-static GByteArray *
-namespace_param_gba(const namespace_info_t* ns_info, const gchar *ns_name,
-		const gchar *param_name)
-{
-	return namespace_info_get_srv_param_gba(ns_info, ns_name, NULL, param_name);
-}
-
-gchar*
-gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
-		const gchar *key, const gchar *def)
-{
-	GByteArray *value;
-
-	if (!nsinfo || !nsinfo->options)
-		return g_strdup(def);
-
-	value = g_hash_table_lookup(nsinfo->options, key);
-	if (!value)
-		return g_strdup(def);
-
-	return g_strndup((gchar*)value->data, value->len);
-}
-
-gint64
-gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
-		const gchar* key, gint64 def)
-{
-	return namespace_info_get_srv_param_i64(nsinfo, NULL, NULL, key, def);
-}
-
-static gsize
-namespace_get_size(namespace_info_t *ns_info, const gchar *name, gsize def)
-{
-	return (gsize) gridcluster_get_nsinfo_int64(ns_info, name, def);
-}
-
-gboolean
-namespace_in_worm_mode(namespace_info_t* ns_info)
-{
-	GByteArray *val = namespace_param_gba(ns_info, NULL, NS_WORM_OPT_NAME);
-	return _gba_to_bool(val, FALSE);
-}
-
-gint64
-namespace_container_max_size(namespace_info_t* ns_info)
-{
-	GByteArray *val = namespace_param_gba(ns_info, NULL, NS_CONTAINER_MAX_SIZE_NAME);
-	return _gba_to_int64(val, -1);
-}
-
-gint64
-namespace_chunk_size(const namespace_info_t* ns_info, const char *ns_name)
-{
-	GByteArray *val = namespace_param_gba(ns_info, ns_name,
-			NS_CHUNK_SIZE_NAME);
-	return _gba_to_int64(val, ns_info->chunk_size);
-}
-
-gchar *
-namespace_storage_policy(const namespace_info_t* ns_info, const char *ns_name)
-{
-	GByteArray *gba = namespace_param_gba(ns_info, ns_name,
-			NS_STORAGE_POLICY_NAME);
-	return !gba ? NULL : g_strndup((gchar*)gba->data, gba->len);
-}
-
-gchar*
-namespace_storage_policy_value(const namespace_info_t *ns_info, const gchar *wanted_policy)
-{
-	const gchar *policy_to_lookup = wanted_policy ?
-			wanted_policy : namespace_storage_policy(ns_info, ns_info->name);
-
-	if (!ns_info || ns_info->storage_policy)
-		return NULL;
-
-	GByteArray *gba = g_hash_table_lookup(ns_info->storage_policy, policy_to_lookup);
-
-	if (!wanted_policy)
-		g_free((gpointer)policy_to_lookup);
-
-	return !gba ? NULL : g_strndup((gchar*)gba->data, gba->len);
-}
-
-static gchar*
-_get_token(const gchar *colon_separated_tokens, const guint token_rank)
-{
-	gchar **tokens = g_strsplit(colon_separated_tokens, ":", 0);
-	gchar *token_wanted = NULL;
-
-	if (g_strv_length(tokens) < token_rank) {
-		ERROR("Cannot split string [%s] into %i ':'-separated tokens.", colon_separated_tokens, token_rank);
-		goto end;
-	}
-
-	token_wanted = g_strdup(tokens[token_rank]);
-
-end:
-	if (tokens)
-		g_strfreev(tokens);
-
-	return token_wanted;
-}
-
-static gchar*
-_get_data_security_id(const gchar *storage_policy_value)
-{
-	gchar *data_sec_id = _get_token(storage_policy_value, 1);
-
-	if (!data_sec_id) {
-		WARN("Storage policy configuration seems to be wrong: [%s]"
-				" Correct pattern is STG_CLASS:DATA_SEC:DATA_THREAT",
-				storage_policy_value ? storage_policy_value : "NULL");
-	}
-
-	return data_sec_id;
-}
-
-gchar*
-namespace_data_security_value(const namespace_info_t *ns_info, const gchar *wanted_policy)
-{
-	gchar *storage_policy_value = namespace_storage_policy_value(ns_info, wanted_policy);
-	gchar *data_sec_id = _get_data_security_id(storage_policy_value);
-	GByteArray *data_sec_val = NULL;
-	gchar str_data_sec_val[LIMIT_LENGTH_STGPOLICY];
-
-	if (storage_policy_value && data_sec_id) {
-		data_sec_val = g_hash_table_lookup(ns_info->data_security, data_sec_id);
-	}
-
-	if (!data_sec_val) {
-		WARN("Cannot find data security with id [%s] (namespace [%s], wanted policy [%s])",
-				data_sec_id, ns_info->name, wanted_policy);
-	}
-
-	if (data_sec_id)
-		g_free(data_sec_id);
-	if (storage_policy_value)
-		g_free(storage_policy_value);
-
-	metautils_gba_data_to_string(data_sec_val, str_data_sec_val, LIMIT_LENGTH_STGPOLICY);
-	return g_strdup(str_data_sec_val);
-}
-
-gboolean
-namespace_is_storage_policy_valid(const namespace_info_t* ns_info, const gchar *storage_policy)
-{
-	if (!ns_info || !ns_info->storage_policy || !storage_policy)
-		return FALSE;
-	if (!g_hash_table_lookup(ns_info->storage_policy, storage_policy))
-		return FALSE;
-	return TRUE;
-}
-
-gboolean
-namespace_in_compression_mode(namespace_info_t* ns_info)
-{
-	if (!ns_info || !ns_info->options)
-		return FALSE;
-	GByteArray *val = namespace_param_gba(ns_info, NULL, NS_COMPRESS_OPT_NAME);
-	gboolean res = _gba_to_bool(val, FALSE);
-	return res;
-}
-
-gsize
-namespace_get_autocontainer_src_offset(namespace_info_t* ns_info)
-{
-	return namespace_get_size(ns_info, "FLATNS_hash_offset", 0);
-}
-
-gsize
-namespace_get_autocontainer_src_size(namespace_info_t* ns_info)
-{
-	return namespace_get_size(ns_info, "FLATNS_hash_size", 0);
-}
-
-gsize
-namespace_get_autocontainer_dst_bits(namespace_info_t* ns_info)
-{
-	return namespace_get_size(ns_info, "FLATNS_hash_bitlength", 17);
-}
-
-gint64
-gridcluster_get_container_max_versions(struct namespace_info_s *nsinfo)
-{
-	/* For backward compatibility, versioning is disabled by default */
-	return gridcluster_get_nsinfo_int64(nsinfo, "meta2_max_versions", 0);
-}
-
-gint64
-gridcluster_get_keep_deleted_delay(struct namespace_info_s *nsinfo)
-{
-	return gridcluster_get_nsinfo_int64(nsinfo, "meta2_keep_deleted_delay", -1);
-}
-
-gchar *
-gridcluster_get_service_update_policy (struct namespace_info_s *nsinfo)
-{
-	const gchar *def = "meta2=KEEP|1|1|;sqlx=KEEP|3|1|";
-
-	if (!nsinfo || !nsinfo->options)
-		return g_strdup(def);
-
-	return gridcluster_get_nsinfo_strvalue (nsinfo, "service_update_policy", def);
-}
-
 GError*
 gridcluster_reload_lbpool(struct grid_lbpool_s *glp)
 {
-	gboolean _reload_srvtype(const gchar *ns, const gchar *srvtype) {
+	gboolean _reload_srvtype(const char *ns, const char *srvtype) {
 		GError *err = NULL;
 		GSList *list_srv = list_namespace_services(ns, srvtype, &err);
 		if (err) {
@@ -799,7 +461,7 @@ gridcluster_reload_lbpool(struct grid_lbpool_s *glp)
 		g_prefix_error(&err, "LB pool reload error: ");
 	else {
 		guint errors = 0;
-		const gchar *ns = grid_lbpool_namespace(glp);
+		const char *ns = grid_lbpool_namespace(glp);
 
 		for (GSList *l=list_srvtypes; l ;l=l->next) {
 			if (!l->data)
@@ -834,7 +496,7 @@ gridcluster_reconfigure_lbpool(struct grid_lbpool_s *glp)
 }
 
 gchar *
-gridcluster_get_agent(void)
+oio_cfg_get_agent(void)
 {
 	gchar *cfg = oio_cfg_get_value(NULL, OIO_CFG_AGENT);
 	return cfg ? cfg : g_strdup(GCLUSTER_AGENT_SOCK_PATH);

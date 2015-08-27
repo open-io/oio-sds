@@ -96,8 +96,16 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 static void
 _task_reload_prefixes(gpointer p)
 {
+	static gboolean already_succeeded = FALSE;
+	static guint tick_reload = 1;
+
+	if (already_succeeded && !(tick_reload++ % 30))
+		return;
+
 	GError *err = _reload_prefixes(PSRV(p), FALSE);
-	if (err) {
+	if (!err)
+		already_succeeded = TRUE;
+	else {
 		GRID_WARN("Failed to reload the meta1 prefixes : (%d) %s",
 				err->code, err->message);
 		g_clear_error(&err);
@@ -108,7 +116,7 @@ static void
 _task_reload_policies(gpointer p)
 {
 	GError *err = NULL;
-	gchar *cfg = gridcluster_get_service_update_policy(&(PSRV(p)->nsinfo));
+	gchar *cfg = namespace_get_service_update_policy(&(PSRV(p)->nsinfo));
 	if (!cfg)
 		err = NEWERROR(EINVAL, "Invalid parameter");
 	else {
@@ -218,9 +226,9 @@ _post_config(struct sqlx_service_s *ss)
 
 	grid_task_queue_register(ss->gtq_reload, 5,
 			_task_reload_policies, NULL, ss);
-	grid_task_queue_register(ss->gtq_reload, 11,
+	grid_task_queue_register(ss->gtq_reload, 1,
 			(GDestroyNotify)sqlx_task_reload_lb, NULL, ss);
-	grid_task_queue_register(ss->gtq_reload, 31,
+	grid_task_queue_register(ss->gtq_reload, 1,
 			_task_reload_prefixes, NULL, ss);
 
 	m1->notify.udata = ss;

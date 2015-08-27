@@ -39,12 +39,15 @@ GError * oio_ext_extract_json (struct json_object *j,
 		struct oio_ext_json_mapping_s *tab);
 
 /** Set a thread-local variable with a copy of the given request id. */
-void oio_ext_set_reqid (const char *reqid);
+void oio_local_set_reqid (const char *reqid);
 
-/** Calls oio_ext_set_reqid() with a randomly generated string */
-void oio_ext_set_random_reqid (void);
+/** Calls oio_local_set_reqid() with a randomly generated string */
+void oio_local_set_random_reqid (void);
 
 /** Get a request-id stored in the thread-local, or NULL if not set */
-const char * oio_ext_get_reqid (void);
+const char * oio_local_get_reqid (void);
+
+void oio_local_set_value (const char *k, const char *v);
+const char* oio_local_get_value (const char *k);
 
 #endif /*OIO_SDS__core__oioext_h*/

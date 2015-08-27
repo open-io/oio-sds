@@ -179,9 +179,9 @@ handler_action (gpointer u, struct http_request_s *rq,
 	// Get a request id for the current request
 	const gchar *reqid = g_tree_lookup (rq->tree_headers, PROXYD_HEADER_REQID);
 	if (reqid)
-		oio_ext_set_reqid(reqid);
+		oio_local_set_reqid(reqid);
 	else
-		oio_ext_set_random_reqid();
+		oio_local_set_random_reqid();
 
 	// Then parse the request to find a handler
 	struct hc_url_s *url = NULL;

@@ -85,24 +85,48 @@ oio_ext_extract_json (struct json_object *obj,
 	return NULL;
 }
 
-static void _free0 (gpointer p) { if (p) g_free(p); }
+struct oio_thread_local_s
+{
+	gchar *reqid;
+	GTree *pairs;
+};
 
-static GPrivate th_local_key_reqid = G_PRIVATE_INIT(_free0);
+static void _otl_clean (gpointer p) {
+	if (!p) return;
+	struct oio_thread_local_s *otl = p;
+	if (otl->reqid) {
+		g_free(otl->reqid);
+		otl->reqid = NULL;
+	}
+	if (otl->pairs) {
+		g_tree_destroy (otl->pairs);
+		otl->pairs = NULL;
+	}
+	g_free(otl);
+}
+
+static GPrivate th_local_key_reqid = G_PRIVATE_INIT(_otl_clean);
 
 const char *
-oio_ext_get_reqid (void)
+oio_local_get_reqid (void)
 {
-	return g_private_get(&th_local_key_reqid);
+	struct oio_thread_local_s *otl = g_private_get(&th_local_key_reqid);
+	return otl ? otl->reqid : NULL;
 }
 
 void
-oio_ext_set_reqid (const char *reqid)
+oio_local_set_reqid (const char *reqid)
 {
-	 g_private_replace (&th_local_key_reqid, g_strdup (reqid));
+	struct oio_thread_local_s *otl = g_private_get(&th_local_key_reqid);
+	if (!otl) {
+		otl = g_malloc0 (sizeof(*otl));
+		g_private_replace (&th_local_key_reqid, otl);
+	}
+	oio_str_replace (&otl->reqid, reqid);
 }
 
 void
-oio_ext_set_random_reqid (void)
+oio_local_set_random_reqid (void)
 {
 	struct {
 		pid_t pid:16;
@@ -113,5 +137,33 @@ oio_ext_set_random_reqid (void)
 
 	char hex[33];
 	oio_str_bin2hex((guint8*)&bulk, sizeof(bulk), hex, sizeof(hex));
-	oio_ext_set_reqid(hex);
+	oio_local_set_reqid(hex);
 }
+
+static int
+_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored)
+{
+	(void) ignored;
+	return g_strcmp0(a, b);
+}
+
+void
+oio_local_set_value (const char *k, const char *v)
+{
+	struct oio_thread_local_s *otl = g_private_get(&th_local_key_reqid);
+	if (!otl) {
+		otl = g_malloc0 (sizeof(*otl));
+		otl->pairs = g_tree_new_full (_strcmp3, NULL, g_free, g_free);
+		g_private_replace (&th_local_key_reqid, otl);
+	}
+	g_tree_replace (otl->pairs, g_strdup(k), g_strdup(v));
+}
+
+const char*
+oio_local_get_value (const char *k)
+{
+	struct oio_thread_local_s *otl = g_private_get(&th_local_key_reqid);
+	if (!otl || !otl->pairs) return NULL;
+	return g_tree_lookup(otl->pairs, k);
+}
+

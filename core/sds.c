@@ -386,7 +386,7 @@ oio_error_message (const struct oio_error_s *e)
 struct oio_error_s *
 oio_sds_init (struct oio_sds_s **out, const char *ns)
 {
-	oio_ext_set_random_reqid ();
+	oio_local_set_random_reqid ();
 	oio_log_lazy_init ();
 
 	assert (out != NULL);
@@ -559,7 +559,7 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		} while (0);
 		struct headers_s headers = {NULL,NULL};
 		_headers_add (&headers, "Expect", "");
-		_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
+		_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
 		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
@@ -721,7 +721,7 @@ _upload_chunks (struct oio_sds_s *sds, GSList *chunks, struct local_upload_s *up
 			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-chunksnb", "%u", g_slist_length(chunkset));
 			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-id", "%s", strrchr(c1->url, '/')+1);
 			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos", "%u", c1->position.meta);
-			http_put_dest_add_header (dest, PROXYD_HEADER_REQID, "%s", oio_ext_get_reqid());
+			http_put_dest_add_header (dest, PROXYD_HEADER_REQID, "%s", oio_local_get_reqid());
 			destset = g_slist_append (destset, dest); 
 		}
 		err = http_put_run (put);
@@ -837,7 +837,7 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 		view_input.done = 0;
 		struct headers_s headers = {NULL,NULL};
 		_headers_add (&headers, "Expect", "");
-		_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
+		_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
 		if (src->autocreate)
 			_headers_add (&headers, PROXYD_HEADER_MODE, "autocreate");
 		rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
@@ -903,7 +903,7 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 
 		struct headers_s headers = {NULL,NULL};
 		_headers_add (&headers, "Expect", "");
-		_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
+		_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
 		_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-policy", "NONE");
 		_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-hash",
 				g_checksum_get_string (upload.checksum_content));
@@ -963,7 +963,7 @@ oio_sds_delete (struct oio_sds_s *sds, struct hc_url_s *url)
 
 	struct headers_s headers = {NULL,NULL};
 	_headers_add (&headers, "Expect", "");
-	_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
+	_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
 	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 
 	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
@@ -1005,7 +1005,7 @@ oio_sds_has (struct oio_sds_s *sds, struct hc_url_s *url, int *phas)
 
 	struct headers_s headers = {NULL,NULL};
 	_headers_add (&headers, "Expect", "");
-	_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
+	_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
 	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 
 	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_NOOP);

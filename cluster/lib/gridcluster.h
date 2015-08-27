@@ -54,202 +54,39 @@ struct task_s {
 	guint8 busy;                /**< TRUE if the task is currently running */
 };
 
-/**
- * Get the namespace infos
- *
- * @param ns_name the namespace name
- * @param error
- *
- * @return an allocated namespace_info_t or NULL if an error occured (error is set).
- * The returned namespace_info_t should be freed with namespace_info_free()
- */
+gchar * oio_cfg_get_agent(void);
+
 namespace_info_t *get_namespace_info(const char *ns_name, GError **error);
-
-/**
- * Get the META0 infos
- *
- * @param ns_name the namespace name
- * @param error
- * @return an allocated meta0_info_t or NULL if an error occured (error is set).
- * The returned meta0_info_t should be freed with g_free()
- */
-meta0_info_t *get_meta0_info(const char *ns_name, GError **error);
-
-/**
- * List services of a given type in a namespace.
- *
- * @param ns_name the namespace name
- * @param type the type of service to list
- * @param error
- *
- * @return a list of service_info_t or NULL if an error occured (error is set)
- */
 GSList* list_namespace_services(const char *ns_name, const char *type, GError **error);
-
-/**
- * Get the first service of a given type in a namespace
- *
- * @param ns_name the namespace_name
- * @param type_name the type of the service
- * @param error
-
- * @return an allocated service_info_s or NULL if an error occured (error is set)
- * The returned service_info_s should be freed with service_info_clean()
- */
-struct service_info_s* get_one_namespace_service(const gchar *ns_name, const gchar *type_name, GError **error);
-
-/**
- * List the types of services available in a namespace
- *
- * @param ns_name the namespace name
- * @param error
- *
- * @return a list of type names in string format or NULL if an error occured (error is set)
- */
 GSList* list_namespace_service_types(const char *ns_name, GError **error);
-
-/** Register a service in a namespace */
 int register_namespace_service(const struct service_info_s *si, GError **error);
-
-/**
- * List all services running locally on the server
- *
- * @param error
- *
- * @return a list of service_info_s or NULL if an error occured (error is set)
- */
 GSList *list_local_services(GError **error);
-
-/**
- * Unregister all services of a given type from a namespace
- *
- * @param ns_name the namespace name
- * @param type the service type
- * @param error
- *
- * @return 1 or 0 if an error occured (error is set)
- */
 int clear_namespace_services(const char *ns_name, const char *type, GError **error);
-
-/**
- * List internal tasks of the agent
- *
- * @param error
- *
- * @return a list of task_s or NULL if an error occured
- */
 GSList *list_tasks(GError **error);
 
-/**
- * Extract mode worm state from namespace_info
- *
- * @param ns_info the namespace_info
- *
- * @return TRUE if namespace is in mode worm, FALSE otherwise
- */
-gboolean namespace_in_worm_mode(namespace_info_t* ns_info);
+gint64 namespace_get_keep_deleted_delay(const namespace_info_t *ni);
+gchar* namespace_get_strvalue(const namespace_info_t *ni, const char *k, const char *d);
+gint64 namespace_get_int64(const namespace_info_t *ni, const char* k, gint64 d);
 
-/**
- * Extract container max size allowed from namespace_info
- *
- * @param ns_info the namespace_info
- *
- * @return the container max size allowed
- */
-gint64 namespace_container_max_size(namespace_info_t* ns_info);
+gboolean namespace_in_worm_mode (const namespace_info_t* ni);
+gboolean namespace_in_compression_mode (const namespace_info_t* ni);
+gint64 namespace_container_max_size (const namespace_info_t* ni);
+gint64 namespace_chunk_size (const namespace_info_t* ni, const char *ns_name);
+gchar* namespace_storage_policy (const namespace_info_t* ni, const char *ns_name);
+gboolean namespace_is_storage_policy_valid (const namespace_info_t* ni, const char *pol);
+gchar* namespace_data_security_value (const namespace_info_t *ni, const char *pol);
+gchar* namespace_storage_policy_value (const namespace_info_t *ni, const char *pol);
+gchar* namespace_get_service_update_policy(const namespace_info_t *nsinfo);
+gint64 namespace_get_container_max_versions(const namespace_info_t *nsinfo);
 
-/**
- * Get chunk size for a specific VNS.
- *
- * @param ns_info the namespace info
- * @param ns_name the full name of the VNS to get chunk size of
- * @return the chunk size for the specified VNS, or the global one
- *   if not defined for this VNS.
- */
-gint64 namespace_chunk_size(const namespace_info_t* ns_info, const char *ns_name);
+gsize namespace_get_autocontainer_src_offset (const namespace_info_t* ni);
+gsize namespace_get_autocontainer_src_size (const namespace_info_t* ni);
+gsize namespace_get_autocontainer_dst_bits (const namespace_info_t* ni);
 
-/**
- * Extract namespace defined storage_policy from namespace_info
- *
- * @param ns_info the namespace_info
- *
- * @return the storage_policy defined (must be freed)
- */
-gchar* namespace_storage_policy(const namespace_info_t* ns_info, const char *ns_name);
-
-/**
- * Check if a storage policy exist for a namespace
- *
- * @param ns_info the namespace_info
- *
- * @param storage_policy the namespace_info
- *
- * @return TRUE if the storage policy exist, FALSE otherwise
- */
-gboolean namespace_is_storage_policy_valid(const namespace_info_t* ns_info, const gchar *storage_policy);
-
-/**
- * Return the value of a data security matching a storage policy (the string "DATASEC:PARAM1:PARAM2:...")
- *
- * @param ns_info the namespace_info
- *
- * @param wanted_policy the policy to extract data security value. If null, get the data security matching the namespace configured policy
- *
- * @return the data security "value"
- */
-gchar* namespace_data_security_value(const namespace_info_t *ns_info, const gchar *wanted_policy);
-
-/**
- * Return the "value" of a storage policy (the string "STG_CLASS:DATA_SEC:DATA_THREAT")
- *
- * @param ns_info the namespace_info
- *
- * @param wanted_policy the policy to extract data security value. If null, get the data security matching the namespace configured policy
- *
- * @return the storage_policy "value" (must be freed)
- */
-gchar* namespace_storage_policy_value(const namespace_info_t *ns_info, const gchar *wanted_policy);
-
-/** Extract mode compression state from namespace_info
- * @return TRUE if namespace is in mode compression, FALSE otherwise */
-gboolean namespace_in_compression_mode(namespace_info_t* ns_info);
-
-gsize namespace_get_autocontainer_src_offset(namespace_info_t* ns_info);
-
-gsize namespace_get_autocontainer_src_size(namespace_info_t* ns_info);
-
-gsize namespace_get_autocontainer_dst_bits(namespace_info_t* ns_info);
-
-/** Only used by gridd */
-typedef namespace_info_t* (*get_namespace_info_f) (GError **error);
-
-/** Returns the services update's configuration when the Load-Balancing
- * is performed by a servce of type srvtype for each namespace and VNS. */
-gchar* gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo);
-
-gint64 gridcluster_get_container_max_versions(struct namespace_info_s *nsinfo);
 
 struct grid_lbpool_s;
-
 GError* gridcluster_reload_lbpool(struct grid_lbpool_s *glp);
-
 GError* gridcluster_reconfigure_lbpool(struct grid_lbpool_s *glp);
-
-/**
- * Get the delay before actually removing contents marked as deleted.
- *
- * @param nsinfo A pointer to the namespace infos
- * @return The delay in seconds, or -1 if disabled (never delete)
- */
-gint64 gridcluster_get_keep_deleted_delay(struct namespace_info_s *nsinfo);
-
-gchar* gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
-		const gchar *key, const gchar *def);
-
-gint64 gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
-		const gchar* key, gint64 def);
-
-gchar * gridcluster_get_agent(void);
 
 /** @} */
 

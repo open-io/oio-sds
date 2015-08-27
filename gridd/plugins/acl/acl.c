@@ -35,6 +35,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define LIMIT_MAX_REFRESH_RATE 30
 #define DEFAULT_ACL_REFRESH_RATE 10
 
+typedef namespace_info_t* (*get_namespace_info_f) (GError **error);
+
 static GSList* acl = NULL;
 static get_namespace_info_f get_ns_info = NULL;
 

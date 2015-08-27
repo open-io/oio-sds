@@ -301,8 +301,7 @@ _resolve_m1_through_many_m0(gchar **urlv, const guint8 *prefix, gchar ***result)
 
 	GRID_TRACE2("%s(%02X%02X)", __FUNCTION__, prefix[0], prefix[1]);
 	for (last=g_strv_length(urlv); last ;last--) {
-		/* pick a random URL */
-		i = rand() % last;
+		i = rand() % last; /* pick a random URL */
 		url = urlv[i];
 
 		GError *err = _resolve_m1_through_one_m0(url, prefix, result);
@@ -358,17 +357,16 @@ static GError *
 _resolve_service_through_many_meta1(gchar **urlv, struct hc_url_s *u,
 		const char *s, gchar ***result)
 {
-	guint i, last;
-	gchar *url;
-
 	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, hc_url_get(u, HCURL_WHOLE), s);
 
-	for (last=g_strv_length(urlv); last ;last--) {
-		/* pick a random URL */
-		i = rand() % last;
-		url = urlv[i];
+	for (guint last=g_strv_length(urlv); last ;last--) {
+		guint i = rand() % last; /* pick a random URL */
+		gchar *url = urlv[i];
 
-		GError *err = meta1v2_remote_list_reference_services(url, u, s, result);
+		gchar *m1 = meta1_strurl_get_address(url);
+		GError *err = meta1v2_remote_list_reference_services(m1, u, s, result);
+		g_free0(m1);
+
 		if (!err)
 			return NULL;
 		if (!CODE_IS_NETWORK_ERROR(err->code))
