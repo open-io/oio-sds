@@ -1,21 +1,18 @@
 import unittest
 
 from mock import MagicMock as Mock
+from mock import patch
 
 from oio.common import exceptions as exc
 from oio.blob.mover import BlobMoverWorker
 
 
-class FakeBlobMoverWorker(BlobMoverWorker):
-    def __init__(self, conf, logger, volume):
-        super(FakeBlobMoverWorker, self).__init__(conf, logger, volume)
-        self.address = '127.0.0.1:6000'
-
-
 class TestBlobMover(unittest.TestCase):
     def setUp(self):
         conf = {'namespace': 'NS'}
-        self.mover = FakeBlobMoverWorker(conf, None, '/tmp')
+        with patch('oio.blob.mover.ContainerClient'):
+            self.mover = BlobMoverWorker(conf, None, '/tmp')
+        self.mover.address = '127.0.0.1:6000'
         self.path = '/tmp/toto'
         self.content_path = 'a'
         self.content_cid = 'CID'
