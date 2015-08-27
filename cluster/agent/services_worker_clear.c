@@ -66,7 +66,7 @@ create_sub_worker( struct namespace_data_s *ns_data, const gchar *type_name, wor
 	asn1_worker=NULL;	
 
 	/*Prepare the ASN.1 session for the future worker*/
-	asn1_worker = create_asn1_worker(&(ns_data->ns_info.addr), NAME_MSGNAME_CS_RM_SRV);
+	asn1_worker = create_asn1_worker(&ns_data->addr, NAME_MSGNAME_CS_RM_SRV);
 	asn1_worker_set_handlers(asn1_worker, agent_asn1_default_response_handler, asn1_error_handler, asn1_final_handler);
 	asn1_worker_set_session_data(asn1_worker, orig_worker, NULL);
 	

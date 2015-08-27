@@ -675,11 +675,6 @@ push_service(struct conscience_s *cs, struct service_info_s *si)
 		 * allowed */
 		if (flag_forced_meta0)
 			return;
-
-		/* Set the meta0 in ns_info struct if it was not forced in config */
-		if ( &(cs->ns_info.addr) == NULL ) {
-			memcpy(&(cs->ns_info.addr), &(si->addr), sizeof(addr_info_t));
-		}
 	}
 
 	/* XXX start of critical section */
@@ -1360,9 +1355,6 @@ module_init_meta0(struct conscience_s *cs, GHashTable * params, GError ** err)
 		GSETERROR(err, "META0 registration error");
 		return FALSE;
 	}
-
-	/* Set this address in the conscience object */
-	memcpy(&(cs->ns_info.addr), &(srvid.addr), sizeof(addr_info_t));
 
 	conscience_srv_lock_score(srv, 100);
 	NOTICE("[NS=%s][SRVTYPE=%s] new locked META0 service at [%s]", cs->ns_info.name, NAME_SRVTYPE_META0, str);

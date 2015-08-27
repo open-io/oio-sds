@@ -27,11 +27,9 @@ enum gridd_dispatcher_filter_result_e
 	FILTER_OK,
 };
 
-/* Forward declarations */
 struct gridd_filter_ctx_s;
 struct gridd_reply_ctx_s;
 
-/* Meta2 dispatcher filter definition */
 typedef int (*gridd_filter)(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply);
 
 #endif /*OIO_SDS__server__gridd_dispatcher_filters_h*/

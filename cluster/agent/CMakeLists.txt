@@ -13,7 +13,6 @@ add_executable(gridagent
 	get_ns_worker.c get_ns_worker.h
 	gridagent.conf
 	gridagent.h
-	http_request_worker.c http_request_worker.h
 	io_scheduler.c io_scheduler.h
 	io_stat_task_worker.c io_stat_task_worker.h
 	main_reqagent.c
@@ -23,7 +22,7 @@ add_executable(gridagent
 	request_worker.c request_worker.h
 	server.c server.h
 	services_task_check.c services_task_get_services.c services_task_get_types.c services_task_push.c
-	services_worker_clear.c services_worker_get_one.c services_worker_list.c services_worker_push.c services_workers.h
+	services_worker_clear.c services_worker_list.c services_worker_push.c services_workers.h
 	task.h
 	task_scheduler.c task_scheduler.h
 	worker.h

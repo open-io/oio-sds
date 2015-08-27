@@ -41,8 +41,8 @@ _copy_hash(GHashTable *src)
 }
 
 gpointer
-namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
-		const gchar *param_name)
+namespace_hash_table_lookup(GHashTable *table, const char *ns_name,
+		const char *param_name)
 {
 	gchar key[LIMIT_LENGTH_NSNAME+64] = {0};
 	gchar parent_ns[LIMIT_LENGTH_NSNAME] = {0};
@@ -84,7 +84,6 @@ namespace_info_copy(namespace_info_t* src, namespace_info_t* dst, GError **error
 
 	memcpy(dst->name, src->name, sizeof(src->name));
 	dst->chunk_size = src->chunk_size;
-	memcpy(&(dst->addr), &(src->addr), sizeof(addr_info_t));
 
 #define NSI_COPY_TABLE_REF(SRC, DST) \
 	if ((SRC) != NULL) {\
@@ -112,7 +111,6 @@ namespace_info_dup(namespace_info_t* src)
 	namespace_info_t *dst = g_malloc0(sizeof(namespace_info_t));
 	memcpy(dst->name, src->name, sizeof(src->name));
 	dst->chunk_size = src->chunk_size;
-	memcpy(&(dst->addr), &(src->addr), sizeof(addr_info_t));
 
 	dst->options = _copy_hash(src->options);
 	dst->storage_policy = _copy_hash(src->storage_policy);
@@ -148,12 +146,11 @@ namespace_info_init(namespace_info_t *ni)
 		return;
 	ni->chunk_size = 0;
 	memset(ni->name, 0, sizeof(ni->name));
-	memset(&ni->addr, 0, sizeof(ni->addr));
 	ni->options = _copy_hash(NULL);
 	ni->storage_policy = _copy_hash(NULL);
+	ni->storage_class = _copy_hash(NULL);
 	ni->data_security = _copy_hash(NULL);
 	ni->data_treatments = _copy_hash(NULL);
-	ni->storage_class = _copy_hash(NULL);
 }
 
 void
@@ -210,7 +207,7 @@ namespace_info_extract_name(GSList *list_nsinfo, gboolean copy)
 }
 
 gchar *
-namespace_info_get_data_security(namespace_info_t *ni, const gchar *data_sec_key)
+namespace_info_get_data_security(namespace_info_t *ni, const char *data_sec_key)
 {
 	if(NULL != ni->data_security) {
 		GByteArray *gba = NULL;
@@ -224,7 +221,7 @@ namespace_info_get_data_security(namespace_info_t *ni, const gchar *data_sec_key
 }
 
 gchar *
-namespace_info_get_data_treatments(namespace_info_t *ni, const gchar *data_treat_key)
+namespace_info_get_data_treatments(namespace_info_t *ni, const char *data_treat_key)
 {
 	if(NULL != ni->data_treatments) {
 		GByteArray *gba = NULL;
@@ -238,7 +235,7 @@ namespace_info_get_data_treatments(namespace_info_t *ni, const gchar *data_treat
 }
 
 gchar *
-namespace_info_get_storage_class(namespace_info_t *ni, const gchar *stgclass_key)
+namespace_info_get_storage_class(namespace_info_t *ni, const char *stgclass_key)
 {
 	if (ni->storage_class != NULL) {
 		GByteArray *gba = NULL;
@@ -254,7 +251,7 @@ namespace_info_get_storage_class(namespace_info_t *ni, const gchar *stgclass_key
 
 GByteArray *
 namespace_info_get_srv_param_gba(const namespace_info_t *ni,
-		const gchar *ns_name, const gchar *srv_type, const gchar *param_name)
+		const char *ns_name, const char *srv_type, const char *param_name)
 {
 	gchar key[128] = {0};
 	GByteArray *res = NULL;
@@ -281,8 +278,8 @@ namespace_info_get_srv_param_gba(const namespace_info_t *ni,
 
 gint64
 namespace_info_get_srv_param_i64(const namespace_info_t *ni,
-		const gchar *ns_name, const gchar *srv_type,
-		const gchar *param_name, gint64 def)
+		const char *ns_name, const char *srv_type,
+		const char *param_name, gint64 def)
 {
 	gint64 res;
 	gchar *end = NULL;
@@ -307,7 +304,7 @@ namespace_info_get_srv_param_i64(const namespace_info_t *ni,
 //------------------------------------------------------------------------------
 
 static GError *
-_load_hash (struct json_object *obj, const gchar *k, GHashTable *dst)
+_load_hash (struct json_object *obj, const char *k, GHashTable *dst)
 {
 	struct json_object *sub = NULL;
 
@@ -354,7 +351,7 @@ namespace_info_init_json_object(struct json_object *obj,
 }
 
 GError *
-namespace_info_init_json(const gchar *encoded, struct namespace_info_s *ni)
+namespace_info_init_json(const char *encoded, struct namespace_info_s *ni)
 {
 	EXTRA_ASSERT(ni != NULL);
 
@@ -380,7 +377,7 @@ namespace_info_init_json(const gchar *encoded, struct namespace_info_s *ni)
 //------------------------------------------------------------------------------
 
 static void
-_encode_json_properties (GString *out, GHashTable *ht, const gchar *tag)
+_encode_json_properties (GString *out, GHashTable *ht, const char *tag)
 {
 	g_string_append_printf(out, "\"%s\":{", tag);
 	if (ht && g_hash_table_size(ht) > 0) {

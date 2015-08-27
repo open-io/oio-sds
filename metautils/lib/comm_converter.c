@@ -22,13 +22,11 @@ License along with this library.
 
 #include "./AddrInfo.h"
 #include "./AddrInfoSequence.h"
-#include "./ArrayList.h"
 #include "./ContentList.h"
 #include "./INTEGER.h"
 #include "./Meta0Info.h"
 #include "./Meta0InfoSequence.h"
 #include "./NamespaceInfo.h"
-#include "./NamespaceInfoSequence.h"
 #include "./Parameter.h"
 #include "./ParameterSequence.h"
 #include "./Score.h"
@@ -807,7 +805,7 @@ strings_unmarshall(GSList ** l, const void *buf, gsize len, GError ** err)
 /* NSINFO ------------------------------------------------------------------- */
 
 static gboolean
-list_conversion (const struct NamespaceInfoValueList *nsinfo_vlist,
+list_conversion (const struct ParameterSequence *nsinfo_vlist,
 		GHashTable **ht, GHashTable* (*conv_func)(GSList * pairs, GError ** err))
 {
 	EXTRA_ASSERT (nsinfo_vlist != NULL);
@@ -859,7 +857,6 @@ namespace_info_ASN2API(const NamespaceInfo_t *asn, namespace_info_t *api)
 
 	memset(api, 0, sizeof(*api));
 	memcpy(api->name, asn->name.buf, MIN((int)sizeof(api->name), asn->name.size));
-	addr_info_ASN2API(&(asn->addr), &(api->addr));
 	asn_INTEGER_to_int64(&(asn->chunkSize), &(api->chunk_size));
 
 	if (!list_conversion(&(asn->options), &(api->options), key_value_pairs_convert_to_map))
@@ -883,7 +880,7 @@ namespace_info_ASN2API(const NamespaceInfo_t *asn, namespace_info_t *api)
 
 static gboolean
 hashtable_conversion(GHashTable *ht,
-		struct NamespaceInfoValueList *nsinfo_vlist,
+		struct ParameterSequence *nsinfo_vlist,
 		GSList* (*conv_func)(GHashTable *, gboolean, GError **))
 {
 	EXTRA_ASSERT (ht != NULL);
@@ -925,7 +922,6 @@ namespace_info_API2ASN(const namespace_info_t * api, NamespaceInfo_t * asn)
 	EXTRA_ASSERT (asn != NULL);
 
 	OCTET_STRING_fromBuf(&(asn->name), api->name, strlen(api->name));
-	addr_info_API2ASN(&(api->addr), &(asn->addr));
 	asn_int64_to_INTEGER(&(asn->chunkSize), api->chunk_size);
 
 	if (!hashtable_conversion(api->options, &(asn->options), key_value_pairs_convert_from_map))
@@ -984,10 +980,7 @@ namespace_info_marshall(namespace_info_t * namespace_info, GError ** err)
 	}
 
 	/*serialize the ASN.1 structure */
-	if (!(result = g_byte_array_sized_new(4096))) {
-		GSETERROR(err, "memory allocation failure");
-		goto error_alloc_gba;
-	}
+	result = g_byte_array_new();
 	encRet = der_encode(&asn_DEF_NamespaceInfo, &asn1_namespace_info, write_in_gba, result);
 	if (encRet.encoded == -1) {
 		GSETERROR(err, "ASN.1 encoding error");
@@ -1001,7 +994,6 @@ namespace_info_marshall(namespace_info_t * namespace_info, GError ** err)
 
 error_encode:
 	g_byte_array_free(result, TRUE);
-error_alloc_gba:
 error_mapping:
 	namespace_info_cleanASN(&asn1_namespace_info, TRUE);
 error_params:

@@ -30,18 +30,13 @@ License along with this library.
 #  define INNER_STAT_NAME_REQ_TIME "gridd.counter.alltime"
 # endif
 
-/* Forward declarations externally defined */
 struct network_client_s;
 struct network_transport_s;
 
-/* Hidden structures internally definied */
 struct gridd_request_dispatcher_s;
 struct grid_stats_holder_s;
 
-/**
- * Given to the request dispatcher, it allows him to reply to
- * the client.
- */
+/* Given to the request dispatcher, it allows him to reply to the client. */
 struct gridd_reply_ctx_s
 {
 	void (*add_header) (const gchar *name, GByteArray *value);
@@ -83,7 +78,7 @@ struct gridd_request_descr_s
 	 * a more efficient structure to match  */
 	const gchar *name;
 
-	/** How to manage this request.
+	/* How to manage this request.
 	 * @param handler_data the arbitrary pointer registered with the request only
 	 * @param group_data the arbitrary pointer registered with the request set
 	 * @param reply all the callbacks to manage the replies flow

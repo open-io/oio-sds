@@ -163,7 +163,7 @@ parse_namespaces(void)
 
 		gchar *ns = g_strndup(sk, strrchr(sk,'/') - sk);
 		namespace_data_t *ns_data = ensure_namespace_data(ns);
-		memcpy(&(ns_data->ns_info.addr), &addr, sizeof(addr_info_t));
+		memcpy(&ns_data->addr, &addr, sizeof(addr_info_t));
 		g_free(ns);
 	}
 

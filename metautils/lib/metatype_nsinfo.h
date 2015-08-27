@@ -27,8 +27,8 @@ struct namespace_info_s;
  * with parent VNS, and so on. If still not found, try unprefixed key.
  * Key may be NULL if the key is the namespace name.
  */
-gpointer namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
-		const gchar *key);
+gpointer namespace_hash_table_lookup(GHashTable *table, const char *ns_name,
+		const char *key);
 
 /**
  * Get a parameter from the namespace info "options" hash table.
@@ -44,7 +44,7 @@ gpointer namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
  * @return The value or NULL
  */
 GByteArray *namespace_info_get_srv_param_gba(const namespace_info_t *ni,
-		const gchar *ns_name, const gchar *srv_type, const gchar *param_name);
+		const char *ns_name, const char *srv_type, const char *param_name);
 
 /**
  * Same as namespace_info_get_srv_param_gba but converts the result
@@ -53,7 +53,7 @@ GByteArray *namespace_info_get_srv_param_gba(const namespace_info_t *ni,
  * @param def The value to return when parameter is not found
  */
 gint64 namespace_info_get_srv_param_i64(const namespace_info_t *ni,
-		const gchar *ns_name, const gchar *srv_type, const gchar *param_name,
+		const char *ns_name, const char *srv_type, const char *param_name,
 		gint64 def);
 
 /**
@@ -130,22 +130,22 @@ GSList* namespace_info_extract_name(GSList *list_nsinfo, gboolean copy);
 
 /* Get the data_security definition from the specified key */
 gchar * namespace_info_get_data_security(struct namespace_info_s *ni,
-		const gchar *data_sec_key);
+		const char *data_sec_key);
 
 /* Get the data_treatments definition from the specified key */
 gchar * namespace_info_get_data_treatments(struct namespace_info_s *ni,
-		const gchar *data_treat_key);
+		const char *data_treat_key);
 
 /* Get the storage_class definition from the specified key */
 gchar * namespace_info_get_storage_class(struct namespace_info_s *ni,
-		const gchar *stgclass_key);
+		const char *stgclass_key);
 
 struct json_object;
 
 GError * namespace_info_init_json_object(struct json_object *obj,
 		struct namespace_info_s *ni);
 
-GError * namespace_info_init_json(const gchar *encoded,
+GError * namespace_info_init_json(const char *encoded,
 		struct namespace_info_s *ni);
 
 // Appends to 'out' a json representation of 'ni'

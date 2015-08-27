@@ -200,7 +200,7 @@ task_worker(gpointer p, GError **error)
 	g_strlcpy(sdata->ns, ns_data->name, sizeof(sdata->ns)-1);
 	g_snprintf(sdata->task_id,sizeof(sdata->task_id),"%s.%s", TASK_ID, ns_data->name);
 
-	asn1_worker = create_asn1_worker(&(ns_data->ns_info.addr), NAME_MSGNAME_CS_GET_SRV);
+	asn1_worker = create_asn1_worker(&ns_data->addr, NAME_MSGNAME_CS_GET_SRV);
 	asn1_worker_set_handlers(asn1_worker,parse_srv_list,asn1_error_handler,asn1_final_handler);
 	asn1_worker_set_session_data(asn1_worker, sdata, (GDestroyNotify)sdata_cleaner);
 	g_hash_table_insert(asn1_worker_get_session(asn1_worker)->req_headers, g_strdup(NAME_MSGKEY_TYPENAME), gba_types);

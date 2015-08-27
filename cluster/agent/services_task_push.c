@@ -119,7 +119,7 @@ task_worker(gpointer p, GError ** error)
 
 	asn1_worker = NULL;
 
-	asn1_worker = create_asn1_worker(&(ns_data->ns_info.addr), NAME_MSGNAME_CS_PUSH_SRV);
+	asn1_worker = create_asn1_worker(&ns_data->addr, NAME_MSGNAME_CS_PUSH_SRV);
 	asn1_worker_set_handlers(asn1_worker, agent_asn1_default_response_handler, asn1_error_handler, asn1_final_handler);
 	asn1_worker_set_session_data(asn1_worker, g_memdup(&sdata,sizeof(sdata)), asn1_cleaner);
 	asn1_worker_set_request_body(asn1_worker, gba_body);

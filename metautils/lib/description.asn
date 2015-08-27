@@ -5,16 +5,12 @@ BEGIN
 
 	ContentList ::= SEQUENCE OF PrintableString
 
-	ArrayList ::= SEQUENCE OF OCTET STRING
-
 	Parameter ::= SEQUENCE {
 			name PrintableString,
 			value OCTET STRING
 	}
 
 	ParameterSequence ::= SEQUENCE OF Parameter
-
-	EventSequence ::= SEQUENCE OF ParameterSequence
 
 	Message ::= SEQUENCE {
 		id      [0] OCTET STRING OPTIONAL,
@@ -38,20 +34,15 @@ BEGIN
 
 	-- Namespace information
 
-	NamespaceInfoValueList ::= SET OF Parameter
-
 	NamespaceInfo ::= SEQUENCE {
 		name           [0] PrintableString,
-		addr           [1] AddrInfo,
 		chunkSize      [2] INTEGER,
-		options        [3] NamespaceInfoValueList,
-		storagePolicy  [4] NamespaceInfoValueList,
-		dataSecurity   [5] NamespaceInfoValueList,
-		dataTreatments [6] NamespaceInfoValueList,
-		storageClass   [7] NamespaceInfoValueList
+		options        [3] ParameterSequence,
+		storagePolicy  [4] ParameterSequence,
+		dataSecurity   [5] ParameterSequence,
+		dataTreatments [6] ParameterSequence,
+		storageClass   [7] ParameterSequence
 	}
-
-	NamespaceInfoSequence ::= SET OF NamespaceInfo
 
 	-- meta0 mapping information
 

@@ -23,12 +23,10 @@ add_custom_command(
 		asn_application.h asn_codecs.h asn_codecs_prim.c asn_codecs_prim.h asn_internal.h
 
 		AddrInfo.c AddrInfo.h AddrInfoSequence.c AddrInfoSequence.h
-		ArrayList.c ArrayList.h
 		ContentList.c ContentList.h
-		EventSequence.c EventSequence.h
 		Message.c Message.h
 		Meta0Info.c Meta0Info.h Meta0InfoSequence.c Meta0InfoSequence.h
-		NamespaceInfoValueList.c NamespaceInfoValueList.h NamespaceInfo.c NamespaceInfo.h NamespaceInfoSequence.c NamespaceInfoSequence.h
+		NamespaceInfo.c NamespaceInfo.h
 		Parameter.c Parameter.h ParameterSequence.c ParameterSequence.h
 		Score.c Score.h
 		ServiceInfo.c ServiceInfo.h ServiceInfoSequence.c ServiceInfoSequence.h
@@ -149,24 +147,16 @@ add_library(metautils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/AddrInfo.h
 		${CMAKE_CURRENT_BINARY_DIR}/AddrInfoSequence.c
 		${CMAKE_CURRENT_BINARY_DIR}/AddrInfoSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/ArrayList.c
-		${CMAKE_CURRENT_BINARY_DIR}/ArrayList.h
 		${CMAKE_CURRENT_BINARY_DIR}/ContentList.c
 		${CMAKE_CURRENT_BINARY_DIR}/ContentList.h
-		${CMAKE_CURRENT_BINARY_DIR}/EventSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/EventSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/Message.c
 		${CMAKE_CURRENT_BINARY_DIR}/Message.h
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0Info.c
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0Info.h
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0InfoSequence.c
 		${CMAKE_CURRENT_BINARY_DIR}/Meta0InfoSequence.h
-		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfoValueList.c
-		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfoValueList.h
 		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfo.c
 		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfo.h
-		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfoSequence.c
-		${CMAKE_CURRENT_BINARY_DIR}/NamespaceInfoSequence.h
 		${CMAKE_CURRENT_BINARY_DIR}/Parameter.c
 		${CMAKE_CURRENT_BINARY_DIR}/Parameter.h
 		${CMAKE_CURRENT_BINARY_DIR}/ParameterSequence.c

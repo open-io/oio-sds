@@ -20,7 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__server__grid_daemon_h
 # define OIO_SDS__server__grid_daemon_h 1
 
-/* Some forward declarations to avoid useless includes */
 struct network_server_s;
 struct gridd_request_dispatcher_s;
 

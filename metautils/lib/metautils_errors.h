@@ -58,10 +58,6 @@ enum {
 	CODE_TEMPORARY = 100, // XXX beacon, network errors below
 
 	CODE_FINAL_OK = 200, // XXX beacon, denote the first success code
-	CODE_PART_CONTENT = 201,
-	CODE_PART_ADMIN = 202,
-	CODE_PART_PROPS = 203,
-	CODE_PROGRESS = 204,
 	CODE_PARTIAL_CONTENT = 206,
 
 	CODE_BEACON_REDIRECT = 300, // XXX

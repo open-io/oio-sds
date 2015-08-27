@@ -234,6 +234,17 @@ gid=${GID}
 path=${RUNDIR}/agent.sock
 """
 
+template_conscience_json = """{
+	"ns":"${NS}",
+	"chunksize":${CHUNK_SIZE},
+	"options":{},
+	"storage_policy":{},
+	"storage_class":{},
+	"data_security":{},
+	"data_treatments":{}
+}
+"""
+
 template_conscience = """
 [General]
 ### Now is 'daemon' ignored (this is managed at the CLI)
@@ -565,8 +576,11 @@ def generate (ns, ip, options={}):
 		f.write(tpl.safe_substitute(env))
 
 	# Conscience configuration
+	env['PORT'] = port_cs
+	with open(CFGDIR + '/'+ns+'-conscience.json', 'w+') as f:
+		tpl = Template(template_conscience_json)
+		f.write(tpl.safe_substitute(env))
 	with open(CFGDIR + '/'+ns+'-conscience.conf', 'w+') as f:
-		env['PORT'] = port_cs
 		tpl = Template(template_conscience)
 		f.write(tpl.safe_substitute(env))
 	with open(CFGDIR + '/' + ns + '-conscience-policies.conf', 'w+') as f:

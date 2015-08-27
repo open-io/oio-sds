@@ -603,15 +603,9 @@ service_info_check_storage_class(const struct service_info_s *si, const gchar *w
 gchar *
 service_info_key (const struct service_info_s *si)
 {
-	gchar ns[LIMIT_LENGTH_NSNAME], addr[STRLEN_ADDRINFO];
-	metautils_strlcpy_physical_ns(ns, si->ns_name, sizeof(ns));
-
-	const gchar *explicit = service_info_get_tag_value(si, "tag.id", NULL);
-	if (explicit)
-		return g_strdup_printf("%s|%s|%s", ns, si->type, explicit);
-
+	gchar addr[STRLEN_ADDRINFO];
 	grid_addrinfo_to_string(&si->addr, addr, sizeof(addr));
-	return g_strdup_printf("%s|%s|%s", ns, si->type, addr);
+	return g_strdup_printf("%s|%s", si->type, addr);
 }
 
 //------------------------------------------------------------------------------

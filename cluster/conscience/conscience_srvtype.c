@@ -136,44 +136,6 @@ conscience_srvtype_remove_srv(struct conscience_srvtype_s *srvtype,
 	}
 }
 
-static GByteArray *
-conscience_srvtype_serialize_config(struct conscience_srvtype_s *srvtype,
-    GError ** err)
-{
-	GByteArray *v, *encoded_kv;
-	GSList *kv_list = NULL;
-	GHashTable *ht = NULL;
-	gchar wrkBuf[32];
-
-	v = encoded_kv = NULL;
-	ht = srvtype->config_ht;
-	g_hash_table_ref(ht);
-
-	/*Add the current timestamp */
-	g_snprintf(wrkBuf, sizeof(wrkBuf), "%ld", time(0));
-	v = g_byte_array_append(g_byte_array_new(),
-	    (guint8 *) wrkBuf, strlen(wrkBuf) + 1);
-	g_hash_table_insert(ht, "timestamp", v);
-
-	/*convert the GHashTable to a list of KV */
-	kv_list = key_value_pairs_convert_from_map(ht, FALSE, err);
-	if (!kv_list) {
-		GSETERROR(err, "Conversion HashTable->List failure");
-		g_hash_table_unref(ht);
-		return NULL;
-	}
-
-	/*encode the list */
-	encoded_kv = key_value_pairs_marshall_gba(kv_list, err);
-	if (!encoded_kv)
-		GSETERROR(err, "Conversion List->ASN.1 failure");
-	g_slist_foreach(kv_list, g_free1, NULL);
-	g_slist_free(kv_list);
-
-	g_hash_table_unref(ht);
-	return encoded_kv;
-}
-
 struct conscience_srv_s *
 conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
     GError ** err, const struct conscience_srvid_s *srvid)

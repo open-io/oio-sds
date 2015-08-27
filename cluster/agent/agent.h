@@ -109,6 +109,8 @@ extern int period_push_srvlist;
 
 typedef struct namespace_data_s {
 	char name[LIMIT_LENGTH_NSNAME];
+	struct addr_info_s addr;
+
 	namespace_info_t ns_info;
 	gboolean configured;
 	struct conscience_s *conscience;
