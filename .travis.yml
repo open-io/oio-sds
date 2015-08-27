@@ -12,4 +12,4 @@ after_failure:
 addons:
   apt:
     packages:
-      - libattr1-dev
+      - python-pyxattr
