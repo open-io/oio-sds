@@ -27,12 +27,6 @@ struct service_info_s;
 struct addr_info_s;
 struct json_object;
 
-/**
- * @defgroup metautils_lb Load-Balancing
- * @ingroup metautils_utils
- * @{
- */
-
 /* Service pool features ---------------------------------------------------- */
 
 /*! A hidden structure representing a pool for a given service type. */
@@ -155,15 +149,12 @@ void grid_lb_iterator_clean(struct grid_lb_iterator_s *iter);
 void grid_lb_iterator_configure(struct grid_lb_iterator_s *iter,
 		const gchar *val);
 
-/*!  */
 gboolean grid_lb_iterator_is_srv_available(struct grid_lb_iterator_s *iter,
 		const struct service_info_s *si);
 
-/*!  */
 gboolean grid_lb_iterator_is_addr_available(struct grid_lb_iterator_s *iter,
 		const struct addr_info_s *ai);
 
-/*!  */
 gboolean grid_lb_iterator_is_url_available(struct grid_lb_iterator_s *iter,
 		const gchar *url);
 
@@ -171,22 +162,11 @@ gboolean grid_lb_iterator_is_url_available(struct grid_lb_iterator_s *iter,
 
 typedef gboolean (*service_filter) (struct service_info_s *si, gpointer hook_data);
 
-/*! Get the next service from the iterator.
- * @see service_info_clean()
- * @param iter
- * @param si
- * @return
- */
+/*! Get the next service from the iterator. */
 gboolean grid_lb_iterator_next(struct grid_lb_iterator_s *iter,
 		struct service_info_s **si);
 
-/*! Get the next service from the iterator.
- * @see service_info_clean()
- * @param iter
- * @param si
- * @param use_shorten_ratio Use (or not) shorten ratio
- * @return
- */
+/*! Get the next service from the iterator. */
 gboolean grid_lb_iterator_next_shorten(struct grid_lb_iterator_s *iter,
 		struct service_info_s **si, gboolean use_shorten_ratio);
 
@@ -304,14 +284,11 @@ GError* grid_lbpool_reload_json_object(struct grid_lbpool_s *glp, const gchar *s
 GError* grid_lbpool_reload_json(struct grid_lbpool_s *glp, const gchar *srvtype,
 		const gchar *encoded);
 
-/*!  */
 struct service_info_s* grid_lbpool_get_service_from_url(
 		struct grid_lbpool_s *glp, const gchar *srvtype,
 		const gchar *url);
 
 /*! flush all the sets registered in the given pool */
 void grid_lbpool_flush(struct grid_lbpool_s *glp);
-
-/*! @} */
 
 #endif /*OIO_SDS__metautils__lib__lb_h*/

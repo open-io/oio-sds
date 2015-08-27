@@ -24,18 +24,11 @@ License along with this library.
 
 # include <metautils/lib/metatypes.h>
 
-/**
- * @addtogroup meta0v2_utils
- * @{
- */
-
 guint16 meta0_utils_bytes_to_prefix(const guint8 *bytes);
 
 GTree* meta0_utils_array_to_tree(GPtrArray *array);
 
 GSList* meta0_utils_tree_to_list(GTree *tree);
-
-GTree* meta0_utils_list_to_tree(GSList *list);
 
 GPtrArray* meta0_utils_list_to_array(GSList *list);
 
@@ -73,7 +66,5 @@ gboolean meta0_utils_check_url_from_base(gchar **url);
 
 addr_info_t * meta0_utils_getMeta0addr(gchar *ns, GSList **m0List,
 		GSList *exclude );
-
-/** @} */
 
 #endif /*OIO_SDS__meta0v2__meta0_utils_h*/

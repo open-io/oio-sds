@@ -24,15 +24,6 @@ License along with this library.
 # include <glib.h>
 # include <sys/time.h>
 
-/**
- * @defgroup metautils_client
- * @ingroup metautils
- * @brief
- * @details
- *
- * @{
- */
-
 # ifndef GRIDC_DEFAULT_TIMEOUT_STEP
 #  define GRIDC_DEFAULT_TIMEOUT_STEP 10.0
 # endif
@@ -127,7 +118,6 @@ struct abstract_client_s
 	VTABLE_CALL(self,struct abstract_client_s*,F)
 
 // wrappers to the call to the vtable.
-//
 
 void gridd_client_free (struct gridd_client_s *self);
 GError * gridd_client_connect_url (struct gridd_client_s *self, const gchar *u);
@@ -176,7 +166,5 @@ struct abstract_client_factory_s
 // provide clients with the same VTABLE than those created with
 // gridd_client_create_empty().
 struct gridd_client_factory_s * gridd_client_factory_create(void);
-
-/** @} */
 
 #endif /*OIO_SDS__metautils__lib__gridd_client_h*/

@@ -83,8 +83,7 @@ const gchar * service_info_get_rawx_volume(const struct service_info_s *si,
 const gchar * service_info_get_stgclass(const struct service_info_s *si,
 		const gchar *def);
 
-/*!
- * Tests if the storage class of a service complies with
+/* Tests if the storage class of a service complies with
  * a specific storage class.
  *
  * @param wanted_class The class we want to match to
@@ -95,13 +94,11 @@ const gchar * service_info_get_stgclass(const struct service_info_s *si,
 gboolean service_info_check_storage_class(const struct service_info_s *si,
 		const gchar *wanted_class);
 
-/**
- * Check if a service_info is specified as internal (i.e. if it has a tag "tag.internal"
- * with a string value not equals to "false"
- */
+/* Check if a service_info is specified as internal (i.e. if it has a tag
+ * "tag.internal" with a string value not equals to "false" */
 gboolean service_info_is_internal(const struct service_info_s *si);
 
-/** Extract the rawx location from service info tag */
+/* Extract the rawx location from service info tag */
 gchar* get_rawx_location(service_info_t* rawx);
 
 #define metautils_rawx_get_location(si) \
@@ -122,7 +119,5 @@ void service_info_encode_json(GString *out, struct service_info_s *si);
 
 /* Returns a unique key identifying the service */
 gchar * service_info_key (const struct service_info_s *si);
-
-/** @} */
 
 #endif /*OIO_SDS__metautils__lib__metatype_srvinfo_h*/

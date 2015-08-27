@@ -54,6 +54,4 @@ gboolean metautils_url_valid_for_connect(const gchar *url);
 
 gboolean metautils_url_valid_for_bind(const gchar *url);
 
-/** @} */
-
 #endif /*OIO_SDS__metautils__lib__metautils_resolv_h*/

@@ -20,26 +20,11 @@ License along with this library.
 #ifndef OIO_SDS__server__grid_daemon_h
 # define OIO_SDS__server__grid_daemon_h 1
 
-/**
- * @defgroup server_grid Grid Daemon utilities V2
- * @ingroup server
- * @brief
- * @details
- * @{
- */
-
 /* Some forward declarations to avoid useless includes */
 struct network_server_s;
 struct gridd_request_dispatcher_s;
 
-/**
- * @param server
- * @param url
- * @param dispatcher
- */
 void grid_daemon_bind_host(struct network_server_s *server, const gchar *url,
 		struct gridd_request_dispatcher_s *dispatcher);
-
-/** @} */
 
 #endif /*OIO_SDS__server__grid_daemon_h*/

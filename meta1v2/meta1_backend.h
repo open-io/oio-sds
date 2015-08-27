@@ -20,11 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta1v2__meta1_backend_h
 # define OIO_SDS__meta1v2__meta1_backend_h 1
 
-/**
- * @addtogroup meta1v2_backend
- * @{
- */
-
 # define META1_SCHEMA \
 	"CREATE TABLE IF NOT EXISTS users ( "\
 		"cid BLOB NOT NULL PRIMARY KEY, "\
@@ -72,7 +67,6 @@ enum m1v2_getsrv_e
 	M1V2_GETSRV_DRYRUN = 0x02,
 };
 
-/* Avoids an include */
 struct grid_lb_iterator_s;
 struct meta1_prefixes_set_s;
 struct sqlx_repository_s;
@@ -80,31 +74,29 @@ struct sqlx_sqlite3_s;
 struct grid_lbpool_s;
 struct hc_url_s;
 
-/* Hidden type */
 struct meta1_backend_s;
 
-/** Backend constructor.
+/* Backend constructor.
  * This creates an internal sqlx_repository_t constructor. */
 struct meta1_backend_s * meta1_backend_init(const gchar *ns,
 		struct sqlx_repository_s *repo, struct grid_lbpool_s *glp);
 
-/** Returns the set of prefixes internally managed
+/* Returns the set of prefixes internally managed
  * Please do not free the internal META1 prefixes set, this is done
  * in the meta1_backend_clean() function. */
 struct meta1_prefixes_set_s* meta1_backend_get_prefixes(
 		struct meta1_backend_s *m1);
 
-/** Returns the holder of LB update policy.
+/* Returns the holder of LB update policy.
  * Please do not free this internal structure, this is done
  * in the meta1_backend_clean() function. */
 struct service_update_policies_s* meta1_backend_get_svcupdate(
 		struct meta1_backend_s *m1);
 
-/** Backend destructor.
+/* Backend destructor.
  * Also cleans the SQLX repository inside. */
 void meta1_backend_clean(struct meta1_backend_s *m1);
 
-/* ------------------------------------------------------------------------- */
 
 GError* meta1_backend_user_create(struct meta1_backend_s *m1,
 		struct hc_url_s *url);
@@ -132,11 +124,11 @@ GError* meta1_backend_services_poll (struct meta1_backend_s *m1,
 		gboolean dryrun, gboolean autocreate,
 		gchar ***result);
 
-/** @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
+/* @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
 GError* meta1_backend_services_config(struct meta1_backend_s *m1,
 		struct hc_url_s *url, const gchar *packedurl);
 
-/** @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
+/* @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
 GError* meta1_backend_services_set(struct meta1_backend_s *m1,
 		struct hc_url_s *url, const gchar *packedurl,
 		gboolean autocreate, gboolean force);
@@ -151,7 +143,6 @@ GError* meta1_backend_del_container_properties(struct meta1_backend_s *m1,
 GError* meta1_backend_get_container_properties(struct meta1_backend_s *m1,
 		struct hc_url_s *url, gchar **names, gchar ***result);
 
-/* -------------------------------------------------------------------------- */
 
 GError *meta1_backend_services_all(struct meta1_backend_s *m1,
 		struct hc_url_s *url, gchar ***result);
@@ -161,7 +152,7 @@ GError* meta1_backend_open_base(struct meta1_backend_s *m1,
 		struct hc_url_s *url, enum m1v2_open_type_e how,
 		struct sqlx_sqlite3_s **sq3);
 
-/** Returns whether the base associated to prefix was already created. */
+/* Returns whether the base associated to prefix was already created. */
 gboolean meta1_backend_base_already_created(struct meta1_backend_s *m1,
 		const guint8 *prefix);
 
@@ -169,13 +160,11 @@ typedef void (*m1b_ref_hook) (gpointer p, const gchar *ns, const gchar *ref);
 
 gchar* meta1_backend_get_ns_name(const struct meta1_backend_s *m1);
 
-/** Get the ip:port the current process is listening to. */
+/* Get the ip:port the current process is listening to. */
 const gchar* meta1_backend_get_local_addr(struct meta1_backend_s *m1);
 
-/** Send a notification (if enabled) with the services linked to a container. */
+/* Send a notification (if enabled) with the services linked to a container. */
 GError *meta1_backend_notify_services(struct meta1_backend_s *m1,
 		struct hc_url_s *url);
-
-/** @} */
 
 #endif /*OIO_SDS__meta1v2__meta1_backend_h*/

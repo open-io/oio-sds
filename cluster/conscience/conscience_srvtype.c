@@ -174,27 +174,6 @@ conscience_srvtype_serialize_config(struct conscience_srvtype_s *srvtype,
 	return encoded_kv;
 }
 
-GByteArray *
-conscience_srvtype_get_config(struct conscience_srvtype_s * srvtype,
-    GError ** err)
-{
-	if (!srvtype) {
-		GSETERROR(err, "Invalid parameter");
-		return NULL;
-	}
-
-	if (!srvtype->config_serialized)
-		srvtype->config_serialized = conscience_srvtype_serialize_config(srvtype, err);
-
-	if (!srvtype->config_serialized) {
-		GSETERROR(err,"Serialization failure");
-		return NULL;
-	}
-	
-	return g_byte_array_append(g_byte_array_new(), srvtype->config_serialized->data,
-		srvtype->config_serialized->len);
-}
-
 struct conscience_srv_s *
 conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
     GError ** err, const struct conscience_srvid_s *srvid)

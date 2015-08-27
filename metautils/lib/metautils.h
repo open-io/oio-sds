@@ -20,14 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__metautils_h
 # define OIO_SDS__metautils__lib__metautils_h 1
 
-/**
- * @defgroup metautils_utils Metautils
- * @ingroup metautils
- * @{
- * Coin!
- * }@
- */
-
 # include <metautils/lib/metautils_macros.h>
 
 # include <sys/types.h>

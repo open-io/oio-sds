@@ -23,20 +23,9 @@ License along with this library.
 # include "metautils.h"
 # include "gridd_client.h"
 
-/**
- * @defgroup metautils_client_ext
- * @ingroup metautils
- * @brief
- * @details
- *
- * @{
- */
-
 struct gridd_client_s;
 
-/* ------------------------------------------------------------------------- */
 /* Wrappers for single clients --------------------------------------------- */
-/* ------------------------------------------------------------------------- */
 
 // Wraps .interest(), .get_fd(), .react() and poll()
 GError* gridd_client_step(struct gridd_client_s *p);
@@ -73,9 +62,7 @@ GError * gridd_client_exec_and_concat (const char *to, gdouble timeout,
 GError * gridd_client_exec_and_concat_string (const char *to, gdouble timeout, GByteArray *req,
 		gchar **out);
 
-/* ------------------------------------------------------------------------- */
 /* Implementation specifics / array of structures -------------------------- */
-/* ------------------------------------------------------------------------- */
 
 // @return NULL if one of the subsequent client creation fails
 struct gridd_client_s ** gridd_client_create_many(gchar **targets,

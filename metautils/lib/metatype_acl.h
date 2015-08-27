@@ -22,14 +22,6 @@ License along with this library.
 
 #include <glib/gtypes.h>
 
-/**
- * @defgroup metautils_utils_acl ACL 
- * @ingroup metautils_utils
- * @brief ACL utils
- * @details Handles access control lists got from the conscience.
- * @{
- */
-
 gboolean authorized_personal_only(const gchar* addr, GSList* acl);
 
 GSList* parse_acl(const GByteArray* acl_byte, gboolean authorize);

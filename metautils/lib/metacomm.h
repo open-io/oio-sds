@@ -20,17 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__metacomm_h
 # define OIO_SDS__metautils__lib__metacomm_h 1
 
-/**
- * @file metacomm.h
- * Global communication library
- */
-
-/**
- * @defgroup metautils_comm Metacomm
- * @ingroup metautils
- * @{
- */
-
 #include <metautils/lib/metatypes.h>
 
 #define DECLARE_MARSHALLER(Name) \

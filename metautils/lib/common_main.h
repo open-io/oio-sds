@@ -23,12 +23,6 @@ License along with this library.
 #include "metautils_macros.h"
 #include <glib.h>
 
-/**
- * @defgroup metautils_main Common Main
- * @ingroup metautils
- * @{
- */
-
 #define HC_PROC_INIT(argv,LVL) do { \
 	grid_main_srand(); \
 	grid_main_set_prgname(argv[0]); \
@@ -72,13 +66,12 @@ struct grid_main_option_s {
 	const char *descr;
 };
 
-/** Number of seconds since Epoch when the debug level has been updated. */
+/* Number of seconds since Epoch when the debug level has been updated. */
 extern time_t main_log_level_update;
 
 extern char syslog_id[64];
 
-/**
- * Returns an array of extra options managed by the current process.
+/* Returns an array of extra options managed by the current process.
  *
  * Define your own to manage options. Carefully set an empty option
  * as the last element of the array.
@@ -95,28 +88,28 @@ struct grid_main_callbacks {
 	void (*specific_stop) (void);
 };
 
-/** Uses sigprocmask to block a lot of signals */
+/* Uses sigprocmask to block a lot of signals */
 void metautils_ignore_signals(void);
 
 /* Activate syslog logging */
 void logger_syslog_open (void);
 
-/** Stops the execution of the processus */
+/* Stops the execution of the processus */
 void grid_main_stop(void);
 
-/** Tests if the processus execution has been stopped */
+/* Tests if the processus execution has been stopped */
 gboolean grid_main_is_running(void);
 
-/** Calls this a the main routine for a non-deamonizable program */
+/* Calls this a the main routine for a non-deamonizable program */
 int grid_main(int argc, char ** argv, struct grid_main_callbacks *cb);
 
-/** Calls this a the main routine for a non-deamonizable program */
+/* Calls this a the main routine for a non-deamonizable program */
 int grid_main_cli(int argc, char ** argv, struct grid_main_callbacks *cb);
 
-/** Sets the result code of grid_main() and grid_main_cli() */
+/* Sets the result code of grid_main() and grid_main_cli() */
 void grid_main_set_status(int rc);
 
-/** Use this to set the name of the current command, this let the HC API
+/* Use this to set the name of the current command, this let the HC API
  * apply the same filter on it (e.g. keep the basename) */
 void grid_main_set_prgname(const gchar *cmd);
 

@@ -30,15 +30,6 @@ License along with this library.
 
 #define SQLXNAME_CHECK(p) do { EXTRA_ASSERT((p) != NULL); NAME_CHECK(p); } while (0)
 
-/**
- * @defgroup sqliterepo_remote RPC Codec
- * @ingroup sqliterepo
- * @brief
- * @details
- *
- * @{
- */
-
 # include <metautils/lib/metatypes.h>
 
 struct Row;
@@ -124,41 +115,25 @@ GByteArray* sqlx_pack_LEANIFY(struct sqlx_name_s *name);
 GByteArray* sqlx_pack_INFO(struct sqlx_name_s *name);
 
 // sqlx requests
-GByteArray* sqlx_pack_QUERY(struct sqlx_name_s *name,
-		const gchar *query, struct TableSequence *params, gboolean autocreate);
-
-GByteArray* sqlx_pack_QUERY_single(struct sqlx_name_s *name,
-		const gchar *query, gboolean autocreate);
-
+GByteArray* sqlx_pack_QUERY(struct sqlx_name_s *name, const gchar *query, struct TableSequence *params, gboolean autocreate);
+GByteArray* sqlx_pack_QUERY_single(struct sqlx_name_s *name, const gchar *query, gboolean autocreate);
 GByteArray* sqlx_pack_DESTROY(struct sqlx_name_s *name, gboolean local);
 
 // sqlx-related elements coders ------------------------------------------------
 
 GByteArray* sqlx_encode_Row(struct Row *row, GError **err);
-
 GByteArray* sqlx_encode_RowSet(struct RowSet *rows, GError **err);
-
 GByteArray* sqlx_encode_Table(struct Table *table, GError **err);
-
 GByteArray* sqlx_encode_TableSequence(struct TableSequence *tabseq,
 		GError **err);
 
 // replication handy functions -------------------------------------------------
 
-void peers_restore(gchar **targets, struct sqlx_name_s *name,
-		GByteArray *dump);
-
-GError * peer_restore(const gchar *target, struct sqlx_name_s *name,
-		GByteArray *dump);
-
-GError * peer_dump_gba(const gchar *target, struct sqlx_name_s *name,
-		GByteArray **result);
-
+void peers_restore(gchar **targets, struct sqlx_name_s *name, GByteArray *dump);
+GError * peer_restore(const gchar *target, struct sqlx_name_s *name, GByteArray *dump);
+GError * peer_dump_gba(const gchar *target, struct sqlx_name_s *name, GByteArray **result);
 typedef GError* (*peer_dump_cb)(GByteArray *part, gint64 remaining, gpointer arg);
-
 GError * peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 		peer_dump_cb, gpointer cb_arg);
-
-/** @} */
 
 #endif /*OIO_SDS__sqliterepo__sqlx_remote_h*/

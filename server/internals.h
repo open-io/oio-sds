@@ -20,15 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__server__internals_h
 # define OIO_SDS__server__internals_h 1
 
-/**
- * @defgroup server_misc Misc. features
- * @ingroup server
- * @brief
- * @details
- *
- * @{
- */
-
 #include <metautils/lib/metautils.h>
 
 # ifndef GRID_STAT_PREFIX_REQ
@@ -54,7 +45,5 @@ License along with this library.
 #ifndef SERVER_DEFAULT_MAX_WORKERS
 # define SERVER_DEFAULT_MAX_WORKERS 200
 #endif
-
-/** @} */
 
 #endif /*OIO_SDS__server__internals_h*/

@@ -22,15 +22,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # include <server/slab.h>
 
-/**
- * @defgroup server_transhttp HTTP features
- * @ingroup server
- * @brief
- * @details
- * @{
- */
-
-/* Avoids an include */
 struct network_client_s;
 
 /* Hidden type, internally defined */
@@ -76,12 +67,12 @@ struct http_request_descr_s
 		 struct http_reply_ctx_s *reply);
 };
 
-/** Associates the given client to the given request dispatcher into
+/* Associates the given client to the given request dispatcher into
  * a transport object. */
 void transport_http_factory0(struct http_request_dispatcher_s *dispatcher,
 		struct network_client_s *client);
 
-/** Wrapper over transport_http_factory0() to provide a factory function
+/* Wrapper over transport_http_factory0() to provide a factory function
  * without having to cast transport_http_factory0(). */
 static inline void
 transport_http_factory(gpointer dispatcher, struct network_client_s *client)
@@ -96,7 +87,5 @@ struct http_request_dispatcher_s * transport_http_build_dispatcher(
 
 const gchar * http_request_get_header(struct http_request_s *req,
 		const gchar *n);
-
-/** @} */
 
 #endif /*OIO_SDS__proxy__transport_http_h*/

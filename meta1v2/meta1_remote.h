@@ -67,6 +67,4 @@ GError * meta1v2_remote_list_services_by_prefix(const char *to, struct oio_url_s
 
 GError * meta1v2_remote_get_prefixes(const char *m1, gchar ***result);
 
-/** @} */
-
 #endif /*OIO_SDS__meta1v2__meta1_remote_h*/

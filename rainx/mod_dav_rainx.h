@@ -20,14 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__rainx__mod_dav_rainx_h
 # define OIO_SDS__rainx__mod_dav_rainx_h 1
 
-/**
- * @file  mod_dav_rainx.h
- * @brief Declarations for the filesystem repository implementation
- *
- * @addtogroup MOD_DAV
- * @{
- */
-
 /* the subdirectory to hold all DAV-related information for a directory */
 #define DAV_FS_STATE_FILE_FOR_DIR       ".state_for_dir"
 #define DAV_FS_LOCK_NULL_FILE           ".locknull"
@@ -79,7 +71,5 @@ extern dav_error * dav_rainx_stat_get_resource(request_rec *r,
 extern dav_error * dav_rainx_info_get_resource(request_rec *r,
 	const char *root_dir, const char *label, int use_checked_in,
 	dav_resource **result_resource);
-
-/** @} */
 
 #endif /*OIO_SDS__rainx__mod_dav_rainx_h*/

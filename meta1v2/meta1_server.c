@@ -42,22 +42,24 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_gridd_dispatcher.h"
 
 static struct meta1_backend_s *m1 = NULL;
+static volatile gboolean already_succeeded = FALSE;
 
 static GError*
 _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 {
-	GError *err;
-	GArray *updated_prefixes=NULL;
-	struct meta1_prefixes_set_s *m1ps;
-
-	m1ps = meta1_backend_get_prefixes(m1);
-	err = meta1_prefixes_load(m1ps, ss->ns_name, ss->url->str, &updated_prefixes);
+	gboolean meta0_ok = FALSE;
+	GArray *updated_prefixes = NULL;
+	struct meta1_prefixes_set_s *m1ps = meta1_backend_get_prefixes(m1);
+	GError *err = meta1_prefixes_load(m1ps, ss->ns_name, ss->url->str,
+			&updated_prefixes, &meta0_ok);
 	if (err) {
 		g_prefix_error(&err, "Reload error: ");
 		if (updated_prefixes)
 			g_array_free(updated_prefixes, TRUE);
 		return err;
 	}
+	if (meta0_ok)
+		already_succeeded = TRUE;
 
 	if (updated_prefixes && !init) {
 		if (updated_prefixes->len)
@@ -96,16 +98,13 @@ _reload_prefixes(struct sqlx_service_s *ss, gboolean init)
 static void
 _task_reload_prefixes(gpointer p)
 {
-	static gboolean already_succeeded = FALSE;
-	static guint tick_reload = 1;
+	static volatile guint tick_reload = 0;
 
-	if (already_succeeded && !(tick_reload++ % 30))
+	if (already_succeeded && 0 != (tick_reload++ % 32))
 		return;
 
 	GError *err = _reload_prefixes(PSRV(p), FALSE);
-	if (!err)
-		already_succeeded = TRUE;
-	else {
+	if (err) {
 		GRID_WARN("Failed to reload the meta1 prefixes : (%d) %s",
 				err->code, err->message);
 		g_clear_error(&err);

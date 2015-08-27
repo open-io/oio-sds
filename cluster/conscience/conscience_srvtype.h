@@ -20,17 +20,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__cluster__conscience__conscience_srvtype_h
 # define OIO_SDS__cluster__conscience__conscience_srvtype_h 1
 
-/**
- * @addtogroup gridcluster_backend
- * @{
- */
-
 # include <metautils/lib/metautils.h>
 # include <cluster/conscience/conscience_srv.h>
 
-/**
- *
- */
 struct conscience_srvtype_s
 {
 	GStaticRWLock rw_lock;
@@ -50,12 +42,6 @@ struct conscience_srvtype_s
 	struct conscience_srv_s services_ring;
 };
 
-/**
- * Defines the type of the 
- * @param srv
- * @param udata
- * @return
- */
 typedef gboolean (service_callback_f) (struct conscience_srv_s * srv, gpointer udata);
 
 /* ------------------------------------------------------------------------- */
@@ -115,12 +101,6 @@ void conscience_srvtype_flush(struct conscience_srvtype_s *srvtype);
 struct conscience_srv_s *conscience_srvtype_register_srv(struct
     conscience_srvtype_s *srvtype, GError ** err, const struct conscience_srvid_s *srvid);
 
-/**
- * @param srvtype
- * @param error
- * @param srvinfo
- * @return
- */
 gboolean conscience_srvtype_refresh(struct conscience_srvtype_s *srvtype,
     GError ** error, struct service_info_s *srvinfo, gboolean keep_score);
 
@@ -186,39 +166,11 @@ void conscience_srvtype_remove_srv(struct conscience_srvtype_s *srvtype, struct 
 guint conscience_srvtype_count_srv(struct conscience_srvtype_s *srvtype, gboolean include_expired);
 
 /**
- * Get a copy of the serialized configuration of the given service-type
- * holder.
- *
- * The caller is responsible to free the returned GByteArray, including
- * its internal data (@see g_byte_array_free()).
- *
- * We admit such a configuration is not volatile, thus it is cached in
- * the structure. This cached value will be freed with a call to
- * conscience_srvtype_destroy().
- * 
- * @param srvtype a valid service-type holder.
- * @param err a GError double pointer set on error.
- * @result a newly allocated GByteArray or NULL in case of failure.
- */
-GByteArray* conscience_get_serialized_configuration(
-		struct conscience_srvtype_s *srvtype, GError ** err);
-
-/**
- * @param srvtype
- * @param err
- * @return
- */
-GByteArray* conscience_srvtype_get_config(
-		struct conscience_srvtype_s * srvtype, GError ** err);
-
-/**
  * Sets acceptable default value in the configuration parameters
  * of the given service type holder.
  *
  * @param srvtype the service type holder to init
  */
 void conscience_srvtype_init(struct conscience_srvtype_s *srvtype);
-
-/** @} */
 
 #endif /*OIO_SDS__cluster__conscience__conscience_srvtype_h*/

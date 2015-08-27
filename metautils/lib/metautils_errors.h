@@ -22,28 +22,6 @@ License along with this library.
 
 #include <glib.h>
 
-/**
- * @param timer
- */
-#define START_TIMER(timer) g_timer_start(timer)
-
-/**
- * @param timer
- * @param action_str
- */
-#define STOP_TIMER(timer, action_str) do { \
-	g_timer_stop(timer);\
-	DEBUG_DOMAIN("timer", "Action [%s] in thread[%p] took %f sec", action_str, g_thread_self(), g_timer_elapsed(timer, NULL)); \
-} while (0)
-
-/**
- * @defgroup metautils_errors GError features
- * @ingroup metautils_utils
- * @{
- */
-
-/* Some well known codes used by read functions */
-
 # define GSETCODE(e,C,FMT,...) g_error_trace (e, G_LOG_DOMAIN, (C), __LINE__, __FUNCTION__, __FILE__, FMT, ##__VA_ARGS__)
 
 # define GSETERROR(e,FMT,...)  g_error_trace (e, G_LOG_DOMAIN, 0,   __LINE__, __FUNCTION__, __FILE__, FMT, ##__VA_ARGS__)

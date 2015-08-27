@@ -20,11 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta0v2__meta0_backend_h
 # define OIO_SDS__meta0v2__meta0_backend_h 1
 
-/**
- * @addtogroup meta0v2_backend
- * @{
- */
-
 # define META0_SCHEMA \
 	"CREATE TABLE IF NOT EXISTS meta1 ( " \
 		"prefix BLOB NOT NULL," \
@@ -88,7 +83,5 @@ GError* meta0_backend_get_all_meta1_ref(struct meta0_backend_s *m0,
 		GPtrArray **result);
 
 GError* meta0_backend_destroy_meta1_ref(struct meta0_backend_s *m0, gchar *meta1);
-
-/** @} */
 
 #endif /*OIO_SDS__meta0v2__meta0_backend_h*/

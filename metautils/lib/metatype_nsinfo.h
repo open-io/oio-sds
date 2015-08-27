@@ -23,12 +23,6 @@ License along with this library.
 struct namespace_info_s;
 
 /**
- * @defgroup metautils_nsinfo NsInfo
- * @ingroup metautils_utils
- * @{
- */
-
-/**
  * Find a namespace-prefixed key in a hash table. If key not found, try again
  * with parent VNS, and so on. If still not found, try unprefixed key.
  * Key may be NULL if the key is the namespace name.
@@ -134,21 +128,15 @@ GHashTable* namespace_info_list2map(GSList *list_nsinfo, gboolean auto_free);
  */
 GSList* namespace_info_extract_name(GSList *list_nsinfo, gboolean copy);
 
-/**
- * Get the data_security definition from the specified key
- */
+/* Get the data_security definition from the specified key */
 gchar * namespace_info_get_data_security(struct namespace_info_s *ni,
 		const gchar *data_sec_key);
 
-/**
- * Get the data_treatments definition from the specified key
- */
+/* Get the data_treatments definition from the specified key */
 gchar * namespace_info_get_data_treatments(struct namespace_info_s *ni,
 		const gchar *data_treat_key);
 
-/**
- * Get the storage_class definition from the specified key
- */
+/* Get the storage_class definition from the specified key */
 gchar * namespace_info_get_storage_class(struct namespace_info_s *ni,
 		const gchar *stgclass_key);
 
@@ -162,7 +150,5 @@ GError * namespace_info_init_json(const gchar *encoded,
 
 // Appends to 'out' a json representation of 'ni'
 void namespace_info_encode_json(GString *out, struct namespace_info_s *ni);
-
-/** @} */
 
 #endif /*OIO_SDS__metautils__lib__metatype_nsinfo_h*/

@@ -62,11 +62,6 @@ struct hc_url_s;
 struct list_params_s;
 struct list_result_s;
 
-/**
- * @addtogroup meta2v2_remote
- * @{
- */
-
 void m2v2_list_result_clean (struct list_result_s *p);
 
 struct m2v2_create_params_s
@@ -78,12 +73,6 @@ struct m2v2_create_params_s
 						  * properties[(i*2)+1] is the i-th value */
 	gboolean local; /**< Do not try to replicate, do not call get_peers() */
 };
-
-/**
- * @addtogroup meta2v2_remote_packers
- * @ingroup meta2v2_remote
- * @{
- */
 
 GByteArray* m2v2_remote_pack_PURGE(struct hc_url_s *url, gboolean dry_run);
 
@@ -138,9 +127,6 @@ GByteArray* m2v2_remote_pack_TOUCH_content(struct hc_url_s *url);
 
 GByteArray* m2v2_remote_pack_TOUCH_container(struct hc_url_s *url, guint32 flags);
 
-/**
- * @}
- */
 
 #define M2V2_MODE_DRYRUN  0x10000000
 
@@ -157,14 +143,7 @@ GError* m2v2_remote_execute_CREATE(const char *target, struct hc_url_s *url,
 GError* m2v2_remote_execute_DESTROY(const char *target, struct hc_url_s *url,
 		guint32 flags);
 
-/**
- * Locally destroy a container on several services.
- *
- * @param targets An array of services managing the database.
- * @param sid
- * @param url URL of the container to destroy
- * @param flags
- */
+/* Locally destroy a container on several services. */
 GError* m2v2_remote_execute_DESTROY_many(gchar **targets, struct hc_url_s *url,
 		guint32 flags);
 
@@ -173,13 +152,9 @@ GError* m2v2_remote_execute_HAS(const char *target, struct hc_url_s *url);
 GError* m2v2_remote_execute_BEANS(const char *target, struct hc_url_s *url,
 		const char *pol, gint64 size, gboolean append, GSList **out);
 
-/**
- * Get spare chunks. The number of spare chunks returned
+/* Get spare chunks. The number of spare chunks returned
  * will be the one defined by the policy minus the length of notin_list.
  *
- * @param target
- * @param sid
- * @param url
  * @param stgpol The storage policy that the spare chunks should match
  * @param notin_list The list of already known chunks that should be taken into
  *   account when computing distance between chunks.
@@ -219,7 +194,7 @@ GError* m2v2_remote_execute_RAW_ADD(const char *target, struct hc_url_s *url,
 GError* m2v2_remote_execute_RAW_DEL(const char *target, struct hc_url_s *url,
 		GSList *beans);
 
-/** Substitute chunks by another one in meta2 database.
+/* Substitute chunks by another one in meta2 database.
  * TODO: return number of substitutions */
 GError* m2v2_remote_execute_RAW_SUBST(const char *target,
 		struct hc_url_s *url, GSList *new_chunks, GSList *old_chunks);
@@ -232,12 +207,12 @@ GError* m2v2_remote_execute_LIST(const char *target,
 		struct hc_url_s *url, struct list_params_s *p,
 		struct list_result_s *out, gchar ***out_properties);
 
-/** Get the aliases the chunk belongs to. */
+/* Get the aliases the chunk belongs to. */
 GError* m2v2_remote_execute_LIST_BY_CHUNKID(const char *target,
 		struct hc_url_s *url, const char *chunk, struct list_params_s *p,
 		struct list_result_s *out);
 
-/** Get the aloases the header belongs to. */
+/* Get the aloases the header belongs to. */
 GError* m2v2_remote_execute_LIST_BY_HEADERHASH(const char *target, 
 		struct hc_url_s *url, GBytes *h, struct list_params_s *p,
 		struct list_result_s *out);
@@ -263,9 +238,5 @@ GError* m2v2_remote_execute_EXITELECTION(const char *target,
 GError* m2v2_remote_touch_content(const char *target, struct hc_url_s *url);
 
 GError* m2v2_remote_touch_container_ex(const char *target, struct hc_url_s *url, guint32 flags);
-
-/**
- * @}
- */
 
 #endif /*OIO_SDS__meta2v2__meta2v2_remote_h*/

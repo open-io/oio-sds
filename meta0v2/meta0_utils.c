@@ -87,38 +87,6 @@ meta0_utils_check_url_from_base(gchar **url) {
 	return TRUE;
 }
 
-GTree*
-meta0_utils_list_to_tree(GSList *list)
-{
-	GSList *l;
-	GTree *result = NULL;
-
-	EXTRA_ASSERT(list != NULL);
-
-	result = g_tree_new_full(
-			hashstr_quick_cmpdata, NULL,
-			g_free, (GDestroyNotify)garray_free);
-
-	for (l=list; l ;l=l->next) {
-		struct meta0_info_s *m0i;
-
-		if (!(m0i = l->data))
-			continue;
-
-		gchar url[STRLEN_ADDRINFO];
-		grid_addrinfo_to_string(&(m0i->addr), url, sizeof(url));
-
-		gsize len = m0i->prefixes_size;
-		len = len / 2;
-		GArray *pfx = g_array_new(FALSE, FALSE, sizeof(guint16));
-		g_array_append_vals(pfx, m0i->prefixes, len);
-
-		g_tree_replace(result, hashstr_create(url), pfx);
-	}
-	
-	return result;
-}
-
 void
 meta0_utils_array_add(GPtrArray *gpa, const guint8 *bytes, const gchar *s)
 {

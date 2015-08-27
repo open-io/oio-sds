@@ -89,8 +89,8 @@ _cache_from_m0l(GSList *l, const struct addr_info_s *ai)
 
 static GError*
 _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps, const char *m0,
-		const struct addr_info_s *local_addr,
-		GArray **updated_prefixes)
+		const struct addr_info_s *local, GArray **updated_prefixes,
+		gboolean *meta0_ok)
 {
 	GError *err = NULL;
 	GSList *m0info_list = NULL;
@@ -107,7 +107,8 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps, const char *m0,
 		return NULL;
 	}
 
-	guint8 *cache = _cache_from_m0l(m0info_list, local_addr);
+	*meta0_ok = TRUE;
+	guint8 *cache = _cache_from_m0l(m0info_list, local);
 	GPtrArray *by_prefix = meta0_utils_list_to_array(m0info_list);
 
 	g_mutex_lock(&m1ps->lock);
@@ -142,10 +143,8 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps, const char *m0,
 }
 
 static GError*
-_cache_load_from_ns(struct meta1_prefixes_set_s *m1ps,
-		const gchar *ns_name,
-		const gchar *local_url,
-		GArray **updated_prefixes)
+_cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const char *ns,
+		const char *local, GArray **updated_prefixes, gboolean *meta0_ok)
 {
 	struct addr_info_s local_ai;
 	GError *err = NULL;
@@ -155,16 +154,16 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps,
 
 	EXTRA_ASSERT(m1ps != NULL);
 
-	if (!ns_name || !local_url) {
+	if (!ns || !local) {
 		GRID_TRACE("META1 prefix set not configured to be reloaded from a namespace");
 		return NULL;
 	}
 
 	memset(&local_ai, 0, sizeof(local_ai));
-	grid_string_to_addrinfo(local_url, NULL, &local_ai);
+	grid_string_to_addrinfo(local, NULL, &local_ai);
 
 	/* Get the META0 address */
-	m0_list = list_namespace_services(ns_name, "meta0", &err);
+	m0_list = list_namespace_services(ns, "meta0", &err);
 	if (err != NULL) {
 		g_prefix_error(&err, "META0 locate error : ");
 		return err;
@@ -188,7 +187,7 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps,
 
 		char m0[STRLEN_ADDRINFO];
 		grid_addrinfo_to_string (&si->addr, m0, sizeof(m0));
-		err = _cache_load_from_m0(m1ps, m0, &local_ai, updated_prefixes);
+		err = _cache_load_from_m0(m1ps, m0, &local_ai, updated_prefixes, meta0_ok);
 		if (!err) {
 			done = TRUE;
 			break;
@@ -240,8 +239,7 @@ meta1_prefixes_clean(struct meta1_prefixes_set_s *m1ps)
 }
 
 GError*
-meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps,
-		const gchar *local_url)
+meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps, const char *local)
 {
 	gint32 i32;
 	guint16 u16;
@@ -255,7 +253,7 @@ meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps,
 	m1ps->by_prefix = meta0_utils_array_create();
 	for (i32=0; i32<65536 ;i32++) {
 		u16 = i32;
-		meta0_utils_array_add(m1ps->by_prefix, (guint8*)(&u16), local_url);
+		meta0_utils_array_add(m1ps->by_prefix, (guint8*)(&u16), local);
 	}
 	g_mutex_unlock(&m1ps->lock);
 
@@ -263,20 +261,20 @@ meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps,
 }
 
 GError*
-meta1_prefixes_load(struct meta1_prefixes_set_s *m1ps,
-		const gchar *ns_name, const gchar *local_url, GArray **updated_prefixes)
+meta1_prefixes_load(struct meta1_prefixes_set_s *m1ps, const char *ns,
+		const char *local, GArray **updated_prefixes, gboolean *meta0_ok)
 {
 	GError *err = NULL;
 
 	EXTRA_ASSERT(m1ps != NULL);
-	EXTRA_ASSERT(ns_name != NULL);
-	EXTRA_ASSERT(local_url != NULL);
+	EXTRA_ASSERT(ns != NULL);
+	EXTRA_ASSERT(local != NULL);
 
-	err = _cache_load_from_ns(m1ps, ns_name, local_url, updated_prefixes);
+	err = _cache_load_from_ns(m1ps, ns, local, updated_prefixes, meta0_ok);
 	if (NULL != err)
 		g_prefix_error(&err, "NS loading error : ");
 	else
-		GRID_DEBUG("Prefixes reloaded for NS[%s]", ns_name);
+		GRID_DEBUG("Prefixes reloaded for NS[%s]", ns);
 
 	return err;
 }

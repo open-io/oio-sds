@@ -20,11 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta1v2__internals_h
 # define OIO_SDS__meta1v2__internals_h 1
 
-/**
- * @addtogroup meta1v2_misc 
- * @{
- */
-
 # include <metautils/lib/metautils.h>
 # include <metautils/lib/metacomm.h>
 
@@ -52,7 +47,5 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 // On prefixes
 #define NAME_MSGNAME_M1V2_GETPREFIX "M1V2_GET_PREFIXES"
 #define NAME_MSGNAME_M1V2_SRVALLONM1 "M1V2_SRVALLONM1"
-
-/** @} */
 
 #endif /*OIO_SDS__meta1v2__internals_h*/

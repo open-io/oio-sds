@@ -23,12 +23,6 @@ License along with this library.
 #include <glib/gtypes.h>
 
 /**
- * @defgroup metautils_l4v L4V codec
- * @ingroup metautils_utils
- * @{
- */
-
-/**
  * Copy src to dst+4 and prepend dstsize in dst.
  *
  * In theory, src and dst could even overlap.
@@ -81,7 +75,5 @@ l4v_prepend_size(void *src, register gsize srcSize)
 	srcSize -= 4;
 	*((guint32*)src) = g_htonl(srcSize);
 }
-
-/** @} */
 
 #endif /*OIO_SDS__metautils__lib__metautils_l4v_h*/

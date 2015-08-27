@@ -22,12 +22,6 @@ License along with this library.
 
 #include <glib/gtypes.h>
 
-/**
- * @defgroup metautils_cid Container ID 
- * @ingroup metautils_utils
- * @{
- */
-
 guint container_id_hash(gconstpointer k);
 
 gboolean container_id_equal(gconstpointer k1, gconstpointer k2);
@@ -35,9 +29,5 @@ gboolean container_id_equal(gconstpointer k1, gconstpointer k2);
 /** Fills the given buffer with the haxedecimal representatino of the
  * container_id. The destination buffer will always be NULL terminated. */
 gsize container_id_to_string(const container_id_t id, gchar * dst, gsize dstsize);
-
-#define meta1_name2hash oio_str_hash_name
-
-/** @} */
 
 #endif /*OIO_SDS__metautils__lib__metatype_cid_h*/

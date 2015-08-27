@@ -20,20 +20,11 @@ License along with this library.
 #ifndef OIO_SDS__cluster__lib__gridcluster_h
 # define OIO_SDS__cluster__lib__gridcluster_h 1
 
-/**
- * @ingroup gridcluster_lib
- * @{
- */
-
 #include <metautils/lib/metatypes.h>
 #include <cluster/agent/gridagent.h>
 
-/** The path to the grid config file */
-
-/**  */
 #define NS_ACL_ALLOW_OPTION "allow"
 
-/**  */
 #define NS_ACL_DENY_OPTION "deny"
 
 # define OIO_CFG_ZOOKEEPER    "zookeeper"
@@ -45,9 +36,6 @@ License along with this library.
 # define gridcluster_get_eventagent(ns) oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)
 # define gridcluster_get_conscience(ns) oio_cfg_get_value((ns), OIO_CFG_CONSCIENCE)
 
-/**
- * Struct to store an agent task description
- */
 struct task_s {
 	char id[MAX_TASKID_LENGTH]; /**< The task id */
 	gint64 period;              /**< how many seconds between each run */
@@ -83,11 +71,8 @@ gsize namespace_get_autocontainer_src_offset (const namespace_info_t* ni);
 gsize namespace_get_autocontainer_src_size (const namespace_info_t* ni);
 gsize namespace_get_autocontainer_dst_bits (const namespace_info_t* ni);
 
-
 struct grid_lbpool_s;
 GError* gridcluster_reload_lbpool(struct grid_lbpool_s *glp);
 GError* gridcluster_reconfigure_lbpool(struct grid_lbpool_s *glp);
-
-/** @} */
 
 #endif /*OIO_SDS__cluster__lib__gridcluster_h*/

@@ -24,13 +24,6 @@ License along with this library.
 
 #include <metautils/lib/metatypes.h>
 
-/**
- * @defgroup metautils_utils_gba GByteArray
- * @ingroup metautils_utils
- * @brief GByteArray utils
- * @{
- */
-
 GByteArray* metautils_gba_from_cid(const container_id_t cid);
 
 GByteArray* metautils_gba_dup(const GByteArray *gba);
@@ -79,7 +72,5 @@ GString* metautils_gba_to_hexgstr(GString *gstr, GByteArray *gba);
 void gba_pool_clean(GSList **pool);
 
 GByteArray * gba_poolify(GSList **pool, GByteArray *gba);
-
-/** @} */
 
 #endif /*OIO_SDS__metautils__lib__metautils_gba_h*/
