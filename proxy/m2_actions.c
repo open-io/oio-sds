@@ -841,7 +841,7 @@ _m2_container_create (struct req_args_s *args)
 	GError *err;
 retry:
 	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook_m2);
-	if (err && err->code == CODE_USER_NOTFOUND) {
+	if (err && CODE_IS_NOTFOUND(err->code)) {
 		if (autocreate) {
 			autocreate = FALSE; /* autocreate just once */
 			g_clear_error (&err);

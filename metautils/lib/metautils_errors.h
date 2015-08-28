@@ -56,6 +56,7 @@ License along with this library.
 #define CODE_IS_REDIRECT(C) (((C) > CODE_BEACON_REDIRECT) && ((C) < CODE_BEACON_ERROR))
 
 #define CODE_IS_NOTFOUND(C) ((C)==CODE_CONTAINER_NOTFOUND \
+		|| (C)==CODE_SRV_NOLINK \
 		|| (C)==CODE_USER_NOTFOUND \
 		|| (C)==CODE_ACCOUNT_NOTFOUND \
 		|| (C)==CODE_CONTENT_NOTFOUND)
