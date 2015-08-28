@@ -1,6 +1,10 @@
 add_definitions(-DG_LOG_DOMAIN="oio.tools")
 
-include_directories(BEFORE ../client/c/lib)
+include_directories(BEFORE ..)
+
+add_executable(tool-ping oio-ping.c)
+bin_prefix(tool-ping "-ping")
+target_link_libraries(tool-ping metautils ${GLIB2_LIBRARIES})
 
 add_executable(tool-error oio-err.c)
 bin_prefix(tool-error "-err")

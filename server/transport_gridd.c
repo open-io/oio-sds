@@ -894,9 +894,10 @@ static gboolean
 dispatch_VERSION(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
-	(void) gdata;
-	(void) hdata;
-	reply->send_reply(CODE_FINAL_OK, *(API_VERSION) ? API_VERSION : "unknown");
+	(void) gdata, (void) hdata;
+	reply->add_body (metautils_gba_from_string(
+			*(API_VERSION) ? API_VERSION : "unknown"));
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -904,7 +905,7 @@ const struct gridd_request_descr_s*
 gridd_get_common_requests(void)
 {
 	static struct gridd_request_descr_s descriptions[] = {
-		{"PING",          dispatch_PING,          NULL},
+		{"REQ_PING",      dispatch_PING,          NULL},
 		{"REQ_STATS",     dispatch_STATS,         NULL},
 		{"REQ_VERSION",   dispatch_VERSION,       NULL},
 		{"REQ_HANDLERS",  dispatch_LISTHANDLERS,  NULL},
