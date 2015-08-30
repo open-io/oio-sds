@@ -25,7 +25,7 @@ License along with this library.
 
 #include <malloc.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 
 #include "sqliterepo.h"
 #include "cache.h"

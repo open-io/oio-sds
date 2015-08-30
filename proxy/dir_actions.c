@@ -70,13 +70,13 @@ _m1_action (struct req_args_s *args, gchar ** m1v,
 		struct meta1_service_url_s *m1 = meta1_unpack_url (*pm1);
 		if (!m1)
 			continue;
-		if (0 != g_ascii_strcasecmp(m1->srvtype, "meta1")) {
+		if (0 != g_ascii_strcasecmp(m1->srvtype, NAME_SRVTYPE_META1)) {
 			meta1_service_url_clean (m1);
 			continue;
 		}
 
 		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1->host, NULL, &m1a)) {
+		if (!grid_string_to_addrinfo (m1->host, &m1a)) {
 			GRID_INFO ("Invalid META1 [%s] for [%s]",
 				m1->host, hc_url_get (args->url, HCURL_WHOLE));
 			meta1_service_url_clean (m1);

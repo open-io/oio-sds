@@ -21,7 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <sys/stat.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include <server/slab.h>
 #include <server/network_server.h>
 #include <server/stats_holder.h>

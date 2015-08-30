@@ -46,11 +46,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
     "INSERT OR IGNORE INTO admin(k,v) " \
 		"VALUES (\"version:main.services\",\"1:0\");" \
     "INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"version:main.properties\",\"1:0\");" \
-	"VACUUM"
+		"VALUES (\"version:main.properties\",\"1:0\")"
 
 # include <glib.h>
-# include <metautils/lib/metatypes.h>
+# include <metautils/metatypes.h>
 
 enum m1v2_open_type_e
 {

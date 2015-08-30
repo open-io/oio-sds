@@ -22,7 +22,7 @@ License along with this library.
 
 # include <sqlite3.h>
 
-# include <metautils/lib/metautils.h>
+# include <metautils/metautils.h>
 # include <RowName.h>
 # include <RowField.h>
 # include <Row.h>
@@ -104,7 +104,7 @@ struct sqlx_repository_s
 {
 	gchar basedir[512];
 
-	GHashTable *schemas;
+	GTree *schemas;
 
 	// Not owned
 	struct sqlx_cache_s *cache;

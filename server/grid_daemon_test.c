@@ -20,7 +20,7 @@ License along with this library.
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 
 #include "network_server.h"
 #include "grid_daemon.h"

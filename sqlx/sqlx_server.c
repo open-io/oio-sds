@@ -24,7 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include <resolver/hc_resolver.h>
 #include <server/grid_daemon.h>
 #include <server/transport_gridd.h>

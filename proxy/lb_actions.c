@@ -40,7 +40,7 @@ _lb_pack_and_free_srvinfo_tab (struct service_info_s **siv)
 	for (struct service_info_s **pp = siv; *pp ;pp++) {
 		if (siv != pp)
 			g_string_append_c(gstr, ',');
-		service_info_encode_json(gstr, *pp);
+		service_info_encode_json(gstr, *pp, FALSE);
 	}
 	g_string_append_c(gstr, ']');
 	return gstr;

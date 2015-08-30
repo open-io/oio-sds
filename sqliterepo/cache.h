@@ -20,7 +20,7 @@ License along with this library.
 #ifndef OIO_SDS__sqliterepo__cache_h
 # define OIO_SDS__sqliterepo__cache_h 1
 
-# include <metautils/lib/metautils.h>
+# include <metautils/metautils.h>
 
 /* Default timeout when trying to open a base currently in use by another
  * thread (milliseconds) */

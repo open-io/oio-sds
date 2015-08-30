@@ -19,16 +19,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
-
+#include <metautils/metautils.h>
 #include <sqliterepo/sqlite_utils.h>
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/election.h>
-
 #include <meta0v2/meta0_remote.h>
 #include <meta0v2/meta0_utils.h>
-
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/meta2v2_remote.h>
@@ -208,8 +204,7 @@ meta2_backend_init(struct meta2_backend_s **result,
 
 	m2->flag_precheck_on_generate = TRUE;
 
-	err = sqlx_repository_configure_type(m2->backend.repo, NAME_SRVTYPE_META2,
-			NULL, schema);
+	err = sqlx_repository_configure_type(m2->backend.repo, NAME_SRVTYPE_META2, schema);
 	if (NULL != err) {
 		meta2_backend_clean(m2);
 		g_prefix_error(&err, "Backend init error: ");

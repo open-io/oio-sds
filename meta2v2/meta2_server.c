@@ -24,8 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/time.h>
 #include <sys/resource.h>
 
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
+#include <metautils/metautils.h>
 #include <server/network_server.h>
 #include <server/transport_gridd.h>
 #include <server/grid_daemon.h>

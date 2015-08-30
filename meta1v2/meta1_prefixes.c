@@ -23,8 +23,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <sqlite3.h>
 
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
+#include <metautils/metautils.h>
+#include <conscience/remote.h>
 #include <meta0v2/meta0_remote.h>
 #include <meta0v2/meta0_utils.h>
 #include <sqliterepo/sqliterepo.h>
@@ -160,10 +160,10 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const char *ns,
 	}
 
 	memset(&local_ai, 0, sizeof(local_ai));
-	grid_string_to_addrinfo(local, NULL, &local_ai);
+	grid_string_to_addrinfo(local, &local_ai);
 
 	/* Get the META0 address */
-	m0_list = list_namespace_services(ns, "meta0", &err);
+	err = conscience_list_services (ns, NAME_SRVTYPE_META0, FALSE, FALSE, &m0_list);
 	if (err != NULL) {
 		g_prefix_error(&err, "META0 locate error : ");
 		return err;

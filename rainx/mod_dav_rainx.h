@@ -35,8 +35,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <apr_shm.h>
 #include <apr_global_mutex.h>
 
-#include <metautils/lib/metatypes.h>
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 
 /* return the storage pool associated with a resource */
 apr_pool_t *dav_rainx_pool(const dav_resource *resource);

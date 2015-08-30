@@ -25,8 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <sqlite3.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 #include <sqliterepo/sqliterepo.h>
 
 #include "./internals.h"

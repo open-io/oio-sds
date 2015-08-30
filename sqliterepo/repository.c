@@ -27,8 +27,7 @@ License along with this library.
 
 #include <sqlite3.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 
 #include "sqliterepo.h"
 #include "hash.h"
@@ -39,6 +38,10 @@ License along with this library.
 #include "internals.h"
 #include "restoration.h"
 #include "sqlx_remote.h"
+
+#define sql_admin "CREATE TABLE IF NOT EXISTS admin (" \
+	"k TEXT PRIMARY KEY NOT NULL," \
+	"v BLOB DEFAULT NULL)"
 
 #define GSTR_APPEND_SEP(S) do { \
 	if ((S)->str[(S)->len-1]!=G_DIR_SEPARATOR) \
@@ -66,12 +69,12 @@ _close_handle(sqlite3 **pdb)
 }
 
 static gchar*
-_compute_path_hash(sqlx_repository_t *repo, const hashstr_t *hn, const gchar *t)
+_compute_path_hash(sqlx_repository_t *repo, const hashstr_t *hn, const char *t)
 {
 	guint w, d, i = 0;
 	gsize nlen;
 	GString *gstr;
-	const gchar *n;
+	const char *n;
 
 	n = hashstr_str(hn);
 	nlen = hashstr_len(hn);
@@ -169,80 +172,31 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 }
 
 static GError*
-__file_read(const gchar *path, GByteArray **raw)
+__test_schema(const char *schema)
 {
-	GError *error = NULL;
-	gchar *content = NULL;
-	gsize content_size = 0;
-
-	if (!g_file_get_contents(path, &content, &content_size, &error))
-		return error;
-	if (!error)
-		*raw = g_byte_array_append(g_byte_array_new(),
-				(guint8*)content, content_size);
-	if (content)
-		g_free(content);
-	return error;
-}
-
-static GError*
-__test_schema(const gchar *schema, const gchar *version, GByteArray **raw)
-{
-	gchar ps_buf[64] = {0};
-	gchar *tmp_path;
 	int rc;
 	char *errmsg = NULL;
 	GError *error = NULL;
 	sqlite3 *db = NULL;
 
-	tmp_path = g_strdup_printf("/tmp/schema.%d.%ld.sqlite",
-			getpid(), time(0));
-
 	/* Open a new base */
 	int flags = SQLITE_OPEN_NOMUTEX|SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE;
-	rc = sqlite3_open_v2(tmp_path, &db, flags, NULL);
+	rc = sqlite3_open_v2(":memory:", &db, flags, NULL);
 	if (rc != SQLITE_OK) {
 		_close_handle(&db);
-		error = NEWERROR(rc, "SQLite error [%s]: (%d) %s",
-				tmp_path, rc, sqlite3_errmsg(db));
-		goto label_exit;
-	}
-
-	/* Set sqlite page size. The default of 1024 produces a lot of
-	 * fragmentation. We advise at least 4096. Big containers with a
-	 * lot of chunks should benefit from page sizes >=16384. */
-	g_snprintf(ps_buf, sizeof(ps_buf), "PRAGMA page_size=%d",
-			SQLX_DEFAULT_PAGE_SIZE);
-	rc = sqlite3_exec(db, ps_buf, NULL, NULL, &errmsg);
-	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-		GRID_WARN("Failed to set page_size=%d in schema: %s",
-				SQLX_DEFAULT_PAGE_SIZE, errmsg);
-		sqlite3_free(errmsg);
-		errmsg = NULL;
+		return NEWERROR(rc, "SQLite error: (%d) %s", rc, sqlite3_errmsg(db));
 	}
 
 	/* Force an admin table */
-	rc = sqlite3_exec(db, "CREATE TABLE admin ("
-				"k TEXT PRIMARY KEY NOT NULL, v BLOB DEFAULT NULL)",
-				NULL, NULL, &errmsg);
+	rc = sqlite3_exec(db, sql_admin, NULL, NULL, &errmsg);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)  {
 		error = NEWERROR(rc, "Admin table error: %s (%s)",
 			sqlite3_errmsg(db), errmsg);
 		goto label_exit;
 	}
 
-	if (version && *version) {
-		GError *e = sqlite_admin_entry_set(db, 1, "schema_version",
-				(guint8*)version, strlen(version));
-		if (e) {
-			GRID_WARN("SQLX failed to set admin [%s] to [%s]",
-					"schema_version", version);
-			g_clear_error(&e);
-		}
-	}
-
 	/* Apply the schema in it */
-	if ((schema != NULL)&&(strlen(schema) > 0)) {
+	if (schema && *schema) {
 		rc = sqlite3_exec(db, schema, NULL, NULL, &errmsg);
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)  {
 			error = NEWERROR(rc, "Schema error : %s (%s)",
@@ -252,41 +206,51 @@ __test_schema(const gchar *schema, const gchar *version, GByteArray **raw)
 	}
 
 	_close_handle(&db);
-	error = __file_read(tmp_path, raw);
 
 label_exit:
 	if (db)
 		(void) sqlite3_close(db);
 	if (errmsg)
 		sqlite3_free(errmsg);
-	unlink(tmp_path);
-	g_free(tmp_path);
 	return error;
 }
 
 static GError*
-__get_schema(sqlx_repository_t *repo, const gchar *type, GByteArray **res)
+__get_schema(sqlx_repository_t *repo, const char *type, const char **res)
 {
-	const gchar *subtype;
-	GByteArray *raw;
-	hashstr_t *ht;
+	gchar *realtype = g_strdup(type);
+	gchar *dot = strchr(realtype, '.');
+	if (dot) *(dot++) = '\0';
 
-	if (NULL != (subtype = strchr(type, '.'))) {
-		HASHSTR_ALLOCA_LEN(ht, type, subtype-type);
-	}
-	else {
-		HASHSTR_ALLOCA(ht, type);
-	}
-
-	raw = g_hash_table_lookup(repo->schemas, ht);
+	gchar *raw = g_tree_lookup(repo->schemas, realtype);
 	if (!raw)
-		return (subtype != NULL)
-			? (NEWERROR(EINVAL, "Unmanaged schema type [%s] [%s]", hashstr_str(ht), type))
-			: (NEWERROR(EINVAL, "Unmanaged schema type [%s]", hashstr_str(ht)));
-
+		return NEWERROR(EINVAL, "Unmanaged schema type [%s] [%s]", realtype, dot);
 	if (res)
 		*res = raw;
 	return NULL;
+}
+
+static gboolean
+__has_tables (struct sqlx_sqlite3_s *sq3)
+{
+	int rc, count = 0;
+	sqlite3_stmt *stmt = NULL;
+
+	sqlite3_prepare_debug (rc, sq3->db, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table'", -1, &stmt, NULL);
+	while (SQLITE_ROW == (rc = sqlite3_step(stmt)))
+		count += sqlite3_column_int (stmt, 0);
+	sqlite3_finalize_debug (rc, stmt);
+
+	return count > 0;
+}
+
+static void
+__ensure_schema (struct sqlx_sqlite3_s *sq3, const char *schema)
+{
+	if (__has_tables (sq3))
+		return;
+	sqlx_exec (sq3->db, sql_admin);
+	sqlx_exec (sq3->db, schema);
 }
 
 static void
@@ -304,7 +268,7 @@ _default_locator (gpointer ignored, struct sqlx_name_s *n, GString *result)
 /* ------------------------------------------------------------------------- */
 
 GError *
-sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
+sqlx_repository_init(const char *vol, const struct sqlx_repo_config_s *cfg,
 		sqlx_repository_t **result)
 {
 	gchar tmpdir[LIMIT_LENGTH_VOLUMENAME+8] = {0};
@@ -364,9 +328,7 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 	repo->hash_depth = 1;
 	repo->hash_width = 3;
 
-	repo->schemas = g_hash_table_new_full(
-			(GHashFunc)hashstr_hash, (GEqualFunc)hashstr_equal,
-			g_free, metautils_gba_unref);
+	repo->schemas = g_tree_new_full(metautils_strcmp3, NULL, g_free, g_free);
 
 	repo->flag_autocreate = !cfg ? TRUE : BOOL(cfg->flags & SQLX_REPO_AUTOCREATE);
 	repo->flag_autovacuum = !cfg ? FALSE : BOOL(cfg->flags & SQLX_REPO_VACUUM);
@@ -426,7 +388,7 @@ sqlx_repository_clean(sqlx_repository_t *repo)
 	}
 
 	if (repo->schemas)
-		g_hash_table_destroy(repo->schemas);
+		g_tree_destroy(repo->schemas);
 
 	memset(repo, 0, sizeof(*repo));
 	g_free(repo);
@@ -467,23 +429,23 @@ sqlx_repository_configure_maxbases(sqlx_repository_t *repo, guint max)
 }
 
 GError*
-sqlx_repository_configure_type(sqlx_repository_t *repo,
-		const gchar *type, const gchar *version, const gchar *schema)
+sqlx_repository_configure_type(sqlx_repository_t *repo, const char *type, const char *schema)
 {
-	GByteArray *raw = NULL;
-	GError *error = NULL;
-
 	EXTRA_ASSERT(repo != NULL);
 	EXTRA_ASSERT(repo->running);
 	EXTRA_ASSERT(type != NULL);
 	EXTRA_ASSERT(schema != NULL);
 
-	if (NULL != (error = __test_schema(schema, version, &raw)))
-		return error;
+	GError *error = __test_schema(schema);
+	if (error) return error;
 
-	g_hash_table_insert(repo->schemas, hashstr_create(type), raw);
-	GRID_INFO("Schema configured for type [%s]", type);
-	GRID_DEBUG("Schema [%s] : %s", type, schema);
+	g_tree_replace (repo->schemas, g_strdup (type), g_strdup (schema));
+	if (GRID_DEBUG_ENABLED()) {
+		GRID_DEBUG("Schema configured for type [%s]: %s", type, schema);
+	} else {
+		GRID_INFO("Schema configured for type [%s]", type);
+	}
+
 	return NULL;
 }
 
@@ -596,10 +558,10 @@ sqlx_repository_get_cache(struct sqlx_repository_s *r)
 	return r->cache;
 }
 
-const gchar*
+const char*
 sqlx_repository_get_local_addr(struct sqlx_repository_s *repo)
 {
-	const gchar* url = NULL;
+	const char* url = NULL;
 
     struct election_manager_s* em = sqlx_repository_get_elections_manager(repo);
     if (em) {
@@ -618,7 +580,7 @@ struct open_args_s
 {
 	struct sqlx_repository_s *repo;
 	struct sqlx_name_s name;
-	GByteArray *raw;
+	const char *schema;
 	hashstr_t *realname;
 	gchar *realpath;
 
@@ -652,60 +614,6 @@ __create_directory(gchar *path)
 	return error;
 }
 
-static GError*
-__create_base(struct open_args_s *args, gchar *path, GByteArray *raw)
-{
-	guint retry = 1;
-	int fd;
-
-	GRID_TRACE("DB creation attempt on [%s]", path);
-
-	/* Create the file atomically */
-label_retry:
-	fd = open(path, O_CREAT|O_EXCL|O_RDWR, 0640);
-	if (fd < 0) {
-		switch (errno) {
-			case EINTR:
-				goto label_retry;
-			case EEXIST:
-				GRID_TRACE("[%s] already exists", path);
-				return NULL;
-			case ENOENT: {
-				GError *err;
-				if (retry--) {
-					if (NULL != (err = __create_directory(path)))
-						return err;
-					goto label_retry;
-				}
-			}
-			default: /* FALLTROUGH */
-				return NEWERROR(errno, "open(O_CREAT|O_EXCL) error : %d (%s)",
-						errno, strerror(errno));
-		}
-	}
-
-	/* Now fill it with the raw content */
-	guint written;
-	for (written=0; written < raw->len ;) {
-		ssize_t w = write(fd, raw->data + written, raw->len - written);
-
-		if (w < 0) {
-			int errsav = errno;
-			if (errsav == EINTR || errsav == EAGAIN)
-				continue;
-			unlink(path);
-			metautils_pclose(&fd);
-			return NEWERROR(errsav, "write() error : %d (%s)",
-					errsav, strerror(errsav));
-		}
-		if (w > 0)
-			written += w;
-	}
-
-	metautils_pclose(&fd);
-	return NULL;
-}
-
 static GError *
 _open_fill_args(struct open_args_s *args, struct sqlx_repository_s *repo,
 		struct sqlx_name_s *n)
@@ -728,7 +636,7 @@ _open_fill_args(struct open_args_s *args, struct sqlx_repository_s *repo,
 	args->realpath = _compute_path_hash(repo, args->realname, NULL);
 	g_string_free(fn, TRUE);
 
-	return __get_schema(repo, args->name.type, &(args->raw));
+	return __get_schema(repo, args->name.type, &args->schema);
 }
 
 static void
@@ -740,7 +648,7 @@ _open_clean_args(struct open_args_s *args)
 		g_free(args->realpath);
 }
 
-static const gchar *
+static const char *
 _get_pragma_sync(register const int mode)
 {
 	switch (mode) {
@@ -765,7 +673,7 @@ __admin_load_from_table(struct sqlx_sqlite3_s *sq3)
 	if (rc == SQLITE_OK) {
 		EXTRA_ASSERT(stmt != NULL);
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
-			const gchar *k = (const gchar*)sqlite3_column_text(stmt, 0);
+			const char *k = (const char*)sqlite3_column_text(stmt, 0);
 			GByteArray *v = g_byte_array_append(g_byte_array_new(),
 					sqlite3_column_blob(stmt, 1),
 					sqlite3_column_bytes(stmt, 1));
@@ -800,9 +708,12 @@ __open_not_cached(struct open_args_s *args, struct sqlx_sqlite3_s **result)
 	gint rc, flags = 0;
 
 retry:
+	flags = 0;
 	flags |= SQLITE_OPEN_NOMUTEX;
 	flags |= SQLITE_OPEN_PRIVATECACHE;
 	flags |= SQLITE_OPEN_READWRITE;
+	if (args->create || args->repo->flag_autocreate)
+		flags |= SQLITE_OPEN_CREATE;
 	handle = NULL;
 
 	switch (rc = sqlite3_open_v2(args->realpath, &handle, flags, NULL)) {
@@ -816,11 +727,11 @@ retry:
 					rc, sqlite_strerror(rc));
 			if (attempts-- && (args->create || args->repo->flag_autocreate)) {
 				_close_handle(&handle);
-				if (!(error = __create_base(args, args->realpath, args->raw))) {
-					GRID_TRACE("Base created, retrying open [%s]", args->realpath);
+				if (!(error = __create_directory(args->realpath))) {
+					GRID_TRACE("Directory created, retrying open [%s]", args->realpath);
 					goto retry;
 				}
-				GRID_DEBUG("DB creation error on [%s] : (%d) %s",
+				GRID_DEBUG("Directory creation error on [%s] : (%d) %s",
 						args->realpath, error->code, error->message);
 			}
 			else {
@@ -848,6 +759,9 @@ retry:
 		GRID_TRACE("Using DELETE journal mode for base [%s]", args->realpath);
 		sqlx_exec(handle, _get_pragma_sync(args->repo->sync_mode_solo));
 	}
+	gchar sql[128];
+	g_snprintf (sql, sizeof(sql), "PRAGMA page_size=%u", SQLX_DEFAULT_PAGE_SIZE);
+	sqlx_exec(handle, sql);
 	sqlx_exec(handle, "PRAGMA foreign_keys = OFF");
 
 	sq3 = g_slice_new0(struct sqlx_sqlite3_s);
@@ -864,6 +778,7 @@ retry:
 			g_free, metautils_gba_unref);
 
 	sqlx_exec (handle, "BEGIN");
+	__ensure_schema (sq3, args->schema);
 	__admin_load_from_table (sq3);
 	sqlx_admin_ensure_versions (sq3);
 	sqlx_admin_set_str (sq3, SQLX_ADMIN_BASENAME, sq3->name.base);
@@ -1504,7 +1419,7 @@ sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
 
 GError*
 sqlx_repository_restore_from_file(struct sqlx_sqlite3_s *sq3,
-		const gchar *path)
+		const char *path)
 {
 	int rc;
 	sqlite3 *src = NULL;

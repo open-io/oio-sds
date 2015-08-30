@@ -20,7 +20,7 @@ License along with this library.
 #include <unistd.h>
 #include <stdio.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 
 #include "sqliterepo.h"
 #include "cache.h"
@@ -57,7 +57,7 @@ main(int argc, char **argv)
 		FAIL(err);
 
 	for (i=0; i<5 ;i++) {
-		err = sqlx_repository_configure_type(repo, type, "test", SCHEMA_META2);
+		err = sqlx_repository_configure_type(repo, type, SCHEMA_META2);
 		if (err != NULL)
 			FAIL(err);
 	}

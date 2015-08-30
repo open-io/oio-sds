@@ -32,7 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <librain.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include <rawx-lib/src/rawx.h>
 #include <rawx-lib/src/compression.h>
 #include <rainx/rainx_config.h>

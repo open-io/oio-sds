@@ -24,8 +24,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/time.h>
 #include <sys/resource.h>
 
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
+#include <metautils/metautils.h>
+#include <conscience/remote.h>
+#include <conscience/lb.h>
 #include <server/network_server.h>
 #include <server/grid_daemon.h>
 #include <server/stats_holder.h>
@@ -298,8 +299,7 @@ _configure_backend(struct sqlx_service_s *ss)
 	}
 
 	err = sqlx_repository_configure_type(ss->repository,
-			ss->service_config->srvtype, NULL,
-			ss->service_config->schema);
+			ss->service_config->srvtype, ss->service_config->schema);
 
 	if (err) {
 		GRID_ERROR("SQLX schema init failure : (%d) %s", err->code, err->message);
@@ -358,7 +358,7 @@ _configure_registration(struct sqlx_service_s *ss)
 	si->tags = g_ptr_array_new();
 	metautils_strlcpy_physical_ns(si->ns_name, ss->ns_name, sizeof(si->ns_name));
 	g_strlcpy(si->type, ss->service_config->srvtype, sizeof(si->type)-1);
-	grid_string_to_addrinfo(ss->announce->str, NULL, &(si->addr));
+	grid_string_to_addrinfo(ss->announce->str, &(si->addr));
 
 	service_tag_set_value_string(
 			service_info_ensure_tag(si->tags, "tag.type"),
@@ -373,15 +373,6 @@ _configure_registration(struct sqlx_service_s *ss)
 	service_tag_set_value_float(
 			service_info_ensure_tag(si->tags, "stat.req_idle"),
 			100.0);
-	service_tag_set_value_macro(
-			service_info_ensure_tag(si->tags, "stat.cpu"),
-			"cpu", NULL);
-	service_tag_set_value_macro(
-			service_info_ensure_tag(si->tags, "stat.space"),
-			"space", ss->volume);
-	service_tag_set_value_macro(
-			service_info_ensure_tag(si->tags, "stat.io"),
-			"io", ss->volume);
 	return TRUE;
 }
 
@@ -734,11 +725,11 @@ _task_register(gpointer p)
 				"stat.req_idle"), network_server_reqidle(PSRV(p)->server));
 
 	/* send the registration now */
-	GError *err = NULL;
-	if (!register_namespace_service(PSRV(p)->si, &err))
+	GError *err = conscience_register_service (PSRV(p)->si);
+	if (err) {
 		g_message("Service registration failed: (%d) %s", err->code, err->message);
-	if (err)
 		g_clear_error(&err);
+	}
 }
 
 static void
@@ -784,10 +775,9 @@ _task_retry_elections(gpointer p)
 static void
 _task_reload_nsinfo(gpointer p)
 {
-	GError *err = NULL;
-	struct namespace_info_s *ni;
-
-	if (!(ni = get_namespace_info(PSRV(p)->ns_name, &err))) {
+	struct namespace_info_s *ni = NULL;
+	GError *err = conscience_get_namespace (PSRV(p)->ns_name, &ni);
+	if (err) {
 		GRID_WARN("NSINFO reload error [%s]: (%d) %s",
 				PSRV(p)->ns_name, err->code, err->message);
 		g_clear_error(&err);

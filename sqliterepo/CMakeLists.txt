@@ -1,7 +1,7 @@
 add_definitions(-DG_LOG_DOMAIN="oio.sqlite")
 
 include_directories(BEFORE . ..
-		${CMAKE_CURRENT_BINARY_DIR}/../metautils/lib)
+		${CMAKE_CURRENT_BINARY_DIR}/../metautils)
 
 include_directories(AFTER
 		${ZK_INCLUDE_DIRS}
@@ -68,22 +68,11 @@ target_link_libraries(gs_m1hash
 		metautils sqliterepo
 		${GLIB2_LIBRARIES})
 
-install(FILES
-			cache.h
-			election.h
-			hash.h
-			replication_dispatcher.h
-			sqliterepo.h
-			sqlite_utils.h
-			sqlx_remote.h
-			upgrade.h
-			version.h
-			zk_manager.h
-		DESTINATION include/sqliterepo
-		PERMISSIONS
-			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-
-install(TARGETS sqliterepo sqliteutils sqlitereporemote gs_m1hash
+install(TARGETS
+			sqliteutils
+			sqlitereporemote
+			sqliterepo
+			gs_m1hash
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 

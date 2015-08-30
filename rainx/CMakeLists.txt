@@ -38,7 +38,7 @@ add_library(mod_dav_rainx MODULE
 set_target_properties(mod_dav_rainx PROPERTIES PREFIX "" SUFFIX .so)
 
 target_link_libraries(mod_dav_rainx
-		metautils rawx
+		metautils rawx gridcluster-remote
 		${APR_LIBRARIES} ${GLIB2_LIBRARIES}
 		${LIBRAIN_LIBRARIES} ${ZLIB_LIBRARIES} ${LZO_LIBRARIES})
 

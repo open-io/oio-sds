@@ -22,7 +22,7 @@ License along with this library.
 
 #include <glib.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include "restoration.h"
 
 GError*

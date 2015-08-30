@@ -1,0 +1,185 @@
+AWL-MetaDirectory-Protocol DEFINITIONS AUTOMATIC TAGS ::=
+BEGIN
+
+	-- general purpose message structures
+
+	ContentList ::= SEQUENCE OF PrintableString
+
+	Parameter ::= SEQUENCE {
+			name PrintableString,
+			value OCTET STRING
+	}
+
+	ParameterSequence ::= SEQUENCE OF Parameter
+
+	Message ::= SEQUENCE {
+		id      [0] OCTET STRING OPTIONAL,
+		name    [1] OCTET STRING OPTIONAL,
+		version [2] OCTET STRING OPTIONAL,
+		content [3] SET OF Parameter,
+		body    [4] OCTET STRING OPTIONAL
+	}
+
+	-- General network address information
+
+	AddrInfo ::= SEQUENCE {
+		ip   [0] CHOICE {
+			ipv4 [0] OCTET STRING(SIZE(4)),
+			ipv6 [1] OCTET STRING(SIZE(16))
+		},
+		port [1] INTEGER
+	}
+
+	AddrInfoSequence ::= SEQUENCE OF AddrInfo
+
+	-- Namespace information
+
+	NamespaceInfo ::= SEQUENCE {
+		name           [0] PrintableString,
+		chunkSize      [2] INTEGER,
+		options        [3] ParameterSequence,
+		storagePolicy  [4] ParameterSequence,
+		dataSecurity   [5] ParameterSequence,
+		dataTreatments [6] ParameterSequence,
+		storageClass   [7] ParameterSequence
+	}
+
+	-- meta0 mapping information
+
+	Meta0Info ::= SEQUENCE {
+		prefix [0] OCTET STRING,
+		addr   [1] AddrInfo
+	}
+
+	Meta0InfoSequence ::= SET OF Meta0Info
+
+	-- Meta2V2 beans
+
+	M2V2Alias ::= SEQUENCE {
+		name             [0] PrintableString,
+		version          [1] INTEGER,
+		content          [3] OCTET STRING,
+		ctime            [4] INTEGER,
+		deleted          [5] BOOLEAN
+	}
+
+	M2V2Content ::= SEQUENCE {
+		id          [0] OCTET STRING, 
+		hash        [1] OCTET STRING OPTIONAL,
+		size        [2] INTEGER,
+		ctime       [3] INTEGER,
+		mimetype    [4] PrintableString,
+		chunkmethod [5] PrintableString,
+		policy      [6] PrintableString
+	}
+
+	M2V2Chunk ::= SEQUENCE {
+		id       [0] PrintableString,
+		content  [1] OCTET STRING,
+		position [2] PrintableString,
+		hash     [3] OCTET STRING,
+		size     [4] INTEGER,
+		ctime    [5] INTEGER
+	}
+
+	M2V2Property ::= SEQUENCE {
+		alias   [0] PrintableString,
+		version [1] INTEGER,
+		key     [2] PrintableString,
+		value   [3] OCTET STRING
+	}
+
+	M2V2Bean ::= SEQUENCE {
+		alias    [0] M2V2Alias OPTIONAL,
+		content  [1] M2V2Content OPTIONAL,
+		chunk    [2] M2V2Chunk OPTIONAL,
+		prop     [3] M2V2Property OPTIONAL
+	}
+
+	M2V2BeanSequence ::= SEQUENCE OF M2V2Bean
+
+	-- Generic Service
+
+	Score ::= SEQUENCE {
+		value	  [0] INTEGER,
+		timestamp [1] INTEGER
+	}
+
+	ServiceTag ::= SEQUENCE {
+		name  [0] PrintableString,
+		value [1] CHOICE {
+			b     [0] BOOLEAN,
+			i     [1] INTEGER,
+			r     [2] REAL,
+			s     [3] OCTET STRING
+		}
+	}
+
+	ServiceInfo ::= SEQUENCE {
+		nsName [0] PrintableString,
+		type   [1] PrintableString,
+		addr   [2] AddrInfo,
+		score  [3] Score,
+		tags   [4] SEQUENCE OF ServiceTag OPTIONAL
+	}
+
+	ServiceInfoSequence ::= SEQUENCE OF ServiceInfo
+
+	-- SQLX related structures
+
+	RowFieldValue ::= CHOICE {
+		i [0] INTEGER,
+		f [1] REAL,
+		b [2] OCTET STRING,
+		s [3] PrintableString,
+		n [4] NULL
+	}
+
+	RowField ::= SEQUENCE {
+		pos   [0] INTEGER,
+		value [1] RowFieldValue
+	}
+
+	RowFieldSequence ::= SEQUENCE OF RowField
+
+	Row ::= SEQUENCE {
+		rowid  [0] INTEGER,
+		fields [1] RowFieldSequence OPTIONAL
+	}
+
+	RowSet ::= SEQUENCE OF Row
+
+	RowFieldType ::= ENUMERATED {
+		typeInt   (0),
+		typeBlob  (1),
+		typeText  (2),
+		typeFloat (3)
+	}
+
+	RowName ::= SEQUENCE {
+		pos  [0] INTEGER,
+		name [1] OCTET STRING,
+		type [2] RowFieldType OPTIONAL
+	}
+
+	TableHeader ::= SEQUENCE OF RowName
+
+	Table ::= SEQUENCE {
+		name         [0] OCTET STRING,
+		header       [1] TableHeader,
+		rows         [2] RowSet,
+		status       [3] INTEGER OPTIONAL,
+		statusString [4] PrintableString OPTIONAL
+	}
+
+	TableSequence ::= SEQUENCE OF Table
+
+	TableVersion ::= SEQUENCE {
+		name    [0] PrintableString,
+		version [1] INTEGER,
+		when    [2] INTEGER
+	}
+
+	BaseVersion ::= SEQUENCE OF TableVersion
+
+END

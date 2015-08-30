@@ -23,8 +23,7 @@ License along with this library.
 #include <string.h>
 #include <math.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 
 #include "internals.h"
 #include "stats_holder.h"
@@ -38,9 +37,7 @@ struct cnx_data_s
 	GDestroyNotify cleanup;
 };
 
-/**
- * Associates a dispatcher and a working buffer to a client.
- */
+/* Associates a dispatcher and a working buffer to a client. */
 struct transport_client_context_s
 {
 	struct gridd_request_dispatcher_s *dispatcher;
@@ -255,7 +252,7 @@ network_client_log_access(struct log_item_s *item)
 
 	g_string_append(gstr, ensure(item->req_ctx->reqid));
 
-	g_string_append_printf(gstr, " t=%ld.%06ld ", diff_handler.tv_sec, diff_handler.tv_nsec / 1000);
+	g_string_append_printf(gstr, " T=%ld.%06ld ", diff_handler.tv_sec, diff_handler.tv_nsec / 1000);
 
 	g_string_append(gstr, ensure(item->req_ctx->subject));
 
@@ -289,7 +286,7 @@ static gchar *
 _req_get_hex_ID(MESSAGE req, gchar *d, gsize dsize)
 {
 	memset(d, 0, dsize);
-	
+
 	gsize flen = 0;
 	guint8 *f = metautils_message_get_ID(req, &flen);
 	if (!f || !flen)
@@ -721,7 +718,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	if (!hdl) {
 		rc = _client_reply_fixed(req_ctx, CODE_NOT_FOUND, "No handler found");
 		_notify_request(req_ctx,
-				GRID_STAT_PREFIX_REQ ".UNEXPECTED", 
+				GRID_STAT_PREFIX_REQ ".UNEXPECTED",
 				GRID_STAT_PREFIX_TIME".UNEXPECTED");
 	}
 	else {
@@ -884,7 +881,7 @@ dispatch_STATS(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	grid_stats_holder_foreach(reply->client->main_stats, NULL, runner);	
+	grid_stats_holder_foreach(reply->client->main_stats, runner);
 	reply->add_body (gba);
 	reply->send_reply (CODE_FINAL_OK, "OK");
 	return TRUE;

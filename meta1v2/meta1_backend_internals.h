@@ -21,7 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define OIO_SDS__meta1v2__meta1_backend_internals_h 1
 
 # include <glib.h>
-# include <metautils/lib/metautils.h>
+# include <metautils/metautils.h>
 # include <sqlx/sqlx_service.h>
 
 #define M1_SQLITE_GERROR(db,RC) g_error_new(GQ(), (RC), "(%s) %s", \

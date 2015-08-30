@@ -19,11 +19,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <errno.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/M2V2Bean.h>
-#include <metautils/lib/M2V2Alias.h>
-#include <metautils/lib/M2V2Content.h>
-#include <metautils/lib/M2V2Property.h>
+#include <metautils/metautils.h>
+#include <metautils/M2V2Bean.h>
+#include <metautils/M2V2Alias.h>
+#include <metautils/M2V2Content.h>
+#include <metautils/M2V2Property.h>
 
 #include <meta2v2/meta2_bean.h>
 #include <meta2v2/autogen.h>

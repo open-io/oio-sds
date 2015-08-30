@@ -38,7 +38,7 @@ License along with this library.
 #include <netinet/tcp.h>
 #include <arpa/inet.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 
 #include "internals.h"
 #include "stats_holder.h"

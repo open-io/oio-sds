@@ -20,15 +20,12 @@ The build process of OpenIO SDS depends on several third-party projects.
 
 When building only the SDK, OpenIO only depends on:
 * cmake, make : involved in the build process.
-* bison, flex : generates expression parsers.
 * glib2, glib2-devel
 * curl, libcurl, libcurl-devel 
 * json-c, json-c-devel
 * [asn1c](https://github.com/open-io/asn1c) : our ASN.1 codec, forked from [Lev Walkin's excellent ASN.1 codec](https://github.com/vlm/asn1c). The purpose of our fork is simply to provide codec for explicitely sized integers (int{8,16,32,64} instead of long int).
 
 Building the entire project will require the SDK dependencies, but also:
-* python: Pure python code generator (no dependency), and python modules.
-* python-distutils-extra: required for the installation process
 * httpd, httpd-devel : server base for RAWX and RAINX services
 * apr, apr-util-devel, apr-devel : internally used by RAINX and RAWX modules
 * attr, libattr-devel : we use xattr a lot to stamp RAWX chunks and repositories base directory.
@@ -38,6 +35,10 @@ Building the entire project will require the SDK dependencies, but also:
 * sqlite, sqlite-devel : base storage for META{0,1,2} and SQLX services.
 * zeromq3, zeromq3-devel : communication of events between services and forward agents.
 * zookeeper-devel, libzookeeper\_mt.so : building with distribution's zookeeper client is OK, but the package ships with a lot of dependencies, including the openjdk. We recommand to use the official Oracle/Sun JDK, and to build your own zookeeper client from the source to avoid a huge waste of space and bandwith.
+* python: Pure python code generator (no dependency), and python modules.
+
+Installing the Python modules requires at install-time:
+* python-distutils-extra: required for the installation process
 * python-setuptools
 * python-pbr
 
@@ -106,7 +107,6 @@ cd ${SRCDIR}/python; sudo python setup.py develop; cd -
 | GCLUSTER_CONFIG_FILE_PATH | "/etc/oio/sds.conf" | System-wide configuration file |
 | GCLUSTER_CONFIG_DIR_PATH | "/etc/oio/sds.conf.d" | System-wide configuration directory for additional files. |
 | GCLUSTER_CONFIG_LOCAL_PATH | ".oio/sds.conf" | Local configuration directory. |
-| GCLUSTER_AGENT_SOCK_PATH | "/var/run/oio-sds-agent.sock" | Default path for agent's socket. |
 | GS_CONFIG_NSINFO_REFRESH | "nsinfo_refresh" | Default refresh period for 
 | RAWX_HEADER_PREFIX | "X-oio-chunk-meta-" | Prefix applied to proxyd's URL, second version (with accounts) |
 | PROXYD_PREFIX2 | "v2.0" | Prefix applied to proxyd's URL, second version (with accounts) |

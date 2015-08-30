@@ -22,7 +22,7 @@ License along with this library.
 
 # include <unistd.h>
 # include <sqlite3.h>
-# include <metautils/lib/metautils.h>
+# include <metautils/metautils.h>
 # include <sqliterepo/sqlite_utils.h>
 # include <sqliterepo/sqlx_remote.h>
 
@@ -127,9 +127,9 @@ struct sqlx_repo_config_s
 	enum sqlx_sync_mode_e sync_repli; /* Which value for pragma synchronous'
 									   for replicated bases */
 	struct {
-		const gchar *ns; /* The name of the physical NS of the repository */
-		const gchar *type; /* The service type used for locking */
-		const gchar *srv; /* a unique ID for the service, i.e. its service
+		const char *ns; /* The name of the physical NS of the repository */
+		const char *type; /* The service type used for locking */
+		const char *srv; /* a unique ID for the service, i.e. its service
 						   * IP:PORT */
 	} lock;
 };
@@ -150,7 +150,7 @@ const char* sqlx_opentype_to_str (enum sqlx_open_type_e type, char *b);
  * @return NULL in case of success or a pointer to a valid GError that
  * describes the error
  */
-GError * sqlx_repository_init(const gchar *vol,
+GError * sqlx_repository_init(const char *vol,
 		const struct sqlx_repo_config_s *cfg,
 		sqlx_repository_t **result);
 
@@ -163,7 +163,7 @@ struct sqlx_cache_s* sqlx_repository_get_cache(struct sqlx_repository_s *r);
 struct election_manager_s* sqlx_repository_get_elections_manager(
 		struct sqlx_repository_s *repo);
 
-const gchar* sqlx_repository_get_local_addr(struct sqlx_repository_s *repo);
+const char* sqlx_repository_get_local_addr(struct sqlx_repository_s *repo);
 
 gboolean sqlx_repository_replication_configured(
 		const struct sqlx_repository_s *r);
@@ -195,7 +195,7 @@ void sqlx_repository_configure_maxbases(sqlx_repository_t *repo,
 
 /* Register a new DB type with its schema.  */
 GError* sqlx_repository_configure_type(sqlx_repository_t *repo,
-		const gchar *type, const gchar *version, const gchar *schema);
+		const char *type, const char *schema);
 
 /* Set open timeout for bases currently in use by another thread.
  * @param timeout milliseconds */
@@ -299,7 +299,7 @@ GError* sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
 		guint8 *raw, gsize rawsize);
 
 GError* sqlx_repository_restore_from_file(struct sqlx_sqlite3_s *sq3,
-		const gchar *path);
+		const char *path);
 
 GError* sqlx_repository_retore_from_master(struct sqlx_sqlite3_s *sq3);
 

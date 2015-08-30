@@ -25,7 +25,7 @@ License along with this library.
 
 #include <zookeeper.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 
 #include "sqliterepo.h"
 #include "hash.h"

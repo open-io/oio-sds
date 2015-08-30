@@ -22,7 +22,7 @@ License along with this library.
 
 # include <glib.h>
 
-# include <metautils/lib/metatypes.h>
+# include <metautils/metatypes.h>
 
 guint16 meta0_utils_bytes_to_prefix(const guint8 *bytes);
 

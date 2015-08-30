@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__rawx_lib__src__rawx_h
 # define OIO_SDS__rawx_lib__src__rawx_h 1
 
-# include <metautils/lib/metatypes.h>
+# include <metautils/metatypes.h>
 
 # define ATTR_NAME_MAX_LENGTH 64
 

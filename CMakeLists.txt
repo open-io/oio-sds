@@ -4,8 +4,6 @@ project (OIOSDS C)
 include(CheckIncludeFile)
 include(CheckLibraryExists)
 include(CheckTypeSize)
-#include(FindFLEX)
-#include(FindBISON)
 include(FindCURL)
 include(FindPythonInterp)
 include(FindZLIB)
@@ -148,7 +146,6 @@ dir2macro("GCLUSTER_ETC_DIR")
 dir2macro("GCLUSTER_CONFIG_FILE_PATH")
 dir2macro("GCLUSTER_CONFIG_DIR_PATH")
 dir2macro("GCLUSTER_CONFIG_LOCAL_PATH")
-dir2macro("GCLUSTER_AGENT_SOCK_PATH")
 
 dir2macro("GS_CONFIG_NSINFO_REFRESH")
 
@@ -260,19 +257,7 @@ macro(bin_prefix T N)
 	set_target_properties(${T} PROPERTIES OUTPUT_NAME ${EXE_PREFIX}${N})
 endmacro ()
 
-set (GRIDD_PLUGINS_DIRECTORY "${LD_LIBDIR}/grid")
-if (DEFINED GRIDD_PLUGINS)
-	set(GRIDD_PLUGINS_DIRECTORY "${GRIDD_PLUGINS}")
-endif ()
-
 ###-------------------------------------------------------------------------###
-
-if (NOT SDK_ONLY)
-find_program(BISON_EXECUTABLE bison)
-find_program(FLEX_EXECUTABLE flex)
-test_CLI(FLEX_EXECUTABLE "flex")
-test_CLI(BISON_EXECUTABLE "bison")
-endif(NOT SDK_ONLY)
 
 # Set defaults 
 set(DEFAULT_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
@@ -290,8 +275,9 @@ pkg_check_modules(CURL curl)
 
 if (NOT SDK_ONLY)
 pkg_check_modules(APR REQUIRED apr-1)
+pkg_check_modules(LUA REQUIRED lua>=5.1)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
-pkg_check_modules(ZMQ libzmq>=4.0.0)
+pkg_check_modules(ZMQ REQUIRED libzmq>=3.0.0)
 endif (NOT SDK_ONLY)
 
 # Load CLI-overriden configuration
@@ -304,6 +290,7 @@ option_or_system(APACHE2 modules/mod_webdav.so httpd.h)
 option_or_system(ATTR attr attr/xattr.h)
 option_or_system(GRIDINIT gridinit-utils gridinit-utils.h)
 option_or_system(LIBRAIN rain librain.h)
+option_or_system(LUA lua lua.h lualib.h)
 option_or_system(LZO lzo2 lzo1.h lzo1x.h lzoutil.h)
 option_or_system(MICROHTTPD microhttpd microhttpd.h)
 option_or_system(ZK zookeeper_mt zookeeper.h)
@@ -323,7 +310,7 @@ endif (NOT SDK_ONLY)
 check_found("CURL" "GLIB2" "JSONC")
 
 if (NOT SDK_ONLY)
-check_found("APR" "APACHE2" "ASN1C" "ATTR" "GRIDINIT" "LIBRAIN" "LZO"
+check_found("APR" "APACHE2" "ASN1C" "ATTR" "GRIDINIT" "LIBRAIN" "LUA" "LZO"
 		"SQLITE3" "ZMQ" "ZK" "PYTHONINTERP")
 
 if (DEFINED APACHE2_MODDIR)
@@ -354,19 +341,8 @@ endif ()
 add_subdirectory(./core)
 
 if (NOT SDK_ONLY)
-add_subdirectory(./metautils/lib)
-add_subdirectory(./cluster/remote)
-add_subdirectory(./cluster/lib)
-
-add_subdirectory(./cluster/agent)
-add_subdirectory(./cluster/conscience)
-add_subdirectory(./cluster/module)
-add_subdirectory(./cluster/tools)
-add_subdirectory(./gridd/main)
-add_subdirectory(./gridd/plugins/acl)
-add_subdirectory(./gridd/plugins/msg_fallback)
-add_subdirectory(./gridd/plugins/msg_ping)
-add_subdirectory(./gridd/plugins/msg_stats)
+add_subdirectory(./metautils)
+add_subdirectory(./conscience)
 add_subdirectory(./meta0v2)
 add_subdirectory(./meta1v2)
 add_subdirectory(./meta2v2)

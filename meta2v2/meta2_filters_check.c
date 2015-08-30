@@ -21,14 +21,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <errno.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
-
-#include <glib.h>
-
+#include <metautils/metautils.h>
 #include <server/transport_gridd.h>
 #include <server/gridd_dispatcher_filters.h>
-
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2_filter_context.h>
 #include <meta2v2/meta2_filters.h>

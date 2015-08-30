@@ -23,8 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 #include <server/transport_gridd.h>
 #include <server/gridd_dispatcher_filters.h>
 #include <meta2v2/meta2_macros.h>

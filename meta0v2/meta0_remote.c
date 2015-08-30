@@ -24,8 +24,7 @@ License along with this library.
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 
 #include "meta0_remote.h"
 #include "internals.h"

@@ -17,7 +17,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <string.h>
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include "path_parser.h"
 
 /* Allocates a node an initaite it with the given word and variable. */

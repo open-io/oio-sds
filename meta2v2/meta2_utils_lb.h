@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta2v2__meta2_utils_lb_h
 # define OIO_SDS__meta2v2__meta2_utils_lb_h 1
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include <glib.h>
 
 /**

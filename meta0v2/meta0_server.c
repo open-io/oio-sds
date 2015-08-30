@@ -26,8 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
+#include <metautils/metautils.h>
 
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/replication_dispatcher.h>
@@ -83,7 +82,7 @@ strv_filter(struct sqlx_service_s *ss, GSList *l)
 		if (!g_ascii_strcasecmp(ss->url->str, zknode->content))
 			continue;
 		addr_info_t addr;
-		if (!grid_string_to_addrinfo(zknode->content, NULL, &addr))
+		if (!grid_string_to_addrinfo(zknode->content, &addr))
 			continue;
 		g_ptr_array_add(tmp, zknode->content);
 		zknode->content = NULL;

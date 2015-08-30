@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include <meta2v2/meta2_utils_json.h>
 #include <meta2v2/autogen.h>
 
@@ -107,9 +107,9 @@ _container_new_props_to_headers (struct req_args_s *args, GTree *props)
 }
 
 static gint
-_sort_aliases_by_name (struct bean_ALIASES_s *a0, struct bean_ALIASES_s *a1)
+_sort_aliases_by_name (struct bean_ALIAS_s *a0, struct bean_ALIAS_s *a1)
 {
-	return g_strcmp0 (ALIASES_get_alias(a0)->str, ALIASES_get_alias(a1)->str);
+	return g_strcmp0 (ALIAS_get_alias(a0)->str, ALIAS_get_alias(a1)->str);
 }
 
 static enum http_rc_e

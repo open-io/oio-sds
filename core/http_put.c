@@ -24,10 +24,11 @@ License along with this library.
 
 #include <glib.h>
 #include <glib/gstdio.h>
-
 #include <curl/curl.h>
 #include <curl/multi.h>
+#include <json-c/json.h>
 
+#include "oio_core.h"
 #include "oiolog.h"
 #include "http_put.h"
 #include "http_internals.h"
@@ -557,5 +558,64 @@ _curl_get_handle (void)
 		curl_easy_setopt (h, CURLOPT_VERBOSE, 1L);
 	}
 	return h;
+}
+
+void
+http_headers_clean (struct http_headers_s *h)
+{
+	if (h->headers) {
+		curl_slist_free_all (h->headers);
+		h->headers = NULL;
+	}
+	if (h->gheaders) {
+		g_slist_free_full (h->gheaders, g_free);
+		h->gheaders = NULL;
+	}
+}
+
+void
+http_headers_add (struct http_headers_s *h, const char *k, const char *v)
+{
+	gchar *s = g_strdup_printf("%s: %s", k, v);
+	h->gheaders = g_slist_prepend (h->gheaders, s);
+	h->headers = curl_slist_append (h->headers, h->gheaders->data);
+}
+
+void
+http_headers_add_int64 (struct http_headers_s *h, const char *k, gint64 i64)
+{
+	gchar v[24];
+	g_snprintf (v, sizeof(v), "%"G_GINT64_FORMAT, i64);
+	http_headers_add (h, k, v);
+}
+
+GError *
+http_body_parse_error (const char *b, gsize len)
+{
+	g_assert (b != NULL);
+	struct json_tokener *tok = json_tokener_new ();
+	struct json_object *jbody = json_tokener_parse_ex (tok, b, len);
+	json_tokener_free (tok);
+	tok = NULL;
+
+	if (!jbody)
+		return NEWERROR(0, "No error explained");
+
+	struct json_object *jcode, *jmsg;
+	struct oio_ext_json_mapping_s map[] = {
+		{"status", &jcode, json_type_int,    0},
+		{"message",  &jmsg,  json_type_string, 0},
+		{NULL, NULL, 0, 0}
+	};
+	GError *err =  oio_ext_extract_json(jbody, map);
+	if (!err) {
+		int code = 0;
+		const char *msg = "Unknown error";
+		if (jcode) code = json_object_get_int64 (jcode);
+		if (jmsg) msg = json_object_get_string (jmsg);
+		err = NEWERROR(code, "(code=%d) %s", code, msg);
+	}
+	json_object_put (jbody);
+	return err;
 }
 

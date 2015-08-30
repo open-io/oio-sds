@@ -30,11 +30,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <math.h>
 #include <getopt.h>
-
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
-
 #include <gridinit-utils.h>
+
+#include <metautils/metautils.h>
+#include <conscience/remote.h>
 
 #define CHILD_KEY "SVC"
 #define DEFAULT_MONITOR_PERIOD 10
@@ -120,20 +119,8 @@ parse_output(const gchar *cmd, service_info_t *si)
 			if (!g_ascii_strcasecmp(str_type, "tag")) {
 				tag = service_info_ensure_tag(si->tags, str_name);
 				service_tag_set_value_string(tag, str_value);
-
-				if (!g_ascii_strcasecmp(str_sub, "vol")) {
-					service_tag_set_value_macro(
-							service_info_ensure_tag (si->tags, "stat.space"),
-							NAME_MACRO_SPACE_TYPE, str_value);
-					service_tag_set_value_macro(
-							service_info_ensure_tag (si->tags, "stat.io"),
-							NAME_MACRO_IOIDLE_TYPE, str_value);
-				}
-			}
-			else if (!g_ascii_strcasecmp(str_type, "stat")) {
-				gdouble dval;
-
-				dval = g_ascii_strtod(str_value, NULL);
+			} else if (!g_ascii_strcasecmp(str_type, "stat")) {
+				gdouble dval = g_ascii_strtod(str_value, NULL);
 				tag = service_info_ensure_tag(si->tags, str_name);
 				service_tag_set_value_float(tag, dval);
 			}
@@ -193,7 +180,7 @@ init_srvinfo(const gchar *sid, service_info_t *si)
 		g_free(str_type);
 		g_strlcpy(si->ns_name, str_ns, sizeof(si->ns_name)-1);
 		g_free(str_ns);
-		if (!grid_string_to_addrinfo(str_addr, NULL, &(si->addr))) {
+		if (!grid_string_to_addrinfo(str_addr, &(si->addr))) {
 			g_printerr("Invalid service address [%s]", str_addr);
 			return -1;
 		}
@@ -203,10 +190,6 @@ init_srvinfo(const gchar *sid, service_info_t *si)
 
 	if (!si->tags)
 		si->tags = g_ptr_array_sized_new(6);
-
-	service_tag_set_value_macro (
-			service_info_ensure_tag (si->tags, "stat.cpu"),
-			NAME_MACRO_CPU_TYPE, NULL);
 
 	return 0;
 }
@@ -281,7 +264,7 @@ monitoring_loop(service_info_t *si)
 				monitor_get_status(svc_mon, si);
 				_add_custom_tags(si);
 			}
-			if (!register_namespace_service(si, &error)) {
+			if (NULL != (error = conscience_register_service (si))) {
 				GRID_WARN("Failed to register the service: %s", gerror_get_message(error));
 				g_clear_error(&error);
 			}

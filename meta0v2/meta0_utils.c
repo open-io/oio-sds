@@ -17,11 +17,11 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
+#include <metautils/metautils.h>
+#include <conscience/remote.h>
 
-#include "./internals.h"
-#include "./meta0_utils.h"
+#include "internals.h"
+#include "meta0_utils.h"
 
 static void
 garray_free(GArray *a)
@@ -168,7 +168,7 @@ meta0_utils_tree_to_list(GTree *byurl)
 		GSList **pl = u;
 
 		m0i = g_malloc0(sizeof(*m0i));
-		grid_string_to_addrinfo(hashstr_str(hurl), NULL, &(m0i->addr));
+		grid_string_to_addrinfo(hashstr_str(hurl), &(m0i->addr));
 		m0i->prefixes_size = 2 * pfx->len;
 		m0i->prefixes = g_memdup(pfx->data, m0i->prefixes_size);
 		*pl = g_slist_prepend(*pl, m0i);
@@ -358,8 +358,7 @@ meta0_utils_getMeta0addr(gchar *namespace, GSList **m0_lst, GSList *exclude)
 {
 	addr_info_t *a = NULL;
 	if (*m0_lst  == NULL) {
-		GError *err = NULL;
-		*m0_lst = list_namespace_services(namespace,NAME_SRVTYPE_META0, &err);
+		GError *err = conscience_list_services (namespace, NAME_SRVTYPE_META0, FALSE, FALSE, m0_lst);
 		if (err) {
 			GRID_WARN("Failed to get Meta0 addresses to namespace %s: (%d) %s",
 					namespace, err->code, err->message);

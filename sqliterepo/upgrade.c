@@ -19,7 +19,7 @@ License along with this library.
 
 #include <fnmatch.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 
 #include "sqliterepo.h"
 #include "sqlite_utils.h"

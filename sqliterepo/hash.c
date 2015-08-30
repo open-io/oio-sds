@@ -17,7 +17,7 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 
 #include "sqliterepo.h"
 #include "sqlx_remote.h"

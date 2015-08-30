@@ -32,8 +32,7 @@ License along with this library.
 
 #include <glib.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 
 #include "sqliterepo.h"
 #include "sqlx_remote.h"

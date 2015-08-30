@@ -24,8 +24,7 @@ License along with this library.
 #include <unistd.h>
 #include <sys/socket.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 
 #include "sqliterepo.h"
 #include "hash.h"

@@ -3,7 +3,7 @@ add_definitions(-DG_LOG_DOMAIN="oio.m2v2")
 include_directories(BEFORE . ..
 		${CMAKE_CURRENT_BINARY_DIR}
 		${CMAKE_CURRENT_BINARY_DIR}/..
-		${CMAKE_CURRENT_BINARY_DIR}/../metautils/lib)
+		${CMAKE_CURRENT_BINARY_DIR}/../metautils)
 
 include_directories(AFTER
 		${JSONC_INCLUDE_DIRS}
@@ -28,7 +28,7 @@ add_library(meta2v2lbutils SHARED
 )
 
 target_link_libraries(meta2v2lbutils
-		metautils gridcluster
+		metautils gridcluster-remote gridcluster-lb
 		${GLIB2_LIBRARIES}
 )
 
@@ -51,7 +51,7 @@ add_library(meta2v2utils SHARED
 )
 
 target_link_libraries(meta2v2utils
-		metautils gridcluster sqliteutils
+		metautils gridcluster-remote sqliteutils
 		${LIBRAIN_LIBRARIES}
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${JSONC_LIBRARIES})
 
@@ -92,36 +92,19 @@ add_executable(meta2_server
 bin_prefix(meta2_server -meta2-server)
 
 target_link_libraries(meta2_server meta2v2
-        hcresolve metautils gridcluster server
+        hcresolve metautils gridcluster-remote server
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
 add_executable(test_meta2_backend test_meta2_backend.c)
 target_link_libraries(test_meta2_backend
 		meta2v2 ${GLIB2_LIBRARIES})
 
-install(FILES
-			${CMAKE_CURRENT_BINARY_DIR}/autogen.h
-			generic.h
-			meta2_backend.h
-			meta2_backend_internals.h
-			meta2_bean.h
-			meta2_events.h
-			meta2_dedup_utils.h
-			meta2_filter_context.h
-			meta2_filters.h
-			meta2_gridd_dispatcher.h
-			meta2_macros.h
-			meta2_test_common.h
-			meta2_utils.h
-			meta2_utils_lb.h
-			meta2_utils_json.h
-			meta2v2_remote.h
-		DESTINATION include/meta2v2
-		PERMISSIONS
-			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-
-
-install(TARGETS meta2v2 meta2v2remote meta2_server meta2v2utils meta2v2lbutils
+install(TARGETS
+			meta2v2
+			meta2v2remote
+			meta2_server
+			meta2v2utils
+			meta2v2lbutils
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 

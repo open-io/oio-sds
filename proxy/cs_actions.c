@@ -34,14 +34,14 @@ _cs_check_tokens (struct req_args_s *args)
     return NULL;
 }
 
-    static GString *
+static GString *
 _cs_pack_and_free_srvinfo_list (GSList * svc)
 {
     GString *gstr = g_string_new ("[");
     for (GSList * l = svc; l; l = l->next) {
         if (l != svc)
             g_string_append_c (gstr, ',');
-        service_info_encode_json (gstr, l->data);
+        service_info_encode_json (gstr, l->data, FALSE);
     }
     g_string_append (gstr, "]");
     g_slist_free_full (svc, (GDestroyNotify) service_info_clean);
@@ -54,7 +54,7 @@ enum reg_op_e {
     REGOP_UNLOCK,
 };
 
-    static enum http_rc_e
+static enum http_rc_e
 _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *jsrv)
 {
     GError *err;
@@ -66,7 +66,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
         return _reply_notfound_error (args, err);
 
     struct service_info_s *si = NULL;
-    err = service_info_load_json_object (jsrv, &si);
+    err = service_info_load_json_object (jsrv, &si, TRUE);
 
     if (err) {
         if (err->code == CODE_BAD_REQUEST)
@@ -93,13 +93,13 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
     gchar *key = service_info_key(si);
     PUSH_DO(lru_tree_insert(push_queue, key, si));
     GString *gstr = g_string_new ("");
-    service_info_encode_json (gstr, si);
+    service_info_encode_json (gstr, si, TRUE);
     return _reply_success_json (args, gstr);
 }
 
 //------------------------------------------------------------------------------
 
-    enum http_rc_e
+enum http_rc_e
 action_cs_nscheck (struct req_args_s *args)
 {
     GError *err;
@@ -109,9 +109,13 @@ action_cs_nscheck (struct req_args_s *args)
     return _reply_success_json (args, NULL);
 }
 
-    enum http_rc_e
+enum http_rc_e
 action_cs_info (struct req_args_s *args)
 {
+	const char *v = OPT("what");
+	if (v && !strcmp(v, "types"))
+		return action_cs_srvtypes (args);
+
     GError *err;
     if (NULL != (err = _cs_check_tokens(args)))
         return _reply_notfound_error (args, err);
@@ -126,12 +130,12 @@ action_cs_info (struct req_args_s *args)
     return _reply_success_json (args, gstr);
 }
 
-    enum http_rc_e
+enum http_rc_e
 action_cs_put (struct req_args_s *args)
 {
     struct json_tokener *parser;
     struct json_object *jbody;
-    enum http_rc_e rc;
+	enum http_rc_e rc;
 
     parser = json_tokener_new ();
     jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
@@ -145,19 +149,28 @@ action_cs_put (struct req_args_s *args)
     return rc;
 }
 
-    enum http_rc_e
+enum http_rc_e
 action_cs_get (struct req_args_s *args)
 {
+	const char *types = TYPE();
+	gboolean full = _request_has_flag (args, PROXYD_HEADER_MODE, "full");
+
     GError *err;
     if (NULL != (err = _cs_check_tokens(args)))
         return _reply_notfound_error(args, err);
 
-    GSList *sl = list_namespace_services (NS(), TYPE(), &err);
+    GSList *sl = NULL;
+	gchar *cs = gridcluster_get_conscience (NS());
+	err = gcluster_get_services (cs, types, full, FALSE, &sl);
+	g_free0 (cs);
+
 	if (NULL != err) {
 		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
 		g_prefix_error (&err, "Agent error: ");
 		return _reply_system_error (args, err);
 	}
+
+	args->rp->access_tail ("%s=%u", types, g_slist_length(sl));
 	return _reply_success_json (args, _cs_pack_and_free_srvinfo_list (sl));
 }
 
@@ -178,7 +191,11 @@ action_cs_del (struct req_args_s *args)
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_notfound_error (args, err);
 
-	if (!clear_namespace_services (NS(), TYPE(), &err)) {
+	gchar *cs = gridcluster_get_conscience (NS());
+	err = gcluster_remove_services (cs, TYPE(), NULL);
+	g_free0 (cs);
+
+	if (err) {
 		g_prefix_error (&err, "Agent error: ");
 		return _reply_system_error (args, err);
 	}

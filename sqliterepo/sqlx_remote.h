@@ -30,7 +30,7 @@ License along with this library.
 
 #define SQLXNAME_CHECK(p) do { EXTRA_ASSERT((p) != NULL); NAME_CHECK(p); } while (0)
 
-# include <metautils/lib/metatypes.h>
+# include <metautils/metatypes.h>
 
 struct Row;
 struct RowSet;

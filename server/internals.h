@@ -20,7 +20,7 @@ License along with this library.
 #ifndef OIO_SDS__server__internals_h
 # define OIO_SDS__server__internals_h 1
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 
 # ifndef GRID_STAT_PREFIX_REQ
 #  define GRID_STAT_PREFIX_REQ "gridd.counter.req"

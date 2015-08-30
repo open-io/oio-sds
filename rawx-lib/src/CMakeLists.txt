@@ -22,16 +22,10 @@ add_library(rawx SHARED
 set_target_properties(rawx PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(rawx
-		metautils gridcluster gridcluster-remote
+		metautils 
 		${ATTR_LIBRARIES} ${ZLIB_LIBRARIES} ${LZO_LIBRARIES})
 
-install(FILES
-			compression.h
-			rawx.h
-		DESTINATION include/rawx-lib/src
-		PERMISSIONS
-			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-
-install(TARGETS rawx
+install(TARGETS
+			rawx
 		LIBRARY DESTINATION ${LD_LIBDIR})
 

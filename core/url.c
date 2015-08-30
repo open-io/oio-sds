@@ -50,11 +50,11 @@ oio_requri_parse (const char *str, struct oio_requri_s *uri)
 		return FALSE;
 
 	gchar *pq = strchr (str, '?');
-	gchar *pa = pq ? strchr (pq, '#') : strchr (str, '#');
+	gchar *pa = strchr (pq ?: str, '#');
 
 	// Extract the main components
 	if (pq || pa)
-		uri->path = g_strndup (str, (pq ? pq : pa) - str);
+		uri->path = g_strndup (str, (pq ?: pa) - str);
 	else
 		uri->path = g_strdup (str);
 

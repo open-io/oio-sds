@@ -48,7 +48,6 @@ void grid_stats_holder_increment_merge(struct grid_stats_holder_s *base,
 
 /* Internal lock acquired on gsh */
 void grid_stats_holder_foreach(struct grid_stats_holder_s *gsh,
-		const gchar *pattern,
 		gboolean (*output)(const gchar *name, guint64 value));
 
 /* ------------------------------------------------------------------------- */

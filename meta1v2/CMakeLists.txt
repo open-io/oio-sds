@@ -22,7 +22,7 @@ add_library(meta1v2 SHARED
 
 set_target_properties(meta1v2 PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(meta1v2
-		metautils gridcluster sqliterepo
+		metautils gridcluster-remote sqliterepo
 		meta0utils meta2v2remote meta0remote
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
@@ -35,7 +35,7 @@ target_link_libraries(meta1remote
 add_executable(meta1_server meta1_gridd_dispatcher.c meta1_server.c)
 bin_prefix(meta1_server -meta1-server)
 target_link_libraries(meta1_server meta1v2
-        meta0utils metautils gridcluster server sqliterepo
+        meta0utils metautils gridcluster-remote server sqliterepo
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
@@ -43,16 +43,11 @@ add_executable(meta1_client meta1_client.c)
 bin_prefix(meta1_client -meta1-client)
 target_link_libraries(meta1_client metautils meta1remote)
 
-install(FILES
-			meta1_backend.h
-			meta1_gridd_dispatcher.h
-			meta1_prefixes.h
-			meta1_remote.h
-        DESTINATION include/meta1v2
-        PERMISSIONS
-            OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-
-install(TARGETS meta1v2 meta1_server meta1remote meta1_client
+install(TARGETS
+			meta1v2
+			meta1_server
+			meta1remote
+			meta1_client
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 

@@ -66,24 +66,24 @@ License along with this library.
 # define oio_cfg_get_proxy(ns)        oio_cfg_get_value((ns), OIO_CFG_PROXY)
 # define oio_cfg_get_proxylocal(ns)   oio_cfg_get_value((ns), OIO_CFG_PROXYLOCAL)
 
-/** @return NULL if the NS was not found or the key not defined for the NS */
+/* @return NULL if the NS was not found or the key not defined for the NS */
 gchar* oio_cfg_get_value (const gchar *ns, const gchar *what);
 
-/** List all the configuration variables locally set.  */
+/* List all the configuration variables locally set.  */
 GHashTable* oio_cfg_parse (void);
 
-/** List all the namespaces locally known */
+/* List all the namespaces locally known */
 gchar** oio_cfg_list_ns (void);
 
-/** get the url of the proxy dedicated to the conscience, with a fallback
+/* get the url of the proxy dedicated to the conscience, with a fallback
  * on a proxy capable of everything */
 gchar * oio_cfg_get_proxy_conscience (const char *ns);
 
-/** get the url of the proxy dedicated to the directory, with a fallback
+/* get the url of the proxy dedicated to the directory, with a fallback
  * on a proxy capable of everything */
 gchar * oio_cfg_get_proxy_directory (const char *ns);
 
-/** get the url of the proxy dedicated to the containers, with a fallback
+/* get the url of the proxy dedicated to the containers, with a fallback
  * on a proxy capable of everything */
 gchar * oio_cfg_get_proxy_containers (const char *ns);
 

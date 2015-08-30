@@ -21,9 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <errno.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
-#include <cluster/lib/gridcluster.h>
+#include <metautils/metautils.h>
 #include <sqliterepo/sqliterepo.h>
 #include <server/grid_daemon.h>
 #include <server/transport_gridd.h>

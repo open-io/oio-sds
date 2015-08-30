@@ -17,7 +17,7 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include <sqliterepo/sqlite_utils.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>

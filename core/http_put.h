@@ -182,4 +182,15 @@ void http_put_clear_dests(struct http_put_s *p);
  */
 void http_put_destroy(struct http_put_s *p);
 
+struct http_headers_s {
+	GSList *gheaders;
+	struct curl_slist *headers;
+};
+
+void http_headers_clean (struct http_headers_s *h);
+void http_headers_add (struct http_headers_s *h, const char *k, const char *v);
+void http_headers_add_int64 (struct http_headers_s *h, const char *k, gint64 i64);
+
+GError * http_body_parse_error (const char *b, gsize len);
+
 #endif /*OIO_SDS__sdk__http_put_h*/

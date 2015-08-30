@@ -20,10 +20,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta1v2__internals_h
 # define OIO_SDS__meta1v2__internals_h 1
 
-# include <metautils/lib/metautils.h>
-# include <metautils/lib/metacomm.h>
+# include <metautils/metautils.h>
 
-#define CONNECT_RETRY_DELAY 3
+# define CONNECT_RETRY_DELAY 3
 
 # ifndef META1_EVT_TOPIC
 #  define META1_EVT_TOPIC "sds.meta1"

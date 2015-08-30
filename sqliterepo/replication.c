@@ -20,8 +20,7 @@ License along with this library.
 #include <stddef.h>
 #include <unistd.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 
 #include <RowFieldSequence.h>
 #include <RowFieldValue.h>

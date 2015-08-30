@@ -23,8 +23,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #undef PACKAGE_TARNAME
 #undef PACKAGE_VERSION
 
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
+#include <metautils/metautils.h>
+#include <conscience/remote.h>
 
 #include "rawx_config.h"
 
@@ -35,7 +35,7 @@ _addr_rule_gclean(gpointer data, gpointer udata)
 	addr_rule_g_free(data);
 }
 
-/**********************************************************************/
+/* -------------------------------------------------------------------------- */
 
 char *
 _get_compression_algorithm(apr_pool_t *p, namespace_info_t *ns_info)
@@ -115,15 +115,14 @@ _get_acl(apr_pool_t *p, namespace_info_t *ns_info)
 gboolean
 update_rawx_conf(apr_pool_t* p, rawx_conf_t **rawx_conf, const gchar* ns_name)
 {
-	rawx_conf_t* new_conf = NULL;
-        namespace_info_t* ns_info;
-        GError *local_error = NULL;
+	namespace_info_t* ns_info = NULL;
+	GError *local_error = conscience_get_namespace (ns_name, &ns_info);
+	if (local_error) {
+		g_clear_error(&local_error);
+		return FALSE;
+	}
 
-        ns_info = get_namespace_info(ns_name, &local_error);
-        if (!ns_info)
-                return FALSE;
-
-	new_conf = apr_palloc(p, sizeof(rawx_conf_t));
+	rawx_conf_t* new_conf = apr_palloc(p, sizeof(rawx_conf_t));
 	char * stgpol = NULL;
 	stgpol = namespace_storage_policy(ns_info, ns_info->name);
 	if(NULL != stgpol) {
@@ -132,9 +131,10 @@ update_rawx_conf(apr_pool_t* p, rawx_conf_t **rawx_conf, const gchar* ns_name)
 
 	new_conf->ni = ns_info;
 	new_conf->acl = _get_acl(p, ns_info);
-        new_conf->last_update = time(0);
+	new_conf->last_update = time(0);
 
 	*rawx_conf = new_conf;
+	namespace_info_clear (ns_info);
 	return TRUE;
 }
 

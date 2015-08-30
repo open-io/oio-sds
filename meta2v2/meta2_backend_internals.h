@@ -24,10 +24,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <unistd.h>
 # include <errno.h>
 
-# include <glib.h>
-
-# include <metautils/lib/metautils.h>
-# include <metautils/lib/metacomm.h>
+# include <metautils/metautils.h>
 # include <sqliterepo/sqliterepo.h>
 # include <sqliterepo/sqlite_utils.h>
 # include <sqlx/sqlx_service.h>

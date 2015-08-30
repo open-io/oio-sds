@@ -25,17 +25,8 @@ add_executable(test_stats_holder test_stats_holder.c)
 target_link_libraries(test_stats_holder server
         ${GLIB2_LIBRARIES})
 
-install(FILES
-			grid_daemon.h
-			gridd_dispatcher_filters.h
-			network_server.h
-			slab.h
-			transport_gridd.h
-		DESTINATION include/server
-		PERMISSIONS
-			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-
-install(TARGETS server 
+install(TARGETS
+			server 
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 

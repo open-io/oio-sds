@@ -18,7 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <string.h>
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include <core/oiolog.h>
 
 #include <meta2v2/meta2_backend_internals.h>

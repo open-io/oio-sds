@@ -100,15 +100,6 @@ start_at_boot=false
 command=redis-server ${CFGDIR}/${NS}-redis-${SRVNUM}.conf
 """
 
-template_flask_gridinit = """
-[service.${NS}-flask]
-group=${NS},localhost,flask
-on_die=respawn
-enabled=true
-start_at_boot=false
-command=/usr/bin/gunicorn --preload -w 2 -b ${IP}:${PORT} oio.sds.admin-flask:app
-"""
-
 template_account_server_gridinit = """
 [service.${NS}-account-server]
 group=${NS},localhost,account-server
@@ -125,7 +116,8 @@ group=${NS},localhost,proxy
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
+#command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
+command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy -O Bind=${IP}:${PORT_PROXYD_CS} -O Bind=${IP}:${PORT_PROXYD_DIR} -O Bind=${IP}:${PORT_PROXYD_M2} ${IP}:${PORT_PROXYD} ${NS}
 """
 
 template_nginx_gridinit = """
@@ -211,147 +203,47 @@ Require all granted
 </VirtualHost>
 """
 
-template_agent = """
-[General]
-user=${UID}
-group=${GID}
+template_scorer_lua = """
+function compute (n, t, score, tags)
+	-- local cpu = tags["stat.cpu"];
+	-- local io = tags["stat.io"];
+	-- local space = tags["stat.space"];
+	-- return __pow(cpu*cpu*io*space,0.25);
+	return 7;
+end
 
-service_check_freq=1
-cluster_update_freq=1
-
-period_get_ns=1
-period_get_srv=1
-period_get_srvtype=1
-period_push_srv=1
-
-[server.inet]
-port=${PORT}
-
-[server.unix]
-mode=0666
-uid=${UID}
-gid=${GID}
-path=${RUNDIR}/agent.sock
 """
 
-template_conscience_json = """{
+template_nsinfo_json = """{
 	"ns":"${NS}",
 	"chunksize":${CHUNK_SIZE},
-	"options":{},
-	"storage_policy":{},
-	"storage_class":{},
-	"data_security":{},
-	"data_treatments":{}
-}
-"""
-
-template_conscience = """
-[General]
-### Now is 'daemon' ignored (this is managed at the CLI)
-### Now is 'pidfile' ingnored (managed at CLI too)
-# Timeout on read operations
-to_op=1000
-# Timeout on accepting connections
-to_cnx=1000
-
-flag.NOLINGER=true
-flag.SHUTDOWN=false
-flag.KEEPALIVE=false
-flag.QUICKACK=false
-
-[Server.conscience]
-min_workers=2
-min_spare_workers=2
-max_spare_workers=10
-max_workers=10
-listen=${IP}:${PORT}
-plugins=conscience,stats,fallback
-
-[Service]
-namespace=${NS}
-type=conscience
-register=false
-load_ns_info=false
-
-[Plugin.stats]
-path=${LIBDIR}/grid/msg_stats.so
-
-[Plugin.fallback]
-path=${LIBDIR}/grid/msg_fallback.so
-
-[Plugin.conscience]
-path=${LIBDIR}/grid/msg_conscience.so
-param_namespace=${NS}
-param_chunk_size=${CHUNK_SIZE}
-param_score_timeout=86400
-
-param_option.ns_status=MASTER
-param_option.WORM=false
-param_option.service_update_policy=meta2=NONE|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|
-param_option.automatic_open=true
-param_option.meta2_max_versions=${VERSIONING}
-param_option.storage_policy=${STGPOL}
-
-param_option.meta2_check.put.GAPS=false
-param_option.meta2_check.put.DISTANCE=false
-param_option.meta2_check.put.STGCLASS=false
-param_option.meta2_check.put.SRVINFO=false
-
-param_storage_conf=${CFGDIR}/${NS}-conscience-policies.conf
-
-param_service.default.score_timeout=30
-param_service.default.score_variation_bound=5
-param_service.default.score_expr=100
-
-param_service.meta0.score_timeout=3600
-param_service.meta0.score_variation_bound=5
-param_service.meta0.score_expr=(num stat.cpu)
-
-param_service.meta1.score_timeout=120
-param_service.meta1.score_variation_bound=5
-param_service.meta1.score_expr=(num stat.cpu)
-
-param_service.meta2.score_timeout=120
-param_service.meta2.score_variation_bound=5
-param_service.meta2.score_expr=(num stat.cpu)
-
-param_service.rawx.score_timeout=120
-param_service.rawx.score_variation_bound=5
-param_service.rawx.score_expr=(num stat.cpu)
-
-param_service.sqlx.score_timeout=120
-param_service.sqlx.score_variation_bound=5
-param_service.sqlx.score_expr=(num stat.cpu)
-
-param_service.echo.score_timeout=120
-param_service.echo.score_variation_bound=5
-param_service.echo.score_expr=(num stat.cpu)
-
-param_service.account.score_timeout=120
-param_service.account.score_variation_bound=5
-param_service.account.score_expr=(num stat.cpu)
-"""
-
-template_conscience_policies = """
-[STORAGE_POLICY]
-SINGLE=NONE:NONE:NONE
-TWOCOPIES=NONE:DUPONETWO:NONE
-FIVECOPIES=NONE:DUPONEFIVE:NONE
-RAIN=NONE:RAIN:NONE
-
-[STORAGE_CLASS]
-# <CLASS> = FALLBACK[,FALLBACK]...
-SUPERFAST=PRETTYGOOD,REASONABLYSLOW,NONE
-PRETTYGOOD=REASONABLYSLOW,NONE
-REASONABLYSLOW=NONE
-
-[DATA_SECURITY]
-DUPONETWO=DUP:distance=1|nb_copy=2
-DUPONEFIVE=DUP:distance=1|nb_copy=5
-RAIN=RAIN:k=6|m=2|algo=liber8tion
-
-[DATA_TREATMENTS]
-"""
+	"options":{
+		"WORM" : "false",
+		"ns_status" : "MASTER",
+		"service_update_policy" : "meta2=NONE|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|",
+		"automatic_open" : "true",
+		"meta2_max_versions" : "${VERSIONING}",
+		"storage_policy" : "${STGPOL}"
+	},
+	"storage_policy":{
+		"SINGLE" : "NONE:NONE:NONE",
+		"TWOCOPIES" : "NONE:DUPONETWO:NONE",
+		"FIVECOPIES" : "NONE:DUPONEFIVE:NONE",
+		"RAIN" : "NONE:RAIN:NONE"
+	},
+	"storage_class":{
+		"SUPERFAST" : "PRETTYGOOD,REASONABLYSLOW,NONE",
+		"PRETTYGOOD" : "REASONABLYSLOW,NONE",
+		"REASONABLYSLOW" : "NONE"
+	},
+	"data_security":{
+		"DUPONETWO" : "DUP:distance=1|nb_copy=2",
+		"DUPONEFIVE" : "DUP:distance=1|nb_copy=5",
+		"RAIN" : "RAIN:k=6|m=2|algo=liber8tion"
+	},
+	"data_treatments":{
+	}
+}"""
 
 template_gridinit_header = """
 [Default]
@@ -367,35 +259,16 @@ env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 #limit.core_size=-1
 #limit.max_files=2048
 #limit.stack_size=256
-
 #include=${CFGDIR}/*-gridinit.conf
-
-[service.gridagent]
-group=common,localhost,agent
-on_die=respawn
-enabled=true
-start_at_boot=true
-command=${EXE_PREFIX}-cluster-agent -s OIO,${NS},agent ${CFGDIR}/agent.conf
-
 """
 
-template_gridinit_ns = """
-
+template_gridinit_conscience = """
 [service.${NS}-conscience]
 group=${NS},localhost,conscience
 on_die=respawn
 enabled=true
 start_at_boot=true
-#command=${EXE_PREFIX}-daemon -s OIO,${NS},conscience ${CFGDIR}/${NS}-conscience.conf
-command=${EXE_PREFIX}-daemon -q ${CFGDIR}/${NS}-conscience.conf
-
-[service.${NS}-event-agent]
-group=${NS},localhost,event
-on_die=respawn
-enabled=true
-start_at_boot=false
-command=${EXE_PREFIX}-event-agent ${CFGDIR}/event-agent.conf
-env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
+command=${EXE_PREFIX}-cluster-server -s OIO,${NS},consc -O Endpoint=${IP}:${PORT_CS} ${CFGDIR}/${NS}-conscience
 """
 
 template_gridinit_service = """
@@ -417,8 +290,6 @@ on_die=respawn
 """
 
 template_local_header = """
-[default]
-agent=${RUNDIR}/agent.sock
 """
 
 template_local_ns = """
@@ -427,6 +298,9 @@ ${NOZK}zookeeper=${IP}:2181
 conscience=${IP}:${PORT_CS}
 #proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
+proxy-conscience=${IP}:${PORT_PROXYD_CS}
+proxy-containers=${IP}:${PORT_PROXYD_M2}
+proxy-directory=${IP}:${PORT_PROXYD_DIR}
 event-agent=ipc://${RUNDIR}/event-agent.sock
 """
 
@@ -502,12 +376,14 @@ def generate (ns, ip, options={}):
 	port = getint(options.PORT_START, 6000)
 
 	port_cs = next_port()
-	port_agent = next_port() # for TCP connection is use by Java applications
 	port_proxy = next_port()
-	port_flask = next_port()
+	port_proxy_cs = next_port()
+	port_proxy_dir = next_port()
+	port_proxy_m2 = next_port()
 	port_account = next_port()
 	port_event_agent = next_port()
 	rawx = []
+	rainx = []
 	services = []
 
 	versioning = 1
@@ -548,6 +424,9 @@ def generate (ns, ip, options={}):
 			VERSIONING=versioning, STGPOL=stgpol,
 			PORT_CS=port_cs,
 			PORT_PROXYD=port_proxy,
+			PORT_PROXYD_CS=port_proxy_cs,
+			PORT_PROXYD_DIR=port_proxy_dir,
+			PORT_PROXYD_M2=port_proxy_m2,
 			M2_REPLICAS=meta2_replicas, M2_DISTANCE=str(1),
 			SQLX_REPLICAS=sqlx_replicas, SQLX_DISTANCE=str(1),
 			APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
@@ -567,6 +446,7 @@ def generate (ns, ip, options={}):
 	mkdir_noerror(CFGDIR)
 	mkdir_noerror(RUNDIR)
 	mkdir_noerror(LOGDIR)
+	mkdir_noerror(CFGDIR + '/' + ns + '-conscience')
 
 	# Global SDS configuration
 	with open(OIODIR + '/'+ 'sds.conf', 'w+') as f:
@@ -577,24 +457,33 @@ def generate (ns, ip, options={}):
 
 	# Conscience configuration
 	env['PORT'] = port_cs
-	with open(CFGDIR + '/'+ns+'-conscience.json', 'w+') as f:
-		tpl = Template(template_conscience_json)
+	with open(CFGDIR + '/'+ns+'-conscience/nsinfo.json', 'w+') as f:
+		tpl = Template(template_nsinfo_json)
 		f.write(tpl.safe_substitute(env))
-	with open(CFGDIR + '/'+ns+'-conscience.conf', 'w+') as f:
-		tpl = Template(template_conscience)
-		f.write(tpl.safe_substitute(env))
-	with open(CFGDIR + '/' + ns + '-conscience-policies.conf', 'w+') as f:
-		tpl = Template(template_conscience_policies)
-		f.write(tpl.safe_substitute(env))
+	def gen_lua(t):
+		with open(CFGDIR + '/'+ns+'-conscience/'+t+'.lua', 'w+') as f:
+			tpl = Template(template_scorer_lua)
+			f.write(tpl.safe_substitute(env))
+	for t, _, _, _ in services:
+		gen_lua(t)
+	if len(rawx) > 0:
+		gen_lua("rawx")
+	if len(rainx) > 0:
+		gen_lua("rainx")
+	gen_lua("account")
+	gen_lua("echo")
 
 	# Generate the "GRIDD-like" services
 	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
 		tpl = Template(template_gridinit_header)
 		f.write(tpl.safe_substitute(env))
+	# conscience
 	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
 		env['PORT'] = port_proxy
-		tpl = Template(template_gridinit_ns)
+		tpl = Template(template_gridinit_conscience)
 		f.write(tpl.safe_substitute(env))
+	# services
+	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
 		tpl = Template(template_gridinit_service)
 		for t, e, n, p in services:
 			mkdir_noerror(DATADIR + '/' + ns + '-' + t + '-' + str(n))
@@ -620,12 +509,6 @@ def generate (ns, ip, options={}):
 		env['PORT'] = p
 		with open(CFGDIR + '/' + ns + '-rawx-httpd-' + str(n) + '.conf', 'w+') as f:
 			f.write(tpl.safe_substitute(env))
-
-	# administration flask
-	env['PORT'] = port_flask
-	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-		tpl = Template(template_flask_gridinit)
-		f.write(tpl.safe_substitute(env))
 
 	# redis
 	if options.ALLOW_REDIS is not None:
@@ -660,30 +543,21 @@ def generate (ns, ip, options={}):
 		tpl = Template(template_event_agent)
 		f.write(tpl.safe_substitute(env))
 
-	# Central agent configuration
-	env['PORT'] = port_agent
-	with open(CFGDIR + '/'+ 'agent.conf', 'w+') as f:
-		tpl = Template(template_agent)
-		f.write(tpl.safe_substitute(env))
-
-        # Test agent configuration
-        listing = {}
-        with open(CFGDIR + '/' + 'test.conf', 'w+') as f:
-                listing["namespace"] = ns
-                listing["account"] = 'test_account'
-                listing["account_addr"] = [str(ip) + ":" + str(port_account)]
-                listing["proxyd_uri"] = "http://" + str(ip) + ":" + str(port_proxy)
-                listing["meta0"] = [str(ip) + ':' + str(m[3]) for m in services
-                                    if
-                                    m[0] == 'meta0']
-                listing["meta1"] = [str(ip) + ':' + str(m[3]) for m in services
-                                    if
-                                    m[0] == 'meta1']
-                listing["meta2"] = [str(ip) + ':' + str(m[3]) for m in services
-                                    if
-                                    m[0] == 'meta2']
-                listing["rawx"] = [str(ip) + ':' + str(p[1]) for p in rawx]
-                f.write(json.dumps(listing))
+	# Test agent configuration
+	listing = {}
+	with open(CFGDIR + '/' + 'test.conf', 'w+') as f:
+		listing["namespace"] = ns
+		listing["account"] = 'test_account'
+		listing["account_addr"] = [str(ip) + ":" + str(port_account)]
+		listing["proxyd_uri"] = "http://" + str(ip) + ":" + str(port_proxy)
+		listing["meta0"] = [str(ip) + ':' + str(m[3]) for m in services
+				    if m[0] == 'meta0']
+		listing["meta1"] = [str(ip) + ':' + str(m[3]) for m in services
+				    if m[0] == 'meta1']
+		listing["meta2"] = [str(ip) + ':' + str(m[3]) for m in services
+				    if m[0] == 'meta2']
+		listing["rawx"] = [str(ip) + ':' + str(p[1]) for p in rawx]
+		f.write(json.dumps(listing))
 
 def main ():
 	from optparse import OptionParser as OptionParser

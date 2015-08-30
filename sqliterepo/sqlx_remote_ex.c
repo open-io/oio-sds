@@ -20,8 +20,7 @@ License along with this library.
 #include <errno.h>
 #include <stdlib.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 #include <sqliterepo/sqlite_utils.h>
 #include <sqliterepo/sqlx_remote.h>
 #include <sqliterepo/sqlx_remote_ex.h>

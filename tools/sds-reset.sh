@@ -103,7 +103,7 @@ while ! pkill -0 gridinit ; do sleep 1 ; done
 while ! [ -e "$GRIDINIT_SOCK" ] ; do sleep 1 ; done
 
 gridinit_cmd -S "$GRIDINIT_SOCK" reload
-gridinit_cmd -S "$GRIDINIT_SOCK" start "@conscience" "@proxy" "@agent" "@meta0" "@meta1"
+gridinit_cmd -S "$GRIDINIT_SOCK" start "@conscience" "@proxy" "@meta0" "@meta1"
 
 # wait for the meta0 to start
 sleep 1
@@ -118,7 +118,7 @@ while [ 0 -ge $(${PREFIX}-cluster -r "$NS" | grep -c meta1) ] ; do
 done
 
 # Init the meta0's content
-${PREFIX}-cluster -r "$NS" | awk -F\| '/meta0/{print $3}' | while read URL ; do
+${PREFIX}-cluster -r "$NS" | awk -F, '/meta0/{print $3}' | while read URL ; do
 	${PREFIX}-meta0-init -O "NbReplicas=${REPLICATION_DIRECTORY}" -O IgnoreDistance=on "$URL"
 	${PREFIX}-meta0-client "$URL" reload
 done

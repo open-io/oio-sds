@@ -22,8 +22,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <errno.h>
 
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
+#include <metautils/metautils.h>
+#include <conscience/remote.h>
 
 #include "./meta0_backend.h"
 #include "./meta0_utils.h"
@@ -514,16 +514,13 @@ _assign(GList *working_m1list,GSList *unref_m1list)
 static GError *
 _init_assign(gchar *ns_name, GList **working_m1list,GSList **unref_m1list)
 { 
-	GError *error = NULL;
 	GSList *m1_list = NULL;
-
-	m1_list = list_namespace_services(ns_name, "meta1", &error);
-	if (!m1_list) {
-		if ( error) {
-			GRID_ERROR("failed to init meta1 service list :(%d) %s", error->code, error->message);
-			goto errorLabel;
-		}
+	GError *error = conscience_list_services (ns_name, NAME_SRVTYPE_META1, FALSE, FALSE, &m1_list);
+	if (error) {
+		GRID_ERROR("failed to init meta1 service list :(%d) %s", error->code, error->message);
+		goto errorLabel;
 	}
+
 	GRID_INFO("nb m1 cs %d",g_slist_length(m1_list));
 	if ( context->replica > g_slist_length(m1_list)) {
 		GRID_ERROR("Number of meta1 services [%d] less than number of replication [%d]",g_slist_length(m1_list),context->replica);
@@ -643,7 +640,7 @@ _unref_meta1(gchar **urls)
 		addr_info_t addr;
 		GRID_DEBUG("unref url %s",*urls);
 
-		grid_string_to_addrinfo(*urls,NULL,&addr);
+		grid_string_to_addrinfo(*urls, &addr);
 
 		GSList *l=prefixByMeta1;
 		for (;l;l=l->next) {

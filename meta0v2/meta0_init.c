@@ -21,11 +21,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <errno.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 
-#include "./meta0_remote.h"
-#include "./meta0_utils.h"
+#include "meta0_remote.h"
+#include "meta0_utils.h"
 
 static gint nbreplicas = 1;
 static gchar **urls;
@@ -35,21 +34,12 @@ static gboolean flag_fill_v1 =FALSE;
 static gboolean nodist = FALSE;
 
 static gboolean
-url_check(const gchar *url)
+urlv_check (gchar **urlv)
 {
-	addr_info_t a;
-	return grid_string_to_addrinfo(url, NULL, &a);
-}
-
-static gboolean
-urlv_check(gchar **urlv)
-{
-	gchar **u;
-
 	if (!urlv)
 		return FALSE;
-	for (u=urlv; *u ;u++) {
-		if (!url_check(*u)) {
+	for (gchar **u=urlv; *u ;u++) {
+		if (!metautils_url_valid_for_connect(*u)) {
 			GRID_WARN("Bad address [%s]", *u);
 			return FALSE;
 		}
@@ -151,7 +141,7 @@ meta0_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	if (!grid_string_to_addrinfo(argv[0], NULL, &addr)) {
+	if (!grid_string_to_addrinfo(argv[0], &addr)) {
 		namespace = strdup(argv[0]);
 		GRID_INFO("[%s] considered as a namespace name", argv[0]);
 	} else {

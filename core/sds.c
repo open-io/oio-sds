@@ -37,7 +37,7 @@ License along with this library.
 #include "http_internals.h"
 
 // used for macros
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 
 struct oio_sds_s
 {
@@ -143,73 +143,6 @@ _write_NOOP(void *data, size_t s, size_t n, void *ignored)
 {
 	(void) data, (void) ignored;
 	return s*n;
-}
-
-static GError *
-_body_parse_error (GString *b)
-{
-	g_assert (b != NULL);
-	struct json_tokener *tok = json_tokener_new ();
-	struct json_object *jbody = json_tokener_parse_ex (tok, b->str, b->len);
-	json_tokener_free (tok);
-	tok = NULL;
-
-	if (!jbody)
-		return NEWERROR(0, "No error explained");
-
-	struct json_object *jcode, *jmsg;
-	struct oio_ext_json_mapping_s map[] = {
-		{"status", &jcode, json_type_int,    0},
-		{"message",  &jmsg,  json_type_string, 0},
-		{NULL, NULL, 0, 0}
-	};
-	GError *err =  oio_ext_extract_json(jbody, map);
-	if (!err) {
-		int code = 0;
-		const char *msg = "Unknown error";
-		if (jcode) code = json_object_get_int64 (jcode);
-		if (jmsg) msg = json_object_get_string (jmsg);
-		err = NEWERROR(code, "(code=%d) %s", code, msg);
-	}
-	json_object_put (jbody);
-	return err;
-}
-
-/* Headers helpers ---------------------------------------------------------- */
-
-struct headers_s
-{
-	GSList *gheaders;
-	struct curl_slist *headers;
-};
-
-static void
-_headers_clean (struct headers_s *h)
-{
-	if (h->headers) {
-		curl_slist_free_all (h->headers);
-		h->headers = NULL;
-	}
-	if (h->gheaders) {
-		g_slist_free_full (h->gheaders, g_free);
-		h->gheaders = NULL;
-	}
-}
-
-static void
-_headers_add (struct headers_s *h, const char *k, const char *v)
-{
-	gchar *s = g_strdup_printf("%s: %s", k, v);
-	h->gheaders = g_slist_prepend (h->gheaders, s);
-	h->headers = curl_slist_append (h->headers, h->gheaders->data);
-}
-
-static void
-_headers_add_int64 (struct headers_s *h, const char *k, gint64 i64)
-{
-	gchar v[24];
-	g_snprintf (v, sizeof(v), "%"G_GINT64_FORMAT, i64);
-	_headers_add (h, k, v);
 }
 
 /* Chunk parsing helpers (JSON) --------------------------------------------- */
@@ -557,9 +490,9 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 			rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
 			g_string_free (http_url, TRUE);
 		} while (0);
-		struct headers_s headers = {NULL,NULL};
-		_headers_add (&headers, "Expect", "");
-		_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
+		struct http_headers_s headers = {NULL,NULL};
+		http_headers_add (&headers, "Expect", "");
+		http_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
 		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
@@ -573,7 +506,7 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 			if (2 != (code/100))
 				err = NEWERROR(0, "Get error: (%ld)", code);
 		}
-		_headers_clean (&headers);
+		http_headers_clean (&headers);
 		curl_easy_cleanup (h);
 	}
 
@@ -835,11 +768,11 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 				(gint64)upload.st.st_size);
 		g_string_append (request_body, "}}");
 		view_input.done = 0;
-		struct headers_s headers = {NULL,NULL};
-		_headers_add (&headers, "Expect", "");
-		_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
+		struct http_headers_s headers = {NULL,NULL};
+		http_headers_add (&headers, "Expect", "");
+		http_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
 		if (src->autocreate)
-			_headers_add (&headers, PROXYD_HEADER_MODE, "autocreate");
+			http_headers_add (&headers, PROXYD_HEADER_MODE, "autocreate");
 		rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
 		rc = curl_easy_setopt (h, CURLOPT_READDATA, &view_input);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
@@ -855,13 +788,13 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 			long code = 0;
 			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
 			if (2 != (code/100)) {
-				err = _body_parse_error (reply_body);
+				err = http_body_parse_error (reply_body->str, reply_body->len);
 				g_prefix_error (&err, "Beans error: (%ld)", code);
 				err->code = code;
 			}
 		}
 		curl_easy_cleanup (h);
-		_headers_clean (&headers);
+		http_headers_clean (&headers);
 	}
 
 	/* parse the beans */
@@ -901,16 +834,16 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 		_chunks_pack (request_body, chunks);
 		view_input.done = 0;
 
-		struct headers_s headers = {NULL,NULL};
-		_headers_add (&headers, "Expect", "");
-		_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
-		_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-policy", "NONE");
-		_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-hash",
+		struct http_headers_s headers = {NULL,NULL};
+		http_headers_add (&headers, "Expect", "");
+		http_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
+		http_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-policy", "NONE");
+		http_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-hash",
 				g_checksum_get_string (upload.checksum_content));
-		_headers_add_int64 (&headers, PROXYD_HEADER_PREFIX "content-meta-length",
+		http_headers_add_int64 (&headers, PROXYD_HEADER_PREFIX "content-meta-length",
 				upload.st.st_size);
 		if (src->autocreate)
-			_headers_add (&headers, PROXYD_HEADER_MODE, "autocreate");
+			http_headers_add (&headers, PROXYD_HEADER_MODE, "autocreate");
 		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 
 		rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
@@ -930,7 +863,7 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 				err = NEWERROR(0, "Put error: (%ld)", code);
 		}
 		curl_easy_cleanup (h);
-		_headers_clean (&headers);
+		http_headers_clean (&headers);
 	}
 
 	/* cleanup and exit */
@@ -961,9 +894,9 @@ oio_sds_delete (struct oio_sds_s *sds, struct hc_url_s *url)
 		g_string_free (http_url, TRUE);
 	} while (0);
 
-	struct headers_s headers = {NULL,NULL};
-	_headers_add (&headers, "Expect", "");
-	_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
+	struct http_headers_s headers = {NULL,NULL};
+	http_headers_add (&headers, "Expect", "");
+	http_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
 	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 
 	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
@@ -979,7 +912,7 @@ oio_sds_delete (struct oio_sds_s *sds, struct hc_url_s *url)
 			err = NEWERROR(0, "Delete error: (%ld)", code);
 	}
 	curl_easy_cleanup (h);
-	_headers_clean (&headers);
+	http_headers_clean (&headers);
 	g_string_free (reply_body, TRUE);
 	return (struct oio_error_s*) err;
 }
@@ -1003,9 +936,9 @@ oio_sds_has (struct oio_sds_s *sds, struct hc_url_s *url, int *phas)
 		g_string_free (http_url, TRUE);
 	} while (0);
 
-	struct headers_s headers = {NULL,NULL};
-	_headers_add (&headers, "Expect", "");
-	_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
+	struct http_headers_s headers = {NULL,NULL};
+	http_headers_add (&headers, "Expect", "");
+	http_headers_add (&headers, PROXYD_HEADER_REQID, oio_local_get_reqid());
 	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 
 	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_NOOP);
@@ -1021,7 +954,7 @@ oio_sds_has (struct oio_sds_s *sds, struct hc_url_s *url, int *phas)
 			err = NEWERROR(0, "Check error: (%ld)", code);
 	}
 	curl_easy_cleanup (h);
-	_headers_clean (&headers);
+	http_headers_clean (&headers);
 	g_string_free (reply_body, TRUE);
 	return (struct oio_error_s*) err;
 }
@@ -1063,7 +996,6 @@ oio_sds_get_compile_options (void)
 	_ADD_STR (OIO_CONFIG_FILE_PATH);
 	_ADD_STR (OIO_CONFIG_DIR_PATH);
 	_ADD_STR (OIO_CONFIG_LOCAL_PATH);
-	_ADD_STR (GCLUSTER_AGENT_SOCK_PATH);
 
 	_ADD_DBL (M0V2_CLIENT_TIMEOUT);
 	_ADD_DBL (M1V2_CLIENT_TIMEOUT);

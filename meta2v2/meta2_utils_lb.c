@@ -20,13 +20,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <string.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <glib.h>
+
+#include <metautils/metautils.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/meta2_utils_lb.h>
-
-#include <glib.h>
 
 GError*
 service_info_from_chunk_id(struct grid_lbpool_s *glp,

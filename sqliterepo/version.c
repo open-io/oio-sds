@@ -25,8 +25,7 @@ License along with this library.
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 
 #include <Table.h>
 #include <TableSequence.h>

@@ -21,8 +21,7 @@ License along with this library.
 #include <glib.h>
 #include <sqlite3.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 #include <server/transport_gridd.h>
 
 #include <RowFieldValue.h>

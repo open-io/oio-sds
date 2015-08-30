@@ -20,9 +20,7 @@ License along with this library.
 #include <errno.h>
 #include <strings.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
-
+#include <metautils/metautils.h>
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2_utils.h>
 #include <meta2v2/meta2v2_remote.h>

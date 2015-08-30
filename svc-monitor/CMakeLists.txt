@@ -12,8 +12,10 @@ link_directories(
 add_executable(svc-monitor main.c)
 bin_prefix(svc-monitor -svc-monitor)
 target_link_libraries(svc-monitor
-		metautils gridcluster
+		metautils gridcluster-remote
 		${GRIDINIT_LIBRARIES} ${GLIB2_LIBRARIES})
 
-install(TARGETS svc-monitor RUNTIME DESTINATION bin)
+install(TARGETS
+			svc-monitor
+		RUNTIME DESTINATION bin)
 

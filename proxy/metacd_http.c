@@ -45,13 +45,13 @@ static guint dir_low_max = PROXYD_DEFAULT_MAX_SERVICES;
 static guint dir_high_ttl = PROXYD_DEFAULT_TTL_CSM0;
 static guint dir_high_max = PROXYD_DEFAULT_MAX_CSM0;
 
+GMutex push_mutex;
 struct grid_lbpool_s *lbpool = NULL;
 struct lru_tree_s *push_queue = NULL;
-GMutex push_mutex;
 gchar *nsname = NULL;
 
-struct namespace_info_s nsinfo;
 GMutex nsinfo_mutex;
+struct namespace_info_s nsinfo;
 gchar **srvtypes = NULL;
 gdouble m2_timeout_all = PROXYD_M2_TIMEOUT_SINGLE;
 struct hc_resolver_s *resolver = NULL;
@@ -71,7 +71,7 @@ action_status(struct req_args_s *args)
 		g_string_append_printf(gstr, "%s = %"G_GINT64_FORMAT"\n", n, v);
 		return TRUE;
 	}
-	grid_stats_holder_foreach(args->rq->client->main_stats, NULL, runner);
+	grid_stats_holder_foreach(args->rq->client->main_stats, runner);
 
 	struct hc_resolver_stats_s s;
 	memset(&s, 0, sizeof(s));
@@ -231,45 +231,84 @@ _push_queue_create (void)
 // Administrative tasks --------------------------------------------------------
 
 static void
-_task_expire_resolver (struct hc_resolver_s *r)
+_task_expire_resolver (gpointer p)
 {
-	hc_resolver_set_now (r, time (0));
-	guint count = hc_resolver_expire (r);
+	(void) p;
+	hc_resolver_set_now (resolver, time (0));
+	guint count = hc_resolver_expire (resolver);
 	if (count)
 		GRID_DEBUG ("Expired %u resolver entries", count);
-	count = hc_resolver_purge (r);
+	count = hc_resolver_purge (resolver);
 	if (count)
 		GRID_DEBUG ("Purged %u resolver ", count);
 }
 
 static void
-_task_reload_lbpool (struct grid_lbpool_s *p)
+_reload_srvtype(const char *cs, const char *type)
 {
-	GError *err;
-
-	if (NULL != (err = gridcluster_reconfigure_lbpool (p))) {
-		GRID_NOTICE ("LBPOOL : reconfigure error : (%d) %s", err->code,
-			err->message);
-		g_clear_error (&err);
+	GSList *list = NULL;
+	GError *err = gcluster_get_services (cs, type, FALSE, FALSE, &list);
+	if (err) {
+		GRID_WARN("Services listing error for type[%s]: code=%d %s",
+				type, err->code, err->message);
+		g_clear_error(&err);
+		return;
 	}
 
-	if (NULL != (err = gridcluster_reload_lbpool (p))) {
-		GRID_NOTICE ("LBPOOL : reload error : (%d) %s", err->code,
-			err->message);
-		g_clear_error (&err);
+	if (GRID_TRACE_ENABLED()) {
+		GRID_TRACE ("SRV loaded %u [%s]", g_slist_length(list), type);
 	}
+
+	if (list) {
+		GSList *l = list;
+
+		gboolean provide(struct service_info_s **p_si) {
+			if (!l)
+				return 0;
+			*p_si = l->data;
+			l->data = NULL;
+			l = l->next;
+			return 1;
+		}
+		grid_lbpool_reload(lbpool, type, provide);
+		g_slist_free(list);
+	}
+}
+
+static void
+_task_reload_lbpool (gpointer p)
+{
+	(void) p;
+	gchar *cs = gridcluster_get_conscience(nsname);
+	if (!cs) return;
+	STRING_STACKIFY(cs);
+
+	gchar **tt = NULL;
+	NSINFO_DO(tt = g_strdupv(srvtypes));
+
+	if (tt) {
+		for (gchar **t=tt; *t ;++t)
+			_reload_srvtype (cs, *t);
+		g_strfreev (tt);
+	}
+
+	grid_lbpool_reconfigure(lbpool, &nsinfo);
 }
 
 static void
 _task_reload_nsinfo (gpointer p)
 {
 	(void) p;
-	GError *err = NULL;
-	struct namespace_info_s *ni;
 
-	if (!(ni = get_namespace_info (nsname, &err))) {
-		GRID_WARN ("NSINFO reload error [%s] : (%d) %s",
-			nsname, err->code, err->message);
+	gchar *cs = gridcluster_get_conscience(nsname);
+	if (!cs) return;
+	STRING_STACKIFY(cs);
+
+	struct namespace_info_s *ni = NULL;
+	GError *err = gcluster_get_namespace (cs, &ni);
+	if (err) {
+		GRID_WARN ("NSINFO reload error [%s] from [%s]: (%d) %s",
+			nsname, cs, err->code, err->message);
 		g_clear_error (&err);
 	} else {
 		NSINFO_DO(namespace_info_copy (ni, &nsinfo, NULL));
@@ -281,20 +320,24 @@ static void
 _task_reload_srvtypes (gpointer p)
 {
 	(void) p;
-	GError *err = NULL;
 
-	GSList *_l = list_namespace_service_types (nsname, &err);
+	gchar *cs = gridcluster_get_conscience(nsname);
+	if (!cs) return;
+	STRING_STACKIFY(cs);
+
+	GSList *list = NULL;
+	GError *err = gcluster_get_service_types (cs, &list);
 	if (err != NULL) {
-		GRID_WARN ("SRVTYPES reload error [%s] : (%d) %s",
-			nsname, err->code, err->message);
+		GRID_WARN ("SRVTYPES reload error [%s] from [%s] : (%d) %s",
+			nsname, cs, err->code, err->message);
 		return;
 	}
 
-	gchar **newset = (gchar **) metautils_list_to_array (_l);
-	g_slist_free (_l);
-	_l = NULL;
+	gchar **newset = (gchar **) metautils_list_to_array (list);
+	g_slist_free (list);
+	list = NULL;
 
-	NSINFO_DO(register gchar **tmp = srvtypes;
+	NSINFO_DO(gchar **tmp = srvtypes;
 	srvtypes = newset;
 	newset = tmp;);
 
@@ -493,7 +536,6 @@ configure_request_handlers (void)
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/lb/$NS/$POOL/$KEY/#GET", action_lb_hash);
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/lb/$NS/$POOL/#GET", action_lb_def);
 
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cs/types/$NS/#GET", action_cs_srvtypes);
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cs/$NS/#HEAD", action_cs_nscheck);
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cs/$NS/#GET", action_cs_info);
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cs/$NS/$TYPE/#HEAD", action_cs_srvcheck);
@@ -659,17 +701,17 @@ grid_main_configure (int argc, char **argv)
 	downstream_gtq = grid_task_queue_create ("downstream");
 
 	grid_task_queue_register (downstream_gtq, (guint) lb_downstream_delay,
-		(GDestroyNotify) _task_reload_lbpool, NULL, lbpool);
+		(GDestroyNotify) _task_reload_lbpool, NULL, NULL);
 
 	// Now prepare a queue for administrative tasks, such as cache expiration,
 	// configuration reloadings, etc.
 	admin_gtq = grid_task_queue_create ("admin");
 
 	grid_task_queue_register (admin_gtq, 1,
-		(GDestroyNotify) _task_expire_resolver, NULL, resolver);
+		(GDestroyNotify) _task_expire_resolver, NULL, NULL);
 
 	grid_task_queue_register (admin_gtq, nsinfo_refresh_delay,
-		(GDestroyNotify) _task_reload_nsinfo, NULL, lbpool);
+		(GDestroyNotify) _task_reload_nsinfo, NULL, NULL);
 
 	grid_task_queue_register (admin_gtq, nsinfo_refresh_delay,
 		(GDestroyNotify) _task_reload_srvtypes, NULL, NULL);

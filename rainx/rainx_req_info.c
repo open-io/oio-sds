@@ -43,11 +43,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <mod_dav.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
-#include <rawx-lib/src/rawx.h>
-
 #include <glib.h>
+
+#include <metautils/metautils.h>
+#include <rawx-lib/src/rawx.h>
 
 #include "mod_dav_rainx.h"
 #include "rainx_internals.h"

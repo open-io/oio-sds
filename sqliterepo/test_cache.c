@@ -20,7 +20,7 @@ License along with this library.
 #include <unistd.h>
 #include <stdio.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 
 #include "cache.h"
 #include "internals.h"

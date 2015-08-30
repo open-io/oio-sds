@@ -30,7 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <signal.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include "gs_rawx_tools.h"
 
 #define DECOMPRESSION_MAX_BUFSIZE 512000

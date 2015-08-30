@@ -32,7 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <ctype.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include <rawx-lib/src/rawx.h>
 
 #include "rawx_repo_core.h"

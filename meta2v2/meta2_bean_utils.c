@@ -22,7 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <asn_SEQUENCE_OF.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include <M2V2BeanSequence.h>
 
 #include <meta2v2/generic.h>

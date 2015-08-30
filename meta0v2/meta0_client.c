@@ -21,11 +21,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <errno.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 
-#include "./meta0_remote.h"
-#include "./meta0_utils.h"
+#include "meta0_remote.h"
+#include "meta0_utils.h"
 
 static addr_info_t addr;
 static gchar *namespace;
@@ -45,7 +44,7 @@ static gboolean
 url_check(const gchar *u)
 {
         addr_info_t a;
-        return grid_string_to_addrinfo(u, NULL, &a);
+        return grid_string_to_addrinfo(u, &a);
 }
 
 static gboolean
@@ -444,7 +443,7 @@ meta0_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	if (!grid_string_to_addrinfo(argv[0], NULL, &addr)) {
+	if (!grid_string_to_addrinfo(argv[0], &addr)) {
 		namespace = strdup(argv[0]);
 	}
 

@@ -31,8 +31,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <apr_strings.h>
 #include <mod_dav.h>
 
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
+#include <metautils/metautils.h>
+#include <conscience/remote.h>
 
 #include "mod_dav_rainx.h"
 #include "rainx_internals.h"
@@ -203,9 +203,8 @@ dav_rainx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg
 	DAV_DEBUG_POOL(cmd->pool, 0, "NS=[%s]", conf->ns_name);
 
 	/* Prepare COMPRESSION / ACL CONF when we get ns name */
-	namespace_info_t* ns_info;
-	GError *local_error = NULL;
-	ns_info = get_namespace_info(conf->ns_name, &local_error);
+	namespace_info_t* ns_info = NULL;
+	GError *local_error = conscience_get_namespace (conf->ns_name, &ns_info);
 	if (!ns_info) {
 		DAV_DEBUG_POOL(cmd->temp_pool, 0, "Failed to get namespace info from ns [%s]", conf->ns_name);
 		return apr_pstrcat(cmd->temp_pool, "Failed to get namespace info from ns: ",

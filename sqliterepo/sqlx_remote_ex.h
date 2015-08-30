@@ -20,7 +20,7 @@ License along with this library.
 #ifndef OIO_SDS__sqliterepo__sqlx_remote_ex_h
 # define OIO_SDS__sqliterepo__sqlx_remote_ex_h 1
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include <sqliterepo/sqlx_remote.h>
 
 /**

@@ -20,7 +20,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta2v2__meta2_bean_h
 # define OIO_SDS__meta2v2__meta2_bean_h 1
 
-#include <metautils/lib/metatypes.h>
+#include <metautils/metatypes.h>
 
 struct M2V2Property;
 struct M2V2Bean;

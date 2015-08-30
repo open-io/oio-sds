@@ -21,9 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <errno.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
-
+#include <metautils/metautils.h>
 #include <meta2v2/meta2_filter_context.h>
 
 struct gridd_filter_input_data_s

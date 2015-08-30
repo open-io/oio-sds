@@ -21,8 +21,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stdlib.h>
 #include <unistd.h>
 
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
+#include <metautils/metautils.h>
+#include <conscience/remote.h>
 #include <meta0v2/meta0_remote.h>
 #include <meta1v2/meta1_remote.h>
 #include <resolver/hc_resolver_internals.h>
@@ -215,14 +215,15 @@ _resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result)
 	GError *err = NULL;
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, ns);
-	hk = hashstr_printf("meta0|%s", ns);
+	hk = hashstr_printf("%s|%s", NAME_SRVTYPE_META0, ns);
 
 	/* Try to hit the cache */
 	if (!(*result = hc_resolver_get_cached(r, r->csm0.cache, hk))) {
 		GSList *allm0;
 
 		/* Now attempt a real resolution */
-		if (!(allm0 = list_namespace_services(ns, NAME_SRVTYPE_META0, &err))) {
+		err = conscience_list_services (ns, NAME_SRVTYPE_META0, FALSE, FALSE, &allm0);
+		if (!allm0 || err) {
 			if (!err)
 				err = NEWERROR(CODE_INTERNAL_ERROR, "No meta0 available");
 			*result = NULL;
@@ -264,7 +265,7 @@ _m0list_to_urlv(GSList *l)
 	for (; l ;l=l->next) {
 		struct meta0_info_s *m0i = l->data;
 		grid_addrinfo_to_string(&(m0i->addr), str, sizeof(str));
-		g_ptr_array_add(tmp, g_strdup_printf("1|meta1|%s|", str));
+		g_ptr_array_add(tmp, g_strdup_printf("1|%s|%s|", NAME_SRVTYPE_META1, str));
 	}
 
 	g_ptr_array_add(tmp, NULL);
@@ -328,7 +329,7 @@ _resolve_meta1(struct hc_resolver_s *r, struct hc_url_s *u, gchar ***result)
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(u, HCURL_WHOLE));
 
-	hk = hashstr_printf("meta1|%s|%.4s",
+	hk = hashstr_printf("%s|%s|%.4s", NAME_SRVTYPE_META1,
 			hc_url_get(u, HCURL_NS), hc_url_get(u, HCURL_HEXID));
 
 	/* Try to hit the cache */
@@ -488,11 +489,11 @@ hc_decache_reference(struct hc_resolver_s *r, struct hc_url_s *url)
 	if (r->flags & HC_RESOLVER_NOCACHE)
 		return;
 
-	hk = hashstr_printf("meta0|%s", hc_url_get(url, HCURL_NS));
+	hk = hashstr_printf("%s|%s", NAME_SRVTYPE_META0, hc_url_get(url, HCURL_NS));
 	hc_resolver_forget(r, r->csm0.cache, hk);
 	g_free(hk);
 
-	hk = hashstr_printf("meta1|%s|%.4s", hc_url_get(url, HCURL_NS),
+	hk = hashstr_printf("%s|%s|%.4s", NAME_SRVTYPE_META1, hc_url_get(url, HCURL_NS),
 			hc_url_get(url, HCURL_HEXID));
 	hc_resolver_forget(r, r->csm0.cache, hk);
 	g_free(hk);

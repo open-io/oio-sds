@@ -25,8 +25,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
-#include <metautils/lib/metautils.h>
-#include <cluster/lib/gridcluster.h>
+#include <metautils/metautils.h>
+#include <conscience/remote.h>
 
 #include "rainx_config.h"
 #include "rainx_internals.h"
@@ -40,7 +40,7 @@ _addr_rule_gclean(gpointer data, gpointer udata)
 	addr_rule_g_free(data);
 }
 
-/**********************************************************************/
+//------------------------------------------------------------------------------
 
 char *
 _get_compression_algorithm(apr_pool_t *p, namespace_info_t *ns_info)
@@ -145,7 +145,7 @@ update_rainx_conf(apr_pool_t* p, rawx_conf_t **rainx_conf, const gchar* ns_name)
 		return FALSE;
 	}
 
-	ns_info = get_namespace_info(ns_name, &local_error);
+	local_error = conscience_get_namespace (ns_name, &ns_info);
 	if (!ns_info) {
 		if (local_error != NULL) {
 			DAV_ERROR_POOL(p, 0, "%s", local_error->message);

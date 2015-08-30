@@ -32,7 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include <metautils/lib/metautils.h>
+#include <metautils/metautils.h>
 #include "compression.h"
 #include "rawx.h"
 

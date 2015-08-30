@@ -19,7 +19,7 @@ License along with this library.
 
 #include <stddef.h>
 
-#include <metautils/lib/metacomm.h>
+#include <metautils/metautils.h>
 
 #include "internals.h"
 #include "network_server.h"
