@@ -124,7 +124,8 @@ def create_app(conf, **kwargs):
     app.backend = AccountBackend(conf)
     app.register_blueprint(account_api)
     # we want exceptions to be logged
-    app.config['PROPAGATE_EXCEPTIONS'] = True
+    if conf.get('log_level') == 'DEBUG':
+        app.config['PROPAGATE_EXCEPTIONS'] = True
     return app
 
 
