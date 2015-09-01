@@ -740,15 +740,26 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 static gchar *
 _request_get_cid (MESSAGE request)
 {
+	GError *err;
 	container_id_t cid;
 	gchar strcid[STRLEN_CONTAINERID];
-	GError *err = metautils_message_extract_cid(request, NAME_MSGKEY_CONTAINERID, &cid);
-	if (err) {
-		g_clear_error(&err);
-		return NULL;
+
+	err = metautils_message_extract_cid(request, NAME_MSGKEY_CONTAINERID, &cid);
+	if (!err) {
+		container_id_to_string(cid, strcid, sizeof(strcid));
+		return g_strdup(strcid);
 	}
-	container_id_to_string(cid, strcid, sizeof(strcid));
-	return g_strdup(strcid);
+	g_clear_error(&err);
+
+	gchar *out = metautils_message_extract_string_copy (request, NAME_MSGKEY_BASENAME);
+	if (out) {
+		gchar *p = strchr(out, '.');
+		if (p) *p = '\0';
+		return out;
+	}
+	g_clear_error (&err);
+
+	return NULL;
 }
 
 static gboolean
