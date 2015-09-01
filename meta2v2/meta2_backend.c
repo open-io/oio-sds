@@ -636,8 +636,9 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 			g_string_append (gs, "\"url\":{");
 			_append_url (gs, url);
 			g_string_append (gs, "}}}");
+			int master = sq3->election == ELECTION_LEADER;
 			m2b_destroy(sq3);
-			if (!local && sq3->election == ELECTION_LEADER && m2->notify.hook)
+			if (!local && master && m2->notify.hook)
 				m2->notify.hook (m2->notify.udata, g_string_free (gs, FALSE));
 			else
 				g_string_free (gs, TRUE);
