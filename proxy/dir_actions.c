@@ -156,6 +156,8 @@ enum http_rc_e
 action_dir_srv_list (struct req_args_s *args)
 {
 	const gchar *type = TYPE();
+	if (!type)
+		return _reply_format_error (args, NEWERROR( CODE_BAD_REQUEST, "No service type provided"));
 
 	gchar **urlv = NULL;
 	GError *err = hc_resolve_reference_service (resolver, args->url, type, &urlv);
@@ -180,6 +182,8 @@ enum http_rc_e
 action_dir_srv_unlink (struct req_args_s *args)
 {
 	const gchar *type = TYPE();
+	if (!type)
+		return _reply_format_error (args, NEWERROR( CODE_BAD_REQUEST, "No service type provided"));
 
 	GError *hook (const gchar * m1) {
 		struct addr_info_s m1a;
@@ -210,6 +214,8 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
 	const gchar *type = TYPE();
+	if (!type)
+		return _reply_format_error (args, NEWERROR(CODE_BAD_REQUEST, "No service type provided"));
 	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
 	gboolean dryrun = _request_has_flag (args, PROXYD_HEADER_MODE, "dryrun");
 
@@ -243,8 +249,10 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 enum http_rc_e
 action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 {
-	const gchar *type = TYPE();
 	struct meta1_service_url_s *m1u = NULL;
+	const gchar *type = TYPE();
+	if (!type)
+		return _reply_format_error (args, NEWERROR(CODE_BAD_REQUEST, "No service type provided"));
 
 	gboolean force = _request_has_flag (args, PROXYD_HEADER_MODE, "replace");
 	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
@@ -288,6 +296,8 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
 	const gchar *type = TYPE();
+	if (!type)
+		return _reply_format_error (args, NEWERROR(CODE_BAD_REQUEST, "No service type provided"));
 	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
 	gboolean dryrun = _request_has_flag (args, PROXYD_HEADER_MODE, "dryrun");
 
