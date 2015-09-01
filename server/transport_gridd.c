@@ -602,7 +602,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		va_end(args);
 
 		const gchar *old = req_ctx->subject;
-		gchar *s = g_strconcat (old?old:"", old?" ":"", tail, NULL);
+		gchar *s = g_strconcat (old?:"", old?" ":"", tail, NULL);
 		oio_str_reuse(&req_ctx->subject, s);
 		g_free0 (tail);
 	}
@@ -665,7 +665,10 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 		}
 		else {
 			_add_body(NULL);
-			_subject ("e=(%d) %s", e->code, e->message);
+			if (e->code == CODE_REDIRECT)
+				_subject ("e=(%d) redirect to %s", e->code, e->message);
+			else
+				_subject ("e=(%d) %s", e->code, e->message);
 			if (code)
 				e->code = code;
 			if (CODE_IS_NETWORK_ERROR(e->code))
