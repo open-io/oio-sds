@@ -20,7 +20,7 @@
 import sys, logging, itertools, threading
 from time import time as now
 import zookeeper
-import oio.config
+from oio.common.utils import load_namespace_conf
 
 PREFIX='/hc'
 PREFIX_NS=PREFIX+'/ns'
@@ -151,7 +151,7 @@ def main():
 		raise ValueError("not enough CLI arguments")
 
 	ns = args[1]
-	cnxstr = oio.config.load().get(ns, 'zookeeper')
+	cnxstr = load_namespace_conf(ns)['zookeeper']
 	zookeeper.set_debug_level(zookeeper.LOG_LEVEL_INFO)
 	zh = zookeeper.init(cnxstr)
 
