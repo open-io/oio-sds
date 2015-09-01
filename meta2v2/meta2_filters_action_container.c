@@ -215,9 +215,6 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 			lp->flag_headers, lp->flag_allversion, lp->flag_nodeleted,
 			lp->prefix, lp->marker_start, lp->marker_end, lp->maxkeys);
 
-	if (lp->maxkeys > 0)
-		lp->maxkeys ++;
-
 	// XXX the underlying meta2_backend_list_aliases() function MUST
 	// return headers before the associated alias.
 	gint64 max = lp->maxkeys;
@@ -238,6 +235,7 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		}
 	}
 
+	lp->maxkeys ++;
 	e = meta2_backend_list_aliases(m2b, url, lp, headers, s3_list_cb, NULL,
 			&properties);
 
@@ -254,11 +252,11 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 	S3_RESPONSE_HEADER(NAME_MSGKEY_MARKER_END, lp->marker_end);
 	S3_RESPONSE_HEADER(NAME_MSGKEY_TRUNCATED, truncated ? "true" : "false");
 	S3_RESPONSE_HEADER(NAME_MSGKEY_NEXTMARKER, next_marker);
-	if (lp->maxkeys > 0) {
-		gchar tmp[64];	
-		g_snprintf(tmp, sizeof(tmp), "%"G_GINT64_FORMAT, lp->maxkeys - 1);
-		reply->add_header(NAME_MSGKEY_MAX_KEYS, metautils_gba_from_string(tmp));
-	}
+
+	gchar tmp[64];
+	g_snprintf(tmp, sizeof(tmp), "%"G_GINT64_FORMAT, lp->maxkeys - 1);
+	reply->add_header(NAME_MSGKEY_MAX_KEYS, metautils_gba_from_string(tmp));
+
 	if (properties) {
 		for (gchar **p=properties; *p && *(p+1) ;p+=2) {
 			if (!g_str_has_prefix (*p, SQLX_ADMIN_PREFIX_USER)
