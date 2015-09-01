@@ -106,6 +106,12 @@ _container_new_props_to_headers (struct req_args_s *args, GTree *props)
 	g_tree_foreach (props, (GTraverseFunc)_run, NULL);
 }
 
+static gint
+_sort_aliases_by_name (struct bean_ALIASES_s *a0, struct bean_ALIASES_s *a1)
+{
+	return g_strcmp0 (ALIASES_get_alias(a0)->str, ALIASES_get_alias(a1)->str);
+}
+
 static enum http_rc_e
 _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 		gchar **prefixes)
@@ -142,6 +148,7 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 	// And now the beans
 	g_string_append (gstr, "\"objects\":[");
 	first = TRUE;
+	aliases = g_slist_sort (aliases, (GCompareFunc)_sort_aliases_by_name);
 	for (GSList *la = aliases; la ; la=la->next) {
 
 		if (!first)
@@ -582,11 +589,27 @@ _delimiter (struct req_args_s *args)
 	return s ? *s : 0;
 }
 
-static gint64
-_max (struct req_args_s *args)
+static GError *
+_max (struct req_args_s *args, gint64 *pmax)
 {
+	*pmax = 0;
 	const char *s = OPT("max");
-	return s ? atoi(s) : 0;
+	if (!s)
+		return NULL;
+	if (!*s)
+		return BADREQ("Invalid max number of items: %s", "empty");
+
+	gchar *end = NULL;
+	*pmax = g_ascii_strtoll(s, &end, 10);
+	if (!*pmax && errno == EINVAL)
+		return BADREQ("Invalid max number of items: %s", "not an integer");
+	if (*pmax <= 0)
+		return BADREQ("Invalid max number of items: %s", "too small");
+	if (*pmax == G_MAXINT64 || *pmax == G_MININT64)
+		return BADREQ("Invalid max number of items: %s", "overflow");
+	if (end && *end)
+		return BADREQ("Invalid max number of items: %s", "trailing characters");
+	return NULL;
 }
 
 struct filter_ctx_s
@@ -737,21 +760,24 @@ action_m2_container_list (struct req_args_s *args)
 	list_in.prefix = OPT("prefix");
 	list_in.marker_start = OPT("marker");
 	list_in.marker_end = OPT("marker_end");
-	list_in.maxkeys = _max (args);
 	delimiter = _delimiter (args);
 	if (OPT("deleted"))
 		list_in.flag_nodeleted = 0;
 	if (OPT("all"))
 		list_in.flag_allversion = ~0;
-	tree_properties = g_tree_new_full (metautils_strcmp3, NULL, g_free, g_free);
+	if (!err)
+		err = _max (args, &list_in.maxkeys);
+	if (!err) {
+		tree_properties = g_tree_new_full (metautils_strcmp3, NULL, g_free, g_free);
+		tree_prefixes = g_tree_new_full (metautils_strcmp3, NULL, g_free, NULL);
+	}
 
 	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%c prefix=%s marker=%s end=%s",
 			hc_url_get(args->url, HCURL_WHOLE), list_in.maxkeys, delimiter,
 			list_in.prefix, list_in.marker_start, list_in.marker_end);
 
-	tree_prefixes = g_tree_new_full (metautils_strcmp3, NULL, g_free, NULL);
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-
+	if (!err)
+		err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	if (!err) {
 		args->rp->add_header(PROXYD_HEADER_PREFIX "list-truncated",
 				g_strdup(list_out.truncated ? "true" : "false"));
@@ -764,12 +790,13 @@ action_m2_container_list (struct req_args_s *args)
 	gchar **keys_prefixes = NULL;
 	if (!err)
 		keys_prefixes = gtree_string_keys (tree_prefixes);
-	_container_new_props_to_headers (args, tree_properties);
+	if (!err)
+		_container_new_props_to_headers (args, tree_properties);
 	enum http_rc_e rc = _reply_aliases (args, err, list_out.beans, keys_prefixes);
-	if (keys_prefixes)
-		g_free (keys_prefixes);
-	g_tree_destroy (tree_prefixes);
-	g_tree_destroy (tree_properties);
+	if (keys_prefixes) g_free (keys_prefixes);
+	if (tree_prefixes) g_tree_destroy (tree_prefixes);
+	if (tree_properties) g_tree_destroy (tree_properties);
+	if (content_hash) g_bytes_unref (content_hash);
 	oio_str_clean (&list_out.next_marker);
 	return rc;
 }

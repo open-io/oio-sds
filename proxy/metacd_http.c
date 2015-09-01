@@ -472,6 +472,9 @@ grid_main_specific_fini (void)
 	oio_str_clean (&nsname);
 	g_mutex_clear(&nsinfo_mutex);
 	g_mutex_clear(&push_mutex);
+
+	g_slist_free_full (config_urlv, g_free);
+	config_urlv = NULL;
 }
 
 static void
