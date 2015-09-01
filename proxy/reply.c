@@ -43,6 +43,16 @@ _create_status_error (GError * e)
 }
 
 enum http_rc_e
+_reply_common_error (struct req_args_s *args, GError *err)
+{
+	if (CODE_IS_NOTFOUND(err->code))
+		return _reply_notfound_error (args, err);
+	if (err->code == CODE_BAD_REQUEST)
+		return _reply_format_error (args, err);
+	return _reply_system_error (args, err);
+}
+
+enum http_rc_e
 _reply_json (struct req_args_s *args, int code, const gchar * msg,
 	GString * gstr)
 {
@@ -132,3 +142,4 @@ _reply_success_json (struct req_args_s *args, GString * gstr)
 	const gchar *msg = gstr && gstr->len > 0 ? "OK" : "No Content";
 	return _reply_json (args, code, msg, gstr);
 }
+

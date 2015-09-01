@@ -173,9 +173,7 @@ action_dir_srv_list (struct req_args_s *args)
 		return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, urlv));
 	}
 
-	if (CODE_IS_NOTFOUND(err->code))
-		return _reply_notfound_error (args, err);
-	return _reply_system_error (args, err);
+	return _reply_common_error (args, err);
 }
 
 enum http_rc_e
@@ -204,9 +202,7 @@ action_dir_srv_unlink (struct req_args_s *args)
 
 	if (!err)
 		return _reply_success_json (args, NULL);
-	if (CODE_IS_NOTFOUND(err->code))
-		return _reply_notfound_error (args, err);
-	return _reply_system_error (args, err);
+	return _reply_common_error (args, err);
 }
 
 enum http_rc_e
@@ -236,11 +232,8 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
-	if (err) {
-		if (CODE_IS_NOTFOUND(err->code))
-			return _reply_notfound_error (args, err);
-		return _reply_system_error (args, err);
-	}
+	if (err)
+		return _reply_common_error (args, err);
 
 	EXTRA_ASSERT (urlv != NULL);
 	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, urlv));
@@ -283,11 +276,8 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
-	if (err) {
-		if (CODE_IS_NOTFOUND(err->code))
-			return _reply_notfound_error (args, err);
-		return _reply_system_error (args, err);
-	}
+	if (err)
+		return _reply_common_error (args, err);
 	return _reply_success_json (args, NULL);
 }
 
@@ -319,11 +309,8 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
-	if (err) {
-		if (CODE_IS_NOTFOUND(err->code))
-				return _reply_notfound_error (args, err);
-		return _reply_system_error (args, err);
-	}
+	if (err)
+		return _reply_common_error (args, err);
 	EXTRA_ASSERT (urlv != NULL);
 	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, urlv));
 }
@@ -374,9 +361,7 @@ action_dir_ref_list (struct req_args_s *args)
 		g_string_append (out, "}");
 		return _reply_success_json (args, out);
 	}
-	if (CODE_IS_NOTFOUND(err->code))
-		return _reply_notfound_error (args, err);
-	return _reply_system_error (args, err);
+	return _reply_common_error (args, err);
 }
 
 enum http_rc_e
@@ -397,9 +382,7 @@ action_dir_ref_has (struct req_args_s *args)
 	GError *err = _m1_locate_and_action (args, hook);
 	if (!err)
 		return _reply_success_json (args, NULL);
-	if (CODE_IS_NOTFOUND(err->code))
-		return _reply_notfound_error (args, err);
-	return _reply_system_error (args, err);
+	return _reply_common_error (args, err);
 }
 
 enum http_rc_e
@@ -416,9 +399,11 @@ action_dir_ref_create (struct req_args_s *args)
 	GError *err = _m1_locate_and_action (args, hook);
 	if (!err)
 		return _reply_created (args);
-	if (err->code == CODE_CONTAINER_EXISTS)
+	if (err->code == CODE_CONTAINER_EXISTS) {
+		g_clear_error (&err);
 		return _reply_accepted (args);
-	return _reply_system_error (args, err);
+	}
+	return _reply_common_error (args, err);
 }
 
 enum http_rc_e
@@ -446,9 +431,7 @@ action_dir_ref_destroy (struct req_args_s *args)
 	}
 	if (!err)
 		return _reply_nocontent (args);
-	if (CODE_IS_NOTFOUND(err->code))
-		return _reply_notfound_error (args, err);
-	return _reply_system_error (args, err);
+	return _reply_common_error (args, err);
 }
 
 //------------------------------------------------------------------------------
@@ -479,9 +462,7 @@ action_dir_resolve (struct req_args_s *args)
 		g_string_append_c (body, ']');
 		return _reply_success_json (args, body);
 	}
-	if (CODE_IS_NOTFOUND(err->code))
-		return _reply_notfound_error (args, err);
-	return _reply_system_error (args, err);
+	return _reply_common_error (args, err);
 }
 
 //------------------------------------------------------------------------------
@@ -511,9 +492,7 @@ action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)
 	}
 	if (!err)
 		return _reply_success_json (args, _pack_and_freev_pairs (pairs));
-	if (CODE_IS_NOTFOUND(err->code))
-		return _reply_notfound_error (args, err);
-	return _reply_system_error (args, err);
+	return _reply_common_error (args, err);
 }
 
 enum http_rc_e
@@ -562,9 +541,7 @@ action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 	}
 	if (!err)
 		return _reply_success_json (args, NULL);
-	if (CODE_IS_NOTFOUND(err->code))
-		return _reply_notfound_error (args, err);
-	return _reply_system_error (args, err);
+	return _reply_common_error (args, err);
 }
 
 enum http_rc_e
@@ -590,9 +567,7 @@ action_dir_prop_del (struct req_args_s *args, struct json_object *jargs)
 	}
 	if (!err)
 		return _reply_success_json (args, NULL);
-	if (CODE_IS_NOTFOUND(err->code))
-		return _reply_notfound_error (args, err);
-	return _reply_system_error (args, err);
+	return _reply_common_error (args, err);
 }
 
 enum http_rc_e

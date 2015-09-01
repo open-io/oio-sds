@@ -192,4 +192,7 @@ _create_status (gint code, const gchar * msg);
 GString *
 _create_status_error (GError * e);
 
+enum http_rc_e
+_reply_common_error (struct req_args_s *args, GError *err);
+
 #endif /*OIO_SDS__proxy__common_h*/

@@ -37,16 +37,10 @@ _reply_m2_error (struct req_args_s *args, GError * err)
 {
 	if (!err)
 		return _reply_success_json (args, NULL);
-
 	g_prefix_error (&err, "M2 error: ");
-	if (err->code == CODE_BAD_REQUEST)
-		return _reply_format_error (args, err);
-	else if (CODE_IS_NOTFOUND(err->code))
-		return _reply_notfound_error (args, err);
-	else if (err->code == CODE_CONTAINER_NOTEMPTY)
+	if (err->code == CODE_CONTAINER_NOTEMPTY)
 		return _reply_conflict_error (args, err);
-	else
-		return _reply_system_error (args, err);
+	return _reply_common_error (args, err);
 }
 
 static void
@@ -870,8 +864,10 @@ action_m2_container_create (struct req_args_s *args)
 	GError *err = _m2_container_create (args);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
-	if (err && err->code == CODE_CONTAINER_EXISTS)
+	if (err && err->code == CODE_CONTAINER_EXISTS) {
+		g_clear_error (&err);
 		return _reply_created(args);
+	}
 	return _reply_m2_error (args, err);
 }
 
@@ -932,9 +928,7 @@ action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
 	if (NULL != err) {
 		g_string_free (gstr, TRUE);
 		g_prefix_error (&err, "M2 error: ");
-		if (CODE_IS_NOTFOUND(err->code))
-			return _reply_notfound_error (args, err);
-		return _reply_system_error (args, err);
+		return _reply_common_error (args, err);
 	}
 
 	g_string_append (gstr, "]}");
@@ -974,9 +968,8 @@ action_m2_container_raw_insert (struct req_args_s *args, struct json_object *jar
 		return m2v2_remote_execute_RAW_ADD (m2->host, args->url, beans);
 	}
 	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (NULL != err) {
+	if (NULL != err)
 		return _reply_m2_error (args, err);
-	}
 	return _reply_success_json (args, NULL);
 }
 
@@ -995,9 +988,8 @@ action_m2_container_raw_delete (struct req_args_s *args, struct json_object *jar
 		return m2v2_remote_execute_RAW_DEL (m2->host, args->url, beans);
 	}
 	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (NULL != err) {
+	if (NULL != err)
 		return _reply_m2_error (args, err);
-	}
 	return _reply_success_json (args, NULL);
 }
 
@@ -1028,7 +1020,8 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 		(void) next;
 		return m2v2_remote_execute_RAW_SUBST (m2->host, args->url, beans_new, beans_old);
 	}
-	if (!err) err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	if (!err)
+		err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	_bean_cleanl2 (beans_old);
 	_bean_cleanl2 (beans_new);
 
