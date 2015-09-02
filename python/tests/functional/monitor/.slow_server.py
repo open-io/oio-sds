@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-from BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
+
+m BaseHTTPServer import BaseHTTPRequestHandler, HTTPServer
 import time
 
 
