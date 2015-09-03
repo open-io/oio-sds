@@ -222,4 +222,3 @@ class TestConscienceFunctional(unittest.TestCase):
                    self.session.get(self.addr_type).json() if
                    session["addr"] == self.addr1]
         self.assertEqual(service, [])
-

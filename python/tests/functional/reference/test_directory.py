@@ -26,13 +26,16 @@ class TestDirectoryFunctional(unittest.TestCase):
         self.basic_addr = urlparse.urlsplit(self.proxyd_uri).hostname + ":"
         self.session = requests.session()
 
-        self.chars = string.ascii_lowercase + string.ascii_uppercase + string.digits
+        self.chars = (string.ascii_lowercase + string.ascii_uppercase +
+                      string.digits)
 
     def setUp(self):
         super(TestDirectoryFunctional, self).setUp()
 
-        self.address = "{0}{1}/{2}".format(self.proxyd_uri, self.namespace, self.account)
-        self.address_cs = "{0}{1}/echo".format(self.proxyd_uri2, self.namespace)
+        self.address = "{0}{1}/{2}".format(self.proxyd_uri, self.namespace,
+                                           self.account)
+        self.address_cs = "{0}{1}/echo".format(self.proxyd_uri2,
+                                               self.namespace)
 
         def id_generator(n):
             return ''.join(random.choice(self.chars) for _ in range(n))
@@ -76,7 +79,8 @@ class TestDirectoryFunctional(unittest.TestCase):
 
         self.addr_RefInvalid = self.address + "/error"
         self.addr_RefInvalid_type = self.addr_RefInvalid + "/echo"
-        self.addr_RefInvalid_type_action = self.addr_RefInvalid_type + "/action"
+        self.addr_RefInvalid_type_action = (self.addr_RefInvalid_type +
+                                            "/action")
 
     def tearDown(self):
         super(TestDirectoryFunctional, self).tearDown()
@@ -206,7 +210,8 @@ class TestDirectoryFunctional(unittest.TestCase):
     def test_service_actions_link_again(self):
 
         self.session.post(self.address_cs + "/action",
-                          json.dumps({"action": "Lock", "args": self.service2}))
+                          json.dumps(
+                              {"action": "Lock", "args": self.service2}))
         time.sleep(4)
 
         resp = self.session.post(self.addr_RefSet_type_action, json.dumps(
@@ -221,7 +226,8 @@ class TestDirectoryFunctional(unittest.TestCase):
     def test_service_actions_renew(self):
 
         self.session.post(self.address_cs + "/action",
-                          json.dumps({"action": "Lock", "args": self.service2}))
+                          json.dumps(
+                              {"action": "Lock", "args": self.service2}))
         time.sleep(4)
 
         resp = self.session.post(self.addr_RefSet_type_action, json.dumps(
@@ -249,7 +255,8 @@ class TestDirectoryFunctional(unittest.TestCase):
     def test_service_actions_force_replace_with_header(self):
 
         self.session.post(self.address_cs + "/action",
-                          json.dumps({"action": "Lock", "args": self.service2}))
+                          json.dumps(
+                              {"action": "Lock", "args": self.service2}))
         time.sleep(4)
 
         self.session.post(self.addr_RefSet_type_action2, json.dumps(
@@ -259,18 +266,18 @@ class TestDirectoryFunctional(unittest.TestCase):
         ))
 
         resp = self.session.post(self.addr_RefSet_type_action2, json.dumps(
-            {"action": "Force", "args": {"seq": 1, "type": "echo",
-                                         "host": self.addr2,
-                                         "args": ""}}),
-            headers={'x-oio-action-mode': 'replace'}
-        )
+            {"action": "Force",
+             "args": {"seq": 1, "type": "echo",
+                      "host": self.addr2,
+                      "args": ""}}), headers={'x-oio-action-mode': 'replace'})
 
         self.assertEqual(resp.status_code, 204)
 
     def test_service_actions_force_replace_no_header(self):
 
         self.session.post(self.address_cs + "/action",
-                          json.dumps({"action": "Lock", "args": self.service2}))
+                          json.dumps(
+                              {"action": "Lock", "args": self.service2}))
         time.sleep(4)
 
         self.session.post(self.addr_RefSet_type_action2, json.dumps(
@@ -282,26 +289,24 @@ class TestDirectoryFunctional(unittest.TestCase):
         resp = self.session.post(self.addr_RefSet_type_action2, json.dumps(
             {"action": "Force", "args": {"seq": 1, "type": "echo",
                                          "host": self.addr2,
-                                         "args": ""}})
-        )
+                                         "args": ""}}))
 
         self.assertEqual(resp.status_code, 403)
 
     def test_service_actions_force_valid(self):
 
         self.session.post(self.address_cs + "/action",
-                          json.dumps({"action": "Lock", "args": self.service2}))
+                          json.dumps(
+                              {"action": "Lock", "args": self.service2}))
         time.sleep(4)
 
         resp = self.session.post(self.addr_RefSet_type_action2, json.dumps(
             {"action": "Force", "args": {"seq": 1, "type": "echo",
                                          "host": self.addr2,
-                                         "args": ""}})
-                                 )
+                                         "args": ""}}))
         self.assertEqual(resp.status_code, 204)
 
         resp = [service["host"] for service in
                 self.session.get(self.addr_RefSet_type2).json()]
 
         self.assertEqual(resp, [self.addr2])
-
