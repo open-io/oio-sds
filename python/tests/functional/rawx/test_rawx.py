@@ -6,8 +6,8 @@ import hashlib
 import gzip
 import StringIO
 import tempfile
-
 import os
+
 import requests
 
 import xattr
@@ -28,7 +28,8 @@ class TestConscienceFunctional(unittest.TestCase):
         self.session = requests.session()
         self.id_chars = string.digits + 'ABCDEF'
 
-        self.chars = string.ascii_lowercase + string.ascii_uppercase + string.digits
+        self.chars = (string.ascii_lowercase + string.ascii_uppercase +
+                      string.digits)
         self.chars_id = string.digits + 'ABCDEF'
 
         self.h = hashlib.new('md5')
@@ -68,14 +69,17 @@ class TestConscienceFunctional(unittest.TestCase):
 
         self.headers_put = {'X-oio-chunk-meta-content-path': self.content.path,
                             'X-oio-chunk-meta-content-size': self.content.size,
-                            'X-oio-chunk-meta-content-chunksnb': self.content.nb_chunks,
-                            'X-oio-chunk-meta-container-id': self.content.id_container,
+                            'X-oio-chunk-meta-content-chunksnb':
+                                self.content.nb_chunks,
+                            'X-oio-chunk-meta-container-id':
+                                self.content.id_container,
                             'X-oio-chunk-meta-chunk-id': self.chunk.chunk_id,
                             'X-oio-chunk-meta-chunk-size': self.chunk.size,
                             'X-oio-chunk-meta-chunk-pos': self.chunk.pos,
                             'X-oio-chunk-meta-chunk-hash': self.hash_rand}
-        self.chunk_path = self.test_dir + 'data/NS-rawx-1/' + self.chunk.chunk_id[
-                                                              0:2] + "/" + self.chunk.chunk_id
+        self.chunk_path = (self.test_dir + 'data/NS-rawx-1/' +
+                           self.chunk.chunk_id[0:2] + "/" +
+                           self.chunk.chunk_id)
 
     def tearDown(self):
 
@@ -110,14 +114,17 @@ class TestConscienceFunctional(unittest.TestCase):
 
         self.headers_put = {'X-oio-chunk-meta-content-path': self.content.path,
                             'X-oio-chunk-meta-content-size': self.content.size,
-                            'X-oio-chunk-meta-content-chunksnb': self.content.nb_chunks,
-                            'X-oio-chunk-meta-container-id': self.content.id_container,
+                            'X-oio-chunk-meta-content-chunksnb':
+                                self.content.nb_chunks,
+                            'X-oio-chunk-meta-container-id':
+                                self.content.id_container,
                             'X-oio-chunk-meta-chunk-id': self.chunk.chunk_id,
                             'X-oio-chunk-meta-chunk-size': self.chunk.size,
                             'X-oio-chunk-meta-chunk-pos': self.chunk.pos,
                             'X-oio-chunk-meta-chunk-hash': self.hash_rand}
-        self.chunk_path = self.test_dir + 'data/NS-rawx-1/' + self.chunk.chunk_id[
-                                                              0:2] + "/" + self.chunk.chunk_id
+        self.chunk_path = (self.test_dir + 'data/NS-rawx-1/' +
+                           self.chunk.chunk_id[0:2] + "/" +
+                           self.chunk.chunk_id)
 
     def setup_compressed(self, tmpfile, length):
 
@@ -138,15 +145,18 @@ class TestConscienceFunctional(unittest.TestCase):
 
         self.headers_put = {'X-oio-chunk-meta-content-path': self.content.path,
                             'X-oio-chunk-meta-content-size': self.content.size,
-                            'X-oio-chunk-meta-content-chunksnb': self.content.nb_chunks,
-                            'X-oio-chunk-meta-container-id': self.content.id_container,
+                            'X-oio-chunk-meta-content-chunksnb':
+                                self.content.nb_chunks,
+                            'X-oio-chunk-meta-container-id':
+                                self.content.id_container,
                             'X-oio-chunk-meta-chunk-id': self.chunk.chunk_id,
                             'X-oio-chunk-meta-chunk-size': self.chunk.size,
                             'X-oio-chunk-meta-chunk-pos': self.chunk.pos,
                             'X-oio-chunk-meta-chunk-hash': self.hash_rand,
                             'Transfer_encoding': 'gzip'}
-        self.chunk_path = self.test_dir + 'data/NS-rawx-1/' + self.chunk.chunk_id[
-                                                              0:2] + "/" + self.chunk.chunk_id
+        self.chunk_path = (self.test_dir + 'data/NS-rawx-1/' +
+                           self.chunk.chunk_id[0:2] + "/" +
+                           self.chunk.chunk_id)
 
     def prepare_compressed(self, length):
 
@@ -179,9 +189,9 @@ class TestConscienceFunctional(unittest.TestCase):
 
         self.setup_again(0)
 
-        p = self.session.put(self.rawx + self.chunk.chunk_id,
-                             data=self.content_data,
-                             headers=self.headers_put)
+        self.session.put(self.rawx + self.chunk.chunk_id,
+                         data=self.content_data,
+                         headers=self.headers_put)
 
         with open(self.chunk_path) as f:
             self.chunk_data = f.read()
@@ -352,7 +362,8 @@ class TestConscienceFunctional(unittest.TestCase):
                          str(self.content.nb_chunks))
         self.assertEqual(resp["X-oio-chunk-meta-container-id"],
                          self.content.id_container)
-        self.assertEqual(resp["X-oio-chunk-meta-chunk-id"], self.chunk.chunk_id)
+        self.assertEqual(resp["X-oio-chunk-meta-chunk-id"],
+                         self.chunk.chunk_id)
         self.assertEqual(resp["X-oio-chunk-meta-chunk-size"],
                          str(self.chunk.size))
         self.assertEqual(resp["X-oio-chunk-meta-chunk-pos"],

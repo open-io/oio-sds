@@ -24,11 +24,14 @@ class TestMeta2Functional(unittest.TestCase):
 
         self.session = requests.session()
 
-        self.chars = string.ascii_lowercase + string.ascii_uppercase + string.digits
+        self.chars = (string.ascii_lowercase + string.ascii_uppercase +
+                      string.digits)
 
         self.proxyd_cs = self.proxyd + "/cs/" + self.namespace
-        self.proxyd_dir = self.proxyd + "/dir/" + self.namespace + '/' + self.account
-        self.proxyd_m2 = self.proxyd + "/m2/" + self.namespace + '/' + self.account
+        self.proxyd_dir = (self.proxyd + "/dir/" + self.namespace + '/' +
+                           self.account)
+        self.proxyd_m2 = (self.proxyd + "/m2/" + self.namespace + '/' +
+                          self.account)
 
         self.h = hashlib.new('ripemd160')
 
@@ -65,14 +68,18 @@ class TestMeta2Functional(unittest.TestCase):
         self.addr_Ref_type_action = self.addr_Ref_type + "/action"
         self.addr_m2_ref_path_action = self.addr_m2_ref_path + "/action"
 
-        self.direct_path = "NS/" + self.account + "/" + self.idRef_rand + "/" + self.path_rand
-        self.path_paste = "NS/" + self.account + "/" + self.idRef_rand + "/" + self.path_rand2
-        self.path_paste_wrong = "NS/" + self.account + "/" + self.idRef_rand2 + "/" + self.path_rand
+        self.direct_path = "NS/" + self.account + "/" + self.idRef_rand + \
+                           "/" + self.path_rand
+        self.path_paste = "NS/" + self.account + "/" + self.idRef_rand + \
+                          "/" + self.path_rand2
+        self.path_paste_wrong = "NS/" + self.account + "/" + \
+                                self.idRef_rand2 + "/" + self.path_rand
 
         self.addr_alone_ref = self.proxyd_dir + "/" + self.idRef_rand2
         self.addr_alone_ref_type_action = self.addr_alone_ref + "meta2/action"
         self.addr_m2_alone_ref = self.proxyd_m2 + "/" + self.idRef_rand2
-        self.addr_m2_alone_ref_path = self.addr_m2_alone_ref + "/" + self.path_rand
+        self.addr_m2_alone_ref_path = (self.addr_m2_alone_ref + "/" +
+                                       self.path_rand)
         self.addr_m2_alone_ref_action = self.addr_m2_alone_ref + "/action"
 
         self.invalid_addr_m2 = self.proxyd_m2 + "/error"
@@ -171,7 +178,8 @@ class TestMeta2Functional(unittest.TestCase):
             for num2 in xrange(13):
                 self.addr_m2_ref_path = self.addr_m2_ref + '/%d-%02d' % (
                     num1, num2)
-                self.addr_m2_ref_path_action = self.addr_m2_ref_path + "/action"
+                self.addr_m2_ref_path_action = (self.addr_m2_ref_path +
+                                                "/action")
                 self.post_bean()
                 self.list_paths.append(self.addr_m2_ref_path)
 
@@ -268,8 +276,8 @@ class TestMeta2Functional(unittest.TestCase):
         self.session.put(self.addr_m2_ref)
         self.prepare_bean_list(2)
 
-        marker = self.session.get(self.addr_m2_ref).json()['objects'][0][
-                     'name'][0:3]
+        marker = self.session.get(self.addr_m2_ref).json()['objects'][0]
+        marker = marker['name'][0:3]
 
         prefix_mark = [bean["name"] for bean in
                        self.session.get(self.addr_m2_ref,
@@ -289,8 +297,8 @@ class TestMeta2Functional(unittest.TestCase):
         names = [bean['name'] for bean in
                  self.session.get(self.addr_m2_ref).json()['objects']]
 
-        marker = self.session.get(self.addr_m2_ref).json()['objects'][0][
-                     'name'][2:3]
+        marker = self.session.get(self.addr_m2_ref).json()['objects'][0]
+        marker = marker['name'][2:3]
 
         delimit_mark = [bean["name"] for bean in
                         self.session.get(self.addr_m2_ref,
@@ -329,40 +337,42 @@ class TestMeta2Functional(unittest.TestCase):
         self.session.put(self.addr_m2_ref)
         self.prepare_bean_listing()
 
-        listing = self.session.get(self.addr_m2_ref, params={'max': 10}).json()[
-            "objects"]
+        listing = self.session.get(self.addr_m2_ref,
+                                   params={'max': 10}).json()["objects"]
 
         self.assertEqual(len(listing), 10)
         self.assertEqual(listing[0]['name'], '0-00')
         self.assertEqual(listing[-1]['name'], '0-09')
 
-        listing = self.session.get(self.addr_m2_ref, params={'max': 10,
-                                                             'marker_end': '0-05'}).json()[
+        listing = self.session.get(self.addr_m2_ref,
+                                   params={'max': 10,
+                                           'marker_end': '0-05'}).json()[
             "objects"]
 
         self.assertEqual(len(listing), 5)
         self.assertEqual(listing[0]['name'], '0-00')
         self.assertEqual(listing[-1]['name'], '0-04')
 
-        listing = self.session.get(self.addr_m2_ref, params={'max': 10,
-                                                             'marker': '0-09'}).json()[
+        listing = self.session.get(self.addr_m2_ref,
+                                   params={'max': 10,
+                                           'marker': '0-09'}).json()[
             "objects"]
 
         self.assertEqual(len(listing), 10)
         self.assertEqual(listing[0]['name'], '0-10')
         self.assertEqual(listing[-1]['name'], '1-06')
 
-        listing = self.session.get(self.addr_m2_ref, params={'max': 6,
-                                                             'marker': '1-09'}).json()[
+        listing = self.session.get(self.addr_m2_ref,
+                                   params={'max': 6, 'marker': '1-09'}).json()[
             "objects"]
 
         self.assertEqual(len(listing), 6)
         self.assertEqual(listing[0]['name'], '1-10')
         self.assertEqual(listing[-1]['name'], '2-02')
 
-        listing = self.session.get(self.addr_m2_ref, params={'max': 2,
-                                                             'prefix': '0-1'}).json()[
-            "objects"]
+        listing = self.session.get(self.addr_m2_ref,
+                                   params={'max': 2, 'prefix':
+                                           '0-1'}).json()["objects"]
 
         self.assertEqual(len(listing), 2)
         self.assertEqual(listing[0]['name'], '0-10')
@@ -415,7 +425,8 @@ class TestMeta2Functional(unittest.TestCase):
         listing = \
             self.session.get(self.addr_m2_ref,
                              params={'max': 6, 'prefix': '2-',
-                                     'marker': '2-04', 'delimiter': '-'}).json()
+                                     'marker': '2-04',
+                                     'delimiter': '-'}).json()
 
         self.assertEqual(len(listing["objects"]), 5)
         self.assertEqual(listing["objects"][0]['name'], '2-05')
@@ -514,7 +525,8 @@ class TestMeta2Functional(unittest.TestCase):
                          headers={
                              'x-oio-content-meta-hash': self.hash_rand,
                              'x-oio-content-meta-length': 40})
-        resp = self.session.get(self.addr_m2_ref).json()["objects"][0]["policy"]
+        resp = self.session.get(self.addr_m2_ref).json()[
+            "objects"][0]["policy"]
         self.assertEqual(resp, "TWOCOPIES")
 
     def test_containers_actions_setStoragePolicy_ref_no_link(self):
@@ -544,7 +556,8 @@ class TestMeta2Functional(unittest.TestCase):
                              'x-oio-content-meta-hash': self.hash_rand,
                              'x-oio-content-meta-length': 40})
 
-        resp = self.session.get(self.addr_m2_ref).json()["objects"][0]["policy"]
+        resp = self.session.get(self.addr_m2_ref).json()[
+            "objects"][0]["policy"]
         self.assertEqual(resp, "none")
 
     def test_containers_actions_getProperties(self):
@@ -808,7 +821,8 @@ class TestMeta2Functional(unittest.TestCase):
 
         self.session.put(self.addr_m2_ref)
         resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
-            {"action": "Spare", "args": {"size": 40, "notin": {}, "broken": {}}}
+            {"action": "Spare", "args": {"size": 40, "notin": {},
+                                         "broken": {}}}
         ))
         raisedException = False
         try:
@@ -829,7 +843,8 @@ class TestMeta2Functional(unittest.TestCase):
     def test_contents_actions_Spare_ref_no_link(self):
 
         resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
-            {"action": "Spare", "args": {"size": 40, "notin": {}, "broken": {}}}
+            {"action": "Spare", "args": {"size": 40, "notin": {},
+                                         "broken": {}}}
         ))
         self.assertEqual(resp.status_code, 404)
 
@@ -848,7 +863,8 @@ class TestMeta2Functional(unittest.TestCase):
             {"action": "SetStoragePolicy", "args": 'TWOCOPIES'}
         ))
         self.assertEqual(resp.status_code, 204)
-        resp = self.session.get(self.addr_m2_ref).json()["objects"][0]["policy"]
+        resp = self.session.get(self.addr_m2_ref).json()[
+            "objects"][0]["policy"]
         self.assertEqual(resp, 'TWOCOPIES')
 
     def test_contents_actions_setStoragePolicy_wrong(self):
@@ -928,4 +944,3 @@ class TestMeta2Functional(unittest.TestCase):
             {"action": "DelProperties", "args": ['prop1']}
         ))
         self.assertEqual(resp.status_code, 403)
-

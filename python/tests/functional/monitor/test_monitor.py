@@ -1,4 +1,3 @@
-#!/usr/bin/python
 import os
 import subprocess
 import unittest
@@ -34,11 +33,11 @@ class TestMonitorFunctional(unittest.TestCase):
 
         self.rawx_test = self.conf["namespace"] + '|rawx|' + self.conf["rawx"][
             0]
-        self.srv_test = self.conf["namespace"] + '|meta0|' + self.conf["meta0"][
-            0]
-        self.account_test = self.conf["namespace"] + '|account|' + \
-                            self.conf["account_addr"][0]
-        self.file_path = os.path.abspath("..")+'/'
+        self.srv_test = (self.conf["namespace"] + '|meta0|' +
+                         self.conf["meta0"][0])
+        self.account_test = (self.conf["namespace"] + '|account|' +
+                             self.conf["account_addr"][0])
+        self.file_path = os.path.abspath("..") + '/'
 
     def setUp(self):
         super(TestMonitorFunctional, self).setUp()
@@ -48,7 +47,7 @@ class TestMonitorFunctional(unittest.TestCase):
             self.kill_slow_server()
         except Exception:
             pass
-        for pid in [self.rawx_pid,self.srv_pid]:
+        for pid in [self.rawx_pid, self.srv_pid]:
             try:
                 os.system("kill -CONT " + self.rawx_pid)
             except Exception:
@@ -109,7 +108,7 @@ class TestMonitorFunctional(unittest.TestCase):
         out, err = self.call_shell('proxy-monitor.py', self.srv_test)
         self.assertEqual(out, '')
         self.assertFalse(
-            'timed out' in err)  
+            'timed out' in err)
 
     def test_proxy_slow(self):
         self.set_slow_server()

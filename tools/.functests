@@ -1,9 +1,0 @@
-#!/bin/bash
-
-SRC_DIR=$(python -c "import os; print os.path.dirname(os.path.realpath('$0'))")
-
-cd $SRC_DIR/tests
-nosetests --exe $@
-rvalue=$?
-cd -
-exit $rvalue
