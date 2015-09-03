@@ -595,13 +595,13 @@ class TestMeta2Functional(unittest.TestCase):
         )).json()["sys.user.name"]
         self.assertEqual(resp, self.prop)
 
-    def test_containers_actions_setProperties_wrong(self):  # to be improved
+    def test_containers_actions_setProperties_wrong(self):
 
         self.session.put(self.addr_m2_ref)
         resp = self.session.post(self.addr_m2_ref_action, json.dumps(
             {"action": "SetProperties", "args": {"error": self.prop}}
         ))
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 400)
 
     def test_containers_actions_setProperties_ref_no_link(self):
 
