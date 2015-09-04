@@ -196,3 +196,14 @@ metautils_cfg_get_bool(const gchar *value, gboolean def)
 	return def;
 }
 
+gboolean
+metautils_str_has_caseprefix (const char *str, const char *prefix)
+{
+	const char *s = str, *p = prefix;
+	for (; *s && *p ;++s,++p) {
+		if (g_ascii_tolower (*s) != g_ascii_tolower (*p))
+			return FALSE;
+	}
+	return !*p;
+}
+

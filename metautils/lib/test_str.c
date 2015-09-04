@@ -138,6 +138,22 @@ test_hex2bin(void)
 	g_assert(CHECK("\x01\x10","0110"));
 }
 
+static void
+test_prefix (void)
+{
+	g_assert (metautils_str_has_caseprefix ("X", "X"));
+	g_assert (metautils_str_has_caseprefix ("X", "x"));
+	g_assert (metautils_str_has_caseprefix ("Xa", "X"));
+	g_assert (metautils_str_has_caseprefix ("Xa", "x"));
+
+	g_assert (!metautils_str_has_caseprefix ("X", "Y"));
+	g_assert (!metautils_str_has_caseprefix ("X", "y"));
+	g_assert (!metautils_str_has_caseprefix ("Xa", "Y"));
+	g_assert (!metautils_str_has_caseprefix ("Xa", "y"));
+
+	g_assert (!metautils_str_has_caseprefix ("X", "Xa"));
+}
+
 int
 main(int argc, char **argv)
 {
@@ -151,6 +167,7 @@ main(int argc, char **argv)
 	g_test_add_func("/metautils/str/ishexa", test_ishexa);
 	g_test_add_func("/metautils/str/strlen", test_strlen_len);
 	g_test_add_func("/metautils/str/hex2bin", test_hex2bin);
+	g_test_add_func("/metautils/str/prefix", test_prefix);
 	return g_test_run();
 }
 

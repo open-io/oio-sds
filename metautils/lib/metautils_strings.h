@@ -92,6 +92,8 @@ void g_free1(gpointer p1, gpointer p2);
 /** Frees the second argument and ignores the first */
 void g_free2(gpointer p1, gpointer p2);
 
+gboolean metautils_str_has_caseprefix (const char *str, const char *prefix);
+
 static inline const gchar *
 none(const gchar *src)
 {
