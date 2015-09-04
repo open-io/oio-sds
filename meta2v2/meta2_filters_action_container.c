@@ -59,6 +59,8 @@ meta2_filter_action_create_container(struct gridd_filter_ctx_s *ctx,
 		g_ptr_array_add (tmp, metautils_message_extract_string_copy (reply->request, *p));
 	}
 	params.properties = (gchar**) metautils_gpa_to_array (tmp, TRUE);
+	g_strfreev (headers);
+	headers = NULL;
 
 retry:
 	err = meta2_backend_create_container(m2b, url, &params);

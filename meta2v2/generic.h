@@ -128,6 +128,8 @@ GError* _db_count_bean(const struct bean_descriptor_s *descr,
 GError* _db_get_FK_by_name(gpointer bean, const gchar *name,
 		sqlite3 *db, on_bean_f cb, gpointer u);
 
+GError* _db_del_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db);
+
 GError* _db_count_FK_by_name(gpointer bean, const gchar *name,
 		sqlite3 *db, gint64 *pcount);
 

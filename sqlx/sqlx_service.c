@@ -587,6 +587,9 @@ sqlx_service_specific_fini(void)
 	if (SRV.zk_url)
 		oio_str_clean(&SRV.zk_url);
 
+	if (SRV.clients_pool)
+		gridd_client_pool_destroy (SRV.clients_pool);
+
 	if (SRV.lb)
 		grid_lbpool_destroy (SRV.lb);
 

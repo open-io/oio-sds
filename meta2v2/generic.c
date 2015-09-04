@@ -739,6 +739,42 @@ _bean_cleanl2(GSList *v)
 /* -------------------------------------------------------------------------- */
 
 static GError*
+_db_del_FK(gpointer bean,
+		const struct fk_field_s *fkf0,
+		const struct bean_descriptor_s *descr,
+		const struct fk_field_s *fkf1,
+		sqlite3 *db)
+{
+	GError *err;
+	guint count;
+	const struct fk_field_s *fkf;
+
+	/* build the query string */
+	GString *gsql = g_string_new("");
+	for (count=0,fkf=fkf0; fkf->name ;fkf++) {
+		if (count++)
+			g_string_append(gsql, " AND ");
+		g_string_append(gsql, fkf->name);
+		g_string_append_c(gsql, '=');
+		g_string_append_c(gsql, '?');
+	}
+
+	/* build the parameter string */
+	GPtrArray *p = g_ptr_array_new();
+	for (fkf=fkf1; fkf->name ;fkf++)
+		g_ptr_array_add(p, _field_to_gvariant(bean, fkf->i));
+	g_ptr_array_add(p, NULL);
+
+	/* execute the query */
+	err = _db_delete(descr, db, gsql->str, (GVariant**)(p->pdata));
+
+	g_string_free(gsql, TRUE);
+	gv_freev((GVariant**) g_ptr_array_free(p, FALSE), FALSE);
+
+	return err;
+}
+
+static GError*
 _db_get_FK(gpointer bean,
 		const struct fk_field_s *fkf0,
 		const struct bean_descriptor_s *descr,
@@ -773,6 +809,31 @@ _db_get_FK(gpointer bean,
 	gv_freev((GVariant**) g_ptr_array_free(p, FALSE), FALSE);
 
 	return err;
+}
+
+GError*
+_db_del_FK_by_name(gpointer bean, const gchar *name, sqlite3 *db)
+{
+	const struct fk_descriptor_s *fk;
+
+	EXTRA_ASSERT(name != NULL);
+	EXTRA_ASSERT(bean != NULL);
+	EXTRA_ASSERT(db != NULL);
+
+	for (fk=DESCR(bean)->fk; fk->name ;fk++) {
+		if (!g_ascii_strcasecmp(fk->name, name)) {
+			EXTRA_ASSERT(DESCR(bean) == fk->src || DESCR(bean) == fk->dst);
+			if (DESCR(bean) == fk->src)
+				return _db_del_FK(bean, fk->dst_fields, fk->dst,
+						fk->src_fields, db);
+			if (DESCR(bean) == fk->dst)
+				return _db_del_FK(bean, fk->src_fields, fk->src,
+						fk->dst_fields, db);
+		}
+	}
+
+	g_assert_not_reached();
+	return NEWERROR(CODE_INTERNAL_ERROR, "BUG"); /* makes the compilers happy */
 }
 
 GError*

@@ -275,6 +275,14 @@ _reply_simplified_beans (struct req_args_s *args, GError *err, GSList *beans, gb
 			header = l0->data;
 			continue;
 		}
+		if (&descr_struct_PROPERTY == DESCR(l0->data)) {
+			struct bean_PROPERTY_s *prop = l0->data;
+			gchar *k = g_strdup_printf (PROXYD_HEADER_PREFIX "content-meta-x-%s", PROPERTY_get_key(prop)->str);
+			GByteArray *v = PROPERTY_get_value (prop);
+			args->rp->add_header(k, g_strndup ((gchar*)v->data, v->len));
+			g_free (k);
+			continue;
+		}
 		if (gstr && &descr_struct_CHUNK == DESCR(l0->data)) {
 			struct bean_CHUNK_s *chunk = l0->data;
 			// Separator
@@ -438,7 +446,7 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 
 		gboolean run_headers (gpointer k, gpointer v, gpointer u) {
 			(void)u;
-			if (!g_str_has_prefix((gchar*)k, PROXYD_HEADER_PREFIX "content-meta-x-"))
+			if (!metautils_str_has_caseprefix ((gchar*)k, PROXYD_HEADER_PREFIX "content-meta-x-"))
 				return FALSE;
 			const char *rk = ((gchar*)k) + sizeof(PROXYD_HEADER_PREFIX "content-meta-x-") - 1;
 			struct bean_PROPERTY_s *prop = _bean_create (&descr_struct_PROPERTY);
@@ -446,6 +454,7 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 			PROPERTY_set_version (prop, 0);
 			PROPERTY_set2_key (prop, rk);
 			PROPERTY_set2_value (prop, (guint8*)v, strlen((gchar*)v));
+			beans = g_slist_prepend (beans, prop);
 			return FALSE;
 		}
 		g_tree_foreach (args->rq->tree_headers, run_headers, NULL);
@@ -465,7 +474,7 @@ _container_headers_to_props (struct req_args_s *args)
 	GPtrArray *tmp;
 	gboolean run_headers (char *k, char *v, gpointer u) {
 		(void)u;
-		if (!g_str_has_prefix(k, PROXYD_HEADER_PREFIX "container-meta-"))
+		if (!metautils_str_has_caseprefix (k, PROXYD_HEADER_PREFIX "container-meta-"))
 			return FALSE;
 		k += sizeof(PROXYD_HEADER_PREFIX "content-meta-");
 		if (g_str_has_prefix (k, "user-")) {
@@ -1490,19 +1499,18 @@ retry:
 	}
 
 	json_object_put (jbody);
-	return _reply_beans (args, err, NULL);
+	return _reply_m2_error (args, err);
 }
 
 enum http_rc_e
 action_m2_content_delete (struct req_args_s *args)
 {
-	GSList *beans = NULL;
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
 		return m2v2_remote_execute_DEL (m2->host, args->url);
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	return _reply_simplified_beans (args, err, beans, TRUE);
+	return _reply_m2_error (args, err);
 }
 
 static enum http_rc_e

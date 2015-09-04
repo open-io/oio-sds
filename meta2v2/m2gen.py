@@ -437,7 +437,6 @@ properties = generator.add_bean(Struct("property") \
 	.field(Text("key")) \
 	.field(Blob("value")) \
 	.PK(("alias","version","key")) \
-	.index('prop_idx_by_alias', ['alias']) \
 	.index('prop_idx_by_alias_key', ['alias','key']) \
 	.set_sql_name("properties")).set_order(1)
 

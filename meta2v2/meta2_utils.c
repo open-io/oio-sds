@@ -714,7 +714,7 @@ _real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_beans)
 	GSList *deleted = NULL;
 	GError *err = m2db_purge_alias_being_deleted(sq3, beans, &deleted);
 	if (err) {
-		g_slist_free(deleted);
+		_bean_cleanl2 (deleted);
 		g_prefix_error(&err, "Purge error: ");
 		return err;
 	}
@@ -794,8 +794,13 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 			if (cb)
 				cb(u0, _bean_dup(bean->data));
 		}
-		// XXX the list's content are the direct pointers to the original beans.
+		// XXX deleted_beans's contents are direct pointers to the original beans.
 		g_slist_free(deleted_beans);
+
+		// sqliterepo might disable foreign keys management, so that we have
+		// to manage this by ourselves.
+		if (!err)
+			err = _db_del_FK_by_name (alias, "properties", sq3->db);
 
 	} else if (hc_url_has(url, HCURL_VERSION)) {
 		/* Alias is in a snapshot but user explicitly asked for its deletion */
@@ -868,6 +873,9 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 			CHUNK_set_ctime(bean, now);
 			CHUNK_set2_content(bean, args->uid, args->uid_size);
 		}
+		else if (DESCR(bean) == &descr_struct_PROPERTY) {
+			PROPERTY_set_version (bean, args->version+1);
+		}
 
 		err = _db_save_bean(sq3->db, bean);
 	}
@@ -923,8 +931,7 @@ m2db_merge_alias(struct m2db_put_args_s *m2db_args, struct bean_ALIAS_s *latest,
 /* PUT ---------------------------------------------------------------------- */
 
 static gint64
-m2db_patch_alias_beans_list(struct m2db_put_args_s *args,
-		GSList *beans)
+_patch_content_stgpol (struct m2db_put_args_s *args, GSList *beans)
 {
 	gchar policy[256];
 	GSList *l;
@@ -979,7 +986,7 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 	memset(&args2, 0, sizeof(args2));
 	args2.beans = beans;
 
-	gint64 size = m2db_patch_alias_beans_list(args, beans);
+	gint64 size = _patch_content_stgpol (args, beans);
 
 	if (hc_url_has(args->url, HCURL_VERSION)) {
 		const char *tmp = hc_url_get(args->url, HCURL_VERSION);
@@ -1034,8 +1041,6 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	if (!hc_url_has(args->url, HCURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
-	gint64 size = m2db_patch_alias_beans_list(args, beans);
-
 	struct { guint32 r; guint32 now; guint16 pid; guint16 th; } uid;
 	uid.now = time(0);
 	uid.r = g_random_int();
@@ -1086,6 +1091,8 @@ suspended:
 		}
 	}
 
+	gint64 size = _patch_content_stgpol (args, beans);
+
 	/** Perform the insertion now and patch the URL with the version */
 	if (!err) {
 		err = m2db_real_put_alias(args->sq3, &args2);
@@ -1102,17 +1109,17 @@ suspended:
 		GRID_TRACE("Need to purge the previous LATEST");
 		GSList *inplace = g_slist_prepend (NULL, _bean_dup(latest));
 		err = _manage_alias (args->sq3->db, latest, TRUE, _bean_list_cb, &inplace);
-		if (!err) {
+		if (!err) { /* remove the alias, header, conbte,t chunk */
 			GSList *deleted = NULL;
 			err = _real_delete (args->sq3, inplace, &deleted);
-			if (out_deleted) {
-				*out_deleted = metautils_gslist_precat (*out_deleted, deleted);
-				deleted = NULL;
-			} else {
-				_bean_cleanl2 (deleted);
-			}
+			if (out_deleted) for (GSList *l=deleted; l ;l=l->next)
+				*out_deleted = g_slist_prepend (*out_deleted, _bean_dup (l->data));
+			// XXX <deleted> beans are direct pointer to <inplace> beans
+			g_slist_free (deleted);
 		}
-		g_slist_free (inplace);
+		_bean_cleanl2 (inplace);
+		if (!err) /* remove the properties */
+			err = _db_del_FK_by_name (latest, "properties", args->sq3->db);
 	}
 
 	/** Purge the exceeding aliases */
