@@ -478,11 +478,11 @@ _container_headers_to_props (struct req_args_s *args)
 			return FALSE;
 		k += sizeof(PROXYD_HEADER_PREFIX "container-meta-") - 1;
 		if (g_str_has_prefix (k, "user-")) {
-			k += sizeof("user-");
+			k += sizeof("user-") - 1;
 			g_ptr_array_add (tmp, g_strconcat ("user.", k, NULL));
 			g_ptr_array_add (tmp, g_strdup (v));
 		} else if (g_str_has_prefix (k, "sys-")) {
-			k += sizeof("sys-");
+			k += sizeof("sys-") - 1;
 			g_ptr_array_add (tmp, g_strconcat ("sys.", k, NULL));
 			g_ptr_array_add (tmp, g_strdup (v));
 		}
