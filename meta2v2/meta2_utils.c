@@ -731,7 +731,7 @@ _real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_beans)
 	GSList *deleted = NULL;
 	GError *err = m2db_purge_alias_being_deleted(sq3, beans, &deleted);
 	if (err) {
-		g_slist_free(deleted);
+		_bean_cleanl2 (deleted);
 		g_prefix_error(&err, "Purge error: ");
 		return err;
 	}
@@ -811,7 +811,7 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 			if (cb)
 				cb(u0, _bean_dup(bean->data));
 		}
-		// XXX the list's content are the direct pointers to the original beans.
+		// XXX deleted_beans's contents are direct pointers to the original beans.
 		g_slist_free(deleted_beans);
 
 		// sqliterepo might disable foreign keys management, so that we have
@@ -1156,16 +1156,14 @@ suspended:
 		if (!err) { /* remove the alias, header, conbte,t chunk */
 			GSList *deleted = NULL;
 			err = _real_delete (args->sq3, inplace, &deleted);
-			if (out_deleted) {
-				*out_deleted = metautils_gslist_precat (*out_deleted, deleted);
-				deleted = NULL;
-			} else {
-				_bean_cleanl2 (deleted);
-			}
+			if (out_deleted) for (GSList *l=deleted; l ;l=l->next)
+				*out_deleted = g_slist_prepend (*out_deleted, _bean_dup (l->data));
+			// XXX <deleted> beans are direct pointer to <inplace> beans
+			g_slist_free (deleted);
 		}
+		_bean_cleanl2 (inplace);
 		if (!err) /* remove the properties */
 			err = _db_del_FK_by_name (latest, "properties", args->sq3->db);
-		g_slist_free (inplace);
 	}
 
 	/** Purge the exceeding aliases */
