@@ -501,6 +501,10 @@ _create_container_init_phase(struct sqlx_sqlite3_s *sq3,
 		m2db_set_ctime (sq3, time(0));
 		sqlx_admin_init_i64(sq3, META2_INIT_FLAG, 1);
 	}
+	if (!err && params->properties) {
+		for (gchar **p=params->properties; *p && *(p+1) ;p+=2)
+			sqlx_admin_set_str (sq3, *p, *(p+1));
+	}
 	if (!params->local)
 		err = sqlx_transaction_end(repctx, err);
 	return err;
