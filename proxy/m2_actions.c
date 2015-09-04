@@ -535,7 +535,7 @@ _container_headers_to_props (struct req_args_s *args)
 		(void)u;
 		if (!metautils_str_has_caseprefix (k, PROXYD_HEADER_PREFIX "container-meta-"))
 			return FALSE;
-		k += sizeof(PROXYD_HEADER_PREFIX "content-meta-");
+		k += sizeof(PROXYD_HEADER_PREFIX "container-meta-") - 1;
 		if (g_str_has_prefix (k, "user-")) {
 			k += sizeof("user-");
 			g_ptr_array_add (tmp, g_strconcat ("user.", k, NULL));
