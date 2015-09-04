@@ -262,6 +262,16 @@ env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 #include=${CFGDIR}/*-gridinit.conf
 """
 
+template_gridinit_event_agent = """
+[service.${NS}-event-agent]
+group=${NS},localhost,event
+on_die=respawn
+enabled=true
+start_at_boot=false
+command=${EXE_PREFIX}-event-agent ${CFGDIR}/event-agent.conf
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
+"""
+
 template_gridinit_conscience = """
 [service.${NS}-conscience]
 group=${NS},localhost,conscience
@@ -479,8 +489,12 @@ def generate (ns, ip, options={}):
 		f.write(tpl.safe_substitute(env))
 	# conscience
 	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-		env['PORT'] = port_proxy
+		env['PORT'] = port_cs
 		tpl = Template(template_gridinit_conscience)
+		f.write(tpl.safe_substitute(env))
+	# conscience
+	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
+		tpl = Template(template_gridinit_event_agent)
 		f.write(tpl.safe_substitute(env))
 	# services
 	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
