@@ -450,7 +450,7 @@ properties = generator.add_bean(Struct("properties") \
 	.field(Text("key")) \
 	.field(Blob("value")) \
 	.PK(("alias","alias_version","key")) \
-	.index('properties_index_by_header', ['alias']) \
+	.index('properties_index_by_header_version', ['alias', 'alias_version']) \
 	.set_sql_name("properties_v2")).set_order(5)
 
 contents = generator.add_bean(Struct("contents") \

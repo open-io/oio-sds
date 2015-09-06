@@ -100,15 +100,6 @@ start_at_boot=false
 command=redis-server ${CFGDIR}/${NS}-redis-${SRVNUM}.conf
 """
 
-template_flask_gridinit = """
-[service.${NS}-flask]
-group=${NS},localhost,flask
-on_die=respawn
-enabled=true
-start_at_boot=false
-command=/usr/bin/gunicorn --preload -w 2 -b ${IP}:${PORT} oio.sds.admin-flask:app
-"""
-
 template_account_server_gridinit = """
 [service.${NS}-account-server]
 group=${NS},localhost,account-server
@@ -493,7 +484,6 @@ def generate (ns, ip, options={}):
 	port_cs = next_port()
 	port_agent = next_port() # for TCP connection is use by Java applications
 	port_proxy = next_port()
-	port_flask = next_port()
 	port_account = next_port()
 	port_event_agent = next_port()
 	rawx = []
@@ -606,12 +596,6 @@ def generate (ns, ip, options={}):
 		env['PORT'] = p
 		with open(CFGDIR + '/' + ns + '-rawx-httpd-' + str(n) + '.conf', 'w+') as f:
 			f.write(tpl.safe_substitute(env))
-
-	# administration flask
-	env['PORT'] = port_flask
-	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-		tpl = Template(template_flask_gridinit)
-		f.write(tpl.safe_substitute(env))
 
 	# redis
 	if options.ALLOW_REDIS is not None:
