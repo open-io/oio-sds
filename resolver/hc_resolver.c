@@ -129,6 +129,12 @@ hc_resolver_create(void)
 }
 
 void
+hc_resolver_configure (struct hc_resolver_s *r, enum hc_resolver_flags_e f)
+{
+	if (r) r->flags = f;
+}
+
+void
 hc_resolver_destroy(struct hc_resolver_s *r)
 {
 	if (!r)
@@ -408,8 +414,7 @@ _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
 	EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
 	if (!err) {
 		/* fill the cache */
-		if (!(r->flags & HC_RESOLVER_NOCACHE))
-			hc_resolver_store(r, r->services.cache, hk, *result);
+		hc_resolver_store(r, r->services.cache, hk, *result);
 	}
 
 	g_strfreev(m1urlv);
