@@ -19,7 +19,9 @@ class TestBlobMover(unittest.TestCase):
         self.chunk_hash = '00000000000000000000000000000000'
         self.chunk_size = 1
         self.chunk_id = 'AAAA'
+        self.chunk_id2 = 'CCCC'
         self.chunk_url = 'http://127.0.0.1:6000/' + self.chunk_id
+        self.chunk_url2 = 'http://127.0.0.1:6002/' + self.chunk_id2
         self.chunk_pos = '0'
         self.metadata = {
             'content_cid': self.content_cid,
@@ -30,9 +32,11 @@ class TestBlobMover(unittest.TestCase):
             'chunk_pos': self.chunk_pos,
             'chunk_size': self.chunk_size,
             'chunk_hash': self.chunk_hash}
-        self.chunk = {'url': self.chunk_url}
-        self.chunks = [self.chunk]
-        self.spare_data = {'notin': [], 'broken': [self.chunk], 'size': 0}
+        self.chunk = {'url': self.chunk_url, 'pos': self.chunk_pos}
+        self.chunk2 = {'url': self.chunk_url2, 'pos': self.chunk_pos}
+        self.chunks = [self.chunk, self.chunk2]
+        self.spare_data = {'notin': [self.chunk2],
+                           'broken': [self.chunk], 'size': 0}
         self.new_chunk_id = 'BBBB'
         self.new_chunk_url = 'http://127.0.0.1:6001/' + self.new_chunk_id
         self.new_chunks = {'chunks': [{'id': self.new_chunk_url}]}
