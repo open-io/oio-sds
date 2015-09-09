@@ -90,11 +90,24 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
     else /* if (op == REGOP_LOCK) */
         si->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
 
-    gchar *key = service_info_key(si);
-    PUSH_DO(lru_tree_insert(push_queue, key, si));
-    GString *gstr = g_string_new ("");
-    service_info_encode_json (gstr, si, TRUE);
-    return _reply_success_json (args, gstr);
+	// TODO follow the DRY principle and factorize this!
+	if (flag_cache_enabled) {
+		GSList l = {.data = si, .next = NULL};
+		if (NULL != (err = gcluster_push_services (csurl, &l))) {
+			service_info_clean (si);
+			return _reply_common_error (args, err);
+		} else {
+			GString *gstr = g_string_new ("");
+			service_info_encode_json (gstr, si, TRUE);
+			service_info_clean (si);
+			return _reply_success_json (args, gstr);
+		}
+	} else {
+		GString *gstr = g_string_new ("");
+		service_info_encode_json (gstr, si, TRUE);
+		PUSH_DO(lru_tree_insert(push_queue, service_info_key(si), si));
+		return _reply_success_json (args, gstr);
+	}
 }
 
 //------------------------------------------------------------------------------
@@ -160,9 +173,7 @@ action_cs_get (struct req_args_s *args)
         return _reply_notfound_error(args, err);
 
     GSList *sl = NULL;
-	gchar *cs = gridcluster_get_conscience (NS());
-	err = gcluster_get_services (cs, types, full, FALSE, &sl);
-	g_free0 (cs);
+	err = gcluster_get_services (csurl, types, full, FALSE, &sl);
 
 	if (NULL != err) {
 		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
@@ -191,9 +202,7 @@ action_cs_del (struct req_args_s *args)
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_notfound_error (args, err);
 
-	gchar *cs = gridcluster_get_conscience (NS());
-	err = gcluster_remove_services (cs, TYPE(), NULL);
-	g_free0 (cs);
+	err = gcluster_remove_services (csurl, TYPE(), NULL);
 
 	if (err) {
 		g_prefix_error (&err, "Agent error: ");

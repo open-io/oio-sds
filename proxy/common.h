@@ -77,14 +77,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 } while (0)
 
 
+extern gchar *nsname;
+extern gchar *csurl;
+extern gboolean flag_cache_enabled;
+extern gdouble m2_timeout_all;
+
 extern struct grid_lbpool_s *lbpool;
 extern GMutex push_mutex;
 extern struct lru_tree_s *push_queue;
-extern gchar *nsname;
 extern struct namespace_info_s nsinfo;
 extern gchar **srvtypes;
 extern GMutex nsinfo_mutex;
-extern gdouble m2_timeout_all;
 extern struct hc_resolver_s *resolver;
 
 enum

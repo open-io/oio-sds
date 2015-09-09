@@ -46,15 +46,20 @@ static guint dir_high_ttl = PROXYD_DEFAULT_TTL_CSM0;
 static guint dir_high_max = PROXYD_DEFAULT_MAX_CSM0;
 
 GMutex push_mutex;
-struct grid_lbpool_s *lbpool = NULL;
 struct lru_tree_s *push_queue = NULL;
-gchar *nsname = NULL;
+
+struct grid_lbpool_s *lbpool = NULL;
 
 GMutex nsinfo_mutex;
 struct namespace_info_s nsinfo;
 gchar **srvtypes = NULL;
-gdouble m2_timeout_all = PROXYD_M2_TIMEOUT_SINGLE;
+
+gchar *nsname = NULL;
+gchar *csurl = NULL;
 struct hc_resolver_s *resolver = NULL;
+
+gdouble m2_timeout_all = PROXYD_M2_TIMEOUT_SINGLE;
+gboolean flag_cache_enabled = TRUE;
 
 // Misc. handlers --------------------------------------------------------------
 
@@ -244,10 +249,10 @@ _task_expire_resolver (gpointer p)
 }
 
 static void
-_reload_srvtype(const char *cs, const char *type)
+_reload_srvtype(const char *type)
 {
 	GSList *list = NULL;
-	GError *err = gcluster_get_services (cs, type, FALSE, FALSE, &list);
+	GError *err = gcluster_get_services (csurl, type, FALSE, FALSE, &list);
 	if (err) {
 		GRID_WARN("Services listing error for type[%s]: code=%d %s",
 				type, err->code, err->message);
@@ -279,16 +284,14 @@ static void
 _task_reload_lbpool (gpointer p)
 {
 	(void) p;
-	gchar *cs = gridcluster_get_conscience(nsname);
-	if (!cs) return;
-	STRING_STACKIFY(cs);
+	if (!csurl) return;
 
 	gchar **tt = NULL;
 	NSINFO_DO(tt = g_strdupv(srvtypes));
 
 	if (tt) {
 		for (gchar **t=tt; *t ;++t)
-			_reload_srvtype (cs, *t);
+			_reload_srvtype (*t);
 		g_strfreev (tt);
 	}
 
@@ -296,19 +299,27 @@ _task_reload_lbpool (gpointer p)
 }
 
 static void
+_task_reload_csurl (gpointer p)
+{
+	(void) p;
+	// TODO the Conscience's URL reloading needs to be made thread-safe. Several thread might access it.
+#if 0
+	gchar *cs = gridcluster_get_conscience(nsname);
+	if (cs)
+		oio_str_reuse (&csurl, cs);
+#endif
+}
+
+static void
 _task_reload_nsinfo (gpointer p)
 {
 	(void) p;
 
-	gchar *cs = gridcluster_get_conscience(nsname);
-	if (!cs) return;
-	STRING_STACKIFY(cs);
-
 	struct namespace_info_s *ni = NULL;
-	GError *err = gcluster_get_namespace (cs, &ni);
+	GError *err = gcluster_get_namespace (csurl, &ni);
 	if (err) {
 		GRID_WARN ("NSINFO reload error [%s] from [%s]: (%d) %s",
-			nsname, cs, err->code, err->message);
+			nsname, csurl, err->code, err->message);
 		g_clear_error (&err);
 	} else {
 		NSINFO_DO(namespace_info_copy (ni, &nsinfo, NULL));
@@ -321,15 +332,13 @@ _task_reload_srvtypes (gpointer p)
 {
 	(void) p;
 
-	gchar *cs = gridcluster_get_conscience(nsname);
-	if (!cs) return;
-	STRING_STACKIFY(cs);
+	if (!csurl) return;
 
 	GSList *list = NULL;
-	GError *err = gcluster_get_service_types (cs, &list);
+	GError *err = gcluster_get_service_types (csurl, &list);
 	if (err != NULL) {
 		GRID_WARN ("SRVTYPES reload error [%s] from [%s] : (%d) %s",
-			nsname, cs, err->code, err->message);
+			nsname, csurl, err->code, err->message);
 		return;
 	}
 
@@ -364,12 +373,10 @@ _task_push (gpointer p)
 	if (!tmp) {
 		GRID_TRACE("Push: no service to be pushed");
 	} else {
-		gchar *cs = gridcluster_get_conscience(nsname);
-		STRING_STACKIFY(cs);
-		if (!cs) {
+		if (!csurl) {
 			GRID_ERROR("Push error: %s", "No/Invalid conscience for namespace NS");
 		} else {
-			GError *err = gcluster_push_services (cs, tmp);
+			GError *err = gcluster_push_services (csurl, tmp);
 			if (err != NULL) {
 				GRID_WARN("Push error: (%d) %s", err->code, err->message);
 				g_clear_error(&err);
@@ -447,6 +454,10 @@ grid_main_get_options (void)
 		{"SrvPush", OT_INT, {.u = &lb_upstream_delay},
 			"Interval between load-balancer service refreshes (seconds)\n"
 			"\t\t-1 to disable, 0 to never refresh"},
+
+		{"Cache", OT_BOOL, {.b = &flag_cache_enabled},
+			"Disable caching for the conscience: services are pushed\n"
+			"synchronously and no cache is kept on a GET."},
 
 		{"DirLowTtl", OT_UINT, {.u = &dir_low_ttl},
 			"Directory 'low' (meta1) TTL for cache elements"},
@@ -666,6 +677,7 @@ grid_main_configure (int argc, char **argv)
 	g_mutex_init (&nsinfo_mutex);
 
 	nsname = g_strdup (cfg_namespace);
+	csurl = gridcluster_get_conscience (nsname);
 	metautils_strlcpy_physical_ns (nsname, cfg_namespace, strlen (nsname) + 1);
 
 	memset (&nsinfo, 0, sizeof (nsinfo));
@@ -679,6 +691,13 @@ grid_main_configure (int argc, char **argv)
 	server = network_server_init ();
 	resolver = hc_resolver_create ();
 	lbpool = grid_lbpool_create (nsname);
+	
+	do {
+		enum hc_resolver_flags_e f = 0;
+		if (flag_cache_enabled)
+			f |= HC_RESOLVER_NOCACHE;
+		hc_resolver_configure (resolver, f);
+	} while (0);
 
 	if (resolver) {
 		hc_resolver_set_ttl_csm0 (resolver, dir_high_ttl);
@@ -709,6 +728,9 @@ grid_main_configure (int argc, char **argv)
 
 	grid_task_queue_register (admin_gtq, 1,
 		(GDestroyNotify) _task_expire_resolver, NULL, NULL);
+
+	grid_task_queue_register (admin_gtq, nsinfo_refresh_delay,
+		(GDestroyNotify) _task_reload_csurl, NULL, NULL);
 
 	grid_task_queue_register (admin_gtq, nsinfo_refresh_delay,
 		(GDestroyNotify) _task_reload_nsinfo, NULL, NULL);
