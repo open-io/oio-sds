@@ -146,15 +146,9 @@ _write_NOOP(void *data, size_t s, size_t n, void *ignored)
 }
 
 static GError *
-_body_parse_error (GString *b)
+_body_parse_json_error (struct json_object *jbody)
 {
-	g_assert (b != NULL);
-	struct json_tokener *tok = json_tokener_new ();
-	struct json_object *jbody = json_tokener_parse_ex (tok, b->str, b->len);
-	json_tokener_free (tok);
-	tok = NULL;
-
-	if (!jbody)
+	if (!jbody || json_object_is_type (jbody, json_type_null))
 		return NEWERROR(0, "No error explained");
 
 	struct json_object *jcode, *jmsg;
@@ -171,7 +165,24 @@ _body_parse_error (GString *b)
 		if (jmsg) msg = json_object_get_string (jmsg);
 		err = NEWERROR(code, "(code=%d) %s", code, msg);
 	}
-	json_object_put (jbody);
+	return err;
+}
+
+static GError *
+_body_parse_error (GString *b)
+{
+	g_assert (b != NULL);
+	GError *err = NULL;
+	struct json_tokener *tok = json_tokener_new ();
+	struct json_object *jbody = json_tokener_parse_ex (tok, b->str, b->len);
+	if (json_tokener_get_error (tok) != json_tokener_success) {
+		err = NEWERROR(CODE_PLATFORM_ERROR, "No json error");
+	} else {
+		err = _body_parse_json_error (jbody);
+	}
+	if (jbody)
+		json_object_put (jbody);
+	json_tokener_free (tok);
 	return err;
 }
 
@@ -583,8 +594,8 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 		struct json_tokener *tok = json_tokener_new ();
 		struct json_object *jbody = json_tokener_parse_ex (tok,
 				reply_body->str, reply_body->len);
-		json_tokener_free (tok);
-		if (!json_object_is_type(jbody, json_type_array)) {
+		if (json_tokener_get_error (tok) != json_tokener_success
+				|| !json_object_is_type(jbody, json_type_array)) {
 			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
 		} else {
 			if (NULL != (err = _load_chunks (&chunks, jbody))) {
@@ -594,6 +605,7 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct hc_url_s *url,
 			}
 		}
 		json_object_put (jbody);
+		json_tokener_free (tok);
 	}
 
 	/* download from the beans */
@@ -871,8 +883,8 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 		struct json_tokener *tok = json_tokener_new ();
 		struct json_object *jbody = json_tokener_parse_ex (tok,
 				reply_body->str, reply_body->len);
-		json_tokener_free (tok);
-		if (!json_object_is_type(jbody, json_type_array)) {
+		if (json_tokener_get_error (tok) != json_tokener_success
+				|| !json_object_is_type(jbody, json_type_array)) {
 			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
 		} else {
 			if (NULL != (err = _load_chunks (&chunks, jbody))) {
@@ -881,7 +893,9 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 				GRID_DEBUG("Got %u beans", g_slist_length (chunks));
 			}
 		}
-		json_object_put (jbody);
+		if (jbody)
+			json_object_put (jbody);
+		json_tokener_free (tok);
 	}
 
 	/* upload the beans */
