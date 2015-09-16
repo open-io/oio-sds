@@ -38,7 +38,6 @@ enum client_step_e
 {
 	NONE = 0,
 	CONNECTING,
-	CONNECTED,
 	REQ_SENDING,
 	REP_READING_SIZE,
 	REP_READING_DATA,
@@ -344,7 +343,8 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 
 		case CONNECTING:
 			EXTRA_ASSERT(client->fd >= 0);
-			client->step = client->request ? REQ_SENDING : CONNECTED;
+			EXTRA_ASSERT(client->request != NULL);
+			client->step = REQ_SENDING;
 			return NULL;
 
 		case REQ_SENDING:
@@ -523,9 +523,6 @@ _client_interest(struct gridd_client_s *client)
 			return 0;
 		case CONNECTING:
 			return CLIENT_WR;
-		case CONNECTED:
-			EXTRA_ASSERT(!client->request);
-			return 0;
 		case REQ_SENDING:
 			return client->request != NULL ?  CLIENT_WR : 0;
 		case REP_READING_SIZE:
@@ -606,8 +603,6 @@ _client_set_fd(struct gridd_client_s *client, int fd)
 			case CONNECTING:
 				if (client->request != NULL)
 					return NEWERROR(CODE_INTERNAL_ERROR, "Request pending");
-				/* PASSTHROUGH */
-			case CONNECTED: /* ok */
 				break;
 			case REQ_SENDING:
 			case REP_READING_SIZE:
@@ -630,8 +625,6 @@ _client_set_fd(struct gridd_client_s *client, int fd)
 	 * explicitely breaks the pending socket management. */
 	client->fd = fd;
 
-	/* CONNECTING instead of CONNECTED helps coping with not yet
-	 * completely connected sockets */
 	client->step = (client->fd >= 0) ? CONNECTING : NONE;
 
 	return NULL;
@@ -696,7 +689,6 @@ _client_request(struct gridd_client_s *client, GByteArray *req,
 	switch (client->step) {
 		case NONE:
 		case CONNECTING:
-		case CONNECTED:
 			if (client->request != NULL)
 				return NEWERROR(CODE_INTERNAL_ERROR, "Request already pending");
 			/* ok */
@@ -742,12 +734,12 @@ _client_expired(struct gridd_client_s *client, GTimeVal *now)
 
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
-
 	switch (client->step) {
 		case NONE:
-		case CONNECTED:
 			return FALSE;
 		case CONNECTING:
+			timersub(now, &(client->tv_start), &diff);
+			return seconds_elapsed(&diff) >= 2.0;
 		case REQ_SENDING:
 		case REP_READING_SIZE:
 		case REP_READING_DATA:
@@ -777,8 +769,9 @@ _client_expire(struct gridd_client_s *client, GTimeVal *now)
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
-	if (_client_finished(client))
+	if (_client_finished(client)) {
 		return;
+	}
 	if (_client_expired(client, now)) {
 		_client_reset_cnx(client);
 		client->error = NEWERROR(ERRCODE_READ_TIMEOUT, "Timeout");
@@ -800,8 +793,6 @@ _client_finished(struct gridd_client_s *client)
 			return TRUE;
 		case CONNECTING:
 			return FALSE;
-		case CONNECTED:
-			return TRUE;
 		case REQ_SENDING:
 		case REP_READING_SIZE:
 		case REP_READING_DATA:
@@ -1003,6 +994,7 @@ gridd_client_start (struct gridd_client_s *self)
 void
 gridd_client_expire (struct gridd_client_s *self, GTimeVal *now)
 {
+
 	GRIDD_CALL(self,expire)(self,now);
 }
 
