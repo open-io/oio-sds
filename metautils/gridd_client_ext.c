@@ -231,8 +231,9 @@ gridd_client_step(struct gridd_client_s *client)
 		gridd_client_fail(client, err);
 		g_clear_error(&err);
 	}
-	else
+	else if (pfd.revents & (POLLIN|POLLOUT)) {
 		gridd_client_react(client);
+	}
 	return NULL;
 }
 
