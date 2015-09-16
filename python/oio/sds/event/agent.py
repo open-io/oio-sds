@@ -13,6 +13,7 @@ from oio.common.http import requests
 from oio.common.queue.sqlite import SqliteQueue
 from oio.common.utils import get_logger
 from oio.common.utils import int_value
+from oio.common.utils import true_value
 from oio.common.utils import validate_service_conf
 from oio.conscience.client import ConscienceClient
 
@@ -55,6 +56,8 @@ class EventWorker(object):
         self.acct_refresh_interval = int_value(
             conf.get('acct_refresh_interval'), 60
         )
+        self.acct_update = true_value(
+            conf.get('acct_update', True))
         self.session = requests.Session()
         self.failed = False
 
@@ -127,13 +130,6 @@ class EventWorker(object):
                 self.acct_update = time.time()
             except Exception:
                 self.logger.warn('Unable to find account instance')
-                # fallback on conf
-                acct_addr = self.conf.get('acct_addr')
-                if not acct_addr:
-                    self.logger.warn(
-                        'Unable to find fallback account instance in config')
-                    raise Exception('Unable to find account instance')
-                self._acct_addr = acct_addr
         return self._acct_addr
 
     def acct_refresh(self):
@@ -145,6 +141,8 @@ class EventWorker(object):
         :param event:
         """
         self.logger.debug('worker "%s" handle container put', self.name)
+        if not self.acct_update:
+            return
         uri = 'http://%s/v1.0/account/container/update' % self.acct_addr
         mtime = event.get('when')
         data = event.get('data')
@@ -160,6 +158,8 @@ class EventWorker(object):
         :param event:
         """
         self.logger.debug('worker "%s" handle container update', self.name)
+        if not self.acct_update:
+            return
         uri = 'http://%s/v1.0/account/container/update' % self.acct_addr
         mtime = event.get('when')
         data = event.get('data')
@@ -182,6 +182,8 @@ class EventWorker(object):
         :param event:
         """
         self.logger.debug('worker "%s" handle container destroy', self.name)
+        if not self.acct_update:
+            return
         uri = 'http://%s/v1.0/account/container/update' % self.acct_addr
         dtime = event.get('when')
         data = event.get('data')
