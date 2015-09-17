@@ -265,6 +265,8 @@ param_namespace=${NS}
 param_chunk_size=${CHUNK_SIZE}
 param_score_timeout=86400
 
+param_option.lb.rawx=WRR
+
 param_option.ns_status=MASTER
 param_option.WORM=false
 param_option.service_update_policy=meta2=NONE|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|
