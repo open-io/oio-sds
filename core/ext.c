@@ -91,7 +91,8 @@ struct oio_thread_local_s
 	GTree *pairs;
 };
 
-static void _otl_clean (gpointer p) {
+static void
+_otl_clean (gpointer p) {
 	if (!p) return;
 	struct oio_thread_local_s *otl = p;
 	if (otl->reqid) {
@@ -163,7 +164,8 @@ const char*
 oio_local_get_value (const char *k)
 {
 	struct oio_thread_local_s *otl = g_private_get(&th_local_key_reqid);
-	if (!otl || !otl->pairs) return NULL;
+	if (!otl || !otl->pairs)
+		return NULL;
 	return g_tree_lookup(otl->pairs, k);
 }
 

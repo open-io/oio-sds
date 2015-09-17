@@ -223,7 +223,8 @@ template_nsinfo_json = """{
 		"service_update_policy" : "meta2=NONE|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|",
 		"automatic_open" : "true",
 		"meta2_max_versions" : "${VERSIONING}",
-		"storage_policy" : "${STGPOL}"
+		"storage_policy" : "${STGPOL}",
+		"lb.rawx" : "WRR"
 	},
 	"storage_policy":{
 		"SINGLE" : "NONE:NONE:NONE",

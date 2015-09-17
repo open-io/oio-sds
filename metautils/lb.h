@@ -104,6 +104,8 @@ void grid_lb_configure_options(struct grid_lb_s *lb, const gchar *opts);
 
 /* Iterators features ------------------------------------------------------ */
 
+const char * grid_lb_iterator_to_string (struct grid_lb_iterator_s *it);
+
 /*!
  * If no type is provided, the default is choosen (RR).
  *

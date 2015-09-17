@@ -141,13 +141,17 @@ class BlobMoverWorker(object):
         except exc.NotFound:
             raise exc.OrphanChunk('Content not found')
         current_chunk = None
+        notin = []
         for c in data:
+            if c['pos'] == meta['chunk_pos']:
+                notin.append(c)
+        for c in notin:
             if c['url'] == chunk_url:
                 current_chunk = c
-                data.remove(c)
+                notin.remove(c)
         if not current_chunk:
             raise exc.OrphanChunk('Chunk not found in content')
-        spare_data = {'notin': data, 'broken': [current_chunk], 'size': 0}
+        spare_data = {'notin': notin, 'broken': [current_chunk], 'size': 0}
         spare_resp = self.container_client.content_spare(
             cid=content_cid, path=content_path, data=spare_data)
 

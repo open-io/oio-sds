@@ -589,16 +589,10 @@ http_headers_add_int64 (struct http_headers_s *h, const char *k, gint64 i64)
 	http_headers_add (h, k, v);
 }
 
-GError *
-http_body_parse_error (const char *b, gsize len)
+static GError *
+_parse_json_error (struct json_object *jbody)
 {
-	g_assert (b != NULL);
-	struct json_tokener *tok = json_tokener_new ();
-	struct json_object *jbody = json_tokener_parse_ex (tok, b, len);
-	json_tokener_free (tok);
-	tok = NULL;
-
-	if (!jbody)
+	if (!jbody || json_object_is_type (jbody, json_type_null))
 		return NEWERROR(0, "No error explained");
 
 	struct json_object *jcode, *jmsg;
@@ -607,15 +601,32 @@ http_body_parse_error (const char *b, gsize len)
 		{"message",  &jmsg,  json_type_string, 0},
 		{NULL, NULL, 0, 0}
 	};
+
 	GError *err =  oio_ext_extract_json(jbody, map);
-	if (!err) {
-		int code = 0;
-		const char *msg = "Unknown error";
-		if (jcode) code = json_object_get_int64 (jcode);
-		if (jmsg) msg = json_object_get_string (jmsg);
-		err = NEWERROR(code, "(code=%d) %s", code, msg);
+	if (err)
+		return err;
+	int code = 0;
+	const char *msg = "Unknown error";
+	if (jcode) code = json_object_get_int64 (jcode);
+	if (jmsg) msg = json_object_get_string (jmsg);
+	return NEWERROR(code, "(code=%d) %s", code, msg);
+}
+
+GError *
+http_body_parse_error (const char *b, gsize len)
+{
+	g_assert (b != NULL);
+	GError *err = NULL;
+	struct json_tokener *tok = json_tokener_new ();
+	struct json_object *jbody = json_tokener_parse_ex (tok, b, len);
+	if (json_tokener_get_error (tok) != json_tokener_success) {
+		err = NEWERROR(600, "No json error");
+	} else {
+		err = _parse_json_error (jbody);
 	}
-	json_object_put (jbody);
+	if (jbody)
+		json_object_put (jbody);
+	json_tokener_free (tok);
 	return err;
 }
 
