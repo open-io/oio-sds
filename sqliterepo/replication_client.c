@@ -66,7 +66,7 @@ peer_restore(const gchar *target, struct sqlx_name_s *name,
 	if (!client)
 		return NEWERROR(CODE_INTERNAL_ERROR, "Failed to create client to [%s], bad address?", target);
 
-	gridd_client_set_timeout(client, 5.0, 30.0);
+	gridd_client_set_timeout(client, 10.0);
 	gridd_client_start(client);
 	if (!(err = gridd_client_loop(client)))
 		err = gridd_client_error(client);
@@ -88,7 +88,7 @@ peers_restore(gchar **targets, struct sqlx_name_s *name,
 	GByteArray *encoded = _pack_RESTORE(name, dump);
 	struct gridd_client_s **clients = gridd_client_create_many(targets, encoded, NULL, NULL);
 	g_byte_array_unref(encoded);
-	gridd_clients_set_timeout(clients, 5.0, 30.0);
+	gridd_clients_set_timeout(clients, 10.0);
 
 	gridd_clients_start(clients);
 	if (!(err = gridd_clients_loop(clients)))
@@ -148,7 +148,7 @@ peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 		return NEWERROR(CODE_INTERNAL_ERROR, "Failed to create client to [%s], bad address?", target);
 
 	// set a long timeout to allow moving large meta2 bases
-	gridd_client_set_timeout(client, 3600.0, 4000.0);
+	gridd_client_set_timeout(client, 3600.0);
 	gridd_client_start(client);
 	if (!(err = gridd_client_loop(client))) {
 		err = gridd_client_error(client);

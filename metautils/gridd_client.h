@@ -77,10 +77,10 @@ struct gridd_client_vtable_s
 
 	// Force the timeout for each signel request (step), and for each request
 	// and its redirections.
-	void (*set_timeout) (struct gridd_client_s *c, gdouble step, gdouble overall);
+	void (*set_timeout) (struct gridd_client_s *c, gdouble seconds);
 
 	// Returns if the client's last change is older than 'now'
-	gboolean (*expired) (struct gridd_client_s *c, GTimeVal *now);
+	gboolean (*expired) (struct gridd_client_s *c, gint64 now);
 
 	// Returns FALSE if the client is still expecting events.
 	gboolean (*finished) (struct gridd_client_s *c);
@@ -93,7 +93,7 @@ struct gridd_client_vtable_s
 
 	// If expired() is true, sets the internal error and mark the client
 	// as failed.
-	void (*expire) (struct gridd_client_s *c, GTimeVal *now);
+	gboolean (*expire) (struct gridd_client_s *c, gint64 now);
 
 	void (*fail) (struct gridd_client_s *c, GError *why);
 };
@@ -128,11 +128,11 @@ const gchar * gridd_client_url (struct gridd_client_s *self);
 int gridd_client_fd (struct gridd_client_s *self);
 GError * gridd_client_set_fd(struct gridd_client_s *self, int fd);
 void gridd_client_set_keepalive(struct gridd_client_s *self, gboolean on);
-void gridd_client_set_timeout (struct gridd_client_s *self, gdouble t0, gdouble t1);
-gboolean gridd_client_expired(struct gridd_client_s *self, GTimeVal *now);
+void gridd_client_set_timeout (struct gridd_client_s *self, gdouble seconds);
+gboolean gridd_client_expired(struct gridd_client_s *self, gint64 now);
 gboolean gridd_client_finished (struct gridd_client_s *self);
 gboolean gridd_client_start (struct gridd_client_s *self);
-void gridd_client_expire (struct gridd_client_s *self, GTimeVal *now);
+gboolean gridd_client_expire (struct gridd_client_s *self, gint64 now);
 void gridd_client_react (struct gridd_client_s *self);
 void gridd_client_fail (struct gridd_client_s *self, GError *why);
 

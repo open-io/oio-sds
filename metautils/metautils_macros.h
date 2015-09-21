@@ -64,6 +64,10 @@ License along with this library.
 # define NAME_SRVTYPE_RAWX  "rawx"
 # define NAME_SRVTYPE_SQLX  "sqlx"
 
+# ifndef COMMON_CLIENT_TIMEOUT
+#  define COMMON_CLIENT_TIMEOUT 30.0
+# endif
+
 # ifndef M2V2_CLIENT_TIMEOUT
 #  define M2V2_CLIENT_TIMEOUT 10.0
 # endif

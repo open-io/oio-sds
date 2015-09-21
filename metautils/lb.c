@@ -1363,7 +1363,7 @@ grid_lbpool_reconfigure(struct grid_lbpool_s *glp,
 		return ;
 	}
 	if (!ni->options) {
-		GRID_DEBUG("LB reload: no configuration", __FUNCTION__);
+		GRID_DEBUG("LB reload: no configuration (%s)", __FUNCTION__);
 		return ;
 	}
 
