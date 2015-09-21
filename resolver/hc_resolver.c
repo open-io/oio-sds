@@ -79,6 +79,7 @@ hc_resolver_element_extract(struct cached_element_s *elt)
 	_strv_pointers(result, elt->s, elt->count_elements);
 	result[elt->count_elements] = NULL;
 
+	oio_ext_array_shuffle ((void**)result, elt->count_elements);
 	return result;
 }
 
