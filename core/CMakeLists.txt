@@ -27,7 +27,10 @@ set_target_properties(oiosds PROPERTIES
 		SOVERSION ${ABI_VERSION})
 
 add_executable(test_oio_url test_url.c)
-target_link_libraries(test_oio_url oiocore)
+target_link_libraries(test_oio_url oiocore ${GLIB2_LIBRARIES})
+
+add_executable(test_ext test_ext.c)
+target_link_libraries(test_ext oiocore)
 
 add_executable(test_roundtrip test_roundtrip.c)
 target_link_libraries(test_roundtrip oiosds)
@@ -50,5 +53,6 @@ install(TARGETS oiocore oiosds
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		PUBLIC_HEADER DESTINATION include)
 
-add_test(NAME metautils/url COMMAND test_hc_url)
+add_test(NAME core/url COMMAND test_oio_url)
+add_test(NAME core/ext COMMAND test_ext)
 

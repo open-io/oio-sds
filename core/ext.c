@@ -61,6 +61,19 @@ oio_ext_gslist_shuffle(GSList *src)
 		(l2 && l2->next) ? oio_ext_gslist_shuffle(l2) : l2);
 }
 
+void
+oio_ext_array_shuffle (gpointer *array, gsize len)
+{
+	while (len-- > 1) {
+		guint32 i = g_random_int_range (0, len+1);
+		if (i == len)
+			continue;
+		gpointer tmp = array[i];
+		array[i] = array[len];
+		array[len] = tmp;
+	}
+}
+
 GError *
 oio_ext_extract_json (struct json_object *obj,
 		struct oio_ext_json_mapping_s *tab)

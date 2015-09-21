@@ -23,6 +23,10 @@ License along with this library.
 /** Shuffles the single linked list. The original <src> MUST NOT be reused. */
 GSList * oio_ext_gslist_shuffle(GSList *src);
 
+/** Shuffles <array> in place. <len> is the len of the array. <len> must be
+ * greater than 1. */
+void oio_ext_array_shuffle (gpointer *array, gsize len);
+
 /** Forward declaration from the json-c. It helps us avoiding an incude. */
 struct json_object;
 
