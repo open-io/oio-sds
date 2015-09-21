@@ -1189,8 +1189,9 @@ grid_lb_iterator_next_set(struct grid_lb_iterator_s *iter,
 		return FALSE;
 	}
 
-	*result = (struct service_info_s**) metautils_gpa_to_array(
-			metautils_gtree_to_gpa(polled, TRUE), TRUE);
+	GPtrArray *gpa = metautils_gtree_to_gpa(polled, TRUE);
+	oio_ext_array_shuffle (gpa->pdata, gpa->len);
+	*result = (struct service_info_s**) metautils_gpa_to_array(gpa , TRUE);
 	return TRUE;
 }
 
