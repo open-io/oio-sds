@@ -223,8 +223,15 @@ template_nsinfo_json = """{
 		"service_update_policy" : "meta2=NONE|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|",
 		"automatic_open" : "true",
 		"meta2_max_versions" : "${VERSIONING}",
+		"meta2_keep_deleted_delay" : 86400,
+		"container_max_size" : 50000000,
+		"compression" : null,
+		"FLATNS_hash_offset" : 0,
+		"FLATNS_hash_size" : 0,
+		"FLATNS_hash_bitlength" : 17,
 		"storage_policy" : "${STGPOL}",
-		"lb.rawx" : "WRR"
+		"lb.meta2" : "WRAND?standard_deviation=no",
+		"lb.rawx" : "WRAND?shorten_ratio=0.8"
 	},
 	"storage_policy":{
 		"SINGLE" : "NONE:NONE:NONE",
