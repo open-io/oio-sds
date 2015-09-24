@@ -70,6 +70,10 @@ gchar ** meta1v2_remote_link_service(const addr_info_t *meta1,
 		GError **err, struct hc_url_s *url, const gchar *srvtype,
 		gboolean dryrun, gboolean autocreate);
 
+GError * meta1v2_remote_relink_service(const addr_info_t *meta1,
+		struct hc_url_s *url, const char *kept, const char *replaced,
+		gboolean dryrun, gchar ***out);
+
 gboolean meta1v2_remote_unlink_service(const addr_info_t *meta1,
 		GError **err, struct hc_url_s *url, const gchar *srvtype);
 
