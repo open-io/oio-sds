@@ -116,7 +116,8 @@ group=${NS},localhost,proxy
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
+#command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
+command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
 """
 
 template_nginx_gridinit = """
@@ -395,7 +396,7 @@ template_local_ns = """
 [${NS}]
 ${NOZK}zookeeper=${IP}:2181
 conscience=${IP}:${PORT_CS}
-proxy-local=${RUNDIR}/${NS}-proxy.sock
+#proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
 event-agent=ipc://${RUNDIR}/event-agent.sock
 """

@@ -74,7 +74,17 @@ done
 mkdir -p "$OIO"
 ( cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs}))
 
-opts="--nb-meta1=${REPLICATION_DIRECTORY} --nb-meta2=${REPLICATION_BUCKET}"
+NB_META2=${REPLICATION_BUCKET}
+if [ -n "$ADD_META2" ] && [ "$ADD_META2" -gt 0 ] ; then
+	NB_META2=$((NB_META2+$ADD_META2))
+fi
+
+NB_META1=${REPLICATION_DIRECTORY}
+if [ -n "$ADD_META1" ] && [ "$ADD_META1" -gt 0 ] ; then
+	NB_META1=$((NB_META1+$ADD_META1))
+fi
+
+opts="--nb-meta1=${NB_META1} --nb-meta2=${NB_META2}"
 if [ -n "$PORT" ] ; then opts="${opts} --port=${PORT}" ; fi
 if [ -n "$CHUNKSIZE" ] ; then opts="${opts} --chunk-size=${CHUNKSIZE}" ; fi
 if [ "$REDIS" -gt 0 ] ; then opts="${opts} --allow-redis" ; fi
