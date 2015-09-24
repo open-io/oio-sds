@@ -26,6 +26,9 @@ set_target_properties(oiosds PROPERTIES
 		PUBLIC_HEADER "oio_sds.h"
 		SOVERSION ${ABI_VERSION})
 
+add_executable(test_oio_str test_str.c)
+target_link_libraries(test_oio_str oiocore)
+
 add_executable(test_oio_url test_url.c)
 target_link_libraries(test_oio_url oiocore ${GLIB2_LIBRARIES})
 
@@ -55,4 +58,5 @@ install(TARGETS oiocore oiosds
 
 add_test(NAME core/url COMMAND test_oio_url)
 add_test(NAME core/ext COMMAND test_ext)
+add_test(NAME core/str COMMAND test_oio_str)
 

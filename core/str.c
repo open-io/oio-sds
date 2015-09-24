@@ -4,6 +4,13 @@
 
 #include "oiostr.h"
 #include "oiourl.h"
+#include "internals.h"
+
+static guint8 masks[] = {
+	0x00, 0x80, 0xC0, 0xE0,
+	0xF0, 0xF8, 0xFC, 0xFE,
+	0xFF
+};
 
 static gchar b2h[][2] =
 {
@@ -205,5 +212,72 @@ oio_str_randomize(guint8 *buf, gsize buflen)
 	}
 
 	g_rand_free(r);
+}
+
+const char *
+oio_str_autocontainer (const char *path, gchar *dst,
+		const struct oio_str_autocontainer_config_s *cfg)
+{
+	guint8 bin[64];
+
+	g_assert (path != NULL);
+	g_assert (dst != NULL);
+	g_assert (cfg != NULL);
+
+	gsize len = strlen (path);
+	gsize src_offset = cfg->src_offset;
+	gsize src_size = cfg->src_size;
+	if (src_offset + src_size > len)
+		return NULL;
+	/* TODO check the sum doesn't cause an overflow... */
+
+	if (!src_size)
+		src_size = len - src_offset;
+
+	GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA256);
+	g_checksum_update (checksum, (guint8*)(path+src_offset), src_size);
+	len = sizeof(bin);
+	g_checksum_get_digest (checksum, bin, &len);
+	g_checksum_free (checksum);
+
+	return oio_str_autocontainer_hash (bin, 64, dst, cfg);
+}
+
+const char *
+oio_str_autocontainer_hash (const guint8 *bin, gsize len, gchar *dst,
+		const struct oio_str_autocontainer_config_s *cfg)
+{
+	g_assert (bin != NULL);
+	g_assert (len > 0);
+	g_assert (dst != NULL);
+	g_assert (cfg != NULL);
+
+	const gsize dst_bits = cfg->dst_bits;
+
+	if (!dst_bits || dst_bits >= len*8)
+		return NULL;
+
+	const gsize div = dst_bits / 8;
+	const gsize mod = dst_bits % 8;
+	const gsize last = mod ? div+1 : div;
+	if (last > len)
+		return NULL;
+
+	gchar *p = dst;
+	for (gsize i=0; i<div ;i++) {
+		const char *s = b2h[ bin[i] ];
+		*(p++) = s[0];
+		*(p++) = s[1];
+	}
+	if (mod) {
+		register guint8 x = bin[last-1] & masks[mod];
+		const char *s = b2h[x];
+		*(p++) = s[0];
+		if (mod > 4)
+			*(p++) = s[1];
+	}
+	*p = '\0';
+
+	return dst;
 }
 

@@ -65,8 +65,8 @@ enum oio_url_field_e
 
 	OIOURL_VERSION,
 
-	OIOURL_WHOLE,
-	OIOURL_HEXID,
+	OIOURL_WHOLE, /* read-only */
+	OIOURL_HEXID, /* read-write */
 };
 
 #define HCURL_LATEST_VERSION "LAST"
