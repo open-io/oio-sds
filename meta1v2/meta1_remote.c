@@ -275,3 +275,18 @@ meta1v2_remote_get_prefixes(const char *to, gchar *** result)
 	return list_request(to, message_marshall_gba_and_clean(req), result);
 }
 
+GError *
+meta1v2_remote_relink_service(const char *m1, struct hc_url_s *url,
+		const char *kept, const char *replaced, gboolean dryrun, 
+		gchar ***out)
+{
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVRELINK);
+	metautils_message_add_url (req, url);
+	metautils_message_add_field_str (req, NAME_MSGKEY_OLD, kept);
+	if (replaced)
+		metautils_message_add_field_str (req, NAME_MSGKEY_NOTIN, replaced);
+	if (dryrun)
+		metautils_message_add_field_str (req, NAME_MSGKEY_DRYRUN, "1");
+	return list_request (m1, message_marshall_gba_and_clean(req), out);
+}
+

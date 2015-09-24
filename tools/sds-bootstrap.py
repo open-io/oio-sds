@@ -116,7 +116,7 @@ group=${NS},localhost,proxy
 on_die=respawn
 enabled=true
 start_at_boot=false
-#command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
+#command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
 command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy -O Cache=no -O Bind=${IP}:${PORT_PROXYD_CS} -O Bind=${IP}:${PORT_PROXYD_DIR} -O Bind=${IP}:${PORT_PROXYD_M2} ${IP}:${PORT_PROXYD} ${NS}
 """
 

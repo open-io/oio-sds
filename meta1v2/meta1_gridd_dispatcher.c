@@ -359,6 +359,40 @@ meta1_dispatch_v2_GET_PREFIX(struct gridd_reply_ctx_s *reply,
 	return TRUE;
 }
 
+static gboolean
+meta1_dispatch_v2_SRVRELINK(struct gridd_reply_ctx_s *reply,
+	struct meta1_backend_s *m1, gpointer ignored)
+{
+	GError *err = NULL;
+	gchar *replaced = NULL, *kept = NULL, **newset = NULL;
+	struct hc_url_s *url = NULL;
+	(void) ignored;
+
+	url = metautils_message_extract_url (reply->request);
+	kept = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_OLD);
+	replaced = metautils_message_extract_string_copy (reply->request, NAME_MSGKEY_NOTIN);
+	gboolean dryrun = metautils_message_extract_flag (reply->request, NAME_MSGKEY_DRYRUN, FALSE);
+	reply->subject("%s|%s", hc_url_get(url, HCURL_WHOLE), hc_url_get(url, HCURL_HEXID));
+
+	if (!url) {
+		reply->send_error (0, NEWERROR(CODE_BAD_REQUEST, "Missing field (%s)", "url"));
+	} else {
+		err = meta1_backend_services_relink (m1, url, kept, replaced, dryrun, &newset);
+		if (NULL != err) {
+			reply->send_error (0, err);
+		} else {
+			reply->add_body(marshall_stringv_and_clean(&newset));
+			reply->send_reply (CODE_FINAL_OK, "OK");
+		}
+	}
+
+	hc_url_pclean (&url);
+	g_free0 (kept);
+	g_free0 (replaced);
+	if (newset) g_strfreev (newset);
+	return TRUE;
+}
+
 /* ------------------------------------------------------------------------- */
 
 typedef gboolean (*hook) (struct gridd_reply_ctx_s *, gpointer, gpointer);
@@ -385,6 +419,8 @@ meta1_gridd_get_requests(void)
 
 		{NAME_MSGNAME_M1V2_SRVALLONM1,  (hook) meta1_dispatch_v2_SRV_ALLONM1, NULL},
 		{NAME_MSGNAME_M1V2_GETPREFIX,	(hook) meta1_dispatch_v2_GET_PREFIX,  NULL},
+
+		{NAME_MSGNAME_M1V2_SRVRELINK,   (hook) meta1_dispatch_v2_SRVRELINK, NULL},
 
 		{NULL, NULL, NULL}
 	};

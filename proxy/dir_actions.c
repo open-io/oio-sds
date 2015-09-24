@@ -306,12 +306,73 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 }
 
 enum http_rc_e
+action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
+{
+	GError *err = NULL;
+	struct meta1_service_url_s *m1u_kept = NULL, *m1u_repl = NULL;
+	gchar **newset = NULL;
+
+	const gchar *type = TYPE();
+	if (!type)
+		return _reply_format_error (args, NEWERROR(CODE_BAD_REQUEST, "No service type provided"));
+
+	gboolean dryrun = _request_has_flag (args, PROXYD_HEADER_MODE, "dryrun");
+
+	struct json_object *jkept, *jrepl;
+	struct metautils_json_mapping_s mapping[] = {
+		{"kept", &jkept, json_type_object, 0},
+		{"replaced", &jrepl, json_type_object, 0},
+		{NULL, NULL, 0, 0}
+	};
+	err = metautils_extract_json (jargs, mapping);
+	if (!err && jkept && json_object_is_type(jkept, json_type_object)) {
+		if (NULL != (err = meta1_service_url_load_json_object (jkept, &m1u_kept)))
+			g_prefix_error (&err, "invalid service in [%s]: ", "kept");
+	}
+	if (!err && jrepl && json_object_is_type(jrepl, json_type_object)) {
+		if (NULL != (err = meta1_service_url_load_json_object (jrepl, &m1u_repl)))
+			g_prefix_error (&err, "invalid service in [%s]: ", "replaced");
+	}
+
+	if (!err) {
+		gchar *kept = NULL, *repl = NULL;
+		GError *hook (const gchar * m1) {
+			if (newset)
+				g_strfreev (newset);
+			return meta1v2_remote_relink_service (m1, args->url, kept, repl, dryrun, &newset);
+		}
+		kept = meta1_pack_url (m1u_kept);
+		repl = m1u_repl ? meta1_pack_url (m1u_repl) : NULL;
+		err = _m1_locate_and_action (args, hook);
+		g_free (kept);
+		g_free (repl);
+	}
+
+	meta1_service_url_clean (m1u_kept);
+	meta1_service_url_clean (m1u_repl);
+
+	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
+		/* Also decache on timeout, a majority of request succeed,
+         * and it will probably silently succeed  */
+		hc_decache_reference_service (resolver, args->url, type);
+	}
+
+	if (err) {
+		if (newset)
+			g_strfreev (newset);
+		return _reply_common_error (args, err);
+	}
+	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, newset));
+}
+
+enum http_rc_e
 action_dir_srv_action (struct req_args_s *args)
 {
 	struct sub_action_s actions[] = {
 		{"Link", action_dir_srv_link},
 		{"Renew", action_dir_srv_renew},
 		{"Force", action_dir_srv_force},
+		{"Relink", action_dir_srv_relink},
 		{NULL,NULL}
 	};
 	return abstract_action ("directory services", args, actions);
@@ -548,6 +609,12 @@ enum http_rc_e
 action_ref_destroy (struct req_args_s *args)
 {
     return action_dir_ref_destroy (args);
+}
+
+enum http_rc_e
+action_ref_relink (struct req_args_s *args)
+{
+    return rest_action (args, action_dir_srv_relink);
 }
 
 enum http_rc_e

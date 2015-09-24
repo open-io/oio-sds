@@ -62,6 +62,11 @@ GError * meta1v2_remote_reference_set_property(const char *m1, struct oio_url_s 
 GError * meta1v2_remote_reference_del_property(const char *m1, struct oio_url_s *url,
 		gchar **keys);
 
+GError * meta1v2_remote_relink_service(const char *m1, struct hc_url_s *url,
+		const char *kept, const char *replaced,
+		gboolean dryrun, gchar ***out);
+
+
 GError * meta1v2_remote_list_services_by_prefix(const char *to, struct oio_url_s *url,
 		gchar ***out);
 
