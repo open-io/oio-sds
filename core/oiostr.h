@@ -60,4 +60,15 @@ void oio_str_hash_name(guint8 *d, const char *ns, const char *account, const cha
 /** Fills 'buf' with buflen random bytes */
 void oio_str_randomize(guint8 *b, gsize blen);
 
+struct oio_str_autocontainer_config_s {
+	gsize src_offset;
+	gsize src_size;
+	gsize dst_bits;
+};
+
+/** Fills 'dst' with the name of the container deduced from the given 'path'.
+ * 'dst' must be at least 65 characters long. */
+const char * oio_str_autocontainer (const char *path, gchar *dst,
+		const struct oio_str_autocontainer_config_s *cfg);
+
 #endif /*OIO_SDS__core__oiostr_h*/
