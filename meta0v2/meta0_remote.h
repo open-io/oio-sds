@@ -56,6 +56,8 @@ GSList *meta0_remote_get_meta1_one(addr_info_t *m0a, gint ms,
 
 gint meta0_remote_cache_refresh(addr_info_t *m0a, gint ms, GError **err);
 
+GError* meta0_remote_cache_reset(addr_info_t *m0a, gboolean local);
+
 gint meta0_remote_fill(addr_info_t *m0a, gint ms, gchar **urls,
 		guint nbreplicas, GError **err);
 
