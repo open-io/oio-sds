@@ -626,24 +626,6 @@ grid_lb_iterator_weighted_random(struct grid_lb_s *lb)
 	return iter;
 }
 
-struct grid_lb_iterator_s*
-grid_lb_iterator_init(struct grid_lb_s *lb, const gchar *type)
-{
-	if (type && *type) {
-		if (IS("RR"))
-			return grid_lb_iterator_round_robin(lb);
-		if (IS("RAND"))
-			return grid_lb_iterator_random(lb);
-		if (IS("WRR") || IS("SRR"))
-			return grid_lb_iterator_weighted_round_robin(lb);
-		if (IS("WRAND") || IS("SRAND"))
-			return grid_lb_iterator_weighted_random(lb);
-		if (IS("SINGLE"))
-			return grid_lb_iterator_single_run(lb);
-	}
-	return grid_lb_iterator_round_robin(lb);
-}
-
 void
 grid_lb_iterator_clean(struct grid_lb_iterator_s *iter)
 {
@@ -1299,7 +1281,7 @@ _ensure(struct grid_lbpool_s *glp, const gchar *srvtype,
 	}
 
 	if (!(iterator = g_tree_lookup(glp->iterators, srvtype))) {
-		iterator = grid_lb_iterator_round_robin(lb);
+		iterator = grid_lb_iterator_weighted_random(lb);
 		g_tree_insert(glp->iterators, g_strdup(srvtype), iterator);
 	}
 

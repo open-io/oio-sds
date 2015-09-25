@@ -110,38 +110,14 @@ void grid_lb_configure_options(struct grid_lb_s *lb, const gchar *opts);
 
 /* Iterators features ------------------------------------------------------ */
 
-/*!
- * If no type is provided, the default is choosen (RR).
- *
- * Types accepted:
- * - SINGLE : simple iterator, run the services once
- * - RR (default) : simple round-robin
- * - WRR : weighted round-robin (using the service's weight)
- * - SRR : synonym for WRR
- * - RAND : simple random pick
- * - WRAND : weighted random-pick (using the service's weight)
- * - SRAND : synonym for WRAND
- *
- * @param lb
- * @param type
- * @return
- */
-struct grid_lb_iterator_s* grid_lb_iterator_init(struct grid_lb_s *lb,
-		const gchar *type);
-
-/*! @see grid_lb_iterator_init() */
 struct grid_lb_iterator_s* grid_lb_iterator_single_run(struct grid_lb_s *lb);
 
-/*! @see grid_lb_iterator_init() */
 struct grid_lb_iterator_s* grid_lb_iterator_round_robin(struct grid_lb_s *lb);
 
-/*! @see grid_lb_iterator_init() */
 struct grid_lb_iterator_s* grid_lb_iterator_weighted_round_robin(struct grid_lb_s *lb);
 
-/*! @see grid_lb_iterator_init() */
 struct grid_lb_iterator_s* grid_lb_iterator_random(struct grid_lb_s *lb);
 
-/*! @see grid_lb_iterator_init() */
 struct grid_lb_iterator_s* grid_lb_iterator_weighted_random(struct grid_lb_s *lb);
 
 /*! Build an iterator based on another iterator. The concurrency is managed
