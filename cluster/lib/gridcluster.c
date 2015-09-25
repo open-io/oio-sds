@@ -763,7 +763,7 @@ gridcluster_get_keep_deleted_delay(struct namespace_info_s *nsinfo)
 gchar *
 gridcluster_get_service_update_policy (struct namespace_info_s *nsinfo)
 {
-	const gchar *def = "meta2=KEEP|1|1|;sqlx=KEEP|3|1|";
+	const gchar *def = "meta2=KEEP|1|1|;sqlx=KEEP|1|1|";
 
 	if (!nsinfo || !nsinfo->options)
 		return g_strdup(def);

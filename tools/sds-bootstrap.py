@@ -116,7 +116,8 @@ group=${NS},localhost,proxy
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
+#command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
+command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
 """
 
 template_nginx_gridinit = """
@@ -227,11 +228,7 @@ path=${RUNDIR}/agent.sock
 
 template_conscience = """
 [General]
-### Now is 'daemon' ignored (this is managed at the CLI)
-### Now is 'pidfile' ingnored (managed at CLI too)
-# Timeout on read operations
 to_op=1000
-# Timeout on accepting connections
 to_cnx=1000
 
 flag.NOLINGER=true
@@ -263,25 +260,19 @@ path=${LIBDIR}/grid/msg_fallback.so
 path=${LIBDIR}/grid/msg_conscience.so
 param_namespace=${NS}
 param_chunk_size=${CHUNK_SIZE}
-param_score_timeout=86400
 
-param_option.ns_status=MASTER
-param_option.WORM=false
 param_option.service_update_policy=meta2=NONE|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|
-param_option.automatic_open=true
 param_option.meta2_max_versions=${VERSIONING}
+param_option.lb.rawx=WRAND?shorten_ratio=0.6&standard_deviation=no
+param_option.meta2_keep_deleted_delay=86400
+param_option.compression=none
+param_option.container_max_size=50000000
+param_option.FLATNS_hash_offset=0
+param_option.FLATNS_hash_size=0
+param_option.FLATNS_hash_bitlength=17
+
 param_option.storage_policy=${STGPOL}
-
-param_option.meta2_check.put.GAPS=false
-param_option.meta2_check.put.DISTANCE=false
-param_option.meta2_check.put.STGCLASS=false
-param_option.meta2_check.put.SRVINFO=false
-
 param_storage_conf=${CFGDIR}/${NS}-conscience-policies.conf
-
-param_service.default.score_timeout=30
-param_service.default.score_variation_bound=5
-param_service.default.score_expr=100
 
 param_service.meta0.score_timeout=3600
 param_service.meta0.score_variation_bound=5
@@ -405,7 +396,7 @@ template_local_ns = """
 [${NS}]
 ${NOZK}zookeeper=${IP}:2181
 conscience=${IP}:${PORT_CS}
-proxy-local=${RUNDIR}/${NS}-proxy.sock
+#proxy-local=${RUNDIR}/${NS}-proxy.sock
 proxy=${IP}:${PORT_PROXYD}
 event-agent=ipc://${RUNDIR}/event-agent.sock
 """

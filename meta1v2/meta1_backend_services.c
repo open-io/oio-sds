@@ -39,6 +39,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"
 
+#define M1U(P) ((struct meta1_service_url_s*)(P))
+
 static GError *__get_container_all_services(struct sqlx_sqlite3_s *sq3,
 		struct hc_url_s *url, const gchar *srvtype,
 		struct meta1_service_url_s ***result);
@@ -133,6 +135,24 @@ expand_urlv(struct meta1_service_url_s **uv)
 
 	g_ptr_array_add(tmp, NULL);
 	return (struct meta1_service_url_s**)g_ptr_array_free(tmp, FALSE);
+}
+
+static struct meta1_service_url_s*
+_siv_to_url(struct service_info_s **siv)
+{
+	struct meta1_service_url_s *m1u = g_malloc0 (sizeof(*m1u));
+	GString *u = g_string_new("");
+
+	for (struct service_info_s **p=siv; *p ; p++) {
+		gchar str[STRLEN_ADDRINFO];
+		grid_addrinfo_to_string(&((*p)->addr), str, sizeof(str));
+		if (u->len > 0)
+			g_string_append_c(u, ',');
+		g_string_append(u, str);
+	}
+	g_strlcpy (m1u->host, u->str, sizeof(m1u->host));
+	g_string_free(u, TRUE);
+	return m1u;
 }
 
 //------------------------------------------------------------------------------
@@ -567,24 +587,12 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 	if(NULL != *err)
 		return NULL;
 
-	GString *compound_url = g_string_new("");
-
-	for (struct service_info_s **p=siv; *p ; p++) {
-		gchar str[STRLEN_ADDRINFO];
-		grid_addrinfo_to_string(&((*p)->addr), str, sizeof(str));
-		if (compound_url->len > 0)
-			g_string_append_c(compound_url, ',');
-		g_string_append(compound_url, str);
-	}
+	struct meta1_service_url_s *m1u = _siv_to_url (siv);
 	service_info_cleanv(siv, FALSE);
 	siv = NULL;
-
-	struct meta1_service_url_s *url = g_malloc0(sizeof(*url));
-	g_strlcpy(url->srvtype, ct->type, sizeof(url->srvtype));
-	g_strlcpy(url->host, compound_url->str, sizeof(url->host));
-	url->seq = seq;
-	g_string_free(compound_url, TRUE);
-	return url;
+	g_strlcpy(m1u->srvtype, ct->type, sizeof(m1u->srvtype));
+	m1u->seq = seq;
+	return m1u;
 }
 
 static struct meta1_service_url_s **
@@ -744,6 +752,161 @@ __renew_container_service(struct sqlx_sqlite3_s *sq3,
 {
 	enum m1v2_getsrv_e mode = M1V2_GETSRV_RENEW|(dryrun? M1V2_GETSRV_DRYRUN:0);
 	return __get_container_service(sq3, url, srvtype, m1, result, mode);
+}
+
+/* ------------------------------------------------------------------------- */
+
+/** @private */
+struct m1v2_relink_input_s {
+	struct meta1_backend_s *m1;
+	struct sqlx_sqlite3_s *sq3;
+	struct hc_url_s *url;
+	struct compound_type_s *ct;
+	struct grid_lb_iterator_s *iterator;
+	struct meta1_service_url_s **kept;
+	struct meta1_service_url_s **replaced;
+	gboolean dryrun;
+};
+
+static struct meta1_service_url_s **
+__parse_and_expand (const char *packed)
+{
+	if (!packed)
+		return NULL;
+	struct meta1_service_url_s *m1u, **out = NULL;
+	if (NULL != (m1u = meta1_unpack_url (packed))) {
+		out = expand_url (m1u);
+		g_free (m1u);
+	}
+	return out;
+}
+
+/** Suitable as a qsort()-like hook */ 
+static gint
+_sorter (struct meta1_service_url_s **p0, struct meta1_service_url_s **p1)
+{
+	gint64 s0 = (*p0)->seq, s1 = (*p1)->seq;
+	if (s0 == s1)
+		return strcmp ((*p0)->host, (*p1)->host);
+	int one = s0 > s1;
+	return one ? one : -(s0 < s1);
+}
+
+/* check if two arrays of urls contains the same items. */
+static gboolean
+__match_urlv (struct meta1_service_url_s **all, struct meta1_service_url_s **kept,
+		struct meta1_service_url_s **replaced)
+{
+	struct meta1_service_url_s *ref = kept && *kept ? *kept : *replaced;
+
+	gboolean rc = FALSE;
+	GPtrArray *gpa_inplace = g_ptr_array_new ();
+	GPtrArray *gpa_told = g_ptr_array_new ();
+
+	/* build two array of URL we can safely sort */
+	for (; *all ;++all) {
+		if ((*all)->seq == ref->seq)
+			g_ptr_array_add (gpa_inplace, *all);
+	}
+	if (kept) while (*kept)
+		g_ptr_array_add (gpa_told, *(kept++));
+	if (replaced) while (*replaced)
+		g_ptr_array_add (gpa_told, *(replaced++));
+
+	/* sort them */
+	if (gpa_told->len != gpa_inplace->len)
+		goto out;
+	g_ptr_array_sort (gpa_inplace, (GCompareFunc)_sorter);
+	g_ptr_array_sort (gpa_told, (GCompareFunc)_sorter);
+
+	/* identical sorted arrays have equal items at each position */
+	for (guint i=0; i<gpa_told->len ;++i) {
+		if (0 != strcmp(M1U(gpa_told->pdata[i])->host, M1U(gpa_inplace->pdata[i])->host))
+			goto out;
+	}
+	rc = TRUE;
+out:
+	g_ptr_array_free (gpa_inplace, TRUE);
+	g_ptr_array_free (gpa_told, TRUE);
+	return rc;
+}
+
+static GError *
+__relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
+{
+	GError *err = NULL;
+	struct service_info_s **polled = NULL;
+	struct meta1_service_url_s *packed = NULL;
+
+	struct meta1_service_url_s *ref = (in->kept && in->kept[0])
+			? in->kept[0] : in->replaced[0];
+
+	/* check the services provided are those in place */
+	struct meta1_service_url_s **inplace = NULL;
+	err = __get_container_all_services (in->sq3, in->url, ref->srvtype, &inplace);
+	if (!err && !__match_urlv(inplace, in->kept, in->replaced))
+		err = NEWERROR(CODE_USER_INUSE, "services changed");
+	meta1_service_url_cleanv (inplace);
+	inplace = NULL;
+
+	/* it is time to poll */
+	if (!err) {
+		struct service_update_policies_s *pol = meta1_backend_get_svcupdate(in->m1);
+		EXTRA_ASSERT (pol != NULL);
+
+		struct lb_next_opt_ext_s opt;
+		memset (&opt, 0, sizeof (opt));
+		opt.req.max = service_howmany_replicas (pol, in->ct->baretype);
+		opt.req.distance = opt.req.max > 1 ? 1 : 0;
+		opt.req.duplicates = FALSE;
+		opt.req.stgclass = NULL;
+		opt.req.strict_stgclass = TRUE;
+		opt.filter.hook = NULL;
+		opt.filter.data = NULL;
+		if (in->kept)
+			opt.srv_inplace = __srvinfo_from_m1srvurl (in->m1->backend.lb,
+					in->ct->baretype, in->kept);
+		if (in->replaced)
+			opt.srv_forbidden = __srvinfo_from_m1srvurl (in->m1->backend.lb,
+					in->ct->baretype, in->replaced);
+
+		if (g_slist_length(opt.srv_inplace) >= opt.req.max)
+			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Too many services kept");
+
+		if (!err) {
+			if (!grid_lb_iterator_next_set2 (in->iterator, &polled, &opt)) {
+				EXTRA_ASSERT(polled == NULL);
+				err = NEWERROR (CODE_POLICY_NOT_SATISFIABLE, "No service available");
+			} else {
+				EXTRA_ASSERT(polled != NULL);
+			}
+		}
+
+		g_slist_free_full (opt.srv_forbidden, (GDestroyNotify)service_info_clean);
+		g_slist_free_full (opt.srv_inplace, (GDestroyNotify)service_info_clean);
+	}
+
+	/* Services have been polled, them save them.
+	 * We MUST use the same SEQ number. Since the service are packed in one
+	 * entry, we can save them with a single SQL statement. */
+	if (!err && !in->dryrun) {
+		packed = _siv_to_url (polled);
+		packed->seq = ref->seq;
+		strcpy (packed->srvtype, ref->srvtype);
+		err = __save_service (in->sq3, in->url, packed, TRUE);
+	}
+
+	/* if the checks, polling and storage succeeded, prepare the output for
+	 * the caller */
+	if (!err) {
+		struct meta1_service_url_s **newset = expand_url (packed);
+		*out = pack_urlv (newset);
+		meta1_service_url_cleanv (newset);
+	}
+
+	service_info_cleanv (polled, FALSE);
+	meta1_service_url_clean (packed);
+	return err;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -925,6 +1088,80 @@ meta1_backend_services_unlink(struct meta1_backend_s *m1,
 		sqlx_repository_unlock_and_close_noerror(sq3);
 	}
 
+	return err;
+}
+
+GError*
+meta1_backend_services_relink(struct meta1_backend_s *m1,
+		struct hc_url_s *url, const char *kept, const char *replaced,
+		gboolean dryrun, gchar ***out)
+{
+	GError *err = NULL;
+	struct meta1_service_url_s **ukept = NULL, **urepl = NULL;
+	/* fields to be prefetched */
+	struct grid_lb_iterator_s *iterator = NULL;
+	struct compound_type_s ct;
+
+	memset (&ct, 0, sizeof(ct));
+	ukept = __parse_and_expand (kept);
+	urepl = __parse_and_expand (replaced);
+
+	/* Sanity checks: we must receive at least one service */
+	if ((!ukept || !*ukept) && (!urepl || !*urepl)) {
+		err = NEWERROR (CODE_BAD_REQUEST, "Missing URL set");
+		goto out;
+	}
+	/* Sanity check : all the services must have the same <seq,type> */
+	struct meta1_service_url_s *ref = ukept && *ukept ? *ukept : *urepl;
+	for (struct meta1_service_url_s **p = ukept; p && *p ;++p) {
+		if (0 != _sorter(p, &ref)) {
+			err = NEWERROR(CODE_BAD_REQUEST, "Mismatch in URL set (%s)", "kept");
+			goto out;
+		}
+	}
+	for (struct meta1_service_url_s **p = urepl; p && *p ;++p) {
+		if (0 != _sorter(p, &ref)) {
+			err = NEWERROR(CODE_BAD_REQUEST, "Mismatch in URL set (%s)", "kept");
+			goto out;
+		}
+	}
+
+	/* prefetch some fields from the backend: the compound type (so it is
+	 * parsed only once), the iterator (so we can already poll services, out
+	 * of the sqlite3 transaction) */
+	if (NULL != (err = compound_type_parse(&ct, ref->srvtype))) {
+		err = NEWERROR(CODE_BAD_REQUEST, "Invalid service type");
+		goto out;
+	}
+	if (NULL != (err = _get_iterator (m1, &ct, &iterator))) {
+		err = NEWERROR(CODE_BAD_REQUEST, "Service type not managed");
+		goto out;
+	}
+
+	/* Call the backend logic now */
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3))) {
+		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
+			if (!(err = __info_user(sq3, url, FALSE, NULL))) {
+				struct m1v2_relink_input_s in = {
+					.m1 = m1, .sq3 = sq3, .url = url,
+					.iterator = iterator, .ct = &ct,
+					.kept = ukept, .replaced = urepl,
+					.dryrun = dryrun
+				};
+				err = __relink_container_services(&in, out);
+			}
+			err = sqlx_transaction_end(repctx, err);
+		}
+		sqlx_repository_unlock_and_close_noerror(sq3);
+	}
+
+out:
+	meta1_service_url_cleanv (ukept);
+	meta1_service_url_cleanv (urepl);
+	grid_lb_iterator_clean (iterator);
+	compound_type_clean (&ct);
 	return err;
 }
 

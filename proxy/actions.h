@@ -54,6 +54,7 @@ enum http_rc_e action_ref_prop_get (struct req_args_s *args);
 enum http_rc_e action_ref_prop_set (struct req_args_s *args);
 enum http_rc_e action_ref_prop_del (struct req_args_s *args);
 enum http_rc_e action_ref_link (struct req_args_s *args);
+enum http_rc_e action_ref_relink (struct req_args_s *args);
 enum http_rc_e action_ref_unlink (struct req_args_s *args);
 enum http_rc_e action_ref_force (struct req_args_s *args);
 enum http_rc_e action_ref_renew (struct req_args_s *args);
@@ -137,6 +138,7 @@ enum http_rc_e action_dir_prop_set (struct req_args_s *args, json_object *jargs)
 enum http_rc_e action_dir_prop_del (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_dir_srv_list (struct req_args_s *args);
 enum http_rc_e action_dir_srv_link (struct req_args_s *args, json_object *jargs);
+enum http_rc_e action_dir_srv_relink (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_dir_srv_unlink (struct req_args_s *args);
 enum http_rc_e action_dir_srv_force (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_dir_srv_renew (struct req_args_s *args, json_object *jargs);

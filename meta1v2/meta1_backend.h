@@ -141,6 +141,10 @@ GError* meta1_backend_services_set(struct meta1_backend_s *m1,
 		struct hc_url_s *url, const gchar *packedurl,
 		gboolean autocreate, gboolean force);
 
+GError* meta1_backend_services_relink(struct meta1_backend_s *m1,
+		struct hc_url_s *url, const char *kept, const char *replaced,
+		gboolean dryrun, gchar ***out);
+
 
 GError* meta1_backend_set_container_properties(struct meta1_backend_s *m1,
 		struct hc_url_s *url, gchar **props, gboolean flush);
