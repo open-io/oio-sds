@@ -74,6 +74,37 @@ oio_ext_array_shuffle (gpointer *array, gsize len)
 	}
 }
 
+void
+oio_ext_array_partition (gpointer *array, gsize len, gboolean (*predicate)(gconstpointer))
+{
+	g_assert (array != NULL);
+	g_assert (predicate != NULL);
+
+	if (!len) return;
+
+	/* qualify each item */
+	gboolean good[len];
+	for (gsize i=0; i<len ;i++)
+		good[i] = (*predicate) (array[i]);
+
+	/* partition the items, the predicate==TRUE first */
+	for (gsize i=0; i<len ;i++) {
+		if (good[i])
+			continue;
+		/* swap the items */
+		gchar *tmp = array[len-1];
+		array[len-1] = array[i];
+		array[i] = tmp;
+		/* swap the qualities */
+		gboolean b = good[len-1];
+		good[len-1] = good[i];
+		good[i] = b;
+
+		-- len;
+		-- i;
+	}
+}
+
 GError *
 oio_ext_extract_json (struct json_object *obj,
 		struct oio_ext_json_mapping_s *tab)

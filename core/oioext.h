@@ -27,6 +27,11 @@ GSList * oio_ext_gslist_shuffle(GSList *src);
  * greater than 1. */
 void oio_ext_array_shuffle (gpointer *array, gsize len);
 
+/** Sorts 'src' in place, placing first the items with a FALSE predicate
+ * then the items with a TRUE predicate */
+void oio_ext_array_partition (gpointer *array, gsize len,
+		gboolean (*predicate)(gconstpointer));
+
 /** Forward declaration from the json-c. It helps us avoiding an incude. */
 struct json_object;
 

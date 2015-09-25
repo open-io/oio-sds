@@ -47,4 +47,6 @@ GError* meta1_service_url_load_json_object(struct json_object *obj,
 void meta1_service_url_encode_json (GString *gstr,
 		struct meta1_service_url_s *m1u);
 
+gchar * meta1_strurl_get_address(const char *str);
+
 #endif /*OIO_SDS__metautils__lib__metatype_m1url_h*/

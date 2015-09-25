@@ -50,7 +50,18 @@ struct hc_resolver_s* hc_resolver_create1(time_t now);
 /* Calls hc_resolver_create1() with the current EPOCH time */
 struct hc_resolver_s* hc_resolver_create(void);
 
+/* Change the internal flags of the resolver */
 void hc_resolver_configure (struct hc_resolver_s *r, enum hc_resolver_flags_e f);
+
+/* Allows to resolver to prefer services that have no known problem.
+ * The hook is called with the IP:PORT couple in a string. */
+void hc_resolver_qualify (struct hc_resolver_s *r,
+		gboolean (*qualify) (gconstpointer));
+
+/* Allows to resolver to report for problematic services. 
+ * The hook is called with the IP:PORT couple in a string. */
+void hc_resolver_notify (struct hc_resolver_s *r,
+		void (*notify) (gconstpointer));
 
 /* Cleanup all the internal structures. */
 void hc_resolver_destroy(struct hc_resolver_s *r);

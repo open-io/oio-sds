@@ -39,27 +39,27 @@ static GSList *config_urlv = NULL;
 static gint lb_downstream_delay = PROXYD_DEFAULT_PERIOD_DOWNSTREAM;
 static guint lb_upstream_delay = PROXYD_DEFAULT_PERIOD_UPSTREAM;
 static guint nsinfo_refresh_delay = 5;
-
 static guint dir_low_ttl = PROXYD_DEFAULT_TTL_SERVICES;
 static guint dir_low_max = PROXYD_DEFAULT_MAX_SERVICES;
 static guint dir_high_ttl = PROXYD_DEFAULT_TTL_CSM0;
 static guint dir_high_max = PROXYD_DEFAULT_MAX_CSM0;
+gdouble m2_timeout_all = PROXYD_M2_TIMEOUT_SINGLE;
+gboolean flag_cache_enabled = TRUE;
+
+struct grid_lbpool_s *lbpool = NULL;
+struct hc_resolver_s *resolver = NULL;
+gchar *nsname = NULL;
+gchar *csurl = NULL;
 
 GMutex push_mutex;
 struct lru_tree_s *push_queue = NULL;
-
-struct grid_lbpool_s *lbpool = NULL;
 
 GMutex nsinfo_mutex;
 struct namespace_info_s nsinfo;
 gchar **srvtypes = NULL;
 
-gchar *nsname = NULL;
-gchar *csurl = NULL;
-struct hc_resolver_s *resolver = NULL;
-
-gdouble m2_timeout_all = PROXYD_M2_TIMEOUT_SINGLE;
-gboolean flag_cache_enabled = TRUE;
+GMutex srv_mutex;
+struct lru_tree_s *srv_down = NULL;
 
 // Misc. handlers --------------------------------------------------------------
 
@@ -234,6 +234,30 @@ _push_queue_create (void)
 }
 
 // Administrative tasks --------------------------------------------------------
+
+static void
+_task_expire_services_down (gpointer p)
+{
+	(void) p;
+	gchar *k = NULL;
+	gpointer v = NULL;
+	guint count = 0;
+
+	gulong oldest = time(0) - 8;
+
+	SRV_DO(while (lru_tree_get_last(srv_down, (void**)&k, &v)) {
+		EXTRA_ASSERT(k != NULL);
+		EXTRA_ASSERT(v != NULL);
+		gulong when = (gulong)v;
+		if (when >= oldest)
+			break;
+		lru_tree_steal_last(srv_down, (void**)&k, &v);
+		g_free(k);
+		++ count;
+	});
+
+	GRID_INFO("re-enabled %u services", count);
+}
 
 static void
 _task_expire_resolver (gpointer p)
@@ -521,10 +545,20 @@ grid_main_specific_fini (void)
 		hc_resolver_destroy (resolver);
 		resolver = NULL;
 	}
+	if (srv_down) {
+		lru_tree_destroy (srv_down);
+		srv_down = NULL;
+	}
+	if (push_queue) {
+		lru_tree_destroy (push_queue);
+		push_queue = NULL;
+	}
 	namespace_info_clear (&nsinfo);
 	oio_str_clean (&nsname);
 	g_mutex_clear(&nsinfo_mutex);
 	g_mutex_clear(&push_mutex);
+	g_mutex_clear(&srv_mutex);
+	oio_str_clean (&csurl);
 
 	g_slist_free_full (config_urlv, g_free);
 	config_urlv = NULL;
@@ -675,6 +709,7 @@ grid_main_configure (int argc, char **argv)
 
 	g_mutex_init (&push_mutex);
 	g_mutex_init (&nsinfo_mutex);
+	g_mutex_init (&srv_mutex);
 
 	nsname = g_strdup (cfg_namespace);
 	csurl = gridcluster_get_conscience (nsname);
@@ -689,24 +724,23 @@ grid_main_configure (int argc, char **argv)
 
 	dispatcher = transport_http_build_dispatcher (path_parser, all_requests);
 	server = network_server_init ();
-	resolver = hc_resolver_create ();
 	lbpool = grid_lbpool_create (nsname);
-	
-	do {
-		enum hc_resolver_flags_e f = 0;
-		if (flag_cache_enabled)
-			f |= HC_RESOLVER_NOCACHE;
-		hc_resolver_configure (resolver, f);
-	} while (0);
+	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free,
+			NULL, LTO_NOATIME);
 
-	if (resolver) {
-		hc_resolver_set_ttl_csm0 (resolver, dir_high_ttl);
-		hc_resolver_set_max_csm0 (resolver, dir_high_max);
-		hc_resolver_set_ttl_services (resolver, dir_low_ttl);
-		hc_resolver_set_max_services (resolver, dir_low_max);
-		GRID_INFO ("RESOLVER limits HIGH[%u/%u] LOW[%u/%u]",
-			dir_high_max, dir_high_ttl, dir_low_max, dir_low_ttl);
-	}
+	resolver = hc_resolver_create ();
+	enum hc_resolver_flags_e f = 0;
+	if (flag_cache_enabled)
+		f |= HC_RESOLVER_NOCACHE;
+	hc_resolver_configure (resolver, f);
+	hc_resolver_qualify (resolver, service_is_ok);
+	hc_resolver_notify (resolver, service_invalidate);
+	hc_resolver_set_ttl_csm0 (resolver, dir_high_ttl);
+	hc_resolver_set_max_csm0 (resolver, dir_high_max);
+	hc_resolver_set_ttl_services (resolver, dir_low_ttl);
+	hc_resolver_set_max_services (resolver, dir_low_max);
+	GRID_INFO ("RESOLVER limits HIGH[%u/%u] LOW[%u/%u]",
+		dir_high_max, dir_high_ttl, dir_low_max, dir_low_ttl);
 
 	// Prepare a queue responsible for upstream to the conscience
 	if (lb_upstream_delay > 0) {
@@ -725,6 +759,9 @@ grid_main_configure (int argc, char **argv)
 	// Now prepare a queue for administrative tasks, such as cache expiration,
 	// configuration reloadings, etc.
 	admin_gtq = grid_task_queue_create ("admin");
+
+	grid_task_queue_register (admin_gtq, 1,
+		(GDestroyNotify) _task_expire_services_down, NULL, NULL);
 
 	grid_task_queue_register (admin_gtq, 1,
 		(GDestroyNotify) _task_expire_resolver, NULL, NULL);

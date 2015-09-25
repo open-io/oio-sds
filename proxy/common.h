@@ -64,18 +64,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SEQ()     (TOK("SEQ") ?: OPT("seq"))
 #define VERSION() OPT("version")
 
-#define PUSH_DO(Action) do { \
-	g_mutex_lock(&push_mutex); \
+#define GUARDED_DO(Lock,Action) do { \
+	g_mutex_lock(&Lock); \
 	Action ; \
-	g_mutex_unlock(&push_mutex); \
+	g_mutex_unlock(&Lock); \
 } while (0)
 
-#define NSINFO_DO(Action) do { \
-	g_mutex_lock(&nsinfo_mutex); \
-	Action ; \
-	g_mutex_unlock(&nsinfo_mutex); \
-} while (0)
-
+#define PUSH_DO(Action) GUARDED_DO(push_mutex,Action)
+#define NSINFO_DO(Action) GUARDED_DO(nsinfo_mutex,Action)
+#define SRV_DO(Action) GUARDED_DO(srv_mutex,Action)
 
 extern gchar *nsname;
 extern gchar *csurl;
@@ -83,12 +80,17 @@ extern gboolean flag_cache_enabled;
 extern gdouble m2_timeout_all;
 
 extern struct grid_lbpool_s *lbpool;
+extern struct hc_resolver_s *resolver;
+
 extern GMutex push_mutex;
 extern struct lru_tree_s *push_queue;
-extern struct namespace_info_s nsinfo;
-extern gchar **srvtypes;
+
 extern GMutex nsinfo_mutex;
-extern struct hc_resolver_s *resolver;
+extern gchar **srvtypes;
+extern struct namespace_info_s nsinfo;
+
+extern GMutex srv_mutex;
+extern struct lru_tree_s *srv_down;
 
 enum
 {
@@ -116,6 +118,9 @@ typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);
 
 gboolean validate_namespace (const char * ns);
 gboolean validate_srvtype (const char * n);
+
+gboolean service_is_ok (gconstpointer p);
+void service_invalidate (gconstpointer n);
 
 const char * _req_get_option (struct req_args_s *args, const char *name);
 const char * _req_get_token (struct req_args_s *args, const char *name);

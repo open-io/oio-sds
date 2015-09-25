@@ -135,3 +135,12 @@ meta1_service_url_encode_json (GString *gstr, struct meta1_service_url_s *m1u)
 	}
 }
 
+gchar *
+meta1_strurl_get_address(const gchar *str)
+{
+	struct meta1_service_url_s *u = meta1_unpack_url(str);
+	gchar *s = g_strdup(u->host);
+	g_free(u);
+	return s;
+}
+
