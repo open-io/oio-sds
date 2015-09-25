@@ -286,7 +286,7 @@ group=${NS},localhost,conscience
 on_die=respawn
 enabled=true
 start_at_boot=true
-command=${EXE_PREFIX}-cluster-server -s OIO,${NS},consc -O Endpoint=${IP}:${PORT_CS} ${CFGDIR}/${NS}-conscience
+command=${EXE_PREFIX}-cluster-server -q -s OIO,${NS},consc -O Endpoint=${IP}:${PORT_CS} ${CFGDIR}/${NS}-conscience
 """
 
 template_gridinit_service = """
