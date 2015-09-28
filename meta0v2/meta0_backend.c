@@ -555,6 +555,39 @@ meta0_backend_reload(struct meta0_backend_s *m0)
 	return _reload(m0, FALSE);
 }
 
+GError *
+meta0_backend_reset(struct meta0_backend_s *m0, gboolean flag_local)
+{
+	EXTRA_ASSERT(m0 != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+
+	err = _open_and_lock(m0, flag_local ? M0V2_OPENBASE_LOCAL : M0V2_OPENBASE_MASTERONLY, &sq3);
+	if (err) return err;
+
+	if (!(err = sqlx_transaction_begin (sq3, &repctx))) {
+		gint rc;
+		sqlite3_stmt *stmt = NULL;
+		sqlite3_prepare_debug (rc, sq3->db, "DELETE FROM meta1", -1, &stmt, NULL);
+		if (rc != SQLITE_OK && rc != SQLITE_DONE)
+			err = SQLITE_GERROR(sq3->db, rc);
+		else {
+			sqlite3_step_debug_until_end (rc, stmt);
+			if (rc != SQLITE_OK && rc != SQLITE_DONE)
+				err = SQLITE_GERROR(sq3->db, rc);
+			else
+				sqlx_transaction_notify_huge_changes (repctx);
+			sqlite3_finalize_debug (rc, stmt);
+		}
+		err = sqlx_transaction_end (repctx, err);
+	}
+
+	_unlock_and_close (sq3);
+	return NULL;
+}
+
 GError*
 meta0_backend_get_all(struct meta0_backend_s *m0, GPtrArray **result)
 {

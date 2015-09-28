@@ -71,11 +71,14 @@ oio_requri_parse (const char *str, struct oio_requri_s *uri)
 	else
 		uri->fragment = g_strdup("");
 
-	// Split compound components of interest
+	// Split and unescape the query components
 	if (uri->query)
 		uri->query_tokens = g_strsplit(uri->query, "&", -1);
 	else
 		uri->query_tokens = g_malloc0(sizeof(void*));
+
+	for (gchar **p=uri->query_tokens; p && *p ;++p)
+		oio_str_reuse (p, g_uri_unescape_string (*p, NULL));
 
 	return TRUE;
 }
@@ -182,15 +185,13 @@ _parse_oldurl(struct oio_url_s *url, const char *str)
 	return _check_parsed_url (url);
 }
 
-static void
-_replace (gchar **pp, const char *s)
-{
-	oio_str_reuse (pp, g_uri_unescape_string (s, NULL));
-}
-
 static int
 _parse_url(struct oio_url_s *url, const char *str)
 {
+	inline void _replace (gchar **pp, const char *s) {
+		oio_str_reuse (pp, g_uri_unescape_string (s, NULL));
+	}
+
 	struct oio_requri_s ruri = {NULL, NULL, NULL, NULL};
 
 	for (; *str && *str == '/' ;++str) {} // skip the leading slashes
@@ -440,17 +441,15 @@ oio_url_has_fq_container (struct oio_url_s *u)
 	return oio_url_has (u, HCURL_NS) && oio_url_has (u, HCURL_ACCOUNT) && oio_url_has (u, HCURL_USER);
 }
 
-static void
-_append (GString *gs, const char *s)
-{
-	gchar *v = g_uri_escape_string (s, NULL, FALSE);
-	g_string_append (gs, v);
-	g_free (v);
-}
-
 static GString *
 _pack_url(struct oio_url_s *u)
 {
+	inline void _append (GString *gs, const char *s) {
+		gchar *v = g_uri_escape_string (s, NULL, FALSE);
+		g_string_append (gs, v);
+		g_free (v);
+	}
+
 	GString *gs = g_string_new ("");
 	if (u->ns) _append (gs, u->ns);
 	g_string_append_c (gs, '/');

@@ -81,6 +81,15 @@ meta0_remote_cache_refresh(const char *m0)
 	return _m0_remote_no_return (m0, gba);
 }
 
+GError *
+meta0_remote_cache_reset (const char *m0, gboolean local)
+{
+	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_M0_RESET);
+	if (local)
+		metautils_message_add_field_struint(req, NAME_MSGKEY_LOCAL, 1);
+	return _m0_remote_no_return (m0, message_marshall_gba_and_clean (req));
+}
+
 GError*
 meta0_remote_fill(const char *m0, gchar **urls, guint nbreplicas)
 {

@@ -271,6 +271,25 @@ meta0_dispatch_v1_RELOAD(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
+meta0_dispatch_v1_RESET(struct gridd_reply_ctx_s *reply,
+		struct meta0_disp_s *m0disp, gpointer ignored)
+{
+	(void) ignored;
+	gboolean flag_local = metautils_message_extract_flag (reply->request,
+			NAME_MSGKEY_LOCAL, FALSE);
+
+	GError *err = meta0_backend_reset(m0disp->m0, flag_local);
+	if (NULL != err) {
+		g_prefix_error(&err, "Backend error: ");
+		reply->send_error(0, err);
+		return TRUE;
+	}
+
+	reply->send_reply(CODE_FINAL_OK, "OK");
+	return TRUE;
+}
+
+static gboolean
 meta0_dispatch_v2_FILL(struct gridd_reply_ctx_s *reply,
 		struct meta0_disp_s *m0disp, gpointer ignored)
 {
@@ -418,6 +437,7 @@ meta0_gridd_get_requests(void)
 		{NAME_MSGNAME_M0_GETONE,              (hook) meta0_dispatch_v1_GETONE,  NULL},
 		{NAME_MSGNAME_M0_FILL,                (hook) meta0_dispatch_v1_FILL,    NULL},
 		{NAME_MSGNAME_M0_RELOAD,              (hook) meta0_dispatch_v1_RELOAD,  NULL},
+		{NAME_MSGNAME_M0_RESET,               (hook) meta0_dispatch_v1_RESET,   NULL},
 		{NAME_MSGNAME_M0_ASSIGN,              (hook) meta0_dispatch_v2_ASSIGN_PREFIX, NULL},
 		{NAME_MSGNAME_M0_DISABLE_META1,       (hook) meta0_dispatch_v2_DISABLE_META1, NULL},
 		{NAME_MSGNAME_M0_V2_FILL,             (hook) meta0_dispatch_v2_FILL, NULL},

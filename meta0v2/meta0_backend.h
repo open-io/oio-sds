@@ -68,6 +68,9 @@ GError* meta0_backend_fill(struct meta0_backend_s *m0, guint replicas,
 
 GError * meta0_backend_reload(struct meta0_backend_s *m0);
 
+/* Please, be careful and know what your are about to do with this... */
+GError * meta0_backend_reset(struct meta0_backend_s *m0, gboolean flag_local);
+
 GError* meta0_backend_get_all(struct meta0_backend_s *m0,
 		GPtrArray **result);
 

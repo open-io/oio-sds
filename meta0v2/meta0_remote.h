@@ -25,6 +25,7 @@ License along with this library.
 GError * meta0_remote_get_meta1_all(const char *m0, GSList **out);
 GError * meta0_remote_get_meta1_one(const char *m0, const guint8 *prefix, GSList **out);
 GError * meta0_remote_cache_refresh(const char *m0);
+GError * meta0_remote_cache_reset(const char *m0, gboolean local);
 GError * meta0_remote_fill(const char *m0, gchar **urls, guint nbreplicas);
 GError * meta0_remote_fill_v2(const char *m0, guint nbreplicas, gboolean nodist);
 GError * meta0_remote_assign(const char *m0, gboolean nocheck);

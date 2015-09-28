@@ -31,6 +31,7 @@ static gchar *namespace;
 static gboolean flag_list = FALSE;
 static gboolean flag_get = FALSE;
 static gboolean flag_reload = FALSE;
+static gboolean flag_reset = FALSE;
 static gboolean flag_assign = FALSE;
 static gboolean flag_disable_meta1 = FALSE;
 static gboolean flag_getmeta1info = FALSE;
@@ -122,6 +123,34 @@ meta0_init_reload(void)
 			GRID_WARN("META0 [%s] refresh", url);
 		}
 		exclude=g_slist_prepend(exclude,m0addr);
+		m0addr = _getMeta0addr(&m0_lst,exclude);
+	}
+
+	g_slist_free_full(m0_lst, (GDestroyNotify)service_info_clean);
+}
+
+static void
+meta0_init_reset(void)
+{
+	GError *err = NULL;
+	GSList *exclude = NULL;
+	GSList *m0_lst = NULL;
+	addr_info_t *m0addr;
+
+	GRID_INFO("Resetting the META0 (base flush)");
+
+	m0addr = _getMeta0addr(&m0_lst, exclude);
+	while (m0addr) {
+		gchar url[STRLEN_ADDRINFO];
+		grid_addrinfo_to_string(m0addr, url , sizeof(url));
+		err = meta0_remote_cache_reset(url, FALSE);
+		if (err != NULL) {
+			GRID_WARN("META0 [%s] reset error (%d) : %s", url, err->code, err->message);
+			g_clear_error(&err);
+		} else {
+			GRID_WARN("META0 [%s] reset", url);
+		}
+		exclude = g_slist_prepend(exclude,m0addr);
 		m0addr = _getMeta0addr(&m0_lst,exclude);
 	}
 
@@ -385,6 +414,9 @@ meta0_action(void)
 	else if (flag_reload) {
 		meta0_init_reload();
 	}
+	else if (flag_reset) {
+		meta0_init_reset();
+	}
 	else if (flag_assign) {
 		meta0_init_assign();
 	}
@@ -408,7 +440,7 @@ meta0_action(void)
 static const char *
 meta0_usage(void)
 {
-	return "Namespace|IP:PORT (get PREFIX|list|reload|get_meta1_info|assign|disable META1_URL...)";
+	return "Namespace|IP:PORT (get PREFIX|list|reload|reset|get_meta1_info|assign|disable META1_URL...)";
 }
 
 static struct grid_main_option_s *
@@ -464,6 +496,12 @@ meta0_configure(int argc, char **argv)
 		if (argc > 2)
 			GRID_DEBUG("Exceeding list arguments ignored.");
 		flag_reload = TRUE;
+		return TRUE;
+	}
+	if (!g_ascii_strcasecmp(command, "reset")) {
+		if (argc > 2)
+			GRID_DEBUG("Exceeding list arguments ignored.");
+		flag_reset = TRUE;
 		return TRUE;
 	}
 	if (!g_ascii_strcasecmp(command, "list")) {
