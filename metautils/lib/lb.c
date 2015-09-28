@@ -1227,6 +1227,38 @@ grid_lb_iterator_next_set2(struct grid_lb_iterator_s *iter,
 	opt.filter.data = opt_ext;
 	return grid_lb_iterator_next_set(iter, result, &opt);
 }
+ 
+GString *
+grid_lb_iterator_to_string (struct grid_lb_iterator_s *it)
+{
+	if (!it)
+		return g_string_new("NULL");
+	GString *gs;
+	switch (it->type) {
+		case LBIT_SINGLE:
+			gs = g_string_new("SINGLE");
+			break;
+		case LBIT_SHARED:
+			gs = grid_lb_iterator_to_string(it->internals.shared.sub);
+			break;
+		case LBIT_RR:
+			gs = g_string_new("RR");
+			break;
+		case LBIT_WRR:
+			gs = g_string_new("WRR");
+			break;
+		case LBIT_RAND:
+			gs = g_string_new("RAND");
+			break;
+		case LBIT_WRAND:
+			gs = g_string_new("WRAND");
+			break;
+	}
+	g_string_append_printf (gs, "?shorten_ratio=%f", it->lb->shorten_ratio);
+	g_string_append_printf (gs, "&standard_deviation=%s",
+			it->lb->standard_deviation ? "yes" : "no");
+	return gs;
+}
 
 /* ------------------------------------------------------------------------- */
 

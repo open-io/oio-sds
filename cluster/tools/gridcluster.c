@@ -92,13 +92,41 @@ print_formated_namespace(namespace_info_t * ns)
 	print_formatted_hashtable(ns->data_security, "Data Security");
 	print_formatted_hashtable(ns->data_treatments, "Data Treatments");
 
-	g_print("\n");
-}
+	GError *err = NULL;
 
-static void
-raw_print_namespace(namespace_info_t * ns)
-{
-	g_print("NAMESPACE|%s|%"G_GINT64_FORMAT"\n", ns->name, ns->chunk_size);
+	/* dump the directory load-balancing configuration */
+	gchar *cfg = gridcluster_get_service_update_policy(ns);
+	if (!cfg) {
+		g_printerr("Invalid NSINFO\n");
+	} else {
+		struct service_update_policies_s *pol = service_update_policies_create();
+		err = service_update_reconfigure(pol, cfg);
+		g_free(cfg); cfg=NULL;
+
+		if (err) {
+			g_printerr("Invalid namespace configuration : (%d) %s\n",
+					err->code, err->message);
+			service_update_policies_destroy(pol);
+			g_clear_error(&err);
+			return;
+		} else {
+			char *tmp = NULL;
+			tmp = service_update_policies_dump(pol);
+			g_print("%20s : %s\n", "LB(srv)", tmp);
+			g_free(tmp);
+		}
+		service_update_policies_destroy(pol);
+	}
+
+	/* dump the rawx load-balancing for the meta2 */
+	struct grid_lbpool_s *glp = grid_lbpool_create (ns->name);
+	grid_lbpool_reconfigure (glp, ns);
+	struct grid_lb_iterator_s *it = grid_lbpool_get_iterator (glp, NAME_SRVTYPE_RAWX);
+	GString *gs = grid_lb_iterator_to_string (it);
+	g_print("%20s : rawx=%s\n", "LB(meta2)", gs->str);
+	grid_lbpool_destroy (glp);
+
+	g_print("\n");
 }
 
 static void
@@ -239,7 +267,6 @@ main(int argc, char **argv)
 	gboolean has_unlock_score = FALSE;
 	gboolean has_service = FALSE;
 	gboolean has_list_task = FALSE;
-	gboolean has_lbconfig = FALSE;
 	gboolean has_flag_full = FALSE;
 	int c = 0;
 	int option_index = 0;
@@ -266,7 +293,6 @@ main(int argc, char **argv)
 		{"raw",            0, 0, 'r'},
 		{"help",           0, 0, 'h'},
 		{"verbose",        0, 0, 'v'},
-		{"lb-config",      0, 0, 'B'},
 		{0, 0, 0, 0}
 	};
 
@@ -281,9 +307,6 @@ main(int argc, char **argv)
 		switch (c) {
 			case 'A':
 				has_allcfg = TRUE;
-				break;
-			case 'B':
-				has_lbconfig = TRUE;
 				break;
 			case 'L':
 				has_nslist = TRUE;
@@ -376,33 +399,7 @@ main(int argc, char **argv)
 		}
 	}
 
-	if (has_lbconfig) {
-		GError *err = NULL;
-		struct service_update_policies_s *pol;
-		gchar *cfg = gridcluster_get_service_update_policy(ns);
-		if (!cfg) {
-			g_printerr("Invalid NSINFO\n");
-			goto exit_label;
-		}
-
-		pol = service_update_policies_create();
-		err = service_update_reconfigure(pol, cfg);
-		g_free(cfg); cfg=NULL;
-
-		if (err) {
-			g_printerr("Invalid namespace configuration : (%d) %s\n",
-					err->code, err->message);
-			service_update_policies_destroy(pol);
-			g_clear_error(&err);
-			goto exit_label;
-		}
-		char *tmp = NULL;
-		tmp = service_update_policies_dump(pol);
-		g_print("%s\n", tmp);
-		g_free(tmp);
-		service_update_policies_destroy(pol);
-	}
-	else if (has_clear_services) {
+	if (has_clear_services) {
 
 		if (!clear_namespace_services(namespace, service_desc, &error)) {
 			g_printerr("Failed to send clear order to cluster for ns='%s' and service='%s' :\n", namespace,
@@ -467,9 +464,7 @@ main(int argc, char **argv)
 	}
 	else {
 
-		if (has_raw)
-			raw_print_namespace(ns);
-		else
+		if (!has_raw)
 			print_formated_namespace(ns);
 
 		gchar *csurl = gridcluster_get_conscience(namespace);
