@@ -23,6 +23,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M0_GETALL              "M0V2_GETALL"
 # define NAME_MSGNAME_M0_GETONE              "M0V2_GETONE"
 # define NAME_MSGNAME_M0_RELOAD              "M0V2_RELOAD"
+# define NAME_MSGNAME_M0_RESET               "M0V2_RESET"
 # define NAME_MSGNAME_M0_FILL                "M0V2_FILL"
 # define NAME_MSGNAME_M0_V2_FILL             "M0V2_V2FILL"
 # define NAME_MSGNAME_M0_ASSIGN              "M0V2_ASSIGN_PREFIX"

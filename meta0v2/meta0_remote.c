@@ -92,6 +92,18 @@ meta0_remote_cache_refresh(addr_info_t *m0a, gint ms, GError ** err)
 	return _m0_remote_no_return (m0a, ms, gba, err);
 }
 
+GError *
+meta0_remote_cache_reset (addr_info_t *m0a, gboolean local)
+{
+	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_M0_RESET);
+	if (local)
+		metautils_message_add_field_struint(req, NAME_MSGKEY_LOCAL, 1);
+	GByteArray *gba = message_marshall_gba_and_clean (req);
+	GError *err = NULL;
+	_m0_remote_no_return (m0a, 1000, gba, &err);
+	return err;
+}
+
 gint
 meta0_remote_fill(addr_info_t *m0a, gint ms, gchar **urls,
 		guint nbreplicas, GError **err)
