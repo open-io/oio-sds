@@ -68,7 +68,12 @@ struct oio_str_autocontainer_config_s {
 
 /** Fills 'dst' with the name of the container deduced from the given 'path'.
  * 'dst' must be at least 65 characters long. */
-const char * oio_str_autocontainer (const char *path, gchar *dst,
+const char * oio_str_autocontainer_name (const char *src, char *dst,
 		const struct oio_str_autocontainer_config_s *cfg);
+
+/** Fills 'dst' with the hexadecimal representation of the first bits
+ * of 'src'. */
+const char * oio_str_autocontainer_hash (const guint8 *src, gsize src_len,
+		gchar *dst, const struct oio_str_autocontainer_config_s *cfg);
 
 #endif /*OIO_SDS__core__oiostr_h*/

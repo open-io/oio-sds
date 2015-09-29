@@ -21,7 +21,7 @@ License along with this library.
 
 struct oio_sds_s;
 struct oio_error_s;
-struct hc_url_s;
+struct oio_url_s;
 
 enum oio_sds_config_e
 {
@@ -93,34 +93,49 @@ int oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 
 /* works with fully qualified urls (content) and local paths */
 struct oio_error_s* oio_sds_download_to_file (struct oio_sds_s *sds,
-		struct hc_url_s *u, const char *local);
+		struct oio_url_s *u, const char *local);
 
 /* Simply wraps oio_sds_upload_from_source() without the autocreation flag
  * set. */
 struct oio_error_s* oio_sds_upload_from_file (struct oio_sds_s *sds,
-		struct hc_url_s *u, const char *local);
+		struct oio_url_s *u, const char *local);
 
 struct oio_source_s {
 	int autocreate;
 	enum {
 		OIO_SRC_NONE = 0, /* do not use this */
 		OIO_SRC_FILE,
+		OIO_SRC_BUFFER,
 	} type;
 	union {
 		const char *path;
+		struct {
+			const void *data;
+			gsize length;
+		} buffer;
 	} data;
 };
 
 /* works with fully qualified urls (content) and local paths */
 struct oio_error_s* oio_sds_upload_from_source (struct oio_sds_s *sds,
-		struct hc_url_s *u, struct oio_source_s *src);
+		struct oio_url_s *u, struct oio_source_s *src);
 
 /* works with fully qualified urls (content) */
 struct oio_error_s* oio_sds_delete (struct oio_sds_s *sds,
-		struct hc_url_s *u);
+		struct oio_url_s *u);
 
 /* currently works with fully qualified urls (content) */
 struct oio_error_s* oio_sds_has (struct oio_sds_s *sds,
-		struct hc_url_s *url, int *phas);
+		struct oio_url_s *url, int *phas);
+
+/* Creates an alias pointing on the physical content 'iname' in the container
+ * identified by 'url'. If the physical content doesn't exist, a new content
+ * will be uploaded.
+ *  'url' be a fully qualified content URI.
+ *  'iname' must be an hexadecimal string.
+ */
+struct oio_error_s* oio_sds_link (struct oio_sds_s *sds,
+		struct oio_url_s *url, struct oio_source_s *src,
+		const char *iname);
 
 #endif /*OIO_SDS__sdk__oio_sds_h*/

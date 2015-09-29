@@ -938,6 +938,7 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct hc_url_s *url,
 	g_string_free (request_body, TRUE);
 	g_string_free (reply_body, TRUE);
 	_upload_fini (&upload);
+	g_slist_free_full (chunks, g_free);
 	GRID_DEBUG("UPLOAD %s", err?"KO":"ok");
 	return (struct oio_error_s*) err;
 }

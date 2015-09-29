@@ -43,26 +43,10 @@ _randomize_string (char *d, const char *chars, size_t dlen)
 	return d;
 }
 
-int
-main(int argc, char **argv)
+static int
+_roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url, const char *path)
 {
-	oio_log_to_stderr();
-	oio_sds_default_autocreate = 1;
-	for (int i=0; i<3 ;i++)
-		oio_log_more ();
-
-	prng = g_rand_new ();
-
-	if (argc != 3) {
-		g_printerr ("Usage: %s HCURL PATH\n", argv[0]);
-		return 1;
-	}
-
-	gchar tmppath[1024], tmpblob[128] = "";
-	const char *str_url = argv[1];
-	const char *str_path = argv[2];
-	struct hc_url_s *url;
-	struct oio_sds_s *client = NULL;
+	gchar tmppath[1024];
 	struct oio_error_s *err = NULL;
 	int has = 0;
 
@@ -70,32 +54,8 @@ main(int argc, char **argv)
 			getpid(), time(0));
 	size_t tmplen = strlen(tmppath);
 	_randomize_string (tmppath+tmplen, random_chars, MIN(16,sizeof(tmppath)-tmplen));
-	_randomize_string (tmpblob, random_chars, sizeof(tmpblob));
 
-	url = hc_url_init(str_url);
-	if (!url) {
-		g_printerr ("Invalid URL [%s]\n", str_url);
-		return 2;
-	}
-	if (!hc_url_has_fq_path(url)) {
-		g_printerr ("Partial URL [%s]: %s requires a NS (%s), an ACCOUNT (%s),"
-				" an USER (%s) and a PATH (%s)\n", str_url, argv[0],
-				hc_url_has (url, HCURL_NS)?"ok":"missing",
-				hc_url_has (url, HCURL_ACCOUNT)?"ok":"missing",
-				hc_url_has (url, HCURL_USER)?"ok":"missing",
-				hc_url_has (url, HCURL_PATH)?"ok":"missing");
-		return 3;
-	}
-	GRID_INFO("URL valid [%s]", hc_url_get (url, HCURL_WHOLE));
-
-	/* Initiate a client */
-	err = oio_sds_init (&client, hc_url_get(url, HCURL_NS));
-	if (err) {
-		g_printerr ("Client init error: (%d) %s\n", oio_error_code(err),
-				oio_error_message(err));
-		return 4;
-	}
-	GRID_INFO("Client ready to [%s]", hc_url_get (url, HCURL_NS));
+	GRID_INFO ("Roundtrip on local(%s) distant(%s)", tmppath, oio_url_get (url, OIOURL_WHOLE));
 
 	/* Check the presence of the targetd content */
 	err = oio_sds_has (client, url, &has);
@@ -111,7 +71,7 @@ main(int argc, char **argv)
 	GRID_INFO("Content absent as expected");
 
 	/* Ok, the content was absent so we can upload it */
-	err = oio_sds_upload_from_file (client, url, str_path);
+	err = oio_sds_upload_from_file (client, url, path);
 	if (err) {
 		g_printerr ("Upload error: (%d) %s\n", oio_error_code(err),
 				oio_error_message(err));
@@ -152,9 +112,99 @@ main(int argc, char **argv)
 	GRID_INFO("Content removed");
 
 	g_remove (tmppath);
-	hc_url_pclean (&url);
-	oio_sds_pfree (&client);
 	oio_error_pfree (&err);
 	return 0;
+}
+
+static int
+_roundtrip_autocontainer (struct oio_sds_s *client, struct oio_url_s *url, const char *path)
+{
+	/* get the fle's content */
+	GError *err = NULL;
+	gchar *file_content = NULL;
+	gsize file_length = 0;
+	if (!g_file_get_contents (path, &file_content, &file_length, &err)) {
+		g_printerr ("Checksum error: file error (%d) %s\n", err->code, err->message);
+		g_clear_error (&err);
+		return 12;
+	}
+	
+	/* hash it with SHA1 */
+	gsize sha1_len = g_checksum_type_get_length (G_CHECKSUM_SHA1);
+	guint8 sha1[sha1_len];
+	GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA1);
+	g_checksum_update (checksum, (guint8*)file_content, file_length);
+	g_checksum_get_digest (checksum, sha1, &sha1_len);
+	g_checksum_free (checksum);
+	g_free (file_content);
+	
+	/* compute the autocontainer with the SHA1, consider only the first 17 bits */
+	struct oio_str_autocontainer_config_s cfg = {
+		.src_offset = 0, .src_size = 0,
+		.dst_bits = 17,
+	};
+	char tmp[65];
+	const char *auto_container = oio_str_autocontainer_hash (sha1, sha1_len, tmp, &cfg);
+	
+	/* build a new URL with the computed container name */
+	struct oio_url_s *url_auto = oio_url_dup (url);
+	oio_url_set (url_auto, OIOURL_USER, auto_container);
+	int rc = _roundtrip_common (client, url_auto, path);
+	oio_url_pclean (&url_auto);
+	return rc;
+}
+
+int
+main(int argc, char **argv)
+{
+	oio_log_to_stderr();
+	oio_sds_default_autocreate = 1;
+	for (int i=0; i<3 ;i++)
+		oio_log_more ();
+
+	prng = g_rand_new ();
+
+	if (argc != 3) {
+		g_printerr ("Usage: %s HCURL PATH\n", argv[0]);
+		return 1;
+	}
+
+	const char *str_url = argv[1];
+	const char *path = argv[2];
+
+	struct oio_url_s *url = oio_url_init(str_url);
+	if (!url) {
+		g_printerr ("Invalid URL [%s]\n", str_url);
+		return 2;
+	}
+	if (!oio_url_has_fq_path(url)) {
+		g_printerr ("Partial URL [%s]: requires a NS (%s), an ACCOUNT (%s),"
+				" an USER (%s) and a PATH (%s)\n", str_url, 
+				oio_url_has (url, HCURL_NS)?"ok":"missing",
+				oio_url_has (url, HCURL_ACCOUNT)?"ok":"missing",
+				oio_url_has (url, HCURL_USER)?"ok":"missing",
+				oio_url_has (url, HCURL_PATH)?"ok":"missing");
+		return 3;
+	}
+	GRID_INFO("URL valid [%s]", oio_url_get (url, HCURL_WHOLE));
+
+	struct oio_sds_s *client = NULL;
+	struct oio_error_s *err = NULL;
+
+	/* Initiate a client */
+	err = oio_sds_init (&client, oio_url_get(url, HCURL_NS));
+	if (err) {
+		g_printerr ("Client init error: (%d) %s\n", oio_error_code(err),
+				oio_error_message(err));
+		return 4;
+	}
+	GRID_INFO("Client ready to [%s]", oio_url_get (url, HCURL_NS));
+
+	int rc =  _roundtrip_common (client, url, path);
+	if (!rc)
+		rc = _roundtrip_autocontainer (client, url, path);
+	oio_sds_pfree (&client);
+	oio_url_pclean (&url);
+	return rc;
 }
 

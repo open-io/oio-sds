@@ -215,7 +215,7 @@ oio_str_randomize(guint8 *buf, gsize buflen)
 }
 
 const char *
-oio_str_autocontainer (const char *path, gchar *dst,
+oio_str_autocontainer_name (const char *path, gchar *dst,
 		const struct oio_str_autocontainer_config_s *cfg)
 {
 	guint8 bin[64];
