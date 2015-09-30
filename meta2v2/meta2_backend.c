@@ -986,6 +986,30 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 }
 
 GError*
+meta2_backend_link_content (struct meta2_backend_s *m2b,
+		struct hc_url_s *url, GBytes *content_id)
+{
+	EXTRA_ASSERT (m2b != NULL);
+	EXTRA_ASSERT (url != NULL);
+	EXTRA_ASSERT (content_id != NULL);
+
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	struct sqlx_repctx_s *repctx = NULL;
+
+	err = m2b_open (m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
+	if (err) return err;
+
+	if (!(err = sqlx_transaction_begin (sq3, &repctx))) {
+		err = m2db_link_content (sq3, url, content_id);
+		err = sqlx_transaction_end (repctx, err);
+	}
+
+	m2b_close (sq3);
+	return err;
+}
+
+GError*
 meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, GSList *beans)
 {
@@ -1644,6 +1668,9 @@ meta2_backend_content_from_chunkid(struct meta2_backend_s *m2b,
 				"  FROM content_v2 "
 				"  WHERE chunk_id = ?)", params, cb, u0);
 		metautils_gvariant_unrefv(params);
+		if (!err) {
+			/* TODO follow the FK to the aliases */
+		}
 		m2b_close(sq3);
 	}
 
@@ -1668,6 +1695,36 @@ meta2_backend_content_from_contenthash (struct meta2_backend_s *m2b,
 		params[0] = _gb_to_gvariant(h);
 		err = CONTENTS_HEADERS_load (sq3->db, " hash = ?", params, cb, u0);
 		metautils_gvariant_unrefv(params);
+		if (!err) {
+			/* TODO follow the FK to the aliases */
+		}
+		m2b_close(sq3);
+	}
+
+	return err;
+}
+
+GError*
+meta2_backend_content_from_contentid (struct meta2_backend_s *m2b,
+		struct hc_url_s *url, GBytes *h,
+		m2_onbean_cb cb, gpointer u0)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+
+	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE|
+			M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
+	if (!err) {
+		GVariant *params[2] = {NULL, NULL};
+		params[0] = _gb_to_gvariant(h);
+		err = CONTENTS_HEADERS_load (sq3->db, " id = ?", params, cb, u0);
+		metautils_gvariant_unrefv(params);
+		if (!err) {
+			/* TODO follow the FK to the aliases */
+		}
 		m2b_close(sq3);
 	}
 

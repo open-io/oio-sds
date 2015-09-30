@@ -385,6 +385,46 @@ meta2_filter_action_list_by_header_hash(struct gridd_filter_ctx_s *ctx,
 }
 
 int
+meta2_filter_action_list_by_header_id(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	GSList *headers = NULL;
+	GError *err = NULL;
+	GBytes *h = NULL;
+	int rc = FILTER_KO;
+
+	struct list_params_s lp;
+	_load_list_params (&lp, ctx);
+
+	// Get the header ID (binary form)
+	gsize hlen = 0;
+	void *hbuf = metautils_message_get_field (reply->request, NAME_MSGKEY_KEY, &hlen);
+	if (hbuf && hlen)
+		h = g_bytes_new_static (hbuf, hlen);
+	if (!h)
+		err = NEWERROR(CODE_BAD_REQUEST, "Missing content hash at [%s]", NAME_MSGKEY_KEY);
+
+	// Use it to locate the headers
+	if (!err) {
+		struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+		struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+		err = meta2_backend_content_from_contentid (m2b, url, h, _bean_list_cb, &headers);
+	}
+	if (!err && !headers)
+		err = NEWERROR(CODE_CONTENT_NOTFOUND, "No header linked");
+
+	// Perform the list on it
+	if (!err)
+		rc = _list_S3(ctx, reply, &lp, headers);
+	else
+		meta2_filter_ctx_set_error(ctx, err);
+
+	_bean_cleanl2 (headers);
+	if (h) g_bytes_unref (h);
+	return rc;
+}
+
+int
 meta2_filter_action_insert_beans(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
@@ -437,5 +477,35 @@ meta2_filter_action_update_beans(struct gridd_filter_ctx_s *ctx,
 	GRID_DEBUG("Failed to update beans : (%d) %s", err->code, err->message);
 	meta2_filter_ctx_set_error(ctx, err);
 	return FILTER_KO;
+}
+
+int
+meta2_filter_action_link(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
+	GError *err = NULL;
+	GBytes *id = NULL;
+	
+	// Get the header ID (binary form)
+	gsize hlen = 0;
+	void *hbuf = metautils_message_get_field (reply->request, NAME_MSGKEY_KEY, &hlen);
+	if (hbuf && hlen)
+		id = g_bytes_new_static (hbuf, hlen);
+	if (!id)
+		err = NEWERROR(CODE_BAD_REQUEST, "Missing content hash at [%s]",
+				NAME_MSGKEY_KEY);
+
+	// Perform the link
+	if (!err)
+		meta2_backend_link_content (m2b, url, id);
+
+	// Cleanup and exit
+	if (id)
+		g_bytes_unref (id);
+	if (err)
+		meta2_filter_ctx_set_error(ctx, err);
+	return err == NULL;
 }
 

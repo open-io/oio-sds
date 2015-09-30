@@ -1,3 +1,21 @@
+/*
+OpenIO SDS core library
+Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #include <string.h>
 
 #include <glib.h>
@@ -92,6 +110,8 @@ oio_str_replace(gchar **dst, const gchar *src)
 gboolean
 oio_str_ishexa(const char *s, gsize slen)
 {
+	if (!slen || (slen%2))
+		return FALSE;
 	for (; *s && slen > 0 ;++s,--slen) {
 		if (!g_ascii_isxdigit(*s))
 			return FALSE;
@@ -106,22 +126,27 @@ oio_str_ishexa1(const char *s)
 	for (; *s ;++s) {
 		if (!g_ascii_isxdigit(*s))
 			return FALSE;
+		len ++;
 	}
-	return (len%2) == 0;
+	return len > 0 && (len%2) == 0;
 }
 
 gboolean
 oio_str_hex2bin(const char *s0, guint8 *d, gsize dlen)
 {
 	const guint8 *s = (const guint8*) s0;
-	if (!s0 || !d)
+	if (!s || !d)
 		return FALSE;
-	gsize sS = strlen(s0);
 
-	if (sS < dlen * 2)
+	gsize sS = strlen(s0);
+	if (sS > dlen * 2)
 		return FALSE;
 
 	while ((dlen--) > 0) {
+		if (!*s)
+			return TRUE;
+ 		if (!*(s+1))
+			return FALSE; 
 		register int i0, i1;
 
 		i0 = hexa[*(s++)];

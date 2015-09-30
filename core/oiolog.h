@@ -1,5 +1,5 @@
 /*
-OpenIO SDS oio core
+OpenIO SDS core library
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
 Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
@@ -19,6 +19,10 @@ License along with this library.
 
 #ifndef OIO_SDS__core_oiolog_h
 # define OIO_SDS__core_oiolog_h 1
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 # include <glib.h>
 
@@ -148,4 +152,7 @@ void oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 
 guint16 oio_log_thread_id(GThread *thread);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /*OIO_SDS__core_oiolog_h*/

@@ -219,6 +219,9 @@ GError* m2v2_remote_execute_RAW_ADD(const char *target, struct hc_url_s *url,
 GError* m2v2_remote_execute_RAW_DEL(const char *target, struct hc_url_s *url,
 		GSList *beans);
 
+GError* m2v2_remote_execute_LINK(const char *target, struct hc_url_s *url,
+		GBytes *content_id);
+
 /** Substitute chunks by another one in meta2 database.
  * TODO: return number of substitutions */
 GError* m2v2_remote_execute_RAW_SUBST(const char *target,
@@ -237,10 +240,14 @@ GError* m2v2_remote_execute_LIST_BY_CHUNKID(const char *target,
 		struct hc_url_s *url, const char *chunk, struct list_params_s *p,
 		struct list_result_s *out);
 
-/** Get the aloases the header belongs to. */
+/** Get the aliases the header belongs to. */
 GError* m2v2_remote_execute_LIST_BY_HEADERHASH(const char *target, 
 		struct hc_url_s *url, GBytes *h, struct list_params_s *p,
 		struct list_result_s *out);
+
+/** idem, but with the content ID as the key */
+GError* m2v2_remote_execute_LIST_BY_HEADERID(const char *target, struct hc_url_s *url,
+		GBytes *h, struct list_params_s *p, struct list_result_s *out);
 
 /* works for contents only. for container props, @see sqlx_pack_PROPDEL() */
 GError* m2v2_remote_execute_PROP_DEL(const char *target,

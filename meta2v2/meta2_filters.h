@@ -209,6 +209,9 @@ int meta2_filter_action_list_contents(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_action_list_by_chunk_id(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
+int meta2_filter_action_list_by_header_id(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply);
+
 int meta2_filter_action_list_by_header_hash(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
@@ -230,6 +233,9 @@ int meta2_filter_action_get_content(struct gridd_filter_ctx_s *ctx,
 
 /*! Call backend and delete a content using informations in filter context */
 int meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply);
+
+int meta2_filter_action_link(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 /*! Work on content properties */

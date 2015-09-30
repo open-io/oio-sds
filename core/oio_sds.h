@@ -1,5 +1,5 @@
 /*
-OpenIO SDS client
+OpenIO SDS core library
 Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
@@ -18,6 +18,10 @@ License along with this library.
 
 #ifndef OIO_SDS__sdk__oio_sds_h
 #define OIO_SDS__sdk__oio_sds_h 1
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 struct oio_sds_s;
 struct oio_error_s;
@@ -72,8 +76,11 @@ char ** oio_sds_get_compile_options (void);
 /* Error management --------------------------------------------------------- */
 
 void oio_error_free (struct oio_error_s *e);
+
 void oio_error_pfree (struct oio_error_s **pe);
+
 int oio_error_code (const struct oio_error_s *e);
+
 const char * oio_error_message (const struct oio_error_s *e);
 
 /* Client-related features -------------------------------------------------- */
@@ -91,51 +98,191 @@ void oio_sds_pfree (struct oio_sds_s **psds);
 int oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 		void *pv, unsigned int vlen);
 
-/* works with fully qualified urls (content) and local paths */
+/* Download ----------------------------------------------------------------- */
+
+/* Expected to return 0 when the data's managemenr succeeded, and something
+ * else when it failed. */
+typedef int (*oio_sds_dl_hook_f) (void*, const unsigned char*, size_t);
+
+struct oio_sds_dl_dst_s
+{
+	/* output variable: how many bytes have been read, at all */
+	size_t out_size;
+
+	enum {
+		OIO_DL_DST_HOOK_SEQUENTIAL = 1,
+		OIO_DL_DST_BUFFER,
+		OIO_DL_DST_FILE,
+	} type;
+
+	union {
+		struct {
+			const char *path;
+		} file;
+		struct {
+			unsigned char *ptr;
+			size_t length;
+		} buffer;
+		struct {
+			oio_sds_dl_hook_f cb;
+			void *ctx;
+
+			/* set 'length' to ((size_t)-1) to mark it unset and allow the
+			 * whole content to be downloaded. If set, it must be coherent
+			 * with the ranges provided. */
+			size_t length;
+		} hook;
+	} data;
+};
+
+struct oio_sds_dl_range_s
+{
+	size_t offset;
+	size_t size;
+};
+
+struct oio_sds_dl_src_s
+{
+	struct oio_url_s *url;
+
+	/* if not set, the whole content will be read at once.
+	 * To be set, it must contain a pointer to a NULL-terminated array
+	 * of pointers to ranges. */
+	struct oio_sds_dl_range_s **ranges;
+};
+
+struct oio_error_s* oio_sds_download (struct oio_sds_s *sds,
+		struct oio_sds_dl_src_s *src, struct oio_sds_dl_dst_s *dst);
+
+/* Downloads the whole file
+ * works with fully qualified urls (content) and local paths */
 struct oio_error_s* oio_sds_download_to_file (struct oio_sds_s *sds,
 		struct oio_url_s *u, const char *local);
 
-/* Simply wraps oio_sds_upload_from_source() without the autocreation flag
+/* Upload ------------------------------------------------------------------- */
+
+typedef ssize_t (*oio_sds_ul_hook_f) (void*, unsigned char *p, size_t s);
+
+struct oio_sds_ul_src_s
+{
+	enum {
+		OIO_UL_SRC_HOOK_SEQUENTIAL = 1,
+		OIO_UL_SRC_BUFFER,
+		OIO_UL_SRC_FILE,
+	} type;
+	union {
+		struct {
+			const char *path;
+			size_t offset;
+			size_t size;
+		} file;
+		struct {
+			unsigned char *ptr;
+			size_t length;
+		} buffer;
+		struct {
+			oio_sds_ul_hook_f cb;
+			void *ctx;
+			size_t size;
+		} hook;
+	} data;
+};
+
+struct oio_sds_ul_dst_s
+{
+	struct oio_url_s *url;
+
+	int autocreate;
+
+	/* output variable: how many bytes have been uploaded */
+	size_t out_size;
+};
+
+/* works with fully qualified urls (content) and local paths */
+struct oio_error_s* oio_sds_upload (struct oio_sds_s *sds,
+		struct oio_sds_ul_src_s *src, struct oio_sds_ul_dst_s *dst);
+
+/* Simply wraps oio_sds_upload() without the autocreation flag
  * set. */
 struct oio_error_s* oio_sds_upload_from_file (struct oio_sds_s *sds,
 		struct oio_url_s *u, const char *local);
+
+/* List --------------------------------------------------------------------- */
+
+struct oio_sds_list_param_s
+{
+	struct oio_url_s *url;
+	const char *prefix;
+	const char *marker;
+	const char *end;
+
+	/* 0 means not set */
+	size_t max_items;
+
+	/* 0 means no set */
+	char delimiter;
+
+	char flag_nodeleted : 1;
+	char flag_allversions : 1;
+};
+
+struct oio_sds_list_listener_s
+{
+	void *ctx;
+	/* called for each item listed */
+	int (*on_item) (void *ctx, const char *item);
+	/* called for each sub-prefix detected (depends on the delimiter) */
+	int (*on_prefix) (void *ctx, const char *prefix);
+	/* called once, with no warranty to be called before 'on_item' nor
+	 * 'on_bound' */
+	int (*on_bound) (void *ctx, const char *next_marker);
+};
+
+struct oio_error_s* oio_sds_list (struct oio_sds_s *sds,
+		struct oio_sds_list_param_s *param,
+		struct oio_sds_list_listener_s *listener);
+
+/* --------------------------------------------------------------------------- */
+
+/* works with fully qualified urls (content) */
+struct oio_error_s* oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *u);
+
+/* currently works with fully qualified urls (content) */
+struct oio_error_s* oio_sds_has (struct oio_sds_s *sds, struct oio_url_s *url,
+		int *phas);
+
+/* Creates an alias named 'url' pointing on the physical content 'content_id'
+ * in the same container.
+ *  'url' be a fully qualified content URI.
+ *  'content_id' must be an hexadecimal string. */
+struct oio_error_s* oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url,
+		const char *content_id);
+
+/* Attempts a link with oio_sds_link(), then calls oio_sds_upload_from_source()
+ * in case of error, if the link failed because of a content not found. */
+struct oio_error_s* oio_sds_link_or_put (struct oio_sds_s *sds,
+		struct oio_sds_ul_dst_s *dst, struct oio_sds_ul_src_s *src,
+		const char *content_id);
+
+/* DEPRECATED --------------------------------------------------------------- */
 
 struct oio_source_s {
 	int autocreate;
 	enum {
 		OIO_SRC_NONE = 0, /* do not use this */
 		OIO_SRC_FILE,
-		OIO_SRC_BUFFER,
 	} type;
 	union {
 		const char *path;
-		struct {
-			const void *data;
-			gsize length;
-		} buffer;
 	} data;
 };
 
-/* works with fully qualified urls (content) and local paths */
+/* XXX @deprecated use oio_sds_upload() instead */
 struct oio_error_s* oio_sds_upload_from_source (struct oio_sds_s *sds,
-		struct oio_url_s *u, struct oio_source_s *src);
+		struct oio_url_s *u, struct oio_source_s *src)
+	__attribute__ ((deprecated));
 
-/* works with fully qualified urls (content) */
-struct oio_error_s* oio_sds_delete (struct oio_sds_s *sds,
-		struct oio_url_s *u);
-
-/* currently works with fully qualified urls (content) */
-struct oio_error_s* oio_sds_has (struct oio_sds_s *sds,
-		struct oio_url_s *url, int *phas);
-
-/* Creates an alias pointing on the physical content 'iname' in the container
- * identified by 'url'. If the physical content doesn't exist, a new content
- * will be uploaded.
- *  'url' be a fully qualified content URI.
- *  'iname' must be an hexadecimal string.
- */
-struct oio_error_s* oio_sds_link (struct oio_sds_s *sds,
-		struct oio_url_s *url, struct oio_source_s *src,
-		const char *iname);
-
+#ifdef __cplusplus
+}
+#endif
 #endif /*OIO_SDS__sdk__oio_sds_h*/

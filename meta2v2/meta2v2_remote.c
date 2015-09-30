@@ -245,7 +245,18 @@ static GByteArray*
 m2v2_remote_pack_LIST_BY_HEADERHASH(struct hc_url_s *url, struct list_params_s *p,
 		GBytes *h)
 {
-	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_LHEADER, url, NULL);
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_LHHASH, url, NULL);
+	_pack_list_params (msg, p);
+	metautils_message_add_field (msg, NAME_MSGKEY_KEY,
+			g_bytes_get_data(h,NULL), g_bytes_get_size(h));
+	return message_marshall_gba_and_clean(msg);
+}
+
+static GByteArray*
+m2v2_remote_pack_LIST_BY_HEADERID(struct hc_url_s *url, struct list_params_s *p,
+		GBytes *h)
+{
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_LHID, url, NULL);
 	_pack_list_params (msg, p);
 	metautils_message_add_field (msg, NAME_MSGKEY_KEY,
 			g_bytes_get_data(h,NULL), g_bytes_get_size(h));
@@ -351,6 +362,15 @@ GByteArray*
 m2v2_remote_pack_TOUCH_container(struct hc_url_s *url, guint32 flags)
 {
 	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V1_TOUCH_CONTAINER, url, NULL, flags);
+}
+
+static GByteArray*
+m2v2_remote_pack_LINK(struct hc_url_s *url, GBytes *id)
+{
+	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_LINK, url, NULL);
+	metautils_message_add_field(msg, NAME_MSGKEY_KEY,
+			g_bytes_get_data(id, NULL), g_bytes_get_size(id));
+	return message_marshall_gba_and_clean(msg);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -562,6 +582,13 @@ m2v2_remote_touch_container_ex(const char *target, struct hc_url_s *url, guint32
 	return _m2v2_request(target, m2v2_remote_pack_TOUCH_container(url, flags), NULL);
 }
 
+GError*
+m2v2_remote_execute_LINK(const char *target, struct hc_url_s *url,
+		GBytes *content_id)
+{
+	return _m2v2_request(target, m2v2_remote_pack_LINK(url, content_id), NULL);
+}
+
 static GError*
 _list (const char *target, GByteArray *request,
 		struct list_result_s *out, gchar ***out_properties)
@@ -657,5 +684,12 @@ m2v2_remote_execute_LIST_BY_HEADERHASH(const char *target, struct hc_url_s *url,
 		GBytes *h, struct list_params_s *p, struct list_result_s *out)
 {
 	return _list (target, m2v2_remote_pack_LIST_BY_HEADERHASH(url, p, h), out, NULL);
+}
+
+GError*
+m2v2_remote_execute_LIST_BY_HEADERID(const char *target, struct hc_url_s *url,
+		GBytes *h, struct list_params_s *p, struct list_result_s *out)
+{
+	return _list (target, m2v2_remote_pack_LIST_BY_HEADERID(url, p, h), out, NULL);
 }
 

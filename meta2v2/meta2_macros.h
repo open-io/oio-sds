@@ -81,7 +81,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V2_LCHUNK  "M2V2_LCHUNK"
 
 /* list but filter by header */
-# define NAME_MSGNAME_M2V2_LHEADER "M2V2_LHEADER"
+# define NAME_MSGNAME_M2V2_LHID   "M2V2_LHID"
+# define NAME_MSGNAME_M2V2_LHHASH "M2V2_LHHASH"
+
+# define NAME_MSGNAME_M2V2_LINK   "M2V2_LINK"
 
 # define NAME_MSGNAME_M2V2_PROP_SET "M2V2_PROP_SET"
 # define NAME_MSGNAME_M2V2_PROP_GET "M2V2_PROP_GET"

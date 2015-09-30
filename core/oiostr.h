@@ -1,5 +1,5 @@
 /*
-OpenIO SDS oio core 
+OpenIO SDS core library
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
 Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
@@ -20,6 +20,10 @@ License along with this library.
 #ifndef OIO_SDS__core__oiostr_h
 # define OIO_SDS__core__oiostr_h 1
 # include <glib.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define oio_pfree0(pp,repl) do { \
 	if (NULL != *(pp)) \
@@ -76,4 +80,7 @@ const char * oio_str_autocontainer_name (const char *src, char *dst,
 const char * oio_str_autocontainer_hash (const guint8 *src, gsize src_len,
 		gchar *dst, const struct oio_str_autocontainer_config_s *cfg);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /*OIO_SDS__core__oiostr_h*/

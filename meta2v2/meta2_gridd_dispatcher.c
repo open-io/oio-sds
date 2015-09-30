@@ -182,7 +182,33 @@ static gridd_filter M2V2_LCHUNK_FILTERS[] =
 	NULL
 };
 
-static gridd_filter M2V2_LHEADER_FILTERS[] =
+static gridd_filter M2V2_LHID_FILTERS[] =
+{
+	meta2_filter_extract_header_url,
+	meta2_filter_extract_header_flags32,
+	meta2_filter_extract_list_params,
+	meta2_filter_fill_subject,
+	meta2_filter_check_url_cid,
+	meta2_filter_check_backend,
+	meta2_filter_check_ns_name,
+	meta2_filter_action_list_by_header_id,
+	NULL
+};
+
+static gridd_filter M2V2_LINK_FILTERS[] =
+{
+	meta2_filter_extract_header_url,
+	meta2_filter_extract_header_flags32,
+	meta2_filter_extract_list_params,
+	meta2_filter_fill_subject,
+	meta2_filter_check_url_cid,
+	meta2_filter_check_backend,
+	meta2_filter_check_ns_name,
+	meta2_filter_action_link,
+	NULL
+};
+
+static gridd_filter M2V2_LHHASH_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_flags32,
@@ -526,7 +552,9 @@ meta2_gridd_get_v2_requests(void)
 
 		{NAME_MSGNAME_M2V2_LIST,    (hook) meta2_dispatch_all, M2V2_LIST_FILTERS},
 		{NAME_MSGNAME_M2V2_LCHUNK,  (hook) meta2_dispatch_all, M2V2_LCHUNK_FILTERS},
-		{NAME_MSGNAME_M2V2_LHEADER, (hook) meta2_dispatch_all, M2V2_LHEADER_FILTERS},
+		{NAME_MSGNAME_M2V2_LHHASH,  (hook) meta2_dispatch_all, M2V2_LHHASH_FILTERS},
+		{NAME_MSGNAME_M2V2_LHID,    (hook) meta2_dispatch_all, M2V2_LHID_FILTERS},
+		{NAME_MSGNAME_M2V2_LINK,    (hook) meta2_dispatch_all, M2V2_LINK_FILTERS},
 
 		/* content properties (container properties now managed through
 		 * sqlx queries) */

@@ -171,6 +171,9 @@ GError* m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0);
 
+GError* m2db_link_content(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+		GBytes *id);
+
 /* ------------------------------------------------------------------------- */
 
 struct m2db_put_args_s

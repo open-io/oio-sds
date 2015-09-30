@@ -1,5 +1,5 @@
 /*
-OpenIO SDS client
+OpenIO SDS core library
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
 Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 

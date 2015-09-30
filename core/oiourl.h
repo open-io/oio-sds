@@ -1,5 +1,5 @@
 /*
-OpenIO SDS metautils
+OpenIO SDS core library
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
 Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
@@ -19,6 +19,10 @@ License along with this library.
 
 #ifndef OIO_SDS__core__oiourl_h
 # define OIO_SDS__core__oiourl_h 1
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <sys/types.h>
 
@@ -122,4 +126,7 @@ int oio_url_has_fq_path (struct oio_url_s *u);
 /** Returns wether all the mandatory components for a container are present */
 int oio_url_has_fq_container (struct oio_url_s *u);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /*OIO_SDS__core__oiourl_h*/

@@ -1,5 +1,5 @@
 /*
-OpenIO SDS metautils
+OpenIO SDS core library
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
 Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
@@ -54,20 +54,20 @@ static void
 _test_url (guint idx, struct oio_url_s *u, struct test_data_s *td)
 {
 	(void) idx;
-	_test_field (td->whole, u, HCURL_WHOLE);
-	_test_field (td->ns, u, HCURL_NS);
-	_test_field (td->account, u, HCURL_ACCOUNT);
-	_test_field (td->ref, u, HCURL_USER);
-	_test_field (td->type, u, HCURL_TYPE);
-	_test_field (td->path, u, HCURL_PATH);
+	_test_field (td->whole, u, OIOURL_WHOLE);
+	_test_field (td->ns, u, OIOURL_NS);
+	_test_field (td->account, u, OIOURL_ACCOUNT);
+	_test_field (td->ref, u, OIOURL_USER);
+	_test_field (td->type, u, OIOURL_TYPE);
+	_test_field (td->path, u, OIOURL_PATH);
 	if (td->hexa) {
-		g_assert (oio_url_has (u, HCURL_HEXID));
+		g_assert (oio_url_has (u, OIOURL_HEXID));
 		g_assert (NULL != oio_url_get_id (u));
-		g_assert (!g_ascii_strcasecmp (oio_url_get (u, HCURL_HEXID), td->hexa));
+		g_assert (!g_ascii_strcasecmp (oio_url_get (u, OIOURL_HEXID), td->hexa));
 	} else {
-		g_assert (!oio_url_has (u, HCURL_HEXID));
+		g_assert (!oio_url_has (u, OIOURL_HEXID));
 		g_assert (NULL == oio_url_get_id (u));
-		g_assert (NULL == oio_url_get (u, HCURL_HEXID));
+		g_assert (NULL == oio_url_get (u, OIOURL_HEXID));
 	}
 }
 
@@ -75,11 +75,11 @@ static struct oio_url_s *
 _init_url (struct test_data_s *td)
 {
 	struct oio_url_s *url = oio_url_empty ();
-	if (td->ns) oio_url_set (url, HCURL_NS, td->ns);
-	if (td->account) oio_url_set (url, HCURL_ACCOUNT, td->account);
-	if (td->ref) oio_url_set (url, HCURL_USER, td->ref);
-	if (td->type) oio_url_set (url, HCURL_TYPE, td->type);
-	if (td->path) oio_url_set (url, HCURL_PATH, td->path);
+	if (td->ns) oio_url_set (url, OIOURL_NS, td->ns);
+	if (td->account) oio_url_set (url, OIOURL_ACCOUNT, td->account);
+	if (td->ref) oio_url_set (url, OIOURL_USER, td->ref);
+	if (td->type) oio_url_set (url, OIOURL_TYPE, td->type);
+	if (td->path) oio_url_set (url, OIOURL_PATH, td->path);
 	return url;
 }
 
@@ -170,9 +170,9 @@ static void
 test_options (void)
 {
 	struct oio_url_s *url = oio_url_empty();
-	oio_url_set(url, HCURL_NS, "NS");
-	oio_url_set(url, HCURL_USER, "REF");
-	oio_url_set(url, HCURL_PATH, "PATH");
+	oio_url_set(url, OIOURL_NS, "NS");
+	oio_url_set(url, OIOURL_USER, "REF");
+	oio_url_set(url, OIOURL_PATH, "PATH");
 
 	const gchar *v;
 
@@ -196,13 +196,13 @@ main(int argc, char **argv)
 	oio_log_init_level(GRID_LOGLVL_INFO);
 	g_log_set_default_handler(oio_log_stderr, NULL);
 
-	g_test_add_func("/metautils/hc_url/configure/valid_old",
+	g_test_add_func("/core/url/configure/valid_old",
 			test_configure_valid_old);
-	g_test_add_func("/metautils/hc_url/configure/valid",
+	g_test_add_func("/core/url/configure/valid",
 			test_configure_valid);
-	g_test_add_func("/metautils/hc_url/configure/invalid",
+	g_test_add_func("/core/url/configure/invalid",
 			test_configure_invalid);
-	g_test_add_func("/metautils/hc_url/options", test_options);
+	g_test_add_func("/core/url/options", test_options);
 	return g_test_run();
 }
 
