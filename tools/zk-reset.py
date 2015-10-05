@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # zk-reset.py, a script resetting a Zookeeper instance for OpenIO SDS.
 # Copyright (C) 2014 Worldine, original work as part of Redcurrant
