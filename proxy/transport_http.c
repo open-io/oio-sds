@@ -278,13 +278,18 @@ http_parser_destroy(struct http_parser_s *parser)
 	g_free(parser);
 }
 
+static gint
+_cmp (gconstpointer p0, gconstpointer p1, gpointer p2)
+{
+	(void) p2;
+	g_assert (p0 != NULL);
+	g_assert (p1 != NULL);
+	return g_ascii_strcasecmp(p0, p1);
+}
+
 static struct http_request_s *
 http_request_create(struct network_client_s *client)
 {
-	gint _cmp (gconstpointer p0, gconstpointer p1, gpointer p2) {
-		(void) p2;
-		return g_ascii_strcasecmp(p0, p1);
-	}
 	struct http_request_s *req;
 	req = g_malloc0(sizeof(*req));
 	req->client = client;
