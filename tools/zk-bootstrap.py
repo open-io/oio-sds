@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # zk-bootstrap.py, a script initating a Zookeeper instance for OpenIO SDS.
 # Copyright (C) 2014 Worldine, original work as part of Redcurrant

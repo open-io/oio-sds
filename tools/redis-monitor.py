@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # redis-monitor.py, a monitoring script for redis services
 # Copyright (C) 2014 Worldine, original work aside of Redcurrant

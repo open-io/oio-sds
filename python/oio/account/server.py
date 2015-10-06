@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 # Copyright (C) 2015 OpenIO, original work as part of
 # OpenIO Software Defined Storage
 #

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # account-monitor.py, a monitoring script for the account service
 # Copyright (C) 2015 OpenIO, original work as part of

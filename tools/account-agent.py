@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 # account-agent.py, a script forwarding notifications to an account service
 # Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
