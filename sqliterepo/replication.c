@@ -106,14 +106,11 @@ context_get_pending_table(GTree *tree, const hashstr_t *key)
 	return subtree;
 }
 
+static void _clean_value(gpointer v) { if (v) g_tree_destroy(v); }
+
 static void
 context_flush_pending(struct sqlx_repctx_s *ctx)
 {
-	void _clean_value(gpointer v) {
-		if (v)
-			g_tree_destroy(v);
-	}
-
 	if (!ctx)
 		return;
 	if (ctx->pending)
