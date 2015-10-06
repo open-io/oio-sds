@@ -5,7 +5,7 @@ from optparse import OptionParser
 from oio.common.utils import parse_options, read_conf
 from oio.account.server import create_app
 from oio.account.server import AccountServiceLogger
-from oio.common.utils import Application
+from oio.common.wsgi import Application
 
 
 if __name__ == '__main__':
