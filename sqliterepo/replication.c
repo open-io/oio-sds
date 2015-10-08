@@ -122,15 +122,8 @@ context_flush_pending(struct sqlx_repctx_s *ctx)
 static void
 context_flush_rowsets(struct sqlx_repctx_s *ctx)
 {
-	void _clean_value(gpointer v) {
-		if (!v)
-			return;
-		asn_DEF_Table.free_struct(&asn_DEF_Table, v, FALSE);
-	}
-
 	if (!ctx)
 		return;
-
 	asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence,
 			&(ctx->sequence), TRUE);
 	memset(&(ctx->sequence), 0, sizeof(ctx->sequence));
