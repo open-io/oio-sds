@@ -332,7 +332,7 @@ uid=${UID}
 gid=${GID}
 working_dir=${TMPDIR}
 inherit_env=1
-env.PATH=${PATH}:${HOME}/.local/bin:${CODEDIR}/bin:/bin:/usr/bin:/usr/local/bin
+#env.PATH=${PATH}:${HOME}/.local/bin:${CODEDIR}/bin:/bin:/usr/bin:/usr/local/bin
 env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 
 #limit.core_size=-1
