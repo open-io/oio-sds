@@ -100,10 +100,10 @@ nice gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
 
 ZK=$(${PREFIX}-cluster --local-cfg | grep "$NS/zookeeper" ; exit 0)
 if [ -n "$ZK" ] ; then
-	#zk-reset.py "$NS"
 	opts=
 	for srvtype in ${AVOID} ; do opts="${opts} --avoid=${srvtype}" ; done
 	if [ $ZKSLOW -ne 0 ] ; then opts="${opts} --slow" ; fi
+	zk-reset.py "$NS"
 	zk-bootstrap.py $opts "$NS"
 fi
 
