@@ -21,12 +21,13 @@ import sys, logging
 import zookeeper
 from oio.common.utils import load_namespace_conf
 
-def delete_tree (zh, path):
+def delete_children (zh, path):
 	path = path.replace('//', '/')
 	try:
 		for n in tuple(zookeeper.get_children(zh, path)):
-			delete_tree(zh, path + '/' + n)
-		zookeeper.delete(zh, path)
+			p = path + '/' + n
+			delete_children(zh, p)
+			zookeeper.delete(zh, p)
 	except:
 		pass
 
@@ -35,6 +36,8 @@ def main():
 
 	parser = OptionParser()
 	parser.add_option('-v', '--verbose', action="store_true", dest="flag_verbose",
+		help='Triggers debugging traces')
+	parser.add_option('-a', '--all', action="store_true", dest="flag_all",
 		help='Triggers debugging traces')
 
 	(options, args) = parser.parse_args(sys.argv)
@@ -59,7 +62,12 @@ def main():
 
 	zookeeper.set_debug_level(zookeeper.LOG_LEVEL_INFO)
 	zh = zookeeper.init(cnxstr)
-	delete_tree(zh, "/hc")
+	if options.flag_all:
+		logging.warn("FLUSHING all the oio-sds entries in the ZK server");
+		delete_children(zh, "/hc")
+	else:
+		logging.info("Cleaning only the meta0 registrations in ZK server");
+		delete_children(zh, "/hc/ns/"+ns+"/srv/meta0")
 	zookeeper.close(zh)
 
 if __name__ == '__main__':
