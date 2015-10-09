@@ -263,7 +263,7 @@ param_chunk_size=${CHUNK_SIZE}
 
 param_option.service_update_policy=meta2=NONE|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|
 param_option.meta2_max_versions=${VERSIONING}
-param_option.lb.rawx=WRAND?shorten_ratio=0.6&standard_deviation=no
+param_option.lb.rawx=WRR?shorten_ratio=1.0&standard_deviation=no
 param_option.meta2_keep_deleted_delay=86400
 param_option.compression=none
 param_option.container_max_size=50000000
@@ -307,6 +307,7 @@ template_conscience_policies = """
 [STORAGE_POLICY]
 SINGLE=NONE:NONE:NONE
 TWOCOPIES=NONE:DUPONETWO:NONE
+THREECOPIES=NONE:DUPONETHREE:NONE
 FIVECOPIES=NONE:DUPONEFIVE:NONE
 RAIN=NONE:RAIN:NONE
 
@@ -318,6 +319,7 @@ REASONABLYSLOW=NONE
 
 [DATA_SECURITY]
 DUPONETWO=DUP:distance=1|nb_copy=2
+DUPONETHREE=DUP:distance=1|nb_copy=3
 DUPONEFIVE=DUP:distance=1|nb_copy=5
 RAIN=RAIN:k=6|m=2|algo=liber8tion
 

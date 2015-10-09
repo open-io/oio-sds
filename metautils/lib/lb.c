@@ -1313,7 +1313,7 @@ _ensure(struct grid_lbpool_s *glp, const gchar *srvtype,
 	}
 
 	if (!(iterator = g_tree_lookup(glp->iterators, srvtype))) {
-		iterator = grid_lb_iterator_weighted_random(lb);
+		iterator = grid_lb_iterator_weighted_round_robin(lb);
 		g_tree_insert(glp->iterators, g_strdup(srvtype), iterator);
 	}
 
