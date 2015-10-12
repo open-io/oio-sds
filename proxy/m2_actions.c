@@ -133,10 +133,10 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 	GString *gstr = g_string_new ("{");
 
 	// Dump the prefixes
-	if (prefixes && *prefixes) {
+	if (prefixes) {
 		g_string_append (gstr, "\"prefixes\":[");
 		first = TRUE;
-		for (gchar **pp=prefixes; pp && *pp ;++pp) {
+		for (gchar **pp=prefixes; *pp ;++pp) {
 			if (!first)
 				g_string_append_c(gstr, ',');
 			first = FALSE;
