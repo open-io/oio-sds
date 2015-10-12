@@ -41,39 +41,22 @@ rdbcompression yes
 rdbchecksum yes
 dbfilename dump.rdb
 dir ${DATADIR}/${NS}-redis-${SRVNUM}
-# slaveof <masterip> <masterport>
-# masterauth <master-password>
 slave-serve-stale-data yes
 slave-read-only yes
-repl-diskless-sync no
-repl-diskless-sync-delay 5
-# repl-ping-slave-period 10
-# repl-timeout 60
 repl-disable-tcp-nodelay no
-# repl-backlog-size 1mb
-# repl-backlog-ttl 3600
 slave-priority 100
-# min-slaves-to-write 3
-# min-slaves-max-lag 10
-# rename-command CONFIG ""
 maxclients 100
 maxmemory 10m
 maxmemory-policy volatile-lru
-# maxmemory-samples 3
 appendonly no
-# The name of the append only file (default: "appendonly.aof")
 appendfilename "appendonly.aof"
-# appendfsync always
 appendfsync everysec
-# appendfsync no
 no-appendfsync-on-rewrite no
 auto-aof-rewrite-percentage 100
 auto-aof-rewrite-min-size 64mb
-aof-load-truncated yes
 lua-time-limit 5000
 slowlog-log-slower-than 10000
 slowlog-max-len 128
-latency-monitor-threshold 0
 notify-keyspace-events ""
 hash-max-ziplist-entries 512
 hash-max-ziplist-value 64
@@ -82,7 +65,6 @@ list-max-ziplist-value 64
 set-max-intset-entries 512
 zset-max-ziplist-entries 128
 zset-max-ziplist-value 64
-hll-sparse-max-bytes 3000
 activerehashing yes
 client-output-buffer-limit normal 0 0 0
 client-output-buffer-limit slave 256mb 64mb 60
