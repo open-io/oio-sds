@@ -36,6 +36,13 @@ void test_get_fail (const char *strcfg, const char *ns, const char *url);
 void test_get_success (const char *strcfg, const char *ns, const char *url,
 		size_t count);
 
+void test_list_badarg (const char *strcfg, const char *ns);
+void test_list_fail (const char *strcfg, const char *ns, const char *url);
+void test_list_success_count (const char *strcfg, const char *ns,
+		const char *strurl, unsigned int count,
+		const char *prefix, const char *marker, const char *end,
+		unsigned int max);
+
 /* -------------------------------------------------------------------------- */
 
 struct oio_FAKE_s
@@ -151,6 +158,7 @@ static void
 _test_wrap (const char *strcfg, const char *ns,
 		void (*hook) (struct oio_sds_s *))
 {
+	g_printerr("\r\n");
 	struct oio_cfg_handle_s *cfg = _build_fake_config (strcfg);
 	oio_cfg_set_handle (cfg);
 
@@ -283,5 +291,80 @@ test_get_success (const char *strcfg, const char *ns, const char *strurl,
 		g_assert (total == count);
 	}
 	_test_wrap_url (strcfg, ns, strurl, _hook);
+}
+
+void
+test_list_badarg (const char *strcfg, const char *ns)
+{
+	void _hook (struct oio_sds_s *sds) {
+		struct oio_sds_list_param_s param;
+		struct oio_sds_list_listener_s listener;
+		struct oio_error_s *err = NULL;
+
+		memset (&param, 0, sizeof(param));
+		memset (&listener, 0, sizeof(listener));
+
+		err = oio_sds_list (sds, NULL, NULL);
+		g_assert_nonnull (err);
+		err = oio_sds_list (sds, &param, NULL);
+		g_assert_nonnull (err);
+		err = oio_sds_list (sds, NULL, &listener);
+		g_assert_nonnull (err);
+		err = oio_sds_list (sds, &param, &listener);
+		g_assert_nonnull (err);
+	}
+	_test_wrap (strcfg, ns, _hook);
+}
+
+void
+test_list_fail (const char *strcfg, const char *ns, const char *strurl)
+{
+	void _hook (struct oio_sds_s *sds, struct oio_url_s *url) {
+		struct oio_sds_list_param_s param;
+		struct oio_sds_list_listener_s listener;
+		struct oio_error_s *err = NULL;
+
+		memset (&param, 0, sizeof(param));
+		memset (&listener, 0, sizeof(listener));
+		param.url = url;
+
+		err = oio_sds_list (sds, &param, &listener);
+		g_assert_nonnull (err);
+	}
+	_test_wrap_url (strcfg, ns, strurl, _hook);
+}
+
+void
+test_list_success_count (const char *strcfg, const char *ns,
+		const char *strurl, unsigned int count,
+		const char *prefix, const char *marker, const char *end,
+		unsigned int max)
+{
+	size_t count_items = 0;
+	int _hook_item (void *ctx, const struct oio_sds_list_item_s *item) {
+		(void) ctx, (void) item;
+		GRID_DEBUG("item %s", item->name);
+		count_items ++;
+		return 0;
+	}
+	void _hook (struct oio_sds_s *sds, struct oio_url_s *url) {
+		struct oio_sds_list_param_s param;
+		struct oio_sds_list_listener_s listener;
+		struct oio_error_s *err = NULL;
+
+		memset (&param, 0, sizeof(param));
+		memset (&listener, 0, sizeof(listener));
+		param.url = url;
+		param.prefix = prefix;
+		param.marker = marker;
+		param.end = end;
+		param.max_items = max;
+		listener.on_item = _hook_item;
+
+		err = oio_sds_list (sds, &param, &listener);
+		g_assert_no_error ((GError*)err);
+	}
+	_test_wrap_url (strcfg, ns, strurl, _hook);
+	g_assert_cmpuint (count_items, ==, count);
 }
 

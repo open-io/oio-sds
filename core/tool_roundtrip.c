@@ -33,6 +33,15 @@ static const char random_chars[] =
 
 static GRand *prng = NULL;
 
+static int
+_on_item (void *ctx, const struct oio_sds_list_item_s *item)
+{
+	(void) ctx;
+	g_print ("Listed item %s, size %"G_GSIZE_FORMAT" version %"G_GSIZE_FORMAT"\n",
+			item->name, item->size, item->version);
+	return 0;
+}
+
 static const char *
 _randomize_string (char *d, const char *chars, size_t dlen)
 {
@@ -121,6 +130,29 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 		return err;
 	}
 	GRID_INFO("Content downloaded to a buffer");
+
+	/* Prsent the container's content */
+	struct oio_sds_list_param_s params = {
+		.url = url,
+		.prefix = NULL,
+		.marker = NULL,
+		.end = NULL,
+		.delimiter = 0,
+		.flag_allversions = 0,
+		.flag_nodeleted = 0,
+	};
+	struct oio_sds_list_listener_s listener = {
+		.ctx = NULL,
+		.on_item = _on_item,
+		.on_prefix = NULL,
+		.on_bound = NULL,
+	};
+	err = oio_sds_list (client, &params, &listener);
+	if (err) {
+		g_printerr ("List error: (%d) %s\n", oio_error_code(err),
+				oio_error_message(err));
+		return err;
+	}
 
 	/* and we let the container clean, we remove the blob in the container. */
 	err = oio_sds_delete (client, url);
