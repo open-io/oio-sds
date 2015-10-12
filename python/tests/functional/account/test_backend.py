@@ -16,6 +16,7 @@ class TestAccountBackend(BaseTestCase):
         self.conn.flushdb()
 
     def tearDown(self):
+        super(TestAccountBackend, self).tearDown()
         self.conn.flushdb()
         del self.conn
 

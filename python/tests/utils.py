@@ -1,7 +1,6 @@
 from __future__ import print_function
 import sys
 import os
-import fixtures
 import json
 import testtools
 
@@ -32,5 +31,4 @@ def get_config(defaults=None):
 class BaseTestCase(testtools.TestCase):
     def setUp(self):
         super(BaseTestCase, self).setUp()
-        self.useFixture(fixtures.TempHomeDir())
         self.conf = get_config()
