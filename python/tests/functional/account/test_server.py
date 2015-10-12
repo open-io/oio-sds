@@ -6,6 +6,7 @@ from tests.utils import BaseTestCase
 
 class TestAccountServer(BaseTestCase):
     def setUp(self):
+        super(TestAccountServer, self).setUp()
         h, p = self.conf['redis'].split(':', 2)
         self.redis_host, self.redis_port = h, int(p)
         conf = {'redis_host': self.redis_host,

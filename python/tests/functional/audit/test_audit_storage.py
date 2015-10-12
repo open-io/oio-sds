@@ -14,26 +14,7 @@ from oio.blob.client import BlobClient
 
 
 class TestBlobAuditorFunctional(unittest.TestCase):
-    def __init__(self, *args, **kwargs):
-        super(TestBlobAuditorFunctional, self).__init__(*args, **kwargs)
-        self.namespace = self.conf['namespace']
-        self.account = self.conf['account']
-
-        self.chars = string.ascii_lowercase + string.ascii_uppercase +\
-            string.digits
-        self.chars_id = string.digits + 'ABCDEF'
-
-        self.rawx = 'http://' + self.conf["rawx"][0]
-
-        self.h = hashlib.new('md5')
-
-        conf = {"namespace": self.namespace}
-        self.auditor = BlobAuditorWorker(conf, get_logger(None), None)
-        self.container_c = ContainerClient(conf)
-        self.blob_c = BlobClient()
-
     def rand_generator(self, dictionary, n):
-
         return ''.join(random.choice(dictionary) for _ in range(n))
 
     class content_test(object):
@@ -51,8 +32,22 @@ class TestBlobAuditorFunctional(unittest.TestCase):
             self.md5 = md5
 
     def setUp(self):
-
         super(TestBlobAuditorFunctional, self).setUp()
+        self.namespace = self.conf['namespace']
+        self.account = self.conf['account']
+
+        self.chars = string.ascii_lowercase + string.ascii_uppercase +\
+            string.digits
+        self.chars_id = string.digits + 'ABCDEF'
+
+        self.rawx = 'http://' + self.conf["rawx"][0]
+
+        self.h = hashlib.new('md5')
+
+        conf = {"namespace": self.namespace}
+        self.auditor = BlobAuditorWorker(conf, get_logger(None), None)
+        self.container_c = ContainerClient(conf)
+        self.blob_c = BlobClient()
 
         self.ref = self.rand_generator(self.chars, 8)
 
