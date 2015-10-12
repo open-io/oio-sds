@@ -1,4 +1,3 @@
-import unittest
 import string
 import hashlib
 import random
@@ -11,9 +10,10 @@ from oio.blob.auditor import BlobAuditorWorker
 from oio.common import exceptions as exc
 from oio.container.client import ContainerClient
 from oio.blob.client import BlobClient
+from tests.utils import BaseTestCase
 
 
-class TestBlobAuditorFunctional(unittest.TestCase):
+class TestBlobAuditorFunctional(BaseTestCase):
     def rand_generator(self, dictionary, n):
         return ''.join(random.choice(dictionary) for _ in range(n))
 
