@@ -1,29 +1,19 @@
 import json
-import unittest
 import random
 import string
 import hashlib
-import os
 
 import requests
 from requests import Request
+from tests.utils import BaseTestCase
 
 
-class TestMeta2Functional(unittest.TestCase):
-    def __init__(self, *args, **kwargs):
-        super(TestMeta2Functional, self).__init__(*args, **kwargs)
-        self._load_config()
-
-    def _load_config(self):
-        self.test_dir = os.path.expanduser('~/.oio/sds/')
-        with open(self.test_dir + 'conf/test.conf') as f:
-            self.conf = json.load(f)
+class TestMeta2Functional(BaseTestCase):
+    def setUp(self):
+        super(TestMeta2Functional, self).setUp()
         self.namespace = self.conf['namespace']
         self.proxyd = self.conf['proxyd_uri'] + "/v2.0"
         self.account = self.conf['account']
-
-        self.session = requests.session()
-
         self.chars = (string.ascii_lowercase + string.ascii_uppercase +
                       string.digits)
 
@@ -33,13 +23,11 @@ class TestMeta2Functional(unittest.TestCase):
         self.proxyd_m2 = (self.proxyd + "/m2/" + self.namespace + '/' +
                           self.account)
 
-        self.h = hashlib.new('ripemd160')
+        self.h = hashlib.new('md5')
 
         self.id_generator = lambda n: ''.join(
             random.choice(self.chars) for _ in range(n))
-
-    def setUp(self):
-        super(TestMeta2Functional, self).setUp()
+        self.session = requests.session()
 
         self.list_paths = list()
 
