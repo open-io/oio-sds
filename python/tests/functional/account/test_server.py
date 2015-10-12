@@ -1,28 +1,19 @@
-import unittest
 import json
 
-import os
-
 from oio.account.server import create_app
+from tests.utils import BaseTestCase
 
 
-class TestAccountServer(unittest.TestCase):
+class TestAccountServer(BaseTestCase):
     def setUp(self):
-        self._load_config()
+        h, p = self.conf['redis'].split(':', 2)
+        self.redis_host, self.redis_port = h, int(p)
         conf = {'redis_host': self.redis_host,
                 'redis_port': self.redis_port}
         self.account_id = 'test'
 
         self.app = create_app(conf).test_client()
         self._create_account()
-
-    def _load_config(self):
-        self.test_dir = os.path.expanduser('~/.oio/sds/')
-        with open(self.test_dir + 'conf/test.conf') as f:
-            self.conf = json.load(f)
-        redis = self.conf['redis']
-        h, p = redis.split(':', 2)
-        self.redis_host, self.redis_port = h, int(p)
 
     def _create_account(self):
         self.app.put('/v1.0/account/create',

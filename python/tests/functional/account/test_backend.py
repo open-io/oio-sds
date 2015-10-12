@@ -1,28 +1,18 @@
-import unittest
-import json
 from time import sleep, time
-
-import os
 
 import redis
 from oio.account.backend import AccountBackend
 from oio.common.utils import Timestamp
+from tests.utils import BaseTestCase
 
 
-class TestAccountBackend(unittest.TestCase):
+class TestAccountBackend(BaseTestCase):
     def setUp(self):
-        self._load_config()
+        h, p = self.conf['redis'].split(':', 2)
+        self.redis_host, self.redis_port = h, int(p)
         self.conn = redis.Redis(host=self.redis_host, port=self.redis_port,
                                 db=3)
         self.conn.flushdb()
-
-    def _load_config(self):
-        self.test_dir = os.path.expanduser('~/.oio/sds/')
-        with open(self.test_dir + 'conf/test.conf') as f:
-            self.conf = json.load(f)
-        redis = self.conf['redis']
-        h, p = redis.split(':', 2)
-        self.redis_host, self.redis_port = h, int(p)
 
     def tearDown(self):
         self.conn.flushdb()

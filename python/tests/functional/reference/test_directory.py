@@ -1,23 +1,17 @@
 import json
-import unittest
 import random
 import string
 import urlparse
 import time
-import os
 
 import requests
 
+from tests.utils import BaseTestCase
 
-class TestDirectoryFunctional(unittest.TestCase):
-    def __init__(self, *args, **kwargs):
-        super(TestDirectoryFunctional, self).__init__(*args, **kwargs)
-        self._load_config()
 
-    def _load_config(self):
-        self.test_dir = os.path.expanduser('~/.oio/sds/')
-        with open(self.test_dir + 'conf/test.conf') as f:
-            self.conf = json.load(f)
+class TestDirectoryFunctional(BaseTestCase):
+    def setUp(self):
+        super(TestDirectoryFunctional, self).setUp()
         self.namespace = self.conf['namespace']
         self.proxyd_uri = self.conf['proxyd_uri'] + "/v2.0/dir/"
         self.proxyd_uri2 = self.conf['proxyd_uri'] + "/v2.0/cs/"
@@ -28,9 +22,6 @@ class TestDirectoryFunctional(unittest.TestCase):
 
         self.chars = (string.ascii_lowercase + string.ascii_uppercase +
                       string.digits)
-
-    def setUp(self):
-        super(TestDirectoryFunctional, self).setUp()
 
         self.address = "{0}{1}/{2}".format(self.proxyd_uri, self.namespace,
                                            self.account)

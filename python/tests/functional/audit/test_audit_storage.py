@@ -1,5 +1,4 @@
 import unittest
-import json
 import string
 import hashlib
 import random
@@ -17,13 +16,6 @@ from oio.blob.client import BlobClient
 class TestBlobAuditorFunctional(unittest.TestCase):
     def __init__(self, *args, **kwargs):
         super(TestBlobAuditorFunctional, self).__init__(*args, **kwargs)
-        self._load_config()
-
-    def _load_config(self):
-
-        self.test_dir = os.path.expanduser('~/.oio/sds/')
-        with open(self.test_dir + 'conf/test.conf') as f:
-            self.conf = json.load(f)
         self.namespace = self.conf['namespace']
         self.account = self.conf['account']
 
