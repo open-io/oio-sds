@@ -1,6 +1,5 @@
 import unittest
 import json
-from ConfigParser import SafeConfigParser
 
 import os
 
@@ -18,13 +17,12 @@ class TestAccountServer(unittest.TestCase):
         self._create_account()
 
     def _load_config(self):
-        default_conf_path = os.path.expanduser('~/.oio/sds/conf/test.conf')
-        config_file = os.environ.get('SDS_TEST_CONFIG_FILE',
-                                     default_conf_path)
-        config = SafeConfigParser()
-        config.read(config_file)
-        self.redis_host = config.get('func_test', 'redis_host')
-        self.redis_port = config.get('func_test', 'redis_port')
+        self.test_dir = os.path.expanduser('~/.oio/sds/')
+        with open(self.test_dir + 'conf/test.conf') as f:
+            self.conf = json.load(f)
+        redis = self.conf['redis']
+        h, p = redis.split(':', 2)
+        self.redis_host, self.redis_port = h, int(p)
 
     def _create_account(self):
         self.app.put('/v1.0/account/create',

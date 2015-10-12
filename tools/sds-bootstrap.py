@@ -592,7 +592,6 @@ def generate (ns, ip, options={}):
 
 	# redis
 	if options.ALLOW_REDIS is not None:
-		env['PORT'] = port_proxy
 		env['SRVNUM'] = 1
 		mkdir_noerror(DATADIR + '/' + str(env['NS']) + '-' + 'redis' + '-' + str(env['SRVNUM']))
 		with open(CFGDIR + '/' + ns + '-redis-'+ str(env['SRVNUM']) +'.conf', 'w+') as f:
@@ -629,24 +628,19 @@ def generate (ns, ip, options={}):
 		tpl = Template(template_agent)
 		f.write(tpl.safe_substitute(env))
 
-        # Test agent configuration
-        listing = {}
-        with open(CFGDIR + '/' + 'test.conf', 'w+') as f:
-                listing["namespace"] = ns
-                listing["account"] = 'test_account'
-                listing["account_addr"] = [str(ip) + ":" + str(port_account)]
-                listing["proxyd_uri"] = "http://" + str(ip) + ":" + str(port_proxy)
-                listing["meta0"] = [str(ip) + ':' + str(m[3]) for m in services
-                                    if
-                                    m[0] == 'meta0']
-                listing["meta1"] = [str(ip) + ':' + str(m[3]) for m in services
-                                    if
-                                    m[0] == 'meta1']
-                listing["meta2"] = [str(ip) + ':' + str(m[3]) for m in services
-                                    if
-                                    m[0] == 'meta2']
-                listing["rawx"] = [str(ip) + ':' + str(p[1]) for p in rawx]
-                f.write(json.dumps(listing))
+	# Test agent configuration
+	listing = {}
+	listing["namespace"] = ns
+	listing["account"] = 'test_account'
+	listing["account_addr"] = [str(ip) + ":" + str(port_account)]
+	listing["proxyd_uri"] = "http://" + str(ip) + ":" + str(port_proxy)
+	listing["meta0"] = [str(ip) + ':' + str(m[3]) for m in services if m[0] == 'meta0']
+	listing["meta1"] = [str(ip) + ':' + str(m[3]) for m in services if m[0] == 'meta1']
+	listing["meta2"] = [str(ip) + ':' + str(m[3]) for m in services if m[0] == 'meta2']
+	listing["rawx"] = [str(ip) + ':' + str(p[1]) for p in rawx]
+	listing["redis"] = str(ip) + ':' + str(env['PORT_REDIS'])
+	with open(CFGDIR + '/' + 'test.conf', 'w+') as f:
+		f.write(json.dumps(listing))
 
 def main ():
 	from optparse import OptionParser as OptionParser
