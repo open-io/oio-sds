@@ -1,5 +1,5 @@
 /*
-OpenIO SDS client
+OpenIO SDS core library
 Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
@@ -19,10 +19,17 @@ License along with this library.
 #ifndef OIO_SDS__sdk__http_internals_h
 # define OIO_SDS__sdk__http_internals_h 1
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 # ifndef  OIOSDS_http_agent
 #  define OIOSDS_http_agent "OpenIO-SDS/SDK-2.0"
 # endif
 
 CURL * _curl_get_handle (void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /*OIO_SDS__sdk__http_internals_h*/

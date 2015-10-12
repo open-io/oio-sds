@@ -1,5 +1,5 @@
 /*
-OpenIO SDS metautils
+OpenIO SDS core library
 Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
@@ -19,6 +19,66 @@ License along with this library.
 #include <glib.h>
 #include "oio_core.h"
 #include "internals.h"
+
+static void
+test_reuse (void)
+{
+	gchar *s0 = g_strdup ("A"), *s1 = g_strdup ("B");
+	oio_str_reuse (&s0, s1);
+	g_assert (s0 == s1);
+
+	oio_str_clean (&s1);
+	g_assert (s1 == NULL);
+}
+
+static void
+test_replace (void)
+{
+	gchar *s0 = g_strdup ("A");
+	oio_str_replace (&s0, "B");
+	g_assert (!strcmp(s0, "B"));
+
+	oio_str_clean (&s0);
+	g_assert (s0 == NULL);
+}
+
+static void
+test_is_hexa (void)
+{
+	/* test the length */
+	g_assert (!oio_str_ishexa1 (""));
+	g_assert (!oio_str_ishexa1 ("A"));
+	g_assert ( oio_str_ishexa1 ("AA"));
+	g_assert (!oio_str_ishexa1 ("AAA"));
+
+	/* test invalid characters */
+	g_assert (!oio_str_ishexa1 ("AG"));
+	g_assert (!oio_str_ishexa1 ("0xAA"));
+
+	g_assert (!oio_str_ishexa ("", 0));
+	g_assert (!oio_str_ishexa ("A", 1));
+	g_assert ( oio_str_ishexa ("AA", 2));
+}
+
+static void
+test_bin (void)
+{
+	guint8 buf[64];
+	gchar str[129];
+
+	g_assert_false (oio_str_hex2bin ("0", buf, sizeof(buf)));
+	g_assert_false (oio_str_hex2bin ("x", buf, sizeof(buf)));
+
+	g_assert_false (oio_str_hex2bin ("0x", buf, sizeof(buf)));
+
+	g_assert_true  (oio_str_hex2bin ("00", buf, 1));
+	g_assert_false (oio_str_hex2bin ("0000", buf, 1));
+
+	g_assert_true (oio_str_hex2bin ("00", buf, sizeof(buf)));
+	g_assert_true (buf[0] == 0);
+	g_assert (2 == oio_str_bin2hex (buf, 1, str, sizeof(str)));
+	g_assert (!g_ascii_strcasecmp(str, "00"));
+}
 
 static void
 test_autocontainer (void)
@@ -53,7 +113,11 @@ main(int argc, char **argv)
 	oio_log_init_level(GRID_LOGLVL_INFO);
 	g_log_set_default_handler(oio_log_stderr, NULL);
 
-	g_test_add_func("/core/autocontainer", test_autocontainer);
+	g_test_add_func("/core/str/reuse", test_reuse);
+	g_test_add_func("/core/str/replace", test_replace);
+	g_test_add_func("/core/str/ishexa", test_is_hexa);
+	g_test_add_func("/core/str/bin", test_bin);
+	g_test_add_func("/core/str/autocontainer", test_autocontainer);
 	return g_test_run();
 }
 

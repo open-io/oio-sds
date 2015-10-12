@@ -1,5 +1,5 @@
 /*
-OpenIO SDS oio core 
+OpenIO SDS core library
 Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
@@ -18,6 +18,11 @@ License along with this library.
 
 #ifndef OIO_SDS__core__oioext_h
 # define OIO_SDS__core__oioext_h 1
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 # include <glib.h>
 
 /** Shuffles the single linked list. The original <src> MUST NOT be reused. */
@@ -47,4 +52,7 @@ void oio_ext_set_random_reqid (void);
 /** Get a request-id stored in the thread-local, or NULL if not set */
 const char * oio_ext_get_reqid (void);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /*OIO_SDS__core__oioext_h*/

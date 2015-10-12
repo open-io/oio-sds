@@ -1345,6 +1345,30 @@ action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 }
 
 enum http_rc_e
+action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
+{
+	if (!jargs || !json_object_is_type (jargs, json_type_string))
+		return _reply_m2_error (args, NEWERROR(CODE_BAD_REQUEST, "Expected: content id (string)"));
+
+	const char *hex = json_object_get_string (jargs);
+	gsize len = 1 + strlen(hex) / 2;
+	guint8 bin[len];
+	if (!oio_str_hex2bin (hex, bin, len))
+		return _reply_m2_error (args, NEWERROR(CODE_BAD_REQUEST, "Expected: content id (hexa)"));
+	GBytes *id = g_bytes_new_static (bin, len);
+
+	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		return m2v2_remote_execute_LINK (m2->host, args->url, id);
+	}
+	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	g_bytes_unref (id);
+	if (err && CODE_IS_NOTFOUND(err->code))
+		return _reply_forbidden_error (args, err);
+	return _reply_m2_error (args, err);
+}
+
+enum http_rc_e
 action_m2_content_stgpol (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type (jargs, json_type_string))
@@ -1459,6 +1483,7 @@ action_m2_content_action (struct req_args_s *args)
 		{"Beans", action_m2_content_beans},
 		{"Spare", action_m2_content_spare},
 		{"Touch", action_m2_content_touch},
+		{"Link", action_m2_content_link},
 		{"SetStoragePolicy", action_m2_content_stgpol},
 		{"GetProperties", action_m2_content_propget},
 		{"SetProperties", action_m2_content_propset},
@@ -1630,6 +1655,12 @@ enum http_rc_e
 action_content_touch (struct req_args_s *args)
 {
     return rest_action (args, action_m2_content_touch);
+}
+
+enum http_rc_e
+action_content_link (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_content_link);
 }
 
 enum http_rc_e

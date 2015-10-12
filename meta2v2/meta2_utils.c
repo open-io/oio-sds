@@ -1496,6 +1496,46 @@ m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 	return err;
 }
 
+/* Link -------------------------------------------------------------------- */
+
+GError*
+m2db_link_content(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+		GBytes *content_id)
+{
+	GError *err = NULL;
+
+	/* check the content exists */
+	GPtrArray *tmp = g_ptr_array_new ();
+	GVariant *params[2] = {NULL, NULL};
+	params[0] = _gb_to_gvariant(content_id);
+	err = CONTENTS_HEADERS_load (sq3->db, " id = ? LIMIT 1", params, _bean_buffer_cb, tmp);
+	metautils_gvariant_unrefv(params);
+	if (err) goto out;
+
+	if (tmp->len <= 0) {
+		err = NEWERROR (CODE_CONTENT_NOTFOUND, "no such content");
+		goto out;
+	}
+
+	/* get the latest alias */
+	gint64 version = 0;
+	err = m2db_get_alias_version (sq3, url, &version);
+	if (err) goto out;
+
+	/* make a new link */
+	struct bean_ALIASES_s *a = _bean_create_child (tmp->pdata[0], "aliases");
+	ALIASES_set2_alias (a, hc_url_get(url, HCURL_PATH));
+	ALIASES_set_version (a, version + 1);
+	ALIASES_set_container_version (a, 1+m2db_get_version(sq3));
+	ALIASES_set2_mdsys (a, "");
+	ALIASES_set_ctime (a, time(0));
+	ALIASES_set_deleted (a, FALSE);
+	err = _db_save_bean (sq3->db, a);
+out:
+	_bean_cleanv2 (tmp);
+	return err;
+}
+
 /* ----- MetaInformations update (stgpol, mdsys, etc...) ----- */
 
 struct update_alias_header_ctx_s {

@@ -87,6 +87,7 @@ enum http_rc_e action_content_prop_del (struct req_args_s *args);
 enum http_rc_e action_content_touch (struct req_args_s *args);
 enum http_rc_e action_content_spare (struct req_args_s *args);
 enum http_rc_e action_content_copy (struct req_args_s *args);
+enum http_rc_e action_content_link (struct req_args_s *args);
 
 // Admin
 
@@ -170,6 +171,7 @@ enum http_rc_e action_m2_content_copy (struct req_args_s *args);
 enum http_rc_e action_m2_content_delete (struct req_args_s *args);
 enum http_rc_e action_m2_content_beans (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_m2_content_touch (struct req_args_s *args, json_object *jargs);
+enum http_rc_e action_m2_content_link (struct req_args_s *args, struct json_object *jargs);
 enum http_rc_e action_m2_content_propget (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_m2_content_propset (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_m2_content_propdel (struct req_args_s *args, json_object *jargs);

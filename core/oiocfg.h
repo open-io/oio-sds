@@ -19,6 +19,11 @@ License along with this library.
 
 #ifndef OIO_SDS__core__config_h
 # define OIO_SDS__core__config_h 1
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 # include <glib.h>
 
 #ifndef PROXYD_PREFIX
@@ -87,4 +92,7 @@ gchar * oio_cfg_get_proxy_directory (const char *ns);
  * on a proxy capable of everything */
 gchar * oio_cfg_get_proxy_containers (const char *ns);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /*OIO_SDS__core__config_h*/

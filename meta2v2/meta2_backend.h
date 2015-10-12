@@ -156,8 +156,14 @@ GError* meta2_backend_force_alias(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, GSList *in,
 		 GSList **out_deleted, GSList **out_added);
 
+/* TODO manage properties */
+GError* meta2_backend_link_content (struct meta2_backend_s *m2b,
+		struct hc_url_s *url, GBytes *content_id);
+
 GError* meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0);
+
+/* Properties -------------------------------------------------------------- */
 
 GError* meta2_backend_get_properties(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0);
@@ -178,6 +184,10 @@ GError* meta2_backend_content_from_chunkid (struct meta2_backend_s *m2b,
 		m2_onbean_cb cb, gpointer u0);
 
 GError* meta2_backend_content_from_contenthash (struct meta2_backend_s *m2b,
+		struct hc_url_s *url, GBytes *h,
+		m2_onbean_cb cb, gpointer u0);
+
+GError* meta2_backend_content_from_contentid (struct meta2_backend_s *m2b,
 		struct hc_url_s *url, GBytes *h,
 		m2_onbean_cb cb, gpointer u0);
 

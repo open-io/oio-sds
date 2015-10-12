@@ -1,7 +1,6 @@
 /*
-OpenIO SDS cluster
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+OpenIO SDS core library
+Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -23,9 +22,12 @@ License along with this library.
 #include <glib.h>
 
 #include "oio_core.h"
+#include "internals.h"
+
+static struct oio_cfg_handle_s *oio_cfg_handle_DEFAULT = NULL;
 
 static gchar *
-_get_key(const gchar *ns, const gchar *what)
+_build_key(const gchar *ns, const gchar *what)
 {
 	gchar *k, *result;
 
@@ -44,7 +46,7 @@ config_load_ns(GHashTable *h, GKeyFile *kf, const gchar *ns)
 	if (keys) {
 		for (pk=keys; *pk ;pk++) {
 			v = g_key_file_get_string(kf, ns, *pk, NULL);
-			g_hash_table_insert(h, _get_key(ns, *pk), v);
+			g_hash_table_insert(h, _build_key(ns, *pk), v);
 		}
 		g_strfreev(keys);
 	}
@@ -91,6 +93,9 @@ config_load_dir(GHashTable *ht, const gchar *dirname, GDir *gdir)
 gchar **
 oio_cfg_list_ns(void)
 {
+	if (oio_cfg_handle_DEFAULT)
+		return oio_cfg_handle_namespaces (oio_cfg_handle_DEFAULT);
+
 	GHashTableIter iter;
 	gpointer k, v;
 	GHashTable *ht = oio_cfg_parse();
@@ -141,11 +146,14 @@ oio_cfg_parse(void)
 gchar *
 oio_cfg_get_value(const gchar *ns, const gchar *what)
 {
+	if (oio_cfg_handle_DEFAULT)
+		return oio_cfg_handle_get (oio_cfg_handle_DEFAULT, ns, what);
+
 	if (!ns || !strcasecmp(ns, "default"))
 		ns = "default";
 
 	GHashTable *ht;
-	gchar *key = _get_key(ns, what);
+	gchar *key = _build_key(ns, what);
 	gchar *value = NULL;
 	if (NULL != (ht = oio_cfg_parse())) {
 		value = g_hash_table_lookup(ht, key);
@@ -176,5 +184,45 @@ oio_cfg_get_proxy_containers (const char *ns)
 {
 	gchar *v = oio_cfg_get_value(ns, OIO_CFG_PROXY_CONTAINERS);
 	return v ?: oio_cfg_get_proxy(ns);
+}
+
+/* -------------------------------------------------------------------------- */
+
+/* TODO duplicated from metautils/lib/gridd_client.h */
+#define VTABLE_CHECK(self,T,F) do { \
+	g_assert(self != NULL); \
+	g_assert(((T)self)->vtable != NULL); \
+	g_assert(((T)self)->vtable-> F != NULL); \
+} while (0)
+
+/* TODO duplicated from metautils/lib/gridd_client.h */
+#define VTABLE_CALL(self,T,F) \
+	VTABLE_CHECK(self,T,F); \
+	return ((T)self)->vtable-> F
+
+#define CFG_CALL(self,F) VTABLE_CALL(self,struct oio_cfg_handle_abstract_s*,F)
+
+void
+oio_cfg_handle_clean (struct oio_cfg_handle_s *self)
+{
+	CFG_CALL(self,clean)(self);
+}
+
+gchar **
+oio_cfg_handle_namespaces (struct oio_cfg_handle_s *self)
+{
+	CFG_CALL(self,namespaces)(self);
+}
+
+gchar *
+oio_cfg_handle_get (struct oio_cfg_handle_s *self, const char *ns, const char *k)
+{
+	CFG_CALL(self,get)(self,ns,k);
+}
+
+void
+oio_cfg_set_handle (struct oio_cfg_handle_s *self)
+{
+	oio_cfg_handle_DEFAULT = self;
 }
 

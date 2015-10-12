@@ -26,20 +26,25 @@ set_target_properties(oiosds PROPERTIES
 		PUBLIC_HEADER "oio_sds.h"
 		SOVERSION ${ABI_VERSION})
 
+add_library(oiosds_test SHARED testlib_sds.c)
+target_link_libraries(oiosds_test oiosds)
+set_target_properties(oiosds_test PROPERTIES
+		SOVERSION ${ABI_VERSION})
+
 add_executable(test_oio_str test_str.c)
 target_link_libraries(test_oio_str oiocore)
 
 add_executable(test_oio_url test_url.c)
 target_link_libraries(test_oio_url oiocore)
 
-add_executable(test_roundtrip test_roundtrip.c)
-target_link_libraries(test_roundtrip oiosds)
+add_executable(tool_roundtrip tool_roundtrip.c)
+target_link_libraries(tool_roundtrip oiosds)
 
-add_executable(test_config test_config.c)
-target_link_libraries(test_config oiosds)
+add_executable(tool_config tool_config.c)
+target_link_libraries(tool_config oiosds)
 
-add_executable(test_ns test_ns.c)
-target_link_libraries(test_ns oiosds ${CURL_LIBRARIES})
+add_executable(tool_ns tool_ns.c)
+target_link_libraries(tool_ns oiosds ${CURL_LIBRARIES})
 
 install(FILES
 		oiocfg.h
@@ -53,6 +58,7 @@ install(TARGETS oiocore oiosds
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		PUBLIC_HEADER DESTINATION include)
 
-add_test(NAME metautils/url COMMAND test_hc_url)
+add_test(NAME metautils/url COMMAND test_oio_url)
 add_test(NAME core/str COMMAND test_oio_str)
+add_test(NAME core/sds COMMAND /usr/bin/env python ${CMAKE_CURRENT_SOURCE_DIR}/test_oiosds.py)
 

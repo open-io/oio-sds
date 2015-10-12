@@ -1,5 +1,5 @@
 /*
-OpenIO SDS oio core
+OpenIO SDS core library
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
 Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
@@ -97,9 +97,8 @@ oio_requri_clear (struct oio_requri_s *uri)
 static int
 _check_parsed_url (struct oio_url_s *u)
 {
-	if (!u->ns && !u->user) return 0;
-	if (u->ns && !u->ns[0]) return 0;
-	if (u->user && !u->user[0]) return 0;
+	if (!u->ns || !u->ns[0]) return 0;
+	if (!u->user || !u->user[0]) return 0;
 	if (u->path && !u->path[0]) return 0;
 	return 1;
 }

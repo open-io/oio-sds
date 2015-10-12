@@ -1,5 +1,5 @@
 /*
-OpenIO SDS client
+OpenIO SDS core library
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
 Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
@@ -19,6 +19,11 @@ License along with this library.
 
 #ifndef OIO_SDS__sdk__http_put_h
 # define OIO_SDS__sdk__http_put_h 1
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 # include <glib.h>
 
 struct http_put_s;
@@ -182,4 +187,7 @@ void http_put_clear_dests(struct http_put_s *p);
  */
 void http_put_destroy(struct http_put_s *p);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /*OIO_SDS__sdk__http_put_h*/
