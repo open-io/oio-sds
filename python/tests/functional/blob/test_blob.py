@@ -46,13 +46,13 @@ class TestBlobFunctional(BaseTestCase):
 
         self.h = hashlib.new('md5')
 
-        self.content_data = self.rand_generator(self.chars, 24)
-        self.url_rand = self.rand_generator(self.chars_id, 64)
+        self.content_data = rand_generator(self.chars, 24)
+        self.url_rand = rand_generator(self.chars_id, 64)
         self.h.update(self.content_data)
         self.hash_rand = self.h.hexdigest().lower()
 
         self.content = FakeContent(
-            self.rand_generator(self.chars, 6), len(self.content_data),
+            rand_generator(self.chars, 6), len(self.content_data),
             self.url_rand, 1)
         self.chunk = FakeChunk(
             self.content.size, self.url_rand, 0, self.hash_rand)
@@ -92,7 +92,7 @@ class TestBlobFunctional(BaseTestCase):
         if length == 0:
             self.content_data = ""
         else:
-            self.content_data = self.rand_generator(self.chars, length)
+            self.content_data = rand_generator(self.chars, length)
 
         self.content.size = length
         self.chunk.size = length
@@ -120,7 +120,7 @@ class TestBlobFunctional(BaseTestCase):
         if length == 0:
             self.content_data = ""
         else:
-            self.content_data = self.rand_generator('data', length)
+            self.content_data = rand_generator('data', length)
 
         gzip.GzipFile(fileobj=tmpfile, mode="wb").write(self.content_data)
         tmpfile.seek(0, 0)
