@@ -1,27 +1,39 @@
-import unittest
-import json
 import string
 import random
 import hashlib
 import gzip
-import StringIO
-import tempfile
 import os
 
 import requests
 
 import xattr
 
+from tests.utils import BaseTestCase
 
-class TestConscienceFunctional(unittest.TestCase):
-    def __init__(self, *args, **kwargs):
-        super(TestConscienceFunctional, self).__init__(*args, **kwargs)
-        self._load_config()
 
-    def _load_config(self):
-        self.test_dir = os.path.expanduser('~/.oio/sds/')
-        with open(self.test_dir + 'conf/test.conf') as f:
-            self.conf = json.load(f)
+class FakeContent(object):
+    def __init__(self, path, size, id_r, nb_chunks):
+        self.path = path
+        self.size = size
+        self.id_container = id_r
+        self.nb_chunks = nb_chunks
+
+
+class FakeChunk(object):
+    def __init__(self, size, id_r, pos, md5):
+        self.size = size
+        self.chunk_id = id_r
+        self.pos = pos
+        self.md5 = md5
+
+
+def rand_generator(self, dictionary, n):
+    return ''.join(random.choice(dictionary) for _ in range(n))
+
+
+class TestBlobFunctional(BaseTestCase):
+    def setUp(self):
+        super(TestBlobFunctional, self).setUp()
         self.namespace = self.conf['namespace']
 
         self.rawx = 'http://' + self.conf["rawx"][0] + '/'
@@ -34,38 +46,16 @@ class TestConscienceFunctional(unittest.TestCase):
 
         self.h = hashlib.new('md5')
 
-    def rand_generator(self, dictionary, n):
-
-        return ''.join(random.choice(dictionary) for _ in range(n))
-
-    class fakeContent(object):
-        def __init__(self, path, size, id_r, nb_chunks):
-            self.path = path
-            self.size = size
-            self.id_container = id_r
-            self.nb_chunks = nb_chunks
-
-    class fakeChunk(object):
-        def __init__(self, size, id_r, pos, md5):
-            self.size = size
-            self.chunk_id = id_r
-            self.pos = pos
-            self.md5 = md5
-
-    def setUp(self):
-
-        super(TestConscienceFunctional, self).setUp()
-
         self.content_data = self.rand_generator(self.chars, 24)
         self.url_rand = self.rand_generator(self.chars_id, 64)
         self.h.update(self.content_data)
         self.hash_rand = self.h.hexdigest().lower()
 
-        self.content = self.fakeContent(self.rand_generator(self.chars, 6),
-                                        len(self.content_data), self.url_rand,
-                                        1)
-        self.chunk = self.fakeChunk(self.content.size, self.url_rand, 0,
-                                    self.hash_rand)
+        self.content = FakeContent(
+            self.rand_generator(self.chars, 6), len(self.content_data),
+            self.url_rand, 1)
+        self.chunk = FakeChunk(
+            self.content.size, self.url_rand, 0, self.hash_rand)
 
         self.headers_put = {'X-oio-chunk-meta-content-path': self.content.path,
                             'X-oio-chunk-meta-content-size': self.content.size,
@@ -82,8 +72,7 @@ class TestConscienceFunctional(unittest.TestCase):
                            self.chunk.chunk_id)
 
     def tearDown(self):
-
-        super(TestConscienceFunctional, self).tearDown()
+        super(TestBlobFunctional, self).tearDown()
         try:
             os.remove(self.chunk_path)
         except Exception:
@@ -157,15 +146,6 @@ class TestConscienceFunctional(unittest.TestCase):
         self.chunk_path = (self.test_dir + 'data/NS-rawx-1/' +
                            self.chunk.chunk_id[0:2] + "/" +
                            self.chunk.chunk_id)
-
-    def prepare_compressed(self, length):
-
-        with tempfile.NamedTemporaryFile(delete=True) as gzfile:
-            self.setup_compressed(gzfile, 24)
-
-            resp = self.session.put(self.rawx + self.chunk.chunk_id,
-                                    data=gzfile, headers=self.headers_put)
-            self.assertEqual(resp.status_code, 201)
 
     def init_chunk(self):
         resp = self.session.put(self.rawx + self.chunk.chunk_id,
@@ -301,53 +281,6 @@ class TestConscienceFunctional(unittest.TestCase):
                                 headers={'Range': 'bytes=5-10005'})
         self.assertEqual(resp.status_code, 206)
         self.assertEqual(resp.content, self.content_data[5:10006])
-
-    def test_put_compress(self):
-
-        with tempfile.NamedTemporaryFile(delete=True) as gzfile:
-            self.setup_compressed(gzfile, 24)
-
-            resp = self.session.put(self.rawx + self.chunk.chunk_id,
-                                    data=gzfile, headers=self.headers_put)
-            self.assertEqual(resp.status_code, 201)
-
-        with open(self.chunk_path) as f:
-            data_to_decode = StringIO.StringIO(f.read())
-        self.assertEqual(gzip.GzipFile(fileobj=data_to_decode).read(),
-                         self.content_data)
-
-    def test_get_compress(self):
-
-        self.prepare_compressed(24)
-
-        resp = self.session.get(self.rawx + self.chunk.chunk_id,
-                                headers={'Accept-encoding': 'gzip'})
-        self.assertEqual(resp.status_code, 200)
-        data_to_decode = StringIO.StringIO(resp.content)
-        self.assertEqual(gzip.GzipFile(fileobj=data_to_decode).read(),
-                         self.content_data)
-
-    def test_get_compress_empty(self):
-
-        self.prepare_compressed(0)
-
-        resp = self.session.get(self.rawx + self.chunk.chunk_id,
-                                headers={'Accept-encoding': 'gzip'})
-        self.assertEqual(resp.status_code, 200)
-        data_to_decode = StringIO.StringIO(resp.content)
-        self.assertEqual(gzip.GzipFile(fileobj=data_to_decode).read(),
-                         self.content_data)
-
-    def test_get_compress_1M(self):
-
-        self.prepare_compressed(1310720)
-
-        resp = self.session.get(self.rawx + self.chunk.chunk_id,
-                                headers={'Accept-encoding': 'gzip'})
-        self.assertEqual(resp.status_code, 200)
-        data_to_decode = StringIO.StringIO(resp.content)
-        self.assertEqual(gzip.GzipFile(fileobj=data_to_decode).read(),
-                         self.content_data)
 
     def test_get_attr(self):
 
