@@ -140,5 +140,3 @@ install(TARGETS meta2v2 meta2v2remote meta2_server meta2v2utils meta2v2lbutils
 		RUNTIME DESTINATION bin)
 
 add_test(NAME meta2/backend COMMAND test_meta2_backend)
-add_test(NAME meta2/converter COMMAND test_meta2_type_converter)
-
