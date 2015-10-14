@@ -85,7 +85,6 @@ install(TARGETS
 
 add_test(NAME client/lib/inc COMMAND test_include)
 add_test(NAME client/lib/url COMMAND test_url)
-add_test(NAME client/metacd/get_container COMMAND test_metacd)
 add_test(NAME client/lib/ref COMMAND test_references)
 add_test(NAME client/lib/ser COMMAND test_services)
 add_test(NAME client/lib/prop COMMAND test_properties)
