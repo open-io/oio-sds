@@ -621,6 +621,7 @@ def generate (ns, ip, options={}):
 	listing["meta2"] = [str(ip) + ':' + str(m[3]) for m in services if m[0] == 'meta2']
 	listing["rawx"] = [str(ip) + ':' + str(p[1]) for p in rawx]
 	listing["redis"] = str(ip) + ':' + str(env['PORT_REDIS'])
+        listing["sds_path"] = SDSDIR
 	with open(CFGDIR + '/' + 'test.conf', 'w+') as f:
 		f.write(json.dumps(listing))
 

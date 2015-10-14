@@ -27,7 +27,7 @@ class FakeChunk(object):
         self.md5 = md5
 
 
-def rand_generator(self, dictionary, n):
+def rand_generator(dictionary, n):
     return ''.join(random.choice(dictionary) for _ in range(n))
 
 
@@ -35,6 +35,7 @@ class TestBlobFunctional(BaseTestCase):
     def setUp(self):
         super(TestBlobFunctional, self).setUp()
         self.namespace = self.conf['namespace']
+        self.test_dir = self.conf['sds_path']
 
         self.rawx = 'http://' + self.conf["rawx"][0] + '/'
         self.session = requests.session()
@@ -67,7 +68,7 @@ class TestBlobFunctional(BaseTestCase):
                             'X-oio-chunk-meta-chunk-size': self.chunk.size,
                             'X-oio-chunk-meta-chunk-pos': self.chunk.pos,
                             'X-oio-chunk-meta-chunk-hash': self.hash_rand}
-        self.chunk_path = (self.test_dir + 'data/NS-rawx-1/' +
+        self.chunk_path = (self.test_dir + '/data/NS-rawx-1/' +
                            self.chunk.chunk_id[0:2] + "/" +
                            self.chunk.chunk_id)
 
@@ -80,12 +81,9 @@ class TestBlobFunctional(BaseTestCase):
 
         try:
             os.removedirs(
-                self.test_dir + 'data/NS-rawx-1/' + self.chunk.chunk_id[0:2])
+                self.test_dir + '/data/NS-rawx-1/' + self.chunk.chunk_id[0:2])
         except Exception:
             pass
-
-        if not (os.path.isdir(self.test_dir + 'data/NS-rawx-1/')):
-            os.makedirs(self.test_dir + 'data/NS-rawx-1/')
 
     def setup_again(self, length):
 
@@ -111,7 +109,7 @@ class TestBlobFunctional(BaseTestCase):
                             'X-oio-chunk-meta-chunk-size': self.chunk.size,
                             'X-oio-chunk-meta-chunk-pos': self.chunk.pos,
                             'X-oio-chunk-meta-chunk-hash': self.hash_rand}
-        self.chunk_path = (self.test_dir + 'data/NS-rawx-1/' +
+        self.chunk_path = (self.test_dir + '/data/NS-rawx-1/' +
                            self.chunk.chunk_id[0:2] + "/" +
                            self.chunk.chunk_id)
 
@@ -143,7 +141,7 @@ class TestBlobFunctional(BaseTestCase):
                             'X-oio-chunk-meta-chunk-pos': self.chunk.pos,
                             'X-oio-chunk-meta-chunk-hash': self.hash_rand,
                             'Transfer_encoding': 'gzip'}
-        self.chunk_path = (self.test_dir + 'data/NS-rawx-1/' +
+        self.chunk_path = (self.test_dir + '/data/NS-rawx-1/' +
                            self.chunk.chunk_id[0:2] + "/" +
                            self.chunk.chunk_id)
 
@@ -382,5 +380,5 @@ class TestBlobFunctional(BaseTestCase):
         self.assertEqual(resp.status_code, 204)
 
         resp = os.listdir(
-            self.test_dir + 'data/NS-rawx-1/' + self.chunk.chunk_id[0:2])
+            self.test_dir + '/data/NS-rawx-1/' + self.chunk.chunk_id[0:2])
         self.assertEqual(resp, [])
