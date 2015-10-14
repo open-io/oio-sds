@@ -71,7 +71,7 @@ _curl_get_handle_proxy (struct oio_sds_s *sds)
 }
 
 static void
-_append (GString *to, struct oio_url_s *url, int what)
+_append_to_url (GString *to, struct oio_url_s *url, int what)
 {
 	const char *original = oio_url_get (url, what);
 	if (!original) {
@@ -104,10 +104,37 @@ _curl_set_url_content (struct oio_url_s *u)
 	}
 
 	g_string_append_printf (hu, "/%s/m2", PROXYD_PREFIX2);
-	_append (hu, u, OIOURL_NS);
-	_append (hu, u, OIOURL_ACCOUNT);
-	_append (hu, u, OIOURL_USER);
-	_append (hu, u, OIOURL_PATH);
+	_append_to_url (hu, u, OIOURL_NS);
+	_append_to_url (hu, u, OIOURL_ACCOUNT);
+	_append_to_url (hu, u, OIOURL_USER);
+	_append_to_url (hu, u, OIOURL_PATH);
+	return hu;
+}
+
+static GString *
+_curl_set_url_container (struct oio_url_s *u)
+{
+	GString *hu = g_string_new("http://");
+
+	const char *ns = oio_url_get (u, OIOURL_NS);
+	if (!ns) {
+		GRID_WARN ("BUG No namespace configured!");
+		g_string_append (hu, "proxy");
+	} else {
+		gchar *s = oio_cfg_get_proxy_containers (ns);
+		if (!s) {
+			GRID_WARN ("No proxy configured!");
+			g_string_append (hu, "proxy");
+		} else {
+			g_string_append (hu, s);
+			g_free (s);
+		}
+	}
+
+	g_string_append_printf (hu, "/%s/m2", PROXYD_PREFIX2);
+	_append_to_url (hu, u, OIOURL_NS);
+	_append_to_url (hu, u, OIOURL_ACCOUNT);
+	_append_to_url (hu, u, OIOURL_USER);
 	return hu;
 }
 
@@ -1263,7 +1290,6 @@ _upload_from_hook (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		struct json_tokener *tok = json_tokener_new ();
 		struct json_object *jbody = json_tokener_parse_ex (tok,
 				reply_body->str, reply_body->len);
-		json_tokener_free (tok);
 		if (!json_object_is_type(jbody, json_type_array)) {
 			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
 		} else {
@@ -1274,6 +1300,7 @@ _upload_from_hook (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 			}
 		}
 		json_object_put (jbody);
+		json_tokener_free (tok);
 	}
 
 	/* upload the beans */
@@ -1478,16 +1505,290 @@ oio_sds_upload_from_source (struct oio_sds_s *sds, struct oio_url_s *url,
 
 /* List --------------------------------------------------------------------- */
 
+static GError *
+_notify_list_prefix (struct oio_sds_list_listener_s *listener,
+		struct json_object *jitem)
+{
+	if (listener->on_prefix)
+		listener->on_prefix (listener->ctx, json_object_get_string (jitem));
+	return NULL;
+}
+
+static GError *
+_notify_list_item (struct oio_sds_list_listener_s *listener,
+		struct json_object *jitem)
+{
+	struct json_object *jn, *jh, *js, *jv;
+	struct oio_ext_json_mapping_s m[] = {
+		{"name", &jn, json_type_string, 1},
+		{"hash", &jh, json_type_string, 1},
+		{"size", &js, json_type_int, 1},
+		{"ver",  &jv, json_type_int, 1},
+		{NULL, NULL, 0, 0}
+	};
+	GError *err = oio_ext_extract_json (jitem, m);
+	if (err) {
+		g_prefix_error (&err, "Invalid item: ");
+		return err;
+	}
+
+	struct oio_sds_list_item_s item;
+	item.name = json_object_get_string (jn);
+	item.hash = json_object_get_string (jh);
+	item.size = json_object_get_int64 (js);
+	item.version = json_object_get_int64 (jv);
+	if (listener->on_item)
+		listener->on_item (listener->ctx, &item);
+	return NULL;
+}
+
+static GError *
+_notify_list_result (struct oio_sds_list_listener_s *listener,
+		struct json_object *jbody, size_t *pcount)
+{
+	struct json_object *jobjects = NULL, *jprefixes = NULL;
+	struct oio_ext_json_mapping_s m[] = {
+		{"objects",  &jobjects,  json_type_array, 1},
+		{"prefixes", &jprefixes, json_type_array, 1},
+		{NULL,NULL,0,0}
+	};
+	GError *err = oio_ext_extract_json (jbody, m);
+	if (err) {
+		g_prefix_error (&err, "Invalid body: ");
+		return err;
+	}
+
+	GRID_TRACE2 ("Found %u items, %u prefixes",
+			json_object_array_length(jobjects),
+			json_object_array_length(jprefixes));
+
+	*pcount = json_object_array_length(jobjects);
+	for (int i=*pcount; i>0 && !err ;i--) {
+		struct json_object *jitem = json_object_array_get_idx (jobjects, i-1);
+		err = _notify_list_item (listener, jitem);
+	}
+	for (int i=json_object_array_length(jprefixes); i>0 && !err ;i--) {
+		struct json_object *jitem = json_object_array_get_idx (jprefixes, i-1);
+		err = _notify_list_prefix (listener, jitem);
+	}
+	
+	return err;
+}
+
+static int
+_has_prefix_len (char **pb, size_t *plen, const char *prefix)
+{
+	char *b = *pb;
+	size_t blen = *plen;
+	if (!b)
+		return FALSE;
+	while (blen && !g_ascii_isalnum(b[blen-1]))
+		blen --;
+	if (!blen)
+		return FALSE;
+	while (*prefix) {
+		if (!(blen--) || g_ascii_tolower(*(b++)) != *(prefix++))
+			return FALSE;
+	}
+	*pb = b;
+	*plen = blen;
+	return TRUE;
+}
+
+static size_t
+_header_callback(char *b, size_t s, size_t n, void *u)
+{
+	struct oio_sds_list_listener_s *listener = u;
+	g_assert (listener != NULL);
+
+	size_t total = n*s;
+	if (!_has_prefix_len (&b, &total, "x-oio-list-"))
+		return total;
+
+	if (_has_prefix_len (&b, &total, "truncated: ")) {
+		gchar tmp[total+1];
+		memcpy (tmp, b, total);
+		tmp[total] = 0;
+		listener->out_truncated = !g_ascii_strcasecmp(tmp, "true") || !g_ascii_strcasecmp(tmp, "yes");
+	}
+	else if (_has_prefix_len (&b, &total, "next: ")) {
+		gchar tmp[total+1];
+		memcpy (tmp, b, total);
+		tmp[total] = 0;
+		listener->on_bound (listener->ctx, tmp);
+	}
+	return n*s;
+}
+
+static gchar *
+_url_build_for_list (struct oio_sds_list_param_s *param)
+{
+	gboolean first = TRUE;
+	GString *http_url = _curl_set_url_container (param->url);
+	void _append (const char *k, const char *v) {
+		if (!v) return;
+		g_string_append_printf (http_url, "%s%s=%s", first?"?":"&", k, v);
+		first = FALSE;
+	}
+	_append ("prefix", param->prefix);
+	_append ("marker", param->marker);
+	_append ("end", param->end);
+	if (param->max_items) {
+		gchar tmp[32];
+		g_snprintf (tmp, sizeof(tmp), "%"G_GSIZE_FORMAT, param->max_items);
+		_append ("max", tmp);
+	}
+	return g_string_free(http_url, FALSE);
+}
+
+static GError *
+_single_list (struct oio_sds_list_param_s *param,
+		struct oio_sds_list_listener_s *listener, CURL *h)
+{
+	CURLcode rc;
+	GError *err = NULL;
+	struct headers_s headers = {NULL,NULL};
+
+	GRID_TRACE("%s prefix %s marker %s end %s max %"G_GSIZE_FORMAT,
+		__FUNCTION__, param->prefix, param->marker, param->end,
+		param->max_items);
+
+	listener->out_count = 0;
+	listener->out_truncated = FALSE;
+	GString *reply_body = g_string_new ("");
+
+	// Query the proxy
+
+	do {
+		gchar *u = _url_build_for_list (param);
+		curl_easy_setopt (h, CURLOPT_URL, u);
+		g_free (u);
+	} while (0);
+
+	_headers_add (&headers, "Expect", "");
+	_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
+	curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
+	curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
+	curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
+	curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
+	curl_easy_setopt (h, CURLOPT_HEADERDATA, listener);
+	curl_easy_setopt (h, CURLOPT_HEADERFUNCTION, _header_callback);
+	rc = curl_easy_perform (h);
+	if (rc != CURLE_OK)
+		err = NEWERROR(0, "Proxy error (beans): (%d) %s", rc, curl_easy_strerror(rc));
+	else {
+		long code = 0;
+		rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
+		if (2 != (code/100)) {
+			err = _body_parse_error (reply_body);
+			g_prefix_error (&err, "Beans error: (%ld)", code);
+			err->code = code;
+		}
+	}
+
+	// Unpack the reply
+	if (!err) {
+		GRID_TRACE("Parsing (%"G_GSIZE_FORMAT") %s", reply_body->len, reply_body->str);
+		struct json_tokener *tok = json_tokener_new ();
+		struct json_object *jbody = json_tokener_parse_ex (tok,
+				reply_body->str, reply_body->len);
+		if (!json_object_is_type(jbody, json_type_object)) {
+			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
+		} else {
+			size_t count_items = 0;
+			if (!(err = _notify_list_result (listener, jbody, &count_items)))
+				listener->out_count = count_items;
+		}
+		json_object_put (jbody);
+		json_tokener_free (tok);
+	}
+
+	g_string_free (reply_body, TRUE);
+	_headers_clean (&headers);
+	return err;
+}
+
 struct oio_error_s *
 oio_sds_list (struct oio_sds_s *sds, struct oio_sds_list_param_s *param,
 		struct oio_sds_list_listener_s *listener)
 {
-	g_assert (sds != NULL);
-	g_assert (param != NULL);
-	g_assert (param->url != NULL);
-	g_assert (listener != NULL);
+	if (!sds || !param || !listener || !param->url)
+		return (struct oio_error_s*) NEWERROR(CODE_BAD_REQUEST, "Missing argument");
+	if (!oio_url_has_fq_container (param->url))
+		return (struct oio_error_s*) NEWERROR(CODE_BAD_REQUEST, "Partial URI");
 
-	return (struct oio_error_s*) NEWERROR(CODE_NOT_IMPLEMENTED, "NYI List not implemented");
+	GRID_DEBUG("LIST prefix %s marker %s end %s max %"G_GSIZE_FORMAT,
+		param->prefix, param->marker, param->end, param->max_items);
+
+	CURL *h = _curl_get_handle_proxy (sds);
+	
+	gchar *next = param->marker ? g_strdup (param->marker) : NULL;
+	listener->out_truncated = 0;
+	listener->out_count = 0;
+	GError *err = NULL;
+
+	for (;;) {
+		gchar *nextnext = NULL;
+		int _hook_bound (void *ctx, const char *next_marker) {
+			(void) ctx;
+			oio_str_replace (&nextnext, next_marker);
+			return 0;
+		}
+		struct oio_sds_list_listener_s l0 = {
+			.ctx = listener->ctx,
+			.on_item = listener->on_item,
+			.on_prefix = listener->on_prefix,
+			.on_bound = _hook_bound,
+			.out_count = 0,
+			.out_truncated = FALSE,
+		};
+		struct oio_sds_list_param_s p0 = *param;
+		p0.marker = next;
+		p0.max_items = param->max_items
+			? param->max_items - listener->out_count : 0;
+		
+		if (NULL != (err = _single_list (&p0, &l0, h))) {
+			oio_str_clean (&next);
+			oio_str_clean (&nextnext);
+			break;
+		}
+		listener->out_count += l0.out_count;
+		GRID_TRACE("list > %"G_GSIZE_FORMAT" (+%"G_GSIZE_FORMAT")"
+				" max=%"G_GSIZE_FORMAT"/%"G_GSIZE_FORMAT" trunc=%d next=%s",
+				listener->out_count, l0.out_count,
+				p0.max_items, param->max_items,
+				l0.out_truncated, nextnext);
+		if (!l0.out_truncated) {
+			oio_str_clean (&next);
+			oio_str_clean (&nextnext);
+			break;
+		}
+		/* truncated */
+		if (!nextnext) {
+			err = NEWERROR(CODE_PLATFORM_ERROR, "Proxy replied a truncated"
+					" list, but no end marker present");
+			oio_str_clean (&next);
+			oio_str_clean (&nextnext);
+			break;
+		}
+		oio_str_reuse (&next, nextnext);
+		nextnext = NULL;
+		/* truncated and tail known */
+		if (param->max_items && param->max_items <= listener->out_count) {
+			/* stop if we have the count */
+			listener->out_truncated = TRUE;
+			break;
+		}
+	}
+	
+	if (next) {
+		if (!err && listener->on_bound)
+			listener->on_bound (listener->ctx, next);
+		oio_str_clean (&next);
+	}
+	
+	curl_easy_cleanup (h);
+	return (struct oio_error_s*) err;
 }
 
 /* Link --------------------------------------------------------------------- */
@@ -1596,8 +1897,10 @@ oio_sds_has (struct oio_sds_s *sds, struct oio_url_s *url, int *phas)
 		long code = 0;
 		rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
 		*phas = (2 == (code/100));
-		if (!*phas && 404 != code)
-			err = NEWERROR(0, "Check error: (%ld)", code);
+		if (!*phas && 404 != code) {
+			err = _body_parse_error (reply_body);
+			g_prefix_error (&err, "Check error (%ld): ", code);
+		}
 	}
 	curl_easy_cleanup (h);
 	_headers_clean (&headers);

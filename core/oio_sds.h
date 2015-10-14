@@ -226,16 +226,29 @@ struct oio_sds_list_param_s
 	char flag_allversions : 1;
 };
 
+struct oio_sds_list_item_s
+{
+	const char *name;
+	const char *hash;
+	size_t size;
+	size_t version;
+};
+
 struct oio_sds_list_listener_s
 {
 	void *ctx;
+
 	/* called for each item listed */
-	int (*on_item) (void *ctx, const char *item);
+	int (*on_item) (void *ctx, const struct oio_sds_list_item_s *item);
+
 	/* called for each sub-prefix detected (depends on the delimiter) */
 	int (*on_prefix) (void *ctx, const char *prefix);
+
 	/* called once, with no warranty to be called before 'on_item' nor
 	 * 'on_bound' */
 	int (*on_bound) (void *ctx, const char *next_marker);
+	size_t out_count;
+	int out_truncated;
 };
 
 struct oio_error_s* oio_sds_list (struct oio_sds_s *sds,

@@ -135,6 +135,7 @@ def test_get(lib):
 		lib.test_get_success(cfg, "NS", "NS/ACCT/JFS//plop", 64)
 	finally:
 		for h in http:
+			assert(0 == len(h.expectations))
 			h.shutdown()
 		for s in services:
 			s.join()
@@ -159,9 +160,95 @@ def test_has(lib):
 	finally:
 		proxy.shutdown()
 		service.join()
+	assert(0 == len(proxy.expectations))
+
+def test_list_fail(lib):
+	proxy = BaseHTTPServer.HTTPServer(("127.0.0.1",0), DumbHttpMock)
+	proxy.expectations = [
+		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (501, {}, "")),
+		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "")),
+		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "lskj")),
+		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "{}")),
+		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "{\"objects\":[]}")),
+		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "{\"prefixes\":[]}")),
+		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "{\"objects\":[]\"prefixes\":[]}")),
+		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "{\"objects\":[{}]\"prefixes\":[]}")),
+	]
+	proxy_url = str(proxy.server_name) + ':' + str(proxy.server_port)
+	service = Service(proxy)
+	service.start()
+
+	cfg = json.dumps({"NS":{"proxy":proxy_url}})
+	try:
+		lib.test_init(cfg, "NS")
+		lib.test_list_badarg(cfg, "NS");
+		while len(proxy.expectations) > 0:
+			lib.test_list_fail(cfg, "NS", "NS/ACCT/JFS") # invalid HTTP reply status
+		assert(0 == len(proxy.expectations))
+	finally:
+		proxy.shutdown()
+		service.join()
+
+def test_list_ok(lib):
+	names = ("plap", "plep", "plip", "plop", "plup", "plyp")
+	proxy = BaseHTTPServer.HTTPServer(("127.0.0.1",0), DumbHttpMock)
+	proxy.expectations = [
+		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "{\"objects\":[],\"prefixes\":[]}")),
+		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, json.dumps({
+				"objects" : [{"name":x, "hash":"0000", "size":0, "ver":1} for x in names],
+				"prefixes" : [],
+		}))),
+		(("/v2.0/m2/NS/ACCT/JFS?prefix=pla", {}, ""), (200, {}, json.dumps({
+				"objects" : [{"name":x, "hash":"0000", "size":0, "ver":1} for x in names if x.startswith("pla")],
+				"prefixes" : [],
+		}))),
+
+		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plap", },
+			json.dumps({
+				"objects" : [{"name":"plap", "hash":"0000", "size":0, "ver":1}],
+				"prefixes" : [],
+		}))),
+		(("/v2.0/m2/NS/ACCT/JFS?marker=plap", {}, ""), (200, { "X-Oio-list-truncated" : False, "X-Oio-list-next" : "plep", },
+			json.dumps({
+				"objects" : [{"name":"plep", "hash":"0000", "size":0, "ver":1}],
+				"prefixes" : [],
+		}))),
+
+		(("/v2.0/m2/NS/ACCT/JFS?max=2", {}, ""), (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plap", },
+			json.dumps({
+				"objects" : [{"name":"plap", "hash":"0000", "size":0, "ver":1}],
+				"prefixes" : [],
+		}))),
+		(("/v2.0/m2/NS/ACCT/JFS?marker=plap&max=1", {}, ""), (200, { "X-Oio-list-truncated" : False, "X-Oio-list-next" : "plep", },
+			json.dumps({
+				"objects" : [{"name":"plep", "hash":"0000", "size":0, "ver":1}],
+				"prefixes" : [],
+		}))),
+	]
+	proxy_url = str(proxy.server_name) + ':' + str(proxy.server_port)
+	service = Service(proxy)
+	service.start()
+
+	cfg = json.dumps({"NS":{"proxy":proxy_url}})
+	try:
+		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 0, None, None, None, 0)
+		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 6, None, None, None, 0)
+		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 1, "pla", None, None, 0)
+		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 2, None, None, None, 0)
+		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 2, None, None, None, 2)
+	finally:
+		proxy.shutdown()
+		service.join()
+	assert(0 == len(proxy.expectations))
+
+def test_list(lib):
+	test_list_fail (lib)
+	test_list_ok (lib)
 
 if __name__ == '__main__':
 	lib = cdll.LoadLibrary("liboiosds_test.so")
 	lib.setup()
 	test_has(lib)
 	test_get(lib)
+	test_list(lib)
+
