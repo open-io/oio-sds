@@ -108,18 +108,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V1_TOUCH_CONTENT   "REQ_M2RAW_TOUCH_CONTENT"
 # define NAME_MSGNAME_M2V1_TOUCH_CONTAINER "REQ_M2RAW_TOUCH_CONTAINER"
 
-/* ------------------------------------------------------------------------- */
-
-#define NAME_MSGNAME_M2_CREATE               "REQ_M2_CREATE"
-#define NAME_MSGNAME_M2_CONTENTSPARE         "REQ_M2_CONTENTSPARE"
-#define NAME_MSGNAME_M2_CONTENTADD           "REQ_M2_CONTENTADD"
-#define NAME_MSGNAME_M2_CONTENTAPPEND        "REQ_M2_CONTENTAPPEND"
-#define NAME_MSGNAME_M2RAW_SETCONTENT        "REQ_M2RAW_CONTENT_SET"
-#define NAME_MSGNAME_M2RAW_GETCHUNKS         "REQ_M2RAW_CHUNKS_GET"
-#define NAME_MSGNAME_M2RAW_SETCHUNKS         "REQ_M2RAW_CHUNKS_SET"
-#define NAME_MSGNAME_M2RAW_DELCHUNKS         "REQ_M2RAW_CHUNKS_DEL"
-#define NAME_MSGNAME_M2RAW_SETMDSYS          "META2_SERVICES_MODIFY_METADATASYS"
-
 /* -------------------------------------------------------------------------- */
 
 # ifndef META2_URL_LOCAL_BASE

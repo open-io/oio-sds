@@ -29,17 +29,6 @@ License along with this library.
  */
 
 /**
- * Fills dst with a pretty string representation of the score.
- *
- * @param src
- * @param dst
- * @param dstsize
- *
- * @return the number of bytes writen in the given buffer
- */
-gint score_to_string(const score_t * src, gchar * dst, gsize dstsize);
-
-/**
  * Free a service_info_t pointer
  *
  * @param si the service_info_t pointer to free

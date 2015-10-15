@@ -74,9 +74,6 @@ int meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
 
 /* ---------------- EXTRACTORS ------------------ */
 
-int meta2_filter_extract_header_optional_position_prefix(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply);
-
 /*! Extract an hc_url from a request */
 int meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
@@ -113,9 +110,6 @@ int meta2_filter_extract_body_beans(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_extract_body_strings(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-int meta2_filter_extract_header_string_V_f2(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 /*! Extracts "FORCE" and parse it as a flag */
 int meta2_filter_extract_header_forceflag(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
@@ -139,9 +133,6 @@ int meta2_filter_extract_header_append(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 int meta2_filter_extract_header_string_size(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 int meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
@@ -190,17 +181,6 @@ int meta2_filter_action_purge_container(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_action_deduplicate_container(struct gridd_filter_ctx_s *ctx,
         struct gridd_reply_ctx_s *reply);
 
-/*! Call backend and generate a list of chunk_info using informations in filter context */
-int meta2_filter_action_generate_chunks(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-/*! Call backend and generate a list of chunk_info using informations in filter context */
-int meta2_filter_action_generate_append_chunks(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Call backend and generate spare chunks using informations in filter context */
-int meta2_filter_action_get_spare_chunks(struct gridd_filter_ctx_s *ctx,
-		                struct gridd_reply_ctx_s *reply);
-
 /*! Call backend and list content of a container with informations available in
  * filter context */
 int meta2_filter_action_list_contents(struct gridd_filter_ctx_s *ctx,
@@ -213,10 +193,6 @@ int meta2_filter_action_list_by_header_id(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 int meta2_filter_action_list_by_header_hash(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Call backend and retrieve the content with informations available in filter context */
-int meta2_filter_action_raw_chunks_get_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 /*! Call backend and put the content with informations available in filter context */
@@ -250,16 +226,7 @@ int meta2_filter_action_get_content_properties(struct gridd_filter_ctx_s *ctx,
 int meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-int meta2_filter_action_modify_mdsys_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
 int meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_remove_raw_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_add_raw_v1(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
 int meta2_filter_action_touch_content_v1(struct gridd_filter_ctx_s *ctx,

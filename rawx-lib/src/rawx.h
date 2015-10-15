@@ -64,6 +64,45 @@ struct rawx_conf_s {
 };
 
 /**
+ * Represents a chunk info in text format
+ */
+typedef struct chunk_textinfo_s
+{
+	gchar *id;           /**< The chunk id */
+	gchar *path;         /**< The chunk path */
+	gchar *size;         /**< The chunk size */
+	gchar *position;     /**< The chunk position */
+	gchar *hash;         /**< The chunk hash */
+	gchar *metadata;     /**< The chunk metadata */
+	gchar *container_id; /**< The container id */
+} chunk_textinfo_t;
+
+/**
+ * Represents a content info in text format
+ */
+typedef struct content_textinfo_s
+{
+	gchar *container_id;    /**< The container id */
+	gchar *path;            /**< The content name */
+	gchar *size;            /**< The content size */
+	gchar *chunk_nb;        /**< The number of chunks */
+	gchar *metadata;        /**< The user metadata */
+	gchar *system_metadata; /**< The system metadata */
+	gchar *storage_policy;	/**< The storage policy */
+	gchar *rawx_list; /**< The rawx list (introduced by the rainx service) */
+	gchar *spare_rawx_list; /**< The rawx list for reconstruction (introduced by the rainx service) */
+	gchar *version; /**< The content version */
+} content_textinfo_t;
+
+
+#define chunk_info_clean  g_free0
+#define chunk_info_gclean g_free1
+
+void chunk_textinfo_free_content(struct chunk_textinfo_s *cti);
+
+void content_textinfo_free_content(struct content_textinfo_s *cti);
+
+/**
  * Write the attributes in the structure in the extended attributes of
  * the file pointed by the given path.
  *

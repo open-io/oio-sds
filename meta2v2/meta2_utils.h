@@ -206,23 +206,6 @@ GError* m2_generate_beans_v1(struct hc_url_s *url, gint64 size, gint64 chunk_siz
 		struct storage_policy_s *pol, const char *mdsys, const char *mdusr,
 		struct grid_lb_iterator_s *iter, m2_onbean_cb cb, gpointer cb_data);
 
-/*! @param result A list of (chunk_info_t *) */
-GError* m2_generate_spare_chunks(struct hc_url_s *url, struct storage_policy_s *pol,
-		struct grid_lb_iterator_s *iter, GSList **result);
-
-/*! @param result A list of (struct bean_CHUNKS_s *) */
-GError* m2_generate_spare_chunks_beans(struct hc_url_s *url,
-		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
-		GSList **result);
-
-/*! @param result A list of (chunk_info_t *) */
-GError* m2_generate_conditionned_spare_chunks(struct grid_lb_iterator_s *iter,
-		struct lb_next_opt_s *opt, service_filter filter, GSList **result);
-
-/*! @param result A list of (struct bean_CHUNKS_s *) */
-GError* m2_generate_conditionned_spare_chunks_beans(struct grid_lb_iterator_s *iter,
-		struct lb_next_opt_s *opt, service_filter filter, GSList **result);
-
 GError* m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname,
 		int repl);
 
@@ -277,33 +260,6 @@ GError* m2db_dup_all_aliases(struct sqlx_sqlite3_s *sq3,
 		gboolean overwrite_latest);
 
 /* --------- TYPE CONVERSION ---------- */
-
-/*!  */
-GSList* m2v2_beans_from_raw_content(const char *id, meta2_raw_content_t *rc);
-
-/*!  */
-GSList* m2v2_beans_from_raw_content_custom(const char *id, meta2_raw_content_t *rc,
-		char* (*make_pos) (guint32, void*), void *udata);
-
-/*!  */
-meta2_raw_content_t* raw_content_from_m2v2_beans(const container_id_t cid, GSList *beans);
-
-/*! @param id Hexadecimal content id (can be NULL if computed later) */
-GSList* m2v2_beans_from_raw_content_v2(const char *id, meta2_raw_content_v2_t *rc);
-
-/*!  */
-meta2_raw_content_v2_t* raw_content_v2_from_m2v2_beans(const container_id_t cid,
-		GSList *beans);
-
-/*!  */
-GSList* chunk_info_list_from_m2v2_beans(GSList *beans, char **mdsys);
-
-/*!  */
-GSList* m2v2_beans_from_chunk_info_list(GByteArray *id, const char *alias,
-		GSList *chunks);
-
-/** Converts a property bean to an old meta2_property_t. */
-meta2_property_t *bean_to_meta2_prop(struct bean_PROPERTIES_s *in_prop);
 
 /* chunk_pair */
 void init_chunk_pair(GPtrArray *chunks, chunk_pair_t *pair, struct bean_CONTENTS_s *c0);

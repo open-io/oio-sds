@@ -54,40 +54,6 @@ void g_free2(gpointer p1, gpointer p2) { (void) p1; g_free0(p2); }
 
 /* ----------------------------------------------------------------------------------- */
 
-gboolean
-convert_chunk_text_to_raw(const struct chunk_textinfo_s* text_chunk, struct meta2_raw_chunk_s* raw_chunk, GError** error)
-{
-	if (text_chunk == NULL) {
-		GSETERROR(error, "text_chunk is null");
-		return FALSE;
-	}
-
-	memset(raw_chunk, 0, sizeof(struct meta2_raw_chunk_s));
-
-	if (text_chunk->id != NULL
-		&& !oio_str_hex2bin(text_chunk->id, raw_chunk->id.id, sizeof(hash_sha256_t))) {
-			GSETERROR(error, "Failed to convert chunk id from hex to bin");
-			return FALSE;
-	}
-
-	if (text_chunk->hash != NULL
-		&& !oio_str_hex2bin(text_chunk->hash, raw_chunk->hash, sizeof(chunk_hash_t))) {
-			GSETERROR(error, "Failed to convert chunk hash from hex to bin");
-			return FALSE;
-	}
-
-	if (text_chunk->size != NULL)
-		raw_chunk->size = g_ascii_strtoll(text_chunk->size, NULL, 10);
-
-	if (text_chunk->position != NULL)
-		raw_chunk->position = g_ascii_strtoull(text_chunk->position, NULL, 10);
-
-	if (text_chunk->metadata != NULL)
-		raw_chunk->metadata = metautils_gba_from_string(text_chunk->metadata);
-
-	return TRUE;
-}
-
 gchar*
 key_value_pair_to_string(key_value_pair_t * kv)
 {

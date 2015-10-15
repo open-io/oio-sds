@@ -25,34 +25,6 @@ License along with this library.
 #include "test_addr.h"
 
 static void
-test_codec (void)
-{
-	gint rc;
-	struct addr_info_s addr;
-	const char *original = "127.0.0.1:6000";
-	char resolved[128];
-	rc = l4_address_init_with_url (&addr, original, NULL);
-	g_assert (BOOL(rc));
-
-	GSList *singleton = g_slist_prepend (NULL, &addr);
-	GByteArray *gba = addr_info_marshall_gba (singleton, NULL);
-	g_assert (gba != NULL);
-	GSList *decoded = NULL;
-	rc = addr_info_unmarshall (&decoded, gba->data, gba->len, NULL);
-	g_assert (BOOL(rc));
-	g_assert (decoded != NULL);
-
-	for (GSList *l=decoded; l ;l=l->next) {
-		grid_addrinfo_to_string (l->data, resolved, sizeof(resolved));
-		g_print("> %s\n", resolved);
-	}
-
-	g_slist_free_full (decoded, addr_info_clean);
-	g_slist_free (singleton);
-	g_byte_array_free (gba, TRUE);
-}
-
-static void
 test_bad_connect_address(void)
 {
 	static const gchar *pProc = __FUNCTION__;
@@ -78,7 +50,6 @@ int
 main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
-	g_test_add_func("/metautils/addr/codec", test_codec);
 	g_test_add_func("/metautils/addr/bad_connect", test_bad_connect_address);
 	g_test_add_func("/metautils/gridd_client/good_address", test_good_connect_address);
 	return g_test_run();

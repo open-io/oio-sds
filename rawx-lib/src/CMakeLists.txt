@@ -13,9 +13,9 @@ link_directories(
 		${ATTR_LIBRARY_DIRS})
 
 add_library(rawx SHARED
-		rawx.h
 		attr_handler.c
-		compression.c compression.h
+		compression.c
+		utils_rawx_maintenance.c
 		lzo_compress.c
 		zlib_compress.c)
 
@@ -23,7 +23,7 @@ set_target_properties(rawx PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(rawx
 		metautils gridcluster gridcluster-remote
-		${NEON_LIBRARIES} ${ATTR_LIBRARIES} ${ZLIB_LIBRARIES} ${LZO_LIBRARIES})
+		${ATTR_LIBRARIES} ${ZLIB_LIBRARIES} ${LZO_LIBRARIES})
 
 install(FILES
 			compression.h

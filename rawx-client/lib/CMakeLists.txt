@@ -9,7 +9,7 @@ set_target_properties(rawxclient PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(rawxclient
 		metautils
-		${NEON_LIBRARIES} ${GLIB2_LIBRARIES})
+		${GLIB2_LIBRARIES})
 
 install(FILES
 			rawx_client.h

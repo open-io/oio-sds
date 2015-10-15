@@ -1,27 +1,20 @@
 add_definitions(-DG_LOG_DOMAIN="oio.tools")
 
-include_directories(BEFORE ../client/c/lib)
+include_directories(BEFORE ..)
+
+add_executable(echo-server oio-echo-server.c)
+bin_prefix(echo-server "-echo-server")
+target_link_libraries(echo-server metautils server gridcluster ${GLIB2_LIBRARIES})
 
 add_executable(tool-error oio-err.c)
 bin_prefix(tool-error "-err")
 target_link_libraries(tool-error ${GLIB2_LIBRARIES})
 
-add_executable(tool-grep oio-grep.c)
-bin_prefix(tool-grep "-grep")
-target_link_libraries(tool-grep gridclient)
-
-add_executable(tool-roundtrip oio-roundtrip.c)
-bin_prefix(tool-roundtrip "-roundtrip")
-target_link_libraries(tool-roundtrip gridclient)
-
-add_executable(tool-roundtrip2 oio-roundtrip2.c)
-bin_prefix(tool-roundtrip2 "-roundtrip2")
-target_link_libraries(tool-roundtrip2 gridclient)
+add_executable(oio-tool oio-tool.c)
+bin_prefix(oio-tool -tool)
+target_link_libraries(oio-tool metautils ${GLIB2_LIBRARIES})
 
 add_test(NAME tools/error COMMAND ${EXE_PREFIX}-err)
-
-install(TARGETS tool-grep tool-roundtrip tool-roundtrip2
-		RUNTIME DESTINATION bin)
 
 
 set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/.timestamp")
@@ -57,6 +50,11 @@ add_custom_command(OUTPUT ${OUTPUT}
 				   DEPENDS ${DEPS})
 
 add_custom_target(tools ALL DEPENDS ${OUTPUT})
+
+install(TARGETS
+			echo-server
+			oio-tool
+		DESTINATION bin)
 
 install(PROGRAMS
 			zk-bootstrap.py

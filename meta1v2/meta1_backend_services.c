@@ -30,7 +30,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metacomm.h>
 #include <cluster/lib/gridcluster.h>
 #include <sqliterepo/sqliterepo.h>
-#include <meta2v2/meta2_remote.h>
 
 #include "./internals.h"
 #include "./compound_types.h"

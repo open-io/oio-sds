@@ -31,7 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/gridd_dispatcher_filters.h>
 
 #include <meta2v2/meta2_macros.h>
-#include <meta2v2/meta2_remote.h>
+#include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/meta2_gridd_dispatcher.h>
 #include <meta2v2/meta2_filters.h>
 #include <meta2v2/meta2_filter_context.h>
@@ -406,106 +406,6 @@ static gridd_filter M2V2_RAW_SUBST_filters[] =
 
 /* ------------------------------------------------------------------------- */
 
-static gridd_filter M2V2_FILTERS_create_v1[] =
-{
-	meta2_filter_extract_header_url,
-	meta2_filter_fill_subject,
-	meta2_filter_check_url_cid,
-	meta2_filter_check_backend,
-	meta2_filter_check_ns_is_master,
-	meta2_filter_check_ns_not_wormed,
-	meta2_filter_extract_header_storage_policy,
-	meta2_filter_action_create_container,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_add_v1[] =
-{
-	meta2_filter_extract_header_url,
-	meta2_filter_fill_subject,
-	meta2_filter_check_url_cid,
-	meta2_filter_check_backend,
-	meta2_filter_check_ns_name,
-	meta2_filter_extract_header_string_size,
-	meta2_filter_extract_header_mdsys,
-	meta2_filter_action_generate_chunks,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_append_v1[] =
-{
-	meta2_filter_extract_header_url,
-	meta2_filter_fill_subject,
-	meta2_filter_check_url_cid,
-	meta2_filter_check_backend,
-	meta2_filter_check_ns_name,
-	meta2_filter_extract_header_string_size,
-	meta2_filter_action_generate_append_chunks,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_spare_v1[] =
-{
-	meta2_filter_extract_header_url,
-	meta2_filter_fill_subject,
-	meta2_filter_check_url_cid,
-	meta2_filter_check_backend,
-	meta2_filter_check_ns_name,
-	meta2_filter_extract_header_storage_policy,
-	meta2_filter_action_get_spare_chunks,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_modify_mdsys_v1[] =
-{
-	meta2_filter_extract_header_url,
-	meta2_filter_fill_subject,
-	meta2_filter_check_url_cid,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_extract_header_string_V_f2,
-	meta2_filter_action_modify_mdsys_v1,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_raw_chunks_get_v1[] =
-{
-	meta2_filter_extract_header_url,
-	meta2_filter_fill_subject,
-	meta2_filter_check_url_cid,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_action_raw_chunks_get_v1,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_del_raw_v1[] =
-{
-	meta2_filter_extract_header_url,
-	meta2_filter_check_url_cid,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_extract_body_rawcontentv1,
-	meta2_filter_action_remove_raw_v1,
-	meta2_filter_success_reply,
-	NULL
-};
-
-static gridd_filter M2V2_FILTERS_set_raw_v1[] =
-{
-	meta2_filter_extract_header_url,
-	meta2_filter_check_url_cid,
-	meta2_filter_check_optional_ns_name,
-	meta2_filter_check_backend,
-	meta2_filter_extract_header_optional_position_prefix,
-	meta2_filter_extract_body_rawcontentv1,
-	meta2_filter_action_add_raw_v1,
-	meta2_filter_success_reply,
-	NULL
-};
-
 static gridd_filter M2V2_FILTERS_touch_content_v1[] =
 {
 	meta2_filter_extract_header_url,
@@ -571,38 +471,6 @@ meta2_gridd_get_v2_requests(void)
 		{NAME_MSGNAME_M2V2_EXITELECTION, (hook) meta2_dispatch_all,  M2V2_EXITELECTION_FILTERS},
 		/* url */
 		{NAME_MSGNAME_M2V2_STGPOL,    (hook) meta2_dispatch_all, M2V2_STGPOL_FILTERS},
-
-		{NULL, NULL, NULL}
-	};
-
-	return descriptions;
-}
-
-const struct gridd_request_descr_s *
-meta2_gridd_get_v1_requests(void)
-{
-	/* old poly-shot features */
-	static struct gridd_request_descr_s descriptions[] = {
-
-		/* CONTAINER */
-		{NAME_MSGNAME_M2_CREATE,  (hook) meta2_dispatch_all, M2V2_FILTERS_create_v1},
-
-		/* CONTENT LEVEL */
-		{NAME_MSGNAME_M2_CONTENTADD,      (hook) meta2_dispatch_all, M2V2_FILTERS_add_v1},
-		{NAME_MSGNAME_M2_CONTENTSPARE,    (hook) meta2_dispatch_all, M2V2_FILTERS_spare_v1},
-		{NAME_MSGNAME_M2_CONTENTAPPEND,   (hook) meta2_dispatch_all, M2V2_FILTERS_append_v1},
-
-		{NAME_MSGNAME_M2RAW_GETCHUNKS,        (hook) meta2_dispatch_all, M2V2_FILTERS_raw_chunks_get_v1},
-
-		{NAME_MSGNAME_M2RAW_DELCHUNKS,  (hook) meta2_dispatch_all, M2V2_FILTERS_del_raw_v1},
-
-		// Necessary to the rawx-mover
-		{NAME_MSGNAME_M2RAW_SETCONTENT, (hook) meta2_dispatch_all, M2V2_FILTERS_set_raw_v1},
-		{NAME_MSGNAME_M2RAW_SETCHUNKS,  (hook) meta2_dispatch_all, M2V2_FILTERS_set_raw_v1},
-
-		/* CONTENT METADATA */
-		// TODO remove this as soon as the C client has been reworked. There is the onyl call.
-		{NAME_MSGNAME_M2RAW_SETMDSYS,   (hook) meta2_dispatch_all, M2V2_FILTERS_modify_mdsys_v1},
 
 		/* AGENT EVENTS */
 		{NAME_MSGNAME_M2V1_TOUCH_CONTAINER, (hook) meta2_dispatch_all, M2V2_FILTERS_touch_container_v1},

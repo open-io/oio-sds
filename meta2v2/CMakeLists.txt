@@ -7,7 +7,6 @@ include_directories(BEFORE . ..
 
 include_directories(AFTER
 		${JSONC_INCLUDE_DIRS}
-		${NEON_INCLUDE_DIRS}
 		${LIBRAIN_INCLUDE_DIRS})
 
 link_directories(
@@ -39,7 +38,6 @@ add_library(meta2v2utils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.c
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.h
 		meta2_utils.c
-		meta2_type_converter.c
 		meta2_utils.h
 		meta2_bean.c
 		meta2_bean_utils.c
@@ -59,8 +57,6 @@ target_link_libraries(meta2v2utils
 
 add_library(meta2v2remote SHARED
 		meta2_macros.h
-		meta2_remote.h
-		meta2_remote.c
 		meta2v2_remote.h
 		meta2v2_remote.c)
 
@@ -103,10 +99,6 @@ add_executable(test_meta2_backend test_meta2_backend.c)
 target_link_libraries(test_meta2_backend
 		meta2v2 ${GLIB2_LIBRARIES})
 
-add_executable(test_meta2_type_converter test_meta2_type_converter.c)
-target_link_libraries(test_meta2_type_converter
-		meta2v2 metautils ${GLIB2_LIBRARIES})
-
 add_executable(test_meta2_dedup test_meta2_dedup.c meta2_test_common.c)
 target_link_libraries(test_meta2_dedup
 		meta2v2 meta2v2utils metautils meta2v2remote
@@ -115,7 +107,6 @@ target_link_libraries(test_meta2_dedup
 install(FILES
 			${CMAKE_CURRENT_BINARY_DIR}/autogen.h
 			generic.h
-			meta2_remote.h
 			meta2_backend.h
 			meta2_backend_internals.h
 			meta2_bean.h
