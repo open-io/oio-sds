@@ -27,32 +27,6 @@ License along with this library.
 
 # include <metautils/lib/metacomm.h>
 
-/**
- * @addtogroup meta1v2_remotev1
- * @{
- */
-
-// TODO remove this as soon as the chunk_checker has been replaced
-#define NAME_MSGNAME_M1_CREATE     "REQ_M1_CREATE"
-// TODO to be removed as soon ad the C SDK has been rewriten
-#define NAME_MSGNAME_M1_CONT_BY_ID   "REQ_M1_CONT_BY_ID"
-
-
-// TODO remove this as soon as the chunk_checker has been replaced
-gboolean meta1_remote_create_container_v2 (addr_info_t *meta1,
-		GError **err, struct hc_url_s *url);
-
-// TODO to be removed as soon ad the C SDK has been rewriten
-struct meta1_raw_container_s* meta1_remote_get_container_by_id(
-		struct metacnx_ctx_s *ctx, struct hc_url_s *url, GError **err);
-
-/** @} */
-
-/**
- * @addtogroup meta1v2_remote 
- * @{
- */
-
 gboolean meta1v2_remote_create_reference (const addr_info_t *meta1,
 		GError **err, struct hc_url_s *url);
 
@@ -107,7 +81,5 @@ gchar** meta1v2_remote_list_services_by_prefix(const addr_info_t *m1, GError **e
 
 gboolean meta1v2_remote_get_prefixes(const addr_info_t *m1,
 		GError **err, gchar ***result);
-
-/** @} */
 
 #endif /*OIO_SDS__meta1v2__meta1_remote_h*/
