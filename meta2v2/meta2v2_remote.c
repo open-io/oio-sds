@@ -131,10 +131,14 @@ m2v2_remote_pack_DEDUP(struct hc_url_s *url, gboolean dry_run)
 }
 
 GByteArray*
-m2v2_remote_pack_PUT(struct hc_url_s *url, GSList *beans)
+m2v2_remote_pack_PUT(struct hc_url_s *url, GSList *beans, GBytes *id)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
-	return _m2v2_pack_request(NAME_MSGNAME_M2V2_PUT, url, body);
+	MESSAGE msg = _m2v2_build_request (NAME_MSGNAME_M2V2_PUT, url, body);
+	if (NULL != id)
+		metautils_message_add_field(msg, NAME_MSGKEY_KEY,
+				g_bytes_get_data(id, NULL), g_bytes_get_size(id));
+	return message_marshall_gba_and_clean(msg);
 }
 
 GByteArray*
@@ -462,9 +466,9 @@ m2v2_remote_execute_STGPOL(const char *target, struct hc_url_s *url,
 
 GError*
 m2v2_remote_execute_PUT(const char *target, struct hc_url_s *url,
-		GSList *in, GSList **out)
+		GSList *in, GBytes *content_id, GSList **out)
 {
-	return _m2v2_request(target, m2v2_remote_pack_PUT(url, in), out);
+	return _m2v2_request(target, m2v2_remote_pack_PUT(url, in, content_id), out);
 }
 
 GError*

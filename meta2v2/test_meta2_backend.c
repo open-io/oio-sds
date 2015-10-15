@@ -402,7 +402,7 @@ static void
 test_content_put_no_beans(void)
 {
 	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
-		GError *err = meta2_backend_put_alias(m2, u, NULL, NULL, NULL);
+		GError *err = meta2_backend_put_alias(m2, u, NULL, NULL, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_BAD_REQUEST);
 		g_clear_error(&err);
 	}
@@ -420,7 +420,7 @@ test_content_put_prop_get(void)
 
 		/* insert a new alias */
 		beans = _create_alias(m2, u, NULL);
-		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL);
+		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL, NULL);
 		g_assert_no_error(err);
 		_bean_cleanl2(beans);
 
@@ -482,7 +482,7 @@ test_content_put_get_delete(void)
 
 		/* insert a new alias */
 		GSList *beans = _create_alias(m2, u, NULL);
-		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL);
+		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL, NULL);
 		g_assert_no_error(err);
 		_bean_cleanl2(beans);
 
@@ -561,7 +561,7 @@ test_content_append(void)
 		beans = _create_alias(m2, u, NULL);
 
 		/* first PUT */
-		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL);
+		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL, NULL);
 		g_assert_no_error(err);
 
 		CHECK_ALIAS_VERSION(m2,u,1);
@@ -721,7 +721,7 @@ test_props_set_simple()
 
 		/* add a content */
 		beans = _create_alias(m2, u, NULL);
-		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL);
+		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL, NULL);
 		g_assert_no_error(err);
 		_bean_cleanl2(beans);
 

@@ -205,6 +205,7 @@ static gridd_filter M2V2_LINK_FILTERS[] =
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_action_link,
+	meta2_filter_success_reply,
 	NULL
 };
 

@@ -499,13 +499,15 @@ meta2_filter_action_link(struct gridd_filter_ctx_s *ctx,
 
 	// Perform the link
 	if (!err)
-		meta2_backend_link_content (m2b, url, id);
+		err = meta2_backend_link_content (m2b, url, id);
 
 	// Cleanup and exit
 	if (id)
 		g_bytes_unref (id);
-	if (err)
-		meta2_filter_ctx_set_error(ctx, err);
-	return err == NULL;
+	if (!err)
+		return FILTER_OK;
+
+	meta2_filter_ctx_set_error(ctx, err);
+	return FILTER_KO;
 }
 

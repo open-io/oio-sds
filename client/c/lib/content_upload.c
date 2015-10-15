@@ -940,7 +940,7 @@ _gs_upload(gs_container_t *container,
 	}
 
 #define CONTENT_ADD_V2() m2v2_remote_execute_BEANS(target, url, actual_stgpol, content_size, append, &chunks)
-#define CONTENT_COMMIT() m2v2_remote_execute_PUT(target, url, chunks, NULL)
+#define CONTENT_COMMIT() m2v2_remote_execute_PUT(target, url, chunks, NULL, NULL)
 #define APPEND_COMMIT() m2v2_remote_execute_APPEND(target, url, chunks, NULL)
 
 	int nb_attempts;

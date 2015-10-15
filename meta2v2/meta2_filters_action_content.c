@@ -262,7 +262,14 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 	if (NULL != meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)) {
 		e = meta2_backend_force_alias(m2b, url, beans, &deleted, &added);
 	} else {
-		e = meta2_backend_put_alias(m2b, url, beans, &deleted, &added);
+		GBytes *gb = NULL;
+		gsize blen = 0;
+		void *b = metautils_message_get_field (reply->request, NAME_MSGKEY_KEY, &blen);
+		if (b && blen)
+			gb = g_bytes_new_static (b, blen);
+		e = meta2_backend_put_alias(m2b, url, beans, gb, &deleted, &added);
+		if (gb)
+			g_bytes_unref (gb);
 	}
 
 	if (NULL != e) {

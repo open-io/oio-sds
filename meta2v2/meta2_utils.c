@@ -890,6 +890,15 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 
 	container_version = 1 + m2db_get_version(sq3);
 
+	gsize idlen = 0;
+	const guint8 *id = NULL;
+	if (args->put_args->content_id)
+		id = g_bytes_get_data (args->put_args->content_id, &idlen);
+	if (!id || !idlen) {
+		id = args->uid;
+		idlen = args->uid_size;
+	}
+
 	for (l=args->beans; !err && l ;l=l->next) {
 		gpointer bean = l->data;
 
@@ -901,7 +910,7 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 				continue;
 			/* reset the alias version and remap the header'is */
 			ALIASES_set_version(bean, args->version+1);
-			ALIASES_set2_content_id(bean, args->uid, args->uid_size);
+			ALIASES_set2_content_id(bean, id, idlen);
 			ALIASES_set_container_version(bean, container_version);
 			ALIASES_set_deleted(bean, FALSE);
 			ALIASES_set_ctime(bean, time(0));
@@ -911,11 +920,11 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 			if (args->merge_only)
 				continue;
 			/* remap the header's id */
-			CONTENTS_HEADERS_set2_id(bean, args->uid, args->uid_size);
+			CONTENTS_HEADERS_set2_id(bean, id, idlen);
 		}
 		else if (DESCR(bean) == &descr_struct_CONTENTS) {
 			/* remap the contant_header id to a unique value */
-			CONTENTS_set2_content_id(bean, args->uid, args->uid_size);
+			CONTENTS_set2_content_id(bean, id, idlen);
 		}
 		else if (DESCR(bean) == &descr_struct_PROPERTIES) {
 			PROPERTIES_set_alias_version (bean, args->version+1);
@@ -1100,6 +1109,23 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	args2.cb_data = out_added;
 	args2.beans = beans;
 	args2.version = -1;
+
+	/* a specific content ID has been provided. We DO NOT allow overriding
+	 * a content with the same ID. So let's check the content is not present,
+	 * yet */
+	if (args->content_id) {
+		GPtrArray *tmp = g_ptr_array_new ();
+		GVariant *params[2] = {NULL, NULL};
+		params[0] = _gb_to_gvariant (args->content_id);
+		err = CONTENTS_HEADERS_load (args->sq3->db, " id = ? LIMIT 1", params,
+				_bean_buffer_cb, tmp);
+		guint count = tmp->len;
+		_bean_cleanv2 (tmp);
+		if (err)
+			return err;
+		if (count)
+			return NEWERROR(CODE_CONTENT_EXISTS, "A content exists with this ID");
+	}
 
 	if (NULL != (err = m2db_latest_alias(args->sq3, args->url, &latest))) {
 		if (err->code == CODE_CONTENT_NOTFOUND) {
@@ -1504,6 +1530,9 @@ m2db_link_content(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 {
 	GError *err = NULL;
 
+	size_t len = 0;
+	const void *bin = g_bytes_get_data (content_id, &len);
+
 	/* check the content exists */
 	GPtrArray *tmp = g_ptr_array_new ();
 	GVariant *params[2] = {NULL, NULL};
@@ -1511,26 +1540,34 @@ m2db_link_content(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	err = CONTENTS_HEADERS_load (sq3->db, " id = ? LIMIT 1", params, _bean_buffer_cb, tmp);
 	metautils_gvariant_unrefv(params);
 	if (err) goto out;
-
 	if (tmp->len <= 0) {
-		err = NEWERROR (CODE_CONTENT_NOTFOUND, "no such content");
+		err = NEWERROR (CODE_CONTENT_NOTFOUND, "no content with such an ID");
 		goto out;
 	}
+	GRID_TRACE("%s %u contents found", __FUNCTION__, tmp->len);
 
 	/* get the latest alias */
 	gint64 version = 0;
 	err = m2db_get_alias_version (sq3, url, &version);
-	if (err) goto out;
+	if (err) {
+		if (err->code != CODE_CONTENT_NOTFOUND)
+			goto out;
+		g_clear_error (&err);
+	}
+
+	/* TODO manage the case of disabled versioning */
 
 	/* make a new link */
-	struct bean_ALIASES_s *a = _bean_create_child (tmp->pdata[0], "aliases");
+	struct bean_ALIASES_s *a = _bean_create (&descr_struct_ALIASES);
 	ALIASES_set2_alias (a, hc_url_get(url, HCURL_PATH));
+	ALIASES_set2_content_id (a, bin, len);
 	ALIASES_set_version (a, version + 1);
 	ALIASES_set_container_version (a, 1+m2db_get_version(sq3));
 	ALIASES_set2_mdsys (a, "");
 	ALIASES_set_ctime (a, time(0));
 	ALIASES_set_deleted (a, FALSE);
 	err = _db_save_bean (sq3->db, a);
+	_bean_clean (a);
 out:
 	_bean_cleanv2 (tmp);
 	return err;

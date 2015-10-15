@@ -1351,9 +1351,9 @@ action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
 		return _reply_m2_error (args, NEWERROR(CODE_BAD_REQUEST, "Expected: content id (string)"));
 
 	const char *hex = json_object_get_string (jargs);
-	gsize len = 1 + strlen(hex) / 2;
-	guint8 bin[len];
-	if (!oio_str_hex2bin (hex, bin, len))
+	gsize len = strlen(hex) / 2;
+	guint8 bin[len+1];
+	if (!oio_str_hex2bin (hex, bin, len+1))
 		return _reply_m2_error (args, NEWERROR(CODE_BAD_REQUEST, "Expected: content id (hexa)"));
 	GBytes *id = g_bytes_new_static (bin, len);
 
@@ -1535,6 +1535,17 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 	if (!jbody)
 		return BADREQ("Invalid JSON body");
 
+	GBytes *id = NULL;
+	const char *hexid = OPT("id");
+	if (hexid) {
+		gsize len = strlen(hexid) / 2;
+		guint8 bin[len+1];
+		if (!oio_str_hex2bin (hexid, bin, len+1))
+			return BADREQ("Optional content id must be hexa");
+		if (len)
+			id = g_bytes_new (bin, len);
+	}
+
 	gboolean append = _request_has_flag (args, PROXYD_HEADER_MODE, "append");
 	gboolean force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
 	GSList *ibeans = NULL;
@@ -1542,6 +1553,7 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 
 	if (NULL != (err = _load_simplified_content (args, jbody, &ibeans))) {
 		_bean_cleanl2 (ibeans);
+		if (id) g_bytes_unref (id);
 		return err;
 	}
 
@@ -1554,12 +1566,13 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 		else if (append)
 			e = m2v2_remote_execute_APPEND (m2->host, args->url, ibeans, &obeans);
 		else
-			e = m2v2_remote_execute_PUT (m2->host, args->url, ibeans, &obeans);
+			e = m2v2_remote_execute_PUT (m2->host, args->url, ibeans, id, &obeans);
 		_bean_cleanl2 (obeans);
 		return e;
 	}
 	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	_bean_cleanl2 (ibeans);
+	if (id) g_bytes_unref (id);
 	return err;
 }
 

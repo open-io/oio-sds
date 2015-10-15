@@ -64,7 +64,7 @@ test_content_dedup(gconstpointer test_data)
 		/* Change the hash of the chunk beans (0 by default) */
 		change_chunk_hash(beans, 0);
 		/* Put the beans in the database */
-		err = meta2_backend_put_alias(m2, url, beans, NULL, NULL);
+		err = meta2_backend_put_alias(m2, url, beans, NULL, NULL, NULL);
 		g_assert_no_error(err);
 		_bean_cleanl2(beans);
 
@@ -77,7 +77,7 @@ test_content_dedup(gconstpointer test_data)
 			g_free(url_str);
 			GSList *beans2 = create_alias(m2, url2, NULL);
 			change_chunk_hash(beans2, counter);
-			err = meta2_backend_put_alias(m2, url2, beans2, NULL, NULL);
+			err = meta2_backend_put_alias(m2, url2, beans2, NULL, NULL, NULL);
 			g_assert_no_error(err);
 			_bean_cleanl2(beans2);
 		}
