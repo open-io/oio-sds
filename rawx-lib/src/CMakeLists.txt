@@ -23,7 +23,7 @@ set_target_properties(rawx PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(rawx
 		metautils gridcluster gridcluster-remote
-		${NEON_LIBRARIES} ${ATTR_LIBRARIES} ${ZLIB_LIBRARIES} ${LZO_LIBRARIES})
+		${ATTR_LIBRARIES} ${ZLIB_LIBRARIES} ${LZO_LIBRARIES})
 
 install(FILES
 			compression.h

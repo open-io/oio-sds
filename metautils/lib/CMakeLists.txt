@@ -160,7 +160,7 @@ add_library(metautils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/asn_codecs_prim.c
 		${CMAKE_CURRENT_BINARY_DIR}/asn_codecs_prim.h
 		${CMAKE_CURRENT_BINARY_DIR}/asn_internal.h
-		
+
 		${CMAKE_CURRENT_BINARY_DIR}/AddrInfo.c
 		${CMAKE_CURRENT_BINARY_DIR}/AddrInfo.h
 		${CMAKE_CURRENT_BINARY_DIR}/AddrInfoSequence.c
@@ -283,25 +283,6 @@ target_link_libraries(metautils
 
 #add_dependencies(metautils asn1c_generation)
 
-add_executable(gs_oid2cid oid_to_cid.c)
-bin_prefix(gs_oid2cid -oid2cid)
-target_link_libraries(gs_oid2cid
-		metautils
-		${GLIB2_LIBRARIES})
-add_dependencies(gs_oid2cid metautils metautils)
-
-add_executable(gs_dump_addr addr_dump.c)
-bin_prefix(gs_dump_addr -dump-addr)
-target_link_libraries(gs_dump_addr
-		metautils
-		${GLIB2_LIBRARIES} ${ASN1C_LIBRARIES})
-
-add_executable(gs_same_hash gs_same_hash.c)
-bin_prefix(gs_same_hash -same-hash)
-target_link_libraries(gs_same_hash
-		metautils 
-		${GLIB2_LIBRARIES})
-
 add_executable(test_lb test_lb.c)
 target_link_libraries(test_lb
 		metautils
@@ -309,12 +290,12 @@ target_link_libraries(test_lb
 
 add_executable(test_stg_policy test_stg_policy.c)
 target_link_libraries(test_stg_policy
-		metautils 
+		metautils
 		${GLIB2_LIBRARIES})
 
 add_executable(test_svc_policy test_svc_policy.c)
 target_link_libraries(test_svc_policy
-		metautils 
+		metautils
 		${GLIB2_LIBRARIES})
 
 add_executable(test_logger test_logger.c)
@@ -333,25 +314,25 @@ target_link_libraries(test_gridd_client
 
 add_executable(test_lrutree test_lrutree.c)
 target_link_libraries(test_lrutree
-		metautils 
+		metautils
 		${GLIB2_LIBRARIES})
 
 add_executable(test_sigfpe test_sigfpe.c)
 target_link_libraries(test_sigfpe
-		metautils 
+		metautils
 		${GLIB2_LIBRARIES})
 
 add_executable(test_str test_str.c)
 target_link_libraries(test_str
-		metautils 
+		metautils
 		${GLIB2_LIBRARIES})
 
 add_executable(test_gba test_gba.c)
 target_link_libraries(test_gba
-		metautils 
+		metautils
 		${GLIB2_LIBRARIES})
 
-install(TARGETS metautils gs_oid2cid gs_dump_addr
+install(TARGETS metautils
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin
 		PUBLIC_HEADER DESTINATION include)
@@ -399,7 +380,7 @@ install(FILES
 		DESTINATION include/metautils/lib
 		PERMISSIONS
 			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-			
+
 
 add_test(NAME metautils/stgpol COMMAND test_stg_policy)
 add_test(NAME metautils/svc_policy COMMAND test_svc_policy)

@@ -7,7 +7,6 @@ include_directories(BEFORE . ..
 
 include_directories(AFTER
 		${JSONC_INCLUDE_DIRS}
-		${NEON_INCLUDE_DIRS}
 		${LIBRAIN_INCLUDE_DIRS})
 
 link_directories(
