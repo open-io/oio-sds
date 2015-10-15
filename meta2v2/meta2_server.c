@@ -186,7 +186,7 @@ _post_config(struct sqlx_service_s *ss)
 	// Register few meta2 tasks
 	grid_task_queue_register(ss->gtq_reload, 5,
 			_task_reconfigure_m2, NULL, ss);
-	grid_task_queue_register(ss->gtq_reload, 10,
+	grid_task_queue_register(ss->gtq_reload, 1,
 			(GDestroyNotify)sqlx_task_reload_lb, NULL, ss);
 
 	m2->notify.udata = ss;

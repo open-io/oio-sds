@@ -31,6 +31,9 @@ target_link_libraries(oiosds_test oiosds)
 set_target_properties(oiosds_test PROPERTIES
 		SOVERSION ${ABI_VERSION})
 
+add_executable(test_oio_ext test_ext.c)
+target_link_libraries(test_oio_ext oiocore)
+
 add_executable(test_oio_str test_str.c)
 target_link_libraries(test_oio_str oiocore)
 
@@ -58,7 +61,8 @@ install(TARGETS oiocore oiosds
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		PUBLIC_HEADER DESTINATION include)
 
-add_test(NAME metautils/url COMMAND test_oio_url)
+add_test(NAME core/ext COMMAND test_oio_ext)
+add_test(NAME core/url COMMAND test_oio_url)
 add_test(NAME core/str COMMAND test_oio_str)
 add_test(NAME core/sds COMMAND /usr/bin/env python ${CMAKE_CURRENT_SOURCE_DIR}/test_oiosds.py)
 
