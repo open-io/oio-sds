@@ -8,6 +8,12 @@ import pwd
 import sys
 import time
 import xattr
+
+try:
+    import simplejson as json
+except ImportError:
+    import json  # noqa
+
 from logging.handlers import SysLogHandler
 
 import eventlet

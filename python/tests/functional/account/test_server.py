@@ -1,4 +1,4 @@
-import json
+import simplejson as json
 
 from oio.account.server import create_app
 from tests.utils import BaseTestCase

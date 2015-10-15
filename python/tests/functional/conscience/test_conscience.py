@@ -1,11 +1,11 @@
-import json
-import unittest
-import time
-import random
-import urlparse
 import os
+import random
+import time
+import unittest
+import urlparse
 
 import requests
+import simplejson as json
 
 
 class TestConscienceFunctional(unittest.TestCase):

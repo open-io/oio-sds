@@ -1,6 +1,6 @@
-import json
-from oio.common.client import Client
 from oio.common import exceptions as exc
+from oio.common.client import Client
+from oio.common.utils import json
 
 
 class DirectoryClient(Client):

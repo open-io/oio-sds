@@ -1,10 +1,10 @@
-import json
 import random
 import string
 import urlparse
 import time
 
 import requests
+import simplejson as json
 
 from tests.utils import BaseTestCase
 
