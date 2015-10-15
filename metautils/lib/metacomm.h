@@ -20,17 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__metacomm_h
 # define OIO_SDS__metautils__lib__metacomm_h 1
 
-/**
- * @file metacomm.h
- * Global communication library
- */
-
-/**
- * @defgroup metautils_comm Metacomm
- * @ingroup metautils
- * @{
- */
-
 #include <metautils/lib/metatypes.h>
 
 #define DECLARE_MARSHALLER(Name) \
@@ -48,114 +37,7 @@ gint Name (GError **err, gpointer udata, gint code, guint8 *buf, gsize len)
 typedef struct Message Message_t;
 typedef Message_t* MESSAGE;
 
-/* ------------------------------------------------------------------------- */
-
-/**
- * @defgroup metacomm_metacnx Connections to META services
- * @ingroup metautils_comm
- * @{
- */
-
-struct metacnx_ctx_s;
 struct hc_url_s;
-
-/** Struct to store a META connection context */
-struct metacnx_ctx_s
-{
-	addr_info_t addr;	/**< The connection server addr */
-	int fd;			/**< The connection fd */
-	guint8 flags;		/**< The connection configuration flags */
-	/**
-	 * Struct to store a connection timeout
-	 */
-	struct
-	{
-		int cnx;/*<! The connection timeout */
-		int req;/*<! The request timeout */
-	} timeout;		/*<! The timeouts */
-};
-
-/** Allocate a new instance of struct metacnx_ctx_s */
-struct metacnx_ctx_s *metacnx_create(void);
-
-/** Clear a struct metacnx_ctx_s (but does not free it) */
-void metacnx_clear(struct metacnx_ctx_s *ctx);
-
-/** Free a struct metacnx_ctx_s */
-void metacnx_destroy(struct metacnx_ctx_s *ctx);
-
-/** Initialize a struct metacnx_ctx_s with host and port */
-gboolean metacnx_init(struct metacnx_ctx_s *ctx, const gchar * host,
-		int port, GError ** err);
-
-/** Initialize a struct metacnx_ctx_s with URL IPv4:port or [IPv6]:port */
-gboolean metacnx_init_with_url(struct metacnx_ctx_s *ctx, const gchar *url,
-		GError ** err);
-
-/** Initialize a struct metacnx_ctx_s with addr_info_t */
-gboolean metacnx_init_with_addr(struct metacnx_ctx_s *ctx,
-		const addr_info_t* addr, GError** err);
-
-/** Open a connection to a META */
-gboolean metacnx_open(struct metacnx_ctx_s *ctx, GError ** err);
-
-/** Check if a connection to a META is opened */
-gboolean metacnx_is_open(struct metacnx_ctx_s *ctx);
-
-/** Close an opened connection to a METAX */
-void metacnx_close(struct metacnx_ctx_s *ctx);
-
-/** @} */
-
-/* ------------------------------------------------------------------------- */
-
-/**
- * @defgroup metacomm_replyseq Manager for sequences of replies
- * @ingroup metautils_comm
- * @{
- */
-
-typedef gboolean(*content_handler_f) (GError ** err, gpointer udata, gint code, guint8 * body, gsize bodySize);
-
-typedef gboolean(*msg_handler_f) (GError ** err, gpointer udata, gint code, MESSAGE rep);
-
-struct code_handler_s
-{
-	int code;                          /**<  */
-	guint32 flags;                     /**<  */
-	content_handler_f content_handler; /**<  */
-	msg_handler_f msg_handler;         /**<  */
-};
-
-struct reply_sequence_data_s
-{
-	gpointer udata;               /**<  */
-	int nbHandlers;               /**<  */
-	struct code_handler_s *codes; /**<  */
-};
-
-gboolean metaXClient_reply_sequence_run_context(GError ** err,
-		struct metacnx_ctx_s *ctx, MESSAGE request,
-		struct reply_sequence_data_s *handlers);
-
-/** Wrapper around metaXClient_reply_sequence_run_context() */
-gboolean metaXClient_reply_sequence_run(GError ** err, MESSAGE request,
-		int *fd, gint ms, struct reply_sequence_data_s *data);
-
-/** Wrapper around metaXClient_reply_sequence_run_context() */
-gboolean metaXClient_reply_sequence_run_from_addrinfo(GError ** err,
-		MESSAGE request, const addr_info_t * addr, gint ms,
-		struct reply_sequence_data_s *data);
-
-/** @} */
-
-/* -------------------------------------------------------------------------- */
-
-/**
- * @defgroup metacomm_message Messages enveloppes
- * @@ingroup metautils_comm
- * @{
- */
 
 /** Builds a simple reply for the given request. This function automates the
  * copy of the required fields from the request, and sets the appropriated
@@ -284,26 +166,7 @@ GError* metautils_message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
 
 struct hc_url_s * metautils_message_extract_url (MESSAGE m);
 
-/** @} */
-
 /* ------------------------------------------------------------------------- */
-
-/**
- * @defgroup metacomm_structs ASN.1/BER Codec for various structures
- * @ingroup metautils_comm
- * @{
- */
-
-DECLARE_MARSHALLER_GBA(chunk_info_marshall_gba);
-DECLARE_UNMARSHALLER(chunk_info_unmarshall);
-DECLARE_BODY_MANAGER(chunk_info_concat);
-
-DECLARE_MARSHALLER_GBA(addr_info_marshall_gba);
-DECLARE_UNMARSHALLER(addr_info_unmarshall);
-
-DECLARE_MARSHALLER_GBA(path_info_marshall_gba);
-DECLARE_UNMARSHALLER(path_info_unmarshall);
-DECLARE_BODY_MANAGER(path_info_concat);
 
 DECLARE_MARSHALLER_GBA(meta0_info_marshall_gba);
 DECLARE_UNMARSHALLER(meta0_info_unmarshall);
@@ -317,43 +180,10 @@ DECLARE_UNMARSHALLER(strings_unmarshall);
 DECLARE_UNMARSHALLER(service_info_unmarshall);
 DECLARE_MARSHALLER_GBA(service_info_marshall_gba);
 
-DECLARE_MARSHALLER_GBA( meta2_property_marshall_gba);
-DECLARE_UNMARSHALLER(   meta2_property_unmarshall);
-
-DECLARE_MARSHALLER_GBA( meta2_raw_content_v2_marshall_gba);
-DECLARE_UNMARSHALLER(   meta2_raw_content_v2_unmarshall);
-
-/**
- * @param si the structure to be serialized. NULL is an error
- * @param err a pointer to the error structure being returned
- * @return NULL in case of error or a valid ASN.1 form of the given servccie_info
- */
 GByteArray* service_info_marshall_1(service_info_t *si, GError **err);
 
-GByteArray *meta1_raw_container_marshall(struct meta1_raw_container_s *container,
-		GError ** err);
-
-struct meta1_raw_container_s *meta1_raw_container_unmarshall(guint8 * buf,
-		gsize buf_len, GError ** err);
-
-gboolean simple_integer_unmarshall(const guint8 * bytes, gsize size,
-		gint64 * result);
-
-GByteArray* simple_integer_marshall_gba(gint64 i64, GError **err);
-
-/** Serializes the content structure into its ASN.1 representation.  */
-GByteArray *meta2_maintenance_marshall_content(
-		struct meta2_raw_content_s *content, GError ** err);
-
-struct meta2_raw_content_s *meta2_maintenance_content_unmarshall_buffer(
-		guint8 * buf, gsize buf_size, GError ** err);
-
-/** Serialize a namespace_info to ASN1 */
 GByteArray* namespace_info_marshall(struct namespace_info_s * namespace_info, GError ** err);
 
-/** Unserialize a namespace_info from ASN1 */
 namespace_info_t* namespace_info_unmarshall(const guint8 * buf, gsize buf_len, GError ** err);
-
-/** @} */
 
 #endif /*OIO_SDS__metautils__lib__metacomm_h*/

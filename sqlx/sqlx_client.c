@@ -24,15 +24,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/sqlx_remote_ex.h>
 #include <resolver/hc_resolver.h>
 
-#include <metautils/RowFieldValue.h>
-#include <metautils/RowField.h>
-#include <metautils/RowFieldSequence.h>
-#include <metautils/Row.h>
-#include <metautils/RowSet.h>
-#include <metautils/RowName.h>
-#include <metautils/TableHeader.h>
-#include <metautils/Table.h>
-#include <metautils/TableSequence.h>
+#include <metautils/lib/RowFieldValue.h>
+#include <metautils/lib/RowField.h>
+#include <metautils/lib/RowFieldSequence.h>
+#include <metautils/lib/Row.h>
+#include <metautils/lib/RowSet.h>
+#include <metautils/lib/RowName.h>
+#include <metautils/lib/TableHeader.h>
+#include <metautils/lib/Table.h>
+#include <metautils/lib/TableSequence.h>
 
 static struct hc_resolver_s *resolver = NULL;
 

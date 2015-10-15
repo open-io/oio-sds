@@ -206,23 +206,6 @@ GError* m2_generate_beans_v1(struct hc_url_s *url, gint64 size, gint64 chunk_siz
 		struct storage_policy_s *pol, const char *mdsys, const char *mdusr,
 		struct grid_lb_iterator_s *iter, m2_onbean_cb cb, gpointer cb_data);
 
-/*! @param result A list of (chunk_info_t *) */
-GError* m2_generate_spare_chunks(struct hc_url_s *url, struct storage_policy_s *pol,
-		struct grid_lb_iterator_s *iter, GSList **result);
-
-/*! @param result A list of (struct bean_CHUNKS_s *) */
-GError* m2_generate_spare_chunks_beans(struct hc_url_s *url,
-		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
-		GSList **result);
-
-/*! @param result A list of (chunk_info_t *) */
-GError* m2_generate_conditionned_spare_chunks(struct grid_lb_iterator_s *iter,
-		struct lb_next_opt_s *opt, service_filter filter, GSList **result);
-
-/*! @param result A list of (struct bean_CHUNKS_s *) */
-GError* m2_generate_conditionned_spare_chunks_beans(struct grid_lb_iterator_s *iter,
-		struct lb_next_opt_s *opt, service_filter filter, GSList **result);
-
 GError* m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname,
 		int repl);
 

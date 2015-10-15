@@ -107,7 +107,6 @@ target_link_libraries(test_meta2_dedup
 install(FILES
 			${CMAKE_CURRENT_BINARY_DIR}/autogen.h
 			generic.h
-			meta2_remote.h
 			meta2_backend.h
 			meta2_backend_internals.h
 			meta2_bean.h
