@@ -93,7 +93,8 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 		const gchar *ns_name,
 		const struct addr_info_s *local_addr,
 		struct addr_info_s *m0_addr,
-		GArray **updated_prefixes)
+		GArray **updated_prefixes,
+		gboolean *meta0_ok)
 {
 	GError *err = NULL;
 	GSList *m0info_list = NULL;
@@ -113,6 +114,7 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 		return NULL;
 	}
 
+	*meta0_ok = TRUE;
 	guint8 *cache = _cache_from_m0l(m0info_list, local_addr);
 	GPtrArray *by_prefix = meta0_utils_list_to_array(m0info_list);
 
@@ -148,10 +150,8 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 }
 
 static GError*
-_cache_load_from_ns(struct meta1_prefixes_set_s *m1ps,
-		const gchar *ns_name,
-		const gchar *local_url,
-		GArray **updated_prefixes)
+_cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const gchar *ns_name,
+		const gchar *local_url, GArray **updated_prefixes, gboolean *meta0_ok)
 {
 	struct addr_info_s local_ai;
 	GError *err = NULL;
@@ -193,7 +193,7 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps,
 		}
 
 		err = _cache_load_from_m0(m1ps, ns_name, &local_ai,
-				&(si->addr),updated_prefixes);
+				&(si->addr), updated_prefixes, meta0_ok);
 		if (!err) {
 			done = TRUE;
 			break;
@@ -269,7 +269,7 @@ meta1_prefixes_manage_all(struct meta1_prefixes_set_s *m1ps,
 
 GError*
 meta1_prefixes_load(struct meta1_prefixes_set_s *m1ps,
-		const gchar *ns_name, const gchar *local_url, GArray **updated_prefixes)
+		const gchar *ns_name, const gchar *local_url, GArray **updated_prefixes, gboolean *meta0_ok)
 {
 	GError *err = NULL;
 
@@ -277,7 +277,7 @@ meta1_prefixes_load(struct meta1_prefixes_set_s *m1ps,
 	EXTRA_ASSERT(ns_name != NULL);
 	EXTRA_ASSERT(local_url != NULL);
 
-	err = _cache_load_from_ns(m1ps, ns_name, local_url, updated_prefixes);
+	err = _cache_load_from_ns(m1ps, ns_name, local_url, updated_prefixes, meta0_ok);
 	if (NULL != err)
 		g_prefix_error(&err, "NS loading error : ");
 	else

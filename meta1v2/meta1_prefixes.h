@@ -43,7 +43,8 @@ struct meta1_prefixes_set_s* meta1_prefixes_init(void);
 GError* meta1_prefixes_load(struct meta1_prefixes_set_s *m1ps,
 		const gchar *ns_name,
 		const gchar *local_url,
-		GArray **updated_prefixes);
+		GArray **updated_prefixes,
+		gboolean *meta0_ok);
 
 /**
  * @param m1ps

@@ -812,14 +812,24 @@ _task_reload_workers(gpointer p)
 void
 sqlx_task_reload_lb (struct sqlx_service_s *ss)
 {
-	GError *err;
+	static volatile gboolean already_succeeded = FALSE;
+	static volatile guint tick_reload = 0;
+	static volatile guint period_reload = 2;
 
 	EXTRA_ASSERT(ss != NULL);
-
 	if (!ss->lb)
 		return;
 
-	if (NULL != (err = gridcluster_reload_lbpool(ss->lb))) {
+	if (already_succeeded && 0 != (tick_reload++ % period_reload))
+		return;
+
+	GError *err = gridcluster_reload_lbpool(ss->lb);
+	if (!err) {
+		already_succeeded = TRUE;
+		period_reload = period_reload << 1;
+		period_reload = CLAMP(period_reload,2,16);
+		tick_reload = 1;
+	} else {
 		GRID_WARN("Failed to reload the LB pool services: (%d) %s",
 				err->code, err->message);
 		g_clear_error(&err);

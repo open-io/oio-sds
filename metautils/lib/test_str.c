@@ -101,20 +101,6 @@ test_lower(void)
 }
 
 static void
-test_ishexa(void)
-{
-	// not hexa
-	g_assert(!oio_str_ishexa("g",1));
-	// wrong size
-	g_assert(!oio_str_ishexa("g",0));
-	g_assert(!oio_str_ishexa("0",0));
-	g_assert(oio_str_ishexa("0",1));
-	g_assert(oio_str_ishexa("",0));
-	// validate hexa chars
-	g_assert(oio_str_ishexa("0123456789ABCDEFabcdef",22));
-}
-
-static void
 test_strlen_len(void)
 {
 	gsize len(const gchar *s, gsize l) {
@@ -123,19 +109,6 @@ test_strlen_len(void)
 	g_assert(len("plop", strlen("plop")) == strlen("plop"));
 	for (guint i=0; i < sizeof("plopplop")+1; ++i)
 		g_assert(len("plopplop", i) == MIN(i,sizeof("plopplop")-1));
-}
-
-static void
-test_hex2bin(void)
-{
-	gboolean check(const guint8 *s, gsize slen, const gchar *t0) {
-		gsize tlen = 2 + (slen * 2);
-		gchar *t = g_malloc0(tlen);
-		oio_str_bin2hex(s, slen, t, tlen);
-		return 0 == g_strcmp0(t, t0);
-	}
-	#define CHECK(B,T) check((guint8*)(B),sizeof(B)-1,(T))
-	g_assert(CHECK("\x01\x10","0110"));
 }
 
 static void
@@ -164,9 +137,7 @@ main(int argc, char **argv)
 	g_test_add_func("/metautils/str/strlcpy_pns", test_strlcpy_pns);
 	g_test_add_func("/metautils/str/upper", test_upper);
 	g_test_add_func("/metautils/str/lower", test_lower);
-	g_test_add_func("/metautils/str/ishexa", test_ishexa);
 	g_test_add_func("/metautils/str/strlen", test_strlen_len);
-	g_test_add_func("/metautils/str/hex2bin", test_hex2bin);
 	g_test_add_func("/metautils/str/prefix", test_prefix);
 	return g_test_run();
 }
