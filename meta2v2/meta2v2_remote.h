@@ -99,7 +99,9 @@ GByteArray* m2v2_remote_pack_DESTROY(struct hc_url_s *url, guint32 flags);
 
 GByteArray* m2v2_remote_pack_HAS(struct hc_url_s *url);
 
-GByteArray* m2v2_remote_pack_PUT(struct hc_url_s *url, GSList *beans);
+/* 'content_id' is optional */
+GByteArray* m2v2_remote_pack_PUT(struct hc_url_s *url, GSList *beans,
+		GBytes *content_id);
 
 GByteArray* m2v2_remote_pack_OVERWRITE(struct hc_url_s *url, GSList *beans);
 
@@ -197,7 +199,7 @@ GError* m2v2_remote_execute_SPARE(const char *target, struct hc_url_s *url,
 		GSList **out);
 
 GError* m2v2_remote_execute_PUT(const char *target, struct hc_url_s *url,
-		GSList *in, GSList **out);
+		GSList *in, GBytes *content_id, GSList **out);
 
 GError* m2v2_remote_execute_OVERWRITE(const char *target, struct hc_url_s *url,
 		GSList *in);

@@ -170,6 +170,7 @@ struct oio_sds_ul_src_s
 		OIO_UL_SRC_BUFFER,
 		OIO_UL_SRC_FILE,
 	} type;
+
 	union {
 		struct {
 			const char *path;
@@ -192,10 +193,14 @@ struct oio_sds_ul_dst_s
 {
 	struct oio_url_s *url;
 
+	/* Should the container be autocreated */
 	int autocreate;
 
 	/* output variable: how many bytes have been uploaded */
 	size_t out_size;
+
+	/* Optional: the unique content name */
+	const char *content_id;
 };
 
 /* works with fully qualified urls (content) and local paths */
@@ -272,10 +277,11 @@ struct oio_error_s* oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url,
 		const char *content_id);
 
 /* Attempts a link with oio_sds_link(), then calls oio_sds_upload_from_source()
- * in case of error, if the link failed because of a content not found. */
-struct oio_error_s* oio_sds_link_or_put (struct oio_sds_s *sds,
-		struct oio_sds_ul_dst_s *dst, struct oio_sds_ul_src_s *src,
-		const char *content_id);
+ * in case of error, if the link failed because of a content not found.
+ * The underlying call to oio_sds_link() requires the 'content_id' field of
+ * 'dst' to be set to a non-NULL value. */
+struct oio_error_s* oio_sds_link_or_upload (struct oio_sds_s *sds,
+		struct oio_sds_ul_src_s *src, struct oio_sds_ul_dst_s *dst);
 
 /* DEPRECATED --------------------------------------------------------------- */
 

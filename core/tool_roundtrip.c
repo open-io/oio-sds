@@ -25,11 +25,21 @@ License along with this library.
 #include "oio_core.h"
 #include "oio_sds.h"
 
+#define MAYBERETURN(E,T) do { \
+	if (E) { \
+		g_printerr ("%s: (%d) %s\n", (T), \
+				oio_error_code((struct oio_error_s*)(E)), \
+				oio_error_message((struct oio_error_s*)(E))); \
+		return err; \
+	} \
+} while (0)
+
 static const char random_chars[] =
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	"abcdefghijklmnopqrstuvwxyz"
-	"0123456789"
-	"-_,";
+	"0123456789";
+
+static const char hex_chars[] = "0123456789ABCDEF";
 
 static GRand *prng = NULL;
 
@@ -42,126 +52,145 @@ _on_item (void *ctx, const struct oio_sds_list_item_s *item)
 	return 0;
 }
 
-static const char *
-_randomize_string (char *d, const char *chars, size_t dlen)
+struct file_info_s
 {
-	size_t chars_len = strlen(chars);
-	for (size_t i=0; i<dlen-1 ;i++)
-		*(d++) = chars[ g_rand_int_range (prng, 0, chars_len) ];
-	*d = 0;
-	return d;
+	guint8 h[32];
+	gsize hs;
+	gsize fs;
+};
+
+static GError *
+_checksum_file (const char *path, struct file_info_s *fi)
+{
+	GError *err = NULL;
+	gchar *file_content = NULL;
+	g_file_get_contents (path, &file_content, &fi->fs, &err);
+	if (err) return err;
+
+	fi->hs = g_checksum_type_get_length (G_CHECKSUM_SHA256);
+
+	GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA256);
+	g_checksum_update (checksum, (guint8*)file_content, fi->fs);
+	g_checksum_get_digest (checksum, fi->h, &fi->hs);
+	g_checksum_free (checksum);
+	g_free (file_content);
+
+	return NULL;
+}
+
+static void
+_append_random_chars (gchar *d, const char *chars, guint n)
+{
+	size_t len = strlen (chars);
+	gchar *p = d + strlen(d);
+	for (guint i=0; i<n ;i++)
+		*(p++) = chars [g_rand_int_range (prng, 0, len)];
+	*p = '\0';
 }
 
 static struct oio_error_s *
 _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 		const char *path)
 {
-	gchar tmppath[1024];
+	struct file_info_s fi, fi0;
 	struct oio_error_s *err = NULL;
 	int has = 0;
 
-	g_snprintf (tmppath, sizeof(tmppath), "/tmp/test-roundtrip-%d-%lu-",
-			getpid(), time(0));
-	size_t tmplen = strlen(tmppath);
-	_randomize_string (tmppath+tmplen, random_chars, MIN(16,sizeof(tmppath)-tmplen));
+	err = (struct oio_error_s*) _checksum_file (path, &fi0);
+	MAYBERETURN(err, "Checksum error (original): ");
 
-	GRID_INFO ("Roundtrip on local(%s) distant(%s)", tmppath,
-			oio_url_get (url, OIOURL_WHOLE));
+	gchar tmppath[256] = "";
+	g_snprintf (tmppath, sizeof(tmppath), "/tmp/test-roundtrip-%d-%lu-", getpid(), time(0));
+	_append_random_chars (tmppath, random_chars, 16);
+	gchar content_id[65] = "";
+	_append_random_chars (content_id, hex_chars, 64);
 
-	/* Check the presence of the targetd content */
+	GRID_INFO ("Roundtrip on local(%s) distant(%s) content_id(%s)", tmppath,
+			oio_url_get (url, OIOURL_WHOLE), content_id);
+
+	/* Check the content is not preset yet */
 	err = oio_sds_has (client, url, &has);
-	if (err) {
-		g_printerr ("Check error: (%d) %s\n", oio_error_code(err),
-				oio_error_message(err));
-		return err;
-	}
-	if (has) {
-		g_printerr ("File already present\n");
-		return err;
-	}
+	if (!err && has) err = (struct oio_error_s*) NEWERROR(0,"content already present");
+	MAYBERETURN(err, "Check error");
 	GRID_INFO("Content absent as expected");
 
-	/* Ok, the content was absent so we can upload it */
-	err = oio_sds_upload_from_file (client, url, path);
-	if (err) {
-		g_printerr ("Upload error: (%d) %s\n", oio_error_code(err),
-				oio_error_message(err));
-		return err;
-	}
+	/* Then upload it */
+	struct oio_sds_ul_src_s ul_src = {
+		.type = OIO_UL_SRC_FILE,
+		.data = { .file = { .path = path, .offset = 0, .size = 0, }, },
+	};
+	struct oio_sds_ul_dst_s ul_dst = {
+		.url = url, .autocreate = 1, .out_size = 0, .content_id = content_id,
+	};
+	err = oio_sds_upload (client, &ul_src, &ul_dst);
+	MAYBERETURN(err, "Upload error");
 	GRID_INFO("Content uploaded");
 
-	/*the upload succeeded, so the presence check should succeed */
+	/* Check it is now present */
 	has = 0;
 	err = oio_sds_has (client, url, &has);
-	if (err) {
-		g_printerr ("Check error: (%d) %s\n", oio_error_code(err),
-				oio_error_message(err));
-		return err;
-	}
-	if (!has) {
-		g_printerr ("File not present\n");
-		return err;
-	}
+	if (!err && !has) err = (struct oio_error_s*) NEWERROR(0, "content not found");
+	MAYBERETURN(err, "Check error");
 	GRID_INFO("Content present as expected");
 
-	/* and it is also possible to download the file */
+	/* Get it to validate the content is accessible */
 	err = oio_sds_download_to_file (client, url, tmppath);
-	if (err) {
-		g_printerr ("Download error: (%d) %s\n", oio_error_code(err),
-				oio_error_message(err));
-		return err;
-	}
+	MAYBERETURN(err, "Download error");
 	GRID_INFO("Content downloaded to a file");
 
-	/* downloads just a portion of the file */
+	/* Validate the original and the copy match */
+	err = (struct oio_error_s*) _checksum_file (tmppath, &fi);
+	MAYBERETURN(err, "Checksum error (copy): ");
+	if (fi.fs != fi0.fs)
+		MAYBERETURN(NEWERROR(0, "Copy sizes mismatch"), "Validation error");
+	if (0 != memcmp(fi.h, fi0.h, fi.hs))
+		MAYBERETURN(NEWERROR(0, "Copy hash mismatch"), "Validation error");
+	GRID_INFO("The original file and its copy match");
+
+	/* Get it an other way in a buffer. */
 	guint8 buf[1024];
-	struct oio_sds_dl_dst_s dst = {
+	struct oio_sds_dl_dst_s dl_dst = {
 		.type = OIO_DL_DST_BUFFER,
 		.data = {.buffer = {.ptr = buf, .length=1024}}
 	};
-	struct oio_sds_dl_src_s src = {
+	struct oio_sds_dl_src_s dl_src = {
 		.url = url,
 		.ranges = NULL,
 	};
-	err = oio_sds_download (client, &src, &dst);
-	if (err) {
-		g_printerr ("Download error: (%d) %s\n", oio_error_code(err),
-				oio_error_message (err));
-		return err;
-	}
+	err = oio_sds_download (client, &dl_src, &dl_dst);
+	MAYBERETURN(err, "Download error");
 	GRID_INFO("Content downloaded to a buffer");
 
-	/* Prsent the container's content */
-	struct oio_sds_list_param_s params = {
-		.url = url,
-		.prefix = NULL,
-		.marker = NULL,
-		.end = NULL,
-		.delimiter = 0,
-		.flag_allversions = 0,
-		.flag_nodeleted = 0,
-	};
-	struct oio_sds_list_listener_s listener = {
-		.ctx = NULL,
-		.on_item = _on_item,
-		.on_prefix = NULL,
-		.on_bound = NULL,
-	};
-	err = oio_sds_list (client, &params, &listener);
-	if (err) {
-		g_printerr ("List error: (%d) %s\n", oio_error_code(err),
-				oio_error_message(err));
-		return err;
-	}
+	/* link the container */
+	struct oio_url_s *url1 = oio_url_dup (url);
+	oio_url_set (url1, OIOURL_PATH, tmppath);
+	err = oio_sds_link (client, url1, content_id);
+	MAYBERETURN(err, "Link error: ");
 
-	/* and we let the container clean, we remove the blob in the container. */
+	/* List the container, the content must appear */
+	struct oio_sds_list_param_s list_in = {
+		.url = url,
+		.prefix = NULL, .marker = NULL, .end = NULL, .delimiter = 0,
+		.flag_allversions = 0, .flag_nodeleted = 0,
+	};
+	struct oio_sds_list_listener_s list_out = {
+		.ctx = NULL,
+		.on_item = _on_item, .on_prefix = NULL, .on_bound = NULL,
+	};
+	err = oio_sds_list (client, &list_in, &list_out);
+	MAYBERETURN(err, "List error");
+
+	/* Remove the content from the content */
 	err = oio_sds_delete (client, url);
-	if (err) {
-		g_printerr ("Delete error: (%d) %s\n", oio_error_code(err),
-				oio_error_message(err));
-		return err;
-	}
+	MAYBERETURN(err, "Delete error");
 	GRID_INFO("Content removed");
+
+	/* Check the content is not preset anymore */
+	has = 0;
+	err = oio_sds_has (client, url, &has);
+	if (!err && has) err = (struct oio_error_s*) NEWERROR(0, "content still present");
+	MAYBERETURN(err, "Check error");
+	GRID_INFO("Content absent as expected");
 
 	g_remove (tmppath);
 	oio_error_pfree (&err);
@@ -172,33 +201,17 @@ static struct oio_error_s *
 _roundtrip_autocontainer (struct oio_sds_s *client, struct oio_url_s *url,
 		const char *path)
 {
-	GError *err = NULL;
+	struct file_info_s fi;
+	GError *err = _checksum_file (path, &fi);
 
-	/* get the fle's content */
-	gchar *file_content = NULL;
-	gsize file_length = 0;
-	if (!g_file_get_contents (path, &file_content, &file_length, &err)) {
-		g_printerr ("Checksum error: file error (%d) %s\n", err->code, err->message);
-		return (struct oio_error_s*) err;
-	}
-	
-	/* hash it with SHA1 */
-	gsize sha1_len = g_checksum_type_get_length (G_CHECKSUM_SHA1);
-	guint8 sha1[sha1_len];
-	GChecksum *checksum = g_checksum_new (G_CHECKSUM_SHA1);
-	g_checksum_update (checksum, (guint8*)file_content, file_length);
-	g_checksum_get_digest (checksum, sha1, &sha1_len);
-	g_checksum_free (checksum);
-	g_free (file_content);
-	
 	/* compute the autocontainer with the SHA1, consider only the first 17 bits */
 	struct oio_str_autocontainer_config_s cfg = {
 		.src_offset = 0, .src_size = 0,
 		.dst_bits = 17,
 	};
 	char tmp[65];
-	const char *auto_container = oio_str_autocontainer_hash (sha1, sha1_len, tmp, &cfg);
-	
+	const char *auto_container = oio_str_autocontainer_hash (fi.h, fi.hs, tmp, &cfg);
+
 	/* build a new URL with the computed container name */
 	struct oio_url_s *url_auto = oio_url_dup (url);
 	oio_url_set (url_auto, OIOURL_USER, auto_container);
@@ -234,7 +247,7 @@ main(int argc, char **argv)
 	if (!oio_url_has_fq_path(url)) {
 		g_printerr ("Partial URL [%s]: requires a NS (%s), an ACCOUNT (%s),"
 				" an USER (%s) and a PATH (%s)\n",
-				oio_url_get (url, OIOURL_WHOLE), 
+				oio_url_get (url, OIOURL_WHOLE),
 				oio_url_has (url, OIOURL_NS)?"ok":"missing",
 				oio_url_has (url, OIOURL_ACCOUNT)?"ok":"missing",
 				oio_url_has (url, OIOURL_USER)?"ok":"missing",

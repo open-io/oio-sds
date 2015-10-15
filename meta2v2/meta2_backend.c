@@ -850,7 +850,8 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
-		GSList *in, GSList **out_deleted, GSList **out_added)
+		GSList *in, GBytes *content_id /* optional */,
+		GSList **out_deleted, GSList **out_added)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -871,6 +872,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		args.max_versions = _maxvers(sq3, m2b);
 		meta2_backend_get_nsinfo(m2b, &(args.nsinfo));
 		args.lbpool = m2b->backend.lb;
+		args.content_id = content_id;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_put_alias(&args, in, out_deleted, out_added)))
@@ -894,7 +896,6 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
-	struct m2db_put_args_s args;
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -902,6 +903,7 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
+		struct m2db_put_args_s args;
 		memset(&args, 0, sizeof(args));
 		args.sq3 = sq3;
 		args.url = url;
@@ -1001,7 +1003,8 @@ meta2_backend_link_content (struct meta2_backend_s *m2b,
 	if (err) return err;
 
 	if (!(err = sqlx_transaction_begin (sq3, &repctx))) {
-		err = m2db_link_content (sq3, url, content_id);
+		if (NULL != (err = m2db_link_content (sq3, url, content_id)))
+			GRID_DEBUG("Link failed: (%d) %s", err->code, err->message);
 		err = sqlx_transaction_end (repctx, err);
 	}
 
