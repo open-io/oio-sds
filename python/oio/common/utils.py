@@ -322,15 +322,14 @@ def paths_gen(volume_path):
 
 
 def read_user_xattr(fd):
-    l = ()
     try:
-        l = xattr.get_all(fd)
+        it = xattr.xattr(fd).iteritems()
     except IOError as e:
         for err in 'ENOTSUP', 'EOPNOTSUPP':
             if hasattr(errno, err) and e.errno == getattr(errno, err):
                 raise e
 
-    meta = {k[5:]: v for k, v in l if k.startswith('user.')}
+    meta = {k[5:]: v for k, v in it if k.startswith('user.')}
     return meta
 
 
