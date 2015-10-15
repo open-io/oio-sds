@@ -133,51 +133,6 @@ meta2_filter_extract_header_version_policy(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_body_rawcontentv1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *err = NULL;
-	struct hc_url_s *url = NULL;
-
-	gsize blen = 0;
-	void *b = metautils_message_get_BODY(reply->request, &blen);
-	if (!b || blen <= 0) {
-		err = NEWERROR(CODE_BAD_REQUEST, "Missing Body");
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	struct meta2_raw_content_s *content =
-		meta2_maintenance_content_unmarshall_buffer(b, blen, &err);
-
-	if (!content) {
-		if (!err)
-			err = NEWERROR(CODE_BAD_REQUEST, "unknown error");
-		g_prefix_error(&err, "Decoding error: ");
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	meta2_filter_ctx_set_input_udata(ctx, content,
-			(GDestroyNotify)meta2_maintenance_destroy_content);
-
-	/* Defines a container id in context url if body raw content is the only
-	 * information we have about the targeted container (the url is mandatory
-	 * for potential has_container filter called later, so this action prevent
-	 * from null url and ugly meta2 behaviour */
-	url = meta2_filter_ctx_get_url(ctx);
-	EXTRA_ASSERT (url != NULL);
-
-	if (!hc_url_get(url, HCURL_HEXID)) {
-		gchar strcid[STRLEN_CONTAINERID];
-		container_id_to_string(content->container_id, strcid, sizeof(strcid));
-		hc_url_set(url, HCURL_HEXID, strcid);
-	}
-
-	return FILTER_OK;
-}
-
-int
 meta2_filter_extract_header_chunk_beans(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
@@ -271,18 +226,6 @@ meta2_filter_extract_header_spare(struct gridd_filter_ctx_s *ctx,
 	return FILTER_OK;
 }
 
-int
-meta2_filter_extract_header_string_V_f2(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	gchar buf[1024];
-
-	TRACE_FILTER();
-	EXTRACT_STRING2(NAME_MSGKEY_VALUE, "V", 0);
-	return FILTER_OK;
-}
-
 static int
 _extract_header_flag(const gchar *n, struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
@@ -359,17 +302,6 @@ meta2_filter_extract_header_string_size(struct gridd_filter_ctx_s *ctx,
 
 	TRACE_FILTER();
 	EXTRACT_STRING(NAME_MSGKEY_CONTENTLENGTH, (opt != NULL));
-	return FILTER_OK;
-}
-
-int
-meta2_filter_extract_header_optional_position_prefix(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	gchar buf[64];
-	TRACE_FILTER();
-	EXTRACT_STRING(NAME_MSGKEY_POSITIONPREFIX, TRUE);
 	return FILTER_OK;
 }
 

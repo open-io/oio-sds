@@ -278,33 +278,6 @@ GError* m2db_dup_all_aliases(struct sqlx_sqlite3_s *sq3,
 
 /* --------- TYPE CONVERSION ---------- */
 
-/*!  */
-GSList* m2v2_beans_from_raw_content(const char *id, meta2_raw_content_t *rc);
-
-/*!  */
-GSList* m2v2_beans_from_raw_content_custom(const char *id, meta2_raw_content_t *rc,
-		char* (*make_pos) (guint32, void*), void *udata);
-
-/*!  */
-meta2_raw_content_t* raw_content_from_m2v2_beans(const container_id_t cid, GSList *beans);
-
-/*! @param id Hexadecimal content id (can be NULL if computed later) */
-GSList* m2v2_beans_from_raw_content_v2(const char *id, meta2_raw_content_v2_t *rc);
-
-/*!  */
-meta2_raw_content_v2_t* raw_content_v2_from_m2v2_beans(const container_id_t cid,
-		GSList *beans);
-
-/*!  */
-GSList* chunk_info_list_from_m2v2_beans(GSList *beans, char **mdsys);
-
-/*!  */
-GSList* m2v2_beans_from_chunk_info_list(GByteArray *id, const char *alias,
-		GSList *chunks);
-
-/** Converts a property bean to an old meta2_property_t. */
-meta2_property_t *bean_to_meta2_prop(struct bean_PROPERTIES_s *in_prop);
-
 /* chunk_pair */
 void init_chunk_pair(GPtrArray *chunks, chunk_pair_t *pair, struct bean_CONTENTS_s *c0);
 
