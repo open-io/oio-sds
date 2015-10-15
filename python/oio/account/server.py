@@ -14,15 +14,13 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import json
-
 import flask
 from flask import request
 from flask import current_app
 from gunicorn.glogging import Logger
 
 from oio.account.backend import AccountBackend
-from oio.common.utils import get_logger
+from oio.common.utils import get_logger, json
 
 
 def get_backend():

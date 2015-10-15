@@ -42,13 +42,14 @@ Building the entire project will require the SDK dependencies, but also:
 * python-pbr
 
 In addition, a few python modules are required at runtime:
-* python-redis
+* python-eventlet
 * python-flask
 * python-gunicorn
-* python-zmq
-* python-eventlet
+* python-redis
 * python-requests
+* python-simplejson
 * python-xattr (xattr)
+* python-zmq
 
 The account service will require an up and running backend:
 * redis

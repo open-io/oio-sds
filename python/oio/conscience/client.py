@@ -1,6 +1,6 @@
-import json
 from oio.common.client import Client
 from oio.common.exceptions import OioException
+from oio.common.utils import json
 
 
 class ConscienceClient(Client):

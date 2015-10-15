@@ -1,5 +1,5 @@
-import json
 from oio.common.client import Client
+from oio.common.utils import json
 
 
 def gen_headers():

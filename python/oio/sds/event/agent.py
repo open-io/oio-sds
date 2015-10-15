@@ -1,4 +1,3 @@
-import json
 import sqlite3
 import time
 
@@ -13,6 +12,7 @@ from oio.common.http import requests
 from oio.common.queue.sqlite import SqliteQueue
 from oio.common.utils import get_logger
 from oio.common.utils import int_value
+from oio.common.utils import json
 from oio.common.utils import true_value
 from oio.common.utils import validate_service_conf
 from oio.conscience.client import ConscienceClient
