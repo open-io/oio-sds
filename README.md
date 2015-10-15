@@ -48,7 +48,7 @@ In addition, a few python modules are required at runtime:
 * python-zmq
 * python-eventlet
 * python-requests
-* python-pyxattr (pyxattr)
+* python-xattr (xattr)
 
 The account service will require an up and running backend:
 * redis
