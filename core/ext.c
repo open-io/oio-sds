@@ -79,6 +79,50 @@ oio_ext_gslist_shuffle(GSList *src)
 		(l2 && l2->next) ? oio_ext_gslist_shuffle(l2) : l2);
 }
 
+void
+oio_ext_array_shuffle (gpointer *array, gsize len)
+{
+	while (len-- > 1) {
+		guint32 i = g_random_int_range (0, len+1);
+		if (i == len)
+			continue;
+		gpointer tmp = array[i];
+		array[i] = array[len];
+		array[len] = tmp;
+	}
+}
+
+void
+oio_ext_array_partition (gpointer *array, gsize len, gboolean (*predicate)(gconstpointer))
+{
+	g_assert (array != NULL);
+	g_assert (predicate != NULL);
+
+	if (!len) return;
+
+	/* qualify each item */
+	gboolean good[len];
+	for (gsize i=0; i<len ;i++)
+		good[i] = (*predicate) (array[i]);
+
+	/* partition the items, the predicate==TRUE first */
+	for (gsize i=0; i<len ;i++) {
+		if (good[i])
+			continue;
+		/* swap the items */
+		gchar *tmp = array[len-1];
+		array[len-1] = array[i];
+		array[i] = tmp;
+		/* swap the qualities */
+		gboolean b = good[len-1];
+		good[len-1] = good[i];
+		good[i] = b;
+
+		-- len;
+		-- i;
+	}
+}
+
 GError *
 oio_ext_extract_json (struct json_object *obj,
 		struct oio_ext_json_mapping_s *tab)
@@ -102,6 +146,8 @@ oio_ext_extract_json (struct json_object *obj,
 	}
 	return NULL;
 }
+
+/* -------------------------------------------------------------------------- */
 
 static void _free0 (gpointer p) { if (p) g_free(p); }
 
@@ -133,3 +179,4 @@ oio_ext_set_random_reqid (void)
 	oio_str_bin2hex((guint8*)&bulk, sizeof(bulk), hex, sizeof(hex));
 	oio_ext_set_reqid(hex);
 }
+
