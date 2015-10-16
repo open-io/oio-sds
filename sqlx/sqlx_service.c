@@ -814,7 +814,7 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 {
 	static volatile gboolean already_succeeded = FALSE;
 	static volatile guint tick_reload = 0;
-	static volatile guint period_reload = 2;
+	static volatile guint period_reload = 1;
 
 	EXTRA_ASSERT(ss != NULL);
 	if (!ss->lb)
@@ -826,8 +826,8 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 	GError *err = gridcluster_reload_lbpool(ss->lb);
 	if (!err) {
 		already_succeeded = TRUE;
-		period_reload = period_reload << 1;
-		period_reload = CLAMP(period_reload,2,16);
+		period_reload ++;
+		period_reload = CLAMP(period_reload,2,10);
 		tick_reload = 1;
 	} else {
 		GRID_WARN("Failed to reload the LB pool services: (%d) %s",
