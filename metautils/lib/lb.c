@@ -470,7 +470,7 @@ grid_lb_get_service_from_url(struct grid_lb_s *lb, const gchar *url)
 		return NULL;
 
 	memset(&ai, 0, sizeof(struct addr_info_s));
-	if (!grid_string_to_addrinfo(url, NULL, &ai))
+	if (!grid_string_to_addrinfo(url, &ai))
 		return NULL;
 
 	return grid_lb_get_service_from_addr(lb, &ai);
@@ -524,7 +524,7 @@ grid_lb_iterator_is_url_available(struct grid_lb_iterator_s *iter,
 		return FALSE;
 	}
 
-	if (!grid_string_to_addrinfo(url, NULL, &ai))
+	if (!grid_string_to_addrinfo(url, &ai))
 		return FALSE;
 
 	return grid_lb_iterator_is_addr_available(iter, &ai);

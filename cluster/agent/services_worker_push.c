@@ -46,7 +46,7 @@ agent_get_service_key(struct service_info_s *si, gchar * dst, gsize dst_size)
 
 	writen = 0;
 	writen += g_snprintf(dst + writen, dst_size - writen, "%s:", si->type);
-	writen += addr_info_to_string(&(si->addr), dst + writen, dst_size - writen);
+	writen += grid_addrinfo_to_string(&(si->addr), dst + writen, dst_size - writen);
 	return writen;
 }
 
@@ -60,7 +60,7 @@ expand_service_tags(struct namespace_data_s *ns_data, struct service_info_s *si,
 	if (!si->tags)
 		return TRUE;
 
-	addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
+	grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
 	for (i = 0, max = si->tags->len; i < max; i++) {
 
 		tag = g_ptr_array_index(si->tags, i);
@@ -153,7 +153,7 @@ manage_service(struct service_info_s *si)
 	}
 
 	key_size = agent_get_service_key(si, key, sizeof(key));
-	addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
+	grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
 
 	/*this service must refer to known namespace and service type*/
 	error_local = NULL;

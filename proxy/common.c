@@ -192,7 +192,7 @@ _gba_request (struct meta1_service_url_s *m1u,
 			&body, _on_reply);
 	g_byte_array_unref (req);
 	gridd_client_start (c);
-	gridd_client_set_timeout (c, 1.0, 1.0);
+	gridd_client_set_timeout (c, COMMON_CLIENT_TIMEOUT);
 	GError *e = gridd_client_loop (c);
 	if (!e)
 		e = gridd_client_error (c);

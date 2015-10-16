@@ -510,29 +510,6 @@ service_info_remove_tag(GPtrArray * a, const gchar * name)
 	}
 }
 
-gboolean
-service_info_set_address(struct service_info_s * si, const gchar * host, int port, GError ** error)
-{
-	addr_info_t *addr;
-
-	if (!si || !host || port < 0 || port > 65535) {
-		GSETERROR(error, "Invalid parameter si=%p host=%p port=%i", si, host, port);
-		return FALSE;
-	}
-
-	addr = build_addr_info(host, port, error);
-	if (!addr) {
-		GSETERROR(error, "Invalid address");
-		return FALSE;
-	}
-
-	memcpy(&(si->addr), addr, sizeof(addr_info_t));
-
-	g_free(addr);
-
-	return TRUE;
-}
-
 GSList*
 service_info_extract_nsname(GSList *services, gboolean copy)
 {
@@ -578,7 +555,7 @@ service_info_to_string(const service_info_t *si)
 
 	/* header string */
 	concat(g_strdup_printf("%s|%s", si->ns_name, si->type));
-	addr_info_to_string(&(si->addr), tmp, sizeof(tmp));
+	grid_addrinfo_to_string(&(si->addr), tmp, sizeof(tmp));
 	concat(g_strdup(tmp));
 	concat(g_strdup_printf("score=%d", si->score.value));
 
@@ -780,7 +757,7 @@ service_info_load_json_object(struct json_object *obj,
 	if (err) return err;
 	
 	struct addr_info_s addr;
-	if (!grid_string_to_addrinfo(json_object_get_string(url), NULL, &addr))
+	if (!grid_string_to_addrinfo(json_object_get_string(url), &addr))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid address");
 
 	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));

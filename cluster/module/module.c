@@ -727,7 +727,7 @@ push_service(struct conscience_s *cs, struct service_info_s *si)
 		if (srv)
 			DEBUG("Service [%s] refreshed with score=%d", str_descr, srv->score.value);
 		else {
-			addr_info_to_string(&(si->addr),str_addr,sizeof(str_addr));
+			grid_addrinfo_to_string(&(si->addr),str_addr,sizeof(str_addr));
 			NOTICE("Service [%s/%s/%s] registered", conscience_get_namespace(cs), si->type, str_addr);
 		}
 	}
@@ -738,7 +738,7 @@ push_service(struct conscience_s *cs, struct service_info_s *si)
 		if (srv)
 			WARN("Service [%s] refresh failed : %s", str_descr, gerror_get_message(error_local));
 		else {
-			addr_info_to_string(&(si->addr),str_addr,sizeof(str_addr));
+			grid_addrinfo_to_string(&(si->addr),str_addr,sizeof(str_addr));
 			WARN("Service [%s/%s/%s] registration failed : %s", conscience_get_namespace(cs),
 				si->type, str_addr, gerror_get_message(error_local));
 		}
@@ -872,7 +872,7 @@ rm_service(struct conscience_s *cs, struct service_info_s *si)
 
 	if (INFO_ENABLED()) {
 		str_desc_len = g_snprintf(str_desc, sizeof(str_desc), "%s/%s/", conscience_get_namespace(cs), si->type);
-		addr_info_to_string(&(si->addr), str_desc + str_desc_len, sizeof(str_desc) - str_desc_len);
+		grid_addrinfo_to_string(&(si->addr), str_desc + str_desc_len, sizeof(str_desc) - str_desc_len);
 		memcpy(&(srvid.addr), &(si->addr), sizeof(addr_info_t));
 	}
 
@@ -1351,7 +1351,7 @@ module_init_meta0(struct conscience_s *cs, GHashTable * params, GError ** err)
 	else
 		flag_forced_meta0 = TRUE;
 
-	if (!l4_address_init_with_url(&(srvid.addr),str,err)) {
+	if (!grid_string_to_addrinfo(str, &(srvid.addr))) {
 		GSETERROR(err,"Invalid META0 address");
 		return FALSE;
 	}

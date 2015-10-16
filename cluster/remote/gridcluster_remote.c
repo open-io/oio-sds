@@ -33,7 +33,7 @@ gcluster_get_namespace_info_full(addr_info_t * addr, long timeout, GError ** err
 {
 	EXTRA_ASSERT (addr != NULL);
 	gchar str[STRLEN_ADDRINFO];
-	addr_info_to_string(addr, str, sizeof(str));
+	grid_addrinfo_to_string(addr, str, sizeof(str));
 
 	GByteArray *out = NULL;
 	GError *err = gridd_client_exec_and_concat (str, ((gdouble)timeout)/1000.0,

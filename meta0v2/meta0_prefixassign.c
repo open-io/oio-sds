@@ -236,6 +236,17 @@ _select_source_assign_m1(GList *lst, guint8 *treat_prefixes, const guint avgscor
 	return aM1;
 }
 
+static gchar *
+_host (const char *s0)
+{
+	if (!s0)
+		return NULL;
+	gchar *s = strrchr(s0, ':');
+	if (!s)
+		return NULL;
+	return g_strndup (s0, s-s0);
+}
+
 static struct meta0_assign_meta1_s*
 _select_dest_assign_m1(GList *lst, const struct meta0_assign_meta1_s *s_aM1, guint8 *prefixe, gboolean unref,gboolean force)
 {
@@ -253,19 +264,19 @@ _select_dest_assign_m1(GList *lst, const struct meta0_assign_meta1_s *s_aM1, gui
 	struct meta0_assign_meta1_s *d_aM1 = lst->data;
 
 	gboolean loop = TRUE;
-	gchar *shost=NULL, *dhost=NULL, *sport=NULL, *dport=NULL, *host=NULL, *port=NULL;
+	gchar *shost=NULL, *dhost=NULL, *host=NULL, *port=NULL;
 	guint i, len;
 
 	guint avgscore = context->avgscore;
 
 	if (s_aM1)
-		l4_address_split(s_aM1->addr,&shost,&sport);
+		shost = _host (s_aM1->addr);
 	do {
 		if (d_aM1 == NULL || (d_aM1->score >= avgscore && !unref)) {
 			loop=FALSE;
 			d_aM1=NULL;
 		} else {
-			l4_address_split(d_aM1->addr,&dhost,&dport);
+			dhost = _host (d_aM1->addr);
 
 			gchar **urls = meta0_utils_array_get_urlv(context->array_meta1_by_prefix , prefix);	
 			if ( urls ) {
@@ -278,7 +289,7 @@ _select_dest_assign_m1(GList *lst, const struct meta0_assign_meta1_s *s_aM1, gui
 						loop=TRUE;
 						break;  // meta1 manage this prefix, not OK
 					}
-					if (l4_address_split(urls[i],&host,&port)) {
+					if (NULL != (host = _host(urls[i]))) {
 						if (g_ascii_strncasecmp(host,dhost,strlen(dhost)) == 0 && ( shost==NULL || g_ascii_strncasecmp(host,shost,strlen(shost)) != 0)){
 							if (!force) {
 								//nouveau meta1 host identique a un host deja present
@@ -288,14 +299,8 @@ _select_dest_assign_m1(GList *lst, const struct meta0_assign_meta1_s *s_aM1, gui
 							}
 						}
 						loop=FALSE;
-						if( host) {
-							g_free(host);
-							host=NULL;
-						}
-						if( port) {
-							g_free(port);
-							port=NULL;
-						}
+						oio_str_clean (&host);
+						oio_str_clean (&port);
 					}
 				}
 				g_strfreev(urls);
@@ -313,32 +318,13 @@ _select_dest_assign_m1(GList *lst, const struct meta0_assign_meta1_s *s_aM1, gui
 				}
 			}
 		}
-		if( dhost) {
-			g_free(dhost);
-			dhost=NULL;
-		}
-		if( host) {
-			g_free(host);
-			host=NULL;
-		}
-		if( dport) {
-			g_free(dport);
-			dport=NULL;
-		}
-		if( port) {
-			g_free(port);
-			port=NULL;
-		}
+		oio_str_clean (&dhost);
+		oio_str_clean (&host);
+		oio_str_clean (&port);
 
 	} while (loop==TRUE);
-	if( shost) {
-		g_free(shost);
-		shost=NULL;
-	}
-	if( sport) {
-		g_free(sport);
-		sport=NULL;
-	}
+
+	oio_str_clean (&shost);
 
 	if (!d_aM1) {
 		GRID_TRACE("NO meta1 dest found");
@@ -604,7 +590,7 @@ _unref_meta1(gchar **urls)
 		addr_info_t addr;
 		GRID_DEBUG("unref url %s",*urls);
 
-		grid_string_to_addrinfo(*urls,NULL,&addr);
+		grid_string_to_addrinfo(*urls, &addr);
 
 		GSList *l=prefixByMeta1;
 		for (;l;l=l->next) {

@@ -63,6 +63,12 @@ struct hc_resolver_s
 	struct lru_ext_s csm0;
 	time_t bogonow;
 	enum hc_resolver_flags_e flags;
+
+	/* called with the IP:PORT string */
+	gboolean (*service_qualifier) (gconstpointer);
+
+	/* called with the IP:PORT string */
+	void (*service_notifier) (gconstpointer);
 };
 
 #endif /*OIO_SDS__resolver__hc_resolver_internals_h*/

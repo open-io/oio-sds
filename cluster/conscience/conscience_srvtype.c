@@ -218,7 +218,7 @@ conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
 	/*build the service description once for all*/
 	desc_size = g_snprintf(service->description,sizeof(service->description),"%s/%s/",
 		srvtype->conscience->ns_info.name, srvtype->type_name);
-	addr_info_to_string(&(service->id.addr),
+	grid_addrinfo_to_string(&(service->id.addr),
 		service->description+desc_size,sizeof(service->description)-desc_size);
 
 	/*register the service with its ID*/

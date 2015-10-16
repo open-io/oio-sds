@@ -691,7 +691,7 @@ main_thread (gpointer arg)
 		ctx = request_context_create(clt, &clt_addr);
 
 		memset(str_addr_src, 0, sizeof(str_addr_src));
-		addr_info_to_string(ctx->remote_addr, str_addr_src, sizeof(str_addr_src));
+		grid_addrinfo_to_string(ctx->remote_addr, str_addr_src, sizeof(str_addr_src));
 		TRACE ("Connection NEW fd=%d [%s]", clt, str_addr_src);
 
 		while (may_continue) {
@@ -1008,16 +1008,16 @@ set_srv_addr(const gchar* url)
 	EXTRA_ASSERT(url != NULL);
 
 	newaddr = g_malloc0(sizeof(addr_info_t));
-	if (!l4_address_init_with_url(newaddr, url, &local_error))
+	if (!grid_string_to_addrinfo(url, newaddr))
 		ERROR("Failed to init the server address to [%s] : %s", url, gerror_get_message(local_error));
 	if (local_error)
 		g_clear_error(&local_error);
 
-	addr_info_to_string(newaddr, str_addr, sizeof(str_addr));
+	grid_addrinfo_to_string(newaddr, str_addr, sizeof(str_addr));
 	NOTICE("Saving [%s] as main server address", str_addr);
 
 	if (serv_addr != NULL) {
-		addr_info_to_string(serv_addr, str_addr, sizeof(str_addr));
+		grid_addrinfo_to_string(serv_addr, str_addr, sizeof(str_addr));
 		WARN("Disarding anoter server address [%s], this won't be registered in the conscience", str_addr);
 		addr_info_gclean(serv_addr, NULL);
 	}

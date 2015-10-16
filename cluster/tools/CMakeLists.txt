@@ -11,17 +11,8 @@ target_link_libraries(gridcluster_cli
 		metautils
 		${GLIB2_LIBRARIES})
 
-add_executable(gridcluster_dummy_service
-	dummy_service.c)
-bin_prefix(gridcluster_dummy_service -cluster-register)
-target_link_libraries(gridcluster_dummy_service
-		gridcluster gridcluster-remote
-		metautils
-		${GLIB2_LIBRARIES})
-
 install(
 	TARGETS
 		gridcluster_cli
-		gridcluster_dummy_service
 	RUNTIME DESTINATION bin)
 

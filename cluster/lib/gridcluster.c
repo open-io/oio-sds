@@ -850,7 +850,7 @@ gridcluster_get_conscience_addr(const char *ns_name)
 	gchar *cs = gridcluster_get_conscience(ns_name);
 	if (!cs)
 		return NULL;
-	gboolean rc = grid_string_to_addrinfo(cs, NULL, &addr);
+	gboolean rc = grid_string_to_addrinfo(cs, &addr);
 	g_free(cs);
 	return rc ? g_memdup(&addr, sizeof(addr_info_t)) : NULL;
 }

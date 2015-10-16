@@ -236,7 +236,7 @@ asn1_request_worker(worker_t *worker, GError **error)
 		return 0;
 	}
 
-	if (0 > (fd = addrinfo_connect_nopoll(asn1_session->addr, 1000, error))) {
+	if (0 > (fd = addrinfo_connect_nopoll(asn1_session->addr, error))) {
 		GSETERROR(error, "Connection to gridd server failed");
 		return 0;
 	}
@@ -252,7 +252,7 @@ asn1_request_worker(worker_t *worker, GError **error)
 		return 0;
 	}
 
-	addr_info_to_string(asn1_session->addr, str_addr, sizeof(str_addr));
+	grid_addrinfo_to_string(asn1_session->addr, str_addr, sizeof(str_addr));
 	DEBUG("ASN.1 request '%s' sent to %s (fd=%d)", asn1_session->req_name, str_addr, fd);
 	return(1);
 }

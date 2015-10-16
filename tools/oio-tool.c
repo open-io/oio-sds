@@ -148,7 +148,7 @@ _dump_addr (const char *s)
 	gchar str[256], hexa[1024];
 	struct addr_info_s addr;
 
-	if (grid_string_to_addrinfo(s, NULL, &addr)) {
+	if (grid_string_to_addrinfo(s, &addr)) {
 		memset(str, 0, sizeof(str));
 		grid_addrinfo_to_string(&addr, str, sizeof(str));
 		memset(hexa, 0, sizeof(hexa));

@@ -203,7 +203,7 @@ meta0_utils_tree_to_list(GTree *byurl)
 		GSList **pl = u;
 
 		m0i = g_malloc0(sizeof(*m0i));
-		grid_string_to_addrinfo(hashstr_str(hurl), NULL, &(m0i->addr));
+		grid_string_to_addrinfo(hashstr_str(hurl), &(m0i->addr));
 		m0i->prefixes_size = 2 * pfx->len;
 		m0i->prefixes = g_memdup(pfx->data, m0i->prefixes_size);
 		*pl = g_slist_prepend(*pl, m0i);

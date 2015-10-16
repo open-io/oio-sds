@@ -46,7 +46,7 @@ meta1_client_list(void)
         gchar **result;
         guint len =0;
 
-	meta1v2_remote_get_prefixes(&addr, &err, &result);
+	err = meta1v2_remote_get_prefixes(url, &result);
 
 	if (err != NULL) {
                 GRID_WARN("META1 request error (%d) : %s", err->code, err->message);
@@ -111,7 +111,7 @@ meta1_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	if (!grid_string_to_addrinfo(argv[0], NULL, &addr)) {
+	if (!grid_string_to_addrinfo(argv[0], &addr)) {
                 GRID_WARN("Invalid address : (%d) %s", errno, strerror(errno));
                 return FALSE;
         }

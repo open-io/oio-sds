@@ -137,10 +137,10 @@ gridd_clients_error(struct gridd_client_s **clients)
 }
 
 void
-gridd_clients_set_timeout(struct gridd_client_s **clients, gdouble to0, gdouble to1)
+gridd_clients_set_timeout(struct gridd_client_s **clients, gdouble seconds)
 {
 	for (; *clients ;++clients)
-		gridd_client_set_timeout(*clients, to0, to1);
+		gridd_client_set_timeout(*clients, seconds);
 }
 
 gboolean
@@ -177,7 +177,7 @@ gridd_clients_start(struct gridd_client_s **clients)
 }
 
 static void
-_clients_expire(struct gridd_client_s **clients, GTimeVal *now)
+_clients_expire(struct gridd_client_s **clients, gint64 now)
 {
 	if (clients) {
 		struct gridd_client_s *c;
@@ -217,9 +217,7 @@ gridd_client_step(struct gridd_client_s *client)
 
 	int rc = metautils_syscall_poll(&pfd, 1, 1000);
 	if (rc == 0) {
-		GTimeVal now;
-		g_get_current_time(&now);
-		gridd_client_expire(client, &now);
+		gridd_client_expire(client, g_get_monotonic_time ());
 		return NULL;
 	}
 	if (rc < 0)
@@ -252,7 +250,6 @@ gridd_clients_step(struct gridd_client_s **clients)
 	guint i, j;
 	int rc;
 	struct gridd_client_s *last, **plast;
-	GTimeVal now;
 	guint nbclients;
 
 	EXTRA_ASSERT(clients != NULL);
@@ -270,8 +267,7 @@ gridd_clients_step(struct gridd_client_s **clients)
 
 	/* Wait for an event to happen */
 	if (!(rc = poll(pfd, j, 100))) {
-		g_get_current_time(&now);
-		_clients_expire(clients, &now);
+		_clients_expire(clients, g_get_monotonic_time ());
 		return NULL;
 	}
 	if (rc < 0)
@@ -299,8 +295,7 @@ gridd_clients_step(struct gridd_client_s **clients)
 	}
 
 	/* Now check for expired clients */
-	g_get_current_time(&now);
-	_clients_expire(clients, &now);
+	_clients_expire(clients, g_get_monotonic_time ());
 	return NULL;
 }
 
@@ -333,9 +328,9 @@ gridd_client_run (struct gridd_client_s *self)
 }
 
 GError *
-gridd_client_exec (const gchar *to, gdouble timeout, GByteArray *req)
+gridd_client_exec (const gchar *to, gdouble seconds, GByteArray *req)
 {
-	return gridd_client_exec4 (to, timeout, req, NULL);
+	return gridd_client_exec4 (to, seconds, req, NULL);
 }
 
 static gboolean
@@ -356,9 +351,14 @@ _cb_exec4 (GPtrArray *tmp, MESSAGE reply)
 }
 
 GError *
-gridd_client_exec4 (const gchar *to, gdouble timeout, GByteArray *req,
+gridd_client_exec4 (const gchar *to, gdouble seconds, GByteArray *req,
 		GByteArray ***out)
 {
+	if (!to) {
+		g_byte_array_unref (req);
+		return NEWERROR(CODE_INTERNAL_ERROR, "No target");
+	}
+
 	GPtrArray *tmp = NULL;
 	if (out)
 		tmp = g_ptr_array_new();
@@ -368,8 +368,8 @@ gridd_client_exec4 (const gchar *to, gdouble timeout, GByteArray *req,
 	if (!client)
 		return NEWERROR(CODE_INTERNAL_ERROR, "client creation");
 	g_byte_array_unref (req);
-	if (timeout > 0.0)
-		gridd_client_set_timeout (client, timeout, timeout);
+	if (seconds > 0.0)
+		gridd_client_set_timeout (client, seconds);
 	GError *err = gridd_client_run (client);
 	gridd_client_free (client);
 
@@ -396,9 +396,14 @@ _cb_exec_and_concat (GByteArray *tmp, MESSAGE reply)
 }
 
 GError *
-gridd_client_exec_and_concat (const gchar *to, gdouble timeout, GByteArray *req,
+gridd_client_exec_and_concat (const gchar *to, gdouble seconds, GByteArray *req,
 		GByteArray **out)
 {
+	if (!to) {
+		g_byte_array_unref (req);
+		return NEWERROR(CODE_INTERNAL_ERROR, "No target");
+	}
+
 	GByteArray *tmp = NULL;
 	if (out)
 		tmp = g_byte_array_new();
@@ -408,8 +413,8 @@ gridd_client_exec_and_concat (const gchar *to, gdouble timeout, GByteArray *req,
 	g_byte_array_unref (req);
 	if (!client)
 		return NEWERROR(CODE_INTERNAL_ERROR, "client creation");
-	if (timeout > 0.0)
-		gridd_client_set_timeout (client, timeout, timeout);
+	if (seconds > 0.0)
+		gridd_client_set_timeout (client, seconds);
 	GError *err = gridd_client_run (client);
 	gridd_client_free (client);
 
@@ -423,11 +428,11 @@ gridd_client_exec_and_concat (const gchar *to, gdouble timeout, GByteArray *req,
 }
 
 GError *
-gridd_client_exec_and_concat_string (const gchar *to, gdouble timeout, GByteArray *req,
+gridd_client_exec_and_concat_string (const gchar *to, gdouble seconds, GByteArray *req,
 		gchar **out)
 {
 	GByteArray *tmp = NULL;
-	GError *err = gridd_client_exec_and_concat (to, timeout, req, out ? &tmp : NULL);
+	GError *err = gridd_client_exec_and_concat (to, seconds, req, out ? &tmp : NULL);
 	
 	if (err) {
 		if (tmp)
@@ -442,11 +447,11 @@ gridd_client_exec_and_concat_string (const gchar *to, gdouble timeout, GByteArra
 }
 
 GError *
-gridd_client_exec_and_decode (const gchar *to, gdouble timeout,
+gridd_client_exec_and_decode (const gchar *to, gdouble seconds,
 		GByteArray *req, GSList **out, body_decoder_f decode)
 {
 	GByteArray ** bodies = NULL;
-	GError *err = gridd_client_exec4 (to, timeout, req,
+	GError *err = gridd_client_exec4 (to, seconds, req,
 			(out && decode) ? &bodies : NULL);
 	if (err) {
 		metautils_gba_cleanv (bodies);
