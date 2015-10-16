@@ -81,7 +81,7 @@ License along with this library.
 # endif
 
 # ifndef CS_CLIENT_TIMEOUT
-#  define CS_CLIENT_TIMEOUT 10.0
+#  define CS_CLIENT_TIMEOUT 3.0
 # endif
 
 /* Some well known service tags macro names */

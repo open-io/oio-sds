@@ -1493,7 +1493,7 @@ grid_lb_reload_json_object(struct grid_lb_s *lb, struct json_object *obj)
 			if (!item || !json_object_is_type(item, json_type_object))
 				return TRUE;
 			*p_si = NULL;
-			GError *e = service_info_load_json_object(item, p_si);
+			GError *e = service_info_load_json_object(item, p_si, TRUE);
 			if (!e)
 				return FALSE;
 			g_clear_error(&e);

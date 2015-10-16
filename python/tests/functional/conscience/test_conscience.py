@@ -109,51 +109,49 @@ class TestConscienceFunctional(unittest.TestCase):
 
     def test_service_pool_put_valid(self):
 
-        time.sleep(1.5)
-        array_addr = [session["addr"] for session in
-                      self.session.get(self.addr_type).json()]
-        self.assertFalse((self.addr1 in array_addr))
+        time.sleep(0.5)
+        resp = self.session.get(self.addr_type)
+        self.assertEqual(resp.status_code, 200)
+        array_addr = [srv["addr"] for srv in resp.json()]
+        self.assertIn(self.addr2, array_addr)
 
         resp = self.session.put(self.addr_type, self.valid_service)
         self.assertEqual(resp.status_code, 200)
-        time.sleep(2)
-        array_addr = [session["addr"] for session in
-                      self.session.get(self.addr_type).json()]
-        self.assertTrue((self.addr1 in array_addr))
+
+        time.sleep(0.5)
+        resp = self.session.get(self.addr_type)
+        self.assertEqual(resp.status_code, 200)
+        array_addr = [srv["addr"] for srv in resp.json()]
+        self.assertIn(self.addr1, array_addr)
 
     def test_service_pool_put_replace(self):
 
-        time.sleep(2)
         self.session.put(self.addr_type, self.valid_service_replace)
 
-        time.sleep(2)
+        time.sleep(0.5)
         resp = self.session.get(self.addr_type).json()
         tag = [service["tags"]["tag.vol"] for service in resp if
                service["addr"] == self.addr2][0]
         self.assertEqual(tag, "changed")
 
     def test_service_pool_put_invalid_addr(self):
-
         resp = self.session.put(self.addr_type, self.invalid_service)
         self.assertEqual(resp.status_code, 400)
 
     def test_service_pool_put_missing_info(self):
-
         resp = self.session.put(self.addr_type, self.service_missing_infos)
         self.assertEqual(resp.status_code, 400)
 
     def test_service_pool_delete(self):
-
-        time.sleep(3)
-
+        time.sleep(0.5)
         resp = self.session.delete(self.addr_type)
-
         self.assertEqual(resp.status_code, 200)
 
-        time.sleep(3)
-        array_addr = [session["addr"] for session in
-                      self.session.get(self.addr_type).json()]
-        self.assertFalse((self.addr2 in array_addr))
+        time.sleep(0.5)
+        resp = self.session.get(self.addr_type)
+        self.assertEqual(resp.status_code, 200)
+        services = resp.json()
+        self.assertListEqual(services,[])
 
     def test_service_pool_delete_wrong(self):
 
@@ -162,11 +160,10 @@ class TestConscienceFunctional(unittest.TestCase):
 
     def test_service_pool_actions_lock(self):
 
-        resp = self.session.post(self.addr_type + "/action",
-                                 self.valid_lock_service)
+        resp = self.session.post(self.addr_type + "/action", self.valid_lock_service)
         self.assertEqual(resp.status_code, 200)
 
-        time.sleep(2.5)
+        time.sleep(0.5)
         score = \
             [session["score"] for session in
              self.session.get(self.addr_type).json() if
@@ -175,15 +172,12 @@ class TestConscienceFunctional(unittest.TestCase):
 
     def test_service_pool_actions_lock_and_reput(self):
 
-        self.session.post(self.addr_type + "/action",
-                          self.valid_lock_service)
+        self.session.post(self.addr_type + "/action", self.valid_lock_service)
 
-        time.sleep(2.5)
-
+        time.sleep(0.5)
         self.session.put(self.addr_type, self.valid_service)
 
-        time.sleep(2.5)
-
+        time.sleep(0.5)
         score = \
             [session["score"] for session in
              self.session.get(self.addr_type).json() if
@@ -192,18 +186,13 @@ class TestConscienceFunctional(unittest.TestCase):
 
     def test_service_pool_actions_lock_and_relock(self):
 
-        self.session.post(self.addr_type + "/action",
-                          self.valid_lock_service)
+        self.session.post(self.addr_type + "/action", self.valid_lock_service)
 
-        time.sleep(2.5)
+        time.sleep(0.5)
+        self.session.post(self.addr_type + "/action", self.valid_lock_service2)
 
-        self.session.post(self.addr_type + "/action",
-                          self.valid_lock_service2)
-
-        time.sleep(2.5)
-
-        score = \
-            [session["score"] for session in
+        time.sleep(0.5)
+        score = [session["score"] for session in
              self.session.get(self.addr_type).json() if
              session["addr"] == self.addr1][0]
         self.assertEqual(score, 100 - self.score_rand)
@@ -212,12 +201,11 @@ class TestConscienceFunctional(unittest.TestCase):
 
         self.session.post(self.addr_type + "/action", self.valid_lock_service)
 
-        time.sleep(2)
-        resp = self.session.post(self.addr_type + "/action",
-                                 self.valid_unlock_service)
+        time.sleep(0.5)
+        resp = self.session.post(self.addr_type + "/action", self.valid_unlock_service)
         self.assertEqual(resp.status_code, 200)
 
-        time.sleep(2.5)
+        time.sleep(0.5)
         service = [session for session in
                    self.session.get(self.addr_type).json() if
                    session["addr"] == self.addr1]

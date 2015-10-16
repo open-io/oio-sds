@@ -158,15 +158,13 @@ grid_stats_holder_get(struct grid_stats_holder_s *gsh, ...)
 }
 
 void
-grid_stats_holder_foreach(struct grid_stats_holder_s *gsh, const gchar *p,
+grid_stats_holder_foreach(struct grid_stats_holder_s *gsh,
 	gboolean (*output)(const gchar *, guint64 value))
 {
 	gboolean traverser(gpointer k, gpointer pv, gpointer ignored) {
 		(void) ignored;
 		guint64 v = *((guint64*)pv);
-		const gchar *n = hashstr_str((struct hashstr_s*)k);
-		if (!p || !*p || 0 != fnmatch(p, n, FNM_NOESCAPE))
-			output(n, v);
+		output (hashstr_str((struct hashstr_s*)k), v);
 		return FALSE;
 	}
 

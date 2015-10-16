@@ -138,27 +138,20 @@ _get_namespace_info_from_agent(const char *ns_name, GError **error)
 	return NULL;
 }
 
-static namespace_info_t*
-_get_namespace_info_from_conscience(const char *ns_name, GError **error)
-{
-	addr_info_t *addr = gridcluster_get_conscience_addr(ns_name);
-	if (addr == NULL) {
-		GSETERROR(error, "Unknown namespace/conscience");
-		return NULL;
-	}
-	namespace_info_t *res = gcluster_get_namespace_info_full(addr,
-			CONNECT_TIMEOUT + SOCKET_TIMEOUT, error);
-	g_free(addr);
-	if (res)
-		g_strlcpy(res->name, ns_name, LIMIT_LENGTH_NSNAME);
-	return res;
-}
-
 namespace_info_t*
 get_namespace_info(const char *ns_name, GError **error)
 {
 	if (!gridagent_available()) {
-		return _get_namespace_info_from_conscience(ns_name, error);
+		gchar *cs = gridcluster_get_conscience(ns_name);
+		STRING_STACKIFY(cs);
+		if (!cs) {
+			GSETERROR(error, "Unknown namespace/conscience");
+			return NULL;
+		}
+		struct namespace_info_s *res = NULL;
+		GError *e = gcluster_get_namespace(cs, &res);
+		g_error_transmit (error, e);
+		return res;
 	} else {
 		return _get_namespace_info_from_agent(ns_name, error);
 	}
@@ -223,16 +216,17 @@ list_namespace_service_types(const char *ns_name, GError **error)
 	if (gridagent_available()) {
 		return _list_namespace_service_types_from_agent(ns_name, error);
 	} else {
-		addr_info_t *cs_addr = gridcluster_get_conscience_addr(ns_name);
-		if (!cs_addr) {
+		gchar *cs = gridcluster_get_conscience(ns_name);
+		STRING_STACKIFY(cs);
+		if (!cs) {
 			GSETERROR(error, "Unknown namespace/conscience");
 			return(NULL);
 		}
 
-		GSList *types = gcluster_get_service_types(cs_addr,
-				CONNECT_TIMEOUT + SOCKET_TIMEOUT, error);
-		g_free(cs_addr);
-		return types;
+		GSList *out = NULL;
+		GError *e = gcluster_get_service_types(cs, &out);
+		g_error_transmit (error, e);
+		return out;
 	}
 }
 
@@ -292,14 +286,15 @@ list_namespace_services(const char *ns_name, const char *type, GError **error)
 
 	if (!gridagent_available()) { // from conscience
 		gchar *cs = gridcluster_get_conscience(ns_name);
+		STRING_STACKIFY (cs);
 		if (!cs) {
 			GSETERROR(error, "Unknown namespace/conscience");
 			return NULL;
-		} else {
-			GSList *res = gcluster_get_services(cs, CS_CLIENT_TIMEOUT, type, FALSE, error);
-			g_free(cs);
-			return res;
 		}
+		GSList *out = NULL;
+		GError *e = gcluster_get_services(cs, type, FALSE, &out);
+		g_error_transmit (error, e);
+		return out;
 	} else { // from agent
 		return list_gridagent_services(ns_name,type,error);
 	}

@@ -18,14 +18,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "common.h"
 
+gchar *
+proxy_get_csurl (void)
+{
+	gchar *cs = NULL;
+	CSURL_DO(if (csurl) { cs = g_strdup(csurl); });
+	return cs;
+}
+
 gboolean
-validate_namespace (const gchar * ns)
+validate_namespace (const char * ns)
 {
 	return 0 == strcmp (ns, nsname);
 }
 
 gboolean
-validate_srvtype (const gchar * n)
+validate_srvtype (const char * n)
 {
 	gboolean rc = FALSE;
 	NSINFO_DO(if (srvtypes) {
@@ -35,8 +43,24 @@ validate_srvtype (const gchar * n)
 	return rc;
 }
 
-const gchar *
-_req_get_option (struct req_args_s *args, const gchar *name)
+gboolean
+service_is_ok (gconstpointer k)
+{
+	gpointer v; 
+	SRV_DO(v = lru_tree_get (srv_down, k));
+	return v == NULL;
+}
+
+void
+service_invalidate (gconstpointer k)
+{
+	gulong now = time(0);
+	SRV_DO(lru_tree_insert (srv_down, g_strdup((const char *)k), (void*)now));
+	GRID_INFO("invalid at %lu %s", now, (const char*)k);
+} 
+
+const char *
+_req_get_option (struct req_args_s *args, const char *name)
 {
 	gsize namelen = strlen(name);
 	gchar *needle = g_alloca(namelen+2);
@@ -53,8 +77,8 @@ _req_get_option (struct req_args_s *args, const gchar *name)
 	return NULL;
 }
 
-const gchar *
-_req_get_token (struct req_args_s *args, const gchar *name)
+const char *
+_req_get_token (struct req_args_s *args, const char *name)
 {
 	return path_matching_get_variable (args->matchings[0], name);
 }
@@ -114,9 +138,18 @@ rest_action (struct req_args_s *args,
     return rc;
 }
 
+static gboolean
+_qualify_service_url (gconstpointer p)
+{
+	gboolean rc = FALSE;
+	gchar *u = meta1_strurl_get_address ((const char*)p);
+	if (u) rc = service_is_ok (u);
+	g_free (u);
+	return rc;
+}
 
 GError *
-_resolve_service_and_do (const gchar *t, gint64 seq, struct hc_url_s *u,
+_resolve_service_and_do (const char *t, gint64 seq, struct hc_url_s *u,
 		GError * (*hook) (struct meta1_service_url_s *m1u, gboolean *next))
 {
 	gchar **uv = NULL;
@@ -138,6 +171,9 @@ _resolve_service_and_do (const gchar *t, gint64 seq, struct hc_url_s *u,
 	if (!*uv)
 		err = NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
 	else {
+		/* just consider the URL part. The resolver already pre-shuffled it. */
+		oio_ext_array_partition ((void**)uv, g_strv_length(uv), _qualify_service_url);
+
 		for (gchar **pm2 = uv; *pm2; ++pm2) {
 			struct meta1_service_url_s *m1u = meta1_unpack_url (*pm2);
 
@@ -152,7 +188,10 @@ _resolve_service_and_do (const gchar *t, gint64 seq, struct hc_url_s *u,
 
 			gboolean next = FALSE;
 			err = hook (m1u, &next);
+			if (err && CODE_IS_NETWORK_ERROR(err->code))
+				service_invalidate (m1u->host);
 			meta1_service_url_clean (m1u);
+
 			if (!err) {
 				if (!next)
 					goto exit;
@@ -192,7 +231,7 @@ _gba_request (struct meta1_service_url_s *m1u,
 			&body, _on_reply);
 	g_byte_array_unref (req);
 	gridd_client_start (c);
-	gridd_client_set_timeout (c, COMMON_CLIENT_TIMEOUT);
+	gridd_client_set_timeout (c, 1.0);
 	GError *e = gridd_client_loop (c);
 	if (!e)
 		e = gridd_client_error (c);
@@ -205,7 +244,7 @@ _gba_request (struct meta1_service_url_s *m1u,
 }
 
 GError *
-_gbav_request (const gchar *t, gint64 seq, struct hc_url_s *u,
+_gbav_request (const char *t, gint64 seq, struct hc_url_s *u,
 		GByteArray * builder (void),
 		gchar ***outurl, GByteArray ***out)
 {
@@ -250,8 +289,10 @@ _request_has_flag (struct req_args_s *args, const char *header,
 {
 	const char *v = g_tree_lookup(args->rq->tree_headers, header);
 	if (!v)	return FALSE;
+
 	gchar **tokens = g_strsplit (v, ",", -1);
 	if (!tokens) return FALSE;
+
 	gboolean rc = FALSE;
 	for (gchar **p=tokens; *p ;++p) {
 		*p = g_strstrip (*p);

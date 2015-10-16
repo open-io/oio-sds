@@ -693,15 +693,21 @@ _append_all_tags(GString *gstr, GPtrArray *tags)
 }
 
 void
-service_info_encode_json(GString *gstr, struct service_info_s *si)
+service_info_encode_json(GString *gstr, struct service_info_s *si, gboolean full)
 {
 	if (!si)
 		return;
 	gchar straddr[STRLEN_ADDRINFO];
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
-	g_string_append_printf(gstr,
-			"{\"addr\":\"%s\",\"score\":%d,\"tags\":{",
-			straddr, si->score.value);
+	if (full) {
+		g_string_append_printf(gstr,
+				"{\"ns\":\"%s\",\"type\":\"%s\",\"addr\":\"%s\",\"score\":%d,\"tags\":{",
+				si->ns_name, si->type, straddr, si->score.value);
+	} else {
+		g_string_append_printf(gstr,
+				"{\"addr\":\"%s\",\"score\":%d,\"tags\":{",
+				straddr, si->score.value);
+	}
 	_append_all_tags(gstr, si->tags);
 	g_string_append(gstr, "}}");
 }
@@ -740,14 +746,14 @@ _srvtag_load_json (const gchar *name, struct json_object *obj)
 
 GError*
 service_info_load_json_object(struct json_object *obj,
-		struct service_info_s **out)
+		struct service_info_s **out, gboolean permissive)
 {
 	EXTRA_ASSERT(out != NULL); *out = NULL;
 
 	struct json_object *ns, *type, *url, *score, *tags;
 	struct metautils_json_mapping_s mapping[] = {
-		{"ns",    &ns,    json_type_string, 1},
-		{"type",  &type,  json_type_string, 1},
+		{"ns",    &ns,    json_type_string, !permissive},
+		{"type",  &type,  json_type_string, !permissive},
 		{"addr",  &url,   json_type_string, 1},
 		{"score", &score, json_type_int,    1},
 		{"tags",  &tags,  json_type_object, 0},
@@ -781,13 +787,14 @@ service_info_load_json_object(struct json_object *obj,
 }
 
 GError*
-service_info_load_json(const gchar *encoded, struct service_info_s **out)
+service_info_load_json(const gchar *encoded, struct service_info_s **out,
+		gboolean permissive)
 {
 	struct json_tokener *tok = json_tokener_new();
 	struct json_object *obj = json_tokener_parse_ex(tok,
 			encoded, strlen(encoded));
 	json_tokener_free(tok);
-	GError *err = service_info_load_json_object(obj, out);
+	GError *err = service_info_load_json_object(obj, out, permissive);
 	json_object_put(obj);
 	return err;
 }

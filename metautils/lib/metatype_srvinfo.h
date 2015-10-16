@@ -131,12 +131,12 @@ gchar* get_rawx_location(service_info_t* rawx);
 struct json_object;
 
 GError* service_info_load_json_object(struct json_object *obj,
-		struct service_info_s **out);
+		struct service_info_s **out, gboolean permissive);
 
 GError* service_info_load_json(const gchar *encoded,
-		struct service_info_s **out);
+		struct service_info_s **out, gboolean permissive);
 
-void service_info_encode_json(GString *out, struct service_info_s *si);
+void service_info_encode_json(GString *out, struct service_info_s *si, gboolean full);
 
 gchar * service_info_key (const struct service_info_s *si);
 

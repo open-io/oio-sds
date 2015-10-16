@@ -217,10 +217,10 @@ set_service_score(const char *service_desc, int score)
 	if (g_strv_length(tokens) < 3)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid service description");
 
-	addr_info_t *cluster_addr;
-	if (!(cluster_addr = gridcluster_get_conscience_addr(tokens[0])))
+	gchar *cs = gridcluster_get_conscience(tokens[0]);
+	STRING_STACKIFY (cs);
+	if (!cs)
 		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Unknown namespace %s", tokens[0]);
-	BUFFER_STACKIFY(cluster_addr, sizeof(addr_info_t));
 
 	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
 	g_strlcpy(si->ns_name, tokens[0], sizeof(si->ns_name));
@@ -234,10 +234,10 @@ set_service_score(const char *service_desc, int score)
 	}
 
 	GSList *list = g_slist_prepend(NULL, si);
-	GError *err = gcluster_push_services(cluster_addr, 4000, list);
+	GError *err = gcluster_push_services(cs, list);
+	g_slist_free(list);
 	if (err)
 		g_prefix_error(&err, "Registration failed: ");
-	g_slist_free(list);
 	service_info_clean (si);
 	return err;
 }
@@ -468,11 +468,11 @@ main(int argc, char **argv)
 			print_formated_namespace(ns);
 
 		gchar *csurl = gridcluster_get_conscience(namespace);
+		STRING_STACKIFY(csurl);
 		if (!csurl) {
 			g_printerr("No conscience address known for [%s]\n", namespace);
 			goto exit_label;
 		}
-		STRING_STACKIFY(csurl);
 		GSList *services_types = list_namespace_service_types(namespace, &error);
 
 		if (!services_types) {
@@ -493,7 +493,7 @@ main(int argc, char **argv)
 				if (!has_flag_full || !has_raw) {
 					list_services = list_namespace_services(namespace, str_type, &error);
 				} else {
-					list_services = gcluster_get_services(csurl, 0.0, str_type, TRUE, &error);
+					error = gcluster_get_services(csurl, str_type, TRUE, &list_services);
 				}
 
 				/* Dump the list */
