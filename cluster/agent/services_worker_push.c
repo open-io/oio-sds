@@ -76,7 +76,7 @@ expand_service_tags(struct namespace_data_s *ns_data, struct service_info_s *si,
 
 			if (!g_ascii_strcasecmp(tag->value.macro.type, NAME_MACRO_IOIDLE_TYPE)) {
 				if (get_io_idle_for_path(tag->value.macro.param, &idle, error))
-					service_tag_set_value_i64(tag, MACRO_MAX(idle,1));
+					service_tag_set_value_i64(tag, MAX(idle,1));
 				else {
 					service_tag_to_string(tag, str_tag, sizeof(str_tag));
 					if (gridagent_blank_undefined_srvtags) {

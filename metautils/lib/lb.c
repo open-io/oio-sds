@@ -359,7 +359,7 @@ _compute_min_score_by_SD(struct grid_lb_s *lb)
 	x = ex2 - (ex * ex); // x <- variance
 	x = ceil(sqrt((gdouble)x)); // x <- ecart type
 	x = ex - x; // x <- average - ecart type (pire score admissible)
-	return FUNC_CLAMP(x, 1, max);
+	return CLAMP(x, 1, max);
 }
 
 static guint
@@ -387,7 +387,7 @@ _compute_size_shortened_by_ratio(struct grid_lb_s *lb)
 {
 	gdouble dl = lb->sorted_by_score->len;
 	guint ul = ceil(dl * lb->shorten_ratio);
-	return FUNC_CLAMP(ul, 1, lb->sorted_by_score->len);
+	return CLAMP(ul, 1, lb->sorted_by_score->len);
 }
 
 static guint
@@ -397,7 +397,7 @@ _compute_shortened_size(struct grid_lb_s *lb)
 		return 0;
 	guint size_max_by_SD = _compute_size_shortened_by_SD(lb);
 	guint size_max_by_ratio = _compute_size_shortened_by_ratio(lb);
-	return MACRO_MIN(size_max_by_SD, size_max_by_ratio);
+	return MIN(size_max_by_SD, size_max_by_ratio);
 }
 
 static void
