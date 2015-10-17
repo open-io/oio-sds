@@ -20,20 +20,11 @@ License along with this library.
 #ifndef OIO_SDS__cluster__lib__gridcluster_h
 # define OIO_SDS__cluster__lib__gridcluster_h 1
 
-/**
- * @ingroup gridcluster_lib
- * @{
- */
-
 #include <metautils/lib/metatypes.h>
 #include <cluster/agent/gridagent.h>
 
-/** The path to the grid config file */
-
-/**  */
 #define NS_ACL_ALLOW_OPTION "allow"
 
-/**  */
 #define NS_ACL_DENY_OPTION "deny"
 
 # define OIO_CFG_ZOOKEEPER    "zookeeper"
@@ -45,6 +36,8 @@ License along with this library.
 # define gridcluster_get_eventagent(ns) oio_cfg_get_value((ns), OIO_CFG_ACCOUNTAGENT)
 # define gridcluster_get_conscience(ns) oio_cfg_get_value((ns), OIO_CFG_CONSCIENCE)
 
+extern gboolean oio_cluster_skip_agent;
+
 /**
  * Struct to store an agent task description
  */
@@ -54,90 +47,21 @@ struct task_s {
 	guint8 busy;                /**< TRUE if the task is currently running */
 };
 
-/**
- * Get the namespace infos
- *
- * @param ns_name the namespace name
- * @param error
- *
- * @return an allocated namespace_info_t or NULL if an error occured (error is set).
- * The returned namespace_info_t should be freed with namespace_info_free()
- */
-namespace_info_t *get_namespace_info(const char *ns_name, GError **error);
+GError* get_namespace_info (const char *ns, struct namespace_info_s **out);
 
-/**
- * Get the META0 infos
- *
- * @param ns_name the namespace name
- * @param error
- * @return an allocated meta0_info_t or NULL if an error occured (error is set).
- * The returned meta0_info_t should be freed with g_free()
- */
-meta0_info_t *get_meta0_info(const char *ns_name, GError **error);
+GError* list_namespace_services (const char *ns, const char *type, GSList **out);
 
-/**
- * List services of a given type in a namespace.
- *
- * @param ns_name the namespace name
- * @param type the type of service to list
- * @param error
- *
- * @return a list of service_info_t or NULL if an error occured (error is set)
- */
-GSList* list_namespace_services(const char *ns_name, const char *type, GError **error);
+GError* list_namespace_service_types (const char *ns, GSList **out);
 
-/**
- * Get the first service of a given type in a namespace
- *
- * @param ns_name the namespace_name
- * @param type_name the type of the service
- * @param error
+GError* register_namespace_services (const char *ns, GSList *ls);
 
- * @return an allocated service_info_s or NULL if an error occured (error is set)
- * The returned service_info_s should be freed with service_info_clean()
- */
-struct service_info_s* get_one_namespace_service(const gchar *ns_name, const gchar *type_name, GError **error);
+GError* register_namespace_service (const struct service_info_s *si);
 
-/**
- * List the types of services available in a namespace
- *
- * @param ns_name the namespace name
- * @param error
- *
- * @return a list of type names in string format or NULL if an error occured (error is set)
- */
-GSList* list_namespace_service_types(const char *ns_name, GError **error);
+GError* clear_namespace_services (const char *ns, const char *type);
 
-/** Register a service in a namespace */
-int register_namespace_service(const struct service_info_s *si, GError **error);
 
-/**
- * List all services running locally on the server
- *
- * @param error
- *
- * @return a list of service_info_s or NULL if an error occured (error is set)
- */
 GSList *list_local_services(GError **error);
 
-/**
- * Unregister all services of a given type from a namespace
- *
- * @param ns_name the namespace name
- * @param type the service type
- * @param error
- *
- * @return 1 or 0 if an error occured (error is set)
- */
-int clear_namespace_services(const char *ns_name, const char *type, GError **error);
-
-/**
- * List internal tasks of the agent
- *
- * @param error
- *
- * @return a list of task_s or NULL if an error occured
- */
 GSList *list_tasks(GError **error);
 
 /**
@@ -249,10 +173,6 @@ gchar* gridcluster_get_nsinfo_strvalue(struct namespace_info_s *nsinfo,
 gint64 gridcluster_get_nsinfo_int64(struct namespace_info_s *nsinfo,
 		const gchar* key, gint64 def);
 
-struct addr_info_s * gridcluster_get_conscience_addr(const char *ns_name);
-
 gchar * gridcluster_get_agent(void);
-
-/** @} */
 
 #endif /*OIO_SDS__cluster__lib__gridcluster_h*/

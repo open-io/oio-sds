@@ -22,7 +22,7 @@ add_executable(gridagent
 	request_worker.c request_worker.h
 	server.c server.h
 	services_task_check.c services_task_get_services.c services_task_get_types.c services_task_push.c
-	services_worker_clear.c services_worker_get_one.c services_worker_list.c services_worker_push.c services_workers.h
+	services_worker_clear.c services_worker_list.c services_worker_push.c services_workers.h
 	task.h
 	task_scheduler.c task_scheduler.h
 	worker.h

@@ -41,8 +41,14 @@ License along with this library.
 #define NAME_MSGNAME_SQLX_REPLICATE          "SQLX_REPLICATE"
 #define NAME_MSGNAME_SQLX_GETVERS            "SQLX_GETVERS"
 #define NAME_MSGNAME_SQLX_RESYNC             "SQLX_RESYNC"
+
+/* repository-wide */
 #define NAME_MSGNAME_SQLX_INFO               "SQLX_INFO"
 #define NAME_MSGNAME_SQLX_LEANIFY            "SQLX_LEANIFY"
+
+/* server-wide */
+#define NAME_MSGNAME_SQLX_FLUSH              "SQLX_FLUSH"
+#define NAME_MSGNAME_SQLX_RELOAD             "SQLX_RELOAD"
 
 #define NAME_MSGNAME_SQLX_QUERY              "SQLX_QUERY"
 #define NAME_MSGNAME_SQLX_DESTROY            "SQLX_DESTROY"

@@ -30,6 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/grid_daemon.h>
 #include <server/stats_holder.h>
 #include <server/transport_gridd.h>
+#include <sqliterepo/sqlx_macros.h>
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/cache.h>
 #include <sqliterepo/election.h>
@@ -62,6 +63,8 @@ static void _task_reload_workers(gpointer p);
 static gpointer _worker_notify_gq2zmq (gpointer p);
 static gpointer _worker_notify_zmq2agent (gpointer p);
 static gpointer _worker_clients (gpointer p);
+
+static const struct gridd_request_descr_s * _get_service_requests (void);
 
 // Static variables
 static struct sqlx_service_s SRV;
@@ -390,6 +393,8 @@ _configure_network(struct sqlx_service_s *ss)
 {
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,
 			sqlx_repli_gridd_get_requests(), ss->repository);
+	transport_gridd_dispatcher_add_requests(ss->dispatcher,
+			_get_service_requests(), ss);
 	return TRUE;
 }
 
@@ -690,7 +695,7 @@ sqlite_service_main(int argc, char **argv,
 	return rc;
 }
 
-// Tasks -----------------------------------------------------------------------
+/* Tasks -------------------------------------------------------------------- */
 
 static gpointer
 _worker_clients(gpointer p)
@@ -737,11 +742,11 @@ _task_register(gpointer p)
 				"stat.req_idle"), network_server_reqidle(PSRV(p)->server));
 
 	/* send the registration now */
-	GError *err = NULL;
-	if (!register_namespace_service(PSRV(p)->si, &err))
+	GError *err = register_namespace_service(PSRV(p)->si);
+	if (err) {
 		g_message("Service registration failed: (%d) %s", err->code, err->message);
-	if (err)
 		g_clear_error(&err);
+	}
 }
 
 static void
@@ -787,10 +792,11 @@ _task_retry_elections(gpointer p)
 static void
 _task_reload_nsinfo(gpointer p)
 {
-	GError *err = NULL;
 	struct namespace_info_s *ni;
+	GError *err = get_namespace_info(PSRV(p)->ns_name, &ni);
+	g_assert ((err != NULL) ^ (ni != NULL));
 
-	if (!(ni = get_namespace_info(PSRV(p)->ns_name, &err))) {
+	if (err) {
 		GRID_WARN("NSINFO reload error [%s]: (%d) %s",
 				PSRV(p)->ns_name, err->code, err->message);
 		g_clear_error(&err);
@@ -838,6 +844,8 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 	// ss->nsinfo is reloaded by _task_reload_nsinfo()
 	grid_lbpool_reconfigure(ss->lb, &(ss->nsinfo));
 }
+
+/* Events notifications ----------------------------------------------------- */
 
 GError *
 sqlx_notify (gpointer udata, gchar *msg)
@@ -1105,5 +1113,45 @@ _worker_notify_gq2zmq (gpointer p)
 	zmq_send (ss->notify.zpush, "", 0, 0);
 	GRID_INFO ("Thread stopping [NOTIFY-GQ2ZMQ]");
 	return p;
+}
+
+/* Specific requests handlers ----------------------------------------------- */
+
+static gboolean
+_dispatch_RELOAD (struct gridd_reply_ctx_s *reply, gpointer pss, gpointer i)
+{
+	(void) i;
+	struct sqlx_service_s *ss = pss;
+	g_assert (ss != NULL);
+	sqlx_task_reload_lb (ss);
+	reply->send_reply(200, "OK");
+	return TRUE;
+}
+
+static gboolean
+_dispatch_FLUSH (struct gridd_reply_ctx_s *reply, gpointer pss, gpointer i)
+{
+	(void) i;
+	struct sqlx_service_s *ss = pss;
+	g_assert(ss != NULL);
+	/* if (ss->lb) grid_lbpool_flush (ss->lb); */
+	if (ss->resolver) {
+		hc_resolver_flush_csm0 (ss->resolver);
+		hc_resolver_flush_services (ss->resolver);
+	}
+	reply->send_reply(200, "OK");
+	return TRUE;
+}
+
+static const struct gridd_request_descr_s *
+_get_service_requests (void)
+{
+	static struct gridd_request_descr_s descriptions[] = {
+		{NAME_MSGNAME_SQLX_RELOAD, _dispatch_RELOAD, NULL},
+		{NAME_MSGNAME_SQLX_FLUSH,  _dispatch_FLUSH,  NULL},
+		{NULL, NULL, NULL}
+	};
+
+	return descriptions;
 }
 

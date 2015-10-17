@@ -83,6 +83,12 @@ sqlx_name_mutable_to_const(struct sqlx_name_mutable_s *mut)
 	if ((N).type) STRING_STACKIFY((N).type); \
 } while (0)
 
+GByteArray* sqlx_pack_FLUSH (void);
+GByteArray* sqlx_pack_RELOAD (void);
+
+GError* sqlx_remote_execute_FLUSH (const char *to);
+GError* sqlx_remote_execute_RELOAD (const char *to);
+
 // sqliterepo-related requests coders ------------------------------------------
 
 GByteArray* sqlx_pack_ENABLE (struct sqlx_name_s *name);
@@ -158,7 +164,5 @@ typedef GError* (*peer_dump_cb)(GByteArray *part, gint64 remaining, gpointer arg
 
 GError * peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 		peer_dump_cb, gpointer cb_arg);
-
-/** @} */
 
 #endif /*OIO_SDS__sqliterepo__sqlx_remote_h*/

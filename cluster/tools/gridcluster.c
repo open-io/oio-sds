@@ -391,7 +391,7 @@ main(int argc, char **argv)
 			goto exit_label;
 		}
 
-		ns = get_namespace_info(namespace, &error);
+		error = get_namespace_info(namespace, &ns);
 		if (ns == NULL) {
 			g_printerr("Failed to get namespace info :\n");
 			g_printerr("%s\n", error->message);
@@ -401,7 +401,7 @@ main(int argc, char **argv)
 
 	if (has_clear_services) {
 
-		if (!clear_namespace_services(namespace, service_desc, &error)) {
+		if (NULL != (error = clear_namespace_services(namespace, service_desc))) {
 			g_printerr("Failed to send clear order to cluster for ns='%s' and service='%s' :\n", namespace,
 					service_desc);
 			g_printerr("%s\n", error->message);
@@ -473,25 +473,22 @@ main(int argc, char **argv)
 			g_printerr("No conscience address known for [%s]\n", namespace);
 			goto exit_label;
 		}
-		GSList *services_types = list_namespace_service_types(namespace, &error);
+		GSList *services_types = NULL;
+		error = list_namespace_service_types(namespace, &services_types);
 
-		if (!services_types) {
-			if (error) {
+		if (error) {
 				g_printerr("Failed to get the services list: %s\n", gerror_get_message(error));
 				goto exit_label;
-			}
-			else {
-				g_print("No service type known in namespace=%s\n", namespace);
-			}
-		}
-		else {
+		} else if (!services_types) {
+			g_print("No service type known in namespace=%s\n", namespace);
+		} else {
 			for (GSList *st = services_types; st; st = st->next) {
 				GSList *list_services = NULL;
 				gchar *str_type = st->data;
 
 				/* Generate the list */
 				if (!has_flag_full || !has_raw) {
-					list_services = list_namespace_services(namespace, str_type, &error);
+					error = list_namespace_services(namespace, str_type, &list_services);
 				} else {
 					error = gcluster_get_services(csurl, str_type, TRUE, &list_services);
 				}

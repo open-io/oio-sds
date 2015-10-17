@@ -245,9 +245,10 @@ self_register_in_cluster(GError **err)
 	}
 
 	/* Register nw in the conscience */
-	if (!register_namespace_service(si, err)) {
+	GError *e = register_namespace_service(si);
+	if (NULL != e) {
 		ERROR("Failed to register service in cluster : %s", gerror_get_message(*err));
-		g_clear_error(err);
+		g_clear_error(&e);
 	}
 	else if (TRACE_ENABLED()) {
 		gchar *str = service_info_to_string(si);
@@ -281,7 +282,7 @@ srv_periodic_refresh_ns_info (gpointer d)
 
 	(void) d;
 
-	if (!(nsinfo = get_namespace_info(ns_name, &error))) {
+	if (!(error = get_namespace_info(ns_name, &ns_info))) {
 		NOTICE("Failed to refresh the Namespace info from the gridagent");
 		if(error)
 			g_clear_error(&error);
@@ -1307,14 +1308,13 @@ load_service_info (GKeyFile *cfgFile, GError **err)
 		load_ns_info = TRUE;
 
 	if(load_ns_info) {
-		ns_info = get_namespace_info(ns_name, err);
+		GError *e = get_namespace_info(ns_name, &ns_info);
 		/* We really want these informations, so loop until we get them. */
-		while (!ns_info) {
-			WARN("Failed to get namespace info: %s", (*err)->message);
-			g_clear_error(err);
-			WARN("Retrying in %d seconds...", GET_NS_INFO_RETRY_DELAY);
+		while (e) {
+			g_clear_error(&e);
+			WARN("Failed to get namespace info (Retrying in %d seconds): %s", GET_NS_INFO_RETRY_DELAY, (*err)->message);
 			sleep(GET_NS_INFO_RETRY_DELAY);
-			ns_info = get_namespace_info(ns_name, err);
+			e = get_namespace_info(ns_name, &ns_info);
 		}
 	}
 

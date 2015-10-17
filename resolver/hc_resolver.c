@@ -215,15 +215,14 @@ hc_resolver_forget(struct hc_resolver_s *r, struct lru_tree_s *lru,
 /* ------------------------------------------------------------------------- */
 
 static gchar **
-_srvlit_to_urlv(GSList *l)
+_srvlist_to_urlv(GSList *l)
 {
 	gchar str[64];
-	struct service_info_s *si;
 	GPtrArray *tmp;
 
 	tmp = g_ptr_array_new();
 	for (; l ;l=l->next) {
-		si = l->data;
+		struct service_info_s *si = l->data;
 		grid_addrinfo_to_string(&(si->addr), str, sizeof(str));
 		g_ptr_array_add(tmp, g_strdup_printf("1|%s|%s|", si->type, str));
 	}
@@ -246,14 +245,14 @@ _resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result)
 		GSList *allm0;
 
 		/* Now attempt a real resolution */
-		allm0 = list_namespace_services (ns, NAME_SRVTYPE_META0, &err);
+		err = list_namespace_services (ns, NAME_SRVTYPE_META0, &allm0);
 		if (!allm0 || err) {
 			if (!err)
 				err = NEWERROR(CODE_INTERNAL_ERROR, "No meta0 available");
 			*result = NULL;
 		}
 		else {
-			*result = _srvlit_to_urlv(allm0);
+			*result = _srvlist_to_urlv(allm0);
 			g_slist_foreach(allm0, service_info_gclean, NULL);
 			g_slist_free(allm0);
 			allm0 = NULL;

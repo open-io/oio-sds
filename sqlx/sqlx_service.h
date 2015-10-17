@@ -64,7 +64,7 @@ struct sqlx_service_config_s
 	void (*set_defaults) (struct sqlx_service_s *ss);
 };
 
-// Elements common to any gridd+sqliterepo services
+/* Elements common to any gridd+sqliterepo services */
 struct sqlx_service_s
 {
 	gchar volume[1024];

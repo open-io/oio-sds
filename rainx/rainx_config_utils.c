@@ -145,12 +145,10 @@ update_rainx_conf(apr_pool_t* p, rawx_conf_t **rainx_conf, const gchar* ns_name)
 		return FALSE;
 	}
 
-	ns_info = get_namespace_info(ns_name, &local_error);
-	if (!ns_info) {
-		if (local_error != NULL) {
-			DAV_ERROR_POOL(p, 0, "%s", local_error->message);
-			g_clear_error(&local_error);
-		}
+	local_error = get_namespace_info(ns_name, &ns_info);
+	if (local_error) {
+		DAV_ERROR_POOL(p, 0, "%s", local_error->message);
+		g_clear_error(&local_error);
 		return FALSE;
 	}
 

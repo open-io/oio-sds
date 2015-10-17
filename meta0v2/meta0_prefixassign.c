@@ -461,10 +461,8 @@ _assign(GList *working_m1list,GSList *unref_m1list)
 static GError *
 _init_assign(gchar *ns_name, GList **working_m1list,GSList **unref_m1list)
 { 
-	GError *error = NULL;
 	GSList *m1_list = NULL;
-
-	m1_list = list_namespace_services(ns_name, "meta1", &error);
+	GError *error = list_namespace_services(ns_name, "meta1", &m1_list);
 	if (!m1_list) {
 		if ( error) {
 			GRID_ERROR("failed to init meta1 service list :(%d) %s", error->code, error->message);

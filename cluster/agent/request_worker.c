@@ -62,10 +62,6 @@ init_request_worker(GError **error)
 		GSETERROR(error, "Failed to register services_worker_push worker in request_worker");
 		return(0);
 	}
-	if (!register_request_handler(MSG_SRV_GET1, services_worker_get_one, error)) {
-		GSETERROR(error, "Failed to register services_worker_get_one worker in request_worker");
-		return(0);
-	}
 
 	if (!register_request_handler(MSG_LSTSVC, services_worker_list_local, error)) {
 		GSETERROR(error, "Failed to register services_worker_list_local worker in request_worker");

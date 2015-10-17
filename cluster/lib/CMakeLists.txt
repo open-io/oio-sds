@@ -12,14 +12,6 @@ target_link_libraries(gridcluster
 		metautils gridcluster-remote
 		-lm ${GLIB2_LIBRARIES})
 
-add_executable(gridcluster_test test.c)
-
-target_link_libraries(gridcluster_test
-		metautils gridcluster gridcluster-remote
-		-lm ${GLIB2_LIBRARIES})
-
-add_dependencies(gridcluster_test gridcluster)
-
 install(FILES
 			gridcluster.h
 		DESTINATION include/cluster/lib

@@ -1520,15 +1520,17 @@ grid_lb_reload_json(struct grid_lb_s *lb, const gchar *encoded)
 void
 grid_lbpool_flush(struct grid_lbpool_s *glp)
 {
-	if (!glp) return;
-	gboolean _flush (gchar *srvtype, struct grid_lb_s *lb, gpointer ignored) {
-		(void) srvtype, (void) ignored;
+	if (!glp)
+		return;
+	gboolean _flush (gchar *srvtype, struct grid_lb_s *lb, gpointer u) {
+		(void) srvtype, (void) u;
 		grid_lb_flush (lb);
 		return FALSE;
 	}
 
 	g_rw_lock_reader_lock(&(glp->rwlock));
-	g_tree_foreach(glp->pools, (GTraverseFunc)_flush, NULL);
+	if (glp->pools)
+		g_tree_foreach(glp->pools, (GTraverseFunc)_flush, NULL);
 	g_rw_lock_reader_unlock(&(glp->rwlock));
 }
 

@@ -30,65 +30,65 @@ _cs_check_tokens (struct req_args_s *args)
 	if (TYPE()) {
 		if (!validate_srvtype(TYPE()))
 			return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid srvtype");
-    }
-    return NULL;
+	}
+	return NULL;
 }
 
 static GString *
 _cs_pack_and_free_srvinfo_list (GSList * svc)
 {
-    GString *gstr = g_string_new ("[");
-    for (GSList * l = svc; l; l = l->next) {
-        if (l != svc)
-            g_string_append_c (gstr, ',');
-        service_info_encode_json (gstr, l->data, FALSE);
-    }
-    g_string_append (gstr, "]");
-    g_slist_free_full (svc, (GDestroyNotify) service_info_clean);
-    return gstr;
+	GString *gstr = g_string_new ("[");
+	for (GSList * l = svc; l; l = l->next) {
+		if (l != svc)
+			g_string_append_c (gstr, ',');
+		service_info_encode_json (gstr, l->data, FALSE);
+	}
+	g_string_append (gstr, "]");
+	g_slist_free_full (svc, (GDestroyNotify) service_info_clean);
+	return gstr;
 }
 
 enum reg_op_e {
-    REGOP_PUSH,
-    REGOP_LOCK,
-    REGOP_UNLOCK,
+	REGOP_PUSH,
+	REGOP_LOCK,
+	REGOP_UNLOCK,
 };
 
 static enum http_rc_e
 _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *jsrv)
 {
-    GError *err;
+	GError *err;
 
-    if (!push_queue)
-        return _reply_bad_gateway(args, NEWERROR(CODE_INTERNAL_ERROR, "Service upstream disabled"));
+	if (!push_queue)
+		return _reply_bad_gateway(args, NEWERROR(CODE_INTERNAL_ERROR, "Service upstream disabled"));
 
-    if (NULL != (err = _cs_check_tokens(args)))
-        return _reply_notfound_error (args, err);
+	if (NULL != (err = _cs_check_tokens(args)))
+		return _reply_notfound_error (args, err);
 
-    struct service_info_s *si = NULL;
-    err = service_info_load_json_object (jsrv, &si, TRUE);
+	struct service_info_s *si = NULL;
+	err = service_info_load_json_object (jsrv, &si, TRUE);
 
-    if (err) {
-        if (err->code == CODE_BAD_REQUEST)
-            return _reply_format_error (args, err);
-        else
-            return _reply_system_error (args, err);
-    }
+	if (err) {
+		if (err->code == CODE_BAD_REQUEST)
+			return _reply_format_error (args, err);
+		else
+			return _reply_system_error (args, err);
+	}
 
-    if (!validate_namespace (si->ns_name)) {
-        service_info_clean (si);
-        return _reply_system_error (args, NEWERROR (CODE_NAMESPACE_NOTMANAGED,
-                    "Unexpected NS"));
-    }
+	if (!validate_namespace (si->ns_name)) {
+		service_info_clean (si);
+		return _reply_system_error (args, NEWERROR (CODE_NAMESPACE_NOTMANAGED,
+					"Unexpected NS"));
+	}
 
-    si->score.timestamp = network_server_bogonow(args->rq->client->server);
+	si->score.timestamp = network_server_bogonow(args->rq->client->server);
 
-    if (op == REGOP_PUSH)
-        si->score.value = SCORE_UNSET;
-    else if (op == REGOP_UNLOCK)
-        si->score.value = SCORE_UNLOCK;
-    else /* if (op == REGOP_LOCK) */
-        si->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
+	if (op == REGOP_PUSH)
+		si->score.value = SCORE_UNSET;
+	else if (op == REGOP_UNLOCK)
+		si->score.value = SCORE_UNLOCK;
+	else /* if (op == REGOP_LOCK) */
+		si->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
 
 	// TODO follow the DRY principle and factorize this!
 	if (flag_cache_enabled) {
@@ -116,11 +116,10 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 enum http_rc_e
 action_cs_nscheck (struct req_args_s *args)
 {
-    GError *err;
-    if (NULL != (err = _cs_check_tokens(args)))
-        return _reply_notfound_error (args, err);
-
-    return _reply_success_json (args, NULL);
+	GError *err;
+	if (NULL != (err = _cs_check_tokens(args)))
+		return _reply_notfound_error (args, err);
+	return _reply_success_json (args, NULL);
 }
 
 enum http_rc_e
@@ -130,37 +129,37 @@ action_cs_info (struct req_args_s *args)
 	if (v && !strcmp(v, "types"))
 		return action_cs_srvtypes (args);
 
-    GError *err;
-    if (NULL != (err = _cs_check_tokens(args)))
-        return _reply_notfound_error (args, err);
+	GError *err;
+	if (NULL != (err = _cs_check_tokens(args)))
+		return _reply_notfound_error (args, err);
 
-    struct namespace_info_s ni;
-    memset (&ni, 0, sizeof (ni));
-    NSINFO_DO(namespace_info_copy (&nsinfo, &ni, NULL));
+	struct namespace_info_s ni;
+	memset (&ni, 0, sizeof (ni));
+	NSINFO_DO(namespace_info_copy (&nsinfo, &ni, NULL));
 
-    GString *gstr = g_string_new ("");
-    namespace_info_encode_json (gstr, &ni);
-    namespace_info_clear (&ni);
-    return _reply_success_json (args, gstr);
+	GString *gstr = g_string_new ("");
+	namespace_info_encode_json (gstr, &ni);
+	namespace_info_clear (&ni);
+	return _reply_success_json (args, gstr);
 }
 
 enum http_rc_e
 action_cs_put (struct req_args_s *args)
 {
-    struct json_tokener *parser;
-    struct json_object *jbody;
+	struct json_tokener *parser;
+	struct json_object *jbody;
 	enum http_rc_e rc;
 
-    parser = json_tokener_new ();
-    jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
-            args->rq->body->len);
-    if (!json_object_is_type (jbody, json_type_object))
-        rc = _reply_format_error (args, BADREQ ("Invalid srv"));
-    else
-        rc = _registration (args, REGOP_PUSH, jbody);
-    json_object_put (jbody);
-    json_tokener_free (parser);
-    return rc;
+	parser = json_tokener_new ();
+	jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
+			args->rq->body->len);
+	if (!json_object_is_type (jbody, json_type_object))
+		rc = _reply_format_error (args, BADREQ ("Invalid srv"));
+	else
+		rc = _registration (args, REGOP_PUSH, jbody);
+	json_object_put (jbody);
+	json_tokener_free (parser);
+	return rc;
 }
 
 enum http_rc_e
@@ -169,12 +168,12 @@ action_cs_get (struct req_args_s *args)
 	const char *types = TYPE();
 	gboolean full = _request_has_flag (args, PROXYD_HEADER_MODE, "full");
 
-    GError *err;
-    if (NULL != (err = _cs_check_tokens(args)))
-        return _reply_notfound_error(args, err);
+	GError *err;
+	if (NULL != (err = _cs_check_tokens(args)))
+		return _reply_notfound_error(args, err);
 
 	CSURL(cs);
-    GSList *sl = NULL;
+	GSList *sl = NULL;
 	err = gcluster_get_services (cs, types, full, &sl);
 
 	if (NULL != err) {
