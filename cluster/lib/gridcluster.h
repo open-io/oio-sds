@@ -114,12 +114,6 @@ gchar* gridcluster_get_service_update_policy(struct namespace_info_s *nsinfo);
 
 gint64 gridcluster_get_container_max_versions(struct namespace_info_s *nsinfo);
 
-struct grid_lbpool_s;
-
-GError* gridcluster_reload_lbpool(struct grid_lbpool_s *glp);
-
-GError* gridcluster_reconfigure_lbpool(struct grid_lbpool_s *glp);
-
 /* Get the delay before actually removing contents marked as deleted. */
 gint64 gridcluster_get_keep_deleted_delay(struct namespace_info_s *nsinfo);
 

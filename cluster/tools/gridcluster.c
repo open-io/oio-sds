@@ -81,6 +81,9 @@ print_formated_namespace(namespace_info_t * ns)
 	print_formatted_hashtable(ns->data_treatments, "Data Treatments");
 
 	GError *err = NULL;
+	GSList *types = NULL;
+	if (NULL != (err = conscience_get_types (ns->name, &types)))
+		g_clear_error (&err);
 
 	/* dump the directory load-balancing configuration */
 	gchar *cfg = gridcluster_get_service_update_policy(ns);
@@ -102,6 +105,16 @@ print_formated_namespace(namespace_info_t * ns)
 			tmp = service_update_policies_dump(pol);
 			g_print("%20s : %s\n", "LB(srv)", tmp);
 			g_free(tmp);
+
+			for (GSList *l=types; l ;l=l->next) {
+				const char *srvtype = l->data;
+				guint count = service_howmany_replicas(pol, srvtype);
+				guint dist = service_howmany_distance(pol, srvtype);
+				g_print("%20s : %s -> %s|%u|%u\n", "", srvtype,
+						service_update_policy_to_string(
+							service_howto_update (pol, srvtype)),
+						count ? count : 1, dist ? dist : 1);
+			}
 		}
 		service_update_policies_destroy(pol);
 	}
@@ -109,11 +122,22 @@ print_formated_namespace(namespace_info_t * ns)
 	/* dump the rawx load-balancing for the meta2 */
 	struct grid_lbpool_s *glp = grid_lbpool_create (ns->name);
 	grid_lbpool_reconfigure (glp, ns);
-	struct grid_lb_iterator_s *it = grid_lbpool_get_iterator (glp, NAME_SRVTYPE_RAWX);
-	GString *gs = grid_lb_iterator_to_string (it);
-	g_print("%20s : rawx=%s\n", "LB(meta2)", gs->str);
-	grid_lbpool_destroy (glp);
+	gboolean first = TRUE;
+	void _dump (const char *srvtype) {
+		struct grid_lb_iterator_s *it = grid_lbpool_ensure_iterator (glp, srvtype);
+		GString *gs = grid_lb_iterator_to_string (it);
+		g_print("%20s : %s=%s\n", first ? "LB(meta2)" : "", srvtype, gs->str);
+		g_string_free (gs, TRUE);
+		first = FALSE;
+	}
+	if (!types) {
+		_dump (NAME_SRVTYPE_RAWX);
+	} else for (GSList *l=types; l ;l=l->next) {
+		_dump (l->data);
+	}
 
+	g_slist_free_full (types, g_free);
+	grid_lbpool_destroy (glp);
 	g_print("\n");
 }
 

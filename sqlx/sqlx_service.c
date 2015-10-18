@@ -66,6 +66,8 @@ static gpointer _worker_clients (gpointer p);
 
 static const struct gridd_request_descr_s * _get_service_requests (void);
 
+static GError* _reload_lbpool(struct grid_lbpool_s *glp, gboolean flush);
+
 // Static variables
 static struct sqlx_service_s SRV;
 static struct replication_config_s replication_config;
@@ -820,7 +822,7 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 	if (already_succeeded && 0 != (tick_reload++ % period_reload))
 		return;
 
-	GError *err = gridcluster_reload_lbpool(ss->lb);
+	GError *err = _reload_lbpool(ss->lb, FALSE);
 	if (!err) {
 		already_succeeded = TRUE;
 		period_reload ++;
@@ -835,6 +837,63 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 	// ss->nsinfo is reloaded by _task_reload_nsinfo()
 	grid_lbpool_reconfigure(ss->lb, &(ss->nsinfo));
 }
+
+static GError*
+_reload_lbpool(struct grid_lbpool_s *glp, gboolean flush)
+{
+	gboolean _reload_srvtype(const gchar *ns, const gchar *srvtype) {
+		GSList *list_srv = NULL;
+		GError *err = conscience_get_services (ns, srvtype, &list_srv);
+		if (err) {
+			GRID_WARN("Gridagent/conscience error: Failed to list the services"
+					" of type [%s]: code=%d %s", srvtype, err->code,
+					err->message);
+			g_clear_error(&err);
+			return FALSE;
+		}
+
+		if (list_srv || flush) {
+			GSList *l = list_srv;
+
+			gboolean provide(struct service_info_s **p_si) {
+				if (!l)
+					return FALSE;
+				*p_si = l->data;
+				l->data = NULL;
+				l = l->next;
+				return TRUE;
+			}
+			grid_lbpool_reload(glp, srvtype, provide);
+			g_slist_free(list_srv);
+		}
+
+		return TRUE;
+	}
+
+	GSList *list_srvtypes = NULL;
+	GError *err = conscience_get_types (grid_lbpool_namespace(glp), &list_srvtypes);
+	if (err)
+		g_prefix_error(&err, "LB pool reload error: ");
+	else {
+		guint errors = 0;
+		const gchar *ns = grid_lbpool_namespace(glp);
+
+		for (GSList *l=list_srvtypes; l ;l=l->next) {
+			if (!l->data)
+				continue;
+			if (!_reload_srvtype(ns, l->data))
+				++ errors;
+		}
+
+		if (errors)
+			GRID_DEBUG("Reloaded %u service types, with %u errors",
+					g_slist_length(list_srvtypes), errors);
+	}
+
+	g_slist_free_full (list_srvtypes, g_free);
+	return err;
+}
+
 
 /* Events notifications ----------------------------------------------------- */
 
@@ -1114,8 +1173,12 @@ _dispatch_RELOAD (struct gridd_reply_ctx_s *reply, gpointer pss, gpointer i)
 	(void) i;
 	struct sqlx_service_s *ss = pss;
 	g_assert (ss != NULL);
-	sqlx_task_reload_lb (ss);
-	reply->send_reply(200, "OK");
+
+	GError *err = _reload_lbpool(ss->lb, TRUE);
+	if (err)
+		reply->send_error (0, err);
+	else
+		reply->send_reply (200, "OK");
 	return TRUE;
 }
 
