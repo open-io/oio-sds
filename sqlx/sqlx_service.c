@@ -376,15 +376,6 @@ _configure_registration(struct sqlx_service_s *ss)
 	service_tag_set_value_float(
 			service_info_ensure_tag(si->tags, "stat.req_idle"),
 			100.0);
-	service_tag_set_value_macro(
-			service_info_ensure_tag(si->tags, "stat.cpu"),
-			"cpu", NULL);
-	service_tag_set_value_macro(
-			service_info_ensure_tag(si->tags, "stat.space"),
-			"space", ss->volume);
-	service_tag_set_value_macro(
-			service_info_ensure_tag(si->tags, "stat.io"),
-			"io", ss->volume);
 	return TRUE;
 }
 
@@ -793,7 +784,7 @@ static void
 _task_reload_nsinfo(gpointer p)
 {
 	struct namespace_info_s *ni;
-	GError *err = get_namespace_info(PSRV(p)->ns_name, &ni);
+	GError *err = conscience_get_namespace(PSRV(p)->ns_name, &ni);
 	g_assert ((err != NULL) ^ (ni != NULL));
 
 	if (err) {

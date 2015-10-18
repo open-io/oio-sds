@@ -26,16 +26,6 @@ clean_tag_value(struct service_tag_s *tag)
 {
 	if (tag->type == STVT_STR && tag->value.s)
 		g_free(tag->value.s);
-	else if (tag->type == STVT_MACRO) {
-		if (tag->value.macro.type) {
-			g_free(tag->value.macro.type);
-			tag->value.macro.type = NULL;
-		}
-		if (tag->value.macro.param) {
-			g_free(tag->value.macro.param);
-			tag->value.macro.param = NULL;
-		}
-	}
 }
 
 void
@@ -186,50 +176,6 @@ service_tag_get_value_string(struct service_tag_s *tag, gchar * s, gsize s_size,
 }
 
 void
-service_tag_set_value_macro(struct service_tag_s *tag, const gchar * type, const gchar * param)
-{
-	if (!tag || !type)
-		return;
-	clean_tag_value(tag);
-	tag->type = STVT_MACRO;
-	tag->value.macro.type = g_strdup(type);
-	if (param)
-		tag->value.macro.param = g_strdup(param);
-}
-
-gboolean
-service_tag_get_value_macro(struct service_tag_s *tag,
-		gchar * type, gsize type_size,
-		gchar* param, gsize param_size,
-		GError** error)
-{
-	if (tag == NULL) {
-		GSETERROR(error, "Argument tag is NULL");
-		return FALSE;
-	}
-
-	if (type == NULL) {
-		GSETERROR(error, "Argument type is NULL");
-		return FALSE;
-	}
-
-	if (param == NULL) {
-		GSETERROR(error, "Argument param is NULL");
-		return FALSE;
-	}
-
-	if (tag->type != STVT_MACRO) {
-		GSETERROR(error, "Tag is not of type MACRO");
-		return FALSE;
-	}
-
-	g_strlcpy(type, tag->value.macro.type, type_size);
-	g_strlcpy(param, tag->value.macro.param, param_size);
-
-	return TRUE;
-}
-
-void
 service_tag_copy(struct service_tag_s *dst, struct service_tag_s *src)
 {
 	if (!dst || !src)
@@ -252,9 +198,6 @@ service_tag_copy(struct service_tag_s *dst, struct service_tag_s *src)
 		return;
 	case STVT_BUF:
 		service_tag_set_value_string(dst, src->value.buf);
-		return;
-	case STVT_MACRO:
-		service_tag_set_value_macro(dst, src->value.macro.type, src->value.macro.param);
 		return;
 	}
 }
@@ -322,11 +265,6 @@ service_tag_to_string(const struct service_tag_s *tag, gchar * dst, gsize dst_si
 		return g_snprintf(dst, dst_size, "%s", tag->value.s);
 	case STVT_BUF:
 		return g_snprintf(dst, dst_size, "%.*s", (int)sizeof(tag->value.buf), tag->value.buf);
-	case STVT_MACRO:
-		if (tag->value.macro.param && *(tag->value.macro.param))
-			return g_snprintf(dst, dst_size, "${%s}", tag->value.macro.type);
-		else
-			return g_snprintf(dst, dst_size, "${%s.%s}", tag->value.macro.type, tag->value.macro.param);
 	}
 	return 0;
 }
@@ -671,10 +609,6 @@ _append_one_tag(GString* gstr, struct service_tag_s *tag)
 			g_string_append_printf(gstr, "\"%.*s\"",
 					(int) sizeof(tag->value.buf), tag->value.buf);
 			return;
-		case STVT_MACRO:
-			g_string_append_printf(gstr, "[\"%s\",\"%s\"]",
-					tag->value.macro.type, tag->value.macro.param);
-			return;
 	}
 }
 
@@ -725,19 +659,6 @@ _srvtag_load_json (const gchar *name, struct json_object *obj)
 		service_tag_set_value_float(tag, json_object_get_double(obj));
 	} else if (json_object_is_type(obj, json_type_boolean)) {
 		service_tag_set_value_boolean(tag, json_object_get_boolean(obj));
-	} else if (json_object_is_type(obj, json_type_array)) { // macro
-		if (json_object_array_length(obj) > 0) {
-			json_object *k, *v = NULL;
-			k = json_object_array_get_idx(obj, 0);
-			if (json_object_array_length(obj) > 1)
-				v = json_object_array_get_idx(obj, 1);
-			if (json_object_is_type(k, json_type_string)
-					&& (!v || json_object_is_type(v, json_type_string))) {
-				service_tag_set_value_macro(tag,
-						json_object_get_string(k),
-						v ? json_object_get_string(v) : NULL);
-			}
-		}
 	} else {
 		service_tag_set_value_boolean(tag, FALSE);
 	}

@@ -26,18 +26,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
-#include <cluster/remote/gridcluster_remote.h>
-
-#ifdef HAVE_DEBUG
-static void
-prompt(void)
-{
-	gchar buf[1024];
-
-	g_printerr("Type a new line to continue\n");
-	fgets(buf, sizeof(buf), stdin);
-}
-#endif
 
 static void
 usage(void)
@@ -234,7 +222,7 @@ set_service_score(const char *service_desc, int score)
 	}
 
 	GSList *list = g_slist_prepend(NULL, si);
-	GError *err = gcluster_push_services(cs, list);
+	GError *err = conscience_remote_push_services(cs, list);
 	g_slist_free(list);
 	if (err)
 		g_prefix_error(&err, "Registration failed: ");
@@ -391,7 +379,7 @@ main(int argc, char **argv)
 			goto exit_label;
 		}
 
-		error = get_namespace_info(namespace, &ns);
+		error = conscience_get_namespace(namespace, &ns);
 		if (ns == NULL) {
 			g_printerr("Failed to get namespace info :\n");
 			g_printerr("%s\n", error->message);
@@ -401,7 +389,7 @@ main(int argc, char **argv)
 
 	if (has_clear_services) {
 
-		if (NULL != (error = clear_namespace_services(namespace, service_desc))) {
+		if (NULL != (error = conscience_remove_services(namespace, service_desc))) {
 			g_printerr("Failed to send clear order to cluster for ns='%s' and service='%s' :\n", namespace,
 					service_desc);
 			g_printerr("%s\n", error->message);
@@ -474,7 +462,7 @@ main(int argc, char **argv)
 			goto exit_label;
 		}
 		GSList *services_types = NULL;
-		error = list_namespace_service_types(namespace, &services_types);
+		error = conscience_get_types (namespace, &services_types);
 
 		if (error) {
 				g_printerr("Failed to get the services list: %s\n", gerror_get_message(error));
@@ -488,9 +476,9 @@ main(int argc, char **argv)
 
 				/* Generate the list */
 				if (!has_flag_full || !has_raw) {
-					error = list_namespace_services(namespace, str_type, &list_services);
+					error = conscience_get_services (namespace, str_type, &list_services);
 				} else {
-					error = gcluster_get_services(csurl, str_type, TRUE, &list_services);
+					error = conscience_remote_get_services(csurl, str_type, TRUE, &list_services);
 				}
 
 				/* Dump the list */

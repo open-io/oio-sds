@@ -245,7 +245,7 @@ _resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result)
 		GSList *allm0;
 
 		/* Now attempt a real resolution */
-		err = list_namespace_services (ns, NAME_SRVTYPE_META0, &allm0);
+		err = conscience_get_services (ns, NAME_SRVTYPE_META0, &allm0);
 		if (!allm0 || err) {
 			if (!err)
 				err = NEWERROR(CODE_INTERNAL_ERROR, "No meta0 available");

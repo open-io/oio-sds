@@ -40,10 +40,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cluster/module/module.h>
 
 #include "./agent.h"
-#include "./cpu_stat_task_worker.h"
 #include "./gridagent.h"
 #include "./io_scheduler.h"
-#include "./io_stat_task_worker.h"
 #include "./namespace_get_task_worker.h"
 #include "./request_worker.h"
 #include "./services_workers.h"

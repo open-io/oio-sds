@@ -191,7 +191,7 @@ dav_rawx_cmd_gridconfig_namespace(cmd_parms *cmd, void *config, const char *arg1
 
 	/* Prepare COMPRESSION / ACL CONF when we get ns name */
 	namespace_info_t* ns_info;
-	GError *local_error = get_namespace_info(conf->ns_name, &ns_info);
+	GError *local_error = conscience_get_namespace(conf->ns_name, &ns_info);
         if(!ns_info) {
 		DAV_DEBUG_POOL(cmd->temp_pool, 0,
 			"Failed to get namespace info from ns [%s]", conf->ns_name);

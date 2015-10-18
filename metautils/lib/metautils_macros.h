@@ -86,15 +86,8 @@ License along with this library.
 
 /* Some well known service tags macro names */
 # define NAME_MACRO_SPACE_NAME "stat.space"
-# define NAME_MACRO_SPACE_TYPE "space"
-
 # define NAME_MACRO_CPU_NAME "stat.cpu"
-# define NAME_MACRO_CPU_TYPE "cpu"
-
 # define NAME_MACRO_IOIDLE_NAME "stat.io"
-# define NAME_MACRO_IOIDLE_TYPE "io"
-
-# define NAME_MACRO_GRIDD_TYPE "gridd.macro"
 
 # define NAME_TAGNAME_RAWX_VOL "tag.vol"
 # define NAME_TAGNAME_RAWX_FIRST "tag.first"

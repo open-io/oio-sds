@@ -328,7 +328,7 @@ env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 [service.gridagent]
 group=common,localhost,agent
 on_die=respawn
-enabled=true
+enabled=false
 start_at_boot=true
 command=${EXE_PREFIX}-cluster-agent -s OIO,${NS},agent ${CFGDIR}/agent.conf
 

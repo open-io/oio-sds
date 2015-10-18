@@ -28,9 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cluster/lib/message.h>
 
 #include "./agent.h"
-#include "./cpu_stat_task_worker.h"
 #include "./io_scheduler.h"
-#include "./io_stat_task_worker.h"
 #include "./namespace_get_task_worker.h"
 #include "./request_worker.h"
 #include "./server.h"
@@ -95,16 +93,6 @@ main_reqagent(void)
 	}
 	if (!init_request_worker(&error)) {
 		ERROR("Failed to init message worker : %s", gerror_get_message(error));
-		goto error_label;
-	}
-
-	/* Local monitoring tasks */
-	if (!start_io_stat_task(&error)) {
-		ERROR("Failed to start io stat task : %s", gerror_get_message(error));
-		goto error_label;
-	}
-	if (!start_cpu_stat_task(&error)) {
-		ERROR("Failed to start cpu stat task : %s", gerror_get_message(error));
 		goto error_label;
 	}
 

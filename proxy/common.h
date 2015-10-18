@@ -34,7 +34,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/url_ext.h>
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
-#include <cluster/remote/gridcluster_remote.h>
 #include <server/network_server.h>
 #include <server/stats_holder.h>
 #include <resolver/hc_resolver.h>

@@ -117,7 +117,7 @@ update_rawx_conf(apr_pool_t* p, rawx_conf_t **rawx_conf, const gchar* ns_name)
 {
 	rawx_conf_t* new_conf = NULL;
 	namespace_info_t* ns_info;
-	GError *local_error = get_namespace_info(ns_name, &ns_info);
+	GError *local_error = conscience_get_namespace(ns_name, &ns_info);
 	if (local_error)
 		return FALSE;
 

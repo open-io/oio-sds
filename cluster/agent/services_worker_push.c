@@ -24,14 +24,12 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
+#include <cluster/lib/gridcluster.h>
 
 #include "conscience/conscience.h"
 
 #include "agent.h"
-#include "cpu_stat_task_worker.h"
-#include "fs.h"
 #include "gridagent.h"
-#include "io_stat_task_worker.h"
 #include "message.h"
 #include "namespace_get_task_worker.h"
 #include "task.h"
@@ -48,92 +46,6 @@ agent_get_service_key(struct service_info_s *si, gchar * dst, gsize dst_size)
 	writen += g_snprintf(dst + writen, dst_size - writen, "%s:", si->type);
 	writen += grid_addrinfo_to_string(&(si->addr), dst + writen, dst_size - writen);
 	return writen;
-}
-
-static gboolean
-expand_service_tags(struct namespace_data_s *ns_data, struct service_info_s *si, GError ** error)
-{
-	int i, max;
-	struct service_tag_s *tag;
-	gchar str_addr[STRLEN_ADDRINFO], str_tag[1024];
-
-	if (!si->tags)
-		return TRUE;
-
-	grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
-	for (i = 0, max = si->tags->len; i < max; i++) {
-
-		tag = g_ptr_array_index(si->tags, i);
-		if (!tag)
-			continue;
-		if (tag->type == STVT_MACRO) {
-			int idle;
-
-			if (!tag->value.macro.type) {
-				GSETERROR(error, "Invalid MACRO type for service_tag");
-				return FALSE;
-			}
-
-			if (!g_ascii_strcasecmp(tag->value.macro.type, NAME_MACRO_IOIDLE_TYPE)) {
-				if (get_io_idle_for_path(tag->value.macro.param, &idle, error))
-					service_tag_set_value_i64(tag, MAX(idle,1));
-				else {
-					service_tag_to_string(tag, str_tag, sizeof(str_tag));
-					if (gridagent_blank_undefined_srvtags) {
-						DEBUG("Service [NS=%s][SRVTYPE=%s][@=%s] : %s nulled",
-							si->ns_name, si->type, str_addr, tag->name);
-						service_tag_set_value_i64(tag, 0);
-					}
-					else {
-						GSETERROR(error, "Service [NS=%s][SRVTYPE=%s][@=%s] : "
-								"macro expansion failure name=[%s] value=[%s]",
-								si->ns_name, si->type, str_addr, tag->name, str_tag);
-						return FALSE;
-					}
-				}
-			}
-			else if (!g_ascii_strcasecmp(tag->value.macro.type, NAME_MACRO_CPU_TYPE)) {
-				if (get_cpu_idle(&idle, error))
-					service_tag_set_value_i64(tag, idle?idle:1);
-				else {
-					service_tag_to_string(tag, str_tag, sizeof(str_tag));
-					if (gridagent_blank_undefined_srvtags) {
-						DEBUG("Service [NS=%s][SRVTYPE=%s][@=%s] : nulled %s",
-								si->ns_name, si->type, str_addr, tag->name);
-						service_tag_set_value_i64(tag, 0);
-					}
-					else {
-						GSETERROR(error, "Service [NS=%s][SRVTYPE=%s][@=%s] : "
-								"macro expansion failure name=[%s] value=[%s]",
-								si->ns_name, si->type, str_addr, tag->name, str_tag);
-						return FALSE;
-					}
-				}
-			}
-			else if (!g_ascii_strcasecmp(tag->value.macro.type, NAME_MACRO_SPACE_TYPE)) {
-				long free_space = get_free_space(tag->value.macro.param, ns_data->ns_info.chunk_size);
-				if (free_space >= 0) {
-					service_tag_set_value_i64(tag, free_space);
-				} else {
-					if (gridagent_blank_undefined_srvtags) {
-						DEBUG("Service [NS=%s][SRVTYPE=%s][@=%s] : nulled %s",
-								si->ns_name, si->type, str_addr, tag->name);
-						service_tag_set_value_i64(tag, 0);
-					} else {
-						GSETERROR(error, "Service [NS=%s][SRVTYPE=%s][@=%s] : "
-								"macro expansion failure name=[%s] value=[%s] : (%d) %s",
-								si->ns_name, si->type, str_addr, tag->name, str_tag, errno, strerror(errno));
-						return FALSE;
-					}
-				}
-			}
-			else {
-				NOTICE("Service [NS=%s][SRVTYPE=%s][@=%s] : macro type not managed name=[%s] type=[%s]",
-					si->ns_name, si->type, str_addr, tag->name, tag->value.macro.type);
-			}
-		}
-	}
-	return TRUE;
 }
 
 static gboolean
@@ -179,13 +91,8 @@ manage_service(struct service_info_s *si)
 	/*replace MACRO tags by their true values */
 	if (error_local)
 		g_clear_error(&error_local);
-	if (!expand_service_tags(ns_data, si, &error_local)) {
-		WARN("Service tags expansion failure: [ns=%s type=%s addr=%s] : %s",
-				ns_data->name, si->type, str_addr, gerror_get_message(error_local));
-		if (error_local)
-			g_error_free(error_local);
-		return FALSE;
-	}
+
+	metautils_srvinfo_ensure_tags (si);
 
 	si->score.value = SCORE_UNSET;
 	si->score.timestamp = g_get_real_time() / 1000000;

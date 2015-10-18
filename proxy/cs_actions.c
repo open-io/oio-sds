@@ -99,7 +99,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 	} else {
 		CSURL(cs);
 		GSList l = {.data = si, .next = NULL};
-		if (NULL != (err = gcluster_push_services (cs, &l))) {
+		if (NULL != (err = conscience_remote_push_services (cs, &l))) {
 			service_info_clean (si);
 			return _reply_common_error (args, err);
 		} else {
@@ -174,7 +174,7 @@ action_cs_get (struct req_args_s *args)
 
 	CSURL(cs);
 	GSList *sl = NULL;
-	err = gcluster_get_services (cs, types, full, &sl);
+	err = conscience_remote_get_services (cs, types, full, &sl);
 
 	if (NULL != err) {
 		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
@@ -204,7 +204,7 @@ action_cs_del (struct req_args_s *args)
 		return _reply_notfound_error (args, err);
 
 	CSURL(cs);
-	err = gcluster_remove_services (cs, TYPE(), NULL);
+	err = conscience_remote_remove_services (cs, TYPE(), NULL);
 
 	if (err) {
 		g_prefix_error (&err, "Agent error: ");

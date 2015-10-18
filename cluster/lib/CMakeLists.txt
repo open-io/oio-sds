@@ -9,8 +9,11 @@ add_library(gridcluster SHARED
 set_target_properties(gridcluster PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(gridcluster
-		metautils gridcluster-remote
+		metautils
 		-lm ${GLIB2_LIBRARIES})
+
+add_executable (tool_sysstat tool_sysstat.c)
+target_link_libraries (tool_sysstat gridcluster)
 
 install(FILES
 			gridcluster.h

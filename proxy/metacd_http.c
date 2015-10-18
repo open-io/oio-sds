@@ -281,7 +281,7 @@ _reload_srvtype(const char *type)
 	CSURL(cs);
 
 	GSList *list = NULL;
-	GError *err = gcluster_get_services (cs, type, FALSE, &list);
+	GError *err = conscience_remote_get_services (cs, type, FALSE, &list);
 	if (err) {
 		GRID_WARN("Services listing error for type[%s]: code=%d %s",
 				type, err->code, err->message);
@@ -344,7 +344,7 @@ _task_reload_nsinfo (gpointer p)
 	if (!cs) return;
 
 	struct namespace_info_s *ni = NULL;
-	GError *err = gcluster_get_namespace (cs, &ni);
+	GError *err = conscience_remote_get_namespace (cs, &ni);
 	if (err) {
 		GRID_WARN ("NSINFO reload error [%s] from [%s]: (%d) %s",
 			nsname, cs, err->code, err->message);
@@ -363,7 +363,7 @@ _task_reload_srvtypes (gpointer p)
 	if (!cs) return;
 
 	GSList *list = NULL;
-	GError *err = gcluster_get_service_types (cs, &list);
+	GError *err = conscience_remote_get_types (cs, &list);
 	if (err != NULL) {
 		GRID_WARN ("SRVTYPES reload error [%s] from [%s] : (%d) %s",
 			nsname, cs, err->code, err->message);
@@ -405,7 +405,7 @@ _task_push (gpointer p)
 		if (!cs) {
 			GRID_ERROR("Push error: %s", "No/Invalid conscience for namespace NS");
 		} else {
-			GError *err = gcluster_push_services (cs, tmp);
+			GError *err = conscience_remote_push_services (cs, tmp);
 			if (err != NULL) {
 				GRID_WARN("Push error: (%d) %s", err->code, err->message);
 				g_clear_error(&err);

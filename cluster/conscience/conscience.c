@@ -182,7 +182,7 @@ conscience_get_srvtype(struct conscience_s *conscience, GError ** error, const c
 		return srvtype;
 
 	if (mode == MODE_AUTOCREATE) {
-		NOTICE("[NS=%s][SRVTYPE=%s] Autocreation wanted!", conscience_get_namespace(conscience), type);
+		NOTICE("[NS=%s][SRVTYPE=%s] Autocreation wanted!", conscience_get_nsname(conscience), type);
 		srvtype = conscience_srvtype_create(conscience, type);
 		if (!srvtype) {
 			GSETERROR(error, "ServiceType allocation failure");
@@ -207,7 +207,7 @@ conscience_get_default_srvtype(struct conscience_s *conscience)
 }
 
 const gchar *
-conscience_get_namespace(struct conscience_s *conscience)
+conscience_get_nsname(struct conscience_s *conscience)
 {
 	if (!conscience)
 		return "";

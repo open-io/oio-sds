@@ -179,7 +179,7 @@ task_worker(gpointer p, GError **error)
 	list_types = conscience_get_srvtype_names(ns_data->conscience, error);
 	if (!list_types) {
 		GSETERROR(error,"No service type found in namespace [%s]",
-				conscience_get_namespace(ns_data->conscience));
+				conscience_get_nsname(ns_data->conscience));
 		return 0;
 	}
 

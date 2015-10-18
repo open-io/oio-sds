@@ -25,10 +25,10 @@ License along with this library.
 #include <errno.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/vfs.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
-#include <cluster/remote/gridcluster_remote.h>
+#include <cluster/module/module.h>
 
 #include "gridcluster.h"
 #include "message.h"
@@ -53,31 +53,8 @@ License along with this library.
 #define NS_COMPRESS_OPT_NAME "compression"
 #define NS_COMPRESS_OPT_VALUE_ON "on"
 
-extern gboolean oio_cluster_skip_agent = 1;
-
-static gint64
-_gba_to_int64(GByteArray *gba, gboolean def)
-{
-	if (!gba)
-		return def;
-	gchar *str = g_alloca(gba->len + 1);
-	memset(str, 0, gba->len + 1);
-	memcpy(str, gba->data, gba->len);
-	return g_ascii_strtoll(str, NULL, 10);
-}
-
-static gboolean
-_gba_to_bool(GByteArray *gba, gboolean def)
-{
-	if (!gba || !gba->data || !gba->len)
-		return def;
-	if (!gba->data[ gba->len - 1 ])
-		return metautils_cfg_get_bool((gchar*)gba->data, def);
-	gchar *str = g_alloca(gba->len + 1);
-	memset(str, 0, gba->len + 1);
-	memcpy(str, gba->data, gba->len);
-	return metautils_cfg_get_bool(str, def);
-}
+gboolean oio_cluster_allow_agent = TRUE;
+gboolean oio_cluster_allow_proxy = FALSE;
 
 static void
 clear_request_and_reply( request_t *req, response_t *resp )
@@ -90,195 +67,305 @@ clear_request_and_reply( request_t *req, response_t *resp )
 		g_free0(resp->data);
 }
 
+/* -------------------------------------------------------------------------- */
+
 GError *
-get_namespace_info(const char *ns, struct namespace_info_s **out)
+conscience_remote_get_namespace (const char *cs, namespace_info_t **out)
+{
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_CS_GET_NSINFO);
+	GByteArray *gba = NULL;
+	GError *err = gridd_client_exec_and_concat (cs, CS_CLIENT_TIMEOUT,
+			message_marshall_gba_and_clean(req), &gba);
+	if (err) {
+		g_prefix_error(&err, "request: ");
+		return err;
+	}
+
+	*out = namespace_info_unmarshall(gba->data, gba->len, &err);
+	if (*out) return NULL;
+	GSETERROR(&err, "Decoding error");
+	return err;
+}
+
+GError *
+conscience_remote_get_services(const char *cs, const char *type, gboolean full,
+		GSList **out)
+{
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_CS_GET_SRV);
+	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
+	if (full)
+		metautils_message_add_field_str(req, NAME_MSGKEY_FULL, "1");
+	return gridd_client_exec_and_decode (cs, CS_CLIENT_TIMEOUT,
+			message_marshall_gba_and_clean(req), out, service_info_unmarshall);
+}
+
+GError *
+conscience_remote_get_types(const char *cs, GSList **out)
+{
+	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_GET_SRVNAMES);
+	return gridd_client_exec_and_decode (cs, CS_CLIENT_TIMEOUT,
+			message_marshall_gba_and_clean(req), out, strings_unmarshall);
+}
+
+GError *
+conscience_remote_push_services(const char *cs, GSList *ls)
+{
+	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_PUSH_SRV);
+	metautils_message_add_body_unref (req, service_info_marshall_gba (ls, NULL));
+	return gridd_client_exec (cs, CS_CLIENT_TIMEOUT,
+			message_marshall_gba_and_clean(req));
+}
+
+GError*
+conscience_remote_remove_services(const char *cs, const char *type, GSList *ls)
+{
+	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_CS_RM_SRV);
+	if (ls)
+		metautils_message_add_body_unref (req, service_info_marshall_gba (ls, NULL));
+	if (type) metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
+	return gridd_client_exec (cs, CS_CLIENT_TIMEOUT,
+			message_marshall_gba_and_clean(req));
+}
+
+/* -------------------------------------------------------------------------- */
+
+GError *
+conscience_agent_get_namespace(const char *ns, struct namespace_info_s **out)
 {
 	g_assert (ns != NULL);
 	g_assert (out != NULL);
 	*out = NULL;
 
-	if (!oio_cluster_skip_agent && gridagent_available()) {
-		GError *err = NULL;
-		request_t req;
-		response_t resp;
-		memset(&req, 0, sizeof(request_t));
-		memset(&resp, 0, sizeof(response_t));
-		req.cmd = g_strdup(MSG_GETNS);
-		req.arg = g_strdup(ns);
-		req.arg_size = strlen(req.arg);
+	GError *err = NULL;
+	request_t req;
+	response_t resp;
+	memset(&req, 0, sizeof(request_t));
+	memset(&resp, 0, sizeof(response_t));
+	req.cmd = g_strdup(MSG_GETNS);
+	req.arg = g_strdup(ns);
+	req.arg_size = strlen(req.arg);
 
-		if (!send_request(&req, &resp, &err))
-			g_prefix_error (&err, "agent request error (%s): ", req.cmd);
-		else if (resp.status != STATUS_OK)
-			MANAGE_ERROR(req,resp,&err);
-		else
-			*out = namespace_info_unmarshall(resp.data, resp.data_size, &err);
+	if (!send_request(&req, &resp, &err))
+		g_prefix_error (&err, "agent request error (%s): ", req.cmd);
+	else if (resp.status != STATUS_OK)
+		MANAGE_ERROR(req,resp,&err);
+	else
+		*out = namespace_info_unmarshall(resp.data, resp.data_size, &err);
 
-		clear_request_and_reply(&req,&resp);
-		return err;
-	}
-
-	gchar *cs = gridcluster_get_conscience(ns);
-	STRING_STACKIFY(cs);
-	if (!cs)
-		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "No such NS");
-	return gcluster_get_namespace(cs, out);
+	clear_request_and_reply(&req,&resp);
+	return err;
 }
 
 GError *
-list_namespace_service_types(const char *ns, GSList **out)
+conscience_agent_get_types(const char *ns, GSList **out)
 {
 	g_assert (ns != NULL);
 	g_assert (out != NULL);
 	*out = NULL;
 
-	if (!oio_cluster_skip_agent && gridagent_available()) {
-		GError *err = NULL;
-		request_t req;
-		response_t resp;
-		memset(&req, 0, sizeof(request_t));
-		memset(&resp, 0, sizeof(response_t));
-		req.cmd = g_strdup(MSG_SRVTYPE_LST);
-		req.arg = g_strdup(ns);
-		req.arg_size = strlen(req.arg);
+	GError *err = NULL;
+	request_t req;
+	response_t resp;
+	memset(&req, 0, sizeof(request_t));
+	memset(&resp, 0, sizeof(response_t));
+	req.cmd = g_strdup(MSG_SRVTYPE_LST);
+	req.arg = g_strdup(ns);
+	req.arg_size = strlen(req.arg);
 
-		if (!send_request(&req, &resp, &err))
-			g_prefix_error (&err, "agent request error (%s): ", req.cmd);
-		else if (resp.status != STATUS_OK)
-			MANAGE_ERROR(req,resp,&err);
-		else 
-			strings_unmarshall(out, resp.data, resp.data_size, &err);
+	if (!send_request(&req, &resp, &err))
+		g_prefix_error (&err, "agent request error (%s): ", req.cmd);
+	else if (resp.status != STATUS_OK)
+		MANAGE_ERROR(req,resp,&err);
+	else 
+		strings_unmarshall(out, resp.data, resp.data_size, &err);
 
-		clear_request_and_reply(&req,&resp);
-		return err;
-	}
-
-	gchar *cs = gridcluster_get_conscience(ns);
-	STRING_STACKIFY(cs);
-	if (!cs)
-		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "No such NS");
-	return gcluster_get_service_types(cs, out);
+	clear_request_and_reply(&req,&resp);
+	return err;
 }
 
 GError *
-list_namespace_services(const char *ns, const char *type, GSList **out)
+conscience_agent_get_services(const char *ns, const char *type, GSList **out)
 {
 	g_assert (ns != NULL);
 	g_assert (type != NULL);
 	g_assert (out != NULL);
 	*out = NULL;
 
-	if (!oio_cluster_skip_agent && gridagent_available()) {
-		GError *err = NULL;
-		request_t req;
-		response_t resp;
-		memset(&req, 0, sizeof(request_t));
-		memset(&resp, 0, sizeof(response_t));
-		req.cmd = g_strdup(MSG_SRV_LST);
-		req.arg = g_strdup_printf("%s:%s", ns, type);
-		req.arg_size = strlen(req.arg);
+	GError *err = NULL;
+	request_t req;
+	response_t resp;
+	memset(&req, 0, sizeof(request_t));
+	memset(&resp, 0, sizeof(response_t));
+	req.cmd = g_strdup(MSG_SRV_LST);
+	req.arg = g_strdup_printf("%s:%s", ns, type);
+	req.arg_size = strlen(req.arg);
 
-		if (!send_request(&req, &resp, &err))
-			g_prefix_error (&err, "agent request error (%s): ", req.cmd);
-		else if (resp.status != STATUS_OK)
-			MANAGE_ERROR(req,resp,&err);
-		else
-			service_info_unmarshall(out, resp.data, resp.data_size,&err);
+	if (!send_request(&req, &resp, &err))
+		g_prefix_error (&err, "agent request error (%s): ", req.cmd);
+	else if (resp.status != STATUS_OK)
+		MANAGE_ERROR(req,resp,&err);
+	else
+		service_info_unmarshall(out, resp.data, resp.data_size,&err);
 
-		clear_request_and_reply(&req,&resp);
-		return err;
-	}
+	clear_request_and_reply(&req,&resp);
+	return err;
+}
+
+GError *
+conscience_agent_push_services (const char *ns, GSList *ls)
+{
+	g_assert (ns != NULL);
+	if (!ls) return NULL;
+
+	GByteArray *gba = service_info_marshall_gba (ls, NULL);
+	if (!gba)
+		return NEWERROR(CODE_INTERNAL_ERROR, "serialisation error");
+
+	GError *err = NULL;
+	request_t req;
+	response_t resp;
+	memset(&req, 0, sizeof(request_t));
+	memset(&resp, 0, sizeof(response_t));
+	req.cmd = g_strdup(MSG_SRV_PSH);
+	req.arg = (char*)gba->data;
+	req.arg_size = gba->len;
+	g_byte_array_free(gba,FALSE);
+
+	if (!send_request(&req, &resp, &err))
+		g_prefix_error (&err, "agent request error (%s): ", req.cmd);
+	else if (resp.status != STATUS_OK)
+		MANAGE_ERROR(req,resp,&err);
+
+	clear_request_and_reply(&req,&resp);
+	return err;
+}
+
+GError *
+conscience_agent_remove_services(const char *ns, const char *type)
+{
+	g_assert (ns != NULL);
+	g_assert (type != NULL);
+
+	GError *err = NULL;
+	request_t req;
+	response_t resp;
+	memset(&req, 0, sizeof(request_t));
+	memset(&resp, 0, sizeof(response_t));
+	req.cmd = g_strdup(MSG_SRV_CLR);
+	req.arg = g_strdup_printf("%s:%s",ns,type);
+	req.arg_size = strlen(req.arg);
+
+	if (!send_request(&req, &resp, &err))
+		g_prefix_error (&err, "agent request failed (%s): ", req.cmd);
+	else if (resp.status != STATUS_OK)
+		MANAGE_ERROR(req,resp,&err);
+
+	clear_request_and_reply(&req,&resp);
+	return err;
+}
+
+/* -------------------------------------------------------------------------- */
+
+GError *
+conscience_get_namespace (const char *ns, struct namespace_info_s **out)
+{
+	g_assert (ns != NULL);
+	g_assert (out != NULL);
+	*out = NULL;
+
+	if (oio_cluster_allow_agent && gridagent_available())
+		return conscience_agent_get_namespace (ns, out);
+
+	gchar *cs = gridcluster_get_conscience(ns);
+	STRING_STACKIFY(cs);
+	if (!cs)
+		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "No such NS");
+	return conscience_remote_get_namespace(cs, out);
+}
+
+GError *
+conscience_get_types (const char *ns, GSList **out)
+{
+	g_assert (ns != NULL);
+	g_assert (out != NULL);
+	*out = NULL;
+
+	if (oio_cluster_allow_agent && gridagent_available())
+		return conscience_agent_get_types (ns, out);
+
+	gchar *cs = gridcluster_get_conscience(ns);
+	STRING_STACKIFY(cs);
+	if (!cs)
+		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "No such NS");
+	return conscience_remote_get_types(cs, out);
+}
+
+GError *
+conscience_get_services (const char *ns, const char *type, GSList **out)
+{
+	g_assert (ns != NULL);
+	g_assert (type != NULL);
+	g_assert (out != NULL);
+	*out = NULL;
+
+	if (oio_cluster_allow_agent && gridagent_available())
+		return conscience_agent_get_services (ns, type, out);
 
 	gchar *cs = gridcluster_get_conscience(ns);
 	STRING_STACKIFY (cs);
 	if (!cs)
 		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "No such NS");
-	return gcluster_get_services(cs, type, FALSE, out);
+	return conscience_remote_get_services(cs, type, FALSE, out);
 }
 
 GError *
-register_namespace_services (const char *ns, GSList *ls)
+conscience_push_services (const char *ns, GSList *ls)
 {
 	g_assert (ns != NULL);
 	if (!ls) return NULL;
 
-	if (gridagent_available()) {
-
-		GByteArray *gba = service_info_marshall_gba (ls, NULL);
-		if (!gba)
-			return NEWERROR(CODE_INTERNAL_ERROR, "serialisation error");
-
-		GError *err = NULL;
-		request_t req;
-		response_t resp;
-		memset(&req, 0, sizeof(request_t));
-		memset(&resp, 0, sizeof(response_t));
-		req.cmd = g_strdup(MSG_SRV_PSH);
-		req.arg = (char*)gba->data;
-		req.arg_size = gba->len;
-		g_byte_array_free(gba,FALSE);
-
-		if (!send_request(&req, &resp, &err))
-			g_prefix_error (&err, "agent request error (%s): ", req.cmd);
-		else if (resp.status != STATUS_OK)
-			MANAGE_ERROR(req,resp,&err);
-
-		clear_request_and_reply(&req,&resp);
-		return err;
-	}
+	if (oio_cluster_allow_agent && gridagent_available())
+		return conscience_agent_push_services (ns, ls);
 
 	gchar *cs = gridcluster_get_conscience(ns);
 	STRING_STACKIFY(cs);
 	if (!cs)
 		return NEWERROR(CODE_BAD_REQUEST, "Unknown namespace/conscience");
-	return gcluster_push_services (cs, ls);
+	return conscience_remote_push_services (cs, ls);
 }
+
+GError *
+conscience_remove_services(const char *ns, const char *type)
+{
+	g_assert (ns != NULL);
+	g_assert (type != NULL);
+
+	if (oio_cluster_allow_agent && gridagent_available())
+		conscience_agent_remove_services (ns, type);
+
+	gchar *cs = gridcluster_get_conscience(ns);
+	STRING_STACKIFY(cs);
+	if (!cs)
+		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Unknown namespace/conscience");
+	return conscience_remote_remove_services (cs, type, NULL);
+}
+
+/* -------------------------------------------------------------------------- */
 
 GError *
 register_namespace_service(const struct service_info_s *si)
 {
 	struct service_info_s *si_copy = service_info_dup(si);
 	si_copy->score.value = SCORE_UNSET;
-	si_copy->score.timestamp = time(0);
+	si_copy->score.timestamp = g_get_real_time () / G_TIME_SPAN_SECOND;
+
+	metautils_srvinfo_ensure_tags (si_copy);
+
 	GSList l = {.data = si_copy, .next = NULL};
-	GError *err = register_namespace_services (si->ns_name, &l);
+	GError *err = conscience_push_services (si->ns_name, &l);
 	service_info_clean(si_copy);
 	return err;
 }
-
-GError *
-clear_namespace_services(const char *ns, const char *type)
-{
-	g_assert (ns != NULL);
-	g_assert (type != NULL);
-
-	if (!oio_cluster_skip_agent && gridagent_available()) {
-		GError *err = NULL;
-		request_t req;
-		response_t resp;
-		memset(&req, 0, sizeof(request_t));
-		memset(&resp, 0, sizeof(response_t));
-		req.cmd = g_strdup(MSG_SRV_CLR);
-		req.arg = g_strdup_printf("%s:%s",ns,type);
-		req.arg_size = strlen(req.arg);
-
-		if (!send_request(&req, &resp, &err))
-			g_prefix_error (&err, "agent request failed (%s): ", req.cmd);
-		else if (resp.status != STATUS_OK)
-			MANAGE_ERROR(req,resp,&err);
-
-		clear_request_and_reply(&req,&resp);
-		return err;
-	}
-
-	gchar *cs = gridcluster_get_conscience(ns);
-	STRING_STACKIFY(cs);
-	if (!cs)
-		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Unknown namespace/conscience");
-	return gcluster_remove_services (cs, type, NULL);
-}
-
-/* ------------------------------------------------------------------------- */
 
 GSList*
 list_local_services(GError **error)
@@ -357,7 +444,302 @@ list_tasks(GError **error)
 	return NULL;
 }
 
-/* ------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+void
+metautils_srvinfo_ensure_tags (struct service_info_s *si)
+{
+	if (!si->tags)
+		return ;
+
+	if (!service_info_get_tag (si->tags, "stat.cpu"))
+		service_tag_set_value_float(service_info_ensure_tag (
+					si->tags, "stat.cpu"), 100.0 * oio_sys_cpu_idle ());
+
+	gchar vol[512];
+	struct service_tag_s *tag = NULL;
+
+	if (si->tags)
+		tag = service_info_get_tag (si->tags, "tag.vol");
+	if (tag) {
+		if (service_tag_get_value_string (tag, vol, sizeof(vol), NULL)) {
+			if (!service_info_get_tag(si->tags, "stat.io"))
+				service_tag_set_value_float (service_info_get_tag(
+							si->tags, "stat.io"), 100.0 * oio_sys_io_idle (vol));
+			if (!service_info_get_tag(si->tags, "stat.space"))
+				service_tag_set_value_float (service_info_ensure_tag (
+							si->tags, "stat.space"), 100.0 * oio_sys_space_idle (vol));
+		}
+	}
+}
+
+gdouble
+oio_sys_cpu_idle (void)
+{
+	static gdouble ratio_idle = 0.01;
+	static guint64 last_sum = 0;
+	static guint64 last_idle = 0;
+	static gint64 last_update = 0;
+	static GMutex lock;
+	static volatile guint lazy_init = 1;
+
+	if (lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
+			g_mutex_init (&lock);
+		}
+	}
+
+	gdouble out;
+
+	g_mutex_lock (&lock);
+	gint64 now = g_get_monotonic_time ();
+	if (!last_update || ((now - last_update) > G_TIME_SPAN_SECOND)) {
+		FILE *fst = fopen ("/proc/stat", "r");
+		while (fst && !feof(fst) && !ferror(fst)) {
+			char line[1024];
+			if (!fgets (line, 1024, fst))
+				break;
+			if (!g_str_has_prefix(line, "cpu "))
+				continue;
+			char *p = g_strstrip(line + 4);
+			long long unsigned int user = 0, nice = 0, sys = 0, idle = 0,
+				 wait = 0, irq = 0, soft = 0, steal = 0, guest = 0,
+				 guest_nice = 0;
+			/* TODO linux provides 10 fields since Linux 2.6.33,
+			 * and we should check the Linux verison to manage the
+			 * old style with 7 fields for earlier releases. */
+			int rc = sscanf(p, "%llu %llu %llu %llu %llu %llu %llu %llu"
+					" %llu %llu", &user, &nice, &sys, &idle, &wait, &irq,
+					&soft, &steal, &guest, &guest_nice);
+			if (rc != 0) {
+				guint64 sum = user + nice + sys + idle + wait + irq + soft
+					+ steal + guest + guest_nice;
+				if (sum > last_sum && idle > last_idle)
+					ratio_idle = ((gdouble)(idle - last_idle)) /
+						((gdouble)(sum - last_sum));
+				last_sum = sum;
+				last_idle = idle;
+				last_update = now;
+			}
+			break;
+		}
+		if (fst)
+			fclose (fst);
+	}
+	out = ratio_idle;
+	g_mutex_unlock (&lock);
+
+	return out;
+}
+
+static gdouble
+_compute_io_idle (guint major, guint minor)
+{
+	struct maj_min_idle_s {
+		guint major, minor;
+		gint64 last_update;
+		unsigned long long last_total_time;
+		gdouble idle;
+	};
+
+	static GSList *cache = NULL;
+	static GMutex lock;
+	static volatile guint lazy_init = 1;
+
+	if (lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
+			g_mutex_init (&lock);
+		}
+	}
+
+	gdouble idle = 1.0;
+	struct maj_min_idle_s *out = NULL;
+
+	g_mutex_lock (&lock);
+	gint64 now = g_get_monotonic_time ();
+
+	/* locate the info in the cache */
+	for (GSList *l=cache; l && !out ;l=l->next) {
+		struct maj_min_idle_s *p = l->data;
+		if (p && p->major == major && p->minor == minor)
+			out = p;
+	}
+	if (!out) {
+		out = SLICE_NEW0 (struct maj_min_idle_s);
+		out->major = major;
+		out->minor = minor;
+		cache = g_slist_prepend (cache, out);
+	}
+
+	/* check its validity and reload if necessary */
+	if (!out->last_update || (now - out->last_update) > G_TIME_SPAN_SECOND) {
+		FILE *fst = fopen ("/proc/diskstats", "r");
+		while (fst && !feof(fst) && !ferror(fst)) {
+			char line[1024], name[256];
+			if (!fgets (line, 1024, fst))
+				break;
+			guint fmajor, fminor;
+			unsigned long long int
+				rd, rd_merged, rd_sectors, rd_time,
+				wr, wr_merged, wr_sectors, wr_time,
+				total_progress, total_time, total_iotime;
+			int rc = sscanf (line, "%u %u %s %llu %llu %llu %llu %llu"
+					"%llu  %llu %llu %llu %llu %llu",
+					&fmajor, &fminor, name,
+					&rd, &rd_merged, &rd_sectors, &rd_time,
+					&wr, &wr_merged, &wr_sectors, &wr_time,
+					&total_progress, &total_time, &total_iotime);
+			if (rc != 0) {
+				gdouble spent = total_time - out->last_total_time; /* in ms */
+				gdouble elapsed = now - out->last_update; /* in µs */
+				elapsed /= G_TIME_SPAN_MILLISECOND; /* in ms */
+				out->idle = spent / elapsed;
+				out->last_update = now;
+				out->last_total_time = total_time;
+				break;
+			}
+		}
+		if (fst)
+			fclose (fst);
+	}
+
+	/* collect the up-to-date value */
+	idle = out->idle;
+
+	/* purge obsolete and exceeding entries of the cache */ 
+	GSList *kept = NULL, *trash = NULL;
+	for (GSList *l=cache; l ;l=l->next) {
+		struct maj_min_idle_s *p = l->data;
+		if ((now - p->last_update) > G_TIME_SPAN_HOUR)
+			trash = g_slist_prepend (trash, p);
+		else
+			kept = g_slist_prepend (kept, p);
+	}
+	cache = kept;
+	g_slist_free_full (trash, g_free);
+	g_mutex_unlock (&lock);
+
+	return idle;
+}
+
+static int
+_get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
+{
+	struct path_maj_min_s {
+		gint64 last_update;
+		int major;
+		int minor;
+		gchar path[];
+	};
+
+	static GSList *cache = NULL;
+	static GMutex lock;
+	static volatile guint lazy_init = 1;
+
+	if (lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
+			g_mutex_init (&lock);
+		}
+	}
+
+	struct path_maj_min_s *out = NULL;
+
+	g_mutex_lock (&lock);
+	gint64 now = g_get_monotonic_time ();
+	/* ensure an entry exists */
+	for (GSList *l=cache; l && !out ;l=l->next) {
+		struct path_maj_min_s *p = l->data;
+		if (p && !strcmp(path, p->path))
+			out = p;
+	}
+	if (!out) {
+		out = g_malloc0 (sizeof(struct path_maj_min_s) + strlen(path) + 1);
+		strcpy (out->path, path);
+		cache = g_slist_prepend (cache, out);
+	}
+
+	/* maybe refresh it */
+	if (!out->last_update || (now - out->last_update) > 30 * G_TIME_SPAN_SECOND) {
+		struct stat st;
+		if (0 != stat(out->path, &st)) {
+			out = NULL;
+		} else {
+			out->major = (guint) major(st.st_dev);
+			out->minor = (guint) minor(st.st_dev);
+			out->last_update = now;
+		}
+	}
+
+	/* collect the up-to-date value */
+	*pmaj = out->major;
+	*pmin = out->minor;
+
+	/* now purge the expired items */
+	GSList *kept = NULL, *trash = NULL;
+	for (GSList *l=cache; l ;l=l->next) {
+		struct path_maj_min_s *p = l->data;
+		if ((now - p->last_update) > G_TIME_SPAN_HOUR)
+			trash = g_slist_prepend (trash, p);
+		else
+			kept = g_slist_prepend (kept, p);
+	}
+	cache = kept;
+	g_mutex_unlock (&lock);
+
+	g_slist_free_full (trash, g_free);
+
+	return out != NULL;
+}
+
+gdouble
+oio_sys_io_idle (const char *vol)
+{
+	guint maj, min;
+	if (_get_major_minor(vol, &maj, &min))
+		return _compute_io_idle(maj, min);
+	return 0.01;
+}
+
+gdouble
+oio_sys_space_idle (const char *vol)
+{
+	struct statfs sfs;
+	if (statfs(vol, &sfs) < 0)
+		return 0.0;
+	gdouble free_inodes_d = sfs.f_ffree, total_blocks_d = sfs.f_blocks,
+			free_blocks_d = sfs.f_bavail;
+	if (free_blocks_d > free_inodes_d)
+		free_blocks_d = free_inodes_d;
+	if (free_blocks_d <= 0.0 || total_blocks_d <= 0.0)
+		return 0.0;
+	return free_blocks_d / total_blocks_d;
+}
+
+/* -------------------------------------------------------------------------- */
+
+static gint64
+_gba_to_int64(GByteArray *gba, gboolean def)
+{
+	if (!gba)
+		return def;
+	gchar *str = g_alloca(gba->len + 1);
+	memset(str, 0, gba->len + 1);
+	memcpy(str, gba->data, gba->len);
+	return g_ascii_strtoll(str, NULL, 10);
+}
+
+static gboolean
+_gba_to_bool(GByteArray *gba, gboolean def)
+{
+	if (!gba || !gba->data || !gba->len)
+		return def;
+	if (!gba->data[ gba->len - 1 ])
+		return metautils_cfg_get_bool((gchar*)gba->data, def);
+	gchar *str = g_alloca(gba->len + 1);
+	memset(str, 0, gba->len + 1);
+	memcpy(str, gba->data, gba->len);
+	return metautils_cfg_get_bool(str, def);
+}
 
 static GByteArray *
 namespace_param_gba(const namespace_info_t* ns_info, const gchar *ns_name,
@@ -569,7 +951,7 @@ gridcluster_reload_lbpool(struct grid_lbpool_s *glp)
 {
 	gboolean _reload_srvtype(const gchar *ns, const gchar *srvtype) {
 		GSList *list_srv = NULL;
-		GError *err = list_namespace_services(ns, srvtype, &list_srv);
+		GError *err = conscience_get_services (ns, srvtype, &list_srv);
 		if (err) {
 			GRID_WARN("Gridagent/conscience error: Failed to list the services"
 					" of type [%s]: code=%d %s", srvtype, err->code,
@@ -597,7 +979,7 @@ gridcluster_reload_lbpool(struct grid_lbpool_s *glp)
 	}
 
 	GSList *list_srvtypes = NULL;
-	GError *err = list_namespace_service_types(grid_lbpool_namespace(glp), &list_srvtypes);
+	GError *err = conscience_get_types (grid_lbpool_namespace(glp), &list_srvtypes);
 	if (err)
 		g_prefix_error(&err, "LB pool reload error: ");
 	else {
@@ -624,7 +1006,7 @@ GError*
 gridcluster_reconfigure_lbpool(struct grid_lbpool_s *glp)
 {
 	namespace_info_t *ni = NULL;
-	GError *err = get_namespace_info(grid_lbpool_namespace(glp), &ni);
+	GError *err = conscience_get_namespace(grid_lbpool_namespace(glp), &ni);
 	if (err)
 		return err;
 	grid_lbpool_reconfigure(glp, ni);

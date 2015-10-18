@@ -356,7 +356,6 @@ add_subdirectory(./core)
 
 if (NOT SDK_ONLY)
 add_subdirectory(./metautils/lib)
-add_subdirectory(./cluster/remote)
 add_subdirectory(./cluster/lib)
 
 add_subdirectory(./cluster/agent)

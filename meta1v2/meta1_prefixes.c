@@ -172,7 +172,7 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const gchar *ns_name,
 	grid_string_to_addrinfo(local_url, &local_ai);
 
 	/* Get the META0 address */
-	err = list_namespace_services(ns_name, "meta0", &m0_list);
+	err = conscience_get_services (ns_name, "meta0", &m0_list);
 	if (err != NULL) {
 		g_prefix_error(&err, "META0 locate error : ");
 		return err;

@@ -162,70 +162,19 @@ srv_inner_gauges_update (gpointer d)
 	STATS_SAVEGAUGE(stopped);
 }
 
-static void
-_expand_gridd_macro(service_info_t *si, const service_tag_t *tag)
-{
-	gchar** params = NULL;
-	gchar str_tag[128];
-
-	service_tag_to_string(tag, str_tag, sizeof(str_tag));
-
-	/* NAME_MACRO_SPECIAL_GRIDD param = type:map_entry */
-	params = g_strsplit(tag->value.macro.param, ":", 2);
-	if (g_strv_length(params) != 2) {
-		ERROR("Failed to parse gridd special macro param : [%s]",tag->value.macro.param);
-		g_strfreev(params);
-		return;
-	}	
-	else {	
-		if (g_ascii_strncasecmp(params[0], "i64", strlen(params[0])) == 0) {
-			gint64 value = 0;
-			if(!srvstat_get_i64(params[1], &value))
-				NOTICE("Failed to get param [%s] in gridd stats map (int64).", params[1]);
-			service_tag_set_value_i64(service_info_ensure_tag(si->tags, tag->name), value);
-		}
-		else if (g_ascii_strncasecmp(params[0], "bool", strlen(params[0])) == 0) {
-			gboolean value = FALSE;
-			if (!srvstat_get_bool(params[1], &value))
-				NOTICE("Failed to get param [%s] in gridd stats map (bool).", params[1]);
-			service_tag_set_value_boolean(service_info_ensure_tag(si->tags, tag->name), value);
-		}
-		else if (g_ascii_strncasecmp(params[0], "double", strlen(params[0])) == 0) {
-			gdouble value = FALSE;
-			if (!srvstat_get_double(params[1], &value))
-				NOTICE("Failed to get param [%s] in gridd stats map (double).", params[1]);
-			service_tag_set_value_float(service_info_ensure_tag(si->tags, tag->name), value);
-		}
-		else if (g_ascii_strncasecmp(params[0], "str", strlen(params[0])) == 0) {
-			gchar *value = NULL;
-			if (!srvstat_get_string(params[1], &value)) {
-				NOTICE("Failed to get param [%s] in gridd stats map (str).", params[1]);
-				value = g_strdup("");
-			}
-			service_tag_set_value_string(service_info_ensure_tag(si->tags, tag->name), value);
-			g_free(value);
-		}
-		g_strfreev(params);
-	}
-}
-
 static gboolean 
 self_register_in_cluster(GError **err)
 {
-	service_info_t *si;
-
-	TRACE("Registering in cluster...");
-		
 	/* Init the service header */
-	si = g_malloc0(sizeof(service_info_t));
+	service_info_t *si = g_malloc0(sizeof(service_info_t));
 	memcpy(&(si->addr), serv_addr, sizeof(addr_info_t));
-        g_strlcpy(si->ns_name, ns_info->name, sizeof(si->ns_name));
-        g_strlcpy(si->type, service_type, sizeof(si->type));
-        si->tags = g_ptr_array_new();
-	
+	g_strlcpy(si->ns_name, ns_info->name, sizeof(si->ns_name));
+	g_strlcpy(si->type, service_type, sizeof(si->type));
+	si->tags = g_ptr_array_new();
+
 	if (first) 
 		service_tag_set_value_boolean(service_info_ensure_tag(si->tags, NAME_TAGNAME_RAWX_FIRST), first);
-	
+
 	/* Copy the service tags */
 	if (!serv_tags)
 		DEBUG("No tag found in gridd to set in service info");
@@ -233,14 +182,7 @@ self_register_in_cluster(GError **err)
 		gsize i;
 		for (i=0; i<serv_tags->len ;i++) {
 			struct service_tag_s *tag = g_ptr_array_index(serv_tags, i);
-			if (tag->type != STVT_MACRO)
-				g_ptr_array_add(si->tags, service_tag_dup(tag));
-			else {
-				if (0 != g_ascii_strncasecmp(tag->value.macro.type, NAME_MACRO_GRIDD_TYPE, strlen(tag->value.macro.type)))
-					g_ptr_array_add(si->tags, service_tag_dup(tag));
-				else
-					_expand_gridd_macro(si, tag);
-			}
+			g_ptr_array_add(si->tags, service_tag_dup(tag));
 		}
 	}
 
@@ -249,11 +191,6 @@ self_register_in_cluster(GError **err)
 	if (NULL != e) {
 		ERROR("Failed to register service in cluster : %s", gerror_get_message(*err));
 		g_clear_error(&e);
-	}
-	else if (TRACE_ENABLED()) {
-		gchar *str = service_info_to_string(si);
-		TRACE("Registered [%s]%s", str, (first?"for the first time":""));
-		g_free(str);
 	}
 
 	service_info_clean(si);
@@ -282,7 +219,7 @@ srv_periodic_refresh_ns_info (gpointer d)
 
 	(void) d;
 
-	if (!(error = get_namespace_info(ns_name, &ns_info))) {
+	if (!(error = conscience_get_namespace(ns_name, &ns_info))) {
 		NOTICE("Failed to refresh the Namespace info from the gridagent");
 		if(error)
 			g_clear_error(&error);
@@ -1308,13 +1245,14 @@ load_service_info (GKeyFile *cfgFile, GError **err)
 		load_ns_info = TRUE;
 
 	if(load_ns_info) {
-		GError *e = get_namespace_info(ns_name, &ns_info);
+		GError *e = conscience_get_namespace (ns_name, &ns_info);
 		/* We really want these informations, so loop until we get them. */
 		while (e) {
 			g_clear_error(&e);
-			WARN("Failed to get namespace info (Retrying in %d seconds): %s", GET_NS_INFO_RETRY_DELAY, (*err)->message);
+			WARN("Failed to get namespace info (Retrying in %d seconds): %s",
+					GET_NS_INFO_RETRY_DELAY, (*err)->message);
 			sleep(GET_NS_INFO_RETRY_DELAY);
-			e = get_namespace_info(ns_name, &ns_info);
+			e = conscience_get_namespace (ns_name, &ns_info);
 		}
 	}
 

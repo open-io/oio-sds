@@ -145,7 +145,7 @@ update_rainx_conf(apr_pool_t* p, rawx_conf_t **rainx_conf, const gchar* ns_name)
 		return FALSE;
 	}
 
-	local_error = get_namespace_info(ns_name, &ns_info);
+	local_error = conscience_get_namespace(ns_name, &ns_info);
 	if (local_error) {
 		DAV_ERROR_POOL(p, 0, "%s", local_error->message);
 		g_clear_error(&local_error);

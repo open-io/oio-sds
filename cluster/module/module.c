@@ -133,7 +133,7 @@ _alert_service_with_zeroed_score(struct conscience_srv_s *srv)
 		}
 
 		SRV_SEND_ERROR(str_id,"[NS=%s][%s][SCORE=0] service=%.*s",
-				conscience_get_namespace(conscience), srv->srvtype->type_name,
+				conscience_get_nsname(conscience), srv->srvtype->type_name,
 				sizeof(srv->description), srv->description);
 		srv->time_last_alert = now;
 	}
@@ -215,7 +215,7 @@ timer_check_services(gpointer u)
 	if (!list_type_names) {
 		if (error_local) {
 			ERROR("[NS=%s] Failed to collect the service types names : %s",
-				conscience_get_namespace(cs), gerror_get_message(error_local));
+				conscience_get_nsname(cs), gerror_get_message(error_local));
 			g_error_free(error_local);
 		}
 		return;
@@ -236,7 +236,7 @@ timer_check_services(gpointer u)
 		srvtype = conscience_get_locked_srvtype(cs, NULL, str_name, MODE_STRICT, 'r');
 		if (!srvtype) {
 			WARN("[NS=%s][SRVTYPE=%s] srvtype disappeared very quickly",
-				conscience_get_namespace(cs), str_name);
+				conscience_get_nsname(cs), str_name);
 			continue;
 		}
 		rc = conscience_srvtype_run_all( srvtype, &error_local, SRVTYPE_FLAG_ADDITIONAL_CALL, service_checker, &now);
@@ -245,7 +245,7 @@ timer_check_services(gpointer u)
 
 		if (!rc)
 			ERROR("[NS=%s][SRVTYPE=%s] Failed to run the service check loop : %s",
-				conscience_get_namespace(cs), str_name, gerror_get_message(error_local));
+				conscience_get_nsname(cs), str_name, gerror_get_message(error_local));
 		if (error_local)
 			g_error_free(error_local);
 	}
@@ -273,7 +273,7 @@ timer_expire_services(gpointer u)
 	if (!list_type_names) {
 		if (error_local) {
 			ERROR("[NS=%s] Failed to collect the service types names : %s",
-				conscience_get_namespace(cs), gerror_get_message(error_local));
+				conscience_get_nsname(cs), gerror_get_message(error_local));
 			g_error_free(error_local);
 		}
 		return;
@@ -293,7 +293,7 @@ timer_expire_services(gpointer u)
 		srvtype = conscience_get_locked_srvtype(cs, NULL, str_name, MODE_STRICT, 'r');
 		if (!srvtype) {
 			WARN("[NS=%s][SRVTYPE=%s] srvtype disappeared very quickly",
-				conscience_get_namespace(cs), str_name);
+				conscience_get_nsname(cs), str_name);
 			continue;
 		}
 		rc = conscience_srvtype_remove_expired( srvtype, &error_local, service_expiration_notifier, NULL);
@@ -302,13 +302,13 @@ timer_expire_services(gpointer u)
 
 		if (rc<0)
 			ERROR("[NS=%s][SRVTYPE=%s] Failed to remove the expired services : %s",
-				conscience_get_namespace(cs), str_name, gerror_get_message(error_local));
+				conscience_get_nsname(cs), str_name, gerror_get_message(error_local));
 		else if (rc>0)
 			NOTICE("[NS=%s][SRVTYPE=%s] Removed [%d] expired services",
-				conscience_get_namespace(cs), str_name, rc);
+				conscience_get_nsname(cs), str_name, rc);
 		else
 			DEBUG("[NS=%s][SRVTYPE=%s] no expired services",
-				conscience_get_namespace(cs), str_name);
+				conscience_get_nsname(cs), str_name);
 
 		if (error_local)
 			g_error_free(error_local);
@@ -379,7 +379,7 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 
 	if (gba == NULL) {
 		GSETERROR(&(ctx.warning), "Failed to marshall namespace info");
-		reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
+		reply_context_log_access(&ctx, "NS=%s", conscience_get_nsname(conscience));
 		reply_context_clear(&ctx, FALSE);
 		return 0;
 	}
@@ -389,12 +389,12 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	if (!reply_context_reply(&ctx, &(ctx.warning))) {
 		GSETERROR(&(ctx.warning), "Cannot reply the namespace info");
-		reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
+		reply_context_log_access(&ctx, "NS=%s", conscience_get_nsname(conscience));
 		reply_context_clear(&ctx, FALSE);
 		return (0);
 	}
 
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
+	reply_context_log_access(&ctx, "NS=%s", conscience_get_nsname(conscience));
 	reply_context_clear(&ctx, TRUE);
 	return (1);
 }
@@ -625,7 +625,7 @@ handler_get_service(struct request_context_s *req_ctx)
 		GSETCODE(&(reply_ctx.warning), CODE_BAD_REQUEST, "Bad request: no/invalid TYPENAME field");
 	} else {
 		gchar **array_types = buffer_split(data, data_size, ",", 0);
-		g_strlcpy(sg.str_ns, conscience_get_namespace(conscience), sizeof(sg.str_ns));
+		g_strlcpy(sg.str_ns, conscience_get_nsname(conscience), sizeof(sg.str_ns));
 
 		/* XXX start of critical section */
 		rc = conscience_run_srvtypes(conscience, &(reply_ctx.warning),
@@ -647,7 +647,7 @@ handler_get_service(struct request_context_s *req_ctx)
 	if (sg.gba_body)
 		g_byte_array_free(sg.gba_body, TRUE);
 	g_slist_free_full(sg.response_bodies, metautils_gba_unref);
-	reply_context_log_access(&(reply_ctx), "NS=%s", conscience_get_namespace(conscience));
+	reply_context_log_access(&(reply_ctx), "NS=%s", conscience_get_nsname(conscience));
 	reply_context_clear(&(reply_ctx), TRUE);
 	return rc ? 1 : 0;
 }
@@ -685,7 +685,7 @@ push_service(struct conscience_s *cs, struct service_info_s *si)
 	/* XXX start of critical section */
 	srvtype = conscience_get_locked_srvtype(cs, &error_local, si->type, MODE_STRICT, 'w');
 	if (!srvtype) {
-		ERROR("Service type [%s/%s] not found : %s", conscience_get_namespace(cs),
+		ERROR("Service type [%s/%s] not found : %s", conscience_get_nsname(cs),
 			si->type, gerror_get_message(error_local));
 		if (error_local)
 			g_error_free(error_local);
@@ -728,7 +728,7 @@ push_service(struct conscience_s *cs, struct service_info_s *si)
 			DEBUG("Service [%s] refreshed with score=%d", str_descr, srv->score.value);
 		else {
 			grid_addrinfo_to_string(&(si->addr),str_addr,sizeof(str_addr));
-			NOTICE("Service [%s/%s/%s] registered", conscience_get_namespace(cs), si->type, str_addr);
+			NOTICE("Service [%s/%s/%s] registered", conscience_get_nsname(cs), si->type, str_addr);
 		}
 	}
 	else {
@@ -739,7 +739,7 @@ push_service(struct conscience_s *cs, struct service_info_s *si)
 			WARN("Service [%s] refresh failed : %s", str_descr, gerror_get_message(error_local));
 		else {
 			grid_addrinfo_to_string(&(si->addr),str_addr,sizeof(str_addr));
-			WARN("Service [%s/%s/%s] registration failed : %s", conscience_get_namespace(cs),
+			WARN("Service [%s/%s/%s] registration failed : %s", conscience_get_nsname(cs),
 				si->type, str_addr, gerror_get_message(error_local));
 		}
 	}
@@ -770,7 +770,7 @@ handler_push_service(struct request_context_s *req_ctx)
 
 	if (DEBUG_ENABLED()) {
 	DEBUG("[%d] services to be pushed in namespace [%s]",
-			g_slist_length(list_srvinfo), conscience_get_namespace(conscience));
+			g_slist_length(list_srvinfo), conscience_get_nsname(conscience));
 	}
 
 	/*Now push each service and reply the success */
@@ -787,14 +787,14 @@ handler_push_service(struct request_context_s *req_ctx)
 
 	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s %d service pushed", conscience_get_namespace(conscience), counter);
+	reply_context_log_access(&ctx, "NS=%s %d service pushed", conscience_get_nsname(conscience), counter);
 	reply_context_clear(&ctx, TRUE);
 	return 1;
 errorLabel:
 	ERROR("An error occured : %s", gerror_get_message(ctx.warning));
 	_reply_ctx_set_error(&ctx);
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
+	reply_context_log_access(&ctx, "NS=%s", conscience_get_nsname(conscience));
 	reply_context_clear(&ctx, TRUE);
 	return 0;
 }
@@ -841,7 +841,7 @@ handler_get_services_types(struct request_context_s *req_ctx)
 		reply_context_set_message(&ctx, CODE_INTERNAL_ERROR, gerror_get_message(ctx.warning));
 		ERROR("Failed to reply the service types : %s", gerror_get_message(ctx.warning));
 		reply_context_reply(&ctx, NULL);
-		reply_context_log_access(&ctx, "NS=%s %d names pushed", conscience_get_namespace(conscience), counter);
+		reply_context_log_access(&ctx, "NS=%s %d names pushed", conscience_get_nsname(conscience), counter);
 		reply_context_clear(&ctx, TRUE);
 		return 0;
 	}
@@ -850,7 +850,7 @@ handler_get_services_types(struct request_context_s *req_ctx)
 	g_byte_array_free(gba_names, TRUE);
 	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s %d names pushed", conscience_get_namespace(conscience), counter);
+	reply_context_log_access(&ctx, "NS=%s %d names pushed", conscience_get_nsname(conscience), counter);
 	reply_context_clear(&ctx, TRUE);
 	return 1;
 }
@@ -871,7 +871,7 @@ rm_service(struct conscience_s *cs, struct service_info_s *si)
 	struct conscience_srvtype_s *srvtype;
 
 	if (INFO_ENABLED()) {
-		str_desc_len = g_snprintf(str_desc, sizeof(str_desc), "%s/%s/", conscience_get_namespace(cs), si->type);
+		str_desc_len = g_snprintf(str_desc, sizeof(str_desc), "%s/%s/", conscience_get_nsname(cs), si->type);
 		grid_addrinfo_to_string(&(si->addr), str_desc + str_desc_len, sizeof(str_desc) - str_desc_len);
 		memcpy(&(srvid.addr), &(si->addr), sizeof(addr_info_t));
 	}
@@ -919,7 +919,7 @@ handler_rm_service(struct request_context_s *req_ctx)
 			goto errorLabel;
 		}
 
-		NOTICE("[NS=%s] [%d] services to be removed", conscience_get_namespace(conscience), g_slist_length(list_srvinfo));
+		NOTICE("[NS=%s] [%d] services to be removed", conscience_get_nsname(conscience), g_slist_length(list_srvinfo));
 
 		/*Now push each service and reply the success */
 		for (GSList *l = list_srvinfo; l; l = g_slist_next(l)) {
@@ -952,7 +952,7 @@ handler_rm_service(struct request_context_s *req_ctx)
 			conscience_release_locked_srvtype(srvtype);
 			/* XXX end ofcritical section */
 
-			NOTICE("[NS=%s][SRVTYPE=%s] flush done!", conscience_get_namespace(conscience), srvtype->type_name);
+			NOTICE("[NS=%s][SRVTYPE=%s] flush done!", conscience_get_nsname(conscience), srvtype->type_name);
 			reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 		}
 		else {
@@ -963,7 +963,7 @@ handler_rm_service(struct request_context_s *req_ctx)
 	}
 
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s %d services removed", conscience_get_namespace(conscience), counter);
+	reply_context_log_access(&ctx, "NS=%s %d services removed", conscience_get_nsname(conscience), counter);
 	reply_context_clear(&ctx, TRUE);
 	return 1;
 
@@ -971,7 +971,7 @@ errorLabel:
 	ERROR("Failed to remove the service : %s", gerror_get_message(ctx.warning));
 	_reply_ctx_set_error(&ctx);
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_namespace(conscience));
+	reply_context_log_access(&ctx, "NS=%s", conscience_get_nsname(conscience));
 	reply_context_clear(&ctx, TRUE);
 	return 0;
 }

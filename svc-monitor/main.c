@@ -120,15 +120,6 @@ parse_output(const gchar *cmd, service_info_t *si)
 			if (!g_ascii_strcasecmp(str_type, "tag")) {
 				tag = service_info_ensure_tag(si->tags, str_name);
 				service_tag_set_value_string(tag, str_value);
-
-				if (!g_ascii_strcasecmp(str_sub, "vol")) {
-					service_tag_set_value_macro(
-							service_info_ensure_tag (si->tags, "stat.space"),
-							NAME_MACRO_SPACE_TYPE, str_value);
-					service_tag_set_value_macro(
-							service_info_ensure_tag (si->tags, "stat.io"),
-							NAME_MACRO_IOIDLE_TYPE, str_value);
-				}
 			}
 			else if (!g_ascii_strcasecmp(str_type, "stat")) {
 				gdouble dval;
@@ -203,10 +194,6 @@ init_srvinfo(const gchar *sid, service_info_t *si)
 
 	if (!si->tags)
 		si->tags = g_ptr_array_sized_new(6);
-
-	service_tag_set_value_macro (
-			service_info_ensure_tag (si->tags, "stat.cpu"),
-			NAME_MACRO_CPU_TYPE, NULL);
 
 	return 0;
 }

@@ -446,12 +446,6 @@ service_tag_ASN2API(ServiceTag_t * asn, service_tag_t * api)
 			api->type = STVT_STR;
 			api->value.s = g_strndup((const gchar*)asn->value.choice.s.buf, asn->value.choice.s.size);
 			return TRUE;
-		case ServiceTag__value_PR_macro:
-			api->type = STVT_MACRO;
-			api->value.macro.type = g_strndup((const gchar*)asn->value.choice.macro.type.buf, asn->value.choice.macro.type.size);
-			api->value.macro.param =
-				g_strndup((const gchar*)asn->value.choice.macro.param.buf, asn->value.choice.macro.param.size);
-			return TRUE;
 		case ServiceTag__value_PR_NOTHING:
 			return FALSE;
 	}
@@ -525,16 +519,6 @@ service_tag_API2ASN(service_tag_t * api, ServiceTag_t * asn)
 	case STVT_BOOL:
 		asn->value.present = ServiceTag__value_PR_b;
 		asn->value.choice.b = api->value.b;
-		break;
-	case STVT_MACRO:
-		asn->value.present = ServiceTag__value_PR_macro;
-		OCTET_STRING_fromBuf(&(asn->value.choice.macro.type), api->value.macro.type,
-		    strlen(api->value.macro.type));
-		if (api->value.macro.param)
-			OCTET_STRING_fromBuf(&(asn->value.choice.macro.param), api->value.macro.param,
-			    strlen(api->value.macro.param));
-		else
-			OCTET_STRING_fromBuf(&(asn->value.choice.macro.param), "", 0);
 		break;
 	}
 	return TRUE;

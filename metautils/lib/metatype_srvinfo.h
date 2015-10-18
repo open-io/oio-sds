@@ -61,12 +61,6 @@ gboolean service_tag_get_value_float(struct service_tag_s *tag, gdouble *r,
 
 void service_tag_copy(struct service_tag_s *dst, struct service_tag_s *src);
 
-void service_tag_set_value_macro(struct service_tag_s *tag, const gchar * type,
-		const gchar * param);
-
-gboolean service_tag_get_value_macro(struct service_tag_s *tag, gchar * type,
-		gsize type_size, gchar* param, gsize param_size, GError** error);
-
 struct service_tag_s *service_tag_dup(struct service_tag_s *src);
 
 gsize service_tag_to_string(const struct service_tag_s *tag, gchar * dst,
