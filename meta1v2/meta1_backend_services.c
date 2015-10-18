@@ -655,7 +655,7 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 		used = NULL;
 	}
 
-	if ((mode != M1V2_GETSRV_RENEW) && used) {
+	if (used && (mode != M1V2_GETSRV_RENEW)) {
 		/* Only keep the services UP, if not forced to renew */
 		struct meta1_service_url_s **up = __get_services_up(m1, used);
 		if (up && *up) {
@@ -667,7 +667,7 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 		meta1_service_url_cleanv(up);
 	}
 
-	if (used && (mode == M1V2_GETSRV_REUSE || policy == SVCUPD_KEEP || policy == SVCUPD_NOT_SPECIFIED)) {
+	if (used && (mode == M1V2_GETSRV_REUSE || policy == SVCUPD_KEEP)) {
 		/* Services used but unavailable, but we are told to reuse */
 		*result = pack_urlv(used);
 		meta1_service_url_cleanv(used);
@@ -926,6 +926,13 @@ meta1_backend_services_set(struct meta1_backend_s *m1,
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
 	g_free(m1url);
+
+	/* XXX JFS: ugly quirk until we find a pretty way to distinguish the
+	 * commit errors (e.g. it can fail because of a replication error or
+	 * a constraint violation) */
+	if (err && NULL != strstr(err->message, "UNIQUE"))
+		err->code = CODE_SRV_ALREADY;
+
 	return err;
 }
 

@@ -266,7 +266,7 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 	}
 
 	if (err) {
-		if (CODE_IS_NSIMPOSSIBLE(err->code))
+		if (CODE_IS_NSIMPOSSIBLE(err->code) || err->code == CODE_SRV_ALREADY)
 			return _reply_forbidden_error (args, err);
 		return _reply_common_error (args, err);
 	}
