@@ -46,14 +46,12 @@ _uconnect_path(const gchar *path, GError **err)
 
 	int usock = socket_nonblock(PF_UNIX, SOCK_STREAM, 0);
 	if (usock < 0) {
-		GSETERROR(err, "Failed to create socket: (%d) %s",
-				errno, strerror(errno));
+		GSETERROR(err, "socket(UNIX): (%d) %s", errno, strerror(errno));
 		return -1;
 	}
 
 	if (0 > connect(usock, (struct sockaddr *) &local, sizeof(local))) {
-		GSETERROR(err, "Failed to connect through file %s : %s",
-				path, strerror(errno));
+		GSETERROR(err, "connect(%s): (%d) %s", path, errno, strerror(errno));
 		metautils_pclose(&usock);
 		return -1;
 	}
