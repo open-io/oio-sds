@@ -209,19 +209,22 @@ _client_to_pollfd(struct gridd_client_s *client, struct pollfd *pfd)
 GError*
 gridd_client_step(struct gridd_client_s *client)
 {
+	int rc;
 	struct pollfd pfd = {-1, 0, 0};
 
-	if (!_client_to_pollfd(client, &pfd)) {
+	if (!_client_to_pollfd(client, &pfd))
 		return NULL;
-	}
 
-	int rc = metautils_syscall_poll(&pfd, 1, 1000);
+retry:
+	rc = metautils_syscall_poll(&pfd, 1, 1000);
 	if (rc == 0) {
 		gridd_client_expire(client, g_get_monotonic_time ());
 		return NULL;
 	}
-	if (rc < 0)
+	if (rc < 0) {
+		if (errno == EINTR) goto retry;
 		return NEWERROR(errno, "poll errno=%d %s", errno, strerror(errno));
+	}
 
 	if (pfd.revents & POLLERR) {
 		GError *err = socket_get_error(pfd.fd);
@@ -265,13 +268,17 @@ gridd_clients_step(struct gridd_client_s **clients)
 	if (!j)
 		return NULL;
 
+retry:
 	/* Wait for an event to happen */
-	if (!(rc = poll(pfd, j, 100))) {
+	rc = metautils_syscall_poll (pfd, j, 100);
+	if (rc == 0) {
 		_clients_expire(clients, g_get_monotonic_time ());
 		return NULL;
 	}
-	if (rc < 0)
+	if (rc < 0) {
+		if (errno == EINTR) goto retry;
 		return NEWERROR(errno, "poll error (%s)", strerror(errno));
+	}
 
 	/* Then manage each event */
 	for (plast=clients,i=0; i<j ;i++) {
