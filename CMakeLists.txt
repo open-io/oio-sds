@@ -33,24 +33,19 @@ if (CMAKE_COMPILER_IS_GNUCC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wshadow")
     EXEC_PROGRAM(gcc ARGS --version OUTPUT_VARIABLE CMAKE_C_COMPILER_VERSION)
 
-	# Activates the stack protection code when explicitely triggered
-	# and with a decently recent gcc (>= 4.2)
+	# gcc >= 4.2
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wcomment")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wmain")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wparentheses")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wfloat-equal")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunsafe-loop-optimizations")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused-but-set-parameter")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused-but-set-variable")
 
-    if(CMAKE_C_COMPILER_VERSION MATCHES " [4-9]\\.[4-9]\\.[0-9]+")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wcomment")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wmain")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wparentheses")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wfloat-equal")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunsafe-loop-optimizations")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused-but-set-parameter")
-        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wunused-but-set-variable")
-    endif()
-
-	if(CMAKE_C_COMPILER_VERSION MATCHES " [4-9]\\.[6-9]\\.[0-9]+")
-		set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wmissing-prototypes")
-		#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion")
-		#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wswitch-enum")
-	endif()
+	# gcc >= 4.6
+	set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wmissing-prototypes")
+	#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wconversion")
+	#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wswitch-enum")
 endif()
 
 set(CMAKE_C_FLAGS_DEBUG          "-O0 -fno-inline")
