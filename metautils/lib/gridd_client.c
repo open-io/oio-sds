@@ -823,6 +823,7 @@ _factory_create_client (struct gridd_client_factory_s *factory)
 {
 	EXTRA_ASSERT(factory != NULL);
 	EXTRA_ASSERT(factory->abstract.vtable == &VTABLE_FACTORY);
+	(void) factory;
 	struct gridd_client_s *client = gridd_client_create_empty();
 	if (!client)
 		return NULL;

@@ -529,7 +529,7 @@ http_put_get_buffer(struct http_put_s *p, const char **buffer, gsize *size)
 static int
 _trace(CURL *h, curl_infotype t, char *data, size_t size, void *u)
 {
-	(void) h, (void) u;
+	(void) h, (void) u, (void) data, (void) size;
 	switch (t) {
 		case CURLINFO_TEXT:
 			GRID_TRACE("CURL: %.*s", (int)size, data);

@@ -215,7 +215,7 @@ sqlite_strtype(int t)
 static GError *
 _stmt_apply_GV_parameter_simple(sqlite3_stmt *stmt, int pos, GVariant *p)
 {
-	register int rc;
+	int rc;
 	gsize slen = 0;
 	const gchar *s;
 
@@ -262,6 +262,7 @@ _stmt_apply_GV_parameter_simple(sqlite3_stmt *stmt, int pos, GVariant *p)
 			return NEWERROR(CODE_BAD_REQUEST, "Unexpected parameter at position %d ('%s')",
 					pos, (gchar*)g_variant_get_type(p));
 	}
+	(void) rc;
 }
 
 static GError *
@@ -1119,12 +1120,13 @@ _bean_create_child(gpointer bean, const gchar *fkname)
 	inline gpointer _build(struct fk_field_s *f0, struct fk_field_s *f1) {
 		gpointer res = _bean_create(dst_descr);
 		for (; f0->i >= 0 && f1->i >=0 ;f0++,f1++) {
-			const struct field_descriptor_s *fd0, *fd1;
 			register gpointer pf0, pf1;
 
-			fd0 = src_descr->fields + f0->i;
-			fd1 = dst_descr->fields + f1->i;
+			const struct field_descriptor_s *fd0 = src_descr->fields + f0->i;
+#ifdef HAVE_EXTRA_ASSERT
+			const struct field_descriptor_s *fd1 = dst_descr->fields + f1->i;
 			EXTRA_ASSERT(fd0->type == fd1->type);
+#endif
 
 			pf0 = FIELD(bean, f0->i);
 			pf1 = FIELD(res, f1->i);

@@ -24,6 +24,7 @@ g_error_trace(GError ** e, const char *dom, int code,
 		int line, const char *func, const char *file,
 		const char *fmt, ...)
 {
+	(void) line, (void) func, (void) file;
 	if (!e)
 		return;
 
