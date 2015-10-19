@@ -80,7 +80,6 @@ struct grid_lb_iterator_s
 	struct grid_lb_s *lb;
 	guint64 version;
 	enum glbi_type_e {
-		LBIT_SINGLE=1,
 		LBIT_SHARED,
 		LBIT_RR,
 		LBIT_WRR,
@@ -88,10 +87,6 @@ struct grid_lb_iterator_s
 		LBIT_WRAND
 	} type;
 	union {
-		struct {
-			guint next_idx;
-		} single;
-
 		struct {
 			guint next_idx;
 			guint next_idx_global;
@@ -571,18 +566,6 @@ grid_lb_iterator_share(struct grid_lb_iterator_s *sub)
 }
 
 struct grid_lb_iterator_s*
-grid_lb_iterator_single_run(struct grid_lb_s *lb)
-{
-	EXTRA_ASSERT(lb != NULL);
-	struct grid_lb_iterator_s *iter = SLICE_NEW0(struct grid_lb_iterator_s);
-	iter->lb = lb;
-	iter->version = lb->version;
-	iter->type = LBIT_SINGLE;
-	iter->internals.single.next_idx = 0;
-	return iter;
-}
-
-struct grid_lb_iterator_s*
 grid_lb_iterator_round_robin(struct grid_lb_s *lb)
 {
 	EXTRA_ASSERT(lb != NULL);
@@ -791,24 +774,6 @@ _result(struct service_info_s **pi, struct service_info_s *si)
 }
 
 static gboolean
-__next_SINGLE(struct grid_lb_s *lb, struct grid_lb_iterator_s *iter,
-		struct service_info_s **si)
-{
-	guint max;
-	struct service_info_s *result = NULL;
-
-	grid_lb_lock(lb);
-	max = lb->gpa->len;
-	if (iter->version == lb->version && max > 0) {
-		if (iter->internals.single.next_idx < max)
-			result = _get_raw(lb, iter->internals.single.next_idx ++);
-	}
-	grid_lb_unlock(lb);
-
-	return _result(si, result);
-}
-
-static gboolean
 __next_RR(struct grid_lb_s *lb, struct grid_lb_iterator_s *iter,
 		struct service_info_s **si, gboolean shorten)
 {
@@ -943,8 +908,6 @@ _iterator_next_shorten(struct grid_lb_iterator_s *iter,
 		struct service_info_s **si, gboolean shorten)
 {
 	switch (iter->type) {
-		case LBIT_SINGLE:
-			return __next_SINGLE(iter->lb, iter, si);
 		case LBIT_RR:
 			return __next_RR(iter->lb, iter, si, shorten);
 		case LBIT_WRR:
@@ -999,7 +962,7 @@ _get_iteration_limit(struct grid_lb_iterator_s *it, gboolean shorten)
 {
 	enum glbi_type_e type = _get_effective_type(it);
 
-	if (type == LBIT_SINGLE || type == LBIT_RR)
+	if (type == LBIT_RR)
 		return shorten ? grid_lb_count(it->lb) : grid_lb_count_all(it->lb);
 	return grid_lb_count_all(it->lb);
 }
@@ -1233,11 +1196,8 @@ grid_lb_iterator_to_string (struct grid_lb_iterator_s *it)
 {
 	if (!it)
 		return g_string_new("NULL");
-	GString *gs;
+	GString *gs = NULL;
 	switch (it->type) {
-		case LBIT_SINGLE:
-			gs = g_string_new("SINGLE");
-			break;
 		case LBIT_SHARED:
 			gs = grid_lb_iterator_to_string(it->internals.shared.sub);
 			break;
@@ -1252,6 +1212,9 @@ grid_lb_iterator_to_string (struct grid_lb_iterator_s *it)
 			break;
 		case LBIT_WRAND:
 			gs = g_string_new("WRAND");
+			break;
+		default:
+			gs = g_string_new("INVALID");
 			break;
 	}
 	g_string_append_printf (gs, "?shorten_ratio=%f", it->lb->shorten_ratio);
