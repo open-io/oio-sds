@@ -165,6 +165,7 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	struct oio_url_s *url1 = oio_url_dup (url);
 	oio_url_set (url1, OIOURL_PATH, tmppath);
 	err = oio_sds_link (client, url1, content_id);
+	oio_url_pclean (&url1);
 	MAYBERETURN(err, "Link error: ");
 
 	/* List the container, the content must appear */
