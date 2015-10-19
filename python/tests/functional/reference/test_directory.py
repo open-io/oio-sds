@@ -251,7 +251,10 @@ class TestDirectoryFunctional(BaseTestCase):
 
         resp = self.session.get(self.url_ref(self.ref1) + '/echo')
         addresses = [service["host"] for service in resp.json()]
-        self.assertItemsEqual([self.addr1,self.addr2], addresses)
+        # XXX JFS: on a srvtype that has no config (e.g. 'echo'), 'Renew'
+        # won't append or replace.
+        #self.assertItemsEqual([self.addr1,self.addr2], addresses)
+        self.assertItemsEqual([self.addr1], addresses)
 
     def test_service_action_renew_not_linked(self):
 
