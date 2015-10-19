@@ -167,6 +167,7 @@ meta1v2_remote_unlink_one_service(const char *to, struct oio_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(srvtype != NULL);
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVUNLINK);
+	metautils_message_add_url (req, url);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
 	if (seqid > 0) {
 		gchar str[24];
