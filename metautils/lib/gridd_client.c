@@ -587,7 +587,7 @@ _client_set_timeout(struct gridd_client_s *client, gdouble seconds)
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
-	client->delay_step = client->delay_overall = seconds * G_TIME_SPAN_SECOND;
+	client->delay_step = client->delay_overall = seconds * (gdouble) G_TIME_SPAN_SECOND;
 }
 
 static GError*
@@ -843,8 +843,8 @@ gridd_client_create_empty(void)
 	client->abstract.vtable = &VTABLE_CLIENT;
 	client->fd = -1;
 	client->step = NONE;
-	client->delay_overall = GRIDC_DEFAULT_TIMEOUT_OVERALL;
-	client->delay_step = GRIDC_DEFAULT_TIMEOUT_STEP,
+	client->delay_overall = GRIDC_DEFAULT_TIMEOUT_OVERALL * (gdouble)G_TIME_SPAN_SECOND;
+	client->delay_step = GRIDC_DEFAULT_TIMEOUT_STEP * (gdouble)G_TIME_SPAN_SECOND,
 	client->past_url = g_string_new("");
 
 	return client;
