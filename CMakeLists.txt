@@ -31,7 +31,6 @@ if (CMAKE_COMPILER_IS_GNUCC)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wsequence-point")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wredundant-decls")
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wshadow")
-    EXEC_PROGRAM(gcc ARGS --version OUTPUT_VARIABLE CMAKE_C_COMPILER_VERSION)
 
 	# gcc >= 4.2
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wcomment")
