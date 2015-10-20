@@ -28,14 +28,14 @@ class TestDirectoryFunctional(BaseTestCase):
                 self.assertEqual (resp.status_code, 204)
 
     def url_ref (self, ref):
-        return self.conf['proxyd_uri'] + '/v2.0/dir/' + self.ns + '/' + self.acct + '/' + ref
+        return self.conf['proxyd_uri'] + '/v2.0/dir/' + self.ns + '/' + self.account + '/' + ref
     def url_srvtype (self, t):
         return self.conf['proxyd_uri'] + '/v2.0/cs/' + self.ns + '/' + t
 
     def setUp(self):
         super(TestDirectoryFunctional, self).setUp()
         self.ns = self.conf['namespace']
-        self.acct = self.conf['account']
+        self.account = self.conf['account']
         self.proxyd_uri = self.conf['proxyd_uri'] + "/v2.0/dir/"
         self.proxyd_uri2 = self.conf['proxyd_uri'] + "/v2.0/cs/"
 
@@ -73,13 +73,6 @@ class TestDirectoryFunctional(BaseTestCase):
 
         self.ref1 = id_generator(6)
         self.ref2 = id_generator(6)
-        self.addr_RefSet = self.url_ref(self.ref1)
-        self.addr_RefSet2 = self.url_ref(self.ref2)
-        self.addr_RefSet_action = self.addr_RefSet + "/action"
-        self.addr_RefSet_type = self.addr_RefSet + "/echo"
-        self.addr_RefSet_type2 = self.addr_RefSet2 + "/echo"
-        self.addr_RefSet_type_action = self.addr_RefSet_type + "/action"
-        self.addr_RefSet_type_action2 = self.addr_RefSet_type2 + "/action"
 
         resp = self.session.put(self.url_ref(self.ref1))
         self.assertEqual(resp.status_code / 100, 2)
@@ -99,12 +92,10 @@ class TestDirectoryFunctional(BaseTestCase):
         resp = self.session.post(self.url_ref(self.ref1) + '/echo/action', json.dumps(action))
         logging.debug("ref1 / echo -> %s", str(resp.json()))
 
-        logging.debug("+++")
         self.session.close()
 
     def tearDown(self):
         super(TestDirectoryFunctional, self).tearDown()
-        logging.debug("+++")
         urls = []
         for r in (self.ref1, self.ref2):
             urls.append (self.url_ref(r) + '/echo')
@@ -151,11 +142,11 @@ class TestDirectoryFunctional(BaseTestCase):
 
     def test_references_actions_getProperties(self):
         action = {'action': 'GetProperties', 'args': ['prop1', 'prop2']}
-        resp = self.session.post(self.addr_RefSet_action, json.dumps(action))
+        resp = self.session.post(self.url_ref(self.ref1) + "/action", json.dumps(action))
         self.assertEqual(resp.status_code, 200)
 
         action = {'action': 'GetProperties', 'args': ['prop1', 'prop2']}
-        resp = self.session.post(self.addr_RefSet_action, json.dumps(action))
+        resp = self.session.post(self.url_ref(self.ref1) + "/action", json.dumps(action))
         props = [property for property in resp.json().values()]
         self.assertListEqual(props, [self.property3, self.property4])
 
@@ -170,11 +161,11 @@ class TestDirectoryFunctional(BaseTestCase):
 
     def test_references_actions_setProperties(self):
         action = {'action': 'SetProperties', 'args': {'prop1': self.property1, 'prop2': self.property2}}
-        resp = self.session.post(self.addr_RefSet_action, json.dumps(action))
+        resp = self.session.post(self.url_ref(self.ref1) + "/action", json.dumps(action))
         self.assertEqual(resp.status_code, 204)
 
         action = {'action': 'GetProperties', 'args': ['prop1', 'prop2']}
-        resp = self.session.post(self.addr_RefSet_action, json.dumps(action))
+        resp = self.session.post(self.url_ref(self.ref1) + "/action", json.dumps(action))
         props = [property for property in resp.json().values()]
         self.assertListEqual(props, [self.property1, self.property2])
 
@@ -187,11 +178,11 @@ class TestDirectoryFunctional(BaseTestCase):
 
     def test_references_actions_delProperties(self):
         action = {'action': 'DeleteProperties', 'args': ['prop1']}
-        resp = self.session.post(self.addr_RefSet_action, json.dumps(action))
+        resp = self.session.post(self.url_ref(self.ref1) + "/action", json.dumps(action))
         self.assertEqual(resp.status_code, 204)
 
         action = {'action': 'GetProperties', 'args': ['prop1']}
-        resp = self.session.post(self.addr_RefSet_action, json.dumps(action))
+        resp = self.session.post(self.url_ref(self.ref1) + "/action", json.dumps(action))
         self.assertEqual(resp.status_code / 100, 2)
         self.assertDictEqual(resp.json(), {})
 
@@ -203,26 +194,23 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(resp.status_code, 404)
 
     def test_service_get(self):
-        resp = self.session.get(self.addr_RefSet_type)
+        resp = self.session.get(self.url_ref(self.ref1) + "/echo")
         self.assertEqual(resp.status_code, 200)
 
     def test_service_delete(self):
-        resp = self.session.delete(self.addr_RefSet_type)
+        resp = self.session.delete(self.url_ref(self.ref1) + "/echo")
         self.assertEqual(resp.status_code, 204)
-        resp = self.session.get(self.addr_RefSet_type).json()
+        resp = self.session.get(self.url_ref(self.ref1) + "/echo").json()
         self.assertEqual(resp, [])
 
-    # The following functions are unstable : with no present way to clean -
-    # - the meta1 between tests, ghosts services could make them fail
-
     def test_services_actions_link(self):
-
-        resp = self.session.post(self.addr_RefSet_type_action2, json.dumps({
-                    "action": "Link", "args": None}))
+        action = {"action": "Link", "args": None}
+        resp = self.session.post(self.url_ref(self.ref2) + '/echo/action', json.dumps(action))
         self.assertEqual(resp.status_code, 200)
-        resp = self.session.get(self.addr_RefSet_type2).json()[0]["host"]
 
-        self.assertEqual(self.addr1, resp)
+        resp = self.session.get(self.url_ref(self.ref2) + '/echo')
+        addresses = [srv['host'] for srv in resp.json()]
+        self.assertListEqual([self.addr1], addresses)
 
     def test_service_actions_link_again(self):
         action = {"action": "Lock", "args": self.service2}
@@ -231,10 +219,10 @@ class TestDirectoryFunctional(BaseTestCase):
 
         self._reload()
         action = {"action": "Link", "args": None}
-        resp = self.session.post(self.addr_RefSet_type_action, json.dumps(action))
+        resp = self.session.post(self.url_ref(self.ref1) + '/echo/action', json.dumps(action))
         self.assertEqual(resp.status_code, 200)
 
-        resp = self.session.get(self.addr_RefSet_type)
+        resp = self.session.get(self.url_ref(self.ref1) + "/echo")
         self.assertEqual(resp.status_code, 200)
         addresses = [service["host"] for service in resp.json()]
         self.assertItemsEqual([self.addr1], addresses)
@@ -266,7 +254,7 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertIn(self.addr1, addresses)
 
         self._reload()
-        resp = self.session.get(self.addr_RefSet_type2)
+        resp = self.session.get(self.url_ref(self.ref2) + '/echo')
         self.assertEqual(resp.status_code, 200)
         addresses = [srv["host"] for srv in resp.json()]
         self.assertEqual([self.addr1], addresses)
