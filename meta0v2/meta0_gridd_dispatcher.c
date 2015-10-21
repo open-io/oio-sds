@@ -297,18 +297,15 @@ meta0_dispatch_v2_FILL(struct gridd_reply_ctx_s *reply,
 	(void) ignored;
 	GError *err;
 	guint nbreplicas = 1;
-	gboolean nodist = FALSE;
 
-	err = metautils_message_extract_struint(reply->request, NAME_MSGKEY_REPLICAS, &nbreplicas);
+	err = metautils_message_extract_struint(reply->request,
+			NAME_MSGKEY_REPLICAS, &nbreplicas);
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
-	err = metautils_message_extract_struint(reply->request, NAME_MSGKEY_NODIST, (guint*)&nodist);
-	if (err != NULL) {
-		reply->send_error(CODE_BAD_REQUEST, err);
-		return TRUE;
-	}
+	gboolean nodist = metautils_message_extract_flag(reply->request,
+			NAME_MSGKEY_NODIST, FALSE);
 
 	reply->subject("repl=%u, nodist=%u", nbreplicas, nodist);
 
@@ -326,8 +323,10 @@ meta0_dispatch_v2_ASSIGN_PREFIX(struct gridd_reply_ctx_s *reply,
 		struct meta0_disp_s *m0disp, gpointer ignored)
 {
 	(void) ignored;
-	GError *err = meta0_assign_prefix_to_meta1(m0disp->m0, m0disp->ns_name,
-			metautils_message_extract_flag(reply->request, NAME_MSGKEY_NOCHECK, FALSE));
+	gboolean nocheck = metautils_message_extract_flag(reply->request,
+			NAME_MSGKEY_NOCHECK, FALSE);
+
+	GError *err = meta0_assign_prefix_to_meta1(m0disp->m0, m0disp->ns_name, nocheck);
 	if (NULL != err) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -352,8 +351,9 @@ meta0_dispatch_v2_DISABLE_META1(struct gridd_reply_ctx_s *reply,
 
 	reply->subject("m1=%u", g_strv_length(urls));
 
-	err = meta0_assign_disable_meta1(m0disp->m0, m0disp->ns_name, urls,
-			metautils_message_extract_flag(reply->request, NAME_MSGKEY_NOCHECK, FALSE));
+	gboolean nocheck = metautils_message_extract_flag(reply->request,
+			NAME_MSGKEY_NOCHECK, FALSE);
+	err = meta0_assign_disable_meta1(m0disp->m0, m0disp->ns_name, urls, nocheck);
 	if (NULL != err) {
 		g_prefix_error(&err, "disable meta1 error:");
 		reply->send_error(0, err);
@@ -384,7 +384,8 @@ meta0_dispatch_v2_DESTROY_META1REF(struct gridd_reply_ctx_s *reply,
 	gchar meta1url[STRLEN_ADDRINFO];
 	(void) ignored;
 
-	err = metautils_message_extract_string(reply->request, NAME_MSGKEY_METAURL, meta1url, sizeof(meta1url));
+	err = metautils_message_extract_string(reply->request,
+			NAME_MSGKEY_METAURL, meta1url, sizeof(meta1url));
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
@@ -410,7 +411,8 @@ meta0_dispatch_v2_DESTROY_ZKNODE(struct gridd_reply_ctx_s *reply,
 	gchar meta0url[STRLEN_ADDRINFO];
 	(void) ignored;
 
-	err = metautils_message_extract_string(reply->request, NAME_MSGKEY_METAURL, meta0url, sizeof(meta0url));
+	err = metautils_message_extract_string(reply->request,
+			NAME_MSGKEY_METAURL, meta0url, sizeof(meta0url));
 	if (err != NULL) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
