@@ -16,8 +16,10 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef OIO_SDS__metautils__lib__cache_h
-# define OIO_SDS__metautils__lib__cache_h 1
+#ifndef OIO_SDS__cache__cache_h
+# define OIO_SDS__cache__cache_h 1
+
+# include <glib.h>
 
 enum oio_cache_status_e
 {
@@ -64,4 +66,4 @@ struct lru_tree_s;
 /* Returns a cache that stores entries in a LRU_TREE */
 struct oio_cache_s * oio_cache_make_LRU (struct lru_tree_s *lru);
 
-#endif /*OIO_SDS__metautils__lib__cache_h*/
+#endif /*OIO_SDS__cache__cache_h*/
