@@ -22,17 +22,9 @@ add_custom_command(
 	DEPENDS m2gen.py
 )
 
-add_library(meta2v2lbutils SHARED
-		meta2_utils_lb.h
-		meta2_utils_lb.c
-)
-
-target_link_libraries(meta2v2lbutils
-		metautils gridcluster
-		${GLIB2_LIBRARIES}
-)
-
 add_library(meta2v2utils SHARED
+		meta2_utils_lb.c
+		meta2_utils_lb.h
 		generic.c
 		generic.h
 		${CMAKE_CURRENT_BINARY_DIR}/autogen.c
@@ -74,7 +66,7 @@ add_library(meta2v2 SHARED
 target_link_libraries(meta2v2
 		metautils sqliterepo
 		meta2v2remote meta1remote meta0remote meta0utils
-		meta2v2utils meta2v2lbutils meta2v2remote
+		meta2v2utils meta2v2remote
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
@@ -99,11 +91,6 @@ add_executable(test_meta2_backend test_meta2_backend.c)
 target_link_libraries(test_meta2_backend
 		meta2v2 ${GLIB2_LIBRARIES})
 
-add_executable(test_meta2_dedup test_meta2_dedup.c meta2_test_common.c)
-target_link_libraries(test_meta2_dedup
-		meta2v2 meta2v2utils metautils meta2v2remote
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
-
 install(FILES
 			${CMAKE_CURRENT_BINARY_DIR}/autogen.h
 			generic.h
@@ -116,7 +103,6 @@ install(FILES
 			meta2_filters.h
 			meta2_gridd_dispatcher.h
 			meta2_macros.h
-			meta2_test_common.h
 			meta2_utils.h
 			meta2_utils_lb.h
 			meta2_utils_json.h
@@ -126,7 +112,7 @@ install(FILES
 			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
 
-install(TARGETS meta2v2 meta2v2remote meta2_server meta2v2utils meta2v2lbutils
+install(TARGETS meta2v2 meta2v2remote meta2_server meta2v2utils
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 

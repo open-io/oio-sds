@@ -43,12 +43,10 @@ extern "C" {
 #define hc_url_has_fq_container oio_url_has_fq_container
 #define hc_url_set              oio_url_set
 #define hc_url_set_id           oio_url_set_id
-#define hc_url_set_option       oio_url_set_option
 #define hc_url_set_oldns        oio_url_set_oldns
 #define hc_url_get              oio_url_get
 #define hc_url_get_id           oio_url_get_id
 #define hc_url_get_id_size      oio_url_get_id_size
-#define hc_url_get_option_value oio_url_get_option_value
 
 #define HCURL_NS      OIOURL_NS
 #define HCURL_ACCOUNT OIOURL_ACCOUNT
@@ -111,14 +109,6 @@ const void* oio_url_get_id(struct oio_url_s *u);
 
 /* returns the number of bytes */
 size_t oio_url_get_id_size(struct oio_url_s *u);
-
-/** Returns the value of the given option. */
-const char* oio_url_get_option_value(struct oio_url_s *u,
-		const char *option_name);
-
-/** Sets a new options in the URL. 'u' and 'k' cannot be NULL. If 'v' is
- * NULL then an empty string will be saved. */
-void oio_url_set_option (struct oio_url_s *u,  const char *k, const char *v);
 
 /** Returns wether all the mandatory components for a path are present */
 int oio_url_has_fq_path (struct oio_url_s *u);

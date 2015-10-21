@@ -19,62 +19,6 @@ License along with this library.
 
 #include "metautils.h"
 
-char *
-storage_policy_from_mdsys_str(const char *mdsys)
-{
-	if(NULL != mdsys) {
-		GError *e = NULL;
-		GHashTable *unpacked = metadata_unpack_string(mdsys, &e);
-		if(!e) {
-			char *pol = g_hash_table_lookup(unpacked, "storage-policy");
-			GRID_TRACE2("pol from md table : %s", pol);
-			if(NULL != pol)
-				pol = g_strdup(pol);
-			g_hash_table_destroy(unpacked);
-			return pol;
-		}
-		GRID_WARN("Failed to unpack mdsys send by client : %s", e->message);
-		g_clear_error(&e);
-	}
-
-	return NULL;
-}
-
-GError *
-storage_policy_from_metadata(GByteArray *sys_metadata, gchar **storage_policy)
-{
-	/* sanity check */
-	if(!sys_metadata || !sys_metadata->data || !storage_policy)
-		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid parameter");
-
-	gchar buf[sys_metadata->len +1];
-	gchar **metadata_tokens = NULL;
-	GError *result = NULL;
-	guint i = 0;
-
-	memset(buf, 0, sizeof(buf));
-	memcpy(buf, sys_metadata->data, sys_metadata->len);
-	metadata_tokens = g_strsplit(buf, ";", 0);
-
-	for(i = 0; i < g_strv_length(metadata_tokens); i++) {
-		if(!g_str_has_prefix(metadata_tokens[i], "storage-policy"))
-			continue;
-		gchar *p = strchr(metadata_tokens[i], '=');
-		if (p)
-			*storage_policy = g_strdup(p + 1);
-		else
-			result = NEWERROR(CODE_INTERNAL_ERROR,
-					"Failed to extract policy from metadata tokens: [%s]",
-					metadata_tokens[i]);
-		break;
-	}
-
-	if(metadata_tokens)
-		g_strfreev(metadata_tokens);
-
-	return result;
-}
-
 gchar*
 get_rawx_location(service_info_t* rawx)
 {

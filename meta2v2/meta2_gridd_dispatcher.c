@@ -53,7 +53,7 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 
 	if (!fl) {
 		GRID_INFO("No filter defined for this request, consider not yet implemented");
-		meta2_filter_not_implemented_reply(ctx, reply);
+		meta2_filter_reply_not_implemented(ctx, reply);
 	}
 	else {
 		for (loop=1; loop && *fl; fl++) {
@@ -61,14 +61,14 @@ meta2_dispatch_all(struct gridd_reply_ctx_s *reply,
 				case FILTER_OK:
 					break;
 				case FILTER_KO:
-					meta2_filter_fail_reply(ctx, reply);
+					meta2_filter_reply_fail(ctx, reply);
 					loop = 0;
 					break;
 				case FILTER_DONE:
 					loop = 0;
 					break;
 				default:
-					meta2_filter_fail_reply(ctx, reply);
+					meta2_filter_reply_fail(ctx, reply);
 					loop = 0;
 					break;
 			}
@@ -93,7 +93,7 @@ static gridd_filter M2V2_CREATE_FILTERS[] =
 	meta2_filter_extract_header_version_policy,
 	meta2_filter_extract_header_localflag,
 	meta2_filter_action_create_container,
-	meta2_filter_success_reply,
+	meta2_filter_reply_success,
 	NULL
 };
 
@@ -111,7 +111,7 @@ static gridd_filter M2V2_DESTROY_FILTERS[] =
 	meta2_filter_check_ns_is_master,
 	meta2_filter_check_ns_not_wormed,
 	meta2_filter_action_delete_container,
-	meta2_filter_success_reply,
+	meta2_filter_reply_success,
 	NULL
 };
 
@@ -125,7 +125,7 @@ static gridd_filter M2V2_HAS_FILTERS[] =
 	meta2_filter_check_ns_name,
 	meta2_filter_check_ns_is_master,
 	meta2_filter_action_has_container,
-	meta2_filter_success_reply,
+	meta2_filter_reply_success,
 	NULL
 };
 
@@ -151,7 +151,7 @@ static gridd_filter M2V2_DEDUP_FILTERS[] =
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_action_deduplicate_container,
-	meta2_filter_success_reply,
+	meta2_filter_reply_success,
 	NULL
 };
 
@@ -205,7 +205,7 @@ static gridd_filter M2V2_LINK_FILTERS[] =
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_action_link,
-	meta2_filter_success_reply,
+	meta2_filter_reply_success,
 	NULL
 };
 
@@ -226,7 +226,6 @@ static gridd_filter M2V2_BEANS_FILTER[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_extract_header_append,
-	meta2_filter_extract_header_mdsys,
 	meta2_filter_extract_header_spare,
 	meta2_filter_extract_header_storage_policy,
 	meta2_filter_extract_header_string_size,
@@ -334,7 +333,7 @@ static gridd_filter M2V2_PROPDEL_FILTERS[] =
 	meta2_filter_check_ns_name,
 	meta2_filter_extract_body_strings,
 	meta2_filter_action_del_content_properties,
-	meta2_filter_success_reply,
+	meta2_filter_reply_success,
 	NULL
 };
 
@@ -347,7 +346,7 @@ static gridd_filter M2V2_STGPOL_FILTERS[] =
 	meta2_filter_check_backend,
 	meta2_filter_check_ns_name,
 	meta2_filter_action_update_storage_policy,
-	meta2_filter_success_reply,
+	meta2_filter_reply_success,
 	NULL
 };
 
@@ -355,7 +354,7 @@ static gridd_filter M2V2_EXITELECTION_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
 	meta2_filter_action_exit_election,
-	meta2_filter_success_reply,
+	meta2_filter_reply_success,
 	NULL
 };
 
@@ -370,7 +369,7 @@ static gridd_filter M2V2_RAW_DEL_filters[] =
 	meta2_filter_check_ns_not_wormed,
 	meta2_filter_extract_body_beans,
 	meta2_filter_action_delete_beans,
-	meta2_filter_success_reply,
+	meta2_filter_reply_success,
 	NULL
 };
 
@@ -385,7 +384,7 @@ static gridd_filter M2V2_RAW_ADD_filters[] =
 	meta2_filter_check_ns_not_wormed,
 	meta2_filter_extract_body_beans,
 	meta2_filter_action_insert_beans,
-	meta2_filter_success_reply,
+	meta2_filter_reply_success,
 	NULL
 };
 
@@ -400,7 +399,7 @@ static gridd_filter M2V2_RAW_SUBST_filters[] =
 	meta2_filter_check_ns_not_wormed,
 	meta2_filter_extract_header_chunk_beans,
 	meta2_filter_action_update_beans,
-	meta2_filter_success_reply,
+	meta2_filter_reply_success,
 	NULL
 };
 
@@ -413,7 +412,7 @@ static gridd_filter M2V2_FILTERS_touch_content_v1[] =
 	meta2_filter_check_optional_ns_name,
 	meta2_filter_check_backend,
 	meta2_filter_action_touch_content_v1, /* XXX TODO FIXME NOOP in facts */
-	meta2_filter_success_reply,
+	meta2_filter_reply_success,
 	NULL
 };
 
@@ -425,7 +424,7 @@ static gridd_filter M2V2_FILTERS_touch_container_v1[] =
 	meta2_filter_check_backend,
     meta2_filter_extract_header_flags32,
 	meta2_filter_action_touch_container_v1, /* XXX TODO FIXME NOOP in facts */
-	meta2_filter_success_reply,
+	meta2_filter_reply_success,
 	NULL
 };
 

@@ -36,25 +36,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static gpointer
 _generate_api_alias(const M2V2Bean_t * asn)
 {
-	gpointer result = NULL;
-	gint64 version, container_version, ct;
+	gint64 i64;
 
-	result = _bean_create(&descr_struct_ALIASES);
-
+	gpointer result = _bean_create(&descr_struct_ALIASES);
 	ALIASES_set2_alias(result, (const char *)asn->alias->name.buf);
 
-	asn_INTEGER_to_int64(&(asn->alias->version), &version);
-	asn_INTEGER_to_int64(&(asn->alias->containerVersion), &container_version);
-	asn_INTEGER_to_int64(&(asn->alias->ctime), &ct);
-		
-	ALIASES_set_version(result, version);
-	ALIASES_set_container_version(result, container_version);
-	ALIASES_set2_content_id(result, asn->alias->contentId.buf, asn->alias->contentId.size);
-	ALIASES_set2_mdsys(result, (const char *)asn->alias->mdsys.buf);
-	ALIASES_set_ctime(result, ct);
+	asn_INTEGER_to_int64(&(asn->alias->version), &i64);
+	ALIASES_set_version(result, i64);
 
-	/* deleted */
+	ALIASES_set2_content(result, asn->alias->content.buf, asn->alias->content.size);
+
 	ALIASES_set_deleted(result, asn->alias->deleted);
+
+	asn_INTEGER_to_int64(&(asn->alias->ctime), &i64);
+	ALIASES_set_ctime(result, i64);
+		
+	asn_INTEGER_to_int64(&(asn->alias->mtime), &i64);
+	ALIASES_set_mtime(result, i64);
 
 	return result;
 }
@@ -62,34 +60,29 @@ _generate_api_alias(const M2V2Bean_t * asn)
 static gpointer
 _generate_api_header(const M2V2Bean_t * asn)
 {
-	gpointer result = NULL;
-	result = _bean_create(&descr_struct_CONTENTS_HEADERS);
+	gint64 i64;
+
+	gpointer result = _bean_create(&descr_struct_CONTENTS_HEADERS);
 
 	CONTENTS_HEADERS_set2_id(result, asn->header->id.buf, asn->header->id.size);
 
-	if(asn->header->policy && asn->header->policy->buf && asn->header->policy->size > 0)
-		CONTENTS_HEADERS_set2_policy(result, (const char *)asn->header->policy->buf);
-
-	/* hash */
 	if (asn->header->hash && asn->header->hash->buf && asn->header->hash->size > 0)
 		CONTENTS_HEADERS_set2_hash(result, asn->header->hash->buf, asn->header->hash->size);
 	
-	gint64 size = 0;
-	asn_INTEGER_to_int64(&(asn->header->size), &size);
-	CONTENTS_HEADERS_set_size(result, size);
+	asn_INTEGER_to_int64(&(asn->header->size), &i64);
+	CONTENTS_HEADERS_set_size(result, i64);
 
-	return result;
-}
+	asn_INTEGER_to_int64(&(asn->header->ctime), &i64);
+	CONTENTS_HEADERS_set_ctime(result, i64);
 
-static gpointer
-_generate_api_content(const M2V2Bean_t * asn)
-{
-	gpointer result = NULL;
-	result = _bean_create(&descr_struct_CONTENTS);
+	asn_INTEGER_to_int64(&(asn->header->mtime), &i64);
+	CONTENTS_HEADERS_set_mtime(result, i64);
 
-	CONTENTS_set2_content_id(result, asn->content->contentId.buf, asn->content->contentId.size);
-	CONTENTS_set2_chunk_id(result, (const char *)asn->content->chunkId.buf);
-	CONTENTS_set2_position(result, (const char *)asn->content->position.buf);
+	CONTENTS_HEADERS_set2_chunk_method (result, (const char*)asn->header->chunkMethod.buf);
+	CONTENTS_HEADERS_set2_mime_type (result, (const char*)asn->header->mimeType.buf);
+
+	if (asn->header->policy && asn->header->policy->buf && asn->header->policy->size > 0)
+		CONTENTS_HEADERS_set2_policy(result, (const char *)asn->header->policy->buf);
 
 	return result;
 }
@@ -97,18 +90,23 @@ _generate_api_content(const M2V2Bean_t * asn)
 static gpointer
 _generate_api_chunk(const M2V2Bean_t * asn)
 {
-	gpointer result = NULL;
-	gint64 size, c;
-	result = _bean_create(&descr_struct_CHUNKS);
+	gint64 i64;
 
-	CHUNKS_set2_hash(result, asn->chunk->hash.buf, asn->chunk->hash.size);
+	gpointer result = _bean_create(&descr_struct_CHUNKS);
+
 	CHUNKS_set2_id(result, (const char *)asn->chunk->id.buf);
 
-	asn_INTEGER_to_int64(&(asn->chunk->size), &size);
-	asn_INTEGER_to_int64(&(asn->chunk->ctime), &c);
+	CHUNKS_set2_hash(result, asn->chunk->hash.buf, asn->chunk->hash.size);
 
-	CHUNKS_set_size(result, size);
-	CHUNKS_set_ctime(result, c);
+	asn_INTEGER_to_int64(&(asn->chunk->size), &i64);
+	CHUNKS_set_size(result, i64);
+
+	asn_INTEGER_to_int64(&(asn->chunk->ctime), &i64);
+	CHUNKS_set_ctime(result, i64);
+
+	CHUNKS_set2_content(result, asn->chunk->content.buf, asn->chunk->content.size);
+
+	CHUNKS_set2_position(result, (const char *)asn->chunk->position.buf);
 
 	return result;
 }
@@ -120,10 +118,10 @@ _generate_api_prop(const M2V2Bean_t * asn)
 	gint64 av;
 	result = _bean_create(&descr_struct_PROPERTIES);
 
-	asn_INTEGER_to_int64(&(asn->prop->aliasVersion), &av);
+	asn_INTEGER_to_int64(&(asn->prop->version), &av);
 
-	PROPERTIES_set2_alias(result, (const char *)asn->prop->aliasName.buf);
-	PROPERTIES_set_alias_version(result, av);
+	PROPERTIES_set2_alias(result, (const char *)asn->prop->alias.buf);
+	PROPERTIES_set_version(result, av);
 	PROPERTIES_set2_key(result, (const char *)asn->prop->key.buf);
 	PROPERTIES_set2_value(result, asn->prop->value.buf, asn->prop->value.size);
 
@@ -137,35 +135,27 @@ _header_to_asn(gpointer api, M2V2Bean_t *asn)
 	asn->header = calloc(1, sizeof(M2V2ContentHeader_t));
 
 	GByteArray *id = CONTENTS_HEADERS_get_id(header);
+	GByteArray *hash = CONTENTS_HEADERS_get_hash(header);
+	GString *pol = CONTENTS_HEADERS_get_policy(header);
+	GString *type = CONTENTS_HEADERS_get_mime_type(header);
+	GString *method = CONTENTS_HEADERS_get_chunk_method(header);
+
 	OCTET_STRING_fromBuf(&(asn->header->id), (const char *)id->data, id->len);
 
-	GByteArray *hash = CONTENTS_HEADERS_get_hash(header);
-	if(NULL != hash)
+	if (NULL != hash)
 		asn->header->hash = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING,
-			(const char *)hash->data, hash->len);
-
-	GString *pol = CONTENTS_HEADERS_get_policy(header);
-	if(NULL != pol)
-		asn->header->policy = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING,
-			(const char *)pol->str, pol->len);
+				(const char *)hash->data, hash->len);
 
 	asn_int64_to_INTEGER(&(asn->header->size), CONTENTS_HEADERS_get_size(header));
+	asn_int64_to_INTEGER(&(asn->header->ctime), CONTENTS_HEADERS_get_ctime(header));
+	asn_int64_to_INTEGER(&(asn->header->mtime), CONTENTS_HEADERS_get_mtime(header));
 
-	return TRUE;
-}
+	OCTET_STRING_fromBuf(&(asn->header->chunkMethod), method->str, method->len);
+	OCTET_STRING_fromBuf(&(asn->header->mimeType), type->str, type->len);
 
-static gboolean
-_content_to_asn(gpointer api, M2V2Bean_t *asn)
-{
-	struct bean_CONTENTS_s *content = (struct bean_CONTENTS_s*) api;
-	asn->content = calloc(1, sizeof(M2V2Content_t));
-	GByteArray *content_id = CONTENTS_get_content_id(content);
-	GString *chunk_id = CONTENTS_get_chunk_id(content);
-	GString *position = CONTENTS_get_position(content);
-
-	OCTET_STRING_fromBuf(&(asn->content->contentId), (const char *)content_id->data, content_id->len);
-	OCTET_STRING_fromBuf(&(asn->content->chunkId), chunk_id->str, chunk_id->len); 
-	OCTET_STRING_fromBuf(&(asn->content->position), position->str, position->len); 
+	if(NULL != pol)
+		asn->header->policy = OCTET_STRING_new_fromBuf(&asn_DEF_OCTET_STRING,
+				(const char *)pol->str, pol->len);
 
 	return TRUE;
 }
@@ -178,10 +168,13 @@ _chunk_to_asn(gpointer api, M2V2Bean_t *asn)
 
 	GByteArray *hash = CHUNKS_get_hash(chunk);
 	GString *chunk_id = CHUNKS_get_id(chunk);
+	GByteArray *content = CHUNKS_get_content(chunk);
+	GString *position = CHUNKS_get_position(chunk);
 
 	OCTET_STRING_fromBuf(&(asn->chunk->hash), (const char *)hash->data, hash->len);
 	OCTET_STRING_fromBuf(&(asn->chunk->id), chunk_id->str, chunk_id->len);
-
+	OCTET_STRING_fromBuf(&(asn->chunk->position), position->str, position->len); 
+	OCTET_STRING_fromBuf(&(asn->chunk->content), (const char *)content->data, content->len);
 	asn_int64_to_INTEGER(&(asn->chunk->size), CHUNKS_get_size(chunk));
 	asn_int64_to_INTEGER(&(asn->chunk->ctime), CHUNKS_get_ctime(chunk));
 
@@ -195,9 +188,9 @@ _property_to_asn(gpointer api, M2V2Bean_t *asn)
 	asn->prop = calloc(1, sizeof(M2V2Property_t));
 
 	GString *alias_name = PROPERTIES_get_alias(prop);
-	OCTET_STRING_fromBuf(&(asn->prop->aliasName), alias_name->str, alias_name->len);
+	OCTET_STRING_fromBuf(&(asn->prop->alias), alias_name->str, alias_name->len);
 
-	asn_int64_to_INTEGER(&(asn->prop->aliasVersion), PROPERTIES_get_alias_version(prop));
+	asn_int64_to_INTEGER(&(asn->prop->version), PROPERTIES_get_version(prop));
 
 	GString *key = PROPERTIES_get_key(prop);
 	OCTET_STRING_fromBuf(&(asn->prop->key), key->str, key->len);
@@ -218,44 +211,34 @@ _alias_to_asn(gpointer api, M2V2Bean_t *asn)
 	OCTET_STRING_fromBuf(&(asn->alias->name), name->str, name->len);
 
 	asn_int64_to_INTEGER(&(asn->alias->version), ALIASES_get_version(alias));
-	asn_int64_to_INTEGER(&(asn->alias->containerVersion), ALIASES_get_container_version(alias));
 
-	GByteArray *id = ALIASES_get_content_id(alias);
-	OCTET_STRING_fromBuf(&(asn->alias->contentId), (const char *)id->data, id->len);
+	GByteArray *id = ALIASES_get_content(alias);
+	OCTET_STRING_fromBuf(&(asn->alias->content), (const char *)id->data, id->len);
 
-	GString *mdsys = ALIASES_get_mdsys(alias);
-	OCTET_STRING_fromBuf(&(asn->alias->mdsys), mdsys->str, mdsys->len);
+	asn->alias->deleted = ALIASES_get_deleted(alias);
 
 	asn_int64_to_INTEGER(&(asn->alias->ctime), ALIASES_get_ctime(alias));
 
-	asn->alias->deleted = ALIASES_get_deleted(alias);
+	asn_int64_to_INTEGER(&(asn->alias->mtime), ALIASES_get_mtime(alias));
 
 	return TRUE;
 }
 
-/* ---------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
 
 gpointer
 bean_ASN2API(const M2V2Bean_t * asn)
 {
 	if (!asn)
 		return NULL;
-
 	if (asn->alias)
 		return _generate_api_alias(asn);
-
 	if (asn->header)
 		return _generate_api_header(asn);
-
-	if (asn->content)
-		return _generate_api_content(asn);
-
 	if (asn->chunk)
 		return _generate_api_chunk(asn);
-
 	if (asn->prop)
 		return _generate_api_prop(asn);
-
 	return NULL;
 }
 
@@ -272,8 +255,6 @@ bean_API2ASN(gpointer * api, M2V2Bean_t * asn)
 		return _header_to_asn(api, asn);
 	if (DESCR(api) == &descr_struct_CHUNKS)
 		return _chunk_to_asn(api, asn);
-	if (DESCR(api) == &descr_struct_CONTENTS)
-		return _content_to_asn(api, asn);
 	if (DESCR(api) == &descr_struct_PROPERTIES)
 		return _property_to_asn(api, asn);
 	return FALSE;
@@ -286,11 +267,9 @@ bean_cleanASN(M2V2Bean_t * asn, gboolean only_content)
 		errno = EINVAL;
 		return;
 	}
-
 	if (only_content)
 		ASN_STRUCT_FREE_CONTENTS_ONLY(asn_DEF_M2V2Bean, asn);
 	else
 		ASN_STRUCT_FREE(asn_DEF_M2V2Bean, asn);
-
 	errno = 0;
 }

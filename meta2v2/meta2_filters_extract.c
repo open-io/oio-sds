@@ -109,18 +109,6 @@ meta2_filter_extract_header_storage_policy(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_extract_header_mdsys(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply)
-{
-	GError *e = NULL;
-	char buf[1024];
-
-	TRACE_FILTER();
-	EXTRACT_STRING(NAME_MSGKEY_MDSYS, TRUE);
-	return FILTER_OK;
-}
-
-int
 meta2_filter_extract_header_version_policy(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
@@ -262,14 +250,7 @@ meta2_filter_extract_header_localflag(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	TRACE_FILTER();
-	int ret = _extract_header_flag(NAME_MSGKEY_LOCAL, ctx, reply);
-	if (meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_LOCAL)) {
-		/* This is a hack to avoid changing every meta2_backend.h
-		 * function prototype. */
-		struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
-		hc_url_set_option(url, META2_URL_LOCAL_BASE, "true");
-	}
-	return ret;
+	return _extract_header_flag(NAME_MSGKEY_LOCAL, ctx, reply);
 }
 
 int

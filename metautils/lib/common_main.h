@@ -42,7 +42,7 @@ License along with this library.
 	g_test_init (&argc, &argv, NULL); \
 	grid_main_set_prgname(argv[0]); \
 	oio_log_lazy_init (); \
-	oio_log_init_level(GRID_LOGLVL_INFO); \
+	oio_log_init_level(GRID_LOGLVL_DEBUG); \
 	oio_log_init_level_from_env("G_DEBUG_LEVEL"); \
 	g_log_set_default_handler(oio_log_stderr, NULL); \
 } while (0)

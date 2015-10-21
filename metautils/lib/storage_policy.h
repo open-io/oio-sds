@@ -241,24 +241,6 @@ GError *storage_policy_check_compat_by_name(struct namespace_info_s *ni,
 GError *storage_policy_check_compat(struct storage_policy_s *old_pol,
 		struct storage_policy_s *new_pol);
 
-/*
- * Extract the storage policy from a content sys-metadata
- * @param sys_metadata the metadata to process
- * @param storage_policy a pointer to the result
- * @result a gerror if an error occured, NULL otherwise
- *
- */
-GError* storage_policy_from_metadata(GByteArray *sys_metadata, gchar **storage_policy);
-
-/*
- * Extract the storage policy from a content sys-metadata
- * @param sys_metadata the metadata to process
- * @param storage_policy a pointer to the result
- * @result the matching storage policy if specified, NULL otherwise
- *
- */
-char* storage_policy_from_mdsys_str(const char *mdsys);
-
 /**
  * Compute the distance between two string representing rawx locations
  */

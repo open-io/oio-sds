@@ -22,9 +22,6 @@ License along with this library.
 #include "oio_core.h"
 #include "url_ext.h"
 
-#define HCURL_OPTION_KEY_VERSION "version"
-#define HCURL_OPTION_KEY_SNAPSHOT "snapshot"
-
 struct oio_url_s
 {
 	/* primary */
@@ -33,7 +30,9 @@ struct oio_url_s
 	gchar *user;
 	gchar *type;
 	gchar *path;
-	GSList *options;
+
+	gchar *version;
+
 	/* secondary */
 	gchar *whole;
 	guint8 id[32];
@@ -103,39 +102,6 @@ _check_parsed_url (struct oio_url_s *u)
 	return 1;
 }
 
-static void
-_options_reset (struct oio_url_s *u)
-{
-	g_slist_free_full(u->options, g_free);
-	u->options = NULL;
-}
-
-static gchar **
-_options_get(struct oio_url_s *u, const gchar *k)
-{
-	for (GSList *l = u->options; l ;l=l->next) {
-		gchar *packed = l->data;
-		gchar *sep = strchr(packed, '=');
-		int kl = strlen(k);
-		if ((kl == (sep-packed)) && (0 == memcmp(k,packed,kl)))
-			return (gchar**)(&(l->data));
-	}
-	return NULL;
-}
-
-static void
-_add_option(struct oio_url_s *u, const char *option_str)
-{
-	char *k, *cursor;
-	if (option_str) {
-		if (NULL != (cursor = strchr(option_str, '='))) {
-			k = g_strndup(option_str, cursor - option_str);
-			oio_url_set_option(u, k, cursor+1);
-			g_free(k);
-		}
-	}
-}
-
 static int
 _parse_oldurl(struct oio_url_s *url, const char *str)
 {
@@ -174,10 +140,6 @@ _parse_oldurl(struct oio_url_s *url, const char *str)
 			g_free (path_tokens);
 		}
 
-		if (ruri.query_tokens) { // Parse the options
-			for (gchar **p=ruri.query_tokens; *p ;++p)
-				_add_option(url, *p);
-		}
 	}
 
 	oio_requri_clear (&ruri);
@@ -222,11 +184,6 @@ _parse_url(struct oio_url_s *url, const char *str)
 
 	if (path_tokens) g_strfreev (path_tokens);
 
-	if (ruri.query_tokens) { // Parse the options
-		for (gchar **p=ruri.query_tokens; *p ;++p)
-			_add_option(url, *p);
-	}
-
 	oio_requri_clear (&ruri);
 	return _check_parsed_url (url);
 }
@@ -239,11 +196,11 @@ _clean_url (struct oio_url_s *u)
 	oio_str_clean(&u->user);
 	oio_str_clean(&u->type);
 	oio_str_clean(&u->path);
+	oio_str_clean(&u->version);
 	oio_str_clean(&u->whole);
 	memset (u->id, 0, sizeof(u->id));
 	memset (u->hexid, 0, sizeof(u->hexid));
 	u->flags = 0;
-	_options_reset(u);
 }
 
 static int
@@ -319,7 +276,10 @@ oio_url_pclean(struct oio_url_s **pu)
 	*pu = (void*)0;
 }
 
-#define STRDUP(Dst,Src,Field) do { if (Src->Field) Dst->Field = g_strdup(Src->Field); } while (0)
+#define STRDUP(Dst,Src,Field) do { \
+	if (Src->Field) \
+		Dst->Field = g_strdup(Src->Field); \
+} while (0)
 
 struct oio_url_s *
 oio_url_dup(struct oio_url_s *u)
@@ -334,14 +294,7 @@ oio_url_dup(struct oio_url_s *u)
 	STRDUP(result, u, type);
 	STRDUP(result, u, path);
 	STRDUP(result, u, whole);
-
-	result->options = NULL;
-	for (GSList *l=u->options; l ;l=l->next) {
-		gchar *packed = l->data;
-		result->options = g_slist_prepend(result->options, g_strdup(packed));
-	}
-	result->options = g_slist_reverse(result->options);
-
+	STRDUP(result, u, version);
 	return result;
 }
 
@@ -379,7 +332,7 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 			return u;
 
 		case HCURL_VERSION:
-			oio_url_set_option(u, HCURL_OPTION_KEY_VERSION, v);
+			oio_str_replace(&(u->version), v);
 			return u;
 
 		case HCURL_WHOLE:
@@ -417,7 +370,7 @@ oio_url_has(struct oio_url_s *u, enum oio_url_field_e f)
 		case HCURL_PATH:
 			return NULL != u->path;
 		case HCURL_VERSION:
-			return NULL != _options_get(u, HCURL_OPTION_KEY_VERSION);
+			return NULL != u->version;
 		case HCURL_WHOLE:
 			return TRUE;
 		case HCURL_HEXID:
@@ -464,19 +417,6 @@ _pack_url(struct oio_url_s *u)
 	return gs;
 }
 
-static GString *
-_append_options(GString *gs, struct oio_url_s *u)
-{
-	gboolean first = TRUE;
-	for (GSList *l=u->options; l ;l=l->next) {
-		g_string_append_c(gs, first ? '?' : '&');
-		// Cool, options have already the good packed form
-		g_string_append(gs, (gchar*)(l->data));
-		first = FALSE;
-	}
-	return gs;
-}
-
 const char*
 oio_url_get(struct oio_url_s *u, enum oio_url_field_e f)
 {
@@ -496,11 +436,11 @@ oio_url_get(struct oio_url_s *u, enum oio_url_field_e f)
 			return u->path;
 
 		case HCURL_VERSION:
-			return oio_url_get_option_value(u, HCURL_OPTION_KEY_VERSION);
+			return u->version;
 
 		case HCURL_WHOLE:
 			if (!u->whole)
-				u->whole = g_string_free(_append_options(_pack_url(u), u), FALSE);
+				u->whole = g_string_free(_pack_url(u), FALSE);
 			return u->whole;
 
 		case HCURL_HEXID:
@@ -538,46 +478,6 @@ oio_url_set_id (struct oio_url_s *u, const void *id)
 		memcpy (u->id, id, 32);
 		oio_str_bin2hex (u->id, sizeof(u->id), u->hexid, sizeof(u->hexid));
 	}
-}
-
-const char*
-oio_url_get_option_value(struct oio_url_s *u, const char *k)
-{
-	if (!u)
-		return NULL;
-	gchar **pv = _options_get(u, k);
-	return pv ? strchr(*pv,'=')+1 : NULL;
-}
-
-gchar **
-oio_url_get_option_names(struct oio_url_s *u)
-{
-	g_assert(u != NULL);
-	guint i=0;
-	gchar **result = g_malloc(sizeof(gchar*)*(1+g_slist_length(u->options)));
-	for (GSList *l = u->options ; l ;l=l->next) {
-		gchar *packed = l->data;
-		gchar *sep = strchr(packed, '=');
-		result[i++] = g_strndup(packed, sep-packed);
-	}
-	result[i] = NULL;
-	return result;
-}
-
-void
-oio_url_set_option (struct oio_url_s *u,  const char *k, const gchar *v)
-{
-	g_assert (u != NULL);
-	g_assert (k != NULL);
-	gchar **pv, *packed = g_strdup_printf("%s=%s", k, v);
-	if (!(pv = _options_get(u, k)))
-		u->options = g_slist_prepend(u->options, packed);
-	else {
-		g_free(*pv);
-		*pv = packed;
-	}
-	g_free(u->whole);
-	u->whole = NULL;
 }
 
 size_t

@@ -159,7 +159,6 @@ License along with this library.
 #define NAME_MSGKEY_OLD                "OLD"
 #define NAME_MSGKEY_OVERWRITE          "OVERWRITE"
 #define NAME_MSGKEY_PREFIX             "PREFIX"
-#define NAME_MSGKEY_MDSYS              "METADATA_SYS"
 #define NAME_MSGKEY_POSITIONPREFIX     "POSITION_PREFIX"
 #define NAME_MSGKEY_PURGE              "PURGE"
 #define NAME_MSGKEY_QUERY              "QUERY"

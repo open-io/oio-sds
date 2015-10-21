@@ -39,14 +39,7 @@ struct storage_policy_s;
 struct hc_url_s;
 struct grid_lb_iterator_s;
 struct lb_next_opt_s;
-struct chunk_pair_s;
 struct sqlx_sqlite3_s;
-
-typedef struct m2v2_chunk_pair_s
-{
-	struct bean_CONTENTS_s *content;
-	struct bean_CHUNKS_s *chunk;
-} m2v2_chunk_pair_t;
 
 struct list_params_s
 {
@@ -65,17 +58,6 @@ struct list_result_s
 	gchar *next_marker;
 	gboolean truncated;
 };
-
-typedef struct chunk_pair_s
-{
-	struct bean_CONTENTS_s *content;
-	struct bean_CHUNKS_s *chunk;
-	struct {
-		gint meta;
-		gint rain;
-		gboolean parity;
-	} position;
-} chunk_pair_t;
 
 struct dup_alias_params_s
 {
@@ -203,8 +185,8 @@ GError* m2_generate_beans(struct hc_url_s *url, gint64 size, gint64 chunk_size,
 		m2_onbean_cb cb, gpointer cb_data);
 
 GError* m2_generate_beans_v1(struct hc_url_s *url, gint64 size, gint64 chunk_size,
-		struct storage_policy_s *pol, const char *mdsys, const char *mdusr,
-		struct grid_lb_iterator_s *iter, m2_onbean_cb cb, gpointer cb_data);
+		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
+		m2_onbean_cb cb, gpointer cb_data);
 
 GError* m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname,
 		int repl);
@@ -237,14 +219,6 @@ GError* m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 /** Delete all aliases of the container, without doing any check.  */
 GError* m2db_flush_container(sqlite3 *db);
 
-/** Run a chunk deduplication cycle on the meta2 database.  */
-GError* m2db_deduplicate_chunks(struct sqlx_sqlite3_s *sq3,
-		namespace_info_t *nsinfo, struct hc_url_s *url);
-
-/** Run a chunk deduplication cycle on a specific alias of the meta2 database. */
-GError* m2db_deduplicate_alias_chunks(struct sqlx_sqlite3_s *sq3,
-		namespace_info_t *nsinfo, struct hc_url_s *url);
-
 GError* m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3,
 		struct hc_url_s *url, guint32 flags, GString **status_message);
 
@@ -261,12 +235,6 @@ GError* m2db_dup_all_aliases(struct sqlx_sqlite3_s *sq3,
 
 /* --------- TYPE CONVERSION ---------- */
 
-/* chunk_pair */
-void init_chunk_pair(GPtrArray *chunks, chunk_pair_t *pair, struct bean_CONTENTS_s *c0);
-
-gint compare_pairs_positions(chunk_pair_t *c0, chunk_pair_t *c1);
-
-/* MISC */
 char * extract_url_from_chunk(struct bean_CHUNKS_s *chunk);
 
 char * location_from_chunk(struct bean_CHUNKS_s *chunk, struct grid_lbpool_s *glp);

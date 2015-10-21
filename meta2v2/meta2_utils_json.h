@@ -25,7 +25,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 GError* m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean);
 GError* m2v2_json_load_single_header (struct json_object *j, gpointer *pbean);
-GError* m2v2_json_load_single_content (struct json_object *j, gpointer *pbean);
 GError* m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean);
 
 /* the type is discovered in the json object */
@@ -47,17 +46,13 @@ void meta2_json_alias_only(GString *gstr, GSList *l, gboolean extend);
  * Ignores beans os other types. */
 void meta2_json_headers_only(GString *gstr, GSList *l, gboolean extend);
 
-/** Convert content beans to their JSON representation.
- * Ignores beans os other types. */
-void meta2_json_contents_only(GString *gstr, GSList *l, gboolean extend);
-
 /** Convert chunk beans to their JSON representation.
  * Ignores beans os other types. */
 void meta2_json_chunks_only(GString *gstr, GSList *l, gboolean extend);
 
 /** Serialize beans to JSON.
  * The output has the form:
- *   "chunks":[],"aliases":[],"headers":[],"contents":[]
+ *   "chunks":[],"aliases":[],"headers":[]
  * The output does not contain the outer curly brackets, to allow easier
  * inclusion in an existing dictionary. */
 void meta2_json_dump_all_beans(GString *gstr, GSList *beans);
@@ -66,7 +61,6 @@ void meta2_json_dump_all_beans(GString *gstr, GSList *beans);
  * The output has the form:
  *   {"type":"chunk":,...},
  *   {"type":"alias",...},
- *   {"type":"content":,...},
  *   {"type":"header",...}
  * The output does not contain the outer square brackets, to allow easier
  * inclusion in an existing array. */
