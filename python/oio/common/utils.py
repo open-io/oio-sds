@@ -329,7 +329,7 @@ def paths_gen(volume_path):
 
 def read_user_xattr(fd):
     try:
-        it = xattr.xattr(fd).iteritems()
+        it = xattr.get_all(fd)
     except IOError as e:
         for err in 'ENOTSUP', 'EOPNOTSUPP':
             if hasattr(errno, err) and e.errno == getattr(errno, err):

@@ -4,5 +4,5 @@ requests
 flask
 redis
 gunicorn
-xattr>=0.4
+pyxattr>=0.4
 simplejson>=2.0.9
