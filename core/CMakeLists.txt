@@ -64,5 +64,5 @@ install(TARGETS oiocore oiosds
 add_test(NAME core/ext COMMAND test_oio_ext)
 add_test(NAME core/url COMMAND test_oio_url)
 add_test(NAME core/str COMMAND test_oio_str)
-add_test(NAME core/sds COMMAND /usr/bin/env python ${CMAKE_CURRENT_SOURCE_DIR}/test_oiosds.py)
+add_test(NAME core/sds COMMAND /usr/bin/env python ${CMAKE_CURRENT_SOURCE_DIR}/test_oiosds.py ${CMAKE_CURRENT_BINARY_DIR})
 
