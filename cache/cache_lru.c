@@ -65,7 +65,7 @@ static enum oio_cache_status_e
 _lru_put (struct oio_cache_s *self, const char *k, const char *v)
 {
 	(void) self, (void) k, (void) v;
-	return OIO_CACHE_RETRYLATER;
+	return OIO_CACHE_DISCONNECTED;
 }
 
 static enum oio_cache_status_e

@@ -37,7 +37,7 @@ static enum oio_cache_status_e
 _noop_put (struct oio_cache_s *self, const char *k, const char *v)
 {
 	(void) self, (void) k, (void) v;
-	return OIO_CACHE_RETRYLATER;
+	return OIO_CACHE_DISCONNECTED;
 }
 
 static enum oio_cache_status_e
@@ -53,7 +53,7 @@ _noop_get (struct oio_cache_s *self, const char *k, gchar **out)
 	(void) self, (void) k;
 	g_assert (out != NULL);
 	*out = NULL;
-	return OIO_CACHE_OK;
+	return OIO_CACHE_NOTFOUND;
 }
 
 static struct oio_cache_vtable_s vtable_NOOP =
