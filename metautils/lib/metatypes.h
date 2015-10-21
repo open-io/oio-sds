@@ -231,7 +231,6 @@ typedef struct service_tag_s
 		STVT_BOOL = 3,	/**< A boolean */
 		STVT_STR = 4,	/**< A string */
 		STVT_BUF = 5,	/**< A bin buffer */
-		STVT_MACRO = 6	/**< A macro */
 	} type;					/**< The tag type */
 	/**
 	 * Type to store a tag value
@@ -243,11 +242,6 @@ typedef struct service_tag_s
 		gboolean b;	/**< The boolean representation */
 		gchar buf[MAX(sizeof(gint64), 2 * sizeof(gchar *))];	/**< The bin buffer representation */
 		gchar *s;	/**< The string representation */
-		struct
-		{
-			gchar *type;	/**< The macro type */
-			gchar *param;	/**< The macro param */
-		} macro;	/**< The macro representation */
 	} value;				/**< The tag value */
 } service_tag_t;
 

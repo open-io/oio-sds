@@ -83,7 +83,7 @@ strv_filter(struct sqlx_service_s *ss, GSList *l)
 		if (!g_ascii_strcasecmp(ss->url->str, zknode->content))
 			continue;
 		addr_info_t addr;
-		if (!l4_address_init_with_url(&addr, zknode->content, NULL))
+		if (!grid_string_to_addrinfo(zknode->content, &addr))
 			continue;
 		g_ptr_array_add(tmp, zknode->content);
 		zknode->content = NULL;

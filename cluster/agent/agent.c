@@ -40,10 +40,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cluster/module/module.h>
 
 #include "./agent.h"
-#include "./cpu_stat_task_worker.h"
 #include "./gridagent.h"
 #include "./io_scheduler.h"
-#include "./io_stat_task_worker.h"
 #include "./namespace_get_task_worker.h"
 #include "./request_worker.h"
 #include "./services_workers.h"
@@ -86,6 +84,38 @@ static int flag_help = FALSE;
 static gchar ns_name[LIMIT_LENGTH_NSNAME];
 
 /* ------------------------------------------------------------------------- */
+
+gint
+addrinfo_connect_nopoll(const addr_info_t * a, GError ** err)
+{
+	struct sockaddr_storage sas;
+	gsize sasSize = sizeof(struct sockaddr_storage);
+	int fd = -1;
+
+	if (!addrinfo_to_sockaddr(a, (struct sockaddr *) &sas, &sasSize)) {
+		GSETERROR(err, "addr_info conversion error");
+		return -1;
+	}
+
+	if (0 > (fd = socket_nonblock(sas.ss_family, SOCK_STREAM, 0))) {
+		GSETERROR(err, "Socket error: (%d) %s", errno, strerror(errno));
+		return -1;
+	}
+
+	sock_set_reuseaddr(fd, TRUE);
+
+	if (0 == metautils_syscall_connect(fd, (struct sockaddr *) &sas, sasSize))
+		return fd;
+
+	if (errno == EALREADY || errno == EINPROGRESS || errno == EINTR) {
+		errno = 0;
+		return fd;
+	}
+
+	GSETERROR(err, "Connect error: (%d) %s", errno, strerror(errno));
+	metautils_pclose(&fd);
+	return -1;
+}
 
 static void
 destroy_namespace_data(gpointer p)
@@ -159,7 +189,7 @@ parse_namespaces(void)
 
 		const gchar *cs = (gchar*) v;
 		addr_info_t addr;
-		grid_string_to_addrinfo(cs, NULL, &addr);
+		grid_string_to_addrinfo(cs, &addr);
 
 		gchar *ns = g_strndup(sk, strrchr(sk,'/') - sk);
 		namespace_data_t *ns_data = ensure_namespace_data(ns);

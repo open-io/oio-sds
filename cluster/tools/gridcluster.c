@@ -26,18 +26,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
-#include <cluster/remote/gridcluster_remote.h>
-
-#ifdef HAVE_DEBUG
-static void
-prompt(void)
-{
-	gchar buf[1024];
-
-	g_printerr("Type a new line to continue\n");
-	fgets(buf, sizeof(buf), stdin);
-}
-#endif
 
 static void
 usage(void)
@@ -93,6 +81,9 @@ print_formated_namespace(namespace_info_t * ns)
 	print_formatted_hashtable(ns->data_treatments, "Data Treatments");
 
 	GError *err = NULL;
+	GSList *types = NULL;
+	if (NULL != (err = conscience_get_types (ns->name, &types)))
+		g_clear_error (&err);
 
 	/* dump the directory load-balancing configuration */
 	gchar *cfg = gridcluster_get_service_update_policy(ns);
@@ -114,6 +105,16 @@ print_formated_namespace(namespace_info_t * ns)
 			tmp = service_update_policies_dump(pol);
 			g_print("%20s : %s\n", "LB(srv)", tmp);
 			g_free(tmp);
+
+			for (GSList *l=types; l ;l=l->next) {
+				const char *srvtype = l->data;
+				guint count = service_howmany_replicas(pol, srvtype);
+				guint dist = service_howmany_distance(pol, srvtype);
+				g_print("%20s : %s -> %s|%u|%u\n", "", srvtype,
+						service_update_policy_to_string(
+							service_howto_update (pol, srvtype)),
+						count ? count : 1, dist ? dist : 1);
+			}
 		}
 		service_update_policies_destroy(pol);
 	}
@@ -121,11 +122,22 @@ print_formated_namespace(namespace_info_t * ns)
 	/* dump the rawx load-balancing for the meta2 */
 	struct grid_lbpool_s *glp = grid_lbpool_create (ns->name);
 	grid_lbpool_reconfigure (glp, ns);
-	struct grid_lb_iterator_s *it = grid_lbpool_get_iterator (glp, NAME_SRVTYPE_RAWX);
-	GString *gs = grid_lb_iterator_to_string (it);
-	g_print("%20s : rawx=%s\n", "LB(meta2)", gs->str);
-	grid_lbpool_destroy (glp);
+	gboolean first = TRUE;
+	void _dump (const char *srvtype) {
+		struct grid_lb_iterator_s *it = grid_lbpool_ensure_iterator (glp, srvtype);
+		GString *gs = grid_lb_iterator_to_string (it);
+		g_print("%20s : %s=%s\n", first ? "LB(meta2)" : "", srvtype, gs->str);
+		g_string_free (gs, TRUE);
+		first = FALSE;
+	}
+	if (!types) {
+		_dump (NAME_SRVTYPE_RAWX);
+	} else for (GSList *l=types; l ;l=l->next) {
+		_dump (l->data);
+	}
 
+	g_slist_free_full (types, g_free);
+	grid_lbpool_destroy (glp);
 	g_print("\n");
 }
 
@@ -148,7 +160,7 @@ print_formated_services(const gchar * type, GSList * services,
 				char str_score[32];
 				char str_addr[STRLEN_ADDRINFO];
 
-				addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
+				grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
 				g_snprintf(str_score, sizeof(str_score), "%d", si->score.value);
 				g_print("%20s\t%20s\n", str_addr, str_score);
 			}
@@ -173,7 +185,7 @@ print_raw_services(const gchar * ns, const gchar * type, GSList * services,
 		if (!si)
 			continue;
 		if(show_internals || !service_info_is_internal(si)) {
-			addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
+			grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
 			g_snprintf(str_score, sizeof(str_score), "%d", si->score.value);
 			g_print("%s|%s|%s|score=%d", ns ? ns : si->ns_name,
 					type ? type : si->type, str_addr, si->score.value);
@@ -217,10 +229,10 @@ set_service_score(const char *service_desc, int score)
 	if (g_strv_length(tokens) < 3)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid service description");
 
-	addr_info_t *cluster_addr;
-	if (!(cluster_addr = gridcluster_get_conscience_addr(tokens[0])))
+	gchar *cs = gridcluster_get_conscience(tokens[0]);
+	STRING_STACKIFY (cs);
+	if (!cs)
 		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Unknown namespace %s", tokens[0]);
-	BUFFER_STACKIFY(cluster_addr, sizeof(addr_info_t));
 
 	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
 	g_strlcpy(si->ns_name, tokens[0], sizeof(si->ns_name));
@@ -228,16 +240,16 @@ set_service_score(const char *service_desc, int score)
 	si->score.value = score;
 	si->score.timestamp = time(0);
 
-	if (!l4_address_init_with_url(&si->addr, tokens[2], NULL)) {
+	if (!grid_string_to_addrinfo(tokens[2], &si->addr)) {
 		service_info_clean (si);
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid service address %s", tokens[2]);
 	}
 
 	GSList *list = g_slist_prepend(NULL, si);
-	GError *err = gcluster_push_services(cluster_addr, 4000, list);
+	GError *err = conscience_remote_push_services(cs, list);
+	g_slist_free(list);
 	if (err)
 		g_prefix_error(&err, "Registration failed: ");
-	g_slist_free(list);
 	service_info_clean (si);
 	return err;
 }
@@ -391,7 +403,7 @@ main(int argc, char **argv)
 			goto exit_label;
 		}
 
-		ns = get_namespace_info(namespace, &error);
+		error = conscience_get_namespace(namespace, &ns);
 		if (ns == NULL) {
 			g_printerr("Failed to get namespace info :\n");
 			g_printerr("%s\n", error->message);
@@ -401,7 +413,7 @@ main(int argc, char **argv)
 
 	if (has_clear_services) {
 
-		if (!clear_namespace_services(namespace, service_desc, &error)) {
+		if (NULL != (error = conscience_remove_services(namespace, service_desc))) {
 			g_printerr("Failed to send clear order to cluster for ns='%s' and service='%s' :\n", namespace,
 					service_desc);
 			g_printerr("%s\n", error->message);
@@ -468,32 +480,29 @@ main(int argc, char **argv)
 			print_formated_namespace(ns);
 
 		gchar *csurl = gridcluster_get_conscience(namespace);
+		STRING_STACKIFY(csurl);
 		if (!csurl) {
 			g_printerr("No conscience address known for [%s]\n", namespace);
 			goto exit_label;
 		}
-		STRING_STACKIFY(csurl);
-		GSList *services_types = list_namespace_service_types(namespace, &error);
+		GSList *services_types = NULL;
+		error = conscience_get_types (namespace, &services_types);
 
-		if (!services_types) {
-			if (error) {
+		if (error) {
 				g_printerr("Failed to get the services list: %s\n", gerror_get_message(error));
 				goto exit_label;
-			}
-			else {
-				g_print("No service type known in namespace=%s\n", namespace);
-			}
-		}
-		else {
+		} else if (!services_types) {
+			g_print("No service type known in namespace=%s\n", namespace);
+		} else {
 			for (GSList *st = services_types; st; st = st->next) {
 				GSList *list_services = NULL;
 				gchar *str_type = st->data;
 
 				/* Generate the list */
 				if (!has_flag_full || !has_raw) {
-					list_services = list_namespace_services(namespace, str_type, &error);
+					error = conscience_get_services (namespace, str_type, &list_services);
 				} else {
-					list_services = gcluster_get_services(csurl, 0.0, str_type, TRUE, &error);
+					error = conscience_remote_get_services(csurl, str_type, TRUE, &list_services);
 				}
 
 				/* Dump the list */

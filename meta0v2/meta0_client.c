@@ -22,10 +22,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <errno.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 
-#include "./meta0_remote.h"
-#include "./meta0_utils.h"
+#include "meta0_remote.h"
+#include "meta0_utils.h"
 
 static addr_info_t addr;
 static gchar *namespace;
@@ -45,24 +44,24 @@ static gchar **urls;
 static gboolean
 url_check(const gchar *u)
 {
-        addr_info_t a;
-        return grid_string_to_addrinfo(u, NULL, &a);
+	addr_info_t a;
+	return grid_string_to_addrinfo(u, &a);
 }
 
 static gboolean
 urlv_check(gchar **urlv)
 {
-        gchar **u;
+	gchar **u;
 
-        if (!urlv)
-                return FALSE;
-        for (u=urlv; *u ;u++) {
-                if (!url_check(*u)) {
-                        GRID_WARN("Bad address [%s]", *u);
-                        return FALSE;
-                }
-        }
-        return TRUE;
+	if (!urlv)
+		return FALSE;
+	for (u=urlv; *u ;u++) {
+		if (!url_check(*u)) {
+			GRID_WARN("Bad address [%s]", *u);
+			return FALSE;
+		}
+	}
+	return TRUE;
 }
 
 static addr_info_t *
@@ -114,9 +113,9 @@ meta0_init_reload(void)
 
 	m0addr = _getMeta0addr(&m0_lst, exclude);
 	while (m0addr) {
-		(void) meta0_remote_cache_refresh(m0addr, 60000, &err);
 		gchar url[STRLEN_ADDRINFO];
-		addr_info_to_string(m0addr, url , sizeof(url));
+		grid_addrinfo_to_string(m0addr, url , sizeof(url));
+		err = meta0_remote_cache_refresh(url);
 		if (err != NULL) {
 			GRID_WARN("META0 [%s] refresh error (%d) : %s", url, err->code, err->message);
 			g_clear_error(&err);
@@ -142,9 +141,9 @@ meta0_init_reset(void)
 
 	m0addr = _getMeta0addr(&m0_lst, exclude);
 	while (m0addr) {
-		err = meta0_remote_cache_reset(m0addr, FALSE);
 		gchar url[STRLEN_ADDRINFO];
-		addr_info_to_string(m0addr, url , sizeof(url));
+		grid_addrinfo_to_string(m0addr, url , sizeof(url));
+		err = meta0_remote_cache_reset(url, FALSE);
 		if (err != NULL) {
 			GRID_WARN("META0 [%s] reset error (%d) : %s", url, err->code, err->message);
 			g_clear_error(&err);
@@ -170,12 +169,13 @@ meta0_init_list(void)
 
 	m0addr = _getMeta0addr(&m0_lst,exclude);
 	while (m0addr) {
-		GSList *list = meta0_remote_get_meta1_all(m0addr, 60000, &err);
+		gchar url[STRLEN_ADDRINFO];
+		grid_addrinfo_to_string(m0addr, url , sizeof(url));
+		GSList *list = NULL;
+		err = meta0_remote_get_meta1_all(url, &list);
 		if (err != NULL) {
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				if (DEBUG_ENABLED()) {
-					gchar url[STRLEN_ADDRINFO];
-					addr_info_to_string(m0addr, url , sizeof(url));
 					GRID_DEBUG("Failed to reach meta0 [%s] : error (%d) : %s",
 							url, err->code, err->message);
 				}
@@ -207,7 +207,10 @@ meta0_init_get(void)
 
 	m0addr = _getMeta0addr(&m0_lst,exclude);
 	while (m0addr) {
-		GSList *list = meta0_remote_get_meta1_one(m0addr, 60000, prefix, &err);
+		gchar url[STRLEN_ADDRINFO];
+		grid_addrinfo_to_string(m0addr, url , sizeof(url));
+		GSList *list = NULL;
+		err = meta0_remote_get_meta1_one(url, prefix, &list);
 		if (err != NULL) {
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				exclude=g_slist_prepend(exclude,m0addr);
@@ -238,7 +241,9 @@ meta0_init_assign(void)
 
 	m0addr = _getMeta0addr(&m0_lst,exclude);
 	while (m0addr) {
-		(void) meta0_remote_assign(m0addr, 60000, flag_nocheck, &err);
+		gchar url[STRLEN_ADDRINFO];
+		grid_addrinfo_to_string(m0addr, url , sizeof(url));
+		err = meta0_remote_assign(url, flag_nocheck);
 		if (err != NULL) {
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				exclude=g_slist_prepend(exclude,m0addr);
@@ -249,7 +254,7 @@ meta0_init_assign(void)
 			}
 			g_clear_error(&err);
 		} else {
-			 GRID_INFO("Assign prefixes terminated!");
+			GRID_INFO("Assign prefixes terminated!");
 			break;
 		}
 	}
@@ -269,7 +274,9 @@ meta0_init_disable_meta1(void)
 
 	m0addr = _getMeta0addr(&m0_lst,exclude);
 	while (m0addr) {
-		(void) meta0_remote_disable_meta1(m0addr, 60000, urls, flag_nocheck, &err);
+		gchar url[STRLEN_ADDRINFO];
+		grid_addrinfo_to_string(m0addr, url , sizeof(url));
+		err = meta0_remote_disable_meta1(url, urls, flag_nocheck);
 		if (err != NULL) {
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				exclude=g_slist_prepend(exclude,m0addr);
@@ -300,7 +307,10 @@ meta0_init_get_meta1_info(void)
 
 	m0addr = _getMeta0addr(&m0_lst,exclude);
 	while (m0addr) {
-		gchar **result = meta0_remote_get_meta1_info(m0addr, 60000, &err);
+		gchar url[STRLEN_ADDRINFO];
+		grid_addrinfo_to_string(m0addr, url , sizeof(url));
+		gchar **result = NULL;
+		err = meta0_remote_get_meta1_info(url, &result);
 
 		if (err != NULL) {
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
@@ -339,7 +349,9 @@ meta0_init_destroy_meta1ref(void)
 
 	m0addr = _getMeta0addr(&m0_lst,exclude);
 	while (m0addr) {
-		(void) meta0_remote_destroy_meta1ref(m0addr, 60000, *urls, &err);
+		gchar url[STRLEN_ADDRINFO];
+		grid_addrinfo_to_string(m0addr, url , sizeof(url));
+		err = meta0_remote_destroy_meta1ref(url, *urls);
 		if (err != NULL) {
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				exclude=g_slist_prepend(exclude,m0addr);
@@ -370,7 +382,9 @@ meta0_init_destroy_zk_node(void)
 
 	m0addr = _getMeta0addr(&m0_lst,exclude);
 	while (m0addr) {
-		(void) meta0_remote_destroy_meta0zknode(m0addr, 60000, *urls, &err);
+		gchar url[STRLEN_ADDRINFO];
+		grid_addrinfo_to_string(m0addr, url , sizeof(url));
+		err = meta0_remote_destroy_meta0zknode(url, *urls);
 		if (err != NULL) {
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				exclude=g_slist_prepend(exclude,m0addr);
@@ -461,7 +475,7 @@ meta0_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	if (!grid_string_to_addrinfo(argv[0], NULL, &addr)) {
+	if (!grid_string_to_addrinfo(argv[0], &addr)) {
 		namespace = strdup(argv[0]);
 	}
 

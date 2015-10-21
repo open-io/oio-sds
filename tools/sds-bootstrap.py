@@ -99,7 +99,7 @@ on_die=respawn
 enabled=true
 start_at_boot=false
 #command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
-command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
+command=${EXE_PREFIX}-proxy -O Cache=off -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
 """
 
 template_nginx_gridinit = """
@@ -243,7 +243,7 @@ path=${LIBDIR}/grid/msg_conscience.so
 param_namespace=${NS}
 param_chunk_size=${CHUNK_SIZE}
 
-param_option.service_update_policy=meta2=NONE|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|
+param_option.service_update_policy=meta2=KEEP|${M2_REPLICAS}|${M2_DISTANCE};sqlx=KEEP|${SQLX_REPLICAS}|${SQLX_DISTANCE}|
 param_option.meta2_max_versions=${VERSIONING}
 param_option.lb.rawx=WRR?shorten_ratio=1.0&standard_deviation=no
 param_option.meta2_keep_deleted_delay=86400
@@ -328,7 +328,7 @@ env.LD_LIBRARY_PATH=${HOME}/.local/@LD_LIBDIR@:${LIBDIR}
 [service.gridagent]
 group=common,localhost,agent
 on_die=respawn
-enabled=true
+enabled=false
 start_at_boot=true
 command=${EXE_PREFIX}-cluster-agent -s OIO,${NS},agent ${CFGDIR}/agent.conf
 

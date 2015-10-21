@@ -7,10 +7,7 @@ include_directories(AFTER
 		${CMAKE_CURRENT_BINARY_DIR}/../metautils/lib)
 
 add_library(hcresolve SHARED
-		hc_resolve.c
-		hc_resolver.c
-		hc_resolver_internals.h
-		hc_resolver.h)
+		hc_resolver.c)
 
 target_link_libraries(hcresolve
 		meta0remote meta1remote metautils gridcluster

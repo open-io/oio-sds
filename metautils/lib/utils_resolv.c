@@ -23,29 +23,9 @@ License along with this library.
 #include <errno.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+#include <sys/un.h>
 
-#include "metatypes.h"
-#include "metautils_bits.h"
-#include "metautils_errors.h"
-#include "metautils_resolv.h"
-
-gboolean
-addr_info_get_addr(const addr_info_t * a, gchar *d, gsize dsize, guint16 *port)
-{
-	if (NULL == port || NULL == d || NULL == a)
-		return FALSE;
-
-	*port = ntohs(a->port);
-
-	switch (a->type) {
-		case TADDR_V4:
-			return (NULL != inet_ntop(AF_INET, &(a->addr.v4), d, dsize));
-		case TADDR_V6:
-			return (NULL != inet_ntop(AF_INET6, a->addr.v6, d, dsize));
-		default:
-			return 0;
-	}
-}
+#include "metautils.h"
 
 gssize
 grid_sockaddr_to_string(const struct sockaddr *s, gchar *dst, gsize dst_size)
@@ -106,15 +86,13 @@ grid_addrinfo_to_string(const struct addr_info_s *a, gchar *dst, gsize dst_size)
 }
 
 static gboolean
-_port_parse(const gchar *start, const gchar *end, guint16 *res)
+_port_parse (const char *start, guint16 *res)
 {
-	gchar *sport_end = NULL;
-	guint64 u64port;
-
-	if (start == end || !g_ascii_isdigit(start[0]))
+	if (!g_ascii_isdigit(*start))
 		return FALSE;
 
-	u64port = g_ascii_strtoull(start, &sport_end, 10);
+	gchar *sport_end = NULL;
+	guint64 u64port = g_ascii_strtoull(start, &sport_end, 10);
 
 	if (!u64port && errno == EINVAL)
 		return FALSE;
@@ -122,7 +100,7 @@ _port_parse(const gchar *start, const gchar *end, guint16 *res)
 		errno = ERANGE;
 		return FALSE;
 	}
-	else if (sport_end != end) {
+	if (sport_end && *sport_end) {
 		errno = EINVAL;
 		return FALSE;
 	}
@@ -132,49 +110,53 @@ _port_parse(const gchar *start, const gchar *end, guint16 *res)
 }
 
 gboolean
-grid_string_to_addrinfo(const gchar *start, const gchar *end, struct addr_info_s *a)
+grid_string_to_sockaddr(const gchar *start, struct sockaddr *s, gsize *slen)
 {
-	const gchar *colon;
-	gchar addr[128];
+	EXTRA_ASSERT (start != NULL);
+	EXTRA_ASSERT (slen != NULL);
 
-	if (NULL == start || NULL == a) {
-		errno = EINVAL;
+	if (!*start)
 		return FALSE;
-	}
 
-	if (!end)
-		end = start + strlen(start);
+	gchar *addr = g_strdup (start);
+	STRING_STACKIFY(addr);
+
+	if (*addr == '/') { // UNIX socket
+		struct sockaddr_un *sun = (struct sockaddr_un*) s;
+		*slen = sizeof(*sun);
+		sun->sun_family = AF_UNIX;
+		g_strlcpy(sun->sun_path, addr, sizeof(sun->sun_path));
+		return TRUE;
+	}
 
 	// Find the ':' separator and fill the working buffers with each part
-	for (colon=end; colon>=start && *colon != ':';colon--);
-	if (colon<=start || colon>=(end-1) || *colon!=':') {
-		errno = EINVAL;
-		return 0;
-	}
-
-	memset(addr, 0, sizeof(struct addr_info_s));
-	memcpy(addr, start, FUNC_MIN(sizeof(addr)-1, colon-start));
+	gchar *colon = strrchr(addr, ':');
+	if (!colon) return FALSE;
+	*(colon++) = '\0';
 
 	// Parse the port
 	guint16 u16port = 0;
-	if (!_port_parse(colon+1, end, &u16port)) {
+	if (!_port_parse(colon, &u16port))
 		return 0;
-	}
-	a->port = g_htons(u16port);
 
 	// And now, parse the address
 	if (addr[0] == '[') {
+		struct sockaddr_in6 *sin6 = (struct sockaddr_in6*) s;
 		size_t l = strlen(addr);
+		*slen = sizeof(struct sockaddr_in6);
 		if (addr[l-1] == ']')
 			addr[--l] = '\0';
-		if (0 < inet_pton(AF_INET6, addr+1, &(a->addr.v6))) {
-			a->type = TADDR_V6;
+		if (0 < inet_pton(AF_INET6, addr+1, &sin6->sin6_addr)) {
+			sin6->sin6_family = AF_INET6;
+			sin6->sin6_port = g_htons(u16port);
 			return 1;
 		}
-	}
-	else {
-		if (0 < inet_pton(AF_INET, addr, &(a->addr.v4))) {
-			a->type = TADDR_V4;
+	} else {
+		struct sockaddr_in *sin = (struct sockaddr_in*) s;
+		*slen = sizeof(struct sockaddr_in);
+		if (0 < inet_pton(AF_INET, addr, &sin->sin_addr)) {
+			sin->sin_family = AF_INET;
+			sin->sin_port = g_htons(u16port);
 			return 1;
 		}
 	}
@@ -182,49 +164,13 @@ grid_string_to_addrinfo(const gchar *start, const gchar *end, struct addr_info_s
 }
 
 gboolean
-grid_string_to_sockaddr(const gchar *src, const gchar *end,
-		struct sockaddr *s, gsize *slen)
+grid_string_to_addrinfo(const gchar *start, struct addr_info_s *a)
 {
-	struct addr_info_s ai;
-
-	memset(&ai, 0, sizeof(struct addr_info_s));
-	if (!grid_string_to_addrinfo(src, end, &ai))
+	struct sockaddr_storage sas;
+	gsize sas_len = sizeof(sas);
+	if (!grid_string_to_sockaddr(start, (struct sockaddr*)&sas, &sas_len))
 		return FALSE;
-
-	return 0 != addrinfo_to_sockaddr(&ai, s, slen);
-}
-
-gboolean
-l4_address_init_with_url(addr_info_t * dst, const gchar * url, GError ** err)
-{
-	if (grid_string_to_addrinfo(url, NULL, dst))
-		return TRUE;
-	GSETCODE(err, 0, "AddrInfo parsing error");
-	return FALSE;
-}
-
-addr_info_t *
-build_addr_info(const gchar * ip, int port, GError ** err)
-{
-	if (NULL == ip || port < 0) {
-		GSETCODE(err, EINVAL, "Invalid parameter");
-		return NULL;
-	}
-
-	gchar buf[256];
-	struct addr_info_s ai;
-
-	if (NULL != strchr(ip, ':'))
-		g_snprintf(buf, sizeof(buf), "[%s]:%d", ip, port);
-	else
-		g_snprintf(buf, sizeof(buf), "%s:%d", ip, port);
-
-	if (!grid_string_to_addrinfo(buf, NULL, &ai)) {
-		GSETCODE(err, EINVAL, "Impossible conversion");
-		return NULL;
-	}
-
-	return g_memdup(&ai, sizeof(struct addr_info_s));
+	return addrinfo_from_sockaddr (a, (struct sockaddr*)&sas, sas_len);
 }
 
 gint
@@ -246,7 +192,7 @@ addrinfo_to_sockaddr(const addr_info_t * ai, struct sockaddr *sa, gsize * saSize
 		sa4->sin_port = ai->port;
 		sa4->sin_addr.s_addr = ai->addr.v4;
 		*saSize = sizeof(struct sockaddr_in);
-		break;
+		return 1;
 	case TADDR_V6:
 		if (*saSize < sizeof(struct sockaddr_in6))
 			return 0;
@@ -255,11 +201,10 @@ addrinfo_to_sockaddr(const addr_info_t * ai, struct sockaddr *sa, gsize * saSize
 		sa6->sin6_port = ai->port;
 		memcpy(&(sa6->sin6_addr), &(ai->addr), sizeof(struct in6_addr));
 		*saSize = sizeof(struct sockaddr_in6);
-		break;
+		return 1;
 	default:
 		return 0;
 	}
-	return 1;
 }
 
 gint
@@ -280,7 +225,7 @@ addrinfo_from_sockaddr(addr_info_t * ai, struct sockaddr * sa, gsize saSize)
 		ai->type = TADDR_V4;
 		ai->port = sa4->sin_port;
 		ai->addr.v4 = sa4->sin_addr.s_addr;
-		break;
+		return 1;
 	case AF_INET6:
 		if (saSize < sizeof(struct sockaddr_in6))
 			return 0;
@@ -288,10 +233,9 @@ addrinfo_from_sockaddr(addr_info_t * ai, struct sockaddr * sa, gsize saSize)
 		ai->type = TADDR_V6;
 		ai->port = sa6->sin6_port;
 		memcpy(&(ai->addr), &(sa6->sin6_addr), sizeof(struct in6_addr));
-		break;
+		return 1;
 	default:
 		return 0;
 	}
-	return 1;
 }
 

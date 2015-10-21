@@ -80,7 +80,6 @@ struct grid_lb_iterator_s
 	struct grid_lb_s *lb;
 	guint64 version;
 	enum glbi_type_e {
-		LBIT_SINGLE=1,
 		LBIT_SHARED,
 		LBIT_RR,
 		LBIT_WRR,
@@ -88,10 +87,6 @@ struct grid_lb_iterator_s
 		LBIT_WRAND
 	} type;
 	union {
-		struct {
-			guint next_idx;
-		} single;
-
 		struct {
 			guint next_idx;
 			guint next_idx_global;
@@ -359,7 +354,7 @@ _compute_min_score_by_SD(struct grid_lb_s *lb)
 	x = ex2 - (ex * ex); // x <- variance
 	x = ceil(sqrt((gdouble)x)); // x <- ecart type
 	x = ex - x; // x <- average - ecart type (pire score admissible)
-	return FUNC_CLAMP(x, 1, max);
+	return CLAMP(x, 1, max);
 }
 
 static guint
@@ -387,7 +382,7 @@ _compute_size_shortened_by_ratio(struct grid_lb_s *lb)
 {
 	gdouble dl = lb->sorted_by_score->len;
 	guint ul = ceil(dl * lb->shorten_ratio);
-	return FUNC_CLAMP(ul, 1, lb->sorted_by_score->len);
+	return CLAMP(ul, 1, lb->sorted_by_score->len);
 }
 
 static guint
@@ -397,7 +392,7 @@ _compute_shortened_size(struct grid_lb_s *lb)
 		return 0;
 	guint size_max_by_SD = _compute_size_shortened_by_SD(lb);
 	guint size_max_by_ratio = _compute_size_shortened_by_ratio(lb);
-	return MACRO_MIN(size_max_by_SD, size_max_by_ratio);
+	return MIN(size_max_by_SD, size_max_by_ratio);
 }
 
 static void
@@ -470,7 +465,7 @@ grid_lb_get_service_from_url(struct grid_lb_s *lb, const gchar *url)
 		return NULL;
 
 	memset(&ai, 0, sizeof(struct addr_info_s));
-	if (!grid_string_to_addrinfo(url, NULL, &ai))
+	if (!grid_string_to_addrinfo(url, &ai))
 		return NULL;
 
 	return grid_lb_get_service_from_addr(lb, &ai);
@@ -524,7 +519,7 @@ grid_lb_iterator_is_url_available(struct grid_lb_iterator_s *iter,
 		return FALSE;
 	}
 
-	if (!grid_string_to_addrinfo(url, NULL, &ai))
+	if (!grid_string_to_addrinfo(url, &ai))
 		return FALSE;
 
 	return grid_lb_iterator_is_addr_available(iter, &ai);
@@ -567,18 +562,6 @@ grid_lb_iterator_share(struct grid_lb_iterator_s *sub)
 	iter->version = sub->version;
 	iter->type = LBIT_SHARED;
 	iter->internals.shared.sub = sub;
-	return iter;
-}
-
-struct grid_lb_iterator_s*
-grid_lb_iterator_single_run(struct grid_lb_s *lb)
-{
-	EXTRA_ASSERT(lb != NULL);
-	struct grid_lb_iterator_s *iter = SLICE_NEW0(struct grid_lb_iterator_s);
-	iter->lb = lb;
-	iter->version = lb->version;
-	iter->type = LBIT_SINGLE;
-	iter->internals.single.next_idx = 0;
 	return iter;
 }
 
@@ -791,24 +774,6 @@ _result(struct service_info_s **pi, struct service_info_s *si)
 }
 
 static gboolean
-__next_SINGLE(struct grid_lb_s *lb, struct grid_lb_iterator_s *iter,
-		struct service_info_s **si)
-{
-	guint max;
-	struct service_info_s *result = NULL;
-
-	grid_lb_lock(lb);
-	max = lb->gpa->len;
-	if (iter->version == lb->version && max > 0) {
-		if (iter->internals.single.next_idx < max)
-			result = _get_raw(lb, iter->internals.single.next_idx ++);
-	}
-	grid_lb_unlock(lb);
-
-	return _result(si, result);
-}
-
-static gboolean
 __next_RR(struct grid_lb_s *lb, struct grid_lb_iterator_s *iter,
 		struct service_info_s **si, gboolean shorten)
 {
@@ -943,8 +908,6 @@ _iterator_next_shorten(struct grid_lb_iterator_s *iter,
 		struct service_info_s **si, gboolean shorten)
 {
 	switch (iter->type) {
-		case LBIT_SINGLE:
-			return __next_SINGLE(iter->lb, iter, si);
 		case LBIT_RR:
 			return __next_RR(iter->lb, iter, si, shorten);
 		case LBIT_WRR:
@@ -999,7 +962,7 @@ _get_iteration_limit(struct grid_lb_iterator_s *it, gboolean shorten)
 {
 	enum glbi_type_e type = _get_effective_type(it);
 
-	if (type == LBIT_SINGLE || type == LBIT_RR)
+	if (type == LBIT_RR)
 		return shorten ? grid_lb_count(it->lb) : grid_lb_count_all(it->lb);
 	return grid_lb_count_all(it->lb);
 }
@@ -1233,11 +1196,8 @@ grid_lb_iterator_to_string (struct grid_lb_iterator_s *it)
 {
 	if (!it)
 		return g_string_new("NULL");
-	GString *gs;
+	GString *gs = NULL;
 	switch (it->type) {
-		case LBIT_SINGLE:
-			gs = g_string_new("SINGLE");
-			break;
 		case LBIT_SHARED:
 			gs = grid_lb_iterator_to_string(it->internals.shared.sub);
 			break;
@@ -1252,6 +1212,9 @@ grid_lb_iterator_to_string (struct grid_lb_iterator_s *it)
 			break;
 		case LBIT_WRAND:
 			gs = g_string_new("WRAND");
+			break;
+		default:
+			gs = g_string_new("INVALID");
 			break;
 	}
 	g_string_append_printf (gs, "?shorten_ratio=%f", it->lb->shorten_ratio);
@@ -1493,7 +1456,7 @@ grid_lb_reload_json_object(struct grid_lb_s *lb, struct json_object *obj)
 			if (!item || !json_object_is_type(item, json_type_object))
 				return TRUE;
 			*p_si = NULL;
-			GError *e = service_info_load_json_object(item, p_si);
+			GError *e = service_info_load_json_object(item, p_si, TRUE);
 			if (!e)
 				return FALSE;
 			g_clear_error(&e);
@@ -1520,15 +1483,17 @@ grid_lb_reload_json(struct grid_lb_s *lb, const gchar *encoded)
 void
 grid_lbpool_flush(struct grid_lbpool_s *glp)
 {
-	if (!glp) return;
-	gboolean _flush (gchar *srvtype, struct grid_lb_s *lb, gpointer ignored) {
-		(void) srvtype, (void) ignored;
+	if (!glp)
+		return;
+	gboolean _flush (gchar *srvtype, struct grid_lb_s *lb, gpointer u) {
+		(void) srvtype, (void) u;
 		grid_lb_flush (lb);
 		return FALSE;
 	}
 
 	g_rw_lock_reader_lock(&(glp->rwlock));
-	g_tree_foreach(glp->pools, (GTraverseFunc)_flush, NULL);
+	if (glp->pools)
+		g_tree_foreach(glp->pools, (GTraverseFunc)_flush, NULL);
 	g_rw_lock_reader_unlock(&(glp->rwlock));
 }
 

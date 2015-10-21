@@ -168,7 +168,7 @@ struct conscience_srvtype_s *conscience_get_default_srvtype(
  * @param conscience
  * @result
  */
-const gchar *conscience_get_namespace(struct conscience_s *conscience);
+const gchar *conscience_get_nsname(struct conscience_s *conscience);
 
 /**
  *

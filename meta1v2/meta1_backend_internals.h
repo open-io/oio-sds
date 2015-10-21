@@ -39,6 +39,8 @@ struct meta1_backend_s
 	} notify;
 };
 
+void __exec_cid(sqlite3 *handle, const gchar *sql, const container_id_t cid);
+
 GError* __create_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url);
 
 /*! check the container exists */
@@ -50,11 +52,6 @@ GError* _open_and_lock(struct meta1_backend_s *m1, struct hc_url_s *url,
 		enum m1v2_open_type_e how, struct sqlx_sqlite3_s **handle);
 
 void gpa_str_free(GPtrArray *gpa);
-
-/*! Necessarily exported because the old meta1 DESTROY request needs it and
- * the new destroy func needs it too. And they are in different files. */
-GError* __destroy_container(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, gboolean flush, gboolean *done);
 
 gboolean m1b_check_ns (struct meta1_backend_s *m1, const char *ns);
 

@@ -141,11 +141,7 @@ BEGIN
 			b     [0] BOOLEAN,
 			i     [1] INTEGER,
 			r     [2] REAL,
-			s     [3] OCTET STRING,
-			macro [4] SEQUENCE {
-				type  [0] PrintableString,
-				param [1] PrintableString
-			}
+			s     [3] OCTET STRING
 		}
 	}
 

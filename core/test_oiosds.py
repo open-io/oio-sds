@@ -16,7 +16,7 @@
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import json, threading, BaseHTTPServer
+import sys, json, threading, BaseHTTPServer
 from ctypes import cdll
 
 class DumbHttpMock (BaseHTTPServer.BaseHTTPRequestHandler):
@@ -246,7 +246,7 @@ def test_list(lib):
 	test_list_ok (lib)
 
 if __name__ == '__main__':
-	lib = cdll.LoadLibrary("liboiosds_test.so")
+	lib = cdll.LoadLibrary(sys.argv[1] + "/liboiosds_test.so")
 	lib.setup()
 	test_has(lib)
 	test_get(lib)

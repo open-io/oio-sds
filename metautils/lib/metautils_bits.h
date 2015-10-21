@@ -29,18 +29,12 @@ License along with this library.
 #define BUFSIZE(B)       (B),sizeof(B)
 #define BUFLEN(B)        (B),sizeof(B)-1
 
-#define ZERO(A) memset((A), 0x00, sizeof(A));
-
 // Return -1 if A<B, 0 if A==B, 1 if A>B
 #define CMP(a,b) (((a) > (b)) - ((a) < (b)))
 
-// Return -1 if A<0, 0 if A==0, 1 if A>0
-#define SIGN(v) CMP(v,0)
 #define BOOL(C) ((C)!=0)
 
 # define MACRO_COND(C,A,B) ((B) ^ (((A)^(B)) & -BOOL(C)))
-# define MACRO_MAX(A,B)    ((A) ^ (((A)^(B)) & -((A)<(B))))
-# define MACRO_MIN(A,B)    ((B) ^ (((A)^(B)) & -((A)<(B))))
 
 // Might slightly speed up the code using branch predictions
 # ifdef __GNUC__
@@ -78,37 +72,6 @@ djb_hash_str(const gchar * b)
 	for (; b[hl.l]; ++hl.l)
 		hl.h = ((hl.h << 5) + hl.h) ^ (guint32) (b[hl.l]);
 	return hl;
-}
-
-static inline int
-FUNC_SIGN(register int v)
-{
-    return SIGN(v);
-}
-
-static inline guint
-FUNC_CLAMP(register guint v, register guint lo, register guint hi)
-{
-	v = MACRO_MIN(v,hi);
-	return MACRO_MAX(v,lo);
-}
-
-static inline guint
-FUNC_MAX(register guint v0, register guint v1)
-{
-	return MACRO_MAX(v0,v1);
-}
-
-static inline guint
-FUNC_MIN(register guint v0, register guint v1)
-{
-	return MACRO_MIN(v0,v1);
-}
-
-static inline guint
-FUNC_COND(register guint c, register guint v0, register guint v1)
-{
-	return MACRO_COND(c,v0,v1);
 }
 
 static inline guint64

@@ -81,7 +81,7 @@ worker_get_timeout (worker_t *w)
 	if (w->timeout.activity > 0)
 		timeout_activity = w->timepoint.activity + (w->timeout.activity * 1000);
 
-	return MACRO_MIN(timeout_activity,timeout_startup);
+	return MIN(timeout_activity,timeout_startup);
 }
 
 static gint64
@@ -123,7 +123,7 @@ _delay(void)
 	gint64 now = _now();
 	gint64 d0 = time_to_next_timed_out_worker(now);
 	gint64 d1 = time_to_next_timed_out_task(now);
-	d0 = MACRO_MIN(d0, d1);
+	d0 = MIN(d0, d1);
 	return CLAMP(d0, 10, 5000);
 }
 

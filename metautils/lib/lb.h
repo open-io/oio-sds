@@ -110,8 +110,6 @@ void grid_lb_configure_options(struct grid_lb_s *lb, const gchar *opts);
 
 /* Iterators features ------------------------------------------------------ */
 
-struct grid_lb_iterator_s* grid_lb_iterator_single_run(struct grid_lb_s *lb);
-
 struct grid_lb_iterator_s* grid_lb_iterator_round_robin(struct grid_lb_s *lb);
 
 struct grid_lb_iterator_s* grid_lb_iterator_weighted_round_robin(struct grid_lb_s *lb);

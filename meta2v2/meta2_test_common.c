@@ -97,7 +97,7 @@ _init_lb(const gchar *ns)
 		g_strlcpy(si->type, "rawx", sizeof(si->type));
 		si->score.timestamp = time(0);
 		si->score.value = ++score;
-		grid_string_to_addrinfo(pdef->url, NULL, &(si->addr));
+		grid_string_to_addrinfo(pdef->url, &(si->addr));
 
 		pdef++;
 		*p_si = si;

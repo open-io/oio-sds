@@ -22,6 +22,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <stddef.h>
 #include <stdint.h>
+#include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
@@ -33,7 +34,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/url_ext.h>
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
-#include <cluster/remote/gridcluster_remote.h>
 #include <server/network_server.h>
 #include <server/stats_holder.h>
 #include <resolver/hc_resolver.h>
@@ -63,28 +63,41 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SEQ()     (TOK("SEQ") ?: OPT("seq"))
 #define VERSION() OPT("version")
 
-#define PUSH_DO(Action) do { \
-	g_mutex_lock(&push_mutex); \
+#define GUARDED_DO(Lock,Action) do { \
+	g_mutex_lock(&Lock); \
 	Action ; \
-	g_mutex_unlock(&push_mutex); \
+	g_mutex_unlock(&Lock); \
 } while (0)
 
-#define NSINFO_DO(Action) do { \
-	g_mutex_lock(&nsinfo_mutex); \
-	Action ; \
-	g_mutex_unlock(&nsinfo_mutex); \
+#define CSURL_DO(Action) GUARDED_DO(csurl_mutex,Action)
+#define PUSH_DO(Action) GUARDED_DO(push_mutex,Action)
+#define NSINFO_DO(Action) GUARDED_DO(nsinfo_mutex,Action)
+#define SRV_DO(Action) GUARDED_DO(srv_mutex,Action)
+
+#define CSURL(C) gchar *C = NULL; do { \
+	C = proxy_get_csurl(); \
+	STRING_STACKIFY(C); \
 } while (0)
 
+extern gchar *nsname;
+extern gboolean flag_cache_enabled;
+extern gdouble m2_timeout_all;
 
 extern struct grid_lbpool_s *lbpool;
+extern struct hc_resolver_s *resolver;
+
+extern GMutex csurl_mutex;
+extern gchar *csurl;
+
 extern GMutex push_mutex;
 extern struct lru_tree_s *push_queue;
-extern gchar *nsname;
-extern struct namespace_info_s nsinfo;
-extern gchar **srvtypes;
+
 extern GMutex nsinfo_mutex;
-extern gdouble m2_timeout_all;
-extern struct hc_resolver_s *resolver;
+extern gchar **srvtypes;
+extern struct namespace_info_s nsinfo;
+
+extern GMutex srv_mutex;
+extern struct lru_tree_s *srv_down;
 
 enum
 {
@@ -103,94 +116,58 @@ struct req_args_s
 	guint32 flags;
 };
 
-typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);
-
-gboolean
-validate_namespace (const gchar * ns);
-
-gboolean
-validate_srvtype (const gchar * n);
-
-const gchar *
-_req_get_option (struct req_args_s *args, const gchar *name);
-
-const gchar *
-_req_get_token (struct req_args_s *args, const gchar *name);
-
 struct sub_action_s {
-	const gchar *verb;
+	const char *verb;
 	enum http_rc_e (*handler) (struct req_args_s *, struct json_object *);
 };
 
-enum http_rc_e
-abstract_action (const char *tag, struct req_args_s*args, struct sub_action_s *sub);
+typedef enum http_rc_e (*req_handler_f) (struct req_args_s *);
 
-enum http_rc_e
-rest_action (struct req_args_s *args,
+gchar * proxy_get_csurl (void);
+
+gboolean validate_namespace (const char * ns);
+gboolean validate_srvtype (const char * n);
+
+gboolean service_is_ok (gconstpointer p);
+void service_invalidate (gconstpointer n);
+
+const char * _req_get_option (struct req_args_s *args, const char *name);
+const char * _req_get_token (struct req_args_s *args, const char *name);
+
+enum http_rc_e abstract_action (const char *tag, struct req_args_s*args, struct sub_action_s *sub);
+
+enum http_rc_e rest_action (struct req_args_s *args,
         enum http_rc_e (*handler) (struct req_args_s *, json_object *));
 
-GError *
-_resolve_service_and_do (const char *t, gint64 seq, struct hc_url_s *u,
+GError * _resolve_service_and_do (const char *t, gint64 seq, struct hc_url_s *u,
         GError * (*hook) (struct meta1_service_url_s *m1u, gboolean *next));
 
-GError *
-_m1_locate_and_action (struct req_args_s *args, GError * (*hook) ());
+GError * _m1_locate_and_action (struct req_args_s *args, GError * (*hook) ());
 
-GError *
-_gba_request (struct meta1_service_url_s *m1u, GByteArray * (reqbuilder) (void),
+GError * _gba_request (struct meta1_service_url_s *m1u, GByteArray * (reqbuilder) (void),
         GByteArray ** out);
 
-GError *
-_gbav_request (const gchar *t, gint64 seq, struct hc_url_s *u, GByteArray * builder (void),
+GError * _gbav_request (const char *t, gint64 seq, struct hc_url_s *u, GByteArray * builder (void),
         gchar ***outurl, GByteArray ***out);
 
-gboolean
-_request_has_flag (struct req_args_s *args, const char *header, const char *flag);
+gboolean _request_has_flag (struct req_args_s *args, const char *header, const char *flag);
 
-enum http_rc_e
-_reply_json (struct req_args_s *args, int code, const gchar * msg, GString * gstr);
+enum http_rc_e _reply_json (struct req_args_s *args, int code, const char * msg, GString * gstr);
+enum http_rc_e _reply_format_error (struct req_args_s *args, GError *err);
+enum http_rc_e _reply_system_error (struct req_args_s *args, GError *err);
+enum http_rc_e _reply_bad_gateway (struct req_args_s *args, GError *err);
+enum http_rc_e _reply_not_implemented (struct req_args_s *args);
+enum http_rc_e _reply_notfound_error (struct req_args_s *args, GError * err);
+enum http_rc_e _reply_forbidden_error (struct req_args_s *args, GError * err);
+enum http_rc_e _reply_method_error (struct req_args_s *args);
+enum http_rc_e _reply_conflict_error (struct req_args_s *args, GError * err);
+enum http_rc_e _reply_nocontent (struct req_args_s *args);
+enum http_rc_e _reply_accepted (struct req_args_s *args);
+enum http_rc_e _reply_created (struct req_args_s *args);
+enum http_rc_e _reply_success_json (struct req_args_s *args, GString * gstr);
 
-enum http_rc_e
-_reply_format_error (struct req_args_s *args, GError *err);
-
-enum http_rc_e
-_reply_system_error (struct req_args_s *args, GError *err);
-
-enum http_rc_e
-_reply_bad_gateway (struct req_args_s *args, GError *err);
-
-enum http_rc_e
-_reply_not_implemented (struct req_args_s *args);
-
-enum http_rc_e
-_reply_notfound_error (struct req_args_s *args, GError * err);
-
-enum http_rc_e
-_reply_forbidden_error (struct req_args_s *args, GError * err);
-
-enum http_rc_e
-_reply_method_error (struct req_args_s *args);
-
-enum http_rc_e
-_reply_conflict_error (struct req_args_s *args, GError * err);
-
-enum http_rc_e
-_reply_nocontent (struct req_args_s *args);
-
-enum http_rc_e
-_reply_accepted (struct req_args_s *args);
-
-enum http_rc_e
-_reply_created (struct req_args_s *args);
-
-enum http_rc_e
-_reply_success_json (struct req_args_s *args, GString * gstr);
-
-GString *
-_create_status (gint code, const gchar * msg);
-
-GString *
-_create_status_error (GError * e);
+GString * _create_status (gint code, const char * msg);
+GString * _create_status_error (GError * e);
 
 enum http_rc_e
 _reply_common_error (struct req_args_s *args, GError *err);

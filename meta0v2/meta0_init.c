@@ -22,10 +22,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <errno.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 
-#include "./meta0_remote.h"
-#include "./meta0_utils.h"
+#include "meta0_remote.h"
+#include "meta0_utils.h"
 
 static gint nbreplicas = 1;
 static gchar **urls;
@@ -35,21 +34,12 @@ static gboolean flag_fill_v1 =FALSE;
 static gboolean nodist = FALSE;
 
 static gboolean
-url_check(const gchar *url)
+urlv_check (gchar **urlv)
 {
-	addr_info_t a;
-	return grid_string_to_addrinfo(url, NULL, &a);
-}
-
-static gboolean
-urlv_check(gchar **urlv)
-{
-	gchar **u;
-
 	if (!urlv)
 		return FALSE;
-	for (u=urlv; *u ;u++) {
-		if (!url_check(*u)) {
+	for (gchar **u=urlv; *u ;u++) {
+		if (!metautils_url_valid_for_connect(*u)) {
 			GRID_WARN("Bad address [%s]", *u);
 			return FALSE;
 		}
@@ -78,14 +68,14 @@ meta0_action(void)
 
 	m0addr = _getMeta0addr(&m0_lst,exclude);
 	while (m0addr) {
-		gboolean rc = FALSE;
+		gchar url[STRLEN_ADDRINFO];
+		grid_addrinfo_to_string(m0addr, url , sizeof(url));
 		if ( flag_fill_v1 )
-			rc = meta0_remote_fill(m0addr, 60000, urls, nbreplicas, &err);
+			err = meta0_remote_fill(url, urls, nbreplicas);
 		else
-			rc = meta0_remote_fill_v2(m0addr, 60000, nbreplicas, nodist, &err);
-		EXTRA_ASSERT((err != NULL) ^ (BOOL(rc)));
+			err = meta0_remote_fill_v2(url, nbreplicas, nodist);
 
-		if (!rc) {
+		if (err) {
 			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				exclude=g_slist_prepend(exclude,m0addr);
@@ -151,7 +141,7 @@ meta0_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	if (!grid_string_to_addrinfo(argv[0], NULL, &addr)) {
+	if (!grid_string_to_addrinfo(argv[0], &addr)) {
 		namespace = strdup(argv[0]);
 		GRID_INFO("[%s] considered as a namespace name", argv[0]);
 	} else {

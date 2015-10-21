@@ -26,16 +26,6 @@ clean_tag_value(struct service_tag_s *tag)
 {
 	if (tag->type == STVT_STR && tag->value.s)
 		g_free(tag->value.s);
-	else if (tag->type == STVT_MACRO) {
-		if (tag->value.macro.type) {
-			g_free(tag->value.macro.type);
-			tag->value.macro.type = NULL;
-		}
-		if (tag->value.macro.param) {
-			g_free(tag->value.macro.param);
-			tag->value.macro.param = NULL;
-		}
-	}
 }
 
 void
@@ -186,50 +176,6 @@ service_tag_get_value_string(struct service_tag_s *tag, gchar * s, gsize s_size,
 }
 
 void
-service_tag_set_value_macro(struct service_tag_s *tag, const gchar * type, const gchar * param)
-{
-	if (!tag || !type)
-		return;
-	clean_tag_value(tag);
-	tag->type = STVT_MACRO;
-	tag->value.macro.type = g_strdup(type);
-	if (param)
-		tag->value.macro.param = g_strdup(param);
-}
-
-gboolean
-service_tag_get_value_macro(struct service_tag_s *tag,
-		gchar * type, gsize type_size,
-		gchar* param, gsize param_size,
-		GError** error)
-{
-	if (tag == NULL) {
-		GSETERROR(error, "Argument tag is NULL");
-		return FALSE;
-	}
-
-	if (type == NULL) {
-		GSETERROR(error, "Argument type is NULL");
-		return FALSE;
-	}
-
-	if (param == NULL) {
-		GSETERROR(error, "Argument param is NULL");
-		return FALSE;
-	}
-
-	if (tag->type != STVT_MACRO) {
-		GSETERROR(error, "Tag is not of type MACRO");
-		return FALSE;
-	}
-
-	g_strlcpy(type, tag->value.macro.type, type_size);
-	g_strlcpy(param, tag->value.macro.param, param_size);
-
-	return TRUE;
-}
-
-void
 service_tag_copy(struct service_tag_s *dst, struct service_tag_s *src)
 {
 	if (!dst || !src)
@@ -252,9 +198,6 @@ service_tag_copy(struct service_tag_s *dst, struct service_tag_s *src)
 		return;
 	case STVT_BUF:
 		service_tag_set_value_string(dst, src->value.buf);
-		return;
-	case STVT_MACRO:
-		service_tag_set_value_macro(dst, src->value.macro.type, src->value.macro.param);
 		return;
 	}
 }
@@ -322,11 +265,6 @@ service_tag_to_string(const struct service_tag_s *tag, gchar * dst, gsize dst_si
 		return g_snprintf(dst, dst_size, "%s", tag->value.s);
 	case STVT_BUF:
 		return g_snprintf(dst, dst_size, "%.*s", (int)sizeof(tag->value.buf), tag->value.buf);
-	case STVT_MACRO:
-		if (tag->value.macro.param && *(tag->value.macro.param))
-			return g_snprintf(dst, dst_size, "${%s}", tag->value.macro.type);
-		else
-			return g_snprintf(dst, dst_size, "${%s.%s}", tag->value.macro.type, tag->value.macro.param);
 	}
 	return 0;
 }
@@ -510,29 +448,6 @@ service_info_remove_tag(GPtrArray * a, const gchar * name)
 	}
 }
 
-gboolean
-service_info_set_address(struct service_info_s * si, const gchar * host, int port, GError ** error)
-{
-	addr_info_t *addr;
-
-	if (!si || !host || port < 0 || port > 65535) {
-		GSETERROR(error, "Invalid parameter si=%p host=%p port=%i", si, host, port);
-		return FALSE;
-	}
-
-	addr = build_addr_info(host, port, error);
-	if (!addr) {
-		GSETERROR(error, "Invalid address");
-		return FALSE;
-	}
-
-	memcpy(&(si->addr), addr, sizeof(addr_info_t));
-
-	g_free(addr);
-
-	return TRUE;
-}
-
 GSList*
 service_info_extract_nsname(GSList *services, gboolean copy)
 {
@@ -578,7 +493,7 @@ service_info_to_string(const service_info_t *si)
 
 	/* header string */
 	concat(g_strdup_printf("%s|%s", si->ns_name, si->type));
-	addr_info_to_string(&(si->addr), tmp, sizeof(tmp));
+	grid_addrinfo_to_string(&(si->addr), tmp, sizeof(tmp));
 	concat(g_strdup(tmp));
 	concat(g_strdup_printf("score=%d", si->score.value));
 
@@ -694,10 +609,6 @@ _append_one_tag(GString* gstr, struct service_tag_s *tag)
 			g_string_append_printf(gstr, "\"%.*s\"",
 					(int) sizeof(tag->value.buf), tag->value.buf);
 			return;
-		case STVT_MACRO:
-			g_string_append_printf(gstr, "[\"%s\",\"%s\"]",
-					tag->value.macro.type, tag->value.macro.param);
-			return;
 	}
 }
 
@@ -716,15 +627,21 @@ _append_all_tags(GString *gstr, GPtrArray *tags)
 }
 
 void
-service_info_encode_json(GString *gstr, struct service_info_s *si)
+service_info_encode_json(GString *gstr, struct service_info_s *si, gboolean full)
 {
 	if (!si)
 		return;
 	gchar straddr[STRLEN_ADDRINFO];
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
-	g_string_append_printf(gstr,
-			"{\"addr\":\"%s\",\"score\":%d,\"tags\":{",
-			straddr, si->score.value);
+	if (full) {
+		g_string_append_printf(gstr,
+				"{\"ns\":\"%s\",\"type\":\"%s\",\"addr\":\"%s\",\"score\":%d,\"tags\":{",
+				si->ns_name, si->type, straddr, si->score.value);
+	} else {
+		g_string_append_printf(gstr,
+				"{\"addr\":\"%s\",\"score\":%d,\"tags\":{",
+				straddr, si->score.value);
+	}
 	_append_all_tags(gstr, si->tags);
 	g_string_append(gstr, "}}");
 }
@@ -742,19 +659,6 @@ _srvtag_load_json (const gchar *name, struct json_object *obj)
 		service_tag_set_value_float(tag, json_object_get_double(obj));
 	} else if (json_object_is_type(obj, json_type_boolean)) {
 		service_tag_set_value_boolean(tag, json_object_get_boolean(obj));
-	} else if (json_object_is_type(obj, json_type_array)) { // macro
-		if (json_object_array_length(obj) > 0) {
-			json_object *k, *v = NULL;
-			k = json_object_array_get_idx(obj, 0);
-			if (json_object_array_length(obj) > 1)
-				v = json_object_array_get_idx(obj, 1);
-			if (json_object_is_type(k, json_type_string)
-					&& (!v || json_object_is_type(v, json_type_string))) {
-				service_tag_set_value_macro(tag,
-						json_object_get_string(k),
-						v ? json_object_get_string(v) : NULL);
-			}
-		}
 	} else {
 		service_tag_set_value_boolean(tag, FALSE);
 	}
@@ -763,14 +667,14 @@ _srvtag_load_json (const gchar *name, struct json_object *obj)
 
 GError*
 service_info_load_json_object(struct json_object *obj,
-		struct service_info_s **out)
+		struct service_info_s **out, gboolean permissive)
 {
 	EXTRA_ASSERT(out != NULL); *out = NULL;
 
 	struct json_object *ns, *type, *url, *score, *tags;
 	struct metautils_json_mapping_s mapping[] = {
-		{"ns",    &ns,    json_type_string, 1},
-		{"type",  &type,  json_type_string, 1},
+		{"ns",    &ns,    json_type_string, !permissive},
+		{"type",  &type,  json_type_string, !permissive},
 		{"addr",  &url,   json_type_string, 1},
 		{"score", &score, json_type_int,    1},
 		{"tags",  &tags,  json_type_object, 0},
@@ -780,7 +684,7 @@ service_info_load_json_object(struct json_object *obj,
 	if (err) return err;
 	
 	struct addr_info_s addr;
-	if (!grid_string_to_addrinfo(json_object_get_string(url), NULL, &addr))
+	if (!grid_string_to_addrinfo(json_object_get_string(url), &addr))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid address");
 
 	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
@@ -804,13 +708,14 @@ service_info_load_json_object(struct json_object *obj,
 }
 
 GError*
-service_info_load_json(const gchar *encoded, struct service_info_s **out)
+service_info_load_json(const gchar *encoded, struct service_info_s **out,
+		gboolean permissive)
 {
 	struct json_tokener *tok = json_tokener_new();
 	struct json_object *obj = json_tokener_parse_ex(tok,
 			encoded, strlen(encoded));
 	json_tokener_free(tok);
-	GError *err = service_info_load_json_object(obj, out);
+	GError *err = service_info_load_json_object(obj, out, permissive);
 	json_object_put(obj);
 	return err;
 }

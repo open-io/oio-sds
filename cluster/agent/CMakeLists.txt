@@ -8,14 +8,10 @@ add_executable(gridagent
 	asn1_request_worker.c asn1_request_worker.h
 	cluster_conf_parser.c
 	cluster_conf_parser.h
-	cpu_stat_task_worker.c cpu_stat_task_worker.h
-	fs.c fs.h
 	get_ns_worker.c get_ns_worker.h
 	gridagent.conf
 	gridagent.h
-	http_request_worker.c http_request_worker.h
 	io_scheduler.c io_scheduler.h
-	io_stat_task_worker.c io_stat_task_worker.h
 	main_reqagent.c
 	message.c message.h
 	namespace_get_task_worker.c namespace_get_task_worker.h
@@ -23,7 +19,7 @@ add_executable(gridagent
 	request_worker.c request_worker.h
 	server.c server.h
 	services_task_check.c services_task_get_services.c services_task_get_types.c services_task_push.c
-	services_worker_clear.c services_worker_get_one.c services_worker_list.c services_worker_push.c services_workers.h
+	services_worker_clear.c services_worker_list.c services_worker_push.c services_workers.h
 	task.h
 	task_scheduler.c task_scheduler.h
 	worker.h
@@ -32,7 +28,7 @@ add_executable(gridagent
 bin_prefix(gridagent -cluster-agent)
 
 target_link_libraries(gridagent
-	gridcluster gridcluster-remote gridcluster-conscience
+	gridcluster gridcluster-conscience
 	metautils
 	-lm ${GLIB2_LIBRARIES})
 

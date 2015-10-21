@@ -21,7 +21,31 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "actions.h"
 
 enum http_rc_e
-action_cache_flush_all (struct req_args_s *args)
+action_forward (struct req_args_s *args)
+{
+	const char *id = TOK("SRVID");
+	const char *action = OPT("action");
+
+	if (!id)
+		return _reply_format_error (args, BADREQ("Missing SRVID"));
+	if (!action)
+		return _reply_format_error (args, BADREQ("Missing action"));
+
+	GError *err = NULL;
+	if (!g_ascii_strcasecmp (action, "flush"))
+		err = sqlx_remote_execute_FLUSH (id);
+	else if (!g_ascii_strcasecmp (action, "reload"))
+		err = sqlx_remote_execute_RELOAD (id);
+	else
+		err = BADREQ("unexpected action");
+
+	if (!err)
+		return _reply_success_json (args, NULL);
+	return _reply_common_error (args, err);
+}
+
+enum http_rc_e
+action_cache_flush_local (struct req_args_s *args)
 {
 	grid_lbpool_flush (lbpool);
 	hc_resolver_flush_csm0 (resolver);

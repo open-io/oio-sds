@@ -225,6 +225,8 @@ For **GET** methods only. It displays a small description of the internal cache 
 
 ### Cache configuration
 For **POST** methods only. Currently managed:
+  * URL ``/cache/flush/service/{IP:PORT}``
+  * URL ``/cache/flush/local``
   * URL ``/cache/flush/low``
   * URL ``/cache/flush/high``
   * URL ``/cache/ttl/low/{INT}``

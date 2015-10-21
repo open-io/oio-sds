@@ -86,26 +86,6 @@ meta1_pack_url(struct meta1_service_url_s *u)
 			u->seq, u->srvtype, u->host, u->args);
 }
 
-gboolean
-meta1_url_get_address(struct meta1_service_url_s *u,
-		struct addr_info_s *dst)
-{
-	return l4_address_init_with_url(dst, u->host, NULL);
-}
-
-gboolean
-meta1_strurl_get_address(const gchar *str, struct addr_info_s *dst)
-{
-	gboolean rc;
-	struct meta1_service_url_s *u;
-
-	u = meta1_unpack_url(str);
-	rc = meta1_url_get_address(u, dst);
-	g_free(u);
-
-	return rc;
-}
-
 GError *
 meta1_service_url_load_json_object(struct json_object *obj,
 		struct meta1_service_url_s **out)
@@ -146,5 +126,14 @@ meta1_service_url_encode_json (GString *gstr, struct meta1_service_url_s *m1u)
 		g_string_append_printf(gstr, "\"args\":\"%.*s\"}",
 				LIMIT_LENGTH_SRVARGS, m1u->args);
 	}
+}
+
+gchar *
+meta1_strurl_get_address(const gchar *str)
+{
+	struct meta1_service_url_s *u = meta1_unpack_url(str);
+	gchar *s = g_strdup(u->host);
+	g_free(u);
+	return s;
 }
 

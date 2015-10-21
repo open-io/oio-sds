@@ -25,7 +25,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define AGENT_DEFAULT_EVENT_XATTR "user.grid.agent.incoming-time"
 
 #define MSG_SRVTYPE_LST "SRVTYPELST"
-#define MSG_SRV_GET1 "SRVGET1"
 #define MSG_SRV_LST "SRVLST"
 #define MSG_SRV_PSH "SRVPSH"
 #define MSG_SRV_CLR "SRVCLR"

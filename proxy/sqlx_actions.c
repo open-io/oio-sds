@@ -28,6 +28,9 @@ _abstract_sqlx_action (struct req_args_s *args, gboolean next,
 	// @TODO Here is a factorisation spot, with sqlx_name_fill()
 	// Build the base name
 	const gchar *type = TYPE();
+	if (!type)
+		return BADREQ("No service type");
+
 	gchar *etype = NULL;
 	gchar *bn = NULL;
 	if (!g_ascii_strcasecmp(type, NAME_SRVTYPE_META0)) {
@@ -84,7 +87,7 @@ _sqlx_action_noreturn (struct req_args_s *args,
 				&msg, _on_status_reply);
 		g_byte_array_unref (req);
 		gridd_client_start (c);
-		gridd_client_set_timeout (c, 1.0, 1.0);
+		gridd_client_set_timeout (c, COMMON_CLIENT_TIMEOUT);
 		GError *e = gridd_client_loop (c);
 		if (!e)
 			e = gridd_client_error (c);
@@ -282,7 +285,7 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 		struct gridd_client_s *c = gridd_client_create(to, req, NULL, NULL);
 		g_byte_array_unref (req);
 		gridd_client_start (c);
-		gridd_client_set_timeout (c, 20.0, 20.0);
+		gridd_client_set_timeout (c, 30.0);
 		GError *e = gridd_client_loop (c);
 		gridd_client_free (c);
 		if (!first)

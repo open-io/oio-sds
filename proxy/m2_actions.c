@@ -17,6 +17,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <errno.h>
+
 #include <metautils/lib/metautils.h>
 #include <meta2v2/meta2_utils_json.h>
 #include <meta2v2/autogen.h>
@@ -876,11 +878,8 @@ retry:
 			autocreate = FALSE; /* autocreate just once */
 			g_clear_error (&err);
 			GError *hook_dir (const gchar *m1) {
-				struct addr_info_s m1a;
-				if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-					return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-				GError *e = NULL;
-				gchar **urlv = meta1v2_remote_link_service (&m1a, &e, args->url, type, FALSE, TRUE);
+				gchar **urlv = NULL;
+				GError *e = meta1v2_remote_link_service (m1, args->url, type, FALSE, TRUE, &urlv);
 				if (urlv) g_strfreev (urlv);
 				return e;
 			}
@@ -907,6 +906,9 @@ action_m2_container_create (struct req_args_s *args)
 	return _reply_m2_error (args, err);
 }
 
+/* XXX FIXME TODO JFS: this is broken. it removes the m2 DB but not the meta1
+ * entry. One possibility should be to mark the base as DISABLED, then remove
+ * the reference in the directory, then remove the m2 DB. */
 enum http_rc_e
 action_m2_container_destroy (struct req_args_s *args)
 {

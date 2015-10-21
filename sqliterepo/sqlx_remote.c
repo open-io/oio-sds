@@ -389,3 +389,23 @@ sqlx_name_extract (struct sqlx_name_s *n, struct hc_url_s *url,
 	return BOOL(rc);
 }
 
+/* -------------------------------------------------------------------------- */
+
+GByteArray* sqlx_pack_FLUSH (void) {
+	return message_marshall_gba_and_clean (metautils_message_create_named (
+				NAME_MSGNAME_SQLX_FLUSH));
+}
+
+GByteArray* sqlx_pack_RELOAD (void) {
+	return message_marshall_gba_and_clean (metautils_message_create_named (
+				NAME_MSGNAME_SQLX_RELOAD));
+}
+
+GError* sqlx_remote_execute_FLUSH (const char *to) {
+	return gridd_client_exec (to, COMMON_CLIENT_TIMEOUT, sqlx_pack_FLUSH());
+}
+
+GError* sqlx_remote_execute_RELOAD (const char *to) {
+	return gridd_client_exec (to, COMMON_CLIENT_TIMEOUT, sqlx_pack_RELOAD());
+}
+

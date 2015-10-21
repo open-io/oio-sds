@@ -2,10 +2,10 @@ add_definitions(-DG_LOG_DOMAIN="oio.cluster.module")
 
 include_directories(BEFORE . .. ../..)
 
-add_library(msg_conscience MODULE module.c module.h alerting.h)
+add_library(msg_conscience MODULE module.c)
 set_target_properties(msg_conscience PROPERTIES PREFIX "" SUFFIX .so)
 target_link_libraries(msg_conscience metautils
-		gridcluster gridcluster-conscience gridcluster-remote
+		gridcluster gridcluster-conscience
 		${GLIB2_LIBRARIES})
 
 install(TARGETS msg_conscience

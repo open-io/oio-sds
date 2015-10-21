@@ -24,15 +24,6 @@ License along with this library.
 # include <glib.h>
 # include <sys/time.h>
 
-/**
- * @defgroup metautils_client
- * @ingroup metautils
- * @brief
- * @details
- *
- * @{
- */
-
 # ifndef GRIDC_DEFAULT_TIMEOUT_STEP
 #  define GRIDC_DEFAULT_TIMEOUT_STEP 10.0
 # endif
@@ -61,7 +52,6 @@ struct gridd_client_vtable_s
 
 	// Connectors
 	GError* (*connect_url) (struct gridd_client_s *c, const gchar *target);
-	GError* (*connect_addr) (struct gridd_client_s *c, const struct addr_info_s *a);
 
 	// Sets the next request to be sent, and what to do with the reply.
 	GError* (*request) (struct gridd_client_s *c, GByteArray *req,
@@ -87,10 +77,10 @@ struct gridd_client_vtable_s
 
 	// Force the timeout for each signel request (step), and for each request
 	// and its redirections.
-	void (*set_timeout) (struct gridd_client_s *c, gdouble step, gdouble overall);
+	void (*set_timeout) (struct gridd_client_s *c, gdouble seconds);
 
 	// Returns if the client's last change is older than 'now'
-	gboolean (*expired) (struct gridd_client_s *c, GTimeVal *now);
+	gboolean (*expired) (struct gridd_client_s *c, gint64 now);
 
 	// Returns FALSE if the client is still expecting events.
 	gboolean (*finished) (struct gridd_client_s *c);
@@ -103,7 +93,7 @@ struct gridd_client_vtable_s
 
 	// If expired() is true, sets the internal error and mark the client
 	// as failed.
-	void (*expire) (struct gridd_client_s *c, GTimeVal *now);
+	gboolean (*expire) (struct gridd_client_s *c, gint64 now);
 
 	void (*fail) (struct gridd_client_s *c, GError *why);
 };
@@ -127,11 +117,9 @@ struct abstract_client_s
 	VTABLE_CALL(self,struct abstract_client_s*,F)
 
 // wrappers to the call to the vtable.
-//
 
 void gridd_client_free (struct gridd_client_s *self);
 GError * gridd_client_connect_url (struct gridd_client_s *self, const gchar *u);
-GError * gridd_client_connect_addr (struct gridd_client_s *self, const struct addr_info_s *a);
 GError * gridd_client_request (struct gridd_client_s *self, GByteArray *req,
 		gpointer ctx, client_on_reply cb);
 GError * gridd_client_error (struct gridd_client_s *self);
@@ -140,11 +128,11 @@ const gchar * gridd_client_url (struct gridd_client_s *self);
 int gridd_client_fd (struct gridd_client_s *self);
 GError * gridd_client_set_fd(struct gridd_client_s *self, int fd);
 void gridd_client_set_keepalive(struct gridd_client_s *self, gboolean on);
-void gridd_client_set_timeout (struct gridd_client_s *self, gdouble t0, gdouble t1);
-gboolean gridd_client_expired(struct gridd_client_s *self, GTimeVal *now);
+void gridd_client_set_timeout (struct gridd_client_s *self, gdouble seconds);
+gboolean gridd_client_expired(struct gridd_client_s *self, gint64 now);
 gboolean gridd_client_finished (struct gridd_client_s *self);
 gboolean gridd_client_start (struct gridd_client_s *self);
-void gridd_client_expire (struct gridd_client_s *self, GTimeVal *now);
+gboolean gridd_client_expire (struct gridd_client_s *self, gint64 now);
 void gridd_client_react (struct gridd_client_s *self);
 void gridd_client_fail (struct gridd_client_s *self, GError *why);
 
@@ -176,7 +164,5 @@ struct abstract_client_factory_s
 // provide clients with the same VTABLE than those created with
 // gridd_client_create_empty().
 struct gridd_client_factory_s * gridd_client_factory_create(void);
-
-/** @} */
 
 #endif /*OIO_SDS__metautils__lib__gridd_client_h*/

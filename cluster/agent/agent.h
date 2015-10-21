@@ -126,4 +126,6 @@ extern GHashTable *namespaces;
 
 int main_reqagent(void);
 
+gint addrinfo_connect_nopoll(const addr_info_t * a, GError ** err);
+
 #endif /*OIO_SDS__cluster__agent__agent_h*/

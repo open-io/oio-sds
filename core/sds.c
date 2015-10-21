@@ -348,20 +348,31 @@ _load_chunks (GSList **out, struct json_object *jtab)
 	return err;
 }
 
+static guint
+_get_meta_bound (GSList *lchunks)
+{
+	if (!lchunks)
+		return 0;
+	guint highest_meta = 0;
+	for (GSList *l=lchunks; l ;l=l->next) {
+		struct chunk_s *c = l->data;
+		highest_meta = MAX(highest_meta, c->position.meta);
+	}
+	return highest_meta + 1;
+}
+
 static GError *
 _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 {
 	*result = NULL;
 
-	guint higher_meta = 0;
-	for (GSList *l=lchunks; l ;l=l->next) {
-		struct chunk_s *c = l->data;
-		higher_meta = MAX(higher_meta, c->position.meta);
-	}
+	if (!lchunks)
+		return NEWERROR(CODE_INTERNAL_ERROR, "No chunk received");
+	const guint meta_bound = _get_meta_bound (lchunks);
 
 	/* build the metachunk */
-	struct metachunk_s **out = g_malloc0 ((higher_meta+2) * sizeof(void*));
-	for (guint i=0; i<=higher_meta ;++i) {
+	struct metachunk_s **out = g_malloc0 ((meta_bound+1) * sizeof(void*));
+	for (guint i=0; i<meta_bound ;++i) {
 		out[i] = g_malloc0 (sizeof(struct metachunk_s));
 		out[i]->meta = i;
 	}
@@ -372,7 +383,7 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 		if (c->position.parity)
 			out[i]->ec = TRUE;
 	}
-	for (guint i=0; i<=higher_meta ;++i) {
+	for (guint i=0; i<meta_bound ;++i) {
 		if (!out[i]->chunks || out[i]->ec)
 			continue;
 		struct chunk_s *first = out[i]->chunks->data;
@@ -384,14 +395,14 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 	}
 
 	/* check the sequence of metachunks has no gap */
-	for (guint i=0; i<=higher_meta ;++i) {
+	for (guint i=0; i<meta_bound ;++i) {
 		if (!out[i]->chunks) {
 			_metachunk_cleanv (out);
 			return NEWERROR (0, "Invalid chunk sequence: gap found at [%u]", i);
 		}
 	}
 
-	for (guint i=0; i<=higher_meta ;++i) {
+	for (guint i=0; i<meta_bound ;++i) {
 		if (out[i]->ec)
 			out[i]->chunks = g_slist_sort (out[i]->chunks, (GCompareFunc)_compare_chunks);
 		else {
@@ -401,7 +412,7 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 	}
 
 	/* Compute each metachunk's size */
-	for (guint i=0; i<=higher_meta ;++i) {
+	for (guint i=0; i<meta_bound ;++i) {
 		if (out[i]->ec) {
 			for (GSList *l=out[i]->chunks; l ;l=l->next) {
 				if (((struct chunk_s*)(l->data))->position.parity)
@@ -415,7 +426,7 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 
 	/* Compute each metachunk's offset in the main content */
 	gint64 offset = 0;
-	for (guint i=0; i<=higher_meta ;++i) {
+	for (guint i=0; i<meta_bound ;++i) {
 		out[i]->offset = offset;
 		offset += out[i]->size;
 	}
@@ -1848,6 +1859,7 @@ oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url, const char *content_
 	curl_easy_cleanup (h);
 	_headers_clean (&headers);
 	g_string_free (reply_body, TRUE);
+	g_string_free (request_body, TRUE);
 	return (struct oio_error_s*) err;
 }
 

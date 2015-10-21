@@ -162,70 +162,19 @@ srv_inner_gauges_update (gpointer d)
 	STATS_SAVEGAUGE(stopped);
 }
 
-static void
-_expand_gridd_macro(service_info_t *si, const service_tag_t *tag)
-{
-	gchar** params = NULL;
-	gchar str_tag[128];
-
-	service_tag_to_string(tag, str_tag, sizeof(str_tag));
-
-	/* NAME_MACRO_SPECIAL_GRIDD param = type:map_entry */
-	params = g_strsplit(tag->value.macro.param, ":", 2);
-	if (g_strv_length(params) != 2) {
-		ERROR("Failed to parse gridd special macro param : [%s]",tag->value.macro.param);
-		g_strfreev(params);
-		return;
-	}	
-	else {	
-		if (g_ascii_strncasecmp(params[0], "i64", strlen(params[0])) == 0) {
-			gint64 value = 0;
-			if(!srvstat_get_i64(params[1], &value))
-				NOTICE("Failed to get param [%s] in gridd stats map (int64).", params[1]);
-			service_tag_set_value_i64(service_info_ensure_tag(si->tags, tag->name), value);
-		}
-		else if (g_ascii_strncasecmp(params[0], "bool", strlen(params[0])) == 0) {
-			gboolean value = FALSE;
-			if (!srvstat_get_bool(params[1], &value))
-				NOTICE("Failed to get param [%s] in gridd stats map (bool).", params[1]);
-			service_tag_set_value_boolean(service_info_ensure_tag(si->tags, tag->name), value);
-		}
-		else if (g_ascii_strncasecmp(params[0], "double", strlen(params[0])) == 0) {
-			gdouble value = FALSE;
-			if (!srvstat_get_double(params[1], &value))
-				NOTICE("Failed to get param [%s] in gridd stats map (double).", params[1]);
-			service_tag_set_value_float(service_info_ensure_tag(si->tags, tag->name), value);
-		}
-		else if (g_ascii_strncasecmp(params[0], "str", strlen(params[0])) == 0) {
-			gchar *value = NULL;
-			if (!srvstat_get_string(params[1], &value)) {
-				NOTICE("Failed to get param [%s] in gridd stats map (str).", params[1]);
-				value = g_strdup("");
-			}
-			service_tag_set_value_string(service_info_ensure_tag(si->tags, tag->name), value);
-			g_free(value);
-		}
-		g_strfreev(params);
-	}
-}
-
 static gboolean 
 self_register_in_cluster(GError **err)
 {
-	service_info_t *si;
-
-	TRACE("Registering in cluster...");
-		
 	/* Init the service header */
-	si = g_malloc0(sizeof(service_info_t));
+	service_info_t *si = g_malloc0(sizeof(service_info_t));
 	memcpy(&(si->addr), serv_addr, sizeof(addr_info_t));
-        g_strlcpy(si->ns_name, ns_info->name, sizeof(si->ns_name));
-        g_strlcpy(si->type, service_type, sizeof(si->type));
-        si->tags = g_ptr_array_new();
-	
+	g_strlcpy(si->ns_name, ns_info->name, sizeof(si->ns_name));
+	g_strlcpy(si->type, service_type, sizeof(si->type));
+	si->tags = g_ptr_array_new();
+
 	if (first) 
 		service_tag_set_value_boolean(service_info_ensure_tag(si->tags, NAME_TAGNAME_RAWX_FIRST), first);
-	
+
 	/* Copy the service tags */
 	if (!serv_tags)
 		DEBUG("No tag found in gridd to set in service info");
@@ -233,26 +182,15 @@ self_register_in_cluster(GError **err)
 		gsize i;
 		for (i=0; i<serv_tags->len ;i++) {
 			struct service_tag_s *tag = g_ptr_array_index(serv_tags, i);
-			if (tag->type != STVT_MACRO)
-				g_ptr_array_add(si->tags, service_tag_dup(tag));
-			else {
-				if (0 != g_ascii_strncasecmp(tag->value.macro.type, NAME_MACRO_GRIDD_TYPE, strlen(tag->value.macro.type)))
-					g_ptr_array_add(si->tags, service_tag_dup(tag));
-				else
-					_expand_gridd_macro(si, tag);
-			}
+			g_ptr_array_add(si->tags, service_tag_dup(tag));
 		}
 	}
 
 	/* Register nw in the conscience */
-	if (!register_namespace_service(si, err)) {
+	GError *e = register_namespace_service(si);
+	if (NULL != e) {
 		ERROR("Failed to register service in cluster : %s", gerror_get_message(*err));
-		g_clear_error(err);
-	}
-	else if (TRACE_ENABLED()) {
-		gchar *str = service_info_to_string(si);
-		TRACE("Registered [%s]%s", str, (first?"for the first time":""));
-		g_free(str);
+		g_clear_error(&e);
 	}
 
 	service_info_clean(si);
@@ -281,7 +219,7 @@ srv_periodic_refresh_ns_info (gpointer d)
 
 	(void) d;
 
-	if (!(nsinfo = get_namespace_info(ns_name, &error))) {
+	if (!(error = conscience_get_namespace(ns_name, &ns_info))) {
 		NOTICE("Failed to refresh the Namespace info from the gridagent");
 		if(error)
 			g_clear_error(&error);
@@ -691,7 +629,7 @@ main_thread (gpointer arg)
 		ctx = request_context_create(clt, &clt_addr);
 
 		memset(str_addr_src, 0, sizeof(str_addr_src));
-		addr_info_to_string(ctx->remote_addr, str_addr_src, sizeof(str_addr_src));
+		grid_addrinfo_to_string(ctx->remote_addr, str_addr_src, sizeof(str_addr_src));
 		TRACE ("Connection NEW fd=%d [%s]", clt, str_addr_src);
 
 		while (may_continue) {
@@ -1008,16 +946,16 @@ set_srv_addr(const gchar* url)
 	EXTRA_ASSERT(url != NULL);
 
 	newaddr = g_malloc0(sizeof(addr_info_t));
-	if (!l4_address_init_with_url(newaddr, url, &local_error))
+	if (!grid_string_to_addrinfo(url, newaddr))
 		ERROR("Failed to init the server address to [%s] : %s", url, gerror_get_message(local_error));
 	if (local_error)
 		g_clear_error(&local_error);
 
-	addr_info_to_string(newaddr, str_addr, sizeof(str_addr));
+	grid_addrinfo_to_string(newaddr, str_addr, sizeof(str_addr));
 	NOTICE("Saving [%s] as main server address", str_addr);
 
 	if (serv_addr != NULL) {
-		addr_info_to_string(serv_addr, str_addr, sizeof(str_addr));
+		grid_addrinfo_to_string(serv_addr, str_addr, sizeof(str_addr));
 		WARN("Disarding anoter server address [%s], this won't be registered in the conscience", str_addr);
 		addr_info_gclean(serv_addr, NULL);
 	}
@@ -1307,14 +1245,14 @@ load_service_info (GKeyFile *cfgFile, GError **err)
 		load_ns_info = TRUE;
 
 	if(load_ns_info) {
-		ns_info = get_namespace_info(ns_name, err);
+		GError *e = conscience_get_namespace (ns_name, &ns_info);
 		/* We really want these informations, so loop until we get them. */
-		while (!ns_info) {
-			WARN("Failed to get namespace info: %s", (*err)->message);
-			g_clear_error(err);
-			WARN("Retrying in %d seconds...", GET_NS_INFO_RETRY_DELAY);
+		while (e) {
+			g_clear_error(&e);
+			WARN("Failed to get namespace info (Retrying in %d seconds): %s",
+					GET_NS_INFO_RETRY_DELAY, (*err)->message);
 			sleep(GET_NS_INFO_RETRY_DELAY);
-			ns_info = get_namespace_info(ns_name, err);
+			e = conscience_get_namespace (ns_name, &ns_info);
 		}
 	}
 

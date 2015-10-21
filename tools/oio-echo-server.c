@@ -44,9 +44,8 @@ _task_register (gpointer p)
     g_strlcpy (si->ns_name, nsname, sizeof (si->ns_name));
     g_strlcpy (si->type, "echo", sizeof (si->type));
     const char *id = announce ? announce->str : urls->data;
-    grid_string_to_addrinfo (id, NULL, &si->addr);
-    GError *err = NULL;
-	register_namespace_service (si, &err);
+    grid_string_to_addrinfo (id, &si->addr);
+    GError *err = register_namespace_service (si);
 
     service_info_clean (si);
     if (err) {

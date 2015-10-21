@@ -104,7 +104,9 @@ _cache_load_from_m0(struct meta1_prefixes_set_s *m1ps,
 			m0_addr);
 
 	(void)ns_name;
-	m0info_list = meta0_remote_get_meta1_all(m0_addr, 10000, &err);
+	gchar m0[STRLEN_ADDRINFO];
+	grid_addrinfo_to_string (m0_addr, m0, sizeof(m0));
+	err = meta0_remote_get_meta1_all(m0, &m0info_list);
 	if (err) {
 		g_prefix_error(&err, "Remote error: ");
 		return err;
@@ -167,10 +169,10 @@ _cache_load_from_ns(struct meta1_prefixes_set_s *m1ps, const gchar *ns_name,
 	}
 
 	memset(&local_ai, 0, sizeof(local_ai));
-	grid_string_to_addrinfo(local_url, NULL, &local_ai);
+	grid_string_to_addrinfo(local_url, &local_ai);
 
 	/* Get the META0 address */
-	m0_list = list_namespace_services(ns_name, "meta0", &err);
+	err = conscience_get_services (ns_name, "meta0", &m0_list);
 	if (err != NULL) {
 		g_prefix_error(&err, "META0 locate error : ");
 		return err;

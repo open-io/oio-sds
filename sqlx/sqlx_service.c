@@ -30,6 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/grid_daemon.h>
 #include <server/stats_holder.h>
 #include <server/transport_gridd.h>
+#include <sqliterepo/sqlx_macros.h>
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/cache.h>
 #include <sqliterepo/election.h>
@@ -62,6 +63,10 @@ static void _task_reload_workers(gpointer p);
 static gpointer _worker_notify_gq2zmq (gpointer p);
 static gpointer _worker_notify_zmq2agent (gpointer p);
 static gpointer _worker_clients (gpointer p);
+
+static const struct gridd_request_descr_s * _get_service_requests (void);
+
+static GError* _reload_lbpool(struct grid_lbpool_s *glp, gboolean flush);
 
 // Static variables
 static struct sqlx_service_s SRV;
@@ -358,7 +363,7 @@ _configure_registration(struct sqlx_service_s *ss)
 	si->tags = g_ptr_array_new();
 	metautils_strlcpy_physical_ns(si->ns_name, ss->ns_name, sizeof(si->ns_name));
 	g_strlcpy(si->type, ss->service_config->srvtype, sizeof(si->type)-1);
-	grid_string_to_addrinfo(ss->announce->str, NULL, &(si->addr));
+	grid_string_to_addrinfo(ss->announce->str, &(si->addr));
 
 	service_tag_set_value_string(
 			service_info_ensure_tag(si->tags, "tag.type"),
@@ -373,15 +378,6 @@ _configure_registration(struct sqlx_service_s *ss)
 	service_tag_set_value_float(
 			service_info_ensure_tag(si->tags, "stat.req_idle"),
 			100.0);
-	service_tag_set_value_macro(
-			service_info_ensure_tag(si->tags, "stat.cpu"),
-			"cpu", NULL);
-	service_tag_set_value_macro(
-			service_info_ensure_tag(si->tags, "stat.space"),
-			"space", ss->volume);
-	service_tag_set_value_macro(
-			service_info_ensure_tag(si->tags, "stat.io"),
-			"io", ss->volume);
 	return TRUE;
 }
 
@@ -390,6 +386,8 @@ _configure_network(struct sqlx_service_s *ss)
 {
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,
 			sqlx_repli_gridd_get_requests(), ss->repository);
+	transport_gridd_dispatcher_add_requests(ss->dispatcher,
+			_get_service_requests(), ss);
 	return TRUE;
 }
 
@@ -690,7 +688,7 @@ sqlite_service_main(int argc, char **argv,
 	return rc;
 }
 
-// Tasks -----------------------------------------------------------------------
+/* Tasks -------------------------------------------------------------------- */
 
 static gpointer
 _worker_clients(gpointer p)
@@ -737,11 +735,11 @@ _task_register(gpointer p)
 				"stat.req_idle"), network_server_reqidle(PSRV(p)->server));
 
 	/* send the registration now */
-	GError *err = NULL;
-	if (!register_namespace_service(PSRV(p)->si, &err))
+	GError *err = register_namespace_service(PSRV(p)->si);
+	if (err) {
 		g_message("Service registration failed: (%d) %s", err->code, err->message);
-	if (err)
 		g_clear_error(&err);
+	}
 }
 
 static void
@@ -787,10 +785,11 @@ _task_retry_elections(gpointer p)
 static void
 _task_reload_nsinfo(gpointer p)
 {
-	GError *err = NULL;
 	struct namespace_info_s *ni;
+	GError *err = conscience_get_namespace(PSRV(p)->ns_name, &ni);
+	g_assert ((err != NULL) ^ (ni != NULL));
 
-	if (!(ni = get_namespace_info(PSRV(p)->ns_name, &err))) {
+	if (err) {
 		GRID_WARN("NSINFO reload error [%s]: (%d) %s",
 				PSRV(p)->ns_name, err->code, err->message);
 		g_clear_error(&err);
@@ -814,7 +813,7 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 {
 	static volatile gboolean already_succeeded = FALSE;
 	static volatile guint tick_reload = 0;
-	static volatile guint period_reload = 2;
+	static volatile guint period_reload = 1;
 
 	EXTRA_ASSERT(ss != NULL);
 	if (!ss->lb)
@@ -823,11 +822,11 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 	if (already_succeeded && 0 != (tick_reload++ % period_reload))
 		return;
 
-	GError *err = gridcluster_reload_lbpool(ss->lb);
+	GError *err = _reload_lbpool(ss->lb, FALSE);
 	if (!err) {
 		already_succeeded = TRUE;
-		period_reload = period_reload << 1;
-		period_reload = CLAMP(period_reload,2,16);
+		period_reload ++;
+		period_reload = CLAMP(period_reload,2,10);
 		tick_reload = 1;
 	} else {
 		GRID_WARN("Failed to reload the LB pool services: (%d) %s",
@@ -838,6 +837,65 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 	// ss->nsinfo is reloaded by _task_reload_nsinfo()
 	grid_lbpool_reconfigure(ss->lb, &(ss->nsinfo));
 }
+
+static GError*
+_reload_lbpool(struct grid_lbpool_s *glp, gboolean flush)
+{
+	gboolean _reload_srvtype(const gchar *ns, const gchar *srvtype) {
+		GSList *list_srv = NULL;
+		GError *err = conscience_get_services (ns, srvtype, &list_srv);
+		if (err) {
+			GRID_WARN("Gridagent/conscience error: Failed to list the services"
+					" of type [%s]: code=%d %s", srvtype, err->code,
+					err->message);
+			g_clear_error(&err);
+			return FALSE;
+		}
+
+		if (list_srv || flush) {
+			GSList *l = list_srv;
+
+			gboolean provide(struct service_info_s **p_si) {
+				if (!l)
+					return FALSE;
+				*p_si = l->data;
+				l->data = NULL;
+				l = l->next;
+				return TRUE;
+			}
+			grid_lbpool_reload(glp, srvtype, provide);
+			g_slist_free(list_srv);
+		}
+
+		return TRUE;
+	}
+
+	GSList *list_srvtypes = NULL;
+	GError *err = conscience_get_types (grid_lbpool_namespace(glp), &list_srvtypes);
+	if (err)
+		g_prefix_error(&err, "LB pool reload error: ");
+	else {
+		guint errors = 0;
+		const gchar *ns = grid_lbpool_namespace(glp);
+
+		for (GSList *l=list_srvtypes; l ;l=l->next) {
+			if (!l->data)
+				continue;
+			if (!_reload_srvtype(ns, l->data))
+				++ errors;
+		}
+
+		if (errors)
+			GRID_DEBUG("Reloaded %u service types, with %u errors",
+					g_slist_length(list_srvtypes), errors);
+	}
+
+	g_slist_free_full (list_srvtypes, g_free);
+	return err;
+}
+
+
+/* Events notifications ----------------------------------------------------- */
 
 GError *
 sqlx_notify (gpointer udata, gchar *msg)
@@ -1105,5 +1163,49 @@ _worker_notify_gq2zmq (gpointer p)
 	zmq_send (ss->notify.zpush, "", 0, 0);
 	GRID_INFO ("Thread stopping [NOTIFY-GQ2ZMQ]");
 	return p;
+}
+
+/* Specific requests handlers ----------------------------------------------- */
+
+static gboolean
+_dispatch_RELOAD (struct gridd_reply_ctx_s *reply, gpointer pss, gpointer i)
+{
+	(void) i;
+	struct sqlx_service_s *ss = pss;
+	g_assert (ss != NULL);
+
+	GError *err = _reload_lbpool(ss->lb, TRUE);
+	if (err)
+		reply->send_error (0, err);
+	else
+		reply->send_reply (200, "OK");
+	return TRUE;
+}
+
+static gboolean
+_dispatch_FLUSH (struct gridd_reply_ctx_s *reply, gpointer pss, gpointer i)
+{
+	(void) i;
+	struct sqlx_service_s *ss = pss;
+	g_assert(ss != NULL);
+	/* if (ss->lb) grid_lbpool_flush (ss->lb); */
+	if (ss->resolver) {
+		hc_resolver_flush_csm0 (ss->resolver);
+		hc_resolver_flush_services (ss->resolver);
+	}
+	reply->send_reply(200, "OK");
+	return TRUE;
+}
+
+static const struct gridd_request_descr_s *
+_get_service_requests (void)
+{
+	static struct gridd_request_descr_s descriptions[] = {
+		{NAME_MSGNAME_SQLX_RELOAD, _dispatch_RELOAD, NULL},
+		{NAME_MSGNAME_SQLX_FLUSH,  _dispatch_FLUSH,  NULL},
+		{NULL, NULL, NULL}
+	};
+
+	return descriptions;
 }
 

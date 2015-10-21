@@ -115,6 +115,7 @@ base_id_out(sqlx_cache_t *cache, gint bd)
 	return (bd < 0) || ((guint)bd) >= cache->bases_count;
 }
 
+#ifdef HAVE_EXTRA_DEBUG
 static const gchar *
 sqlx_status_to_str(enum sqlx_base_status_e status)
 {
@@ -134,7 +135,6 @@ sqlx_status_to_str(enum sqlx_base_status_e status)
 	}
 }
 
-#ifdef HAVE_EXTRA_DEBUG
 static void
 sqlx_base_debug_func(const gchar *from, sqlx_base_t *base)
 {

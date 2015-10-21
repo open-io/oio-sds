@@ -116,12 +116,10 @@ gboolean
 update_rawx_conf(apr_pool_t* p, rawx_conf_t **rawx_conf, const gchar* ns_name)
 {
 	rawx_conf_t* new_conf = NULL;
-        namespace_info_t* ns_info;
-        GError *local_error = NULL;
-
-        ns_info = get_namespace_info(ns_name, &local_error);
-        if (!ns_info)
-                return FALSE;
+	namespace_info_t* ns_info;
+	GError *local_error = conscience_get_namespace(ns_name, &ns_info);
+	if (local_error)
+		return FALSE;
 
 	new_conf = apr_palloc(p, sizeof(rawx_conf_t));
 	char * stgpol = NULL;
@@ -132,7 +130,7 @@ update_rawx_conf(apr_pool_t* p, rawx_conf_t **rawx_conf, const gchar* ns_name)
 
 	new_conf->ni = ns_info;
 	new_conf->acl = _get_acl(p, ns_info);
-        new_conf->last_update = time(0);
+	new_conf->last_update = time(0);
 
 	*rawx_conf = new_conf;
 	return TRUE;

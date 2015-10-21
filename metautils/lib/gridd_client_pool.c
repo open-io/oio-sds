@@ -39,7 +39,7 @@ struct gridd_client_pool_s
 	struct event_client_s **active_clients;
 	GAsyncQueue *pending_clients;
 
-	time_t last_timeout_check;
+	gint64 last_timeout_check;
 
 	int fdmon;
 	/* notifications */
@@ -241,29 +241,36 @@ _pool_unmonitor(struct gridd_client_pool_s *pool, int fd)
 static void
 _manage_timeouts(struct gridd_client_pool_s *pool)
 {
-	GTimeVal now;
-	struct event_client_s *ec;
-
 	if (pool->active_count <= 0)
 		return;
 
-	g_get_current_time(&now);
-	if (pool->last_timeout_check == now.tv_sec)
+	gint64 now = g_get_monotonic_time ();
+	if (now - pool->last_timeout_check > G_TIME_SPAN_SECOND)
 		return;
+	pool->last_timeout_check = now;
 
 	for (int i=0; i<pool->active_clients_size ;i++) {
-
+		struct event_client_s *ec;
 		if (!(ec = pool->active_clients[i]))
 			continue;
 
 		EXTRA_ASSERT(ec->client != NULL);
 		EXTRA_ASSERT(i == gridd_client_fd(ec->client));
 
-		if (gridd_client_expired(ec->client, &now)) {
+		if (gridd_client_expire (ec->client, now)) {
 			GRID_INFO("EXPIRED Client fd=%d [%s]", i, gridd_client_url(ec->client));
 			_pool_unmonitor(pool, i);
 			event_client_free(ec);
 		}
+	}
+
+	gint64 elapsed = g_get_monotonic_time () - now;
+	if (elapsed > 5 * G_TIME_SPAN_SECOND) {
+		GRID_WARN("Client pool timeout check took %"G_GINT64_FORMAT" ms",
+				elapsed / G_TIME_SPAN_MILLISECOND);
+	} else {
+		GRID_DEBUG("Client pool timeout check took %"G_GINT64_FORMAT" ms",
+				elapsed / G_TIME_SPAN_MILLISECOND);
 	}
 }
 

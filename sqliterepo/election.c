@@ -1557,7 +1557,6 @@ defer_USE(struct election_member_s *member, time_t now)
 			mc->on_end = on_end_USE;
 			mc->client = gridd_client_create(*p, req, NULL, NULL);
 			gridd_client_set_timeout(mc->client,
-					time2double(member->manager->delay_max_wait),
 					time2double(member->manager->delay_max_wait));
 			mc->udata = udata;
 			gridd_client_pool_defer(member->manager->pool, mc);
@@ -1627,7 +1626,7 @@ defer_PIPEFROM(struct election_member_s *member)
 		member_ref(member);
 		mc = g_malloc0(sizeof(*mc));
 		mc->client = gridd_client_create(target, req, NULL, NULL);
-		gridd_client_set_timeout(mc->client, 30.0, 60.0);
+		gridd_client_set_timeout(mc->client, 30.0);
 		mc->on_end = on_end_PIPEFROM;
 		mc->udata = member;
 		g_byte_array_unref(req);
@@ -1794,7 +1793,6 @@ defer_GETVERS(struct election_member_s *member)
 		mc->udata = g_memdup(&udata, sizeof(udata));
 		mc->client = gridd_client_create(*p, req, mc, on_reply_GETVERS);
 		gridd_client_set_timeout(mc->client,
-				time2double(member->manager->delay_max_wait),
 				time2double(member->manager->delay_max_wait));
 		gridd_client_pool_defer(member->manager->pool, mc);
 	}

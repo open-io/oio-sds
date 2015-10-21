@@ -62,11 +62,6 @@ struct hc_url_s;
 struct list_params_s;
 struct list_result_s;
 
-/**
- * @addtogroup meta2v2_remote
- * @{
- */
-
 void m2v2_list_result_clean (struct list_result_s *p);
 
 struct m2v2_create_params_s
@@ -78,71 +73,6 @@ struct m2v2_create_params_s
 						  * properties[(i*2)+1] is the i-th value */
 	gboolean local; /**< Do not try to replicate, do not call get_peers() */
 };
-
-/**
- * @addtogroup meta2v2_remote_packers
- * @ingroup meta2v2_remote
- * @{
- */
-
-GByteArray* m2v2_remote_pack_PURGE(struct hc_url_s *url, gboolean dry_run);
-
-GByteArray* m2v2_remote_pack_DEDUP(struct hc_url_s *url, gboolean dry_run);
-
-/* The storage_policy, version_policy and all the properties are optional
- * and plain ASCII strings, so they will be sent as HEADER of the message
- * request instead of as a serialized body. */
-GByteArray* m2v2_remote_pack_CREATE(struct hc_url_s *url,
-		struct m2v2_create_params_s *pols);
-
-GByteArray* m2v2_remote_pack_DESTROY(struct hc_url_s *url, guint32 flags);
-
-GByteArray* m2v2_remote_pack_HAS(struct hc_url_s *url);
-
-/* 'content_id' is optional */
-GByteArray* m2v2_remote_pack_PUT(struct hc_url_s *url, GSList *beans,
-		GBytes *content_id);
-
-GByteArray* m2v2_remote_pack_OVERWRITE(struct hc_url_s *url, GSList *beans);
-
-GByteArray* m2v2_remote_pack_APPEND(struct hc_url_s *url, GSList *beans);
-
-GByteArray* m2v2_remote_pack_COPY(struct hc_url_s *url, const char *src);
-
-GByteArray* m2v2_remote_pack_BEANS(struct hc_url_s *url,
-		const char *pol, gint64 size, gboolean append);
-
-GByteArray* m2v2_remote_pack_SPARE(struct hc_url_s *url,
-		const char *pol, GSList *notin_list, GSList *broken_list);
-
-GByteArray* m2v2_remote_pack_DEL(struct hc_url_s *url);
-
-GByteArray* m2v2_remote_pack_RAW_ADD(struct hc_url_s *url, GSList *beans);
-
-GByteArray* m2v2_remote_pack_RAW_DEL(struct hc_url_s *url, GSList *beans);
-
-GByteArray* m2v2_remote_pack_RAW_SUBST(struct hc_url_s *url,
-		GSList *new_chunks, GSList *old_chunks);
-
-GByteArray* m2v2_remote_pack_GET(struct hc_url_s *url, guint32 flags);
-
-GByteArray* m2v2_remote_pack_PROP_DEL(struct hc_url_s *url, GSList *names);
-
-GByteArray* m2v2_remote_pack_PROP_SET(struct hc_url_s *url, guint32 flags, GSList *beans);
-
-GByteArray* m2v2_remote_pack_PROP_GET(struct hc_url_s *url, guint32 flags);
-
-GByteArray* m2v2_remote_pack_STGPOL(struct hc_url_s *url, const char *pol);
-
-GByteArray* m2v2_remote_pack_EXITELECTION(struct hc_url_s *url);
-
-GByteArray* m2v2_remote_pack_TOUCH_content(struct hc_url_s *url);
-
-GByteArray* m2v2_remote_pack_TOUCH_container(struct hc_url_s *url, guint32 flags);
-
-/**
- * @}
- */
 
 #define M2V2_MODE_DRYRUN  0x10000000
 
@@ -272,9 +202,5 @@ GError* m2v2_remote_execute_EXITELECTION(const char *target,
 GError* m2v2_remote_touch_content(const char *target, struct hc_url_s *url);
 
 GError* m2v2_remote_touch_container_ex(const char *target, struct hc_url_s *url, guint32 flags);
-
-/**
- * @}
- */
 
 #endif /*OIO_SDS__meta2v2__meta2v2_remote_h*/

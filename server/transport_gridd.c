@@ -289,7 +289,7 @@ static gchar *
 _req_get_hex_ID(MESSAGE req, gchar *d, gsize dsize)
 {
 	memset(d, 0, dsize);
-	
+
 	gsize flen = 0;
 	guint8 *f = metautils_message_get_ID(req, &flen);
 	if (!f || !flen)
@@ -886,7 +886,7 @@ dispatch_STATS(struct gridd_reply_ctx_s *reply,
 
 	(void) gdata;
 	(void) hdata;
-	grid_stats_holder_foreach(reply->client->main_stats, NULL, runner);	
+	grid_stats_holder_foreach(reply->client->main_stats, runner);
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }

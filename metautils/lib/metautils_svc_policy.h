@@ -38,11 +38,12 @@ struct service_update_policies_s;
  */
 enum service_update_policy_e
 {
-	SVCUPD_NOT_SPECIFIED = 0, /*!< do not touch the services in place */
-	SVCUPD_KEEP,   /*!< do not touch services in place */
-	SVCUPD_APPEND, /*!< keep down services, append a new if all are down */
-	SVCUPD_REPLACE /*!< Replace the last service down is none is up */
+	SVCUPD_KEEP = 1, /*!< do not touch services in place */
+	SVCUPD_APPEND,   /*!< keep down services, append a new if all are down */
+	SVCUPD_REPLACE   /*!< Replace the last service down is none is up */
 };
+
+const char * service_update_policy_to_string (enum service_update_policy_e p);
 
 /*!
  * @return

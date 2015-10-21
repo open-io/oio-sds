@@ -27,26 +27,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqlite3.h>
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
-#include <cluster/lib/gridcluster.h>
 #include <sqliterepo/sqliterepo.h>
 
 #include "./internals.h"
 #include "./compound_types.h"
-#include "./internals_sqlite.h"
 #include "./meta1_prefixes.h"
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"
 
 #define M1U(P) ((struct meta1_service_url_s*)(P))
 
+static void __notify_services_by_cid(struct meta1_backend_s *m1,
+		struct sqlx_sqlite3_s *sq3, struct hc_url_s *url);
+
 static GError *__get_container_all_services(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, const gchar *srvtype,
+		struct hc_url_s *url, const char *srvtype,
 		struct meta1_service_url_s ***result);
-static GError *__notify_services(struct meta1_backend_s *m1,
-		struct sqlx_sqlite3_s *sq3, struct hc_url_s *url);
-static GError *__notify_services_by_cid(struct meta1_backend_s *m1,
-		struct sqlx_sqlite3_s *sq3, struct hc_url_s *url);
 
 static struct meta1_service_url_s *
 meta1_url_dup(struct meta1_service_url_s *u)
@@ -158,7 +154,7 @@ _siv_to_url(struct service_info_s **siv)
 
 static GError *
 __del_container_srvtype_properties(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, const gchar *srvtype)
+		struct hc_url_s *url, const char *srvtype)
 {
    GError *err = NULL;
     gint rc;
@@ -188,7 +184,7 @@ __del_container_srvtype_properties(struct sqlx_sqlite3_s *sq3,
 
 static GError *
 __del_container_all_services(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, const gchar *srvtype)
+		struct hc_url_s *url, const char *srvtype)
 {
 	sqlite3_stmt *stmt = NULL;
 	GError *err = NULL;
@@ -213,9 +209,9 @@ __del_container_all_services(struct sqlx_sqlite3_s *sq3,
 
 static GError *
 __del_container_one_service(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, const gchar *srvtype, gint64 seq)
+		struct hc_url_s *url, const char *srvtype, gint64 seq)
 {
-	static const gchar *sql = "DELETE FROM services WHERE cid = ? AND srvtype = ? AND seq = ?";
+	static const char *sql = "DELETE FROM services WHERE cid = ? AND srvtype = ? AND seq = ?";
 	sqlite3_stmt *stmt = NULL;
 	GError *err = NULL;
 	int rc;
@@ -239,15 +235,11 @@ __del_container_one_service(struct sqlx_sqlite3_s *sq3,
 static GError *
 __del_container_services(struct meta1_backend_s *m1,
 		struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		const gchar *srvtype, gchar **urlv)
+		const char *srvtype, gchar **urlv)
 {
 	gint64 seq;
 	GError *err = NULL;
 	guint line = 1;
-	struct sqlx_repctx_s *repctx = NULL;
-
-	if (NULL != (err = sqlx_transaction_begin(sq3, &repctx)))
-		return err;
 
 	if (!urlv || !*urlv)
 		err = __del_container_all_services(sq3, url, srvtype);
@@ -280,30 +272,21 @@ __del_container_services(struct meta1_backend_s *m1,
 		}
 		meta1_service_url_cleanv (used);
 
-		GError *err2 = __notify_services_by_cid(m1, sq3, url);
-		if (err2 != NULL) {
-			GRID_WARN("Failed to notify [%s] service deletions"
-				" in [%s]: %s", srvtype, hc_url_get(url, HCURL_HEXID), err2->message);
-			g_clear_error(&err2);
-		}
+		__notify_services_by_cid(m1, sq3, url);
 	}
 
-	return sqlx_transaction_end(repctx, err);
+	return err;
 }
 
 static GError *
 __configure_service(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 		struct meta1_service_url_s *m1url)
 {
-	static const gchar *sql = "UPDATE services SET args = ? "
+	static const char *sql = "UPDATE services SET args = ? "
 		"WHERE cid = ? AND seq = ? AND srvtype = ?";
 	gint rc;
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
-
-	if (NULL != (err = sqlx_transaction_begin(sq3, &repctx)))
-		return err;
 
 	sqlite3_prepare_debug(rc, sq3->db, sql, -1, &stmt, NULL);
 	if (rc != SQLITE_OK)
@@ -321,7 +304,7 @@ __configure_service(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 			err = NEWERROR(CODE_SRV_NOLINK, "Service not found");
 	}
 
-	return sqlx_transaction_end(repctx, err);
+	return err;
 }
 
 static GError *
@@ -369,7 +352,7 @@ __get_all_services(struct sqlx_sqlite3_s *sq3,
 
 static GError *
 __get_container_all_services(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		const gchar *srvtype, struct meta1_service_url_s ***result)
+		const char *srvtype, struct meta1_service_url_s ***result)
 {
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
@@ -450,7 +433,7 @@ __save_service(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 
 static GError *
 __delete_service(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		const gchar *srvtype)
+		const char *srvtype)
 {
 	gint rc;
 	GError *err = NULL;
@@ -514,7 +497,7 @@ _get_iterator(struct meta1_backend_s *m1, struct compound_type_s *ct,
 }
 
 static GError*
-_get_iterator2(struct meta1_backend_s *m1, const gchar *srvtype,
+_get_iterator2(struct meta1_backend_s *m1, const char *srvtype,
 		struct grid_lb_iterator_s **result)
 {
 	struct compound_type_s ct;
@@ -537,7 +520,7 @@ _get_iterator2(struct meta1_backend_s *m1, const gchar *srvtype,
 }
 
 static GSList *
-__srvinfo_from_m1srvurl(struct grid_lbpool_s *glp, const gchar *type,
+__srvinfo_from_m1srvurl(struct grid_lbpool_s *glp, const char *type,
 		struct meta1_service_url_s **urls)
 {
 	GSList *out = NULL;
@@ -644,8 +627,8 @@ __get_services_up(struct meta1_backend_s *m1, struct meta1_service_url_s **src)
 static GError *
 __get_container_service2(struct sqlx_sqlite3_s *sq3,
 		struct hc_url_s *url, struct compound_type_s *ct,
-		struct meta1_backend_s *m1, gchar ***result,
-		enum m1v2_getsrv_e mode)
+		struct meta1_backend_s *m1, enum m1v2_getsrv_e mode,
+		gchar ***result, gboolean *renewed)
 {
 	GError *err = NULL;
 	struct meta1_service_url_s **used = NULL;
@@ -672,7 +655,8 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 		used = NULL;
 	}
 
-	if ((mode & M1V2_GETSRV_REUSE) && used) { /* Only keep the services UP */
+	if (used && (mode != M1V2_GETSRV_RENEW)) {
+		/* Only keep the services UP, if not forced to renew */
 		struct meta1_service_url_s **up = __get_services_up(m1, used);
 		if (up && *up) {
 			*result = pack_urlv(up);
@@ -683,45 +667,35 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 		meta1_service_url_cleanv(up);
 	}
 
-	/* No service available, poll a new one */
-	if ((mode & M1V2_GETSRV_REUSE) && used &&
-			(policy == SVCUPD_KEEP || policy == SVCUPD_NOT_SPECIFIED))
+	if (used && (mode == M1V2_GETSRV_REUSE || policy == SVCUPD_KEEP)) {
+		/* Services used but unavailable, but we are told to reuse */
 		*result = pack_urlv(used);
-	else {
-		gint seq;
-		struct meta1_service_url_s *m1_url = NULL;
+		meta1_service_url_cleanv(used);
+		return err;
+	}
 
-		seq = urlv_get_max_seq(used);
-		seq = (seq<0 ? 1 : seq+1);
+	/* No service available, poll a new one */
+	struct meta1_service_url_s *m1_url = NULL;
+	gint seq = urlv_get_max_seq(used);
+	seq = (seq<0 ? 1 : seq+1);
 
-		if (NULL != (m1_url = __poll_services(m1, replicas, ct, seq, used, &err))) {
-			if (!(mode & M1V2_GETSRV_DRYRUN)) {
-				struct sqlx_repctx_s *repctx = NULL;
-				err = sqlx_transaction_begin(sq3, &repctx);
-				if (NULL == err) {
-					if (policy == SVCUPD_REPLACE)
-						err = __delete_service(sq3, url, ct->type);
-					if (NULL == err)
-						err = __save_service(sq3, url, m1_url, TRUE);
-					err = sqlx_transaction_end(repctx, err);
-				}
+	if (NULL != (m1_url = __poll_services(m1, replicas, ct, seq, used, &err))) {
+		if (mode != M1V2_GETSRV_DRYRUN) {
+			if (NULL == err) {
+				if (policy == SVCUPD_REPLACE)
+					err = __delete_service(sq3, url, ct->type);
+				if (NULL == err)
+					err = __save_service(sq3, url, m1_url, TRUE);
 			}
-
-			if (!err && result) {
-				struct meta1_service_url_s **unpacked = expand_url(m1_url);
-				*result = pack_urlv(unpacked);
-				meta1_service_url_cleanv(unpacked);
-
-				GError *err2 = __notify_services(m1, sq3, url);
-				if (err2 != NULL) {
-					GRID_WARN("Failed to notify [%s] service modifications"
-							" of [%s]: %s", ct->type,
-							hc_url_get(url, HCURL_WHOLE), err2->message);
-					g_clear_error(&err2);
-				}
-			}
-			g_free(m1_url);
 		}
+
+		if (!err && result) {
+			struct meta1_service_url_s **unpacked = expand_url(m1_url);
+			*result = pack_urlv(unpacked);
+			meta1_service_url_cleanv(unpacked);
+			if (renewed) *renewed = TRUE;
+		}
+		g_free(m1_url);
 	}
 
 	meta1_service_url_cleanv(used);
@@ -730,27 +704,18 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 
 static GError *
 __get_container_service(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, const gchar *srvtype,
-		struct meta1_backend_s *m1, gchar ***result,
-		enum m1v2_getsrv_e mode)
+		struct hc_url_s *url, const char *srvtype,
+		struct meta1_backend_s *m1, enum m1v2_getsrv_e mode,
+		gchar ***result, gboolean *renewed)
 {
 	GError *err = NULL;
 	struct compound_type_s ct;
 
 	if (NULL != (err = compound_type_parse(&ct, srvtype)))
 		return err;
-	err = __get_container_service2(sq3, url, &ct, m1, result, mode);
+	err = __get_container_service2(sq3, url, &ct, m1, mode, result, renewed);
 	compound_type_clean(&ct);
 	return err;
-}
-
-static GError *
-__renew_container_service(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, const gchar *srvtype,
-		struct meta1_backend_s *m1, gboolean dryrun, gchar ***result)
-{
-	enum m1v2_getsrv_e mode = M1V2_GETSRV_RENEW|(dryrun? M1V2_GETSRV_DRYRUN:0);
-	return __get_container_service(sq3, url, srvtype, m1, result, mode);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -912,7 +877,7 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 
 GError*
 meta1_backend_services_config(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *packedurl)
+		struct hc_url_s *url, const char *packedurl)
 {
 	struct meta1_service_url_s *m1url;
 	if (!(m1url = meta1_unpack_url(packedurl)))
@@ -923,30 +888,24 @@ meta1_backend_services_config(struct meta1_backend_s *m1,
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
-	if (!err) {
-		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
+	if (err) { g_free(m1url); return err; }
+
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
+		if (!(err = __info_user(sq3, url, FALSE, NULL)))
 			err = __configure_service(sq3, url, m1url);
-			if (NULL != err)
-				g_prefix_error(&err, "Query error: ");
-			else {
-				GError *err2 = __notify_services_by_cid(m1, sq3, url);
-				if (err2 != NULL) {
-					GRID_WARN("Failed to notify [%s] service arg modification in [%s]: %s",
-							m1url->srvtype, hc_url_get(url, HCURL_HEXID), err2->message);
-					g_clear_error(&err2);
-				}
-			}
-		}
-		sqlx_repository_unlock_and_close_noerror(sq3);
+		if (!(err = sqlx_transaction_end(repctx, err)))
+			__notify_services_by_cid(m1, sq3, url);
 	}
 
+	sqlx_repository_unlock_and_close_noerror(sq3);
 	g_free(m1url);
 	return err;
 }
 
 GError*
 meta1_backend_services_set(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *packedurl,
+		struct hc_url_s *url, const char *packedurl,
 		gboolean autocreate, gboolean force)
 {
 	struct meta1_service_url_s *m1url;
@@ -955,25 +914,25 @@ meta1_backend_services_set(struct meta1_backend_s *m1,
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
-	if (!err) {
-		struct sqlx_repctx_s *repctx = NULL;
-		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-			if (!(err = __info_user(sq3, url, autocreate, NULL)))
-				err = __save_service(sq3, url, m1url, force);
-			if (!(err = sqlx_transaction_end(repctx, err))) {
-				GError *err2 = __notify_services_by_cid(m1, sq3, url);
-				if (err2 != NULL) {
-					GRID_WARN("Failed to notify forced service [%s] in [%s]:"
-							" (%d) %s", packedurl, hc_url_get (url, HCURL_HEXID),
-							err2->code, err2->message);
-					g_clear_error(&err2);
-				}
-			}
-		}
-		sqlx_repository_unlock_and_close_noerror(sq3);
+	if (err) { g_free(m1url); return err; }
+
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
+		if (!(err = __info_user(sq3, url, autocreate, NULL)))
+			err = __save_service(sq3, url, m1url, force);
+		if (!(err = sqlx_transaction_end(repctx, err)))
+			__notify_services_by_cid(m1, sq3, url);
 	}
 
+	sqlx_repository_unlock_and_close_noerror(sq3);
 	g_free(m1url);
+
+	/* XXX JFS: ugly quirk until we find a pretty way to distinguish the
+	 * commit errors (e.g. it can fail because of a replication error or
+	 * a constraint violation) */
+	if (err && NULL != strstr(err->message, "UNIQUE"))
+		err->code = CODE_SRV_ALREADY;
+
 	return err;
 }
 
@@ -983,7 +942,10 @@ meta1_backend_services_all(struct meta1_backend_s *m1,
 {
     struct sqlx_sqlite3_s *sq3 = NULL;
     GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
-    if (!err) {
+	if (err) return err;
+
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		struct meta1_service_url_s **used = NULL;
 		if (NULL != (err = __get_all_services(sq3, &used)))
 			g_prefix_error(&err, "Query error: ");
@@ -993,65 +955,81 @@ meta1_backend_services_all(struct meta1_backend_s *m1,
 			meta1_service_url_cleanv(expanded);
 			meta1_service_url_cleanv(used); 			
 		}
-
-        sqlx_repository_unlock_and_close_noerror(sq3);
+		err = sqlx_transaction_end(repctx, err);
     }
 
+	sqlx_repository_unlock_and_close_noerror(sq3);
     return err;
 }
 
 GError *
 meta1_backend_services_link (struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *srvtype,
+		struct hc_url_s *url, const char *srvtype,
 		gboolean dryrun, gboolean autocreate,
 		gchar ***result)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
-	if (!err) {
+	if (err) return err;
+
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
+		gboolean renewed = FALSE;
 		if (!(err = __info_user(sq3, url, autocreate, NULL))) {
-			enum m1v2_getsrv_e mode = M1V2_GETSRV_REUSE;
-			if (dryrun) mode |= M1V2_GETSRV_DRYRUN;
-			err = __get_container_service(sq3, url, srvtype, m1, result, mode);
+			enum m1v2_getsrv_e mode = dryrun ? M1V2_GETSRV_DRYRUN : M1V2_GETSRV_REUSE;
+			err = __get_container_service(sq3, url, srvtype, m1, mode, result, &renewed);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
-		sqlx_repository_unlock_and_close_noerror(sq3);
+		if (!(err = sqlx_transaction_end(repctx, err))) {
+			if (renewed) __notify_services_by_cid(m1, sq3, url);
+		}
 	}
 
+	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
 
 GError*
 meta1_backend_services_poll(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *srvtype,
+		struct hc_url_s *url, const char *srvtype,
 		gboolean dryrun, gboolean autocreate,
 		gchar ***result)
 {
 	EXTRA_ASSERT(srvtype != NULL);
 	EXTRA_ASSERT(result != NULL);
+
+	gboolean renewed = FALSE;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
-	if (!err) {
+	if (err) return err;
+
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, autocreate, NULL))) {
-			err = __renew_container_service(sq3, url, srvtype, m1, dryrun,
-					result);
+			enum m1v2_getsrv_e mode = dryrun ? M1V2_GETSRV_DRYRUN : M1V2_GETSRV_RENEW;
+			err = __get_container_service(sq3, url, srvtype, m1, mode, result, &renewed);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
-		sqlx_repository_unlock_and_close_noerror(sq3);
+		if (!(err = sqlx_transaction_end(repctx, err)) && renewed)
+			if (renewed) __notify_services_by_cid(m1, sq3, url);
 	}
 
+	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
 
 GError *
 meta1_backend_services_list(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *srvtype, gchar ***result)
+		struct hc_url_s *url, const char *srvtype, gchar ***result)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
-	if (!err) {
+	if (err) return err;
+
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 			struct meta1_service_url_s **uv = NULL;
 			err = __get_container_all_services(sq3, url, srvtype, &uv);
@@ -1065,28 +1043,33 @@ meta1_backend_services_list(struct meta1_backend_s *m1,
 				meta1_service_url_cleanv(uv);
 			}
 		}
-		sqlx_repository_unlock_and_close_noerror(sq3);
+		err = sqlx_transaction_end(repctx, err);
 	}
 
+	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
 
 GError*
 meta1_backend_services_unlink(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *srvtype, gchar **urlv)
+		struct hc_url_s *url, const char *srvtype, gchar **urlv)
 {
 	EXTRA_ASSERT(srvtype != NULL);
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERONLY, &sq3);
-	if (!err) {
+	if (err) return err;
+
+	struct sqlx_repctx_s *repctx = NULL;
+	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
 			err = __del_container_services(m1, sq3, url, srvtype, urlv);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
-		sqlx_repository_unlock_and_close_noerror(sq3);
+		err = sqlx_transaction_end(repctx, err);
 	}
 
+	sqlx_repository_unlock_and_close_noerror(sq3);
 	return err;
 }
 
@@ -1166,26 +1149,6 @@ out:
 
 /* ------------------------------------------------------------------------- */
 
-struct meta1_full_service_url_s
-{
-	container_id_t cid;
-	struct meta1_service_url_s *urls;
-};
-
-static GError *
-__notify_services_by_cid(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url)
-{
-	struct hc_url_s **urls = NULL;
-	GError *err = __info_user(sq3, url, FALSE, &urls);
-	if (!err) {
-		hc_url_set (urls[0], HCURL_NS, m1->backend.ns_name);
-		err = __notify_services(m1, sq3, url);
-	}
-	hc_url_cleanv (urls);
-	return err;
-}
-
 static GError *
 __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 		struct hc_url_s *url)
@@ -1220,13 +1183,32 @@ __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 	return err;
 }
 
+static void
+__notify_services_by_cid(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
+		struct hc_url_s *url)
+{
+	struct hc_url_s **urls = NULL;
+	GError *err = __info_user(sq3, url, FALSE, &urls);
+	if (!err) {
+		hc_url_set (urls[0], HCURL_NS, m1->backend.ns_name);
+		err = __notify_services(m1, sq3, url);
+	}
+	hc_url_cleanv (urls);
+
+	if (err) {
+		GRID_WARN("Failed to notify the services for [%s]: %s",
+				hc_url_get(url, HCURL_HEXID), err->message);
+		g_clear_error(&err);
+	}
+}
+
 GError *
 meta1_backend_notify_services(struct meta1_backend_s *m1, struct hc_url_s *url)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, M1V2_OPENBASE_MASTERSLAVE, &sq3);
 	if (!err) {
-		err = __notify_services(m1, sq3, url);
+		__notify_services_by_cid(m1, sq3, url);
 		sqlx_repository_unlock_and_close_noerror(sq3);
 	}
 	return err;

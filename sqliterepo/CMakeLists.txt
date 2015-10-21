@@ -62,12 +62,6 @@ target_link_libraries(test_version sqliterepo
 		metautils
 		${GLIB2_LIBRARIES})
 
-add_executable(gs_m1hash hash.h gs_m1hash.c)
-bin_prefix(gs_m1hash -m1hash)
-target_link_libraries(gs_m1hash
-		metautils sqliterepo
-		${GLIB2_LIBRARIES})
-
 install(FILES
 			cache.h
 			election.h
@@ -83,7 +77,7 @@ install(FILES
 		PERMISSIONS
 			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
-install(TARGETS sqliterepo sqliteutils sqlitereporemote gs_m1hash
+install(TARGETS sqliterepo sqliteutils sqlitereporemote
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 

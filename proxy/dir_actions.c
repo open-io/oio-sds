@@ -64,19 +64,19 @@ _pack_and_freev_pairs (gchar ** pairs)
 
 static GError *
 _m1_action (struct req_args_s *args, gchar ** m1v,
-	GError * (*hook) (const gchar * m1))
+	GError * (*hook) (const char * m1))
 {
 	for (gchar ** pm1 = m1v; *pm1; ++pm1) {
 		struct meta1_service_url_s *m1 = meta1_unpack_url (*pm1);
 		if (!m1)
 			continue;
-		if (0 != g_ascii_strcasecmp(m1->srvtype, "meta1")) {
+		if (0 != g_ascii_strcasecmp(m1->srvtype, NAME_SRVTYPE_META1)) {
 			meta1_service_url_clean (m1);
 			continue;
 		}
 
 		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1->host, NULL, &m1a)) {
+		if (!grid_string_to_addrinfo (m1->host, &m1a)) {
 			GRID_INFO ("Invalid META1 [%s] for [%s]",
 				m1->host, hc_url_get (args->url, HCURL_WHOLE));
 			meta1_service_url_clean (m1);
@@ -155,7 +155,7 @@ decode_json_string_array (gchar *** pkeys, struct json_object *j)
 enum http_rc_e
 action_dir_srv_list (struct req_args_s *args)
 {
-	const gchar *type = TYPE();
+	const char *type = TYPE();
 	if (!type)
 		return _reply_format_error (args, NEWERROR( CODE_BAD_REQUEST, "No service type provided"));
 
@@ -179,17 +179,12 @@ action_dir_srv_list (struct req_args_s *args)
 enum http_rc_e
 action_dir_srv_unlink (struct req_args_s *args)
 {
-	const gchar *type = TYPE();
+	const char *type = TYPE();
 	if (!type)
 		return _reply_format_error (args, NEWERROR( CODE_BAD_REQUEST, "No service type provided"));
 
-	GError *hook (const gchar * m1) {
-		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-		GError *err = NULL;
-		meta1v2_remote_unlink_service (&m1a, &err, args->url, type);
-		return err;
+	GError *hook (const char * m1) {
+		return meta1v2_remote_unlink_service (m1, args->url, type);
 	}
 
 	GError *err = _m1_locate_and_action (args, hook);
@@ -209,20 +204,15 @@ enum http_rc_e
 action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
-	const gchar *type = TYPE();
+	const char *type = TYPE();
 	if (!type)
 		return _reply_format_error (args, NEWERROR(CODE_BAD_REQUEST, "No service type provided"));
 	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
 	gboolean dryrun = _request_has_flag (args, PROXYD_HEADER_MODE, "dryrun");
 
 	gchar **urlv = NULL;
-	GError *hook (const gchar * m1) {
-		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-		GError *err = NULL;
-		urlv = meta1v2_remote_link_service (&m1a, &err, args->url, type, dryrun, autocreate);
-		return err;
+	GError *hook (const char * m1) {
+		return meta1v2_remote_link_service (m1, args->url, type, dryrun, autocreate, &urlv);
 	}
 
 	GError *err = _m1_locate_and_action (args, hook);
@@ -232,8 +222,11 @@ action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
-	if (err)
+	if (err) {
+		if (CODE_IS_NSIMPOSSIBLE(err->code))
+			return _reply_forbidden_error (args, err);
 		return _reply_common_error (args, err);
+	}
 
 	EXTRA_ASSERT (urlv != NULL);
 	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, urlv));
@@ -243,20 +236,16 @@ enum http_rc_e
 action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 {
 	struct meta1_service_url_s *m1u = NULL;
-	const gchar *type = TYPE();
+	const char *type = TYPE();
 	if (!type)
 		return _reply_format_error (args, NEWERROR(CODE_BAD_REQUEST, "No service type provided"));
 
 	gboolean force = _request_has_flag (args, PROXYD_HEADER_MODE, "replace");
 	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
 
-	GError *hook (const gchar * m1) {
-		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-		GError *e = NULL;
+	GError *hook (const char * m1) {
 		gchar *packed = meta1_pack_url (m1u);
-		meta1v2_remote_force_reference_service (&m1a, &e, args->url, packed, autocreate, force);
+		GError *e = meta1v2_remote_force_reference_service (m1, args->url, packed, autocreate, force);
 		g_free (packed);
 		return e;
 	}
@@ -276,8 +265,11 @@ action_dir_srv_force (struct req_args_s *args, struct json_object *jargs)
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
-	if (err)
+	if (err) {
+		if (CODE_IS_NSIMPOSSIBLE(err->code) || err->code == CODE_SRV_ALREADY)
+			return _reply_forbidden_error (args, err);
 		return _reply_common_error (args, err);
+	}
 	return _reply_success_json (args, NULL);
 }
 
@@ -285,20 +277,15 @@ enum http_rc_e
 action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
-	const gchar *type = TYPE();
+	const char *type = TYPE();
 	if (!type)
 		return _reply_format_error (args, NEWERROR(CODE_BAD_REQUEST, "No service type provided"));
 	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
 	gboolean dryrun = _request_has_flag (args, PROXYD_HEADER_MODE, "dryrun");
 
 	gchar **urlv = NULL;
-	GError *hook (const gchar * m1) {
-		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-		GError *err = NULL;
-		urlv = meta1v2_remote_poll_reference_service (&m1a, &err, args->url, type, dryrun, autocreate);
-		return err;
+	GError *hook (const char * m1) {
+		return meta1v2_remote_poll_reference_service (m1, args->url, type, dryrun, autocreate, &urlv);
 	}
 
 	GError *err = _m1_locate_and_action (args, hook);
@@ -309,8 +296,11 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 		hc_decache_reference_service (resolver, args->url, type);
 	}
 
-	if (err)
+	if (err) {
+		if (CODE_IS_NSIMPOSSIBLE(err->code))
+			return _reply_forbidden_error (args, err);
 		return _reply_common_error (args, err);
+	}
 	EXTRA_ASSERT (urlv != NULL);
 	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, urlv));
 }
@@ -347,12 +337,9 @@ action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
 	if (!err) {
 		gchar *kept = NULL, *repl = NULL;
 		GError *hook (const gchar * m1) {
-			struct addr_info_s m1a;
-			if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-				return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
 			if (newset)
 				g_strfreev (newset);
-			return meta1v2_remote_relink_service (&m1a, args->url, kept, repl, dryrun, &newset);
+			return meta1v2_remote_relink_service (m1, args->url, kept, repl, dryrun, &newset);
 		}
 		kept = meta1_pack_url (m1u_kept);
 		repl = m1u_repl ? meta1_pack_url (m1u_repl) : NULL;
@@ -401,14 +388,8 @@ action_dir_ref_list (struct req_args_s *args)
 					CODE_NAMESPACE_NOTMANAGED, "Namespace not managed"));
 
 	gchar **urlv = NULL;
-	GError *hook (const gchar * m1) {
-		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-		GError *err = NULL;
-		urlv = meta1v2_remote_list_reference_services (&m1a, &err, args->url, NULL);
-		EXTRA_ASSERT ((err!=NULL) ^ (urlv!=NULL));
-		return err;
+	GError *hook (const char * m1) {
+		return meta1v2_remote_list_reference_services (m1, args->url, NULL, &urlv);
 	}
 	GError *err = _m1_locate_and_action (args, hook);
 	if (!err) {
@@ -435,13 +416,8 @@ action_dir_ref_has (struct req_args_s *args)
 		return _reply_forbidden_error(args,
 				NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Namespace not managed"));
 
-	GError *hook (const gchar * m1) {
-		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-		GError *err = NULL;
-		meta1v2_remote_has_reference (&m1a, &err, args->url, NULL);
-		return err;
+	GError *hook (const char * m1) {
+		return meta1v2_remote_has_reference (m1, args->url, NULL);
 	}
 	GError *err = _m1_locate_and_action (args, hook);
 	if (!err)
@@ -452,13 +428,8 @@ action_dir_ref_has (struct req_args_s *args)
 enum http_rc_e
 action_dir_ref_create (struct req_args_s *args)
 {
-	GError *hook (const gchar * m1) {
-		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-		GError *err = NULL;
-		meta1v2_remote_create_reference (&m1a, &err, args->url);
-		return err;
+	GError *hook (const char * m1) {
+		return meta1v2_remote_create_reference (m1, args->url);
 	}
 	GError *err = _m1_locate_and_action (args, hook);
 	if (!err)
@@ -475,13 +446,8 @@ action_dir_ref_destroy (struct req_args_s *args)
 {
 	gboolean force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
 
-	GError *hook (const gchar * m1) {
-		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-		GError *err = NULL;
-		meta1v2_remote_delete_reference (&m1a, &err, args->url, force);
-		return err;
+	GError *hook (const char * m1) {
+		return meta1v2_remote_delete_reference (m1, args->url, force);
 	}
 	GError *err = _m1_locate_and_action (args, hook);
 	if (!err || CODE_IS_NETWORK_ERROR(err->code)) {
@@ -495,6 +461,8 @@ action_dir_ref_destroy (struct req_args_s *args)
 	}
 	if (!err)
 		return _reply_nocontent (args);
+	if (err->code == CODE_USER_INUSE)
+		return _reply_forbidden_error (args, err);
 	return _reply_common_error (args, err);
 }
 
@@ -504,13 +472,8 @@ enum http_rc_e
 action_dir_resolve (struct req_args_s *args)
 {
 	struct hc_url_s **urlv = NULL;
-	GError *hook (const gchar * m1) {
-		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-		GError *err = NULL;
-		meta1v2_remote_has_reference (&m1a, &err, args->url, &urlv);
-		return err;
+	GError *hook (const char * m1) {
+		return meta1v2_remote_has_reference (m1, args->url, &urlv);
 	}
 	GError *err = _m1_locate_and_action (args, hook);
 	if (!err) {
@@ -539,14 +502,9 @@ action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)
 
 	// Execute the request
 	gchar **pairs = NULL;
-	GError *hook (const gchar * m1) {
-		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-		GError *e = NULL;
-		meta1v2_remote_reference_get_property (&m1a, &e, args->url,
+	GError *hook (const char * m1) {
+		return meta1v2_remote_reference_get_property (m1, args->url,
 				(*keys ? keys : NULL), &pairs);
-		return e;
 	}
 
 	if (!err) {
@@ -590,13 +548,8 @@ action_dir_prop_set (struct req_args_s *args, struct json_object *jargs)
 		g_ptr_array_free (v, TRUE);
 	}
 
-	GError *hook (const gchar * m1) {
-		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-		GError *e = NULL;
-		meta1v2_remote_reference_set_property (&m1a, &e, args->url, pairs, flush);
-		return e;
+	GError *hook (const char * m1) {
+		return meta1v2_remote_reference_set_property (m1, args->url, pairs, flush);
 	}
 
 	if (!err) {
@@ -614,14 +567,8 @@ action_dir_prop_del (struct req_args_s *args, struct json_object *jargs)
 	gchar **keys = NULL;
 	GError *err = decode_json_string_array (&keys, jargs);
 
-	// Execute the request
-	GError *hook (const gchar * m1) {
-		struct addr_info_s m1a;
-		if (!grid_string_to_addrinfo (m1, NULL, &m1a))
-			return NEWERROR (CODE_NETWORK_ERROR, "Invalid M1 address");
-		GError *e = NULL;
-		meta1v2_remote_reference_del_property (&m1a, &e, args->url, keys);
-		return e;
+	GError *hook (const char *m1) {
+		return meta1v2_remote_reference_del_property (m1, args->url, keys);
 	}
 
 	if (!err) {

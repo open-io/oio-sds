@@ -28,7 +28,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "./agent.h"
 #include "./asn1_request_worker.h"
-#include "./fs.h"
 #include "./io_scheduler.h"
 #include "./namespace_get_task_worker.h"
 #include "./services_workers.h"

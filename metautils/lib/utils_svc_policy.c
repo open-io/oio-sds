@@ -86,33 +86,14 @@ _get_from_array(const gchar *name, struct kv_s *pkv,
 static GError*
 _get_by_name(const gchar *name, enum service_update_policy_e *result)
 {
-	static struct kv_s byname[] =
-	{
-		{"NONE", SVCUPD_KEEP},
+	static struct kv_s byname[] = {
 		{"KEEP", SVCUPD_KEEP},
 		{"REPLACE", SVCUPD_REPLACE},
 		{"APPEND", SVCUPD_APPEND},
-		{NULL, SVCUPD_NOT_SPECIFIED},
+		{NULL, SVCUPD_KEEP},
 	};
 
 	return _get_from_array(name, byname, result);
-}
-
-static const gchar *
-_pol2str(enum service_update_policy_e pol)
-{
-	switch (pol) {
-		case SVCUPD_NOT_SPECIFIED:
-			return "NOT_SPECIFIED";
-		case SVCUPD_KEEP:
-			return "KEEP";
-		case SVCUPD_APPEND:
-			return "APPEND";
-		case SVCUPD_REPLACE:
-			return "REPLACE";
-	}
-
-	return "INVALID";
 }
 
 static GTree *
@@ -159,7 +140,7 @@ service_howto_update2(struct service_update_policies_s *pol,
 	EXTRA_ASSERT(pol != NULL);
 	EXTRA_ASSERT(htype != NULL);
 
-	policy = SVCUPD_NOT_SPECIFIED;
+	policy = SVCUPD_KEEP;
 	g_mutex_lock(&pol->lock);
 	if (NULL != (el = g_tree_lookup(pol->tree_elements, htype)))
 		policy = el->howto_update;
@@ -196,7 +177,7 @@ service_update_policies_dump(struct service_update_policies_s *pol)
 			g_string_append_c(gstr, ';');
 		g_string_append(gstr, hashstr_str(k));
 		g_string_append_c(gstr, '=');
-		g_string_append(gstr, _pol2str(el->howto_update));
+		g_string_append(gstr, service_update_policy_to_string(el->howto_update));
 		g_string_append_printf(gstr, "|%u|%u", el->replicas, el->reqdist);
 		if (el->tagname && el->tagvalue)
 			g_string_append_printf(gstr, "|%s=%s", el->tagname, el->tagvalue);
@@ -210,6 +191,21 @@ service_update_policies_dump(struct service_update_policies_s *pol)
 	g_mutex_unlock(&pol->lock);
 
 	return g_string_free(out, FALSE);
+}
+
+const char *
+service_update_policy_to_string (enum service_update_policy_e p)
+{
+	switch (p) {
+		case SVCUPD_KEEP:
+			return "KEEP";
+		case SVCUPD_APPEND:
+			return "APPEND";
+		case SVCUPD_REPLACE:
+			return "REPLACE";
+		default:
+			return "***invalid***";
+	}
 }
 
 /* ------------------------------------------------------------------------- */

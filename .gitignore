@@ -36,3 +36,4 @@ build
 *.egg
 *.egg-info
 python/.tox/
+python/.eggs/

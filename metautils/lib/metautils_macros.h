@@ -64,6 +64,10 @@ License along with this library.
 # define NAME_SRVTYPE_RAWX  "rawx"
 # define NAME_SRVTYPE_SQLX  "sqlx"
 
+# ifndef COMMON_CLIENT_TIMEOUT
+#  define COMMON_CLIENT_TIMEOUT 30.0
+# endif
+
 # ifndef M2V2_CLIENT_TIMEOUT
 #  define M2V2_CLIENT_TIMEOUT 10.0
 # endif
@@ -77,20 +81,13 @@ License along with this library.
 # endif
 
 # ifndef CS_CLIENT_TIMEOUT
-#  define CS_CLIENT_TIMEOUT 10.0
+#  define CS_CLIENT_TIMEOUT 3.0
 # endif
 
 /* Some well known service tags macro names */
 # define NAME_MACRO_SPACE_NAME "stat.space"
-# define NAME_MACRO_SPACE_TYPE "space"
-
 # define NAME_MACRO_CPU_NAME "stat.cpu"
-# define NAME_MACRO_CPU_TYPE "cpu"
-
 # define NAME_MACRO_IOIDLE_NAME "stat.io"
-# define NAME_MACRO_IOIDLE_TYPE "io"
-
-# define NAME_MACRO_GRIDD_TYPE "gridd.macro"
 
 # define NAME_TAGNAME_RAWX_VOL "tag.vol"
 # define NAME_TAGNAME_RAWX_FIRST "tag.first"

@@ -106,7 +106,7 @@ asn1_final_handler( worker_t *worker, GError **error)
 		if (!l->data)
 			continue;
 		si = l->data;
-		addr_info_to_string(&(si->addr), str_addr, sizeof(str_addr));
+		grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
 		
 		srvtype = conscience_get_srvtype( ns_data->conscience, &error_local, si->type, MODE_STRICT );
 		if (!srvtype) {
@@ -179,7 +179,7 @@ task_worker(gpointer p, GError **error)
 	list_types = conscience_get_srvtype_names(ns_data->conscience, error);
 	if (!list_types) {
 		GSETERROR(error,"No service type found in namespace [%s]",
-				conscience_get_namespace(ns_data->conscience));
+				conscience_get_nsname(ns_data->conscience));
 		return 0;
 	}
 

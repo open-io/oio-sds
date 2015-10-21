@@ -100,14 +100,6 @@ hc_resolver_element_create(gchar **value)
 	return elt;
 }
 
-/* Timeout helpers --------------------------------------------------------- */
-
-static gdouble
-_timeout(gdouble *pd, gdouble def)
-{
-	return (!pd || *pd <= 0.001) ? def : *pd;
-}
-
 /* Public API -------------------------------------------------------------- */
 
 struct hc_resolver_s*
@@ -134,6 +126,30 @@ struct hc_resolver_s*
 hc_resolver_create(void)
 {
 	return hc_resolver_create1(time(0));
+}
+
+void
+hc_resolver_configure (struct hc_resolver_s *r, enum hc_resolver_flags_e f)
+{
+	if (r) r->flags = f;
+}
+
+void
+hc_resolver_qualify (struct hc_resolver_s *r,
+		gboolean (*qualify) (gconstpointer))
+{
+	g_assert (qualify != NULL);
+	if (!r)
+		r->service_qualifier = qualify;
+}
+
+void
+hc_resolver_notify (struct hc_resolver_s *r,
+		void (*notify) (gconstpointer))
+{
+	g_assert (notify != NULL);
+	if (!r)
+		r->service_notifier = notify;
 }
 
 void
@@ -199,16 +215,15 @@ hc_resolver_forget(struct hc_resolver_s *r, struct lru_tree_s *lru,
 /* ------------------------------------------------------------------------- */
 
 static gchar **
-_srvlit_to_urlv(GSList *l)
+_srvlist_to_urlv(GSList *l)
 {
 	gchar str[64];
-	struct service_info_s *si;
 	GPtrArray *tmp;
 
 	tmp = g_ptr_array_new();
 	for (; l ;l=l->next) {
-		si = l->data;
-		addr_info_to_string(&(si->addr), str, sizeof(str));
+		struct service_info_s *si = l->data;
+		grid_addrinfo_to_string(&(si->addr), str, sizeof(str));
 		g_ptr_array_add(tmp, g_strdup_printf("1|%s|%s|", si->type, str));
 	}
 
@@ -217,26 +232,27 @@ _srvlit_to_urlv(GSList *l)
 }
 
 static GError*
-_resolve_meta0(struct hc_resolver_s *r, const gchar *ns, gchar ***result)
+_resolve_meta0(struct hc_resolver_s *r, const char *ns, gchar ***result)
 {
 	struct hashstr_s *hk;
 	GError *err = NULL;
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, ns);
-	hk = hashstr_printf("meta0|%s", ns);
+	hk = hashstr_printf("%s|%s", NAME_SRVTYPE_META0, ns);
 
 	/* Try to hit the cache */
 	if (!(*result = hc_resolver_get_cached(r, r->csm0.cache, hk))) {
 		GSList *allm0;
 
 		/* Now attempt a real resolution */
-		if (!(allm0 = list_namespace_services(ns, NAME_SRVTYPE_META0, &err))) {
+		err = conscience_get_services (ns, NAME_SRVTYPE_META0, &allm0);
+		if (!allm0 || err) {
 			if (!err)
 				err = NEWERROR(CODE_INTERNAL_ERROR, "No meta0 available");
 			*result = NULL;
 		}
 		else {
-			*result = _srvlit_to_urlv(allm0);
+			*result = _srvlist_to_urlv(allm0);
 			g_slist_foreach(allm0, service_info_gclean, NULL);
 			g_slist_free(allm0);
 			allm0 = NULL;
@@ -262,8 +278,8 @@ _m0list_to_urlv(GSList *l)
 	tmp = g_ptr_array_new();
 	for (; l ;l=l->next) {
 		struct meta0_info_s *m0i = l->data;
-		addr_info_to_string(&(m0i->addr), str, sizeof(str));
-		g_ptr_array_add(tmp, g_strdup_printf("1|meta1|%s|", str));
+		grid_addrinfo_to_string(&(m0i->addr), str, sizeof(str));
+		g_ptr_array_add(tmp, g_strdup_printf("1|%s|%s|", NAME_SRVTYPE_META1, str));
 	}
 
 	g_ptr_array_add(tmp, NULL);
@@ -271,56 +287,54 @@ _m0list_to_urlv(GSList *l)
 }
 
 static GError *
-_resolve_m1_through_one_m0(const gchar *m0, const guint8 *prefix, gchar ***result)
+_resolve_m1_through_one_m0(const char *m0, const guint8 *prefix, gchar ***result)
 {
 	GError *err = NULL;
-	struct addr_info_s ai;
 
 	GRID_TRACE2("%s(%s,%02X%02X)", __FUNCTION__, m0, prefix[0], prefix[1]);
-	meta1_strurl_get_address(m0, &ai);
+	gchar *url = meta1_strurl_get_address(m0);
+	STRING_STACKIFY(url);
 
 	do {
-		GSList *lmap = meta0_remote_get_meta1_one(&ai,
-				_timeout(&rc_resolver_timeout_m0, 30.0), prefix, &err);
-		if (!lmap) {
-			if (err)
-				return err;
-			return NEWERROR(CODE_INTERNAL_ERROR, "No meta1 found");
-		}
-		else {
-			*result = _m0list_to_urlv(lmap);
-			g_slist_foreach(lmap, meta0_info_gclean, NULL);
-			g_slist_free(lmap);
-			err = NULL;
-		}
+		GSList *lmap = NULL;
+		err = meta0_remote_get_meta1_one(url, prefix, &lmap);
+		if (err)
+			return err;
+		*result = _m0list_to_urlv(lmap);
+		g_slist_foreach(lmap, meta0_info_gclean, NULL);
+		g_slist_free(lmap);
 	} while (0);
 
 	return err;
 }
 
 static GError *
-_resolve_m1_through_many_m0(gchar **urlv, const guint8 *prefix, gchar ***result)
+_resolve_m1_through_many_m0(struct hc_resolver_s *r, gchar **urlv, const guint8 *prefix, gchar ***result)
 {
-	guint i, last;
-	gchar *url;
-
 	GRID_TRACE2("%s(%02X%02X)", __FUNCTION__, prefix[0], prefix[1]);
-	for (last=g_strv_length(urlv); last ;last--) {
-		/* pick a random URL */
-		i = rand() % last;
-		url = urlv[i];
 
-		GError *err = _resolve_m1_through_one_m0(url, prefix, result);
+	if (urlv && *urlv) {
+		gsize len = g_strv_length(urlv);
+		oio_ext_array_shuffle ((void**)urlv, len);
+		if (r->service_qualifier) {
+			/* url already contains ip:port, and not meta1_service_url_s */
+			gboolean _wrap (gconstpointer p) {
+				return r->service_qualifier ((const char*)p);
+			}
+			oio_ext_array_partition ((void**)urlv, len, _wrap);
+		}
+	}
+
+	for (gchar **purl=urlv; *purl ;++purl) {
+		GError *err = _resolve_m1_through_one_m0(*purl, prefix, result);
 		EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
 		if (!err)
 			return NULL;
 		if (!CODE_IS_NETWORK_ERROR(err->code))
 			return err;
-
+		if (r->service_notifier)
+			r->service_notifier (*purl);
 		g_error_free(err);
-		/* swap 'i' and 'last' */
-		urlv[i] = urlv[last-1];
-		urlv[last-1] = url;
 	}
 
 	return NEWERROR(CODE_INTERNAL_ERROR, "No META0 answered");
@@ -334,7 +348,7 @@ _resolve_meta1(struct hc_resolver_s *r, struct hc_url_s *u, gchar ***result)
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(u, HCURL_WHOLE));
 
-	hk = hashstr_printf("meta1|%s|%.4s",
+	hk = hashstr_printf("%s|%s|%.4s", NAME_SRVTYPE_META1,
 			hc_url_get(u, HCURL_NS), hc_url_get(u, HCURL_HEXID));
 
 	/* Try to hit the cache */
@@ -346,7 +360,7 @@ _resolve_meta1(struct hc_resolver_s *r, struct hc_url_s *u, gchar ***result)
 		if (err != NULL)
 			g_prefix_error(&err, "M0 resolution error: ");
 		else {
-			err = _resolve_m1_through_many_m0(m0urlv, hc_url_get_id(u), result);
+			err = _resolve_m1_through_many_m0(r, m0urlv, hc_url_get_id(u), result);
 			if (!err)
 				hc_resolver_store(r, r->csm0.cache, hk, *result);
 			g_strfreev(m0urlv);
@@ -360,46 +374,40 @@ _resolve_meta1(struct hc_resolver_s *r, struct hc_url_s *u, gchar ***result)
 /* ------------------------------------------------------------------------- */
 
 static GError *
-_resolve_service_through_one_m1(const gchar *m1, struct hc_url_s *u,
-		const gchar *s, gchar ***result)
+_resolve_service_through_many_meta1(struct hc_resolver_s *r, gchar **urlv,
+		struct hc_url_s *u, const char *s, gchar ***result)
 {
-	GError *err = NULL;
-	struct addr_info_s ai;
-
-	GRID_TRACE2("%s(%s,%s,%s)", __FUNCTION__, m1, hc_url_get(u, HCURL_WHOLE), s);
-	meta1_strurl_get_address(m1, &ai);
-
-	*result = meta1v2_remote_list_reference_services(&ai, &err, u, s);
-	EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
-
-	return err;
-}
-
-static GError *
-_resolve_service_through_many_meta1(gchar **urlv, struct hc_url_s *u,
-		const gchar *s, gchar ***result)
-{
-	guint i, last;
-	gchar *url;
-
 	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, hc_url_get(u, HCURL_WHOLE), s);
 
-	for (last=g_strv_length(urlv); last ;last--) {
-		/* pick a random URL */
-		i = rand() % last;
-		url = urlv[i];
+	if (urlv && *urlv) {
+		gsize len = g_strv_length(urlv);
+		oio_ext_array_shuffle ((void**)urlv, len);
+		if (r->service_qualifier) {
+			/* we must the callback because our array contains packed URL */
+			gboolean _qualify_service_url (gconstpointer p) {
+				gboolean rc = FALSE;
+				gchar *m1u = meta1_strurl_get_address ((const char*)p);
+				if (m1u) rc = r->service_qualifier (m1u);
+				g_free (m1u);
+				return rc;
+			}
+			oio_ext_array_partition ((void**)urlv, len, _qualify_service_url);
+		}
+	}
 
-		GError *err = _resolve_service_through_one_m1(url, u, s, result);
-		EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
+	for (gchar **purl=urlv; *purl ;++purl) {
+
+		gchar *m1 = meta1_strurl_get_address(*purl);
+		GError *err = meta1v2_remote_list_reference_services(m1, u, s, result);
+		if (err && CODE_IS_NETWORK_ERROR(err->code) && r->service_notifier)
+			r->service_notifier (m1);
+		g_free0(m1);
+
 		if (!err)
 			return NULL;
 		if (!CODE_IS_NETWORK_ERROR(err->code))
 			return err;
 		g_clear_error(&err);
-
-		/* swap 'i' and 'last' */
-		urlv[i] = urlv[last-1];
-		urlv[last-1] = url;
 	}
 
 	return NEWERROR(CODE_INTERNAL_ERROR, "No META0 answered");
@@ -407,7 +415,7 @@ _resolve_service_through_many_meta1(gchar **urlv, struct hc_url_s *u,
 
 static GError*
 _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
-		struct hc_url_s *u, const gchar *s, gchar ***result)
+		struct hc_url_s *u, const char *s, gchar ***result)
 {
 	GError *err;
 	gchar **m1urlv = NULL;
@@ -427,12 +435,11 @@ _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
 	if (NULL != err)
 		return err;
 
-	err = _resolve_service_through_many_meta1(m1urlv, u, s, result);
+	err = _resolve_service_through_many_meta1(r, m1urlv, u, s, result);
 	EXTRA_ASSERT((err!=NULL) ^ (*result!=NULL));
 	if (!err) {
 		/* fill the cache */
-		if (!(r->flags & HC_RESOLVER_NOCACHE))
-			hc_resolver_store(r, r->services.cache, hk, *result);
+		hc_resolver_store(r, r->services.cache, hk, *result);
 	}
 
 	g_strfreev(m1urlv);
@@ -476,7 +483,7 @@ hc_resolve_reference_directory(struct hc_resolver_s *r, struct hc_url_s *url,
 
 GError*
 hc_resolve_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
-		const gchar *srvtype, gchar ***result)
+		const char *srvtype, gchar ***result)
 {
 	GError *err;
 	struct hashstr_s *hk;
@@ -497,6 +504,8 @@ hc_resolve_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
 	err = _resolve_reference_service(r, hk, url, srvtype, result);
 	g_free(hk);
 
+	if (result && *result)
+		oio_ext_array_shuffle ((void**)*result, g_strv_length(*result));
 	return err;
 }
 
@@ -512,11 +521,11 @@ hc_decache_reference(struct hc_resolver_s *r, struct hc_url_s *url)
 	if (r->flags & HC_RESOLVER_NOCACHE)
 		return;
 
-	hk = hashstr_printf("meta0|%s", hc_url_get(url, HCURL_NS));
+	hk = hashstr_printf("%s|%s", NAME_SRVTYPE_META0, hc_url_get(url, HCURL_NS));
 	hc_resolver_forget(r, r->csm0.cache, hk);
 	g_free(hk);
 
-	hk = hashstr_printf("meta1|%s|%.4s", hc_url_get(url, HCURL_NS),
+	hk = hashstr_printf("%s|%s|%.4s", NAME_SRVTYPE_META1, hc_url_get(url, HCURL_NS),
 			hc_url_get(url, HCURL_HEXID));
 	hc_resolver_forget(r, r->csm0.cache, hk);
 	g_free(hk);
@@ -524,7 +533,7 @@ hc_decache_reference(struct hc_resolver_s *r, struct hc_url_s *url)
 
 void
 hc_decache_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
-		const gchar *srvtype)
+		const char *srvtype)
 {
 	struct hashstr_s *hk;
 

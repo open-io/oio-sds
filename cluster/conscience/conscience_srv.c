@@ -116,8 +116,6 @@ conscience_srv_compute_score(struct conscience_srv_s
 			return g_strdup(pTag->value.s);
 		case STVT_BUF:
 			return g_strdup(pTag->value.buf);
-		case STVT_MACRO:
-			break;
 		}
 		DEBUG("[%s/%s/] invalid tag value! : %s", conscience->ns_info.name, srvtype->type_name, f);
 		return NULL;
@@ -239,7 +237,7 @@ conscience_srv_fill_srvinfo_header(struct service_info_s *dst,
 	memcpy(&(dst->addr), &(src->id.addr), sizeof(addr_info_t));
 	memcpy(&(dst->score), &(src->score), sizeof(score_t));
 	memcpy(dst->type, src->srvtype->type_name, sizeof(dst->type));
-	ns_name = conscience_get_namespace(src->srvtype->conscience);
+	ns_name = conscience_get_nsname(src->srvtype->conscience);
 	if (ns_name)
 		g_strlcpy(dst->ns_name, ns_name, sizeof(dst->ns_name)-1);
 }
