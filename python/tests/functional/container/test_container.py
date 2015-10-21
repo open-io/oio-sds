@@ -11,14 +11,17 @@ from tests.utils import BaseTestCase
 
 class TestMeta2Functional(BaseTestCase):
 
-    def url_srvtype (self, t):
-        return self.conf['proxyd_uri'] + '/v2.0/cs/' + self.ns + '/' + t
+    def url_srvtype(self, t):
+        url = self.conf['proxyd_uri']
+        return '/'.join((url, 'v2.0/cs', self.ns, t))
 
-    def url_ref (self, ref):
-        return self.conf['proxyd_uri'] + '/v2.0/dir/' + self.ns + '/' + self.account + '/' + ref
+    def url_ref(self, ref):
+        url = self.conf['proxyd_uri']
+        return '/'.join((url, 'v2.0/dir', self.ns, self.account, ref))
 
-    def url_container (self, ref):
-        return self.conf['proxyd_uri'] + '/v2.0/m2/' + self.ns + '/' + self.account + '/' + ref
+    def url_container(self, ref):
+        url = self.conf['proxyd_uri']
+        return '/'.join((url, 'v2.0/m2', self.ns, self.account, ref))
 
     def setUp(self):
         super(TestMeta2Functional, self).setUp()
@@ -28,8 +31,8 @@ class TestMeta2Functional(BaseTestCase):
         self.chars = (string.ascii_lowercase + string.ascii_uppercase +
                       string.digits)
 
-        self.proxyd_dir = (self.proxyd + "/dir/" + self.ns + '/' + self.account)
-        self.proxyd_m2 = (self.proxyd + "/m2/" + self.ns + '/' + self.account)
+        self.proxyd_dir = self.proxyd + "/dir/" + self.ns + '/' + self.account
+        self.proxyd_m2 = self.proxyd + "/m2/" + self.ns + '/' + self.account
 
         self.h = hashlib.new('md5')
 
@@ -109,10 +112,14 @@ class TestMeta2Functional(BaseTestCase):
     def prepare_bean(self, i):
 
         if i == 1:
-            self.bean = \
-                self.session.post(self.addr_m2_ref_path_action, json.dumps(
-                    {"action": "Beans", "args": self.bean_void}
-                )).json()[0]
+            action = {"action": "Beans", "args": self.bean_void}
+            resp = self.session.post(self.addr_m2_ref_path_action,
+                                     json.dumps(action))
+            self.assertEqual(resp.status_code, 200)
+            beans = resp.json()
+            self.assertIsInstance(beans, list)
+            self.assertGreaterEqual(len(beans), 1)
+            self.bean = beans[0]
             self.bean["id"] = self.bean["url"]
             self.bean["hash"] = self.hash_rand
             self.bean["size"] = 40
@@ -324,17 +331,20 @@ class TestMeta2Functional(BaseTestCase):
         self.delete_bean_list()
 
     def test_container_get_ref_link(self):
-
+        # FIXME the reference exists, requesting the container currently
+        # autocreates it.
         resp = self.session.get(self.addr_m2_ref)
         self.assertEqual(resp.status_code, 404)
 
     def test_container_get_listing(self):
+        resp = self.session.put(self.addr_m2_ref)
+        self.assertEqual(resp.status_code, 204)
 
-        self.session.put(self.addr_m2_ref)
         self.prepare_bean_listing()
 
-        listing = self.session.get(self.addr_m2_ref,
-                                   params={'max': 10}).json()["objects"]
+        resp = self.session.get(self.addr_m2_ref, params={'max': 10})
+        self.assertEqual(resp.status_code, 200)
+        listing = resp.json()["objects"]
 
         self.assertEqual(len(listing), 10)
         self.assertEqual(listing[0]['name'], '0-00')
@@ -463,7 +473,7 @@ class TestMeta2Functional(BaseTestCase):
 
         resp = self.session.put(self.addr_m2_ref)
         self.assertEqual(resp.status_code, 204)
-        
+
         self.prepare_bean_listing()
 
         params = {'max': 10, 'prefix': '3-05-', 'delimiter': "-"}
@@ -484,7 +494,7 @@ class TestMeta2Functional(BaseTestCase):
         self.assertEqual(resp.status_code, 204)
         resp = self.session.delete(self.addr_m2_ref)
         self.assertEqual(resp.status_code, 204)
-        # FIXME broken
+        # FIXME the container will be recreated by the HEAD request
         resp = self.session.head(self.addr_m2_ref)
         self.assertEqual(resp.status_code, 404)
 
@@ -497,7 +507,7 @@ class TestMeta2Functional(BaseTestCase):
     def test_container_delete_ref_link(self):
         resp = self.session.delete(self.addr_m2_ref)
         self.assertEqual(resp.status_code, 204)
-        # FIXME
+        # FIXME the container will be recreated by the HEAD request
         resp = self.session.delete(self.addr_m2_ref)
         self.assertEqual(resp.status_code, 404)
 
@@ -525,25 +535,26 @@ class TestMeta2Functional(BaseTestCase):
         ))
         self.assertEqual(resp.status_code, 200)
 
-        resp = self.session.put(self.addr_m2_ref_path, json.dumps([self.bean]),
-                headers={ 'x-oio-content-meta-hash': self.hash_rand, 'x-oio-content-meta-length': 40})
+        h = {'x-oio-content-meta-hash': self.hash_rand,
+             'x-oio-content-meta-length': 40}
+        resp = self.session.put(self.addr_m2_ref_path,
+                                json.dumps([self.bean]), headers=h)
         self.assertEqual(resp.status_code, 204)
 
-        resp = self.session.get(self.addr_m2_ref).json()["objects"][0]["policy"]
-        self.assertEqual(resp, "TWOCOPIES")
+        resp = self.session.get(self.addr_m2_ref)
+        objects = resp.json()["objects"]
+        first = objects[0]
+        self.assertEqual(first["policy"], "TWOCOPIES")
 
     def test_containers_actions_setStoragePolicy_ref_no_link(self):
-
-        resp = self.session.post(self.addr_m2_alone_ref_action, json.dumps(
-            {"action": "SetStoragePolicy", "args": "TWOCOPIES"}
-        ))
+        action = {"action": "SetStoragePolicy", "args": "TWOCOPIES"}
+        resp = self.session.post(self.addr_m2_alone_ref_action,
+                                 json.dumps(action))
         self.assertEqual(resp.status_code, 404)
 
     def test_containers_actions_setStoragePolicy_ref_link(self):
-
-        resp = self.session.post(self.addr_m2_ref_action, json.dumps(
-            {"action": "SetStoragePolicy", "args": "TWOCOPIES"}
-        ))
+        action = {"action": "SetStoragePolicy", "args": "TWOCOPIES"}
+        resp = self.session.post(self.addr_m2_ref_action, json.dumps(action))
         self.assertEqual(resp.status_code, 404)
 
     def test_containers_actions_setStoragePolicy_wrong(self):
@@ -551,17 +562,21 @@ class TestMeta2Functional(BaseTestCase):
         self.assertEqual(resp.status_code, 204)
 
         self.prepare_bean(1)
-        self.session.post(self.addr_m2_ref_action, json.dumps(
-            {"action": "SetStoragePolicy", "args": "error"}
-        ))
+        action = {"action": "SetStoragePolicy", "args": "error"}
+        resp = self.session.post(self.addr_m2_ref_action, json.dumps(action))
+        self.assertEqual(resp.status_code, 403)
 
-        resp = self.session.put(self.addr_m2_ref_path, json.dumps([self.bean]),
-                headers={ 'x-oio-content-meta-hash': self.hash_rand, 'x-oio-content-meta-length': 40})
+        h = {'x-oio-content-meta-hash': self.hash_rand,
+             'x-oio-content-meta-length': 40}
+        resp = self.session.put(self.addr_m2_ref_path,
+                                json.dumps([self.bean]), headers=h)
         self.assertEqual(resp.status_code, 204)
 
-        resp = self.session.get(self.addr_m2_ref).json()[
-            "objects"][0]["policy"]
-        self.assertEqual(resp, "none")
+        resp = self.session.get(self.addr_m2_ref)
+        self.assertEqual(resp.status_code, 200)
+        objects = resp.json()
+        first = objects["objects"][0]
+        self.assertEqual(first["policy"], "none")
 
     def test_containers_actions_getProperties(self):
         resp = self.session.put(self.addr_m2_ref)
@@ -574,7 +589,8 @@ class TestMeta2Functional(BaseTestCase):
 
     def test_containers_actions_getProperties_ref_no_link(self):
         action = {"action": "GetProperties", "args": None}
-        resp = self.session.post(self.addr_m2_alone_ref_action, json.dumps(action))
+        resp = self.session.post(self.addr_m2_alone_ref_action,
+                                 json.dumps(action))
         self.assertEqual(resp.status_code, 404)
 
     def test_containers_actions_getProperties_ref_link(self):
@@ -664,24 +680,30 @@ class TestMeta2Functional(BaseTestCase):
         self.prepare_content()
         self.prepare_bean(2)
 
-        resp = self.session.post(self.addr_m2_ref_action, json.dumps(
-            {"action": "RawUpdate", "args": {"new": [self.bean2], "old": [self.bean]}}
-        ))
+        action = {"action": "RawUpdate",
+                  "args": {"new": [self.bean2], "old": [self.bean]}}
+        resp = self.session.post(self.addr_m2_ref_action, json.dumps(action))
         self.assertTrue(resp.status_code, 204)
 
-        resp = self.session.get(self.addr_m2_ref_path).json()
-        self.assertEqual(resp[0]["url"], self.bean2["url"])
-        self.assertEqual(resp[0]["hash"], self.bean2["hash"].upper())
+        resp = self.session.get(self.addr_m2_ref_path)
+        self.assertEqual(resp.status_code, 200)
+        beans = resp.json()
+        self.assertGreaterEqual(len(beans), 1)
+        first = beans[0]
+        self.assertEqual(first["url"], self.bean2["url"])
+        self.assertEqual(first["hash"], self.bean2["hash"].upper())
 
     def test_containers_actions_rawUpdate_ref_link(self):
         self.prepare_content()
-        resp = self.session.post(self.addr_alone_ref_type_action, json.dumps(
-            {"action": "Link", "args": None}
-        ))
+        action = {"action": "Link", "args": None}
+        resp = self.session.post(self.addr_alone_ref_type_action,
+                                 json.dumps(action))
         self.assertEqual(resp.status_code, 200)
-        resp = self.session.post(self.addr_m2_alone_ref_action, json.dumps(
-            {"action": "RawUpdate", "args": {"new": [self.bean], "old": [self.bean]}}
-        ))
+
+        action = {"action": "RawUpdate",
+                  "args": {"new": [self.bean], "old": [self.bean]}}
+        resp = self.session.post(self.addr_m2_alone_ref_action,
+                                 json.dumps(action))
         self.assertTrue(resp.status_code, 404)
 
     # Content tests
@@ -715,8 +737,10 @@ class TestMeta2Functional(BaseTestCase):
 
         self.prepare_bean(1)
 
-        headers = { 'x-oio-content-meta-hash': self.hash_rand, 'x-oio-content-meta-length': 40}
-        resp = self.session.put(self.addr_m2_ref_path, json.dumps([self.bean]), headers=headers)
+        headers = {'x-oio-content-meta-hash': self.hash_rand,
+                   'x-oio-content-meta-length': 40}
+        resp = self.session.put(self.addr_m2_ref_path,
+                                json.dumps([self.bean]), headers=headers)
         self.assertEqual(resp.status_code, 204)
 
         resp = self.session.get(self.addr_m2_ref)
@@ -732,11 +756,14 @@ class TestMeta2Functional(BaseTestCase):
 
         self.prepare_bean(1)
         action = {"action": "Link", "args": None}
-        resp = self.session.post(self.addr_alone_ref_type_action, json.dumps(action))
+        resp = self.session.post(self.addr_alone_ref_type_action,
+                                 json.dumps(action))
         self.assertEqual(resp.status_code, 200)
 
-        headers = {'x-oio-content-meta-hash': self.hash_rand, 'x-oio-content-meta-length': 40}
-        resp = self.session.put(self.addr_m2_alone_ref_path, json.dumps([self.bean]), headers=headers)
+        headers = {'x-oio-content-meta-hash': self.hash_rand,
+                   'x-oio-content-meta-length': 40}
+        resp = self.session.put(self.addr_m2_alone_ref_path,
+                                json.dumps([self.bean]), headers=headers)
         self.assertEqual(resp.status_code, 404)
 
     def test_contents_put_invalid_headers(self):
@@ -745,8 +772,10 @@ class TestMeta2Functional(BaseTestCase):
 
         self.prepare_bean(1)
 
-        resp = self.session.put(self.addr_m2_ref_path, json.dumps([self.bean]),
-                headers={ 'x-oio-content-meta-hash': 'error', 'x-oio-content-meta-length': 40})
+        headers = {'x-oio-content-meta-hash': 'error',
+                   'x-oio-content-meta-length': 40}
+        resp = self.session.put(self.addr_m2_ref_path,
+                                json.dumps([self.bean]), headers=headers)
         self.assertEqual(resp.status_code, 400)
 
     def test_contents_delete(self):
@@ -823,9 +852,10 @@ class TestMeta2Functional(BaseTestCase):
         resp = self.session.put(self.addr_m2_ref)
         self.assertEqual(resp.status_code, 204)
 
-        resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
-            {"action": "Spare", "args": {"size": 40, "notin": {}, "broken": {}}}
-        ))
+        action = {"action": "Spare",
+                  "args": {"size": 40, "notin": {}, "broken": {}}}
+        resp = self.session.post(self.addr_m2_ref_path_action,
+                                 json.dumps(action))
         raisedException = False
         try:
             print resp.json()
@@ -839,14 +869,16 @@ class TestMeta2Functional(BaseTestCase):
         self.assertEqual(resp.status_code, 204)
 
         resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
-            {"action": "Spare", "args": {"size": 40, "notin": {}}}
+            {"action": "Spare",
+             "args": {"size": 40, "notin": {}}}
         ))
         self.assertEqual(resp.status_code, 400)
 
     def test_contents_actions_Spare_ref_no_link(self):
-        resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
-            {"action": "Spare", "args": {"size": 40, "notin": {}, "broken": {}}}
-        ))
+        action = {"action": "Spare",
+                  "args": {"size": 40, "notin": {}, "broken": {}}}
+        resp = self.session.post(self.addr_m2_ref_path_action,
+                                 json.dumps(action))
         self.assertEqual(resp.status_code, 404)
 
     def test_contents_actions_touch(self):
@@ -862,9 +894,13 @@ class TestMeta2Functional(BaseTestCase):
             {"action": "SetStoragePolicy", "args": 'TWOCOPIES'}
         ))
         self.assertEqual(resp.status_code, 204)
-        resp = self.session.get(self.addr_m2_ref).json()[
-            "objects"][0]["policy"]
-        self.assertEqual(resp, 'TWOCOPIES')
+
+        resp = self.session.get(self.addr_m2_ref)
+        self.assertEqual(resp.status_code, 200)
+        objects = resp.json()["objects"]
+        self.assertGreaterEqual(len(objects), 1)
+        first = objects[0]
+        self.assertEqual(first['policy'], 'TWOCOPIES')
 
     def test_contents_actions_setStoragePolicy_wrong(self):
         self.prepare_content()
@@ -888,8 +924,9 @@ class TestMeta2Functional(BaseTestCase):
             {"action": "GetProperties", "args": None}
         ))
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()["prop1"], self.prop_rand)
-        self.assertEqual(resp.json()["prop2"], self.prop_rand2)
+        props = resp.json()
+        self.assertEqual(props["prop1"], self.prop_rand)
+        self.assertEqual(props["prop2"], self.prop_rand2)
 
     def test_contents_actions_getProperties_no_content(self):
         resp = self.session.put(self.addr_m2_ref)
@@ -907,20 +944,24 @@ class TestMeta2Functional(BaseTestCase):
              "args": {"prop1": self.prop_rand, "prop2": self.prop_rand2}}
         ))
         self.assertEqual(resp.status_code, 200)
-        resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
-            {"action": "GetProperties", "args": None}
-        )).json()
-        self.assertEqual(resp["prop1"], self.prop_rand)
-        self.assertEqual(resp["prop2"], self.prop_rand2)
+
+        action = {"action": "GetProperties", "args": None}
+        resp = self.session.post(self.addr_m2_ref_path_action,
+                                 json.dumps(action))
+        self.assertEqual(resp.status_code, 200)
+        props = resp.json()
+        self.assertEqual(props["prop1"], self.prop_rand)
+        self.assertEqual(props["prop2"], self.prop_rand2)
 
     def test_contents_actions_setProperties_no_content(self):
         resp = self.session.put(self.addr_m2_ref)
         self.assertEqual(resp.status_code, 204)
 
-        resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
-            {"action": "SetProperties",
-             "args": {"prop1": self.prop_rand, "prop2": self.prop_rand2}}
-        ))
+        action = {"action": "SetProperties",
+                  "args": {"prop1": self.prop_rand,
+                           "prop2": self.prop_rand2}}
+        resp = self.session.post(self.addr_m2_ref_path_action,
+                                 json.dumps(action))
         self.assertEqual(resp.status_code, 404)
 
     def test_contents_actions_delProperties(self):

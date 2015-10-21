@@ -1,6 +1,5 @@
 import os
 import random
-import time
 import unittest
 import urlparse
 
@@ -54,10 +53,9 @@ class TestConscienceFunctional(unittest.TestCase):
 
         self.service["tags"]["tag.vol"] = "True"
 
-        self.invalid_service = json.dumps(
-            {'type': 'echo', 'ns': self.namespace, 'score': 1, 'addr': 'error',
+        s = {'type': 'echo', 'ns': self.namespace, 'score': 1, 'addr': 'error',
              'tags': {'tag.vol': 'test', 'tag.up': True}}
-        )
+        self.invalid_service = json.dumps(s)
 
         self.service["addr"] = self.addr2
         self.service_temoin = json.dumps(self.service)
@@ -146,7 +144,7 @@ class TestConscienceFunctional(unittest.TestCase):
         resp = self.session.get(self.addr_type)
         self.assertEqual(resp.status_code, 200)
         services = resp.json()
-        self.assertListEqual(services,[])
+        self.assertListEqual(services, [])
 
     def test_service_pool_delete_wrong(self):
 
@@ -155,7 +153,8 @@ class TestConscienceFunctional(unittest.TestCase):
 
     def test_service_pool_actions_lock(self):
 
-        resp = self.session.post(self.addr_type + "/action", self.valid_lock_service)
+        resp = self.session.post(self.addr_type + "/action",
+                                 self.valid_lock_service)
         self.assertEqual(resp.status_code, 200)
 
         score = \
@@ -182,19 +181,18 @@ class TestConscienceFunctional(unittest.TestCase):
 
         self.session.post(self.addr_type + "/action", self.valid_lock_service2)
 
-        score = [session["score"] for session in
-             self.session.get(self.addr_type).json() if
-             session["addr"] == self.addr1][0]
+        resp = self.session.get(self.addr_type)
+        score = [x["score"] for x in resp.json() if x["addr"] == self.addr1][0]
         self.assertEqual(score, 100 - self.score_rand)
 
     def test_services_pool_actions_unlock(self):
 
         self.session.post(self.addr_type + "/action", self.valid_lock_service)
 
-        resp = self.session.post(self.addr_type + "/action", self.valid_unlock_service)
+        resp = self.session.post(self.addr_type + "/action",
+                                 self.valid_unlock_service)
         self.assertEqual(resp.status_code, 200)
 
-        service = [session for session in
-                   self.session.get(self.addr_type).json() if
-                   session["addr"] == self.addr1]
+        resp = self.session.get(self.addr_type)
+        service = [x for x in resp.json() if x["addr"] == self.addr1]
         self.assertEqual(service, [])
