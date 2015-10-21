@@ -28,6 +28,9 @@ _abstract_sqlx_action (struct req_args_s *args, gboolean next,
 	// @TODO Here is a factorisation spot, with sqlx_name_fill()
 	// Build the base name
 	const gchar *type = TYPE();
+	if (!type)
+		return BADREQ("No service type");
+
 	gchar *etype = NULL;
 	gchar *bn = NULL;
 	if (!g_ascii_strcasecmp(type, NAME_SRVTYPE_META0)) {
