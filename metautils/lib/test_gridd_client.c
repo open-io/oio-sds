@@ -158,9 +158,9 @@ main(int argc, char **argv)
 			test_bad_addresses);
 	g_test_add_func("/metautils/gridd_client/good_address",
 			test_good_addresses);
-	g_test_add_func("/metautils/gridd_client/ignored_connect/fail_start",
+	g_test_add_func("/metautils/gridd_client/ignored_connect_fail_start",
 			test_failed_start_on_ignored_connect_error);
-	g_test_add_func("/metautils/gridd_client/ignored_connect/fail_start",
+	g_test_add_func("/metautils/gridd_client/ignored_connect_loop",
 			test_loop_on_ignored_start_error);
 	return g_test_run();
 }
