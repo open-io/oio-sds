@@ -134,7 +134,7 @@ static gboolean
 _header_to_asn(gpointer api, M2V2Bean_t *asn)
 {
 	struct bean_CONTENTS_HEADERS_s *header = (struct bean_CONTENTS_HEADERS_s*) api;
-	asn->header = g_malloc0(sizeof(M2V2ContentHeader_t));
+	asn->header = calloc(1, sizeof(M2V2ContentHeader_t));
 
 	GByteArray *id = CONTENTS_HEADERS_get_id(header);
 	OCTET_STRING_fromBuf(&(asn->header->id), (const char *)id->data, id->len);
@@ -158,7 +158,7 @@ static gboolean
 _content_to_asn(gpointer api, M2V2Bean_t *asn)
 {
 	struct bean_CONTENTS_s *content = (struct bean_CONTENTS_s*) api;
-	asn->content = g_malloc0(sizeof(M2V2Content_t));
+	asn->content = calloc(1, sizeof(M2V2Content_t));
 	GByteArray *content_id = CONTENTS_get_content_id(content);
 	GString *chunk_id = CONTENTS_get_chunk_id(content);
 	GString *position = CONTENTS_get_position(content);
@@ -174,7 +174,7 @@ static gboolean
 _chunk_to_asn(gpointer api, M2V2Bean_t *asn)
 {
 	struct bean_CHUNKS_s *chunk = (struct bean_CHUNKS_s *) api;
-	asn->chunk = g_malloc0(sizeof(M2V2Chunk_t));
+	asn->chunk = calloc(1, sizeof(M2V2Chunk_t));
 
 	GByteArray *hash = CHUNKS_get_hash(chunk);
 	GString *chunk_id = CHUNKS_get_id(chunk);
@@ -192,7 +192,7 @@ static gboolean
 _property_to_asn(gpointer api, M2V2Bean_t *asn)
 {
 	struct bean_PROPERTIES_s *prop = (struct bean_PROPERTIES_s *) api;
-	asn->prop = g_malloc0(sizeof(M2V2Property_t));
+	asn->prop = calloc(1, sizeof(M2V2Property_t));
 
 	GString *alias_name = PROPERTIES_get_alias(prop);
 	OCTET_STRING_fromBuf(&(asn->prop->aliasName), alias_name->str, alias_name->len);
@@ -212,7 +212,7 @@ static gboolean
 _alias_to_asn(gpointer api, M2V2Bean_t *asn)
 {
 	struct bean_ALIASES_s *alias = (struct bean_ALIASES_s *) api;
-	asn->alias = g_malloc0(sizeof(M2V2Alias_t));
+	asn->alias = calloc(1, sizeof(M2V2Alias_t));
 
 	GString *name = ALIASES_get_alias(alias);
 	OCTET_STRING_fromBuf(&(asn->alias->name), name->str, name->len);
