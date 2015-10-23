@@ -25,6 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <meta2v2/meta2_utils_lb.h>
+#include <meta2v2/meta2_utils.h>
 
 #include <glib.h>
 
@@ -83,19 +84,16 @@ static gpointer
 _gen_chunk_bean(struct service_info_s *si)
 {
 	gchar straddr[STRLEN_ADDRINFO], strid[STRLEN_CHUNKID];
-	gchar *strvol = NULL;
-	gchar *chunk_id = NULL;
+	gchar *chunkid = NULL;
 	struct bean_CHUNKS_s *chunk = NULL;
 
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
 	SHA256_randomized_string(strid, sizeof(strid));
-	strvol = metautils_rawx_get_volume(si);
 	chunk = _bean_create(&descr_struct_CHUNKS);
-	chunk_id = g_strdup_printf("http://%s/%s", straddr, strid);
-	CHUNKS_set2_id(chunk, chunk_id);
+	chunkid = m2v2_build_chunk_url (straddr, strid);
+	CHUNKS_set2_id(chunk, chunkid);
 
-	g_free(strvol);
-	g_free(chunk_id);
+	g_free(chunkid);
 	return (gpointer)chunk;
 }
 

@@ -70,6 +70,12 @@ _m2db_count_alias_versions(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 #define RANGE_ERROR(v) ((v) == G_MININT64 || (v) == G_MAXINT64)
 #define STRTOLL_ERROR(v,s,e) (FORMAT_ERROR(v,s,e) || RANGE_ERROR(v))
 
+gchar*
+m2v2_build_chunk_url (const char *srv, const char *id)
+{
+	return g_strconcat(srv, "/", id, NULL);
+}
+
 gboolean
 m2v2_parse_chunk_position(const gchar *s, gint *pos, gboolean *par, gint *sub)
 {
@@ -1681,12 +1687,11 @@ _m2_generate_content_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
 		guint pos, gint64 cs, gint subpos, gboolean parity)
 {
 	gchar *chunkid, strpos[64];
-	gchar *strvol, straddr[STRLEN_ADDRINFO], strid[STRLEN_CHUNKID];
+	gchar straddr[STRLEN_ADDRINFO], strid[STRLEN_CHUNKID];
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(ctx->url, HCURL_WHOLE));
 
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
-	strvol = metautils_rawx_get_volume(si);
 	SHA256_randomized_string(strid, sizeof(strid));
 
 	if (subpos >= 0)
@@ -1694,8 +1699,7 @@ _m2_generate_content_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
 	else
 		g_snprintf(strpos, sizeof(strpos), "%u", pos);
 
-	chunkid = g_strdup_printf("http://%s/%s", straddr, strid);
-	g_free(strvol);
+	chunkid = m2v2_build_chunk_url (straddr, strid);
 
 	struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
 	CHUNKS_set2_id(chunk, chunkid);

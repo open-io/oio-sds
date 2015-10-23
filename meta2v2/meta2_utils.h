@@ -69,6 +69,8 @@ struct dup_alias_params_s
 	GSList *errors;
 };
 
+gchar* m2v2_build_chunk_url (const char *srv, const char *id);
+
 gboolean m2v2_parse_chunk_position(const gchar *str, gint *ppos,
 		gboolean *ppar, gint *psub);
 
