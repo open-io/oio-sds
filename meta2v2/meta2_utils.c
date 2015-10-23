@@ -18,15 +18,25 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
 #include <string.h>
-#include <glib.h>
-#include <meta2v2/meta2_backend_internals.h>
 
+#include <glib.h>
+
+#include <core/oiolog.h>
+#include <meta2v2/meta2_backend_internals.h>
 #include <meta2v2/meta2_utils.h>
 #include <meta2v2/meta2_macros.h>
 #include <meta2v2/meta2v2_remote.h>
 #include <meta2v2/meta2_dedup_utils.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
+
+#define RANDOM_UID(uid,uid_size) \
+	struct { guint64 now; guint32 r; guint16 pid; guint16 th; } uid; \
+	uid.now = g_get_real_time (); \
+	uid.r = g_random_int(); \
+	uid.pid = getpid(); \
+	uid.th = oio_log_current_thread_id(); \
+	gsize uid_size = sizeof(uid);
 
 static GError*
 _get_container_policy(struct sqlx_sqlite3_s *sq3, struct namespace_info_s *nsinfo,
@@ -999,7 +1009,6 @@ GError*
 m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		GSList **out_deleted, GSList **out_added)
 {
-	guint8 uid[33];
 	struct put_args_s args2;
 	struct bean_ALIASES_s *latest = NULL;
 	GError *err = NULL;
@@ -1028,9 +1037,9 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 			g_prefix_error(&err, "Version error: ");
 		else {
 			g_clear_error(&err);
-			SHA256_randomized_buffer(uid, sizeof(uid));
-			args2.uid = uid;
-			args2.uid_size = sizeof(uid);
+			RANDOM_UID(uid, uid_size);
+			args2.uid = (guint8*) &uid;
+			args2.uid_size = uid_size;
 			err = m2db_real_put_alias(args->sq3, &args2);
 		}
 	}
@@ -1038,9 +1047,9 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		if (latest)
 			err = m2db_merge_alias(args, latest, &args2);
 		else {
-			SHA256_randomized_buffer(uid, sizeof(uid));
-			args2.uid = uid;
-			args2.uid_size = sizeof(uid);
+			RANDOM_UID(uid, uid_size);
+			args2.uid = (guint8*) &uid;
+			args2.uid_size = uid_size;
 			err = m2db_real_put_alias(args->sq3, &args2);
 		}
 	}
@@ -1068,15 +1077,13 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	if (!hc_url_has(args->url, HCURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
-	guint8 uid[32];
-	memset(uid, 0, sizeof(uid));
-	SHA256_randomized_buffer(uid, sizeof(uid));
-
+	RANDOM_UID(uid, uid_size);
 	struct put_args_s args2;
+
 	memset(&args2, 0, sizeof(args2));
 	args2.put_args = args;
-	args2.uid = uid;
-	args2.uid_size = sizeof(uid);
+	args2.uid = (guint8*) &uid;
+	args2.uid_size = uid_size;
 	args2.cb = out_added ? _bean_list_cb : NULL;
 	args2.cb_data = out_added;
 	args2.beans = beans;
@@ -1256,7 +1263,8 @@ m2db_copy_alias(struct m2db_put_args_s *args, const char *source)
 struct append_context_s
 {
 	GPtrArray *tmp;
-	guint8 uid[32];
+	guint8 *uid;
+	gsize uid_size;
 	GByteArray *old_uid;
 	GString *policy;
 	gint64 old_version;
@@ -1289,7 +1297,7 @@ _keep_old_bean(gpointer u, gpointer bean)
 	gint64 i64;
 
 	if (DESCR(bean) == &descr_struct_CHUNKS) {
-		CHUNKS_set2_content(bean, ctx->uid, sizeof(ctx->uid));
+		CHUNKS_set2_content(bean, ctx->uid, ctx->uid_size);
 		if (NULL != (gs = CHUNKS_get_position(bean))) {
 			i64 = g_ascii_strtoll(gs->str, NULL, 10);
 			if (ctx->old_count < i64)
@@ -1329,7 +1337,7 @@ _mangle_new_bean(struct append_context_s *ctx, gpointer bean)
 	if (DESCR(bean) == &descr_struct_ALIASES) {
 		bean = _bean_dup(bean);
 		ALIASES_set_version(bean, ((ctx->versioning) ? ctx->old_version + 1 : ctx->old_version));
-		ALIASES_set2_content(bean, ctx->uid, sizeof(ctx->uid));
+		ALIASES_set2_content(bean, ctx->uid, ctx->uid_size);
 		g_ptr_array_add(ctx->tmp, bean);
 		return FALSE;
 	}
@@ -1337,7 +1345,7 @@ _mangle_new_bean(struct append_context_s *ctx, gpointer bean)
 	if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
 		bean = _bean_dup(bean);
 		CONTENTS_HEADERS_set_size(bean, CONTENTS_HEADERS_get_size(bean) + ctx->old_size);
-		CONTENTS_HEADERS_set2_id(bean, ctx->uid, sizeof(ctx->uid));
+		CONTENTS_HEADERS_set2_id(bean, ctx->uid, ctx->uid_size);
 		CONTENTS_HEADERS_set2_policy(bean, ctx->policy->str);
 		CONTENTS_HEADERS_nullify_hash(bean);
 		g_ptr_array_add(ctx->tmp, bean);
@@ -1347,7 +1355,7 @@ _mangle_new_bean(struct append_context_s *ctx, gpointer bean)
 	if (DESCR(bean) == &descr_struct_CHUNKS) {
 		bean = _bean_dup(bean);
 		_increment_position(CHUNKS_get_position(bean), ctx->old_count);
-		CHUNKS_set2_content(bean, ctx->uid, sizeof(ctx->uid));
+		CHUNKS_set2_content(bean, ctx->uid, ctx->uid_size);
 		g_ptr_array_add(ctx->tmp, bean);
 		return FALSE;
 	}
@@ -1381,6 +1389,8 @@ m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 	if (!hc_url_has(url, HCURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
+	RANDOM_UID(uid, uid_size);
+
 	memset(&ctx, 0, sizeof(ctx));
 	ctx.tmp = g_ptr_array_new();
 	ctx.policy = g_string_new("");
@@ -1388,7 +1398,8 @@ m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 	ctx.old_version = G_MININT64;
 	ctx.old_size = G_MININT64;
 	ctx.versioning = VERSIONS_ENABLED(max_versions);
-	SHA256_randomized_buffer(ctx.uid, sizeof(ctx.uid));
+	ctx.uid = (guint8*) &uid;
+	ctx.uid_size = uid_size;
 
 	// Merge the previous versions of the beans with the new part
 	err = m2db_get_alias(sq3, url, M2V2_FLAG_NOPROPS, _keep_old_bean, &ctx);
@@ -1530,7 +1541,8 @@ out:
 
 struct update_alias_header_ctx_s {
 	GPtrArray *tmp;
-	guint8 uid[32];
+	guint8 *uid;
+	gsize uid_size;
 	gint64 old_version;
 	gboolean versioning;
 };
@@ -1541,21 +1553,21 @@ _update_new_bean(struct update_alias_header_ctx_s *ctx, gpointer bean)
 	if (DESCR(bean) == &descr_struct_ALIASES) {
 		bean = _bean_dup(bean);
 		ALIASES_set_version(bean, ((ctx->versioning) ? ctx->old_version + 1 : ctx->old_version));
-		ALIASES_set2_content(bean, ctx->uid, sizeof(ctx->uid));
+		ALIASES_set2_content(bean, ctx->uid, ctx->uid_size);
 		g_ptr_array_add(ctx->tmp, bean);
 		return;
 	}
 
 	if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
 		bean = _bean_dup(bean);
-		CONTENTS_HEADERS_set2_id(bean, ctx->uid, sizeof(ctx->uid));
+		CONTENTS_HEADERS_set2_id(bean, ctx->uid, ctx->uid_size);
 		g_ptr_array_add(ctx->tmp, bean);
 		return;
 	}
 
 	if (DESCR(bean) == &descr_struct_CHUNKS) {
 		bean = _bean_dup(bean);
-		CHUNKS_set2_content(bean, ctx->uid, sizeof(ctx->uid));
+		CHUNKS_set2_content(bean, ctx->uid, ctx->uid_size);
 		g_ptr_array_add(ctx->tmp, bean);
 		return;
 	}
@@ -1569,7 +1581,6 @@ GError*
 m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		struct hc_url_s *url, GSList *beans)
 {
-	struct update_alias_header_ctx_s ctx;
 	struct bean_ALIASES_s *latest = NULL;
 	GError *err = NULL;
 
@@ -1582,11 +1593,15 @@ m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	if (!hc_url_has(url, HCURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
+	RANDOM_UID(uid,uid_size);
+	struct update_alias_header_ctx_s ctx;
 	memset(&ctx, 0, sizeof(ctx));
+
 	ctx.tmp = g_ptr_array_new();
 	ctx.old_version = G_MININT64;
 	ctx.versioning = VERSIONS_ENABLED(max_versions);
-	SHA256_randomized_buffer(ctx.uid, sizeof(ctx.uid));
+	ctx.uid = (guint8*) &uid;
+	ctx.uid_size = uid_size;
 
 	// Merge the previous versions of the beans with the new part
 	if (NULL != (err = m2db_latest_alias(sq3, url, &latest))) {
@@ -1615,7 +1630,8 @@ struct gen_ctx_s
 	struct hc_url_s *url;
 	struct storage_policy_s *pol;
 	struct grid_lb_iterator_s *iter;
-	guint8 uid[32];
+	guint8 *uid;
+	gsize uid_size;
 	guint8 h[16];
 	gint64 size;
 	gint64 chunk_size;
@@ -1648,13 +1664,13 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	ALIASES_set_version(alias, 0);
 	ALIASES_set_ctime(alias, time(0));
 	ALIASES_set_deleted(alias, FALSE);
-	ALIASES_set2_content(alias, ctx->uid, sizeof(ctx->uid));
+	ALIASES_set2_content(alias, ctx->uid, ctx->uid_size);
 	ctx->cb(ctx->cb_data, alias);
 
 	struct bean_CONTENTS_HEADERS_s *header;
 	header = _bean_create(&descr_struct_CONTENTS_HEADERS);
 	CONTENTS_HEADERS_set_size(header, ctx->size);
-	CONTENTS_HEADERS_set2_id(header, ctx->uid, sizeof(ctx->uid));
+	CONTENTS_HEADERS_set2_id(header, ctx->uid, ctx->uid_size);
 	CONTENTS_HEADERS_set2_policy(header, p);
 	CONTENTS_HEADERS_nullify_hash(header);
 	ctx->cb(ctx->cb_data, header);
@@ -1683,7 +1699,7 @@ _m2_generate_content_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
 
 	struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
 	CHUNKS_set2_id(chunk, chunkid);
-	CHUNKS_set2_content(chunk, ctx->uid, sizeof(ctx->uid));
+	CHUNKS_set2_content(chunk, ctx->uid, ctx->uid_size);
 	CHUNKS_set_ctime(chunk, time(0));
 	CHUNKS_set2_hash(chunk, ctx->h, sizeof(ctx->h));
 	CHUNKS_set_size(chunk, cs);
@@ -1824,8 +1840,6 @@ m2_generate_beans_v1(struct hc_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
 		m2_onbean_cb cb, gpointer cb_data)
 {
-	struct gen_ctx_s ctx;
-
 	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE));
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(iter != NULL);
@@ -1837,12 +1851,15 @@ m2_generate_beans_v1(struct hc_url_s *url, gint64 size, gint64 chunk_size,
 	if (chunk_size <= 0)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid chunk size");
 
-	memset(ctx.h, 0, sizeof(ctx.h));
-	memset(ctx.uid, 0, sizeof(ctx.uid));
-	SHA256_randomized_buffer(ctx.uid, sizeof(ctx.uid));
-	ctx.iter = iter;
-	ctx.pol = pol;
+	RANDOM_UID(uid, uid_size);
+	struct gen_ctx_s ctx;
+	memset(&ctx, 0, sizeof(ctx));
+
 	ctx.url = url;
+	ctx.pol = pol;
+	ctx.iter = iter;
+	ctx.uid = (guint8*) &uid;
+	ctx.uid_size = uid_size;
 	ctx.size = size;
 	ctx.chunk_size = chunk_size;
 	ctx.cb = cb;
