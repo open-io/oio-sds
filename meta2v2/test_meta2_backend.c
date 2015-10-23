@@ -31,7 +31,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 typedef void (*repo_test_f) (struct meta2_backend_s *m2);
 
 typedef void (*container_test_f) (struct meta2_backend_s *m2,
-		struct hc_url_s *url);
+		struct hc_url_s *url, gint64 max_versions);
 
 static guint64 container_counter = 0;
 static gint64 chunk_size = 3000;
@@ -329,7 +329,7 @@ _container_wraper(const char *ns, gint64 maxvers, container_test_f cf)
 		g_assert_no_error(err);
 
 		if (cf)
-			cf(m2, url);
+			cf(m2, url, maxvers);
 
 		err = meta2_backend_destroy_container (m2, url, M2V2_DESTROY_FORCE|M2V2_DESTROY_FLUSH);
 		g_assert_no_error (err);
@@ -337,10 +337,19 @@ _container_wraper(const char *ns, gint64 maxvers, container_test_f cf)
 		hc_url_pclean(&url);
 	}
 
-	g_printerr("--- %"G_GINT64_FORMAT" %s "
-			"-----------------------------------------------------",
+	g_printerr("--- %"G_GINT64_FORMAT" %s -----------------------------------------------------",
 			maxvers, ns);
 	_repo_wraper(ns, maxvers, test);
+}
+
+static void
+_container_wraper_allversions (const char *ns, container_test_f cf)
+{
+	_container_wraper (ns, -2, cf);
+	_container_wraper (ns, -1, cf);
+	_container_wraper (ns, 0, cf);
+	_container_wraper (ns, 1, cf);
+	_container_wraper (ns, 2, cf);
 }
 
 static void
@@ -389,37 +398,37 @@ test_backend_strange_ns(void)
 static void
 test_container_create_destroy(void)
 {
-	_container_wraper("NS", 0, NULL);
+	_container_wraper_allversions("NS", NULL);
 }
 
 static void
 test_content_delete_not_found(void)
 {
-	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
+	void test(struct meta2_backend_s *m2, struct hc_url_s *u, gint64 max_versions) {
+		(void) max_versions;
 		GError *err = meta2_backend_delete_alias(m2, u, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		g_clear_error(&err);
 	}
-	_container_wraper("NS", 0, test);
+	_container_wraper_allversions("NS", test);
 }
 
 static void
 test_content_put_no_beans(void)
 {
-	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
+	void test(struct meta2_backend_s *m2, struct hc_url_s *u, gint64 max_versions) {
+		(void) max_versions;
 		GError *err = meta2_backend_put_alias(m2, u, NULL, NULL, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_BAD_REQUEST);
 		g_clear_error(&err);
 	}
-	_container_wraper("NS", 0, test);
+	_container_wraper_allversions("NS", test);
 }
 
 static void
 test_content_put_prop_get(void)
 {
-	gint64 max_versions;
-
-	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
+	void test(struct meta2_backend_s *m2, struct hc_url_s *u, gint64 max_versions) {
 		GSList *beans;
 		guint expected;
 		GPtrArray *tmp;
@@ -445,9 +454,22 @@ test_content_put_prop_get(void)
 		CHECK_ALIAS_VERSION(m2,u,0);
 		check_list_count(m2,u,1);
 
-		/* check we got our beans */
+		/* check we got our beans, without the properties */
 		tmp = g_ptr_array_new();
-		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION, _bean_buffer_cb, tmp);
+		err = meta2_backend_get_alias(m2, u,
+				M2V2_FLAG_ALLVERSION|M2V2_FLAG_NOPROPS,
+				_bean_buffer_cb, tmp);
+		g_assert_no_error(err);
+		expected = 2 + chunks_count;
+		GRID_DEBUG("TEST count=%u expected=%u", tmp->len, expected);
+		_debug_beans_array(tmp);
+		g_assert(tmp->len == expected);
+		_bean_cleanv2(tmp);
+
+		/* idem, but with the properties */
+		tmp = g_ptr_array_new();
+		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION,
+				_bean_buffer_cb, tmp);
 		g_assert_no_error(err);
 		expected = 10 + 2 + chunks_count;
 		GRID_DEBUG("TEST count=%u expected=%u", tmp->len, expected);
@@ -467,32 +489,22 @@ test_content_put_prop_get(void)
 
 		/* check we get nothing when looking for a valid version */
 		tmp = g_ptr_array_new();
-		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_NODELETED, _bean_buffer_cb, tmp);
+		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_NODELETED,
+				_bean_buffer_cb, tmp);
 		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		expected = 0;
 		GRID_DEBUG("TEST count=%u expected=%u", tmp->len, expected);
 		g_assert(tmp->len == expected);
 		_bean_cleanv2(tmp);
-
-		/* Check we can undelete (by deleting deleted version) */
-		if (VERSIONS_UNLIMITED(max_versions)) {
-			err = meta2_backend_delete_alias(m2, u, NULL, NULL);
-			g_assert_no_error(err);
-
-			CHECK_ALIAS_VERSION(m2,u, 1);
-			check_list_count(m2, u, 2);
-		}
 	}
-	max_versions = 0;
-	_container_wraper("NS", max_versions, test);
+
+	_container_wraper_allversions("NS", test);
 }
 
 static void
 test_content_put_get_delete(void)
 {
-	gint64 max_versions;
-
-	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
+	void test(struct meta2_backend_s *m2, struct hc_url_s *u, gint64 max_versions) {
 		guint expected;
 		GPtrArray *tmp;
 		GError *err;
@@ -542,7 +554,8 @@ test_content_put_get_delete(void)
 
 		/* check there are 2 versions */
 		tmp = g_ptr_array_new();
-		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION, _bean_buffer_cb, tmp);
+		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION,
+				_bean_buffer_cb, tmp);
 		if (VERSIONS_ENABLED(max_versions)) {
 			g_assert_no_error(err);
 			// nb_versions * (1 alias + 1 content header + chunks_count * (1 chunk))
@@ -568,38 +581,26 @@ test_content_put_get_delete(void)
 		}
 	}
 
-	max_versions = -1;
-	g_assert (VERSIONS_UNLIMITED(max_versions));
-	_container_wraper("NS", max_versions, test);
-
-	max_versions = 0;
-	g_assert (VERSIONS_DISABLED(max_versions));
-	_container_wraper("NS", max_versions, test);
-
-	max_versions = 1;
-	g_assert (VERSIONS_SUSPENDED(max_versions));
-	_container_wraper("NS", max_versions, test);
-
-	max_versions = 2;
-	g_assert (VERSIONS_LIMITED(max_versions));
-	_container_wraper("NS", max_versions, test);
+	_container_wraper_allversions("NS", test);
 }
 
 static void
 test_content_append_empty(void)
 {
-	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
+	void test(struct meta2_backend_s *m2, struct hc_url_s *u, gint64 max_versions) {
+		(void) max_versions;
 		GError *err = meta2_backend_append_to_alias(m2, u, NULL, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_BAD_REQUEST);
 		g_clear_error(&err);
 	}
-	_container_wraper("NS", 0, test);
+	_container_wraper_allversions("NS", test);
 }
 
 static void
 test_content_append(void)
 {
-	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
+	void test(struct meta2_backend_s *m2, struct hc_url_s *u, gint64 max_versions) {
+		(void) max_versions;
 		GPtrArray *tmp;
 		GSList *beans = NULL;
 		GError *err;
@@ -611,14 +612,14 @@ test_content_append(void)
 		/* first PUT */
 		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL, NULL);
 		g_assert_no_error(err);
-
-		CHECK_ALIAS_VERSION(m2,u,1);
+		CHECK_ALIAS_VERSION(m2,u,0);
+		check_list_count(m2,u,1);
 
 		/* count the beans */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION, _bean_buffer_cb, tmp);
 		g_assert_no_error(err);
-		expected = 1 + 1 + (2*chunks_count);
+		expected = 1 + 1 + chunks_count;
 		GRID_DEBUG("TEST Found %u beans (ALLVERSION)", tmp->len);
 		g_assert(tmp->len == expected);
 		_bean_cleanv2(tmp);
@@ -626,17 +627,22 @@ test_content_append(void)
 		/* append */
 		err = meta2_backend_append_to_alias(m2, u, beans, NULL, NULL);
 		g_assert_no_error(err);
-
-		CHECK_ALIAS_VERSION(m2,u,2);
+		if (VERSIONS_ENABLED(max_versions)) {
+			CHECK_ALIAS_VERSION(m2,u,1);
+			check_list_count(m2,u,2);
+		} else {
+			CHECK_ALIAS_VERSION(m2,u,0);
+			check_list_count(m2,u,1);
+		}
 
 		/* check we got our beans */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION, _bean_buffer_cb, tmp);
 		g_assert_no_error(err);
 		expected = 2 /* alias */ + 2 /* headers */
-			+ (2*chunks_count) /* original chunks+contents */
-			+ (2*chunks_count) /* new chunks+contents duplicated */
-			+ (2*chunks_count); /* new chunks appended */
+			+ chunks_count  /* original chunks */
+			+ chunks_count  /* new chunks duplicated */
+			+ chunks_count; /* new chunks appended */
 		GRID_DEBUG("TEST After the append, got %u, expected %u", tmp->len, expected);
 		g_assert(tmp->len == expected);
 		_bean_cleanv2(tmp);
@@ -666,13 +672,13 @@ test_content_append(void)
 
 		_bean_cleanl2(beans);
 	}
-	_container_wraper("NS", 0, test);
+	_container_wraper_allversions("NS", test);
 }
 
 static void
 test_content_append_not_found(void)
 {
-	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
+	void test(struct meta2_backend_s *m2, struct hc_url_s *u, gint64 max_versions) {
 		guint expected;
 		GPtrArray *tmp;
 		GSList *beans = NULL;
@@ -733,13 +739,13 @@ test_content_append_not_found(void)
 		_debug_beans_array(tmp);
 		_bean_cleanv2(tmp);
 	}
-	_container_wraper("NS", 0, test);
+	_container_wraper_allversions("NS", test);
 }
 
 static void
 test_props_gotchas()
 {
-	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
+	void test(struct meta2_backend_s *m2, struct hc_url_s *u, gint64 max_versions) {
 		GError *err;
 		GSList *beans;
 
@@ -757,13 +763,13 @@ test_props_gotchas()
 		g_clear_error(&err);
 		_bean_cleanl2(beans);
 	}
-	_container_wraper("NS", 0, test);
+	_container_wraper_allversions("NS", test);
 }
 
 static void
 test_props_set_simple()
 {
-	void test(struct meta2_backend_s *m2, struct hc_url_s *u) {
+	void test(struct meta2_backend_s *m2, struct hc_url_s *u, gint64 max_versions) {
 		GError *err;
 		GSList *beans;
 
@@ -783,7 +789,7 @@ test_props_set_simple()
 
 		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?2:1));
 	}
-	_container_wraper("NS", 0, test);
+	_container_wraper_allversions("NS", test);
 }
 
 static void
@@ -812,7 +818,7 @@ test_content_dedup (void)
 		}
 	}
 
-	void test(struct meta2_backend_s *m2, struct hc_url_s *url) {
+	void test(struct meta2_backend_s *m2, struct hc_url_s *url, gint64 max_versions) {
 		GError *err;
 		/* Generate a list of beans */
 		GSList *beans = _create_alias(m2, url, NULL);
@@ -841,7 +847,7 @@ test_content_dedup (void)
 		err = NEWERROR(CODE_NOT_IMPLEMENTED, "test not yet implemented");
 		g_assert_no_error(err);
 	}
-	_container_wraper("NS", 0, test);
+	_container_wraper_allversions("NS", test);
 }
 
 int
