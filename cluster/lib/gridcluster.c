@@ -586,7 +586,7 @@ _compute_io_idle (guint major, guint minor)
 {
 	_constructor_idle_cache ();
 
-	gdouble idle = 1.0;
+	gdouble idle = 0.01;
 	struct maj_min_idle_s *out = NULL;
 
 	g_mutex_lock (&io_lock);
@@ -625,9 +625,9 @@ _compute_io_idle (guint major, guint minor)
 					&total_progress, &total_time, &total_iotime);
 			if (rc != 0) {
 				gdouble spent = total_time - out->last_total_time; /* in ms */
-				gdouble elapsed = now - out->last_update; /* in µs */
+				gdouble elapsed = now - out->last_update; /* in us */
 				elapsed /= G_TIME_SPAN_MILLISECOND; /* in ms */
-				out->idle = spent / elapsed;
+				out->idle = 1.0 - (spent / elapsed);
 				out->last_update = now;
 				out->last_total_time = total_time;
 				break;
@@ -715,7 +715,6 @@ _get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
 	g_slist_free (majmin_cache);
 	majmin_cache = kept;
 	g_mutex_unlock (&majmin_lock);
-
 
 	return out != NULL;
 }
