@@ -52,7 +52,7 @@ _versioned(struct meta2_backend_s *m2, struct hc_url_s *u)
 	gint64 v = 0;
 	GError *err = meta2_backend_get_max_versions(m2, u, &v);
 	g_assert_no_error(err);
-	return v != 0; // -1 means unlimited
+	return VERSIONS_ENABLED(v);
 }
 
 static void
@@ -394,7 +394,10 @@ test_backend_strange_ns(void)
 static void
 test_container_create_destroy(void)
 {
-	_container_wraper_allversions("NS", NULL);
+	void test(struct meta2_backend_s *m2, struct hc_url_s *u, gint64 max_versions) {
+		g_assert (VERSIONS_ENABLED(max_versions) == _versioned(m2, u));
+	}
+	_container_wraper_allversions("NS", test);
 }
 
 static void
@@ -772,10 +775,6 @@ test_props_gotchas()
 		GError *err;
 		GSList *beans;
 
-		err = meta2_backend_set_properties(m2, u, FALSE, NULL, NULL, NULL);
-		g_assert_error(err, GQ(), CODE_BAD_REQUEST);
-		g_clear_error(&err);
-
 		err = meta2_backend_get_properties(m2, u, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		g_clear_error(&err);
@@ -802,7 +801,7 @@ test_props_set_simple()
 		g_assert_no_error(err);
 		_bean_cleanl2(beans);
 
-		CHECK_ALIAS_VERSION(m2,u,1);
+		CHECK_ALIAS_VERSION(m2,u,0);
 
 		/* set it properties */
 		beans = _props_generate(u, 1, 10);
@@ -810,7 +809,7 @@ test_props_set_simple()
 		g_assert_no_error(err);
 		_bean_cleanl2(beans);
 
-		CHECK_ALIAS_VERSION(m2,u,(_versioned(m2,u)?2:1));
+		CHECK_ALIAS_VERSION(m2,u,0);
 	}
 	_container_wraper_allversions("NS", test);
 }
@@ -866,9 +865,10 @@ test_content_dedup (void)
 			_bean_cleanl2(beans2);
 		}
 
-		/* TODO */
-		err = NEWERROR(CODE_NOT_IMPLEMENTED, "test not yet implemented");
+		err = meta2_backend_deduplicate_contents (m2, url, 0, NULL);
 		g_assert_no_error(err);
+
+		/* TODO check the result of the dedup ;) */
 	}
 	_container_wraper_allversions("NS", test);
 }

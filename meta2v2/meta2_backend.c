@@ -1214,7 +1214,7 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	GRID_TRACE("M2 GET(%s)", hc_url_get(url, HCURL_WHOLE));
+	GRID_TRACE("M2 PROPSET(%s)", hc_url_get(url, HCURL_WHOLE));
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
