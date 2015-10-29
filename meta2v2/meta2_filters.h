@@ -40,8 +40,8 @@ struct on_bean_ctx_s
 struct on_bean_ctx_s *_on_bean_ctx_init(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply);
 
-void _on_bean_ctx_append_udata_list(struct on_bean_ctx_s *obc);
-void _on_bean_ctx_send_list(struct on_bean_ctx_s *obc, gboolean final);
+void _on_bean_ctx_send_list(struct on_bean_ctx_s *obc);
+
 void _on_bean_ctx_clean(struct on_bean_ctx_s *obc);
 
 /* -------------------------------------------------------------------------- */

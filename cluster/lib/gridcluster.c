@@ -77,11 +77,13 @@ conscience_remote_get_namespace (const char *cs, namespace_info_t **out)
 	GError *err = gridd_client_exec_and_concat (cs, CS_CLIENT_TIMEOUT,
 			message_marshall_gba_and_clean(req), &gba);
 	if (err) {
+		g_assert (gba == NULL);
 		g_prefix_error(&err, "request: ");
 		return err;
 	}
 
 	*out = namespace_info_unmarshall(gba->data, gba->len, &err);
+	g_byte_array_unref (gba);
 	if (*out) return NULL;
 	GSETERROR(&err, "Decoding error");
 	return err;
@@ -532,34 +534,66 @@ oio_sys_cpu_idle (void)
 	return out;
 }
 
+/* -------------------------------------------------------------------------- */
+
+/** @private */
+struct maj_min_idle_s {
+	guint major, minor;
+	gint64 last_update;
+	unsigned long long last_total_time;
+	gdouble idle;
+};
+
+static GSList *io_cache = NULL;
+static GMutex io_lock;
+
+static GSList *majmin_cache = NULL;
+static GMutex majmin_lock;
+
+void _constructor_idle_cache (void);
+void _destructor_idle_cache (void);
+
+void __attribute__ ((constructor))
+_constructor_idle_cache (void)
+{
+	static volatile guint lazy_init = 1;
+	if (lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
+			g_mutex_init (&io_lock);
+			g_mutex_init (&majmin_lock);
+		}
+	}
+}
+
+void __attribute__ ((destructor))
+_destructor_idle_cache (void)
+{
+	_constructor_idle_cache ();
+
+	g_mutex_lock (&io_lock);
+	g_slist_free_full (io_cache, g_free);
+	io_cache = NULL;
+	g_mutex_unlock (&io_lock);
+
+	g_mutex_lock (&majmin_lock);
+	g_slist_free_full (majmin_cache, g_free);
+	majmin_cache = NULL;
+	g_mutex_unlock (&majmin_lock);
+}
+
 static gdouble
 _compute_io_idle (guint major, guint minor)
 {
-	struct maj_min_idle_s {
-		guint major, minor;
-		gint64 last_update;
-		unsigned long long last_total_time;
-		gdouble idle;
-	};
+	_constructor_idle_cache ();
 
-	static GSList *cache = NULL;
-	static GMutex lock;
-	static volatile guint lazy_init = 1;
-
-	if (lazy_init) {
-		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
-			g_mutex_init (&lock);
-		}
-	}
-
-	gdouble idle = 1.0;
+	gdouble idle = 0.01;
 	struct maj_min_idle_s *out = NULL;
 
-	g_mutex_lock (&lock);
+	g_mutex_lock (&io_lock);
 	gint64 now = g_get_monotonic_time ();
 
 	/* locate the info in the cache */
-	for (GSList *l=cache; l && !out ;l=l->next) {
+	for (GSList *l=io_cache; l && !out ;l=l->next) {
 		struct maj_min_idle_s *p = l->data;
 		if (p && p->major == major && p->minor == minor)
 			out = p;
@@ -568,7 +602,7 @@ _compute_io_idle (guint major, guint minor)
 		out = SLICE_NEW0 (struct maj_min_idle_s);
 		out->major = major;
 		out->minor = minor;
-		cache = g_slist_prepend (cache, out);
+		io_cache = g_slist_prepend (io_cache, out);
 	}
 
 	/* check its validity and reload if necessary */
@@ -591,9 +625,9 @@ _compute_io_idle (guint major, guint minor)
 					&total_progress, &total_time, &total_iotime);
 			if (rc != 0) {
 				gdouble spent = total_time - out->last_total_time; /* in ms */
-				gdouble elapsed = now - out->last_update; /* in µs */
+				gdouble elapsed = now - out->last_update; /* in us */
 				elapsed /= G_TIME_SPAN_MILLISECOND; /* in ms */
-				out->idle = spent / elapsed;
+				out->idle = 1.0 - (spent / elapsed);
 				out->last_update = now;
 				out->last_total_time = total_time;
 				break;
@@ -608,46 +642,40 @@ _compute_io_idle (guint major, guint minor)
 
 	/* purge obsolete and exceeding entries of the cache */ 
 	GSList *kept = NULL, *trash = NULL;
-	for (GSList *l=cache; l ;l=l->next) {
+	for (GSList *l=io_cache; l ;l=l->next) {
 		struct maj_min_idle_s *p = l->data;
 		if ((now - p->last_update) > G_TIME_SPAN_HOUR)
 			trash = g_slist_prepend (trash, p);
 		else
 			kept = g_slist_prepend (kept, p);
 	}
-	cache = kept;
+	g_slist_free (io_cache);
 	g_slist_free_full (trash, g_free);
-	g_mutex_unlock (&lock);
+	io_cache = kept;
+	g_mutex_unlock (&io_lock);
 
 	return idle;
 }
 
+struct path_maj_min_s
+{
+	gint64 last_update;
+	int major;
+	int minor;
+	gchar path[];
+};
+
 static int
 _get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
 {
-	struct path_maj_min_s {
-		gint64 last_update;
-		int major;
-		int minor;
-		gchar path[];
-	};
-
-	static GSList *cache = NULL;
-	static GMutex lock;
-	static volatile guint lazy_init = 1;
-
-	if (lazy_init) {
-		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
-			g_mutex_init (&lock);
-		}
-	}
+	_constructor_idle_cache ();
 
 	struct path_maj_min_s *out = NULL;
 
-	g_mutex_lock (&lock);
+	g_mutex_lock (&majmin_lock);
 	gint64 now = g_get_monotonic_time ();
 	/* ensure an entry exists */
-	for (GSList *l=cache; l && !out ;l=l->next) {
+	for (GSList *l=majmin_cache; l && !out ;l=l->next) {
 		struct path_maj_min_s *p = l->data;
 		if (p && !strcmp(path, p->path))
 			out = p;
@@ -655,7 +683,7 @@ _get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
 	if (!out) {
 		out = g_malloc0 (sizeof(struct path_maj_min_s) + strlen(path) + 1);
 		strcpy (out->path, path);
-		cache = g_slist_prepend (cache, out);
+		majmin_cache = g_slist_prepend (majmin_cache, out);
 	}
 
 	/* maybe refresh it */
@@ -676,17 +704,17 @@ _get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
 
 	/* now purge the expired items */
 	GSList *kept = NULL, *trash = NULL;
-	for (GSList *l=cache; l ;l=l->next) {
+	for (GSList *l=majmin_cache; l ;l=l->next) {
 		struct path_maj_min_s *p = l->data;
 		if ((now - p->last_update) > G_TIME_SPAN_HOUR)
 			trash = g_slist_prepend (trash, p);
 		else
 			kept = g_slist_prepend (kept, p);
 	}
-	cache = kept;
-	g_mutex_unlock (&lock);
-
 	g_slist_free_full (trash, g_free);
+	g_slist_free (majmin_cache);
+	majmin_cache = kept;
+	g_mutex_unlock (&majmin_lock);
 
 	return out != NULL;
 }

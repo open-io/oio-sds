@@ -159,7 +159,7 @@ meta2_filter_action_purge_container(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_on_bean_ctx_send_list(obc, TRUE);
+	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
 }
@@ -270,7 +270,7 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		}
 	}
 
-	_on_bean_ctx_send_list(obc, TRUE);
+	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	g_free0(next_marker);
 	if (properties) g_strfreev (properties);

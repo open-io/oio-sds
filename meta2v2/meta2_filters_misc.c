@@ -51,41 +51,16 @@ _on_bean_ctx_init(struct gridd_filter_ctx_s *ctx,
 }
 
 void
-_on_bean_ctx_append_udata_list(struct on_bean_ctx_s *obc)
+_on_bean_ctx_send_list(struct on_bean_ctx_s *obc)
 {
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(obc->ctx);
-
-	if (m2b->notify.hook) {
-		if (obc->first) {
-			obc->first = FALSE;
-			meta2_filter_ctx_set_input_udata(obc->ctx, obc->l,
-					(GDestroyNotify)_bean_cleanl2);
-		} else {
-			meta2_filter_ctx_set_input_udata2(obc->ctx,
-					metautils_gslist_precat(obc->l,
-						(GSList*)meta2_filter_ctx_get_input_udata(obc->ctx)),
-					(GDestroyNotify) _bean_cleanl2, FALSE);
-		}
-	} else {
-		GRID_TRACE("Events disabled, cleaning beans immediately");
-		_bean_cleanl2(obc->l);
-	}
-}
-
-void
-_on_bean_ctx_send_list(struct on_bean_ctx_s *obc, gboolean final)
-{
-	/* marshall the list, send and clean it */
 	if (NULL != obc->l) {
 		obc->l = g_slist_reverse (obc->l);
 		obc->reply->add_body(bean_sequence_marshall(obc->l));
-		_on_bean_ctx_append_udata_list(obc);
+		_bean_cleanl2 (obc->l);
+		obc->l = NULL;
 	}
-	if (final)
-		obc->reply->send_reply(CODE_FINAL_OK, "OK");
-	else
-		obc->reply->send_reply(CODE_PARTIAL_CONTENT, "Partial content");
-	obc->l = NULL;
+
+	obc->reply->send_reply(CODE_FINAL_OK, "OK");
 }
 
 void
@@ -94,11 +69,8 @@ _on_bean_ctx_clean(struct on_bean_ctx_s *obc)
 	if (!obc)
 		return;
 
-	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(obc->ctx);
-
-	if (obc->l) {
-		if (!m2b->notify.hook)
-			_bean_cleanl2(obc->l);
+	if (NULL != obc->l) {
+		_bean_cleanl2 (obc->l);
 		obc->l = NULL;
 	}
 	obc->reply = NULL;
