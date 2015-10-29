@@ -559,48 +559,85 @@ _db_delete(const struct bean_descriptor_s *descr, sqlite3 *db,
 
 /* REPLACE ------------------------------------------------------------------ */
 
+static GVariant**
+_bean_params_update (gpointer bean)
+{
+	const struct field_descriptor_s *fd;
+	GPtrArray *v;
+	GVariant *gv;
+
+	v = g_ptr_array_sized_new(1 + DESCR(bean)->count_fields);
+	for (fd=DESCR(bean)->fields; fd->name ;fd++) {
+		if (!fd->pk) {
+			gv = _field_to_gvariant(bean, fd->position);
+			EXTRA_ASSERT(gv != NULL);
+			g_ptr_array_add(v, gv);
+		}
+	}
+	for (fd=DESCR(bean)->fields; fd->name ;fd++) {
+		if (fd->pk) {
+			gv = _field_to_gvariant(bean, fd->position);
+			EXTRA_ASSERT(gv != NULL);
+			g_ptr_array_add(v, gv);
+		}
+	}
+
+	g_ptr_array_add(v, NULL);
+	return (GVariant**) g_ptr_array_free(v, FALSE);
+}
+
+static GVariant**
+_bean_params_insert_or_replace (gpointer bean)
+{
+	const struct field_descriptor_s *fd;
+	GPtrArray *v;
+
+	v = g_ptr_array_sized_new(1 + DESCR(bean)->count_fields);
+	for (fd=DESCR(bean)->fields; fd->name ;fd++)
+		g_ptr_array_add(v, _field_to_gvariant(bean, fd->position));
+
+	g_ptr_array_add(v, NULL);
+	return (GVariant**) g_ptr_array_free(v, FALSE);
+}
+
+GError*
+_db_insert_bean(sqlite3 *db, gpointer bean)
+{
+	EXTRA_ASSERT(db != NULL);
+	EXTRA_ASSERT(bean != NULL);
+
+	GVariant **params = _bean_params_insert_or_replace (bean);
+	GError *err = _db_execute(db, DESCR(bean)->sql_insert, params);
+	gv_freev(params, FALSE);
+	return err;
+}
+
+GError *
+_db_insert_beans_list (sqlite3 *db, GSList *list)
+{
+	GError *err = NULL;
+
+	EXTRA_ASSERT(db != NULL);
+	for (; !err && list ;list=list->next)
+		err = _db_insert_bean (db, list->data);
+	return err;
+}
+
+GError *
+_db_insert_beans_array (sqlite3 *db, GPtrArray *tmp)
+{
+	GError *err = NULL;
+
+	EXTRA_ASSERT(db != NULL);
+	for (guint i=0; !err && i<tmp->len; i++)
+		err = _db_insert_bean (db, tmp->pdata[i]);
+	return err;
+}
+
 GError*
 _db_save_bean(sqlite3 *db, gpointer bean)
 {
 	/* an UPDATE query has the form '... SET [non-pk] WHERE [pk]' */
-	GVariant** _params_update() {
-		const struct field_descriptor_s *fd;
-		GPtrArray *v;
-		GVariant *gv;
-
-		v = g_ptr_array_sized_new(1 + DESCR(bean)->count_fields);
-		for (fd=DESCR(bean)->fields; fd->name ;fd++) {
-			if (!fd->pk) {
-				gv = _field_to_gvariant(bean, fd->position);
-				EXTRA_ASSERT(gv != NULL);
-				g_ptr_array_add(v, gv);
-			}
-		}
-		for (fd=DESCR(bean)->fields; fd->name ;fd++) {
-			if (fd->pk) {
-				gv = _field_to_gvariant(bean, fd->position);
-				EXTRA_ASSERT(gv != NULL);
-				g_ptr_array_add(v, gv);
-			}
-		}
-
-		g_ptr_array_add(v, NULL);
-		return (GVariant**) g_ptr_array_free(v, FALSE);
-	}
-
-	/* a REPLACE query sets all the fields following their declaration order */
-	GVariant** _params_replace() {
-		const struct field_descriptor_s *fd;
-		GPtrArray *v;
-
-		v = g_ptr_array_sized_new(1 + DESCR(bean)->count_fields);
-		for (fd=DESCR(bean)->fields; fd->name ;fd++)
-			g_ptr_array_add(v, _field_to_gvariant(bean, fd->position));
-
-		g_ptr_array_add(v, NULL);
-		return (GVariant**) g_ptr_array_free(v, FALSE);
-	}
-
 	GError *err;
 	GVariant **params = NULL;
 
@@ -608,11 +645,11 @@ _db_save_bean(sqlite3 *db, gpointer bean)
 	EXTRA_ASSERT(bean != NULL);
 
 	if (HDR(bean)->flags & BEAN_FLAG_TRANSIENT) {
-		params = _params_replace();
+		params = _bean_params_insert_or_replace (bean);
 		err = _db_execute(db, DESCR(bean)->sql_replace, params);
 	}
 	else {
-		params = _params_update();
+		params = _bean_params_update (bean);
 		err = _db_execute(db, DESCR(bean)->sql_update, params);
 	}
 
@@ -627,14 +664,8 @@ _db_save_beans_list(sqlite3 *db, GSList *list)
 
 	EXTRA_ASSERT(db != NULL);
 	for (; !err && list ;list=list->next) {
-		if (!list->data)
-			continue;
-		if (GRID_TRACE2_ENABLED()) {
-			GString *s = _bean_debug(NULL, list->data);
-			GRID_TRACE("M2 saving  %s", s->str);
-			g_string_free(s, TRUE);
-		}
-		err = _db_save_bean(db, list->data);
+		if (list->data)
+			err = _db_save_bean(db, list->data);
 	}
 	return err;
 }
@@ -646,14 +677,8 @@ _db_save_beans_array(sqlite3 *src, GPtrArray *tmp)
 
 	EXTRA_ASSERT(src != NULL);
 	EXTRA_ASSERT(tmp != NULL);
-	for (guint i=0; !err && i<tmp->len; i++) {
-		if (GRID_TRACE_ENABLED()) {
-			GString *s = _bean_debug(NULL, tmp->pdata[i]);
-			GRID_TRACE("M2 saving  %s", s->str);
-			g_string_free(s, TRUE);
-		}
-		err = _db_save_bean(src, tmp->pdata[i]);
-	}
+	for (guint i=0; !err && i<tmp->len; i++)
+		err = _db_save_bean (src, tmp->pdata[i]);
 	return err;
 }
 

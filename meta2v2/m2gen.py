@@ -349,6 +349,7 @@ the list."""
 
 			t0 = ",".join(t.get_fields_names())
 			t1 = ",".join(['?' for f in t.fields])
+			out.write('\t'+dquoted("INSERT  INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")")+',\n')
 			out.write('\t'+dquoted("REPLACE INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")")+',\n')
 
 			t0 = ",".join([ f.name+'=?' for f in t.fields if not f.name in t.pk])
