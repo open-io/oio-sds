@@ -58,11 +58,9 @@ _versioned(struct meta2_backend_s *m2, struct hc_url_s *u)
 static void
 _debug_beans_list(GSList *l)
 {
-	if (!g_getenv("GS_DEBUG_ENABLED"))
-		return;
 	for (; l ;l=l->next) {
 		GString *s = _bean_debug(NULL, l->data);
-		GRID_DEBUG("TEST DUMP %s", s->str);
+		GRID_DEBUG(" %s", s->str);
 		g_string_free(s, TRUE);
 	}
 }
@@ -70,12 +68,10 @@ _debug_beans_list(GSList *l)
 static void
 _debug_beans_array(GPtrArray *v)
 {
-	if (!g_getenv("GS_DEBUG_ENABLED"))
-		return;
 	guint i;
 	for (i=0; i<v->len ;i++) {
 		GString *s = _bean_debug(NULL, v->pdata[i]);
-		GRID_DEBUG("TEST DUMP %s", s->str);
+		GRID_DEBUG(" %s", s->str);
 		g_string_free(s, TRUE);
 	}
 }
@@ -115,7 +111,7 @@ _create_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	err = meta2_backend_generate_beans(m2b, url, (chunk_size*(chunks_count-1))+1,
 			polname, FALSE, _onbean, &beans);
 	generated = g_slist_length(beans);
-	expected = (2+chunks_count);
+	expected = 1 + 1 + chunks_count;
 	GRID_DEBUG("BEANS generated=%u expected=%u", generated, expected);
 	g_assert_no_error(err);
 	g_assert(generated == expected);
@@ -620,58 +616,78 @@ test_content_append(void)
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION, _bean_buffer_cb, tmp);
 		g_assert_no_error(err);
 		expected = 1 + 1 + chunks_count;
-		GRID_DEBUG("TEST Found %u beans (ALLVERSION)", tmp->len);
+		GRID_DEBUG("Put -> %u beans (ALLVERSION)", tmp->len);
+		//_debug_beans_array (tmp);
 		g_assert(tmp->len == expected);
 		_bean_cleanv2(tmp);
 
-		/* append */
-		err = meta2_backend_append_to_alias(m2, u, beans, NULL, NULL);
-		g_assert_no_error(err);
-		if (VERSIONS_ENABLED(max_versions)) {
-			CHECK_ALIAS_VERSION(m2,u,1);
-			check_list_count(m2,u,2);
-		} else {
-			CHECK_ALIAS_VERSION(m2,u,0);
-			check_list_count(m2,u,1);
-		}
+		/* append th same chunks */
+		tmp = g_ptr_array_new ();
+		err = meta2_backend_append_to_alias(m2, u, beans, _bean_buffer_cb, tmp);
+		g_assert(err != NULL);
+		_bean_cleanv2 (tmp);
+
+		/* append new chunks */
+		struct oio_url_s *u1 = oio_url_dup(u);
+		oio_url_set (u1, OIOURL_PATH, "_");
+		GSList *newbeans = _create_alias(m2, u1, NULL);
+		oio_url_pclean (&u1);
+
+		tmp = g_ptr_array_new ();
+		err = meta2_backend_append_to_alias(m2, u, newbeans, _bean_buffer_cb, tmp);
+		GRID_DEBUG("Append -> %u beans", tmp->len);
+		//_debug_beans_array (tmp);
+		CHECK_ALIAS_VERSION(m2,u,0);
+		check_list_count(m2,u,1);
+		_bean_cleanl2 (newbeans);
 
 		/* check we got our beans */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION, _bean_buffer_cb, tmp);
 		g_assert_no_error(err);
-		expected = 2 /* alias */ + 2 /* headers */
+		expected = 1 /* alias */ + 1 /* headers */
 			+ chunks_count  /* original chunks */
-			+ chunks_count  /* new chunks duplicated */
 			+ chunks_count; /* new chunks appended */
 		GRID_DEBUG("TEST After the append, got %u, expected %u", tmp->len, expected);
 		g_assert(tmp->len == expected);
 		_bean_cleanv2(tmp);
 
-		/* delete the bean */
+		/* delete the alias */
 		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
-		g_assert_no_error(err);
-
-		CHECK_ALIAS_VERSION(m2,u,3);
+		if (VERSIONS_ENABLED(max_versions)) {
+			g_assert_no_error(err);
+			CHECK_ALIAS_VERSION(m2,u,1);
+			check_list_count(m2,u,2);
+		} else {
+			g_assert_no_error(err);
+			check_list_count(m2,u,0);
+		}
 
 		/* check we get nothing when looking for a valid version */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_NODELETED, _bean_buffer_cb, tmp);
 		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
 		GRID_DEBUG("TEST Found %u beans (NODELETED)", tmp->len);
-		g_assert(tmp->len == 0);
+		g_assert_cmpint(tmp->len, ==, 0);
 		_bean_cleanv2(tmp);
 
 		/* check we can get both deleted and previous versions */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION, _bean_buffer_cb, tmp);
-		g_assert_no_error(err);
-		_debug_beans_array(tmp);
-		expected = 3+3+(10*chunks_count);
+		GRID_DEBUG("TEST Found %u beans (ALLVERSION)", tmp->len);
+		if (VERSIONS_ENABLED(max_versions)) {
+			g_assert_no_error(err);
+			expected = 2*(1+1+(2*chunks_count));
+		} else {
+			g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
+			expected = 0;
+		}
 		g_assert_cmpint(tmp->len, ==, expected);
 		_bean_cleanv2(tmp);
 
 		_bean_cleanl2(beans);
 	}
+
 	_container_wraper_allversions("NS", test);
 }
 
@@ -689,41 +705,44 @@ test_content_append_not_found(void)
 		/* first PUT */
 		err = meta2_backend_append_to_alias(m2, u, beans, NULL, NULL);
 		g_assert_no_error(err);
-
-		CHECK_ALIAS_VERSION(m2,u,1);
+		CHECK_ALIAS_VERSION(m2,u,0);
 
 		/* count the beans */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION, _bean_buffer_cb, tmp);
 		g_assert_no_error(err);
-		expected = 1 + 1 + (2*chunks_count);
+		expected = 1 + 1 + chunks_count;
 		g_assert(tmp->len == expected);
 		_bean_cleanv2(tmp);
 
 		/* re-APPEND */
-		err = meta2_backend_append_to_alias(m2, u, beans, NULL, NULL);
+		struct oio_url_s *u1 = oio_url_dup(u);
+		oio_url_set (u1, OIOURL_PATH, "_");
+		GSList *newbeans = _create_alias(m2, u1, NULL);
+		err = meta2_backend_append_to_alias(m2, u, newbeans, NULL, NULL);
 		g_assert_no_error(err);
-		_bean_cleanl2(beans);
+		_bean_cleanl2(newbeans);
 
-		CHECK_ALIAS_VERSION(m2,u,2);
+		CHECK_ALIAS_VERSION(m2,u,0);
 
 		/* count the beans */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION, _bean_buffer_cb, tmp);
 		g_assert_no_error(err);
-		expected = 2 /* alias */
-			+ 2 /* headers */
-			+ (2*chunks_count) /* original chunks+contents */
-			+ (2*chunks_count) /* new chunks+contents duplicated */
-			+ (2*chunks_count); /* new chunks appended */
+		expected = 1 /* alias */ + 1 /* headers */
+			+ chunks_count /* original chunks+contents */
+			+ chunks_count; /* new chunks appended */
 		g_assert(tmp->len == expected);
 		_bean_cleanv2(tmp);
 
 		/* delete the bean */
 		err = meta2_backend_delete_alias(m2, u, NULL, NULL);
 		g_assert_no_error(err);
-
-		CHECK_ALIAS_VERSION(m2,u,3);
+		if (VERSIONS_ENABLED(max_versions)) {
+			CHECK_ALIAS_VERSION(m2,u,1);
+		} else {
+			check_list_count(m2,u,0);
+		}
 
 		/* check we get nothing when looking for a valid version */
 		tmp = g_ptr_array_new();
@@ -735,7 +754,11 @@ test_content_append_not_found(void)
 		/* check we can get both deleted and previous versions */
 		tmp = g_ptr_array_new();
 		err = meta2_backend_get_alias(m2, u, M2V2_FLAG_ALLVERSION, _bean_buffer_cb, tmp);
-		g_assert_no_error(err);
+		if (VERSIONS_ENABLED(max_versions)) {
+			g_assert_no_error(err);
+		} else {
+			g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
+		}
 		_debug_beans_array(tmp);
 		_bean_cleanv2(tmp);
 	}
@@ -873,14 +896,14 @@ main(int argc, char **argv)
 			test_content_put_prop_get);
 	g_test_add_func("/meta2v2/backend/content/append_empty",
 			test_content_append_empty);
-	g_test_add_func("/meta2v2/backend/content/append",
-			test_content_append);
-	g_test_add_func("/meta2v2/backend/content/append_notfound",
-			test_content_append_not_found);
 	g_test_add_func("/meta2v2/backend/props/set_simple",
 			test_props_set_simple);
 	g_test_add_func("/meta2v2/backend/props/gotchas",
 			test_props_gotchas);
+	g_test_add_func("/meta2v2/backend/content/append",
+			test_content_append);
+	g_test_add_func("/meta2v2/backend/content/append_notfound",
+			test_content_append_not_found);
 	g_test_add_func("/meta2v2/backend/content/dedup",
 			test_content_dedup);
 

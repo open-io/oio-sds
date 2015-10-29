@@ -76,34 +76,43 @@ m2v2_build_chunk_url (const char *srv, const char *id)
 	return g_strconcat(srv, "/", id, NULL);
 }
 
-gboolean
-m2v2_parse_chunk_position(const gchar *s, gint *pos, gboolean *par, gint *sub)
+void
+m2v2_position_encode (GString *out, struct m2v2_position_s *p)
 {
+	EXTRA_ASSERT(out != NULL);
+	EXTRA_ASSERT(p != NULL);
+	if (p->flag_rain) {
+		g_string_printf(out, "%d.%d%s", p->meta, p->intra, p->flag_parity ? "p" : "");
+	} else {
+		g_string_printf(out, "%d", p->meta);
+	}
+}
+
+struct m2v2_position_s
+m2v2_position_decode (const char *s)
+{
+	struct m2v2_position_s out = {0, 0, 0, 0, 0};
 	gchar *end = NULL;
 	gboolean parity = FALSE;
 	gint64 p64, s64;
 
-	EXTRA_ASSERT(pos != NULL);
-	EXTRA_ASSERT(par != NULL);
-	EXTRA_ASSERT(sub != NULL);
 	if (!s)
-		return FALSE;
+		return out;
 
 	p64 = g_ascii_strtoll(s, &end, 10);
 	if (STRTOLL_ERROR(p64, s, end))
-		return FALSE;
-	if (!*end) { // No sub-position found
-		*pos = p64;
-		*par = FALSE;
-		*sub = -1;
-		return TRUE;
+		return out;
+	if (!*end) {
+		out.meta = p64;
+		out.flag_ok = 1;
+		return out;
 	}
 
 	if (*end != '.')
-		return FALSE;
+		return out;
 	s = end + 1;
 	if (!*s) // Trailing dot not accepted
-		return FALSE;
+		return out;
 
 	if (*s == 'p') {
 		parity = 1;
@@ -113,14 +122,16 @@ m2v2_parse_chunk_position(const gchar *s, gint *pos, gboolean *par, gint *sub)
 	end = NULL;
 	s64 = g_ascii_strtoll(s, &end, 10);
 	if (STRTOLL_ERROR(s64, s, end))
-		return FALSE;
+		return out;
 	if (*end) // Trailing extra chars not accepted
-		return FALSE;
+		return out;
 
-	*pos = p64;
-	*par = parity;
-	*sub = s64;
-	return TRUE;
+	out.meta = p64;
+	out.intra = s64;
+	out.flag_parity = BOOL(parity);
+	out.flag_rain = 1;
+	out.flag_ok = 1;
+	return out;
 }
 
 guint64
@@ -1266,126 +1277,11 @@ m2db_copy_alias(struct m2db_put_args_s *args, const char *source)
 
 /* APPEND ------------------------------------------------------------------- */
 
-struct append_context_s
-{
-	GPtrArray *tmp;
-	guint8 *uid;
-	gsize uid_size;
-	GByteArray *old_uid;
-	GString *policy;
-	gint64 old_version;
-	gint64 old_count;
-	gint64 old_size;
-	gboolean fresh;
-	gboolean versioning;
-	gboolean append_on_deleted;
-};
-
-static void
-_increment_position(GString *encoded_position, gint64 inc)
-{
-	gchar tail[128];
-	gchar *end = NULL;
-	gint64 pos;
-
-	memset(tail, 0, sizeof(tail));
-	pos = g_ascii_strtoll(encoded_position->str, &end, 10);
-	g_strlcpy(tail, end, sizeof(tail));
-
-	g_string_printf(encoded_position, "%"G_GINT64_FORMAT"%s", pos+inc, tail);
-}
-
-static void
-_keep_old_bean(gpointer u, gpointer bean)
-{
-	struct append_context_s *ctx = u;
-	GString *gs;
-	gint64 i64;
-
-	if (DESCR(bean) == &descr_struct_CHUNKS) {
-		CHUNKS_set2_content(bean, ctx->uid, ctx->uid_size);
-		if (NULL != (gs = CHUNKS_get_position(bean))) {
-			i64 = g_ascii_strtoll(gs->str, NULL, 10);
-			if (ctx->old_count < i64)
-				ctx->old_count = i64;
-		}
-		/* We need them for notification purposes */
-		g_ptr_array_add(ctx->tmp, bean);
-	}
-	else {
-		if (DESCR(bean) == &descr_struct_ALIASES) {
-			/* get the most up-to-date version */
-			i64 = ALIASES_get_version(bean);
-			if (ctx->old_version < i64) {
-				ctx->old_version = i64;
-				/* if it's deleted, overwrite (do a PUT instead of append) */
-				if (ALIASES_get_deleted(bean)) {
-					ctx->old_version -= 1;
-					ctx->fresh = TRUE;
-				}
-			}
-		}
-		else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
-			ctx->old_size = CONTENTS_HEADERS_get_size(bean);
-			if (NULL != (gs = CONTENTS_HEADERS_get_policy(bean))) {
-				g_string_assign(ctx->policy, gs->str);
-			}
-			// Save old content id so we can find old content beans
-			ctx->old_uid = metautils_gba_dup(CONTENTS_HEADERS_get_id(bean));
-		}
-		_bean_clean(bean);
-	}
-}
-
-static gboolean
-_mangle_new_bean(struct append_context_s *ctx, gpointer bean)
-{
-	if (DESCR(bean) == &descr_struct_ALIASES) {
-		bean = _bean_dup(bean);
-		ALIASES_set_version(bean, ((ctx->versioning) ? ctx->old_version + 1 : ctx->old_version));
-		ALIASES_set2_content(bean, ctx->uid, ctx->uid_size);
-		g_ptr_array_add(ctx->tmp, bean);
-		return FALSE;
-	}
-
-	if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
-		bean = _bean_dup(bean);
-		CONTENTS_HEADERS_set_size(bean, CONTENTS_HEADERS_get_size(bean) + ctx->old_size);
-		CONTENTS_HEADERS_set2_id(bean, ctx->uid, ctx->uid_size);
-		CONTENTS_HEADERS_set2_policy(bean, ctx->policy->str);
-		CONTENTS_HEADERS_nullify_hash(bean);
-		g_ptr_array_add(ctx->tmp, bean);
-		return TRUE;
-	}
-
-	if (DESCR(bean) == &descr_struct_CHUNKS) {
-		bean = _bean_dup(bean);
-		_increment_position(CHUNKS_get_position(bean), ctx->old_count);
-		CHUNKS_set2_content(bean, ctx->uid, ctx->uid_size);
-		g_ptr_array_add(ctx->tmp, bean);
-		return FALSE;
-	}
-
-	/* other bean types are ignored and discarded */
-	return FALSE;
-}
-
-static void _delete_contents_by_id(struct sqlx_sqlite3_s *sq3, GByteArray *cid,
-		GError **err)
-{
-	const gchar *clause = " content = ? ";
-	GVariant *params[] = {NULL, NULL};
-	params[0] = _gba_to_gvariant(cid);
-	*err = CHUNKS_delete(sq3->db, clause, params);
-	g_variant_unref(params[0]);
-}
-
 GError*
 m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 		gint64 max_versions, struct hc_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0)
 {
-	struct append_context_s ctx;
 	GError *err = NULL;
 
 	// Sanity checks
@@ -1395,94 +1291,89 @@ m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 	if (!hc_url_has(url, HCURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
-	RANDOM_UID(uid, uid_size);
+	GPtrArray *tmp = g_ptr_array_new ();
+	err = m2db_get_alias(sq3, url, M2V2_FLAG_LATEST|M2V2_FLAG_NOPROPS,
+			_bean_buffer_cb, tmp);
 
-	memset(&ctx, 0, sizeof(ctx));
-	ctx.tmp = g_ptr_array_new();
-	ctx.policy = g_string_new("");
-	ctx.old_count = G_MININT64;
-	ctx.old_version = G_MININT64;
-	ctx.old_size = G_MININT64;
-	ctx.versioning = VERSIONS_ENABLED(max_versions);
-	ctx.uid = (guint8*) &uid;
-	ctx.uid_size = uid_size;
-
-	// Merge the previous versions of the beans with the new part
-	err = m2db_get_alias(sq3, url, M2V2_FLAG_NOPROPS, _keep_old_bean, &ctx);
 	/* Content does not exist or is deleted */
-	if (err && err->code == CODE_CONTENT_NOTFOUND &&
-			!VERSIONS_DISABLED(max_versions)) {
-		ctx.fresh = TRUE; // Do a PUT instead of append
+	if (err) {
+		if (err->code != CODE_CONTENT_NOTFOUND)
+			goto out;
 		g_clear_error(&err);
 	}
-	if (ctx.fresh) {
-		/* renew the buffer */
-		_bean_cleanv2(ctx.tmp);
-		ctx.tmp = g_ptr_array_new();
+	if (tmp->len <= 0) {
+		_bean_cleanv2(tmp);
+
+		struct m2db_put_args_s args;
+		memset(&args, 0, sizeof(args));
+		args.sq3 = sq3;
+		args.url = url;
+		args.max_versions = max_versions;
+		args.nsinfo = *ni;
+		return m2db_put_alias(&args, beans, NULL, NULL); /** XXX TODO FIXME */
 	}
 
-	/* Append the old beans that will be kept */
-	if (!err) {
-		if (ctx.fresh) {
-			struct m2db_put_args_s args;
-			memset(&args, 0, sizeof(args));
-			args.sq3 = sq3;
-			args.url = url;
-			args.max_versions = max_versions;
-			args.nsinfo = *ni;
-			err = m2db_put_alias(&args, beans, NULL, NULL); /** XXX TODO FIXME */
+	/* a content is present, let's append the chunks. Let's start by filtering
+	 * the chunks. */
+	GSList *newchunks = NULL;
+	for (GSList *l=beans; l ;l=l->next) {
+		gpointer bean = l->data;
+		if (bean && &descr_struct_CHUNKS == DESCR(bean))
+			newchunks = g_slist_prepend (newchunks, _bean_dup (bean));
+	}
+
+	/* For the beans in place, get the position of the last chunk (meta), and
+	 * the current content ID */
+	gint64 last_position = -1;
+	GBytes *content_id = NULL;
+	for (guint i=0; i<tmp->len ;++i) {
+		gpointer bean = tmp->pdata[i];
+		if (&descr_struct_CONTENTS_HEADERS == DESCR(bean)) {
+			struct bean_CONTENTS_HEADERS_s *header = bean;
+			GByteArray *gba = CONTENTS_HEADERS_get_id (header);
+			if (gba) {
+				if (content_id)
+					g_bytes_unref (content_id);
+				content_id = g_bytes_new (gba->data, gba->len);
+			}
 		}
-		else {
-			GRID_TRACE("M2 already %u beans, version=%"G_GINT64_FORMAT
-					" position=%"G_GINT64_FORMAT" size=%"G_GINT64_FORMAT,
-					ctx.tmp->len, ctx.old_version, ctx.old_count,
-					ctx.old_size);
-			gint64 append_size = 0;
-
-			ctx.old_count = ctx.tmp->len ? ctx.old_count + 1 : 0;
-			if (ctx.old_version == G_MININT64) {
-				ctx.old_version = 0;
-			}
-
-			/* append and mangle the new beans */
-			GRID_TRACE("MANGLE NEW BEAN => v + 1");
-			for (; beans ;beans=beans->next) {
-				if( _mangle_new_bean(&ctx, beans->data)) {
-					append_size = CONTENTS_HEADERS_get_size(beans->data);
-				}
-			}
-
-			/* Now save the whole */
-			if (!(err = _db_save_beans_array(sq3->db, ctx.tmp)) && cb) {
-				guint i;
-				for (i=0; i<ctx.tmp->len; i++) {
-					cb(u0, _bean_dup(ctx.tmp->pdata[i]));
-				}
-			}
-			if (VERSIONS_ENABLED(max_versions)) {
-				// Container size is cumulative. Even if some chunks are
-				// referenced by another alias version, we count them.
-				m2db_set_size(sq3,
-						m2db_get_size(sq3) + append_size + ctx.old_size);
-			} else {
-				m2db_set_size(sq3, m2db_get_size(sq3) + append_size);
-			}
-			if (!err && VERSIONS_DISABLED(max_versions)) {
-				// We must not let old contents in the base or
-				// synchronous deletion won't delete all chunks.
-				_delete_contents_by_id(sq3, ctx.old_uid, &err);
-				if (err) {
-					GRID_DEBUG("%s", err->message);
-					GRID_WARN("Some chunks may be referenced twice, purge recommended");
-					g_clear_error(&err);
-				}
+		else if (&descr_struct_CHUNKS == DESCR(bean)) {
+			struct bean_CHUNKS_s *chunk = bean;
+			GString *gs = CHUNKS_get_position (chunk);
+			if (gs) {
+				gint64 p = g_ascii_strtoll (gs->str, NULL, 10);
+				last_position = MAX(last_position, p);
 			}
 		}
 	}
+	g_assert (last_position >= 0);
+	g_assert (content_id != NULL);
 
-	g_string_free(ctx.policy, TRUE);
-	_bean_cleanv2(ctx.tmp);
-	metautils_gba_unref(ctx.old_uid);
+	/* update the position in each new chunk, and link it to the content
+	 * in place */
+	for (GSList *l=newchunks; l ;l=l->next) {
+		struct bean_CHUNKS_s *chunk = l->data;
+		GString *gs = CHUNKS_get_position (chunk);
+		struct m2v2_position_s position = m2v2_position_decode (gs->str);
+		position.meta += last_position + 1;
+		m2v2_position_encode  (gs, &position);
+		CHUNKS_set2_content (chunk, g_bytes_get_data(content_id, NULL),
+				g_bytes_get_size(content_id));
+	}
+
+	/* Now insert each chunk bean */
+	if (!(err = _db_insert_beans_list (sq3->db, newchunks))) {
+		if (cb) {
+			for (GSList *l=newchunks; l ;l=l->next) {
+				cb (u0, l->data);
+				l->data = NULL;
+			}
+		}
+	}
+	_bean_cleanl2 (newchunks);
+
+out:
+	_bean_cleanv2(tmp);
 	return err;
 }
 

@@ -71,8 +71,18 @@ struct dup_alias_params_s
 
 gchar* m2v2_build_chunk_url (const char *srv, const char *id);
 
-gboolean m2v2_parse_chunk_position(const gchar *str, gint *ppos,
-		gboolean *ppar, gint *psub);
+
+struct m2v2_position_s {
+	int meta, intra;
+	unsigned int flag_parity : 1;
+	unsigned int flag_rain : 1;
+	unsigned int flag_ok : 1;
+};
+
+struct m2v2_position_s m2v2_position_decode (const char *str);
+
+void m2v2_position_encode (GString *out, struct m2v2_position_s *p);
+
 
 typedef void (*m2_onbean_cb) (gpointer u, gpointer bean);
 
