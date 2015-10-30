@@ -1517,6 +1517,7 @@ m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	/* Now save the whole */
 	err = _db_save_beans_array(sq3->db, ctx.tmp);
 
+	_bean_clean(latest);
 	_bean_cleanv2(ctx.tmp);
 	return err;
 }
