@@ -464,9 +464,7 @@ struct meta0_disp_s*
 meta0_gridd_get_dispatcher(struct meta0_backend_s *m0,
 		struct zk_manager_s *m0zkmanager, gchar* ns_name)
 {
-	struct meta0_disp_s *result;
-
-	result = g_malloc0(sizeof(*result));
+	struct meta0_disp_s *result = g_malloc0(sizeof(*result));
 	result->ns_name = g_strdup(ns_name);
 	result->m0 = m0;
 	result->m0zkmanager = m0zkmanager;
@@ -483,8 +481,8 @@ meta0_gridd_free_dispatcher(struct meta0_disp_s *m0disp)
 		return;
 	if (m0disp->encoded)
 		g_byte_array_unref(m0disp->encoded);
+	oio_str_clean(&m0disp->ns_name);
 	g_mutex_clear(&m0disp->lock);
-	memset(m0disp, 0, sizeof(*m0disp));
 	g_free(m0disp);
 }
 

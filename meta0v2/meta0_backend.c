@@ -109,13 +109,13 @@ meta0_backend_clean(struct meta0_backend_s *m0)
 {
 	if (!m0)
 		return;
-	if (m0->id)
-		g_free(m0->id);
+	oio_str_clean (&m0->ns);
+	oio_str_clean (&m0->id);
 	if (m0->array_by_prefix)
 		meta0_utils_array_clean(m0->array_by_prefix);
 	if (m0->array_meta1_ref)
 		meta0_utils_array_meta1ref_clean(m0->array_meta1_ref);
-	memset(m0, 0, sizeof(struct meta0_backend_s));
+	g_rw_lock_clear (&m0->rwlock);
 	g_free(m0);
 }
 
