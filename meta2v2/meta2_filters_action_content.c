@@ -139,7 +139,7 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 		_notify_beans (m2b, url, added, "content.new");
 		if (deleted)
 			_notify_beans (m2b, url, deleted, "content.deleted");
-		_on_bean_ctx_send_list(obc, TRUE);
+		_on_bean_ctx_send_list(obc);
 		rc = FILTER_OK;
 	}
 
@@ -170,7 +170,7 @@ _copy_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		e = meta2_backend_get_alias(m2b, url, M2V2_FLAG_NOPROPS,
 				_bean_list_cb, &obc->l);
 		if (!e)
-			_on_bean_ctx_send_list(obc, TRUE);
+			_on_bean_ctx_send_list(obc);
 		_on_bean_ctx_clean(obc);
 	}
 
@@ -216,7 +216,7 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 	}
 
 	_notify_beans (m2b, url, obc->l, "content.append");
-	_on_bean_ctx_send_list(obc, TRUE);
+	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
 }
@@ -247,7 +247,7 @@ meta2_filter_action_get_content(struct gridd_filter_ctx_s *ctx,
 		goto cleanup;
 	}
 
-	_on_bean_ctx_send_list(obc, TRUE);
+	_on_bean_ctx_send_list(obc);
 	rc = FILTER_OK;
 
 cleanup:
@@ -275,7 +275,7 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 	}
 
 	_notify_beans(m2b, url, obc->l, "content.deleted");
-	_on_bean_ctx_send_list(obc, TRUE);
+	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
 }
@@ -309,7 +309,7 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_on_bean_ctx_send_list(obc, TRUE);
+	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
 }
@@ -332,7 +332,7 @@ meta2_filter_action_get_content_properties(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	_on_bean_ctx_send_list(obc, TRUE);
+	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
 }
@@ -438,7 +438,7 @@ meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
 		}
 	}
 
-	_on_bean_ctx_send_list(obc, TRUE);
+	_on_bean_ctx_send_list(obc);
 	_on_bean_ctx_clean(obc);
 	return FILTER_OK;
 }

@@ -1119,6 +1119,7 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 		params[0] = _gb_to_gvariant (args->content_id);
 		err = CONTENTS_HEADERS_load (args->sq3->db, " id = ? LIMIT 1", params,
 				_bean_buffer_cb, tmp);
+		metautils_gvariant_unrefv(params);
 		guint count = tmp->len;
 		_bean_cleanv2 (tmp);
 		if (err)
