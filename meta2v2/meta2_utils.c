@@ -73,7 +73,7 @@ _m2db_count_alias_versions(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 gchar*
 m2v2_build_chunk_url (const char *srv, const char *id)
 {
-	return g_strconcat(srv, "/", id, NULL);
+	return g_strconcat("http://", srv, "/", id, NULL);
 }
 
 void
