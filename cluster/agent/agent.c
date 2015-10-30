@@ -151,7 +151,7 @@ create_namespace_data(const gchar * ns)
 			sizeof(ns_data->ns_info.name));
 
 	ns_data->conscience = conscience_create();
-	namespace_info_copy(&(ns_data->ns_info), &(ns_data->conscience->ns_info), NULL);
+	namespace_info_copy(&(ns_data->ns_info), &(ns_data->conscience->ns_info));
 
 	ns_data->local_services = g_hash_table_new_full(g_str_hash, g_str_equal,
 			g_free, (GDestroyNotify) service_info_clean);

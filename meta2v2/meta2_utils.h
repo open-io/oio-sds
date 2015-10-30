@@ -175,7 +175,7 @@ struct m2db_put_args_s
 	struct sqlx_sqlite3_s *sq3;
 	gint64 max_versions;
 	struct hc_url_s *url;
-	struct namespace_info_s nsinfo;
+	struct namespace_info_s *nsinfo;
 	struct grid_lbpool_s *lbpool;
 	GBytes *content_id; /* optional */
 };

@@ -614,7 +614,8 @@ sqlx_service_specific_fini(void)
 	if (SRV.prng)
 		g_rand_free (SRV.prng);
 
-	namespace_info_clear(&SRV.nsinfo);
+	if (SRV.nsinfo)
+		namespace_info_free(SRV.nsinfo);
 }
 
 static struct grid_main_option_s *
@@ -785,24 +786,30 @@ _task_retry_elections(gpointer p)
 static void
 _task_reload_nsinfo(gpointer p)
 {
-	struct namespace_info_s *ni;
+	struct namespace_info_s *ni = NULL, *old = NULL;
 	GError *err = conscience_get_namespace(PSRV(p)->ns_name, &ni);
-	g_assert ((err != NULL) ^ (ni != NULL));
+	EXTRA_ASSERT ((err != NULL) ^ (ni != NULL));
 
 	if (err) {
 		GRID_WARN("NSINFO reload error [%s]: (%d) %s",
 				PSRV(p)->ns_name, err->code, err->message);
 		g_clear_error(&err);
 	} else {
-		namespace_info_copy(ni, &(PSRV(p)->nsinfo), NULL);
-		namespace_info_free(ni);
+		old = PSRV(p)->nsinfo;
+		PSRV(p)->nsinfo = ni;
+		namespace_info_free(old);
 	}
 }
 
 static void
 _task_reload_workers(gpointer p)
 {
-	gint64 max_workers = namespace_info_get_srv_param_i64(&(PSRV(p)->nsinfo),
+	if (!PSRV(p)->nsinfo) {
+		GRID_DEBUG("NS info not yet loaded");
+		return;
+	}
+
+	gint64 max_workers = namespace_info_get_srv_param_i64 (PSRV(p)->nsinfo,
 			NULL, PSRV(p)->service_config->srvtype, "max_workers",
 			SRV.cfg_max_workers);
 	network_server_set_max_workers(PSRV(p)->server, (guint) max_workers);
@@ -816,7 +823,7 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 	static volatile guint period_reload = 1;
 
 	EXTRA_ASSERT(ss != NULL);
-	if (!ss->lb)
+	if (!ss->lb || !ss->nsinfo)
 		return;
 
 	if (already_succeeded && 0 != (tick_reload++ % period_reload))
@@ -834,8 +841,7 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 		g_clear_error(&err);
 	}
 
-	// ss->nsinfo is reloaded by _task_reload_nsinfo()
-	grid_lbpool_reconfigure(ss->lb, &(ss->nsinfo));
+	grid_lbpool_reconfigure(ss->lb, ss->nsinfo);
 }
 
 static GError*

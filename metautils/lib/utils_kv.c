@@ -38,26 +38,6 @@ key_value_pairs_empty (void)
 			g_free, metautils_gba_clean);
 }
 
-GHashTable *
-key_value_pairs_convert_to_map(GSList * pairs, GError ** err)
-{
-	GHashTable *result = key_value_pairs_empty();
-
-	if (!result) {
-		GSETERROR(err, "Memory allocation failure");
-		return NULL;
-	}
-
-	for (GSList *pair = pairs; pair; pair = g_slist_next(pair)) {
-		if(!pair->data)
-			continue;
-		key_value_pair_t *p = (key_value_pair_t *) pair->data;
-		g_hash_table_insert(result, g_strdup(p->key), metautils_gba_dup(p->value));
-	}
-
-	return result;
-}
-
 struct kv_convert_ctx_s
 {
 	gboolean error_met;

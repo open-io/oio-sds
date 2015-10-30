@@ -768,49 +768,25 @@ strings_unmarshall(GSList ** l, const void *buf, gsize len, GError ** err)
 
 /* NSINFO ------------------------------------------------------------------- */
 
-static gboolean
-list_conversion (const struct NamespaceInfoValueList *nsinfo_vlist,
-		GHashTable **ht, GHashTable* (*conv_func)(GSList * pairs, GError ** err))
+static GHashTable*
+list_conversion (const struct NamespaceInfoValueList *vl)
 {
-	EXTRA_ASSERT (nsinfo_vlist != NULL);
-	EXTRA_ASSERT (ht != NULL);
+	EXTRA_ASSERT (vl != NULL);
 
-	void _free(GSList *valuelist) {
-		if (valuelist) {
-			g_slist_foreach(valuelist, key_value_pair_gclean, NULL);
-			g_slist_free(valuelist);
-		}
-	}
+	GHashTable *ht = key_value_pairs_empty();
 
-	if (nsinfo_vlist->list.count <= 0) {
-		*ht = key_value_pairs_empty();
-	} else {
-		GSList* valuelist = NULL;
-		GError *error = NULL;
-
-		for (int i = 0; i < nsinfo_vlist->list.count; i++) {
-			Parameter_t* asn_prop;
-			if (!(asn_prop = nsinfo_vlist->list.array[i]))
+	if (vl->list.count > 0) {
+		for (int i = 0; i < vl->list.count; i++) {
+			Parameter_t* p;
+			if (!(p = vl->list.array[i]))
 				continue;
-			key_value_pair_t* api_prop = g_malloc0(sizeof(key_value_pair_t));
-			key_value_pair_ASN2API(asn_prop, api_prop);
-			valuelist = g_slist_prepend(valuelist, api_prop);
-		}
-
-		*ht = (conv_func(valuelist, &error));
-		g_slist_foreach(valuelist, key_value_pair_gclean, NULL);
-		g_slist_free(valuelist);
-		valuelist = NULL;
-
-		if (*ht == NULL) {
-			ERROR("Failed to convert key_value_pairs to map in namespace_info ASN to API conversion : %s",
-					gerror_get_message(error));
-			g_clear_error(&error);
-			return FALSE;
+			g_hash_table_insert (ht,
+					g_strndup((gchar*)p->name.buf, p->name.size),
+					g_byte_array_append(g_byte_array_new(), p->value.buf, p->value.size));
 		}
 	}
 
-	return TRUE;
+	return ht;
 }
 
 static gboolean
@@ -824,23 +800,12 @@ namespace_info_ASN2API(const NamespaceInfo_t *asn, namespace_info_t *api)
 	addr_info_ASN2API(&(asn->addr), &(api->addr));
 	asn_INTEGER_to_int64(&(asn->chunkSize), &(api->chunk_size));
 
-	if (!list_conversion(&(asn->options), &(api->options), key_value_pairs_convert_to_map))
-		return FALSE;
-
-	if (!list_conversion(&(asn->storagePolicy), &(api->storage_policy), key_value_pairs_convert_to_map))
-		return FALSE;
-
-	if (!list_conversion(&(asn->dataSecurity), &(api->data_security), key_value_pairs_convert_to_map))
-		return FALSE;
-
-	if (!list_conversion(&(asn->dataTreatments), &(api->data_treatments), key_value_pairs_convert_to_map))
-		return FALSE;
-
-	if (!list_conversion(&(asn->storageClass), &(api->storage_class), key_value_pairs_convert_to_map))
-		return FALSE;
-
+	api->options = list_conversion(&(asn->options));
+	api->storage_policy = list_conversion(&(asn->storagePolicy));
+	api->data_security = list_conversion(&(asn->dataSecurity));
+	api->data_treatments = list_conversion(&(asn->dataTreatments));
+	api->storage_class = list_conversion(&(asn->storageClass));
 	return TRUE;
-
 }
 
 static gboolean

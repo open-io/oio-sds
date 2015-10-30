@@ -44,7 +44,9 @@ static struct meta2_backend_s *m2 = NULL;
 static void
 _task_reconfigure_m2(gpointer p)
 {
-	meta2_backend_configure_nsinfo(m2, &(PSRV(p)->nsinfo));
+	if (!PSRV(p)->nsinfo)
+		return;
+	meta2_backend_configure_nsinfo(m2, PSRV(p)->nsinfo);
 }
 
 static gchar **

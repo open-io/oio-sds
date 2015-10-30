@@ -59,13 +59,6 @@ enum m2v2_open_type_e
 #define M2V2_OPEN_STATUS    0xF00
 };
 
-#define _M2B_GET_VNS_INFO(m2b, vns, nsinfo) \
-	struct namespace_info_s nsinfo;\
-	memset(&nsinfo, 0, sizeof(nsinfo));\
-	meta2_backend_get_nsinfo((m2b), &nsinfo);\
-	if ((vns))\
-		g_strlcpy(nsinfo.name, (vns), LIMIT_LENGTH_NSNAME);
-
 static void
 _append_url (GString *gs, struct hc_url_s *url)
 {
@@ -87,43 +80,37 @@ _append_url (GString *gs, struct hc_url_s *url)
 }
 
 static gint64
-m2b_quota(struct meta2_backend_s *m2b, const gchar *vns)
-{
-	gint64 quota;
-	_M2B_GET_VNS_INFO(m2b, vns, nsinfo)
-	quota = namespace_container_max_size(&nsinfo);
-	namespace_info_clear(&nsinfo);
-
-	return quota;
-}
-
-static gint64
 _quota(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
-	gchar *vns = m2db_get_namespace(sq3, m2b->backend.ns_name);
-	gint64 res = m2db_get_quota(sq3, m2b_quota(m2b, vns));
-	g_free(vns);
-	return res;
+	gint64 quota = 0;
+
+	g_mutex_lock (&m2b->nsinfo_lock);
+	quota = namespace_container_max_size(m2b->nsinfo);
+	g_mutex_unlock (&m2b->nsinfo_lock);
+
+	return m2db_get_quota(sq3, quota);
 }
 
 static gint64
-m2b_max_versions(struct meta2_backend_s *m2b, const gchar *vns)
+m2b_max_versions(struct meta2_backend_s *m2b)
 {
-	gint64 max_versions;
-	_M2B_GET_VNS_INFO(m2b, vns, nsinfo)
-	max_versions = gridcluster_get_container_max_versions(&nsinfo);
-	namespace_info_clear(&nsinfo);
+	gint64 max_versions = -1;
+
+	g_mutex_lock (&m2b->nsinfo_lock);
+	max_versions = gridcluster_get_container_max_versions(m2b->nsinfo);
+	g_mutex_unlock (&m2b->nsinfo_lock);
 
 	return max_versions;
 }
 
 static gint64
-m2b_keep_deleted_delay(struct meta2_backend_s *m2b, const gchar *vns)
+m2b_keep_deleted_delay(struct meta2_backend_s *m2b)
 {
-	gint64 delay;
-	_M2B_GET_VNS_INFO(m2b, vns, nsinfo)
-	delay = gridcluster_get_keep_deleted_delay(&nsinfo);
-	namespace_info_clear(&nsinfo);
+	gint64 delay = -1;
+
+	g_mutex_lock (&m2b->nsinfo_lock);
+	delay = gridcluster_get_keep_deleted_delay(m2b->nsinfo);
+	g_mutex_unlock (&m2b->nsinfo_lock);
 
 	return delay;
 }
@@ -131,20 +118,13 @@ m2b_keep_deleted_delay(struct meta2_backend_s *m2b, const gchar *vns)
 static gint64
 _maxvers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
-	gchar *vns = m2db_get_namespace(sq3, m2b->backend.ns_name);
-	gint64 res = m2db_get_max_versions(sq3, m2b_max_versions(m2b, vns));
-	g_free(vns);
-	return res;
+	return m2db_get_max_versions(sq3, m2b_max_versions(m2b));
 }
 
 static gint64
 _retention_delay(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
-	gchar *vns = m2db_get_namespace(sq3, m2b->backend.ns_name);
-	gint64 res = m2db_get_keep_deleted_delay(sq3,
-			m2b_keep_deleted_delay(m2b, vns));
-	g_free(vns);
-	return res;
+	return m2db_get_keep_deleted_delay(sq3, m2b_keep_deleted_delay(m2b));
 }
 
 /* Backend ------------------------------------------------------------------ */
@@ -154,21 +134,18 @@ _check_policy(struct meta2_backend_s *m2, const gchar *polname)
 {
 	GError *err = NULL;
 	struct storage_policy_s *policy = NULL;
-	struct namespace_info_s nsinfo;
 
 	if (!*polname)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid policy: %s", "empty");
 
-	memset(&nsinfo, 0, sizeof(nsinfo));
-	if (!meta2_backend_get_nsinfo(m2, &nsinfo))
-		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid policy: %s", "NS not ready");
+	g_mutex_lock (&m2->nsinfo_lock);
+	policy = storage_policy_init(m2->nsinfo, polname);
+	g_mutex_unlock (&m2->nsinfo_lock);
 
-	if (!(policy = storage_policy_init(&nsinfo, polname)))
+	if (!policy)
 		err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy: %s", "not found");
 	else
 		storage_policy_clean(policy);
-
-	namespace_info_clear(&nsinfo);
 	return err;
 }
 
@@ -204,7 +181,7 @@ meta2_backend_init(struct meta2_backend_s **result,
 	m2->backend.repo = repo;
 	m2->backend.lb = glp;
 	m2->policies = service_update_policies_create();
-	g_mutex_init(&m2->backend.ns_info_lock);
+	g_mutex_init(&m2->nsinfo_lock);
 
 	m2->flag_precheck_on_generate = TRUE;
 
@@ -228,49 +205,48 @@ meta2_backend_init(struct meta2_backend_s **result,
 void
 meta2_backend_clean(struct meta2_backend_s *m2)
 {
-	if (!m2) {
+	if (!m2)
 		return;
-	}
-	if (m2->policies) {
+	if (m2->policies)
 		service_update_policies_destroy(m2->policies);
-	}
-	if (m2->resolver) {
+	if (m2->resolver)
 		m2->resolver = NULL;
-	}
-	g_mutex_clear(&m2->backend.ns_info_lock);
-	namespace_info_clear(&(m2->backend.ns_info));
+	g_mutex_clear(&m2->nsinfo_lock);
+	namespace_info_free(m2->nsinfo);
 	g_free(m2);
 }
 
 void
 meta2_backend_configure_nsinfo(struct meta2_backend_s *m2,
-		struct namespace_info_s *ns_info)
+		struct namespace_info_s *ni)
 {
 	EXTRA_ASSERT(m2 != NULL);
-	EXTRA_ASSERT(ns_info != NULL);
+	EXTRA_ASSERT(ni != NULL);
 
-	g_mutex_lock(&m2->backend.ns_info_lock);
-	(void) namespace_info_copy(ns_info, &(m2->backend.ns_info), NULL);
-	g_mutex_unlock(&m2->backend.ns_info_lock);
+	struct namespace_info_s *old = NULL, *copy = NULL;
+	copy = namespace_info_dup (ni);
+
+	g_mutex_lock(&m2->nsinfo_lock);
+	old = m2->nsinfo;
+	m2->nsinfo = copy;
+	g_mutex_unlock(&m2->nsinfo_lock);
+
+	if (old)
+		namespace_info_free (old);
 }
 
-gboolean
-meta2_backend_get_nsinfo(struct meta2_backend_s *m2,
-		struct namespace_info_s *dst)
+struct namespace_info_s *
+meta2_backend_get_nsinfo (struct meta2_backend_s *m2)
 {
-	gboolean rc = FALSE;
-
 	EXTRA_ASSERT(m2 != NULL);
-	EXTRA_ASSERT(dst != NULL);
+	struct namespace_info_s *out = NULL;
 
-	g_mutex_lock(&m2->backend.ns_info_lock);
-	if (m2->backend.ns_info.name[0]) {
-		(void) namespace_info_copy(&(m2->backend.ns_info), dst, NULL);
-		rc = TRUE;
-	}
-	g_mutex_unlock(&m2->backend.ns_info_lock);
+	g_mutex_lock(&m2->nsinfo_lock);
+	if (m2->nsinfo)
+		out = namespace_info_dup (m2->nsinfo);
+	g_mutex_unlock(&m2->nsinfo_lock);
 
-	return rc;
+	return out;
 }
 
 GError*
@@ -307,7 +283,9 @@ gboolean
 meta2_backend_initiated(struct meta2_backend_s *m2)
 {
 	EXTRA_ASSERT(m2 != NULL);
-	gboolean rc = (m2->backend.ns_info.name[0] != '\0');
+	g_mutex_lock (&m2->nsinfo_lock);
+	gboolean rc = (NULL != m2->nsinfo);
+	g_mutex_unlock (&m2->nsinfo_lock);
 	return rc;
 }
 
@@ -892,7 +870,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
-		meta2_backend_get_nsinfo(m2b, &(args.nsinfo));
+		args.nsinfo = meta2_backend_get_nsinfo(m2b);
 		args.lbpool = m2b->backend.lb;
 		args.content_id = content_id;
 
@@ -905,7 +883,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		}
 		m2b_close(sq3);
 
-		namespace_info_clear(&(args.nsinfo));
+		namespace_info_free(args.nsinfo);
 	}
 
 	return err;
@@ -930,7 +908,7 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
-		meta2_backend_get_nsinfo(m2b, &(args.nsinfo));
+		args.nsinfo = meta2_backend_get_nsinfo(m2b);
 		args.lbpool = m2b->backend.lb;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
@@ -940,7 +918,7 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		}
 		m2b_close(sq3);
 
-		namespace_info_clear(&(args.nsinfo));
+		namespace_info_free(args.nsinfo);
 	}
 
 	return err;
@@ -967,7 +945,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
-		meta2_backend_get_nsinfo(m2b, &(args.nsinfo));
+		args.nsinfo = meta2_backend_get_nsinfo(m2b);
 		args.lbpool = m2b->backend.lb;
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
@@ -977,8 +955,9 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		}
 		if (!err)
 			meta2_backend_add_modified_container(m2b, sq3);
+		namespace_info_free(args.nsinfo);
+
 		m2b_close(sq3);
-		namespace_info_clear(&(args.nsinfo));
 	}
 
 	return err;
@@ -1137,23 +1116,21 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
-	struct namespace_info_s ni;
+	struct namespace_info_s *nsinfo = NULL;
 	gint64 max_versions;
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
 	if (!beans)
 		return NEWERROR(CODE_BAD_REQUEST, "No bean");
-
-	memset(&ni, '\0', sizeof(struct namespace_info_s));
-
-	meta2_backend_get_nsinfo(m2b, &ni);
+	if (!(nsinfo = meta2_backend_get_nsinfo (m2b)))
+		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		max_versions = _maxvers(sq3, m2b);
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_append_to_alias(sq3, &ni, max_versions, url, beans, cb, u0)))
+			if (!(err = m2db_append_to_alias(sq3, nsinfo, max_versions, url, beans, cb, u0)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
@@ -1162,6 +1139,7 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 		m2b_close(sq3);
 	}
 
+	namespace_info_free (nsinfo);
 	return err;
 }
 
@@ -1324,7 +1302,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = NULL;
-	struct namespace_info_s nsinfo;
+	struct namespace_info_s *nsinfo;
 	struct storage_policy_s *policy = NULL;
 	struct grid_lb_iterator_s *iter = NULL;
 
@@ -1334,8 +1312,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(cb != NULL);
 
-	memset(&nsinfo, 0, sizeof(nsinfo));
-	if (!meta2_backend_get_nsinfo(m2b, &nsinfo))
+	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
 		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
 
 	/* Several checks are to be performed on the container state */
@@ -1361,20 +1338,17 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 		/* Now check the storage policy */
 		if (!err) {
 			if (polname) {
-				if (!(policy = storage_policy_init(&nsinfo, polname)))
+				if (!(policy = storage_policy_init(nsinfo, polname)))
 					err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
 							"Invalid policy [%s]", polname);
 			} else {
-				err = m2db_get_storage_policy(sq3, url, &nsinfo, append, &policy);
+				err = m2db_get_storage_policy(sq3, url, nsinfo, append, &policy);
 				if (err || !policy) {
-					gchar *default_ns_policy_name = 
-						namespace_storage_policy(&nsinfo, hc_url_get(url, HCURL_NS));
-					if (NULL != default_ns_policy_name) {
-						if (!(policy = storage_policy_init(&nsinfo,
-										default_ns_policy_name)))
-							err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
-									"Invalid policy [%s]", default_ns_policy_name);
-						g_free(default_ns_policy_name);
+					gchar *def = namespace_storage_policy(nsinfo, hc_url_get(url, HCURL_NS));
+					if (NULL != def) {
+						if (!(policy = storage_policy_init(nsinfo, def)))
+							err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy [%s]", def);
+						g_free(def);
 					}
 				}
 			}
@@ -1395,13 +1369,12 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No RAWX available");
 		else
 			err = m2_generate_beans_v1(url, size,
-					namespace_chunk_size(&nsinfo, hc_url_get(url, HCURL_NS)),
+					namespace_chunk_size(nsinfo, hc_url_get(url, HCURL_NS)),
 					policy, iter, cb, cb_data);
 	}
 
-	namespace_info_clear(&nsinfo);
-	if (policy)
-		storage_policy_clean(policy);
+	namespace_info_free(nsinfo);
+	storage_policy_clean(policy);
 	return err;
 }
 
@@ -1456,7 +1429,7 @@ meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 	broken2 = srvinfo_from_piped_chunkid(broken);
 
 	// FIXME: storage class should come as parameter
-	stgpol = storage_policy_init(&(m2b->backend.ns_info), NULL);
+	stgpol = storage_policy_init(m2b->nsinfo, NULL);
 
 	err = get_conditioned_spare_chunks(m2b->backend.lb, count, dist,
 			storage_policy_get_storage_class(stgpol), notin2, broken2, result,
@@ -1474,15 +1447,14 @@ _load_storage_policy(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		const gchar *polname, struct storage_policy_s **pol)
 {
 	GError *err = NULL;
-	namespace_info_t nsinfo;
+	namespace_info_t *nsinfo = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
-	memset(&nsinfo, 0, sizeof(nsinfo));
-	if (!meta2_backend_get_nsinfo(m2b, &nsinfo))
+	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
 		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
 
 	if (polname) {
-		if (!(*pol = storage_policy_init(&nsinfo, polname)))
+		if (!(*pol = storage_policy_init(nsinfo, polname)))
 			err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy [%s]",
 					polname);
 	} else {
@@ -1490,23 +1462,21 @@ _load_storage_policy(struct meta2_backend_s *m2b, struct hc_url_s *url,
 				|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
 		if (!err) {
 			/* check pol from container / ns */
-			err = m2db_get_storage_policy(sq3, url, &nsinfo, FALSE, pol);
+			err = m2db_get_storage_policy(sq3, url, nsinfo, FALSE, pol);
 			if (err || !*pol) {
-				gchar *default_ns_policy_name =
-					namespace_storage_policy(&nsinfo, hc_url_get(url, HCURL_NS));
-				if (NULL != default_ns_policy_name) {
-					if (!(*pol = storage_policy_init(&nsinfo,
-									default_ns_policy_name)))
+				gchar *def = namespace_storage_policy(nsinfo, hc_url_get(url, HCURL_NS));
+				if (NULL != def) {
+					if (!(*pol = storage_policy_init(nsinfo, def)))
 						err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
-								"Invalid policy [%s]", default_ns_policy_name);
-					g_free(default_ns_policy_name);
+								"Invalid policy [%s]", def);
+					g_free(def);
 				}
 			}
 		}
 		m2b_close(sq3);
 	}
 
-	namespace_info_clear(&nsinfo);
+	namespace_info_free(nsinfo);
 	return err;
 }
 

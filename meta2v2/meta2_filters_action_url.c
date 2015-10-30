@@ -75,8 +75,12 @@ _update_content_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_back
 		return FILTER_OK;
 	}
 
-	e = storage_policy_check_compat_by_name(&(m2b->backend.ns_info),
+	/* XXX */
+	g_mutex_lock (&m2b->nsinfo_lock);
+	e = storage_policy_check_compat_by_name(m2b->nsinfo,
 			CONTENTS_HEADERS_get_policy(header)->str, stgpol);
+	g_mutex_unlock (&m2b->nsinfo_lock);
+
 	if (e != NULL) {
 		GRID_DEBUG("Failed to update storage policy: %s", e->message);
 		meta2_filter_ctx_set_error(ctx, e);
@@ -111,16 +115,17 @@ meta2_filter_action_update_storage_policy(struct gridd_filter_ctx_s *ctx,
 	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
 	const char *stgpol = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_STGPOLICY);
 	struct storage_policy_s *sp = NULL;
-	struct namespace_info_s ni;
-	memset(&ni, 0, sizeof(ni));
-	meta2_backend_get_nsinfo(m2b, &ni);
 
 	/* ensure storage policy */
 	GError *err = NULL;
 	if (!stgpol)
 		err = NEWERROR(CODE_BAD_REQUEST, "Missing storage policy");
-	if (!err)
-		sp = storage_policy_init (&ni, stgpol);
+	if (!err) {
+		/* XXX race condition around the nsinfo */
+		g_mutex_lock (&m2b->nsinfo_lock);
+		sp = storage_policy_init (m2b->nsinfo, stgpol);
+		g_mutex_unlock (&m2b->nsinfo_lock);
+	}
 	if (!sp)
 		err = NEWERROR(CODE_BAD_REQUEST, "Invalid storage policy [%s]", stgpol);
 	if (err) {
@@ -128,7 +133,6 @@ meta2_filter_action_update_storage_policy(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	namespace_info_clear(&ni);
 	storage_policy_clean(sp);
 	return _update_content_storage_policy(ctx, m2b, url, stgpol);
 }

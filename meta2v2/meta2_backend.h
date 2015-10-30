@@ -47,8 +47,7 @@ void meta2_backend_configure_nsinfo(struct meta2_backend_s *m2,
  *
  * Be sure a valid namespace_info_s is pointed by dst (a zero'ed ns_info is
  * valid). */
-gboolean meta2_backend_get_nsinfo(struct meta2_backend_s *m2,
-		struct namespace_info_s *dst);
+struct namespace_info_s * meta2_backend_get_nsinfo(struct meta2_backend_s *m2);
 
 /** Tests if the backend has been fully initiated. I.e. it checks a
  * valid NSinfo has been provided. */

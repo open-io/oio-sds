@@ -54,28 +54,6 @@ void g_free2(gpointer p1, gpointer p2) { (void) p1; g_free0(p2); }
 
 /* ----------------------------------------------------------------------------------- */
 
-gchar*
-key_value_pair_to_string(key_value_pair_t * kv)
-{
-        gchar *str_value = NULL, *result = NULL;
-        gsize str_value_len;
-
-        if (!kv)
-                return g_strdup("KeyValue|NULL|NULL");
-
-        if (!kv->value)
-                return g_strconcat("KeyValue|",(kv->key?kv->key:"NULL"),"|NULL", NULL);
-
-        str_value_len = 8 + 3 * kv->value->len;
-        str_value = g_malloc0(str_value_len);
-        metautils_gba_data_to_string(kv->value, str_value, str_value_len);
-
-        result = g_strconcat("KeyValue|",(kv->key?kv->key:"NULL"), "|", str_value, NULL);
-        g_free(str_value);
-
-        return result;
-}
-
 gsize
 metautils_strlcpy_physical_ns(gchar *d, const gchar *s, gsize dlen)
 {

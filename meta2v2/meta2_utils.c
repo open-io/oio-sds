@@ -54,7 +54,7 @@ _m2db_count_alias_versions(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 
 	v = 0;
 	sqlite3_prepare_debug(rc, sq3->db,
-			"SELECT COUNT(version) FROM alias_v2 WHERE alias = ?", -1, &stmt, NULL);
+			"SELECT COUNT(version) FROM aliases WHERE alias = ?", -1, &stmt, NULL);
 	if (rc == SQLITE_OK) {
 		sqlite3_bind_text(stmt, 1, hc_url_get(url, HCURL_PATH), -1, NULL);
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
@@ -139,9 +139,9 @@ m2db_get_container_size(sqlite3 *db, gboolean check_alias)
 {
 	guint64 size = 0;
 	gchar tmp[512];
-	g_snprintf(tmp, sizeof(tmp), "%s%s", "SELECT SUM(size) FROM content_header_v2",
+	g_snprintf(tmp, sizeof(tmp), "%s%s", "SELECT SUM(size) FROM contents",
 			!check_alias ? "" :
-			" WHERE EXISTS (SELECT content_id FROM alias_v2 WHERE content_id = id)");
+			" WHERE EXISTS (SELECT content FROM aliases WHERE content = id)");
 	const gchar *sql = tmp;
 	int rc, grc = SQLITE_OK;
 	const gchar *next;
@@ -1005,7 +1005,7 @@ _patch_content_stgpol (struct m2db_put_args_s *args, GSList *beans)
 
 				/* force the policy to the default policy of the container
 				 * or namespace */
-				err = _get_container_policy(args->sq3, &(args->nsinfo), &pol);
+				err = _get_container_policy(args->sq3, args->nsinfo, &pol);
 				CONTENTS_HEADERS_set2_policy(bean,
 						(!err && pol) ? storage_policy_get_name(pol) : "none");
 				if (pol)
@@ -1310,7 +1310,7 @@ m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 		args.sq3 = sq3;
 		args.url = url;
 		args.max_versions = max_versions;
-		args.nsinfo = *ni;
+		args.nsinfo = ni;
 		return m2db_put_alias(&args, beans, NULL, NULL); /** XXX TODO FIXME */
 	}
 
@@ -1361,6 +1361,9 @@ m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
 		CHUNKS_set2_content (chunk, g_bytes_get_data(content_id, NULL),
 				g_bytes_get_size(content_id));
 	}
+
+	g_bytes_unref (content_id);
+	content_id = NULL;
 
 	/* Now insert each chunk bean */
 	if (!(err = _db_insert_beans_list (sq3->db, newchunks))) {
@@ -1914,12 +1917,12 @@ _purge_exceeding_aliases(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 	GRID_TRACE("%s, max_versions = %"G_GINT64_FORMAT, __FUNCTION__, max_versions);
 
 	const gchar *sql_lookup = "SELECT alias, count(*)"
-		"FROM alias_v2 "
+		"FROM aliases "
 		"WHERE NOT deleted " // Do not count last extra deleted version
 		"GROUP BY alias "
 		"HAVING COUNT(*) > ?";
 	const gchar *sql_delete = " rowid IN "
-		"(SELECT rowid FROM alias_v2 WHERE alias = ? "
+		"(SELECT rowid FROM aliases WHERE alias = ? "
 		" ORDER BY version ASC LIMIT ? ) ";
 
 	int rc = SQLITE_OK;
@@ -2007,14 +2010,14 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 	// All aliases which have one version deleted (the last) older than time_limit
 	sql = (" alias IN "
 			"(SELECT alias FROM "
-			"  (SELECT alias,ctime,deleted FROM alias_v2 GROUP BY alias) "
+			"  (SELECT alias,ctime,deleted FROM aliases GROUP BY alias) "
 			" WHERE deleted AND ctime < ?) ");
 
 	// Last snapshoted aliases part of deleted contents.
 	// (take some paracetamol)
-	sql2 = (" rowid IN (SELECT a1.rowid FROM alias_v2 AS a1"
+	sql2 = (" rowid IN (SELECT a1.rowid FROM aliases AS a1"
 			" INNER JOIN "
-			"(SELECT alias,max(deleted) as mdel FROM alias_v2 GROUP BY alias) AS a2 "
+			"(SELECT alias,max(deleted) as mdel FROM aliases GROUP BY alias) AS a2 "
 			"ON a1.alias = a2.alias "
 			"WHERE mdel "
 			"GROUP BY a1.alias HAVING max(version)) ");
@@ -2094,22 +2097,6 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 	return err;
 }
 
-static gint64
-_get_chunks_to_drop(sqlite3 *db, m2_onbean_cb cb, gpointer u0)
-{
-	gint64 count = 0;
-	GVariant *params[] = {NULL};
-
-	void cb_counter(gpointer udata, gpointer bean) {
-		cb(udata, bean);
-		count++;
-	}
-	CHUNKS_load(db,
-			" NOT EXISTS (SELECT chunk_id FROM content_v2 WHERE chunk_id = id)",
-			params, cb_counter, u0);
-	return count;
-}
-
 GError*
 m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions, gint64 retention_delay,
 	guint32 flags, m2_onbean_cb cb, gpointer u0)
@@ -2133,30 +2120,13 @@ m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions, gint64 retention_del
 		}
 
 		/* purge unreferenced properties */
-		sqlx_exec(sq3->db, "DELETE FROM properties_v2 WHERE NOT EXISTS "
-				"(SELECT alias FROM alias_v2 "
-				" WHERE alias_v2.alias = properties_v2.alias)");
+		sqlx_exec(sq3->db, "DELETE FROM properties WHERE NOT EXISTS "
+				"(SELECT alias FROM aliases "
+				" WHERE aliases.alias = properties.alias)");
 
 		/* purge unreferenced content_headers, cascading to contents */
-		sqlx_exec(sq3->db, "DELETE FROM content_header_v2 WHERE NOT EXISTS "
-				"(SELECT content_id FROM alias_v2 WHERE content_id = id)");
-
-		sqlx_exec(sq3->db, "DELETE FROM content_v2 WHERE NOT EXISTS "
-				"(SELECT content_id FROM alias_v2 "
-				" WHERE alias_v2.content_id = content_v2.content_id)");
-	}
-
-	/* delete chunks if asked */
-	if (NULL != cb) {
-		gint64 count = _get_chunks_to_drop(sq3->db, cb, u0);
-
-		GRID_DEBUG("Nb chunks found to delete %ld", count);
-
-		if (!dry_run) {
-			/* purge unreferenced chunks */
-			sqlx_exec(sq3->db, "DELETE FROM chunk_v2 WHERE NOT EXISTS "
-					"(SELECT chunk_id FROM content_v2 WHERE chunk_id = id)");
-		}
+		sqlx_exec(sq3->db, "DELETE FROM chunks AS c WHERE NOT EXISTS "
+				"(SELECT content FROM aliases AS a WHERE a.content = c.content)");
 	}
 
 	if (!dry_run) {
@@ -2195,7 +2165,7 @@ m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 GError*
 m2db_flush_container(sqlite3 *db)
 {
-	int rc = sqlx_exec(db, "DELETE FROM alias_v2");
+	int rc = sqlx_exec(db, "DELETE FROM aliases");
 	if (SQLITE_OK == rc) return NULL;
 	return SQLITE_GERROR(db, rc);
 }

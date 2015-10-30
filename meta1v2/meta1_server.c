@@ -115,7 +115,7 @@ static void
 _task_reload_policies(gpointer p)
 {
 	GError *err = NULL;
-	gchar *cfg = gridcluster_get_service_update_policy(&(PSRV(p)->nsinfo));
+	gchar *cfg = gridcluster_get_service_update_policy (PSRV(p)->nsinfo);
 	if (!cfg)
 		err = NEWERROR(EINVAL, "Invalid parameter");
 	else {

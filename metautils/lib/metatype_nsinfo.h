@@ -29,14 +29,6 @@ struct namespace_info_s;
  */
 
 /**
- * Find a namespace-prefixed key in a hash table. If key not found, try again
- * with parent VNS, and so on. If still not found, try unprefixed key.
- * Key may be NULL if the key is the namespace name.
- */
-gpointer namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
-		const gchar *key);
-
-/**
  * Get a parameter from the namespace info "options" hash table.
  * This intelligently looks for VNS overridden parameters.
  * If a service type is provided by the type-specific parameter
@@ -72,11 +64,9 @@ gint64 namespace_info_get_srv_param_i64(const namespace_info_t *ni,
  *
  * @param src the source namespace_info we copy from
  * @param dst the destination namespace_info we copy to
- * @param error
- * @return FALSE if an error occured, TRUE otherwise
  */
-gboolean namespace_info_copy(struct namespace_info_s* src,
-		struct namespace_info_s* dst, GError **error);
+void namespace_info_copy(struct namespace_info_s* src,
+		struct namespace_info_s* dst);
 
 /**
  * Makes a deep copy of the input struct namespace_info_s.
