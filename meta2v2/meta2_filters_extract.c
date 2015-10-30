@@ -171,6 +171,8 @@ meta2_filter_extract_body_beans(struct gridd_filter_ctx_s *ctx,
 	return FILTER_OK;
 }
 
+static void list_clean (gpointer p) { g_slist_free_full(p, g_free0); }
+
 int
 meta2_filter_extract_body_strings(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
@@ -187,7 +189,6 @@ meta2_filter_extract_body_strings(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	void list_clean (gpointer p) { g_slist_free_full(p, g_free0); }
 	meta2_filter_ctx_set_input_udata(ctx, l, list_clean);
 	return FILTER_OK;
 }
