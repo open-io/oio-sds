@@ -777,7 +777,7 @@ meta0_assign_fill(struct meta0_backend_s *m0, gchar *ns_name, guint replicas,
 			working_m1list=g_list_sort(working_m1list,meta0_assign_sort_by_score);
 			d_aM1 =_select_dest_assign_m1(working_m1list,NULL,(guint8*)(&idx),TRUE, nodist);
 			if ( ! d_aM1 ) {
-				error = NEWERROR(0, "Not enough META1 to meet the requirements (distance, number) (happened at prefix %u)", idx);
+				error = NEWERROR(0, "Not enough META1 to satisfy constraints (distance, number). META0 already initiated?");
 				goto errorLabel;
 			}
 
@@ -790,7 +790,7 @@ meta0_assign_fill(struct meta0_backend_s *m0, gchar *ns_name, guint replicas,
 	new_meta1ref = _updated_meta1ref();
 	error = meta0_backend_assign(m0, context->array_meta1_by_prefix, new_meta1ref,TRUE);
 	if ( error ) {
-		GRID_ERROR("failed to update BDD :(%d) %s", error->code, error->message);
+		GRID_ERROR("Failed to update database: (%d) %s", error->code, error->message);
 		goto errorLabel;
 	}
 
@@ -850,7 +850,7 @@ meta0_assign_prefix_to_meta1(struct meta0_backend_s *m0, gchar *ns_name, gboolea
 	new_meta1ref = _updated_meta1ref();
 	error = meta0_backend_assign(m0, context->array_meta1_by_prefix, new_meta1ref,FALSE);
 	if ( error ) {
-		GRID_ERROR("failed to update BDD :(%d) %s", error->code, error->message);
+		GRID_ERROR("Failed to update database: (%d) %s", error->code, error->message);
 		goto errorLabel;
 	}
 	context->lastAssignTime=g_date_time_new_now_local();
@@ -910,7 +910,7 @@ meta0_assign_disable_meta1(struct meta0_backend_s *m0, gchar *ns_name, char **m1
 	new_meta1ref = _updated_meta1ref();
 	error = meta0_backend_assign(m0, context->array_meta1_by_prefix, new_meta1ref ,FALSE);
 	if ( error ) {
-		GRID_ERROR("failed to update BDD :(%d) %s", error->code, error->message);
+		GRID_ERROR("Failed to update database: (%d) %s", error->code, error->message);
 		goto errorLabel;
 	}
 
