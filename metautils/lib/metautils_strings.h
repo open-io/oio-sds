@@ -81,26 +81,15 @@ int metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored);
  * string (yes, true, on, yes, 1) */
 gboolean metautils_cfg_get_bool(const gchar *value, gboolean def);
 
-#define metautils_randomize_buffer oio_str_randomize
-
-/** Frees <p> if p is not NULL */
+/* g_free(p) if p is not NULL */
 void g_free0(gpointer p);
 
-/** Frees the first argument and ignores the second */
+/* g_free0(p1) and ignores p2 */
 void g_free1(gpointer p1, gpointer p2);
 
-/** Frees the second argument and ignores the first */
+/* g_free0(p2) and ignores p1 */
 void g_free2(gpointer p1, gpointer p2);
 
 gboolean metautils_str_has_caseprefix (const char *str, const char *prefix);
-
-static inline const gchar *
-none(const gchar *src)
-{
-	return src ? src : "null";
-}
-
-#define metautils_json_mapping_s oio_ext_json_mapping_s
-#define metautils_extract_json   oio_ext_extract_json
 
 #endif /*OIO_SDS__metautils__lib__metautils_strings_h*/

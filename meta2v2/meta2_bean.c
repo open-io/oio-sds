@@ -25,7 +25,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/M2V2Bean.h>
 #include <metautils/lib/M2V2Alias.h>
-#include <metautils/lib/M2V2Content.h>
 #include <metautils/lib/M2V2ContentHeader.h>
 #include <metautils/lib/M2V2Property.h>
 

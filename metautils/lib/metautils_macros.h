@@ -34,23 +34,11 @@ License along with this library.
 #  define EXTRA_ASSERT(X)
 # endif
 
-# ifndef EVENT_TOPIC
-#  define EVENT_TOPIC "oio.sds"
-# endif
-
-# ifdef HAVE_ALLOWED_SLICE
-#  define SLICE_NEW0(T)    g_slice_new0(T)
-#  define SLICE_NEW(T)     g_slice_new(T)
-#  define SLICE_ALLOC(S)   g_slice_alloc(S)
-#  define SLICE_FREE(T,P)  g_slice_free(T,(P))
-#  define SLICE_FREE1(S,P) g_slice_free1((S),(P))
-# else
-#  define SLICE_NEW0(T)    g_malloc0(sizeof(T))
-#  define SLICE_NEW(T)     g_malloc(sizeof(T))
-#  define SLICE_ALLOC(S)   g_malloc(S)
-#  define SLICE_FREE(T,P)  g_free((P))
-#  define SLICE_FREE1(S,P) g_free((P))
-# endif
+# define SLICE_NEW0(T)    g_slice_new0(T)
+# define SLICE_NEW(T)     g_slice_new(T)
+# define SLICE_ALLOC(S)   g_slice_alloc(S)
+# define SLICE_FREE(T,P)  g_slice_free(T,(P))
+# define SLICE_FREE1(S,P) g_slice_free1((S),(P))
 
 /* size [in bytes] asn1c can require on the stack. Use 0 for as many bytes
  * as necessary (with the risk of stack smashing). */

@@ -387,7 +387,7 @@ attr void name##_RB_INSERT_COLOR(struct name *, struct type *);     \
 attr void name##_RB_REMOVE_COLOR(struct name *, struct type *, struct type *);\
 attr struct type *name##_RB_REMOVE(struct name *, struct type *);   \
 attr struct type *name##_RB_INSERT(void *u, struct name *, struct type *);   \
-attr struct type *name##_RB_FIND(void *u, struct name *, struct type *);     \
+attr struct type *name##_RB_FIND(void *u, struct name *, const struct type *);     \
 attr struct type *name##_RB_NFIND(void *u, struct name *, struct type *);    \
 attr struct type *name##_RB_NEXT(struct type *);            \
 attr struct type *name##_RB_PREV(struct type *);            \
@@ -624,7 +624,7 @@ name##_RB_INSERT(void *u, struct name *head, struct type *elm)           \
                                     \
 /* Finds the node with the same key as elm */               \
 attr struct type *                          \
-name##_RB_FIND(void *u, struct name *head, struct type *elm)         \
+name##_RB_FIND(void *u, struct name *head, const struct type *elm)         \
 {                                   \
     struct type *tmp = RB_ROOT(head);               \
     int comp;                           \

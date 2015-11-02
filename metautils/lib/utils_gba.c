@@ -24,7 +24,7 @@ metautils_gba_randomize(GByteArray *gba)
 {
 	if (unlikely(NULL == gba))
 		return ;
-	metautils_randomize_buffer(gba->data, gba->len);
+	oio_str_randomize(gba->data, gba->len);
 }
 
 gsize
