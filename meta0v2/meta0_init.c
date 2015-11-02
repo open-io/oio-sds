@@ -76,7 +76,7 @@ meta0_action(void)
 			err = meta0_remote_fill_v2(url, nbreplicas, nodist);
 
 		if (err) {
-			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
+			GRID_WARN("META0 error (%d): %s", err->code, err->message);
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				exclude=g_slist_prepend(exclude,m0addr);
 				m0addr = _getMeta0addr(&m0_lst,exclude);
