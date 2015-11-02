@@ -37,7 +37,7 @@ m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 	GByteArray *hid = NULL;
 	struct bean_ALIASES_s *alias = NULL;
 	struct json_object *jname, *jversion, *jctime, *jmtime, *jheader, *jdel;
-	struct metautils_json_mapping_s m[] = {
+	struct oio_ext_json_mapping_s m[] = {
 		{"name",    &jname,    json_type_string,  1},
 		{"ver",     &jversion, json_type_int,     1},
 		{"header",  &jheader,  json_type_string,  1},
@@ -48,7 +48,7 @@ m2v2_json_load_single_alias (struct json_object *j, gpointer *pbean)
 	};
 
 	*pbean = NULL;
-	if (NULL != (err = metautils_extract_json(j, m)))
+	if (NULL != (err = oio_ext_extract_json(j, m)))
 		goto exit;
 
 	hid = metautils_gba_from_hexstring(json_object_get_string(jheader));
@@ -80,7 +80,7 @@ m2v2_json_load_single_header (struct json_object *j, gpointer *pbean)
 	GByteArray *id = NULL, *hash = NULL;
 	struct bean_CONTENTS_HEADERS_s *header = NULL;
 	struct json_object *jid, *jhash, *jsize, *jctime, *jmtime, *jmethod, *jtype;
-	struct metautils_json_mapping_s mapping[] = {
+	struct oio_ext_json_mapping_s mapping[] = {
 		{"id",     &jid,    json_type_string, 1},
 		{"hash",   &jhash,  json_type_string, 1},
 		{"size",   &jsize,  json_type_int, 1},
@@ -92,7 +92,7 @@ m2v2_json_load_single_header (struct json_object *j, gpointer *pbean)
 	};
 
 	*pbean = NULL;
-	if (NULL != (err = metautils_extract_json (j, mapping)))
+	if (NULL != (err = oio_ext_extract_json (j, mapping)))
 		return err;
 
 	id = metautils_gba_from_hexstring(json_object_get_string(jid));
@@ -134,7 +134,7 @@ m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean)
 	GByteArray *hid = NULL, *hash = NULL;
 	struct bean_CHUNKS_s *chunk = NULL;
 	struct json_object *jid, *jcontent, *jhash, *jsize, *jctime, *jpos;
-	struct metautils_json_mapping_s mapping[] = {
+	struct oio_ext_json_mapping_s mapping[] = {
 		{"id",      &jid,      json_type_string, 1},
 		{"hash",    &jhash,    json_type_string, 1},
 		{"size",    &jsize,    json_type_int, 1},
@@ -145,7 +145,7 @@ m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean)
 	};
 
 	*pbean = NULL;
-	if (NULL != (err = metautils_extract_json (j, mapping)))
+	if (NULL != (err = oio_ext_extract_json (j, mapping)))
 		return err;
 
 	hid = metautils_gba_from_hexstring(json_object_get_string(jid));

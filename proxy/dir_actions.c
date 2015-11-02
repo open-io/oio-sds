@@ -319,12 +319,12 @@ action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
 	gboolean dryrun = _request_has_flag (args, PROXYD_HEADER_MODE, "dryrun");
 
 	struct json_object *jkept, *jrepl;
-	struct metautils_json_mapping_s mapping[] = {
+	struct oio_ext_json_mapping_s mapping[] = {
 		{"kept", &jkept, json_type_object, 0},
 		{"replaced", &jrepl, json_type_object, 0},
 		{NULL, NULL, 0, 0}
 	};
-	err = metautils_extract_json (jargs, mapping);
+	err = oio_ext_extract_json (jargs, mapping);
 	if (!err && jkept && json_object_is_type(jkept, json_type_object)) {
 		if (NULL != (err = meta1_service_url_load_json_object (jkept, &m1u_kept)))
 			g_prefix_error (&err, "invalid service in [%s]: ", "kept");

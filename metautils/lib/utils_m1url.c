@@ -93,14 +93,14 @@ meta1_service_url_load_json_object(struct json_object *obj,
 	EXTRA_ASSERT(out != NULL); *out = NULL;
 
 	struct json_object *s=NULL, *t=NULL, *h=NULL, *a=NULL;
-	struct metautils_json_mapping_s mapping[] = {
+	struct oio_ext_json_mapping_s mapping[] = {
 		{"seq",  &s, json_type_int,    1},
 		{"type", &t, json_type_string, 1},
 		{"host", &h, json_type_string, 1},
 		{"args", &a, json_type_string, 1},
 		{NULL, NULL, 0, 0}
 	};
-	GError *err = metautils_extract_json (obj, mapping);
+	GError *err = oio_ext_extract_json (obj, mapping);
 	if (err) return err;
 
 	struct meta1_service_url_s *m1u;

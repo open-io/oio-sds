@@ -325,12 +325,12 @@ namespace_info_init_json_object(struct json_object *obj,
 	EXTRA_ASSERT(ni != NULL);
 
 	struct json_object *ns=NULL, *sz=NULL;
-	struct metautils_json_mapping_s mapping[] = {
+	struct oio_ext_json_mapping_s mapping[] = {
 		{"ns",        &ns, json_type_string, 1},
 		{"chunksize", &sz, json_type_int,    1},
 		{NULL, NULL, 0, 0}
 	};
-	GError *err = metautils_extract_json (obj, mapping);
+	GError *err = oio_ext_extract_json (obj, mapping);
 	if (err) return err;
 
 	metautils_strlcpy_physical_ns(ni->name, json_object_get_string(ns), sizeof(ni->name));

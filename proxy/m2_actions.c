@@ -372,7 +372,7 @@ _load_simplified_chunks (struct json_object *jbody, GSList **out)
 	// Load the beans
 	for (int i=json_object_array_length(jbody); i>0 && !err ;i--) {
 		struct json_object *jurl=NULL, *jpos=NULL, *jsize=NULL, *jhash=NULL;
-		struct metautils_json_mapping_s m[] = {
+		struct oio_ext_json_mapping_s m[] = {
 			{"url",  &jurl,  json_type_string, 1},
 			{"pos",  &jpos,  json_type_string, 1},
 			{"size", &jsize, json_type_int,    1},
@@ -380,7 +380,7 @@ _load_simplified_chunks (struct json_object *jbody, GSList **out)
 			{NULL, NULL, 0, 0}
 		};
 		GRID_TRACE("JSON: parsing chunk at %i", i-1);
-		err = metautils_extract_json (json_object_array_get_idx (jbody, i-1), m);
+		err = oio_ext_extract_json (json_object_array_get_idx (jbody, i-1), m);
 		if (err) break;
 
 		GByteArray *h = NULL;
@@ -922,8 +922,7 @@ action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
 		gchar *msg = NULL;
-		GError *e =
-			m2v2_remote_execute_DEDUP (m2->host, args->url, 0, &msg);
+		GError *e = m2v2_remote_execute_DEDUP (m2->host, args->url, 0, &msg);
 		if (msg) {
 			if (!first)
 				g_string_append_c (gstr, ',');

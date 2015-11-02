@@ -672,7 +672,7 @@ service_info_load_json_object(struct json_object *obj,
 	EXTRA_ASSERT(out != NULL); *out = NULL;
 
 	struct json_object *ns, *type, *url, *score, *tags;
-	struct metautils_json_mapping_s mapping[] = {
+	struct oio_ext_json_mapping_s mapping[] = {
 		{"ns",    &ns,    json_type_string, !permissive},
 		{"type",  &type,  json_type_string, !permissive},
 		{"addr",  &url,   json_type_string, 1},
@@ -680,7 +680,7 @@ service_info_load_json_object(struct json_object *obj,
 		{"tags",  &tags,  json_type_object, 0},
 		{NULL, NULL, 0, 0}
 	};
-	GError *err = metautils_extract_json (obj, mapping);
+	GError *err = oio_ext_extract_json (obj, mapping);
 	if (err) return err;
 	
 	struct addr_info_s addr;
