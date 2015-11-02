@@ -68,11 +68,7 @@ static struct metautils_sockets_vtable_s VTABLE = {
 void
 metautils_set_vtable_sockets(struct metautils_sockets_vtable_s *vtable)
 {
-#ifdef HAVE_MOCKS
 	memcpy(&VTABLE, vtable, sizeof(VTABLE));
-#else
-	(void) vtable;
-#endif
 }
 
 struct metautils_sockets_vtable_s*
@@ -84,10 +80,8 @@ metautils_get_vtable_sockets(void)
 int
 socket_nonblock(int domain, int type, int protocol)
 {
-#ifdef HAVE_MOCKS
 	if (VTABLE.socket_nonblock)
 		return VTABLE.socket_nonblock(domain, type, protocol);
-#endif
 #ifdef HAVE_SOCKET3
 	return metautils_syscall_socket(domain, type|SOCK_NONBLOCK, protocol);
 #else
@@ -104,10 +98,8 @@ socket_nonblock(int domain, int type, int protocol)
 int
 accept_nonblock(int srv, struct sockaddr *sa, socklen_t *sa_len)
 {
-#ifdef HAVE_MOCKS
 	if (VTABLE.accept_nonblock)
 		return VTABLE.accept_nonblock(srv, sa, sa_len);
-#endif
 #ifdef HAVE_ACCEPT4
 	return metautils_syscall_accept4(srv, sa, sa_len, SOCK_NONBLOCK);
 #else
@@ -121,10 +113,8 @@ accept_nonblock(int srv, struct sockaddr *sa, socklen_t *sa_len)
 gint
 sock_to_write(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 {
-#ifdef HAVE_MOCKS
 	if (VTABLE.to_write)
 		return VTABLE.to_write(fd, ms, buf, bufSize, err);
-#endif
 
 #define WRITE() do { \
 		written = metautils_syscall_write(fd, ((guint8 *)buf) + nbSent, bufSize - nbSent); \
@@ -202,10 +192,8 @@ sock_to_write(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 gint
 sock_to_read(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 {
-#ifdef HAVE_MOCKS
 	if (VTABLE.to_read)
 		return VTABLE.to_read(fd, ms, buf, bufSize, err);
-#endif
 
 #define READ() do { \
 		rc = metautils_syscall_read(fd, buf, bufSize); \
@@ -268,10 +256,8 @@ sock_to_read(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 gint
 sock_to_read_size(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 {
-#ifdef HAVE_MOCKS
 	if (VTABLE.to_read_size)
 		return VTABLE.to_read_size(fd, ms, buf, bufSize, err);
-#endif
 
 	gsize nbRead = 0;
 
@@ -296,10 +282,8 @@ sock_to_read_size(int fd, gint ms, void *buf, gsize bufSize, GError ** err)
 gint
 socket_get_errcode(int fd)
 {
-#ifdef HAVE_MOCKS
 	if (VTABLE.get_error)
 		return VTABLE.get_error(fd);
-#endif
 
 	int rc, sock_err = 0;
 	socklen_t sock_err_size = sizeof(sock_err);
@@ -322,10 +306,8 @@ socket_get_error(int fd)
 gboolean
 sock_set_tcpquickack(int fd, gboolean enabled)
 {
-#ifdef HAVE_MOCKS
 	if (VTABLE.set_tcpquickack)
 		return VTABLE.set_tcpquickack(fd, enabled);
-#endif
 
 	int opt = BOOL(enabled);
 	if (!metautils_syscall_setsockopt(fd, IPPROTO_TCP, TCP_QUICKACK, (void*)&opt, sizeof(opt)))
@@ -338,10 +320,8 @@ sock_set_tcpquickack(int fd, gboolean enabled)
 gboolean
 sock_set_non_blocking(int fd, gboolean enabled)
 {
-#ifdef HAVE_MOCKS
 	if (VTABLE.set_non_blocking)
 		return VTABLE.set_non_blocking(fd, enabled);
-#endif
 
 	if (fd < 0) {
 		errno = EAGAIN;
@@ -362,10 +342,8 @@ sock_set_non_blocking(int fd, gboolean enabled)
 gboolean
 sock_set_reuseaddr(int fd, gboolean enabled)
 {
-#ifdef HAVE_MOCKS
 	if (VTABLE.set_reuseaddr)
 		return VTABLE.set_reuseaddr(fd, enabled);
-#endif
 
 	int opt = BOOL(enabled);
 	if (!metautils_syscall_setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, (void*)&opt, sizeof(opt)))
@@ -378,10 +356,8 @@ sock_set_reuseaddr(int fd, gboolean enabled)
 gboolean
 sock_set_keepalive(int fd, gboolean enabled)
 {
-#ifdef HAVE_MOCKS
 	if (VTABLE.set_keepalive)
 		return VTABLE.set_keepalive(fd, enabled);
-#endif
 
 	int opt = BOOL(enabled);
 	if (!metautils_syscall_setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, (void*)&opt, sizeof(opt)))
@@ -394,10 +370,9 @@ sock_set_keepalive(int fd, gboolean enabled)
 gboolean
 sock_set_nodelay(int fd, gboolean enabled)
 {
-#ifdef HAVE_MOCKS
 	if (VTABLE.set_nodelay)
 		return VTABLE.set_nodelay(fd, enabled);
-#endif
+
 	int opt = BOOL(enabled);
 	if (!metautils_syscall_setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, (void*)&opt, sizeof(opt)))
 		return TRUE;
@@ -409,10 +384,9 @@ sock_set_nodelay(int fd, gboolean enabled)
 gboolean
 sock_set_cork(int fd, gboolean enabled)
 {
-#ifdef HAVE_MOCKS
 	if (VTABLE.set_cork)
 		return VTABLE.set_cork(fd, enabled);
-#endif
+
 	int opt = BOOL(enabled);
 	if (!metautils_syscall_setsockopt(fd, IPPROTO_TCP, TCP_CORK, (void*)&opt, sizeof(opt)))
 		return TRUE;
@@ -424,10 +398,9 @@ sock_set_cork(int fd, gboolean enabled)
 gboolean
 sock_set_linger(int fd, int onoff, int linger)
 {
-#ifdef HAVE_MOCKS
 	if (VTABLE.set_linger)
 		return VTABLE.set_linger(fd, onoff, linger);
-#endif
+
 	struct linger ls;
 	ls.l_onoff = BOOL(onoff);
 	ls.l_linger = linger;
