@@ -31,9 +31,7 @@ static void
 usage(void)
 {
 	g_printerr("Usage: gridcluster [OPTION]... <NAMESPACE>...\n\n");
-	g_printerr("  %-20s\t%s\n", "--errors,                 -e", "Shows erroneous container identifiers");
 	g_printerr("  %-20s\t%s\n", "--clear-services SERVICE    ", "Clear all local RAWX reference in cluster.");
-	g_printerr("  %-20s\t%s\n", "--clear-errors              ", "Clear all local erroneous containers references in the cluster");
 	g_printerr("  %-20s\t%s\n", "--full,                     ", "Show full services.");
 	g_printerr("  %-20s\t%s\n", "--lb-config,                ", "Prints to stdout the namespace LB configuration ");
 	g_printerr("  %-20s\t%s\n", "--local-cfg,              -A", "Prints to stdout the namespaces configuration values locally configured");
@@ -41,8 +39,6 @@ usage(void)
 	g_printerr("  %-20s\t%s\n", "--local-srv               -l", "List local services monitored on this server.");
 	g_printerr("  %-20s\t%s\n", "--local-tasks,            -t", "List internal tasks scheduled on this server.");
 	g_printerr("  %-20s\t%s\n", "--raw,                    -r", "Output in parsable mode.");
-	g_printerr("  %-20s\t%s\n", "--rules,                  -R", "Dump the logic rules path for the given namespace");
-	g_printerr("  %-20s\t%s\n", "--rules-path,             -P", "Dump the logic rules for the given namespace");
 	g_printerr("  %-20s\t%s\n", "--service <service desc>, -S", "Select service described by desc.");
 	g_printerr("  %-20s\t%s\n", "--set-score <[0..100]>      ", "Set and lock score for the service specified by -S.");
 	g_printerr("  %-20s\t%s\n", "--unlock-score              ", "Unlock score for the service specified by -S.");
@@ -314,7 +310,7 @@ main(int argc, char **argv)
 	memset(cid_str, 0x00, sizeof(cid_str));
 	enable_debug();
 
-	while ((c = getopt_long(argc, argv, "ALsvealtrBC:S:h", long_options, &option_index)) > -1) {
+	while ((c = getopt_long(argc, argv, "ALsvaltrC:S:h", long_options, &option_index)) > -1) {
 
 		switch (c) {
 			case 'A':
