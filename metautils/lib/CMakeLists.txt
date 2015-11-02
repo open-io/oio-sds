@@ -52,7 +52,6 @@ add_custom_command(
 		M2V2Bean.c M2V2Bean.h
 		M2V2BeanSequence.c M2V2BeanSequence.h
 		M2V2Chunk.c M2V2Chunk.h
-		M2V2Content.c M2V2Content.h
 		M2V2ContentHeader.c M2V2ContentHeader.h
 		M2V2Property.c M2V2Property.h
 
@@ -219,8 +218,6 @@ add_library(metautils SHARED
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Bean.c
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Alias.h
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Alias.c
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Content.h
-		${CMAKE_CURRENT_BINARY_DIR}/M2V2Content.c
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Chunk.h
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2Chunk.c
 		${CMAKE_CURRENT_BINARY_DIR}/M2V2ContentHeader.h
