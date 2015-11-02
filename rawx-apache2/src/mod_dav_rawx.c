@@ -419,7 +419,6 @@ rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp,
 		server_rec *server)
 {
 	apr_status_t status;
-	enum lock_state_e state;
 	server_rec *s;
 	server_addr_rec *a;
 	dav_rawx_server_conf *conf;
@@ -466,38 +465,14 @@ rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp,
 			apr_snprintf(url, sizeof(url), "%s:%d", host, a->host_port);
 			DAV_DEBUG_POOL(plog, 0, "xattr-lock : testing addr [%s]", url);
 
-			state = rawx_get_volume_lock_state(conf->docroot, conf->ns_name,
-					url, &gerr);
-			switch (state) {
-
-				case ERROR_LS:
-					DAV_ERROR_POOL(plog, 0, "Failed to check the docroot ownership: %s",
-							gerror_get_message(gerr));
-					goto label_error;
-
-				case NOLOCK_LS:
-					if (!rawx_lock_volume(conf->docroot, conf->ns_name, url, 0, &gerr)) {
-						DAV_ERROR_POOL(plog, 0, "Failed to grab the docroot ownership: %s",
-								gerror_get_message(gerr));
-						goto label_error;
-					}
-					DAV_DEBUG_POOL(plog, 0, "Docroot now owned");
-					volume_validated = ~0;
-					break;
-
-				case OWN_LS:
-					DAV_DEBUG_POOL(plog, 0, "Docroot already owned by the current server");
-					if (!rawx_lock_volume(conf->docroot, conf->ns_name, url,
-							RAWXLOCK_FLAG_OVERWRITE, &gerr))
-						DAV_ERROR_POOL(plog, 0, "Failed to complete the docroot ownership: %s",
-							gerror_get_message(gerr));
-					volume_validated = ~0;
-					break;
-
-				case OTHER_LS:
-					DAV_ERROR_POOL(plog, 0, "Another RAWX already used the docroot (see XATTR)"
-							" : %s", gerror_get_message(gerr));
-					goto label_error;
+			gerr = volume_service_lock (conf->docroot, NAME_SRVTYPE_RAWX,
+					url, conf->ns_name);
+			if (!gerr)
+				volume_validated = 1;
+			else {
+				DAV_ERROR_POOL(plog, 0, "Failed to grab the docroot ownership: %s",
+						gerror_get_message(gerr));
+				goto label_error;
 			}
 		}
 	}

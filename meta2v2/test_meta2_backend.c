@@ -246,9 +246,6 @@ _repo_wraper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.flags = SQLX_REPO_DELETEON;
-	cfg.lock.ns = "NS";
-	cfg.lock.type = "meta2";
-	cfg.lock.srv = "test-meta2";
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
 
@@ -290,9 +287,6 @@ _repo_failure(const gchar *ns)
 	g_printerr("\n");
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.flags = SQLX_REPO_DELETEON;
-	cfg.lock.ns = "NS";
-	cfg.lock.type = "meta2";
-	cfg.lock.srv = "test-meta2";
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
 	err = meta2_backend_init(&backend, repository, ns, glp, resolver);

@@ -82,7 +82,6 @@ enum sqlx_repo_flag_e
 	SQLX_REPO_NOCACHE      = 0x01,
 	SQLX_REPO_VACUUM       = 0x02,
 	SQLX_REPO_DELETEON     = 0x04,
-	SQLX_REPO_NOLOCK       = 0x08,
 	SQLX_REPO_AUTOCREATE   = 0x10,
 };
 
@@ -124,12 +123,6 @@ struct sqlx_repo_config_s
 
 	enum sqlx_sync_mode_e sync_repli; /**< Which value for pragma synchronous'
 									   for replicated bases */
-	struct {
-		const gchar *ns; /**< The name of the physical NS of the repository */
-		const gchar *type; /**< The service type used for locking */
-		const gchar *srv; /**< a unique ID for the service, i.e. its service
-						   * IP:PORT */
-	} lock;
 };
 
 /* ------------------------------------------------------------------------- */

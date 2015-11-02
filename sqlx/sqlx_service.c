@@ -286,12 +286,8 @@ _configure_backend(struct sqlx_service_s *ss)
 	repository_config.flags |= ss->flag_delete_on ? SQLX_REPO_DELETEON : 0;
 	repository_config.flags |= ss->flag_cached_bases ? 0 : SQLX_REPO_NOCACHE;
 	repository_config.flags |= ss->flag_autocreate ? SQLX_REPO_AUTOCREATE : 0;
-	repository_config.flags |= ss->flag_nolock ? SQLX_REPO_NOLOCK : 0;
 	repository_config.sync_solo = ss->sync_mode_solo;
 	repository_config.sync_repli = ss->sync_mode_repli;
-	repository_config.lock.ns = ss->ns_name;
-	repository_config.lock.type = ss->service_config->srvtype;
-	repository_config.lock.srv = ss->announce->str;
 
 	GError *err = sqlx_repository_init(ss->volume, &repository_config,
 			&ss->repository);
@@ -407,6 +403,13 @@ static void
 sqlx_service_action(void)
 {
 	GError *err = NULL;
+
+	if (!SRV.flag_nolock) {
+		err = volume_service_lock (SRV.volume, SRV.service_config->srvtype,
+				SRV.announce->str, SRV.ns_name);
+		if (err)
+			return _action_report_error(err, "Volume lock failed");
+	}
 
 	gridd_client_pool_set_max(SRV.clients_pool, SRV.max_active);
 	network_server_set_maxcnx(SRV.server, SRV.max_passive);
