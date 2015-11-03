@@ -17,7 +17,6 @@ License along with this library.
 */
 
 #include <metautils/lib/lrutree.h>
-#include <core/oiolog.h>
 #include <cache/cache.h>
 
 static void
@@ -42,7 +41,7 @@ test_not_found (struct oio_cache_s *c, const char *k)
 	g_assert_cmpint (rc, ==, OIO_CACHE_NOTFOUND);
 }
 
-static void
+void
 test_cache_cycle (struct oio_cache_s *c)
 {
 	const char *k = "NOTFOUND";
@@ -61,39 +60,5 @@ test_cache_cycle (struct oio_cache_s *c)
 	}
 
 	test_not_found (c, k);
-}
-
-static void
-test_cache_cycle_noop (void)
-{
-	struct oio_cache_s *c = oio_cache_make_NOOP ();
-	test_cache_cycle (c);
-	oio_cache_destroy (c);
-}
-
-static void
-test_cache_cycle_lru (void)
-{
-	struct lru_tree_s *lru = lru_tree_create (
-			(GCompareFunc)g_strcmp0, g_free, g_free, 0);
-	g_assert_nonnull (lru);
-
-	struct oio_cache_s *c = oio_cache_make_LRU (lru);
-
-	test_cache_cycle (c);
-	oio_cache_destroy (c);
-}
-
-int
-main (int argc, char **argv)
-{
-	g_test_init (&argc, &argv, NULL);
-	oio_log_lazy_init ();
-	oio_log_init_level(GRID_LOGLVL_INFO);
-	g_log_set_default_handler(oio_log_stderr, NULL);
-
-	g_test_add_func("/cache/cycle/noop", test_cache_cycle_noop);
-	g_test_add_func("/cache/cycle/lru", test_cache_cycle_lru);
-	return g_test_run();
 }
 
