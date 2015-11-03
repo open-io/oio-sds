@@ -89,7 +89,6 @@ add_library(metautils SHARED
 		common_main.c common_main.h
 		utils_syscall.c metautils_syscall.h
 		lrutree.c lrutree.h tree.h
-		cache.c cache.h
 		storage_policy.c storage_policy.h
 		expr.2str.c
 		expr.clean.c
@@ -298,7 +297,6 @@ install(FILES
 			gridd_client.h
 			gridd_client_ext.h
 			gridd_client_pool.h
-			cache.h
 			lb.h
 			lrutree.h
 			metacomm.h
