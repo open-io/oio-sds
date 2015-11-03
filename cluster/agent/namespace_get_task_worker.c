@@ -119,18 +119,12 @@ parse_namespace_info(worker_t *worker, GError **error)
 			ns_data->ns_info.name, ns_info->name, ns_info->chunk_size);
 
 		namespace_info_clear(&(ns_data->ns_info));
-
-		if (!namespace_info_copy(ns_info, &(ns_data->ns_info), error)) {
-			GSETERROR(error, "Failed to copy namespace_info");
-			namespace_info_free(ns_info);
-			return 0;
-		}
-
+		namespace_info_copy(ns_info, &(ns_data->ns_info));
 		namespace_info_free(ns_info);
 
 		/* Flag namespace if it's the first config */
 		ns_data->configured = TRUE;
-        }
+	}
 
 	return(1);
 }

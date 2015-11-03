@@ -152,6 +152,8 @@ void oio_log_syslog(const gchar *log_domain, GLogLevelFlags log_level,
 
 guint16 oio_log_thread_id(GThread *thread);
 
+guint16 oio_log_current_thread_id(void);
+
 #ifdef __cplusplus
 }
 #endif

@@ -20,15 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__sqliterepo__sqliterepo_h
 # define OIO_SDS__sqliterepo__sqliterepo_h 1
 
-/**
- * @defgroup sqliterepo_repo Repository of bases
- * @ingroup sqliterepo
- * @brief
- * @details
- *
- * @{
- */
-
 # include <unistd.h>
 # include <sqlite3.h>
 # include <metautils/lib/metautils.h>
@@ -56,7 +47,6 @@ typedef GError* (*sqlx_repo_open_hook)(struct sqlx_sqlite3_s *sq3,
 typedef void (*sqlx_repo_change_hook)(struct sqlx_sqlite3_s *sq3,
 		gpointer cb_data);
 
-/**  */
 typedef void (*sqlx_file_locator_f) (gpointer locator_data,
 		struct sqlx_name_s *n, GString *file_name);
 
@@ -92,7 +82,6 @@ enum sqlx_repo_flag_e
 	SQLX_REPO_NOCACHE      = 0x01,
 	SQLX_REPO_VACUUM       = 0x02,
 	SQLX_REPO_DELETEON     = 0x04,
-	SQLX_REPO_NOLOCK       = 0x08,
 	SQLX_REPO_AUTOCREATE   = 0x10,
 };
 
@@ -134,12 +123,6 @@ struct sqlx_repo_config_s
 
 	enum sqlx_sync_mode_e sync_repli; /**< Which value for pragma synchronous'
 									   for replicated bases */
-	struct {
-		const gchar *ns; /**< The name of the physical NS of the repository */
-		const gchar *type; /**< The service type used for locking */
-		const gchar *srv; /**< a unique ID for the service, i.e. its service
-						   * IP:PORT */
-	} lock;
 };
 
 /* ------------------------------------------------------------------------- */
@@ -166,21 +149,16 @@ GError * sqlx_repository_init(const gchar *vol,
  * For security purposes, it internally calls sqlx_repository_stop(). */
 void sqlx_repository_clean(sqlx_repository_t *repo);
 
-/**  */
 struct sqlx_cache_s* sqlx_repository_get_cache(struct sqlx_repository_s *r);
 
-/**  */
 struct election_manager_s* sqlx_repository_get_elections_manager(
 		struct sqlx_repository_s *repo);
 
-/**  */
 const gchar* sqlx_repository_get_local_addr(struct sqlx_repository_s *repo);
 
-/**  */
 gboolean sqlx_repository_replication_configured(
 		const struct sqlx_repository_s *r);
 
-/**  */
 gboolean sqlx_repository_running(sqlx_repository_t *repo);
 
 /** Mark the repository and its internal structures as being shut down.
@@ -215,27 +193,21 @@ GError* sqlx_repository_configure_type(sqlx_repository_t *repo,
 void sqlx_repository_configure_open_timeout(sqlx_repository_t *repo,
 		gint64 timeout);
 
-/**  */
 void sqlx_repository_configure_close_callback(sqlx_repository_t *repo,
 		sqlx_repo_close_hook cb, gpointer cb_data);
 
-/**  */
 void sqlx_repository_call_close_callback(struct sqlx_sqlite3_s *sq3);
 
-/**  */
 void sqlx_repository_configure_open_callback(sqlx_repository_t *repo,
 		sqlx_repo_open_hook cb, gpointer cb_data);
 
-/**  */
 void sqlx_repository_configure_change_callback(sqlx_repository_t *repo,
 		sqlx_repo_change_hook cb, gpointer cb_data);
 
-/**  */
 void sqlx_repository_call_change_callback(struct sqlx_sqlite3_s *sq3);
 
 /* Bases operations -------------------------------------------------------- */
 
-/**  */
 GError* sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 		struct sqlx_name_s *n, enum sqlx_open_type_e how,
 		struct sqlx_sqlite3_s **sq3, gchar **lead);
@@ -255,7 +227,6 @@ void sqlx_repository_unlock_and_close_noerror(struct sqlx_sqlite3_s *sq3);
 void sqlx_repository_unlock_and_close_noerror2(struct sqlx_sqlite3_s *sq3,
 		guint32 flags);
 
-/**  */
 GError * sqlx_repository_get_version(struct sqlx_sqlite3_s *sq3,
 		GTree **result);
 
@@ -264,7 +235,6 @@ GError * sqlx_repository_get_version(struct sqlx_sqlite3_s *sq3,
 GError * sqlx_repository_get_version2(sqlx_repository_t *repo,
 		struct sqlx_name_s *n, GTree **result);
 
-/**  */
 GError* sqlx_repository_has_base2(sqlx_repository_t *repo,
 		 struct sqlx_name_s *n, gchar** bddname);
 
@@ -275,7 +245,6 @@ GError* sqlx_repository_has_base2(sqlx_repository_t *repo,
 GError* sqlx_repository_prepare_election(sqlx_repository_t *repo,
 		struct sqlx_name_s *n);
 
-/**  */
 GError* sqlx_repository_exit_election(sqlx_repository_t *repo,
 		struct sqlx_name_s *n);
 
@@ -318,20 +287,16 @@ GError* sqlx_repository_dump_base_chunked(struct sqlx_sqlite3_s *sq3,
 GError* sqlx_repository_backup_base(struct sqlx_sqlite3_s *src_sq3,
 		struct sqlx_sqlite3_s *dst_sq3);
 
-/**  */
 GError* sqlx_repository_restore_base(struct sqlx_sqlite3_s *sq3,
 		guint8 *raw, gsize rawsize);
 
-/**  */
 GError* sqlx_repository_restore_from_file(struct sqlx_sqlite3_s *sq3,
 		const gchar *path);
 
-/**  */
 GError* sqlx_repository_retore_from_master(struct sqlx_sqlite3_s *sq3);
 
 /* ------------------------------------------------------------------------- */
 
-/**  */
 GError* sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 		struct sqlx_repctx_s **result);
 
@@ -340,16 +305,12 @@ GError* sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 GError* sqlx_transaction_begin(struct sqlx_sqlite3_s *sq3,
 		struct sqlx_repctx_s **result);
 
-/**  */
 GError* sqlx_transaction_end(struct sqlx_repctx_s *repctx, GError *err);
 
-/**  */
 struct sqlx_sqlite3_s* sqlx_transaction_get_base(struct sqlx_repctx_s *ctx);
 
 /** Tells it will be necessary to immediately perform a RESYNC instead
  * of a regular REPLICATE operation. */
 void sqlx_transaction_notify_huge_changes(struct sqlx_repctx_s *ctx);
-
-/** @} */
 
 #endif /*OIO_SDS__sqliterepo__sqliterepo_h*/

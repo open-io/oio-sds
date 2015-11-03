@@ -1793,11 +1793,9 @@ sqlx_dispatch_PROPDEL(struct gridd_reply_ctx_s *reply,
 	if (NULL != err) {
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
-		return TRUE;
-	}
-
+	} else {
 	struct sqlx_repctx_s *repctx = NULL;
-	if (!(flags&FLAG_LOCAL))
+	if (!(flags & FLAG_LOCAL))
 		err = sqlx_transaction_begin(sq3, &repctx);
 	if (!err) {
 		if (!keys)
@@ -1815,6 +1813,9 @@ sqlx_dispatch_PROPDEL(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
+	}
+
+	g_slist_free_full (keys, g_free0);
 	return TRUE;
 }
 

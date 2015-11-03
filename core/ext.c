@@ -17,6 +17,7 @@ License along with this library.
 */
 
 #include <unistd.h>
+#include <string.h>
 
 #include <glib.h>
 #include <json.h>
@@ -178,5 +179,44 @@ oio_ext_set_random_reqid (void)
 	char hex[33];
 	oio_str_bin2hex((guint8*)&bulk, sizeof(bulk), hex, sizeof(hex));
 	oio_ext_set_reqid(hex);
+}
+
+/* -------------------------------------------------------------------------- */
+
+#include <execinfo.h>
+#define STACK_MAX 8
+
+GError *
+oio_error_debug (GQuark gq, int code, const char *fmt, ...)
+{
+	void *frames[STACK_MAX];
+	int nbframes = backtrace(frames, STACK_MAX);
+
+	GString *gs = g_string_new("");
+	char **strv = backtrace_symbols (frames, nbframes);
+	if (strv) {
+		for (int i=1; i<nbframes ;i++) {
+			if (gs->len)
+				g_string_append (gs, ", ");
+			char *s, *start = strv[i];
+			if (NULL != (s = strchr(start, '(')))
+				start = s+1;
+			if (NULL != (s = strchr(start, '+')))
+				*s = 0;
+			if (NULL != (s = strchr(start, ')')))
+				*s = 0;
+			g_string_append (gs, start);
+		}
+		free (strv);
+	}
+
+	va_list args;
+	va_start (args, fmt);
+	GError *err = g_error_new_valist (gq, code, fmt, args);
+	va_end (args);
+
+	g_prefix_error (&err, "%s ", gs->str);
+	g_string_free (gs, TRUE);
+	return err;
 }
 

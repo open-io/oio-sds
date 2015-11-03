@@ -400,7 +400,6 @@ meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 	const char *size_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CONTENTLENGTH);
 	const char *policy_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_STGPOLICY);
-	const char *mdsys = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_MDSYS);
 	const char *spare_type = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_SPARE);
 	gboolean append = (NULL != meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_APPEND));
 
@@ -427,8 +426,8 @@ meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
 	}
 	// Standard beans request
 	else {
-		e = meta2_backend_generate_beans_v1(m2b, url, size, policy_str, append,
-				mdsys, NULL, _bean_list_cb, &obc->l);
+		e = meta2_backend_generate_beans(m2b, url, size, policy_str, append,
+				_bean_list_cb, &obc->l);
 		if (NULL != e) {
 			GRID_DEBUG("Failed to return alias for url: %s",
 					hc_url_get(url, HCURL_WHOLE));

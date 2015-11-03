@@ -37,6 +37,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 struct meta2_backend_s
 {
 	struct meta_backend_common_s backend;
+
+	struct namespace_info_s *nsinfo;
+	GMutex nsinfo_lock;
+
 	struct service_update_policies_s *policies;
 	struct hc_resolver_s *resolver;
 

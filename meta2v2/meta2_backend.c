@@ -59,13 +59,6 @@ enum m2v2_open_type_e
 #define M2V2_OPEN_STATUS    0xF00
 };
 
-#define _M2B_GET_VNS_INFO(m2b, vns, nsinfo) \
-	struct namespace_info_s nsinfo;\
-	memset(&nsinfo, 0, sizeof(nsinfo));\
-	meta2_backend_get_nsinfo((m2b), &nsinfo);\
-	if ((vns))\
-		g_strlcpy(nsinfo.name, (vns), LIMIT_LENGTH_NSNAME);
-
 static void
 _append_url (GString *gs, struct hc_url_s *url)
 {
@@ -87,43 +80,37 @@ _append_url (GString *gs, struct hc_url_s *url)
 }
 
 static gint64
-m2b_quota(struct meta2_backend_s *m2b, const gchar *vns)
-{
-	gint64 quota;
-	_M2B_GET_VNS_INFO(m2b, vns, nsinfo)
-	quota = namespace_container_max_size(&nsinfo);
-	namespace_info_clear(&nsinfo);
-
-	return quota;
-}
-
-static gint64
 _quota(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
-	gchar *vns = m2db_get_namespace(sq3, m2b->backend.ns_name);
-	gint64 res = m2db_get_quota(sq3, m2b_quota(m2b, vns));
-	g_free(vns);
-	return res;
+	gint64 quota = 0;
+
+	g_mutex_lock (&m2b->nsinfo_lock);
+	quota = namespace_container_max_size(m2b->nsinfo);
+	g_mutex_unlock (&m2b->nsinfo_lock);
+
+	return m2db_get_quota(sq3, quota);
 }
 
 static gint64
-m2b_max_versions(struct meta2_backend_s *m2b, const gchar *vns)
+m2b_max_versions(struct meta2_backend_s *m2b)
 {
-	gint64 max_versions;
-	_M2B_GET_VNS_INFO(m2b, vns, nsinfo)
-	max_versions = gridcluster_get_container_max_versions(&nsinfo);
-	namespace_info_clear(&nsinfo);
+	gint64 max_versions = -1;
+
+	g_mutex_lock (&m2b->nsinfo_lock);
+	max_versions = gridcluster_get_container_max_versions(m2b->nsinfo);
+	g_mutex_unlock (&m2b->nsinfo_lock);
 
 	return max_versions;
 }
 
 static gint64
-m2b_keep_deleted_delay(struct meta2_backend_s *m2b, const gchar *vns)
+m2b_keep_deleted_delay(struct meta2_backend_s *m2b)
 {
-	gint64 delay;
-	_M2B_GET_VNS_INFO(m2b, vns, nsinfo)
-	delay = gridcluster_get_keep_deleted_delay(&nsinfo);
-	namespace_info_clear(&nsinfo);
+	gint64 delay = -1;
+
+	g_mutex_lock (&m2b->nsinfo_lock);
+	delay = gridcluster_get_keep_deleted_delay(m2b->nsinfo);
+	g_mutex_unlock (&m2b->nsinfo_lock);
 
 	return delay;
 }
@@ -131,20 +118,13 @@ m2b_keep_deleted_delay(struct meta2_backend_s *m2b, const gchar *vns)
 static gint64
 _maxvers(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
-	gchar *vns = m2db_get_namespace(sq3, m2b->backend.ns_name);
-	gint64 res = m2db_get_max_versions(sq3, m2b_max_versions(m2b, vns));
-	g_free(vns);
-	return res;
+	return m2db_get_max_versions(sq3, m2b_max_versions(m2b));
 }
 
 static gint64
 _retention_delay(struct sqlx_sqlite3_s *sq3, struct meta2_backend_s *m2b)
 {
-	gchar *vns = m2db_get_namespace(sq3, m2b->backend.ns_name);
-	gint64 res = m2db_get_keep_deleted_delay(sq3,
-			m2b_keep_deleted_delay(m2b, vns));
-	g_free(vns);
-	return res;
+	return m2db_get_keep_deleted_delay(sq3, m2b_keep_deleted_delay(m2b));
 }
 
 /* Backend ------------------------------------------------------------------ */
@@ -154,21 +134,18 @@ _check_policy(struct meta2_backend_s *m2, const gchar *polname)
 {
 	GError *err = NULL;
 	struct storage_policy_s *policy = NULL;
-	struct namespace_info_s nsinfo;
 
 	if (!*polname)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid policy: %s", "empty");
 
-	memset(&nsinfo, 0, sizeof(nsinfo));
-	if (!meta2_backend_get_nsinfo(m2, &nsinfo))
-		return NEWERROR(CODE_INTERNAL_ERROR, "Invalid policy: %s", "NS not ready");
+	g_mutex_lock (&m2->nsinfo_lock);
+	policy = storage_policy_init(m2->nsinfo, polname);
+	g_mutex_unlock (&m2->nsinfo_lock);
 
-	if (!(policy = storage_policy_init(&nsinfo, polname)))
+	if (!policy)
 		err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy: %s", "not found");
 	else
 		storage_policy_clean(policy);
-
-	namespace_info_clear(&nsinfo);
 	return err;
 }
 
@@ -204,7 +181,7 @@ meta2_backend_init(struct meta2_backend_s **result,
 	m2->backend.repo = repo;
 	m2->backend.lb = glp;
 	m2->policies = service_update_policies_create();
-	g_mutex_init(&m2->backend.ns_info_lock);
+	g_mutex_init(&m2->nsinfo_lock);
 
 	m2->flag_precheck_on_generate = TRUE;
 
@@ -228,49 +205,48 @@ meta2_backend_init(struct meta2_backend_s **result,
 void
 meta2_backend_clean(struct meta2_backend_s *m2)
 {
-	if (!m2) {
+	if (!m2)
 		return;
-	}
-	if (m2->policies) {
+	if (m2->policies)
 		service_update_policies_destroy(m2->policies);
-	}
-	if (m2->resolver) {
+	if (m2->resolver)
 		m2->resolver = NULL;
-	}
-	g_mutex_clear(&m2->backend.ns_info_lock);
-	namespace_info_clear(&(m2->backend.ns_info));
+	g_mutex_clear(&m2->nsinfo_lock);
+	namespace_info_free(m2->nsinfo);
 	g_free(m2);
 }
 
 void
 meta2_backend_configure_nsinfo(struct meta2_backend_s *m2,
-		struct namespace_info_s *ns_info)
+		struct namespace_info_s *ni)
 {
 	EXTRA_ASSERT(m2 != NULL);
-	EXTRA_ASSERT(ns_info != NULL);
+	EXTRA_ASSERT(ni != NULL);
 
-	g_mutex_lock(&m2->backend.ns_info_lock);
-	(void) namespace_info_copy(ns_info, &(m2->backend.ns_info), NULL);
-	g_mutex_unlock(&m2->backend.ns_info_lock);
+	struct namespace_info_s *old = NULL, *copy = NULL;
+	copy = namespace_info_dup (ni);
+
+	g_mutex_lock(&m2->nsinfo_lock);
+	old = m2->nsinfo;
+	m2->nsinfo = copy;
+	g_mutex_unlock(&m2->nsinfo_lock);
+
+	if (old)
+		namespace_info_free (old);
 }
 
-gboolean
-meta2_backend_get_nsinfo(struct meta2_backend_s *m2,
-		struct namespace_info_s *dst)
+struct namespace_info_s *
+meta2_backend_get_nsinfo (struct meta2_backend_s *m2)
 {
-	gboolean rc = FALSE;
-
 	EXTRA_ASSERT(m2 != NULL);
-	EXTRA_ASSERT(dst != NULL);
+	struct namespace_info_s *out = NULL;
 
-	g_mutex_lock(&m2->backend.ns_info_lock);
-	if (m2->backend.ns_info.name[0]) {
-		(void) namespace_info_copy(&(m2->backend.ns_info), dst, NULL);
-		rc = TRUE;
-	}
-	g_mutex_unlock(&m2->backend.ns_info_lock);
+	g_mutex_lock(&m2->nsinfo_lock);
+	if (m2->nsinfo)
+		out = namespace_info_dup (m2->nsinfo);
+	g_mutex_unlock(&m2->nsinfo_lock);
 
-	return rc;
+	return out;
 }
 
 GError*
@@ -307,7 +283,9 @@ gboolean
 meta2_backend_initiated(struct meta2_backend_s *m2)
 {
 	EXTRA_ASSERT(m2 != NULL);
-	gboolean rc = (m2->backend.ns_info.name[0] != '\0');
+	g_mutex_lock (&m2->nsinfo_lock);
+	gboolean rc = (NULL != m2->nsinfo);
+	g_mutex_unlock (&m2->nsinfo_lock);
 	return rc;
 }
 
@@ -361,7 +339,6 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 		enum m2v2_open_type_e how, struct sqlx_sqlite3_s **result)
 {
 	GError *err = NULL;
-	gboolean no_peers = FALSE;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
 	EXTRA_ASSERT(url != NULL);
@@ -369,7 +346,8 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 	EXTRA_ASSERT(m2 != NULL);
 	EXTRA_ASSERT(m2->backend.repo != NULL);
 
-	no_peers = hc_url_get_option_value(url, META2_URL_LOCAL_BASE) != NULL;
+	/* TODO */
+	gboolean no_peers = FALSE;
 	if (no_peers) {
 		how &= ~M2V2_OPEN_REPLIMODE;
 		how |= M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK;
@@ -387,7 +365,7 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 		return err;
 	}
 
-	sq3->no_peers = no_peers;
+	sq3->no_peers = how & (M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK);
 
 	// XXX If the container is being deleted, this is sad ...
 	// This MIGHT happen if a cache is present (and this is the
@@ -483,6 +461,27 @@ meta2_backend_has_container(struct meta2_backend_s *m2,
 					"Container created but not initiated");
 		m2b_close(sq3);
 	}
+	return err;
+}
+
+GError*
+meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
+		struct hc_url_s *url, gint64 *result)
+{
+	GError *err = NULL;
+	struct sqlx_sqlite3_s *sq3 = NULL;
+
+	EXTRA_ASSERT(m2b != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(result != NULL);
+
+	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
+			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
+	if (!err) {
+		*result = _maxvers(sq3, m2b);
+		m2b_close(sq3);
+	}
+
 	return err;
 }
 
@@ -858,8 +857,10 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(out_deleted != NULL);
-	EXTRA_ASSERT(out_added != NULL);
+	//EXTRA_ASSERT(out_deleted != NULL);
+	//EXTRA_ASSERT(out_added != NULL);
+	if (!in)
+		return NEWERROR(CODE_BAD_REQUEST, "No bean");
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
@@ -869,7 +870,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
-		meta2_backend_get_nsinfo(m2b, &(args.nsinfo));
+		args.nsinfo = meta2_backend_get_nsinfo(m2b);
 		args.lbpool = m2b->backend.lb;
 		args.content_id = content_id;
 
@@ -882,7 +883,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		}
 		m2b_close(sq3);
 
-		namespace_info_clear(&(args.nsinfo));
+		namespace_info_free(args.nsinfo);
 	}
 
 	return err;
@@ -907,7 +908,7 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
-		meta2_backend_get_nsinfo(m2b, &(args.nsinfo));
+		args.nsinfo = meta2_backend_get_nsinfo(m2b);
 		args.lbpool = m2b->backend.lb;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
@@ -917,7 +918,7 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		}
 		m2b_close(sq3);
 
-		namespace_info_clear(&(args.nsinfo));
+		namespace_info_free(args.nsinfo);
 	}
 
 	return err;
@@ -944,7 +945,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		args.sq3 = sq3;
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
-		meta2_backend_get_nsinfo(m2b, &(args.nsinfo));
+		args.nsinfo = meta2_backend_get_nsinfo(m2b);
 		args.lbpool = m2b->backend.lb;
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
@@ -954,8 +955,9 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		}
 		if (!err)
 			meta2_backend_add_modified_container(m2b, sq3);
+		namespace_info_free(args.nsinfo);
+
 		m2b_close(sq3);
-		namespace_info_clear(&(args.nsinfo));
 	}
 
 	return err;
@@ -1089,38 +1091,6 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	return err;
 }
 
-static GSList*
-_filter_beans(GSList *beans, const struct bean_descriptor_s *descr)
-{
-	GSList *result = NULL;
-
-	for (; beans ;beans=beans->next) {
-		gpointer bean = beans->data;
-		if (unlikely(NULL == bean))
-			continue;
-		if (descr == DESCR(bean))
-			result = g_slist_prepend(result, _bean_dup(bean));
-	}
-
-	return result;
-}
-
-static GSList*
-_filter_contents(GSList *beans)
-{
-	return _filter_beans(beans, &descr_struct_CONTENTS);
-}
-
-GError*
-meta2_backend_delete_chunks(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *beans)
-{
-	GSList *contents = _filter_contents(beans);
-	GError *err = meta2_backend_delete_beans(m2b, url, beans);
-	g_slist_free_full(contents, _bean_clean);
-	return err;
-}
-
 GError*
 meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gint64 *version)
@@ -1146,21 +1116,21 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
-	struct namespace_info_s ni;
+	struct namespace_info_s *nsinfo = NULL;
 	gint64 max_versions;
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
-
-	memset(&ni, '\0', sizeof(struct namespace_info_s));
-
-	meta2_backend_get_nsinfo(m2b, &ni);
+	if (!beans)
+		return NEWERROR(CODE_BAD_REQUEST, "No bean");
+	if (!(nsinfo = meta2_backend_get_nsinfo (m2b)))
+		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		max_versions = _maxvers(sq3, m2b);
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			if (!(err = m2db_append_to_alias(sq3, &ni, max_versions, url, beans, cb, u0)))
+			if (!(err = m2db_append_to_alias(sq3, nsinfo, max_versions, url, beans, cb, u0)))
 				m2db_increment_version(sq3);
 			err = sqlx_transaction_end(repctx, err);
 		}
@@ -1169,6 +1139,7 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 		m2b_close(sq3);
 	}
 
+	namespace_info_free (nsinfo);
 	return err;
 }
 
@@ -1221,7 +1192,7 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	GRID_TRACE("M2 GET(%s)", hc_url_get(url, HCURL_WHOLE));
+	GRID_TRACE("M2 PROPSET(%s)", hc_url_get(url, HCURL_WHOLE));
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -1239,162 +1210,7 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b, struct hc_url_s *url,
 	return err;
 }
 
-GError*
-meta2_backend_generate_beans(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 size, const gchar *polname,
-		gboolean append, m2_onbean_cb cb, gpointer cb_data)
-{
-	return meta2_backend_generate_beans_v1(m2b, url, size, polname, append,
-		NULL, NULL, cb, cb_data);
-}
-
-static GError*
-_check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
-{
-	void _cb(gpointer udata, gpointer bean) {
-		if(bean) {
-			*((gboolean*)udata) = FALSE;
-			_bean_clean(bean);
-		}
-	}
-
-	gboolean no_bean = TRUE;
-	GError *err = m2db_get_alias(sq3, url, M2V2_FLAG_NODELETED, _cb, &no_bean);
-	if (NULL != err) {
-		if (err->code == CODE_CONTENT_NOTFOUND) {
-			g_clear_error(&err);
-		} else {
-			g_prefix_error(&err, "Could not check the ALIAS is present"
-					" (multiple versions not allowed): ");
-		}
-	}
-	else if (!no_bean)
-		err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already present");
-
-	return err;
-}
-
-GError*
-meta2_backend_generate_beans_v1(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 size, const gchar *polname,
-		gboolean append, const char *mdsys, const char *mdusr,
-		m2_onbean_cb cb, gpointer cb_data)
-{
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err = NULL;
-	struct namespace_info_s nsinfo;
-	struct storage_policy_s *policy = NULL;
-	struct grid_lb_iterator_s *iter = NULL;
-
-	GRID_TRACE("BEANS(%s,%"G_GINT64_FORMAT",%s)", hc_url_get(url, HCURL_WHOLE),
-			size, polname);
-	EXTRA_ASSERT(m2b != NULL);
-	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(cb != NULL);
-
-	memset(&nsinfo, 0, sizeof(nsinfo));
-	if (!meta2_backend_get_nsinfo(m2b, &nsinfo))
-		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
-
-	/* Several checks are to be performed on the container state */
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE|M2V2_OPEN_ENABLED, &sq3);
-	if (!err) {
-
-		gint64 max_version = _maxvers(sq3, m2b);
-		if (m2b->flag_precheck_on_generate && VERSIONS_DISABLED(max_version)) {
-			/* If the versioning is not supported, we check the content
-			 * is not present */
-			err = _check_alias_doesnt_exist(sq3, url);
-			if(append) {
-				if(err) {
-					g_clear_error(&err);
-					err = NULL;
-				} else {
-					err = NEWERROR(CODE_CONTENT_NOTFOUND, "Content [%s] "
-							"not found", hc_url_get(url, HCURL_PATH));
-				}
-			}
-		}
-
-		/* Now check the storage policy */
-		if (!err) {
-			if (polname) {
-				if (!(policy = storage_policy_init(&nsinfo, polname)))
-					err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
-							"Invalid policy [%s]", polname);
-			} else {
-				/* check polname not in mdsys */
-				char *polstr = storage_policy_from_mdsys_str(mdsys);
-				GRID_TRACE("Storage policy from sys md = %s", polstr);
-				if(NULL != polstr){
-					if (!(policy = storage_policy_init(&nsinfo, polstr)))
-						err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
-								"Invalid policy [%s]", polstr);
-					g_free(polstr);
-				} else {
-					err = m2db_get_storage_policy(sq3, url, &nsinfo, append, &policy);
-					if (err || !policy) {
-						gchar *default_ns_policy_name = 
-							namespace_storage_policy(&nsinfo, hc_url_get(url, HCURL_NS));
-						if (NULL != default_ns_policy_name) {
-							if (!(policy = storage_policy_init(&nsinfo,
-											default_ns_policy_name)))
-								err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
-										"Invalid policy [%s]", default_ns_policy_name);
-							g_free(default_ns_policy_name);
-						}
-					}
-				}
-			}
-		}
-
-		/* check container not full */
-		gint64 quota = _quota(sq3, m2b);
-		if(quota > 0 && quota <= m2db_get_size(sq3))
-			err = NEWERROR(CODE_CONTAINER_FULL, "Container's quota reached (%"G_GINT64_FORMAT" bytes)", quota);
-
-		m2b_close(sq3);
-	}
-
-	/* Let's continue to generate the beans, no need for an open container for the moment */
-	if (!err) {
-		iter = grid_lbpool_get_iterator(m2b->backend.lb, "rawx");
-		if (!iter)
-			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No RAWX available");
-		else
-			err = m2_generate_beans_v1(url, size,
-					namespace_chunk_size(&nsinfo, hc_url_get(url, HCURL_NS)),
-					policy, mdsys, mdusr, iter, cb, cb_data);
-	}
-
-	namespace_info_clear(&nsinfo);
-	if (policy)
-		storage_policy_clean(policy);
-	return err;
-}
-
-GError*
-meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 *result)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	EXTRA_ASSERT(m2b != NULL);
-	EXTRA_ASSERT(url != NULL);
-	EXTRA_ASSERT(result != NULL);
-
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE
-			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
-	if (!err) {
-		*result = _maxvers(sq3, m2b);
-		m2b_close(sq3);
-	}
-
-	return err;
-}
-
-/* ------------------------------------------------------------------------- */
+/* dedup -------------------------------------------------------------------- */
 
 GError*
 meta2_backend_update_alias_header(struct meta2_backend_s *m2b,
@@ -1451,56 +1267,114 @@ meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
 	return err;
 }
 
-GError*
-meta2_backend_deduplicate_chunks(struct meta2_backend_s *m2b,
-		struct hc_url_s *url)
+/* Beans generation --------------------------------------------------------- */
+
+static GError*
+_check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 {
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	namespace_info_t nsinfo;
-	memset(&nsinfo, 0, sizeof(nsinfo));
-	meta2_backend_get_nsinfo(m2b, &nsinfo);
-
-	EXTRA_ASSERT(m2b != NULL);
-	EXTRA_ASSERT(url != NULL);
-
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
-	if (!err) {
-		GRID_INFO("Starting chunk deduplication on %s",
-				hc_url_get(url, HCURL_WHOLE));
-		err = m2db_deduplicate_chunks(sq3, &nsinfo, url);
-		GRID_INFO("Finished chunk deduplication");
-		m2b_close(sq3);
-	} else {
-		GRID_WARN("Got error when opening database: %s", err->message);
+	void _cb(gpointer udata, gpointer bean) {
+		if(bean) {
+			*((gboolean*)udata) = FALSE;
+			_bean_clean(bean);
+		}
 	}
+
+	gboolean no_bean = TRUE;
+	GError *err = m2db_get_alias(sq3, url, M2V2_FLAG_NODELETED, _cb, &no_bean);
+	if (NULL != err) {
+		if (err->code == CODE_CONTENT_NOTFOUND) {
+			g_clear_error(&err);
+		} else {
+			g_prefix_error(&err, "Could not check the ALIAS is present"
+					" (multiple versions not allowed): ");
+		}
+	}
+	else if (!no_bean)
+		err = NEWERROR(CODE_CONTENT_EXISTS, "Alias already present");
+
 	return err;
 }
 
 GError*
-meta2_backend_deduplicate_alias_chunks(struct meta2_backend_s *m2b,
-		struct hc_url_s *url)
+meta2_backend_generate_beans(struct meta2_backend_s *m2b,
+		struct hc_url_s *url, gint64 size, const gchar *polname, gboolean append, 
+		m2_onbean_cb cb, gpointer cb_data)
 {
-	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	namespace_info_t nsinfo;
-	memset(&nsinfo, 0, sizeof(nsinfo));
-	meta2_backend_get_nsinfo(m2b, &nsinfo);
+	GError *err = NULL;
+	struct namespace_info_s *nsinfo;
+	struct storage_policy_s *policy = NULL;
+	struct grid_lb_iterator_s *iter = NULL;
 
+	GRID_TRACE("BEANS(%s,%"G_GINT64_FORMAT",%s)", hc_url_get(url, HCURL_WHOLE),
+			size, polname);
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(cb != NULL);
 
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
+	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
+		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
+
+	/* Several checks are to be performed on the container state */
+	err = m2b_open(m2b, url, M2V2_OPEN_MASTERSLAVE|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		GRID_INFO("Starting chunk deduplication on %s (%s)",
-				hc_url_get(url, HCURL_WHOLE),
-				hc_url_get(url, HCURL_PATH));
+
+		gint64 max_version = _maxvers(sq3, m2b);
+		if (m2b->flag_precheck_on_generate && VERSIONS_DISABLED(max_version)) {
+			/* If the versioning is not supported, we check the content
+			 * is not present */
+			err = _check_alias_doesnt_exist(sq3, url);
+			if(append) {
+				if(err) {
+					g_clear_error(&err);
+					err = NULL;
+				} else {
+					err = NEWERROR(CODE_CONTENT_NOTFOUND, "Content [%s] "
+							"not found", hc_url_get(url, HCURL_PATH));
+				}
+			}
+		}
+
+		/* Now check the storage policy */
+		if (!err) {
+			if (polname) {
+				if (!(policy = storage_policy_init(nsinfo, polname)))
+					err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
+							"Invalid policy [%s]", polname);
+			} else {
+				err = m2db_get_storage_policy(sq3, url, nsinfo, append, &policy);
+				if (err || !policy) {
+					gchar *def = namespace_storage_policy(nsinfo, hc_url_get(url, HCURL_NS));
+					if (NULL != def) {
+						if (!(policy = storage_policy_init(nsinfo, def)))
+							err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy [%s]", def);
+						g_free(def);
+					}
+				}
+			}
+		}
+
+		/* check container not full */
+		gint64 quota = _quota(sq3, m2b);
+		if(quota > 0 && quota <= m2db_get_size(sq3))
+			err = NEWERROR(CODE_CONTAINER_FULL, "Container's quota reached (%"G_GINT64_FORMAT" bytes)", quota);
+
 		m2b_close(sq3);
-		err = m2db_deduplicate_alias_chunks(sq3, &nsinfo, url);
-	} else {
-		GRID_WARN("Got error when opening database: %s", err->message);
 	}
+
+	/* Let's continue to generate the beans, no need for an open container for the moment */
+	if (!err) {
+		iter = grid_lbpool_get_iterator(m2b->backend.lb, "rawx");
+		if (!iter)
+			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No RAWX available");
+		else
+			err = m2_generate_beans_v1(url, size,
+					namespace_chunk_size(nsinfo, hc_url_get(url, HCURL_NS)),
+					policy, iter, cb, cb_data);
+	}
+
+	namespace_info_free(nsinfo);
+	storage_policy_clean(policy);
 	return err;
 }
 
@@ -1555,7 +1429,7 @@ meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 	broken2 = srvinfo_from_piped_chunkid(broken);
 
 	// FIXME: storage class should come as parameter
-	stgpol = storage_policy_init(&(m2b->backend.ns_info), NULL);
+	stgpol = storage_policy_init(m2b->nsinfo, NULL);
 
 	err = get_conditioned_spare_chunks(m2b->backend.lb, count, dist,
 			storage_policy_get_storage_class(stgpol), notin2, broken2, result,
@@ -1573,15 +1447,14 @@ _load_storage_policy(struct meta2_backend_s *m2b, struct hc_url_s *url,
 		const gchar *polname, struct storage_policy_s **pol)
 {
 	GError *err = NULL;
-	namespace_info_t nsinfo;
+	namespace_info_t *nsinfo = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
-	memset(&nsinfo, 0, sizeof(nsinfo));
-	if (!meta2_backend_get_nsinfo(m2b, &nsinfo))
+	if (!(nsinfo = meta2_backend_get_nsinfo(m2b)))
 		return NEWERROR(CODE_INTERNAL_ERROR, "NS not ready");
 
 	if (polname) {
-		if (!(*pol = storage_policy_init(&nsinfo, polname)))
+		if (!(*pol = storage_policy_init(nsinfo, polname)))
 			err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy [%s]",
 					polname);
 	} else {
@@ -1589,23 +1462,21 @@ _load_storage_policy(struct meta2_backend_s *m2b, struct hc_url_s *url,
 				|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
 		if (!err) {
 			/* check pol from container / ns */
-			err = m2db_get_storage_policy(sq3, url, &nsinfo, FALSE, pol);
+			err = m2db_get_storage_policy(sq3, url, nsinfo, FALSE, pol);
 			if (err || !*pol) {
-				gchar *default_ns_policy_name =
-					namespace_storage_policy(&nsinfo, hc_url_get(url, HCURL_NS));
-				if (NULL != default_ns_policy_name) {
-					if (!(*pol = storage_policy_init(&nsinfo,
-									default_ns_policy_name)))
+				gchar *def = namespace_storage_policy(nsinfo, hc_url_get(url, HCURL_NS));
+				if (NULL != def) {
+					if (!(*pol = storage_policy_init(nsinfo, def)))
 						err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
-								"Invalid policy [%s]", default_ns_policy_name);
-					g_free(default_ns_policy_name);
+								"Invalid policy [%s]", def);
+					g_free(def);
 				}
 			}
 		}
 		m2b_close(sq3);
 	}
 
-	namespace_info_clear(&nsinfo);
+	namespace_info_free(nsinfo);
 	return err;
 }
 
@@ -1649,6 +1520,8 @@ meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct hc_url_s *url
 	return err;
 }
 
+/* Contents lookup ---------------------------------------------------------- */
+
 GError*
 meta2_backend_content_from_chunkid(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, const char *chunk_id,
@@ -1668,7 +1541,7 @@ meta2_backend_content_from_chunkid(struct meta2_backend_s *m2b,
 		err = CONTENTS_HEADERS_load (sq3->db, " id IN"
 				" (SELECT DISTINCT content_id"
 				"  FROM content_v2 "
-				"  WHERE chunk_id = ?)", params, cb, u0);
+				"  WHERE chunk_id = ?) LIMIT 1", params, cb, u0);
 		metautils_gvariant_unrefv(params);
 		if (!err) {
 			/* TODO follow the FK to the aliases */

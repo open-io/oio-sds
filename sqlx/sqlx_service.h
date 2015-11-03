@@ -113,7 +113,7 @@ struct sqlx_service_s
 	// The tasks under this queue always follow a reload of the
 	// nsinfo field, and can safely play with it. This is the place
 	// for LB reloading, reconfiguration, etc.
-	struct namespace_info_s nsinfo;
+	struct namespace_info_s *nsinfo;
 	struct grid_task_queue_s *gtq_reload;
 	GThread *thread_reload;
 
@@ -177,9 +177,9 @@ struct sqlx_service_s
 
 struct meta_backend_common_s {
 	gchar ns_name[LIMIT_LENGTH_NSNAME];
-	namespace_info_t ns_info;
-	GMutex ns_info_lock;
+
 	const gchar *type;
+
 	struct sqlx_repository_s *repo;
 
 	// Managed by sqlx_service_extra, do not allocate/free

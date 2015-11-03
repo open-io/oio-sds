@@ -290,33 +290,10 @@ gboolean get_compression_info_in_attr(const char *pathname, GError **error,
 # define RAWXLOCK_FLAG_OVERWRITE 0x00010000
 #endif
 
-enum lock_state_e {
-	ERROR_LS=0,/**<the status of the lock is unkonwn or erroneous*/
-	NOLOCK_LS,/**<no lock has been set*/
-	OWN_LS,/**<the lock is owned by the current server*/
-	OTHER_LS/**<the lock is owned by anoter server*/
-};
-
-enum lock_state_e rawx_get_volume_lock_state(const char *vol, const char *ns,
-	const char *host, GError **err );
-
-int rawx_lock_volume(const char *vol, const char *ns, const char *host,
-	guint32 flags, GError **err);
-
-gboolean rawx_get_lock_info(const char *vol, gchar *dst_host,
-	gsize dst_host_size, gchar *dst_ns, gsize dst_ns_size, GError **gerr);
-
-/**
- * Clean a rawx config, but do not free the structure.
- */
+/* Clean a rawx config, but do not free the structure.  */
 void rawx_conf_clean(rawx_conf_t *c);
 
-/**
- * Clean a rawx config, and free the structure.
- */
+/* Clean a rawx config, and free the structure.  */
 void rawx_conf_gclean(rawx_conf_t *c);
-
-/* stamp the last scanned time on a chunk */
-void stamp_a_chunk(const char *chunk_path, const char *attr_to_set);
 
 #endif /*OIO_SDS__rawx_lib__src__rawx_h*/

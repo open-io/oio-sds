@@ -22,33 +22,19 @@ License along with this library.
 
 #include <glib/gtypes.h>
 
-/**
- * @defgroup metautil_kv KeyValue pairs
- * @ingroup metautils_utils
- * @{
- */
-
 GHashTable * key_value_pairs_empty (void);
 
-/** Deep copy or not (key and values are copied too) */
-GHashTable *key_value_pairs_convert_to_map(GSList * pairs, GError ** err);
-
-/** Deep (copy) of Shallow (!copy) copy of the map */
+/* Deep copy of the map */
 GSList *key_value_pairs_convert_from_map(GHashTable * ht, gboolean copy,
 		GError ** err);
 
-/** Deep cleaning of the given key_value_pair_t (frees all the structure
+/* Deep cleaning of the given key_value_pair_t (frees all the structure
  * members and the structure) */
 void key_value_pair_clean(key_value_pair_t * kv);
 
-/** Call key_value_pair_clean() on the first argument */
 void key_value_pair_gclean(gpointer p, gpointer u);
 
 struct key_value_pair_s* key_value_pair_create(const gchar *k,
 		const guint8 *v, gsize vs);
-
-gchar* key_value_pair_to_string(key_value_pair_t * kv);
-
-/** @} */
 
 #endif /*OIO_SDS__metautils__lib__metatype_kv_h*/

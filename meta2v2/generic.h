@@ -69,6 +69,7 @@ struct bean_descriptor_s
 	const gchar *sql_name;
 	const gchar *sql_select;
 	const gchar *sql_count;
+	const gchar *sql_insert;
 	const gchar *sql_replace;
 	const gchar *sql_update;
 	const long offset_fields;
@@ -105,6 +106,10 @@ void _bean_clean(gpointer bean);
 void _bean_cleanv(gpointer *beanv);
 void _bean_cleanv2(GPtrArray *v);
 void _bean_cleanl2(GSList *v);
+
+GError* _db_insert_bean(sqlite3 *db, gpointer bean);
+GError* _db_insert_beans_list(sqlite3 *db, GSList *list);
+GError* _db_insert_beans_array(sqlite3 *db, GPtrArray *array);
 
 GError* _db_save_bean(sqlite3 *db, gpointer bean);
 GError* _db_save_beans_list(sqlite3 *db, GSList *list);

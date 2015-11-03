@@ -48,7 +48,7 @@ oio_log_thread_id(GThread *thread)
 	return (bulk.u[0] ^ bulk.u[1]) ^ (bulk.u[2] ^ bulk.u[3]);
 }
 
-static inline guint16
+guint16
 oio_log_current_thread_id(void)
 {
 	return oio_log_thread_id(g_thread_self());

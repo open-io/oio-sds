@@ -47,8 +47,7 @@ void meta2_backend_configure_nsinfo(struct meta2_backend_s *m2,
  *
  * Be sure a valid namespace_info_s is pointed by dst (a zero'ed ns_info is
  * valid). */
-gboolean meta2_backend_get_nsinfo(struct meta2_backend_s *m2,
-		struct namespace_info_s *dst);
+struct namespace_info_s * meta2_backend_get_nsinfo(struct meta2_backend_s *m2);
 
 /** Tests if the backend has been fully initiated. I.e. it checks a
  * valid NSinfo has been provided. */
@@ -94,14 +93,6 @@ GError *meta2_backend_purge_container(struct meta2_backend_s *m2,
 /** Find and unreference duplicate content headers.  */
 GError* meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, guint32 flags, GString **status_message);
-
-/** Find and unreference duplicate chunks of a container.  */
-GError* meta2_backend_deduplicate_chunks(struct meta2_backend_s *m2b,
-        struct hc_url_s *url);
-
-/** Find and unreference duplicate chunks of a content.  */
-GError* meta2_backend_deduplicate_alias_chunks(struct meta2_backend_s *m2b,
-        struct hc_url_s *url);
 
 /* -------------------------------------------------------------------------- */
 
@@ -199,11 +190,6 @@ GError* meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
 GError* meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gint64 size, const gchar *polname,
 		gboolean append, m2_onbean_cb cb, gpointer cb_data);
-
-GError* meta2_backend_generate_beans_v1(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 size, const gchar *polname,
-		gboolean append, const char *mdsys, const char *mdusr,
-		m2_onbean_cb cb, gpointer cb_data);
 
 GError* meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 		struct hc_url_s *url, gint64 *result);

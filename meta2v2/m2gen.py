@@ -349,6 +349,7 @@ the list."""
 
 			t0 = ",".join(t.get_fields_names())
 			t1 = ",".join(['?' for f in t.fields])
+			out.write('\t'+dquoted("INSERT  INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")")+',\n')
 			out.write('\t'+dquoted("REPLACE INTO "+t.sql_name+"("+t0+") VALUES ("+t1+")")+',\n')
 
 			t0 = ",".join([ f.name+'=?' for f in t.fields if not f.name in t.pk])
@@ -434,65 +435,59 @@ generator = Generator()
 alias = generator.add_bean(Struct("aliases") \
 	.field(Text("alias")) \
 	.field(Int( "version")) \
-	.field(Int( "container_version")) \
-	.field(Blob("content_id"), mandatory=False) \
-	.field(Text("mdsys")) \
-	.field(Int( "ctime")) \
+	.field(Blob("content")) \
 	.field(Bool("deleted")) \
+	.field(Int( "ctime")) \
+	.field(Int( "mtime")) \
 	.PK(("alias", "version")) \
 	.index('alias_index_by_name', ['alias']) \
-	.index('alias_index_by_header', ['content_id']) \
-	.set_sql_name("alias_v2")).set_order(0)
+	.index('alias_index_by_header', ['content']) \
+	.set_sql_name("aliases")).set_order(0)
 
 properties = generator.add_bean(Struct("properties") \
 	.field(Text("alias")) \
-	.field(Int("alias_version")) \
+	.field(Int("version")) \
 	.field(Text("key")) \
 	.field(Blob("value")) \
-	.PK(("alias","alias_version","key")) \
-	.index('properties_index_by_header_version', ['alias', 'alias_version']) \
-	.set_sql_name("properties_v2")).set_order(5)
+	.PK(("alias","version","key")) \
+	.index('properties_index_by_header_version', ['alias', 'version']) \
+	.set_sql_name("properties")).set_order(5)
 
-contents = generator.add_bean(Struct("contents") \
-	.field(Blob("content_id")) \
-	.field(Text("chunk_id")) \
-	.field(Text("position")) \
-	.PK(("content_id","chunk_id","position")) \
-	.index('contents_index_by_header', ['content_id']) \
-	.index('contents_index_by_chunk', ['chunk_id']) \
-	.set_sql_name("content_v2")).set_order(2)
-
-contents_headers = generator.add_bean(Struct("contents_headers") \
+contents = generator.add_bean(Struct("contents_headers") \
 	.field(Blob("id")) \
-	.field(Text("policy"), mandatory=False) \
 	.field(Blob("hash"), mandatory=False) \
 	.field(Int("size")) \
-	.PK(("id","policy")) \
-	.set_sql_name("content_header_v2")).set_order(1)
+	.field(Int("ctime")) \
+	.field(Int("mtime")) \
+	.field(Text("mime_type")) \
+	.field(Text("chunk_method")) \
+	.field(Text("policy"), mandatory=False) \
+	.PK(("id",)) \
+	.index('content_by_hash_size', ['hash','size']) \
+	.set_sql_name("contents")).set_order(1)
 
 chunks = generator.add_bean(Struct("chunks") \
 	.field(Text("id")) \
+	.field(Blob("content")) \
+	.field(Text("position")) \
 	.field(Blob("hash")) \
 	.field(Int("size")) \
 	.field(Int("ctime")) \
 	.PK(("id",)) \
-	.set_sql_name("chunk_v2")).set_order(3)
+	.index('chunk_index_by_header', ['content']) \
+	.set_sql_name("chunks")).set_order(3)
 
 generator.add_fk(ForeignKey(
-		(properties, ('alias','alias_version'), "alias"),
+		(properties, ('alias','version'), "alias"),
 		(alias, ('alias', 'version'), "properties")))
 
 generator.add_fk(ForeignKey(
-		(alias, ('content_id',), "image"),
-		(contents_headers, ('id',), "aliases")))
+		(alias, ('content',), "image"),
+		(contents, ('id',), "aliases")))
 
 generator.add_fk(ForeignKey(
-		(contents, ('content_id',), "headers"),
-		(contents_headers, ('id',), "content")))
-
-generator.add_fk(ForeignKey(
-		(contents, ('chunk_id',), "chunk"),
-		(chunks, ('id',), "contents")))
+		(chunks, ('content',), "content"),
+		(contents, ('id',), "chunks")))
 
 #-------------------------------------------------------------------------------
 

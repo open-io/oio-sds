@@ -166,28 +166,6 @@ test_configure_invalid(void)
 	g_assert(url == NULL);
 }
 
-static void
-test_options (void)
-{
-	struct oio_url_s *url = oio_url_empty();
-	oio_url_set(url, OIOURL_NS, "NS");
-	oio_url_set(url, OIOURL_USER, "REF");
-	oio_url_set(url, OIOURL_PATH, "PATH");
-
-	const gchar *v;
-
-	oio_url_set_option(url, "k", "v");
-	v = oio_url_get_option_value(url, "k");
-	g_assert(0 == strcmp(v, "v"));
-
-	oio_url_set_option(url, "k", "v0");
-	v = oio_url_get_option_value(url, "k");
-	g_assert(0 == strcmp(v, "v0"));
-
-	oio_url_clean(url);
-	url = NULL;
-}
-
 int
 main(int argc, char **argv)
 {
@@ -202,7 +180,6 @@ main(int argc, char **argv)
 			test_configure_valid);
 	g_test_add_func("/core/url/configure/invalid",
 			test_configure_invalid);
-	g_test_add_func("/core/url/options", test_options);
 	return g_test_run();
 }
 

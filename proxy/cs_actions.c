@@ -135,7 +135,7 @@ action_cs_info (struct req_args_s *args)
 
 	struct namespace_info_s ni;
 	memset (&ni, 0, sizeof (ni));
-	NSINFO_DO(namespace_info_copy (&nsinfo, &ni, NULL));
+	NSINFO_DO(namespace_info_copy (&nsinfo, &ni));
 
 	GString *gstr = g_string_new ("");
 	namespace_info_encode_json (gstr, &ni);

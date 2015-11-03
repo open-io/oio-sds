@@ -61,7 +61,7 @@ _node_cleanup(struct lru_tree_s *lt, struct _node_s *node)
 }
 
 static int
-_node_compare(gpointer u, struct _node_s *n0, struct _node_s *n1)
+_node_compare(gpointer u, const struct _node_s *n0, const struct _node_s *n1)
 {
     struct lru_tree_s *lt = u;
     return lt->kcmp(n0->k, n1->k);

@@ -108,16 +108,4 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define NAME_MSGNAME_M2V1_TOUCH_CONTENT   "REQ_M2RAW_TOUCH_CONTENT"
 # define NAME_MSGNAME_M2V1_TOUCH_CONTAINER "REQ_M2RAW_TOUCH_CONTAINER"
 
-/* -------------------------------------------------------------------------- */
-
-# ifndef META2_URL_LOCAL_BASE
-#  define META2_URL_LOCAL_BASE "__M2V2_LOCAL_BASE__"
-# endif
-
-/* LEGACY CONSTANTS --------------------------------------------------------- */
-
-# ifndef MDUSR_PROPERTY_KEY
-#  define MDUSR_PROPERTY_KEY M2V2_ADMIN_PREFIX_SYS "v1.mdusr"
-# endif
-
 #endif /*OIO_SDS__meta2v2__meta2_macros_h*/

@@ -40,7 +40,7 @@ _copy_hash(GHashTable *src)
 	return res;
 }
 
-gpointer
+static gpointer
 namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
 		const gchar *param_name)
 {
@@ -73,14 +73,11 @@ namespace_hash_table_lookup(GHashTable *table, const gchar *ns_name,
 	return value;
 }
 
-gboolean
-namespace_info_copy(namespace_info_t* src, namespace_info_t* dst, GError **error)
+void
+namespace_info_copy(namespace_info_t* src, namespace_info_t* dst)
 {
-	if (src == NULL || dst == NULL) {
-		GSETCODE(error, ERRCODE_PARAM, "Argument src or dst should not be NULL");
-		errno = EINVAL;
-		return FALSE;
-	}
+	EXTRA_ASSERT(src != NULL);
+	EXTRA_ASSERT(dst != NULL);
 
 	memcpy(dst->name, src->name, sizeof(src->name));
 	dst->chunk_size = src->chunk_size;
@@ -90,8 +87,7 @@ namespace_info_copy(namespace_info_t* src, namespace_info_t* dst, GError **error
 	if ((SRC) != NULL) {\
 		GHashTable *old = (DST);\
 		DST = g_hash_table_ref(SRC);\
-		if (old)\
-			 g_hash_table_unref(old);\
+		if (old) g_hash_table_unref(old);\
 	}
 
 	NSI_COPY_TABLE_REF(src->options, dst->options);
@@ -101,9 +97,6 @@ namespace_info_copy(namespace_info_t* src, namespace_info_t* dst, GError **error
 	NSI_COPY_TABLE_REF(src->storage_class, dst->storage_class);
 
 #undef NSI_COPY_TABLE_REF
-
-	errno = 0;
-	return TRUE;
 }
 
 namespace_info_t*
@@ -332,12 +325,12 @@ namespace_info_init_json_object(struct json_object *obj,
 	EXTRA_ASSERT(ni != NULL);
 
 	struct json_object *ns=NULL, *sz=NULL;
-	struct metautils_json_mapping_s mapping[] = {
+	struct oio_ext_json_mapping_s mapping[] = {
 		{"ns",        &ns, json_type_string, 1},
 		{"chunksize", &sz, json_type_int,    1},
 		{NULL, NULL, 0, 0}
 	};
-	GError *err = metautils_extract_json (obj, mapping);
+	GError *err = oio_ext_extract_json (obj, mapping);
 	if (err) return err;
 
 	metautils_strlcpy_physical_ns(ni->name, json_object_get_string(ns), sizeof(ni->name));

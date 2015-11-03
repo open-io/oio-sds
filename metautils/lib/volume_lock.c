@@ -24,14 +24,8 @@ License along with this library.
 #include "metautils.h"
 #include "volume_lock.h"
 
-#define alloca_xattr(r,fmt,t) do { \
-	size_t rs = strlen(fmt) + strlen(t) + 1; \
-	r = g_alloca(rs); \
-	g_snprintf(r, rs, fmt, t); \
-} while (0)
-
 static GError*
-_check_lock(const gchar *vol, const gchar *n, const gchar *v)
+_check_lock(const char *vol, const char *n, const char *v)
 {
 	static gssize max_size = 256;
 	gchar *buf;
@@ -68,41 +62,31 @@ retry:
 }
 
 static GError*
-_set_lock(const gchar *vol, const gchar *n, const gchar *v)
+_set_lock(const char *vol, const char *n, const char *v)
 {
-	int rc;
-
-	rc = setxattr(vol, n, v, strlen(v), XATTR_CREATE);
+	int rc = setxattr(vol, n, v, strlen(v), XATTR_CREATE);
 	if (!rc)
 		return NULL;
-
 	return (errno == EEXIST) ? _check_lock(vol, n, v)
 		: NEWERROR(errno, "XATTR set error: %s", strerror(errno));
 }
 
 GError*
-volume_service_lock(const gchar *vol, const gchar *type, const gchar *id,
-		const gchar *ns)
+volume_service_lock(const char *vol, const char *type, const char *id,
+		const char *ns)
 {
+	EXTRA_ASSERT (vol != NULL);
+	EXTRA_ASSERT (ns != NULL);
+	EXTRA_ASSERT (id != NULL);
+	EXTRA_ASSERT (type != NULL);
+
 	GError *err;
-	gchar *n, pns[256];
-
-	if (!type || !*type)
-		return NEWERROR(EINVAL, "Invalid service type");
-
-	if (ns && *ns) {
-		metautils_strlcpy_physical_ns(pns, ns, sizeof(pns));
-		alloca_xattr(n, "user.%s_server.namespace", type);
-		if (NULL != (err = _set_lock(vol, n, pns)))
-			return err;
-	}
-
-	if (id && *id) {
-		alloca_xattr(n, "user.%s_server.address", type);
-		if (NULL != (err = _set_lock(vol, n, id)))
-			return err;
-	}
-
+	if (NULL != (err = _set_lock(vol, "user.server.ns", ns)))
+		return err;
+	if (NULL != (err = _set_lock(vol, "user.server.id", id)))
+		return err;
+	if (NULL != (err = _set_lock(vol, "user.server.type", type)))
+		return err;
 	return NULL;
 }
 

@@ -348,16 +348,6 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 	if (!ok)
 		return NEWERROR(errno, "Invalid directory : insufficient permissions");
 
-	/* Lock the volume with XATTR */
-	if (cfg != NULL) {
-		if (!(cfg->flags & SQLX_REPO_NOLOCK)) {
-			GError *err = volume_service_lock(vol, cfg->lock.type,
-						cfg->lock.srv, cfg->lock.ns);
-			if (err != NULL)
-				return err;
-		}
-	}
-
 	/* Create the directory used by dump/restore functions */
 	g_snprintf(tmpdir, sizeof(tmpdir), "%s/tmp", vol);
 	mkdir(tmpdir, 0755);

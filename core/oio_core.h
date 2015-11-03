@@ -20,9 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__core__core_h
 # define OIO_SDS__core__core_h 1
 
-# define GQ() g_quark_from_static_string(G_LOG_DOMAIN)
-# define NEWERROR(CODE, FMT,...) g_error_new(GQ(), (CODE), FMT, ##__VA_ARGS__)
-
 # include "core/oiocfg.h"
 # include "core/oioext.h"
 # include "core/oiolog.h"

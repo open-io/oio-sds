@@ -350,7 +350,7 @@ _task_reload_nsinfo (gpointer p)
 			nsname, cs, err->code, err->message);
 		g_clear_error (&err);
 	} else {
-		NSINFO_DO(namespace_info_copy (ni, &nsinfo, NULL));
+		NSINFO_DO(namespace_info_copy (ni, &nsinfo));
 		namespace_info_free (ni);
 	}
 }

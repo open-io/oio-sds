@@ -97,7 +97,7 @@ meta2_filter_fill_subject(struct gridd_filter_ctx_s *ctx,
 } while(0)
 
 int
-meta2_filter_fail_reply(struct gridd_filter_ctx_s *ctx,
+meta2_filter_reply_fail(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	GError *e = NULL;
@@ -117,7 +117,7 @@ meta2_filter_fail_reply(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_success_reply(struct gridd_filter_ctx_s *ctx,
+meta2_filter_reply_success(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	TRACE_FILTER();
@@ -127,7 +127,7 @@ meta2_filter_success_reply(struct gridd_filter_ctx_s *ctx,
 }
 
 int
-meta2_filter_not_implemented_reply(struct gridd_filter_ctx_s *ctx,
+meta2_filter_reply_not_implemented(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	TRACE_FILTER();

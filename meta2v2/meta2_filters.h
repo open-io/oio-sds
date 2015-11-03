@@ -44,211 +44,68 @@ void _on_bean_ctx_send_list(struct on_bean_ctx_s *obc);
 
 void _on_bean_ctx_clean(struct on_bean_ctx_s *obc);
 
-/* ------------ CHECK --------------- */
+/* -------------------------------------------------------------------------- */
 
-int meta2_filter_check_url_cid (struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
+#define M2V2_DECLARE_FILTER(F) int F (struct gridd_filter_ctx_s *, struct gridd_reply_ctx_s *)
 
-/*! Check the ns send in the request fields match with the ns of the meta2
- * backend */
-int meta2_filter_check_ns_name(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
+M2V2_DECLARE_FILTER(meta2_filter_check_url_cid);
+M2V2_DECLARE_FILTER(meta2_filter_check_ns_name);
+M2V2_DECLARE_FILTER(meta2_filter_check_optional_ns_name);
+M2V2_DECLARE_FILTER(meta2_filter_check_backend);
+M2V2_DECLARE_FILTER(meta2_filter_check_ns_is_master);
+M2V2_DECLARE_FILTER(meta2_filter_check_ns_not_wormed);
 
-int meta2_filter_check_optional_ns_name(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_url);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_copy);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_chunk_beans);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_storage_policy);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_version_policy);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_spare);
+M2V2_DECLARE_FILTER(meta2_filter_extract_body_beans);
+M2V2_DECLARE_FILTER(meta2_filter_extract_body_strings);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_forceflag);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_flushflag);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_purgeflag);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_localflag);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_flags32);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_append);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_string_size);
+M2V2_DECLARE_FILTER(meta2_filter_extract_header_optional_overwrite);
+M2V2_DECLARE_FILTER(meta2_filter_extract_list_params);
 
-int meta2_filter_check_backend(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
+M2V2_DECLARE_FILTER(meta2_filter_fill_subject);
+M2V2_DECLARE_FILTER(meta2_filter_reply_success);
+M2V2_DECLARE_FILTER(meta2_filter_reply_fail);
+M2V2_DECLARE_FILTER(meta2_filter_reply_not_implemented);
 
-/*! Check the ns is in master mode */
-int meta2_filter_check_ns_is_master(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Check the ns is not in worm mode */
-int meta2_filter_check_ns_not_wormed(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/* ---------------- EXTRACTORS ------------------ */
-
-/*! Extract an hc_url from a request */
-int meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Extract the copy source header */
-int meta2_filter_extract_header_copy(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Extract the legacy field path from a request. */
-int meta2_filter_extract_header_mdsys(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Extract "NEW_CHUNKS" and "OLD_CHUNKS" headers from SUBST_CHUNK request.
- * The extracted value, stored in udata, is an array with 2 lists of beans. */
-int meta2_filter_extract_header_chunk_beans(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Extract the storage policy field of the request */
-int meta2_filter_extract_header_storage_policy(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_extract_header_version_policy(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Extract the spare method specified in header NAME_MSGKEY_SPARE, if specified.
- * Can be M2V2_SPARE_BY_BLACKLIST or M2V2_SPARE_BY_STGPOL. */
-int meta2_filter_extract_header_spare(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Extract the beans encoded in the message body */
-int meta2_filter_extract_body_beans(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_extract_body_strings(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Extracts "FORCE" and parse it as a flag */
-int meta2_filter_extract_header_forceflag(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Extracts "FLUSH" and parse it as a flag */
-int meta2_filter_extract_header_flushflag(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Extracts "PURGE" and parse it as a flag */
-int meta2_filter_extract_header_purgeflag(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Extracts "LOCAL" and parse it as a flag */
-int meta2_filter_extract_header_localflag(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_extract_header_flags32(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_extract_header_append(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_extract_header_string_size(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_extract_header_optional_overwrite(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_extract_list_params(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply);
-
-/* ---------------- EXTRA ------------------- */
-
-/*! Fill the reply subject with ctx informations */
-int meta2_filter_fill_subject(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Send a success reply with all informations available in filter context to the client */
-int meta2_filter_success_reply(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Send a fail reply with all informations available in filter context to the client */
-int meta2_filter_fail_reply(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Send a fail reply with all informations available in filter context to the client */
-int meta2_filter_not_implemented_reply(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/* BACKEND ------------------------------------------------------------------ */
-
-/*! Call backend and create the container with informations available in filter context */
-int meta2_filter_action_create_container(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Call backend and check the container existence with informations available in filter context */
-int meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Call backend and delete a container with informations available in filter context */
-int meta2_filter_action_delete_container(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*!  */
-int meta2_filter_action_purge_container(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Call backend and deduplicate chunks of a container */
-int meta2_filter_action_deduplicate_container(struct gridd_filter_ctx_s *ctx,
-        struct gridd_reply_ctx_s *reply);
-
-/*! Call backend and list content of a container with informations available in
- * filter context */
-int meta2_filter_action_list_contents(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_list_by_chunk_id(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_list_by_header_id(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_list_by_header_hash(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Call backend and put the content with informations available in filter context */
-int meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Call backend and append the content with informations available in filter context */
-int meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Call backend and get informations of a "content" (alias, chunk, props, ...) */
-int meta2_filter_action_get_content(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Call backend and delete a content using informations in filter context */
-int meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_link(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Work on content properties */
-int meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Work on content properties */
-int meta2_filter_action_get_content_properties(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/*! Work on content properties */
-int meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_touch_content_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
+M2V2_DECLARE_FILTER(meta2_filter_action_create_container);
+M2V2_DECLARE_FILTER(meta2_filter_action_has_container);
+M2V2_DECLARE_FILTER(meta2_filter_action_delete_container);
+M2V2_DECLARE_FILTER(meta2_filter_action_purge_container);
+M2V2_DECLARE_FILTER(meta2_filter_action_deduplicate_container);
+M2V2_DECLARE_FILTER(meta2_filter_action_list_contents);
+M2V2_DECLARE_FILTER(meta2_filter_action_list_by_chunk_id);
+M2V2_DECLARE_FILTER(meta2_filter_action_list_by_header_id);
+M2V2_DECLARE_FILTER(meta2_filter_action_list_by_header_hash);
+M2V2_DECLARE_FILTER(meta2_filter_action_put_content);
+M2V2_DECLARE_FILTER(meta2_filter_action_append_content);
+M2V2_DECLARE_FILTER(meta2_filter_action_get_content);
+M2V2_DECLARE_FILTER(meta2_filter_action_delete_content);
+M2V2_DECLARE_FILTER(meta2_filter_action_link);
+M2V2_DECLARE_FILTER(meta2_filter_action_set_content_properties);
+M2V2_DECLARE_FILTER(meta2_filter_action_get_content_properties);
+M2V2_DECLARE_FILTER(meta2_filter_action_del_content_properties);
+M2V2_DECLARE_FILTER(meta2_filter_action_generate_beans);
+M2V2_DECLARE_FILTER(meta2_filter_action_touch_content_v1);
 
 #define META2TOUCH_FLAGS_UPDATECSIZE     0x00000001
 #define META2TOUCH_FLAGS_RECALCCSIZE     0x00000002
-int meta2_filter_action_touch_container_v1(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
+M2V2_DECLARE_FILTER(meta2_filter_action_touch_container_v1);
+M2V2_DECLARE_FILTER(meta2_filter_action_insert_beans);
+M2V2_DECLARE_FILTER(meta2_filter_action_delete_beans);
+M2V2_DECLARE_FILTER(meta2_filter_action_update_beans);
 
-int meta2_filter_action_insert_beans(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_delete_beans(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_update_beans(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-/* ---------------------- URL ---------------------*/
-
-/*! Update a container or a content storage policy */
-int meta2_filter_action_update_storage_policy(struct gridd_filter_ctx_s *ctx,
-		struct gridd_reply_ctx_s *reply);
-
-int meta2_filter_action_exit_election(struct gridd_filter_ctx_s *ctx,
-                struct gridd_reply_ctx_s *reply);
+M2V2_DECLARE_FILTER(meta2_filter_action_update_storage_policy);
+M2V2_DECLARE_FILTER(meta2_filter_action_exit_election);
 
 #endif /*OIO_SDS__meta2v2__meta2_filters_h*/
