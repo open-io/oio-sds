@@ -10,8 +10,8 @@ install(TARGETS oiocache
 		RUNTIME DESTINATION bin
 		PUBLIC_HEADER DESTINATION include)
 
-add_executable(test_cache_abstract test_cache_abstract.c)
-target_link_libraries(test_cache_abstract oiocache)
+add_executable(test_cache test_cache.c)
+target_link_libraries(test_cache oiocache)
 
-add_test(NAME cache/abstract COMMAND test_cache_abstract)
+add_test(NAME cache/abstract COMMAND test_cache)
 
