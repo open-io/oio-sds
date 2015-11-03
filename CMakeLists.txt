@@ -276,7 +276,7 @@ set(ZK_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/zookeeper")
 # check system configuration
 pkg_search_module(JSONC json json-c)
 pkg_check_modules(GLIB2 REQUIRED glib-2.0 gthread-2.0 gmodule-2.0)
-pkg_check_modules(CURL curl)
+pkg_check_modules(CURL curl libcurl)
 
 if (NOT SDK_ONLY)
 pkg_check_modules(APR REQUIRED apr-1)
