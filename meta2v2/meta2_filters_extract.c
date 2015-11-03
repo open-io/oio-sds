@@ -120,20 +120,24 @@ meta2_filter_extract_header_version_policy(struct gridd_filter_ctx_s *ctx,
 	return FILTER_OK;
 }
 
+static void
+_plist_cleaner(gpointer ptr)
+{
+	GSList **lists = ptr;
+	_bean_cleanl2(lists[0]);
+	_bean_cleanl2(lists[1]);
+	g_free (lists);
+}
+
+
 int
 meta2_filter_extract_header_chunk_beans(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	void _cleaner(gpointer ptr) {
-		GSList **lists = ptr;
-		_bean_cleanl2(lists[0]);
-		_bean_cleanl2(lists[1]);
-		// FIXME memleak with <lists> itself ?
-	}
 	GSList **lists = g_malloc0(2 * sizeof(GSList *));
 	EXTRACT_HEADER_BEANS(NAME_MSGKEY_NEW, lists[0]);
 	EXTRACT_HEADER_BEANS(NAME_MSGKEY_OLD, lists[1]);
-	meta2_filter_ctx_set_input_udata(ctx, lists, _cleaner);
+	meta2_filter_ctx_set_input_udata(ctx, lists, _plist_cleaner);
 	return FILTER_OK;
 }
 

@@ -1073,7 +1073,7 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct hc_url_s *url,
 					err = _db_save_bean (sq3->db, l1->data);
 				if (!err && DESCR(l0->data) == &descr_struct_CHUNKS) {
 					gchar *stmt = g_strdup_printf(
-							"UPDATE content_v2 SET chunk_id = '%s' WHERE chunk_id = '%s'",
+							"UPDATE chunks SET id = '%s' WHERE id = '%s'",
 							CHUNKS_get_id(l1->data)->str, CHUNKS_get_id(l0->data)->str);
 					int rc = sqlx_exec(sq3->db, stmt);
 					g_free(stmt);
@@ -1269,18 +1269,21 @@ meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
 
 /* Beans generation --------------------------------------------------------- */
 
+static void
+_cb_has_not(gpointer udata, gpointer bean)
+{
+	if (!bean)
+		return;
+	*((gboolean*)udata) = FALSE;
+	_bean_clean(bean);
+}
+
 static GError*
 _check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 {
-	void _cb(gpointer udata, gpointer bean) {
-		if(bean) {
-			*((gboolean*)udata) = FALSE;
-			_bean_clean(bean);
-		}
-	}
-
 	gboolean no_bean = TRUE;
-	GError *err = m2db_get_alias(sq3, url, M2V2_FLAG_NODELETED, _cb, &no_bean);
+	GError *err = m2db_get_alias(sq3, url, M2V2_FLAG_NODELETED,
+			_cb_has_not, &no_bean);
 	if (NULL != err) {
 		if (err->code == CODE_CONTENT_NOTFOUND) {
 			g_clear_error(&err);
@@ -1539,9 +1542,8 @@ meta2_backend_content_from_chunkid(struct meta2_backend_s *m2b,
 		GVariant *params[2] = {NULL, NULL};
 		params[0] = g_variant_new_string(chunk_id);
 		err = CONTENTS_HEADERS_load (sq3->db, " id IN"
-				" (SELECT DISTINCT content_id"
-				"  FROM content_v2 "
-				"  WHERE chunk_id = ?) LIMIT 1", params, cb, u0);
+				" (SELECT DISTINCT content FROM chunks "
+				"  WHERE id = ?) LIMIT 1", params, cb, u0);
 		metautils_gvariant_unrefv(params);
 		if (!err) {
 			/* TODO follow the FK to the aliases */

@@ -48,3 +48,6 @@ if (LIBMEMCACHED_FOUND)
 
 	add_test(NAME cache/memcached COMMAND test_cache_memcached)
 endif ()
+
+print_found("HIREDIS")
+print_found("LIBMEMCACHED")

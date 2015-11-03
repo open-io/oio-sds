@@ -148,7 +148,7 @@ m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean)
 	if (NULL != (err = oio_ext_extract_json (j, mapping)))
 		return err;
 
-	hid = metautils_gba_from_hexstring(json_object_get_string(jid));
+	hid = metautils_gba_from_hexstring(json_object_get_string(jcontent));
 	if (!hid) {
 		err = NEWERROR(CODE_BAD_REQUEST, "Invalid header, not hexa id");
 		goto exit;
