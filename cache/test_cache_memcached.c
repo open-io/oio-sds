@@ -18,19 +18,18 @@ License along with this library.
 
 #include <core/oiolog.h>
 #include <cache/cache.h>
-#include <cache/cache_redis.h>
+#include <cache/cache_memcached.h>
 
 #include "test_cache_abstract.c"
 
 static void
-test_cache_cycle_redis (void)
+test_cache_cycle_memcached (void)
 {
 	// TODO those should probably be passed as args
 	char *ip = "127.0.0.1";
-	int port = 6379;
-	struct timeval timeout = {0,0};
+	int port = 11211;
 
-	struct oio_cache_s * c = oio_cache_make_redis (ip, port, timeout);
+	struct oio_cache_s * c = oio_cache_make_memcached (ip, port);
 
 	test_cache_cycle (c);
 	oio_cache_destroy (c);
@@ -44,7 +43,7 @@ main(int argc, char **argv)
 	oio_log_init_level(GRID_LOGLVL_INFO);
 	g_log_set_default_handler(oio_log_stderr, NULL);
 
-	g_test_add_func("/cache/cycle/redis", test_cache_cycle_redis);
+	g_test_add_func("/cache/cycle/memcached", test_cache_cycle_memcached);
 	return g_test_run();
 }
 

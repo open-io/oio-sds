@@ -16,7 +16,6 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <metautils/lib/lrutree.h>
 #include <cache/cache.h>
 
 static void
