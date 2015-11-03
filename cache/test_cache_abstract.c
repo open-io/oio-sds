@@ -41,7 +41,7 @@ test_not_found (struct oio_cache_s *c, const char *k)
 	g_assert_cmpint (rc, ==, OIO_CACHE_NOTFOUND);
 }
 
-void
+static void
 test_cache_cycle (struct oio_cache_s *c)
 {
 	const char *k = "NOTFOUND";
