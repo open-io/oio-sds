@@ -66,4 +66,8 @@ struct lru_tree_s;
 /* Returns a cache that stores entries in a LRU_TREE */
 struct oio_cache_s * oio_cache_make_LRU (struct lru_tree_s *lru);
 
+/* Returns a multi-layered cache */
+struct oio_cache_s * oio_cache_make_multilayer (GSList *caches);
+struct oio_cache_s * oio_cache_make_multilayer_var (struct oio_cache_s *first, ...);
+
 #endif /*OIO_SDS__cache__cache_h*/

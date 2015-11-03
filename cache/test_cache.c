@@ -41,6 +41,22 @@ test_cache_cycle_lru (void)
 	oio_cache_destroy (c);
 }
 
+static void
+test_cache_cycle_multilayer (void)
+{
+	struct lru_tree_s *lru = lru_tree_create (
+	        (GCompareFunc)g_strcmp0, g_free, g_free, 0);
+	g_assert_nonnull (lru);
+
+	struct oio_cache_s *c1 = oio_cache_make_LRU (lru);
+	struct oio_cache_s *c2 = oio_cache_make_NOOP ();
+
+	struct oio_cache_s *c = oio_cache_make_multilayer_var (c1,c2,NULL);
+
+	test_cache_cycle (c);
+	oio_cache_destroy (c);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -51,6 +67,7 @@ main (int argc, char **argv)
 
 	g_test_add_func("/cache/cycle/noop", test_cache_cycle_noop);
 	g_test_add_func("/cache/cycle/lru", test_cache_cycle_lru);
+	g_test_add_func("/cache/cycle/multilayer", test_cache_cycle_multilayer);
 	return g_test_run();
 }
 
