@@ -1,5 +1,5 @@
 /*
-OpenIO SDS metautils
+OpenIO SDS cache
 Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or

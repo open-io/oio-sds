@@ -18,6 +18,7 @@ License along with this library.
 
 #include "test_cache_abstract.c"
 
+#include <metautils/lib/lrutree.h>
 #include <core/oiolog.h>
 
 static void
