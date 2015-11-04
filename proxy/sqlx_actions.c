@@ -444,34 +444,6 @@ action_sqlx_disable_disabled (struct req_args_s *args, struct json_object *jargs
 }
 
 enum http_rc_e
-action_sqlx_action (struct req_args_s *args)
-{
-	struct sub_action_s actions[] = {
-		{"Info", action_sqlx_info},
-		{"Leanify", action_sqlx_leanify},
-
-		{"Ping", action_sqlx_ping},
-		{"Status", action_sqlx_status},
-		{"Debug", action_sqlx_debug},
-		{"Resync", action_sqlx_resync},
-		{"Leave", action_sqlx_leave},
-		{"CopyTo", action_sqlx_copyto},
-
-		{"GetProperties", action_sqlx_propget},
-		{"SetProperties", action_sqlx_propset},
-		{"DelProperties", action_sqlx_propdel},
-
-		{"Freeze", action_sqlx_freeze},
-		{"Enable", action_sqlx_enable},
-		{"Disable", action_sqlx_disable},
-		{"DisableDisabled", action_sqlx_disable_disabled},
-
-		{NULL,NULL},
-	};
-	return abstract_action ("sqlx actions", args, actions);
-}
-
-enum http_rc_e
 action_admin_ping (struct req_args_s *args)
 {
 	return _sqlx_action_noreturn (args, sqlx_pack_USE);

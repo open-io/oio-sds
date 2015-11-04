@@ -1093,30 +1093,6 @@ action_m2_container_setvers (struct req_args_s *args, struct json_object *jargs)
 }
 
 enum http_rc_e
-action_m2_container_action (struct req_args_s *args)
-{
-	struct sub_action_s actions[] = {
-		{"Purge", action_m2_container_purge},
-		{"Dedup", action_m2_container_dedup},
-		{"Touch", action_m2_container_touch},
-
-		{"RawInsert", action_m2_container_raw_insert},
-		{"RawDelete", action_m2_container_raw_delete},
-		{"RawUpdate", action_m2_container_raw_update},
-
-		{"GetProperties", action_m2_container_propget},
-		{"SetProperties", action_m2_container_propset},
-		{"DelProperties", action_m2_container_propdel},
-
-		{"SetStoragePolicy", action_m2_container_stgpol},
-		{"SetVersioning", action_m2_container_setvers},
-
-		{NULL,NULL}
-	};
-	return abstract_action ("meta2 container", args, actions);
-}
-
-enum http_rc_e
 action_container_create (struct req_args_s *args)
 {
     return action_m2_container_create (args);
@@ -1320,10 +1296,19 @@ action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 enum http_rc_e
 action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
 {
-	if (!jargs || !json_object_is_type (jargs, json_type_string))
-		return _reply_m2_error (args, NEWERROR(CODE_BAD_REQUEST, "Expected: content id (string)"));
+	if (!jargs || !json_object_is_type (jargs, json_type_object))
+		return _reply_m2_error (args, NEWERROR(CODE_BAD_REQUEST, "Expected: json object"));
 
-	const char *hex = json_object_get_string (jargs);
+	struct json_object *jid = NULL;
+	struct oio_ext_json_mapping_s m[] = {
+		{"id",  &jid,  json_type_string, 1},
+		{NULL, NULL, 0, 0}
+	};
+	GError *err = oio_ext_extract_json (jargs, m);
+	if (err)
+		return _reply_m2_error (args, NEWERROR(CODE_BAD_REQUEST, "Expected: id (string)"));
+
+	const char *hex = json_object_get_string (jid);
 	gsize len = strlen(hex) / 2;
 	guint8 bin[len+1];
 	if (!oio_str_hex2bin (hex, bin, len+1))
@@ -1334,7 +1319,7 @@ action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
 		(void) next;
 		return m2v2_remote_execute_LINK (m2->host, args->url, id);
 	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	g_bytes_unref (id);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
@@ -1447,23 +1432,6 @@ action_m2_content_propget (struct req_args_s *args, struct json_object *jargs)
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	return _reply_properties (args, err, beans);
-}
-
-enum http_rc_e
-action_m2_content_action (struct req_args_s *args)
-{
-	struct sub_action_s actions[] = {
-		{"Beans", action_m2_content_beans},
-		{"Spare", action_m2_content_spare},
-		{"Touch", action_m2_content_touch},
-		{"Link", action_m2_content_link},
-		{"SetStoragePolicy", action_m2_content_stgpol},
-		{"GetProperties", action_m2_content_propget},
-		{"SetProperties", action_m2_content_propset},
-		{"DelProperties", action_m2_content_propdel},
-		{NULL,NULL}
-	};
-	return abstract_action ("meta2 content", args, actions);
 }
 
 /* CONTENT resources ------------------------------------------------------- */

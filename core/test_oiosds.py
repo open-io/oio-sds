@@ -97,13 +97,13 @@ def test_get(lib):
 	for h in http[1:]:
 		h.expectations = rawx_expectations
 	http[0].expectations = [
-		(("/v2.0/m2/NS/ACCT/JFS/plop", {}, ""), (503, {}, "")),
-		(("/v2.0/m2/NS/ACCT/JFS/plop", {}, ""), (200, {}, "[]")),
-		(("/v2.0/m2/NS/ACCT/JFS/plop", {}, ""), (200, {}, json.dumps([
+		(("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (503, {}, "")),
+		(("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (200, {}, "[]")),
+		(("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (200, {}, json.dumps([
 			{"url":"http://"+urls[1]+"/0000000000000000000000000000000000000000000000000000000000000000",
 			"pos":"0.0", "size":64, "hash":"00000000000000000000000000000000"},
 		]))),
-		(("/v2.0/m2/NS/ACCT/JFS/plop", {}, ""), (200, {}, json.dumps([
+		(("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (200, {}, json.dumps([
 			{"url":"http://"+urls[1]+"/0000000000000000000000000000000000000000000000000000000000000001",
 			"pos":"0.0", "size":64, "hash":"00000000000000000000000000000000"},
 			{"url":"http://"+urls[2]+"/0000000000000000000000000000000000000000000000000000000000000002",
@@ -111,7 +111,7 @@ def test_get(lib):
 			{"url":"http://"+urls[3]+"/0000000000000000000000000000000000000000000000000000000000000003",
 			"pos":"0.0", "size":64, "hash":"00000000000000000000000000000000"},
 		]))),
-		(("/v2.0/m2/NS/ACCT/JFS/plop", {}, ""), (200, {}, json.dumps([
+		(("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (200, {}, json.dumps([
 			{"url":"http://"+urls[1]+"/0000000000000000000000000000000000000000000000000000000000000004",
 			"pos":"0.0", "size":16, "hash":"00000000000000000000000000000000"},
 			{"url":"http://"+urls[2]+"/0000000000000000000000000000000000000000000000000000000000000005",
@@ -143,9 +143,9 @@ def test_get(lib):
 def test_has(lib):
 	proxy = BaseHTTPServer.HTTPServer(("127.0.0.1",0), DumbHttpMock)
 	proxy.expectations = [
-		(("/v2.0/m2/NS/ACCT/JFS/plop", {}, ""), (204, {}, "")),
-		(("/v2.0/m2/NS/ACCT/JFS/plop", {}, ""), (404, {}, "")),
-		(("/v2.0/m2/NS/ACCT/JFS/plop", {}, ""), (500, {}, "")),
+		(("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (204, {}, "")),
+		(("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (404, {}, "")),
+		(("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (500, {}, "")),
 	]
 	proxy_url = str(proxy.server_name) + ':' + str(proxy.server_port)
 	service = Service(proxy)
@@ -165,14 +165,14 @@ def test_has(lib):
 def test_list_fail(lib):
 	proxy = BaseHTTPServer.HTTPServer(("127.0.0.1",0), DumbHttpMock)
 	proxy.expectations = [
-		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (501, {}, "")),
-		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "")),
-		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "lskj")),
-		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "{}")),
-		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "{\"objects\":[]}")),
-		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "{\"prefixes\":[]}")),
-		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "{\"objects\":[]\"prefixes\":[]}")),
-		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "{\"objects\":[{}]\"prefixes\":[]}")),
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (501, {}, "")),
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (200, {}, "")),
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (200, {}, "lskj")),
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (200, {}, "{}")),
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (200, {}, "{\"objects\":[]}")),
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (200, {}, "{\"prefixes\":[]}")),
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (200, {}, "{\"objects\":[]\"prefixes\":[]}")),
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""), (200, {}, "{\"objects\":[{}]\"prefixes\":[]}")),
 	]
 	proxy_url = str(proxy.server_name) + ':' + str(proxy.server_port)
 	service = Service(proxy)
@@ -193,33 +193,40 @@ def test_list_ok(lib):
 	names = ("plap", "plep", "plip", "plop", "plup", "plyp")
 	proxy = BaseHTTPServer.HTTPServer(("127.0.0.1",0), DumbHttpMock)
 	proxy.expectations = [
-		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, "{\"objects\":[],\"prefixes\":[]}")),
-		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, {}, json.dumps({
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
+		 (200, {}, "{\"objects\":[],\"prefixes\":[]}")),
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
+		 (200, {}, json.dumps({
 				"objects" : [{"name":x, "hash":"0000", "size":0, "ver":1} for x in names],
 				"prefixes" : [],
 		}))),
-		(("/v2.0/m2/NS/ACCT/JFS?prefix=pla", {}, ""), (200, {}, json.dumps({
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&prefix=pla", {}, ""),
+		 (200, {}, json.dumps({
 				"objects" : [{"name":x, "hash":"0000", "size":0, "ver":1} for x in names if x.startswith("pla")],
 				"prefixes" : [],
 		}))),
 
-		(("/v2.0/m2/NS/ACCT/JFS", {}, ""), (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plap", },
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
+		 (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plap", },
 			json.dumps({
 				"objects" : [{"name":"plap", "hash":"0000", "size":0, "ver":1}],
 				"prefixes" : [],
 		}))),
-		(("/v2.0/m2/NS/ACCT/JFS?marker=plap", {}, ""), (200, { "X-Oio-list-truncated" : False, "X-Oio-list-next" : "plep", },
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&marker=plap", {}, ""),
+		 (200, { "X-Oio-list-truncated" : False, "X-Oio-list-next" : "plep", },
 			json.dumps({
 				"objects" : [{"name":"plep", "hash":"0000", "size":0, "ver":1}],
 				"prefixes" : [],
 		}))),
 
-		(("/v2.0/m2/NS/ACCT/JFS?max=2", {}, ""), (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plap", },
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&max=2", {}, ""),
+		 (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plap", },
 			json.dumps({
 				"objects" : [{"name":"plap", "hash":"0000", "size":0, "ver":1}],
 				"prefixes" : [],
 		}))),
-		(("/v2.0/m2/NS/ACCT/JFS?marker=plap&max=1", {}, ""), (200, { "X-Oio-list-truncated" : False, "X-Oio-list-next" : "plep", },
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&marker=plap&max=1", {}, ""),
+		 (200, { "X-Oio-list-truncated" : False, "X-Oio-list-next" : "plep", },
 			json.dumps({
 				"objects" : [{"name":"plep", "hash":"0000", "size":0, "ver":1}],
 				"prefixes" : [],

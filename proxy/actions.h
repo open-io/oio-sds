@@ -111,13 +111,11 @@ enum http_rc_e action_cs_put (struct req_args_s *args);
 enum http_rc_e action_cs_del (struct req_args_s *args);
 enum http_rc_e action_cs_srv_lock (struct req_args_s *args, struct json_object *jargs);
 enum http_rc_e action_cs_srv_unlock (struct req_args_s *args, struct json_object *jargs);
-enum http_rc_e action_cs_action (struct req_args_s *args);
 
 enum http_rc_e action_dir_ref_has (struct req_args_s *args);
 enum http_rc_e action_dir_ref_list (struct req_args_s *args);
 enum http_rc_e action_dir_ref_create (struct req_args_s *args);
 enum http_rc_e action_dir_ref_destroy (struct req_args_s *args);
-enum http_rc_e action_dir_ref_action (struct req_args_s *args);
 enum http_rc_e action_dir_prop_get (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_dir_prop_set (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_dir_prop_del (struct req_args_s *args, json_object *jargs);
@@ -127,7 +125,6 @@ enum http_rc_e action_dir_srv_relink (struct req_args_s *args, json_object *jarg
 enum http_rc_e action_dir_srv_unlink (struct req_args_s *args);
 enum http_rc_e action_dir_srv_force (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_dir_srv_renew (struct req_args_s *args, json_object *jargs);
-enum http_rc_e action_dir_srv_action (struct req_args_s *args);
 enum http_rc_e action_dir_resolve (struct req_args_s *args);
 
 enum http_rc_e action_m2_container_create (struct req_args_s *args);
@@ -145,7 +142,7 @@ enum http_rc_e action_m2_container_propset (struct req_args_s *args, json_object
 enum http_rc_e action_m2_container_propdel (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_m2_container_stgpol (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_m2_container_setvers (struct req_args_s *args, json_object *jargs);
-enum http_rc_e action_m2_container_action (struct req_args_s *args);
+
 enum http_rc_e action_m2_content_check (struct req_args_s *args);
 enum http_rc_e action_m2_content_get (struct req_args_s *args);
 enum http_rc_e action_m2_content_put (struct req_args_s *args);
@@ -159,7 +156,6 @@ enum http_rc_e action_m2_content_propset (struct req_args_s *args, json_object *
 enum http_rc_e action_m2_content_propdel (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_m2_content_stgpol (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_m2_content_spare (struct req_args_s *args, json_object *jargs);
-enum http_rc_e action_m2_content_action (struct req_args_s *args);
 
 enum http_rc_e action_sqlx_propget (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_sqlx_propset (struct req_args_s *args, json_object *jargs);
@@ -176,6 +172,5 @@ enum http_rc_e action_sqlx_freeze (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_sqlx_enable (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_sqlx_disable (struct req_args_s *args, json_object *jargs);
 enum http_rc_e action_sqlx_disable_disabled (struct req_args_s *args, json_object *jargs);
-enum http_rc_e action_sqlx_action (struct req_args_s *args);
 
 #endif /*OIO_SDS__proxy__actions_h*/

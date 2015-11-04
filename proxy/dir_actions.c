@@ -365,19 +365,6 @@ action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
 	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, newset));
 }
 
-enum http_rc_e
-action_dir_srv_action (struct req_args_s *args)
-{
-	struct sub_action_s actions[] = {
-		{"Link", action_dir_srv_link},
-		{"Renew", action_dir_srv_renew},
-		{"Force", action_dir_srv_force},
-		{"Relink", action_dir_srv_relink},
-		{NULL,NULL}
-	};
-	return abstract_action ("directory services", args, actions);
-}
-
 //------------------------------------------------------------------------------
 
 enum http_rc_e
@@ -579,18 +566,6 @@ action_dir_prop_del (struct req_args_s *args, struct json_object *jargs)
 	if (!err)
 		return _reply_success_json (args, NULL);
 	return _reply_common_error (args, err);
-}
-
-enum http_rc_e
-action_dir_ref_action (struct req_args_s *args)
-{
-	struct sub_action_s actions[] = {
-		{"GetProperties", action_dir_prop_get},
-		{"SetProperties", action_dir_prop_set},
-		{"DeleteProperties", action_dir_prop_del},
-		{NULL,NULL}
-	};
-	return abstract_action ("directory references", args, actions);
 }
 
 enum http_rc_e

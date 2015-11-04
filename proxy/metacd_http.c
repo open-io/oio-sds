@@ -589,51 +589,12 @@ configure_request_handlers (void)
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/lb/$NS/$POOL/$KEY/#GET", action_lb_hash);
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/lb/$NS/$POOL/#GET", action_lb_def);
 
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cs/$NS/#HEAD", action_cs_nscheck);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cs/$NS/#GET", action_cs_info);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cs/$NS/$TYPE/#HEAD", action_cs_srvcheck);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cs/$NS/$TYPE/#GET", action_cs_get);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cs/$NS/$TYPE/#PUT", action_cs_put);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cs/$NS/$TYPE/#DELETE", action_cs_del);
-	// TODO maybe it should be interesting to provide "per-service" URL instead
-	// of "per pool". Especially to manage the actions below.
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cs/$NS/$TYPE/action/#POST", action_cs_action);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/dir/$NS/$ACCOUNT/$REF/#HEAD", action_dir_ref_has);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/dir/$NS/$ACCOUNT/$REF/#GET", action_dir_ref_list);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/dir/$NS/$ACCOUNT/$REF/#PUT", action_dir_ref_create);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/dir/$NS/$ACCOUNT/$REF/#DELETE", action_dir_ref_destroy);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/dir/$NS/$ACCOUNT/$REF/action/#POST", action_dir_ref_action);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/dir/$NS/$ACCOUNT/$REF/$TYPE/#HEAD", action_dir_srv_list);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/dir/$NS/$ACCOUNT/$REF/$TYPE/#GET", action_dir_srv_list);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/dir/$NS/$ACCOUNT/$REF/$TYPE/#DELETE", action_dir_srv_unlink);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/dir/$NS/$ACCOUNT/$REF/$TYPE/action/#POST", action_dir_srv_action);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/dir/$NS/$CID/#GET", action_dir_resolve);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/#HEAD", action_m2_container_check);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/#GET", action_m2_container_list);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/#PUT", action_m2_container_create);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/#DELETE", action_m2_container_destroy);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/action/#POST", action_m2_container_action);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/$PATH/#HEAD", action_m2_content_check);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/$PATH/#GET", action_m2_content_get);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/$PATH/#PUT", action_m2_content_put);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/$PATH/#COPY", action_m2_content_copy);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/$PATH/#DELETE", action_m2_content_delete);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/m2/$NS/$ACCOUNT/$REF/$PATH/action/#POST", action_m2_content_action);
-
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/sqlx/$NS/$ACCOUNT/$REF/$TYPE/$SEQ/action/#POST", action_sqlx_action);
-
     // New routes
-    //
+  
 	// Load Balancing
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/lb/choose/#GET", action_lb_choose);
 
 	// Conscience
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/check/#HEAD", action_conscience_check);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/info/#GET", action_conscience_info);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/list/#GET", action_conscience_list);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/register/#POST", action_conscience_register);
@@ -672,6 +633,7 @@ configure_request_handlers (void)
 
     // Content
     path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/create/#POST", action_content_put);
+    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/link/#POST", action_content_link);
     path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/delete/#POST", action_content_delete);
     path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/show/#GET", action_content_show);
     path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/prepare/#POST", action_content_prepare);

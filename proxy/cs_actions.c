@@ -60,7 +60,8 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 	GError *err;
 
 	if (!push_queue)
-		return _reply_bad_gateway(args, NEWERROR(CODE_INTERNAL_ERROR, "Service upstream disabled"));
+		return _reply_bad_gateway(args, NEWERROR(CODE_INTERNAL_ERROR,
+					"Service upstream disabled"));
 
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_notfound_error (args, err);
@@ -75,13 +76,21 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 			return _reply_system_error (args, err);
 	}
 
-	if (!validate_namespace (si->ns_name)) {
+	if (!si->type[0]) {
 		service_info_clean (si);
-		return _reply_system_error (args, NEWERROR (CODE_NAMESPACE_NOTMANAGED,
+		return _reply_format_error (args, NEWERROR (CODE_SERVICE_NOTFOUND,
+					"Service type not specified"));
+	}
+
+	if (!si->ns_name[0]) {
+		g_strlcpy (si->ns_name, nsname, sizeof(si->ns_name));
+	} else if (!validate_namespace (si->ns_name)) {
+		service_info_clean (si);
+		return _reply_format_error (args, NEWERROR (CODE_NAMESPACE_NOTMANAGED,
 					"Unexpected NS"));
 	}
 
-	si->score.timestamp = network_server_bogonow(args->rq->client->server);
+	si->score.timestamp = g_get_real_time () / G_TIME_SPAN_SECOND;
 
 	if (op == REGOP_PUSH)
 		si->score.value = SCORE_UNSET;
@@ -223,17 +232,6 @@ enum http_rc_e
 action_cs_srv_unlock (struct req_args_s *args, struct json_object *jargs)
 {
 	return _registration (args, REGOP_UNLOCK, jargs);
-}
-
-enum http_rc_e
-action_cs_action (struct req_args_s *args)
-{
-	struct sub_action_s actions[] = {
-		{"Lock", action_cs_srv_lock},
-		{"Unlock", action_cs_srv_unlock},
-		{NULL,NULL}
-	};
-	return abstract_action ("conscience", args, actions);
 }
 
 enum http_rc_e
