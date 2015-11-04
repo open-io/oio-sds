@@ -59,6 +59,9 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 {
 	GError *err;
 
+	if (!jsrv || !json_object_is_type (jsrv, json_type_object))
+		return _reply_common_error (args, BADREQ("Expected: json object"));
+
 	if (!push_queue)
 		return _reply_bad_gateway(args, NEWERROR(CODE_INTERNAL_ERROR,
 					"Service upstream disabled"));
@@ -123,22 +126,32 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 //------------------------------------------------------------------------------
 
 enum http_rc_e
-action_cs_nscheck (struct req_args_s *args)
+action_conscience_info (struct req_args_s *args)
 {
 	GError *err;
-	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error (args, err);
-	return _reply_success_json (args, NULL);
-}
-
-enum http_rc_e
-action_cs_info (struct req_args_s *args)
-{
 	const char *v = OPT("what");
-	if (v && !strcmp(v, "types"))
-		return action_cs_srvtypes (args);
 
-	GError *err;
+	if (v && !strcmp(v, "types")) {
+		if (NULL != (err = _cs_check_tokens(args)))
+			return _reply_notfound_error (args, err);
+
+		GString *out = g_string_new("");
+		g_string_append_c(out, '[');
+		NSINFO_DO(if (srvtypes && *srvtypes) {
+			g_string_append_c(out, '"');
+			g_string_append(out, *srvtypes);
+			g_string_append_c(out, '"');
+			for (gchar **ps = srvtypes+1; *ps ;ps++) {
+				g_string_append_c(out, ',');
+				g_string_append_c(out, '"');
+				g_string_append(out, *ps);
+				g_string_append_c(out, '"');
+			}
+		});
+		g_string_append_c(out, ']');
+		return _reply_success_json (args, out);
+	}
+
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_notfound_error (args, err);
 
@@ -153,26 +166,7 @@ action_cs_info (struct req_args_s *args)
 }
 
 enum http_rc_e
-action_cs_put (struct req_args_s *args)
-{
-	struct json_tokener *parser;
-	struct json_object *jbody;
-	enum http_rc_e rc;
-
-	parser = json_tokener_new ();
-	jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
-			args->rq->body->len);
-	if (!json_object_is_type (jbody, json_type_object))
-		rc = _reply_format_error (args, BADREQ ("Invalid srv"));
-	else
-		rc = _registration (args, REGOP_PUSH, jbody);
-	json_object_put (jbody);
-	json_tokener_free (parser);
-	return rc;
-}
-
-enum http_rc_e
-action_cs_get (struct req_args_s *args)
+action_conscience_list (struct req_args_s *args)
 {
 	const char *types = TYPE();
 	gboolean full = _request_has_flag (args, PROXYD_HEADER_MODE, "full");
@@ -196,17 +190,7 @@ action_cs_get (struct req_args_s *args)
 }
 
 enum http_rc_e
-action_cs_srvcheck (struct req_args_s *args)
-{
-	GError *err;
-	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error (args, err);
-
-	return _reply_success_json (args, NULL);
-}
-
-enum http_rc_e
-action_cs_del (struct req_args_s *args)
+action_conscience_deregister (struct req_args_s *args)
 {
 	GError *err;
 	if (NULL != (err = _cs_check_tokens(args)))
@@ -222,80 +206,38 @@ action_cs_del (struct req_args_s *args)
 	return _reply_success_json (args, _create_status (CODE_FINAL_OK, "OK"));
 }
 
-enum http_rc_e
-action_cs_srv_lock (struct req_args_s *args, struct json_object *jargs)
+static enum http_rc_e
+_rest_conscience_register (struct req_args_s *args, struct json_object *jargs)
 {
-	return _registration (args, REGOP_LOCK, jargs);
-}
-
-enum http_rc_e
-action_cs_srv_unlock (struct req_args_s *args, struct json_object *jargs)
-{
-	return _registration (args, REGOP_UNLOCK, jargs);
-}
-
-enum http_rc_e
-action_cs_srvtypes (struct req_args_s *args)
-{
-	GError *err;
-	if (NULL != (err = _cs_check_tokens(args)))
-		return _reply_notfound_error (args, err);
-
-	GString *out = g_string_new("");
-	g_string_append_c(out, '[');
-	NSINFO_DO(if (srvtypes && *srvtypes) {
-		g_string_append_c(out, '"');
-		g_string_append(out, *srvtypes);
-		g_string_append_c(out, '"');
-		for (gchar **ps = srvtypes+1; *ps ;ps++) {
-			g_string_append_c(out, ',');
-			g_string_append_c(out, '"');
-			g_string_append(out, *ps);
-			g_string_append_c(out, '"');
-		}
-	});
-	g_string_append_c(out, ']');
-	return _reply_success_json (args, out);
-}
-
-enum http_rc_e
-action_conscience_check (struct req_args_s *args)
-{
-    return action_cs_nscheck (args);
-}
-
-enum http_rc_e
-action_conscience_info (struct req_args_s *args)
-{
-	return action_cs_info (args);
-}
-
-enum http_rc_e
-action_conscience_list (struct req_args_s *args)
-{
-	return action_cs_get (args);
+	return _registration (args, REGOP_PUSH, jargs);
 }
 
 enum http_rc_e
 action_conscience_register (struct req_args_s *args)
 {
-	return action_cs_put (args);
+	return rest_action (args, _rest_conscience_register);
 }
 
-enum http_rc_e
-action_conscience_deregister (struct req_args_s *args)
+static enum http_rc_e
+_rest_conscience_lock (struct req_args_s *args, struct json_object *jargs)
 {
-	return action_cs_del (args);
+	return _registration (args, REGOP_LOCK, jargs);
 }
 
 enum http_rc_e
 action_conscience_lock (struct req_args_s *args)
 {
-	return rest_action (args, action_cs_srv_lock);
+	return rest_action (args, _rest_conscience_lock);
+}
+
+static enum http_rc_e
+_rest_conscience_unlock (struct req_args_s *args, struct json_object *jargs)
+{
+	return _registration (args, REGOP_UNLOCK, jargs);
 }
 
 enum http_rc_e
 action_conscience_unlock (struct req_args_s *args)
 {
-	return rest_action (args, action_cs_srv_unlock);
+	return rest_action (args, _rest_conscience_unlock);
 }

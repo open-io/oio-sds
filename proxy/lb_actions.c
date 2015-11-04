@@ -107,27 +107,11 @@ _lb (struct req_args_s *args, struct grid_lb_iterator_s *iter)
 }
 
 enum http_rc_e
-action_lb_def (struct req_args_s *args)
+action_lb_choose (struct req_args_s *args)
 {
 	GError *err;
 	if (NULL != (err = _lb_check_tokens(args)))
 		return _reply_notfound_error (args, err);
 
 	return _lb (args, grid_lbpool_ensure_iterator(lbpool, POOL()));
-}
-
-enum http_rc_e
-action_lb_hash (struct req_args_s *args)
-{
-	GError *err;
-	if (NULL != (err = _lb_check_tokens(args)))
-		return _reply_notfound_error (args, err);
-
-	return _reply_system_error(args, NEWERROR (CODE_INTERNAL_ERROR, "Not implemented"));
-}
-
-enum http_rc_e
-action_lb_choose (struct req_args_s *args)
-{
-	return action_lb_def (args);
 }

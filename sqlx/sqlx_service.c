@@ -1008,7 +1008,7 @@ retry:
 		GRID_WARN("EVT:ERR %s (%d) %s", tmp, err, zmq_strerror(err));
 		return FALSE;
 	} else {
-		GRID_INFO("EVT:SNT %s", tmp);
+		GRID_DEBUG("EVT:SNT %s", tmp);
 		return TRUE;
 	}
 }
@@ -1033,7 +1033,7 @@ _manage_event (struct sqlx_service_s *ss, zmq_msg_t *msg)
 	if (GRID_INFO_ENABLED()) {
 		gchar tmp[1+ 2*HEADER_SIZE];
 		oio_str_bin2hex(evt, HEADER_SIZE, tmp, sizeof(tmp));
-		GRID_INFO("EVT:DEF %s (%u) %.*s", tmp, ss->notify.pending_events->len, evt->size, evt->message);
+		GRID_DEBUG("EVT:DEF %s (%u) %.*s", tmp, ss->notify.pending_events->len, evt->size, evt->message);
 	}
 
 	return _send_event (ss, evt);
@@ -1053,7 +1053,7 @@ _manage_ack (struct sqlx_service_s *ss, zmq_msg_t *msg)
 			oio_str_bin2hex(evt, HEADER_SIZE, tmp, sizeof(tmp));
 			g_free (evt);
 			g_ptr_array_remove_index_fast (ss->notify.pending_events, i);
-			GRID_INFO("EVT:ACK %s", tmp);
+			GRID_DEBUG("EVT:ACK %s", tmp);
 			return;
 		}
 	}
@@ -1147,7 +1147,7 @@ retry:
 			GRID_WARN("EVT:ERR - %s %s", encoded, zmq_strerror(err));
 		}
 	} else {
-		GRID_INFO("EVT:END - %s", encoded);
+		GRID_DEBUG("EVT:END - %s", encoded);
 	}
 	g_free (encoded);
 	return rc;

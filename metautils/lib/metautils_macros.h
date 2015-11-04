@@ -51,6 +51,9 @@ License along with this library.
 # define NAME_SRVTYPE_META2 "meta2"
 # define NAME_SRVTYPE_RAWX  "rawx"
 # define NAME_SRVTYPE_SQLX  "sqlx"
+# define NAME_SRVTYPE_RDIR  "rdir"
+
+# define NAME_ACCOUNT_RDIR  "_RDIR"
 
 # ifndef COMMON_CLIENT_TIMEOUT
 #  define COMMON_CLIENT_TIMEOUT 30.0

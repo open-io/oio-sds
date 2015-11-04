@@ -142,7 +142,7 @@ enum http_rc_e rest_action (struct req_args_s *args,
 GError * _resolve_service_and_do (const char *t, gint64 seq, struct hc_url_s *u,
         GError * (*hook) (struct meta1_service_url_s *m1u, gboolean *next));
 
-GError * _m1_locate_and_action (struct req_args_s *args, GError * (*hook) ());
+GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ());
 
 GError * _gba_request (struct meta1_service_url_s *m1u, GByteArray * (reqbuilder) (void),
         GByteArray ** out);
