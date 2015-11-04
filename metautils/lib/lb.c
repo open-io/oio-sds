@@ -39,8 +39,6 @@ License along with this library.
 #include "./lb.h"
 #include "./storage_policy.h"
 
-#define BOOLNAME(b) ((b)?"TRUE":"FALSE")
-#define IS(S) !g_ascii_strcasecmp(type, (S))
 #define SLOT(P) ((struct score_slot_s*)P)
 
 typedef guint32 srv_weight_t;

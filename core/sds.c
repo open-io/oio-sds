@@ -61,7 +61,7 @@ static CURL *
 _curl_get_handle_proxy (struct oio_sds_s *sds)
 {
 	CURL *h = _curl_get_handle ();
-#if (LIBCURL_VERSION_MAJOR >= 7) && (LIBCURL_VERSION_MINOR >= 40)
+#if (LIBCURL_VERSION_MAJOR > 7) || ((LIBCURL_VERSION_MAJOR == 7) && (LIBCURL_VERSION_MINOR >= 40))
 	if (sds->proxy_local)
 		curl_easy_setopt (h, CURLOPT_UNIX_SOCKET_PATH, sds->proxy_local);
 #else
@@ -70,74 +70,59 @@ _curl_get_handle_proxy (struct oio_sds_s *sds)
 	return h;
 }
 
+static GString *
+_curl_url_prefix (struct oio_url_s *u)
+{
+	GString *hu = g_string_new("http://");
+
+	const char *ns = oio_url_get (u, OIOURL_NS);
+	if (!ns) {
+		GRID_WARN ("BUG No namespace configured!");
+		g_string_append (hu, "proxy");
+	} else {
+		gchar *s = oio_cfg_get_proxy_containers (ns);
+		if (!s) {
+			GRID_WARN ("No proxy configured!");
+			g_string_append (hu, "proxy");
+		} else {
+			g_string_append (hu, s);
+			g_free (s);
+		}
+	}
+
+	return hu;
+}
+
 static void
-_append_to_url (GString *to, struct oio_url_s *url, int what)
+_append (GString *gs, char sep, const char *k, const char *v)
 {
-	const char *original = oio_url_get (url, what);
-	if (!original) {
-		g_string_append_c (to, '/');
-	} else {
-		gchar *s = g_uri_escape_string (original, NULL, FALSE);
-		g_string_append_printf (to, "/%s", s);
-		g_free (s);
-	}
+	gchar *venc = g_uri_escape_string (v, NULL, FALSE);
+	g_string_append_printf (gs, "%c%s=%s", sep, k, venc);
+	g_free (venc);
 }
 
 static GString *
-_curl_set_url_content (struct oio_url_s *u)
+_curl_container_url (struct oio_url_s *u, const char *action)
 {
-	GString *hu = g_string_new("http://");
-
-	const char *ns = oio_url_get (u, OIOURL_NS);
-	if (!ns) {
-		GRID_WARN ("BUG No namespace configured!");
-		g_string_append (hu, "proxy");
-	} else {
-		gchar *s = oio_cfg_get_proxy_containers (ns);
-		if (!s) {
-			GRID_WARN ("No proxy configured!");
-			g_string_append (hu, "proxy");
-		} else {
-			g_string_append (hu, s);
-			g_free (s);
-		}
-	}
-
-	g_string_append_printf (hu, "/%s/m2", PROXYD_PREFIX2);
-	_append_to_url (hu, u, OIOURL_NS);
-	_append_to_url (hu, u, OIOURL_ACCOUNT);
-	_append_to_url (hu, u, OIOURL_USER);
-	_append_to_url (hu, u, OIOURL_PATH);
+	GString *hu = _curl_url_prefix (u);
+	g_string_append_printf (hu, "/%s/%s/container/%s", PROXYD_PREFIX,
+			oio_url_get(u, OIOURL_NS), action);
+	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
+	_append (hu, '&', "ref",  oio_url_get (u, OIOURL_USER));
 	return hu;
 }
 
 static GString *
-_curl_set_url_container (struct oio_url_s *u)
+_curl_content_url (struct oio_url_s *u, const char *action)
 {
-	GString *hu = g_string_new("http://");
-
-	const char *ns = oio_url_get (u, OIOURL_NS);
-	if (!ns) {
-		GRID_WARN ("BUG No namespace configured!");
-		g_string_append (hu, "proxy");
-	} else {
-		gchar *s = oio_cfg_get_proxy_containers (ns);
-		if (!s) {
-			GRID_WARN ("No proxy configured!");
-			g_string_append (hu, "proxy");
-		} else {
-			g_string_append (hu, s);
-			g_free (s);
-		}
-	}
-
-	g_string_append_printf (hu, "/%s/m2", PROXYD_PREFIX2);
-	_append_to_url (hu, u, OIOURL_NS);
-	_append_to_url (hu, u, OIOURL_ACCOUNT);
-	_append_to_url (hu, u, OIOURL_USER);
+	GString *hu = _curl_url_prefix (u);
+	g_string_append_printf (hu, "/%s/%s/content/%s", PROXYD_PREFIX,
+			oio_url_get(u, OIOURL_NS), action);
+	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
+	_append (hu, '&', "ref",  oio_url_get (u, OIOURL_USER));
+	_append (hu, '&', "path", oio_url_get (u, OIOURL_PATH));
 	return hu;
 }
-
 
 /* Body helpers ------------------------------------------------------------- */
 
@@ -873,7 +858,7 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 		CURL *h = _curl_get_handle_proxy (sds);
 		g_string_set_size (reply_body, 0);
 		do {
-			GString *http_url = _curl_set_url_content (src->url);
+			GString *http_url = _curl_content_url (src->url, "show");
 			rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
 			g_string_free (http_url, TRUE);
 		} while (0);
@@ -1256,15 +1241,12 @@ _upload_from_hook (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		GRID_DEBUG("Getting some BEANS from the proxy ...");
 		CURL *h = _curl_get_handle_proxy (sds);
 		do {
-			GString *http_url = _curl_set_url_content (dst->url);
-			g_string_append (http_url, "/action");
+			GString *http_url = _curl_content_url (dst->url, "prepare");
 			rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
 			g_string_free (http_url, TRUE);
 		} while (0);
-		g_string_append (request_body, "{\"action\":\"Beans\",\"args\":{");
-		g_string_append_printf (request_body, "\"size\":%"G_GINT64_FORMAT,
-				(gint64) src->data.hook.size);
-		g_string_append (request_body, "}}");
+		g_string_printf (request_body, "{\"size\":%"G_GSIZE_FORMAT"}",
+				src->data.hook.size);
 		view_input.done = 0;
 		struct headers_s headers = {NULL,NULL};
 		_headers_add (&headers, "Expect", "");
@@ -1326,9 +1308,9 @@ _upload_from_hook (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		GRID_DEBUG("Saving the uploaded beans ...");
 		CURL *h = _curl_get_handle_proxy (sds);
 		do {
-			GString *http_url = _curl_set_url_content (dst->url);
+			GString *http_url = _curl_content_url (dst->url, "create");
 			if (dst->content_id)
-				g_string_append_printf (http_url, "?id=%s", dst->content_id); /* TODO url_encode! */
+				_append (http_url, '&', "id", dst->content_id);
 			rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
 			g_string_free (http_url, TRUE);
 		} while (0);
@@ -1352,7 +1334,7 @@ _upload_from_hook (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
 		rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
 		rc = curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
-		rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "PUT");
+		rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "POST");
 		rc = curl_easy_setopt (h, CURLOPT_INFILESIZE_LARGE, request_body->len);
 		rc = curl_easy_perform (h);
 		if (rc != CURLE_OK)
@@ -1637,21 +1619,16 @@ _header_callback(char *b, size_t s, size_t n, void *u)
 static gchar *
 _url_build_for_list (struct oio_sds_list_param_s *param)
 {
-	gboolean first = TRUE;
-	GString *http_url = _curl_set_url_container (param->url);
-	void _append (const char *k, const char *v) {
-		if (!v) return;
-		g_string_append_printf (http_url, "%s%s=%s", first?"?":"&", k, v);
-		first = FALSE;
-	}
-	_append ("prefix", param->prefix);
-	_append ("marker", param->marker);
-	_append ("end", param->end);
-	if (param->max_items) {
-		gchar tmp[32];
-		g_snprintf (tmp, sizeof(tmp), "%"G_GSIZE_FORMAT, param->max_items);
-		_append ("max", tmp);
-	}
+	GString *http_url = _curl_container_url (param->url, "list");
+	if (param->prefix)
+		_append (http_url, '&', "prefix", param->prefix);
+	if (param->marker)
+		_append (http_url, '&', "marker", param->marker);
+	if (param->end)
+		_append (http_url, '&', "end", param->end);
+	if (param->max_items)
+		g_string_append_printf (http_url, "&max=%"G_GSIZE_FORMAT, param->max_items);
+
 	return g_string_free(http_url, FALSE);
 }
 
@@ -1822,15 +1799,12 @@ oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url, const char *content_
 	CURL *h = _curl_get_handle_proxy (sds);
 
 	do {
-		GString *http_url = _curl_set_url_content (url);
-		g_string_append (http_url, "/action");
+		GString *http_url = _curl_content_url (url, "link");
 		rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
 		g_string_free (http_url, TRUE);
 	} while (0);
 
-	g_string_append_printf (request_body,
-			"{\"action\":\"Link\",\"args\":\"%s\"}",
-			content_id);
+	g_string_append_printf (request_body, "{\"id\":\"%s\"}", content_id);
 
 	struct headers_s headers = {NULL,NULL};
 	_headers_add (&headers, "Expect", "");
@@ -1896,7 +1870,7 @@ oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *url)
 	CURL *h = _curl_get_handle_proxy (sds);
 
 	do {
-		GString *http_url = _curl_set_url_content (url);
+		GString *http_url = _curl_content_url (url, "delete");
 		rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
 		g_string_free (http_url, TRUE);
 	} while (0);
@@ -1908,7 +1882,7 @@ oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *url)
 
 	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
 	rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
-	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "DELETE");
+	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "POST");
 	rc = curl_easy_perform (h);
 	if (CURLE_OK != rc)
 		err = NEWERROR(0, "Proxy error (delete): %s", curl_easy_strerror(rc));
@@ -1938,7 +1912,7 @@ oio_sds_has (struct oio_sds_s *sds, struct oio_url_s *url, int *phas)
 	CURL *h = _curl_get_handle_proxy (sds);
 
 	do {
-		GString *http_url = _curl_set_url_content (url);
+		GString *http_url = _curl_content_url (url, "show");
 		rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
 		g_string_free (http_url, TRUE);
 	} while (0);
@@ -1949,7 +1923,7 @@ oio_sds_has (struct oio_sds_s *sds, struct oio_url_s *url, int *phas)
 	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 
 	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_NOOP);
-	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "HEAD");
+	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
 	rc = curl_easy_perform (h);
 	if (CURLE_OK != rc)
 		err = NEWERROR(0, "Proxy error (head): %s", curl_easy_strerror(rc));
