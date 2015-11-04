@@ -688,9 +688,11 @@ service_info_load_json_object(struct json_object *obj,
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid address");
 
 	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
-	metautils_strlcpy_physical_ns(si->ns_name, json_object_get_string(ns), sizeof(si->ns_name));
+	if (ns)
+		metautils_strlcpy_physical_ns(si->ns_name, json_object_get_string(ns), sizeof(si->ns_name));
 	memcpy (&si->addr, &addr, sizeof(struct addr_info_s));
-	g_strlcpy(si->type, json_object_get_string(type), sizeof(si->type));
+	if (type)
+		g_strlcpy(si->type, json_object_get_string(type), sizeof(si->type));
 	si->score.value = json_object_get_int(score);
 
 	if (tags) { json_object_object_foreach(tags,key,val) {
