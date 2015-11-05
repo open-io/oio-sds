@@ -21,17 +21,21 @@ chunk_xattr_keys = {'chunk_hash': 'grid.chunk.hash',
                     'content_chunksnb': 'grid.content.nbchunk'}
 
 
-volume_xattr_keys = {'namespace': 'rawx_server.namespace',
-                     'address': 'rawx_server.address'}
+volume_xattr_keys = {'namespace': 'server.ns',
+                     'type': 'server.type',
+                     'id': 'server.id'}
 
 
 def check_volume(volume_path):
     meta = read_user_xattr(volume_path)
+    server_type = meta.get(volume_xattr_keys['type'])
+    if server_type != 'rawx':
+        raise exc.OioException('Invalid volume path')
     namespace = meta.get(volume_xattr_keys['namespace'])
-    address = meta.get(volume_xattr_keys['address'])
-    if namespace is None or address is None:
+    server_id = meta.get(volume_xattr_keys['id'])
+    if namespace is None or server_id is None:
         raise exc.OioException('Invalid rawx volume path')
-    return namespace, address
+    return namespace, server_id
 
 
 def read_chunk_metadata(fd):
