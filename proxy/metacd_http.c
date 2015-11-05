@@ -586,13 +586,14 @@ configure_request_handlers (void)
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/max/low/$COUNT/#POST", action_cache_set_max_low);
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/max/high/$COUNT/#POST", action_cache_set_max_high);
 
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/lb/$NS/$POOL/$KEY/#GET", action_lb_hash);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/lb/$NS/$POOL/#GET", action_lb_def);
-
     // New routes
   
 	// Load Balancing
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/lb/choose/#GET", action_lb_choose);
+
+	/* reverse directory management */
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/rdir/push/#POST", action_rdir_push);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/rdir/fetch/#GET", action_rdir_fetch);
 
 	// Conscience
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/info/#GET", action_conscience_info);

@@ -219,55 +219,6 @@ _load_stringv (struct json_object *jargs)
 //------------------------------------------------------------------------------
 
 enum http_rc_e
-action_sqlx_leave (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-    return action_admin_leave (args);
-}
-
-enum http_rc_e
-action_sqlx_ping (struct req_args_s *args, struct json_object *jargs)
-{
-    (void) jargs;
-    return action_admin_ping (args);
-}
-
-enum http_rc_e
-action_sqlx_status (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-    return action_admin_status (args);
-}
-
-enum http_rc_e
-action_sqlx_info (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-    return action_admin_info (args);
-}
-
-enum http_rc_e
-action_sqlx_leanify (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-    return action_admin_drop_cache (args);
-}
-
-enum http_rc_e
-action_sqlx_resync (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-    return action_admin_sync (args);
-}
-
-enum http_rc_e
-action_sqlx_debug (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-    return action_admin_debug (args);
-}
-
-enum http_rc_e
 action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type(jargs, json_type_string))
@@ -413,34 +364,6 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 	enum http_rc_e rc = _sqlx_action_noreturn (args, packer);
 	g_strfreev (namev);
 	return rc;
-}
-
-enum http_rc_e
-action_sqlx_freeze (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-	return _sqlx_action_noreturn(args, sqlx_pack_FREEZE);
-}
-
-enum http_rc_e
-action_sqlx_enable (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-	return _sqlx_action_noreturn(args, sqlx_pack_ENABLE);
-}
-
-enum http_rc_e
-action_sqlx_disable (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-	return _sqlx_action_noreturn(args, sqlx_pack_DISABLE);
-}
-
-enum http_rc_e
-action_sqlx_disable_disabled (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-	return _sqlx_action_noreturn(args, sqlx_pack_DISABLE_DISABLED);
 }
 
 enum http_rc_e

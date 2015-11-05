@@ -648,11 +648,289 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 	}
 }
 
+static GError *
+_m2_container_create (struct req_args_s *args)
+{
+	const char *type = TYPE();
+	if (!type || !*type)
+		type = NAME_SRVTYPE_META2;
+	if (!g_str_has_prefix (type, NAME_SRVTYPE_META2))
+		return BADREQ("The service type is not a "NAME_SRVTYPE_META2);
+	else {
+		const char *sep = type + sizeof(NAME_SRVTYPE_META2) - 1;
+		if (*sep && *sep != '.')
+			return BADREQ("The service type is not a "NAME_SRVTYPE_META2);
+	}
 
-/** @todo TODO FIXME ensure we get a correct result if we have to loop
- * toward several meta2 servers */
+	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
+
+	gchar **properties = _container_headers_to_props (args);
+
+	GError *hook_m2 (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		struct m2v2_create_params_s param = {
+			OPT("stgpol"), OPT("verpol"), properties, FALSE
+		};
+		return m2v2_remote_execute_CREATE (m2->host, args->url, &param);
+	}
+
+	GError *err;
+retry:
+	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook_m2);
+	if (err && CODE_IS_NOTFOUND(err->code)) {
+		if (autocreate) {
+			autocreate = FALSE; /* autocreate just once */
+			g_clear_error (&err);
+			GError *hook_dir (const gchar *m1) {
+				gchar **urlv = NULL;
+				GError *e = meta1v2_remote_link_service (m1, args->url, type, FALSE, TRUE, &urlv);
+				if (urlv) g_strfreev (urlv);
+				return e;
+			}
+			err = _m1_locate_and_action (args->url, hook_dir);
+			if (!err)
+				goto retry;
+		}
+	}
+
+	g_strfreev (properties);
+	return err;
+}
+
+/* XXX FIXME TODO JFS: this is broken. it removes the m2 DB but not the meta1
+ * entry. One possibility should be to mark the base as DISABLED, then remove
+ * the reference in the directory, then remove the m2 DB. */
+static enum http_rc_e
+action_m2_container_destroy (struct req_args_s *args)
+{
+	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		return m2v2_remote_execute_DESTROY (m2->host, args->url, 0);
+	}
+
+	GError *err;
+	if (NULL != (err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook)))
+		return _reply_m2_error(args, err);
+	return _reply_nocontent (args);
+}
+
+/* CONTAINER action resources ----------------------------------------------- */
+
+static enum http_rc_e
+action_m2_container_purge (struct req_args_s *args, struct json_object *jargs)
+{
+	(void) jargs;
+	GSList *beans = NULL;
+	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		return m2v2_remote_execute_PURGE (m2->host, args->url, FALSE,
+				m2_timeout_all, &beans);
+	}
+	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	return _reply_beans (args, err, beans);
+}
+
+static enum http_rc_e
+action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
+{
+	(void) jargs;
+	GError *err;
+	gboolean first = TRUE;
+	GString *gstr = g_string_new ("{\"msg\":[");
+	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		gchar *msg = NULL;
+		GError *e = m2v2_remote_execute_DEDUP (m2->host, args->url, 0, &msg);
+		if (msg) {
+			if (!first)
+				g_string_append_c (gstr, ',');
+			first = FALSE;
+			g_string_append_c (gstr, '"');
+			g_string_append (gstr, msg);	// TODO escape this!
+			g_string_append_c (gstr, '"');
+			g_free (msg);
+		}
+		return e;
+	}
+	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	if (NULL != err) {
+		g_string_free (gstr, TRUE);
+		g_prefix_error (&err, "M2 error: ");
+		return _reply_common_error (args, err);
+	}
+
+	g_string_append (gstr, "]}");
+	return _reply_success_json (args, gstr);
+}
+
+static enum http_rc_e
+action_m2_container_touch (struct req_args_s *args, struct json_object *jargs)
+{
+	(void) jargs;
+	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		return m2v2_remote_touch_container_ex (m2->host, args->url, 0);
+	}
+	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	if (NULL != err) {
+		if (CODE_IS_NOTFOUND(err->code))
+			return _reply_forbidden_error (args, err);
+		return _reply_m2_error (args, err);
+	}
+
+	return _reply_success_json (args, NULL);
+}
+
+static enum http_rc_e
+action_m2_container_raw_insert (struct req_args_s *args, struct json_object *jargs)
+{
+	GSList *beans = NULL;
+	GError *err = m2v2_json_load_setof_xbean (jargs, &beans);
+	if (err)
+		return _reply_format_error (args, err);
+	if (!beans)
+		return _reply_format_error (args, BADREQ("Empty beans list"));
+
+	GError * hook (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		return m2v2_remote_execute_RAW_ADD (m2->host, args->url, beans);
+	}
+	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	if (NULL != err)
+		return _reply_m2_error (args, err);
+	return _reply_success_json (args, NULL);
+}
+
+static enum http_rc_e
+action_m2_container_raw_delete (struct req_args_s *args, struct json_object *jargs)
+{
+	GSList *beans = NULL;
+	GError *err = m2v2_json_load_setof_xbean (jargs, &beans);
+	if (err)
+		return _reply_format_error (args, err);
+	if (!beans)
+		return _reply_format_error (args, BADREQ("Empty beans list"));
+
+	GError * hook (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		return m2v2_remote_execute_RAW_DEL (m2->host, args->url, beans);
+	}
+	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	if (NULL != err)
+		return _reply_m2_error (args, err);
+	return _reply_success_json (args, NULL);
+}
+
+static enum http_rc_e
+action_m2_container_raw_update (struct req_args_s *args, struct json_object *jargs)
+{
+	if (!json_object_is_type (jargs, json_type_object))
+		return _reply_format_error (args, BADREQ("JSON object expected"));
+
+	GError *err = NULL;
+	GSList *beans_old = NULL, *beans_new = NULL;
+	struct json_object *jold = NULL, *jnew = NULL;
+
+	if (!err && !json_object_object_get_ex (jargs, "old", &jold))
+		err = BADREQ("No 'old' set of beans");
+	if (!err && !json_object_object_get_ex (jargs, "new", &jnew))
+		err = BADREQ("No 'new' set of beans");
+	if (!err)
+		err = m2v2_json_load_setof_xbean (jold, &beans_old);
+	if (!err)
+		err = m2v2_json_load_setof_xbean (jnew, &beans_new);
+	if (!err && !beans_old)
+		err = BADREQ("No bean to update");
+	if (!err && (g_slist_length(beans_new) != g_slist_length(beans_old)))
+		err = BADREQ("Length mismatch for bean sets");
+
+	GError * hook (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		return m2v2_remote_execute_RAW_SUBST (m2->host, args->url, beans_new, beans_old);
+	}
+	if (!err)
+		err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	_bean_cleanl2 (beans_old);
+	_bean_cleanl2 (beans_new);
+
+	if (NULL != err)
+		return _reply_m2_error (args, err);
+	return _reply_success_json (args, NULL);
+}
+
+static enum http_rc_e
+action_m2_container_propget (struct req_args_s *args, struct json_object *jargs)
+{
+	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
+	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
+	return action_sqlx_propget(args, jargs);
+}
+
+static enum http_rc_e
+action_m2_container_propset (struct req_args_s *args, struct json_object *jargs)
+{
+	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
+	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
+	return action_sqlx_propset(args, jargs);
+}
+
+static enum http_rc_e
+action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
+{
+	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
+	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
+	return action_sqlx_propdel(args, jargs);
+}
+
 enum http_rc_e
-action_m2_container_list (struct req_args_s *args)
+action_m2_container_stgpol (struct req_args_s *args, struct json_object *jargs)
+{
+	if (!json_object_is_type(jargs, json_type_string))
+		return _reply_format_error (args, BADREQ ("Storage policy must be a string"));
+
+	struct json_object *fake_jargs = json_object_new_object();
+	json_object_object_add (fake_jargs, M2V2_ADMIN_STORAGE_POLICY, jargs);
+
+	enum http_rc_e rc = action_m2_container_propset (args, fake_jargs);
+	json_object_put (fake_jargs);
+	return rc;
+}
+
+enum http_rc_e
+action_m2_container_setvers (struct req_args_s *args, struct json_object *jargs)
+{
+	if (!json_object_is_type(jargs, json_type_int))
+		return _reply_format_error (args, BADREQ ("Versioning policy must be an integer"));
+
+	struct json_object *fake_jargs = json_object_new_object();
+	json_object_object_add (fake_jargs, M2V2_ADMIN_STORAGE_POLICY, jargs);
+
+	enum http_rc_e rc = action_m2_container_propset (args, fake_jargs);
+	json_object_put (fake_jargs);
+	return rc;
+}
+
+enum http_rc_e
+action_container_create (struct req_args_s *args)
+{
+	GError *err = _m2_container_create (args);
+	if (err && CODE_IS_NOTFOUND(err->code))
+		return _reply_forbidden_error (args, err);
+	if (err && err->code == CODE_CONTAINER_EXISTS) {
+		g_clear_error (&err);
+		return _reply_created(args);
+	}
+	return _reply_m2_error (args, err);
+}
+
+enum http_rc_e
+action_container_destroy (struct req_args_s *args)
+{
+   return action_m2_container_destroy (args);
+}
+
+enum http_rc_e
+action_container_list (struct req_args_s *args)
 {
 	struct list_result_s list_out = {NULL,NULL,FALSE};
 	struct list_params_s list_in;
@@ -788,7 +1066,7 @@ action_m2_container_list (struct req_args_s *args)
 }
 
 enum http_rc_e
-action_m2_container_check (struct req_args_s *args)
+action_container_show (struct req_args_s *args)
 {
 	GError *err = NULL;
 	GByteArray **bodies = NULL;
@@ -815,305 +1093,6 @@ action_m2_container_check (struct req_args_s *args)
 	_container_old_props_to_headers (args, pairs);
 	g_slist_free_full (pairs, (GDestroyNotify)key_value_pair_clean);
 	return _reply_success_json (args, NULL);
-}
-
-static GError *
-_m2_container_create (struct req_args_s *args)
-{
-	const char *type = TYPE();
-	if (!type || !*type)
-		type = NAME_SRVTYPE_META2;
-	if (!g_str_has_prefix (type, NAME_SRVTYPE_META2))
-		return BADREQ("The service type is not a "NAME_SRVTYPE_META2);
-	else {
-		const char *sep = type + sizeof(NAME_SRVTYPE_META2) - 1;
-		if (*sep && *sep != '.')
-			return BADREQ("The service type is not a "NAME_SRVTYPE_META2);
-	}
-
-	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
-
-	gchar **properties = _container_headers_to_props (args);
-
-	GError *hook_m2 (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		struct m2v2_create_params_s param = {
-			OPT("stgpol"), OPT("verpol"), properties, FALSE
-		};
-		return m2v2_remote_execute_CREATE (m2->host, args->url, &param);
-	}
-
-	GError *err;
-retry:
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook_m2);
-	if (err && CODE_IS_NOTFOUND(err->code)) {
-		if (autocreate) {
-			autocreate = FALSE; /* autocreate just once */
-			g_clear_error (&err);
-			GError *hook_dir (const gchar *m1) {
-				gchar **urlv = NULL;
-				GError *e = meta1v2_remote_link_service (m1, args->url, type, FALSE, TRUE, &urlv);
-				if (urlv) g_strfreev (urlv);
-				return e;
-			}
-			err = _m1_locate_and_action (args, hook_dir);
-			if (!err)
-				goto retry;
-		}
-	}
-
-	g_strfreev (properties);
-	return err;
-}
-
-enum http_rc_e
-action_m2_container_create (struct req_args_s *args)
-{
-	GError *err = _m2_container_create (args);
-	if (err && CODE_IS_NOTFOUND(err->code))
-		return _reply_forbidden_error (args, err);
-	if (err && err->code == CODE_CONTAINER_EXISTS) {
-		g_clear_error (&err);
-		return _reply_created(args);
-	}
-	return _reply_m2_error (args, err);
-}
-
-/* XXX FIXME TODO JFS: this is broken. it removes the m2 DB but not the meta1
- * entry. One possibility should be to mark the base as DISABLED, then remove
- * the reference in the directory, then remove the m2 DB. */
-enum http_rc_e
-action_m2_container_destroy (struct req_args_s *args)
-{
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_DESTROY (m2->host, args->url, 0);
-	}
-
-	GError *err;
-	if (NULL != (err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook)))
-		return _reply_m2_error(args, err);
-	return _reply_nocontent (args);
-}
-
-/* CONTAINER action resources ----------------------------------------------- */
-
-enum http_rc_e
-action_m2_container_purge (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-	GSList *beans = NULL;
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_PURGE (m2->host, args->url, FALSE,
-				m2_timeout_all, &beans);
-	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	return _reply_beans (args, err, beans);
-}
-
-enum http_rc_e
-action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-	GError *err;
-	gboolean first = TRUE;
-	GString *gstr = g_string_new ("{\"msg\":[");
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		gchar *msg = NULL;
-		GError *e = m2v2_remote_execute_DEDUP (m2->host, args->url, 0, &msg);
-		if (msg) {
-			if (!first)
-				g_string_append_c (gstr, ',');
-			first = FALSE;
-			g_string_append_c (gstr, '"');
-			g_string_append (gstr, msg);	// TODO escape this!
-			g_string_append_c (gstr, '"');
-			g_free (msg);
-		}
-		return e;
-	}
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (NULL != err) {
-		g_string_free (gstr, TRUE);
-		g_prefix_error (&err, "M2 error: ");
-		return _reply_common_error (args, err);
-	}
-
-	g_string_append (gstr, "]}");
-	return _reply_success_json (args, gstr);
-}
-
-enum http_rc_e
-action_m2_container_touch (struct req_args_s *args, struct json_object *jargs)
-{
-	(void) jargs;
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_touch_container_ex (m2->host, args->url, 0);
-	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (NULL != err) {
-		if (CODE_IS_NOTFOUND(err->code))
-			return _reply_forbidden_error (args, err);
-		return _reply_m2_error (args, err);
-	}
-
-	return _reply_success_json (args, NULL);
-}
-
-enum http_rc_e
-action_m2_container_raw_insert (struct req_args_s *args, struct json_object *jargs)
-{
-	GSList *beans = NULL;
-	GError *err = m2v2_json_load_setof_xbean (jargs, &beans);
-	if (err)
-		return _reply_format_error (args, err);
-	if (!beans)
-		return _reply_format_error (args, BADREQ("Empty beans list"));
-
-	GError * hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_RAW_ADD (m2->host, args->url, beans);
-	}
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (NULL != err)
-		return _reply_m2_error (args, err);
-	return _reply_success_json (args, NULL);
-}
-
-enum http_rc_e
-action_m2_container_raw_delete (struct req_args_s *args, struct json_object *jargs)
-{
-	GSList *beans = NULL;
-	GError *err = m2v2_json_load_setof_xbean (jargs, &beans);
-	if (err)
-		return _reply_format_error (args, err);
-	if (!beans)
-		return _reply_format_error (args, BADREQ("Empty beans list"));
-
-	GError * hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_RAW_DEL (m2->host, args->url, beans);
-	}
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (NULL != err)
-		return _reply_m2_error (args, err);
-	return _reply_success_json (args, NULL);
-}
-
-enum http_rc_e
-action_m2_container_raw_update (struct req_args_s *args, struct json_object *jargs)
-{
-	if (!json_object_is_type (jargs, json_type_object))
-		return _reply_format_error (args, BADREQ("JSON object expected"));
-
-	GError *err = NULL;
-	GSList *beans_old = NULL, *beans_new = NULL;
-	struct json_object *jold = NULL, *jnew = NULL;
-
-	if (!err && !json_object_object_get_ex (jargs, "old", &jold))
-		err = BADREQ("No 'old' set of beans");
-	if (!err && !json_object_object_get_ex (jargs, "new", &jnew))
-		err = BADREQ("No 'new' set of beans");
-	if (!err)
-		err = m2v2_json_load_setof_xbean (jold, &beans_old);
-	if (!err)
-		err = m2v2_json_load_setof_xbean (jnew, &beans_new);
-	if (!err && !beans_old)
-		err = BADREQ("No bean to update");
-	if (!err && (g_slist_length(beans_new) != g_slist_length(beans_old)))
-		err = BADREQ("Length mismatch for bean sets");
-
-	GError * hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_RAW_SUBST (m2->host, args->url, beans_new, beans_old);
-	}
-	if (!err)
-		err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	_bean_cleanl2 (beans_old);
-	_bean_cleanl2 (beans_new);
-
-	if (NULL != err)
-		return _reply_m2_error (args, err);
-	return _reply_success_json (args, NULL);
-}
-
-enum http_rc_e
-action_m2_container_propget (struct req_args_s *args, struct json_object *jargs)
-{
-	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
-	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
-	return action_sqlx_propget(args, jargs);
-}
-
-enum http_rc_e
-action_m2_container_propset (struct req_args_s *args, struct json_object *jargs)
-{
-	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
-	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
-	return action_sqlx_propset(args, jargs);
-}
-
-enum http_rc_e
-action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
-{
-	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
-	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
-	return action_sqlx_propdel(args, jargs);
-}
-
-enum http_rc_e
-action_m2_container_stgpol (struct req_args_s *args, struct json_object *jargs)
-{
-	if (!json_object_is_type(jargs, json_type_string))
-		return _reply_format_error (args, BADREQ ("Storage policy must be a string"));
-
-	struct json_object *fake_jargs = json_object_new_object();
-	json_object_object_add (fake_jargs, M2V2_ADMIN_STORAGE_POLICY, jargs);
-
-	enum http_rc_e rc = action_m2_container_propset (args, fake_jargs);
-	json_object_put (fake_jargs);
-	return rc;
-}
-
-enum http_rc_e
-action_m2_container_setvers (struct req_args_s *args, struct json_object *jargs)
-{
-	if (!json_object_is_type(jargs, json_type_int))
-		return _reply_format_error (args, BADREQ ("Versioning policy must be an integer"));
-
-	struct json_object *fake_jargs = json_object_new_object();
-	json_object_object_add (fake_jargs, M2V2_ADMIN_STORAGE_POLICY, jargs);
-
-	enum http_rc_e rc = action_m2_container_propset (args, fake_jargs);
-	json_object_put (fake_jargs);
-	return rc;
-}
-
-enum http_rc_e
-action_container_create (struct req_args_s *args)
-{
-    return action_m2_container_create (args);
-}
-
-enum http_rc_e
-action_container_destroy (struct req_args_s *args)
-{
-   return action_m2_container_destroy (args);
-}
-
-enum http_rc_e
-action_container_list (struct req_args_s *args)
-{
-    return action_m2_container_list (args);
-}
-
-enum http_rc_e
-action_container_show (struct req_args_s *args)
-{
-    return action_m2_container_check (args);
 }
 
 enum http_rc_e
@@ -1174,7 +1153,7 @@ action_container_raw_delete (struct req_args_s *args)
 /* CONTENT action resource -------------------------------------------------- */
 
 
-enum http_rc_e
+static enum http_rc_e
 action_m2_content_beans (struct req_args_s *args, struct json_object *jargs)
 {
 	struct json_object *jsize = NULL, *jpol = NULL;
@@ -1271,7 +1250,7 @@ _m2_json_spare (struct req_args_s *args, struct json_object *jbody, GSList ** ou
 	return err;
 }
 
-enum http_rc_e
+static enum http_rc_e
 action_m2_content_spare (struct req_args_s *args, struct json_object *jargs)
 {
 	GSList *beans = NULL;
@@ -1279,7 +1258,7 @@ action_m2_content_spare (struct req_args_s *args, struct json_object *jargs)
 	return _reply_beans (args, err, beans);
 }
 
-enum http_rc_e
+static enum http_rc_e
 action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
@@ -1293,11 +1272,11 @@ action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 	return _reply_m2_error (args, err);
 }
 
-enum http_rc_e
+static enum http_rc_e
 action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!jargs || !json_object_is_type (jargs, json_type_object))
-		return _reply_m2_error (args, NEWERROR(CODE_BAD_REQUEST, "Expected: json object"));
+		return _reply_m2_error (args, BADREQ("Expected: json object"));
 
 	struct json_object *jid = NULL;
 	struct oio_ext_json_mapping_s m[] = {
@@ -1306,13 +1285,13 @@ action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
 	};
 	GError *err = oio_ext_extract_json (jargs, m);
 	if (err)
-		return _reply_m2_error (args, NEWERROR(CODE_BAD_REQUEST, "Expected: id (string)"));
+		return _reply_m2_error (args, BADREQ("Expected: id (string)"));
 
 	const char *hex = json_object_get_string (jid);
 	gsize len = strlen(hex) / 2;
 	guint8 bin[len+1];
 	if (!oio_str_hex2bin (hex, bin, len+1))
-		return _reply_m2_error (args, NEWERROR(CODE_BAD_REQUEST, "Expected: content id (hexa)"));
+		return _reply_m2_error (args, BADREQ("Expected: content id (hexa)"));
 	GBytes *id = g_bytes_new_static (bin, len);
 
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
@@ -1326,27 +1305,7 @@ action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
 	return _reply_m2_error (args, err);
 }
 
-enum http_rc_e
-action_m2_content_stgpol (struct req_args_s *args, struct json_object *jargs)
-{
-	if (!json_object_is_type (jargs, json_type_string))
-		return _reply_format_error (args, BADREQ ("the storage policy must be a string"));
-
-	const gchar *stgpol = json_object_get_string (jargs);
-	if (!stgpol)
-		return _reply_format_error (args, BADREQ ("missing policy"));
-
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_STGPOL (m2->host, args->url, stgpol, NULL);
-	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	if (err && CODE_IS_NOTFOUND(err->code))
-		return _reply_forbidden_error (args, err);
-	return _reply_m2_error (args, err);
-}
-
-enum http_rc_e
+static enum http_rc_e
 action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 {
 	// TODO manage the version of the content
@@ -1383,7 +1342,7 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 	return _reply_properties (args, err, beans);
 }
 
-enum http_rc_e
+static enum http_rc_e
 action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type(jargs, json_type_array))
@@ -1416,7 +1375,7 @@ action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
 	return _reply_m2_error (args, err);
 }
 
-enum http_rc_e
+static enum http_rc_e
 action_m2_content_propget (struct req_args_s *args, struct json_object *jargs)
 {
 	(void) jargs;
@@ -1435,40 +1394,6 @@ action_m2_content_propget (struct req_args_s *args, struct json_object *jargs)
 }
 
 /* CONTENT resources ------------------------------------------------------- */
-
-enum http_rc_e
-action_m2_content_copy (struct req_args_s *args)
-{
-	const gchar *target = g_tree_lookup (args->rq->tree_headers, "destination");
-	if (!target)
-		return _reply_format_error(args, BADREQ("Missing target header"));
-
-	struct hc_url_s *target_url = hc_url_oldinit(target);
-	if (!target_url)
-		return _reply_format_error(args, BADREQ("Invalid URL in target header"));
-
-	// Check the namespace and container match between both URLs
-	if (!hc_url_has(target_url, HCURL_HEXID)
-			|| !hc_url_has(target_url, HCURL_NS)
-			|| !hc_url_has(target_url, HCURL_PATH)
-			|| !hc_url_has(args->url, HCURL_HEXID)
-			|| !hc_url_has(args->url, HCURL_NS)
-			|| strcmp(hc_url_get(target_url, HCURL_HEXID), hc_url_get(args->url, HCURL_HEXID))
-			|| strcmp(hc_url_get(target_url, HCURL_HEXID), hc_url_get(args->url, HCURL_HEXID))) {
-		hc_url_pclean(&target_url);
-		return _reply_format_error(args, BADREQ("Invalid source/target URL"));
-	}
-
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_COPY (m2->host, target_url, hc_url_get(args->url, HCURL_PATH));
-	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	hc_url_pclean(&target_url);
-	if (err && CODE_IS_NOTFOUND(err->code))
-		return _reply_forbidden_error (args, err);
-	return _reply_m2_error (args, err);
-}
 
 static GError *
 _m2_json_put (struct req_args_s *args, struct json_object *jbody)
@@ -1518,7 +1443,7 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 }
 
 enum http_rc_e
-action_m2_content_put (struct req_args_s *args)
+action_content_put (struct req_args_s *args)
 {
 	struct json_object *jbody;
 	GError *err;
@@ -1547,47 +1472,6 @@ retry:
 }
 
 enum http_rc_e
-action_m2_content_delete (struct req_args_s *args)
-{
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_DEL (m2->host, args->url);
-	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	return _reply_m2_error (args, err);
-}
-
-static enum http_rc_e
-_m2_content_get (struct req_args_s *args, gboolean body)
-{
-	GSList *beans = NULL;
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_GET (m2->host, args->url, 0, &beans);
-	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	return _reply_simplified_beans (args, err, beans, body);
-}
-
-enum http_rc_e
-action_m2_content_check (struct req_args_s *args)
-{
-	return _m2_content_get (args, FALSE);
-}
-
-enum http_rc_e
-action_m2_content_get (struct req_args_s *args)
-{
-	return _m2_content_get (args, TRUE);
-}
-
-enum http_rc_e
-action_content_put (struct req_args_s *args)
-{
-    return action_m2_content_put (args);
-}
-
-enum http_rc_e
 action_content_prepare (struct req_args_s *args)
 {
     return rest_action (args, action_m2_content_beans);
@@ -1596,13 +1480,24 @@ action_content_prepare (struct req_args_s *args)
 enum http_rc_e
 action_content_show (struct req_args_s *args)
 {
-    return action_m2_content_get (args);
+	GSList *beans = NULL;
+	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		return m2v2_remote_execute_GET (m2->host, args->url, 0, &beans);
+	}
+	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	return _reply_simplified_beans (args, err, beans, TRUE);
 }
 
 enum http_rc_e
 action_content_delete (struct req_args_s *args)
 {
-    return action_m2_content_delete (args);
+	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		return m2v2_remote_execute_DEL (m2->host, args->url);
+	}
+	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	return _reply_m2_error (args, err);
 }
 
 enum http_rc_e
@@ -1644,5 +1539,33 @@ action_content_prop_del (struct req_args_s *args)
 enum http_rc_e
 action_content_copy (struct req_args_s *args)
 {
-    return action_m2_content_copy (args);
+	const gchar *target = g_tree_lookup (args->rq->tree_headers, "destination");
+	if (!target)
+		return _reply_format_error(args, BADREQ("Missing target header"));
+
+	struct hc_url_s *target_url = hc_url_oldinit(target);
+	if (!target_url)
+		return _reply_format_error(args, BADREQ("Invalid URL in target header"));
+
+	// Check the namespace and container match between both URLs
+	if (!hc_url_has(target_url, HCURL_HEXID)
+			|| !hc_url_has(target_url, HCURL_NS)
+			|| !hc_url_has(target_url, HCURL_PATH)
+			|| !hc_url_has(args->url, HCURL_HEXID)
+			|| !hc_url_has(args->url, HCURL_NS)
+			|| strcmp(hc_url_get(target_url, HCURL_HEXID), hc_url_get(args->url, HCURL_HEXID))
+			|| strcmp(hc_url_get(target_url, HCURL_HEXID), hc_url_get(args->url, HCURL_HEXID))) {
+		hc_url_pclean(&target_url);
+		return _reply_format_error(args, BADREQ("Invalid source/target URL"));
+	}
+
+	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		return m2v2_remote_execute_COPY (m2->host, target_url, hc_url_get(args->url, HCURL_PATH));
+	}
+	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	hc_url_pclean(&target_url);
+	if (err && CODE_IS_NOTFOUND(err->code))
+		return _reply_forbidden_error (args, err);
+	return _reply_m2_error (args, err);
 }

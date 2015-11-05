@@ -133,7 +133,7 @@ rest_action (struct req_args_s *args,
     jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
             args->rq->body->len);
     rc = handler(args, jbody);
-    json_object_put (jbody);
+    if (jbody) json_object_put (jbody);
     json_tokener_free (parser);
     return rc;
 }
