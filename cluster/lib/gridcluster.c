@@ -93,6 +93,7 @@ GError *
 conscience_remote_get_services(const char *cs, const char *type, gboolean full,
 		GSList **out)
 {
+	EXTRA_ASSERT(type != NULL);
 	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_CS_GET_SRV);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, type);
 	if (full)

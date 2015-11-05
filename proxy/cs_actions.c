@@ -81,8 +81,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 
 	if (!si->type[0]) {
 		service_info_clean (si);
-		return _reply_format_error (args, NEWERROR (CODE_SERVICE_NOTFOUND,
-					"Service type not specified"));
+		return _reply_format_error (args, BADREQ("Service type not specified"));
 	}
 
 	if (!si->ns_name[0]) {
@@ -169,6 +168,9 @@ enum http_rc_e
 action_conscience_list (struct req_args_s *args)
 {
 	const char *types = TYPE();
+	if (!types)
+		return _reply_format_error (args, BADREQ("Missing type"));
+
 	gboolean full = _request_has_flag (args, PROXYD_HEADER_MODE, "full");
 
 	GError *err;
