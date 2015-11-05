@@ -1,0 +1,16 @@
+#!/usr/bin/env python
+
+from optparse import OptionParser
+
+from oio.common.utils import parse_options, read_conf
+from oio.index.server import create_app
+from oio.index.server import IndexServiceLogger
+from oio.common.wsgi import Application
+
+
+if __name__ == '__main__':
+    parser = OptionParser("%prog CONFIG [options]")
+    conf_file, options = parse_options(parser)
+    conf = read_conf(conf_file, 'index-server')
+    app = create_app(conf)
+    Application(app, conf, logger_class=IndexServiceLogger).run()
