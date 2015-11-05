@@ -3,8 +3,8 @@ bind_addr = 127.0.0.1
 bind_port = 9999
 # Currently, only 1 worker is allowed to avoid concurrent access to leveldb database
 workers = 1
-db_path=/home/chris/.oio/sds/data/NS-index-1
+db_path=/var/lib/oio/sds/vol1/NS/index-1
 log_facility = LOG_LOCAL0
-log_level = DEBUG
+log_level = INFO
 log_address = /dev/log
-syslog_prefix = OIO,NS,account,1
+syslog_prefix = OIO,NS,index,1
