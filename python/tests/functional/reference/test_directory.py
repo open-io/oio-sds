@@ -5,15 +5,6 @@ from tests.utils import BaseTestCase
 
 class TestDirectoryFunctional(BaseTestCase):
 
-    def param_srv(self, ref, srvtype):
-        return {'ref': ref, 'acct': self.account, 'type': srvtype}
-
-    def param_ref(self, ref):
-        return {'ref': ref, 'acct': self.account}
-
-    def url_ref(self, action):
-        return '/'.join((self.uri, 'v3.0', self.ns, 'reference', action))
-
     def setUp(self):
         super(TestDirectoryFunctional, self).setUp()
         self._reload()
@@ -24,66 +15,66 @@ class TestDirectoryFunctional(BaseTestCase):
         super(TestDirectoryFunctional, self).tearDown()
         for ref in ('plop-'+str(i) for i in range(5)):
             try:
-                self.session.post(self.url_ref('destroy'),
+                self.session.post(self._url_ref('destroy'),
                                   params=self.param_ref(ref),
                                   headers={'X-oio-action-mode': 'force'})
             except:
                 pass
 
     def test_reference_put_invalid(self):
-        resp = self.session.put(self.url_ref("plop") + "/no/such/resource")
+        resp = self.session.put(self._url_ref("plop") + "/no/such/resource")
         self.assertEqual(resp.status_code, 404)
 
     def test_reference_delete_invalid(self):
-        resp = self.session.delete(self.url_ref("plop") + "/no/such/resource")
+        resp = self.session.delete(self._url_ref("plop") + "/no/such/resource")
         self.assertEqual(resp.status_code, 404)
 
     def test_reference_head_invalid(self):
-        resp = self.session.head(self.url_ref('show') + "/no/such/resource")
+        resp = self.session.head(self._url_ref('show') + "/no/such/resource")
         self.assertEqual(resp.status_code, 404)
-        resp = self.session.head(self.url_ref('show'))
+        resp = self.session.head(self._url_ref('show'))
         self.assertEqual(resp.status_code, 404)
 
     def test_reference_cycle(self):
         params = self.param_ref('plop-0')
-        resp = self.session.post(self.url_ref('destroy'), params=params)
+        resp = self.session.post(self._url_ref('destroy'), params=params)
 
-        resp = self.session.get(self.url_ref('show'), params=params)
+        resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 404)
-        resp = self.session.post(self.url_ref('create'), params=params)
+        resp = self.session.post(self._url_ref('create'), params=params)
         self.assertEqual(resp.status_code, 201)
-        resp = self.session.get(self.url_ref('show'), params=params)
+        resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 200)
-        resp = self.session.post(self.url_ref('destroy'), params=params)
+        resp = self.session.post(self._url_ref('destroy'), params=params)
         self.assertEqual(resp.status_code, 204)
-        resp = self.session.get(self.url_ref('show'), params=params)
+        resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 404)
 
     def test_references_actions_properties_invalid(self):
-        resp = self.session.post(self.url_ref('get_properties'))
+        resp = self.session.post(self._url_ref('get_properties'))
         self.assertEqual(resp.status_code, 400)
-        resp = self.session.post(self.url_ref('get_properties'),
+        resp = self.session.post(self._url_ref('get_properties'),
                                  data=json.dumps({}))
         self.assertEqual(resp.status_code, 400)
-        resp = self.session.post(self.url_ref('get_properties'),
+        resp = self.session.post(self._url_ref('get_properties'),
                                  data=json.dumps(['plop']))
         self.assertEqual(resp.status_code, 400)
 
-        resp = self.session.post(self.url_ref('set_properties'))
+        resp = self.session.post(self._url_ref('set_properties'))
         self.assertEqual(resp.status_code, 400)
-        resp = self.session.post(self.url_ref('set_properties'),
+        resp = self.session.post(self._url_ref('set_properties'),
                                  data=json.dumps({}))
         self.assertEqual(resp.status_code, 400)
-        resp = self.session.post(self.url_ref('set_properties'),
+        resp = self.session.post(self._url_ref('set_properties'),
                                  data=json.dumps(['plop']))
         self.assertEqual(resp.status_code, 400)
 
-        resp = self.session.post(self.url_ref('del_properties'))
+        resp = self.session.post(self._url_ref('del_properties'))
         self.assertEqual(resp.status_code, 400)
-        resp = self.session.post(self.url_ref('del_properties'),
+        resp = self.session.post(self._url_ref('del_properties'),
                                  data=json.dumps({}))
         self.assertEqual(resp.status_code, 400)
-        resp = self.session.post(self.url_ref('del_properties'),
+        resp = self.session.post(self._url_ref('del_properties'),
                                  data=json.dumps(['plop']))
         self.assertEqual(resp.status_code, 400)
 
@@ -91,41 +82,41 @@ class TestDirectoryFunctional(BaseTestCase):
         params = self.param_ref('plop-0')
         body = json.dumps(['prop1'])
 
-        resp = self.session.post(self.url_ref('del_properties'),
+        resp = self.session.post(self._url_ref('del_properties'),
                                  params=params, data=body)
         self.assertEqual(resp.status_code, 404)
 
-        resp = self.session.post(self.url_ref('create'), params=params)
+        resp = self.session.post(self._url_ref('create'), params=params)
         self.assertEqual(resp.status_code, 201)
 
-        resp = self.session.post(self.url_ref('del_properties'),
+        resp = self.session.post(self._url_ref('del_properties'),
                                  params=params, data=body)
         self.assertEqual(resp.status_code, 204)
 
-        resp = self.session.post(self.url_ref('get_properties'),
+        resp = self.session.post(self._url_ref('get_properties'),
                                  params=params, data=body)
         self.assertEqual(resp.status_code, 200)
         self.assertDictEqual(resp.json(), {})
 
-        resp = self.session.post(self.url_ref('set_properties'),
+        resp = self.session.post(self._url_ref('set_properties'),
                                  params=params,
                                  data=json.dumps({'prop1': 'value1'}))
         self.assertEqual(resp.status_code, 204)
 
-        resp = self.session.post(self.url_ref('get_properties'),
+        resp = self.session.post(self._url_ref('get_properties'),
                                  params=params, data=body)
         self.assertEqual(resp.status_code, 200)
         self.assertDictEqual(resp.json(), {'prop1': 'value1'})
 
-        resp = self.session.post(self.url_ref('del_properties'),
+        resp = self.session.post(self._url_ref('del_properties'),
                                  params=params, data=body)
         self.assertEqual(resp.status_code, 204)
 
     def test_services_cycle(self):
         params = self.param_srv('plop-0', 'echo')
-        resp = self.session.post(self.url_ref('create'), params=params)
+        resp = self.session.post(self._url_ref('create'), params=params)
 
-        resp = self.session.get(self.url_ref('show'), params=params)
+        resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertIsInstance(body, dict)
@@ -136,20 +127,20 @@ class TestDirectoryFunctional(BaseTestCase):
         self._reload()
 
         # Initial link
-        resp = self.session.post(self.url_ref('link'), params=params)
+        resp = self.session.post(self._url_ref('link'), params=params)
         self.assertEqual(resp.status_code, 200)
 
-        resp = self.session.get(self.url_ref('show'), params=params)
+        resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertIsInstance(body, dict)
         self.assertEqual(body['srv'][0]['host'], srv0['addr'])
 
         # second identical link
-        resp = self.session.post(self.url_ref('link'), params=params)
+        resp = self.session.post(self._url_ref('link'), params=params)
         self.assertEqual(resp.status_code, 200)
 
-        resp = self.session.get(self.url_ref('show'), params=params)
+        resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertIsInstance(body, dict)
@@ -166,10 +157,10 @@ class TestDirectoryFunctional(BaseTestCase):
         self._register_srv(srv1)
         self._reload()
 
-        resp = self.session.post(self.url_ref('link'), params=params)
+        resp = self.session.post(self._url_ref('link'), params=params)
         self.assertEqual(resp.status_code, 200)
 
-        resp = self.session.get(self.url_ref('show'), params=params)
+        resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertIsInstance(body, dict)
@@ -177,20 +168,20 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(body['srv'][0]['host'], srv0['addr'])
 
         # unlink
-        resp = self.session.post(self.url_ref('unlink'), params=params)
+        resp = self.session.post(self._url_ref('unlink'), params=params)
         self.assertEqual(resp.status_code, 204)
 
-        resp = self.session.get(self.url_ref('show'), params=params)
+        resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertIsInstance(body, dict)
         self.assertItemsEqual(body['srv'], [])
 
         # Renew while not linked
-        resp = self.session.post(self.url_ref('renew'), params=params)
+        resp = self.session.post(self._url_ref('renew'), params=params)
         self.assertEqual(resp.status_code, 200)
 
-        resp = self.session.get(self.url_ref('show'), params=params)
+        resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertIsInstance(body, dict)
@@ -204,10 +195,10 @@ class TestDirectoryFunctional(BaseTestCase):
         self._lock_srv(srv1)
         self._reload()
 
-        resp = self.session.post(self.url_ref('renew'), params=params)
+        resp = self.session.post(self._url_ref('renew'), params=params)
         self.assertEqual(resp.status_code, 200)
 
-        resp = self.session.get(self.url_ref('show'), params=params)
+        resp = self.session.get(self._url_ref('show'), params=params)
         self.assertEqual(resp.status_code, 200)
         body = resp.json()
         self.assertIsInstance(body, dict)
@@ -228,7 +219,7 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(resp.status_code, 204)
 
         # unlink
-        resp = self.session.post(self.url_ref('unlink'), params=params)
+        resp = self.session.post(self._url_ref('unlink'), params=params)
         self.assertEqual(resp.status_code, 204)
 
         # Force without header while not linked
@@ -237,7 +228,7 @@ class TestDirectoryFunctional(BaseTestCase):
         self.assertEqual(resp.status_code, 204)
 
         # unlink
-        resp = self.session.post(self.url_ref('unlink'), params=params)
+        resp = self.session.post(self._url_ref('unlink'), params=params)
         self.assertEqual(resp.status_code, 204)
 
         # Force with header while not linked

@@ -36,14 +36,29 @@ def get_config(defaults=None):
 
 class BaseTestCase(testtools.TestCase):
 
-    def _mod(self, name):
+    def _url(self, name):
         return '/'.join((self.uri, "v3.0", self.ns, name))
 
     def _url_cs(self, action):
-        return self._mod("conscience") + '/' + action
+        return self._url("conscience") + '/' + action
 
     def _url_ref(self, action):
-        return self._mod("reference") + '/' + action
+        return self._url("reference") + '/' + action
+
+    def _url_container(self, action):
+        return self._url("container") + '/' + action
+
+    def _url_content(self, action):
+        return self._url("content") + '/' + action
+
+    def param_srv(self, ref, srvtype):
+        return {'ref': ref, 'acct': self.account, 'type': srvtype}
+
+    def param_ref(self, ref):
+        return {'ref': ref, 'acct': self.account}
+
+    def param_content(self, ref, path):
+        return {'ref': ref, 'acct': self.account, 'path': path}
 
     def setUp(self):
         super(BaseTestCase, self).setUp()
