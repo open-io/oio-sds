@@ -72,6 +72,13 @@ _remote_push (const char *to, const char *volname, GString *body)
 	curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "POST");
 	curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
 	curl_easy_setopt (h, CURLOPT_READDATA, &view_input);
+	curl_easy_setopt (h, CURLOPT_INFILESIZE_LARGE, body->len);
+	curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
+
+	struct curl_slist *headers = NULL;
+	headers = curl_slist_append (headers, "Content-type: application/json");
+	headers = curl_slist_append (headers, "Expect:");
+	curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers);
 
 	CURLcode rc = curl_easy_perform (h);
 	if (rc != CURLE_OK) {
@@ -83,6 +90,7 @@ _remote_push (const char *to, const char *volname, GString *body)
 			err = NEWERROR(0, "service error: (%ld)", code);
 	}
 
+	curl_slist_free_all (headers);
 	curl_easy_cleanup (h);
 	return err;
 }
@@ -146,7 +154,9 @@ retry:
 	}
 
 	oio_url_pclean (&volurl);
-	return _reply_common_error (args, err);
+	if (err)
+		return _reply_common_error (args, err);
+	return _reply_nocontent (args);
 }
 
 enum http_rc_e

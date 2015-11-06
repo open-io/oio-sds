@@ -19,50 +19,63 @@ from flask import request
 from flask import current_app
 from gunicorn.glogging import Logger
 
-from oio.index.server_db import IndexBackend
+from oio.rdir.server_db import RdirBackend
 from oio.common.utils import get_logger, json
 
-index_api = flask.Blueprint('index_api', __name__)
+rdir_api = flask.Blueprint('rdir_api', __name__)
 
 
 def get_backend():
     return current_app.backend
 
 
-@index_api.route('/v1.0/index/update', methods=['PUT'])
-def index_update():
-    volume = request.args.get('volume')
+@rdir_api.route('/status', methods=['GET'])
+def status():
+    status = get_backend().status()
+    return flask.Response(json.dumps(status), mimetype='application/json')
+
+
+@rdir_api.route('/<ns>/rdir/push', methods=['POST'])
+def rdir_update(ns):
+    volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
     decoded = flask.request.get_json(force=True)
-    chunk_id = decoded.get('chunk_id')
-    content_cid = decoded.get('content_cid')
-    content_path = decoded.get('content_path')
-    get_backend().put(volume, chunk_id, content_cid, content_path)
+    chunk = decoded.get('chunk')
+    container = decoded.get('container')
+    content = decoded.get('content')
+    get_backend().put(volume, chunk, container, content)
     return flask.Response('', 204)
 
 
-@index_api.route('/v1.0/index/dump', methods=['GET'])
-def index_dump():
-    volume = request.args.get('volume')
+@rdir_api.route('/<ns>/rdir/dump', methods=['GET'])
+def rdir_dump(ns):
+    volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
+    pretty = request.args.get('pretty')
+
     data = get_backend().dump(volume)
 
-    return flask.Response(json.dumps(data), mimetype='application/json')
+    if (pretty):
+        body = json.dumps(data, indent=4)
+    else:
+        body = json.dumps(data)
+
+    return flask.Response(body, mimetype='application/json')
 
 
 def create_app(conf, **kwargs):
     app = flask.Flask(__name__)
-    app.register_blueprint(index_api)
-    app.backend = IndexBackend(conf)
+    app.register_blueprint(rdir_api)
+    app.backend = RdirBackend(conf)
     # we want exceptions to be logged
     if conf.get('log_level') == 'DEBUG':
         app.config['PROPAGATE_EXCEPTIONS'] = True
     return app
 
 
-class IndexServiceLogger(Logger):
+class RdirServiceLogger(Logger):
     def __init__(self, cfg):
         self.cfg = cfg
         prefix = cfg.syslog_prefix if cfg.syslog_prefix else ''
@@ -80,5 +93,5 @@ class IndexServiceLogger(Logger):
             'log_address': address
         }
 
-        self.error_log = get_logger(error_conf, 'index.error')
-        self.access_log = get_logger(access_conf, 'index.access')
+        self.error_log = get_logger(error_conf, 'rdir.error')
+        self.access_log = get_logger(access_conf, 'rdir.access')

@@ -41,6 +41,9 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/rainx-monitor.py
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/account-monitor.py
 		${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-account-monitor.py
 		@ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/rdir-monitor.py
+		${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-rdir-monitor.py
+		@ONLY)
 
 add_custom_command(OUTPUT ${OUTPUT}
 				   COMMAND ${CMAKE_COMMAND} -E touch ${OUTPUT}
@@ -63,5 +66,6 @@ install(PROGRAMS
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-rawx-monitor.py
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-rainx-monitor.py
 			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-account-monitor.py
+			${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-rdir-monitor.py
 		DESTINATION bin)
 

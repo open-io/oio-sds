@@ -21,7 +21,7 @@ import plyvel
 from oio.common.utils import json
 
 
-class IndexBackend(object):
+class RdirBackend(object):
     def __init__(self, conf):
         self.db_path = conf.get('db_path')
         self.dbs = {}
@@ -37,15 +37,20 @@ class IndexBackend(object):
         return db
 
     def put(self, volume, chunk_id, content_cid, content_path):
-        #TODO replace content_path with content_id when available in git
+        # TODO replace content_path with content_id when available in git
         key = "%s|%s|%s" % (content_cid, content_path, chunk_id)
-        value = json.dumps({"mtime": "%f" % time.time()})
+        value = json.dumps({"mtime": time.time()})
 
-        self._get_db(volume).put(str(key), str(value))
+        self._get_db(volume).put(key.encode('utf8'), value.encode('utf8'))
 
     def dump(self, volume):
-        #TODO improve this method to use less memory
+        # TODO improve this method to use less memory
         data = dict()
         for key, value in self._get_db(volume):
-            data[key] = value
+            data[key] = json.loads(value)
         return data
+
+    def status(self):
+        opened_db_count = len(self.dbs)
+        status = {'opened_db_count': opened_db_count}
+        return status
