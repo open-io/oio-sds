@@ -320,24 +320,6 @@ action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
 //------------------------------------------------------------------------------
 
 static enum http_rc_e
-action_dir_ref_create (struct req_args_s *args)
-{
-	GError *hook (const char * m1) {
-		return meta1v2_remote_create_reference (m1, args->url);
-	}
-	GError *err = _m1_locate_and_action (args->url, hook);
-	if (!err)
-		return _reply_created (args);
-	if (err->code == CODE_CONTAINER_EXISTS) {
-		g_clear_error (&err);
-		return _reply_accepted (args);
-	}
-	return _reply_common_error (args, err);
-}
-
-//------------------------------------------------------------------------------
-
-static enum http_rc_e
 action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)
 {
 	gchar **keys = NULL;
@@ -427,19 +409,32 @@ action_dir_prop_del (struct req_args_s *args, struct json_object *jargs)
 enum http_rc_e
 action_ref_create (struct req_args_s *args)
 {
-    return action_dir_ref_create (args);
+	GError *hook (const char * m1) {
+		return meta1v2_remote_create_reference (m1, args->url);
+	}
+	GError *err = _m1_locate_and_action (args->url, hook);
+	if (!err)
+		return _reply_created (args);
+	if (err->code == CODE_CONTAINER_EXISTS) {
+		g_clear_error (&err);
+		return _reply_accepted (args);
+	}
+	return _reply_common_error (args, err);
 }
 
 enum http_rc_e
 action_ref_show (struct req_args_s *args)
 {
+	const char *type = TYPE();
+
 	if (!validate_namespace(NS()))
 		return _reply_forbidden_error(args, NEWERROR(
 					CODE_NAMESPACE_NOTMANAGED, "Namespace not managed"));
 
 	gchar **urlv = NULL;
 	GError *hook (const char * m1) {
-		return meta1v2_remote_list_reference_services (m1, args->url, NULL, &urlv);
+		return meta1v2_remote_list_reference_services (m1, args->url,
+				type, &urlv);
 	}
 	GError *err = _m1_locate_and_action (args->url, hook);
 	if (!err) {

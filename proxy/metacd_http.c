@@ -203,7 +203,8 @@ handler_action (gpointer u, struct http_request_s *rq,
 
 	enum http_rc_e rc;
 	if (!*matchings) {
-		rp->set_body (NULL, 0);
+		rp->set_content_type ("application/json");
+		rp->set_body_gstr (g_string_new("{\"status\":404,\"message\":\"No handler found\"}"));
 		rp->set_status (HTTP_CODE_NOT_FOUND, "No handler found");
 		rp->finalize ();
 		rc = HTTPRC_DONE;
