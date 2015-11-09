@@ -104,16 +104,19 @@ int oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
  * else when it failed. */
 typedef int (*oio_sds_dl_hook_f) (void*, const unsigned char*, size_t);
 
+enum oio_sds_dl_dst_type_e
+{
+	OIO_DL_DST_HOOK_SEQUENTIAL = 1,
+	OIO_DL_DST_BUFFER,
+	OIO_DL_DST_FILE,
+};
+
 struct oio_sds_dl_dst_s
 {
 	/* output variable: how many bytes have been read, at all */
 	size_t out_size;
 
-	enum {
-		OIO_DL_DST_HOOK_SEQUENTIAL = 1,
-		OIO_DL_DST_BUFFER,
-		OIO_DL_DST_FILE,
-	} type;
+	enum oio_sds_dl_dst_type_e type;
 
 	union {
 		struct {
@@ -163,13 +166,16 @@ struct oio_error_s* oio_sds_download_to_file (struct oio_sds_s *sds,
 
 typedef ssize_t (*oio_sds_ul_hook_f) (void*, unsigned char *p, size_t s);
 
+enum oio_sds_ul_src_type_e
+{
+	OIO_UL_SRC_HOOK_SEQUENTIAL = 1,
+	OIO_UL_SRC_BUFFER,
+	OIO_UL_SRC_FILE,
+};
+
 struct oio_sds_ul_src_s
 {
-	enum {
-		OIO_UL_SRC_HOOK_SEQUENTIAL = 1,
-		OIO_UL_SRC_BUFFER,
-		OIO_UL_SRC_FILE,
-	} type;
+	enum oio_sds_ul_src_type_e type;
 
 	union {
 		struct {
