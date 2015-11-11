@@ -46,14 +46,11 @@ typedef ssize_t (*http_put_input_f) (void *user_data, char *b, size_t s);
  *
  * @cb_input callback to read data
  * @cb_input_data user data used by the callback cb_input
- * @data_length size of the complete data to send
- * @timeout_cnx timeout for connection phase in seconds
- * @timeout_op timeout for transfer operation in seconds
  *
  * @return handle on this http request or NULL in case of error
  */
-struct http_put_s *http_put_create (http_put_input_f cb_input, gpointer cb_input_data,
-		size_t data_length, long timeout_cnx, long timeout_op);
+struct http_put_s *http_put_create (http_put_input_f cb_input,
+		gpointer cb_input_data, gint64 content_length);
 
 /**
  * Add a new destination where to send data.
@@ -100,6 +97,12 @@ void http_put_dest_add_header(struct http_put_dest_s *dest, const char *key,
  */
 GError *http_put_run(struct http_put_s *p);
 
+void http_put_feed (struct http_put_s *p, GBytes *b);
+
+GError * http_put_step (struct http_put_s *p);
+
+gboolean http_put_done (struct http_put_s *p);
+
 /**
  * Get the number of failed requests.
  *
@@ -117,35 +120,6 @@ guint http_put_get_failure_number(struct http_put_s *p);
  * @param size buffer size (must be the same as md5 size)
  */
 void http_put_get_md5(struct http_put_s *p, guint8 *buffer, gsize size);
-
-/**
- * Get a pointer on data sent in this request.
- *
- * This function must be called only after the end of the request.
- *
- * @param p http put handle
- * @param[out] buffer return a pointer on data sent
- * @param[out] size return the size of data sent
- */
-void http_put_get_buffer(struct http_put_s *p, const char **buffer, gsize *size);
-
-/**
- * Get all user_data linked to successful destinations.
- *
- * @param p http put handle
- *
- * @return list of user_data (list must be freed by caller)
- */
-GSList *http_put_get_success_dests(struct http_put_s *p);
-
-/**
- * Get all user_data linked to failed destinations.
- *
- * @param p http put handle
- *
- * @return list of user_data (list must be freed by caller)
- */
-GSList *http_put_get_failure_dests(struct http_put_s *p);
 
 /**
  * Get response header for destination represented its user_data.
@@ -171,14 +145,6 @@ const char *http_put_get_header(struct http_put_s *p, gpointer user_data, const 
  * @return valid http code or 0 if request failed (connection failed...)
  */
 guint http_put_get_http_code(struct http_put_s *p, gpointer user_data);
-
-/**
- * Free all destinations.
- * It is useful to add spare destination to retry transfer.
- *
- * @param p http put handle
- */
-void http_put_clear_dests(struct http_put_s *p);
 
 /**
  * Free http_put and all destinations

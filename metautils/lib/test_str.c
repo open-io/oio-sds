@@ -101,17 +101,6 @@ test_lower(void)
 }
 
 static void
-test_strlen_len(void)
-{
-	gsize len(const gchar *s, gsize l) {
-		return strlen_len((guint8*)s, l);
-	}
-	g_assert(len("plop", strlen("plop")) == strlen("plop"));
-	for (guint i=0; i < sizeof("plopplop")+1; ++i)
-		g_assert(len("plopplop", i) == MIN(i,sizeof("plopplop")-1));
-}
-
-static void
 test_prefix (void)
 {
 	g_assert (metautils_str_has_caseprefix ("X", "X"));
@@ -137,7 +126,6 @@ main(int argc, char **argv)
 	g_test_add_func("/metautils/str/strlcpy_pns", test_strlcpy_pns);
 	g_test_add_func("/metautils/str/upper", test_upper);
 	g_test_add_func("/metautils/str/lower", test_lower);
-	g_test_add_func("/metautils/str/strlen", test_strlen_len);
 	g_test_add_func("/metautils/str/prefix", test_prefix);
 	return g_test_run();
 }

@@ -1560,11 +1560,13 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	p = ctx->pol ? storage_policy_get_name(ctx->pol) : "none";
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(ctx->url, HCURL_WHOLE));
+	const gint64 now = g_get_real_time ();
 
 	struct bean_ALIASES_s *alias = _bean_create(&descr_struct_ALIASES);
 	ALIASES_set2_alias(alias, hc_url_get(ctx->url, HCURL_PATH));
-	ALIASES_set_version(alias, 0);
-	ALIASES_set_ctime(alias, time(0));
+	ALIASES_set_version(alias, now);
+	ALIASES_set_ctime(alias, now / G_TIME_SPAN_SECOND);
+	ALIASES_set_ctime(alias, now / G_TIME_SPAN_SECOND);
 	ALIASES_set_deleted(alias, FALSE);
 	ALIASES_set2_content(alias, ctx->uid, ctx->uid_size);
 	ctx->cb(ctx->cb_data, alias);
@@ -1575,6 +1577,8 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	CONTENTS_HEADERS_set2_id(header, ctx->uid, ctx->uid_size);
 	CONTENTS_HEADERS_set2_policy(header, p);
 	CONTENTS_HEADERS_nullify_hash(header);
+	CONTENTS_HEADERS_set_ctime(header, now / G_TIME_SPAN_SECOND);
+	CONTENTS_HEADERS_set_mtime(header, now / G_TIME_SPAN_SECOND);
 	ctx->cb(ctx->cb_data, header);
 }
 
@@ -1617,8 +1621,6 @@ _m2_generate_RAIN(struct gen_ctx_s *ctx)
 	guint pos;
 	/* Current allocated size */
 	gint64 s;
-	/* Current chunk size */
-	gint64 cs;
 	/* Storage policy storage class */
 	const struct storage_class_s *stgclass;
 	gint distance, k, m;
@@ -1651,13 +1653,9 @@ _m2_generate_RAIN(struct gen_ctx_s *ctx)
 			break;
 		}
 
-		/* meta chunk size */
-		if (ctx->chunk_size < (cs = ctx->size - s))
-			cs = ctx->chunk_size;
-
 		for (gint i=0; siv[i] ;++i) {
 			gboolean parity = (i >= k);
-			_m2_generate_content_chunk(ctx, siv[i], pos, cs,
+			_m2_generate_content_chunk(ctx, siv[i], pos, ctx->chunk_size,
 					(parity ? i-k : i), parity);
 		}
 
@@ -1678,8 +1676,6 @@ _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 	guint pos;
 	/* Current allocated size */
 	gint64 s;
-	/* Current chunk size */
-	gint64 cs;
 	/* Storage policy storage class */
 	const struct storage_class_s *stgclass;
 	gint distance, copies;
@@ -1712,11 +1708,8 @@ _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 			break;
 		}
 
-		if (ctx->chunk_size < (cs = ctx->size - s))
-			cs = ctx->chunk_size;
-
 		for (psi=siv; *psi ;++psi)
-			_m2_generate_content_chunk(ctx, *psi, pos, cs, -1, FALSE);
+			_m2_generate_content_chunk(ctx, *psi, pos, ctx->chunk_size, -1, FALSE);
 
 		service_info_cleanv(siv, FALSE);
 
@@ -1729,14 +1722,6 @@ _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 
 GError*
 m2_generate_beans(struct hc_url_s *url, gint64 size, gint64 chunk_size,
-		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
-		m2_onbean_cb cb, gpointer cb_data)
-{
-	return m2_generate_beans_v1(url, size, chunk_size, pol, iter, cb, cb_data);
-}
-
-GError*
-m2_generate_beans_v1(struct hc_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
 		m2_onbean_cb cb, gpointer cb_data)
 {

@@ -29,6 +29,69 @@ extern "C" {
 
 CURL * _curl_get_handle (void);
 
+/* --------------------------------------------------------------------------
+ * Headers helpers
+ * -------------------------------------------------------------------------- */
+
+struct oio_headers_s
+{
+	GSList *gheaders;
+	struct curl_slist *headers;
+};
+
+void oio_headers_common (struct oio_headers_s *h);
+
+void oio_headers_clear (struct oio_headers_s *h);
+
+void oio_headers_add (struct oio_headers_s *h,
+		const char *k, const char *v);
+
+void oio_headers_add_int64 (struct oio_headers_s *h,
+		const char *k, gint64 i64);
+
+/* --------------------------------------------------------------------------
+ * PROXY
+ * Wrappers for CURL operations toward the proxy.
+ * -------------------------------------------------------------------------- */
+
+struct oio_url_s;
+
+GError * oio_proxy_call_content_show (CURL *h, struct oio_url_s *u,
+		GString *out);
+
+GError * oio_proxy_call_content_delete (CURL *h, struct oio_url_s *u);
+
+GError * oio_proxy_call_content_link (CURL *h, struct oio_url_s *u,
+		const char *id);
+
+struct oio_proxy_content_prepare_out_s
+{
+	GString *body;
+	gchar *header_chunksize;
+	gchar *header_version;
+	gchar *header_content;
+};
+
+GError * oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
+		gsize size, gboolean autocreate,
+		struct oio_proxy_content_prepare_out_s *out);
+
+struct oio_proxy_content_create_in_s
+{
+	gsize size;
+	gint64 version;
+	gchar *content;
+	GString *chunks;
+};
+
+GError * oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
+		struct oio_proxy_content_create_in_s *in, GString *out);
+
+GError *
+oio_proxy_call_content_list (CURL *h, struct oio_url_s *u, GString *out,
+		const char *prefix, const char *marker, const char *end,
+		guint max, char delim);
+
 #ifdef __cplusplus
 }
 #endif

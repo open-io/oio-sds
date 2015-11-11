@@ -34,10 +34,6 @@ License along with this library.
 /** The maximum length of a namespace name */
 #define LIMIT_LENGTH_NSNAME 64
 
-#define LIMIT_LENGTH_ACCOUNT 256
-
-#define LIMIT_LENGTH_USER 256
-
 /** The maximum length of a content name */
 #define LIMIT_LENGTH_CONTENTPATH 1024
 
@@ -66,13 +62,6 @@ License along with this library.
 
 /** The maximum length of service options */
 #define LIMIT_LENGTH_SRVARGS 256
-
-/** The maximum length of a URL
- * (namespace, container, content, options, separators) */
-#define LIMIT_LENGTH_HCURL (LIMIT_LENGTH_NSNAME +\
-	LIMIT_LENGTH_ACCOUNT + LIMIT_LENGTH_USER + \
-	LIMIT_LENGTH_BASETYPE + LIMIT_LENGTH_CONTENTPATH +\
-	LIMIT_LENGTH_HCURL_OPTIONS)
 
 /** The maximum length for values of 'admin' table */
 #define LIMIT_LENGTH_ADMIN_VALUE 1024

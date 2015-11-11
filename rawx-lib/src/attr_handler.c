@@ -106,16 +106,6 @@ retry:
 	}
 }
 
-/**
- Write key/value pair into an extended attribute of a file
-
- @param file an opened file descriptor to the file
- @param key the key
- @param value the value
- @param error
-
- @return TRUE or FALSE if an error occured (error will be set)
- */
 static gboolean
 _write_to_xattr(int file, const gchar * key, const gchar * value, GError ** error)
 {
@@ -132,16 +122,6 @@ _write_to_xattr(int file, const gchar * key, const gchar * value, GError ** erro
 	return TRUE;
 }
 
-/**
- Write key/value pair into a regular file
-
- @param file an opened file descriptor to the file
- @key the key
- @param value the value
- @param error
-
- @return TRUE or FALSE if an error occured (error will be set)
- */
 static gboolean
 _write_to_attr_file(int file, const gchar * key, const gchar * value, GError ** error)
 {
@@ -183,16 +163,6 @@ _write_to_attr_file(int file, const gchar * key, const gchar * value, GError ** 
 	return TRUE;
 }
 
-/**
- Write attibutes from attr_handle using the given writer
-
- @param attr_hash the hash containing key/value pairs to write
- @param file an opened descriptor to a file (depends on the writer used)
- @param writer a writer function pointer
- @param error
-
- @return TRUE or FALSE if an error occured (error will be set)
- */
 static gboolean
 _write_attributes(GHashTable * attr_hash, int file, attr_writer_f writer, GError ** error)
 {
@@ -218,14 +188,6 @@ _write_attributes(GHashTable * attr_hash, int file, attr_writer_f writer, GError
 	return TRUE;
 }
 
-/**
- Write all attributes
-
- @param attr_handle the attr_handle containing attibutes to write
- @param error
-
- @return TRUE or FALSE if an error occured (error will be set)
- */
 static gboolean
 _commit_attr_handle(struct attr_handle_s *attr_handle, GError ** error)
 {
@@ -271,14 +233,6 @@ _commit_attr_handle(struct attr_handle_s *attr_handle, GError ** error)
 	return TRUE;
 }
 
-/**
- Write all attributes
-
- @param attr_handle the attr_handle containing attibutes to write
- @param error
-
- @return TRUE or FALSE if an error occured (error will be set)
- */
 static gboolean
 _commit_v2_attr_handle(int filedes, struct attr_handle_s *attr_handle, GError ** error)
 {
@@ -301,13 +255,6 @@ _commit_v2_attr_handle(int filedes, struct attr_handle_s *attr_handle, GError **
 	return TRUE;
 }
 
-/**
- Alloc a new struct attr_handle_s
-
- @param chunk_path the path to the chunk file
-
- @return an allocated struct attr_handle_s or NULL if a memory alocation failed
- */
 static struct attr_handle_s *
 _alloc_attr_handle(const gchar * chunk_path)
 {
@@ -343,14 +290,6 @@ error_handle:
 	return NULL;
 }
 
-/**
- * Free struct attr_handle_s
- *
- * @param attr_handle a struct attr_handle_s to free
- * @param content_only a flag to specify if we want to free the struct itself
- *
- * TODO FIXME XXX duplicated in rawx-lighttpd/li and rules-motor/c2python.c
- */
 static void
 _clean_attr_handle(struct attr_handle_s *attr_handle, int content_only)
 {
@@ -378,14 +317,6 @@ _clean_attr_handle(struct attr_handle_s *attr_handle, int content_only)
 		g_free(attr_handle);
 }
 
-/**
- Load attributes from .attr file
-
- @param attr_handle the struct attr_handle to fill
- @param error
-
- @return TRUE or FALSE if an errror occured (error is set)
- */
 static gboolean
 _load_from_file_attr(struct attr_handle_s *attr_handle, GError ** error)
 {
@@ -432,14 +363,6 @@ _load_from_file_attr(struct attr_handle_s *attr_handle, GError ** error)
 	return TRUE;
 }
 
-/**
- Load attributes from xattr
-
- @param attr_handle the struct attr_handle to fill
- @param error
-
- @return TRUE or FALSE if an error occured (error is set)
- */
 static gboolean
 _load_from_xattr(struct attr_handle_s *attr_handle, GError ** error)
 {
@@ -497,15 +420,6 @@ retry:
 	return TRUE;
 }
 
-/**
- Load attributes from chunk (either from xattr or from chunk.attr)
-
- @param chunk_path the path to the chunk file
- @param attr_handle a double pointer to struct attr_handle_s which will be allocated
- @param error
-
- @return TRUE or FALSE if a memory allocation failed
- */
 static gboolean
 _load_attr_from_file(const char *chunk_path, struct attr_handle_s** attr_handle, GError ** error)
 {
@@ -546,15 +460,6 @@ error_and_exit:
 	return FALSE;
 }
 
-/**
- Get an empty attr handler for chunk (either from xattr or from chunk.attr)
-
- @param chunk_path the path to the chunk file
- @param attr_handle a double pointer to struct attr_handle_s which will be allocated
- @param error
-
- @return TRUE or FALSE if a memory allocation failed
- */
 static gboolean
 _lazy_load_attr_from_file(const char *chunk_path, struct attr_handle_s** attr_handle, GError ** error)
 {
@@ -567,22 +472,9 @@ _lazy_load_attr_from_file(const char *chunk_path, struct attr_handle_s** attr_ha
 	return TRUE;
 }
 
-/**
- Get attribute from attr_handle struct
-
- @param attr_handle the attr_handle to look attribute in
- @param error
- @param domain the attibute domain
- @param attrname the attribute name
- @param result will be allocated with attribute value or NULL if an error
-	occured or attrbute was not found
-
- @return TRUE or FALSE if an error occured or attribute was not found
-	(error is set)
- */
 static gboolean
 _get_attr_from_handle(struct attr_handle_s *attr_handle, GError ** error,
-		const char *domain, const char *attrname, char **result, gboolean opt)
+		const char *domain, const char *attrname, gchar **result)
 {
 	char key[ATTR_NAME_MAX_LENGTH], *value;
 
@@ -599,26 +491,12 @@ _get_attr_from_handle(struct attr_handle_s *attr_handle, GError ** error,
 	if (value)
 		*result = g_strdup(value);
 	else {
-		if(!opt)
-			INFO("Attribute [%s] not found for chunk [%s]", key, attr_handle->chunk_path);
-		else
-			DEBUG("Attribute [%s] not found for chunk [%s]", key, attr_handle->chunk_path);
+		GRID_TRACE("Attribute [%s] not found for chunk [%s]", key, attr_handle->chunk_path);
 		*result = NULL;
 	}
 	return TRUE;
 }
 
-/**
- Set attribute in attr_handle
-
- @param attr_handle the attr_handle to set the attribute in
- @param error
- @param domain the attribute domain
- @param attrname the attribute name
- @param attrvalue the attribute value
-
- @return TRUE or FALSE if an error occured (error is set)
- */
 static gboolean
 _set_attr_in_handle(struct attr_handle_s *attr_handle, GError ** error,
 		const char *domain, const char *attrname, const char *attrvalue)
@@ -644,335 +522,110 @@ _set_attr_in_handle(struct attr_handle_s *attr_handle, GError ** error,
 	}
 }
 
-/* --------------------------------------------------------------------------------------------------------------------------- */
+/* -------------------------------------------------------------------------- */
+
+#define SET(K,V) if (K) { \
+	if ((V) && !_set_attr_in_handle(attr_handle, &e, ATTR_DOMAIN, K, (V))) \
+		goto error_set_attr; \
+}
+
 gboolean
-set_rawx_full_info_in_attr(const char *pathname, int filedes, GError ** error, struct content_textinfo_s * content,
-    struct chunk_textinfo_s * chunk, char* compression_info, char* compressed_size)
+set_rawx_full_info_in_attr(const char *p, int filedes, GError **error,
+		struct content_textinfo_s * content, struct chunk_textinfo_s * chunk,
+		const char* compression_info, const char* compressed_size)
 {
 	struct attr_handle_s *attr_handle;
-	GError *local_error = NULL;
+	GError *e = NULL;
 
-	if (!_lazy_load_attr_from_file(pathname, &attr_handle, &local_error)) {
-		SETERROR(error, "Failed to init the attribute management context : %s", local_error->message);
-		g_clear_error(&local_error);
+	if (!_lazy_load_attr_from_file(p, &attr_handle, &e)) {
+		SETERROR(error, "Failed to init the attribute management context : %s", e->message);
+		g_clear_error(&e);
 		return FALSE;
 	}
 
-	if (chunk->id && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_ID, chunk->id))
-		goto error_set_attr;
-	if (chunk->size
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_SIZE, chunk->size))
-		goto error_set_attr;
-	if (chunk->hash
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_HASH, chunk->hash))
-		goto error_set_attr;
-	if (chunk->position
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_POS, chunk->position))
-		goto error_set_attr;
-	if (chunk->metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_METADATA, chunk->metadata))
-		goto error_set_attr;
+	if (chunk) {
+		SET(ATTR_NAME_CHUNK_ID, chunk->id);
+		SET(ATTR_NAME_CHUNK_SIZE, chunk->size);
+		SET(ATTR_NAME_CHUNK_HASH, chunk->hash);
+		SET(ATTR_NAME_CHUNK_POS, chunk->position);
+		SET(ATTR_NAME_CHUNK_METADATA, chunk->metadata);
+	}
 
-	if (content->path
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_PATH, content->path))
-		goto error_set_attr;
-	if (content->size
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_SIZE, content->size))
-		goto error_set_attr;
-	if (content->chunk_nb
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_NBCHUNK,
-		content->chunk_nb))
-		goto error_set_attr;
-	if (content->container_id
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_CONTAINER,
-		content->container_id))
-		goto error_set_attr;
-	if (content->metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA,
-		content->metadata))
-		goto error_set_attr;
-	if (content->system_metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA_SYS,
-		content->system_metadata))
-		goto error_set_attr;
+	if (content) {
+		SET(ATTR_NAME_CONTENT_PATH, content->path);
+		SET(ATTR_NAME_CONTENT_ID, content->content_id);
+		SET(ATTR_NAME_CONTENT_SIZE, content->size);
+		SET(ATTR_NAME_CONTENT_NBCHUNK, content->chunk_nb);
+		SET(ATTR_NAME_CONTENT_CONTAINER, content->container_id);
+	}
 
-	/* Compression info */
-	if(compressed_size && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_COMPRESSED_SIZE,
-		compressed_size))
-		goto error_set_attr;
+	SET(ATTR_NAME_CHUNK_COMPRESSED_SIZE, compressed_size);
+	SET(ATTR_NAME_CHUNK_METADATA_COMPRESS, compression_info);
 
-	if(compression_info && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_METADATA_COMPRESS,
-		compression_info))
-		goto error_set_attr;
+	gboolean rc;
+	if (filedes < 0)
+		rc = _commit_attr_handle(attr_handle, &e);
+	else
+		rc = _commit_v2_attr_handle(filedes, attr_handle, &e);
 
-	if (!_commit_v2_attr_handle(filedes, attr_handle, &local_error)) {
-		SETERROR(error, "Could not write all the attributes on disk : %s", local_error->message);
-		g_clear_error(&local_error);
+	if (!rc) {
+		SETERROR(error, "Could not write all the attributes on disk : %s", e->message);
+		g_clear_error(&e);
 		_clean_attr_handle(attr_handle, FALSE);
 		return FALSE;
 	}
 
 	_clean_attr_handle(attr_handle, FALSE);
-
 	return TRUE;
 
-      error_set_attr:
-	SETERROR(error, "Failed to set attr in handle : %s", local_error->message);
-	g_clear_error(&local_error);
+error_set_attr:
+	SETERROR(error, "Failed to set attr in handle : %s", e->message);
+	g_clear_error(&e);
 	_clean_attr_handle(attr_handle, FALSE);
-
 	return FALSE;
 }
 
 gboolean
-set_rawx_info_in_attr(const char *pathname, GError ** error, struct content_textinfo_s * content,
+set_rawx_info_in_attr(const char *p, GError ** error, struct content_textinfo_s * content,
     struct chunk_textinfo_s * chunk)
 {
-	struct attr_handle_s *attr_handle;
-	GError *local_error = NULL;
-
-	if (!_lazy_load_attr_from_file(pathname, &attr_handle, &local_error)) {
-		SETERROR(error, "Failed to init the attribute management context : %s", local_error->message);
-		g_clear_error(&local_error);
-		return FALSE;
-	}
-
-	if (chunk->id && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_ID, chunk->id))
-		goto error_set_attr;
-	if (chunk->size
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_SIZE, chunk->size))
-		goto error_set_attr;
-	if (chunk->hash
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_HASH, chunk->hash))
-		goto error_set_attr;
-	if (chunk->position
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_POS, chunk->position))
-		goto error_set_attr;
-	if (chunk->metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_METADATA, chunk->metadata))
-		goto error_set_attr;
-
-	if (content->path
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_PATH, content->path))
-		goto error_set_attr;
-	if (content->size
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_SIZE, content->size))
-		goto error_set_attr;
-	if (content->chunk_nb
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_NBCHUNK,
-		content->chunk_nb))
-		goto error_set_attr;
-	if (content->container_id
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_CONTAINER,
-		content->container_id))
-		goto error_set_attr;
-	if (content->metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA,
-		content->metadata))
-		goto error_set_attr;
-	if (content->system_metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA_SYS,
-		content->system_metadata))
-		goto error_set_attr;
-
-	if (!_commit_attr_handle(attr_handle, &local_error)) {
-		SETERROR(error, "Could not write all the attributes on disk : %s", local_error->message);
-		g_clear_error(&local_error);
-		_clean_attr_handle(attr_handle, FALSE);
-		return FALSE;
-	}
-
-	_clean_attr_handle(attr_handle, FALSE);
-
-	return TRUE;
-
-      error_set_attr:
-	SETERROR(error, "Failed to set attr in handle : %s", local_error->message);
-	g_clear_error(&local_error);
-	_clean_attr_handle(attr_handle, FALSE);
-
-	return FALSE;
+	return set_rawx_full_info_in_attr (p, -1, error, content, chunk, NULL, NULL);
 }
 
 gboolean
-set_chunk_info_in_attr(const char *pathname, GError ** error, struct chunk_textinfo_s * cti)
+set_chunk_info_in_attr(const char *p, GError ** error, struct chunk_textinfo_s * cti)
 {
-	struct attr_handle_s *attr_handle;
-	GError *local_error = NULL;
-
-	if (!_lazy_load_attr_from_file(pathname, &attr_handle, &local_error)) {
-		SETERROR(error, "Failed to init the attribute management context : %s", local_error->message);
-		g_clear_error(&local_error);
-		return FALSE;
-	}
-
-	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_ID, cti->id))
-		goto error_set_attr;
-	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_PATH, cti->path))
-		goto error_set_attr;
-	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_SIZE, cti->size))
-		goto error_set_attr;
-	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_HASH, cti->hash))
-		goto error_set_attr;
-	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_POS, cti->position))
-		goto error_set_attr;
-	if (cti->metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_METADATA, cti->metadata))
-		goto error_set_attr;
-	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_CONTAINER, cti->container_id))
-		goto error_set_attr;
-
-	if (!_commit_attr_handle(attr_handle, &local_error)) {
-		SETERROR(error, "Could not write all the attributes on disk : %s", local_error->message);
-		g_clear_error(&local_error);
-		_clean_attr_handle(attr_handle, FALSE);
-		return FALSE;
-	}
-
-	_clean_attr_handle(attr_handle, FALSE);
-
-	return TRUE;
-
-      error_set_attr:
-	SETERROR(error, "Failed to set attr : %s", local_error->message);
-	g_clear_error(&local_error);
-	_clean_attr_handle(attr_handle, FALSE);
-
-	return FALSE;
+	return set_rawx_full_info_in_attr (p, -1, error, NULL, cti, NULL, NULL);
 }
 
 gboolean
-set_content_info_in_attr(const char *pathname, GError ** error, struct content_textinfo_s * cti)
+set_content_info_in_attr(const char *p, GError ** error, struct content_textinfo_s * cti)
 {
-	struct attr_handle_s *attr_handle;
-	GError *local_error = NULL;
-
-	if (!_lazy_load_attr_from_file(pathname, &attr_handle, &local_error)) {
-		SETERRCODE(error, local_error->code, "Failed to init the attribute management context : %s",
-			local_error->message);
-		g_clear_error(&local_error);
-		return FALSE;
-	}
-
-	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_PATH, cti->path))
-		goto error_set_attr;
-	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_SIZE, cti->size))
-		goto error_set_attr;
-	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_NBCHUNK, cti->chunk_nb))
-		goto error_set_attr;
-	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_CONTAINER,
-		cti->container_id))
-		goto error_set_attr;
-	if (cti->metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA, cti->metadata))
-		goto error_set_attr;
-	if (cti->system_metadata
-	    && !_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CONTENT_METADATA_SYS,
-		cti->system_metadata))
-		goto error_set_attr;
-
-	if (!_commit_attr_handle(attr_handle, &local_error)) {
-		SETERRCODE(error, local_error->code, "Could not write all the attributes on disk : %s",
-			local_error->message);
-		g_clear_error(&local_error);
-		_clean_attr_handle(attr_handle, FALSE);
-		return FALSE;
-	}
-
-	_clean_attr_handle(attr_handle, FALSE);
-
-	return TRUE;
-
-      error_set_attr:
-	SETERRCODE(error, local_error->code, "Failed to set attr : %s", local_error->message);
-	g_clear_error(&local_error);
-	_clean_attr_handle(attr_handle, FALSE);
-
-	return FALSE;
+	return set_rawx_full_info_in_attr (p, -1, error, cti, NULL, NULL, NULL);
 }
 
 gboolean
-set_compression_info_in_attr(const char *pathname, GError ** error, gchar * metadata_compress)
+set_compression_info_in_attr(const char *p, GError ** error, const char *v)
 {
-	struct attr_handle_s *attr_handle;
-	GError *local_error = NULL;
-
-	if(!metadata_compress) {
+	if (!v) {
 		SETERROR(error, "Empty compression metadata");
-		g_clear_error(&local_error);
 		return FALSE;
 	}
-	if (!_lazy_load_attr_from_file(pathname, &attr_handle, &local_error)) {
-		SETERROR(error, "Failed to init the attribute management context : %s", local_error->message);
-		g_clear_error(&local_error);
-		return FALSE;
-	}
-
-	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_METADATA_COMPRESS, metadata_compress)){
-		SETERROR(error, "Failed to add [%s : %s] in attributes context : %s", ATTR_NAME_CHUNK_METADATA_COMPRESS,
-					 metadata_compress, local_error->message);
-		g_clear_error(&local_error);
-		goto error_set_attr;
-	}
-
-	if (!_commit_attr_handle(attr_handle, &local_error)) {
-		SETERRCODE(error, local_error->code, "Could not write all the attributes on disk : %s",
-			local_error->message);
-		g_clear_error(&local_error);
-		_clean_attr_handle(attr_handle, FALSE);
-		return FALSE;
-	}
-	_clean_attr_handle(attr_handle, FALSE);
-	return TRUE;
-
-	error_set_attr:
-		SETERRCODE(error, local_error->code, "Failed to set attr : %s", local_error->message);
-		g_clear_error(&local_error);
-		_clean_attr_handle(attr_handle, FALSE);
-
-	return FALSE;
-
+	return set_rawx_full_info_in_attr (p, -1, error, NULL, NULL, v, NULL);
 }
 
 gboolean
-set_chunk_compressed_size_in_attr(const char *pathname, GError ** error, guint32 compressed_size)
+set_chunk_compressed_size_in_attr(const char *p, GError ** error, guint32 v)
 {
-	struct attr_handle_s *attr_handle;
-	GError *local_error = NULL;
-	gchar *size = NULL;
-	size = g_malloc0(32);
-	g_snprintf(size, 32, "%d", compressed_size);
+	gchar buf[32] = "";
+	g_snprintf (buf, sizeof(buf), "%"G_GUINT32_FORMAT, v);
+	return set_rawx_full_info_in_attr (p, -1, error, NULL, NULL, NULL, buf);
+}
 
-	if (!_lazy_load_attr_from_file(pathname, &attr_handle, &local_error)) {
-		SETERROR(error, "Failed to init the attribute management context : %s", local_error->message);
-		g_clear_error(&local_error);
-		return FALSE;
-	}
+/* -------------------------------------------------------------------------- */
 
-	if (!_set_attr_in_handle(attr_handle, &local_error, ATTR_DOMAIN, ATTR_NAME_CHUNK_COMPRESSED_SIZE, size)){
-		goto error_set_attr;
-	}
-
-	if (!_commit_attr_handle(attr_handle, &local_error)) {
-		SETERRCODE(error, local_error->code, "Could not write all the attributes on disk : %s",
-			local_error->message);
-		g_clear_error(&local_error);
-		g_free(size);
-		_clean_attr_handle(attr_handle, FALSE);
-		return FALSE;
-	}
-
-	_clean_attr_handle(attr_handle, FALSE);
-	g_free(size);
-	return TRUE;
-
-	error_set_attr:
-		SETERRCODE(error, local_error->code, "Failed to set attr : %s", local_error->message);
-		g_clear_error(&local_error);
-		_clean_attr_handle(attr_handle, FALSE);
-		g_free(size);
-
-	return FALSE;
+#define GET(K,R) if (!_get_attr_from_handle(attr_handle, &e, ATTR_DOMAIN, K, &(R))) { \
+	goto error_get_attr; \
 }
 
 gboolean
@@ -995,171 +648,51 @@ get_rawx_info_in_attr(const char *pathname, GError ** error,
 		struct content_textinfo_s * content, struct chunk_textinfo_s * chunk)
 {
 	struct attr_handle_s *attr_handle;
-	GError *local_error = NULL;
+	GError *e = NULL;
 
-	if (!_load_attr_from_file(pathname, &attr_handle, &local_error)) {
+	if (!_load_attr_from_file(pathname, &attr_handle, &e)) {
 		SETERROR(error, "Failed to init the attribute management context : %s",
-				local_error->message);
-		g_clear_error(&local_error);
+				e->message);
+		g_clear_error(&e);
 		return FALSE;
 	}
 
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_PATH, &(content->path), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_SIZE, &(content->size), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_NBCHUNK, &(content->chunk_nb), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_CONTAINER, &(content->container_id), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_METADATA, &(content->metadata), TRUE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_METADATA_SYS,
-				&(content->system_metadata), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CHUNK_ID, &(chunk->id), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CHUNK_SIZE, &(chunk->size), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CHUNK_POS, &(chunk->position), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CHUNK_HASH, &(chunk->hash), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CHUNK_METADATA, &(chunk->metadata), TRUE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_PATH, &(chunk->path), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_CONTAINER, &(chunk->container_id), FALSE))
-		goto error_get_attr;
+	if (content) {
+		GET(ATTR_NAME_CONTENT_PATH, content->path);
+		GET(ATTR_NAME_CONTENT_ID, content->content_id);
+		GET(ATTR_NAME_CONTENT_SIZE, content->size);
+		GET(ATTR_NAME_CONTENT_NBCHUNK, content->chunk_nb);
+		GET(ATTR_NAME_CONTENT_CONTAINER, content->container_id);
+	}
+
+	if (chunk) {
+		GET(ATTR_NAME_CHUNK_ID, chunk->id);
+		GET(ATTR_NAME_CHUNK_SIZE, chunk->size);
+		GET(ATTR_NAME_CHUNK_POS, chunk->position);
+		GET(ATTR_NAME_CHUNK_HASH, chunk->hash);
+		GET(ATTR_NAME_CHUNK_METADATA, chunk->metadata);
+	}
 
 	_clean_attr_handle(attr_handle, FALSE);
-
 	return TRUE;
 
-      error_get_attr:
-	SETERROR(error, "Failed to get attr : %s", local_error->message);
-	g_clear_error(&local_error);
+error_get_attr:
+	SETERROR(error, "Failed to get attr : %s", e->message);
+	g_clear_error(&e);
 	_clean_attr_handle(attr_handle, FALSE);
-
 	return FALSE;
 }
 
 gboolean
-get_content_info_in_attr(const char *pathname, GError ** error,
-		struct content_textinfo_s * cti)
+get_content_info_in_attr(const char *p, GError **e, struct content_textinfo_s *c)
 {
-	struct attr_handle_s *attr_handle;
-	GError *local_error = NULL;
-
-	if (!cti || !pathname) {
-		SETERROR(error, "invalid parameter");
-		return FALSE;
-	}
-
-	if (!_load_attr_from_file(pathname, &attr_handle, &local_error)) {
-		SETERROR(error, "Failed to init the attribute management context : %s",
-				local_error->message);
-		g_clear_error(&local_error);
-		return FALSE;
-	}
-
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_PATH, &(cti->path), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_SIZE, &(cti->size), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_NBCHUNK, &(cti->chunk_nb), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_CONTAINER, &(cti->container_id), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_METADATA, &(cti->metadata), TRUE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_METADATA_SYS, &(cti->system_metadata), FALSE))
-		goto error_get_attr;
-
-	_clean_attr_handle(attr_handle, FALSE);
-
-	return TRUE;
-
-      error_get_attr:
-	SETERROR(error, "Failed to get attr : %s", local_error->message);
-	g_clear_error(&local_error);
-	_clean_attr_handle(attr_handle, FALSE);
-
-	return FALSE;
+	return get_rawx_info_in_attr (p, e, c, NULL);
 }
 
 gboolean
-get_chunk_info_in_attr(const char *pathname, GError ** error,
-		struct chunk_textinfo_s * cti)
+get_chunk_info_in_attr(const char *p, GError **e, struct chunk_textinfo_s *c)
 {
-	struct attr_handle_s *attr_handle;
-	GError *local_error = NULL;
-
-	DEBUG("Getting chunk attributes...");
-
-	if (!cti || !pathname) {
-		SETERROR(error, "invalid parameter");
-		return FALSE;
-	}
-
-	if (!_load_attr_from_file(pathname, &attr_handle, &local_error)) {
-		SETERROR(error, "Failed to init the attribute management context : %s",
-				local_error->message);
-		g_clear_error(&local_error);
-		return FALSE;
-	}
-
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CHUNK_ID, &(cti->id), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CHUNK_SIZE, &(cti->size), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CHUNK_POS, &(cti->position), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CHUNK_HASH, &(cti->hash), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CHUNK_METADATA, &(cti->metadata), TRUE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_CONTAINER, &(cti->container_id), FALSE))
-		goto error_get_attr;
-	if (!_get_attr_from_handle(attr_handle, &local_error, ATTR_DOMAIN,
-				ATTR_NAME_CONTENT_PATH, &(cti->path), FALSE))
-		goto error_get_attr;
-
-	_clean_attr_handle(attr_handle, FALSE);
-
-	return TRUE;
-
-      error_get_attr:
-	SETERROR(error, "Failed to get attr : %s", local_error->message);
-	g_clear_error(&local_error);
-	_clean_attr_handle(attr_handle, FALSE);
-
-	return FALSE;
+	return get_rawx_info_in_attr (p, e, NULL, c);
 }
 
 gboolean
@@ -1192,6 +725,8 @@ get_compression_info_in_attr(const char *pathname, GError ** error,
 
 	return TRUE;
 }
+
+/* -------------------------------------------------------------------------- */
 
 static void
 _rawx_acl_clean(gpointer data, gpointer udata)

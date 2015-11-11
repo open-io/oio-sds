@@ -30,6 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <unistd.h>
 #include <assert.h>
 #include <sys/stat.h>
+#include <ctype.h>
 
 #include <apr.h>
 #include <apr_file_io.h>
@@ -186,83 +187,69 @@ rainx_repo_check_request(request_rec *req, const char *root_dir,
 	return NULL;
 }
 
-/* --------------------------------------------------------------------
- **
- ** REPOSITORY HOOK FUNCTIONS
- */
+/* ------------------------------------------------------------------------- */
 
-static void
-__load_one_header(request_rec *request, apr_uint32_t headers,
-		const char *name, char **dst)
+static int
+__load_one_header(request_rec *request, const char *name, char **dst)
 {
-	const char *value;
-
-	*dst = NULL;
-
-	if (headers & HEADER_SCHEME_V2) {
-		char new_name[strlen(name) + sizeof(HEADER_PREFIX_GRID)];
-		g_snprintf(new_name, sizeof(new_name), HEADER_PREFIX_GRID"%s", name);
-		if (NULL != (value = apr_table_get(request->headers_in, new_name))) {
-			*dst = apr_pstrdup(request->pool, value);
-			DAV_XDEBUG_REQ(request, 0, "Header found [%s]:[%s]", new_name, *dst);
-		}
-	}
-
-	if (!(*dst) && (headers & HEADER_SCHEME_V1)) {
-		if (NULL != (value = apr_table_get(request->headers_in, name))) {
-			*dst = apr_pstrdup(request->pool, value);
-			DAV_XDEBUG_REQ(request, 0, "Header found [%s]:[%s]", name, *dst);
-		}
-	}
+	const char *value = apr_table_get(request->headers_in, name);
+	if (!value)
+		return 0;
+	*dst = apr_pstrdup(request->pool, value);
+	return 1;
 }
 
-static void
+static int
+__load_one_header_lc(request_rec *request, const char *name, char **dst)
+{
+	size_t len = strlen(name);
+	char *lc = alloca(len+1);
+	memcpy(lc, name, len+1);
+	for (char *p=lc+1; *p ;++p) *p = tolower(*p);
+
+	const char *value = apr_table_get(request->headers_in, lc);
+	if (!value)
+		return 0;
+	*dst = apr_pstrdup(request->pool, value);
+	return 1;
+}
+
+#define LOAD_HEADER2(Where,Name) do { \
+	if (!resource->info->Where) { \
+		if (!__load_one_header(request, Name, &(resource->info->Where))) \
+			__load_one_header_lc(request, Name, &(resource->info->Where)); \
+	} \
+} while (0)
+
+static const char *
 request_load_chunk_info(request_rec *request, dav_resource *resource)
 {
 	dav_rainx_server_conf *conf = ap_get_module_config(
 			resource->info->request->server->module_config, &dav_rainx_module);
 
-	/* These headers are used by the Integrity loop */
-	LOAD_HEADER(content, path,            "content_path");
-	LOAD_HEADER(content, size,            "content_size");
-	LOAD_HEADER(content, chunk_nb,        "content_chunksnb");
-	LOAD_HEADER(content, metadata,        "content_metadata");
-	LOAD_HEADER(content, system_metadata, "content_metadata-sys");
-	LOAD_HEADER(content, container_id,    "content_containerid");
+	LOAD_HEADER2(content.container_id, RAWX_HEADER_PREFIX "container-id");
 
-	LOAD_HEADER(chunk, id,           "chunk_id");
-	LOAD_HEADER(chunk, path,         "chunk_path");
-	LOAD_HEADER(chunk, size,         "chunk_size");
-	LOAD_HEADER(chunk, hash,         "chunk_hash");
-	LOAD_HEADER(chunk, position,     "chunk_position");
-	LOAD_HEADER(chunk, metadata,     "chunk_metadata");
-	LOAD_HEADER(chunk, container_id, "chunk_containerid");
+	LOAD_HEADER2(content.content_id,     RAWX_HEADER_PREFIX "content-id");
+	LOAD_HEADER2(content.path,           RAWX_HEADER_PREFIX "content-path");
+	LOAD_HEADER2(content.version,        RAWX_HEADER_PREFIX "content-version");
+	LOAD_HEADER2(content.size,           RAWX_HEADER_PREFIX "content-size");
+	LOAD_HEADER2(content.chunk_nb,       RAWX_HEADER_PREFIX "content-chunksnb");
+	LOAD_HEADER2(content.storage_policy, RAWX_HEADER_PREFIX "content-chunksnb");
 
-	if (conf->headers_scheme & HEADER_SCHEME_V1) {
-		/* There are the headers used by the common client.
-		 * This is an ugly clue of history and entropy */
-		LOAD_HEADER(chunk, id,           "chunkid");
-		LOAD_HEADER(chunk, path,         "contentpath");
-		LOAD_HEADER(chunk, size,         "chunksize");
-		LOAD_HEADER(chunk, hash,         "chunkhash");
-		LOAD_HEADER(chunk, position,     "chunkpos");
-		LOAD_HEADER(chunk, metadata,     "chunkmetadata");
-		LOAD_HEADER(chunk, container_id, "containerid");
+	LOAD_HEADER2(chunk.id,           RAWX_HEADER_PREFIX "chunk-id");
+	LOAD_HEADER2(chunk.size,         RAWX_HEADER_PREFIX "chunk-size");
+	LOAD_HEADER2(chunk.position,     RAWX_HEADER_PREFIX "chunk-pos");
+	LOAD_HEADER2(chunk.hash,         RAWX_HEADER_PREFIX "chunk-hash");
+	LOAD_HEADER2(chunk.metadata,     RAWX_HEADER_PREFIX "chunk-metadata");
 
-		LOAD_HEADER(content, path,            "contentpath");
-		LOAD_HEADER(content, size,            "contentsize");
-		LOAD_HEADER(content, chunk_nb,        "chunknb");
-		LOAD_HEADER(content, metadata,        "contentmetadata");
-		LOAD_HEADER(content, system_metadata, "contentmetadata-sys");
-		LOAD_HEADER(content, container_id,    "containerid");
-		LOAD_HEADER(content, storage_policy,    "storagepolicy");
-		LOAD_HEADER(content, rawx_list, "rawxlist");
-		LOAD_HEADER(content, spare_rawx_list, "sparerawxlist");
-	}
+	if (!resource->info->content.container_id) return "container-id";
+	if (!resource->info->content.content_id) return "content-id";
+	if (!resource->info->content.path) return "content-path";
+
+	if (!resource->info->chunk.position) return "chunk-pos";
 
 	resource->info->namespace = apr_pstrdup(request->pool, conf->ns_name);
-	__load_one_header(request, conf->headers_scheme,
-			"namespace", &(resource->info->namespace));
+	return NULL;
 }
 
 static dav_error *
@@ -322,7 +309,12 @@ dav_rainx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	resource->hooks = &dav_hooks_repository_rainx;
 	resource->pool = r->pool;
 
-	request_load_chunk_info(r, resource);
+	const char *missing = request_load_chunk_info(r, resource);
+	if (missing != NULL) {
+		return server_create_and_stat_error(request_get_server_config(r),
+				r->pool, HTTP_BAD_REQUEST, 0, apr_pstrcat(
+					r->pool, "Missing header ", missing, NULL));
+	}
 
 	/* Check META-Chunk size not larger than namespace allowed chunk-size */
 	apr_thread_mutex_lock(conf->rainx_conf_lock);
@@ -710,14 +702,6 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 			"containerid: %s\nchunknb: %s\ncontentpath: %s\ncontentsize: %s",
 			temp_content.container_id, temp_content.chunk_nb,
 			temp_content.path, temp_content.size);
-	if (temp_content.metadata)
-		custom_header = apr_psprintf(stream->r->info->request->pool,
-				"%s\ncontentmetadata: %s", custom_header,
-				temp_content.metadata);
-	if (temp_content.system_metadata)
-		custom_header = apr_psprintf(stream->r->info->request->pool,
-				"%s\ncontentmetadata-sys: %s", custom_header,
-				temp_content.system_metadata);
 
 	/* Finalizing custom header */
 	int startid = strlen(
@@ -1014,13 +998,6 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 			"containerid: %s\nchunknb: %s\ncontentpath: %s\ncontentsize: %s",
 			temp_content.container_id, temp_content.chunk_nb,
 			temp_content.path, temp_content.size);
-	if (temp_content.metadata)
-		custom_header = apr_psprintf(stream->r->info->request->pool,
-				"%s\ncontentmetadata: %s", custom_header, temp_content.metadata);
-	if (temp_content.system_metadata)
-		custom_header = apr_psprintf(stream->r->info->request->pool,
-				"%s\ncontentmetadata-sys: %s", custom_header,
-				temp_content.system_metadata);
 
 	data_subpools = (apr_pool_t**) apr_pcalloc(stream->r->info->request->pool,
 			rain_params->k * sizeof(apr_pool_t*));
@@ -1357,13 +1334,6 @@ upload_to_rawx(const dav_resource *resource, gboolean* failure_array,
 			"containerid: %s\nchunknb: %s\ncontentpath: %s\ncontentsize: %s",
 			temp_content.container_id, temp_content.chunk_nb,
 			temp_content.path, temp_content.size);
-	if (temp_content.metadata)
-		custom_header = apr_psprintf(resource->info->request->pool,
-				"%s\ncontentmetadata: %s", custom_header, temp_content.metadata);
-	if (temp_content.system_metadata)
-		custom_header = apr_psprintf(resource->info->request->pool,
-				"%s\ncontentmetadata-sys: %s", custom_header,
-				temp_content.system_metadata);
 
 	/* Data strips */
 	for (int i = 0; i < data_rawx_list_size; i++) {

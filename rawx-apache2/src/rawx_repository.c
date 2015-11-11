@@ -155,7 +155,6 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 
 	(void) use_checked_in;/* No way, we do not support versioning */
 	conf = request_get_server_config(r);
-	
 
 	/* Check if client allowed to work with us */
 	if(conf->enabled_acl) {
@@ -362,26 +361,20 @@ dav_rawx_close_stream(dav_stream *stream, int commit)
 static dav_error *
 dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 {
-	gsize nb_write;
-	
 	DAV_XDEBUG_POOL(stream->p, 0, "%s(%s)", __FUNCTION__, stream->pathname);
 
 	guint written = 0;
-	guint tmp = 0;
-	GByteArray* gba = NULL;
+	gulong checksum = stream->compress_checksum;
 
-	gulong checksum = 0;
-	checksum = stream->compress_checksum;
-
-	while(written < bufsize){
+	while (written < bufsize) {
 		memcpy(stream->buffer + stream->bufsize, buf + written, MIN(bufsize - written, stream->blocksize - stream->bufsize));
-		tmp = MIN(bufsize - written, stream->blocksize - stream->bufsize);
+		guint tmp = MIN(bufsize - written, stream->blocksize - stream->bufsize);
 		written += tmp;
 		stream->bufsize += tmp;
 
 		/* If buffer full, compress if needed and write to distant file */
 		if(stream->blocksize - stream->bufsize <=0){	
-			nb_write = 0;
+			gsize nb_write = 0;
 			if(!stream->compression) {
 				nb_write = fwrite(stream->buffer, stream->bufsize, 1, stream->f);
 				if (nb_write != 1) {
@@ -392,7 +385,7 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 							"resource.");
 				}
 			} else {
-				gba = g_byte_array_new();
+				GByteArray *gba = g_byte_array_new();
 				if(stream->comp_ctx.data_compressor(stream->buffer, stream->bufsize, gba, 
 							&checksum)!=0) { 
 					if (gba)

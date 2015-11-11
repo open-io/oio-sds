@@ -43,8 +43,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define MAX_REPLY_MESSAGE_SIZE 1024
 #define INIT_REQ_STATUS -1
 
-#define LOAD_HEADER(Set,Where,Name) __load_one_header(request, conf->headers_scheme, Name, &(resource->info-> Set . Where))
-
 typedef int func0(int, int, int, const char*);
 typedef char* func1(char**, char**, int, int, int, const char*);
 typedef char** func2(char*, int, int, int, const char*);

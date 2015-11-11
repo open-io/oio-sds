@@ -244,19 +244,20 @@ _load_in_place_chunk_info(const dav_resource *r, const char *path, struct conten
 		return e;
 	}
 
+	str_replace_by_pooled_str(p, &(content->container_id));
+
+	str_replace_by_pooled_str(p, &(content->content_id));
 	str_replace_by_pooled_str(p, &(content->path));
+	str_replace_by_pooled_str(p, &(content->version));
 	str_replace_by_pooled_str(p, &(content->size));
 	str_replace_by_pooled_str(p, &(content->chunk_nb));
-	str_replace_by_pooled_str(p, &(content->metadata));
-	str_replace_by_pooled_str(p, &(content->system_metadata));
-	str_replace_by_pooled_str(p, &(content->container_id));
+	str_replace_by_pooled_str(p, &(content->storage_policy));
+
 	str_replace_by_pooled_str(p, &(chunk->id));
-	str_replace_by_pooled_str(p, &(chunk->path));
 	str_replace_by_pooled_str(p, &(chunk->size));
 	str_replace_by_pooled_str(p, &(chunk->hash));
 	str_replace_by_pooled_str(p, &(chunk->position));
 	str_replace_by_pooled_str(p, &(chunk->metadata));
-	str_replace_by_pooled_str(p, &(chunk->container_id));
 
 	if(!get_compression_info_in_attr(path, &ge, comp_opt)){
 		if(NULL != ge) {	
@@ -357,57 +358,6 @@ _update_chunk_storage(const dav_resource *resource, const char *path, const stru
 }
 
 static dav_error *
-_ensure_sys_metadata(const dav_resource *resource, const char *path, const char *sp, struct content_textinfo_s *content)
-{
-
-	if(!sp) {
-		return NULL;
-	}
-
-	GError *ge = NULL;
-	dav_error *e = NULL;
-	int change = 1;
-
-	if(!content->system_metadata) {
-		content->system_metadata = apr_pstrcat(resource->pool, "storage-policy=", sp, ";", NULL);
-	} else {
-		const char *p = NULL;
-		if (content->system_metadata)
-			p = g_strrstr(content->system_metadata, "storage-policy=");
-		if(NULL != p) {
-			const char *end = NULL;
-			p = p + strlen("storage-policy=");
-			end = strchr(p, ';');
-			if((strlen(sp) != (size_t)(end - p))
-					|| 0 != g_ascii_strncasecmp(sp, p , strlen(sp))) {
-				content->system_metadata = apr_pstrndup(resource->pool, content->system_metadata, p - content->system_metadata);
-				content->system_metadata = apr_pstrcat(resource->pool, content->system_metadata, sp, end, NULL); 
-			} else {
-				change = 0;
-			}
-		} else {
-			if(g_str_has_suffix(content->system_metadata, ";")) {
-				content->system_metadata = apr_pstrcat(resource->pool, content->system_metadata, "storage-policy=", sp, NULL);
-			} else {
-				content->system_metadata = apr_pstrcat(resource->pool, content->system_metadata, ";storage-policy=", sp, NULL);
-			}
-		}
-	}
-	
-	if(change && !set_content_info_in_attr(path, &ge, content)) {
-		e = server_create_and_stat_error(resource_get_server_config(resource), resource->pool,
-			HTTP_INTERNAL_SERVER_ERROR, 0, apr_pstrcat( resource->pool, "Failed to set chunk xattr : ",
-			(NULL != ge) ? ge->message : "No error specified", NULL));
-		if(NULL != ge)
-			g_clear_error(&ge);
-		return e;
-	}
-
-	return NULL;
-}
-	
-
-static dav_error *
 dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
 {
 	(void) output;
@@ -465,17 +415,8 @@ dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
 		DAV_DEBUG_REQ(r, 0, "Storage policy already applied, don't do anything!");
 	}
 
-	/* ensure sys-metadata header is valid */
-	e = _ensure_sys_metadata(resource, path, storage_policy_get_name(sp), content);
-	if (NULL != e) {
-		DAV_ERROR_REQ(r, 0, "Failed to ensure sys-metadata, storage-policy possibly not correctly present in xattr: %s", e->desc);
-		goto end_deliver;
-	}
-
 end_deliver:
-
 	/* stats inc */
-
 	return e;
 }
 
