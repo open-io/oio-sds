@@ -44,7 +44,7 @@ def rdir_update(ns):
     chunk = decoded.get('chunk')
     container = decoded.get('container')
     content = decoded.get('content')
-    get_backend().put(volume, chunk, container, content)
+    get_backend().put(volume, container, content, chunk)
     return flask.Response('', 204)
 
 

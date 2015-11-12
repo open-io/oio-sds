@@ -16,6 +16,7 @@ from oio.common.utils import json
 from oio.common.utils import true_value
 from oio.common.utils import validate_service_conf
 from oio.conscience.client import ConscienceClient
+from oio.rdir.client import RdirClient
 
 
 PARALLEL_CHUNKS_DELETE = 2
@@ -32,6 +33,7 @@ class EventType(object):
     CONTAINER_UPDATE = "meta2.container.state"
     OBJECT_PUT = "meta2.content.new"
     OBJECT_DELETE = "meta2.content.deleted"
+    CHUNK_PUT = "rawx.chunk.new"
     PING = "ping"
 
 
@@ -51,6 +53,7 @@ class EventWorker(object):
         self.logger = get_logger(self.conf, verbose=verbose)
         self.init_zmq(context)
         self.cs = ConscienceClient(self.conf)
+        self.rdir = RdirClient(self.conf)
         self._acct_addr = None
         self.acct_update = 0
         self.acct_refresh_interval = int_value(
@@ -116,6 +119,8 @@ class EventWorker(object):
             return self.handle_object_delete
         elif event_type == EventType.REFERENCE_UPDATE:
             return self.handle_reference_update
+        elif event_type == EventType.CHUNK_PUT:
+            return self.handle_chunk_put
         elif event_type == EventType.PING:
             return self.handle_ping
         else:
@@ -246,6 +251,20 @@ class EventWorker(object):
         :param event
         """
         self.logger.debug('worker "%s" handle reference update', self.name)
+
+    def handle_chunk_put(self, event):
+        """
+        Handle chunk creation.
+        :param event
+        """
+        self.logger.debug('worker "%s" handle chunk creation', self.name)
+
+        data = event.get('data')
+        volume = data.get('volume')
+        container = data.get('container')
+        content = data.get('content')
+        chunk = data.get('chunk')
+        self.rdir.chunk_push(volume, container, content, chunk)
 
     def handle_ping(self, event):
         """

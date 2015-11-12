@@ -36,9 +36,9 @@ class RdirBackend(object):
             db = self.dbs[volume]
         return db
 
-    def put(self, volume, chunk_id, content_cid, content_path):
+    def put(self, volume, container, content, chunk):
         # TODO replace content_path with content_id when available in git
-        key = "%s|%s|%s" % (content_cid, content_path, chunk_id)
+        key = "%s|%s|%s" % (container, content, chunk)
         value = json.dumps({"mtime": time.time()})
 
         self._get_db(volume).put(key.encode('utf8'), value.encode('utf8'))

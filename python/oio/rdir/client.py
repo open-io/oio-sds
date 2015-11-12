@@ -5,17 +5,17 @@ from oio.common.utils import true_value
 class RdirClient(Client):
     def __init__(self, conf, **kwargs):
         super(RdirClient, self).__init__(conf, **kwargs)
-        self.autocreate = true_value(conf.get('autocreate'))
+        self.autocreate = true_value(conf.get('autocreate', True))
 
     def _make_uri(self, action, volume_id):
         uri = 'v3.0/%s/%s?vol=%s' % (self.ns, action, volume_id)
         return uri
 
-    def chunk_push(self, volume_id, chunk_id, content_cid, content_path):
-        uri = self._make_uri('rdir/push', volume_id)
-        body = {'container': content_cid,
-                'content': content_path,
-                'chunk': chunk_id}
+    def chunk_push(self, volume, container, content, chunk):
+        uri = self._make_uri('rdir/push', volume)
+        body = {'container': container,
+                'content': content,
+                'chunk': chunk}
         headers = {}
         if self.autocreate:
             headers['x-oio-action-mode'] = 'autocreate'

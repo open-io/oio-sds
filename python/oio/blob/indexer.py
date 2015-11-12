@@ -89,9 +89,9 @@ class BlobIndexerWorker(object):
                 raise exc.FaultyChunk(
                     'Missing extended attribute %s' % e)
             self.index_client.chunk_push(self.volume_id,
-                                           meta['chunk_id'],
                                            meta['content_cid'],
-                                           meta['content_path'])
+                                           meta['content_path'],
+                                           meta['chunk_id'])
 
 
 class BlobIndexer(Daemon):
