@@ -183,7 +183,6 @@ grid_namespace NS
 grid_dir_run ${RUNDIR}
 #grid_upload_blocksize 65536
 #grid_upload_fileflags DIRECT|SYNC|NOATIME
-grid_event_agent_addr ipc://${RUNDIR}/event-agent.sock
 
 <Directory />
 DAV rawx

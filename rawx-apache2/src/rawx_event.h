@@ -25,7 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /**
  * Initialize event mechanism
  *
- * @addr event agent address or "" if events disabled.
+ * @addr event agent address or NULL if events disabled.
  *
  * @return 0 if KO, !=0 if OK
  */

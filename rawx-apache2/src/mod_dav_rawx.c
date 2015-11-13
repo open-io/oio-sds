@@ -326,27 +326,12 @@ dav_rawx_cmd_gridconfig_acl(cmd_parms *cmd, void *config, const char *arg1)
 	return NULL;
 }
 
-static const char *
-dav_rawx_cmd_gridconfig_event_addr(cmd_parms *cmd, void *config, const char *arg1)
-{
-	dav_rawx_server_conf *conf;
-	(void) config;
-
-	DAV_XDEBUG_POOL(cmd->pool, 0, "%s()", __FUNCTION__);
-
-	conf = ap_get_module_config(cmd->server->module_config, &dav_rawx_module);
-
-	memset(conf->event_agent_addr, 0x00, sizeof(conf->event_agent_addr));
-	apr_cpystrn(conf->event_agent_addr, arg1, sizeof(conf->event_agent_addr)-1);
-
-	return NULL;
-}
-
 static void
 rawx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 {
 	apr_status_t status;
 	dav_rawx_server_conf *conf;
+	gchar *event_agent_addr;
 
 	DAV_XDEBUG_POOL(pchild, 0, "%s()", __FUNCTION__);
 	conf = ap_get_module_config(s->module_config, &dav_rawx_module);
@@ -358,8 +343,10 @@ rawx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 
 	conf->cleanup = _cleanup_child;
 
-	if (!rawx_event_init(conf->event_agent_addr))
-		DAV_ERROR_POOL(pchild, 0, "Failed to initialize ZMQ context");
+	event_agent_addr = gridcluster_get_eventagent(conf->ns_name);
+	if (!rawx_event_init(event_agent_addr))
+		DAV_ERROR_POOL(pchild, 0, "Failed to initialize event context");
+	g_free(event_agent_addr);
 
 }
 
@@ -550,7 +537,6 @@ static const command_rec dav_rawx_cmds[] =
     AP_INIT_TAKE1("grid_fsync_dir",   dav_rawx_cmd_gridconfig_fsync_dir,   NULL, RSRC_CONF, "do fsync on chunk direcory after renaming .pending"),
     AP_INIT_TAKE1("grid_acl",         dav_rawx_cmd_gridconfig_acl,         NULL, RSRC_CONF, "enabled acl"),
     AP_INIT_TAKE1("grid_upload_blocksize",    dav_rawx_cmd_gridconfig_upblock,     NULL, RSRC_CONF, "upload block size"),
-    AP_INIT_TAKE1("grid_event_agent_addr",    dav_rawx_cmd_gridconfig_event_addr,     NULL, RSRC_CONF, "event agent address"),
     AP_INIT_TAKE1(NULL,  NULL,  NULL, RSRC_CONF, NULL)
 };
 

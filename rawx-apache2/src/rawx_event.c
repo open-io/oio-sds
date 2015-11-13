@@ -11,7 +11,7 @@ static char g_event_addr[RAWX_EVENT_ADDR_SIZE];
 int
 rawx_event_init(const char *addr)
 {
-	if (addr[0] == '\0')
+	if (addr == NULL)
 		return 1;
 
 	g_strlcpy(g_event_addr, addr, sizeof(g_event_addr));
