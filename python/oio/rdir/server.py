@@ -48,6 +48,19 @@ def rdir_update(ns):
     return flask.Response('', 204)
 
 
+@rdir_api.route('/<ns>/rdir/delete', methods=['DELETE'])
+def rdir_delete(ns):
+    volume = request.args.get('vol')
+    if not volume:
+        return flask.Response('Missing volume id', 400)
+    decoded = flask.request.get_json(force=True)
+    chunk = decoded.get('chunk')
+    container = decoded.get('container')
+    content = decoded.get('content')
+    get_backend().delete(volume, container, content, chunk)
+    return flask.Response('', 204)
+
+
 @rdir_api.route('/<ns>/rdir/dump', methods=['GET'])
 def rdir_dump(ns):
     volume = request.args.get('vol')

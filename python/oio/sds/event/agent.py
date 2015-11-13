@@ -34,6 +34,7 @@ class EventType(object):
     OBJECT_PUT = "meta2.content.new"
     OBJECT_DELETE = "meta2.content.deleted"
     CHUNK_PUT = "rawx.chunk.new"
+    CHUNK_DELETE = "rawx.chunk.delete"
     PING = "ping"
 
 
@@ -121,6 +122,8 @@ class EventWorker(object):
             return self.handle_reference_update
         elif event_type == EventType.CHUNK_PUT:
             return self.handle_chunk_put
+        elif event_type == EventType.CHUNK_DELETE:
+            return self.handle_chunk_delete
         elif event_type == EventType.PING:
             return self.handle_ping
         else:
@@ -265,6 +268,20 @@ class EventWorker(object):
         content = data.get('content')
         chunk = data.get('chunk')
         self.rdir.chunk_push(volume, container, content, chunk)
+
+    def handle_chunk_delete(self, event):
+        """
+        Handle chunk deletion.
+        :param event
+        """
+        self.logger.debug('worker "%s" handle chunk deletion', self.name)
+
+        data = event.get('data')
+        volume = data.get('volume')
+        container = data.get('container')
+        content = data.get('content')
+        chunk = data.get('chunk')
+        self.rdir.chunk_delete(volume, container, content, chunk)
 
     def handle_ping(self, event):
         """

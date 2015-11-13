@@ -647,27 +647,6 @@ rawx_repo_rollback_upload(dav_stream *stream)
 	return NULL;
 }
 
-static void send_event_chunk_put(dav_stream *stream) {
-	int rc;
-	dav_rawx_server_conf *conf = resource_get_server_config(stream->r);
-
-	GString *json = g_string_sized_new(128);
-	g_string_append_printf(json,
-			"{"
-			"\"volume\":\"%s\","
-			"\"container\":\"%s\","
-			"\"content\":\"%s\","
-			"\"chunk\":\"%s\""
-			"}",
-			conf->rawx_id,
-			stream->r->info->content.container_id,
-			stream->r->info->content.path,
-			stream->r->info->chunk.id);
-
-	rc = rawx_event_send("rawx.chunk.new", json);
-	DAV_DEBUG_REQ(stream->r->info->request, 0, "Event rawx.chunk.new %s", rc ? "OK" : "KO");
-}
-
 dav_error *
 rawx_repo_commit_upload(dav_stream *stream)
 {
@@ -689,7 +668,7 @@ rawx_repo_commit_upload(dav_stream *stream)
 	request_fill_headers(stream->r->info->request,
 			&(stream->r->info->content), &(stream->r->info->chunk));
 
-	send_event_chunk_put(stream);
+	send_chunk_event("rawx.chunk.new", stream->r);
 
 	return NULL;
 }

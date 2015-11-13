@@ -21,3 +21,11 @@ class RdirClient(Client):
             headers['x-oio-action-mode'] = 'autocreate'
 
         self._request('POST', uri, json=body, headers=headers)
+
+    def chunk_delete(self, volume, container, content, chunk):
+        uri = self._make_uri('rdir/delete', volume)
+        body = {'container': container,
+                'content': content,
+                'chunk': chunk}
+
+        self._request('DELETE', uri, json=body)

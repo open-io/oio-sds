@@ -111,3 +111,24 @@ dav_format_time(int style, apr_time_t sec, char *buf)
 			tms.tm_year + 1900,
 			tms.tm_hour, tms.tm_min, tms.tm_sec);
 }
+
+void send_chunk_event(const char *type, const dav_resource *resource) {
+	int rc;
+	dav_rawx_server_conf *conf = resource_get_server_config(resource);
+
+	GString *json = g_string_sized_new(128);
+	g_string_append_printf(json,
+			"{"
+			"\"volume\":\"%s\","
+			"\"container\":\"%s\","
+			"\"content\":\"%s\","
+			"\"chunk\":\"%s\""
+			"}",
+			conf->rawx_id,
+			resource->info->content.container_id,
+			resource->info->content.path,
+			resource->info->chunk.id);
+
+	rc = rawx_event_send(type, json);
+	DAV_DEBUG_REQ(resource->info->request, 0, "Event %s %s", type, rc ? "OK" : "KO");
+}

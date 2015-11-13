@@ -43,6 +43,12 @@ class RdirBackend(object):
 
         self._get_db(volume).put(key.encode('utf8'), value.encode('utf8'))
 
+    def delete(self, volume, container, content, chunk):
+        # TODO replace content_path with content_id when available in git
+        key = "%s|%s|%s" % (container, content, chunk)
+
+        self._get_db(volume).delete(key.encode('utf8'))
+
     def dump(self, volume):
         # TODO improve this method to use less memory
         data = dict()

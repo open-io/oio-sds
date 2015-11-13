@@ -56,20 +56,16 @@ _read_GString(void *b, size_t s, size_t n, struct view_GString_s *in)
 }
 
 static GError *
-_remote_push (const char *to, const char *volname, GString *body)
+_curl_send (const char *http_method, GString *url, GString *body)
 {
 	struct view_GString_s view_input = {.data=body, .done=0};
 	GError *err = NULL;
 
-	GString *gs = g_string_new("http://");
-	g_string_append (gs, to);
-	g_string_append_printf (gs, "/%s/rdir/push?vol=%s", nsname, volname);
-
 	CURL *h = curl_easy_init ();
 	curl_easy_setopt (h, CURLOPT_NOPROGRESS, 1L);
 	curl_easy_setopt (h, CURLOPT_PROXY, NULL);
-	curl_easy_setopt (h, CURLOPT_URL, gs->str);
-	curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "POST");
+	curl_easy_setopt (h, CURLOPT_URL, url->str);
+	curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, http_method);
 	curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
 	curl_easy_setopt (h, CURLOPT_READDATA, &view_input);
 	curl_easy_setopt (h, CURLOPT_INFILESIZE_LARGE, body->len);
@@ -92,6 +88,21 @@ _remote_push (const char *to, const char *volname, GString *body)
 
 	curl_slist_free_all (headers);
 	curl_easy_cleanup (h);
+	return err;
+}
+
+static GError *
+_remote_push (const char *to, const char *volname, GString *body)
+{
+	GError *err = NULL;
+
+	GString *url = g_string_new("http://");
+	g_string_append_printf (url, "%s/%s/rdir/push?vol=%s",
+			to, nsname, volname);
+
+	err = _curl_send ("POST", url, body);
+
+	g_string_free(url, TRUE);
 	return err;
 }
 
@@ -165,3 +176,65 @@ action_rdir_push (struct req_args_s *args)
 	return rest_action (args, _rest_rdir_push);
 }
 
+static GError *
+_remote_delete (const char *to, const char *volname, GString *body)
+{
+	GError *err = NULL;
+
+	GString *url = g_string_new("http://");
+	g_string_append_printf (url, "%s/%s/rdir/delete?vol=%s",
+			to, nsname, volname);
+
+	err = _curl_send ("DELETE", url, body);
+
+	g_string_free(url, TRUE);
+	return err;
+}
+
+static enum http_rc_e
+_rest_rdir_delete (struct req_args_s *args, struct json_object *jargs)
+{
+	if (!jargs || !json_object_is_type (jargs, json_type_object))
+		return _reply_common_error (args, BADREQ("Expected: json object"));
+
+	GError *err = NULL;
+
+	const char *vol = OPT("vol");
+	if (!vol)
+		return _reply_format_error (args, BADREQ("Missing volume"));
+	struct json_object *jchunk, *jcontent, *jcontainer;
+	struct oio_ext_json_mapping_s m[] = {
+		{"chunk", &jchunk, json_type_string, 1},
+		{"content", &jcontent, json_type_string, 1},
+		{"container", &jcontainer, json_type_string, 1},
+		/* TODO also unpack additional fields, e.g. a payload */
+		{NULL, NULL, 0, 0},
+	};
+	if (NULL != (err = oio_ext_extract_json (jargs, m)))
+		return _reply_format_error (args, BADREQ("Invalid JSON body"));
+
+	struct oio_url_s *volurl = oio_url_empty ();
+	oio_url_set (volurl, OIOURL_NS, nsname);
+	oio_url_set (volurl, OIOURL_ACCOUNT, NAME_ACCOUNT_RDIR);
+	oio_url_set (volurl, OIOURL_USER, vol);
+
+	GError *hook (struct meta1_service_url_s *idx, gboolean *next) {
+		GString *gs = g_string_new (json_object_to_json_string(jargs));
+		GError *e = _remote_delete (idx->host, vol, gs);
+		g_string_free (gs, TRUE);
+		*next = (e!=NULL);
+		return e;
+	}
+
+	err = _resolve_service_and_do (NAME_SRVTYPE_RDIR, 0, volurl, hook);
+
+	oio_url_pclean (&volurl);
+	if (err)
+		return _reply_common_error (args, err);
+	return _reply_nocontent (args);
+}
+enum http_rc_e
+action_rdir_delete (struct req_args_s *args)
+{
+	return rest_action (args, _rest_rdir_delete);
+}
