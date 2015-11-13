@@ -263,11 +263,12 @@ class EventWorker(object):
         self.logger.debug('worker "%s" handle chunk creation', self.name)
 
         data = event.get('data')
+        mtime = event.get('mtime')
         volume = data.get('volume')
         container = data.get('container')
         content = data.get('content')
         chunk = data.get('chunk')
-        self.rdir.chunk_push(volume, container, content, chunk)
+        self.rdir.chunk_push(volume, container, content, chunk, mtime)
 
     def handle_chunk_delete(self, event):
         """

@@ -36,7 +36,7 @@ def status():
 
 
 @rdir_api.route('/<ns>/rdir/push', methods=['POST'])
-def rdir_update(ns):
+def rdir_push(ns):
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
@@ -44,7 +44,8 @@ def rdir_update(ns):
     chunk = decoded.get('chunk')
     container = decoded.get('container')
     content = decoded.get('content')
-    get_backend().put(volume, container, content, chunk)
+    mtime = decoded.get('mtime')
+    get_backend().put(volume, container, content, chunk, mtime)
     return flask.Response('', 204)
 
 

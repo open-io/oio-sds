@@ -117,11 +117,12 @@ _rest_rdir_push (struct req_args_s *args, struct json_object *jargs)
 	const char *vol = OPT("vol");
 	if (!vol)
 		return _reply_format_error (args, BADREQ("Missing volume"));
-	struct json_object *jchunk, *jcontent, *jcontainer;
+	struct json_object *jchunk, *jcontent, *jcontainer, *jmtime;
 	struct oio_ext_json_mapping_s m[] = {
 		{"chunk", &jchunk, json_type_string, 1},
 		{"content", &jcontent, json_type_string, 1},
 		{"container", &jcontainer, json_type_string, 1},
+		{"mtime", &jmtime, json_type_int, 0},
 		/* TODO also unpack additional fields, e.g. a payload */
 		{NULL, NULL, 0, 0},
 	};

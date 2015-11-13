@@ -11,11 +11,13 @@ class RdirClient(Client):
         uri = 'v3.0/%s/%s?vol=%s' % (self.ns, action, volume_id)
         return uri
 
-    def chunk_push(self, volume, container, content, chunk):
+    def chunk_push(self, volume, container, content, chunk, mtime=None):
         uri = self._make_uri('rdir/push', volume)
         body = {'container': container,
                 'content': content,
                 'chunk': chunk}
+        if mtime:
+            body['mtime'] = mtime
         headers = {}
         if self.autocreate:
             headers['x-oio-action-mode'] = 'autocreate'
