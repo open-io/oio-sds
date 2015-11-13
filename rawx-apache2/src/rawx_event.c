@@ -78,56 +78,50 @@ _init_data_part(zmq_msg_t *message, GString *json) {
 int
 rawx_event_send_raw(GString *json){
 	int rc;
+	void *sock = NULL;
+	zmq_msg_t zmsg;
 
 	if (g_zmq_ctx == NULL)
 		return 1;
 
-	void *sock = zmq_socket(g_zmq_ctx, ZMQ_REQ);
-	if (sock == NULL) {
-		return 0;
-	}
+	sock = zmq_socket(g_zmq_ctx, ZMQ_REQ);
+	if (sock == NULL)
+		goto error;
 
 	int opt = 1000;
 	zmq_setsockopt(sock, ZMQ_LINGER, &opt, sizeof(opt));
 
 	rc = zmq_connect(sock, g_event_addr);
+	if (rc < 0)
+		goto error;
+
+	rc = _init_header_part(&zmsg);
+	if (rc < 0)
+		goto error;
+
+	rc = zmq_msg_send(&zmsg, sock, ZMQ_SNDMORE);
 	if (rc < 0) {
-		zmq_close(sock);
-		return 0;
+		zmq_msg_close(&zmsg);
+		goto error;
 	}
 
-	zmq_msg_t header_part;
-	rc = _init_header_part(&header_part);
-	if (rc < 0) {
-		zmq_close(sock);
-		return 0;
-	}
+	rc = _init_data_part(&zmsg, json);
+	if (rc < 0)
+		goto error;
 
-	rc = zmq_msg_send(&header_part, sock, ZMQ_SNDMORE);
+	rc = zmq_msg_send(&zmsg, sock, 0);
 	if (rc < 0) {
-		zmq_msg_close(&header_part);
-		zmq_close(sock);
-		return 0;
-	}
-
-	zmq_msg_t data_part;
-	rc = _init_data_part(&data_part, json);
-	if (rc < 0) {
-		zmq_msg_close(&header_part);
-		zmq_close(sock);
-		return 0;
-	}
-
-	rc = zmq_msg_send(&data_part, sock, 0);
-	if (rc < 0) {
-		zmq_msg_close(&data_part);
-		zmq_msg_close(&header_part);
-		zmq_close(sock);
-		return 0;
+		zmq_msg_close(&zmsg);
+		goto error;
 	}
 
 	/* We don't need the response */
 	zmq_close(sock);
 
 	return 1;
+
+error:
+	if (sock != NULL)
+		zmq_close(sock);
+	return 0;
 }
