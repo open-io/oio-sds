@@ -793,9 +793,9 @@ _download (struct _download_ctx_s *dl)
 		for (struct oio_sds_dl_range_s **p=dl->src->ranges; *p ;++p) {
 			if ((*p)->offset >= total)
 				return NEWERROR (CODE_BAD_REQUEST, "Range not satisfiable");
-			if ((*p)->size >= total)
+			if ((*p)->size > total)
 				return NEWERROR (CODE_BAD_REQUEST, "Range not satisfiable");
-			if ((*p)->offset + (*p)->size >= total)
+			if ((*p)->offset + (*p)->size > total)
 				return NEWERROR (CODE_BAD_REQUEST, "Range not satisfiable");
 		}
 	} else {
