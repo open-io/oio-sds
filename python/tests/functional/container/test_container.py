@@ -1,9 +1,4 @@
-import random
-import string
-import hashlib
-import logging
 
-import requests
 from requests import Request
 import simplejson as json
 from tests.utils import BaseTestCase
