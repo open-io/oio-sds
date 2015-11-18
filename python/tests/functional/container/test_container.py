@@ -1,9 +1,4 @@
-import random
-import string
-import hashlib
-import logging
 
-import requests
 from requests import Request
 import simplejson as json
 from tests.utils import BaseTestCase
@@ -11,221 +6,29 @@ from tests.utils import BaseTestCase
 
 class TestMeta2Functional(BaseTestCase):
 
-    def url_srvtype(self, t):
-        url = self.conf['proxyd_uri']
-        return '/'.join((url, 'v2.0/cs', self.ns, t))
-
-    def url_ref(self, ref):
-        url = self.conf['proxyd_uri']
-        return '/'.join((url, 'v2.0/dir', self.ns, self.account, ref))
-
-    def url_container(self, ref):
-        url = self.conf['proxyd_uri']
-        return '/'.join((url, 'v2.0/m2', self.ns, self.account, ref))
-
     def setUp(self):
         super(TestMeta2Functional, self).setUp()
-        self.ns = self.conf['namespace']
-        self.proxyd = self.conf['proxyd_uri'] + "/v2.0"
-        self.account = self.conf['account']
-        self.chars = (string.ascii_lowercase + string.ascii_uppercase +
-                      string.digits)
-
-        self.proxyd_dir = self.proxyd + "/dir/" + self.ns + '/' + self.account
-        self.proxyd_m2 = self.proxyd + "/m2/" + self.ns + '/' + self.account
-
-        self.h = hashlib.new('md5')
-
-        self.id_generator = lambda n: ''.join(
-            random.choice(self.chars) for _ in range(n))
-        self.session = requests.session()
-
-        self.list_paths = list()
-
-        self.idRef_rand = self.id_generator(6)
-        self.idRef_rand2 = self.id_generator(6)
-        self.prop = self.id_generator(8)
-        self.path_rand = self.id_generator(10)
-        self.path_rand2 = self.id_generator(10)
-        self.prop_rand = self.id_generator(12)
-        self.prop_rand2 = self.id_generator(12)
-        self.string_rand = self.id_generator(20)
-        self.string_rand2 = self.id_generator(20)
-
-        self.h.update(self.string_rand)
-        self.hash_rand = self.h.hexdigest()
-        self.h.update(self.string_rand2)
-        self.hash_rand2 = self.h.hexdigest()
-
-        self.addr_Ref = self.url_ref(self.idRef_rand)
-        self.addr_Ref_type = self.url_ref(self.idRef_rand) + "/meta2"
-        self.addr_m2_ref = self.proxyd_m2 + "/" + self.idRef_rand
-        self.addr_m2_ref_action = self.addr_m2_ref + "/action"
-        self.addr_m2_ref_path = self.addr_m2_ref + "/" + self.path_rand
-        self.addr_m2_ref_path2 = self.addr_m2_ref + "/" + self.path_rand2
-        self.addr_Ref_type_action = self.addr_Ref_type + "/action"
-        self.addr_m2_ref_path_action = self.addr_m2_ref_path + "/action"
-
-        self.direct_path = "NS/" + self.account + "/" + self.idRef_rand + \
-                           "/" + self.path_rand
-        self.path_paste = "NS/" + self.account + "/" + self.idRef_rand + \
-                          "/" + self.path_rand2
-        self.path_paste_wrong = "NS/" + self.account + "/" + \
-                                self.idRef_rand2 + "/" + self.path_rand
-
-        self.addr_alone_ref = self.proxyd_dir + "/" + self.idRef_rand2
-        self.addr_alone_ref_type_action = self.addr_alone_ref + "meta2/action"
-        self.addr_m2_alone_ref = self.proxyd_m2 + "/" + self.idRef_rand2
-        self.addr_m2_alone_ref_path = (self.addr_m2_alone_ref + "/" +
-                                       self.path_rand)
-        self.addr_m2_alone_ref_action = self.addr_m2_alone_ref + "/action"
-
-        self.invalid_addr_m2 = self.proxyd_m2 + "/error"
-        self.invalid_addr_m2_action = self.invalid_addr_m2 + "/action"
-
-        self.bean_void = {'size': ''}
-        self.bean = self.bean_void
-
-        resp = self.session.put(self.addr_Ref)
-        self.assertEqual(201, resp.status_code)
-
-        resp = self.session.put(self.addr_alone_ref)
-        self.assertEqual(201, resp.status_code)
-
-        action = {"action": "Link", "args": None}
-        resp = self.session.post(self.addr_Ref_type_action, json.dumps(action))
-        self.assertEqual(200, resp.status_code)
-
-        logging.debug("+++")
+        self._reload()
+        self.session.close()
 
     def tearDown(self):
         super(TestMeta2Functional, self).tearDown()
-
-        for a in [self.addr_m2_ref_path, self.addr_m2_ref_path2,
-                  self.addr_m2_ref, self.addr_Ref_type,
-                  self.addr_Ref]:
+        for ref in ('plop-'+str(i) for i in range(5)):
             try:
-                self.session.delete(a)
-            except Exception:
+                self.session.post(self._url_ref('destroy'),
+                                  params=self.param_ref(ref),
+                                  headers={'X-oio-action-mode': 'force'})
+            except:
                 pass
 
-    def prepare_bean(self, i):
-
-        if i == 1:
-            action = {"action": "Beans", "args": self.bean_void}
-            resp = self.session.post(self.addr_m2_ref_path_action,
-                                     json.dumps(action))
-            self.assertEqual(resp.status_code, 200)
-            beans = resp.json()
-            self.assertIsInstance(beans, list)
-            self.assertGreaterEqual(len(beans), 1)
-            self.bean = beans[0]
-            self.bean["id"] = self.bean["url"]
-            self.bean["hash"] = self.hash_rand
-            self.bean["size"] = 40
-            self.bean["type"] = "chunk"
-            self.prepared_bean = self.bean
-        if i == 2:
-            self.bean2 = \
-                self.session.post(self.addr_m2_ref_path_action, json.dumps(
-                    {"action": "Beans", "args": self.bean_void}
-                )).json()[0]
-            self.bean2["id"] = self.bean2["url"]
-            self.bean2["hash"] = self.hash_rand2
-            self.bean2["size"] = 80
-            self.bean2["type"] = "chunk"
-
-    def post_bean(self):
-
-        self.session.put(self.addr_m2_ref_path,
-                         json.dumps([self.prepared_bean]),
-                         headers={
-                             'x-oio-content-meta-hash': self.hash_rand,
-                             'x-oio-content-meta-length': 40})
-
-    def prepare_bean_list(self, i):
-
-        j = 1
-
-        while j <= i:
-            self.path_rand = self.id_generator(10)
-            self.string_rand = self.id_generator(20)
-
-            self.h.update(self.string_rand)
-            self.hash_rand = self.h.hexdigest()
-
-            self.addr_m2_ref_path = self.addr_m2_ref + "/" + self.path_rand
-            self.addr_m2_ref_path_action = self.addr_m2_ref_path + "/action"
-
-            self.prepared_bean = \
-                self.session.post(self.addr_m2_ref_path_action, json.dumps(
-                    {"action": "Beans", "args": self.bean_void}
-                )).json()[0]
-            self.prepared_bean["id"] = self.prepared_bean["url"]
-            self.prepared_bean["hash"] = self.hash_rand
-            self.prepared_bean["size"] = 40
-            self.prepared_bean["type"] = "chunk"
-
-            self.post_bean()
-
-            self.list_paths.append(self.addr_m2_ref_path)
-            j += 1
-
-    def prepare_bean_listing(self):
-
-        self.prepared_bean = \
-            self.session.post(self.addr_m2_ref_path_action, json.dumps(
-                {"action": "Beans", "args": self.bean_void}
-            )).json()[0]
-        self.prepared_bean["hash"] = self.hash_rand
-        self.prepared_bean["size"] = 40
-        self.prepared_bean["type"] = "chunk"
-
-        for num1 in xrange(4):
-            for num2 in xrange(13):
-                self.addr_m2_ref_path = self.addr_m2_ref + '/%d-%02d' % (
-                    num1, num2)
-                self.addr_m2_ref_path_action = (self.addr_m2_ref_path +
-                                                "/action")
-                self.post_bean()
-                self.list_paths.append(self.addr_m2_ref_path)
-
-        for num in xrange(13):
-            self.addr_m2_ref_path = self.addr_m2_ref + '/2-05-%02d' % num
-            self.addr_m2_ref_path_action = self.addr_m2_ref_path + "/action"
-            self.post_bean()
-            self.list_paths.append(self.addr_m2_ref_path)
-
-        for num in xrange(13):
-            self.addr_m2_ref_path = self.addr_m2_ref + '/3-%02d-05' % num
-            self.addr_m2_ref_path_action = self.addr_m2_ref_path + "/action"
-            self.post_bean()
-            self.list_paths.append(self.addr_m2_ref_path)
-
-    def delete_bean_list(self):
-
-        for a in self.list_paths:
-            try:
-                self.session.delete(a)
-            except Exception:
-                pass
-        del self.list_paths
-
-    def prepare_content(self):
-
-        self.session.put(self.addr_m2_ref)
-        self.prepare_bean(1)
-        self.post_bean()
-
-    def prepare_properties(self):
-
-        self.prepare_content()
-        self.session.post(self.addr_m2_ref_path_action, json.dumps(
-            {"action": "SetProperties",
-             "args": {"prop1": self.prop_rand, "prop2": self.prop_rand2}}
-        ))
-
-    # Containers tests
+    def test_containers_cycle(self):
+        params = self.param_content('plop-0', 'c0')
+        resp = self.session.post(self._url_container('check'), params=params)
+        self.assertEqual(resp.status_code, 404)
+        resp = self.session.post(self._url_container('create'), params=params)
+        self.assertEqual(resp.status_code, 204)
+        resp = self.session.post(self._url_container('check'), params=params)
+        self.assertEqual(resp.status_code, 204)
 
     def test_containers_put(self):
         resp = self.session.put(self.addr_m2_ref)
