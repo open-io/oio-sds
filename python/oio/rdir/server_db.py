@@ -93,9 +93,8 @@ class RdirBackend(object):
                 containers[container] = {'total': 1, 'rebuilt': 0}
 
             data = json.loads(value)
-            mtime = data.get('mtime')
             rtime = data.get('rtime')
-            if rtime >= mtime:
+            if rtime is not None:
                 total_chunks_rebuilt += 1
                 containers[container]['rebuilt'] += 1
 

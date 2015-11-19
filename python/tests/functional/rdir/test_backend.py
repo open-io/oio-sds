@@ -139,18 +139,16 @@ class TestRdirBackend(BaseTestCase):
                        mtime=10)
         self.rdir.push("myvolume", "mycontainer1", "mycontent2", "mychunk",
                        mtime=10, rtime=20)
-        self.rdir.push("myvolume", "mycontainer2", "mycontent3", "mychunk",
-                       mtime=20, rtime=10)
-        self.rdir.push("myvolume", "mycontainer3", "mycontent4", "mychunk",
+        self.rdir.push("myvolume", "mycontainer2", "mycontent4", "mychunk",
                        mtime=10)
-        self.rdir.push("myvolume", "mycontainer3", "mycontent5", "mychunk",
+        self.rdir.push("myvolume", "mycontainer2", "mycontent5", "mychunk",
                        mtime=20, rtime=30)
 
         data = self.rdir.rebuild_status("myvolume")
         self.assertEqual(data,
                          {
                              'chunk': {
-                                 'total': 5,
+                                 'total': 4,
                                  'rebuilt': 2
                              },
                              'container': {
@@ -163,10 +161,6 @@ class TestRdirBackend(BaseTestCase):
                                      'rebuilt': 1
                                  },
                                  'mycontainer2': {
-                                     'total': 1,
-                                     'rebuilt': 0
-                                 },
-                                 'mycontainer3': {
                                      'total': 2,
                                      'rebuilt': 1
                                  },
