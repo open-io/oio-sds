@@ -15,9 +15,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
-import time
 import plyvel
+import itertools
 
+from oio.common.exceptions import ServerException
 from oio.common.utils import json
 
 
@@ -32,16 +33,30 @@ class RdirBackend(object):
         try:
             db = self.dbs[volume]
         except KeyError:
-            self.dbs[volume] = plyvel.DB("%s/%s" % (self.db_path, volume), create_if_missing=True)
+            self.dbs[volume] = plyvel.DB("%s/%s" % (self.db_path, volume),
+                                         create_if_missing=True)
             db = self.dbs[volume]
         return db
 
-    def put(self, volume, container, content, chunk, mtime=None):
+    def push(self, volume, container, content, chunk, mtime=None, rtime=None):
         # TODO replace content_path with content_id when available in git
         key = "%s|%s|%s" % (container, content, chunk)
-        if not mtime:
-            mtime = int(time.time())
-        value = json.dumps({"mtime": mtime})
+
+        value = self._get_db(volume).get(key.encode('utf8'))
+        if value is not None:
+            value = json.loads(value)
+        else:
+            value = dict()
+
+        if mtime is not None:
+            value['mtime'] = mtime
+        if rtime is not None:
+            value['rtime'] = rtime
+
+        if value.get('mtime') is None:  # not consistent
+            raise ServerException("mtime is mandatory")
+
+        value = json.dumps(value)
 
         self._get_db(volume).put(key.encode('utf8'), value.encode('utf8'))
 
@@ -51,12 +66,47 @@ class RdirBackend(object):
 
         self._get_db(volume).delete(key.encode('utf8'))
 
-    def dump(self, volume):
-        # TODO improve this method to use less memory
+    def fetch(self, volume, start_after=None, limit=None):
         data = dict()
-        for key, value in self._get_db(volume):
+
+        if start_after is not None:
+            start_after = start_after.encode('utf8')
+
+        db_iter = self._get_db(volume).iterator(
+            start=start_after,
+            include_start=False)
+        for key, value in itertools.islice(db_iter, limit):
             data[key] = json.loads(value)
         return data
+
+    def rebuild_status(self, volume):
+        total_chunks = 0
+        total_chunks_rebuilt = 0
+        containers = dict()
+        for key, value in self._get_db(volume):
+            total_chunks += 1
+
+            container, content, chunk = key.split('|')
+            try:
+                containers[container]['total'] += 1
+            except KeyError:
+                containers[container] = {'total': 1, 'rebuilt': 0}
+
+            data = json.loads(value)
+            mtime = data.get('mtime')
+            rtime = data.get('rtime')
+            if rtime >= mtime:
+                total_chunks_rebuilt += 1
+                containers[container]['rebuilt'] += 1
+
+        result = {
+            'chunk': {
+                'total': total_chunks,
+                'rebuilt': total_chunks_rebuilt
+            },
+            'container': containers
+        }
+        return result
 
     def status(self):
         opened_db_count = len(self.dbs)

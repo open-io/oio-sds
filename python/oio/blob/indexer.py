@@ -75,11 +75,11 @@ class BlobIndexerWorker(object):
         try:
             self.logger.debug('Updating index: %s' % path)
             self.update_index(path)
-            self.passes += 1
         except Exception:
             self.errors += 1
             self.logger.exception('ERROR while updating index for chunk %s',
                                   path)
+        self.passes += 1
 
     def update_index(self, path):
         with open(path) as f:
@@ -89,9 +89,10 @@ class BlobIndexerWorker(object):
                 raise exc.FaultyChunk(
                     'Missing extended attribute %s' % e)
             self.index_client.chunk_push(self.volume_id,
-                                           meta['content_cid'],
-                                           meta['content_path'],
-                                           meta['chunk_id'])
+                                         meta['content_cid'],
+                                         meta['content_path'],
+                                         meta['chunk_id'],
+                                         mtime=int(time.time()))
 
 
 class BlobIndexer(Daemon):

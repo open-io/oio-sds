@@ -46,7 +46,7 @@ rawx_event_send(const char *event_type, GString *data_json) {
 			"\"data\":%s"
 			"}",
 			event_type,
-			g_get_real_time(),
+			g_get_real_time() / 1000000, /* number of seconds */
 			data_json->str);
 
 	g_string_free(data_json, TRUE);

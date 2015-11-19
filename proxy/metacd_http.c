@@ -594,7 +594,8 @@ configure_request_handlers (void)
 	/* reverse directory management */
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/rdir/push/#POST", action_rdir_push);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/rdir/delete/#DELETE", action_rdir_delete);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/rdir/fetch/#GET", action_rdir_fetch);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/rdir/fetch/#POST", action_rdir_fetch);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/rdir/rebuild_status/#GET", action_rdir_rebuild_status);
 
 	// Conscience
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/info/#GET", action_conscience_info);
