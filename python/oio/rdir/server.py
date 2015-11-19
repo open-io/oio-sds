@@ -75,8 +75,10 @@ def rdir_fetch(ns):
         decoded = {}
     start_after = decoded.get('start_after')
     limit = decoded.get('limit')
+    ignore_rebuilt = decoded.get('ignore_rebuilt')
 
-    data = get_backend().fetch(volume, start_after=start_after, limit=limit)
+    data = get_backend().fetch(volume, start_after=start_after,
+                               limit=limit, ignore_rebuilt=ignore_rebuilt)
 
     if pretty:
         body = json.dumps(data, indent=4)

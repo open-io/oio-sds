@@ -66,8 +66,9 @@ class RdirBackend(object):
 
         self._get_db(volume).delete(key.encode('utf8'))
 
-    def fetch(self, volume, start_after=None, limit=None):
-        data = dict()
+    def fetch(self, volume, start_after=None, limit=None,
+              ignore_rebuilt=False):
+        result = dict()
 
         if start_after is not None:
             start_after = start_after.encode('utf8')
@@ -75,9 +76,16 @@ class RdirBackend(object):
         db_iter = self._get_db(volume).iterator(
             start=start_after,
             include_start=False)
-        for key, value in itertools.islice(db_iter, limit):
-            data[key] = json.loads(value)
-        return data
+        count = 0
+        for key, value in db_iter:
+            if limit is not None and count >= limit:
+                break
+            data = json.loads(value)
+            if data.get('rtime') is not None and ignore_rebuilt is not None:
+                continue
+            result[key] = data
+            count += 1
+        return result
 
     def rebuild_status(self, volume):
         total_chunks = 0

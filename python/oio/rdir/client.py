@@ -35,11 +35,13 @@ class RdirClient(Client):
 
         self._request('DELETE', uri, json=body)
 
-    def fetch(self, volume, limit=100, start_after=None):
+    def fetch(self, volume, limit=100, start_after=None, ignore_rebuilt=False):
         uri = self._make_uri('rdir/fetch', volume)
         req_body = {'limit': limit}
         if start_after:
             req_body['start_after'] = start_after
+        if ignore_rebuilt:
+            req_body['ignore_rebuilt'] = True
 
         while True:
             resp, resp_body = self._request('POST', uri, json=req_body)

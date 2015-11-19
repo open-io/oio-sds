@@ -84,7 +84,7 @@ class TestRdirBackend(BaseTestCase):
         self.rdir.push("myvolume", "mycontainer0", "mycontent2", "mychunk",
                        mtime=2)
         self.rdir.push("myvolume", "mycontainer1", "mycontent3", "mychunk",
-                       mtime=3)
+                       mtime=3, rtime=4)
         self.rdir.push("myvolume", "mycontainer2", "mycontent4", "mychunk",
                        mtime=4)
 
@@ -94,7 +94,8 @@ class TestRdirBackend(BaseTestCase):
                          {
                              "mycontainer0|mycontent1|mychunk": {"mtime": 1},
                              "mycontainer0|mycontent2|mychunk": {"mtime": 2},
-                             "mycontainer1|mycontent3|mychunk": {"mtime": 3},
+                             "mycontainer1|mycontent3|mychunk":
+                                 {"mtime": 3, "rtime": 4},
                              "mycontainer2|mycontent4|mychunk": {"mtime": 4}
                          })
 
@@ -115,7 +116,8 @@ class TestRdirBackend(BaseTestCase):
                                start_after="mycontainer0|mycontent2|mychunk")
         self.assertEqual(data,
                          {
-                             "mycontainer1|mycontent3|mychunk": {"mtime": 3},
+                             "mycontainer1|mycontent3|mychunk":
+                                 {"mtime": 3, "rtime": 4},
                              "mycontainer2|mycontent4|mychunk": {"mtime": 4}
                          })
 
@@ -129,7 +131,17 @@ class TestRdirBackend(BaseTestCase):
                                start_after="mycontainer0|mycontent2|mychunk")
         self.assertEqual(data,
                          {
-                             "mycontainer1|mycontent3|mychunk": {"mtime": 3},
+                             "mycontainer1|mycontent3|mychunk":
+                                 {"mtime": 3, "rtime": 4},
+                             "mycontainer2|mycontent4|mychunk": {"mtime": 4}
+                         })
+
+        # ignore rebuild chunks
+        data = self.rdir.fetch("myvolume", ignore_rebuilt=True)
+        self.assertEqual(data,
+                         {
+                             "mycontainer0|mycontent1|mychunk": {"mtime": 1},
+                             "mycontainer0|mycontent2|mychunk": {"mtime": 2},
                              "mycontainer2|mycontent4|mychunk": {"mtime": 4}
                          })
 

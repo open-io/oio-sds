@@ -266,10 +266,11 @@ _rest_rdir_fetch (struct req_args_s *args, struct json_object *jargs)
 	const char *vol = OPT("vol");
 	if (!vol)
 		return _reply_format_error (args, BADREQ("Missing volume"));
-	struct json_object *jlimit, *jstart_after;
+	struct json_object *jlimit, *jstart_after, *jignore_rebuilt;
 	struct oio_ext_json_mapping_s m[] = {
 		{"limit", &jlimit, json_type_int, 0},
 		{"start_after", &jstart_after, json_type_string, 0},
+		{"ignore_rebuilt", &jignore_rebuilt, json_type_boolean, 0},
 		{NULL, NULL, 0, 0},
 	};
 	if (NULL != (err = oio_ext_extract_json (jargs, m)))
