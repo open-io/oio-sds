@@ -63,23 +63,24 @@ def rdir_delete(ns):
     return flask.Response('', 204)
 
 
-@rdir_api.route('/<ns>/rdir/fetch', methods=['GET', 'POST'])
+@rdir_api.route('/<ns>/rdir/fetch', methods=['POST'])
 def rdir_fetch(ns):
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
     pretty = request.args.get('pretty')
 
-    decoded = flask.request.get_json(force=True, silent=True)
-    if not decoded:
-        decoded = {}
+    decoded = flask.request.get_json(force=True)
     start_after = decoded.get('start_after')
     limit = decoded.get('limit')
-    ignore_rebuilt = decoded.get('ignore_rebuilt', False)
+    if limit is not None and limit <= 0:
+        return flask.Response('limit must be greate than 0', 400)
+    rebuild = decoded.get('rebuild', False)
+    if not isinstance(rebuild, bool):
+        return flask.Response('limit must be true or false', 400)
 
     data = get_backend().chunk_fetch(volume, start_after=start_after,
-                                     limit=limit,
-                                     ignore_rebuilt=ignore_rebuilt)
+                                     limit=limit, rebuild=rebuild)
 
     if pretty:
         body = json.dumps(data, indent=4)
@@ -104,6 +105,77 @@ def rdir_rebuild_status(ns):
         body = json.dumps(data)
 
     return flask.Response(body, mimetype='application/json')
+
+
+@rdir_api.route('/<ns>/rdir/admin/broken', methods=['POST'])
+def rdir_admin_broken_set(ns):
+    volume = request.args.get('vol')
+    if not volume:
+        return flask.Response('Missing volume id', 400)
+
+    decoded = flask.request.get_json(force=True)
+    date = decoded.get('date')
+    if date is None or not isinstance(date, int):
+        return flask.Response('Missing date or bad format', 400)
+
+    get_backend().admin_set_broken_date(volume, date)
+
+    return flask.Response('', 204)
+
+
+@rdir_api.route('/<ns>/rdir/admin/broken', methods=['GET'])
+def rdir_admin_broken_get(ns):
+    volume = request.args.get('vol')
+    if not volume:
+        return flask.Response('Missing volume id', 400)
+
+    date = get_backend().admin_get_broken_date(volume)
+    resp = {}
+    if date:
+        resp = {'date': date}
+    return flask.Response(json.dumps(resp), 200,
+                          mimetype='application/json')
+
+
+@rdir_api.route('/<ns>/rdir/admin/lock', methods=['POST'])
+def rdir_admin_lock(ns):
+    volume = request.args.get('vol')
+    if not volume:
+        return flask.Response('Missing volume id', 400)
+
+    decoded = flask.request.get_json(force=True)
+    who = decoded.get('who')
+    if who is None:
+        return flask.Response('Missing token who', 400)
+
+    desc = get_backend().admin_lock(volume, who)
+
+    if desc is not None:
+        resp = {'who': desc}
+        return flask.Response(json.dumps(resp), 403,
+                              mimetype='application/json')
+
+    return flask.Response('', 204)
+
+
+@rdir_api.route('/<ns>/rdir/admin/unlock', methods=['POST'])
+def rdir_admin_unlock(ns):
+    volume = request.args.get('vol')
+    if not volume:
+        return flask.Response('Missing volume id', 400)
+
+    get_backend().admin_unlock(volume)
+    return flask.Response('', 204)
+
+
+@rdir_api.route('/<ns>/rdir/admin/show', methods=['GET'])
+def rdir_admin_show(ns):
+    volume = request.args.get('vol')
+    if not volume:
+        return flask.Response('Missing volume id', 400)
+
+    data = get_backend().admin_show(volume)
+    return flask.Response(json.dumps(data), 200, mimetype='application/json')
 
 
 def create_app(conf, **kwargs):

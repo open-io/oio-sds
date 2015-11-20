@@ -21,8 +21,8 @@ from oio.common.exceptions import ServerException
 from oio.common.utils import json
 
 
-# FIXME this class is not thread-safe (see _get_db, push) but it works fine
-# with the default gunicorn sync worker and with only one worker.
+# FIXME this class is not thread-safe (see _get_db, push, lock) but it
+# works fine with the default gunicorn sync worker and with only one worker.
 # Only one process can open a leveldb DB so if we want to use several workers,
 # we need to close/open db each time.
 # In multithreaded environement, the push function needs transaction to update
@@ -79,12 +79,16 @@ class RdirBackend(object):
 
         self._get_db_chunk(volume).delete(key.encode('utf8'))
 
-    def chunk_fetch(self, volume, start_after=None, limit=None,
-                    ignore_rebuilt=False):
+    def chunk_fetch(self, volume, start_after=None, limit=None, rebuild=False):
         result = dict()
 
         if start_after is not None:
             start_after = start_after.encode('utf8')
+
+        broken_date = self.admin_get_broken_date(volume)
+        if rebuild and broken_date is None:
+            # No broken date set so no chunks needs to be rebuild
+            return result
 
         db_iter = self._get_db_chunk(volume).iterator(
             start=start_after,
@@ -94,8 +98,12 @@ class RdirBackend(object):
             if limit is not None and count >= limit:
                 break
             data = json.loads(value)
-            if data.get('rtime') is not None and ignore_rebuilt:
-                continue
+            if rebuild:
+                if data.get('rtime'):
+                    continue  # already rebuilt
+                mtime = data.get('mtime')
+                if int(mtime) > broken_date:
+                    continue  # chunk pushed after the incident
             result[key] = data
             count += 1
         return result
@@ -126,6 +134,32 @@ class RdirBackend(object):
             },
             'container': containers
         }
+        return result
+
+    def admin_set_broken_date(self, volume, date):
+        self._get_db_admin(volume).put('broken_date', str(date))
+
+    def admin_get_broken_date(self, volume):
+        ret = self._get_db_admin(volume).get('broken_date')
+        if ret is None:
+            return None
+        return int(ret)
+
+    def admin_lock(self, volume, who):
+        ret = self._get_db_admin(volume).get('lock')
+        if ret is not None:
+            return ret  # already locked
+
+        self._get_db_admin(volume).put('lock', who.encode('utf8'))
+        return None
+
+    def admin_unlock(self, volume):
+        self._get_db_admin(volume).delete('lock')
+
+    def admin_show(self, volume):
+        result = {}
+        for key, value in self._get_db_admin(volume):
+            result[key] = value
         return result
 
     def status(self):

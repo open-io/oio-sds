@@ -42,7 +42,7 @@ class BlobRebuilderWorker(object):
 
         chunks = self.rdir_client.fetch(self.volume,
                                         limit=self.rdir_fetch_limit,
-                                        ignore_rebuilt=True)
+                                        rebuild=True)
         for container, content, chunk, data in chunks:
             loop_time = time.time()
 
