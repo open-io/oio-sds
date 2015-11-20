@@ -46,7 +46,7 @@ def rdir_push(ns):
     content = decoded.get('content')
     mtime = decoded.get('mtime')
     rtime = decoded.get('rtime')
-    get_backend().push(volume, container, content, chunk, mtime, rtime)
+    get_backend().chunk_push(volume, container, content, chunk, mtime, rtime)
     return flask.Response('', 204)
 
 
@@ -59,7 +59,7 @@ def rdir_delete(ns):
     chunk = decoded.get('chunk')
     container = decoded.get('container')
     content = decoded.get('content')
-    get_backend().delete(volume, container, content, chunk)
+    get_backend().chunk_delete(volume, container, content, chunk)
     return flask.Response('', 204)
 
 
@@ -77,8 +77,9 @@ def rdir_fetch(ns):
     limit = decoded.get('limit')
     ignore_rebuilt = decoded.get('ignore_rebuilt', False)
 
-    data = get_backend().fetch(volume, start_after=start_after,
-                               limit=limit, ignore_rebuilt=ignore_rebuilt)
+    data = get_backend().chunk_fetch(volume, start_after=start_after,
+                                     limit=limit,
+                                     ignore_rebuilt=ignore_rebuilt)
 
     if pretty:
         body = json.dumps(data, indent=4)
@@ -95,7 +96,7 @@ def rdir_rebuild_status(ns):
         return flask.Response('Missing volume id', 400)
     pretty = request.args.get('pretty')
 
-    data = get_backend().rebuild_status(volume)
+    data = get_backend().chunk_rebuild_status(volume)
 
     if pretty:
         body = json.dumps(data, indent=4)
