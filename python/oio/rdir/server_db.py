@@ -16,7 +16,6 @@
 
 import os
 import plyvel
-import itertools
 
 from oio.common.exceptions import ServerException
 from oio.common.utils import json
@@ -37,6 +36,7 @@ class RdirBackend(object):
                                          create_if_missing=True)
             db = self.dbs[volume]
         return db
+
 
     def push(self, volume, container, content, chunk, mtime=None, rtime=None):
         # TODO replace content_path with content_id when available in git
@@ -81,7 +81,7 @@ class RdirBackend(object):
             if limit is not None and count >= limit:
                 break
             data = json.loads(value)
-            if data.get('rtime') is not None and ignore_rebuilt is not None:
+            if data.get('rtime') is not None and ignore_rebuilt:
                 continue
             result[key] = data
             count += 1
