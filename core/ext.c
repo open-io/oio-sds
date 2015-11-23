@@ -23,6 +23,7 @@ License along with this library.
 #include <json.h>
 
 #include "oio_core.h"
+#include "internals.h"
 
 #define PREPEND(Result,List) do { \
 	next = (List)->next; \
@@ -183,6 +184,7 @@ oio_ext_set_random_reqid (void)
 
 /* -------------------------------------------------------------------------- */
 
+# ifdef HAVE_BACKTRACE
 #include <execinfo.h>
 #define STACK_MAX 8
 
@@ -197,7 +199,7 @@ oio_error_debug (GQuark gq, int code, const char *fmt, ...)
 	if (strv) {
 		for (int i=1; i<nbframes ;i++) {
 			if (gs->len)
-				g_string_append (gs, ", ");
+				g_string_append (gs, ",");
 			char *s, *start = strv[i];
 			if (NULL != (s = strchr(start, '(')))
 				start = s+1;
@@ -215,8 +217,9 @@ oio_error_debug (GQuark gq, int code, const char *fmt, ...)
 	GError *err = g_error_new_valist (gq, code, fmt, args);
 	va_end (args);
 
-	g_prefix_error (&err, "%s ", gs->str);
+	g_prefix_error (&err, "[%s] ", gs->str);
 	g_string_free (gs, TRUE);
 	return err;
 }
 
+#endif

@@ -26,19 +26,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # define ATTR_DOMAIN "user.grid"
 
-# define ATTR_NAME_CHUNK_ID "chunk.id"
-# define ATTR_NAME_CHUNK_SIZE "chunk.size"
-# define ATTR_NAME_CHUNK_HASH "chunk.hash"
-# define ATTR_NAME_CHUNK_POS "chunk.position"
-# define ATTR_NAME_CHUNK_METADATA "chunk.metadata"
+# define ATTR_NAME_CHUNK_ID                "chunk.id"
+# define ATTR_NAME_CHUNK_SIZE              "chunk.size"
+# define ATTR_NAME_CHUNK_HASH              "chunk.hash"
+# define ATTR_NAME_CHUNK_POS               "chunk.position"
+# define ATTR_NAME_CHUNK_METADATA          "chunk.metadata"
 # define ATTR_NAME_CHUNK_METADATA_COMPRESS "chunk.metadatacompress"
-# define ATTR_NAME_CHUNK_COMPRESSED_SIZE "chunk.compressedsize"
+# define ATTR_NAME_CHUNK_COMPRESSED_SIZE   "chunk.compressedsize"
 
-# define ATTR_NAME_CONTENT_PATH "content.path"
-# define ATTR_NAME_CONTENT_SIZE "content.size"
-# define ATTR_NAME_CONTENT_NBCHUNK "content.nbchunk"
-# define ATTR_NAME_CONTENT_METADATA "content.metadata"
-# define ATTR_NAME_CONTENT_METADATA_SYS "content.metadatasys"
+# define ATTR_NAME_CONTENT_PATH      "content.path"
+# define ATTR_NAME_CONTENT_ID        "content.id"
+# define ATTR_NAME_CONTENT_SIZE      "content.size"
+# define ATTR_NAME_CONTENT_NBCHUNK   "content.nbchunk"
 # define ATTR_NAME_CONTENT_CONTAINER "content.container"
 
 #define NS_RAWX_BUFSIZE_OPTION "rawx_bufsize"
@@ -53,7 +52,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 typedef struct rawx_conf_s rawx_conf_t;
 
-struct rawx_conf_s {
+struct rawx_conf_s
+{
 	/* gboolean compression;
 	gchar* compression_algorithm;
 	gint64 blocksize; */
@@ -63,35 +63,28 @@ struct rawx_conf_s {
 	gint64 last_update;
 };
 
-/**
- * Represents a chunk info in text format
- */
 typedef struct chunk_textinfo_s
 {
 	gchar *id;           /**< The chunk id */
-	gchar *path;         /**< The chunk path */
 	gchar *size;         /**< The chunk size */
 	gchar *position;     /**< The chunk position */
 	gchar *hash;         /**< The chunk hash */
 	gchar *metadata;     /**< The chunk metadata */
-	gchar *container_id; /**< The container id */
 } chunk_textinfo_t;
 
-/**
- * Represents a content info in text format
- */
 typedef struct content_textinfo_s
 {
 	gchar *container_id;    /**< The container id */
-	gchar *path;            /**< The content name */
+
+	gchar *content_id;      /**< The content id */
+	gchar *path;            /**< The alias path */
+	gchar *version;         /**< The content version */
 	gchar *size;            /**< The content size */
 	gchar *chunk_nb;        /**< The number of chunks */
-	gchar *metadata;        /**< The user metadata */
-	gchar *system_metadata; /**< The system metadata */
-	gchar *storage_policy;	/**< The storage policy */
+	gchar *storage_policy;  /**< The storage policy */
+
 	gchar *rawx_list; /**< The rawx list (introduced by the rainx service) */
 	gchar *spare_rawx_list; /**< The rawx list for reconstruction (introduced by the rainx service) */
-	gchar *version; /**< The content version */
 } content_textinfo_t;
 
 
@@ -167,7 +160,7 @@ gboolean set_rawx_info_in_attr(const char *pathname, GError **error,
 gboolean set_rawx_full_info_in_attr(const char *pathname, int filedes, 
 	GError **error,
 	struct content_textinfo_s *content, struct chunk_textinfo_s *chunk,
-	char *compression_info, char *compressed_size);
+	const char *compression_info, const char *compressed_size);
 
 /**
  * Set the compression attributes in the extended attributes
@@ -182,7 +175,7 @@ gboolean set_rawx_full_info_in_attr(const char *pathname, int filedes,
  * @return 1 in case of success, 0 in case of error
  */
 gboolean set_compression_info_in_attr(const char *pathname, GError **error,
-	gchar *ns_name);
+	const char *ns_name);
 
 /**
  * Set the compression attributes in the extended attributes

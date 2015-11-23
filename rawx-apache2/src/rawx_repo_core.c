@@ -284,19 +284,20 @@ resource_stat_chunk(dav_resource *resource, int xattr_too)
 						apr_pstrdup(resource->pool, gerror_get_message(err)));
 			}
 			else {
+				REPLACE_FIELD(pool, content, container_id);
+				REPLACE_FIELD(pool, content, content_id);
 				REPLACE_FIELD(pool, content, path);
+				REPLACE_FIELD(pool, content, version);
 				REPLACE_FIELD(pool, content, size);
 				REPLACE_FIELD(pool, content, chunk_nb);
-				REPLACE_FIELD(pool, content, metadata);
-				REPLACE_FIELD(pool, content, system_metadata);
-				REPLACE_FIELD(pool, content, container_id);
+				REPLACE_FIELD(pool, content, storage_policy);
+				REPLACE_FIELD(pool, content, rawx_list);
+				REPLACE_FIELD(pool, content, spare_rawx_list);
 				REPLACE_FIELD(pool, chunk, id);
-				REPLACE_FIELD(pool, chunk, path);
 				REPLACE_FIELD(pool, chunk, size);
-				REPLACE_FIELD(pool, chunk, hash);
 				REPLACE_FIELD(pool, chunk, position);
+				REPLACE_FIELD(pool, chunk, hash);
 				REPLACE_FIELD(pool, chunk, metadata);
-				REPLACE_FIELD(pool, chunk, container_id);
 			}
 			if (err)
 				g_clear_error(&err);
@@ -329,12 +330,6 @@ __load_one_header_lc(request_rec *request, const char *name, char **dst)
 	return 1;
 }
 
-#define LOAD_HEADER(Where,Name) do { \
-	if (!resource->info->Where) { \
-		__load_one_header(request, Name, &(resource->info->Where)); \
-	} \
-} while (0)
-
 #define LOAD_HEADER2(Where,Name) do { \
 	if (!resource->info->Where) { \
 		if (!__load_one_header(request, Name, &(resource->info->Where))) \
@@ -342,84 +337,27 @@ __load_one_header_lc(request_rec *request, const char *name, char **dst)
 	} \
 } while (0)
 
-#define DAMNED_UGLY_PREFIX "X-Grid-"
-
 const char *
 request_load_chunk_info(request_rec *request, dav_resource *resource)
 {
-	/* XXX override this with up-to-date headers */
-	LOAD_HEADER2(content.path,            RAWX_HEADER_PREFIX "content-path");
-	LOAD_HEADER2(content.size,            RAWX_HEADER_PREFIX "content-size");
-	LOAD_HEADER2(content.chunk_nb,        RAWX_HEADER_PREFIX "content-chunksnb");
-	LOAD_HEADER2(content.metadata,        RAWX_HEADER_PREFIX "content-metadata");
-	LOAD_HEADER2(content.system_metadata, RAWX_HEADER_PREFIX "content-metadata-sys");
-	LOAD_HEADER2(content.container_id,    RAWX_HEADER_PREFIX "container-id");
+	LOAD_HEADER2(content.container_id,   RAWX_HEADER_PREFIX "container-id");
+
+	LOAD_HEADER2(content.content_id,     RAWX_HEADER_PREFIX "content-id");
+	LOAD_HEADER2(content.path,           RAWX_HEADER_PREFIX "content-path");
+	LOAD_HEADER2(content.version,        RAWX_HEADER_PREFIX "content-version");
+	LOAD_HEADER2(content.size,           RAWX_HEADER_PREFIX "content-size");
+	LOAD_HEADER2(content.chunk_nb,       RAWX_HEADER_PREFIX "content-chunksnb");
+	LOAD_HEADER2(content.storage_policy, RAWX_HEADER_PREFIX "content-stgpol");
 
 	LOAD_HEADER2(chunk.id,           RAWX_HEADER_PREFIX "chunk-id");
-	LOAD_HEADER2(chunk.path,         RAWX_HEADER_PREFIX "content-path");
 	LOAD_HEADER2(chunk.size,         RAWX_HEADER_PREFIX "chunk-size");
-	LOAD_HEADER2(chunk.hash,         RAWX_HEADER_PREFIX "chunk-hash");
 	LOAD_HEADER2(chunk.position,     RAWX_HEADER_PREFIX "chunk-pos");
-	LOAD_HEADER2(chunk.metadata,     RAWX_HEADER_PREFIX "chunk-metadata");
-	LOAD_HEADER2(chunk.container_id, RAWX_HEADER_PREFIX "container-id");
-
-	/* XXX TODO FIXME remove these old-style headers (post-1.5) */
-	LOAD_HEADER(content.path,            DAMNED_UGLY_PREFIX "content_path");
-	LOAD_HEADER(content.size,            DAMNED_UGLY_PREFIX "content_size");
-	LOAD_HEADER(content.chunk_nb,        DAMNED_UGLY_PREFIX "content_chunksnb");
-	LOAD_HEADER(content.metadata,        DAMNED_UGLY_PREFIX "content_metadata");
-	LOAD_HEADER(content.system_metadata, DAMNED_UGLY_PREFIX "content_metadata-sys");
-	LOAD_HEADER(content.container_id,    DAMNED_UGLY_PREFIX "content_containerid");
-
-	LOAD_HEADER(chunk.id,           DAMNED_UGLY_PREFIX "chunk_id");
-	LOAD_HEADER(chunk.path,         DAMNED_UGLY_PREFIX "chunk_path");
-	LOAD_HEADER(chunk.size,         DAMNED_UGLY_PREFIX "chunk_size");
-	LOAD_HEADER(chunk.hash,         DAMNED_UGLY_PREFIX "chunk_hash");
-	LOAD_HEADER(chunk.position,     DAMNED_UGLY_PREFIX "chunk_position");
-	LOAD_HEADER(chunk.metadata,     DAMNED_UGLY_PREFIX "chunk_metadata");
-	LOAD_HEADER(chunk.container_id, DAMNED_UGLY_PREFIX "chunk_containerid");
-
-	/* XXX TODO FIXME remove these old-style headers (post-1.4) */
-	LOAD_HEADER(content.path,            "content_path");
-	LOAD_HEADER(content.size,            "content_size");
-	LOAD_HEADER(content.chunk_nb,        "content_chunksnb");
-	LOAD_HEADER(content.metadata,        "content_metadata");
-	LOAD_HEADER(content.system_metadata, "content_metadata-sys");
-	LOAD_HEADER(content.container_id,    "content_containerid");
-
-	LOAD_HEADER(chunk.id,           "chunk_id");
-	LOAD_HEADER(chunk.path,         "chunk_path");
-	LOAD_HEADER(chunk.size,         "chunk_size");
-	LOAD_HEADER(chunk.hash,         "chunk_hash");
-	LOAD_HEADER(chunk.position,     "chunk_position");
-	LOAD_HEADER(chunk.metadata,     "chunk_metadata");
-	LOAD_HEADER(chunk.container_id, "chunk_containerid");
-
-	/* XXX TODO FIXME remove these old-style headers (pre-1.4) */
-	LOAD_HEADER(content.path,            "contentpath");
-	LOAD_HEADER(content.size,            "contentsize");
-	LOAD_HEADER(content.chunk_nb,        "chunknb");
-	LOAD_HEADER(content.metadata,        "contentmetadata");
-	LOAD_HEADER(content.system_metadata, "contentmetadata-sys");
-	LOAD_HEADER(content.container_id,    "containerid");
-
-	LOAD_HEADER(chunk.id,           "chunkid");
-	LOAD_HEADER(chunk.path,         "contentpath");
-	LOAD_HEADER(chunk.size,         "chunksize");
-	LOAD_HEADER(chunk.hash,         "chunkhash");
-	LOAD_HEADER(chunk.position,     "chunkpos");
-	LOAD_HEADER(chunk.metadata,     "chunkmetadata");
-	LOAD_HEADER(chunk.container_id, "containerid");
+	LOAD_HEADER2(chunk.hash,         RAWX_HEADER_PREFIX "chunk-hash");
 
 	if (!resource->info->content.container_id) return "container-id";
-	if (!resource->info->chunk.container_id) return "container-id";
-
+	if (!resource->info->content.content_id) return "content-id";
 	if (!resource->info->content.path) return "content-path";
-	if (!resource->info->content.size) return "content-size";
-	if (!resource->info->content.chunk_nb) return "content-chunksnb";
 
-	if (!resource->info->chunk.path) return "content-path";
-	//if (!resource->info->chunk.size) return "chunk-size";
 	if (!resource->info->chunk.position) return "chunk-pos";
 	
 	return NULL;
@@ -481,14 +419,11 @@ request_fill_headers(request_rec *r, struct content_textinfo_s *c0,
 	__set_header(r, "content-path",         c0->path);
 	__set_header(r, "content-size",         c0->size);
 	__set_header(r, "content-chunksnb",     c0->chunk_nb);
-	__set_header(r, "content-metadata",     c0->metadata);
-	__set_header(r, "content-metadata-sys", c0->system_metadata);
 
 	__set_header(r, "chunk-id",          c1->id);
 	__set_header(r, "chunk-size",        c1->size);
 	__set_header(r, "chunk-hash",        c1->hash);
 	__set_header(r, "chunk-pos",         c1->position);
-	__set_header(r, "chunk-metadata",    c1->metadata);
 }
 
 /*************************************************************************/
@@ -694,23 +629,6 @@ rawx_repo_ensure_directory(const dav_resource *resource)
 	return NULL;
 }
 
-static char *
-__extract_stgpol(apr_pool_t *p, const char *str)
-{
-	char *tmp = NULL;
-	char *end = NULL;
-	if (str)
-		tmp = g_strrstr(str, "storage-policy");
-	if(!tmp)
-		return NULL;
-	tmp = strchr(tmp, '=');
-	tmp = apr_pstrdup(p, tmp + 1);
-	end = strchr(tmp, ';');
-	if(NULL != end)
-		memset(end, '\0', 1); 
-	return tmp;
-}
-
 dav_error *
 rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 {
@@ -756,15 +674,10 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 
 	/* TODO: try to create a storage_policy struct from request header */
 	/* if not possible, get it from rawx_conf (default namespace conf) */
-	char *str = __extract_stgpol(p, resource->info->content.system_metadata);
-	if(NULL != str) {
-		DAV_DEBUG_REQ(resource->info->request, 0 , "stg_pol init from req header %s", str);
-		sp = storage_policy_init(conf->rawx_conf->ni, str);
-	} else {
-		DAV_DEBUG_REQ(resource->info->request, 0 , "stg_pol init from local sp");
-		sp = storage_policy_dup(conf->rawx_conf->sp);
-	}
-	apr_pool_cleanup_register(p, sp, apr_storage_policy_clean, apr_pool_cleanup_null);
+	DAV_DEBUG_REQ(resource->info->request, 0 , "stg_pol init from local sp");
+	if (NULL != (sp = storage_policy_dup(conf->rawx_conf->sp)))
+		apr_pool_cleanup_register(p, sp, apr_storage_policy_clean,
+				apr_pool_cleanup_null);
 
 	dt = storage_policy_get_data_treatments(sp);
 

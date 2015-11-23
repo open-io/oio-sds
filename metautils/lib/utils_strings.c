@@ -160,20 +160,6 @@ buffer_split(const void *buf, gsize buflen, const gchar *sep, gint max_tokens)
 	return sp;
 }
 
-gsize
-strlen_len(const void * s, const gsize l)
-{
-	gsize i = 0;
-
-	if (!s)
-		return 0;
-	for (i = 0; i < l; i++) {
-		if (!((guint8*)s)[i])
-			return i;
-	}
-	return i;
-}
-
 gboolean
 metautils_cfg_get_bool(const gchar *value, gboolean def)
 {

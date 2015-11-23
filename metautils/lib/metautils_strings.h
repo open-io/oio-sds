@@ -61,8 +61,6 @@ void metautils_str_upper(register gchar *s);
 
 void metautils_str_lower(register gchar *s);
 
-gsize strlen_len(const void * s, const gsize l);
-
 /** Splits the given buffer (considered as a non NULL-terminated) into 
  * newly allocated tokens (wrapping g_strsplit()) */
 gchar **buffer_split(const void *buf, gsize buflen, const gchar * separator, gint max_tokens);

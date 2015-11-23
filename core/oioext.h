@@ -25,16 +25,6 @@ extern "C" {
 
 # include <glib.h>
 
-# define GQ() g_quark_from_static_string(G_LOG_DOMAIN)
-
-# ifdef HAVE_BACKTRACE
-#  define NEWERROR(CODE, FMT, ...) oio_error_debug(GQ(), (CODE), FMT, ##__VA_ARGS__)
-# else
-#  define NEWERROR(CODE, FMT,...) g_error_new(GQ(), (CODE), FMT, ##__VA_ARGS__)
-# endif
-
-GError * oio_error_debug (GQuark gq, int code, const char *fmt, ...);
-
 /** Shuffles the single linked list. The original <src> MUST NOT be reused. */
 GSList * oio_ext_gslist_shuffle(GSList *src);
 

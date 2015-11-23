@@ -27,15 +27,14 @@ License along with this library.
 #include <glib.h>
 #include <json.h>
 #include <curl/curl.h>
-#include <curl/multi.h>
 #include <curl/curlver.h>
 
 #include "oio_core.h"
 #include "oio_sds.h"
 #include "http_put.h"
 #include "http_internals.h"
+#include "internals.h"
 
-// used for macros
 #include <metautils/lib/metautils.h>
 
 struct oio_sds_s
@@ -48,6 +47,7 @@ struct oio_sds_s
 		int rawx;
 	} timeout;
 	gboolean sync_after_download;
+	CURL *h;
 };
 
 struct oio_error_s;
@@ -67,163 +67,10 @@ _curl_get_handle_proxy (struct oio_sds_s *sds)
 #else
 	(void) sds;
 #endif
+	//curl_easy_setopt (h, CURLOPT_FORBID_REUSE, 0L);
+	//curl_easy_setopt (h, CURLOPT_FRESH_CONNECT, 0L);
+	curl_easy_setopt (h, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_0);
 	return h;
-}
-
-static GString *
-_curl_url_prefix (struct oio_url_s *u)
-{
-	GString *hu = g_string_new("http://");
-
-	const char *ns = oio_url_get (u, OIOURL_NS);
-	if (!ns) {
-		GRID_WARN ("BUG No namespace configured!");
-		g_string_append (hu, "proxy");
-	} else {
-		gchar *s = oio_cfg_get_proxy_containers (ns);
-		if (!s) {
-			GRID_WARN ("No proxy configured!");
-			g_string_append (hu, "proxy");
-		} else {
-			g_string_append (hu, s);
-			g_free (s);
-		}
-	}
-
-	return hu;
-}
-
-static void
-_append (GString *gs, char sep, const char *k, const char *v)
-{
-	gchar *venc = g_uri_escape_string (v, NULL, FALSE);
-	g_string_append_printf (gs, "%c%s=%s", sep, k, venc);
-	g_free (venc);
-}
-
-static GString *
-_curl_container_url (struct oio_url_s *u, const char *action)
-{
-	GString *hu = _curl_url_prefix (u);
-	g_string_append_printf (hu, "/%s/%s/container/%s", PROXYD_PREFIX,
-			oio_url_get(u, OIOURL_NS), action);
-	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
-	_append (hu, '&', "ref",  oio_url_get (u, OIOURL_USER));
-	return hu;
-}
-
-static GString *
-_curl_content_url (struct oio_url_s *u, const char *action)
-{
-	GString *hu = _curl_url_prefix (u);
-	g_string_append_printf (hu, "/%s/%s/content/%s", PROXYD_PREFIX,
-			oio_url_get(u, OIOURL_NS), action);
-	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
-	_append (hu, '&', "ref",  oio_url_get (u, OIOURL_USER));
-	_append (hu, '&', "path", oio_url_get (u, OIOURL_PATH));
-	return hu;
-}
-
-/* Body helpers ------------------------------------------------------------- */
-
-static size_t
-_write_GString(void *b, size_t s, size_t n, GString *out)
-{
-	g_string_append_len (out, (gchar*)b, s*n);
-	return s*n;
-}
-
-struct view_GString_s
-{
-	GString *data;
-	size_t done;
-};
-
-static size_t
-_read_GString(void *b, size_t s, size_t n, struct view_GString_s *in)
-{
-	size_t remaining = in->data->len - in->done;
-	size_t available = s * n;
-	size_t len = MIN(remaining,available);
-	if (len) {
-		memcpy(b, in->data->str, len);
-		in->done += len;
-	}
-	return len;
-}
-
-static size_t
-_write_NOOP(void *data, size_t s, size_t n, void *ignored)
-{
-	(void) data, (void) ignored;
-	return s*n;
-}
-
-static GError *
-_body_parse_error (GString *b)
-{
-	g_assert (b != NULL);
-	struct json_tokener *tok = json_tokener_new ();
-	struct json_object *jbody = json_tokener_parse_ex (tok, b->str, b->len);
-	json_tokener_free (tok);
-	tok = NULL;
-
-	if (!jbody)
-		return NEWERROR(0, "No error explained");
-
-	struct json_object *jcode, *jmsg;
-	struct oio_ext_json_mapping_s map[] = {
-		{"status", &jcode, json_type_int,    0},
-		{"message",  &jmsg,  json_type_string, 0},
-		{NULL, NULL, 0, 0}
-	};
-	GError *err =  oio_ext_extract_json(jbody, map);
-	if (!err) {
-		int code = 0;
-		const char *msg = "Unknown error";
-		if (jcode) code = json_object_get_int64 (jcode);
-		if (jmsg) msg = json_object_get_string (jmsg);
-		err = NEWERROR(code, "(code=%d) %s", code, msg);
-	}
-	json_object_put (jbody);
-	return err;
-}
-
-/* Headers helpers ---------------------------------------------------------- */
-
-struct headers_s
-{
-	GSList *gheaders;
-	struct curl_slist *headers;
-};
-
-static void
-_headers_clean (struct headers_s *h)
-{
-	if (h->headers) {
-		curl_slist_free_all (h->headers);
-		h->headers = NULL;
-	}
-	if (h->gheaders) {
-		g_slist_free_full (h->gheaders, g_free);
-		h->gheaders = NULL;
-	}
-}
-
-static void
-_headers_add (struct headers_s *h, const char *k, const char *v)
-{
-	gchar *s = g_strdup_printf("%s: %s", k, v);
-	h->gheaders = g_slist_prepend (h->gheaders, s);
-	h->headers = curl_slist_append (h->headers, h->gheaders->data);
-}
-
-static void
-_headers_add_int64 (struct headers_s *h, const char *k, gint64 i64)
-{
-	gchar v[24];
-	g_snprintf (v, sizeof(v), "%"G_GINT64_FORMAT, i64);
-	_headers_add (h, k, v);
 }
 
 /* Chunk parsing helpers (JSON) --------------------------------------------- */
@@ -264,14 +111,21 @@ _compare_chunks (const struct chunk_s *c0, const struct chunk_s *c1)
 }
 
 static void
+_metachunk_clean (struct metachunk_s *mc)
+{
+	if (!mc)
+		return;	
+	g_slist_free (mc->chunks);
+	g_free (mc);
+}
+
+static void
 _metachunk_cleanv (struct metachunk_s **tab)
 {
 	if (!tab)
 		return;
-	for (struct metachunk_s **p=tab; *p ;++p) {
-		g_slist_free ((*p)->chunks);
-		g_free (*p);
-	}
+	for (struct metachunk_s **p=tab; *p ;++p)
+		_metachunk_clean (*p);
 	g_free (tab);
 }
 
@@ -296,8 +150,37 @@ _load_one_chunk (struct json_object *jurl, struct json_object *jsize,
 	return result;
 }
 
+static const char *
+_chunk_pack_position (struct chunk_s *c, gchar *buf, gsize len)
+{
+	g_snprintf (buf, len, "%u.%u%s", c->position.meta, c->position.intra,
+			c->position.parity ? "p" : "");
+	return buf;
+}
+
+static void
+_chunks_pack (GString *gs, GSList *chunks)
+{
+	gchar strpos[32];
+
+	g_string_append (gs, "[");
+	for (GSList *l=chunks; l ;l=l->next) {
+		struct chunk_s *c = l->data;
+		if (gs->str[gs->len - 1] != '[')
+			g_string_append_c (gs, ',');
+		_chunk_pack_position (c, strpos, sizeof(strpos));
+		g_string_append_printf (gs,
+				"{\"url\":\"%s\","
+				"\"size\":%"G_GINT64_FORMAT","
+				"\"pos\":\"%s\","
+				"\"hash\":\"%s\"}",
+				c->url, c->size, strpos, c->hexhash);
+	}
+	g_string_append (gs, "]");
+}
+
 static GError *
-_load_chunks (GSList **out, struct json_object *jtab)
+_chunks_load (GSList **out, struct json_object *jtab)
 {
 	GSList *chunks = NULL;
 	GError *err = NULL;
@@ -496,6 +379,7 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	(*out)->proxy_local = oio_cfg_get_proxylocal (ns);
 	(*out)->proxy = oio_cfg_get_proxy_containers (ns);
 	(*out)->sync_after_download = TRUE;
+	(*out)->h = _curl_get_handle_proxy (*out);
 	return NULL;
 }
 
@@ -599,10 +483,13 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 		/* TODO compute a MD5SUM */
 		/* TODO guard against to many bytes received from the rawx */
 		if (0 == dl->dst->data.hook.cb (dl->dst->data.hook.ctx, data, total)) {
+			GRID_WARN("user callback managed %"G_GSIZE_FORMAT" bytes", total);
 			*p_nbread += total;
 			return total;
+		} else {
+			GRID_WARN("user callback failed");
+			return 0;
 		}
-		return 0;
 	}
 
 	GError *err = NULL;
@@ -616,10 +503,9 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 			str_range, c0->size, c0->url);
 
 	CURL *h = _curl_get_handle ();
-	struct headers_s headers = {NULL,NULL};
-	_headers_add (&headers, "Expect", "");
-	_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
-	_headers_add (&headers, "Range", str_range);
+	struct oio_headers_s headers = {NULL,NULL};
+	oio_headers_common (&headers);
+	oio_headers_add (&headers, "Range", str_range);
 	curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 	curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
 	curl_easy_setopt (h, CURLOPT_URL, c0->url);
@@ -638,7 +524,7 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 	}
 
 	curl_easy_cleanup (h);
-	_headers_clean (&headers);
+	oio_headers_clear (&headers);
 	return err;
 }
 
@@ -649,14 +535,15 @@ static GError *
 _download_range_from_metachunk_replicated (struct _download_ctx_s *dl,
 		const struct oio_sds_dl_range_s *range, struct metachunk_s *meta)
 {
-	GRID_TRACE("%s", __FUNCTION__);
+	GRID_DEBUG("%s", __FUNCTION__);
 	struct oio_sds_dl_range_s r0 = *range;
 	GSList *tail_chunks = meta->chunks;
 
 	while (r0.size > 0) {
+		GRID_DEBUG("%s at %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT, __FUNCTION__, r0.offset, r0.size);
 
 		if (!tail_chunks)
-			return NEWERROR (CODE_PLATFORM_ERROR, "Too many failure");
+			return NEWERROR (CODE_PLATFORM_ERROR, "Too many failures");
 		struct chunk_s *chunk = tail_chunks->data;
 		tail_chunks = tail_chunks->next;
 
@@ -690,11 +577,12 @@ _download_range_from_metachunk_rained (struct _download_ctx_s *dl,
 		struct chunk_s *chunk = tail_chunks->data;
 		tail_chunks = tail_chunks->next;
 
+		gchar strpos[32];
 		GRID_TRACE("Range %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT
-				" CHUNK size=%"G_GSIZE_FORMAT" pos=%u.%u%s %s",
-				r0.offset, r0.size,
-				chunk->size, chunk->position.meta, chunk->position.intra,
-				(chunk->position.parity ? "" : "p"), chunk->url);
+				" CHUNK size=%"G_GSIZE_FORMAT" pos=%s %s",
+				r0.offset, r0.size, chunk->size,
+				_chunk_pack_position(chunk, strpos, sizeof(strpos)), 
+				chunk->url);
 
 		if (chunk->position.parity) {
 			GRID_TRACE2("Skipped: parity");
@@ -793,9 +681,9 @@ _download (struct _download_ctx_s *dl)
 		for (struct oio_sds_dl_range_s **p=dl->src->ranges; *p ;++p) {
 			if ((*p)->offset >= total)
 				return NEWERROR (CODE_BAD_REQUEST, "Range not satisfiable");
-			if ((*p)->size >= total)
+			if ((*p)->size > total)
 				return NEWERROR (CODE_BAD_REQUEST, "Range not satisfiable");
-			if ((*p)->offset + (*p)->size >= total)
+			if ((*p)->offset + (*p)->size > total)
 				return NEWERROR (CODE_BAD_REQUEST, "Range not satisfiable");
 		}
 	} else {
@@ -837,10 +725,6 @@ static struct oio_error_s*
 _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 		struct oio_sds_dl_dst_s *dst)
 {
-	g_assert (sds != NULL);
-	g_assert (src != NULL);
-	g_assert (src->url != NULL);
-
 	g_assert (dst->type == OIO_DL_DST_HOOK_SEQUENTIAL);
 	dst->out_size = 0;
 	if (!dst->data.hook.cb)
@@ -848,39 +732,13 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 	_dl_debug (__FUNCTION__, src, dst);
 
 	GError *err = NULL;
-	CURLcode rc;
 
 	GSList *chunks = NULL;
 	GString *reply_body = g_string_new("");
 
 	/* Get the beans */
-	if (!err) {
-		CURL *h = _curl_get_handle_proxy (sds);
-		g_string_set_size (reply_body, 0);
-		do {
-			GString *http_url = _curl_content_url (src->url, "show");
-			rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
-			g_string_free (http_url, TRUE);
-		} while (0);
-		struct headers_s headers = {NULL,NULL};
-		_headers_add (&headers, "Expect", "");
-		_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
-		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
-		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
-		rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
-		rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
-		rc = curl_easy_perform (h);
-		if (CURLE_OK != rc)
-			err = NEWERROR(0, "Proxy error (get): (%d) %s", rc, curl_easy_strerror(rc));
-		else {
-			long code = 0;
-			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
-			if (2 != (code/100))
-				err = NEWERROR(0, "Get error: (%ld)", code);
-		}
-		_headers_clean (&headers);
-		curl_easy_cleanup (h);
-	}
+	if (!err)
+		err = oio_proxy_call_content_show (sds->h, src->url, reply_body);
 
 	/* Parse the beans */
 	if (!err) {
@@ -892,7 +750,7 @@ _download_to_hook (struct oio_sds_s *sds, struct oio_sds_dl_src_s *src,
 		if (!json_object_is_type(jbody, json_type_array)) {
 			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
 		} else {
-			if (NULL != (err = _load_chunks (&chunks, jbody))) {
+			if (NULL != (err = _chunks_load (&chunks, jbody))) {
 				g_prefix_error (&err, "Parsing: ");
 			} else {
 				GRID_DEBUG("Got %u beans", g_slist_length (chunks));
@@ -1007,9 +865,8 @@ struct oio_error_s*
 oio_sds_download (struct oio_sds_s *sds, struct oio_sds_dl_src_s *dl,
 		struct oio_sds_dl_dst_s *snk)
 {
-	g_assert (sds != NULL);
-	g_assert (dl != NULL);
-	g_assert (snk != NULL);
+	if (!sds || !dl || !snk || !dl->url)
+		return (struct oio_error_s*) BADREQ("Missing argument");
 
 	snk->out_size = 0;
 
@@ -1026,7 +883,8 @@ struct oio_error_s*
 oio_sds_download_to_file (struct oio_sds_s *sds, struct oio_url_s *url,
 		const char *local)
 {
-	g_assert (local != NULL);
+	if (!local)
+		return (struct oio_error_s*) BADREQ("Missin local path");
 	struct oio_sds_dl_src_s dl = {
 		.url = url,
 		.ranges = NULL,
@@ -1040,6 +898,349 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct oio_url_s *url,
 }
 
 /* Upload ------------------------------------------------------------------- */
+
+struct oio_sds_ul_s
+{
+	/* set at _init() */
+	struct oio_sds_s *sds;
+	struct oio_sds_ul_dst_s *dst;
+	GChecksum *checksum_content;
+	GChecksum *checksum_chunk;
+	GQueue *buffer_tail;
+	GQueue *metachunk_ready;
+	GList *metachunk_done;
+	GSList *chunks_done;
+	GSList *chunks_failed;
+
+	/* set at the first prepare */
+	gint64 chunk_size;
+	gint64 version;
+	gchar *hexid;
+
+	/* modified at each _step() */
+	struct metachunk_s *mc;
+	GSList *chunks;
+	struct http_put_s *put;
+	GSList *http_dests;
+	size_t local_done;
+};
+
+struct oio_sds_ul_s *
+oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
+{
+	if (!sds || !dst)
+		return NULL;
+
+	struct oio_sds_ul_s *ul = g_malloc0 (sizeof(*ul));
+	ul->sds = sds;
+	ul->dst = dst;
+	ul->checksum_content = g_checksum_new (G_CHECKSUM_MD5);
+	ul->checksum_chunk = g_checksum_new (G_CHECKSUM_MD5);
+	ul->buffer_tail = g_queue_new ();
+	ul->metachunk_ready = g_queue_new ();
+	return ul;
+}
+
+void
+oio_sds_upload_clean (struct oio_sds_ul_s *ul)
+{
+	if (!ul)
+		return;
+
+	if (ul->checksum_content)
+		g_checksum_free (ul->checksum_content);
+	if (ul->checksum_chunk)
+		g_checksum_free (ul->checksum_chunk);
+	if (ul->buffer_tail)
+		g_queue_free (ul->buffer_tail);
+	if (ul->put)
+		http_put_destroy (ul->put);
+
+	if (ul->metachunk_ready)
+		g_queue_free_full (ul->metachunk_ready, (GDestroyNotify)_metachunk_clean);
+
+	if (ul->http_dests)
+		g_slist_free (ul->http_dests);
+
+	if (ul->mc)
+		_metachunk_clean (ul->mc);
+	if (ul->chunks)
+		g_slist_free_full (ul->chunks, g_free);
+
+	g_slist_free_full (ul->chunks_done, g_free);
+	g_slist_free_full (ul->chunks_failed, g_free);
+	g_free (ul);
+}
+
+int
+oio_sds_upload_done (struct oio_sds_ul_s *ul)
+{
+	return !ul || !ul->put || http_put_done(ul->put);
+}
+
+struct oio_error_s *
+oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
+{
+	g_assert (ul != NULL);
+	
+	GError *err = NULL;
+	GString *request_body = g_string_new("");
+	GString *reply_body = g_string_new ("");
+
+	/* get the beans */
+	if (!err) {
+		struct oio_proxy_content_prepare_out_s out = {
+			.body = reply_body,
+			.header_chunksize = NULL,
+			.header_version = NULL,
+			.header_content = NULL,
+		};
+		err = oio_proxy_call_content_prepare (ul->sds->h, ul->dst->url,
+				size, ul->dst->autocreate, &out);
+		if (err)
+			g_prefix_error (&err, "Proxy: ");
+		if (out.header_chunksize && !ul->chunk_size)
+			ul->chunk_size = g_ascii_strtoll (out.header_chunksize, NULL, 10);
+		if (out.header_version && !ul->version)
+			ul->version = g_ascii_strtoll (out.header_version, NULL, 10);
+		if (out.header_content)
+			oio_str_replace (&ul->hexid, out.header_content);
+		oio_str_clean (&out.header_chunksize);
+		oio_str_clean (&out.header_version);
+		oio_str_clean (&out.header_content);
+	}
+
+	/* Parse the output */
+	if (!err) {
+		struct json_tokener *tok = json_tokener_new ();
+		struct json_object *jbody = json_tokener_parse_ex (tok,
+				reply_body->str, reply_body->len);
+		if (!json_object_is_type(jbody, json_type_array))
+			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
+		else if (NULL != (err = _chunks_load (&ul->chunks, jbody)))
+			g_prefix_error (&err, "Parsing: ");
+		json_object_put (jbody);
+		json_tokener_free (tok);
+	}
+
+	/* prepare the set of chunks to detect replication or erasure coding */
+	if (!err) {
+		struct metachunk_s **out = NULL;
+		ul->chunks = g_slist_sort (ul->chunks, (GCompareFunc)_compare_chunks);
+		if (NULL != (err = _organize_chunks (ul->chunks, &out)))
+			g_prefix_error (&err, "Logic: ");
+		else {
+			for (struct metachunk_s **p=out; *p ;++p)
+				g_queue_push_tail (ul->metachunk_ready, *p);
+			if (out)
+				g_free (out);
+		}
+	}
+
+	if (!ul->version)
+		ul->version = g_get_real_time();
+	if (!ul->chunk_size)
+		ul->chunk_size = 0;
+	if (!ul->hexid)
+		ul->hexid = g_strdup("0000");
+	
+	g_string_free (request_body, TRUE);
+	g_string_free (reply_body, TRUE);
+	return (struct oio_error_s*) err;
+}
+
+struct oio_error_s *
+oio_sds_upload_feed (struct oio_sds_ul_s *ul,
+		const unsigned char *buf, size_t len)
+{
+	GRID_DEBUG("%s (%p) <- %"G_GSIZE_FORMAT, __FUNCTION__, ul, len);
+	g_assert (ul != NULL);
+	g_queue_push_tail (ul->buffer_tail, g_bytes_new (buf, len));
+	return NULL;
+}
+
+static GError *
+_sds_upload_finish (struct oio_sds_ul_s *ul)
+{
+	GRID_DEBUG("%s (%p)", __FUNCTION__, ul);
+	g_assert (ul->mc != NULL);
+	GError *err = NULL;
+
+	guint failures = http_put_get_failure_number (ul->put);
+	guint total = g_slist_length (ul->http_dests);
+	GRID_DEBUG("uploads %u/%u failed", failures, total);
+
+	if (failures >= total)
+		err = NEWERROR(CODE_PLATFORM_ERROR, "No upload succeeded");
+
+	/* patch the chunk sizes */
+	ul->mc->size = ul->local_done;
+	for (GSList *l=ul->mc->chunks; l ;l=l->next)
+		((struct chunk_s *)(l->data))->size = ul->mc->size;
+
+	/* store the structure in holders for further commit/abort */
+	ul->chunks_done = g_slist_concat (ul->chunks_done, ul->chunks);
+	GRID_WARN("> chunks +%u -> %u", g_slist_length(ul->chunks),
+			g_slist_length(ul->chunks_done));
+	ul->chunks = NULL;
+
+	ul->metachunk_done = g_list_append (ul->metachunk_done, ul->mc);
+	GRID_WARN("> metachunks +1 -> %u (%"G_GINT64_FORMAT")",
+			g_list_length(ul->metachunk_done),
+			ul->mc->size);
+	ul->mc = NULL;
+	ul->local_done = 0;
+
+	/* clean the HTTP side */
+	http_put_destroy (ul->put);
+	ul->put = NULL;
+
+	g_slist_free (ul->http_dests);
+	ul->http_dests = NULL;
+
+	return err;
+}
+
+static GError *
+_sds_upload_renew (struct oio_sds_ul_s *ul)
+{
+	GRID_DEBUG("%s (%p)", __FUNCTION__, ul);
+
+	struct oio_error_s *err = NULL;
+	if (g_queue_is_empty (ul->metachunk_ready)) {
+		if (NULL != (err = oio_sds_upload_prepare (ul, 1)))
+			return (GError*) err;
+	}
+
+	ul->mc = g_queue_pop_head (ul->metachunk_ready);
+	ul->local_done = 0;
+	if (ul->metachunk_done) {
+		struct metachunk_s *last = (g_list_last (ul->metachunk_done))->data;
+		ul->mc->offset = last->offset + last->size;
+		ul->mc->meta = last->meta + 1;
+	} else {
+		ul->mc->offset = 0;
+		ul->mc->meta = 0;
+	}
+
+	ul->put = http_put_create (NULL, NULL, -1);
+
+	for (GSList *l=ul->mc->chunks; l ;l=l->next) {
+		struct chunk_s *c = l->data;
+		struct http_put_dest_s *dest = http_put_add_dest (ul->put, c->url, c);
+
+		http_put_dest_add_header (dest, PROXYD_HEADER_REQID,
+				"%s", oio_ext_get_reqid());
+
+		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "container-id",
+				"%s", oio_url_get (ul->dst->url, OIOURL_HEXID));
+
+		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-path",
+				"%s", oio_url_get (ul->dst->url, OIOURL_PATH));
+		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-version",
+				"%" G_GINT64_FORMAT, ul->version);
+		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-id",
+				"%s", ul->hexid);
+
+		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-id",
+				"%s", strrchr(c->url, '/')+1);
+
+		gchar strpos[32];
+		_chunk_pack_position (c, strpos, sizeof(strpos));
+		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos",
+				"%s", strpos);
+
+		ul->http_dests = g_slist_append (ul->http_dests, dest);
+	}
+
+	return NULL;
+}
+
+struct oio_error_s *
+oio_sds_upload_step (struct oio_sds_ul_s *ul)
+{
+	GRID_DEBUG("%s (%p)", __FUNCTION__, ul);
+	g_assert (ul != NULL);
+
+	GError *err = NULL;
+
+	/* Renew the upload if it finished or wasn't started yet */
+	if (!ul->put)
+		err = _sds_upload_renew (ul);
+	
+	if (!err) {
+		if (!g_queue_is_empty (ul->buffer_tail)) {
+			gsize chunksize = ul->mc->size;
+			GBytes *buf = g_queue_pop_head (ul->buffer_tail);
+			gsize len = g_bytes_get_size (buf);
+			gsize max = chunksize - ul->local_done;
+			if (len > max) {
+				GBytes *first = g_bytes_new_from_bytes (buf, 0, max);
+				GBytes *second = g_bytes_new_from_bytes (buf, max+1, len);
+				g_queue_push_head (ul->buffer_tail, second);
+				g_bytes_unref (buf);
+				buf = first;
+			}
+			ul->local_done += g_bytes_get_size (buf);
+			http_put_feed (ul->put, buf);
+		}
+		err = http_put_step (ul->put);
+	}
+
+	if (!err && ul->put && http_put_done (ul->put))
+		err = _sds_upload_finish (ul);
+
+	return (struct oio_error_s*) err;
+}
+
+static void
+_chunks_remove (CURL *h, GSList *chunks)
+{
+	(void) h, (void) chunks;
+}
+
+struct oio_error_s *
+oio_sds_upload_commit (struct oio_sds_ul_s *ul)
+{
+	GRID_DEBUG("%s (%p)", __FUNCTION__, ul);
+	g_assert (ul != NULL);
+
+	if (ul->put && !http_put_done (ul->put))
+		return (struct oio_error_s *) SYSERR("RAWX upload not completed");
+
+	gint64 size = 0;
+	for (GList *l=g_list_first(ul->metachunk_done); l ;l=g_list_next(l))
+		size += ((struct metachunk_s*) l->data)->size;
+
+	GString *request_body = g_string_new("");
+	GString *reply_body = g_string_new ("");
+	_chunks_pack (request_body, ul->chunks_done);
+
+	GRID_WARN("Saving %s", request_body->str);
+	struct oio_proxy_content_create_in_s in = {
+		.size = size, .version = ul->version, .content = ul->hexid,
+		.chunks = request_body,
+	};
+	GError *err = oio_proxy_call_content_create (ul->sds->h, ul->dst->url,
+			&in, reply_body);
+
+	if (ul->chunks_failed)
+		_chunks_remove (ul->sds->h, ul->chunks_failed);
+	
+	g_string_free (request_body, TRUE);
+	g_string_free (reply_body, TRUE);
+	return (struct oio_error_s*) err;
+}
+
+struct oio_error_s *
+oio_sds_upload_abort (struct oio_sds_ul_s *ul)
+{
+	GRID_DEBUG("%s (%p)", __FUNCTION__, ul);
+	g_assert (ul != NULL);
+	if (ul->chunks_failed)
+		_chunks_remove (ul->sds->h, ul->chunks_failed);
+	return (struct oio_error_s *) NEWERROR(CODE_NOT_IMPLEMENTED, "NYI");
+}
 
 static void
 _ul_debug (const char *caller, struct oio_sds_ul_src_s *src,
@@ -1065,326 +1266,92 @@ _ul_debug (const char *caller, struct oio_sds_ul_src_s *src,
 	g_string_free (out, TRUE);
 }
 
-struct _upload_ctx_s
-{
-	struct oio_sds_s *sds;
-	struct oio_sds_ul_dst_s *dst;
-	struct oio_sds_ul_src_s *src;
-	GChecksum *checksum_content;
-	GSList *chunks;
-};
-
-static void
-_upload_fini (struct _upload_ctx_s *upload)
-{
-	if (upload->checksum_content)
-		g_checksum_free (upload->checksum_content);
-	g_slist_free_full (upload->chunks, g_free);
-}
-
 static GError *
-_upload_chunks_from_hook (struct _upload_ctx_s *upload)
-{
-	GError *err = NULL;
-	size_t done = 0;
-
-	_ul_debug(__FUNCTION__, upload->src, upload->dst);
-
-	for (GSList *l=upload->chunks; l && !err ;l=l->next) {
-		struct chunk_s *c0 = l->data;
-
-		/* TODO no EC managed yet */
-		if (c0->position.parity)
-			continue;
-
-		/* collect all the chunks at the same position */
-		GSList *chunkset = g_slist_prepend (NULL, c0);
-		for (; l->next ;l=l->next) {
-			struct chunk_s *c1 = l->next->data;
-			if (0 != memcmp(&c0->position, &c1->position, sizeof(c0->position)))
-				break;
-			chunkset = g_slist_prepend (chunkset, c1);
-		}
-
-		chunkset = metautils_gslist_shuffle (chunkset);
-		c0 = chunkset->data;
-
-		/* compute and patch the chunksize */
-		gsize local_size = upload->src->data.hook.size - done;
-		for (GSList *l1=chunkset; l1 ;l1=l1->next) {
-			struct chunk_s *c1 = l1->data;
-			local_size = MIN(local_size, c1->size);
-		}
-		for (GSList *l1=chunkset; l1 ;l1=l1->next) {
-			struct chunk_s *c1 = l1->data;
-			GRID_DEBUG("%"G_GSIZE_FORMAT" <- %"G_GSIZE_FORMAT" %s", local_size, c1->size, c1->url);
-			c1->size = local_size;
-		}
-
-		if (DEBUG_ENABLED()) {
-			for (GSList *l1=chunkset; l1 ;l1=l1->next) {
-				struct chunk_s *c1 = l1->data;
-				GRID_DEBUG(" > [%s] pos=%u.%u%c size=%"G_GSIZE_FORMAT, c1->url,
-						c1->position.meta, c1->position.intra, c1->position.parity ? 'P' : ' ',
-						c1->size);
-			}
-		}
-
-		/* upload only the expected bytes */
-		size_t local_done = 0;
-		ssize_t _read_wrapper (void *u, char *ptr, size_t len) {
-			(void) u;
-			size_t remaining = local_size - local_done;
-			len = MIN(len, remaining);
-			ssize_t r = upload->src->data.hook.cb(upload->src->data.hook.ctx,
-					(unsigned char*)ptr, len);
-			if (r > 0)
-				local_done += r;
-			return r;
-		}
-
-		/* start a new upload */
-		GSList *destset = NULL;
-		struct http_put_s *put = http_put_create (_read_wrapper, NULL,
-				local_size, upload->sds->timeout.proxy, upload->sds->timeout.proxy);
-		for (GSList *l1=chunkset; l1 ;l1=l1->next) {
-			struct chunk_s *c1 = l1->data;
-			struct http_put_dest_s *dest = http_put_add_dest (put, c1->url, c1);
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "container-id", "%s", oio_url_get (upload->dst->url, OIOURL_HEXID));
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-path", "%s", oio_url_get (upload->dst->url, OIOURL_PATH));
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-size", "%" G_GINT64_FORMAT, c1->size);
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-chunksnb", "%u", g_slist_length(chunkset));
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-metadata-sys", "%s", "");
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-id", "%s", strrchr(c1->url, '/')+1);
-			http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "chunk-pos", "%u", c1->position.meta);
-			http_put_dest_add_header (dest, PROXYD_HEADER_REQID, "%s", oio_ext_get_reqid());
-			destset = g_slist_append (destset, dest);
-		}
-		err = http_put_run (put);
-
-		/* check at least one chunk succeeded */
-		if (!err) {
-			if (http_put_get_failure_number (put) >= g_slist_length (destset))
-				err = NEWERROR(0, "No chunk upload succeeded");
-		}
-
-		/* check the hash match (received vs. computed) */
-		if (!err) {
-			hash_md5_t bin;
-			char computed[STRLEN_MD5];
-			http_put_get_md5 (put, bin, sizeof(hash_md5_t));
-			oio_str_bin2hex (bin, sizeof(hash_md5_t), computed, sizeof(computed));
-			for (GSList *l1=chunkset; !err && l1 ;l1=l1->next) {
-				const gchar *received = http_put_get_header (put, l1->data, RAWX_HEADER_PREFIX "chunk-hash");
-				if (!received || g_ascii_strcasecmp(received, computed)) {
-					err = NEWERROR(0, "Possible corruption: chunk hash mismatch "
-						"computed[%s] received[%s]", computed, received);
-				} else {
-					struct chunk_s *c1 = l1->data;
-					memcpy (c1->hexhash, computed, sizeof(c1->hexhash));
-				}
-			}
-		}
-		http_put_destroy (put);
-
-		if (!err)
-			done += local_size;
-		g_slist_free (chunkset);
-		g_slist_free (destset);
-	}
-
-	return err;
-}
-
-static void
-_chunks_pack (GString *gs, GSList *chunks)
-{
-	g_string_append (gs, "[");
-	for (GSList *l=chunks; l ;l=l->next) {
-		struct chunk_s *c = l->data;
-		if (gs->str[gs->len - 1] != '[')
-			g_string_append_c (gs, ',');
-		g_string_append_printf (gs,
-				"{\"url\":\"%s\","
-				"\"size\":%"G_GINT64_FORMAT","
-				"\"pos\":\"%u\","
-				"\"hash\":\"%s\"}",
-				c->url, c->size, c->position.meta, c->hexhash);
-	}
-	g_string_append (gs, "]");
-}
-
-static struct oio_error_s *
 _upload_from_hook (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		struct oio_sds_ul_src_s *src)
 {
-	GError *err = NULL;
-	CURLcode rc;
-
 	_ul_debug(__FUNCTION__, src, dst);
+	if (!src->data.hook.cb)
+		return BADREQ("Missing hook");
 
-	/* check the local file */
-	struct _upload_ctx_s upload;
-	upload.sds = sds;
-	upload.dst = dst;
-	upload.src = src;
-	upload.checksum_content = g_checksum_new (G_CHECKSUM_MD5);
-	upload.chunks = NULL;
+	struct oio_sds_ul_s *ul = oio_sds_upload_init (sds, dst);
+	if (!ul)
+		return SYSERR("Resource allocation failure");
 
-	GString *request_body = g_string_new(""), *reply_body = g_string_new ("");
-	struct view_GString_s view_input = {.data=request_body, .done=0};
+	struct oio_error_s *err = NULL;
 
-	/* get the beans */
-	g_string_set_size (request_body, 0);
-	g_string_set_size (reply_body, 0);
-	if (!err) {
-		GRID_DEBUG("Getting some BEANS from the proxy ...");
-		CURL *h = _curl_get_handle_proxy (sds);
-		do {
-			GString *http_url = _curl_content_url (dst->url, "prepare");
-			rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
-			g_string_free (http_url, TRUE);
-		} while (0);
-		g_string_printf (request_body, "{\"size\":%"G_GSIZE_FORMAT"}",
-				src->data.hook.size);
-		view_input.done = 0;
-		struct headers_s headers = {NULL,NULL};
-		_headers_add (&headers, "Expect", "");
-		_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
-		if (dst->autocreate)
-			_headers_add (&headers, PROXYD_HEADER_MODE, "autocreate");
-		rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
-		rc = curl_easy_setopt (h, CURLOPT_READDATA, &view_input);
-		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
-		rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
-		rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "POST");
-		rc = curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
-		rc = curl_easy_setopt (h, CURLOPT_INFILESIZE_LARGE, request_body->len);
-		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
-		rc = curl_easy_perform (h);
-		if (rc != CURLE_OK)
-			err = NEWERROR(0, "Proxy error (beans): (%d) %s", rc, curl_easy_strerror(rc));
-		else {
-			long code = 0;
-			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
-			if (2 != (code/100)) {
-				err = _body_parse_error (reply_body);
-				g_prefix_error (&err, "Beans error (%ld): ", code);
-			}
+	/* If a size is specified, then prepare enough chunks.
+	 * Specifying no size, then preparing no chunks, will require to
+	 * call the proxy as soon as a new chunk is necessary, then issuing
+	 * several calls to the proxy. */
+	if (src->data.hook.size > 0 && src->data.hook.size != (size_t)-1)
+		err = oio_sds_upload_prepare (ul, src->data.hook.size);
+
+	while (!err) {
+		guint8 buf[8192];
+		gssize len = 0;
+
+		/* Call some data */
+		len = src->data.hook.cb (src->data.hook.ctx, buf, sizeof(buf));
+		if (len < 0)
+			err = (struct oio_error_s*) SYSERR("data hook error");
+		
+		/* feed the upload queue then do the I/O things */
+		if (!err && !(err = oio_sds_upload_feed (ul, buf ,len)))
+			err = oio_sds_upload_step (ul);
+		if (!len)
+			break;
+	}
+
+	while (!err && !oio_sds_upload_done (ul))
+		err = oio_sds_upload_step (ul);
+	
+	if (!err)
+		err = oio_sds_upload_commit (ul);
+	else {
+		struct oio_error_s *e = oio_sds_upload_abort (ul);
+		if (e) {
+			GRID_WARN("Upload abort failed: (%d) %s",
+					oio_error_code (e), oio_error_message (e));
+			oio_error_free (e);
 		}
-		curl_easy_cleanup (h);
-		_headers_clean (&headers);
 	}
 
-	/* parse the beans */
-	if (!err) {
-		GRID_DEBUG("Parsing the BEANS from %s", reply_body->str);
-		struct json_tokener *tok = json_tokener_new ();
-		struct json_object *jbody = json_tokener_parse_ex (tok,
-				reply_body->str, reply_body->len);
-		if (!json_object_is_type(jbody, json_type_array)) {
-			err = NEWERROR(0, "Invalid JSON from the OIO proxy");
-		} else {
-			if (NULL != (err = _load_chunks (&upload.chunks, jbody))) {
-				g_prefix_error (&err, "Parsing: ");
-			} else {
-				GRID_DEBUG("Got %u beans", g_slist_length (upload.chunks));
-			}
-		}
-		json_object_put (jbody);
-		json_tokener_free (tok);
-	}
-
-	/* upload the beans */
-	if (!err) {
-		upload.chunks = g_slist_sort (upload.chunks, (GCompareFunc)_compare_chunks);
-		err = _upload_chunks_from_hook (&upload);
-	}
-
-	/* save the beans */
-	g_string_set_size (request_body, 0);
-	g_string_set_size (reply_body, 0);
-	if (!err) {
-		GRID_DEBUG("Saving the uploaded beans ...");
-		CURL *h = _curl_get_handle_proxy (sds);
-		do {
-			GString *http_url = _curl_content_url (dst->url, "create");
-			if (dst->content_id)
-				_append (http_url, '&', "id", dst->content_id);
-			rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
-			g_string_free (http_url, TRUE);
-		} while (0);
-		_chunks_pack (request_body, upload.chunks);
-		view_input.done = 0;
-
-		struct headers_s headers = {NULL,NULL};
-		_headers_add (&headers, "Expect", "");
-		_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
-		_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-policy", "NONE");
-		_headers_add (&headers, PROXYD_HEADER_PREFIX "content-meta-hash",
-				g_checksum_get_string (upload.checksum_content));
-		_headers_add_int64 (&headers, PROXYD_HEADER_PREFIX "content-meta-length",
-				src->data.hook.size);
-		if (dst->autocreate)
-			_headers_add (&headers, PROXYD_HEADER_MODE, "autocreate");
-		rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
-
-		rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
-		rc = curl_easy_setopt (h, CURLOPT_READDATA, &view_input);
-		rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
-		rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
-		rc = curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
-		rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "POST");
-		rc = curl_easy_setopt (h, CURLOPT_INFILESIZE_LARGE, request_body->len);
-		rc = curl_easy_perform (h);
-		if (rc != CURLE_OK)
-			err = NEWERROR(0, "Proxy error (put): (%d) %s", rc, curl_easy_strerror(rc));
-		else {
-			long code = 0;
-			rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
-			if (2 != (code/100))
-				err = NEWERROR(0, "Put error: (%ld)", code);
-		}
-		curl_easy_cleanup (h);
-		_headers_clean (&headers);
-	}
-
-	/* cleanup and exit */
-	g_string_free (request_body, TRUE);
-	g_string_free (reply_body, TRUE);
-	_upload_fini (&upload);
-	GRID_DEBUG("UPLOAD %s", err?"KO":"ok");
-	return (struct oio_error_s*) err;
+	oio_sds_upload_clean (ul);
+	return (GError*) err;
 }
 
 static ssize_t
 _read_FILE (void *u, unsigned char *ptr, size_t len)
 {
 	FILE *in = u;
-	if (feof(in) || ferror(in))
-		return -1;
+	GRID_DEBUG("Reading at most %"G_GSIZE_FORMAT, len);
+	if (ferror(in))
+		return (ssize_t)-1;
+	if (feof(in))
+		return 0;
 	return fread(ptr, 1, len, in);
 }
 
-static struct oio_error_s *
+static GError *
 _upload_from_file (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		struct oio_sds_ul_src_s *src)
 {
 	_ul_debug(__FUNCTION__, src, dst);
 	if (!src->data.file.path)
-		return (struct oio_error_s*) NEWERROR(0, "Invalid argument: %s", "no path");
+		return NEWERROR(0, "Invalid argument: %s", "no path");
 
 	int fd = -1;
 	FILE *in = NULL;
-	struct oio_error_s *err = NULL;
+	GError *err = NULL;
 	struct stat st;
 
 	if (0 > (fd = open (src->data.file.path, O_RDONLY, 0644)))
-		err = (struct oio_error_s*) NEWERROR(CODE_INTERNAL_ERROR, "open() error: (%d) %s", errno, strerror(errno));
+		err = SYSERR("open() error: (%d) %s", errno, strerror(errno));
 	else if (0 > fstat (fd, &st))
-		err = (struct oio_error_s*) NEWERROR(CODE_INTERNAL_ERROR, "fstat() error: (%d) %s", errno, strerror(errno));
+		err = SYSERR("fstat() error: (%d) %s", errno, strerror(errno));
 	else if (!(in = fdopen(fd, "r")))
-		err = (struct oio_error_s*) NEWERROR(CODE_INTERNAL_ERROR, "fdopen() error: (%d) %s", errno, strerror(errno));
+		err = SYSERR("fdopen() error: (%d) %s", errno, strerror(errno));
 	else {
 		struct oio_sds_ul_src_s src0 = {
 			.type = OIO_UL_SRC_HOOK_SEQUENTIAL, .data = { .hook = {
@@ -1403,19 +1370,19 @@ _upload_from_file (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 	return err;
 }
 
-static struct oio_error_s *
+static GError *
 _upload_from_buffer (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		struct oio_sds_ul_src_s *src)
 {
 	_ul_debug(__FUNCTION__, src, dst);
 	if (!src->data.buffer.ptr)
-		return (struct oio_error_s*) NEWERROR (0, "Invalid argument: %s", "no buffer");
+		return NEWERROR (0, "Invalid argument: %s", "no buffer");
 
 	FILE *in = NULL;
-	struct oio_error_s *err = NULL;
+	GError *err = NULL;
 
 	if (!(in = fmemopen (src->data.buffer.ptr, src->data.buffer.length, "r")))
-		err = (struct oio_error_s*) NEWERROR (CODE_INTERNAL_ERROR, "fmemopen() error: (%d) %s", errno, strerror(errno));
+		err = SYSERR("fmemopen() error: (%d) %s", errno, strerror(errno));
 	else {
 		struct oio_sds_ul_src_s src0 = {
 			.type = OIO_UL_SRC_HOOK_SEQUENTIAL, .data = { .hook = {
@@ -1436,16 +1403,15 @@ struct oio_error_s*
 oio_sds_upload (struct oio_sds_s *sds, struct oio_sds_ul_src_s *src,
 		struct oio_sds_ul_dst_s *dst)
 {
-	g_assert (sds != NULL);
-	g_assert (dst != NULL);
-	g_assert (src != NULL);
+	if (!sds || !src || !dst)
+		return (struct oio_error_s*) BADREQ("Missing parameter");
 
 	if (src->type == OIO_UL_SRC_HOOK_SEQUENTIAL)
-		return _upload_from_hook (sds, dst, src);
+		return (struct oio_error_s*) _upload_from_hook (sds, dst, src);
 	if (src->type == OIO_UL_SRC_FILE)
-		return _upload_from_file (sds, dst, src);
+		return (struct oio_error_s*) _upload_from_file (sds, dst, src);
 	if (src->type == OIO_UL_SRC_BUFFER)
-		return _upload_from_buffer (sds, dst, src);
+		return (struct oio_error_s*) _upload_from_buffer (sds, dst, src);
 
 	return (struct oio_error_s*) NEWERROR(0, "Invalid argument: %s",
 			"source type not managed");
@@ -1455,6 +1421,9 @@ struct oio_error_s*
 oio_sds_upload_from_file (struct oio_sds_s *sds, struct oio_url_s *url,
 		const char *local)
 {
+	if (!local)
+		return (struct oio_error_s*) BADREQ("Missing local path");
+
 	struct oio_sds_ul_src_s src = {
 		.type = OIO_UL_SRC_FILE,
 		.data = {
@@ -1478,9 +1447,8 @@ struct oio_error_s*
 oio_sds_upload_from_source (struct oio_sds_s *sds, struct oio_url_s *url,
 		struct oio_source_s *oldsrc)
 {
-	g_assert (sds != NULL);
-	g_assert (url != NULL);
-	g_assert (oldsrc != NULL);
+	if (!sds || !url || !oldsrc)
+		return (struct oio_error_s*) BADREQ("Missing parameter");
 	g_assert (oldsrc->type == OIO_SRC_FILE);
 	g_assert (oldsrc->data.path != NULL);
 
@@ -1571,75 +1539,10 @@ _notify_list_result (struct oio_sds_list_listener_s *listener,
 	return err;
 }
 
-static int
-_has_prefix_len (char **pb, size_t *plen, const char *prefix)
-{
-	char *b = *pb;
-	size_t blen = *plen;
-	if (!b)
-		return FALSE;
-	while (blen && !g_ascii_isalnum(b[blen-1]))
-		blen --;
-	if (!blen)
-		return FALSE;
-	while (*prefix) {
-		if (!(blen--) || g_ascii_tolower(*(b++)) != *(prefix++))
-			return FALSE;
-	}
-	*pb = b;
-	*plen = blen;
-	return TRUE;
-}
-
-static size_t
-_header_callback(char *b, size_t s, size_t n, void *u)
-{
-	struct oio_sds_list_listener_s *listener = u;
-	g_assert (listener != NULL);
-
-	size_t total = n*s;
-	if (!_has_prefix_len (&b, &total, "x-oio-list-"))
-		return total;
-
-	if (_has_prefix_len (&b, &total, "truncated: ")) {
-		gchar tmp[total+1];
-		memcpy (tmp, b, total);
-		tmp[total] = 0;
-		listener->out_truncated = !g_ascii_strcasecmp(tmp, "true") || !g_ascii_strcasecmp(tmp, "yes");
-	}
-	else if (_has_prefix_len (&b, &total, "next: ")) {
-		gchar tmp[total+1];
-		memcpy (tmp, b, total);
-		tmp[total] = 0;
-		listener->on_bound (listener->ctx, tmp);
-	}
-	return n*s;
-}
-
-static gchar *
-_url_build_for_list (struct oio_sds_list_param_s *param)
-{
-	GString *http_url = _curl_container_url (param->url, "list");
-	if (param->prefix)
-		_append (http_url, '&', "prefix", param->prefix);
-	if (param->marker)
-		_append (http_url, '&', "marker", param->marker);
-	if (param->end)
-		_append (http_url, '&', "end", param->end);
-	if (param->max_items)
-		g_string_append_printf (http_url, "&max=%"G_GSIZE_FORMAT, param->max_items);
-
-	return g_string_free(http_url, FALSE);
-}
-
 static GError *
 _single_list (struct oio_sds_list_param_s *param,
 		struct oio_sds_list_listener_s *listener, CURL *h)
 {
-	CURLcode rc;
-	GError *err = NULL;
-	struct headers_s headers = {NULL,NULL};
-
 	GRID_TRACE("%s prefix %s marker %s end %s max %"G_GSIZE_FORMAT,
 		__FUNCTION__, param->prefix, param->marker, param->end,
 		param->max_items);
@@ -1649,33 +1552,8 @@ _single_list (struct oio_sds_list_param_s *param,
 	GString *reply_body = g_string_new ("");
 
 	// Query the proxy
-
-	do {
-		gchar *u = _url_build_for_list (param);
-		curl_easy_setopt (h, CURLOPT_URL, u);
-		g_free (u);
-	} while (0);
-
-	_headers_add (&headers, "Expect", "");
-	_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
-	curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
-	curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
-	curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
-	curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
-	curl_easy_setopt (h, CURLOPT_HEADERDATA, listener);
-	curl_easy_setopt (h, CURLOPT_HEADERFUNCTION, _header_callback);
-	rc = curl_easy_perform (h);
-	if (rc != CURLE_OK)
-		err = NEWERROR(0, "Proxy error (beans): (%d) %s", rc, curl_easy_strerror(rc));
-	else {
-		long code = 0;
-		rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
-		if (2 != (code/100)) {
-			err = _body_parse_error (reply_body);
-			g_prefix_error (&err, "Beans error: (%ld)", code);
-			err->code = code;
-		}
-	}
+	GError *err = oio_proxy_call_content_list (h, param->url, reply_body,
+			param->prefix, param->marker, param->end, param->max_items, 0);
 
 	// Unpack the reply
 	if (!err) {
@@ -1695,7 +1573,6 @@ _single_list (struct oio_sds_list_param_s *param,
 	}
 
 	g_string_free (reply_body, TRUE);
-	_headers_clean (&headers);
 	return err;
 }
 
@@ -1710,8 +1587,6 @@ oio_sds_list (struct oio_sds_s *sds, struct oio_sds_list_param_s *param,
 
 	GRID_DEBUG("LIST prefix %s marker %s end %s max %"G_GSIZE_FORMAT,
 		param->prefix, param->marker, param->end, param->max_items);
-
-	CURL *h = _curl_get_handle_proxy (sds);
 
 	gchar *next = param->marker ? g_strdup (param->marker) : NULL;
 	listener->out_truncated = 0;
@@ -1738,7 +1613,7 @@ oio_sds_list (struct oio_sds_s *sds, struct oio_sds_list_param_s *param,
 		p0.max_items = param->max_items
 			? param->max_items - listener->out_count : 0;
 
-		if (NULL != (err = _single_list (&p0, &l0, h))) {
+		if (NULL != (err = _single_list (&p0, &l0, sds->h))) {
 			oio_str_clean (&next);
 			oio_str_clean (&nextnext);
 			break;
@@ -1778,63 +1653,18 @@ oio_sds_list (struct oio_sds_s *sds, struct oio_sds_list_param_s *param,
 		oio_str_clean (&next);
 	}
 
-	curl_easy_cleanup (h);
 	return (struct oio_error_s*) err;
 }
 
-/* Link --------------------------------------------------------------------- */
+/* Misc. -------------------------------------------------------------------- */
 
 struct oio_error_s*
 oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url, const char *content_id)
 {
 	if (!sds || !url || !content_id)
-		return (struct oio_error_s*) NEWERROR(CODE_INTERNAL_ERROR, "Missing argument");
+		return (struct oio_error_s*) BADREQ("Missing argument");
 
-	CURLcode rc;
-	GError *err = NULL;
-
-	GString *request_body = g_string_new(""), *reply_body = g_string_new("");
-	struct view_GString_s view_input = {.data=request_body, .done=0};
-
-	CURL *h = _curl_get_handle_proxy (sds);
-
-	do {
-		GString *http_url = _curl_content_url (url, "link");
-		rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
-		g_string_free (http_url, TRUE);
-	} while (0);
-
-	g_string_append_printf (request_body, "{\"id\":\"%s\"}", content_id);
-
-	struct headers_s headers = {NULL,NULL};
-	_headers_add (&headers, "Expect", "");
-	_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
-	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
-
-	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "POST");
-	rc = curl_easy_setopt (h, CURLOPT_READFUNCTION, _read_GString);
-	rc = curl_easy_setopt (h, CURLOPT_READDATA, &view_input);
-	rc = curl_easy_setopt (h, CURLOPT_UPLOAD, 1L);
-	rc = curl_easy_setopt (h, CURLOPT_INFILESIZE_LARGE, request_body->len);
-
-	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
-	rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
-	rc = curl_easy_perform (h);
-	if (CURLE_OK != rc)
-		err = NEWERROR(0, "Proxy error (link): %s", curl_easy_strerror(rc));
-	else {
-		long code = 0;
-		rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
-		if (2 != (code/100)) {
-			err = _body_parse_error (reply_body);
-			g_prefix_error (&err, "Link error (%ld): ", code);
-		}
-	}
-	curl_easy_cleanup (h);
-	_headers_clean (&headers);
-	g_string_free (reply_body, TRUE);
-	g_string_free (request_body, TRUE);
-	return (struct oio_error_s*) err;
+	return (struct oio_error_s*) oio_proxy_call_content_link (sds->h, url, content_id);
 }
 
 struct oio_error_s*
@@ -1842,9 +1672,9 @@ oio_sds_link_or_upload (struct oio_sds_s *sds, struct oio_sds_ul_src_s *src,
 		struct oio_sds_ul_dst_s *dst)
 {
 	if (!sds || !src || !dst)
-		return (struct oio_error_s*) NEWERROR(CODE_INTERNAL_ERROR, "Missing argument");
+		return (struct oio_error_s*) BADREQ("Missing argument");
 	if (!dst->content_id)
-		return (struct oio_error_s*) NEWERROR(CODE_INTERNAL_ERROR, "Missing content ID");
+		return (struct oio_error_s*) BADREQ("Missing content ID");
 
 	struct oio_error_s *err = oio_sds_link (sds, dst->url, dst->content_id);
 	if (!err)
@@ -1855,90 +1685,25 @@ oio_sds_link_or_upload (struct oio_sds_s *sds, struct oio_sds_ul_src_s *src,
 	return oio_sds_upload (sds, src, dst);
 }
 
-/* -------------------------------------------------------------------------- */
-
 struct oio_error_s*
 oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *url)
 {
-	g_assert (sds != NULL);
-	g_assert (url != NULL);
+	if (!sds || !url)
+		return (struct oio_error_s*) BADREQ("Missing argument");
 
-	CURLcode rc;
-	GError *err = NULL;
-
-	GString *reply_body = g_string_new("");
-	CURL *h = _curl_get_handle_proxy (sds);
-
-	do {
-		GString *http_url = _curl_content_url (url, "delete");
-		rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
-		g_string_free (http_url, TRUE);
-	} while (0);
-
-	struct headers_s headers = {NULL,NULL};
-	_headers_add (&headers, "Expect", "");
-	_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
-	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
-
-	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_GString);
-	rc = curl_easy_setopt (h, CURLOPT_WRITEDATA, reply_body);
-	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "POST");
-	rc = curl_easy_perform (h);
-	if (CURLE_OK != rc)
-		err = NEWERROR(0, "Proxy error (delete): %s", curl_easy_strerror(rc));
-	else {
-		long code = 0;
-		rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
-		if (2 != (code/100))
-			err = NEWERROR(0, "Delete error: (%ld)", code);
-	}
-	curl_easy_cleanup (h);
-	_headers_clean (&headers);
-	g_string_free (reply_body, TRUE);
-	return (struct oio_error_s*) err;
+	return (struct oio_error_s*) oio_proxy_call_content_delete (sds->h, url);
 }
 
 struct oio_error_s*
 oio_sds_has (struct oio_sds_s *sds, struct oio_url_s *url, int *phas)
 {
-	g_assert (sds != NULL);
-	g_assert (url != NULL);
-	g_assert (phas != NULL);
+	if (!sds || !url || !phas)
+		return (struct oio_error_s*) BADREQ("Missing argument");
 
-	CURLcode rc;
-	GError *err = NULL;
-
-	GString *reply_body = g_string_new("");
-	CURL *h = _curl_get_handle_proxy (sds);
-
-	do {
-		GString *http_url = _curl_content_url (url, "show");
-		rc = curl_easy_setopt (h, CURLOPT_URL, http_url->str);
-		g_string_free (http_url, TRUE);
-	} while (0);
-
-	struct headers_s headers = {NULL,NULL};
-	_headers_add (&headers, "Expect", "");
-	_headers_add (&headers, PROXYD_HEADER_REQID, oio_ext_get_reqid());
-	rc = curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
-
-	rc = curl_easy_setopt (h, CURLOPT_WRITEFUNCTION, _write_NOOP);
-	rc = curl_easy_setopt (h, CURLOPT_CUSTOMREQUEST, "GET");
-	rc = curl_easy_perform (h);
-	if (CURLE_OK != rc)
-		err = NEWERROR(0, "Proxy error (head): %s", curl_easy_strerror(rc));
-	else {
-		long code = 0;
-		rc = curl_easy_getinfo (h, CURLINFO_RESPONSE_CODE, &code);
-		*phas = (2 == (code/100));
-		if (!*phas && 404 != code) {
-			err = _body_parse_error (reply_body);
-			g_prefix_error (&err, "Check error (%ld): ", code);
-		}
-	}
-	curl_easy_cleanup (h);
-	_headers_clean (&headers);
-	g_string_free (reply_body, TRUE);
+	GError *err = oio_proxy_call_content_show (sds->h, url, NULL);
+	*phas = (err == NULL);
+	if (err && (CODE_IS_NOTFOUND(err->code) || err->code == CODE_NOT_FOUND))
+		g_clear_error(&err);
 	return (struct oio_error_s*) err;
 }
 

@@ -196,10 +196,6 @@ GError* m2_generate_beans(struct hc_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
 		m2_onbean_cb cb, gpointer cb_data);
 
-GError* m2_generate_beans_v1(struct hc_url_s *url, gint64 size, gint64 chunk_size,
-		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
-		m2_onbean_cb cb, gpointer cb_data);
-
 GError* m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname,
 		int repl);
 

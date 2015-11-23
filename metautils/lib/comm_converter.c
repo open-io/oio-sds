@@ -494,7 +494,7 @@ service_tag_API2ASN(service_tag_t * api, ServiceTag_t * asn)
 	memset(asn, 0x00, sizeof(ServiceTag_t));
 
 	/*name */
-	name_len = strlen_len((const guint8*)api->name, sizeof(api->name));
+	name_len = strnlen(api->name, sizeof(api->name));
 	OCTET_STRING_fromBuf(&(asn->name), api->name, name_len);
 
 	/*value */
@@ -505,7 +505,7 @@ service_tag_API2ASN(service_tag_t * api, ServiceTag_t * asn)
 		break;
 	case STVT_BUF:
 		asn->value.present = ServiceTag__value_PR_s;
-		OCTET_STRING_fromBuf(&(asn->value.choice.s), api->value.buf, strlen_len((const guint8*)api->value.buf,
+		OCTET_STRING_fromBuf(&(asn->value.choice.s), api->value.buf, strnlen(api->value.buf,
 			sizeof(api->value.buf)));
 		break;
 	case STVT_REAL:
@@ -533,8 +533,8 @@ service_info_API2ASN(service_info_t * api, ServiceInfo_t * asn)
 	memset(asn, 0x00, sizeof(ServiceInfo_t));
 
 	/*header */
-	OCTET_STRING_fromBuf(&(asn->type), api->type, strlen_len((const guint8*)api->type, sizeof(api->type)));
-	OCTET_STRING_fromBuf(&(asn->nsName), api->ns_name, strlen_len((const guint8*)api->ns_name, sizeof(api->ns_name)));
+	OCTET_STRING_fromBuf(&(asn->type), api->type, strnlen(api->type, sizeof(api->type)));
+	OCTET_STRING_fromBuf(&(asn->nsName), api->ns_name, strnlen(api->ns_name, sizeof(api->ns_name)));
 	addr_info_API2ASN(&(api->addr), &(asn->addr));
 	score_API2ASN(&api->score, &asn->score);
 
