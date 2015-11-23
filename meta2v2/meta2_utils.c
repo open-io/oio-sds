@@ -1579,6 +1579,7 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	CONTENTS_HEADERS_nullify_hash(header);
 	CONTENTS_HEADERS_set_ctime(header, now / G_TIME_SPAN_SECOND);
 	CONTENTS_HEADERS_set_mtime(header, now / G_TIME_SPAN_SECOND);
+	CONTENTS_HEADERS_set2_mime_type(header, "application/octet-stream");
 	ctx->cb(ctx->cb_data, header);
 }
 
