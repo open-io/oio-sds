@@ -905,7 +905,8 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 		if (DESCR(bean) == &descr_struct_ALIASES) {
 			if (args->merge_only)
 				continue;
-			ALIASES_set_version(bean, args->version+1);
+			if (0 >= ALIASES_get_version (bean))
+				ALIASES_set_version(bean, args->version+1);
 			ALIASES_set2_content(bean, id, idlen);
 			ALIASES_set_deleted(bean, FALSE);
 			ALIASES_set_ctime(bean, now);
@@ -918,7 +919,7 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 			CONTENTS_HEADERS_set_ctime(bean, now);
 			CONTENTS_HEADERS_set_mtime(bean, now);
 			lazy_set_str (CONTENTS_HEADERS, bean, chunk_method, "bytes");
-			lazy_set_str (CONTENTS_HEADERS, bean, mime_type, "octet/stream");
+			lazy_set_str (CONTENTS_HEADERS, bean, mime_type, "application/octet-stream");
 			lazy_set_str (CONTENTS_HEADERS, bean, policy, "NONE");
 		}
 		else if (DESCR(bean) == &descr_struct_CHUNKS) {
