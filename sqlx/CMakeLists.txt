@@ -26,9 +26,9 @@ target_link_libraries(sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${ZMQ_LIBRARIES})
 
 
-add_executable(hcsqlx sqlx_client.c)
-bin_prefix(hcsqlx -sqlx)
-target_link_libraries(hcsqlx
+add_executable(tool_sqlx tool_sqlx.c)
+bin_prefix(tool_sqlx -sqlx)
+target_link_libraries(tool_sqlx
 		hcresolve metautils gridcluster sqlitereporemote
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 		
@@ -39,7 +39,7 @@ target_link_libraries(sqlx_server
 		sqlxsrv ${GLIB2_LIBRARIES})
 
 
-install(TARGETS sqlx_server hcsqlx sqlxsrv
+install(TARGETS sqlx_server tool_sqlx sqlxsrv
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)
 
