@@ -1566,7 +1566,7 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	ALIASES_set2_alias(alias, hc_url_get(ctx->url, HCURL_PATH));
 	ALIASES_set_version(alias, now);
 	ALIASES_set_ctime(alias, now / G_TIME_SPAN_SECOND);
-	ALIASES_set_ctime(alias, now / G_TIME_SPAN_SECOND);
+	ALIASES_set_mtime(alias, now / G_TIME_SPAN_SECOND);
 	ALIASES_set_deleted(alias, FALSE);
 	ALIASES_set2_content(alias, ctx->uid, ctx->uid_size);
 	ctx->cb(ctx->cb_data, alias);
@@ -1579,6 +1579,7 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	CONTENTS_HEADERS_nullify_hash(header);
 	CONTENTS_HEADERS_set_ctime(header, now / G_TIME_SPAN_SECOND);
 	CONTENTS_HEADERS_set_mtime(header, now / G_TIME_SPAN_SECOND);
+	CONTENTS_HEADERS_set2_mime_type(header, "application/octet-stream");
 	ctx->cb(ctx->cb_data, header);
 }
 

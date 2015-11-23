@@ -168,14 +168,16 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 			}
 		}
 
-		g_string_append_c(gstr, '{');
 		g_string_append_printf(gstr,
-				"\"name\":\"%s\",\"ver\":%"G_GINT64_FORMAT","
-				"\"ctime\":%"G_GINT64_FORMAT","
-				"\"deleted\":%s",
+				"{\"name\":\"%s\""
+				",\"ver\":%"G_GINT64_FORMAT
+				",\"ctime\":%"G_GINT64_FORMAT
+				",\"mtime\":%"G_GINT64_FORMAT
+				",\"deleted\":%s",
 				ALIASES_get_alias(a)->str,
 				ALIASES_get_version(a),
 				ALIASES_get_ctime(a),
+				ALIASES_get_mtime(a),
 				ALIASES_get_deleted(a) ? "true" : "false");
 
 		if (h) {
@@ -197,6 +199,8 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 
 			g_string_append_printf(gstr, ",\"size\":%"G_GINT64_FORMAT,
 					CONTENTS_HEADERS_get_size(h));
+			g_string_append_printf(gstr, ",\"mime-type\":\"%s\"",
+					CONTENTS_HEADERS_get_mime_type(h)->str);
 		}
 		g_string_append_c(gstr, '}');
 	}
@@ -252,7 +256,7 @@ _populate_headers_with_header (struct req_args_s *args,
 	GByteArray *gb = CONTENTS_HEADERS_get_id (header);
 	gchar hexid[1+2*gb->len];
 	oio_str_bin2hex (gb->data, gb->len, hexid, 1+2*gb->len);
-	args->rp->add_header (PROXYD_HEADER_PREFIX "content-id",
+	args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-id",
 			g_strdup_printf ("%s", hexid));
 }
 
@@ -473,7 +477,7 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 	if (!err) {
 		// Extract the content-type
 		gchar *s;
-		s = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-type");
+		s = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-mime-type");
 		if (s)
 			CONTENTS_HEADERS_set2_mime_type (header, s);
 

@@ -362,7 +362,7 @@ oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
 				oio_str_replace (&out->header_chunksize, *(p+1));
 			else if (!g_ascii_strcasecmp(*p, "content-meta-version"))
 				oio_str_replace (&out->header_version, *(p+1));
-			else if (!g_ascii_strcasecmp(*p, "content-id"))
+			else if (!g_ascii_strcasecmp(*p, "content-meta-id"))
 				oio_str_replace (&out->header_content, *(p+1));
 		}
 	}
@@ -380,6 +380,10 @@ oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 	if (in->content)
 		g_string_append_printf (http_url, "&id=%s", in->content);
 	gchar *hdrin[] = {
+		g_strdup(PROXYD_HEADER_PREFIX "content-meta-id"),
+		g_strdup_printf("%s", in->content),
+		g_strdup(PROXYD_HEADER_PREFIX "content-meta-version"),
+		g_strdup_printf("%"G_GINT64_FORMAT, in->version),
 		g_strdup(PROXYD_HEADER_PREFIX "content-meta-length"),
 		g_strdup_printf("%"G_GSIZE_FORMAT, in->size),
 		g_strdup(PROXYD_HEADER_PREFIX "content-meta-hash"),
