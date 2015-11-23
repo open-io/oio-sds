@@ -552,11 +552,13 @@ set_rawx_full_info_in_attr(const char *p, int filedes, GError **error,
 	}
 
 	if (content) {
-		SET(ATTR_NAME_CONTENT_PATH, content->path);
+		SET(ATTR_NAME_CONTENT_CONTAINER, content->container_id);
 		SET(ATTR_NAME_CONTENT_ID, content->content_id);
+		SET(ATTR_NAME_CONTENT_PATH, content->path);
+		SET(ATTR_NAME_CONTENT_VERSION, content->version);
 		SET(ATTR_NAME_CONTENT_SIZE, content->size);
 		SET(ATTR_NAME_CONTENT_NBCHUNK, content->chunk_nb);
-		SET(ATTR_NAME_CONTENT_CONTAINER, content->container_id);
+		SET(ATTR_NAME_CONTENT_STGPOL, content->storage_policy);
 	}
 
 	SET(ATTR_NAME_CHUNK_COMPRESSED_SIZE, compressed_size);
@@ -658,11 +660,13 @@ get_rawx_info_in_attr(const char *pathname, GError ** error,
 	}
 
 	if (content) {
-		GET(ATTR_NAME_CONTENT_PATH, content->path);
+		GET(ATTR_NAME_CONTENT_CONTAINER, content->container_id);
 		GET(ATTR_NAME_CONTENT_ID, content->content_id);
+		GET(ATTR_NAME_CONTENT_PATH, content->path);
+		GET(ATTR_NAME_CONTENT_VERSION, content->version);
 		GET(ATTR_NAME_CONTENT_SIZE, content->size);
 		GET(ATTR_NAME_CONTENT_NBCHUNK, content->chunk_nb);
-		GET(ATTR_NAME_CONTENT_CONTAINER, content->container_id);
+		GET(ATTR_NAME_CONTENT_STGPOL, content->chunk_nb);
 	}
 
 	if (chunk) {
