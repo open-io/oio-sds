@@ -1,4 +1,5 @@
 import time
+from socket import gethostname
 
 from oio.blob.client import BlobClient
 from oio.container.client import ContainerClient
@@ -34,15 +35,24 @@ class BlobRebuilderWorker(object):
         self.container_client = ContainerClient(conf)
         self.rdir_client = RdirClient(conf)
 
+    def rebuilder_pass_with_lock(self):
+        self.rdir_client.admin_lock(self.volume,
+                                    "rebuilder on %s" % gethostname())
+
+        try:
+            self.rebuilder_pass()
+        finally:
+            self.rdir_client.admin_unlock(self.volume)
+
     def rebuilder_pass(self):
         start_time = report_time = time.time()
 
         total_errors = 0
         rebuilder_time = 0
 
-        chunks = self.rdir_client.fetch(self.volume,
-                                        limit=self.rdir_fetch_limit,
-                                        rebuild=True)
+        chunks = self.rdir_client.chunk_fetch(self.volume,
+                                              limit=self.rdir_fetch_limit,
+                                              rebuild=True)
         for container, content, chunk, data in chunks:
             loop_time = time.time()
 
@@ -165,6 +175,6 @@ class BlobRebuilder(Daemon):
         try:
             worker = BlobRebuilderWorker(self.conf,
                                          self.logger, self.volume_id)
-            worker.rebuilder_pass()
+            worker.rebuilder_pass_with_lock()
         except Exception as e:
             self.logger.exception('ERROR in rebuilder: %s' % e)

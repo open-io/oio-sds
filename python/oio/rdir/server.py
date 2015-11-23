@@ -151,8 +151,8 @@ def rdir_admin_lock(ns):
     desc = get_backend().admin_lock(volume, who)
 
     if desc is not None:
-        resp = {'who': desc}
-        return flask.Response(json.dumps(resp), 403,
+        message = "Already locked by %s" % desc
+        return flask.Response(message, 403,
                               mimetype='application/json')
 
     return flask.Response('', 204)
