@@ -858,18 +858,7 @@ gridd_client_factory_create(void)
 	return factory;
 }
 
-#define VTABLE_CHECK(self,T,F) do { \
-	EXTRA_ASSERT(self != NULL); \
-	EXTRA_ASSERT(((T)self)->vtable != NULL); \
-	EXTRA_ASSERT(((T)self)->vtable-> F != NULL); \
-} while (0)
-
-#define VTABLE_CALL(self,T,F) \
-	VTABLE_CHECK(self,T,F); \
-	return ((T)self)->vtable-> F
-
-#define GRIDD_CALL(self,F) \
-	VTABLE_CALL(self,struct abstract_client_s*,F)
+#define GRIDD_CALL(self,F) VTABLE_CALL(self,struct abstract_client_s*,F)
 
 void
 gridd_client_free (struct gridd_client_s *self)

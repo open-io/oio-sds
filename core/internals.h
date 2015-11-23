@@ -39,6 +39,16 @@ extern "C" {
 		|| (C)==CODE_POLICY_NOT_SUPPORTED \
 		|| (C)==CODE_NAMESPACE_NOTMANAGED)
 
+#define VTABLE_CHECK(self,T,F) do { \
+	g_assert(self != NULL); \
+	g_assert(((T)self)->vtable != NULL); \
+	g_assert(((T)self)->vtable-> F != NULL); \
+} while (0)
+
+#define VTABLE_CALL(self,T,F) \
+	VTABLE_CHECK(self,T,F); \
+	return ((T)self)->vtable-> F
+
 enum {
 	ERRCODE_UNKNOWN_ERROR = 0,
 	ERRCODE_PARAM = 1,

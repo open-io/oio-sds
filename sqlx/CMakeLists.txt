@@ -14,17 +14,18 @@ link_directories(
 		${SQLITE3_LIBRARY_DIRS})
 
 
-add_library(sqlxsrv SHARED
-		sqlx_service.c sqlx_service.h)
-
+add_library(sqlxsrv SHARED sqlx_service.c)
 set_target_properties(sqlxsrv PROPERTIES SOVERSION ${ABI_VERSION})
-
 target_link_libraries(sqlxsrv
 		server metautils gridcluster sqliterepo
 		hcresolve meta0remote meta1remote
 		server sqliterepo metautils gridcluster
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${ZMQ_LIBRARIES})
 
+add_library(sqlxclient SHARED sqlx_client.c)
+set_target_properties(sqlxclient PROPERTIES SOVERSION ${ABI_VERSION})
+target_link_libraries(sqlxclient
+		oiocore)
 
 add_executable(tool_sqlx tool_sqlx.c)
 bin_prefix(tool_sqlx -sqlx)
