@@ -87,7 +87,7 @@ class TestRdirServer(BaseTestCase):
                              query_string={'vol': "xxx"},
                              data=json.dumps(data))
         self.assertEqual(resp.status_code, 403)
-        self.assertEqual(json.loads(resp.data), {'who': "a functionnal test"})
+        self.assertEqual(resp.data, "Already locked by a functionnal test")
 
         # unlock
         resp = self.app.post("/NS/rdir/admin/unlock",
