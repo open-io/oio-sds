@@ -157,7 +157,6 @@ The following actions are currently available:
     * Mandatory header **X-oio-content-meta-length: XXX**
 	* Optional header **X-oio-content-meta-chunk-method: XXX**
 	* Optional header **X-oio-content-meta-type: XXX**
-	* Optional header **X-oio-content-type: XXX**
     * Optional header **X-oio-content-meta-policy: XXX**
     * Optional header **X-oio-content-meta-hash: XXX**
 	* Optional header **X-oio-content-meta-x-Key: Value**
