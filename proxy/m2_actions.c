@@ -256,7 +256,7 @@ _populate_headers_with_header (struct req_args_s *args,
 	GByteArray *gb = CONTENTS_HEADERS_get_id (header);
 	gchar hexid[1+2*gb->len];
 	oio_str_bin2hex (gb->data, gb->len, hexid, 1+2*gb->len);
-	args->rp->add_header (PROXYD_HEADER_PREFIX "content-id",
+	args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-id",
 			g_strdup_printf ("%s", hexid));
 }
 
@@ -477,7 +477,7 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 	if (!err) {
 		// Extract the content-type
 		gchar *s;
-		s = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-type");
+		s = g_tree_lookup (args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-mime-type");
 		if (s)
 			CONTENTS_HEADERS_set2_mime_type (header, s);
 
