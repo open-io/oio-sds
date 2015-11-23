@@ -1371,7 +1371,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 		if (!iter)
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No RAWX available");
 		else
-			err = m2_generate_beans_v1(url, size,
+			err = m2_generate_beans(url, size,
 					namespace_chunk_size(nsinfo, hc_url_get(url, HCURL_NS)),
 					policy, iter, cb, cb_data);
 	}

@@ -227,7 +227,8 @@ _reply_beans (struct req_args_s *args, GError * err, GSList * beans)
 }
 
 static void
-_populate_headers_with_header (struct req_args_s *args, struct bean_CONTENTS_HEADERS_s *header)
+_populate_headers_with_header (struct req_args_s *args,
+		struct bean_CONTENTS_HEADERS_s *header)
 {
 	if (!header)
 		return;
@@ -251,6 +252,12 @@ _populate_headers_with_header (struct req_args_s *args, struct bean_CONTENTS_HEA
 			g_strdup(CONTENTS_HEADERS_get_mime_type(header)->str));
 	args->rp->add_header (PROXYD_HEADER_PREFIX "content-meta-chunk-method",
 			g_strdup(CONTENTS_HEADERS_get_chunk_method(header)->str));
+
+	GByteArray *gb = CONTENTS_HEADERS_get_id (header);
+	gchar hexid[1+2*gb->len];
+	oio_str_bin2hex (gb->data, gb->len, hexid, 1+2*gb->len);
+	args->rp->add_header (PROXYD_HEADER_PREFIX "content-id",
+			g_strdup_printf ("%s", hexid));
 }
 
 static void
@@ -270,7 +277,8 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 }
 
 static enum http_rc_e
-_reply_simplified_beans (struct req_args_s *args, GError *err, GSList *beans, gboolean body)
+_reply_simplified_beans (struct req_args_s *args, GError *err,
+		GSList *beans, gboolean body)
 {
 	if (err)
 		return _reply_m2_error(args, err);
@@ -409,6 +417,7 @@ _load_simplified_chunks (struct json_object *jbody, GSList **out)
 	return err;
 
 }
+
 static GError *
 _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GSList **out)
 {

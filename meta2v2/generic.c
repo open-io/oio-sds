@@ -1039,7 +1039,7 @@ _bean_debugl2 (const char *tag, GSList *beans)
 	for (; beans ;beans=beans->next) {
 		g_string_set_size (gs, 0);
 		gs = _bean_debug (gs, beans->data);
-		GRID_DEBUG (" %s > %s", tag, gs->str);
+		GRID_DEBUG ("%s %s", tag, gs->str);
 	}
 	g_string_free (gs, TRUE);
 }

@@ -72,7 +72,7 @@ create_sub_worker( struct namespace_data_s *ns_data, const gchar *type_name, wor
 	
 	g_hash_table_insert(asn1_worker_get_session(asn1_worker)->req_headers,
 		g_strdup(NAME_MSGKEY_TYPENAME), g_byte_array_append(g_byte_array_new(), (guint8*)type_name,
-			strlen_len((guint8*)type_name, LIMIT_LENGTH_SRVTYPE)));
+			strnlen(type_name, LIMIT_LENGTH_SRVTYPE)));
 
 	/*Then create the ASN.1 worker*/
 	if (!asn1_request_worker(asn1_worker, error)) {

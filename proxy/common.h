@@ -49,8 +49,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "path_parser.h"
 #include "transport_http.h"
 
-#define BADREQ(M,...) NEWERROR(CODE_BAD_REQUEST,M,##__VA_ARGS__)
-
 #define OPT(N)    _req_get_option(args,(N))
 #define TOK(N)    _req_get_token(args,(N))
 #define CID()     (TOK("CID") ?: OPT("cid"))

@@ -162,7 +162,9 @@ struct oio_error_s* oio_sds_download (struct oio_sds_s *sds,
 struct oio_error_s* oio_sds_download_to_file (struct oio_sds_s *sds,
 		struct oio_url_s *u, const char *local);
 
-/* Upload ------------------------------------------------------------------- */
+/* --------------------------------------------------------------------------
+ * Upload
+ * -------------------------------------------------------------------------- */
 
 typedef ssize_t (*oio_sds_ul_hook_f) (void*, unsigned char *p, size_t s);
 
@@ -209,6 +211,36 @@ struct oio_sds_ul_dst_s
 	const char *content_id;
 };
 
+/* "Female" upload API
+ * The sequence is managed by the caller: an upload context has to be
+ * initiated, then fed with some data, told to progress, then closed. */
+
+struct oio_sds_ul_s;
+
+struct oio_sds_ul_s * oio_sds_upload_init (struct oio_sds_s *sds,
+		struct oio_sds_ul_dst_s *dst);
+
+struct oio_error_s * oio_sds_upload_prepare (struct oio_sds_ul_s *ul,
+	size_t size);
+
+struct oio_error_s * oio_sds_upload_feed (struct oio_sds_ul_s *ul,
+		const unsigned char *buf, size_t len);
+
+struct oio_error_s * oio_sds_upload_step (struct oio_sds_ul_s *ul);
+
+struct oio_error_s * oio_sds_upload_commit (struct oio_sds_ul_s *ul);
+
+struct oio_error_s * oio_sds_upload_abort (struct oio_sds_ul_s *ul);
+
+int oio_sds_upload_done (struct oio_sds_ul_s *ul);
+
+void oio_sds_upload_clean (struct oio_sds_ul_s *ul);
+
+/* "Male" upload API
+ * This API wraps the "female" API. The sequence is managed by the underlying
+ * API call, you just have to provide some data. When the data is called,
+ * it has to be available. */
+
 /* works with fully qualified urls (content) and local paths */
 struct oio_error_s* oio_sds_upload (struct oio_sds_s *sds,
 		struct oio_sds_ul_src_s *src, struct oio_sds_ul_dst_s *dst);
@@ -217,6 +249,23 @@ struct oio_error_s* oio_sds_upload (struct oio_sds_s *sds,
  * set. */
 struct oio_error_s* oio_sds_upload_from_file (struct oio_sds_s *sds,
 		struct oio_url_s *u, const char *local);
+
+struct oio_source_s
+{
+	int autocreate;
+	enum {
+		OIO_SRC_NONE = 0, /* do not use this */
+		OIO_SRC_FILE,
+	} type;
+	union {
+		const char *path;
+	} data;
+};
+
+/* @deprecated use oio_sds_upload() instead */
+struct oio_error_s* oio_sds_upload_from_source (struct oio_sds_s *sds,
+		struct oio_url_s *u, struct oio_source_s *src)
+	__attribute__ ((deprecated));
 
 /* List --------------------------------------------------------------------- */
 
@@ -290,22 +339,6 @@ struct oio_error_s* oio_sds_link_or_upload (struct oio_sds_s *sds,
 		struct oio_sds_ul_src_s *src, struct oio_sds_ul_dst_s *dst);
 
 /* DEPRECATED --------------------------------------------------------------- */
-
-struct oio_source_s {
-	int autocreate;
-	enum {
-		OIO_SRC_NONE = 0, /* do not use this */
-		OIO_SRC_FILE,
-	} type;
-	union {
-		const char *path;
-	} data;
-};
-
-/* XXX @deprecated use oio_sds_upload() instead */
-struct oio_error_s* oio_sds_upload_from_source (struct oio_sds_s *sds,
-		struct oio_url_s *u, struct oio_source_s *src)
-	__attribute__ ((deprecated));
 
 #ifdef __cplusplus
 }

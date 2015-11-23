@@ -37,6 +37,7 @@ License along with this library.
 # include <glib/gstdio.h>
 
 #include <core/oio_core.h>
+#include <core/internals.h>
 
 # include <metautils/lib/metatypes.h>
 

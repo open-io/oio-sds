@@ -22,6 +22,7 @@ License along with this library.
 #include <glib.h>
 #include <glib/gstdio.h>
 
+#include "internals.h"
 #include "oio_core.h"
 #include "oio_sds.h"
 
