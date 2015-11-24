@@ -493,6 +493,25 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 		ALIASES_set2_alias (alias, PATH());
 		ALIASES_set2_content (alias, (guint8*)"0", 1);
 
+		if (!err) { // aliases version
+			gchar *s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-version");
+			if (s) {
+				errno = 0;
+				gchar *end = NULL;
+				gint64 s64 = g_ascii_strtoll(s, &end, 10);
+				if (s64 < 0)
+					err = BADREQ("Header: negative content version");
+				else if (s64 == G_MAXINT64)
+					err = BADREQ("Header: content version overflow");
+				else if (s64 == 0 && end == s)
+					err = BADREQ("Header: invalid content version (parsing failed)");
+				else if (*end != 0)
+					err = BADREQ("Header: invalid content version (trailing characters)");
+				else
+					ALIASES_set_version (alias, s64);
+			}
+		}
+
 		gboolean run_headers (gpointer k, gpointer v, gpointer u) {
 			(void)u;
 			if (!metautils_str_has_caseprefix ((gchar*)k, PROXYD_HEADER_PREFIX "content-meta-x-"))

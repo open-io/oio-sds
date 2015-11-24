@@ -36,8 +36,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # define ATTR_NAME_CONTENT_PATH      "content.path"
 # define ATTR_NAME_CONTENT_ID        "content.id"
+# define ATTR_NAME_CONTENT_VERSION   "content.version"
 # define ATTR_NAME_CONTENT_SIZE      "content.size"
 # define ATTR_NAME_CONTENT_NBCHUNK   "content.nbchunk"
+# define ATTR_NAME_CONTENT_STGPOL    "content.storage_policy"
 # define ATTR_NAME_CONTENT_CONTAINER "content.container"
 
 #define NS_RAWX_BUFSIZE_OPTION "rawx_bufsize"
