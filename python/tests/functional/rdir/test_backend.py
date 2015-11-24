@@ -36,6 +36,23 @@ class TestRdirBackend(BaseTestCase):
         self.assertEqual(data["mycontainer|mycontent|mychunk"],
                          {'mtime': 4444, 'rtime': 5555})
 
+    def test_push_allowed_tokens(self):
+        data_put = {
+            'content_version': 1,
+            'content_nbchunks': 3,
+            'content_path': "path",
+            'content_size': 1234,
+            'chunk_hash': "1234567890ABCDEF",
+            'chunk_position': "1",
+            'chunk_size': 123,
+            'mtime': 123456,
+            'rtime': 456
+        }
+        self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",
+                             **data_put)
+        data_fetch = self.rdir.chunk_fetch("myvolume")
+        self.assertEqual(data_fetch["mycontainer|mycontent|mychunk"], data_put)
+
     def test_chunk_push_update_data(self):
         # initial push
         self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",

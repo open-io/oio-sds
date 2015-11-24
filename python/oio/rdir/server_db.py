@@ -34,63 +34,61 @@ class RdirBackend(object):
         if not os.path.exists(self.db_path):
             os.makedirs(self.db_path)
 
-    def _get_db(self, volume):
+    def _get_db(self, volume_id):
         try:
-            db = self.dbs[volume]
+            db = self.dbs[volume_id]
         except KeyError:
-            self.dbs[volume] = plyvel.DB("%s/%s" % (self.db_path, volume),
-                                         create_if_missing=True)
-            db = self.dbs[volume]
+            path = "%s/%s" % (self.db_path, volume_id)
+            self.dbs[volume_id] = plyvel.DB(path, create_if_missing=True)
+            db = self.dbs[volume_id]
         return db
 
-    def _get_db_chunk(self, volume):
-        return self._get_db(volume).prefixed_db("chunk|")
+    def _get_db_chunk(self, volume_id):
+        return self._get_db(volume_id).prefixed_db("chunk|")
 
-    def _get_db_admin(self, volume):
-        return self._get_db(volume).prefixed_db("admin|")
+    def _get_db_admin(self, volume_id):
+        return self._get_db(volume_id).prefixed_db("admin|")
 
-    def chunk_push(self, volume, container, content, chunk,
-                   mtime=None, rtime=None):
-        # TODO replace content_path with content_id when available in git
-        key = "%s|%s|%s" % (container, content, chunk)
+    def chunk_push(self, volume_id,
+                   container_id, content_id, chunk_id, **data):
+        key = "%s|%s|%s" % (container_id, content_id, chunk_id)
 
-        value = self._get_db_chunk(volume).get(key.encode('utf8'))
+        value = self._get_db_chunk(volume_id).get(key.encode('utf8'))
         if value is not None:
             value = json.loads(value)
         else:
             value = dict()
 
-        if mtime is not None:
-            value['mtime'] = mtime
-        if rtime is not None:
-            value['rtime'] = rtime
+        for k, v in data.iteritems():
+            value[k] = v
 
-        if value.get('mtime') is None:  # not consistent
+        if 'mtime' not in value:  # not consistent
             raise ServerException("mtime is mandatory")
 
         value = json.dumps(value)
 
-        self._get_db_chunk(volume).put(key.encode('utf8'),
-                                       value.encode('utf8'))
+        self._get_db_chunk(volume_id).put(key.encode('utf8'),
+                                          value.encode('utf8'))
 
-    def chunk_delete(self, volume, container, content, chunk):
+    def chunk_delete(self, volume_id, container_id, content_id, chunk_id):
         # TODO replace content_path with content_id when available in git
-        key = "%s|%s|%s" % (container, content, chunk)
+        key = "%s|%s|%s" % (container_id, content_id, chunk_id)
 
-        self._get_db_chunk(volume).delete(key.encode('utf8'))
+        self._get_db_chunk(volume_id).delete(key.encode('utf8'))
 
-    def chunk_fetch(self, volume, start_after=None, limit=None, rebuild=False):
+    def chunk_fetch(self, volume_id, start_after=None,
+                    limit=None, rebuild=False):
         result = dict()
 
         if start_after is not None:
             start_after = start_after.encode('utf8')
 
-        broken_date = self.admin_get_broken_date(volume)
+        broken_date = self.admin_get_broken_date(volume_id)
         if rebuild and broken_date is None:
             # No broken date set so no chunks needs to be rebuild
             return result
 
-        db_iter = self._get_db_chunk(volume).iterator(
+        db_iter = self._get_db_chunk(volume_id).iterator(
             start=start_after,
             include_start=False)
         count = 0
@@ -108,11 +106,11 @@ class RdirBackend(object):
             count += 1
         return result
 
-    def chunk_rebuild_status(self, volume):
+    def chunk_rebuild_status(self, volume_id):
         total_chunks = 0
         total_chunks_rebuilt = 0
         containers = dict()
-        for key, value in self._get_db_chunk(volume):
+        for key, value in self._get_db_chunk(volume_id):
             total_chunks += 1
 
             container, content, chunk = key.split('|')
@@ -136,29 +134,29 @@ class RdirBackend(object):
         }
         return result
 
-    def admin_set_broken_date(self, volume, date):
-        self._get_db_admin(volume).put('broken_date', str(date))
+    def admin_set_broken_date(self, volume_id, date):
+        self._get_db_admin(volume_id).put('broken_date', str(date))
 
-    def admin_get_broken_date(self, volume):
-        ret = self._get_db_admin(volume).get('broken_date')
+    def admin_get_broken_date(self, volume_id):
+        ret = self._get_db_admin(volume_id).get('broken_date')
         if ret is None:
             return None
         return int(ret)
 
-    def admin_lock(self, volume, who):
-        ret = self._get_db_admin(volume).get('lock')
+    def admin_lock(self, volume_id, who):
+        ret = self._get_db_admin(volume_id).get('lock')
         if ret is not None:
             return ret  # already locked
 
-        self._get_db_admin(volume).put('lock', who.encode('utf8'))
+        self._get_db_admin(volume_id).put('lock', who.encode('utf8'))
         return None
 
-    def admin_unlock(self, volume):
-        self._get_db_admin(volume).delete('lock')
+    def admin_unlock(self, volume_id):
+        self._get_db_admin(volume_id).delete('lock')
 
-    def admin_show(self, volume):
+    def admin_show(self, volume_id):
         result = {}
-        for key, value in self._get_db_admin(volume):
+        for key, value in self._get_db_admin(volume_id):
             result[key] = value
         return result
 

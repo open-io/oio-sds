@@ -83,6 +83,7 @@ class EventWorker(object):
         try:
             while self.running:
                 msg = self.socket.recv_multipart()
+                self.logger.debug("msg received: %s" % msg)
                 ack = [msg[0]]
                 event = decode_msg(msg)
                 self.process_event(event)
@@ -264,11 +265,17 @@ class EventWorker(object):
 
         when = event.get('when')
         data = event.get('data')
-        volume = data.get('volume')
-        container = data.get('container')
-        content = data.get('content')
-        chunk = data.get('chunk')
-        self.rdir.chunk_push(volume, container, content, chunk, mtime=when)
+        volume_id = data.get('volume_id')
+        del data['volume_id']
+        container_id = data.get('container_id')
+        del data['container_id']
+        content_id = data.get('content_id')
+        del data['content_id']
+        chunk_id = data.get('chunk_id')
+        del data['chunk_id']
+        data['mtime'] = when
+        self.rdir.chunk_push(volume_id, container_id, content_id, chunk_id,
+                             **data)
 
     def handle_chunk_delete(self, event):
         """
@@ -278,11 +285,11 @@ class EventWorker(object):
         self.logger.debug('worker "%s" handle chunk deletion', self.name)
 
         data = event.get('data')
-        volume = data.get('volume')
-        container = data.get('container')
-        content = data.get('content')
-        chunk = data.get('chunk')
-        self.rdir.chunk_delete(volume, container, content, chunk)
+        volume_id = data.get('volume_id')
+        container_id = data.get('container_id')
+        content_id = data.get('content_id')
+        chunk_id = data.get('chunk_id')
+        self.rdir.chunk_delete(volume_id, container_id, content_id, chunk_id)
 
     def handle_ping(self, event):
         """

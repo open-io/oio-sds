@@ -38,26 +38,26 @@ class RdirClient(Client):
         resp, body = self._direct_request(method, uri, **kwargs)
         return resp, body
 
-    def chunk_push(self, volume, container, content, chunk,
-                   mtime=None, rtime=None):
-        body = {'container': container,
-                'content': content,
-                'chunk': chunk}
-        if mtime:
-            body['mtime'] = mtime
-        if rtime:
-            body['rtime'] = rtime
+    def chunk_push(self, volume_id, container_id, content_id, chunk_id,
+                   **data):
+        body = {'container_id': container_id,
+                'content_id': content_id,
+                'chunk_id': chunk_id}
+
+        for key, value in data.iteritems():
+            body[key] = value
+
         headers = {}
 
-        self._rdir_request(volume, 'POST', 'rdir/push',
+        self._rdir_request(volume_id, 'POST', 'rdir/push',
                            json=body, headers=headers)
 
-    def chunk_delete(self, volume, container, content, chunk):
-        body = {'container': container,
-                'content': content,
-                'chunk': chunk}
+    def chunk_delete(self, volume_id, container_id, content_id, chunk_id):
+        body = {'container_id': container_id,
+                'content_id': content_id,
+                'chunk_id': chunk_id}
 
-        self._rdir_request(volume, 'DELETE', 'rdir/delete', json=body)
+        self._rdir_request(volume_id, 'DELETE', 'rdir/delete', json=body)
 
     def chunk_fetch(self, volume, limit=100, rebuild=False):
         req_body = {'limit': limit}
@@ -85,7 +85,6 @@ class RdirClient(Client):
         return resp_body.get('date')
 
     def admin_lock(self, volume, who):
-        uri = self._make_uri('rdir/admin/lock', volume)
         body = {'who': who}
 
         self._rdir_request(volume, 'POST', 'rdir/admin/lock', json=body)

@@ -41,12 +41,29 @@ def rdir_push(ns):
     if not volume:
         return flask.Response('Missing volume id', 400)
     decoded = flask.request.get_json(force=True)
-    chunk = decoded.get('chunk')
-    container = decoded.get('container')
-    content = decoded.get('content')
-    mtime = decoded.get('mtime')
-    rtime = decoded.get('rtime')
-    get_backend().chunk_push(volume, container, content, chunk, mtime, rtime)
+    chunk_id = decoded.get('chunk_id')
+    if chunk_id is None:
+        return flask.Response('Missing token chunk_id', 400)
+    container_id = decoded.get('container_id')
+    if container_id is None:
+        return flask.Response('Missing token container_id', 400)
+    content_id = decoded.get('content_id')
+    if content_id is None:
+        return flask.Response('Missing token content_id', 400)
+    data = {}
+    allowed_tokens_int = ['content_version', 'content_nbchunks',
+                          'content_size', 'chunk_size', 'mtime', 'rtime']
+    for token in allowed_tokens_int:
+        if token in decoded:
+            data[token] = int(decoded[token])
+
+    allowed_tokens_str = ['content_path', 'chunk_hash', 'chunk_position']
+    for token in allowed_tokens_str:
+        if token in decoded:
+            data[token] = decoded[token]
+
+    get_backend().chunk_push(volume, container_id, content_id, chunk_id,
+                             **data)
     return flask.Response('', 204)
 
 
@@ -56,10 +73,16 @@ def rdir_delete(ns):
     if not volume:
         return flask.Response('Missing volume id', 400)
     decoded = flask.request.get_json(force=True)
-    chunk = decoded.get('chunk')
-    container = decoded.get('container')
-    content = decoded.get('content')
-    get_backend().chunk_delete(volume, container, content, chunk)
+    chunk_id = decoded.get('chunk_id')
+    if chunk_id is None:
+        return flask.Response('Missing token chunk_id', 400)
+    container_id = decoded.get('container_id')
+    if container_id is None:
+        return flask.Response('Missing token container_id', 400)
+    content_id = decoded.get('content_id')
+    if content_id is None:
+        return flask.Response('Missing token content_id', 400)
+    get_backend().chunk_delete(volume, container_id, content_id, chunk_id)
     return flask.Response('', 204)
 
 

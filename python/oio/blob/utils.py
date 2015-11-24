@@ -18,6 +18,8 @@ chunk_xattr_keys = {'chunk_hash': 'grid.chunk.hash',
                     'content_size': 'grid.content.size',
                     'content_cid': 'grid.content.container',
                     'content_path': 'grid.content.path',
+                    'content_id': 'grid.content.id',
+                    'content_version': 'grid.content.version',
                     'content_chunksnb': 'grid.content.nbchunk'}
 
 

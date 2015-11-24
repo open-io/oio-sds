@@ -19,12 +19,50 @@ class TestRdirServer(BaseTestCase):
         del self.app
         shutil.rmtree(self.db_path)
 
+    def test_push_allowed_tokens(self):
+        data_put = {
+            'container_id': "mycontainer",
+            'content_id': "mycontent",
+            'chunk_id': "mychunk",
+            'content_version': "1",
+            'content_nbchunks': "3",
+            'content_path': "path",
+            'content_size': "1234",
+            'chunk_hash': "1234567890ABCDEF",
+            'chunk_position': "1",
+            'chunk_size': "123",
+            'mtime': 123456,
+            'rtime': 456
+        }
+        resp = self.app.post("/NS/rdir/push", query_string={'vol': "xxx"},
+                             data=json.dumps(data_put),
+                             content_type="application/json")
+        self.assertEqual(resp.status_code, 204)
+
+        resp = self.app.post("/NS/rdir/fetch", query_string={'vol': "xxx"},
+                             data=json.dumps({}),
+                             content_type="application/json")
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(json.loads(resp.data), {
+            "mycontainer|mycontent|mychunk": {
+                'content_version': 1,
+                'content_nbchunks': 3,
+                'content_path': "path",
+                'content_size': 1234,
+                'chunk_hash': "1234567890ABCDEF",
+                'chunk_position': "1",
+                'chunk_size': 123,
+                'mtime': 123456,
+                'rtime': 456
+            }
+        })
+
     def test_push_fetch_delete(self):
         # push
         data = {
-            'container': "mycontainer",
-            'content': "mycontent",
-            'chunk': "mychunk",
+            'container_id': "mycontainer",
+            'content_id': "mycontent",
+            'chunk_id': "mychunk",
             'mtime': 1234
         }
         resp = self.app.post("/NS/rdir/push", query_string={'vol': "xxx"},
@@ -42,9 +80,9 @@ class TestRdirServer(BaseTestCase):
 
         # delete
         data = {
-            'container': "mycontainer",
-            'content': "mycontent",
-            'chunk': "mychunk",
+            'container_id': "mycontainer",
+            'content_id': "mycontent",
+            'chunk_id': "mychunk",
         }
         resp = self.app.delete("/NS/rdir/delete", query_string={'vol': "xxx"},
                                data=json.dumps(data),

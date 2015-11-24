@@ -88,11 +88,21 @@ class BlobIndexerWorker(object):
             except exc.MissingAttribute as e:
                 raise exc.FaultyChunk(
                     'Missing extended attribute %s' % e)
+            data = {
+                'content_version': meta['content_version'],
+                'content_nbchunks': meta['content_chunksnb'],
+                'content_path': meta['content_path'],
+                'content_size': meta['content_size'],
+                'chunk_hash': meta['chunk_hash'],
+                'chunk_position': meta['chunk_pos'],
+                'chunk_size': meta['chunk_size'],
+                'mtime': int(time.time())
+            }
             self.index_client.chunk_push(self.volume_id,
                                          meta['content_cid'],
-                                         meta['content_path'],
+                                         meta['content_id'],
                                          meta['chunk_id'],
-                                         mtime=int(time.time()))
+                                         **data)
 
 
 class BlobIndexer(Daemon):
