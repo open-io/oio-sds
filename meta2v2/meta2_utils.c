@@ -305,30 +305,63 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *u,
 		guint32 flags, m2_onbean_cb cb, gpointer u0)
 {
 	/* sanity checks */
-	if (!oio_url_has(u, OIOURL_PATH))
-		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
+	if (!oio_url_has(u, OIOURL_PATH) && !oio_url_has(u, OIOURL_CONTENTID))
+		return NEWERROR(CODE_BAD_REQUEST, "Missing path and content");
 
 	GRID_TRACE("GET(%s)", oio_url_get(u, OIOURL_WHOLE));
 
 	/* query, and nevermind the snapshot */
+	GError *err = NULL;
 	const gchar *sql = NULL;
 	GVariant *params[3] = {NULL, NULL, NULL};
-	params[0] = g_variant_new_string(oio_url_get(u, OIOURL_PATH));
-	if (flags & M2V2_FLAG_LATEST) {
-		sql = "alias = ? ORDER BY version DESC LIMIT 1";
-	} else if (flags & M2V2_FLAG_ALLVERSION) {
-		sql = "alias = ? ORDER BY version DESC";
-	} else {
-		if (oio_url_has(u, OIOURL_VERSION)) {
-			sql = "alias = ? AND version = ? LIMIT 1";
-			params[1] = g_variant_new_int64(atoi(oio_url_get(u, OIOURL_VERSION)));
-		} else {
+
+	if (oio_url_has(u, OIOURL_PATH)) {
+		params[0] = g_variant_new_string(oio_url_get(u, OIOURL_PATH));
+		if (flags & M2V2_FLAG_LATEST) {
 			sql = "alias = ? ORDER BY version DESC LIMIT 1";
+		} else if (flags & M2V2_FLAG_ALLVERSION) {
+			sql = "alias = ? ORDER BY version DESC";
+		} else {
+			if (oio_url_has(u, OIOURL_VERSION)) {
+				sql = "alias = ? AND version = ? LIMIT 1";
+				params[1] = g_variant_new_int64(atoi(oio_url_get(u, OIOURL_VERSION)));
+			} else {
+				sql = "alias = ? ORDER BY version DESC LIMIT 1";
+			}
+		}
+	} else {
+
+		do { /* get the content-id in its binary form */
+			/* XXX TODO this code is multiplicated, there is room for factorisation */
+			const char *h = oio_url_get(u, OIOURL_CONTENTID);
+			gsize hl = strlen(h);
+			guint8 b[hl/2];
+			if (!oio_str_hex2bin (h, b, hl/2))
+				err = BADREQ("The content ID is not hexa");
+			else {
+				GBytes *gb = g_bytes_new_static (b, hl/2);
+				params[0] = _gb_to_gvariant(gb);
+				g_bytes_unref (gb);
+			}
+		} while (0);
+
+		if (flags & M2V2_FLAG_LATEST) {
+			sql = "content = ? ORDER BY version DESC LIMIT 1";
+		} else if (flags & M2V2_FLAG_ALLVERSION) {
+			sql = "content = ? ORDER BY version DESC";
+		} else {
+			if (oio_url_has(u, OIOURL_VERSION)) {
+				sql = "content = ? AND version = ? LIMIT 1";
+				params[1] = g_variant_new_int64(atoi(oio_url_get(u, OIOURL_VERSION)));
+			} else {
+				sql = "content = ? ORDER BY version DESC LIMIT 1";
+			}
 		}
 	}
 
 	GPtrArray *tmp = g_ptr_array_new();
-	GError *err = ALIASES_load_buffered(sq3->db, sql, params, tmp);
+	if (!err)
+		err = ALIASES_load_buffered(sq3->db, sql, params, tmp);
 	metautils_gvariant_unrefv(params);
 
 	if (!err) {
