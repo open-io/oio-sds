@@ -41,12 +41,13 @@ struct test_data_s {
 static void
 _test_field (const char *v, struct oio_url_s *u, enum oio_url_field_e f)
 {
+	const char *found = oio_url_get (u, f);
 	if (v) {
 		g_assert (oio_url_has (u, f));
-		g_assert (!strcmp (v, oio_url_get (u, f)));
+		g_assert (!strcmp (v, found));
 	} else {
 		g_assert (!oio_url_has (u, f));
-		g_assert (NULL == oio_url_get (u, f));
+		g_assert (NULL == found);
 	}
 }
 
@@ -87,15 +88,15 @@ static void
 test_configure_valid (void)
 {
 	static struct test_data_s tab[] = {
-		{ "/NS//JFS",
-			"NS//JFS/",
+		{ "/NS/ACCT/JFS",
+			"NS/ACCT/JFS/",
 			"NS", "ACCT", "JFS", OIOURL_DEFAULT_TYPE, NULL,
-			"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
+			"9006CE70B59E5777D6BB410C57944812EB05FCDB5BA85D520A14B3051D1D094F"},
 
-		{ "NS//JFS//1.",
-			"NS//JFS//1.",
+		{ "NS/ACCT/JFS//1.",
+			"NS/ACCT/JFS//1.",
 			"NS", "ACCT", "JFS", OIOURL_DEFAULT_TYPE, "1.",
-			"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
+			"9006CE70B59E5777D6BB410C57944812EB05FCDB5BA85D520A14B3051D1D094F"},
 
 		TEST_END
 	};
@@ -128,6 +129,51 @@ test_configure_invalid(void)
 	g_assert(url == NULL);
 }
 
+/* Plays a set of duplication/free roundtrips. */
+static void
+_round_dup_cleanup (struct oio_url_s *u0)
+{
+	for (guint i=0; i<64 ;++i)
+		oio_url_clean (oio_url_dup (u0));
+}
+
+/* Plays rounds of allocations/librations on partial URL */
+static void
+test_dup (void)
+{
+	struct oio_url_s *u0 = oio_url_empty ();
+
+	oio_url_set (u0, OIOURL_NS, "NS");
+	_round_dup_cleanup (u0);
+
+	oio_url_set (u0, OIOURL_ACCOUNT, "ACCT");
+	_round_dup_cleanup (u0);
+
+	oio_url_set (u0, OIOURL_USER, "JFS");
+	_round_dup_cleanup (u0);
+
+	(void) oio_url_get_id (u0);
+	(void) oio_url_get_id_size (u0);
+	_round_dup_cleanup (u0);
+
+	oio_url_set (u0, OIOURL_TYPE, "mail");
+	_round_dup_cleanup (u0);
+
+	oio_url_set (u0, OIOURL_PATH, "path");
+	_round_dup_cleanup (u0);
+
+	oio_url_set (u0, OIOURL_CONTENTID, "XYZT");
+	_round_dup_cleanup (u0);
+
+	oio_url_set (u0, OIOURL_CONTENTID, "0000");
+	_round_dup_cleanup (u0);
+
+	oio_url_set (u0, OIOURL_VERSION, "0");
+	_round_dup_cleanup (u0);
+
+	oio_url_pclean (&u0);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -140,6 +186,7 @@ main(int argc, char **argv)
 			test_configure_valid);
 	g_test_add_func("/core/url/configure/invalid",
 			test_configure_invalid);
+	g_test_add_func("/core/url/dup", test_dup);
 	return g_test_run();
 }
 
