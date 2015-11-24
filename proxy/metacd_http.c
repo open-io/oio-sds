@@ -169,6 +169,9 @@ _metacd_load_url (struct req_args_s *args)
 	if (NULL != (s = CID()))
 		oio_url_set (url, OIOURL_HEXID, s);
 
+	if (NULL != (s = CONTENT()))
+		oio_url_set (url, OIOURL_CONTENTID, s);
+
 	return url;
 }
 

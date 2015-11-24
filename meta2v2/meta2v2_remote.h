@@ -129,7 +129,7 @@ GError* m2v2_remote_execute_SPARE(const char *target, struct oio_url_s *url,
 		GSList **out);
 
 GError* m2v2_remote_execute_PUT(const char *target, struct oio_url_s *url,
-		GSList *in, GBytes *content_id, GSList **out);
+		GSList *in, GSList **out);
 
 GError* m2v2_remote_execute_OVERWRITE(const char *target, struct oio_url_s *url,
 		GSList *in);
@@ -151,8 +151,7 @@ GError* m2v2_remote_execute_RAW_ADD(const char *target, struct oio_url_s *url,
 GError* m2v2_remote_execute_RAW_DEL(const char *target, struct oio_url_s *url,
 		GSList *beans);
 
-GError* m2v2_remote_execute_LINK(const char *target, struct oio_url_s *url,
-		GBytes *content_id);
+GError* m2v2_remote_execute_LINK(const char *target, struct oio_url_s *url);
 
 /** Substitute chunks by another one in meta2 database.
  * TODO: return number of substitutions */
