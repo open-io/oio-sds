@@ -864,6 +864,7 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 struct put_args_s
 {
 	struct m2db_put_args_s *put_args;
+
 	guint8 *uid;
 	gsize uid_size;
 
@@ -887,15 +888,6 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 {
 	gint64 now = g_get_real_time() / G_TIME_SPAN_SECOND;
 
-	gsize idlen = 0;
-	const guint8 *id = NULL;
-	if (args->put_args->content_id)
-		id = g_bytes_get_data (args->put_args->content_id, &idlen);
-	if (!id || !idlen) {
-		id = args->uid;
-		idlen = args->uid_size;
-	}
-
 	/* patch the beans */
 	for (GSList *l=args->beans; l ;l=l->next) {
 		gpointer bean = l->data;
@@ -907,7 +899,7 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 				continue;
 			if (0 >= ALIASES_get_version (bean))
 				ALIASES_set_version(bean, args->version+1);
-			ALIASES_set2_content(bean, id, idlen);
+			ALIASES_set2_content(bean, args->uid, args->uid_size);
 			ALIASES_set_deleted(bean, FALSE);
 			ALIASES_set_ctime(bean, now);
 			ALIASES_set_mtime(bean, now);
@@ -915,7 +907,7 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 		else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
 			if (args->merge_only)
 				continue;
-			CONTENTS_HEADERS_set2_id(bean, id, idlen);
+			CONTENTS_HEADERS_set2_id(bean, args->uid, args->uid_size);
 			CONTENTS_HEADERS_set_ctime(bean, now);
 			CONTENTS_HEADERS_set_mtime(bean, now);
 			lazy_set_str (CONTENTS_HEADERS, bean, chunk_method, "bytes");
@@ -923,7 +915,7 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 			lazy_set_str (CONTENTS_HEADERS, bean, policy, "NONE");
 		}
 		else if (DESCR(bean) == &descr_struct_CHUNKS) {
-			CHUNKS_set2_content(bean, id, idlen);
+			CHUNKS_set2_content(bean, args->uid, args->uid_size);
 			CHUNKS_set_ctime(bean, now);
 		}
 		else if (DESCR(bean) == &descr_struct_PROPERTIES) {
@@ -939,46 +931,6 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 		for (GSList *l=args->beans; l ;l=l->next)
 			args->cb(args->cb_data, _bean_dup(l->data));
 	}
-	return err;
-}
-
-static GError*
-m2db_merge_alias(struct m2db_put_args_s *m2db_args, struct bean_ALIASES_s *latest,
-		struct put_args_s *args)
-{
-	void cb(gpointer u0, gpointer bean) {
-		GByteArray **pgba = u0;
-		if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
-			GByteArray *gba = CONTENTS_HEADERS_get_id(bean);
-			if (!*pgba)
-				*pgba = g_byte_array_new();
-			else
-				g_byte_array_set_size(*pgba, 0);
-			g_byte_array_append(*pgba, gba->data, gba->len);
-		}
-		_bean_clean(bean);
-	}
-
-	GError *err = NULL;;
-	GByteArray *gba = NULL;
-
-	/* Extract the CONTENT_HEADER id in place */
-	EXTRA_ASSERT(latest != NULL);
-	if (NULL != (err = _db_get_FK_by_name(latest, "image", m2db_args->sq3->db, cb, &gba)))
-		g_prefix_error(&err, "DB error: ");
-	else {
-		if (gba == NULL)
-			err = NEWERROR(CODE_INTERNAL_ERROR, "HEADER not found");
-		else {
-			args->merge_only = TRUE;
-			args->uid = gba->data;
-			args->uid_size = gba->len;
-			err = m2db_real_put_alias(m2db_args->sq3, args);
-		}
-	}
-
-	if (gba)
-		g_byte_array_free(gba, TRUE);
 	return err;
 }
 
@@ -1062,14 +1014,17 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		}
 	}
 	else {
-		if (latest)
-			err = m2db_merge_alias(args, latest, &args2);
-		else {
+		if (latest) {
+			GByteArray *gba = ALIASES_get_content (latest);
+			args2.merge_only = TRUE;
+			args2.uid = gba->data;
+			args2.uid_size = gba->len;
+		} else {
 			RANDOM_UID(uid, uid_size);
 			args2.uid = (guint8*) &uid;
 			args2.uid_size = uid_size;
-			err = m2db_real_put_alias(args->sq3, &args2);
 		}
+		err = m2db_real_put_alias(args->sq3, &args2);
 	}
 
 	if(!err)
@@ -1100,8 +1055,20 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 
 	memset(&args2, 0, sizeof(args2));
 	args2.put_args = args;
-	args2.uid = (guint8*) &uid;
-	args2.uid_size = uid_size;
+	if (oio_url_has (args->url, OIOURL_CONTENTID)) {
+		const char *h = oio_url_get (args->url, OIOURL_CONTENTID);
+		gsize hl = strlen(h);
+		guint8 *b = g_alloca (hl/2);
+		if (oio_str_hex2bin(h, b, hl/02)) {
+			args2.uid = b;
+			args2.uid_size = hl/2;
+		} else {
+			return BADREQ("Invalid content ID (not hexa)");
+		}
+	} else {
+		args2.uid = (guint8*) &uid;
+		args2.uid_size = uid_size;
+	}
 	args2.cb = out_added ? _bean_list_cb : NULL;
 	args2.cb_data = out_added;
 	args2.beans = beans;
@@ -1110,15 +1077,17 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	/* a specific content ID has been provided. We DO NOT allow overriding
 	 * a content with the same ID. So let's check the content is not present,
 	 * yet */
-	if (args->content_id) {
+	if (oio_url_has(args->url, OIOURL_CONTENTID)) {
 		GPtrArray *tmp = g_ptr_array_new ();
 		GVariant *params[2] = {NULL, NULL};
-		params[0] = _gb_to_gvariant (args->content_id);
+		GBytes *id = g_bytes_new (args2.uid, args2.uid_size);
+		params[0] = _gb_to_gvariant (id);
 		err = CONTENTS_HEADERS_load (args->sq3->db, " id = ? LIMIT 1", params,
 				_bean_buffer_cb, tmp);
 		metautils_gvariant_unrefv(params);
 		guint count = tmp->len;
 		_bean_cleanv2 (tmp);
+		g_bytes_unref (id);
 		if (err)
 			return err;
 		if (count)

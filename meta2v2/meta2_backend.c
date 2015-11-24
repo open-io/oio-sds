@@ -848,8 +848,7 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
-		GSList *in, GBytes *content_id /* optional */,
-		GSList **out_deleted, GSList **out_added)
+		GSList *in, GSList **out_deleted, GSList **out_added)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -857,8 +856,6 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
-	//EXTRA_ASSERT(out_deleted != NULL);
-	//EXTRA_ASSERT(out_added != NULL);
 	if (!in)
 		return NEWERROR(CODE_BAD_REQUEST, "No bean");
 
@@ -872,7 +869,6 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.max_versions = _maxvers(sq3, m2b);
 		args.nsinfo = meta2_backend_get_nsinfo(m2b);
 		args.lbpool = m2b->backend.lb;
-		args.content_id = content_id;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_put_alias(&args, in, out_deleted, out_added)))

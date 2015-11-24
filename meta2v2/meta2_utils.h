@@ -177,7 +177,6 @@ struct m2db_put_args_s
 	struct oio_url_s *url;
 	struct namespace_info_s *nsinfo;
 	struct grid_lbpool_s *lbpool;
-	GBytes *content_id; /* optional */
 };
 
 GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *in,

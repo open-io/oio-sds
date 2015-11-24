@@ -131,7 +131,7 @@ GError* meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 				struct oio_url_s *url, gboolean bRecalc);
 
 GError* meta2_backend_put_alias(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *in, GBytes *content_id /* optional */,
+		struct oio_url_s *url, GSList *in,
 		GSList **out_deleted, GSList **out_added);
 
 GError* meta2_backend_copy_alias(struct meta2_backend_s *m2b,
