@@ -92,7 +92,7 @@ meta1_backend_get_prefixes(struct meta1_backend_s *m1)
 }
 
 GError*
-meta1_backend_open_base(struct meta1_backend_s *m1, struct hc_url_s *url,
+meta1_backend_open_base(struct meta1_backend_s *m1, struct oio_url_s *url,
 		enum m1v2_open_type_e how, struct sqlx_sqlite3_s **sq3)
 {
 	return _open_and_lock(m1, url, how, sq3);

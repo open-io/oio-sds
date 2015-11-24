@@ -60,7 +60,7 @@ enum m2v2_open_type_e
 };
 
 static void
-_append_url (GString *gs, struct hc_url_s *url)
+_append_url (GString *gs, struct oio_url_s *url)
 {
 	void _append (const char *n, const char *v) {
 		if (v)
@@ -68,15 +68,15 @@ _append_url (GString *gs, struct hc_url_s *url)
 		else
 			g_string_append_printf (gs, "\"%s\":null", n);
 	}
-	_append ("ns", hc_url_get(url, HCURL_NS));
+	_append ("ns", oio_url_get(url, OIOURL_NS));
 	g_string_append_c (gs, ',');
-	_append ("account", hc_url_get(url, HCURL_ACCOUNT));
+	_append ("account", oio_url_get(url, OIOURL_ACCOUNT));
 	g_string_append_c (gs, ',');
-	_append ("user", hc_url_get(url, HCURL_USER));
+	_append ("user", oio_url_get(url, OIOURL_USER));
 	g_string_append_c (gs, ',');
-	_append ("type", hc_url_get(url, HCURL_TYPE));
+	_append ("type", oio_url_get(url, OIOURL_TYPE));
 	g_string_append_c (gs, ',');
-	_append ("id", hc_url_get(url, HCURL_HEXID));
+	_append ("id", oio_url_get(url, OIOURL_HEXID));
 }
 
 static gint64
@@ -335,7 +335,7 @@ m2b_destroy(struct sqlx_sqlite3_s *sq3)
 }
 
 static GError *
-m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
+m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 		enum m2v2_open_type_e how, struct sqlx_sqlite3_s **result)
 {
 	GError *err = NULL;
@@ -382,25 +382,25 @@ m2b_open(struct meta2_backend_s *m2, struct hc_url_s *url,
 
 	// Complete URL with full VNS and container name
 	void set(gchar *k, int f) {
-		if (hc_url_has(url, f))
+		if (oio_url_has(url, f))
 			return;
 		gchar *s = sqlx_admin_get_str (sq3, k);
 		if (s) {
-			hc_url_set (url, f, s);
+			oio_url_set (url, f, s);
 			g_free (s);
 		}
 	}
-	set (SQLX_ADMIN_NAMESPACE, HCURL_NS);
-	set (SQLX_ADMIN_ACCOUNT, HCURL_ACCOUNT);
-	set (SQLX_ADMIN_USERNAME, HCURL_USER);
-	set (SQLX_ADMIN_USERTYPE, HCURL_TYPE);
+	set (SQLX_ADMIN_NAMESPACE, OIOURL_NS);
+	set (SQLX_ADMIN_ACCOUNT, OIOURL_ACCOUNT);
+	set (SQLX_ADMIN_USERNAME, OIOURL_USER);
+	set (SQLX_ADMIN_USERTYPE, OIOURL_TYPE);
 
 	*result = sq3;
 	return NULL;
 }
 
 static GError*
-_transaction_begin(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+_transaction_begin(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		struct sqlx_repctx_s **result)
 {
 	struct sqlx_repctx_s* repctx = NULL;
@@ -419,12 +419,12 @@ _transaction_begin(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 
 GError *
 meta2_backend_has_master_container(struct meta2_backend_s *m2,
-		struct hc_url_s *url)
+		struct oio_url_s *url)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
-	GRID_DEBUG("HAS(%s)", hc_url_get(url, HCURL_WHOLE));
+	GRID_DEBUG("HAS(%s)", oio_url_get(url, OIOURL_WHOLE));
 	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY
 			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
 	if (sq3) {
@@ -435,13 +435,13 @@ meta2_backend_has_master_container(struct meta2_backend_s *m2,
 
 GError *
 meta2_backend_has_container(struct meta2_backend_s *m2,
-		struct hc_url_s *url)
+		struct oio_url_s *url)
 {
 	GError *err = NULL;
 
 	EXTRA_ASSERT(m2 != NULL);
 	EXTRA_ASSERT(url != NULL);
-	GRID_DEBUG("HAS(%s)", hc_url_get(url, HCURL_WHOLE));
+	GRID_DEBUG("HAS(%s)", oio_url_get(url, OIOURL_WHOLE));
 
 	struct sqlx_name_mutable_s n;
 	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
@@ -466,7 +466,7 @@ meta2_backend_has_container(struct meta2_backend_s *m2,
 
 GError*
 meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 *result)
+		struct oio_url_s *url, gint64 *result)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -487,7 +487,7 @@ meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 
 static GError *
 _create_container_init_phase(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, struct m2v2_create_params_s *params)
+		struct oio_url_s *url, struct m2v2_create_params_s *params)
 {
 	GError *err = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
@@ -516,13 +516,13 @@ _create_container_init_phase(struct sqlx_sqlite3_s *sq3,
 
 GError *
 meta2_backend_create_container(struct meta2_backend_s *m2,
-		struct hc_url_s *url, struct m2v2_create_params_s *params)
+		struct oio_url_s *url, struct m2v2_create_params_s *params)
 {
 	GError *err = NULL;
 	enum m2v2_open_type_e open_mode = 0;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
-	GRID_DEBUG("CREATE(%s,%s,%s)%s", hc_url_get(url, HCURL_WHOLE),
+	GRID_DEBUG("CREATE(%s,%s,%s)%s", oio_url_get(url, OIOURL_WHOLE),
 			params?params->storage_policy:NULL,
 			params?params->version_policy:NULL,
 			(params && params->local)? " (local)" : "");
@@ -568,7 +568,7 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 
 GError *
 meta2_backend_destroy_container(struct meta2_backend_s *m2,
-		struct hc_url_s *url, guint32 flags)
+		struct oio_url_s *url, guint32 flags)
 {
 	GError *err = NULL;
 	gboolean local = flags & M2V2_DESTROY_LOCAL;
@@ -586,7 +586,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 	lp.flag_nodeleted = ~0;
 	lp.maxkeys = 1;
 
-	GRID_DEBUG("DESTROY(%s)%s", hc_url_get(url, HCURL_WHOLE),
+	GRID_DEBUG("DESTROY(%s)%s", oio_url_get(url, OIOURL_WHOLE),
 			local? " (local)" : "");
 	err = m2b_open(m2, url, local? M2V2_OPEN_LOCAL : M2V2_OPEN_MASTERONLY,
 			&sq3);
@@ -654,7 +654,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 
 GError *
 meta2_backend_flush_container(struct meta2_backend_s *m2,
-		struct hc_url_s *url)
+		struct oio_url_s *url)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -679,7 +679,7 @@ meta2_backend_flush_container(struct meta2_backend_s *m2,
 
 GError *
 meta2_backend_purge_container(struct meta2_backend_s *m2,
-		struct hc_url_s *url, guint32 flags, m2_onbean_cb cb, gpointer u0)
+		struct oio_url_s *url, guint32 flags, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -702,7 +702,7 @@ meta2_backend_purge_container(struct meta2_backend_s *m2,
 /* Contents --------------------------------------------------------------- */
 
 GError*
-meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct hc_url_s *url,
+meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		struct list_params_s *lp, GSList *headers,
 		m2_onbean_cb cb, gpointer u0, gchar ***out_properties)
 {
@@ -727,7 +727,7 @@ meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct hc_url_s *url,
 
 GError*
 meta2_backend_get_alias(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, guint32 flags,
+		struct oio_url_s *url, guint32 flags,
 		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
@@ -799,7 +799,7 @@ meta2_backend_add_modified_container(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gboolean bRecalc)
+		struct oio_url_s *url, gboolean bRecalc)
 {
     GError *err = NULL;
     struct sqlx_sqlite3_s *sq3 = NULL;
@@ -819,7 +819,7 @@ meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_delete_alias(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0)
+		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -847,7 +847,7 @@ meta2_backend_delete_alias(struct meta2_backend_s *m2b,
 }
 
 GError*
-meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
+meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *in, GBytes *content_id /* optional */,
 		GSList **out_deleted, GSList **out_added)
 {
@@ -890,7 +890,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 }
 
 GError*
-meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
+meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		const char *src)
 {
 	GError *err = NULL;
@@ -925,7 +925,7 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 }
 
 GError*
-meta2_backend_force_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
+meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *in, GSList **out_deleted, GSList **out_added)
 {
 	GError *err = NULL;
@@ -965,7 +965,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct hc_url_s *url,
 
 GError*
 meta2_backend_insert_beans(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *beans)
+		struct oio_url_s *url, GSList *beans)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -990,7 +990,7 @@ meta2_backend_insert_beans(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_link_content (struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GBytes *content_id)
+		struct oio_url_s *url, GBytes *content_id)
 {
 	EXTRA_ASSERT (m2b != NULL);
 	EXTRA_ASSERT (url != NULL);
@@ -1015,7 +1015,7 @@ meta2_backend_link_content (struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_delete_beans(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *beans)
+		struct oio_url_s *url, GSList *beans)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1043,7 +1043,7 @@ meta2_backend_delete_beans(struct meta2_backend_s *m2b,
 }
 
 GError*
-meta2_backend_update_beans(struct meta2_backend_s *m2b, struct hc_url_s *url, 
+meta2_backend_update_beans(struct meta2_backend_s *m2b, struct oio_url_s *url, 
 		GSList *new_chunks, GSList *old_chunks)
 {
 	GError *err = NULL;
@@ -1093,7 +1093,7 @@ meta2_backend_update_beans(struct meta2_backend_s *m2b, struct hc_url_s *url,
 
 GError*
 meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 *version)
+		struct oio_url_s *url, gint64 *version)
 {
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -1110,7 +1110,7 @@ meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *beans,
+		struct oio_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
@@ -1145,7 +1145,7 @@ meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_get_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0)
+		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
 {
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -1162,7 +1162,7 @@ meta2_backend_get_properties(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_del_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gchar **propv)
+		struct oio_url_s *url, gchar **propv)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1185,14 +1185,14 @@ meta2_backend_del_properties(struct meta2_backend_s *m2b,
 }
 
 GError*
-meta2_backend_set_properties(struct meta2_backend_s *m2b, struct hc_url_s *url,
+meta2_backend_set_properties(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		gboolean flush, GSList *beans, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	GRID_TRACE("M2 PROPSET(%s)", hc_url_get(url, HCURL_WHOLE));
+	GRID_TRACE("M2 PROPSET(%s)", oio_url_get(url, OIOURL_WHOLE));
 
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -1214,7 +1214,7 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b, struct hc_url_s *url,
 
 GError*
 meta2_backend_update_alias_header(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *beans)
+		struct oio_url_s *url, GSList *beans)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1239,7 +1239,7 @@ meta2_backend_update_alias_header(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, guint32 flags, GString **status_message)
+		struct oio_url_s *url, guint32 flags, GString **status_message)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1250,7 +1250,7 @@ meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
 		GRID_INFO("Starting content deduplication on %s",
-				hc_url_get(url, HCURL_WHOLE));
+				oio_url_get(url, OIOURL_WHOLE));
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
 			err = m2db_deduplicate_contents(sq3, url, flags, status_message);
 			if (err == NULL) {
@@ -1279,7 +1279,7 @@ _cb_has_not(gpointer udata, gpointer bean)
 }
 
 static GError*
-_check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
+_check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 {
 	gboolean no_bean = TRUE;
 	GError *err = m2db_get_alias(sq3, url, M2V2_FLAG_NODELETED,
@@ -1300,7 +1300,7 @@ _check_alias_doesnt_exist(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 
 GError*
 meta2_backend_generate_beans(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 size, const gchar *polname, gboolean append, 
+		struct oio_url_s *url, gint64 size, const gchar *polname, gboolean append, 
 		m2_onbean_cb cb, gpointer cb_data)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1309,7 +1309,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 	struct storage_policy_s *policy = NULL;
 	struct grid_lb_iterator_s *iter = NULL;
 
-	GRID_TRACE("BEANS(%s,%"G_GINT64_FORMAT",%s)", hc_url_get(url, HCURL_WHOLE),
+	GRID_TRACE("BEANS(%s,%"G_GINT64_FORMAT",%s)", oio_url_get(url, OIOURL_WHOLE),
 			size, polname);
 	EXTRA_ASSERT(m2b != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -1333,7 +1333,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 					err = NULL;
 				} else {
 					err = NEWERROR(CODE_CONTENT_NOTFOUND, "Content [%s] "
-							"not found", hc_url_get(url, HCURL_PATH));
+							"not found", oio_url_get(url, OIOURL_PATH));
 				}
 			}
 		}
@@ -1347,7 +1347,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 			} else {
 				err = m2db_get_storage_policy(sq3, url, nsinfo, append, &policy);
 				if (err || !policy) {
-					gchar *def = namespace_storage_policy(nsinfo, hc_url_get(url, HCURL_NS));
+					gchar *def = namespace_storage_policy(nsinfo, oio_url_get(url, OIOURL_NS));
 					if (NULL != def) {
 						if (!(policy = storage_policy_init(nsinfo, def)))
 							err = NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy [%s]", def);
@@ -1372,7 +1372,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No RAWX available");
 		else
 			err = m2_generate_beans(url, size,
-					namespace_chunk_size(nsinfo, hc_url_get(url, HCURL_NS)),
+					namespace_chunk_size(nsinfo, oio_url_get(url, OIOURL_NS)),
 					policy, iter, cb, cb_data);
 	}
 
@@ -1385,7 +1385,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 // TODO 'url' seems only useful for logging purposes
 GError*
 meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 count, gint64 dist, const char *notin,
+		struct oio_url_s *url, gint64 count, gint64 dist, const char *notin,
 		const char *broken, GSList **result, gboolean answer_beans)
 {
 	GError *err = NULL;
@@ -1422,7 +1422,7 @@ meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 
 	(void) url;
 	GRID_TRACE("CONDITIONNED SPARE(%s, %"G_GINT64_FORMAT", %"G_GINT64_FORMAT", %s, %s)",
-			hc_url_get(url, HCURL_WHOLE),
+			oio_url_get(url, OIOURL_WHOLE),
 			count,
 			dist,
 			notin,
@@ -1446,7 +1446,7 @@ meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 }
 
 static GError*
-_load_storage_policy(struct meta2_backend_s *m2b, struct hc_url_s *url,
+_load_storage_policy(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		const gchar *polname, struct storage_policy_s **pol)
 {
 	GError *err = NULL;
@@ -1467,7 +1467,7 @@ _load_storage_policy(struct meta2_backend_s *m2b, struct hc_url_s *url,
 			/* check pol from container / ns */
 			err = m2db_get_storage_policy(sq3, url, nsinfo, FALSE, pol);
 			if (err || !*pol) {
-				gchar *def = namespace_storage_policy(nsinfo, hc_url_get(url, HCURL_NS));
+				gchar *def = namespace_storage_policy(nsinfo, oio_url_get(url, OIOURL_NS));
 				if (NULL != def) {
 					if (!(*pol = storage_policy_init(nsinfo, def)))
 						err = NEWERROR(CODE_POLICY_NOT_SUPPORTED,
@@ -1485,7 +1485,7 @@ _load_storage_policy(struct meta2_backend_s *m2b, struct hc_url_s *url,
 
 GError*
 meta2_backend_get_conditionned_spare_chunks_v2(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, const gchar *polname, GSList *notin,
+		struct oio_url_s *url, const gchar *polname, GSList *notin,
 		GSList *broken, GSList **result)
 {
 	GError *err = NULL;
@@ -1503,13 +1503,13 @@ meta2_backend_get_conditionned_spare_chunks_v2(struct meta2_backend_s *m2b,
 }
 
 GError*
-meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct hc_url_s *url,
+meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		const char *polname, GSList **result, gboolean use_beans)
 {
 	struct storage_policy_s *pol = NULL;
 	GError *err = NULL;
 
-	GRID_TRACE("SPARE(%s,%s)", hc_url_get(url, HCURL_WHOLE), polname);
+	GRID_TRACE("SPARE(%s,%s)", oio_url_get(url, OIOURL_WHOLE), polname);
 	EXTRA_ASSERT(m2b != NULL);
 
 	err = _load_storage_policy(m2b, url, polname, &pol);
@@ -1527,7 +1527,7 @@ meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct hc_url_s *url
 
 GError*
 meta2_backend_content_from_chunkid(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, const char *chunk_id,
+		struct oio_url_s *url, const char *chunk_id,
 		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
@@ -1556,7 +1556,7 @@ meta2_backend_content_from_chunkid(struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_content_from_contenthash (struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GBytes *h,
+		struct oio_url_s *url, GBytes *h,
 		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
@@ -1583,7 +1583,7 @@ meta2_backend_content_from_contenthash (struct meta2_backend_s *m2b,
 
 GError*
 meta2_backend_content_from_contentid (struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GBytes *h,
+		struct oio_url_s *url, GBytes *h,
 		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;

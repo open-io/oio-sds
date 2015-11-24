@@ -77,7 +77,7 @@ meta2_filter_extract_header_url(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	TRACE_FILTER();
-	struct hc_url_s *url = metautils_message_extract_url (reply->request);
+	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	meta2_filter_ctx_set_url(ctx, url);
 	return FILTER_OK;
 }

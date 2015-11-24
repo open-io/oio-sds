@@ -1069,7 +1069,7 @@ action_container_list (struct req_args_s *args)
 	}
 
 	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%c prefix=%s marker=%s end=%s",
-			hc_url_get(args->url, HCURL_WHOLE), list_in.maxkeys, delimiter,
+			oio_url_get(args->url, OIOURL_WHOLE), list_in.maxkeys, delimiter,
 			list_in.prefix, list_in.marker_start, list_in.marker_end);
 
 	if (!err)
@@ -1356,7 +1356,7 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 				const char *sv = json_object_get_string (jv);
 				PROPERTIES_set2_value (prop, (guint8*)sv, strlen(sv));
 			}
-			PROPERTIES_set2_alias (prop, hc_url_get (args->url, HCURL_PATH));
+			PROPERTIES_set2_alias (prop, oio_url_get (args->url, OIOURL_PATH));
 			PROPERTIES_set_version (prop, version);
 			beans = g_slist_prepend (beans, prop);
 		}
@@ -1575,28 +1575,28 @@ action_content_copy (struct req_args_s *args)
 	if (!target)
 		return _reply_format_error(args, BADREQ("Missing target header"));
 
-	struct hc_url_s *target_url = hc_url_oldinit(target);
+	struct oio_url_s *target_url = oio_url_init(target);
 	if (!target_url)
 		return _reply_format_error(args, BADREQ("Invalid URL in target header"));
 
 	// Check the namespace and container match between both URLs
-	if (!hc_url_has(target_url, HCURL_HEXID)
-			|| !hc_url_has(target_url, HCURL_NS)
-			|| !hc_url_has(target_url, HCURL_PATH)
-			|| !hc_url_has(args->url, HCURL_HEXID)
-			|| !hc_url_has(args->url, HCURL_NS)
-			|| strcmp(hc_url_get(target_url, HCURL_HEXID), hc_url_get(args->url, HCURL_HEXID))
-			|| strcmp(hc_url_get(target_url, HCURL_HEXID), hc_url_get(args->url, HCURL_HEXID))) {
-		hc_url_pclean(&target_url);
+	if (!oio_url_has(target_url, OIOURL_HEXID)
+			|| !oio_url_has(target_url, OIOURL_NS)
+			|| !oio_url_has(target_url, OIOURL_PATH)
+			|| !oio_url_has(args->url, OIOURL_HEXID)
+			|| !oio_url_has(args->url, OIOURL_NS)
+			|| strcmp(oio_url_get(target_url, OIOURL_HEXID), oio_url_get(args->url, OIOURL_HEXID))
+			|| strcmp(oio_url_get(target_url, OIOURL_HEXID), oio_url_get(args->url, OIOURL_HEXID))) {
+		oio_url_pclean(&target_url);
 		return _reply_format_error(args, BADREQ("Invalid source/target URL"));
 	}
 
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_COPY (m2->host, target_url, hc_url_get(args->url, HCURL_PATH));
+		return m2v2_remote_execute_COPY (m2->host, target_url, oio_url_get(args->url, OIOURL_PATH));
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	hc_url_pclean(&target_url);
+	oio_url_pclean(&target_url);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);

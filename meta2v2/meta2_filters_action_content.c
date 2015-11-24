@@ -64,7 +64,7 @@ struct all_vers_cb_args
 };
 
 static void
-_notify_beans (struct meta2_backend_s *m2b, struct hc_url_s *url,
+_notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 		GSList *beans, const char *name)
 {
 	void sep (GString *gs) {
@@ -94,7 +94,7 @@ _notify_beans (struct meta2_backend_s *m2b, struct hc_url_s *url,
 	g_string_append_printf (gs, "\"event\":\"%s.%s\"", NAME_SRVTYPE_META2, name);
 	append_int64 (gs, "when", g_get_real_time());
 	g_string_append (gs, ",\"url\":{");
-	hc_url_to_json (gs, url);
+	oio_url_to_json (gs, url);
 	g_string_append (gs, "},\"data\":[");
 	meta2_json_dump_all_xbeans (gs, beans);
 	g_string_append (gs, "]}");
@@ -107,14 +107,14 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 	GError *e = NULL;
 	gint rc = FILTER_OK;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
 	GSList *added = NULL, *deleted = NULL;
 
 	GRID_DEBUG("Putting %d beans in [%s]%s", g_slist_length(beans),
-			hc_url_get(url, HCURL_WHOLE),
+			oio_url_get(url, OIOURL_WHOLE),
 			meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_OVERWRITE)?
 			" (overwrite)":"");
 
@@ -132,7 +132,7 @@ _put_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply)
 	}
 
 	if (NULL != e) {
-		GRID_DEBUG("Fail to put alias (%s)", hc_url_get(url, HCURL_WHOLE));
+		GRID_DEBUG("Fail to put alias (%s)", oio_url_get(url, OIOURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
 		rc = FILTER_KO;
 	} else {
@@ -154,14 +154,14 @@ _copy_alias(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 		const char *source)
 {
 	GError *e = NULL;
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 
-	GRID_DEBUG("Copying %s from %s", hc_url_get(url, HCURL_WHOLE), source);
+	GRID_DEBUG("Copying %s from %s", oio_url_get(url, OIOURL_WHOLE), source);
 
 	e = meta2_backend_copy_alias(m2b, url, source);
 	if (NULL != e) {
-		GRID_DEBUG("Fail to copy alias (%s) to (%s)", source, hc_url_get(url, HCURL_WHOLE));
+		GRID_DEBUG("Fail to copy alias (%s) to (%s)", source, oio_url_get(url, OIOURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
 	} else {
@@ -183,11 +183,11 @@ meta2_filter_action_put_content(struct gridd_filter_ctx_s *ctx,
 {
 	TRACE_FILTER();
 	const char *copy_source = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_COPY);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 
 	if (NULL != copy_source) {
-		reply->subject("%s|%s|COPY(%s)", hc_url_get(url, HCURL_WHOLE),
-				hc_url_get(url, HCURL_HEXID), copy_source);
+		reply->subject("%s|%s|COPY(%s)", oio_url_get(url, OIOURL_WHOLE),
+				oio_url_get(url, OIOURL_HEXID), copy_source);
 		return _copy_alias(ctx, reply, copy_source);
 	}
 
@@ -203,13 +203,13 @@ meta2_filter_action_append_content(struct gridd_filter_ctx_s *ctx,
 	GError *e = NULL;
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 	GRID_DEBUG("Appending %d beans", g_slist_length(beans));
 
 	e = meta2_backend_append_to_alias(m2b, url, beans, _bean_list_cb, &obc->l);
 	if(NULL != e) {
-		GRID_DEBUG("Fail to append to alias (%s)", hc_url_get(url, HCURL_WHOLE));
+		GRID_DEBUG("Fail to append to alias (%s)", oio_url_get(url, OIOURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
 		_on_bean_ctx_clean(obc);
 		return FILTER_KO;
@@ -230,7 +230,7 @@ meta2_filter_action_get_content(struct gridd_filter_ctx_s *ctx,
 	GError *e = NULL;
 	guint32 flags = 0;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
 	TRACE_FILTER();
@@ -241,8 +241,8 @@ meta2_filter_action_get_content(struct gridd_filter_ctx_s *ctx,
 
 	e = meta2_backend_get_alias(m2b, url, flags, _bean_list_cb, &obc->l);
 	if (NULL != e) {
-		GRID_DEBUG("Fail to return alias for url: %s", hc_url_get(
-					url, HCURL_WHOLE));
+		GRID_DEBUG("Fail to return alias for url: %s", oio_url_get(
+					url, OIOURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
 		goto cleanup;
 	}
@@ -261,14 +261,14 @@ meta2_filter_action_delete_content(struct gridd_filter_ctx_s *ctx,
 {
 	(void) reply;
 	GError *e = NULL;
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
 	TRACE_FILTER();
 	e = meta2_backend_delete_alias(m2b, url, _bean_list_cb, &obc->l);
 	if (NULL != e) {
-		GRID_DEBUG("Fail to delete alias for url: %s", hc_url_get(url, HCURL_WHOLE));
+		GRID_DEBUG("Fail to delete alias for url: %s", oio_url_get(url, OIOURL_WHOLE));
 		meta2_filter_ctx_set_error(ctx, e);
 		_on_bean_ctx_clean(obc);
 		return FILTER_KO;
@@ -287,7 +287,7 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 	GError *e = NULL;
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
 	guint32 flags = 0;
@@ -295,7 +295,7 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 	if (NULL != fstr)
 		flags = atoi(fstr);
 	
-	if (!hc_url_has(url, HCURL_PATH))
+	if (!oio_url_has(url, OIOURL_PATH))
 		e = NEWERROR(CODE_BAD_REQUEST, "Missing content path");
 	else
 		e = meta2_backend_set_properties(m2b, url, BOOL(flags&M2V2_FLAG_FLUSH),
@@ -303,7 +303,7 @@ meta2_filter_action_set_content_properties(struct gridd_filter_ctx_s *ctx,
 
 	if (NULL != e) {
 		GRID_DEBUG("Failed to set properties to [%s] : (%d) %s",
-				hc_url_get(url, HCURL_WHOLE), e->code, e->message);
+				oio_url_get(url, OIOURL_WHOLE), e->code, e->message);
 		_on_bean_ctx_clean(obc);
 		meta2_filter_ctx_set_error(ctx, e);
 		return FILTER_KO;
@@ -320,7 +320,7 @@ meta2_filter_action_get_content_properties(struct gridd_filter_ctx_s *ctx,
 {
 	GError *e = NULL;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 
 	TRACE_FILTER();
@@ -344,7 +344,7 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 	(void) reply;
 	GError *e = NULL;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	GSList *namel = meta2_filter_ctx_get_input_udata(ctx);
 
 	TRACE_FILTER();
@@ -364,7 +364,7 @@ meta2_filter_action_del_content_properties(struct gridd_filter_ctx_s *ctx,
 static GError*
 _spare_with_blacklist(struct meta2_backend_s *m2b,
 		struct gridd_filter_ctx_s *ctx, struct on_bean_ctx_s *obc,
-		struct hc_url_s *url, const gchar *polname)
+		struct oio_url_s *url, const gchar *polname)
 {
 	GError *err = NULL;
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
@@ -396,7 +396,7 @@ meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
 	gint64 size = 0;
 
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 	const char *size_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_CONTENTLENGTH);
 	const char *policy_str = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_STGPOLICY);
@@ -409,8 +409,8 @@ meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
 
 	// Spare beans request
 	if (spare_type != NULL) {
-		reply->subject("%s|%s|%s", hc_url_get(url, HCURL_WHOLE),
-				hc_url_get(url, HCURL_HEXID), spare_type);
+		reply->subject("%s|%s|%s", oio_url_get(url, OIOURL_WHOLE),
+				oio_url_get(url, OIOURL_HEXID), spare_type);
 		if (strcmp(spare_type, M2V2_SPARE_BY_BLACKLIST) == 0) {
 			e = _spare_with_blacklist(m2b, ctx, obc, url, policy_str);
 		} else if (strcmp(spare_type, M2V2_SPARE_BY_STGPOL) == 0) {
@@ -430,7 +430,7 @@ meta2_filter_action_generate_beans(struct gridd_filter_ctx_s *ctx,
 				_bean_list_cb, &obc->l);
 		if (NULL != e) {
 			GRID_DEBUG("Failed to return alias for url: %s",
-					hc_url_get(url, HCURL_WHOLE));
+					oio_url_get(url, OIOURL_WHOLE));
 			_on_bean_ctx_clean(obc);
 			meta2_filter_ctx_set_error(ctx, e);
 			return FILTER_KO;

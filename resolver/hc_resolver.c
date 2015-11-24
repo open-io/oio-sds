@@ -341,26 +341,26 @@ _resolve_m1_through_many_m0(struct hc_resolver_s *r, gchar **urlv, const guint8 
 }
 
 static GError *
-_resolve_meta1(struct hc_resolver_s *r, struct hc_url_s *u, gchar ***result)
+_resolve_meta1(struct hc_resolver_s *r, struct oio_url_s *u, gchar ***result)
 {
 	struct hashstr_s *hk;
 	GError *err = NULL;
 
-	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(u, HCURL_WHOLE));
+	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(u, OIOURL_WHOLE));
 
 	hk = hashstr_printf("%s|%s|%.4s", NAME_SRVTYPE_META1,
-			hc_url_get(u, HCURL_NS), hc_url_get(u, HCURL_HEXID));
+			oio_url_get(u, OIOURL_NS), oio_url_get(u, OIOURL_HEXID));
 
 	/* Try to hit the cache */
 	if (!(*result = hc_resolver_get_cached(r, r->csm0.cache, hk))) {
 		/* get a meta0, then store it in the cache */
 		gchar **m0urlv = NULL;
 
-		err = _resolve_meta0(r, hc_url_get(u, HCURL_NS), &m0urlv);
+		err = _resolve_meta0(r, oio_url_get(u, OIOURL_NS), &m0urlv);
 		if (err != NULL)
 			g_prefix_error(&err, "M0 resolution error: ");
 		else {
-			err = _resolve_m1_through_many_m0(r, m0urlv, hc_url_get_id(u), result);
+			err = _resolve_m1_through_many_m0(r, m0urlv, oio_url_get_id(u), result);
 			if (!err)
 				hc_resolver_store(r, r->csm0.cache, hk, *result);
 			g_strfreev(m0urlv);
@@ -375,9 +375,9 @@ _resolve_meta1(struct hc_resolver_s *r, struct hc_url_s *u, gchar ***result)
 
 static GError *
 _resolve_service_through_many_meta1(struct hc_resolver_s *r, gchar **urlv,
-		struct hc_url_s *u, const char *s, gchar ***result)
+		struct oio_url_s *u, const char *s, gchar ***result)
 {
-	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, hc_url_get(u, HCURL_WHOLE), s);
+	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, oio_url_get(u, OIOURL_WHOLE), s);
 
 	if (urlv && *urlv) {
 		gsize len = g_strv_length(urlv);
@@ -415,13 +415,13 @@ _resolve_service_through_many_meta1(struct hc_resolver_s *r, gchar **urlv,
 
 static GError*
 _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
-		struct hc_url_s *u, const char *s, gchar ***result)
+		struct oio_url_s *u, const char *s, gchar ***result)
 {
 	GError *err;
 	gchar **m1urlv = NULL;
 
 	GRID_TRACE2("%s(%s,%s,%s)", __FUNCTION__, hashstr_str(hk),
-			hc_url_get(u, HCURL_WHOLE), s);
+			oio_url_get(u, OIOURL_WHOLE), s);
 
 	/* Try to hit the cache for the service itself */
 	*result = hc_resolver_get_cached(r, r->services.cache, hk);
@@ -449,20 +449,20 @@ _resolve_reference_service(struct hc_resolver_s *r, struct hashstr_s *hk,
 /* ------------------------------------------------------------------------- */
 
 GError*
-hc_resolve_reference_directory(struct hc_resolver_s *r, struct hc_url_s *url,
+hc_resolve_reference_directory(struct hc_resolver_s *r, struct oio_url_s *url,
 		gchar ***result)
 {
-	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE));
+	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE));
 	EXTRA_ASSERT(r != NULL);
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(result != NULL);
-	if (!hc_url_get_id(url) || !hc_url_has(url, HCURL_NS))
-		return NEWERROR(CODE_BAD_REQUEST, "Incomplete URL [%s]", hc_url_get(url, HCURL_WHOLE));
+	if (!oio_url_get_id(url) || !oio_url_has(url, OIOURL_NS))
+		return NEWERROR(CODE_BAD_REQUEST, "Incomplete URL [%s]", oio_url_get(url, OIOURL_WHOLE));
 
 	GError *err = NULL;
 	gchar **m1v = NULL, **m0v = NULL;
 
-	if (!(err = _resolve_meta0(r, hc_url_get(url, HCURL_NS), &m0v)))
+	if (!(err = _resolve_meta0(r, oio_url_get(url, OIOURL_NS), &m0v)))
 		err = _resolve_meta1(r, url, &m1v);
 
 	if (err) {
@@ -482,25 +482,25 @@ hc_resolve_reference_directory(struct hc_resolver_s *r, struct hc_url_s *url,
 }
 
 GError*
-hc_resolve_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
+hc_resolve_reference_service(struct hc_resolver_s *r, struct oio_url_s *url,
 		const char *srvtype, gchar ***result)
 {
 	GError *err;
 	struct hashstr_s *hk;
 
-	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE), srvtype);
+	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE), srvtype);
 	EXTRA_ASSERT(r != NULL);
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(srvtype != NULL);
 	EXTRA_ASSERT(result != NULL);
 	EXTRA_ASSERT(*result == NULL);
 
-	if (!hc_url_get_id(url) || !hc_url_has(url, HCURL_NS))
-		return NEWERROR(CODE_BAD_REQUEST, "Incomplete URL [%s]", hc_url_get(url, HCURL_WHOLE));
+	if (!oio_url_get_id(url) || !oio_url_has(url, OIOURL_NS))
+		return NEWERROR(CODE_BAD_REQUEST, "Incomplete URL [%s]", oio_url_get(url, OIOURL_WHOLE));
 
 	hk = hashstr_printf("%s|%s|%s", srvtype,
-			hc_url_get(url, HCURL_NS),
-			hc_url_get(url, HCURL_HEXID));
+			oio_url_get(url, OIOURL_NS),
+			oio_url_get(url, OIOURL_HEXID));
 	err = _resolve_reference_service(r, hk, url, srvtype, result);
 	g_free(hk);
 
@@ -510,34 +510,34 @@ hc_resolve_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
 }
 
 void
-hc_decache_reference(struct hc_resolver_s *r, struct hc_url_s *url)
+hc_decache_reference(struct hc_resolver_s *r, struct oio_url_s *url)
 {
 	struct hashstr_s *hk;
 
-	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE));
+	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE));
 	EXTRA_ASSERT(r != NULL);
 	EXTRA_ASSERT(url != NULL);
 
 	if (r->flags & HC_RESOLVER_NOCACHE)
 		return;
 
-	hk = hashstr_printf("%s|%s", NAME_SRVTYPE_META0, hc_url_get(url, HCURL_NS));
+	hk = hashstr_printf("%s|%s", NAME_SRVTYPE_META0, oio_url_get(url, OIOURL_NS));
 	hc_resolver_forget(r, r->csm0.cache, hk);
 	g_free(hk);
 
-	hk = hashstr_printf("%s|%s|%.4s", NAME_SRVTYPE_META1, hc_url_get(url, HCURL_NS),
-			hc_url_get(url, HCURL_HEXID));
+	hk = hashstr_printf("%s|%s|%.4s", NAME_SRVTYPE_META1, oio_url_get(url, OIOURL_NS),
+			oio_url_get(url, OIOURL_HEXID));
 	hc_resolver_forget(r, r->csm0.cache, hk);
 	g_free(hk);
 }
 
 void
-hc_decache_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
+hc_decache_reference_service(struct hc_resolver_s *r, struct oio_url_s *url,
 		const char *srvtype)
 {
 	struct hashstr_s *hk;
 
-	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE), srvtype);
+	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE), srvtype);
 	EXTRA_ASSERT(r != NULL);
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(srvtype != NULL);
@@ -546,7 +546,7 @@ hc_decache_reference_service(struct hc_resolver_s *r, struct hc_url_s *url,
 		return;
 
 	hk = hashstr_printf("%s|%s|%s", srvtype,
-			hc_url_get(url, HCURL_NS), hc_url_get(url, HCURL_HEXID));
+			oio_url_get(url, OIOURL_NS), oio_url_get(url, OIOURL_HEXID));
 	hc_resolver_forget(r, r->services.cache, hk);
 	g_free(hk);
 }

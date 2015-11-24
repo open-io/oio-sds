@@ -37,7 +37,7 @@ gint Name (GError **err, gpointer udata, gint code, guint8 *buf, gsize len)
 typedef struct Message Message_t;
 typedef Message_t* MESSAGE;
 
-struct hc_url_s;
+struct oio_url_s;
 
 /** Builds a simple reply for the given request. This function automates the
  * copy of the required fields from the request, and sets the appropriated
@@ -93,7 +93,7 @@ void metautils_message_add_field(MESSAGE m, const char *name, const void *value,
 
 void metautils_message_add_cid (MESSAGE m, const char *f, const container_id_t cid);
 
-void metautils_message_add_url (MESSAGE m, struct hc_url_s *url);
+void metautils_message_add_url (MESSAGE m, struct oio_url_s *url);
 
 /* wraps message_set_BODY() and g_bytes_array_unref() */
 void metautils_message_add_body_unref (MESSAGE m, GByteArray *body);
@@ -164,7 +164,7 @@ GError* metautils_unpack_bodyv (GByteArray **bodyv, GSList **result,
 GError* metautils_message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
 		GSList **result, body_decoder_f decoder);
 
-struct hc_url_s * metautils_message_extract_url (MESSAGE m);
+struct oio_url_s * metautils_message_extract_url (MESSAGE m);
 
 /* ------------------------------------------------------------------------- */
 

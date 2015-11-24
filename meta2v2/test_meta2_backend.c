@@ -308,9 +308,9 @@ _container_wraper(const char *ns, gint64 maxvers, container_test_f cf)
 		GError *err;
 
 		gchar *strurl = g_strdup_printf(
-				"/%s/container-%"G_GUINT64_FORMAT"/content-%"G_GINT64_FORMAT,
+				"/%s/account/container-%"G_GUINT64_FORMAT"/content-%"G_GINT64_FORMAT,
 				ns, ++container_counter, g_get_monotonic_time());
-		url = oio_url_oldinit(strurl);
+		url = oio_url_init(strurl);
 		g_free(strurl);
 
 		err = meta2_backend_create_container(m2, url, &params);
@@ -860,14 +860,18 @@ test_content_dedup (void)
 		/* Generate other contents with same hashes */
 		for (guint counter = 1; counter <= num_duplicates; counter++) {
 			/* Suffix the base url */
-			gchar *url_str = g_strdup_printf("%s_%d", oio_url_get(url, OIOURL_WHOLE), counter);
-			struct oio_url_s *url2 = oio_url_oldinit(url_str);
+			struct oio_url_s *url2 = oio_url_dup (url);
+			const char *p0 = oio_url_get (url, OIOURL_PATH);
+			if (p0) {
+				gchar *p = g_strdup_printf("%s-%u", p0, counter);
+				oio_url_set (url2, OIOURL_PATH, p);
+				g_free (p);
+			}
 			GSList *beans2 = _create_alias(m2, url2, NULL);
 			change_chunk_hash(beans2, counter);
 			err = meta2_backend_put_alias(m2, url2, beans2, NULL, NULL, NULL);
 			g_assert_no_error(err);
 			_bean_cleanl2(beans2);
-			g_free(url_str);
 			oio_url_pclean (&url2);
 		}
 

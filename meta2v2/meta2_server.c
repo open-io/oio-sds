@@ -97,10 +97,10 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 	GError *err = NULL;
 
 	gint64 seq = 1;
-	struct hc_url_s *u = hc_url_empty ();
-	hc_url_set(u, HCURL_NS, ss->ns_name);
+	struct oio_url_s *u = oio_url_empty ();
+	oio_url_set(u, OIOURL_NS, ss->ns_name);
 	if (!sqlx_name_extract (n, u, NAME_SRVTYPE_META2, &seq)) {
-		hc_url_pclean (&u);
+		oio_url_pclean (&u);
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name: '%s'", n->type);
 	}
 
@@ -112,7 +112,7 @@ retry:
 
 	if (NULL != err) {
 		g_prefix_error(&err, "Peer resolution error: ");
-		hc_url_clean(u);
+		oio_url_clean(u);
 		return err;
 	}
 
@@ -134,7 +134,7 @@ retry:
 		*result = out;
 	}
 
-	hc_url_clean(u);
+	oio_url_clean(u);
 	return err;
 }
 
@@ -147,14 +147,14 @@ meta2_on_close(struct sqlx_sqlite3_s *sq3, gboolean deleted, gpointer cb_data)
 	if (!deleted)
 		return;
 
-	struct hc_url_s *u = hc_url_empty ();
-	hc_url_set (u, HCURL_NS, PSRV(cb_data)->ns_name);
+	struct oio_url_s *u = oio_url_empty ();
+	oio_url_set (u, OIOURL_NS, PSRV(cb_data)->ns_name);
 	if (!sqlx_name_extract ((struct sqlx_name_s*)&sq3->name, u, NAME_SRVTYPE_META2, &seq)) {
 		GRID_WARN("Invalid base name [%s]", sq3->name.base);
 		return;
 	}
 	hc_decache_reference_service(PSRV(cb_data)->resolver, u, NAME_SRVTYPE_META2);
-	hc_url_pclean(&u);
+	oio_url_pclean(&u);
 }
 
 static gboolean

@@ -34,9 +34,9 @@ void meta2_filter_ctx_clean(struct gridd_filter_ctx_s *ctx);
 
 void meta2_filter_ctx_gclean(gpointer ctx, gpointer ignored);
 
-struct hc_url_s * meta2_filter_ctx_get_url(const struct gridd_filter_ctx_s *ctx);
+struct oio_url_s * meta2_filter_ctx_get_url(const struct gridd_filter_ctx_s *ctx);
 
-void meta2_filter_ctx_set_url(struct gridd_filter_ctx_s *ctx, struct hc_url_s *url);
+void meta2_filter_ctx_set_url(struct gridd_filter_ctx_s *ctx, struct oio_url_s *url);
 
 void meta2_filter_ctx_add_param(struct gridd_filter_ctx_s *ctx, const char *k, const char *v);
 

@@ -86,10 +86,10 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 	SQLXNAME_CHECK(n);
 
 	gint64 seq = 1;
-	struct hc_url_s *u = hc_url_empty();
-	hc_url_set(u, HCURL_NS, ss->ns_name);
+	struct oio_url_s *u = oio_url_empty();
+	oio_url_set(u, OIOURL_NS, ss->ns_name);
 	if (!sqlx_name_extract (n, u, NAME_SRVTYPE_SQLX, &seq)) {
-		hc_url_clean(u);
+		oio_url_clean(u);
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name");
 	}
 
@@ -98,7 +98,7 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 
 	gchar **peers = NULL;
 	GError *err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);
-	hc_url_pclean(&u);
+	oio_url_pclean(&u);
 
 	if (NULL != err) {
 		g_prefix_error(&err, "Peer resolution error");

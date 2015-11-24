@@ -57,7 +57,7 @@ License along with this library.
 /* Request N spare chunks according to a storage policy */
 #define M2V2_SPARE_BY_STGPOL "SPARE_STGPOL"
 
-struct hc_url_s;
+struct oio_url_s;
 
 struct list_params_s;
 struct list_result_s;
@@ -76,17 +76,17 @@ struct m2v2_create_params_s
 
 #define M2V2_MODE_DRYRUN  0x10000000
 
-GError* m2v2_remote_execute_PURGE(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_PURGE(const char *target, struct oio_url_s *url,
 		gboolean dry_run, gdouble timeout, GSList **out);
 
 /** @param out A status message */
-GError* m2v2_remote_execute_DEDUP(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_DEDUP(const char *target, struct oio_url_s *url,
 		gboolean dry_run, gchar **out);
 
-GError* m2v2_remote_execute_CREATE(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_CREATE(const char *target, struct oio_url_s *url,
 		struct m2v2_create_params_s *pols);
 
-GError* m2v2_remote_execute_DESTROY(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_DESTROY(const char *target, struct oio_url_s *url,
 		guint32 flags);
 
 /**
@@ -97,12 +97,12 @@ GError* m2v2_remote_execute_DESTROY(const char *target, struct hc_url_s *url,
  * @param url URL of the container to destroy
  * @param flags
  */
-GError* m2v2_remote_execute_DESTROY_many(gchar **targets, struct hc_url_s *url,
+GError* m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url,
 		guint32 flags);
 
-GError* m2v2_remote_execute_HAS(const char *target, struct hc_url_s *url);
+GError* m2v2_remote_execute_HAS(const char *target, struct oio_url_s *url);
 
-GError* m2v2_remote_execute_BEANS(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_BEANS(const char *target, struct oio_url_s *url,
 		const char *pol, gint64 size, gboolean append, GSList **out);
 
 /**
@@ -124,83 +124,83 @@ GError* m2v2_remote_execute_BEANS(const char *target, struct hc_url_s *url,
  * @note notin_list and broken_list may contain beans other than
  *   (struct bean_CHUNKS_s *) with no harm (they will be ignored).
  */
-GError* m2v2_remote_execute_SPARE(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_SPARE(const char *target, struct oio_url_s *url,
 		const char *stgpol, GSList *notin_list, GSList *broken_list,
 		GSList **out);
 
-GError* m2v2_remote_execute_PUT(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_PUT(const char *target, struct oio_url_s *url,
 		GSList *in, GBytes *content_id, GSList **out);
 
-GError* m2v2_remote_execute_OVERWRITE(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_OVERWRITE(const char *target, struct oio_url_s *url,
 		GSList *in);
 
-GError* m2v2_remote_execute_APPEND(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_APPEND(const char *target, struct oio_url_s *url,
 		GSList *in, GSList **out);
 
-GError* m2v2_remote_execute_COPY(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_COPY(const char *target, struct oio_url_s *url,
 		const char *src);
 
-GError* m2v2_remote_execute_GET(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_GET(const char *target, struct oio_url_s *url,
 		guint32 flags, GSList **out);
 
-GError* m2v2_remote_execute_DEL(const char *target, struct hc_url_s *url);
+GError* m2v2_remote_execute_DEL(const char *target, struct oio_url_s *url);
 
-GError* m2v2_remote_execute_RAW_ADD(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_RAW_ADD(const char *target, struct oio_url_s *url,
 		GSList *beans);
 
-GError* m2v2_remote_execute_RAW_DEL(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_RAW_DEL(const char *target, struct oio_url_s *url,
 		GSList *beans);
 
-GError* m2v2_remote_execute_LINK(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_LINK(const char *target, struct oio_url_s *url,
 		GBytes *content_id);
 
 /** Substitute chunks by another one in meta2 database.
  * TODO: return number of substitutions */
 GError* m2v2_remote_execute_RAW_SUBST(const char *target,
-		struct hc_url_s *url, GSList *new_chunks, GSList *old_chunks);
+		struct oio_url_s *url, GSList *new_chunks, GSList *old_chunks);
 
 GError* m2v2_remote_execute_RAW_SUBST_single(const char *target,
-		struct hc_url_s *url,
+		struct oio_url_s *url,
 		struct bean_CHUNKS_s *new_chunk, struct bean_CHUNKS_s *old_chunk);
 
 GError* m2v2_remote_execute_LIST(const char *target,
-		struct hc_url_s *url, struct list_params_s *p,
+		struct oio_url_s *url, struct list_params_s *p,
 		struct list_result_s *out, gchar ***out_properties);
 
 /** Get the aliases the chunk belongs to. */
 GError* m2v2_remote_execute_LIST_BY_CHUNKID(const char *target,
-		struct hc_url_s *url, const char *chunk, struct list_params_s *p,
+		struct oio_url_s *url, const char *chunk, struct list_params_s *p,
 		struct list_result_s *out);
 
 /** Get the aliases the header belongs to. */
 GError* m2v2_remote_execute_LIST_BY_HEADERHASH(const char *target, 
-		struct hc_url_s *url, GBytes *h, struct list_params_s *p,
+		struct oio_url_s *url, GBytes *h, struct list_params_s *p,
 		struct list_result_s *out);
 
 /** idem, but with the content ID as the key */
-GError* m2v2_remote_execute_LIST_BY_HEADERID(const char *target, struct hc_url_s *url,
+GError* m2v2_remote_execute_LIST_BY_HEADERID(const char *target, struct oio_url_s *url,
 		GBytes *h, struct list_params_s *p, struct list_result_s *out);
 
 /* works for contents only. for container props, @see sqlx_pack_PROPDEL() */
 GError* m2v2_remote_execute_PROP_DEL(const char *target,
-		struct hc_url_s *url, GSList *names);
+		struct oio_url_s *url, GSList *names);
 
 /* works for contents only. for container props, @see sqlx_pack_PROPSET() */
 GError* m2v2_remote_execute_PROP_SET(const char *target,
-		struct hc_url_s *url, guint32 flags, GSList *in);
+		struct oio_url_s *url, guint32 flags, GSList *in);
 
 /* works for contents only. for container props, @see sqlx_pack_PROPGET() */
 GError* m2v2_remote_execute_PROP_GET(const char *target,
-		struct hc_url_s *url, guint32 flags, GSList **out);
+		struct oio_url_s *url, guint32 flags, GSList **out);
 
 GError* m2v2_remote_execute_STGPOL(const char *target,
-		struct hc_url_s *url, const char *pol, GSList **out);
+		struct oio_url_s *url, const char *pol, GSList **out);
 
 GError* m2v2_remote_execute_EXITELECTION(const char *target,
-		struct hc_url_s *url);
+		struct oio_url_s *url);
 
-GError* m2v2_remote_touch_content(const char *target, struct hc_url_s *url);
+GError* m2v2_remote_touch_content(const char *target, struct oio_url_s *url);
 
-GError* m2v2_remote_touch_container_ex(const char *target, struct hc_url_s *url, guint32 flags);
+GError* m2v2_remote_touch_container_ex(const char *target, struct oio_url_s *url, guint32 flags);
 
 #endif /*OIO_SDS__meta2v2__meta2v2_remote_h*/

@@ -65,10 +65,10 @@ struct sqlx_name_s
 void sqlx_name_clean (struct sqlx_name_mutable_s *n);
 void sqlx_name_free  (struct sqlx_name_mutable_s *n);
 
-void sqlx_name_fill  (struct sqlx_name_mutable_s *n, struct hc_url_s *url,
+void sqlx_name_fill  (struct sqlx_name_mutable_s *n, struct oio_url_s *url,
 		const char *srvtype, gint64 seq);
 
-gboolean sqlx_name_extract (struct sqlx_name_s *n, struct hc_url_s *url,
+gboolean sqlx_name_extract (struct sqlx_name_s *n, struct oio_url_s *url,
 		const char *srvtype, gint64 *pseq);
 
 static inline struct sqlx_name_s *

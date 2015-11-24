@@ -436,43 +436,43 @@ static struct map_s {
 	int u;
 	const char *avoid;
 } url2msg_map[] = {
-	{NAME_MSGKEY_NAMESPACE,   HCURL_NS,      NULL},
-	{NAME_MSGKEY_ACCOUNT,     HCURL_ACCOUNT, HCURL_DEFAULT_ACCOUNT},
-	{NAME_MSGKEY_USER,        HCURL_USER,    NULL},
-	{NAME_MSGKEY_TYPENAME,    HCURL_TYPE,    HCURL_DEFAULT_TYPE},
-	{NAME_MSGKEY_CONTENTPATH, HCURL_PATH,    NULL},
-	{NAME_MSGKEY_VERSION,     HCURL_VERSION, NULL},
+	{NAME_MSGKEY_NAMESPACE,   OIOURL_NS,      NULL},
+	{NAME_MSGKEY_ACCOUNT,     OIOURL_ACCOUNT, NULL},
+	{NAME_MSGKEY_USER,        OIOURL_USER,    NULL},
+	{NAME_MSGKEY_TYPENAME,    OIOURL_TYPE,    OIOURL_DEFAULT_TYPE},
+	{NAME_MSGKEY_CONTENTPATH, OIOURL_PATH,    NULL},
+	{NAME_MSGKEY_VERSION,     OIOURL_VERSION, NULL},
 	{NULL,0,NULL},
 };
 
 void
-metautils_message_add_url (MESSAGE m, struct hc_url_s *url)
+metautils_message_add_url (MESSAGE m, struct oio_url_s *url)
 {
 	if (!m)
 		return;
 	for (struct map_s *p = url2msg_map; p->f ;++p) {
-		if (hc_url_has (url, p->u)) {
-			const char *s = hc_url_get (url, p->u);
+		if (oio_url_has (url, p->u)) {
+			const char *s = oio_url_get (url, p->u);
 			if (!p->avoid || strcmp(p->avoid, s))
 				metautils_message_add_field_str(m, p->f, s);
 		}
 	}
 
-	const guint8 *id = hc_url_get_id (url);
+	const guint8 *id = oio_url_get_id (url);
 	if (id)
-		metautils_message_add_field (m, NAME_MSGKEY_CONTAINERID, id, hc_url_get_id_size (url));
+		metautils_message_add_field (m, NAME_MSGKEY_CONTAINERID, id, oio_url_get_id_size (url));
 }
 
-struct hc_url_s *
+struct oio_url_s *
 metautils_message_extract_url (MESSAGE m)
 {
-	struct hc_url_s *url = hc_url_empty ();
+	struct oio_url_s *url = oio_url_empty ();
 	for (struct map_s *p = url2msg_map; p->f ;++p) {
 		// TODO call really often, so make it zero-copy
 		gchar *s = metautils_message_extract_string_copy (m, p->f);
 		if (s) {
 			if (!p->avoid || strcmp(p->avoid, s))
-				hc_url_set (url, p->u, s);
+				oio_url_set (url, p->u, s);
 			g_free0 (s);
 		}
 	}
@@ -482,7 +482,7 @@ metautils_message_extract_url (MESSAGE m)
 	if (e)
 		g_clear_error (&e);
 	else
-		hc_url_set_id (url, cid);
+		oio_url_set_id (url, cid);
 
 	return url;
 }
