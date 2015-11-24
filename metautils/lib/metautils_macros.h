@@ -121,6 +121,7 @@ License along with this library.
 #define NAME_MSGKEY_CONTAINERNAME      "CN"
 #define NAME_MSGKEY_CONTENTLENGTH      "CL"
 #define NAME_MSGKEY_CONTENTPATH        "CP"
+#define NAME_MSGKEY_CONTENTID          "CI"
 #define NAME_MSGKEY_COPY               "COPY"
 #define NAME_MSGKEY_COUNT              "COUNT"
 #define NAME_MSGKEY_DISTANCE           "DISTANCE"
