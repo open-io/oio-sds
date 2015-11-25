@@ -144,30 +144,33 @@ _metacd_match (const gchar *method, const gchar *path)
 	return result;
 }
 
-static struct hc_url_s *
+static struct oio_url_s *
 _metacd_load_url (struct req_args_s *args)
 {
 	const gchar *s;
-	struct hc_url_s *url = hc_url_empty();
+	struct oio_url_s *url = oio_url_empty();
 
 	if (NULL != (s = NS()))
-		hc_url_set_oldns (url, s);
+		oio_url_set (url, OIOURL_NS, s);
 
 	if (NULL != (s = ACCOUNT()))
-		hc_url_set (url, HCURL_ACCOUNT, s);
+		oio_url_set (url, OIOURL_ACCOUNT, s);
 
 	if (NULL != (s = REF())) {
-		hc_url_set (url, HCURL_USER, s);
-		hc_url_set (url, HCURL_TYPE, HCURL_DEFAULT_TYPE);
+		oio_url_set (url, OIOURL_USER, s);
+		oio_url_set (url, OIOURL_TYPE, OIOURL_DEFAULT_TYPE);
 	}
 	if (NULL != (s = PATH())) {
-		hc_url_set (url, HCURL_PATH, s);
+		oio_url_set (url, OIOURL_PATH, s);
 		if (NULL != (s = VERSION()))
-			hc_url_set (url, HCURL_VERSION, s);
+			oio_url_set (url, OIOURL_VERSION, s);
 	}
 
 	if (NULL != (s = CID()))
-		hc_url_set (url, HCURL_HEXID, s);
+		oio_url_set (url, OIOURL_HEXID, s);
+
+	if (NULL != (s = CONTENT()))
+		oio_url_set (url, OIOURL_CONTENTID, s);
 
 	return url;
 }
@@ -191,7 +194,7 @@ handler_action (gpointer u, struct http_request_s *rq,
 		oio_ext_set_random_reqid();
 
 	// Then parse the request to find a handler
-	struct hc_url_s *url = NULL;
+	struct oio_url_s *url = NULL;
 	struct oio_requri_s ruri = {NULL, NULL, NULL, NULL};
 	oio_requri_parse (rq->req_uri, &ruri);
 
@@ -225,7 +228,7 @@ handler_action (gpointer u, struct http_request_s *rq,
 
 	path_matching_cleanv (matchings);
 	oio_requri_clear (&ruri);
-	hc_url_pclean (&url);
+	oio_url_pclean (&url);
 	return rc;
 }
 

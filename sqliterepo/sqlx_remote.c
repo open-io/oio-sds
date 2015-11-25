@@ -344,24 +344,24 @@ sqlx_name_free (struct sqlx_name_mutable_s *n)
 }
 
 void
-sqlx_name_fill  (struct sqlx_name_mutable_s *n, struct hc_url_s *url,
+sqlx_name_fill  (struct sqlx_name_mutable_s *n, struct oio_url_s *url,
 		const char *srvtype, gint64 seq)
 {
 	EXTRA_ASSERT (n != NULL);
 	EXTRA_ASSERT (url != NULL);
 	EXTRA_ASSERT (srvtype != NULL);
-	const gchar *subtype = hc_url_get (url, HCURL_TYPE);
+	const gchar *subtype = oio_url_get (url, OIOURL_TYPE);
 
-	n->ns = g_strdup(hc_url_get (url, HCURL_NS));
-	n->base = g_strdup_printf ("%s.%"G_GINT64_FORMAT, hc_url_get (url, HCURL_HEXID), seq);
-	if (subtype && 0 != strcmp(subtype, HCURL_DEFAULT_TYPE))
+	n->ns = g_strdup(oio_url_get (url, OIOURL_NS));
+	n->base = g_strdup_printf ("%s.%"G_GINT64_FORMAT, oio_url_get (url, OIOURL_HEXID), seq);
+	if (subtype && 0 != strcmp(subtype, OIOURL_DEFAULT_TYPE))
 		n->type = g_strdup_printf ("%s.%s", srvtype, subtype);
 	else
 		n->type = g_strdup (srvtype);
 }
 
 gboolean
-sqlx_name_extract (struct sqlx_name_s *n, struct hc_url_s *url,
+sqlx_name_extract (struct sqlx_name_s *n, struct oio_url_s *url,
 		const char *srvtype, gint64 *pseq)
 {
 	SQLXNAME_CHECK(n);
@@ -375,13 +375,13 @@ sqlx_name_extract (struct sqlx_name_s *n, struct hc_url_s *url,
 	if (NULL != (tokens = g_strsplit (n->type, ".", 2))) {
 		if (tokens[0])
 			rc = !strcmp(tokens[0], srvtype);
-		hc_url_set (url, HCURL_TYPE, tokens[1] ? tokens[1] : HCURL_DEFAULT_TYPE);
+		oio_url_set (url, OIOURL_TYPE, tokens[1] ? tokens[1] : OIOURL_DEFAULT_TYPE);
 		g_strfreev (tokens);
 	}
 
 	if (NULL != (tokens = g_strsplit (n->base, ".", 2))) {
 		if (tokens[0])
-			hc_url_set (url, HCURL_HEXID, tokens[0]);
+			oio_url_set (url, OIOURL_HEXID, tokens[0]);
 		*pseq = tokens[1] ? g_ascii_strtoll (tokens[1], NULL, 10) : 1;
 		g_strfreev (tokens);
 	}

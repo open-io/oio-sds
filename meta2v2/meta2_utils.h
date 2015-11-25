@@ -36,7 +36,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define VERSIONS_LIMITED(V)   ((V) > 1)
 
 struct storage_policy_s;
-struct hc_url_s;
+struct oio_url_s;
 struct grid_lb_iterator_s;
 struct lb_next_opt_s;
 struct sqlx_sqlite3_s;
@@ -125,47 +125,47 @@ gint64 m2db_get_version(struct sqlx_sqlite3_s *sq3);
 
 void m2db_increment_version(struct sqlx_sqlite3_s *sq3);
 
-void m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url);
+void m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url);
 
 /* Get just the ALIAS, with version allowed */
-GError* m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+GError* m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		guint32 flags, struct bean_ALIASES_s **out);
 
 /* Get the BEANS starting at the ALIAS pointed by <url>
  * with version and recursion allowed */
-GError* m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+GError* m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		guint32 flags, m2_onbean_cb cb, gpointer u);
 
 /* Get the version on the ALIAS specified by <url>. */
-GError* m2db_get_alias_version(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+GError* m2db_get_alias_version(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gint64 *version);
 
 /*! Get just the alias with the latest version, whatever the version in <url> */
-GError* m2db_latest_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+GError* m2db_latest_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		struct bean_ALIASES_s **out);
 
 /* Get just the ALIAS with version allowed */
-GError* m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+GError* m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		struct bean_ALIASES_s **out);
 
 GError* m2db_list_aliases(struct sqlx_sqlite3_s *sq3, struct list_params_s *lp,
 		GSList *headers, m2_onbean_cb cb, gpointer u);
 
-GError* m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+GError* m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		m2_onbean_cb cb, gpointer u);
 
-GError* m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+GError* m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gchar **namev);
 
 GError* m2db_flush_property(struct sqlx_sqlite3_s *sq3, const gchar *k);
 
-GError* m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+GError* m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gboolean flush, GSList *beans, m2_onbean_cb cb, gpointer u0);
 
 GError* m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0);
+		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
 
-GError* m2db_link_content(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+GError* m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GBytes *id);
 
 /* ------------------------------------------------------------------------- */
@@ -174,10 +174,9 @@ struct m2db_put_args_s
 {
 	struct sqlx_sqlite3_s *sq3;
 	gint64 max_versions;
-	struct hc_url_s *url;
+	struct oio_url_s *url;
 	struct namespace_info_s *nsinfo;
 	struct grid_lbpool_s *lbpool;
-	GBytes *content_id; /* optional */
 };
 
 GError* m2db_put_alias(struct m2db_put_args_s *args, GSList *in,
@@ -189,17 +188,17 @@ GError* m2db_force_alias(struct m2db_put_args_s *args, GSList *in,
 GError* m2db_copy_alias(struct m2db_put_args_s *args, const char *source);
 
 GError* m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
-		gint64 max_versions, struct hc_url_s *url, GSList *beans,
+		gint64 max_versions, struct oio_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
-GError* m2_generate_beans(struct hc_url_s *url, gint64 size, gint64 chunk_size,
+GError* m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
 		m2_onbean_cb cb, gpointer cb_data);
 
 GError* m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname,
 		int repl);
 
-GError* m2db_get_storage_policy(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+GError* m2db_get_storage_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		struct namespace_info_s *nsinfo, gboolean from_previous,
 		struct storage_policy_s **result);
 
@@ -208,7 +207,7 @@ GError* m2db_get_container_status(struct sqlx_sqlite3_s *sq3, guint32 *status);
 GError* m2db_set_container_status(struct sqlx_sqlite3_s *sq3, guint32 r);
 
 GError* m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct hc_url_s *url, GSList *beans);
+		struct oio_url_s *url, GSList *beans);
 
 /**
  * @param db
@@ -228,7 +227,7 @@ GError* m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 GError* m2db_flush_container(sqlite3 *db);
 
 GError* m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3,
-		struct hc_url_s *url, guint32 flags, GString **status_message);
+		struct oio_url_s *url, guint32 flags, GString **status_message);
 
 /**
  * Create a new alias for each existing alias of the container, with

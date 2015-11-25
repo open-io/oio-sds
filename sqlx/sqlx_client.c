@@ -39,7 +39,7 @@ static struct hc_resolver_s *resolver = NULL;
 static gboolean flag_xml = FALSE;
 static gboolean flag_json = FALSE;
 
-struct hc_url_s *url = NULL;
+struct oio_url_s *url = NULL;
 static gchar *type = NULL;
 static gchar **query = NULL;
 
@@ -378,8 +378,8 @@ static void
 cli_action(void)
 {
 	/* Use the client to get a sqlx service */
-	GRID_DEBUG("Locating [%s] CID[%s]", hc_url_get(url, HCURL_WHOLE),
-			hc_url_get(url, HCURL_HEXID));
+	GRID_DEBUG("Locating [%s] CID[%s]", oio_url_get(url, OIOURL_WHOLE),
+			oio_url_get(url, OIOURL_HEXID));
 
 	gchar **srvurlv = NULL;
 	GError *err = hc_resolve_reference_service(resolver, url, type, &srvurlv);
@@ -451,7 +451,7 @@ cli_specific_fini(void)
 		resolver = NULL;
 	}
 	if (url) {
-		hc_url_clean(url);
+		oio_url_clean(url);
 		url = NULL;
 	}
 }
@@ -478,7 +478,7 @@ cli_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	if (!(url = hc_url_oldinit(argv[0]))) {
+	if (!(url = oio_url_init(argv[0]))) {
 		g_printerr("Invalid hc URL (%s)\n", strerror(errno));
 		return FALSE;
 	}

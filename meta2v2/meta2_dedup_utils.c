@@ -129,7 +129,7 @@ get_dup_contents_headers_by_hash(sqlite3 *db, GError **err)
 }
 
 guint64
-dedup_aliases(sqlite3 *db, struct hc_url_s *url, gboolean dry_run, GSList **impacted_aliases,
+dedup_aliases(sqlite3 *db, struct oio_url_s *url, gboolean dry_run, GSList **impacted_aliases,
 		GError **err)
 {
 	(void) url;

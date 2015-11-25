@@ -28,7 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 struct gridd_filter_input_data_s
 {
-	struct hc_url_s *url;
+	struct oio_url_s *url;
 	struct meta2_backend_s *backend;
 	GHashTable *params;
 	void *udata;
@@ -53,7 +53,7 @@ _input_data_clean(struct gridd_filter_input_data_s *input_data)
 		return;
 
 	if (NULL != input_data->url) {
-		hc_url_clean(input_data->url);
+		oio_url_clean(input_data->url);
 		input_data->url = NULL;
 	}
 
@@ -138,14 +138,14 @@ meta2_filter_ctx_gclean(gpointer ctx, gpointer ignored)
 }
 
 void
-meta2_filter_ctx_set_url(struct gridd_filter_ctx_s *ctx, struct hc_url_s *url)
+meta2_filter_ctx_set_url(struct gridd_filter_ctx_s *ctx, struct oio_url_s *url)
 {
 	if(!ctx || !ctx->input_data)
 		return;
 	ctx->input_data->url = url;
 }
 
-struct hc_url_s *
+struct oio_url_s *
 meta2_filter_ctx_get_url(const struct gridd_filter_ctx_s *ctx)
 {
 	if(!ctx || !ctx->input_data)

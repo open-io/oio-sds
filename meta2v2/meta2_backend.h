@@ -62,13 +62,13 @@ const gchar* meta2_backend_get_local_addr(struct meta2_backend_s *m2);
 /* -------------------------------------------------------------------------- */
 
 GError *meta2_backend_has_master_container(struct meta2_backend_s *m2,
-		struct hc_url_s *url);
+		struct oio_url_s *url);
 
 GError *meta2_backend_has_container(struct meta2_backend_s *m2,
-		struct hc_url_s *url);
+		struct oio_url_s *url);
 
 GError *meta2_backend_create_container(struct meta2_backend_s *m2,
-		struct hc_url_s *url, struct m2v2_create_params_s *params);
+		struct oio_url_s *url, struct m2v2_create_params_s *params);
 
 #define M2V2_DESTROY_PURGE 0x01 /* XXX Not implemented.
 								   performs a PURGE before the destroy */
@@ -79,24 +79,24 @@ GError *meta2_backend_create_container(struct meta2_backend_s *m2,
 #define M2V2_DESTROY_LOCAL 0x08 /* Destroy only the local base */
 
 GError* meta2_backend_destroy_container(struct meta2_backend_s *m2,
-		struct hc_url_s *url, guint32 flags);
+		struct oio_url_s *url, guint32 flags);
 
 /** Destroy all contents of a container.  */
 GError* meta2_backend_flush_container(struct meta2_backend_s *m2,
-		struct hc_url_s *url);
+		struct oio_url_s *url);
 
 #define M2V2_MODE_DRYRUN  0x10000000
 
 GError *meta2_backend_purge_container(struct meta2_backend_s *m2,
-		struct hc_url_s *url, guint32 flags, m2_onbean_cb cb, gpointer u0);
+		struct oio_url_s *url, guint32 flags, m2_onbean_cb cb, gpointer u0);
 
 /** Find and unreference duplicate content headers.  */
 GError* meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, guint32 flags, GString **status_message);
+		struct oio_url_s *url, guint32 flags, GString **status_message);
 
 /* -------------------------------------------------------------------------- */
 
-GError* meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct hc_url_s *url,
+GError* meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		struct list_params_s *lp, GSList *headers,
 		m2_onbean_cb cb, gpointer u0, gchar ***out_properties);
 
@@ -104,104 +104,104 @@ GError* meta2_backend_list_aliases(struct meta2_backend_s *m2b, struct hc_url_s 
  * @param flags 0 or a combination (ORed) of M2V2_FLAG_ALLVERSION
  *        and M2V2_FLAG_NODELETED */
 GError* meta2_backend_get_alias(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, guint32 flags,
+		struct oio_url_s *url, guint32 flags,
 		m2_onbean_cb cb, gpointer u0);
 
 /** Delete all the beans listed, regardless of their type. This is REALLY
  * DANGEROUS, do not use this feature. */
 GError* meta2_backend_delete_beans(struct meta2_backend_s *m2b,
-                struct hc_url_s *url, GSList *beans);
+                struct oio_url_s *url, GSList *beans);
 
 /** Inserts all the beans listed, as is, regardless of their type. This is REALLY
  * DANGEROUS, do not use this feature. */
 GError* meta2_backend_insert_beans(struct meta2_backend_s *m2b,
-                struct hc_url_s *url, GSList *beans);
+                struct oio_url_s *url, GSList *beans);
 
 /** Updates all the beans listed (old by new), as is, regardless of their type.
  * This is REALLY DANGEROUS, do not use this feature. */
 GError* meta2_backend_update_beans(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *new_chunks, GSList *old_chunks);
+		struct oio_url_s *url, GSList *new_chunks, GSList *old_chunks);
 
 /** Filters out only the CONTENTS-typed beans and call
  * meta2_backend_delete_beans() */
 GError* meta2_backend_delete_chunks(struct meta2_backend_s *m2b,
-                struct hc_url_s *url, GSList *beans);
+                struct oio_url_s *url, GSList *beans);
 
 GError* meta2_backend_refresh_container_size(struct meta2_backend_s *m2b,
-				struct hc_url_s *url, gboolean bRecalc);
+				struct oio_url_s *url, gboolean bRecalc);
 
 GError* meta2_backend_put_alias(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *in, GBytes *content_id /* optional */,
+		struct oio_url_s *url, GSList *in,
 		GSList **out_deleted, GSList **out_added);
 
 GError* meta2_backend_copy_alias(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, const char *src);
+		struct oio_url_s *url, const char *src);
 
 GError* meta2_backend_append_to_alias(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *beans,
+		struct oio_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
 /** Create a new version of the ALIAS but with the given chunks linked to
  * the existing CONTENT.  */
 GError* meta2_backend_force_alias(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *in,
+		struct oio_url_s *url, GSList *in,
 		 GSList **out_deleted, GSList **out_added);
 
 /* TODO manage properties */
 GError* meta2_backend_link_content (struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GBytes *content_id);
+		struct oio_url_s *url, GBytes *content_id);
 
 GError* meta2_backend_delete_alias(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0);
+		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
 
 /* Properties -------------------------------------------------------------- */
 
 GError* meta2_backend_get_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0);
+		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0);
 
 GError* meta2_backend_del_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gchar **propv);
+		struct oio_url_s *url, gchar **propv);
 
 /** Helper for testing purpose */
 GError* meta2_backend_set_properties(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gboolean flush, GSList *beans,
+		struct oio_url_s *url, gboolean flush, GSList *beans,
 		m2_onbean_cb cb, gpointer u0);
 
 /* Back-Links listing ------------------------------------------------------- */
 
 /** Get a list of CONTENT_HEADER ownning the given chunk id. */
 GError* meta2_backend_content_from_chunkid (struct meta2_backend_s *m2b,
-		struct hc_url_s *url, const gchar* chunk_id,
+		struct oio_url_s *url, const gchar* chunk_id,
 		m2_onbean_cb cb, gpointer u0);
 
 GError* meta2_backend_content_from_contenthash (struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GBytes *h,
+		struct oio_url_s *url, GBytes *h,
 		m2_onbean_cb cb, gpointer u0);
 
 GError* meta2_backend_content_from_contentid (struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GBytes *h,
+		struct oio_url_s *url, GBytes *h,
 		m2_onbean_cb cb, gpointer u0);
 
 /* TESTING ------------------------------------------------------------------ */
 
 GError* meta2_backend_get_alias_version(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 *version);
+		struct oio_url_s *url, gint64 *version);
 
 GError* meta2_backend_generate_beans(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 size, const gchar *polname,
+		struct oio_url_s *url, gint64 size, const gchar *polname,
 		gboolean append, m2_onbean_cb cb, gpointer cb_data);
 
 GError* meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 *result);
+		struct oio_url_s *url, gint64 *result);
 
 GError* meta2_backend_update_alias_header(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, GSList *beans);
+		struct oio_url_s *url, GSList *beans);
 
 /** Generate spare chunk (in form of a chunk_info list). This function takes
  * care of the storage policy during the chunks generation (distance,
  * nb_chunks,...) */
 GError* meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, const char *polname, GSList **result,
+		struct oio_url_s *url, const char *polname, GSList **result,
 		gboolean answer_beans);
 
 /** Generate spare chunk (in form of a chunk_info list). This function
@@ -211,12 +211,12 @@ GError* meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b,
  * which is the list of already tried chunks url (e.g for which rawx seems to
  * not work) */
 GError* meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
-		struct hc_url_s *url, gint64 count, gint64 dist, const char *notin,
+		struct oio_url_s *url, gint64 count, gint64 dist, const char *notin,
 		const char * broken, GSList **result, gboolean answer_beans);
 
 /** Generate spare chunks (in form of a bean_CHUNKS_s list).  */
 GError* meta2_backend_get_conditionned_spare_chunks_v2(
-		struct meta2_backend_s *m2b, struct hc_url_s *url, const gchar *stgpol,
+		struct meta2_backend_s *m2b, struct oio_url_s *url, const gchar *stgpol,
 		GSList *notin, GSList *broken, GSList **result);
 
 #endif /*OIO_SDS__meta2v2__meta2_backend_h*/

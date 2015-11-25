@@ -34,14 +34,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_backend_internals.h"
 
 static GError *
-__del_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+__del_container_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gchar **names)
 {
 	GError *err = NULL;
 	gchar **p_name;
 
 	if (!names || !*names)
-		__exec_cid(sq3->db, "DELETE FROM properties WHERE cid = ?", hc_url_get_id(url));
+		__exec_cid(sq3->db, "DELETE FROM properties WHERE cid = ?", oio_url_get_id(url));
 	else {
 		for (p_name=names; !err && p_name && *p_name ;p_name++) {
 			sqlite3_stmt *stmt = NULL;
@@ -51,7 +51,7 @@ __del_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 			if (rc != SQLITE_OK && rc != SQLITE_DONE)
 				err = M1_SQLITE_GERROR(sq3->db, rc);
 			else {
-				(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
+				(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id(url), oio_url_get_id_size(url), NULL);
 				(void) sqlite3_bind_text(stmt, 2, *p_name, strlen(*p_name), NULL);
 				sqlite3_step_debug_until_end (rc, stmt);
 				if (rc != SQLITE_DONE)
@@ -65,7 +65,7 @@ __del_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 }
 
 static GError *
-__replace_property(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+__replace_property(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		const gchar *name, const gchar *value)
 {
 	GError *err = NULL;
@@ -83,7 +83,7 @@ __replace_property(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	else {
 		(void) sqlite3_bind_text(stmt, 1, name, -1, NULL);
 		(void) sqlite3_bind_text(stmt, 2, value, -1, NULL);
-		(void) sqlite3_bind_blob(stmt, 3, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
+		(void) sqlite3_bind_blob(stmt, 3, oio_url_get_id(url), oio_url_get_id_size(url), NULL);
 		sqlite3_step_debug_until_end (rc, stmt);
 		if (rc != SQLITE_DONE && rc != SQLITE_OK)
 			err = M1_SQLITE_GERROR(sq3->db, rc);
@@ -94,7 +94,7 @@ __replace_property(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 }
 
 static GError *
-__set_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+__set_container_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gchar **props)
 {
 	GError *err = NULL;
@@ -124,7 +124,7 @@ __pack_property(const unsigned char *n, int n_size,
 }
 
 static GError *
-__get_all_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, GPtrArray *gpa)
+__get_all_container_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url, GPtrArray *gpa)
 {
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
@@ -135,7 +135,7 @@ __get_all_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)
 		err = M1_SQLITE_GERROR(sq3->db, rc);
 	else {
-		(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
+		(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id(url), oio_url_get_id_size(url), NULL);
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 			gchar *prop = __pack_property(
 					sqlite3_column_text(stmt, 0), sqlite3_column_bytes(stmt, 0),
@@ -151,7 +151,7 @@ __get_all_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 }
 
 static GError *
-__get_one_property(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, const gchar *name, GPtrArray *gpa)
+__get_one_property(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url, const gchar *name, GPtrArray *gpa)
 {
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
@@ -165,7 +165,7 @@ __get_one_property(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, const gchar
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)
 		err = M1_SQLITE_GERROR(sq3->db, rc);
 	else {
-		(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
+		(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id(url), oio_url_get_id_size(url), NULL);
 		(void) sqlite3_bind_text(stmt, 2, name, -1, NULL);
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 			gchar *prop = __pack_property(
@@ -182,7 +182,7 @@ __get_one_property(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, const gchar
 }
 
 static GError *
-__get_container_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, gchar **names, gchar ***result)
+__get_container_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url, gchar **names, gchar ***result)
 {
 	GError *err = NULL;
 	GPtrArray *gpa;
@@ -229,7 +229,7 @@ __check_property_format(gchar **strv)
 
 GError *
 meta1_backend_set_container_properties(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gchar **props, gboolean flush)
+		struct oio_url_s *url, gchar **props, gboolean flush)
 {
 	EXTRA_ASSERT(props != NULL);
 
@@ -264,7 +264,7 @@ meta1_backend_set_container_properties(struct meta1_backend_s *m1,
 
 GError *
 meta1_backend_del_container_properties(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gchar **names)
+		struct oio_url_s *url, gchar **names)
 {
 	EXTRA_ASSERT(names != NULL);
 
@@ -287,7 +287,7 @@ meta1_backend_del_container_properties(struct meta1_backend_s *m1,
 
 GError *
 meta1_backend_get_container_properties(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gchar **names, gchar ***result)
+		struct oio_url_s *url, gchar **names, gchar ***result)
 {
 	EXTRA_ASSERT(result != NULL);
 

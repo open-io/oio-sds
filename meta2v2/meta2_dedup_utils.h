@@ -58,7 +58,7 @@ guint64 substitute_content_header(sqlite3 *db, struct bean_CONTENTS_HEADERS_s *n
  * @param err A pointer to a GError
  * @return The storage space saved thanks to deduplication
  */
-guint64 dedup_aliases(sqlite3 *db, struct hc_url_s *url, gboolean dry_run,
+guint64 dedup_aliases(sqlite3 *db, struct oio_url_s *url, gboolean dry_run,
 		GSList **impacted_aliases, GError **err);
 
 #endif /*OIO_SDS__meta2v2__meta2_dedup_utils_h*/

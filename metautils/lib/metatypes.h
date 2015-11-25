@@ -46,9 +46,6 @@ License along with this library.
 /** The maximum length of a location name */
 #define LIMIT_LENGTH_LOCNAME 64
 
-/** The maximum length of a URL query string (including '?') */
-#define LIMIT_LENGTH_HCURL_OPTIONS 512
-
 #define LIMIT_LENGTH_CHUNKURL 512
 
 #define LIMIT_LENGTH_REQID 128

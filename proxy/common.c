@@ -149,7 +149,7 @@ _qualify_service_url (gconstpointer p)
 }
 
 GError *
-_resolve_service_and_do (const char *t, gint64 seq, struct hc_url_s *u,
+_resolve_service_and_do (const char *t, gint64 seq, struct oio_url_s *u,
 		GError * (*hook) (struct meta1_service_url_s *m1u, gboolean *next))
 {
 	gchar **uv = NULL;
@@ -244,7 +244,7 @@ _gba_request (struct meta1_service_url_s *m1u,
 }
 
 GError *
-_gbav_request (const char *t, gint64 seq, struct hc_url_s *u,
+_gbav_request (const char *t, gint64 seq, struct oio_url_s *u,
 		GByteArray * builder (void),
 		gchar ***outurl, GByteArray ***out)
 {

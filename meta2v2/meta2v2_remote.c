@@ -31,7 +31,7 @@ License along with this library.
 #include <meta2v2/autogen.h>
 
 static MESSAGE
-_m2v2_build_request(const char *name, struct hc_url_s *url, GByteArray *body)
+_m2v2_build_request(const char *name, struct oio_url_s *url, GByteArray *body)
 {
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(url != NULL);
@@ -44,7 +44,7 @@ _m2v2_build_request(const char *name, struct hc_url_s *url, GByteArray *body)
 }
 
 static GByteArray *
-_m2v2_pack_request_with_flags(const char *name, struct hc_url_s *url,
+_m2v2_pack_request_with_flags(const char *name, struct oio_url_s *url,
 		GByteArray *body, guint32 flags)
 {
 	MESSAGE msg = _m2v2_build_request(name, url, body);
@@ -54,7 +54,7 @@ _m2v2_pack_request_with_flags(const char *name, struct hc_url_s *url,
 }
 
 static GByteArray *
-_m2v2_pack_request(const char *name, struct hc_url_s *url, GByteArray *body)
+_m2v2_pack_request(const char *name, struct oio_url_s *url, GByteArray *body)
 {
 	return message_marshall_gba_and_clean(_m2v2_build_request(name, url, body));
 }
@@ -72,7 +72,7 @@ m2v2_list_result_clean (struct list_result_s *p)
 }
 
 static GByteArray*
-m2v2_remote_pack_CREATE(struct hc_url_s *url, struct m2v2_create_params_s *pols)
+m2v2_remote_pack_CREATE(struct oio_url_s *url, struct m2v2_create_params_s *pols)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_CREATE, url, NULL);
 	if (pols && pols->storage_policy)
@@ -91,7 +91,7 @@ m2v2_remote_pack_CREATE(struct hc_url_s *url, struct m2v2_create_params_s *pols)
 }
 
 static GByteArray*
-m2v2_remote_pack_DESTROY(struct hc_url_s *url, guint32 flags)
+m2v2_remote_pack_DESTROY(struct oio_url_s *url, guint32 flags)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_DESTROY, url, NULL);
 	if (flags & M2V2_DESTROY_FORCE)
@@ -107,13 +107,13 @@ m2v2_remote_pack_DESTROY(struct hc_url_s *url, guint32 flags)
 }
 
 static GByteArray*
-m2v2_remote_pack_HAS(struct hc_url_s *url)
+m2v2_remote_pack_HAS(struct oio_url_s *url)
 {
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_HAS, url, NULL);
 }
 
 static GByteArray*
-m2v2_remote_pack_PURGE(struct hc_url_s *url, gboolean dry_run)
+m2v2_remote_pack_PURGE(struct oio_url_s *url, gboolean dry_run)
 {
 	guint32 flags = 0;
 	if (dry_run)
@@ -122,7 +122,7 @@ m2v2_remote_pack_PURGE(struct hc_url_s *url, gboolean dry_run)
 }
 
 static GByteArray*
-m2v2_remote_pack_DEDUP(struct hc_url_s *url, gboolean dry_run)
+m2v2_remote_pack_DEDUP(struct oio_url_s *url, gboolean dry_run)
 {
 	guint32 flags = 0;
 	if (dry_run)
@@ -131,18 +131,15 @@ m2v2_remote_pack_DEDUP(struct hc_url_s *url, gboolean dry_run)
 }
 
 static GByteArray*
-m2v2_remote_pack_PUT(struct hc_url_s *url, GSList *beans, GBytes *id)
+m2v2_remote_pack_PUT(struct oio_url_s *url, GSList *beans)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
 	MESSAGE msg = _m2v2_build_request (NAME_MSGNAME_M2V2_PUT, url, body);
-	if (NULL != id)
-		metautils_message_add_field(msg, NAME_MSGKEY_KEY,
-				g_bytes_get_data(id, NULL), g_bytes_get_size(id));
 	return message_marshall_gba_and_clean(msg);
 }
 
 static GByteArray*
-m2v2_remote_pack_OVERWRITE(struct hc_url_s *url, GSList *beans)
+m2v2_remote_pack_OVERWRITE(struct oio_url_s *url, GSList *beans)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, body);
@@ -151,14 +148,14 @@ m2v2_remote_pack_OVERWRITE(struct hc_url_s *url, GSList *beans)
 }
 
 static GByteArray*
-m2v2_remote_pack_APPEND(struct hc_url_s *url, GSList *beans)
+m2v2_remote_pack_APPEND(struct oio_url_s *url, GSList *beans)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_APPEND, url, body);
 }
 
 static GByteArray*
-m2v2_remote_pack_COPY(struct hc_url_s *url, const char *src)
+m2v2_remote_pack_COPY(struct oio_url_s *url, const char *src)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_PUT, url, NULL);
 	metautils_message_add_field_str(msg, NAME_MSGKEY_COPY, src);
@@ -166,27 +163,27 @@ m2v2_remote_pack_COPY(struct hc_url_s *url, const char *src)
 }
 
 static GByteArray*
-m2v2_remote_pack_DEL(struct hc_url_s *url)
+m2v2_remote_pack_DEL(struct oio_url_s *url)
 {
 	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_DEL, url, NULL, 0);
 }
 
 static GByteArray*
-m2v2_remote_pack_RAW_DEL(struct hc_url_s *url, GSList *beans)
+m2v2_remote_pack_RAW_DEL(struct oio_url_s *url, GSList *beans)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_RAW_DEL, url, body);
 }
 
 static GByteArray*
-m2v2_remote_pack_RAW_ADD(struct hc_url_s *url, GSList *beans)
+m2v2_remote_pack_RAW_ADD(struct oio_url_s *url, GSList *beans)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_RAW_ADD, url, body);
 }
 
 static GByteArray*
-m2v2_remote_pack_RAW_SUBST(struct hc_url_s *url,
+m2v2_remote_pack_RAW_SUBST(struct oio_url_s *url,
 		GSList *new_chunks, GSList *old_chunks)
 {
 	GByteArray *new_chunks_gba = bean_sequence_marshall(new_chunks);
@@ -202,7 +199,7 @@ m2v2_remote_pack_RAW_SUBST(struct hc_url_s *url,
 }
 
 static GByteArray*
-m2v2_remote_pack_GET(struct hc_url_s *url, guint32 flags)
+m2v2_remote_pack_GET(struct oio_url_s *url, guint32 flags)
 {
 	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_GET, url, NULL, flags);
 }
@@ -228,7 +225,7 @@ _pack_list_params (MESSAGE msg, struct list_params_s *p)
 }
 
 static GByteArray*
-m2v2_remote_pack_LIST(struct hc_url_s *url, struct list_params_s *p)
+m2v2_remote_pack_LIST(struct oio_url_s *url, struct list_params_s *p)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_LIST, url, NULL);
 	_pack_list_params (msg, p);
@@ -236,7 +233,7 @@ m2v2_remote_pack_LIST(struct hc_url_s *url, struct list_params_s *p)
 }
 
 static GByteArray*
-m2v2_remote_pack_LIST_BY_CHUNKID(struct hc_url_s *url, struct list_params_s *p,
+m2v2_remote_pack_LIST_BY_CHUNKID(struct oio_url_s *url, struct list_params_s *p,
 		const char *chunk)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_LCHUNK, url, NULL);
@@ -246,7 +243,7 @@ m2v2_remote_pack_LIST_BY_CHUNKID(struct hc_url_s *url, struct list_params_s *p,
 }
 
 static GByteArray*
-m2v2_remote_pack_LIST_BY_HEADERHASH(struct hc_url_s *url, struct list_params_s *p,
+m2v2_remote_pack_LIST_BY_HEADERHASH(struct oio_url_s *url, struct list_params_s *p,
 		GBytes *h)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_LHHASH, url, NULL);
@@ -257,7 +254,7 @@ m2v2_remote_pack_LIST_BY_HEADERHASH(struct hc_url_s *url, struct list_params_s *
 }
 
 static GByteArray*
-m2v2_remote_pack_LIST_BY_HEADERID(struct hc_url_s *url, struct list_params_s *p,
+m2v2_remote_pack_LIST_BY_HEADERID(struct oio_url_s *url, struct list_params_s *p,
 		GBytes *h)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_LHID, url, NULL);
@@ -268,14 +265,14 @@ m2v2_remote_pack_LIST_BY_HEADERID(struct hc_url_s *url, struct list_params_s *p,
 }
 
 static GByteArray*
-m2v2_remote_pack_PROP_DEL(struct hc_url_s *url, GSList *names)
+m2v2_remote_pack_PROP_DEL(struct oio_url_s *url, GSList *names)
 {
 	GByteArray *body = strings_marshall_gba(names, NULL);
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_PROP_DEL, url, body);
 }
 
 static GByteArray*
-m2v2_remote_pack_PROP_SET(struct hc_url_s *url, guint32 flags,
+m2v2_remote_pack_PROP_SET(struct oio_url_s *url, guint32 flags,
 		GSList *beans)
 {
 	GByteArray *body = bean_sequence_marshall(beans);
@@ -283,13 +280,13 @@ m2v2_remote_pack_PROP_SET(struct hc_url_s *url, guint32 flags,
 }
 
 static GByteArray*
-m2v2_remote_pack_PROP_GET(struct hc_url_s *url, guint32 flags)
+m2v2_remote_pack_PROP_GET(struct oio_url_s *url, guint32 flags)
 {
 	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_PROP_GET, url, NULL, flags);
 }
 
 static GByteArray*
-m2v2_remote_pack_BEANS(struct hc_url_s *url, const char *pol, gint64 size, gboolean append)
+m2v2_remote_pack_BEANS(struct oio_url_s *url, const char *pol, gint64 size, gboolean append)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_BEANS, url, NULL);
 	metautils_message_add_field_strint64 (msg, NAME_MSGKEY_CONTENTLENGTH, size);
@@ -303,7 +300,7 @@ m2v2_remote_pack_BEANS(struct hc_url_s *url, const char *pol, gint64 size, gbool
 }
 
 static GByteArray*
-m2v2_remote_pack_SPARE(struct hc_url_s *url, const char *pol,
+m2v2_remote_pack_SPARE(struct oio_url_s *url, const char *pol,
 		GSList *notin_list, GSList *broken_list)
 {
 	gchar *spare_type = M2V2_SPARE_BY_STGPOL;
@@ -343,7 +340,7 @@ m2v2_remote_pack_SPARE(struct hc_url_s *url, const char *pol,
 }
 
 static GByteArray*
-m2v2_remote_pack_STGPOL(struct hc_url_s *url, const char *pol)
+m2v2_remote_pack_STGPOL(struct oio_url_s *url, const char *pol)
 {
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_STGPOL, url, NULL);
 	metautils_message_add_field_str(msg, NAME_MSGKEY_STGPOLICY, pol);
@@ -351,30 +348,27 @@ m2v2_remote_pack_STGPOL(struct hc_url_s *url, const char *pol)
 }
 
 static GByteArray*
-m2v2_remote_pack_EXITELECTION(struct hc_url_s *url)
+m2v2_remote_pack_EXITELECTION(struct oio_url_s *url)
 {
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_EXITELECTION, url, NULL);
 }
 
 static GByteArray*
-m2v2_remote_pack_TOUCH_content(struct hc_url_s *url)
+m2v2_remote_pack_TOUCH_content(struct oio_url_s *url)
 {
 	return _m2v2_pack_request(NAME_MSGNAME_M2V1_TOUCH_CONTENT, url, NULL);
 }
 
 static GByteArray*
-m2v2_remote_pack_TOUCH_container(struct hc_url_s *url, guint32 flags)
+m2v2_remote_pack_TOUCH_container(struct oio_url_s *url, guint32 flags)
 {
 	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V1_TOUCH_CONTAINER, url, NULL, flags);
 }
 
 static GByteArray*
-m2v2_remote_pack_LINK(struct hc_url_s *url, GBytes *id)
+m2v2_remote_pack_LINK(struct oio_url_s *url)
 {
-	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_LINK, url, NULL);
-	metautils_message_add_field(msg, NAME_MSGKEY_KEY,
-			g_bytes_get_data(id, NULL), g_bytes_get_size(id));
-	return message_marshall_gba_and_clean(msg);
+	return message_marshall_gba_and_clean(_m2v2_build_request(NAME_MSGNAME_M2V2_LINK, url, NULL));
 }
 
 /* ------------------------------------------------------------------------- */
@@ -393,19 +387,19 @@ _m2v2_request(const char *url, GByteArray *req, GSList **out)
 }
 
 GError*
-m2v2_remote_execute_CREATE(const char *target, struct hc_url_s *url, struct m2v2_create_params_s *pols)
+m2v2_remote_execute_CREATE(const char *target, struct oio_url_s *url, struct m2v2_create_params_s *pols)
 {
 	return _m2v2_request(target, m2v2_remote_pack_CREATE(url, pols), NULL);
 }
 
 GError*
-m2v2_remote_execute_DESTROY(const char *target, struct hc_url_s *url, guint32 flags)
+m2v2_remote_execute_DESTROY(const char *target, struct oio_url_s *url, guint32 flags)
 {
 	return _m2v2_request(target, m2v2_remote_pack_DESTROY(url, flags), NULL);
 }
 
 GError*
-m2v2_remote_execute_DESTROY_many(gchar **targets, struct hc_url_s *url, guint32 flags)
+m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url, guint32 flags)
 {
 	if (!targets)
 		return NEWERROR(CODE_INTERNAL_ERROR, "invalid target array (NULL)");
@@ -437,20 +431,20 @@ m2v2_remote_execute_DESTROY_many(gchar **targets, struct hc_url_s *url, guint32 
 }
 
 GError*
-m2v2_remote_execute_HAS(const char *target, struct hc_url_s *url)
+m2v2_remote_execute_HAS(const char *target, struct oio_url_s *url)
 {
 	return _m2v2_request(target, m2v2_remote_pack_HAS(url), NULL);
 }
 
 GError*
-m2v2_remote_execute_BEANS(const char *target, struct hc_url_s *url,
+m2v2_remote_execute_BEANS(const char *target, struct oio_url_s *url,
 		const char *pol, gint64 size, gboolean append, GSList **out)
 {
 	return _m2v2_request(target, m2v2_remote_pack_BEANS(url, pol, size, append), out);
 }
 
 GError*
-m2v2_remote_execute_SPARE(const char *target, struct hc_url_s *url,
+m2v2_remote_execute_SPARE(const char *target, struct oio_url_s *url,
 		const char *pol, GSList *notin_list, GSList *broken_list,
 		GSList **out)
 {
@@ -458,52 +452,52 @@ m2v2_remote_execute_SPARE(const char *target, struct hc_url_s *url,
 }
 
 GError*
-m2v2_remote_execute_STGPOL(const char *target, struct hc_url_s *url,
+m2v2_remote_execute_STGPOL(const char *target, struct oio_url_s *url,
 		const char *pol, GSList **out)
 {
 	return _m2v2_request(target, m2v2_remote_pack_STGPOL(url, pol), out);
 }
 
 GError*
-m2v2_remote_execute_PUT(const char *target, struct hc_url_s *url,
-		GSList *in, GBytes *content_id, GSList **out)
+m2v2_remote_execute_PUT(const char *target, struct oio_url_s *url,
+		GSList *in, GSList **out)
 {
-	return _m2v2_request(target, m2v2_remote_pack_PUT(url, in, content_id), out);
+	return _m2v2_request(target, m2v2_remote_pack_PUT(url, in), out);
 }
 
 GError*
-m2v2_remote_execute_OVERWRITE(const char *target, struct hc_url_s *url, GSList *in)
+m2v2_remote_execute_OVERWRITE(const char *target, struct oio_url_s *url, GSList *in)
 {
 	return _m2v2_request(target, m2v2_remote_pack_OVERWRITE(url, in), NULL);
 }
 
 GError*
-m2v2_remote_execute_APPEND(const char *target, struct hc_url_s *url, GSList *in, GSList **out)
+m2v2_remote_execute_APPEND(const char *target, struct oio_url_s *url, GSList *in, GSList **out)
 {
 	return _m2v2_request(target, m2v2_remote_pack_APPEND(url, in), out);
 }
 
 GError*
-m2v2_remote_execute_COPY(const char *target, struct hc_url_s *url, const char *src)
+m2v2_remote_execute_COPY(const char *target, struct oio_url_s *url, const char *src)
 {
 	return _m2v2_request(target, m2v2_remote_pack_COPY(url, src), NULL);
 }
 
 GError*
-m2v2_remote_execute_PURGE(const char *target, struct hc_url_s *url, gboolean dry_run,
+m2v2_remote_execute_PURGE(const char *target, struct oio_url_s *url, gboolean dry_run,
 		gdouble timeout, GSList **out)
 {
 	return _m2v2_request_ex(target, m2v2_remote_pack_PURGE(url, dry_run), timeout, out);
 }
 
 GError*
-m2v2_remote_execute_EXITELECTION(const char *target, struct hc_url_s *url)
+m2v2_remote_execute_EXITELECTION(const char *target, struct oio_url_s *url)
 {
 	return _m2v2_request(target, m2v2_remote_pack_EXITELECTION(url), NULL);
 }
 
 GError*
-m2v2_remote_execute_DEDUP(const char *target, struct hc_url_s *url,
+m2v2_remote_execute_DEDUP(const char *target, struct oio_url_s *url,
 		gboolean dry_run, gchar **out)
 {
 	return gridd_client_exec_and_concat_string (target, M2V2_CLIENT_TIMEOUT,
@@ -511,40 +505,40 @@ m2v2_remote_execute_DEDUP(const char *target, struct hc_url_s *url,
 }
 
 GError*
-m2v2_remote_execute_GET(const char *target, struct hc_url_s *url,
+m2v2_remote_execute_GET(const char *target, struct oio_url_s *url,
 		guint32 flags, GSList **out)
 {
 	return _m2v2_request(target, m2v2_remote_pack_GET(url, flags), out);
 }
 
 GError*
-m2v2_remote_execute_DEL(const char *target, struct hc_url_s *url)
+m2v2_remote_execute_DEL(const char *target, struct oio_url_s *url)
 {
 	return _m2v2_request(target, m2v2_remote_pack_DEL(url), NULL);
 }
 
 GError*
-m2v2_remote_execute_RAW_ADD(const char *target, struct hc_url_s *url,
+m2v2_remote_execute_RAW_ADD(const char *target, struct oio_url_s *url,
 		GSList *beans)
 {
 	return _m2v2_request(target, m2v2_remote_pack_RAW_ADD(url, beans), NULL);
 }
 
 GError*
-m2v2_remote_execute_RAW_DEL(const char *target, struct hc_url_s *url, GSList *beans)
+m2v2_remote_execute_RAW_DEL(const char *target, struct oio_url_s *url, GSList *beans)
 {
 	return _m2v2_request(target, m2v2_remote_pack_RAW_DEL(url, beans), NULL);
 }
 
 GError*
-m2v2_remote_execute_RAW_SUBST(const char *target, struct hc_url_s *url,
+m2v2_remote_execute_RAW_SUBST(const char *target, struct oio_url_s *url,
 		GSList *new_chunks, GSList *old_chunks)
 {
 	return _m2v2_request(target, m2v2_remote_pack_RAW_SUBST(url, new_chunks, old_chunks), NULL);
 }
 
 GError*
-m2v2_remote_execute_RAW_SUBST_single(const char *target, struct hc_url_s *url,
+m2v2_remote_execute_RAW_SUBST_single(const char *target, struct oio_url_s *url,
 		struct bean_CHUNKS_s *new_chunk,
 		struct bean_CHUNKS_s *old_chunk)
 {
@@ -557,40 +551,39 @@ m2v2_remote_execute_RAW_SUBST_single(const char *target, struct hc_url_s *url,
 }
 
 GError*
-m2v2_remote_execute_PROP_DEL(const char *target, struct hc_url_s *url, GSList *names)
+m2v2_remote_execute_PROP_DEL(const char *target, struct oio_url_s *url, GSList *names)
 {
 	return _m2v2_request(target, m2v2_remote_pack_PROP_DEL(url, names), NULL);
 }
 
 GError*
-m2v2_remote_execute_PROP_SET(const char *target, struct hc_url_s *url, guint32 flags, GSList *in)
+m2v2_remote_execute_PROP_SET(const char *target, struct oio_url_s *url, guint32 flags, GSList *in)
 {
 	return _m2v2_request(target, m2v2_remote_pack_PROP_SET(url, flags, in), NULL);
 }
 
 GError*
-m2v2_remote_execute_PROP_GET(const char *target, struct hc_url_s *url, guint32 flags, GSList **out)
+m2v2_remote_execute_PROP_GET(const char *target, struct oio_url_s *url, guint32 flags, GSList **out)
 {
 	return _m2v2_request(target, m2v2_remote_pack_PROP_GET(url, flags), out);
 }
 
 GError*
-m2v2_remote_touch_content(const char *target, struct hc_url_s *url)
+m2v2_remote_touch_content(const char *target, struct oio_url_s *url)
 {
 	return _m2v2_request(target, m2v2_remote_pack_TOUCH_content(url), NULL);
 }
 
 GError*
-m2v2_remote_touch_container_ex(const char *target, struct hc_url_s *url, guint32 flags)
+m2v2_remote_touch_container_ex(const char *target, struct oio_url_s *url, guint32 flags)
 {
 	return _m2v2_request(target, m2v2_remote_pack_TOUCH_container(url, flags), NULL);
 }
 
 GError*
-m2v2_remote_execute_LINK(const char *target, struct hc_url_s *url,
-		GBytes *content_id)
+m2v2_remote_execute_LINK(const char *target, struct oio_url_s *url)
 {
-	return _m2v2_request(target, m2v2_remote_pack_LINK(url, content_id), NULL);
+	return _m2v2_request(target, m2v2_remote_pack_LINK(url), NULL);
 }
 
 static GError*
@@ -670,28 +663,28 @@ _list (const char *target, GByteArray *request,
 
 GError*
 m2v2_remote_execute_LIST(const char *target,
-		struct hc_url_s *url, struct list_params_s *p,
+		struct oio_url_s *url, struct list_params_s *p,
 		struct list_result_s *out, gchar ***out_properties)
 {
 	return _list (target, m2v2_remote_pack_LIST(url, p), out, out_properties);
 }
 
 GError*
-m2v2_remote_execute_LIST_BY_CHUNKID(const char *target, struct hc_url_s *url,
+m2v2_remote_execute_LIST_BY_CHUNKID(const char *target, struct oio_url_s *url,
 		const char *chunk, struct list_params_s *p, struct list_result_s *out)
 {
 	return _list (target, m2v2_remote_pack_LIST_BY_CHUNKID(url, p, chunk), out, NULL);
 }
 
 GError*
-m2v2_remote_execute_LIST_BY_HEADERHASH(const char *target, struct hc_url_s *url,
+m2v2_remote_execute_LIST_BY_HEADERHASH(const char *target, struct oio_url_s *url,
 		GBytes *h, struct list_params_s *p, struct list_result_s *out)
 {
 	return _list (target, m2v2_remote_pack_LIST_BY_HEADERHASH(url, p, h), out, NULL);
 }
 
 GError*
-m2v2_remote_execute_LIST_BY_HEADERID(const char *target, struct hc_url_s *url,
+m2v2_remote_execute_LIST_BY_HEADERID(const char *target, struct oio_url_s *url,
 		GBytes *h, struct list_params_s *p, struct list_result_s *out)
 {
 	return _list (target, m2v2_remote_pack_LIST_BY_HEADERID(url, p, h), out, NULL);

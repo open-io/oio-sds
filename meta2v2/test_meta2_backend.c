@@ -308,9 +308,9 @@ _container_wraper(const char *ns, gint64 maxvers, container_test_f cf)
 		GError *err;
 
 		gchar *strurl = g_strdup_printf(
-				"/%s/container-%"G_GUINT64_FORMAT"/content-%"G_GINT64_FORMAT,
+				"/%s/account/container-%"G_GUINT64_FORMAT"/content-%"G_GINT64_FORMAT,
 				ns, ++container_counter, g_get_monotonic_time());
-		url = oio_url_oldinit(strurl);
+		url = oio_url_init(strurl);
 		g_free(strurl);
 
 		err = meta2_backend_create_container(m2, url, &params);
@@ -409,7 +409,7 @@ test_content_put_no_beans(void)
 {
 	void test(struct meta2_backend_s *m2, struct oio_url_s *u, gint64 max_versions) {
 		(void) max_versions;
-		GError *err = meta2_backend_put_alias(m2, u, NULL, NULL, NULL, NULL);
+		GError *err = meta2_backend_put_alias(m2, u, NULL, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_BAD_REQUEST);
 		g_clear_error(&err);
 	}
@@ -428,7 +428,7 @@ test_content_put_prop_get(void)
 		/* insert a new alias */
 		do {
 			beans = _create_alias(m2, u, NULL);
-			err = meta2_backend_put_alias(m2, u, beans, NULL, NULL, NULL);
+			err = meta2_backend_put_alias(m2, u, beans, NULL, NULL);
 			g_assert_no_error(err);
 			_bean_cleanl2(beans);
 		} while (0);
@@ -506,7 +506,7 @@ test_content_put_get_delete(void)
 		/* insert a new alias */
 		do {
 			GSList *beans = _create_alias(m2, u, NULL);
-			err = meta2_backend_put_alias(m2, u, beans, NULL, NULL, NULL);
+			err = meta2_backend_put_alias(m2, u, beans, NULL, NULL);
 			g_assert_no_error(err);
 			_bean_cleanl2(beans);
 		} while (0);
@@ -608,7 +608,7 @@ test_content_append(void)
 		beans = _create_alias(m2, u, NULL);
 
 		/* first PUT */
-		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL, NULL);
+		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL);
 		g_assert_no_error(err);
 		CHECK_ALIAS_VERSION(m2,u,0);
 		check_list_count(m2,u,1);
@@ -804,7 +804,7 @@ test_props_set_simple()
 
 		/* add a content */
 		beans = _create_alias(m2, u, NULL);
-		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL, NULL);
+		err = meta2_backend_put_alias(m2, u, beans, NULL, NULL);
 		g_assert_no_error(err);
 		_bean_cleanl2(beans);
 
@@ -853,21 +853,25 @@ test_content_dedup (void)
 		/* Change the hash of the chunk beans (0 by default) */
 		change_chunk_hash(beans, 0);
 		/* Put the beans in the database */
-		err = meta2_backend_put_alias(m2, url, beans, NULL, NULL, NULL);
+		err = meta2_backend_put_alias(m2, url, beans, NULL, NULL);
 		g_assert_no_error(err);
 		_bean_cleanl2(beans);
 
 		/* Generate other contents with same hashes */
 		for (guint counter = 1; counter <= num_duplicates; counter++) {
 			/* Suffix the base url */
-			gchar *url_str = g_strdup_printf("%s_%d", oio_url_get(url, OIOURL_WHOLE), counter);
-			struct oio_url_s *url2 = oio_url_oldinit(url_str);
+			struct oio_url_s *url2 = oio_url_dup (url);
+			const char *p0 = oio_url_get (url, OIOURL_PATH);
+			if (p0) {
+				gchar *p = g_strdup_printf("%s-%u", p0, counter);
+				oio_url_set (url2, OIOURL_PATH, p);
+				g_free (p);
+			}
 			GSList *beans2 = _create_alias(m2, url2, NULL);
 			change_chunk_hash(beans2, counter);
-			err = meta2_backend_put_alias(m2, url2, beans2, NULL, NULL, NULL);
+			err = meta2_backend_put_alias(m2, url2, beans2, NULL, NULL);
 			g_assert_no_error(err);
 			_bean_cleanl2(beans2);
-			g_free(url_str);
 			oio_url_pclean (&url2);
 		}
 

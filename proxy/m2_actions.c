@@ -415,7 +415,6 @@ _load_simplified_chunks (struct json_object *jbody, GSList **out)
 		*out = beans;
 
 	return err;
-
 }
 
 static GError *
@@ -1069,7 +1068,7 @@ action_container_list (struct req_args_s *args)
 	}
 
 	GRID_DEBUG("Listing [%s] max=%"G_GINT64_FORMAT" delim=%c prefix=%s marker=%s end=%s",
-			hc_url_get(args->url, HCURL_WHOLE), list_in.maxkeys, delimiter,
+			oio_url_get(args->url, OIOURL_WHOLE), list_in.maxkeys, delimiter,
 			list_in.prefix, list_in.marker_start, list_in.marker_end);
 
 	if (!err)
@@ -1307,6 +1306,9 @@ action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 static enum http_rc_e
 action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
 {
+	if (NULL != CONTENT())
+		return _reply_m2_error (args, BADREQ("No content allowed in the URL"));
+
 	if (!jargs || !json_object_is_type (jargs, json_type_object))
 		return _reply_m2_error (args, BADREQ("Expected: json object"));
 
@@ -1319,19 +1321,13 @@ action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
 	if (err)
 		return _reply_m2_error (args, BADREQ("Expected: id (string)"));
 
-	const char *hex = json_object_get_string (jid);
-	gsize len = strlen(hex) / 2;
-	guint8 bin[len+1];
-	if (!oio_str_hex2bin (hex, bin, len+1))
-		return _reply_m2_error (args, BADREQ("Expected: content id (hexa)"));
-	GBytes *id = g_bytes_new_static (bin, len);
+	oio_url_set (args->url, OIOURL_CONTENTID, json_object_get_string (jid));
 
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_LINK (m2->host, args->url, id);
+		return m2v2_remote_execute_LINK (m2->host, args->url);
 	}
 	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	g_bytes_unref (id);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
@@ -1340,6 +1336,9 @@ action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
 static enum http_rc_e
 action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 {
+	if (CONTENT())
+		return _reply_m2_error (args, BADREQ("Content. not allowed in the URL"));
+
 	// TODO manage the version of the content
 	gint64 version = 0;
 	GSList *beans = NULL;
@@ -1356,7 +1355,7 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 				const char *sv = json_object_get_string (jv);
 				PROPERTIES_set2_value (prop, (guint8*)sv, strlen(sv));
 			}
-			PROPERTIES_set2_alias (prop, hc_url_get (args->url, HCURL_PATH));
+			PROPERTIES_set2_alias (prop, oio_url_get (args->url, OIOURL_PATH));
 			PROPERTIES_set_version (prop, version);
 			beans = g_slist_prepend (beans, prop);
 		}
@@ -1433,17 +1432,6 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 	if (!jbody)
 		return BADREQ("Invalid JSON body");
 
-	GBytes *id = NULL;
-	const char *hexid = OPT("id");
-	if (hexid) {
-		gsize len = strlen(hexid) / 2;
-		guint8 bin[len+1];
-		if (!oio_str_hex2bin (hexid, bin, len+1))
-			return BADREQ("Optional content id must be hexa");
-		if (len)
-			id = g_bytes_new (bin, len);
-	}
-
 	gboolean append = _request_has_flag (args, PROXYD_HEADER_MODE, "append");
 	gboolean force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
 	GSList *ibeans = NULL;
@@ -1451,7 +1439,6 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 
 	if (NULL != (err = _load_simplified_content (args, jbody, &ibeans))) {
 		_bean_cleanl2 (ibeans);
-		if (id) g_bytes_unref (id);
 		return err;
 	}
 
@@ -1464,13 +1451,12 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 		else if (append)
 			e = m2v2_remote_execute_APPEND (m2->host, args->url, ibeans, &obeans);
 		else
-			e = m2v2_remote_execute_PUT (m2->host, args->url, ibeans, id, &obeans);
+			e = m2v2_remote_execute_PUT (m2->host, args->url, ibeans, &obeans);
 		_bean_cleanl2 (obeans);
 		return e;
 	}
 	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
 	_bean_cleanl2 (ibeans);
-	if (id) g_bytes_unref (id);
 	return err;
 }
 
@@ -1575,28 +1561,28 @@ action_content_copy (struct req_args_s *args)
 	if (!target)
 		return _reply_format_error(args, BADREQ("Missing target header"));
 
-	struct hc_url_s *target_url = hc_url_oldinit(target);
+	struct oio_url_s *target_url = oio_url_init(target);
 	if (!target_url)
 		return _reply_format_error(args, BADREQ("Invalid URL in target header"));
 
 	// Check the namespace and container match between both URLs
-	if (!hc_url_has(target_url, HCURL_HEXID)
-			|| !hc_url_has(target_url, HCURL_NS)
-			|| !hc_url_has(target_url, HCURL_PATH)
-			|| !hc_url_has(args->url, HCURL_HEXID)
-			|| !hc_url_has(args->url, HCURL_NS)
-			|| strcmp(hc_url_get(target_url, HCURL_HEXID), hc_url_get(args->url, HCURL_HEXID))
-			|| strcmp(hc_url_get(target_url, HCURL_HEXID), hc_url_get(args->url, HCURL_HEXID))) {
-		hc_url_pclean(&target_url);
+	if (!oio_url_has(target_url, OIOURL_HEXID)
+			|| !oio_url_has(target_url, OIOURL_NS)
+			|| !oio_url_has(target_url, OIOURL_PATH)
+			|| !oio_url_has(args->url, OIOURL_HEXID)
+			|| !oio_url_has(args->url, OIOURL_NS)
+			|| strcmp(oio_url_get(target_url, OIOURL_HEXID), oio_url_get(args->url, OIOURL_HEXID))
+			|| strcmp(oio_url_get(target_url, OIOURL_HEXID), oio_url_get(args->url, OIOURL_HEXID))) {
+		oio_url_pclean(&target_url);
 		return _reply_format_error(args, BADREQ("Invalid source/target URL"));
 	}
 
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_COPY (m2->host, target_url, hc_url_get(args->url, HCURL_PATH));
+		return m2v2_remote_execute_COPY (m2->host, target_url, oio_url_get(args->url, OIOURL_PATH));
 	}
 	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
-	hc_url_pclean(&target_url);
+	oio_url_pclean(&target_url);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
