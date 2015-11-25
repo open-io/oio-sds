@@ -46,7 +46,7 @@ meta2_filter_action_create_container(struct gridd_filter_ctx_s *ctx,
 	(void) reply;
 	struct m2v2_create_params_s params = {NULL,NULL,NULL,0};
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	GError *err = NULL;
 	int retry = 2;
 
@@ -91,7 +91,7 @@ meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
 {
 	(void) reply;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 
 	if (!url) {
 		GRID_WARN("BUG : Checking container's presence : URL not set");
@@ -102,7 +102,7 @@ meta2_filter_action_has_container(struct gridd_filter_ctx_s *ctx,
 	GError *e = meta2_backend_has_container(m2b, url);
 	if (NULL != e) {
 		GRID_DEBUG("Container test error for [%s] : (%d) %s",
-					hc_url_get(url, HCURL_WHOLE), e->code, e->message);
+					oio_url_get(url, OIOURL_WHOLE), e->code, e->message);
 		if (e->code == CODE_CONTAINER_NOTFOUND)
 			hc_decache_reference_service(m2b->resolver, url, NAME_SRVTYPE_META2);
 		meta2_filter_ctx_set_error(ctx, e);
@@ -204,7 +204,7 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 {
 	GError *e = NULL;
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
 	gboolean truncated = FALSE;
 	char *next_marker = NULL;
@@ -242,7 +242,7 @@ _list_S3(struct gridd_filter_ctx_s *ctx, struct gridd_reply_ctx_s *reply,
 			&properties);
 
 	if (NULL != e) {
-		GRID_DEBUG("Fail to return alias for url: %s", hc_url_get(url, HCURL_WHOLE));
+		GRID_DEBUG("Fail to return alias for url: %s", oio_url_get(url, OIOURL_WHOLE));
 		_on_bean_ctx_clean(obc);
 		meta2_filter_ctx_set_error(ctx, e);
 		if (properties) g_strfreev (properties);
@@ -327,7 +327,7 @@ meta2_filter_action_list_by_chunk_id(struct gridd_filter_ctx_s *ctx,
 	// Use it to locate the headers
 	if (!err) {
 		struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-		struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+		struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 		err = meta2_backend_content_from_chunkid (m2b, url, c, _bean_list_cb, &headers);
 	}
 	if (!err && !headers)
@@ -367,7 +367,7 @@ meta2_filter_action_list_by_header_hash(struct gridd_filter_ctx_s *ctx,
 	// Use it to locate the headers
 	if (!err) {
 		struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-		struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+		struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 		err = meta2_backend_content_from_contenthash (m2b, url, h, _bean_list_cb, &headers);
 	}
 	if (!err && !headers)
@@ -407,7 +407,7 @@ meta2_filter_action_list_by_header_id(struct gridd_filter_ctx_s *ctx,
 	// Use it to locate the headers
 	if (!err) {
 		struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-		struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+		struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 		err = meta2_backend_content_from_contentid (m2b, url, h, _bean_list_cb, &headers);
 	}
 	if (!err && !headers)
@@ -429,7 +429,7 @@ meta2_filter_action_insert_beans(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	(void) reply;
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 
@@ -447,7 +447,7 @@ meta2_filter_action_delete_beans(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	(void) reply;
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	GSList *beans = meta2_filter_ctx_get_input_udata(ctx);
 
@@ -465,7 +465,7 @@ meta2_filter_action_update_beans(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	(void) reply;
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	GSList **chunk_lists = meta2_filter_ctx_get_input_udata(ctx);
 
@@ -483,7 +483,7 @@ int
 meta2_filter_action_link(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	GError *err = NULL;
 	GBytes *id = NULL;

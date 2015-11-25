@@ -71,7 +71,7 @@ struct meta1_prefixes_set_s;
 struct sqlx_repository_s;
 struct sqlx_sqlite3_s;
 struct grid_lbpool_s;
-struct hc_url_s;
+struct oio_url_s;
 
 struct meta1_backend_s;
 
@@ -98,61 +98,61 @@ void meta1_backend_clean(struct meta1_backend_s *m1);
 
 
 GError* meta1_backend_user_create(struct meta1_backend_s *m1,
-		struct hc_url_s *url);
+		struct oio_url_s *url);
 
 GError* meta1_backend_user_destroy(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gboolean force);
+		struct oio_url_s *url, gboolean force);
 
 GError* meta1_backend_user_info(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gchar ***result);
+		struct oio_url_s *url, gchar ***result);
 
 
 GError* meta1_backend_services_list(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *srvtype, gchar ***result);
+		struct oio_url_s *url, const gchar *srvtype, gchar ***result);
 
 GError* meta1_backend_services_link (struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *srvtype,
+		struct oio_url_s *url, const gchar *srvtype,
 		gboolean dryrun, gboolean autocreate,
 		gchar ***result);
 
 GError* meta1_backend_services_unlink(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *srvtype, gchar **urlv);
+		struct oio_url_s *url, const gchar *srvtype, gchar **urlv);
 
 GError* meta1_backend_services_poll (struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *srvtype,
+		struct oio_url_s *url, const gchar *srvtype,
 		gboolean dryrun, gboolean autocreate,
 		gchar ***result);
 
 /* @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
 GError* meta1_backend_services_config(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *packedurl);
+		struct oio_url_s *url, const gchar *packedurl);
 
 /* @param packedurl formatted as 'SEQ|TYPE|IP:PORT|ARGS' */
 GError* meta1_backend_services_set(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const gchar *packedurl,
+		struct oio_url_s *url, const gchar *packedurl,
 		gboolean autocreate, gboolean force);
 
 GError* meta1_backend_services_relink(struct meta1_backend_s *m1,
-		struct hc_url_s *url, const char *kept, const char *replaced,
+		struct oio_url_s *url, const char *kept, const char *replaced,
 		gboolean dryrun, gchar ***out);
 
 
 GError* meta1_backend_set_container_properties(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gchar **props, gboolean flush);
+		struct oio_url_s *url, gchar **props, gboolean flush);
 
 GError* meta1_backend_del_container_properties(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gchar **names);
+		struct oio_url_s *url, gchar **names);
 
 GError* meta1_backend_get_container_properties(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gchar **names, gchar ***result);
+		struct oio_url_s *url, gchar **names, gchar ***result);
 
 
 GError *meta1_backend_services_all(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gchar ***result);
+		struct oio_url_s *url, gchar ***result);
 
 /* Ugly quirk */
 GError* meta1_backend_open_base(struct meta1_backend_s *m1,
-		struct hc_url_s *url, enum m1v2_open_type_e how,
+		struct oio_url_s *url, enum m1v2_open_type_e how,
 		struct sqlx_sqlite3_s **sq3);
 
 /* Returns whether the base associated to prefix was already created. */
@@ -168,6 +168,6 @@ const gchar* meta1_backend_get_local_addr(struct meta1_backend_s *m1);
 
 /* Send a notification (if enabled) with the services linked to a container. */
 GError *meta1_backend_notify_services(struct meta1_backend_s *m1,
-		struct hc_url_s *url);
+		struct oio_url_s *url);
 
 #endif /*OIO_SDS__meta1v2__meta1_backend_h*/

@@ -17,8 +17,8 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#ifndef OIO_SDS__metautils__lib__hc_url_ext_h
-# define OIO_SDS__metautils__lib__hc_url_ext_h 1
+#ifndef OIO_SDS__metautils__lib__oio_url_ext_h
+# define OIO_SDS__metautils__lib__oio_url_ext_h 1
 
 /**
  * This file provides and API dependent from the GLib, with non essential features.
@@ -27,8 +27,8 @@ License along with this library.
  */
 #include <glib.h>
 
-#define hc_url_get_option_names oio_url_get_option_names
-#define hc_url_to_json          oio_url_to_json
+#define oio_url_get_option_names oio_url_get_option_names
+#define oio_url_to_json          oio_url_to_json
 
 struct oio_url_s;
 
@@ -51,4 +51,4 @@ gboolean oio_requri_parse (const char *packed, struct oio_requri_s *ruri);
 
 void oio_requri_clear (struct oio_requri_s *ruri);
 
-#endif /*OIO_SDS__metautils__lib__hc_url_ext_h*/
+#endif /*OIO_SDS__metautils__lib__oio_url_ext_h*/

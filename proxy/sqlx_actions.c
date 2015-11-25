@@ -38,19 +38,19 @@ _abstract_sqlx_action (struct req_args_s *args, gboolean next,
 		etype = g_strdup("#" NAME_SRVTYPE_META0);
 	}
 	else if (!g_ascii_strcasecmp(type, NAME_SRVTYPE_META1)) {
-		bn = g_strndup (hc_url_get(args->url, HCURL_HEXID), 4);
+		bn = g_strndup (oio_url_get(args->url, OIOURL_HEXID), 4);
 		etype = g_strdup("#" NAME_SRVTYPE_META1);
 	}
 	else if (!g_ascii_strcasecmp(type, NAME_SRVTYPE_META2)) {
 		seq = 1;
 		bn = g_strdup_printf("%s.%"G_GINT64_FORMAT,
-				hc_url_get (args->url, HCURL_HEXID), seq);
+				oio_url_get (args->url, OIOURL_HEXID), seq);
 		etype = g_strdup(NAME_SRVTYPE_META2);
 	}
 	else if (!g_str_has_prefix(type, "sqlx.")) {
 		seq = atoi(SEQ());
 		bn = g_strdup_printf("%s.%"G_GINT64_FORMAT,
-				hc_url_get (args->url, HCURL_HEXID), seq);
+				oio_url_get (args->url, OIOURL_HEXID), seq);
 		etype = g_strdup(type);
 	}
 	else {

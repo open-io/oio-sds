@@ -126,11 +126,11 @@ _dump_cid (const char *s)
 
 	char str_id[128];
 	const char *dst;
-	struct hc_url_s *url = hc_url_init (s);
+	struct oio_url_s *url = oio_url_init (s);
 
-	if (url && NULL != hc_url_get_id(url)) {
+	if (url && NULL != oio_url_get_id(url)) {
 		memset(str_id, 0, sizeof(str_id));
-		oio_str_bin2hex(hc_url_get_id(url), hc_url_get_id_size(url),
+		oio_str_bin2hex(oio_url_get_id(url), oio_url_get_id_size(url),
 				str_id, sizeof(str_id));
 		dst = str_id;
 	}
@@ -139,7 +139,7 @@ _dump_cid (const char *s)
 	}
 
 	g_print("%s %s\n", dst, s);
-	hc_url_clean(url);
+	oio_url_clean(url);
 }
 
 static void

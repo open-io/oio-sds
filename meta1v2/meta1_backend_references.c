@@ -36,7 +36,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define FMT_COUNT "SELECT COUNT(*) FROM %s WHERE cid = ?"
 
 static GError*
-__count_FK (struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+__count_FK (struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		const char *table, guint *count)
 {
 	gint rc;
@@ -49,7 +49,7 @@ __count_FK (struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	if (rc != SQLITE_OK)
 		return M1_SQLITE_GERROR(sq3->db, rc);
 
-	(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id (url), hc_url_get_id_size (url), NULL);
+	(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id (url), oio_url_get_id_size (url), NULL);
 
 	guint _count = 0;
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt)))
@@ -67,7 +67,7 @@ __count_FK (struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 }
 
 static GError*
-__destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+__destroy_container(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gboolean force, gboolean *pdone)
 {
 	GError *err = NULL;
@@ -77,9 +77,9 @@ __destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	EXTRA_ASSERT(sq3->db != NULL);
 
 	if (force) {
-		__exec_cid (sq3->db, "DELETE FROM services WHERE cid = ?", hc_url_get_id (url));
+		__exec_cid (sq3->db, "DELETE FROM services WHERE cid = ?", oio_url_get_id (url));
 		count_actions += sqlite3_changes(sq3->db);
-		__exec_cid (sq3->db, "DELETE FROM properties WHERE cid = ?", hc_url_get_id (url));
+		__exec_cid (sq3->db, "DELETE FROM properties WHERE cid = ?", oio_url_get_id (url));
 		count_actions += sqlite3_changes(sq3->db);
 	} else {
 		guint count_services = 0, count_properties = 0;
@@ -97,7 +97,7 @@ __destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	}
 
 	if (!err) {
-		__exec_cid(sq3->db, "DELETE FROM users WHERE cid = ?", hc_url_get_id (url));
+		__exec_cid(sq3->db, "DELETE FROM users WHERE cid = ?", oio_url_get_id (url));
 		count_actions += sqlite3_changes(sq3->db);
 	}
 
@@ -114,10 +114,10 @@ __destroy_container(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 
 GError *
 meta1_backend_user_create(struct meta1_backend_s *m1,
-		struct hc_url_s *url)
+		struct oio_url_s *url)
 {
 	EXTRA_ASSERT(url != NULL);
-	if (!hc_url_has_fq_container (url))
+	if (!oio_url_has_fq_container (url))
 		return NEWERROR(CODE_BAD_REQUEST, "Partial URL");
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -142,7 +142,7 @@ meta1_backend_user_create(struct meta1_backend_s *m1,
 
 GError *
 meta1_backend_user_destroy(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gboolean force)
+		struct oio_url_s *url, gboolean force)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, SQLX_OPEN_MASTERONLY, &sq3);
@@ -163,7 +163,7 @@ meta1_backend_user_destroy(struct meta1_backend_s *m1,
 
 GError *
 meta1_backend_user_info(struct meta1_backend_s *m1,
-		struct hc_url_s *url, gchar ***result)
+		struct oio_url_s *url, gchar ***result)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GError *err = _open_and_lock(m1, url, SQLX_OPEN_MASTERSLAVE, &sq3);
@@ -171,20 +171,20 @@ meta1_backend_user_info(struct meta1_backend_s *m1,
 
 	struct sqlx_repctx_s *repctx = NULL;
 	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-		struct hc_url_s **urls = NULL;
+		struct oio_url_s **urls = NULL;
 		if (!(err = __info_user(sq3, url, FALSE, &urls))) {
 			if (result) {
 				if (!urls)
-					*result = g_malloc0(sizeof(struct hc_url_s*));
+					*result = g_malloc0(sizeof(struct oio_url_s*));
 				else {
 					*result = g_malloc0(sizeof(gchar*) * (1+g_strv_length((gchar**)urls)));
 					for (int i=0; urls[i] ;++i)
-						(*result)[i] = g_strdup(hc_url_get(urls[i], HCURL_WHOLE));
+						(*result)[i] = g_strdup(oio_url_get(urls[i], OIOURL_WHOLE));
 				}
 			}
 		}
 		err = sqlx_transaction_end(repctx, err);
-		hc_url_cleanv (urls);
+		oio_url_cleanv (urls);
 	}
 
 	sqlx_repository_unlock_and_close_noerror(sq3);

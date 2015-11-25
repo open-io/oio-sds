@@ -185,18 +185,15 @@ oio_str_bin2hex(const void *s, size_t sS, char *d, size_t dS)
 void
 oio_str_hash_name(guint8 *p, const char *ns, const char *account, const char *user)
 {
-	g_assert (ns != NULL);
-	g_assert (*ns != 0);
-	g_assert (user != NULL);
-	g_assert (*user != 0);
+	g_assert (ns != NULL && *ns != 0);
+	g_assert (account != NULL && *account != 0);
+	g_assert (user != NULL && *user != 0);
 
 	guint8 zero = 0;
 	GChecksum *sum = g_checksum_new(G_CHECKSUM_SHA256);
 
-	if (account && 0 != strcmp(account, HCURL_DEFAULT_ACCOUNT)) {
-		g_checksum_update(sum, (guint8*)account, strlen(account));
-		g_checksum_update(sum, &zero, 1);
-	}
+	g_checksum_update(sum, (guint8*)account, strlen(account));
+	g_checksum_update(sum, &zero, 1);
 	g_checksum_update(sum, (guint8*)user, strlen(user));
 
 	gsize s = 32;

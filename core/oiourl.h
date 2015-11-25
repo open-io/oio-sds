@@ -20,42 +20,13 @@ License along with this library.
 #ifndef OIO_SDS__core__oiourl_h
 # define OIO_SDS__core__oiourl_h 1
 
+#include <sys/types.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-#include <sys/types.h>
-
-#define HCURL_DEFAULT_ACCOUNT ""
-#define HCURL_DEFAULT_TYPE    ""
-
-#define hc_url_field_e          oio_url_field_e
-#define hc_url_s                oio_url_s
-#define hc_url_init             oio_url_init
-#define hc_url_empty            oio_url_empty
-#define hc_url_oldinit          oio_url_oldinit
-#define hc_url_dup              oio_url_dup
-#define hc_url_clean            oio_url_clean
-#define hc_url_cleanv           oio_url_cleanv
-#define hc_url_pclean           oio_url_pclean
-#define hc_url_has              oio_url_has
-#define hc_url_has_fq_path      oio_url_has_fq_path
-#define hc_url_has_fq_container oio_url_has_fq_container
-#define hc_url_set              oio_url_set
-#define hc_url_set_id           oio_url_set_id
-#define hc_url_set_oldns        oio_url_set_oldns
-#define hc_url_get              oio_url_get
-#define hc_url_get_id           oio_url_get_id
-#define hc_url_get_id_size      oio_url_get_id_size
-
-#define HCURL_NS      OIOURL_NS
-#define HCURL_ACCOUNT OIOURL_ACCOUNT
-#define HCURL_USER    OIOURL_USER
-#define HCURL_TYPE    OIOURL_TYPE
-#define HCURL_PATH    OIOURL_PATH
-#define HCURL_VERSION OIOURL_VERSION
-#define HCURL_WHOLE   OIOURL_WHOLE
-#define HCURL_HEXID   OIOURL_HEXID
+#define OIOURL_DEFAULT_TYPE    ""
 
 enum oio_url_field_e
 {
@@ -68,15 +39,14 @@ enum oio_url_field_e
 	OIOURL_VERSION,
 
 	OIOURL_WHOLE, /* read-only */
-	OIOURL_HEXID, /* read-write */
+
+	OIOURL_HEXID,     /* read-write */
+	OIOURL_CONTENTID, /* read-write */
 };
 
-#define HCURL_LATEST_VERSION "LAST"
+#define OIOURL_LATEST_VERSION "LAST"
 
 struct oio_url_s;
-
-/** Calls oio_url_empty() then parse the given string. */
-struct oio_url_s * oio_url_oldinit(const char *url);
 
 struct oio_url_s * oio_url_init(const char *url);
 
@@ -100,9 +70,6 @@ int oio_url_has(struct oio_url_s *u, enum oio_url_field_e f);
 
 /* <id> must be oio_url_get_id_size() bytes long */
 void oio_url_set_id(struct oio_url_s *u, const void *id);
-
-/* @deprecated */
-void oio_url_set_oldns(struct oio_url_s *u, const char *ns);
 
 /* the returned value points to an array of oio_url_get_id_size() bytes long. */
 const void* oio_url_get_id(struct oio_url_s *u);

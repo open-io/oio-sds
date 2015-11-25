@@ -78,7 +78,7 @@ _m1_action (struct oio_url_s *url, gchar ** m1v,
 		struct addr_info_s m1a;
 		if (!grid_string_to_addrinfo (m1->host, &m1a)) {
 			GRID_INFO ("Invalid META1 [%s] for [%s]",
-				m1->host, hc_url_get (url, HCURL_WHOLE));
+				m1->host, oio_url_get (url, OIOURL_WHOLE));
 			meta1_service_url_clean (m1);
 			continue;
 		}

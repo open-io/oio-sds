@@ -45,7 +45,7 @@ _meta2_filter_check_ns_name(struct gridd_filter_ctx_s *ctx,
 	(void) reply;
 	TRACE_FILTER();
 	const struct meta2_backend_s *backend = meta2_filter_ctx_get_backend(ctx);
-	const char *req_ns = hc_url_get(meta2_filter_ctx_get_url(ctx), HCURL_NS);
+	const char *req_ns = oio_url_get(meta2_filter_ctx_get_url(ctx), OIOURL_NS);
 
 	if (!backend || !backend->backend.ns_name[0]) {
 		GRID_DEBUG("Missing information for namespace checking");
@@ -127,9 +127,9 @@ meta2_filter_check_url_cid (struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	(void) reply;
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	TRACE_FILTER();
-	if (url && hc_url_has(url, HCURL_HEXID))
+	if (url && oio_url_has(url, OIOURL_HEXID))
 		return FILTER_OK;
 	meta2_filter_ctx_set_error (ctx, NEWERROR(CODE_BAD_REQUEST, "No/partial URL"));
 	return FILTER_KO;

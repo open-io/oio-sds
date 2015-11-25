@@ -89,12 +89,12 @@ test_configure_valid (void)
 	static struct test_data_s tab[] = {
 		{ "/NS//JFS",
 			"NS//JFS/",
-			"NS", HCURL_DEFAULT_ACCOUNT, "JFS", HCURL_DEFAULT_TYPE, NULL,
+			"NS", "ACCT", "JFS", OIOURL_DEFAULT_TYPE, NULL,
 			"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
 
 		{ "NS//JFS//1.",
 			"NS//JFS//1.",
-			"NS", HCURL_DEFAULT_ACCOUNT, "JFS", HCURL_DEFAULT_TYPE, "1.",
+			"NS", "ACCT", "JFS", OIOURL_DEFAULT_TYPE, "1.",
 			"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
 
 		TEST_END
@@ -117,52 +117,14 @@ test_configure_valid (void)
 }
 
 static void
-test_configure_valid_old(void)
-{
-	static struct test_data_s tab[] = {
-		{ "/NS/JFS",
-			"NS//JFS/",
-			"NS", HCURL_DEFAULT_ACCOUNT, "JFS", HCURL_DEFAULT_TYPE, NULL,
-			"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
-
-		{ "/NS/JFS/1.",
-			"NS//JFS//1.",
-			"NS", HCURL_DEFAULT_ACCOUNT, "JFS", HCURL_DEFAULT_TYPE, "1.",
-			"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
-
-		{ "NS//JFS//1.",
-			"NS//JFS//%2F1.",
-			"NS", HCURL_DEFAULT_ACCOUNT, "JFS", HCURL_DEFAULT_TYPE, "/1.",
-			"C3F36084054557E6DBA6F001C41DAFBFEF50FCC83DB2B3F782AE414A07BB3A7A"},
-
-		TEST_END
-	};
-
-	guint idx = 0;
-	for (struct test_data_s *th=tab; th->url ;th++) {
-		struct oio_url_s *url;
-
-		url = oio_url_oldinit(th->url);
-		g_assert(url != NULL);
-		_test_url (idx++, url, th);
-		oio_url_pclean (&url);
-
-		url = _init_url (th);
-		g_assert(url != NULL);
-		_test_url (idx++, url, th);
-		oio_url_pclean (&url);
-	}
-}
-
-static void
 test_configure_invalid(void)
 {
 	struct oio_url_s *url;
 
-	url = oio_url_oldinit("");
+	url = oio_url_init("");
 	g_assert(url == NULL);
 
-	url = oio_url_oldinit("/");
+	url = oio_url_init("/");
 	g_assert(url == NULL);
 }
 
@@ -174,8 +136,6 @@ main(int argc, char **argv)
 	oio_log_init_level(GRID_LOGLVL_INFO);
 	g_log_set_default_handler(oio_log_stderr, NULL);
 
-	g_test_add_func("/core/url/configure/valid_old",
-			test_configure_valid_old);
 	g_test_add_func("/core/url/configure/valid",
 			test_configure_valid);
 	g_test_add_func("/core/url/configure/invalid",

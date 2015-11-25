@@ -41,20 +41,20 @@ struct meta1_backend_s
 
 void __exec_cid(sqlite3 *handle, const gchar *sql, const container_id_t cid);
 
-GError* __create_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url);
+GError* __create_user(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url);
 
 /*! check the container exists */
-GError * __info_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
-		gboolean autocreate, struct hc_url_s ***result);
+GError * __info_user(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+		gboolean autocreate, struct oio_url_s ***result);
 
 /*! Open and lock the META1 base responsible for the given container. */
-GError* _open_and_lock(struct meta1_backend_s *m1, struct hc_url_s *url,
+GError* _open_and_lock(struct meta1_backend_s *m1, struct oio_url_s *url,
 		enum m1v2_open_type_e how, struct sqlx_sqlite3_s **handle);
 
 void gpa_str_free(GPtrArray *gpa);
 
 gboolean m1b_check_ns (struct meta1_backend_s *m1, const char *ns);
 
-gboolean m1b_check_ns_url (struct meta1_backend_s *m1, struct hc_url_s *url);
+gboolean m1b_check_ns_url (struct meta1_backend_s *m1, struct oio_url_s *url);
 
 #endif /*OIO_SDS__meta1v2__meta1_backend_internals_h*/

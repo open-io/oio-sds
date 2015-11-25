@@ -43,7 +43,7 @@ _get_container_policy(struct sqlx_sqlite3_s *sq3, struct namespace_info_s *nsinf
 		struct storage_policy_s **result);
 
 static gint64
-_m2db_count_alias_versions(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
+_m2db_count_alias_versions(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 {
 	int rc;
 	gint64 v;
@@ -56,7 +56,7 @@ _m2db_count_alias_versions(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 	sqlite3_prepare_debug(rc, sq3->db,
 			"SELECT COUNT(version) FROM aliases WHERE alias = ?", -1, &stmt, NULL);
 	if (rc == SQLITE_OK) {
-		sqlite3_bind_text(stmt, 1, hc_url_get(url, HCURL_PATH), -1, NULL);
+		sqlite3_bind_text(stmt, 1, oio_url_get(url, OIOURL_PATH), -1, NULL);
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 			v = sqlite3_column_int64(stmt, 0);
 		}
@@ -301,34 +301,67 @@ _manage_alias(sqlite3 *db, struct bean_ALIASES_s *bean,
 }
 
 GError*
-m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *u,
+m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *u,
 		guint32 flags, m2_onbean_cb cb, gpointer u0)
 {
 	/* sanity checks */
-	if (!hc_url_has(u, HCURL_PATH))
-		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
+	if (!oio_url_has(u, OIOURL_PATH) && !oio_url_has(u, OIOURL_CONTENTID))
+		return NEWERROR(CODE_BAD_REQUEST, "Missing path and content");
 
-	GRID_TRACE("GET(%s)", hc_url_get(u, HCURL_WHOLE));
+	GRID_TRACE("GET(%s)", oio_url_get(u, OIOURL_WHOLE));
 
 	/* query, and nevermind the snapshot */
+	GError *err = NULL;
 	const gchar *sql = NULL;
 	GVariant *params[3] = {NULL, NULL, NULL};
-	params[0] = g_variant_new_string(hc_url_get(u, HCURL_PATH));
-	if (flags & M2V2_FLAG_LATEST) {
-		sql = "alias = ? ORDER BY version DESC LIMIT 1";
-	} else if (flags & M2V2_FLAG_ALLVERSION) {
-		sql = "alias = ? ORDER BY version DESC";
-	} else {
-		if (hc_url_has(u, HCURL_VERSION)) {
-			sql = "alias = ? AND version = ? LIMIT 1";
-			params[1] = g_variant_new_int64(atoi(hc_url_get(u, HCURL_VERSION)));
-		} else {
+
+	if (oio_url_has(u, OIOURL_PATH)) {
+		params[0] = g_variant_new_string(oio_url_get(u, OIOURL_PATH));
+		if (flags & M2V2_FLAG_LATEST) {
 			sql = "alias = ? ORDER BY version DESC LIMIT 1";
+		} else if (flags & M2V2_FLAG_ALLVERSION) {
+			sql = "alias = ? ORDER BY version DESC";
+		} else {
+			if (oio_url_has(u, OIOURL_VERSION)) {
+				sql = "alias = ? AND version = ? LIMIT 1";
+				params[1] = g_variant_new_int64(atoi(oio_url_get(u, OIOURL_VERSION)));
+			} else {
+				sql = "alias = ? ORDER BY version DESC LIMIT 1";
+			}
+		}
+	} else {
+
+		do { /* get the content-id in its binary form */
+			/* XXX TODO this code is multiplicated, there is room for factorisation */
+			const char *h = oio_url_get(u, OIOURL_CONTENTID);
+			gsize hl = strlen(h);
+			guint8 b[hl/2];
+			if (!oio_str_hex2bin (h, b, hl/2))
+				err = BADREQ("The content ID is not hexa");
+			else {
+				GBytes *gb = g_bytes_new_static (b, hl/2);
+				params[0] = _gb_to_gvariant(gb);
+				g_bytes_unref (gb);
+			}
+		} while (0);
+
+		if (flags & M2V2_FLAG_LATEST) {
+			sql = "content = ? ORDER BY version DESC LIMIT 1";
+		} else if (flags & M2V2_FLAG_ALLVERSION) {
+			sql = "content = ? ORDER BY version DESC";
+		} else {
+			if (oio_url_has(u, OIOURL_VERSION)) {
+				sql = "content = ? AND version = ? LIMIT 1";
+				params[1] = g_variant_new_int64(atoi(oio_url_get(u, OIOURL_VERSION)));
+			} else {
+				sql = "content = ? ORDER BY version DESC LIMIT 1";
+			}
 		}
 	}
 
 	GPtrArray *tmp = g_ptr_array_new();
-	GError *err = ALIASES_load_buffered(sq3->db, sql, params, tmp);
+	if (!err)
+		err = ALIASES_load_buffered(sq3->db, sql, params, tmp);
 	metautils_gvariant_unrefv(params);
 
 	if (!err) {
@@ -389,7 +422,7 @@ m2db_get_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *u,
 }
 
 GError*
-m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		guint32 flags, struct bean_ALIASES_s **out)
 {
 	EXTRA_ASSERT (out != NULL);
@@ -408,7 +441,7 @@ m2db_get_alias1(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 }
 
 GError*
-m2db_get_alias_version(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+m2db_get_alias_version(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gint64 *out)
 {
 	GError *err = NULL;
@@ -428,14 +461,14 @@ m2db_get_alias_version(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 }
 
 GError*
-m2db_latest_alias(struct sqlx_sqlite3_s *sq3,  struct hc_url_s *url,
+m2db_latest_alias(struct sqlx_sqlite3_s *sq3,  struct oio_url_s *url,
 		struct bean_ALIASES_s **alias)
 {
 	return m2db_get_alias1(sq3, url, M2V2_FLAG_LATEST, alias);
 }
 
 GError*
-m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+m2db_get_versioned_alias(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		struct bean_ALIASES_s **alias)
 {
 	return m2db_get_alias1 (sq3, url, 0, alias);
@@ -594,7 +627,7 @@ label_error:
 /* PROPERTIES --------------------------------------------------------------- */
 
 GError*
-m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		m2_onbean_cb cb, gpointer u0)
 {
 	GPtrArray *tmp = g_ptr_array_new ();
@@ -611,7 +644,7 @@ m2db_get_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 }
 
 GError*
-m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		gboolean flush, GSList *beans, m2_onbean_cb cb, gpointer u0)
 {
 	struct bean_ALIASES_s *alias = NULL;
@@ -655,7 +688,7 @@ m2db_set_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 }
 
 GError*
-m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, gchar **namev)
+m2db_del_properties(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url, gchar **namev)
 {
 	GError *err;
 	GPtrArray *tmp;
@@ -778,7 +811,7 @@ _real_delete(struct sqlx_sqlite3_s *sq3, GSList *beans, GSList **deleted_beans)
 
 GError*
 m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct hc_url_s *url, m2_onbean_cb cb, gpointer u0)
+		struct oio_url_s *url, m2_onbean_cb cb, gpointer u0)
 {
 	GError *err;
 	struct bean_ALIASES_s *alias = NULL;
@@ -791,8 +824,8 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		beans = g_slist_prepend(beans, bean);
 	}
 
-	if (VERSIONS_DISABLED(max_versions) && hc_url_has(url, HCURL_VERSION)
-			&& 0!=g_ascii_strtoll(hc_url_get(url, HCURL_VERSION), NULL, 10))
+	if (VERSIONS_DISABLED(max_versions) && oio_url_has(url, OIOURL_VERSION)
+			&& 0!=g_ascii_strtoll(oio_url_get(url, OIOURL_VERSION), NULL, 10))
 		return NEWERROR(CODE_BAD_REQUEST,
 				"Versioning not supported and version specified");
 
@@ -810,12 +843,12 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 
 	GRID_TRACE("CONTENT %s beans=%u maxvers=%"G_GINT64_FORMAT
 			" deleted=%d ver=%u/%s",
-			hc_url_get(url, HCURL_WHOLE), g_slist_length(beans),
+			oio_url_get(url, OIOURL_WHOLE), g_slist_length(beans),
 			max_versions, ALIASES_get_deleted(alias),
-			hc_url_has(url, HCURL_VERSION), hc_url_get(url, HCURL_VERSION));
+			oio_url_has(url, OIOURL_VERSION), oio_url_get(url, OIOURL_VERSION));
 
 	if (VERSIONS_DISABLED(max_versions) || VERSIONS_SUSPENDED(max_versions) ||
-			hc_url_has(url, HCURL_VERSION) || ALIASES_get_deleted(alias)) {
+			oio_url_has(url, OIOURL_VERSION) || ALIASES_get_deleted(alias)) {
 
 		GRID_TRACE("deleting now");
 
@@ -834,7 +867,7 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		if (!err)
 			err = _db_del_FK_by_name (alias, "properties", sq3->db);
 
-	} else if (hc_url_has(url, HCURL_VERSION)) {
+	} else if (oio_url_has(url, OIOURL_VERSION)) {
 		/* Alias is in a snapshot but user explicitly asked for its deletion */
 		err = NEWERROR(CODE_NOT_ALLOWED,
 				"Cannot delete a content belonging to a snapshot");
@@ -864,6 +897,7 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 struct put_args_s
 {
 	struct m2db_put_args_s *put_args;
+
 	guint8 *uid;
 	gsize uid_size;
 
@@ -887,15 +921,6 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 {
 	gint64 now = g_get_real_time() / G_TIME_SPAN_SECOND;
 
-	gsize idlen = 0;
-	const guint8 *id = NULL;
-	if (args->put_args->content_id)
-		id = g_bytes_get_data (args->put_args->content_id, &idlen);
-	if (!id || !idlen) {
-		id = args->uid;
-		idlen = args->uid_size;
-	}
-
 	/* patch the beans */
 	for (GSList *l=args->beans; l ;l=l->next) {
 		gpointer bean = l->data;
@@ -907,7 +932,7 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 				continue;
 			if (0 >= ALIASES_get_version (bean))
 				ALIASES_set_version(bean, args->version+1);
-			ALIASES_set2_content(bean, id, idlen);
+			ALIASES_set2_content(bean, args->uid, args->uid_size);
 			ALIASES_set_deleted(bean, FALSE);
 			ALIASES_set_ctime(bean, now);
 			ALIASES_set_mtime(bean, now);
@@ -915,7 +940,7 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 		else if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
 			if (args->merge_only)
 				continue;
-			CONTENTS_HEADERS_set2_id(bean, id, idlen);
+			CONTENTS_HEADERS_set2_id(bean, args->uid, args->uid_size);
 			CONTENTS_HEADERS_set_ctime(bean, now);
 			CONTENTS_HEADERS_set_mtime(bean, now);
 			lazy_set_str (CONTENTS_HEADERS, bean, chunk_method, "bytes");
@@ -923,7 +948,7 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 			lazy_set_str (CONTENTS_HEADERS, bean, policy, "NONE");
 		}
 		else if (DESCR(bean) == &descr_struct_CHUNKS) {
-			CHUNKS_set2_content(bean, id, idlen);
+			CHUNKS_set2_content(bean, args->uid, args->uid_size);
 			CHUNKS_set_ctime(bean, now);
 		}
 		else if (DESCR(bean) == &descr_struct_PROPERTIES) {
@@ -939,46 +964,6 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 		for (GSList *l=args->beans; l ;l=l->next)
 			args->cb(args->cb_data, _bean_dup(l->data));
 	}
-	return err;
-}
-
-static GError*
-m2db_merge_alias(struct m2db_put_args_s *m2db_args, struct bean_ALIASES_s *latest,
-		struct put_args_s *args)
-{
-	void cb(gpointer u0, gpointer bean) {
-		GByteArray **pgba = u0;
-		if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
-			GByteArray *gba = CONTENTS_HEADERS_get_id(bean);
-			if (!*pgba)
-				*pgba = g_byte_array_new();
-			else
-				g_byte_array_set_size(*pgba, 0);
-			g_byte_array_append(*pgba, gba->data, gba->len);
-		}
-		_bean_clean(bean);
-	}
-
-	GError *err = NULL;;
-	GByteArray *gba = NULL;
-
-	/* Extract the CONTENT_HEADER id in place */
-	EXTRA_ASSERT(latest != NULL);
-	if (NULL != (err = _db_get_FK_by_name(latest, "image", m2db_args->sq3->db, cb, &gba)))
-		g_prefix_error(&err, "DB error: ");
-	else {
-		if (gba == NULL)
-			err = NEWERROR(CODE_INTERNAL_ERROR, "HEADER not found");
-		else {
-			args->merge_only = TRUE;
-			args->uid = gba->data;
-			args->uid_size = gba->len;
-			err = m2db_real_put_alias(m2db_args->sq3, args);
-		}
-	}
-
-	if (gba)
-		g_byte_array_free(gba, TRUE);
 	return err;
 }
 
@@ -1034,7 +1019,7 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 	EXTRA_ASSERT(args != NULL);
 	EXTRA_ASSERT(args->sq3 != NULL);
 	EXTRA_ASSERT(args->url != NULL);
-	if (!hc_url_has(args->url, HCURL_PATH))
+	if (!oio_url_has(args->url, OIOURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
 	memset(&args2, 0, sizeof(args2));
@@ -1042,8 +1027,8 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 
 	gint64 size = _patch_content_stgpol (args, beans);
 
-	if (hc_url_has(args->url, HCURL_VERSION)) {
-		const char *tmp = hc_url_get(args->url, HCURL_VERSION);
+	if (oio_url_has(args->url, OIOURL_VERSION)) {
+		const char *tmp = oio_url_get(args->url, OIOURL_VERSION);
 		args2.version = g_ascii_strtoll(tmp, NULL, 10);
 		err = m2db_get_versioned_alias(args->sq3, args->url, &latest);
 	} else {
@@ -1062,14 +1047,17 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 		}
 	}
 	else {
-		if (latest)
-			err = m2db_merge_alias(args, latest, &args2);
-		else {
+		if (latest) {
+			GByteArray *gba = ALIASES_get_content (latest);
+			args2.merge_only = TRUE;
+			args2.uid = gba->data;
+			args2.uid_size = gba->len;
+		} else {
 			RANDOM_UID(uid, uid_size);
 			args2.uid = (guint8*) &uid;
 			args2.uid_size = uid_size;
-			err = m2db_real_put_alias(args->sq3, &args2);
 		}
+		err = m2db_real_put_alias(args->sq3, &args2);
 	}
 
 	if(!err)
@@ -1092,7 +1080,7 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	EXTRA_ASSERT(args != NULL);
 	EXTRA_ASSERT(args->sq3 != NULL);
 	EXTRA_ASSERT(args->url != NULL);
-	if (!hc_url_has(args->url, HCURL_PATH))
+	if (!oio_url_has(args->url, OIOURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
 	RANDOM_UID(uid, uid_size);
@@ -1100,8 +1088,20 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 
 	memset(&args2, 0, sizeof(args2));
 	args2.put_args = args;
-	args2.uid = (guint8*) &uid;
-	args2.uid_size = uid_size;
+	if (oio_url_has (args->url, OIOURL_CONTENTID)) {
+		const char *h = oio_url_get (args->url, OIOURL_CONTENTID);
+		gsize hl = strlen(h);
+		guint8 *b = g_alloca (hl/2);
+		if (oio_str_hex2bin(h, b, hl/02)) {
+			args2.uid = b;
+			args2.uid_size = hl/2;
+		} else {
+			return BADREQ("Invalid content ID (not hexa)");
+		}
+	} else {
+		args2.uid = (guint8*) &uid;
+		args2.uid_size = uid_size;
+	}
 	args2.cb = out_added ? _bean_list_cb : NULL;
 	args2.cb_data = out_added;
 	args2.beans = beans;
@@ -1110,15 +1110,17 @@ m2db_put_alias(struct m2db_put_args_s *args, GSList *beans,
 	/* a specific content ID has been provided. We DO NOT allow overriding
 	 * a content with the same ID. So let's check the content is not present,
 	 * yet */
-	if (args->content_id) {
+	if (oio_url_has(args->url, OIOURL_CONTENTID)) {
 		GPtrArray *tmp = g_ptr_array_new ();
 		GVariant *params[2] = {NULL, NULL};
-		params[0] = _gb_to_gvariant (args->content_id);
+		GBytes *id = g_bytes_new (args2.uid, args2.uid_size);
+		params[0] = _gb_to_gvariant (id);
 		err = CONTENTS_HEADERS_load (args->sq3->db, " id = ? LIMIT 1", params,
 				_bean_buffer_cb, tmp);
 		metautils_gvariant_unrefv(params);
 		guint count = tmp->len;
 		_bean_cleanv2 (tmp);
+		g_bytes_unref (id);
 		if (err)
 			return err;
 		if (count)
@@ -1205,27 +1207,27 @@ m2db_copy_alias(struct m2db_put_args_s *args, const char *source)
 {
 	struct bean_ALIASES_s *latest = NULL;
 	struct bean_ALIASES_s *dst_latest = NULL;
-	struct hc_url_s *orig = NULL;
+	struct oio_url_s *orig = NULL;
 	GError *err = NULL;
 
-	GRID_TRACE("M2 COPY(%s FROM %s)", hc_url_get(args->url, HCURL_WHOLE), source);
+	GRID_TRACE("M2 COPY(%s FROM %s)", oio_url_get(args->url, OIOURL_WHOLE), source);
 	EXTRA_ASSERT(args != NULL);
 	EXTRA_ASSERT(args->sq3 != NULL);
 	EXTRA_ASSERT(args->url != NULL);
 	EXTRA_ASSERT(source != NULL);
 
-	if (!hc_url_has(args->url, HCURL_PATH))
+	if (!oio_url_has(args->url, OIOURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
 	// Try to use source as an URL
-	orig = hc_url_oldinit(source);
-	if (!orig || !hc_url_has(orig, HCURL_PATH)) {
+	orig = oio_url_init(source);
+	if (!orig || !oio_url_has(orig, OIOURL_PATH)) {
 		// Source is just the name of the content to copy
-		orig = hc_url_oldinit(hc_url_get(args->url, HCURL_WHOLE));
-		hc_url_set(orig, HCURL_PATH, source);
+		orig = oio_url_init(oio_url_get(args->url, OIOURL_WHOLE));
+		oio_url_set(orig, OIOURL_PATH, source);
 	}
 
-	if (hc_url_has(orig, HCURL_VERSION)) {
+	if (oio_url_has(orig, OIOURL_VERSION)) {
 		err = m2db_get_versioned_alias(args->sq3, orig, &latest);
 	} else {
 		err = m2db_latest_alias(args->sq3, orig, &latest);
@@ -1240,7 +1242,7 @@ m2db_copy_alias(struct m2db_put_args_s *args, const char *source)
 			err = NEWERROR(CODE_CONTENT_NOTFOUND,
 					"Cannot copy content, source is deleted");
 		} else {
-			ALIASES_set2_alias(latest, hc_url_get(args->url, HCURL_PATH));
+			ALIASES_set2_alias(latest, oio_url_get(args->url, OIOURL_PATH));
 			if (VERSIONS_DISABLED(args->max_versions) ||
 					VERSIONS_SUSPENDED(args->max_versions)) {
 				ALIASES_set_version(latest, 0);
@@ -1272,7 +1274,7 @@ m2db_copy_alias(struct m2db_put_args_s *args, const char *source)
 		}
 	}
 
-	hc_url_clean(orig);
+	oio_url_clean(orig);
 
 	return err;
 }
@@ -1281,16 +1283,16 @@ m2db_copy_alias(struct m2db_put_args_s *args, const char *source)
 
 GError*
 m2db_append_to_alias(struct sqlx_sqlite3_s *sq3, namespace_info_t *ni,
-		gint64 max_versions, struct hc_url_s *url, GSList *beans,
+		gint64 max_versions, struct oio_url_s *url, GSList *beans,
 		m2_onbean_cb cb, gpointer u0)
 {
 	GError *err = NULL;
 
 	// Sanity checks
-	GRID_TRACE("M2 APPEND(%s)", hc_url_get(url, HCURL_WHOLE));
+	GRID_TRACE("M2 APPEND(%s)", oio_url_get(url, OIOURL_WHOLE));
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(url != NULL);
-	if (!hc_url_has(url, HCURL_PATH))
+	if (!oio_url_has(url, OIOURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
 	GPtrArray *tmp = g_ptr_array_new ();
@@ -1385,7 +1387,7 @@ out:
 /* Link -------------------------------------------------------------------- */
 
 GError*
-m2db_link_content(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		GBytes *content_id)
 {
 	GError *err = NULL;
@@ -1424,7 +1426,7 @@ m2db_link_content(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
 	/* make a new link */
 	gint64 now = g_get_real_time () / G_TIME_SPAN_SECOND;
 	struct bean_ALIASES_s *a = _bean_create (&descr_struct_ALIASES);
-	ALIASES_set2_alias (a, hc_url_get(url, HCURL_PATH));
+	ALIASES_set2_alias (a, oio_url_get(url, OIOURL_PATH));
 	ALIASES_set2_content (a, bin, len);
 	ALIASES_set_version (a, version + 1);
 	ALIASES_set_ctime (a, now);
@@ -1481,18 +1483,18 @@ _update_new_bean(struct update_alias_header_ctx_s *ctx, gpointer bean)
 
 GError*
 m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct hc_url_s *url, GSList *beans)
+		struct oio_url_s *url, GSList *beans)
 {
 	struct bean_ALIASES_s *latest = NULL;
 	GError *err = NULL;
 
 	// Sanity checks
-	GRID_TRACE("M2 UPDATE ALIAS HEADER(%s)", hc_url_get(url, HCURL_WHOLE));
+	GRID_TRACE("M2 UPDATE ALIAS HEADER(%s)", oio_url_get(url, OIOURL_WHOLE));
 
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(url != NULL);
 
-	if (!hc_url_has(url, HCURL_PATH))
+	if (!oio_url_has(url, OIOURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
 	RANDOM_UID(uid,uid_size);
@@ -1530,7 +1532,7 @@ m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 
 struct gen_ctx_s
 {
-	struct hc_url_s *url;
+	struct oio_url_s *url;
 	struct storage_policy_s *pol;
 	struct grid_lb_iterator_s *iter;
 	guint8 *uid;
@@ -1560,11 +1562,11 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	const gchar *p;
 	p = ctx->pol ? storage_policy_get_name(ctx->pol) : "none";
 
-	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(ctx->url, HCURL_WHOLE));
+	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
 	const gint64 now = g_get_real_time ();
 
 	struct bean_ALIASES_s *alias = _bean_create(&descr_struct_ALIASES);
-	ALIASES_set2_alias(alias, hc_url_get(ctx->url, HCURL_PATH));
+	ALIASES_set2_alias(alias, oio_url_get(ctx->url, OIOURL_PATH));
 	ALIASES_set_version(alias, now);
 	ALIASES_set_ctime(alias, now / G_TIME_SPAN_SECOND);
 	ALIASES_set_mtime(alias, now / G_TIME_SPAN_SECOND);
@@ -1591,7 +1593,7 @@ _m2_generate_content_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
 	gchar *chunkid, strpos[64];
 	gchar straddr[STRLEN_ADDRINFO], strid[STRLEN_CHUNKID];
 
-	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(ctx->url, HCURL_WHOLE));
+	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
 
 	grid_addrinfo_to_string(&(si->addr), straddr, sizeof(straddr));
 	SHA256_randomized_string(strid, sizeof(strid));
@@ -1627,7 +1629,7 @@ _m2_generate_RAIN(struct gen_ctx_s *ctx)
 	const struct storage_class_s *stgclass;
 	gint distance, k, m;
 
-	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(ctx->url, HCURL_WHOLE));
+	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
 	distance = _policy_parameter(ctx->pol, DS_KEY_DISTANCE, 1);
 	k = _policy_parameter(ctx->pol, DS_KEY_K, 3);
 	m = _policy_parameter(ctx->pol, DS_KEY_M, 2);
@@ -1682,7 +1684,7 @@ _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 	const struct storage_class_s *stgclass;
 	gint distance, copies;
 
-	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(ctx->url, HCURL_WHOLE));
+	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
 	distance = _policy_parameter(ctx->pol, DS_KEY_DISTANCE, 1);
 	copies = _policy_parameter(ctx->pol, DS_KEY_COPY_COUNT, 1);
 	stgclass = storage_policy_get_storage_class(ctx->pol);
@@ -1723,15 +1725,15 @@ _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 }
 
 GError*
-m2_generate_beans(struct hc_url_s *url, gint64 size, gint64 chunk_size,
+m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 		struct storage_policy_s *pol, struct grid_lb_iterator_s *iter,
 		m2_onbean_cb cb, gpointer cb_data)
 {
-	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE));
+	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE));
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(iter != NULL);
 
-	if (!hc_url_has(url, HCURL_PATH))
+	if (!oio_url_has(url, OIOURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 	if (size < 0)
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid size");
@@ -1769,7 +1771,7 @@ m2_generate_beans(struct hc_url_s *url, gint64 size, gint64 chunk_size,
 /* Storage Policy ----------------------------------------------------------- */
 
 static GError*
-_get_content_policy(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+_get_content_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		struct namespace_info_s *nsinfo, struct storage_policy_s **result)
 {
 	GError *err = NULL;
@@ -1816,14 +1818,14 @@ _get_container_policy(struct sqlx_sqlite3_s *sq3, struct namespace_info_s *nsinf
 }
 
 GError*
-m2db_get_storage_policy(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+m2db_get_storage_policy(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		struct namespace_info_s *nsinfo, gboolean from_previous,
 		struct storage_policy_s **result)
 {
 	GError *err = NULL;
 	struct storage_policy_s *policy = NULL;
 
-	GRID_TRACE2("%s(%s)", __FUNCTION__, hc_url_get(url, HCURL_WHOLE));
+	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(url, OIOURL_WHOLE));
 	EXTRA_ASSERT(sq3 != NULL);
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(nsinfo != NULL);
@@ -1858,19 +1860,19 @@ m2db_set_storage_policy(struct sqlx_sqlite3_s *sq3, const gchar *polname, int re
 }
 
 void
-m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
+m2db_set_container_name(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 {
 	sqlx_admin_init_str(sq3, M2V2_ADMIN_VERSION, "0");
 
 	struct map_s { const char *f; int k; } map[] = {
-		{SQLX_ADMIN_NAMESPACE, HCURL_NS},
-		{SQLX_ADMIN_ACCOUNT, HCURL_ACCOUNT},
-		{SQLX_ADMIN_USERNAME, HCURL_USER},
-		{SQLX_ADMIN_USERTYPE, HCURL_TYPE},
+		{SQLX_ADMIN_NAMESPACE, OIOURL_NS},
+		{SQLX_ADMIN_ACCOUNT, OIOURL_ACCOUNT},
+		{SQLX_ADMIN_USERNAME, OIOURL_USER},
+		{SQLX_ADMIN_USERTYPE, OIOURL_TYPE},
 		{NULL,0},
 	};
 	for (struct map_s *p = map; p->f ; ++p) {
-		const gchar *v = hc_url_get(url, p->k);
+		const gchar *v = oio_url_get(url, p->k);
 		if (v != NULL)
 			sqlx_admin_init_str(sq3, p->f, v);
 	}
@@ -2125,7 +2127,7 @@ m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions, gint64 retention_del
 }
 
 GError*
-m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url,
+m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		guint32 flags, GString **status_message)
 {
 	GError *err = NULL;
@@ -2168,8 +2170,8 @@ m2v2_dup_alias(struct dup_alias_params_s *params, gpointer bean)
 		/* If source container version specified, we may not be duplicating
 		 * latest version of each alias, so we must find it. */
 		if (params->src_c_version >= 1) {
-			struct hc_url_s *url = hc_url_empty();
-			hc_url_set(url, HCURL_PATH, ALIASES_get_alias(new_alias)->str);
+			struct oio_url_s *url = oio_url_empty();
+			oio_url_set(url, OIOURL_PATH, ALIASES_get_alias(new_alias)->str);
 			local_err = m2db_get_alias_version(params->sq3, url, &latest_version);
 			if (local_err != NULL) {
 				GRID_WARN("Failed to get latest alias version for '%s'",
@@ -2178,7 +2180,7 @@ m2v2_dup_alias(struct dup_alias_params_s *params, gpointer bean)
 				_bean_clean(new_alias);
 				new_alias = NULL;
 			}
-			hc_url_clean(url);
+			oio_url_clean(url);
 		}
 		if (local_err == NULL) {
 			ALIASES_set_version(new_alias,

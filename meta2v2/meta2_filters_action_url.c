@@ -40,7 +40,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 static int
 _update_content_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_backend_s *m2b,
-		struct hc_url_s *url, const char *stgpol)
+		struct oio_url_s *url, const char *stgpol)
 {
 	GError *e = NULL;
 	GSList *beans = NULL;
@@ -57,7 +57,7 @@ _update_content_storage_policy(struct gridd_filter_ctx_s *ctx, struct meta2_back
 			_bean_clean(bean);
 	}
 
-	if (!hc_url_has(url, HCURL_PATH))
+	if (!oio_url_has(url, OIOURL_PATH))
 		e = NEWERROR(CODE_BAD_REQUEST, "No content path");
 	if (!e)
 		e = meta2_backend_get_alias(m2b, url, M2V2_FLAG_NODELETED, _get_alias_header_cb, NULL);
@@ -112,7 +112,7 @@ meta2_filter_action_update_storage_policy(struct gridd_filter_ctx_s *ctx,
 	(void) reply;
 
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	const char *stgpol = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_STGPOLICY);
 	struct storage_policy_s *sp = NULL;
 
@@ -144,11 +144,11 @@ meta2_filter_action_exit_election(struct gridd_filter_ctx_s *ctx,
 	(void) reply;
 
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
-	struct hc_url_s *url = meta2_filter_ctx_get_url(ctx);
+	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 
-	if (hc_url_has(url,HCURL_HEXID)) {
+	if (oio_url_has(url,OIOURL_HEXID)) {
 		struct sqlx_name_s n = {
-			.base = hc_url_get(url,HCURL_HEXID),
+			.base = oio_url_get(url,OIOURL_HEXID),
 			.type = NAME_SRVTYPE_META2,
 			.ns = m2b->backend.ns_name
 		};

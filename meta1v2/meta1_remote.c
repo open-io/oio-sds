@@ -277,7 +277,7 @@ meta1v2_remote_get_prefixes(const char *to, gchar *** result)
 }
 
 GError *
-meta1v2_remote_relink_service(const char *m1, struct hc_url_s *url,
+meta1v2_remote_relink_service(const char *m1, struct oio_url_s *url,
 		const char *kept, const char *replaced, gboolean dryrun, 
 		gchar ***out)
 {

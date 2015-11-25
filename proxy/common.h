@@ -49,16 +49,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "path_parser.h"
 #include "transport_http.h"
 
-#define OPT(N)    _req_get_option(args,(N))
 #define TOK(N)    _req_get_token(args,(N))
-#define CID()     (TOK("CID") ?: OPT("cid"))
 #define NS()      TOK("NS")
-#define ACCOUNT() (TOK("ACCOUNT") ?: OPT("acct"))
-#define POOL()    (TOK("POOL") ?: OPT("pool"))
-#define TYPE()    (TOK("TYPE") ?: OPT("type"))
-#define REF()     (TOK("REF") ?: OPT("ref"))
-#define PATH()    (TOK("PATH") ?: OPT("path"))
-#define SEQ()     (TOK("SEQ") ?: OPT("seq"))
+
+#define OPT(N)    _req_get_option(args,(N))
+#define CID()     OPT("cid")
+#define ACCOUNT() OPT("acct")
+#define POOL()    OPT("pool")
+#define CONTENT() OPT("content")
+#define TYPE()    OPT("type")
+#define REF()     OPT("ref")
+#define PATH()    OPT("path")
+#define SEQ()     OPT("seq")
 #define VERSION() OPT("version")
 
 #define GUARDED_DO(Lock,Action) do { \
@@ -106,7 +108,7 @@ struct req_args_s
 {
 	struct oio_requri_s *req_uri; // parsed URI
 	struct path_matching_s **matchings; // matched handlers
-	struct hc_url_s *url;
+	struct oio_url_s *url;
 
 	struct http_request_s *rq;
 	struct http_reply_ctx_s *rp;
@@ -137,7 +139,7 @@ enum http_rc_e abstract_action (const char *tag, struct req_args_s*args, struct 
 enum http_rc_e rest_action (struct req_args_s *args,
         enum http_rc_e (*handler) (struct req_args_s *, json_object *));
 
-GError * _resolve_service_and_do (const char *t, gint64 seq, struct hc_url_s *u,
+GError * _resolve_service_and_do (const char *t, gint64 seq, struct oio_url_s *u,
         GError * (*hook) (struct meta1_service_url_s *m1u, gboolean *next));
 
 GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ());
@@ -145,7 +147,7 @@ GError * _m1_locate_and_action (struct oio_url_s *url, GError * (*hook) ());
 GError * _gba_request (struct meta1_service_url_s *m1u, GByteArray * (reqbuilder) (void),
         GByteArray ** out);
 
-GError * _gbav_request (const char *t, gint64 seq, struct hc_url_s *u, GByteArray * builder (void),
+GError * _gbav_request (const char *t, gint64 seq, struct oio_url_s *u, GByteArray * builder (void),
         gchar ***outurl, GByteArray ***out);
 
 gboolean _request_has_flag (struct req_args_s *args, const char *header, const char *flag);

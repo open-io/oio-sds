@@ -75,7 +75,7 @@ m1_to_sqlx(enum m1v2_open_type_e t)
 }
 
 GError*
-_open_and_lock(struct meta1_backend_s *m1, struct hc_url_s *url,
+_open_and_lock(struct meta1_backend_s *m1, struct oio_url_s *url,
 		enum m1v2_open_type_e how, struct sqlx_sqlite3_s **handle)
 {
 	EXTRA_ASSERT(m1 != NULL);
@@ -83,15 +83,15 @@ _open_and_lock(struct meta1_backend_s *m1, struct hc_url_s *url,
 	EXTRA_ASSERT(handle != NULL);
 
 	GRID_TRACE2("%s(%p,%p,%d,%p)", __FUNCTION__, (void*)m1,
-			hc_url_get (url, HCURL_HEXID), how, (void*)handle);
+			oio_url_get (url, OIOURL_HEXID), how, (void*)handle);
 
-	if (!hc_url_has (url, HCURL_HEXID))
+	if (!oio_url_has (url, OIOURL_HEXID))
 		return NEWERROR (CODE_BAD_REQUEST, "Partial URL (missing HEXID)");
 	if (!m1b_check_ns_url (m1, url))
 		return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid NS");
 
 	gchar base[5];
-	const guint8 *cid = hc_url_get_id(url);
+	const guint8 *cid = oio_url_get_id(url);
 	g_snprintf(base, sizeof(base), "%02X%02X", cid[0], cid[1]);
 
 	if (!meta1_prefixes_is_managed(m1->prefixes, cid))
@@ -115,9 +115,9 @@ _open_and_lock(struct meta1_backend_s *m1, struct hc_url_s *url,
 }
 
 GError*
-__create_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
+__create_user(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 {
-	if (!hc_url_has_fq_container (url))
+	if (!oio_url_has_fq_container (url))
 		return NEWERROR(CODE_BAD_REQUEST, "Partial URL");
 
 	static const gchar *sql = "INSERT INTO users ('cid','account','user') VALUES (?,?,?)";
@@ -134,9 +134,9 @@ __create_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 	if (rc != SQLITE_OK)
 		err = M1_SQLITE_GERROR(sq3->db, rc);
 	else {
-		sqlite3_bind_blob(stmt, 1, hc_url_get_id(url), hc_url_get_id_size(url), NULL);
-		sqlite3_bind_text(stmt, 2, hc_url_get(url, HCURL_ACCOUNT), -1, NULL);
-		sqlite3_bind_text(stmt, 3, hc_url_get(url, HCURL_USER), -1, NULL);
+		sqlite3_bind_blob(stmt, 1, oio_url_get_id(url), oio_url_get_id_size(url), NULL);
+		sqlite3_bind_text(stmt, 2, oio_url_get(url, OIOURL_ACCOUNT), -1, NULL);
+		sqlite3_bind_text(stmt, 3, oio_url_get(url, OIOURL_USER), -1, NULL);
 
 		/* Run the results */
 		do { rc = sqlite3_step(stmt); } while (rc == SQLITE_ROW);
@@ -159,8 +159,8 @@ __create_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url)
 }
 
 GError*
-__info_user(struct sqlx_sqlite3_s *sq3, struct hc_url_s *url, gboolean ac,
-		struct hc_url_s ***result)
+__info_user(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url, gboolean ac,
+		struct oio_url_s ***result)
 {
 	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
@@ -177,7 +177,7 @@ retry:
 	sqlite3_prepare_debug(rc, sq3->db, "SELECT account,user FROM users WHERE cid = ?", -1, &stmt, NULL);
 	if (rc != SQLITE_OK)
 		return M1_SQLITE_GERROR(sq3->db, rc);
-	(void) sqlite3_bind_blob(stmt, 1, hc_url_get_id (url), hc_url_get_id_size (url), NULL);
+	(void) sqlite3_bind_blob(stmt, 1, oio_url_get_id (url), oio_url_get_id_size (url), NULL);
 
 	/* Run the results */
 	found = FALSE;
@@ -185,11 +185,11 @@ retry:
 	do { if (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 		found = TRUE;
 		if (!gpa) continue;
-		struct hc_url_s *u = hc_url_empty ();
-		hc_url_set (u, HCURL_NS, hc_url_get (url, HCURL_NS));
-		hc_url_set (u, HCURL_ACCOUNT, (char*)sqlite3_column_text(stmt, 0));
-		hc_url_set (u, HCURL_USER, (char*)sqlite3_column_text(stmt, 1));
-		hc_url_set (u, HCURL_HEXID, hc_url_get (url, HCURL_HEXID));
+		struct oio_url_s *u = oio_url_empty ();
+		oio_url_set (u, OIOURL_NS, oio_url_get (url, OIOURL_NS));
+		oio_url_set (u, OIOURL_ACCOUNT, (char*)sqlite3_column_text(stmt, 0));
+		oio_url_set (u, OIOURL_USER, (char*)sqlite3_column_text(stmt, 1));
+		oio_url_set (u, OIOURL_HEXID, oio_url_get (url, OIOURL_HEXID));
 		g_ptr_array_add(gpa, u);
 	} } while (rc == SQLITE_ROW);
 
@@ -203,7 +203,7 @@ retry:
 
 	if (err) {
 		if (gpa) {
-			g_ptr_array_set_free_func (gpa, (GDestroyNotify)hc_url_clean);
+			g_ptr_array_set_free_func (gpa, (GDestroyNotify)oio_url_clean);
 			g_ptr_array_free (gpa, TRUE);
 		}
 		return err;
@@ -219,7 +219,7 @@ retry:
 		return NEWERROR(CODE_USER_NOTFOUND, "no such container");
 	}
 	if (gpa)
-		*result = (struct hc_url_s**) metautils_gpa_to_array(gpa, TRUE);
+		*result = (struct oio_url_s**) metautils_gpa_to_array(gpa, TRUE);
 	return NULL;
 }
 
@@ -241,10 +241,10 @@ m1b_check_ns (struct meta1_backend_s *m1, const char *ns)
 }
 
 gboolean
-m1b_check_ns_url (struct meta1_backend_s *m1, struct hc_url_s *url)
+m1b_check_ns_url (struct meta1_backend_s *m1, struct oio_url_s *url)
 {
 	if (!url)
 		return FALSE;
-	return m1b_check_ns (m1, hc_url_get (url, HCURL_NS));
+	return m1b_check_ns (m1, oio_url_get (url, OIOURL_NS));
 }
 
