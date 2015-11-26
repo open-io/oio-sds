@@ -529,6 +529,8 @@ _set_attr_in_handle(struct attr_handle_s *attr_handle, GError ** error,
 		goto error_set_attr; \
 }
 
+static void _up (gchar *s) { do { *s = g_ascii_toupper(*s); } while (*(s++)); }
+
 gboolean
 set_rawx_full_info_in_attr(const char *p, int filedes, GError **error,
 		struct content_textinfo_s * content, struct chunk_textinfo_s * chunk,
@@ -544,6 +546,8 @@ set_rawx_full_info_in_attr(const char *p, int filedes, GError **error,
 	}
 
 	if (chunk) {
+		_up(chunk->hash);
+
 		SET(ATTR_NAME_CHUNK_ID, chunk->id);
 		SET(ATTR_NAME_CHUNK_SIZE, chunk->size);
 		SET(ATTR_NAME_CHUNK_HASH, chunk->hash);
@@ -552,6 +556,9 @@ set_rawx_full_info_in_attr(const char *p, int filedes, GError **error,
 	}
 
 	if (content) {
+		_up(content->container_id);
+		_up(content->content_id);
+
 		SET(ATTR_NAME_CONTENT_CONTAINER, content->container_id);
 		SET(ATTR_NAME_CONTENT_ID, content->content_id);
 		SET(ATTR_NAME_CONTENT_PATH, content->path);
