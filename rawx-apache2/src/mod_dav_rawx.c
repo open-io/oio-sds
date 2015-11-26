@@ -38,15 +38,17 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "mod_dav_rawx.h"
 #include "rawx_internals.h"
 #include "rawx_config.h"
+#include "rawx_event.h"
 
 static void
-_stat_cleanup_child(dav_rawx_server_conf *conf)
+_cleanup_child(dav_rawx_server_conf *conf)
 {
 	server_child_stat_fini(conf, conf->pool);
+	rawx_event_destroy();
 }
 
 static void
-_stat_cleanup_master(dav_rawx_server_conf *conf)
+_cleanup_master(dav_rawx_server_conf *conf)
 {
 	server_master_stat_fini(conf, conf->pool);
 }
@@ -55,7 +57,7 @@ _stat_cleanup_master(dav_rawx_server_conf *conf)
  * Invoked whatever the context
  */
 static apr_status_t
-_stat_cleanup_to_register(void *udata)
+_cleanup_to_register(void *udata)
 {
 	dav_rawx_server_conf *conf = udata;
 	if (conf && conf->cleanup) {
@@ -329,16 +331,23 @@ rawx_hook_child_init(apr_pool_t *pchild, server_rec *s)
 {
 	apr_status_t status;
 	dav_rawx_server_conf *conf;
+	gchar *event_agent_addr;
 
 	DAV_XDEBUG_POOL(pchild, 0, "%s()", __FUNCTION__);
 	conf = ap_get_module_config(s->module_config, &dav_rawx_module);
-	conf->cleanup = _stat_cleanup_child;
+	conf->cleanup = _cleanup_child;
 
 	status = server_init_child_stat(conf, pchild, pchild);
 	if (APR_SUCCESS != status)
 		DAV_ERROR_POOL(pchild, 0, "Failed to attach the RAWX statistics support");
 
-	conf->cleanup = _stat_cleanup_child;
+	conf->cleanup = _cleanup_child;
+
+	event_agent_addr = gridcluster_get_eventagent(conf->ns_name);
+	if (!rawx_event_init(event_agent_addr))
+		DAV_ERROR_POOL(pchild, 0, "Failed to initialize event context");
+	g_free(event_agent_addr);
+
 }
 
 /* Dynamically shared modules are loaded twice by apache!
@@ -465,6 +474,9 @@ rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp,
 			apr_snprintf(url, sizeof(url), "%s:%d", host, a->host_port);
 			DAV_DEBUG_POOL(plog, 0, "xattr-lock : testing addr [%s]", url);
 
+			/* FIXME the rawx_id is ok if there is only one ip:port in configuration */
+			g_strlcpy(conf->rawx_id, url, sizeof(conf->rawx_id));
+
 			gerr = volume_service_lock (conf->docroot, NAME_SRVTYPE_RAWX,
 					url, conf->ns_name);
 			if (!gerr)
@@ -500,10 +512,10 @@ rawx_hook_post_config(apr_pool_t *pconf, apr_pool_t *plog, apr_pool_t *ptemp,
 	}
 	else {
 		/* This will be overwritten by the child_init */
-		conf->cleanup = _stat_cleanup_master;
+		conf->cleanup = _cleanup_master;
 		apr_pool_userdata_set(conf, apr_psprintf(pconf,
 				"RAWX-config-to-be-cleaned-%d", i++),
-				_stat_cleanup_to_register, pconf);
+				_cleanup_to_register, pconf);
 	}
 
 	return OK;

@@ -37,6 +37,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "rawx_repo_core.h"
 #include "rawx_internals.h"
+#include "rawx_event.h"
 
 #define DEFAULT_BLOCK_SIZE "5242880"
 #define DEFAULT_COMPRESSION_ALGO "ZLIB"
@@ -601,6 +602,8 @@ rawx_repo_commit_upload(dav_stream *stream)
 
 	request_fill_headers(stream->r->info->request,
 			&(stream->r->info->content), &(stream->r->info->chunk));
+
+	send_chunk_event("rawx.chunk.new", stream->r);
 
 	return NULL;
 }

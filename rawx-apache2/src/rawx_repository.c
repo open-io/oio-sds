@@ -682,6 +682,9 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 		goto end_remove;
 	}
 
+	/* Deletion event needs chunk's attrs */
+	resource_stat_chunk(resource, 1);
+
 	status = apr_file_remove(resource_get_pathname(resource), pool);
 	if (APR_SUCCESS != status) {
 		e = server_create_and_stat_error(resource_get_server_config(resource), pool,
@@ -691,6 +694,8 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 					NULL));
 		goto end_remove;
 	}
+
+	send_chunk_event("rawx.chunk.delete", resource);
 
 	resource->exists = 0;
 	resource->collection = 0;
