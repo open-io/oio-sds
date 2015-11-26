@@ -117,4 +117,6 @@ void str_replace_by_pooled_str(apr_pool_t *pool, char ** pstr);
 
 void dav_format_time(int style, apr_time_t sec, char *buf);
 
+void send_chunk_event(const char *type, const dav_resource *resource);
+
 #endif /*OIO_SDS__rawx_apache2__src__rawx_internals_h*/

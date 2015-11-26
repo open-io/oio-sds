@@ -35,6 +35,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "rawx_stats_rrd.h"
 
+#include "rawx_event.h"
+
 #define FSYNC_ON_CHUNK 1
 #define FSYNC_ON_CHUNK_DIR 2
 
@@ -84,12 +86,14 @@ struct shm_stats_s {
 typedef struct dav_rawx_server_conf_s dav_rawx_server_conf;
 
 struct dav_rawx_server_conf_s {
+	char rawx_id[64]; /* enough for @ipv6:port */
 	apr_pool_t *pool;
 	char docroot[1024];
 	char ns_name[LIMIT_LENGTH_NSNAME];
 	int hash_depth;
 	int hash_width;
 	int fsync_on_close;
+	char event_agent_addr[RAWX_EVENT_ADDR_SIZE];
 
 	/* Statistics involved data */
 	struct {

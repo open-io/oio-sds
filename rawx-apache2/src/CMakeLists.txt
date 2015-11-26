@@ -7,7 +7,8 @@ include_directories(AFTER
 		${APACHE2_INCLUDE_DIRS}
 		${APR_INCLUDE_DIRS}
 		${LZO_INCLUDE_DIRS}
-		${ZLIB_INCLUDE_DIRS})
+		${ZLIB_INCLUDE_DIRS}
+		${ZMQ_INCLUDE_DIRS})
 
 link_directories(
 		${ATTR_LIBRARY_DIRS}
@@ -33,14 +34,17 @@ add_library(mod_dav_rawx MODULE
 		rawx_req_info.c
 		rawx_chunk_update.c
 		rawx_stats_rrd.c
-		rawx_stats_rrd.h)
+		rawx_stats_rrd.h
+		rawx_event.c
+		rawx_event.h)
 
 set_target_properties(mod_dav_rawx PROPERTIES PREFIX "" SUFFIX .so)
 
 target_link_libraries(mod_dav_rawx
 		metautils rawx
 		${APR_LIBRARIES} ${GLIB2_LIBRARIES}
-		${ZLIB_LIBRARIES} ${LZO_LIBRARIES})
+		${ZLIB_LIBRARIES} ${LZO_LIBRARIES}
+		${ZMQ_LIBRARIES})
 
 install(TARGETS mod_dav_rawx
 		LIBRARY DESTINATION ${APACHE2_MODULES_DIRS})
