@@ -46,7 +46,7 @@ struct oio_sqlx_client_vtable_s
 
 	GError * (*execute_statement) (struct oio_sqlx_client_s *self,
 			const char *in_stmt, gchar **in_params,
-			struct oio_sqlx_output_ctx_s *out_ctx, gchar **out_lines);
+			struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines);
 };
 
 /* Any implementation of a oio_sqlx_client_s must respect this preamble */
@@ -59,7 +59,7 @@ void oio_sqlx_client__destroy (struct oio_sqlx_client_s *self);
 
 GError * oio_sqlx_client__execute_statement (struct oio_sqlx_client_s *self,
 		const char *in_stmt, gchar **in_params,
-		struct oio_sqlx_output_ctx_s *out_ctx, gchar **out_lines);
+		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines);
 
 /* -------------------------------------------------------------------------- */
 
@@ -68,6 +68,7 @@ struct oio_sqlx_client_factory_s;
 struct oio_sqlx_client_factory_vtable_s
 {
 	void (*destroy) (struct oio_sqlx_client_factory_s *self);
+
 	GError * (*open) (struct oio_sqlx_client_factory_s *self,
 			const struct oio_url_s *u, struct oio_sqlx_client_s **out);
 };
@@ -87,6 +88,10 @@ GError * oio_sqlx_client_factory__open (struct oio_sqlx_client_factory_s *self,
 /* Creates the default SQLX client that locates then contacts sqlx servers */ 
 struct oio_sqlx_client_factory_s * oio_sqlx_client_factory__create_sds (
 		const char *ns);
+
+/* Creates the default SQLX client that locates then contacts sqlx servers */ 
+struct oio_sqlx_client_factory_s * oio_sqlx_client_factory__create_local (
+		const char *ns, const char *schema);
 
 #ifdef __cplusplus
 }
