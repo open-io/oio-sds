@@ -442,6 +442,28 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 			CONTENTS_HEADERS_set2_policy (header, s);
 	}
 
+	if (!err) { // Content ID
+		gchar *s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-id");
+		if (NULL != s) {
+			GByteArray *h = metautils_gba_from_hexstring (s);
+			if (!h)
+				err = BADREQ("Invalid content ID (not hexa)");
+			else {
+				oio_url_set (args->url, OIOURL_CONTENTID, s);
+				CONTENTS_HEADERS_set_id (header, h);
+				/* XXX JFS: this is clean to have uniform CONTENT ID among all
+				 * the beans, but it is a bit useless since this requires more
+				 * bytes on the network and can be done in the META2 server */
+				for (GSList *l=beans; l ;l=l->next) {
+					if (DESCR(l->data) != &descr_struct_CHUNKS)
+						continue;
+					CHUNKS_set_content(l->data, h);
+				}
+				g_byte_array_free(h, TRUE);
+			}
+		}
+	}
+
 	if (!err) { // Content hash
 		gchar *s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-hash");
 		if (NULL != s) {
@@ -490,7 +512,7 @@ _load_simplified_content (struct req_args_s *args, struct json_object *jbody, GS
 		struct bean_ALIASES_s *alias = _bean_create (&descr_struct_ALIASES);
 		beans = g_slist_prepend (beans, alias);
 		ALIASES_set2_alias (alias, PATH());
-		ALIASES_set2_content (alias, (guint8*)"0", 1);
+		ALIASES_set_content (alias, CONTENTS_HEADERS_get_id (header));
 
 		if (!err) { // aliases version
 			gchar *s = g_tree_lookup(args->rq->tree_headers, PROXYD_HEADER_PREFIX "content-meta-version");
