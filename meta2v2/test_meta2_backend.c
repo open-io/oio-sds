@@ -308,7 +308,7 @@ _container_wraper(const char *ns, gint64 maxvers, container_test_f cf)
 		GError *err;
 
 		gchar *strurl = g_strdup_printf(
-				"/%s/account/container-%"G_GUINT64_FORMAT"/content-%"G_GINT64_FORMAT,
+				"/%s/account/container-%"G_GUINT64_FORMAT"//content-%"G_GINT64_FORMAT,
 				ns, ++container_counter, g_get_monotonic_time());
 		url = oio_url_init(strurl);
 		g_free(strurl);
