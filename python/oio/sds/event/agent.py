@@ -96,7 +96,8 @@ class EventWorker(object):
     def process_event(self, event):
         handler = self.get_handler(event)
         if not handler:
-            raise Exception('No handler found')
+            self.logger.warn("No handler found")
+            return
         handler(event)
 
     def get_handler(self, event):
