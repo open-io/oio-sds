@@ -99,7 +99,7 @@ rawx_event_send_raw(GString *json){
 	if (rc < 0)
 		goto error;
 
-	rc = zmq_msg_send(&zmsg, sock, ZMQ_SNDMORE);
+	rc = zmq_msg_send(&zmsg, sock, ZMQ_SNDMORE|ZMQ_DONTWAIT);
 	if (rc < 0) {
 		zmq_msg_close(&zmsg);
 		goto error;
@@ -109,7 +109,7 @@ rawx_event_send_raw(GString *json){
 	if (rc < 0)
 		goto error;
 
-	rc = zmq_msg_send(&zmsg, sock, 0);
+	rc = zmq_msg_send(&zmsg, sock, ZMQ_DONTWAIT);
 	if (rc < 0) {
 		zmq_msg_close(&zmsg);
 		goto error;
