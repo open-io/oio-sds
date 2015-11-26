@@ -36,7 +36,11 @@ extern "C" {
 		oio_pfree0(pp,repl); \
 } while (0)
 
+#define OIO_STRV_APPEND_COPY(Tab,S0) do { (Tab) = oio_strv_append((Tab), g_strdup(S0)); } while (0)
+
 void oio_str_reuse(gchar **dst, gchar *src);
+
+gchar ** oio_strv_append(gchar **dst, gchar *s);
 
 /** frees *s and set it to NULL */
 void oio_str_clean(gchar **s);
