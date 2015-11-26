@@ -58,6 +58,14 @@ class UnrecoverableContent(ContentException):
 class ServerException(OioException):
     pass
 
+
+class Meta2Exception(OioException):
+    pass
+
+
+class SpareChunkException(Meta2Exception):
+    pass
+
 _http_status_map = {404: NotFound}
 
 

@@ -9,7 +9,9 @@ chunk_headers = {'content_cid': '%scontainer-id' % RAWX_HEADER_PREFIX,
                  'chunk_pos': '%schunk-pos' % RAWX_HEADER_PREFIX,
                  'content_path': '%scontent-path' % RAWX_HEADER_PREFIX,
                  'content_size': '%scontent-size' % RAWX_HEADER_PREFIX,
-                 'content_chunksnb': '%scontent-chunksnb' % RAWX_HEADER_PREFIX}
+                 'content_chunksnb': '%scontent-chunksnb' % RAWX_HEADER_PREFIX,
+                 'content_id': '%scontent-id' % RAWX_HEADER_PREFIX,
+                 'content_version': '%scontent-version' % RAWX_HEADER_PREFIX}
 
 chunk_xattr_keys = {'chunk_hash': 'grid.chunk.hash',
                     'chunk_size': 'grid.chunk.size',

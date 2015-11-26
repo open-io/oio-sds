@@ -11,19 +11,29 @@ def gen_put_headers(meta):
         chunk_headers['content_cid']: meta['content_cid'],
         chunk_headers['chunk_id']: meta['chunk_id'],
         chunk_headers['chunk_pos']: meta['chunk_pos'],
+        chunk_headers['content_id']: meta['content_id'],
         chunk_headers['content_path']: meta['content_path'],
         chunk_headers['content_size']: meta['content_size'],
-        chunk_headers['content_chunksnb']: meta['content_chunksnb'],
+        chunk_headers['content_version']: meta['content_version']
         }
     if meta.get('chunk_hash'):
         headers.update({chunk_headers['chunk_hash']: meta['chunk_hash']})
+    if meta.get('content_chunksnb'):
+        headers.update(
+            {chunk_headers['content_chunksnb']: meta['content_chunksnb']})
     return headers
 
 
 def extract_headers_meta(headers):
     meta = {}
     for k in chunk_headers.iterkeys():
-        meta[k] = headers[chunk_headers[k]]
+        try:
+            meta[k] = headers[chunk_headers[k]]
+        except KeyError as e:
+            # 'content_chunksnb' is optional
+            if k != 'content_chunksnb':
+                raise e
+
     return meta
 
 

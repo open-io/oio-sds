@@ -416,9 +416,11 @@ request_fill_headers(request_rec *r, struct content_textinfo_s *c0,
 {
 	__set_header(r, "container-id",  c0->container_id);
 
+	__set_header(r, "content-id",         	c0->content_id);
 	__set_header(r, "content-path",         c0->path);
 	__set_header(r, "content-size",         c0->size);
 	__set_header(r, "content-chunksnb",     c0->chunk_nb);
+	__set_header(r, "content-version",     	c0->version);
 
 	__set_header(r, "chunk-id",          c1->id);
 	__set_header(r, "chunk-size",        c1->size);
