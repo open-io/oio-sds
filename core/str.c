@@ -303,3 +303,15 @@ oio_str_autocontainer_hash (const guint8 *bin, gsize len, gchar *dst,
 	return dst;
 }
 
+gchar **
+oio_strv_append(gchar **tab, gchar *s)
+{
+	g_assert (tab != NULL);
+	g_assert (s != NULL);
+	gsize l = g_strv_length (tab);
+	tab = g_try_realloc (tab, (l+2) * sizeof(gchar*));
+	tab[l] = s;
+	tab[l+1] = NULL;
+	return tab;
+}
+
