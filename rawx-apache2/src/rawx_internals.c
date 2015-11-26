@@ -123,25 +123,29 @@ void send_chunk_event(const char *type, const dav_resource *resource) {
 			"\"container_id\":\"%s\","
 			"\"content_id\":\"%s\","
 			"\"content_version\":\"%s\","
-			"\"content_nbchunks\":\"%s\","
 			"\"content_path\":\"%s\","
 			"\"content_size\":\"%s\","
 			"\"chunk_id\":\"%s\","
 			"\"chunk_hash\":\"%s\","
 			"\"chunk_position\":\"%s\","
-			"\"chunk_size\":\"%s\""
-			"}",
+			"\"chunk_size\":\"%s\"",
 			conf->rawx_id,
 			resource->info->content.container_id,
 			resource->info->content.content_id,
 			resource->info->content.version,
-			resource->info->content.chunk_nb,
 			resource->info->content.path,
 			resource->info->content.size,
 			resource->info->chunk.id,
 			resource->info->chunk.hash,
 			resource->info->chunk.position,
 			resource->info->chunk.size);
+
+	if (resource->info->content.chunk_nb)
+		g_string_append_printf(json,
+				",\"content_nbchunks\":\"%s\"",
+				resource->info->content.chunk_nb);
+
+	g_string_append_printf(json, "}");
 
 	rc = rawx_event_send(type, json);
 	DAV_DEBUG_REQ(resource->info->request, 0, "Event %s %s", type, rc ? "OK" : "KO");
