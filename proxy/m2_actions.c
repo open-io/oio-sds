@@ -914,24 +914,24 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 static enum http_rc_e
 action_m2_container_propget (struct req_args_s *args, struct json_object *jargs)
 {
-	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
-	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
+	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "type=meta2");
+	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "seq=1");
 	return action_sqlx_propget(args, jargs);
 }
 
 static enum http_rc_e
 action_m2_container_propset (struct req_args_s *args, struct json_object *jargs)
 {
-	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
-	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
+	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "type=meta2");
+	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "seq=1");
 	return action_sqlx_propset(args, jargs);
 }
 
 static enum http_rc_e
 action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
 {
-	path_matching_set_variable(args->matchings[0], g_strdup("TYPE=meta2"));
-	path_matching_set_variable(args->matchings[0], g_strdup("SEQ=1"));
+	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "type=meta2");
+	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "seq=1");
 	return action_sqlx_propdel(args, jargs);
 }
 

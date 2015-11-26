@@ -66,19 +66,6 @@ static void _match_free (struct path_matching_s *);
 
 /* ------------------------------------------------------------------------- */
 
-static gchar **
-_strv_append (gchar **tab, gchar *s)
-{
-	EXTRA_ASSERT(tab != NULL);
-	EXTRA_ASSERT(s != NULL);
-	gsize l = g_strv_length (tab);
-	tab = g_try_realloc (tab, (l+2) * sizeof(gchar*));
-	tab[l] = s;
-	tab[l+1] = NULL;
-	return tab;
-}
-
-
 struct path_parser_s *
 path_parser_init (void)
 {
@@ -441,19 +428,12 @@ _trie_explore (struct trie_node_s **tab, gchar **needles,
 		} else { // Wildcard
 			struct path_matching_s *m = _match_dup (current_match);
 			m->last = *tab;
-			m->vars = _strv_append (m->vars, g_strdup_printf("%s=%s", (*tab)->var, *needles));
+			m->vars = oio_strv_append (m->vars, g_strdup_printf("%s=%s", (*tab)->var, *needles));
 			step (m);
 		}
 			
 	}
 
 	return matches;
-}
-
-void
-path_matching_set_variable (struct path_matching_s *self, gchar *kv)
-{
-	EXTRA_ASSERT(self != NULL);
-	self->vars = _strv_append(self->vars, kv);
 }
 

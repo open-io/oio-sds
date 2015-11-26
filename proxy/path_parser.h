@@ -68,9 +68,6 @@ gchar * path_matching_get_path (struct path_matching_s *self);
 const gchar * path_matching_get_variable (struct path_matching_s *self,
 		const char *name);
 
-void path_matching_set_variable (struct path_matching_s *self,
-		gchar *kv);
-
 /* Returns the arbitrary pointer associated with the description matched. */
 gpointer path_matching_get_udata (struct path_matching_s *self);
 
