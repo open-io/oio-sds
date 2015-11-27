@@ -75,13 +75,13 @@ class RdirClient(Client):
                 yield container, content, chunk, value
             req_body['start_after'] = key
 
-    def admin_broken_set(self, volume, date):
+    def admin_incident_set(self, volume, date):
         body = {'date': date}
-        self._rdir_request(volume, 'POST', 'rdir/admin/broken', json=body)
+        self._rdir_request(volume, 'POST', 'rdir/admin/incident', json=body)
 
-    def admin_broken_get(self, volume):
+    def admin_incident_get(self, volume):
         resp, resp_body = self._rdir_request(volume, 'GET',
-                                             'rdir/admin/broken')
+                                             'rdir/admin/incident')
         return resp_body.get('date')
 
     def admin_lock(self, volume, who):

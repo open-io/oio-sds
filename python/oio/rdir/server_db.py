@@ -82,9 +82,9 @@ class RdirBackend(object):
         if start_after is not None:
             start_after = start_after.encode('utf8')
 
-        broken_date = self.admin_get_broken_date(volume_id)
-        if rebuild and broken_date is None:
-            # No broken date set so no chunks needs to be rebuild
+        incident_date = self.admin_get_incident_date(volume_id)
+        if rebuild and incident_date is None:
+            # No incident date set so no chunks needs to be rebuild
             return result
 
         db_iter = self._get_db_chunk(volume_id).iterator(
@@ -99,7 +99,7 @@ class RdirBackend(object):
                 if data.get('rtime'):
                     continue  # already rebuilt
                 mtime = data.get('mtime')
-                if int(mtime) > broken_date:
+                if int(mtime) > incident_date:
                     continue  # chunk pushed after the incident
             result[key] = data
             count += 1
@@ -108,7 +108,7 @@ class RdirBackend(object):
     def chunk_status(self, volume_id):
         total_chunks = 0
         total_chunks_rebuilt = 0
-        incident_date = self.admin_get_broken_date(volume_id)
+        incident_date = self.admin_get_incident_date(volume_id)
         containers = dict()
         for key, value in self._get_db_chunk(volume_id):
             total_chunks += 1
@@ -136,11 +136,11 @@ class RdirBackend(object):
             result['chunk']['rebuilt'] = total_chunks_rebuilt
         return result
 
-    def admin_set_broken_date(self, volume_id, date):
-        self._get_db_admin(volume_id).put('broken_date', str(date))
+    def admin_set_incident_date(self, volume_id, date):
+        self._get_db_admin(volume_id).put('incident_date', str(date))
 
-    def admin_get_broken_date(self, volume_id):
-        ret = self._get_db_admin(volume_id).get('broken_date')
+    def admin_get_incident_date(self, volume_id):
+        ret = self._get_db_admin(volume_id).get('incident_date')
         if ret is None:
             return None
         return int(ret)

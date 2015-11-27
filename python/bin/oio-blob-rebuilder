@@ -14,7 +14,7 @@ def force_unlock(conf, volume):
 
 def set_incident_date(conf, volume, date):
     client = RdirClient(conf)
-    client.admin_broken_set(volume, date)
+    client.admin_incident_set(volume, date)
 
 
 def make_arg_parser():

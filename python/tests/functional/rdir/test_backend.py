@@ -160,12 +160,12 @@ class TestRdirBackend(BaseTestCase):
                              "mycontainer2|mycontent4|mychunk": {"mtime": 10}
                          })
 
-        # rebuild mode: no broken date so no entry
+        # rebuild mode: no incident date so no entry
         data = self.rdir.chunk_fetch("myvolume", rebuild=True)
         self.assertEqual(data, {})
 
-        # rebuild mode: with broken date
-        self.rdir.admin_set_broken_date("myvolume", 6)
+        # rebuild mode: with incident date
+        self.rdir.admin_set_incident_date("myvolume", 6)
         data = self.rdir.chunk_fetch("myvolume", rebuild=True)
         self.assertEqual(data, {
             "mycontainer0|mycontent1|mychunk": {"mtime": 1},
@@ -203,7 +203,7 @@ class TestRdirBackend(BaseTestCase):
                          })
 
     def test_rdir_status_rebuild(self):
-        self.rdir.admin_set_broken_date("myvolume", 30)
+        self.rdir.admin_set_incident_date("myvolume", 30)
         # initial pushes
         self.rdir.chunk_push("myvolume", "mycontainer0", "mycontent1",
                              "mychunk", mtime=10)
@@ -284,18 +284,18 @@ class TestRdirBackend(BaseTestCase):
                              "mycontainer2|mycontent2|mychunk2": {'mtime': 4}
                          })
 
-    def test_admin_broken_date(self):
-        # no broken date
-        date = self.rdir.admin_get_broken_date("myvolume")
+    def test_admin_incident_date(self):
+        # no incident date
+        date = self.rdir.admin_get_incident_date("myvolume")
         self.assertEqual(date, None)
 
-        # add broken date
-        self.rdir.admin_set_broken_date("myvolume", 1234)
-        self.assertEqual(self.rdir.admin_get_broken_date("myvolume"), 1234)
+        # add incident date
+        self.rdir.admin_set_incident_date("myvolume", 1234)
+        self.assertEqual(self.rdir.admin_get_incident_date("myvolume"), 1234)
 
-        # update broken date
-        self.rdir.admin_set_broken_date("myvolume", 5555)
-        self.assertEqual(self.rdir.admin_get_broken_date("myvolume"), 5555)
+        # update incident date
+        self.rdir.admin_set_incident_date("myvolume", 5555)
+        self.assertEqual(self.rdir.admin_get_incident_date("myvolume"), 5555)
 
     def test_admin_lock_unlock(self):
         # unlock without lock
@@ -318,7 +318,7 @@ class TestRdirBackend(BaseTestCase):
 
     def test_admin_show(self):
         self.rdir.admin_lock("myvolume", "a functionnal test")
-        self.rdir.admin_set_broken_date("myvolume", 1234)
+        self.rdir.admin_set_incident_date("myvolume", 1234)
         res = self.rdir.admin_show("myvolume")
-        self.assertEqual(res, {'broken_date': "1234",
+        self.assertEqual(res, {'incident_date': "1234",
                                'lock': "a functionnal test"})

@@ -130,8 +130,8 @@ def rdir_status(ns):
     return flask.Response(body, mimetype='application/json')
 
 
-@rdir_api.route('/v1/<ns>/rdir/admin/broken', methods=['POST'])
-def rdir_admin_broken_set(ns):
+@rdir_api.route('/v1/<ns>/rdir/admin/incident', methods=['POST'])
+def rdir_admin_incident_set(ns):
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
@@ -141,18 +141,18 @@ def rdir_admin_broken_set(ns):
     if date is None or not isinstance(date, int):
         return flask.Response('Missing date or bad format', 400)
 
-    get_backend().admin_set_broken_date(volume, date)
+    get_backend().admin_set_incident_date(volume, date)
 
     return flask.Response('', 204)
 
 
-@rdir_api.route('/v1/<ns>/rdir/admin/broken', methods=['GET'])
-def rdir_admin_broken_get(ns):
+@rdir_api.route('/v1/<ns>/rdir/admin/incident', methods=['GET'])
+def rdir_admin_incident_get(ns):
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
 
-    date = get_backend().admin_get_broken_date(volume)
+    date = get_backend().admin_get_incident_date(volume)
     resp = {}
     if date:
         resp = {'date': date}
