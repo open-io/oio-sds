@@ -34,12 +34,12 @@ class TestRdirServer(BaseTestCase):
             'mtime': 123456,
             'rtime': 456
         }
-        resp = self.app.post("/NS/rdir/push", query_string={'vol': "xxx"},
+        resp = self.app.post("/v1/NS/rdir/push", query_string={'vol': "xxx"},
                              data=json.dumps(data_put),
                              content_type="application/json")
         self.assertEqual(resp.status_code, 204)
 
-        resp = self.app.post("/NS/rdir/fetch", query_string={'vol': "xxx"},
+        resp = self.app.post("/v1/NS/rdir/fetch", query_string={'vol': "xxx"},
                              data=json.dumps({}),
                              content_type="application/json")
         self.assertEqual(resp.status_code, 200)
@@ -65,13 +65,13 @@ class TestRdirServer(BaseTestCase):
             'chunk_id': "mychunk",
             'mtime': 1234
         }
-        resp = self.app.post("/NS/rdir/push", query_string={'vol': "xxx"},
+        resp = self.app.post("/v1/NS/rdir/push", query_string={'vol': "xxx"},
                              data=json.dumps(data),
                              content_type="application/json")
         self.assertEqual(resp.status_code, 204)
 
         # fetch
-        resp = self.app.post("/NS/rdir/fetch", query_string={'vol': "xxx"},
+        resp = self.app.post("/v1/NS/rdir/fetch", query_string={'vol': "xxx"},
                              data=json.dumps({}),
                              content_type="application/json")
         self.assertEqual(resp.status_code, 200)
@@ -84,20 +84,21 @@ class TestRdirServer(BaseTestCase):
             'content_id': "mycontent",
             'chunk_id': "mychunk",
         }
-        resp = self.app.delete("/NS/rdir/delete", query_string={'vol': "xxx"},
+        resp = self.app.delete("/v1/NS/rdir/delete",
+                               query_string={'vol': "xxx"},
                                data=json.dumps(data),
                                content_type="application/json")
         self.assertEqual(resp.status_code, 204)
 
         # fetch
-        resp = self.app.post("/NS/rdir/fetch", query_string={'vol': "xxx"},
+        resp = self.app.post("/v1/NS/rdir/fetch", query_string={'vol': "xxx"},
                              data=json.dumps({}),
                              content_type="application/json")
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(json.loads(resp.data), {})
 
     def test_rdir_status(self):
-        resp = self.app.get("/NS/rdir/status",
+        resp = self.app.get("/v1/NS/rdir/status",
                             query_string={'vol': "xxx"})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(json.loads(resp.data),
@@ -107,28 +108,28 @@ class TestRdirServer(BaseTestCase):
 
     def test_lock_unlock(self):
         # lock without who
-        resp = self.app.post("/NS/rdir/admin/lock",
+        resp = self.app.post("/v1/NS/rdir/admin/lock",
                              query_string={'vol': "xxx"},
                              data=json.dumps({}))
         self.assertEqual(resp.status_code, 400)
 
         # lock
         data = {'who': "a functionnal test"}
-        resp = self.app.post("/NS/rdir/admin/lock",
+        resp = self.app.post("/v1/NS/rdir/admin/lock",
                              query_string={'vol': "xxx"},
                              data=json.dumps(data))
         self.assertEqual(resp.status_code, 204)
 
         # double lock
         data = {'who': "an other functionnal test"}
-        resp = self.app.post("/NS/rdir/admin/lock",
+        resp = self.app.post("/v1/NS/rdir/admin/lock",
                              query_string={'vol': "xxx"},
                              data=json.dumps(data))
         self.assertEqual(resp.status_code, 403)
         self.assertEqual(resp.data, "Already locked by a functionnal test")
 
         # unlock
-        resp = self.app.post("/NS/rdir/admin/unlock",
+        resp = self.app.post("/v1/NS/rdir/admin/unlock",
                              query_string={'vol': "xxx"})
         self.assertEqual(resp.status_code, 204)
 

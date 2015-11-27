@@ -35,7 +35,7 @@ def server_status():
     return flask.Response(json.dumps(status), mimetype='application/json')
 
 
-@rdir_api.route('/<ns>/rdir/push', methods=['POST'])
+@rdir_api.route('/v1/<ns>/rdir/push', methods=['POST'])
 def rdir_push(ns):
     volume = request.args.get('vol')
     if not volume:
@@ -67,7 +67,7 @@ def rdir_push(ns):
     return flask.Response('', 204)
 
 
-@rdir_api.route('/<ns>/rdir/delete', methods=['DELETE'])
+@rdir_api.route('/v1/<ns>/rdir/delete', methods=['DELETE'])
 def rdir_delete(ns):
     volume = request.args.get('vol')
     if not volume:
@@ -86,7 +86,7 @@ def rdir_delete(ns):
     return flask.Response('', 204)
 
 
-@rdir_api.route('/<ns>/rdir/fetch', methods=['POST'])
+@rdir_api.route('/v1/<ns>/rdir/fetch', methods=['POST'])
 def rdir_fetch(ns):
     volume = request.args.get('vol')
     if not volume:
@@ -113,7 +113,7 @@ def rdir_fetch(ns):
     return flask.Response(body, mimetype='application/json')
 
 
-@rdir_api.route('/<ns>/rdir/status', methods=['GET'])
+@rdir_api.route('/v1/<ns>/rdir/status', methods=['GET'])
 def rdir_status(ns):
     volume = request.args.get('vol')
     if not volume:
@@ -130,7 +130,7 @@ def rdir_status(ns):
     return flask.Response(body, mimetype='application/json')
 
 
-@rdir_api.route('/<ns>/rdir/admin/broken', methods=['POST'])
+@rdir_api.route('/v1/<ns>/rdir/admin/broken', methods=['POST'])
 def rdir_admin_broken_set(ns):
     volume = request.args.get('vol')
     if not volume:
@@ -146,7 +146,7 @@ def rdir_admin_broken_set(ns):
     return flask.Response('', 204)
 
 
-@rdir_api.route('/<ns>/rdir/admin/broken', methods=['GET'])
+@rdir_api.route('/v1/<ns>/rdir/admin/broken', methods=['GET'])
 def rdir_admin_broken_get(ns):
     volume = request.args.get('vol')
     if not volume:
@@ -160,7 +160,7 @@ def rdir_admin_broken_get(ns):
                           mimetype='application/json')
 
 
-@rdir_api.route('/<ns>/rdir/admin/lock', methods=['POST'])
+@rdir_api.route('/v1/<ns>/rdir/admin/lock', methods=['POST'])
 def rdir_admin_lock(ns):
     volume = request.args.get('vol')
     if not volume:
@@ -181,7 +181,7 @@ def rdir_admin_lock(ns):
     return flask.Response('', 204)
 
 
-@rdir_api.route('/<ns>/rdir/admin/unlock', methods=['POST'])
+@rdir_api.route('/v1/<ns>/rdir/admin/unlock', methods=['POST'])
 def rdir_admin_unlock(ns):
     volume = request.args.get('vol')
     if not volume:
@@ -191,7 +191,7 @@ def rdir_admin_unlock(ns):
     return flask.Response('', 204)
 
 
-@rdir_api.route('/<ns>/rdir/admin/show', methods=['GET'])
+@rdir_api.route('/v1/<ns>/rdir/admin/show', methods=['GET'])
 def rdir_admin_show(ns):
     volume = request.args.get('vol')
     if not volume:

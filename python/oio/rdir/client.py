@@ -29,7 +29,7 @@ class RdirClient(Client):
 
     def _make_uri(self, action, volume_id):
         rdir_host = self._get_rdir_addr(volume_id)
-        uri = 'http://%s/%s/%s?vol=%s' % (
+        uri = 'http://%s/v1/%s/%s?vol=%s' % (
             rdir_host, self.ns, action, volume_id)
         return uri
 
