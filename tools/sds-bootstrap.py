@@ -624,11 +624,19 @@ def generate (ns, ip, options={}):
 	listing["meta1"] = [str(ip) + ':' + str(m[3]) for m in services if m[0] == 'meta1']
 	listing["meta2"] = [str(ip) + ':' + str(m[3]) for m in services if m[0] == 'meta2']
 	listing["sqlx"] = [str(ip) + ':' + str(m[3]) for m in services if m[0] == 'sqlx']
-	listing["rawx"] = [str(ip) + ':' + str(p[1]) for p in rawx]
+	listing["rawx"] = list()
+	rawx_index = 0
+	for num,port in rawx:
+		i, rawx_index = rawx_index, rawx_index + 1
+		listing["rawx"].append({
+				'num': num,
+				'addr': str(ip) + ':' + str(port),
+				'path': env['DATADIR'] +'/'+ ns +'-rawx-' + str(num)
+		})
 	listing["redis"] = str(ip) + ':' + str(env['PORT_REDIS'])
 	listing["sds_path"] = SDSDIR
 	with open(CFGDIR + '/' + 'test.conf', 'w+') as f:
-		f.write(json.dumps(listing))
+		f.write(json.dumps(listing, indent=2))
 
 def main ():
 	from optparse import OptionParser as OptionParser
