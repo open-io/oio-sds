@@ -45,7 +45,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
             string.digits
         self.chars_id = string.digits + 'ABCDEF'
 
-        self.rawx = 'http://' + self.conf["rawx"][0]
+        self.rawx = 'http://' + self.conf["rawx"][0]['addr']
 
         self.h = hashlib.new('md5')
 
@@ -81,6 +81,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
                       'content_chunksnb': self.content.nb_chunks,
                       'content_path': self.content.path,
                       'content_cid': self.content.id_container,
+                      'content_id': '0000',
                       'chunk_id': self.chunk.id_chunk,
                       'chunk_pos': self.chunk.pos}
         self.blob_c.chunk_put(self.chunk_url, chunk_meta, self.data)

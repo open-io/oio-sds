@@ -4,6 +4,7 @@ from oio.common.utils import read_user_xattr
 RAWX_HEADER_PREFIX = 'x-oio-chunk-meta-'
 
 chunk_headers = {'content_cid': '%scontainer-id' % RAWX_HEADER_PREFIX,
+                 'content_id': '%scontent-id' % RAWX_HEADER_PREFIX,
                  'chunk_id': '%schunk-id' % RAWX_HEADER_PREFIX,
                  'chunk_hash': '%schunk-hash' % RAWX_HEADER_PREFIX,
                  'chunk_pos': '%schunk-pos' % RAWX_HEADER_PREFIX,
@@ -17,6 +18,7 @@ chunk_xattr_keys = {'chunk_hash': 'grid.chunk.hash',
                     'chunk_pos': 'grid.chunk.position',
                     'content_size': 'grid.content.size',
                     'content_cid': 'grid.content.container',
+                    'content_id': 'grid.content.id',
                     'content_path': 'grid.content.path',
                     'content_chunksnb': 'grid.content.nbchunk'}
 
