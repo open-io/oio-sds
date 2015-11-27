@@ -78,11 +78,6 @@ enum http_rc_e action_content_spare (struct req_args_s *args);
 enum http_rc_e action_content_copy (struct req_args_s *args);
 enum http_rc_e action_content_link (struct req_args_s *args);
 
-enum http_rc_e action_rdir_push (struct req_args_s *args);
-enum http_rc_e action_rdir_delete (struct req_args_s *args);
-enum http_rc_e action_rdir_fetch (struct req_args_s *args);
-enum http_rc_e action_rdir_rebuild_status (struct req_args_s *args);
-
 // Admin on SQLX bases
 
 enum http_rc_e action_admin_ping (struct req_args_s *args);
