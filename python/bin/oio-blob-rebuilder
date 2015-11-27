@@ -1,0 +1,98 @@
+#!/usr/bin/env python
+
+import argparse
+
+from oio.blob.rebuilder import BlobRebuilderWorker
+from oio.common.utils import get_logger
+from oio.rdir.client import RdirClient
+
+
+def force_unlock(conf, volume):
+    client = RdirClient(conf)
+    client.admin_unlock(volume)
+
+
+def set_incident_date(conf, volume, date):
+    client = RdirClient(conf)
+    client.admin_incident_set(volume, date)
+
+
+def make_arg_parser():
+    log_parser = argparse.ArgumentParser(add_help=False)
+    levels = ['DEBUG', 'INFO', 'WARN', 'ERROR']
+    log_parser.add_argument('--log-level', choices=levels,
+                            help="Log level")
+    log_parser.add_argument('--log-syslog-prefix',
+                            default='OIO,OPENIO,blob-rebuilder',
+                            help="Syslog prefix")
+    log_parser.add_argument('--log-facility',
+                            help="Log facility")
+    log_parser.add_argument('--log-address',
+                            help="Log address")
+
+    parser = argparse.ArgumentParser(parents=[log_parser])
+    parser.add_argument('namespace', help="Namespace")
+    parser.add_argument('volume', help="The volume id to rebuild")
+    parser.add_argument('--dry-run', action='store_true',
+                        help="Display actions but do nothing")
+    parser.add_argument('--incident-date', type=int,
+                        metavar="timestamp unix in seconds",
+                        help="Set the incident date in a number "
+                             "of seconds since January 1, 1970")
+    parser.add_argument('--force-unlock', action='store_true',
+                        help="Remove the lock held by an other user before "
+                             "beginning the rebuild")
+    parser.add_argument('--rdir-fetch-limit', type=int,
+                        help="Maximum of entries returned in "
+                             "each rdir response")
+    parser.add_argument('--report-interval', type=int,
+                        help="Report interval in seconds")
+    parser.add_argument('--bytes-per-second', type=int,
+                        help="Max bytes per second")
+    parser.add_argument('--chunks-per-second', type=int,
+                        help="Max chunks per second")
+    parser.add_argument('-q', '--quiet', action='store_true',
+                        help="Don't print log on console")
+
+    return parser
+
+
+if __name__ == '__main__':
+    args = make_arg_parser().parse_args()
+
+    conf = {}
+    if args.log_level is not None:
+        conf['log_level'] = args.log_level
+    if args.log_syslog_prefix is not None:
+        conf['syslog_prefix'] = args.log_syslog_prefix
+    if args.log_facility is not None:
+        conf['log_facility'] = args.log_facility
+    if args.log_address is not None:
+        conf['log_address'] = args.log_address
+    conf['dry_run'] = args.dry_run
+    if args.rdir_fetch_limit is not None:
+        conf['rdir_fetch_limit'] = args.rdir_fetch_limit
+    if args.report_interval is not None:
+        conf['report_interval'] = args.report_interval
+    if args.bytes_per_second is not None:
+        conf['bytes_per_second'] = args.bytes_per_second
+    if args.chunks_per_second is not None:
+        conf['chunks_per_second'] = args.chunks_per_second
+    conf['namespace'] = args.namespace
+
+    logger = get_logger(conf, None, not args.quiet)
+
+    if args.force_unlock:
+        logger.info("Unlock the volume %s" % args.volume)
+        force_unlock(conf, args.volume)
+
+    if args.incident_date is not None:
+        logger.info("Set incident date for volume %s to %d"
+                    % (args.volume, args.incident_date))
+        set_incident_date(conf, args.volume, args.incident_date)
+
+    try:
+        worker = BlobRebuilderWorker(conf, logger, args.volume)
+        worker.rebuilder_pass_with_lock()
+    except Exception as e:
+        logger.exception('ERROR in rebuilder: %s' % e)

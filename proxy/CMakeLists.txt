@@ -25,7 +25,6 @@ add_executable(metacd_http
     dir_actions.c
     m2_actions.c
     sqlx_actions.c
-    index_actions.c
     reply.c
     path_parser.c
     transport_http.c)

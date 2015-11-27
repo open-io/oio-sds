@@ -595,10 +595,6 @@ configure_request_handlers (void)
 	// Load Balancing
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/lb/choose/#GET", action_lb_choose);
 
-	/* reverse directory management */
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/rdir/push/#POST", action_rdir_push);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/rdir/fetch/#GET", action_rdir_fetch);
-
 	// Conscience
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/info/#GET", action_conscience_info);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/list/#GET", action_conscience_list);
