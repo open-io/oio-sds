@@ -28,14 +28,13 @@ test_query_success (struct oio_sqlx_client_s *client,
 	gchar **out = NULL;
 	struct oio_sqlx_output_ctx_s context = {0,0,0};
 
-	g_printerr("\n");
 	err = oio_sqlx_client__execute_statement (client,
 			query, params, &context, &out);
 	g_assert_no_error (err);
 	g_assert_nonnull (out);
-	g_printerr("#CTX total:%"G_GINT64_FORMAT
-			" changes:%"G_GINT64_FORMAT
-			" rowid:%"G_GINT64_FORMAT"\n",
+	g_printerr("#SQL: %s\n#CTX total:%"G_GINT64_FORMAT
+			" changes:%"G_GINT64_FORMAT" rowid:%"G_GINT64_FORMAT"\n",
+			query,
 			context.changes, context.total_changes, context.last_rowid);
 	for (gchar **p=out; *p ;++p)
 		g_printerr("%s\n", *p);
@@ -52,7 +51,8 @@ test_local (void)
 
 	factory = oio_sqlx_client_factory__create_local ("NS",
 			"CREATE TABLE IF NOT EXISTS admin (k TEXT PRIMARY KEY, v TEXT NOT NULL);"
-			"CREATE TABLE IF NOT EXISTS sequence (i INT PRIMARY KEY, v TEXT NOT NULL)");
+			"CREATE TABLE IF NOT EXISTS sequence (i INTEGER PRIMARY KEY, v TEXT NOT NULL);"
+			"CREATE TABLE IF NOT EXISTS sequence2 (i INT PRIMARY KEY, v TEXT NOT NULL);");
 
 	struct oio_url_s *url = oio_url_empty ();
 	oio_url_set (url, OIOURL_NS, "MyNamespace");
@@ -66,7 +66,14 @@ test_local (void)
 	test_query_success(client, "INSERT INTO sequence ('v') VALUES ('coin')", NULL);
 	test_query_success(client, "INSERT INTO sequence ('v') VALUES ('coin')", NULL);
 	test_query_success(client, "INSERT INTO sequence ('v') VALUES ('coin')", NULL);
-	test_query_success(client, "SELECT rowid,v FROM sequence", NULL);
+	test_query_success(client, "INSERT INTO sequence ('i','v') VALUES (150,'coin')", NULL);
+	test_query_success(client, "SELECT rowid,i,v FROM sequence", NULL);
+	test_query_success(client, "INSERT INTO sequence2 ('v') VALUES ('coin')", NULL);
+	test_query_success(client, "INSERT INTO sequence2 ('v') VALUES ('coin')", NULL);
+	test_query_success(client, "INSERT INTO sequence2 ('v') VALUES ('coin')", NULL);
+	test_query_success(client, "INSERT INTO sequence2 ('v') VALUES ('coin')", NULL);
+	test_query_success(client, "INSERT INTO sequence2 ('i','v') VALUES (150,'coin')", NULL);
+	test_query_success(client, "SELECT rowid,i,v FROM sequence2", NULL);
 	test_query_success(client, "REPLACE INTO admin ('k','v') VALUES ('k0','v0')", NULL);
 	test_query_success(client, "REPLACE INTO admin ('k','v') VALUES ('k0','v0')", NULL);
 	test_query_success(client, "REPLACE INTO admin ('k','v') VALUES ('k0','v0')", NULL);
