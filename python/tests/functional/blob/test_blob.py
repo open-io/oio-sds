@@ -26,6 +26,7 @@ class TestBlobFunctional(BaseTestCase):
     def _chunk_attr(self, name, data):
         return {
             'X-oio-chunk-meta-content-id': '0123456789ABCDEF',
+            'X-oio-chunk-meta-content-version': 12,
             'X-oio-chunk-meta-content-path': 'test-plop',
             'X-oio-chunk-meta-content-size': len(data),
             'X-oio-chunk-meta-content-chunksnb': 1,
