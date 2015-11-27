@@ -172,24 +172,54 @@ class TestRdirBackend(BaseTestCase):
             "mycontainer0|mycontent2|mychunk": {"mtime": 2},
         })
 
-    def test_rebuild_status(self):
+    def test_rdir_status(self):
         # initial pushes
         self.rdir.chunk_push("myvolume", "mycontainer0", "mycontent1",
-                             "mychunk",
-                             mtime=10)
+                             "mychunk", mtime=10)
         self.rdir.chunk_push("myvolume", "mycontainer1", "mycontent2",
-                             "mychunk",
-                             mtime=10, rtime=20)
+                             "mychunk", mtime=10)
         self.rdir.chunk_push("myvolume", "mycontainer2", "mycontent4",
-                             "mychunk",
-                             mtime=10)
+                             "mychunk", mtime=10)
         self.rdir.chunk_push("myvolume", "mycontainer2", "mycontent5",
-                             "mychunk",
-                             mtime=20, rtime=30)
+                             "mychunk", mtime=20)
 
-        data = self.rdir.chunk_rebuild_status("myvolume")
+        data = self.rdir.chunk_status("myvolume")
         self.assertEqual(data,
                          {
+                             'chunk': {
+                                 'total': 4
+                             },
+                             'container': {
+                                 'mycontainer0': {
+                                     'total': 1
+                                 },
+                                 'mycontainer1': {
+                                     'total': 1
+                                 },
+                                 'mycontainer2': {
+                                     'total': 2
+                                 },
+                             }
+                         })
+
+    def test_rdir_status_rebuild(self):
+        self.rdir.admin_set_broken_date("myvolume", 30)
+        # initial pushes
+        self.rdir.chunk_push("myvolume", "mycontainer0", "mycontent1",
+                             "mychunk", mtime=10)
+        self.rdir.chunk_push("myvolume", "mycontainer1", "mycontent2",
+                             "mychunk", mtime=10, rtime=20)
+        self.rdir.chunk_push("myvolume", "mycontainer2", "mycontent4",
+                             "mychunk", mtime=10)
+        self.rdir.chunk_push("myvolume", "mycontainer2", "mycontent5",
+                             "mychunk", mtime=20, rtime=30)
+
+        data = self.rdir.chunk_status("myvolume")
+        self.assertEqual(data,
+                         {
+                             'rebuild': {
+                                 'incident_date': 30
+                             },
                              'chunk': {
                                  'total': 4,
                                  'rebuilt': 2

@@ -71,7 +71,6 @@ class RdirBackend(object):
                                           value.encode('utf8'))
 
     def chunk_delete(self, volume_id, container_id, content_id, chunk_id):
-        # TODO replace content_path with content_id when available in git
         key = "%s|%s|%s" % (container_id, content_id, chunk_id)
 
         self._get_db_chunk(volume_id).delete(key.encode('utf8'))
@@ -106,9 +105,10 @@ class RdirBackend(object):
             count += 1
         return result
 
-    def chunk_rebuild_status(self, volume_id):
+    def chunk_status(self, volume_id):
         total_chunks = 0
         total_chunks_rebuilt = 0
+        incident_date = self.admin_get_broken_date(volume_id)
         containers = dict()
         for key, value in self._get_db_chunk(volume_id):
             total_chunks += 1
@@ -117,7 +117,9 @@ class RdirBackend(object):
             try:
                 containers[container]['total'] += 1
             except KeyError:
-                containers[container] = {'total': 1, 'rebuilt': 0}
+                containers[container] = {'total': 1}
+                if incident_date is not None:
+                    containers[container]['rebuilt'] = 0
 
             data = json.loads(value)
             rtime = data.get('rtime')
@@ -126,12 +128,12 @@ class RdirBackend(object):
                 containers[container]['rebuilt'] += 1
 
         result = {
-            'chunk': {
-                'total': total_chunks,
-                'rebuilt': total_chunks_rebuilt
-            },
+            'chunk': {'total': total_chunks},
             'container': containers
         }
+        if incident_date is not None:
+            result['rebuild'] = {'incident_date': incident_date}
+            result['chunk']['rebuilt'] = total_chunks_rebuilt
         return result
 
     def admin_set_broken_date(self, volume_id, date):

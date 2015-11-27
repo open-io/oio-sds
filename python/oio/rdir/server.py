@@ -30,7 +30,7 @@ def get_backend():
 
 
 @rdir_api.route('/status', methods=['GET'])
-def status():
+def server_status():
     status = get_backend().status()
     return flask.Response(json.dumps(status), mimetype='application/json')
 
@@ -113,14 +113,14 @@ def rdir_fetch(ns):
     return flask.Response(body, mimetype='application/json')
 
 
-@rdir_api.route('/<ns>/rdir/rebuild_status', methods=['GET'])
-def rdir_rebuild_status(ns):
+@rdir_api.route('/<ns>/rdir/status', methods=['GET'])
+def rdir_status(ns):
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
     pretty = request.args.get('pretty')
 
-    data = get_backend().chunk_rebuild_status(volume)
+    data = get_backend().chunk_status(volume)
 
     if pretty:
         body = json.dumps(data, indent=4)

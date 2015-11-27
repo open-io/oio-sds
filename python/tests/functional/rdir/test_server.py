@@ -96,12 +96,12 @@ class TestRdirServer(BaseTestCase):
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(json.loads(resp.data), {})
 
-    def test_rebuild_status(self):
-        resp = self.app.get("/NS/rdir/rebuild_status",
+    def test_rdir_status(self):
+        resp = self.app.get("/NS/rdir/status",
                             query_string={'vol': "xxx"})
         self.assertEqual(resp.status_code, 200)
         self.assertEqual(json.loads(resp.data),
-                         {'chunk': {'total': 0, 'rebuilt': 0},
+                         {'chunk': {'total': 0},
                           'container': {}
                           })
 
