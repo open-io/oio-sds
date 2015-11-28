@@ -1,4 +1,7 @@
-import unittest, string, struct, binascii, logging
+import binascii
+import logging
+import struct
+import unittest
 import simplejson as json
 from tests.utils import BaseTestCase
 
@@ -75,7 +78,7 @@ class TestMeta2Functional(BaseTestCase):
             for c0 in "01234567":
                 for c1 in "01234567":
                     i, index = index, index + 1
-                    yield i, '{0}/{1}/plop'.format(c0,c1)
+                    yield i, '{0}/{1}/plop'.format(c0, c1)
 
         # Fill some contents
         for i, name in names():
@@ -95,9 +98,9 @@ class TestMeta2Functional(BaseTestCase):
                        p+"mime-type": "application/octet-stream",
                        p+"chunk-method": "plain/bytes"}
             params = self.param_content('plop-0', name)
-            body = json.dumps([chunk,])
+            body = json.dumps([chunk, ])
             resp = self.session.post(self.url_content('create'),
-                                    params=params, headers=headers, data=body)
+                                     params=params, headers=headers, data=body)
             self.assertEqual(resp.status_code, 204)
 
         params = self.param_ref('plop-0')
@@ -143,7 +146,7 @@ class TestMeta2Functional(BaseTestCase):
 
     def test_properties(self):
         params = self.param_ref('plop-0')
-        
+
         # test Get/Set/Del on unexistant container
         resp = self.session.post(self.url_container('get_properties'),
                                  params=params)
@@ -173,7 +176,6 @@ class TestMeta2Functional(BaseTestCase):
         self.assertEqual(resp.status_code, 200)
 
         # now let's retry on real properties
-
 
     def test_raw(self):
         pass
