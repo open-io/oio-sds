@@ -82,6 +82,7 @@ class TestBlobAuditorFunctional(BaseTestCase):
                       'content_path': self.content.path,
                       'content_cid': self.content.id_container,
                       'content_id': '0000',
+                      'content_version': 1,
                       'chunk_id': self.chunk.id_chunk,
                       'chunk_pos': self.chunk.pos}
         self.blob_c.chunk_put(self.chunk_url, chunk_meta, self.data)
