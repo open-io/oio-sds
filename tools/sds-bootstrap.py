@@ -92,6 +92,16 @@ command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},account,1 -p 1 -m '${EXE_PREFIX}-
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
+template_rdir_server_gridinit = """
+[service.${NS}-rdir-server]
+group=${NS},localhost,rdir-server
+on_die=respawn
+enabled=true
+start_at_boot=false
+command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},rdir,1 -p 1 -m '${EXE_PREFIX}-rdir-monitor.py' -i '${NS}|rdir|${IP}:${PORT}' -c '${EXE_PREFIX}-rdir-server ${CFGDIR}/${NS}-rdir-server.conf'
+env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
+"""
+
 template_proxy_gridinit = """
 [service.${NS}-proxy]
 group=${NS},localhost,proxy
@@ -413,6 +423,19 @@ log_address = /dev/log
 syslog_prefix = OIO,${NS},account,1
 """
 
+template_rdir_server = """
+[rdir-server]
+bind_addr = ${IP}
+bind_port = ${PORT}
+db_path= ${DB_PATH}
+# Currently, only 1 worker is allowed to avoid concurrent access to leveldb database
+workers = 1
+log_facility = LOG_LOCAL0
+log_level = INFO
+log_address = /dev/log
+syslog_prefix = OIO,${NS},rdir,1
+"""
+
 HOME = str(os.environ['HOME'])
 EXE_PREFIX = "@EXE_PREFIX@"
 OIODIR = HOME + '/.oio'
@@ -465,6 +488,7 @@ def generate (ns, ip, options={}):
 	port_proxy = next_port()
 	port_account = next_port()
 	port_event_agent = next_port()
+	port_rdir = next_port()
 	rawx = []
 	services = []
 
@@ -600,6 +624,17 @@ def generate (ns, ip, options={}):
 		f.write(tpl.safe_substitute(env))
 	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
 		tpl = Template(template_account_server_gridinit)
+		f.write(tpl.safe_substitute(env))
+
+	# rdir-server
+	env['PORT'] = port_rdir
+	env['DB_PATH'] = DATADIR + '/' + ns + '-rdir-1'
+	mkdir_noerror(env['DB_PATH'])
+	with open(CFGDIR + '/' + ns + '-rdir-server.conf', 'w+') as f:
+		tpl = Template(template_rdir_server)
+		f.write(tpl.safe_substitute(env))
+	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
+		tpl = Template(template_rdir_server_gridinit)
 		f.write(tpl.safe_substitute(env))
 
 	# Event agent configuration

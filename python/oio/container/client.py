@@ -15,13 +15,16 @@ class ContainerClient(Client):
         uri = 'v3.0/%s/%s' % (self.ns, target)
         return uri
 
-    def _make_params(self, acct=None, ref=None, path=None, cid=None):
+    def _make_params(self, acct=None, ref=None, path=None, cid=None,
+                     content=None):
         if cid:
             params = {'cid': cid}
         else:
             params = {'acct': acct, 'ref': ref}
         if path:
             params.update({'path': path})
+        if content:
+            params.update({'content': content})
         return params
 
     def container_create(self, acct=None, ref=None, cid=None, **kwargs):
@@ -137,9 +140,10 @@ class ContainerClient(Client):
         params = self._make_params(acct, ref, path, cid=cid)
         resp, body = self._request('POST', uri, params=params)
 
-    def content_show(self, acct=None, ref=None, path=None, cid=None, **kwargs):
+    def content_show(self, acct=None, ref=None, path=None, cid=None,
+                     content=None, **kwargs):
         uri = self._make_uri('content/show')
-        params = self._make_params(acct, ref, path, cid=cid)
+        params = self._make_params(acct, ref, path, cid=cid, content=content)
         resp, body = self._request('GET', uri, params=params)
         return body
 

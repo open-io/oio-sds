@@ -1,5 +1,7 @@
 language: python
 python: 2.7
+sudo: required
+dist: trusty
 env:
   - TOX_ENV=pep8
   - TOX_ENV=py27
@@ -13,3 +15,6 @@ addons:
   apt:
     packages:
       - libattr1-dev
+      - libleveldb-dev
+      - libleveldb1v5
+      - g++
