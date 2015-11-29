@@ -8,7 +8,9 @@ from oio.common.utils import get_logger, int_value, ratelimit, paths_gen
 
 SLEEP_TIME = 30
 
+
 class BlobIndexerWorker(object):
+
     def __init__(self, conf, logger, volume):
         self.conf = conf
         self.logger = logger
