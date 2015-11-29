@@ -6,6 +6,17 @@ import simplejson as json
 from tests.utils import BaseTestCase
 
 
+def gen_props(n, v):
+    """Generates 'n' properties tuples, whose value is prefixed with 'v'"""
+    for i in range(n):
+        yield "user.k{0}".format(i), v+str(i)
+
+
+def user_props(b):
+    """Filters user's properties from the set of the container properties."""
+    return dict((k, v) for k, v in b.items() if k.startswith("user."))
+
+
 class TestMeta2Functional(BaseTestCase):
 
     def setUp(self):
@@ -144,10 +155,13 @@ class TestMeta2Functional(BaseTestCase):
         self.check_list_output(resp.json(), 8, 0)
         del params['marker_end']
 
-    def test_properties(self):
+    def check_prop_output(self, body, ref):
+        self.assertIsInstance(body, dict)
+        self.assertDictEqual(user_props(body), ref)
+
+    def test_properties_noent(self):
         params = self.param_ref('plop-0')
 
-        # test Get/Set/Del on unexistant container
         resp = self.session.post(self.url_container('get_properties'),
                                  params=params)
         self.assertEqual(resp.status_code, 404)
@@ -158,27 +172,112 @@ class TestMeta2Functional(BaseTestCase):
                                  params=params, data=json.dumps([]))
         self.assertEqual(resp.status_code, 404)
 
-        # then create it ...
+    def test_properties_none(self):
+        params = self.param_ref('plop-0')
+
+        # create the containers
         headers = {"X-oio-action-mode": "autocreate"}
         resp = self.session.post(self.url_container('create'),
                                  params=params, headers=headers)
         self.assertEqual(resp.status_code, 204)
 
-        # ... and retry
+        # chek no props after creation
         resp = self.session.post(self.url_container('get_properties'),
                                  params=params)
         self.assertEqual(resp.status_code, 200)
+        body = resp.json()
+        self.assertIsInstance(body, dict)
+        self.assertGreater(len(body), 0)
+        self.assertDictEqual(user_props(body), {})
+
+        # check set/del works on no set
         resp = self.session.post(self.url_container('set_properties'),
                                  params=params)
         self.assertEqual(resp.status_code, 200)
+
         resp = self.session.post(self.url_container('del_properties'),
                                  params=params, data=json.dumps([]))
         self.assertEqual(resp.status_code, 200)
 
-        # now let's retry on real properties
+    def test_properties(self):
+        params = self.param_ref('plop-0')
 
-    def test_raw(self):
-        pass
+        # Create the container
+        headers = {"X-oio-action-mode": "autocreate"}
+        resp = self.session.post(self.url_container('create'),
+                                 params=params, headers=headers)
+        self.assertEqual(resp.status_code, 204)
+
+        # Check the simple SET works
+        data = dict(gen_props(256, 'val'))
+        resp = self.session.post(self.url_container('set_properties'),
+                                 params=params, data=json.dumps(data))
+        self.assertEqual(resp.status_code, 200)
+
+        resp = self.session.post(self.url_container('get_properties'),
+                                 params=params)
+        self.assertEqual(resp.status_code, 200)
+        self.check_prop_output(resp.json(), data)
+
+        # check SET overriding works
+        change = {"user.k0": "XXX"}
+        resp = self.session.post(self.url_container('set_properties'),
+                                 params=params, data=json.dumps(change))
+        self.assertEqual(resp.status_code, 200)
+
+        data.update(change)
+        resp = self.session.post(self.url_container('get_properties'),
+                                 params=params)
+        self.assertEqual(resp.status_code, 200)
+        self.check_prop_output(resp.json(), data)
+
+        # check the FLUSH/REPLACE works
+        data = dict(gen_props(16, 'XXXX'))
+        params1 = dict(params)
+        params1['flush'] = '1'
+        resp = self.session.post(self.url_container('set_properties'),
+                                 params=params1, data=json.dumps(data))
+        self.assertEqual(resp.status_code, 200)
+
+        resp = self.session.post(self.url_container('get_properties'),
+                                 params=params)
+        self.assertEqual(resp.status_code, 200)
+        self.check_prop_output(resp.json(), data)
+
+        # check the simple delete works
+        resp = self.session.post(self.url_container('del_properties'),
+                                 params=params, data=json.dumps(["user.k0"]))
+        self.assertEqual(resp.status_code, 200)
+
+        del data["user.k0"]
+        resp = self.session.post(self.url_container('get_properties'),
+                                 params=params)
+        self.assertEqual(resp.status_code, 200)
+        self.check_prop_output(resp.json(), data)
+
+        # check the DELETE(all) works
+        resp = self.session.post(self.url_container('del_properties'),
+                                 params=params, data=json.dumps([]))
+        self.assertEqual(resp.status_code, 200)
+
+        data = dict()
+        resp = self.session.post(self.url_container('get_properties'),
+                                 params=params)
+        self.assertEqual(resp.status_code, 200)
+        self.check_prop_output(resp.json(), data)
+
+        # check the FLUSH works
+        data = dict(gen_props(32, "kjlkqjlxqjs"))
+        resp = self.session.post(self.url_container('set_properties'),
+                                 params=params, data=json.dumps(data))
+        self.assertEqual(resp.status_code, 200)
+
+        params1 = dict(params)
+        params1['flush'] = '1'
+        resp = self.session.post(self.url_container('set_properties'),
+                                 params=params1, data=json.dumps({}))
+        self.assertEqual(resp.status_code, 200)
+        self.check_prop_output(resp.json(), {})
 
     def test_touch(self):
         params = self.param_ref('plop-0')
@@ -192,95 +291,8 @@ class TestMeta2Functional(BaseTestCase):
         resp = self.session.post(self.url_container('touch'), params=params)
         self.assertEqual(resp.status_code, 204)
 
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_containers_actions_getProperties(self):
-        resp = self.session.put(self.addr_m2_ref)
-        self.assertEqual(resp.status_code, 204)
-
-        action = {"action": "GetProperties", "args": None}
-        resp = self.session.post(self.addr_m2_ref_action, json.dumps(action))
-        self.assertEqual(resp.status_code, 200)
-        self.assertEqual(type(resp.json()), dict)
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_containers_actions_getProperties_ref_no_link(self):
-        action = {"action": "GetProperties", "args": None}
-        resp = self.session.post(self.addr_m2_alone_ref_action,
-                                 json.dumps(action))
-        self.assertEqual(resp.status_code, 404)
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_containers_actions_getProperties_ref_link(self):
-        action = {"action": "GetProperties", "args": None}
-        resp = self.session.post(self.addr_m2_ref_action, json.dumps(action))
-        self.assertEqual(resp.status_code, 200)
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_containers_actions_setProperties(self):
-        resp = self.session.put(self.addr_m2_ref)
-        self.assertEqual(resp.status_code, 204)
-
-        resp = self.session.post(self.addr_m2_ref_action, json.dumps(
-            {"action": "SetProperties", "args": {"sys.user.name": self.prop}}
-        ))
-        self.assertEqual(resp.status_code, 200)
-
-        resp = self.session.post(self.addr_m2_ref_action, json.dumps(
-            {"action": "GetProperties", "args": None}
-        )).json()["sys.user.name"]
-        self.assertEqual(resp, self.prop)
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_containers_actions_setProperties_wrong(self):
-        resp = self.session.put(self.addr_m2_ref)
-        self.assertEqual(resp.status_code, 204)
-
-        resp = self.session.post(self.addr_m2_ref_action, json.dumps(
-            {"action": "SetProperties", "args": {"error": self.prop}}
-        ))
-        self.assertEqual(resp.status_code, 400)
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_containers_actions_setProperties_ref_no_link(self):
-        resp = self.session.post(self.addr_m2_alone_ref_action, json.dumps(
-            {"action": "SetProperties", "args": {"sys.user.name": self.prop}}
-        ))
-        self.assertEqual(resp.status_code, 404)
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_containers_actions_setProperties_ref_link(self):
-        resp = self.session.post(self.addr_m2_ref_action, json.dumps(
-            {"action": "SetProperties", "args": {"sys.user.name": self.prop}}
-        ))
-        self.assertEqual(resp.status_code, 404)
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_containers_actions_DelProperties(self):
-        resp = self.session.put(self.addr_m2_ref)
-        self.assertEqual(resp.status_code, 204)
-
-        resp = self.session.post(self.addr_m2_ref_action, json.dumps(
-            {"action": "DelProperties", "args": ["sys.user.name"]}
-        ))
-        self.assertEqual(resp.status_code, 200)
-
-        resp = self.session.post(self.addr_m2_ref_action, json.dumps(
-            {"action": "GetProperties", "args": None}
-        )).json()
-        self.assertFalse("sys.user.name" in resp.keys())
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_containers_actions_DelProperties_no_link(self):
-        resp = self.session.post(self.addr_m2_alone_ref_action, json.dumps(
-            {"action": "DelProperties", "args": ["sys.user.name"]}
-        ))
-        self.assertEqual(resp.status_code, 404)
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_containers_actions_DelProperties_link(self):
-        action = {"action": "DelProperties", "args": ["sys.user.name"]}
-        resp = self.session.post(self.addr_m2_ref_action, json.dumps(action))
-        self.assertEqual(resp.status_code, 404)
+    def test_raw(self):
+        pass
 
     @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
     def test_containers_actions_rawInsert(self):  # to be improved
