@@ -96,7 +96,7 @@ GByteArray* sqlx_pack_FREEZE (struct sqlx_name_s *name);
 GByteArray* sqlx_pack_DISABLE (struct sqlx_name_s *name);
 GByteArray* sqlx_pack_DISABLE_DISABLED (struct sqlx_name_s *name);
 
-GByteArray* sqlx_pack_PROPGET (struct sqlx_name_s *name, const gchar * const *k);
+GByteArray* sqlx_pack_PROPGET (struct sqlx_name_s *name);
 GByteArray* sqlx_pack_PROPDEL (struct sqlx_name_s *name, const gchar * const *k);
 
 /* @param kv a NULL-terminated array of strings, containing N pairs
