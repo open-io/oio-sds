@@ -10,7 +10,9 @@ chunk_headers = {'content_cid': '%scontainer-id' % RAWX_HEADER_PREFIX,
                  'chunk_pos': '%schunk-pos' % RAWX_HEADER_PREFIX,
                  'content_path': '%scontent-path' % RAWX_HEADER_PREFIX,
                  'content_size': '%scontent-size' % RAWX_HEADER_PREFIX,
-                 'content_chunksnb': '%scontent-chunksnb' % RAWX_HEADER_PREFIX}
+                 'content_chunksnb': '%scontent-chunksnb' % RAWX_HEADER_PREFIX,
+                 'content_id': '%scontent-id' % RAWX_HEADER_PREFIX,
+                 'content_version': '%scontent-version' % RAWX_HEADER_PREFIX}
 
 chunk_xattr_keys = {'chunk_hash': 'grid.chunk.hash',
                     'chunk_size': 'grid.chunk.size',
@@ -20,6 +22,8 @@ chunk_xattr_keys = {'chunk_hash': 'grid.chunk.hash',
                     'content_cid': 'grid.content.container',
                     'content_id': 'grid.content.id',
                     'content_path': 'grid.content.path',
+                    'content_id': 'grid.content.id',
+                    'content_version': 'grid.content.version',
                     'content_chunksnb': 'grid.content.nbchunk'}
 
 

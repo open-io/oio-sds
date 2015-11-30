@@ -17,10 +17,8 @@ class Client(object):
         self.session = requests.Session()
         self.endpoint = 'http://%s' % ns_conf.get('proxy')
 
-    def _request(self, method, url, **kwargs):
-        endpoint = self.endpoint
-        url = '/'.join([endpoint.rstrip('/'), url.lstrip('/')])
-        resp = self.session.request(method, url, **kwargs)
+    def _direct_request(self, method, full_url, **kwargs):
+        resp = self.session.request(method, full_url, **kwargs)
         try:
             body = resp.json()
         except ValueError:
@@ -28,3 +26,8 @@ class Client(object):
         if resp.status_code >= 400:
             raise from_response(resp, body)
         return resp, body
+
+    def _request(self, method, url, **kwargs):
+        endpoint = self.endpoint
+        url = '/'.join([endpoint.rstrip('/'), url.lstrip('/')])
+        return self._direct_request(method, url, **kwargs)
