@@ -17,6 +17,7 @@
 import flask
 from flask import request
 from flask import current_app
+from werkzeug.exceptions import BadRequest
 from gunicorn.glogging import Logger
 
 from oio.rdir.server_db import RdirBackend
@@ -29,6 +30,11 @@ def get_backend():
     return current_app.backend
 
 
+def _check_ns(ns):
+    if ns != current_app.ns:
+        raise BadRequest("Bad namespace")
+
+
 @rdir_api.route('/status', methods=['GET'])
 def server_status():
     status = get_backend().status()
@@ -37,6 +43,7 @@ def server_status():
 
 @rdir_api.route('/v1/<ns>/rdir/push', methods=['POST'])
 def rdir_push(ns):
+    _check_ns(ns)
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
@@ -69,6 +76,7 @@ def rdir_push(ns):
 
 @rdir_api.route('/v1/<ns>/rdir/delete', methods=['DELETE'])
 def rdir_delete(ns):
+    _check_ns(ns)
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
@@ -88,6 +96,7 @@ def rdir_delete(ns):
 
 @rdir_api.route('/v1/<ns>/rdir/fetch', methods=['POST'])
 def rdir_fetch(ns):
+    _check_ns(ns)
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
@@ -115,6 +124,7 @@ def rdir_fetch(ns):
 
 @rdir_api.route('/v1/<ns>/rdir/status', methods=['GET'])
 def rdir_status(ns):
+    _check_ns(ns)
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
@@ -132,6 +142,7 @@ def rdir_status(ns):
 
 @rdir_api.route('/v1/<ns>/rdir/admin/incident', methods=['POST'])
 def rdir_admin_incident_set(ns):
+    _check_ns(ns)
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
@@ -148,6 +159,7 @@ def rdir_admin_incident_set(ns):
 
 @rdir_api.route('/v1/<ns>/rdir/admin/incident', methods=['GET'])
 def rdir_admin_incident_get(ns):
+    _check_ns(ns)
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
@@ -162,6 +174,7 @@ def rdir_admin_incident_get(ns):
 
 @rdir_api.route('/v1/<ns>/rdir/admin/lock', methods=['POST'])
 def rdir_admin_lock(ns):
+    _check_ns(ns)
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
@@ -183,6 +196,7 @@ def rdir_admin_lock(ns):
 
 @rdir_api.route('/v1/<ns>/rdir/admin/unlock', methods=['POST'])
 def rdir_admin_unlock(ns):
+    _check_ns(ns)
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
@@ -193,6 +207,7 @@ def rdir_admin_unlock(ns):
 
 @rdir_api.route('/v1/<ns>/rdir/admin/show', methods=['GET'])
 def rdir_admin_show(ns):
+    _check_ns(ns)
     volume = request.args.get('vol')
     if not volume:
         return flask.Response('Missing volume id', 400)
@@ -205,6 +220,7 @@ def create_app(conf, **kwargs):
     app = flask.Flask(__name__)
     app.register_blueprint(rdir_api)
     app.backend = RdirBackend(conf)
+    app.ns = conf['namespace']
     # we want exceptions to be logged
     if conf.get('log_level') == 'DEBUG':
         app.config['PROPAGATE_EXCEPTIONS'] = True

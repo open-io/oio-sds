@@ -10,7 +10,8 @@ class TestRdirServer(BaseTestCase):
         super(TestRdirServer, self).setUp()
 
         self.db_path = tempfile.mkdtemp()
-        self.conf = {'db_path': self.db_path}
+        self.conf = {'db_path': self.db_path,
+                     'namespace': 'NS'}
 
         self.app = create_app(self.conf).test_client()
 
@@ -132,6 +133,11 @@ class TestRdirServer(BaseTestCase):
         resp = self.app.post("/v1/NS/rdir/admin/unlock",
                              query_string={'vol': "xxx"})
         self.assertEqual(resp.status_code, 204)
+
+    def test_rdir_bad_ns(self):
+        resp = self.app.get("/v1/badns/rdir/status",
+                            query_string={'vol': "xxx"})
+        self.assertEqual(resp.status_code, 400)
 
     def test_status(self):
         resp = self.app.get('/status')

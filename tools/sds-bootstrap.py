@@ -427,6 +427,7 @@ template_rdir_server = """
 [rdir-server]
 bind_addr = ${IP}
 bind_port = ${PORT}
+namespace = ${NS}
 db_path= ${DB_PATH}
 # Currently, only 1 worker is allowed to avoid concurrent access to leveldb database
 workers = 1
