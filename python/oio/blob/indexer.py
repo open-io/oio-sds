@@ -6,6 +6,7 @@ from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
 from oio.common.utils import get_logger, int_value, ratelimit, paths_gen
 
+SLEEP_TIME = 30
 
 class BlobIndexerWorker(object):
     def __init__(self, conf, logger, volume):
@@ -115,8 +116,13 @@ class BlobIndexer(Daemon):
         self.volume = volume
 
     def run(self, *args, **kwargs):
-        try:
-            worker = BlobIndexerWorker(self.conf, self.logger, self.volume)
-            worker.index_pass()
-        except Exception as e:
-            self.logger.exception('ERROR during indexing: %s' % e)
+        while True:
+            try:
+                worker = BlobIndexerWorker(self.conf, self.logger, self.volume)
+                worker.index_pass()
+            except Exception as e:
+                self.logger.exception('ERROR during indexing: %s' % e)
+            self._sleep()
+
+    def _sleep(self):
+        time.sleep(SLEEP_TIME)
