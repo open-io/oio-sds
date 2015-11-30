@@ -6,4 +6,3 @@ redis
 gunicorn
 pyxattr>=0.4
 simplejson>=2.0.9
-plyvel

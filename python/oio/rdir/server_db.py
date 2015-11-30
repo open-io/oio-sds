@@ -15,10 +15,9 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import os
-import plyvel
-
 from oio.common.exceptions import ServerException
 from oio.common.utils import json
+from plyvel import DB
 
 
 # FIXME this class is not thread-safe (see _get_db, push, lock) but it
@@ -28,6 +27,7 @@ from oio.common.utils import json
 # In multithreaded environement, the push function needs transaction to update
 # an entry in a consistent manner.
 class RdirBackend(object):
+
     def __init__(self, conf):
         self.db_path = conf.get('db_path')
         self.dbs = {}
@@ -39,7 +39,7 @@ class RdirBackend(object):
             db = self.dbs[volume_id]
         except KeyError:
             path = "%s/%s" % (self.db_path, volume_id)
-            self.dbs[volume_id] = plyvel.DB(path, create_if_missing=True)
+            self.dbs[volume_id] = DB(path, create_if_missing=True)
             db = self.dbs[volume_id]
         return db
 
