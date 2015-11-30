@@ -322,3 +322,34 @@ class TestRdirBackend(BaseTestCase):
         res = self.rdir.admin_show("myvolume")
         self.assertEqual(res, {'incident_date': "1234",
                                'lock': "a functionnal test"})
+
+    def test_admin_clear(self):
+        # populate the db
+        self.rdir.admin_set_incident_date("myvolume", 666)
+        self.rdir.chunk_push("myvolume", "mycontainer1", "mycontent",
+                             "mychunk", mtime=1)
+        self.rdir.chunk_push("myvolume", "mycontainer2", "mycontent1",
+                             "mychunk", mtime=2, rtime=3)
+
+        # clear rebuilt chunk entries
+        count = self.rdir.admin_clear("myvolume", False)
+        self.assertEqual(count, 1)
+
+        # check db state
+        data = self.rdir.chunk_fetch("myvolume")
+        self.assertEqual(data, {
+            "mycontainer1|mycontent|mychunk": {'mtime': 1}
+        })
+        self.assertEqual(self.rdir.admin_get_incident_date("myvolume"), None)
+
+        # populate again the db
+        self.rdir.chunk_push("myvolume", "mycontainer3", "mycontent1",
+                             "mychunk", mtime=3, rtime=4)
+
+        # clear all entries
+        count = self.rdir.admin_clear("myvolume", True)
+        self.assertEqual(count, 2)
+
+        # check db state
+        data = self.rdir.chunk_fetch("myvolume")
+        self.assertEqual(data, {})

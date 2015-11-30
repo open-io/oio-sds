@@ -145,6 +145,18 @@ class RdirBackend(object):
             return None
         return int(ret)
 
+    def admin_clear(self, volume_id, clear_all):
+        db = self._get_db_chunk(volume_id)
+        count = 0
+        for key, value in db:
+            if not clear_all:
+                data = json.loads(value)
+            if clear_all or 'rtime' in data:
+                count += 1
+                db.delete(key)
+        self._get_db_admin(volume_id).delete('incident_date')
+        return count
+
     def admin_lock(self, volume_id, who):
         ret = self._get_db_admin(volume_id).get('lock')
         if ret is not None:

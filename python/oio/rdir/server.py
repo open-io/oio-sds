@@ -172,6 +172,32 @@ def rdir_admin_incident_get(ns):
                           mimetype='application/json')
 
 
+@rdir_api.route('/v1/<ns>/rdir/admin/clear', methods=['POST'])
+def rdir_admin_clear(ns):
+    _check_ns(ns)
+    volume = request.args.get('vol')
+    if not volume:
+        return flask.Response('Missing volume id', 400)
+
+    decoded = flask.request.get_json(force=True)
+    clear_all = decoded.get('all', False)
+    if not isinstance(clear_all, bool):
+        return flask.Response('"all" must be true or false', 400)
+
+    lock = get_backend().admin_lock(volume, 'admin_clear')
+    if lock is not None:
+        return flask.Response("Already locked by %s" % lock, 403,
+                              mimetype='application/json')
+
+    nb = get_backend().admin_clear(volume, clear_all)
+
+    get_backend().admin_unlock(volume)
+
+    resp = {'removed': nb}
+    return flask.Response(json.dumps(resp), 200,
+                          mimetype='application/json')
+
+
 @rdir_api.route('/v1/<ns>/rdir/admin/lock', methods=['POST'])
 def rdir_admin_lock(ns):
     _check_ns(ns)

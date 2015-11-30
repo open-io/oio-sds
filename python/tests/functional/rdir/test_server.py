@@ -139,6 +139,44 @@ class TestRdirServer(BaseTestCase):
                             query_string={'vol': "xxx"})
         self.assertEqual(resp.status_code, 400)
 
+    def test_rdir_clear_and_lock(self):
+        # push
+        data = {
+            'container_id': "mycontainer",
+            'content_id': "mycontent",
+            'chunk_id': "mychunk",
+            'mtime': 1234
+        }
+        resp = self.app.post("/v1/NS/rdir/push", query_string={'vol': "xxx"},
+                             data=json.dumps(data),
+                             content_type="application/json")
+        self.assertEqual(resp.status_code, 204)
+
+        # lock
+        data = {'who': "a functionnal test"}
+        resp = self.app.post("/v1/NS/rdir/admin/lock",
+                             query_string={'vol': "xxx"},
+                             data=json.dumps(data))
+        self.assertEqual(resp.status_code, 204)
+
+        # try to clear while the lock is held
+        resp = self.app.post("/v1/NS/rdir/admin/clear",
+                             query_string={'vol': "xxx"},
+                             data=json.dumps({}))
+        self.assertEqual(resp.status_code, 403)
+
+        # unlock
+        resp = self.app.post("/v1/NS/rdir/admin/unlock",
+                             query_string={'vol': "xxx"})
+        self.assertEqual(resp.status_code, 204)
+
+        # clear all entries
+        resp = self.app.post("/v1/NS/rdir/admin/clear",
+                             query_string={'vol': "xxx"},
+                             data=json.dumps({'all': True}))
+        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(json.loads(resp.data), {'removed': 1})
+
     def test_status(self):
         resp = self.app.get('/status')
         self.assertEqual(resp.status_code, 200)
