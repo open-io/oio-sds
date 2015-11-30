@@ -45,10 +45,10 @@ class BaseTestCase(testtools.TestCase):
     def _url_ref(self, action):
         return self._url("reference") + '/' + action
 
-    def _url_container(self, action):
+    def url_container(self, action):
         return self._url("container") + '/' + action
 
-    def _url_content(self, action):
+    def url_content(self, action):
         return self._url("content") + '/' + action
 
     def param_srv(self, ref, srvtype):

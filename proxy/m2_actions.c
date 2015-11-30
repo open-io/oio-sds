@@ -756,13 +756,24 @@ retry:
 static enum http_rc_e
 action_m2_container_destroy (struct req_args_s *args)
 {
+	guint32 flags = 0;
+	if (_request_has_flag (args, PROXYD_HEADER_MODE, "force"))
+		flags = M2V2_DESTROY_FORCE;
+	if (_request_has_flag (args, PROXYD_HEADER_MODE, "flush"))
+		flags = M2V2_DESTROY_FLUSH;
+	if (_request_has_flag (args, PROXYD_HEADER_MODE, "purge"))
+		flags = M2V2_DESTROY_PURGE;
+	if (_request_has_flag (args, PROXYD_HEADER_MODE, "local"))
+		flags = M2V2_DESTROY_LOCAL;
+
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_DESTROY (m2->host, args->url, 0);
+		return m2v2_remote_execute_DESTROY (m2->host, args->url, flags);
 	}
 
 	GError *err;
-	if (NULL != (err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook)))
+	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	if (NULL != err)
 		return _reply_m2_error(args, err);
 	return _reply_nocontent (args);
 }
