@@ -1,5 +1,5 @@
 import simplejson as json
-
+import unittest
 from tests.utils import BaseTestCase
 
 
@@ -8,10 +8,8 @@ class TestDirectoryFunctional(BaseTestCase):
     def setUp(self):
         super(TestDirectoryFunctional, self).setUp()
         self._reload()
-        self.session.close()
 
     def tearDown(self):
-        self.session.close()
         super(TestDirectoryFunctional, self).tearDown()
         for ref in ('plop-'+str(i) for i in range(5)):
             try:
@@ -29,6 +27,7 @@ class TestDirectoryFunctional(BaseTestCase):
         resp = self.session.delete(self._url_ref("plop") + "/no/such/resource")
         self.assertEqual(resp.status_code, 404)
 
+    @unittest.skip("HEAD not managed yet")
     def test_reference_head_invalid(self):
         resp = self.session.head(self._url_ref('show') + "/no/such/resource")
         self.assertEqual(resp.status_code, 404)
