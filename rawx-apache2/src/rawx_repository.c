@@ -228,7 +228,12 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 	}
 
 	if (r->method_number == M_POST || r->method_number == M_PUT) {
-		if(resource->exists)
+		if (resource->info->chunk.id) {
+			if (0 != apr_strnatcasecmp(resource->info->chunk.id, resource->info->hex_chunkid))
+				return server_create_and_stat_error(request_get_server_config(r), r->pool,
+						HTTP_BAD_REQUEST, 0, "chunk-id mismatch");
+		}
+		if (resource->exists)
 			return server_create_and_stat_error(request_get_server_config(r), r->pool,
 				HTTP_CONFLICT, 0, "Resource busy or already exists");
 		request_parse_query(r, resource);
@@ -457,7 +462,8 @@ dav_rawx_set_headers(request_rec *r, const dav_resource *resource)
 	ap_set_etag(r);
 
 	/* we accept byte-ranges */
-	apr_table_setn(r->headers_out, apr_pstrdup(r->pool, "Accept-Ranges"), apr_pstrdup(r->pool, "bytes"));
+	apr_table_setn(r->headers_out, apr_pstrdup(r->pool, "Accept-Ranges"),
+			apr_pstrdup(r->pool, "bytes"));
 
 	/* set up the Content-Length header */
 	ap_set_content_length(r, resource->info->finfo.size);

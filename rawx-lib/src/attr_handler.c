@@ -322,7 +322,7 @@ _load_from_file_attr(struct attr_handle_s *attr_handle, GError ** error)
 {
 	FILE *stream;
 	struct stat chunk_stats;
-	char lineBuf[65536];
+	char lineBuf[8192];
 
 	EXTRA_ASSERT(attr_handle != NULL);
 	EXTRA_ASSERT(attr_handle->attr_hash != NULL);
@@ -673,7 +673,7 @@ get_rawx_info_in_attr(const char *pathname, GError ** error,
 		GET(ATTR_NAME_CONTENT_VERSION, content->version);
 		GET(ATTR_NAME_CONTENT_SIZE, content->size);
 		GET(ATTR_NAME_CONTENT_NBCHUNK, content->chunk_nb);
-		GET(ATTR_NAME_CONTENT_STGPOL, content->chunk_nb);
+		GET(ATTR_NAME_CONTENT_STGPOL, content->storage_policy);
 	}
 
 	if (chunk) {

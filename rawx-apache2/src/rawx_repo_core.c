@@ -55,11 +55,9 @@ apr_storage_policy_clean(void *p)
 static void
 __set_header(request_rec *r, const char *n, const char *v)
 {
-	if (r && n && v) {
-		apr_table_setn(r->headers_out, apr_pstrcat(r->pool, RAWX_HEADER_PREFIX, n, NULL), apr_pstrdup(r->pool, v));
-	} else {
-		DAV_DEBUG_REQ(r, 0, "pointers ko");  
-	}
+	if (!v) return;
+	apr_table_setn(r->headers_out, apr_pstrcat(r->pool,
+				RAWX_HEADER_PREFIX, n, NULL), apr_pstrdup(r->pool, v));
 }
 
 static dav_error *
@@ -291,8 +289,10 @@ resource_stat_chunk(dav_resource *resource, int xattr_too)
 				REPLACE_FIELD(pool, content, size);
 				REPLACE_FIELD(pool, content, chunk_nb);
 				REPLACE_FIELD(pool, content, storage_policy);
+
 				REPLACE_FIELD(pool, content, rawx_list);
 				REPLACE_FIELD(pool, content, spare_rawx_list);
+
 				REPLACE_FIELD(pool, chunk, id);
 				REPLACE_FIELD(pool, chunk, size);
 				REPLACE_FIELD(pool, chunk, position);
@@ -337,6 +337,14 @@ __load_one_header_lc(request_rec *request, const char *name, char **dst)
 	} \
 } while (0)
 
+static void
+_up (gchar *s)
+{
+	if (s) {
+		do { *s = g_ascii_toupper(*s); } while (*(s++));
+	}
+}
+
 const char *
 request_load_chunk_info(request_rec *request, dav_resource *resource)
 {
@@ -357,8 +365,24 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 	if (!resource->info->content.container_id) return "container-id";
 	if (!resource->info->content.content_id) return "content-id";
 	if (!resource->info->content.path) return "content-path";
-
 	if (!resource->info->chunk.position) return "chunk-pos";
+	
+	_up (resource->info->content.container_id);
+	_up (resource->info->content.content_id);
+	_up (resource->info->chunk.hash);
+	_up (resource->info->chunk.id);
+
+	if (!oio_str_ishexa(resource->info->content.container_id, 64))
+		return "container-id";
+	if (!oio_str_ishexa1(resource->info->content.content_id))
+		return "content-id";
+
+	if (resource->info->chunk.id &&
+		!oio_str_ishexa1(resource->info->chunk.id))
+		return "chunk-id";
+	if (resource->info->chunk.hash && resource->info->chunk.hash[0] &&
+		!oio_str_ishexa1(resource->info->chunk.hash))
+		return "chunk-hash";
 	
 	return NULL;
 }
@@ -416,11 +440,12 @@ request_fill_headers(request_rec *r, struct content_textinfo_s *c0,
 {
 	__set_header(r, "container-id",  c0->container_id);
 
-	__set_header(r, "content-id",         	c0->content_id);
+	__set_header(r, "content-id",           c0->content_id);
 	__set_header(r, "content-path",         c0->path);
 	__set_header(r, "content-size",         c0->size);
+	__set_header(r, "content-version",      c0->version);
 	__set_header(r, "content-chunksnb",     c0->chunk_nb);
-	__set_header(r, "content-version",     	c0->version);
+	__set_header(r, "content-stgpol",       c0->storage_policy);
 
 	__set_header(r, "chunk-id",          c1->id);
 	__set_header(r, "chunk-size",        c1->size);
@@ -468,8 +493,7 @@ rawx_repo_check_request(request_rec *req, const char *root_dir, const char * lab
 	}
 
 	for (i=0; *src ; src++, i++) {
-		char c = *src;
-		c = g_ascii_toupper(*src);
+		gchar c = g_ascii_toupper(*src);
 		if (!g_ascii_isdigit(c) && (c < 'A' || c > 'F') && i < 64) {
 			/* Only compare first 64 characters */
 			return server_create_and_stat_error(conf, req->pool,
