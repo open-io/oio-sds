@@ -23,6 +23,8 @@ PARALLEL_CHUNKS_DELETE = 2
 CHUNK_TIMEOUT = 60
 ACCOUNT_SERVICE_TIMEOUT = 60
 
+EVENT_BATCH_SIZE = 500
+
 ACCOUNT_SERVICE = 'account'
 
 
@@ -79,18 +81,21 @@ class EventWorker(object):
         socket.connect('inproc://event-front')
         self.socket = socket
 
+    def safe_ack(self, msg):
+        try:
+            self.socket.send_multipart(msg)
+        except Exception:
+            self.logger.warn('Unable to ack event')
+
     def run(self):
         try:
             while self.running:
                 msg = self.socket.recv_multipart()
                 self.logger.debug("msg received: %s" % msg)
-                ack = [msg[0]]
                 event = decode_msg(msg)
-                self.process_event(event)
-                try:
-                    self.socket.send_multipart(ack)
-                except Exception as e:
-                    self.logger.warn('Unable to ack event')
+                success = self.process_event(event)
+                f = "0" if success else ""
+                self.safe_ack([msg[0], f])
         except Exception as e:
             self.logger.warn('ERROR in worker "%s"', e)
             self.failed = True
@@ -102,8 +107,15 @@ class EventWorker(object):
         handler = self.get_handler(event)
         if not handler:
             self.logger.warn("No handler found")
-            return
-        handler(event)
+            # mark as success
+            return True
+        success = True
+        try:
+            handler(event)
+        except Exception:
+            success = False
+        finally:
+            return success
 
     def get_handler(self, event):
         event_type = event.get('event')
@@ -341,8 +353,12 @@ class EventAgent(Daemon):
                 while True:
                     msg = backend.recv_multipart()
                     event_id = msg[1]
+                    success = msg[2]
                     event_id = sqlite3.Binary(event_id)
-                    self.queue.delete(event_id)
+                    if not success:
+                        self.queue.failed(event_id)
+                    else:
+                        self.queue.delete(event_id)
 
             boss_pool = GreenPool(2)
             boss_pool.spawn_n(front, self.server, self.backend)
@@ -396,7 +412,7 @@ class EventAgent(Daemon):
             worker.stop()
 
     def retry(self):
-        cursor = self.queue.load()
+        cursor = self.queue.load(EVENT_BATCH_SIZE)
 
         for event in cursor:
             event_id, data = event
