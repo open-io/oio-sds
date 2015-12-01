@@ -1,11 +1,10 @@
+import unittest
 from mock import MagicMock as Mock
 
 from oio.rdir.client import RdirClient
 
-from tests.utils import BaseTestCase
 
-
-class TestRdirClient(BaseTestCase):
+class TestRdirClient(unittest.TestCase):
     def setUp(self):
         super(TestRdirClient, self).setUp()
         self.rdir_client = RdirClient({'namespace': "NS"})

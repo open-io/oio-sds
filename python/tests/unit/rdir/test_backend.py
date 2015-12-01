@@ -1,11 +1,12 @@
 import tempfile
 import shutil
+import unittest
+
 from oio.common.exceptions import ServerException
 from oio.rdir.server_db import RdirBackend
-from tests.utils import BaseTestCase
 
 
-class TestRdirBackend(BaseTestCase):
+class TestRdirBackend(unittest.TestCase):
     def setUp(self):
         super(TestRdirBackend, self).setUp()
         self.db_path = tempfile.mkdtemp()

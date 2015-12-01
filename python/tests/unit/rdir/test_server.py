@@ -1,11 +1,12 @@
 import tempfile
 import shutil
 import simplejson as json
+import unittest
+
 from oio.rdir.server import create_app
-from tests.utils import BaseTestCase
 
 
-class TestRdirServer(BaseTestCase):
+class TestRdirServer(unittest.TestCase):
     def setUp(self):
         super(TestRdirServer, self).setUp()
 
