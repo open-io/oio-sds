@@ -86,18 +86,20 @@ _req_get_token (struct req_args_s *args, const char *name)
 enum http_rc_e
 abstract_action (const char *tag, struct req_args_s *args, struct sub_action_s *sub)
 {
-	struct json_tokener *parser;
-	struct json_object *jbody, *jargs, *jaction;
 	enum http_rc_e rc;
+	json_tokener *parser = json_tokener_new ();
+	json_object *jbody = NULL;
 
-	jaction = jargs = NULL;
-	parser = json_tokener_new ();
+	if (args->rq->body->len)
+		jbody = json_tokener_parse_ex (parser,
+				(char *) args->rq->body->data, args->rq->body->len);
 
-	jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
-			args->rq->body->len);
-	if (!json_object_is_type (jbody, json_type_object))
+	if (json_tokener_success != json_tokener_get_error (parser))
+		rc = _reply_format_error (args, BADREQ ("Invalid JSON"));
+	else if (!json_object_is_type (jbody, json_type_object))
 		rc = _reply_format_error (args, BADREQ ("Invalid JSON object (%s)", tag));
 	else {
+		json_object *jargs = NULL, *jaction = NULL;
 		if (!json_object_object_get_ex (jbody, "action", &jaction)
 				|| !json_object_is_type (jaction, json_type_string))
 			rc = _reply_forbidden_error (args, BADREQ ("No/Bad action (%s)", tag));
@@ -116,26 +118,33 @@ abstract_action (const char *tag, struct req_args_s *args, struct sub_action_s *
 		}
 	}
 exit:
-	json_object_put (jbody);
+	if (jbody)
+		json_object_put (jbody);
 	json_tokener_free (parser);
 	return rc;
 }
 
 enum http_rc_e
 rest_action (struct req_args_s *args,
-        enum http_rc_e (*handler) (struct req_args_s *, json_object *))
+		enum http_rc_e (*handler) (struct req_args_s *, json_object *))
 {
-    enum http_rc_e rc;
-    json_object *jbody;
-    json_tokener *parser;
-    parser = json_tokener_new ();
+	enum http_rc_e rc;
+	json_tokener *parser = json_tokener_new ();
+	json_object *jbody = NULL;
 
-    jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
-            args->rq->body->len);
-    rc = handler(args, jbody);
-    if (jbody) json_object_put (jbody);
-    json_tokener_free (parser);
-    return rc;
+	if (args->rq->body->len)
+		jbody = json_tokener_parse_ex (parser,
+				(char *) args->rq->body->data, args->rq->body->len);
+
+	if (json_tokener_success != json_tokener_get_error (parser))
+		rc = _reply_format_error (args, BADREQ("Invalid JSON"));
+	else
+		rc = handler(args, jbody);
+
+	if (jbody)
+		json_object_put (jbody);
+	json_tokener_free (parser);
+	return rc;
 }
 
 static gboolean

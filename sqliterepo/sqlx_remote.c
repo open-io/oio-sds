@@ -280,15 +280,10 @@ sqlx_pack_DISABLE_DISABLED(struct sqlx_name_s *name)
 }
 
 GByteArray *
-sqlx_pack_PROPGET(struct sqlx_name_s *name, const gchar * const *keys)
+sqlx_pack_PROPGET(struct sqlx_name_s *name)
 {
-	GSList *names = metautils_array_to_list((void**)keys);
-	GByteArray *body = strings_marshall_gba(names, NULL);
-	g_slist_free(names);
-
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PROPGET, name);
-	metautils_message_add_body_unref(req, body);
-	return message_marshall_gba_and_clean(req);
+	return message_marshall_gba_and_clean(make_request(
+				NAME_MSGNAME_SQLX_PROPGET, name));
 }
 
 GByteArray *
