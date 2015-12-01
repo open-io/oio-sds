@@ -70,7 +70,7 @@ class RdirClient(Client):
             resp.raise_for_status()
             if len(resp_body) == 0:
                 break
-            for key, value in resp_body.iteritems():
+            for (key, value) in resp_body:
                 container, content, chunk = key.split('|')
                 yield container, content, chunk, value
             req_body['start_after'] = key

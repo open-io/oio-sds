@@ -77,7 +77,7 @@ class RdirBackend(object):
 
     def chunk_fetch(self, volume_id, start_after=None,
                     limit=None, rebuild=False):
-        result = dict()
+        result = []
 
         if start_after is not None:
             start_after = start_after.encode('utf8')
@@ -101,7 +101,7 @@ class RdirBackend(object):
                 mtime = data.get('mtime')
                 if int(mtime) > incident_date:
                     continue  # chunk pushed after the incident
-            result[key] = data
+            result.append((key, data))
             count += 1
         return result
 

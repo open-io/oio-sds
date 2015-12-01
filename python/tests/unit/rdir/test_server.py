@@ -45,19 +45,22 @@ class TestRdirServer(unittest.TestCase):
                              data=json.dumps({}),
                              content_type="application/json")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(json.loads(resp.data), {
-            "mycontainer|mycontent|mychunk": {
-                'content_version': 1,
-                'content_nbchunks': 3,
-                'content_path': "path",
-                'content_size': 1234,
-                'chunk_hash': "1234567890ABCDEF",
-                'chunk_position': "1",
-                'chunk_size': 123,
-                'mtime': 123456,
-                'rtime': 456
-            }
-        })
+        self.assertEqual(json.loads(resp.data), [
+            [
+                "mycontainer|mycontent|mychunk",
+                {
+                    'content_version': 1,
+                    'content_nbchunks': 3,
+                    'content_path': "path",
+                    'content_size': 1234,
+                    'chunk_hash': "1234567890ABCDEF",
+                    'chunk_position': "1",
+                    'chunk_size': 123,
+                    'mtime': 123456,
+                    'rtime': 456
+                }
+            ]
+        ])
 
     def test_push_fetch_delete(self):
         # push
@@ -77,8 +80,9 @@ class TestRdirServer(unittest.TestCase):
                              data=json.dumps({}),
                              content_type="application/json")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(json.loads(resp.data),
-                         {"mycontainer|mycontent|mychunk": {'mtime': 1234}})
+        self.assertEqual(json.loads(resp.data), [
+            ["mycontainer|mycontent|mychunk", {'mtime': 1234}]
+        ])
 
         # delete
         data = {
@@ -97,7 +101,7 @@ class TestRdirServer(unittest.TestCase):
                              data=json.dumps({}),
                              content_type="application/json")
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(json.loads(resp.data), {})
+        self.assertEqual(json.loads(resp.data), [])
 
     def test_rdir_status(self):
         resp = self.app.get("/v1/NS/rdir/status",
