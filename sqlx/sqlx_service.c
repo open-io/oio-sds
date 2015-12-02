@@ -987,7 +987,7 @@ struct event_s
 };
 
 static gboolean
-_send_event (struct sqlx_service_s *ss, struct event_s *evt)
+_zmq2agent_send_event (struct sqlx_service_s *ss, struct event_s *evt)
 {
 	int rc;
 	gchar tmp[1+ 2*HEADER_SIZE];
@@ -998,7 +998,8 @@ _send_event (struct sqlx_service_s *ss, struct event_s *evt)
 retry:
 	rc = zmq_send (ss->notify.zagent, "", 0, ZMQ_SNDMORE|ZMQ_MORE|ZMQ_DONTWAIT);
 	if (rc == 0) {
-		rc = zmq_send (ss->notify.zagent, evt, HEADER_SIZE, ZMQ_MORE|ZMQ_SNDMORE|ZMQ_DONTWAIT);
+		rc = zmq_send (ss->notify.zagent, evt, HEADER_SIZE,
+				ZMQ_MORE|ZMQ_SNDMORE|ZMQ_DONTWAIT);
 		if (rc == HEADER_SIZE)
 			rc = zmq_send (ss->notify.zagent, evt->message, evt->size, ZMQ_DONTWAIT);
 	}
@@ -1010,13 +1011,14 @@ retry:
 		GRID_WARN("EVT:ERR %s (%d) %s", tmp, err, zmq_strerror(err));
 		return FALSE;
 	} else {
+		++ ss->notify.counter_sent;
 		GRID_DEBUG("EVT:SNT %s", tmp);
 		return TRUE;
 	}
 }
 
 static gboolean
-_manage_event (struct sqlx_service_s *ss, zmq_msg_t *msg)
+_zmq2agent_manage_event (struct sqlx_service_s *ss, zmq_msg_t *msg)
 {
 	if (!ss->notify.zagent)
 		return TRUE;
@@ -1032,17 +1034,18 @@ _manage_event (struct sqlx_service_s *ss, zmq_msg_t *msg)
 
 	g_ptr_array_add (ss->notify.pending_events, evt);
 
-	if (GRID_INFO_ENABLED()) {
+	if (GRID_DEBUG_ENABLED()) {
 		gchar tmp[1+ 2*HEADER_SIZE];
 		oio_str_bin2hex(evt, HEADER_SIZE, tmp, sizeof(tmp));
-		GRID_DEBUG("EVT:DEF %s (%u) %.*s", tmp, ss->notify.pending_events->len, evt->size, evt->message);
+		GRID_DEBUG("EVT:DEF %s (%u) %.*s", tmp,
+				ss->notify.pending_events->len, evt->size, evt->message);
 	}
 
-	return _send_event (ss, evt);
+	return _zmq2agent_send_event (ss, evt);
 }
 
 static void
-_manage_ack (struct sqlx_service_s *ss, zmq_msg_t *msg)
+_zmq2agent_manage_ack (struct sqlx_service_s *ss, zmq_msg_t *msg)
 {
 	if (zmq_msg_size (msg) != HEADER_SIZE)
 		return;
@@ -1051,14 +1054,18 @@ _manage_ack (struct sqlx_service_s *ss, zmq_msg_t *msg)
 	for (guint i=0; i<ss->notify.pending_events->len ;i++) {
 		struct event_s *evt = g_ptr_array_index(ss->notify.pending_events, i);
 		if (!memcmp(evt, d, HEADER_SIZE)) {
-			gchar tmp[1+(2*HEADER_SIZE)];
-			oio_str_bin2hex(evt, HEADER_SIZE, tmp, sizeof(tmp));
+			if (GRID_DEBUG_ENABLED()) {
+				gchar tmp[1+(2*HEADER_SIZE)];
+				oio_str_bin2hex(evt, HEADER_SIZE, tmp, sizeof(tmp));
+				GRID_DEBUG("EVT:ACK %s", tmp);
+			}
 			g_free (evt);
 			g_ptr_array_remove_index_fast (ss->notify.pending_events, i);
-			GRID_DEBUG("EVT:ACK %s", tmp);
+			++ ss->notify.counter_ack;
 			return;
 		}
 	}
+	++ ss->notify.counter_ack_notfound;
 }
 
 static void
@@ -1068,14 +1075,14 @@ _retry_events (struct sqlx_service_s *ss)
 	for (guint i=0; i<ss->notify.pending_events->len ;i++) {
 		struct event_s *evt = g_ptr_array_index (ss->notify.pending_events, i);
 		if (evt->last_sent < now-29) {
-			if (!_send_event (ss, evt))
+			if (!_zmq2agent_send_event (ss, evt))
 				break;
 		}
 	}
 }
 
 static void
-_receive_acks (struct sqlx_service_s *ss)
+_zmq2agent_receive_acks (struct sqlx_service_s *ss)
 {
 	int rc;
 	zmq_msg_t msg;
@@ -1083,13 +1090,13 @@ _receive_acks (struct sqlx_service_s *ss)
 		zmq_msg_init (&msg);
 		rc = zmq_msg_recv (&msg, ss->notify.zagent, ZMQ_DONTWAIT);
 		if (rc > 0)
-			_manage_ack (ss, &msg);
+			_zmq2agent_manage_ack (ss, &msg);
 		zmq_msg_close (&msg);
 	} while (rc >= 0);
 }
 
 static gboolean
-_receive_events (struct sqlx_service_s *ss)
+_zmq2agent_receive_events (struct sqlx_service_s *ss)
 {
 	int i=0, rc, ended = 0;
 	do {
@@ -1097,8 +1104,11 @@ _receive_events (struct sqlx_service_s *ss)
 		zmq_msg_init (&msg);
 		rc = zmq_msg_recv (&msg, ss->notify.zpull, ZMQ_DONTWAIT);
 		ended = (rc == 0); // empty frame is an EOF
-		if (rc > 0 && !_manage_event (ss, &msg))
-			rc = 0; // make it break
+		if (rc > 0) {
+			++ ss->notify.counter_received;
+			if (!_zmq2agent_manage_event (ss, &msg))
+				rc = 0; // make it break
+		}
 		zmq_msg_close (&msg);
 	} while (rc > 0 && i++ < ss->notify.max_recv_per_round);
 	return !ended;
@@ -1107,6 +1117,7 @@ _receive_events (struct sqlx_service_s *ss)
 static gpointer
 _worker_notify_zmq2agent (gpointer p)
 {
+	gint64 last_debug = g_get_monotonic_time ();
 	struct sqlx_service_s *ss = p;
 	zmq_pollitem_t pi[2] = {
 		{ss->notify.zpull, -1, ZMQ_POLLIN, 0},
@@ -1123,10 +1134,21 @@ _worker_notify_zmq2agent (gpointer p)
 				break;
 		}
 		if (pi[1].revents)
-			_receive_acks (ss);
+			_zmq2agent_receive_acks (ss);
 		_retry_events (ss);
 		if (pi[0].revents)
-			run = _receive_events (ss);
+			run = _zmq2agent_receive_events (ss);
+
+		/* Periodically write stats in the log */
+		gint64 now = g_get_monotonic_time ();
+		if ((now - last_debug) > G_TIME_SPAN_MINUTE) {
+			GRID_INFO("ZMQ2AGENT recv=%"G_GINT64_FORMAT" sent=%"G_GINT64_FORMAT
+					" ack=%"G_GINT64_FORMAT"+%"G_GINT64_FORMAT" queue=%u",
+					ss->notify.counter_received, ss->notify.counter_sent,
+					ss->notify.counter_ack, ss->notify.counter_ack_notfound,
+					ss->notify.pending_events->len);
+			last_debug = now;
+		}
 	}
 
 	GRID_INFO ("Thread stopping [NOTIFY-ZMQ2AGENT]");
@@ -1160,17 +1182,20 @@ _worker_notify_gq2zmq (gpointer p)
 {
 	struct sqlx_service_s *ss = p;
 	gchar *tmp;
+
 	while (grid_main_is_running()) {
 		tmp = (gchar*) g_async_queue_timeout_pop (ss->notify.queue, 1000000L);
 		if (tmp && !_forward_event (ss, tmp))
 			break;
 	}
+
+	/* manage what remains in the GQueue */
 	while (NULL != (tmp = g_async_queue_try_pop (ss->notify.queue))) {
 		if (!_forward_event (ss, tmp))
 			break;
 	}
 
-	// Empty frame is an EOF
+	/* Empty frame is an EOF */
 	zmq_send (ss->notify.zpush, "", 0, 0);
 	GRID_INFO ("Thread stopping [NOTIFY-GQ2ZMQ]");
 	return p;
