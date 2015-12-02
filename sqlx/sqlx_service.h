@@ -99,11 +99,19 @@ struct sqlx_service_s
 		// Pair of interconnected sockets between the gq2zmq thread and the zmq2agent thread
 		void        *zpush; // write only
 		void        *zpull; // read only
-		// ZMQ socket to the agent
+
+		/* ZMQ socket to the agent */
 		void        *zagent;
+		GPtrArray   *pending_events;
+		/* used to compute the event id */
 		guint16     procid;
 		guint       counter;
-		GPtrArray   *pending_events;
+		/* stats on events streams, managed only by the ZMQ2AGENT thead */
+		guint64     counter_received;
+		guint64     counter_sent;
+		guint64     counter_ack;
+		guint64     counter_ack_notfound;
+
 		// how many events are received each time the queue becomes active.
 		// A low value helps preventing starvation but leads to more contexts
 		// switches.
