@@ -613,6 +613,8 @@ sqlx_service_specific_fini(void)
 		zmq_close (SRV.notify.zagent);
 	if (SRV.notify.zctx)
 		zmq_term (SRV.notify.zctx);
+	if (SRV.notify.pending_events)
+		g_ptr_array_free (SRV.notify.pending_events, TRUE);
 
 	if (SRV.prng)
 		g_rand_free (SRV.prng);
