@@ -865,8 +865,7 @@ static gboolean
 dispatch_PING(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
-	(void) gdata;
-	(void) hdata;
+	(void) gdata, (void) hdata;
 	reply->send_reply(CODE_FINAL_OK, "PONG");
 	return TRUE;
 }
@@ -875,18 +874,20 @@ static gboolean
 dispatch_STATS(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
+	GByteArray *body;
+
 	gboolean runner(const gchar *n, guint64 v) {
-		gchar *name, value[64];
-		name = g_strdup_printf("stat:%s", n);
-		g_snprintf(value, sizeof(value), "%"G_GUINT64_FORMAT, v);
-		reply->add_header(name, metautils_gba_from_string(value));
-		g_free(name);
+		gchar value[1024];
+		gsize len = g_snprintf(value, sizeof(value),
+				"%s=%"G_GUINT64_FORMAT"\n", n, v);
+		g_byte_array_append (body, (guint8*)value, len);
 		return TRUE;
 	}
 
-	(void) gdata;
-	(void) hdata;
+	(void) gdata, (void) hdata;
+	body = g_byte_array_new();
 	grid_stats_holder_foreach(reply->client->main_stats, runner);
+	reply->add_body(body);
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
@@ -895,9 +896,9 @@ static gboolean
 dispatch_VERSION(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
-	(void) gdata;
-	(void) hdata;
-	reply->send_reply(CODE_FINAL_OK, *(API_VERSION) ? API_VERSION : "unknown");
+	(void) gdata, (void) hdata;
+	reply->add_body(metautils_gba_from_string(API_VERSION));
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -905,7 +906,7 @@ const struct gridd_request_descr_s*
 gridd_get_common_requests(void)
 {
 	static struct gridd_request_descr_s descriptions[] = {
-		{"PING",          dispatch_PING,          NULL},
+		{"REQ_PING",      dispatch_PING,          NULL},
 		{"REQ_STATS",     dispatch_STATS,         NULL},
 		{"REQ_VERSION",   dispatch_VERSION,       NULL},
 		{"REQ_HANDLERS",  dispatch_LISTHANDLERS,  NULL},
