@@ -37,6 +37,24 @@ _remote_ping (const char *to)
 }
 
 static GError *
+_remote_handlers (const char *to, gchar ***out)
+{
+	MESSAGE req = metautils_message_create_named("REQ_HANDLERS");
+	GByteArray *encoded = message_marshall_gba_and_clean (req);
+
+	gchar *packed = NULL;
+	GError *err = gridd_client_exec_and_concat_string (to, 30.0, encoded, &packed);
+	if (err) {
+		g_free0 (packed);
+		return err;
+	}
+
+	*out = metautils_decode_lines(packed, packed + strlen(packed));
+	g_free0 (packed);
+	return NULL;
+}
+
+static GError *
 _remote_stat (const char *to, gchar ***out)
 {
 	MESSAGE req = metautils_message_create_named("REQ_STATS");
@@ -55,22 +73,41 @@ _remote_stat (const char *to, gchar ***out)
 }
 
 static int
+_do_handlers (const char *to)
+{
+	gchar **tab = NULL;
+	GError *err = _remote_handlers(to, &tab);
+	if (err) {
+		g_printerr("%s HANDLERS ERROR (%d) %s\n", to, err->code, err->message);
+		g_error_free(err);
+		return 1;
+	}
+
+	g_printerr ("%s COUNT %u\n", to, g_strv_length(tab));
+	for (gchar **p=tab; *p ;p++)
+		g_print("%s %s\n", to, *p);
+
+	g_strfreev(tab);
+	return 0;
+}
+
+static int
 _do_stat (const char *to)
 {
 	gchar **tab = NULL;
 	GError *err = _remote_stat(to, &tab);
 	if (err) {
-		g_printerr("Stat failed for %s : (%d) %s\n", to, err->code, err->message);
+		g_printerr("%s STAT ERROR (%d) %s\n", to, err->code, err->message);
 		g_error_free(err);
 		return 1;
 	}
 
-	g_print("# COUNT %u\n", g_strv_length(tab));
+	g_printerr("%s COUNT %u\n", to, g_strv_length(tab));
 	for (gchar **p=tab; *p ;p++) {
 		gchar *k = *p;
 		gchar *v = strchr(k,'=');
 		if (v) *(v++) = '\0';
-		g_print("%s %s\n", k, v);
+		g_print("%s %s %s\n", to, k, v);
 	}
 
 	g_strfreev(tab);
@@ -83,12 +120,11 @@ _do_version (const char *to)
 	gchar *version = NULL;
 	GError *err = _remote_version (to, &version);
 	if (!err) {
-		g_print ("# VERSION %s - %s\n", to, version);
+		g_print ("%s VERSION %s\n", to, version);
 		g_free (version);
 		return 0;
-	}
-	else {
-		g_print("# VERSION %s (%d) %s\n", to, err->code, err->message);
+	} else {
+		g_printerr ("%s VERSION ERROR (%d) %s\n", to, err->code, err->message);
 		g_clear_error (&err);
 		return 1;
 	}
@@ -97,13 +133,14 @@ _do_version (const char *to)
 static int
 _do_ping (const char *to)
 {
+	gint64 pre = g_get_monotonic_time();
 	GError *err = _remote_ping (to);
+	gint64 post = g_get_monotonic_time();
 	if (!err) {
-		g_print ("# PING %s - OK\n", to);
+		g_print ("%s PING OK %"G_GINT64_FORMAT"\n", to, (post-pre));
 		return 0;
-	}
-	else {
-		g_print("# PING %s (%d) %s\n", to, err->code, err->message);
+	} else {
+		g_print ("%s PING ERROR %"G_GINT64_FORMAT" (%d) %s\n", to, (post-pre), err->code, err->message);
 		g_clear_error (&err);
 		return 1;
 	}
@@ -218,6 +255,9 @@ main (int argc, char **argv)
 		g_printerr (" %s addr IP:PORT\n", argv[0]);
 		g_printerr (" %s cid  OIOURL\n", argv[0]);
 		g_printerr (" %s ping IP:PORT\n", argv[0]);
+		g_printerr (" %s version IP:PORT\n", argv[0]);
+		g_printerr (" %s handlers IP:PORT\n", argv[0]);
+		g_printerr (" %s stats IP:PORT\n", argv[0]);
 		g_printerr (" %s hash [PREFIX]\n", argv[0]);
 		return 2;
 	}
@@ -231,13 +271,21 @@ main (int argc, char **argv)
 		for (int i=2; i<argc ;++i)
 			_dump_cid (argv[i]);
 		return 0;
+	} else if (!strcmp("version", argv[1])) {
+		for (int i=2; i<argc ;++i)
+			_do_version(argv[i]);
+		return 0;
 	} else if (!strcmp("ping", argv[1])) {
-		for (int i=2; i<argc ;++i) {
-			const char *url = argv[i];
-			_do_ping (url);
-			_do_version(url);
-			_do_stat (url);
-		}
+		for (int i=2; i<argc ;++i)
+			_do_ping (argv[i]);
+		return 0;
+	} else if (!strcmp("handlers", argv[1])) {
+		for (int i=2; i<argc ;++i)
+			_do_handlers (argv[i]);
+		return 0;
+	} else if (!strcmp("stats", argv[1])) {
+		for (int i=2; i<argc ;++i)
+			_do_stat (argv[i]);
 		return 0;
 	} else if (!strcmp("hash", argv[1])) {
 		_same_hash (argc>2 ? argv[2] : "");
