@@ -185,6 +185,7 @@ oio_ext_set_random_reqid (void)
 /* -------------------------------------------------------------------------- */
 
 # ifdef HAVE_BACKTRACE
+#warn "Backtrace enabled"
 #include <execinfo.h>
 #define STACK_MAX 8
 
