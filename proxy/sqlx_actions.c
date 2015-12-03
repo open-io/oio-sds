@@ -305,21 +305,13 @@ enum http_rc_e
 action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 {
 	GError *err = NULL;
-	gchar **namev = NULL;
-	if (json_object_is_type (jargs, json_type_null))
-		namev = g_malloc0 (sizeof(gchar*));
-	else
-		namev = _load_stringv (jargs);
-	if (!namev)
-		return _reply_format_error (args, BADREQ("Bad names"));
 
 	// Query the services
 	GByteArray* packer (struct sqlx_name_s *n) {
-		return sqlx_pack_PROPGET (n, (const gchar * const * )namev);
+		return sqlx_pack_PROPGET (n);
 	}
 	GByteArray **bodies = NULL;
 	err = _sqlx_action_bodyv (args, packer, &bodies);
-	g_strfreev (namev);
 	if (err)
 		return _reply_common_error (args, err);
 

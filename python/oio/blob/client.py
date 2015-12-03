@@ -9,7 +9,6 @@ READ_BUFFER_SIZE = 65535
 def gen_put_headers(meta):
     headers = {
         chunk_headers['content_cid']: meta['content_cid'],
-        chunk_headers['content_id']: meta['content_id'],
         chunk_headers['chunk_id']: meta['chunk_id'],
         chunk_headers['chunk_pos']: meta['chunk_pos'],
         chunk_headers['content_id']: meta['content_id'],

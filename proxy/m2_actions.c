@@ -1137,7 +1137,9 @@ action_container_show (struct req_args_s *args)
 
 	struct sqlx_name_mutable_s n = {NULL,NULL,NULL};
 	sqlx_name_fill (&n, args->url, NAME_SRVTYPE_META2, 1);
-	GByteArray* packer () { return sqlx_pack_PROPGET (sqlx_name_mutable_to_const(&n), NULL); }
+	GByteArray* packer () {
+		return sqlx_pack_PROPGET (sqlx_name_mutable_to_const(&n));
+	}
 	err = _gbav_request (n.type, 0, args->url, packer, NULL, &bodies);
 	sqlx_name_clean(&n);
 
@@ -1496,29 +1498,34 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 enum http_rc_e
 action_content_put (struct req_args_s *args)
 {
-	struct json_object *jbody;
-	GError *err;
+	GError *err = NULL;
+	json_tokener *parser = json_tokener_new ();
+	json_object *jbody = NULL;
+	if (args->rq->body->len)
+		jbody = json_tokener_parse_ex (parser,
+				(char *) args->rq->body->data, args->rq->body->len);
 
-	struct json_tokener *parser = json_tokener_new ();
-	jbody = json_tokener_parse_ex (parser, (char *) args->rq->body->data,
-		args->rq->body->len);
-	json_tokener_free (parser);
-
-	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
-
+	if (json_tokener_success != json_tokener_get_error (parser))
+		err = BADREQ("Invalid JSON");
+	else {
+		gboolean autocreate = _request_has_flag (args,
+				PROXYD_HEADER_MODE, "autocreate");
 retry:
-	err = _m2_json_put (args, jbody);
-	if (err && CODE_IS_NOTFOUND(err->code)) {
-		if (autocreate) {
-			GRID_DEBUG("Request failed because of resource not found, attempting autocreation");
-			autocreate = FALSE;
-			g_clear_error (&err);
-			if (!(err = _m2_container_create (args)))
-				goto retry;
+		err = _m2_json_put (args, jbody);
+		if (err && CODE_IS_NOTFOUND(err->code)) {
+			if (autocreate) {
+				GRID_DEBUG("Request failed because of resource not found, attempting autocreation");
+				autocreate = FALSE;
+				g_clear_error (&err);
+				if (!(err = _m2_container_create (args)))
+					goto retry;
+			}
 		}
 	}
 
-	json_object_put (jbody);
+	if (jbody)
+		json_object_put (jbody);
+	json_tokener_free (parser);
 	return _reply_m2_error (args, err);
 }
 
