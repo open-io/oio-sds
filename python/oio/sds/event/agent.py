@@ -64,6 +64,8 @@ class EventWorker(object):
         )
         self.acct_update = true_value(
             conf.get('acct_update', True))
+        self.rdir_update = true_value(
+            conf.get('rdir_update', True))
         self.session = requests.Session()
         self.failed = False
 
@@ -274,6 +276,10 @@ class EventWorker(object):
         Handle chunk creation.
         :param event
         """
+        if not self.rdir_update:
+            self.logger.debug('worker "%s" skip chunk creation', self.name)
+            return
+
         self.logger.debug('worker "%s" handle chunk creation', self.name)
 
         when = event.get('when')
@@ -295,6 +301,10 @@ class EventWorker(object):
         Handle chunk deletion.
         :param event
         """
+        if not self.rdir_update:
+            self.logger.debug('worker "%s" skip chunk deletion', self.name)
+            return
+
         self.logger.debug('worker "%s" handle chunk deletion', self.name)
 
         data = event.get('data')
