@@ -30,7 +30,7 @@ License along with this library.
 
 char syslog_id[64] = "";
 static int syslog_opened = 0;
-time_t main_log_level_update = 0;
+gint64 main_log_level_update = 0;
 
 
 static int grid_main_rc = 0;
@@ -285,7 +285,7 @@ static void
 grid_main_sighandler_USR1(int s)
 {
 	oio_log_verbose();
-	main_log_level_update = time(0);
+	main_log_level_update = g_get_monotonic_time () / G_TIME_SPAN_SECOND;
 	alarm(900);
 	signal(s, grid_main_sighandler_USR1);
 }
@@ -301,8 +301,9 @@ grid_main_sighandler_USR2(int s)
 static void
 grid_main_sighandler_ALRM(int s)
 {
+	gint64 now = g_get_monotonic_time () = G_TIME_SPAN_SECOND;
 	signal(s, grid_main_sighandler_ALRM);
-	if (!main_log_level_update || main_log_level_update + 299 < time(0)) {
+	if (!main_log_level_update || main_log_level_update + 299 < now) {
 		oio_log_reset_level();
 		main_log_level_update = 0;
 	}
@@ -433,7 +434,7 @@ grid_main_init(int argc, char **args)
 			case 'v':
 				if (!flag_quiet) {
 					oio_log_verbose_default();
-					main_log_level_update = time(0);
+					main_log_level_update = g_get_monotonic_time () / G_TIME_SPAN_SECOND;
 				}
 				break;
 			case ':':
@@ -654,6 +655,6 @@ grid_main_set_status(int rc)
 void
 grid_main_srand(void)
 {
-	srand(time(0) ^ getpid());
+	srand(g_get_real_time () ^ getpid ());
 }
 
