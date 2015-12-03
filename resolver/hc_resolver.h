@@ -47,9 +47,6 @@ struct hc_resolver_s;
 /* Simple constructor */
 struct hc_resolver_s* hc_resolver_create1(time_t now);
 
-/* Calls hc_resolver_create1() with the current EPOCH time */
-struct hc_resolver_s* hc_resolver_create(void);
-
 /* Change the internal flags of the resolver */
 void hc_resolver_configure (struct hc_resolver_s *r, enum hc_resolver_flags_e f);
 

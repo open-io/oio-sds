@@ -21,10 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
-#include <time.h>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <attr/xattr.h>
+
 #include <glib.h>
 
 #include <metautils/lib/metautils.h>

@@ -160,7 +160,7 @@ meta2_filter_action_exit_election(struct gridd_filter_ctx_s *ctx,
 		}
 	} else {
 		election_manager_exit_all(sqlx_repository_get_elections_manager(
-					m2b->backend.repo), NULL, FALSE);
+					m2b->backend.repo), 5 * G_TIME_SPAN_MINUTE, FALSE);
 	}
 	return FILTER_OK;
 }

@@ -202,7 +202,7 @@ _init_lb(const gchar *ns)
 		si = g_malloc0(sizeof(*si));
 		metautils_strlcpy_physical_ns(si->ns_name, "NS", sizeof(si->ns_name));
 		g_strlcpy(si->type, "rawx", sizeof(si->type));
-		si->score.timestamp = time(0);
+		si->score.timestamp = g_get_real_time() / G_TIME_SPAN_SECOND;
 		si->score.value = ++score;
 		grid_string_to_addrinfo(pdef->url, &(si->addr));
 
@@ -241,7 +241,7 @@ _repo_wraper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 
 	glp = _init_lb(ns);
 
-	resolver = hc_resolver_create();
+	resolver = hc_resolver_create1(g_get_monotonic_time() / G_TIME_SPAN_SECOND);
 	g_assert(resolver != NULL);
 
 	memset(&cfg, 0, sizeof(cfg));
@@ -281,7 +281,7 @@ _repo_failure(const gchar *ns)
 
 	glp = _init_lb(ns);
 
-	resolver = hc_resolver_create();
+	resolver = hc_resolver_create1(g_get_monotonic_time() / G_TIME_SPAN_SECOND);
 	g_assert(resolver != NULL);
 
 	g_printerr("\n");

@@ -301,7 +301,7 @@ grid_main_sighandler_USR2(int s)
 static void
 grid_main_sighandler_ALRM(int s)
 {
-	gint64 now = g_get_monotonic_time () = G_TIME_SPAN_SECOND;
+	gint64 now = g_get_monotonic_time () / G_TIME_SPAN_SECOND;
 	signal(s, grid_main_sighandler_ALRM);
 	if (!main_log_level_update || main_log_level_update + 299 < now) {
 		oio_log_reset_level();

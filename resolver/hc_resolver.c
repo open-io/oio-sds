@@ -122,12 +122,6 @@ hc_resolver_create1(time_t now)
 	return resolver;
 }
 
-struct hc_resolver_s*
-hc_resolver_create(void)
-{
-	return hc_resolver_create1(time(0));
-}
-
 void
 hc_resolver_configure (struct hc_resolver_s *r, enum hc_resolver_flags_e f)
 {

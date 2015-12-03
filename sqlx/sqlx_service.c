@@ -21,7 +21,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stddef.h>
 #include <errno.h>
 #include <string.h>
-#include <sys/time.h>
 #include <sys/resource.h>
 
 #include <metautils/lib/metautils.h>
@@ -212,7 +211,7 @@ _init_configless_structures(struct sqlx_service_s *ss)
 			|| !(ss->clients_pool = gridd_client_pool_create())
 			|| !(ss->gsr_reqtime = grid_single_rrd_create(network_server_bogonow(ss->server), 8))
 			|| !(ss->gsr_reqcounter = grid_single_rrd_create(network_server_bogonow(ss->server),8))
-			|| !(ss->resolver = hc_resolver_create())
+			|| !(ss->resolver = hc_resolver_create1(g_get_monotonic_time() / G_TIME_SPAN_SECOND))
 			|| !(ss->gtq_admin = grid_task_queue_create("admin"))
 			|| !(ss->gtq_register = grid_task_queue_create("register"))
 			|| !(ss->gtq_reload = grid_task_queue_create("reload"))) {
@@ -551,11 +550,10 @@ sqlx_service_specific_fini(void)
 		sqlx_repository_stop(SRV.repository);
 		struct sqlx_cache_s *cache = sqlx_repository_get_cache(SRV.repository);
 		if (cache)
-			sqlx_cache_expire(cache, G_MAXUINT, NULL);
+			sqlx_cache_expire(cache, G_MAXUINT, 0);
 	}
-	if (SRV.election_manager) {
-		election_manager_exit_all(SRV.election_manager, NULL, TRUE);
-	}
+	if (SRV.election_manager)
+		election_manager_exit_all(SRV.election_manager, 0, TRUE);
 
 	// Cleanup
 	if (SRV.gtq_admin)
@@ -746,13 +744,9 @@ _task_register(gpointer p)
 static void
 _task_expire_bases(gpointer p)
 {
-	GTimeVal end;
-	g_get_current_time(&end);
-	g_time_val_add(&end, 500000L);
-
 	struct sqlx_cache_s *cache = sqlx_repository_get_cache(PSRV(p)->repository);
 	if (cache != NULL) {
-		guint count = sqlx_cache_expire(cache, 100, &end);
+		guint count = sqlx_cache_expire(cache, 100, 500 * G_TIME_SPAN_MILLISECOND);
 		if (count)
 			GRID_DEBUG("Expired %u bases", count);
 	}
@@ -761,7 +755,7 @@ _task_expire_bases(gpointer p)
 static void
 _task_expire_resolver(gpointer p)
 {
-	hc_resolver_set_now(PSRV(p)->resolver, time(0));
+	hc_resolver_set_now(PSRV(p)->resolver, g_get_monotonic_time () / G_TIME_SPAN_SECOND);
 	guint count = hc_resolver_expire(PSRV(p)->resolver);
 	if (count)
 		GRID_DEBUG("Expired %u entries from the resolver cache", count);
@@ -773,12 +767,8 @@ _task_retry_elections(gpointer p)
 	if (!PSRV(p)->flag_replicable)
 		return;
 
-	GTimeVal end;
-	g_get_current_time(&end);
-	g_time_val_add(&end, 500000L);
-
-	guint count = election_manager_retry_elections(
-			PSRV(p)->election_manager, 100, &end);
+	guint count = election_manager_retry_elections(PSRV(p)->election_manager,
+			100, 500 * G_TIME_SPAN_MILLISECOND);
 	if (count)
 		GRID_DEBUG("Retried %u elections", count);
 }

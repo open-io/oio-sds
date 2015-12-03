@@ -1608,7 +1608,7 @@ _m2_generate_content_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
 	struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
 	CHUNKS_set2_id(chunk, chunkid);
 	CHUNKS_set2_content(chunk, ctx->uid, ctx->uid_size);
-	CHUNKS_set_ctime(chunk, time(0));
+	CHUNKS_set_ctime(chunk, g_get_real_time() / G_TIME_SPAN_SECOND);
 	CHUNKS_set2_hash(chunk, ctx->h, sizeof(ctx->h));
 	CHUNKS_set_size(chunk, cs);
 	CHUNKS_set2_position(chunk, strpos);
@@ -1992,7 +1992,7 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 	gchar *sql, *sql2;
 	GSList *old_deleted = NULL;
 	GVariant *params[] = {NULL, NULL};
-	gint64 now = (gint64) time(0);
+	gint64 now = g_get_real_time () / G_TIME_SPAN_SECOND;
 	gint64 time_limit = 0;
 	struct dup_alias_params_s dup_params;
 

@@ -20,9 +20,8 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__gridd_client_h
 # define OIO_SDS__metautils__lib__gridd_client_h 1
 
-# include "metautils.h"
 # include <glib.h>
-# include <sys/time.h>
+# include "metautils.h"
 
 # ifndef GRIDC_DEFAULT_TIMEOUT_STEP
 #  define GRIDC_DEFAULT_TIMEOUT_STEP 10.0

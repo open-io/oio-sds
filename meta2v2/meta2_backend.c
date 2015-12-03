@@ -502,7 +502,7 @@ _create_container_init_phase(struct sqlx_sqlite3_s *sq3,
 		m2db_set_max_versions(sq3, max);
 	}
 	if (!err) {
-		m2db_set_ctime (sq3, time(0));
+		m2db_set_ctime (sq3, g_get_real_time());
 		sqlx_admin_init_i64(sq3, META2_INIT_FLAG, 1);
 	}
 	if (!err && params->properties) {

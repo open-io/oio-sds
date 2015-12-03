@@ -63,7 +63,7 @@ struct sqlx_base_s
 
 	gpointer handle;
 
-	GTimeVal last_update; /*!< Changed under the global lock */
+	gint64 last_update; /*!< Changed under the global lock */
 
 	struct {
 		gint prev;
@@ -235,7 +235,7 @@ SQLX_UNSHIFT(sqlx_cache_t *cache, sqlx_base_t *base,
 		beacon->last = base->index;
 
 	base->status = status;
-	g_get_current_time(&(base->last_update));
+	base->last_update = g_get_monotonic_time ();
 }
 
 static void
@@ -392,7 +392,7 @@ _expire_base(sqlx_cache_t *cache, sqlx_base_t *b)
 	b->owner = NULL;
 	b->name = NULL;
 	b->count_open = 0;
-	b->last_update.tv_sec = b->last_update.tv_usec = 0;
+	b->last_update = 0;
 	sqlx_base_move_to_list(cache, b, SQLX_BASE_FREE);
 
 	g_tree_remove(cache->bases_by_name, n);
@@ -401,14 +401,11 @@ _expire_base(sqlx_cache_t *cache, sqlx_base_t *b)
 }
 
 static gint
-_expire_specific_base(sqlx_cache_t *cache, sqlx_base_t *b, GTimeVal *now,
-		time_t grace_delay)
+_expire_specific_base(sqlx_cache_t *cache, sqlx_base_t *b, gint64 now, time_t grace_delay)
 {
 	if (now) {
-		GTimeVal pivot;
-		memcpy(&pivot, now, sizeof(GTimeVal));
-		g_time_val_add(&pivot, grace_delay * -1000000L);
-		if (gtv_bigger(&(b->last_update), &pivot))
+		now += grace_delay * G_TIME_SPAN_SECOND;
+		if (b->last_update > now)
 			return 0;
 	}
 
@@ -437,18 +434,15 @@ _expire_specific_base(sqlx_cache_t *cache, sqlx_base_t *b, GTimeVal *now,
 }
 
 static gint
-sqlx_expire_first_idle_base(sqlx_cache_t *cache, GTimeVal *now)
+sqlx_expire_first_idle_base(sqlx_cache_t *cache, gint64 now)
 {
 	gint rc = 0, bd_idle;
 
 	/* Poll the next idle base, and respect the increasing order of the 'heat' */
 	if (0 <= (bd_idle = cache->beacon_idle.last))
-		rc = _expire_specific_base(cache, GET(cache, bd_idle), now,
-				cache->cool_grace_delay);
-
+		rc = _expire_specific_base(cache, GET(cache, bd_idle), now, cache->cool_grace_delay);
 	if (!rc && 0 <= (bd_idle = cache->beacon_idle_hot.last))
-		rc = _expire_specific_base(cache, GET(cache, bd_idle), now,
-				cache->hot_grace_delay);
+		rc = _expire_specific_base(cache, GET(cache, bd_idle), now, cache->hot_grace_delay);
 
 	return rc;
 }
@@ -625,7 +619,7 @@ retry:
 		else {
 			GRID_DEBUG("No base available for [%s] (%d %s)",
 					hashstr_str(hname), err->code, err->message);
-			if (sqlx_expire_first_idle_base(cache, NULL) >= 0) {
+			if (sqlx_expire_first_idle_base(cache, 0) >= 0) {
 				g_clear_error(&err);
 				goto retry;
 			}
@@ -814,16 +808,17 @@ sqlx_cache_expire_all(sqlx_cache_t *cache)
 
 	g_mutex_lock(&cache->lock);
 	cache->used = TRUE;
-	for (nb=0; sqlx_expire_first_idle_base(cache, NULL) ;nb++) { }
+	for (nb=0; sqlx_expire_first_idle_base(cache, 0) ;nb++) { }
 	g_mutex_unlock(&cache->lock);
 
 	return nb;
 }
 
 guint
-sqlx_cache_expire(sqlx_cache_t *cache, guint max, GTimeVal *end)
+sqlx_cache_expire(sqlx_cache_t *cache, guint max, gint64 duration)
 {
-	guint nb;
+	guint nb = 0;
+	gint64 pivot = g_get_monotonic_time () + duration;
 
 	EXTRA_ASSERT(cache != NULL);
 
@@ -831,11 +826,8 @@ sqlx_cache_expire(sqlx_cache_t *cache, guint max, GTimeVal *end)
 	cache->used = TRUE;
 
 	for (nb=0; !max || nb < max ; nb++) {
-		GTimeVal now;
-		g_get_current_time(&now);
-		if (end && gtv_bigger(&now, end))
-			break;
-		if (!sqlx_expire_first_idle_base(cache, &now))
+		gint64 now = g_get_monotonic_time ();
+		if (now > pivot || !sqlx_expire_first_idle_base(cache, now))
 			break;
 	}
 
@@ -851,12 +843,10 @@ sqlx_cache_expire(sqlx_cache_t *cache, guint max, GTimeVal *end)
 gpointer
 sqlx_cache_get_handle(sqlx_cache_t *cache, gint bd)
 {
-	sqlx_base_t *base;
-
 	EXTRA_ASSERT(cache != NULL);
 	EXTRA_ASSERT(bd >= 0);
 
-	base = GET(cache,bd);
+	sqlx_base_t *base = GET(cache,bd);
 	EXTRA_ASSERT(base != NULL);
 
 	return base->handle;
@@ -865,14 +855,11 @@ sqlx_cache_get_handle(sqlx_cache_t *cache, gint bd)
 void
 sqlx_cache_set_handle(sqlx_cache_t *cache, gint bd, gpointer sq3)
 {
-	sqlx_base_t *base;
-
 	EXTRA_ASSERT(cache != NULL);
 	EXTRA_ASSERT(bd >= 0);
 
-	base = GET(cache,bd);
+	sqlx_base_t *base = GET(cache,bd);
 	EXTRA_ASSERT(base != NULL);
-
 	base->handle = sq3;
 }
 

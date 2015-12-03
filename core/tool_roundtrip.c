@@ -101,7 +101,9 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	MAYBERETURN(err, "Checksum error (original): ");
 
 	gchar tmppath[256] = "";
-	g_snprintf (tmppath, sizeof(tmppath), "/tmp/test-roundtrip-%d-%lu-", getpid(), time(0));
+	g_snprintf (tmppath, sizeof(tmppath),
+			"/tmp/test-roundtrip-%d-%"G_GINT64_FORMAT"-",
+			getpid(), g_get_real_time());
 	_append_random_chars (tmppath, random_chars, 16);
 	gchar content_id[65] = "";
 	_append_random_chars (content_id, hex_chars, 64);
@@ -249,12 +251,13 @@ main(int argc, char **argv)
 
 	if (!oio_url_has_fq_path(url)) {
 		g_printerr ("Partial URL [%s]: requires a NS (%s), an ACCOUNT (%s),"
-				" an USER (%s) and a PATH (%s)\n",
+				" an USER (%s) and a PATH (%s) (+ optional TYPE: %s)\n",
 				oio_url_get (url, OIOURL_WHOLE),
 				oio_url_has (url, OIOURL_NS)?"ok":"missing",
 				oio_url_has (url, OIOURL_ACCOUNT)?"ok":"missing",
 				oio_url_has (url, OIOURL_USER)?"ok":"missing",
-				oio_url_has (url, OIOURL_PATH)?"ok":"missing");
+				oio_url_has (url, OIOURL_PATH)?"ok":"missing",
+				oio_url_has (url, OIOURL_TYPE)?"ok":"missing");
 		return 3;
 	}
 	GRID_INFO("URL valid [%s]", oio_url_get (url, OIOURL_WHOLE));

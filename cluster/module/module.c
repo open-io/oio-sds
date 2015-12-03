@@ -23,7 +23,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <errno.h>
 #include <fnmatch.h>
-#include <sys/time.h>
 #include <arpa/inet.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -117,9 +116,8 @@ _alert_service_with_zeroed_score(struct conscience_srv_s *srv)
 	gchar c;
 	gsize str_id_size, i;
 	gchar str_id[sizeof("conscience.%.*s.score") + LIMIT_LENGTH_SRVTYPE];
-	time_t now;
+	time_t now = g_get_real_time () / G_TIME_SPAN_SECOND;
 
-	now = time(0);
 	if (srv->time_last_alert < now - srv->srvtype->alert_frequency_limit) {
 		str_id_size = g_snprintf(str_id, sizeof(str_id),"conscience.%.*s.score",
 				LIMIT_LENGTH_SRVTYPE, srv->srvtype->type_name);
@@ -151,12 +149,10 @@ init_reply_ctx_with_request(struct request_context_s *req, struct reply_context_
 static void
 save_counters(gpointer u)
 {
-	double d;
-
 #define CONSCIENCE_COUNTER_PREFIX "conscience.req.counter."
 #define SAVE_COUNTER(F) do { d=stats.F ; srvstat_set( CONSCIENCE_COUNTER_PREFIX #F, d ); } while (0)
 	(void)u;
-	d = time(0);
+	gdouble d = g_get_real_time () / G_TIME_SPAN_SECOND;
 	srvstat_set(CONSCIENCE_COUNTER_PREFIX "timestamp", d);
 
 	SAVE_COUNTER(ns_info);
@@ -221,7 +217,7 @@ timer_check_services(gpointer u)
 		return;
 	}
 
-	now = time(0);
+	now = g_get_real_time () / G_TIME_SPAN_SECOND;
 	for (l=list_type_names; l ;l=g_slist_next(l)) {
 		gboolean rc;
 		gchar *str_name;

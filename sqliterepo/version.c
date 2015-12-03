@@ -22,8 +22,6 @@ License along with this library.
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
@@ -147,7 +145,7 @@ hook_increment(gpointer k, gpointer v, gpointer u)
 {
 	(void) k; (void) u;
 	OV(v)->version ++;
-	OV(v)->when = time(0);
+	OV(v)->when = g_get_real_time() / G_TIME_SPAN_SECOND;
 	return FALSE;
 }
 

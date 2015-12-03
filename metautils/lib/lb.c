@@ -737,7 +737,7 @@ grid_lb_iterator_configure(struct grid_lb_iterator_s *iter, const gchar *val)
 					iter->internals.srr.next_idx = 0;
 					iter->internals.srr.next_idx_global = 0;
 					iter->internals.srr.current = 0;
-					iter->internals.srr.last_reset = time(NULL);
+					iter->internals.srr.last_reset = g_get_monotonic_time() / G_TIME_SPAN_SECOND;
 				}
 			}
 			else if (g_str_has_prefix(val, "WRAND") || g_str_has_prefix(val, "SRAND")) {
@@ -805,7 +805,7 @@ __next_SRR(struct grid_lb_s *lb, struct grid_lb_iterator_s *iter,
 		iter->internals.srr.next_idx = 0;
 		slot = &g_array_index(lb->sorted_by_score, struct score_slot_s, 0);
 		iter->internals.srr.current = slot->score;
-		iter->internals.srr.last_reset = time(NULL);
+		iter->internals.srr.last_reset = g_get_monotonic_time() / G_TIME_SPAN_SECOND;
 	}
 	inline void decrement(void) {
 		iter->internals.srr.next_idx = 0;
@@ -815,10 +815,11 @@ __next_SRR(struct grid_lb_s *lb, struct grid_lb_iterator_s *iter,
 
 	grid_lb_lock(lb);
 	if (lb->gpa->len > 0) {
-		gint expiration = iter->internals.srr.last_reset + lb->reset_delay;
+		time_t expiration = iter->internals.srr.last_reset + lb->reset_delay;
+		time_t now = g_get_monotonic_time () / G_TIME_SPAN_SECOND;
 		// maybe rotate
 		if (iter->internals.srr.current == 0 ||
-				(lb->reset_delay > 0 && expiration < time(NULL)))
+				(lb->reset_delay > 0 && expiration < now))
 			reset();
 		else if (iter->internals.srr.next_idx >= lb->sorted_by_score->len)
 			decrement();

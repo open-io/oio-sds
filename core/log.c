@@ -22,8 +22,6 @@ License along with this library.
 #include <string.h>
 #include <unistd.h>
 #include <syslog.h>
-#include <sys/time.h>
-#include <sys/types.h>
 
 #include <glib.h>
 
@@ -219,16 +217,11 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 		const gchar *message, gpointer user_data)
 {
 	static guint longest_prefix = 38;
-	struct timeval tv;
-	GString *gstr;
-
+	GString *gstr = g_string_sized_new(256);
 	(void) user_data;
 
-	gstr = g_string_sized_new(256);
-	gettimeofday(&tv, NULL);
-
-	g_string_append_printf(gstr, "%ld.%03ld %d %04X ",
-			tv.tv_sec, tv.tv_usec/1000,
+	g_string_append_printf(gstr, "%"G_GINT64_FORMAT" %d %04X ",
+			g_get_monotonic_time () / G_TIME_SPAN_MILLISECOND,
 			getpid(), oio_log_current_thread_id());
 
 	if (!log_domain || !*log_domain)
