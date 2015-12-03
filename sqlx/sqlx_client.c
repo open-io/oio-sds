@@ -19,9 +19,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 #include <sqlite3.h>
 
-#include <core/oiostr.h>
-#include <core/oiolog.h>
+/* from oiocore */
 #include <core/oiocfg.h>
+#include <core/oiolog.h>
+#include <core/oiostr.h>
+#include <core/oiourl.h>
+
+/* from oiosds */
+#include <core/oiodir.h>
 #include <core/internals.h>
 
 #include "sqlx_client.h"
@@ -62,16 +67,34 @@ oio_sqlx_client_factory__open (struct oio_sqlx_client_factory_s *self,
 struct oio_sqlx_client_factory_SDS_s
 {
 	struct oio_sqlx_client_factory_vtable_s *vtable;
-	gchar *url_proxy;
+	struct oio_directory_s *dir;
 	gchar *ns;
 };
 
+struct oio_sqlx_client_SDS_s
+{
+	struct oio_sqlx_client_vtable_s *vtable;
+	struct oio_sqlx_client_factory_SDS_s *factory;
+	struct oio_url_s *url;
+};
+
 static void _sds_factory_destroy (struct oio_sqlx_client_factory_s *self);
+
 static GError * _sds_factory_open (struct oio_sqlx_client_factory_s *self,
 			const struct oio_url_s *u, struct oio_sqlx_client_s **out);
 
+static void _sds_client_destroy (struct oio_sqlx_client_s *self);
+
+static GError * _sds_client_execute (struct oio_sqlx_client_s *self,
+		const char *in_stmt, gchar **in_params,
+		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines);
+
 struct oio_sqlx_client_factory_vtable_s vtable_factory_SDS = {
 	_sds_factory_destroy, _sds_factory_open
+};
+
+struct oio_sqlx_client_vtable_s vtable_SDS = {
+	_sds_client_destroy, _sds_client_execute
 };
 
 static void
@@ -81,8 +104,8 @@ _sds_factory_destroy (struct oio_sqlx_client_factory_s *self)
 	struct oio_sqlx_client_factory_SDS_s *s =
 		(struct oio_sqlx_client_factory_SDS_s*) self;
 	g_assert (s->vtable == &vtable_factory_SDS);
-	oio_str_clean (&s->url_proxy);
 	oio_str_clean (&s->ns);
+	s->dir = NULL;
 	s->vtable = NULL;
 	g_free (s);
 }
@@ -92,27 +115,68 @@ _sds_factory_open (struct oio_sqlx_client_factory_s *self,
 			const struct oio_url_s *u, struct oio_sqlx_client_s **out)
 {
 	g_assert (self != NULL);
-	struct oio_sqlx_client_factory_SDS_s *s =
+	struct oio_sqlx_client_factory_SDS_s *f =
 		(struct oio_sqlx_client_factory_SDS_s*) self;
-	g_assert (s->vtable == &vtable_factory_SDS);
+	g_assert (f->vtable == &vtable_factory_SDS);
 	g_assert (out != NULL);
 	g_assert (u != NULL);
-	*out = NULL;
-	return NEWERROR(CODE_NOT_IMPLEMENTED, "NYI");
+
+	if (!oio_url_has_fq_container(u))
+		return BADREQ("Partial URL");
+
+	struct oio_sqlx_client_SDS_s * client = g_malloc0 (sizeof(
+				struct oio_sqlx_client_SDS_s));
+	client->vtable = &vtable_SDS;
+	client->factory = f;
+	client->url = oio_url_dup (u);
+
+	*out = (struct oio_sqlx_client_s*) client;
+	return NULL;
 }
 
 struct oio_sqlx_client_factory_s *
-oio_sqlx_client_factory__create_sds (const char *ns)
+oio_sqlx_client_factory__create_sds (const char *ns,
+		struct oio_directory_s *dir)
 {
 	struct oio_sqlx_client_factory_SDS_s *self = g_slice_new0(
 			struct oio_sqlx_client_factory_SDS_s);
 	self->vtable = &vtable_factory_SDS;
 	self->ns = g_strdup (ns);
-	self->url_proxy = oio_cfg_get_proxy_directory (ns);
-	if (self->ns && self->url_proxy)
+	self->dir = dir;
+	if (self->ns && self->dir)
 		return (struct oio_sqlx_client_factory_s*) self;
 	_sds_factory_destroy ((struct oio_sqlx_client_factory_s*)self);
 	return NULL;
+}
+
+static void
+_sds_client_destroy (struct oio_sqlx_client_s *self)
+{
+	g_assert (self != NULL);
+	struct oio_sqlx_client_SDS_s *c = (struct oio_sqlx_client_SDS_s*) self;
+	g_assert (c->vtable == &vtable_SDS);
+	c->vtable = NULL;
+	c->factory = NULL;
+	g_free (c);
+}
+
+static GError *
+_sds_client_execute (struct oio_sqlx_client_s *self,
+		const char *in_stmt, gchar **in_params,
+		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines)
+{
+	g_assert (self != NULL);
+	struct oio_sqlx_client_SDS_s *c = (struct oio_sqlx_client_SDS_s*) self;
+	g_assert (c->vtable == &vtable_SDS);
+	g_assert (c->factory != NULL);
+
+	/* locate the sqlx server via the directory object */
+	GError *err = oio_directory__list (c->factory->dir, c->url, "sqlx",
+			NULL, NULL);
+
+	/* contact it */
+
+	return NEWERROR(CODE_NOT_IMPLEMENTED, "NYI");
 }
 
 /* Local implementation ----------------------------------------------------- */
@@ -333,7 +397,7 @@ _local_factory_open (struct oio_sqlx_client_factory_s *self,
 		return NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (schema): (%d) %s",
 				rc, sqlite3_errmsg(db));
 	}
-	
+
 	struct oio_sqlx_client_LOCAL_s *s = g_slice_new0 (struct oio_sqlx_client_LOCAL_s);
 	s->vtable = &vtable_LOCAL;
 	s->db = db;

@@ -26,7 +26,7 @@ target_link_libraries(sqlxsrv
 add_library(sqlxclient SHARED sqlx_client.c)
 set_target_properties(sqlxclient PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(sqlxclient
-		oiocore ${SQLITE3_LIBRARIES})
+		oiocore oiosds ${SQLITE3_LIBRARIES})
 
 add_executable(tool_sqlx tool_sqlx.c)
 bin_prefix(tool_sqlx -sqlx)

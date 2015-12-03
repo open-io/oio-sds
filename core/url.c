@@ -228,7 +228,7 @@ oio_url_pclean(struct oio_url_s **pu)
 } while (0)
 
 struct oio_url_s *
-oio_url_dup(struct oio_url_s *u)
+oio_url_dup(const struct oio_url_s *u)
 {
 	if (!u)
 		return NULL;
@@ -305,7 +305,7 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 }
 
 int
-oio_url_has(struct oio_url_s *u, enum oio_url_field_e f)
+oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f)
 {
 	if (!f || !u)
 		return 0;
@@ -337,13 +337,13 @@ oio_url_has(struct oio_url_s *u, enum oio_url_field_e f)
 }
 
 int
-oio_url_has_fq_path (struct oio_url_s *u)
+oio_url_has_fq_path (const struct oio_url_s *u)
 {
 	return oio_url_has (u, OIOURL_PATH) && oio_url_has_fq_container (u);
 }
 
 int
-oio_url_has_fq_container (struct oio_url_s *u)
+oio_url_has_fq_container (const struct oio_url_s *u)
 {
 	return oio_url_has (u, OIOURL_NS) && oio_url_has (u, OIOURL_ACCOUNT) && oio_url_has (u, OIOURL_USER);
 }

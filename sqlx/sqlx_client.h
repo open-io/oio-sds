@@ -87,7 +87,7 @@ GError * oio_sqlx_client_factory__open (struct oio_sqlx_client_factory_s *self,
 
 /* Creates the default SQLX client that locates then contacts sqlx servers */ 
 struct oio_sqlx_client_factory_s * oio_sqlx_client_factory__create_sds (
-		const char *ns);
+		const char *ns, struct oio_directory_s *dir);
 
 /* Creates the default SQLX client that locates then contacts sqlx servers */ 
 struct oio_sqlx_client_factory_s * oio_sqlx_client_factory__create_local (
