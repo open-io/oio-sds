@@ -16,8 +16,8 @@ class RdirClient(Client):
             resp = self.directory_client.show(acct='_RDIR', ref=volume_id)
         except NotFound as e:
             if self.autocreate:
-                self.directory_client.create('_RDIR', volume_id)
-                self.directory_client.link('_RDIR', volume_id, 'rdir')
+                self.directory_client.link('_RDIR', volume_id, 'rdir',
+                                           autocreate=True)
                 resp = self.directory_client.show(acct='_RDIR', ref=volume_id)
             else:
                 raise e

@@ -27,17 +27,25 @@ class TestRdirBackend(unittest.TestCase):
         ])
 
     def test_chunk_push_rtime(self):
-        self.assertRaises(ServerException,
-                          self.rdir.chunk_push,
-                          "myvolume", "mycontainer",
-                          "mycontent", "mychunk",
-                          rtime=5555)
+        self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",
+                             rtime=5555)
+        data = self.rdir.chunk_fetch("myvolume")
+        self.assertEqual(data, [
+            ("mycontainer|mycontent|mychunk", {'mtime': 5555, 'rtime': 5555})
+        ])
+
         self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",
                              mtime=4444, rtime=5555)
         data = self.rdir.chunk_fetch("myvolume")
         self.assertEqual(data, [
             ("mycontainer|mycontent|mychunk", {'mtime': 4444, 'rtime': 5555})
         ])
+
+    def test_chunk_push_no_rtime_no_mtime(self):
+        self.assertRaises(ServerException,
+                          self.rdir.chunk_push,
+                          "myvolume", "mycontainer",
+                          "mycontent", "mychunk")
 
     def test_push_allowed_tokens(self):
         data_put = {

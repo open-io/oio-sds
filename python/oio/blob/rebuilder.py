@@ -2,6 +2,7 @@ import time
 from socket import gethostname
 
 from oio.blob.client import BlobClient
+from oio.common.exceptions import ClientException
 from oio.container.client import ContainerClient
 from oio.rdir.client import RdirClient
 from oio.common import exceptions as exc
@@ -122,8 +123,6 @@ class BlobRebuilderWorker(object):
                          % (container_id, content_id, chunk_id))
         try:
             self.chunk_rebuild(container_id, content_id, chunk_id)
-            self.rdir_client.chunk_push(self.volume, container_id, content_id,
-                                        chunk_id, rtime=int(time.time()))
         except Exception as e:
             self.errors += 1
             self.logger.error('ERROR while rebuilding chunk %s|%s|%s) : %s',
@@ -162,11 +161,11 @@ class BlobRebuilderWorker(object):
         spare_data = {'notin': notin,
                       'broken': [broken],
                       'size': 0}
-        spare_resp = self.container_client.content_spare(
-            cid=container_id, content=content_id, data=spare_data)
-
-        if len(spare_resp['chunks']) == 0:
-            raise exc.SpareChunkException('No spare chunk')
+        try:
+            spare_resp = self.container_client.content_spare(
+                cid=container_id, content=content_id, data=spare_data)
+        except ClientException as e:
+            raise exc.SpareChunkException('No spare chunk (%s)' % e.message)
 
         return spare_resp['chunks'][0]
 
@@ -198,19 +197,26 @@ class BlobRebuilderWorker(object):
         spare_chunk = self._meta2_get_spare_chunk(
             container_id, content_id, duplicate_chunks, current_chunk)
 
+        uploaded = False
         for src in duplicate_chunks:
             try:
                 self.blob_client.chunk_copy(src['url'], spare_chunk['id'])
                 self.logger.debug('copy chunk from %s to %s',
                                   src['url'], spare_chunk['id'])
+                uploaded = True
                 break
             except Exception as e:
                 self.logger.debug('Failed to copy chunk from %s to %s: %s',
                                   src['url'], spare_chunk['id'], type(e))
-                raise e
+        if not uploaded:
+            raise exc.UnrecoverableContent('No copy available '
+                                           'of missing chunk')
 
         self._meta2_replace_chunk(container_id, content_id,
                                   current_chunk, spare_chunk)
+
+        self.rdir_client.chunk_push(self.volume, container_id, content_id,
+                                    chunk_id, rtime=int(time.time()))
 
         self.bytes_processed += current_chunk['size']
         self.total_bytes_processed += current_chunk['size']

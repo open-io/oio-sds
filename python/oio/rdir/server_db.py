@@ -63,7 +63,12 @@ class RdirBackend(object):
             value[k] = v
 
         if 'mtime' not in value:  # not consistent
-            raise ServerException("mtime is mandatory")
+            if 'rtime' in value:
+                # In functionnal test, we can encounter the case where rebuild
+                # update (rtime) arrives before creation update (first mtime)
+                value['mtime'] = value['rtime']
+            else:
+                raise ServerException("mtime is mandatory")
 
         value = json.dumps(value)
 
