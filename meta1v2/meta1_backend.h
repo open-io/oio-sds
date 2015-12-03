@@ -37,6 +37,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		"name TEXT NOT NULL, "\
 		"value TEXT NOT NULL, "\
 		"PRIMARY KEY(cid,name));"\
+	"CREATE INDEX IF NOT EXISTS prop_by_cid on properties (cid);" \
+	"CREATE INDEX IF NOT EXISTS serv_by_cid on services (cid);" \
+	"CREATE INDEX IF NOT EXISTS serv_by_srvtype on services (cid,srvtype);" \
 	"INSERT OR IGNORE INTO admin(k,v) " \
 		"VALUES (\"schema_version\",\"1.6\");" \
     "INSERT OR IGNORE INTO admin(k,v) " \
