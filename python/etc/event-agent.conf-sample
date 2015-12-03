@@ -6,6 +6,7 @@ workers = 2
 queue_location = /tmp/oio-event-queue.db
 retry_interval = 30
 acct_update = True
+rdir_update = True
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log

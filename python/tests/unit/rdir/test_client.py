@@ -1,11 +1,10 @@
+import unittest
 from mock import MagicMock as Mock
 
 from oio.rdir.client import RdirClient
 
-from tests.utils import BaseTestCase
 
-
-class TestRdirClient(BaseTestCase):
+class TestRdirClient(unittest.TestCase):
     def setUp(self):
         super(TestRdirClient, self).setUp()
         self.rdir_client = RdirClient({'namespace': "NS"})
@@ -20,10 +19,10 @@ class TestRdirClient(BaseTestCase):
             side_effect=[
                 (
                     Mock(),
-                    {
-                        "container1|content1|chunk1": {'mtime': 10},
-                        "container2|content2|chunk2": {'mtime': 20}
-                    }
+                    [
+                        ["container1|content1|chunk1", {'mtime': 10}],
+                        ["container2|content2|chunk2", {'mtime': 20}]
+                    ]
                 )
             ])
         gen = self.rdir_client.chunk_fetch("volume", limit=2)
@@ -39,19 +38,22 @@ class TestRdirClient(BaseTestCase):
             side_effect=[
                 (
                     Mock(),
-                    {
-                        "container1|content1|chunk1": {'mtime': 10},
-                        "container2|content2|chunk2": {'mtime': 20}
-                    }
+                    [
+                        ["container1|content1|chunk1", {'mtime': 10}],
+                        ["container2|content2|chunk2", {'mtime': 20}]
+                    ]
                 ),
                 (
                     Mock(),
-                    {
-                        "container3|content3|chunk3": {'mtime': 30}
-                    }
+                    [
+                        ["container3|content3|chunk3", {'mtime': 30}]
+                    ]
                 )
             ])
         gen = self.rdir_client.chunk_fetch("volume", limit=2)
+        # print(gen.next())
+        # print(gen.next())
+        # print(gen.next())
         self.assertEqual(gen.next(),
                          ("container1", "content1", "chunk1", {'mtime': 10}))
         self.assertEqual(gen.next(),

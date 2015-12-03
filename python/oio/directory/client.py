@@ -71,10 +71,14 @@ class DirectoryClient(Client):
         resp, body = self._request(
             'POST', uri, data=data, params=params)
 
-    def link(self, acct=None, ref=None, srv_type=None, cid=None, **kwargs):
+    def link(self, acct=None, ref=None, srv_type=None, cid=None,
+             autocreate=False, **kwargs):
         uri = self._make_uri('reference/link')
         params = self._make_params(acct, ref, srv_type, cid=cid)
-        resp, body = self._request('POST', uri, params=params)
+        headers = {}
+        if autocreate:
+            headers["X-oio-action-mode"] = "autocreate"
+        resp, body = self._request('POST', uri, params=params, headers=headers)
 
     def unlink(self, acct=None, ref=None, srv_type=None, cid=None, **kwargs):
         uri = self._make_uri('reference/unlink')

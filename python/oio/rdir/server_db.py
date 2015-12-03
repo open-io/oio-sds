@@ -63,7 +63,12 @@ class RdirBackend(object):
             value[k] = v
 
         if 'mtime' not in value:  # not consistent
-            raise ServerException("mtime is mandatory")
+            if 'rtime' in value:
+                # In functionnal test, we can encounter the case where rebuild
+                # update (rtime) arrives before creation update (first mtime)
+                value['mtime'] = value['rtime']
+            else:
+                raise ServerException("mtime is mandatory")
 
         value = json.dumps(value)
 
@@ -77,7 +82,7 @@ class RdirBackend(object):
 
     def chunk_fetch(self, volume_id, start_after=None,
                     limit=None, rebuild=False):
-        result = dict()
+        result = []
 
         if start_after is not None:
             start_after = start_after.encode('utf8')
@@ -101,7 +106,7 @@ class RdirBackend(object):
                 mtime = data.get('mtime')
                 if int(mtime) > incident_date:
                     continue  # chunk pushed after the incident
-            result[key] = data
+            result.append((key, data))
             count += 1
         return result
 
@@ -144,6 +149,18 @@ class RdirBackend(object):
         if ret is None:
             return None
         return int(ret)
+
+    def admin_clear(self, volume_id, clear_all):
+        db = self._get_db_chunk(volume_id)
+        count = 0
+        for key, value in db:
+            if not clear_all:
+                data = json.loads(value)
+            if clear_all or 'rtime' in data:
+                count += 1
+                db.delete(key)
+        self._get_db_admin(volume_id).delete('incident_date')
+        return count
 
     def admin_lock(self, volume_id, who):
         ret = self._get_db_admin(volume_id).get('lock')

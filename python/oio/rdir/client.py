@@ -16,8 +16,8 @@ class RdirClient(Client):
             resp = self.directory_client.show(acct='_RDIR', ref=volume_id)
         except NotFound as e:
             if self.autocreate:
-                self.directory_client.create('_RDIR', volume_id)
-                self.directory_client.link('_RDIR', volume_id, 'rdir')
+                self.directory_client.link('_RDIR', volume_id, 'rdir',
+                                           autocreate=True)
                 resp = self.directory_client.show(acct='_RDIR', ref=volume_id)
             else:
                 raise e
@@ -70,7 +70,7 @@ class RdirClient(Client):
             resp.raise_for_status()
             if len(resp_body) == 0:
                 break
-            for key, value in resp_body.iteritems():
+            for (key, value) in resp_body:
                 container, content, chunk = key.split('|')
                 yield container, content, chunk, value
             req_body['start_after'] = key

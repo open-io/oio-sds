@@ -124,13 +124,15 @@ class ContainerClient(Client):
 
     def content_create(self, acct=None, ref=None, path=None,
                        size=None, checksum=None, data=None, cid=None,
-                       **kwargs):
+                       content_id=None, **kwargs):
         uri = self._make_uri('content/create')
         params = self._make_params(acct, ref, path, cid=cid)
         data = json.dumps(data)
         hdrs = gen_headers()
         hdrs.update({'x-oio-content-meta-length': size,
                      'x-oio-content-meta-hash': checksum})
+        if content_id is not None:
+            hdrs['x-oio-content-meta-id'] = content_id
         resp, body = self._request(
             'POST', uri, data=data, params=params, headers=hdrs)
 

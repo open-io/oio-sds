@@ -428,7 +428,7 @@ template_rdir_server = """
 bind_addr = ${IP}
 bind_port = ${PORT}
 namespace = ${NS}
-db_path= ${DB_PATH}
+db_path= ${RDIR_DB_PATH}
 # Currently, only 1 worker is allowed to avoid concurrent access to leveldb database
 workers = 1
 log_facility = LOG_LOCAL0
@@ -629,8 +629,8 @@ def generate (ns, ip, options={}):
 
 	# rdir-server
 	env['PORT'] = port_rdir
-	env['DB_PATH'] = DATADIR + '/' + ns + '-rdir-1'
-	mkdir_noerror(env['DB_PATH'])
+	env['RDIR_DB_PATH'] = DATADIR + '/' + ns + '-rdir-1'
+	mkdir_noerror(env['RDIR_DB_PATH'])
 	with open(CFGDIR + '/' + ns + '-rdir-server.conf', 'w+') as f:
 		tpl = Template(template_rdir_server)
 		f.write(tpl.safe_substitute(env))
@@ -653,6 +653,7 @@ def generate (ns, ip, options={}):
 	# Test agent configuration
 	listing = {}
 	listing["namespace"] = ns
+        listing["stgpol"] = stgpol
 	listing["account"] = 'test_account'
 	listing["account_addr"] = [str(ip) + ":" + str(port_account)]
 	listing["proxyd_uri"] = "http://" + str(ip) + ":" + str(port_proxy)
@@ -671,6 +672,7 @@ def generate (ns, ip, options={}):
 		})
 	listing["redis"] = str(ip) + ':' + str(env['PORT_REDIS'])
 	listing["sds_path"] = SDSDIR
+        listing["rdir"] = { "path": env['RDIR_DB_PATH'], "addr": str(ip) + ':' + str(port_rdir) }
 	with open(CFGDIR + '/' + 'test.conf', 'w+') as f:
 		f.write(json.dumps(listing, indent=2))
 

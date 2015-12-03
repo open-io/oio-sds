@@ -1,11 +1,12 @@
 import tempfile
 import shutil
+import unittest
+
 from oio.common.exceptions import ServerException
 from oio.rdir.server_db import RdirBackend
-from tests.utils import BaseTestCase
 
 
-class TestRdirBackend(BaseTestCase):
+class TestRdirBackend(unittest.TestCase):
     def setUp(self):
         super(TestRdirBackend, self).setUp()
         self.db_path = tempfile.mkdtemp()
@@ -21,20 +22,30 @@ class TestRdirBackend(BaseTestCase):
         self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",
                              mtime=1234)
         data = self.rdir.chunk_fetch("myvolume")
-        self.assertEqual(data["mycontainer|mycontent|mychunk"],
-                         {'mtime': 1234})
+        self.assertEqual(data, [
+            ("mycontainer|mycontent|mychunk", {'mtime': 1234})
+        ])
 
     def test_chunk_push_rtime(self):
-        self.assertRaises(ServerException,
-                          self.rdir.chunk_push,
-                          "myvolume", "mycontainer",
-                          "mycontent", "mychunk",
-                          rtime=5555)
+        self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",
+                             rtime=5555)
+        data = self.rdir.chunk_fetch("myvolume")
+        self.assertEqual(data, [
+            ("mycontainer|mycontent|mychunk", {'mtime': 5555, 'rtime': 5555})
+        ])
+
         self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",
                              mtime=4444, rtime=5555)
         data = self.rdir.chunk_fetch("myvolume")
-        self.assertEqual(data["mycontainer|mycontent|mychunk"],
-                         {'mtime': 4444, 'rtime': 5555})
+        self.assertEqual(data, [
+            ("mycontainer|mycontent|mychunk", {'mtime': 4444, 'rtime': 5555})
+        ])
+
+    def test_chunk_push_no_rtime_no_mtime(self):
+        self.assertRaises(ServerException,
+                          self.rdir.chunk_push,
+                          "myvolume", "mycontainer",
+                          "mycontent", "mychunk")
 
     def test_push_allowed_tokens(self):
         data_put = {
@@ -51,126 +62,126 @@ class TestRdirBackend(BaseTestCase):
         self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",
                              **data_put)
         data_fetch = self.rdir.chunk_fetch("myvolume")
-        self.assertEqual(data_fetch["mycontainer|mycontent|mychunk"], data_put)
+        self.assertEqual(data_fetch, [
+            ("mycontainer|mycontent|mychunk", data_put)
+        ])
 
     def test_chunk_push_update_data(self):
         # initial push
         self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",
                              rtime=5555, mtime=6666)
         data = self.rdir.chunk_fetch("myvolume")
-        self.assertEqual(data["mycontainer|mycontent|mychunk"],
-                         {'mtime': 6666, 'rtime': 5555})
+        self.assertEqual(data, [
+            ("mycontainer|mycontent|mychunk", {'mtime': 6666, 'rtime': 5555})
+        ])
 
         # update mtime and rtime
         self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",
                              mtime=1111, rtime=2222)
         data = self.rdir.chunk_fetch("myvolume")
-        self.assertEqual(data["mycontainer|mycontent|mychunk"],
-                         {'mtime': 1111, 'rtime': 2222})
+        self.assertEqual(data, [
+            ("mycontainer|mycontent|mychunk", {'mtime': 1111, 'rtime': 2222})
+        ])
 
         # update only mtime
         self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",
                              mtime=9999)
         data = self.rdir.chunk_fetch("myvolume")
-        self.assertEqual(data["mycontainer|mycontent|mychunk"],
-                         {'mtime': 9999, 'rtime': 2222})
+        self.assertEqual(data, [
+            ("mycontainer|mycontent|mychunk", {'mtime': 9999, 'rtime': 2222})
+        ])
 
         # update only rtime
         self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",
                              rtime=7777)
         data = self.rdir.chunk_fetch("myvolume")
-        self.assertEqual(data["mycontainer|mycontent|mychunk"],
-                         {'mtime': 9999, 'rtime': 7777})
+        self.assertEqual(data, [
+            ("mycontainer|mycontent|mychunk", {'mtime': 9999, 'rtime': 7777})
+        ])
 
     def test_chunk_delete(self):
         self.rdir.chunk_push("myvolume", "mycontainer", "mycontent", "mychunk",
                              rtime=5555, mtime=6666)
         data = self.rdir.chunk_fetch("myvolume")
-        self.assertEqual(data["mycontainer|mycontent|mychunk"],
-                         {'mtime': 6666, 'rtime': 5555})
+        self.assertEqual(data, [
+            ("mycontainer|mycontent|mychunk", {'mtime': 6666, 'rtime': 5555})
+        ])
 
         self.rdir.chunk_delete("myvolume", "mycontainer", "mycontent",
                                "mychunk")
         data = self.rdir.chunk_fetch("myvolume")
-        self.assertEqual(data, {})
+        self.assertEqual(data, [])
 
     def test_fetch(self):
-        # initial push
-        self.rdir.chunk_push("myvolume", "mycontainer0", "mycontent1",
-                             "mychunk",
-                             mtime=1)
+        # initial push (container name are unordered)
         self.rdir.chunk_push("myvolume", "mycontainer0", "mycontent2",
                              "mychunk",
                              mtime=2)
-        self.rdir.chunk_push("myvolume", "mycontainer1", "mycontent3",
+        self.rdir.chunk_push("myvolume", "mycontainer0", "mycontent1",
                              "mychunk",
-                             mtime=3, rtime=4)
+                             mtime=1)
         self.rdir.chunk_push("myvolume", "mycontainer2", "mycontent4",
                              "mychunk",
                              mtime=10)
+        self.rdir.chunk_push("myvolume", "mycontainer1", "mycontent3",
+                             "mychunk",
+                             mtime=3, rtime=4)
 
-        # fetch all data
+        # fetch all data (leveldb sorted entries by key)
         data = self.rdir.chunk_fetch("myvolume")
-        self.assertEqual(data,
-                         {
-                             "mycontainer0|mycontent1|mychunk": {"mtime": 1},
-                             "mycontainer0|mycontent2|mychunk": {"mtime": 2},
-                             "mycontainer1|mycontent3|mychunk":
-                                 {"mtime": 3, "rtime": 4},
-                             "mycontainer2|mycontent4|mychunk": {"mtime": 10}
-                         })
+        self.assertEqual(data, [
+            ("mycontainer0|mycontent1|mychunk", {"mtime": 1}),
+            ("mycontainer0|mycontent2|mychunk", {"mtime": 2}),
+            ("mycontainer1|mycontent3|mychunk", {"mtime": 3, "rtime": 4}),
+            ("mycontainer2|mycontent4|mychunk", {"mtime": 10})
+        ])
 
         # fetch 0 records max
         data = self.rdir.chunk_fetch("myvolume", limit=0)
-        self.assertEqual(data, {})
+        self.assertEqual(data, [])
 
         # fetch 2 records max
         data = self.rdir.chunk_fetch("myvolume", limit=2)
-        self.assertEqual(data,
-                         {
-                             "mycontainer0|mycontent1|mychunk": {"mtime": 1},
-                             "mycontainer0|mycontent2|mychunk": {"mtime": 2}
-                         })
+        self.assertEqual(data, [
+            ("mycontainer0|mycontent1|mychunk", {"mtime": 1}),
+            ("mycontainer0|mycontent2|mychunk", {"mtime": 2})
+        ])
 
         # fetch 5 records max from record number 3
         data = self.rdir.chunk_fetch("myvolume", limit=5,
                                      start_after="mycontainer0|"
                                                  "mycontent2|mychunk")
-        self.assertEqual(data,
-                         {
-                             "mycontainer1|mycontent3|mychunk":
-                                 {"mtime": 3, "rtime": 4},
-                             "mycontainer2|mycontent4|mychunk": {"mtime": 10}
-                         })
+        self.assertEqual(data, [
+            ("mycontainer1|mycontent3|mychunk", {"mtime": 3, "rtime": 4}),
+            ("mycontainer2|mycontent4|mychunk", {"mtime": 10})
+        ])
 
         # fetch 5 records max from last record
         data = self.rdir.chunk_fetch("myvolume", limit=2,
                                      start_after="mycontainer2|"
                                                  "mycontent4|mychunk")
-        self.assertEqual(data, {})
+        self.assertEqual(data, [])
 
         # fetch all data from record number 2
         data = self.rdir.chunk_fetch("myvolume", start_after="mycontainer0|"
                                                              "mycontent2|"
                                                              "mychunk")
-        self.assertEqual(data,
-                         {
-                             "mycontainer1|mycontent3|mychunk":
-                                 {"mtime": 3, "rtime": 4},
-                             "mycontainer2|mycontent4|mychunk": {"mtime": 10}
-                         })
+        self.assertEqual(data, [
+            ("mycontainer1|mycontent3|mychunk", {"mtime": 3, "rtime": 4}),
+            ("mycontainer2|mycontent4|mychunk", {"mtime": 10})
+        ])
 
         # rebuild mode: no incident date so no entry
         data = self.rdir.chunk_fetch("myvolume", rebuild=True)
-        self.assertEqual(data, {})
+        self.assertEqual(data, [])
 
         # rebuild mode: with incident date
         self.rdir.admin_set_incident_date("myvolume", 6)
         data = self.rdir.chunk_fetch("myvolume", rebuild=True)
-        self.assertEqual(data, {
-            "mycontainer0|mycontent1|mychunk": {"mtime": 1},
-            "mycontainer0|mycontent2|mychunk": {"mtime": 2},
-        })
+        self.assertEqual(data, [
+            ("mycontainer0|mycontent1|mychunk", {"mtime": 1}),
+            ("mycontainer0|mycontent2|mychunk", {"mtime": 2}),
+        ])
 
     def test_rdir_status(self):
         # initial pushes
@@ -255,12 +266,14 @@ class TestRdirBackend(BaseTestCase):
                              mtime=2222)
 
         data = self.rdir.chunk_fetch("myvolume1")
-        self.assertEqual(data["mycontainer|mycontent|mychunk"],
-                         {'mtime': 1111})
+        self.assertEqual(data, [
+            ("mycontainer|mycontent|mychunk", {'mtime': 1111})
+        ])
 
         data = self.rdir.chunk_fetch("myvolume2")
-        self.assertEqual(data["mycontainer|mycontent|mychunk"],
-                         {'mtime': 2222})
+        self.assertEqual(data, [
+            ("mycontainer|mycontent|mychunk", {'mtime': 2222})
+        ])
 
     def test_push_mix_container_content_chunk(self):
         self.rdir.chunk_push("myvolume", "mycontainer1", "mycontent",
@@ -276,13 +289,12 @@ class TestRdirBackend(BaseTestCase):
                              "mychunk2",
                              mtime=4)
         data = self.rdir.chunk_fetch("myvolume")
-        self.assertEqual(data,
-                         {
-                             "mycontainer1|mycontent|mychunk": {'mtime': 1},
-                             "mycontainer2|mycontent1|mychunk": {'mtime': 2},
-                             "mycontainer2|mycontent2|mychunk1": {'mtime': 3},
-                             "mycontainer2|mycontent2|mychunk2": {'mtime': 4}
-                         })
+        self.assertEqual(data, [
+            ("mycontainer1|mycontent|mychunk", {'mtime': 1}),
+            ("mycontainer2|mycontent1|mychunk", {'mtime': 2}),
+            ("mycontainer2|mycontent2|mychunk1", {'mtime': 3}),
+            ("mycontainer2|mycontent2|mychunk2", {'mtime': 4})
+        ])
 
     def test_admin_incident_date(self):
         # no incident date
@@ -322,3 +334,34 @@ class TestRdirBackend(BaseTestCase):
         res = self.rdir.admin_show("myvolume")
         self.assertEqual(res, {'incident_date': "1234",
                                'lock': "a functionnal test"})
+
+    def test_admin_clear(self):
+        # populate the db
+        self.rdir.admin_set_incident_date("myvolume", 666)
+        self.rdir.chunk_push("myvolume", "mycontainer1", "mycontent",
+                             "mychunk", mtime=1)
+        self.rdir.chunk_push("myvolume", "mycontainer2", "mycontent1",
+                             "mychunk", mtime=2, rtime=3)
+
+        # clear rebuilt chunk entries
+        count = self.rdir.admin_clear("myvolume", False)
+        self.assertEqual(count, 1)
+
+        # check db state
+        data = self.rdir.chunk_fetch("myvolume")
+        self.assertEqual(data, [
+            ("mycontainer1|mycontent|mychunk", {'mtime': 1})
+        ])
+        self.assertEqual(self.rdir.admin_get_incident_date("myvolume"), None)
+
+        # populate again the db
+        self.rdir.chunk_push("myvolume", "mycontainer3", "mycontent1",
+                             "mychunk", mtime=3, rtime=4)
+
+        # clear all entries
+        count = self.rdir.admin_clear("myvolume", True)
+        self.assertEqual(count, 2)
+
+        # check db state
+        data = self.rdir.chunk_fetch("myvolume")
+        self.assertEqual(data, [])
