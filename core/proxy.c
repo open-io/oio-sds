@@ -36,8 +36,11 @@ _ptrv_free_content (gchar **tab)
 	while (*tab) { g_free (*(tab++)); }
 }
 
+/* @private */
+enum _prefix_e { PREFIX_REFERENCE, PREFIX_CONTAINER };
+
 static GString *
-_curl_url_prefix (struct oio_url_s *u)
+_curl_url_prefix (struct oio_url_s *u, enum _prefix_e which)
 {
 	GString *hu = g_string_new("http://");
 
@@ -46,7 +49,15 @@ _curl_url_prefix (struct oio_url_s *u)
 		GRID_WARN ("BUG No namespace configured!");
 		g_string_append (hu, "proxy");
 	} else {
-		gchar *s = oio_cfg_get_proxy_containers (ns);
+		gchar *s = NULL;
+
+		if (which == PREFIX_CONTAINER)
+			s = oio_cfg_get_proxy_containers (ns);
+		else if (which == PREFIX_REFERENCE)
+			s = oio_cfg_get_proxy_directory (ns);
+		else
+			s = oio_cfg_get_proxy (ns);
+
 		if (!s) {
 			GRID_WARN ("No proxy configured!");
 			g_string_append (hu, "proxy");
@@ -59,6 +70,18 @@ _curl_url_prefix (struct oio_url_s *u)
 	return hu;
 }
 
+static GString *
+_curl_url_prefix_containers (struct oio_url_s *u)
+{
+	return _curl_url_prefix (u, PREFIX_CONTAINER);
+}
+
+static GString *
+_curl_url_prefix_reference (struct oio_url_s *u)
+{
+	return _curl_url_prefix (u, PREFIX_REFERENCE);
+}
+
 static void
 _append (GString *gs, char sep, const char *k, const char *v)
 {
@@ -68,9 +91,20 @@ _append (GString *gs, char sep, const char *k, const char *v)
 }
 
 static GString *
+_curl_reference_url (struct oio_url_s *u, const char *action)
+{
+	GString *hu = _curl_url_prefix_reference (u);
+	g_string_append_printf (hu, "/%s/%s/reference/%s", PROXYD_PREFIX,
+			oio_url_get(u, OIOURL_NS), action);
+	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
+	_append (hu, '&', "ref",  oio_url_get (u, OIOURL_USER));
+	return hu;
+}
+
+static GString *
 _curl_container_url (struct oio_url_s *u, const char *action)
 {
-	GString *hu = _curl_url_prefix (u);
+	GString *hu = _curl_url_prefix_containers (u);
 	g_string_append_printf (hu, "/%s/%s/container/%s", PROXYD_PREFIX,
 			oio_url_get(u, OIOURL_NS), action);
 	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
@@ -81,7 +115,7 @@ _curl_container_url (struct oio_url_s *u, const char *action)
 static GString *
 _curl_content_url (struct oio_url_s *u, const char *action)
 {
-	GString *hu = _curl_url_prefix (u);
+	GString *hu = _curl_url_prefix_containers (u);
 	g_string_append_printf (hu, "/%s/%s/content/%s", PROXYD_PREFIX,
 			oio_url_get(u, OIOURL_NS), action);
 	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
@@ -123,14 +157,14 @@ _body_parse_error (GString *b)
 }
 
 static size_t
-_write_NOOP(void *data, size_t s, size_t n, void *ignored)
+_write_NOOP (void *data, size_t s, size_t n, void *ignored)
 {
 	(void) data, (void) ignored;
 	return s*n;
 }
 
 static size_t
-_write_GString(void *b, size_t s, size_t n, GString *out)
+_write_GString (void *b, size_t s, size_t n, GString *out)
 {
 	g_string_append_len (out, (gchar*)b, s*n);
 	return s*n;
@@ -143,7 +177,7 @@ struct view_GString_s
 };
 
 static size_t
-_read_GString(void *b, size_t s, size_t n, struct view_GString_s *in)
+_read_GString (void *b, size_t s, size_t n, struct view_GString_s *in)
 {
 	size_t remaining = in->data->len - in->done;
 	size_t available = s * n;
@@ -411,6 +445,21 @@ oio_proxy_call_content_list (CURL *h, struct oio_url_s *u, GString *out,
 	if (end) _append (http_url, '&', "end", end);
 	if (max) g_string_append_printf (http_url, "&max=%u", max);
 	if (delim) g_string_append_printf (http_url, "&delimiter=%c", delim);
+
+	struct http_ctx_s o = { .headers = NULL, .body = out };
+	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);
+	g_strfreev (o.headers);
+
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_reference_show (CURL *h, struct oio_url_s *u,
+		const char *t, GString *out)
+{
+	GString *http_url = _curl_reference_url (u, "show");
+	if (t) _append(http_url, '&', "type", t);
 
 	struct http_ctx_s o = { .headers = NULL, .body = out };
 	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);

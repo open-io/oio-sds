@@ -1,7 +1,6 @@
 /*
 OpenIO SDS sqlx
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
 
 This program is free software: you can redistribute it and/or modify
 it under the terms of the GNU Affero General Public License as
@@ -17,494 +16,409 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <errno.h>
+#include <glib.h>
+#include <sqlite3.h>
 
-#include <metautils/lib/metautils.h>
-#include <sqliterepo/sqlx_remote.h>
-#include <sqliterepo/sqlx_remote_ex.h>
-#include <resolver/hc_resolver.h>
+/* from oiocore */
+#include <core/oiocfg.h>
+#include <core/oiolog.h>
+#include <core/oiostr.h>
+#include <core/oiourl.h>
 
-#include <metautils/lib/RowFieldValue.h>
-#include <metautils/lib/RowField.h>
-#include <metautils/lib/RowFieldSequence.h>
-#include <metautils/lib/Row.h>
-#include <metautils/lib/RowSet.h>
-#include <metautils/lib/RowName.h>
-#include <metautils/lib/TableHeader.h>
-#include <metautils/lib/Table.h>
-#include <metautils/lib/TableSequence.h>
+/* from oiosds */
+#include <core/oiodir.h>
+#include <core/internals.h>
 
-static struct hc_resolver_s *resolver = NULL;
+#include "sqlx_client.h"
 
-static gboolean flag_xml = FALSE;
-static gboolean flag_json = FALSE;
+#define CLIENT_CALL(self,F) VTABLE_CALL(self,struct oio_sqlx_client_abstract_s*,F)
+#define FACTORY_CALL(self,F) VTABLE_CALL(self,struct oio_sqlx_client_factory_abstract_s*,F)
 
-struct oio_url_s *url = NULL;
-static gchar *type = NULL;
-static gchar **query = NULL;
-
-static void
-_dump_table_text(struct Table *table)
+void
+oio_sqlx_client__destroy (struct oio_sqlx_client_s *self)
 {
-	gdouble d = 0;
-	gint64 i64 = 0, pos = 0;
-	int32_t i, imax, j, jmax;
-
-	g_print("# query = \"%.*s\"\n", table->name.size, table->name.buf);
-	g_print("# rows = %u\n", table->rows.list.count);
-
-	if (!table->status)
-		g_print("# status = ?");
-	else {
-		asn_INTEGER_to_int64(table->status, &i64);
-		g_print("# status = %"G_GINT64_FORMAT, i64);
-	}
-
-	if (!table->statusString)
-		g_print("\n");
-	else
-		g_print(" (%.*s)\n", table->statusString->size, table->statusString->buf);
-
-	if (table->rows.list.count > 0) {
-
-		for (i=0,imax=table->rows.list.count; i<imax ;i++) {
-			struct Row *row = table->rows.list.array[i];
-			if (!row->fields || row->fields->list.count < 0)
-				continue;
-
-			for (j=0,jmax=row->fields->list.count; j<jmax ;j++) {
-				struct RowField *field = row->fields->list.array[j];
-
-				asn_INTEGER_to_int64(&(field->pos), &pos);
-				if (j)
-					g_print("|");
-				
-				switch (field->value.present) {
-					case RowFieldValue_PR_NOTHING:
-					case RowFieldValue_PR_n:
-						g_print("(nil)");
-						break;
-					case RowFieldValue_PR_i:
-						asn_INTEGER_to_int64(&(field->value.choice.i), &i64);
-						g_print("%"G_GINT64_FORMAT, i64);
-						break;
-					case RowFieldValue_PR_f:
-						asn_REAL2double(&(field->value.choice.f), &d);
-						g_print("%f", d);
-						break;
-					case RowFieldValue_PR_b:
-						g_print("%.*s", field->value.choice.b.size,
-							field->value.choice.b.buf);
-						break;
-					case RowFieldValue_PR_s:
-						g_print("%.*s", field->value.choice.s.size,
-									field->value.choice.s.buf);
-						break;
-				}
-			}
-
-			g_print("\n");
-		}
-	}
+	CLIENT_CALL(self,destroy)(self);
 }
 
-static void
-_dump_table_xml(struct Table *table)
+GError *
+oio_sqlx_client__execute_statement (struct oio_sqlx_client_s *self,
+		const char *in_stmt, gchar **in_params,
+		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out)
 {
-	gdouble d = 0;
-	gint64 i64 = 0, pos = 0;
-	int32_t i, j;
-
-	g_print("<table>\n <name>%.*s</name>\n", table->name.size, table->name.buf);
-
-	i64 = 0;
-	if (table->status)
-		asn_INTEGER_to_int64(table->status, &i64);
-
-	if (table->statusString)
-		g_print(" <status code=\"%"G_GINT64_FORMAT"\"/>\n", i64);
-	else
-		g_print(" <status code=\"%"G_GINT64_FORMAT"\">%.*s</status>\n", i64,
-				table->statusString->size, table->statusString->buf);
-
-	if (table->rows.list.count > 0) {
-
-		g_print(" <rows>\n");
-
-		for (i=0; i<table->rows.list.count ;i++) {
-			struct Row *row = table->rows.list.array[i];
-			if (!row->fields || row->fields->list.count < 0)
-				continue;
-
-			g_print("  <row>\n");
-
-			for (j=0; j<row->fields->list.count ;j++) {
-				struct RowField *field = row->fields->list.array[j];
-
-				asn_INTEGER_to_int64(&(field->pos), &pos);
-				g_print("   <f pos=%"G_GINT64_FORMAT">", pos);
-
-				switch (field->value.present) {
-					case RowFieldValue_PR_NOTHING:
-					case RowFieldValue_PR_n:
-						g_print("(nil)");
-						break;
-					case RowFieldValue_PR_i:
-						asn_INTEGER_to_int64(&(field->value.choice.i), &i64);
-						g_print("%"G_GINT64_FORMAT, i64);
-						break;
-					case RowFieldValue_PR_f:
-						asn_REAL2double(&(field->value.choice.f), &d);
-						g_print("%f", d);
-						break;
-					case RowFieldValue_PR_b:
-						g_print("%.*s", field->value.choice.b.size,
-								field->value.choice.b.buf);
-						break;
-					case RowFieldValue_PR_s:
-						g_print("%.*s", field->value.choice.s.size,
-								field->value.choice.s.buf);
-						break;
-				}
-
-				g_print("</f>\n");
-			}
-
-			g_print("  </row>\n");
-		}
-
-		g_print(" </rows>\n");
-	}
-
-	g_print("<table>\n");
+	CLIENT_CALL(self,execute_statement)(self, in_stmt, in_params, out_ctx, out);
 }
 
-static void
-json_dump_string(const guint8 *b, gint32 max)
+void
+oio_sqlx_client_factory__destroy
+(struct oio_sqlx_client_factory_s *self)
 {
-	gint32 i;
-	register guint16 u16;
-	register guint8 c;
-
-	g_print("\"");
-	for (i=0; i<max ;i++) {
-		c = b[i];
-		if (g_ascii_isprint(c))
-			g_print("%c", c);
-		else {
-			u16 = c;
-			g_print("\\u%04x", u16);
-		}
-	}
-	g_print("\"");
+	FACTORY_CALL(self,destroy)(self);
 }
 
-static void
-_dump_table_json(struct Table *table)
+GError *
+oio_sqlx_client_factory__open (struct oio_sqlx_client_factory_s *self,
+			struct oio_url_s *u, struct oio_sqlx_client_s **out)
 {
-	gdouble d = 0;
-	gint64 i64 = 0, pos = 0;
-	int32_t i, j;
-
-	g_print(" {\n \"table\" : \"%.*s\",\n", table->name.size, table->name.buf);
-	if (table->status) {
-		asn_INTEGER_to_int64(table->status, &i64);
-		g_print(" \"status\" : %"G_GINT64_FORMAT",\n", i64);
-	}
-	g_print("  \"rows\" : [\n");
-
-	if (table->rows.list.count > 0) {
-
-		for (i=0; i<table->rows.list.count ;i++) {
-			struct Row *row = table->rows.list.array[i];
-			if (!row->fields || row->fields->list.count < 0)
-				continue;
-
-			g_print("   {\n");
-
-			for (j=0; j<row->fields->list.count ;j++) {
-				struct RowField *field = row->fields->list.array[j];
-
-				asn_INTEGER_to_int64(&(field->pos), &pos);
-				g_print("    \"%"G_GINT64_FORMAT"\" : ", pos);
-
-				switch (field->value.present) {
-					case RowFieldValue_PR_NOTHING:
-					case RowFieldValue_PR_n:
-						g_print("null");
-						break;
-					case RowFieldValue_PR_i:
-						asn_INTEGER_to_int64(&(field->value.choice.i), &i64);
-						g_print("%"G_GINT64_FORMAT, i64);
-						break;
-					case RowFieldValue_PR_f:
-						asn_REAL2double(&(field->value.choice.f), &d);
-						g_print("%f", d);
-						break;
-					case RowFieldValue_PR_b:
-						json_dump_string(field->value.choice.b.buf, field->value.choice.b.size);
-						break;
-					case RowFieldValue_PR_s:
-						json_dump_string(field->value.choice.s.buf, field->value.choice.s.size);
-						break;
-				}
-				g_print(",\n");
-			}
-			g_print("   },\n");
-		}
-	}
-
-	g_print("  ]\n },\n");
+	FACTORY_CALL(self,open)(self, u, out);
 }
 
-static gboolean
-_on_reply(gpointer u, MESSAGE reply)
+/* SDS implementation ------------------------------------------------------- */
+
+struct oio_sqlx_client_factory_SDS_s
 {
-	(void) u;
-	size_t bsize = 0;
-	void *b = metautils_message_get_BODY(reply, &bsize);
-	if (!b || !bsize)
-		return TRUE;
-
-	asn_codec_ctx_t ctx;
-	memset(&ctx, 0, sizeof(ctx));
-	ctx.max_stack_size = ASN1C_MAX_STACK;
-
-	struct TableSequence *ts = NULL;
-	asn_dec_rval_t rv = ber_decode(&ctx, &asn_DEF_TableSequence, (void**)&ts, b, bsize);
-	if (rv.code != RC_OK) {
-		g_printerr("Invalid reply from SQLX: bad body, decoding error\n");
-		return FALSE;
-	}
-
-	if (flag_json) {
-		g_print("{ \"result\" : [\n");
-		for (int i=0; i < ts->list.count ; i++)
-			_dump_table_json(ts->list.array[i]);
-		g_print(" ]\n}");
-	}
-	else if (flag_xml) {
-		g_print("<result>\n");
-		for (int i=0; i < ts->list.count ; i++)
-			_dump_table_xml(ts->list.array[i]);
-		g_print("</result>");
-	}
-	else {
-		for (int i=0; i < ts->list.count ; i++)
-			_dump_table_text(ts->list.array[i]);
-	}
-
-	if (ts)
-		asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence, ts, FALSE);
-	return TRUE;
-}
-
-static gint
-do_query(struct gridd_client_s *client, struct meta1_service_url_s *surl,
-		const gchar *Q)
-{
-	gint rc = 0;
-	GError *err;
-	GByteArray *req;
-	struct sqlx_name_mutable_s name;
-
-	GRID_DEBUG("Querying [%s]", Q);
-
-	sqlx_name_fill (&name, url, NAME_SRVTYPE_SQLX, surl->seq);
-
-	req = sqlx_pack_QUERY_single(sqlx_name_mutable_to_const(&name), Q, FALSE);
-	err = gridd_client_request(client, req, NULL, _on_reply);
-	g_byte_array_unref(req);
-
-	if (NULL != err) {
-		g_printerr("Local error: (%d) %s\n", err->code, err->message);
-		g_clear_error(&err);
-	}
-	else if (NULL != (err = gridd_client_loop(client))) {
-		g_printerr("Local error: (%d) %s\n", err->code, err->message);
-		g_clear_error(&err);
-	}
-	else {
-		if (NULL != (err = gridd_client_error(client))) {
-			g_printerr("SQLX error: (%d) %s\n", err->code, err->message);
-			g_clear_error(&err);
-		}
-		else {
-			GRID_DEBUG("SQLX query succeeded");
-			rc = 1;
-		}
-	}
-
-	sqlx_name_clean (&name);
-	return rc;
-}
-
-static gint
-do_queryv(struct meta1_service_url_s *surl)
-{
-	gint rc;
-	gchar **pq;
-	struct gridd_client_s *client;
-
-	GRID_DEBUG("Contacting SHARD[%"G_GINT64_FORMAT"] at [%s][%s]",
-			surl->seq, surl->host, surl->args);
-
-	client = gridd_client_create_idle(surl->host);
-	gridd_client_set_keepalive(client, TRUE);
-	gridd_client_start(client);
-
-	rc = 1;
-	for (pq=query; *pq ;pq++) {
-		if (!do_query(client, surl, *pq)) {
-			rc = 0;
-			break;
-		}
-	}
-
-	gridd_client_free(client);
-	return rc;
-}
-
-/* XXX TODO make a call to the proxy */
-static gint
-do_destroy2(struct meta1_service_url_s *srvurl)
-{
-	(void) srvurl;
-	g_printerr("SQLX base destruciton not implemented");
-	return 1;
-}
-
-static void
-cli_action(void)
-{
-	/* Use the client to get a sqlx service */
-	GRID_DEBUG("Locating [%s] CID[%s]", oio_url_get(url, OIOURL_WHOLE),
-			oio_url_get(url, OIOURL_HEXID));
-
-	gchar **srvurlv = NULL;
-	GError *err = hc_resolve_reference_service(resolver, url, type, &srvurlv);
-	if (err != NULL) {
-		GRID_ERROR("Services resolution error: (%d) %s", err->code, err->message);
-		grid_main_set_status(1);
-		return;
-	}
-
-	if (!srvurlv || !*srvurlv) {
-		GRID_ERROR("Services resolution error: (%d) %s", 0, "No service found");
-		grid_main_set_status(1);
-		return;
-	}
-
-	for (gchar **s=srvurlv; *s ;s++)
-		GRID_DEBUG("Located [%s]", *s);
-
-	gint rc = 0;
-	for (gchar **s=srvurlv; !rc && *s ;s++) {
-		struct meta1_service_url_s *surl;
-		if (!(surl = meta1_unpack_url(*s)))
-			g_printerr("Invalid service URL from meta1 [%s]\n", *s);
-		else {
-			if (!g_ascii_strcasecmp("destroy", query[0])) {
-				rc = do_destroy2(surl);
-			} else {
-				rc = do_queryv(surl);
-			}
-			g_free(surl);
-		}
-	}
-
-	g_strfreev(srvurlv);
-}
-
-static struct grid_main_option_s *
-cli_get_options(void)
-{
-	static struct grid_main_option_s cli_options[] = {
-		{ "OutputXML", OT_BOOL, {.b = &flag_xml},
-			"Write XML instead of the default key=value output"},
-		{ "OutputJSON", OT_BOOL, {.b = &flag_json},
-			"Write JSON instead of the default key=value output or XML output"},
-		{NULL, 0, {.i=0}, NULL}
-	};
-
-	return cli_options;
-}
-
-static void
-cli_set_defaults(void)
-{
-	GRID_DEBUG("Setting defaults");
-	type = NULL;
-	query = NULL;
-	url = NULL;
-	resolver = NULL;
-}
-
-static void
-cli_specific_fini(void)
-{
-	GRID_DEBUG("Exiting");
-	metautils_pfree(&type);
-	metautils_pfree(&query);
-	if (resolver) {
-		hc_resolver_destroy (resolver);
-		resolver = NULL;
-	}
-	if (url) {
-		oio_url_clean(url);
-		url = NULL;
-	}
-}
-
-static void
-cli_specific_stop(void)
-{
-	/* no op */
-}
-
-static const gchar *
-cli_usage(void)
-{
-	return "NS/REF TYPE QUERY [QUERY...]\nNS/REF TYPE 'destroy'";
-}
-
-static gboolean
-cli_configure(int argc, char **argv)
-{
-	GRID_DEBUG("Configuration");
-
-	if (argc < 3) {
-		g_printerr("Invalid arguments number");
-		return FALSE;
-	}
-
-	if (!(url = oio_url_init(argv[0]))) {
-		g_printerr("Invalid hc URL (%s)\n", strerror(errno));
-		return FALSE;
-	}
-
-	resolver = hc_resolver_create();
-	type = g_strconcat("sqlx.", argv[1], NULL);
-	query = g_strdupv(argv+2);
-	GRID_DEBUG("Executing %u requests", g_strv_length(query));
-
-	return TRUE;
-}
-
-struct grid_main_callbacks cli_callbacks =
-{
-	.options = cli_get_options,
-	.action = cli_action,
-	.set_defaults = cli_set_defaults,
-	.specific_fini = cli_specific_fini,
-	.configure = cli_configure,
-	.usage = cli_usage,
-	.specific_stop = cli_specific_stop,
+	struct oio_sqlx_client_factory_vtable_s *vtable;
+	struct oio_directory_s *dir;
+	gchar *ns;
 };
 
-int
-main(int argc, char **args)
+struct oio_sqlx_client_SDS_s
 {
-	return grid_main_cli(argc, args, &cli_callbacks);
+	struct oio_sqlx_client_vtable_s *vtable;
+	struct oio_sqlx_client_factory_SDS_s *factory;
+	struct oio_url_s *url;
+};
+
+static void _sds_factory_destroy (struct oio_sqlx_client_factory_s *self);
+
+static GError * _sds_factory_open (struct oio_sqlx_client_factory_s *self,
+			const struct oio_url_s *u, struct oio_sqlx_client_s **out);
+
+static void _sds_client_destroy (struct oio_sqlx_client_s *self);
+
+static GError * _sds_client_execute (struct oio_sqlx_client_s *self,
+		const char *in_stmt, gchar **in_params,
+		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines);
+
+struct oio_sqlx_client_factory_vtable_s vtable_factory_SDS = {
+	_sds_factory_destroy, _sds_factory_open
+};
+
+struct oio_sqlx_client_vtable_s vtable_SDS = {
+	_sds_client_destroy, _sds_client_execute
+};
+
+static void
+_sds_factory_destroy (struct oio_sqlx_client_factory_s *self)
+{
+	g_assert (self != NULL);
+	struct oio_sqlx_client_factory_SDS_s *s =
+		(struct oio_sqlx_client_factory_SDS_s*) self;
+	g_assert (s->vtable == &vtable_factory_SDS);
+	oio_str_clean (&s->ns);
+	s->dir = NULL;
+	s->vtable = NULL;
+	g_free (s);
+}
+
+static GError *
+_sds_factory_open (struct oio_sqlx_client_factory_s *self,
+			const struct oio_url_s *u, struct oio_sqlx_client_s **out)
+{
+	g_assert (self != NULL);
+	struct oio_sqlx_client_factory_SDS_s *f =
+		(struct oio_sqlx_client_factory_SDS_s*) self;
+	g_assert (f->vtable == &vtable_factory_SDS);
+	g_assert (out != NULL);
+	g_assert (u != NULL);
+
+	if (!oio_url_has_fq_container(u))
+		return BADREQ("Partial URL");
+
+	struct oio_sqlx_client_SDS_s * client = g_malloc0 (sizeof(
+				struct oio_sqlx_client_SDS_s));
+	client->vtable = &vtable_SDS;
+	client->factory = f;
+	client->url = oio_url_dup (u);
+
+	*out = (struct oio_sqlx_client_s*) client;
+	return NULL;
+}
+
+struct oio_sqlx_client_factory_s *
+oio_sqlx_client_factory__create_sds (const char *ns,
+		struct oio_directory_s *dir)
+{
+	struct oio_sqlx_client_factory_SDS_s *self = g_slice_new0(
+			struct oio_sqlx_client_factory_SDS_s);
+	self->vtable = &vtable_factory_SDS;
+	self->ns = g_strdup (ns);
+	self->dir = dir;
+	if (self->ns && self->dir)
+		return (struct oio_sqlx_client_factory_s*) self;
+	_sds_factory_destroy ((struct oio_sqlx_client_factory_s*)self);
+	return NULL;
+}
+
+static void
+_sds_client_destroy (struct oio_sqlx_client_s *self)
+{
+	g_assert (self != NULL);
+	struct oio_sqlx_client_SDS_s *c = (struct oio_sqlx_client_SDS_s*) self;
+	g_assert (c->vtable == &vtable_SDS);
+	c->vtable = NULL;
+	c->factory = NULL;
+	g_free (c);
+}
+
+static GError *
+_sds_client_execute (struct oio_sqlx_client_s *self,
+		const char *in_stmt, gchar **in_params,
+		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines)
+{
+	g_assert (self != NULL);
+	struct oio_sqlx_client_SDS_s *c = (struct oio_sqlx_client_SDS_s*) self;
+	g_assert (c->vtable == &vtable_SDS);
+	g_assert (c->factory != NULL);
+
+	/* locate the sqlx server via the directory object */
+	GError *err = oio_directory__list (c->factory->dir, c->url, "sqlx",
+			NULL, NULL);
+
+	/* contact it */
+
+	return NEWERROR(CODE_NOT_IMPLEMENTED, "NYI");
+}
+
+/* Local implementation ----------------------------------------------------- */
+
+struct oio_sqlx_client_LOCAL_s
+{
+	struct oio_sqlx_client_vtable_s *vtable;
+	sqlite3 *db;
+};
+
+struct oio_sqlx_client_factory_LOCAL_s
+{
+	struct oio_sqlx_client_factory_vtable_s *vtable;
+	gchar *schema;
+	gchar *ns;
+};
+
+static void _local_client_destroy (struct oio_sqlx_client_s *self);
+
+static GError * _local_client_execute_statement (struct oio_sqlx_client_s *self,
+		const char *in_stmt, gchar **in_params,
+		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines);
+
+static void _local_factory_destroy (struct oio_sqlx_client_factory_s *self);
+
+static GError * _local_factory_open (struct oio_sqlx_client_factory_s *self,
+			const struct oio_url_s *u, struct oio_sqlx_client_s **out);
+
+struct oio_sqlx_client_factory_vtable_s vtable_factory_LOCAL =
+{
+	_local_factory_destroy, _local_factory_open
+};
+
+struct oio_sqlx_client_vtable_s vtable_LOCAL =
+{
+	_local_client_destroy, _local_client_execute_statement,
+};
+
+static void
+_local_client_destroy (struct oio_sqlx_client_s *self)
+{
+	g_assert (self != NULL);
+	struct oio_sqlx_client_LOCAL_s *s = (struct oio_sqlx_client_LOCAL_s*)self;
+	g_assert (s->vtable == &vtable_LOCAL);
+	if (s->db)
+		sqlite3_close (s->db);
+	s->db = NULL;
+	s->vtable = NULL;
+	g_free (s);
+}
+
+static gchar *
+_pack_column_names (sqlite3_stmt *stmt)
+{
+	GString *gs = g_string_new("");
+	for (int i=0,max=sqlite3_column_count(stmt); i<max ;++i) {
+		if (gs->len > 0) g_string_append_c (gs, ',');
+		g_string_append (gs, sqlite3_column_name(stmt, i));
+	}
+	return g_string_free (gs, FALSE);
+}
+
+static gchar *
+_pack_record (sqlite3_stmt *stmt)
+{
+	GString *gs = g_string_new("");
+	for (int i=0,max=sqlite3_column_count(stmt); i<max ;++i) {
+		if (gs->len > 0)
+			g_string_append_c (gs, ',');
+		if (sqlite3_column_type(stmt, i) == SQLITE_INTEGER) {
+			g_string_append_printf (gs, "%"G_GINT64_FORMAT,
+					(gint64)sqlite3_column_int64(stmt, i));
+		} else {
+			const char *v = (const char*)sqlite3_column_text(stmt, i);
+			if (v) g_string_append (gs, v);
+		}
+	}
+	return g_string_free (gs, FALSE);
+}
+
+static GError *
+_local_client_execute_statement (struct oio_sqlx_client_s *self,
+		const char *in_stmt, gchar **in_params,
+		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines)
+{
+	g_assert (self != NULL);
+	struct oio_sqlx_client_LOCAL_s *s = (struct oio_sqlx_client_LOCAL_s*)self;
+	g_assert (s->vtable == &vtable_LOCAL);
+	g_assert (s->db != NULL);
+
+	GError *err = NULL;
+	sqlite3_stmt *stmt = NULL;
+	GPtrArray *tmp = NULL;
+
+	/* prepare the query and bind the parameters */
+	int rc = sqlite3_prepare (s->db, in_stmt, -1, &stmt, NULL);
+	if (rc != SQLITE_OK) {
+		err = NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (prepare): (%d) %s",
+				rc, sqlite3_errmsg(s->db));
+		goto out;
+	}
+
+	for (int i=0; in_params && in_params[i]; ++i) {
+		rc = sqlite3_bind_text (stmt, i+1, in_params[i], -1, NULL);
+		if (SQLITE_OK != rc) {
+			err = NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (bind): (%d) %s",
+					rc, sqlite3_errmsg(s->db));
+			goto out;
+		}
+	}
+
+	/* pack the output */
+	tmp = g_ptr_array_new ();
+	if (out_lines)
+		g_ptr_array_add (tmp, _pack_column_names(stmt));
+	do {
+		rc = sqlite3_step (stmt);
+		if (rc == SQLITE_ROW && out_lines)
+			g_ptr_array_add (tmp, _pack_record (stmt));
+	} while (rc == SQLITE_ROW);
+
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		err = NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (step): (%d) %s",
+				rc, sqlite3_errmsg(s->db));
+		goto out;
+	}
+
+	/* fill the context */
+	if (out_ctx) {
+		out_ctx->changes = sqlite3_changes (s->db);
+		out_ctx->total_changes = sqlite3_total_changes (s->db);
+		out_ctx->last_rowid = sqlite3_last_insert_rowid (s->db);
+	}
+
+out:
+	if (SQLITE_OK != (rc = sqlite3_finalize (stmt))) {
+		if (!err)
+			err = NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (finalize): "
+					"(%d) %s", rc, sqlite3_errmsg(s->db));
+	}
+	if (tmp)
+		g_ptr_array_add (tmp, NULL);
+	if (!err && out_lines) {
+		*out_lines = (gchar**)g_ptr_array_free (tmp, FALSE);
+		tmp = NULL;
+	}
+	if (tmp)
+		g_strfreev ((gchar**)g_ptr_array_free (tmp, FALSE));
+	return err;
+}
+
+static void
+_local_factory_destroy (struct oio_sqlx_client_factory_s *self)
+{
+	g_assert (self != NULL);
+	struct oio_sqlx_client_factory_LOCAL_s *s =
+		(struct oio_sqlx_client_factory_LOCAL_s*) self;
+	g_assert (s->vtable == &vtable_factory_LOCAL);
+	oio_str_clean (&s->schema);
+	oio_str_clean (&s->ns);
+	s->vtable = NULL;
+	g_free (s);
+}
+
+/* XXX JFS dupplicated from sqliterepo/sqlite_utils.c */
+static int
+_sqlx_exec(sqlite3 *handle, const gchar *sql)
+{
+	int rc, grc = SQLITE_OK;
+	const gchar *next;
+	sqlite3_stmt *stmt = NULL;
+
+	while ((grc == SQLITE_OK) && sql && *sql) {
+		next = NULL;
+		rc = sqlite3_prepare(handle, sql, -1, &stmt, &next);
+		sql = next;
+		if (rc != SQLITE_OK && rc != SQLITE_DONE)
+			grc = rc;
+		else if (stmt) {
+			do {
+				rc = sqlite3_step(stmt);
+			} while (rc == SQLITE_ROW);
+			if (rc != SQLITE_OK && rc != SQLITE_DONE)
+				grc = rc;
+			rc = sqlite3_finalize(stmt);
+		}
+
+		stmt = NULL;
+	}
+
+	return grc;
+}
+
+static GError *
+_local_factory_open (struct oio_sqlx_client_factory_s *self,
+			const struct oio_url_s *u, struct oio_sqlx_client_s **out)
+{
+	g_assert (self != NULL);
+	struct oio_sqlx_client_factory_LOCAL_s *factory =
+		(struct oio_sqlx_client_factory_LOCAL_s*) self;
+	g_assert (factory->vtable == &vtable_factory_LOCAL);
+	g_assert (out != NULL);
+	g_assert (u != NULL);
+
+	sqlite3 *db = NULL;
+	int flags = SQLITE_OPEN_NOMUTEX|SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE;
+	int rc = sqlite3_open_v2(":memory:", &db, flags, NULL);
+	if (rc != SQLITE_OK) {
+		sqlite3_close (db);
+		return NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (open): (%d) %s",
+				rc, sqlite3_errmsg(db));
+	}
+
+	/* apply the schema */
+	rc = _sqlx_exec (db, factory->schema);
+	if (SQLITE_OK != rc && SQLITE_DONE != rc) {
+		sqlite3_close (db);
+		return NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (schema): (%d) %s",
+				rc, sqlite3_errmsg(db));
+	}
+
+	struct oio_sqlx_client_LOCAL_s *s = g_slice_new0 (struct oio_sqlx_client_LOCAL_s);
+	s->vtable = &vtable_LOCAL;
+	s->db = db;
+	*out = (struct oio_sqlx_client_s*) s;
+
+	return NULL;
+}
+
+struct oio_sqlx_client_factory_s *
+oio_sqlx_client_factory__create_local (const char *ns, const char *schema)
+{
+	g_assert (ns != NULL);
+	g_assert (schema != NULL);
+	struct oio_sqlx_client_factory_LOCAL_s *self = g_slice_new0(
+			struct oio_sqlx_client_factory_LOCAL_s);
+	self->vtable = &vtable_factory_LOCAL;
+	self->ns = g_strdup (ns);
+	self->schema = g_strdup (schema);
+	if (self->ns && self->schema)
+		return (struct oio_sqlx_client_factory_s*) self;
+	_local_factory_destroy ((struct oio_sqlx_client_factory_s*)self);
+	return NULL;
 }
 

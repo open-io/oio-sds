@@ -188,18 +188,6 @@ oio_cfg_get_proxy_containers (const char *ns)
 
 /* -------------------------------------------------------------------------- */
 
-/* TODO duplicated from metautils/lib/gridd_client.h */
-#define VTABLE_CHECK(self,T,F) do { \
-	g_assert(self != NULL); \
-	g_assert(((T)self)->vtable != NULL); \
-	g_assert(((T)self)->vtable-> F != NULL); \
-} while (0)
-
-/* TODO duplicated from metautils/lib/gridd_client.h */
-#define VTABLE_CALL(self,T,F) \
-	VTABLE_CHECK(self,T,F); \
-	return ((T)self)->vtable-> F
-
 #define CFG_CALL(self,F) VTABLE_CALL(self,struct oio_cfg_handle_abstract_s*,F)
 
 void

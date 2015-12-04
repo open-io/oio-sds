@@ -53,7 +53,7 @@ struct oio_url_s * oio_url_init(const char *url);
 /** Builds an empty URL */
 struct oio_url_s * oio_url_empty(void);
 
-struct oio_url_s* oio_url_dup(struct oio_url_s *u);
+struct oio_url_s* oio_url_dup(const struct oio_url_s *u);
 
 void oio_url_clean(struct oio_url_s *u);
 
@@ -66,7 +66,7 @@ struct oio_url_s* oio_url_set(struct oio_url_s *u,
 
 const char * oio_url_get(struct oio_url_s *u, enum oio_url_field_e f);
 
-int oio_url_has(struct oio_url_s *u, enum oio_url_field_e f);
+int oio_url_has(const struct oio_url_s *u, enum oio_url_field_e f);
 
 /* <id> must be oio_url_get_id_size() bytes long */
 void oio_url_set_id(struct oio_url_s *u, const void *id);
@@ -78,10 +78,10 @@ const void* oio_url_get_id(struct oio_url_s *u);
 size_t oio_url_get_id_size(struct oio_url_s *u);
 
 /** Returns wether all the mandatory components for a path are present */
-int oio_url_has_fq_path (struct oio_url_s *u);
+int oio_url_has_fq_path (const struct oio_url_s *u);
 
 /** Returns wether all the mandatory components for a container are present */
-int oio_url_has_fq_container (struct oio_url_s *u);
+int oio_url_has_fq_container (const struct oio_url_s *u);
 
 #ifdef __cplusplus
 }

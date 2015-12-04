@@ -88,9 +88,14 @@ GError * oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 		struct oio_proxy_content_create_in_s *in, GString *out);
 
 GError *
-oio_proxy_call_content_list (CURL *h, struct oio_url_s *u, GString *out,
+oio_proxy_call_content_list (CURL *h, struct oio_url_s *u,
+		GString *out,
 		const char *prefix, const char *marker, const char *end,
 		guint max, char delim);
+
+GError *
+oio_proxy_call_reference_show (CURL *h, struct oio_url_s *u,
+		const char *t, GString *out);
 
 #ifdef __cplusplus
 }
