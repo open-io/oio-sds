@@ -702,7 +702,7 @@ grid_main_configure (int argc, char **argv)
 
 	resolver = hc_resolver_create ();
 	enum hc_resolver_flags_e f = 0;
-	if (flag_cache_enabled)
+	if (!flag_cache_enabled)
 		f |= HC_RESOLVER_NOCACHE;
 	hc_resolver_configure (resolver, f);
 	hc_resolver_qualify (resolver, service_is_ok);

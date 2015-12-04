@@ -431,12 +431,18 @@ action_ref_show (struct req_args_s *args)
 		return _reply_forbidden_error(args, NEWERROR(
 					CODE_NAMESPACE_NOTMANAGED, "Namespace not managed"));
 
+	GError *err = NULL;
 	gchar **urlv = NULL;
-	GError *hook (const char * m1) {
-		return meta1v2_remote_list_reference_services (m1, args->url,
-				type, &urlv);
+	if (type) {
+		err = hc_resolve_reference_service (resolver, args->url, type, &urlv);
+	} else {
+		GError *hook (const char * m1) {
+			return meta1v2_remote_list_reference_services (m1, args->url,
+					type, &urlv);
+		}
+		err = _m1_locate_and_action (args->url, hook);
 	}
-	GError *err = _m1_locate_and_action (args->url, hook);
+
 	if (!err) {
 		gchar **dirv = NULL;
 		err = hc_resolve_reference_directory (resolver, args->url, &dirv);
