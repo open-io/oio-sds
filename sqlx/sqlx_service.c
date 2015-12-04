@@ -371,9 +371,6 @@ _configure_registration(struct sqlx_service_s *ss)
 			service_info_ensure_tag(si->tags, "tag.vol"),
 			ss->volume);
 
-	service_tag_set_value_float(
-			service_info_ensure_tag(si->tags, "stat.req_idle"),
-			100.0);
 	return TRUE;
 }
 
@@ -737,8 +734,6 @@ _task_register(gpointer p)
 				"stat.total_reqpersec"), avg_counter / 4);
 	service_tag_set_value_i64(service_info_ensure_tag(PSRV(p)->si->tags,
 				"stat.total_avreqtime"), (avg_time)/(avg_counter));
-	service_tag_set_value_float(service_info_ensure_tag(PSRV(p)->si->tags,
-				"stat.req_idle"), network_server_reqidle(PSRV(p)->server));
 
 	/* send the registration now */
 	GError *err = register_namespace_service(PSRV(p)->si);

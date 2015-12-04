@@ -472,45 +472,6 @@ service_info_extract_nsname(GSList *services, gboolean copy)
 	return result;
 }
 
-gchar *
-service_info_to_string(const service_info_t *si)
-{
-	gchar tmp[256];
-	guint count = 0;
-	gchar **strv = NULL;
-
-	void concat(gchar *s) {
-		count = count + 1;
-		strv = g_realloc(strv, (count+1) * sizeof(gchar*));
-		strv[count-1] = s;
-		strv[count] = NULL;
-	}
-
-	if (!si)
-		return g_strdup("NULL");
-
-	strv = g_malloc0((count+1) * sizeof(gchar*));
-
-	/* header string */
-	concat(g_strdup_printf("%s|%s", si->ns_name, si->type));
-	grid_addrinfo_to_string(&(si->addr), tmp, sizeof(tmp));
-	concat(g_strdup(tmp));
-	concat(g_strdup_printf("score=%d", si->score.value));
-
-	/* tags list */
-	if (si->tags) {
-		for (int i=0, max=si->tags->len; i<max ;i++) {
-			struct service_tag_s *tag = g_ptr_array_index((si->tags), i);
-			service_tag_to_string(tag, tmp, sizeof(tmp));
-			concat(g_strdup(tmp));
-		}
-	}
-
-	gchar *result = g_strjoinv("|",strv);
-	g_strfreev(strv);
-	return result;
-}
-
 void
 service_info_swap(struct service_info_s *si0, struct service_info_s *si1)
 {
@@ -627,7 +588,7 @@ _append_all_tags(GString *gstr, GPtrArray *tags)
 }
 
 void
-service_info_encode_json(GString *gstr, struct service_info_s *si, gboolean full)
+service_info_encode_json(GString *gstr, const struct service_info_s *si, gboolean full)
 {
 	if (!si)
 		return;

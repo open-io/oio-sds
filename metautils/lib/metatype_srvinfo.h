@@ -66,8 +66,6 @@ struct service_tag_s *service_tag_dup(struct service_tag_s *src);
 gsize service_tag_to_string(const struct service_tag_s *tag, gchar * dst,
 		gsize dst_size);
 
-gchar* service_info_to_string(const service_info_t *si);
-
 void service_info_swap(struct service_info_s *si0, struct service_info_s *si1);
 
 gint service_info_sort_by_score(gconstpointer a, gconstpointer b);
@@ -130,7 +128,8 @@ GError* service_info_load_json_object(struct json_object *obj,
 GError* service_info_load_json(const gchar *encoded,
 		struct service_info_s **out, gboolean permissive);
 
-void service_info_encode_json(GString *out, struct service_info_s *si, gboolean full);
+void service_info_encode_json(GString *out, const struct service_info_s *si,
+		gboolean full);
 
 gchar * service_info_key (const struct service_info_s *si);
 
