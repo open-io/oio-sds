@@ -45,6 +45,7 @@ In addition, a few python modules are required at runtime:
 * python-eventlet
 * python-flask
 * python-gunicorn
+* python-plyvel
 * python-redis
 * python-requests
 * python-simplejson
