@@ -55,26 +55,19 @@ static guint
 _fill(struct grid_lb_s *lb, guint max)
 {
 	guint i, count;
-	int dump;
 
 	gboolean provide(struct service_info_s **p_si) {
 		g_assert(p_si != NULL);
 		if (i >= max)
 			return FALSE;
 		*p_si = _build_si(ADDR_GOOD, i ++);
-		if (dump) {
-			gchar *str = service_info_to_string(*p_si);
-			g_free(str);
-		}
 		count ++;
 		return TRUE;
 	}
 
-	dump = 0;
 	i = count = 0;
 	grid_lb_reload(lb, &provide);
 
-	dump = 1;
 	i = count = 0;
 	grid_lb_reload(lb, &provide);
 
