@@ -13,12 +13,14 @@ class RdirClient(Client):
     # TODO keep rdir addr in local cache to avoid lookup requests
     def _get_rdir_addr(self, volume_id):
         try:
-            resp = self.directory_client.show(acct='_RDIR', ref=volume_id)
+            resp = self.directory_client.show(acct='_RDIR', ref=volume_id,
+                                              srv_type='rdir')
         except NotFound as e:
             if self.autocreate:
                 self.directory_client.link('_RDIR', volume_id, 'rdir',
                                            autocreate=True)
-                resp = self.directory_client.show(acct='_RDIR', ref=volume_id)
+                resp = self.directory_client.show(acct='_RDIR', ref=volume_id,
+                                                  srv_type='rdir')
             else:
                 raise e
 

@@ -25,10 +25,9 @@ class BlobIndexerWorker(object):
         self.max_chunks_per_second = int_value(
             conf.get('chunks_per_second'), 30)
         self.index_client = RdirClient(conf)
-
-    def index_pass(self):
         self.namespace, self.volume_id = check_volume(self.volume)
 
+    def index_pass(self):
         start_time = report_time = time.time()
 
         total_errors = 0
