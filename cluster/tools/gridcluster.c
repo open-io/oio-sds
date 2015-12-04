@@ -401,8 +401,8 @@ main(int argc, char **argv)
 
 		error = conscience_get_namespace(namespace, &ns);
 		if (ns == NULL) {
-			g_printerr("Failed to get namespace info :\n");
-			g_printerr("%s\n", error->message);
+			g_printerr("Failed to get namespace info: (%d) %s\n",
+					error->code, error->message);
 			goto exit_label;
 		}
 	}

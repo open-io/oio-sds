@@ -43,7 +43,6 @@ License along with this library.
 		GSETERROR(Error, "Error from agent : %.*s", Resp.data_size, (char*)(Resp.data));\
 	else\
 		GSETERROR(Error, "Error from agent : (no response)");\
-	clear_request_and_reply(&Req,&Resp);\
 } while (0)
 #define NS_WORM_OPT_NAME "worm"
 #define NS_CONTAINER_MAX_SIZE_NAME "container_max_size"
@@ -60,11 +59,11 @@ static void
 clear_request_and_reply( request_t *req, response_t *resp )
 {
 	if (req) {
-		g_free0 (req->cmd);
-		g_free0 (req->arg);
+		oio_str_clean (&req->cmd);
+		oio_str_clean (&req->arg);
 	}
 	if (resp)
-		g_free0(resp->data);
+		oio_str_clean (&resp->data);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -389,6 +388,7 @@ list_local_services(GError **error)
 
 	if (resp.status != STATUS_OK) {
 		MANAGE_ERROR(req,resp,error);
+		clear_request_and_reply(&req,&resp);
 		return NULL;
 	}
 
@@ -398,7 +398,6 @@ list_local_services(GError **error)
 		return NULL;
 	}
 
-	clear_request_and_reply(&req,&resp);
 	return srv_list;
 }
 
@@ -444,6 +443,7 @@ list_tasks(GError **error)
 	}
 
 	MANAGE_ERROR(req,resp,error);
+	clear_request_and_reply(&req,&resp);
 	return NULL;
 }
 
