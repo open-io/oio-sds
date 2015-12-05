@@ -47,7 +47,7 @@ struct oio_url_s;
 MESSAGE metaXServer_reply_simple(MESSAGE request, gint status, const gchar *msg);
 
 /** Performs the opposite operation : retrieves the core elements of the
- * message (supposed to be a reply). 
+ * message (supposed to be a reply).
  * The message returned in the msg pointer is a copy of the original.
  * It is allocated with the g_lib and must be freed with g_free(). */
 GError* metaXClient_reply_simple(MESSAGE reply, guint * status, gchar ** msg);

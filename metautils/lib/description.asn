@@ -91,7 +91,7 @@ BEGIN
 	}
 
 	M2V2ContentHeader ::= SEQUENCE {
-		id          [0] OCTET STRING, 
+		id          [0] OCTET STRING,
 		hash        [1] OCTET STRING OPTIONAL,
 		size        [3] INTEGER,
 		ctime       [4] INTEGER,
