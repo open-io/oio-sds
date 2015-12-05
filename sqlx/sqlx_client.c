@@ -173,7 +173,118 @@ _sds_client_destroy (struct oio_sqlx_client_s *self)
 	g_assert (c->vtable == &vtable_SDS);
 	c->vtable = NULL;
 	c->factory = NULL;
+	oio_url_pclean (&c->url);
 	g_free (c);
+}
+
+static GByteArray *
+_pack_request (struct sqlx_name_mutable_s *n, const char *in_stmt,
+		gchar **in_params)
+{
+	GByteArray *req = NULL;
+
+	struct Row *row = calloc(1, sizeof(struct Row));
+	asn_int64_to_INTEGER(&row->rowid, 0);
+	if (in_params) {
+		for (gchar **pparam=in_params; *pparam ;++pparam) {
+			struct RowField *rf = calloc(1, sizeof(struct RowField));
+			asn_uint32_to_INTEGER (&rf->pos, (guint32)(pparam - in_params));
+			OCTET_STRING_fromBuf(&rf->value.choice.s, *pparam, strlen(*pparam));
+			rf->value.present = RowFieldValue_PR_s;
+			asn_sequence_add(&(row->fields->list), rf);
+		}
+	}
+
+	struct Table *table = calloc(1, sizeof(struct Table));
+	OCTET_STRING_fromBuf(&(table->name), in_stmt, strlen(in_stmt));
+	asn_sequence_add (&table->rows.list, row);
+
+	struct TableSequence in_table_sequence;
+	memset (&in_table_sequence, 0, sizeof(in_table_sequence));
+	asn_sequence_add (&in_table_sequence.list, table);
+
+	req = sqlx_pack_QUERY(sqlx_name_mutable_to_const(n),
+			in_stmt, &in_table_sequence, TRUE/*autocreate*/);
+
+	asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence,
+			&in_table_sequence, TRUE);
+	return req;
+}
+
+static GError *
+_unpack_reply (struct TableSequence *ts, GPtrArray *lines)
+{
+	if (!ts->list.count || !ts->list.array)
+		return NEWERROR(CODE_PLATFORM_ERROR, "Invalid body from the sqlx (content)");
+
+	GError *err = NULL;
+
+	for (int ti=0; !err && ti < ts->list.count ;++ti) {
+		struct Table *t = ts->list.array[ti];
+		if (!t)
+			continue;
+
+		if (!t->status) {
+			err = NEWERROR(CODE_PLATFORM_ERROR, "SQLX reply failure");
+			break;
+		}
+
+		gint64 s64 = -1;
+		asn_INTEGER_to_int64 (t->status, &s64);
+		if (s64 != 0) {
+			err = NEWERROR(CODE_INTERNAL_ERROR,
+					"Query failure: (%"G_GINT64_FORMAT") %.*s", s64,
+					t->statusString ? t->statusString->size : 64,
+					t->statusString ? (char*)t->statusString->buf : "Unknown error");
+			continue;
+		}
+
+		for (int ri=0; !err && ri < t->rows.list.count ;++ri) {
+			struct Row *r = t->rows.list.array[ri];
+			if (!r || !r->fields)
+				continue;
+			GPtrArray *tokens = g_ptr_array_new ();
+
+			for (int fi=0; !err && fi < r->fields->list.count ;++fi) {
+				struct RowField *f = r->fields->list.array[fi];
+				if (!fi)
+					continue;
+				gint64 i64;
+				gdouble d;
+				gchar *s;
+				switch (f->value.present) {
+					case RowFieldValue_PR_NOTHING:
+					case RowFieldValue_PR_n:
+						g_ptr_array_add (tokens, g_strdup("null"));
+						break;
+					case RowFieldValue_PR_i:
+						asn_INTEGER_to_int64(&(f->value.choice.i), &i64);
+						g_ptr_array_add (tokens, g_strdup_printf("%"G_GINT64_FORMAT, i64));
+						break;
+					case RowFieldValue_PR_f:
+						asn_REAL2double(&(f->value.choice.f), &d);
+						g_ptr_array_add (tokens, g_strdup_printf("%f", d));
+						break;
+					case RowFieldValue_PR_b:
+						s = g_strndup((gchar*)f->value.choice.b.buf, f->value.choice.b.size);
+						g_ptr_array_add (tokens, s);
+						break;
+					case RowFieldValue_PR_s:
+						s = g_strndup((gchar*)f->value.choice.s.buf, f->value.choice.s.size);
+						g_ptr_array_add (tokens, s);
+						break;
+				}
+			}
+			g_ptr_array_add (tokens, NULL);
+			if (!err) {
+				gchar *csv = g_strjoinv (",", (gchar**) tokens->pdata);
+				g_ptr_array_add (lines, csv);
+			}
+			g_strfreev ((gchar**)g_ptr_array_free (tokens, FALSE));
+		}
+	}
+
+	return NULL;
 }
 
 static GError *
@@ -203,42 +314,16 @@ _sds_client_execute (struct oio_sqlx_client_s *self,
 		return err;
 	}
 	if (!allsrv || !*allsrv) {
-		if (allsrv) g_strfreev (allsrv);
+		if (allsrv)
+			g_strfreev (allsrv);
 		return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not found");
 	}
 
 	/* Pack the query parameters */
-	GByteArray *req = NULL;
-	do {
-		struct Row *row = calloc(1, sizeof(struct Row));
-		asn_int64_to_INTEGER(&row->rowid, 0);
-		if (in_params) {
-			for (gchar **pparam=in_params; *pparam ;++pparam) {
-				struct RowField *rf = calloc(1, sizeof(struct RowField));
-				asn_uint32_to_INTEGER (&rf->pos, (guint32)(pparam - in_params));
-				OCTET_STRING_fromBuf(&rf->value.choice.s, *pparam, strlen(*pparam));
-				rf->value.present = RowFieldValue_PR_s;
-				asn_sequence_add(&(row->fields->list), rf);
-			}
-		}
-
-		struct Table *table = calloc(1, sizeof(struct Table));
-		OCTET_STRING_fromBuf(&(table->name), in_stmt, strlen(in_stmt));
-		asn_sequence_add (&table->rows.list, row);
-
-		struct TableSequence in_table_sequence;
-		memset (&in_table_sequence, 0, sizeof(in_table_sequence));
-		asn_sequence_add (&in_table_sequence.list, table);
-
-		struct sqlx_name_mutable_s name;
-		sqlx_name_fill (&name, c->url, srvtype, atoi(allsrv[0]));
-		req = sqlx_pack_QUERY(sqlx_name_mutable_to_const(&name),
-				in_stmt, &in_table_sequence, TRUE/*autocreate*/);
-		sqlx_name_clean (&name);
-
-		asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence,
-				&in_table_sequence, TRUE);
-	} while (0);
+	struct sqlx_name_mutable_s name;
+	sqlx_name_fill (&name, c->url, srvtype, atoi(allsrv[0]));
+	GByteArray *req = _pack_request (&name, in_stmt, in_params);
+	sqlx_name_clean (&name);
 	GRID_DEBUG("Encoded query: %u bytes", req ? req->len : 0);
 
 	/* Query each service until a reply is acceptable */
@@ -272,87 +357,29 @@ _sds_client_execute (struct oio_sqlx_client_s *self,
 		ctx.max_stack_size = ASN1C_MAX_STACK;
 		asn_dec_rval_t rv = ber_decode(&ctx, &asn_DEF_TableSequence,
 				(void**)&ts, out->data, out->len);
+		g_byte_array_unref (out);
+		out = NULL;
+
 		if (rv.code != RC_OK) {
 			err = NEWERROR(CODE_PLATFORM_ERROR, "Invalid body from the sqlx (decode)");
 			break;
 		}
-		if (!ts || !ts->list.array) {
+		if (!ts) {
 			err = NEWERROR(CODE_PLATFORM_ERROR, "Invalid body from the sqlx (content)");
 			break;
 		}
 
 		GPtrArray *lines = g_ptr_array_new ();
-		/* XXX For each TABLE */
-		for (int ti=0; !err && ti < ts->list.count ;++ti) {
-			struct Table *t = ts->list.array[ti];
-			if (!t)
-				continue;
-
-			if (!t->status) {
-				err = NEWERROR(CODE_PLATFORM_ERROR, "SQLX reply failure");
-				continue;
-			} else {
-				gint64 s64 = -1;
-				asn_INTEGER_to_int64 (t->status, &s64);
-				if (s64 != 0) {
-					err = NEWERROR(CODE_INTERNAL_ERROR, "Query failure: (%"G_GINT64_FORMAT") %.*s",
-							s64,
-							t->statusString ? t->statusString->size : 64,
-							t->statusString ? (char*)t->statusString->buf : "Unknown error");
-					continue;
-				}
-			}
-
-			/* XXX for each ROW */
-			for (int ri=0; !err && ri < t->rows.list.count ;++ri) {
-				struct Row *r = t->rows.list.array[ri];
-				if (!r || !r->fields)
-					continue;
-				GPtrArray *tokens = g_ptr_array_new ();
-				/* XXX for each FIELD oin the row */
-				for (int fi=0; !err && fi < r->fields->list.count ;++fi) {
-					struct RowField *f = r->fields->list.array[fi];
-					if (!fi)
-						continue;
-					gint64 i64;
-					gdouble d;
-					switch (f->value.present) {
-						case RowFieldValue_PR_NOTHING:
-						case RowFieldValue_PR_n:
-							g_ptr_array_add (tokens, g_strdup("null"));
-							break;
-						case RowFieldValue_PR_i:
-							asn_INTEGER_to_int64(&(f->value.choice.i), &i64);
-							g_ptr_array_add (tokens, g_strdup_printf("%"G_GINT64_FORMAT, i64));
-							break;
-						case RowFieldValue_PR_f:
-							asn_REAL2double(&(f->value.choice.f), &d);
-							g_ptr_array_add (tokens, g_strdup_printf("%f", d));
-							g_print("%f", d);
-							break;
-						case RowFieldValue_PR_b:
-							g_ptr_array_add (tokens, g_strndup(
-										(gchar*)f->value.choice.b.buf, f->value.choice.b.size));
-							break;
-						case RowFieldValue_PR_s:
-							g_ptr_array_add (tokens, g_strndup(
-										(gchar*)f->value.choice.s.buf, f->value.choice.s.size));
-							break;
-					}
-				}
-				g_ptr_array_add (tokens, NULL);
-				if (!err)
-					g_ptr_array_add (lines, g_strjoinv (",", (gchar**) tokens->pdata));
-				g_strfreev ((gchar**)g_ptr_array_free (tokens, TRUE));
-			}
-		}
-
+		err = _unpack_reply (ts, lines);
 		g_ptr_array_add (lines, NULL);
+
 		if (err) {
 			g_strfreev ((gchar**) g_ptr_array_free (lines, FALSE));
 		} else {
 			*out_lines = (gchar**) g_ptr_array_free (lines, FALSE);
 		}
+
+		asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence, ts, FALSE);
 	}
 
 	if (!err && !done)
