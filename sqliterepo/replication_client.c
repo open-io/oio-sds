@@ -39,8 +39,6 @@ License along with this library.
 #include "sqlx_remote.h"
 #include "internals.h"
 
-struct TableSequence;
-
 static GByteArray*
 _pack_RESTORE(struct sqlx_name_s *name, GByteArray *dump)
 {

@@ -349,7 +349,7 @@ label_rollback:
 		err = version_validate_diff(postvers, expected_version, &worst);
 		if (err == NULL) {
 			if (worst != 0) // Diff missed
-					err = NEWERROR(CODE_CONCURRENT, "Concurrent change detected");
+				err = NEWERROR(CODE_CONCURRENT, "Concurrent change detected");
 		}
 		if (err != NULL)
 			goto label_rollback;
@@ -480,7 +480,8 @@ _dump_chunked(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
-	GRID_TRACE2("%s(%p,%s,%s,%p)", __FUNCTION__, repo, name->base, name->type, _send_chunk);
+	GRID_TRACE2("%s(%p,%s,%s,%p)", __FUNCTION__,
+			repo, name->base, name->type, _send_chunk);
 
 	err = sqlx_repository_open_and_lock(repo, name,
 			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK, &sq3, NULL);
@@ -509,7 +510,8 @@ _pipe_from(const gchar *source, struct sqlx_repository_s *repo,
 	gchar path[LIMIT_LENGTH_VOLUMENAME+32] = {0};
 	struct restore_ctx_s *ctx = NULL;
 
-	GRID_TRACE2("%s(%s,%p,%s,%s)", __FUNCTION__, source, repo, name->base, name->type);
+	GRID_TRACE2("%s(%s,%p,%s,%s)", __FUNCTION__,
+			source, repo, name->base, name->type);
 
 	g_snprintf(path, sizeof(path), "%s/tmp/restore.sqlite3.XXXXXX",
 			repo->basedir);
@@ -765,7 +767,7 @@ _table_set_error(Table_t *table, GError *err, int changes)
 		table->statusString = OCTET_STRING_new_fromBuf(&asn_DEF_PrintableString, err->message, strlen(err->message));
 	}
 
-	table->status = g_malloc0(sizeof(INTEGER_t));
+	table->status = calloc(1, sizeof(INTEGER_t));
 	asn_int64_to_INTEGER(table->status, status);
 
 	if (err)
@@ -1006,7 +1008,7 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 			for (rc = SQLITE_ROW; rc == SQLITE_ROW ;) {
 				rc = sqlite3_step(stmt);
 				if (rc == SQLITE_ROW) {
-					Row_t *rrow = g_malloc0(sizeof(Row_t));
+					struct Row *rrow = calloc(1, sizeof(struct Row));
 					load_statement(stmt, rrow, result, noreal);
 					asn_sequence_add(&(result->rows.list), rrow);
 				}
@@ -1024,7 +1026,7 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 		for (rc = SQLITE_ROW; rc == SQLITE_ROW ;) {
 			rc = sqlite3_step(stmt);
 			if (rc == SQLITE_ROW) {
-				Row_t *rrow = g_malloc0(sizeof(Row_t));
+				struct Row *rrow = calloc(1, sizeof(struct Row));
 				load_statement(stmt, rrow, result, noreal);
 				asn_sequence_add(&(result->rows.list), rrow);
 			}
@@ -1107,7 +1109,8 @@ do_query_after_open(struct gridd_reply_ctx_s *reply_ctx,
 		g_free(query);
 
 		if (0 != action) {
-			err = sqlx_repository_status_base(sq3->repo, sqlx_name_mutable_to_const(&sq3->name));
+			err = sqlx_repository_status_base(sq3->repo,
+					sqlx_name_mutable_to_const(&sq3->name));
 			if (NULL != err) {
 				if (err->code != CODE_REDIRECT)
 					g_prefix_error(&err, "Status error: ");
@@ -1128,7 +1131,7 @@ do_query_after_open(struct gridd_reply_ctx_s *reply_ctx,
 		gchar *query;
 
 		req = params->list.array[i32];
-		res = g_malloc0(sizeof(struct Table));
+		res = calloc(1, sizeof(struct Table));
 		query = _table_to_query(req);
 		replication_ctx = reply_ctx->get_cnx_data("repctx");
 		reply_ctx->forget_cnx_data("repctx");
@@ -1275,34 +1278,47 @@ end_label:
 #define FLAG_FLUSH      0x20
 
 static GError *
-_load_sqlx_name (struct gridd_reply_ctx_s *ctx, struct sqlx_name_mutable_s *n, guint32 *pflags)
+_load_sqlx_name (struct gridd_reply_ctx_s *ctx,
+		struct sqlx_name_mutable_s *n, guint32 *pflags)
 {
 	GError *err;
-	gchar ns[LIMIT_LENGTH_NSNAME], base[LIMIT_LENGTH_BASENAME], type[LIMIT_LENGTH_BASETYPE];
+	gchar
+		ns[LIMIT_LENGTH_NSNAME],
+		base[LIMIT_LENGTH_BASENAME],
+		type[LIMIT_LENGTH_BASETYPE];
 	gboolean flush, nocheck, noreal, local, autocreate, chunked;
 
 	flush = noreal = local = autocreate = nocheck = chunked = FALSE;
 	memset(n, 0, sizeof(*n));
 
-	err = metautils_message_extract_string(ctx->request, NAME_MSGKEY_NAMESPACE, ns, sizeof(ns));
+	err = metautils_message_extract_string(ctx->request,
+			NAME_MSGKEY_NAMESPACE, ns, sizeof(ns));
 	if (NULL != err)
 		return err;
-	err = metautils_message_extract_string(ctx->request, NAME_MSGKEY_BASENAME, base, sizeof(base));
+	err = metautils_message_extract_string(ctx->request,
+			NAME_MSGKEY_BASENAME, base, sizeof(base));
 	if (NULL != err)
 		return err;
-	err = metautils_message_extract_string(ctx->request, NAME_MSGKEY_BASETYPE, type, sizeof(type));
+	err = metautils_message_extract_string(ctx->request,
+			NAME_MSGKEY_BASETYPE, type, sizeof(type));
 	if (NULL != err)
 		return err;
 
-	local = metautils_message_extract_flag(ctx->request, NAME_MSGKEY_LOCAL, FALSE);
-	autocreate = metautils_message_extract_flag(ctx->request, NAME_MSGKEY_AUTOCREATE, FALSE);
-	nocheck = metautils_message_extract_flag(ctx->request, NAME_MSGKEY_NOCHECK, FALSE);
-	noreal = metautils_message_extract_flag(ctx->request, NAME_MSGKEY_NOREAL, FALSE);
-	chunked = metautils_message_extract_flag(ctx->request, NAME_MSGKEY_CHUNKED, FALSE);
-	flush = metautils_message_extract_flag(ctx->request, NAME_MSGKEY_FLUSH, FALSE);
+	local = metautils_message_extract_flag(ctx->request,
+			NAME_MSGKEY_LOCAL, FALSE);
+	autocreate = metautils_message_extract_flag(ctx->request,
+			NAME_MSGKEY_AUTOCREATE, FALSE);
+	nocheck = metautils_message_extract_flag(ctx->request,
+			NAME_MSGKEY_NOCHECK, FALSE);
+	noreal = metautils_message_extract_flag(ctx->request,
+			NAME_MSGKEY_NOREAL, FALSE);
+	chunked = metautils_message_extract_flag(ctx->request,
+			NAME_MSGKEY_CHUNKED, FALSE);
+	flush = metautils_message_extract_flag(ctx->request,
+			NAME_MSGKEY_FLUSH, FALSE);
 
 	ctx->subject("%s.%s|%s", base, type, local?"LOC":"REP");
-	
+
 	oio_str_replace(&n->ns, ns);
 	oio_str_replace(&n->base, base);
 	oio_str_replace(&n->type, type);
@@ -1444,12 +1460,12 @@ sqlx_dispatch_HAS(struct gridd_reply_ctx_s *reply,
 		reply->send_error(0, err);
 	} else {
 		if (bddname) {
-	    	reply->add_body(metautils_gba_from_string(bddname));
+			reply->add_body(metautils_gba_from_string(bddname));
 			g_free(bddname);
 		} else {
 			reply->add_body(metautils_gba_from_string("Not found"));
 		}
-   		reply->send_reply(CODE_FINAL_OK, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	}
 
     return TRUE;
@@ -2283,7 +2299,8 @@ _extract_params(MESSAGE msg, TableSequence_t **params)
 	asn_codec_ctx_t ctx;
 	memset(&ctx, 0, sizeof(ctx));
 	ctx.max_stack_size = ASN1C_MAX_STACK;
-	asn_dec_rval_t rv = ber_decode(&ctx, &asn_DEF_TableSequence, (void**)params, b, bsize);
+	asn_dec_rval_t rv = ber_decode(&ctx, &asn_DEF_TableSequence,
+			(void**)params, b, bsize);
 	if (rv.code != RC_OK)
 		return NEWERROR(CODE_BAD_REQUEST, "body decoding error");
 	return NULL;
@@ -2307,7 +2324,8 @@ sqlx_dispatch_QUERY(struct gridd_reply_ctx_s *reply,
 	SQLXNAME_STACKIFY(name);
 
 	if (!g_str_has_prefix(name.type, "sqlx.")) {
-		reply->send_error(0, NEWERROR(CODE_BAD_REQUEST, "Invalid schema name, not prefixed with 'sqlx.'"));
+		reply->send_error(0, NEWERROR(CODE_BAD_REQUEST,
+					"Invalid schema name, not prefixed with 'sqlx.'"));
 		return TRUE;
 	}
 	if (NULL != (err = _extract_params(reply->request, &params))) {
@@ -2320,19 +2338,18 @@ sqlx_dispatch_QUERY(struct gridd_reply_ctx_s *reply,
 	}
 
 	/* execute the request now */
-	result = g_malloc0(sizeof(struct TableSequence));
-	err = do_query(reply, repo, CONST(&name), params, result, flags&FLAG_NOREAL, flags&FLAG_AUTOCREATE);
+	result = calloc(1, sizeof(struct TableSequence));
+	err = do_query(reply, repo, CONST(&name), params,
+			result, flags&FLAG_NOREAL, flags&FLAG_AUTOCREATE);
 
 	if (params)
 		asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence, params, FALSE);
 
 	if (result) {
 		if (!err) {
-			asn_enc_rval_t rv;
-			GByteArray *encoded;
-
-			encoded = g_byte_array_new();
-			rv = der_encode(&asn_DEF_TableSequence, result, write_to_gba, encoded);
+			GByteArray *encoded = g_byte_array_new();
+			asn_enc_rval_t rv = der_encode(&asn_DEF_TableSequence,
+					result, write_to_gba, encoded);
 			if (0 < rv.encoded)
 				reply->add_body(encoded);
 			else {
@@ -2348,7 +2365,7 @@ sqlx_dispatch_QUERY(struct gridd_reply_ctx_s *reply,
 	if (err)
 		reply->send_error(0, err);
 	else
-		reply->send_reply(CODE_INTERNAL_ERROR, "OK");
+		reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
@@ -2366,7 +2383,7 @@ sqlx_dispatch_DESTROY(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 	SQLXNAME_STACKIFY(name);
-		
+
 	if (NULL != (err = do_destroy(reply, repo, CONST(&name), flags&FLAG_LOCAL)))
 		reply->send_error(0, err);
 	else
