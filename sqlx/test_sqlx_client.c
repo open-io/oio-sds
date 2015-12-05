@@ -29,13 +29,13 @@ test_query_success (struct oio_sqlx_client_s *client,
 	gchar **out = NULL;
 	struct oio_sqlx_output_ctx_s context = {0,0,0};
 
+	g_printerr("\n#QUERY: %s\n", query);
 	err = oio_sqlx_client__execute_statement (client,
 			query, params, &context, &out);
 	g_assert_no_error (err);
 	g_assert_nonnull (out);
-	g_printerr("#SQL: %s\n#CTX total:%"G_GINT64_FORMAT
+	g_printerr("#CTX total:%"G_GINT64_FORMAT
 			" changes:%"G_GINT64_FORMAT" rowid:%"G_GINT64_FORMAT"\n",
-			query,
 			context.changes, context.total_changes, context.last_rowid);
 	for (gchar **p=out; *p ;++p)
 		g_printerr("%s\n", *p);
@@ -54,6 +54,13 @@ _test_round (struct oio_sqlx_client_factory_s *factory)
 	struct oio_sqlx_client_s *client = NULL;
 	GError *err = oio_sqlx_client_factory__open (factory, url, &client);
 	g_assert_no_error (err);
+
+	test_query_success(client, "CREATE TABLE IF NOT EXISTS admin (k TEXT PRIMARY KEY, v TEXT NOT NULL)", NULL);
+	test_query_success(client, "CREATE TABLE IF NOT EXISTS sequence (i INTEGER PRIMARY KEY, v TEXT NOT NULL)", NULL);
+	test_query_success(client, "CREATE TABLE IF NOT EXISTS sequence2 (i INT PRIMARY KEY, v TEXT NOT NULL)", NULL);
+
+	test_query_success(client, "DELETE FROM sequence", NULL);
+	test_query_success(client, "DELETE FROM sequence2", NULL);
 
 	test_query_success(client, "SELECT * FROM sqlite_master", NULL);
 	test_query_success(client, "INSERT INTO sequence ('v') VALUES ('coin')", NULL);

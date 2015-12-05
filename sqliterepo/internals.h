@@ -205,8 +205,7 @@ write_to_gba(const void *b, size_t bs, void *u)
  * @param r
  * @param t
  */
-void load_statement(sqlite3_stmt *stmt, Row_t *r, Table_t *t,
-		gboolean noreal);
+void load_statement(sqlite3_stmt *stmt, Row_t *r, Table_t *t);
 
 /**
  * @param op

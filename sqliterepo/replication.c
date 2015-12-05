@@ -146,8 +146,7 @@ load_table_header(sqlite3_stmt *stmt, Table_t *t)
 }
 
 void
-load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table,
-		gboolean noreal)
+load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table)
 {
 	guint32 i, max;
 
@@ -174,16 +173,11 @@ load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table,
 				} while (0);
 				break;
 			case SQLITE_FLOAT:
-				if (!noreal) {
+				do {
 					gdouble d = sqlite3_column_double(stmt, i);
 					asn_double2REAL(&(rf->value.choice.f), d);
 					rf->value.present = RowFieldValue_PR_f;
-				}
-				else {
-					const guint8 *t = sqlite3_column_text(stmt, i);
-					OCTET_STRING_fromBuf(&(rf->value.choice.s), (char*)t, strlen((char*)t));
-					rf->value.present = RowFieldValue_PR_s;
-				}
+				} while (0);
 				break;
 			case SQLITE_TEXT:
 				do {
@@ -226,7 +220,7 @@ load_table_row(sqlite3 *db, const hashstr_t *name, gint64 rowid, Row_t *row,
 
 	sqlite3_bind_int64(stmt, 1, rowid);
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt)))
-		load_statement(stmt, row, table, FALSE);
+		load_statement(stmt, row, table);
 
 	sqlite3_finalize_debug(rc, stmt);
 }
@@ -387,7 +381,8 @@ _perform_REPLICATE(struct sqlx_repctx_s *ctx)
 	GError *err;
 	gchar **peers = NULL;
 
-	err = sqlx_config_get_peers(ctx->sq3->config, sqlx_name_mutable_to_const(&ctx->sq3->name), &peers);
+	err = sqlx_config_get_peers(ctx->sq3->config,
+			sqlx_name_mutable_to_const(&ctx->sq3->name), &peers);
 
 	if (err != NULL) {
 		GRID_WARN("Replicated transaction started but peers not found "

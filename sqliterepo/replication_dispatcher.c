@@ -744,34 +744,33 @@ _query_get_rights(struct sqlite3 *h, const gchar *query)
 }
 
 static void
-_table_set_error(Table_t *table, GError *err, int changes)
+_table_set_error(Table_t *table, GError *err,
+		int local_changes, int total_changes, gint64 rowid)
 {
-	gint64 status;
-
-	if (table->status) {
-		ASN_STRUCT_FREE(asn_DEF_INTEGER, table->status);
-		table->status = NULL;
+	void _reset_integer (INTEGER_t **pi, gint64 v) {
+		ASN_STRUCT_FREE(asn_DEF_INTEGER, *pi);
+		*pi = calloc(1, sizeof(INTEGER_t));
+		asn_int64_to_INTEGER(*pi, v);
 	}
+
+	gint64 status = 0;
 	if (table->statusString) {
 		ASN_STRUCT_FREE(asn_DEF_PrintableString, table->statusString);
 		table->statusString = NULL;
 	}
 
-	if (!err) {
-		status = changes;
-		GRID_DEBUG("STATUS: %"G_GINT64_FORMAT" %s (changes = %d)", status, "OK", changes);
-	}
-	else {
+	if (err) {
 		status = - err->code;
 		GRID_DEBUG("STATUS: %"G_GINT64_FORMAT" %s", status, err->message);
-		table->statusString = OCTET_STRING_new_fromBuf(&asn_DEF_PrintableString, err->message, strlen(err->message));
+		table->statusString = OCTET_STRING_new_fromBuf(&asn_DEF_PrintableString,
+				err->message, strlen(err->message));
+		g_error_free(err);
 	}
 
-	table->status = calloc(1, sizeof(INTEGER_t));
-	asn_int64_to_INTEGER(table->status, status);
-
-	if (err)
-		g_error_free(err);
+	_reset_integer (&table->status, status);
+	_reset_integer (&table->localChanges, local_changes);
+	_reset_integer (&table->totalChanges, total_changes);
+	_reset_integer (&table->lastRowId, rowid);
 }
 
 /**
@@ -788,15 +787,13 @@ _table_set_error(Table_t *table, GError *err, int changes)
 static void
 _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 		Table_t *params, Table_t *result,
-		struct sqlx_repctx_s **replication_ctx,
-		gboolean noreal)
+		struct sqlx_repctx_s **replication_ctx)
 {
 	GError *err = NULL;
 	gint rc = 0;
 	sqlite3_stmt *stmt = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 	enum query_action_e action = QA_READ;
-	int changes = 0;
 
 	int qualifier(void *u, int op,
 			const char *s1, const char *s2,
@@ -908,13 +905,17 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 		if (!err)
 			err = SQLITE_GERROR(sq3->db, rc);
 		GRID_DEBUG("Invalid statement : [%s]", query);
-		_table_set_error(result, err, 0);
+		_table_set_error(result, err, 0,
+						sqlite3_total_changes(sq3->db),
+						sqlite3_last_insert_rowid(sq3->db));
 		return ;
 	}
 
 	if (!stmt) {
 		GRID_DEBUG("Empty statement : [%s]", query);
-		_table_set_error(result, NULL, 0);
+		_table_set_error(result, NULL, 0,
+				sqlite3_total_changes(sq3->db),
+				sqlite3_last_insert_rowid(sq3->db));
 		return ;
 	}
 
@@ -937,7 +938,9 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 				err = sqlx_transaction_begin(sq3, &repctx);
 				if (NULL == err)
 					*replication_ctx = repctx;
-				_table_set_error(result, err, 0);
+				_table_set_error(result, err, 0,
+						sqlite3_total_changes(sq3->db),
+						sqlite3_last_insert_rowid(sq3->db));
 				return ;
 			}
 
@@ -951,7 +954,10 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 				sqlite3_finalize_debug(rc, stmt);
 				err = sqlx_transaction_end(repctx, NULL);
 				*replication_ctx = repctx = NULL;
-				_table_set_error(result, err, sqlite3_changes(sq3->db));
+				_table_set_error(result, err,
+						sqlite3_changes(sq3->db),
+						sqlite3_total_changes(sq3->db),
+						sqlite3_last_insert_rowid(sq3->db));
 				return ;
 			}
 
@@ -965,7 +971,9 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 				sqlite3_finalize_debug(rc, stmt);
 				err = sqlx_transaction_end(repctx, NEWERROR(0, "aborted by user"));
 				*replication_ctx = repctx = NULL;
-				_table_set_error(result, err, sqlite3_changes(sq3->db));
+				_table_set_error(result, err, 0,
+						sqlite3_total_changes(sq3->db),
+						sqlite3_last_insert_rowid(sq3->db));
 				return ;
 			}
 
@@ -981,7 +989,10 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 				sqlite3_finalize_debug(rc, stmt);
 				err = sqlx_transaction_begin(sq3, &repctx);
 				if (NULL != err) {
-					_table_set_error(result, err, sqlite3_changes(sq3->db));
+					_table_set_error(result, err,
+							sqlite3_changes(sq3->db),
+							sqlite3_total_changes(sq3->db),
+							sqlite3_last_insert_rowid(sq3->db));
 					return;
 				}
 				sqlite3_prepare_debug(rc, sq3->db, query, -1, &stmt, NULL);
@@ -1009,7 +1020,7 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 				rc = sqlite3_step(stmt);
 				if (rc == SQLITE_ROW) {
 					struct Row *rrow = calloc(1, sizeof(struct Row));
-					load_statement(stmt, rrow, result, noreal);
+					load_statement(stmt, rrow, result);
 					asn_sequence_add(&(result->rows.list), rrow);
 				}
 			}
@@ -1027,7 +1038,7 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 			rc = sqlite3_step(stmt);
 			if (rc == SQLITE_ROW) {
 				struct Row *rrow = calloc(1, sizeof(struct Row));
-				load_statement(stmt, rrow, result, noreal);
+				load_statement(stmt, rrow, result);
 				asn_sequence_add(&(result->rows.list), rrow);
 			}
 		}
@@ -1040,14 +1051,17 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 	if (action == QA_SCHEMA && repctx != NULL)
 		sqlx_transaction_notify_huge_changes(repctx);
 
-	changes = sqlite3_changes(sq3->db);
+	int local_changes = sqlite3_changes(sq3->db);
+	int total_changes = sqlite3_changes(sq3->db);
+	gint64 last_rowid = sqlite3_last_insert_rowid(sq3->db);
 
 	if (repctx && !*replication_ctx) {
 		err = sqlx_transaction_end(repctx, err);
 		repctx = NULL;
 	}
 
-	_table_set_error(result, err, changes); /* err cleaned inside */
+	/* err cleaned inside */
+	_table_set_error(result, err, local_changes, total_changes, last_rowid);
 	return ;
 }
 
@@ -1084,7 +1098,7 @@ _table_to_query(Table_t *t)
 static GError *
 do_query_after_open(struct gridd_reply_ctx_s *reply_ctx,
 		struct sqlx_sqlite3_s *sq3, TableSequence_t *params,
-		TableSequence_t *result, gboolean noreal)
+		TableSequence_t *result)
 {
 	gint32 i32;
 	guint32 admin_status = ADMIN_STATUS_ENABLED;
@@ -1102,9 +1116,7 @@ do_query_after_open(struct gridd_reply_ctx_s *reply_ctx,
 	 * write operations or schema changes, we immediately check we are the
 	 * master, to redirect the request to another server. */
 	for (i32=0; i32 < params->list.count && !err ;i32++) {
-		gchar *query;
-
-		query = _table_to_query(params->list.array[i32]);
+		gchar *query = _table_to_query(params->list.array[i32]);
 		action = _query_get_rights(sq3->db, query);
 		g_free(query);
 
@@ -1135,7 +1147,7 @@ do_query_after_open(struct gridd_reply_ctx_s *reply_ctx,
 		query = _table_to_query(req);
 		replication_ctx = reply_ctx->get_cnx_data("repctx");
 		reply_ctx->forget_cnx_data("repctx");
-		_execute_next_query(sq3, query, req, res, &replication_ctx, noreal);
+		_execute_next_query(sq3, query, req, res, &replication_ctx);
 		g_free(query);
 
 		asn_sequence_add(&(result->list), res);
@@ -1206,7 +1218,7 @@ static GError *
 do_query(struct gridd_reply_ctx_s *reply_ctx, sqlx_repository_t *repo,
 		struct sqlx_name_s *name,
 		TableSequence_t *params, TableSequence_t *result,
-		gboolean noreal, gboolean autocreate)
+		gboolean autocreate)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1220,7 +1232,7 @@ do_query(struct gridd_reply_ctx_s *reply_ctx, sqlx_repository_t *repo,
 
 	err = _check_init_flag(sq3, autocreate);
 	if (!err)
-		err = do_query_after_open(reply_ctx, sq3, params, result, noreal);
+		err = do_query_after_open(reply_ctx, sq3, params, result);
 
 	// If a transaction is pending, we do not close the base, but without
 	// a transaction, we can close the base
@@ -1272,7 +1284,6 @@ end_label:
 
 #define FLAG_AUTOCREATE 0x01
 #define FLAG_LOCAL      0x02
-#define FLAG_NOREAL     0x04
 #define FLAG_NOCHECK    0x08
 #define FLAG_CHUNKED    0x10
 #define FLAG_FLUSH      0x20
@@ -1286,9 +1297,9 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 		ns[LIMIT_LENGTH_NSNAME],
 		base[LIMIT_LENGTH_BASENAME],
 		type[LIMIT_LENGTH_BASETYPE];
-	gboolean flush, nocheck, noreal, local, autocreate, chunked;
+	gboolean flush, nocheck, local, autocreate, chunked;
 
-	flush = noreal = local = autocreate = nocheck = chunked = FALSE;
+	flush = local = autocreate = nocheck = chunked = FALSE;
 	memset(n, 0, sizeof(*n));
 
 	err = metautils_message_extract_string(ctx->request,
@@ -1310,8 +1321,6 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 			NAME_MSGKEY_AUTOCREATE, FALSE);
 	nocheck = metautils_message_extract_flag(ctx->request,
 			NAME_MSGKEY_NOCHECK, FALSE);
-	noreal = metautils_message_extract_flag(ctx->request,
-			NAME_MSGKEY_NOREAL, FALSE);
 	chunked = metautils_message_extract_flag(ctx->request,
 			NAME_MSGKEY_CHUNKED, FALSE);
 	flush = metautils_message_extract_flag(ctx->request,
@@ -1326,7 +1335,6 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 		*pflags = 0;
 		*pflags |= (autocreate ? FLAG_AUTOCREATE : 0);
 		*pflags |= (local ? FLAG_LOCAL : 0);
-		*pflags |= (noreal ? FLAG_NOREAL : 0);
 		*pflags |= (nocheck ? FLAG_NOCHECK : 0);
 		*pflags |= (chunked ? FLAG_CHUNKED : 0);
 		*pflags |= (flush ? FLAG_FLUSH : 0);
@@ -2340,7 +2348,7 @@ sqlx_dispatch_QUERY(struct gridd_reply_ctx_s *reply,
 	/* execute the request now */
 	result = calloc(1, sizeof(struct TableSequence));
 	err = do_query(reply, repo, CONST(&name), params,
-			result, flags&FLAG_NOREAL, flags&FLAG_AUTOCREATE);
+			result, flags&FLAG_AUTOCREATE);
 
 	if (params)
 		asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence, params, FALSE);
