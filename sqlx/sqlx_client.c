@@ -16,6 +16,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <string.h>
+
 #include <glib.h>
 #include <sqlite3.h>
 
@@ -28,6 +30,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /* from oiosds */
 #include <core/oiodir.h>
 #include <core/internals.h>
+
+#include <RowFieldSequence.h>
+#include <RowFieldValue.h>
+#include <RowField.h>
+#include <Row.h>
+#include <RowSet.h>
+#include <RowName.h>
+#include <TableHeader.h>
+#include <Table.h>
+#include <TableSequence.h>
+#include <asn_codecs.h>
+
+#include <metautils/lib/metautils.h>
+#include <sqliterepo/sqlx_remote.h>
 
 #include "sqlx_client.h"
 
@@ -171,12 +187,164 @@ _sds_client_execute (struct oio_sqlx_client_s *self,
 	g_assert (c->factory != NULL);
 
 	/* locate the sqlx server via the directory object */
-	GError *err = oio_directory__list (c->factory->dir, c->url, "sqlx",
-			NULL, NULL);
+	gchar srvtype[64] = "sqlx.";
+	const char *subtype = oio_url_get (c->url, OIOURL_TYPE);
+	if (subtype && *subtype)
+		g_strlcat (srvtype, subtype, sizeof(srvtype));
+	else
+		g_strlcat (srvtype, "default", sizeof(srvtype));
 
-	/* contact it */
+	gchar **allsrv = NULL;
+	GError *err = oio_directory__list (c->factory->dir,
+			c->url, srvtype, NULL, &allsrv);
+	if (NULL != err) {
+		g_prefix_error (&err, "Directory error: ");
+		g_assert (allsrv == NULL);
+		return err;
+	}
+	if (!allsrv || !*allsrv) {
+		if (allsrv) g_strfreev (allsrv);
+		return NEWERROR(CODE_CONTAINER_NOTFOUND, "Base not found");
+	}
 
-	return NEWERROR(CODE_NOT_IMPLEMENTED, "NYI");
+	/* Pack the query parameters */
+	GByteArray *req = NULL;
+	do {
+		struct Row *row = calloc(1, sizeof(struct Row));
+		asn_int64_to_INTEGER(&row->rowid, 0);
+		if (in_params) {
+			for (gchar **pparam=in_params; *pparam ;++pparam) {
+				struct RowField *rf = calloc(1, sizeof(struct RowField));
+				asn_uint32_to_INTEGER (&rf->pos, (guint32)(pparam - in_params));
+				OCTET_STRING_fromBuf(&rf->value.choice.s, *pparam, strlen(*pparam));
+				rf->value.present = RowFieldValue_PR_s;
+				asn_sequence_add(&(row->fields->list), rf);
+			}
+		}
+
+		struct Table *table = calloc(1, sizeof(struct Table));
+		OCTET_STRING_fromBuf(&(table->name), in_stmt, strlen(in_stmt));
+		asn_sequence_add (&table->rows.list, row);
+
+		struct TableSequence in_table_sequence;
+		memset (&in_table_sequence, 0, sizeof(in_table_sequence));
+		asn_sequence_add (&in_table_sequence.list, table);
+
+		struct sqlx_name_mutable_s name;
+		sqlx_name_fill (&name, c->url, srvtype, atoi(allsrv[0]));
+		req = sqlx_pack_QUERY(sqlx_name_mutable_to_const(&name),
+				in_stmt, &in_table_sequence, TRUE/*autocreate*/);
+		sqlx_name_clean (&name);
+
+		asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence,
+				&in_table_sequence, TRUE);
+	} while (0);
+	GRID_DEBUG("Encoded query: %u bytes", req ? req->len : 0);
+
+	/* Query each service until a reply is acceptable */
+	gboolean done = FALSE;
+	for (gchar **psrv=allsrv; *psrv ;++psrv) {
+		gchar *p = *psrv;
+		if (!(p = strchr (p, ','))) continue;
+		if (!(p = strchr (p+1, ','))) continue;
+		done = TRUE;
+		++p;
+		GRID_DEBUG("SQLX trying with %s", p);
+
+		/* send the request */
+		/* TODO JFS: macro for the timeout */
+		/* TODO JFS: here are memory copies. big result sets can can cause OOM */
+		GByteArray *out = NULL;
+		err = gridd_client_exec_and_concat (p, 60.0, req, &out);
+		if (!err) {
+			GRID_DEBUG("Got %u bytes", out ? out->len : 0);
+
+			struct TableSequence *ts = NULL;
+
+			asn_codec_ctx_t ctx;
+			memset(&ctx, 0, sizeof(ctx));
+			ctx.max_stack_size = ASN1C_MAX_STACK;
+			asn_dec_rval_t rv = ber_decode(&ctx, &asn_DEF_TableSequence,
+					(void**)&ts, out->data, out->len);
+			if (rv.code != RC_OK) {
+				err = NEWERROR(CODE_PLATFORM_ERROR, "Invalid body from the sqlx");
+			} else if (ts && ts->list.array) {
+				GPtrArray *lines = g_ptr_array_new ();
+				/* XXX For each TABLE */
+				for (int ti=0; !err && ti < ts->list.count ;++ti) {
+					struct Table *t = ts->list.array[ti];
+					if (!t)
+						continue;
+
+					if (!t->status) {
+						err = NEWERROR(CODE_PLATFORM_ERROR, "SQLX reply failure");
+						continue;
+					} else {
+						gint64 s64 = 0;
+						asn_INTEGER_to_int64 (t->status, &s64);
+						if (s64 != CODE_FINAL_OK) {
+							err = NEWERROR(CODE_INTERNAL_ERROR, "Query failure");
+							continue;
+						}
+					}
+
+					/* XXX for each ROW */
+					for (int ri=0; !err && ri < t->rows.list.count ;++ri) {
+						struct Row *r = t->rows.list.array[ri];
+						if (!r || !r->fields)
+							continue;
+						GPtrArray *tokens = g_ptr_array_new ();
+						/* XXX for each FIELD oin the row */
+						for (int fi=0; !err && fi < r->fields->list.count ;++fi) {
+							struct RowField *f = r->fields->list.array[fi];
+							if (!fi)
+								continue;
+							gint64 i64;
+							gdouble d;
+							switch (f->value.present) {
+								case RowFieldValue_PR_NOTHING:
+								case RowFieldValue_PR_n:
+									g_ptr_array_add (tokens, g_strdup("null"));
+									break;
+								case RowFieldValue_PR_i:
+									asn_INTEGER_to_int64(&(f->value.choice.i), &i64);
+									g_ptr_array_add (tokens, g_strdup_printf("%"G_GINT64_FORMAT, i64));
+									break;
+								case RowFieldValue_PR_f:
+									asn_REAL2double(&(f->value.choice.f), &d);
+									g_ptr_array_add (tokens, g_strdup_printf("%f", d));
+									g_print("%f", d);
+									break;
+								case RowFieldValue_PR_b:
+									g_ptr_array_add (tokens, g_strndup(
+												(gchar*)f->value.choice.b.buf, f->value.choice.b.size));
+									break;
+								case RowFieldValue_PR_s:
+									g_ptr_array_add (tokens, g_strndup(
+												(gchar*)f->value.choice.s.buf, f->value.choice.s.size));
+									break;
+							}
+						}
+						g_ptr_array_add (tokens, NULL);
+						if (!err)
+							g_ptr_array_add (lines, g_strjoinv (",", (gchar**) tokens->pdata));
+						g_strfreev ((gchar**)g_ptr_array_free (tokens, TRUE));
+					}
+				}
+				g_ptr_array_add (lines, NULL);
+				if (err) {
+					*out_lines = (gchar**) g_ptr_array_free (lines, FALSE);
+				} else {
+					g_strfreev ((gchar**) g_ptr_array_free (lines, FALSE));
+				}
+			}
+		}
+	}
+	if (!err && !done)
+		err = NEWERROR(CODE_PLATFORM_ERROR, "Invalid SQLX URL: none matched");
+
+	g_strfreev (allsrv);
+	return err;
 }
 
 /* Local implementation ----------------------------------------------------- */
@@ -343,28 +511,35 @@ _local_factory_destroy (struct oio_sqlx_client_factory_s *self)
 
 /* XXX JFS dupplicated from sqliterepo/sqlite_utils.c */
 static int
-_sqlx_exec(sqlite3 *handle, const gchar *sql)
+_sqlx_exec(sqlite3 *handle, const char *sql)
 {
 	int rc, grc = SQLITE_OK;
-	const gchar *next;
 	sqlite3_stmt *stmt = NULL;
 
 	while ((grc == SQLITE_OK) && sql && *sql) {
-		next = NULL;
+		const char *next = NULL;
 		rc = sqlite3_prepare(handle, sql, -1, &stmt, &next);
+		GRID_DEBUG("sqlite3_prepare(%s) = %d", sql, rc);
 		sql = next;
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)
 			grc = rc;
-		else if (stmt) {
-			do {
-				rc = sqlite3_step(stmt);
-			} while (rc == SQLITE_ROW);
+		else {
+			if (stmt) {
+				do {
+					rc = sqlite3_step(stmt);
+					GRID_DEBUG("sqlite3_step() = %d", rc);
+				} while (rc == SQLITE_ROW);
+				if (rc != SQLITE_OK && rc != SQLITE_DONE)
+					grc = rc;
+			}
+		}
+		if (stmt) {
+			rc = sqlite3_finalize(stmt);
+			GRID_DEBUG("sqlite3_finalize() = %d", rc);
+			stmt = NULL;
 			if (rc != SQLITE_OK && rc != SQLITE_DONE)
 				grc = rc;
-			rc = sqlite3_finalize(stmt);
 		}
-
-		stmt = NULL;
 	}
 
 	return grc;
