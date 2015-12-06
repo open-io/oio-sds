@@ -62,8 +62,8 @@ clear_request_and_reply( request_t *req, response_t *resp )
 		oio_str_clean (&req->cmd);
 		oio_str_clean (&req->arg);
 	}
-	if (resp)
-		oio_str_clean (&resp->data);
+	if (resp->data) g_free (resp->data);
+	resp->data = NULL;
 }
 
 /* -------------------------------------------------------------------------- */
