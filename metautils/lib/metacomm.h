@@ -95,6 +95,9 @@ void metautils_message_add_cid (MESSAGE m, const char *f, const container_id_t c
 
 void metautils_message_add_url (MESSAGE m, struct oio_url_s *url);
 
+/* As for metautils_message_add_url() but skip the type mentionned */
+void metautils_message_add_url_no_type (MESSAGE m, struct oio_url_s *url);
+
 /* wraps message_set_BODY() and g_bytes_array_unref() */
 void metautils_message_add_body_unref (MESSAGE m, GByteArray *body);
 

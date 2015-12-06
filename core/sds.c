@@ -114,7 +114,7 @@ static void
 _metachunk_clean (struct metachunk_s *mc)
 {
 	if (!mc)
-		return;	
+		return;
 	g_slist_free (mc->chunks);
 	g_free (mc);
 }
@@ -581,7 +581,7 @@ _download_range_from_metachunk_rained (struct _download_ctx_s *dl,
 		GRID_TRACE("Range %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT
 				" CHUNK size=%"G_GSIZE_FORMAT" pos=%s %s",
 				r0.offset, r0.size, chunk->size,
-				_chunk_pack_position(chunk, strpos, sizeof(strpos)), 
+				_chunk_pack_position(chunk, strpos, sizeof(strpos)),
 				chunk->url);
 
 		if (chunk->position.parity) {
@@ -982,7 +982,7 @@ struct oio_error_s *
 oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 {
 	g_assert (ul != NULL);
-	
+
 	GError *err = NULL;
 	GString *request_body = g_string_new("");
 	GString *reply_body = g_string_new ("");
@@ -1043,7 +1043,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 		ul->chunk_size = 0;
 	if (!ul->hexid)
 		ul->hexid = g_strdup("0000");
-	
+
 	g_string_free (request_body, TRUE);
 	g_string_free (reply_body, TRUE);
 	return (struct oio_error_s*) err;
@@ -1167,7 +1167,7 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 	/* Renew the upload if it finished or wasn't started yet */
 	if (!ul->put)
 		err = _sds_upload_renew (ul);
-	
+
 	if (!err) {
 		if (!g_queue_is_empty (ul->buffer_tail)) {
 			gsize chunksize = ul->mc->size;
@@ -1226,7 +1226,7 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 
 	if (ul->chunks_failed)
 		_chunks_remove (ul->sds->h, ul->chunks_failed);
-	
+
 	g_string_free (request_body, TRUE);
 	g_string_free (reply_body, TRUE);
 	return (struct oio_error_s*) err;
@@ -1295,7 +1295,7 @@ _upload_from_hook (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		len = src->data.hook.cb (src->data.hook.ctx, buf, sizeof(buf));
 		if (len < 0)
 			err = (struct oio_error_s*) SYSERR("data hook error");
-		
+
 		/* feed the upload queue then do the I/O things */
 		if (!err && !(err = oio_sds_upload_feed (ul, buf ,len)))
 			err = oio_sds_upload_step (ul);
@@ -1305,7 +1305,7 @@ _upload_from_hook (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 
 	while (!err && !oio_sds_upload_done (ul))
 		err = oio_sds_upload_step (ul);
-	
+
 	if (!err)
 		err = oio_sds_upload_commit (ul);
 	else {
