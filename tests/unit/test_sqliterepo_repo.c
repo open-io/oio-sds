@@ -22,9 +22,10 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 
-#include "sqliterepo.h"
-#include "cache.h"
-#include "internals.h"
+#include <sqliterepo/sqliterepo.h>
+#include <sqliterepo/sqlx_remote.h>
+#include <sqliterepo/cache.h>
+#include <sqliterepo/internals.h>
 
 #define SCHEMA_META2 "CREATE TABLE IF NOT EXISTS content (" \
 	" path TEXT NOT NULL PRIMARY KEY," \

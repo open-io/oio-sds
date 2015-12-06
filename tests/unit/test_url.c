@@ -21,7 +21,7 @@ License along with this library.
 #include <string.h>
 #include <stdio.h>
 
-#include "oio_core.h"
+#include <core/oio_core.h>
 
 struct test_data_s {
 	const char *url;

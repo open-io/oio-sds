@@ -15,12 +15,6 @@ target_link_libraries(gridcluster
 add_executable (tool_sysstat tool_sysstat.c)
 target_link_libraries (tool_sysstat gridcluster)
 
-install(FILES
-			gridcluster.h
-		DESTINATION include/cluster/lib
-		PERMISSIONS
-			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-
 install(TARGETS gridcluster
 	LIBRARY DESTINATION ${LD_LIBDIR}
 	RUNTIME DESTINATION bin)

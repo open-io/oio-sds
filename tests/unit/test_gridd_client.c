@@ -21,7 +21,8 @@ License along with this library.
 #include <string.h>
 #include <stdio.h>
 
-#include "metautils.h"
+#include <metautils/lib/metautils.h>
+
 #include "test_addr.h"
 
 static GByteArray *

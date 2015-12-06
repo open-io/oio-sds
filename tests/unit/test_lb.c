@@ -25,7 +25,7 @@ License along with this library.
 #include <arpa/inet.h>
 #include <math.h>
 
-#include "metautils.h"
+#include <metautils/lib/metautils.h>
 
 #define SRVTYPE "sqlx"
 

@@ -20,7 +20,10 @@ License along with this library.
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "metautils.h"
+#include <metautils/lib/metautils.h>
+
+#undef GQ
+#define GQ() g_quark_from_static_string("oio.utils")
 
 static void
 test_tags(const gchar *str, ...)

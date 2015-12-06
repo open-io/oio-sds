@@ -18,9 +18,9 @@ License along with this library.
 
 #include <stdarg.h>
 
-#include "oiolog.h"
-#include "oio_sds.h"
-#include "http_put.h"
+#include <core/oiolog.h>
+#include <core/oio_sds.h>
+#include <core/http_put.h>
 
 void setup (void);
 void test_upload_ok (int errors, int size, ...);

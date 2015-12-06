@@ -18,24 +18,30 @@ License along with this library.
 */
 
 #include <metautils/lib/metautils.h>
-#include "election.h"
-#include "version.h"
+#include <sqliterepo/election.h>
+#include <sqliterepo/version.h>
+#include <sqliterepo/sqlx_remote.h>
 
-static const gchar * _get_id (gpointer ctx) {
+static const char *
+_get_id (gpointer ctx)
+{
 	(void) ctx;
 	return "0.0.0.0:0";
 }
 
-static GError* _get_peers (gpointer ctx, const gchar *n, const gchar *t,
-		gchar ***result) {
-	(void) ctx, (void) n, (void) t;
+static GError*
+_get_peers (gpointer ctx, struct sqlx_name_s *n, gboolean nocache,
+		gchar ***result)
+{
+	(void) ctx, (void) n, (void) nocache;
 	*result = g_malloc0(sizeof(gchar*));
 	return NULL;
 }
 
-static GError* _get_vers (gpointer ctx, const gchar *n, const gchar *t,
-		GTree **result) {
-	(void) ctx, (void) n, (void) t;
+static GError*
+_get_vers (gpointer ctx, struct sqlx_name_s *n, GTree **result)
+{
+	(void) ctx, (void) n;
 	*result = version_empty();
 	return NULL;
 }
@@ -97,7 +103,8 @@ test_election_init(void)
 	g_assert_no_error(err);
 	g_assert(&cfg == election_manager_get_config0(m));
 
-	err = election_init(m, "name", "type");
+	struct sqlx_name_s n = {.ns="NS", .base="base", .type="type"};
+	err = election_init(m, &n);
 	g_assert_no_error(err);
 
 	election_manager_clean(m);

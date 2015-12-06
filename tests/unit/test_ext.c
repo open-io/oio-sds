@@ -17,8 +17,8 @@ License along with this library.
 */
 
 #include <glib.h>
-#include "oiolog.h"
-#include "oioext.h"
+#include <core/oiolog.h>
+#include <core/oioext.h>
 
 static void
 test_shuffle_array (void)

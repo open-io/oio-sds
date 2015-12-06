@@ -23,7 +23,7 @@ License along with this library.
 
 #include <glib.h>
 
-#include "./metautils.h"
+#include <metautils/lib/metautils.h>
 
 static void
 _dummy_gba(GByteArray *gba, guint v, register guint len)

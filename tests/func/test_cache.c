@@ -16,10 +16,10 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include "test_cache_abstract.c"
-
 #include <metautils/lib/lrutree.h>
 #include <core/oiolog.h>
+
+#include "test_cache_abstract.c"
 
 static void
 test_cache_cycle_noop (void)

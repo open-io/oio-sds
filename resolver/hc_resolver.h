@@ -55,7 +55,7 @@ void hc_resolver_configure (struct hc_resolver_s *r, enum hc_resolver_flags_e f)
 void hc_resolver_qualify (struct hc_resolver_s *r,
 		gboolean (*qualify) (gconstpointer));
 
-/* Allows to resolver to report for problematic services. 
+/* Allows to resolver to report for problematic services.
  * The hook is called with the IP:PORT couple in a string. */
 void hc_resolver_notify (struct hc_resolver_s *r,
 		void (*notify) (gconstpointer));

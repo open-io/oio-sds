@@ -28,6 +28,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/autogen.h>
 #include <resolver/hc_resolver.h>
 
+#undef GQ
+#define GQ() g_quark_from_static_string("oio.m2v2")
+
 typedef void (*repo_test_f) (struct meta2_backend_s *m2);
 
 typedef void (*container_test_f) (struct meta2_backend_s *m2,

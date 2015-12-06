@@ -22,10 +22,10 @@ License along with this library.
 #include <glib.h>
 #include <json.h>
 
-#include "oiolog.h"
-#include "oiourl.h"
-#include "oio_sds.h"
-#include "internals.h"
+#include <core/oiolog.h>
+#include <core/oiourl.h>
+#include <core/oio_sds.h>
+#include <core/internals.h>
 
 void setup (void);
 void test_init (const char *strcfg, const char *ns);

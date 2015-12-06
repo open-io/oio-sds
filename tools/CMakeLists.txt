@@ -6,15 +6,9 @@ add_executable(echo-server oio-echo-server.c)
 bin_prefix(echo-server "-echo-server")
 target_link_libraries(echo-server metautils server gridcluster ${GLIB2_LIBRARIES})
 
-add_executable(tool-error oio-err.c)
-bin_prefix(tool-error "-err")
-target_link_libraries(tool-error ${GLIB2_LIBRARIES})
-
 add_executable(oio-tool oio-tool.c)
 bin_prefix(oio-tool -tool)
 target_link_libraries(oio-tool metautils ${GLIB2_LIBRARIES})
-
-add_test(NAME tools/error COMMAND ${EXE_PREFIX}-err)
 
 
 set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/.timestamp")

@@ -19,7 +19,7 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 
-#include "./version.h"
+#include <sqliterepo/version.h>
 
 #define GQD(D) g_quark_from_static_string(D)
 

@@ -2,7 +2,7 @@ add_definitions(-DG_LOG_DOMAIN="oio.cluster.agent")
 
 include_directories(BEFORE . .. ../..)
 
-add_executable(gridagent 
+add_executable(gridagent
 	accept_worker.c accept_worker.h
 	agent.c agent.h
 	asn1_request_worker.c asn1_request_worker.h
@@ -31,14 +31,6 @@ target_link_libraries(gridagent
 	gridcluster gridcluster-conscience
 	metautils
 	-lm ${GLIB2_LIBRARIES})
-
-install(FILES
-			agent.h
-			gridagent.h
-			task.h
-		DESTINATION include/cluster/agent
-		PERMISSIONS
-			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
 install(TARGETS gridagent
         LIBRARY DESTINATION ${LD_LIBDIR}

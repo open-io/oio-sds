@@ -19,7 +19,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/oiourl.h>
 #include <core/oiodir.h>
 #include <metautils/lib/metautils.h>
-#include "sqlx_client.h"
+#include <sqlx/sqlx_client.h>
 
 static void
 test_query_success (struct oio_sqlx_client_s *client,

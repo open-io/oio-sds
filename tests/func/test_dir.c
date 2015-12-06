@@ -18,9 +18,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
-#include "oio_core.h"
-
-#include "oiodir.h"
+#include <core/oio_core.h>
+#include <core/oiodir.h>
 
 static void
 _test_init_round (void)
@@ -49,7 +48,7 @@ _test_reference_cycle_round (void)
 
 	struct oio_directory_s *dir = oio_directory__create_proxy ("NS");
 	g_assert_nonnull (dir);
-	
+
 	/* create */
 
 	/* link */

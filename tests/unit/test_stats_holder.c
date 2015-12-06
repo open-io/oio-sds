@@ -1,5 +1,5 @@
 /*
-OpenIO SDS metautils
+OpenIO SDS server
 Copyright (C) 2014 Worldine, original work as part of Redcurrant
 Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
@@ -17,41 +17,28 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
+#include "metautils/lib/metautils.h"
+#include "server/stats_holder.h"
+#include <glib.h>
 
-#include "metautils.h"
-#include "test_addr.h"
-
-static void
-test_bad_connect_address(void)
-{
-	static const gchar *pProc = __FUNCTION__;
-	void test(const gchar *url) {
-		gboolean rc = metautils_url_valid_for_connect(url);
-		URL_ASSERT(rc == FALSE);
-	}
-	test_on_urlv(bad_urls, test);
-}
+#undef GQ
+#define GQ() g_quark_from_static_string("oio.server")
 
 static void
-test_good_connect_address(void)
+test_rrd (void)
 {
-	static const gchar *pProc = __FUNCTION__;
-	void test(const gchar *url) {
-		gboolean rc = metautils_url_valid_for_connect(url);
-		URL_ASSERT(rc != FALSE);
-	}
-	test_on_urlv(good_urls, test);
+	struct grid_single_rrd_s *rrd = grid_single_rrd_create(2, 60);
+	grid_single_rrd_push(rrd, 3, 0);
+	grid_single_rrd_push(rrd, 1000, 0);
+	grid_single_rrd_push(rrd, 2, 0);
+	grid_single_rrd_destroy(rrd);
 }
 
 int
-main(int argc, char **argv)
+main (int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
-	g_test_add_func("/metautils/addr/bad_connect", test_bad_connect_address);
-	g_test_add_func("/metautils/gridd_client/good_address", test_good_connect_address);
+	g_test_add_func("/server/rrd", test_rrd);
 	return g_test_run();
 }
 

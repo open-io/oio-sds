@@ -137,6 +137,6 @@ _dir_proxy_list (struct oio_directory_s *self,
 		json_tokener_free (tok);
 	}
 	g_string_free (out, TRUE);
-	
+
 	return err;
 }

@@ -22,18 +22,7 @@ target_link_libraries(gridd
 		metautils gridcluster
 		${GLIB2_LIBRARIES})
 
-install(FILES
-			message_handler.h
-			plugin.h
-			plugin_holder.h
-			srvalert.h
-			srvstats.h
-			srvtimer.h
-		DESTINATION include/gridd/main
-		PERMISSIONS
-			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-
 install(TARGETS gridd
-	LIBRARY DESTINATION ${LD_LIBDIR}
-	RUNTIME DESTINATION bin)
+		LIBRARY DESTINATION ${LD_LIBDIR}
+		RUNTIME DESTINATION bin)
 
