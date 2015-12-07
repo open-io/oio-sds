@@ -195,6 +195,75 @@ Require all granted
 </VirtualHost>
 """
 
+template_rainx_service = """
+LoadModule mpm_worker_module   ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
+LoadModule authz_core_module   ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
+LoadModule dav_module          ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_dav.so
+LoadModule mime_module         ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mime.so
+LoadModule dav_rainx_module     @APACHE2_MODULES_DIRS@/mod_dav_rainx.so
+
+<IfModule !unixd_module>
+	LoadModule unixd_module        ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_unixd.so
+</IfModule>
+<IfModule !log_config_module>
+	LoadModule log_config_module   ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_log_config.so
+</IfModule>
+
+Listen ${IP}:${PORT}
+PidFile ${RUNDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.pid
+ServerRoot ${TMPDIR}
+ServerName localhost
+ServerSignature Off
+ServerTokens Prod
+DocumentRoot ${RUNDIR}
+TypesConfig /etc/mime.types
+
+User  ${USER}
+Group ${USER}
+
+LogFormat "%h %l %t \\"%r\\" %>s %b %D" log/common
+ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-errors.log
+CustomLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-access.log log/common
+LogLevel info
+
+<IfModule mod_env.c>
+SetEnv nokeepalive 1
+SetEnv downgrade-1.0 1
+SetEnv force-response-1.0 1
+</IfModule>
+
+<IfModule prefork.c>
+MaxClients 10
+StartServers 5
+MinSpareServers 5
+MaxSpareServers 10
+</IfModule>
+
+<IfModule worker.c>
+StartServers 1
+MaxClients 10
+MinSpareThreads 2
+MaxSpareThreads 10
+ThreadsPerChild 10
+MaxRequestsPerChild 0
+</IfModule>
+
+DavDepthInfinity Off
+
+grid_namespace NS
+grid_dir_run ${RUNDIR}
+
+<Directory />
+DAV rainx
+AllowOverride None
+Require all granted
+</Directory>
+
+<VirtualHost ${IP}:${PORT}>
+# DO NOT REMOVE (even if empty) !
+</VirtualHost>
+"""
+
 template_agent = """
 [General]
 user=${UID}
@@ -281,6 +350,10 @@ param_service.meta2.score_expr=(num stat.cpu)
 param_service.rawx.score_timeout=120
 param_service.rawx.score_variation_bound=5
 param_service.rawx.score_expr=(num stat.cpu)
+
+param_service.rainx.score_timeout=120
+param_service.rainx.score_variation_bound=5
+param_service.rainx.score_expr=(num stat.cpu)
 
 param_service.sqlx.score_timeout=120
 param_service.sqlx.score_variation_bound=5
@@ -380,6 +453,15 @@ template_gridinit_rawx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE}
 command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},${SRVTYPE},${SRVNUM} -p 1 -m '${EXE_PREFIX}-rawx-monitor.py' -i '${NS}|${SRVTYPE}|${IP}:${PORT}' -c '${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf'
+enabled=true
+start_at_boot=false
+on_die=respawn
+"""
+
+template_gridinit_rainx = """
+[Service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE}
+command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},${SRVTYPE},${SRVNUM} -p 1 -m '${EXE_PREFIX}-rainx-monitor.py' -i '${NS}|${SRVTYPE}|${IP}:${PORT}' -c '${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf'
 enabled=true
 start_at_boot=false
 on_die=respawn
@@ -491,6 +573,7 @@ def generate (ns, ip, options={}):
 	port_event_agent = next_port()
 	port_rdir = next_port()
 	rawx = []
+	rainx = []
 	services = []
 
 	versioning = 1
@@ -519,6 +602,9 @@ def generate (ns, ip, options={}):
 	if options.NO_RAWX is None:
 		for i in range(1, 1+getint(options.NB_RAWX, 3)):
 			rawx.append((i, next_port()))
+	if options.NO_RAINX is None:
+		for i in range(1, 1+getint(options.NB_RAINX, 1)):
+			rainx.append((i, next_port()))
 
 	print "Deploying", repr(services)
 
@@ -599,6 +685,23 @@ def generate (ns, ip, options={}):
 		env['SRVNUM'] = n
 		env['PORT'] = p
 		with open(CFGDIR + '/' + ns + '-rawx-httpd-' + str(n) + '.conf', 'w+') as f:
+			f.write(tpl.safe_substitute(env))
+
+	# Generate the RAINX services
+	tpl = Template(template_gridinit_rainx)
+	with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
+		for n,p in rainx:
+			mkdir_noerror(DATADIR + '/' + ns + '-rainx-' + str(n))
+			env['SRVTYPE'] = 'rainx'
+			env['SRVNUM'] = n
+			env['PORT'] = p
+			f.write(tpl.safe_substitute(env))
+	tpl = Template(template_rainx_service)
+	for n,p in rainx:
+		env['SRVTYPE'] = 'rainx'
+		env['SRVNUM'] = n
+		env['PORT'] = p
+		with open(CFGDIR + '/' + ns + '-rainx-httpd-' + str(n) + '.conf', 'w+') as f:
 			f.write(tpl.safe_substitute(env))
 
 	# redis
@@ -703,12 +806,14 @@ def main ():
 	parser.add_option("--no-meta2", action="store_true", dest="NO_META2")
 	parser.add_option("--no-sqlx", action="store_true", dest="NO_SQLX")
 	parser.add_option("--no-rawx", action="store_true", dest="NO_RAWX")
+	parser.add_option("--no-rainx", action="store_true", dest="NO_RAINX")
 
 	parser.add_option("--nb-meta0", action="store", type="int", dest="NB_META0")
 	parser.add_option("--nb-meta1", action="store", type="int", dest="NB_META1")
 	parser.add_option("--nb-meta2", action="store", type="int", dest="NB_META2")
 	parser.add_option("--nb-sqlx",  action="store", type="int", dest="NB_SQLX")
 	parser.add_option("--nb-rawx",  action="store", type="int", dest="NB_RAWX")
+	parser.add_option("--nb-rainx",  action="store", type="int", dest="NB_RAINX")
 
 	options, args = parser.parse_args()
 	generate(args[0], args[1], options)
