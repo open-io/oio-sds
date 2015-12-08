@@ -1,15 +1,16 @@
-language: python
-python: 2.7
-env:
-  - TOX_ENV=pep8
-  - TOX_ENV=py27
+sudo: required
+dist: trusty
+language: c
 install:
-  - pip install --upgrade pip setuptools tox virtualenv
+  - sudo apt-add-repository "deb http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse"
+  - sudo apt-add-repository "deb http://mirror.openio.io/pub/repo/mini-dinstall/ trusty/"
+  - sudo apt-get update -qq
+  - sudo apt-get install -y --force-yes libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev libattr1-dev libevent-dev apache2 apache2-dev liblzo2-dev openio-gridinit openio-asn1c openio-sds-librain-dev libjson-c-dev flex bison curl libleveldb1 libleveldb-dev libattr1-dev python-all-dev python-virtualenv
+  - virtualenv oio && source oio/bin/activate
+  - pip install --upgrade pip setuptools virtualenv
+  - (cd python && pip install -r requirements.txt)
 script:
-  - cd python && tox -v -v -e $TOX_ENV
-after_failure:
-  - for LOG in .tox/$TOX_ENV/log/*; do echo "$LOG\n"; cat "$LOG"; echo "\n\n"; done
-addons:
-  apt:
-    packages:
-      - libattr1-dev
+  - cmake -DCMAKE_BUILD_TYPE="Debug" -DZK_LIBDIR="/usr/lib" -DZK_INCDIR="/usr/include/zookeeper" -DLIBRAIN_LIBDIR="/usr/lib" -DLIBRAIN_INCDIR="/usr/include" -DAPACHE2_LIBDIR="/usr/lib/apache2" -DAPACHE2_INCDIR="/usr/include/apache2" .
+  - make
+  - (cd python && python setup.py install)
+  - make test
