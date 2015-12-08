@@ -6,7 +6,7 @@ before_script:
   - sudo apt-add-repository "deb http://archive.ubuntu.com/ubuntu trusty-backports main restricted universe multiverse"
   - sudo apt-add-repository "deb http://mirror.openio.io/pub/repo/mini-dinstall/ trusty/"
   - sudo apt-get update -qq
-  - sudo apt-get install -y libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev libattr1-dev libevent-dev apache2 apache2-dev liblzo2-dev openio-gridinit openio-asn1c openio-sds-librain-dev libjson-c-dev flex bison curl
+  - sudo apt-get install -y --force-yes libglib2.0-dev libzookeeper-mt-dev libzmq3-dev libcurl4-gnutls-dev libapreq2-dev libsqlite3-dev libattr1-dev libevent-dev apache2 apache2-dev liblzo2-dev openio-gridinit openio-asn1c openio-sds-librain-dev libjson-c-dev flex bison curl
 install:
   - pip install --upgrade pip setuptools tox virtualenv
 script:
