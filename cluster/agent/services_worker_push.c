@@ -95,7 +95,7 @@ manage_service(struct service_info_s *si)
 	metautils_srvinfo_ensure_tags (si);
 
 	si->score.value = SCORE_UNSET;
-	si->score.timestamp = g_get_real_time() / 1000000;
+	si->score.timestamp = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 
 	/*then keep the score */
 	g_hash_table_remove(ns_data->down_services, key);

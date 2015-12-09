@@ -235,7 +235,7 @@ SQLX_UNSHIFT(sqlx_cache_t *cache, sqlx_base_t *base,
 		beacon->last = base->index;
 
 	base->status = status;
-	base->last_update = g_get_monotonic_time ();
+	base->last_update = oio_ext_monotonic_time ();
 }
 
 static void
@@ -599,7 +599,7 @@ sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
 	EXTRA_ASSERT(hname != NULL);
 	EXTRA_ASSERT(result != NULL);
 
-	gint64 deadline = g_get_monotonic_time();
+	gint64 deadline = oio_ext_monotonic_time();
 	if (cache->open_timeout >= 0) {
 		deadline += cache->open_timeout * G_TIME_SPAN_MILLISECOND;
 	} else {
@@ -818,7 +818,7 @@ guint
 sqlx_cache_expire(sqlx_cache_t *cache, guint max, gint64 duration)
 {
 	guint nb = 0;
-	gint64 pivot = g_get_monotonic_time () + duration;
+	gint64 pivot = oio_ext_monotonic_time () + duration;
 
 	EXTRA_ASSERT(cache != NULL);
 
@@ -826,7 +826,7 @@ sqlx_cache_expire(sqlx_cache_t *cache, guint max, gint64 duration)
 	cache->used = TRUE;
 
 	for (nb=0; !max || nb < max ; nb++) {
-		gint64 now = g_get_monotonic_time ();
+		gint64 now = oio_ext_monotonic_time ();
 		if (now > pivot || !sqlx_expire_first_idle_base(cache, now))
 			break;
 	}

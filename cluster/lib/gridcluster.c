@@ -359,7 +359,7 @@ register_namespace_service(const struct service_info_s *si)
 {
 	struct service_info_s *si_copy = service_info_dup(si);
 	si_copy->score.value = SCORE_UNSET;
-	si_copy->score.timestamp = g_get_real_time () / G_TIME_SPAN_SECOND;
+	si_copy->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 
 	metautils_srvinfo_ensure_tags (si_copy);
 
@@ -492,7 +492,7 @@ oio_sys_cpu_idle (void)
 	gdouble out;
 
 	g_mutex_lock (&lock);
-	gint64 now = g_get_monotonic_time ();
+	gint64 now = oio_ext_monotonic_time ();
 	if (!last_update || ((now - last_update) > G_TIME_SPAN_SECOND)) {
 		FILE *fst = fopen ("/proc/stat", "r");
 		while (fst && !feof(fst) && !ferror(fst)) {
@@ -588,7 +588,7 @@ _compute_io_idle (guint major, guint minor)
 	struct maj_min_idle_s *out = NULL;
 
 	g_mutex_lock (&io_lock);
-	gint64 now = g_get_monotonic_time ();
+	gint64 now = oio_ext_monotonic_time ();
 
 	/* locate the info in the cache */
 	for (GSList *l=io_cache; l && !out ;l=l->next) {
@@ -671,7 +671,7 @@ _get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
 	struct path_maj_min_s *out = NULL;
 
 	g_mutex_lock (&majmin_lock);
-	gint64 now = g_get_monotonic_time ();
+	gint64 now = oio_ext_monotonic_time ();
 	/* ensure an entry exists */
 	for (GSList *l=majmin_cache; l && !out ;l=l->next) {
 		struct path_maj_min_s *p = l->data;

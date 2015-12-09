@@ -255,7 +255,7 @@ network_server_init(void)
 	result->flag_continue = ~0;
 	result->stats = grid_stats_holder_init();
 
-	result->now = g_get_monotonic_time ();
+	result->now = oio_ext_monotonic_time ();
 
 	result->queue_events = g_async_queue_new();
 	result->queue_monitor = g_async_queue_new();
@@ -518,7 +518,7 @@ _manage_client_event(struct network_server_s *srv,
 	clt->events = MACRO_COND(!ev0, CLT_ERROR, ev0);
 
 	if (ev0 & EPOLLIN)
-		clt->time.evt_in = g_get_monotonic_time();
+		clt->time.evt_in = oio_ext_monotonic_time();
 
 	if (clt->events & CLT_ERROR)
 		ARM_CLIENT(srv, clt, EPOLL_CTL_DEL);
@@ -570,7 +570,7 @@ _server_shutdown_inactive_connections(struct network_server_s *srv)
 {
 	struct network_client_s *clt, *n;
 
-	time_t now = g_get_monotonic_time ();
+	time_t now = oio_ext_monotonic_time ();
 	time_t ti = now - srv->atexit_max_idle;
 	time_t tc = now - srv->atexit_max_open_never_input;
 	time_t tp = now - srv->atexit_max_open_persist;
@@ -645,7 +645,7 @@ network_server_run(struct network_server_s *srv)
 	_server_start_one_worker(srv, FALSE);
 	srv->thread_events = g_thread_new("events", _thread_cb_events, srv);
 
-	srv->now = g_get_monotonic_time ();
+	srv->now = oio_ext_monotonic_time ();
 	last_update = network_server_bogonow(srv);
 	while (srv->flag_continue) {
 		now = network_server_bogonow(srv);
@@ -654,7 +654,7 @@ network_server_run(struct network_server_s *srv)
 			last_update = now;
 		}
 		g_usleep(_start_necessary_threads(srv) ? 50000 : 500000);
-		srv->now = g_get_monotonic_time ();
+		srv->now = oio_ext_monotonic_time ();
 	}
 
 	network_server_close_servers(srv);
@@ -663,7 +663,7 @@ network_server_run(struct network_server_s *srv)
 	while (srv->workers_total) {
 		GRID_DEBUG("Waiting for %u workers to die", srv->workers_total);
 		g_usleep(200000);
-		srv->now = g_get_monotonic_time ();
+		srv->now = oio_ext_monotonic_time ();
 	}
 	srv->thread_first_worker = NULL;
 

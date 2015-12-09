@@ -228,7 +228,7 @@ static void
 network_client_log_access(struct log_item_s *item)
 {
 	if (!item->req_ctx->tv_end)
-		item->req_ctx->tv_end = g_get_monotonic_time ();
+		item->req_ctx->tv_end = oio_ext_monotonic_time ();
 
 	gint64 diff_total = item->req_ctx->tv_end - item->req_ctx->tv_start;
 	gint64 diff_handler = item->req_ctx->tv_end - item->req_ctx->tv_parsed;
@@ -536,7 +536,7 @@ _notify_request(struct req_ctx_s *ctx,
 		const gchar *name_req, const gchar *name_time)
 {
 	if (!ctx->tv_end)
-		ctx->tv_end = g_get_monotonic_time();
+		ctx->tv_end = oio_ext_monotonic_time();
 
 	gint64 diff = ctx->tv_end - ctx->tv_start;
 
@@ -786,7 +786,7 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 
 	// take the encoding into account
 	req_ctx.tv_start = client->time.evt_in;
-	req_ctx.tv_parsed = g_get_monotonic_time ();
+	req_ctx.tv_parsed = oio_ext_monotonic_time ();
 
 	if (!request) {
 		struct log_item_s item;

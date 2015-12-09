@@ -553,7 +553,7 @@ member_set_id(struct election_member_s *m, gint64 id)
 static void
 member_set_status(struct election_member_s *m, enum election_step_e s)
 {
-	m->last_status = g_get_monotonic_time ();
+	m->last_status = oio_ext_monotonic_time ();
 	m->step = s;
 	if (STATUS_FINAL(s)) {
 		member_debug(__FUNCTION__, "FINAL", m);
@@ -679,7 +679,7 @@ member_create(struct election_manager_s *manager, struct sqlx_name_s *n,
 
 	result = g_malloc0(sizeof(*result));
 	result->manager = manager;
-	result->last_status = g_get_monotonic_time ();
+	result->last_status = oio_ext_monotonic_time ();
 	result->key = hashstr_dup(key);
 	result->name.base = g_strdup(n->base);
 	result->name.type = g_strdup(n->type);
@@ -759,7 +759,7 @@ member_pending_for_too_long(struct election_member_s *member)
 		case STEP_CANDOK:
 		case STEP_PRELOST:
 		case STEP_PRELEAD:
-			return member->last_status < g_get_monotonic_time () -
+			return member->last_status < oio_ext_monotonic_time () -
 				(member->manager->delay_max_idle * G_TIME_SPAN_SECOND);
 		case STEP_LEAVING:
 		case STEP_LEADER:
@@ -777,7 +777,7 @@ member_failed_for_too_long(struct election_member_s *member)
 {
 	if (member->step != STEP_FAILED)
 		return FALSE;
-	return member->last_status < g_get_monotonic_time () -
+	return member->last_status < oio_ext_monotonic_time () -
 		(member->manager->delay_restart_failed * G_TIME_SPAN_SECOND);
 }
 
@@ -847,7 +847,7 @@ _manager_exit_all(struct election_manager_s *manager, gint64 duration,
 
 	GRID_INFO("Voluntarily exiting all the elections...");
 	MANAGER_CHECK(manager);
-	gint64 pivot = g_get_monotonic_time () + duration;
+	gint64 pivot = oio_ext_monotonic_time () + duration;
 
 	/* Order the node to exit */
 	g_mutex_lock(&manager->lock);
@@ -857,7 +857,7 @@ _manager_exit_all(struct election_manager_s *manager, gint64 duration,
 
 	while (0 < (count = manager_count_active(manager))) {
 		GRID_INFO("Waiting for %u active elections", count);
-		if (g_get_monotonic_time () > pivot) {
+		if (oio_ext_monotonic_time () > pivot) {
 			GRID_WARN("TIMEOUT while waiting for active elections");
 			return;
 		}
@@ -1296,7 +1296,7 @@ wait_for_final_status(struct election_member_s *m, gint64 deadline)
 
 		member_kickoff(m);
 
-		gint64 tmp = g_get_monotonic_time();
+		gint64 tmp = oio_ext_monotonic_time();
 		if (tmp > deadline) {
 			GRID_WARN("TIMEOUT! (wait) [%s.%s]", m->name.base, m->name.type);
 			return FALSE;
@@ -1326,7 +1326,7 @@ _election_get_status(struct election_manager_s *mgr, struct sqlx_name_s *n, gcha
 	MANAGER_CHECK(mgr);
 	EXTRA_ASSERT(n != NULL);
 
-	gint64 deadline = g_get_monotonic_time () + mgr->delay_max_wait * G_TIME_SPAN_SECOND;
+	gint64 deadline = oio_ext_monotonic_time () + mgr->delay_max_wait * G_TIME_SPAN_SECOND;
 	g_mutex_lock(&mgr->lock);
 
 	struct election_member_s *m = manager_init_member(mgr, n, TRUE);
@@ -1399,7 +1399,7 @@ static GSList*
 _get_to_be_notified(struct election_manager_s *manager, gint64 duration)
 {
 	GSList *res = NULL;
-	gint64 pivot = g_get_monotonic_time () + duration;
+	gint64 pivot = oio_ext_monotonic_time () + duration;
 
 	gint _sort_by_status(gconstpointer p0, gconstpointer p1) {
 		register const gint64 tv0 = MEMBER(p0)->last_status, tv1 = MEMBER(p1)->last_status;
@@ -1447,10 +1447,10 @@ _manager_retry_elections(struct election_manager_s *manager,
 			SQLX_DELAY_ELECTION_REPLAY * G_TIME_SPAN_SECOND);
 
 	guint count = 0;
-	gint64 pivot = g_get_monotonic_time () + duration;
+	gint64 pivot = oio_ext_monotonic_time () + duration;
 	for (GSList *l=to_be_notified; l ;l=l->next) {
 		struct election_member_s *m = l->data;
-		if (duration && pivot < g_get_monotonic_time())
+		if (duration && pivot < oio_ext_monotonic_time())
 			break;
 		if (max && count >= max)
 			break;
@@ -1529,7 +1529,7 @@ defer_USE(struct election_member_s *member, time_t now)
 	} else {
 		GByteArray *req;
 
-		member->last_USE = now ? now : (g_get_real_time()/G_TIME_SPAN_SECOND);
+		member->last_USE = now ? now : (oio_ext_real_time()/G_TIME_SPAN_SECOND);
 		member->pending_USE = pending;
 		member->reqid_USE = manager_next_reqid(member->manager);
 
@@ -1964,7 +1964,7 @@ member_ping_delay(struct election_member_s *member)
 static void
 member_ping(struct election_member_s *member)
 {
-	time_t now = g_get_real_time() / G_TIME_SPAN_SECOND;
+	time_t now = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 	time_t delay = member_ping_delay(member);
 
 	if (!member->last_USE || member->last_USE + delay < now
@@ -2082,7 +2082,7 @@ _transition(struct election_member_s *member, enum event_type_e evt,
 						GRID_INFO("Election for [%s.%s] seems stale (PRELEAD), restarting GETVERS",
 								member->name.base, member->name.type);
 						defer_GETVERS(member);
-						member->last_status = g_get_monotonic_time ();
+						member->last_status = oio_ext_monotonic_time ();
 					} else {
 						member_ping(member);
 					}
@@ -2162,7 +2162,7 @@ _transition(struct election_member_s *member, enum event_type_e evt,
 						// This is to prevent SQLX_GETVERS bursts. We got a
 						// case where defer_GETVERS was called several times
 						// before the first response arrives.
-						member->last_status = g_get_monotonic_time ();
+						member->last_status = oio_ext_monotonic_time ();
 					} else {
 						member_ping(member);
 					}

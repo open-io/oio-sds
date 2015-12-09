@@ -1260,7 +1260,7 @@ _unique_random_SHA256(void)
 	} bulk;
 
 	memset(&bulk, 0, sizeof(bulk));
-	bulk.now = g_get_real_time ();
+	bulk.now = oio_ext_real_time ();
 	bulk.pid = getpid();
 	bulk.ppid = getppid();
 	bulk.uid = geteuid();

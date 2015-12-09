@@ -105,7 +105,7 @@ _mark_service_state(const gchar *ns_name, const gchar *srv_key, gboolean is_up)
 	ns_data = g_hash_table_lookup(namespaces, ns_name);
 	if (!ns_data)
 		return;
-	
+
 	if (is_up) {
 		si = g_hash_table_lookup(ns_data->local_services, srv_key);
 		if (!si) {
@@ -118,14 +118,14 @@ _mark_service_state(const gchar *ns_name, const gchar *srv_key, gboolean is_up)
 			}
 		}
 		else {
-			si->score.timestamp = g_get_real_time() / 1000000;
+			si->score.timestamp = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 			DEBUG("Service [%s/%s] still UP", ns_name, srv_key);
 		}
 
 		/*ensure the UP tag on TRUE*/
 		if (si) {
 			service_tag_set_value_boolean(service_info_ensure_tag(si->tags,"tag.up"), TRUE);
-			si->score.timestamp = g_get_real_time() / 1000000;
+			si->score.timestamp = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 		}
 	}
 	else {
@@ -169,11 +169,11 @@ _detect_obsolete_services(struct namespace_data_s *ns_data)
 	struct service_info_s *si;
 
 
-	time_now = g_get_real_time()/1000000;
+	time_now = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 	time_down = time_now - 5;
 	time_broken = time_now - 30;
 	counter = 0;
-	
+
 	if (!ns_data->configured) {
 		return;
 	}
@@ -241,7 +241,7 @@ _check_tcp_service_worker_cleaner(worker_t *worker)
 	else {
 		_mark_service_state(wdata->ns_name, wdata->srv_key, FALSE);
 		WARN("Connection attempt failed to [%s/%s]", wdata->ns_name, wdata->srv_key);
-	}	
+	}
 
 	g_free(wdata);
 }
@@ -278,7 +278,7 @@ _check_tcp_service_task(gpointer udata, GError **error)
 	struct service_info_s *si;
 	struct namespace_data_s *ns_data;
 	struct taskdata_checksrv_s *task_data;
-	
+
 	task_data = udata;
 
 	ns_data = g_hash_table_lookup(namespaces, task_data->ns_name);
@@ -331,7 +331,7 @@ _check_tcp_service_task(gpointer udata, GError **error)
 			GSETERROR(error, "Failed to add socket fd=%d to io_scheduler : %s", fd, strerror(errno));
 			return 0;
 		}
-		
+
 		TRACE("TCP-connect tried to [%s] for [%s] (fd=%d)", task_data->srv_key, task_data->task_name, fd);
 	} while (0);
 
@@ -401,7 +401,7 @@ allservice_check_start_HT(struct namespace_data_s *ns_data, GHashTable *ht)
 				ERROR("Memory allocation failure");
 				continue;
 			}
-			
+
 			/* now start the task! */
 			if (add_task_to_schedule(task, &error_local))
 				INFO("Task started: %s", td_scheme.task_name);
@@ -415,9 +415,6 @@ allservice_check_start_HT(struct namespace_data_s *ns_data, GHashTable *ht)
 	}
 }
 
-/**
- * Starts a 
- */
 static int
 allservices_check_starter(gpointer udata, GError **error)
 {
@@ -426,7 +423,7 @@ allservices_check_starter(gpointer udata, GError **error)
 
 	(void) udata;
 	(void) error;
-	
+
 	/*ensure there is a task started for each services locally registered*/
 	g_hash_table_iter_init(&iter_ns, namespaces);
 	while (g_hash_table_iter_next(&iter_ns, &k, &v)) {

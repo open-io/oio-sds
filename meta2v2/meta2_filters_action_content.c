@@ -89,7 +89,7 @@ _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 
 	GString *gs = g_string_new ("{");
 	g_string_append_printf (gs, "\"event\":\"%s.%s\"", NAME_SRVTYPE_META2, name);
-	append_int64 (gs, "when", g_get_real_time());
+	append_int64 (gs, "when", oio_ext_real_time());
 	g_string_append (gs, ",\"url\":{");
 	oio_url_to_json (gs, url);
 	g_string_append (gs, "},\"data\":[");

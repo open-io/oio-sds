@@ -47,7 +47,7 @@ _build_si(const gchar *a, guint i)
 	si->addr.type = TADDR_V4;
 	si->addr.port = htons(i+2);
 	si->score.value = i;
-	si->score.timestamp = g_get_real_time () / G_TIME_SPAN_SECOND;
+	si->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 	return si;
 }
 

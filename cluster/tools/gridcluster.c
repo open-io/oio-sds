@@ -234,7 +234,7 @@ set_service_score(const char *service_desc, int score)
 	g_strlcpy(si->ns_name, tokens[0], sizeof(si->ns_name));
 	g_strlcpy(si->type, tokens[1], sizeof(si->type));
 	si->score.value = score;
-	si->score.timestamp = g_get_real_time () / G_TIME_SPAN_SECOND;
+	si->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 
 	if (!grid_string_to_addrinfo(tokens[2], &si->addr)) {
 		service_info_clean (si);

@@ -150,7 +150,7 @@ conscience_srvtype_serialize_config(struct conscience_srvtype_s *srvtype,
 	g_hash_table_ref(ht);
 
 	/*Add the current timestamp */
-	g_snprintf(wrkBuf, sizeof(wrkBuf), "%ld", g_get_real_time () / G_TIME_SPAN_SECOND);
+	g_snprintf(wrkBuf, sizeof(wrkBuf), "%ld", oio_ext_real_time () / G_TIME_SPAN_SECOND);
 	v = g_byte_array_append(g_byte_array_new(),
 	    (guint8 *) wrkBuf, strlen(wrkBuf) + 1);
 	g_hash_table_insert(ht, "timestamp", v);
@@ -211,7 +211,7 @@ conscience_srvtype_register_srv(struct conscience_srvtype_s *srvtype,
 	memcpy(&(service->id), srvid, sizeof(struct conscience_srvid_s));
 	service->tags = g_ptr_array_new();
 	service->locked = FALSE;
-	service->score.timestamp = g_get_real_time () / G_TIME_SPAN_SECOND;
+	service->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 	service->score.value = -1;
 	service->srvtype = srvtype;
 
@@ -249,7 +249,7 @@ conscience_srvtype_remove_expired(struct conscience_srvtype_s * srvtype,
 	}
 
 	how_many = 0U;
-	oldest = g_get_real_time () / G_TIME_SPAN_SECOND - srvtype->score_expiration;
+	oldest = oio_ext_real_time () / G_TIME_SPAN_SECOND - srvtype->score_expiration;
 
 	g_hash_table_iter_init(&iter, srvtype->services_ht);
 	while (g_hash_table_iter_next(&iter, &key, &value)) {
@@ -288,7 +288,7 @@ conscience_srvtype_run_all(struct conscience_srvtype_s * srvtype,
 			rc = callback(srv, udata);
 	}
 	else {
-		oldest = g_get_real_time () / G_TIME_SPAN_SECOND - srvtype->score_expiration;
+		oldest = oio_ext_real_time () / G_TIME_SPAN_SECOND - srvtype->score_expiration;
 		beacon = &(srvtype->services_ring);
 		for (srv = beacon->next; rc && srv && srv != beacon; srv = srv->next) {
 			if (srv->locked || srv->score.timestamp > oldest)
@@ -318,7 +318,7 @@ conscience_srvtype_count_srv(struct conscience_srvtype_s * srvtype,
 		time_t oldest;
 		struct conscience_srv_s *beacon, *srv;
 
-		oldest = g_get_real_time () / G_TIME_SPAN_SECOND - srvtype->score_expiration;
+		oldest = oio_ext_real_time () / G_TIME_SPAN_SECOND - srvtype->score_expiration;
 		beacon = &(srvtype->services_ring);
 
 		for (srv = beacon->next; srv && srv != beacon;

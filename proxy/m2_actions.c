@@ -400,7 +400,7 @@ _load_simplified_chunks (struct json_object *jbody, GSList **out)
 	if (!json_object_is_type(jbody, json_type_array))
 		return BADREQ ("JSON: Not an array");
 
-	gint64 now = g_get_real_time () / G_TIME_SPAN_SECOND;
+	gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 
 	// Load the beans
 	for (int i=json_object_array_length(jbody); i>0 && !err ;i--) {

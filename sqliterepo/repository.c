@@ -206,7 +206,7 @@ __test_schema(const gchar *schema, const gchar *version, GByteArray **raw)
 	sqlite3 *db = NULL;
 
 	tmp_path = g_strdup_printf("/tmp/schema.%d.%"G_GINT64_FORMAT".sqlite",
-			getpid(), g_get_real_time());
+			getpid(), oio_ext_real_time());
 
 	/* Open a new base */
 	int flags = SQLITE_OPEN_NOMUTEX|SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE;

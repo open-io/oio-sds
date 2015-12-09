@@ -483,7 +483,7 @@ cli_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	resolver = hc_resolver_create1(g_get_monotonic_time() / G_TIME_SPAN_SECOND);
+	resolver = hc_resolver_create1(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND);
 	type = g_strconcat("sqlx.", argv[1], NULL);
 	query = g_strdupv(argv+2);
 	GRID_DEBUG("Executing %u requests", g_strv_length(query));

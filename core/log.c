@@ -26,6 +26,7 @@ License along with this library.
 #include <glib.h>
 
 #include "oiolog.h"
+#include "oioext.h"
 
 int oio_log_level_default = 0x7F;
 
@@ -221,7 +222,7 @@ _logger_stderr(const gchar *log_domain, GLogLevelFlags log_level,
 	(void) user_data;
 
 	g_string_append_printf(gstr, "%"G_GINT64_FORMAT" %d %04X ",
-			g_get_monotonic_time () / G_TIME_SPAN_MILLISECOND,
+			oio_ext_monotonic_time () / G_TIME_SPAN_MILLISECOND,
 			getpid(), oio_log_current_thread_id());
 
 	if (!log_domain || !*log_domain)

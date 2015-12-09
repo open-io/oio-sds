@@ -36,7 +36,9 @@ static gboolean stopped = TRUE;
 static GSList *workers = NULL;
 static gint64 first_timeout = 0;
 
-static gint64 _now () { return g_get_monotonic_time () / 1000; }
+static gint64 _now () {
+	return oio_ext_monotonic_time () / G_TIME_SPAN_MILLISECOND;
+}
 
 static void
 abort_worker(worker_t *worker)
@@ -214,7 +216,7 @@ launch_io_scheduler(void)
 void
 stop_io_scheduler(void)
 {
-	if (!stopped) 
+	if (!stopped)
 		INFO("Stopping IO scheduler...");
 	stopped = TRUE;
 }

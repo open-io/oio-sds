@@ -399,7 +399,7 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 {
 	const gchar *reqid = g_tree_lookup(r->request->tree_headers, PROXYD_HEADER_REQID);
 
-	gint64 now = g_get_monotonic_time ();
+	gint64 now = oio_ext_monotonic_time ();
 	gint64 diff_total = now - r->tv_start;
 	gint64 diff_handler = now - r->tv_parsed;
 
@@ -677,7 +677,7 @@ http_notify_input(struct network_client_s *clt)
 			// First, the last chunk of data received
 			// Second, the moment the real treatment start ... i.e. now!
 			r.tv_start = clt->time.evt_in;
-			r.tv_parsed = g_get_monotonic_time ();
+			r.tv_parsed = oio_ext_monotonic_time ();
 
 			GError *err = http_manage_request(&r);
 

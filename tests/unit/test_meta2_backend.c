@@ -205,7 +205,7 @@ _init_lb(const gchar *ns)
 		si = g_malloc0(sizeof(*si));
 		metautils_strlcpy_physical_ns(si->ns_name, "NS", sizeof(si->ns_name));
 		g_strlcpy(si->type, "rawx", sizeof(si->type));
-		si->score.timestamp = g_get_real_time() / G_TIME_SPAN_SECOND;
+		si->score.timestamp = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 		si->score.value = ++score;
 		grid_string_to_addrinfo(pdef->url, &(si->addr));
 
@@ -244,7 +244,7 @@ _repo_wraper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 
 	glp = _init_lb(ns);
 
-	resolver = hc_resolver_create1(g_get_monotonic_time() / G_TIME_SPAN_SECOND);
+	resolver = hc_resolver_create1(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND);
 	g_assert(resolver != NULL);
 
 	memset(&cfg, 0, sizeof(cfg));
@@ -284,7 +284,7 @@ _repo_failure(const gchar *ns)
 
 	glp = _init_lb(ns);
 
-	resolver = hc_resolver_create1(g_get_monotonic_time() / G_TIME_SPAN_SECOND);
+	resolver = hc_resolver_create1(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND);
 	g_assert(resolver != NULL);
 
 	g_printerr("\n");
@@ -312,7 +312,7 @@ _container_wraper(const char *ns, gint64 maxvers, container_test_f cf)
 
 		gchar *strurl = g_strdup_printf(
 				"/%s/account/container-%"G_GUINT64_FORMAT"//content-%"G_GINT64_FORMAT,
-				ns, ++container_counter, g_get_monotonic_time());
+				ns, ++container_counter, oio_ext_monotonic_time());
 		url = oio_url_init(strurl);
 		g_free(strurl);
 

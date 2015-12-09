@@ -103,7 +103,7 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	gchar tmppath[256] = "";
 	g_snprintf (tmppath, sizeof(tmppath),
 			"/tmp/test-roundtrip-%d-%"G_GINT64_FORMAT"-",
-			getpid(), g_get_real_time());
+			getpid(), oio_ext_real_time());
 	_append_random_chars (tmppath, random_chars, 16);
 	gchar content_id[65] = "";
 	_append_random_chars (content_id, hex_chars, 64);

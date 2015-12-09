@@ -502,7 +502,7 @@ _create_container_init_phase(struct sqlx_sqlite3_s *sq3,
 		m2db_set_max_versions(sq3, max);
 	}
 	if (!err) {
-		m2db_set_ctime (sq3, g_get_real_time());
+		m2db_set_ctime (sq3, oio_ext_real_time());
 		sqlx_admin_init_i64(sq3, META2_INIT_FLAG, 1);
 	}
 	if (!err && params->properties) {
@@ -553,7 +553,7 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 			if (!params->local && sq3->election == ELECTION_LEADER && m2->notify.hook) {
 				GString *gs = g_string_new ("{");
 				g_string_append (gs, "\"event\":\""NAME_SRVTYPE_META2".container.create\"");
-				g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, g_get_real_time());
+				g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
 				g_string_append (gs, ",\"data\":{");
 				g_string_append (gs, "\"url\":{");
 				_append_url (gs, url);
@@ -633,7 +633,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		if (!err) {
 			GString *gs = g_string_new ("{");
 			g_string_append (gs, "\"event\":\"" NAME_SRVTYPE_META2 ".container.destroy\"");
-			g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, g_get_real_time());
+			g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
 			g_string_append (gs, ",\"data\":{");
 			g_string_append (gs, "\"url\":{");
 			_append_url (gs, url);
@@ -771,7 +771,7 @@ _container_state (struct sqlx_sqlite3_s *sq3)
 
 	GString *gs = g_string_new("{");
 	append_const (gs, "event", NAME_SRVTYPE_META2 ".container.state");
-	append_int64 (gs, "when", g_get_real_time());
+	append_int64 (gs, "when", oio_ext_real_time());
 	g_string_append (gs, ",\"url\":{");
 	append (gs, "ns", sqlx_admin_get_str(sq3, SQLX_ADMIN_NAMESPACE));
 	append (gs, "account", sqlx_admin_get_str(sq3, SQLX_ADMIN_ACCOUNT));

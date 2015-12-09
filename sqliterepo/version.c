@@ -145,7 +145,7 @@ hook_increment(gpointer k, gpointer v, gpointer u)
 {
 	(void) k; (void) u;
 	OV(v)->version ++;
-	OV(v)->when = g_get_real_time() / G_TIME_SPAN_SECOND;
+	OV(v)->when = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 	return FALSE;
 }
 

@@ -211,7 +211,7 @@ _init_configless_structures(struct sqlx_service_s *ss)
 			|| !(ss->clients_pool = gridd_client_pool_create())
 			|| !(ss->gsr_reqtime = grid_single_rrd_create(network_server_bogonow(ss->server), 8))
 			|| !(ss->gsr_reqcounter = grid_single_rrd_create(network_server_bogonow(ss->server),8))
-			|| !(ss->resolver = hc_resolver_create1(g_get_monotonic_time() / G_TIME_SPAN_SECOND))
+			|| !(ss->resolver = hc_resolver_create1(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND))
 			|| !(ss->gtq_admin = grid_task_queue_create("admin"))
 			|| !(ss->gtq_register = grid_task_queue_create("register"))
 			|| !(ss->gtq_reload = grid_task_queue_create("reload"))) {
@@ -755,7 +755,7 @@ _task_expire_bases(gpointer p)
 static void
 _task_expire_resolver(gpointer p)
 {
-	hc_resolver_set_now(PSRV(p)->resolver, g_get_monotonic_time () / G_TIME_SPAN_SECOND);
+	hc_resolver_set_now(PSRV(p)->resolver, oio_ext_monotonic_time () / G_TIME_SPAN_SECOND);
 	guint count = hc_resolver_expire(PSRV(p)->resolver);
 	if (count)
 		GRID_DEBUG("Expired %u entries from the resolver cache", count);
@@ -1102,7 +1102,7 @@ _zmq2agent_receive_events (struct sqlx_service_s *ss)
 static gpointer
 _worker_notify_zmq2agent (gpointer p)
 {
-	gint64 last_debug = g_get_monotonic_time ();
+	gint64 last_debug = oio_ext_monotonic_time ();
 	struct sqlx_service_s *ss = p;
 	zmq_pollitem_t pi[2] = {
 		{ss->notify.zpull, -1, ZMQ_POLLIN, 0},
@@ -1125,7 +1125,7 @@ _worker_notify_zmq2agent (gpointer p)
 			run = _zmq2agent_receive_events (ss);
 
 		/* Periodically write stats in the log */
-		gint64 now = g_get_monotonic_time ();
+		gint64 now = oio_ext_monotonic_time ();
 		if ((now - last_debug) > G_TIME_SPAN_MINUTE) {
 			GRID_INFO("ZMQ2AGENT recv=%"G_GINT64_FORMAT" sent=%"G_GINT64_FORMAT
 					" ack=%"G_GINT64_FORMAT"+%"G_GINT64_FORMAT" queue=%u",

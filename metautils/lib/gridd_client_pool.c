@@ -244,7 +244,7 @@ _manage_timeouts(struct gridd_client_pool_s *pool)
 	if (pool->active_count <= 0)
 		return;
 
-	gint64 now = g_get_monotonic_time ();
+	gint64 now = oio_ext_monotonic_time ();
 	if (now - pool->last_timeout_check > G_TIME_SPAN_SECOND)
 		return;
 	pool->last_timeout_check = now;
@@ -264,7 +264,7 @@ _manage_timeouts(struct gridd_client_pool_s *pool)
 		}
 	}
 
-	gint64 elapsed = g_get_monotonic_time () - now;
+	gint64 elapsed = oio_ext_monotonic_time () - now;
 	if (elapsed > 5 * G_TIME_SPAN_SECOND) {
 		GRID_WARN("Client pool timeout check took %"G_GINT64_FORMAT" ms",
 				elapsed / G_TIME_SPAN_MILLISECOND);

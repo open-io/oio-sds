@@ -30,7 +30,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 /* TODO factorize this with meta2v2/meta2_utils.c */
 #define RANDOM_UID(uid,uid_size) \
 	struct { guint64 now; guint32 r; guint16 pid; guint16 th; } uid; \
-	uid.now = g_get_real_time (); \
+	uid.now = oio_ext_real_time (); \
 	uid.r = g_random_int(); \
 	uid.pid = getpid(); \
 	uid.th = oio_log_current_thread_id(); \

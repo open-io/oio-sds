@@ -1038,7 +1038,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 	}
 
 	if (!ul->version)
-		ul->version = g_get_real_time();
+		ul->version = oio_ext_real_time();
 	if (!ul->chunk_size)
 		ul->chunk_size = 0;
 	if (!ul->hexid)
