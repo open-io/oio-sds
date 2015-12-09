@@ -250,7 +250,7 @@ _header_callback(char *b, size_t s, size_t n, void *u)
 	gchar tmp[total+1];
 	memcpy (tmp, b, total);
 	tmp[total] = '\0';
-	
+
 	char *colon = strchr(tmp, ':');
 	if (colon) {
 		*(colon++) = 0;
@@ -261,7 +261,7 @@ _header_callback(char *b, size_t s, size_t n, void *u)
 		o->headers[l+1] = g_strdup (g_strstrip(colon));
 		o->headers[l+2] = NULL;
 	}
-	
+
 	return n*s;
 }
 
@@ -476,6 +476,37 @@ oio_proxy_call_reference_show (CURL *h, struct oio_url_s *u,
 	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);
 	g_strfreev (o.headers);
 
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_reference_create (CURL *h, struct oio_url_s *u)
+{
+	GString *http_url = _curl_reference_url (u, "create");
+	GError *err = _proxy_call (h, "POST", http_url->str, NULL, NULL);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
+		const char *srvtype, gboolean autocreate, GString *out)
+{
+	GString *http_url = _curl_reference_url (u, "link");
+	_append (http_url, '&', "type", srvtype);
+	gchar *hdrin[] = {
+		g_strdup(PROXYD_HEADER_PREFIX "action-mode"),
+		g_strdup(autocreate ? "autocreate" : ""),
+		NULL,
+	};
+
+	struct http_ctx_s i = { .headers = hdrin, .body = NULL };
+	struct http_ctx_s o = { .headers = NULL, .body = out };
+	GError *err = _proxy_call (h, "POST", http_url->str, &i, &o);
+
+	_ptrv_free_content (i.headers);
+	g_strfreev (o.headers);
 	g_string_free(http_url, TRUE);
 	return err;
 }
