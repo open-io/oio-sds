@@ -659,12 +659,12 @@ extract_code_message_reply(const dav_resource* resource, char* reply,
 
 static void
 update_response_list(dav_stream *stream, char* rawx_entry,
-		int stored_size, char* md5_digest)
+		int stored_size, char* md5_digest, char* chunkpos)
 {
 	// FIXME: this should be separated by ';', not '|'
 	char* response_entry = apr_psprintf(stream->r->info->request->pool,
-			"%s%s%d%s%s", rawx_entry, RAWXLIST_SEPARATOR, stored_size,
-			RAWXLIST_SEPARATOR, md5_digest);
+			"%s%s%s%s%d%s%s", chunkpos, RAWXLIST_SEPARATOR, rawx_entry,
+			RAWXLIST_SEPARATOR, stored_size, RAWXLIST_SEPARATOR, md5_digest);
 	if (NULL == stream->r->info->response_chunk_list)
 		stream->r->info->response_chunk_list = response_entry;
 	else
@@ -780,7 +780,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 		update_response_list(stream,
 				stream->r->info->rawx_list[stream->r->info->current_rawx],
 				subchunk_size - stream->r->info->current_chunk_remaining,
-				custom_chunkhash);
+				custom_chunkhash, custom_chunkpos);
 	}
 
 	g_free(custom_chunkhash);
@@ -915,7 +915,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 
 				update_response_list(stream,
 						stream->r->info->rawx_list[stream->r->info->current_rawx],
-						subchunk_size, custom_chunkhash);
+						subchunk_size, custom_chunkhash, custom_chunkpos);
 
 				g_free(custom_chunkhash);
 				custom_chunkhash = NULL;
@@ -1094,7 +1094,7 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 
 			update_response_list(stream,
 					stream->r->info->rawx_list[stream->r->info->current_rawx],
-					subchunk_size, custom_chunkhash);
+					subchunk_size, custom_chunkhash, custom_chunkpos);
 
 			if (custom_chunkhash) {
 				g_free(custom_chunkhash);
