@@ -244,6 +244,7 @@ main(int argc, char **argv)
 	oio_url_set (url, OIOURL_NS, g_getenv("OIO_NS"));
 	oio_url_set (url, OIOURL_ACCOUNT, g_getenv("OIO_ACCOUNT"));
 	oio_url_set (url, OIOURL_USER, g_getenv("OIO_USER"));
+	oio_url_set (url, OIOURL_TYPE, g_getenv("OIO_TYPE"));
 	oio_url_set (url, OIOURL_PATH, g_getenv("OIO_PATH"));
 
 	if (!oio_url_has_fq_path(url)) {

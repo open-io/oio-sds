@@ -465,6 +465,24 @@ metautils_message_add_url (MESSAGE m, struct oio_url_s *url)
 		metautils_message_add_field (m, NAME_MSGKEY_CONTAINERID, id, oio_url_get_id_size (url));
 }
 
+void
+metautils_message_add_url_no_type (MESSAGE m, struct oio_url_s *url)
+{
+	if (!m)
+		return;
+	for (struct map_s *p = url2msg_map; p->f ;++p) {
+		if (p->u != OIOURL_TYPE && oio_url_has (url, p->u)) {
+			const char *s = oio_url_get (url, p->u);
+			if (!p->avoid || strcmp(p->avoid, s))
+				metautils_message_add_field_str(m, p->f, s);
+		}
+	}
+
+	const guint8 *id = oio_url_get_id (url);
+	if (id)
+		metautils_message_add_field (m, NAME_MSGKEY_CONTAINERID, id, oio_url_get_id_size (url));
+}
+
 struct oio_url_s *
 metautils_message_extract_url (MESSAGE m)
 {

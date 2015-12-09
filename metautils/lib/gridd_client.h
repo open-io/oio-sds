@@ -43,6 +43,7 @@ enum client_interest_e
 	CLIENT_WR = 0x02
 };
 
+/* Return TRUE to notify the reply management failed. */
 typedef gboolean (*client_on_reply)(gpointer ctx, MESSAGE reply);
 
 struct gridd_client_vtable_s

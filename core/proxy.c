@@ -102,6 +102,15 @@ _curl_reference_url (struct oio_url_s *u, const char *action)
 }
 
 static GString *
+_append_type (struct oio_url_s *u, GString *hu)
+{
+	const char *type = oio_url_get (u, OIOURL_TYPE);
+	if (type && *type)
+		_append (hu, '&', "type", type);
+	return hu;
+}
+
+static GString *
 _curl_container_url (struct oio_url_s *u, const char *action)
 {
 	GString *hu = _curl_url_prefix_containers (u);
@@ -109,6 +118,7 @@ _curl_container_url (struct oio_url_s *u, const char *action)
 			oio_url_get(u, OIOURL_NS), action);
 	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
 	_append (hu, '&', "ref",  oio_url_get (u, OIOURL_USER));
+	_append_type (u, hu);
 	return hu;
 }
 
@@ -120,6 +130,7 @@ _curl_content_url (struct oio_url_s *u, const char *action)
 			oio_url_get(u, OIOURL_NS), action);
 	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
 	_append (hu, '&', "ref",  oio_url_get (u, OIOURL_USER));
+	_append_type (u, hu);
 	_append (hu, '&', "path", oio_url_get (u, OIOURL_PATH));
 	return hu;
 }

@@ -215,8 +215,9 @@ sqlx_pack_QUERY(struct sqlx_name_s *name, const gchar *query,
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_QUERY, name);
 	metautils_message_add_field(req, NAME_MSGKEY_AUTOCREATE, &ac, 1);
 	metautils_message_add_fields_str(req, NAME_MSGKEY_QUERY, query, NULL);
-	if (!params)
-		metautils_message_add_body_unref (req, sqlx_encode_TableSequence(params, NULL));
+	if (params)
+		metautils_message_add_body_unref (req, sqlx_encode_TableSequence(
+					params, NULL));
 	return message_marshall_gba_and_clean(req);
 }
 
@@ -227,22 +228,15 @@ sqlx_pack_QUERY_single(struct sqlx_name_s *name, const gchar *query,
 	EXTRA_ASSERT(name != NULL);
 	EXTRA_ASSERT(query != NULL);
 
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_QUERY, name);
-	guint8 ac = (guint8) autocreate;
-	do {
-		Table_t *t = g_malloc0(sizeof(Table_t));
-		OCTET_STRING_fromBuf(&(t->name), query, strlen(query));
+	struct Table *t = calloc(1, sizeof(Table_t));
+	OCTET_STRING_fromBuf(&(t->name), query, strlen(query));
 
-		TableSequence_t *ts = g_malloc0(sizeof(TableSequence_t));
-		asn_sequence_add(&(ts->list), t);
+	struct TableSequence *ts = calloc(1, sizeof(TableSequence_t));
+	asn_sequence_add(&(ts->list), t);
 
-		metautils_message_add_body_unref(req, sqlx_encode_TableSequence(ts, NULL));
-		metautils_message_add_field(req, NAME_MSGKEY_AUTOCREATE, &ac, 1);
-
-		asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence, ts, FALSE);
-	} while (0);
-
-	return message_marshall_gba_and_clean(req);
+	GByteArray *req = sqlx_pack_QUERY(name, query, ts, autocreate);
+	asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence, ts, FALSE);
+	return req;
 }
 
 GByteArray *

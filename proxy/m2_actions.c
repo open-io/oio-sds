@@ -27,6 +27,27 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "actions.h"
 
 static void
+_get_meta2_realtype (struct req_args_s *args, gchar *d, gsize dlen,
+		const char *prefix)
+{
+	const char *type = oio_url_get (args->url, OIOURL_TYPE);
+	if (type && *type) {
+		g_snprintf(d, dlen, "%s%s.%s", prefix, NAME_SRVTYPE_META2, type);
+	} else {
+		g_snprintf(d, dlen, "%s%s", prefix, NAME_SRVTYPE_META2);
+	}
+}
+
+static GError *
+_resolve_meta2 (struct req_args_s *args,
+		GError * (*hook) (struct meta1_service_url_s *, gboolean *))
+{
+	gchar realtype[64];
+	_get_meta2_realtype (args, realtype, sizeof(realtype), "");
+	return _resolve_service_and_do (realtype, 0, args->url, hook);
+}
+
+static void
 _json_dump_all_beans (GString * gstr, GSList * beans)
 {
 	g_string_append_c (gstr, '{');
@@ -704,19 +725,8 @@ _filter (struct filter_ctx_s *ctx, GSList *l)
 static GError *
 _m2_container_create (struct req_args_s *args)
 {
-	const char *type = TYPE();
-	if (!type || !*type)
-		type = NAME_SRVTYPE_META2;
-	if (!g_str_has_prefix (type, NAME_SRVTYPE_META2))
-		return BADREQ("The service type is not a "NAME_SRVTYPE_META2);
-	else {
-		const char *sep = type + sizeof(NAME_SRVTYPE_META2) - 1;
-		if (*sep && *sep != '.')
-			return BADREQ("The service type is not a "NAME_SRVTYPE_META2);
-	}
-
-	gboolean autocreate = _request_has_flag (args, PROXYD_HEADER_MODE, "autocreate");
-
+	gboolean autocreate = _request_has_flag (args,
+			PROXYD_HEADER_MODE, "autocreate");
 	gchar **properties = _container_headers_to_props (args);
 
 	GError *hook_m2 (struct meta1_service_url_s *m2, gboolean *next) {
@@ -729,14 +739,20 @@ _m2_container_create (struct req_args_s *args)
 
 	GError *err;
 retry:
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook_m2);
+	GRID_TRACE("Container creation %s", oio_url_get (args->url, OIOURL_WHOLE));
+	err = _resolve_meta2 (args, hook_m2);
 	if (err && CODE_IS_NOTFOUND(err->code)) {
 		if (autocreate) {
+			GRID_DEBUG("Resource not found, autocreation: (%d) %s",
+					err->code, err->message);
 			autocreate = FALSE; /* autocreate just once */
 			g_clear_error (&err);
 			GError *hook_dir (const gchar *m1) {
 				gchar **urlv = NULL;
-				GError *e = meta1v2_remote_link_service (m1, args->url, type, FALSE, TRUE, &urlv);
+				gchar realtype[64];
+				_get_meta2_realtype (args, realtype, sizeof(realtype), "");
+				GError *e = meta1v2_remote_link_service (m1, args->url,
+						realtype, FALSE, TRUE, &urlv);
 				if (urlv) g_strfreev (urlv);
 				return e;
 			}
@@ -772,7 +788,7 @@ action_m2_container_destroy (struct req_args_s *args)
 	}
 
 	GError *err;
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	err = _resolve_meta2 (args, hook);
 	if (NULL != err)
 		return _reply_m2_error(args, err);
 	return _reply_nocontent (args);
@@ -790,7 +806,7 @@ action_m2_container_purge (struct req_args_s *args, struct json_object *jargs)
 		return m2v2_remote_execute_PURGE (m2->host, args->url, FALSE,
 				m2_timeout_all, &beans);
 	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	GError *err = _resolve_meta2 (args, hook);
 	return _reply_beans (args, err, beans);
 }
 
@@ -816,7 +832,7 @@ action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
 		}
 		return e;
 	}
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	err = _resolve_meta2 (args, hook);
 	if (NULL != err) {
 		g_string_free (gstr, TRUE);
 		g_prefix_error (&err, "M2 error: ");
@@ -835,7 +851,7 @@ action_m2_container_touch (struct req_args_s *args, struct json_object *jargs)
 		(void) next;
 		return m2v2_remote_touch_container_ex (m2->host, args->url, 0);
 	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	GError *err = _resolve_meta2 (args, hook);
 	if (NULL != err) {
 		if (CODE_IS_NOTFOUND(err->code))
 			return _reply_forbidden_error (args, err);
@@ -859,7 +875,7 @@ action_m2_container_raw_insert (struct req_args_s *args, struct json_object *jar
 		(void) next;
 		return m2v2_remote_execute_RAW_ADD (m2->host, args->url, beans);
 	}
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	err = _resolve_meta2 (args, hook);
 	if (NULL != err)
 		return _reply_m2_error (args, err);
 	return _reply_success_json (args, NULL);
@@ -879,7 +895,7 @@ action_m2_container_raw_delete (struct req_args_s *args, struct json_object *jar
 		(void) next;
 		return m2v2_remote_execute_RAW_DEL (m2->host, args->url, beans);
 	}
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	err = _resolve_meta2 (args, hook);
 	if (NULL != err)
 		return _reply_m2_error (args, err);
 	return _reply_success_json (args, NULL);
@@ -913,7 +929,7 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 		return m2v2_remote_execute_RAW_SUBST (m2->host, args->url, beans_new, beans_old);
 	}
 	if (!err)
-		err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+		err = _resolve_meta2 (args, hook);
 	_bean_cleanl2 (beans_old);
 	_bean_cleanl2 (beans_new);
 
@@ -922,27 +938,37 @@ action_m2_container_raw_update (struct req_args_s *args, struct json_object *jar
 	return _reply_success_json (args, NULL);
 }
 
+/* XXX JFS: You talk to a meta2 with its subtype, because it is a "high level"
+ * interaction with the DB, while sqlx access are quiet raw and "low level"
+ * DB calls. So that they do not consider the same kind of type. SQLX want to
+ * a fully qualified type, not just the subtype. */
+static void
+_add_meta2_type (struct req_args_s *args)
+{
+	gchar realtype[64];
+	_get_meta2_realtype (args, realtype, sizeof(realtype), "type=");
+	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, realtype);
+	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "seq=1");
+}
+
 static enum http_rc_e
 action_m2_container_propget (struct req_args_s *args, struct json_object *jargs)
 {
-	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "type=meta2");
-	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "seq=1");
+	_add_meta2_type (args);
 	return action_sqlx_propget(args, jargs);
 }
 
 static enum http_rc_e
 action_m2_container_propset (struct req_args_s *args, struct json_object *jargs)
 {
-	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "type=meta2");
-	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "seq=1");
+	_add_meta2_type (args);
 	return action_sqlx_propset(args, jargs);
 }
 
 static enum http_rc_e
 action_m2_container_propdel (struct req_args_s *args, struct json_object *jargs)
 {
-	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "type=meta2");
-	OIO_STRV_APPEND_COPY (args->req_uri->query_tokens, "seq=1");
+	_add_meta2_type (args);
 	return action_sqlx_propdel(args, jargs);
 }
 
@@ -1105,7 +1131,7 @@ action_container_list (struct req_args_s *args)
 			list_in.prefix, list_in.marker_start, list_in.marker_end);
 
 	if (!err)
-		err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+		err = _resolve_meta2 (args, hook);
 	if (!err) {
 		args->rp->add_header(PROXYD_HEADER_PREFIX "list-truncated",
 				g_strdup(list_out.truncated ? "true" : "false"));
@@ -1246,12 +1272,14 @@ action_m2_content_beans (struct req_args_s *args, struct json_object *jargs)
 	}
 
 retry:
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	GRID_TRACE("Content preparation %s", oio_url_get (args->url, OIOURL_WHOLE));
+	err = _resolve_meta2 (args, hook);
 
 	// Maybe manage autocreation
 	if (err && CODE_IS_NOTFOUND(err->code)) {
 		if (autocreate) {
-			GRID_DEBUG("Request failed because of resource not found, attempting autocreation");
+			GRID_DEBUG("Resource not found, autocreation: (%d) %s",
+					err->code, err->message);
 			autocreate = FALSE;
 			g_clear_error (&err);
 			if (!(err = _m2_container_create (args)))
@@ -1305,7 +1333,7 @@ _m2_json_spare (struct req_args_s *args, struct json_object *jbody, GSList ** ou
 		return m2v2_remote_execute_SPARE (m2->host, args->url,
 				OPT("stgpol"), notin, broken, &obeans);
 	}
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	err = _resolve_meta2 (args, hook);
 	_bean_cleanl2 (broken);
 	_bean_cleanl2 (notin);
 	EXTRA_ASSERT ((err != NULL) ^ (obeans != NULL));
@@ -1332,7 +1360,7 @@ action_m2_content_touch (struct req_args_s *args, struct json_object *jargs)
 		(void) next;
 		return m2v2_remote_touch_content (m2->host, args->url);
 	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	GError *err = _resolve_meta2 (args, hook);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
@@ -1362,7 +1390,7 @@ action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
 		(void) next;
 		return m2v2_remote_execute_LINK (m2->host, args->url);
 	}
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	err = _resolve_meta2 (args, hook);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
 	return _reply_m2_error (args, err);
@@ -1404,7 +1432,7 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 		(void) next;
 		return m2v2_remote_execute_PROP_SET (m2->host, args->url, flags, beans);
 	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	GError *err = _resolve_meta2 (args, hook);
 	return _reply_properties (args, err, beans);
 }
 
@@ -1434,7 +1462,7 @@ action_m2_content_propdel (struct req_args_s *args, struct json_object *jargs)
 		(void) next;
 		return m2v2_remote_execute_PROP_DEL (m2->host, args->url, names);
 	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	GError *err = _resolve_meta2 (args, hook);
 	g_slist_free_full (names, g_free0);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);
@@ -1455,7 +1483,7 @@ action_m2_content_propget (struct req_args_s *args, struct json_object *jargs)
 		return m2v2_remote_execute_PROP_GET (m2->host, args->url,
 				M2V2_FLAG_ALLPROPS|M2V2_FLAG_NOFORMATCHECK, &beans);
 	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	GError *err = _resolve_meta2 (args, hook);
 	return _reply_properties (args, err, beans);
 }
 
@@ -1490,7 +1518,7 @@ _m2_json_put (struct req_args_s *args, struct json_object *jbody)
 		_bean_cleanl2 (obeans);
 		return e;
 	}
-	err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	err = _resolve_meta2 (args, hook);
 	_bean_cleanl2 (ibeans);
 	return err;
 }
@@ -1514,7 +1542,7 @@ retry:
 		err = _m2_json_put (args, jbody);
 		if (err && CODE_IS_NOTFOUND(err->code)) {
 			if (autocreate) {
-				GRID_DEBUG("Request failed because of resource not found, attempting autocreation");
+				GRID_DEBUG("Resource not found, autocreation");
 				autocreate = FALSE;
 				g_clear_error (&err);
 				if (!(err = _m2_container_create (args)))
@@ -1543,7 +1571,7 @@ action_content_show (struct req_args_s *args)
 		(void) next;
 		return m2v2_remote_execute_GET (m2->host, args->url, 0, &beans);
 	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	GError *err = _resolve_meta2 (args, hook);
 	return _reply_simplified_beans (args, err, beans, TRUE);
 }
 
@@ -1554,7 +1582,7 @@ action_content_delete (struct req_args_s *args)
 		(void) next;
 		return m2v2_remote_execute_DEL (m2->host, args->url);
 	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	GError *err = _resolve_meta2 (args, hook);
 	return _reply_m2_error (args, err);
 }
 
@@ -1591,7 +1619,7 @@ action_content_prop_set (struct req_args_s *args)
 enum http_rc_e
 action_content_prop_del (struct req_args_s *args)
 {
-    return rest_action (args, action_m2_content_propdel);
+	return rest_action (args, action_m2_content_propdel);
 }
 
 enum http_rc_e
@@ -1621,7 +1649,7 @@ action_content_copy (struct req_args_s *args)
 		(void) next;
 		return m2v2_remote_execute_COPY (m2->host, target_url, oio_url_get(args->url, OIOURL_PATH));
 	}
-	GError *err = _resolve_service_and_do (NAME_SRVTYPE_META2, 0, args->url, hook);
+	GError *err = _resolve_meta2 (args, hook);
 	oio_url_pclean(&target_url);
 	if (err && CODE_IS_NOTFOUND(err->code))
 		return _reply_forbidden_error (args, err);

@@ -23,16 +23,16 @@ static GError *
 _abstract_sqlx_action (struct req_args_s *args, gboolean next,
 		GError* (*hook) (struct sqlx_name_s *n, struct meta1_service_url_s *m1u))
 {
-	gint64 seq = 1;
-
 	// @TODO Here is a factorisation spot, with sqlx_name_fill()
 	// Build the base name
 	const gchar *type = TYPE();
 	if (!type)
 		return BADREQ("No service type");
 
+	gint64 seq = 1;
 	gchar *etype = NULL;
 	gchar *bn = NULL;
+
 	if (!g_ascii_strcasecmp(type, NAME_SRVTYPE_META0)) {
 		bn = g_strdup (nsname);
 		etype = g_strdup("#" NAME_SRVTYPE_META0);
@@ -41,13 +41,14 @@ _abstract_sqlx_action (struct req_args_s *args, gboolean next,
 		bn = g_strndup (oio_url_get(args->url, OIOURL_HEXID), 4);
 		etype = g_strdup("#" NAME_SRVTYPE_META1);
 	}
-	else if (!g_ascii_strcasecmp(type, NAME_SRVTYPE_META2)) {
-		seq = 1;
+	else if (!g_ascii_strcasecmp(type, NAME_SRVTYPE_META2)
+			|| g_str_has_prefix(type, NAME_SRVTYPE_META2".")) {
 		bn = g_strdup_printf("%s.%"G_GINT64_FORMAT,
 				oio_url_get (args->url, OIOURL_HEXID), seq);
-		etype = g_strdup(NAME_SRVTYPE_META2);
+		etype = g_strdup(type);
 	}
-	else if (!g_str_has_prefix(type, "sqlx.")) {
+	else if (!g_ascii_strcasecmp(type, NAME_SRVTYPE_SQLX)
+			|| g_str_has_prefix(type, NAME_SRVTYPE_SQLX".")) {
 		seq = atoi(SEQ());
 		bn = g_strdup_printf("%s.%"G_GINT64_FORMAT,
 				oio_url_get (args->url, OIOURL_HEXID), seq);
@@ -195,7 +196,7 @@ _sqlx_action_bodyv (struct req_args_s *args,
 	return NULL;
 }
 
-//------------------------------------------------------------------------------
+/* ---------------------------------------------------------------------------*/
 
 static gchar **
 _load_stringv (struct json_object *jargs)
@@ -216,7 +217,7 @@ _load_stringv (struct json_object *jargs)
 	return (gchar**) metautils_gpa_to_array (tmp, TRUE);
 }
 
-//------------------------------------------------------------------------------
+/* ---------------------------------------------------------------------------*/
 
 enum http_rc_e
 action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)

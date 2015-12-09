@@ -169,21 +169,21 @@ gchar *
 oio_cfg_get_proxy_conscience (const char *ns)
 {
 	gchar *v = oio_cfg_get_value(ns, OIO_CFG_PROXY_CONSCIENCE);
-	return v ?: oio_cfg_get_proxy(ns);
+	return v ? v : oio_cfg_get_proxy(ns);
 }
 
 gchar *
 oio_cfg_get_proxy_directory (const char *ns)
 {
 	gchar *v = oio_cfg_get_value(ns, OIO_CFG_PROXY_DIRECTORY);
-	return v ?: oio_cfg_get_proxy(ns);
+	return v ? v : oio_cfg_get_proxy(ns);
 }
 
 gchar *
 oio_cfg_get_proxy_containers (const char *ns)
 {
 	gchar *v = oio_cfg_get_value(ns, OIO_CFG_PROXY_CONTAINERS);
-	return v ?: oio_cfg_get_proxy(ns);
+	return v ? v : oio_cfg_get_proxy(ns);
 }
 
 /* -------------------------------------------------------------------------- */

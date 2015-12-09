@@ -156,10 +156,12 @@ _metacd_load_url (struct req_args_s *args)
 	if (NULL != (s = ACCOUNT()))
 		oio_url_set (url, OIOURL_ACCOUNT, s);
 
-	if (NULL != (s = REF())) {
+	if (NULL != (s = REF()))
 		oio_url_set (url, OIOURL_USER, s);
-		oio_url_set (url, OIOURL_TYPE, OIOURL_DEFAULT_TYPE);
-	}
+
+	if (NULL != (s = TYPE()))
+		oio_url_set (url, OIOURL_TYPE, s);
+
 	if (NULL != (s = PATH())) {
 		oio_url_set (url, OIOURL_PATH, s);
 		if (NULL != (s = VERSION()))
@@ -223,6 +225,7 @@ handler_action (gpointer u, struct http_request_s *rq,
 
 		args.url = url = _metacd_load_url (&args);
 		req_handler_f handler = path_matching_get_udata (*matchings);
+		GRID_TRACE("URL %s", oio_url_get(args.url, OIOURL_WHOLE));
 		rc = (*handler) (&args);
 	}
 
@@ -591,7 +594,7 @@ configure_request_handlers (void)
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/max/high/$COUNT/#POST", action_cache_set_max_high);
 
     // New routes
-  
+
 	// Load Balancing
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/lb/choose/#GET", action_lb_choose);
 

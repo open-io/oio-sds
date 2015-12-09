@@ -137,11 +137,8 @@ load_table_header(sqlite3_stmt *stmt, Table_t *t)
 	guint32 i, max;
 
 	for (i=0,max=sqlite3_data_count(stmt); i<max ;i++) {
-		const gchar *cname;
-		RowName_t *rname;
-
-		cname = sqlite3_column_name(stmt, i);
-		rname = g_malloc0(sizeof(*rname));
+		const char *cname = sqlite3_column_name(stmt, i);
+		struct RowName *rname = calloc(1, sizeof(*rname));
 		asn_uint32_to_INTEGER(&(rname->pos), i);
 		OCTET_STRING_fromBuf(&(rname->name), cname, strlen(cname));
 		asn_sequence_add(&(t->header.list), rname);
@@ -149,8 +146,7 @@ load_table_header(sqlite3_stmt *stmt, Table_t *t)
 }
 
 void
-load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table,
-		gboolean noreal)
+load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table)
 {
 	guint32 i, max;
 
@@ -158,12 +154,10 @@ load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table,
 		load_table_header(stmt, table);
 
 	if (!row->fields) /* Lazy memory allocation */
-		row->fields = g_malloc0(sizeof(struct RowFieldSequence));
+		row->fields = calloc(1, sizeof(struct RowFieldSequence));
 
 	for (i=0,max=sqlite3_data_count(stmt); i<max ;i++) {
-		struct RowField *rf;
-
-		rf = g_malloc0(sizeof(*rf));
+		struct RowField *rf = calloc(1, sizeof(*rf));
 		asn_uint32_to_INTEGER(&(rf->pos), i);
 		rf->value.present = RowFieldValue_PR_n;
 
@@ -179,16 +173,11 @@ load_statement(sqlite3_stmt *stmt, Row_t *row, Table_t *table,
 				} while (0);
 				break;
 			case SQLITE_FLOAT:
-				if (!noreal) {
+				do {
 					gdouble d = sqlite3_column_double(stmt, i);
 					asn_double2REAL(&(rf->value.choice.f), d);
 					rf->value.present = RowFieldValue_PR_f;
-				}
-				else {
-					const guint8 *t = sqlite3_column_text(stmt, i);
-					OCTET_STRING_fromBuf(&(rf->value.choice.s), (char*)t, strlen((char*)t));
-					rf->value.present = RowFieldValue_PR_s;
-				}
+				} while (0);
 				break;
 			case SQLITE_TEXT:
 				do {
@@ -231,7 +220,7 @@ load_table_row(sqlite3 *db, const hashstr_t *name, gint64 rowid, Row_t *row,
 
 	sqlite3_bind_int64(stmt, 1, rowid);
 	while (SQLITE_ROW == (rc = sqlite3_step(stmt)))
-		load_statement(stmt, row, table, FALSE);
+		load_statement(stmt, row, table);
 
 	sqlite3_finalize_debug(rc, stmt);
 }
@@ -260,11 +249,10 @@ static void
 context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 {
 	gboolean _on_table(gpointer name, gpointer rows, gpointer u0) {
-		Table_t *table;
+		struct Table *table;
 		(void) u0;
 
 		gboolean _on_row(gpointer k, gpointer v, gpointer u1) {
-			Row_t *row;
 			gint64 rowid = *((gint64*)k);
 			guint deleted = GPOINTER_TO_UINT(v);
 			(void) u1;
@@ -272,7 +260,7 @@ context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 			GRID_TRACE2("%s(%s,%"G_GINT64_FORMAT",%d)", __FUNCTION__,
 					hashstr_str(name), rowid, deleted);
 
-			row = g_malloc0(sizeof(*row));
+			struct Row *row = calloc(1, sizeof(*row));
 			asn_int64_to_INTEGER(&(row->rowid), rowid);
 			if (!deleted)
 				load_table_row(db, name, rowid, row, table);
@@ -283,7 +271,7 @@ context_pending_to_rowset(sqlite3 *db, struct sqlx_repctx_s *ctx)
 
 		GRID_TRACE2("%s(%s,%p)", __FUNCTION__, hashstr_str(name), rows);
 
-		table = g_malloc0(sizeof(Table_t));
+		table = calloc(1, sizeof(struct Table));
 		OCTET_STRING_fromBuf(&(table->name),
 				hashstr_str(name), hashstr_len(name));
 		g_tree_foreach(rows, _on_row, NULL);
@@ -393,7 +381,8 @@ _perform_REPLICATE(struct sqlx_repctx_s *ctx)
 	GError *err;
 	gchar **peers = NULL;
 
-	err = sqlx_config_get_peers(ctx->sq3->config, sqlx_name_mutable_to_const(&ctx->sq3->name), &peers);
+	err = sqlx_config_get_peers(ctx->sq3->config,
+			sqlx_name_mutable_to_const(&ctx->sq3->name), &peers);
 
 	if (err != NULL) {
 		GRID_WARN("Replicated transaction started but peers not found "

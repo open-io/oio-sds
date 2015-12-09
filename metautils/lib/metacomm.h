@@ -47,7 +47,7 @@ struct oio_url_s;
 MESSAGE metaXServer_reply_simple(MESSAGE request, gint status, const gchar *msg);
 
 /** Performs the opposite operation : retrieves the core elements of the
- * message (supposed to be a reply). 
+ * message (supposed to be a reply).
  * The message returned in the msg pointer is a copy of the original.
  * It is allocated with the g_lib and must be freed with g_free(). */
 GError* metaXClient_reply_simple(MESSAGE reply, guint * status, gchar ** msg);
@@ -94,6 +94,9 @@ void metautils_message_add_field(MESSAGE m, const char *name, const void *value,
 void metautils_message_add_cid (MESSAGE m, const char *f, const container_id_t cid);
 
 void metautils_message_add_url (MESSAGE m, struct oio_url_s *url);
+
+/* As for metautils_message_add_url() but skip the type mentionned */
+void metautils_message_add_url_no_type (MESSAGE m, struct oio_url_s *url);
 
 /* wraps message_set_BODY() and g_bytes_array_unref() */
 void metautils_message_add_body_unref (MESSAGE m, GByteArray *body);

@@ -91,7 +91,7 @@ BEGIN
 	}
 
 	M2V2ContentHeader ::= SEQUENCE {
-		id          [0] OCTET STRING, 
+		id          [0] OCTET STRING,
 		hash        [1] OCTET STRING OPTIONAL,
 		size        [3] INTEGER,
 		ctime       [4] INTEGER,
@@ -207,8 +207,13 @@ BEGIN
 		name         [0] OCTET STRING,
 		header       [1] TableHeader,
 		rows         [2] RowSet,
+
 		status       [3] INTEGER OPTIONAL,
-		statusString [4] PrintableString OPTIONAL
+		statusString [4] PrintableString OPTIONAL,
+
+		localChanges [5] INTEGER OPTIONAL,
+		totalChanges [6] INTEGER OPTIONAL,
+		lastRowId    [7] INTEGER OPTIONAL
 	}
 
 	TableSequence ::= SEQUENCE OF Table

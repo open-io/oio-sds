@@ -25,8 +25,8 @@ License along with this library.
 struct oio_url_s
 {
 	/* primary */
-	gchar *ns; 
-	gchar *account; 
+	gchar *ns;
+	gchar *account;
 	gchar *user;
 	gchar *type;
 	gchar *path;
