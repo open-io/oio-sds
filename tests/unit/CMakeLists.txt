@@ -77,4 +77,5 @@ add_test(NAME sqliterepo/version COMMAND test_sqliterepo_version)
 add_executable(test_sqliterepo_election test_sqliterepo_election.c)
 target_link_libraries(test_sqliterepo_election sqliterepo metautils
 		${GLIB2_LIBRARIES})
+add_test(NAME sqliterepo/election COMMAND test_sqliterepo_election)
 

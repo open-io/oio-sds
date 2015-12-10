@@ -17,10 +17,15 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <glib.h>
+
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/election.h>
 #include <sqliterepo/version.h>
 #include <sqliterepo/sqlx_remote.h>
+
+#undef GQ
+#define GQ() g_quark_from_static_string("oio.sqlite")
 
 static const char *
 _get_id (gpointer ctx)
@@ -55,25 +60,25 @@ test_create_bad_config(void)
 	struct replication_config_s cfg0 = { NULL, _get_peers, _get_vers,
 		NULL, ELECTION_MODE_NONE};
 	err = election_manager_create(&cfg0, &m);
-	g_assert_error(err, g_quark_from_static_string("sqliterepo"), ERRCODE_PARAM);
+	g_assert_error(err, GQ(), ERRCODE_PARAM);
 	g_clear_error(&err);
 
 	struct replication_config_s cfg1 = { _get_id, NULL, _get_vers,
 		NULL, ELECTION_MODE_NONE};
 	err = election_manager_create(&cfg1, &m);
-	g_assert_error(err, g_quark_from_static_string("sqliterepo"), ERRCODE_PARAM);
+	g_assert_error(err, GQ(), ERRCODE_PARAM);
 	g_clear_error(&err);
 
 	struct replication_config_s cfg2 = { _get_id, _get_peers, NULL,
 		NULL, ELECTION_MODE_NONE};
 	err = election_manager_create(&cfg2, &m);
-	g_assert_error(err, g_quark_from_static_string("sqliterepo"), ERRCODE_PARAM);
+	g_assert_error(err, GQ(), ERRCODE_PARAM);
 	g_clear_error(&err);
 
 	struct replication_config_s cfg3 = { _get_id, _get_peers, _get_vers,
 		NULL, ELECTION_MODE_NONE+3};
 	err = election_manager_create(&cfg3, &m);
-	g_assert_error(err, g_quark_from_static_string("sqliterepo"), ERRCODE_PARAM);
+	g_assert_error(err, GQ(), ERRCODE_PARAM);
 	g_clear_error(&err);
 }
 

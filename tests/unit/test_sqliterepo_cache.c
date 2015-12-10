@@ -20,15 +20,12 @@ License along with this library.
 #include <unistd.h>
 #include <stdio.h>
 
-#include <metautils/lib/metautils.h>
+#include <glib.h>
 
+#include <metautils/lib/metautils.h>
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/cache.h>
 #include <sqliterepo/internals.h>
-
-#define FAIL(E) g_error("<%s:%d> FAIL : (code=%d) %s", \
-		__FUNCTION__, __LINE__,						\
-		(E)->code, (E)->message)
 
 const gchar *name0 = "AAAAAAA";
 const gchar *name1 = "AAAAAAB";
@@ -43,17 +40,13 @@ test_lock_unlock(sqlx_cache_t *cache, gint bd)
 	HASHSTR_ALLOCA(hname, name0);
 
 	for (i=0; i<max ;i++) {
-		/* Lock the same base */
 		err = sqlx_cache_open_and_lock_base(cache, hname, &bd);
-		if (err != NULL)
-			FAIL(err);
+		g_assert_no_error (err);
 	}
 
 	for (i=0; i<max ;i++) {
-		/* Release the same base */
 		err = sqlx_cache_unlock_and_close_base(cache, bd, FALSE);
-		if (err != NULL)
-			FAIL(err);
+		g_assert_no_error (err);
 	}
 }
 
@@ -67,15 +60,13 @@ test_regular(sqlx_cache_t *cache)
 	HASHSTR_ALLOCA(hname, name0);
 
 	err = sqlx_cache_open_and_lock_base(cache, hname, &bd);
-	if (err != NULL)
-		FAIL(err);
+	g_assert_no_error (err);
 	g_debug("open(%s) = %d OK", name0, bd);
 
 	test_lock_unlock(cache, bd);
 
 	err = sqlx_cache_unlock_and_close_base(cache, bd, FALSE);
-	if (err != NULL)
-		FAIL(err);
+	g_assert_no_error (err);
 	g_debug("close(%d) OK", bd);
 }
 
