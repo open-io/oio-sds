@@ -67,10 +67,12 @@ target_link_libraries(test_sqliterepo_repo sqliterepo sqlitereporemote metautils
 add_executable(test_sqliterepo_cache test_sqliterepo_cache.c)
 target_link_libraries(test_sqliterepo_cache sqliterepo sqlitereporemote metautils
 		${GLIB2_LIBRARIES})
+add_test(NAME sqliterepo/cache COMMAND test_sqliterepo_cache)
 
 add_executable(test_sqliterepo_version test_sqliterepo_version.c)
 target_link_libraries(test_sqliterepo_version sqliterepo metautils
 		${GLIB2_LIBRARIES})
+add_test(NAME sqliterepo/version COMMAND test_sqliterepo_version)
 
 add_executable(test_sqliterepo_election test_sqliterepo_election.c)
 target_link_libraries(test_sqliterepo_election sqliterepo metautils

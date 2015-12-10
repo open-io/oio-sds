@@ -21,7 +21,8 @@ License along with this library.
 
 #include <sqliterepo/version.h>
 
-#define GQD(D) g_quark_from_static_string(D)
+#undef GQ
+#define GQ() g_quark_from_static_string("oio.sqlite")
 
 struct cfg_s {
 	const gchar *name;
@@ -65,7 +66,7 @@ test_pipeto_version(struct cfg_s *cfg0, struct cfg_s *cfg1, gint64 r)
 	GTree *v0 = build_version(cfg0);
 	GTree *v1 = build_version(cfg1);
 	GError *err = version_validate_diff(v0, v1, &worst);
-	g_assert_error(err, GQD("sqliterepo"), CODE_PIPETO);
+	g_assert_error(err, GQ(), CODE_PIPETO);
 	g_assert(r == worst);
 	g_tree_destroy(v0);
 	g_tree_destroy(v1);
@@ -78,7 +79,7 @@ test_pipefrom_version(struct cfg_s *cfg0, struct cfg_s *cfg1, gint64 r)
 	GTree *v0 = build_version(cfg0);
 	GTree *v1 = build_version(cfg1);
 	GError *err = version_validate_diff(v0, v1, &worst);
-	g_assert_error(err, GQD("sqliterepo"), CODE_PIPEFROM);
+	g_assert_error(err, GQ(), CODE_PIPEFROM);
 	g_assert(r == worst);
 	g_tree_destroy(v0);
 	g_tree_destroy(v1);
@@ -91,7 +92,7 @@ test_concurrent_version(struct cfg_s *cfg0, struct cfg_s *cfg1)
 	GTree *v0 = build_version(cfg0);
 	GTree *v1 = build_version(cfg1);
 	GError *err = version_validate_diff(v0, v1, &worst);
-	g_assert_error(err, GQD("sqliterepo"), CODE_CONCURRENT);
+	g_assert_error(err, GQ(), CODE_CONCURRENT);
 	g_assert(0 == worst);
 	g_tree_destroy(v0);
 	g_tree_destroy(v1);
