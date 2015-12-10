@@ -62,8 +62,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "rainx_repository.h"
 #include "rainx_http_tools.h"
 
-#define OIO_HEADER_CHUNK_PREFIX "x-oio-chunk-meta-"
-
 /* pull this in from the other source file */
 /*extern const dav_hooks_locks dav_hooks_locks_fs; */
 
@@ -709,12 +707,12 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 	struct content_textinfo_s temp_content = stream->r->info->content;
 	struct chunk_textinfo_s temp_chunk = stream->r->info->chunk;
 	char* custom_header = apr_psprintf(stream->r->info->request->pool,
-			OIO_HEADER_CHUNK_PREFIX "container-id: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-chunksnb: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-path: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-id: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-version: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-size: %s",
+			RAWX_HEADER_PREFIX "container-id: %s\n"
+			RAWX_HEADER_PREFIX "content-chunksnb: %s\n"
+			RAWX_HEADER_PREFIX "content-path: %s\n"
+			RAWX_HEADER_PREFIX "content-id: %s\n"
+			RAWX_HEADER_PREFIX "content-version: %s\n"
+			RAWX_HEADER_PREFIX "content-size: %s",
 			temp_content.container_id, temp_content.chunk_nb,
 			temp_content.path, temp_content.content_id,
 			temp_content.version, temp_content.size);
@@ -754,10 +752,10 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 		data_put_params[i]->data_to_send_size = subchunk_size - stream->r->info->current_chunk_remaining;
 		data_put_params[i]->header = apr_psprintf(subpool,
 				"%s\n"
-				OIO_HEADER_CHUNK_PREFIX "chunk-id: %s\n"
-				OIO_HEADER_CHUNK_PREFIX "chunk-pos: %s\n"
-				OIO_HEADER_CHUNK_PREFIX "chunk-size: %s\n"
-				OIO_HEADER_CHUNK_PREFIX "chunk-hash: %s",
+				RAWX_HEADER_PREFIX "chunk-id: %s\n"
+				RAWX_HEADER_PREFIX "chunk-pos: %s\n"
+				RAWX_HEADER_PREFIX "chunk-size: %s\n"
+				RAWX_HEADER_PREFIX "chunk-hash: %s",
 				custom_header, custom_chunkid, custom_chunkpos,
 				custom_chunksize, custom_chunkhash);
 		data_put_params[i]->req_type = "PUT";
@@ -888,10 +886,10 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 				coding_put_params[i]->data_to_send_size = subchunk_size;
 				coding_put_params[i]->header = apr_psprintf(coding_subpools[i],
 					"%s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-id: %s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-pos: %s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-size: %s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-hash: %s",
+					RAWX_HEADER_PREFIX "chunk-id: %s\n"
+					RAWX_HEADER_PREFIX "chunk-pos: %s\n"
+					RAWX_HEADER_PREFIX "chunk-size: %s\n"
+					RAWX_HEADER_PREFIX "chunk-hash: %s",
 					custom_header, custom_chunkid, custom_chunkpos,
 					custom_chunksize, custom_chunkhash);
 				coding_put_params[i]->req_type = "PUT";
@@ -1019,12 +1017,12 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 	struct content_textinfo_s temp_content = stream->r->info->content;
 	struct chunk_textinfo_s temp_chunk = stream->r->info->chunk;
 	char* custom_header = apr_psprintf(stream->r->info->request->pool,
-			OIO_HEADER_CHUNK_PREFIX "container-id: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-chunksnb: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-path: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-id: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-version: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-size: %s",
+			RAWX_HEADER_PREFIX "container-id: %s\n"
+			RAWX_HEADER_PREFIX "content-chunksnb: %s\n"
+			RAWX_HEADER_PREFIX "content-path: %s\n"
+			RAWX_HEADER_PREFIX "content-id: %s\n"
+			RAWX_HEADER_PREFIX "content-version: %s\n"
+			RAWX_HEADER_PREFIX "content-size: %s",
 			temp_content.container_id, temp_content.chunk_nb,
 			temp_content.path, temp_content.content_id,
 			temp_content.version, temp_content.size);
@@ -1069,10 +1067,10 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 			data_put_params[i]->data_to_send_size = subchunk_size;
 			data_put_params[i]->header = apr_psprintf(data_subpools[i],
 					"%s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-id: %s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-pos: %s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-size: %s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-hash: %s",
+					RAWX_HEADER_PREFIX "chunk-id: %s\n"
+					RAWX_HEADER_PREFIX "chunk-pos: %s\n"
+					RAWX_HEADER_PREFIX "chunk-size: %s\n"
+					RAWX_HEADER_PREFIX "chunk-hash: %s",
 					custom_header, custom_chunkid, custom_chunkpos,
 					custom_chunksize, custom_chunkhash);
 			data_put_params[i]->req_type = "PUT";
@@ -1365,12 +1363,12 @@ upload_to_rawx(const dav_resource *resource, gboolean* failure_array,
 
 	/* Preparing custom header */
 	custom_header = apr_psprintf(resource->info->request->pool,
-			OIO_HEADER_CHUNK_PREFIX "container-id: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-chunksnb: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-path: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-id: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-version: %s\n"
-			OIO_HEADER_CHUNK_PREFIX "content-size: %s",
+			RAWX_HEADER_PREFIX "container-id: %s\n"
+			RAWX_HEADER_PREFIX "content-chunksnb: %s\n"
+			RAWX_HEADER_PREFIX "content-path: %s\n"
+			RAWX_HEADER_PREFIX "content-id: %s\n"
+			RAWX_HEADER_PREFIX "content-version: %s\n"
+			RAWX_HEADER_PREFIX "content-size: %s",
 			temp_content.container_id, temp_content.chunk_nb,
 			temp_content.path, temp_content.content_id,
 			temp_content.version, temp_content.size);
@@ -1401,10 +1399,10 @@ upload_to_rawx(const dav_resource *resource, gboolean* failure_array,
 					byte_count_to_send);
 			char* custom_header2 = apr_psprintf(resource->info->request->pool,
 					"%s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-id: %s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-pos: %s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-size: %s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-hash: %s",
+					RAWX_HEADER_PREFIX "chunk-id: %s\n"
+					RAWX_HEADER_PREFIX "chunk-pos: %s\n"
+					RAWX_HEADER_PREFIX "chunk-size: %s\n"
+					RAWX_HEADER_PREFIX "chunk-hash: %s",
 					custom_header, custom_chunkid, custom_chunkpos,
 					custom_chunksize, custom_chunkhash);
 			rps.service_address = spare_rawx_list[cur_spare_rawx];
@@ -1474,10 +1472,10 @@ upload_to_rawx(const dav_resource *resource, gboolean* failure_array,
 					subchunk_size);
 			char* custom_header2 = apr_psprintf(resource->info->request->pool,
 					"%s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-id: %s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-pos: %s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-size: %s\n"
-					OIO_HEADER_CHUNK_PREFIX "chunk-hash: %s",
+					RAWX_HEADER_PREFIX "chunk-id: %s\n"
+					RAWX_HEADER_PREFIX "chunk-pos: %s\n"
+					RAWX_HEADER_PREFIX "chunk-size: %s\n"
+					RAWX_HEADER_PREFIX "chunk-hash: %s",
 					custom_header, custom_chunkid, custom_chunkpos,
 					custom_chunksize, custom_chunkhash);
 			rps.service_address = spare_rawx_list[cur_spare_rawx];
