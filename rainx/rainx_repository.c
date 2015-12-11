@@ -234,7 +234,9 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 	LOAD_HEADER2(content.version,        RAWX_HEADER_PREFIX "content-version");
 	LOAD_HEADER2(content.size,           RAWX_HEADER_PREFIX "content-size");
 	LOAD_HEADER2(content.chunk_nb,       RAWX_HEADER_PREFIX "content-chunksnb");
-	LOAD_HEADER2(content.storage_policy, RAWX_HEADER_PREFIX "content-chunksnb");
+	LOAD_HEADER2(content.storage_policy, RAWX_HEADER_PREFIX "content-storagepolicy");
+	LOAD_HEADER2(content.rawx_list,      RAWX_HEADER_PREFIX "rawxlist");
+	LOAD_HEADER2(content.spare_rawx_list,RAWX_HEADER_PREFIX "sparerawxlist");
 
 	LOAD_HEADER2(chunk.id,           RAWX_HEADER_PREFIX "chunk-id");
 	LOAD_HEADER2(chunk.size,         RAWX_HEADER_PREFIX "chunk-size");
@@ -550,6 +552,12 @@ rainx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 
 	resource->info->response_chunk_list = NULL;
 
+	ds->md5 = g_checksum_new(G_CHECKSUM_MD5);
+	if (ds->md5 == NULL) {
+		return server_create_and_stat_error(conf, pool, HTTP_INTERNAL_SERVER_ERROR,
+				0, "Failed to initialize md5 checksum");
+	}
+
 	*result = ds;
 
 	return NULL;
@@ -649,12 +657,12 @@ extract_code_message_reply(const dav_resource* resource, char* reply,
 
 static void
 update_response_list(dav_stream *stream, char* rawx_entry,
-		int stored_size, char* md5_digest)
+		int stored_size, char* md5_digest, char* chunkpos)
 {
 	// FIXME: this should be separated by ';', not '|'
 	char* response_entry = apr_psprintf(stream->r->info->request->pool,
-			"%s%s%d%s%s", rawx_entry, RAWXLIST_SEPARATOR, stored_size,
-			RAWXLIST_SEPARATOR, md5_digest);
+			"%s%s%s%s%d%s%s", chunkpos, RAWXLIST_SEPARATOR, rawx_entry,
+			RAWXLIST_SEPARATOR, stored_size, RAWXLIST_SEPARATOR, md5_digest);
 	if (NULL == stream->r->info->response_chunk_list)
 		stream->r->info->response_chunk_list = response_entry;
 	else
@@ -699,9 +707,15 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 	struct content_textinfo_s temp_content = stream->r->info->content;
 	struct chunk_textinfo_s temp_chunk = stream->r->info->chunk;
 	char* custom_header = apr_psprintf(stream->r->info->request->pool,
-			"containerid: %s\nchunknb: %s\ncontentpath: %s\ncontentsize: %s",
+			RAWX_HEADER_PREFIX "container-id: %s\n"
+			RAWX_HEADER_PREFIX "content-chunksnb: %s\n"
+			RAWX_HEADER_PREFIX "content-path: %s\n"
+			RAWX_HEADER_PREFIX "content-id: %s\n"
+			RAWX_HEADER_PREFIX "content-version: %s\n"
+			RAWX_HEADER_PREFIX "content-size: %s",
 			temp_content.container_id, temp_content.chunk_nb,
-			temp_content.path, temp_content.size);
+			temp_content.path, temp_content.content_id,
+			temp_content.version, temp_content.size);
 
 	/* Finalizing custom header */
 	int startid = strlen(
@@ -737,7 +751,11 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 		data_put_params[i]->data_to_send = stream->chunk_start_ptr;
 		data_put_params[i]->data_to_send_size = subchunk_size - stream->r->info->current_chunk_remaining;
 		data_put_params[i]->header = apr_psprintf(subpool,
-				"%s\nchunkid: %s\nchunkpos: %s\nchunksize: %s\nchunkhash: %s",
+				"%s\n"
+				RAWX_HEADER_PREFIX "chunk-id: %s\n"
+				RAWX_HEADER_PREFIX "chunk-pos: %s\n"
+				RAWX_HEADER_PREFIX "chunk-size: %s\n"
+				RAWX_HEADER_PREFIX "chunk-hash: %s",
 				custom_header, custom_chunkid, custom_chunkpos,
 				custom_chunksize, custom_chunkhash);
 		data_put_params[i]->req_type = "PUT";
@@ -760,7 +778,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 		update_response_list(stream,
 				stream->r->info->rawx_list[stream->r->info->current_rawx],
 				subchunk_size - stream->r->info->current_chunk_remaining,
-				custom_chunkhash);
+				custom_chunkhash, custom_chunkpos);
 	}
 
 	g_free(custom_chunkhash);
@@ -867,9 +885,13 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 				coding_put_params[i]->data_to_send = (char*)coding_metachunks[i];
 				coding_put_params[i]->data_to_send_size = subchunk_size;
 				coding_put_params[i]->header = apr_psprintf(coding_subpools[i],
-						"%s\nchunkid: %s\nchunkpos: %s\nchunksize: %s\nchunkhash: %s",
-						custom_header, custom_chunkid, custom_chunkpos,
-						custom_chunksize, custom_chunkhash);
+					"%s\n"
+					RAWX_HEADER_PREFIX "chunk-id: %s\n"
+					RAWX_HEADER_PREFIX "chunk-pos: %s\n"
+					RAWX_HEADER_PREFIX "chunk-size: %s\n"
+					RAWX_HEADER_PREFIX "chunk-hash: %s",
+					custom_header, custom_chunkid, custom_chunkpos,
+					custom_chunksize, custom_chunkhash);
 				coding_put_params[i]->req_type = "PUT";
 				coding_put_params[i]->reply = apr_pcalloc(coding_subpools[i],
 						MAX_REPLY_HEADER_SIZE + REPLY_BUFFER_SIZE);
@@ -891,7 +913,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 
 				update_response_list(stream,
 						stream->r->info->rawx_list[stream->r->info->current_rawx],
-						subchunk_size, custom_chunkhash);
+						subchunk_size, custom_chunkhash, custom_chunkpos);
 
 				g_free(custom_chunkhash);
 				custom_chunkhash = NULL;
@@ -995,9 +1017,15 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 	struct content_textinfo_s temp_content = stream->r->info->content;
 	struct chunk_textinfo_s temp_chunk = stream->r->info->chunk;
 	char* custom_header = apr_psprintf(stream->r->info->request->pool,
-			"containerid: %s\nchunknb: %s\ncontentpath: %s\ncontentsize: %s",
+			RAWX_HEADER_PREFIX "container-id: %s\n"
+			RAWX_HEADER_PREFIX "content-chunksnb: %s\n"
+			RAWX_HEADER_PREFIX "content-path: %s\n"
+			RAWX_HEADER_PREFIX "content-id: %s\n"
+			RAWX_HEADER_PREFIX "content-version: %s\n"
+			RAWX_HEADER_PREFIX "content-size: %s",
 			temp_content.container_id, temp_content.chunk_nb,
-			temp_content.path, temp_content.size);
+			temp_content.path, temp_content.content_id,
+			temp_content.version, temp_content.size);
 
 	data_subpools = (apr_pool_t**) apr_pcalloc(stream->r->info->request->pool,
 			rain_params->k * sizeof(apr_pool_t*));
@@ -1038,7 +1066,11 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 			data_put_params[i]->data_to_send = stream->chunk_start_ptr;
 			data_put_params[i]->data_to_send_size = subchunk_size;
 			data_put_params[i]->header = apr_psprintf(data_subpools[i],
-					"%s\nchunkid: %s\nchunkpos: %s\nchunksize: %s\nchunkhash: %s",
+					"%s\n"
+					RAWX_HEADER_PREFIX "chunk-id: %s\n"
+					RAWX_HEADER_PREFIX "chunk-pos: %s\n"
+					RAWX_HEADER_PREFIX "chunk-size: %s\n"
+					RAWX_HEADER_PREFIX "chunk-hash: %s",
 					custom_header, custom_chunkid, custom_chunkpos,
 					custom_chunksize, custom_chunkhash);
 			data_put_params[i]->req_type = "PUT";
@@ -1060,7 +1092,7 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 
 			update_response_list(stream,
 					stream->r->info->rawx_list[stream->r->info->current_rawx],
-					subchunk_size, custom_chunkhash);
+					subchunk_size, custom_chunkhash, custom_chunkpos);
 
 			if (custom_chunkhash) {
 				g_free(custom_chunkhash);
@@ -1331,9 +1363,15 @@ upload_to_rawx(const dav_resource *resource, gboolean* failure_array,
 
 	/* Preparing custom header */
 	custom_header = apr_psprintf(resource->info->request->pool,
-			"containerid: %s\nchunknb: %s\ncontentpath: %s\ncontentsize: %s",
+			RAWX_HEADER_PREFIX "container-id: %s\n"
+			RAWX_HEADER_PREFIX "content-chunksnb: %s\n"
+			RAWX_HEADER_PREFIX "content-path: %s\n"
+			RAWX_HEADER_PREFIX "content-id: %s\n"
+			RAWX_HEADER_PREFIX "content-version: %s\n"
+			RAWX_HEADER_PREFIX "content-size: %s",
 			temp_content.container_id, temp_content.chunk_nb,
-			temp_content.path, temp_content.size);
+			temp_content.path, temp_content.content_id,
+			temp_content.version, temp_content.size);
 
 	/* Data strips */
 	for (int i = 0; i < data_rawx_list_size; i++) {
@@ -1360,7 +1398,11 @@ upload_to_rawx(const dav_resource *resource, gboolean* failure_array,
 					G_CHECKSUM_MD5, (const guchar*)datachunks[i],
 					byte_count_to_send);
 			char* custom_header2 = apr_psprintf(resource->info->request->pool,
-					"%s\nchunkid: %s\nchunkpos: %s\nchunksize: %s\nchunkhash: %s",
+					"%s\n"
+					RAWX_HEADER_PREFIX "chunk-id: %s\n"
+					RAWX_HEADER_PREFIX "chunk-pos: %s\n"
+					RAWX_HEADER_PREFIX "chunk-size: %s\n"
+					RAWX_HEADER_PREFIX "chunk-hash: %s",
 					custom_header, custom_chunkid, custom_chunkpos,
 					custom_chunksize, custom_chunkhash);
 			rps.service_address = spare_rawx_list[cur_spare_rawx];
@@ -1429,7 +1471,11 @@ upload_to_rawx(const dav_resource *resource, gboolean* failure_array,
 					G_CHECKSUM_MD5, (const guchar*)codingchunks[i],
 					subchunk_size);
 			char* custom_header2 = apr_psprintf(resource->info->request->pool,
-					"%s\nchunkid: %s\nchunkpos: %s\nchunksize: %s\nchunkhash: %s",
+					"%s\n"
+					RAWX_HEADER_PREFIX "chunk-id: %s\n"
+					RAWX_HEADER_PREFIX "chunk-pos: %s\n"
+					RAWX_HEADER_PREFIX "chunk-size: %s\n"
+					RAWX_HEADER_PREFIX "chunk-hash: %s",
 					custom_header, custom_chunkid, custom_chunkpos,
 					custom_chunksize, custom_chunkhash);
 			rps.service_address = spare_rawx_list[cur_spare_rawx];
