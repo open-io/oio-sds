@@ -60,15 +60,6 @@ add_executable(test_stats_holder test_stats_holder.c)
 target_link_libraries(test_stats_holder server ${GLIB2_LIBRARIES})
 add_test(NAME server/stats COMMAND test_stats_holder)
 
-add_executable(test_sqliterepo_repo test_sqliterepo_repo.c)
-target_link_libraries(test_sqliterepo_repo sqliterepo sqlitereporemote metautils
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
-
-add_executable(test_sqliterepo_cache test_sqliterepo_cache.c)
-target_link_libraries(test_sqliterepo_cache sqliterepo sqlitereporemote metautils
-		${GLIB2_LIBRARIES})
-add_test(NAME sqliterepo/cache COMMAND test_sqliterepo_cache)
-
 add_executable(test_sqliterepo_version test_sqliterepo_version.c)
 target_link_libraries(test_sqliterepo_version sqliterepo metautils
 		${GLIB2_LIBRARIES})
@@ -78,4 +69,14 @@ add_executable(test_sqliterepo_election test_sqliterepo_election.c)
 target_link_libraries(test_sqliterepo_election sqliterepo metautils
 		${GLIB2_LIBRARIES})
 add_test(NAME sqliterepo/election COMMAND test_sqliterepo_election)
+
+add_executable(test_sqliterepo_cache test_sqliterepo_cache.c)
+target_link_libraries(test_sqliterepo_cache sqliterepo sqlitereporemote metautils
+		${GLIB2_LIBRARIES})
+add_test(NAME sqliterepo/cache COMMAND test_sqliterepo_cache)
+
+add_executable(test_sqliterepo_repo test_sqliterepo_repo.c)
+target_link_libraries(test_sqliterepo_repo sqliterepo sqlitereporemote metautils
+		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
+add_test(NAME sqliterepo/repository COMMAND test_sqliterepo_repo)
 

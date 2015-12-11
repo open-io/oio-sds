@@ -118,8 +118,7 @@ test_election_init(void)
 int
 main(int argc, char **argv)
 {
-	HC_PROC_INIT(argv,GRID_LOGLVL_INFO);
-	g_test_init(&argc, &argv, NULL);
+	HC_TEST_INIT(argc,argv);
 	g_test_add_func("/sqlx/election/create_bad_config",
 			test_create_bad_config);
 	g_test_add_func("/sqlx/election/create_ok",
