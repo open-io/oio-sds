@@ -75,6 +75,17 @@ _compute_path_hash(sqlx_repository_t *repo, const hashstr_t *hn, const gchar *t)
 
 	n = hashstr_str(hn);
 	nlen = hashstr_len(hn);
+
+	/* XXX TODO FIXME JFS: this shortcut help plugging test code. the test
+	 * program is then free to define a <sqlx_file_locator_f> that generates
+	 * an absolute path, or a special name (for sqlite3, e.g. ":memory:").
+	 * This is UGLY, I admit it without any torture. Changing it would (e.g.)
+	 * consist in systematically providing the <locator> instead of the
+	 * volume's <basedir> and the repository init, and then expecting the
+	 * <locator> to return the WHOLE path instead of just the filenames. */
+	if (*n == '/' || *n == ':')
+		return g_strdup (n);
+
 	gstr = g_string_sized_new(256);
 	g_string_append(gstr, repo->basedir);
 
@@ -159,7 +170,8 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 				GRID_WARN("Failed to exit election [%s]", err->message);
 				g_clear_error(&err);
 			} else {
-				GRID_TRACE("exit election succeeded [%s][%s]", sq3->name.base, sq3->name.type);
+				GRID_TRACE("exit election succeeded [%s][%s]",
+						sq3->name.base, sq3->name.type);
 			}
 		}
 		__delete_base(sq3);
@@ -350,7 +362,7 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 
 	/* Create the directory used by dump/restore functions */
 	g_snprintf(tmpdir, sizeof(tmpdir), "%s/tmp", vol);
-	mkdir(tmpdir, 0755);
+	g_mkdir(tmpdir, 0755);
 
 	repo = g_malloc0(sizeof(struct sqlx_repository_s));
 	g_strlcpy(repo->basedir, vol, sizeof(repo->basedir)-1);
@@ -553,6 +565,7 @@ sqlx_repository_set_locator(struct sqlx_repository_s *repo,
 		sqlx_file_locator_f locator, gpointer locator_data)
 {
 	EXTRA_ASSERT(repo != NULL);
+	EXTRA_ASSERT(locator != NULL);
 	EXTRA_ASSERT(repo->running);
 	repo->locator = locator;
 	repo->locator_data = locator_data;
