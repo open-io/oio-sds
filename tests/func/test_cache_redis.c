@@ -20,7 +20,7 @@ License along with this library.
 #include <cache/cache.h>
 #include <cache/cache_redis.h>
 
-#include "test_cache_abstract.c"
+#include "tests/common/test_cache_abstract.c"
 
 static void
 test_cache_cycle_redis (void)

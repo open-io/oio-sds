@@ -19,7 +19,7 @@ License along with this library.
 #include <metautils/lib/lrutree.h>
 #include <core/oiolog.h>
 
-#include "test_cache_abstract.c"
+#include "tests/common/test_cache_abstract.c"
 
 static void
 test_cache_cycle_noop (void)

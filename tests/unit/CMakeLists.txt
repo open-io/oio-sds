@@ -4,6 +4,10 @@ include_directories(BEFORE . ../..
 		${CMAKE_CURRENT_BINARY_DIR}/../..
 		${CMAKE_CURRENT_BINARY_DIR}/../../metautils/lib)
 
+add_executable(test_cache_lru test_cache_lru.c)
+target_link_libraries(test_cache_lru oiocache)
+add_test(NAME cache/lru COMMAND test_cache_lru)
+
 add_executable(test_lb test_lb.c)
 target_link_libraries(test_lb metautils ${GLIB2_LIBRARIES})
 add_test(NAME metautils/lb COMMAND test_lb)

@@ -12,10 +12,6 @@ link_directories(
 		${CURL_LIBRARY_DIRS}
 		${JSONC_LIBRARY_DIRS})
 
-add_executable(test_cache test_cache.c)
-target_link_libraries(test_cache oiocache)
-add_test(NAME cache/abstract COMMAND test_cache)
-
 if (HIREDIS_FOUND)
 	add_executable(test_cache_redis test_cache_redis.c)
 	target_link_libraries(test_cache_redis oiocache oiocache_redis)
