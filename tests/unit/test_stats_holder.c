@@ -25,13 +25,21 @@ License along with this library.
 #define GQ() g_quark_from_static_string("oio.server")
 
 static void
-test_rrd (void)
+_round_rrd (void)
 {
 	struct grid_single_rrd_s *rrd = grid_single_rrd_create(2, 60);
-	grid_single_rrd_push(rrd, 3, 0);
-	grid_single_rrd_push(rrd, 1000, 0);
-	grid_single_rrd_push(rrd, 2, 0);
+	for (int i=0; i<16 ;++i) {
+		grid_single_rrd_push(rrd, 1 + 61*i, 0);
+		grid_single_rrd_push(rrd, 61*i, 0);
+	}
 	grid_single_rrd_destroy(rrd);
+}
+
+static void
+test_rrd (void)
+{
+	for (int i=0; i<16 ;++i)
+		_round_rrd ();
 }
 
 int

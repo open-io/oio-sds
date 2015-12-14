@@ -27,48 +27,11 @@ License along with this library.
 #include <sqliterepo/cache.h>
 #include <sqliterepo/internals.h>
 
-const gchar *name0 = "AAAAAAA";
-const gchar *name1 = "AAAAAAB";
+#undef GQ
+#define GQ() g_quark_from_static_string("oio.sqlite")
 
-static void
-test_lock_unlock(sqlx_cache_t *cache, gint bd)
-{
-	GError *err;
-	int i, max = 5;
-
-	hashstr_t *hname = NULL;
-	HASHSTR_ALLOCA(hname, name0);
-
-	for (i=0; i<max ;i++) {
-		err = sqlx_cache_open_and_lock_base(cache, hname, &bd);
-		g_assert_no_error (err);
-	}
-
-	for (i=0; i<max ;i++) {
-		err = sqlx_cache_unlock_and_close_base(cache, bd, FALSE);
-		g_assert_no_error (err);
-	}
-}
-
-static void
-test_regular(sqlx_cache_t *cache)
-{
-	gint bd = -1;
-	GError *err;
-
-	hashstr_t *hname = NULL;
-	HASHSTR_ALLOCA(hname, name0);
-
-	err = sqlx_cache_open_and_lock_base(cache, hname, &bd);
-	g_assert_no_error (err);
-	g_debug("open(%s) = %d OK", name0, bd);
-
-	test_lock_unlock(cache, bd);
-
-	err = sqlx_cache_unlock_and_close_base(cache, bd, FALSE);
-	g_assert_no_error (err);
-	g_debug("close(%d) OK", bd);
-}
+const char *name0 = "AAAAAAA";
+const char *name1 = "AAAAAAB";
 
 static void
 sqlite_close (gpointer handle)
@@ -76,21 +39,76 @@ sqlite_close (gpointer handle)
 	g_debug("Closing base with handle %p", handle);
 }
 
-int
-main(int argc, char ** argv)
+static void
+_round_lock(sqlx_cache_t *cache)
 {
-	HC_PROC_INIT(argv, GRID_LOGLVL_TRACE2);
+	hashstr_t *hn0 = NULL, *hn1 = NULL;
+	HASHSTR_ALLOCA(hn0, name0);
+	HASHSTR_ALLOCA(hn1, name1);
 
-	(void) argc;
+	gint id0;
+	GError *err = sqlx_cache_open_and_lock_base(cache, hn0, &id0);
+	g_assert_no_error (err);
+
+	for (int i=0; i<5 ;i++) {
+		gint id = g_random_int();
+		err = sqlx_cache_open_and_lock_base(cache, hn0, &id);
+		g_assert_no_error (err);
+		g_assert_cmpint(id0, ==, id);
+	}
+	for (int i=0; i<6 ;i++) {
+		err = sqlx_cache_unlock_and_close_base(cache, id0, FALSE);
+		g_assert_no_error (err);
+	}
+	err = sqlx_cache_unlock_and_close_base(cache, id0, FALSE);
+	g_assert_error (err, GQ(), CODE_INTERNAL_ERROR);
+	g_clear_error (&err);
+
+	for (int i=0; i<5 ;i++) {
+		gint id = g_random_int ();
+		err = sqlx_cache_open_and_lock_base(cache, hn1, &id);
+		g_assert_no_error (err);
+		err = sqlx_cache_unlock_and_close_base(cache, id, FALSE);
+		g_assert_no_error (err);
+	}
+}
+
+static void
+test_lock (void)
+{
 	sqlx_cache_t *cache = sqlx_cache_init();
 	g_assert(cache != NULL);
 	sqlx_cache_set_close_hook(cache, sqlite_close);
+	for (int i=0; i<5 ;++i)
+		_round_lock (cache);
+	sqlx_cache_expire(cache, 0, 0);
+	sqlx_cache_clean(cache);
+}
 
-	test_regular(cache);
-
+static void
+_round_init (void)
+{
+	sqlx_cache_t *cache = sqlx_cache_init();
+	g_assert(cache != NULL);
+	sqlx_cache_set_close_hook(cache, sqlite_close);
 	sqlx_cache_debug(cache);
 	sqlx_cache_expire(cache, 0, 0);
 	sqlx_cache_clean(cache);
-	return 0;
+}
+
+static void
+test_init (void)
+{
+	for (int i=0; i<5 ;++i)
+		_round_init ();
+}
+
+int
+main(int argc, char ** argv)
+{
+	HC_TEST_INIT(argc, argv);
+	g_test_add_func("/sqliterepo/cache/init", test_init);
+	g_test_add_func("/sqliterepo/cache/lock", test_lock);
+	return g_test_run();
 }
 

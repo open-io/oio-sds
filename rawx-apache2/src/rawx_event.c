@@ -1,8 +1,10 @@
 #include <stdlib.h>
 #include <assert.h>
+
 #include <zmq.h>
 #include <glib.h>
 
+#include <core/oioext.h>
 #include "rawx_event.h"
 
 static void *g_zmq_ctx = NULL;

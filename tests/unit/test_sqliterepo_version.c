@@ -212,19 +212,13 @@ test_schema_concurrent(void)
 int
 main(int argc, char **argv)
 {
-	HC_PROC_INIT(argv, GRID_LOGLVL_TRACE2);
-	g_test_init (&argc, &argv, NULL);
+	HC_TEST_INIT(argc, argv);
 
-	g_test_add_func("/sqliterepo/version/equal",
-			test_equal);
-	g_test_add_func("/sqliterepo/version/content/normal",
-			test_diff_normal);
-	g_test_add_func("/sqliterepo/version/content/big",
-			test_diff_big);
-	g_test_add_func("/sqliterepo/version/schema/equal",
-			test_schema_equal);
-	g_test_add_func("/sqliterepo/version/schema/diff",
-			test_schema_diff);
+	g_test_add_func("/sqliterepo/version/equal", test_equal);
+	g_test_add_func("/sqliterepo/version/content/normal", test_diff_normal);
+	g_test_add_func("/sqliterepo/version/content/big", test_diff_big);
+	g_test_add_func("/sqliterepo/version/schema/equal", test_schema_equal);
+	g_test_add_func("/sqliterepo/version/schema/diff", test_schema_diff);
 	g_test_add_func("/sqliterepo/version/schema/concurrent",
 			test_schema_concurrent);
 	return g_test_run();

@@ -815,6 +815,7 @@ test_props_gotchas()
 	void test(struct meta2_backend_s *m2, struct oio_url_s *u, gint64 maxver) {
 		GError *err;
 		GSList *beans;
+		(void) maxver;
 
 		err = meta2_backend_get_properties(m2, u, NULL, NULL);
 		g_assert_error(err, GQ(), CODE_CONTENT_NOTFOUND);
@@ -835,6 +836,7 @@ test_props_set_simple()
 	void test(struct meta2_backend_s *m2, struct oio_url_s *u, gint64 maxver) {
 		GError *err;
 		GSList *beans;
+		(void) maxver;
 
 		CLOCK_START = CLOCK = g_random_int();
 
@@ -888,6 +890,7 @@ test_content_dedup (void)
 
 	void test(struct meta2_backend_s *m2, struct oio_url_s *url, gint64 maxver) {
 		GError *err;
+		(void) maxver;
 		/* Generate a list of beans */
 		GSList *beans = _create_alias(m2, url, NULL);
 		/* Change the hash of the chunk beans (0 by default) */

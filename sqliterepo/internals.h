@@ -149,17 +149,23 @@ struct sqlx_repository_s
 	gboolean running : 1;
 };
 
-static inline int
-write_to_gba(const void *b, size_t bs, void *u)
-{
-	if (b && bs && u)
-		g_byte_array_append((GByteArray*)u, b, bs);
-	return 1;
-}
-
 void load_statement(sqlite3_stmt *stmt, Row_t *r, Table_t *t);
 
 const gchar * sqlite_op2str(int op);
+
+/* ----------------------------------------------------------------------------
+ * Global variables
+ * Not to be altered by a regular server. Designed for testing purposes, or for
+ * those who know what they are doing.
+ * */
+
+/* In the same precision as oio_ext_monotonic_time(), how many TIMESPAN the
+ * current thread should wait for the condition in the cache of bases. */
+extern gint64 oio_cache_period_cond_wait;
+
+/* In the same precision as oio_ext_monotonic_time(), how many TIMESPAN the
+ * current thread should wait for the condition in the cache of bases. */
+extern gint64 oio_election_period_cond_wait;
 
 /** @} */
 

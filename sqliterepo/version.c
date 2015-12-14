@@ -187,7 +187,7 @@ version_encode(GTree *t)
 	g_tree_foreach(t, runner, NULL);
 
 	encoded = g_byte_array_new();
-	rv = der_encode(&asn_DEF_BaseVersion, &bv, write_to_gba, encoded);
+	rv = der_encode(&asn_DEF_BaseVersion, &bv, metautils_asn1c_write_gba, encoded);
 	asn_DEF_BaseVersion.free_struct(&asn_DEF_BaseVersion, &bv, TRUE);
 
 	if (0 >= rv.encoded) {

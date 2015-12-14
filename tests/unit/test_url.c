@@ -22,6 +22,7 @@ License along with this library.
 #include <stdio.h>
 
 #include <core/oio_core.h>
+#include <metautils/lib/common_main.h>
 
 struct test_data_s {
 	const char *url;
@@ -177,15 +178,9 @@ test_dup (void)
 int
 main(int argc, char **argv)
 {
-	g_test_init (&argc, &argv, NULL);
-	oio_log_lazy_init ();
-	oio_log_init_level(GRID_LOGLVL_INFO);
-	g_log_set_default_handler(oio_log_stderr, NULL);
-
-	g_test_add_func("/core/url/configure/valid",
-			test_configure_valid);
-	g_test_add_func("/core/url/configure/invalid",
-			test_configure_invalid);
+	HC_TEST_INIT(argc,argv);
+	g_test_add_func("/core/url/configure/valid", test_configure_valid);
+	g_test_add_func("/core/url/configure/invalid", test_configure_invalid);
 	g_test_add_func("/core/url/dup", test_dup);
 	return g_test_run();
 }

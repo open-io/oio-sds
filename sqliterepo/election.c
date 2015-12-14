@@ -172,6 +172,8 @@ struct election_member_s
 	char pending_PIPEFROM : 1;
 };
 
+gint64 oio_election_period_cond_wait = G_TIME_SPAN_SECOND;
+
 /* ------------------------------------------------------------------------- */
 
 static void member_destroy(struct election_member_s *member);
@@ -750,7 +752,7 @@ member_in_group(struct election_member_s *member, GArray *i64v)
 }
 
 static gboolean
-member_pending_for_too_long(struct election_member_s *member)
+member_pending_for_too_long(struct election_member_s *member, gint64 now)
 {
 	switch (member->step) {
 		case STEP_NONE:
@@ -759,8 +761,8 @@ member_pending_for_too_long(struct election_member_s *member)
 		case STEP_CANDOK:
 		case STEP_PRELOST:
 		case STEP_PRELEAD:
-			return member->last_status < oio_ext_monotonic_time () -
-				(member->manager->delay_max_idle * G_TIME_SPAN_SECOND);
+			return member->last_status <
+				now - (member->manager->delay_max_idle * G_TIME_SPAN_SECOND);
 		case STEP_LEAVING:
 		case STEP_LEADER:
 		case STEP_LOST:
@@ -1296,13 +1298,13 @@ wait_for_final_status(struct election_member_s *m, gint64 deadline)
 
 		member_kickoff(m);
 
-		gint64 tmp = oio_ext_monotonic_time();
-		if (tmp > deadline) {
+		/* compare internal timers to our fake'able clock */
+		gint64 now = oio_ext_monotonic_time();
+		if (now > deadline) {
 			GRID_WARN("TIMEOUT! (wait) [%s.%s]", m->name.base, m->name.type);
 			return FALSE;
 		}
-
-		if (member_pending_for_too_long(m)) {
+		if (member_pending_for_too_long(m, now)) {
 			GRID_WARN("TIMEOUT! (pending) [%s.%s]", m->name.base, m->name.type);
 			return FALSE;
 		}
@@ -1310,15 +1312,17 @@ wait_for_final_status(struct election_member_s *m, gint64 deadline)
 		GRID_TRACE("Still waiting for a final status on [%s.%s]",
 				m->name.base, m->name.type);
 
-		tmp += 1 * G_TIME_SPAN_SECOND;
-		g_cond_wait_until(member_get_cond(m), member_get_lock(m), tmp);
+		/* perform the real WAIT on the real monotonic clock. */
+		g_cond_wait_until(member_get_cond(m), member_get_lock(m),
+				g_get_monotonic_time() + oio_election_period_cond_wait);
 	}
 
 	return TRUE;
 }
 
 static enum election_status_e
-_election_get_status(struct election_manager_s *mgr, struct sqlx_name_s *n, gchar **master_url)
+_election_get_status(struct election_manager_s *mgr, struct sqlx_name_s *n,
+		gchar **master_url)
 {
 	int rc;
 	gchar *url = NULL;
@@ -1326,9 +1330,10 @@ _election_get_status(struct election_manager_s *mgr, struct sqlx_name_s *n, gcha
 	MANAGER_CHECK(mgr);
 	EXTRA_ASSERT(n != NULL);
 
-	gint64 deadline = oio_ext_monotonic_time () + mgr->delay_max_wait * G_TIME_SPAN_SECOND;
-	g_mutex_lock(&mgr->lock);
+	gint64 deadline = oio_ext_monotonic_time ()
+		+ mgr->delay_max_wait * G_TIME_SPAN_SECOND;
 
+	g_mutex_lock(&mgr->lock);
 	struct election_member_s *m = manager_init_member(mgr, n, TRUE);
 	member_kickoff(m);
 
@@ -1978,6 +1983,7 @@ _transition(struct election_member_s *member, enum event_type_e evt,
 		void *evt_arg)
 {
 	gchar tag[256];
+	gint64 now;
 	guint reqid;
 	int zrc;
 
@@ -2077,12 +2083,13 @@ _transition(struct election_member_s *member, enum event_type_e evt,
 		case STEP_PRELOST:
 			switch (evt) {
 				case EVT_NONE:
-					if (member_pending_for_too_long(member)) {
+					now = oio_ext_monotonic_time ();
+					if (member_pending_for_too_long(member, now)) {
 						// See case STEP_PRELOST for explanations
 						GRID_INFO("Election for [%s.%s] seems stale (PRELEAD), restarting GETVERS",
 								member->name.base, member->name.type);
 						defer_GETVERS(member);
-						member->last_status = oio_ext_monotonic_time ();
+						member->last_status = now;
 					} else {
 						member_ping(member);
 					}
@@ -2154,7 +2161,8 @@ _transition(struct election_member_s *member, enum event_type_e evt,
 		case STEP_PRELEAD:
 			switch (evt) {
 				case EVT_NONE:
-					if (member_pending_for_too_long(member)) {
+					now = oio_ext_monotonic_time ();
+					if (member_pending_for_too_long(member, now)) {
 						// Sometimes the response to SQLX_GETVERS never arrives.
 						GRID_INFO("Election for [%s.%s] seems stale (PRELOST), restarting GETVERS",
 								member->name.base, member->name.type);
@@ -2162,7 +2170,7 @@ _transition(struct election_member_s *member, enum event_type_e evt,
 						// This is to prevent SQLX_GETVERS bursts. We got a
 						// case where defer_GETVERS was called several times
 						// before the first response arrives.
-						member->last_status = oio_ext_monotonic_time ();
+						member->last_status = now;
 					} else {
 						member_ping(member);
 					}

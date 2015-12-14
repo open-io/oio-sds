@@ -51,6 +51,7 @@ test_bad_addresses(void)
 
 		err = gridd_client_connect_url(client, url);
 		g_assert(err != NULL);
+		g_clear_error (&err);
 
 		g_byte_array_unref(req);
 		gridd_client_free(client);
@@ -141,7 +142,8 @@ test_loop_on_ignored_start_error(void)
 		g_assert(err == NULL);
 
 		err = gridd_client_error(client);
-		g_assert(err != NULL);
+		g_assert (err != NULL);
+		g_clear_error (&err);
 
 		g_byte_array_unref(req);
 		gridd_client_free(client);

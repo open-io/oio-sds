@@ -19,6 +19,7 @@ License along with this library.
 #include <glib.h>
 #include <core/oiolog.h>
 #include <core/oioext.h>
+#include <metautils/lib/metautils.h>
 
 static void
 test_shuffle_array (void)
@@ -36,11 +37,7 @@ test_shuffle_array (void)
 int
 main (int argc, char **argv)
 {
-	g_test_init (&argc, &argv, NULL);
-	oio_log_lazy_init ();
-	oio_log_init_level(GRID_LOGLVL_INFO);
-	g_log_set_default_handler(oio_log_stderr, NULL);
-
+	HC_TEST_INIT(argc,argv);
 	g_test_add_func("/core/shuffle/array", test_shuffle_array);
 	return g_test_run();
 }

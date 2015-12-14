@@ -306,6 +306,7 @@ enum http_rc_e
 action_sqlx_propget (struct req_args_s *args, struct json_object *jargs)
 {
 	GError *err = NULL;
+	(void) jargs;
 
 	// Query the services
 	GByteArray* packer (struct sqlx_name_s *n) {

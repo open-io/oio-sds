@@ -17,17 +17,17 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <core/oiolog.h>
 #include <metautils/lib/lrutree.h>
+#include <metautils/lib/common_main.h>
 
 int
 main(int argc, char **argv)
 {
-	struct lru_tree_s *lt;
+	HC_TEST_INIT(argc,argv);
 
-	(void) argc;
-	(void) argv;
-
-	lt = lru_tree_create((GCompareFunc)g_strcmp0, g_free, NULL, 0);
+	struct lru_tree_s *lt = lru_tree_create(
+			(GCompareFunc)g_strcmp0, g_free, NULL, 0);
 	g_assert(lt != NULL);
 
 	lru_tree_insert(lt, g_strdup("plop"), GINT_TO_POINTER(1));
@@ -41,7 +41,7 @@ main(int argc, char **argv)
 
 	gpointer k, v;
 	while (lru_tree_steal_first(lt, &k, &v)) {
-		g_printerr("K %s %p\n", (gchar*)k, v);
+		GRID_DEBUG("K %s %p", (gchar*)k, v);
 		g_free(k);
 	}
 

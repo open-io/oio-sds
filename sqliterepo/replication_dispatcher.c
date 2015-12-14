@@ -2357,7 +2357,7 @@ sqlx_dispatch_QUERY(struct gridd_reply_ctx_s *reply,
 		if (!err) {
 			GByteArray *encoded = g_byte_array_new();
 			asn_enc_rval_t rv = der_encode(&asn_DEF_TableSequence,
-					result, write_to_gba, encoded);
+					result, metautils_asn1c_write_gba, encoded);
 			if (0 < rv.encoded)
 				reply->add_body(encoded);
 			else {

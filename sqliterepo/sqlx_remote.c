@@ -60,7 +60,7 @@ sqlx_encode_ASN1(struct asn_TYPE_descriptor_s *descr, void *s, GError **err)
 {
 	asn_enc_rval_t rv;
 	GByteArray *encoded = g_byte_array_new();
-	rv = der_encode(descr, s, write_to_gba, encoded);
+	rv = der_encode(descr, s, metautils_asn1c_write_gba, encoded);
 	if (0 >= rv.encoded) {
 		g_byte_array_free(encoded, TRUE);
 		GSETERROR(err, "TableSequence encoding error : %s",
