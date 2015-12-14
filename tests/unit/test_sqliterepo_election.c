@@ -83,20 +83,6 @@ test_create_bad_config(void)
 }
 
 static void
-test_create_ok(void)
-{
-	struct replication_config_s cfg = { _get_id, _get_peers, _get_vers,
-		NULL, ELECTION_MODE_NONE};
-	struct election_manager_s *m = NULL;
-	GError *err;
-
-	err = election_manager_create(&cfg, &m);
-	g_assert_no_error(err);
-	g_assert(&cfg == election_manager_get_config0(m));
-	election_manager_clean(m);
-}
-
-static void
 test_election_init(void)
 {
 	struct replication_config_s cfg = { _get_id, _get_peers, _get_vers,
@@ -108,11 +94,35 @@ test_election_init(void)
 	g_assert_no_error(err);
 	g_assert(&cfg == election_manager_get_config0(m));
 
-	struct sqlx_name_s n = {.ns="NS", .base="base", .type="type"};
-	err = election_init(m, &n);
-	g_assert_no_error(err);
+	for (int i=0; i<8 ;++i) {
+		struct sqlx_name_mutable_s n = {
+			.ns="NS",
+			.base="base",
+			.type="type"
+		};
+		n.base = g_strdup_printf("base-%"G_GUINT32_FORMAT, g_random_int());
+		err = election_init(m, sqlx_name_mutable_to_const(&n));
+		g_assert_no_error(err);
+		err = election_exit(m, sqlx_name_mutable_to_const(&n));
+		g_assert_no_error(err);
+		g_free (n.base);
+	}
 
 	election_manager_clean(m);
+}
+
+static void
+test_create_ok(void)
+{
+	struct replication_config_s cfg = { _get_id, _get_peers, _get_vers,
+		NULL, ELECTION_MODE_NONE};
+	for (int i=0; i<8 ;++i) {
+		struct election_manager_s *m = NULL;
+		GError *err = election_manager_create(&cfg, &m);
+		g_assert_no_error(err);
+		g_assert(&cfg == election_manager_get_config0(m));
+		election_manager_clean(m);
+	}
 }
 
 int
