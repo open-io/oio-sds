@@ -51,11 +51,8 @@ _element_clean_tag(struct element_s *e)
 {
 	if (!e)
 		return ;
-	if (e->tagname)
-		g_free(e->tagname);
-	if (e->tagvalue)
-		g_free(e->tagvalue);
-	e->tagname = e->tagvalue = NULL;
+	oio_str_clean (&e->tagname);
+	oio_str_clean (&e->tagvalue);
 }
 
 static void
@@ -467,9 +464,9 @@ service_update_tagfilter2(struct service_update_policies_s *pol,
 	if (NULL != (el = g_tree_lookup(pol->tree_elements, htype))) {
 		if (el->tagname) {
 			if (pname)
-				*pname = g_strdup(el->tagname);
+				oio_str_replace (pname, el->tagname);
 			if (pvalue)
-				*pvalue = el->tagvalue ? g_strdup(el->tagvalue) : NULL;
+				oio_str_replace (pvalue, el->tagvalue);
 			rc = TRUE;
 		}
 	}
