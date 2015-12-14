@@ -499,7 +499,7 @@ http_manage_request(struct req_ctx_s *r)
 
 		// Set the status line
 		g_string_append_printf(buf, "%s %d %s\r\n", r->request->version, code, msg);
-		g_string_append_printf(buf, "Server: metacd_http/%s\r\n", API_VERSION);
+		g_string_append_printf(buf, "Server: metacd_http/%s\r\n", OIOSDS_API_VERSION);
 
 		if (0 == g_ascii_strcasecmp("HTTP/1.1", r->request->version)) {
 			// Manage the "Connection" header of http/1.1

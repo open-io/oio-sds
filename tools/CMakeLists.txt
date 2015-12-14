@@ -39,11 +39,20 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/rdir-monitor.py
 		${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-rdir-monitor.py
 		@ONLY)
 
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-sds.pc.in
+		${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc
+		@ONLY)
+
 add_custom_command(OUTPUT ${OUTPUT}
 				   COMMAND ${CMAKE_COMMAND} -E touch ${OUTPUT}
 				   DEPENDS ${DEPS})
 
 add_custom_target(tools ALL DEPENDS ${OUTPUT})
+
+install(FILES
+			${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc
+		DESTINATION ${LD_LIBDIR}/pkgconfig
+		PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
 install(TARGETS
 			echo-server

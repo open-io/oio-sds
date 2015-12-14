@@ -11,12 +11,14 @@ include(FindPythonInterp)
 include(FindZLIB)
 find_package(PkgConfig)
 
-set(OIOSDS_RELEASE master)
-set(OIOSDS_VERSION_MAJOR 1)
-set(OIOSDS_VERSION_MINOR 0)
+if (NOT DEFINED OIOSDS_RELEASE)
+	set(OIOSDS_RELEASE master)
+endif ()
+if (NOT DEFINED OIOSDS_API_VERSION_SHORT)
+	set(OIOSDS_API_VERSION_SHORT "1.0")
+endif ()
 
-set(SHORT_API_VERSION "${OIOSDS_VERSION_MAJOR}.${OIOSDS_VERSION_MINOR}")
-set(API_VERSION "${OIOSDS_RELEASE}/${SHORT_API_VERSION}")
+set(OIOSDS_API_VERSION "${OIOSDS_RELEASE}/${OIOSDS_API_VERSION_SHORT}")
 
 if (NOT ABI_VERSION)
 	set(ABI_VERSION 0)
@@ -74,8 +76,7 @@ add_definitions(-D_LARGEFILE_SOURCE)
 add_definitions(-D_LARGEFILE64_SOURCE)
 add_definitions(-D_FILE_OFFSET_BITS=64)
 add_definitions(-DHAVE_SOCKLEN_T)
-add_definitions(-DAPI_VERSION="${API_VERSION}")
-add_definitions(-DSHORT_API_VERSION="${SHORT_API_VERSION}")
+add_definitions(-DOIOSDS_API_VERSION="${OIOSDS_API_VERSION}")
 if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
 	MESSAGE("DEBUG symbols enabled")
 	add_definitions(-DG_ERRORCHECK_MUTEXES)
@@ -332,14 +333,14 @@ else ()
 endif ()
 endif (NOT SDK_ONLY)
 
+ENABLE_TESTING()
+
 set(CMAKE_LIBRARY_PATH "")
 set(CMAKE_INCLUDE_PATH "")
 include_directories(AFTER
 		${GLIB2_INCLUDE_DIRS})
 
 link_directories(${GLIB2_LIBRARY_DIRS})
-
-ENABLE_TESTING()
 
 add_subdirectory(./core)
 

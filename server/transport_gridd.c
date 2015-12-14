@@ -894,7 +894,7 @@ dispatch_VERSION(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
 	(void) gdata, (void) hdata;
-	reply->add_body(metautils_gba_from_string(API_VERSION));
+	reply->add_body(metautils_gba_from_string(OIOSDS_API_VERSION));
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
