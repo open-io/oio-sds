@@ -25,7 +25,7 @@ License along with this library.
 #include <arpa/inet.h>
 #include <math.h>
 
-#include "metautils.h"
+#include <metautils/lib/metautils.h>
 
 #define SRVTYPE "sqlx"
 
@@ -47,7 +47,7 @@ _build_si(const gchar *a, guint i)
 	si->addr.type = TADDR_V4;
 	si->addr.port = htons(i+2);
 	si->score.value = i;
-	si->score.timestamp = time(0);
+	si->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 	return si;
 }
 

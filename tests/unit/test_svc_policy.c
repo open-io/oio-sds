@@ -20,7 +20,10 @@ License along with this library.
 #include <stdlib.h>
 #include <unistd.h>
 
-#include "metautils.h"
+#include <metautils/lib/metautils.h>
+
+#undef GQ
+#define GQ() g_quark_from_static_string("oio.utils")
 
 static void
 test_tags(const gchar *str, ...)
@@ -38,8 +41,6 @@ test_tags(const gchar *str, ...)
 	va_start(args, str);
 	for (;;) {
 		char *_t, *_n, *_v;
-		gchar *n = NULL, *v = NULL;
-		gboolean expected;
 
 		if (!(_t = va_arg(args, char*)))
 			break;
@@ -49,21 +50,25 @@ test_tags(const gchar *str, ...)
 			break;
 
 		g_debug("check %s (%s,%s)", _t, _n, _v);
+		gchar *n = NULL, *v = NULL;
 
 		if (*_n) {
-			expected = service_update_tagfilter(svcpol, _t, &n, &v);
-			g_assert(expected != FALSE);
+			gboolean expected = service_update_tagfilter(svcpol, _t, &n, &v);
+			g_assert_true(expected);
 			g_assert(n != NULL);
 			g_assert(v != NULL);
 			g_assert(0 == strcmp(n, _n));
 			g_assert(0 == strcmp(v, _v));
 		}
 		else {
-			expected = service_update_tagfilter(svcpol, _t, &n, &v);
-			g_assert(expected == FALSE);
+			gboolean expected = service_update_tagfilter(svcpol, _t, &n, &v);
+			g_assert_false(expected);
 			g_assert(n == NULL);
 			g_assert(v == NULL);
 		}
+
+		oio_str_clean (&n);
+		oio_str_clean (&v);
 	}
 	va_end(args);
 
@@ -105,25 +110,23 @@ test_replicas(const gchar *str, ...)
 static void
 test_configure_str(gboolean expected, const gchar *str)
 {
-	struct service_update_policies_s *svcpol;
-	GError *err;
-
-	svcpol = service_update_policies_create();
+	struct service_update_policies_s *svcpol = service_update_policies_create();
 	g_assert(svcpol != NULL);
-	err = service_update_reconfigure(svcpol, str);
 
-	if (expected) {
-		g_assert_no_error(err);
-
-		gchar *dump = service_update_policies_dump(svcpol);
-		g_test_message("DUMP: %s", dump);
-		g_free(dump);
-	}
-	else {
-		g_assert_error(err, GQ(), 0);
-		g_test_message("Expected error : (%d) %s",
-				err->code, err->message);
-		g_clear_error(&err);
+	for (int i=0; i<16 ;++i) {
+		GError *err = service_update_reconfigure(svcpol, str);
+		if (expected) {
+			g_assert_no_error(err);
+			gchar *dump = service_update_policies_dump(svcpol);
+			g_test_message("DUMP: %s", dump);
+			g_free(dump);
+		}
+		else {
+			g_assert_error(err, GQ(), 0);
+			g_test_message("Expected error : (%d) %s",
+					err->code, err->message);
+			g_clear_error(&err);
+		}
 	}
 
 	service_update_policies_destroy(svcpol);

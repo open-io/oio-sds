@@ -32,6 +32,10 @@ License along with this library.
 	List = next; \
 } while (0)
 
+time_hook_f oio_time_monotonic = NULL;
+
+time_hook_f oio_time_real = NULL;
+
 static GSList*
 gslist_merge_random(GSList *l1, GSList *l2)
 {
@@ -224,3 +228,20 @@ oio_error_debug (GQuark gq, int code, const char *fmt, ...)
 }
 
 #endif
+
+gint64
+oio_ext_real_time (void)
+{
+	if (oio_time_real)
+		return (*oio_time_real)();
+	return g_get_real_time();
+}
+
+gint64
+oio_ext_monotonic_time (void)
+{
+	if (oio_time_monotonic)
+		return (*oio_time_monotonic)();
+	return g_get_monotonic_time();
+}
+

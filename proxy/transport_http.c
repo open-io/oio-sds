@@ -49,7 +49,7 @@ struct http_request_dispatcher_s
 
 struct req_ctx_s
 {
-	struct timespec tv_start, tv_parsed;
+	gint64 tv_start, tv_parsed;
 
 	struct network_client_s *client;
 	struct network_transport_s *transport;
@@ -397,12 +397,11 @@ sender(gpointer k, gpointer v, gpointer u)
 static void
 _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 {
-	struct timespec now, diff_total, diff_handler;
 	const gchar *reqid = g_tree_lookup(r->request->tree_headers, PROXYD_HEADER_REQID);
 
-	network_server_now(&now);
-	timespec_sub(&now, &r->tv_start, &diff_total);
-	timespec_sub(&now, &r->tv_parsed, &diff_handler);
+	gint64 now = oio_ext_monotonic_time ();
+	gint64 diff_total = now - r->tv_start;
+	gint64 diff_handler = now - r->tv_parsed;
 
 	GString *gstr = g_string_sized_new(256);
 
@@ -414,11 +413,11 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 			" %s %d %ld.%06ld %"G_GSIZE_FORMAT" %s %s t=%ld.%06ld",
 			r->request->cmd,
 			status,
-			diff_total.tv_sec, diff_total.tv_nsec / 1000,
+			diff_total / G_TIME_SPAN_SECOND, diff_total % G_TIME_SPAN_SECOND,
 			out_len,
 			(reqid && *reqid) ? reqid : "-",
 			r->request->req_uri,
-			diff_handler.tv_sec, diff_handler.tv_nsec / 1000);
+			diff_handler / G_TIME_SPAN_SECOND, diff_handler % G_TIME_SPAN_SECOND);
 
 	if (tail) {
 		g_string_append_c (gstr, ' ');
@@ -500,7 +499,7 @@ http_manage_request(struct req_ctx_s *r)
 
 		// Set the status line
 		g_string_append_printf(buf, "%s %d %s\r\n", r->request->version, code, msg);
-		g_string_append_printf(buf, "Server: metacd_http/%s\r\n", API_VERSION);
+		g_string_append_printf(buf, "Server: metacd_http/%s\r\n", OIOSDS_API_VERSION);
 
 		if (0 == g_ascii_strcasecmp("HTTP/1.1", r->request->version)) {
 			// Manage the "Connection" header of http/1.1
@@ -677,8 +676,8 @@ http_notify_input(struct network_client_s *clt)
 			// Important times are now known.$
 			// First, the last chunk of data received
 			// Second, the moment the real treatment start ... i.e. now!
-			memcpy(&r.tv_start, &clt->time.evt_in, sizeof(r.tv_start));
-			network_server_now(&r.tv_parsed);
+			r.tv_start = clt->time.evt_in;
+			r.tv_parsed = oio_ext_monotonic_time ();
 
 			GError *err = http_manage_request(&r);
 

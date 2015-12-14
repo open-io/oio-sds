@@ -1,7 +1,6 @@
 /*
-OpenIO SDS server
-Copyright (C) 2014 Worldine, original work as part of Redcurrant
-Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
+OpenIO SDS metautils
+Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -17,25 +16,29 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include "metautils/lib/metautils.h"
-#include "server/stats_holder.h"
 #include <glib.h>
+#include <core/oiolog.h>
+#include <core/oioext.h>
+#include <metautils/lib/metautils.h>
 
 static void
-test_rrd (void)
+test_shuffle_array (void)
 {
-	struct grid_single_rrd_s *rrd = grid_single_rrd_create(2, 60);
-	grid_single_rrd_push(rrd, 3, 0);
-	grid_single_rrd_push(rrd, 1000, 0);
-	grid_single_rrd_push(rrd, 2, 0);
-	grid_single_rrd_destroy(rrd);
+	void *tab[10];
+	for (int i=0; i<10 ;++i)
+		tab[i] = NULL;
+	for (long unsigned int i=0; i<8 ;i++)
+		tab[i+1] = (void*)i;
+	oio_ext_array_shuffle (tab+1, 8);
+	g_assert_null (tab[0]);
+	g_assert_null (tab[9]);
 }
 
 int
 main (int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
-	g_test_add_func("/server/rrd", test_rrd);
+	g_test_add_func("/core/shuffle/array", test_shuffle_array);
 	return g_test_run();
 }
 

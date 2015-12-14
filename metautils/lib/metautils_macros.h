@@ -24,10 +24,6 @@ License along with this library.
 #  define LOG_DEFAULT_DOMAIN "default"
 # endif
 
-# ifndef API_VERSION
-#  define API_VERSION ((const char*)"")
-# endif
-
 # ifdef HAVE_EXTRA_ASSERT
 #  define EXTRA_ASSERT(X) g_assert(X)
 # else

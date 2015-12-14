@@ -6,6 +6,7 @@
 #include "oiostr.h"
 #include "oioext.h"
 #include "oiodir.h"
+#include "oiolog.h"
 
 #include "internals.h"
 #include "http_internals.h"
@@ -19,11 +20,26 @@ oio_directory__destroy (struct oio_directory_s *self)
 }
 
 GError *
+oio_directory__create (struct oio_directory_s *self,
+		const struct oio_url_s *url)
+{
+	DIR_CALL(self,create)(self, url);
+}
+
+GError *
 oio_directory__list (struct oio_directory_s *self,
 		const struct oio_url_s *url, const char *srvtype,
 		gchar ***out_dir, gchar ***out_srv)
 {
 	DIR_CALL(self,list)(self, url, srvtype, out_dir, out_srv);
+}
+
+GError *
+oio_directory__link (struct oio_directory_s *self,
+		const struct oio_url_s *url, const char *srvtype, gboolean autocreate,
+		gchar ***out_srv)
+{
+	DIR_CALL(self,link)(self, url, srvtype, autocreate, out_srv);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -36,13 +52,23 @@ struct oio_directory_PROXY_s
 
 static void _dir_proxy_destroy (struct oio_directory_s *self);
 
+static GError * _dir_proxy_create (struct oio_directory_s *self,
+			const struct oio_url_s *url);
+
 static GError * _dir_proxy_list (struct oio_directory_s *self,
 			const struct oio_url_s *url, const char *srvtype,
 			gchar ***out_dir, gchar ***out_srv);
 
+static GError * _dir_proxy_link (struct oio_directory_s *self,
+			const struct oio_url_s *url, const char *srvtype,
+			gboolean autocreate, gchar ***out_srv);
+
 struct oio_directory_vtable_s vtable_PROXY =
 {
-	_dir_proxy_destroy, _dir_proxy_list,
+	_dir_proxy_destroy,
+	_dir_proxy_create,
+	_dir_proxy_list,
+	_dir_proxy_link,
 };
 
 struct oio_directory_s *
@@ -98,9 +124,25 @@ _load_srvtab (struct json_object *jtab, gchar ***out)
 }
 
 static GError *
+_dir_proxy_create (struct oio_directory_s *self, const struct oio_url_s *url)
+{
+	g_assert (self != NULL);
+	struct oio_directory_PROXY_s *d = (struct oio_directory_PROXY_s *) self;
+	g_assert (d->vtable == &vtable_PROXY);
+
+	struct oio_url_s *u = oio_url_dup (url);
+	CURL *h = _curl_get_handle ();
+	GError *err = oio_proxy_call_reference_create (h, u);
+	curl_easy_cleanup (h);
+	oio_url_pclean (&u);
+
+	return err;
+}
+
+static GError *
 _dir_proxy_list (struct oio_directory_s *self,
-			const struct oio_url_s *url, const char *srvtype,
-			gchar ***out_dir, gchar ***out_srv)
+		const struct oio_url_s *url, const char *srvtype,
+		gchar ***out_dir, gchar ***out_srv)
 {
 	g_assert (self != NULL);
 	struct oio_directory_PROXY_s *d = (struct oio_directory_PROXY_s *) self;
@@ -137,6 +179,41 @@ _dir_proxy_list (struct oio_directory_s *self,
 		json_tokener_free (tok);
 	}
 	g_string_free (out, TRUE);
-	
+
 	return err;
 }
+
+static GError *
+_dir_proxy_link (struct oio_directory_s *self,
+			const struct oio_url_s *url, const char *srvtype,
+			gboolean autocreate, gchar ***out_srv)
+{
+	g_assert (self != NULL);
+	struct oio_directory_PROXY_s *d = (struct oio_directory_PROXY_s *) self;
+	g_assert (d->vtable == &vtable_PROXY);
+
+	GError *err = NULL;
+	GString *out = g_string_new ("");
+	struct oio_url_s *u = oio_url_dup (url);
+	CURL *h = _curl_get_handle ();
+	err = oio_proxy_call_reference_link (h, u, srvtype, autocreate, out);
+	curl_easy_cleanup (h);
+	oio_url_pclean (&u);
+
+	if (!err) {
+		struct json_tokener *tok = json_tokener_new ();
+		struct json_object *jbody = json_tokener_parse_ex (tok,
+				out->str, out->len);
+		if (json_tokener_success != json_tokener_get_error (tok))
+			err = SYSERR("Proxy protocol error");
+		else
+			err = _load_srvtab (jbody, out_srv);
+		if (jbody)
+			json_object_put (jbody);
+		json_tokener_free (tok);
+	}
+	g_string_free (out, TRUE);
+
+	return err;
+}
+

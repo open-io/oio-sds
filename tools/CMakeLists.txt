@@ -6,15 +6,9 @@ add_executable(echo-server oio-echo-server.c)
 bin_prefix(echo-server "-echo-server")
 target_link_libraries(echo-server metautils server gridcluster ${GLIB2_LIBRARIES})
 
-add_executable(tool-error oio-err.c)
-bin_prefix(tool-error "-err")
-target_link_libraries(tool-error ${GLIB2_LIBRARIES})
-
 add_executable(oio-tool oio-tool.c)
 bin_prefix(oio-tool -tool)
 target_link_libraries(oio-tool metautils ${GLIB2_LIBRARIES})
-
-add_test(NAME tools/error COMMAND ${EXE_PREFIX}-err)
 
 
 set(OUTPUT      "${CMAKE_CURRENT_BINARY_DIR}/.timestamp")
@@ -45,11 +39,20 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/rdir-monitor.py
 		${CMAKE_CURRENT_BINARY_DIR}/${EXE_PREFIX}-rdir-monitor.py
 		@ONLY)
 
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/oio-sds.pc.in
+		${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc
+		@ONLY)
+
 add_custom_command(OUTPUT ${OUTPUT}
 				   COMMAND ${CMAKE_COMMAND} -E touch ${OUTPUT}
 				   DEPENDS ${DEPS})
 
 add_custom_target(tools ALL DEPENDS ${OUTPUT})
+
+install(FILES
+			${CMAKE_CURRENT_BINARY_DIR}/oio-sds.pc
+		DESTINATION ${LD_LIBDIR}/pkgconfig
+		PERMISSIONS OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
 
 install(TARGETS
 			echo-server

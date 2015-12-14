@@ -23,7 +23,7 @@ License along with this library.
 
 #include <glib.h>
 
-#include "./metautils.h"
+#include <metautils/lib/metautils.h>
 
 static void
 _dummy_gba(GByteArray *gba, guint v, register guint len)
@@ -33,7 +33,7 @@ _dummy_gba(GByteArray *gba, guint v, register guint len)
 		gba = g_byte_array_append(gba, (guint8*)&v, sizeof(v));
 }
 
-#define COUNT 65536
+#define COUNT 31
 
 static void
 test_gba_cmp(void)

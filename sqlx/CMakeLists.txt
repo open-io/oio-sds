@@ -24,7 +24,9 @@ target_link_libraries(sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES} ${ZMQ_LIBRARIES})
 
 add_library(sqlxclient SHARED sqlx_client.c)
-set_target_properties(sqlxclient PROPERTIES SOVERSION ${ABI_VERSION})
+set_target_properties(sqlxclient PROPERTIES
+		PUBLIC_HEADER "sqlx_client.h"
+		SOVERSION ${ABI_VERSION})
 target_link_libraries(sqlxclient
 		oiocore oiosds sqlitereporemote
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
@@ -34,19 +36,15 @@ bin_prefix(tool_sqlx -sqlx)
 target_link_libraries(tool_sqlx
 		hcresolve metautils gridcluster sqlitereporemote
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
-		
+
 
 add_executable(sqlx_server sqlx_server.c)
 bin_prefix(sqlx_server -sqlx-server)
 target_link_libraries(sqlx_server
 		sqlxsrv ${GLIB2_LIBRARIES})
 
-add_executable(test_sqlx_client test_sqlx_client.c)
-target_link_libraries(test_sqlx_client
-		sqlxclient metautils)
-
-install(TARGETS sqlx_server tool_sqlx sqlxsrv
+install(TARGETS sqlx_server tool_sqlx sqlxsrv sqlxclient
 		LIBRARY DESTINATION ${LD_LIBDIR}
-		RUNTIME DESTINATION bin)
+		RUNTIME DESTINATION bin
+		PUBLIC_HEADER DESTINATION include)
 
-add_test(NAME sqlx/client COMMAND test_sqlx_client)

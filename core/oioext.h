@@ -61,6 +61,10 @@ void oio_ext_set_random_reqid (void);
 /** Get a request-id stored in the thread-local, or NULL if not set */
 const char * oio_ext_get_reqid (void);
 
+gint64 oio_ext_real_time (void);
+
+gint64 oio_ext_monotonic_time (void);
+
 #ifdef __cplusplus
 }
 #endif

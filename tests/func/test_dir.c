@@ -16,11 +16,45 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <unistd.h>
+
 #include <glib.h>
 
-#include "oio_core.h"
+#include <core/oio_core.h>
+#include <core/oiodir.h>
+#include <core/internals.h>
 
-#include "oiodir.h"
+#undef GQ
+#define GQ() g_quark_from_static_string("oio.core")
+
+/* TODO factorize this with meta2v2/meta2_utils.c */
+#define RANDOM_UID(uid,uid_size) \
+	struct { guint64 now; guint32 r; guint16 pid; guint16 th; } uid; \
+	uid.now = oio_ext_real_time (); \
+	uid.r = g_random_int(); \
+	uid.pid = getpid(); \
+	uid.th = oio_log_current_thread_id(); \
+	gsize uid_size = sizeof(uid);
+
+static void
+_random_string (gchar *d, gsize dlen)
+{
+	RANDOM_UID (uid,uidlen);
+	oio_str_bin2hex ((void*)&uid, uidlen, d, dlen);
+}
+
+static void
+_random_url (struct oio_url_s *url)
+{
+	gchar buf[65];
+
+	oio_url_set (url, OIOURL_NS, "NS");
+
+	_random_string (buf, sizeof(buf));
+	oio_url_set (url, OIOURL_ACCOUNT, buf);
+	_random_string (buf, sizeof(buf));
+	oio_url_set (url, OIOURL_USER, buf);
+}
 
 static void
 _test_init_round (void)
@@ -33,7 +67,7 @@ _test_init_round (void)
 static void
 test_init (void)
 {
-	for (int i=0; i<64 ;++i)
+	for (int i=0; i<16 ;++i)
 		_test_init_round ();
 }
 
@@ -43,19 +77,30 @@ _test_reference_cycle_round (void)
 	GError *err = NULL;
 
 	struct oio_url_s *url = oio_url_empty ();
-	oio_url_set (url, OIOURL_NS, "NS");
-	oio_url_set (url, OIOURL_ACCOUNT, "ACCT");
-	oio_url_set (url, OIOURL_USER, "JFS");
+	_random_url (url);
 
 	struct oio_directory_s *dir = oio_directory__create_proxy ("NS");
 	g_assert_nonnull (dir);
-	
-	/* create */
 
-	/* link */
+	/* link with no reference */
+	gchar **srvtab = NULL;
+	err = oio_directory__link (dir, url, "meta2", FALSE, &srvtab);
+	g_assert_error (err, GQ(), CODE_USER_NOTFOUND);
+	g_assert_null (srvtab);
+	g_clear_error (&err);
+
+	/* create */
+	err = oio_directory__create (dir, url);
+	g_assert_no_error (err);
+
+	/* link with a reference */
+	err = oio_directory__link (dir, url, "meta2", FALSE, &srvtab);
+	g_assert_no_error (err);
+	g_assert_nonnull (srvtab);
+	g_strfreev (srvtab);
 
 	/* list */
-	gchar **dirtab = NULL, **srvtab = NULL;
+	gchar **dirtab = NULL;
 	err = oio_directory__list (dir, url, "meta2", &dirtab, &srvtab);
 	g_assert_no_error (err);
 	g_assert_nonnull (dirtab);

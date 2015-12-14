@@ -194,7 +194,7 @@ conscience_srv_compute_score(struct conscience_srv_s
 	}
 
 	service->score.value = MAX(0,current);
-	service->score.timestamp = time(0);
+	service->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 	return &(service->score);
 }
 
@@ -204,7 +204,7 @@ conscience_srv_lock_score( struct conscience_srv_s *srv, gint s )
 	if (!srv)
 		return;
 	srv->score.value = s;
-	srv->score.timestamp = time(0);
+	srv->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 	srv->locked = TRUE;
 }
 

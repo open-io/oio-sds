@@ -19,9 +19,10 @@ License along with this library.
 
 #include <metautils/lib/metautils.h>
 
-#include "./version.h"
+#include <sqliterepo/version.h>
 
-#define GQD(D) g_quark_from_static_string(D)
+#undef GQ
+#define GQ() g_quark_from_static_string("oio.sqlite")
 
 struct cfg_s {
 	const gchar *name;
@@ -37,13 +38,12 @@ build_version(struct cfg_s *cfg)
 		struct object_version_s o;
 		o.version = cfg->v;
 		o.when = cfg->t;
-		g_tree_insert(v, hashstr_create(cfg->name),
-				g_memdup(&o, sizeof(o)));
+		g_tree_insert(v, hashstr_create(cfg->name), g_memdup(&o, sizeof(o)));
 	}
 	return v;
 }
 
-//------------------------------------------------------------------------------
+/* -------------------------------------------------------------------------- */
 
 static void
 test_noerror_version(struct cfg_s *c0, struct cfg_s *c1, gint64 r)
@@ -65,7 +65,8 @@ test_pipeto_version(struct cfg_s *cfg0, struct cfg_s *cfg1, gint64 r)
 	GTree *v0 = build_version(cfg0);
 	GTree *v1 = build_version(cfg1);
 	GError *err = version_validate_diff(v0, v1, &worst);
-	g_assert_error(err, GQD("sqliterepo"), CODE_PIPETO);
+	g_assert_error(err, GQ(), CODE_PIPETO);
+	g_clear_error (&err);
 	g_assert(r == worst);
 	g_tree_destroy(v0);
 	g_tree_destroy(v1);
@@ -78,7 +79,8 @@ test_pipefrom_version(struct cfg_s *cfg0, struct cfg_s *cfg1, gint64 r)
 	GTree *v0 = build_version(cfg0);
 	GTree *v1 = build_version(cfg1);
 	GError *err = version_validate_diff(v0, v1, &worst);
-	g_assert_error(err, GQD("sqliterepo"), CODE_PIPEFROM);
+	g_assert_error(err, GQ(), CODE_PIPEFROM);
+	g_clear_error (&err);
 	g_assert(r == worst);
 	g_tree_destroy(v0);
 	g_tree_destroy(v1);
@@ -91,13 +93,14 @@ test_concurrent_version(struct cfg_s *cfg0, struct cfg_s *cfg1)
 	GTree *v0 = build_version(cfg0);
 	GTree *v1 = build_version(cfg1);
 	GError *err = version_validate_diff(v0, v1, &worst);
-	g_assert_error(err, GQD("sqliterepo"), CODE_CONCURRENT);
+	g_assert_error(err, GQ(), CODE_CONCURRENT);
+	g_clear_error (&err);
 	g_assert(0 == worst);
 	g_tree_destroy(v0);
 	g_tree_destroy(v1);
 }
 
-//------------------------------------------------------------------------------
+/* -------------------------------------------------------------------------- */
 
 static void
 test_equal(void)
@@ -204,24 +207,18 @@ test_schema_concurrent(void)
 	test_concurrent_version(cfg1, cfg0);
 }
 
-//------------------------------------------------------------------------------
+/* -------------------------------------------------------------------------- */
 
 int
 main(int argc, char **argv)
 {
-	HC_PROC_INIT(argv, GRID_LOGLVL_TRACE2);
-	g_test_init (&argc, &argv, NULL);
+	HC_TEST_INIT(argc, argv);
 
-	g_test_add_func("/sqliterepo/version/equal",
-			test_equal);
-	g_test_add_func("/sqliterepo/version/content/normal",
-			test_diff_normal);
-	g_test_add_func("/sqliterepo/version/content/big",
-			test_diff_big);
-	g_test_add_func("/sqliterepo/version/schema/equal",
-			test_schema_equal);
-	g_test_add_func("/sqliterepo/version/schema/diff",
-			test_schema_diff);
+	g_test_add_func("/sqliterepo/version/equal", test_equal);
+	g_test_add_func("/sqliterepo/version/content/normal", test_diff_normal);
+	g_test_add_func("/sqliterepo/version/content/big", test_diff_big);
+	g_test_add_func("/sqliterepo/version/schema/equal", test_schema_equal);
+	g_test_add_func("/sqliterepo/version/schema/diff", test_schema_diff);
 	g_test_add_func("/sqliterepo/version/schema/concurrent",
 			test_schema_concurrent);
 	return g_test_run();

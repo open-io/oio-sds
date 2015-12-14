@@ -21,8 +21,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stddef.h>
 #include <errno.h>
 #include <string.h>
-#include <sys/time.h>
-#include <sys/resource.h>
 
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>

@@ -1,6 +1,7 @@
 /*
-OpenIO SDS core library
-Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+OpenIO SDS metautils
+Copyright (C) 2014 Worldine, original work as part of Redcurrant
+Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -15,10 +16,18 @@ Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
-#include <string.h>
-#include <glib.h>
-#include "oio_core.h"
-#include "internals.h"
+
+#include <metautils/lib/metautils.h>
+
+static void
+test_transform(gchar* (*T) (const gchar*), const gchar *s0, const gchar *sN)
+{
+	gchar *s = T(s0);
+	g_assert(0 == g_strcmp0(sN,s));
+	g_free(s);
+}
+
+/* ------------------------------------------------------------------------- */
 
 static void
 test_reuse (void)
@@ -86,7 +95,7 @@ test_autocontainer (void)
 	struct oio_str_autocontainer_config_s cfg = {
 		.src_size = 0, .src_offset = 0, .dst_bits = 17
 	};
-	
+
 	guint64 nb0 = 0, nb8 = 0;
 	for (unsigned int i0=0; i0<256 ;i0++) {
 		for (unsigned int i1=0; i1<256 ;i1++) {
@@ -105,19 +114,89 @@ test_autocontainer (void)
 	g_assert (nb0 == nb8);
 }
 
+static void
+test_clean(void)
+{
+	gchar *s0 = g_strdup("");
+	oio_str_clean(&s0);
+	g_assert(NULL == s0);
+}
+
+static void
+test_strlcpy_pns(void)
+{
+	gchar * _trans(const gchar *s0) {
+		gchar *s = g_strdup(s0);
+		metautils_strlcpy_physical_ns(s, s0, strlen(s0)+1);
+		return s;
+	}
+	test_transform(_trans, "", "");
+	test_transform(_trans, "....", "");
+	test_transform(_trans, "N", "N");
+	test_transform(_trans, "N.P", "N");
+}
+
+static void
+test_upper(void)
+{
+	gchar * _trans(const gchar *s0) {
+		gchar *s = g_strdup(s0);
+		metautils_str_upper(s);
+		return s;
+	}
+	test_transform(_trans, "", "");
+	test_transform(_trans, "a", "A");
+	test_transform(_trans, "A", "A");
+	test_transform(_trans, "Aa", "AA");
+}
+
+static void
+test_lower(void)
+{
+	gchar * _trans(const gchar *s0) {
+		gchar *s = g_strdup(s0);
+		metautils_str_lower(s);
+		return s;
+	}
+	test_transform(_trans, "", "");
+	test_transform(_trans, "a", "a");
+	test_transform(_trans, "A", "a");
+	test_transform(_trans, "Aa", "aa");
+}
+
+static void
+test_prefix (void)
+{
+	g_assert (metautils_str_has_caseprefix ("X", "X"));
+	g_assert (metautils_str_has_caseprefix ("X", "x"));
+	g_assert (metautils_str_has_caseprefix ("Xa", "X"));
+	g_assert (metautils_str_has_caseprefix ("Xa", "x"));
+
+	g_assert (!metautils_str_has_caseprefix ("X", "Y"));
+	g_assert (!metautils_str_has_caseprefix ("X", "y"));
+	g_assert (!metautils_str_has_caseprefix ("Xa", "Y"));
+	g_assert (!metautils_str_has_caseprefix ("Xa", "y"));
+
+	g_assert (!metautils_str_has_caseprefix ("X", "Xa"));
+}
+
 int
 main(int argc, char **argv)
 {
-	g_test_init (&argc, &argv, NULL);
-	oio_log_lazy_init ();
-	oio_log_init_level(GRID_LOGLVL_INFO);
-	g_log_set_default_handler(oio_log_stderr, NULL);
+	HC_TEST_INIT(argc,argv);
 
 	g_test_add_func("/core/str/reuse", test_reuse);
 	g_test_add_func("/core/str/replace", test_replace);
 	g_test_add_func("/core/str/ishexa", test_is_hexa);
 	g_test_add_func("/core/str/bin", test_bin);
 	g_test_add_func("/core/str/autocontainer", test_autocontainer);
+
+	g_test_add_func("/metautils/str/clean", test_clean);
+	g_test_add_func("/metautils/str/strlcpy_pns", test_strlcpy_pns);
+	g_test_add_func("/metautils/str/upper", test_upper);
+	g_test_add_func("/metautils/str/lower", test_lower);
+	g_test_add_func("/metautils/str/prefix", test_prefix);
+
 	return g_test_run();
 }
 

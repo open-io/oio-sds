@@ -10,14 +10,15 @@ include(FindCURL)
 include(FindPythonInterp)
 include(FindZLIB)
 find_package(PkgConfig)
-find_package(Doxygen)
 
-set(OIOSDS_RELEASE master)
-set(OIOSDS_VERSION_MAJOR 1)
-set(OIOSDS_VERSION_MINOR 0)
+if (NOT DEFINED OIOSDS_RELEASE)
+	set(OIOSDS_RELEASE master)
+endif ()
+if (NOT DEFINED OIOSDS_API_VERSION_SHORT)
+	set(OIOSDS_API_VERSION_SHORT "1.0")
+endif ()
 
-set(SHORT_API_VERSION "${OIOSDS_VERSION_MAJOR}.${OIOSDS_VERSION_MINOR}")
-set(API_VERSION "${OIOSDS_RELEASE}/${SHORT_API_VERSION}")
+set(OIOSDS_API_VERSION "${OIOSDS_RELEASE}/${OIOSDS_API_VERSION_SHORT}")
 
 if (NOT ABI_VERSION)
 	set(ABI_VERSION 0)
@@ -75,8 +76,7 @@ add_definitions(-D_LARGEFILE_SOURCE)
 add_definitions(-D_LARGEFILE64_SOURCE)
 add_definitions(-D_FILE_OFFSET_BITS=64)
 add_definitions(-DHAVE_SOCKLEN_T)
-add_definitions(-DAPI_VERSION="${API_VERSION}")
-add_definitions(-DSHORT_API_VERSION="${SHORT_API_VERSION}")
+add_definitions(-DOIOSDS_API_VERSION="${OIOSDS_API_VERSION}")
 if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
 	MESSAGE("DEBUG symbols enabled")
 	add_definitions(-DG_ERRORCHECK_MUTEXES)
@@ -268,7 +268,7 @@ test_CLI(FLEX_EXECUTABLE "flex")
 test_CLI(BISON_EXECUTABLE "bison")
 endif(NOT SDK_ONLY)
 
-# Set defaults 
+# Set defaults
 set(DEFAULT_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
 set(DEFAULT_INCLUDE_DIRS "/usr/include")
 set(LZO_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/lzo")
@@ -286,6 +286,10 @@ if (NOT SDK_ONLY)
 pkg_check_modules(APR REQUIRED apr-1)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 pkg_check_modules(ZMQ libzmq>=4.0.0)
+# Optional cache libraries
+pkg_search_module(HIREDIS hiredis)
+pkg_search_module(LIBMEMCACHED libmemcached)
+
 endif (NOT SDK_ONLY)
 
 # Load CLI-overriden configuration
@@ -314,6 +318,8 @@ set(ASN1C_EXE_OPTS "-fwide-types")
 endif (NOT SDK_ONLY)
 
 # Check every required module is present
+print_found("HIREDIS")
+print_found("LIBMEMCACHED")
 check_found("CURL" "GLIB2" "JSONC")
 
 if (NOT SDK_ONLY)
@@ -327,23 +333,14 @@ else ()
 endif ()
 endif (NOT SDK_ONLY)
 
+ENABLE_TESTING()
+
 set(CMAKE_LIBRARY_PATH "")
 set(CMAKE_INCLUDE_PATH "")
 include_directories(AFTER
 		${GLIB2_INCLUDE_DIRS})
 
 link_directories(${GLIB2_LIBRARY_DIRS})
-
-ENABLE_TESTING()
-
-if (DOXYGEN_FOUND)
-	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in
-		${CMAKE_CURRENT_BINARY_DIR}/Doxyfile @ONLY)
-	add_custom_target(doc
-		${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
-		WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-		COMMENT "Generating API documentation with Doxygen" VERBATIM)
-endif ()
 
 add_subdirectory(./core)
 
@@ -374,5 +371,7 @@ add_subdirectory(./sqliterepo)
 add_subdirectory(./sqlx)
 add_subdirectory(./svc-monitor)
 add_subdirectory(./tools)
+add_subdirectory(./tests/unit)
+add_subdirectory(./tests/func)
 endif (NOT SDK_ONLY)
 

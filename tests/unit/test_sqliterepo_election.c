@@ -17,25 +17,36 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <metautils/lib/metautils.h>
-#include "election.h"
-#include "version.h"
+#include <glib.h>
 
-static const gchar * _get_id (gpointer ctx) {
+#include <metautils/lib/metautils.h>
+#include <sqliterepo/election.h>
+#include <sqliterepo/version.h>
+#include <sqliterepo/sqlx_remote.h>
+
+#undef GQ
+#define GQ() g_quark_from_static_string("oio.sqlite")
+
+static const char *
+_get_id (gpointer ctx)
+{
 	(void) ctx;
 	return "0.0.0.0:0";
 }
 
-static GError* _get_peers (gpointer ctx, const gchar *n, const gchar *t,
-		gchar ***result) {
-	(void) ctx, (void) n, (void) t;
+static GError*
+_get_peers (gpointer ctx, struct sqlx_name_s *n, gboolean nocache,
+		gchar ***result)
+{
+	(void) ctx, (void) n, (void) nocache;
 	*result = g_malloc0(sizeof(gchar*));
 	return NULL;
 }
 
-static GError* _get_vers (gpointer ctx, const gchar *n, const gchar *t,
-		GTree **result) {
-	(void) ctx, (void) n, (void) t;
+static GError*
+_get_vers (gpointer ctx, struct sqlx_name_s *n, GTree **result)
+{
+	(void) ctx, (void) n;
 	*result = version_empty();
 	return NULL;
 }
@@ -49,25 +60,25 @@ test_create_bad_config(void)
 	struct replication_config_s cfg0 = { NULL, _get_peers, _get_vers,
 		NULL, ELECTION_MODE_NONE};
 	err = election_manager_create(&cfg0, &m);
-	g_assert_error(err, g_quark_from_static_string("sqliterepo"), ERRCODE_PARAM);
+	g_assert_error(err, GQ(), ERRCODE_PARAM);
 	g_clear_error(&err);
 
 	struct replication_config_s cfg1 = { _get_id, NULL, _get_vers,
 		NULL, ELECTION_MODE_NONE};
 	err = election_manager_create(&cfg1, &m);
-	g_assert_error(err, g_quark_from_static_string("sqliterepo"), ERRCODE_PARAM);
+	g_assert_error(err, GQ(), ERRCODE_PARAM);
 	g_clear_error(&err);
 
 	struct replication_config_s cfg2 = { _get_id, _get_peers, NULL,
 		NULL, ELECTION_MODE_NONE};
 	err = election_manager_create(&cfg2, &m);
-	g_assert_error(err, g_quark_from_static_string("sqliterepo"), ERRCODE_PARAM);
+	g_assert_error(err, GQ(), ERRCODE_PARAM);
 	g_clear_error(&err);
 
 	struct replication_config_s cfg3 = { _get_id, _get_peers, _get_vers,
 		NULL, ELECTION_MODE_NONE+3};
 	err = election_manager_create(&cfg3, &m);
-	g_assert_error(err, g_quark_from_static_string("sqliterepo"), ERRCODE_PARAM);
+	g_assert_error(err, GQ(), ERRCODE_PARAM);
 	g_clear_error(&err);
 }
 
@@ -97,7 +108,8 @@ test_election_init(void)
 	g_assert_no_error(err);
 	g_assert(&cfg == election_manager_get_config0(m));
 
-	err = election_init(m, "name", "type");
+	struct sqlx_name_s n = {.ns="NS", .base="base", .type="type"};
+	err = election_init(m, &n);
 	g_assert_no_error(err);
 
 	election_manager_clean(m);
@@ -106,8 +118,7 @@ test_election_init(void)
 int
 main(int argc, char **argv)
 {
-	HC_PROC_INIT(argv,GRID_LOGLVL_INFO);
-	g_test_init(&argc, &argv, NULL);
+	HC_TEST_INIT(argc,argv);
 	g_test_add_func("/sqlx/election/create_bad_config",
 			test_create_bad_config);
 	g_test_add_func("/sqlx/election/create_ok",

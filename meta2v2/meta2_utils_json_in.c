@@ -163,7 +163,7 @@ m2v2_json_load_single_chunk (struct json_object *j, gpointer *pbean)
 	CHUNKS_set2_id (chunk, json_object_get_string(jid));
 	CHUNKS_set_hash (chunk, hash);
 	CHUNKS_set_size (chunk, json_object_get_int64(jsize));
-	CHUNKS_set_ctime (chunk, !jctime ? g_get_real_time() / G_TIME_SPAN_SECOND : json_object_get_int64(jctime));
+	CHUNKS_set_ctime (chunk, !jctime ? oio_ext_real_time() / G_TIME_SPAN_SECOND : json_object_get_int64(jctime));
 	CHUNKS_set_content (chunk, hid);
 	CHUNKS_set2_position (chunk, json_object_get_string (jpos));
 	*pbean = chunk;

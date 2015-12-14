@@ -32,7 +32,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define RANDOM_UID(uid,uid_size) \
 	struct { guint64 now; guint32 r; guint16 pid; guint16 th; } uid; \
-	uid.now = g_get_real_time (); \
+	uid.now = oio_ext_real_time (); \
 	uid.r = g_random_int(); \
 	uid.pid = getpid(); \
 	uid.th = oio_log_current_thread_id(); \
@@ -872,7 +872,7 @@ m2db_delete_alias(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 		err = NEWERROR(CODE_NOT_ALLOWED,
 				"Cannot delete a content belonging to a snapshot");
 	} else {
-		gint64 now = g_get_real_time () / G_TIME_SPAN_SECOND;
+		gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 		/* Create a new version marked as deleted */
 		struct bean_ALIASES_s *new_alias = _bean_dup(alias);
 		ALIASES_set_deleted(new_alias, TRUE);
@@ -919,7 +919,7 @@ struct put_args_s
 static GError*
 m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 {
-	gint64 now = g_get_real_time() / G_TIME_SPAN_SECOND;
+	gint64 now = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 
 	/* patch the beans */
 	for (GSList *l=args->beans; l ;l=l->next) {
@@ -1424,7 +1424,7 @@ m2db_link_content(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 	/* TODO manage the case of disabled versioning */
 
 	/* make a new link */
-	gint64 now = g_get_real_time () / G_TIME_SPAN_SECOND;
+	gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 	struct bean_ALIASES_s *a = _bean_create (&descr_struct_ALIASES);
 	ALIASES_set2_alias (a, oio_url_get(url, OIOURL_PATH));
 	ALIASES_set2_content (a, bin, len);
@@ -1563,7 +1563,7 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	p = ctx->pol ? storage_policy_get_name(ctx->pol) : "none";
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
-	const gint64 now = g_get_real_time ();
+	const gint64 now = oio_ext_real_time ();
 
 	struct bean_ALIASES_s *alias = _bean_create(&descr_struct_ALIASES);
 	ALIASES_set2_alias(alias, oio_url_get(ctx->url, OIOURL_PATH));
@@ -1608,7 +1608,7 @@ _m2_generate_content_chunk(struct gen_ctx_s *ctx, struct service_info_s *si,
 	struct bean_CHUNKS_s *chunk = _bean_create(&descr_struct_CHUNKS);
 	CHUNKS_set2_id(chunk, chunkid);
 	CHUNKS_set2_content(chunk, ctx->uid, ctx->uid_size);
-	CHUNKS_set_ctime(chunk, time(0));
+	CHUNKS_set_ctime(chunk, oio_ext_real_time() / G_TIME_SPAN_SECOND);
 	CHUNKS_set2_hash(chunk, ctx->h, sizeof(ctx->h));
 	CHUNKS_set_size(chunk, cs);
 	CHUNKS_set2_position(chunk, strpos);
@@ -1992,7 +1992,7 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 	gchar *sql, *sql2;
 	GSList *old_deleted = NULL;
 	GVariant *params[] = {NULL, NULL};
-	gint64 now = (gint64) time(0);
+	gint64 now = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 	gint64 time_limit = 0;
 	struct dup_alias_params_s dup_params;
 

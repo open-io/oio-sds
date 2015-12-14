@@ -20,7 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__server__network_server_h
 # define OIO_SDS__server__network_server_h 1
 
-# include <sys/time.h>
 # include <server/slab.h>
 
 # define timespec_sub(a, b, result) do { \
@@ -80,9 +79,9 @@ struct network_client_s
 	gchar peer_name[128];
 	int flags;
 	struct {
-		time_t cnx; // coarse (bogo)
-		time_t evt_out; // coarse (bogo)
-		struct timespec evt_in; // precise
+		time_t cnx; // coarse (bogo monotonic)
+		time_t evt_out; // coarse (bogo monotonic)
+		gint64 evt_in; // precise (monotonic)
 	} time;
 
 	/* Pending input */
@@ -97,48 +96,18 @@ struct network_client_s
 	struct network_client_s *next; /*!< XXX DO NOT USE */
 };
 
-/*! Creates a new server
- * @return
- */
 struct network_server_s * network_server_init(void);
 
-/*!
- * Changes the maximum number of worker threads that the server can run.
- * This can be done while the server is working.
- *
- * @param srv
- * @param max
- */
 void network_server_set_max_workers(struct network_server_s *srv, guint max);
 
-/*! Changes the maximum number of concurrent connections that can be
- * managed by the given server.
- *
- * This can be done while the server is working.
- *
- * @param srv
- * @param max
- */
 void network_server_set_maxcnx(struct network_server_s *srv, guint max);
 
-/*! Changes the number of connection backlog that can be
- * used by the given server.
- *
- * This can be done while the server is working.
- *
- * @param srv
- * @param cnx_bl
- */
 void network_server_set_cnx_backlog(struct network_server_s *srv,
 		guint cnx_bl);
 
 typedef void (*network_transport_factory) (gpointer u,
 		struct network_client_s *clt);
 
-/*!
- * @param srv * @param url
- * @param factory
- */
 void network_server_bind_host(struct network_server_s *srv,
 		const gchar *url, gpointer factory_udata,
 		network_transport_factory factory);
@@ -151,59 +120,27 @@ void network_server_bind_host_lowlatency(struct network_server_s *srv,
 		const gchar *url, gpointer factory_udata,
 		network_transport_factory factory);
 
-/*!
- * @param srv
- */
 void network_server_close_servers(struct network_server_s *srv);
 
-/*!
- * @param srv
- * @return
- */
 GError * network_server_open_servers(struct network_server_s *srv);
 
-/*!
- * @param srv
- * @return
- */
 GError * network_server_run(struct network_server_s *srv);
 
-/*!
- * @param srv
- */
 void network_server_stop(struct network_server_s *srv);
 
-/*!
- * @param srv
- */
 void network_server_clean(struct network_server_s *srv);
 
-/*!
- * @param srv
- * @return
- */
 struct grid_stats_holder_s * network_server_get_stats(
 		struct network_server_s *srv);
 
-/*!
- * @param srv
- * @return
- */
 gint network_server_pending_events(struct network_server_s *srv);
 
-/*!
- * @param srv
- * @return
- */
 gdouble network_server_reqidle(struct network_server_s *srv);
 
 /*! "not really precise and not really reliable" clock with a precision at a
  * second. Useful and sufficiant when sub-second precision is not required,
  * e.g. for cache expirations. Does not involve syscalls. */
 time_t network_server_bogonow(const struct network_server_s *srv);
-
-/*! Precise monotonic clock measurement. Might involve a syscall. */
-void network_server_now(struct timespec *ts);
 
 /* -------------------------------------------------------------------------- */
 

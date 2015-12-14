@@ -13,12 +13,6 @@ target_link_libraries(hcresolve
 		meta0remote meta1remote metautils gridcluster
 		${GLIB2_LIBRARIES})
 
-install(FILES
-			hc_resolver.h
-		DESTINATION include/resolver
-		PERMISSIONS
-			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-
 install(TARGETS hcresolve
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)

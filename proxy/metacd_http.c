@@ -252,7 +252,7 @@ _task_expire_services_down (gpointer p)
 	gpointer v = NULL;
 	guint count = 0;
 
-	gulong oldest = time(0) - 8;
+	gulong oldest = (oio_ext_monotonic_time() / G_TIME_SPAN_SECOND) - 8;
 
 	SRV_DO(while (lru_tree_get_last(srv_down, (void**)&k, &v)) {
 		EXTRA_ASSERT(k != NULL);
@@ -273,7 +273,7 @@ static void
 _task_expire_resolver (gpointer p)
 {
 	(void) p;
-	hc_resolver_set_now (resolver, time (0));
+	hc_resolver_set_now (resolver, oio_ext_monotonic_time() / G_TIME_SPAN_SECOND);
 	guint count = hc_resolver_expire (resolver);
 	if (count)
 		GRID_DEBUG ("Expired %u resolver entries", count);
@@ -703,7 +703,7 @@ grid_main_configure (int argc, char **argv)
 	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free,
 			NULL, LTO_NOATIME);
 
-	resolver = hc_resolver_create ();
+	resolver = hc_resolver_create1 (oio_ext_monotonic_time() / G_TIME_SPAN_SECOND);
 	enum hc_resolver_flags_e f = 0;
 	if (!flag_cache_enabled)
 		f |= HC_RESOLVER_NOCACHE;

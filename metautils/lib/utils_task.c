@@ -146,27 +146,20 @@ grid_task_queue_register(struct grid_task_queue_s *gtq, task_period_t period,
 
 struct gtq_args_s
 {
-	GTimeVal period_duration;
+	gint64 period_millis;
 	struct grid_task_queue_s *gtq;
 };
 
 static gpointer
 _gtq_worker(gpointer p)
 {
-	struct gtq_args_s *parg = p;
-
 	metautils_ignore_signals();
 
-	// extract variables
-	GTimeVal period;
-	struct grid_task_queue_s *gtq = parg->gtq;
-	period = parg->period_duration;
-	g_free(parg);
-
+	struct grid_task_queue_s *gtq = p;
 	GRID_DEBUG("TaskQueue started [%s]", gtq->name);
 
 	while (!gtq->stopped) {
-		g_usleep(period.tv_sec * G_USEC_PER_SEC + period.tv_usec);
+		g_usleep(G_USEC_PER_SEC);
 		grid_task_queue_fire(gtq);
 	}
 
@@ -177,19 +170,6 @@ _gtq_worker(gpointer p)
 GThread*
 grid_task_queue_run(struct grid_task_queue_s *gtq, GError **err)
 {
-	struct gtq_args_s args, *p;
-	GThread *th;
-
-	args.period_duration.tv_sec = 1;
-	args.period_duration.tv_usec = 0;
-	args.gtq = gtq;
-	p = g_memdup(&args, sizeof(struct gtq_args_s));
-
-	th = g_thread_try_new("queue", _gtq_worker, p, err);
-	if (NULL != th)
-		return th;
-
-	g_free(p);
-	return NULL;
+	return g_thread_try_new("queue", _gtq_worker, gtq, err);
 }
 

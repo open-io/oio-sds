@@ -63,7 +63,7 @@ struct gridd_client_s
 	GByteArray *request;
 	guint sent_bytes;
 
-	// four timers with the same precision as g_get_monotonic_time ()
+	// four timers with the same precision as oio_ext_monotonic_time ()
 	gint64 tv_step;
 	gint64 tv_start;
 	gint64 delay_step;
@@ -175,7 +175,7 @@ _client_connect(struct gridd_client_s *client)
 	}
 
 	EXTRA_ASSERT(err == NULL);
-	client->tv_step = g_get_monotonic_time ();
+	client->tv_step = oio_ext_monotonic_time ();
 	client->step = CONNECTING;
 	return NULL;
 }
@@ -473,7 +473,7 @@ _client_react(struct gridd_client_s *client)
 		return;
 	GError *err = NULL;
 
-	client->tv_step = g_get_monotonic_time ();
+	client->tv_step = oio_ext_monotonic_time ();
 retry:
 	if (!(err = _client_manage_event(client))) {
 		if (client->step == REP_READING_SIZE && client->reply
@@ -780,7 +780,7 @@ _client_start(struct gridd_client_s *client)
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
-	client->tv_start = client->tv_step = g_get_monotonic_time ();
+	client->tv_start = client->tv_step = oio_ext_monotonic_time ();
 
 	if (client->step != NONE)
 		return FALSE;

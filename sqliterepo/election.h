@@ -91,11 +91,13 @@ struct election_manager_vtable_s
 
 	/** Run all the elections failed/pending for too long, then kick them off */
 	guint (*retry_elections) (struct election_manager_s*,
-			guint, GTimeVal*);
+			guint max, gint64 duration);
 
-	/** Exit all elections older than 'max' */
+	/** Exit all elections older than 'max'. Doesn't last longer than a delay
+	 * of <duration>, which has the same unit as the g_get_*_time() function,
+	 * e.g. "5 * G_TIME_SPAN_SECOND" */
 	void (*exit_all) (struct election_manager_s *,
-			GTimeVal *max, gboolean persist);
+			gint64 duration, gboolean persist);
 
 	/** Run all the elections and count them, grouped by status */
 	struct election_counts_s (*count) (struct election_manager_s *);

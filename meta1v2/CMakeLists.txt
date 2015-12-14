@@ -43,15 +43,6 @@ add_executable(meta1_client meta1_client.c)
 bin_prefix(meta1_client -meta1-client)
 target_link_libraries(meta1_client metautils meta1remote)
 
-install(FILES
-			meta1_backend.h
-			meta1_gridd_dispatcher.h
-			meta1_prefixes.h
-			meta1_remote.h
-        DESTINATION include/meta1v2
-        PERMISSIONS
-            OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-
 install(TARGETS meta1v2 meta1_server meta1remote meta1_client
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)

@@ -152,7 +152,18 @@ enum {
 	HTTP_CODE_BAD_GATEWAY        = 502,
 };
 
+typedef gint64 (*time_hook_f) (void);
+
+/* Must the service addresses be shuffled or not */
 extern volatile int oio_sds_no_shuffle;
+
+/* Let/Set it to NULL for the system time.
+ * Microsecond precision */
+extern time_hook_f oio_time_monotonic;
+
+/* Let/Set it to NULL for the system real time.
+ * Microsecond precision */
+extern time_hook_f oio_time_real;
 
 /* -------------------------------------------------------------------------- */
 

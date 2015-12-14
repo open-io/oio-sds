@@ -1164,7 +1164,7 @@ __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 		services2 = expand_urlv(services);
 		GString *notif = g_string_sized_new(128);
 		g_string_append (notif, "{\"event\":\""NAME_SRVTYPE_META1".account.services\"");
-		g_string_append_printf (notif, ",\"when\":%"G_GINT64_FORMAT, g_get_real_time());
+		g_string_append_printf (notif, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
 		g_string_append (notif, ",\"data\":{");
 		g_string_append_printf (notif, "\"url\":\"%s\"", oio_url_get(url, OIOURL_WHOLE));
 		g_string_append (notif, ",\"services\":[");

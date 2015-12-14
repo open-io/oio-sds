@@ -66,7 +66,7 @@ struct gridd_request_dispatcher_s
 
 struct req_ctx_s
 {
-	struct timespec tv_start, tv_parsed, tv_end;
+	gint64 tv_start, tv_parsed, tv_end;
 
 	MESSAGE request;
 	struct network_client_s *client;
@@ -227,12 +227,11 @@ struct log_item_s
 static void
 network_client_log_access(struct log_item_s *item)
 {
-	struct timespec diff_total, diff_handler;
+	if (!item->req_ctx->tv_end)
+		item->req_ctx->tv_end = oio_ext_monotonic_time ();
 
-	if (!item->req_ctx->tv_end.tv_sec)
-		network_server_now(&item->req_ctx->tv_end);
-	timespec_sub(&item->req_ctx->tv_end, &item->req_ctx->tv_start, &diff_total);
-	timespec_sub(&item->req_ctx->tv_end, &item->req_ctx->tv_parsed, &diff_handler);
+	gint64 diff_total = item->req_ctx->tv_end - item->req_ctx->tv_start;
+	gint64 diff_handler = item->req_ctx->tv_end - item->req_ctx->tv_parsed;
 
 	GString *gstr = g_string_sized_new(256);
 
@@ -246,7 +245,9 @@ network_client_log_access(struct log_item_s *item)
 
 	g_string_append_printf(gstr, " %d", item->code);
 
-	g_string_append_printf(gstr, " %ld.%06ld", diff_total.tv_sec, diff_total.tv_nsec / 1000);
+	g_string_append_printf(gstr, " %ld.%06ld",
+			diff_total / G_TIME_SPAN_SECOND,
+			diff_total % G_TIME_SPAN_SECOND);
 
 	g_string_append_printf(gstr, " %"G_GSIZE_FORMAT" ", item->out_len); // reply size
 
@@ -255,7 +256,9 @@ network_client_log_access(struct log_item_s *item)
 
 	g_string_append(gstr, ensure(item->req_ctx->reqid));
 
-	g_string_append_printf(gstr, " t=%ld.%06ld ", diff_handler.tv_sec, diff_handler.tv_nsec / 1000);
+	g_string_append_printf(gstr, " t=%ld.%06ld ",
+			diff_handler / G_TIME_SPAN_SECOND,
+			diff_handler % G_TIME_SPAN_SECOND);
 
 	g_string_append(gstr, ensure(item->req_ctx->subject));
 
@@ -532,22 +535,16 @@ static void
 _notify_request(struct req_ctx_s *ctx,
 		const gchar *name_req, const gchar *name_time)
 {
-	struct timespec diff;
-	guint64 e_s, e_us, e_sum;
+	if (!ctx->tv_end)
+		ctx->tv_end = oio_ext_monotonic_time();
 
-	if (!ctx->tv_end.tv_sec)
-		network_server_now(&ctx->tv_end);
-	timespec_sub(&ctx->tv_end, &ctx->tv_start, &diff);
-
-	e_s = diff.tv_sec;
-	e_us = diff.tv_nsec / 1000;
-	e_sum = e_s * 1000000LLU + e_us;
+	gint64 diff = ctx->tv_end - ctx->tv_start;
 
 	grid_stats_holder_increment(ctx->client->local_stats,
 			name_req, guint_to_guint64(1),
 			INNER_STAT_NAME_REQ_COUNTER, guint_to_guint64(1),
-			name_time, e_sum,
-			INNER_STAT_NAME_REQ_TIME, e_sum,
+			name_time, diff,
+			INNER_STAT_NAME_REQ_TIME, diff,
 			NULL);
 }
 
@@ -788,8 +785,8 @@ _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 	MESSAGE request = message_unmarshall(gba->data, gba->len, &err);
 
 	// take the encoding into account
-	memcpy(&req_ctx.tv_start, &client->time.evt_in, sizeof(req_ctx.tv_start));
-	network_server_now(&req_ctx.tv_parsed);
+	req_ctx.tv_start = client->time.evt_in;
+	req_ctx.tv_parsed = oio_ext_monotonic_time ();
 
 	if (!request) {
 		struct log_item_s item;
@@ -897,7 +894,7 @@ dispatch_VERSION(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
 	(void) gdata, (void) hdata;
-	reply->add_body(metautils_gba_from_string(API_VERSION));
+	reply->add_body(metautils_gba_from_string(OIOSDS_API_VERSION));
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }

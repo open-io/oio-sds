@@ -94,13 +94,14 @@ metautils_message_destroy(MESSAGE m)
 	free(m);
 }
 
-static int
-write_gba(const void *b, gsize bSize, void *key)
+int
+metautils_asn1c_write_gba (const void *b, gsize bSize, void *key)
 {
 	if (b && bSize > 0)
 		g_byte_array_append((GByteArray*)key, b, bSize);
 	return 0;
 }
+
 
 GByteArray*
 message_marshall_gba(MESSAGE m, GError **err)
@@ -126,7 +127,7 @@ message_marshall_gba(MESSAGE m, GError **err)
 	guint32 u32 = 0;
 	GByteArray *result = g_byte_array_sized_new(256);
 	g_byte_array_append(result, (guint8*)&u32, sizeof(u32));
-	encRet = der_encode(&asn_DEF_Message, m, write_gba, result);
+	encRet = der_encode(&asn_DEF_Message, m, metautils_asn1c_write_gba, result);
 
 	if (encRet.encoded < 0) {
 		g_byte_array_free(result, TRUE);

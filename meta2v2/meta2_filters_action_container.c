@@ -21,6 +21,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <string.h>
 #include <errno.h>
 
+#include <glib.h>
+
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
 #include <cluster/lib/gridcluster.h>
@@ -36,8 +38,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
 #include <resolver/hc_resolver.h>
-
-#include <glib.h>
 
 int
 meta2_filter_action_create_container(struct gridd_filter_ctx_s *ctx,

@@ -13,4 +13,5 @@ script:
   - cmake -DCMAKE_BUILD_TYPE="Debug" -DZK_LIBDIR="/usr/lib" -DZK_INCDIR="/usr/include/zookeeper" -DLIBRAIN_LIBDIR="/usr/lib" -DLIBRAIN_INCDIR="/usr/include" -DAPACHE2_LIBDIR="/usr/lib/apache2" -DAPACHE2_INCDIR="/usr/include/apache2" .
   - make
   - (cd python && python setup.py install)
-  - make test
+  - make -C tests/unit test
+  - make -C tests/func test

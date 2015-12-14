@@ -20,7 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__cluster__agent__worker_h
 # define OIO_SDS__cluster__agent__worker_h 1
 
-#include <sys/time.h>
 #include <glib.h>
 
 #define CLEAR_WORKER_DATA(d) if (d) {\

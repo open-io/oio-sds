@@ -21,7 +21,7 @@ License along with this library.
 #include <string.h>
 #include <stdio.h>
 
-#include "metautils.h"
+#include <metautils/lib/metautils.h>
 #include "test_addr.h"
 
 static void
@@ -50,8 +50,8 @@ int
 main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
-	g_test_add_func("/metautils/addr/bad_connect", test_bad_connect_address);
-	g_test_add_func("/metautils/gridd_client/good_address", test_good_connect_address);
+	g_test_add_func("/metautils/addr/connect/ko", test_bad_connect_address);
+	g_test_add_func("/metautils/addr/connect/ok", test_good_connect_address);
 	return g_test_run();
 }
 

@@ -17,38 +17,36 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include "metautils/lib/metautils.h"
+#include "server/stats_holder.h"
 #include <glib.h>
 
-#include "internals.h"
-#include "network_server.h"
-#include "transport_echo.h"
+#undef GQ
+#define GQ() g_quark_from_static_string("oio.server")
 
-static int
-echo_notify_input(struct network_client_s *clt)
+static void
+_round_rrd (void)
 {
-	struct data_slab_s *slab;
-
-	while (data_slab_sequence_has_data(&(clt->input))) {
-		if (!(slab = data_slab_sequence_shift(&(clt->input))))
-			break;
-		network_client_send_slab(clt, slab);
+	struct grid_single_rrd_s *rrd = grid_single_rrd_create(2, 60);
+	for (int i=0; i<16 ;++i) {
+		grid_single_rrd_push(rrd, 1 + 61*i, 0);
+		grid_single_rrd_push(rrd, 61*i, 0);
 	}
-	return clt->transport.waiting_for_close ? RC_NODATA : RC_PROCESSED;
+	grid_single_rrd_destroy(rrd);
 }
 
-void
-transport_echo_factory(gpointer factory_udata, struct network_client_s *clt)
+static void
+test_rrd (void)
 {
-	struct network_transport_s *transport;
+	for (int i=0; i<16 ;++i)
+		_round_rrd ();
+}
 
-	(void) factory_udata;
-	transport = &(clt->transport);
-
-	transport->client_context = NULL;
-	transport->clean_context = NULL;
-	transport->notify_input = echo_notify_input;
-	transport->notify_error = NULL;
-
-	network_client_allow_input(clt, TRUE);
+int
+main (int argc, char **argv)
+{
+	HC_TEST_INIT(argc,argv);
+	g_test_add_func("/server/rrd", test_rrd);
+	return g_test_run();
 }
 

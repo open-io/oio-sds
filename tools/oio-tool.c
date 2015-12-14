@@ -133,9 +133,9 @@ _do_version (const char *to)
 static int
 _do_ping (const char *to)
 {
-	gint64 pre = g_get_monotonic_time();
+	gint64 pre = oio_ext_monotonic_time();
 	GError *err = _remote_ping (to);
-	gint64 post = g_get_monotonic_time();
+	gint64 post = oio_ext_monotonic_time();
 	if (!err) {
 		g_print ("%s PING OK %"G_GINT64_FORMAT"\n", to, (post-pre));
 		return 0;

@@ -272,13 +272,6 @@ free_OCTET_STRING(OCTET_STRING_t * os)
 	OCTET_STRING_free(&asn_DEF_OCTET_STRING, os, 0);
 }
 
-static int
-write_in_gba(const void *b, gsize bSize, void *key)
-{
-	GByteArray *a = g_byte_array_append((GByteArray *) key, b, bSize);
-	return a ? 0 : -1;
-}
-
 /* -------------------------------------------------------------------------- */
 
 static gboolean
@@ -614,7 +607,7 @@ service_info_marshall_1(service_info_t *si, GError **err)
 		ALERT("Conversion error");
 
 	gba = g_byte_array_sized_new(64);
-	encRet = der_encode(&asn_DEF_ServiceInfo, &asn, write_in_gba, gba);
+	encRet = der_encode(&asn_DEF_ServiceInfo, &asn, metautils_asn1c_write_gba, gba);
 	service_info_cleanASN(&asn, TRUE);
 
 	if (encRet.encoded == -1) {
@@ -691,15 +684,9 @@ strings_marshall_gba(GSList * list, GError ** err)
 	asn_enc_rval_t encRet;
 	GByteArray *result = NULL;
 
-	int write_f(const void *b, gsize bSize, void *key) {
-		(void) key;
-		g_byte_array_append(result, b, bSize);
-		return 0;
-	}
-
 	memset(&list_asn, 0x00, sizeof(list_asn));
 
-	result = g_byte_array_sized_new(4096);
+	result = g_byte_array_sized_new (512);
 	if (!result) {
 		GSETERROR(err, "Failed to alloc byte array");
 		return NULL;
@@ -715,7 +702,7 @@ strings_marshall_gba(GSList * list, GError ** err)
 		asn_set_add(&(list_asn.list), os);
 	}
 
-	encRet = der_encode(&asn_DEF_ContentList, &list_asn, write_f, 0);
+	encRet = der_encode(&asn_DEF_ContentList, &list_asn, metautils_asn1c_write_gba, result);
 	if (encRet.encoded == -1)
 		goto error_encode;
 
@@ -915,7 +902,8 @@ namespace_info_marshall(namespace_info_t * namespace_info, GError ** err)
 		GSETERROR(err, "memory allocation failure");
 		goto error_alloc_gba;
 	}
-	encRet = der_encode(&asn_DEF_NamespaceInfo, &asn1_namespace_info, write_in_gba, result);
+	encRet = der_encode(&asn_DEF_NamespaceInfo, &asn1_namespace_info,
+			metautils_asn1c_write_gba, result);
 	if (encRet.encoded == -1) {
 		GSETERROR(err, "ASN.1 encoding error");
 		goto error_encode;
