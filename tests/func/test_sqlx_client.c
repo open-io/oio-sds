@@ -20,6 +20,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/oiodir.h>
 #include <metautils/lib/metautils.h>
 #include <sqlx/sqlx_client.h>
+#include <sqlx/sqlx_client_local.h>
+#include <sqlx/sqlx_client_direct.h>
 
 static void
 test_query_success (struct oio_sqlx_client_s *client,
