@@ -179,7 +179,7 @@ DavDepthInfinity Off
 grid_hash_width 2
 grid_hash_depth 1
 grid_docroot ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
-grid_namespace NS
+grid_namespace ${NS}
 grid_dir_run ${RUNDIR}
 #grid_upload_blocksize 65536
 #grid_upload_fileflags DIRECT|SYNC|NOATIME
@@ -250,7 +250,7 @@ MaxRequestsPerChild 0
 
 DavDepthInfinity Off
 
-grid_namespace NS
+grid_namespace ${NS}
 grid_dir_run ${RUNDIR}
 
 <Directory />
@@ -490,7 +490,7 @@ workers = 5
 log_facility = LOG_LOCAL0
 log_level = INFO
 log_address = /dev/log
-syslog_prefix = OIO,NS,event-agent
+syslog_prefix = OIO,${NS},event-agent
 """
 
 template_account_server = """
