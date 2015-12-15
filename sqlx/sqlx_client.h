@@ -26,7 +26,6 @@ extern "C" {
 #endif
 
 struct oio_url_s;
-struct oio_directory_s;
 
 /* -------------------------------------------------------------------------- */
 
@@ -82,16 +81,6 @@ void oio_sqlx_client_factory__destroy (struct oio_sqlx_client_factory_s *self);
 
 GError * oio_sqlx_client_factory__open (struct oio_sqlx_client_factory_s *self,
 			struct oio_url_s *u, struct oio_sqlx_client_s **out);
-
-/* Implementation specifics ------------------------------------------------- */
-
-/* Creates the default SQLX client that locates then contacts sqlx servers */ 
-struct oio_sqlx_client_factory_s * oio_sqlx_client_factory__create_sds (
-		const char *ns, struct oio_directory_s *dir);
-
-/* Creates the default SQLX client that locates then contacts sqlx servers */ 
-struct oio_sqlx_client_factory_s * oio_sqlx_client_factory__create_local (
-		const char *ns, const char *schema);
 
 #ifdef __cplusplus
 }
