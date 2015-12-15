@@ -17,7 +17,6 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <malloc.h>
 #include <glib.h>
 #include <sqlite3.h>
 
@@ -2300,15 +2299,8 @@ static gboolean
 sqlx_dispatch_LEANIFY(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
-	(void) ignored;
-	(void) repo;
-
-	int size = sqlite3_release_memory(MALLOC_TRIM_SIZE);
-
-	gchar message[32 + sizeof("Released %d")];
-	g_snprintf(message, sizeof(message), "Released %d", size);
-	malloc_trim((size_t)MALLOC_TRIM_SIZE);
-	reply->add_body(metautils_gba_from_string(message));
+	(void) ignored, (void) repo;
+	sqlite3_release_memory (OIO_MALLOC_TRIM_SIZE);
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }

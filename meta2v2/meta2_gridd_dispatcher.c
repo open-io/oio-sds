@@ -26,7 +26,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <glib.h>
 
-#include <server/grid_daemon.h>
 #include <server/transport_gridd.h>
 #include <server/gridd_dispatcher_filters.h>
 

@@ -114,8 +114,6 @@ void metautils_message_add_fields_gba(MESSAGE m, ...);
 
 void metautils_message_add_fieldv_str(MESSAGE m, va_list args);
 
-void metautils_message_add_fields_str(MESSAGE m, ...);
-
 void* metautils_message_get_field(MESSAGE m, const char *name, gsize *vsize);
 
 gchar ** metautils_message_get_field_names(MESSAGE m);

@@ -46,6 +46,19 @@ enum {
 	RC_PROCESSED,
 };
 
+struct server_stat_s /* stored in the server */
+{
+	guint64 value;
+	GQuark  which;
+};
+
+struct server_stat_msg_s /* sent by the workers */
+{
+	guint64  value;
+	GQuark   which;
+	gboolean increment : 1; /* FALSE -> reset */
+};
+
 struct network_transport_s
 {
 	/* Associate private data to the  */
@@ -65,15 +78,6 @@ struct network_client_s
 	int fd;
 	enum { CLT_READ=0X01, CLT_WRITE=0X02, CLT_ERROR=0X04 } events;
 	struct network_server_s *server;
-
-	struct grid_stats_holder_s *main_stats; /*!< XXX DO NOT USE XXX
-	(unless you know what you're doing). This is a direct (and unprotected)
-	pointer to the stats_holder of the main server. It is shared among 
-	all threads. */
-
-	struct grid_stats_holder_s *local_stats; /*!< Can be safely used
-	by any app. This is a pointer to the stats_holder local to the thread
-	that is running the current client. */
 
 	int flags;
 	struct { /* monotonic timers */
@@ -96,6 +100,11 @@ struct network_client_s
 	gchar local_name[128];
 	gchar peer_name[128];
 };
+
+extern GQuark gq_count_all;
+extern GQuark gq_time_all;
+extern GQuark gq_count_unexpected;
+extern GQuark gq_time_unexpected;
 
 struct network_server_s * network_server_init(void);
 
@@ -131,17 +140,13 @@ void network_server_stop(struct network_server_s *srv);
 
 void network_server_clean(struct network_server_s *srv);
 
-struct grid_stats_holder_s * network_server_get_stats(
-		struct network_server_s *srv);
+void network_server_stat_push (struct network_server_s *srv,
+		GQuark which, guint64 value, gboolean increment);
 
-gint network_server_pending_events(struct network_server_s *srv);
+/* Synchronosly get the current value of the stat named <which> */
+guint64 network_server_stat_getone (struct network_server_s *srv, GQuark which);
 
-gdouble network_server_reqidle(struct network_server_s *srv);
-
-/*! "not really precise and not really reliable" clock with a precision at a
- * second. Useful and sufficiant when sub-second precision is not required,
- * e.g. for cache expirations. Does not involve syscalls. */
-time_t network_server_bogonow(const struct network_server_s *srv);
+GArray* network_server_stat_getall (struct network_server_s *srv);
 
 /* -------------------------------------------------------------------------- */
 
@@ -151,15 +156,5 @@ void network_client_close_output(struct network_client_s *clt, int now);
 
 int network_client_send_slab(struct network_client_s *client,
 		struct data_slab_s *slab);
-
-/* Convenience easy factories ----------------------------------------------- */
-
-static inline void
-transport_devnull_factory(gpointer factory_udata,
-		struct network_client_s *clt)
-{
-	(void) factory_udata;
-	(void) clt;
-}
 
 #endif /*OIO_SDS__server__network_server_h*/

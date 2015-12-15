@@ -395,17 +395,6 @@ metautils_message_add_fieldv_str(MESSAGE m, va_list args)
 }
 
 void
-metautils_message_add_fields_str(MESSAGE m, ...)
-{
-	if (!m)
-		return;
-	va_list args;
-	va_start(args, m);
-	metautils_message_add_fieldv_str(m, args);
-	va_end(args);
-}
-
-void
 metautils_message_add_fieldv_gba(MESSAGE m, va_list args)
 {
 	if (!m)

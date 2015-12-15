@@ -67,8 +67,6 @@ License along with this library.
 // Page size at database creation (should be multiple of storage block size)
 #define SQLX_DEFAULT_PAGE_SIZE "4096"
 
-#define MALLOC_TRIM_SIZE (16*1024*1024)
-
 #define MEMBER(D)   ((struct election_member_s*)(D))
 #define MMANAGER(D) MEMBER(D)->manager
 #define MKEY(D)     MEMBER(D)->key

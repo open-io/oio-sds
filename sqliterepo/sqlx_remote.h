@@ -126,8 +126,8 @@ GByteArray* sqlx_pack_RESTORE(struct sqlx_name_s *name, const guint8 *raw, gsize
 GByteArray* sqlx_pack_REPLICATE(struct sqlx_name_s *name, struct TableSequence *tabseq);
 
 // service-wide requests
-GByteArray* sqlx_pack_LEANIFY(struct sqlx_name_s *name);
-GByteArray* sqlx_pack_INFO(struct sqlx_name_s *name);
+GByteArray* sqlx_pack_LEANIFY(void);
+GByteArray* sqlx_pack_INFO(void);
 
 // sqlx requests
 GByteArray* sqlx_pack_QUERY(struct sqlx_name_s *name,

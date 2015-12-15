@@ -26,9 +26,6 @@ License along with this library.
  * A place for all the macros playing with integer bits
  */
 
-#define BUFSIZE(B)       (B),sizeof(B)
-#define BUFLEN(B)        (B),sizeof(B)-1
-
 // Return -1 if A<B, 0 if A==B, 1 if A>B
 #define CMP(a,b) (((a) > (b)) - ((a) < (b)))
 

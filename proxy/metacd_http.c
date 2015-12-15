@@ -21,7 +21,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "actions.h"
 
 static struct path_parser_s *path_parser = NULL;
-static struct http_request_dispatcher_s *dispatcher = NULL;
 static struct network_server_s *server = NULL;
 
 static struct grid_task_queue_s *admin_gtq = NULL;
@@ -77,12 +76,17 @@ action_status(struct req_args_s *args)
 		return _reply_method_error(args);
 
 	GString *gstr = g_string_sized_new (128);
-	gboolean runner (const gchar *n, guint64 v) {
-		g_string_append_printf(gstr, "%s = %"G_GINT64_FORMAT"\n", n, v);
-		return TRUE;
-	}
-	grid_stats_holder_foreach(args->rq->client->main_stats, runner);
 
+	/* first, the stats about all the requests received */
+	GArray *array = network_server_stat_getall(args->rq->client->server);
+	for (guint i=0; i<array->len ;++i) {
+		struct server_stat_s *st = &g_array_index (array, struct server_stat_s, i);
+		g_string_append_printf (gstr, "%s = %"G_GUINT64_FORMAT"\n",
+				g_quark_to_string (st->which), st->value);
+	}
+	g_array_free (array, TRUE);
+
+	/* some stats about the internal cache */
 	struct hc_resolver_stats_s s = {0};
 	hc_resolver_info(resolver, &s);
 
@@ -185,11 +189,8 @@ _metacd_load_url (struct req_args_s *args)
 }
 
 static enum http_rc_e
-handler_action (gpointer u, struct http_request_s *rq,
-	struct http_reply_ctx_s *rp)
+handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 {
-	(void) u;
-
 	gboolean _boolhdr (const gchar * n) {
 		return metautils_cfg_get_bool (
 			(gchar *) g_tree_lookup (rq->tree_headers, n), FALSE);
@@ -213,6 +214,9 @@ handler_action (gpointer u, struct http_request_s *rq,
 			ruri.path, ruri.query, ruri.fragment,
 			g_strv_length((gchar**)matchings));
 
+	GQuark gq_count = gq_count_unexpected;
+	GQuark gq_time = gq_time_unexpected;
+
 	enum http_rc_e rc;
 	if (!*matchings) {
 		rp->set_content_type ("application/json");
@@ -232,10 +236,19 @@ handler_action (gpointer u, struct http_request_s *rq,
 
 		args.url = url = _metacd_load_url (&args);
 		rp->subject(oio_url_get(url, OIOURL_HEXID));
-		req_handler_f handler = path_matching_get_udata (*matchings);
+		gq_count = (*matchings)->last->gq_count;
+		gq_time = (*matchings)->last->gq_time;
 		GRID_TRACE("URL %s", oio_url_get(args.url, OIOURL_WHOLE));
+		req_handler_f handler = (*matchings)->last->u;
 		rc = (*handler) (&args);
 	}
+
+	gint64 spent = oio_ext_monotonic_time () - rq->client->time.evt_in;
+
+	network_server_stat_push (rq->client->server, gq_count, 1, FALSE);
+	network_server_stat_push (rq->client->server, gq_count_all, 1, FALSE);
+	network_server_stat_push (rq->client->server, gq_time, spent, FALSE);
+	network_server_stat_push (rq->client->server, gq_time_all, spent, FALSE);
 
 	path_matching_cleanv (matchings);
 	oio_requri_clear (&ruri);
@@ -567,10 +580,6 @@ grid_main_specific_fini (void)
 		network_server_clean (server);
 		server = NULL;
 	}
-	if (dispatcher) {
-		http_request_dispatcher_clean (dispatcher);
-		dispatcher = NULL;
-	}
 	if (path_parser) {
 		path_parser_clean (path_parser);
 		path_parser = NULL;
@@ -610,103 +619,99 @@ grid_main_specific_fini (void)
 static void
 configure_request_handlers (void)
 {
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/status/#GET", action_status);
+#define SET(Url,Cb) path_parser_configure (path_parser, PROXYD_PREFIX Url, Cb)
 
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/forward/$SRVID/#POST", action_forward);
+	SET("/status/#GET", action_status);
 
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/status/#GET", action_cache_status);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/flush/local/#POST", action_cache_flush_local);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/flush/high/#POST", action_cache_flush_high);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/flush/low/#POST", action_cache_flush_low);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/ttl/low/$COUNT/#POST", action_cache_set_ttl_low);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/ttl/high/$COUNT/#POST", action_cache_set_ttl_high);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/max/low/$COUNT/#POST", action_cache_set_max_low);
-	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/max/high/$COUNT/#POST", action_cache_set_max_high);
+	SET("/forward/$SRVID/#POST", action_forward);
+
+	SET("/cache/status/#GET", action_cache_status);
+	SET("/cache/flush/local/#POST", action_cache_flush_local);
+	SET("/cache/flush/high/#POST", action_cache_flush_high);
+	SET("/cache/flush/low/#POST", action_cache_flush_low);
+	SET("/cache/ttl/low/$COUNT/#POST", action_cache_set_ttl_low);
+	SET("/cache/ttl/high/$COUNT/#POST", action_cache_set_ttl_high);
+	SET("/cache/max/low/$COUNT/#POST", action_cache_set_max_low);
+	SET("/cache/max/high/$COUNT/#POST", action_cache_set_max_high);
 
     // New routes
 
 	// Load Balancing
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/lb/choose/#GET", action_lb_choose);
+	SET("/$NS/lb/choose/#GET", action_lb_choose);
 
 	// Local services
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/local/list/#GET", action_local_list);
 
 	// Conscience
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/info/#GET", action_conscience_info);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/list/#GET", action_conscience_list);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/register/#POST", action_conscience_register);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/deregister/#POST", action_conscience_deregister);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/flush/#POST", action_conscience_flush);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/lock/#POST", action_conscience_lock);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/unlock/#POST", action_conscience_unlock);
+	SET("/$NS/conscience/info/#GET", action_conscience_info);
+	SET("/$NS/conscience/list/#GET", action_conscience_list);
+	SET("/$NS/conscience/register/#POST", action_conscience_register);
+	SET("/$NS/conscience/deregister/#POST", action_conscience_deregister);
+	SET("/$NS/conscience/flush/#POST", action_conscience_flush);
+	SET("/$NS/conscience/lock/#POST", action_conscience_lock);
+	SET("/$NS/conscience/unlock/#POST", action_conscience_unlock);
 
     // Directory
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/create/#POST", action_ref_create);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/destroy/#POST", action_ref_destroy);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/show/#GET", action_ref_show);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/get_properties/#POST", action_ref_prop_get);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/set_properties/#POST", action_ref_prop_set);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/del_properties/#POST", action_ref_prop_del);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/link/#POST", action_ref_link);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/unlink/#POST", action_ref_unlink);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/force/#POST", action_ref_force);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/reference/renew/#POST", action_ref_renew);
-
+    SET("/$NS/reference/create/#POST", action_ref_create);
+    SET("/$NS/reference/destroy/#POST", action_ref_destroy);
+    SET("/$NS/reference/show/#GET", action_ref_show);
+    SET("/$NS/reference/get_properties/#POST", action_ref_prop_get);
+    SET("/$NS/reference/set_properties/#POST", action_ref_prop_set);
+    SET("/$NS/reference/del_properties/#POST", action_ref_prop_del);
+    SET("/$NS/reference/link/#POST", action_ref_link);
+    SET("/$NS/reference/unlink/#POST", action_ref_unlink);
+    SET("/$NS/reference/force/#POST", action_ref_force);
+    SET("/$NS/reference/renew/#POST", action_ref_renew);
 
     // Meta2
     // Container
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/create/#POST", action_container_create);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/destroy/#POST", action_container_destroy);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/show/#GET", action_container_show);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/list/#GET", action_container_list);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/get_properties/#POST", action_container_prop_get);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/set_properties/#POST", action_container_prop_set);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/del_properties/#POST", action_container_prop_del);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/touch/#POST", action_container_touch);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/dedup/#POST", action_container_dedup);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/purge/#POST", action_container_purge);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/raw_insert/#POST", action_container_raw_insert);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/raw_update/#POST", action_container_raw_update);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/container/raw_delete/#POST", action_container_raw_delete);
+    SET("/$NS/container/create/#POST", action_container_create);
+    SET("/$NS/container/destroy/#POST", action_container_destroy);
+    SET("/$NS/container/show/#GET", action_container_show);
+    SET("/$NS/container/list/#GET", action_container_list);
+    SET("/$NS/container/get_properties/#POST", action_container_prop_get);
+    SET("/$NS/container/set_properties/#POST", action_container_prop_set);
+    SET("/$NS/container/del_properties/#POST", action_container_prop_del);
+    SET("/$NS/container/touch/#POST", action_container_touch);
+    SET("/$NS/container/dedup/#POST", action_container_dedup);
+    SET("/$NS/container/purge/#POST", action_container_purge);
+    SET("/$NS/container/raw_insert/#POST", action_container_raw_insert);
+    SET("/$NS/container/raw_update/#POST", action_container_raw_update);
+    SET("/$NS/container/raw_delete/#POST", action_container_raw_delete);
 
     // Content
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/create/#POST", action_content_put);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/link/#POST", action_content_link);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/delete/#POST", action_content_delete);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/show/#GET", action_content_show);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/prepare/#POST", action_content_prepare);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/get_properties/#POST", action_content_prop_get);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/set_properties/#POST", action_content_prop_set);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/del_properties/#POST", action_content_prop_del);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/touch/#POST", action_content_touch);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/spare/#POST", action_content_spare);
-    path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/content/copy/#POST", action_content_copy);
+    SET("/$NS/content/create/#POST", action_content_put);
+    SET("/$NS/content/link/#POST", action_content_link);
+    SET("/$NS/content/delete/#POST", action_content_delete);
+    SET("/$NS/content/show/#GET", action_content_show);
+    SET("/$NS/content/prepare/#POST", action_content_prepare);
+    SET("/$NS/content/get_properties/#POST", action_content_prop_get);
+    SET("/$NS/content/set_properties/#POST", action_content_prop_set);
+    SET("/$NS/content/del_properties/#POST", action_content_prop_del);
+    SET("/$NS/content/touch/#POST", action_content_touch);
+    SET("/$NS/content/spare/#POST", action_content_spare);
+    SET("/$NS/content/copy/#POST", action_content_copy);
 
     // Admin
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/ping/#POST", action_admin_ping);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/info/#POST", action_admin_info);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/status/#POST", action_admin_status);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/drop_cache/#POST", action_admin_drop_cache);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/sync/#POST", action_admin_sync);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/leave/#POST", action_admin_leave);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/debug/#POST", action_admin_debug);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/copy/#POST", action_admin_copy);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/get_properties/#POST", action_admin_prop_get);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/set_properties/#POST", action_admin_prop_set);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/del_properties/#POST", action_admin_prop_del);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/freeze/#POST", action_admin_freeze);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/enable/#POST", action_admin_enable);
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/disable/#POST", action_admin_disable);
+	SET("/$NS/admin/ping/#POST", action_admin_ping);
+	SET("/$NS/admin/info/#POST", action_admin_info);
+	SET("/$NS/admin/status/#POST", action_admin_status);
+	SET("/$NS/admin/drop_cache/#POST", action_admin_drop_cache);
+	SET("/$NS/admin/sync/#POST", action_admin_sync);
+	SET("/$NS/admin/leave/#POST", action_admin_leave);
+	SET("/$NS/admin/debug/#POST", action_admin_debug);
+	SET("/$NS/admin/copy/#POST", action_admin_copy);
+	SET("/$NS/admin/get_properties/#POST", action_admin_prop_get);
+	SET("/$NS/admin/set_properties/#POST", action_admin_prop_set);
+	SET("/$NS/admin/del_properties/#POST", action_admin_prop_del);
+	SET("/$NS/admin/freeze/#POST", action_admin_freeze);
+	SET("/$NS/admin/enable/#POST", action_admin_enable);
+	SET("/$NS/admin/disable/#POST", action_admin_disable);
 }
 
 static gboolean
 grid_main_configure (int argc, char **argv)
 {
-	static struct http_request_descr_s all_requests[] = {
-		{"action", handler_action},
-		{NULL, NULL}
-	};
-
 	if (argc != 2) {
 		GRID_ERROR ("Invalid parameter, expected : IP:PORT NS");
 		return FALSE;
@@ -730,8 +735,19 @@ grid_main_configure (int argc, char **argv)
 	path_parser = path_parser_init ();
 	configure_request_handlers ();
 
-	dispatcher = transport_http_build_dispatcher (path_parser, all_requests);
 	server = network_server_init ();
+
+	/* ensure each Route as a pair of count/time stats */
+	void _runner (const struct trie_node_s *n) {
+		network_server_stat_push (server, n->gq_count, 0, FALSE);
+		network_server_stat_push (server, n->gq_time, 0, FALSE);
+	}
+	path_parser_foreach (path_parser, _runner);
+	network_server_stat_push (server, gq_count_all, 0, FALSE);
+	network_server_stat_push (server, gq_count_unexpected, 0, FALSE);
+	network_server_stat_push (server, gq_time_all, 0, FALSE);
+	network_server_stat_push (server, gq_time_unexpected, 0, FALSE);
+
 	lbpool = grid_lbpool_create (nsname);
 	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free,
 			NULL, LTO_NOATIME);
@@ -788,9 +804,11 @@ grid_main_configure (int argc, char **argv)
 	grid_task_queue_register (admin_gtq, nsinfo_refresh_delay,
 		(GDestroyNotify) _task_reload_srvtypes, NULL, NULL);
 
-	network_server_bind_host (server, cfg_main_url, dispatcher, transport_http_factory);
+	network_server_bind_host (server, cfg_main_url, handler_action,
+			(network_transport_factory) transport_http_factory0);
 	for (GSList *lu=config_urlv; lu ;lu=lu->next)
-		network_server_bind_host (server, lu->data, dispatcher, transport_http_factory);
+		network_server_bind_host (server, lu->data, handler_action,
+				(network_transport_factory) transport_http_factory0);
 
 	return TRUE;
 }

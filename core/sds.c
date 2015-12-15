@@ -1900,7 +1900,7 @@ oio_sds_get_compile_options (void)
 #define _ADD_STR(S) _add(#S,S)
 #define _ADD_DBL(S) _add_double(#S,S)
 #define _ADD_INT(S) _add_integer(#S,S)
-	_ADD_STR (PROXYD_PREFIX2);
+	_ADD_STR (PROXYD_PREFIX);
 	_ADD_STR (PROXYD_HEADER_PREFIX);
 	_ADD_STR (PROXYD_HEADER_REQID);
 	_ADD_STR (PROXYD_HEADER_NOEMPTY);

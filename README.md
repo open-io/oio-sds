@@ -114,7 +114,7 @@ cd ${SRCDIR}/python; sudo python setup.py develop; cd -
 | GCLUSTER_AGENT_SOCK_PATH | "/var/run/oio-sds-agent.sock" | Default path for agent's socket. |
 | GS_CONFIG_NSINFO_REFRESH | "nsinfo_refresh" | Default refresh period for 
 | RAWX_HEADER_PREFIX | "X-oio-chunk-meta-" | Prefix applied to proxyd's URL, second version (with accounts) |
-| PROXYD_PREFIX2 | "v2.0" | Prefix applied to proxyd's URL, second version (with accounts) |
+| PROXYD_PREFIX | "v3.0" | Prefix applied to proxyd's URL, second version (with accounts) |
 | PROXYD_PATH_MAXLEN | 2048 | Maximum length for path to be accepted in requests. |
 | PROXYD_DEFAULT_TTL_CSM0 | 0 | Maximum TTL (in seconds) for conscience entries in the proxyd cache. |
 | PROXYD_DEFAULT_TTL_SERVICES | 3600 | Idem for services entries. |

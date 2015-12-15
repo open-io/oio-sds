@@ -30,10 +30,6 @@ extern "C" {
 #define PROXYD_PREFIX "v3.0"
 #endif
 
-#ifndef PROXYD_PREFIX2
-#define PROXYD_PREFIX2 "v2.0"
-#endif
-
 #ifndef PROXYD_HEADER_PREFIX
 #define PROXYD_HEADER_PREFIX "X-oio-"
 #endif

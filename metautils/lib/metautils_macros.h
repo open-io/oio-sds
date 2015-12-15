@@ -238,4 +238,6 @@ enum {
 # define OIO_M2V2_LISTRESULT_BATCH 1000
 #endif
 
+#define OIO_MALLOC_TRIM_SIZE (16*1024*1024)
+
 #endif /*OIO_SDS__metautils__lib__metautils_macros_h*/
