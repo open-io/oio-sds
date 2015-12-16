@@ -1,12 +1,27 @@
+# Copyright (C) 2015 OpenIO, original work as part of
+# OpenIO Software Defined Storage
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 3.0 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library.
+
 import time
 from socket import gethostname
 
-from oio.blob.client import BlobClient
-from oio.common.exceptions import ClientException
-from oio.container.client import ContainerClient
-from oio.rdir.client import RdirClient
 from oio.common import exceptions as exc
 from oio.common.utils import get_logger, int_value, ratelimit, true_value
+from oio.common.exceptions import ContentNotFound
+from oio.content.factory import ContentFactory
+from oio.rdir.client import RdirClient
 
 
 class BlobRebuilderWorker(object):
@@ -33,9 +48,8 @@ class BlobRebuilderWorker(object):
             conf.get('bytes_per_second'), 10000000)
         self.rdir_fetch_limit = int_value(
             conf.get('rdir_fetch_limit'), 100)
-        self.blob_client = BlobClient()
-        self.container_client = ContainerClient(conf)
         self.rdir_client = RdirClient(conf)
+        self.content_factory = ContentFactory(conf)
 
     def rebuilder_pass_with_lock(self):
         self.rdir_client.admin_lock(self.volume,
@@ -130,93 +144,18 @@ class BlobRebuilderWorker(object):
 
         self.passes += 1
 
-    def _meta2_get_chunks_at_pos(self, container_id, content_id, chunk_id):
-        current_chunk_url = 'http://%s/%s' % (self.volume, chunk_id)
-
-        try:
-            data = self.container_client.content_show(
-                cid=container_id, content=content_id)
-        except exc.NotFound:
-            raise exc.OrphanChunk('Content not found')
-
-        current_chunk = None
-        for c in data:
-            if c['url'] == current_chunk_url:
-                current_chunk = c
-                break
-        if not current_chunk:
-            raise exc.OrphanChunk('Chunk not found in content')
-
-        duplicate_chunks = []
-        for c in data:
-            if c['pos'] == current_chunk['pos'] \
-                    and c['url'] != current_chunk['url']:
-                duplicate_chunks.append(c)
-        if len(duplicate_chunks) == 0:
-            raise exc.UnrecoverableContent('No copy of missing chunk')
-
-        return current_chunk, duplicate_chunks
-
-    def _meta2_get_spare_chunk(self, container_id, content_id, notin, broken):
-        spare_data = {'notin': notin,
-                      'broken': [broken],
-                      'size': 0}
-        try:
-            spare_resp = self.container_client.content_spare(
-                cid=container_id, content=content_id, data=spare_data)
-        except ClientException as e:
-            raise exc.SpareChunkException('No spare chunk (%s)' % e.message)
-
-        return spare_resp['chunks'][0]
-
-    def _meta2_replace_chunk(self, container_id, content_id,
-                             current_chunk, new_chunk):
-        old = [{'type': 'chunk',
-                'id': current_chunk['url'],
-                'hash': current_chunk['hash'],
-                'size': current_chunk['size'],
-                'pos': current_chunk['pos'],
-                'content': content_id}]
-        new = [{'type': 'chunk',
-                'id': new_chunk['id'],
-                'hash': current_chunk['hash'],
-                'size': current_chunk['size'],
-                'pos': current_chunk['pos'],
-                'content': content_id}]
-        update_data = {'old': old, 'new': new}
-
-        self.container_client.container_raw_update(
-            cid=container_id, data=update_data)
-
     # TODO rain support
     def chunk_rebuild(self, container_id, content_id, chunk_id):
+        try:
+            content = self.content_factory.get(container_id, content_id)
+        except ContentNotFound:
+            raise exc.OrphanChunk('Content not found')
 
-        current_chunk, duplicate_chunks = self._meta2_get_chunks_at_pos(
-            container_id, content_id, chunk_id)
-
-        spare_chunk = self._meta2_get_spare_chunk(
-            container_id, content_id, duplicate_chunks, current_chunk)
-
-        uploaded = False
-        for src in duplicate_chunks:
-            try:
-                self.blob_client.chunk_copy(src['url'], spare_chunk['id'])
-                self.logger.debug('copy chunk from %s to %s',
-                                  src['url'], spare_chunk['id'])
-                uploaded = True
-                break
-            except Exception as e:
-                self.logger.debug('Failed to copy chunk from %s to %s: %s',
-                                  src['url'], spare_chunk['id'], type(e))
-        if not uploaded:
-            raise exc.UnrecoverableContent('No copy available '
-                                           'of missing chunk')
-
-        self._meta2_replace_chunk(container_id, content_id,
-                                  current_chunk, spare_chunk)
+        content.rebuild_chunk(chunk_id)
 
         self.rdir_client.chunk_push(self.volume, container_id, content_id,
                                     chunk_id, rtime=int(time.time()))
 
-        self.bytes_processed += current_chunk['size']
-        self.total_bytes_processed += current_chunk['size']
+        chunk_size = content.chunks.filter(id=chunk_id).one().size
+        self.bytes_processed += chunk_size
+        self.total_bytes_processed += chunk_size

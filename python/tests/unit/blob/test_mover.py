@@ -51,7 +51,8 @@ class TestBlobMover(unittest.TestCase):
     def test_chunk_move(self):
         mover = self.mover
         mover.load_chunk_metadata = Mock(return_value=self.metadata)
-        mover.container_client.content_show = Mock(return_value=self.chunks)
+        mover.container_client.content_show = Mock(
+            return_value=(self.chunks, {}))
         mover.container_client.content_spare = Mock(
             return_value=self.new_chunks)
         mover.blob_client.chunk_copy = Mock(
@@ -86,7 +87,7 @@ class TestBlobMover(unittest.TestCase):
     def test_chunk_move_not_in_content(self):
         mover = self.mover
         mover.load_chunk_metadata = Mock(return_value=self.metadata)
-        mover.container_client.content_show = Mock(return_value={})
+        mover.container_client.content_show = Mock(return_value=({}, {}))
 
         with self.assertRaises(exc.OrphanChunk):
             mover.chunk_move(self.path)

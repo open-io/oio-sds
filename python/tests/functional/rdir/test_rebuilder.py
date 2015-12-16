@@ -1,18 +1,35 @@
+# Copyright (C) 2015 OpenIO, original work as part of
+# OpenIO Software Defined Storage
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 3.0 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library.
+
 import hashlib
 import random
 import string
 import time
 import unittest
 
+from mock import patch
+
 from oio.blob.client import BlobClient
 from oio.blob.rebuilder import BlobRebuilderWorker
-from oio.common.exceptions import SpareChunkException, OrphanChunk, \
-    UnrecoverableContent
+from oio.common.exceptions import SpareChunkException, OrphanChunk
+from oio.common.exceptions import UnrecoverableContent
+from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.rdir.client import RdirClient
 from tests.utils import BaseTestCase, get_config
-from oio.common.utils import cid_from_name
-from mock import MagicMock as Mock
 
 
 def generate_data(dictionary, n):
@@ -36,6 +53,7 @@ class TestContent(object):
         self.version = "0"
         self.size = 0
         self.chunks = []
+        self.stgpol = test_conf["stgpol"]
 
     def add_chunk(self, data, pos, rawx):
         c = TestChunk(self.test_conf, data, pos, rawx, self)
@@ -122,6 +140,7 @@ class TestRebuilderCrawler(BaseTestCase):
                                              size=content.size,
                                              checksum=content.hash,
                                              content_id=content.content_id,
+                                             stgpol=content.stgpol,
                                              data=content.get_create_meta2())
 
     def tearDown(self):
@@ -147,9 +166,9 @@ class TestRebuilderCrawler(BaseTestCase):
                                 content.chunks[0].id)
 
         # check meta2 information
-        res = self.container_client.content_show(acct=content.account,
-                                                 ref=content.container_name,
-                                                 content=content.content_id)
+        res, _ = self.container_client.content_show(acct=content.account,
+                                                    ref=content.container_name,
+                                                    content=content.content_id)
 
         new_chunk_info = None
         for c in res:
@@ -227,11 +246,12 @@ class TestRebuilderCrawler(BaseTestCase):
                                         self.conf['rawx'][0]['addr'])
 
         # Force upload to raise an exception
-        rebuilder.blob_client.chunk_copy = Mock(side_effect=Exception("xx"))
-
-        self.assertRaises(UnrecoverableContent, rebuilder.chunk_rebuild,
-                          content.container_id, content.content_id,
-                          content.chunks[0].id)
+        with patch('oio.content.content.BlobClient') as MockClass:
+            instance = MockClass.return_value
+            instance.chunk_copy.side_effect = Exception("xx")
+            self.assertRaises(UnrecoverableContent, rebuilder.chunk_rebuild,
+                              content.container_id, content.content_id,
+                              content.chunks[0].id)
 
     @unittest.skipIf(get_config()['stgpol'] != "TWOCOPIES",
                      "Storage policy is not TWOCOPIES")
@@ -241,7 +261,7 @@ class TestRebuilderCrawler(BaseTestCase):
 
         # try to rebuild an nonexistant chunk
         self.assertRaises(OrphanChunk, rebuilder.chunk_rebuild,
-                          64*'0', 32*'0', 64*'0')
+                          64 * '0', 32 * '0', 64 * '0')
 
     @unittest.skipIf(get_config()['stgpol'] != "TWOCOPIES",
                      "Storage policy is not TWOCOPIES")
