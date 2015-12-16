@@ -109,7 +109,7 @@ struct gridd_reply_ctx_s
 	struct network_client_s *client;
 
 	/* ASN.1 request decoded */
-	MESSAGE request;
+	struct Message *request;
 
 	/* extracted from the request */
 	const struct hashstr_s *reqname;

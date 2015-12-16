@@ -25,13 +25,6 @@ target_link_libraries(rawx
 		metautils gridcluster
 		${ATTR_LIBRARIES} ${ZLIB_LIBRARIES} ${LZO_LIBRARIES})
 
-install(FILES
-			compression.h
-			rawx.h
-		DESTINATION include/rawx-lib/src
-		PERMISSIONS
-			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-
 install(TARGETS rawx
 		LIBRARY DESTINATION ${LD_LIBDIR})
 

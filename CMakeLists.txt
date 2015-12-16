@@ -10,14 +10,15 @@ include(FindCURL)
 include(FindPythonInterp)
 include(FindZLIB)
 find_package(PkgConfig)
-find_package(Doxygen)
 
-set(OIOSDS_RELEASE master)
-set(OIOSDS_VERSION_MAJOR 1)
-set(OIOSDS_VERSION_MINOR 0)
+if (NOT DEFINED OIOSDS_RELEASE)
+	set(OIOSDS_RELEASE master)
+endif ()
+if (NOT DEFINED OIOSDS_API_VERSION_SHORT)
+	set(OIOSDS_API_VERSION_SHORT "1.0")
+endif ()
 
-set(SHORT_API_VERSION "${OIOSDS_VERSION_MAJOR}.${OIOSDS_VERSION_MINOR}")
-set(API_VERSION "${OIOSDS_RELEASE}/${SHORT_API_VERSION}")
+set(OIOSDS_API_VERSION "${OIOSDS_RELEASE}/${OIOSDS_API_VERSION_SHORT}")
 
 if (NOT ABI_VERSION)
 	set(ABI_VERSION 0)
@@ -52,31 +53,13 @@ set(CMAKE_C_FLAGS_RELEASE        "-O2")
 set(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -fno-inline")
 set(CMAKE_C_FLAGS_MINSIZEREL     "-Os -s")
 
-if (NOT DEFINED CMAKE_INSTALL_PREFIX)
-	set (CMAKE_INSTALL_PREFIX "/usr/local")
-endif ()
-MESSAGE(STATUS "Installation prefix : ${CMAKE_INSTALL_PREFIX}")
-
-if (LD_LIBDIR)
-	MESSAGE("LD_LIBDIR explicitely set to ${LD_LIBDIR}")
-else()
-	CHECK_TYPE_SIZE(long SIZEOF_LONG)
-	MESSAGE(STATUS "sizeof(long) = ${SIZEOF_LONG}")
-	if (SIZEOF_LONG EQUAL 8)
-		set (LD_LIBDIR "lib64")
-	else ()
-		set (LD_LIBDIR "lib")
-	endif ()
-endif()
-
 add_definitions(-D_REENTRANT)
 add_definitions(-D_LARGE_FILES)
 add_definitions(-D_LARGEFILE_SOURCE)
 add_definitions(-D_LARGEFILE64_SOURCE)
 add_definitions(-D_FILE_OFFSET_BITS=64)
 add_definitions(-DHAVE_SOCKLEN_T)
-add_definitions(-DAPI_VERSION="${API_VERSION}")
-add_definitions(-DSHORT_API_VERSION="${SHORT_API_VERSION}")
+add_definitions(-DOIOSDS_API_VERSION="${OIOSDS_API_VERSION}")
 if (CMAKE_BUILD_TYPE STREQUAL "Debug" OR CMAKE_BUILD_TYPE STREQUAL "RelWithDebInfo")
 	MESSAGE("DEBUG symbols enabled")
 	add_definitions(-DG_ERRORCHECK_MUTEXES)
@@ -131,55 +114,6 @@ macro (dir2macro N)
 		MESSAGE("CFLAGS: ${N} left to default")
 	endif ()
 endmacro ()
-
-dir2macro("GCLUSTER_RUN_DIR")
-dir2macro("GCLUSTER_ETC_DIR")
-
-dir2macro("GCLUSTER_CONFIG_FILE_PATH")
-dir2macro("GCLUSTER_CONFIG_DIR_PATH")
-dir2macro("GCLUSTER_CONFIG_LOCAL_PATH")
-dir2macro("GCLUSTER_AGENT_SOCK_PATH")
-
-dir2macro("GS_CONFIG_NSINFO_REFRESH")
-
-dir2macro("PROXYD_PREFIX2")
-dir2macro("PROXYD_PATH_MAXLEN")
-dir2macro("PROXYD_DEFAULT_TTL_CSM0")
-dir2macro("PROXYD_DEFAULT_TTL_SERVICES")
-dir2macro("PROXYD_DEFAULT_MAX_CSM0")
-dir2macro("PROXYD_DEFAULT_MAX_SERVICES")
-dir2macro("PROXYD_DIR_TIMEOUT_SINGLE")
-dir2macro("PROXYD_DIR_TIMEOUT_GLOBAL")
-dir2macro("PROXYD_HEADER_PREFIX")
-dir2macro("PROXYD_HEADER_REQID")
-dir2macro("PROXYD_HEADER_NOEMPTY")
-
-dir2macro("DAEMON_DEFAULT_TIMEOUT_READ")
-dir2macro("DAEMON_DEFAULT_TIMEOUT_ACCEPT")
-
-dir2macro("SQLX_ADMIN_PREFIX_SYS")
-dir2macro("SQLX_ADMIN_PREFIX_USER")
-dir2macro("SQLX_ADMIN_INITFLAG")
-dir2macro("SQLX_ADMIN_STATUS")
-dir2macro("SQLX_ADMIN_REFERENCE")
-dir2macro("SQLX_ADMIN_BASENAME")
-dir2macro("SQLX_ADMIN_BASETYPE")
-dir2macro("SQLX_ADMIN_NAMESPACE")
-
-dir2macro("M2V2_ADMIN_PREFIX_SYS")
-dir2macro("M2V2_ADMIN_PREFIX_USER")
-dir2macro("M2V2_ADMIN_VERSION")
-dir2macro("M2V2_ADMIN_QUOTA")
-dir2macro("M2V2_ADMIN_SIZE")
-dir2macro("M2V2_ADMIN_CTIME")
-dir2macro("M2V2_ADMIN_VERSIONING_POLICY")
-dir2macro("M2V2_ADMIN_STORAGE_POLICY")
-dir2macro("M2V2_ADMIN_KEEP_DELETED_DELAY")
-dir2macro("M2V2_CLIENT_TIMEOUT")
-
-dir2macro("META2_INIT_FLAG")
-
-###-------------------------------------------------------------------------###
 
 macro(test_CLI var msg)
 	if (${var})
@@ -254,6 +188,90 @@ macro(bin_prefix T N)
 	set_target_properties(${T} PROPERTIES OUTPUT_NAME ${EXE_PREFIX}${N})
 endmacro ()
 
+###-------------------------------------------------------------------------###
+
+dir2macro("GCLUSTER_RUN_DIR")
+dir2macro("GCLUSTER_ETC_DIR")
+
+dir2macro("GCLUSTER_CONFIG_FILE_PATH")
+dir2macro("GCLUSTER_CONFIG_DIR_PATH")
+dir2macro("GCLUSTER_CONFIG_LOCAL_PATH")
+dir2macro("GCLUSTER_AGENT_SOCK_PATH")
+
+dir2macro("GS_CONFIG_NSINFO_REFRESH")
+
+dir2macro("PROXYD_PREFIX2")
+dir2macro("PROXYD_PATH_MAXLEN")
+dir2macro("PROXYD_DEFAULT_TTL_CSM0")
+dir2macro("PROXYD_DEFAULT_TTL_SERVICES")
+dir2macro("PROXYD_DEFAULT_MAX_CSM0")
+dir2macro("PROXYD_DEFAULT_MAX_SERVICES")
+dir2macro("PROXYD_DIR_TIMEOUT_SINGLE")
+dir2macro("PROXYD_DIR_TIMEOUT_GLOBAL")
+dir2macro("PROXYD_HEADER_PREFIX")
+dir2macro("PROXYD_HEADER_REQID")
+dir2macro("PROXYD_HEADER_NOEMPTY")
+
+dir2macro("DAEMON_DEFAULT_TIMEOUT_READ")
+dir2macro("DAEMON_DEFAULT_TIMEOUT_ACCEPT")
+
+dir2macro("SQLX_ADMIN_PREFIX_SYS")
+dir2macro("SQLX_ADMIN_PREFIX_USER")
+dir2macro("SQLX_ADMIN_INITFLAG")
+dir2macro("SQLX_ADMIN_STATUS")
+dir2macro("SQLX_ADMIN_REFERENCE")
+dir2macro("SQLX_ADMIN_BASENAME")
+dir2macro("SQLX_ADMIN_BASETYPE")
+dir2macro("SQLX_ADMIN_NAMESPACE")
+
+dir2macro("M2V2_ADMIN_PREFIX_SYS")
+dir2macro("M2V2_ADMIN_PREFIX_USER")
+dir2macro("M2V2_ADMIN_VERSION")
+dir2macro("M2V2_ADMIN_QUOTA")
+dir2macro("M2V2_ADMIN_SIZE")
+dir2macro("M2V2_ADMIN_CTIME")
+dir2macro("M2V2_ADMIN_VERSIONING_POLICY")
+dir2macro("M2V2_ADMIN_STORAGE_POLICY")
+dir2macro("M2V2_ADMIN_KEEP_DELETED_DELAY")
+dir2macro("M2V2_CLIENT_TIMEOUT")
+
+dir2macro("META2_INIT_FLAG")
+
+###-------------------------------------------------------------------------###
+
+if (NOT DEFINED CMAKE_INSTALL_PREFIX)
+	set (CMAKE_INSTALL_PREFIX "/usr/local")
+endif ()
+MESSAGE(STATUS "Installation prefix : ${CMAKE_INSTALL_PREFIX}")
+
+
+if (LD_LIBEXECDIR)
+	MESSAGE("LD_LIBEXECDIR explicitely set to ${LD_LIBEXECDIR}")
+else ()
+	set (LD_LIBEXECDIR "libexec")
+	MESSAGE("LD_LIBEXECDIR set to ${LD_LIBEXECDIR} (default)")
+endif ()
+
+if (LD_LIBDIR)
+	MESSAGE("LD_LIBDIR explicitely set to ${LD_LIBDIR}")
+else()
+	CHECK_TYPE_SIZE(long SIZEOF_LONG)
+	MESSAGE(STATUS "sizeof(long) = ${SIZEOF_LONG}")
+	if (SIZEOF_LONG EQUAL 8)
+		set (LD_LIBDIR "lib64")
+	else ()
+		set (LD_LIBDIR "lib")
+	endif ()
+	MESSAGE("LD_LIBDIR set to ${LD_LIBDIR} (default)")
+endif()
+
+if (PKGCONFIG_DIRECTORY)
+	MESSAGE("PKGCONFIG_DIRECTORY explicitely set to ${PKGCONFIG_DIRECTORY}")
+else ()
+	set(PKGCONFIG_DIRECTORY "${CMAKE_INSTALL_PREFIX}/${LD_LIBDIR}/pkgconfig")
+	MESSAGE("PKGCONFIG_DIRECTORY set to ${PKGCONFIG_DIRECTORY} (default)")
+endif ()
+
 set (GRIDD_PLUGINS_DIRECTORY "${LD_LIBDIR}/grid")
 if (DEFINED GRIDD_PLUGINS)
 	set(GRIDD_PLUGINS_DIRECTORY "${GRIDD_PLUGINS}")
@@ -268,7 +286,7 @@ test_CLI(FLEX_EXECUTABLE "flex")
 test_CLI(BISON_EXECUTABLE "bison")
 endif(NOT SDK_ONLY)
 
-# Set defaults 
+# Set defaults
 set(DEFAULT_LIBRARY_DIRS "/usr/${LD_LIBDIR}")
 set(DEFAULT_INCLUDE_DIRS "/usr/include")
 set(LZO_INCLUDE_DIRS "${DEFAULT_INCLUDE_DIRS}/lzo")
@@ -286,6 +304,10 @@ if (NOT SDK_ONLY)
 pkg_check_modules(APR REQUIRED apr-1)
 pkg_check_modules(SQLITE3 REQUIRED sqlite3)
 pkg_check_modules(ZMQ libzmq>=4.0.0)
+# Optional cache libraries
+pkg_search_module(HIREDIS hiredis)
+pkg_search_module(LIBMEMCACHED libmemcached)
+
 endif (NOT SDK_ONLY)
 
 # Load CLI-overriden configuration
@@ -314,6 +336,8 @@ set(ASN1C_EXE_OPTS "-fwide-types")
 endif (NOT SDK_ONLY)
 
 # Check every required module is present
+print_found("HIREDIS")
+print_found("LIBMEMCACHED")
 check_found("CURL" "GLIB2" "JSONC")
 
 if (NOT SDK_ONLY)
@@ -327,23 +351,14 @@ else ()
 endif ()
 endif (NOT SDK_ONLY)
 
+ENABLE_TESTING()
+
 set(CMAKE_LIBRARY_PATH "")
 set(CMAKE_INCLUDE_PATH "")
 include_directories(AFTER
 		${GLIB2_INCLUDE_DIRS})
 
 link_directories(${GLIB2_LIBRARY_DIRS})
-
-ENABLE_TESTING()
-
-if (DOXYGEN_FOUND)
-	configure_file(${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile.in
-		${CMAKE_CURRENT_BINARY_DIR}/Doxyfile @ONLY)
-	add_custom_target(doc
-		${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_BINARY_DIR}/Doxyfile
-		WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-		COMMENT "Generating API documentation with Doxygen" VERBATIM)
-endif ()
 
 add_subdirectory(./core)
 
@@ -374,5 +389,7 @@ add_subdirectory(./sqliterepo)
 add_subdirectory(./sqlx)
 add_subdirectory(./svc-monitor)
 add_subdirectory(./tools)
+add_subdirectory(./tests/unit)
+add_subdirectory(./tests/func)
 endif (NOT SDK_ONLY)
 

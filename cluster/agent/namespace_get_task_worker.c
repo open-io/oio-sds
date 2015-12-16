@@ -143,7 +143,6 @@ task_worker(gpointer p, GError **error)
 
 	asn1_worker = create_asn1_worker(&(ns_data->ns_info.addr), NAME_MSGNAME_CS_GET_NSINFO);
 	asn1_worker_set_session_data(asn1_worker, g_strdup(ns_data->name), session_data_cleaner);
-	asn1_worker_set_request_header(asn1_worker, "VERSION", SHORT_API_VERSION);
 	asn1_worker_set_handlers(asn1_worker,parse_namespace_info,error_handler,final_handler);
 
 	error = NULL;

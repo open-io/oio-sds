@@ -154,14 +154,13 @@ _add_custom_tags(service_info_t *si)
 static void
 monitor_get_status(const gchar *monitor_cmd, service_info_t *si)
 {
-	gchar *str_si;
-
 	if (strlen(monitor_cmd) > 0) {
 		GRID_TRACE("Collecting the service state");
 		parse_output(monitor_cmd, si);
-		str_si =  service_info_to_string(si);
-		GRID_DEBUG("SVC state: %s", str_si);
-		g_free(str_si);
+		GString *gs = g_string_new("");
+		service_info_encode_json (gs, si, FALSE);
+		GRID_DEBUG("SVC state: %s", gs->str);
+		g_string_free (gs, TRUE);
 	}
 }
 

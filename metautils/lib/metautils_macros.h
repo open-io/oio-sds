@@ -24,10 +24,6 @@ License along with this library.
 #  define LOG_DEFAULT_DOMAIN "default"
 # endif
 
-# ifndef API_VERSION
-#  define API_VERSION ((const char*)"")
-# endif
-
 # ifdef HAVE_EXTRA_ASSERT
 #  define EXTRA_ASSERT(X) g_assert(X)
 # else
@@ -85,7 +81,6 @@ License along with this library.
 # define NAME_TAGNAME_RAWX_LOC "tag.loc"
 # define NAME_TAGNAME_INTERNAL "tag.internal"
 # define NAME_TAGNAME_RAWX_STGCLASS "tag.stgclass"
-# define NAME_TAGNAME_REQIDLE "stat.req_idle"
 
 # define NAME_TAGNAME_AGENT_CHECK "tag.agent_check"
 

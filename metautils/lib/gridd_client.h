@@ -20,9 +20,8 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__gridd_client_h
 # define OIO_SDS__metautils__lib__gridd_client_h 1
 
-# include "metautils.h"
 # include <glib.h>
-# include <sys/time.h>
+# include "metautils.h"
 
 # ifndef GRIDC_DEFAULT_TIMEOUT_STEP
 #  define GRIDC_DEFAULT_TIMEOUT_STEP 10.0
@@ -43,6 +42,7 @@ enum client_interest_e
 	CLIENT_WR = 0x02
 };
 
+/* Return TRUE to notify the reply management failed. */
 typedef gboolean (*client_on_reply)(gpointer ctx, MESSAGE reply);
 
 struct gridd_client_vtable_s
@@ -102,19 +102,6 @@ struct abstract_client_s
 {
 	struct gridd_client_vtable_s *vtable;
 };
-
-#define VTABLE_CHECK(self,T,F) do { \
-	EXTRA_ASSERT(self != NULL); \
-	EXTRA_ASSERT(((T)self)->vtable != NULL); \
-	EXTRA_ASSERT(((T)self)->vtable-> F != NULL); \
-} while (0)
-
-#define VTABLE_CALL(self,T,F) \
-	VTABLE_CHECK(self,T,F); \
-	return ((T)self)->vtable-> F
-
-#define GRIDD_CALL(self,F) \
-	VTABLE_CALL(self,struct abstract_client_s*,F)
 
 // wrappers to the call to the vtable.
 

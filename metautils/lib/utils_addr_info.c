@@ -22,8 +22,6 @@ License along with this library.
 #include <fcntl.h>
 #include <netdb.h>
 #include <poll.h>
-#include <sys/time.h>
-#include <sys/types.h>
 #include <unistd.h>
 
 #include "metautils.h"

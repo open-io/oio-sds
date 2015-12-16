@@ -55,17 +55,6 @@ target_link_libraries(meta0_server
 		sqlxsrv
 		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
 
-install(FILES
-			meta0_backend.h
-			meta0_gridd_dispatcher.h
-			meta0_prefixassign.h
-			meta0_remote.h
-			meta0_utils.h
-        DESTINATION include/meta0v2
-        PERMISSIONS
-            OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-
-
 install(TARGETS meta0utils meta0remote meta0v2 meta0_server meta0_client meta0_init
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin)

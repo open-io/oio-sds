@@ -17,31 +17,11 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <unistd.h>
-#include <time.h>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <attr/xattr.h>
-
 #include <glib.h>
 
-#include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 #include <server/transport_gridd.h>
 #include <server/gridd_dispatcher_filters.h>
-#include <cluster/lib/gridcluster.h>
-#include <meta2v2/meta2_macros.h>
-#include <meta2v2/meta2_filter_context.h>
 #include <meta2v2/meta2_filters.h>
-#include <meta2v2/meta2_backend_internals.h>
-#include <meta2v2/meta2_bean.h>
-#include <meta2v2/meta2v2_remote.h>
-#include <meta2v2/generic.h>
-#include <meta2v2/autogen.h>
-#include <meta2v2/meta2_utils_json.h>
 
 int
 meta2_filter_action_touch_content_v1(struct gridd_filter_ctx_s *ctx,

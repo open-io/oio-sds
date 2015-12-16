@@ -22,7 +22,6 @@ License along with this library.
 #include <poll.h>
 #include <netdb.h>
 #include <string.h>
-#include <sys/time.h>
 #include <sys/types.h>
 #include <netinet/tcp.h>
 

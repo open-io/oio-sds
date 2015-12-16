@@ -26,7 +26,6 @@ License along with this library.
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-#include <sys/time.h>
 
 #include <metautils/lib/metautils.h>
 

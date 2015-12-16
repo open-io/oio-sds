@@ -234,7 +234,7 @@ set_service_score(const char *service_desc, int score)
 	g_strlcpy(si->ns_name, tokens[0], sizeof(si->ns_name));
 	g_strlcpy(si->type, tokens[1], sizeof(si->type));
 	si->score.value = score;
-	si->score.timestamp = time(0);
+	si->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 
 	if (!grid_string_to_addrinfo(tokens[2], &si->addr)) {
 		service_info_clean (si);
@@ -401,8 +401,8 @@ main(int argc, char **argv)
 
 		error = conscience_get_namespace(namespace, &ns);
 		if (ns == NULL) {
-			g_printerr("Failed to get namespace info :\n");
-			g_printerr("%s\n", error->message);
+			g_printerr("Failed to get namespace info: (%d) %s\n",
+					error->code, error->message);
 			goto exit_label;
 		}
 	}

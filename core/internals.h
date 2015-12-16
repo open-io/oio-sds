@@ -39,6 +39,16 @@ extern "C" {
 		|| (C)==CODE_POLICY_NOT_SUPPORTED \
 		|| (C)==CODE_NAMESPACE_NOTMANAGED)
 
+#define VTABLE_CHECK(self,T,F) do { \
+	g_assert(self != NULL); \
+	g_assert(((T)self)->vtable != NULL); \
+	g_assert(((T)self)->vtable-> F != NULL); \
+} while (0)
+
+#define VTABLE_CALL(self,T,F) \
+	VTABLE_CHECK(self,T,F); \
+	return ((T)self)->vtable-> F
+
 enum {
 	ERRCODE_UNKNOWN_ERROR = 0,
 	ERRCODE_PARAM = 1,
@@ -142,7 +152,18 @@ enum {
 	HTTP_CODE_BAD_GATEWAY        = 502,
 };
 
+typedef gint64 (*time_hook_f) (void);
+
+/* Must the service addresses be shuffled or not */
 extern volatile int oio_sds_no_shuffle;
+
+/* Let/Set it to NULL for the system time.
+ * Microsecond precision */
+extern time_hook_f oio_time_monotonic;
+
+/* Let/Set it to NULL for the system real time.
+ * Microsecond precision */
+extern time_hook_f oio_time_real;
 
 /* -------------------------------------------------------------------------- */
 

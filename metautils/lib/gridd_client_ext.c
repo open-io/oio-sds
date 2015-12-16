@@ -218,7 +218,7 @@ gridd_client_step(struct gridd_client_s *client)
 retry:
 	rc = metautils_syscall_poll(&pfd, 1, 1000);
 	if (rc == 0) {
-		gridd_client_expire(client, g_get_monotonic_time ());
+		gridd_client_expire(client, oio_ext_monotonic_time ());
 		return NULL;
 	}
 	if (rc < 0) {
@@ -272,7 +272,7 @@ retry:
 	/* Wait for an event to happen */
 	rc = metautils_syscall_poll (pfd, j, 100);
 	if (rc == 0) {
-		_clients_expire(clients, g_get_monotonic_time ());
+		_clients_expire(clients, oio_ext_monotonic_time ());
 		return NULL;
 	}
 	if (rc < 0) {
@@ -302,7 +302,7 @@ retry:
 	}
 
 	/* Now check for expired clients */
-	_clients_expire(clients, g_get_monotonic_time ());
+	_clients_expire(clients, oio_ext_monotonic_time ());
 	return NULL;
 }
 

@@ -92,7 +92,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 					"Unexpected NS"));
 	}
 
-	si->score.timestamp = g_get_real_time () / G_TIME_SPAN_SECOND;
+	si->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 
 	if (op == REGOP_PUSH)
 		si->score.value = SCORE_UNSET;

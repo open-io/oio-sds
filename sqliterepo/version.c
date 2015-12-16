@@ -22,8 +22,6 @@ License along with this library.
 #include <errno.h>
 #include <string.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
@@ -147,7 +145,7 @@ hook_increment(gpointer k, gpointer v, gpointer u)
 {
 	(void) k; (void) u;
 	OV(v)->version ++;
-	OV(v)->when = time(0);
+	OV(v)->when = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 	return FALSE;
 }
 
@@ -189,7 +187,7 @@ version_encode(GTree *t)
 	g_tree_foreach(t, runner, NULL);
 
 	encoded = g_byte_array_new();
-	rv = der_encode(&asn_DEF_BaseVersion, &bv, write_to_gba, encoded);
+	rv = der_encode(&asn_DEF_BaseVersion, &bv, metautils_asn1c_write_gba, encoded);
 	asn_DEF_BaseVersion.free_struct(&asn_DEF_BaseVersion, &bv, TRUE);
 
 	if (0 >= rv.encoded) {

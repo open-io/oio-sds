@@ -43,7 +43,6 @@ License along with this library.
 		GSETERROR(Error, "Error from agent : %.*s", Resp.data_size, (char*)(Resp.data));\
 	else\
 		GSETERROR(Error, "Error from agent : (no response)");\
-	clear_request_and_reply(&Req,&Resp);\
 } while (0)
 #define NS_WORM_OPT_NAME "worm"
 #define NS_CONTAINER_MAX_SIZE_NAME "container_max_size"
@@ -60,11 +59,11 @@ static void
 clear_request_and_reply( request_t *req, response_t *resp )
 {
 	if (req) {
-		g_free0 (req->cmd);
-		g_free0 (req->arg);
+		oio_str_clean (&req->cmd);
+		oio_str_clean (&req->arg);
 	}
-	if (resp)
-		g_free0(resp->data);
+	if (resp->data) g_free (resp->data);
+	resp->data = NULL;
 }
 
 /* -------------------------------------------------------------------------- */
@@ -360,7 +359,7 @@ register_namespace_service(const struct service_info_s *si)
 {
 	struct service_info_s *si_copy = service_info_dup(si);
 	si_copy->score.value = SCORE_UNSET;
-	si_copy->score.timestamp = g_get_real_time () / G_TIME_SPAN_SECOND;
+	si_copy->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
 
 	metautils_srvinfo_ensure_tags (si_copy);
 
@@ -389,6 +388,7 @@ list_local_services(GError **error)
 
 	if (resp.status != STATUS_OK) {
 		MANAGE_ERROR(req,resp,error);
+		clear_request_and_reply(&req,&resp);
 		return NULL;
 	}
 
@@ -398,7 +398,6 @@ list_local_services(GError **error)
 		return NULL;
 	}
 
-	clear_request_and_reply(&req,&resp);
 	return srv_list;
 }
 
@@ -444,6 +443,7 @@ list_tasks(GError **error)
 	}
 
 	MANAGE_ERROR(req,resp,error);
+	clear_request_and_reply(&req,&resp);
 	return NULL;
 }
 
@@ -460,14 +460,11 @@ metautils_srvinfo_ensure_tags (struct service_info_s *si)
 					si->tags, "stat.cpu"), 100.0 * oio_sys_cpu_idle ());
 
 	gchar vol[512];
-	struct service_tag_s *tag = NULL;
-
-	if (si->tags)
-		tag = service_info_get_tag (si->tags, "tag.vol");
+	struct service_tag_s *tag = service_info_get_tag (si->tags, "tag.vol");
 	if (tag) {
 		if (service_tag_get_value_string (tag, vol, sizeof(vol), NULL)) {
 			if (!service_info_get_tag(si->tags, "stat.io"))
-				service_tag_set_value_float (service_info_get_tag(
+				service_tag_set_value_float (service_info_ensure_tag(
 							si->tags, "stat.io"), 100.0 * oio_sys_io_idle (vol));
 			if (!service_info_get_tag(si->tags, "stat.space"))
 				service_tag_set_value_float (service_info_ensure_tag (
@@ -495,7 +492,7 @@ oio_sys_cpu_idle (void)
 	gdouble out;
 
 	g_mutex_lock (&lock);
-	gint64 now = g_get_monotonic_time ();
+	gint64 now = oio_ext_monotonic_time ();
 	if (!last_update || ((now - last_update) > G_TIME_SPAN_SECOND)) {
 		FILE *fst = fopen ("/proc/stat", "r");
 		while (fst && !feof(fst) && !ferror(fst)) {
@@ -591,7 +588,7 @@ _compute_io_idle (guint major, guint minor)
 	struct maj_min_idle_s *out = NULL;
 
 	g_mutex_lock (&io_lock);
-	gint64 now = g_get_monotonic_time ();
+	gint64 now = oio_ext_monotonic_time ();
 
 	/* locate the info in the cache */
 	for (GSList *l=io_cache; l && !out ;l=l->next) {
@@ -674,7 +671,7 @@ _get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
 	struct path_maj_min_s *out = NULL;
 
 	g_mutex_lock (&majmin_lock);
-	gint64 now = g_get_monotonic_time ();
+	gint64 now = oio_ext_monotonic_time ();
 	/* ensure an entry exists */
 	for (GSList *l=majmin_cache; l && !out ;l=l->next) {
 		struct path_maj_min_s *p = l->data;

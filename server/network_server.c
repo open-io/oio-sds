@@ -27,7 +27,6 @@ License along with this library.
 #include <fcntl.h>
 #include <netdb.h>
 
-#include <sys/time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/socket.h>
@@ -120,7 +119,7 @@ struct network_server_s
 	time_t atexit_max_open_persist; /*< max connection time for persistant
 									  connections*/
 
-	struct timespec now;
+	gint64 now; /*< bogo counter for EPOCH */
 
 	int wakeup[2];
 	int epollfd;
@@ -256,7 +255,7 @@ network_server_init(void)
 	result->flag_continue = ~0;
 	result->stats = grid_stats_holder_init();
 
-	clock_gettime(CLOCK_MONOTONIC_COARSE, &result->now);
+	result->now = oio_ext_monotonic_time ();
 
 	result->queue_events = g_async_queue_new();
 	result->queue_monitor = g_async_queue_new();
@@ -275,8 +274,10 @@ network_server_init(void)
 	result->epollfd = epoll_create(4096);
 
 	// XXX JFS : #slots as a power of 2 ... for efficient modulos
-	result->workers_active_1 = grid_single_rrd_create(result->now.tv_sec, 32);
-	result->workers_active_60 = grid_single_rrd_create(result->now.tv_sec/60, 64);
+	result->workers_active_1 = grid_single_rrd_create(
+			result->now / G_TIME_SPAN_SECOND, 32);
+	result->workers_active_60 = grid_single_rrd_create(
+			result->now / G_TIME_SPAN_MINUTE, 64);
 
 	result->atexit_max_open_never_input = 3;
 	result->atexit_max_idle = 2;
@@ -504,8 +505,7 @@ ARM_ENDPOINT(struct network_server_s *srv, struct endpoint_s *e, int how)
 
 static void
 _manage_client_event(struct network_server_s *srv,
-		struct network_client_s *clt, register int ev0,
-		struct timespec *now)
+		struct network_client_s *clt, register int ev0)
 {
 	_client_remove_from_monitored(srv, clt);
 
@@ -518,7 +518,7 @@ _manage_client_event(struct network_server_s *srv,
 	clt->events = MACRO_COND(!ev0, CLT_ERROR, ev0);
 
 	if (ev0 & EPOLLIN)
-		memcpy(&clt->time.evt_in, now, sizeof(struct timespec));
+		clt->time.evt_in = oio_ext_monotonic_time();
 
 	if (clt->events & CLT_ERROR)
 		ARM_CLIENT(srv, clt, EPOLL_CTL_DEL);
@@ -530,13 +530,11 @@ _manage_events(struct network_server_s *srv)
 {
 	struct network_client_s *clt;
 	struct epoll_event allev[MAXEV], *pev;
-	struct timespec now;
 	int rc, erc;
 
 	(void) rc;
 	erc = epoll_wait(srv->epollfd, allev, MAXEV, 500);
 	if (erc > 0) {
-		network_server_now(&now);
 		while (erc-- > 0) {
 			pev = allev+erc;
 
@@ -554,7 +552,7 @@ _manage_events(struct network_server_s *srv)
 				ARM_ENDPOINT(srv, e, EPOLL_CTL_MOD);
 			}
 			else {
-				_manage_client_event(srv, pev->data.ptr, pev->events, &now);
+				_manage_client_event(srv, pev->data.ptr, pev->events);
 			}
 		}
 	}
@@ -572,7 +570,7 @@ _server_shutdown_inactive_connections(struct network_server_s *srv)
 {
 	struct network_client_s *clt, *n;
 
-	time_t now = network_server_bogonow(srv);
+	time_t now = oio_ext_monotonic_time ();
 	time_t ti = now - srv->atexit_max_idle;
 	time_t tc = now - srv->atexit_max_open_never_input;
 	time_t tp = now - srv->atexit_max_open_persist;
@@ -580,13 +578,13 @@ _server_shutdown_inactive_connections(struct network_server_s *srv)
 	for (clt=srv->first ; clt ; clt=n) {
 		n = clt->next;
 		EXTRA_ASSERT(clt->fd >= 0);
-		if (clt->time.evt_in.tv_sec) {
-			if (clt->time.evt_in.tv_sec < ti || clt->time.cnx < tp) {
-				_manage_client_event(srv, clt, 0, NULL);
+		if (clt->time.evt_in) {
+			if (clt->time.evt_in < ti || clt->time.cnx < tp) {
+				_manage_client_event(srv, clt, 0);
 			}
 		}
 		else if (clt->time.cnx < tc) { /* never input */
-			_manage_client_event(srv, clt, 0, NULL);
+			_manage_client_event(srv, clt, 0);
 		}
 	}
 }
@@ -647,7 +645,7 @@ network_server_run(struct network_server_s *srv)
 	_server_start_one_worker(srv, FALSE);
 	srv->thread_events = g_thread_new("events", _thread_cb_events, srv);
 
-	clock_gettime(CLOCK_MONOTONIC_COARSE, &srv->now);
+	srv->now = oio_ext_monotonic_time ();
 	last_update = network_server_bogonow(srv);
 	while (srv->flag_continue) {
 		now = network_server_bogonow(srv);
@@ -655,8 +653,8 @@ network_server_run(struct network_server_s *srv)
 			_server_update_main_stats(srv);
 			last_update = now;
 		}
-		usleep(_start_necessary_threads(srv) ? 50000 : 500000);
-		clock_gettime(CLOCK_MONOTONIC_COARSE, &srv->now);
+		g_usleep(_start_necessary_threads(srv) ? 50000 : 500000);
+		srv->now = oio_ext_monotonic_time ();
 	}
 
 	network_server_close_servers(srv);
@@ -664,8 +662,8 @@ network_server_run(struct network_server_s *srv)
 	/* Wait for all the workers */
 	while (srv->workers_total) {
 		GRID_DEBUG("Waiting for %u workers to die", srv->workers_total);
-		usleep(200000);
-		clock_gettime(CLOCK_MONOTONIC_COARSE, &srv->now);
+		g_usleep(200000);
+		srv->now = oio_ext_monotonic_time ();
 	}
 	srv->thread_first_worker = NULL;
 
@@ -719,13 +717,7 @@ network_server_reqidle(struct network_server_s *srv)
 time_t
 network_server_bogonow(const struct network_server_s *srv)
 {
-	return srv->now.tv_sec;
-}
-
-void
-network_server_now(struct timespec *ts)
-{
-	clock_gettime(CLOCK_MONOTONIC, ts);
+	return srv->now / G_TIME_SPAN_SECOND;
 }
 
 /* Endpoint features ------------------------------------------------------- */

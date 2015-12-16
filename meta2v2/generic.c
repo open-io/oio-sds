@@ -1250,7 +1250,7 @@ _unique_random_SHA256(void)
 {
 	static guint64 seq = 0;
 	struct {
-		time_t now;
+		gint64 now;
 		pid_t pid, ppid;
 		uid_t uid;
 		gid_t gid;
@@ -1260,7 +1260,7 @@ _unique_random_SHA256(void)
 	} bulk;
 
 	memset(&bulk, 0, sizeof(bulk));
-	bulk.now = time(0);
+	bulk.now = oio_ext_real_time ();
 	bulk.pid = getpid();
 	bulk.ppid = getppid();
 	bulk.uid = geteuid();

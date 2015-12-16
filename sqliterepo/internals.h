@@ -149,70 +149,23 @@ struct sqlx_repository_s
 	gboolean running : 1;
 };
 
-/**
- * @param t0
- * @param t1
- * @return
- */
-static inline gboolean
-gtv_bigger(const GTimeVal *t0, const GTimeVal *t1)
-{
-	if (t0->tv_sec > t1->tv_sec)
-		return TRUE;
-	if (t0->tv_sec == t1->tv_sec && t0->tv_usec > t1->tv_usec)
-		return TRUE;
-	return FALSE;
-}
+void load_statement(sqlite3_stmt *stmt, Row_t *r, Table_t *t);
 
-/**
- * @param i1
- * @param i2
- * @return
- */
-static inline int
-gint64_cmp(gint64 i1, gint64 i2)
-{
-	return (i1==i2) ? 0 : (i1<i2 ? -1 : 1);
-}
-
-/**
- * @param p1
- * @param p2
- * @return
- */
-static inline int
-gint64_sort(gconstpointer p1, gconstpointer p2)
-{
-	return gint64_cmp(*(gint64*)p1, *(gint64*)p2);
-}
-
-/**
- * @param b
- * @param bs
- * @param u
- * @return
- */
-static inline int
-write_to_gba(const void *b, size_t bs, void *u)
-{
-	if (b && bs && u)
-		g_byte_array_append((GByteArray*)u, b, bs);
-	return 1;
-}
-
-/**
- * @param stmt
- * @param r
- * @param t
- */
-void load_statement(sqlite3_stmt *stmt, Row_t *r, Table_t *t,
-		gboolean noreal);
-
-/**
- * @param op
- * @return
- */
 const gchar * sqlite_op2str(int op);
+
+/* ----------------------------------------------------------------------------
+ * Global variables
+ * Not to be altered by a regular server. Designed for testing purposes, or for
+ * those who know what they are doing.
+ * */
+
+/* In the same precision as oio_ext_monotonic_time(), how many TIMESPAN the
+ * current thread should wait for the condition in the cache of bases. */
+extern gint64 oio_cache_period_cond_wait;
+
+/* In the same precision as oio_ext_monotonic_time(), how many TIMESPAN the
+ * current thread should wait for the condition in the cache of bases. */
+extern gint64 oio_election_period_cond_wait;
 
 /** @} */
 

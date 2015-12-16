@@ -9,8 +9,7 @@ target_link_libraries(gridcluster_cli
 		gridcluster metautils
 		${GLIB2_LIBRARIES})
 
-install(
-	TARGETS
+install(TARGETS
 		gridcluster_cli
 	RUNTIME DESTINATION bin)
 

@@ -235,113 +235,14 @@ target_link_libraries(metautils
 		${ASN1C_LIBRARIES}
 		-lm)
 
-#add_dependencies(metautils asn1c_generation)
-
-add_executable(test_lb test_lb.c)
-target_link_libraries(test_lb
+add_executable(tool_sigfpe tool_sigfpe.c)
+target_link_libraries(tool_sigfpe
 		metautils
 		${GLIB2_LIBRARIES})
 
-add_executable(test_stg_policy test_stg_policy.c)
-target_link_libraries(test_stg_policy
-		metautils
-		${GLIB2_LIBRARIES})
-
-add_executable(test_svc_policy test_svc_policy.c)
-target_link_libraries(test_svc_policy
-		metautils
-		${GLIB2_LIBRARIES})
-
-add_executable(test_logger test_logger.c)
-target_link_libraries(test_logger
-		metautils ${GLIB2_LIBRARIES})
-
-add_executable(test_addr test_addr.c)
-target_link_libraries(test_addr
-		metautils
-		${GLIB2_LIBRARIES})
-
-add_executable(test_gridd_client test_gridd_client.c)
-target_link_libraries(test_gridd_client
-		metautils
-		${GLIB2_LIBRARIES})
-
-add_executable(test_lrutree test_lrutree.c)
-target_link_libraries(test_lrutree
-		metautils
-		${GLIB2_LIBRARIES})
-
-add_executable(test_sigfpe test_sigfpe.c)
-target_link_libraries(test_sigfpe
-		metautils
-		${GLIB2_LIBRARIES})
-
-add_executable(test_str test_str.c)
-target_link_libraries(test_str
-		metautils
-		${GLIB2_LIBRARIES})
-
-add_executable(test_gba test_gba.c)
-target_link_libraries(test_gba
-		metautils
-		${GLIB2_LIBRARIES})
 
 install(TARGETS metautils
 		LIBRARY DESTINATION ${LD_LIBDIR}
 		RUNTIME DESTINATION bin
 		PUBLIC_HEADER DESTINATION include)
-
-install(FILES
-			common_main.h
-			expr.h
-			gridd_client.h
-			gridd_client_ext.h
-			gridd_client_pool.h
-			lb.h
-			lrutree.h
-			metacomm.h
-			metatype_acl.h
-			metatype_addrinfo.h
-			metatype_cid.h
-			metatype_kv.h
-			metatype_m0info.h
-			metatype_m1url.h
-			metatype_metadata.h
-			metatype_nsinfo.h
-			metatypes.h
-			metatype_srvinfo.h
-			metautils_bits.h
-			metautils_containers.h
-			metautils-doc.h
-			metautils_errors.h
-			metautils_gba.h
-			metautils.h
-			metautils_hashstr.h
-			metautils_l4v.h
-			metautils_macros.h
-			metautils_resolv.h
-			metautils_sockets.h
-			metautils_strings.h
-			metautils_svc_policy.h
-			metautils_syscall.h
-			metautils_task.h
-			storage_policy.h
-			test_addr.h
-			tree.h
-			volume_lock.h
-		DESTINATION include/metautils/lib
-		PERMISSIONS
-			OWNER_WRITE OWNER_READ GROUP_READ WORLD_READ)
-
-
-add_test(NAME metautils/stgpol COMMAND test_stg_policy)
-add_test(NAME metautils/svc_policy COMMAND test_svc_policy)
-add_test(NAME metautils/lb COMMAND test_lb)
-add_test(NAME metautils/logger COMMAND test_logger)
-add_test(NAME metautils/lru COMMAND test_lrutree)
-add_test(NAME metautils/addr COMMAND test_addr)
-add_test(NAME metautils/gridd_client COMMAND test_gridd_client)
-#add_test(NAME metautils/sigfpe COMMAND test_sigfpe)
-add_test(NAME metautils/strings COMMAND test_str)
-add_test(NAME metautils/gba COMMAND test_gba)
 

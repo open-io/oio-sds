@@ -15,8 +15,6 @@
 # License along with this library.
 
 import hashlib
-import random
-import string
 import time
 import unittest
 
@@ -24,20 +22,13 @@ from mock import patch
 
 from oio.blob.client import BlobClient
 from oio.blob.rebuilder import BlobRebuilderWorker
-from oio.common.exceptions import SpareChunkException, OrphanChunk
-from oio.common.exceptions import UnrecoverableContent
+from oio.common.exceptions import SpareChunkException, OrphanChunk, \
+    UnrecoverableContent
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.rdir.client import RdirClient
+from tests.functional.rdir.common import generate_id
 from tests.utils import BaseTestCase, get_config
-
-
-def generate_data(dictionary, n):
-    return ''.join(random.choice(dictionary) for _ in range(n))
-
-
-def generate_id(size):
-    return generate_data(string.digits + 'ABCDEF', size)
 
 
 class TestContent(object):

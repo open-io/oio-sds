@@ -36,8 +36,11 @@ _ptrv_free_content (gchar **tab)
 	while (*tab) { g_free (*(tab++)); }
 }
 
+/* @private */
+enum _prefix_e { PREFIX_REFERENCE, PREFIX_CONTAINER };
+
 static GString *
-_curl_url_prefix (struct oio_url_s *u)
+_curl_url_prefix (struct oio_url_s *u, enum _prefix_e which)
 {
 	GString *hu = g_string_new("http://");
 
@@ -46,7 +49,15 @@ _curl_url_prefix (struct oio_url_s *u)
 		GRID_WARN ("BUG No namespace configured!");
 		g_string_append (hu, "proxy");
 	} else {
-		gchar *s = oio_cfg_get_proxy_containers (ns);
+		gchar *s = NULL;
+
+		if (which == PREFIX_CONTAINER)
+			s = oio_cfg_get_proxy_containers (ns);
+		else if (which == PREFIX_REFERENCE)
+			s = oio_cfg_get_proxy_directory (ns);
+		else
+			s = oio_cfg_get_proxy (ns);
+
 		if (!s) {
 			GRID_WARN ("No proxy configured!");
 			g_string_append (hu, "proxy");
@@ -59,6 +70,18 @@ _curl_url_prefix (struct oio_url_s *u)
 	return hu;
 }
 
+static GString *
+_curl_url_prefix_containers (struct oio_url_s *u)
+{
+	return _curl_url_prefix (u, PREFIX_CONTAINER);
+}
+
+static GString *
+_curl_url_prefix_reference (struct oio_url_s *u)
+{
+	return _curl_url_prefix (u, PREFIX_REFERENCE);
+}
+
 static void
 _append (GString *gs, char sep, const char *k, const char *v)
 {
@@ -68,10 +91,10 @@ _append (GString *gs, char sep, const char *k, const char *v)
 }
 
 static GString *
-_curl_container_url (struct oio_url_s *u, const char *action)
+_curl_reference_url (struct oio_url_s *u, const char *action)
 {
-	GString *hu = _curl_url_prefix (u);
-	g_string_append_printf (hu, "/%s/%s/container/%s", PROXYD_PREFIX,
+	GString *hu = _curl_url_prefix_reference (u);
+	g_string_append_printf (hu, "/%s/%s/reference/%s", PROXYD_PREFIX,
 			oio_url_get(u, OIOURL_NS), action);
 	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
 	_append (hu, '&', "ref",  oio_url_get (u, OIOURL_USER));
@@ -79,13 +102,35 @@ _curl_container_url (struct oio_url_s *u, const char *action)
 }
 
 static GString *
+_append_type (struct oio_url_s *u, GString *hu)
+{
+	const char *type = oio_url_get (u, OIOURL_TYPE);
+	if (type && *type)
+		_append (hu, '&', "type", type);
+	return hu;
+}
+
+static GString *
+_curl_container_url (struct oio_url_s *u, const char *action)
+{
+	GString *hu = _curl_url_prefix_containers (u);
+	g_string_append_printf (hu, "/%s/%s/container/%s", PROXYD_PREFIX,
+			oio_url_get(u, OIOURL_NS), action);
+	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
+	_append (hu, '&', "ref",  oio_url_get (u, OIOURL_USER));
+	_append_type (u, hu);
+	return hu;
+}
+
+static GString *
 _curl_content_url (struct oio_url_s *u, const char *action)
 {
-	GString *hu = _curl_url_prefix (u);
+	GString *hu = _curl_url_prefix_containers (u);
 	g_string_append_printf (hu, "/%s/%s/content/%s", PROXYD_PREFIX,
 			oio_url_get(u, OIOURL_NS), action);
 	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
 	_append (hu, '&', "ref",  oio_url_get (u, OIOURL_USER));
+	_append_type (u, hu);
 	_append (hu, '&', "path", oio_url_get (u, OIOURL_PATH));
 	return hu;
 }
@@ -123,14 +168,14 @@ _body_parse_error (GString *b)
 }
 
 static size_t
-_write_NOOP(void *data, size_t s, size_t n, void *ignored)
+_write_NOOP (void *data, size_t s, size_t n, void *ignored)
 {
 	(void) data, (void) ignored;
 	return s*n;
 }
 
 static size_t
-_write_GString(void *b, size_t s, size_t n, GString *out)
+_write_GString (void *b, size_t s, size_t n, GString *out)
 {
 	g_string_append_len (out, (gchar*)b, s*n);
 	return s*n;
@@ -143,7 +188,7 @@ struct view_GString_s
 };
 
 static size_t
-_read_GString(void *b, size_t s, size_t n, struct view_GString_s *in)
+_read_GString (void *b, size_t s, size_t n, struct view_GString_s *in)
 {
 	size_t remaining = in->data->len - in->done;
 	size_t available = s * n;
@@ -205,7 +250,7 @@ _header_callback(char *b, size_t s, size_t n, void *u)
 	gchar tmp[total+1];
 	memcpy (tmp, b, total);
 	tmp[total] = '\0';
-	
+
 	char *colon = strchr(tmp, ':');
 	if (colon) {
 		*(colon++) = 0;
@@ -216,7 +261,7 @@ _header_callback(char *b, size_t s, size_t n, void *u)
 		o->headers[l+1] = g_strdup (g_strstrip(colon));
 		o->headers[l+2] = NULL;
 	}
-	
+
 	return n*s;
 }
 
@@ -296,10 +341,10 @@ static GError *
 _proxy_call (CURL *h, const char *method, const char *url,
 		struct http_ctx_s *in, struct http_ctx_s *out)
 {
-	gint64 t = g_get_monotonic_time ();
+	gint64 t = oio_ext_monotonic_time ();
 	GRID_DEBUG("proxy: %s %s", method, url);
 	GError *err = _proxy_call_notime (h, method, url, in, out);
-	t = g_get_monotonic_time () - t;
+	t = oio_ext_monotonic_time () - t;
 	GRID_DEBUG("proxy: %s %s took %"G_GINT64_FORMAT"us", method, url, t);
 	return err;
 }
@@ -416,6 +461,52 @@ oio_proxy_call_content_list (CURL *h, struct oio_url_s *u, GString *out,
 	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);
 	g_strfreev (o.headers);
 
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_reference_show (CURL *h, struct oio_url_s *u,
+		const char *t, GString *out)
+{
+	GString *http_url = _curl_reference_url (u, "show");
+	if (t) _append(http_url, '&', "type", t);
+
+	struct http_ctx_s o = { .headers = NULL, .body = out };
+	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);
+	g_strfreev (o.headers);
+
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_reference_create (CURL *h, struct oio_url_s *u)
+{
+	GString *http_url = _curl_reference_url (u, "create");
+	GError *err = _proxy_call (h, "POST", http_url->str, NULL, NULL);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
+		const char *srvtype, gboolean autocreate, GString *out)
+{
+	GString *http_url = _curl_reference_url (u, "link");
+	_append (http_url, '&', "type", srvtype);
+	gchar *hdrin[] = {
+		g_strdup(PROXYD_HEADER_PREFIX "action-mode"),
+		g_strdup(autocreate ? "autocreate" : ""),
+		NULL,
+	};
+
+	struct http_ctx_s i = { .headers = hdrin, .body = NULL };
+	struct http_ctx_s o = { .headers = NULL, .body = out };
+	GError *err = _proxy_call (h, "POST", http_url->str, &i, &o);
+
+	_ptrv_free_content (i.headers);
+	g_strfreev (o.headers);
 	g_string_free(http_url, TRUE);
 	return err;
 }

@@ -156,10 +156,12 @@ _metacd_load_url (struct req_args_s *args)
 	if (NULL != (s = ACCOUNT()))
 		oio_url_set (url, OIOURL_ACCOUNT, s);
 
-	if (NULL != (s = REF())) {
+	if (NULL != (s = REF()))
 		oio_url_set (url, OIOURL_USER, s);
-		oio_url_set (url, OIOURL_TYPE, OIOURL_DEFAULT_TYPE);
-	}
+
+	if (NULL != (s = TYPE()))
+		oio_url_set (url, OIOURL_TYPE, s);
+
 	if (NULL != (s = PATH())) {
 		oio_url_set (url, OIOURL_PATH, s);
 		if (NULL != (s = VERSION()))
@@ -223,6 +225,7 @@ handler_action (gpointer u, struct http_request_s *rq,
 
 		args.url = url = _metacd_load_url (&args);
 		req_handler_f handler = path_matching_get_udata (*matchings);
+		GRID_TRACE("URL %s", oio_url_get(args.url, OIOURL_WHOLE));
 		rc = (*handler) (&args);
 	}
 
@@ -249,7 +252,7 @@ _task_expire_services_down (gpointer p)
 	gpointer v = NULL;
 	guint count = 0;
 
-	gulong oldest = time(0) - 8;
+	gulong oldest = (oio_ext_monotonic_time() / G_TIME_SPAN_SECOND) - 8;
 
 	SRV_DO(while (lru_tree_get_last(srv_down, (void**)&k, &v)) {
 		EXTRA_ASSERT(k != NULL);
@@ -270,7 +273,7 @@ static void
 _task_expire_resolver (gpointer p)
 {
 	(void) p;
-	hc_resolver_set_now (resolver, time (0));
+	hc_resolver_set_now (resolver, oio_ext_monotonic_time() / G_TIME_SPAN_SECOND);
 	guint count = hc_resolver_expire (resolver);
 	if (count)
 		GRID_DEBUG ("Expired %u resolver entries", count);
@@ -591,7 +594,7 @@ configure_request_handlers (void)
 	path_parser_configure (path_parser, PROXYD_PREFIX2 "/cache/max/high/$COUNT/#POST", action_cache_set_max_high);
 
     // New routes
-  
+
 	// Load Balancing
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/lb/choose/#GET", action_lb_choose);
 
@@ -700,9 +703,9 @@ grid_main_configure (int argc, char **argv)
 	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free,
 			NULL, LTO_NOATIME);
 
-	resolver = hc_resolver_create ();
+	resolver = hc_resolver_create1 (oio_ext_monotonic_time() / G_TIME_SPAN_SECOND);
 	enum hc_resolver_flags_e f = 0;
-	if (flag_cache_enabled)
+	if (!flag_cache_enabled)
 		f |= HC_RESOLVER_NOCACHE;
 	hc_resolver_configure (resolver, f);
 	hc_resolver_qualify (resolver, service_is_ok);

@@ -35,9 +35,9 @@ class DirectoryClient(Client):
             return False
         return True
 
-    def show(self, acct=None, ref=None, cid=None, **kwargs):
+    def show(self, acct=None, ref=None, cid=None, srv_type=None, **kwargs):
         uri = self._make_uri('reference/show')
-        params = self._make_params(acct, ref, cid=cid)
+        params = self._make_params(acct, ref, cid=cid, srv_type=srv_type)
         resp, body = self._request('GET', uri, params=params)
         return body
 

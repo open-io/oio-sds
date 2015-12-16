@@ -45,6 +45,7 @@ In addition, a few python modules are required at runtime:
 * python-eventlet
 * python-flask
 * python-gunicorn
+* python-plyvel
 * python-redis
 * python-requests
 * python-simplejson
@@ -101,7 +102,8 @@ cd ${SRCDIR}/python; sudo python setup.py develop; cd -
 
 | Macro | Default | Description |
 | ----- | ------- | ----------- |
-| GCLUSTER_ETC_DIR | "/etc/oio" | System-wide configuration directory |
+| OIOSDS_RELEASE | "master" | Global release name |
+| OIOSDS_API_VERSION_SHORT | "1.0" | Minor version number |
 | GCLUSTER_RUN_DIR | "/var/run" | Prefix to spool. |
 | GCLUSTER_CONFIG_FILE_PATH | "/etc/oio/sds.conf" | System-wide configuration file |
 | GCLUSTER_CONFIG_DIR_PATH | "/etc/oio/sds.conf.d" | System-wide configuration directory for additional files. |

@@ -1,0 +1,12 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=@CMAKE_INSTALL_PREFIX@/@LD_LIBEXECDIR@
+libdir=@CMAKE_INSTALL_PREFIX@/@LD_LIBDIR@
+includedir=@CMAKE_INSTALL_PREFIX@/include
+
+Name: OpenIO SDS
+Description: SDS client API's
+Version: @OIOSDS_API_VERSION_SHORT@
+Requires.private: sqlite3, glib-2.0
+Libs: -L${libdir} -loiocore -loiosds -loiosqlx -loiosqlx_direct -loiosqlx_local
+Cflags: -I${includedir}
+
