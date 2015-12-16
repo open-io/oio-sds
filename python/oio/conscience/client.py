@@ -25,3 +25,8 @@ class ConscienceClient(Client):
         uri = self._make_uri('conscience/register')
         data = json.dumps(service_definition)
         resp, body = self._request('POST', uri, data=data)
+
+    def info(self):
+        uri = self._make_uri("conscience/info")
+        resp, body = self._request("GET", uri)
+        return body
