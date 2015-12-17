@@ -756,6 +756,7 @@ def generate (ns, ip, options={}):
 	# Test agent configuration
 	listing = {}
 	listing["namespace"] = ns
+	listing["chunk_size"] = env['CHUNK_SIZE']
         listing["stgpol"] = stgpol
 	listing["account"] = 'test_account'
 	listing["account_addr"] = [str(ip) + ":" + str(port_account)]
