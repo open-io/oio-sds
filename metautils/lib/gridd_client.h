@@ -123,8 +123,11 @@ gboolean gridd_client_expire (struct gridd_client_s *self, gint64 now);
 void gridd_client_react (struct gridd_client_s *self);
 void gridd_client_fail (struct gridd_client_s *self, GError *why);
 
-// Instanciate a client with the default VTABLE
+/* Instanciate a client with the default VTABLE */
 struct gridd_client_s * gridd_client_create_empty(void);
+
+/* Only works with clients of the default type */
+void gridd_client_no_redirect (struct gridd_client_s *c);
 
 /* ------------------------------------------------------------------------- */
 

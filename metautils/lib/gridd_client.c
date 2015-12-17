@@ -78,6 +78,7 @@ struct gridd_client_s
 	GError *error;
 	GString *past_url;
 	gboolean keepalive;
+	gboolean forbid_redirect;
 };
 
 static void _client_free(struct gridd_client_s *client);
@@ -284,7 +285,7 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 		return NULL;
 	}
 
-	if (status == CODE_REDIRECT) {
+	if (status == CODE_REDIRECT && !client->forbid_redirect) {
 		/* Reset the context */
 		_client_reset_reply(client);
 		_client_reset_cnx(client);
@@ -848,6 +849,14 @@ gridd_client_create_empty(void)
 	client->past_url = g_string_new("");
 
 	return client;
+}
+
+void
+gridd_client_no_redirect (struct gridd_client_s *c)
+{
+	if (!c) return;
+	EXTRA_ASSERT(c->abstract.vtable == &VTABLE_CLIENT);
+	c->forbid_redirect = TRUE;
 }
 
 struct gridd_client_factory_s *
