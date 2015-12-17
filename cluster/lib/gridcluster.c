@@ -542,6 +542,15 @@ struct maj_min_idle_s {
 	gdouble idle;
 };
 
+/** @private */
+struct path_maj_min_s
+{
+	gint64 last_update;
+	int major;
+	int minor;
+	gchar path[];
+};
+
 static GSList *io_cache = NULL;
 static GMutex io_lock;
 
@@ -550,6 +559,16 @@ static GMutex majmin_lock;
 
 void _constructor_idle_cache (void);
 void _destructor_idle_cache (void);
+
+
+static void
+_free_majmin_idle_list (GSList *l)
+{
+	void _clean_idle (struct maj_min_idle_s *p) {
+		SLICE_FREE (struct maj_min_idle_s, p);
+	}
+	g_slist_free_full (l, (GDestroyNotify)_clean_idle);
+}
 
 void __attribute__ ((constructor))
 _constructor_idle_cache (void)
@@ -569,7 +588,7 @@ _destructor_idle_cache (void)
 	_constructor_idle_cache ();
 
 	g_mutex_lock (&io_lock);
-	g_slist_free_full (io_cache, g_free);
+	_free_majmin_idle_list (io_cache);
 	io_cache = NULL;
 	g_mutex_unlock (&io_lock);
 
@@ -648,20 +667,12 @@ _compute_io_idle (guint major, guint minor)
 			kept = g_slist_prepend (kept, p);
 	}
 	g_slist_free (io_cache);
-	g_slist_free_full (trash, g_free);
+	_free_majmin_idle_list (trash);
 	io_cache = kept;
 	g_mutex_unlock (&io_lock);
 
 	return idle;
 }
-
-struct path_maj_min_s
-{
-	gint64 last_update;
-	int major;
-	int minor;
-	gchar path[];
-};
 
 static int
 _get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
