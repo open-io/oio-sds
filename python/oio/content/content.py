@@ -116,6 +116,10 @@ class Chunk(object):
         return self.pos.split('.')[1]
 
     @property
+    def is_subchunk(self):
+        return len(self.pos.split('.')) > 1
+
+    @property
     def is_parity(self):
         return self.subpos[0] == 'p'
 
@@ -145,6 +149,24 @@ class Chunk(object):
     def __str__(self):
         return "[Chunk %s]" % self.id
 
+    def __cmp__(self, other):
+        if self.metapos != other.metapos:
+            return cmp(int(self.metapos), int(other.metapos))
+
+        if not self.is_subchunk:
+            return cmp(self.id, other.id)
+
+        if not self.is_parity and not other.is_parity:
+            return cmp(int(self.subpos), int(other.subpos))
+
+        if self.is_parity and other.is_parity:
+            return cmp(self.subpos, other.subpos)
+
+        if self.is_parity:
+            return 1
+
+        return -1
+
 
 class ChunksHelper(object):
     def __init__(self, chunks, raw_chunk=True):
@@ -154,6 +176,7 @@ class ChunksHelper(object):
                 self.chunks.append(Chunk(c))
         else:
             self.chunks = chunks
+        self.chunks.sort()
 
     def filter(self, id=None, pos=None, metapos=None, subpos=None,
                is_parity=None):

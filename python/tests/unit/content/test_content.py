@@ -32,6 +32,7 @@ class TestChunk(unittest.TestCase):
         self.assertEqual(c.hash, "E952A419957A6E405BFC53EC65483F73")
         self.assertEqual(c.id, "AABBCC")
         self.assertEqual(c.host, "127.0.0.1:6010")
+        self.assertFalse(c.is_subchunk)
         self.assertEqual(c.data, data)
         self.assertEqual(c.raw(), data)
 
@@ -45,6 +46,7 @@ class TestChunk(unittest.TestCase):
         self.assertEqual(c.pos, "0.1")
         self.assertEqual(c.metapos, "0")
         self.assertEqual(c.subpos, "1")
+        self.assertTrue(c.is_subchunk)
 
     def test_chunk_rain_parity(self):
         data = {
@@ -56,6 +58,54 @@ class TestChunk(unittest.TestCase):
         self.assertEqual(c.pos, "0.p0")
         self.assertEqual(c.metapos, "0")
         self.assertEqual(c.subpos, "p0")
+        self.assertTrue(c.is_subchunk)
+
+    def test_comparison_no_rain(self):
+        c1 = Chunk({
+            "url": "http://127.0.0.1:6011/BB",
+            "pos": "0", "size": 1048576,
+            "hash": "00000000000000000000000000000000"})
+        c2 = Chunk({
+            "url": "http://127.0.0.1:6011/AA",
+            "pos": "1", "size": 1048576,
+            "hash": "00000000000000000000000000000000"})
+        c3 = Chunk({
+            "url": "http://127.0.0.1:6011/BB",
+            "pos": "1", "size": 1048576,
+            "hash": "00000000000000000000000000000000"})
+        self.assertTrue(c1 < c2)
+        self.assertFalse(c1 > c2)
+        self.assertTrue(c1 == c1)
+        self.assertTrue(c2 < c3)
+        self.assertFalse(c2 > c3)
+        self.assertFalse(c2 == c3)
+
+    def test_comparison_rain(self):
+        c1 = Chunk({
+            "url": "http://127.0.0.1:6011/BB",
+            "pos": "0.0", "size": 1048576,
+            "hash": "00000000000000000000000000000000"})
+        c2 = Chunk({
+            "url": "http://127.0.0.1:6011/AA",
+            "pos": "0.1", "size": 1048576,
+            "hash": "00000000000000000000000000000000"})
+        c3 = Chunk({
+            "url": "http://127.0.0.1:6011/BB",
+            "pos": "1.0", "size": 1048576,
+            "hash": "00000000000000000000000000000000"})
+        c4 = Chunk({
+            "url": "http://127.0.0.1:6011/BB",
+            "pos": "0.p0", "size": 1048576,
+            "hash": "00000000000000000000000000000000"})
+        c5 = Chunk({
+            "url": "http://127.0.0.1:6011/BB",
+            "pos": "0.p1", "size": 1048576,
+            "hash": "00000000000000000000000000000000"})
+        self.assertTrue(c1 < c2)
+        self.assertTrue(c2 < c3)
+        self.assertTrue(c2 < c4)
+        self.assertTrue(c4 < c3)
+        self.assertTrue(c4 < c5)
 
 
 class TestChunksHelper(unittest.TestCase):
@@ -113,6 +163,26 @@ class TestChunksHelper(unittest.TestCase):
 
     def tearDown(self):
         super(TestChunksHelper, self).tearDown()
+
+    def test_sort_dup(self):
+        rain_chunks = ChunksHelper([
+            self.dup_c2_2, self.dup_c2_1,
+            self.dup_c1_2, self.dup_c1_1
+        ])
+        self.assertEqual(rain_chunks.raw(), [
+            self.dup_c1_1, self.dup_c1_2,
+            self.dup_c2_1, self.dup_c2_2
+        ])
+
+    def test_sort_rain(self):
+        rain_chunks = ChunksHelper([
+            self.rain_c1_p, self.rain_c1_1, self.rain_c1_0,
+            self.rain_c0_p, self.rain_c0_1, self.rain_c0_0
+        ])
+        self.assertEqual(rain_chunks.raw(), [
+            self.rain_c0_0, self.rain_c0_1, self.rain_c0_p,
+            self.rain_c1_0, self.rain_c1_1, self.rain_c1_p
+        ])
 
     def test_dup_search(self):
         res1 = self.dup_chunks.filter(pos="1")
