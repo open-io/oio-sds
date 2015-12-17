@@ -66,6 +66,18 @@ static GError *
 _m1_action (struct oio_url_s *url, gchar ** m1v,
 	GError * (*hook) (const char * m1))
 {
+	if (m1v && *m1v) {
+		gboolean _wrap (gconstpointer p) {
+			gchar *m1u = meta1_strurl_get_address ((const char*)p);
+			STRING_STACKIFY (m1u);
+			return service_is_ok (m1u);
+		}
+		gsize len = oio_ext_array_partition ((void**)m1v,
+				g_strv_length (m1v), _wrap);
+		if (len > 0 && !oio_dir_no_shuffle)
+			oio_ext_array_shuffle ((void**)m1v, len);
+	}
+
 	for (gchar ** pm1 = m1v; *pm1; ++pm1) {
 		struct meta1_service_url_s *m1 = meta1_unpack_url (*pm1);
 		if (!m1)
@@ -84,16 +96,23 @@ _m1_action (struct oio_url_s *url, gchar ** m1v,
 		}
 
 		GError *err = hook (m1->host);
+		if (err && CODE_IS_NETWORK_ERROR(err->code)) {
+			GRID_WARN("M1 cnx error [%s]: (%d) %s",
+					m1->host, err->code, err->message);
+			service_invalidate (m1->host);
+		}
 		meta1_service_url_clean (m1);
+
 		if (!err)
 			return NULL;
-		else if (err->code == CODE_REDIRECT)
+		if (CODE_IS_NETWORK_ERROR (err->code) || err->code == CODE_REDIRECT)
 			g_clear_error (&err);
 		else {
 			g_prefix_error (&err, "META1 error: ");
 			return err;
 		}
 	}
+
 	return NEWERROR (CODE_UNAVAILABLE, "No meta1 answered");
 }
 
@@ -150,7 +169,7 @@ decode_json_string_array (gchar *** pkeys, struct json_object *j)
 	return err;
 }
 
-//------------------------------------------------------------------------------
+/* -------------------------------------------------------------------------- */
 
 static enum http_rc_e
 action_dir_srv_link (struct req_args_s *args, struct json_object *jargs)
@@ -317,7 +336,7 @@ action_dir_srv_relink (struct req_args_s *args, struct json_object *jargs)
 	return _reply_success_json (args, _pack_and_freev_m1url_list (NULL, newset));
 }
 
-//------------------------------------------------------------------------------
+/* -------------------------------------------------------------------------- */
 
 static enum http_rc_e
 action_dir_prop_get (struct req_args_s *args, struct json_object *jargs)

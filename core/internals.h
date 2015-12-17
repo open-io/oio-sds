@@ -154,8 +154,11 @@ enum {
 
 typedef gint64 (*time_hook_f) (void);
 
-/* Must the service addresses be shuffled or not */
+/* Must the service addresses be shuffled or not when uploading chunks */
 extern volatile int oio_sds_no_shuffle;
+
+/* Must the service addresses be shuffled or not (out from the directory) */
+extern volatile int oio_dir_no_shuffle;
 
 /* Let/Set it to NULL for the system time.
  * Microsecond precision */
