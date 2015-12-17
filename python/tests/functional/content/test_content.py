@@ -19,6 +19,7 @@ from mock import MagicMock as Mock
 from oio.common.exceptions import InconsistentContent
 from oio.content.factory import ContentFactory
 from oio.content.dup import DupContent
+from oio.content.rain import RainContent
 from tests.utils import BaseTestCase
 
 
@@ -74,16 +75,16 @@ class TestContentFactory(BaseTestCase):
     def test_get_rain(self):
         meta = {
             "chunk-method": "plain/rain?algo=liber8tion&k=6&m=2",
-            "ctime": 1450176946,
-            "deleted": False,
+            "ctime": "1450176946",
+            "deleted": "False",
             "hash": "E952A419957A6E405BFC53EC65483F73",
             "hash-method": "md5",
             "id": "3FA2C4A1ED2605005335A276890EC458",
-            "length": 658,
+            "length": "658",
             "mime-type": "application/octet-stream",
             "name": "tox.ini",
             "policy": "RAIN",
-            "version": 1450176946676289
+            "version": "1450176946676289"
         }
         chunks = [
             {
@@ -105,23 +106,34 @@ class TestContentFactory(BaseTestCase):
         ]
         self.content_factory.container_client.content_show = Mock(
             return_value=(chunks, meta))
-        # TODO
-        self.assertRaises(Exception, self.content_factory.get,
-                          "xxx_container_id", "xxx_content_id")
+        c = self.content_factory.get("xxx_container_id", "xxx_content_id")
+        self.assertEqual(type(c), RainContent)
+        self.assertEqual(c.content_id, "3FA2C4A1ED2605005335A276890EC458")
+        self.assertEqual(c.length, 658)
+        self.assertEqual(c.path, "tox.ini")
+        self.assertEqual(c.version, "1450176946676289")
+        self.assertEqual(c.algo, "liber8tion")
+        self.assertEqual(c.k, 6)
+        self.assertEqual(c.m, 2)
+        self.assertEqual(len(c.chunks), 4)
+        self.assertEqual(c.chunks[0].raw(), chunks[0])
+        self.assertEqual(c.chunks[1].raw(), chunks[1])
+        self.assertEqual(c.chunks[2].raw(), chunks[2])
+        self.assertEqual(c.chunks[3].raw(), chunks[3])
 
     def test_get_dup(self):
         meta = {
             "chunk-method": "plain/bytes",
-            "ctime": 1450176946,
-            "deleted": False,
+            "ctime": "1450176946",
+            "deleted": "False",
             "hash": "E952A419957A6E405BFC53EC65483F73",
             "hash-method": "md5",
             "id": "3FA2C4A1ED2605005335A276890EC458",
-            "length": 658,
+            "length": "658",
             "mime-type": "application/octet-stream",
             "name": "tox.ini",
             "policy": "TWOCOPIES",
-            "version": 1450176946676289
+            "version": "1450176946676289"
         }
         chunks = [
             {
@@ -137,3 +149,62 @@ class TestContentFactory(BaseTestCase):
             return_value=(chunks, meta))
         c = self.content_factory.get("xxx_container_id", "xxx_content_id")
         self.assertEqual(type(c), DupContent)
+        self.assertEqual(c.content_id, "3FA2C4A1ED2605005335A276890EC458")
+        self.assertEqual(c.length, 658)
+        self.assertEqual(c.path, "tox.ini")
+        self.assertEqual(c.version, "1450176946676289")
+        self.assertEqual(c.nb_copy, 2)
+        self.assertEqual(c.distance, 1)
+        self.assertEqual(len(c.chunks), 2)
+        self.assertEqual(c.chunks[0].raw(), chunks[0])
+        self.assertEqual(c.chunks[1].raw(), chunks[1])
+
+    def test_new_rain(self):
+        meta = {
+            "chunk-method": "plain/rain?algo=liber8tion&k=6&m=2",
+            "ctime": "1450341162",
+            "deleted": "False",
+            "hash": "",
+            "hash-method": "md5",
+            "id": "F4B1C8DD132705007DE8B43D0709DAA2",
+            "length": "1000",
+            "mime-type": "application/octet-stream",
+            "name": "titi",
+            "policy": "RAIN",
+            "version": "1450341162332663"
+        }
+        chunks = [
+            {
+                "url": "http://127.0.0.1:6010/0_p1",
+                "pos": "0.p1", "size": 1048576,
+                "hash": "00000000000000000000000000000000"},
+            {
+                "url": "http://127.0.0.1:6011/0_p0",
+                "pos": "0.p0", "size": 1048576,
+                "hash": "00000000000000000000000000000000"},
+            {
+                "url": "http://127.0.0.1:6016/0_1",
+                "pos": "0.1", "size": 1048576,
+                "hash": "00000000000000000000000000000000"},
+            {
+                "url": "http://127.0.0.1:6017/0_0",
+                "pos": "0.0", "size": 1048576,
+                "hash": "00000000000000000000000000000000"}
+        ]
+        self.content_factory.container_client.content_prepare = Mock(
+            return_value=(chunks, meta))
+        c = self.content_factory.new("xxx_container_id", "titi",
+                                     1000, "RAIN")
+        self.assertEqual(type(c), RainContent)
+        self.assertEqual(c.content_id, "F4B1C8DD132705007DE8B43D0709DAA2")
+        self.assertEqual(c.length, 1000)
+        self.assertEqual(c.path, "titi")
+        self.assertEqual(c.version, "1450341162332663")
+        self.assertEqual(c.algo, "liber8tion")
+        self.assertEqual(c.k, 6)
+        self.assertEqual(c.m, 2)
+        self.assertEqual(len(c.chunks), 4)
+        self.assertEqual(c.chunks[0].raw(), chunks[0])
+        self.assertEqual(c.chunks[1].raw(), chunks[1])
+        self.assertEqual(c.chunks[2].raw(), chunks[2])
+        self.assertEqual(c.chunks[3].raw(), chunks[3])

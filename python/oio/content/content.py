@@ -13,10 +13,12 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+import requests
 
 from oio.blob.client import BlobClient
 from oio.common.exceptions import ClientException
 from oio.common.utils import get_logger
+from oio.conscience.client import ConscienceClient
 from oio.container.client import ContainerClient
 from oio.common import exceptions as exc
 
@@ -29,9 +31,16 @@ class Content(object):
         self.chunks = ChunksHelper(chunks)
         self.stgpol_args = stgpol_args
         self.logger = get_logger(self.conf)
-        self.content_id = metadata["id"]
+        self.cs_client = ConscienceClient(conf)
         self.container_client = ContainerClient(self.conf)
         self.blob_client = BlobClient()
+        self.session = requests.Session()
+        self.content_id = metadata["id"]
+        self.stgpol_name = metadata["policy"]
+        self.path = metadata["name"]
+        self.length = int(metadata["length"])
+        self.version = metadata["version"]
+        self.hash = metadata["hash"]
 
     def meta2_get_spare_chunk(self, chunks_notin, chunks_broken, size=0):
         spare_data = {"notin": ChunksHelper(chunks_notin, False).raw(),
@@ -69,6 +78,16 @@ class Content(object):
         self.container_client.container_raw_update(
             cid=self.container_id, data=update_data)
 
+    def meta2_create_object(self):
+        # FIXME add version, mime-type, chunk-method
+        self.container_client.content_create(cid=self.container_id,
+                                             path=self.path,
+                                             content_id=self.content_id,
+                                             stgpol=self.stgpol_name,
+                                             size=self.length,
+                                             checksum=self.hash,
+                                             data=self.chunks.raw())
+
     def rebuild_chunk(self, chunk_id):
         raise NotImplementedError()
 
@@ -89,6 +108,18 @@ class Chunk(object):
         return self._data["pos"]
 
     @property
+    def metapos(self):
+        return self.pos.split('.')[0]
+
+    @property
+    def subpos(self):
+        return self.pos.split('.')[1]
+
+    @property
+    def is_parity(self):
+        return self.subpos[0] == 'p'
+
+    @property
     def size(self):
         return self._data["size"]
 
@@ -97,8 +128,12 @@ class Chunk(object):
         return self.url.split('/')[-1]
 
     @property
+    def host(self):
+        return self.url.split('/')[2]
+
+    @property
     def hash(self):
-        return self._data["hash"]
+        return self._data["hash"].upper()
 
     @property
     def data(self):
@@ -120,22 +155,36 @@ class ChunksHelper(object):
         else:
             self.chunks = chunks
 
-    def filter(self, id=None, pos=None):
+    def filter(self, id=None, pos=None, metapos=None, subpos=None,
+               is_parity=None):
         found = []
         for c in self.chunks:
             if id is not None and c.id != id:
                 continue
             if pos is not None and c.pos != str(pos):
                 continue
+            if metapos is not None and c.metapos != str(metapos):
+                continue
+            if subpos is not None and c.subpos != str(subpos):
+                continue
+            if is_parity is not None and c.is_parity != is_parity:
+                continue
             found.append(c)
         return ChunksHelper(found, False)
 
-    def exclude(self, id=None, pos=None):
+    def exclude(self, id=None, pos=None, metapos=None, subpos=None,
+                is_parity=None):
         found = []
         for c in self.chunks:
             if id is not None and c.id == id:
                 continue
             if pos is not None and c.pos == str(pos):
+                continue
+            if metapos is not None and c.metapos == str(metapos):
+                continue
+            if subpos is not None and c.subpos == str(subpos):
+                continue
+            if is_parity is not None and c.is_parity == is_parity:
                 continue
             found.append(c)
         return ChunksHelper(found, False)
@@ -160,3 +209,6 @@ class ChunksHelper(object):
     def __iter__(self):
         for c in self.chunks:
             yield c
+
+    def __getitem__(self, item):
+        return self.chunks[item]

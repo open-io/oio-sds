@@ -20,6 +20,7 @@ from oio.common.utils import get_logger
 from oio.conscience.client import ConscienceClient
 from oio.container.client import ContainerClient
 from oio.content.dup import DupContent
+from oio.content.rain import RainContent
 
 
 class ContentFactory(object):
@@ -68,11 +69,21 @@ class ContentFactory(object):
         if pol_type == "DUP":
             return DupContent(self.conf, container_id, meta, chunks, pol_args)
         elif pol_type == "RAIN":
-            # TODO
-            raise NotImplementedError("Not yet implemented")
+            return RainContent(self.conf, container_id, meta, chunks, pol_args)
 
         raise InconsistentContent("Unknown storage policy")
 
     def new(self, container_id, path, size, policy):
-        # TODO
-        raise NotImplementedError("Not yet implemented")
+        # TODO allow to specify the storage policy
+        chunks, meta = self.container_client.content_prepare(
+            cid=container_id, path=path, size=size)
+
+        # TODO use the forced policy
+        pol_type, pol_args = self._extract_datasec(meta['policy'])
+
+        if pol_type == "DUP":
+            return DupContent(self.conf, container_id, meta, chunks, pol_args)
+        elif pol_type == "RAIN":
+            return RainContent(self.conf, container_id, meta, chunks, pol_args)
+
+        raise InconsistentContent("Unknown storage policy")

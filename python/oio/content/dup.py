@@ -23,8 +23,8 @@ class DupContent(Content):
     def __init__(self, conf, container_id, metadata, chunks, stgpol_args):
         super(DupContent, self).__init__(conf, container_id, metadata,
                                          chunks, stgpol_args)
-        self.nb_copy = stgpol_args["nb_copy"]
-        self.distance = stgpol_args["distance"]
+        self.nb_copy = int(stgpol_args["nb_copy"])
+        self.distance = int(stgpol_args["distance"])
 
     def rebuild_chunk(self, chunk_id):
         current_chunk = self.chunks.filter(id=chunk_id).one()

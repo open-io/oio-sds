@@ -172,7 +172,8 @@ class ContainerClient(Client):
         hdrs = gen_headers()
         resp, body = self._request(
             'POST', uri, data=data, params=params, headers=hdrs)
-        return body
+        resp_headers = extract_content_headers_meta(resp.headers)
+        return body, resp_headers
 
     def content_get_properties(self, acct=None, ref=None, path=None,
                                properties=[], cid=None, **kwargs):
