@@ -655,6 +655,7 @@ configure_request_handlers (void)
 
     // Admin
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/ping/#POST", action_admin_ping);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/info/#POST", action_admin_info);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/status/#POST", action_admin_status);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/drop_cache/#POST", action_admin_drop_cache);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/sync/#POST", action_admin_sync);
