@@ -33,11 +33,13 @@ License along with this library.
 } while (0)
 
 time_hook_f oio_time_monotonic = NULL;
-
 time_hook_f oio_time_real = NULL;
+volatile int oio_sds_default_autocreate = 0;
+volatile int oio_sds_no_shuffle = 0;
+volatile int oio_dir_no_shuffle = 0;
 
 static GSList*
-gslist_merge_random(GSList *l1, GSList *l2)
+gslist_merge_random (GSList *l1, GSList *l2)
 {
 	GSList *next, *result = NULL;
 
@@ -60,7 +62,7 @@ gslist_merge_random(GSList *l1, GSList *l2)
 }
 
 static void
-gslist_split_in_two(GSList *src, GSList **r1, GSList **r2)
+gslist_split_in_two (GSList *src, GSList **r1, GSList **r2)
 {
 	GSList *next, *l1 = NULL, *l2 = NULL;
 
@@ -75,7 +77,7 @@ gslist_split_in_two(GSList *src, GSList **r1, GSList **r2)
 }
 
 GSList *
-oio_ext_gslist_shuffle(GSList *src)
+oio_ext_gslist_shuffle (GSList *src)
 {
 	GSList *l1=NULL, *l2=NULL;
 
@@ -98,18 +100,21 @@ oio_ext_array_shuffle (gpointer *array, gsize len)
 	}
 }
 
-void
-oio_ext_array_partition (gpointer *array, gsize len, gboolean (*predicate)(gconstpointer))
+gsize
+oio_ext_array_partition (gpointer *array, gsize len,
+		gboolean (*predicate)(gconstpointer))
 {
 	g_assert (array != NULL);
 	g_assert (predicate != NULL);
 
-	if (!len) return;
+	if (!len)
+		return 0;
 
-	/* qualify each item */
-	gboolean good[len];
+	/* qualify each item, so that we call the predicate only once */
+	guchar *good = g_malloc0 (len);
+
 	for (gsize i=0; i<len ;i++)
-		good[i] = (*predicate) (array[i]);
+		good[i] = 0 != ((*predicate) (array[i]));
 
 	/* partition the items, the predicate==TRUE first */
 	for (gsize i=0; i<len ;i++) {
@@ -127,6 +132,9 @@ oio_ext_array_partition (gpointer *array, gsize len, gboolean (*predicate)(gcons
 		-- len;
 		-- i;
 	}
+
+	g_free (good);
+	return len;
 }
 
 GError *

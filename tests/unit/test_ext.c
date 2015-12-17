@@ -25,20 +25,45 @@ static void
 test_shuffle_array (void)
 {
 	void *tab[10];
-	for (int i=0; i<10 ;++i)
+	for (guint i=0; i<10 ;++i)
 		tab[i] = NULL;
-	for (long unsigned int i=0; i<8 ;i++)
-		tab[i+1] = (void*)i;
+	for (gulong i=1; i<9 ;i++)
+		tab[i] = (void*)i;
 	oio_ext_array_shuffle (tab+1, 8);
 	g_assert_null (tab[0]);
 	g_assert_null (tab[9]);
+}
+
+static void
+test_partition (void)
+{
+	gboolean _is_even (gconstpointer p) {
+		return 0 != (((gulong)p) % 2);
+	}
+
+	void *tab[8];
+	for (guint i=0; i<8 ;++i)
+		tab[i] = NULL;
+	for (gulong i=0; i<8 ;++i)
+		tab[i] = (void*)i;
+
+	/* tab = {0,1,2,3,4,5,6,7} */
+	gsize pivot = oio_ext_array_partition (tab, 8, _is_even);
+	/* tab = {1,3,5,7} :: {0,2,4,6} */
+
+	g_assert (pivot == 4);
+	for (guint i=0; i<pivot ;++i)
+		g_assert_true (_is_even (tab[i]));
+	for (guint i=pivot; i<8 ;++i)
+		g_assert_false (_is_even (tab[i]));
 }
 
 int
 main (int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
-	g_test_add_func("/core/shuffle/array", test_shuffle_array);
+	g_test_add_func("/core/ext/shuffle", test_shuffle_array);
+	g_test_add_func("/core/ext/partition", test_partition);
 	return g_test_run();
 }
 

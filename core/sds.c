@@ -53,10 +53,6 @@ struct oio_sds_s
 struct oio_error_s;
 struct oio_url_s;
 
-volatile int oio_sds_default_autocreate = 0;
-
-volatile int oio_sds_no_shuffle = 0;
-
 static CURL *
 _curl_get_handle_proxy (struct oio_sds_s *sds)
 {

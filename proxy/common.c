@@ -46,7 +46,7 @@ validate_srvtype (const char * n)
 gboolean
 service_is_ok (gconstpointer k)
 {
-	gpointer v; 
+	gpointer v;
 	SRV_DO(v = lru_tree_get (srv_down, k));
 	return v == NULL;
 }
@@ -57,7 +57,7 @@ service_invalidate (gconstpointer k)
 	gulong now = oio_ext_monotonic_time () / G_TIME_SPAN_SECOND;
 	SRV_DO(lru_tree_insert (srv_down, g_strdup((const char *)k), (void*)now));
 	GRID_INFO("invalid at %lu %s", now, (const char*)k);
-} 
+}
 
 const char *
 _req_get_option (struct req_args_s *args, const char *name)
@@ -152,7 +152,8 @@ _qualify_service_url (gconstpointer p)
 {
 	gboolean rc = FALSE;
 	gchar *u = meta1_strurl_get_address ((const char*)p);
-	if (u) rc = service_is_ok (u);
+	if (u)
+		rc = service_is_ok (u);
 	g_free (u);
 	return rc;
 }
@@ -181,7 +182,11 @@ _resolve_service_and_do (const char *t, gint64 seq, struct oio_url_s *u,
 		err = NEWERROR (CODE_CONTAINER_NOTFOUND, "No service located");
 	else {
 		/* just consider the URL part. The resolver already pre-shuffled it. */
-		oio_ext_array_partition ((void**)uv, g_strv_length(uv), _qualify_service_url);
+
+		gsize pivot = oio_ext_array_partition ((void**)uv, g_strv_length(uv),
+				_qualify_service_url);
+		if (pivot > 0 && !oio_dir_no_shuffle)
+			oio_ext_array_shuffle ((void**)uv, pivot);
 
 		for (gchar **pm2 = uv; *pm2; ++pm2) {
 			struct meta1_service_url_s *m1u = meta1_unpack_url (*pm2);
