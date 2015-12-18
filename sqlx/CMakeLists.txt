@@ -34,6 +34,7 @@ target_link_libraries(oiosqlx
 
 add_library(oiosqlx_local SHARED sqlx_client_local.c)
 set_target_properties(oiosqlx_local PROPERTIES
+		PUBLIC_HEADER "sqlx_client_local.h"
 		SOVERSION ${ABI_VERSION})
 target_link_libraries(oiosqlx_local
 		oiosqlx ${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
@@ -41,6 +42,7 @@ target_link_libraries(oiosqlx_local
 
 add_library(oiosqlx_direct SHARED sqlx_client_direct.c)
 set_target_properties(oiosqlx_direct PROPERTIES
+		PUBLIC_HEADER "sqlx_client_direct.h"
 		SOVERSION ${ABI_VERSION})
 target_link_libraries(oiosqlx_direct
 		oiosqlx sqlitereporemote ${GLIB2_LIBRARIES})

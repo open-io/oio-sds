@@ -33,21 +33,20 @@ static gchar **query = NULL;
 static void
 cli_action (void)
 {
-	for (gchar **pq=query; *pq ;pq++) {
-		struct oio_sqlx_output_ctx_s ctx = {0, 0, 0};
-		gchar **out = NULL;
-		GError *err = oio_sqlx_client__execute_statement (
-				sqlx_client, *pq, NULL, &ctx, &out);
-		if (err) {
-			g_printerr ("# QUERY ERROR: %s\n", *pq);
-			g_printerr ("(%d) %s\n", err->code, err->message);
-			g_clear_error (&err);
-		} else {
-			for (gchar **po = out; *po ;++po) {
-				g_print("%s\n", *po);
-			}
-			g_strfreev (out);
+	struct oio_sqlx_output_ctx_s ctx = {0, 0, 0};
+	gchar **out = NULL;
+	GRID_DEBUG("Query with %u params: %s", g_strv_length(query+1), query[0]);
+	GError *err = oio_sqlx_client__execute_statement (
+			sqlx_client, query[0], query+1, &ctx, &out);
+	if (err) {
+		g_printerr ("# QUERY ERROR: %s\n", query[0]);
+		g_printerr ("(%d) %s\n", err->code, err->message);
+		g_clear_error (&err);
+	} else {
+		for (gchar **po = out; *po ;++po) {
+			g_print("%s\n", *po);
 		}
+		g_strfreev (out);
 	}
 }
 
