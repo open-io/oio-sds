@@ -541,18 +541,20 @@ end:
 static void
 apply_parameters(sqlite3_stmt *stmt, Row_t *row)
 {
-	gint32 j;
 	gint64 i64;
 	gdouble d;
 
-	for (j=0; j<row->fields->list.count ;j++) {
-		int pos = 0;
+	if (!row->fields) {
+		GRID_DEBUG("Row without field");
+		return;
+	}
+	for (gint32 j=0; j<row->fields->list.count ;j++) {
+		RowField_t *field = row->fields->list.array[j];
+		if (!field)
+			continue;
 		long lpos = 0;
-		RowField_t *field;
-
-		field = row->fields->list.array[j];
 		asn_INTEGER2long(&(field->pos), &lpos);
-		pos = lpos;
+		int pos = lpos;
 
 		switch (field->value.present) {
 			case RowFieldValue_PR_i:

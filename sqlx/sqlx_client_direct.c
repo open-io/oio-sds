@@ -151,25 +151,29 @@ _pack_request (struct sqlx_name_mutable_s *n, const char *in_stmt,
 {
 	GByteArray *req = NULL;
 
-	struct Row *row = calloc(1, sizeof(struct Row));
-	asn_int64_to_INTEGER(&row->rowid, 0);
-	if (in_params) {
-		for (gchar **pparam=in_params; *pparam ;++pparam) {
-			struct RowField *rf = calloc(1, sizeof(struct RowField));
-			asn_uint32_to_INTEGER (&rf->pos, (guint32)(pparam - in_params));
-			OCTET_STRING_fromBuf(&rf->value.choice.s, *pparam, strlen(*pparam));
-			rf->value.present = RowFieldValue_PR_s;
-			asn_sequence_add(&(row->fields->list), rf);
-		}
-	}
+	struct TableSequence in_table_sequence;
+	memset (&in_table_sequence, 0, sizeof(in_table_sequence));
 
 	struct Table *table = calloc(1, sizeof(struct Table));
 	OCTET_STRING_fromBuf(&(table->name), in_stmt, strlen(in_stmt));
-	asn_sequence_add (&table->rows.list, row);
-
-	struct TableSequence in_table_sequence;
-	memset (&in_table_sequence, 0, sizeof(in_table_sequence));
 	asn_sequence_add (&in_table_sequence.list, table);
+
+	struct Row *row = calloc(1, sizeof(struct Row));
+	asn_int64_to_INTEGER(&row->rowid, 0);
+	if (in_params) {
+		struct RowFieldSequence *rfs = calloc(1, sizeof(struct RowFieldSequence));
+		row->fields = rfs;
+		for (gchar **pparam=in_params; *pparam ;++pparam) {
+			struct RowField *rf = calloc(1, sizeof(struct RowField));
+			/* XXX JFS: index must conform the sqlite3_bind_*() norm,
+			 * where the leftmost parameter has an index of 1 */
+			asn_uint32_to_INTEGER (&rf->pos, 1 + (guint32)(pparam - in_params));
+			OCTET_STRING_fromBuf(&rf->value.choice.s, *pparam, strlen(*pparam));
+			rf->value.present = RowFieldValue_PR_s;
+			asn_sequence_add(&(rfs->list), rf);
+		}
+	}
+	asn_sequence_add (&table->rows.list, row);
 
 	req = sqlx_pack_QUERY(sqlx_name_mutable_to_const(n),
 			in_stmt, &in_table_sequence, TRUE/*autocreate*/);
