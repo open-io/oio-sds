@@ -149,8 +149,12 @@ _load_one_chunk (struct json_object *jurl, struct json_object *jsize,
 static const char *
 _chunk_pack_position (struct chunk_s *c, gchar *buf, gsize len)
 {
-	g_snprintf (buf, len, "%u.%u%s", c->position.meta, c->position.intra,
-			c->position.parity ? "p" : "");
+	if (c->position.parity)
+		g_snprintf (buf, len, "%u.%u%s",
+				c->position.meta, c->position.intra,
+				c->position.parity ? "p" : "");
+	else
+		g_snprintf (buf, len, "%u", c->position.meta);
 	return buf;
 }
 
@@ -1172,7 +1176,7 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 			gsize max = chunksize - ul->local_done;
 			if (len > max) {
 				GBytes *first = g_bytes_new_from_bytes (buf, 0, max);
-				GBytes *second = g_bytes_new_from_bytes (buf, max+1, len);
+				GBytes *second = g_bytes_new_from_bytes (buf, max, len-max);
 				g_queue_push_head (ul->buffer_tail, second);
 				g_bytes_unref (buf);
 				buf = first;
