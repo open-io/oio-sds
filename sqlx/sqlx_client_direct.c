@@ -207,15 +207,17 @@ _unpack_reply (struct TableSequence *ts, GPtrArray *lines)
 			continue;
 		}
 
+		/* append each row */
 		for (int ri=0; !err && ri < t->rows.list.count ;++ri) {
 			struct Row *r = t->rows.list.array[ri];
 			if (!r || !r->fields)
 				continue;
 			GPtrArray *tokens = g_ptr_array_new ();
 
+			/* append one token per field */
 			for (int fi=0; !err && fi < r->fields->list.count ;++fi) {
 				struct RowField *f = r->fields->list.array[fi];
-				if (!fi)
+				if (!f)
 					continue;
 				gint64 i64;
 				gdouble d;
@@ -241,8 +243,13 @@ _unpack_reply (struct TableSequence *ts, GPtrArray *lines)
 						s = g_strndup((gchar*)f->value.choice.s.buf, f->value.choice.s.size);
 						g_ptr_array_add (tokens, s);
 						break;
+					default:
+						g_ptr_array_add (tokens, g_strdup("?"));
+						break;
 				}
 			}
+
+			/* pack the ROW for the line */
 			g_ptr_array_add (tokens, NULL);
 			if (!err) {
 				gchar *csv = g_strjoinv (",", (gchar**) tokens->pdata);
@@ -266,12 +273,12 @@ _sds_client_execute (struct oio_sqlx_client_s *self,
 	g_assert (c->factory != NULL);
 
 	/* locate the sqlx server via the directory object */
-	gchar srvtype[64] = "sqlx.";
+	gchar srvtype[64] = "sqlx";
 	const char *subtype = oio_url_get (c->url, OIOURL_TYPE);
-	if (subtype && *subtype)
+	if (subtype && *subtype) {
+		g_strlcat (srvtype, ".", sizeof(srvtype));
 		g_strlcat (srvtype, subtype, sizeof(srvtype));
-	else
-		g_strlcat (srvtype, "default", sizeof(srvtype));
+	}
 
 	gchar **allsrv = NULL;
 	GError *err = oio_directory__list (c->factory->dir,
