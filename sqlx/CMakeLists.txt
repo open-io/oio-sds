@@ -49,8 +49,8 @@ target_link_libraries(oiosqlx_direct
 add_executable(tool_sqlx tool_sqlx.c)
 bin_prefix(tool_sqlx -sqlx)
 target_link_libraries(tool_sqlx
-		hcresolve metautils gridcluster sqlitereporemote
-		${GLIB2_LIBRARIES} ${SQLITE3_LIBRARIES})
+		oiocore oiosds oiosqlx_direct
+		${GLIB2_LIBRARIES})
 
 add_executable(sqlx_server sqlx_server.c)
 bin_prefix(sqlx_server -sqlx-server)
