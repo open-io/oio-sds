@@ -554,6 +554,8 @@ sqlx_service_specific_fini(void)
 	}
 	if (SRV.election_manager)
 		election_manager_exit_all(SRV.election_manager, 0, TRUE);
+	if (SRV.sync)
+		sqlx_sync_close(SRV.sync);
 
 	// Cleanup
 	if (SRV.gtq_admin)
