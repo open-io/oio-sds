@@ -570,7 +570,7 @@ _server_shutdown_inactive_connections(struct network_server_s *srv)
 {
 	struct network_client_s *clt, *n;
 
-	time_t now = oio_ext_monotonic_time ();
+	time_t now = network_server_bogonow (srv);
 	time_t ti = now - srv->atexit_max_idle;
 	time_t tc = now - srv->atexit_max_open_never_input;
 	time_t tp = now - srv->atexit_max_open_persist;
