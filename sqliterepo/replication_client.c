@@ -119,7 +119,7 @@ peer_dump(const gchar *target, struct sqlx_name_s *name, gboolean chunked,
 		g_clear_error(&err2);
 
 		void *b = metautils_message_get_BODY(reply, &bsize);
-		if (!b) {
+		if (b && bsize) {
 			GByteArray *dump = g_byte_array_new();
 			g_byte_array_append(dump, b, bsize);
 			err2 = callback(dump, remaining, cb_arg);
