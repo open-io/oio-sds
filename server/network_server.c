@@ -113,10 +113,10 @@ struct network_server_s
 	time_t workers_max_idle_delay;
 
 	/* when waiting for a clean axit ... */
-	time_t atexit_max_open_never_input; /*< max connection time
+	gint64 atexit_max_open_never_input; /*< max connection time
 										  for connection without any input.*/
-	time_t atexit_max_idle; /*< max idle time since last input */
-	time_t atexit_max_open_persist; /*< max connection time for persistant
+	gint64 atexit_max_idle; /*< max idle time since last input */
+	gint64 atexit_max_open_persist; /*< max connection time for persistant
 									  connections*/
 
 	gint64 now; /*< bogo counter for EPOCH */
@@ -279,9 +279,9 @@ network_server_init(void)
 	result->workers_active_60 = grid_single_rrd_create(
 			result->now / G_TIME_SPAN_MINUTE, 64);
 
-	result->atexit_max_open_never_input = 3;
-	result->atexit_max_idle = 2;
-	result->atexit_max_open_persist = 10;
+	result->atexit_max_open_never_input = 30 * G_TIME_SPAN_SECOND;
+	result->atexit_max_idle = 5 * G_TIME_SPAN_SECOND;
+	result->atexit_max_open_persist = 120 * G_TIME_SPAN_SECOND;
 
 	GRID_INFO("SERVER ready with epollfd[%d] pipe[%d,%d]",
 			result->epollfd, result->wakeup[0], result->wakeup[1]);
@@ -568,44 +568,50 @@ _manage_events(struct network_server_s *srv)
 static void
 _server_shutdown_inactive_connections(struct network_server_s *srv)
 {
+	guint count = 0;
+	gint64 now = oio_ext_monotonic_time ();
+	gint64 ti = now - srv->atexit_max_idle;
+	gint64 tc = now - srv->atexit_max_open_never_input;
+	gint64 tp = now - srv->atexit_max_open_persist;
+
 	struct network_client_s *clt, *n;
-
-	time_t now = network_server_bogonow (srv);
-	time_t ti = now - srv->atexit_max_idle;
-	time_t tc = now - srv->atexit_max_open_never_input;
-	time_t tp = now - srv->atexit_max_open_persist;
-
 	for (clt=srv->first ; clt ; clt=n) {
 		n = clt->next;
 		EXTRA_ASSERT(clt->fd >= 0);
 		if (clt->time.evt_in) {
-			if (clt->time.evt_in < ti || clt->time.cnx < tp) {
+			if (clt->time.evt_in < ti) {
+				GRID_INFO("cnx %d closed: %s", clt->fd, "idle for too long");
 				_manage_client_event(srv, clt, 0);
+				++ count;
+			} else if (clt->time.cnx < tp) {
+				GRID_INFO("cnx %d closed: %s", clt->fd, "open since too long");
+				_manage_client_event(srv, clt, 0);
+				++ count;
 			}
-		}
-		else if (clt->time.cnx < tc) { /* never input */
+		} else if (clt->time.cnx < tc) { /* never input */
+			GRID_INFO("cnx %d closed: %s", clt->fd, "inactive since too long");
 			_manage_client_event(srv, clt, 0);
+			++ count;
 		}
 	}
+
+	if (count) GRID_NOTICE ("%u cnx closed", count);
 }
 
 static gpointer
 _thread_cb_events(gpointer d)
 {
 	struct network_server_s *srv = d;
-	time_t now, last;
 
 	metautils_ignore_signals();
 	GRID_INFO("EVENTS thread starting pfd=%d", srv->epollfd);
 
-	now = last = network_server_bogonow(srv);
-
-	while (srv->flag_continue) {
+	for (gint64 next = 0; srv->flag_continue ;) {
 		_manage_events(srv);
-		now = network_server_bogonow(srv);
-		if (now > last + 30 || now < last) {
+		gint64 now = oio_ext_monotonic_time ();
+		if (now > next) {
 			_server_shutdown_inactive_connections(srv);
-			last = now;
+			next = now + 30 * G_TIME_SPAN_SECOND;
 		}
 	}
 
@@ -879,7 +885,7 @@ retry:
 	grid_sockaddr_to_string((struct sockaddr*)&ss,
 			clt->peer_name, sizeof(clt->peer_name));
 	_client_sock_name(fd, clt->local_name, sizeof(clt->local_name));
-	clt->time.cnx = network_server_bogonow(srv);
+	clt->time.cnx = oio_ext_monotonic_time ();
 	clt->events = CLT_READ;
 
 	clt->input.first = clt->input.last = NULL;
@@ -1549,7 +1555,7 @@ network_client_send_slab(struct network_client_s *client, struct data_slab_s *ds
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(ds != NULL);
 
-	client->time.evt_out = network_server_bogonow(client->server);
+	client->time.evt_out = oio_ext_monotonic_time ();
 
 	if (!_client_ready_for_output(client)) {
 		register int type = ds->type;
