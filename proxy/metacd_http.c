@@ -379,6 +379,7 @@ _task_reload_srvtypes (gpointer p)
 	if (err != NULL) {
 		GRID_WARN ("SRVTYPES reload error [%s] from [%s] : (%d) %s",
 			nsname, cs, err->code, err->message);
+		g_clear_error (&err);
 		return;
 	}
 
