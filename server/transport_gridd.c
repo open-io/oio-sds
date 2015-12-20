@@ -716,7 +716,7 @@ _request_get_cid (MESSAGE request)
 
 	err = metautils_message_extract_cid(request, NAME_MSGKEY_CONTAINERID, &cid);
 	if (!err) {
-		container_id_to_string(cid, strcid, sizeof(strcid));
+		oio_str_bin2hex (cid, sizeof(container_id_t), strcid, sizeof(strcid));
 		return g_strdup(strcid);
 	}
 	g_clear_error(&err);
@@ -831,9 +831,23 @@ static gboolean
 dispatch_LEAN(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
+	gchar buf[128] = "Freed:";
 	(void) gdata, (void) hdata;
-	malloc_trim ((size_t)OIO_MALLOC_TRIM_SIZE);
-	reply->send_reply(CODE_FINAL_OK, "OK");
+
+	if (metautils_message_extract_flag (reply->request, "LIBC", FALSE)) {
+		if (malloc_trim (0))
+			g_strlcat (buf, " malloc-heap", sizeof(buf));
+	}
+
+	if (metautils_message_extract_flag (reply->request, "THREADS", FALSE)) {
+		g_thread_pool_stop_unused_threads ();
+		g_strlcat (buf, " idle-threads", sizeof(buf));
+	}
+
+	if (buf[strlen(buf)-1] != ':')
+		g_strlcat (buf, " nothing", sizeof(buf));
+
+	reply->send_reply(CODE_FINAL_OK, buf);
 	return TRUE;
 }
 

@@ -2300,8 +2300,15 @@ sqlx_dispatch_LEANIFY(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	(void) ignored, (void) repo;
-	sqlite3_release_memory (OIO_MALLOC_TRIM_SIZE);
-	reply->send_reply(CODE_FINAL_OK, "OK");
+
+	guint size = 0;
+	GError *err = metautils_message_extract_struint (reply->request, NAME_MSGKEY_SIZE, &size);
+	if (err) {
+		reply->send_error(CODE_BAD_REQUEST, err);
+	} else {
+		sqlite3_release_memory (size);
+		reply->send_reply(CODE_FINAL_OK, "OK");
+	}
 	return TRUE;
 }
 

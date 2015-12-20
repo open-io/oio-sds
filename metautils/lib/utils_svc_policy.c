@@ -127,7 +127,7 @@ service_update_policies_destroy(struct service_update_policies_s *pol)
 	g_free(pol);
 }
 
-enum service_update_policy_e
+static enum service_update_policy_e
 service_howto_update2(struct service_update_policies_s *pol,
 		const struct hashstr_s *htype)
 {
@@ -368,7 +368,7 @@ service_update_reconfigure(struct service_update_policies_s *pol,
 	return NULL;
 }
 
-guint
+static guint
 service_howmany_replicas2(struct service_update_policies_s *pol,
 		struct hashstr_s *htype)
 {
@@ -409,7 +409,7 @@ service_howmany_replicas(struct service_update_policies_s *pol,
 	return service_howmany_replicas2(pol, htype);
 }
 
-guint
+static guint
 service_howmany_distance2(struct service_update_policies_s *pol,
 		struct hashstr_s *htype)
 {

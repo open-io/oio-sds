@@ -351,42 +351,6 @@ service_info_equal(const struct service_info_s * si1, const struct service_info_
 		&& !strcmp(si1->ns_name, si2->ns_name) && !strcmp(si1->type, si2->type);
 }
 
-// for test <NS part> from a complete VNS name only
-gboolean
-service_info_equal_v2(const struct service_info_s * si1, const struct service_info_s * si2)
-{
-	const gchar *sep = NULL;
-
-    if (si1 == si2)
-       return TRUE;
-
-    if (si1 == NULL || si2 == NULL)
-       return FALSE;
-
-	// for compare NS part from VNS name, 
-	if (NULL != (sep = strchr(si2->ns_name, '.'))) {
-		gboolean result = FALSE;
-		struct service_info_s *si2_tmp = service_info_dup(si2);
-		g_strlcpy(si2_tmp->ns_name, si2->ns_name, sep - si2->ns_name+1);
-        //VNS part not used here: = g_strdup(sep+1);
-		result = service_info_equal(si1, si2_tmp);
-		service_info_clean(si2_tmp);
-		return result;
-	}
-
-	return service_info_equal(si1, si2);
-}
-
-meta0_info_t *
-service_info_convert_to_m0info(struct service_info_s * srv)
-{
-	if (!srv)
-		return NULL;
-	meta0_info_t *mi = g_malloc0(sizeof(meta0_info_t));
-	memcpy(&(mi->addr), &(srv->addr), sizeof(addr_info_t));
-	return mi;
-}
-
 struct service_tag_s *
 service_info_get_tag(GPtrArray * a, const gchar * name)
 {
@@ -448,30 +412,6 @@ service_info_remove_tag(GPtrArray * a, const gchar * name)
 	}
 }
 
-GSList*
-service_info_extract_nsname(GSList *services, gboolean copy)
-{
-	struct service_info_s *si;
-	GHashTable *ht;
-	GHashTableIter iter;
-	GSList *l, *result;
-	gpointer k, v;
-
-	ht = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, NULL);
-	for (l=services; l ;l=l->next) {
-		si = l->data;
-		g_hash_table_insert(ht, si->ns_name, si->ns_name);
-	}
-
-	result = NULL;
-	g_hash_table_iter_init(&iter, ht);
-	while (g_hash_table_iter_next(&iter, &k, &v))
-		result = g_slist_prepend(result, copy ? g_strndup(k, LIMIT_LENGTH_NSNAME) : k);
-
-	g_hash_table_destroy(ht);
-	return result;
-}
-
 void
 service_info_swap(struct service_info_s *si0, struct service_info_s *si1)
 {
@@ -516,13 +456,6 @@ const gchar *
 service_info_get_stgclass(const struct service_info_s *si, const gchar *d)
 {
 	return service_info_get_tag_value(si, NAME_TAGNAME_RAWX_STGCLASS, d);
-}
-
-gboolean
-service_info_is_internal(const struct service_info_s *si)
-{
-	return (0 != g_ascii_strcasecmp("false", service_info_get_tag_value(si,
-	            NAME_TAGNAME_INTERNAL, "false")));
 }
 
 gboolean
@@ -643,7 +576,7 @@ service_info_load_json_object(struct json_object *obj,
 	};
 	GError *err = oio_ext_extract_json (obj, mapping);
 	if (err) return err;
-	
+
 	struct addr_info_s addr;
 	if (!grid_string_to_addrinfo(json_object_get_string(url), &addr))
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid address");

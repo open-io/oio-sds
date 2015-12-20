@@ -26,9 +26,6 @@ gboolean addr_info_equal(gconstpointer a, gconstpointer b);
 gint addr_info_compare(gconstpointer a, gconstpointer b);
 guint addr_info_hash(gconstpointer k);
 
-/* convert a service string (as returned by meta1) into an addr_info */
-addr_info_t * addr_info_from_service_str(const gchar *service);
-
 #define addr_info_clean  g_free0
 #define addr_info_gclean g_free1
 

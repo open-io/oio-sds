@@ -22,8 +22,6 @@ License along with this library.
 
 #include <glib/gtypes.h>
 
-GHashTable * key_value_pairs_empty (void);
-
 /* Deep copy of the map */
 GSList *key_value_pairs_convert_from_map(GHashTable * ht, gboolean copy,
 		GError ** err);

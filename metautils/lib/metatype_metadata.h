@@ -22,8 +22,6 @@ License along with this library.
 
 #include <glib/gtypes.h>
 
-GHashTable* metadata_create_empty(void);
-
 GHashTable* metadata_unpack_buffer(const guint8 *data, gsize size, GError **error);
 
 GHashTable* metadata_unpack_string(const gchar *data, GError **error);

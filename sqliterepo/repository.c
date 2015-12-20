@@ -701,7 +701,6 @@ retry:
 
 	sqlite3_busy_timeout(handle, 30000);
 
-
 	sq3 = SLICE_NEW0(struct sqlx_sqlite3_s);
 	sq3->db = handle;
 	sq3->bd = -1;

@@ -503,7 +503,7 @@ sqlx_replication_free_context(struct sqlx_repctx_s *ctx)
 		g_tree_destroy(ctx->pending);
 	if (ctx->resync_todo)
 		g_ptr_array_free(ctx->resync_todo, TRUE);
-	g_slice_free(struct sqlx_repctx_s, ctx);
+	SLICE_FREE(struct sqlx_repctx_s, ctx);
 }
 
 // Public API -----------------------------------------------------------------
@@ -533,7 +533,7 @@ sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 		}
 	}
 
-	struct sqlx_repctx_s *repctx = g_slice_new0(struct sqlx_repctx_s);
+	struct sqlx_repctx_s *repctx = SLICE_NEW0(struct sqlx_repctx_s);
 	repctx->hollow = !has;
 	repctx->sq3 = sq3;
 	repctx->changes = sqlite3_total_changes(sq3->db);

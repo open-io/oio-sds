@@ -754,7 +754,8 @@ list_conversion (const struct NamespaceInfoValueList *vl)
 {
 	EXTRA_ASSERT (vl != NULL);
 
-	GHashTable *ht = key_value_pairs_empty();
+	GHashTable *ht = g_hash_table_new_full(g_str_hash, g_str_equal,
+			g_free, metautils_gba_clean);
 
 	if (vl->list.count > 0) {
 		for (int i = 0; i < vl->list.count; i++) {

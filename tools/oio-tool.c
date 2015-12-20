@@ -32,8 +32,10 @@ _remote_kill (const char *to)
 static GError *
 _remote_glib_lean (const char *to)
 {
-	GByteArray *encoded = message_marshall_gba_and_clean (
-			metautils_message_create_named("REQ_LEAN"));
+	MESSAGE req = metautils_message_create_named("REQ_LEAN");
+	metautils_message_add_field_str(req, "LIBC", "1");
+	metautils_message_add_field_str(req, "THREADS", "1");
+	GByteArray *encoded = message_marshall_gba_and_clean (req);
 	return gridd_client_exec (to, 30.0, encoded);
 }
 

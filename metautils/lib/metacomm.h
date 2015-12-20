@@ -101,18 +101,14 @@ void metautils_message_add_url_no_type (MESSAGE m, struct oio_url_s *url);
 /* wraps message_set_BODY() and g_bytes_array_unref() */
 void metautils_message_add_body_unref (MESSAGE m, GByteArray *body);
 
+void metautils_message_add_field_gba(MESSAGE m, const char *name, GByteArray *gba);
+
 void metautils_message_add_field_str(MESSAGE m, const char *name, const char *value);
 
 void metautils_message_add_field_strint64(MESSAGE m, const char *n, gint64 v);
 
 static inline void metautils_message_add_field_strint(MESSAGE m, const char *n, gint v) { return metautils_message_add_field_strint64(m,n,v); }
 static inline void metautils_message_add_field_struint(MESSAGE m, const char *n, guint v) { return metautils_message_add_field_strint64(m,n,v); }
-
-void metautils_message_add_fieldv_gba(MESSAGE m, va_list args);
-
-void metautils_message_add_fields_gba(MESSAGE m, ...);
-
-void metautils_message_add_fieldv_str(MESSAGE m, va_list args);
 
 void* metautils_message_get_field(MESSAGE m, const char *name, gsize *vsize);
 
@@ -148,9 +144,6 @@ GError* metautils_message_extract_boolean(MESSAGE msg,
 GError* metautils_message_extract_header_encoded(MESSAGE msg,
 		const gchar *n, gboolean mandatory,
 		GSList **result, body_decoder_f decoder);
-
-GError* metautils_message_extract_header_gba(MESSAGE msg, const gchar *n,
-		gboolean mandatory, GByteArray **result);
 
 GError* metautils_message_extract_body_gba(MESSAGE msg, GByteArray **result);
 

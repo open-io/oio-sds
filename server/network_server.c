@@ -26,7 +26,6 @@ License along with this library.
 #include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
-#include <malloc.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -241,8 +240,8 @@ network_server_init(void)
 
 	result->pool_stats = g_thread_pool_new ((GFunc)_cb_stats, result, 1, FALSE, NULL);
 	result->pool_workers = g_thread_pool_new ((GFunc)_cb_worker, result, -1, FALSE, NULL);
-	g_thread_pool_set_max_unused_threads (50);
-	g_thread_pool_set_max_idle_time (60000);
+	g_thread_pool_set_max_unused_threads (5);
+	g_thread_pool_set_max_idle_time (30000);
 
 	GRID_INFO("SERVER ready with epollfd[%d] pipe[%d,%d]",
 			result->epollfd, result->wakeup[0], result->wakeup[1]);
@@ -457,7 +456,7 @@ ARM_ENDPOINT(struct network_server_s *srv, struct endpoint_s *e, int how)
 			e->fd, epoll2str(how), errno, strerror(errno));
 }
 
-#define MAXEV 64
+#define MAXEV 16
 
 static void
 _manage_client_event(struct network_server_s *srv,
@@ -622,7 +621,6 @@ network_server_run(struct network_server_s *srv)
 				srv->cnx_accept, TRUE);
 		network_server_stat_push (srv, srv->gq_counter_cnx_close,
 				srv->cnx_close, TRUE);
-		malloc_trim(1024*1024);
 	}
 
 	GRID_DEBUG("Server %p starting to exit", srv);

@@ -175,33 +175,6 @@ namespace_info_gclean(gpointer p1, gpointer p2)
 		namespace_info_free((struct namespace_info_s*)p1);
 }
 
-GHashTable*
-namespace_info_list2map(GSList *list_nsinfo, gboolean auto_free)
-{
-	GSList *l;
-	GHashTable *ht;
-
-	ht = g_hash_table_new_full(g_str_hash, g_str_equal, NULL, auto_free ? (GDestroyNotify)namespace_info_free : NULL);
-	for (l=list_nsinfo; l ;l=l->next) {
-		if (l->data)
-			g_hash_table_insert(ht, ((struct namespace_info_s*)l->data)->name, l->data);
-	}
-	return ht;
-}
-
-GSList*
-namespace_info_extract_name(GSList *list_nsinfo, gboolean copy)
-{
-	GSList *l, *result;
-
-	result = NULL;
-	for (l=list_nsinfo; l ;l=l->next) {
-		if (l->data)
-			result = g_slist_prepend(result, (copy ? g_strndup((gchar*)l->data, LIMIT_LENGTH_NSNAME) : l->data));
-	}
-	return result;
-}
-
 gchar *
 namespace_info_get_data_security(namespace_info_t *ni, const gchar *data_sec_key)
 {
