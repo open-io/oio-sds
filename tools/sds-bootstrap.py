@@ -390,7 +390,7 @@ REASONABLYSLOW=NONE
 DUPONETWO=DUP:distance=1|nb_copy=2
 DUPONETHREE=DUP:distance=1|nb_copy=3
 DUPONEFIVE=DUP:distance=1|nb_copy=5
-RAIN=RAIN:k=6|m=2|algo=liber8tion
+RAIN=RAIN:k=6|m=2|algo=liber8tion|distance=1
 
 [DATA_TREATMENTS]
 """
