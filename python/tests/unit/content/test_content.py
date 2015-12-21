@@ -59,6 +59,7 @@ class TestChunk(unittest.TestCase):
         self.assertEqual(c.metapos, "0")
         self.assertEqual(c.subpos, "p0")
         self.assertTrue(c.is_subchunk)
+        self.assertEqual(c.paritypos, "0")
 
     def test_comparison_no_rain(self):
         c1 = Chunk({
@@ -106,6 +107,14 @@ class TestChunk(unittest.TestCase):
         self.assertTrue(c2 < c4)
         self.assertTrue(c4 < c3)
         self.assertTrue(c4 < c5)
+
+    def test_chunk_set_field(self):
+        c = Chunk({
+            "url": "http://127.0.0.1:6011/BB",
+            "pos": "0.0", "size": 1048576,
+            "hash": "00000000000000000000000000000000"})
+        c.url = "http://0.0.0.0:0000/AA"
+        self.assertEqual(c.url, "http://0.0.0.0:0000/AA")
 
 
 class TestChunksHelper(unittest.TestCase):

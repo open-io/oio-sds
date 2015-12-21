@@ -19,7 +19,7 @@ from socket import gethostname
 
 from oio.common import exceptions as exc
 from oio.common.utils import get_logger, int_value, ratelimit, true_value
-from oio.common.exceptions import ContentNotFound
+from oio.common.exceptions import ContentNotFound, OrphanChunk
 from oio.content.factory import ContentFactory
 from oio.rdir.client import RdirClient
 
@@ -133,8 +133,6 @@ class BlobRebuilderWorker(object):
         self.passes += 1
 
     def safe_chunk_rebuild(self, container_id, content_id, chunk_id):
-        self.logger.info('Rebuilding (container %s, content %s, chunk %s)'
-                         % (container_id, content_id, chunk_id))
         try:
             self.chunk_rebuild(container_id, content_id, chunk_id)
         except Exception as e:
@@ -144,18 +142,24 @@ class BlobRebuilderWorker(object):
 
         self.passes += 1
 
-    # TODO rain support
     def chunk_rebuild(self, container_id, content_id, chunk_id):
+        self.logger.info('Rebuilding (container %s, content %s, chunk %s)'
+                         % (container_id, content_id, chunk_id))
+
         try:
             content = self.content_factory.get(container_id, content_id)
         except ContentNotFound:
             raise exc.OrphanChunk('Content not found')
+
+        chunk = content.chunks.filter(id=chunk_id).one()
+        if chunk is None:
+            raise OrphanChunk("Chunk not found in content")
+        chunk_size = chunk.size
 
         content.rebuild_chunk(chunk_id)
 
         self.rdir_client.chunk_push(self.volume, container_id, content_id,
                                     chunk_id, rtime=int(time.time()))
 
-        chunk_size = content.chunks.filter(id=chunk_id).one().size
         self.bytes_processed += chunk_size
         self.total_bytes_processed += chunk_size

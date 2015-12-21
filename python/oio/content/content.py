@@ -86,6 +86,7 @@ class Content(object):
                                              stgpol=self.stgpol_name,
                                              size=self.length,
                                              checksum=self.hash,
+                                             version=self.version,
                                              data=self.chunks.raw())
 
     def rebuild_chunk(self, chunk_id):
@@ -102,6 +103,10 @@ class Chunk(object):
     @property
     def url(self):
         return self._data["url"]
+
+    @url.setter
+    def url(self, new_url):
+        self._data["url"] = new_url
 
     @property
     def pos(self):
@@ -122,6 +127,10 @@ class Chunk(object):
     @property
     def is_parity(self):
         return self.subpos[0] == 'p'
+
+    @property
+    def paritypos(self):
+        return self.subpos[1:]
 
     @property
     def size(self):

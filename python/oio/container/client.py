@@ -135,7 +135,7 @@ class ContainerClient(Client):
 
     def content_create(self, acct=None, ref=None, path=None,
                        size=None, checksum=None, data=None, cid=None,
-                       content_id=None, stgpol=None, **kwargs):
+                       content_id=None, stgpol=None, version=None, **kwargs):
         uri = self._make_uri('content/create')
         params = self._make_params(acct, ref, path, cid=cid)
         data = json.dumps(data)
@@ -144,8 +144,11 @@ class ContainerClient(Client):
                      'x-oio-content-meta-hash': checksum})
         if content_id is not None:
             hdrs['x-oio-content-meta-id'] = content_id
+        # FIXME stgpol and version are mandatory ?
         if stgpol is not None:
             hdrs['x-oio-content-meta-policy'] = stgpol
+        if version is not None:
+            hdrs['x-oio-content-meta-version'] = version
         resp, body = self._request(
             'POST', uri, data=data, params=params, headers=hdrs)
 
