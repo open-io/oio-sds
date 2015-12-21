@@ -80,7 +80,7 @@ _local_client_destroy (struct oio_sqlx_client_s *self)
 		sqlite3_close (s->db);
 	s->db = NULL;
 	s->vtable = NULL;
-	g_free (s);
+	SLICE_FREE (struct oio_sqlx_client_LOCAL_s, s);
 }
 
 static gchar *
@@ -193,7 +193,7 @@ _local_factory_destroy (struct oio_sqlx_client_factory_s *self)
 	oio_str_clean (&s->schema);
 	oio_str_clean (&s->ns);
 	s->vtable = NULL;
-	g_free (s);
+	SLICE_FREE (struct oio_sqlx_client_factory_LOCAL_s, s);
 }
 
 /* XXX JFS dupplicated from sqliterepo/sqlite_utils.c */
@@ -260,7 +260,7 @@ _local_factory_open (struct oio_sqlx_client_factory_s *self,
 				rc, sqlite3_errmsg(db));
 	}
 
-	struct oio_sqlx_client_LOCAL_s *s = g_slice_new0 (struct oio_sqlx_client_LOCAL_s);
+	struct oio_sqlx_client_LOCAL_s *s = SLICE_NEW0 (struct oio_sqlx_client_LOCAL_s);
 	s->vtable = &vtable_LOCAL;
 	s->db = db;
 	*out = (struct oio_sqlx_client_s*) s;
@@ -273,8 +273,7 @@ oio_sqlx_client_factory__create_local (const char *ns, const char *schema)
 {
 	g_assert (ns != NULL);
 	g_assert (schema != NULL);
-	struct oio_sqlx_client_factory_LOCAL_s *self = g_slice_new0(
-			struct oio_sqlx_client_factory_LOCAL_s);
+	struct oio_sqlx_client_factory_LOCAL_s *self = SLICE_NEW0 (struct oio_sqlx_client_factory_LOCAL_s);
 	self->vtable = &vtable_factory_LOCAL;
 	self->ns = g_strdup (ns);
 	self->schema = g_strdup (schema);
