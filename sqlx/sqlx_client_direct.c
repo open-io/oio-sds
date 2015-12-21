@@ -46,6 +46,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/sqlx_remote.h>
 
 #include "sqlx_client.h"
+#include "sqlx_client_internals.h"
 #include "sqlx_client_direct.h"
 
 struct oio_sqlx_client_factory_SDS_s
@@ -73,12 +74,20 @@ static GError * _sds_client_execute (struct oio_sqlx_client_s *self,
 		const char *in_stmt, gchar **in_params,
 		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines);
 
+static GError * _sds_client_batch (struct oio_sqlx_client_s *self,
+		struct oio_sqlx_batch_s *in,
+		struct oio_sqlx_batch_result_s **out);
+
 struct oio_sqlx_client_factory_vtable_s vtable_factory_SDS = {
-	_sds_factory_destroy, _sds_factory_open
+	_sds_factory_destroy,
+	_sds_factory_open,
+	NULL /* the default batch implementation fits */
 };
 
 struct oio_sqlx_client_vtable_s vtable_SDS = {
-	_sds_client_destroy, _sds_client_execute
+	_sds_client_destroy,
+	_sds_client_execute,
+	_sds_client_batch
 };
 
 static void
@@ -144,37 +153,47 @@ _sds_client_destroy (struct oio_sqlx_client_s *self)
 }
 
 static GByteArray *
-_pack_request (struct sqlx_name_mutable_s *n, const char *in_stmt,
-		gchar **in_params)
+_pack_request (struct sqlx_name_mutable_s *n, struct oio_sqlx_batch_s *batch)
 {
 	GByteArray *req = NULL;
 
 	struct TableSequence in_table_sequence;
 	memset (&in_table_sequence, 0, sizeof(in_table_sequence));
 
-	struct Table *table = calloc(1, sizeof(struct Table));
-	OCTET_STRING_fromBuf(&(table->name), in_stmt, strlen(in_stmt));
-	asn_sequence_add (&in_table_sequence.list, table);
+	for (guint i=0; i<batch->statements->len ;++i) {
+		GPtrArray *stmt = batch->statements->pdata[i];
+		if (!stmt || !stmt->len) {
+			GRID_WARN("Empty statement at position %u", i);
+			continue;
+		}
 
-	struct Row *row = calloc(1, sizeof(struct Row));
-	asn_int64_to_INTEGER(&row->rowid, 0);
-	if (in_params) {
-		struct RowFieldSequence *rfs = calloc(1, sizeof(struct RowFieldSequence));
-		row->fields = rfs;
-		for (gchar **pparam=in_params; *pparam ;++pparam) {
-			struct RowField *rf = calloc(1, sizeof(struct RowField));
-			/* XXX JFS: index must conform the sqlite3_bind_*() norm,
-			 * where the leftmost parameter has an index of 1 */
-			asn_uint32_to_INTEGER (&rf->pos, 1 + (guint32)(pparam - in_params));
-			OCTET_STRING_fromBuf(&rf->value.choice.s, *pparam, strlen(*pparam));
-			rf->value.present = RowFieldValue_PR_s;
-			asn_sequence_add(&(rfs->list), rf);
+		const gchar *query = (gchar*)(stmt->pdata[0]);
+
+		struct Table *table = calloc(1, sizeof(struct Table));
+		OCTET_STRING_fromBuf(&(table->name), query, strlen(query));
+		asn_sequence_add (&in_table_sequence.list, table);
+
+		if (stmt->len > 1) {
+			struct Row *row = calloc(1, sizeof(struct Row));
+			asn_int64_to_INTEGER(&row->rowid, 0);
+			struct RowFieldSequence *rfs = calloc(1, sizeof(struct RowFieldSequence));
+			row->fields = rfs;
+			for (guint fi=1; fi < stmt->len ;++fi) {
+				const char *param = stmt->pdata[fi];
+				struct RowField *rf = calloc(1, sizeof(struct RowField));
+				/* XXX JFS: index must conform the sqlite3_bind_*() norm,
+				 * where the leftmost parameter has an index of 1 */
+				asn_uint32_to_INTEGER (&rf->pos, fi);
+				OCTET_STRING_fromBuf(&rf->value.choice.s, param, strlen(param));
+				rf->value.present = RowFieldValue_PR_s;
+				asn_sequence_add(&(rfs->list), rf);
+			}
+			asn_sequence_add (&table->rows.list, row);
 		}
 	}
-	asn_sequence_add (&table->rows.list, row);
 
 	req = sqlx_pack_QUERY(sqlx_name_mutable_to_const(n),
-			in_stmt, &in_table_sequence, TRUE/*autocreate*/);
+			"QUERY", &in_table_sequence, TRUE/*autocreate*/);
 
 	asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence,
 			&in_table_sequence, TRUE);
@@ -182,11 +201,8 @@ _pack_request (struct sqlx_name_mutable_s *n, const char *in_stmt,
 }
 
 static GError *
-_unpack_reply (struct TableSequence *ts, GPtrArray *lines)
+_unpack_asn1_to_api (struct TableSequence *ts, struct oio_sqlx_batch_result_s *batch)
 {
-	if (!ts->list.count || !ts->list.array)
-		return NEWERROR(CODE_PLATFORM_ERROR, "Invalid body from the sqlx (content)");
-
 	GError *err = NULL;
 
 	for (int ti=0; !err && ti < ts->list.count ;++ti) {
@@ -199,15 +215,18 @@ _unpack_reply (struct TableSequence *ts, GPtrArray *lines)
 			break;
 		}
 
+		struct oio_sqlx_statement_result_s *stmt = oio_sqlx_statement_result__create ();
+
 		gint64 s64 = -1;
 		asn_INTEGER_to_int64 (t->status, &s64);
 		if (s64 != 0) {
-			err = NEWERROR(CODE_INTERNAL_ERROR,
+			stmt->err = NEWERROR(CODE_INTERNAL_ERROR,
 					"Query failure: (%"G_GINT64_FORMAT") %.*s", s64,
 					t->statusString ? t->statusString->size : 64,
 					t->statusString ? (char*)t->statusString->buf : "Unknown error");
-			continue;
 		}
+
+		/* TODO fills the output context */
 
 		/* append each row */
 		for (int ri=0; !err && ri < t->rows.list.count ;++ri) {
@@ -251,24 +270,62 @@ _unpack_reply (struct TableSequence *ts, GPtrArray *lines)
 				}
 			}
 
-			/* pack the ROW for the line */
-			g_ptr_array_add (tokens, NULL);
 			if (!err) {
-				gchar *csv = g_strjoinv (",", (gchar**) tokens->pdata);
-				g_ptr_array_add (lines, csv);
+				g_ptr_array_add (tokens, NULL);
+				g_ptr_array_add (stmt->rows, (gchar**)g_ptr_array_free (tokens, FALSE));
+			} else {
+				g_ptr_array_set_free_func (tokens, g_free);
+				g_ptr_array_free (tokens, TRUE);
 			}
-			g_strfreev ((gchar**)g_ptr_array_free (tokens, FALSE));
+			tokens = NULL;
 		}
+
+		g_ptr_array_add (batch->results, stmt);
 	}
 
-	return NULL;
+	return err;
 }
 
 static GError *
-_sds_client_execute (struct oio_sqlx_client_s *self,
-		const char *in_stmt, gchar **in_params,
-		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines)
+_unpack_reply (GByteArray *packed, struct oio_sqlx_batch_result_s **result)
 {
+	/* asn1 unpacking */
+	struct TableSequence *ts = NULL;
+	asn_codec_ctx_t ctx;
+	memset(&ctx, 0, sizeof(ctx));
+	ctx.max_stack_size = ASN1C_MAX_STACK;
+	asn_dec_rval_t rv = ber_decode(&ctx, &asn_DEF_TableSequence,
+			(void**)&ts, packed->data, packed->len);
+
+	if (rv.code != RC_OK)
+		return NEWERROR(CODE_PLATFORM_ERROR, "Invalid body from the sqlx (decode)");
+	if (!ts)
+		return NEWERROR(CODE_PLATFORM_ERROR, "Invalid body from the sqlx (content)");
+
+	if (!ts->list.count || !ts->list.array) {
+		asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence, ts, FALSE);
+		return NEWERROR(CODE_PLATFORM_ERROR, "Invalid body from the sqlx (content)");
+	}
+
+	struct oio_sqlx_batch_result_s *batch = oio_sqlx_batch_result__create ();
+	GError *err = _unpack_asn1_to_api (ts, batch);
+
+	if (err)
+		oio_sqlx_batch_result__destroy (batch);
+	else
+		*result = batch;
+
+	asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence, ts, FALSE);
+	return err;
+}
+
+static GError *
+_sds_client_batch (struct oio_sqlx_client_s *self,
+		struct oio_sqlx_batch_s *batch,
+		struct oio_sqlx_batch_result_s **out_result)
+{
+	GRID_WARN("%s (%p)", __FUNCTION__, self);
+
 	g_assert (self != NULL);
 	struct oio_sqlx_client_SDS_s *c = (struct oio_sqlx_client_SDS_s*) self;
 	g_assert (c->vtable == &vtable_SDS);
@@ -299,7 +356,7 @@ _sds_client_execute (struct oio_sqlx_client_s *self,
 	/* Pack the query parameters */
 	struct sqlx_name_mutable_s name;
 	sqlx_name_fill (&name, c->url, srvtype, atoi(allsrv[0]));
-	GByteArray *req = _pack_request (&name, in_stmt, in_params);
+	GByteArray *req = _pack_request (&name, batch);
 	sqlx_name_clean (&name);
 	GRID_DEBUG("Encoded query: %u bytes", req ? req->len : 0);
 
@@ -312,7 +369,7 @@ _sds_client_execute (struct oio_sqlx_client_s *self,
 		done = TRUE;
 		++p;
 
-		/* send the request */
+		/* send the request and concat all the replies */
 		GByteArray *out = NULL;
 		GRID_DEBUG("SQLX trying with %s", p);
 		/* TODO JFS: macro for the timeout */
@@ -328,41 +385,61 @@ _sds_client_execute (struct oio_sqlx_client_s *self,
 
 		/* Decode the reply */
 		GRID_DEBUG("Got %u bytes", out ? out->len : 0);
-		struct TableSequence *ts = NULL;
-		asn_codec_ctx_t ctx;
-		memset(&ctx, 0, sizeof(ctx));
-		ctx.max_stack_size = ASN1C_MAX_STACK;
-		asn_dec_rval_t rv = ber_decode(&ctx, &asn_DEF_TableSequence,
-				(void**)&ts, out->data, out->len);
-		g_byte_array_unref (out);
-		out = NULL;
-
-		if (rv.code != RC_OK) {
-			err = NEWERROR(CODE_PLATFORM_ERROR, "Invalid body from the sqlx (decode)");
-			break;
-		}
-		if (!ts) {
-			err = NEWERROR(CODE_PLATFORM_ERROR, "Invalid body from the sqlx (content)");
-			break;
-		}
-
-		GPtrArray *lines = g_ptr_array_new ();
-		err = _unpack_reply (ts, lines);
-		g_ptr_array_add (lines, NULL);
-
-		if (err) {
-			g_strfreev ((gchar**) g_ptr_array_free (lines, FALSE));
+		struct oio_sqlx_batch_result_s *result = NULL;
+		if (NULL != (err = _unpack_reply (out, &result))) {
+			oio_sqlx_batch_result__destroy (result); /* to be sure */
 		} else {
-			*out_lines = (gchar**) g_ptr_array_free (lines, FALSE);
+			*out_result = result;
 		}
 
-		asn_DEF_TableSequence.free_struct(&asn_DEF_TableSequence, ts, FALSE);
+		g_byte_array_free (out, TRUE);
 	}
 
 	if (!err && !done)
 		err = NEWERROR(CODE_PLATFORM_ERROR, "Invalid SQLX URL: none matched");
 
 	g_strfreev (allsrv);
+	return err;
+}
+
+static GError *
+_sds_client_execute (struct oio_sqlx_client_s *self,
+		const char *in_stmt, gchar **in_params,
+		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines)
+{
+	GError *err = NULL;
+	struct oio_sqlx_batch_s *batch = NULL;
+	struct oio_sqlx_batch_result_s *result = NULL;
+
+	GRID_WARN("%s (%p, %s)", __FUNCTION__, self, in_stmt);
+
+	(void) oio_sqlx_client_factory__batch (NULL, &batch);
+	oio_sqlx_batch__add (batch, in_stmt, in_params);
+	err = oio_sqlx_client__execute_batch (self, batch, &result);
+	oio_sqlx_batch__destroy (batch);
+
+	if (err) {
+		g_assert (result == NULL);
+		return err;
+	}
+
+	g_assert (result != NULL);
+	guint count = oio_sqlx_batch_result__count_statements (result);
+	g_assert (count == 1);
+	guint count_lines = 0;
+	err = oio_sqlx_batch_result__get_statement (result, 0, &count_lines, out_ctx);
+	if (!err) {
+		GPtrArray *tmp = g_ptr_array_new ();
+		for (guint i=0; i<count_lines ;++i) {
+			gchar **fields = oio_sqlx_batch_result__get_row (result, 0, i);
+			g_ptr_array_add (tmp, g_strjoinv (",", fields));
+			g_strfreev (fields);
+		}
+		g_ptr_array_add (tmp, NULL);
+		*out_lines = (gchar**) g_ptr_array_free (tmp, FALSE);
+	}
+	oio_sqlx_batch_result__destroy (result);
+
 	return err;
 }
 

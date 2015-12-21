@@ -34,6 +34,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/sqlx_remote.h>
 
 #include "sqlx_client.h"
+#include "sqlx_client_internals.h"
 #include "sqlx_client_local.h"
 
 struct oio_sqlx_client_LOCAL_s
@@ -62,7 +63,9 @@ static GError * _local_factory_open (struct oio_sqlx_client_factory_s *self,
 
 struct oio_sqlx_client_factory_vtable_s vtable_factory_LOCAL =
 {
-	_local_factory_destroy, _local_factory_open
+	_local_factory_destroy,
+	_local_factory_open,
+	NULL /* the default batch implementation fits */
 };
 
 struct oio_sqlx_client_vtable_s vtable_LOCAL =

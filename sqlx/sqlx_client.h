@@ -25,11 +25,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 extern "C" {
 #endif
 
-struct oio_url_s;
-
 /* -------------------------------------------------------------------------- */
-
-struct oio_sqlx_client_s;
 
 struct oio_sqlx_output_ctx_s
 {
@@ -38,21 +34,42 @@ struct oio_sqlx_output_ctx_s
 	gint64 last_rowid;
 };
 
-/* The interface to be implemented */
-struct oio_sqlx_client_vtable_s
-{
-	void (*destroy) (struct oio_sqlx_client_s *self);
+struct oio_sqlx_batch_s;
 
-	GError * (*execute_statement) (struct oio_sqlx_client_s *self,
-			const char *in_stmt, gchar **in_params,
-			struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines);
-};
+void oio_sqlx_batch__destroy (struct oio_sqlx_batch_s *self);
 
-/* Any implementation of a oio_sqlx_client_s must respect this preamble */
-struct oio_sqlx_client_abstract_s
-{
-	struct oio_sqlx_client_vtable_s *vtable;
-};
+void oio_sqlx_batch__add (struct oio_sqlx_batch_s *self,
+		const char *stmt, gchar **params);
+
+
+struct oio_sqlx_batch_result_s;
+
+void oio_sqlx_batch_result__destroy (struct oio_sqlx_batch_result_s *self);
+
+guint oio_sqlx_batch_result__count_statements (
+		struct oio_sqlx_batch_result_s *self);
+
+/* Collect information about the given statement in the result set.
+ * @param i_stmt identifies the i-th statement in the set
+ * @param pcount will store the number of lines
+ * @param out_ctx will be filled with
+ */
+GError* oio_sqlx_batch_result__get_statement (
+		struct oio_sqlx_batch_result_s *self, guint i_stmt,
+		guint *out_count, struct oio_sqlx_output_ctx_s *out_ctx);
+
+/* Get the given line in the given statement in the result set
+ * @param i_stmt the index of the statement
+ * @param i_line the index of the row
+ * @return a NULL-erminated array of strings, one for each field in the given
+ *         row. All the fields are currently mapped to their textual
+ *         representation. BLOBs are not supported yet. */
+gchar** oio_sqlx_batch_result__get_row (struct oio_sqlx_batch_result_s *self,
+		guint i_stmt, guint i_row);
+
+/* -------------------------------------------------------------------------- */
+
+struct oio_sqlx_client_s;
 
 void oio_sqlx_client__destroy (struct oio_sqlx_client_s *self);
 
@@ -60,27 +77,23 @@ GError * oio_sqlx_client__execute_statement (struct oio_sqlx_client_s *self,
 		const char *in_stmt, gchar **in_params,
 		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines);
 
+GError * oio_sqlx_client__execute_batch (struct oio_sqlx_client_s *self,
+		struct oio_sqlx_batch_s *batch,
+		struct oio_sqlx_batch_result_s **out_result);
+
 /* -------------------------------------------------------------------------- */
 
+struct oio_url_s;
+
 struct oio_sqlx_client_factory_s;
-
-struct oio_sqlx_client_factory_vtable_s
-{
-	void (*destroy) (struct oio_sqlx_client_factory_s *self);
-
-	GError * (*open) (struct oio_sqlx_client_factory_s *self,
-			const struct oio_url_s *u, struct oio_sqlx_client_s **out);
-};
-
-struct oio_sqlx_client_factory_abstract_s
-{
-	struct oio_sqlx_client_factory_vtable_s *vtable;
-};
 
 void oio_sqlx_client_factory__destroy (struct oio_sqlx_client_factory_s *self);
 
 GError * oio_sqlx_client_factory__open (struct oio_sqlx_client_factory_s *self,
-			struct oio_url_s *u, struct oio_sqlx_client_s **out);
+		struct oio_url_s *u, struct oio_sqlx_client_s **out);
+
+GError * oio_sqlx_client_factory__batch (struct oio_sqlx_client_factory_s *self,
+		struct oio_sqlx_batch_s **out);
 
 #ifdef __cplusplus
 }

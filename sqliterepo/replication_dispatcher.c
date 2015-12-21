@@ -1033,7 +1033,7 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 	else {
 
 		if (params->rows.list.count > 0)
-			GRID_DEBUG("The request does not expects parameters but an input has been provided");
+			GRID_DEBUG("No parameter expected, %u provided", params->rows.list.count);
 
 		/* Only one STEP */
 		for (rc = SQLITE_ROW; rc == SQLITE_ROW ;) {
