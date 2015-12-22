@@ -95,8 +95,8 @@ struct sqlx_cache_s
 	glong open_timeout; // milliseconds
 
 	guint32 heat_threshold;
-	time_t cool_grace_delay;
-	time_t hot_grace_delay;
+	gint64 cool_grace_delay; // same precision as oio_ext_monotonic_time()
+	gint64 hot_grace_delay;  // idem
 
 	/* Doubly linked lists of tables, one by status */
 	struct beacon_s beacon_free;
@@ -404,10 +404,11 @@ _expire_base(sqlx_cache_t *cache, sqlx_base_t *b)
 }
 
 static gint
-_expire_specific_base(sqlx_cache_t *cache, sqlx_base_t *b, gint64 now, time_t grace_delay)
+_expire_specific_base(sqlx_cache_t *cache, sqlx_base_t *b, gint64 now,
+		gint64 grace_delay)
 {
 	if (now) {
-		now += grace_delay * G_TIME_SPAN_SECOND;
+		now = (now > grace_delay) ? (now - grace_delay) : 0;
 		if (b->last_update > now)
 			return 0;
 	}
@@ -526,8 +527,8 @@ sqlx_cache_init(void)
 	sqlx_cache_t *cache;
 
 	cache = g_malloc0(sizeof(*cache));
-	cache->cool_grace_delay = SQLX_GRACE_DELAY_COOL;
-	cache->hot_grace_delay = SQLX_GRACE_DELAY_HOT;
+	cache->cool_grace_delay = SQLX_GRACE_DELAY_COOL * G_TIME_SPAN_SECOND;
+	cache->hot_grace_delay = SQLX_GRACE_DELAY_HOT * G_TIME_SPAN_SECOND;
 	cache->heat_threshold = 1;
 	cache->used = FALSE;
 	g_mutex_init(&cache->lock);

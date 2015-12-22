@@ -541,18 +541,20 @@ end:
 static void
 apply_parameters(sqlite3_stmt *stmt, Row_t *row)
 {
-	gint32 j;
 	gint64 i64;
 	gdouble d;
 
-	for (j=0; j<row->fields->list.count ;j++) {
-		int pos = 0;
+	if (!row->fields) {
+		GRID_DEBUG("Row without field");
+		return;
+	}
+	for (gint32 j=0; j<row->fields->list.count ;j++) {
+		RowField_t *field = row->fields->list.array[j];
+		if (!field)
+			continue;
 		long lpos = 0;
-		RowField_t *field;
-
-		field = row->fields->list.array[j];
 		asn_INTEGER2long(&(field->pos), &lpos);
-		pos = lpos;
+		int pos = lpos;
 
 		switch (field->value.present) {
 			case RowFieldValue_PR_i:
@@ -1031,7 +1033,7 @@ _execute_next_query(struct sqlx_sqlite3_s *sq3, const gchar *query,
 	else {
 
 		if (params->rows.list.count > 0)
-			GRID_DEBUG("The request does not expects parameters but an input has been provided");
+			GRID_DEBUG("No parameter expected, %u provided", params->rows.list.count);
 
 		/* Only one STEP */
 		for (rc = SQLITE_ROW; rc == SQLITE_ROW ;) {
@@ -2331,7 +2333,8 @@ sqlx_dispatch_QUERY(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
-	if (!g_str_has_prefix(name.type, "sqlx.")) {
+	if (!g_str_has_prefix(name.type, NAME_SRVTYPE_SQLX".") &&
+			strcmp(name.type, NAME_SRVTYPE_SQLX)) {
 		reply->send_error(0, NEWERROR(CODE_BAD_REQUEST,
 					"Invalid schema name, not prefixed with 'sqlx.'"));
 		return TRUE;

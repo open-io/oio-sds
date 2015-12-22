@@ -16,8 +16,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#ifndef OIO_SDS__resolver__directory_h
-# define OIO_SDS__resolver__directory_h 1
+#ifndef OIO_SDS__core__directory_h
+# define OIO_SDS__core__directory_h 1
 
 # include <glib.h>
 
@@ -68,4 +68,4 @@ GError * oio_directory__link (struct oio_directory_s *d,
  * services */
 struct oio_directory_s * oio_directory__create_proxy (const char *ns);
 
-#endif /*OIO_SDS__resolver__directory_h*/
+#endif /*OIO_SDS__core__directory_h*/

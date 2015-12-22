@@ -75,13 +75,11 @@ struct network_client_s
 	by any app. This is a pointer to the stats_holder local to the thread
 	that is running the current client. */
 
-	gchar local_name[128];
-	gchar peer_name[128];
 	int flags;
-	struct {
-		time_t cnx; // coarse (bogo monotonic)
-		time_t evt_out; // coarse (bogo monotonic)
-		gint64 evt_in; // precise (monotonic)
+	struct { /* monotonic timers */
+		gint64 cnx;
+		gint64 evt_out;
+		gint64 evt_in;
 	} time;
 
 	/* Pending input */
@@ -94,6 +92,9 @@ struct network_client_s
 
 	struct network_client_s *prev; /*!< XXX DO NOT USE */
 	struct network_client_s *next; /*!< XXX DO NOT USE */
+
+	gchar local_name[128];
+	gchar peer_name[128];
 };
 
 struct network_server_s * network_server_init(void);

@@ -125,25 +125,26 @@ hc_resolver_create1(time_t now)
 void
 hc_resolver_configure (struct hc_resolver_s *r, enum hc_resolver_flags_e f)
 {
-	if (r) r->flags = f;
+	g_assert (r != NULL);
+	r->flags = f;
 }
 
 void
 hc_resolver_qualify (struct hc_resolver_s *r,
 		gboolean (*qualify) (gconstpointer))
 {
+	g_assert (r != NULL);
 	g_assert (qualify != NULL);
-	if (!r)
-		r->service_qualifier = qualify;
+	r->service_qualifier = qualify;
 }
 
 void
 hc_resolver_notify (struct hc_resolver_s *r,
 		void (*notify) (gconstpointer))
 {
+	g_assert (r != NULL);
 	g_assert (notify != NULL);
-	if (!r)
-		r->service_notifier = notify;
+	r->service_notifier = notify;
 }
 
 void
@@ -309,14 +310,15 @@ _resolve_m1_through_many_m0(struct hc_resolver_s *r, gchar **urlv, const guint8 
 
 	if (urlv && *urlv) {
 		gsize len = g_strv_length(urlv);
-		oio_ext_array_shuffle ((void**)urlv, len);
 		if (r->service_qualifier) {
 			/* url already contains ip:port, and not meta1_service_url_s */
 			gboolean _wrap (gconstpointer p) {
 				return r->service_qualifier ((const char*)p);
 			}
-			oio_ext_array_partition ((void**)urlv, len, _wrap);
+			len = oio_ext_array_partition ((void**)urlv, len, _wrap);
 		}
+		if (len > 0 && !oio_dir_no_shuffle)
+			oio_ext_array_shuffle ((void**)urlv, len);
 	}
 
 	for (gchar **purl=urlv; *purl ;++purl) {
@@ -375,18 +377,17 @@ _resolve_service_through_many_meta1(struct hc_resolver_s *r, gchar **urlv,
 
 	if (urlv && *urlv) {
 		gsize len = g_strv_length(urlv);
-		oio_ext_array_shuffle ((void**)urlv, len);
 		if (r->service_qualifier) {
 			/* we must the callback because our array contains packed URL */
-			gboolean _qualify_service_url (gconstpointer p) {
-				gboolean rc = FALSE;
+			gboolean _wrap (gconstpointer p) {
 				gchar *m1u = meta1_strurl_get_address ((const char*)p);
-				if (m1u) rc = r->service_qualifier (m1u);
-				g_free (m1u);
-				return rc;
+				STRING_STACKIFY (m1u);
+				return r->service_qualifier (m1u);
 			}
-			oio_ext_array_partition ((void**)urlv, len, _qualify_service_url);
+			len = oio_ext_array_partition ((void**)urlv, len, _wrap);
 		}
+		if (len > 0 && !oio_dir_no_shuffle)
+			oio_ext_array_shuffle ((void**)urlv, len);
 	}
 
 	for (gchar **purl=urlv; *purl ;++purl) {
@@ -451,7 +452,7 @@ hc_resolve_reference_directory(struct hc_resolver_s *r, struct oio_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(result != NULL);
 	if (!oio_url_get_id(url) || !oio_url_has(url, OIOURL_NS))
-		return NEWERROR(CODE_BAD_REQUEST, "Incomplete URL [%s]", oio_url_get(url, OIOURL_WHOLE));
+		return BADREQ("Incomplete URL [%s]", oio_url_get(url, OIOURL_WHOLE));
 
 	GError *err = NULL;
 	gchar **m1v = NULL, **m0v = NULL;
@@ -490,7 +491,7 @@ hc_resolve_reference_service(struct hc_resolver_s *r, struct oio_url_s *url,
 	EXTRA_ASSERT(*result == NULL);
 
 	if (!oio_url_get_id(url) || !oio_url_has(url, OIOURL_NS))
-		return NEWERROR(CODE_BAD_REQUEST, "Incomplete URL [%s]", oio_url_get(url, OIOURL_WHOLE));
+		return BADREQ("Incomplete URL [%s]", oio_url_get(url, OIOURL_WHOLE));
 
 	hk = hashstr_printf("%s|%s|%s", srvtype,
 			oio_url_get(url, OIOURL_NS),
@@ -498,7 +499,7 @@ hc_resolve_reference_service(struct hc_resolver_s *r, struct oio_url_s *url,
 	err = _resolve_reference_service(r, hk, url, srvtype, result);
 	g_free(hk);
 
-	if (result && *result)
+	if (result && *result && !oio_dir_no_shuffle)
 		oio_ext_array_shuffle ((void**)*result, g_strv_length(*result));
 	return err;
 }

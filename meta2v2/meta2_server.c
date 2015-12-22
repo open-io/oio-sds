@@ -99,7 +99,7 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 	oio_url_set(u, OIOURL_NS, ss->ns_name);
 	if (!sqlx_name_extract (n, u, NAME_SRVTYPE_META2, &seq)) {
 		oio_url_pclean (&u);
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid type name: '%s'", n->type);
+		return BADREQ("Invalid type name: '%s'", n->type);
 	}
 
 retry:

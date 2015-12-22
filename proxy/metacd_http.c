@@ -94,6 +94,11 @@ action_status(struct req_args_s *args)
 	g_string_append_printf(gstr, "cache.srv.ttl = %lu\n", s.services.ttl);
 	g_string_append_printf(gstr, "cache.srv.clock = %lu\n", s.clock);
 
+	gint64 count_down = 0;
+	SRV_DO(count_down = lru_tree_count(srv_down));
+	g_string_append_printf(gstr, "down.srv.count = %"G_GINT64_FORMAT"\n",
+			count_down);
+
 	args->rp->set_body_gstr(gstr);
 	args->rp->set_status(HTTP_CODE_OK, "OK");
 	args->rp->set_content_type("text/x-java-properties");
@@ -374,6 +379,7 @@ _task_reload_srvtypes (gpointer p)
 	if (err != NULL) {
 		GRID_WARN ("SRVTYPES reload error [%s] from [%s] : (%d) %s",
 			nsname, cs, err->code, err->message);
+		g_clear_error (&err);
 		return;
 	}
 
@@ -650,6 +656,7 @@ configure_request_handlers (void)
 
     // Admin
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/ping/#POST", action_admin_ping);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/info/#POST", action_admin_info);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/status/#POST", action_admin_status);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/drop_cache/#POST", action_admin_drop_cache);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/sync/#POST", action_admin_sync);

@@ -37,6 +37,7 @@ target_link_libraries(tool_ns oiosds ${CURL_LIBRARIES})
 
 install(FILES
 		oiocfg.h
+		oiodir.h
 		oioext.h
 		oiolog.h
 		oiostr.h

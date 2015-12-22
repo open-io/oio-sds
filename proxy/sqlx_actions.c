@@ -58,7 +58,7 @@ _abstract_sqlx_action (struct req_args_s *args, gboolean next,
 		return NEWERROR(HTTP_CODE_NOT_FOUND, "Type not managed");
 	}
 
-	struct sqlx_name_s n = {.ns=NS(),.base=bn,.type=etype};
+	struct sqlx_name_s n = {.ns=NS(),.base=bn,.type=type};
 	GError *on_url (struct meta1_service_url_s *m1u, gboolean *pnext) {
 		*pnext = next;
 		return hook(&n, m1u);
@@ -70,8 +70,11 @@ _abstract_sqlx_action (struct req_args_s *args, gboolean next,
 	return err;
 }
 
+#define SQLX_NEXT    0x01
+#define SQLX_NOREDIR 0x02
+
 static enum http_rc_e
-_sqlx_action_noreturn (struct req_args_s *args,
+_sqlx_action_noreturn (struct req_args_s *args, guint32 flags,
 		GByteArray* (*reqbuilder) (struct sqlx_name_s *))
 {
 	gboolean _on_status_reply (gpointer ctx, MESSAGE reply) {
@@ -86,6 +89,8 @@ _sqlx_action_noreturn (struct req_args_s *args,
 		GByteArray *req = reqbuilder(n);
 		struct gridd_client_s *c = gridd_client_create(m1u->host, req,
 				&msg, _on_status_reply);
+		if (flags & SQLX_NOREDIR)
+			gridd_client_no_redirect (c);
 		g_byte_array_unref (req);
 		gridd_client_start (c);
 		gridd_client_set_timeout (c, COMMON_CLIENT_TIMEOUT);
@@ -94,7 +99,7 @@ _sqlx_action_noreturn (struct req_args_s *args,
 			e = gridd_client_error (c);
 		gridd_client_free (c);
 		if (!first)
-			g_string_append_c (out, ',');
+			g_string_append (out, ",\n");
 		first = FALSE;
 		if (!e)
 			g_string_append_printf (out, "\"%s\":\"%s\"", m1u->host, "OK");
@@ -107,7 +112,7 @@ _sqlx_action_noreturn (struct req_args_s *args,
 		return e;
 	}
 
-	GError *err = _abstract_sqlx_action (args, FALSE, hook);
+	GError *err = _abstract_sqlx_action (args, flags & SQLX_NEXT, hook);
 	g_string_append(out, "}");
 
 	if (err) {
@@ -118,7 +123,7 @@ _sqlx_action_noreturn (struct req_args_s *args,
 }
 
 static enum http_rc_e
-_sqlx_action_flatbody (struct req_args_s *args,
+_sqlx_action_flatbody (struct req_args_s *args, guint32 flags,
 		GByteArray* (*reqbuilder) (struct sqlx_name_s *))
 {
 	GString *out = g_string_new("{");
@@ -129,7 +134,7 @@ _sqlx_action_flatbody (struct req_args_s *args,
 		GByteArray * body = NULL;
 		GError *e = _gba_request (m1u, _builder, &body);
 		if (!first)
-			g_string_append_c (out, '\n');
+			g_string_append (out, ",\n");
 		first = FALSE;
 		if (!e)
 			g_string_append_printf (out, "\"%s\":\"%.*s\"", m1u->host,
@@ -145,7 +150,7 @@ _sqlx_action_flatbody (struct req_args_s *args,
 		return NULL;
 	}
 
-	GError *err = _abstract_sqlx_action (args, FALSE, hook);
+	GError *err = _abstract_sqlx_action (args, flags & SQLX_NEXT, hook);
 	g_string_append(out, "}");
 
 	if (err) {
@@ -224,6 +229,7 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 {
 	if (!json_object_is_type(jargs, json_type_string))
 		return _reply_format_error (args, BADREQ("Action argument must be a string"));
+
 	const gchar *to = json_object_get_string (jargs);
 	if (!metautils_url_valid_for_connect(to))
 		return _reply_format_error (args, BADREQ("Invalid target URL"));
@@ -254,7 +260,7 @@ action_sqlx_copyto (struct req_args_s *args, struct json_object *jargs)
 		return NULL;
 	}
 
-	GError *err = _abstract_sqlx_action (args, TRUE, hook);
+	GError *err = _abstract_sqlx_action (args, FALSE, hook);
 	g_string_append(out, "}");
 
 	if (err) {
@@ -294,7 +300,7 @@ action_sqlx_propset (struct req_args_s *args, struct json_object *jargs)
 		GByteArray * packer (struct sqlx_name_s *n) {
 			return sqlx_pack_PROPSET_pairs (n, flush, pairs);
 		}
-		rc = _sqlx_action_noreturn (args, packer);
+		rc = _sqlx_action_noreturn (args, 0, packer);
 	} else {
 		rc = _reply_common_error (args, err);
 	}
@@ -355,7 +361,7 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 	GByteArray * packer (struct sqlx_name_s *n) {
 		return sqlx_pack_PROPDEL (n, (const gchar * const * )namev);
 	}
-	enum http_rc_e rc = _sqlx_action_noreturn (args, packer);
+	enum http_rc_e rc = _sqlx_action_noreturn (args, 0, packer);
 	g_strfreev (namev);
 	return rc;
 }
@@ -363,43 +369,43 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 enum http_rc_e
 action_admin_ping (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn (args, sqlx_pack_USE);
+	return _sqlx_action_noreturn (args, SQLX_NEXT|SQLX_NOREDIR, sqlx_pack_USE);
 }
 
 enum http_rc_e
 action_admin_status (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn (args, sqlx_pack_STATUS);
+	return _sqlx_action_noreturn (args, SQLX_NEXT|SQLX_NOREDIR, sqlx_pack_STATUS);
 }
 
 enum http_rc_e
 action_admin_info (struct req_args_s *args)
 {
-    return _sqlx_action_flatbody (args, sqlx_pack_INFO);
+    return _sqlx_action_flatbody (args, SQLX_NEXT|SQLX_NOREDIR, sqlx_pack_INFO);
 }
 
 enum http_rc_e
 action_admin_drop_cache (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn (args, sqlx_pack_LEANIFY);
+	return _sqlx_action_noreturn (args, SQLX_NEXT|SQLX_NOREDIR, sqlx_pack_LEANIFY);
 }
 
 enum http_rc_e
 action_admin_sync (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn (args, sqlx_pack_RESYNC);
+	return _sqlx_action_noreturn (args, SQLX_NEXT|SQLX_NOREDIR, sqlx_pack_RESYNC);
 }
 
 enum http_rc_e
 action_admin_leave (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn (args, sqlx_pack_EXITELECTION);
+	return _sqlx_action_noreturn (args, SQLX_NEXT|SQLX_NOREDIR, sqlx_pack_EXITELECTION);
 }
 
 enum http_rc_e
 action_admin_debug (struct req_args_s *args)
 {
-	return _sqlx_action_flatbody (args, sqlx_pack_DESCR);
+	return _sqlx_action_flatbody (args, SQLX_NEXT, sqlx_pack_DESCR);
 }
 
 enum http_rc_e
@@ -429,17 +435,17 @@ action_admin_prop_del (struct req_args_s *args)
 enum http_rc_e
 action_admin_freeze (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn(args, sqlx_pack_FREEZE);
+	return _sqlx_action_noreturn(args, 0, sqlx_pack_FREEZE);
 }
 
 enum http_rc_e
 action_admin_enable (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn(args, sqlx_pack_ENABLE);
+	return _sqlx_action_noreturn(args, 0, sqlx_pack_ENABLE);
 }
 
 enum http_rc_e
 action_admin_disable (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn(args, sqlx_pack_DISABLE);
+	return _sqlx_action_noreturn(args, 0, sqlx_pack_DISABLE);
 }

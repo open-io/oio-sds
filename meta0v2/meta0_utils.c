@@ -193,28 +193,30 @@ meta0_utils_list_to_array(GSList *list)
 	return result;
 }
 
+static gboolean
+_tree2list_traverser(gpointer k, gpointer v, gpointer u)
+{
+	struct meta0_info_s *m0i;
+	hashstr_t *hurl = k;
+	GArray *pfx = v;
+	GSList **pl = u;
+
+	m0i = g_malloc0(sizeof(*m0i));
+	grid_string_to_addrinfo(hashstr_str(hurl), &(m0i->addr));
+	m0i->prefixes_size = 2 * pfx->len;
+	m0i->prefixes = g_memdup(pfx->data, m0i->prefixes_size);
+	*pl = g_slist_prepend(*pl, m0i);
+
+	return FALSE;
+}
+
 GSList*
 meta0_utils_tree_to_list(GTree *byurl)
 {
-	gboolean _traverser(gpointer k, gpointer v, gpointer u) {
-		struct meta0_info_s *m0i;
-		hashstr_t *hurl = k;
-		GArray *pfx = v;
-		GSList **pl = u;
-
-		m0i = g_malloc0(sizeof(*m0i));
-		grid_string_to_addrinfo(hashstr_str(hurl), &(m0i->addr));
-		m0i->prefixes_size = 2 * pfx->len;
-		m0i->prefixes = g_memdup(pfx->data, m0i->prefixes_size);
-		*pl = g_slist_prepend(*pl, m0i);
-
-		return FALSE;
-	}
-
 	GSList *result = NULL;
 
 	EXTRA_ASSERT(byurl != NULL);
-	g_tree_foreach(byurl, _traverser, &result);
+	g_tree_foreach(byurl, _tree2list_traverser, &result);
 	return result;
 }
 
