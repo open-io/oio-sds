@@ -265,6 +265,12 @@ class TestRainContent(BaseTestCase):
     def test_download_content_2xchunksize_with_broken_0_2_and_1_0(self):
         self._test_download(2 * self.conf["chunk_size"], ["0.2", "1.0"])
 
+    def test_download_content_chunksize_bytes_with_3_broken_chunks(self):
+        data = random_data(self.conf["chunk_size"])
+        content = self._new_content(data, ["0.0", "0.1", "0.2"])
+        gen = content.download()
+        self.assertRaises(UnrecoverableContent, gen.next)
+
     def test_download_interrupt_close(self):
         data = random_data(self.conf["chunk_size"])
         content = self._new_content(data, ["0.p0"])

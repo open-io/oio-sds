@@ -116,9 +116,9 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.k, 6)
         self.assertEqual(c.m, 2)
         self.assertEqual(len(c.chunks), 4)
-        self.assertEqual(c.chunks[0].raw(), chunks[0])
+        self.assertEqual(c.chunks[0].raw(), chunks[2])
         self.assertEqual(c.chunks[1].raw(), chunks[1])
-        self.assertEqual(c.chunks[2].raw(), chunks[2])
+        self.assertEqual(c.chunks[2].raw(), chunks[0])
         self.assertEqual(c.chunks[3].raw(), chunks[3])
 
     def test_get_dup(self):
@@ -204,7 +204,7 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.k, 6)
         self.assertEqual(c.m, 2)
         self.assertEqual(len(c.chunks), 4)
-        self.assertEqual(c.chunks[0].raw(), chunks[0])
-        self.assertEqual(c.chunks[1].raw(), chunks[1])
-        self.assertEqual(c.chunks[2].raw(), chunks[2])
-        self.assertEqual(c.chunks[3].raw(), chunks[3])
+        self.assertEqual(c.chunks[0].raw(), chunks[3])
+        self.assertEqual(c.chunks[1].raw(), chunks[2])
+        self.assertEqual(c.chunks[2].raw(), chunks[1])
+        self.assertEqual(c.chunks[3].raw(), chunks[0])
