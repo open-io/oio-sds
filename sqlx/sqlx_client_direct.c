@@ -221,7 +221,12 @@ _unpack_asn1_to_api (struct TableSequence *ts, struct oio_sqlx_batch_result_s *b
 					t->statusString ? (char*)t->statusString->buf : "Unknown error");
 		}
 
-		/* TODO fills the output context */
+		if (t->localChanges)
+			asn_INTEGER_to_int64 (t->localChanges, &stmt->ctx.changes);
+		if (t->totalChanges)
+			asn_INTEGER_to_int64 (t->localChanges, &stmt->ctx.total_changes);
+		if (t->lastRowId)
+			asn_INTEGER_to_int64 (t->lastRowId, &stmt->ctx.last_rowid);
 
 		/* append each row */
 		for (int ri=0; !err && ri < t->rows.list.count ;++ri) {
@@ -367,9 +372,9 @@ _sds_client_batch (struct oio_sqlx_client_s *self,
 		/* send the request and concat all the replies */
 		GByteArray *out = NULL;
 		GRID_DEBUG("SQLX trying with %s", p);
-		/* TODO JFS: macro for the timeout */
-		/* TODO JFS: here are memory copies. big result sets can can cause OOM */
-		err = gridd_client_exec_and_concat (p, 60.0, req, &out);
+		/* XXX JFS: here are memory copies. big result sets can cause OOM.
+		 * Manage to avoid big resultsets. */
+		err = gridd_client_exec_and_concat (p, SQLX_CLIENT_TIMEOUT, req, &out);
 		if (err) {
 			if (err->code == CODE_NETWORK_ERROR) {
 				g_clear_error (&err);

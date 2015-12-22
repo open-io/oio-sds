@@ -55,6 +55,10 @@ License along with this library.
 #  define COMMON_CLIENT_TIMEOUT 30.0
 # endif
 
+# ifndef SQLX_CLIENT_TIMEOUT
+#  define SQLX_CLIENT_TIMEOUT 30.0
+# endif
+
 # ifndef M2V2_CLIENT_TIMEOUT
 #  define M2V2_CLIENT_TIMEOUT 10.0
 # endif
