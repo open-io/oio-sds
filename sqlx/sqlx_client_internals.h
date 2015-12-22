@@ -25,19 +25,19 @@ extern "C" {
 
 struct oio_sqlx_batch_s
 {
-	GPtrArray *statements;
+	GPtrArray *statements; /* <GPtrArray<gchar*>*> */
 };
 
 struct oio_sqlx_statement_result_s
 {
 	struct oio_sqlx_output_ctx_s ctx;
 	GError *err;
-	GPtrArray *rows;
+	GPtrArray *rows; /* <gchar**> */
 };
 
 struct oio_sqlx_batch_result_s
 {
-	GPtrArray *results; /* <oio_sqlx_statement_result_s> */
+	GPtrArray *results; /* <oio_sqlx_statement_result_s*> */
 };
 
 struct oio_sqlx_batch_result_s * oio_sqlx_batch_result__create (void);
@@ -50,10 +50,6 @@ struct oio_sqlx_statement_result_s * oio_sqlx_statement_result__create (void);
 struct oio_sqlx_client_vtable_s
 {
 	void (*destroy) (struct oio_sqlx_client_s *self);
-
-	GError * (*execute_statement) (struct oio_sqlx_client_s *self,
-			const char *in_stmt, gchar **in_params,
-			struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines);
 
 	GError * (*execute_batch) (struct oio_sqlx_client_s *self,
 			struct oio_sqlx_batch_s *in,

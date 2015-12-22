@@ -52,9 +52,9 @@ struct oio_sqlx_client_factory_LOCAL_s
 
 static void _local_client_destroy (struct oio_sqlx_client_s *self);
 
-static GError * _local_client_execute_statement (struct oio_sqlx_client_s *self,
-		const char *in_stmt, gchar **in_params,
-		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines);
+static GError * _local_client_execute_batch (struct oio_sqlx_client_s *self,
+		struct oio_sqlx_batch_s *batch,
+		struct oio_sqlx_batch_result_s **out_result);
 
 static void _local_factory_destroy (struct oio_sqlx_client_factory_s *self);
 
@@ -70,7 +70,8 @@ struct oio_sqlx_client_factory_vtable_s vtable_factory_LOCAL =
 
 struct oio_sqlx_client_vtable_s vtable_LOCAL =
 {
-	_local_client_destroy, _local_client_execute_statement,
+	_local_client_destroy,
+	_local_client_execute_batch,
 };
 
 static void
@@ -86,104 +87,104 @@ _local_client_destroy (struct oio_sqlx_client_s *self)
 	SLICE_FREE (struct oio_sqlx_client_LOCAL_s, s);
 }
 
-static gchar *
-_pack_column_names (sqlite3_stmt *stmt)
-{
-	GString *gs = g_string_new("");
-	for (int i=0,max=sqlite3_column_count(stmt); i<max ;++i) {
-		if (gs->len > 0) g_string_append_c (gs, ',');
-		g_string_append (gs, sqlite3_column_name(stmt, i));
-	}
-	return g_string_free (gs, FALSE);
-}
-
-static gchar *
+static gchar **
 _pack_record (sqlite3_stmt *stmt)
 {
-	GString *gs = g_string_new("");
-	for (int i=0,max=sqlite3_column_count(stmt); i<max ;++i) {
-		if (gs->len > 0)
-			g_string_append_c (gs, ',');
-		if (sqlite3_column_type(stmt, i) == SQLITE_INTEGER) {
-			g_string_append_printf (gs, "%"G_GINT64_FORMAT,
-					(gint64)sqlite3_column_int64(stmt, i));
-		} else {
-			const char *v = (const char*)sqlite3_column_text(stmt, i);
-			if (v) g_string_append (gs, v);
-		}
+	GPtrArray *tmp = g_ptr_array_new ();
+	const int max=sqlite3_column_count(stmt);
+	for (int i=0; i<max ;++i) {
+		const char *v = (const char*)sqlite3_column_text(stmt, i);
+		g_ptr_array_add (tmp, g_strdup(v?v:""));
 	}
-	return g_string_free (gs, FALSE);
+	g_ptr_array_add (tmp, NULL);
+	return (gchar**) g_ptr_array_free (tmp, FALSE);
 }
 
-static GError *
-_local_client_execute_statement (struct oio_sqlx_client_s *self,
-		const char *in_stmt, gchar **in_params,
-		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines)
+static void
+_exec_statement (struct oio_sqlx_client_LOCAL_s *s,
+		GPtrArray *in, struct oio_sqlx_statement_result_s *out)
 {
-	g_assert (self != NULL);
-	struct oio_sqlx_client_LOCAL_s *s = (struct oio_sqlx_client_LOCAL_s*)self;
-	g_assert (s->vtable == &vtable_LOCAL);
-	g_assert (s->db != NULL);
-
-	GError *err = NULL;
 	sqlite3_stmt *stmt = NULL;
-	GPtrArray *tmp = NULL;
 
 	/* prepare the query and bind the parameters */
-	int rc = sqlite3_prepare (s->db, in_stmt, -1, &stmt, NULL);
+	int rc = sqlite3_prepare (s->db, in->pdata[0], -1, &stmt, NULL);
 	if (rc != SQLITE_OK) {
-		err = NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (prepare): (%d) %s",
+		out->err = NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (prepare): (%d) %s",
 				rc, sqlite3_errmsg(s->db));
 		goto out;
 	}
 
-	for (int i=0; in_params && in_params[i]; ++i) {
-		rc = sqlite3_bind_text (stmt, i+1, in_params[i], -1, NULL);
+	const guint max = in->len;
+	for (guint i=1; i<max; ++i) {
+		rc = sqlite3_bind_text (stmt, i, in->pdata[i], -1, NULL);
 		if (SQLITE_OK != rc) {
-			err = NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (bind): (%d) %s",
+			out->err = NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (bind): (%d) %s",
 					rc, sqlite3_errmsg(s->db));
 			goto out;
 		}
 	}
 
 	/* pack the output */
-	tmp = g_ptr_array_new ();
-	if (out_lines)
-		g_ptr_array_add (tmp, _pack_column_names(stmt));
 	do {
 		rc = sqlite3_step (stmt);
-		if (rc == SQLITE_ROW && out_lines)
-			g_ptr_array_add (tmp, _pack_record (stmt));
+		if (rc == SQLITE_ROW) {
+			g_ptr_array_add (out->rows, _pack_record (stmt));
+		}
 	} while (rc == SQLITE_ROW);
 
 	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-		err = NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (step): (%d) %s",
+		out->err = NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (step): (%d) %s",
 				rc, sqlite3_errmsg(s->db));
 		goto out;
 	}
 
-	/* fill the context */
-	if (out_ctx) {
-		out_ctx->changes = sqlite3_changes (s->db);
-		out_ctx->total_changes = sqlite3_total_changes (s->db);
-		out_ctx->last_rowid = sqlite3_last_insert_rowid (s->db);
-	}
-
 out:
 	if (SQLITE_OK != (rc = sqlite3_finalize (stmt))) {
-		if (!err)
-			err = NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (finalize): "
+		if (!out->err) {
+			out->err = NEWERROR(CODE_INTERNAL_ERROR, "DB ERROR (finalize): "
 					"(%d) %s", rc, sqlite3_errmsg(s->db));
+		}
 	}
-	if (tmp)
-		g_ptr_array_add (tmp, NULL);
-	if (!err && out_lines) {
-		*out_lines = (gchar**)g_ptr_array_free (tmp, FALSE);
-		tmp = NULL;
+
+	/* fill the context */
+	out->ctx.changes = sqlite3_changes (s->db);
+	out->ctx.total_changes = sqlite3_total_changes (s->db);
+	out->ctx.last_rowid = sqlite3_last_insert_rowid (s->db);
+
+}
+
+static GError *
+_local_client_execute_batch (struct oio_sqlx_client_s *self,
+		struct oio_sqlx_batch_s *batch,
+		struct oio_sqlx_batch_result_s **out_result)
+{
+	/* sanity checks */
+	if (!self || !batch || !out_result || !batch->statements)
+		return BADREQ("Invalid parameter");
+	const guint max = batch->statements->len;
+	if (!max)
+		return BADREQ("Empty batch");
+	for (guint i=0; i<max ;++i) {
+		GPtrArray *stmt = batch->statements->pdata[i];
+		if (!stmt || stmt->len < 1)
+			return BADREQ("Empty statement at %u", i);
 	}
-	if (tmp)
-		g_strfreev ((gchar**)g_ptr_array_free (tmp, FALSE));
-	return err;
+
+	struct oio_sqlx_client_LOCAL_s *s = (struct oio_sqlx_client_LOCAL_s*)self;
+	g_assert (s->vtable == &vtable_LOCAL);
+	g_assert (s->db != NULL);
+
+	struct oio_sqlx_batch_result_s *result = oio_sqlx_batch_result__create ();
+
+	for (guint i=0; i<max ;++i) {
+		GPtrArray *stmt = batch->statements->pdata[i];
+		struct oio_sqlx_statement_result_s *out = oio_sqlx_statement_result__create ();
+		_exec_statement (s, stmt, out);
+		g_ptr_array_add (result->results, out);
+	}
+
+	*out_result = result;
+	return NULL;
 }
 
 static void
@@ -285,5 +286,4 @@ oio_sqlx_client_factory__create_local (const char *ns, const char *schema)
 	_local_factory_destroy ((struct oio_sqlx_client_factory_s*)self);
 	return NULL;
 }
-
 

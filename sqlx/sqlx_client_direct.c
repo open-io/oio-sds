@@ -70,10 +70,6 @@ static GError * _sds_factory_open (struct oio_sqlx_client_factory_s *self,
 
 static void _sds_client_destroy (struct oio_sqlx_client_s *self);
 
-static GError * _sds_client_execute (struct oio_sqlx_client_s *self,
-		const char *in_stmt, gchar **in_params,
-		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines);
-
 static GError * _sds_client_batch (struct oio_sqlx_client_s *self,
 		struct oio_sqlx_batch_s *in,
 		struct oio_sqlx_batch_result_s **out);
@@ -86,7 +82,6 @@ struct oio_sqlx_client_factory_vtable_s vtable_factory_SDS = {
 
 struct oio_sqlx_client_vtable_s vtable_SDS = {
 	_sds_client_destroy,
-	_sds_client_execute,
 	_sds_client_batch
 };
 
@@ -399,47 +394,6 @@ _sds_client_batch (struct oio_sqlx_client_s *self,
 		err = NEWERROR(CODE_PLATFORM_ERROR, "Invalid SQLX URL: none matched");
 
 	g_strfreev (allsrv);
-	return err;
-}
-
-static GError *
-_sds_client_execute (struct oio_sqlx_client_s *self,
-		const char *in_stmt, gchar **in_params,
-		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines)
-{
-	GError *err = NULL;
-	struct oio_sqlx_batch_s *batch = NULL;
-	struct oio_sqlx_batch_result_s *result = NULL;
-
-	GRID_WARN("%s (%p, %s)", __FUNCTION__, self, in_stmt);
-
-	(void) oio_sqlx_client_factory__batch (NULL, &batch);
-	oio_sqlx_batch__add (batch, in_stmt, in_params);
-	err = oio_sqlx_client__execute_batch (self, batch, &result);
-	oio_sqlx_batch__destroy (batch);
-
-	if (err) {
-		g_assert (result == NULL);
-		return err;
-	}
-
-	g_assert (result != NULL);
-	guint count = oio_sqlx_batch_result__count_statements (result);
-	g_assert (count == 1);
-	guint count_lines = 0;
-	err = oio_sqlx_batch_result__get_statement (result, 0, &count_lines, out_ctx);
-	if (!err) {
-		GPtrArray *tmp = g_ptr_array_new ();
-		for (guint i=0; i<count_lines ;++i) {
-			gchar **fields = oio_sqlx_batch_result__get_row (result, 0, i);
-			g_ptr_array_add (tmp, g_strjoinv (",", fields));
-			g_strfreev (fields);
-		}
-		g_ptr_array_add (tmp, NULL);
-		*out_lines = (gchar**) g_ptr_array_free (tmp, FALSE);
-	}
-	oio_sqlx_batch_result__destroy (result);
-
 	return err;
 }
 
