@@ -22,11 +22,11 @@ import time
 from testtools.matchers import NotEquals
 
 from oio.blob.client import BlobClient
-from oio.common.exceptions import UnrecoverableContent, OrphanChunk
+from oio.common.exceptions import UnrecoverableContent, OrphanChunk, NotFound
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
-from oio.content.rain import RainContent
+from oio.content.rain import RainContent, READ_CHUNK_SIZE
 from tests.utils import BaseTestCase
 
 
@@ -35,6 +35,10 @@ def md5_stream(stream):
     for data in stream:
         checksum.update(data)
     return checksum.hexdigest().upper()
+
+
+def random_data(data_size):
+    return os.urandom(data_size)
 
 
 class TestRainContent(BaseTestCase):
@@ -64,7 +68,7 @@ class TestRainContent(BaseTestCase):
     def tearDown(self):
         super(TestRainContent, self).tearDown()
 
-    def test_rain_upload_very_small_content(self):
+    def test_upload_very_small_content(self):
         data = "azerty"
         content = self.content_factory.new(self.container_id, "titi",
                                            len(data), "RAIN")
@@ -85,7 +89,7 @@ class TestRainContent(BaseTestCase):
         self.assertEqual(meta['chunk_pos'], chunk.pos)
         self.assertEqual(meta['chunk_hash'], content.hash)
 
-    def test_rain_upload_small_content_one_metachunk(self):
+    def test_upload_small_content_one_metachunk(self):
         data = os.urandom(self.conf["chunk_size"])
         content = self.content_factory.new(self.container_id, "titi",
                                            len(data), "RAIN")
@@ -105,7 +109,7 @@ class TestRainContent(BaseTestCase):
         self.assertEqual(meta['chunk_pos'], chunk.pos)
         self.assertEqual(meta['chunk_hash'], chunk.hash)
 
-    def test_rain_upload_two_metachunk(self):
+    def test_upload_two_metachunk(self):
         data = os.urandom(2 * self.conf["chunk_size"])
         content = self.content_factory.new(self.container_id, "titi",
                                            len(data), "RAIN")
@@ -171,44 +175,101 @@ class TestRainContent(BaseTestCase):
             del rebuilt_meta["chunk_id"]
             self.assertEqual(rebuilt_meta, old_info[pos]["dl_meta"])
 
-    def test_rain_content_1_byte_rebuild_pos_0_0(self):
+    def test_content_1_byte_rebuild_pos_0_0(self):
         self._test_rebuild(1, ["0.0"])
 
-    def test_rain_content_1_byte_rebuild_pos_0_p0(self):
+    def test_content_1_byte_rebuild_pos_0_p0(self):
         self._test_rebuild(1, ["0.p0"])
 
-    def test_rain_content_1_byte_rebuild_pos_0_0_and_0_p0(self):
+    def test_content_1_byte_rebuild_pos_0_0_and_0_p0(self):
         self._test_rebuild(1, ["0.0", "0.p0"])
 
-    def test_rain_content_chunksize_bytes_rebuild_pos_0_0(self):
+    def test_content_chunksize_bytes_rebuild_pos_0_0(self):
         self._test_rebuild(self.conf["chunk_size"], ["0.0"])
 
-    def test_rain_content_chunksize_bytes_rebuild_pos_0_0_and_0_1(self):
+    def test_content_chunksize_bytes_rebuild_pos_0_0_and_0_1(self):
         self._test_rebuild(self.conf["chunk_size"], ["0.0", "0.1"])
 
-    def test_rain_content_chunksize_bytes_rebuild_pos_0_0_and_0_p0(self):
+    def test_content_chunksize_bytes_rebuild_pos_0_0_and_0_p0(self):
         self._test_rebuild(self.conf["chunk_size"], ["0.0", "0.p0"])
 
-    def test_rain_content_chunksize_bytes_rebuild_pos_0_p0_and_0_p1(self):
+    def test_content_chunksize_bytes_rebuild_pos_0_p0_and_0_p1(self):
         self._test_rebuild(self.conf["chunk_size"], ["0.p0", "0.p1"])
 
-    def test_rain_content_chunksize_bytes_rebuild_more_than_k_chunk(self):
+    def test_content_chunksize_bytes_rebuild_more_than_k_chunk(self):
         self.assertRaises(UnrecoverableContent, self._test_rebuild,
                           self.conf["chunk_size"], ["0.0", "0.1", "0.2"])
 
-    def _new_content(self, data_size):
-        data = os.urandom(data_size)
+    def _new_content(self, data, broken_pos_list=[]):
         old_content = self.content_factory.new(self.container_id, "titi",
                                                len(data), "RAIN")
         self.assertEqual(type(old_content), RainContent)
 
         old_content.upload(StringIO.StringIO(data))
 
+        for pos in broken_pos_list:
+            c = old_content.chunks.filter(pos=pos)[0]
+            self.blob_client.chunk_delete(c.url)
+
         # get the new structure of the uploaded content
         return self.content_factory.get(self.container_id,
                                         old_content.content_id)
 
-    def test_rain_orphan_chunk(self):
-        content = self._new_content(10)
+    def test_orphan_chunk(self):
+        content = self._new_content(random_data(10))
 
         self.assertRaises(OrphanChunk, content.rebuild_chunk, "uNkNoWnId")
+
+    def test_rebuild_on_the_fly(self):
+        data = random_data(self.conf["chunk_size"])
+        content = self._new_content(data, ["0.0", "0.p0"])
+
+        stream = content.rebuild_metachunk("0", on_the_fly=True)
+
+        dl_data = "".join(stream)
+
+        self.assertEqual(dl_data, data)
+
+        del_chunk_0_0 = content.chunks.filter(pos="0.0")[0]
+        del_chunk_0_p0 = content.chunks.filter(pos="0.p0")[0]
+
+        self.assertRaises(NotFound,
+                          self.blob_client.chunk_get, del_chunk_0_0.url)
+        self.assertRaises(NotFound,
+                          self.blob_client.chunk_get, del_chunk_0_p0.url)
+
+    def _test_download(self, data_size, broken_pos_list):
+        data = random_data(data_size)
+        content = self._new_content(data, broken_pos_list)
+
+        downloaded_data = "".join(content.download())
+
+        self.assertEqual(downloaded_data, data)
+
+        for pos in broken_pos_list:
+            c = content.chunks.filter(pos=pos)[0]
+            self.assertRaises(NotFound, self.blob_client.chunk_delete, c.url)
+
+    def test_download_content_1_byte_without_broken_chunks(self):
+        self._test_download(1, [])
+
+    def test_download_content_chunksize_bytes_without_broken_chunks(self):
+        self._test_download(self.conf["chunk_size"], [])
+
+    def test_download_content_chunksize_plus_1_without_broken_chunks(self):
+        self._test_download(self.conf["chunk_size"] + 1, [])
+
+    def test_download_content_1_byte_with_broken_0_0_and_0_p0(self):
+        self._test_download(1, ["0.0", "0.p0"])
+
+    def test_download_content_2xchunksize_with_broken_0_2_and_1_0(self):
+        self._test_download(2 * self.conf["chunk_size"], ["0.2", "1.0"])
+
+    def test_download_interrupt_close(self):
+        data = random_data(self.conf["chunk_size"])
+        content = self._new_content(data, ["0.p0"])
+
+        download_iter = content.download()
+
+        self.assertEqual(download_iter.next(), data[0:READ_CHUNK_SIZE-1])
+        download_iter.close()

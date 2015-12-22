@@ -17,10 +17,11 @@ import hashlib
 
 from oio.blob.utils import chunk_headers
 from oio.common.exceptions import ServiceUnavailable, OrphanChunk, \
-    UnrecoverableContent
+    UnrecoverableContent, NotFound
 from oio.content.content import Content, ChunksHelper
 
 WRITE_CHUNK_SIZE = 65536
+READ_CHUNK_SIZE = 65536
 
 
 class RainContent(Content):
@@ -57,7 +58,8 @@ class RainContent(Content):
             res_chunks.append("%s/%s" % (c.host, c.id))
         return '|'.join(res_chunks)
 
-    def rebuild_metachunk(self, metapos, force_broken_chunk=None):
+    def rebuild_metachunk(self, metapos, force_broken_chunk=None,
+                          on_the_fly=False):
         def _encode_sparerawxlist(broken_chunks, spare_urls):
             res = []
             for i, bc in enumerate(broken_chunks):
@@ -109,9 +111,12 @@ class RainContent(Content):
         headers[chunk_headers["chunk_size"]] = \
             self._get_metachunk_size(metapos)
 
-        resp = self.session.get(self._get_rain_addr(), headers=headers)
+        resp = self.session.get(self._get_rain_addr(on_the_fly),
+                                headers=headers, stream=True)
         # FIXME remove chunks already uploaded in case of error
         resp.raise_for_status()
+        if on_the_fly:
+            return resp.iter_content(READ_CHUNK_SIZE)
         resp.close()
 
         for i, bc in enumerate(broken_chunks):
@@ -198,3 +203,29 @@ class RainContent(Content):
         self.hash = global_checksum.hexdigest().upper()
 
         self.meta2_create_object()
+
+    def _download_metachunk(self, metapos):
+        streams = []
+        try:
+            try:
+                for c in self.chunks.filter(metapos=metapos, is_parity=False):
+                    meta, stream = self.blob_client.chunk_get(c.url)
+                    streams.append(stream)
+            except NotFound:
+                self.logger.debug("Chunk %s not found" % c.url)
+                for s in streams:
+                    s.close()
+                # TODO don't test again the presence of chunks during rebuild
+                streams = [self.rebuild_metachunk(metapos, on_the_fly=True)]
+
+            for stream in streams:
+                for data in stream:
+                    yield data
+        finally:
+            for stream in streams:
+                stream.close()
+
+    def download(self):
+        for pos in xrange(self._get_metachunk_nb()):
+            for d in self._download_metachunk(pos):
+                yield d
