@@ -25,22 +25,6 @@ License along with this library.
 #include "metautils_strings.h"
 #include "metautils_containers.h"
 
-void
-metautils_str_upper(register gchar *s)
-{
-	for (; *s ;++s) {
-		*s = g_ascii_toupper(*s);
-	}
-}
-
-void
-metautils_str_lower(register gchar *s)
-{
-	for (; *s ;++s) {
-		*s = g_ascii_tolower(*s);
-	}
-}
-
 int
 metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored)
 {

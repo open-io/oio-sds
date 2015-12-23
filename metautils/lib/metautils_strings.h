@@ -57,11 +57,10 @@ gsize metautils_strlcpy_physical_ns(gchar *d, const gchar *s, gsize dlen);
  */
 gchar ** g_strdupv2(gchar **src);
 
-void metautils_str_upper(register gchar *s);
+#define metautils_str_upper oio_str_upper
+#define metautils_str_lower oio_str_lower
 
-void metautils_str_lower(register gchar *s);
-
-/** Splits the given buffer (considered as a non NULL-terminated) into 
+/** Splits the given buffer (considered as a non NULL-terminated) into
  * newly allocated tokens (wrapping g_strsplit()) */
 gchar **buffer_split(const void *buf, gsize buflen, const gchar * separator, gint max_tokens);
 

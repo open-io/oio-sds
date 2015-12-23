@@ -42,7 +42,7 @@ test_upload_ok (int errors, int size, ...)
 
 	GError *err = NULL;
 	gint64 content_length = size;
-	struct http_put_s *p = http_put_create (NULL, NULL, content_length);
+	struct http_put_s *p = http_put_create (content_length, -1);
 	g_assert (p != NULL);
 
 	GSList *dests = NULL;

@@ -34,12 +34,16 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # define ATTR_NAME_CHUNK_METADATA_COMPRESS "chunk.metadatacompress"
 # define ATTR_NAME_CHUNK_COMPRESSED_SIZE   "chunk.compressedsize"
 
-# define ATTR_NAME_CONTENT_PATH      "content.path"
-# define ATTR_NAME_CONTENT_ID        "content.id"
-# define ATTR_NAME_CONTENT_VERSION   "content.version"
-# define ATTR_NAME_CONTENT_SIZE      "content.size"
-# define ATTR_NAME_CONTENT_NBCHUNK   "content.nbchunk"
-# define ATTR_NAME_CONTENT_STGPOL    "content.storage_policy"
+# define ATTR_NAME_CONTENT_PATH        "content.path"
+# define ATTR_NAME_CONTENT_ID          "content.id"
+# define ATTR_NAME_CONTENT_VERSION     "content.version"
+# define ATTR_NAME_CONTENT_SIZE        "content.size"
+# define ATTR_NAME_CONTENT_NBCHUNK     "content.nbchunk"
+
+# define ATTR_NAME_CONTENT_STGPOL      "content.storage_policy"
+# define ATTR_NAME_CONTENT_MIMETYPE    "content.mime_type"
+# define ATTR_NAME_CONTENT_CHUNKMETHOD "content.chunk_method"
+
 # define ATTR_NAME_CONTENT_CONTAINER "content.container"
 
 #define NS_RAWX_BUFSIZE_OPTION "rawx_bufsize"
@@ -83,7 +87,10 @@ typedef struct content_textinfo_s
 	gchar *version;         /**< The content version */
 	gchar *size;            /**< The content size */
 	gchar *chunk_nb;        /**< The number of chunks */
-	gchar *storage_policy;  /**< The storage policy */
+
+	gchar *storage_policy;
+	gchar *chunk_method;
+	gchar *mime_type;
 
 	gchar *rawx_list; /**< The rawx list (introduced by the rainx service) */
 	gchar *spare_rawx_list; /**< The rawx list for reconstruction (introduced by the rainx service) */

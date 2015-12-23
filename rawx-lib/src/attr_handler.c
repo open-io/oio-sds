@@ -565,7 +565,10 @@ set_rawx_full_info_in_attr(const char *p, int filedes, GError **error,
 		SET(ATTR_NAME_CONTENT_VERSION, content->version);
 		SET(ATTR_NAME_CONTENT_SIZE, content->size);
 		SET(ATTR_NAME_CONTENT_NBCHUNK, content->chunk_nb);
+
 		SET(ATTR_NAME_CONTENT_STGPOL, content->storage_policy);
+		SET(ATTR_NAME_CONTENT_MIMETYPE, content->mime_type);
+		SET(ATTR_NAME_CONTENT_CHUNKMETHOD, content->chunk_method);
 	}
 
 	SET(ATTR_NAME_CHUNK_COMPRESSED_SIZE, compressed_size);
@@ -666,6 +669,14 @@ get_rawx_info_in_attr(const char *pathname, GError ** error,
 		return FALSE;
 	}
 
+	if (chunk) {
+		GET(ATTR_NAME_CHUNK_ID, chunk->id);
+		GET(ATTR_NAME_CHUNK_SIZE, chunk->size);
+		GET(ATTR_NAME_CHUNK_POS, chunk->position);
+		GET(ATTR_NAME_CHUNK_HASH, chunk->hash);
+		GET(ATTR_NAME_CHUNK_METADATA, chunk->metadata);
+	}
+
 	if (content) {
 		GET(ATTR_NAME_CONTENT_CONTAINER, content->container_id);
 		GET(ATTR_NAME_CONTENT_ID, content->content_id);
@@ -673,15 +684,10 @@ get_rawx_info_in_attr(const char *pathname, GError ** error,
 		GET(ATTR_NAME_CONTENT_VERSION, content->version);
 		GET(ATTR_NAME_CONTENT_SIZE, content->size);
 		GET(ATTR_NAME_CONTENT_NBCHUNK, content->chunk_nb);
-		GET(ATTR_NAME_CONTENT_STGPOL, content->storage_policy);
-	}
 
-	if (chunk) {
-		GET(ATTR_NAME_CHUNK_ID, chunk->id);
-		GET(ATTR_NAME_CHUNK_SIZE, chunk->size);
-		GET(ATTR_NAME_CHUNK_POS, chunk->position);
-		GET(ATTR_NAME_CHUNK_HASH, chunk->hash);
-		GET(ATTR_NAME_CHUNK_METADATA, chunk->metadata);
+		GET(ATTR_NAME_CONTENT_STGPOL, content->storage_policy);
+		GET(ATTR_NAME_CONTENT_CHUNKMETHOD, content->chunk_method);
+		GET(ATTR_NAME_CONTENT_MIMETYPE, content->mime_type);
 	}
 
 	_clean_attr_handle(attr_handle, FALSE);
