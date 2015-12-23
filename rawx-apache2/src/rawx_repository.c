@@ -207,9 +207,9 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 		resource->info->dirname, resource->info->hex_chunkid,
 		resource->info->file_extension,
 		NULL);
-	
+
 	/* init compression context structure if we are in get method (for decompression) */
-	
+
 	if(r->method_number == M_GET && !ctx.update_only) {
 		resource_init_decompression(resource, conf);
 	}
@@ -238,7 +238,7 @@ dav_rawx_get_resource(request_rec *r, const char *root_dir, const char *label,
 				HTTP_CONFLICT, 0, "Resource busy or already exists");
 		request_parse_query(r, resource);
 	}
-	
+
 	*result_resource = resource;
 	return NULL;
 }
@@ -254,7 +254,7 @@ dav_rawx_get_parent_resource(const dav_resource *resource, dav_resource **result
 	pool = resource->pool;
 
 	DAV_XDEBUG_RES(resource, 0, "%s(%s)", __FUNCTION__, resource_get_pathname(resource));
-	
+
 	/* Build a fake root */
 	parent = apr_pcalloc(resource->pool, sizeof(*resource));
 	parent->exists = 1;
@@ -304,7 +304,7 @@ dav_rawx_open_stream(const dav_resource *resource, dav_stream_mode mode, dav_str
 	dav_error *e = NULL;
 
 	(void) mode;
-	
+
 	DAV_DEBUG_REQ(resource->info->request, 0, "%s(%s/%s)", __FUNCTION__, resource->info->dirname, resource->info->hex_chunkid);
 
 	e = rawx_repo_ensure_directory(resource);
@@ -312,7 +312,7 @@ dav_rawx_open_stream(const dav_resource *resource, dav_stream_mode mode, dav_str
 		DAV_DEBUG_REQ(resource->info->request, 0, "Chunk directory creation failure");
 		return e;
 	}
-	
+
 	e = rawx_repo_stream_create(resource, &ds);
 	if( NULL != e ) {
 		DAV_DEBUG_REQ(resource->info->request, 0, "Dav stream initialization failure");
@@ -335,7 +335,7 @@ dav_rawx_close_stream(dav_stream *stream, int commit)
 
 	DAV_DEBUG_REQ(stream->r->info->request, 0, "Closing (%s) the stream to [%s]",
 		(commit ? "commit" : "rollback"), stream->pathname);
-	
+
 	if (!commit) {
 		e = rawx_repo_rollback_upload(stream);
 	} else {
@@ -378,7 +378,7 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 		stream->bufsize += tmp;
 
 		/* If buffer full, compress if needed and write to distant file */
-		if(stream->blocksize - stream->bufsize <=0){	
+		if(stream->blocksize - stream->bufsize <=0){
 			gsize nb_write = 0;
 			if(!stream->compression) {
 				nb_write = fwrite(stream->buffer, stream->bufsize, 1, stream->f);
@@ -391,19 +391,19 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 				}
 			} else {
 				GByteArray *gba = g_byte_array_new();
-				if(stream->comp_ctx.data_compressor(stream->buffer, stream->bufsize, gba, 
-							&checksum)!=0) { 
+				if(stream->comp_ctx.data_compressor(stream->buffer, stream->bufsize, gba,
+							&checksum)!=0) {
 					if (gba)
-						g_byte_array_free(gba, TRUE);	
+						g_byte_array_free(gba, TRUE);
 					/* ### use something besides 500? */
 					return server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
 							HTTP_INTERNAL_SERVER_ERROR, 0,
 							"An error occurred while compressing data.");
-				}		
+				}
 				nb_write = fwrite(gba->data, gba->len, 1, stream->f);
 				if (nb_write != 1) {
 					if (gba)
-						g_byte_array_free(gba, TRUE);	
+						g_byte_array_free(gba, TRUE);
 					/* ### use something besides 500? */
 					return server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
 							HTTP_INTERNAL_SERVER_ERROR, 0,
@@ -412,16 +412,16 @@ dav_rawx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 				}
 				stream->compressed_size += gba->len;
 				if (gba)
-					g_byte_array_free(gba, TRUE);	
+					g_byte_array_free(gba, TRUE);
 			}
 
 			stream->buffer = apr_pcalloc(stream->p, stream->blocksize);
 			stream->bufsize = 0;
 		}
 	}
-	
+
 	stream->compress_checksum = checksum;
-	
+
 	/* update the hash and the stats */
 	g_checksum_update(stream->md5, buf, bufsize);
 	/* update total_size */
@@ -473,7 +473,7 @@ dav_rawx_set_headers(request_rec *r, const dav_resource *resource)
 
 	/* compute metadata_compress if compressed content */
 	if(resource->info->compression) {
-		char *buf = apr_pstrcat(r->pool, "compression=on;compression_algorithm=", resource->info->compress_algo, 
+		char *buf = apr_pstrcat(r->pool, "compression=on;compression_algorithm=", resource->info->compress_algo,
 				";compression_blocksize=", apr_psprintf(r->pool, "%d", resource->info->cp_chunk.block_size), ";", NULL);
 		apr_table_setn(r->headers_out, apr_pstrdup(r->pool, "metadatacompress"), buf);
 	}
@@ -563,9 +563,9 @@ dav_rawx_deliver(const dav_resource *resource, ap_filter_t *output)
 			/* creation of compression specific bucket */
 			bkt = apr_pcalloc(pool, sizeof(struct apr_bucket));
 			bkt->type = &chunk_bucket_type;
-			bkt->length = i64; 
+			bkt->length = i64;
 			bkt->start = 0;
-			bkt->data = ctx; 
+			bkt->data = ctx;
 			bkt->free = chunk_bucket_free_noop;
 			bkt->list = output->c->bucket_alloc;
 		}
@@ -607,7 +607,7 @@ end_deliver:
 	/* Now we pass here even if an error occured, for process request duration */
 	server_inc_request_stat(resource_get_server_config(resource), RAWX_STATNAME_REQ_CHUNKGET,
 			request_get_duration(resource->info->request));
-	
+
 	return e;
 }
 
@@ -710,7 +710,7 @@ dav_rawx_remove_resource(dav_resource *resource, dav_response **response)
 	apr_snprintf(attr_path, sizeof(attr_path), "%s.attr", resource_get_pathname(resource));
 	status = apr_file_remove(attr_path, pool);
 	if (status != APR_SUCCESS && !APR_STATUS_IS_ENOENT(status)) {
-		e = server_create_and_stat_error(resource_get_server_config(resource), pool, 
+		e = server_create_and_stat_error(resource_get_server_config(resource), pool,
 			HTTP_INTERNAL_SERVER_ERROR, 0, apr_pstrcat(pool,
 					"Failed to DELETE this chunk's  properties : ",
 					apr_strerror(status, buff, sizeof(buff)),
@@ -730,7 +730,7 @@ end_remove:
 }
 
 /* XXX JFS : etags are strings that uniquely identify a content.
- * A chunk is unique in a namespace, thus the e-tag must contain 
+ * A chunk is unique in a namespace, thus the e-tag must contain
  * both fields. */
 static const char *
 dav_rawx_getetag(const dav_resource *resource)
@@ -738,7 +738,7 @@ dav_rawx_getetag(const dav_resource *resource)
 	const char *etag;
 	dav_rawx_server_conf *conf;
 	dav_resource_private *ctx;
-	
+
 	ctx = resource->info;
 	conf = resource_get_server_config(resource);
 
@@ -770,7 +770,7 @@ dav_rawx_walk(const dav_walk_params *params, int depth, dav_response **response)
 	wres.resource = params->root;
 
 	DAV_XDEBUG_RES(params->root, 0, "sanity checks for %s(%s)", __FUNCTION__, resource_get_pathname(wres.resource));
-	
+
 	if (wres.resource->type != DAV_RESOURCE_TYPE_REGULAR)
 		return server_create_and_stat_error(resource_get_server_config(params->root), params->root->pool,
 			HTTP_CONFLICT, 0, "Only regular resources can be deleted with RAWX");
@@ -780,9 +780,9 @@ dav_rawx_walk(const dav_walk_params *params, int depth, dav_response **response)
 	if (!wres.resource->exists)
 		return server_create_and_stat_error(resource_get_server_config(params->root), params->root->pool,
 			HTTP_NOT_FOUND, 0, "Resource not found (no chunk)");
-		
+
 	DAV_DEBUG_RES(params->root, 0, "ready for %s(%s)", __FUNCTION__, resource_get_pathname(wres.resource));
-    	err = (*params->func)(&wres, DAV_CALLTYPE_MEMBER);
+	err = (*params->func)(&wres, DAV_CALLTYPE_MEMBER);
 	*response = wres.response;
 	return err;
 }

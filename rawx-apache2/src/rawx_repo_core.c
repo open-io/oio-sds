@@ -73,7 +73,7 @@ _set_chunk_extended_attributes(dav_stream *stream)
 
 	stream->r->info->chunk.size = apr_psprintf(stream->r->pool, "%d", (int)stream->total_size);
 
-	if(stream->compressed_size) {
+	if (stream->compressed_size) {
 		char size[32];
 		apr_snprintf(size, 32, "%d", stream->compressed_size);
 		if(!set_rawx_full_info_in_attr(stream->pathname, fileno(stream->f), &ge,
@@ -82,7 +82,7 @@ _set_chunk_extended_attributes(dav_stream *stream)
 			e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
 					HTTP_FORBIDDEN, 0, apr_pstrdup(stream->p, gerror_get_message(ge)));
 		}
-	} else { 
+	} else {
 		if(!set_rawx_full_info_in_attr(stream->pathname, fileno(stream->f), &ge, &(stream->r->info->content),
 					&(stream->r->info->chunk), NULL, NULL)) {
 			e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
@@ -183,9 +183,9 @@ _write_data_crumble_COMP(dav_stream *stream, gulong *checksum)
 		e = server_create_and_stat_error(resource_get_server_config(stream->r), stream->p,
 				HTTP_INTERNAL_SERVER_ERROR, 0,
 				"An error occurred while compressing data.");
-	}		
+	}
 
-	g_byte_array_free(gba, TRUE);	
+	g_byte_array_free(gba, TRUE);
 
 	return e;
 }
@@ -204,13 +204,13 @@ resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf)
 	if(!get_compression_info_in_attr(resource_get_pathname(resource), &e, &comp_opt)){
 		if(comp_opt)
 			g_hash_table_destroy(comp_opt);
-		if(e)	
+		if(e)
 			g_clear_error(&e);
 		return server_create_and_stat_error(conf, resource->pool, HTTP_CONFLICT, 0, "Failed to get chunk compression in attr");
 	}
 	c = g_hash_table_lookup(comp_opt, NS_COMPRESSION_OPTION);
 	if (c && 0 == g_ascii_strcasecmp(c, NS_COMPRESSION_ON)) {
-		resource->info->compression = TRUE; 
+		resource->info->compression = TRUE;
 	} else {
 		resource->info->compression = FALSE;
 	}
@@ -220,7 +220,7 @@ resource_init_decompression(dav_resource *resource, dav_rawx_server_conf *conf)
 		char *algo = g_hash_table_lookup(comp_opt, NS_COMPRESS_ALGO_OPTION);
 		memset(resource->info->compress_algo, 0, sizeof(resource->info->compress_algo));
 		memcpy(resource->info->compress_algo, algo, MIN(strlen(algo), sizeof(resource->info->compress_algo)));
-		init_compression_ctx(&(resource->info->comp_ctx), algo); 
+		init_compression_ctx(&(resource->info->comp_ctx), algo);
 		if (0 != resource->info->comp_ctx.chunk_initiator(&(resource->info->cp_chunk),
 					(char*)resource->info->fullpath)) {
 			r = server_create_and_stat_error(resource_get_server_config(resource), resource->pool,
@@ -252,7 +252,7 @@ resource_stat_chunk(dav_resource *resource, int xattr_too)
 		DAV_ERROR_RES(resource, 0, "Cannot stat a anything else a chunk");
 		return;
 	}
-	
+
 	char * tmp_path = apr_pstrcat(resource->pool, resource_get_pathname(resource), ".pending", NULL);
 
 	status = apr_stat(&(resource->info->finfo), tmp_path, APR_FINFO_NORM, resource->pool);
@@ -262,7 +262,7 @@ resource_stat_chunk(dav_resource *resource, int xattr_too)
 
 	resource->collection = 0;
 	resource->exists = (status == APR_SUCCESS);
-	
+
 	if (!resource->exists)
 		DAV_DEBUG_RES(resource, 0, "Resource does not exist [%s]", resource_get_pathname(resource));
 	else  {
@@ -288,7 +288,10 @@ resource_stat_chunk(dav_resource *resource, int xattr_too)
 				REPLACE_FIELD(pool, content, version);
 				REPLACE_FIELD(pool, content, size);
 				REPLACE_FIELD(pool, content, chunk_nb);
+
 				REPLACE_FIELD(pool, content, storage_policy);
+				REPLACE_FIELD(pool, content, chunk_method);
+				REPLACE_FIELD(pool, content, mime_type);
 
 				REPLACE_FIELD(pool, content, rawx_list);
 				REPLACE_FIELD(pool, content, spare_rawx_list);
@@ -355,7 +358,10 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 	LOAD_HEADER2(content.version,        RAWX_HEADER_PREFIX "content-version");
 	LOAD_HEADER2(content.size,           RAWX_HEADER_PREFIX "content-size");
 	LOAD_HEADER2(content.chunk_nb,       RAWX_HEADER_PREFIX "content-chunksnb");
-	LOAD_HEADER2(content.storage_policy, RAWX_HEADER_PREFIX "content-stgpol");
+
+	LOAD_HEADER2(content.storage_policy, RAWX_HEADER_PREFIX "content-storage-policy");
+	LOAD_HEADER2(content.mime_type,      RAWX_HEADER_PREFIX "content-mime-type");
+	LOAD_HEADER2(content.chunk_method,   RAWX_HEADER_PREFIX "content-chunk-method");
 
 	LOAD_HEADER2(chunk.id,           RAWX_HEADER_PREFIX "chunk-id");
 	LOAD_HEADER2(chunk.size,         RAWX_HEADER_PREFIX "chunk-size");
@@ -364,9 +370,16 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 
 	if (!resource->info->content.container_id) return "container-id";
 	if (!resource->info->content.content_id) return "content-id";
+
+	/* TODO make these fields mandatory
+	if (!resource->info->content.storage_policy) return "storage-policy";
+	if (!resource->info->content.chunk_method) return "chunk-method";
+	if (!resource->info->content.mime_type) return "mime-type";
+	*/
+
 	if (!resource->info->content.path) return "content-path";
 	if (!resource->info->chunk.position) return "chunk-pos";
-	
+
 	_up (resource->info->content.container_id);
 	_up (resource->info->content.content_id);
 	_up (resource->info->chunk.hash);
@@ -383,7 +396,7 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 	if (resource->info->chunk.hash && resource->info->chunk.hash[0] &&
 		!oio_str_ishexa1(resource->info->chunk.hash))
 		return "chunk-hash";
-	
+
 	return NULL;
 }
 
@@ -393,7 +406,7 @@ request_parse_query(request_rec *r, dav_resource *resource)
 	/* Sanity check */
 	if(!r->parsed_uri.query)
 		return;
-	
+
 	char *query = NULL;
 	query = apr_pstrdup(r->pool, r->parsed_uri.query);
 
@@ -401,13 +414,13 @@ request_parse_query(request_rec *r, dav_resource *resource)
 	char *k = NULL;
 	char *v = NULL;
 	char *last = NULL;
-	
+
 	k = apr_strtok(query, "=&", &last);
 	v = apr_strtok(NULL, "=&",&last);
 
 	if(!k || !v)
 		goto end;
-		
+
 	if(0 == apr_strnatcasecmp(k, "comp"))
 		resource->info->forced_cp = apr_pstrdup(r->pool, v);
 	if(0 == apr_strnatcasecmp(k, "algo"))
@@ -426,7 +439,7 @@ request_parse_query(request_rec *r, dav_resource *resource)
 			resource->info->forced_cp_algo = apr_pstrdup(r->pool, v);
 		if(0 == apr_strnatcasecmp(k, "bs"))
 			resource->info->forced_cp_bs = apr_pstrdup(r->pool, v);
-		
+
 	}
 
 end:
@@ -445,7 +458,10 @@ request_fill_headers(request_rec *r, struct content_textinfo_s *c0,
 	__set_header(r, "content-size",         c0->size);
 	__set_header(r, "content-version",      c0->version);
 	__set_header(r, "content-chunksnb",     c0->chunk_nb);
-	__set_header(r, "content-stgpol",       c0->storage_policy);
+
+	__set_header(r, "content-storage-policy", c0->storage_policy);
+	__set_header(r, "content-chunk-method",   c0->chunk_method);
+	__set_header(r, "content-mime-type",      c0->mime_type);
 
 	__set_header(r, "chunk-id",          c1->id);
 	__set_header(r, "chunk-size",        c1->size);
@@ -564,7 +580,7 @@ rawx_repo_write_last_data_crumble(dav_stream *stream)
 	checksum = stream->compress_checksum;
 
 	/* If buffer contain data, compress it if needed and write it to distant file */
-	if( 0 < stream->bufsize ) {	
+	if( 0 < stream->bufsize ) {
 		if(!stream->compression) {
 			e = _write_data_crumble_UNCOMP(stream);
 		} else {
@@ -650,7 +666,7 @@ rawx_repo_ensure_directory(const dav_resource *resource)
 			MAP_IO2HTTP(status), 0,
 				apr_pstrcat(resource->info->pool, "mkdir(", ctx->dirname, ") failure : ", strerror(errno), NULL));
 	}
-	
+
 	DAV_DEBUG_REQ(resource->info->request, status, "mkdir(%s) success", ctx->dirname);
 	return NULL;
 }
@@ -716,8 +732,8 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 		DAV_DEBUG_REQ(resource->info->request, 0 , "Compression Mode OFF");
 		ds->blocksize = g_ascii_strtoll(DEFAULT_BLOCK_SIZE, NULL, 10); /* conf->rawx_conf->blocksize; */
 		ds->buffer = apr_pcalloc(p, ds->blocksize);
-		ds->bufsize = 0;	
-	} else {	
+		ds->bufsize = 0;
+	} else {
 		DAV_DEBUG_REQ(resource->info->request, 0 , "Compression Mode ON");
 		ds->compression = TRUE;
 		if(NULL != dt && COMPRESSION == data_treatments_get_type(dt)) {
@@ -732,30 +748,30 @@ rawx_repo_stream_create(const dav_resource *resource, dav_stream **result)
 				algo = DEFAULT_COMPRESSION_ALGO;
 			ds->blocksize = g_ascii_strtoll(bs, NULL, 10);
 
-			metadata_compress = apr_pstrcat(p, NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";", 
-					NS_COMPRESS_ALGO_OPTION,"=", algo, ";", 
-					NS_COMPRESS_BLOCKSIZE_OPTION, "=", bs, NULL);  
+			metadata_compress = apr_pstrcat(p, NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";",
+					NS_COMPRESS_ALGO_OPTION,"=", algo, ";",
+					NS_COMPRESS_BLOCKSIZE_OPTION, "=", bs, NULL);
 
-			init_compression_ctx(&(ds->comp_ctx), algo); 
+			init_compression_ctx(&(ds->comp_ctx), algo);
 		} else {
 			/* compression forced by request header */
 			if(!ctx->forced_cp_algo || !ctx->forced_cp_bs){
 				return server_create_and_stat_error(resource_get_server_config(resource), p,
 						HTTP_BAD_REQUEST, 0,
 						apr_pstrcat(p, "Failed to get compression info from incoming request", NULL));
-			}	
+			}
 			ds->blocksize = strtol(ctx->forced_cp_bs, NULL, 10);
 
-			metadata_compress = apr_pstrcat(p, NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";", 
-					NS_COMPRESS_ALGO_OPTION,"=", ctx->forced_cp_algo, ";", 
-					NS_COMPRESS_BLOCKSIZE_OPTION, "=", ctx->forced_cp_bs, NULL);	
+			metadata_compress = apr_pstrcat(p, NS_COMPRESSION_OPTION, "=", NS_COMPRESSION_ON, ";",
+					NS_COMPRESS_ALGO_OPTION,"=", ctx->forced_cp_algo, ";",
+					NS_COMPRESS_BLOCKSIZE_OPTION, "=", ctx->forced_cp_bs, NULL);
 
-			init_compression_ctx(&(ds->comp_ctx), ctx->forced_cp_algo); 
+			init_compression_ctx(&(ds->comp_ctx), ctx->forced_cp_algo);
 		}
 
 		ds->buffer = apr_pcalloc(p, ds->blocksize);
-		ds->bufsize = 0;	
-	
+		ds->bufsize = 0;
+
 		gulong checksum = 0;
 
 		if(!(ds->comp_ctx.checksum_initiator)(&checksum)){

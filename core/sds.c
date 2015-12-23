@@ -1211,7 +1211,7 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-id",
 				"%s", ul->hexid);
 
-		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-policy",
+		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-storage-policy",
 				"%s", ul->stgpol);
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-chunk-method",
 				"%s", ul->chunk_method);
