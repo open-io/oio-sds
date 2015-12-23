@@ -234,7 +234,8 @@ http_put_dest_destroy(gpointer destination)
 void
 http_put_destroy(struct http_put_s *p)
 {
-	g_assert(p != NULL);
+	if (!p)
+		return;
 	if (p->dests)
 		g_slist_free_full(p->dests, http_put_dest_destroy);
 	if (p->mhandle)
@@ -258,7 +259,7 @@ http_put_feed (struct http_put_s *p, GBytes *b)
 	g_assert (b != NULL);
 	gssize len = g_bytes_get_size (b);
 	g_assert (len <= 0 || p->remaining_length < 0 || len <= p->remaining_length);
-	GRID_DEBUG("%s (%p) <- %"G_GSIZE_FORMAT, __FUNCTION__, p, len);
+	GRID_TRACE("%s (%p) <- %"G_GSIZE_FORMAT, __FUNCTION__, p, len);
 
 	g_queue_push_tail (p->buffer_tail, g_bytes_ref(b));
 
@@ -416,7 +417,6 @@ cb_header(void *ptr, size_t size, size_t nmemb, struct http_put_dest_s *dest)
 	gchar *value = g_strndup(tmp, (header + len) - tmp);
 	g_strstrip(value);
 	g_hash_table_insert(dest->response_headers, key, value);
-	//GRID_TRACE2("CURL header [%s]:[%s]", key, value);
 	return len;
 }
 
@@ -467,7 +467,7 @@ _manage_curl_events (struct http_put_s *p)
 
 	while ((msg = curl_multi_info_read(p->mhandle, &msgs_left))) {
 		if (msg->msg != CURLMSG_DONE) {
-			GRID_DEBUG("Unexpected CURL event");
+			GRID_TRACE("Unexpected CURL event");
 		} else {
 			CURL *easy = msg->easy_handle;
 			CURLcode curl_ret = msg->data.result;
@@ -484,7 +484,7 @@ _manage_curl_events (struct http_put_s *p)
 			if (curl_ret == CURLE_OK)
 				dest->http_code = http_ret;
 
-			GRID_DEBUG("DONE [%s] code=%ld strerror=%s",
+			GRID_TRACE("DONE [%s] code=%ld strerror=%s",
 					dest->url, http_ret, curl_easy_strerror(curl_ret));
 
 			CURLMcode rc = curl_multi_remove_handle(p->mhandle, dest->handle);
@@ -516,12 +516,12 @@ http_put_step (struct http_put_s *p)
 	g_assert (p != NULL);
 
 	if (!p->dests) {
-		GRID_DEBUG("%s Empty upload detected", __FUNCTION__);
+		GRID_TRACE("%s Empty upload detected", __FUNCTION__);
 		p->state = HTTP_WHOLE_FINISHED;
 		return NULL;
 	}
 	if (p->state == HTTP_WHOLE_FINISHED) {
-		GRID_DEBUG("%s BUG: Stepping on a finished upload", __FUNCTION__);
+		GRID_TRACE("%s BUG: Stepping on a finished upload", __FUNCTION__);
 		return NULL;
 	}
 
@@ -551,7 +551,7 @@ http_put_step (struct http_put_s *p)
 	}
 
 	if (p->state == HTTP_WHOLE_BEGIN) {
-		GRID_DEBUG("%s Starting %u uploads", __FUNCTION__, count_dests);
+		GRID_TRACE("%s Starting %u uploads", __FUNCTION__, count_dests);
 		_start_upload(p);
 		p->state = HTTP_WHOLE_READY;
 	}
@@ -562,7 +562,7 @@ http_put_step (struct http_put_s *p)
 		struct http_put_dest_s *d = l->data;
 		if (d->state == HTTP_SINGLE_FINISHED)
 			continue;
-		GRID_DEBUG("%s %p %d/%s %s", __FUNCTION__, d->buffer,
+		GRID_TRACE("%s %p %d/%s %s", __FUNCTION__, d->buffer,
 				d->state, _single_put_state_to_string(d->state), d->url);
 		if (d->buffer) {
 			if (d->state == HTTP_SINGLE_PAUSED) {
@@ -575,7 +575,7 @@ http_put_step (struct http_put_s *p)
 	count_up= _count_up_dests (p);
 	p->state = count_up ? HTTP_WHOLE_READY : HTTP_WHOLE_PAUSED;
 
-	GRID_DEBUG("%s Uploads: %u total, %u up (%u wanted to data)",
+	GRID_TRACE("%s Uploads: %u total, %u up (%u wanted to data)",
 			__FUNCTION__, count_dests, count_up, count_waiting_for_data);
 
 	if (count_up) {
@@ -606,7 +606,7 @@ retry:
 	curl_multi_perform(p->mhandle, &rc);
 
 	if (!(count_up = _count_up_dests (p))) {
-		GRID_DEBUG("%s uploads finishing", __FUNCTION__);
+		GRID_TRACE("%s uploads finishing", __FUNCTION__);
 		_manage_curl_events(p);
 		p->state = HTTP_WHOLE_FINISHED;
 	}
@@ -622,13 +622,13 @@ _trace(CURL *h, curl_infotype t, char *data, size_t size, void *u)
 	(void) h, (void) u, (void) data, (void) size;
 	switch (t) {
 		case CURLINFO_TEXT:
-			GRID_TRACE("CURL: %.*s", (int)size, data);
+			GRID_TRACE2("CURL: %.*s", (int)size, data);
 			return 0;
 		case CURLINFO_HEADER_IN:
-			GRID_TRACE("CURL< %.*s", (int)size, data);
+			GRID_TRACE2("CURL< %.*s", (int)size, data);
 			return 0;
 		case CURLINFO_HEADER_OUT:
-			GRID_TRACE("CURL> %.*s", (int)size, data);
+			GRID_TRACE2("CURL> %.*s", (int)size, data);
 			return 0;
 		default:
 			return 0;

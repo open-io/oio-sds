@@ -203,8 +203,8 @@ _chunks_load (GSList **out, struct json_object *jtab)
 					2*sizeof(chunk_hash_t));
 		else {
 			struct chunk_s *c = _load_one_chunk (jurl, jsize, jpos);
-			for (char *p = c->hexhash; *h ;) // copies the hash as uppercase
-				*(p++) = g_ascii_toupper (*(h++));
+			g_strlcpy (c->hexhash, h, sizeof(c->hexhash));
+			oio_str_upper(c->hexhash);
 			chunks = g_slist_prepend (chunks, c);
 		}
 	}
@@ -390,6 +390,8 @@ oio_sds_free (struct oio_sds_s *sds)
 	oio_str_clean (&sds->ns);
 	oio_str_clean (&sds->proxy);
 	oio_str_clean (&sds->proxy_local);
+	if (sds->h)
+		curl_easy_cleanup (sds->h);
 	SLICE_FREE (struct oio_sds_s, sds);
 }
 
@@ -908,7 +910,6 @@ struct oio_sds_ul_s
 	struct oio_sds_s *sds;
 	struct oio_sds_ul_dst_s *dst;
 	GChecksum *checksum_content;
-	GChecksum *checksum_chunk;
 	GQueue *buffer_tail;
 	GQueue *metachunk_ready;
 	GList *metachunk_done;
@@ -929,6 +930,7 @@ struct oio_sds_ul_s
 	struct http_put_s *put;
 	GSList *http_dests;
 	size_t local_done;
+	GChecksum *checksum_chunk;
 };
 
 static void
@@ -939,7 +941,25 @@ _assert_no_upload (struct oio_sds_ul_s *ul)
 	g_assert (NULL == ul->chunks);
 	g_assert (NULL == ul->put);
 	g_assert (NULL == ul->http_dests);
+	g_assert (NULL == ul->checksum_chunk);
 	g_assert (0 == ul->local_done);
+}
+
+static void
+_sds_upload_reset (struct oio_sds_ul_s *ul)
+{
+	if (ul->checksum_chunk)
+		g_checksum_free (ul->checksum_chunk);
+	ul->checksum_chunk = NULL;
+	_metachunk_clean (ul->mc);
+	ul->mc = NULL;
+	g_slist_free (ul->chunks);
+	ul->chunks = NULL;
+	http_put_destroy (ul->put);
+	ul->put = NULL;
+	g_slist_free (ul->http_dests);
+	ul->http_dests = NULL;
+	ul->local_done = 0;
 }
 
 struct oio_sds_ul_s *
@@ -954,7 +974,7 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 	ul->sds = sds;
 	ul->dst = dst;
 	ul->checksum_content = g_checksum_new (G_CHECKSUM_MD5);
-	ul->checksum_chunk = g_checksum_new (G_CHECKSUM_MD5);
+	ul->checksum_chunk = NULL;
 	ul->buffer_tail = g_queue_new ();
 	ul->metachunk_ready = g_queue_new ();
 	return ul;
@@ -968,26 +988,18 @@ oio_sds_upload_clean (struct oio_sds_ul_s *ul)
 
 	if (ul->checksum_content)
 		g_checksum_free (ul->checksum_content);
-	if (ul->checksum_chunk)
-		g_checksum_free (ul->checksum_chunk);
 	if (ul->buffer_tail)
 		g_queue_free (ul->buffer_tail);
-	if (ul->put)
-		http_put_destroy (ul->put);
-
 	if (ul->metachunk_ready)
 		g_queue_free_full (ul->metachunk_ready, (GDestroyNotify)_metachunk_clean);
-
-	if (ul->http_dests)
-		g_slist_free (ul->http_dests);
-
-	if (ul->mc)
-		_metachunk_clean (ul->mc);
-	if (ul->chunks)
-		g_slist_free_full (ul->chunks, g_free);
-
 	g_slist_free_full (ul->chunks_done, g_free);
 	g_slist_free_full (ul->chunks_failed, g_free);
+	oio_str_clean (&ul->hexid);
+	oio_str_clean (&ul->stgpol);
+	oio_str_clean (&ul->chunk_method);
+	oio_str_clean (&ul->mime_type);
+	_sds_upload_reset (ul);
+
 	g_free (ul);
 }
 
@@ -1102,7 +1114,7 @@ struct oio_error_s *
 oio_sds_upload_feed (struct oio_sds_ul_s *ul,
 		const unsigned char *buf, size_t len)
 {
-	GRID_DEBUG("%s (%p) <- %"G_GSIZE_FORMAT, __FUNCTION__, ul, len);
+	GRID_TRACE("%s (%p) <- %"G_GSIZE_FORMAT, __FUNCTION__, ul, len);
 	g_assert (ul != NULL);
 	g_assert (!ul->finished);
 	g_assert (ul->ready_for_data);
@@ -1115,21 +1127,17 @@ oio_sds_upload_feed (struct oio_sds_ul_s *ul,
 static GError *
 _sds_upload_finish (struct oio_sds_ul_s *ul)
 {
-	GRID_DEBUG("%s (%p)", __FUNCTION__, ul);
+	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
 	g_assert (ul->mc != NULL);
 	GError *err = NULL;
 
 	guint failures = http_put_get_failure_number (ul->put);
 	guint total = g_slist_length (ul->http_dests);
-	GRID_DEBUG("%s uploads %u/%u failed", __FUNCTION__, failures, total);
+	GRID_TRACE("%s uploads %u/%u failed", __FUNCTION__, failures, total);
 
 	if (failures >= total)
 		err = NEWERROR(CODE_PLATFORM_ERROR, "No upload succeeded");
-
-	if (err) {
-		_metachunk_clean (ul->mc);
-		g_slist_free (ul->chunks);
-	} else {
+	else {
 		/* patch the chunk sizes and positions */
 		ul->mc->size = ul->local_done;
 		for (GSList *l=ul->mc->chunks; l ;l=l->next) {
@@ -1138,33 +1146,37 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 			g_assert (c->position.meta == ul->mc->meta);
 		}
 
+		if (ul->checksum_chunk) {
+			const char *h = g_checksum_get_string (ul->checksum_chunk);
+			for (GSList *l=ul->mc->chunks; l ;l=l->next) {
+				struct chunk_s *c = l->data;
+				g_strlcpy (c->hexhash, h, sizeof(c->hexhash));
+				oio_str_upper (c->hexhash);
+			}
+		}
+
 		/* store the structure in holders for further commit/abort */
 		ul->chunks_done = g_slist_concat (ul->chunks_done, ul->chunks);
-		GRID_WARN("%s > chunks +%u -> %u", __FUNCTION__,
+		GRID_TRACE("%s > chunks +%u -> %u", __FUNCTION__,
 				g_slist_length(ul->chunks),
 				g_slist_length(ul->chunks_done));
 
 		ul->metachunk_done = g_list_append (ul->metachunk_done, ul->mc);
-		GRID_WARN("%s > metachunks +1 -> %u (%"G_GINT64_FORMAT")", __FUNCTION__,
+		GRID_TRACE("%s > metachunks +1 -> %u (%"G_GINT64_FORMAT")", __FUNCTION__,
 				g_list_length(ul->metachunk_done),
 				ul->mc->size);
+		ul->mc = NULL;
+		ul->chunks = NULL;
 	}
 
-	ul->mc = NULL;
-	ul->chunks = NULL;
-	http_put_destroy (ul->put);
-	ul->put = NULL;
-	g_slist_free (ul->http_dests);
-	ul->http_dests = NULL;
-	ul->local_done = 0;
-
+	_sds_upload_reset (ul);
 	return err;
 }
 
 static GError *
 _sds_upload_renew (struct oio_sds_ul_s *ul)
 {
-	GRID_DEBUG("%s (%p)", __FUNCTION__, ul);
+	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
 
 	struct oio_error_s *err = NULL;
 	_assert_no_upload (ul);
@@ -1229,7 +1241,8 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 		ul->http_dests = g_slist_append (ul->http_dests, dest);
 	}
 
-	GRID_DEBUG("%s (%pp) upload ready!", __FUNCTION__, ul);
+	ul->checksum_chunk = g_checksum_new (G_CHECKSUM_MD5);
+	GRID_TRACE("%s (%p) upload ready!", __FUNCTION__, ul);
 	return NULL;
 }
 
@@ -1237,18 +1250,18 @@ struct oio_error_s *
 oio_sds_upload_step (struct oio_sds_ul_s *ul)
 {
 	static const char *end = "";
-	GRID_DEBUG("%s (%p)", __FUNCTION__, ul);
+	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
 	g_assert (ul != NULL);
 
 	if (ul->finished) {
-		GRID_DEBUG("%s (%p) finished!", __FUNCTION__, ul);
+		GRID_TRACE("%s (%p) finished!", __FUNCTION__, ul);
 		return NULL;
 	}
 
 	if (ul->put) {
 		/* maybe finish the previous upload */
 		gsize max = http_put_expected_bytes (ul->put);
-		GRID_DEBUG("%s (%p) upload running, expecting %"G_GSIZE_FORMAT" bytes",
+		GRID_TRACE("%s (%p) upload running, expecting %"G_GSIZE_FORMAT" bytes",
 				__FUNCTION__, ul, max);
 		if (0 == max) {
 			GError *err;
@@ -1267,14 +1280,14 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 		_assert_no_upload (ul);
 
 		/* Check if we need to start a new one */
-		GRID_DEBUG("%s (%p) No upload currently running", __FUNCTION__, ul);
+		GRID_TRACE("%s (%p) No upload currently running", __FUNCTION__, ul);
 		if (g_queue_is_empty (ul->buffer_tail)) {
 			/* no need to start an upload now */
 			if (!ul->ready_for_data) {
-				GRID_DEBUG("%s (%p) not expecting data anymore, finishing", __FUNCTION__, ul);
+				GRID_TRACE("%s (%p) not expecting data anymore, finishing", __FUNCTION__, ul);
 				ul->finished = TRUE;
 			} else {
-				GRID_DEBUG("%s (%p) No data pending, nothing to do", __FUNCTION__, ul);
+				GRID_TRACE("%s (%p) No data pending, nothing to do", __FUNCTION__, ul);
 			}
 			return NULL;
 		} else {
@@ -1293,7 +1306,7 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 		/* We have all the clues it is necessary to kick a new upload off */
 		GError *err = _sds_upload_renew (ul);
 		if (NULL != err) {
-			GRID_DEBUG("%s (%p) Failed to renew the upload", __FUNCTION__, ul);
+			GRID_TRACE("%s (%p) Failed to renew the upload", __FUNCTION__, ul);
 			return (struct oio_error_s*) err;
 		}
 	}
@@ -1303,7 +1316,7 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 
 	/* An upload is really running, maybe feed it */
 	if (!g_queue_is_empty (ul->buffer_tail)) {
-		GRID_DEBUG("%s (%p) Data ready!", __FUNCTION__, ul);
+		GRID_TRACE("%s (%p) Data ready!", __FUNCTION__, ul);
 		GBytes *buf = g_queue_pop_head (ul->buffer_tail);
 
 		gsize len = g_bytes_get_size (buf);
@@ -1312,19 +1325,30 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 
 		/* the upload still wants to more bytes */
 		if (!len) {
-			GRID_DEBUG("%s (%p) tail buffer", __FUNCTION__, ul);
+			GRID_TRACE("%s (%p) tail buffer", __FUNCTION__, ul);
 			g_assert (FALSE == ul->ready_for_data);
 		} else if (max > 0 && len > max) {
-			GRID_DEBUG("%s (%p) %"G_GSIZE_FORMAT" accepted at most", __FUNCTION__, ul, max);
+			GRID_TRACE("%s (%p) %"G_GSIZE_FORMAT" accepted at most", __FUNCTION__, ul, max);
 			GBytes *first = g_bytes_new_from_bytes (buf, 0, max);
 			GBytes *second = g_bytes_new_from_bytes (buf, max, len-max);
 			g_queue_push_head (ul->buffer_tail, second);
 			g_bytes_unref (buf);
 			buf = first;
 		} else {
-			GRID_DEBUG("%s (%p) %"G_GSIZE_FORMAT" pushed at once", __FUNCTION__, ul, len);
+			GRID_TRACE("%s (%p) %"G_GSIZE_FORMAT" pushed at once", __FUNCTION__, ul, len);
 		}
-		ul->local_done += g_bytes_get_size (buf);
+
+		/* Update local counters and checksums */
+		gsize l = 0;
+		const void *b = g_bytes_get_data (buf, &l);
+		if (l) {
+			if (ul->checksum_chunk)
+				g_checksum_update (ul->checksum_chunk, b, l);
+			g_checksum_update (ul->checksum_content, b, l);
+			ul->local_done += l;
+		}
+
+		/* then feed the upload with the chunk of data */
 		http_put_feed (ul->put, buf);
 	}
 
@@ -1340,12 +1364,13 @@ static void
 _chunks_remove (CURL *h, GSList *chunks)
 {
 	(void) h, (void) chunks;
+	/* TODO JFS */
 }
 
 struct oio_error_s *
 oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 {
-	GRID_DEBUG("%s (%p)", __FUNCTION__, ul);
+	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
 	g_assert (ul != NULL);
 
 	if (ul->put && !http_put_done (ul->put))
@@ -1359,11 +1384,18 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 	GString *reply_body = g_string_new ("");
 	_chunks_pack (request_body, ul->chunks_done);
 
-	GRID_WARN("Saving %s", request_body->str);
+	gchar hash[STRLEN_CHUNKHASH];
+	g_strlcpy (hash, g_checksum_get_string (ul->checksum_content), sizeof(hash));
+	oio_str_upper (hash);
 	struct oio_proxy_content_create_in_s in = {
-		.size = size, .version = ul->version, .content = ul->hexid,
+		.size = size,
+		.version = ul->version,
+		.content = ul->hexid,
 		.chunks = request_body,
+		.hash = hash,
 	};
+
+	GRID_TRACE("%s (%p) Saving %s", __FUNCTION__, ul, request_body->str);
 	GError *err = oio_proxy_call_content_create (ul->sds->h, ul->dst->url,
 			&in, reply_body);
 
@@ -1378,7 +1410,7 @@ oio_sds_upload_commit (struct oio_sds_ul_s *ul)
 struct oio_error_s *
 oio_sds_upload_abort (struct oio_sds_ul_s *ul)
 {
-	GRID_DEBUG("%s (%p)", __FUNCTION__, ul);
+	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
 	g_assert (ul != NULL);
 	if (ul->chunks_failed)
 		_chunks_remove (ul->sds->h, ul->chunks_failed);
@@ -1426,11 +1458,11 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		err = oio_sds_upload_prepare (ul, src->data.hook.size);
 
 	while (!err && !oio_sds_upload_done (ul)) {
-		GRID_DEBUG("%s (%p) not done yet", __FUNCTION__, ul);
+		GRID_TRACE("%s (%p) not done yet", __FUNCTION__, ul);
 
 		/* feed the upload queue */
 		if (oio_sds_upload_greedy (ul)) {
-			GRID_DEBUG("%s (%p) greedy!", __FUNCTION__, ul);
+			GRID_TRACE("%s (%p) greedy!", __FUNCTION__, ul);
 			guint8 b[8192];
 			gssize l = src->data.hook.cb (src->data.hook.ctx, b, sizeof(b));
 			if (l < 0)
@@ -1477,7 +1509,7 @@ static ssize_t
 _read_FILE (void *u, unsigned char *ptr, size_t len)
 {
 	FILE *in = u;
-	GRID_DEBUG("Reading at most %"G_GSIZE_FORMAT, len);
+	GRID_TRACE("Reading at most %"G_GSIZE_FORMAT, len);
 	if (ferror(in))
 		return (ssize_t)-1;
 	if (feof(in))

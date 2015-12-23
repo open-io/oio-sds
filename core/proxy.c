@@ -438,7 +438,7 @@ oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 		g_strdup(PROXYD_HEADER_PREFIX "content-meta-length"),
 		g_strdup_printf("%"G_GSIZE_FORMAT, in->size),
 		g_strdup(PROXYD_HEADER_PREFIX "content-meta-hash"),
-		g_strdup_printf("%s", "00000000000000000000000000000000"),
+		g_strdup_printf("%s", in->hash),
 		g_strdup(PROXYD_HEADER_PREFIX "content-meta-policy"),
 		g_strdup_printf("%s", "NONE"),
 		NULL

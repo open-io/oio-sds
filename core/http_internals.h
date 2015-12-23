@@ -83,8 +83,9 @@ struct oio_proxy_content_create_in_s
 {
 	gsize size;
 	gint64 version;
-	gchar *content;
+	const char *content;
 	GString *chunks;
+	const char *hash;
 };
 
 GError * oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
