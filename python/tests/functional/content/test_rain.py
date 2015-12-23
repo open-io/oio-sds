@@ -15,7 +15,6 @@
 # License along with this library.
 
 import StringIO
-import hashlib
 import os
 import time
 
@@ -27,18 +26,8 @@ from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
 from oio.content.rain import RainContent, READ_CHUNK_SIZE
+from tests.functional.content.test_content import md5_stream, random_data
 from tests.utils import BaseTestCase
-
-
-def md5_stream(stream):
-    checksum = hashlib.md5()
-    for data in stream:
-        checksum.update(data)
-    return checksum.hexdigest().upper()
-
-
-def random_data(data_size):
-    return os.urandom(data_size)
 
 
 class TestRainContent(BaseTestCase):
@@ -59,7 +48,7 @@ class TestRainContent(BaseTestCase):
         self.content_factory = ContentFactory(self.gridconf)
         self.container_client = ContainerClient(self.gridconf)
         self.blob_client = BlobClient()
-        self.container_name = "TestRainContent%d" % time.time()
+        self.container_name = "TestRainContent%f" % time.time()
         self.container_client.container_create(acct=self.account,
                                                ref=self.container_name)
         self.container_id = cid_from_name(self.account,

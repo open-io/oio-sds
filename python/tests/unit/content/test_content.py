@@ -115,6 +115,10 @@ class TestChunk(unittest.TestCase):
             "hash": "00000000000000000000000000000000"})
         c.url = "http://0.0.0.0:0000/AA"
         self.assertEqual(c.url, "http://0.0.0.0:0000/AA")
+        c.hash = "AzErTy"
+        self.assertEqual(c.hash, "AZERTY")
+        c.size = 1234
+        self.assertEqual(c.size, 1234)
 
 
 class TestChunksHelper(unittest.TestCase):
@@ -280,3 +284,4 @@ class TestChunksHelper(unittest.TestCase):
 
     def test_getitem(self):
         self.assertEqual(self.dup_chunks[0].raw(), self.dup_c1_1)
+        self.assertEqual(self.dup_chunks[-1].raw(), self.dup_c2_2)

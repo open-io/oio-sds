@@ -13,6 +13,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+
 import requests
 
 from oio.blob.client import BlobClient
@@ -21,6 +22,9 @@ from oio.common.utils import get_logger
 from oio.conscience.client import ConscienceClient
 from oio.container.client import ContainerClient
 from oio.common import exceptions as exc
+
+WRITE_CHUNK_SIZE = 65536
+READ_CHUNK_SIZE = 65536
 
 
 class Content(object):
@@ -92,7 +96,10 @@ class Content(object):
     def rebuild_chunk(self, chunk_id):
         raise NotImplementedError()
 
-    def move_chunk(self, chunk_id):
+    def upload(self, stream):
+        raise NotImplementedError()
+
+    def download(self):
         raise NotImplementedError()
 
 
@@ -136,6 +143,10 @@ class Chunk(object):
     def size(self):
         return self._data["size"]
 
+    @size.setter
+    def size(self, new_size):
+        self._data["size"] = new_size
+
     @property
     def id(self):
         return self.url.split('/')[-1]
@@ -147,6 +158,10 @@ class Chunk(object):
     @property
     def hash(self):
         return self._data["hash"].upper()
+
+    @hash.setter
+    def hash(self, new_hash):
+        self._data["hash"] = new_hash
 
     @property
     def data(self):

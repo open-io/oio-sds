@@ -13,6 +13,8 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+import hashlib
+import os
 
 from mock import MagicMock as Mock
 
@@ -21,6 +23,23 @@ from oio.content.factory import ContentFactory
 from oio.content.dup import DupContent
 from oio.content.rain import RainContent
 from tests.utils import BaseTestCase
+
+
+def md5_stream(stream):
+    checksum = hashlib.md5()
+    for data in stream:
+        checksum.update(data)
+    return checksum.hexdigest().upper()
+
+
+def md5_data(data):
+    checksum = hashlib.md5()
+    checksum.update(data)
+    return checksum.hexdigest().upper()
+
+
+def random_data(data_size):
+    return os.urandom(data_size)
 
 
 class TestContentFactory(BaseTestCase):
