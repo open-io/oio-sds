@@ -404,11 +404,17 @@ oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
 	if (!err && out && o.headers) {
 		for (gchar **p=o.headers; *p && *(p+1) ;p+=2) {
 			if (!g_ascii_strcasecmp(*p, "ns-chunk-size"))
-				oio_str_replace (&out->header_chunksize, *(p+1));
+				oio_str_replace (&out->header_chunk_size, *(p+1));
 			else if (!g_ascii_strcasecmp(*p, "content-meta-version"))
 				oio_str_replace (&out->header_version, *(p+1));
 			else if (!g_ascii_strcasecmp(*p, "content-meta-id"))
 				oio_str_replace (&out->header_content, *(p+1));
+			else if (!g_ascii_strcasecmp(*p, "content-meta-policy"))
+				oio_str_replace (&out->header_stgpol, *(p+1));
+			else if (!g_ascii_strcasecmp(*p, "content-meta-mime-type"))
+				oio_str_replace (&out->header_mime_type, *(p+1));
+			else if (!g_ascii_strcasecmp(*p, "content-meta-chunk-method"))
+				oio_str_replace (&out->header_chunk_method, *(p+1));
 		}
 	}
 	g_string_free (http_url, TRUE);

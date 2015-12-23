@@ -77,34 +77,48 @@ struct http_put_dest_s
 
 struct http_put_s
 {
-	/* list of destinations (rawx, rainx)*/
-	GSList *dests;
+	GSList *dests; /* <struct http_put_dest_s*> */
 
 	CURLM *mhandle;
 
 	long timeout_cnx;
 	long timeout_op;
 
-	/* how many bytes are expected
+	/* how many bytes are announced to the server
 	 *   <0 : streaming with transfer-encoding=chunked
 	 *   0 : empty content
 	 *   >0 : content-length known and announced */
 	gint64 content_length;
 
-	/* callback to read data from client. It might be NULL, as when the
-	 * client explicitely feeds the data. */
-	http_put_input_f cb_input;
-	gpointer cb_input_data;
+	/* how many bytes are expected
+	 *   <0 : streaming with transfer-encoding=chunked
+	 *   0 : empty content
+	 *   >0 : content-length known and announced */
+	gint64 soft_length;
 
-	GQueue *buffer_tail;
+	/* How many bytes might still be enqueued. <remaining_length> starts at
+	 * <soft_length> and decreases for each buffer enqueued. */
+	gint64 remaining_length;
+
+	GQueue *buffer_tail; /* <GBytes*> */
 
 	enum http_whole_put_state_e state;
 };
 
-void init_curl (void);
-void destroy_curl (void);
+static const char *
+_single_put_state_to_string (enum http_single_put_e s)
+{
+	switch (s) {
+		case HTTP_SINGLE_BEGIN: return "BEGIN";
+		case HTTP_SINGLE_REQUEST: return "REQUEST";
+		case HTTP_SINGLE_PAUSED: return "PAUSED";
+		case HTTP_SINGLE_REPLY: return "REPLY";
+		case HTTP_SINGLE_FINISHED: return "FINISHED";
+		default: g_assert_not_reached (); return "?";
+	}
+}
 
-void __attribute__ ((constructor))
+static void __attribute__ ((constructor))
 init_curl(void)
 {
 	/* With NSS, all internal data are not correctly freed at
@@ -113,50 +127,52 @@ init_curl(void)
 	curl_global_init(CURL_GLOBAL_ALL & ~CURL_GLOBAL_SSL);
 }
 
-void __attribute__ ((destructor))
+static void __attribute__ ((destructor))
 destroy_curl(void)
 {
 	curl_global_cleanup();
 }
 
+/* -------------------------------------------------------------------------- */
+
 struct http_put_s *
-http_put_create(http_put_input_f cb_input, gpointer cb_input_data,
-		gint64 content_length)
+http_put_create(gint64 content_length, gint64 soft_length)
 {
-	struct http_put_s *p;
-	p = g_malloc0(sizeof(struct http_put_s));
+	/* sanity checks */
+	if (soft_length < 0 && content_length >= 0)
+		soft_length = content_length;
+	if (soft_length >= 0 && content_length >= 0) {
+		if (soft_length != content_length)
+			return NULL;
+	}
+
+	struct http_put_s *p = g_try_malloc0(sizeof(struct http_put_s));
 	p->dests = NULL;
 	p->mhandle = curl_multi_init();
-	p->cb_input = cb_input;
-	p->cb_input_data = cb_input_data;
 	p->buffer_tail = g_queue_new();
 	p->timeout_cnx = 60;
 	p->timeout_op = 60;
 	p->content_length = content_length;
+	p->remaining_length = p->soft_length = soft_length;
 	p->state = HTTP_WHOLE_BEGIN;
 	return p;
 }
 
 struct http_put_dest_s *
-http_put_add_dest(struct http_put_s *p, const char *url, gpointer user_data)
+http_put_add_dest(struct http_put_s *p, const char *url, gpointer u)
 {
-	struct http_put_dest_s *dest;
-
 	g_assert(p != NULL);
 	g_assert(p->state == HTTP_WHOLE_BEGIN);
 	g_assert(url != NULL);
-	g_assert(user_data != NULL);
+	g_assert(u != NULL);
 
-	dest = g_malloc0(sizeof(struct http_put_dest_s));
-
+	struct http_put_dest_s *dest = g_try_malloc0(sizeof(struct http_put_dest_s));
 	dest->http_put = p;
 	dest->url = g_strdup(url);
 	dest->handle = NULL;
-	dest->user_data = user_data;
+	dest->user_data = u;
 	dest->headers = NULL;
-
 	dest->curl_headers = NULL;
-
 	dest->response_headers = g_hash_table_new_full (g_str_hash, g_str_equal,
 			g_free, g_free);
 	dest->bytes_sent = 0;
@@ -172,23 +188,21 @@ void
 http_put_dest_add_header(struct http_put_dest_s *dest,
 		const char *key, const char *val_fmt, ...)
 {
-	gchar *header;
-	va_list ap;
-	gchar *val;
+	gchar *val = NULL;
 
 	g_assert(dest != NULL);
 	g_assert(key != NULL);
 	g_assert(val_fmt != NULL);
 
+	va_list ap;
 	va_start(ap, val_fmt);
 	g_vasprintf(&val, val_fmt, ap);
 	va_end(ap);
 
-	header = g_strdup_printf("%s: %s", key, val);
+	gchar *header = g_strdup_printf("%s: %s", key, val);
 	g_free(val);
 
 	dest->headers = g_slist_prepend(dest->headers, header);
-
 	dest->curl_headers = curl_slist_append(dest->curl_headers, header);
 }
 
@@ -213,6 +227,7 @@ http_put_dest_destroy(gpointer destination)
 		curl_slist_free_all(dest->curl_headers);
 	if (dest->response_headers)
 		g_hash_table_destroy(dest->response_headers);
+
 	g_free(dest);
 }
 
@@ -226,6 +241,91 @@ http_put_destroy(struct http_put_s *p)
 		curl_multi_cleanup(p->mhandle);
 	g_free(p);
 }
+
+gint64
+http_put_expected_bytes (struct http_put_s *p)
+{
+	g_assert(p != NULL);
+	if (http_put_done (p))
+		return 0;
+	return p->remaining_length;
+}
+
+void
+http_put_feed (struct http_put_s *p, GBytes *b)
+{
+	g_assert (p != NULL);
+	g_assert (b != NULL);
+	gssize len = g_bytes_get_size (b);
+	g_assert (len <= 0 || p->remaining_length < 0 || len <= p->remaining_length);
+	GRID_DEBUG("%s (%p) <- %"G_GSIZE_FORMAT, __FUNCTION__, p, len);
+
+	g_queue_push_tail (p->buffer_tail, g_bytes_ref(b));
+
+	if (!len) { /* marker for end of stream */
+		p->remaining_length = 0;
+	} else {
+		p->remaining_length -= len;
+	}
+}
+
+gboolean
+http_put_done (struct http_put_s *p)
+{
+	g_assert (p != NULL);
+	return p->state == HTTP_WHOLE_FINISHED;
+}
+
+guint
+http_put_get_failure_number(struct http_put_s *p)
+{
+	g_assert(p != NULL);
+	guint ret = 0;
+	for (GSList *l = p->dests ; NULL != l ; l = l->next) {
+		struct http_put_dest_s *d = l->data;
+		if (d->state == HTTP_SINGLE_FINISHED && d->http_code / 100 != 2)
+			ret++;
+	}
+	return ret;
+}
+
+const char *
+http_put_get_header(struct http_put_s *p, gpointer k, const char *h)
+{
+	g_assert(p != NULL);
+	g_assert(k != NULL);
+	g_assert(h != NULL);
+	for (GSList *l=p->dests; l ;l=l->next) {
+		struct http_put_dest_s *dest = l->data;
+		if (dest && dest->user_data == k)
+			return g_hash_table_lookup(dest->response_headers, h);
+	}
+	return NULL;
+}
+
+guint
+http_put_get_http_code(struct http_put_s *p, gpointer k)
+{
+	g_assert(p != NULL);
+	g_assert(k != NULL);
+	for (GSList *l=p->dests; l ;l=l->next) {
+		struct http_put_dest_s *dest = l->data;
+		if (dest && dest->user_data == k)
+			return dest->http_code;
+	}
+	return 0;
+}
+
+void
+http_put_get_md5(struct http_put_s *p, guint8 *buffer, gsize size)
+{
+	g_assert (p != NULL);
+	g_assert (buffer != NULL);
+	memset (buffer, 0, size);
+	/* XXX TODO */
+}
+
+/* -------------------------------------------------------------------------- */
 
 static size_t
 _done_reading (struct http_put_dest_s *dest, const char *why)
@@ -266,7 +366,7 @@ cb_read(void *data, size_t s, size_t n, struct http_put_dest_s *dest)
 	size_t max = s * n;
 	size_t real = MIN(max, bs);
 	real = MIN(real, remaining);
-	
+
 	memcpy (data, b, real);
 
 	if (real == bs) {
@@ -395,14 +495,6 @@ _manage_curl_events (struct http_put_s *p)
 	}
 }
 
-static GBytes *
-_call_data (struct http_put_s *p)
-{
-	char b[2048];
-	ssize_t r = p->cb_input (p->cb_input_data, b, sizeof(b));
-	return (r < 0) ? NULL : g_bytes_new (b, r);
-}
-
 static guint
 _count_up_dests (struct http_put_s *p)
 {
@@ -415,13 +507,6 @@ _count_up_dests (struct http_put_s *p)
 	return count;
 }
 
-gboolean
-http_put_done (struct http_put_s *p)
-{
-	g_assert (p != NULL);
-	return p->state == HTTP_WHOLE_FINISHED;
-}
-
 GError *
 http_put_step (struct http_put_s *p)
 {
@@ -431,17 +516,17 @@ http_put_step (struct http_put_s *p)
 	g_assert (p != NULL);
 
 	if (!p->dests) {
-		GRID_DEBUG("Empty upload detected");
+		GRID_DEBUG("%s Empty upload detected", __FUNCTION__);
 		p->state = HTTP_WHOLE_FINISHED;
 		return NULL;
 	}
 	if (p->state == HTTP_WHOLE_FINISHED) {
-		GRID_DEBUG("BUG: Stepping on a finished upload");
+		GRID_DEBUG("%s BUG: Stepping on a finished upload", __FUNCTION__);
 		return NULL;
 	}
 
 	count_dests = g_slist_length(p->dests);
-	GRID_TRACE("STEP on %u destinations", count_dests);
+	GRID_TRACE("%s STEP on %u destinations", __FUNCTION__, count_dests);
 
 	/* consume the CURL notifications for terminated actions */
 	_manage_curl_events(p);
@@ -456,11 +541,6 @@ http_put_step (struct http_put_s *p)
 	}
 	if (count_waiting_for_data >= count_dests) {
 		GBytes *buf = g_queue_pop_head (p->buffer_tail);
-		if (!buf && p->cb_input) {
-			/* No data immediately available, try to call some from the hook */
-			if (!(buf = _call_data (p)))
-				return SYSERR("No data collected from the user callback");
-		}
 		if (buf) {
 			for (GSList *l=p->dests; l ;l=l->next) {
 				struct http_put_dest_s *d = l->data;
@@ -471,18 +551,19 @@ http_put_step (struct http_put_s *p)
 	}
 
 	if (p->state == HTTP_WHOLE_BEGIN) {
-		GRID_DEBUG("Starting %u uploads", count_dests);
+		GRID_DEBUG("%s Starting %u uploads", __FUNCTION__, count_dests);
 		_start_upload(p);
 		p->state = HTTP_WHOLE_READY;
 	}
 
-	/* pause CURL actions that have no data to manage immediately, 
+	/* pause CURL actions that have no data to manage immediately,
 	 * and ensure the action with data ready are registered. */
 	for (GSList *l=p->dests; l ;l=l->next) {
 		struct http_put_dest_s *d = l->data;
 		if (d->state == HTTP_SINGLE_FINISHED)
 			continue;
-		GRID_DEBUG("%s : %p %d", d->url, d->buffer, d->state); 
+		GRID_DEBUG("%s %p %d/%s %s", __FUNCTION__, d->buffer,
+				d->state, _single_put_state_to_string(d->state), d->url);
 		if (d->buffer) {
 			if (d->state == HTTP_SINGLE_PAUSED) {
 				curl_easy_pause (d->handle, CURLPAUSE_CONT);
@@ -494,8 +575,8 @@ http_put_step (struct http_put_s *p)
 	count_up= _count_up_dests (p);
 	p->state = count_up ? HTTP_WHOLE_READY : HTTP_WHOLE_PAUSED;
 
-	GRID_TRACE("Uploads: %u total, %u up (%u wanted to data)",
-			count_dests, count_up, count_waiting_for_data);
+	GRID_DEBUG("%s Uploads: %u total, %u up (%u wanted to data)",
+			__FUNCTION__, count_dests, count_up, count_waiting_for_data);
 
 	if (count_up) {
 		fd_set fdread, fdwrite, fdexcep;
@@ -525,7 +606,7 @@ retry:
 	curl_multi_perform(p->mhandle, &rc);
 
 	if (!(count_up = _count_up_dests (p))) {
-		GRID_TRACE("Uploads: finishing");
+		GRID_DEBUG("%s uploads finishing", __FUNCTION__);
 		_manage_curl_events(p);
 		p->state = HTTP_WHOLE_FINISHED;
 	}
@@ -533,63 +614,7 @@ retry:
 	return NULL;
 }
 
-GError *
-http_put_run(struct http_put_s *p)
-{
-	g_assert(p != NULL);
-	while (p->state != HTTP_WHOLE_FINISHED)
-		http_put_step (p);
-	return NULL;
-}
-
-guint
-http_put_get_failure_number(struct http_put_s *p)
-{
-	g_assert(p != NULL);
-	guint ret = 0;
-	for (GSList *l = p->dests ; NULL != l ; l = l->next) {
-		struct http_put_dest_s *d = l->data;
-		if (d->state == HTTP_SINGLE_FINISHED && d->http_code / 100 != 2)
-			ret++;
-	}
-	return ret;
-}
-
-const char *
-http_put_get_header(struct http_put_s *p, gpointer k, const char *h)
-{
-	g_assert(p != NULL);
-	g_assert(k != NULL);
-	g_assert(h != NULL);
-	for (GSList *l=p->dests; l ;l=l->next) {
-		struct http_put_dest_s *dest = l->data;
-		if (dest && dest->user_data == k)
-			return g_hash_table_lookup(dest->response_headers, h);
-	}
-	return NULL;
-}
-
-guint
-http_put_get_http_code(struct http_put_s *p, gpointer k)
-{
-	g_assert(p != NULL);
-	g_assert(k != NULL);
-	for (GSList *l=p->dests; l ;l=l->next) {
-		struct http_put_dest_s *dest = l->data;
-		if (dest && dest->user_data == k)
-			return dest->http_code;
-	}
-	return 0;
-}
-
-void
-http_put_get_md5(struct http_put_s *p, guint8 *buffer, gsize size)
-{
-	/* XXX */
-	g_assert (p != NULL);
-	g_assert (buffer != NULL);
-	memset (buffer, 0, size);
-}
+/* -------------------------------------------------------------------------- */
 
 static int
 _trace(CURL *h, curl_infotype t, char *data, size_t size, void *u)
@@ -622,13 +647,5 @@ _curl_get_handle (void)
 		curl_easy_setopt (h, CURLOPT_VERBOSE, 1L);
 	}
 	return h;
-}
-
-void
-http_put_feed (struct http_put_s *p, GBytes *b)
-{
-	g_assert (p != NULL);
-	g_assert (b != NULL);
-	g_queue_push_tail (p->buffer_tail, g_bytes_ref(b));
 }
 

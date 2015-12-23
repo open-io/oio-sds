@@ -118,14 +118,10 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	GRID_INFO("Content absent as expected");
 
 	/* Then upload it */
-	struct oio_sds_ul_src_s ul_src = {
-		.type = OIO_UL_SRC_FILE,
-		.data = { .file = { .path = path, .offset = 0, .size = 0, }, },
-	};
 	struct oio_sds_ul_dst_s ul_dst = {
 		.url = url, .autocreate = 1, .out_size = 0, .content_id = content_id,
 	};
-	err = oio_sds_upload (client, &ul_src, &ul_dst);
+	err = oio_sds_upload_from_file (client, &ul_dst, path, 0, 0);
 	MAYBERETURN(err, "Upload error");
 	GRID_INFO("Content uploaded");
 
@@ -230,8 +226,7 @@ main(int argc, char **argv)
 {
 	oio_log_to_stderr();
 	oio_sds_default_autocreate = 1;
-	for (int i=0; i<4 ;i++)
-		oio_log_more ();
+	oio_log_init_level_from_env("G_DEBUG_LEVEL");
 
 	prng = g_rand_new ();
 

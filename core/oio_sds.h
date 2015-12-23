@@ -166,37 +166,6 @@ struct oio_error_s* oio_sds_download_to_file (struct oio_sds_s *sds,
  * Upload
  * -------------------------------------------------------------------------- */
 
-typedef ssize_t (*oio_sds_ul_hook_f) (void*, unsigned char *p, size_t s);
-
-enum oio_sds_ul_src_type_e
-{
-	OIO_UL_SRC_HOOK_SEQUENTIAL = 1,
-	OIO_UL_SRC_BUFFER,
-	OIO_UL_SRC_FILE,
-};
-
-struct oio_sds_ul_src_s
-{
-	enum oio_sds_ul_src_type_e type;
-
-	union {
-		struct {
-			const char *path;
-			size_t offset;
-			size_t size;
-		} file;
-		struct {
-			unsigned char *ptr;
-			size_t length;
-		} buffer;
-		struct {
-			oio_sds_ul_hook_f cb;
-			void *ctx;
-			size_t size;
-		} hook;
-	} data;
-};
-
 struct oio_sds_ul_dst_s
 {
 	struct oio_url_s *url;
@@ -232,6 +201,10 @@ struct oio_error_s * oio_sds_upload_commit (struct oio_sds_ul_s *ul);
 
 struct oio_error_s * oio_sds_upload_abort (struct oio_sds_ul_s *ul);
 
+/* Tells if the upload is ready to be accept data */
+int oio_sds_upload_greedy (struct oio_sds_ul_s *ul);
+
+/* Tells if the upload is ready to be (in)validated */
 int oio_sds_upload_done (struct oio_sds_ul_s *ul);
 
 void oio_sds_upload_clean (struct oio_sds_ul_s *ul);
@@ -241,6 +214,27 @@ void oio_sds_upload_clean (struct oio_sds_ul_s *ul);
  * API call, you just have to provide some data. When the data is called,
  * it has to be available. */
 
+typedef ssize_t (*oio_sds_ul_hook_f) (void*, unsigned char *p, size_t s);
+
+enum oio_sds_ul_src_type_e
+{
+	OIO_UL_SRC_HOOK_SEQUENTIAL = 1,
+	/*OIO_UL_SRC_HOOK_RANDOM, */ /* coming soon */
+};
+
+struct oio_sds_ul_src_s
+{
+	enum oio_sds_ul_src_type_e type;
+
+	union {
+		struct {
+			oio_sds_ul_hook_f cb;
+			void *ctx;
+			size_t size;
+		} hook;
+	} data;
+};
+
 /* works with fully qualified urls (content) and local paths */
 struct oio_error_s* oio_sds_upload (struct oio_sds_s *sds,
 		struct oio_sds_ul_src_s *src, struct oio_sds_ul_dst_s *dst);
@@ -248,24 +242,15 @@ struct oio_error_s* oio_sds_upload (struct oio_sds_s *sds,
 /* Simply wraps oio_sds_upload() without the autocreation flag
  * set. */
 struct oio_error_s* oio_sds_upload_from_file (struct oio_sds_s *sds,
-		struct oio_url_s *u, const char *local);
+		struct oio_sds_ul_dst_s *dst,
+		const char *local, size_t off, size_t len);
 
-struct oio_source_s
-{
-	int autocreate;
-	enum {
-		OIO_SRC_NONE = 0, /* do not use this */
-		OIO_SRC_FILE,
-	} type;
-	union {
-		const char *path;
-	} data;
-};
+/* Simply wraps oio_sds_upload() without the autocreation flag
+ * set. */
+struct oio_error_s* oio_sds_upload_from_buffer (struct oio_sds_s *sds,
+		struct oio_sds_ul_dst_s *dst,
+		void *base, size_t len);
 
-/* @deprecated use oio_sds_upload() instead */
-struct oio_error_s* oio_sds_upload_from_source (struct oio_sds_s *sds,
-		struct oio_url_s *u, struct oio_source_s *src)
-	__attribute__ ((deprecated));
 
 /* List --------------------------------------------------------------------- */
 
