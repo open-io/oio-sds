@@ -85,3 +85,36 @@ class ContentFactory(object):
             return RainContent(self.conf, container_id, meta, chunks, pol_args)
 
         raise InconsistentContent("Unknown storage policy")
+
+    def change_policy(self, container_id, content_id, new_policy):
+        old_content = self.get(container_id, content_id)
+        new_content = self.new(container_id, old_content.path,
+                               old_content.length, new_policy)
+
+        stream = old_content.download()
+        new_content.upload(GeneratorIO(stream))
+        # the old content is automatically deleted because the new content has
+        # the same name (but not the same id)
+        return new_content
+
+
+class GeneratorIO(object):
+    def __init__(self, generator):
+        self.generator = generator
+        self.buffer = ""
+
+    def read(self, size):
+        output = ""
+        while size > 0:
+            if len(self.buffer) >= size:
+                output += self.buffer[0:size]
+                self.buffer = self.buffer[size:]
+                break
+            output += self.buffer
+            size -= len(self.buffer)
+            try:
+                self.buffer = self.generator.next()
+            except StopIteration:
+                self.buffer = ""
+                break
+        return output

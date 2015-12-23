@@ -46,7 +46,7 @@ class Content(object):
         self.version = metadata["version"]
         self.hash = metadata["hash"]
 
-    def meta2_get_spare_chunk(self, chunks_notin, chunks_broken):
+    def _meta2_get_spare_chunk(self, chunks_notin, chunks_broken):
         spare_data = {
             "notin": ChunksHelper(chunks_notin, False).raw(),
             "broken": ChunksHelper(chunks_broken, False).raw()
@@ -64,7 +64,7 @@ class Content(object):
 
         return url_list
 
-    def meta2_update_spare_chunk(self, current_chunk, new_url):
+    def _meta2_update_spare_chunk(self, current_chunk, new_url):
         old = [{'type': 'chunk',
                 'id': current_chunk.url,
                 'hash': current_chunk.hash,
@@ -82,7 +82,7 @@ class Content(object):
         self.container_client.container_raw_update(
             cid=self.container_id, data=update_data)
 
-    def meta2_create_object(self):
+    def _meta2_create_object(self):
         # FIXME add mime-type, chunk-method
         self.container_client.content_create(cid=self.container_id,
                                              path=self.path,

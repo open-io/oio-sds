@@ -93,7 +93,7 @@ class RainContent(Content):
             raise UnrecoverableContent(
                 "Not enough chunks to rebuild the metachunk")
 
-        spare_urls = self.meta2_get_spare_chunk(notin_chunks, broken_chunks)
+        spare_urls = self._meta2_get_spare_chunk(notin_chunks, broken_chunks)
 
         headers = {}
         headers["X-oio-chunk-meta-content-storagepolicy"] = self.stgpol_name
@@ -122,7 +122,7 @@ class RainContent(Content):
 
         for i, bc in enumerate(broken_chunks):
             # TODO send only one request with all chunks modifications
-            self.meta2_update_spare_chunk(bc, spare_urls[i])
+            self._meta2_update_spare_chunk(bc, spare_urls[i])
             bc.url = spare_urls[i]  # update current content
 
     def rebuild_chunk(self, chunk_id):
@@ -203,7 +203,7 @@ class RainContent(Content):
         self.chunks = ChunksHelper(content_chunks)
         self.hash = global_checksum.hexdigest().upper()
 
-        self.meta2_create_object()
+        self._meta2_create_object()
 
     def _download_metachunk(self, metapos):
         streams = []

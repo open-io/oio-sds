@@ -41,8 +41,8 @@ class DupContent(Content):
         if len(duplicate_chunks) == 0:
             raise UnrecoverableContent("No copy of missing chunk")
 
-        spare_urls = self.meta2_get_spare_chunk(duplicate_chunks,
-                                                [current_chunk])
+        spare_urls = self._meta2_get_spare_chunk(duplicate_chunks,
+                                                 [current_chunk])
 
         uploaded = False
         for src in duplicate_chunks:
@@ -58,7 +58,7 @@ class DupContent(Content):
         if not uploaded:
             raise UnrecoverableContent("No copy available of missing chunk")
 
-        self.meta2_update_spare_chunk(current_chunk, spare_urls[0])
+        self._meta2_update_spare_chunk(current_chunk, spare_urls[0])
 
     # FIXME upload chunks in parallel
     def upload(self, stream):
@@ -102,7 +102,7 @@ class DupContent(Content):
 
         self.hash = global_checksum.hexdigest().upper()
 
-        self.meta2_create_object()
+        self._meta2_create_object()
 
     def _download_chunk(self, pos):
         stream = None

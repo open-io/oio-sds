@@ -16,6 +16,7 @@
 
 import unittest
 from oio.content.content import Chunk, ChunksHelper
+from oio.content.factory import GeneratorIO
 
 
 class TestChunk(unittest.TestCase):
@@ -285,3 +286,29 @@ class TestChunksHelper(unittest.TestCase):
     def test_getitem(self):
         self.assertEqual(self.dup_chunks[0].raw(), self.dup_c1_1)
         self.assertEqual(self.dup_chunks[-1].raw(), self.dup_c2_2)
+
+
+class TestGeneratorIO(unittest.TestCase):
+    def test_read_1_by_1_byte(self):
+        data = ["a", "bc", "", "d"]
+        gen = GeneratorIO(iter(data))
+        self.assertEqual(gen.read(1), "a")
+        self.assertEqual(gen.read(1), "b")
+        self.assertEqual(gen.read(1), "c")
+        self.assertEqual(gen.read(1), "d")
+        self.assertEqual(gen.read(1), "")
+
+    def test_read_more_than_data_size(self):
+        data = ["a", "bc", "", "d"]
+        gen = GeneratorIO(iter(data))
+        self.assertEqual(gen.read(10), "abcd")
+        self.assertEqual(gen.read(10), "")
+
+    def test_read_empty_data(self):
+        data = []
+        gen = GeneratorIO(iter(data))
+        self.assertEqual(gen.read(10), "")
+
+        data = ["", "", ""]
+        gen = GeneratorIO(iter(data))
+        self.assertEqual(gen.read(10), "")

@@ -13,12 +13,16 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+import StringIO
 import hashlib
 import os
 
+import time
 from mock import MagicMock as Mock
 
 from oio.common.exceptions import InconsistentContent
+from oio.common.utils import cid_from_name
+from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
 from oio.content.dup import DupContent
 from oio.content.rain import RainContent
@@ -46,8 +50,15 @@ class TestContentFactory(BaseTestCase):
     def setUp(self):
         super(TestContentFactory, self).setUp()
         self.namespace = self.conf['namespace']
+        self.chunk_size = self.conf['chunk_size']
         self.gridconf = {"namespace": self.namespace}
         self.content_factory = ContentFactory(self.gridconf)
+        self.container_name = "TestContentFactory%f" % time.time()
+        self.container_client = ContainerClient(self.gridconf)
+        self.container_client.container_create(acct=self.account,
+                                               ref=self.container_name)
+        self.container_id = cid_from_name(self.account,
+                                          self.container_name).upper()
 
     def tearDown(self):
         super(TestContentFactory, self).tearDown()
@@ -227,3 +238,59 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(c.chunks[1].raw(), chunks[2])
         self.assertEqual(c.chunks[2].raw(), chunks[1])
         self.assertEqual(c.chunks[3].raw(), chunks[0])
+
+    def _new_content(self, stgpol, data):
+        old_content = self.content_factory.new(self.container_id, "titi",
+                                               len(data), stgpol)
+        old_content.upload(StringIO.StringIO(data))
+        return self.content_factory.get(self.container_id,
+                                        old_content.content_id)
+
+    def _test_change_policy(self, data_size, old_policy, new_policy):
+        data = random_data(data_size)
+        obj_type = {
+            "SINGLE": DupContent,
+            "TWOCOPIES": DupContent,
+            "THREECOPIES": DupContent,
+            "RAIN": RainContent
+        }
+        old_content = self._new_content(old_policy, data)
+        self.assertEqual(type(old_content), obj_type[old_policy])
+
+        changed_content = self.content_factory.change_policy(
+            old_content.container_id, old_content.content_id, new_policy)
+
+        new_content = self.content_factory.get(self.container_id,
+                                               changed_content.content_id)
+        self.assertEqual(type(new_content), obj_type[new_policy])
+
+        downloaded_data = "".join(new_content.download())
+
+        self.assertEqual(downloaded_data, data)
+
+    def test_change_content_1_byte_policy_single_to_rain(self):
+        self._test_change_policy(1, "SINGLE", "RAIN")
+
+    def test_change_content_chunksize_bytes_policy_twocopies_to_rain(self):
+        self._test_change_policy(self.chunk_size, "TWOCOPIES", "RAIN")
+
+    def test_change_content_2xchunksize_bytes_policy_threecopies_to_rain(self):
+        self._test_change_policy(self.chunk_size * 2, "THREECOPIES", "RAIN")
+
+    def test_change_content_1_byte_policy_rain_to_threecopies(self):
+        self._test_change_policy(1, "RAIN", "THREECOPIES")
+
+    def test_change_content_chunksize_bytes_policy_rain_to_twocopies(self):
+        self._test_change_policy(self.chunk_size, "RAIN", "TWOCOPIES")
+
+    def test_change_content_2xchunksize_bytes_policy_rain_to_single(self):
+        self._test_change_policy(self.chunk_size * 2, "RAIN", "SINGLE")
+
+    def test_change_content_0_byte_policy_twocopies_to_threecopies(self):
+        self._test_change_policy(0, "TWOCOPIES", "THREECOPIES")
+
+    def test_change_content_chunksize_bytes_policy_single_to_twocopies(self):
+        self._test_change_policy(self.chunk_size, "SINGLE", "TWOCOPIES")
+
+    def test_change_content_2xchunksize_bytes_policy_3copies_to_single(self):
+        self._test_change_policy(self.chunk_size * 2, "THREECOPIES", "SINGLE")
