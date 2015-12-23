@@ -943,9 +943,9 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 			CONTENTS_HEADERS_set2_id(bean, args->uid, args->uid_size);
 			CONTENTS_HEADERS_set_ctime(bean, now);
 			CONTENTS_HEADERS_set_mtime(bean, now);
-			lazy_set_str (CONTENTS_HEADERS, bean, chunk_method, "bytes");
-			lazy_set_str (CONTENTS_HEADERS, bean, mime_type, "application/octet-stream");
-			lazy_set_str (CONTENTS_HEADERS, bean, policy, "NONE");
+			lazy_set_str (CONTENTS_HEADERS, bean, chunk_method, OIO_DEFAULT_CHUNKMETHOD);
+			lazy_set_str (CONTENTS_HEADERS, bean, mime_type, OIO_DEFAULT_MIMETYPE);
+			lazy_set_str (CONTENTS_HEADERS, bean, policy, OIO_DEFAULT_STGPOL);
 		}
 		else if (DESCR(bean) == &descr_struct_CHUNKS) {
 			CHUNKS_set2_content(bean, args->uid, args->uid_size);
@@ -1582,7 +1582,8 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	CONTENTS_HEADERS_nullify_hash(header);
 	CONTENTS_HEADERS_set_ctime(header, now / G_TIME_SPAN_SECOND);
 	CONTENTS_HEADERS_set_mtime(header, now / G_TIME_SPAN_SECOND);
-	CONTENTS_HEADERS_set2_mime_type(header, "application/octet-stream");
+	CONTENTS_HEADERS_set2_mime_type(header, OIO_DEFAULT_MIMETYPE);
+	CONTENTS_HEADERS_set2_chunk_method(header, OIO_DEFAULT_CHUNKMETHOD);
 	ctx->cb(ctx->cb_data, header);
 }
 
@@ -1676,10 +1677,6 @@ static GError*
 _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 {
 	GError *err = NULL;
-	/* Chunk position */
-	guint pos;
-	/* Current allocated size */
-	gint64 s;
 	/* Storage policy storage class */
 	const struct storage_class_s *stgclass;
 	gint distance, copies;
@@ -1692,7 +1689,8 @@ _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 
 	(void) distance;
 
-	for (pos=0,s=0; s < MAX(ctx->size,1) ;) {
+	guint pos = 0;
+	for (gint64 s=0; s < MAX(ctx->size,1) ; s += ctx->chunk_size) {
 		struct service_info_s **psi, **siv = NULL;
 
 		struct lb_next_opt_s opt;
@@ -1716,9 +1714,7 @@ _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 			_m2_generate_content_chunk(ctx, *psi, pos, ctx->chunk_size, -1, FALSE);
 
 		service_info_cleanv(siv, FALSE);
-
 		++ pos;
-		s += ctx->chunk_size;
 	}
 
 	return err;
