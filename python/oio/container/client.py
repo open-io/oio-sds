@@ -167,10 +167,12 @@ class ContainerClient(Client):
         return body, resp_headers
 
     def content_prepare(self, acct=None, ref=None, path=None, size=None,
-                        cid=None, **kwargs):
+                        cid=None, stgpol=None, **kwargs):
         uri = self._make_uri('content/prepare')
         params = self._make_params(acct, ref, path, cid=cid)
         data = {'size': size}
+        if stgpol:
+            data['policy'] = stgpol
         data = json.dumps(data)
         hdrs = gen_headers()
         resp, body = self._request(
@@ -211,9 +213,11 @@ class ContainerClient(Client):
         resp, body = self._request('POST', uri, params=params)
 
     def content_spare(self, acct=None, ref=None, path=None, data=None,
-                      cid=None, **kwargs):
+                      cid=None, stgpol=None, **kwargs):
         uri = self._make_uri('content/spare')
         params = self._make_params(acct, ref, path, cid=cid)
+        if stgpol:
+            params['stgpol'] = stgpol
         data = json.dumps(data)
         resp, body = self._request(
             'POST', uri, data=data, params=params)

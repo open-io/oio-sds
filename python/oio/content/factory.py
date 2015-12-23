@@ -74,11 +74,9 @@ class ContentFactory(object):
         raise InconsistentContent("Unknown storage policy")
 
     def new(self, container_id, path, size, policy):
-        # TODO allow to specify the storage policy
         chunks, meta = self.container_client.content_prepare(
-            cid=container_id, path=path, size=size)
+            cid=container_id, path=path, size=size, stgpol=policy)
 
-        # TODO use the forced policy
         pol_type, pol_args = self._extract_datasec(meta['policy'])
 
         if pol_type == "DUP":

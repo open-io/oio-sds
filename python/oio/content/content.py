@@ -17,11 +17,11 @@
 import requests
 
 from oio.blob.client import BlobClient
+from oio.common import exceptions as exc
 from oio.common.exceptions import ClientException
 from oio.common.utils import get_logger
 from oio.conscience.client import ConscienceClient
 from oio.container.client import ContainerClient
-from oio.common import exceptions as exc
 
 WRITE_CHUNK_SIZE = 65536
 READ_CHUNK_SIZE = 65536
@@ -46,15 +46,15 @@ class Content(object):
         self.version = metadata["version"]
         self.hash = metadata["hash"]
 
-    def meta2_get_spare_chunk(self, chunks_notin, chunks_broken, size=0):
-        spare_data = {"notin": ChunksHelper(chunks_notin, False).raw(),
-                      "broken": ChunksHelper(chunks_broken, False).raw(),
-                      "size": size}
-
+    def meta2_get_spare_chunk(self, chunks_notin, chunks_broken):
+        spare_data = {
+            "notin": ChunksHelper(chunks_notin, False).raw(),
+            "broken": ChunksHelper(chunks_broken, False).raw()
+        }
         try:
             spare_resp = self.container_client.content_spare(
                 cid=self.container_id, content=self.content_id,
-                data=spare_data)
+                data=spare_data, stgpol=self.stgpol_name)
         except ClientException as e:
             raise exc.SpareChunkException("No spare chunk (%s)" % e.message)
 
@@ -83,7 +83,7 @@ class Content(object):
             cid=self.container_id, data=update_data)
 
     def meta2_create_object(self):
-        # FIXME add version, mime-type, chunk-method
+        # FIXME add mime-type, chunk-method
         self.container_client.content_create(cid=self.container_id,
                                              path=self.path,
                                              content_id=self.content_id,

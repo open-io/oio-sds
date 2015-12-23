@@ -34,13 +34,9 @@ class TestDupContent(BaseTestCase):
     def setUp(self):
         super(TestDupContent, self).setUp()
 
-        if self.conf['stgpol'] != "TWOCOPIES":
-            self.skipTest("Default storage policy must be "
-                          "TWOCOPIES to run dup tests")
-
         if len(self.conf['rawx']) < 3:
             self.skipTest("Not enough rawx. "
-                          "Rain tests needs more than 12 rawx to run")
+                          "Dup tests needs more than 2 rawx to run")
 
         self.namespace = self.conf['namespace']
         self.account = self.conf['account']

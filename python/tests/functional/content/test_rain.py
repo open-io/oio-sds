@@ -34,10 +34,6 @@ class TestRainContent(BaseTestCase):
     def setUp(self):
         super(TestRainContent, self).setUp()
 
-        if self.conf['stgpol'] != "RAIN":
-            self.skipTest("Default storage policy must be "
-                          "RAIN to run rain tests")
-
         if len(self.conf['rawx']) < 12:
             self.skipTest("Not enough rawx. "
                           "Rain tests needs more than 12 rawx to run")
