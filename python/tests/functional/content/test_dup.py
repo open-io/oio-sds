@@ -54,10 +54,10 @@ class TestDupContent(BaseTestCase):
     def tearDown(self):
         super(TestDupContent, self).tearDown()
 
-    def _test_upload(self, data_size):
+    def _test_upload(self, stgpol, data_size):
         data = random_data(data_size)
         content = self.content_factory.new(self.container_id, "titi",
-                                           len(data), "TWOCOPIES")
+                                           len(data), stgpol)
         self.assertEqual(type(content), DupContent)
 
         content.upload(StringIO.StringIO(data))
@@ -67,18 +67,25 @@ class TestDupContent(BaseTestCase):
         chunks = ChunksHelper(chunks)
         self.assertEqual(meta['hash'], md5_data(data))
         self.assertEqual(meta['length'], str(len(data)))
-        self.assertEqual(meta['policy'], "TWOCOPIES")
+        self.assertEqual(meta['policy'], stgpol)
         self.assertEqual(meta['name'], "titi")
 
         metachunk_nb = int(math.ceil(float(len(data)) / self.chunk_size))
         if metachunk_nb == 0:
             metachunk_nb = 1  # special case for empty content
 
-        self.assertEqual(len(chunks), metachunk_nb * 2)
+        if stgpol == "THREECOPIES":
+            nb_copy = 3
+        elif stgpol == "TWOCOPIES":
+            nb_copy = 2
+        elif stgpol == "SINGLE":
+            nb_copy = 1
+
+        self.assertEqual(len(chunks), metachunk_nb * nb_copy)
 
         for pos in range(metachunk_nb):
             chunks_at_pos = content.chunks.filter(pos=pos)
-            self.assertEqual(len(chunks_at_pos), 2)
+            self.assertEqual(len(chunks_at_pos), nb_copy)
 
             data_begin = pos * self.chunk_size
             data_end = pos * self.chunk_size + self.chunk_size
@@ -95,21 +102,27 @@ class TestDupContent(BaseTestCase):
                 self.assertEqual(meta['chunk_pos'], str(pos))
                 self.assertEqual(meta['chunk_hash'], chunk_hash)
 
-    def test_upload_0_byte(self):
-        self._test_upload(0)
+    def test_twocopies_upload_0_byte(self):
+        self._test_upload("TWOCOPIES", 0)
 
-    def test_upload_1_byte(self):
-        self._test_upload(1)
+    def test_twocopies_upload_1_byte(self):
+        self._test_upload("TWOCOPIES", 1)
 
-    def test_upload_chunksize_bytes(self):
-        self._test_upload(self.chunk_size)
+    def test_twocopies_upload_chunksize_bytes(self):
+        self._test_upload("TWOCOPIES", self.chunk_size)
 
-    def test_upload_chunksize_plus_1_bytes(self):
-        self._test_upload(self.chunk_size + 1)
+    def test_twocopies_upload_chunksize_plus_1_bytes(self):
+        self._test_upload("TWOCOPIES", self.chunk_size + 1)
 
-    def _new_content(self, data, broken_pos_list):
+    def test_single_upload_0_byte(self):
+        self._test_upload("SINGLE", 0)
+
+    def test_single_upload_chunksize_plus_1_bytes(self):
+        self._test_upload("SINGLE", self.chunk_size + 1)
+
+    def _new_content(self, stgpol, data, broken_pos_list):
         old_content = self.content_factory.new(self.container_id, "titi",
-                                               len(data), "TWOCOPIES")
+                                               len(data), stgpol)
         self.assertEqual(type(old_content), DupContent)
 
         old_content.upload(StringIO.StringIO(data))
@@ -122,9 +135,9 @@ class TestDupContent(BaseTestCase):
         return self.content_factory.get(self.container_id,
                                         old_content.content_id)
 
-    def _test_download(self, data_size, broken_pos_list):
+    def _test_download(self, stgpol, data_size, broken_pos_list):
         data = random_data(data_size)
-        content = self._new_content(data, broken_pos_list)
+        content = self._new_content(stgpol, data, broken_pos_list)
 
         downloaded_data = "".join(content.download())
 
@@ -135,26 +148,32 @@ class TestDupContent(BaseTestCase):
             c = content.chunks.filter(pos=pos)[0]
             self.assertRaises(NotFound, self.blob_client.chunk_delete, c.url)
 
-    def test_download_content_0_byte_without_broken_chunks(self):
-        self._test_download(0, [])
+    def test_twocopies_download_content_0_byte_without_broken_chunks(self):
+        self._test_download("TWOCOPIES", 0, [])
 
-    def test_download_content_0_byte_with_broken_0_0(self):
-        self._test_download(0, [(0, 0)])
+    def test_twocopies_download_content_0_byte_with_broken_0_0(self):
+        self._test_download("TWOCOPIES", 0, [(0, 0)])
 
-    def test_download_content_1_byte_without_broken_chunks(self):
-        self._test_download(1, [])
+    def test_twocopies_download_content_1_byte_without_broken_chunks(self):
+        self._test_download("TWOCOPIES", 1, [])
 
-    def test_download_content_1_byte_with_broken_0_0(self):
-        self._test_download(1, [(0, 0)])
+    def test_twocopies_download_content_1_byte_with_broken_0_0(self):
+        self._test_download("TWOCOPIES", 1, [(0, 0)])
 
-    def test_download_content_chunksize_bytes_without_broken_chunks(self):
-        self._test_download(self.chunk_size, [])
+    def test_twocopies_download_chunksize_bytes_without_broken_chunks(self):
+        self._test_download("TWOCOPIES", self.chunk_size, [])
 
-    def test_download_content_2xchunksize_bytes_with_broken_0_0_and_1_0(self):
-        self._test_download(self.chunk_size * 2, [(0, 0), (1, 0)])
+    def test_twocopies_download_2xchuksize_bytes_with_broken_0_0_and_1_0(self):
+        self._test_download("TWOCOPIES", self.chunk_size * 2, [(0, 0), (1, 0)])
 
-    def test_download_content_chunksize_bytes_with_2_broken_chunks(self):
+    def test_twocopies_download_content_chunksize_bytes_2_broken_chunks(self):
         data = random_data(self.chunk_size)
-        content = self._new_content(data, [(0, 0), (0, 1)])
+        content = self._new_content("TWOCOPIES", data, [(0, 0), (0, 1)])
         gen = content.download()
         self.assertRaises(UnrecoverableContent, gen.next)
+
+    def test_single_download_content_1_byte_without_broken_chunks(self):
+        self._test_download("SINGLE", 1, [])
+
+    def test_single_download_chunksize_bytes_plus_1_without_broken_chunk(self):
+        self._test_download("SINGLE", self.chunk_size * 2, [])
