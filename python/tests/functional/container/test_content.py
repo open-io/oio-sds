@@ -1,7 +1,13 @@
-import unittest
+import random
 import simplejson as json
+import unittest
 from requests import Request
 from tests.utils import BaseTestCase
+
+
+def random_content():
+    return 'content-{0}-{1}'.format(random.randint(0,65536),
+                                    random.randint(0,65536))
 
 
 class TestMeta2Functional(BaseTestCase):
@@ -12,168 +18,132 @@ class TestMeta2Functional(BaseTestCase):
 
     def tearDown(self):
         super(TestMeta2Functional, self).tearDown()
-        for ref in ('plop-'+str(i) for i in range(5)):
-            try:
-                self.session.post(self._url_ref('destroy'),
-                                  params=self.param_ref(ref),
-                                  headers={'X-oio-action-mode': 'force'})
-            except:
-                pass
+        try:
+            ref = 'plop-0'
+            params = self.param_ref(ref)
+            self.session.post(self.url_container('destroy'),
+                              params=params,
+                              headers={'X-oio-action-mode': 'force'})
+            self.session.post(self._url_ref('destroy'),
+                              params=params,
+                              headers={'X-oio-action-mode': 'force'})
+        except:
+            pass
 
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_content_head(self):
-        self.prepare_content()
-        resp = self.session.head(self.addr_m2_ref_path)
-        self.assertEqual(resp.status_code, 204)
+    def valid_chunks(self, tab):
+        self.assertIsInstance(tab, list)
+        for chunk in tab:
+            self.assertIsInstance(chunk, dict)
+            self.assertListEqual(sorted(chunk.keys()),
+                                 sorted(['url','pos','hash','size']))
+            self.assertIsInstance(chunk['size'], int)
+        return True
 
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_content_head_void_container(self):
-        resp = self.session.put(self.addr_m2_ref)
-        self.assertEqual(resp.status_code, 204)
-        resp = self.session.head(self.addr_m2_ref_path)
-        self.assertEqual(resp.status_code, 404)
+    def test_prepare(self):
+        headers = {'X-oio-action-mode': 'autocreate'}
+        params = self.param_content ('plop-0', random_content())
 
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_contents_get(self):
-        self.prepare_content()
-        resp = self.session.get(self.addr_m2_ref_path)
+        resp = self.session.post(self.url_content('prepare'),
+                                 params=params)
+        self.assertError(resp, 400, 400)
+        resp = self.session.post(self.url_content('prepare'),
+                                 params=params,
+                                 data=json.dumps({'size':1024}))
+        self.assertError(resp, 404, 406)
+        resp = self.session.post(self.url_content('prepare'),
+                                 params=params,
+                                 data=json.dumps({'size':1024}),
+                                 headers=headers)
         self.assertEqual(resp.status_code, 200)
-        self.assertEqual(resp.json()[0]["hash"], self.hash_rand.upper())
+        self.assertTrue(self.valid_chunks(resp.json()))
+        # TODO test /content/prepare with additional useless parameters
+        # TODO test /content/prepare with invalid sizes
 
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_contents_get_void_container(self):
-        resp = self.session.put(self.addr_m2_ref)
+    def test_copy(self):
+        ref = 'plop-0'
+        path = random_content ()
+        to = '{0}/{1}/{2}//{3}'.format(self.ns, self.account, ref, path+'-COPY')
+        headers = {'Destination': to, 'X-oio-action-mode': 'autocreate'}
+
+        resp = self.session.post(self.url_content('copy'))
+        self.assertError(resp, 400, 400)
+
+        params = self.param_ref (ref)
+        resp = self.session.post(self.url_content('copy'), params=params)
+        self.assertError(resp, 400, 400)
+
+        params = self.param_content (ref, path)
+        resp = self.session.post(self.url_content('copy'), params=params)
+        self.assertError(resp, 400, 400)
+
+        # No user, no container, no content
+        resp = self.session.post(self.url_content('copy'),
+                                 headers=headers, params=params)
+        self.assertError(resp, 403, 406)
+
+        # No content
+        resp = self.session.post(self.url_container('create'),
+                                 params=params, headers=headers)
         self.assertEqual(resp.status_code, 204)
-        resp = self.session.get(self.addr_m2_ref_path)
-        self.assertEqual(resp.status_code, 404)
+        resp = self.session.post(self.url_content('copy'),
+                                 headers=headers, params=params)
+        self.assertError(resp, 403, 420)
 
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_contents_put(self):
-        resp = self.session.put(self.addr_m2_ref)
-        self.assertEqual(resp.status_code, 204)
+    def test_cycle(self):
+        ref = 'plop-0'
+        path = random_content ()
+        headers = {'X-oio-action-mode': 'autocreate'}
+        params = self.param_content (ref, path)
 
-        self.prepare_bean(1)
+        resp = self.session.get(self.url_content('show'), params=params)
+        self.assertError(resp, 404, 406)
 
-        headers = {'x-oio-content-meta-hash': self.hash_rand,
-                   'x-oio-content-meta-length': 40}
-        resp = self.session.put(self.addr_m2_ref_path,
-                                json.dumps([self.bean]), headers=headers)
-        self.assertEqual(resp.status_code, 204)
+        resp = self.session.post(self.url_content('touch'), params=params)
+        self.assertError(resp, 403, 406)
 
-        resp = self.session.get(self.addr_m2_ref)
+        resp = self.session.post(self.url_content('prepare'),
+                                 data=json.dumps({'size':1024}),
+                                 params=params,
+                                 headers=headers)
         self.assertEqual(resp.status_code, 200)
-        objects = resp.json()["objects"]
-        self.assertGreaterEqual(len(objects), 1)
-        first = objects[0]
-        self.assertEqual(first['hash'], self.hash_rand.upper())
+        chunks = resp.json()
 
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_contents_put_ref_link(self):
-        resp = self.session.put(self.addr_m2_ref)
+        headers = {'X-oio-action-mode': 'autocreate',
+                   'X-oio-content-meta-length': 1024,}
+        resp = self.session.post(self.url_content('create'),
+                                 params=params,
+                                 headers=headers,
+                                 data=json.dumps(chunks))
         self.assertEqual(resp.status_code, 204)
 
-        self.prepare_bean(1)
-        action = {"action": "Link", "args": None}
-        resp = self.session.post(self.addr_alone_ref_type_action,
-                                 json.dumps(action))
+        ## FIXME check re-create depending on the container's versioning policy
+        #resp = self.session.post(self.url_content('create'),
+        #                         params=params,
+        #                         headers=headers,
+        #                         data=json.dumps(chunks))
+        #self.assertEqual(resp.status_code, 201)
+
+        resp = self.session.get(self.url_content('show'), params=params)
         self.assertEqual(resp.status_code, 200)
 
-        headers = {'x-oio-content-meta-hash': self.hash_rand,
-                   'x-oio-content-meta-length': 40}
-        resp = self.session.put(self.addr_m2_alone_ref_path,
-                                json.dumps([self.bean]), headers=headers)
-        self.assertEqual(resp.status_code, 404)
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_contents_put_invalid_headers(self):
-        resp = self.session.put(self.addr_m2_ref)
+        to = '{0}/{1}/{2}//{3}'.format(self.ns, self.account, ref,
+                                       path + '-COPY')
+        headers = {'Destination': to}
+        resp = self.session.post(self.url_content('copy'),
+                                 headers=headers, params=params)
         self.assertEqual(resp.status_code, 204)
 
-        self.prepare_bean(1)
-
-        headers = {'x-oio-content-meta-hash': 'error',
-                   'x-oio-content-meta-length': 40}
-        resp = self.session.put(self.addr_m2_ref_path,
-                                json.dumps([self.bean]), headers=headers)
-        self.assertEqual(resp.status_code, 400)
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_contents_delete(self):
-        self.prepare_content()
-
-        resp = self.session.delete(self.addr_m2_ref_path)
+        resp = self.session.get(self.url_content('show'), params=params)
         self.assertEqual(resp.status_code, 200)
 
-        resp = self.session.get(self.addr_m2_ref).json()['objects']
-        self.assertEqual(resp, [])
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_contents_delete_no_content(self):
-        resp = self.session.put(self.addr_m2_ref)
+        resp = self.session.post(self.url_content('delete'), params=params)
         self.assertEqual(resp.status_code, 204)
 
-        resp = self.session.delete(self.addr_m2_ref_path)
-        self.assertEqual(resp.status_code, 404)
+        resp = self.session.get(self.url_content('show'), params=params)
+        self.assertError(resp, 404, 420)
 
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_contents_copy(self):
-        self.prepare_content()
-        req = Request('COPY', self.addr_m2_ref_path,
-                      headers={'Destination': self.path_paste})
-        resp = self.session.send(req.prepare())
-        self.assertEqual(resp.status_code, 204)
-
-        resp = self.session.get(self.addr_m2_ref_path).json()
-        resp2 = self.session.get(self.addr_m2_ref_path2).json()
-        self.assertEqual(resp, resp2)
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_contents_copy_no_aim(self):
-        self.prepare_content()
-        req = Request('COPY', self.addr_m2_ref_path,
-                      headers={'Destination': self.path_paste_wrong})
-        resp = self.session.send(req.prepare())
-        self.assertTrue(resp.status_code, 400)
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_contents_copy_no_content(self):
-        resp = self.session.put(self.addr_m2_ref)
-        self.assertEqual(resp.status_code, 204)
-        req = Request('COPY', self.addr_m2_ref_path,
-                      headers={'Destination': self.path_paste_wrong})
-        resp = self.session.send(req.prepare())
-        self.assertTrue(resp.status_code, 400)
-
-    # Content actions tests
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_contents_actions_beans(self):
-        resp = self.session.put(self.addr_m2_ref)
-        self.assertEqual(resp.status_code, 204)
-
-        resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
-            {"action": "Beans", "args": self.bean_void}
-        ))
-        self.assertEqual(resp.status_code, 200)
-        for label in ["url", "pos", "size", "hash"]:
-            self.assertTrue(label in resp.json()[0].keys())
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_contents_actions_beans_wrong_arg(self):
-        resp = self.session.put(self.addr_m2_ref)
-        self.assertEqual(resp.status_code, 204)
-
-        resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
-            {"action": "Beans", "args": {'error': 'error'}}
-        ))
-        self.assertEqual(resp.status_code, 400)
-
-    @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
-    def test_contents_actions_beans_ref_no_link(self):
-        resp = self.session.post(self.addr_m2_ref_path_action, json.dumps(
-            {"action": "Beans", "args": self.bean_void}
-        ))
-        self.assertEqual(resp.status_code, 404)
+        resp = self.session.post(self.url_content('delete'), params=params)
+        self.assertError(resp, 404, 420)
 
     @unittest.skip("Encore un test de couille d'ours qui ne sert a rien")
     def test_contents_actions_Spare(self):  # to be improved
