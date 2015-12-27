@@ -340,14 +340,6 @@ m2v2_remote_pack_SPARE(struct oio_url_s *url, const char *pol,
 }
 
 static GByteArray*
-m2v2_remote_pack_STGPOL(struct oio_url_s *url, const char *pol)
-{
-	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_STGPOL, url, NULL);
-	metautils_message_add_field_str(msg, NAME_MSGKEY_STGPOLICY, pol);
-	return message_marshall_gba_and_clean(msg);
-}
-
-static GByteArray*
 m2v2_remote_pack_EXITELECTION(struct oio_url_s *url)
 {
 	return _m2v2_pack_request(NAME_MSGNAME_M2V2_EXITELECTION, url, NULL);
@@ -449,13 +441,6 @@ m2v2_remote_execute_SPARE(const char *target, struct oio_url_s *url,
 		GSList **out)
 {
 	return _m2v2_request(target, m2v2_remote_pack_SPARE(url, pol, notin_list, broken_list), out);
-}
-
-GError*
-m2v2_remote_execute_STGPOL(const char *target, struct oio_url_s *url,
-		const char *pol, GSList **out)
-{
-	return _m2v2_request(target, m2v2_remote_pack_STGPOL(url, pol), out);
 }
 
 GError*
