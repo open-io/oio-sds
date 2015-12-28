@@ -337,19 +337,6 @@ static gridd_filter M2V2_PROPDEL_FILTERS[] =
 	NULL
 };
 
-static gridd_filter M2V2_STGPOL_FILTERS[] =
-{
-	meta2_filter_extract_header_url,
-	meta2_filter_extract_header_storage_policy,
-	meta2_filter_fill_subject,
-	meta2_filter_check_url_cid,
-	meta2_filter_check_backend,
-	meta2_filter_check_ns_name,
-	meta2_filter_action_update_storage_policy,
-	meta2_filter_reply_success,
-	NULL
-};
-
 static gridd_filter M2V2_EXITELECTION_FILTERS[] =
 {
 	meta2_filter_extract_header_url,
@@ -470,8 +457,6 @@ meta2_gridd_get_v2_requests(void)
 		{NAME_MSGNAME_M2V2_RAW_SUBST, (hook) meta2_dispatch_all, M2V2_RAW_SUBST_filters},
 
 		{NAME_MSGNAME_M2V2_EXITELECTION, (hook) meta2_dispatch_all,  M2V2_EXITELECTION_FILTERS},
-		/* url */
-		{NAME_MSGNAME_M2V2_STGPOL,    (hook) meta2_dispatch_all, M2V2_STGPOL_FILTERS},
 
 		/* AGENT EVENTS */
 		{NAME_MSGNAME_M2V1_TOUCH_CONTAINER, (hook) meta2_dispatch_all, M2V2_FILTERS_touch_container_v1},

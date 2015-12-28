@@ -256,6 +256,8 @@ _repo_wraper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.flags = SQLX_REPO_DELETEON;
+	cfg.sync_solo = SQLX_SYNC_OFF;
+	cfg.sync_repli = SQLX_SYNC_OFF;
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
 

@@ -298,8 +298,7 @@ _configure_backend(struct sqlx_service_s *ss)
 	}
 
 	err = sqlx_repository_configure_type(ss->repository,
-			ss->service_config->srvtype, NULL,
-			ss->service_config->schema);
+			ss->service_config->srvtype, ss->service_config->schema);
 
 	if (err) {
 		GRID_ERROR("SQLX schema init failure : (%d) %s", err->code, err->message);
@@ -310,7 +309,7 @@ _configure_backend(struct sqlx_service_s *ss)
 	sqlx_repository_configure_open_timeout (ss->repository, ss->open_timeout);
 
 	sqlx_repository_configure_hash (ss->repository,
-			ss->service_config->repo_hash_width, 
+			ss->service_config->repo_hash_width,
 			ss->service_config->repo_hash_depth);
 
 	GRID_TRACE("SQLX repository initiated");

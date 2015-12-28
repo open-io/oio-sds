@@ -105,7 +105,6 @@ M2V2_DECLARE_FILTER(meta2_filter_action_insert_beans);
 M2V2_DECLARE_FILTER(meta2_filter_action_delete_beans);
 M2V2_DECLARE_FILTER(meta2_filter_action_update_beans);
 
-M2V2_DECLARE_FILTER(meta2_filter_action_update_storage_policy);
 M2V2_DECLARE_FILTER(meta2_filter_action_exit_election);
 
 #endif /*OIO_SDS__meta2v2__meta2_filters_h*/
