@@ -47,102 +47,21 @@ sqlx_exec(sqlite3 *handle, const gchar *sql)
 	return grc;
 }
 
-GError*
-sqlite_admin_entry_set(sqlite3 *db, const int repl, const gchar *k,
-		const guint8 *v, gsize vlen)
-{
-	int rc;
-	GError *err = NULL;
-	sqlite3_stmt *stmt = NULL;
-
-	EXTRA_ASSERT(db != NULL);
-	EXTRA_ASSERT(k != NULL);
-	EXTRA_ASSERT(*k != '\0');
-
-	sqlite3_prepare_debug(rc, db, repl
-			? "INSERT OR REPLACE INTO admin (k,v) VALUES (?,?)"
-			: "INSERT OR IGNORE  INTO admin (k,v) VALUES (?,?)"
-			, -1, &stmt, NULL);
-	if (rc != SQLITE_OK && rc != SQLITE_DONE)
-		err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s", rc, sqlite3_errmsg(db));
-	else {
-		sqlite3_bind_text(stmt, 1, k, -1, NULL);
-		if (v && vlen)
-			sqlite3_bind_blob(stmt, 2, v, vlen, NULL);
-		else
-			sqlite3_bind_text(stmt, 2, "", 0, NULL);
-		sqlite3_step_debug_until_end(rc, stmt);
-		if (rc != SQLITE_OK && rc != SQLITE_DONE)
-			err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s", rc, sqlite3_errmsg(db));
-		(void) sqlite3_finalize(stmt);
-	}
-
-	return err;
-}
-
-static void
-_admin_entry_set_gba_noerror(sqlite3 *db, const gchar *k, GByteArray *v)
-{
-	GError *e = sqlite_admin_entry_set(db, 1, k, v?v->data:NULL, v?v->len:0);
-	if (e) {
-		GRID_WARN("SQLX failed to set admin [%s]", k);
-		g_clear_error(&e);
-	}
-}
-
-static GError*
-_admin_entry_del(sqlite3 *db, const gchar *k)
-{
-	int rc;
-	GError *err = NULL;
-	sqlite3_stmt *stmt = NULL;
-
-	EXTRA_ASSERT(db != NULL);
-	EXTRA_ASSERT(k != NULL);
-	EXTRA_ASSERT(*k != '\0');
-
-	sqlite3_prepare_debug(rc, db, "DELETE FROM admin WHERE k = ?", -1, &stmt, NULL);
-	if (rc != SQLITE_OK && rc != SQLITE_DONE)
-		err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s", rc, sqlite3_errmsg(db));
-	else {
-		sqlite3_bind_text(stmt, 1, k, -1, NULL);
-		sqlite3_step_debug_until_end(rc, stmt);
-		if (rc != SQLITE_OK && rc != SQLITE_DONE)
-			err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s", rc, sqlite3_errmsg(db));
-		(void) sqlite3_finalize(stmt);
-	}
-
-	return err;
-}
-
-static void
-_admin_entry_del_noerror(sqlite3 *db, const gchar *k)
-{
-	GError *e = _admin_entry_del(db, k);
-	if (e) {
-		GRID_WARN("SQLX failed to del admin [%s]", k);
-		g_clear_error(&e);
-	}
-}
-
 void
 sqlx_admin_set_gba_and_clean(struct sqlx_sqlite3_s *sq3, const gchar *k,
 		GByteArray *gba)
 {
-	GByteArray *prev;
-
 	// Avoid replacing the value if the same is already present
-	if (NULL != (prev = g_tree_lookup(sq3->admin, k))) {
-		if (gba->len == prev->len) {
-			if (!memcmp(gba->data, prev->data, prev->len)) {
-				g_byte_array_free(gba, TRUE);
-				return;
-			}
+	GByteArray *prev = g_tree_lookup(sq3->admin, k);
+	if (prev && gba->len == prev->len) {
+		if (!memcmp(gba->data, prev->data, prev->len)) {
+			g_byte_array_free(gba, TRUE);
+			return;
 		}
 	}
 
-	_admin_entry_set_gba_noerror(sq3->db, k, gba);
 	g_tree_replace(sq3->admin, g_strdup(k), gba);
+	sq3->admin_dirty = 1;
 }
 
 void
@@ -161,8 +80,7 @@ sqlx_admin_init_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v)
 void
 sqlx_admin_del(struct sqlx_sqlite3_s *sq3, const gchar *k)
 {
-	_admin_entry_del_noerror(sq3->db, k);
-	g_tree_remove(sq3->admin, k);
+	sqlx_admin_set_str (sq3, k, "");
 }
 
 void
@@ -255,6 +173,26 @@ sqlx_admin_inc_version(struct sqlx_sqlite3_s *sq3, const gchar *k, const int del
 }
 
 void
+sqlx_admin_ensure_versions (struct sqlx_sqlite3_s *sq3)
+{
+	sqlite3_stmt *stmt = NULL;
+	int rc;
+
+	sqlite3_prepare_debug(rc, sq3->db, "SELECT name FROM sqlite_master"
+			" WHERE type = 'table'", -1, &stmt, NULL);
+	if (rc == SQLITE_OK) {
+		EXTRA_ASSERT(stmt != NULL);
+		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+			const gchar *name = (const gchar*)sqlite3_column_text(stmt, 0);
+			gchar *k = g_strdup_printf("version:main.%s", name);
+			sqlx_admin_init_str (sq3, k, "1:0");
+			g_free(k);
+		}
+		sqlite3_finalize(stmt);
+	}
+}
+
+void
 sqlx_admin_inc_all_versions(struct sqlx_sqlite3_s *sq3, const int delta)
 {
 	gboolean runner(gchar *k0, GByteArray *v, gpointer ignored) {
@@ -262,26 +200,23 @@ sqlx_admin_inc_all_versions(struct sqlx_sqlite3_s *sq3, const int delta)
 		if (!g_str_has_prefix(k0, "version:"))
 			return FALSE;
 
-		gchar *p, *prev;
-		prev = g_alloca(v->len+3);
-		memset(prev, 0, v->len+3);
+		gchar *prev = g_alloca(v->len+8);
+		memset(prev, 0, v->len+8);
 		memcpy(prev, v->data, v->len);
 
-		// Build the new version string
-		p = strchr(prev, ':');
+		/* Build the new version string */
+		gchar *p = strchr(prev, ':');
 		if (!p)
 			return FALSE;
 		*(p++) = '\0';
 		gint64 v0 = g_ascii_strtoll(prev, NULL, 10) + delta;
 		gint64 v1 = g_ascii_strtoll(p, NULL, 10);
-		g_snprintf(prev, v->len+3, "%"G_GINT64_FORMAT":%"G_GINT64_FORMAT, v0, v1);
+		g_snprintf(prev, v->len+8, "%"G_GINT64_FORMAT":%"G_GINT64_FORMAT, v0, v1);
 
-		// Change in place
+		/* Change in place and mark for a later save in the DB */
 		g_byte_array_set_size(v, 0);
 		g_byte_array_append(v, (guint8*)prev, strlen(prev));
-
-		// Change in the DB
-		sqlite_admin_entry_set(sq3->db, 1/*replace*/, k0, v->data, v->len);
+		sq3->admin_dirty = 1;
 		return FALSE;
 	}
 
@@ -331,5 +266,113 @@ sqlx_admin_get_keyvalues (struct sqlx_sqlite3_s *sq3)
 	GPtrArray *tmp = g_ptr_array_new ();
 	g_tree_foreach (sq3->admin, (GTraverseFunc) runner, tmp);
 	return (gchar**) metautils_gpa_to_array (tmp, TRUE);
+}
+
+guint
+sqlx_admin_save (struct sqlx_sqlite3_s *sq3)
+{
+	int rc;
+	guint count = 0;
+	GError *err = NULL;
+	sqlite3_stmt *stmt = NULL;
+	gboolean run_to_delete = FALSE;
+
+	EXTRA_ASSERT(sq3 != NULL);
+
+	sqlite3_prepare_debug(rc, sq3->db, "INSERT OR REPLACE INTO admin (k,v) VALUES (?,?)", -1, &stmt, NULL);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE)
+		err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
+	else {
+		gboolean _save (gchar *k, GByteArray *v, gpointer i) {
+			if (!v || !v->len || !v->data) {
+				run_to_delete = TRUE;
+				return FALSE;
+			}
+			(void) i;
+			sqlite3_reset (stmt);
+			sqlite3_clear_bindings (stmt);
+			sqlite3_bind_text (stmt, 1, k, -1, NULL);
+			if (v->data && v->len)
+				sqlite3_bind_blob (stmt, 2, v->data, v->len, NULL);
+			sqlite3_step_debug_until_end (rc, stmt);
+			if (rc != SQLITE_OK && rc != SQLITE_DONE)
+				err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s",
+						rc, sqlite3_errmsg(sq3->db));
+			count ++;
+			return err != NULL;
+		}
+		g_tree_foreach (sq3->admin, (GTraverseFunc)_save, NULL);
+		(void) sqlite3_finalize(stmt);
+	}
+
+	if (run_to_delete && !err) {
+		sqlite3_prepare_debug(rc, sq3->db, "DELETE FROM admin WHERE k = ?", -1, &stmt, NULL);
+		if (rc != SQLITE_OK && rc != SQLITE_DONE)
+			err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
+		else {
+			gboolean _delete (gchar *k, GByteArray *v, gpointer i) {
+				if (v && v->len)
+					return FALSE;
+				(void) i;
+				sqlite3_reset (stmt);
+				sqlite3_clear_bindings (stmt);
+				sqlite3_bind_text (stmt, 1, k, -1, NULL);
+				sqlite3_step_debug_until_end (rc, stmt);
+				if (rc != SQLITE_OK && rc != SQLITE_DONE)
+					err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s",
+							rc, sqlite3_errmsg(sq3->db));
+				count ++;
+				return err != NULL;
+			}
+			g_tree_foreach (sq3->admin, (GTraverseFunc)_delete, NULL);
+			(void) sqlite3_finalize(stmt);
+		}
+	}
+
+	if (err) {
+		GRID_WARN("DB error: failed to save the admin table: (%d) %s",
+				err->code, err->message);
+		g_clear_error (&err);
+		count = 0;
+	}
+	return count;
+}
+
+guint
+sqlx_admin_save_lazy (struct sqlx_sqlite3_s *sq3)
+{
+	if (!sq3 || !sq3->admin_dirty) return 0;
+	sq3->admin_dirty = 0;
+	return sqlx_admin_save (sq3);
+}
+
+guint
+sqlx_admin_save_lazy_tnx (struct sqlx_sqlite3_s *sq3)
+{
+	if (!sq3 || !sq3->admin_dirty) return 0;
+	sqlx_exec (sq3->db, "BEGIN");
+	guint rc = sqlx_admin_save (sq3);
+	sqlx_exec (sq3->db, "COMMIT");
+	return rc;
+}
+
+void
+sqlx_admin_load(struct sqlx_sqlite3_s *sq3)
+{
+	sqlite3_stmt *stmt = NULL;
+	int rc;
+
+	sqlite3_prepare_debug(rc, sq3->db, "SELECT k,v FROM admin", -1, &stmt, NULL);
+	if (rc == SQLITE_OK) {
+		EXTRA_ASSERT(stmt != NULL);
+		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
+			const gchar *k = (const gchar*)sqlite3_column_text(stmt, 0);
+			GByteArray *v = g_byte_array_append(g_byte_array_new(),
+					sqlite3_column_blob(stmt, 1),
+					sqlite3_column_bytes(stmt, 1));
+			g_tree_replace(sq3->admin, g_strdup(k), v);
+		}
+		sqlite3_finalize(stmt);
+	}
 }
 
