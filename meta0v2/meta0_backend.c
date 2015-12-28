@@ -465,7 +465,7 @@ static void
 _unlock_and_close(struct sqlx_sqlite3_s *sq3)
 {
 	EXTRA_ASSERT(sq3 != NULL);
-
+	sqlx_admin_save_lazy (sq3);
 	sqlx_repository_unlock_and_close_noerror(sq3);
 }
 

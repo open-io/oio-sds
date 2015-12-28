@@ -1188,11 +1188,13 @@ __notify_services_by_cid(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url)
 {
 	struct oio_url_s **urls = NULL;
+	sqlx_exec (sq3->db, "BEGIN");
 	GError *err = __info_user(sq3, url, FALSE, &urls);
 	if (!err) {
 		oio_url_set (urls[0], OIOURL_NS, m1->backend.ns_name);
 		err = __notify_services(m1, sq3, url);
 	}
+	sqlx_exec (sq3->db, "ROLLBACK");
 	oio_url_cleanv (urls);
 
 	if (err) {

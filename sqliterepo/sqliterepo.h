@@ -110,6 +110,8 @@ struct sqlx_sqlite3_s
 	GTree *admin; // <gchar*,GByteArray*>
 	gint bd; // ID in cache
 	enum election_status_e election; // set at open(), reset at close()
+
+	gboolean admin_dirty : 8;
 	gboolean deleted : 8;
 	gboolean no_peers : 8; // Prevent get_peers()
 };
@@ -186,7 +188,7 @@ void sqlx_repository_configure_maxbases(sqlx_repository_t *repo,
 
 /** Register a new DB type with its schema.  */
 GError* sqlx_repository_configure_type(sqlx_repository_t *repo,
-		const gchar *type, const gchar *schema);
+		const char *type, const char *schema);
 
 /** Set open timeout for bases currently in use by another thread.
  * @param timeout milliseconds */
