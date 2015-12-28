@@ -35,9 +35,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #define SQLX_TYPE "sqlx"
 
 #define SQLX_SCHEMA \
-	"INSERT INTO admin(k,v) VALUES (\"schema_version\",\"1.7\");"\
-	"INSERT INTO admin(k,v) VALUES (\"version:main.admin\",\"1:0\");"\
-	"VACUUM"
+	"INSERT INTO admin(k,v) VALUES (\"schema_version\",\"1.0\");"\
+	"INSERT INTO admin(k,v) VALUES (\"version:main.admin\",\"1:0\")"
 
 static gchar **
 filter_services(struct sqlx_service_s *ss, gchar **s, gint64 seq, const gchar *t)
