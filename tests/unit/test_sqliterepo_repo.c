@@ -67,7 +67,7 @@ _round_init (void)
 	for (int i=0; i<5 ;i++)
 		g_assert_true (sqlx_repository_running (repo));
 	for (int i=0; i<5 ;i++) {
-		err = sqlx_repository_configure_type(repo, type, "test", SCHEMA);
+		err = sqlx_repository_configure_type(repo, type, SCHEMA);
 		g_assert_no_error (err);
 	}
 	sqlx_repository_clean(repo);
@@ -89,7 +89,7 @@ _round_open_close (void)
 	err = sqlx_repository_init("/tmp", NULL, &repo);
 	g_assert_no_error (err);
 	g_assert_true (sqlx_repository_running (repo));
-	err = sqlx_repository_configure_type(repo, type, "test", SCHEMA);
+	err = sqlx_repository_configure_type(repo, type, SCHEMA);
 	g_assert_no_error (err);
 	sqlx_repository_set_locator (repo, _locator, NULL);
 

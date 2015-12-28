@@ -36,14 +36,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 		"prefixes TEXT NOT NULL," \
 		"PRIMARY KEY (addr));" \
 	"INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"schema_version\",\"1.8\");" \
+		"VALUES (\"schema_version\",\"1.0\");" \
     "INSERT OR IGNORE INTO admin(k,v) " \
 		"VALUES (\"version:main.admin\",\"1:0\");" \
     "INSERT OR IGNORE INTO admin(k,v) " \
 		"VALUES (\"version:main.meta1\",\"1:0\");" \
     "INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"version:main.meta1_ref\",\"1:0\");" \
-	"VACUUM"
+		"VALUES (\"version:main.meta1_ref\",\"1:0\");"
 
 struct meta0_backend_s;
 struct sqlx_repository_s;
@@ -84,7 +83,7 @@ GError* meta0_backend_get_all(struct meta0_backend_s *m0,
 GError* meta0_backend_get_one(struct meta0_backend_s *m0,
 		const guint8 *prefix, gchar ***urls);
 
-GError* meta0_backend_assign(struct meta0_backend_s *m0, 
+GError* meta0_backend_assign(struct meta0_backend_s *m0,
 		const GPtrArray *new_assign_prefixes,
 		const GPtrArray *new_assign_meta1ref,
 		const gboolean init);

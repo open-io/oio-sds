@@ -41,7 +41,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	"CREATE INDEX IF NOT EXISTS serv_by_cid on services (cid);" \
 	"CREATE INDEX IF NOT EXISTS serv_by_srvtype on services (cid,srvtype);" \
 	"INSERT OR IGNORE INTO admin(k,v) " \
-		"VALUES (\"schema_version\",\"1.6\");" \
+		"VALUES (\"schema_version\",\"1.0\");" \
     "INSERT OR IGNORE INTO admin(k,v) " \
 		"VALUES (\"version:main.admin\",\"1:0\");" \
     "INSERT OR IGNORE INTO admin(k,v) " \

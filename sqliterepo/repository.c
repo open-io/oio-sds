@@ -207,18 +207,33 @@ __file_read(const gchar *path, GByteArray **raw)
 	return error;
 }
 
-static GError*
-__test_schema(const gchar *schema, const gchar *version, GByteArray **raw)
+static GError *
+_sqlx_execute (sqlite3 *db, const char *statement)
 {
-	gchar ps_buf[64] = {0};
-	gchar *tmp_path;
+	GError *err = NULL;
+	int rc = sqlx_exec(db, statement);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE)
+		err = NEWERROR(rc, "SQL error: (%d) %s", rc, sqlite3_errmsg(db));
+	return err;
+}
+
+static GError*
+__test_schema(const gchar *schema, GByteArray **raw)
+{
 	int rc;
-	char *errmsg = NULL;
 	GError *error = NULL;
 	sqlite3 *db = NULL;
 
-	tmp_path = g_strdup_printf("/tmp/schema.%d.%"G_GINT64_FORMAT".sqlite",
-			getpid(), oio_ext_real_time());
+	const char *tmp_dir = "/tmp";
+	if (g_getenv("TMPDIR"))
+		tmp_dir = g_getenv("TMPDIR");
+	gchar *tmp_path = g_strdup_printf ("%s/sqliterepo-schema-XXXXXX.sqlite", tmp_dir);
+	STRING_STACKIFY(tmp_path);
+
+	int tmp_fd = g_mkstemp_full (tmp_path, O_CREAT|O_EXCL, 0644);
+	if (tmp_fd < 0)
+		return SYSERR("tmpfile creation failure: (%d) %s", errno, strerror(errno));
+	GRID_DEBUG("schema tested in [%s]", tmp_path);
 
 	/* Open a new base */
 	int flags = SQLITE_OPEN_NOMUTEX|SQLITE_OPEN_READWRITE|SQLITE_OPEN_CREATE;
@@ -233,49 +248,33 @@ __test_schema(const gchar *schema, const gchar *version, GByteArray **raw)
 	/* Set sqlite page size. The default of 1024 produces a lot of
 	 * fragmentation. We advise at least 4096. Big containers with a
 	 * lot of chunks should benefit from page sizes >=16384. */
-	g_snprintf(ps_buf, sizeof(ps_buf), "PRAGMA page_size=%d",
+	gchar preamble[256];
+	gsize len = g_snprintf(preamble, sizeof(preamble),
+			"PRAGMA page_size = %d;"
+			"PRAGMA synchronous = OFF;"
+			"PRAGMA journal_mode = MEMORY;"
+			"PRAGMA temp_store = MEMORY;"
+			"BEGIN;"
+			"CREATE TABLE admin (k TEXT PRIMARY KEY NOT NULL, v BLOB DEFAULT NULL)",
 			SQLX_DEFAULT_PAGE_SIZE);
-	rc = sqlite3_exec(db, ps_buf, NULL, NULL, &errmsg);
-	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
-		GRID_WARN("Failed to set page_size=%d in schema: %s",
-				SQLX_DEFAULT_PAGE_SIZE, errmsg);
-		sqlite3_free(errmsg);
-		errmsg = NULL;
-	}
-
-	/* Force an admin table */
-	rc = sqlite3_exec(db, "CREATE TABLE admin ("
-				"k TEXT PRIMARY KEY NOT NULL, v BLOB DEFAULT NULL)",
-				NULL, NULL, &errmsg);
-	if (rc != SQLITE_OK && rc != SQLITE_DONE)  {
-		error = NEWERROR(rc, "Admin table error: %s (%s)",
-			sqlite3_errmsg(db), errmsg);
+	g_assert (len < sizeof(preamble));
+	if (NULL != (error = _sqlx_execute (db, preamble)))
 		goto label_exit;
-	}
-
-	if (version && *version)
-		_admin_entry_set_str_noerror(db, "schema_version", version);
-
-	/* Apply the schema in it */
-	if ((schema != NULL)&&(strlen(schema) > 0)) {
-		rc = sqlite3_exec(db, schema, NULL, NULL, &errmsg);
-		if (rc != SQLITE_OK && rc != SQLITE_DONE)  {
-			error = NEWERROR(rc, "Schema error : %s (%s)",
-				sqlite3_errmsg(db), errmsg);
-			goto label_exit;
-		}
-	}
+	if (schema && *schema && NULL != (error = _sqlx_execute (db, schema)))
+		goto label_exit;
+	if (NULL != (error = _sqlx_execute (db, "COMMIT")))
+		goto label_exit;
+	if (NULL != (error = _sqlx_execute (db, "VACUUM")))
+		goto label_exit;
 
 	_close_handle(&db);
+	fdatasync(tmp_fd);
 	error = __file_read(tmp_path, raw);
 
 label_exit:
-	if (db)
-		(void) sqlite3_close(db);
-	if (errmsg)
-		sqlite3_free(errmsg);
+	_close_handle(&db);
 	unlink(tmp_path);
-	g_free(tmp_path);
+	metautils_pclose (&tmp_fd);
 	return error;
 }
 
@@ -473,7 +472,7 @@ sqlx_repository_configure_maxbases(sqlx_repository_t *repo, guint max)
 
 GError*
 sqlx_repository_configure_type(sqlx_repository_t *repo,
-		const gchar *type, const gchar *version, const gchar *schema)
+		const gchar *type, const gchar *schema)
 {
 	GByteArray *raw = NULL;
 	GError *error = NULL;
@@ -483,7 +482,7 @@ sqlx_repository_configure_type(sqlx_repository_t *repo,
 	EXTRA_ASSERT(type != NULL);
 	EXTRA_ASSERT(schema != NULL);
 
-	if (NULL != (error = __test_schema(schema, version, &raw)))
+	if (NULL != (error = __test_schema(schema, &raw)))
 		return error;
 
 	g_hash_table_insert(repo->schemas, hashstr_create(type), raw);
@@ -883,6 +882,7 @@ retry:
 	sqlite3_busy_timeout(handle, 30000);
 	if (args->is_replicated) {
 		sqlx_exec(handle, "PRAGMA journal_mode = MEMORY");
+		sqlx_exec(handle, "PRAGMA temp_store = MEMORY");
 		sqlx_exec(handle, _get_pragma_sync(args->repo->sync_mode_repli));
 	} else {
 		GRID_TRACE("Using DELETE journal mode for base [%s]", args->realpath);

@@ -185,8 +185,8 @@ meta2_backend_init(struct meta2_backend_s **result,
 
 	m2->flag_precheck_on_generate = TRUE;
 
-	err = sqlx_repository_configure_type(m2->backend.repo, NAME_SRVTYPE_META2,
-			NULL, schema);
+	err = sqlx_repository_configure_type(m2->backend.repo,
+			NAME_SRVTYPE_META2, schema);
 	if (NULL != err) {
 		meta2_backend_clean(m2);
 		g_prefix_error(&err, "Backend init error: ");
