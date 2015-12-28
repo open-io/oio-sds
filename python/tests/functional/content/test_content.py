@@ -20,7 +20,8 @@ import os
 import time
 from mock import MagicMock as Mock
 
-from oio.common.exceptions import InconsistentContent
+from oio.common.exceptions import InconsistentContent, NotFound, \
+    ContentNotFound, ClientException
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
 from oio.content.factory import ContentFactory
@@ -260,6 +261,11 @@ class TestContentFactory(BaseTestCase):
         changed_content = self.content_factory.change_policy(
             old_content.container_id, old_content.content_id, new_policy)
 
+        self.assertRaises(NotFound, self.container_client.content_show,
+                          self.account,
+                          cid=old_content.container_id,
+                          content=old_content.content_id)
+
         new_content = self.content_factory.get(self.container_id,
                                                changed_content.content_id)
         self.assertEqual(type(new_content), obj_type[new_policy])
@@ -294,3 +300,13 @@ class TestContentFactory(BaseTestCase):
 
     def test_change_content_2xchunksize_bytes_policy_3copies_to_single(self):
         self._test_change_policy(self.chunk_size * 2, "THREECOPIES", "SINGLE")
+
+    def test_change_policy_unknown_content(self):
+        self.assertRaises(ContentNotFound, self.content_factory.change_policy,
+                          self.container_id, "1234", "RAIN")
+
+    def test_change_policy_unknown_storage_policy(self):
+        data = random_data(10)
+        old_content = self._new_content("TWOCOPIES", data)
+        self.assertRaises(ClientException, self.content_factory.change_policy,
+                          self.container_id, old_content.content_id, "UnKnOwN")
