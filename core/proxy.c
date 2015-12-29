@@ -341,11 +341,10 @@ static GError *
 _proxy_call (CURL *h, const char *method, const char *url,
 		struct http_ctx_s *in, struct http_ctx_s *out)
 {
-	gint64 t = oio_ext_monotonic_time ();
-	GRID_DEBUG("proxy: %s %s", method, url);
+	gint64 t = g_get_monotonic_time ();
 	GError *err = _proxy_call_notime (h, method, url, in, out);
-	t = oio_ext_monotonic_time () - t;
-	GRID_DEBUG("proxy: %s %s took %"G_GINT64_FORMAT"us", method, url, t);
+	t = g_get_monotonic_time () - t;
+	GRID_TRACE("proxy: %s %s took %"G_GINT64_FORMAT"us", method, url, t);
 	return err;
 }
 
