@@ -371,11 +371,9 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 	if (!resource->info->content.container_id) return "container-id";
 	if (!resource->info->content.content_id) return "content-id";
 
-	/* TODO make these fields mandatory
 	if (!resource->info->content.storage_policy) return "storage-policy";
 	if (!resource->info->content.chunk_method) return "chunk-method";
 	if (!resource->info->content.mime_type) return "mime-type";
-	*/
 
 	if (!resource->info->content.path) return "content-path";
 	if (!resource->info->chunk.position) return "chunk-pos";
