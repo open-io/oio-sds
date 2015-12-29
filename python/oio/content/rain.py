@@ -96,7 +96,7 @@ class RainContent(Content):
         spare_urls = self._meta2_get_spare_chunk(notin_chunks, broken_chunks)
 
         headers = {}
-        headers["X-oio-chunk-meta-content-storagepolicy"] = self.stgpol_name
+        headers["X-oio-chunk-meta-content-storage-policy"] = self.stgpol_name
         headers["X-oio-chunk-meta-rawxlist"] = \
             self._encode_rawxlist(current_chunks)
         headers["X-oio-chunk-meta-sparerawxlist"] = \
@@ -176,7 +176,7 @@ class RainContent(Content):
                 chunk_size = remaining_bytes
 
             headers = {}
-            headers["X-oio-chunk-meta-content-storagepolicy"] = \
+            headers["X-oio-chunk-meta-content-storage-policy"] = \
                 self.stgpol_name
             headers["X-oio-chunk-meta-rawxlist"] = \
                 self._encode_rawxlist(chunks_at_pos)
