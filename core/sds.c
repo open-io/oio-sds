@@ -78,6 +78,7 @@ struct chunk_s
 	struct chunk_position_s {
 		guint meta;
 		guint intra;
+		gboolean ec : 8; /* composite position ? */
 		gboolean parity : 8;
 	} position;
 	gchar hexhash[STRLEN_CHUNKHASH];
@@ -137,6 +138,7 @@ _load_one_chunk (struct json_object *jurl, struct json_object *jsize,
 	s = json_object_get_string(jpos);
 	result->position.meta = atoi(s);
 	if (NULL != (s = strchr(s, '.'))) {
+		result->position.ec = 1;
 		if (*(s+1) == 'p') {
 			result->position.parity = 1;
 			result->position.intra = atoi(s+2);
@@ -150,7 +152,7 @@ _load_one_chunk (struct json_object *jurl, struct json_object *jsize,
 static const char *
 _chunk_pack_position (struct chunk_s *c, gchar *buf, gsize len)
 {
-	if (c->position.parity)
+	if (c->position.ec)
 		g_snprintf (buf, len, "%u.%u%s",
 				c->position.meta, c->position.intra,
 				c->position.parity ? "p" : "");
@@ -249,7 +251,7 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 		struct chunk_s *c = l->data;
 		guint i = c->position.meta;
 		out[i]->chunks = g_slist_prepend (out[i]->chunks, c);
-		if (c->position.parity)
+		if (c->position.ec)
 			out[i]->ec = TRUE;
 	}
 	for (guint i=0; i<meta_bound ;++i) {
