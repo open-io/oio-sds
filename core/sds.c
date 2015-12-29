@@ -39,6 +39,7 @@ License along with this library.
 
 struct oio_sds_s
 {
+	gchar *session_id;
 	gchar *ns;
 	gchar *proxy;
 	gchar *proxy_local;
@@ -375,6 +376,7 @@ oio_sds_init (struct oio_sds_s **out, const char *ns)
 	g_assert (out != NULL);
 	g_assert (ns != NULL);
 	*out = SLICE_NEW0 (struct oio_sds_s);
+	(*out)->session_id = g_strdup(oio_ext_get_reqid());
 	(*out)->ns = g_strdup (ns);
 	(*out)->proxy_local = oio_cfg_get_proxylocal (ns);
 	(*out)->proxy = oio_cfg_get_proxy_containers (ns);
@@ -387,6 +389,7 @@ void
 oio_sds_free (struct oio_sds_s *sds)
 {
 	if (!sds) return;
+	oio_str_clean (&sds->session_id);
 	oio_str_clean (&sds->ns);
 	oio_str_clean (&sds->proxy);
 	oio_str_clean (&sds->proxy_local);
@@ -869,6 +872,7 @@ oio_sds_download (struct oio_sds_s *sds, struct oio_sds_dl_src_s *dl,
 {
 	if (!sds || !dl || !snk || !dl->url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
+	oio_ext_set_reqid (sds->session_id);
 
 	snk->out_size = 0;
 
@@ -967,6 +971,7 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 {
 	if (!sds || !dst)
 		return NULL;
+	oio_ext_set_reqid (sds->session_id);
 
 	struct oio_sds_ul_s *ul = g_malloc0 (sizeof(*ul));
 	ul->finished = FALSE;
@@ -1701,6 +1706,7 @@ oio_sds_list (struct oio_sds_s *sds, struct oio_sds_list_param_s *param,
 		return (struct oio_error_s*) NEWERROR(CODE_BAD_REQUEST, "Missing argument");
 	if (!oio_url_has_fq_container (param->url))
 		return (struct oio_error_s*) NEWERROR(CODE_BAD_REQUEST, "Partial URI");
+	oio_ext_set_reqid (sds->session_id);
 
 	GRID_DEBUG("LIST prefix %s marker %s end %s max %"G_GSIZE_FORMAT,
 		param->prefix, param->marker, param->end, param->max_items);
@@ -1780,7 +1786,7 @@ oio_sds_link (struct oio_sds_s *sds, struct oio_url_s *url, const char *content_
 {
 	if (!sds || !url || !content_id)
 		return (struct oio_error_s*) BADREQ("Missing argument");
-
+	oio_ext_set_reqid (sds->session_id);
 	return (struct oio_error_s*) oio_proxy_call_content_link (sds->h, url, content_id);
 }
 
@@ -1807,7 +1813,7 @@ oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *url)
 {
 	if (!sds || !url)
 		return (struct oio_error_s*) BADREQ("Missing argument");
-
+	oio_ext_set_reqid (sds->session_id);
 	return (struct oio_error_s*) oio_proxy_call_content_delete (sds->h, url);
 }
 
@@ -1816,7 +1822,7 @@ oio_sds_has (struct oio_sds_s *sds, struct oio_url_s *url, int *phas)
 {
 	if (!sds || !url || !phas)
 		return (struct oio_error_s*) BADREQ("Missing argument");
-
+	oio_ext_set_reqid (sds->session_id);
 	GError *err = oio_proxy_call_content_show (sds->h, url, NULL);
 	*phas = (err == NULL);
 	if (err && (CODE_IS_NOTFOUND(err->code) || err->code == CODE_NOT_FOUND))
