@@ -1140,9 +1140,9 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 	guint total = g_slist_length (ul->http_dests);
 	GRID_TRACE("%s uploads %u/%u failed", __FUNCTION__, failures, total);
 
-	if (failures >= total)
+	if (failures >= total) {
 		err = NEWERROR(CODE_PLATFORM_ERROR, "No upload succeeded");
-	else {
+	} else {
 		/* patch the chunk sizes and positions */
 		ul->mc->size = ul->local_done;
 		for (GSList *l=ul->mc->chunks; l ;l=l->next) {
@@ -1469,11 +1469,21 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		if (oio_sds_upload_greedy (ul)) {
 			GRID_TRACE("%s (%p) greedy!", __FUNCTION__, ul);
 			guint8 b[8192];
-			gssize l = src->data.hook.cb (src->data.hook.ctx, b, sizeof(b));
-			if (l < 0)
-				err = (struct oio_error_s*) SYSERR("data hook error");
-			else
-				err = oio_sds_upload_feed (ul, b, l);
+			size_t l = src->data.hook.cb (src->data.hook.ctx, b, sizeof(b));
+			switch (l) {
+				case OIO_SDS_UL__ERROR:
+					err = (struct oio_error_s*) SYSERR("data hook error");
+					break;
+				case OIO_SDS_UL__DONE:
+					err = oio_sds_upload_feed (ul, b, 0);
+					break;
+				case OIO_SDS_UL__NODATA:
+					GRID_INFO("%s No data ready from user's hook", __FUNCTION__);
+					break;
+				default:
+					err = oio_sds_upload_feed (ul, b, l);
+					break;
+			}
 		}
 
 		/* do the I/O things */
@@ -1510,16 +1520,17 @@ oio_sds_upload (struct oio_sds_s *sds, struct oio_sds_ul_src_s *src,
 			"source type not managed");
 }
 
-static ssize_t
+static size_t
 _read_FILE (void *u, unsigned char *ptr, size_t len)
 {
 	FILE *in = u;
 	GRID_TRACE("Reading at most %"G_GSIZE_FORMAT, len);
 	if (ferror(in))
-		return (ssize_t)-1;
+		return OIO_SDS_UL__ERROR;
 	if (feof(in))
-		return 0;
-	return fread(ptr, 1, len, in);
+		return OIO_SDS_UL__DONE;
+	size_t r = fread(ptr, 1, len, in);
+	return (r == 0) ? OIO_SDS_UL__NODATA : r;
 }
 
 struct oio_error_s*
