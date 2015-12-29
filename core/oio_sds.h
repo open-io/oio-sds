@@ -214,7 +214,11 @@ void oio_sds_upload_clean (struct oio_sds_ul_s *ul);
  * API call, you just have to provide some data. When the data is called,
  * it has to be available. */
 
-typedef ssize_t (*oio_sds_ul_hook_f) (void*, unsigned char *p, size_t s);
+#define OIO_SDS_UL__ERROR  ((size_t)-2)
+#define OIO_SDS_UL__DONE   ((size_t)-1)
+#define OIO_SDS_UL__NODATA ((size_t)0)
+
+typedef size_t (*oio_sds_ul_hook_f) (void*, unsigned char *p, size_t s);
 
 enum oio_sds_ul_src_type_e
 {
