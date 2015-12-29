@@ -185,8 +185,8 @@ meta2_backend_init(struct meta2_backend_s **result,
 
 	m2->flag_precheck_on_generate = TRUE;
 
-	err = sqlx_repository_configure_type(m2->backend.repo, NAME_SRVTYPE_META2,
-			NULL, schema);
+	err = sqlx_repository_configure_type(m2->backend.repo,
+			NAME_SRVTYPE_META2, schema);
 	if (NULL != err) {
 		meta2_backend_clean(m2);
 		g_prefix_error(&err, "Backend init error: ");
@@ -1207,31 +1207,6 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b, struct oio_url_s *url,
 }
 
 /* dedup -------------------------------------------------------------------- */
-
-GError*
-meta2_backend_update_alias_header(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *beans)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_repctx_s *repctx = NULL;
-	guint32 max_versions = 0;
-
-	EXTRA_ASSERT(m2b != NULL);
-	EXTRA_ASSERT(url != NULL);
-
-	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
-	if (!err) {
-		max_versions = _maxvers(sq3, m2b);
-		if (!(err = _transaction_begin(sq3, url, &repctx))) {
-			err = m2db_update_alias_header(sq3, max_versions, url, beans);
-			err = sqlx_transaction_end(repctx, err);
-		}
-		m2b_close(sq3);
-	}
-
-	return err;
-}
 
 GError*
 meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,

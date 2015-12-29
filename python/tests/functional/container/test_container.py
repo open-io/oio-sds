@@ -1,8 +1,20 @@
 import binascii
 import logging
-import struct
+import random
 import simplejson as json
+import struct
 from tests.utils import BaseTestCase
+
+
+def random_content():
+    return 'content-{0}'.format(random.randint(0,65536))
+
+
+def merge(s0,s1):
+    out = dict()
+    out.update(s0)
+    out.update(s1)
+    return out
 
 
 def gen_chunks(n):
@@ -17,7 +29,7 @@ def gen_chunks(n):
                "content": h}
 
 
-def names():
+def gen_names():
     index = 0
     for c0 in "01234567":
         for c1 in "01234567":
@@ -36,13 +48,13 @@ def user_props(b):
     return dict((k, v) for k, v in b.items() if k.startswith("user."))
 
 
-class TestMeta2Functional(BaseTestCase):
+class TestMeta2Containers(BaseTestCase):
 
     def setUp(self):
-        super(TestMeta2Functional, self).setUp()
+        super(TestMeta2Containers, self).setUp()
 
     def tearDown(self):
-        super(TestMeta2Functional, self).tearDown()
+        super(TestMeta2Containers, self).tearDown()
         try:
             ref = 'plop-0'
             params = self.param_ref(ref)
@@ -70,7 +82,7 @@ class TestMeta2Functional(BaseTestCase):
                                  headers={'X-oio-action-mode': 'force'})
         self.assertEqual(resp.status_code, 204)
 
-    def test_cycle(self):
+    def test_cycle_container(self):
         params = self.param_ref('plop-0')
 
         resp = self.session.get(self.url_container('show'), params=params)
@@ -108,7 +120,7 @@ class TestMeta2Functional(BaseTestCase):
         self._create(params, 204)
 
         # Fill some contents
-        for i, name in names():
+        for i, name in gen_names():
             h = binascii.hexlify(struct.pack("q", i))
             logging.debug("id=%s name=%s", h, name)
             chunk = {"url": "http://127.0.0.1:6008/"+h,
@@ -333,3 +345,209 @@ class TestMeta2Functional(BaseTestCase):
 
         self._create(params, 204)
         self._raw_insert(params, 204, chunks)
+
+class TestMeta2Contents(BaseTestCase):
+
+    def setUp(self):
+        super(TestMeta2Contents, self).setUp()
+        self._reload()
+
+    def tearDown(self):
+        super(TestMeta2Contents, self).tearDown()
+        try:
+            ref = 'plop-0'
+            params = self.param_ref(ref)
+            self.session.post(self.url_container('destroy'),
+                              params=params,
+                              headers={'X-oio-action-mode': 'force'})
+            self.session.post(self._url_ref('destroy'),
+                              params=params,
+                              headers={'X-oio-action-mode': 'force'})
+        except:
+            pass
+
+    def valid_chunks(self, tab):
+        self.assertIsInstance(tab, list)
+        for chunk in tab:
+            self.assertIsInstance(chunk, dict)
+            self.assertListEqual(sorted(chunk.keys()),
+                                 sorted(['url','pos','hash','size']))
+            self.assertIsInstance(chunk['size'], int)
+        return True
+
+    def test_prepare(self):
+        headers = {'X-oio-action-mode': 'autocreate'}
+        params = self.param_content ('plop-0', random_content())
+
+        resp = self.session.post(self.url_content('prepare'),
+                                 params=params)
+        self.assertError(resp, 400, 400)
+        resp = self.session.post(self.url_content('prepare'),
+                                 params=params,
+                                 data=json.dumps({'size':1024}))
+        self.assertError(resp, 404, 406)
+        resp = self.session.post(self.url_content('prepare'),
+                                 params=params,
+                                 data=json.dumps({'size':1024}),
+                                 headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        self.assertTrue(self.valid_chunks(resp.json()))
+        # TODO test /content/prepare with additional useless parameters
+        # TODO test /content/prepare with invalid sizes
+
+    def test_spare(self):
+        params = self.param_content ('plop-0', random_content())
+        resp = self.session.post(self.url_content('spare'), params=params)
+        self.assertError(resp, 400, 400)
+        resp = self.session.post(self.url_content('spare'), params=params,
+                                 data=json.dumps({}))
+        self.assertError(resp, 400, 400)
+        resp = self.session.post(self.url_content('spare'), params=params,
+                                 data=json.dumps({"notin":"", "broken":""}))
+        self.assertError(resp, 400, 400)
+        resp = self.session.post(self.url_content('spare'), params=params,
+                                 data=json.dumps({"notin":[], "broken":[]}))
+        self.assertError(resp, 400, 400)
+
+        # TODO check SPARE requests reaching the meta2 server
+
+    def test_copy(self):
+        ref = 'plop-0'
+        path = random_content ()
+        to = '{0}/{1}/{2}//{3}'.format(self.ns, self.account, ref, path+'-COPY')
+        headers = {'Destination': to, 'X-oio-action-mode': 'autocreate'}
+
+        resp = self.session.post(self.url_content('copy'))
+        self.assertError(resp, 400, 400)
+
+        params = self.param_ref (ref)
+        resp = self.session.post(self.url_content('copy'), params=params)
+        self.assertError(resp, 400, 400)
+
+        params = self.param_content (ref, path)
+        resp = self.session.post(self.url_content('copy'), params=params)
+        self.assertError(resp, 400, 400)
+
+        # No user, no container, no content
+        resp = self.session.post(self.url_content('copy'),
+                                 headers=headers, params=params)
+        self.assertError(resp, 403, 406)
+
+        # No content
+        resp = self.session.post(self.url_container('create'),
+                                 params=params, headers=headers)
+        self.assertEqual(resp.status_code, 204)
+        resp = self.session.post(self.url_content('copy'),
+                                 headers=headers, params=params)
+        self.assertError(resp, 403, 420)
+
+    def test_cycle_properties(self):
+        ref = 'plop-0'
+        path = random_content ()
+        headers = {'X-oio-action-mode': 'autocreate'}
+        params = self.param_content (ref, path)
+
+        def get_ok(expected):
+            resp = self.session.post(self.url_content('get_properties'), params=params)
+            self.assertEqual(resp.status_code, 200)
+            body = resp.json()
+            self.assertIsInstance(body, dict)
+            self.assertDictEqual(body, expected)
+
+        def del_ok(keys):
+            resp = self.session.post(self.url_content('del_properties'),
+                                     params=params, data=json.dumps(keys))
+            self.assertEqual(resp.status_code, 204)
+
+        def set_ok(kv):
+            resp = self.session.post(self.url_content('set_properties'),
+                                     params=params, data=json.dumps(kv))
+            self.assertEqual(resp.status_code, 204)
+
+        # GetProperties on no content
+        resp = self.session.post(self.url_content('get_properties'), params=params)
+        self.assertError(resp, 404, 406)
+
+        # Create the content
+        resp = self.session.post(self.url_content('prepare'),
+                data=json.dumps({'size':1024}),
+                params=params,
+                headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        chunks = resp.json()
+
+        headers = {'X-oio-action-mode': 'autocreate',
+                   'X-oio-content-meta-length': 1024,}
+        resp = self.session.post(self.url_content('create'),
+                                 params=params,
+                                 headers=headers,
+                                 data=json.dumps(chunks))
+        self.assertEqual(resp.status_code, 204)
+
+        p0 = { random_content(): random_content() }
+        p1 = { random_content(): random_content() }
+
+        get_ok ({})
+        set_ok (p0)
+        set_ok (p1)
+        get_ok(merge(p0,p1))
+        del_ok(p0.keys())
+        get_ok(p1)
+        del_ok(p0.keys())
+        get_ok(p1)
+
+    def test_cycle_content(self):
+        ref = 'plop-0'
+        path = random_content ()
+        headers = {'X-oio-action-mode': 'autocreate'}
+        params = self.param_content (ref, path)
+
+        resp = self.session.get(self.url_content('show'), params=params)
+        self.assertError(resp, 404, 406)
+
+        resp = self.session.post(self.url_content('touch'), params=params)
+        self.assertError(resp, 403, 406)
+
+        resp = self.session.post(self.url_content('prepare'),
+                                 data=json.dumps({'size':1024}),
+                                 params=params,
+                                 headers=headers)
+        self.assertEqual(resp.status_code, 200)
+        chunks = resp.json()
+
+        headers = {'X-oio-action-mode': 'autocreate',
+                   'X-oio-content-meta-length': 1024,}
+        resp = self.session.post(self.url_content('create'),
+                                 params=params,
+                                 headers=headers,
+                                 data=json.dumps(chunks))
+        self.assertEqual(resp.status_code, 204)
+
+        ## FIXME check re-create depending on the container's versioning policy
+        #resp = self.session.post(self.url_content('create'),
+        #                         params=params,
+        #                         headers=headers,
+        #                         data=json.dumps(chunks))
+        #self.assertEqual(resp.status_code, 201)
+
+        resp = self.session.get(self.url_content('show'), params=params)
+        self.assertEqual(resp.status_code, 200)
+
+        to = '{0}/{1}/{2}//{3}-COPY'.format(self.ns, self.account, ref, path)
+        headers = {'Destination': to}
+        resp = self.session.post(self.url_content('copy'),
+                                 headers=headers, params=params)
+        self.assertEqual(resp.status_code, 204)
+
+        resp = self.session.get(self.url_content('show'), params=params)
+        self.assertEqual(resp.status_code, 200)
+
+        resp = self.session.post(self.url_content('delete'), params=params)
+        self.assertEqual(resp.status_code, 204)
+
+        resp = self.session.get(self.url_content('show'), params=params)
+        self.assertError(resp, 404, 420)
+
+        resp = self.session.post(self.url_content('delete'), params=params)
+        self.assertError(resp, 404, 420)
+

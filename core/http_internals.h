@@ -67,9 +67,12 @@ GError * oio_proxy_call_content_link (CURL *h, struct oio_url_s *u,
 struct oio_proxy_content_prepare_out_s
 {
 	GString *body;
-	gchar *header_chunksize;
+	gchar *header_chunk_size;
 	gchar *header_version;
 	gchar *header_content;
+	gchar *header_stgpol;
+	gchar *header_chunk_method;
+	gchar *header_mime_type;
 };
 
 GError * oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
@@ -80,8 +83,9 @@ struct oio_proxy_content_create_in_s
 {
 	gsize size;
 	gint64 version;
-	gchar *content;
+	const char *content;
 	GString *chunks;
+	const char *hash;
 };
 
 GError * oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,

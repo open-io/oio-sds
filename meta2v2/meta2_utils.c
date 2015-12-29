@@ -943,9 +943,9 @@ m2db_real_put_alias(struct sqlx_sqlite3_s *sq3, struct put_args_s *args)
 			CONTENTS_HEADERS_set2_id(bean, args->uid, args->uid_size);
 			CONTENTS_HEADERS_set_ctime(bean, now);
 			CONTENTS_HEADERS_set_mtime(bean, now);
-			lazy_set_str (CONTENTS_HEADERS, bean, chunk_method, "bytes");
-			lazy_set_str (CONTENTS_HEADERS, bean, mime_type, "application/octet-stream");
-			lazy_set_str (CONTENTS_HEADERS, bean, policy, "NONE");
+			lazy_set_str (CONTENTS_HEADERS, bean, chunk_method, OIO_DEFAULT_CHUNKMETHOD);
+			lazy_set_str (CONTENTS_HEADERS, bean, mime_type, OIO_DEFAULT_MIMETYPE);
+			lazy_set_str (CONTENTS_HEADERS, bean, policy, OIO_DEFAULT_STGPOL);
 		}
 		else if (DESCR(bean) == &descr_struct_CHUNKS) {
 			CHUNKS_set2_content(bean, args->uid, args->uid_size);
@@ -1441,93 +1441,6 @@ out:
 	return err;
 }
 
-/* ----- MetaInformations update (stgpol, etc...) ----- */
-
-struct update_alias_header_ctx_s {
-	GPtrArray *tmp;
-	guint8 *uid;
-	gsize uid_size;
-	gint64 old_version;
-	gboolean versioning;
-};
-
-static void
-_update_new_bean(struct update_alias_header_ctx_s *ctx, gpointer bean)
-{
-	if (DESCR(bean) == &descr_struct_ALIASES) {
-		bean = _bean_dup(bean);
-		ALIASES_set_version(bean, ((ctx->versioning) ? ctx->old_version + 1 : ctx->old_version));
-		ALIASES_set2_content(bean, ctx->uid, ctx->uid_size);
-		g_ptr_array_add(ctx->tmp, bean);
-		return;
-	}
-
-	if (DESCR(bean) == &descr_struct_CONTENTS_HEADERS) {
-		bean = _bean_dup(bean);
-		CONTENTS_HEADERS_set2_id(bean, ctx->uid, ctx->uid_size);
-		g_ptr_array_add(ctx->tmp, bean);
-		return;
-	}
-
-	if (DESCR(bean) == &descr_struct_CHUNKS) {
-		bean = _bean_dup(bean);
-		CHUNKS_set2_content(bean, ctx->uid, ctx->uid_size);
-		g_ptr_array_add(ctx->tmp, bean);
-		return;
-	}
-
-	/* other bean types are ignored and discarded */
-
-	g_ptr_array_add(ctx->tmp, _bean_dup(bean));
-}
-
-GError*
-m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct oio_url_s *url, GSList *beans)
-{
-	struct bean_ALIASES_s *latest = NULL;
-	GError *err = NULL;
-
-	// Sanity checks
-	GRID_TRACE("M2 UPDATE ALIAS HEADER(%s)", oio_url_get(url, OIOURL_WHOLE));
-
-	EXTRA_ASSERT(sq3 != NULL);
-	EXTRA_ASSERT(url != NULL);
-
-	if (!oio_url_has(url, OIOURL_PATH))
-		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
-
-	RANDOM_UID(uid,uid_size);
-	struct update_alias_header_ctx_s ctx;
-	memset(&ctx, 0, sizeof(ctx));
-
-	ctx.tmp = g_ptr_array_new();
-	ctx.old_version = G_MININT64;
-	ctx.versioning = VERSIONS_ENABLED(max_versions);
-	ctx.uid = (guint8*) &uid;
-	ctx.uid_size = uid_size;
-
-	// Merge the previous versions of the beans with the new part
-	if (NULL != (err = m2db_latest_alias(sq3, url, &latest))) {
-		g_prefix_error(&err, "Latest error: ");
-		return err;
-	}
-	ctx.old_version = ALIASES_get_version(latest);
-
-	/* append and mangle the new beans */
-	GRID_TRACE("UDPATE NEW BEAN => v + 1");
-	for (; beans ;beans=beans->next) {
-		_update_new_bean(&ctx, beans->data);
-	}
-
-	/* Now save the whole */
-	err = _db_save_beans_array(sq3->db, ctx.tmp);
-
-	_bean_clean(latest);
-	_bean_cleanv2(ctx.tmp);
-	return err;
-}
-
 /* GENERATOR ---------------------------------------------------------------- */
 
 struct gen_ctx_s
@@ -1583,7 +1496,7 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	CONTENTS_HEADERS_nullify_hash(header);
 	CONTENTS_HEADERS_set_ctime(header, now / G_TIME_SPAN_SECOND);
 	CONTENTS_HEADERS_set_mtime(header, now / G_TIME_SPAN_SECOND);
-	CONTENTS_HEADERS_set2_mime_type(header, "application/octet-stream");
+	CONTENTS_HEADERS_set2_mime_type(header, OIO_DEFAULT_MIMETYPE);
 	chunk_method = storage_policy_to_chunk_method(ctx->pol);
 	CONTENTS_HEADERS_set_chunk_method(header, chunk_method);
 	g_string_free(chunk_method, TRUE);
@@ -1680,10 +1593,6 @@ static GError*
 _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 {
 	GError *err = NULL;
-	/* Chunk position */
-	guint pos;
-	/* Current allocated size */
-	gint64 s;
 	/* Storage policy storage class */
 	const struct storage_class_s *stgclass;
 	gint distance, copies;
@@ -1696,7 +1605,8 @@ _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 
 	(void) distance;
 
-	for (pos=0,s=0; s < MAX(ctx->size,1) ;) {
+	guint pos = 0;
+	for (gint64 s=0; s < MAX(ctx->size,1) ; s += ctx->chunk_size) {
 		struct service_info_s **psi, **siv = NULL;
 
 		struct lb_next_opt_s opt;
@@ -1720,9 +1630,7 @@ _m2_generate_DUPLI(struct gen_ctx_s *ctx)
 			_m2_generate_content_chunk(ctx, *psi, pos, ctx->chunk_size, -1, FALSE);
 
 		service_info_cleanv(siv, FALSE);
-
 		++ pos;
-		s += ctx->chunk_size;
 	}
 
 	return err;

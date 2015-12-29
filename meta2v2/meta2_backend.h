@@ -194,9 +194,6 @@ GError* meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 GError* meta2_backend_get_max_versions(struct meta2_backend_s *m2b,
 		struct oio_url_s *url, gint64 *result);
 
-GError* meta2_backend_update_alias_header(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, GSList *beans);
-
 /** Generate spare chunk (in form of a chunk_info list). This function takes
  * care of the storage policy during the chunks generation (distance,
  * nb_chunks,...) */

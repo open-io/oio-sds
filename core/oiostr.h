@@ -84,6 +84,10 @@ const char * oio_str_autocontainer_name (const char *src, char *dst,
 const char * oio_str_autocontainer_hash (const guint8 *src, gsize src_len,
 		gchar *dst, const struct oio_str_autocontainer_config_s *cfg);
 
+void oio_str_upper(register gchar *s);
+
+void oio_str_lower(register gchar *s);
+
 #ifdef __cplusplus
 }
 #endif

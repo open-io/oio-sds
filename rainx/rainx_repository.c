@@ -234,7 +234,11 @@ request_load_chunk_info(request_rec *request, dav_resource *resource)
 	LOAD_HEADER2(content.version,        RAWX_HEADER_PREFIX "content-version");
 	LOAD_HEADER2(content.size,           RAWX_HEADER_PREFIX "content-size");
 	LOAD_HEADER2(content.chunk_nb,       RAWX_HEADER_PREFIX "content-chunksnb");
-	LOAD_HEADER2(content.storage_policy, RAWX_HEADER_PREFIX "content-storagepolicy");
+
+	LOAD_HEADER2(content.storage_policy, RAWX_HEADER_PREFIX "content-storage-policy");
+	LOAD_HEADER2(content.mime_type,      RAWX_HEADER_PREFIX "content-mime-type");
+	LOAD_HEADER2(content.chunk_method,   RAWX_HEADER_PREFIX "content-chunk-method");
+
 	LOAD_HEADER2(content.rawx_list,      RAWX_HEADER_PREFIX "rawxlist");
 	LOAD_HEADER2(content.spare_rawx_list,RAWX_HEADER_PREFIX "sparerawxlist");
 
@@ -716,6 +720,7 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 			temp_content.container_id, temp_content.chunk_nb,
 			temp_content.path, temp_content.content_id,
 			temp_content.version, temp_content.size);
+	/* TODO JFS: set the storage-policy, mime-type, chunk-method */
 
 	/* Finalizing custom header */
 	int startid = strlen(

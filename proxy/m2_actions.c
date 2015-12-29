@@ -1330,6 +1330,8 @@ _m2_json_spare (struct req_args_s *args, struct json_object *jbody, GSList ** ou
 		_bean_cleanl2 (broken);
 		return err;
 	}
+	if (!notin && !broken)
+		return BADREQ("Empty beans sets");
 
 	GSList *obeans = NULL;
 	GError *hook (struct meta1_service_url_s * m2, gboolean *next) {
@@ -1437,7 +1439,10 @@ action_m2_content_propset (struct req_args_s *args, struct json_object *jargs)
 		return m2v2_remote_execute_PROP_SET (m2->host, args->url, flags, beans);
 	}
 	GError *err = _resolve_meta2 (args, hook);
-	return _reply_properties (args, err, beans);
+	_bean_cleanl2 (beans);
+	if (err && CODE_IS_NOTFOUND(err->code))
+		return _reply_forbidden_error (args, err);
+	return _reply_m2_error (args, err);
 }
 
 static enum http_rc_e

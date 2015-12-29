@@ -186,7 +186,7 @@ void sqlx_repository_configure_maxbases(sqlx_repository_t *repo,
 
 /** Register a new DB type with its schema.  */
 GError* sqlx_repository_configure_type(sqlx_repository_t *repo,
-		const gchar *type, const gchar *version, const gchar *schema);
+		const gchar *type, const gchar *schema);
 
 /** Set open timeout for bases currently in use by another thread.
  * @param timeout milliseconds */

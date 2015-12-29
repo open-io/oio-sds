@@ -192,9 +192,6 @@ GError* m2v2_remote_execute_PROP_SET(const char *target,
 GError* m2v2_remote_execute_PROP_GET(const char *target,
 		struct oio_url_s *url, guint32 flags, GSList **out);
 
-GError* m2v2_remote_execute_STGPOL(const char *target,
-		struct oio_url_s *url, const char *pol, GSList **out);
-
 GError* m2v2_remote_execute_EXITELECTION(const char *target,
 		struct oio_url_s *url);
 

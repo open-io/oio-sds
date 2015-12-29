@@ -20,6 +20,8 @@ License along with this library.
 #include <string.h>
 #include <stdarg.h>
 
+#include <core/oiostr.h>
+
 #include "./metautils_strings.h"
 #include "./metautils_bits.h"
 #include "./metautils_hashstr.h"

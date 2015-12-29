@@ -315,3 +315,16 @@ oio_strv_append(gchar **tab, gchar *s)
 	return tab;
 }
 
+void
+oio_str_upper(register gchar *s)
+{
+	for (; *s ;++s)
+		*s = g_ascii_toupper(*s);
+}
+
+void
+oio_str_lower(register gchar *s)
+{
+	for (; *s ;++s)
+		*s = g_ascii_tolower(*s);
+}

@@ -62,6 +62,18 @@ extern "C" {
 #  define OIO_CONFIG_LOCAL_PATH ".oio/sds.conf"
 # endif
 
+# ifndef OIO_DEFAULT_STGPOL
+#  define OIO_DEFAULT_STGPOL "NONE"
+# endif
+
+# ifndef OIO_DEFAULT_CHUNKMETHOD
+#  define OIO_DEFAULT_CHUNKMETHOD "bytes"
+# endif
+
+# ifndef OIO_DEFAULT_MIMETYPE
+#  define OIO_DEFAULT_MIMETYPE "application/octet-stream"
+# endif
+
 # define OIO_CFG_PROXY        "proxy"
 # define OIO_CFG_PROXYLOCAL   "proxy-local"
 # define OIO_CFG_PROXY_CONSCIENCE "proxy-conscience"

@@ -206,9 +206,6 @@ GError* m2db_get_container_status(struct sqlx_sqlite3_s *sq3, guint32 *status);
 
 GError* m2db_set_container_status(struct sqlx_sqlite3_s *sq3, guint32 r);
 
-GError* m2db_update_alias_header(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		struct oio_url_s *url, GSList *beans);
-
 /**
  * @param db
  * @param max_versions Maximum number of versions to keep
