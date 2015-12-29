@@ -248,6 +248,10 @@ class TestContentFactory(BaseTestCase):
                                         old_content.content_id)
 
     def _test_change_policy(self, data_size, old_policy, new_policy):
+        if (old_policy == "RAIN" or new_policy == "RAIN") \
+                and len(self.conf['rawx']) < 8:
+            self.skipTest("RAIN: Need more than 8 rawx to run")
+
         data = random_data(data_size)
         obj_type = {
             "SINGLE": DupContent,
@@ -305,14 +309,14 @@ class TestContentFactory(BaseTestCase):
 
     def test_change_content_with_same_policy(self):
         data = random_data(10)
-        old_content = self._new_content("RAIN", data)
+        old_content = self._new_content("TWOCOPIES", data)
         changed_content = self.content_factory.change_policy(
-            old_content.container_id, old_content.content_id, "RAIN")
+            old_content.container_id, old_content.content_id, "TWOCOPIES")
         self.assertEqual(old_content.content_id, changed_content.content_id)
 
     def test_change_policy_unknown_content(self):
         self.assertRaises(ContentNotFound, self.content_factory.change_policy,
-                          self.container_id, "1234", "RAIN")
+                          self.container_id, "1234", "SINGLE")
 
     def test_change_policy_unknown_storage_policy(self):
         data = random_data(10)
