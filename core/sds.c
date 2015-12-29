@@ -488,7 +488,7 @@ _download_range_from_chunk (struct _download_ctx_s *dl,
 		/* TODO compute a MD5SUM */
 		/* TODO guard against to many bytes received from the rawx */
 		if (0 == dl->dst->data.hook.cb (dl->dst->data.hook.ctx, data, total)) {
-			GRID_WARN("user callback managed %"G_GSIZE_FORMAT" bytes", total);
+			GRID_TRACE("user callback managed %"G_GSIZE_FORMAT" bytes", total);
 			*p_nbread += total;
 			return total;
 		} else {
