@@ -88,6 +88,9 @@ class ContentFactory(object):
 
     def change_policy(self, container_id, content_id, new_policy):
         old_content = self.get(container_id, content_id)
+        if old_content.stgpol_name == new_policy:
+            return old_content
+
         new_content = self.new(container_id, old_content.path,
                                old_content.length, new_policy)
 

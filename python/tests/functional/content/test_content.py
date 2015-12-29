@@ -274,6 +274,8 @@ class TestContentFactory(BaseTestCase):
 
         self.assertEqual(downloaded_data, data)
 
+    # TODO add tests with RAIN empty contents when supported
+
     def test_change_content_1_byte_policy_single_to_rain(self):
         self._test_change_policy(1, "SINGLE", "RAIN")
 
@@ -300,6 +302,13 @@ class TestContentFactory(BaseTestCase):
 
     def test_change_content_2xchunksize_bytes_policy_3copies_to_single(self):
         self._test_change_policy(self.chunk_size * 2, "THREECOPIES", "SINGLE")
+
+    def test_change_content_with_same_policy(self):
+        data = random_data(10)
+        old_content = self._new_content("RAIN", data)
+        changed_content = self.content_factory.change_policy(
+            old_content.container_id, old_content.content_id, "RAIN")
+        self.assertEqual(old_content.content_id, changed_content.content_id)
 
     def test_change_policy_unknown_content(self):
         self.assertRaises(ContentNotFound, self.content_factory.change_policy,
