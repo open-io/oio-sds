@@ -1186,14 +1186,19 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
 
 	struct oio_error_s *err = NULL;
-	_assert_no_upload (ul);
+
+	g_assert (NULL == ul->put);
+	g_assert (NULL == ul->http_dests);
+	g_assert (NULL == ul->checksum_chunk);
 
 	/* ensure we have a new destination (metachunk) */
-	if (g_queue_is_empty (ul->metachunk_ready)) {
-		if (NULL != (err = oio_sds_upload_prepare (ul, 1)))
-			return (GError*) err;
+	if (!ul->mc) {
+		if (g_queue_is_empty (ul->metachunk_ready)) {
+			if (NULL != (err = oio_sds_upload_prepare (ul, 1)))
+				return (GError*) err;
+		}
+		ul->mc = g_queue_pop_head (ul->metachunk_ready);
 	}
-	ul->mc = g_queue_pop_head (ul->metachunk_ready);
 	g_assert (NULL != ul->mc);
 
 	/* patch the metachunk characteristics (position now known) */
@@ -1284,7 +1289,9 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 		}
 	} else {
 		/* No upload running ... */
-		_assert_no_upload (ul);
+		g_assert (NULL == ul->http_dests);
+		g_assert (NULL == ul->checksum_chunk);
+		g_assert (0 == ul->local_done);
 
 		/* Check if we need to start a new one */
 		GRID_TRACE("%s (%p) No upload currently running", __FUNCTION__, ul);
@@ -1555,6 +1562,8 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		err = SYSERR("fdopen() error: (%d) %s", errno, strerror(errno));
 	else {
 		lseek (fd, off, SEEK_SET);
+		if (len == 0 || len == (size_t)-1)
+			len = st.st_size;
 		struct oio_sds_ul_src_s src0 = {
 			.type = OIO_UL_SRC_HOOK_SEQUENTIAL, .data = { .hook = {
 				.cb = _read_FILE,
