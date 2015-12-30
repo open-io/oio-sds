@@ -14,7 +14,10 @@ def gen_put_headers(meta):
         chunk_headers['content_id']: meta['content_id'],
         chunk_headers['content_path']: meta['content_path'],
         chunk_headers['content_size']: meta['content_size'],
-        chunk_headers['content_version']: meta['content_version']
+        chunk_headers['content_version']: meta['content_version'],
+        chunk_headers['content_mimetype']: meta['content_mimetype'],
+        chunk_headers['content_chunkmethod']: meta['content_chunkmethod'],
+        chunk_headers['content_policy']: meta['content_policy']
         }
     if meta.get('chunk_hash'):
         headers.update({chunk_headers['chunk_hash']: meta['chunk_hash']})
