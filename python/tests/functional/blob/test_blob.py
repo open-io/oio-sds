@@ -27,6 +27,9 @@ class TestBlobFunctional(BaseTestCase):
         return {
             'X-oio-chunk-meta-content-id': '0123456789ABCDEF',
             'X-oio-chunk-meta-content-path': 'test-plop',
+            'X-oio-chunk-meta-content-mime-type': 'application/octet-stream',
+            'X-oio-chunk-meta-content-chunk-method': 'bytes',
+            'X-oio-chunk-meta-content-storage-policy': 'TESTPOLICY',
             'X-oio-chunk-meta-content-size': len(data),
             'X-oio-chunk-meta-content-chunksnb': 1,
             'X-oio-chunk-meta-container-id': '1'*64,
