@@ -40,6 +40,7 @@ class TestRainContent(BaseTestCase):
 
         self.namespace = self.conf['namespace']
         self.account = self.conf['account']
+        self.chunk_size = self.conf['chunk_size']
         self.gridconf = {"namespace": self.namespace}
         self.content_factory = ContentFactory(self.gridconf)
         self.container_client = ContainerClient(self.gridconf)
@@ -113,6 +114,21 @@ class TestRainContent(BaseTestCase):
         self.assertEqual(meta['chunk_id'], chunk.id)
         self.assertEqual(meta['chunk_pos'], chunk.pos)
         self.assertEqual(meta['chunk_hash'], chunk.hash)
+
+    def test_chunks_cleanup_when_upload_failed(self):
+        data = random_data(2 * self.chunk_size)
+        content = self.content_factory.new(self.container_id, "titi",
+                                           len(data), "RAIN")
+        self.assertEqual(type(content), RainContent)
+
+        # set bad url for position 1
+        for chunk in content.chunks.filter(pos="1.p0"):
+            chunk.url = "http://127.0.0.1:9/DEADBEEF"
+
+        self.assertRaises(Exception, content.upload, StringIO.StringIO(data))
+        for chunk in content.chunks.exclude(pos="1.p0"):
+            self.assertRaises(NotFound,
+                              self.blob_client.chunk_head, chunk.url)
 
     def _test_rebuild(self, data_size, broken_pos_list):
         data = os.urandom(data_size)

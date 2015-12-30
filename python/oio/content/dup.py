@@ -61,7 +61,7 @@ class DupContent(Content):
         self._meta2_update_spare_chunk(current_chunk, spare_urls[0])
 
     # FIXME upload chunks in parallel
-    def upload(self, stream):
+    def _upload(self, stream):
         global_checksum = hashlib.md5()
         total_bytes_transferred = 0
 
@@ -91,7 +91,6 @@ class DupContent(Content):
                 hdrs["chunk_id"] = chunk.id
 
                 self.blob_client.chunk_put(chunk.url, hdrs, big_buf)
-                # FIXME remove chunks already uploaded in case of error
                 # FIXME skip faulty rawx and continue if one rawx per
                 # pos is good
 

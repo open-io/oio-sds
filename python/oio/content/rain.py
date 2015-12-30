@@ -114,7 +114,6 @@ class RainContent(Content):
 
         resp = self.session.get(self._get_rain_addr(on_the_fly),
                                 headers=headers, stream=True)
-        # FIXME remove chunks already uploaded in case of error
         resp.raise_for_status()
         if on_the_fly:
             return resp.iter_content(READ_CHUNK_SIZE)
@@ -139,7 +138,7 @@ class RainContent(Content):
         self.rebuild_metachunk(current_chunk.metapos,
                                force_broken_chunk=current_chunk)
 
-    def upload(self, stream):
+    def _upload(self, stream):
         global_checksum = hashlib.md5()
         total_bytes_transferred = 0
         content_chunks = []
@@ -193,7 +192,6 @@ class RainContent(Content):
             resp = self.session.put(self._get_rain_addr(),
                                     data=_limit_stream(stream, chunk_size),
                                     headers=headers)
-            # FIXME remove chunks already uploaded in case of error
             resp.raise_for_status()
 
             content_chunks.extend(_decode_chunklist(resp.headers['chunklist']))

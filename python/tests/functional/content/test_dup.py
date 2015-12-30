@@ -120,6 +120,21 @@ class TestDupContent(BaseTestCase):
     def test_single_upload_chunksize_plus_1_bytes(self):
         self._test_upload("SINGLE", self.chunk_size + 1)
 
+    def test_chunks_cleanup_when_upload_failed(self):
+        data = random_data(2 * self.chunk_size)
+        content = self.content_factory.new(self.container_id, "titi",
+                                           len(data), "TWOCOPIES")
+        self.assertEqual(type(content), DupContent)
+
+        # set bad url for position 1
+        for chunk in content.chunks.filter(pos=1):
+            chunk.url = "http://127.0.0.1:9/DEADBEEF"
+
+        self.assertRaises(Exception, content.upload, StringIO.StringIO(data))
+        for chunk in content.chunks.exclude(pos=1):
+            self.assertRaises(NotFound,
+                              self.blob_client.chunk_head, chunk.url)
+
     def _new_content(self, stgpol, data, broken_pos_list):
         old_content = self.content_factory.new(self.container_id, "titi",
                                                len(data), stgpol)

@@ -97,6 +97,17 @@ class Content(object):
         raise NotImplementedError()
 
     def upload(self, stream):
+        try:
+            self._upload(stream)
+        except Exception as e:
+            for chunk in self.chunks:
+                try:
+                    self.blob_client.chunk_delete(chunk.url)
+                except:
+                    pass
+            raise e
+
+    def _upload(self, stream):
         raise NotImplementedError()
 
     def download(self):
