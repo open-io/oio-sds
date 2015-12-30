@@ -89,6 +89,9 @@ class DupContent(Content):
                 hdrs["content_cid"] = self.container_id
                 hdrs["chunk_pos"] = pos
                 hdrs["chunk_id"] = chunk.id
+                hdrs["content_mimetype"] = self.mime_type
+                hdrs["content_chunkmethod"] = self.chunk_method
+                hdrs["content_policy"] = self.stgpol_name
 
                 self.blob_client.chunk_put(chunk.url, hdrs, big_buf)
                 # FIXME skip faulty rawx and continue if one rawx per

@@ -716,11 +716,15 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 			RAWX_HEADER_PREFIX "content-path: %s\n"
 			RAWX_HEADER_PREFIX "content-id: %s\n"
 			RAWX_HEADER_PREFIX "content-version: %s\n"
+			RAWX_HEADER_PREFIX "content-storage-policy: %s\n"
+			RAWX_HEADER_PREFIX "content-mime-type: %s\n"
+			RAWX_HEADER_PREFIX "content-chunk-method: %s\n"
 			RAWX_HEADER_PREFIX "content-size: %s",
 			temp_content.container_id, temp_content.chunk_nb,
 			temp_content.path, temp_content.content_id,
-			temp_content.version, temp_content.size);
-	/* TODO JFS: set the storage-policy, mime-type, chunk-method */
+			temp_content.version, temp_content.storage_policy,
+			temp_content.mime_type, temp_content.chunk_method,
+			temp_content.size);
 
 	/* Finalizing custom header */
 	int startid = strlen(
@@ -1027,10 +1031,15 @@ dav_rainx_write_stream(dav_stream *stream, const void *buf, apr_size_t bufsize)
 			RAWX_HEADER_PREFIX "content-path: %s\n"
 			RAWX_HEADER_PREFIX "content-id: %s\n"
 			RAWX_HEADER_PREFIX "content-version: %s\n"
+			RAWX_HEADER_PREFIX "content-storage-policy: %s\n"
+			RAWX_HEADER_PREFIX "content-mime-type: %s\n"
+			RAWX_HEADER_PREFIX "content-chunk-method: %s\n"
 			RAWX_HEADER_PREFIX "content-size: %s",
 			temp_content.container_id, temp_content.chunk_nb,
 			temp_content.path, temp_content.content_id,
-			temp_content.version, temp_content.size);
+			temp_content.version, temp_content.storage_policy,
+			temp_content.mime_type, temp_content.chunk_method,
+			temp_content.size);
 
 	data_subpools = (apr_pool_t**) apr_pcalloc(stream->r->info->request->pool,
 			rain_params->k * sizeof(apr_pool_t*));
@@ -1373,10 +1382,15 @@ upload_to_rawx(const dav_resource *resource, gboolean* failure_array,
 			RAWX_HEADER_PREFIX "content-path: %s\n"
 			RAWX_HEADER_PREFIX "content-id: %s\n"
 			RAWX_HEADER_PREFIX "content-version: %s\n"
+			RAWX_HEADER_PREFIX "content-storage-policy: %s\n"
+			RAWX_HEADER_PREFIX "content-mime-type: %s\n"
+			RAWX_HEADER_PREFIX "content-chunk-method: %s\n"
 			RAWX_HEADER_PREFIX "content-size: %s",
 			temp_content.container_id, temp_content.chunk_nb,
 			temp_content.path, temp_content.content_id,
-			temp_content.version, temp_content.size);
+			temp_content.version, temp_content.storage_policy,
+			temp_content.mime_type, temp_content.chunk_method,
+			temp_content.size);
 
 	/* Data strips */
 	for (int i = 0; i < data_rawx_list_size; i++) {

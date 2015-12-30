@@ -68,7 +68,7 @@ class TestRainContent(BaseTestCase):
 
         content.upload(StringIO.StringIO(data))
 
-        chunks, meta = self.container_client.content_show(
+        meta, chunks = self.container_client.content_show(
             cid=self.container_id, content=content.content_id)
         chunks = ChunksHelper(chunks)
         self.assertEqual(meta['hash'], md5_data(data))

@@ -160,7 +160,7 @@ class TestRebuilderCrawler(BaseTestCase):
                                 content.chunks[0].id)
 
         # check meta2 information
-        res, _ = self.container_client.content_show(acct=content.account,
+        _, res = self.container_client.content_show(acct=content.account,
                                                     ref=content.container_name,
                                                     content=content.content_id)
 

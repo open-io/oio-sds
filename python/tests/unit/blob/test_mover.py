@@ -52,7 +52,7 @@ class TestBlobMover(unittest.TestCase):
         mover = self.mover
         mover.load_chunk_metadata = Mock(return_value=self.metadata)
         mover.container_client.content_show = Mock(
-            return_value=(self.chunks, {}))
+            return_value=({}, self.chunks))
         mover.container_client.content_spare = Mock(
             return_value=self.new_chunks)
         mover.blob_client.chunk_copy = Mock(

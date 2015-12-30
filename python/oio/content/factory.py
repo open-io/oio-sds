@@ -58,7 +58,7 @@ class ContentFactory(object):
 
     def get(self, container_id, content_id):
         try:
-            chunks, meta = self.container_client.content_show(
+            meta, chunks = self.container_client.content_show(
                 cid=container_id, content=content_id)
         except NotFound:
             raise ContentNotFound("Content %s/%s not found" % (container_id,
@@ -74,7 +74,7 @@ class ContentFactory(object):
         raise InconsistentContent("Unknown storage policy")
 
     def new(self, container_id, path, size, policy):
-        chunks, meta = self.container_client.content_prepare(
+        meta, chunks = self.container_client.content_prepare(
             cid=container_id, path=path, size=size, stgpol=policy)
 
         pol_type, pol_args = self._extract_datasec(meta['policy'])

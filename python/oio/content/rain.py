@@ -109,8 +109,10 @@ class RainContent(Content):
             self._get_metachunk_nb()
         headers[chunk_headers["content_cid"]] = self.container_id
         headers[chunk_headers["chunk_pos"]] = metapos
-        headers[chunk_headers["chunk_size"]] = \
+        headers["X-oio-chunk-meta-chunk-size"] = \
             self._get_metachunk_size(metapos)
+        headers[chunk_headers["content_mimetype"]] = self.mime_type
+        headers[chunk_headers["content_chunkmethod"]] = self.chunk_method
 
         resp = self.session.get(self._get_rain_addr(on_the_fly),
                                 headers=headers, stream=True)
@@ -187,7 +189,9 @@ class RainContent(Content):
                 self._get_metachunk_nb()
             headers[chunk_headers["content_cid"]] = self.container_id
             headers[chunk_headers["chunk_pos"]] = pos
-            headers[chunk_headers["chunk_size"]] = chunk_size
+            headers["X-oio-chunk-meta-chunk-size"] = chunk_size
+            headers[chunk_headers["content_mimetype"]] = self.mime_type
+            headers[chunk_headers["content_chunkmethod"]] = self.chunk_method
 
             resp = self.session.put(self._get_rain_addr(),
                                     data=_limit_stream(stream, chunk_size),

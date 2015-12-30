@@ -163,7 +163,7 @@ class BlobAuditorWorker(object):
             try:
                 content_cid = meta['content_cid']
                 content_path = meta['content_path']
-                data, _ = self.container_client.content_show(
+                _, data = self.container_client.content_show(
                     cid=content_cid, path=content_path)
                 chunk_data = None
                 for c in data:

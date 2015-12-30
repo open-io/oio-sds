@@ -39,12 +39,14 @@ class Content(object):
         self.container_client = ContainerClient(self.conf)
         self.blob_client = BlobClient()
         self.session = requests.Session()
-        self.content_id = metadata["id"]
-        self.stgpol_name = metadata["policy"]
-        self.path = metadata["name"]
-        self.length = int(metadata["length"])
-        self.version = metadata["version"]
-        self.hash = metadata["hash"]
+        self.content_id = self.metadata["id"]
+        self.stgpol_name = self.metadata["policy"]
+        self.path = self.metadata["name"]
+        self.length = int(self.metadata["length"])
+        self.version = self.metadata["version"]
+        self.hash = self.metadata["hash"]
+        self.mime_type = self.metadata["mime-type"]
+        self.chunk_method = self.metadata["chunk-method"]
 
     def _meta2_get_spare_chunk(self, chunks_notin, chunks_broken):
         spare_data = {
@@ -83,7 +85,6 @@ class Content(object):
             cid=self.container_id, data=update_data)
 
     def _meta2_create_object(self):
-        # FIXME add mime-type, chunk-method
         self.container_client.content_create(cid=self.container_id,
                                              path=self.path,
                                              content_id=self.content_id,
@@ -91,6 +92,8 @@ class Content(object):
                                              size=self.length,
                                              checksum=self.hash,
                                              version=self.version,
+                                             chunk_method=self.chunk_method,
+                                             mime_type=self.mime_type,
                                              data=self.chunks.raw())
 
     def rebuild_chunk(self, chunk_id):

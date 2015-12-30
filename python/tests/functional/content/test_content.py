@@ -136,7 +136,7 @@ class TestContentFactory(BaseTestCase):
                 "hash": "DA9D7F72AEEA5791565724424CE45C16"}
         ]
         self.content_factory.container_client.content_show = Mock(
-            return_value=(chunks, meta))
+            return_value=(meta, chunks))
         c = self.content_factory.get("xxx_container_id", "xxx_content_id")
         self.assertEqual(type(c), RainContent)
         self.assertEqual(c.content_id, "3FA2C4A1ED2605005335A276890EC458")
@@ -177,7 +177,7 @@ class TestContentFactory(BaseTestCase):
                 "hash": "E952A419957A6E405BFC53EC65483F73"}
         ]
         self.content_factory.container_client.content_show = Mock(
-            return_value=(chunks, meta))
+            return_value=(meta, chunks))
         c = self.content_factory.get("xxx_container_id", "xxx_content_id")
         self.assertEqual(type(c), DupContent)
         self.assertEqual(c.content_id, "3FA2C4A1ED2605005335A276890EC458")
@@ -223,7 +223,7 @@ class TestContentFactory(BaseTestCase):
                 "hash": "00000000000000000000000000000000"}
         ]
         self.content_factory.container_client.content_prepare = Mock(
-            return_value=(chunks, meta))
+            return_value=(meta, chunks))
         c = self.content_factory.new("xxx_container_id", "titi",
                                      1000, "RAIN")
         self.assertEqual(type(c), RainContent)
