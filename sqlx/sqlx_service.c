@@ -135,8 +135,8 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 	// Positional arguments
 	gsize s = g_strlcpy(ss->ns_name, argv[0], sizeof(ss->ns_name));
 	if (s >= sizeof(ss->ns_name)) {
-		GRID_WARN("Namespace name too long (given=%"G_GSIZE_FORMAT" max=%lu)",
-				s, sizeof(ss->ns_name));
+		GRID_WARN("Namespace name too long (given=%"G_GSIZE_FORMAT" max=%u)",
+				s, (unsigned int)sizeof(ss->ns_name));
 		return FALSE;
 	}
 	GRID_NOTICE("NS configured to [%s]", ss->ns_name);
@@ -150,8 +150,8 @@ _configure_with_arguments(struct sqlx_service_s *ss, int argc, char **argv)
 
 	s = g_strlcpy(ss->volume, argv[1], sizeof(ss->volume));
 	if (s >= sizeof(ss->volume)) {
-		GRID_WARN("Volume name too long (given=%"G_GSIZE_FORMAT" max=%lu)",
-				s, sizeof(ss->volume));
+		GRID_WARN("Volume name too long (given=%"G_GSIZE_FORMAT" max=%u)",
+				s, (unsigned int) sizeof(ss->volume));
 		return FALSE;
 	}
 	GRID_NOTICE("Volume configured to [%s]", ss->volume);

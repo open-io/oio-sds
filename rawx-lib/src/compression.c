@@ -38,24 +38,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define DECOMPRESSION_MAX_BUFSIZE 512000
 
-#if 0
-static gulong
-get_adler_ulong(struct compressed_chunk_s* chunk)
-{
-	gulong result = 0;
-	result = chunk->checksum;
-	return result;
-}
-
-static guint32
-get_adler_uint32(struct compressed_chunk_s* chunk)
-{
-	guint32 result = 0;
-	result = chunk->checksum;
-	return result;
-}
-#endif
-
 gboolean
 init_compression_ctx(struct compression_ctx_s* comp_ctx, const gchar* algo_name)
 {

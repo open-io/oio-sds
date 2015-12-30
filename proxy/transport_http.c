@@ -410,7 +410,7 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 	g_string_append(gstr, r->client->peer_name);
 
 	g_string_append_printf(gstr,
-			" %s %d %ld.%06ld %"G_GSIZE_FORMAT" %s %s t=%ld.%06ld",
+			" %s %d %"G_GINT64_FORMAT".%06"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" %s %s t=%"G_GINT64_FORMAT".%06"G_GINT64_FORMAT,
 			r->request->cmd,
 			status,
 			diff_total / G_TIME_SPAN_SECOND, diff_total % G_TIME_SPAN_SECOND,

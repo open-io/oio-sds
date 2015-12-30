@@ -41,14 +41,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static void
 _copy_tab_values(struct rawx_stats_rrd_s *src, struct rawx_stats_rrd_s *dst)
 {
-	for(uint i = 0; i < src->period; i++)
+	for (time_t i = 0; i < src->period; i++)
 		dst->ten[i] = src->ten[i];
 }
 
 static void
 _init_tab_values(struct rawx_stats_rrd_s *rrd, time_t period)
 {
-	for(uint i = 0; i < period; i++)
+	for (time_t i = 0; i < period; i++)
 		rrd->ten[i] = 0;
 }
 
