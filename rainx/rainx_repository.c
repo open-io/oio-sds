@@ -1550,15 +1550,15 @@ _send_reconstructed_data(const dav_resource *resource, ap_filter_t *output,
 	for (unsigned int i = 0; i < rain_params->k && sent_size < expected_size; i++) {
 		// Last subchunk may be smaller, and there may be less than k subchunks
 		size_t out_size = MIN(expected_size-sent_size, rain_params->block_size);
-		DAV_DEBUG_REQ(resource->info->request, 0, "writing %lu bytes, pos %u",
+		DAV_DEBUG_REQ(resource->info->request, 0, "writing %"G_GSIZE_FORMAT" bytes, pos %u",
 				out_size, i);
 		apr_brigade_write(bb, NULL, resource->info, data[i], out_size);
 		sent_size += out_size;
-		DAV_DEBUG_REQ(resource->info->request, 0, "%lu bytes sent", sent_size);
+		DAV_DEBUG_REQ(resource->info->request, 0, "%"G_GSIZE_FORMAT" bytes sent", sent_size);
 	}
 	if (sent_size != expected_size) {
 		DAV_ERROR_REQ(resource->info->request, 0,
-				"Expected %lu bytes, sent %lu bytes",
+				"Expected %"G_GSIZE_FORMAT" bytes, sent %"G_GSIZE_FORMAT" bytes",
 				expected_size, sent_size);
 	}
 	if (ap_pass_brigade(output, bb) != APR_SUCCESS) {

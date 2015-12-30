@@ -228,7 +228,7 @@ rawx_stats_rrd_dump_values(struct rawx_stats_rrd_s *rsr, apr_pool_t *p)
 	char *str = NULL;
 
 	str = apr_psprintf(p, "[%u", rsr->ten[0]);
-	for(uint i = 1; i < rsr->period; i++) {
+	for (time_t i = 1; i < rsr->period; i++) {
 		str = apr_psprintf(p, "%s, %u", str, rsr->ten[i]);
 	}
 	str = apr_pstrcat(p, str, "]", NULL);

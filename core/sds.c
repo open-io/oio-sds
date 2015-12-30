@@ -584,12 +584,14 @@ _download_range_from_metachunk_rained (struct _download_ctx_s *dl,
 		struct chunk_s *chunk = tail_chunks->data;
 		tail_chunks = tail_chunks->next;
 
+#ifdef HAVE_EXTRA_DEBUG
 		gchar strpos[32];
 		GRID_TRACE("Range %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT
 				" CHUNK size=%"G_GSIZE_FORMAT" pos=%s %s",
 				r0.offset, r0.size, chunk->size,
 				_chunk_pack_position(chunk, strpos, sizeof(strpos)),
 				chunk->url);
+#endif
 
 		if (chunk->position.parity) {
 			GRID_TRACE2("Skipped: parity");
