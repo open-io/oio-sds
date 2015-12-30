@@ -43,6 +43,12 @@ class TestIndexerCrawler(BaseTestCase):
         xattr.setxattr(chunk_path, 'user.grid.content.nbchunk', '1')
         xattr.setxattr(chunk_path, 'user.grid.content.path', 'toto')
         xattr.setxattr(chunk_path, 'user.grid.content.size', '4')
+        xattr.setxattr(chunk_path, 'user.grid.content.mime_type',
+                                   'application/octet-stream')
+        xattr.setxattr(chunk_path, 'user.grid.content.storage_policy',
+                                   'TESTPOLICY')
+        xattr.setxattr(chunk_path, 'user.grid.content.chunk_method',
+                                   'bytes')
         xattr.setxattr(chunk_path, 'user.grid.content.version', '0')
 
         return chunk_path, container_id, content_id, chunk_id

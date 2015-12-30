@@ -79,6 +79,10 @@ class TestChunk(object):
                       'content_path': self.content.content_name,
                       'content_cid': self.content.container_id,
                       'content_id': self.content.content_id,
+                      'content_policy': 'TESTPOLICY',
+                      'content_chunkmethod': 'bytes',
+                      'content_mimetype': 'application/octet-stream',
+                      'chunk_pos': self.pos,
                       'chunk_id': self.id,
                       'chunk_pos': self.pos,
                       'content_version': self.content.version}
