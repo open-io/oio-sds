@@ -180,7 +180,7 @@ _configure_limits(struct sqlx_service_s *ss)
 	}
 	if (limit.rlim_cur < 64) {
 		GRID_ERROR("Not enough file descriptors allowed [%lu], "
-				"minimum 64 required", limit.rlim_cur);
+				"minimum 64 required", (unsigned long) limit.rlim_cur);
 		return FALSE;
 	}
 
