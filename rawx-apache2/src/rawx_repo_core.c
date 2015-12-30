@@ -28,7 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <http_config.h>
 #include <http_protocol.h>      /* for ap_set_* (in dav_rawx_set_headers) */
 #include <http_request.h>       /* for ap_update_mtime() */
-#include <apr-1.0/apr_escape.h>
+#include <apr_escape.h>
 #include <mod_dav.h>
 
 #include <ctype.h>
