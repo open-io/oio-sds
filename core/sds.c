@@ -78,6 +78,7 @@ struct chunk_s
 	struct chunk_position_s {
 		guint meta;
 		guint intra;
+		gboolean ec : 8; /* composite position ? */
 		gboolean parity : 8;
 	} position;
 	gchar hexhash[STRLEN_CHUNKHASH];
@@ -137,6 +138,7 @@ _load_one_chunk (struct json_object *jurl, struct json_object *jsize,
 	s = json_object_get_string(jpos);
 	result->position.meta = atoi(s);
 	if (NULL != (s = strchr(s, '.'))) {
+		result->position.ec = 1;
 		if (*(s+1) == 'p') {
 			result->position.parity = 1;
 			result->position.intra = atoi(s+2);
@@ -150,7 +152,7 @@ _load_one_chunk (struct json_object *jurl, struct json_object *jsize,
 static const char *
 _chunk_pack_position (struct chunk_s *c, gchar *buf, gsize len)
 {
-	if (c->position.parity)
+	if (c->position.ec)
 		g_snprintf (buf, len, "%u.%u%s",
 				c->position.meta, c->position.intra,
 				c->position.parity ? "p" : "");
@@ -249,7 +251,7 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 		struct chunk_s *c = l->data;
 		guint i = c->position.meta;
 		out[i]->chunks = g_slist_prepend (out[i]->chunks, c);
-		if (c->position.parity)
+		if (c->position.ec)
 			out[i]->ec = TRUE;
 	}
 	for (guint i=0; i<meta_bound ;++i) {
@@ -1140,9 +1142,9 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 	guint total = g_slist_length (ul->http_dests);
 	GRID_TRACE("%s uploads %u/%u failed", __FUNCTION__, failures, total);
 
-	if (failures >= total)
+	if (failures >= total) {
 		err = NEWERROR(CODE_PLATFORM_ERROR, "No upload succeeded");
-	else {
+	} else {
 		/* patch the chunk sizes and positions */
 		ul->mc->size = ul->local_done;
 		for (GSList *l=ul->mc->chunks; l ;l=l->next) {
@@ -1184,14 +1186,19 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 	GRID_TRACE("%s (%p)", __FUNCTION__, ul);
 
 	struct oio_error_s *err = NULL;
-	_assert_no_upload (ul);
+
+	g_assert (NULL == ul->put);
+	g_assert (NULL == ul->http_dests);
+	g_assert (NULL == ul->checksum_chunk);
 
 	/* ensure we have a new destination (metachunk) */
-	if (g_queue_is_empty (ul->metachunk_ready)) {
-		if (NULL != (err = oio_sds_upload_prepare (ul, 1)))
-			return (GError*) err;
+	if (!ul->mc) {
+		if (g_queue_is_empty (ul->metachunk_ready)) {
+			if (NULL != (err = oio_sds_upload_prepare (ul, 1)))
+				return (GError*) err;
+		}
+		ul->mc = g_queue_pop_head (ul->metachunk_ready);
 	}
-	ul->mc = g_queue_pop_head (ul->metachunk_ready);
 	g_assert (NULL != ul->mc);
 
 	/* patch the metachunk characteristics (position now known) */
@@ -1282,7 +1289,9 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 		}
 	} else {
 		/* No upload running ... */
-		_assert_no_upload (ul);
+		g_assert (NULL == ul->http_dests);
+		g_assert (NULL == ul->checksum_chunk);
+		g_assert (0 == ul->local_done);
 
 		/* Check if we need to start a new one */
 		GRID_TRACE("%s (%p) No upload currently running", __FUNCTION__, ul);
@@ -1469,11 +1478,21 @@ _upload_sequential (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		if (oio_sds_upload_greedy (ul)) {
 			GRID_TRACE("%s (%p) greedy!", __FUNCTION__, ul);
 			guint8 b[8192];
-			gssize l = src->data.hook.cb (src->data.hook.ctx, b, sizeof(b));
-			if (l < 0)
-				err = (struct oio_error_s*) SYSERR("data hook error");
-			else
-				err = oio_sds_upload_feed (ul, b, l);
+			size_t l = src->data.hook.cb (src->data.hook.ctx, b, sizeof(b));
+			switch (l) {
+				case OIO_SDS_UL__ERROR:
+					err = (struct oio_error_s*) SYSERR("data hook error");
+					break;
+				case OIO_SDS_UL__DONE:
+					err = oio_sds_upload_feed (ul, b, 0);
+					break;
+				case OIO_SDS_UL__NODATA:
+					GRID_INFO("%s No data ready from user's hook", __FUNCTION__);
+					break;
+				default:
+					err = oio_sds_upload_feed (ul, b, l);
+					break;
+			}
 		}
 
 		/* do the I/O things */
@@ -1510,16 +1529,17 @@ oio_sds_upload (struct oio_sds_s *sds, struct oio_sds_ul_src_s *src,
 			"source type not managed");
 }
 
-static ssize_t
+static size_t
 _read_FILE (void *u, unsigned char *ptr, size_t len)
 {
 	FILE *in = u;
 	GRID_TRACE("Reading at most %"G_GSIZE_FORMAT, len);
 	if (ferror(in))
-		return (ssize_t)-1;
+		return OIO_SDS_UL__ERROR;
 	if (feof(in))
-		return 0;
-	return fread(ptr, 1, len, in);
+		return OIO_SDS_UL__DONE;
+	size_t r = fread(ptr, 1, len, in);
+	return (r == 0) ? OIO_SDS_UL__NODATA : r;
 }
 
 struct oio_error_s*
@@ -1542,6 +1562,8 @@ oio_sds_upload_from_file (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst,
 		err = SYSERR("fdopen() error: (%d) %s", errno, strerror(errno));
 	else {
 		lseek (fd, off, SEEK_SET);
+		if (len == 0 || len == (size_t)-1)
+			len = st.st_size;
 		struct oio_sds_ul_src_s src0 = {
 			.type = OIO_UL_SRC_HOOK_SEQUENTIAL, .data = { .hook = {
 				.cb = _read_FILE,

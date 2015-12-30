@@ -83,19 +83,54 @@ _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 		append_const (gs, k, v);
 		g_free0 (v);
 	}
+	void forward (GSList *list_of_beans) {
+		GString *gs = g_string_new ("{");
+		g_string_append_printf (gs, "\"event\":\"%s.%s\"", NAME_SRVTYPE_META2, name);
+		append_int64 (gs, "when", oio_ext_real_time());
+		g_string_append (gs, ",\"url\":{");
+		oio_url_to_json (gs, url);
+		g_string_append (gs, "},\"data\":[");
+		meta2_json_dump_all_xbeans (gs, list_of_beans);
+		g_string_append (gs, "]}");
+		m2b->notify.hook (m2b->notify.udata, g_string_free (gs, FALSE));
+	}
 
 	if (!m2b->notify.hook)
 		return;
 
-	GString *gs = g_string_new ("{");
-	g_string_append_printf (gs, "\"event\":\"%s.%s\"", NAME_SRVTYPE_META2, name);
-	append_int64 (gs, "when", oio_ext_real_time());
-	g_string_append (gs, ",\"url\":{");
-	oio_url_to_json (gs, url);
-	g_string_append (gs, "},\"data\":[");
-	meta2_json_dump_all_xbeans (gs, beans);
-	g_string_append (gs, "]}");
-	m2b->notify.hook (m2b->notify.udata, g_string_free (gs, FALSE));
+	if (g_slist_length (beans) < 16)
+		forward (beans);
+	else {
+		/* first, notify everything but the chunks */
+		GSList *non_chunks = NULL;
+		for (GSList *l=beans; l ;l=l->next) {
+			if (&descr_struct_CHUNKS != DESCR(l->data))
+				non_chunks = g_slist_prepend (non_chunks, l->data);
+		}
+		if (non_chunks) {
+			forward (non_chunks);
+			g_slist_free (non_chunks);
+		}
+
+		/* then notify each chunks by batches of 16 items */
+		GSList *batch = NULL;
+		guint count = 0;
+		for (GSList *l=beans; l ;l=l->next) {
+			if (&descr_struct_CHUNKS != DESCR(l->data))
+				continue;
+			batch = g_slist_prepend (batch, l->data);
+			if (!((++count)%16)) {
+				forward (batch);
+				g_slist_free (batch);
+				batch = NULL;
+			}
+		}
+		if (batch) {
+			forward (batch);
+			g_slist_free (batch);
+			batch = NULL;
+		}
+	}
 }
 
 static int
