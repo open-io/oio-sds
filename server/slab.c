@@ -364,7 +364,7 @@ data_slab_trace(const gchar *tag, struct data_slab_s *ds)
 				ds->data.file.start,
 				ds->data.file.end);
 		case STYPE_PATH:
-			g_string_append_printf(gstr, "| fd=%d start=%"G_GSIZE_FORMAT" end=%"G_GSIZE_FORMAT" path=%s",
+			g_string_append_printf(gstr, "| fd=%d start=%"G_GSSIZE_FORMAT" end=%"G_GSSIZE_FORMAT" path=%s",
 				ds->data.path.fd,
 				ds->data.path.start,
 				ds->data.path.end,

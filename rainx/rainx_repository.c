@@ -470,11 +470,11 @@ _init_rain_encoding(dav_rainx_server_conf *srv_conf,
 			"[%s] policy parameters are: k=%ld, m=%ld, algo=%s",
 			stgpol_str, k, m, algo);
 	DAV_DEBUG_REQ(resource->info->request, 0,
-			"Encoding parameters are: block_size=%lu, packet_size=%lu, "
-			"strip_size=%lu",
-			res_priv->rain_params.block_size,
-			res_priv->rain_params.packet_size,
-			res_priv->rain_params.strip_size);
+			"Encoding parameters are: block_size=%u, packet_size=%u, "
+			"strip_size=%u",
+			(unsigned int) res_priv->rain_params.block_size,
+			(unsigned int) res_priv->rain_params.packet_size,
+			(unsigned int) res_priv->rain_params.strip_size);
 
 end:
 	if (err_msg != NULL) {

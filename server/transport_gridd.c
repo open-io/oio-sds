@@ -245,7 +245,7 @@ network_client_log_access(struct log_item_s *item)
 
 	g_string_append_printf(gstr, " %d", item->code);
 
-	g_string_append_printf(gstr, " %ld.%06ld",
+	g_string_append_printf(gstr, " %"G_GINT64_FORMAT".%06"G_GINT64_FORMAT,
 			diff_total / G_TIME_SPAN_SECOND,
 			diff_total % G_TIME_SPAN_SECOND);
 
@@ -256,7 +256,7 @@ network_client_log_access(struct log_item_s *item)
 
 	g_string_append(gstr, ensure(item->req_ctx->reqid));
 
-	g_string_append_printf(gstr, " t=%ld.%06ld ",
+	g_string_append_printf(gstr, " t=%"G_GINT64_FORMAT".%06"G_GINT64_FORMAT" ",
 			diff_handler / G_TIME_SPAN_SECOND,
 			diff_handler % G_TIME_SPAN_SECOND);
 

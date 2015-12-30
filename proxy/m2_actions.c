@@ -383,10 +383,11 @@ _get_hash (const char *s, GByteArray **out)
 	if (!h)
 		return BADREQ("JSON: invalid hash: not hexa");
 
-	if (h->len != g_checksum_type_get_length(G_CHECKSUM_MD5)
-			&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA256)
-			&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA512)
-			&& h->len != g_checksum_type_get_length(G_CHECKSUM_SHA1)) {
+	const gssize len = h->len;
+	if (len != g_checksum_type_get_length(G_CHECKSUM_MD5)
+			&& len != g_checksum_type_get_length(G_CHECKSUM_SHA256)
+			&& len != g_checksum_type_get_length(G_CHECKSUM_SHA512)
+			&& len != g_checksum_type_get_length(G_CHECKSUM_SHA1)) {
 		g_byte_array_free (h, TRUE);
 		return BADREQ("JSON: invalid hash: invalid length");
 	}

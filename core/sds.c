@@ -174,7 +174,7 @@ _chunks_pack (GString *gs, GSList *chunks)
 		_chunk_pack_position (c, strpos, sizeof(strpos));
 		g_string_append_printf (gs,
 				"{\"url\":\"%s\","
-				"\"size\":%"G_GINT64_FORMAT","
+				"\"size\":%"G_GSIZE_FORMAT","
 				"\"pos\":\"%s\","
 				"\"hash\":\"%s\"}",
 				c->url, c->size, strpos, c->hexhash);
