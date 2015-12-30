@@ -28,6 +28,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <http_config.h>
 #include <http_protocol.h>      /* for ap_set_* (in dav_rawx_set_headers) */
 #include <http_request.h>       /* for ap_update_mtime() */
+#include <apr-1.0/apr_escape.h>
 #include <mod_dav.h>
 
 #include <ctype.h>
@@ -57,7 +58,8 @@ __set_header(request_rec *r, const char *n, const char *v)
 {
 	if (!v) return;
 	apr_table_setn(r->headers_out, apr_pstrcat(r->pool,
-				RAWX_HEADER_PREFIX, n, NULL), apr_pstrdup(r->pool, v));
+				RAWX_HEADER_PREFIX, n, NULL),
+				apr_pescape_urlencoded(r->pool, v));
 }
 
 static dav_error *
@@ -314,7 +316,7 @@ __load_one_header(request_rec *request, const char *name, char **dst)
 	const char *value = apr_table_get(request->headers_in, name);
 	if (!value)
 		return 0;
-	*dst = apr_pstrdup(request->pool, value);
+	*dst = apr_punescape_url (request->pool, value, NULL, NULL, 1);
 	return 1;
 }
 
