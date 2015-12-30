@@ -80,6 +80,7 @@ _container_single_prop_to_headers (struct req_args_s *args,
 		const char *pk, gchar *v)
 {
 	if (!g_ascii_strcasecmp(pk, "sys.container_name")) {
+		oio_str_reuse (&v, g_uri_escape_string (v, NULL, FALSE));
 		args->rp->add_header(PROXYD_HEADER_PREFIX "container-meta-name", v);
 	} else if (!g_ascii_strcasecmp(pk, "sys.container_size")) {
 		args->rp->add_header(PROXYD_HEADER_PREFIX "container-meta-size", v);
@@ -91,17 +92,20 @@ _container_single_prop_to_headers (struct req_args_s *args,
 		gchar *k = g_strdup_printf(PROXYD_HEADER_PREFIX "container-meta-sys-%s",
 				pk + sizeof("sys.") - 1);
 		_purify_header(k);
+		oio_str_reuse (&v, g_uri_escape_string (v, NULL, FALSE));
 		args->rp->add_header(k, v);
 		g_free(k);
 	} else if (g_str_has_prefix(pk, "user.")) {
 		gchar *k = g_strdup_printf(PROXYD_HEADER_PREFIX "container-meta-user-%s",
 				pk + sizeof("user.") - 1);
 		_purify_header(k);
+		oio_str_reuse (&v, g_uri_escape_string (v, NULL, FALSE));
 		args->rp->add_header(k, v);
 		g_free(k);
 	} else {
 		gchar *k = g_strdup_printf(PROXYD_HEADER_PREFIX "container-meta-x-%s", pk);
 		_purify_header(k);
+		oio_str_reuse (&v, g_uri_escape_string (v, NULL, FALSE));
 		args->rp->add_header(k, v);
 		g_free(k);
 	}
@@ -288,7 +292,7 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 		return;
 
 	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-name",
-			g_strdup(ALIASES_get_alias(alias)->str));
+			g_uri_escape_string(ALIASES_get_alias(alias)->str, NULL, FALSE));
 	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-version",
 			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_version(alias)));
 	args->rp->add_header(PROXYD_HEADER_PREFIX "content-meta-deleted",
@@ -1137,7 +1141,7 @@ action_container_list (struct req_args_s *args)
 				g_strdup(list_out.truncated ? "true" : "false"));
 		if (list_out.next_marker) {
 			args->rp->add_header(PROXYD_HEADER_PREFIX "list-marker",
-					g_strdup(list_out.next_marker));
+					g_uri_escape_string(list_out.next_marker, NULL, FALSE));
 		}
 	}
 
