@@ -77,8 +77,11 @@ oio_requri_parse (const char *str, struct oio_requri_s *uri)
 	else
 		uri->query_tokens = g_malloc0(sizeof(void*));
 
-	for (gchar **p=uri->query_tokens; p && *p ;++p)
+	for (gchar **p=uri->query_tokens; p && *p ;++p) {
+		if (*p) for (gchar *q=*p; *q ;++q)
+			if (*q == '+') *q = ' ';
 		oio_str_reuse (p, g_uri_unescape_string (*p, NULL));
+	}
 
 	return TRUE;
 }

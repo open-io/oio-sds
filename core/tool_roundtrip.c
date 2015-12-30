@@ -111,7 +111,7 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 	GRID_INFO ("Roundtrip on local(%s) distant(%s) content_id(%s)", tmppath,
 			oio_url_get (url, OIOURL_WHOLE), content_id);
 
-	/* Check the content is not preset yet */
+	/* Check the content is not present yet */
 	err = oio_sds_has (client, url, &has);
 	if (!err && has) err = (struct oio_error_s*) NEWERROR(0,"content already present");
 	MAYBERETURN(err, "Check error");

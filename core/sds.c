@@ -1228,8 +1228,12 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "container-id",
 				"%s", oio_url_get (ul->dst->url, OIOURL_HEXID));
 
+		gchar *escaped = g_uri_escape_string (oio_url_get (
+					ul->dst->url, OIOURL_PATH), NULL, TRUE);
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-path",
-				"%s", oio_url_get (ul->dst->url, OIOURL_PATH));
+				"%s", escaped);
+		g_free (escaped);
+
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-version",
 				"%" G_GINT64_FORMAT, ul->version);
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-id",
