@@ -84,7 +84,7 @@ class TestDupContent(BaseTestCase):
         self.assertEqual(len(chunks), metachunk_nb * nb_copy)
 
         for pos in range(metachunk_nb):
-            chunks_at_pos = content.chunks.filter(pos=pos)
+            chunks_at_pos = chunks.filter(pos=pos)
             self.assertEqual(len(chunks_at_pos), nb_copy)
 
             data_begin = pos * self.chunk_size
@@ -97,7 +97,7 @@ class TestDupContent(BaseTestCase):
                 self.assertEqual(meta['content_size'], str(len(data)))
                 self.assertEqual(meta['content_path'], "titi")
                 self.assertEqual(meta['content_cid'], self.container_id)
-                self.assertEqual(meta['content_id'], content.content_id)
+                self.assertEqual(meta['content_id'], meta['content_id'])
                 self.assertEqual(meta['chunk_id'], chunk.id)
                 self.assertEqual(meta['chunk_pos'], str(pos))
                 self.assertEqual(meta['chunk_hash'], chunk_hash)

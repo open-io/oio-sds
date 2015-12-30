@@ -15,18 +15,22 @@
 # License along with this library.
 
 import StringIO
+import hashlib
 import os
 import time
 
+import math
 from testtools.matchers import NotEquals
 
 from oio.blob.client import BlobClient
 from oio.common.exceptions import UnrecoverableContent, OrphanChunk, NotFound
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
+from oio.content.content import ChunksHelper
 from oio.content.factory import ContentFactory
 from oio.content.rain import RainContent, READ_CHUNK_SIZE
-from tests.functional.content.test_content import md5_stream, random_data
+from tests.functional.content.test_content import md5_stream, random_data, \
+    md5_data
 from tests.utils import BaseTestCase
 
 
@@ -54,66 +58,78 @@ class TestRainContent(BaseTestCase):
     def tearDown(self):
         super(TestRainContent, self).tearDown()
 
-    def test_upload_very_small_content(self):
-        data = "azerty"
+    def _test_upload(self, data_size):
+        data = random_data(data_size)
         content = self.content_factory.new(self.container_id, "titi",
                                            len(data), "RAIN")
+        k = 6
+        m = 2
         self.assertEqual(type(content), RainContent)
 
         content.upload(StringIO.StringIO(data))
 
-        self.assertEqual(len(content.chunks), 1 + content.m)
+        chunks, meta = self.container_client.content_show(
+            cid=self.container_id, content=content.content_id)
+        chunks = ChunksHelper(chunks)
+        self.assertEqual(meta['hash'], md5_data(data))
+        self.assertEqual(meta['length'], str(len(data)))
+        self.assertEqual(meta['policy'], "RAIN")
+        self.assertEqual(meta['name'], "titi")
 
-        chunk = content.chunks.filter(pos="0.0").one()
-        meta, stream = self.blob_client.chunk_get(chunk.url)
-        self.assertEqual(stream.next(), data)
-        self.assertEqual(meta['content_size'], str(content.length))
-        self.assertEqual(meta['content_path'], content.path)
-        self.assertEqual(meta['content_cid'], content.container_id)
-        self.assertEqual(meta['content_id'], content.content_id)
-        self.assertEqual(meta['chunk_id'], chunk.id)
-        self.assertEqual(meta['chunk_pos'], chunk.pos)
-        self.assertEqual(meta['chunk_hash'], content.hash)
+        metachunk_nb = int(math.ceil(float(len(data)) / self.chunk_size))
+        if metachunk_nb == 0:
+            metachunk_nb = 1  # special case for empty content
 
-    def test_upload_small_content_one_metachunk(self):
-        data = os.urandom(self.conf["chunk_size"])
-        content = self.content_factory.new(self.container_id, "titi",
-                                           len(data), "RAIN")
-        self.assertEqual(type(content), RainContent)
+        nb_chunks_min = metachunk_nb * (k + m) - (k - 1)
+        nb_chunks_max = metachunk_nb * (k + m)
+        self.assertEquals(len(chunks) >= nb_chunks_min, True)
+        self.assertEquals(len(chunks) <= nb_chunks_max, True)
 
-        content.upload(StringIO.StringIO(data))
+        for metapos in range(metachunk_nb):
+            chunks_at_pos = content.chunks.filter(metapos=metapos)
+            data_chunks_at_pos = chunks_at_pos.filter(is_parity=False)
+            parity_chunks_at_pos = chunks_at_pos.filter(is_parity=True)
 
-        self.assertEqual(len(content.chunks), content.k + content.m)
+            if metapos < metachunk_nb - 1:
+                self.assertEqual(len(data_chunks_at_pos), k)
+            else:
+                self.assertEquals(len(data_chunks_at_pos) >= 1, True)
+                self.assertEquals(len(data_chunks_at_pos) <= k, True)
+            self.assertEqual(len(parity_chunks_at_pos), m)
 
-        chunk = content.chunks.filter(pos="0.0").one()
-        meta, stream = self.blob_client.chunk_get(chunk.url)
-        self.assertEqual(meta['content_size'], str(content.length))
-        self.assertEqual(meta['content_path'], content.path)
-        self.assertEqual(meta['content_cid'], content.container_id)
-        self.assertEqual(meta['content_id'], content.content_id)
-        self.assertEqual(meta['chunk_id'], chunk.id)
-        self.assertEqual(meta['chunk_pos'], chunk.pos)
-        self.assertEqual(meta['chunk_hash'], chunk.hash)
+            for chunk in chunks_at_pos:
+                meta, stream = self.blob_client.chunk_get(chunk.url)
+                self.assertEqual(md5_stream(stream), chunk.hash)
+                self.assertEqual(meta['content_size'], str(len(data)))
+                self.assertEqual(meta['content_path'], "titi")
+                self.assertEqual(meta['content_cid'], self.container_id)
+                self.assertEqual(meta['content_id'], meta['content_id'])
+                self.assertEqual(meta['chunk_id'], chunk.id)
+                self.assertEqual(meta['chunk_pos'], chunk.pos)
+                self.assertEqual(meta['chunk_hash'], chunk.hash)
 
-    def test_upload_two_metachunk(self):
-        data = os.urandom(2 * self.conf["chunk_size"])
-        content = self.content_factory.new(self.container_id, "titi",
-                                           len(data), "RAIN")
-        self.assertEqual(type(content), RainContent)
+            data_begin = metapos * self.chunk_size
+            data_end = metapos * self.chunk_size + self.chunk_size
+            target_metachunk_hash = md5_data(data[data_begin:data_end])
 
-        content.upload(StringIO.StringIO(data))
+            metachunk_hash = hashlib.md5()
+            for chunk in data_chunks_at_pos:
+                meta, stream = self.blob_client.chunk_get(chunk.url)
+                for d in stream:
+                    metachunk_hash.update(d)
+            self.assertEqual(metachunk_hash.hexdigest().upper(),
+                             target_metachunk_hash)
 
-        self.assertEqual(len(content.chunks), 2 * (content.k + content.m))
+    # FIXME add support of empty content + tests
 
-        chunk = content.chunks.filter(pos="0.0").one()
-        meta, stream = self.blob_client.chunk_get(chunk.url)
-        self.assertEqual(meta['content_size'], str(content.length))
-        self.assertEqual(meta['content_path'], content.path)
-        self.assertEqual(meta['content_cid'], content.container_id)
-        self.assertEqual(meta['content_id'], content.content_id)
-        self.assertEqual(meta['chunk_id'], chunk.id)
-        self.assertEqual(meta['chunk_pos'], chunk.pos)
-        self.assertEqual(meta['chunk_hash'], chunk.hash)
+    def test_upload_1_byte(self):
+        self._test_upload(1)
+
+    def test_upload_chunksize_bytes(self):
+        self._test_upload(self.chunk_size)
+
+    def test_upload_chunksize_plus_1_bytes(self):
+        self._test_upload(self.chunk_size + 1)
 
     def test_chunks_cleanup_when_upload_failed(self):
         data = random_data(2 * self.chunk_size)
