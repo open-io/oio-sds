@@ -124,7 +124,6 @@ void send_chunk_event(const char *type, const dav_resource *resource) {
 			"\"content_id\":\"%s\","
 			"\"content_version\":\"%s\","
 			"\"content_path\":\"%s\","
-			"\"content_size\":\"%s\","
 			"\"chunk_id\":\"%s\","
 			"\"chunk_hash\":\"%s\","
 			"\"chunk_position\":\"%s\","
@@ -134,11 +133,15 @@ void send_chunk_event(const char *type, const dav_resource *resource) {
 			resource->info->content.content_id,
 			resource->info->content.version,
 			resource->info->content.path,
-			resource->info->content.size,
 			resource->info->chunk.id,
 			resource->info->chunk.hash,
 			resource->info->chunk.position,
 			resource->info->chunk.size);
+
+	if (resource->info->content.size)
+		g_string_append_printf(json,
+				",\"content_size\":\"%s\"",
+				resource->info->content.size);
 
 	if (resource->info->content.chunk_nb)
 		g_string_append_printf(json,
