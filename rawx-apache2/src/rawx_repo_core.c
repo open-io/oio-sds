@@ -28,7 +28,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <http_config.h>
 #include <http_protocol.h>      /* for ap_set_* (in dav_rawx_set_headers) */
 #include <http_request.h>       /* for ap_update_mtime() */
-#include <apr_escape.h>
 #include <mod_dav.h>
 
 #include <ctype.h>
@@ -316,7 +315,9 @@ __load_one_header(request_rec *request, const char *name, char **dst)
 	const char *value = apr_table_get(request->headers_in, name);
 	if (!value)
 		return 0;
-	*dst = apr_punescape_url (request->pool, value, NULL, NULL, 1);
+	gchar *decoded = g_uri_unescape_string (value, NULL);
+	*dst = apr_pstrdup (request->pool, decoded);
+	g_free (decoded);
 	return 1;
 }
 
@@ -451,10 +452,12 @@ void
 request_fill_headers(request_rec *r, struct content_textinfo_s *c0,
 		struct chunk_textinfo_s *c1)
 {
+	gchar *decoded = g_uri_escape_string (c0->path, NULL, FALSE);
+
 	__set_header(r, "container-id",  c0->container_id);
 
 	__set_header(r, "content-id",           c0->content_id);
-	__set_header(r, "content-path",         apr_pescape_urlencoded (r->pool, c0->path));
+	__set_header(r, "content-path",         decoded);
 	__set_header(r, "content-size",         c0->size);
 	__set_header(r, "content-version",      c0->version);
 	__set_header(r, "content-chunksnb",     c0->chunk_nb);
@@ -467,6 +470,8 @@ request_fill_headers(request_rec *r, struct content_textinfo_s *c0,
 	__set_header(r, "chunk-size",        c1->size);
 	__set_header(r, "chunk-hash",        c1->hash);
 	__set_header(r, "chunk-pos",         c1->position);
+
+	g_free (decoded);
 }
 
 /*************************************************************************/

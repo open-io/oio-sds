@@ -20,15 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__server__internals_h
 # define OIO_SDS__server__internals_h 1
 
-/**
- * @defgroup server_misc Misc. features
- * @ingroup server
- * @brief
- * @details
- *
- * @{
- */
-
 #include <metautils/lib/metautils.h>
 
 # ifndef GRID_STAT_PREFIX_REQ
@@ -55,6 +46,22 @@ License along with this library.
 # define SERVER_DEFAULT_MAX_WORKERS 200
 #endif
 
-/** @} */
+/* How long (in microseconds) a connection might stay idle between two
+ * requests */
+#ifndef  SERVER_DEFAULT_CNX_IDLE
+# define SERVER_DEFAULT_CNX_IDLE  (5 * G_TIME_SPAN_MINUTE)
+#endif
+
+/* How long (in microseconds) a connection might exist since its creation
+ * (whatever it is active or not) */
+#ifndef  SERVER_DEFAULT_CNX_LIFETIME
+# define SERVER_DEFAULT_CNX_LIFETIME  (2 * G_TIME_SPAN_HOUR)
+#endif
+
+/* How long (in microseconds) a connection might exist since its creation
+ * when it received no request at all */
+#ifndef  SERVER_DEFAULT_CNX_INACTIVE
+# define SERVER_DEFAULT_CNX_INACTIVE  (30 * G_TIME_SPAN_SECOND)
+#endif
 
 #endif /*OIO_SDS__server__internals_h*/
