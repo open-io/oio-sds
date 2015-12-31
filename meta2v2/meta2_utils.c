@@ -1959,7 +1959,7 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 	}
 
 	// Do the purge.
-	GRID_DEBUG("Purging deleted aliases older than %ld seconds (timestamp < %ld)",
+	GRID_DEBUG("Purging deleted aliases older than %"G_GINT64_FORMAT" seconds (timestamp < %"G_GINT64_FORMAT")",
 			delay, time_limit);
 	params[0] = g_variant_new_int64(time_limit);
 	err = ALIASES_load(sq3->db, sql, params, (m2_onbean_cb)_delete_cb, u0);

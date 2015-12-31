@@ -470,11 +470,11 @@ _init_rain_encoding(dav_rainx_server_conf *srv_conf,
 			"[%s] policy parameters are: k=%ld, m=%ld, algo=%s",
 			stgpol_str, k, m, algo);
 	DAV_DEBUG_REQ(resource->info->request, 0,
-			"Encoding parameters are: block_size=%lu, packet_size=%lu, "
-			"strip_size=%lu",
-			res_priv->rain_params.block_size,
-			res_priv->rain_params.packet_size,
-			res_priv->rain_params.strip_size);
+			"Encoding parameters are: block_size=%u, packet_size=%u, "
+			"strip_size=%u",
+			(unsigned int) res_priv->rain_params.block_size,
+			(unsigned int) res_priv->rain_params.packet_size,
+			(unsigned int) res_priv->rain_params.strip_size);
 
 end:
 	if (err_msg != NULL) {
@@ -1564,15 +1564,15 @@ _send_reconstructed_data(const dav_resource *resource, ap_filter_t *output,
 	for (unsigned int i = 0; i < rain_params->k && sent_size < expected_size; i++) {
 		// Last subchunk may be smaller, and there may be less than k subchunks
 		size_t out_size = MIN(expected_size-sent_size, rain_params->block_size);
-		DAV_DEBUG_REQ(resource->info->request, 0, "writing %lu bytes, pos %u",
+		DAV_DEBUG_REQ(resource->info->request, 0, "writing %"G_GSIZE_FORMAT" bytes, pos %u",
 				out_size, i);
 		apr_brigade_write(bb, NULL, resource->info, data[i], out_size);
 		sent_size += out_size;
-		DAV_DEBUG_REQ(resource->info->request, 0, "%lu bytes sent", sent_size);
+		DAV_DEBUG_REQ(resource->info->request, 0, "%"G_GSIZE_FORMAT" bytes sent", sent_size);
 	}
 	if (sent_size != expected_size) {
 		DAV_ERROR_REQ(resource->info->request, 0,
-				"Expected %lu bytes, sent %lu bytes",
+				"Expected %"G_GSIZE_FORMAT" bytes, sent %"G_GSIZE_FORMAT" bytes",
 				expected_size, sent_size);
 	}
 	if (ap_pass_brigade(output, bb) != APR_SUCCESS) {

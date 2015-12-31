@@ -150,7 +150,7 @@ conscience_srvtype_serialize_config(struct conscience_srvtype_s *srvtype,
 	g_hash_table_ref(ht);
 
 	/*Add the current timestamp */
-	g_snprintf(wrkBuf, sizeof(wrkBuf), "%ld", oio_ext_real_time () / G_TIME_SPAN_SECOND);
+	g_snprintf(wrkBuf, sizeof(wrkBuf), "%"G_GINT64_FORMAT, oio_ext_real_time () / G_TIME_SPAN_SECOND);
 	v = g_byte_array_append(g_byte_array_new(),
 	    (guint8 *) wrkBuf, strlen(wrkBuf) + 1);
 	g_hash_table_insert(ht, "timestamp", v);
@@ -190,7 +190,7 @@ conscience_srvtype_get_config(struct conscience_srvtype_s * srvtype,
 		GSETERROR(err,"Serialization failure");
 		return NULL;
 	}
-	
+
 	return g_byte_array_append(g_byte_array_new(), srvtype->config_serialized->data,
 		srvtype->config_serialized->len);
 }
@@ -368,7 +368,7 @@ conscience_srvtype_set_type_expression(struct conscience_srvtype_s * srvtype,
 		g_free(srvtype->score_expr_str);
 	if (srvtype->score_expr)
 		expr_clean(srvtype->score_expr);
-	
+
 	srvtype->score_expr_str = g_strdup(expr_str);
 	srvtype->score_expr = pE;
 	return TRUE;

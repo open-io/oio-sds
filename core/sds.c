@@ -174,7 +174,7 @@ _chunks_pack (GString *gs, GSList *chunks)
 		_chunk_pack_position (c, strpos, sizeof(strpos));
 		g_string_append_printf (gs,
 				"{\"url\":\"%s\","
-				"\"size\":%"G_GINT64_FORMAT","
+				"\"size\":%"G_GSIZE_FORMAT","
 				"\"pos\":\"%s\","
 				"\"hash\":\"%s\"}",
 				c->url, c->size, strpos, c->hexhash);
@@ -584,12 +584,14 @@ _download_range_from_metachunk_rained (struct _download_ctx_s *dl,
 		struct chunk_s *chunk = tail_chunks->data;
 		tail_chunks = tail_chunks->next;
 
+#ifdef HAVE_EXTRA_DEBUG
 		gchar strpos[32];
 		GRID_TRACE("Range %"G_GSIZE_FORMAT"+%"G_GSIZE_FORMAT
 				" CHUNK size=%"G_GSIZE_FORMAT" pos=%s %s",
 				r0.offset, r0.size, chunk->size,
 				_chunk_pack_position(chunk, strpos, sizeof(strpos)),
 				chunk->url);
+#endif
 
 		if (chunk->position.parity) {
 			GRID_TRACE2("Skipped: parity");
@@ -1228,8 +1230,12 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "container-id",
 				"%s", oio_url_get (ul->dst->url, OIOURL_HEXID));
 
+		gchar *escaped = g_uri_escape_string (oio_url_get (
+					ul->dst->url, OIOURL_PATH), NULL, TRUE);
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-path",
-				"%s", oio_url_get (ul->dst->url, OIOURL_PATH));
+				"%s", escaped);
+		g_free (escaped);
+
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-version",
 				"%" G_GINT64_FORMAT, ul->version);
 		http_put_dest_add_header (dest, RAWX_HEADER_PREFIX "content-id",

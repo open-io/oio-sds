@@ -41,14 +41,14 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static void
 _copy_tab_values(struct rainx_stats_rrd_s *src, struct rainx_stats_rrd_s *dst)
 {
-	for(uint i = 0; i < src->period; i++)
+	for (time_t i = 0; i < src->period; i++)
 		dst->ten[i] = src->ten[i];
 }
 
 static void
 _init_tab_values(struct rainx_stats_rrd_s *rrd, time_t period)
 {
-	for(uint i = 0; i < period; i++)
+	for (time_t i = 0; i < period; i++)
 		rrd->ten[i] = 0;
 }
 
@@ -220,7 +220,7 @@ rainx_stats_rrd_dump_values(struct rainx_stats_rrd_s *rsr, apr_pool_t *p)
 	char *str = NULL;
 
 	str = apr_psprintf(p, "[%u", rsr->ten[0]);
-	for(uint i = 1; i < rsr->period; i++) {
+	for (time_t i = 1; i < rsr->period; i++) {
 		str = apr_psprintf(p, "%s, %u", str, rsr->ten[i]);
 	}
 	str = apr_pstrcat(p, str, "]", NULL);

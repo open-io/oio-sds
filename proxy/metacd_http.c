@@ -669,7 +669,6 @@ configure_request_handlers (void)
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/freeze/#POST", action_admin_freeze);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/enable/#POST", action_admin_enable);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/admin/disable/#POST", action_admin_disable);
-
 }
 
 static gboolean
