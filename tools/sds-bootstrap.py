@@ -774,6 +774,13 @@ def generate (ns, ip, options={}):
 				'addr': str(ip) + ':' + str(port),
 				'path': env['DATADIR'] +'/'+ ns +'-rawx-' + str(num)
 		})
+	listing["rainx"] = list()
+	rainx_index = 0
+	for num,port in rainx:
+		listing["rainx"].append({
+				'num': num,
+				'addr': str(ip) + ':' + str(port)
+		})
 	listing["redis"] = str(ip) + ':' + str(env['PORT_REDIS'])
 	listing["sds_path"] = SDSDIR
         listing["rdir"] = { "path": env['RDIR_DB_PATH'], "addr": str(ip) + ':' + str(port_rdir) }
