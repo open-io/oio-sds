@@ -237,6 +237,10 @@ dir2macro("M2V2_CLIENT_TIMEOUT")
 
 dir2macro("META2_INIT_FLAG")
 
+dir2macro("SERVER_DEFAULT_CNX_IDLE")
+dir2macro("SERVER_DEFAULT_CNX_LIFETIME")
+dir2macro("SERVER_DEFAULT_CNX_INACTIVE")
+
 ###-------------------------------------------------------------------------###
 
 if (NOT DEFINED CMAKE_INSTALL_PREFIX)

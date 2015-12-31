@@ -104,6 +104,9 @@ cd ${SRCDIR}/python; sudo python setup.py develop; cd -
 | ----- | ------- | ----------- |
 | OIOSDS_RELEASE | "master" | Global release name |
 | OIOSDS_API_VERSION_SHORT | "1.0" | Minor version number |
+| SERVER_DEFAULT_CNX_IDLE | "5 * G_TIME_SPAN_MINUTE" | How long (in microseconds) a connection might stay idle between two requests |
+| SERVER_DEFAULT_CNX_LIFETIME | "2 * G_TIME_SPAN_HOUR" | How long (in microseconds) a connection might exist since its creation (whatever it is active or not) |
+| SERVER_DEFAULT_CNX_INACTIVE | "30 * G_TIME_SPAN_SECOND" | How long (in microseconds) a connection might exist since its creation when it received no request at all. |
 | GCLUSTER_RUN_DIR | "/var/run" | Prefix to spool. |
 | GCLUSTER_CONFIG_FILE_PATH | "/etc/oio/sds.conf" | System-wide configuration file |
 | GCLUSTER_CONFIG_DIR_PATH | "/etc/oio/sds.conf.d" | System-wide configuration directory for additional files. |
