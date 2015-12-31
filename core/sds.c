@@ -153,9 +153,10 @@ static const char *
 _chunk_pack_position (struct chunk_s *c, gchar *buf, gsize len)
 {
 	if (c->position.ec)
-		g_snprintf (buf, len, "%u.%u%s",
-				c->position.meta, c->position.intra,
-				c->position.parity ? "p" : "");
+		g_snprintf (buf, len, "%u.%s%u",
+				c->position.meta,
+				(c->position.parity ? "p" : ""),
+				c->position.intra);
 	else
 		g_snprintf (buf, len, "%u", c->position.meta);
 	return buf;
