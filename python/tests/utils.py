@@ -92,17 +92,17 @@ class BaseTestCase(testtools.TestCase):
         self.assertEqual(resp.status_code, 200)
 
     def _reload(self):
-        url = self.uri + '/v2.0/cache/flush/local'
+        url = self.uri + '/v3.0/cache/flush/local'
         resp = self.session.post(url, '')
         self.assertEqual(resp.status_code / 100, 2)
         for srvtype in ('meta1', 'meta2'):
             for t in self.conf[srvtype]:
-                url = self.uri + '/v2.0/forward/' + str(t)
+                url = self.uri + '/v3.0/forward/' + str(t)
                 resp = self.session.post(url, params={'action': 'flush'})
                 self.assertEqual(resp.status_code, 204)
         for srvtype in ('meta1', 'meta2'):
             for t in self.conf[srvtype]:
-                url = self.uri + '/v2.0/forward/' + str(t)
+                url = self.uri + '/v3.0/forward/' + str(t)
                 resp = self.session.post(url, params={'action': 'reload'})
                 self.assertEqual(resp.status_code, 204)
 
