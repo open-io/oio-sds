@@ -64,7 +64,9 @@ def rdir_push(ns):
         if token in decoded:
             data[token] = int(decoded[token])
 
-    allowed_tokens_str = ['content_path', 'chunk_hash', 'chunk_position']
+    allowed_tokens_str = ['content_path', 'content_storage_policy',
+                          'content_mime_type', 'content_chunk_method',
+                          'chunk_hash', 'chunk_position']
     for token in allowed_tokens_str:
         if token in decoded:
             data[token] = decoded[token]
