@@ -245,10 +245,9 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 
 	gint64 spent = oio_ext_monotonic_time () - rq->client->time.evt_in;
 
-	network_server_stat_push (rq->client->server, gq_count, 1, FALSE);
-	network_server_stat_push (rq->client->server, gq_count_all, 1, FALSE);
-	network_server_stat_push (rq->client->server, gq_time, spent, FALSE);
-	network_server_stat_push (rq->client->server, gq_time_all, spent, FALSE);
+	network_server_stat_push4 (rq->client->server, TRUE,
+			gq_count, 1, gq_count_all, 1,
+			gq_time, spent, gq_time_all, spent);
 
 	path_matching_cleanv (matchings);
 	oio_requri_clear (&ruri);
@@ -739,14 +738,13 @@ grid_main_configure (int argc, char **argv)
 
 	/* ensure each Route as a pair of count/time stats */
 	void _runner (const struct trie_node_s *n) {
-		network_server_stat_push (server, n->gq_count, 0, FALSE);
-		network_server_stat_push (server, n->gq_time, 0, FALSE);
+		network_server_stat_push2 (server, FALSE,
+				n->gq_count, 0, n->gq_time, 0);
 	}
 	path_parser_foreach (path_parser, _runner);
-	network_server_stat_push (server, gq_count_all, 0, FALSE);
-	network_server_stat_push (server, gq_count_unexpected, 0, FALSE);
-	network_server_stat_push (server, gq_time_all, 0, FALSE);
-	network_server_stat_push (server, gq_time_unexpected, 0, FALSE);
+	network_server_stat_push4 (server, FALSE,
+			gq_count_all, 0, gq_count_unexpected, 0,
+			gq_time_all, 0, gq_time_unexpected, 0);
 
 	lbpool = grid_lbpool_create (nsname);
 	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free,

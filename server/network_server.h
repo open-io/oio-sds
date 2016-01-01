@@ -54,8 +54,8 @@ struct server_stat_s /* stored in the server */
 
 struct server_stat_msg_s /* sent by the workers */
 {
-	guint64  value;
-	GQuark   which;
+	guint64  value[4];
+	GQuark   which[4];
 	gboolean increment : 1; /* FALSE -> reset */
 };
 
@@ -140,8 +140,12 @@ void network_server_stop(struct network_server_s *srv);
 
 void network_server_clean(struct network_server_s *srv);
 
-void network_server_stat_push (struct network_server_s *srv,
-		GQuark which, guint64 value, gboolean increment);
+void network_server_stat_push2 (struct network_server_s *srv, gboolean inc,
+		GQuark k1, guint64 v1, GQuark k2, guint64 v2);
+
+void network_server_stat_push4 (struct network_server_s *srv, gboolean inc,
+		GQuark k1, guint64 v1, GQuark k2, guint64 v2,
+		GQuark k3, guint64 v3, GQuark k4, guint64 v4);
 
 /* Synchronosly get the current value of the stat named <which> */
 guint64 network_server_stat_getone (struct network_server_s *srv, GQuark which);

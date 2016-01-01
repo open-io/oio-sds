@@ -150,7 +150,7 @@ _server_stat_cmp (const struct server_stat_s *st0,
 static guint64 *
 _stat_locate (struct network_server_s *srv, GQuark which)
 {
-	struct server_stat_s key = {.which=which, .value=NULL};
+	struct server_stat_s key = {.which=which, .value=0};
 	struct server_stat_s *p = (struct server_stat_s*) bsearch (&key,
 			srv->stats->data, srv->stats->len, sizeof(key),
 			(GCompareFunc)_server_stat_cmp);
@@ -161,15 +161,23 @@ _stat_locate (struct network_server_s *srv, GQuark which)
 /* Public API --------------------------------------------------------------- */
 
 void
-network_server_stat_push (struct network_server_s *srv,
-		GQuark which, guint64 value, gboolean increment)
+network_server_stat_push2 (struct network_server_s *srv, gboolean increment,
+		GQuark k1, guint64 v1, GQuark k2, guint64 v2)
+{
+	network_server_stat_push4 (srv, increment, k1, v1, k2, v2, 0, 0, 0, 0);
+}
+
+void
+network_server_stat_push4 (struct network_server_s *srv, gboolean increment,
+		GQuark k1, guint64 v1, GQuark k2, guint64 v2,
+		GQuark k3, guint64 v3, GQuark k4, guint64 v4)
 {
 	EXTRA_ASSERT (srv != NULL);
-	struct server_stat_msg_s *msg = SLICE_NEW0 (struct server_stat_msg_s);
-	msg->which = which;
-	msg->value = value;
-	msg->increment = BOOL(increment);
-	g_thread_pool_push (srv->pool_stats, msg, NULL);
+	struct server_stat_msg_s *m = SLICE_NEW0 (struct server_stat_msg_s);
+	m->which[0] = k1, m->which[1] = k2, m->which[2] = k3, m->which[3] = k4;
+	m->value[0] = v1, m->value[1] = v2, m->value[2] = v3, m->value[3] = v4;
+	m->increment = BOOL(increment);
+	g_thread_pool_push (srv->pool_stats, m, NULL);
 }
 
 guint64
@@ -606,21 +614,17 @@ network_server_run(struct network_server_s *srv)
 
 	srv->thread_events = g_thread_new("events", _thread_cb_events, srv);
 
+	network_server_stat_push2 (srv, FALSE,
+			srv->gq_gauge_cnx_max, srv->cnx_max,
+			srv->gq_gauge_cnx_maxsys, srv->cnx_max_sys);
+
 	while (srv->flag_continue) {
 		g_usleep(1 * G_TIME_SPAN_SECOND);
-		network_server_stat_push (srv, srv->gq_gauge_threads,
-				(guint64) g_thread_pool_get_num_threads(srv->pool_workers),
-				TRUE);
-		network_server_stat_push (srv, srv->gq_gauge_cnx_current,
-				srv->cnx_clients, TRUE);
-		network_server_stat_push (srv, srv->gq_gauge_cnx_max,
-				srv->cnx_max, TRUE);
-		network_server_stat_push (srv, srv->gq_gauge_cnx_maxsys,
-				srv->cnx_max_sys, TRUE);
-		network_server_stat_push (srv, srv->gq_counter_cnx_accept,
-				srv->cnx_accept, TRUE);
-		network_server_stat_push (srv, srv->gq_counter_cnx_close,
-				srv->cnx_close, TRUE);
+		network_server_stat_push4 (srv, FALSE,
+				srv->gq_gauge_threads, (guint64) g_thread_pool_get_num_threads(srv->pool_workers),
+				srv->gq_gauge_cnx_current, srv->cnx_clients,
+				srv->gq_counter_cnx_accept, srv->cnx_accept,
+				srv->gq_counter_cnx_close, srv->cnx_close);
 	}
 
 	GRID_DEBUG("Server %p starting to exit", srv);
@@ -854,18 +858,25 @@ network_server_set_cnx_backlog(struct network_server_s *srv, guint bl)
 static void
 _cb_stats(struct server_stat_msg_s *msg, struct network_server_s *srv)
 {
-	g_mutex_lock (&srv->lock_stats);
-	guint64 *p = _stat_locate (srv, msg->which);
-	if (p) {
-		*p = (msg->increment ? *p : 0) + msg->value;
-	} else {
-		/* The set of stats should be stable, and populated once at the
-		 * process startup. So that inserting then sorting for each stat
-		 * added shouldn't have a big impact during the server's lifetime */
-		struct server_stat_s st = {.value=msg->value, .which=msg->which};
-		g_array_append_vals (srv->stats, &st, 1);
-		g_array_sort (srv->stats, (GCompareFunc)_server_stat_cmp);
+	void _manage_at(const int n) {
+		const guint64 value = msg->value[n];
+		const GQuark which = msg->which[n];
+		if (!which)
+			return;
+		guint64 *p = _stat_locate (srv, which);
+		if (p)
+			*p = (msg->increment ? *p : 0) + value;
+		else {
+			/* The set of stats should be stable, and populated once at the
+			 * process startup. So that inserting then sorting for each stat
+			 * added shouldn't have a big impact during the server's lifetime */
+			struct server_stat_s st = {.value=value, .which=which};
+			g_array_append_vals (srv->stats, &st, 1);
+			g_array_sort (srv->stats, (GCompareFunc)_server_stat_cmp);
+		}
 	}
+	g_mutex_lock (&srv->lock_stats);
+	for (int i=0; i<4 ;++i) _manage_at (i);
 	g_mutex_unlock (&srv->lock_stats);
 	SLICE_FREE(struct server_stat_msg_s, msg);
 }

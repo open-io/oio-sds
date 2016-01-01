@@ -515,10 +515,9 @@ _notify_request(struct req_ctx_s *ctx, GQuark gq_count, GQuark gq_time)
 
 	gint64 diff = ctx->tv_end - ctx->tv_start;
 
-	network_server_stat_push (ctx->client->server, gq_count, 1, FALSE);
-	network_server_stat_push (ctx->client->server, gq_count_all, 1, FALSE);
-	network_server_stat_push (ctx->client->server, gq_time, diff, FALSE);
-	network_server_stat_push (ctx->client->server, gq_time_all, diff, FALSE);
+	network_server_stat_push4 (ctx->client->server, TRUE,
+			gq_count, 1, gq_count_all, 1,
+			gq_time, diff, gq_time_all, diff);
 }
 
 static gboolean
@@ -931,15 +930,14 @@ grid_daemon_bind_host(struct network_server_s *server, const gchar *url,
 	gboolean _traverser(gpointer k, gpointer v, gpointer u) {
 		(void) k; (void) u;
 		struct gridd_request_handler_s *h = (struct gridd_request_handler_s*) v;
-		network_server_stat_push (server, h->stat_name_req, 0, FALSE);
-		network_server_stat_push (server, h->stat_name_time, 0, FALSE);
+		network_server_stat_push2 (server, FALSE,
+				h->stat_name_req, 0, h->stat_name_time, 0);
 		return FALSE;
 	}
 	g_tree_foreach (dispatcher->tree_requests, _traverser, NULL);
-	network_server_stat_push (server, gq_count_all, 0, FALSE);
-	network_server_stat_push (server, gq_count_unexpected, 0, FALSE);
-	network_server_stat_push (server, gq_time_all, 0, FALSE);
-	network_server_stat_push (server, gq_time_unexpected, 0, FALSE);
+	network_server_stat_push4 (server, FALSE,
+			gq_count_all, 0, gq_count_unexpected, 0,
+			gq_time_all, 0, gq_time_unexpected, 0);
 
 	network_server_bind_host_lowlatency(server, url, dispatcher,
 			(network_transport_factory)transport_gridd_factory);
