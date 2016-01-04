@@ -105,8 +105,8 @@ _roundtrip_common (struct oio_sds_s *client, struct oio_url_s *url,
 			"/tmp/test-roundtrip-%d-%"G_GINT64_FORMAT"-",
 			getpid(), oio_ext_real_time());
 	_append_random_chars (tmppath, random_chars, 16);
-	gchar content_id[65] = "";
-	_append_random_chars (content_id, hex_chars, 64);
+	gchar content_id[17] = "";
+	_append_random_chars (content_id, hex_chars, 16);
 
 	GRID_INFO ("Roundtrip on local(%s) distant(%s) content_id(%s)", tmppath,
 			oio_url_get (url, OIOURL_WHOLE), content_id);
