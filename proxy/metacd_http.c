@@ -229,6 +229,7 @@ handler_action (gpointer u, struct http_request_s *rq,
 			args.flags |= FLAG_NOEMPTY;
 
 		args.url = url = _metacd_load_url (&args);
+		rp->subject(oio_url_get(url, OIOURL_HEXID));
 		req_handler_f handler = path_matching_get_udata (*matchings);
 		GRID_TRACE("URL %s", oio_url_get(args.url, OIOURL_WHOLE));
 		rc = (*handler) (&args);

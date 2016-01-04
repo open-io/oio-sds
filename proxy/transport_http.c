@@ -57,6 +57,8 @@ struct req_ctx_s
 	struct http_request_dispatcher_s *dispatcher;
 	struct http_request_s *request;
 
+	gchar *uid;
+
 	gboolean close_after_request;
 };
 
@@ -397,7 +399,7 @@ sender(gpointer k, gpointer v, gpointer u)
 static void
 _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 {
-	const gchar *reqid = g_tree_lookup(r->request->tree_headers, PROXYD_HEADER_REQID);
+	const char *reqid = g_tree_lookup(r->request->tree_headers, PROXYD_HEADER_REQID);
 
 	gint64 now = oio_ext_monotonic_time ();
 	gint64 diff_total = now - r->tv_start;
@@ -410,11 +412,12 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 	g_string_append(gstr, r->client->peer_name);
 
 	g_string_append_printf(gstr,
-			" %s %d %"G_GINT64_FORMAT".%06"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" %s %s t=%"G_GINT64_FORMAT".%06"G_GINT64_FORMAT,
+			" %s %d %"G_GINT64_FORMAT".%06"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" %s %s %s t=%"G_GINT64_FORMAT".%06"G_GINT64_FORMAT,
 			r->request->cmd,
 			status,
 			diff_total / G_TIME_SPAN_SECOND, diff_total % G_TIME_SPAN_SECOND,
 			out_len,
+			(r->uid && *r->uid) ? r->uid : "-",
 			(reqid && *reqid) ? reqid : "-",
 			r->request->req_uri,
 			diff_handler / G_TIME_SPAN_SECOND, diff_handler % G_TIME_SPAN_SECOND);
@@ -441,6 +444,10 @@ http_manage_request(struct req_ctx_s *r)
 		guint8 *data;
 		gsize len;
 	} body;
+
+	void subject (const char *id) {
+		oio_str_replace (&r->uid, id);
+	}
 
 	void cleanup(void) {
 		oio_str_clean (&msg);
@@ -537,6 +544,7 @@ http_manage_request(struct req_ctx_s *r)
 		body.data = NULL;
 		body.len = 0;
 	}
+
 	void access_tail (const char *fmt, ...) {
 		va_list args;
 		va_start(args, fmt);
@@ -564,6 +572,7 @@ http_manage_request(struct req_ctx_s *r)
 		.set_body = set_body,
 		.set_body_gba = set_body_gba,
 		.set_body_gstr = set_body_gstr,
+		.subject = subject,
 		.finalize = finalize,
 		.access_tail = access_tail,
 	};
@@ -669,6 +678,8 @@ http_notify_input(struct network_client_s *clt)
 			continue;
 		}
 
+		oio_str_clean (&r.uid);
+
 		struct http_parsing_result_s rc = http_parse(parser, data, data_size);
 
 		if (rc.status == HPRC_SUCCESS) {
@@ -712,6 +723,7 @@ http_notify_input(struct network_client_s *clt)
 	parser->command_provider = NULL;
 	parser->body_provider = NULL;
 	parser->header_provider = NULL;
+	oio_str_clean (&r.uid);
 	return clt->transport.waiting_for_close ? RC_NODATA : RC_PROCESSED;
 }
 
