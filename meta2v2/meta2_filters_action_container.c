@@ -175,7 +175,7 @@ meta2_filter_action_deduplicate_container(struct gridd_filter_ctx_s *ctx,
 	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
 	if (NULL != fstr)
 		flags = (guint32) g_ascii_strtoull(fstr, NULL, 10);
-	
+
 	GError *err = meta2_backend_deduplicate_contents(
 			meta2_filter_ctx_get_backend(ctx),
 			meta2_filter_ctx_get_url(ctx),
@@ -483,23 +483,26 @@ int
 meta2_filter_action_link(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
+	(void) reply;
 	struct oio_url_s *url = meta2_filter_ctx_get_url(ctx);
 	struct meta2_backend_s *m2b = meta2_filter_ctx_get_backend(ctx);
 	GError *err = NULL;
 	GBytes *id = NULL;
-	
+
 	// Get the header ID (binary form)
-	gsize hlen = 0;
-	void *hbuf = metautils_message_get_field (reply->request, NAME_MSGKEY_KEY, &hlen);
-	if (hbuf && hlen)
-		id = g_bytes_new_static (hbuf, hlen);
-	if (!id)
-		err = NEWERROR(CODE_BAD_REQUEST, "Missing content hash at [%s]",
-				NAME_MSGKEY_KEY);
+	const char *hexid = oio_url_get(url, OIOURL_CONTENTID);
+	if (!hexid)
+		err = BADREQ("Missing content ID");
+	else if (!oio_str_ishexa1(hexid))
+		err = BADREQ("Invalid content ID");
+	else
+		id = g_byte_array_free_to_bytes (metautils_gba_from_hexstring(hexid));
 
 	// Perform the link
-	if (!err)
+	if (!err) {
+		GRID_WARN("Linking [%s] to [%s]", oio_url_get(url, OIOURL_WHOLE), hexid);
 		err = meta2_backend_link_content (m2b, url, id);
+	}
 
 	// Cleanup and exit
 	if (id)

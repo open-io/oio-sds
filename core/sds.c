@@ -987,6 +987,9 @@ oio_sds_upload_init (struct oio_sds_s *sds, struct oio_sds_ul_dst_s *dst)
 	ul->checksum_chunk = NULL;
 	ul->buffer_tail = g_queue_new ();
 	ul->metachunk_ready = g_queue_new ();
+
+	if (dst->content_id)
+		oio_str_replace (&ul->hexid, dst->content_id);
 	return ul;
 }
 
@@ -1061,7 +1064,7 @@ oio_sds_upload_prepare (struct oio_sds_ul_s *ul, size_t size)
 				ul->chunk_size = g_ascii_strtoll (out.header_chunk_size, NULL, 10);
 			if (out.header_version && !ul->version)
 				ul->version = g_ascii_strtoll (out.header_version, NULL, 10);
-			if (out.header_content)
+			if (out.header_content && !ul->hexid)
 				oio_str_replace (&ul->hexid, out.header_content);
 			if (out.header_stgpol)
 				oio_str_replace (&ul->stgpol, out.header_stgpol);

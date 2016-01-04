@@ -1395,7 +1395,9 @@ action_m2_content_link (struct req_args_s *args, struct json_object *jargs)
 	if (err)
 		return _reply_m2_error (args, BADREQ("Expected: id (string)"));
 
-	oio_url_set (args->url, OIOURL_CONTENTID, json_object_get_string (jid));
+	const char *id = json_object_get_string (jid);
+	if (!oio_url_set (args->url, OIOURL_CONTENTID, id))
+		return _reply_m2_error (args, BADREQ("Expected: id (hexa string)"));
 
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
