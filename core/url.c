@@ -298,8 +298,9 @@ oio_url_set(struct oio_url_s *u, enum oio_url_field_e f, const char *v)
 			return u;
 
 		case OIOURL_CONTENTID:
+			if (!oio_str_ishexa1(v))
+				return NULL;
 			oio_str_replace(&(u->content), v);
-			/* TODO check it is hexadecimal */
 			return u;
 	}
 
