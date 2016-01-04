@@ -120,7 +120,8 @@ class TestRainContent(BaseTestCase):
             self.assertEqual(metachunk_hash.hexdigest().upper(),
                              target_metachunk_hash)
 
-    # FIXME add support of empty content + tests
+    def test_upload_0_byte(self):
+        self._test_upload(0)
 
     def test_upload_1_byte(self):
         self._test_upload(1)
@@ -191,6 +192,12 @@ class TestRainContent(BaseTestCase):
             del old_info[pos]["dl_meta"]["chunk_id"]
             del rebuilt_meta["chunk_id"]
             self.assertEqual(rebuilt_meta, old_info[pos]["dl_meta"])
+
+    def test_content_0_byte_rebuild_pos_0_0(self):
+        self._test_rebuild(0, ["0.0"])
+
+    def test_content_0_byte_rebuild_pos_0_0_and_0_p0(self):
+        self._test_rebuild(0, ["0.0", "0.p0"])
 
     def test_content_1_byte_rebuild_pos_0_0(self):
         self._test_rebuild(1, ["0.0"])
@@ -267,6 +274,9 @@ class TestRainContent(BaseTestCase):
             c = content.chunks.filter(pos=pos)[0]
             self.assertRaises(NotFound, self.blob_client.chunk_delete, c.url)
 
+    def test_download_content_0_byte_without_broken_chunks(self):
+        self._test_download(0, [])
+
     def test_download_content_1_byte_without_broken_chunks(self):
         self._test_download(1, [])
 
@@ -275,6 +285,9 @@ class TestRainContent(BaseTestCase):
 
     def test_download_content_chunksize_plus_1_without_broken_chunks(self):
         self._test_download(self.conf["chunk_size"] + 1, [])
+
+    def test_download_content_0_byte_with_broken_0_0_and_0_p0(self):
+        self._test_download(0, ["0.0", "0.p0"])
 
     def test_download_content_1_byte_with_broken_0_0_and_0_p0(self):
         self._test_download(1, ["0.0", "0.p0"])

@@ -278,7 +278,11 @@ class TestContentFactory(BaseTestCase):
 
         self.assertEqual(downloaded_data, data)
 
-    # TODO add tests with RAIN empty contents when supported
+    def test_change_content_0_byte_policy_single_to_rain(self):
+        self._test_change_policy(0, "SINGLE", "RAIN")
+
+    def test_change_content_0_byte_policy_rain_to_twocopies(self):
+        self._test_change_policy(0, "RAIN", "TWOCOPIES")
 
     def test_change_content_1_byte_policy_single_to_rain(self):
         self._test_change_policy(1, "SINGLE", "RAIN")
