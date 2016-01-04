@@ -111,6 +111,9 @@ class TestChunk(object):
             self.id, self.pos, self.url, self.hash)
 
 
+# TODO the rebuilding mechanism is now tested in content/test_[dup|rain]
+# so these tests shouldn't test if chunks are really rebuild but they
+# should test if the rdir is correctly updated.
 class TestRebuilderCrawler(BaseTestCase):
     def setUp(self):
         super(TestRebuilderCrawler, self).setUp()
