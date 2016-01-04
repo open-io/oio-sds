@@ -1,8 +1,24 @@
+# Copyright (C) 2015 OpenIO, original work as part of
+# OpenIO Software Defined Storage
+#
+# This library is free software; you can redistribute it and/or
+# modify it under the terms of the GNU Lesser General Public
+# License as published by the Free Software Foundation; either
+# version 3.0 of the License, or (at your option) any later version.
+#
+# This library is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+# Lesser General Public License for more details.
+#
+# You should have received a copy of the GNU Lesser General Public
+# License along with this library.
+
 import hashlib
 import time
 import unittest
 
-from mock import MagicMock as Mock
+from mock import patch
 
 from oio.blob.client import BlobClient
 from oio.blob.rebuilder import BlobRebuilderWorker
@@ -16,7 +32,8 @@ from tests.utils import BaseTestCase, get_config
 
 
 class TestContent(object):
-    def __init__(self, test_conf, account, container_name, content_name):
+    def __init__(self, test_conf, account,
+                 container_name, content_name, stgpol):
         self.test_conf = test_conf
         self.account = account
         self.container_name = container_name
@@ -28,6 +45,7 @@ class TestContent(object):
         self.version = "0"
         self.size = 0
         self.chunks = []
+        self.stgpol = stgpol
 
     def add_chunk(self, data, pos, rawx):
         c = TestChunk(self.test_conf, data, pos, rawx, self)
@@ -118,17 +136,16 @@ class TestRebuilderCrawler(BaseTestCase):
                                              size=content.size,
                                              checksum=content.hash,
                                              content_id=content.content_id,
+                                             stgpol=content.stgpol,
                                              data=content.get_create_meta2())
 
     def tearDown(self):
         super(TestRebuilderCrawler, self).tearDown()
 
-    @unittest.skipIf(get_config()['stgpol'] != "TWOCOPIES",
-                     "Storage policy is not TWOCOPIES")
     def test_rebuild_chunk(self):
         # push a new content
         content = TestContent(self.conf, self.account,
-                              self.container_name, "mycontent")
+                              self.container_name, "mycontent", "TWOCOPIES")
         data = "azerty"
         content.add_chunk(data, pos='0', rawx=0)
         content.add_chunk(data, pos='0', rawx=1)
@@ -143,9 +160,9 @@ class TestRebuilderCrawler(BaseTestCase):
                                 content.chunks[0].id)
 
         # check meta2 information
-        res = self.container_client.content_show(acct=content.account,
-                                                 ref=content.container_name,
-                                                 content=content.content_id)
+        _, res = self.container_client.content_show(acct=content.account,
+                                                    ref=content.container_name,
+                                                    content=content.content_id)
 
         new_chunk_info = None
         for c in res:
@@ -183,14 +200,12 @@ class TestRebuilderCrawler(BaseTestCase):
 
         self.assertIsNotNone(check_value.get('rtime'))
 
-    @unittest.skipIf((get_config()['stgpol'] != "THREECOPIES"
-                      or len(get_config()['rawx']) != 3),
-                     "Storage policy is not THREECOPIES "
-                     "or the number of rawx is not 3")
+    @unittest.skipIf(len(get_config()['rawx']) != 3,
+                     "The number of rawx must be 3")
     def test_rebuild_no_spare(self):
         # push a new content
         content = TestContent(self.conf, self.account,
-                              self.container_name, "mycontent")
+                              self.container_name, "mycontent", "THREECOPIES")
         data = "azerty"
         content.add_chunk(data, pos='0', rawx=0)
         content.add_chunk(data, pos='0', rawx=1)
@@ -206,12 +221,10 @@ class TestRebuilderCrawler(BaseTestCase):
                           content.container_id, content.content_id,
                           content.chunks[0].id)
 
-    @unittest.skipIf((get_config()['stgpol'] != "TWOCOPIES"),
-                     "Storage policy is not TWOCOPIES")
     def test_rebuild_upload_failed(self):
         # push a new content
         content = TestContent(self.conf, self.account,
-                              self.container_name, "mycontent")
+                              self.container_name, "mycontent", "TWOCOPIES")
         data = "azerty"
         content.add_chunk(data, pos='0', rawx=0)
         content.add_chunk(data, pos='0', rawx=1)
@@ -223,28 +236,25 @@ class TestRebuilderCrawler(BaseTestCase):
                                         self.conf['rawx'][0]['addr'])
 
         # Force upload to raise an exception
-        rebuilder.blob_client.chunk_copy = Mock(side_effect=Exception("xx"))
+        with patch('oio.content.content.BlobClient') as MockClass:
+            instance = MockClass.return_value
+            instance.chunk_copy.side_effect = Exception("xx")
+            self.assertRaises(UnrecoverableContent, rebuilder.chunk_rebuild,
+                              content.container_id, content.content_id,
+                              content.chunks[0].id)
 
-        self.assertRaises(UnrecoverableContent, rebuilder.chunk_rebuild,
-                          content.container_id, content.content_id,
-                          content.chunks[0].id)
-
-    @unittest.skipIf(get_config()['stgpol'] != "TWOCOPIES",
-                     "Storage policy is not TWOCOPIES")
     def test_rebuild_nonexistent_chunk(self):
         rebuilder = BlobRebuilderWorker(self.gridconf, None,
                                         self.conf['rawx'][0]['addr'])
 
         # try to rebuild an nonexistant chunk
         self.assertRaises(OrphanChunk, rebuilder.chunk_rebuild,
-                          64*'0', 32*'0', 64*'0')
+                          64 * '0', 32 * '0', 64 * '0')
 
-    @unittest.skipIf(get_config()['stgpol'] != "TWOCOPIES",
-                     "Storage policy is not TWOCOPIES")
     def test_rebuild_orphan_chunk(self):
         # push a new content
         content = TestContent(self.conf, self.account,
-                              self.container_name, "mycontent")
+                              self.container_name, "mycontent", "TWOCOPIES")
         data = "azerty"
         content.add_chunk(data, pos='0', rawx=0)
         content.add_chunk(data, pos='0', rawx=1)
@@ -259,12 +269,10 @@ class TestRebuilderCrawler(BaseTestCase):
         self.assertRaises(OrphanChunk, rebuilder.chunk_rebuild,
                           content.container_id, content.content_id, 64 * '0')
 
-    @unittest.skipIf(get_config()['stgpol'] != "SINGLE",
-                     "Storage policy is not SINGLE")
     def test_rebuild_with_no_copy(self):
         # push a new content
         content = TestContent(self.conf, self.account,
-                              self.container_name, "mycontent")
+                              self.container_name, "mycontent", "SINGLE")
         data = "azerty"
         content.add_chunk(data, pos='0', rawx=0)
 

@@ -136,7 +136,7 @@ class BlobMoverWorker(object):
             (self.address, meta['chunk_id'])
 
         try:
-            data = self.container_client.content_show(
+            _, data = self.container_client.content_show(
                 cid=content_cid, path=content_path)
         except exc.NotFound:
             raise exc.OrphanChunk('Content not found')

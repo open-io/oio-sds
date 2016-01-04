@@ -198,12 +198,16 @@ _reply_aliases (struct req_args_s *args, GError * err, GSList * beans,
 				",\"ver\":%"G_GINT64_FORMAT
 				",\"ctime\":%"G_GINT64_FORMAT
 				",\"mtime\":%"G_GINT64_FORMAT
-				",\"deleted\":%s",
+				",\"deleted\":%s"
+				",\"content\":\"",
 				ALIASES_get_alias(a)->str,
 				ALIASES_get_version(a),
 				ALIASES_get_ctime(a),
 				ALIASES_get_mtime(a),
 				ALIASES_get_deleted(a) ? "true" : "false");
+
+		metautils_gba_to_hexgstr(gstr, ALIASES_get_content(a));
+		g_string_append_c (gstr, '"');
 
 		if (h) {
 			g_string_append_c (gstr, ',');

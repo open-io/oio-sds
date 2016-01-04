@@ -3,6 +3,7 @@ from oio.common.utils import read_user_xattr
 
 RAWX_HEADER_PREFIX = 'x-oio-chunk-meta-'
 
+
 chunk_headers = {
     'content_cid': '%scontainer-id' % RAWX_HEADER_PREFIX,
     'content_id': '%scontent-id' % RAWX_HEADER_PREFIX,

@@ -47,14 +47,6 @@ class OrphanChunk(ChunkException):
     pass
 
 
-class ContentException(OioException):
-    pass
-
-
-class UnrecoverableContent(ContentException):
-    pass
-
-
 class ServerException(OioException):
     pass
 
@@ -65,6 +57,27 @@ class Meta2Exception(OioException):
 
 class SpareChunkException(Meta2Exception):
     pass
+
+
+class ContentException(OioException):
+    pass
+
+
+class InconsistentContent(ContentException):
+    pass
+
+
+class ContentNotFound(ContentException):
+    pass
+
+
+class UnrecoverableContent(ContentException):
+    pass
+
+
+class ServiceUnavailable(OioException):
+    pass
+
 
 _http_status_map = {404: NotFound}
 

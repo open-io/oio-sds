@@ -1473,6 +1473,7 @@ static void
 _m2_generate_alias_header(struct gen_ctx_s *ctx)
 {
 	const gchar *p;
+	GString *chunk_method;
 	p = ctx->pol ? storage_policy_get_name(ctx->pol) : "none";
 
 	GRID_TRACE2("%s(%s)", __FUNCTION__, oio_url_get(ctx->url, OIOURL_WHOLE));
@@ -1496,7 +1497,9 @@ _m2_generate_alias_header(struct gen_ctx_s *ctx)
 	CONTENTS_HEADERS_set_ctime(header, now / G_TIME_SPAN_SECOND);
 	CONTENTS_HEADERS_set_mtime(header, now / G_TIME_SPAN_SECOND);
 	CONTENTS_HEADERS_set2_mime_type(header, OIO_DEFAULT_MIMETYPE);
-	CONTENTS_HEADERS_set2_chunk_method(header, OIO_DEFAULT_CHUNKMETHOD);
+	chunk_method = storage_policy_to_chunk_method(ctx->pol);
+	CONTENTS_HEADERS_set_chunk_method(header, chunk_method);
+	g_string_free(chunk_method, TRUE);
 	ctx->cb(ctx->cb_data, header);
 }
 

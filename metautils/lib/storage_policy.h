@@ -70,6 +70,12 @@ struct storage_policy_s * storage_policy_init(struct namespace_info_s *ni,
 
 struct storage_policy_s * storage_policy_dup(const struct storage_policy_s *sp);
 
+/**
+ * @param sp the storage policy
+ * @return a string which represents the storage policy
+ */
+GString * storage_policy_to_chunk_method(const struct storage_policy_s *sp);
+
 void storage_policy_clean(struct storage_policy_s *sp);
 
 void storage_policy_gclean(gpointer u, gpointer ignored);

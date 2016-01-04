@@ -390,7 +390,7 @@ REASONABLYSLOW=NONE
 DUPONETWO=DUP:distance=1|nb_copy=2
 DUPONETHREE=DUP:distance=1|nb_copy=3
 DUPONEFIVE=DUP:distance=1|nb_copy=5
-RAIN=RAIN:k=6|m=2|algo=liber8tion
+RAIN=RAIN:k=6|m=2|algo=liber8tion|distance=1
 
 [DATA_TREATMENTS]
 """
@@ -756,6 +756,7 @@ def generate (ns, ip, options={}):
 	# Test agent configuration
 	listing = {}
 	listing["namespace"] = ns
+	listing["chunk_size"] = env['CHUNK_SIZE']
         listing["stgpol"] = stgpol
 	listing["account"] = 'test_account'
 	listing["account_addr"] = [str(ip) + ":" + str(port_account)]
@@ -772,6 +773,13 @@ def generate (ns, ip, options={}):
 				'num': num,
 				'addr': str(ip) + ':' + str(port),
 				'path': env['DATADIR'] +'/'+ ns +'-rawx-' + str(num)
+		})
+	listing["rainx"] = list()
+	rainx_index = 0
+	for num,port in rainx:
+		listing["rainx"].append({
+				'num': num,
+				'addr': str(ip) + ':' + str(port)
 		})
 	listing["redis"] = str(ip) + ':' + str(env['PORT_REDIS'])
 	listing["sds_path"] = SDSDIR

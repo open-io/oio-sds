@@ -537,3 +537,34 @@ storage_class_is_satisfied2(const struct storage_class_s *wsc,
 	}
 	return FALSE;
 }
+
+static GString *
+_rain_policy_to_chunk_method(const struct data_security_s *datasec) {
+	GString *result = g_string_new("plain/rain?");
+
+	gint64 k = data_security_get_int64_param(datasec, DS_KEY_K, 0);
+	gint64 m = data_security_get_int64_param(datasec, DS_KEY_M, 0);
+	const char *algo = data_security_get_param(datasec, DS_KEY_ALGO);
+
+	g_string_append_printf(result, "algo=%s&k=%" G_GINT64_FORMAT
+			"&m=%" G_GINT64_FORMAT, algo, k, m);
+
+	return result;
+}
+
+GString *
+storage_policy_to_chunk_method(const struct storage_policy_s *sp)
+{
+	const struct data_security_s *datasec = storage_policy_get_data_security(sp);
+
+	switch (data_security_get_type(datasec)) {
+		case RAIN:
+			return _rain_policy_to_chunk_method(datasec);
+		case DS_NONE:
+		case DUPLI:
+			return g_string_new("plain/bytes");
+		default:
+			g_assert_not_reached();
+	}
+}
+

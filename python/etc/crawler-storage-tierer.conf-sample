@@ -1,0 +1,15 @@
+[crawler-storage-tierer]
+namespace = NS
+user = openio
+# Containers from this account will be processed
+account = my_account
+# Contents older than this threshold (in seconds) will be processed
+outdated_threshold = 2592000
+# New storage policy to apply to outdated contents
+new_policy = RAIN
+report_interval = 5
+contents_per_second = 30
+log_level = INFO
+log_facility = LOG_LOCAL0
+log_address = /dev/log
+syslog_prefix = OIO,OPENIO,crawler-storage-tierer,1

@@ -1,6 +1,17 @@
 from oio.common.client import Client
 from oio.common.utils import json
 
+CONTENT_HEADER_PREFIX = 'x-oio-content-meta-'
+
+
+def extract_content_headers_meta(headers):
+    resp_headers = {}
+    for key in headers:
+        if key.lower().startswith(CONTENT_HEADER_PREFIX):
+            short_key = key[len(CONTENT_HEADER_PREFIX):]
+            resp_headers[short_key] = headers[key]
+    return resp_headers
+
 
 def gen_headers():
     hdrs = {'x-oio-action-mode': 'autocreate'}
@@ -124,7 +135,8 @@ class ContainerClient(Client):
 
     def content_create(self, acct=None, ref=None, path=None,
                        size=None, checksum=None, data=None, cid=None,
-                       content_id=None, **kwargs):
+                       content_id=None, stgpol=None, version=None,
+                       mime_type=None, chunk_method=None, **kwargs):
         uri = self._make_uri('content/create')
         params = self._make_params(acct, ref, path, cid=cid)
         data = json.dumps(data)
@@ -133,6 +145,14 @@ class ContainerClient(Client):
                      'x-oio-content-meta-hash': checksum})
         if content_id is not None:
             hdrs['x-oio-content-meta-id'] = content_id
+        if stgpol is not None:
+            hdrs['x-oio-content-meta-policy'] = stgpol
+        if version is not None:
+            hdrs['x-oio-content-meta-version'] = version
+        if mime_type is not None:
+            hdrs['x-oio-content-meta-mime-type'] = mime_type
+        if chunk_method is not None:
+            hdrs['x-oio-content-meta-chunk-method'] = chunk_method
         resp, body = self._request(
             'POST', uri, data=data, params=params, headers=hdrs)
 
@@ -147,18 +167,22 @@ class ContainerClient(Client):
         uri = self._make_uri('content/show')
         params = self._make_params(acct, ref, path, cid=cid, content=content)
         resp, body = self._request('GET', uri, params=params)
-        return body
+        resp_headers = extract_content_headers_meta(resp.headers)
+        return resp_headers, body
 
     def content_prepare(self, acct=None, ref=None, path=None, size=None,
-                        cid=None, **kwargs):
+                        cid=None, stgpol=None, **kwargs):
         uri = self._make_uri('content/prepare')
         params = self._make_params(acct, ref, path, cid=cid)
         data = {'size': size}
+        if stgpol:
+            data['policy'] = stgpol
         data = json.dumps(data)
         hdrs = gen_headers()
         resp, body = self._request(
             'POST', uri, data=data, params=params, headers=hdrs)
-        return resp.headers, body
+        resp_headers = extract_content_headers_meta(resp.headers)
+        return resp_headers, body
 
     def content_get_properties(self, acct=None, ref=None, path=None,
                                properties=[], cid=None, **kwargs):
@@ -193,9 +217,11 @@ class ContainerClient(Client):
         resp, body = self._request('POST', uri, params=params)
 
     def content_spare(self, acct=None, ref=None, path=None, data=None,
-                      cid=None, **kwargs):
+                      cid=None, stgpol=None, **kwargs):
         uri = self._make_uri('content/spare')
         params = self._make_params(acct, ref, path, cid=cid)
+        if stgpol:
+            params['stgpol'] = stgpol
         data = json.dumps(data)
         resp, body = self._request(
             'POST', uri, data=data, params=params)
