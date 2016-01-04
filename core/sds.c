@@ -912,6 +912,7 @@ oio_sds_download_to_file (struct oio_sds_s *sds, struct oio_url_s *url,
 
 struct oio_sds_ul_s
 {
+	gboolean started;
 	gboolean finished;
 	gboolean ready_for_data;
 
@@ -1197,6 +1198,8 @@ _sds_upload_renew (struct oio_sds_ul_s *ul)
 	g_assert (NULL == ul->http_dests);
 	g_assert (NULL == ul->checksum_chunk);
 
+	ul->started = TRUE;
+
 	/* ensure we have a new destination (metachunk) */
 	if (!ul->mc) {
 		if (g_queue_is_empty (ul->metachunk_ready)) {
@@ -1313,26 +1316,27 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 			} else {
 				GRID_TRACE("%s (%p) No data pending, nothing to do", __FUNCTION__, ul);
 			}
-			return NULL;
 		} else {
 			/* maybe we received the termination buffer */
 			GBytes *buf = g_queue_pop_head (ul->buffer_tail);
-			if (0 >= g_bytes_get_size (buf)) {
+			if (0 >= g_bytes_get_size (buf) && ul->started) {
 				ul->ready_for_data = FALSE;
 				ul->finished = TRUE;
 				g_bytes_unref (buf);
-				return NULL;
 			} else {
+				/* XXX JFS: if no upload at all has ever been started and we
+				 * received a buffer (empty or not), then we have a stream and
+				 * we need at least one empty chunk to be able to rebuid the
+				 * content. So we re-enqueue the buffer and let the PUT happen. */
 				g_queue_push_head (ul->buffer_tail, buf);
+				GError *err = _sds_upload_renew (ul);
+				if (NULL != err) {
+					GRID_TRACE("%s (%p) Failed to renew the upload", __FUNCTION__, ul);
+					return (struct oio_error_s*) err;
+				}
 			}
 		}
-
-		/* We have all the clues it is necessary to kick a new upload off */
-		GError *err = _sds_upload_renew (ul);
-		if (NULL != err) {
-			GRID_TRACE("%s (%p) Failed to renew the upload", __FUNCTION__, ul);
-			return (struct oio_error_s*) err;
-		}
+		return NULL;
 	}
 
 	g_assert (ul->put != NULL);

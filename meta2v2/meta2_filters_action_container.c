@@ -500,7 +500,7 @@ meta2_filter_action_link(struct gridd_filter_ctx_s *ctx,
 
 	// Perform the link
 	if (!err) {
-		GRID_WARN("Linking [%s] to [%s]", oio_url_get(url, OIOURL_WHOLE), hexid);
+		GRID_DEBUG("Linking [%s] to [%s]", oio_url_get(url, OIOURL_WHOLE), hexid);
 		err = meta2_backend_link_content (m2b, url, id);
 	}
 
