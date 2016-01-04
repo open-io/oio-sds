@@ -35,13 +35,14 @@ CHUNKSIZE=
 REDIS=0
 PORT=
 
-while getopts ":B:C:D:E:I:N:P:R:S:V:X:Z" opt; do
+while getopts ":B:C:D:E:I:M:N:P:R:S:V:X:Z" opt; do
 	case $opt in
 		B) REPLICATION_BUCKET="${OPTARG}" ;;
 		C) CHUNKSIZE="${OPTARG}" ;;
 		D) REPLICATION_DIRECTORY="${OPTARG}" ;;
 		E) NB_RAWX="${OPTARG}" ;;
 		I) IP="${OPTARG}" ;;
+		M) MONITOR_PERIOD="${OPTARG}" ;;
 		N) NS="${OPTARG}" ;;
 		P) PORT="${OPTARG}" ;;
 		R) REDIS="${OPTARG}" ;;
@@ -59,6 +60,7 @@ echo "$0" \
 	"-D \"${REPLICATION_DIRECTORY}\"" \
 	"-E \"${NB_RAWX}\"" \
 	"-I \"${IP}\"" \
+	"-M \"${MONITOR_PERIOD}\"" \
 	"-N \"${NS}\"" \
 	"-P \"${PORT}\"" \
 	"-R \"${REDIS}\"" \
@@ -90,6 +92,7 @@ opts="--nb-meta1=${NB_META1} --nb-meta2=${NB_META2}"
 if [ -n "$PORT" ] ; then opts="${opts} --port=${PORT}" ; fi
 if [ -n "$NB_RAWX" ] ; then opts="${opts} --nb-rawx=${NB_RAWX}" ; fi
 if [ -n "$CHUNKSIZE" ] ; then opts="${opts} --chunk-size=${CHUNKSIZE}" ; fi
+if [ -n "$MONITOR_PERIOD" ] ; then opts="${opts} --monitor-period=${MONITOR_PERIOD}" ; fi
 if [ "$REDIS" -gt 0 ] ; then opts="${opts} --allow-redis" ; fi
 for srvtype in ${AVOID} ; do opts="${opts} --no-${srvtype}"; done
 ${PREFIX}-bootstrap.py \
