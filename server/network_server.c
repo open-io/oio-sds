@@ -279,9 +279,9 @@ network_server_init(void)
 	result->workers_active_60 = grid_single_rrd_create(
 			result->now / G_TIME_SPAN_MINUTE, 64);
 
-	result->atexit_max_open_never_input = 30 * G_TIME_SPAN_SECOND;
-	result->atexit_max_idle = 5 * G_TIME_SPAN_SECOND;
-	result->atexit_max_open_persist = 120 * G_TIME_SPAN_SECOND;
+	result->atexit_max_open_never_input = SERVER_DEFAULT_CNX_INACTIVE;
+	result->atexit_max_idle = SERVER_DEFAULT_CNX_IDLE;
+	result->atexit_max_open_persist = SERVER_DEFAULT_CNX_LIFETIME;
 
 	GRID_INFO("SERVER ready with epollfd[%d] pipe[%d,%d]",
 			result->epollfd, result->wakeup[0], result->wakeup[1]);
@@ -580,22 +580,22 @@ _server_shutdown_inactive_connections(struct network_server_s *srv)
 		EXTRA_ASSERT(clt->fd >= 0);
 		if (clt->time.evt_in) {
 			if (clt->time.evt_in < ti) {
-				GRID_INFO("cnx %d closed: %s", clt->fd, "idle for too long");
+				GRID_DEBUG("cnx %d closed: %s", clt->fd, "idle for too long");
 				_manage_client_event(srv, clt, 0);
 				++ count;
 			} else if (clt->time.cnx < tp) {
-				GRID_INFO("cnx %d closed: %s", clt->fd, "open since too long");
+				GRID_DEBUG("cnx %d closed: %s", clt->fd, "open since too long");
 				_manage_client_event(srv, clt, 0);
 				++ count;
 			}
 		} else if (clt->time.cnx < tc) { /* never input */
-			GRID_INFO("cnx %d closed: %s", clt->fd, "inactive since too long");
+			GRID_DEBUG("cnx %d closed: %s", clt->fd, "inactive since too long");
 			_manage_client_event(srv, clt, 0);
 			++ count;
 		}
 	}
 
-	if (count) GRID_NOTICE ("%u cnx closed", count);
+	if (count) GRID_INFO ("%u cnx closed (idle or inactive)", count);
 }
 
 static gpointer

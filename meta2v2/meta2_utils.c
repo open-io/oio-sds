@@ -1538,10 +1538,6 @@ static GError*
 _m2_generate_RAIN(struct gen_ctx_s *ctx)
 {
 	GError *err = NULL;
-	/* Chunk position */
-	guint pos;
-	/* Current allocated size */
-	gint64 s;
 	/* Storage policy storage class */
 	const struct storage_class_s *stgclass;
 	gint distance, k, m;
@@ -1555,19 +1551,20 @@ _m2_generate_RAIN(struct gen_ctx_s *ctx)
 
 	(void) distance;
 
-	for (pos=0,s=0; s < MAX(ctx->size,1) ;) {
+	guint pos = 0;
+	for (gint64 s=0; s < MAX(ctx->size,1) ;) {
 		struct service_info_s **siv = NULL;
 
 		struct lb_next_opt_s opt;
 		memset(&opt, 0, sizeof(opt));
 		opt.req.duplicates = (distance <= 0);
-		opt.req.max = ((ctx->size>0)?(k + m):1);
+		opt.req.max = k + m;
 		opt.req.distance = distance;
 		opt.req.stgclass = stgclass;
 		opt.req.strict_stgclass = FALSE; // Accept ersatzes
 
 		if (!grid_lb_iterator_next_set(ctx->iter, &siv, &opt)) {
-			if ( pos == 0 )
+			if (pos == 0)
 				err = NEWERROR(CODE_PLATFORM_ERROR,"No Rawx available");
 			else
 				err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Not enough RAWX");
@@ -1581,7 +1578,6 @@ _m2_generate_RAIN(struct gen_ctx_s *ctx)
 		}
 
 		service_info_cleanv(siv, FALSE);
-
 		++ pos;
 		s += ctx->chunk_size;
 	}
@@ -1666,7 +1662,7 @@ m2_generate_beans(struct oio_url_s *url, gint64 size, gint64 chunk_size,
 	ctx.cb = cb;
 	ctx.cb_data = cb_data;
 
-	if (!pol/* || size == 0*/)
+	if (!pol)
 		return _m2_generate_DUPLI(&ctx);
 
 	switch (data_security_get_type(storage_policy_get_data_security(pol))) {
