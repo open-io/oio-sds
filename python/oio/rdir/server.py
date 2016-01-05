@@ -263,13 +263,13 @@ class RdirServiceLogger(Logger):
 
         error_conf = {
             'syslog_prefix': prefix,
-            'log_facility': 'LOG_LOCAL1',
+            'log_facility': 'LOG_LOCAL0',
             'log_address': address
         }
 
         access_conf = {
             'syslog_prefix': prefix,
-            'log_facility': 'LOG_LOCAL0',
+            'log_facility': 'LOG_LOCAL1',
             'log_address': address
         }
 
