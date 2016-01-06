@@ -88,7 +88,7 @@ group=${NS},localhost,account-server
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},account,1 -p 1 -m '${EXE_PREFIX}-account-monitor.py' -i '${NS}|account|${IP}:${PORT}' -c '${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf'
+command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},account,1 -p ${MONITOR_PERIOD} -m '${EXE_PREFIX}-account-monitor.py' -i '${NS}|account|${IP}:${PORT}' -c '${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf'
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
@@ -98,7 +98,7 @@ group=${NS},localhost,rdir-server
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},rdir,1 -p 1 -m '${EXE_PREFIX}-rdir-monitor.py' -i '${NS}|rdir|${IP}:${PORT}' -c '${EXE_PREFIX}-rdir-server ${CFGDIR}/${NS}-rdir-server.conf'
+command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},rdir,1 -p ${MONITOR_PERIOD} -m '${EXE_PREFIX}-rdir-monitor.py' -i '${NS}|rdir|${IP}:${PORT}' -c '${EXE_PREFIX}-rdir-server ${CFGDIR}/${NS}-rdir-server.conf'
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
@@ -452,7 +452,7 @@ command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${NS}
 template_gridinit_rawx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE}
-command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},${SRVTYPE},${SRVNUM} -p 1 -m '${EXE_PREFIX}-rawx-monitor.py' -i '${NS}|${SRVTYPE}|${IP}:${PORT}' -c '${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf'
+command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},${SRVTYPE},${SRVNUM} -p ${MONITOR_PERIOD} -m '${EXE_PREFIX}-rawx-monitor.py' -i '${NS}|${SRVTYPE}|${IP}:${PORT}' -c '${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf'
 enabled=true
 start_at_boot=false
 on_die=respawn
@@ -461,7 +461,7 @@ on_die=respawn
 template_gridinit_rainx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE}
-command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},${SRVTYPE},${SRVNUM} -p 1 -m '${EXE_PREFIX}-rainx-monitor.py' -i '${NS}|${SRVTYPE}|${IP}:${PORT}' -c '${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf'
+command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},${SRVTYPE},${SRVNUM} -p ${MONITOR_PERIOD} -m '${EXE_PREFIX}-rainx-monitor.py' -i '${NS}|${SRVTYPE}|${IP}:${PORT}' -c '${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf'
 enabled=true
 start_at_boot=false
 on_die=respawn
@@ -623,6 +623,7 @@ def generate (ns, ip, options={}):
 			HTTPD_BINARY=HTTPD_BINARY)
 
 	env['CHUNK_SIZE'] = getint(options.CHUNK_SIZE, 1024*1024)
+	env['MONITOR_PERIOD'] = getint(options.MONITOR_PERIOD, 1)
 	env['PORT_REDIS'] = 6379
 
 	if options.NO_ZOOKEEPER is not None:
@@ -808,6 +809,7 @@ def main ():
 	parser.add_option("--chunk-size", action="store", type="int", dest="CHUNK_SIZE")
 	parser.add_option("--no-zookeeper", action="store_true", dest="NO_ZOOKEEPER")
 	parser.add_option("--allow-redis", action="store_true", dest="ALLOW_REDIS")
+	parser.add_option("--monitor-period", action="store", type="int", dest="MONITOR_PERIOD")
 
 	parser.add_option("--no-meta0", action="store_true", dest="NO_META0")
 	parser.add_option("--no-meta1", action="store_true", dest="NO_META1")

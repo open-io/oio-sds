@@ -218,7 +218,6 @@ class RainContent(Content):
                 self.logger.debug("Chunk %s not found" % c.url)
                 for s in streams:
                     s.close()
-                # TODO don't test again the presence of chunks during rebuild
                 streams = [self.rebuild_metachunk(metapos, on_the_fly=True)]
 
             for stream in streams:

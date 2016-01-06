@@ -751,7 +751,8 @@ dav_rainx_close_stream(dav_stream *stream, int commit)
 		goto close_stream_error_label;
 	}
 
-	if (subchunk_size - stream->r->info->current_chunk_remaining > 0) {
+	if (subchunk_size - stream->r->info->current_chunk_remaining > 0
+			|| stream->original_data_size == 0 /* empty content */) {
 		/* Initializing the PUT params structure */
 		i = stream->r->info->current_rawx;
 		data_put_params[i] = (struct req_params_store*)apr_pcalloc(
