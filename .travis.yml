@@ -10,8 +10,11 @@ install:
   - pip install --upgrade pip setuptools virtualenv
   - (cd python && pip install -r requirements.txt)
 script:
-  - cmake -DCMAKE_BUILD_TYPE="Debug" -DZK_LIBDIR="/usr/lib" -DZK_INCDIR="/usr/include/zookeeper" -DLIBRAIN_LIBDIR="/usr/lib" -DLIBRAIN_INCDIR="/usr/include" -DAPACHE2_LIBDIR="/usr/lib/apache2" -DAPACHE2_INCDIR="/usr/include/apache2" .
+  - mkdir /tmp/oio
+  - cmake -DCMAKE_INSTALL_PREFIX=/tmp/oio -DLD_LIBDIR=lib -DCMAKE_BUILD_TYPE="Debug" -DZK_LIBDIR="/usr/lib" -DZK_INCDIR="/usr/include/zookeeper" -DLIBRAIN_LIBDIR="/usr/lib" -DLIBRAIN_INCDIR="/usr/include" -DAPACHE2_LIBDIR="/usr/lib/apache2" -DAPACHE2_INCDIR="/usr/include/apache2" .
   - make
-  - (cd python && python setup.py install)
+  - ( cd python && python setup.py install )
+  - ( export PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib" && /tmp/oio/bin/oio-reset.sh -S SINGLE -N "NS" -C 65536 -B 1 -D 1 -R 1 -X "zookeeper" )
   - make -C tests/unit test
   - make -C tests/func test
+  - ( export PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib" && OIO_NS=NS OIO_ACCOUNT=TravisTestAccount OIO_USER=TravisTestContainer OIO_PATH=$(rand) ./core/tool_roundtrip /etc/passwd )
