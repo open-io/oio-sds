@@ -297,12 +297,9 @@ void
 test_list_badarg (const char *strcfg, const char *ns)
 {
 	void _hook (struct oio_sds_s *sds) {
-		struct oio_sds_list_param_s param;
-		struct oio_sds_list_listener_s listener;
+		struct oio_sds_list_param_s param = {0};
+		struct oio_sds_list_listener_s listener = {0};
 		struct oio_error_s *err = NULL;
-
-		memset (&param, 0, sizeof(param));
-		memset (&listener, 0, sizeof(listener));
 
 		err = oio_sds_list (sds, NULL, NULL);
 		g_assert_nonnull (err);
@@ -320,12 +317,10 @@ void
 test_list_fail (const char *strcfg, const char *ns, const char *strurl)
 {
 	void _hook (struct oio_sds_s *sds, struct oio_url_s *url) {
-		struct oio_sds_list_param_s param;
-		struct oio_sds_list_listener_s listener;
+		struct oio_sds_list_param_s param = {0};
+		struct oio_sds_list_listener_s listener = {0};
 		struct oio_error_s *err = NULL;
 
-		memset (&param, 0, sizeof(param));
-		memset (&listener, 0, sizeof(listener));
 		param.url = url;
 
 		err = oio_sds_list (sds, &param, &listener);
@@ -348,12 +343,12 @@ test_list_success_count (const char *strcfg, const char *ns,
 		return 0;
 	}
 	void _hook (struct oio_sds_s *sds, struct oio_url_s *url) {
-		struct oio_sds_list_param_s param;
-		struct oio_sds_list_listener_s listener;
+		GRID_DEBUG("TEST LIST ns=%s count=%u prefix=%s marker=%s end=%s max=%u",
+				ns, count, prefix, marker, end, max);
+		struct oio_sds_list_param_s param = {0};
+		struct oio_sds_list_listener_s listener = {0};
 		struct oio_error_s *err = NULL;
 
-		memset (&param, 0, sizeof(param));
-		memset (&listener, 0, sizeof(listener));
 		param.url = url;
 		param.prefix = prefix;
 		param.marker = marker;

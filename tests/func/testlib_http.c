@@ -60,10 +60,14 @@ test_upload_ok (int errors, int size, ...)
 	if (size < 0)
 		size = 128;
 	int fed = 0;
+
+	GRID_DEBUG("Uploading size=%d -> content-length=%"G_GINT64_FORMAT
+			" soft-length=%d", size, content_length, -1);
 	while (!http_put_done(p)) {
 		if (fed < size) {
-			http_put_feed (p, g_bytes_new((guint8*)"00000000", 8));
-			fed += 8;
+			int howmuch = (size-fed > 8) ? 8 : (size-fed);
+			http_put_feed (p, g_bytes_new((guint8*)"00000000", howmuch));
+			fed += howmuch;
 		} else {
 			http_put_feed (p, g_bytes_new((guint8*)"", 0));
 		}

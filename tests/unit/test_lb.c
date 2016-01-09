@@ -204,8 +204,7 @@ generate_set_and_check_uniform_repartition(struct grid_lb_iterator_s *iter,
 	struct service_info_s **siv = NULL;
 	GTree *used = g_tree_new_full(cmp_addr, NULL, g_free, g_free);
 
-	struct lb_next_opt_s opt;
-	memset(&opt, 0, sizeof(opt));
+	struct lb_next_opt_s opt = {0};
 	opt.req.max = max_get;
 	opt.req.distance = 1;
 	opt.req.duplicates = TRUE;
@@ -242,8 +241,7 @@ _count_set(struct grid_lb_iterator_s *iter, guint max)
 	struct service_info_s **siv = NULL;
 	gboolean rc;
 
-	struct lb_next_opt_s opt;
-	memset(&opt, 0, sizeof(opt));
+	struct lb_next_opt_s opt = {0};
 	opt.req.max = max;
 	opt.req.distance = 1;
 	opt.req.duplicates = TRUE;

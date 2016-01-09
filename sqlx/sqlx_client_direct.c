@@ -26,11 +26,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/oiolog.h>
 #include <core/oiostr.h>
 #include <core/oiourl.h>
-
-/* from oiosds */
 #include <core/oiodir.h>
 #include <core/internals.h>
 
+/* from oio-sds/metautils */
 #include <RowFieldSequence.h>
 #include <RowFieldValue.h>
 #include <RowField.h>
@@ -43,6 +42,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <asn_codecs.h>
 
 #include <metautils/lib/metautils.h>
+
 #include <sqliterepo/sqlx_remote.h>
 
 #include "sqlx_client.h"
@@ -68,6 +68,8 @@ static void _sds_factory_destroy (struct oio_sqlx_client_factory_s *self);
 static GError * _sds_factory_open (struct oio_sqlx_client_factory_s *self,
 			const struct oio_url_s *u, struct oio_sqlx_client_s **out);
 
+static GError * _sds_client_create_db (struct oio_sqlx_client_s *self);
+
 static void _sds_client_destroy (struct oio_sqlx_client_s *self);
 
 static GError * _sds_client_batch (struct oio_sqlx_client_s *self,
@@ -82,8 +84,11 @@ struct oio_sqlx_client_factory_vtable_s vtable_factory_SDS = {
 
 struct oio_sqlx_client_vtable_s vtable_SDS = {
 	_sds_client_destroy,
+	_sds_client_create_db,
 	_sds_client_batch
 };
+
+/* -------------------------------------------------------------------------- */
 
 static void
 _sds_factory_destroy (struct oio_sqlx_client_factory_s *self)
@@ -135,6 +140,19 @@ oio_sqlx_client_factory__create_sds (const char *ns,
 	return NULL;
 }
 
+/* -------------------------------------------------------------------------- */
+
+static void
+_sds_client_get_srvtype (struct oio_sqlx_client_SDS_s *self, gchar *d, gsize dlen)
+{
+	g_strlcpy (d, NAME_SRVTYPE_SQLX, dlen);
+	const char *subtype = oio_url_get (self->url, OIOURL_TYPE);
+	if (subtype && *subtype) {
+		g_strlcat (d, ".", dlen);
+		g_strlcat (d, subtype, dlen);
+	}
+}
+
 static void
 _sds_client_destroy (struct oio_sqlx_client_s *self)
 {
@@ -145,6 +163,44 @@ _sds_client_destroy (struct oio_sqlx_client_s *self)
 	c->factory = NULL;
 	oio_url_pclean (&c->url);
 	SLICE_FREE (struct oio_sqlx_client_SDS_s, c);
+}
+
+/* With SQLX, creating a DB is mainly a call to the directory to ensure a
+ * service is linked, then a query to reach the service a autocreate the
+ * DB file. */
+static GError *
+_sds_client_create_db (struct oio_sqlx_client_s *self)
+{
+	g_assert (self != NULL);
+	struct oio_sqlx_client_SDS_s *c = (struct oio_sqlx_client_SDS_s*) self;
+	g_assert (c->vtable == &vtable_SDS);
+
+	/* Link with the directory */
+	gchar srvtype[64];
+	_sds_client_get_srvtype (c, srvtype, sizeof(srvtype));
+
+	gchar **allsrv = NULL;
+	GError *err = oio_directory__link (c->factory->dir,
+			c->url, srvtype, TRUE/*autocreate*/, &allsrv);
+	if (err) {
+		g_prefix_error (&err, "Directory error: ");
+		EXTRA_ASSERT (allsrv == NULL);
+		return err;
+	} else {
+		EXTRA_ASSERT (allsrv != NULL);
+		g_strfreev (allsrv);
+	}
+
+	/* then hit the service to autocreate the base */
+	err = oio_sqlx_client__execute_statement (self,
+			"SELECT COUNT(*) from sqlite_master", NULL,
+			NULL, NULL);
+	if (err) {
+		g_prefix_error (&err, "sqlx error: ");
+		return err;
+	}
+
+	return NULL;
 }
 
 static GByteArray *
@@ -324,7 +380,7 @@ _sds_client_batch (struct oio_sqlx_client_s *self,
 		struct oio_sqlx_batch_s *batch,
 		struct oio_sqlx_batch_result_s **out_result)
 {
-	GRID_WARN("%s (%p)", __FUNCTION__, self);
+	GRID_TRACE2("%s (%p)", __FUNCTION__, self);
 
 	g_assert (self != NULL);
 	struct oio_sqlx_client_SDS_s *c = (struct oio_sqlx_client_SDS_s*) self;
@@ -332,12 +388,8 @@ _sds_client_batch (struct oio_sqlx_client_s *self,
 	g_assert (c->factory != NULL);
 
 	/* locate the sqlx server via the directory object */
-	gchar srvtype[64] = "sqlx";
-	const char *subtype = oio_url_get (c->url, OIOURL_TYPE);
-	if (subtype && *subtype) {
-		g_strlcat (srvtype, ".", sizeof(srvtype));
-		g_strlcat (srvtype, subtype, sizeof(srvtype));
-	}
+	gchar srvtype[64];
+	_sds_client_get_srvtype (c, srvtype, sizeof(srvtype));
 
 	gchar **allsrv = NULL;
 	GError *err = oio_directory__list (c->factory->dir,

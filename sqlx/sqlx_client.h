@@ -73,13 +73,20 @@ struct oio_sqlx_client_s;
 
 void oio_sqlx_client__destroy (struct oio_sqlx_client_s *self);
 
-GError * oio_sqlx_client__execute_statement (struct oio_sqlx_client_s *self,
-		const char *in_stmt, gchar **in_params,
-		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines);
+/* ensure the DB exists */
+GError * oio_sqlx_client__create_db (struct oio_sqlx_client_s *self);
 
 GError * oio_sqlx_client__execute_batch (struct oio_sqlx_client_s *self,
 		struct oio_sqlx_batch_s *batch,
 		struct oio_sqlx_batch_result_s **out_result);
+
+/* execute a single statement. this is ccurrently a wrapper of
+   oio_sqlx_client__execute_statement() working on a singleton statement.
+   The output consist in the whole resultset where each line is a "kind of"
+   CSV agregation of the corresponding row. */
+GError * oio_sqlx_client__execute_statement (struct oio_sqlx_client_s *self,
+		const char *in_stmt, gchar **in_params,
+		struct oio_sqlx_output_ctx_s *out_ctx, gchar ***out_lines);
 
 /* -------------------------------------------------------------------------- */
 

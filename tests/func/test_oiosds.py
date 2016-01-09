@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 
-# test_oiosds.py, a script performing functional tests of the OpenIO SDS's C SDK 
+# test_oiosds.py, a script performing functional tests of the OpenIO SDS's C SDK
 # Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
-# 
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
 # License, or (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Affero General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
@@ -99,18 +99,21 @@ def test_get(lib):
 	http[0].expectations = [
 		(("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (503, {}, "")),
 		(("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (200, {}, "[]")),
+
 		(("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (200, {}, json.dumps([
 			{"url":"http://"+urls[1]+"/0000000000000000000000000000000000000000000000000000000000000000",
-			"pos":"0.0", "size":64, "hash":"00000000000000000000000000000000"},
+			"pos":"0", "size":64, "hash":"00000000000000000000000000000000"},
 		]))),
+
 		(("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (200, {}, json.dumps([
 			{"url":"http://"+urls[1]+"/0000000000000000000000000000000000000000000000000000000000000001",
-			"pos":"0.0", "size":64, "hash":"00000000000000000000000000000000"},
+			"pos":"0", "size":64, "hash":"00000000000000000000000000000000"},
 			{"url":"http://"+urls[2]+"/0000000000000000000000000000000000000000000000000000000000000002",
-			"pos":"0.0", "size":64, "hash":"00000000000000000000000000000000"},
+			"pos":"0", "size":64, "hash":"00000000000000000000000000000000"},
 			{"url":"http://"+urls[3]+"/0000000000000000000000000000000000000000000000000000000000000003",
-			"pos":"0.0", "size":64, "hash":"00000000000000000000000000000000"},
+			"pos":"0", "size":64, "hash":"00000000000000000000000000000000"},
 		]))),
+
 		(("/v3.0/NS/content/show?acct=ACCT&ref=JFS&path=plop", {}, ""), (200, {}, json.dumps([
 			{"url":"http://"+urls[1]+"/0000000000000000000000000000000000000000000000000000000000000004",
 			"pos":"0.0", "size":16, "hash":"00000000000000000000000000000000"},
@@ -195,23 +198,19 @@ def test_list_ok(lib):
 	proxy.expectations = [
 		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
 		 (200, {}, "{\"objects\":[],\"prefixes\":[]}")),
+
 		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
 		 (200, {}, json.dumps({
 				"objects" : [{"name":x, "hash":"0000", "size":0, "ver":1} for x in names],
 				"prefixes" : [],
 		}))),
+
 		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&prefix=pla", {}, ""),
 		 (200, {}, json.dumps({
 				"objects" : [{"name":x, "hash":"0000", "size":0, "ver":1} for x in names if x.startswith("pla")],
 				"prefixes" : [],
 		}))),
 
-		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
-		 (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plap", },
-			json.dumps({
-				"objects" : [{"name":"plap", "hash":"0000", "size":0, "ver":1}],
-				"prefixes" : [],
-		}))),
 		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&marker=plap", {}, ""),
 		 (200, { "X-Oio-list-truncated" : False, "X-Oio-list-next" : "plep", },
 			json.dumps({
@@ -219,12 +218,26 @@ def test_list_ok(lib):
 				"prefixes" : [],
 		}))),
 
-		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&max=2", {}, ""),
-		 (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plap", },
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
+		 (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plep", },
 			json.dumps({
-				"objects" : [{"name":"plap", "hash":"0000", "size":0, "ver":1}],
+				"objects" : [
+					{"name":"plap", "hash":"0000", "size":0, "ver":1},
+					{"name":"plep", "hash":"0000", "size":0, "ver":1},
+				],
 				"prefixes" : [],
 		}))),
+
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&max=2", {}, ""),
+		 (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plep", },
+			json.dumps({
+				"objects" : [
+					{"name":"plap", "hash":"0000", "size":0, "ver":1},
+					{"name":"plep", "hash":"0000", "size":0, "ver":1},
+				],
+				"prefixes" : [],
+		}))),
+
 		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&marker=plap&max=1", {}, ""),
 		 (200, { "X-Oio-list-truncated" : False, "X-Oio-list-next" : "plep", },
 			json.dumps({
@@ -241,8 +254,10 @@ def test_list_ok(lib):
 		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 0, None, None, None, 0)
 		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 6, None, None, None, 0)
 		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 1, "pla", None, None, 0)
+		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 1, None, "plap", None, 0)
 		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 2, None, None, None, 0)
 		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 2, None, None, None, 2)
+		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 1, None, "plap", None, 1)
 	finally:
 		proxy.shutdown()
 		service.join()

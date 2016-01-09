@@ -26,23 +26,23 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "tests/common/test_sqlx_abstract.c"
 
 static void
-test_sds (void)
+test_mem (void)
 {
 	struct oio_sqlx_client_factory_s *factory = NULL;
-	struct oio_directory_s *dir = oio_directory__create_proxy ("NS");
-	factory = oio_sqlx_client_factory__create_sds ("NS", dir);
+	factory = oio_sqlx_client_factory__create_local ("NS",
+			"CREATE TABLE IF NOT EXISTS admin (k TEXT PRIMARY KEY, v TEXT NOT NULL);"
+			"CREATE TABLE IF NOT EXISTS sequence (i INTEGER PRIMARY KEY, v TEXT NOT NULL);"
+			"CREATE TABLE IF NOT EXISTS sequence2 (i INT PRIMARY KEY, v TEXT NOT NULL);");
 	g_assert_nonnull (factory);
 	_test_round (factory);
 	oio_sqlx_client_factory__destroy (factory);
 	factory = NULL;
-	oio_directory__destroy (dir);
-	dir = NULL;
 }
 
 int
 main (int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
-	g_test_add_func("/sqlx/client/sds", test_sds);
+	g_test_add_func("/sqlx/client/mem", test_mem);
 	return g_test_run();
 }
