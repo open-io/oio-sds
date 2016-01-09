@@ -198,23 +198,19 @@ def test_list_ok(lib):
 	proxy.expectations = [
 		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
 		 (200, {}, "{\"objects\":[],\"prefixes\":[]}")),
+
 		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
 		 (200, {}, json.dumps({
 				"objects" : [{"name":x, "hash":"0000", "size":0, "ver":1} for x in names],
 				"prefixes" : [],
 		}))),
+
 		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&prefix=pla", {}, ""),
 		 (200, {}, json.dumps({
 				"objects" : [{"name":x, "hash":"0000", "size":0, "ver":1} for x in names if x.startswith("pla")],
 				"prefixes" : [],
 		}))),
 
-		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
-		 (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plap", },
-			json.dumps({
-				"objects" : [{"name":"plap", "hash":"0000", "size":0, "ver":1}],
-				"prefixes" : [],
-		}))),
 		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&marker=plap", {}, ""),
 		 (200, { "X-Oio-list-truncated" : False, "X-Oio-list-next" : "plep", },
 			json.dumps({
@@ -222,12 +218,26 @@ def test_list_ok(lib):
 				"prefixes" : [],
 		}))),
 
-		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&max=2", {}, ""),
-		 (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plap", },
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS", {}, ""),
+		 (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plep", },
 			json.dumps({
-				"objects" : [{"name":"plap", "hash":"0000", "size":0, "ver":1}],
+				"objects" : [
+					{"name":"plap", "hash":"0000", "size":0, "ver":1},
+					{"name":"plep", "hash":"0000", "size":0, "ver":1},
+				],
 				"prefixes" : [],
 		}))),
+
+		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&max=2", {}, ""),
+		 (200, { "X-Oio-list-truncated" : True, "X-Oio-list-next" : "plep", },
+			json.dumps({
+				"objects" : [
+					{"name":"plap", "hash":"0000", "size":0, "ver":1},
+					{"name":"plep", "hash":"0000", "size":0, "ver":1},
+				],
+				"prefixes" : [],
+		}))),
+
 		(("/v3.0/NS/container/list?acct=ACCT&ref=JFS&marker=plap&max=1", {}, ""),
 		 (200, { "X-Oio-list-truncated" : False, "X-Oio-list-next" : "plep", },
 			json.dumps({
@@ -244,8 +254,10 @@ def test_list_ok(lib):
 		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 0, None, None, None, 0)
 		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 6, None, None, None, 0)
 		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 1, "pla", None, None, 0)
+		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 1, None, "plap", None, 0)
 		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 2, None, None, None, 0)
 		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 2, None, None, None, 2)
+		lib.test_list_success_count(cfg, "NS", "NS/ACCT/JFS", 1, None, "plap", None, 1)
 	finally:
 		proxy.shutdown()
 		service.join()
