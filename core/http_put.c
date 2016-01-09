@@ -258,8 +258,8 @@ http_put_feed (struct http_put_s *p, GBytes *b)
 	g_assert (p != NULL);
 	g_assert (b != NULL);
 	gssize len = g_bytes_get_size (b);
-	g_assert (len <= 0 || p->remaining_length < 0 || len <= p->remaining_length);
 	GRID_TRACE("%s (%p) <- %"G_GSIZE_FORMAT, __FUNCTION__, p, len);
+	g_assert (len <= 0 || p->remaining_length < 0 || len <= p->remaining_length);
 
 	g_queue_push_tail (p->buffer_tail, g_bytes_ref(b));
 
