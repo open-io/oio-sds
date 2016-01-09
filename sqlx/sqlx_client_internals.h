@@ -51,6 +51,8 @@ struct oio_sqlx_client_vtable_s
 {
 	void (*destroy) (struct oio_sqlx_client_s *self);
 
+	GError * (*create_db) (struct oio_sqlx_client_s *self);
+
 	GError * (*execute_batch) (struct oio_sqlx_client_s *self,
 			struct oio_sqlx_batch_s *in,
 			struct oio_sqlx_batch_result_s **out);

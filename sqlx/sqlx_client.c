@@ -27,9 +27,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <core/oiostr.h>
 #include <core/oiourl.h>
 
-/* from oiosds */
 #include <core/internals.h>
 
+/* from oiosds */
 #include <metautils/lib/metautils.h>
 #include <sqliterepo/sqlx_remote.h>
 
@@ -43,6 +43,20 @@ void
 oio_sqlx_client__destroy (struct oio_sqlx_client_s *self)
 {
 	CLIENT_CALL(self,destroy)(self);
+}
+
+GError *
+oio_sqlx_client__create_db (struct oio_sqlx_client_s *self)
+{
+	CLIENT_CALL(self,create_db)(self);
+}
+
+GError *
+oio_sqlx_client__execute_batch (struct oio_sqlx_client_s *self,
+		struct oio_sqlx_batch_s *batch,
+		struct oio_sqlx_batch_result_s **out_result)
+{
+	CLIENT_CALL(self,execute_batch)(self, batch, out_result);
 }
 
 GError *
@@ -71,7 +85,7 @@ oio_sqlx_client__execute_statement (struct oio_sqlx_client_s *self,
 	g_assert (count == 1);
 	guint count_lines = 0;
 	err = oio_sqlx_batch_result__get_statement (result, 0, &count_lines, out_ctx);
-	if (!err) {
+	if (!err && out_lines) {
 		GPtrArray *tmp = g_ptr_array_new ();
 		for (guint i=0; i<count_lines ;++i) {
 			gchar **fields = oio_sqlx_batch_result__get_row (result, 0, i);
@@ -84,14 +98,6 @@ oio_sqlx_client__execute_statement (struct oio_sqlx_client_s *self,
 	oio_sqlx_batch_result__destroy (result);
 
 	return err;
-}
-
-GError *
-oio_sqlx_client__execute_batch (struct oio_sqlx_client_s *self,
-		struct oio_sqlx_batch_s *batch,
-		struct oio_sqlx_batch_result_s **out_result)
-{
-	CLIENT_CALL(self,execute_batch)(self, batch, out_result);
 }
 
 void
@@ -168,8 +174,10 @@ oio_sqlx_batch_result__get_statement (
 	EXTRA_ASSERT (stmt != NULL);
 	EXTRA_ASSERT (stmt->rows != NULL);
 
-	*out_ctx = stmt->ctx;
-	*out_count = stmt->rows->len;
+	if (out_ctx)
+		*out_ctx = stmt->ctx;
+	if (out_count)
+		*out_count = stmt->rows->len;
 	if (!stmt->err)
 		return NULL;
 	return NEWERROR(stmt->err->code, "%s", stmt->err->message);

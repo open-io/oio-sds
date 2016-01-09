@@ -21,17 +21,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 #include <sqlite3.h>
 
-/* from oiocore */
 #include <core/oiocfg.h>
 #include <core/oiolog.h>
 #include <core/oiostr.h>
 #include <core/oiourl.h>
-
-/* from oiosds */
 #include <core/internals.h>
 
 #include <metautils/lib/metautils.h>
-#include <sqliterepo/sqlx_remote.h>
 
 #include "sqlx_client.h"
 #include "sqlx_client_internals.h"
@@ -52,6 +48,8 @@ struct oio_sqlx_client_factory_LOCAL_s
 
 static void _local_client_destroy (struct oio_sqlx_client_s *self);
 
+static GError * _local_client_create_db (struct oio_sqlx_client_s *self);
+
 static GError * _local_client_execute_batch (struct oio_sqlx_client_s *self,
 		struct oio_sqlx_batch_s *batch,
 		struct oio_sqlx_batch_result_s **out_result);
@@ -71,6 +69,7 @@ struct oio_sqlx_client_factory_vtable_s vtable_factory_LOCAL =
 struct oio_sqlx_client_vtable_s vtable_LOCAL =
 {
 	_local_client_destroy,
+	_local_client_create_db,
 	_local_client_execute_batch,
 };
 
@@ -85,6 +84,16 @@ _local_client_destroy (struct oio_sqlx_client_s *self)
 	s->db = NULL;
 	s->vtable = NULL;
 	SLICE_FREE (struct oio_sqlx_client_LOCAL_s, s);
+}
+
+static GError *
+_local_client_create_db (struct oio_sqlx_client_s *self)
+{
+	g_assert (self != NULL);
+	struct oio_sqlx_client_LOCAL_s *s = (struct oio_sqlx_client_LOCAL_s*)self;
+	g_assert (s->vtable == &vtable_LOCAL);
+	/* actually a No-OP since the DB is in-mem, and created at the opening */
+	return NULL;
 }
 
 static gchar **

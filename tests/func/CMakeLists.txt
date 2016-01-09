@@ -42,8 +42,7 @@ add_executable(test_oio_dir test_dir.c)
 target_link_libraries(test_oio_dir oiosds)
 add_test(NAME core/dir COMMAND test_oio_dir)
 
-add_executable(test_sqlx_client test_sqlx_client.c)
-target_link_libraries(test_sqlx_client
-		oiosqlx oiosqlx_direct oiosqlx_local)
-add_test(NAME sqlx/client COMMAND test_sqlx_client)
+add_executable(test_sqlx_client_sds test_sqlx_client.c)
+target_link_libraries(test_sqlx_client_sds oiosqlx oiosqlx_direct ${COMMON})
+add_test(NAME sqlx/client/sds COMMAND test_sqlx_client_sds)
 

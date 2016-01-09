@@ -142,8 +142,7 @@ check_list_count(struct meta2_backend_s *m2, struct oio_url_s *url,
 		_bean_clean(bean);
 	}
 
-	struct list_params_s lp;
-	memset(&lp, '\0', sizeof(struct list_params_s));
+	struct list_params_s lp = {0};
 	lp.flag_allversion = ~0;
 
 	err = meta2_backend_list_aliases(m2, url, &lp, NULL, _count, NULL, NULL);
@@ -238,7 +237,7 @@ _repo_wraper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 	struct sqlx_repository_s *repository = NULL;
 	struct hc_resolver_s *resolver = NULL;
 	struct namespace_info_s *nsinfo = NULL;
-	struct sqlx_repo_config_s cfg;
+	struct sqlx_repo_config_s cfg = {0};
 
 	g_assert(ns != NULL);
 
@@ -254,7 +253,6 @@ _repo_wraper(const gchar *ns, gint64 maxvers, repo_test_f fr)
 	resolver = hc_resolver_create1(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND);
 	g_assert(resolver != NULL);
 
-	memset(&cfg, 0, sizeof(cfg));
 	cfg.flags = SQLX_REPO_DELETEON;
 	cfg.sync_solo = SQLX_SYNC_OFF;
 	cfg.sync_repli = SQLX_SYNC_OFF;
@@ -284,7 +282,7 @@ _repo_failure(const gchar *ns)
 	struct sqlx_repository_s *repository = NULL;
 	struct hc_resolver_s *resolver = NULL;
 	struct grid_lbpool_s *glp = NULL;
-	struct sqlx_repo_config_s cfg;
+	struct sqlx_repo_config_s cfg = {0};
 
 	g_assert(ns != NULL);
 
@@ -297,7 +295,6 @@ _repo_failure(const gchar *ns)
 	resolver = hc_resolver_create1(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND);
 	g_assert(resolver != NULL);
 
-	memset(&cfg, 0, sizeof(cfg));
 	cfg.flags = SQLX_REPO_DELETEON;
 	err = sqlx_repository_init(repodir, &cfg, &repository);
 	g_assert_no_error(err);
