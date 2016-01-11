@@ -17,7 +17,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 from string import Template
-import os, errno, pwd, json
+import os, errno, pwd, grp, json, re
 
 template_redis = """
 daemonize no
@@ -145,7 +145,7 @@ DocumentRoot ${RUNDIR}
 TypesConfig /etc/mime.types
 
 User  ${USER}
-Group ${USER}
+Group ${GROUP}
 
 LogFormat "%h %l %t \\"%r\\" %>s %b %D" log/common
 ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-errors.log
@@ -219,7 +219,7 @@ DocumentRoot ${RUNDIR}
 TypesConfig /etc/mime.types
 
 User  ${USER}
-Group ${USER}
+Group ${GROUP}
 
 LogFormat "%h %l %t \\"%r\\" %>s %b %D" log/common
 ErrorLog ${SDSDIR}/logs/${NS}-${SRVTYPE}-httpd-${SRVNUM}-errors.log
@@ -531,7 +531,7 @@ DATADIR = SDSDIR + '/data'
 TMPDIR = '/tmp'
 CODEDIR = '@CMAKE_INSTALL_PREFIX@'
 LIBDIR = CODEDIR + '/@LD_LIBDIR@'
-PATH = HOME+"/.local/bin:@CMAKE_INSTALL_PREFIX@/bin"
+PATH = HOME+"/.local/bin:@CMAKE_INSTALL_PREFIX@/bin:/usr/sbin"
 port = 6000
 
 # XXX When /usr/sbin/httpd is present we suspect a Redhat/Centos/Fedora
@@ -613,12 +613,18 @@ def generate (ns, ip, options={}):
 			SDSDIR=SDSDIR, TMPDIR=TMPDIR,
 			DATADIR=DATADIR, CFGDIR=CFGDIR, RUNDIR=RUNDIR, SPOOLDIR=SPOOLDIR,
 			LOGDIR=LOGDIR, CODEDIR=CODEDIR,
-			UID=str(os.geteuid()), GID=str(os.getgid()), USER=str(pwd.getpwuid(os.getuid()).pw_name),
-			VERSIONING=versioning, STGPOL=stgpol,
+			UID=str(os.geteuid()),
+			GID=str(os.getgid()),
+			USER=str(pwd.getpwuid(os.getuid()).pw_name),
+			GROUP=str(grp.getgrgid(os.getgid()).gr_name),
+			VERSIONING=versioning,
+			STGPOL=stgpol,
 			PORT_CS=port_cs,
 			PORT_PROXYD=port_proxy,
-			M2_REPLICAS=meta2_replicas, M2_DISTANCE=str(1),
-			SQLX_REPLICAS=sqlx_replicas, SQLX_DISTANCE=str(1),
+			M2_REPLICAS=meta2_replicas,
+			M2_DISTANCE=str(1),
+			SQLX_REPLICAS=sqlx_replicas,
+			SQLX_DISTANCE=str(1),
 			APACHE2_MODULES_SYSTEM_DIR=APACHE2_MODULES_SYSTEM_DIR,
 			HTTPD_BINARY=HTTPD_BINARY)
 
@@ -685,8 +691,11 @@ def generate (ns, ip, options={}):
 		env['SRVTYPE'] = 'rawx'
 		env['SRVNUM'] = n
 		env['PORT'] = p
+		to_write = tpl.safe_substitute(env)
+		if options.OPENSUSE:
+			to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
 		with open(CFGDIR + '/' + ns + '-rawx-httpd-' + str(n) + '.conf', 'w+') as f:
-			f.write(tpl.safe_substitute(env))
+			f.write(to_write)
 
 	# Generate the RAINX services
 	tpl = Template(template_gridinit_rainx)
@@ -702,13 +711,15 @@ def generate (ns, ip, options={}):
 		env['SRVTYPE'] = 'rainx'
 		env['SRVNUM'] = n
 		env['PORT'] = p
+		to_write = tpl.safe_substitute(env)
+		if options.OPENSUSE:
+			to_write = re.sub(r"LoadModule.*mpm_worker.*", "", to_write)
 		with open(CFGDIR + '/' + ns + '-rainx-httpd-' + str(n) + '.conf', 'w+') as f:
-			f.write(tpl.safe_substitute(env))
+			f.write(to_write)
 
 	# redis
 	if options.ALLOW_REDIS is not None:
 		env['SRVNUM'] = 1
-		mkdir_noerror(DATADIR + '/' + str(env['NS']) + '-' + 'redis' + '-' + str(env['SRVNUM']))
 		with open(CFGDIR + '/' + ns + '-redis-'+ str(env['SRVNUM']) +'.conf', 'w+') as f:
 			tpl = Template(template_redis)
 			f.write(tpl.safe_substitute(env))
@@ -804,6 +815,10 @@ def main ():
 	parser.add_option("-S", "--stgpol",
 			action="store", type="string", dest="M2_STGPOL",
 			help="How many replicas for META2")
+
+	parser.add_option("--opensuse",
+			action="store_true", dest="OPENSUSE",
+			help="Customize some config files for Opensuse")
 
 	parser.add_option("--port", action="store", type="int", dest="PORT_START")
 	parser.add_option("--chunk-size", action="store", type="int", dest="CHUNK_SIZE")

@@ -35,6 +35,8 @@ CHUNKSIZE=
 REDIS=0
 PORT=
 
+OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
+
 while getopts ":B:C:D:E:I:M:N:P:R:S:V:X:Z" opt; do
 	case $opt in
 		B) REPLICATION_BUCKET="${OPTARG}" ;;
@@ -95,6 +97,11 @@ if [ -n "$CHUNKSIZE" ] ; then opts="${opts} --chunk-size=${CHUNKSIZE}" ; fi
 if [ -n "$MONITOR_PERIOD" ] ; then opts="${opts} --monitor-period=${MONITOR_PERIOD}" ; fi
 if [ "$REDIS" -gt 0 ] ; then opts="${opts} --allow-redis" ; fi
 for srvtype in ${AVOID} ; do opts="${opts} --no-${srvtype}"; done
+if [ -n "$OPENSUSE" ]
+then
+	echo $PATH | grep -q '/usr/sbin' || PATH="$PATH:/usr/sbin"
+	opts="${opts} --opensuse"
+fi
 ${PREFIX}-bootstrap.py \
 		-B "$REPLICATION_BUCKET" \
 		-V "$VERSIONING" \
