@@ -2,11 +2,13 @@ import time
 
 from oio.blob.client import BlobClient
 from oio.blob.utils import check_volume, read_chunk_metadata
+from oio.common.exceptions import ContentNotFound
 from oio.container.client import ContainerClient
 from oio.common.daemon import Daemon
 from oio.common import exceptions as exc
 from oio.common.utils import get_logger, int_value, ratelimit, paths_gen, \
     statfs
+from oio.content.factory import ContentFactory
 
 SLEEP_TIME = 30
 READ_BUFFER_SIZE = 65535
@@ -39,6 +41,7 @@ class BlobMoverWorker(object):
             conf.get('bytes_per_second'), 10000000)
         self.blob_client = BlobClient()
         self.container_client = ContainerClient(conf)
+        self.content_factory = ContentFactory(conf)
 
     def mover_pass(self):
         self.namespace, self.address = check_volume(self.volume)
@@ -130,52 +133,19 @@ class BlobMoverWorker(object):
     def chunk_move(self, path):
         meta = self.load_chunk_metadata(path)
         content_cid = meta['content_cid']
-        content_path = meta['content_path']
-
-        chunk_url = 'http://%s/%s' % \
-            (self.address, meta['chunk_id'])
+        content_id = meta['content_id']
+        chunk_id = meta['chunk_id']
+        chunk_url = 'http://%s/%s' % (self.address, meta['chunk_id'])
 
         try:
-            _, data = self.container_client.content_show(
-                cid=content_cid, path=content_path)
-        except exc.NotFound:
+            content = self.content_factory.get(content_cid, content_id)
+        except ContentNotFound:
             raise exc.OrphanChunk('Content not found')
-        current_chunk = None
-        notin = []
-        for c in data:
-            if c['pos'] == meta['chunk_pos']:
-                notin.append(c)
-        for c in notin:
-            if c['url'] == chunk_url:
-                current_chunk = c
-                notin.remove(c)
-        if not current_chunk:
-            raise exc.OrphanChunk('Chunk not found in content')
-        spare_data = {'notin': notin, 'broken': [current_chunk], 'size': 0}
-        spare_resp = self.container_client.content_spare(
-            cid=content_cid, path=content_path, data=spare_data)
 
-        new_chunk = spare_resp['chunks'][0]
-        self.blob_client.chunk_copy(
-            current_chunk['url'], new_chunk['id'])
-
-        old = [{'type': 'chunk',
-                'id': current_chunk['url'],
-                'hash': meta['chunk_hash'],
-                'size': int(meta['chunk_size'])}]
-        new = [{'type': 'chunk',
-                'id': new_chunk['id'],
-                'hash': meta['chunk_hash'],
-                'size': int(meta['chunk_size'])}]
-        update_data = {'old': old, 'new': new}
-
-        self.container_client.container_raw_update(
-            cid=content_cid, data=update_data)
-
-        self.blob_client.chunk_delete(current_chunk['url'])
+        new_chunk = content.move_chunk(chunk_id)
 
         self.logger.info(
-            'moved chunk %s to %s', current_chunk['url'], new_chunk['id'])
+            'moved chunk %s to %s', chunk_url, new_chunk['url'])
 
 
 class BlobMover(Daemon):

@@ -18,7 +18,7 @@ import requests
 
 from oio.blob.client import BlobClient
 from oio.common import exceptions as exc
-from oio.common.exceptions import ClientException
+from oio.common.exceptions import ClientException, OrphanChunk
 from oio.common.utils import get_logger
 from oio.conscience.client import ConscienceClient
 from oio.container.client import ContainerClient
@@ -115,6 +115,32 @@ class Content(object):
 
     def download(self):
         raise NotImplementedError()
+
+    def move_chunk(self, chunk_id):
+        current_chunk = self.chunks.filter(id=chunk_id).one()
+        if current_chunk is None:
+            raise OrphanChunk("Chunk not found in content")
+
+        other_chunks = self.chunks.filter(
+            metapos=current_chunk.metapos).exclude(id=chunk_id).all()
+
+        spare_urls = self._meta2_get_spare_chunk(other_chunks,
+                                                 [current_chunk])
+
+        self.logger.debug("copy chunk from %s to %s",
+                          current_chunk.url, spare_urls[0])
+        self.blob_client.chunk_copy(current_chunk.url, spare_urls[0])
+
+        self._meta2_update_spare_chunk(current_chunk, spare_urls[0])
+
+        try:
+            self.blob_client.chunk_delete(current_chunk.url)
+        except:
+            self.logger.warn("Failed to delete chunk %s" % current_chunk.url)
+
+        current_chunk.url = spare_urls[0]
+
+        return current_chunk.raw()
 
 
 class Chunk(object):
