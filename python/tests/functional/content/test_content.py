@@ -13,19 +13,24 @@
 #
 # You should have received a copy of the GNU Lesser General Public
 # License along with this library.
+
 import StringIO
 import hashlib
-import os
 
+import os
 import time
 from mock import MagicMock as Mock
+from testtools.matchers import Contains
+from testtools.matchers import Not
+from testtools.testcase import ExpectedException
 
+from oio.blob.client import BlobClient
 from oio.common.exceptions import InconsistentContent, NotFound, \
-    ContentNotFound, ClientException
+    ContentNotFound, ClientException, OrphanChunk
 from oio.common.utils import cid_from_name
 from oio.container.client import ContainerClient
-from oio.content.factory import ContentFactory
 from oio.content.dup import DupContent
+from oio.content.factory import ContentFactory
 from oio.content.rain import RainContent
 from tests.utils import BaseTestCase
 
@@ -55,6 +60,7 @@ class TestContentFactory(BaseTestCase):
         self.gridconf = {"namespace": self.namespace}
         self.content_factory = ContentFactory(self.gridconf)
         self.container_name = "TestContentFactory%f" % time.time()
+        self.blob_client = BlobClient()
         self.container_client = ContainerClient(self.gridconf)
         self.container_client.container_create(acct=self.account,
                                                ref=self.container_name)
@@ -189,6 +195,10 @@ class TestContentFactory(BaseTestCase):
         self.assertEqual(len(c.chunks), 2)
         self.assertEqual(c.chunks[0].raw(), chunks[0])
         self.assertEqual(c.chunks[1].raw(), chunks[1])
+
+    def test_get_unknown_content(self):
+        self.assertRaises(ContentNotFound, self.content_factory.get,
+                          self.container_id, "1234")
 
     def test_new_rain(self):
         meta = {
@@ -327,3 +337,49 @@ class TestContentFactory(BaseTestCase):
         old_content = self._new_content("TWOCOPIES", data)
         self.assertRaises(ClientException, self.content_factory.change_policy,
                           self.container_id, old_content.content_id, "UnKnOwN")
+
+    def _test_move_chunk(self, policy):
+        data = random_data(self.chunk_size)
+        content = self._new_content(policy, data)
+
+        chunk_id = content.chunks.filter(metapos=0)[0].id
+        chunk_url = content.chunks.filter(metapos=0)[0].url
+        chunk_meta, chunk_stream = self.blob_client.chunk_get(chunk_url)
+        chunk_hash = md5_stream(chunk_stream)
+        new_chunk = content.move_chunk(chunk_id)
+
+        content_updated = self.content_factory.get(self.container_id,
+                                                   content.content_id)
+
+        hosts = []
+        for c in content_updated.chunks.filter(metapos=0):
+            self.assertThat(hosts, Not(Contains(c.host)))
+            self.assertNotEquals(c.id, chunk_id)
+            hosts.append(c.host)
+
+        new_chunk_meta, new_chunk_stream = self.blob_client.chunk_get(
+            new_chunk["url"])
+        new_chunk_hash = md5_stream(new_chunk_stream)
+
+        self.assertEqual(new_chunk_hash, chunk_hash)
+
+        del chunk_meta["chunk_id"]
+        del new_chunk_meta["chunk_id"]
+        self.assertEqual(new_chunk_meta, chunk_meta)
+
+    def test_single_move_chunk(self):
+        self._test_move_chunk("SINGLE")
+
+    def test_twocopies_move_chunk(self):
+        self._test_move_chunk("TWOCOPIES")
+
+    def test_rain_move_chunk(self):
+        if len(self.conf['rawx']) < 9:
+            self.skipTest("Need more than 8 rawx")
+        self._test_move_chunk("RAIN")
+
+    def test_move_chunk_not_in_content(self):
+        data = random_data(self.chunk_size)
+        content = self._new_content("TWOCOPIES", data)
+        with ExpectedException(OrphanChunk):
+            content.move_chunk("1234")

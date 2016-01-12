@@ -15,9 +15,9 @@
 # License along with this library.
 
 import StringIO
+
 import math
 import time
-
 from testtools.matchers import NotEquals
 from testtools.testcase import ExpectedException
 
@@ -138,7 +138,7 @@ class TestDupContent(BaseTestCase):
             self.assertRaises(NotFound,
                               self.blob_client.chunk_head, chunk.url)
 
-    def _new_content(self, stgpol, data, broken_pos_list):
+    def _new_content(self, stgpol, data, broken_pos_list=[]):
         old_content = self.content_factory.new(self.container_id, "titi",
                                                len(data), stgpol)
         self.assertEqual(type(old_content), DupContent)
@@ -206,10 +206,14 @@ class TestDupContent(BaseTestCase):
         self._test_rebuild("TWOCOPIES", 1, [(0, 1)], (0, 1))
 
     def test_3copies_content_chunksize_bytes_2broken_rebuild_pos_0_idx_1(self):
+        if len(self.conf['rawx']) <= 3:
+            self.skipTest("Need more than 3 rawx")
         self._test_rebuild("THREECOPIES", self.chunk_size,
                            [(0, 0), (0, 1)], (0, 1))
 
     def test_3copies_content_2xchksize_bytes_2broken_rebuild_pos_1_idx_2(self):
+        if len(self.conf['rawx']) <= 3:
+            self.skipTest("Need more than 3 rawx")
         self._test_rebuild("THREECOPIES", 2 * self.chunk_size,
                            [(1, 0), (1, 2)], (1, 2))
 
