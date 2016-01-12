@@ -19,6 +19,18 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqlx/sqlx_client.h>
 
 static void
+test_empty_batch (struct oio_sqlx_client_factory_s *factory)
+{
+	struct oio_sqlx_batch_s *batch = NULL;
+	GError *err = oio_sqlx_client_factory__batch (factory, &batch);
+	g_assert_no_error (err);
+	g_assert_true (oio_sqlx_batch__is_empty (batch));
+	oio_sqlx_batch__add (batch, "BEGIN", NULL);
+	g_assert_false (oio_sqlx_batch__is_empty (batch));
+	oio_sqlx_batch__destroy (batch);
+}
+
+static void
 test_query_success (struct oio_sqlx_client_s *client,
 		const char *query, gchar **params)
 {
@@ -43,6 +55,8 @@ test_query_success (struct oio_sqlx_client_s *client,
 static void
 _test_round (struct oio_sqlx_client_factory_s *factory)
 {
+	test_empty_batch (factory);
+
 	struct oio_url_s *url = oio_url_empty ();
 	oio_url_set (url, OIOURL_NS, "NS");
 	oio_url_set (url, OIOURL_ACCOUNT, "ACCT");

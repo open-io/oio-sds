@@ -36,10 +36,15 @@ struct oio_sqlx_output_ctx_s
 
 struct oio_sqlx_batch_s;
 
+/* cleans all the memory allocated for this batch. Batch unusable after */
 void oio_sqlx_batch__destroy (struct oio_sqlx_batch_s *self);
 
+/* register a statement (and its parameters) in the batch */
 void oio_sqlx_batch__add (struct oio_sqlx_batch_s *self,
 		const char *stmt, gchar **params);
+
+/* Returns wether the batch has no statement registered or not */
+gboolean oio_sqlx_batch__is_empty (struct oio_sqlx_batch_s *self);
 
 
 struct oio_sqlx_batch_result_s;
