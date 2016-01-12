@@ -153,6 +153,14 @@ oio_sqlx_batch__add (struct oio_sqlx_batch_s *self,
 	g_ptr_array_add (self->statements, tab);
 }
 
+gboolean
+oio_sqlx_batch__is_empty (struct oio_sqlx_batch_s *self)
+{
+	EXTRA_ASSERT (self != NULL);
+	EXTRA_ASSERT(self->statements != NULL);
+	return self->statements->len <= 0;
+}
+
 guint
 oio_sqlx_batch_result__count_statements (struct oio_sqlx_batch_result_s *self)
 {
