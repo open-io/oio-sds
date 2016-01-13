@@ -20,13 +20,13 @@ import eventlet
 import eventlet.semaphore
 from eventlet.green import socket, threading
 
+from optparse import OptionParser
+from ConfigParser import SafeConfigParser
+
 
 logging.thread = eventlet.green.thread
 logging.threading = threading
 logging._lock = logging.threading.RLock()
-
-from optparse import OptionParser
-from ConfigParser import SafeConfigParser
 
 
 class NullLogger(object):
