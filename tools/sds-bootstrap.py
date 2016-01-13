@@ -363,6 +363,10 @@ param_service.rdir.score_timeout=120
 param_service.rdir.score_variation_bound=5
 param_service.rdir.score_expr=(num stat.cpu)
 
+param_service.oiofs.score_timeout=120
+param_service.oiofs.score_variation_bound=5
+param_service.oiofs.score_expr=(num stat.cpu)
+
 param_service.account.score_timeout=120
 param_service.account.score_variation_bound=5
 param_service.account.score_expr=(num stat.cpu)
