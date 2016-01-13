@@ -37,25 +37,27 @@ _ptrv_free_content (gchar **tab)
 }
 
 /* @private */
-enum _prefix_e { PREFIX_REFERENCE, PREFIX_CONTAINER };
+enum _prefix_e { PREFIX_CONSCIENCE, PREFIX_REFERENCE, PREFIX_CONTAINER };
 
 static GString *
-_curl_url_prefix (struct oio_url_s *u, enum _prefix_e which)
+_curl_url_prefix (const char *ns, enum _prefix_e which)
 {
 	GString *hu = g_string_new("http://");
 
-	const char *ns = oio_url_get (u, OIOURL_NS);
 	if (!ns) {
 		GRID_WARN ("BUG No namespace configured!");
 		g_string_append (hu, "proxy");
 	} else {
 		gchar *s = NULL;
 
-		if (which == PREFIX_CONTAINER)
+		if (which == PREFIX_CONSCIENCE)
+			s = oio_cfg_get_proxy_conscience (ns);
+		else if (which == PREFIX_CONTAINER)
 			s = oio_cfg_get_proxy_containers (ns);
 		else if (which == PREFIX_REFERENCE)
 			s = oio_cfg_get_proxy_directory (ns);
-		else
+
+		if (!s)
 			s = oio_cfg_get_proxy (ns);
 
 		if (!s) {
@@ -73,13 +75,13 @@ _curl_url_prefix (struct oio_url_s *u, enum _prefix_e which)
 static GString *
 _curl_url_prefix_containers (struct oio_url_s *u)
 {
-	return _curl_url_prefix (u, PREFIX_CONTAINER);
+	return _curl_url_prefix (oio_url_get (u, OIOURL_NS), PREFIX_CONTAINER);
 }
 
 static GString *
 _curl_url_prefix_reference (struct oio_url_s *u)
 {
-	return _curl_url_prefix (u, PREFIX_REFERENCE);
+	return _curl_url_prefix (oio_url_get (u, OIOURL_NS), PREFIX_REFERENCE);
 }
 
 static void
@@ -98,6 +100,15 @@ _curl_reference_url (struct oio_url_s *u, const char *action)
 			oio_url_get(u, OIOURL_NS), action);
 	_append (hu, '?', "acct", oio_url_get (u, OIOURL_ACCOUNT));
 	_append (hu, '&', "ref",  oio_url_get (u, OIOURL_USER));
+	return hu;
+}
+
+static GString *
+_curl_conscience_url (const char *ns, const char *action)
+{
+	GString *hu = _curl_url_prefix (ns, PREFIX_CONSCIENCE);
+	g_string_append_printf (hu, "/%s/%s/conscience/%s", PROXYD_PREFIX,
+			ns, action);
 	return hu;
 }
 
@@ -516,3 +527,38 @@ oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
 	return err;
 }
 
+GError *
+oio_proxy_call_conscience_register (CURL *h, const char *ns, GString *in)
+{
+	GString *http_url = _curl_conscience_url (ns, "register");
+	struct http_ctx_s i = { .headers = NULL, .body = in };
+	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_conscience_list (CURL *h, const char *ns,
+		const char *srvtype, GString *out)
+{
+	GString *http_url = _curl_conscience_url (ns, "list");
+	_append (http_url, '?', "type", srvtype);
+	struct http_ctx_s o = { .headers = NULL, .body = out };
+	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);
+	g_strfreev (o.headers);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_conscience_list_types (CURL *h, const char *ns,
+		GString *out)
+{
+	GString *http_url = _curl_conscience_url (ns, "list");
+	_append (http_url, '?', "what", "types");
+	struct http_ctx_s o = { .headers = NULL, .body = out };
+	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);
+	g_strfreev (o.headers);
+	g_string_free(http_url, TRUE);
+	return err;
+}
