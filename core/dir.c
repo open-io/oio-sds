@@ -1,3 +1,21 @@
+/*
+OpenIO SDS core library
+Copyright (C) 2015 OpenIO, original work as part of OpenIO Software Defined Storage
+
+This library is free software; you can redistribute it and/or
+modify it under the terms of the GNU Lesser General Public
+License as published by the Free Software Foundation; either
+version 3.0 of the License, or (at your option) any later version.
+
+This library is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+Lesser General Public License for more details.
+
+You should have received a copy of the GNU Lesser General Public
+License along with this library.
+*/
+
 #include <glib.h>
 #include <json.h>
 #include <curl/curl.h>
@@ -63,7 +81,7 @@ static GError * _dir_proxy_link (struct oio_directory_s *self,
 			const struct oio_url_s *url, const char *srvtype,
 			gboolean autocreate, gchar ***out_srv);
 
-struct oio_directory_vtable_s vtable_PROXY =
+static struct oio_directory_vtable_s vtable_PROXY =
 {
 	_dir_proxy_destroy,
 	_dir_proxy_create,

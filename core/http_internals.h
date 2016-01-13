@@ -18,7 +18,6 @@ License along with this library.
 
 #ifndef OIO_SDS__sdk__http_internals_h
 # define OIO_SDS__sdk__http_internals_h 1
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -54,7 +53,30 @@ void oio_headers_add_int64 (struct oio_headers_s *h,
  * Wrappers for CURL operations toward the proxy.
  * -------------------------------------------------------------------------- */
 
+/* conscience */
+
+GError * oio_proxy_call_conscience_register (CURL *h, const char *ns,
+		GString *in);
+
+GError * oio_proxy_call_conscience_list (CURL *h, const char *ns,
+		const char *srvtype, GString *out);
+
+GError * oio_proxy_call_conscience_list_types (CURL *h, const char *ns,
+		GString *out);
+
 struct oio_url_s;
+
+/* directory */
+
+GError * oio_proxy_call_reference_show (CURL *h, struct oio_url_s *u,
+		const char *t, GString *out);
+
+GError * oio_proxy_call_reference_create (CURL *h, struct oio_url_s *u);
+
+GError * oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
+		const char *srvtype, gboolean autocreate, GString *out);
+
+/* container */
 
 GError * oio_proxy_call_content_show (CURL *h, struct oio_url_s *u,
 		GString *out);
@@ -91,22 +113,10 @@ struct oio_proxy_content_create_in_s
 GError * oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 		struct oio_proxy_content_create_in_s *in, GString *out);
 
-GError *
-oio_proxy_call_content_list (CURL *h, struct oio_url_s *u,
+GError * oio_proxy_call_content_list (CURL *h, struct oio_url_s *u,
 		GString *out,
 		const char *prefix, const char *marker, const char *end,
 		guint max, char delim);
-
-GError *
-oio_proxy_call_reference_show (CURL *h, struct oio_url_s *u,
-		const char *t, GString *out);
-
-GError *
-oio_proxy_call_reference_create (CURL *h, struct oio_url_s *u);
-
-GError *
-oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
-		const char *srvtype, gboolean autocreate, GString *out);
 
 #ifdef __cplusplus
 }
