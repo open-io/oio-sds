@@ -41,6 +41,8 @@ GError *
 oio_cs_client__register_service (struct oio_cs_client_s *self,
 		const char *in_type, const struct oio_cs_registration_s *reg)
 {
+	if (!in_type)
+		return BADREQ("Missing srvtype");
 	CS_CALL(self,register_service)(self,in_type,reg);
 }
 
@@ -49,6 +51,8 @@ oio_cs_client__list_services (struct oio_cs_client_s *self,
 		const char *in_type,
 		void (*on_reg) (const struct oio_cs_registration_s *reg))
 {
+	if (!in_type)
+		return BADREQ("Missing srvtype");
 	CS_CALL(self,list_services)(self,in_type,on_reg);
 }
 
@@ -105,8 +109,8 @@ _cs_PROXY__register_service (struct oio_cs_client_s *self,
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
 	g_assert (cs->vtable == &vtable_PROXY);
 
-	if (!in_type)
-		return BADREQ("Missing service type");
+	if (!in_type || !*in_type)
+		return BADREQ("Missing srvtype");
 	if (!reg || !reg->url || !reg->id)
 		return BADREQ("Invalid service");
 
@@ -144,8 +148,8 @@ _cs_PROXY__list_services (struct oio_cs_client_s *self,
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
 	g_assert (cs->vtable == &vtable_PROXY);
 
-	if (!in_type)
-		return BADREQ("Missing service type");
+	if (!in_type || !*in_type)
+		return BADREQ("Missing srvtype");
 
 	GString *body = g_string_new ("");
 
@@ -158,17 +162,18 @@ _cs_PROXY__list_services (struct oio_cs_client_s *self,
 
 	if (!err) {
 		json_tokener *parser = json_tokener_new ();
-		json_object *jbody = NULL;
+		json_object *jbody = json_tokener_parse_ex (parser, body->str, body->len);
 		if (json_tokener_success != json_tokener_get_error (parser))
 			err = NEWERROR(CODE_PLATFORM_ERROR, "proxy: invalid JSON");
 		else if (!jbody || !json_object_is_type (jbody, json_type_array))
-			err = NEWERROR(CODE_PLATFORM_ERROR, "proxy:  unexpected reply");
+			err = NEWERROR(CODE_PLATFORM_ERROR, "proxy:  unexpected JSON");
 		else for (int i=json_object_array_length(jbody); i>0 && !err ;i--) {
 			json_object *item = json_object_array_get_idx (jbody, i-1);
-			if (!json_object_is_type(item, json_type_string))
-				err = NEWERROR(CODE_PLATFORM_ERROR, "proxy:  unexpected reply");
+			if (!json_object_is_type(item, json_type_object))
+				err = NEWERROR(CODE_PLATFORM_ERROR, "proxy:  unexpected item");
 			else {
 				struct oio_cs_registration_s reg = {0};
+				/* TODO(jfs) fill reg with the item */
 				if (on_reg)
 					(on_reg)(&reg);
 			}
@@ -200,7 +205,7 @@ _cs_PROXY__list_types (struct oio_cs_client_s *self,
 
 	if (!err) {
 		json_tokener *parser = json_tokener_new ();
-		json_object *jbody = NULL;
+		json_object *jbody = json_tokener_parse_ex (parser, body->str, body->len);
 		if (json_tokener_success != json_tokener_get_error (parser))
 			err = NEWERROR(CODE_PLATFORM_ERROR, "proxy: invalid JSON");
 		else if (!jbody || !json_object_is_type (jbody, json_type_array))

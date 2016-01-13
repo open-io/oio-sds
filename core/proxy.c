@@ -554,7 +554,7 @@ GError *
 oio_proxy_call_conscience_list_types (CURL *h, const char *ns,
 		GString *out)
 {
-	GString *http_url = _curl_conscience_url (ns, "list");
+	GString *http_url = _curl_conscience_url (ns, "info");
 	_append (http_url, '?', "what", "types");
 	struct http_ctx_s o = { .headers = NULL, .body = out };
 	GError *err = _proxy_call (h, "GET", http_url->str, NULL, &o);

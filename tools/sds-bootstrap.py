@@ -724,6 +724,7 @@ def generate (ns, ip, options={}):
 	# redis
 	if options.ALLOW_REDIS is not None:
 		env['SRVNUM'] = 1
+		mkdir_noerror(DATADIR + '/' + str(env['NS']) + '-' + 'redis' + '-' + str(env['SRVNUM']))
 		with open(CFGDIR + '/' + ns + '-redis-'+ str(env['SRVNUM']) +'.conf', 'w+') as f:
 			tpl = Template(template_redis)
 			f.write(tpl.safe_substitute(env))
