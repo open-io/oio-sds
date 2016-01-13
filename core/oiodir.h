@@ -19,6 +19,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__core__directory_h
 # define OIO_SDS__core__directory_h 1
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 # include <glib.h>
 
 struct oio_url_s;
@@ -68,4 +72,7 @@ GError * oio_directory__link (struct oio_directory_s *d,
  * services */
 struct oio_directory_s * oio_directory__create_proxy (const char *ns);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /*OIO_SDS__core__directory_h*/
