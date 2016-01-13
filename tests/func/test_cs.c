@@ -27,40 +27,83 @@ License along with this library.
 const char *ns = "NS";
 const char *srvtype = "echo";
 
+/* loop on create/destroy to raise a leak */
 static void
 test_proxied_init (void)
 {
-	for (int i=0; i<8 ;++i) {
+	for (int i=0; i<16 ;++i) {
 		struct oio_cs_client_s *cs = oio_cs_client__create_proxied (ns);
+		g_assert_nonnull (cs);
 		oio_cs_client__destroy (cs);
 	}
 }
 
+/* loop on the push (with various parameters) to attempt raising memleaks */
 static void
 test_proxied_push (void)
 {
-	struct oio_cs_registration_s reg0 = {
+	struct oio_cs_registration_s reg = {
 		.id = "klkqd",
 		.url = "127.0.0.1:5000",
 		.kv_tags = NULL,
 	};
-	const char *tags1[] = {
-		"stat.cpu", "100.0",
-		NULL
-	};
-	struct oio_cs_registration_s reg1 = {
-		.id = "klkqd",
-		.url = "127.0.0.1:5000",
-		.kv_tags = tags1,
-	};
+	const char *tags1[] = { "stat.cpu", NULL };
+	const char *tags2[] = { "stat.cpu", "100.0", NULL };
+	const char *tags3[] = { "stat.cpu", "invalid but should work", NULL };
 	GError *err;
+
 	struct oio_cs_client_s *cs = oio_cs_client__create_proxied (ns);
+	g_assert_nonnull (cs);
 	for (int i=0; i<8 ;++i) {
 		err = oio_cs_client__register_service (cs, srvtype, NULL);
 		g_assert_error (err, GQ(), CODE_BAD_REQUEST);
-		err = oio_cs_client__register_service (cs, srvtype, &reg0);
+		g_clear_error (&err);
+		reg.kv_tags = NULL;
+		err = oio_cs_client__register_service (cs, srvtype, &reg);
 		g_assert_no_error (err);
-		err = oio_cs_client__register_service (cs, srvtype, &reg1);
+		reg.kv_tags = tags1;
+		err = oio_cs_client__register_service (cs, srvtype, &reg);
+		g_assert_no_error (err);
+		reg.kv_tags = tags2;
+		err = oio_cs_client__register_service (cs, srvtype, &reg);
+		g_assert_no_error (err);
+		reg.kv_tags = tags3;
+		err = oio_cs_client__register_service (cs, srvtype, &reg);
+		g_assert_no_error (err);
+	}
+	oio_cs_client__destroy (cs);
+}
+
+static void
+test_proxied_list (void)
+{
+	GError *err;
+	struct oio_cs_client_s *cs = oio_cs_client__create_proxied (ns);
+	g_assert_nonnull (cs);
+	for (int i=0; i<8 ;++i) {
+		err = oio_cs_client__list_services (cs, NULL, NULL);
+		g_assert_error (err, GQ(), CODE_BAD_REQUEST);
+		g_clear_error (&err);
+		err = oio_cs_client__list_services (cs, "", NULL);
+		g_assert_error (err, GQ(), CODE_BAD_REQUEST);
+		g_clear_error (&err);
+		err = oio_cs_client__list_services (cs, "xXxXxXxXx", NULL);
+		g_assert_error (err, GQ(), CODE_SRVTYPE_NOTMANAGED);
+		g_clear_error (&err);
+		err = oio_cs_client__list_services (cs, srvtype, NULL);
+		g_assert_no_error (err);
+	}
+	oio_cs_client__destroy (cs);
+}
+
+static void
+test_proxied_types (void)
+{
+	GError *err;
+	struct oio_cs_client_s *cs = oio_cs_client__create_proxied (ns);
+	g_assert_nonnull (cs);
+	for (int i=0; i<8 ;++i) {
+		err = oio_cs_client__list_types (cs, NULL);
 		g_assert_no_error (err);
 	}
 	oio_cs_client__destroy (cs);
@@ -76,6 +119,8 @@ main(int argc, char **argv)
 
 	g_test_add_func("/cs/proxy/init", test_proxied_init);
 	g_test_add_func("/cs/proxy/push", test_proxied_push);
+	g_test_add_func("/cs/proxy/list", test_proxied_list);
+	g_test_add_func("/cs/proxy/types", test_proxied_types);
 	return g_test_run();
 }
 
