@@ -38,6 +38,10 @@ set_target_properties(oiohttp_test PROPERTIES
 add_test(NAME core/http
 		COMMAND /usr/bin/env python ${CMAKE_CURRENT_SOURCE_DIR}/test_oiohttp.py ${CMAKE_CURRENT_BINARY_DIR})
 
+add_executable(test_oio_cs test_cs.c)
+target_link_libraries(test_oio_cs oiosds)
+add_test(NAME core/cs COMMAND test_oio_cs)
+
 add_executable(test_oio_dir test_dir.c)
 target_link_libraries(test_oio_dir oiosds)
 add_test(NAME core/dir COMMAND test_oio_dir)

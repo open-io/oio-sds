@@ -94,7 +94,7 @@ _cs_PROXY__destroy (struct oio_cs_client_s *self)
 	struct oio_cs_client_PROXY_s *cs = (struct oio_cs_client_PROXY_s*) self;
 	g_assert (cs->vtable == &vtable_PROXY);
 	oio_str_clean (&cs->ns);
-	g_free (self);
+	SLICE_FREE (struct oio_cs_client_PROXY_s, cs);
 }
 
 GError *
@@ -219,3 +219,13 @@ _cs_PROXY__list_types (struct oio_cs_client_s *self,
 	g_string_free (body, TRUE);
 	return err;
 }
+
+struct oio_cs_client_s *
+oio_cs_client__create_proxied (const char *ns)
+{
+	struct oio_cs_client_PROXY_s *cs = SLICE_NEW0(struct oio_cs_client_PROXY_s);
+	cs->vtable = &vtable_PROXY;
+	oio_str_replace (&cs->ns, ns);
+	return (struct oio_cs_client_s*) cs;
+}
+

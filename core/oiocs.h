@@ -46,6 +46,10 @@ GError * oio_cs_client__list_services (struct oio_cs_client_s *self,
 GError * oio_cs_client__list_types (struct oio_cs_client_s *self,
 		void (*on_type) (const char *srvtype));
 
+/* -------------------------------------------------------------------------- */
+
+struct oio_cs_client_s * oio_cs_client__create_proxied (const char *ns);
+
 #ifdef __cplusplus
 }
 #endif
