@@ -29,7 +29,7 @@ _cs_check_tokens (struct req_args_s *args)
 
 	if (TYPE()) {
 		if (!validate_srvtype(TYPE()))
-			return NEWERROR(CODE_NAMESPACE_NOTMANAGED, "Invalid srvtype");
+			return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "Invalid srvtype");
 	}
 	return NULL;
 }
