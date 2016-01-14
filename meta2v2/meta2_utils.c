@@ -1022,6 +1022,9 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 	if (!oio_url_has(args->url, OIOURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
+	/* TODO(jfs): return the beans added/deleted */
+	(void) out_deleted, (void) out_added;
+
 	memset(&args2, 0, sizeof(args2));
 	args2.beans = beans;
 

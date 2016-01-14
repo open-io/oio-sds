@@ -1,5 +1,5 @@
 add_definitions(-DG_LOG_DOMAIN="oio.tests.unit")
-set(MAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 include_directories(BEFORE . ../..
 		${CMAKE_CURRENT_BINARY_DIR}/../..
