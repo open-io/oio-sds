@@ -24,9 +24,8 @@ License along with this library.
 #undef GQ
 #define GQ() g_quark_from_static_string("oio.core")
 
-/* TODO(jfs): get the variables from the environment */
-const char *ns = "NS";
-const char *srvtype = "echo";
+const char *ns = NULL;
+const char *srvtype = NULL;
 
 /* loop on create/destroy to raise a leak */
 static void
@@ -148,6 +147,10 @@ int
 main(int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
+	g_assert_nonnull (g_getenv ("OIO_NS"));
+	ns = g_getenv ("OIO_NS");
+	srvtype = g_getenv ("OIO_TEST_SRVTYPE");
+	if (!srvtype) srvtype = "echo";
 	g_test_add_func("/cs/proxy/init", test_proxied_init);
 	g_test_add_func("/cs/proxy/push", test_proxied_push);
 	g_test_add_func("/cs/proxy/list", test_proxied_list);

@@ -766,13 +766,12 @@ static gboolean
 _client_manage_l4v(struct network_client_s *client, GByteArray *gba)
 {
 	gchar hexid[65];
-	struct req_ctx_s req_ctx;
+	struct req_ctx_s req_ctx = {0};
 	gboolean rc = FALSE;
 	GError *err = NULL;
 
 	EXTRA_ASSERT(gba != NULL);
 	EXTRA_ASSERT(client != NULL);
-	memset(&req_ctx, 0, sizeof(req_ctx));
 
 	req_ctx.uid = NULL;
 	req_ctx.subject = NULL;

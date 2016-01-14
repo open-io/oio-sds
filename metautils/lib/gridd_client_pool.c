@@ -93,12 +93,12 @@ gridd_client_pool_create(void)
 		return NULL;
 	}
 
-	// TODO FIXME factorize this in metautils
-	struct rlimit limit;
-	memset(&limit, 0, sizeof(limit));
+	/* TODO(jfs): factorize this in metautils */
+	struct rlimit limit = {0};
 	if (0 != getrlimit(RLIMIT_NOFILE, &limit))
 		limit.rlim_cur = limit.rlim_max = 32768;
 
+	/* TODO(jfs): nice spot for SLICE allocation */
 	pool = g_malloc0(sizeof(*pool));
 	pool->pending_clients = g_async_queue_new();
 
@@ -119,8 +119,7 @@ gridd_client_pool_create(void)
 	sock_set_non_blocking(pool->fd_out, TRUE);
 
 	/* then monitors at least the notifications pipe's output */
-	struct epoll_event ev;
-	memset(&ev, 0, sizeof(ev));
+	struct epoll_event ev = {0};
 	ev.events = EPOLLIN;
 	ev.data.fd = pool->fd_in;
 	if (0 > epoll_ctl(pool->fdmon, EPOLL_CTL_ADD, pool->fd_in, &ev)) {
@@ -146,13 +145,11 @@ static int
 event_client_monitor(struct gridd_client_pool_s *pool, struct event_client_s *mc)
 {
 	int fd, rc, interest;
-	struct epoll_event ev;
+	struct epoll_event ev = {0};
 
 	EXTRA_ASSERT(pool != NULL);
 	EXTRA_ASSERT(mc != NULL);
 	EXTRA_ASSERT(mc->client != NULL);
-
-	memset(&ev, 0, sizeof(ev));
 
 	interest = gridd_client_interest(mc->client);
 	if (interest & CLIENT_RD)
@@ -186,7 +183,6 @@ event_client_free(struct event_client_s *ec)
 		ec->on_end(ec);
 	if (ec->client)
 		gridd_client_free(ec->client);
-	memset(ec, 0, sizeof(*ec));
 	g_free(ec);
 }
 
@@ -351,8 +347,7 @@ _round(struct gridd_client_pool_s *pool, time_t sec)
 	EXTRA_ASSERT(pool->vtable == &VTABLE);
 	EXTRA_ASSERT(pool->fdmon >= 0);
 
-	struct epoll_event ev[MAX_ROUND];
-	memset(ev, 0, sizeof(ev));
+	struct epoll_event ev[MAX_ROUND] = {0};
 	int rc = epoll_wait(pool->fdmon, ev, MAX_ROUND, sec * 1000L);
 
 	if (rc < 0 && errno != EINTR)

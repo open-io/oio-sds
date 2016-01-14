@@ -207,9 +207,7 @@ static GByteArray *
 _pack_request (struct sqlx_name_mutable_s *n, struct oio_sqlx_batch_s *batch)
 {
 	GByteArray *req = NULL;
-
-	struct TableSequence in_table_sequence;
-	memset (&in_table_sequence, 0, sizeof(in_table_sequence));
+	struct TableSequence in_table_sequence = {{0}};
 
 	for (guint i=0; i<batch->statements->len ;++i) {
 		GPtrArray *stmt = batch->statements->pdata[i];
@@ -347,8 +345,7 @@ _unpack_reply (GByteArray *packed, struct oio_sqlx_batch_result_s **result)
 {
 	/* asn1 unpacking */
 	struct TableSequence *ts = NULL;
-	asn_codec_ctx_t ctx;
-	memset(&ctx, 0, sizeof(ctx));
+	asn_codec_ctx_t ctx = {0};
 	ctx.max_stack_size = ASN1C_MAX_STACK;
 	asn_dec_rval_t rv = ber_decode(&ctx, &asn_DEF_TableSequence,
 			(void**)&ts, packed->data, packed->len);

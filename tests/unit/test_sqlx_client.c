@@ -22,6 +22,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqlx/sqlx_client_local.h>
 #include <sqlx/sqlx_client_direct.h>
 
+const char *ns = "NS";
+const char *acct = "ACCT";
+const char *user = "JFS";
+
 #include "tests/common/test_sqlx_abstract.c"
 
 static void

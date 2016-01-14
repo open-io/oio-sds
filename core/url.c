@@ -159,8 +159,7 @@ _clean_url (struct oio_url_s *u)
 	oio_str_clean(&u->version);
 	oio_str_clean(&u->content);
 	oio_str_clean(&u->whole);
-	memset (u->id, 0, sizeof(u->id));
-	memset (u->hexid, 0, sizeof(u->hexid));
+	u->hexid[0] = '\0';
 	u->flags = 0;
 }
 
@@ -170,8 +169,7 @@ _compute_id (struct oio_url_s *url)
 	if (!url->ns || !*url->ns || !url->user || !*url->user)
 		return 0;
 
-	memset(url->hexid, 0, sizeof(url->hexid));
-	memset(url->id, 0, sizeof(url->id));
+	url->hexid[0] = '\0';
 	oio_str_hash_name(url->id, url->ns, url->account, url->user);
 	oio_str_bin2hex(url->id, sizeof(url->id), url->hexid, sizeof(url->hexid));
 	return 1;

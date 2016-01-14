@@ -72,14 +72,13 @@ sqlx_upgrader_register(struct sqlx_upgrader_s *su,
 		const gchar *p0, const gchar *p1,
 		sqlx_upgrade_cb cb, gpointer cb_data)
 {
-	struct sqlx_upgrade_step_s step;
+	struct sqlx_upgrade_step_s step = {0};
 
 	EXTRA_ASSERT(su != NULL);
 	EXTRA_ASSERT(su->steps != NULL);
 	EXTRA_ASSERT(p1 != NULL);
 	EXTRA_ASSERT(cb != NULL);
 
-	memset(&step, 0, sizeof(step));
 	step.pre = p0 ? g_strdup(p0) : NULL;
 	step.post = g_strdup(p1);
 	step.cb = cb;

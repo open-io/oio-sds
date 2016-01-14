@@ -1390,7 +1390,6 @@ _manager_clean(struct election_manager_s *manager)
 	for (i=0; i<COND_COUNT ;i++)
 		g_cond_clear(manager->conds + i);
 
-	memset(manager, 0, sizeof(*manager));
 	g_free(manager);
 }
 
@@ -2383,9 +2382,8 @@ static struct election_counts_s
 _manager_count(struct election_manager_s *manager)
 {
 	MANAGER_CHECK(manager);
-	struct election_counts_s count;
+	struct election_counts_s count = {0};
 
-	memset(&count, 0, sizeof(count));
 	if (manager != NULL) {
 		g_mutex_lock(&manager->lock);
 		lru_tree_foreach_DEQ(manager->lrutree_members,

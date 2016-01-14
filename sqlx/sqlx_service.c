@@ -68,8 +68,8 @@ static const struct gridd_request_descr_s * _get_service_requests (void);
 static GError* _reload_lbpool(struct grid_lbpool_s *glp, gboolean flush);
 
 // Static variables
-static struct sqlx_service_s SRV;
-static struct replication_config_s replication_config;
+static struct sqlx_service_s SRV = {0};
+static struct replication_config_s replication_config = {0};
 static struct grid_main_callbacks sqlx_service_callbacks =
 {
 	.options = sqlx_service_get_options,
@@ -279,8 +279,7 @@ _configure_replication(struct sqlx_service_s *ss)
 static gboolean
 _configure_backend(struct sqlx_service_s *ss)
 {
-	struct sqlx_repo_config_s repository_config;
-	memset(&repository_config, 0, sizeof(repository_config));
+	struct sqlx_repo_config_s repository_config = {0};
 	repository_config.flags = 0;
 	repository_config.flags |= ss->flag_delete_on ? SQLX_REPO_DELETEON : 0;
 	repository_config.flags |= ss->flag_cached_bases ? 0 : SQLX_REPO_NOCACHE;
@@ -682,8 +681,6 @@ int
 sqlite_service_main(int argc, char **argv,
 		const struct sqlx_service_config_s *cfg)
 {
-	memset(&SRV, 0, sizeof(SRV));
-	memset(&replication_config, 0, sizeof(replication_config));
 	SRV.replication_config = &replication_config;
 	SRV.service_config = cfg;
 	int rc = grid_main(argc, argv, &sqlx_service_callbacks);

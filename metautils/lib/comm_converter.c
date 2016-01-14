@@ -116,7 +116,6 @@ abstract_sequence_unmarshall(const struct abstract_sequence_handler_s *h,
 	void *result = NULL;
 	gint i = 0, max = 0;
 	asn_dec_rval_t decRet;
-	asn_codec_ctx_t codecCtx;
 	struct anonymous_sequence_s *abstract_sequence;
 	GSList *api_result = NULL;
 
@@ -132,7 +131,7 @@ abstract_sequence_unmarshall(const struct abstract_sequence_handler_s *h,
 		return -1;
 	}
 
-	memset(&codecCtx, 0, sizeof(asn_codec_ctx_t));
+	asn_codec_ctx_t codecCtx = {0};
 	codecCtx.max_stack_size = ASN1C_MAX_STACK;
 	decRet = ber_decode(&codecCtx, h->asn1_descriptor, &(result), asn1_encoded, asn1_encoded_size);
 
@@ -195,7 +194,6 @@ abstract_sequence_marshall(const struct abstract_sequence_handler_s * h, GSList 
 	gboolean error_occured = FALSE;
 	gsize probable_size;
 	asn_enc_rval_t encRet;
-	struct anonymous_sequence_s asnSeq;
 	GByteArray *gba;
 
 	int func_write(const void *b, gsize bSize, void *key)
@@ -239,7 +237,7 @@ abstract_sequence_marshall(const struct abstract_sequence_handler_s * h, GSList 
 	}
 
 	/*fills the ASN.1 structure */
-	memset(&asnSeq, 0x00, sizeof(asnSeq));
+	struct anonymous_sequence_s asnSeq = {0};
 	g_slist_foreach(api_sequence, &func_fill, &asnSeq);
 	if (error_occured) {
 		g_byte_array_free(gba, TRUE);
@@ -680,18 +678,13 @@ DEFINE_SEQUENCE_UNMARSHALLER(&descr_Meta0Info, meta0_info_unmarshall)
 GByteArray *
 strings_marshall_gba(GSList * list, GError ** err)
 {
-	ContentList_t list_asn;
-	asn_enc_rval_t encRet;
-	GByteArray *result = NULL;
-
-	memset(&list_asn, 0x00, sizeof(list_asn));
-
-	result = g_byte_array_sized_new (512);
+	GByteArray *result = g_byte_array_sized_new (512);
 	if (!result) {
 		GSETERROR(err, "Failed to alloc byte array");
 		return NULL;
 	}
 
+	ContentList_t list_asn = {0};
 	for (GSList *l = list; l; l=l->next) {
 		char *s = l->data;
 		if (!s)
@@ -702,6 +695,7 @@ strings_marshall_gba(GSList * list, GError ** err)
 		asn_set_add(&(list_asn.list), os);
 	}
 
+	asn_enc_rval_t encRet;
 	encRet = der_encode(&asn_DEF_ContentList, &list_asn, metautils_asn1c_write_gba, result);
 	if (encRet.encoded == -1)
 		goto error_encode;
@@ -881,15 +875,13 @@ namespace_info_marshall(namespace_info_t * namespace_info, GError ** err)
 {
 	asn_enc_rval_t encRet;
 	GByteArray *result = NULL;
-	NamespaceInfo_t asn1_namespace_info;
+	NamespaceInfo_t asn1_namespace_info = {0};
 
 	/*sanity checks */
 	if (!namespace_info) {
 		GSETERROR(err, "Invalid parameter");
 		goto error_params;
 	}
-
-	memset(&asn1_namespace_info, 0x00, sizeof(NamespaceInfo_t));
 
 	/*fills an ASN.1 structure */
 	if (!namespace_info_API2ASN(namespace_info, &asn1_namespace_info)) {

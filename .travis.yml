@@ -12,9 +12,16 @@ install:
 script:
   - mkdir /tmp/oio
   - cmake -DCMAKE_INSTALL_PREFIX="/tmp/oio" -DLD_LIBDIR="lib" -DCMAKE_BUILD_TYPE="Debug" -DZK_LIBDIR="/usr/lib" -DZK_INCDIR="/usr/include/zookeeper" -DLIBRAIN_LIBDIR="/usr/lib" -DLIBRAIN_INCDIR="/usr/include" -DAPACHE2_LIBDIR="/usr/lib/apache2" -DAPACHE2_INCDIR="/usr/include/apache2" -DAPACHE2_MODDIR=/tmp/oio/lib/apache2/module .
-  - make all install
+  - make -j 8 all install
   - ( cd python && python setup.py install )
-  - ( export PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib" && /tmp/oio/bin/oio-reset.sh -S SINGLE -N "NS" -C 65536 -B 1 -D 1 -R 1 -X "zookeeper" )
+  - export G_DEBUG_LEVEL=D
+  - export PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib"
   - make -C tests/unit test
+  - export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" OIO_USER=USER-$RANDOM
+  - /tmp/oio/bin/oio-reset.sh -S SINGLE -N $OIO_NS -C 65536 -B 1 -D 1 -R 1 -X "zookeeper"
   - make -C tests/func test
-  - ( export PATH="$PATH:/tmp/oio/bin" LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/tmp/oio/lib" && OIO_NS=NS OIO_ACCOUNT=Travis-$RANDOM OIO_USER=Travis-$RANDOM OIO_PATH=Content-$RANDOM ./core/tool_roundtrip /etc/passwd )
+  - OIO_PATH=PATH-$RANDOM ./core/tool_roundtrip /etc/passwd
+  - export OIO_NS="NS-${RANDOM}" OIO_ACCOUNT="ACCT-$RANDOM" OIO_USER=USER-$RANDOM
+  - /tmp/oio/bin/oio-reset.sh -S THREECOPIES -N $OIO_NS -C 1000 -B 1 -D 1 -R 1 -E 5 -X "zookeeper"
+  - make -C tests/func test
+  - OIO_PATH=PATH-$RANDOM ./core/tool_roundtrip /etc/passwd
