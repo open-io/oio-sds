@@ -16,9 +16,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 
-#include <core/oiourl.h>
-#include <core/oiodir.h>
-#include <metautils/lib/metautils.h>
+#include <core/oio_core.h>
+#include <core/oio_sds.h>
 #include <sqlx/sqlx_client.h>
 #include <sqlx/sqlx_client_local.h>
 #include <sqlx/sqlx_client_direct.h>

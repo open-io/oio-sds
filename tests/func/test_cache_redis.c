@@ -16,7 +16,7 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <core/oiolog.h>
+#include <core/oio_core.h>
 #include <cache/cache.h>
 #include <cache/cache_redis.h>
 
@@ -39,12 +39,7 @@ test_cache_cycle_redis (void)
 int
 main(int argc, char **argv)
 {
-	g_test_init(&argc, &argv, NULL);
-	oio_log_lazy_init ();
-	oio_log_init_level(GRID_LOGLVL_INFO);
-	g_log_set_default_handler(oio_log_stderr, NULL);
-
+	HC_TEST_INIT(argc,argv);
 	g_test_add_func("/cache/cycle/redis", test_cache_cycle_redis);
 	return g_test_run();
 }
-

@@ -87,9 +87,8 @@ _curl_url_prefix_reference (struct oio_url_s *u)
 static void
 _append (GString *gs, char sep, const char *k, const char *v)
 {
-	gchar *venc = g_uri_escape_string (v, NULL, FALSE);
-	g_string_append_printf (gs, "%c%s=%s", sep, k, venc);
-	g_free (venc);
+	g_string_append_printf (gs, "%c%s=", sep, k);
+	g_string_append_uri_escaped (gs, v, NULL, TRUE);
 }
 
 static GString *
@@ -438,8 +437,10 @@ oio_proxy_call_content_create (CURL *h, struct oio_url_s *u,
 		struct oio_proxy_content_create_in_s *in, GString *out)
 {
 	GString *http_url = _curl_content_url (u, "create");
-	if (in->content)
-		g_string_append_printf (http_url, "&id=%s", in->content);
+	if (in->content) {
+		g_string_append (http_url, "&id=");
+		g_string_append_uri_escaped (http_url, in->content, NULL, TRUE);
+	}
 	gchar *hdrin[] = {
 		g_strdup(PROXYD_HEADER_PREFIX "content-meta-id"),
 		g_strdup_printf("%s", in->content),
@@ -531,6 +532,37 @@ GError *
 oio_proxy_call_conscience_register (CURL *h, const char *ns, GString *in)
 {
 	GString *http_url = _curl_conscience_url (ns, "register");
+	struct http_ctx_s i = { .headers = NULL, .body = in };
+	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_conscience_deregister (CURL *h, const char *ns, GString *in)
+{
+	GString *http_url = _curl_conscience_url (ns, "deregister");
+	struct http_ctx_s i = { .headers = NULL, .body = in };
+	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_conscience_flush (CURL *h, const char *ns,
+		const char *srvtype)
+{
+	GString *http_url = _curl_conscience_url (ns, "flush");
+	_append (http_url, '?', "type", srvtype);
+	GError *err = _proxy_call (h, "POST", http_url->str, NULL, NULL);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
+oio_proxy_call_conscience_unlock (CURL *h, const char *ns, GString *in)
+{
+	GString *http_url = _curl_conscience_url (ns, "unlock");
 	struct http_ctx_s i = { .headers = NULL, .body = in };
 	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
 	g_string_free(http_url, TRUE);

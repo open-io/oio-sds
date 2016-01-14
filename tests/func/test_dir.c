@@ -21,7 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 
 #include <core/oio_core.h>
-#include <core/oiodir.h>
+#include <core/oio_sds.h>
 #include <core/internals.h>
 
 #undef GQ
@@ -122,14 +122,8 @@ test_reference_cycle (void)
 int
 main (int argc, char **argv)
 {
-	g_test_init (&argc, &argv, NULL);
-	oio_ext_set_random_reqid ();
-	oio_log_lazy_init ();
-	oio_log_init_level (GRID_LOGLVL_INFO);
-	g_log_set_default_handler (oio_log_stderr, NULL);
-
+	HC_TEST_INIT(argc,argv);
 	g_test_add_func ("/core/directory/init", test_init);
 	g_test_add_func ("/core/directory/references", test_reference_cycle);
 	return g_test_run ();
 }
-

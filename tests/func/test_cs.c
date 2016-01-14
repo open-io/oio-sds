@@ -16,9 +16,10 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <core/oiolog.h>
-#include <core/oiocs.h>
+#include <core/oio_core.h>
+#include <core/oio_sds.h>
 #include <core/internals.h>
+#include <metautils/lib/metautils.h>
 
 #undef GQ
 #define GQ() g_quark_from_static_string("oio.core")
@@ -74,6 +75,37 @@ test_proxied_push (void)
 	oio_cs_client__destroy (cs);
 }
 
+/* loop on the push (with various parameters) to attempt raising memleaks */
+static void
+test_proxied_deregister (void)
+{
+	struct oio_cs_registration_s reg = {
+		.id = "klkqd",
+		.url = "127.0.0.1:5000",
+		.kv_tags = NULL,
+	};
+	const char *tags[] = { "stat.cpu", "100.0", NULL };
+	GError *err;
+
+	struct oio_cs_client_s *cs = oio_cs_client__create_proxied (ns);
+	g_assert_nonnull (cs);
+	for (int i=0; i<8 ;++i) {
+		err = oio_cs_client__flush_services (cs, srvtype);
+		g_assert_no_error (err);
+		reg.kv_tags = tags;
+		err = oio_cs_client__register_service (cs, srvtype, &reg);
+		g_assert_no_error (err);
+		void on_reg (const struct oio_cs_registration_s *preg) {
+			GRID_DEBUG("turn=%d id=%s url=%s", i, preg->id, preg->url);
+		}
+		err = oio_cs_client__list_services (cs, srvtype, on_reg);
+		g_assert_no_error (err);
+		err = oio_cs_client__flush_services (cs, srvtype);
+		g_assert_no_error (err);
+	}
+	oio_cs_client__destroy (cs);
+}
+
 static void
 test_proxied_list (void)
 {
@@ -103,7 +135,10 @@ test_proxied_types (void)
 	struct oio_cs_client_s *cs = oio_cs_client__create_proxied (ns);
 	g_assert_nonnull (cs);
 	for (int i=0; i<8 ;++i) {
-		err = oio_cs_client__list_types (cs, NULL);
+		void on_type (const char *st) {
+			GRID_DEBUG("turn=%d type=%s", i, st);
+		}
+		err = oio_cs_client__list_types (cs, on_type);
 		g_assert_no_error (err);
 	}
 	oio_cs_client__destroy (cs);
@@ -112,16 +147,11 @@ test_proxied_types (void)
 int
 main(int argc, char **argv)
 {
-	g_test_init(&argc, &argv, NULL);
-	oio_log_lazy_init ();
-	oio_log_init_level(GRID_LOGLVL_INFO);
-	g_log_set_default_handler(oio_log_stderr, NULL);
-
+	HC_TEST_INIT(argc,argv);
 	g_test_add_func("/cs/proxy/init", test_proxied_init);
 	g_test_add_func("/cs/proxy/push", test_proxied_push);
 	g_test_add_func("/cs/proxy/list", test_proxied_list);
 	g_test_add_func("/cs/proxy/types", test_proxied_types);
+	g_test_add_func("/cs/proxy/deregister", test_proxied_deregister);
 	return g_test_run();
 }
-
-

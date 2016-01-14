@@ -1,4 +1,5 @@
 add_definitions(-DG_LOG_DOMAIN="oio.tests.func")
+set(MAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 include_directories(BEFORE . ../..)
 

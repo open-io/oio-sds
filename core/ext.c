@@ -253,3 +253,17 @@ oio_ext_monotonic_time (void)
 	return g_get_monotonic_time();
 }
 
+void
+oio_ext_init_test (int *argc, char ***argv)
+{
+	g_test_init (argc, argv, NULL);
+
+	char *sep = strrchr ((*argv)[0], '/');
+	g_set_prgname (sep ? sep+1 : (*argv)[0]);
+
+	oio_log_lazy_init ();
+	oio_log_init_level(GRID_LOGLVL_INFO);
+	oio_log_init_level_from_env("G_DEBUG_LEVEL");
+	g_log_set_default_handler(oio_log_stderr, NULL);
+	oio_ext_set_random_reqid ();
+}

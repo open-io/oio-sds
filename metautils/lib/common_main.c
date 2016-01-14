@@ -373,10 +373,8 @@ grid_main_delete_pid_file(void)
 void
 grid_main_set_prgname(const gchar *cmd)
 {
-	gchar *bn;
-
 	EXTRA_ASSERT(cmd != NULL);
-	bn = g_path_get_basename(cmd);
+	gchar *bn = g_path_get_basename(cmd);
 	g_set_prgname(bn);
 	g_free(bn);
 }

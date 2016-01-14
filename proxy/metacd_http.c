@@ -610,6 +610,7 @@ configure_request_handlers (void)
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/list/#GET", action_conscience_list);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/register/#POST", action_conscience_register);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/deregister/#POST", action_conscience_deregister);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/flush/#POST", action_conscience_flush);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/lock/#POST", action_conscience_lock);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/unlock/#POST", action_conscience_unlock);
 

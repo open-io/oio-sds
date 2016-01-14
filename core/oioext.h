@@ -25,6 +25,10 @@ extern "C" {
 
 # include <glib.h>
 
+void oio_ext_init_test (int *argc, char ***argv);
+
+#define HC_TEST_INIT(argc,argv) oio_ext_init_test(&argc,&argv)
+
 /** Shuffles the single linked list. The original <src> MUST NOT be reused. */
 GSList * oio_ext_gslist_shuffle(GSList *src);
 
