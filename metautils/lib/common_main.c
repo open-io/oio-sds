@@ -249,7 +249,7 @@ _signal_block(int s)
 static void
 _signal_ignore(int s)
 {
-	struct sigaction sa = {0}, saold = {0};
+	struct sigaction sa = {{0}}, saold = {{0}};
 	sigaddset(&sa.sa_mask, s);
 	sa.sa_handler = SIG_IGN;
 	sigaction(s, &sa, &saold);

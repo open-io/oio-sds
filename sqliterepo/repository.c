@@ -1402,7 +1402,7 @@ _read_file(int fd, GByteArray *gba)
 	GError *err = NULL;
 
 	rc = fstat(fd, &st);
-	GRID_TRACE2("%s(%d,%p) size=%"G_GSIZE_FORMAT, __FUNCTION__, fd,
+	GRID_TRACE2("%s(%d,%p) size=%"G_GINT64_FORMAT, __FUNCTION__, fd,
 			gba, st.st_size);
 
 	if (0 > rc)

@@ -390,7 +390,7 @@ cb_read(void *data, size_t s, size_t n, struct http_put_dest_s *dest)
 
 	GRID_TRACE2("read: %"G_GSIZE_FORMAT" avail, %"G_GSIZE_FORMAT" max,"
 			" %"G_GSIZE_FORMAT" remaining, %"G_GSIZE_FORMAT" sent "
-			"-> %"G_GSIZE_FORMAT" total",
+			"-> %"G_GINT64_FORMAT" total",
 			bs, max, remaining, real, dest->bytes_sent);
 
 	return real;

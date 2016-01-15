@@ -347,7 +347,7 @@ _round(struct gridd_client_pool_s *pool, time_t sec)
 	EXTRA_ASSERT(pool->vtable == &VTABLE);
 	EXTRA_ASSERT(pool->fdmon >= 0);
 
-	struct epoll_event ev[MAX_ROUND] = {0};
+	struct epoll_event ev[MAX_ROUND];
 	int rc = epoll_wait(pool->fdmon, ev, MAX_ROUND, sec * 1000L);
 
 	if (rc < 0 && errno != EINTR)

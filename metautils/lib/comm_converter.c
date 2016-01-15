@@ -237,7 +237,7 @@ abstract_sequence_marshall(const struct abstract_sequence_handler_s * h, GSList 
 	}
 
 	/*fills the ASN.1 structure */
-	struct anonymous_sequence_s asnSeq = {0};
+	struct anonymous_sequence_s asnSeq = {{0}};
 	g_slist_foreach(api_sequence, &func_fill, &asnSeq);
 	if (error_occured) {
 		g_byte_array_free(gba, TRUE);
@@ -684,7 +684,7 @@ strings_marshall_gba(GSList * list, GError ** err)
 		return NULL;
 	}
 
-	ContentList_t list_asn = {0};
+	ContentList_t list_asn = {{0}};
 	for (GSList *l = list; l; l=l->next) {
 		char *s = l->data;
 		if (!s)
@@ -875,7 +875,7 @@ namespace_info_marshall(namespace_info_t * namespace_info, GError ** err)
 {
 	asn_enc_rval_t encRet;
 	GByteArray *result = NULL;
-	NamespaceInfo_t asn1_namespace_info = {0};
+	NamespaceInfo_t asn1_namespace_info = {{0}};
 
 	/*sanity checks */
 	if (!namespace_info) {

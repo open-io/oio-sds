@@ -460,7 +460,7 @@ grid_lb_get_service_from_url(struct grid_lb_s *lb, const gchar *url)
 	if (!lb || !url)
 		return NULL;
 
-	addr_info_t ai = {0};
+	addr_info_t ai = {{0}};
 	if (!grid_string_to_addrinfo(url, &ai))
 		return NULL;
 	return grid_lb_get_service_from_addr(lb, &ai);
@@ -1176,7 +1176,7 @@ gboolean
 grid_lb_iterator_next_set2(struct grid_lb_iterator_s *iter,
 		struct service_info_s ***result, struct lb_next_opt_ext_s *opt_ext)
 {
-	struct lb_next_opt_s opt = {0};
+	struct lb_next_opt_s opt = {{0}};
 	memcpy(&(opt.req), &(opt_ext->req), sizeof(struct lb_next_opt_simple_s));
 
 	opt.filter.hook = (service_filter) _ext_opt_filter;

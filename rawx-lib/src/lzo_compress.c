@@ -342,7 +342,7 @@ lzo_compressed_chunk_check_integrity(struct compressed_chunk_s *chunk)
 	
 	lzo_uint32 checksum32 = 0;
 	checksum32 = chunk->checksum;
-	DEBUG("chunk->checksum : %"G_GUINT32_FORMAT"\n", checksum32);
+	DEBUG("chunk->checksum : %"G_GUINT32_FORMAT"\n", (guint32) checksum32);
 	c = *((guint32*)(eof_info + sizeof(guint32)));	
 
 	DEBUG("c (get from file): %d\n", c);

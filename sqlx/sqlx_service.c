@@ -68,7 +68,7 @@ static const struct gridd_request_descr_s * _get_service_requests (void);
 static GError* _reload_lbpool(struct grid_lbpool_s *glp, gboolean flush);
 
 // Static variables
-static struct sqlx_service_s SRV = {0};
+static struct sqlx_service_s SRV = {{0}};
 static struct replication_config_s replication_config = {0};
 static struct grid_main_callbacks sqlx_service_callbacks =
 {

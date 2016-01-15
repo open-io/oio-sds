@@ -1972,7 +1972,7 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 	for (GSList *l = old_deleted; l != NULL; l = l->next) {
 		if (!ALIASES_get_deleted(l->data)) {
 			if (GRID_TRACE_ENABLED()) {
-				GRID_TRACE("Copy/delete %s version %ld",
+				GRID_TRACE("Copy/delete %s version %"G_GINT64_FORMAT,
 					ALIASES_get_alias(l->data)->str,
 					ALIASES_get_version(l->data));
 			}

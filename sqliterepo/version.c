@@ -167,7 +167,7 @@ version_encode(GTree *t)
 {
 	asn_enc_rval_t rv;
 	GByteArray *encoded;
-	struct BaseVersion bv = {0};
+	struct BaseVersion bv = {{0}};
 
 	gboolean runner(gpointer _k, gpointer _v, gpointer _u) {
 		(void) _u;

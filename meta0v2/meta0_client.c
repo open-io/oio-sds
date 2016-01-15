@@ -26,7 +26,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "meta0_remote.h"
 #include "meta0_utils.h"
 
-static addr_info_t addr = {0};
+static addr_info_t addr = {{0}};
 static gchar *namespace = NULL;
 static gboolean flag_list = FALSE;
 static gboolean flag_get = FALSE;
@@ -44,7 +44,7 @@ static gchar **urls = NULL;
 static gboolean
 url_check(const gchar *u)
 {
-	addr_info_t a = {0};
+	addr_info_t a = {{0}};
 	return grid_string_to_addrinfo(u, &a);
 }
 

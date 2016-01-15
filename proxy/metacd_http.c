@@ -57,7 +57,7 @@ GMutex push_mutex = {0};
 struct lru_tree_s *push_queue = NULL;
 
 GMutex nsinfo_mutex = {0};
-struct namespace_info_s nsinfo = {0};
+struct namespace_info_s nsinfo = {{0}};
 gchar **srvtypes = NULL;
 
 GMutex srv_mutex = {0};

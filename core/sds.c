@@ -1176,7 +1176,7 @@ _sds_upload_finish (struct oio_sds_ul_s *ul)
 				g_slist_length(ul->chunks_done));
 
 		ul->metachunk_done = g_list_append (ul->metachunk_done, ul->mc);
-		GRID_TRACE("%s > metachunks +1 -> %u (%"G_GINT64_FORMAT")", __FUNCTION__,
+		GRID_TRACE("%s > metachunks +1 -> %u (%"G_GSIZE_FORMAT")", __FUNCTION__,
 				g_list_length(ul->metachunk_done),
 				ul->mc->size);
 		ul->mc = NULL;
