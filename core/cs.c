@@ -133,9 +133,8 @@ _pack_registration (const char *ns, const char *srvtype,
 		g_string_append_printf (body, ",\"score\":%d", *pscore);
 	if (kv_tags) {
 		g_string_append (body, ",\"tags\":{");
-		gboolean first = TRUE;
-		for (const char * const *pp = kv_tags; *pp && *(pp+1) ;pp+=2) {
-			if (!first)
+		for (const char * const *pp = kv_tags; *pp && *(pp+1); pp+=2) {
+			if (pp != kv_tags)
 				g_string_append_c (body, ',');
 			g_string_append_printf (body, "\"%s\":\"%s\"", *pp, *(pp+1));
 		}
