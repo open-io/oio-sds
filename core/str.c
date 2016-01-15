@@ -328,3 +328,25 @@ oio_str_lower(register gchar *s)
 	for (; *s ;++s)
 		*s = g_ascii_tolower(*s);
 }
+
+void
+oio_str_gstring_append_json_string (GString *base, const char *s)
+{
+	while (*s) {
+		if (*s == '"')
+			g_string_append_c (base, '\\');
+		g_string_append_c (base, *(s++));
+	}
+}
+
+void
+oio_str_gstring_append_json_pair (GString *base, const char *k, const char *v)
+{
+	g_string_append_c (base, '"');
+	g_string_append (base, k);
+	g_string_append_c (base, '"');
+	g_string_append_c (base, ':');
+	g_string_append_c (base, '"');
+	oio_str_gstring_append_json_string (base, v);
+	g_string_append_c (base, '"');
+}

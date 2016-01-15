@@ -48,7 +48,7 @@ static int
 _on_item (void *ctx, const struct oio_sds_list_item_s *item)
 {
 	(void) ctx;
-	g_print ("Listed item %s, size %"G_GSIZE_FORMAT" version %"G_GSIZE_FORMAT"\n",
+	GRID_DEBUG ("Listed item %s, size %"G_GSIZE_FORMAT" version %"G_GSIZE_FORMAT"\n",
 			item->name, item->size, item->version);
 	return 0;
 }

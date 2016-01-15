@@ -1022,6 +1022,9 @@ m2db_force_alias(struct m2db_put_args_s *args, GSList *beans,
 	if (!oio_url_has(args->url, OIOURL_PATH))
 		return NEWERROR(CODE_BAD_REQUEST, "Missing path");
 
+	/* TODO(jfs): return the beans added/deleted */
+	(void) out_deleted, (void) out_added;
+
 	memset(&args2, 0, sizeof(args2));
 	args2.beans = beans;
 
@@ -1969,7 +1972,7 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 	for (GSList *l = old_deleted; l != NULL; l = l->next) {
 		if (!ALIASES_get_deleted(l->data)) {
 			if (GRID_TRACE_ENABLED()) {
-				GRID_TRACE("Copy/delete %s version %ld",
+				GRID_TRACE("Copy/delete %s version %"G_GINT64_FORMAT,
 					ALIASES_get_alias(l->data)->str,
 					ALIASES_get_version(l->data));
 			}

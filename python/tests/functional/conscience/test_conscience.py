@@ -5,6 +5,11 @@ from tests.utils import BaseTestCase
 import simplejson as json
 
 
+# TODO(jfs) There should be only one referece for error codes
+CODE_NAMESPACE_NOTMANAGED = 418
+CODE_SRVTYPE_NOTMANAGED = 453
+
+
 class TestConscienceFunctional(BaseTestCase):
 
     def test_namespace_get(self):
@@ -20,7 +25,7 @@ class TestConscienceFunctional(BaseTestCase):
         self.assertIsInstance(resp.json(), list)
         self.assertEqual(len(resp.json()), 0)
         resp = self.session.get(self._url_cs('list'), params={'type': 'error'})
-        self.assertError(resp, 404, 418)
+        self.assertError(resp, 404, CODE_SRVTYPE_NOTMANAGED)
         resp = self.session.get(self._url_cs('list'))
         self.assertError(resp, 400, 400)
 

@@ -17,7 +17,12 @@ License along with this library.
 */
 
 #include <unistd.h>
+#include <fcntl.h>
 #include <string.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <sys/vfs.h>
+#include <sys/types.h>
 
 #include <glib.h>
 #include <json.h>
@@ -253,3 +258,296 @@ oio_ext_monotonic_time (void)
 	return g_get_monotonic_time();
 }
 
+void
+oio_ext_init_test (int *argc, char ***argv)
+{
+	g_test_init (argc, argv, NULL);
+
+	char *sep = strrchr ((*argv)[0], '/');
+	g_set_prgname (sep ? sep+1 : (*argv)[0]);
+
+	oio_log_lazy_init ();
+	oio_log_init_level(GRID_LOGLVL_INFO);
+	oio_log_init_level_from_env("G_DEBUG_LEVEL");
+	g_log_set_default_handler(oio_log_stderr, NULL);
+	oio_ext_set_random_reqid ();
+}
+
+/* -------------------------------------------------------------------------- */
+
+/** @private */
+struct maj_min_idle_s {
+	guint major, minor;
+	gint64 last_update;
+	unsigned long long last_total_time;
+	gdouble idle;
+};
+
+/** @private */
+struct path_maj_min_s
+{
+	gint64 last_update;
+	int major;
+	int minor;
+	gchar path[];
+};
+
+static GSList *io_cache = NULL;
+static GMutex io_lock;
+
+static GSList *majmin_cache = NULL;
+static GMutex majmin_lock;
+
+void _constructor_idle_cache (void);
+void _destructor_idle_cache (void);
+
+
+static void
+_free_majmin_idle_list (GSList *l)
+{
+	void _clean_idle (struct maj_min_idle_s *p) {
+		g_free (p);
+	}
+	g_slist_free_full (l, (GDestroyNotify)_clean_idle);
+}
+
+void __attribute__ ((constructor))
+_constructor_idle_cache (void)
+{
+	static volatile guint lazy_init = 1;
+	if (lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
+			g_mutex_init (&io_lock);
+			g_mutex_init (&majmin_lock);
+		}
+	}
+}
+
+void __attribute__ ((destructor))
+_destructor_idle_cache (void)
+{
+	_constructor_idle_cache ();
+
+	g_mutex_lock (&io_lock);
+	_free_majmin_idle_list (io_cache);
+	io_cache = NULL;
+	g_mutex_unlock (&io_lock);
+
+	g_mutex_lock (&majmin_lock);
+	g_slist_free_full (majmin_cache, g_free);
+	majmin_cache = NULL;
+	g_mutex_unlock (&majmin_lock);
+}
+
+static gdouble
+_compute_io_idle (guint major, guint minor)
+{
+	_constructor_idle_cache ();
+
+	gdouble idle = 0.01;
+	struct maj_min_idle_s *out = NULL;
+
+	g_mutex_lock (&io_lock);
+	gint64 now = oio_ext_monotonic_time ();
+
+	/* locate the info in the cache */
+	for (GSList *l=io_cache; l && !out ;l=l->next) {
+		struct maj_min_idle_s *p = l->data;
+		if (p && p->major == major && p->minor == minor)
+			out = p;
+	}
+	if (!out) {
+		out = g_malloc0 (sizeof(struct maj_min_idle_s));
+		out->major = major;
+		out->minor = minor;
+		io_cache = g_slist_prepend (io_cache, out);
+	}
+
+	/* check its validity and reload if necessary */
+	if (!out->last_update || (now - out->last_update) > G_TIME_SPAN_SECOND) {
+		FILE *fst = fopen ("/proc/diskstats", "r");
+		while (fst && !feof(fst) && !ferror(fst)) {
+			char line[1024], name[256];
+			if (!fgets (line, 1024, fst))
+				break;
+			guint fmajor, fminor;
+			unsigned long long int
+				rd, rd_merged, rd_sectors, rd_time,
+				wr, wr_merged, wr_sectors, wr_time,
+				total_progress, total_time, total_iotime;
+			int rc = sscanf (line, "%u %u %s %llu %llu %llu %llu %llu"
+					"%llu  %llu %llu %llu %llu %llu",
+					&fmajor, &fminor, name,
+					&rd, &rd_merged, &rd_sectors, &rd_time,
+					&wr, &wr_merged, &wr_sectors, &wr_time,
+					&total_progress, &total_time, &total_iotime);
+			if (rc != 0) {
+				gdouble spent = total_time - out->last_total_time; /* in ms */
+				gdouble elapsed = now - out->last_update; /* in us */
+				elapsed /= G_TIME_SPAN_MILLISECOND; /* in ms */
+				out->idle = 1.0 - (spent / elapsed);
+				out->last_update = now;
+				out->last_total_time = total_time;
+				break;
+			}
+		}
+		if (fst)
+			fclose (fst);
+	}
+
+	/* collect the up-to-date value */
+	idle = out->idle;
+
+	/* purge obsolete and exceeding entries of the cache */
+	GSList *kept = NULL, *trash = NULL;
+	for (GSList *l=io_cache; l ;l=l->next) {
+		struct maj_min_idle_s *p = l->data;
+		if ((now - p->last_update) > G_TIME_SPAN_HOUR)
+			trash = g_slist_prepend (trash, p);
+		else
+			kept = g_slist_prepend (kept, p);
+	}
+	g_slist_free (io_cache);
+	_free_majmin_idle_list (trash);
+	io_cache = kept;
+	g_mutex_unlock (&io_lock);
+
+	return idle;
+}
+
+static int
+_get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
+{
+	_constructor_idle_cache ();
+
+	struct path_maj_min_s *out = NULL;
+
+	g_mutex_lock (&majmin_lock);
+	gint64 now = oio_ext_monotonic_time ();
+	/* ensure an entry exists */
+	for (GSList *l=majmin_cache; l && !out ;l=l->next) {
+		struct path_maj_min_s *p = l->data;
+		if (p && !strcmp(path, p->path))
+			out = p;
+	}
+	if (!out) {
+		out = g_malloc0 (sizeof(struct path_maj_min_s) + strlen(path) + 1);
+		strcpy (out->path, path);
+		majmin_cache = g_slist_prepend (majmin_cache, out);
+	}
+
+	/* maybe refresh it */
+	if (!out->last_update || (now - out->last_update) > 30 * G_TIME_SPAN_SECOND) {
+		struct stat st;
+		if (0 != stat(out->path, &st)) {
+			out = NULL;
+		} else {
+			out->major = (guint) major(st.st_dev);
+			out->minor = (guint) minor(st.st_dev);
+			out->last_update = now;
+		}
+	}
+
+	/* collect the up-to-date value */
+	*pmaj = out->major;
+	*pmin = out->minor;
+
+	/* now purge the expired items */
+	GSList *kept = NULL, *trash = NULL;
+	for (GSList *l=majmin_cache; l ;l=l->next) {
+		struct path_maj_min_s *p = l->data;
+		if ((now - p->last_update) > G_TIME_SPAN_HOUR)
+			trash = g_slist_prepend (trash, p);
+		else
+			kept = g_slist_prepend (kept, p);
+	}
+	g_slist_free_full (trash, g_free);
+	g_slist_free (majmin_cache);
+	majmin_cache = kept;
+	g_mutex_unlock (&majmin_lock);
+
+	return out != NULL;
+}
+
+gdouble
+oio_sys_io_idle (const char *vol)
+{
+	guint maj, min;
+	if (_get_major_minor(vol, &maj, &min))
+		return _compute_io_idle(maj, min);
+	return 0.01;
+}
+
+gdouble
+oio_sys_space_idle (const char *vol)
+{
+	struct statfs sfs;
+	if (statfs(vol, &sfs) < 0)
+		return 0.0;
+	gdouble free_inodes_d = sfs.f_ffree, total_blocks_d = sfs.f_blocks,
+			free_blocks_d = sfs.f_bavail;
+	if (free_blocks_d > free_inodes_d)
+		free_blocks_d = free_inodes_d;
+	if (free_blocks_d <= 0.0 || total_blocks_d <= 0.0)
+		return 0.0;
+	return free_blocks_d / total_blocks_d;
+}
+
+gdouble
+oio_sys_cpu_idle (void)
+{
+	static gdouble ratio_idle = 0.01;
+	static guint64 last_sum = 0;
+	static guint64 last_idle = 0;
+	static gint64 last_update = 0;
+	static GMutex lock;
+	static volatile guint lazy_init = 1;
+
+	if (lazy_init) {
+		if (g_atomic_int_compare_and_exchange(&lazy_init, 1, 0)) {
+			g_mutex_init (&lock);
+		}
+	}
+
+	gdouble out;
+
+	g_mutex_lock (&lock);
+	gint64 now = oio_ext_monotonic_time ();
+	if (!last_update || ((now - last_update) > G_TIME_SPAN_SECOND)) {
+		FILE *fst = fopen ("/proc/stat", "r");
+		while (fst && !feof(fst) && !ferror(fst)) {
+			char line[1024];
+			if (!fgets (line, 1024, fst))
+				break;
+			if (!g_str_has_prefix(line, "cpu "))
+				continue;
+			char *p = g_strstrip(line + 4);
+			long long unsigned int user = 0, nice = 0, sys = 0, idle = 0,
+				 wait = 0, irq = 0, soft = 0, steal = 0, guest = 0,
+				 guest_nice = 0;
+			/* TODO linux provides 10 fields since Linux 2.6.33,
+			 * and we should check the Linux verison to manage the
+			 * old style with 7 fields for earlier releases. */
+			int rc = sscanf(p, "%llu %llu %llu %llu %llu %llu %llu %llu"
+					" %llu %llu", &user, &nice, &sys, &idle, &wait, &irq,
+					&soft, &steal, &guest, &guest_nice);
+			if (rc != 0) {
+				guint64 sum = user + nice + sys + idle + wait + irq + soft
+					+ steal + guest + guest_nice;
+				if (sum > last_sum && idle > last_idle)
+					ratio_idle = ((gdouble)(idle - last_idle)) /
+						((gdouble)(sum - last_sum));
+				last_sum = sum;
+				last_idle = idle;
+				last_update = now;
+			}
+			break;
+		}
+		if (fst)
+			fclose (fst);
+	}
+	out = ratio_idle;
+	g_mutex_unlock (&lock);
+
+	return out;
+}

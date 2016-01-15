@@ -732,8 +732,6 @@ _open_fill_args(struct open_args_s *args, struct sqlx_repository_s *repo,
 	EXTRA_ASSERT(repo->locator != NULL);
 	SQLXNAME_CHECK(n);
 
-	memset(args, 0, sizeof(struct open_args_s));
-
 	args->repo = repo;
 	args->name.type = n->type;
 	args->name.base = n->base;
@@ -1106,12 +1104,11 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 		struct sqlx_sqlite3_s **result, gchar **lead)
 {
 	GError *err = NULL;
-	struct open_args_s args;
+	struct open_args_s args = {0};
 
-	memset(&args, '\0', sizeof(struct open_args_s));
 	EXTRA_ASSERT(repo != NULL);
 	SQLXNAME_CHECK(n);
-	
+
 	if (result)
 		*result = NULL;
 
@@ -1405,7 +1402,7 @@ _read_file(int fd, GByteArray *gba)
 	GError *err = NULL;
 
 	rc = fstat(fd, &st);
-	GRID_TRACE2("%s(%d,%p) size=%"G_GSIZE_FORMAT, __FUNCTION__, fd,
+	GRID_TRACE2("%s(%d,%p) size=%"G_GINT64_FORMAT, __FUNCTION__, fd,
 			gba, st.st_size);
 
 	if (0 > rc)

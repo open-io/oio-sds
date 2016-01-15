@@ -624,7 +624,7 @@ _lower(gchar *s)
 static int
 http_notify_input(struct network_client_s *clt)
 {
-	struct req_ctx_s r;
+	struct req_ctx_s r = {0};
 
 	void command_provider(const gchar *c, const gchar *s, const gchar *v) {
 		r.request->cmd = g_strdup(c);
@@ -640,7 +640,6 @@ http_notify_input(struct network_client_s *clt)
 		g_byte_array_append(r.request->body, data, data_len);
 	}
 
-	memset(&r, 0, sizeof(r));
 	r.close_after_request = TRUE;
 	r.client = clt;
 	r.transport = &(clt->transport);

@@ -25,6 +25,10 @@ extern "C" {
 
 # include <glib.h>
 
+void oio_ext_init_test (int *argc, char ***argv);
+
+#define HC_TEST_INIT(argc,argv) oio_ext_init_test(&argc,&argv)
+
 /** Shuffles the single linked list. The original <src> MUST NOT be reused. */
 GSList * oio_ext_gslist_shuffle(GSList *src);
 
@@ -64,6 +68,12 @@ const char * oio_ext_get_reqid (void);
 gint64 oio_ext_real_time (void);
 
 gint64 oio_ext_monotonic_time (void);
+
+gdouble oio_sys_cpu_idle (void);
+
+gdouble oio_sys_io_idle (const char *vol);
+
+gdouble oio_sys_space_idle (const char *vol);
 
 #ifdef __cplusplus
 }

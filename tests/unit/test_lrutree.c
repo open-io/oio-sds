@@ -17,9 +17,8 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
-#include <core/oiolog.h>
+#include <core/oio_core.h>
 #include <metautils/lib/lrutree.h>
-#include <metautils/lib/common_main.h>
 
 int
 main(int argc, char **argv)

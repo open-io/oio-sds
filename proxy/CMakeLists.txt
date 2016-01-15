@@ -1,4 +1,5 @@
 add_definitions(-DG_LOG_DOMAIN="oio.proxy")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 add_definitions(-DHAVE_UGLY_RC_FUNCTIONS=1)
 

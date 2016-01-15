@@ -32,6 +32,15 @@ struct oio_cs_client_vtable_s
 	GError * (*register_service) (struct oio_cs_client_s *self,
 			const char *in_type, const struct oio_cs_registration_s *reg);
 
+	GError * (*deregister_service) (struct oio_cs_client_s *self,
+			const char *in_type, const char *id);
+
+	GError * (*flush_services) (struct oio_cs_client_s *self,
+			const char *in_type);
+
+	GError * (*unlock_service) (struct oio_cs_client_s *self,
+			const char *in_type, const char *id);
+
 	GError * (*list_services) (struct oio_cs_client_s *self,
 			const char *in_type,
 			void (*on_reg) (const struct oio_cs_registration_s *reg));

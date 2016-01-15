@@ -42,10 +42,6 @@ extern gboolean oio_cluster_allow_proxy;
 struct service_info_s;
 void metautils_srvinfo_ensure_tags (struct service_info_s *si);
 
-gdouble oio_sys_cpu_idle (void);
-gdouble oio_sys_io_idle (const char *vol);
-gdouble oio_sys_space_idle (const char *vol);
-
 /* Requests explicitely to the conscience ----------------------------------- */
 
 GError * conscience_remote_get_namespace (const char *cs, struct namespace_info_s **out);

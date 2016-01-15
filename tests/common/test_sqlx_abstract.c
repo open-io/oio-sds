@@ -57,10 +57,14 @@ _test_round (struct oio_sqlx_client_factory_s *factory)
 {
 	test_empty_batch (factory);
 
+	g_assert_nonnull (ns);
+	g_assert_nonnull (acct);
+	g_assert_nonnull (user);
+
 	struct oio_url_s *url = oio_url_empty ();
-	oio_url_set (url, OIOURL_NS, "NS");
-	oio_url_set (url, OIOURL_ACCOUNT, "ACCT");
-	oio_url_set (url, OIOURL_USER, "JFS");
+	oio_url_set (url, OIOURL_NS, ns);
+	oio_url_set (url, OIOURL_ACCOUNT, acct);
+	oio_url_set (url, OIOURL_USER, user);
 
 	struct oio_sqlx_client_s *client = NULL;
 	GError *err = oio_sqlx_client_factory__open (factory, url, &client);

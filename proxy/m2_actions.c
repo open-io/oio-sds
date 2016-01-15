@@ -1031,8 +1031,8 @@ action_container_destroy (struct req_args_s *args)
 enum http_rc_e
 action_container_list (struct req_args_s *args)
 {
-	struct list_result_s list_out = {NULL,NULL,FALSE};
-	struct list_params_s list_in;
+	struct list_result_s list_out = {0};
+	struct list_params_s list_in = {0};
 	GError *err = NULL;
 	guint count = 0;
 	char delimiter = 0;
@@ -1117,7 +1117,6 @@ action_container_list (struct req_args_s *args)
 		return e;
 	}
 
-	memset(&list_in, 0, sizeof(list_in));
 	list_in.flag_headers = ~0;
 	list_in.flag_nodeleted = ~0;
 	list_in.prefix = OPT("prefix");

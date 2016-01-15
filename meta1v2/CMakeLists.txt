@@ -1,4 +1,5 @@
 add_definitions(-DG_LOG_DOMAIN="oio.m1v2")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 include_directories(BEFORE . ..
 		${JSONC_INCLUDE_DIRS})

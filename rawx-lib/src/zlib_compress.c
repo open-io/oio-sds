@@ -240,7 +240,7 @@ _zlib_fill_decompressed_buffer(struct compressed_chunk_s * chunk, gsize to_skip)
 	/* Consider the "to_skip" bytes already read */
 	chunk->read += to_skip;
 
-	DEBUG("_fill_decompressed_buffer: current block compressed size (read from file): %"G_GSIZE_FORMAT, in_len);
+	DEBUG("_fill_decompressed_buffer: current block compressed size (read from file): %lu", in_len);
 	DEBUG("_fill_decompressed_buffer: block_size = %u", (uint)chunk->block_size);
 
 	/* sanity check of the size values */

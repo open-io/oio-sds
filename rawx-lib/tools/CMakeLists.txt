@@ -1,4 +1,5 @@
 add_definitions(-DG_LOG_DOMAIN="oio.rawx.lib")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 include_directories(BEFORE . .. ../..)
 
@@ -18,7 +19,7 @@ add_executable(gs_uncompress gs_uncompress.c)
 bin_prefix(gs_uncompress -rawx-uncompress)
 target_link_libraries(gs_uncompress ${REQLIBS})
 
-install(TARGETS 
+install(TARGETS
 		gs_compress gs_uncompress
 		RUNTIME DESTINATION bin)
 

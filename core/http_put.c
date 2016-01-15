@@ -105,6 +105,7 @@ struct http_put_s
 	enum http_whole_put_state_e state;
 };
 
+#ifdef HAVE_EXTRA_DEBUG
 static const char *
 _single_put_state_to_string (enum http_single_put_e s)
 {
@@ -117,6 +118,7 @@ _single_put_state_to_string (enum http_single_put_e s)
 		default: g_assert_not_reached (); return "?";
 	}
 }
+#endif
 
 static void __attribute__ ((constructor))
 init_curl(void)
@@ -331,6 +333,7 @@ http_put_get_md5(struct http_put_s *p, guint8 *buffer, gsize size)
 static size_t
 _done_reading (struct http_put_dest_s *dest, const char *why)
 {
+	(void) why;
 	if (dest->buffer) {
 		g_bytes_unref (dest->buffer);
 		dest->buffer = NULL;
@@ -387,7 +390,7 @@ cb_read(void *data, size_t s, size_t n, struct http_put_dest_s *dest)
 
 	GRID_TRACE2("read: %"G_GSIZE_FORMAT" avail, %"G_GSIZE_FORMAT" max,"
 			" %"G_GSIZE_FORMAT" remaining, %"G_GSIZE_FORMAT" sent "
-			"-> %"G_GSIZE_FORMAT" total",
+			"-> %"G_GINT64_FORMAT" total",
 			bs, max, remaining, real, dest->bytes_sent);
 
 	return real;

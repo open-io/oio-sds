@@ -21,8 +21,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <glib.h>
 
 #include <core/oio_core.h>
-#include <core/oiodir.h>
+#include <core/oio_sds.h>
 #include <core/internals.h>
+#include <metautils/lib/metautils_macros.h>
 
 #undef GQ
 #define GQ() g_quark_from_static_string("oio.core")
@@ -36,6 +37,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 	uid.th = oio_log_current_thread_id(); \
 	gsize uid_size = sizeof(uid);
 
+const char *ns = NULL;
+
 static void
 _random_string (gchar *d, gsize dlen)
 {
@@ -46,10 +49,8 @@ _random_string (gchar *d, gsize dlen)
 static void
 _random_url (struct oio_url_s *url)
 {
-	gchar buf[65];
-
-	oio_url_set (url, OIOURL_NS, "NS");
-
+	char buf[65];
+	oio_url_set (url, OIOURL_NS, ns);
 	_random_string (buf, sizeof(buf));
 	oio_url_set (url, OIOURL_ACCOUNT, buf);
 	_random_string (buf, sizeof(buf));
@@ -59,7 +60,7 @@ _random_url (struct oio_url_s *url)
 static void
 _test_init_round (void)
 {
-	struct oio_directory_s *dir = oio_directory__create_proxy ("NS");
+	struct oio_directory_s *dir = oio_directory__create_proxy (ns);
 	g_assert_nonnull (dir);
 	oio_directory__destroy (dir);
 }
@@ -79,12 +80,12 @@ _test_reference_cycle_round (void)
 	struct oio_url_s *url = oio_url_empty ();
 	_random_url (url);
 
-	struct oio_directory_s *dir = oio_directory__create_proxy ("NS");
+	struct oio_directory_s *dir = oio_directory__create_proxy (ns);
 	g_assert_nonnull (dir);
 
 	/* link with no reference */
 	gchar **srvtab = NULL;
-	err = oio_directory__link (dir, url, "meta2", FALSE, &srvtab);
+	err = oio_directory__link (dir, url, NAME_SRVTYPE_META2, FALSE, &srvtab);
 	g_assert_error (err, GQ(), CODE_USER_NOTFOUND);
 	g_assert_null (srvtab);
 	g_clear_error (&err);
@@ -94,14 +95,14 @@ _test_reference_cycle_round (void)
 	g_assert_no_error (err);
 
 	/* link with a reference */
-	err = oio_directory__link (dir, url, "meta2", FALSE, &srvtab);
+	err = oio_directory__link (dir, url, NAME_SRVTYPE_META2, FALSE, &srvtab);
 	g_assert_no_error (err);
 	g_assert_nonnull (srvtab);
 	g_strfreev (srvtab);
 
 	/* list */
 	gchar **dirtab = NULL;
-	err = oio_directory__list (dir, url, "meta2", &dirtab, &srvtab);
+	err = oio_directory__list (dir, url, NAME_SRVTYPE_META2, &dirtab, &srvtab);
 	g_assert_no_error (err);
 	g_assert_nonnull (dirtab);
 	g_assert_nonnull (srvtab);
@@ -122,14 +123,10 @@ test_reference_cycle (void)
 int
 main (int argc, char **argv)
 {
-	g_test_init (&argc, &argv, NULL);
-	oio_ext_set_random_reqid ();
-	oio_log_lazy_init ();
-	oio_log_init_level (GRID_LOGLVL_INFO);
-	g_log_set_default_handler (oio_log_stderr, NULL);
-
+	HC_TEST_INIT(argc,argv);
+	g_assert_nonnull (g_getenv ("OIO_NS"));
+	ns = g_getenv ("OIO_NS");
 	g_test_add_func ("/core/directory/init", test_init);
 	g_test_add_func ("/core/directory/references", test_reference_cycle);
 	return g_test_run ();
 }
-

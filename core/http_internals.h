@@ -58,6 +58,15 @@ void oio_headers_add_int64 (struct oio_headers_s *h,
 GError * oio_proxy_call_conscience_register (CURL *h, const char *ns,
 		GString *in);
 
+GError * oio_proxy_call_conscience_deregister (CURL *h, const char *ns,
+		GString *in);
+
+GError * oio_proxy_call_conscience_flush (CURL *h, const char *ns,
+		const char *srvtype);
+
+GError * oio_proxy_call_conscience_unlock (CURL *h, const char *ns,
+		GString *in);
+
 GError * oio_proxy_call_conscience_list (CURL *h, const char *ns,
 		const char *srvtype, GString *out);
 

@@ -73,8 +73,9 @@ echo "$0" \
 
 # Stop and clean everything
 while pkill --full -0 gridinit ; do
-	pkill --full gridinit
-	sleep 2
+	if pkill --full gridinit ; then
+		sleep 2
+	fi
 done
 
 mkdir -p "$OIO"

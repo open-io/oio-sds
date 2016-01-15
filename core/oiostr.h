@@ -88,6 +88,15 @@ void oio_str_upper(register gchar *s);
 
 void oio_str_lower(register gchar *s);
 
+/* appends to 'base' the JSON acceptable version of 's', i.e. 's' with its
+ * double quotes escaped and other characters are valid UTF-8 */
+void oio_str_gstring_append_json_string (GString *base, const char *s);
+
+/* appends "<k>":"<v>" where k and v are added with
+   oio_str_gstring_append_json_string() */
+void oio_str_gstring_append_json_pair (GString *base,
+		const char *k, const char *v);
+
 #ifdef __cplusplus
 }
 #endif

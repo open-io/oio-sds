@@ -163,7 +163,6 @@ zk_manager_clean(struct zk_manager_s *manager)
 	if (manager->zh)
 		zookeeper_close(manager->zh);
 
-	memset(manager, 0, sizeof(*manager));
 	g_free(manager);
 }
 
@@ -202,18 +201,15 @@ create_zk_node(struct zk_manager_s *manager, gchar *subdir, gchar *name, gchar *
 GError *
 list_zk_children_node(struct zk_manager_s *manager, gchar *sub_dir, GSList **result)
 {
-	struct String_vector sv;
+	struct String_vector sv = {0};
 	int i, rc;
-	gchar buffer[512];
 	struct Stat my_stat;
 	gchar *fullpath=NULL;
 	gchar *dirpath=NULL;
 	GError *err = NULL;
 	struct zk_node_s *zknode;
 	GSList *list=NULL;
-	int buflen=0;
 
-	memset(&sv, '\0', sizeof(struct String_vector));
 	dirpath = get_fullpath(manager,sub_dir,NULL);
 	rc = zoo_get_children(manager->zh, dirpath, 0, &sv);
 
@@ -224,8 +220,8 @@ list_zk_children_node(struct zk_manager_s *manager, gchar *sub_dir, GSList **res
 	}
 
 	for (i=0; i<sv.count; i++) {
-		memset( buffer, 0, 512 );
-		buflen= sizeof(buffer)-1;
+		gchar buffer[512] = {0};
+		int buflen = sizeof(buffer)-1;
 		zknode = g_malloc0(sizeof(struct zk_node_s));
 		fullpath = g_strdup_printf("%s/%s",dirpath,sv.data[i]);
 		rc = zoo_get(manager->zh, fullpath, 1, buffer , &buflen, &my_stat);

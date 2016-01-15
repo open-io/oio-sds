@@ -167,7 +167,7 @@ version_encode(GTree *t)
 {
 	asn_enc_rval_t rv;
 	GByteArray *encoded;
-	struct BaseVersion bv;
+	struct BaseVersion bv = {{0}};
 
 	gboolean runner(gpointer _k, gpointer _v, gpointer _u) {
 		(void) _u;
@@ -183,7 +183,6 @@ version_encode(GTree *t)
 	}
 
 	GRID_TRACE2("%s(%p)", __FUNCTION__, t);
-	memset(&bv, 0, sizeof(bv));
 	g_tree_foreach(t, runner, NULL);
 
 	encoded = g_byte_array_new();
@@ -204,11 +203,10 @@ version_decode(guint8 *raw, gsize rawsize)
 {
 	struct BaseVersion *bv = NULL;
 	asn_dec_rval_t rv;
-	asn_codec_ctx_t ctx;
+	asn_codec_ctx_t ctx = {0};
 
 	GRID_TRACE2("%s(%p,%"G_GSIZE_FORMAT")", __FUNCTION__, raw, rawsize);
 
-	memset(&ctx, 0, sizeof(ctx));
 	ctx.max_stack_size = ASN1C_MAX_STACK;
 	rv = ber_decode(&ctx, &asn_DEF_BaseVersion, (void**)&bv, raw, rawsize);
 	if (rv.code != RC_OK) {

@@ -154,8 +154,7 @@ action_conscience_info (struct req_args_s *args)
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_notfound_error (args, err);
 
-	struct namespace_info_s ni;
-	memset (&ni, 0, sizeof (ni));
+	struct namespace_info_s ni = {{0}};
 	NSINFO_DO(namespace_info_copy (&nsinfo, &ni));
 
 	GString *gstr = g_string_new ("");
@@ -183,7 +182,7 @@ action_conscience_list (struct req_args_s *args)
 
 	if (NULL != err) {
 		g_slist_free_full (sl, (GDestroyNotify) service_info_clean);
-		g_prefix_error (&err, "Agent error: ");
+		g_prefix_error (&err, "Conscience error: ");
 		return _reply_system_error (args, err);
 	}
 
@@ -192,20 +191,42 @@ action_conscience_list (struct req_args_s *args)
 }
 
 enum http_rc_e
-action_conscience_deregister (struct req_args_s *args)
+action_conscience_flush (struct req_args_s *args)
 {
 	GError *err;
 	if (NULL != (err = _cs_check_tokens(args)))
 		return _reply_notfound_error (args, err);
 
+	const char *srvtype = TYPE();
+	if (!srvtype)
+		return _reply_format_error (args, BADREQ("Missing type"));
+
 	CSURL(cs);
-	err = conscience_remote_remove_services (cs, TYPE(), NULL);
+	err = conscience_remote_remove_services (cs, srvtype, NULL);
 
 	if (err) {
-		g_prefix_error (&err, "Agent error: ");
+		g_prefix_error (&err, "Conscience error: ");
 		return _reply_system_error (args, err);
 	}
 	return _reply_success_json (args, _create_status (CODE_FINAL_OK, "OK"));
+}
+
+enum http_rc_e
+action_conscience_deregister (struct req_args_s *args)
+{
+	/* TODO(jfs): this behavior should disappear, there is the explicit
+	   flush() for this */
+	if (!args->rq->body || !args->rq->body->len) {
+		GRID_INFO("old-style flush");
+		return action_conscience_flush (args);
+	}
+
+	GError *err;
+	if (NULL != (err = _cs_check_tokens(args)))
+		return _reply_notfound_error (args, err);
+
+	/* TODO(jfs): the deregistration of a single service has not been implemented yet */
+	return _reply_not_implemented (args);
 }
 
 static enum http_rc_e

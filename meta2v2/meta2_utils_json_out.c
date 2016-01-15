@@ -29,14 +29,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 static void
 encode_alias (GString *g, gpointer bean)
 {
+	oio_str_gstring_append_json_pair (g, "name", ALIASES_get_alias(bean)->str);
 	g_string_append_printf(g,
-			"\"name\":\"%s\","
-			"\"ver\":%"G_GINT64_FORMAT","
-			"\"ctime\":%"G_GINT64_FORMAT","
-			"\"mtime\":%"G_GINT64_FORMAT","
-			"\"deleted\":%s,"
-			"\"header\":\"",
-			ALIASES_get_alias(bean)->str,
+			",\"ver\":%"G_GINT64_FORMAT
+			",\"ctime\":%"G_GINT64_FORMAT
+			",\"mtime\":%"G_GINT64_FORMAT
+			",\"deleted\":%s"
+			",\"header\":\"",
 			ALIASES_get_version(bean),
 			ALIASES_get_ctime(bean),
 			ALIASES_get_mtime(bean),
@@ -76,10 +75,10 @@ encode_chunk (GString *g, gpointer bean)
 static void
 encode_property (GString *g, gpointer bean)
 {
-	g_string_append_printf(g, "\"alias\":\"%s\",", PROPERTIES_get_alias(bean)->str);
-	g_string_append_printf(g, "\"version\":%"G_GINT64_FORMAT",", PROPERTIES_get_version(bean));
-	g_string_append_printf(g, "\"key\":\"%s\",", PROPERTIES_get_key(bean)->str);
-	g_string_append_printf(g, "\"value\":\"%.*s\"",
+	oio_str_gstring_append_json_pair(g, "alias", PROPERTIES_get_alias(bean)->str);
+	g_string_append_printf(g, ",\"version\":%"G_GINT64_FORMAT",", PROPERTIES_get_version(bean));
+	oio_str_gstring_append_json_pair(g, "key", PROPERTIES_get_key(bean)->str);
+	g_string_append_printf(g, ",\"value\":\"%.*s\"",
 			PROPERTIES_get_value(bean)->len,
 			(gchar*) PROPERTIES_get_value(bean)->data);
 }

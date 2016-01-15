@@ -50,17 +50,17 @@ struct grid_lbpool_s *lbpool = NULL;
 struct hc_resolver_s *resolver = NULL;
 gchar *nsname = NULL;
 
-GMutex csurl_mutex;
+GMutex csurl_mutex = {0};
 gchar *csurl = NULL;
 
-GMutex push_mutex;
+GMutex push_mutex = {0};
 struct lru_tree_s *push_queue = NULL;
 
-GMutex nsinfo_mutex;
-struct namespace_info_s nsinfo;
+GMutex nsinfo_mutex = {0};
+struct namespace_info_s nsinfo = {{0}};
 gchar **srvtypes = NULL;
 
-GMutex srv_mutex;
+GMutex srv_mutex = {0};
 struct lru_tree_s *srv_down = NULL;
 
 // Misc. handlers --------------------------------------------------------------
@@ -80,8 +80,7 @@ action_status(struct req_args_s *args)
 	}
 	grid_stats_holder_foreach(args->rq->client->main_stats, runner);
 
-	struct hc_resolver_stats_s s;
-	memset(&s, 0, sizeof(s));
+	struct hc_resolver_stats_s s = {0};
 	hc_resolver_info(resolver, &s);
 
 	g_string_append_printf(gstr, "cache.dir.count = %"G_GINT64_FORMAT"\n", s.csm0.count);
@@ -610,6 +609,7 @@ configure_request_handlers (void)
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/list/#GET", action_conscience_list);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/register/#POST", action_conscience_register);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/deregister/#POST", action_conscience_deregister);
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/flush/#POST", action_conscience_flush);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/lock/#POST", action_conscience_lock);
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/unlock/#POST", action_conscience_unlock);
 
@@ -697,7 +697,6 @@ grid_main_configure (int argc, char **argv)
 	csurl = gridcluster_get_conscience (nsname);
 	metautils_strlcpy_physical_ns (nsname, cfg_namespace, strlen (nsname) + 1);
 
-	memset (&nsinfo, 0, sizeof (nsinfo));
 	metautils_strlcpy_physical_ns (nsinfo.name, cfg_namespace, sizeof (nsinfo.name));
 	nsinfo.chunk_size = 1;
 

@@ -457,15 +457,12 @@ grid_lb_get_service_from_addr(struct grid_lb_s *lb, const struct addr_info_s *ai
 struct service_info_s*
 grid_lb_get_service_from_url(struct grid_lb_s *lb, const gchar *url)
 {
-	addr_info_t ai;
-
 	if (!lb || !url)
 		return NULL;
 
-	memset(&ai, 0, sizeof(struct addr_info_s));
+	addr_info_t ai = {{0}};
 	if (!grid_string_to_addrinfo(url, &ai))
 		return NULL;
-
 	return grid_lb_get_service_from_addr(lb, &ai);
 }
 
@@ -612,7 +609,6 @@ grid_lb_iterator_clean(struct grid_lb_iterator_s *iter)
 {
 	if (!iter)
 		return;
-	memset(iter, 0, sizeof(struct grid_lb_iterator_s));
 	SLICE_FREE(struct grid_lb_iterator_s, iter);
 }
 
@@ -1180,16 +1176,14 @@ gboolean
 grid_lb_iterator_next_set2(struct grid_lb_iterator_s *iter,
 		struct service_info_s ***result, struct lb_next_opt_ext_s *opt_ext)
 {
-	struct lb_next_opt_s opt;
-
-	memset(&opt, 0, sizeof(opt));
+	struct lb_next_opt_s opt = {{0}};
 	memcpy(&(opt.req), &(opt_ext->req), sizeof(struct lb_next_opt_simple_s));
 
 	opt.filter.hook = (service_filter) _ext_opt_filter;
 	opt.filter.data = opt_ext;
 	return grid_lb_iterator_next_set(iter, result, &opt);
 }
- 
+
 GString *
 grid_lb_iterator_to_string (struct grid_lb_iterator_s *it)
 {
@@ -1258,7 +1252,6 @@ grid_lbpool_destroy(struct grid_lbpool_s *glp)
 	g_rw_lock_writer_unlock(&(glp->rwlock));
 	g_rw_lock_clear(&(glp->rwlock));
 
-	memset(glp, 0, sizeof(struct grid_lbpool_s));
 	SLICE_FREE(struct grid_lbpool_s, glp);
 }
 

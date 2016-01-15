@@ -1302,7 +1302,6 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 	gboolean flush, nocheck, local, autocreate, chunked;
 
 	flush = local = autocreate = nocheck = chunked = FALSE;
-	memset(n, 0, sizeof(*n));
 
 	err = metautils_message_extract_string(ctx->request,
 			NAME_MSGKEY_NAMESPACE, ns, sizeof(ns));
@@ -1353,7 +1352,7 @@ sqlx_dispatch_GETVERS(struct gridd_reply_ctx_s *reply,
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	GTree *version = NULL;
 	GError *err = NULL;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1404,7 +1403,7 @@ sqlx_dispatch_REPLICATE(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 	GError *err = NULL;
 
 	(void) ignored;
@@ -1457,7 +1456,7 @@ sqlx_dispatch_HAS(struct gridd_reply_ctx_s *reply,
 {
     GError *err = NULL;
     gchar *bddname=NULL;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 
     (void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1486,7 +1485,7 @@ sqlx_dispatch_STATUS(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1508,7 +1507,7 @@ sqlx_dispatch_ISMASTER(struct gridd_reply_ctx_s *reply,
         struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1537,7 +1536,7 @@ sqlx_dispatch_DESCR(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err = NULL;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 	gchar descr[512] = "?";
 
 	(void) ignored;
@@ -1559,7 +1558,7 @@ sqlx_dispatch_USE(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1580,7 +1579,7 @@ sqlx_dispatch_EXITELECTION(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1603,7 +1602,7 @@ sqlx_dispatch_PIPETO(struct gridd_reply_ctx_s *reply,
 	GError *err = NULL;
 	GByteArray *dump = NULL;
 	gchar target[STRLEN_ADDRINFO];
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1638,7 +1637,7 @@ sqlx_dispatch_DUMP(struct gridd_reply_ctx_s *reply,
 {
 	GError *err = NULL;
 	guint32 flags = 0;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
@@ -1684,7 +1683,7 @@ sqlx_dispatch_RESTORE(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1720,7 +1719,7 @@ sqlx_dispatch_PIPEFROM(struct gridd_reply_ctx_s *reply,
 {
 	GError *err;
 	gchar source[64];
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1746,7 +1745,7 @@ sqlx_dispatch_RESYNC(struct gridd_reply_ctx_s *reply,
 	GError *err = NULL;
 	gboolean has_peers = FALSE;
 	struct election_manager_s *em = NULL;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, NULL))) {
@@ -1794,7 +1793,7 @@ sqlx_dispatch_PROPDEL(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 	GError *err;
 	guint32 flags = 0;
 
@@ -1850,7 +1849,7 @@ sqlx_dispatch_PROPGET(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 	GError *err;
 	guint32 flags = 0;
 
@@ -1897,7 +1896,7 @@ sqlx_dispatch_PROPSET(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 	GError *err;
 	guint32 flags = 0;
 
@@ -1977,7 +1976,7 @@ sqlx_dispatch_ENABLE(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 	GError *err;
 	guint32 flags = 0;
 
@@ -2023,7 +2022,7 @@ sqlx_dispatch_FREEZE(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 	GError *err;
 	guint32 flags = 0;
 
@@ -2072,7 +2071,7 @@ sqlx_dispatch_DISABLE(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 	GError *err;
 	guint32 flags = 0;
 
@@ -2121,7 +2120,7 @@ sqlx_dispatch_DISABLE_DISABLED(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 	GError *err;
 	guint32 flags = 0;
 
@@ -2306,8 +2305,7 @@ _extract_params(MESSAGE msg, TableSequence_t **params)
 	if (!b)
 		return NEWERROR(CODE_BAD_REQUEST, "Bad body");
 
-	asn_codec_ctx_t ctx;
-	memset(&ctx, 0, sizeof(ctx));
+	asn_codec_ctx_t ctx = {0};
 	ctx.max_stack_size = ASN1C_MAX_STACK;
 	asn_dec_rval_t rv = ber_decode(&ctx, &asn_DEF_TableSequence,
 			(void**)params, b, bsize);
@@ -2323,7 +2321,7 @@ sqlx_dispatch_QUERY(struct gridd_reply_ctx_s *reply,
 	GError *err;
 	guint32 flags = 0;
 	TableSequence_t *params = NULL, *result = NULL;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 
 	/* unpack the parameters */
 	(void) ignored;
@@ -2387,7 +2385,7 @@ sqlx_dispatch_DESTROY(struct gridd_reply_ctx_s *reply,
 	(void) ignored;
 	GError *err = NULL;
 	guint32 flags = 0;
-	struct sqlx_name_mutable_s name;
+	struct sqlx_name_mutable_s name = {0};
 
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);

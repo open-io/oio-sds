@@ -249,9 +249,7 @@ _signal_block(int s)
 static void
 _signal_ignore(int s)
 {
-	struct sigaction sa, saold;
-	memset(&sa, 0, sizeof(struct sigaction));
-	memset(&saold, 0, sizeof(struct sigaction));
+	struct sigaction sa = {{0}}, saold = {{0}};
 	sigaddset(&sa.sa_mask, s);
 	sa.sa_handler = SIG_IGN;
 	sigaction(s, &sa, &saold);
@@ -373,10 +371,8 @@ grid_main_delete_pid_file(void)
 void
 grid_main_set_prgname(const gchar *cmd)
 {
-	gchar *bn;
-
 	EXTRA_ASSERT(cmd != NULL);
-	bn = g_path_get_basename(cmd);
+	gchar *bn = g_path_get_basename(cmd);
 	g_set_prgname(bn);
 	g_free(bn);
 }

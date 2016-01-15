@@ -61,8 +61,7 @@ metautils_url_valid_for_connect(const gchar *url)
 		errno = EINVAL;
 		return FALSE;
 	}
-	addr_info_t ai;
-	memset(&ai, 0, sizeof(ai));
+	addr_info_t ai = {{0}};
 	if (!grid_string_to_addrinfo(url, &ai))
 		return FALSE;
 	return metautils_addr_valid_for_connect(&ai);
@@ -75,8 +74,7 @@ metautils_url_valid_for_bind(const gchar *url)
 		errno = EINVAL;
 		return FALSE;
 	}
-	addr_info_t ai;
-	memset(&ai, 0, sizeof(ai));
+	addr_info_t ai = {{0}};
 	if (!grid_string_to_addrinfo(url, &ai))
 		return FALSE;
 	return metautils_addr_valid_for_bind(&ai);
