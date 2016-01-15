@@ -293,10 +293,10 @@ struct path_maj_min_s
 };
 
 static GSList *io_cache = NULL;
-static GMutex io_lock;
+static GMutex io_lock = {0};
 
 static GSList *majmin_cache = NULL;
-static GMutex majmin_lock;
+static GMutex majmin_lock = {0};
 
 void _constructor_idle_cache (void);
 void _destructor_idle_cache (void);
