@@ -506,33 +506,6 @@ sqlx_replication_free_context(struct sqlx_repctx_s *ctx)
 	g_slice_free(struct sqlx_repctx_s, ctx);
 }
 
-static void
-sqlx_transaction_changes(struct sqlx_repctx_s *ctx)
-{
-	EXTRA_ASSERT(ctx != NULL);
-	EXTRA_ASSERT(ctx->sq3 != NULL);
-	EXTRA_ASSERT(ctx->sq3->db != NULL);
-
-	if (!ctx->hollow) {
-		int changes = sqlite3_total_changes(ctx->sq3->db);
-		if (changes != ctx->changes) {
-			GRID_DEBUG("HUGE change detected [%s][%s] (%d vs %d)",
-					ctx->sq3->name.base, ctx->sq3->name.type,
-					changes, ctx->changes);
-			ctx->huge = 1;
-		}
-	}
-
-	if (!ctx->hollow && !ctx->huge) {
-		context_pending_inc_versions(ctx);
-		context_pending_to_rowset(ctx->sq3->db, ctx);
-	}
-	else {
-		context_flush_pending(ctx);
-		sqlx_admin_inc_all_versions(ctx->sq3, 2);
-	}
-}
-
 // Public API -----------------------------------------------------------------
 
 GError *
@@ -601,7 +574,7 @@ sqlx_transaction_begin(struct sqlx_sqlite3_s *sq3,
 	if (repctx->resync_todo)
 		g_ptr_array_set_size(repctx->resync_todo, 0);
 	sqlx_exec(sq3->db, "BEGIN");
-	sqlx_admin_reload(sq3);
+	/*sqlx_admin_reload(sq3);*/
 	*result = repctx;
 	return NULL;
 }
@@ -618,7 +591,7 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 {
 	int rc;
 
-	GRID_TRACE2("%s(%p)", __FUNCTION__, ctx);
+	GRID_TRACE2("%s (%p)", __FUNCTION__, ctx);
 
 	if (NULL == ctx) {
 		if (!err)
@@ -641,14 +614,42 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 		sqlx_admin_reload(ctx->sq3);
 	}
 	else {
-		// Ensure that newly created tables have versions now referenced
-		// in the admin table.
-		sqlx_admin_reload(ctx->sq3);
+		/* Ensure that newly created tables have versions now referenced
+		 * in the admin table. */
+		sqlx_admin_ensure_versions (ctx->sq3);
 
-		// Agregate the changes
-		sqlx_transaction_changes(ctx);
+		/* Special management for the big changes (it is big when we could
+		 * not capture each row change, so that we need to trigger a whole
+		 * resync. */
+		if (!ctx->hollow) {
+			int changes = sqlite3_total_changes(ctx->sq3->db);
+			if (changes != ctx->changes) {
+				GRID_DEBUG("HUGE change detected [%s][%s] (%d vs %d)",
+						ctx->sq3->name.base, ctx->sq3->name.type,
+						changes, ctx->changes);
+				ctx->huge = 1;
+			}
+		}
 
-		// Apply the changes on the slaves.
+		if (!ctx->hollow) {
+			if (ctx->huge) {
+				sqlx_admin_inc_all_versions(ctx->sq3, 2);
+			} else if (ctx->changes) {
+				context_pending_inc_versions(ctx);
+			}
+		}
+
+		/* If anything changed in the admin table, then save it */
+		sqlx_admin_save_lazy (ctx->sq3);
+
+		/* Prepare the changes to be sent to the slave peers */
+		if (!ctx->hollow && !ctx->huge) {
+			context_pending_to_rowset(ctx->sq3->db, ctx);
+		} else {
+			context_flush_pending(ctx);
+		}
+
+		/* Apply the changes on the slaves. */
 		rc = sqlx_exec(ctx->sq3->db, "COMMIT");
 		if (rc != SQLITE_OK && rc != SQLITE_DONE) {
 			err = SQLITE_GERROR(ctx->sq3->db, rc);

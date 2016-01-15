@@ -233,8 +233,7 @@ __del_container_one_service(struct sqlx_sqlite3_s *sq3,
 }
 
 static GError *
-__del_container_services(struct meta1_backend_s *m1,
-		struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
+__del_container_services(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 		const char *srvtype, gchar **urlv)
 {
 	gint64 seq;
@@ -271,8 +270,6 @@ __del_container_services(struct meta1_backend_s *m1,
 			}
 		}
 		meta1_service_url_cleanv (used);
-
-		__notify_services_by_cid(m1, sq3, url);
 	}
 
 	return err;
@@ -745,7 +742,7 @@ __parse_and_expand (const char *packed)
 	return out;
 }
 
-/** Suitable as a qsort()-like hook */ 
+/** Suitable as a qsort()-like hook */
 static gint
 _sorter (struct meta1_service_url_s **p0, struct meta1_service_url_s **p1)
 {
@@ -953,7 +950,7 @@ meta1_backend_services_all(struct meta1_backend_s *m1,
 			struct meta1_service_url_s **expanded = expand_urlv(used);
 			*result = pack_urlv(expanded);
 			meta1_service_url_cleanv(expanded);
-			meta1_service_url_cleanv(used); 			
+			meta1_service_url_cleanv(used);
 		}
 		err = sqlx_transaction_end(repctx, err);
     }
@@ -982,7 +979,8 @@ meta1_backend_services_link (struct meta1_backend_s *m1,
 				g_prefix_error(&err, "Query error: ");
 		}
 		if (!(err = sqlx_transaction_end(repctx, err))) {
-			if (renewed) __notify_services_by_cid(m1, sq3, url);
+			if (renewed)
+				__notify_services_by_cid(m1, sq3, url);
 		}
 	}
 
@@ -1012,8 +1010,10 @@ meta1_backend_services_poll(struct meta1_backend_s *m1,
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
-		if (!(err = sqlx_transaction_end(repctx, err)) && renewed)
-			if (renewed) __notify_services_by_cid(m1, sq3, url);
+		if (!(err = sqlx_transaction_end(repctx, err)) && renewed) {
+			if (renewed)
+				__notify_services_by_cid(m1, sq3, url);
+		}
 	}
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
@@ -1062,11 +1062,12 @@ meta1_backend_services_unlink(struct meta1_backend_s *m1,
 	struct sqlx_repctx_s *repctx = NULL;
 	if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
 		if (!(err = __info_user(sq3, url, FALSE, NULL))) {
-			err = __del_container_services(m1, sq3, url, srvtype, urlv);
+			err = __del_container_services(sq3, url, srvtype, urlv);
 			if (NULL != err)
 				g_prefix_error(&err, "Query error: ");
 		}
-		err = sqlx_transaction_end(repctx, err);
+		if (!(err = sqlx_transaction_end(repctx, err)))
+			__notify_services_by_cid(m1, sq3, url);
 	}
 
 	sqlx_repository_unlock_and_close_noerror(sq3);
@@ -1134,7 +1135,10 @@ meta1_backend_services_relink(struct meta1_backend_s *m1,
 				};
 				err = __relink_container_services(&in, out);
 			}
-			err = sqlx_transaction_end(repctx, err);
+			if (!(err = sqlx_transaction_end(repctx, err))) {
+				if (!dryrun)
+					__notify_services_by_cid(m1, sq3, url);
+			}
 		}
 		sqlx_repository_unlock_and_close_noerror(sq3);
 	}
@@ -1188,11 +1192,13 @@ __notify_services_by_cid(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url)
 {
 	struct oio_url_s **urls = NULL;
+	sqlx_exec (sq3->db, "BEGIN");
 	GError *err = __info_user(sq3, url, FALSE, &urls);
 	if (!err) {
 		oio_url_set (urls[0], OIOURL_NS, m1->backend.ns_name);
 		err = __notify_services(m1, sq3, url);
 	}
+	sqlx_exec (sq3->db, "ROLLBACK");
 	oio_url_cleanv (urls);
 
 	if (err) {

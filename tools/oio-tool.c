@@ -195,44 +195,40 @@ _dump_addr (const char *s)
 }
 
 static void
-_same_hash (const char *p0)
+_same_hash (const char *acct, const char *p0)
 {
 	static gchar* memory[65536];
 
-	GString *prefix = g_string_new(p0);
-
-	gint64 counter;
-	GChecksum *c;
-	gchar num[64];
+	gint64 counter = 0;
 	union {
 		guint8 b[32];
 		guint16 prefix;
 	} bin;
-	gsize binsize;
 
 	memset(&bin, 0, sizeof(bin));
-	counter = 0;
-	c = g_checksum_new(G_CHECKSUM_SHA256);
+	GChecksum *c = g_checksum_new(G_CHECKSUM_SHA256);
 
-	if (prefix && prefix->len > 0) {
+	if (*p0) {
 		/* pre-loads the memory with the prefix only */
-		g_checksum_update(c, (guint8*) prefix->str, prefix->len);
-		binsize = sizeof(bin.b);
+		g_checksum_update(c, (guint8*) acct, strlen(acct));
+		g_checksum_update(c, (guint8*)"", 1);
+		g_checksum_update(c, (guint8*) p0, strlen(p0));
+		gsize binsize = sizeof(bin.b);
 		g_checksum_get_digest(c, bin.b, &binsize);
-		memory[bin.prefix] = g_strdup(prefix->str);
+		memory[bin.prefix] = g_strdup(p0);
 	}
 
 	for (;;) {
 
-		GString *gstr = g_string_new("");
-		if (prefix && prefix->len > 0)
-			g_string_append_len(gstr, prefix->str, prefix->len);
-		g_snprintf(num, sizeof(num), "%"G_GINT64_FORMAT, counter++);
-		g_string_append(gstr, num);
+		GString *gstr = g_string_new (p0);
+		g_string_append_printf (gstr, "%"G_GINT64_FORMAT, counter++);
 
 		g_checksum_reset(c);
+
+		g_checksum_update(c, (guint8*) acct, strlen(acct));
+		g_checksum_update(c, (guint8*)"", 1);
 		g_checksum_update(c, (guint8*) gstr->str, gstr->len);
-		binsize = sizeof(bin.b);
+		gsize binsize = sizeof(bin.b);
 		g_checksum_get_digest(c, bin.b, &binsize);
 
 		if (memory[bin.prefix]) {
@@ -258,7 +254,7 @@ main (int argc, char **argv)
 		g_printerr (" %s version IP:PORT\n", argv[0]);
 		g_printerr (" %s handlers IP:PORT\n", argv[0]);
 		g_printerr (" %s stats IP:PORT\n", argv[0]);
-		g_printerr (" %s hash [PREFIX]\n", argv[0]);
+		g_printerr (" %s hash ACCOUNT [PREFIX]\n", argv[0]);
 		return 2;
 	}
 	oio_ext_set_random_reqid ();
@@ -288,7 +284,11 @@ main (int argc, char **argv)
 			_do_stat (argv[i]);
 		return 0;
 	} else if (!strcmp("hash", argv[1])) {
-		_same_hash (argc>2 ? argv[2] : "");
+		if (argc < 2 || argc > 4) {
+			g_printerr ("Usage: %s hash ACCOUNT [PREFIX]\n", argv[0]);
+			return 1;
+		}
+		_same_hash (argv[2], argc==4 ? argv[3] : "");
 		return 0;
 	}
 
