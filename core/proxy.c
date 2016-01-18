@@ -87,8 +87,10 @@ _curl_url_prefix_reference (struct oio_url_s *u)
 static void
 _append (GString *gs, char sep, const char *k, const char *v)
 {
-	g_string_append_printf (gs, "%c%s=", sep, k);
-	g_string_append_uri_escaped (gs, v, NULL, TRUE);
+	if (k != NULL && v != NULL) {
+		g_string_append_printf (gs, "%c%s=", sep, k);
+		g_string_append_uri_escaped (gs, v, NULL, TRUE);
+	}
 }
 
 static GString *

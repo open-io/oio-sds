@@ -25,8 +25,8 @@ License along with this library.
 #include <metautils/lib/common_main.h>
 
 struct test_data_s {
-	const char *url;
-	const char *whole;
+	const char *url; /* to be decoded */
+	const char *whole; /* expected packed result */
 
 	const char *ns;
 	const char *account;
@@ -40,15 +40,14 @@ struct test_data_s {
 #define TEST_END {NULL,NULL, NULL,NULL,NULL,NULL,NULL, NULL}
 
 static void
-_test_field (const char *v, struct oio_url_s *u, enum oio_url_field_e f)
+_test_field (const char *expected, struct oio_url_s *u, enum oio_url_field_e f)
 {
-	const char *found = oio_url_get (u, f);
-	if (v) {
-		g_assert (oio_url_has (u, f));
-		g_assert (!strcmp (v, found));
+	if (expected) {
+		g_assert_true (oio_url_has (u, f));
+		g_assert_cmpstr (oio_url_get (u, f), ==, expected);
 	} else {
-		g_assert (!oio_url_has (u, f));
-		g_assert (NULL == found);
+		g_assert_false (oio_url_has (u, f));
+		g_assert_null (oio_url_get (u, f));
 	}
 }
 
@@ -63,13 +62,14 @@ _test_url (guint idx, struct oio_url_s *u, struct test_data_s *td)
 	_test_field (td->type, u, OIOURL_TYPE);
 	_test_field (td->path, u, OIOURL_PATH);
 	if (td->hexa) {
-		g_assert (oio_url_has (u, OIOURL_HEXID));
-		g_assert (NULL != oio_url_get_id (u));
-		g_assert (!g_ascii_strcasecmp (oio_url_get (u, OIOURL_HEXID), td->hexa));
+		g_assert_true (oio_url_has (u, OIOURL_HEXID));
+		g_assert_nonnull (oio_url_get_id (u));
+		g_assert_nonnull (oio_url_get (u, OIOURL_HEXID));
+		g_assert_cmpstr (oio_url_get (u, OIOURL_HEXID), ==, td->hexa);
 	} else {
-		g_assert (!oio_url_has (u, OIOURL_HEXID));
-		g_assert (NULL == oio_url_get_id (u));
-		g_assert (NULL == oio_url_get (u, OIOURL_HEXID));
+		g_assert_false (oio_url_has (u, OIOURL_HEXID));
+		g_assert_null (oio_url_get_id (u));
+		g_assert_null (oio_url_get (u, OIOURL_HEXID));
 	}
 }
 
@@ -89,24 +89,32 @@ static void
 test_configure_valid (void)
 {
 	static struct test_data_s tab[] = {
-		{ "/NS/ACCT/JFS",
-			"NS/ACCT/JFS/",
+		{ "/NS/ACCT/JFS", "NS/ACCT/JFS/",
 			"NS", "ACCT", "JFS", OIOURL_DEFAULT_TYPE, NULL,
 			"9006CE70B59E5777D6BB410C57944812EB05FCDB5BA85D520A14B3051D1D094F"},
 
-		{ "NS/ACCT/JFS//1.",
-			"NS/ACCT/JFS//1.",
+		{ "NS/ACCT/JFS//1.", "NS/ACCT/JFS//1.",
 			"NS", "ACCT", "JFS", OIOURL_DEFAULT_TYPE, "1.",
 			"9006CE70B59E5777D6BB410C57944812EB05FCDB5BA85D520A14B3051D1D094F"},
 
-		{ "NS/ACCT/JFS//x x",
-			"NS/ACCT/JFS//x%20x",
+		{ "NS/ACCT/JFS//x x", "NS/ACCT/JFS//x%20x",
 			"NS", "ACCT", "JFS", OIOURL_DEFAULT_TYPE, "x x",
 			"9006CE70B59E5777D6BB410C57944812EB05FCDB5BA85D520A14B3051D1D094F"},
 
-		{ "NS/ACCT/JFS//x%20x",
-			"NS/ACCT/JFS//x%20x",
+		{ "NS/ACCT/JFS//x%20x", "NS/ACCT/JFS//x%20x",
 			"NS", "ACCT", "JFS", OIOURL_DEFAULT_TYPE, "x x",
+			"9006CE70B59E5777D6BB410C57944812EB05FCDB5BA85D520A14B3051D1D094F"},
+
+		/* if no ACCOUNT is set, no hexa ID can be computed */
+		{ NULL, "NS", "NS", NULL, "JFS", NULL, NULL, NULL},
+		{ NULL, "NS", "NS", NULL, "JFS", OIOURL_DEFAULT_TYPE, "x", NULL},
+
+		/* if no USER is set, no hexa ID can be computed */
+		{ NULL, "NS/ACCT", "NS", "ACCT", NULL, NULL, NULL, NULL},
+		{ NULL, "NS/ACCT", "NS", "ACCT", NULL, OIOURL_DEFAULT_TYPE, "x", NULL},
+
+		{ NULL, "NS/ACCT/JFS/",
+			"NS", "ACCT", "JFS", NULL, NULL,
 			"9006CE70B59E5777D6BB410C57944812EB05FCDB5BA85D520A14B3051D1D094F"},
 
 		TEST_END
@@ -116,13 +124,15 @@ test_configure_valid (void)
 	for (struct test_data_s *th=tab; th->url ;th++) {
 		struct oio_url_s *url;
 
-		url = oio_url_init(th->url);
-		g_assert(url != NULL);
-		_test_url (idx++, url, th);
-		oio_url_pclean (&url);
+		if (th->url) {
+			url = oio_url_init(th->url);
+			g_assert_nonnull (url);
+			_test_url (idx++, url, th);
+			oio_url_pclean (&url);
+		}
 
 		url = _init_url (th);
-		g_assert(url != NULL);
+		g_assert_nonnull (url);
 		_test_url (idx++, url, th);
 		oio_url_pclean (&url);
 	}
@@ -131,13 +141,8 @@ test_configure_valid (void)
 static void
 test_configure_invalid(void)
 {
-	struct oio_url_s *url;
-
-	url = oio_url_init("");
-	g_assert(url == NULL);
-
-	url = oio_url_init("/");
-	g_assert(url == NULL);
+	g_assert_null (oio_url_init(""));
+	g_assert_null (oio_url_init("/"));
 }
 
 /* Plays a set of duplication/free roundtrips. */
