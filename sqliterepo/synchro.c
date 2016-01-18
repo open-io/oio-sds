@@ -161,12 +161,20 @@ _realdirname(const struct sqlx_sync_s *ss, const gchar *path)
 	}
 }
 
+static void __attribute__ ((constructor))
+_zk_init_env (void)
+{
+	zoo_set_debug_level (ZOO_LOG_LEVEL_WARN);
+}
+
 //------------------------------------------------------------------------------
 
 static void
 zk_main_watch(zhandle_t *zh, int type, int state, const char *path,
 		void *watcherCtx)
 {
+	metautils_ignore_signals();
+
 	struct sqlx_sync_s *ss = watcherCtx;
 	(void) zh;
 	(void) path;
