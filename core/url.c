@@ -353,38 +353,29 @@ oio_url_has_fq_container (const struct oio_url_s *u)
 static GString *
 _pack_url(struct oio_url_s *u)
 {
-	inline void _append (GString *gs, const char *s) {
-		gchar *v = g_uri_escape_string (s, NULL, FALSE);
-		g_string_append (gs, v);
-		g_free (v);
-	}
-
 	GString *gs = g_string_new ("");
-	if (u->ns)
-		_append (gs, u->ns);
-
-	g_string_append_c (gs, '/');
-	if (u->account)
-		_append (gs, u->account);
-
-	g_string_append_c (gs, '/');
-	if (u->user)
-		_append (gs, u->user);
-
-	g_string_append_c (gs, '/');
-	if (u->type)
-		_append (gs, u->type);
-
-	if (oio_url_has (u, OIOURL_PATH)) {
-		g_string_append_c (gs, '/');
-		_append (gs, oio_url_get(u, OIOURL_PATH));
+	if (u->ns) {
+		g_string_append_uri_escaped (gs, u->ns, NULL, TRUE);
+		if (u->account) {
+			g_string_append_c (gs, '/');
+			g_string_append_uri_escaped (gs, u->account, NULL, TRUE);
+			if (u->user) {
+				g_string_append_c (gs, '/');
+				g_string_append_uri_escaped (gs, u->user, NULL, TRUE);
+				g_string_append_c (gs, '/');
+				if (u->type)
+					g_string_append_uri_escaped (gs, u->type, NULL, TRUE);
+				if (u->path) {
+					g_string_append_c (gs, '/');
+					g_string_append_uri_escaped (gs, u->path, NULL, TRUE);
+				}
+				if (u->content) {
+					g_string_append_c (gs, '?');
+					g_string_append_uri_escaped (gs, u->content, NULL, TRUE);
+				}
+			}
+		}
 	}
-
-	if (oio_url_has (u, OIOURL_CONTENTID)) {
-		g_string_append_c (gs, '?');
-		_append (gs, oio_url_get(u, OIOURL_CONTENTID));
-	}
-
 	return gs;
 }
 
@@ -463,33 +454,28 @@ oio_url_get_id_size(struct oio_url_s *u)
 void
 oio_url_to_json (GString *out, struct oio_url_s *u)
 {
-	gboolean first = TRUE;
+	guint len = out->len;
 
-	g_string_append_printf (out, "\"ns\":\"%s\"", oio_url_get (u, OIOURL_NS));
-
-	first = FALSE;
-	if (oio_url_has (u, OIOURL_ACCOUNT)) {
-		if (!first) g_string_append_c (out, ',');
-		g_string_append_printf (out, "\"account\":\"%s\"", oio_url_get (u, OIOURL_ACCOUNT));
-		first = FALSE;
+	oio_str_gstring_append_json_pair (out, "ns", u->ns);
+	if (u->account) {
+		if (len != out->len) g_string_append_c (out, ',');
+		oio_str_gstring_append_json_pair (out, "account", u->account);
 	}
-	if (oio_url_has (u, OIOURL_USER)) {
-		if (!first) g_string_append_c (out, ',');
-		g_string_append_printf (out, "\"user\":\"%s\"", oio_url_get (u, OIOURL_USER));
-		first = FALSE;
+	if (u->user) {
+		if (len != out->len) g_string_append_c (out, ',');
+		oio_str_gstring_append_json_pair (out, "user", u->user);
 	}
-	if (oio_url_has (u, OIOURL_TYPE)) {
-		if (!first) g_string_append_c (out, ',');
-		g_string_append_printf (out, "\"type\":\"%s\"", oio_url_get (u, OIOURL_TYPE));
-		first = FALSE;
+	if (u->type) {
+		if (len != out->len) g_string_append_c (out, ',');
+		oio_str_gstring_append_json_pair (out, "type", u->type);
 	}
-	if (oio_url_has (u, OIOURL_PATH)) {
-		if (!first) g_string_append_c (out, ',');
-		g_string_append_printf (out, "\"path\":\"%s\"", oio_url_get (u, OIOURL_PATH));
+	if (u->path) {
+		if (len != out->len) g_string_append_c (out, ',');
+		oio_str_gstring_append_json_pair (out, "path", u->path);
 	}
-	if (oio_url_has (u, OIOURL_CONTENTID)) {
-		if (!first) g_string_append_c (out, ',');
-		g_string_append_printf (out, "\"content\":\"%s\"", oio_url_get (u, OIOURL_CONTENTID));
+	if (u->content) {
+		if (len != out->len) g_string_append_c (out, ',');
+		oio_str_gstring_append_json_pair (out, "content", u->content);
 	}
 }
 

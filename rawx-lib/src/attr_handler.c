@@ -659,7 +659,7 @@ gboolean
 get_rawx_info_in_attr(const char *pathname, GError ** error,
 		struct content_textinfo_s * content, struct chunk_textinfo_s * chunk)
 {
-	struct attr_handle_s *attr_handle;
+	struct attr_handle_s *attr_handle = NULL;
 	GError *e = NULL;
 
 	if (!_load_attr_from_file(pathname, &attr_handle, &e)) {
