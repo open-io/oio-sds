@@ -87,6 +87,9 @@ GError * oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
 
 /* container */
 
+/* Links the meta2 then triggers container creation */
+GError * oio_proxy_call_container_create (CURL *h, struct oio_url_s *u);
+
 GError * oio_proxy_call_content_show (CURL *h, struct oio_url_s *u,
 		GString *out);
 

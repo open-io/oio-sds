@@ -436,6 +436,18 @@ oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 	}
 }
 
+
+/* Create / destroy --------------------------------------------------------- */
+
+struct oio_error_s*
+oio_sds_create (struct oio_sds_s *sds, struct oio_url_s *url)
+{
+	GError *err = NULL;
+	err = oio_proxy_call_container_create(sds->h, url);
+	return (struct oio_error_s *) err;
+}
+
+
 /* Download ----------------------------------------------------------------- */
 
 struct _download_ctx_s

@@ -363,6 +363,17 @@ _proxy_call (CURL *h, const char *method, const char *url,
 /* -------------------------------------------------------------------------- */
 
 GError *
+oio_proxy_call_container_create (CURL *h, struct oio_url_s *u)
+{
+	GString *http_url = _curl_container_url (u, "create");
+	gchar *hdrin[] = {PROXYD_HEADER_MODE, "autocreate", NULL};
+	struct http_ctx_s i = { .headers = hdrin, .body = NULL };
+	GError *err = _proxy_call (h, "POST", http_url->str, &i, NULL);
+	g_string_free(http_url, TRUE);
+	return err;
+}
+
+GError *
 oio_proxy_call_content_show (CURL *h, struct oio_url_s *u, GString *out)
 {
 	GString *http_url = _curl_content_url (u, "show");
@@ -398,7 +409,7 @@ oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
 		struct oio_proxy_content_prepare_out_s *out)
 {
 	gchar *hdrin[] = {
-		PROXYD_HEADER_PREFIX"action-mode", autocreate ? "autocreate" : NULL,
+		PROXYD_HEADER_MODE, autocreate ? "autocreate" : NULL,
 		NULL
 	};
 	struct http_ctx_s i = {
@@ -515,7 +526,7 @@ oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
 	GString *http_url = _curl_reference_url (u, "link");
 	_append (http_url, '&', "type", srvtype);
 	gchar *hdrin[] = {
-		g_strdup(PROXYD_HEADER_PREFIX "action-mode"),
+		g_strdup(PROXYD_HEADER_MODE),
 		g_strdup(autocreate ? "autocreate" : ""),
 		NULL,
 	};
