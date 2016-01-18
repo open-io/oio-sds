@@ -98,6 +98,12 @@ void oio_sds_pfree (struct oio_sds_s **psds);
 int oio_sds_configure (struct oio_sds_s *sds, enum oio_sds_config_e what,
 		void *pv, unsigned int vlen);
 
+/* Create / destroy --------------------------------------------------------- */
+
+/* Links the meta2 then triggers container creation */
+struct oio_error_s* oio_sds_create (struct oio_sds_s *sds, struct oio_url_s *url);
+
+
 /* Download ----------------------------------------------------------------- */
 
 /* Expected to return 0 when the data's managemenr succeeded, and something
