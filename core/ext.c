@@ -47,10 +47,10 @@ static GSList*
 gslist_merge_random (GSList *l1, GSList *l2)
 {
 	GSList *next, *result = NULL;
-
+	GRand *r = g_rand_new_with_seed (g_random_int ());
 	while (l1 || l2) {
 		if (l1 && l2) {
-			if (g_random_boolean())
+			if (g_rand_boolean(r))
 				PREPEND(result,l1);
 			else
 				PREPEND(result,l2);
@@ -62,7 +62,7 @@ gslist_merge_random (GSList *l1, GSList *l2)
 				PREPEND(result,l2);
 		}
 	}
-
+	g_rand_free (r);
 	return result;
 }
 
@@ -70,14 +70,12 @@ static void
 gslist_split_in_two (GSList *src, GSList **r1, GSList **r2)
 {
 	GSList *next, *l1 = NULL, *l2 = NULL;
-
 	while (src) {
 		if (src)
 			PREPEND(l1, src);
 		if (src)
 			PREPEND(l2, src);
 	}
-
 	*r1 = l1, *r2 = l2;
 }
 
@@ -95,14 +93,16 @@ oio_ext_gslist_shuffle (GSList *src)
 void
 oio_ext_array_shuffle (gpointer *array, gsize len)
 {
+	GRand *r = g_rand_new_with_seed (g_random_int ());
 	while (len-- > 1) {
-		guint32 i = g_random_int_range (0, len+1);
+		guint32 i = g_rand_int_range (r, 0, len+1);
 		if (i == len)
 			continue;
 		gpointer tmp = array[i];
 		array[i] = array[len];
 		array[len] = tmp;
 	}
+	g_rand_free (r);
 }
 
 gsize

@@ -21,6 +21,24 @@ License along with this library.
 #include <core/oioext.h>
 #include <metautils/lib/metautils.h>
 
+/* TODO(jfs): check the number of syscalls (futex(), open()) during
+   test_shuffle_list () and test_shuffle_array (). both function ipmply
+   polling a lot a random numbers and the ccore/ library should care the
+   number of syscalls performed. Only 1 opening of /dev/urandom is
+   necessary. */
+
+static void
+test_shuffle_list (void)
+{
+	GSList *l0 = NULL;
+	for (gulong i=1; i<11; ++i)
+		l0 = g_slist_prepend (l0, (void*)i);
+	for (int i=0; i<5 ;++i)
+		l0 = oio_ext_gslist_shuffle (l0);
+	g_assert_cmpuint (g_slist_length (l0), ==, 10);
+	g_slist_free (l0);
+}
+
 static void
 test_shuffle_array (void)
 {
@@ -62,8 +80,9 @@ int
 main (int argc, char **argv)
 {
 	HC_TEST_INIT(argc,argv);
-	g_test_add_func("/core/ext/shuffle", test_shuffle_array);
-	g_test_add_func("/core/ext/partition", test_partition);
+	g_test_add_func("/core/ext/array/partition", test_partition);
+	g_test_add_func("/core/ext/list/shuffle", test_shuffle_list);
+	g_test_add_func("/core/ext/array/shuffle", test_shuffle_array);
 	return g_test_run();
 }
 

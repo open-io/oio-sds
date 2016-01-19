@@ -998,14 +998,14 @@ retry:
 }
 
 static gboolean
-_zmq2agent_manage_event (struct sqlx_service_s *ss, zmq_msg_t *msg)
+_zmq2agent_manage_event (guint32 r, struct sqlx_service_s *ss, zmq_msg_t *msg)
 {
 	if (!ss->notify.zagent)
 		return TRUE;
 
 	struct event_s *evt = g_malloc (sizeof(struct event_s) + zmq_msg_size(msg));
 	memcpy (evt->message, zmq_msg_data(msg), zmq_msg_size(msg));
-	evt->rand = g_random_int ();
+	evt->rand = r;
 	evt->evtid = ss->notify.counter ++;
 	evt->procid = ss->notify.procid;
 	evt->size = zmq_msg_size (msg);
@@ -1076,7 +1076,7 @@ _zmq2agent_receive_acks (struct sqlx_service_s *ss)
 }
 
 static gboolean
-_zmq2agent_receive_events (struct sqlx_service_s *ss)
+_zmq2agent_receive_events (GRand *r, struct sqlx_service_s *ss)
 {
 	int i=0, rc, ended = 0;
 	do {
@@ -1086,7 +1086,7 @@ _zmq2agent_receive_events (struct sqlx_service_s *ss)
 		ended = (rc == 0); // empty frame is an EOF
 		if (rc > 0) {
 			++ ss->notify.counter_received;
-			if (!_zmq2agent_manage_event (ss, &msg))
+			if (!_zmq2agent_manage_event (g_rand_int(r), ss, &msg))
 				rc = 0; // make it break
 		}
 		zmq_msg_close (&msg);
@@ -1097,6 +1097,11 @@ _zmq2agent_receive_events (struct sqlx_service_s *ss)
 static gpointer
 _worker_notify_zmq2agent (gpointer p)
 {
+	/* XXX(jfs): a dedicated PRNG avoids locking the glib's PRNG for each call
+	   (such global locks are present in the GLib) and opening it with a seed
+	   from the glib's PRNG avoids syscalls to the special file /dev/urandom */
+	GRand *r = g_rand_new_with_seed (g_random_int ());
+
 	gint64 last_debug = oio_ext_monotonic_time ();
 	struct sqlx_service_s *ss = p;
 	zmq_pollitem_t pi[2] = {
@@ -1117,7 +1122,7 @@ _worker_notify_zmq2agent (gpointer p)
 			_zmq2agent_receive_acks (ss);
 		_retry_events (ss);
 		if (pi[0].revents)
-			run = _zmq2agent_receive_events (ss);
+			run = _zmq2agent_receive_events (r, ss);
 
 		/* Periodically write stats in the log */
 		gint64 now = oio_ext_monotonic_time ();
@@ -1131,6 +1136,7 @@ _worker_notify_zmq2agent (gpointer p)
 		}
 	}
 
+	g_rand_free (r);
 	GRID_INFO ("Thread stopping [NOTIFY-ZMQ2AGENT]");
 	return p;
 }
