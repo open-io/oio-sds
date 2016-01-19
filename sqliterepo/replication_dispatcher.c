@@ -2304,11 +2304,11 @@ sqlx_dispatch_LEANIFY(struct gridd_reply_ctx_s *reply,
 	guint size = 0;
 	GError *err = metautils_message_extract_struint (reply->request, NAME_MSGKEY_SIZE, &size);
 	if (err) {
-		reply->send_error(CODE_BAD_REQUEST, err);
-	} else {
-		sqlite3_release_memory (size);
-		reply->send_reply(CODE_FINAL_OK, "OK");
+		g_clear_error (&err);
+		size = 16 * 1024 * 1024;
 	}
+	sqlite3_release_memory (size);
+	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
 
