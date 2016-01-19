@@ -1556,19 +1556,19 @@ _m2_generate_chunks(struct gen_ctx_s *ctx,
 
 	guint pos = 0;
 	gint64 esize = MAX(ctx->size,1);
-	for (gint64 s=0; s < esize ;s+=mcs,++pos) {
+	for (gint64 s = 0; s < esize; s += mcs, ++pos) {
 
-		struct lb_next_opt_s opt;
+		struct lb_next_opt_ext_s opt;
 		memset(&opt, 0, sizeof(opt));
-		opt.req.duplicates = (distance <= 0);
-		opt.req.max = count;
-		opt.req.distance = distance;
-		opt.req.weak_distance = weak;
-		opt.req.stgclass = stgclass;
-		opt.req.strict_stgclass = FALSE; // Accept ersatzes
+		opt.duplicates = (distance <= 0);
+		opt.max = count;
+		opt.distance = distance;
+		opt.weak_distance = weak;
+		opt.stgclass = stgclass;
+		opt.strict_stgclass = FALSE; // Accept ersatzes
 
 		struct service_info_s **siv = NULL;
-		if (!grid_lb_iterator_next_set(ctx->iter, &siv, &opt, &err)) {
+		if (!grid_lb_iterator_next_set2(ctx->iter, &siv, &opt, &err)) {
 			g_prefix_error(&err, "at position %u: ", pos);
 			break;
 		}

@@ -539,12 +539,10 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 	GRID_DEBUG("Polling %u [%s]", replicas, ct->fulltype);
 
 	if (!(*err = _get_iterator(m1, ct, &iter))) {
-		struct lb_next_opt_ext_s opt = {{0}};
-		opt.req.distance = MACRO_COND(replicas>1,1,0);
-		opt.req.max = replicas;
-		opt.req.duplicates = FALSE;
-		opt.req.stgclass = NULL;
-		opt.req.strict_stgclass = TRUE;
+		struct lb_next_opt_ext_s opt = {0};
+		opt.distance = MACRO_COND(replicas>1,1,0);
+		opt.max = replicas;
+		opt.strict_stgclass = TRUE;
 		opt.srv_forbidden = __srvinfo_from_m1srvurl(m1->lb, ct->baretype, used);
 
 		if (ct->req.k && !strcmp(ct->req.k, NAME_TAGNAME_USER_IS_SERVICE)) {
@@ -553,7 +551,7 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 					meta1_unpack_url(srvurl), NULL};
 			/* If ct->req.v is not an addr, srv_inplace will contain NULL */
 			opt.srv_inplace = __srvinfo_from_m1srvurl(m1->lb, NULL, inplace);
-			opt.req.distance = 1;
+			opt.distance = 1;
 			meta1_service_url_clean(inplace[0]);
 			g_free(srvurl);
 		} else {
@@ -833,14 +831,10 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 		struct service_update_policies_s *pol = meta1_backend_get_svcupdate(in->m1);
 		EXTRA_ASSERT (pol != NULL);
 
-		struct lb_next_opt_ext_s opt = {{0}};
-		opt.req.max = service_howmany_replicas (pol, in->ct->baretype);
-		opt.req.distance = opt.req.max > 1 ? 1 : 0;
-		opt.req.duplicates = FALSE;
-		opt.req.stgclass = NULL;
-		opt.req.strict_stgclass = TRUE;
-		opt.filter.hook = NULL;
-		opt.filter.data = NULL;
+		struct lb_next_opt_ext_s opt = {0};
+		opt.max = service_howmany_replicas (pol, in->ct->baretype);
+		opt.distance = opt.max > 1 ? 1 : 0;
+		opt.strict_stgclass = TRUE;
 		if (in->kept)
 			opt.srv_inplace = __srvinfo_from_m1srvurl (in->m1->lb,
 					in->ct->baretype, in->kept);
@@ -848,7 +842,7 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 			opt.srv_forbidden = __srvinfo_from_m1srvurl (in->m1->lb,
 					in->ct->baretype, in->replaced);
 
-		if (g_slist_length(opt.srv_inplace) >= opt.req.max)
+		if (g_slist_length(opt.srv_inplace) >= opt.max)
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "Too many services kept");
 
 		if (!err) {

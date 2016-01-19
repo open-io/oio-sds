@@ -944,17 +944,15 @@ _reload_lbpool(struct grid_lbpool_s *glp, gboolean flush)
 	}
 
 	GSList *list_srvtypes = NULL;
-	GError *err = conscience_get_types (grid_lbpool_namespace(glp), &list_srvtypes);
+	GError *err = conscience_get_types (SRV.ns_name, &list_srvtypes);
 	if (err)
 		g_prefix_error(&err, "LB pool reload error: ");
 	else {
 		guint errors = 0;
-		const gchar *ns = grid_lbpool_namespace(glp);
-
 		for (GSList *l=list_srvtypes; l ;l=l->next) {
 			if (!l->data)
 				continue;
-			if (!_reload_srvtype(ns, l->data))
+			if (!_reload_srvtype(SRV.ns_name, l->data))
 				++ errors;
 		}
 

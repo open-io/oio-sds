@@ -110,18 +110,16 @@ GError*
 get_spare_chunks(struct grid_lbpool_s *lbp, struct storage_policy_s *stgpol,
 		GSList **result)
 {
-	const char *k, *m, *cpstr, *diststr;
+	const char *k, *m, *cpstr;
 	const struct data_security_s *ds = storage_policy_get_data_security(stgpol);
-	struct lb_next_opt_ext_s opt_ext;
 
-	memset(&opt_ext, 0, sizeof(opt_ext));
-	opt_ext.req.stgclass = storage_policy_get_storage_class(stgpol);
-	opt_ext.req.strict_stgclass = TRUE;
+	struct lb_next_opt_ext_s opt = {0};
+	opt.stgclass = storage_policy_get_storage_class(stgpol);
+	opt.strict_stgclass = TRUE;
 
-	diststr = data_security_get_param(ds, DS_KEY_DISTANCE);
-	opt_ext.req.distance = (NULL != diststr) ? atoi(diststr) : 1;
-	opt_ext.req.weak_distance = \
-			BOOL(data_security_get_int64_param(ds, DS_KEY_WEAK, 0));
+	const char *diststr = data_security_get_param(ds, DS_KEY_DISTANCE);
+	opt.distance = (NULL != diststr) ? atoi(diststr) : 1;
+	opt.weak_distance = BOOL(data_security_get_int64_param(ds, DS_KEY_WEAK, 0));
 
 	switch (data_security_get_type(ds)) {
 		case STGPOL_DS_EC:
@@ -129,17 +127,17 @@ get_spare_chunks(struct grid_lbpool_s *lbp, struct storage_policy_s *stgpol,
 			m = data_security_get_param(ds, DS_KEY_M);
 			if (!k || !m)
 				return NEWERROR(CODE_BAD_REQUEST, "Invalid RAIN policy (missing K and/or M)");
-			opt_ext.req.max = atoi(k) + atoi(m);
+			opt.max = atoi(k) + atoi(m);
 			break;
 		case STGPOL_DS_PLAIN:
 			cpstr = data_security_get_param(ds, DS_KEY_COPY_COUNT);
-			opt_ext.req.max = (NULL != cpstr) ? atoi(cpstr) : 1;
+			opt.max = (NULL != cpstr) ? atoi(cpstr) : 1;
 			break;
 		default:
 			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid policy type");
 	}
 
-	return _poll_services(lbp, "rawx", &opt_ext, result);
+	return _poll_services(lbp, "rawx", &opt, result);
 }
 
 //------------------------------------------------------------------------------
@@ -176,43 +174,34 @@ get_conditioned_spare_chunks2(struct grid_lbpool_s *lbp,
 	const struct data_security_s *ds = storage_policy_get_data_security(stgpol);
 	const struct storage_class_s *stgclass = storage_policy_get_storage_class(stgpol);
 
-	struct lb_next_opt_ext_s opt_ext;
-	memset(&opt_ext, 0, sizeof(opt_ext));
-	opt_ext.req.max = 0;
-	opt_ext.req.distance = data_security_get_int64_param(ds, DS_KEY_DISTANCE, 0);
-	opt_ext.req.weak_distance = \
-			BOOL(data_security_get_int64_param(ds, DS_KEY_WEAK, 0));
-	opt_ext.req.duplicates = (opt_ext.req.distance <= 0);
-	opt_ext.req.stgclass = stgclass;
-	opt_ext.req.strict_stgclass = FALSE;
-	opt_ext.srv_inplace = NULL;
-	opt_ext.srv_forbidden = NULL;
+	struct lb_next_opt_ext_s opt = {0};
+	opt.distance = data_security_get_int64_param(ds, DS_KEY_DISTANCE, 0);
+	opt.weak_distance = BOOL(data_security_get_int64_param(ds, DS_KEY_WEAK, 0));
+	opt.duplicates = (opt.distance <= 0);
+	opt.stgclass = stgclass;
 
 	switch (data_security_get_type(ds)) {
 		case STGPOL_DS_PLAIN:
-			opt_ext.req.max = data_security_get_int64_param(ds, DS_KEY_COPY_COUNT, 1);
+			opt.max = data_security_get_int64_param(ds, DS_KEY_COPY_COUNT, 1);
 			break;
 		case STGPOL_DS_EC:
-			opt_ext.req.max = data_security_get_int64_param(ds, DS_KEY_K, 1)
+			opt.max = data_security_get_int64_param(ds, DS_KEY_K, 1)
 				+ data_security_get_int64_param(ds, DS_KEY_M, 0);
 			break;
 		default:
 			return NEWERROR(CODE_POLICY_NOT_SUPPORTED, "Invalid storage policy");
 	}
 
-	guint count = g_slist_length(already);
-	if (opt_ext.req.max > count)
-		opt_ext.req.max = opt_ext.req.max - count;
-	else
-		opt_ext.req.max = 1;
+	const guint count = g_slist_length(already);
+	opt.max = (opt.max > count) ? opt.max - count : 1;
 
 	GError *err = NULL;
 
-	opt_ext.srv_forbidden = convert_chunks_to_srvinfo(lbp, broken);
-	opt_ext.srv_inplace = convert_chunks_to_srvinfo(lbp, already);
-	err = _poll_services(lbp, "rawx", &opt_ext, result);
-	g_slist_free_full(opt_ext.srv_forbidden, (GDestroyNotify)service_info_clean);
-	g_slist_free_full(opt_ext.srv_inplace, (GDestroyNotify)service_info_clean);
+	opt.srv_forbidden = convert_chunks_to_srvinfo(lbp, broken);
+	opt.srv_inplace = convert_chunks_to_srvinfo(lbp, already);
+	err = _poll_services(lbp, "rawx", &opt, result);
+	g_slist_free_full(opt.srv_forbidden, (GDestroyNotify)service_info_clean);
+	g_slist_free_full(opt.srv_inplace, (GDestroyNotify)service_info_clean);
 
 	return err;
 }

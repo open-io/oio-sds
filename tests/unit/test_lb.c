@@ -31,6 +31,7 @@ License along with this library.
 
 #define ADDR_GOOD "127.0.0.1"
 #define ADDR_BAD  "127.0.0.2"
+#define NS "NS"
 
 static guint max_feed = 37;
 static guint max_get = 5001;
@@ -41,7 +42,7 @@ _build_si(const gchar *a, guint i)
 	struct service_info_s *si;
 
 	si = g_malloc0(sizeof(*si));
-	g_strlcpy(si->ns_name, "NS", sizeof(si->ns_name));
+	g_strlcpy(si->ns_name, NS, sizeof(si->ns_name));
 	g_strlcpy(si->type, SRVTYPE, sizeof(si->type));
 	si->addr.addr.v4 = inet_addr(a);
 	si->addr.type = TADDR_V4;
@@ -67,7 +68,7 @@ _build_si_loc(const gchar *a, guint i)
 }
 
 static guint
-_fill(struct grid_lb_s *lb, guint max)
+_fill(struct grid_lbpool_s *lbp, const char *srvtype, guint max)
 {
 	guint i, count;
 
@@ -81,37 +82,20 @@ _fill(struct grid_lb_s *lb, guint max)
 	}
 
 	i = count = 0;
-	grid_lb_reload(lb, &provide);
+	grid_lbpool_reload(lbp, srvtype, &provide);
 
 	g_assert(count == max);
 	return count;
-}
-
-static struct grid_lb_s *
-_build(void)
-{
-	struct grid_lb_s *lb;
-
-	lb = grid_lb_init("NS", SRVTYPE);
-	g_assert(lb != NULL);
-
-	grid_lb_set_SD_shortening(lb, FALSE);
-	grid_lb_set_shorten_ratio(lb, 1.001);
-	_fill(lb, max_feed);
-	return lb;
 }
 
 static void
 check_presence(gboolean expected, struct grid_lb_iterator_s *iter,
 		struct service_info_s *si)
 {
-	gboolean available;
-
-	available = grid_lb_iterator_is_srv_available(iter, si);
-	available = (available != 0);
-	expected = (expected != 0);
-
-	g_assert(available == expected);
+	gchar *k = service_info_key (si);
+	STRING_STACKIFY(k);
+	gboolean available = grid_lb_iterator_is_url_available(iter, k);
+	g_assert(BOOL(available) == BOOL(expected));
 }
 
 static void
@@ -158,24 +142,20 @@ cmp_addr(gconstpointer a, gconstpointer b, gpointer user_data)
 }
 
 static void
-_keep_for_repartition(GTree *used, struct service_info_s *si)
-{
-	guint *pi = g_tree_lookup(used, &(si->addr));
-	if (!pi) {
-		pi = g_malloc0(sizeof(guint));
-		*pi = 1;
-		g_tree_insert(used, g_memdup(&(si->addr), sizeof(struct addr_info_s)), pi);
-	}
-	else {
-		++ *pi;
-	}
-}
-
-static void
 _compute_repartition(GTree *used, struct service_info_s **siv)
 {
-	while (*siv)
-		_keep_for_repartition(used, *(siv++));
+	while (*siv) {
+		struct service_info_s *si = *siv;
+		guint *pi = g_tree_lookup(used, &(si->addr));
+		if (!pi) {
+			pi = g_malloc0(sizeof(guint));
+			*pi = 1;
+			g_tree_insert(used, g_memdup(&(si->addr), sizeof(struct addr_info_s)), pi);
+		}
+		else {
+			++ *pi;
+		}
+	}
 }
 
 static void
@@ -216,12 +196,12 @@ generate_set_and_check_uniform_repartition(struct grid_lb_iterator_s *iter,
 	struct service_info_s **siv = NULL;
 	GTree *used = g_tree_new_full(cmp_addr, NULL, g_free, g_free);
 
-	struct lb_next_opt_s opt = {{0}};
-	opt.req.max = max_get;
-	opt.req.distance = 1;
-	opt.req.weak_distance = 1;
-	opt.req.duplicates = TRUE;
-	gboolean rc = grid_lb_iterator_next_set(iter, &siv, &opt, NULL);
+	struct lb_next_opt_ext_s opt = {0};
+	opt.max = max_get;
+	opt.distance = 1;
+	opt.weak_distance = 1;
+	opt.duplicates = TRUE;
+	gboolean rc = grid_lb_iterator_next_set2(iter, &siv, &opt, NULL);
 	g_assert(rc != FALSE);
 
 	_compute_repartition(used, siv);
@@ -236,13 +216,15 @@ generate_1by1_and_check_uniform_repartition(struct grid_lb_iterator_s *iter,
 {
 	GTree *used = g_tree_new_full(cmp_addr, NULL, g_free, g_free);
 	for (guint i=0; i<max_get; ++i) {
-		struct service_info_s *si = NULL;
-		if (!grid_lb_iterator_next(iter, &si))
+		struct service_info_s **siv = NULL;
+		struct lb_next_opt_ext_s opt = {0};
+		opt.max = 1;
+		if (!grid_lb_iterator_next_set2(iter, &siv, &opt, NULL))
 			break;
-		if (!si)
+		if (!siv)
 			break;
-		_keep_for_repartition(used, si);
-		service_info_clean(si);
+		_compute_repartition(used, siv);
+		service_info_cleanv(siv, FALSE);
 	}
 	_check_repartition_uniform(used, ratio);
 	g_tree_destroy(used);
@@ -255,13 +237,13 @@ _count_set(struct grid_lb_iterator_s *iter, guint max, gboolean weak,
 	struct service_info_s **siv = NULL;
 	gboolean rc;
 
-	struct lb_next_opt_s opt = {{0}};
-	opt.req.max = max;
-	opt.req.distance = 1;
-	opt.req.weak_distance = weak;
-	opt.req.duplicates = TRUE;
+	struct lb_next_opt_ext_s opt = {0};
+	opt.max = max;
+	opt.distance = 1;
+	opt.weak_distance = weak;
+	opt.duplicates = TRUE;
 
-	rc = grid_lb_iterator_next_set(iter, &siv, &opt, NULL);
+	rc = grid_lb_iterator_next_set2(iter, &siv, &opt, NULL);
 	g_assert(rc == expect);
 
 	if (expect) {
@@ -278,10 +260,12 @@ _count_single(struct grid_lb_iterator_s *iter, guint max)
 	guint count = 0;
 
 	while ((max--) > 0) {
-		struct service_info_s *si = NULL;
-		if (!grid_lb_iterator_next(iter, &si))
+		struct service_info_s **siv = NULL;
+		struct lb_next_opt_ext_s opt = {0};
+		opt.max = 1;
+		if (!grid_lb_iterator_next_set2(iter, &siv, &opt, NULL))
 			break;
-		service_info_clean(si);
+		service_info_cleanv(siv, FALSE);
 		count ++;
 	}
 
@@ -321,11 +305,10 @@ check_service_count_near_limit(struct grid_lb_iterator_s *iter)
 static void
 test_lb_RR(void)
 {
-	struct grid_lb_s *lb;
-	struct grid_lb_iterator_s *iter;
-
-	lb = _build();
-	iter = grid_lb_iterator_round_robin(lb);
+	struct grid_lbpool_s *lbp = grid_lbpool_create (NS);
+	struct grid_lb_iterator_s *iter = grid_lbpool_ensure_iterator (lbp, SRVTYPE);
+	grid_lbpool_configure_string (lbp, SRVTYPE, "RR");
+	_fill (lbp, SRVTYPE, max_feed);
 
 	check_service_count(iter);
 	check_service_count_near_limit(iter);
@@ -333,53 +316,53 @@ test_lb_RR(void)
 	generate_set_and_check_uniform_repartition(iter, 0.01);
 
 	grid_lb_iterator_clean(iter);
-	grid_lb_clean(lb);
+	grid_lbpool_destroy (lbp);
 }
 
 static void
 test_lb_WRR(void)
 {
-	struct grid_lb_s *lb;
-	struct grid_lb_iterator_s *iter;
+	struct grid_lbpool_s *lbp = grid_lbpool_create (NS);
+	struct grid_lb_iterator_s *iter = grid_lbpool_ensure_iterator (lbp, SRVTYPE);
+	grid_lbpool_configure_string (lbp, SRVTYPE, "WRR");
+	_fill (lbp, SRVTYPE, max_feed);
 
-	lb = _build();
-	iter = grid_lb_iterator_weighted_round_robin(lb);
 	check_service_count(iter);
 	check_service_count_near_limit(iter);
+
 	grid_lb_iterator_clean(iter);
-	grid_lb_clean(lb);
+	grid_lbpool_destroy(lbp);
 }
 
 static void
 test_lb_RAND(void)
 {
-	struct grid_lb_s *lb;
-	struct grid_lb_iterator_s *iter;
+	struct grid_lbpool_s *lbp = grid_lbpool_create (NS);
+	struct grid_lb_iterator_s *iter = grid_lbpool_ensure_iterator (lbp, SRVTYPE);
+	grid_lbpool_configure_string (lbp, SRVTYPE, "RAND");
+	_fill (lbp, SRVTYPE, max_feed);
 
-	lb = _build();
-	iter = grid_lb_iterator_random(lb);
 	check_service_count(iter);
 	generate_1by1_and_check_uniform_repartition(iter, 0.3);
 	generate_set_and_check_uniform_repartition(iter, 0.3);
 
 	grid_lb_iterator_clean(iter);
-	grid_lb_clean(lb);
+	grid_lbpool_destroy(lbp);
 }
 
 static void
 test_lb_WRAND(void)
 {
-	struct grid_lb_s *lb;
-	struct grid_lb_iterator_s *iter;
+	struct grid_lbpool_s *lbp = grid_lbpool_create (NS);
+	struct grid_lb_iterator_s *iter = grid_lbpool_ensure_iterator (lbp, SRVTYPE);
+	grid_lbpool_configure_string (lbp, SRVTYPE, "WRAND");
+	_fill (lbp, SRVTYPE, max_feed);
 
-	lb = _build();
-	iter = grid_lb_iterator_weighted_random(lb);
 	check_service_count(iter);
-	grid_lb_iterator_clean(iter);
-	grid_lb_clean(lb);
-}
 
-/* -------------------------------------------------------------------------- */
+	grid_lb_iterator_clean(iter);
+	grid_lbpool_destroy (lbp);
+}
 
 static void
 test_pool_create_destroy(void)

@@ -79,16 +79,11 @@ _lb (struct req_args_s *args, struct grid_lb_iterator_s *iter)
 
 	// Terribly configurable and poorly implemented LB
 	struct storage_class_s *stgcls = storage_class_init(&nsinfo, cls);
-	struct lb_next_opt_ext_s opt;
-	opt.req.distance = 1;
-	opt.req.max = sz ? atoi(sz) : 1;
-	opt.req.duplicates = FALSE;
-	opt.req.stgclass = !stgcls ? NULL : stgcls;
-	opt.req.strict_stgclass = FALSE;
-	opt.filter.data = NULL;
-	opt.filter.hook = tagk ? _filter_tag : NULL;
-	opt.srv_inplace = NULL;
-	opt.srv_forbidden = NULL;
+	struct lb_next_opt_ext_s opt = {0};
+	opt.distance = 1;
+	opt.max = sz ? atoi(sz) : 1;
+	if (stgcls) opt.stgclass = stgcls;
+	if (tagk) opt.filter.hook = _filter_tag;
 
 	GError *err = NULL;
 	struct service_info_s **siv = NULL;

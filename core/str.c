@@ -454,3 +454,10 @@ oio_str_is_number (const char *s)
 		return 0;
 	return 1;
 }
+
+int
+oio_str_cmp3 (const void *a, const void *b, void *ignored)
+{
+	(void) ignored;
+	return g_strcmp0 (a,b);
+}

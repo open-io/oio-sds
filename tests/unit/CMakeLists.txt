@@ -17,6 +17,10 @@ add_executable(test_cache_lru test_cache_lru.c)
 target_link_libraries(test_cache_lru oiocache)
 add_test(NAME cache/lru COMMAND test_cache_lru)
 
+add_executable(test_lb2 test_lb2.c)
+target_link_libraries(test_lb2 metautils ${COMMON})
+#add_test(NAME core/lb COMMAND test_lb2)
+
 add_executable(test_lb test_lb.c)
 target_link_libraries(test_lb metautils ${COMMON})
 add_test(NAME metautils/lb COMMAND test_lb)

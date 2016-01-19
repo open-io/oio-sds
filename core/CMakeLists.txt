@@ -20,7 +20,7 @@ set_target_properties(oiocore PROPERTIES
 		PUBLIC_HEADER "oio_core.h"
 		SOVERSION ${ABI_VERSION})
 
-add_library(oiosds SHARED sds.c proxy.c headers.c http_put.c dir.c cs.c)
+add_library(oiosds SHARED sds.c proxy.c headers.c http_put.c dir.c cs.c lb.c)
 target_link_libraries(oiosds oiocore
 		${GLIB2_LIBRARIES} ${CURL_LIBRARIES} ${JSONC_LIBRARIES})
 set_target_properties(oiosds PROPERTIES
@@ -44,6 +44,7 @@ install(FILES
 		oiostr.h
 		oiourl.h
 		oiocs.h
+		oiolb.h
 		DESTINATION include/core)
 
 install(TARGETS oiocore oiosds

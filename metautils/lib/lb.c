@@ -29,15 +29,10 @@ License along with this library.
 #include <arpa/inet.h>
 
 #include <math.h>
-
 #include <glib.h>
-
 #include <json.h>
 
-#include "./metautils.h"
-#include "./resolv.h"
-#include "./lb.h"
-#include "./storage_policy.h"
+#include "metautils.h"
 
 #define SLOT(P) ((struct score_slot_s*)P)
 
@@ -52,8 +47,6 @@ struct grid_lb_s
 	gdouble shorten_ratio;
 	gboolean standard_deviation;
 	gint reset_delay;
-
-	void (*use_hook) (void);
 
 	GRecMutex lock;
 	guint64 version;
@@ -199,21 +192,7 @@ grid_lb_unlock(struct grid_lb_s *lb)
 	g_rec_mutex_unlock(&(lb->lock));
 }
 
-void
-grid_lb_set_SD_shortening(struct grid_lb_s *lb, gboolean on)
-{
-	if (lb)
-		lb->standard_deviation = on;
-}
-
-void
-grid_lb_set_shorten_ratio(struct grid_lb_s *lb, gdouble ratio)
-{
-	if (lb)
-		lb->shorten_ratio = CLAMP(ratio, 0.001, 1.001);
-}
-
-struct grid_lb_s*
+static struct grid_lb_s*
 grid_lb_init(const gchar *ns, const gchar *srvtype)
 {
 	struct grid_lb_s *lb = SLICE_NEW0(struct grid_lb_s);
@@ -226,7 +205,6 @@ grid_lb_init(const gchar *ns, const gchar *srvtype)
 	lb->standard_deviation = FALSE;
 	lb->reset_delay = 60;
 	lb->version = 1;
-	lb->use_hook = NULL;
 	g_rec_mutex_init(&(lb->lock));
 	lb->gpa = g_ptr_array_new();
 
@@ -265,7 +243,7 @@ _lb_flush(struct grid_lb_s *lb)
 	lb->size_max = 0;
 }
 
-void
+static void
 grid_lb_clean(struct grid_lb_s *lb)
 {
 	if (!lb)
@@ -404,7 +382,7 @@ _lb_reload(struct grid_lb_s *lb, service_provider_f provide)
 	++ lb->version;
 }
 
-void
+static void
 grid_lb_flush(struct grid_lb_s *lb)
 {
 	if (!lb) return;
@@ -413,7 +391,7 @@ grid_lb_flush(struct grid_lb_s *lb)
 	grid_lb_unlock(lb);
 }
 
-void
+static void
 grid_lb_reload(struct grid_lb_s *lb, service_provider_f provide)
 {
 	if (!lb)
@@ -426,6 +404,47 @@ grid_lb_reload(struct grid_lb_s *lb, service_provider_f provide)
 
 	GRID_DEBUG("LB [%s|%s] reloaded with [%u/%u] services",
 			lb->ns, lb->srvtype, lb->sorted_by_score->len, lb->size_max);
+}
+
+static GError *
+grid_lb_reload_json_object(struct grid_lb_s *lb, struct json_object *obj)
+{
+	if (!lb)
+		return NEWERROR(CODE_BAD_REQUEST, "Invalid parameter");
+	if (!json_object_is_type(obj, json_type_array))
+		return NEWERROR(CODE_BAD_REQUEST, "JSON object is not an array");
+
+	int i = json_object_array_length(obj);
+	gboolean provide(struct service_info_s **p_si) {
+		*p_si = NULL;
+		while (i > 0) {
+			--i;
+			struct json_object *item = json_object_array_get_idx(obj, i);
+			if (!item || !json_object_is_type(item, json_type_object))
+				return TRUE;
+			*p_si = NULL;
+			GError *e = service_info_load_json_object(item, p_si, TRUE);
+			if (!e)
+				return FALSE;
+			g_clear_error(&e);
+		}
+		*p_si = NULL;
+		return TRUE;
+	}
+	grid_lb_reload(lb, provide);
+	return NULL;
+}
+
+static GError *
+grid_lb_reload_json(struct grid_lb_s *lb, const gchar *encoded)
+{
+	struct json_tokener *tok = json_tokener_new();
+	struct json_object *obj = json_tokener_parse_ex(tok,
+			encoded, strlen(encoded));
+	json_tokener_free(tok);
+	GError *err = grid_lb_reload_json_object(lb, obj);
+	json_object_put(obj);
+	return err;
 }
 
 static struct service_info_s*
@@ -441,7 +460,7 @@ _get_service_from_addr(struct grid_lb_s *lb, const struct addr_info_s *ai)
 	return service_info_dup(si);
 }
 
-struct service_info_s*
+static struct service_info_s*
 grid_lb_get_service_from_addr(struct grid_lb_s *lb, const struct addr_info_s *ai)
 {
 	EXTRA_ASSERT(ai != NULL);
@@ -455,7 +474,7 @@ grid_lb_get_service_from_addr(struct grid_lb_s *lb, const struct addr_info_s *ai
 	return si;
 }
 
-struct service_info_s*
+static struct service_info_s*
 grid_lb_get_service_from_url(struct grid_lb_s *lb, const gchar *url)
 {
 	if (!lb || !url)
@@ -480,7 +499,7 @@ _lb_is_addr_available(struct grid_lb_s *lb, const struct addr_info_s *ai)
 	return si->score.value > 0;
 }
 
-gboolean
+static gboolean
 grid_lb_is_addr_available(struct grid_lb_s *lb, const struct addr_info_s *ai)
 {
 	EXTRA_ASSERT(lb != NULL);
@@ -492,16 +511,12 @@ grid_lb_is_addr_available(struct grid_lb_s *lb, const struct addr_info_s *ai)
 	return rc;
 }
 
-gboolean
-grid_lb_is_srv_available(struct grid_lb_s *lb, const struct service_info_s *si)
+static gboolean
+grid_lb_iterator_is_addr_available(struct grid_lb_iterator_s *iter,
+		const struct addr_info_s *ai)
 {
-	EXTRA_ASSERT(si != NULL);
-	EXTRA_ASSERT(lb != NULL);
-
-	EXTRA_ASSERT(!strcmp(si->type, lb->srvtype));
-	EXTRA_ASSERT(!strcmp(si->ns_name, lb->ns));
-
-	return grid_lb_is_addr_available(lb, &(si->addr));
+	EXTRA_ASSERT(iter != NULL);
+	return grid_lb_is_addr_available(iter->lb, ai);
 }
 
 gboolean
@@ -521,7 +536,7 @@ grid_lb_iterator_is_url_available(struct grid_lb_iterator_s *iter,
 	return grid_lb_iterator_is_addr_available(iter, &ai);
 }
 
-gsize
+static gsize
 grid_lb_count(struct grid_lb_s *lb)
 {
 	if (!lb)
@@ -534,7 +549,7 @@ grid_lb_count(struct grid_lb_s *lb)
 	return rc;
 }
 
-gsize
+static gsize
 grid_lb_count_all(struct grid_lb_s *lb)
 {
 	if (!lb)
@@ -561,72 +576,12 @@ grid_lb_iterator_share(struct grid_lb_iterator_s *sub)
 	return iter;
 }
 
-struct grid_lb_iterator_s*
-grid_lb_iterator_round_robin(struct grid_lb_s *lb)
-{
-	EXTRA_ASSERT(lb != NULL);
-	struct grid_lb_iterator_s *iter = SLICE_NEW0(struct grid_lb_iterator_s);
-	iter->lb = lb;
-	iter->version = lb->version;
-	iter->type = LBIT_RR;
-	return iter;
-}
-
-struct grid_lb_iterator_s*
-grid_lb_iterator_weighted_round_robin(struct grid_lb_s *lb)
-{
-	EXTRA_ASSERT(lb != NULL);
-	struct grid_lb_iterator_s *iter = SLICE_NEW0(struct grid_lb_iterator_s);
-	iter->lb = lb;
-	iter->version = lb->version;
-	iter->type = LBIT_WRR;
-	return iter;
-}
-
-struct grid_lb_iterator_s*
-grid_lb_iterator_random(struct grid_lb_s *lb)
-{
-	EXTRA_ASSERT(lb != NULL);
-	struct grid_lb_iterator_s *iter = SLICE_NEW0(struct grid_lb_iterator_s);
-	iter->lb = lb;
-	iter->version = lb->version;
-	iter->type = LBIT_RAND;
-	return iter;
-}
-
-struct grid_lb_iterator_s*
-grid_lb_iterator_weighted_random(struct grid_lb_s *lb)
-{
-	EXTRA_ASSERT(lb != NULL);
-	struct grid_lb_iterator_s *iter = SLICE_NEW0(struct grid_lb_iterator_s);
-	iter->lb = lb;
-	iter->version = lb->version;
-	iter->type = LBIT_WRAND;
-	return iter;
-}
-
 void
 grid_lb_iterator_clean(struct grid_lb_iterator_s *iter)
 {
 	if (!iter)
 		return;
 	SLICE_FREE(struct grid_lb_iterator_s, iter);
-}
-
-gboolean
-grid_lb_iterator_is_srv_available(struct grid_lb_iterator_s *iter,
-		const struct service_info_s *si)
-{
-	EXTRA_ASSERT(iter != NULL);
-	return grid_lb_is_srv_available(iter->lb, si);
-}
-
-gboolean
-grid_lb_iterator_is_addr_available(struct grid_lb_iterator_s *iter,
-		const struct addr_info_s *ai)
-{
-	EXTRA_ASSERT(iter != NULL);
-	return grid_lb_is_addr_available(iter->lb, ai);
 }
 
 static void
@@ -685,7 +640,7 @@ _next(const gchar *p, const gchar *sep)
 	return NULL;
 }
 
-void
+static void
 grid_lb_configure_options(struct grid_lb_s *lb, const gchar *opts)
 {
 
@@ -703,7 +658,7 @@ grid_lb_configure_options(struct grid_lb_s *lb, const gchar *opts)
 	}
 }
 
-void
+static void
 grid_lb_iterator_configure(struct grid_lb_iterator_s *iter, const gchar *val)
 {
 	if (iter->type == LBIT_SHARED) {
@@ -887,14 +842,16 @@ __next_SRAND(struct grid_lb_s *lb, struct service_info_s **si)
 	return _result(si, result);
 }
 
+static gboolean _iterator_next_shorten(struct grid_lb_iterator_s *iter,
+		struct service_info_s **si, gboolean shorten);
+
 static gboolean
 __next_SHARED(struct grid_lb_iterator_s *iter, struct service_info_s **si,
 		gboolean shorten)
 {
 	if (!iter || !si)
 		return FALSE;
-	return grid_lb_iterator_next_shorten(iter->internals.shared.sub,
-			si, shorten);
+	return _iterator_next_shorten(iter->internals.shared.sub, si, shorten);
 }
 
 static gboolean
@@ -924,31 +881,6 @@ _iterator_next_shorten(struct grid_lb_iterator_s *iter,
 
 	g_assert_not_reached();
 	return FALSE;
-}
-
-gboolean
-grid_lb_iterator_next_shorten(struct grid_lb_iterator_s *iter,
-		struct service_info_s **si, gboolean shorten)
-{
-	struct grid_lb_s *lb;
-
-	if (!iter || !si)
-		return FALSE;
-
-	lb = iter->lb;
-	EXTRA_ASSERT(lb != NULL);
-
-	if (lb->use_hook)
-		lb->use_hook();
-
-	return _iterator_next_shorten(iter, si, shorten);
-}
-
-gboolean
-grid_lb_iterator_next(struct grid_lb_iterator_s *iter,
-		struct service_info_s **si)
-{
-	return grid_lb_iterator_next_shorten(iter, si, TRUE);
 }
 
 static gsize
@@ -999,7 +931,7 @@ _filter_matches(struct lb_next_opt_filter_s *f, struct service_info_s *si)
  * @param shorten whether to use shorten ratio or not
  */
 static void
-_search_servers(struct grid_lb_iterator_s *iter, struct lb_next_opt_s *opt,
+_search_servers(struct grid_lb_iterator_s *iter, struct lb_next_opt_ext_s *opt,
 		const gchar *stgclass, GTree *polled, gboolean shorten)
 {
 	gsize limit = _get_iteration_limit(iter, shorten);
@@ -1007,12 +939,12 @@ _search_servers(struct grid_lb_iterator_s *iter, struct lb_next_opt_s *opt,
 	if (GRID_DEBUG_ENABLED()) {
 		GRID_DEBUG("SEARCH max=%u/%u dup=%d dist=%d stgclass=%s pool=%u"
 				" shorten=%f filter=%p",
-				(guint)g_tree_nnodes(polled), opt->req.max,
-				opt->req.duplicates, opt->req.distance,
+				(guint)g_tree_nnodes(polled), opt->max,
+				opt->duplicates, opt->distance,
 				stgclass, (guint)limit, iter->lb->shorten_ratio, opt->filter.hook);
 	}
 
-	while (limit > 0 && opt->req.max > (guint)g_tree_nnodes(polled)) {
+	while (limit > 0 && opt->max > (guint)g_tree_nnodes(polled)) {
 
 		struct service_info_s *si = NULL;
 		if (!_iterator_next_shorten(iter, &si, shorten))
@@ -1020,7 +952,7 @@ _search_servers(struct grid_lb_iterator_s *iter, struct lb_next_opt_s *opt,
 
 		if (!service_info_check_storage_class(si, stgclass)
 				|| !_filter_matches(&(opt->filter), si)
-				|| !_distance_fits(opt->req.distance, polled, si))
+				|| !_distance_fits(opt->distance, polled, si))
 		{
 			service_info_clean(si);
 			--limit;
@@ -1067,7 +999,7 @@ cmp_ptr(gconstpointer a, gconstpointer b, gpointer user_data)
  * If still not enough servers are collected, retry with each fallback
  * storage classes. */
 static void
-_next_set(struct grid_lb_iterator_s *it, struct lb_next_opt_s *opt,
+_next_set(struct grid_lb_iterator_s *it, struct lb_next_opt_ext_s *opt,
 		const gchar *stgclass, GTree *polled, GSList *fallbacks)
 {
 	_search_servers(it, opt, stgclass, polled, TRUE);
@@ -1076,13 +1008,13 @@ _next_set(struct grid_lb_iterator_s *it, struct lb_next_opt_s *opt,
 	// to same position as before our research (we won't use the
 	// polled services, so pointer should not move).
 
-	if (opt->req.max > (guint)g_tree_nnodes(polled)) {
+	if (opt->max > (guint)g_tree_nnodes(polled)) {
 		GRID_DEBUG("Shorten ratio bypass");
 		_search_servers(it, opt, stgclass, polled, FALSE);
 	}
 
 	GSList *fb_cur = fallbacks;
-	while (opt->req.max > (guint)g_tree_nnodes(polled) && fb_cur) {
+	while (opt->max > (guint)g_tree_nnodes(polled) && fb_cur) {
 		if (fb_cur->data) {
 			GRID_DEBUG("Fallback to stgclass %s", (char *)fb_cur->data);
 			_search_servers(it, opt, fb_cur->data, polled, FALSE);
@@ -1090,47 +1022,45 @@ _next_set(struct grid_lb_iterator_s *it, struct lb_next_opt_s *opt,
 		fb_cur = fb_cur->next;
 	}
 
-	if (opt->req.max > (guint)g_tree_nnodes(polled)
-			&& opt->req.weak_distance && opt->req.distance > 0) {
-		opt->req.distance--;
-		GRID_DEBUG("Reducing distance requirement to %u", opt->req.distance);
+	if (opt->max > (guint)g_tree_nnodes(polled)
+			&& opt->weak_distance && opt->distance > 0) {
+		opt->distance--;
+		GRID_DEBUG("Reducing distance requirement to %u", opt->distance);
 		return _next_set(it, opt, stgclass, polled, fallbacks);
 	}
 }
 
-gboolean
-grid_lb_iterator_next_set(struct grid_lb_iterator_s *iter,
-		struct service_info_s ***result, struct lb_next_opt_s *opt,
+static gboolean
+_next_set_FILTER_ONLY(struct grid_lb_iterator_s *iter,
+		struct service_info_s ***result, struct lb_next_opt_ext_s *opt,
 		GError **err)
 {
 	// Sanity checks
-	if (!iter || !iter->lb || !result || !opt || !opt->req.max) {
+	if (!iter || !iter->lb || !result || !opt || !opt->max) {
 		if (err && !*err)
 			*err = NEWERROR(CODE_BAD_REQUEST, "invalid LB parameters");
 		return FALSE;
 	}
-	if (!opt->req.duplicates && opt->req.max > grid_lb_count_all(iter->lb)) {
+	if (!opt->duplicates && opt->max > grid_lb_count_all(iter->lb)) {
 		if (err && !*err)
 			*err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
 					"asked for %u services but "
 					"there is only %"G_GSIZE_FORMAT" in the pool",
-					opt->req.max, grid_lb_count_all(iter->lb));
+					opt->max, grid_lb_count_all(iter->lb));
 		return FALSE;
 	}
-	if (iter->lb->use_hook)
-		iter->lb->use_hook();
 
 	// Manage the duplication cases with a well chosen set
 	GTree *polled = NULL;
-	if (!opt->req.duplicates)
+	if (!opt->duplicates)
 		polled = g_tree_new_full(cmp_addr, NULL, NULL, NULL);
 	else
 		polled = g_tree_new_full(cmp_ptr, NULL, NULL, NULL);
 
-	const gchar *stgclass_name = storage_class_get_name(opt->req.stgclass);
+	const gchar *stgclass_name = storage_class_get_name(opt->stgclass);
 	GSList *fallbacks = NULL;
-	if (!opt->req.strict_stgclass)
-		fallbacks = (GSList *)storage_class_get_fallbacks(opt->req.stgclass);
+	if (!opt->strict_stgclass)
+		fallbacks = (GSList *)storage_class_get_fallbacks(opt->stgclass);
 
 	// In a critical section to prevent several threads to iterate with
 	// the sameiterator and then skip services...
@@ -1139,12 +1069,12 @@ grid_lb_iterator_next_set(struct grid_lb_iterator_s *iter,
 	grid_lb_unlock(iter->lb);
 
 	// Not enough servers found, fail
-	if (opt->req.max > (guint)g_tree_nnodes(polled)) {
+	if (opt->max > (guint)g_tree_nnodes(polled)) {
 		if (err && !*err)
 			*err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE,
 					"asked for %u services "
 					"but found only %u matching the criteria",
-					opt->req.max, (guint)g_tree_nnodes(polled));
+					opt->max, (guint)g_tree_nnodes(polled));
 		g_tree_foreach(polled, run_clean, NULL);
 		g_tree_destroy(polled);
 		return FALSE;
@@ -1156,14 +1086,14 @@ grid_lb_iterator_next_set(struct grid_lb_iterator_s *iter,
 }
 
 static gboolean
-_ext_opt_filter(struct service_info_s *si, struct lb_next_opt_ext_s *opt_ext)
+_ext_opt_filter(struct service_info_s *si, struct lb_next_opt_ext_s *opt)
 {
 	GSList *l;
 	struct service_info_s *si0;
-	EXTRA_ASSERT(opt_ext != NULL);
+	EXTRA_ASSERT(opt != NULL);
 
 	// Check if the service is not forbidden
-	for (l = opt_ext->srv_forbidden; l; l=l->next) {
+	for (l = opt->srv_forbidden; l; l=l->next) {
 		if (!(si0 = l->data))
 			continue;
 		if (addr_info_equal(&si->addr, &si0->addr))
@@ -1171,8 +1101,8 @@ _ext_opt_filter(struct service_info_s *si, struct lb_next_opt_ext_s *opt_ext)
 	}
 
 	// Check if the service has already be choosen
-	if (!opt_ext->req.duplicates) {
-		for (l = opt_ext->srv_inplace; l; l=l->next) {
+	if (!opt->duplicates) {
+		for (l = opt->srv_inplace; l; l=l->next) {
 			if (!(si0 = l->data))
 				continue;
 			if (addr_info_equal(&si->addr, &si0->addr))
@@ -1181,31 +1111,32 @@ _ext_opt_filter(struct service_info_s *si, struct lb_next_opt_ext_s *opt_ext)
 	}
 
 	// Check if the distance fits already chosen services
-	if (opt_ext->req.distance > 0) {
-		for (l = opt_ext->srv_inplace; l; l=l->next) {
+	if (opt->distance > 0) {
+		for (l = opt->srv_inplace; l; l=l->next) {
 			if (!(si0 = l->data))
 				continue;
 			guint d = distance_between_services(si, si0);
-			if (opt_ext->req.distance > d)
+			if (opt->distance > d)
 				return FALSE;
 		}
 	}
 
 	// Now the custom filter, if any
-	return _filter_matches(&(opt_ext->filter), si);
+	return _filter_matches(&(opt->filter), si);
 }
 
 gboolean
 grid_lb_iterator_next_set2(struct grid_lb_iterator_s *iter,
-		struct service_info_s ***result, struct lb_next_opt_ext_s *opt_ext,
+		struct service_info_s ***result, struct lb_next_opt_ext_s *opt0,
 		GError **err)
 {
-	struct lb_next_opt_s opt = {{0}};
-	memcpy(&(opt.req), &(opt_ext->req), sizeof(struct lb_next_opt_simple_s));
+	struct lb_next_opt_ext_s opt = *opt0;
 
+	/* wrap all the specific filters got from the caller under a single
+	 * filter hook that performs all the checks. */
 	opt.filter.hook = (service_filter) _ext_opt_filter;
-	opt.filter.data = opt_ext;
-	return grid_lb_iterator_next_set(iter, result, &opt, err);
+	opt.filter.data = opt0;
+	return _next_set_FILTER_ONLY(iter, result, &opt, err);
 }
 
 GString *
@@ -1293,7 +1224,10 @@ _ensure(struct grid_lbpool_s *glp, const gchar *srvtype,
 	}
 
 	if (!(iterator = g_tree_lookup(glp->iterators, srvtype))) {
-		iterator = grid_lb_iterator_weighted_round_robin(lb);
+		iterator = SLICE_NEW0(struct grid_lb_iterator_s);
+		iterator->lb = lb;
+		iterator->version = lb->version;
+		iterator->type = LBIT_WRR;
 		g_tree_insert(glp->iterators, g_strdup(srvtype), iterator);
 	}
 
@@ -1356,19 +1290,6 @@ grid_lbpool_reconfigure(struct grid_lbpool_s *glp,
 	}
 }
 
-struct grid_lb_s *
-grid_lbpool_get_lb (struct grid_lbpool_s *glp, const gchar *srvtype)
-{
-	EXTRA_ASSERT (glp != NULL);
-	EXTRA_ASSERT (srvtype != NULL);
-
-	g_rw_lock_reader_lock(&(glp->rwlock));
-	struct grid_lb_s *lb = g_tree_lookup(glp->pools, srvtype);
-	g_rw_lock_reader_unlock(&(glp->rwlock));
-
-	return lb;
-}
-
 struct grid_lb_iterator_s *
 grid_lbpool_ensure_iterator (struct grid_lbpool_s *glp, const gchar *srvtype)
 {
@@ -1383,7 +1304,7 @@ grid_lbpool_ensure_iterator (struct grid_lbpool_s *glp, const gchar *srvtype)
 	return iterator;
 }
 
-struct grid_lb_s *
+static struct grid_lb_s *
 grid_lbpool_ensure_lb (struct grid_lbpool_s *glp, const gchar *srvtype)
 {
 	struct grid_lb_s *lb =  NULL;
@@ -1393,6 +1314,19 @@ grid_lbpool_ensure_lb (struct grid_lbpool_s *glp, const gchar *srvtype)
 	g_rw_lock_writer_lock(&(glp->rwlock));
 	_ensure (glp, srvtype, &lb, NULL);
 	g_rw_lock_writer_unlock(&(glp->rwlock));
+
+	return lb;
+}
+
+static struct grid_lb_s *
+grid_lbpool_get_lb (struct grid_lbpool_s *glp, const gchar *srvtype)
+{
+	EXTRA_ASSERT (glp != NULL);
+	EXTRA_ASSERT (srvtype != NULL);
+
+	g_rw_lock_reader_lock(&(glp->rwlock));
+	struct grid_lb_s *lb = g_tree_lookup(glp->pools, srvtype);
+	g_rw_lock_reader_unlock(&(glp->rwlock));
 
 	return lb;
 }
@@ -1438,13 +1372,6 @@ grid_lbpool_get_iterator(struct grid_lbpool_s *glp, const gchar *srvtype)
 	return iter;
 }
 
-const gchar*
-grid_lbpool_namespace(struct grid_lbpool_s *glp)
-{
-	EXTRA_ASSERT(glp != NULL);
-	return glp->ns;
-}
-
 static struct service_info_s*
 _grid_lbpool_get_service_untyped(struct grid_lbpool_s *glp,
 		const gchar *url)
@@ -1478,47 +1405,6 @@ grid_lbpool_get_service_from_url(struct grid_lbpool_s *glp,
 		return _grid_lbpool_get_service_untyped(glp, url);
 
 	return grid_lb_get_service_from_url(grid_lbpool_get_lb(glp, srvtype), url);
-}
-
-GError *
-grid_lb_reload_json_object(struct grid_lb_s *lb, struct json_object *obj)
-{
-	if (!lb)
-		return NEWERROR(CODE_BAD_REQUEST, "Invalid parameter");
-	if (!json_object_is_type(obj, json_type_array))
-		return NEWERROR(CODE_BAD_REQUEST, "JSON object is not an array");
-
-	int i = json_object_array_length(obj);
-	gboolean provide(struct service_info_s **p_si) {
-		*p_si = NULL;
-		while (i > 0) {
-			--i;
-			struct json_object *item = json_object_array_get_idx(obj, i);
-			if (!item || !json_object_is_type(item, json_type_object))
-				return TRUE;
-			*p_si = NULL;
-			GError *e = service_info_load_json_object(item, p_si, TRUE);
-			if (!e)
-				return FALSE;
-			g_clear_error(&e);
-		}
-		*p_si = NULL;
-		return TRUE;
-	}
-	grid_lb_reload(lb, provide);
-	return NULL;
-}
-
-GError *
-grid_lb_reload_json(struct grid_lb_s *lb, const gchar *encoded)
-{
-	struct json_tokener *tok = json_tokener_new();
-	struct json_object *obj = json_tokener_parse_ex(tok,
-			encoded, strlen(encoded));
-	json_tokener_free(tok);
-	GError *err = grid_lb_reload_json_object(lb, obj);
-	json_object_put(obj);
-	return err;
 }
 
 void
