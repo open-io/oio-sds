@@ -35,12 +35,12 @@ License along with this library.
 #define NAME_MSGNAME_SQLX_EXITELECTION       "DB_LEAVE"
 
 #define NAME_MSGNAME_SQLX_USE                "DB_USE"
-#define NAME_MSGNAME_SQLX_GETVERS            "DB_GETVERS"
+#define NAME_MSGNAME_SQLX_GETVERS            "DB_VERS"
+#define NAME_MSGNAME_SQLX_REPLICATE          "DB_REPLI"
 #define NAME_MSGNAME_SQLX_PIPETO             "DB_PIPETO"
 #define NAME_MSGNAME_SQLX_PIPEFROM           "DB_PIPEFROM"
 #define NAME_MSGNAME_SQLX_DUMP               "DB_DUMP"
 #define NAME_MSGNAME_SQLX_RESTORE            "DB_RESTORE"
-#define NAME_MSGNAME_SQLX_REPLICATE          "DB_REPLICATE"
 #define NAME_MSGNAME_SQLX_RESYNC             "DB_RESYNC"
 
 /* repository-wide */
