@@ -762,6 +762,12 @@ retry:
 				_get_meta2_realtype (args, realtype, sizeof(realtype), "");
 				GError *e = meta1v2_remote_link_service (m1, args->url,
 						realtype, FALSE, TRUE, &urlv);
+				if (!e && urlv && *urlv) {
+					/* Explicitely feeding the meta1 avoids a subsequent
+					   call to meta1 to locate the meta2 */
+					hc_resolver_tell (resolver, args->url, realtype,
+							(const char * const *) urlv);
+				}
 				if (urlv) g_strfreev (urlv);
 				return e;
 			}

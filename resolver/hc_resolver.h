@@ -27,6 +27,7 @@ enum hc_resolver_flags_e
 	HC_RESOLVER_NOCACHE = 0x01,
 	HC_RESOLVER_NOATIME = 0x02,
 	HC_RESOLVER_NOMAX =   0x04,
+	HC_RESOLVER_DECACHEM0 = 0x08,
 };
 
 /** timeout (in seconds) for requests to meta0 services.
@@ -81,6 +82,9 @@ void hc_resolver_set_now(struct hc_resolver_s *r, time_t now);
 
 /* Applies time-based cache policies. */
 guint hc_resolver_expire(struct hc_resolver_s *r);
+
+void hc_resolver_tell (struct hc_resolver_s *r, struct oio_url_s *u,
+		const char *srvtype, const char * const *urlv);
 
 /* Applies cardinality-based cache policies. */
 guint hc_resolver_purge(struct hc_resolver_s *r);
