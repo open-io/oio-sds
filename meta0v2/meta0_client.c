@@ -51,11 +51,9 @@ url_check(const gchar *u)
 static gboolean
 urlv_check(gchar **urlv)
 {
-	gchar **u;
-
 	if (!urlv)
 		return FALSE;
-	for (u=urlv; *u ;u++) {
+	for (gchar **u = urlv; *u ;u++) {
 		if (!url_check(*u)) {
 			GRID_WARN("Bad address [%s]", *u);
 			return FALSE;
@@ -79,14 +77,10 @@ dump_and_clean_list(GSList *list)
 {
 	GRID_INFO("(Start of META0 content)");
 	if (list) {
-		guint i;
-		GPtrArray *array;
-		gchar **v;
-
-		array = meta0_utils_list_to_array(list);
+		GPtrArray *array = meta0_utils_list_to_array(list);
 		meta0_utils_list_clean(list);
-
-		for (i=0; i<array->len ;i++) {
+		for (guint i = 0; i<array->len ;i++) {
+			gchar **v;
 			if (NULL != (v = array->pdata[i])) {
 				guint16 p = i;
 				gchar *joined = g_strjoinv("|", v);
@@ -119,10 +113,11 @@ meta0_init_reload(void)
 		if (err != NULL) {
 			GRID_WARN("META0 [%s] refresh error (%d) : %s", url, err->code, err->message);
 			g_clear_error(&err);
+			grid_main_set_status(1);
 		} else {
 			GRID_WARN("META0 [%s] refresh", url);
 		}
-		exclude=g_slist_prepend(exclude,m0addr);
+		exclude = g_slist_prepend(exclude,m0addr);
 		m0addr = _getMeta0addr(&m0_lst,exclude);
 	}
 
@@ -147,6 +142,7 @@ meta0_init_reset(void)
 		if (err != NULL) {
 			GRID_WARN("META0 [%s] reset error (%d) : %s", url, err->code, err->message);
 			g_clear_error(&err);
+			grid_main_set_status (1);
 		} else {
 			GRID_WARN("META0 [%s] reset", url);
 		}
@@ -188,10 +184,12 @@ meta0_init_list(void)
 			g_clear_error(&err);
 		} else {
 			dump_and_clean_list(list);
-			break;
+			goto exit;
 		}
 	}
 
+	grid_main_set_status (1);
+exit:
 	g_slist_free_full(m0_lst, (GDestroyNotify)service_info_clean);
 }
 
@@ -212,20 +210,22 @@ meta0_init_get(void)
 		GSList *list = NULL;
 		err = meta0_remote_get_meta1_one(url, prefix, &list);
 		if (err != NULL) {
+			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
-				exclude=g_slist_prepend(exclude,m0addr);
+				exclude = g_slist_prepend(exclude,m0addr);
 				m0addr = _getMeta0addr(&m0_lst,exclude);
 			} else {
-				GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
-				m0addr=NULL;
+				m0addr = NULL;
 			}
 			g_clear_error(&err);
 		} else {
 			dump_and_clean_list(list);
-			break;
+			goto exit;
 		}
 	}
 
+	grid_main_set_status(1);
+exit:
 	g_slist_free_full(m0_lst, (GDestroyNotify)service_info_clean);
 }
 
@@ -245,20 +245,22 @@ meta0_init_assign(void)
 		grid_addrinfo_to_string(m0addr, url , sizeof(url));
 		err = meta0_remote_assign(url, flag_nocheck);
 		if (err != NULL) {
+			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
-				exclude=g_slist_prepend(exclude,m0addr);
+				exclude = g_slist_prepend(exclude,m0addr);
 				m0addr = _getMeta0addr(&m0_lst,exclude);
 			} else {
-				GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
-				m0addr=NULL;
+				m0addr = NULL;
 			}
 			g_clear_error(&err);
 		} else {
 			GRID_INFO("Assign prefixes terminated!");
-			break;
+			goto exit;
 		}
 	}
 
+	grid_main_set_status (1);
+exit:
 	g_slist_free_full(m0_lst, (GDestroyNotify)service_info_clean);
 }
 
@@ -278,20 +280,22 @@ meta0_init_disable_meta1(void)
 		grid_addrinfo_to_string(m0addr, url , sizeof(url));
 		err = meta0_remote_disable_meta1(url, urls, flag_nocheck);
 		if (err != NULL) {
+			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
-				exclude=g_slist_prepend(exclude,m0addr);
+				exclude = g_slist_prepend(exclude,m0addr);
 				m0addr = _getMeta0addr(&m0_lst,exclude);
 			} else {
-				GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
-				m0addr=NULL;
+				m0addr = NULL;
 			}
 			g_clear_error(&err);
 		} else {
 			GRID_INFO("META1 services disabled!");
-			break;
+			goto exit;
 		}
 	}
 
+	grid_main_set_status(1);
+exit:
 	g_slist_free_full(m0_lst, (GDestroyNotify)service_info_clean);
 }
 
@@ -313,27 +317,28 @@ meta0_init_get_meta1_info(void)
 		err = meta0_remote_get_meta1_info(url, &result);
 
 		if (err != NULL) {
+			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
 				exclude = g_slist_prepend(exclude, m0addr);
 				m0addr = _getMeta0addr(&m0_lst, exclude);
 			} else {
-				m0addr=NULL;
+				m0addr = NULL;
 			}
 			g_clear_error(&err);
 		} else {
 			if (result != NULL) {
-				gchar **u;
-				for(u=result; *u ;u++) {
+				for (gchar **u = result; *u ;u++)
 					g_print("%s\n",*u);
-				}
 				g_strfreev(result);
 			} else {
 				GRID_INFO("No meta1 referenced");
 			}
-			break;
+			goto exit;
 		}
 	}
 
+	grid_main_set_status(1);
+exit:
 	g_slist_free_full(m0_lst, (GDestroyNotify)service_info_clean);
 }
 
@@ -353,20 +358,22 @@ meta0_init_destroy_meta1ref(void)
 		grid_addrinfo_to_string(m0addr, url , sizeof(url));
 		err = meta0_remote_destroy_meta1ref(url, *urls);
 		if (err != NULL) {
+			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
-				exclude=g_slist_prepend(exclude,m0addr);
+				exclude = g_slist_prepend(exclude,m0addr);
 				m0addr = _getMeta0addr(&m0_lst,exclude);
 			} else {
-				GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
-				m0addr=NULL;
+				m0addr = NULL;
 			}
 			g_clear_error(&err);
 		} else {
 			GRID_INFO("META1 reference removed!");
-			break;
+			goto exit;
 		}
 	}
 
+	grid_main_set_status(1);
+exit:
 	g_slist_free_full(m0_lst, (GDestroyNotify)service_info_clean);
 }
 
@@ -386,20 +393,21 @@ meta0_init_destroy_zk_node(void)
 		grid_addrinfo_to_string(m0addr, url , sizeof(url));
 		err = meta0_remote_destroy_meta0zknode(url, *urls);
 		if (err != NULL) {
+			GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
 			if (CODE_IS_NETWORK_ERROR(err->code)) {
-				exclude=g_slist_prepend(exclude,m0addr);
+				exclude = g_slist_prepend(exclude,m0addr);
 				m0addr = _getMeta0addr(&m0_lst,exclude);
 			} else {
-				GRID_WARN("META0 request error (%d) : %s", err->code, err->message);
-				m0addr=NULL;
+				m0addr = NULL;
 			}
 			g_clear_error(&err);
 		} else {
 			GRID_INFO("META0 Zookeeper node removed!");
-			break;
+			return;
 		}
 	}
 
+	grid_main_set_status(1);
 }
 
 static void
@@ -588,6 +596,6 @@ static struct grid_main_callbacks meta0_callbacks =
 int
 main(int argc, char ** argv)
 {
-	return grid_main(argc, argv, &meta0_callbacks);
+	return grid_main_cli (argc, argv, &meta0_callbacks);
 }
 
