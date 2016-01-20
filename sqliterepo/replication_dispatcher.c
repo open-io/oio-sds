@@ -1327,7 +1327,7 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 	flush = metautils_message_extract_flag(ctx->request,
 			NAME_MSGKEY_FLUSH, FALSE);
 
-	ctx->subject("%s.%s|%s", base, type, local?"LOC":"REP");
+	ctx->subject("%s.%s%s", base, type, local?"|LOCAL":"");
 
 	oio_str_replace(&n->ns, ns);
 	oio_str_replace(&n->base, base);
@@ -2439,7 +2439,6 @@ sqlx_repli_gridd_get_requests(void)
 		{NAME_MSGNAME_SQLX_DESCR,        (hook) sqlx_dispatch_DESCR,     NULL},
 		{NAME_MSGNAME_SQLX_ISMASTER,     (hook) sqlx_dispatch_ISMASTER,  NULL},
 		{NAME_MSGNAME_SQLX_USE,          (hook) sqlx_dispatch_USE,       NULL},
-		{NAME_MSGNAME_SQLX_ELECTION,     (hook) sqlx_dispatch_USE,       NULL},
 		{NAME_MSGNAME_SQLX_EXITELECTION, (hook) sqlx_dispatch_EXITELECTION, NULL},
 		{NAME_MSGNAME_SQLX_PIPETO,       (hook) sqlx_dispatch_PIPETO,    NULL},
 		{NAME_MSGNAME_SQLX_PIPEFROM,     (hook) sqlx_dispatch_PIPEFROM,  NULL},

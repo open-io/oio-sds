@@ -256,7 +256,7 @@ action_dir_srv_renew (struct req_args_s *args, struct json_object *jargs)
 
 	gchar **urlv = NULL;
 	GError *hook (const char * m1) {
-		return meta1v2_remote_poll_reference_service (m1, args->url, type, dryrun, autocreate, &urlv);
+		return meta1v2_remote_renew_reference_service (m1, args->url, type, dryrun, autocreate, &urlv);
 	}
 
 	GError *err = _m1_locate_and_action (args->url, hook);

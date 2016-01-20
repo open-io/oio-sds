@@ -91,7 +91,7 @@ meta1_dispatch_v2_USERINFO(struct gridd_reply_ctx_s *reply,
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
 	reply->subject("%s|%s", oio_url_get(url, OIOURL_WHOLE), oio_url_get(url, OIOURL_HEXID));
 	(void) ignored;
-	
+
 	if (NULL != (err = meta1_backend_user_info(m1, url, &info)))
 		reply->send_error(0, err);
 	else {
@@ -132,7 +132,7 @@ meta1_dispatch_v2_SRV_LINK(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-meta1_dispatch_v2_SRV_POLL(struct gridd_reply_ctx_s *reply,
+meta1_dispatch_v2_SRV_RENEW(struct gridd_reply_ctx_s *reply,
 		struct meta1_backend_s *m1, gpointer ignored)
 {
 	struct oio_url_s *url = metautils_message_extract_url (reply->request);
@@ -253,7 +253,7 @@ meta1_dispatch_v2_SRV_LIST(struct gridd_reply_ctx_s *reply,
 	return TRUE;
 }
 
-static gboolean 
+static gboolean
 meta1_dispatch_v2_SRV_ALLONM1(struct gridd_reply_ctx_s *reply,
         struct meta1_backend_s *m1, gpointer ignored)
 {
@@ -340,7 +340,7 @@ meta1_dispatch_v2_PROPDEL(struct gridd_reply_ctx_s *reply,
 		reply->send_error(CODE_BAD_REQUEST, err);
 	else if (NULL != (err = meta1_backend_del_container_properties(m1, url, strv)))
 		reply->send_error(0, err);
-	else 
+	else
 		reply->send_reply(CODE_FINAL_OK, "OK");
 
 	if (strv) g_strfreev (strv);
@@ -411,8 +411,8 @@ meta1_gridd_get_requests(void)
 		{NAME_MSGNAME_M1V2_SRVLIST,     (hook) meta1_dispatch_v2_SRV_LIST,    NULL},
 		{NAME_MSGNAME_M1V2_SRVLINK,     (hook) meta1_dispatch_v2_SRV_LINK,    NULL},
 		{NAME_MSGNAME_M1V2_SRVUNLINK,   (hook) meta1_dispatch_v2_SRV_UNLINK,  NULL},
-		{NAME_MSGNAME_M1V2_SRVSET,      (hook) meta1_dispatch_v2_SRV_FORCE,   NULL},
-		{NAME_MSGNAME_M1V2_SRVPOLL,     (hook) meta1_dispatch_v2_SRV_POLL,    NULL},
+		{NAME_MSGNAME_M1V2_SRVFORCE,    (hook) meta1_dispatch_v2_SRV_FORCE,   NULL},
+		{NAME_MSGNAME_M1V2_SRVRENEW,    (hook) meta1_dispatch_v2_SRV_RENEW,   NULL},
 		{NAME_MSGNAME_M1V2_SRVCONFIG,   (hook) meta1_dispatch_v2_SRV_CONFIG,  NULL},
 
 		{NAME_MSGNAME_M1V2_PROPGET,     (hook) meta1_dispatch_v2_PROPGET, NULL},
