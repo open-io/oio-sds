@@ -445,8 +445,6 @@ grid_main_init(int argc, char **args)
 	if (*syslog_id) {
 		GRID_DEBUG("Opening syslog with id [%s]", syslog_id);
 		logger_syslog_open();
-	} else {
-		g_strlcpy(syslog_id, "-", sizeof(syslog_id));
 	}
 
 	flag_running = TRUE;
