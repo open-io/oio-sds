@@ -87,10 +87,10 @@ meta0_action(void)
 		} else {
 			GRID_INFO("META0 filled!");
 			return;
-		}	
+		}
 	}
 
-	grid_main_set_status(0);
+	grid_main_set_status(1);
 }
 
 static const char *
@@ -151,7 +151,7 @@ meta0_configure(int argc, char **argv)
 	if (argc < 2) {
 		GRID_NOTICE("META1 located from the conscience");
 	} else {
-		// meta1 addr 
+		// meta1 addr
 		if (!urlv_check(argv+1)) {
 			GRID_WARN("Invalid META1 address");
 			return FALSE;
@@ -184,6 +184,6 @@ static struct grid_main_callbacks meta0_callbacks =
 int
 main(int argc, char ** argv)
 {
-	return grid_main(argc, argv, &meta0_callbacks);
+	return grid_main_cli (argc, argv, &meta0_callbacks);
 }
 
