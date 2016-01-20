@@ -1327,7 +1327,7 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 	flush = metautils_message_extract_flag(ctx->request,
 			NAME_MSGKEY_FLUSH, FALSE);
 
-	ctx->subject("%s.%s|%s", base, type, local?"LOC":"REP");
+	ctx->subject("%s.%s%s", base, type, local?"|LOCAL":"");
 
 	oio_str_replace(&n->ns, ns);
 	oio_str_replace(&n->base, base);
