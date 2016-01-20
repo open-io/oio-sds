@@ -772,12 +772,14 @@ def generate (ns, ip, options={}):
 
 	# Test agent configuration
 	listing = {}
+	listing["ns"] = ns
 	listing["namespace"] = ns
 	listing["chunk_size"] = env['CHUNK_SIZE']
         listing["stgpol"] = stgpol
 	listing["account"] = 'test_account'
 	listing["account_addr"] = [str(ip) + ":" + str(port_account)]
 	listing["proxyd_uri"] = "http://" + str(ip) + ":" + str(port_proxy)
+	listing["proxyd_url"] = listing["proxyd_uri"]
 	listing["meta0"] = [str(ip) + ':' + str(m[3]) for m in services if m[0] == 'meta0']
 	listing["meta1"] = [str(ip) + ':' + str(m[3]) for m in services if m[0] == 'meta1']
 	listing["meta2"] = [str(ip) + ':' + str(m[3]) for m in services if m[0] == 'meta2']
