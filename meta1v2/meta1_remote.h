@@ -45,7 +45,7 @@ GError * meta1v2_remote_unlink_service(const char *m1, struct oio_url_s *url,
 GError * meta1v2_remote_unlink_one_service(const char *m1, struct oio_url_s *url,
 		const char *srvtype, gint64 seqid);
 
-GError * meta1v2_remote_poll_reference_service(const char *m1, struct oio_url_s *url,
+GError * meta1v2_remote_renew_reference_service(const char *m1, struct oio_url_s *url,
 		const char *srvtype, gboolean dryrun, gboolean ac, gchar ***out);
 
 GError * meta1v2_remote_force_reference_service(const char *m1, struct oio_url_s *url,

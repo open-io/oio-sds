@@ -177,13 +177,13 @@ meta1v2_remote_unlink_one_service(const char *to, struct oio_url_s *url,
 }
 
 GError *
-meta1v2_remote_poll_reference_service(const char *to, struct oio_url_s *url,
+meta1v2_remote_renew_reference_service(const char *to, struct oio_url_s *url,
 		const char *srvtype, gboolean dryrun, gboolean autocreate,
 		gchar ***result)
 {
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(srvtype != NULL);
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVPOLL);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVRENEW);
 	metautils_message_add_url_no_type (req, url);
 	metautils_message_add_field_str (req, NAME_MSGKEY_TYPENAME, srvtype);
 	if (dryrun)
@@ -199,7 +199,7 @@ meta1v2_remote_force_reference_service(const char *to, struct oio_url_s *url,
 {
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(m1url != NULL);
-	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVSET);
+	MESSAGE req = metautils_message_create_named(NAME_MSGNAME_M1V2_SRVFORCE);
 	metautils_message_add_url_no_type (req, url);
 	metautils_message_add_body_unref (req, metautils_gba_from_string(m1url));
 	if (autocreate)
