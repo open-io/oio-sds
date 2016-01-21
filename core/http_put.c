@@ -242,6 +242,10 @@ http_put_destroy(struct http_put_s *p)
 		g_slist_free_full(p->dests, http_put_dest_destroy);
 	if (p->mhandle)
 		curl_multi_cleanup(p->mhandle);
+	if (p->buffer_tail) {
+		g_queue_free_full(p->buffer_tail, (GDestroyNotify)g_bytes_unref);
+		p->buffer_tail = NULL;
+	}
 	g_free(p);
 }
 
