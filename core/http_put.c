@@ -242,6 +242,10 @@ http_put_destroy(struct http_put_s *p)
 		g_slist_free_full(p->dests, http_put_dest_destroy);
 	if (p->mhandle)
 		curl_multi_cleanup(p->mhandle);
+	if (p->buffer_tail) {
+		g_queue_free_full(p->buffer_tail, (GDestroyNotify)g_bytes_unref);
+		p->buffer_tail = NULL;
+	}
 	g_free(p);
 }
 
@@ -263,7 +267,7 @@ http_put_feed (struct http_put_s *p, GBytes *b)
 	GRID_TRACE("%s (%p) <- %"G_GSIZE_FORMAT, __FUNCTION__, p, len);
 	g_assert (len <= 0 || p->remaining_length < 0 || len <= p->remaining_length);
 
-	g_queue_push_tail (p->buffer_tail, g_bytes_ref(b));
+	g_queue_push_tail (p->buffer_tail, b);
 
 	if (!len) { /* marker for end of stream */
 		p->remaining_length = 0;

@@ -440,6 +440,7 @@ oio_proxy_call_content_prepare (CURL *h, struct oio_url_s *u,
 		}
 	}
 	g_string_free (http_url, TRUE);
+	g_string_free(i.body, TRUE);
 	if (o.headers)
 		g_strfreev (o.headers);
 	return err;
