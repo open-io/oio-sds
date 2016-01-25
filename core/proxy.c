@@ -353,6 +353,9 @@ static GError *
 _proxy_call (CURL *h, const char *method, const char *url,
 		struct http_ctx_s *in, struct http_ctx_s *out)
 {
+	if (!oio_ext_get_reqid ())
+		oio_ext_set_random_reqid();
+
 	gint64 t = g_get_monotonic_time ();
 	GError *err = _proxy_call_notime (h, method, url, in, out);
 	t = g_get_monotonic_time () - t;
