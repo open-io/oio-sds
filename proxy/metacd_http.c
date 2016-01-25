@@ -639,7 +639,7 @@ configure_request_handlers (void)
 	SET("/$NS/lb/choose/#GET", action_lb_choose);
 
 	// Local services
-	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/local/list/#GET", action_local_list);
+	SET ("/$NS/local/list/#GET", action_local_list);
 
 	// Conscience
 	SET("/$NS/conscience/info/#GET", action_conscience_info);
