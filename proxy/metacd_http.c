@@ -32,13 +32,15 @@ static GThread *admin_thread = NULL;
 static GThread *upstream_thread = NULL;
 static GThread *downstream_thread = NULL;
 
+time_t nsinfo_refresh_delay = 5;
+time_t cs_expire_local_services = 5;
+
 // Configuration
 
 static GSList *config_urlv = NULL;
 
 static gint lb_downstream_delay = PROXYD_DEFAULT_PERIOD_DOWNSTREAM;
 static guint lb_upstream_delay = PROXYD_DEFAULT_PERIOD_UPSTREAM;
-static guint nsinfo_refresh_delay = 5;
 static guint dir_low_ttl = PROXYD_DEFAULT_TTL_SERVICES;
 static guint dir_low_max = PROXYD_DEFAULT_MAX_SERVICES;
 static guint dir_high_ttl = PROXYD_DEFAULT_TTL_CSM0;
@@ -55,6 +57,7 @@ gchar *csurl = NULL;
 
 GMutex push_mutex = {0};
 struct lru_tree_s *push_queue = NULL;
+struct lru_tree_s *srv_registered = NULL;
 
 GMutex nsinfo_mutex = {0};
 struct namespace_info_s nsinfo = {{0}};
@@ -395,7 +398,24 @@ _task_reload_srvtypes (gpointer p)
 		g_strfreev (newset);
 }
 
-// Poll some elements and forward them
+static void
+_task_expire_local (gpointer p)
+{
+	gint pivot = (oio_ext_real_time () / G_TIME_SPAN_SECOND) - cs_expire_local_services;
+	(void) p;
+	PUSH_DO(do {
+		gchar *k = NULL;
+		struct service_info_s *si = NULL;
+		while (lru_tree_get_first (srv_registered, (gpointer*)&k, (gpointer)&si)) {
+			if (si->score.timestamp > pivot)
+				break;
+			lru_tree_steal_first (srv_registered, NULL, NULL);
+			g_free (k);
+			service_info_clean (si);
+		}
+	} while (0));
+}
+
 static void
 _task_push (gpointer p)
 {
@@ -490,12 +510,12 @@ grid_main_get_options (void)
 		{"LbRefresh", OT_INT, {.i = &lb_downstream_delay},
 			"Interval between load-balancer service refreshes (seconds)\n"
 			"\t\t-1 to disable, 0 to never refresh"},
-		{"NsinfoRefresh", OT_UINT, {.u = &nsinfo_refresh_delay},
+		{"NsinfoRefresh", OT_TIME, {.t = &nsinfo_refresh_delay},
 			"Interval between NS configuration's refreshes (seconds)"},
 
 		{"SrvPush", OT_INT, {.u = &lb_upstream_delay},
 			"Interval between load-balancer service refreshes (seconds)\n"
-			"\t\t-1 to disable, 0 to never refresh"},
+			"\t\tMust be >= 1"},
 
 		{"Cache", OT_BOOL, {.b = &flag_cache_enabled},
 			"Disable caching for the conscience: services are pushed\n"
@@ -571,6 +591,10 @@ grid_main_specific_fini (void)
 		lru_tree_destroy (push_queue);
 		push_queue = NULL;
 	}
+	if (srv_registered) {
+		lru_tree_destroy (srv_registered);
+		srv_registered = NULL;
+	}
 	namespace_info_clear (&nsinfo);
 	oio_str_clean (&nsname);
 	g_mutex_clear(&nsinfo_mutex);
@@ -603,6 +627,9 @@ configure_request_handlers (void)
 
 	// Load Balancing
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/lb/choose/#GET", action_lb_choose);
+
+	// Local services
+	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/local/list/#GET", action_local_list);
 
 	// Conscience
 	path_parser_configure (path_parser, PROXYD_PREFIX "/$NS/conscience/info/#GET", action_conscience_info);
@@ -723,13 +750,18 @@ grid_main_configure (int argc, char **argv)
 	GRID_INFO ("RESOLVER limits HIGH[%u/%u] LOW[%u/%u]",
 		dir_high_max, dir_high_ttl, dir_low_max, dir_low_ttl);
 
+	srv_registered = _push_queue_create();
+
+	upstream_gtq = grid_task_queue_create ("upstream");
+
 	// Prepare a queue responsible for upstream to the conscience
-	if (lb_upstream_delay > 0) {
-		push_queue = _push_queue_create();
-		upstream_gtq = grid_task_queue_create ("upstream");
-		grid_task_queue_register(upstream_gtq, (guint) lb_upstream_delay,
-				(GDestroyNotify) _task_push, NULL, NULL);
-	}
+	push_queue = _push_queue_create();
+
+	grid_task_queue_register(upstream_gtq, (guint) lb_upstream_delay,
+			(GDestroyNotify) _task_push, NULL, NULL);
+
+	grid_task_queue_register(upstream_gtq, 1,
+			(GDestroyNotify) _task_expire_local, NULL, NULL);
 
 	// Prepare a queue responsible for the downstream from the conscience
 	downstream_gtq = grid_task_queue_create ("downstream");

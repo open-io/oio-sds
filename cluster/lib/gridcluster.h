@@ -50,18 +50,12 @@ GError * conscience_remote_get_types (const char *cs, GSList **out);
 GError * conscience_remote_push_services (const char *cs, GSList *ls);
 GError * conscience_remote_remove_services(const char *cs, const char *type, GSList *ls);
 
-GError * conscience_agent_get_namespace (const char *cs, struct namespace_info_s **out);
-GError * conscience_agent_get_services (const char *cs, const gchar *type, GSList **out);
-GError * conscience_agent_get_types (const char *cs, GSList **out);
-GError * conscience_agent_push_services (const char *cs, GSList *ls);
-GError * conscience_agent_remove_services(const char *cs, const char *type);
-
 /* Requests the the best target (conscience, agent proxy) ------------------- */
 
 GError* conscience_get_namespace (const char *ns, struct namespace_info_s **out);
 GError* conscience_get_services (const char *ns, const char *type, GSList **out);
 GError* conscience_get_types (const char *ns, GSList **out);
-GError* conscience_push_services (const char *ns, GSList *ls);
+GError* conscience_push_service (const char *ns, struct service_info_s *si);
 GError* conscience_remove_services (const char *ns, const char *type);
 
 GError* register_namespace_service (const struct service_info_s *si);

@@ -82,6 +82,10 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 extern gchar *nsname;
 extern gboolean flag_cache_enabled;
 extern gdouble m2_timeout_all;
+extern time_t nsinfo_refresh_delay;
+
+/* how long the proxy remembers the srv it registered ino the conscience */
+extern time_t cs_expire_local_services;
 
 extern struct grid_lbpool_s *lbpool;
 extern struct hc_resolver_s *resolver;
@@ -90,7 +94,10 @@ extern GMutex csurl_mutex;
 extern gchar *csurl;
 
 extern GMutex push_mutex;
+/* staging area for services being sent up. <struct service_info_s*> */
 extern struct lru_tree_s *push_queue;
+/* holder for services registered within the last 5 seconds */
+extern struct lru_tree_s *srv_registered;
 
 extern GMutex nsinfo_mutex;
 extern gchar **srvtypes;
@@ -101,6 +108,7 @@ extern struct lru_tree_s *srv_down;
 
 enum
 {
+	/* consider empty results sets as errors */
 	FLAG_NOEMPTY = 0x0001,
 };
 

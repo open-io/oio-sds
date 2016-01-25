@@ -10,7 +10,7 @@ add_library(gridcluster SHARED
 set_target_properties(gridcluster PROPERTIES SOVERSION ${ABI_VERSION})
 
 target_link_libraries(gridcluster
-		metautils
+		metautils oiosds
 		-lm ${GLIB2_LIBRARIES})
 
 add_executable (tool_sysstat tool_sysstat.c)
