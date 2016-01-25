@@ -97,13 +97,13 @@ class BaseTestCase(testtools.TestCase):
         self.assertEqual(resp.status_code / 100, 2)
         for srvtype in ('meta1', 'meta2'):
             for t in self.conf[srvtype]:
-                url = self.uri + '/v3.0/forward/' + str(t)
-                resp = self.session.post(url, params={'action': 'flush'})
+                url = self.uri + '/v3.0/forward/flush'
+                resp = self.session.post(url, params={'id': str(t)})
                 self.assertEqual(resp.status_code, 204)
         for srvtype in ('meta1', 'meta2'):
             for t in self.conf[srvtype]:
-                url = self.uri + '/v3.0/forward/' + str(t)
-                resp = self.session.post(url, params={'action': 'reload'})
+                url = self.uri + '/v3.0/forward/reload'
+                resp = self.session.post(url, params={'id': str(t)})
                 self.assertEqual(resp.status_code, 204)
 
     def _addr(self):

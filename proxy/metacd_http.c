@@ -622,7 +622,7 @@ configure_request_handlers (void)
 
 	SET("/status/#GET", action_status);
 
-	SET("/forward/$SRVID/#POST", action_forward);
+	SET("/forward/$ACTION/#POST", action_forward);
 
 	SET("/cache/status/#GET", action_cache_status);
 	SET("/cache/flush/local/#POST", action_cache_flush_local);
