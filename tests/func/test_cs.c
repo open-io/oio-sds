@@ -94,8 +94,9 @@ test_proxied_deregister (void)
 		reg.kv_tags = tags;
 		err = oio_cs_client__register_service (cs, srvtype, &reg);
 		g_assert_no_error (err);
-		void on_reg (const struct oio_cs_registration_s *preg) {
-			GRID_DEBUG("turn=%d id=%s url=%s", i, preg->id, preg->url);
+		void on_reg (const struct oio_cs_registration_s *preg, int score) {
+			GRID_DEBUG("turn=%d id=%s url=%s score=%d",
+					i, preg->id, preg->url, score);
 		}
 		err = oio_cs_client__list_services (cs, srvtype, on_reg);
 		g_assert_no_error (err);

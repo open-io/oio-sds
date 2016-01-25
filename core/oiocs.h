@@ -50,7 +50,7 @@ GError * oio_cs_client__unlock_service (struct oio_cs_client_s *self,
 
 GError * oio_cs_client__list_services (struct oio_cs_client_s *self,
 		const char *in_type,
-		void (*on_reg) (const struct oio_cs_registration_s *reg));
+		void (*on_reg) (const struct oio_cs_registration_s *reg, int score));
 
 GError * oio_cs_client__list_types (struct oio_cs_client_s *self,
 		void (*on_type) (const char *srvtype));
