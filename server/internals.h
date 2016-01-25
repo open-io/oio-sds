@@ -24,11 +24,11 @@ License along with this library.
 #include <server/network_server.h>
 
 # ifndef  OIO_STAT_PREFIX_REQ
-#  define OIO_STAT_PREFIX_REQ "req.count"
+#  define OIO_STAT_PREFIX_REQ "req.counter.hits"
 # endif
 
 # ifndef  OIO_STAT_PREFIX_TIME
-#  define OIO_STAT_PREFIX_TIME "req.time"
+#  define OIO_STAT_PREFIX_TIME "req.counter.time"
 # endif
 
 /* How long (in microseconds) a connection might stay idle between two

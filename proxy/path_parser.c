@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <string.h>
 #include <metautils/lib/metautils.h>
+#include <server/internals.h>
 #include "path_parser.h"
 
 /* Allocates a node an initaite it with the given word and variable. */
@@ -221,6 +222,34 @@ _nodev_lookup (struct trie_node_s **tab, const gchar *word, const gchar *var)
 	return NULL;
 }
 
+#define P PROXYD_PREFIX"/$NS/"
+
+static gchar *
+_stat_name (const char *prefix, const char *tail, gchar *d, gsize dlen)
+{
+	if (g_str_has_prefix(tail, P))
+		dlen = g_snprintf (d, dlen, "%s.%s", prefix, tail+sizeof(P)-1);
+	else if (g_str_has_prefix(tail, PROXYD_PREFIX))
+		dlen = g_snprintf (d, dlen, "%s.%s", prefix, tail+sizeof(PROXYD_PREFIX)-1);
+	else
+		dlen = g_snprintf (d, dlen, "%s.%s", prefix, tail);
+
+	/* replace ugly characters by '_' */
+	for (int i=strlen (prefix)+1; d[i] ;++i) {
+		if (!g_ascii_isalnum (d[i]))
+			d[i]='_';
+	}
+
+	gchar *s;
+	/* agregate subsequent '_' */
+	while (NULL != (s = g_strrstr_len(d, dlen, "__"))) {
+		for (;*s;++s)
+			*s = *(s+1);
+	}
+
+	return d;
+}
+
 struct trie_node_s **
 _trie_insert (const struct trie_node_s *parent, struct trie_node_s **tab,
 		gchar **words, const char *descr, gpointer u)
@@ -247,13 +276,11 @@ _trie_insert (const struct trie_node_s *parent, struct trie_node_s **tab,
 		n->next = _trie_insert (n, n->next, words+1, descr, u);
 	else {
 		gchar tmp[512];
-
 		n->u = u;
-
-		g_snprintf (tmp, sizeof(tmp), "req.count.%s", descr);
-		n->gq_count = g_quark_from_string (tmp);
-		g_snprintf (tmp, sizeof(tmp), "req.time.%s", descr);
-		n->gq_time = g_quark_from_string (tmp);
+		n->gq_count = g_quark_from_string (
+				_stat_name(OIO_STAT_PREFIX_REQ, descr, tmp, sizeof(tmp)));
+		n->gq_time = g_quark_from_string (
+				_stat_name(OIO_STAT_PREFIX_TIME, descr, tmp, sizeof(tmp)));
 	}
 
 	return tab;

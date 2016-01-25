@@ -239,12 +239,12 @@ network_server_init(void)
 	result->atexit_max_idle = SERVER_DEFAULT_CNX_IDLE;
 	result->atexit_max_open_persist = SERVER_DEFAULT_CNX_LIFETIME;
 
-	result->gq_gauge_threads = g_quark_from_static_string ("server.thread.gauge.active");
-	result->gq_gauge_cnx_current = g_quark_from_static_string ("server.cnx.gauge.client");
-	result->gq_gauge_cnx_max = g_quark_from_static_string ("server.cnx.gauge.max");
-	result->gq_gauge_cnx_maxsys = g_quark_from_static_string ("server.cnx.gauge.max_sys");
-	result->gq_counter_cnx_accept = g_quark_from_static_string ("server.cnx.counter.accept");
-	result->gq_counter_cnx_close = g_quark_from_static_string ("server.cnx.counter.close");
+	result->gq_gauge_threads = g_quark_from_static_string ("server.gauge.thread.active");
+	result->gq_gauge_cnx_current = g_quark_from_static_string ("server.gauge.cnx.client");
+	result->gq_gauge_cnx_max = g_quark_from_static_string ("server.gauge.cnx.max");
+	result->gq_gauge_cnx_maxsys = g_quark_from_static_string ("server.gauge.cnx.max_sys");
+	result->gq_counter_cnx_accept = g_quark_from_static_string ("server.counter.cnx.accept");
+	result->gq_counter_cnx_close = g_quark_from_static_string ("server.counter.cnx.close");
 
 	result->pool_stats = g_thread_pool_new ((GFunc)_cb_stats, result, 1, FALSE, NULL);
 	result->pool_workers = g_thread_pool_new ((GFunc)_cb_worker, result, -1, FALSE, NULL);

@@ -90,19 +90,19 @@ action_status(struct req_args_s *args)
 	struct hc_resolver_stats_s s = {0};
 	hc_resolver_info(resolver, &s);
 
-	g_string_append_printf(gstr, "cache.dir.count = %"G_GINT64_FORMAT"\n", s.csm0.count);
-	g_string_append_printf(gstr, "cache.dir.max = %u\n", s.csm0.max);
-	g_string_append_printf(gstr, "cache.dir.ttl = %lu\n", s.csm0.ttl);
-	g_string_append_printf(gstr, "cache.dir.clock = %lu\n", s.clock);
+	g_string_append_printf(gstr, "cache.gauge.dir.count = %"G_GINT64_FORMAT"\n", s.csm0.count);
+	g_string_append_printf(gstr, "cache.gauge.dir.max = %u\n", s.csm0.max);
+	g_string_append_printf(gstr, "cache.gauge.dir.ttl = %lu\n", s.csm0.ttl);
+	g_string_append_printf(gstr, "cache.gauge.dir.clock = %lu\n", s.clock);
 
-	g_string_append_printf(gstr, "cache.srv.count = %"G_GINT64_FORMAT"\n", s.services.count);
-	g_string_append_printf(gstr, "cache.srv.max = %u\n", s.services.max);
-	g_string_append_printf(gstr, "cache.srv.ttl = %lu\n", s.services.ttl);
-	g_string_append_printf(gstr, "cache.srv.clock = %lu\n", s.clock);
+	g_string_append_printf(gstr, "cache.gauge.srv.count = %"G_GINT64_FORMAT"\n", s.services.count);
+	g_string_append_printf(gstr, "cache.gauge.srv.max = %u\n", s.services.max);
+	g_string_append_printf(gstr, "cache.gauge.srv.ttl = %lu\n", s.services.ttl);
+	g_string_append_printf(gstr, "cache.gauge.srv.clock = %lu\n", s.clock);
 
 	gint64 count_down = 0;
 	SRV_DO(count_down = lru_tree_count(srv_down));
-	g_string_append_printf(gstr, "down.srv.count = %"G_GINT64_FORMAT"\n",
+	g_string_append_printf(gstr, "down.gauge.srv = %"G_GINT64_FORMAT"\n",
 			count_down);
 
 	args->rp->set_body_gstr(gstr);
