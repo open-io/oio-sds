@@ -1305,7 +1305,6 @@ oio_sds_upload_step (struct oio_sds_ul_s *ul)
 			while (!http_put_done(ul->put)) {
 				GBytes *empty = g_bytes_new_static (end, 0);
 				http_put_feed (ul->put, empty);
-				g_bytes_unref(empty);
 				if (NULL != (err = http_put_step (ul->put)))
 					return (struct oio_error_s*) err;
 			}
