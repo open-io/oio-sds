@@ -137,7 +137,7 @@ done
 
 # wait for meta1 to be known in the conscience (this is necessary for the
 # init phase of the meta0
-while [ 0 -ge $(${PREFIX}-cluster -r "$NS" | grep -c meta1) ] ; do
+while [ ${REPLICATION_DIRECTORY} -gt $(${PREFIX}-cluster -r "$NS" | grep -c meta1) ] ; do
 	sleep 1
 done
 
