@@ -1259,7 +1259,7 @@ do_destroy(struct gridd_reply_ctx_s *reply, struct sqlx_repository_s *repo,
 		return err;
 
 	if (!local) {
-		err = sqlx_config_get_peers(sq3->config, name, &peers);
+		err = election_get_peers(sq3->manager, name, FALSE, &peers);
 		if (err)
 			goto end_label;
 		if (NULL != peers) {
@@ -1755,8 +1755,7 @@ sqlx_dispatch_RESYNC(struct gridd_reply_ctx_s *reply,
 
 	/* Force refresh of peers from meta1 */
 	em = sqlx_repository_get_elections_manager(repo);
-	err = sqlx_config_has_peers2(election_manager_get_config(em),
-			CONST(&name), TRUE, &has_peers);
+	err = election_has_peers(em, CONST(&name), TRUE, &has_peers);
 	g_clear_error(&err);
 
 	/* Open and lock the base */
@@ -2252,16 +2251,10 @@ _info_replication(struct sqlx_repository_s *repo, GString *gstr)
 		}
 	}
 
-	const struct replication_config_s *config = election_manager_get_config(
-			sqlx_repository_get_elections_manager(repo));
-
-	if (!config) {
-		g_string_append(gstr, "Replication: none\n");
-		return;
-	}
-
 	g_string_append(gstr, "Replication:\n");
-	g_string_append_printf(gstr, "\tmode: %s\n", _mode2str(config->mode));
+	g_string_append_printf(gstr, "\tmode: %s\n",
+			_mode2str(election_manager_get_mode(
+					sqlx_repository_get_elections_manager(repo))));
 }
 
 static void

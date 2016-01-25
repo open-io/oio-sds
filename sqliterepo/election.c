@@ -180,14 +180,13 @@ static void member_destroy(struct election_member_s *member);
 
 static void _manager_clean(struct election_manager_s *manager);
 
-static const struct replication_config_s * _manager_get_config(
-		const struct election_manager_s *manager);
+enum election_mode_e _manager_get_mode (const struct election_manager_s *manager);
 
-static void _manager_exit_all(struct election_manager_s *manager,
-		gint64 duration, gboolean persist);
+const char * _manager_get_local (const struct election_manager_s *manager);
 
-static guint _manager_retry_elections(struct election_manager_s *manager,
-		guint max, gint64 duration);
+static GError * _election_get_peers(struct election_manager_s *manager,
+		struct sqlx_name_s *n, gboolean nocache, gchar ***peers);
+
 
 static GError * _election_trigger_RESYNC(struct election_manager_s *manager,
 		struct sqlx_name_s *n);
@@ -201,35 +200,20 @@ static GError * _election_start(struct election_manager_s *manager,
 static GError * _election_exit(struct election_manager_s *manager,
 		struct sqlx_name_s *n);
 
-static GError * _election_has_peers(struct election_manager_s *manager,
-		struct sqlx_name_s *n, gboolean *peers_present);
-
-static GError * _election_get_peers(struct election_manager_s *manager,
-		struct sqlx_name_s *n, gchar ***peers);
-
-static void _election_whatabout(struct election_manager_s *m,
-		struct sqlx_name_s *n, gchar *d, gsize ds);
-
 static enum election_status_e _election_get_status(struct election_manager_s *m,
 		struct sqlx_name_s *n, gchar **master_url);
-
-static struct election_counts_s _manager_count(struct election_manager_s *manager);
 
 static struct election_manager_vtable_s VTABLE =
 {
 	_manager_clean,
-	_manager_get_config,
-	_manager_retry_elections,
-	_manager_exit_all,
-	_manager_count,
+	_manager_get_mode,
+	_manager_get_local,
+	_election_get_peers,
 	_election_init,
 	_election_start,
 	_election_exit,
-	_election_has_peers,
-	_election_get_peers,
 	_election_get_status,
 	_election_trigger_RESYNC,
-	_election_whatabout
 };
 
 static void transition_error(struct election_member_s *member,
@@ -449,13 +433,13 @@ member_has_action(struct election_member_s *m)
 static const gchar*
 member_get_url(struct election_member_s *m)
 {
-	return sqlx_config_get_local_url(MCFG(m));
+	return election_manager_get_local(MMANAGER(m));
 }
 
 static GError *
 member_get_peers(struct election_member_s *m, gboolean nocache, gchar ***peers)
 {
-	return sqlx_config_get_peers2(MCFG(m),
+	return election_get_peers(MMANAGER(m),
 			sqlx_name_mutable_to_const(&m->name), nocache, peers);
 }
 
@@ -841,14 +825,15 @@ manager_send_EXITING(struct election_manager_s *manager)
 	GRID_INFO("EXIT order sent");
 }
 
-static void
-_manager_exit_all(struct election_manager_s *manager, gint64 duration,
+void
+election_manager_exit_all(struct election_manager_s *manager, gint64 duration,
 		gboolean persist)
 {
 	guint count;
 
 	GRID_INFO("Voluntarily exiting all the elections...");
 	MANAGER_CHECK(manager);
+	g_assert (manager->vtable == &VTABLE);
 	gint64 pivot = oio_ext_monotonic_time () + duration;
 
 	/* Order the node to exit */
@@ -872,37 +857,31 @@ _manager_exit_all(struct election_manager_s *manager, gint64 duration,
 	GRID_INFO("No more active elections");
 }
 
-static void
-_election_whatabout(struct election_manager_s *m, struct sqlx_name_s *n,
-		gchar *d, gsize ds)
+void
+election_manager_whatabout (struct election_manager_s *m,
+		struct sqlx_name_s *n, gchar *d, gsize ds)
 {
-	struct election_member_s *member;
-	hashstr_t *key;
-
-	MANAGER_CHECK(m);
 	NAME_CHECK(n);
+	MANAGER_CHECK(m);
+	g_assert (m->vtable == &VTABLE);
 	EXTRA_ASSERT(d != NULL);
 	EXTRA_ASSERT(ds > 0);
 
-	key = sqliterepo_hash_name(n);
+	hashstr_t *key = sqliterepo_hash_name(n);
 	g_mutex_lock(&m->lock);
-	member = manager_get_member(m, key);
+	struct election_member_s *member = manager_get_member(m, key);
 	if (member) {
-		gchar *log;
-
 		member_descr(member, d, ds);
-		log = member_dump_log(member);
+		gchar *log = member_dump_log(member);
 		g_strlcat(d, log, ds);
 		g_free(log);
 	}
 	else {
-		const struct replication_config_s *cfg = election_manager_get_config(m);
-		if (!cfg)
-			g_snprintf(d, ds, "No replication configured");
-		else if (cfg->mode == ELECTION_MODE_NONE)
+		if (election_manager_get_mode(m) == ELECTION_MODE_NONE)
 			g_snprintf(d, ds, "Replication disabled by configuration");
 		else
-			g_snprintf(d, ds, "No election for [%s][%s] [%s]", n->base, n->type, hashstr_str(key));
+			g_snprintf(d, ds, "No election for [%s][%s] [%s]",
+					n->base, n->type, hashstr_str(key));
 	}
 	g_mutex_unlock(&m->lock);
 
@@ -1220,7 +1199,7 @@ _election_make(struct election_manager_s *m, struct sqlx_name_s *n,
 	SQLXNAME_CHECK(n);
 
 	gboolean peers_present = FALSE;
-	GError *err = election_has_peers(m, n, &peers_present);
+	GError *err = election_has_peers(m, n, FALSE, &peers_present);
 	if (err != NULL) {
 		g_prefix_error(&err, "Election error: ");
 		return err;
@@ -1278,17 +1257,10 @@ _election_exit(struct election_manager_s *manager, struct sqlx_name_s *n)
 }
 
 static GError *
-_election_has_peers(struct election_manager_s *manager, struct sqlx_name_s *n,
-		gboolean *peers_present)
-{
-	return sqlx_config_has_peers(manager->config, n, peers_present);
-}
-
-static GError *
 _election_get_peers(struct election_manager_s *manager, struct sqlx_name_s *n,
-		gchar ***peers)
+		gboolean nocache, gchar ***peers)
 {
-	return sqlx_config_get_peers(manager->config, n, peers);
+	return sqlx_config_get_peers(manager->config, n, nocache, peers);
 }
 
 static gboolean
@@ -1393,10 +1365,24 @@ _manager_clean(struct election_manager_s *manager)
 	g_free(manager);
 }
 
-const struct replication_config_s *
-_manager_get_config(const struct election_manager_s *manager)
+const char *
+_manager_get_local (const struct election_manager_s *manager)
 {
-	return manager ? manager->config : NULL;
+	MANAGER_CHECK(manager);
+	g_assert (manager->vtable == &VTABLE);
+	if (!manager->config || !manager->config->get_local_url)
+		return NULL;
+	return manager->config->get_local_url (manager->config->ctx);
+}
+
+enum election_mode_e
+_manager_get_mode (const struct election_manager_s *manager)
+{
+	MANAGER_CHECK(manager);
+	g_assert (manager->vtable == &VTABLE);
+	if (!manager->config || manager->config->mode <= ELECTION_MODE_NONE)
+		return ELECTION_MODE_NONE;
+	return manager->config->mode;
 }
 
 static GSList*
@@ -1436,11 +1422,13 @@ _get_to_be_notified(struct election_manager_s *manager, gint64 duration)
 	return g_slist_sort(res, _sort_by_status);
 }
 
-static guint
-_manager_retry_elections(struct election_manager_s *manager,
+guint
+election_manager_retry_elections(struct election_manager_s *manager,
 		guint max, gint64 duration)
 {
 	MANAGER_CHECK(manager);
+	g_assert (manager->vtable == &VTABLE);
+
 	if (manager->exiting)
 		return 0;
 
@@ -2378,10 +2366,12 @@ _count_runner(hashstr_t *k, struct election_member_s *v,
 	}
 }
 
-static struct election_counts_s
-_manager_count(struct election_manager_s *manager)
+struct election_counts_s
+election_manager_count(struct election_manager_s *manager)
 {
 	MANAGER_CHECK(manager);
+	g_assert (manager->vtable == &VTABLE);
+
 	struct election_counts_s count = {0};
 
 	if (manager != NULL) {
@@ -2393,16 +2383,8 @@ _manager_count(struct election_manager_s *manager)
 	return count;
 }
 
-const gchar *
-sqlx_config_get_local_url(const struct replication_config_s *cfg)
-{
-	if (!cfg || !cfg->get_local_url)
-		return NULL;
-	return cfg->get_local_url(cfg->ctx);
-}
-
 GError *
-sqlx_config_get_peers2(const struct replication_config_s *cfg, struct sqlx_name_s *n,
+sqlx_config_get_peers (const struct replication_config_s *cfg, struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
 	SQLXNAME_CHECK(n);
@@ -2428,18 +2410,11 @@ sqlx_config_get_peers2(const struct replication_config_s *cfg, struct sqlx_name_
 }
 
 GError *
-sqlx_config_get_peers(const struct replication_config_s *cfg,
-		struct sqlx_name_s *n, gchar ***result)
-{
-	return sqlx_config_get_peers2(cfg, n, FALSE, result);
-}
-
-GError *
-sqlx_config_has_peers2(const struct replication_config_s *cfg,
-		struct sqlx_name_s *n, gboolean nocache, gboolean *result)
+election_has_peers (struct election_manager_s *m, struct sqlx_name_s *n,
+		gboolean nocache, gboolean *result)
 {
 	gchar **peers = NULL;
-	GError *err = sqlx_config_get_peers2(cfg, n, nocache, &peers);
+	GError *err = sqlx_config_get_peers(m->config, n, nocache, &peers);
 	if (err != NULL) {
 		*result = FALSE;
 		return err;
@@ -2451,9 +2426,29 @@ sqlx_config_has_peers2(const struct replication_config_s *cfg,
 }
 
 GError *
-sqlx_config_has_peers(const struct replication_config_s *cfg,
-		struct sqlx_name_s *n, gboolean *result)
+election_get_peers (struct election_manager_s *m, struct sqlx_name_s *n,
+		gboolean nocache, gchar ***peers)
 {
-	return sqlx_config_has_peers2(cfg, n, FALSE, result);
+	if (!m) {
+		if (peers)
+			*peers = g_malloc0(sizeof(void*));
+		return NULL;
+	}
+	return ((struct abstract_election_manager_s*)m)->vtable->election_get_peers(m,n,nocache,peers);
 }
 
+const char *
+election_manager_get_local (const struct election_manager_s *m)
+{
+	if (!m)
+		return NULL;
+	return ((struct abstract_election_manager_s*)m)->vtable->get_local(m);
+}
+
+enum election_mode_e
+election_manager_get_mode (const struct election_manager_s *m)
+{
+	if (!m)
+		return ELECTION_MODE_NONE;
+	return ((struct abstract_election_manager_s*)m)->vtable->get_mode(m);
+}

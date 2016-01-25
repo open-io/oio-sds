@@ -49,7 +49,6 @@ struct sqlx_name_s;
 
 struct replication_config_s
 {
-
 	/** Tells the unique ID of the local service. */
 	const gchar * (*get_local_url)(gpointer ctx);
 
@@ -86,21 +85,16 @@ struct election_manager_vtable_s
 	/** Destroys an election_manager created by election_manager_create() */
 	void (*clean) (struct election_manager_s *);
 
-	/** Returns a pointer to the internal config of the manager */
-	const struct replication_config_s* (*get_config) (const struct election_manager_s *);
 
-	/** Run all the elections failed/pending for too long, then kick them off */
-	guint (*retry_elections) (struct election_manager_s*,
-			guint max, gint64 duration);
+	/* is replication configured, and how */
+	enum election_mode_e (*get_mode) (const struct election_manager_s *);
 
-	/** Exit all elections older than 'max'. Doesn't last longer than a delay
-	 * of <duration>, which has the same unit as the g_get_*_time() function,
-	 * e.g. "5 * G_TIME_SPAN_SECOND" */
-	void (*exit_all) (struct election_manager_s *,
-			gint64 duration, gboolean persist);
+	/* return the ID ofthe local service */
+	const char * (*get_local) (const struct election_manager_s *);
 
-	/** Run all the elections and count them, grouped by status */
-	struct election_counts_s (*count) (struct election_manager_s *);
+	/* who are the peers for the given base */
+	GError* (*election_get_peers) (struct election_manager_s *manager,
+			struct sqlx_name_s *n, gboolean nocache, gchar ***peers);
 
 	/** Prepare the internal memory for the election context, but without
 	 * starting the election. Usefull to prepare. */
@@ -115,12 +109,6 @@ struct election_manager_vtable_s
 	GError* (*election_exit) (struct election_manager_s *manager,
 			struct sqlx_name_s *n);
 
-	GError* (*election_has_peers) (struct election_manager_s *manager,
-			struct sqlx_name_s *n, gboolean *ppeers);
-
-	GError* (*election_get_peers) (struct election_manager_s *manager,
-			struct sqlx_name_s *n, gchar ***peers);
-
 	/** Triggers the global election mechanism then wait for a final status
 	 * have been locally hit.  */
 	enum election_status_e (*election_get_status) (struct election_manager_s *manager,
@@ -129,11 +117,6 @@ struct election_manager_vtable_s
 
 	GError* (*election_trigger_RESYNC) (struct election_manager_s *m,
 			struct sqlx_name_s *n);
-
-	/** Give the status for an election */
-	void (*election_whatabout) (struct election_manager_s *m,
-			struct sqlx_name_s *n,
-			gchar *d, gsize ds);
 };
 
 struct abstract_election_manager_s {
@@ -145,32 +128,18 @@ struct abstract_election_manager_s {
 #define election_manager_clean(m) \
 	((struct abstract_election_manager_s*)m)->vtable->clean(m)
 
-#define election_manager_get_config0(m) \
-	(((struct abstract_election_manager_s*)m)->vtable->get_config(m))
+enum election_mode_e election_manager_get_mode (const struct election_manager_s *);
 
-#define election_manager_get_config(m) \
-	((m==NULL) ? NULL : election_manager_get_config0(m))
+const char * election_manager_get_local (const struct election_manager_s *m);
 
-#define election_manager_retry_elections(m,max,end) \
-	((struct abstract_election_manager_s*)m)->vtable->retry_elections(m,max,end)
-
-#define election_manager_exit_all(m,max,persist) \
-	((struct abstract_election_manager_s*)m)->vtable->exit_all(m,max,persist)
-
-#define election_manager_count(m) \
-	((struct abstract_election_manager_s*)m)->vtable->count(m);
+GError* election_get_peers (struct election_manager_s *manager,
+		struct sqlx_name_s *n, gboolean nocache, gchar ***peers);
 
 #define election_init(m,n) \
 	((struct abstract_election_manager_s*)m)->vtable->election_init(m,n)
 
 #define election_start(m,n) \
 	((struct abstract_election_manager_s*)m)->vtable->election_start(m,n)
-
-#define election_has_peers(m,n,ppresent) \
-	((struct abstract_election_manager_s*)m)->vtable->election_has_peers(m,n,ppresent)
-
-#define election_get_peers(m,n,peers) \
-	((struct abstract_election_manager_s*)m)->vtable->election_get_peers(m,n,peers)
 
 #define election_exit(m,n) \
 	((struct abstract_election_manager_s*)m)->vtable->election_exit(m,n)
@@ -181,14 +150,26 @@ struct abstract_election_manager_s {
 #define election_manager_trigger_RESYNC(m,n) \
 	((struct abstract_election_manager_s*)m)->vtable->election_trigger_RESYNC(m,n)
 
-#define election_manager_whatabout(m,n,d,ds) \
-	((struct abstract_election_manager_s*)m)->vtable->election_whatabout(m,n,d,ds)
+/* wraps election_get_peers() */
+GError * election_has_peers (struct election_manager_s *m,
+		struct sqlx_name_s *n, gboolean nocache, gboolean *ppresent);
 
 /* Implementation-specific operations -------------------------------------- */
 
 /** Creates the election_manager structure.  */
 GError* election_manager_create (struct replication_config_s *config,
 		struct election_manager_s **result);
+
+struct election_counts_s election_manager_count (struct election_manager_s *m);
+
+guint election_manager_retry_elections (struct election_manager_s *m,
+		guint max, gint64 duration);
+
+void election_manager_exit_all (struct election_manager_s *m,
+		gint64 oldest, gboolean persist);
+
+void election_manager_whatabout (struct election_manager_s *m,
+		struct sqlx_name_s *n, gchar *d, gsize ds);
 
 /** Associate a gridd_client_pool to the given election_manager. The manager
  * is not responsible for that pool, it won't destroy it. */
@@ -201,22 +182,8 @@ void election_manager_set_sync (struct election_manager_s *m,
 /* Implementation-specific operations -------------------------------------- */
 
 /** Wraps the call to the hook in the config structure */
-const gchar *sqlx_config_get_local_url(const struct replication_config_s *cfg);
-
-/** Wraps the call to the hook in the config structure */
 GError* sqlx_config_get_peers(const struct replication_config_s *cfg,
-		struct sqlx_name_s *n, gchar ***result);
-
-/** Wraps the call to the hook in the config structure */
-GError* sqlx_config_get_peers2(const struct replication_config_s *cfg,
 		struct sqlx_name_s *n, gboolean nocache, gchar ***result);
-
-/** Wraps the call to the hook in the config structure */
-GError* sqlx_config_has_peers(const struct replication_config_s *cfg,
-		struct sqlx_name_s *n, gboolean *result);
-
-GError* sqlx_config_has_peers2(const struct replication_config_s *cfg,
-		struct sqlx_name_s *n, gboolean nocache, gboolean *result);
 
 /** @} */
 

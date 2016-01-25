@@ -340,7 +340,7 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 
 		++ count_success; // XXX JFS: don't forget the local success!
 		guint groupsize = 1 + g_strv_length(peers);
-		if (ctx->sq3->config->mode == ELECTION_MODE_GROUP) {
+		if (election_manager_get_mode(ctx->sq3->manager) == ELECTION_MODE_GROUP) {
 			if (count_success < groupsize)
 				err = SYSERR("Not enough successes, no group");
 		}
@@ -359,11 +359,13 @@ _defer_synchronous_RESYNC(struct sqlx_repctx_s *ctx)
 {
 	gchar **peers = NULL;
 
-	GError *err = sqlx_config_get_peers(ctx->sq3->config, sqlx_name_mutable_to_const(&ctx->sq3->name), &peers);
+	GError *err = election_get_peers (ctx->sq3->manager,
+			sqlx_name_mutable_to_const(&ctx->sq3->name), FALSE, &peers);
 
 	if (err != NULL) {
 		GRID_WARN("Replicated transaction started but peers not found "
-				"[%s][%s] : (%d) %s", ctx->sq3->name.base, ctx->sq3->name.type, err->code, err->message);
+				"[%s][%s] : (%d) %s", ctx->sq3->name.base, ctx->sq3->name.type,
+				err->code, err->message);
 		g_clear_error(&err);
 		return;
 	}
@@ -381,8 +383,8 @@ _perform_REPLICATE(struct sqlx_repctx_s *ctx)
 	GError *err;
 	gchar **peers = NULL;
 
-	err = sqlx_config_get_peers(ctx->sq3->config,
-			sqlx_name_mutable_to_const(&ctx->sq3->name), &peers);
+	err = election_get_peers (ctx->sq3->manager,
+			sqlx_name_mutable_to_const(&ctx->sq3->name), FALSE, &peers);
 
 	if (err != NULL) {
 		GRID_WARN("Replicated transaction started but peers not found "
@@ -419,8 +421,7 @@ hook_commit(gpointer d)
 	GRID_TRACE2("%s(%p)", __FUNCTION__, ctx);
 	EXTRA_ASSERT(ctx != NULL);
 	EXTRA_ASSERT(ctx->sq3 != NULL);
-	EXTRA_ASSERT(ctx->sq3->config != NULL);
-	EXTRA_ASSERT(ctx->sq3->config->get_peers != NULL);
+	EXTRA_ASSERT(ctx->sq3->manager != NULL);
 
 	ctx->any_change = 1;
 
@@ -529,7 +530,7 @@ sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 			sqlx_repository_replication_configured(sq3->repo)) {
 		GError *err = election_has_peers(
 				sqlx_repository_get_elections_manager(sq3->repo),
-				sqlx_name_mutable_to_const(&sq3->name), &has);
+				sqlx_name_mutable_to_const(&sq3->name), FALSE, &has);
 		if (err != NULL) {
 			g_prefix_error(&err, "Peer resolution: ");
 			return err;
