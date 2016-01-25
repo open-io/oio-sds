@@ -60,6 +60,7 @@ struct req_ctx_s
 	gchar *uid;
 
 	gboolean close_after_request;
+	gboolean access_disabled;
 };
 
 static int http_notify_input(struct network_client_s *clt);
@@ -399,6 +400,9 @@ sender(gpointer k, gpointer v, gpointer u)
 static void
 _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 {
+	if (r->access_disabled && 2 == (status / 100))
+		return;
+
 	const char *reqid = g_tree_lookup(r->request->tree_headers, PROXYD_HEADER_REQID);
 
 	gint64 now = oio_ext_monotonic_time ();
@@ -553,6 +557,10 @@ http_manage_request(struct req_ctx_s *r)
 		oio_str_reuse (&access, s);
 	}
 
+	void no_access (void) {
+		r->access_disabled = TRUE;
+	}
+
 	void final_error(int c_, const char *m_) {
 		if (!finalized) {
 			set_body(NULL, 0);
@@ -575,6 +583,7 @@ http_manage_request(struct req_ctx_s *r)
 		.subject = subject,
 		.finalize = finalize,
 		.access_tail = access_tail,
+		.no_access = no_access,
 	};
 
 	finalized = FALSE;

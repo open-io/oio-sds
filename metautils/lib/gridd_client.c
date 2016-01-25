@@ -319,7 +319,11 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 	}
 
 	/* all other are considered errors */
-	err = NEWERROR(status, "Request error: %s", message);
+	if (status != CODE_REDIRECT)
+		err = NEWERROR(status, "Request error: %s", message);
+	else
+		err = NEWERROR(status, "%s", message);
+
 	g_free(message);
 	if (!client->keepalive)
 		_client_reset_cnx(client);

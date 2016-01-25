@@ -101,6 +101,12 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 	else /* if (op == REGOP_LOCK) */
 		si->score.value = CLAMP(si->score.value, SCORE_DOWN, SCORE_MAX);
 
+	if (cs_expire_local_services > 0) {
+		gchar *k = service_info_key (si);
+		struct service_info_s *v = service_info_dup (si);
+		PUSH_DO(lru_tree_insert (srv_registered, k, v));
+	}
+
 	// TODO follow the DRY principle and factorize this!
 	if (flag_cache_enabled) {
 		GString *gstr = g_string_new ("");
@@ -127,6 +133,7 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 enum http_rc_e
 action_conscience_info (struct req_args_s *args)
 {
+	args->rp->no_access();
 	GError *err;
 	const char *v = OPT("what");
 
@@ -164,8 +171,45 @@ action_conscience_info (struct req_args_s *args)
 }
 
 enum http_rc_e
+action_local_list (struct req_args_s *args)
+{
+	args->rp->no_access();
+
+	const char *types = TYPE();
+	if (!types)
+		return _reply_format_error (args, BADREQ("Missing type"));
+
+	gboolean full = _request_has_flag (args, PROXYD_HEADER_MODE, "full");
+
+	GError *err;
+	if (NULL != (err = _cs_check_tokens(args)))
+		return _reply_notfound_error(args, err);
+
+	GString *gs = g_string_new ("[");
+	gboolean _on_service (gpointer k, gpointer v, gpointer u) {
+		(void) k, (void) u;
+		struct service_info_s *si = v;
+		if (!g_ascii_strcasecmp (si->type, types)) {
+			if (gs->len > 1)
+				g_string_append_c (gs, ',');
+			service_info_encode_json (gs, si, full);
+		}
+		return FALSE;
+	}
+
+	PUSH_DO(do {
+		lru_tree_foreach_DEQ (srv_registered, _on_service, NULL);
+	} while (0));
+	g_string_append_c (gs, ']');
+
+	return _reply_success_json (args, gs);
+}
+
+enum http_rc_e
 action_conscience_list (struct req_args_s *args)
 {
+	args->rp->no_access();
+
 	const char *types = TYPE();
 	if (!types)
 		return _reply_format_error (args, BADREQ("Missing type"));
@@ -238,6 +282,7 @@ _rest_conscience_register (struct req_args_s *args, struct json_object *jargs)
 enum http_rc_e
 action_conscience_register (struct req_args_s *args)
 {
+	args->rp->no_access();
 	return rest_action (args, _rest_conscience_register);
 }
 
