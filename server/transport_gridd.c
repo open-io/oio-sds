@@ -864,8 +864,12 @@ dispatch_KILL(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
 	(void) gdata, (void) hdata;
-	abort();
-	reply->send_reply(CODE_FINAL_OK, "OK");
+	if (reply->client->server->abort_allowed) {
+		abort();
+		reply->send_reply(CODE_FINAL_OK, "OK");
+	} else {
+		reply->send_reply(CODE_NOT_ALLOWED, "abort disabled");
+	}
 	return TRUE;
 }
 

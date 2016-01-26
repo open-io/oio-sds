@@ -31,8 +31,6 @@ add_library(mod_dav_rainx MODULE
 		rainx_properties.c
 		rainx_repository.c
 		rainx_req_info.c
-		rainx_stats_rrd.c
-		rainx_stats_rrd.h
 		rainx_http_tools.c
 		rainx_http_tools.h)
 

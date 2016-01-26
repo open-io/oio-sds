@@ -29,7 +29,7 @@ License along with this library.
 #include "metautils.h"
 
 #ifndef URL_MAXLEN
-# define URL_MAXLEN 256
+# define URL_MAXLEN STRLEN_ADDRINFO
 #endif
 
 #define EVENT_BUFFER_SIZE 2048
@@ -53,32 +53,30 @@ struct gridd_client_factory_s
 struct gridd_client_s
 {
 	struct abstract_client_s abstract;
-	gchar orig_url[URL_MAXLEN];
-
-	gchar url[URL_MAXLEN];
-	guint nb_redirects;
-
-	int fd;
-	enum client_step_e step;
 	GByteArray *request;
-	guint sent_bytes;
+	GByteArray *reply;
+	GError *error;
 
-	// four timers with the same precision as oio_ext_monotonic_time ()
+	gpointer ctx;
+	client_on_reply on_reply;
+
 	gint64 tv_step;
 	gint64 tv_start;
 	gint64 delay_step;
 	gint64 delay_overall;
 
 	guint32 size;
-	GByteArray *reply;
 
-	gpointer ctx;
-	client_on_reply on_reply;
+	guint nb_redirects;
+	int fd;
+	guint sent_bytes;
 
-	GError *error;
-	GString *past_url;
-	gboolean keepalive;
-	gboolean forbid_redirect;
+	enum client_step_e step : 16;
+	gboolean keepalive : 8;
+	gboolean forbid_redirect : 8;
+
+	gchar orig_url[URL_MAXLEN];
+	gchar url[URL_MAXLEN];
 };
 
 static void _client_free(struct gridd_client_s *client);
@@ -225,26 +223,6 @@ _client_reset_error(struct gridd_client_s *client)
 		g_clear_error(&(client->error));
 }
 
-static gboolean
-_client_looped(struct gridd_client_s *client, const gchar *url)
-{
-	gboolean rc;
-	gchar *start, *end;
-
-	start = client->past_url->str;
-	while (start && *start) {
-		if (!(end = strchr(start, '|'))) /* EOL */
-			return !g_ascii_strcasecmp(url, start);
-		*end = '\0';
-		rc = !g_ascii_strcasecmp(url, start);
-		*end = '|';
-		if (rc)
-			return TRUE;
-		start = end+1;
-	}
-	return FALSE;
-}
-
 static GError *
 _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 {
@@ -256,10 +234,10 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 		g_prefix_error (&err, "reply: ");
 		return err;
 	}
+	STRING_STACKIFY(message);
 
 	if (CODE_IS_NETWORK_ERROR(status)) {
 		err = NEWERROR(status, "net error: %s", message);
-		g_free(message);
 		metautils_pclose(&(client->fd));
 		client->step = STATUS_FAILED;
 		return err;
@@ -267,7 +245,6 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 
 	if (status == CODE_TEMPORARY) {
 		client->step = REP_READING_SIZE;
-		g_free(message);
 		return NULL;
 	}
 
@@ -277,7 +254,6 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 			if (!client->keepalive)
 				metautils_pclose(&(client->fd));
 		}
-		g_free(message);
 		if (client->on_reply) {
 			if (!client->on_reply(client->ctx, reply))
 				return NEWERROR(CODE_INTERNAL_ERROR, "Handler error");
@@ -291,31 +267,14 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 		_client_reset_cnx(client);
 		client->sent_bytes = 0;
 
-		if ((++ client->nb_redirects) > 7) {
-			g_free(message);
+		if ((++ client->nb_redirects) > 3)
 			return NEWERROR(CODE_TOOMANY_REDIRECT, "Too many redirections");
-		}
-
-		/* Save the current URL to avoid looping, and check
-		 * for a potential loop */
-		g_string_append_c(client->past_url, '|');
-		g_string_append(client->past_url, client->url);
-		if (_client_looped(client, message)) {
-			g_free(message);
-			return NEWERROR(CODE_LOOP_REDIRECT, "Looping on redirections");
-		}
 
 		/* Replace the URL */
-		memset(client->url, 0, sizeof(client->url));
-		g_strlcpy(client->url, message, sizeof(client->url)-1);
-		if (NULL != (err = _client_connect(client))) {
-			g_free(message);
+		g_strlcpy(client->url, message, URL_MAXLEN);
+		if (NULL != (err = _client_connect(client)))
 			g_prefix_error(&err, "Redirection error: Connect error: ");
-			return err;
-		}
-
-		g_free(message);
-		return NULL;
+		return err;
 	}
 
 	/* all other are considered errors */
@@ -324,7 +283,6 @@ _client_manage_reply(struct gridd_client_s *client, MESSAGE reply)
 	else
 		err = NEWERROR(status, "%s", message);
 
-	g_free(message);
 	if (!client->keepalive)
 		_client_reset_cnx(client);
 	_client_reset_reply(client);
@@ -572,9 +530,6 @@ _client_free(struct gridd_client_s *client)
 	_client_reset_error(client);
 	if (client->reply)
 		g_byte_array_free(client->reply, TRUE);
-	if (client->past_url)
-		g_string_free(client->past_url, TRUE);
-	memset(client, 0, sizeof(*client));
 	client->fd = -1;
 	SLICE_FREE (struct gridd_client_s, client);
 }
@@ -585,7 +540,7 @@ _client_set_keepalive(struct gridd_client_s *client, gboolean on)
 	EXTRA_ASSERT(client != NULL);
 	EXTRA_ASSERT(client->abstract.vtable == &VTABLE_CLIENT);
 
-	client->keepalive = on;
+	client->keepalive = BOOL(on);
 }
 
 static void
@@ -656,7 +611,7 @@ _client_connect_url(struct gridd_client_s *client, const gchar *url)
 	_client_reset_reply(client);
 
 	g_strlcpy(client->orig_url, url, URL_MAXLEN);
-	memcpy(client->url, client->orig_url, URL_MAXLEN);
+	g_strlcpy(client->url, url, URL_MAXLEN);
 	client->step = NONE;
 	return NULL;
 }
@@ -851,8 +806,7 @@ gridd_client_create_empty(void)
 	client->fd = -1;
 	client->step = NONE;
 	client->delay_overall = GRIDC_DEFAULT_TIMEOUT_OVERALL * (gdouble)G_TIME_SPAN_SECOND;
-	client->delay_step = GRIDC_DEFAULT_TIMEOUT_STEP * (gdouble)G_TIME_SPAN_SECOND,
-	client->past_url = g_string_new("");
+	client->delay_step = GRIDC_DEFAULT_TIMEOUT_STEP * (gdouble)G_TIME_SPAN_SECOND;
 
 	return client;
 }
@@ -862,7 +816,7 @@ gridd_client_no_redirect (struct gridd_client_s *c)
 {
 	if (!c) return;
 	EXTRA_ASSERT(c->abstract.vtable == &VTABLE_CLIENT);
-	c->forbid_redirect = TRUE;
+	c->forbid_redirect = 1;
 }
 
 struct gridd_client_factory_s *

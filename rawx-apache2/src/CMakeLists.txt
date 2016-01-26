@@ -34,8 +34,6 @@ add_library(mod_dav_rawx MODULE
 		rawx_repository.c
 		rawx_req_info.c
 		rawx_chunk_update.c
-		rawx_stats_rrd.c
-		rawx_stats_rrd.h
 		rawx_event.c
 		rawx_event.h)
 

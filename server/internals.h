@@ -24,11 +24,11 @@ License along with this library.
 #include <server/network_server.h>
 
 # ifndef  OIO_STAT_PREFIX_REQ
-#  define OIO_STAT_PREFIX_REQ "req.counter.hits"
+#  define OIO_STAT_PREFIX_REQ "counter req.hits"
 # endif
 
 # ifndef  OIO_STAT_PREFIX_TIME
-#  define OIO_STAT_PREFIX_TIME "req.counter.time"
+#  define OIO_STAT_PREFIX_TIME "counter req.time"
 # endif
 
 /* How long (in microseconds) a connection might stay idle between two
@@ -114,6 +114,7 @@ struct network_server_s
 	int wakeup[2];
 	int epollfd;
 	gboolean flag_continue : 1;
+	gboolean abort_allowed : 1;
 };
 
 enum

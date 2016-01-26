@@ -22,14 +22,6 @@ License along with this library.
 
 # include <glib.h>
 
-# ifndef INNER_STAT_NAME_REQ_COUNTER
-#  define INNER_STAT_NAME_REQ_COUNTER "gridd.counter.allreq"
-# endif
-
-# ifndef INNER_STAT_NAME_REQ_TIME
-#  define INNER_STAT_NAME_REQ_TIME "gridd.counter.alltime"
-# endif
-
 /* Forward declarations externally defined */
 struct network_client_s;
 struct network_server_s;

@@ -400,18 +400,8 @@ _create_shm_if_needed(char *shm_path, server_rec *server, apr_pool_t *plog)
 		}
 		/* Init the SHM */
 		void *ptr_counter = apr_shm_baseaddr_get(shm);
-		if (ptr_counter) {
+		if (ptr_counter)
 			memset(ptr_counter, 0, sizeof(struct shm_stats_s));
-			/* init rrd's */
-			rawx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_req_sec));
-			rawx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_duration));
-			rawx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_req_put_sec));
-			rawx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_put_duration));
-			rawx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_req_get_sec));
-			rawx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_get_duration));
-			rawx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_req_del_sec));
-			rawx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_del_duration));
-		}
 		// Save the SHM handle in the process' pool, without cleanup callback
 		apr_pool_userdata_set(shm, SHM_HANDLE_KEY, NULL, ppool);
 		// Register the cleanup callback to be executed BEFORE pool cleanup
