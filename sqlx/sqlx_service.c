@@ -27,6 +27,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
 #include <server/stats_holder.h>
+#include <server/internals.h>
 #include <server/transport_gridd.h>
 #include <sqliterepo/sqlx_macros.h>
 #include <sqliterepo/sqliterepo.h>
@@ -710,10 +711,10 @@ _task_register(gpointer p)
 
 	grid_single_rrd_push (PSRV(p)->gsr_reqcounter, now,
 			network_server_stat_getone(PSRV(p)->server,
-				g_quark_from_static_string(INNER_STAT_NAME_REQ_COUNTER)));
+				g_quark_from_static_string(OIO_STAT_PREFIX_REQ)));
 	grid_single_rrd_push (PSRV(p)->gsr_reqtime, now,
 			network_server_stat_getone(PSRV(p)->server,
-				g_quark_from_static_string(INNER_STAT_NAME_REQ_TIME)));
+				g_quark_from_static_string(OIO_STAT_PREFIX_TIME)));
 
 	guint64 avg_counter = grid_single_rrd_get_delta(PSRV(p)->gsr_reqcounter,
 			now, 4);
