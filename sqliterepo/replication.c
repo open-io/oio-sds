@@ -342,11 +342,11 @@ _replicate_on_peers(gchar **peers, struct sqlx_repctx_s *ctx)
 		guint groupsize = 1 + g_strv_length(peers);
 		if (ctx->sq3->config->mode == ELECTION_MODE_GROUP) {
 			if (count_success < groupsize)
-				err = NEWERROR(CODE_INTERNAL_ERROR, "Not enough successes, no group");
+				err = SYSERR("Not enough successes, no group");
 		}
 		else {
 			if (count_success < group_to_quorum(groupsize))
-				err = NEWERROR(CODE_INTERNAL_ERROR, "Not enough successes, no quorum");
+				err = SYSERR("Not enough successes, no quorum");
 		}
 	}
 
@@ -522,6 +522,9 @@ sqlx_transaction_prepare(struct sqlx_sqlite3_s *sq3,
 	EXTRA_ASSERT(sq3->db != NULL);
 	*result = NULL;
 
+	if (sq3->admin_dirty)
+		sqlx_alert_dirty_base (sq3, "new TNX on a dirty admin");
+
 	if (!sq3->no_peers &&
 			sqlx_repository_replication_configured(sq3->repo)) {
 		GError *err = election_has_peers(
@@ -595,7 +598,7 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 
 	if (NULL == ctx) {
 		if (!err)
-			err = NEWERROR(CODE_INTERNAL_ERROR, "no tnx");
+			err = SYSERR("no tnx");
 		g_prefix_error(&err, "transaction error: ");
 		return err;
 	}
@@ -663,6 +666,9 @@ sqlx_transaction_end(struct sqlx_repctx_s *ctx, GError *err)
 			sqlx_synchronous_resync(ctx, (gchar**)ctx->resync_todo->pdata);
 		}
 	}
+
+	if (ctx->sq3->admin_dirty)
+		sqlx_alert_dirty_base (ctx->sq3, "still dirty after transaction");
 
 	if (ctx->any_change) {
 		sqlx_repository_call_change_callback(ctx->sq3);

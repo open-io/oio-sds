@@ -101,6 +101,21 @@ _round_open_close (void)
 		g_assert_no_error (err);
 		g_assert_nonnull (sq3);
 
+		sqlx_admin_set_i64 (sq3, "plop", 5345);
+		sqlx_admin_save_lazy_tnx (sq3);
+
+		struct sqlx_repctx_s *repctx = NULL;
+		err = sqlx_transaction_begin (sq3, &repctx);
+		g_assert_no_error (err);
+
+		sqlx_admin_set_i64 (sq3, "plop", 5346);
+		sqlx_admin_save_lazy (sq3);
+		sqlx_admin_set_i64 (sq3, "plop", 5347);
+
+		err = sqlx_transaction_end (repctx, SYSERR("fake error"));
+		g_assert_error (err, GQ(), CODE_INTERNAL_ERROR);
+		g_clear_error (&err);
+
 		err = sqlx_repository_unlock_and_close(sq3);
 		g_assert_no_error (err);
 	}
