@@ -69,12 +69,11 @@ struct dav_resource_private {
 	dav_rawx_server_conf *conf;
 	generator_f generator;
 	enum request_type_e type;
-	
 };
 
 /* ------------------------------------------------------------------------- */
 
-#define STR_KV(Field,Name) apr_psprintf(pool, "rawx."Name" %u\n", stats->body.Field)
+#define STR_KV(Field,Name) apr_psprintf(pool, Name" %u\n", stats->body.Field)
 
 static const char *
 __gen_info(const dav_resource *resource, apr_pool_t *pool)
@@ -86,68 +85,41 @@ __gen_info(const dav_resource *resource, apr_pool_t *pool)
 static const char *
 __gen_stats(const dav_resource *resource, apr_pool_t *pool)
 {
-	struct shm_stats_s *stats = NULL;
-
 	DAV_XDEBUG_POOL(pool, 0, "%s()", __FUNCTION__);
 
-	memset(&stats, 0, sizeof(stats));
-	dav_rawx_server_conf *c = NULL;
-	c = resource_get_server_config(resource);
+	dav_rawx_server_conf *c = resource_get_server_config(resource);
+
 	apr_global_mutex_lock(c->lock.handle);
-	stats = apr_shm_baseaddr_get(c->shm.handle);
+	struct shm_stats_s *stats = apr_shm_baseaddr_get(c->shm.handle);
 	apr_global_mutex_unlock(c->lock.handle);
 
-	apr_uint64_t req = rawx_stats_rrd_get_delta(&(stats->body.rrd_req_sec), 4);
-	apr_uint64_t reqavgtime = rawx_stats_rrd_get_delta(&(stats->body.rrd_duration), 4);
-	apr_uint64_t req_put = rawx_stats_rrd_get_delta(&(stats->body.rrd_req_put_sec), 4);
-	apr_uint64_t reqavgtime_put = rawx_stats_rrd_get_delta(&(stats->body.rrd_put_duration), 4);
-	apr_uint64_t req_get = rawx_stats_rrd_get_delta(&(stats->body.rrd_req_get_sec), 4);
-	apr_uint64_t reqavgtime_get = rawx_stats_rrd_get_delta(&(stats->body.rrd_get_duration), 4);
-	apr_uint64_t req_del = rawx_stats_rrd_get_delta(&(stats->body.rrd_req_del_sec), 4);
-	apr_uint64_t reqavgtime_del = rawx_stats_rrd_get_delta(&(stats->body.rrd_del_duration), 4);
+	return apr_pstrcat(pool,
+			STR_KV(time_all,       "counter req.time"),
+			STR_KV(time_put,       "counter req.time.put"),
+			STR_KV(time_get,       "counter req.time.get"),
+			STR_KV(time_del,       "counter req.time.del"),
+			STR_KV(time_stat,      "counter req.time.stat"),
+			STR_KV(time_info,      "counter req.time.info"),
+			STR_KV(time_raw,       "counter req.time.raw"),
+			STR_KV(time_other,     "counter req.time.other"),
 
-	apr_uint64_t r_time = 0, r_put_time = 0, r_get_time = 0, r_del_time = 0;
-	if(req > 0)
-		r_time = reqavgtime / req;
-	if(req_put > 0)
-		r_put_time = reqavgtime_put / req_put;
-	if(req_get > 0)
-		r_get_time = reqavgtime_get / req_get;
-	if(req_del > 0)
-		r_del_time = reqavgtime_del / req_del;
+			STR_KV(req_all,       "counter req.hits"),
+			STR_KV(req_chunk_put, "counter req.hits.put"),
+			STR_KV(req_chunk_get, "counter req.hits.get"),
+			STR_KV(req_chunk_del, "counter req.hits.del"),
+			STR_KV(req_stat,      "counter req.hits.stat"),
+			STR_KV(req_info,      "counter req.hits.info"),
+			STR_KV(req_raw,       "counter req.hits.raw"),
+			STR_KV(req_other,     "counter req.hits.other"),
 
-	double r_rate = 0, r_put_rate = 0, r_get_rate = 0, r_del_rate = 0;
-	r_rate = (double)req / 4;
-	r_put_rate = (double)req_put / 4;
-	r_get_rate = (double)req_get / 4;
-	r_del_rate = (double)req_del / 4;
-
-	return apr_pstrcat(pool, 
-			STR_KV(req_all,       "req.all"),
-			STR_KV(req_chunk_put, "req.put"),
-			STR_KV(req_chunk_get, "req.get"),
-			STR_KV(req_chunk_del, "req.del"),
-			STR_KV(req_stat,      "req.stat"),
-			STR_KV(req_info,      "req.info"),
-			STR_KV(req_raw,       "req.raw"),
-			STR_KV(req_other,     "req.other"),
-			STR_KV(rep_2XX,       "rep.2xx"),
-			STR_KV(rep_4XX,       "rep.4xx"),
-			STR_KV(rep_5XX,       "rep.5xx"),
-			STR_KV(rep_other,     "rep.other"),
-			STR_KV(rep_403,       "rep.403"),
-			STR_KV(rep_404,       "rep.404"),
-			STR_KV(rep_bread,     "rep.bread"),
-			STR_KV(rep_bwritten,  "rep.bwritten"),
-			apr_psprintf(pool, "rawx.reqpersec %f\n", r_rate),
-			apr_psprintf(pool, "rawx.avreqtime %"APR_UINT64_T_FMT"\n", r_time),
-			apr_psprintf(pool, "rawx.reqputpersec %f\n", r_put_rate),
-			apr_psprintf(pool, "rawx.avputreqtime %"APR_UINT64_T_FMT"\n", r_put_time),
-			apr_psprintf(pool, "rawx.reqgetpersec %f\n", r_get_rate),
-			apr_psprintf(pool, "rawx.avgetreqtime %"APR_UINT64_T_FMT"\n", r_get_time),
-			apr_psprintf(pool, "rawx.reqdelpersec %f\n", r_del_rate),
-			apr_psprintf(pool, "rawx.avdelreqtime %"APR_UINT64_T_FMT"\n", r_del_time),
-			apr_psprintf(pool, "rawx.volume %s\n", c->docroot),
+			STR_KV(rep_2XX,       "counter rep.hits.2xx"),
+			STR_KV(rep_4XX,       "counter rep.hits.4xx"),
+			STR_KV(rep_5XX,       "counter rep.hits.5xx"),
+			STR_KV(rep_other,     "counter rep.hits.other"),
+			STR_KV(rep_403,       "counter rep.hits.403"),
+			STR_KV(rep_404,       "counter rep.hits.404"),
+			STR_KV(rep_bread,     "counter rep.bread"),
+			STR_KV(rep_bwritten,  "counter rep.bwritten"),
 			NULL);
 }
 
@@ -157,7 +129,7 @@ __build_req_resource(const request_rec *r, const dav_hooks_repository *hooks, ge
 	dav_resource *resource;
 
 	DAV_XDEBUG_REQ(r, 0, "%s(...)", __FUNCTION__);
-	
+
 	resource = apr_pcalloc(r->pool, sizeof(*resource));
 	resource->type = DAV_RESOURCE_TYPE_PRIVATE;
 	resource->hooks = hooks;
@@ -188,7 +160,7 @@ dav_rawx_stat_get_resource(request_rec *r, const char *root_dir, const char *lab
 	if (r->method_number != M_GET)
 		return server_create_and_stat_error(request_get_server_config(r), r->pool,
 				HTTP_BAD_REQUEST, 0, apr_pstrdup(r->pool, "Invalid request method, only GET"));
-	
+
 	*result_resource = __build_req_resource(r, &dav_hooks_repository_rawxstat, __gen_stats);
 	(*result_resource)->info->type = STAT;
 	return NULL;
@@ -204,7 +176,7 @@ dav_rawx_info_get_resource(request_rec *r, const char *root_dir, const char *lab
 
 	DAV_XDEBUG_REQ(r, 0, "%s(...)", __FUNCTION__);
 	*result_resource = NULL;
-	
+
 	if (r->method_number != M_GET)
 		return server_create_and_stat_error(request_get_server_config(r), r->pool,
 				HTTP_BAD_REQUEST, 0, apr_pstrdup(r->pool, "Invalid request method, only GET"));
@@ -279,7 +251,7 @@ dav_rawx_deliver_SPECIAL(const dav_resource *resource, ap_filter_t *output)
 	if ((status = ap_pass_brigade(output, bb)) != APR_SUCCESS)
 		return server_create_and_stat_error(resource_get_server_config(resource), pool,
 			HTTP_FORBIDDEN, 0, apr_pstrdup(pool,"Could not write contents to filter."));
-	
+
 	server_inc_stat(resource_get_server_config(resource), RAWX_STATNAME_REP_2XX, 0);
 
 	/* HERE ADD request counter */

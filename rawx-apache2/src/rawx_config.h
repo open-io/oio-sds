@@ -33,14 +33,31 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <rawx-lib/src/rawx.h>
 
-#include "rawx_stats_rrd.h"
-
 #include "rawx_event.h"
 
 #define FSYNC_ON_CHUNK 1
 #define FSYNC_ON_CHUNK_DIR 2
 
+#define RAWX_STATNAME_REQ_ALL       "q0"
+#define RAWX_STATNAME_REQ_CHUNKGET  "q1"
+#define RAWX_STATNAME_REQ_CHUNKPUT  "q2"
+#define RAWX_STATNAME_REQ_CHUNKDEL  "q3"
+#define RAWX_STATNAME_REQ_STAT      "q4"
+#define RAWX_STATNAME_REQ_INFO      "q5"
+#define RAWX_STATNAME_REQ_RAW       "q6"
+#define RAWX_STATNAME_REQ_OTHER     "q7"
+
+#define RAWX_STATNAME_REP_2XX       "r1"
+#define RAWX_STATNAME_REP_4XX       "r2"
+#define RAWX_STATNAME_REP_5XX       "r3"
+#define RAWX_STATNAME_REP_OTHER     "r4"
+#define RAWX_STATNAME_REP_403       "r5"
+#define RAWX_STATNAME_REP_404       "r6"
+#define RAWX_STATNAME_REP_BREAD     "r7"
+#define RAWX_STATNAME_REP_BWRITTEN  "r8"
+
 struct rawx_stats_s {
+
 	apr_uint32_t req_all;
 	apr_uint32_t req_chunk_get;
 	apr_uint32_t req_chunk_put;
@@ -49,6 +66,7 @@ struct rawx_stats_s {
 	apr_uint32_t req_info;
 	apr_uint32_t req_raw;
 	apr_uint32_t req_other;
+
 	apr_uint32_t rep_2XX;
 	apr_uint32_t rep_4XX;
 	apr_uint32_t rep_5XX;
@@ -57,18 +75,15 @@ struct rawx_stats_s {
 	apr_uint32_t rep_404;
 	apr_uint32_t rep_bread;
 	apr_uint32_t rep_bwritten;
+
 	apr_uint32_t time_all;
 	apr_uint32_t time_put;
 	apr_uint32_t time_get;
 	apr_uint32_t time_del;
-	struct rawx_stats_rrd_s rrd_req_sec;
-	struct rawx_stats_rrd_s rrd_duration;
-	struct rawx_stats_rrd_s rrd_req_put_sec;
-	struct rawx_stats_rrd_s rrd_put_duration;
-	struct rawx_stats_rrd_s rrd_req_get_sec;
-	struct rawx_stats_rrd_s rrd_get_duration;
-	struct rawx_stats_rrd_s rrd_req_del_sec;
-	struct rawx_stats_rrd_s rrd_del_duration;
+	apr_uint32_t time_stat;
+	apr_uint32_t time_info;
+	apr_uint32_t time_raw;
+	apr_uint32_t time_other;
 };
 
 struct shm_stats_s {
