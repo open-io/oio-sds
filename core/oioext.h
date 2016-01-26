@@ -75,6 +75,10 @@ gint64 oio_ext_real_time (void);
 
 gint64 oio_ext_monotonic_time (void);
 
+time_t oio_ext_real_seconds (void);
+
+time_t oio_ext_monotonic_seconds (void);
+
 gdouble oio_sys_cpu_idle (void);
 
 gdouble oio_sys_io_idle (const char *vol);
