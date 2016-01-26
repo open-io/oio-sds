@@ -379,15 +379,22 @@ conscience_push_service (const char *ns, struct service_info_s *si)
 			g_ptr_array_add (tmp, g_strdup(tag->name));
 			g_ptr_array_add (tmp, g_strdup(v));
 		}
-		g_ptr_array_add (tmp, g_strdup("tag.score"));
-		g_ptr_array_add (tmp, g_strdup_printf("%"G_GUINT32_FORMAT, si->score.value));
 		g_ptr_array_add (tmp, NULL);
 		kv = (gchar**) g_ptr_array_free (tmp, FALSE);
 		grid_addrinfo_to_string (&si->addr, strurl, sizeof(strurl));
 		srvkey = service_info_key (si);
 		struct oio_cs_registration_s reg =
 			{ .id = srvkey, .url = strurl, .kv_tags = (const char * const *)kv };
-		GError *err = oio_cs_client__register_service (cs, si->type, &reg);
+
+		GError *err;
+		if (si->score.value == SCORE_UNSET)
+			err = oio_cs_client__register_service (cs, si->type, &reg);
+		else if (si->score.value == SCORE_UNLOCK)
+			err = oio_cs_client__unlock_service (cs, si->type, reg.id);
+		else
+			err = oio_cs_client__lock_service (cs, si->type, &reg,
+					si->score.value);
+
 		g_free (srvkey);
 		g_strfreev (kv);
 		oio_cs_client__destroy (cs);

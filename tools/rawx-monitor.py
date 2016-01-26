@@ -3,17 +3,17 @@
 # rainx-monitor.py, a monitoring script for rainx services
 # Copyright (C) 2014 Worldine, original work aside of Redcurrant
 # Copyright (C) 2015 OpenIO, modified as part of OpenIO Software Defined Storage
-# 
+#
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU Affero General Public License as
 # published by the Free Software Foundation, either version 3 of the
 # License, or (at your option) any later version.
-# 
+#
 # This program is distributed in the hope that it will be useful,
 # but WITHOUT ANY WARRANTY; without even the implied warranty of
 # MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 # GNU Affero General Public License for more details.
-# 
+#
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
@@ -22,13 +22,7 @@ import urllib2
 import syslog
 
 RAWX_STAT_KEYS = [
-	("rawx.reqpersec", "stat.total_reqpersec"),
-	("rawx.reqputpersec", "stat.put_reqpersec"),
-	("rawx.reqgetpersec", "stat.get_reqpersec"),
-	("rawx.avreqtime", "stat.total_avreqtime"),
-	("rawx.avputreqtime", "stat.put_avreqtime"),
-	("rawx.avgetreqtime", "stat.get_avreqtime"),
-	("rawx.volume", "tag.vol"),
+	("config volume", "tag.vol"),
 ]
 
 def parse_info(stream):
@@ -36,15 +30,17 @@ def parse_info(stream):
 	for line in stream.readlines():
 		parts = line.split()
 		if len(parts) > 1:
+			l = len(parts)
+			k, t = ' '.join(parts[:l-1]), parts[l-1]
 			# try to cast value to int or float
 			try:
-				value = int(parts[1])
+				value = int(t)
 			except ValueError:
 				try:
-					value = float(parts[1])
+					value = float(t)
 				except ValueError:
-					value = parts[1]
-			data[parts[0]] = value
+					value = t
+			data[k] = value
 		else:
 			data[parts[0]] = None
 	return data

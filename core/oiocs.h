@@ -39,6 +39,10 @@ void oio_cs_client__destroy (struct oio_cs_client_s *self);
 GError * oio_cs_client__register_service (struct oio_cs_client_s *self,
 		const char *in_type, const struct oio_cs_registration_s *reg);
 
+GError * oio_cs_client__lock_service (struct oio_cs_client_s *self,
+		const char *in_type, const struct oio_cs_registration_s *reg,
+		int score);
+
 GError * oio_cs_client__deregister_service (struct oio_cs_client_s *self,
 		const char *in_type, const char *id);
 

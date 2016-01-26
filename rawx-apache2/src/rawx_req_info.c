@@ -120,6 +120,8 @@ __gen_stats(const dav_resource *resource, apr_pool_t *pool)
 			STR_KV(rep_404,       "counter rep.hits.404"),
 			STR_KV(rep_bread,     "counter rep.bread"),
 			STR_KV(rep_bwritten,  "counter rep.bwritten"),
+
+			apr_psprintf(pool, "config volume %s", c->docroot),
 			NULL);
 }
 
