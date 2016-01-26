@@ -92,8 +92,6 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 					"Unexpected NS"));
 	}
 
-	si->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
-
 	if (op == REGOP_PUSH)
 		si->score.value = SCORE_UNSET;
 	else if (op == REGOP_UNLOCK)
@@ -104,8 +102,11 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 	if (cs_expire_local_services > 0) {
 		gchar *k = service_info_key (si);
 		struct service_info_s *v = service_info_dup (si);
+		v->score.timestamp = oio_ext_monotonic_seconds ();
 		PUSH_DO(lru_tree_insert (srv_registered, k, v));
 	}
+
+	si->score.timestamp = oio_ext_real_seconds ();
 
 	// TODO follow the DRY principle and factorize this!
 	if (flag_cache_enabled) {
