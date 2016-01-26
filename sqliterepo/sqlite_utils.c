@@ -279,9 +279,10 @@ sqlx_admin_save (struct sqlx_sqlite3_s *sq3)
 
 	EXTRA_ASSERT(sq3 != NULL);
 
-	sqlite3_prepare_debug(rc, sq3->db, "INSERT OR REPLACE INTO admin (k,v) VALUES (?,?)", -1, &stmt, NULL);
+	sqlite3_prepare_debug(rc, sq3->db,
+			"INSERT OR REPLACE INTO admin (k,v) VALUES (?,?)", -1, &stmt, NULL);
 	if (rc != SQLITE_OK && rc != SQLITE_DONE)
-		err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
+		err = SYSERR("DB error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
 	else {
 		gboolean _save (gchar *k, GByteArray *v, gpointer i) {
 			if (!v || !v->len || !v->data) {
@@ -295,8 +296,7 @@ sqlx_admin_save (struct sqlx_sqlite3_s *sq3)
 			sqlite3_bind_blob (stmt, 2, v->data, v->len, NULL);
 			sqlite3_step_debug_until_end (rc, stmt);
 			if (rc != SQLITE_OK && rc != SQLITE_DONE)
-				err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s",
-						rc, sqlite3_errmsg(sq3->db));
+				err = SYSERR("DB error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
 			count ++;
 			return err != NULL;
 		}
@@ -307,7 +307,7 @@ sqlx_admin_save (struct sqlx_sqlite3_s *sq3)
 	if (run_to_delete && !err) {
 		sqlite3_prepare_debug(rc, sq3->db, "DELETE FROM admin WHERE k = ?", -1, &stmt, NULL);
 		if (rc != SQLITE_OK && rc != SQLITE_DONE)
-			err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
+			err = SYSERR("DB error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
 		else {
 			gboolean _delete (gchar *k, GByteArray *v, gpointer i) {
 				if (v && v->len)
@@ -318,8 +318,7 @@ sqlx_admin_save (struct sqlx_sqlite3_s *sq3)
 				sqlite3_bind_text (stmt, 1, k, -1, NULL);
 				sqlite3_step_debug_until_end (rc, stmt);
 				if (rc != SQLITE_OK && rc != SQLITE_DONE)
-					err = NEWERROR(CODE_INTERNAL_ERROR, "DB error: (%d) %s",
-							rc, sqlite3_errmsg(sq3->db));
+					err = SYSERR("DB error: (%d) %s", rc, sqlite3_errmsg(sq3->db));
 				count ++;
 				return err != NULL;
 			}
@@ -341,8 +340,9 @@ guint
 sqlx_admin_save_lazy (struct sqlx_sqlite3_s *sq3)
 {
 	if (!sq3 || !sq3->admin_dirty) return 0;
+	guint rc = sqlx_admin_save (sq3);
 	sq3->admin_dirty = 0;
-	return sqlx_admin_save (sq3);
+	return rc;
 }
 
 guint
@@ -352,6 +352,7 @@ sqlx_admin_save_lazy_tnx (struct sqlx_sqlite3_s *sq3)
 	sqlx_exec (sq3->db, "BEGIN");
 	guint rc = sqlx_admin_save (sq3);
 	sqlx_exec (sq3->db, "COMMIT");
+	sq3->admin_dirty = 0;
 	return rc;
 }
 
@@ -373,5 +374,12 @@ sqlx_admin_load(struct sqlx_sqlite3_s *sq3)
 		}
 		sqlite3_finalize(stmt);
 	}
+}
+
+void
+sqlx_alert_dirty_base(struct sqlx_sqlite3_s *sq3, const char *msg)
+{
+	GRID_ERROR ("BUG: Base [%s][%s] %s", sq3->name.base, sq3->name.type, msg);
+	g_assert (!sq3->admin_dirty);
 }
 

@@ -645,6 +645,7 @@ sqlx_admin_reload(struct sqlx_sqlite3_s *sq3)
 	sqlx_admin_load (sq3);
 	sqlx_admin_ensure_versions (sq3);
     sqlx_admin_save_lazy_tnx (sq3);
+	sq3->admin_dirty = 0;
 	GRID_TRACE("Loaded %u ADMIN from [%s.%s]", g_tree_nnodes(sq3->admin),
 			sq3->name.base, sq3->name.type);
 }
@@ -845,9 +846,11 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 		err = args->repo->cache
 			? __open_maybe_cached(args, result)
 			: __open_not_cached(args, result);
-	if (!err)
+	if (!err) {
+		if ((*result)->admin_dirty)
+			sqlx_alert_dirty_base (*result, "opened with dirty admin");
 		(*result)->election = status;
-
+	}
 	return err;
 }
 
@@ -864,10 +867,8 @@ sqlx_repository_unlock_and_close2(struct sqlx_sqlite3_s *sq3, guint32 flags)
 
 	sq3->election = 0;
 
-	if (sq3->admin_dirty) {
-		GRID_ERROR("BUG: Trying to close [%s][%s] with dirty admin", sq3->name.base, sq3->name.type);
-		g_assert (!sq3->admin_dirty);
-	}
+	if (sq3->admin_dirty)
+		sqlx_alert_dirty_base(sq3, "closing with dirty admin");
 
 	if (!sq3->repo->flag_delete_on)
 		sq3->deleted = FALSE;
