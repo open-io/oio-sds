@@ -138,8 +138,7 @@ print_formated_namespace(namespace_info_t * ns)
 }
 
 static void
-print_formated_services(const gchar * type, GSList * services,
-	gboolean show_internals)
+print_formated_services(const gchar * type, GSList * services)
 {
 	if(services && 0 < g_slist_length(services)) {
 
@@ -148,25 +147,22 @@ print_formated_services(const gchar * type, GSList * services,
 			struct service_info_s *si = l->data;
 			if(!si)
 				continue;
-			if(show_internals || !service_info_is_internal(si)) {
-				if(!init) {
-					g_print("\n-- %s --\n", type);
-					init = TRUE;
-				}
-				char str_score[32];
-				char str_addr[STRLEN_ADDRINFO];
-
-				grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
-				g_snprintf(str_score, sizeof(str_score), "%d", si->score.value);
-				g_print("%20s\t%20s\n", str_addr, str_score);
+			if(!init) {
+				g_print("\n-- %s --\n", type);
+				init = TRUE;
 			}
+			char str_score[32];
+			char str_addr[STRLEN_ADDRINFO];
+
+			grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
+			g_snprintf(str_score, sizeof(str_score), "%d", si->score.value);
+			g_print("%20s\t%20s\n", str_addr, str_score);
 		}
 	}
 }
 
 static void
-print_raw_services(const gchar * ns, const gchar * type, GSList * services,
-	gboolean show_internals)
+print_raw_services(const gchar * ns, const gchar * type, GSList * services)
 {
 	GSList *l;
 
@@ -177,28 +173,26 @@ print_raw_services(const gchar * ns, const gchar * type, GSList * services,
 		char str_score[32];
 		char str_addr[STRLEN_ADDRINFO];
 
-		si = l->data;
-		if (!si)
+		if (!(si = l->data))
 			continue;
-		if(show_internals || !service_info_is_internal(si)) {
-			grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
-			g_snprintf(str_score, sizeof(str_score), "%d", si->score.value);
-			g_print("%s|%s|%s|score=%d", ns ? ns : si->ns_name,
-					type ? type : si->type, str_addr, si->score.value);
-			if (si->tags) {
-				int i, max;
-				struct service_tag_s *tag;
-				gchar str_tag_value[256];
 
-				for (i = 0, max = si->tags->len; i < max; i++) {
-					tag = g_ptr_array_index(si->tags, i);
-					service_tag_to_string(tag, str_tag_value,
-							sizeof(str_tag_value));
-					g_print("|%s=%s", tag->name, str_tag_value);
-				}
+		grid_addrinfo_to_string(&(si->addr), str_addr, sizeof(str_addr));
+		g_snprintf(str_score, sizeof(str_score), "%d", si->score.value);
+		g_print("%s|%s|%s|score=%d", ns ? ns : si->ns_name,
+				type ? type : si->type, str_addr, si->score.value);
+		if (si->tags) {
+			int i, max;
+			struct service_tag_s *tag;
+			gchar str_tag_value[256];
+
+			for (i = 0, max = si->tags->len; i < max; i++) {
+				tag = g_ptr_array_index(si->tags, i);
+				service_tag_to_string(tag, str_tag_value,
+						sizeof(str_tag_value));
+				g_print("|%s=%s", tag->name, str_tag_value);
 			}
-			g_print("\n");
 		}
+		g_print("\n");
 	}
 }
 
@@ -267,7 +261,6 @@ main(int argc, char **argv)
 	gchar *namespace = NULL;
 	gboolean has_allcfg = FALSE;
 	gboolean has_nslist = FALSE;
-	gboolean has_show_internals = FALSE;
 	gboolean has_raw = FALSE;
 	gboolean has_clear_services = FALSE;
 	gboolean has_list = FALSE;
@@ -297,7 +290,6 @@ main(int argc, char **argv)
 		{"local-srv",      0, 0, 'l'},
 		{"local-tasks",    0, 0, 't'},
 		{"show",           0, 0, 's'},
-		{"show-internals", 0, 0, 'a'},
 		{"raw",            0, 0, 'r'},
 		{"help",           0, 0, 'h'},
 		{"verbose",        0, 0, 'v'},
@@ -310,7 +302,7 @@ main(int argc, char **argv)
 	memset(cid_str, 0x00, sizeof(cid_str));
 	enable_debug();
 
-	while ((c = getopt_long(argc, argv, "ALsvaltrC:S:h", long_options, &option_index)) > -1) {
+	while ((c = getopt_long(argc, argv, "ALsvltrC:S:h", long_options, &option_index)) > -1) {
 
 		switch (c) {
 			case 'A':
@@ -357,9 +349,6 @@ main(int argc, char **argv)
 				break;
 			case 'v':
 				oio_log_verbose();
-				break;
-			case 'a':
-				has_show_internals = TRUE;
 				break;
 			case 'h':
 				rc = 0;
@@ -431,7 +420,7 @@ main(int argc, char **argv)
 			goto exit_label;
 		}
 
-		print_raw_services(NULL, NULL, services, has_show_internals);
+		print_raw_services(NULL, NULL, services);
 		g_slist_free_full (services, (GDestroyNotify)service_info_clean);
 
 	}
@@ -509,11 +498,9 @@ main(int argc, char **argv)
 				}
 				else {
 					if (has_raw)
-						print_raw_services(namespace, str_type, list_services,
-								has_show_internals);
+						print_raw_services(namespace, str_type, list_services);
 					else
-						print_formated_services(str_type, list_services,
-								has_show_internals);
+						print_formated_services(str_type, list_services);
 				}
 
 				if (error)

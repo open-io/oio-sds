@@ -32,19 +32,7 @@ struct transport_client_context_s
 {
 	struct http_parser_s *parser;
 	struct http_request_s *request;
-	struct http_request_dispatcher_s *dispatcher;
-};
-
-struct http_request_handler_s
-{
-	enum http_rc_e (*handler)(gpointer u,
-			struct http_request_s *request, struct http_reply_ctx_s *reply);
-};
-
-struct http_request_dispatcher_s
-{
-	gpointer u;
-	GArray *requests;
+	http_handler_f handler;
 };
 
 struct req_ctx_s
@@ -54,7 +42,6 @@ struct req_ctx_s
 	struct network_client_s *client;
 	struct network_transport_s *transport;
 	struct transport_client_context_s *context;
-	struct http_request_dispatcher_s *dispatcher;
 	struct http_request_s *request;
 
 	gchar *uid;
@@ -319,39 +306,6 @@ http_request_clean(struct http_request_s *req)
 
 //------------------------------------------------------------------------------
 
-void
-http_request_dispatcher_clean(struct http_request_dispatcher_s *d)
-{
-	if (!d)
-		return ;
-	if (d->requests)
-		g_array_free(d->requests, TRUE);
-	g_free(d);
-}
-
-struct http_request_dispatcher_s *
-transport_http_build_dispatcher(gpointer u,
-		const struct http_request_descr_s *descr)
-{
-	const struct http_request_descr_s *d;
-	struct http_request_dispatcher_s *dispatcher;
-
-	dispatcher = g_malloc0(sizeof(*dispatcher));
-	dispatcher->u = u;
-	dispatcher->requests = g_array_new(FALSE, FALSE,
-			sizeof(struct http_request_handler_s));
-
-	for (d=descr; d && d->name && d->handler ;d++) {
-		struct http_request_handler_s h;
-		h.handler = d->handler;
-		g_array_append_vals(dispatcher->requests, &h, 1);
-	}
-
-	return dispatcher;
-}
-
-//------------------------------------------------------------------------------
-
 static void
 http_context_clean(struct transport_client_context_s *ctx)
 {
@@ -365,14 +319,13 @@ http_context_clean(struct transport_client_context_s *ctx)
 }
 
 void
-transport_http_factory0(struct http_request_dispatcher_s *dispatcher,
-		struct network_client_s *client)
+transport_http_factory0(http_handler_f hdl, struct network_client_s *client)
 {
 	struct network_transport_s *transport;
 	struct transport_client_context_s *client_context;
 
 	client_context = g_malloc0(sizeof(struct transport_client_context_s));
-	client_context->dispatcher = dispatcher;
+	client_context->handler = hdl;
 	client_context->parser = http_parser_create();
 	client_context->request = http_request_create(client);
 
@@ -570,7 +523,8 @@ http_manage_request(struct req_ctx_s *r)
 		}
 	}
 
-	EXTRA_ASSERT(r->dispatcher != NULL);
+	EXTRA_ASSERT(r->context != NULL);
+	EXTRA_ASSERT(r->context->handler != NULL);
 
 	struct http_reply_ctx_s reply = {
 		.set_status = set_status,
@@ -596,24 +550,15 @@ http_manage_request(struct req_ctx_s *r)
 		return NULL;
 	}
 
-	GArray *ga = r->dispatcher->requests;
-	for (guint i=0; i < ga->len ;++i) {
-		enum http_rc_e rc;
-		struct http_request_handler_s *h;
-		h = &g_array_index(ga, struct http_request_handler_s, i);
-		EXTRA_ASSERT(h->handler != NULL);
-		rc = h->handler(r->dispatcher->u, r->request, &reply);
-		switch (rc) {
-			case HTTPRC_DONE:
-				EXTRA_ASSERT(finalized != FALSE);
-				cleanup();
-				return NULL;
-			case HTTPRC_NEXT:
-				break;
-			case HTTPRC_ABORT:
-				final_error(HTTP_CODE_INTERNAL_ERROR, "Internal error");
-				return NEWERROR(HTTP_CODE_INTERNAL_ERROR, "HTTP handler error");
-		}
+	enum http_rc_e rc = r->context->handler (r->request, &reply);
+	switch (rc) {
+		case HTTPRC_DONE:
+			EXTRA_ASSERT(finalized != FALSE);
+			cleanup();
+			return NULL;
+		case HTTPRC_ABORT:
+			final_error(HTTP_CODE_INTERNAL_ERROR, "Internal error");
+			return NEWERROR(HTTP_CODE_INTERNAL_ERROR, "HTTP handler error");
 	}
 
 	EXTRA_ASSERT(!finalized);
@@ -653,7 +598,6 @@ http_notify_input(struct network_client_s *clt)
 	r.client = clt;
 	r.transport = &(clt->transport);
 	r.context = r.transport->client_context;
-	r.dispatcher = r.context->dispatcher;
 	r.request = r.context->request;
 
 	struct http_parser_s *parser = clt->transport.client_context->parser;

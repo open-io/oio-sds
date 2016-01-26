@@ -26,7 +26,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <metautils/lib/metautils.h>
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
-#include <server/grid_daemon.h>
 #include <server/stats_holder.h>
 #include <server/transport_gridd.h>
 #include <sqliterepo/sqlx_macros.h>
@@ -202,15 +201,14 @@ _init_configless_structures(struct sqlx_service_s *ss)
 	ss->notify.procid = getpid();
 	ss->notify.counter = 0;
 
-	if (!(ss->prng = g_rand_new())
-			|| !(ss->notify.zctx = zmq_init(1))
+	if (!(ss->notify.zctx = zmq_init(1))
 			|| !(ss->notify.pending_events = g_ptr_array_sized_new(32))
 			|| !(ss->server = network_server_init())
 			|| !(ss->dispatcher = transport_gridd_build_empty_dispatcher())
 			|| !(ss->si = g_malloc0(sizeof(struct service_info_s)))
 			|| !(ss->clients_pool = gridd_client_pool_create())
-			|| !(ss->gsr_reqtime = grid_single_rrd_create(network_server_bogonow(ss->server), 8))
-			|| !(ss->gsr_reqcounter = grid_single_rrd_create(network_server_bogonow(ss->server),8))
+			|| !(ss->gsr_reqtime = grid_single_rrd_create(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND, 8))
+			|| !(ss->gsr_reqcounter = grid_single_rrd_create(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND,8))
 			|| !(ss->resolver = hc_resolver_create1(oio_ext_monotonic_time() / G_TIME_SPAN_SECOND))
 			|| !(ss->gtq_admin = grid_task_queue_create("admin"))
 			|| !(ss->gtq_register = grid_task_queue_create("register"))
@@ -611,9 +609,6 @@ sqlx_service_specific_fini(void)
 	if (SRV.notify.pending_events)
 		g_ptr_array_free (SRV.notify.pending_events, TRUE);
 
-	if (SRV.prng)
-		g_rand_free (SRV.prng);
-
 	if (SRV.nsinfo)
 		namespace_info_free(SRV.nsinfo);
 }
@@ -711,12 +706,14 @@ _task_register(gpointer p)
 		return;
 
 	/* Computes the avg requests rate/time */
-	time_t now = network_server_bogonow(PSRV(p)->server);
+	time_t now = oio_ext_monotonic_time () / G_TIME_SPAN_SECOND;
 
-	grid_single_rrd_feed(network_server_get_stats(PSRV(p)->server), now,
-			INNER_STAT_NAME_REQ_COUNTER, PSRV(p)->gsr_reqcounter,
-			INNER_STAT_NAME_REQ_TIME, PSRV(p)->gsr_reqtime,
-			NULL);
+	grid_single_rrd_push (PSRV(p)->gsr_reqcounter, now,
+			network_server_stat_getone(PSRV(p)->server,
+				g_quark_from_static_string(INNER_STAT_NAME_REQ_COUNTER)));
+	grid_single_rrd_push (PSRV(p)->gsr_reqtime, now,
+			network_server_stat_getone(PSRV(p)->server,
+				g_quark_from_static_string(INNER_STAT_NAME_REQ_TIME)));
 
 	guint64 avg_counter = grid_single_rrd_get_delta(PSRV(p)->gsr_reqcounter,
 			now, 4);
@@ -975,7 +972,7 @@ _zmq2agent_send_event (struct sqlx_service_s *ss, struct event_s *evt)
 	int rc;
 	gchar tmp[1+ 2*HEADER_SIZE];
 
-	evt->last_sent = network_server_bogonow (ss->server);
+	evt->last_sent = oio_ext_monotonic_time () / G_TIME_SPAN_SECOND;
 	oio_str_bin2hex(evt, HEADER_SIZE, tmp, sizeof(tmp));
 
 retry:
@@ -1001,18 +998,18 @@ retry:
 }
 
 static gboolean
-_zmq2agent_manage_event (struct sqlx_service_s *ss, zmq_msg_t *msg)
+_zmq2agent_manage_event (guint32 r, struct sqlx_service_s *ss, zmq_msg_t *msg)
 {
 	if (!ss->notify.zagent)
 		return TRUE;
 
 	struct event_s *evt = g_malloc (sizeof(struct event_s) + zmq_msg_size(msg));
 	memcpy (evt->message, zmq_msg_data(msg), zmq_msg_size(msg));
-	evt->rand = g_rand_int (ss->prng);
+	evt->rand = r;
 	evt->evtid = ss->notify.counter ++;
 	evt->procid = ss->notify.procid;
 	evt->size = zmq_msg_size (msg);
-	evt->last_sent = network_server_bogonow (ss->server);
+	evt->last_sent = oio_ext_monotonic_time () / G_TIME_SPAN_SECOND;
 	evt->recv_time = evt->last_sent;
 
 	g_ptr_array_add (ss->notify.pending_events, evt);
@@ -1054,7 +1051,7 @@ _zmq2agent_manage_ack (struct sqlx_service_s *ss, zmq_msg_t *msg)
 static void
 _retry_events (struct sqlx_service_s *ss)
 {
-	const time_t now = network_server_bogonow (ss->server);
+	const time_t now = oio_ext_monotonic_time () / G_TIME_SPAN_SECOND;
 	for (guint i=0; i<ss->notify.pending_events->len ;i++) {
 		struct event_s *evt = g_ptr_array_index (ss->notify.pending_events, i);
 		if (evt->last_sent < now-29) {
@@ -1079,7 +1076,7 @@ _zmq2agent_receive_acks (struct sqlx_service_s *ss)
 }
 
 static gboolean
-_zmq2agent_receive_events (struct sqlx_service_s *ss)
+_zmq2agent_receive_events (GRand *r, struct sqlx_service_s *ss)
 {
 	int i=0, rc, ended = 0;
 	do {
@@ -1089,7 +1086,7 @@ _zmq2agent_receive_events (struct sqlx_service_s *ss)
 		ended = (rc == 0); // empty frame is an EOF
 		if (rc > 0) {
 			++ ss->notify.counter_received;
-			if (!_zmq2agent_manage_event (ss, &msg))
+			if (!_zmq2agent_manage_event (g_rand_int(r), ss, &msg))
 				rc = 0; // make it break
 		}
 		zmq_msg_close (&msg);
@@ -1100,6 +1097,11 @@ _zmq2agent_receive_events (struct sqlx_service_s *ss)
 static gpointer
 _worker_notify_zmq2agent (gpointer p)
 {
+	/* XXX(jfs): a dedicated PRNG avoids locking the glib's PRNG for each call
+	   (such global locks are present in the GLib) and opening it with a seed
+	   from the glib's PRNG avoids syscalls to the special file /dev/urandom */
+	GRand *r = g_rand_new_with_seed (g_random_int ());
+
 	gint64 last_debug = oio_ext_monotonic_time ();
 	struct sqlx_service_s *ss = p;
 	zmq_pollitem_t pi[2] = {
@@ -1120,7 +1122,7 @@ _worker_notify_zmq2agent (gpointer p)
 			_zmq2agent_receive_acks (ss);
 		_retry_events (ss);
 		if (pi[0].revents)
-			run = _zmq2agent_receive_events (ss);
+			run = _zmq2agent_receive_events (r, ss);
 
 		/* Periodically write stats in the log */
 		gint64 now = oio_ext_monotonic_time ();
@@ -1134,6 +1136,7 @@ _worker_notify_zmq2agent (gpointer p)
 		}
 	}
 
+	g_rand_free (r);
 	GRID_INFO ("Thread stopping [NOTIFY-ZMQ2AGENT]");
 	return p;
 }
@@ -1167,7 +1170,7 @@ _worker_notify_gq2zmq (gpointer p)
 	gchar *tmp;
 
 	while (grid_main_is_running()) {
-		tmp = (gchar*) g_async_queue_timeout_pop (ss->notify.queue, 1000000L);
+		tmp = (gchar*) g_async_queue_timeout_pop (ss->notify.queue, 1 * G_TIME_SPAN_SECOND);
 		if (tmp && !_forward_event (ss, tmp))
 			break;
 	}

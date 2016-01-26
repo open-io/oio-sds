@@ -175,11 +175,7 @@ action_local_list (struct req_args_s *args)
 {
 	args->rp->no_access();
 
-	const char *types = TYPE();
-	if (!types)
-		return _reply_format_error (args, BADREQ("Missing type"));
-
-	gboolean full = _request_has_flag (args, PROXYD_HEADER_MODE, "full");
+	const char *type = TYPE();
 
 	GError *err;
 	if (NULL != (err = _cs_check_tokens(args)))
@@ -189,10 +185,10 @@ action_local_list (struct req_args_s *args)
 	gboolean _on_service (gpointer k, gpointer v, gpointer u) {
 		(void) k, (void) u;
 		struct service_info_s *si = v;
-		if (!g_ascii_strcasecmp (si->type, types)) {
+		if (!type || !g_ascii_strcasecmp (si->type, type)) {
 			if (gs->len > 1)
 				g_string_append_c (gs, ',');
-			service_info_encode_json (gs, si, full);
+			service_info_encode_json (gs, si, type==NULL);
 		}
 		return FALSE;
 	}

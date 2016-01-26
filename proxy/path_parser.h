@@ -34,6 +34,8 @@ struct trie_node_s
 	gchar *word;
 	gchar *var;
 	gpointer u;
+	GQuark gq_count;
+	GQuark gq_time;
 };
 
 struct path_parser_s
@@ -53,29 +55,17 @@ void path_parser_clean (struct path_parser_s *self);
 void path_parser_configure (struct path_parser_s *self,
 		const char *descr, void *udata);
 
-/* Dumps a JSON description of the parser's guts. */
-GString * path_parser_debug (GString *out, struct path_parser_s *self);
-
 /* Run the parsing logic. Returns a NULL pointer array of matching
  * structures. The return has to be freed with path_matching_cleanv(). */
 struct path_matching_s ** path_parser_match (struct path_parser_s *self,
 		gchar **tokens);
 
-/* Returns a copy of the description corresponding to the given matching. */
-gchar * path_matching_get_path (struct path_matching_s *self);
+void path_parser_foreach (struct path_parser_s *self,
+		void (*hook) (const struct trie_node_s *n));
 
 /* Returns the variable captured during the matching process. */
 const gchar * path_matching_get_variable (struct path_matching_s *self,
 		const char *name);
-
-/* Returns the arbitrary pointer associated with the description matched. */
-gpointer path_matching_get_udata (struct path_matching_s *self);
-
-/* Fills <out> with a JSON representation of <tab> */
-GString * path_matching_debugv (GString *out, struct path_matching_s **tab);
-
-/* Fills <out> with a JSON representation of <self> */
-GString * path_matching_debug (GString *out, struct path_matching_s *self);
 
 void path_matching_cleanv (struct path_matching_s **tab);
 

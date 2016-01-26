@@ -19,6 +19,33 @@ License along with this library.
 
 #include <glib.h>
 #include <metautils/lib/metautils.h>
+#include <sqliterepo/sqlx_macros.h>
+
+static GError *
+_remote_kill (const char *to)
+{
+	GByteArray *encoded = message_marshall_gba_and_clean (
+			metautils_message_create_named("REQ_KILL"));
+	return gridd_client_exec (to, 30.0, encoded);
+}
+
+static GError *
+_remote_glib_lean (const char *to)
+{
+	MESSAGE req = metautils_message_create_named("REQ_LEAN");
+	metautils_message_add_field_str(req, "LIBC", "1");
+	metautils_message_add_field_str(req, "THREADS", "1");
+	GByteArray *encoded = message_marshall_gba_and_clean (req);
+	return gridd_client_exec (to, 30.0, encoded);
+}
+
+static GError *
+_remote_sqlx_lean (const char *to)
+{
+	GByteArray *encoded = message_marshall_gba_and_clean (
+			metautils_message_create_named(NAME_MSGNAME_SQLX_LEANIFY));
+	return gridd_client_exec (to, 30.0, encoded);
+}
 
 static GError *
 _remote_version (const char *to, gchar **out)
@@ -125,6 +152,46 @@ _do_version (const char *to)
 		return 0;
 	} else {
 		g_printerr ("%s VERSION ERROR (%d) %s\n", to, err->code, err->message);
+		g_clear_error (&err);
+		return 1;
+	}
+}
+
+static int
+_do_kill (const char *to, const char *how)
+{
+	gint64 pre = oio_ext_monotonic_time();
+	GError *err = _remote_kill (to);
+	gint64 post = oio_ext_monotonic_time();
+	if (!err) {
+		g_print ("%s KILL-%s OK %"G_GINT64_FORMAT"\n", to, how, (post-pre));
+		return 0;
+	} else {
+		g_print ("%s KILL-%s ERROR %"G_GINT64_FORMAT" (%d) %s\n", to, how, (post-pre),
+				err->code, err->message);
+		g_clear_error (&err);
+		return 1;
+	}
+}
+
+static int
+_do_lean (const char *to, gboolean glib)
+{
+	GError *err = NULL;
+	gint64 pre = oio_ext_monotonic_time();
+	if (glib)
+		err = _remote_glib_lean (to);
+	else
+		err = _remote_sqlx_lean (to);
+	gint64 post = oio_ext_monotonic_time();
+	if (!err) {
+		g_print ("%s LEAN-%s OK %"G_GINT64_FORMAT"\n",
+				to, glib ? "glib" : "sqlx", (post-pre));
+		return 0;
+	} else {
+		g_print ("%s LEAN-%s ERROR %"G_GINT64_FORMAT" (%d) %s\n",
+				to, glib ? "glbi" : "sqlx", (post-pre),
+				err->code, err->message);
 		g_clear_error (&err);
 		return 1;
 	}
@@ -254,7 +321,9 @@ main (int argc, char **argv)
 		g_printerr (" %s version IP:PORT\n", argv[0]);
 		g_printerr (" %s handlers IP:PORT\n", argv[0]);
 		g_printerr (" %s stats IP:PORT\n", argv[0]);
-		g_printerr (" %s hash ACCOUNT [PREFIX]\n", argv[0]);
+		g_printerr (" %s lean (glib|sqlite) IP:PORT\n", argv[0]);
+		g_printerr (" %s kill (glib|sqlite) IP:PORT\n", argv[0]);
+		g_printerr (" %s hash [PREFIX]\n", argv[0]);
 		return 2;
 	}
 	oio_ext_set_random_reqid ();
@@ -266,6 +335,30 @@ main (int argc, char **argv)
 	} else if (!strcmp("cid", argv[1])) {
 		for (int i=2; i<argc ;++i)
 			_dump_cid (argv[i]);
+		return 0;
+	} else if (!strcmp("kill", argv[1])) {
+		if (argc < 3) {
+			g_printerr ("Missing 'kill' argument: 'abort'\n");
+			return 1;
+		}
+		if (strcmp(argv[2], "abort")) {
+			g_printerr ("Invalid 'lean' argument: 'abort'\n");
+			return 1;
+		}
+		for (int i=3; i<argc ;++i)
+			_do_kill(argv[i], argv[2]);
+		return 0;
+	} else if (!strcmp("lean", argv[1])) {
+		if (argc < 3) {
+			g_printerr ("Missing 'lean' argument: 'glib' or 'sqlite'\n");
+			return 1;
+		}
+		if (strcmp(argv[2], "glib") && strcmp(argv[2], "sqlite")) {
+			g_printerr ("Invalid 'lean' argument: 'glib' or 'sqlite'\n");
+			return 1;
+		}
+		for (int i=3; i<argc ;++i)
+			_do_lean(argv[i], !strcmp(argv[2], "glib"));
 		return 0;
 	} else if (!strcmp("version", argv[1])) {
 		for (int i=2; i<argc ;++i)

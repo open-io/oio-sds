@@ -157,20 +157,3 @@ addr_info_hash(gconstpointer k)
 	return djb_hash_buf((guint8 *) &addr, sizeof(addr_info_t));
 }
 
-addr_info_t *
-addr_info_from_service_str(const gchar *service)
-{
-	gchar **t = g_strsplit(service, "|", 3);
-	if (!t) return NULL;
-
-	if (g_strv_length(t) != 3) {
-		g_strfreev (t);
-		return NULL;
-	}
-
-	addr_info_t addr;
-	int rc = grid_string_to_addrinfo (t[2], &addr);
-	g_strfreev (t);
-	return !rc ? NULL : g_memdup(&addr, sizeof(addr));
-}
-

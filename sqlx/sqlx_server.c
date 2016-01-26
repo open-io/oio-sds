@@ -26,7 +26,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 #include <resolver/hc_resolver.h>
-#include <server/grid_daemon.h>
 #include <server/transport_gridd.h>
 #include <sqliterepo/replication_dispatcher.h>
 #include <sqliterepo/sqlx_remote.h>

@@ -54,7 +54,6 @@ License along with this library.
 # include <metautils/lib/metautils_svc_policy.h>
 # include <metautils/lib/metautils_syscall.h>
 
-# include <metautils/lib/metatype_cid.h>
 # include <metautils/lib/metatype_m0info.h>
 # include <metautils/lib/metatype_nsinfo.h>
 # include <metautils/lib/metatype_srvinfo.h>

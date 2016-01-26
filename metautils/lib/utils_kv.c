@@ -31,13 +31,6 @@ key_value_pair_create(const gchar *k, const guint8 *v, gsize vs)
 	return kv;
 }
 
-GHashTable *
-key_value_pairs_empty (void)
-{
-	return g_hash_table_new_full(g_str_hash, g_str_equal,
-			g_free, metautils_gba_clean);
-}
-
 struct kv_convert_ctx_s
 {
 	gboolean error_met;

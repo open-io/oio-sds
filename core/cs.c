@@ -22,6 +22,7 @@ License along with this library.
 
 #include <metautils/lib/metautils_macros.h>
 
+#include "oioext.h"
 #include "oiostr.h"
 #include "oioext.h"
 #include "oiocs.h"

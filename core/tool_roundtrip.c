@@ -42,8 +42,6 @@ static const char random_chars[] =
 
 static const char hex_chars[] = "0123456789ABCDEF";
 
-static GRand *prng = NULL;
-
 static int
 _on_item (void *ctx, const struct oio_sds_list_item_s *item)
 {
@@ -85,7 +83,7 @@ _append_random_chars (gchar *d, const char *chars, guint n)
 	size_t len = strlen (chars);
 	gchar *p = d + strlen(d);
 	for (guint i=0; i<n ;i++)
-		*(p++) = chars [g_rand_int_range (prng, 0, len)];
+		*(p++) = chars [g_random_int_range (0, len)];
 	*p = '\0';
 }
 
@@ -227,8 +225,6 @@ main(int argc, char **argv)
 	oio_log_to_stderr();
 	oio_sds_default_autocreate = 1;
 	oio_log_init_level_from_env("G_DEBUG_LEVEL");
-
-	prng = g_rand_new ();
 
 	if (argc != 2) {
 		g_printerr ("Usage: %s PATH\n", argv[0]);

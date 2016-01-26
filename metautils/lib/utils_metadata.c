@@ -22,12 +22,6 @@ License along with this library.
 #define METADATA_HT_CREATE() g_hash_table_new_full(g_str_hash, g_str_equal, g_free, g_free)
 
 GHashTable*
-metadata_create_empty(void)
-{
-	return METADATA_HT_CREATE();
-}
-
-GHashTable*
 metadata_unpack_buffer(const guint8 *data, gsize size, GError **error)
 {
 	GHashTable *ht;

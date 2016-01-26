@@ -18,6 +18,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <string.h>
 #include <metautils/lib/metautils.h>
+#include <server/internals.h>
 #include "path_parser.h"
 
 /* Allocates a node an initaite it with the given word and variable. */
@@ -27,17 +28,8 @@ static struct trie_node_s * _node_init (const struct trie_node_s*,
 /* Clean the node and all its children (recursively) */
 static void _node_free (struct trie_node_s *);
 
-/* Fills the GString with the path to the given node */
-static GString * _node_path (GString*, const struct trie_node_s *);
-
-/* Fills the GString with a JSON representation of the node */ 
-static GString * _node_debug (GString*, const struct trie_node_s *);
-
 /* Allocates an empty array */
 static struct trie_node_s ** _nodev_empty (void);
-
-/* compute the size of the array */
-static gsize _nodev_length (struct trie_node_s **);
 
 /* clean the array */
 static void _nodev_free (struct trie_node_s **);
@@ -49,12 +41,9 @@ static struct trie_node_s * _nodev_lookup (struct trie_node_s **,
 /* appends to the node array */
 struct trie_node_s ** _nodev_append (struct trie_node_s **, struct trie_node_s *);
 
-/* Dumps the Trie for debug purpose */
-static GString * _nodev_debug (GString *, struct trie_node_s **);
-
 /* Fills the tree */
 static struct trie_node_s ** _trie_insert (const struct trie_node_s *,
-		struct trie_node_s **, gchar **, gpointer);
+		struct trie_node_s **, gchar **, const char*, gpointer);
 
 /* Recursively run the tree */
 static GSList * _trie_explore (struct trie_node_s **, gchar **,
@@ -83,17 +72,6 @@ path_parser_clean (struct path_parser_s *self)
 	g_free (self);
 }
 
-GString *
-path_parser_debug (GString *out, struct path_parser_s *self)
-{
-	if (!out)
-		out = g_string_new ("");
-	g_string_append (out, "{\"r\":");
-	_nodev_debug (out, self->roots);
-	g_string_append (out, "}");
-	return out;
-}
-
 struct path_matching_s **
 path_parser_match (struct path_parser_s *self, gchar **tokens)
 {
@@ -114,42 +92,8 @@ path_parser_configure (struct path_parser_s *self, const char *descr, void *u)
 	EXTRA_ASSERT (self != NULL);
 	EXTRA_ASSERT (descr != NULL);
 	gchar **tokens = g_strsplit (descr, "/", -1);
-	self->roots = _trie_insert (NULL, self->roots, tokens, u);
+	self->roots = _trie_insert (NULL, self->roots, tokens, descr, u);
 	g_strfreev (tokens);
-}
-
-GString *
-path_matching_debug (GString *out, struct path_matching_s *m)
-{
-	if (!out)
-		out = g_string_new ("");
-	g_string_append (out, "{\"p\":");
-	_node_path (out, m->last);
-	g_string_append (out, ",\"v\":[");
-	for (gchar **p = m->vars; *p ;p++) {
-		g_string_append_c (out, '"');
-		g_string_append (out, *p);
-		g_string_append_c (out, '"');
-		if (*(p+1))
-			g_string_append (out, ",");
-	}
-	g_string_append (out, "]}");
-	return out;
-}
-
-GString *
-path_matching_debugv (GString *out, struct path_matching_s **tab)
-{
-	if (!out)
-		out = g_string_new ("");
-	g_string_append_c (out, '[');
-	for (; *tab ;++tab) {
-		path_matching_debug (out, *tab);
-		if (*(tab+1))
-			g_string_append_c (out, ',');
-	}
-	g_string_append_c (out, ']');
-	return out;
 }
 
 void
@@ -160,13 +104,6 @@ path_matching_cleanv (struct path_matching_s **tab)
 	for (struct path_matching_s **p = tab; *p ;++p)
 		_match_free (*p);
 	g_free (tab);
-}
-
-gchar *
-path_matching_get_path (struct path_matching_s *self)
-{
-	EXTRA_ASSERT (self != NULL);
-	return g_string_free (_node_path (NULL, self->last), TRUE);
 }
 
 const gchar *
@@ -189,20 +126,12 @@ path_matching_get_variable (struct path_matching_s *self, const char *name)
 	return NULL;
 }
 
-gpointer
-path_matching_get_udata (struct path_matching_s *self)
-{
-	EXTRA_ASSERT (self != NULL);
-	EXTRA_ASSERT (self->last != NULL);
-	return self->last->u;
-}
-
 /* ------------------------------------------------------------------------- */
 
 struct path_matching_s *
 _match_dup (const struct path_matching_s *m0)
 {
-	struct path_matching_s *m = g_slice_new (struct path_matching_s);
+	struct path_matching_s *m = SLICE_NEW (struct path_matching_s);
 	m->last = m0->last;
 	m->vars = m0->vars ? g_strdupv (m0->vars) : g_try_malloc0 (sizeof(gchar*));
 	return m;
@@ -213,7 +142,7 @@ _match_free (struct path_matching_s *m)
 {
 	if (m->vars)
 		g_strfreev (m->vars);
-	g_slice_free (struct path_matching_s, m);
+	SLICE_FREE (struct path_matching_s, m);
 }
 
 struct trie_node_s *
@@ -241,62 +170,6 @@ _node_free (struct trie_node_s *n)
 	g_free (n);
 }
 
-GString *
-_node_path (GString *out, const struct trie_node_s *n)
-{
-	if (n)
-		return out;
-	if (!out)
-		out = g_string_new("");
-
-	GPtrArray *tmp = g_ptr_array_new();
-	for (; n ;n=n->parent) {
-		if (tmp->len > 0)
-			g_ptr_array_add(tmp, "/");
-		if (n->word)
-			g_ptr_array_add(tmp, n->word);
-		else {
-			g_ptr_array_add(tmp, n->var);
-			g_ptr_array_add(tmp, "$"); // XXX we traverse in reverse order
-		}
-	}
-
-	for (guint i=tmp->len; i>0 ;i--)
-		g_string_append (out, tmp->pdata[i-1]);
-	g_ptr_array_free (tmp, TRUE);
-	return out;
-}
-
-GString *
-_node_debug (GString *out, const struct trie_node_s *n)
-{
-	if (!out)
-		out = g_string_new("");
-
-	g_string_append_printf (out, "{\"i\":\"%p\",", n);
-
-	if (n->word)
-		g_string_append_printf (out, "\"w\":\"%s\",", n->word);
-	else
-		g_string_append (out, "\"w\":null,");
-
-	if (n->var)
-		g_string_append_printf (out, "\"v\":\"%s\",", n->var);
-	else
-		g_string_append (out, "\"v\":null,");
-
-	g_string_append_printf (out, "\"F\":%s,", n->u ? "true" : "false");
-
-	if (n->parent)
-		g_string_append_printf (out, "\"p\":\"%p\",\"n\":", n->parent);
-	else
-		g_string_append (out, "\"p\":null,\"n\":");
-
-	_nodev_debug(out, n->next);
-	g_string_append (out, "}");
-	return out;
-}
-
 struct trie_node_s **
 _nodev_empty (void)
 {
@@ -310,12 +183,12 @@ _nodev_free (struct trie_node_s **tab)
 		return;
 	for (struct trie_node_s **p = tab; *p ;++p) {
 		_node_free (*p);
-		*p = NULL;	
+		*p = NULL;
 	}
 	g_free (tab);
 }
 
-gsize
+static gsize
 _nodev_length (struct trie_node_s **tab)
 {
 	gsize count = 0;
@@ -349,26 +222,37 @@ _nodev_lookup (struct trie_node_s **tab, const gchar *word, const gchar *var)
 	return NULL;
 }
 
-GString *
-_nodev_debug (GString *out, struct trie_node_s **tab)
+#define P PROXYD_PREFIX"/$NS/"
+
+static gchar *
+_stat_name (const char *prefix, const char *tail, gchar *d, gsize dlen)
 {
-	if (!out)
-		out = g_string_new ("");
-	g_string_append (out, "[");
-	if (tab) {
-		for (; *tab ;++tab) {
-			_node_debug (out, *tab);
-			if (*(tab+1))
-				g_string_append (out, ",");
-		}
+	if (g_str_has_prefix(tail, P))
+		dlen = g_snprintf (d, dlen, "%s.%s", prefix, tail+sizeof(P)-1);
+	else if (g_str_has_prefix(tail, PROXYD_PREFIX))
+		dlen = g_snprintf (d, dlen, "%s.%s", prefix, tail+sizeof(PROXYD_PREFIX)-1);
+	else
+		dlen = g_snprintf (d, dlen, "%s.%s", prefix, tail);
+
+	/* replace ugly characters by '_' */
+	for (int i=strlen (prefix)+1; d[i] ;++i) {
+		if (!g_ascii_isalnum (d[i]))
+			d[i]='_';
 	}
-	g_string_append (out, "]");
-	return out;
+
+	gchar *s;
+	/* agregate subsequent '_' */
+	while (NULL != (s = g_strrstr_len(d, dlen, "__"))) {
+		for (;*s;++s)
+			*s = *(s+1);
+	}
+
+	return d;
 }
 
 struct trie_node_s **
-_trie_insert (const struct trie_node_s *parent, struct trie_node_s **tab, gchar **words,
-		gpointer u)
+_trie_insert (const struct trie_node_s *parent, struct trie_node_s **tab,
+		gchar **words, const char *descr, gpointer u)
 {
 	EXTRA_ASSERT (tab != NULL);
 	EXTRA_ASSERT (words != NULL);
@@ -389,9 +273,15 @@ _trie_insert (const struct trie_node_s *parent, struct trie_node_s **tab, gchar 
 
 	// Then recurse on the next words, or mark the node as final.
 	if (*(words+1))
-		n->next = _trie_insert (n, n->next, words+1, u);
-	else
+		n->next = _trie_insert (n, n->next, words+1, descr, u);
+	else {
+		gchar tmp[512];
 		n->u = u;
+		n->gq_count = g_quark_from_string (
+				_stat_name(OIO_STAT_PREFIX_REQ, descr, tmp, sizeof(tmp)));
+		n->gq_time = g_quark_from_string (
+				_stat_name(OIO_STAT_PREFIX_TIME, descr, tmp, sizeof(tmp)));
+	}
 
 	return tab;
 }
@@ -431,9 +321,24 @@ _trie_explore (struct trie_node_s **tab, gchar **needles,
 			m->vars = oio_strv_append (m->vars, g_strdup_printf("%s=%s", (*tab)->var, *needles));
 			step (m);
 		}
-			
 	}
 
 	return matches;
+}
+
+static void
+_run (void (*hook) (const struct trie_node_s *), struct trie_node_s **p)
+{
+	for (; *p ;++p) {
+		if ((*p)->u) hook (*p);
+		if ((*p)->next) _run (hook, (*p)->next);
+	}
+}
+
+void
+path_parser_foreach (struct path_parser_s *self,
+		void (*hook) (const struct trie_node_s *))
+{
+	if (self->roots) _run (hook, self->roots);
 }
 

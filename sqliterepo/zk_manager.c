@@ -44,7 +44,6 @@ struct zk_manager_s
 static gchar*
 get_fullpath(struct zk_manager_s *manager, gchar *subdir, gchar* name)
 {
-	struct hashstr_s *key;
 	gchar * result;
 	if (subdir)
 		result = g_strdup_printf("%s/%s",manager->zk_dir,subdir);
@@ -54,8 +53,8 @@ get_fullpath(struct zk_manager_s *manager, gchar *subdir, gchar* name)
 	if ( name ) {
 		struct sqlx_name_s n = {"", "", ""};
 		n.base = name;
-		key = sqliterepo_hash_name(&n);
-		result =  g_strdup_printf("%s/%s",result,hashstr_str(key));
+		struct hashstr_s *key = sqliterepo_hash_name(&n);
+		oio_str_reuse (&result, g_strdup_printf("%s/%s", result, hashstr_str(key)));
 		g_free(key);
 	}
 
@@ -162,6 +161,7 @@ zk_manager_clean(struct zk_manager_s *manager)
 
 	if (manager->zh)
 		zookeeper_close(manager->zh);
+	oio_str_clean (&manager->zk_url);
 
 	g_free(manager);
 }
@@ -182,16 +182,16 @@ create_zk_node(struct zk_manager_s *manager, gchar *subdir, gchar *name, gchar *
 	EXTRA_ASSERT(manager != NULL);
 	EXTRA_ASSERT(name != NULL);
 
-	int rc;
-	gchar buffer[512], *path;
-
+	gchar buffer[512];
 	memset(buffer, 0, sizeof(buffer));
-	path = get_fullpath(manager, subdir, name);
+
+	gchar *path = get_fullpath(manager, subdir, name);
+	STRING_STACKIFY(path);
+
 	GRID_TRACE("create node %s , full path [%s]", name, path);
 
-	rc = zoo_create(manager->zh, path, data, strlen(data),
+	int rc = zoo_create(manager->zh, path, data, strlen(data),
 			&ZOO_OPEN_ACL_UNSAFE, 0, buffer, sizeof(buffer)-1);
-	g_free(path);
 
 	if (rc != ZOK && rc != ZNODEEXISTS)
 		return  NEWERROR(0, "Failed to create Zk node [%s], zk code [%d]", name, rc );
@@ -201,17 +201,17 @@ create_zk_node(struct zk_manager_s *manager, gchar *subdir, gchar *name, gchar *
 GError *
 list_zk_children_node(struct zk_manager_s *manager, gchar *sub_dir, GSList **result)
 {
-	struct String_vector sv = {0};
-	int i, rc;
 	struct Stat my_stat;
-	gchar *fullpath=NULL;
-	gchar *dirpath=NULL;
 	GError *err = NULL;
 	struct zk_node_s *zknode;
 	GSList *list=NULL;
 
-	dirpath = get_fullpath(manager,sub_dir,NULL);
-	rc = zoo_get_children(manager->zh, dirpath, 0, &sv);
+	gchar *dirpath = get_fullpath(manager,sub_dir,NULL);
+	STRING_STACKIFY(dirpath);
+
+	struct String_vector sv = {0};
+	memset(&sv, '\0', sizeof(struct String_vector));
+	int rc = zoo_get_children(manager->zh, dirpath, 0, &sv);
 
 	if ( rc != ZOK ) {
 		err = NEWERROR(0, "Failed to find zk children node [%s] , zk code [%d]",
@@ -219,18 +219,20 @@ list_zk_children_node(struct zk_manager_s *manager, gchar *sub_dir, GSList **res
 		goto end_error;
 	}
 
-	for (i=0; i<sv.count; i++) {
+	for (int i=0; i<sv.count; i++) {
 		gchar buffer[512] = {0};
 		int buflen = sizeof(buffer)-1;
 		zknode = g_malloc0(sizeof(struct zk_node_s));
-		fullpath = g_strdup_printf("%s/%s",dirpath,sv.data[i]);
+		gchar *fullpath = g_strdup_printf("%s/%s",dirpath,sv.data[i]);
 		rc = zoo_get(manager->zh, fullpath, 1, buffer , &buflen, &my_stat);
 		if ( rc != ZOK ) {
-			err =  NEWERROR(0, "Failed to get node [%s] , zk code [%d]",fullpath,rc);
+			g_free (fullpath);
+			err =  NEWERROR(0, "Failed to get node [%s] , zk code [%d]", fullpath, rc);
 			goto end_error;
 		}
 
-		zknode->path=g_strdup(fullpath);
+		zknode->path = fullpath;
+		fullpath = NULL;
 		if ( buflen > 0 )
 			zknode->content=g_strdup(buffer);
 		list = g_slist_prepend(list,zknode);
@@ -239,13 +241,10 @@ list_zk_children_node(struct zk_manager_s *manager, gchar *sub_dir, GSList **res
 
 end_error :
 	free_string_vector(&sv);
-	if (fullpath)
-		g_free(fullpath);
 	if ( err ) {
 		g_slist_free_full(list, (GDestroyNotify) free_zknode);
 		*result=NULL;
 	}
-
 	return err;
 }
 
@@ -255,13 +254,12 @@ delete_zk_node(struct zk_manager_s *manager, gchar *subdir, gchar *name)
 	EXTRA_ASSERT(manager != NULL);
 	EXTRA_ASSERT(name != NULL);
 
-	int rc;
+	gchar *fullpath = get_fullpath(manager,subdir,name);
+	STRING_STACKIFY(fullpath);
 
-	GRID_TRACE("create node %s , full path [%s]", name,
-			get_fullpath(manager,subdir,name));
+	GRID_TRACE("create node %s , full path [%s]", name, fullpath);
 
-	rc = zoo_delete(manager->zh,get_fullpath(manager,subdir,name),-1);
-
+	int rc = zoo_delete(manager->zh, fullpath, -1);
 	if ( rc != ZOK && rc != ZNONODE )
 		return  NEWERROR(0, "Failed to delete zk  node [%s], zk code [%d]", name, rc);
 	return NULL;

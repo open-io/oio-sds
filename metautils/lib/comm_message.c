@@ -135,7 +135,8 @@ message_marshall_gba(MESSAGE m, GError **err)
 		return NULL;
 	}
 
-	l4v_prepend_size(result->data, result->len);
+	guint32 s32 = result->len - 4;
+	*((guint32*)(result->data)) = g_htonl(s32);
 	return result;
 }
 
@@ -371,65 +372,18 @@ metautils_message_add_field_str(MESSAGE m, const char *name, const char *value)
 }
 
 void
+metautils_message_add_field_gba(MESSAGE m, const char *name, GByteArray *gba)
+{
+	if (gba)
+		metautils_message_add_field (m, name, gba->data, gba->len);
+}
+
+void
 metautils_message_add_field_strint64(MESSAGE m, const char *name, gint64 v)
 {
 	gchar tmp[24];
 	g_snprintf(tmp, 24, "%"G_GINT64_FORMAT, v);
 	return metautils_message_add_field_str(m, name, tmp);
-}
-
-void
-metautils_message_add_fieldv_str(MESSAGE m, va_list args)
-{
-	if (!m)
-		return;
-	for (;;) {
-		char *k = va_arg(args, char *);
-		if (!k)
-			break;
-		char *v = va_arg(args, char *);
-		if (!v)
-			break;
-		metautils_message_add_field_str(m, k, v);
-	}
-}
-
-void
-metautils_message_add_fields_str(MESSAGE m, ...)
-{
-	if (!m)
-		return;
-	va_list args;
-	va_start(args, m);
-	metautils_message_add_fieldv_str(m, args);
-	va_end(args);
-}
-
-void
-metautils_message_add_fieldv_gba(MESSAGE m, va_list args)
-{
-	if (!m)
-		return;
-	for (;;) {
-		char *k = va_arg(args, char *);
-		if (!k)
-			break;
-		GByteArray *v = va_arg(args, GByteArray *);
-		if (!v)
-			break;
-		metautils_message_add_field(m, k, v->data, v->len);
-	}
-}
-
-void
-metautils_message_add_fields_gba(MESSAGE m, ...)
-{
-	if (!m)
-		return;
-	va_list args;
-	va_start(args, m);
-	metautils_message_add_fieldv_gba(m, args);
-	va_end(args);
 }
 
 static struct map_s
@@ -703,7 +657,7 @@ metautils_message_extract_body_encoded(MESSAGE msg, gboolean mandatory,
 	void *b = metautils_message_get_BODY(msg, &bsize);
 	if (!b) {
 		if (mandatory)
-			return NEWERROR(CODE_BAD_REQUEST, "Missing body");	
+			return NEWERROR(CODE_BAD_REQUEST, "Missing body");
 		return NULL;
     }
 
@@ -733,7 +687,7 @@ metautils_message_extract_header_encoded(MESSAGE msg, const gchar *n, gboolean m
 		if (mandatory)
 			return NEWERROR(CODE_BAD_REQUEST, "Missing header [%s]", n);
 		return NULL;
-	} 
+	}
 
 	GError *err = NULL;
 	int rc = decoder(result, b, bsize, &err);
@@ -805,28 +759,6 @@ metautils_message_extract_boolean(MESSAGE msg, const gchar *n,
 	}
 	if (v)
 		*v = metautils_cfg_get_bool (tmp, *v);
-	return NULL;
-}
-
-GError*
-metautils_message_extract_header_gba(MESSAGE msg, const gchar *n,
-		gboolean mandatory, GByteArray **result)
-{
-	EXTRA_ASSERT(msg != NULL);
-	EXTRA_ASSERT(n != NULL);
-	EXTRA_ASSERT(result != NULL);
-
-	gsize fsize = 0;
-	void *f = metautils_message_get_field(msg, n, &fsize);
-
-	if (!f || !fsize) {
-		if (mandatory)
-			return NEWERROR(CODE_BAD_REQUEST, "Missing ID prefix at '%s'", n);
-		*result = NULL;
-		return NULL;
-	}
-
-	*result = g_byte_array_append(g_byte_array_new(), f, fsize);
 	return NULL;
 }
 

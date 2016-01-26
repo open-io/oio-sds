@@ -646,7 +646,7 @@ main_thread (gpointer arg)
 				continue;
 			}
 
-			GByteArray *gba = l4v_read(clt, srv->to_operation, &gErr);
+			GByteArray *gba = l4v_read_2to(clt, srv->to_operation, srv->to_operation, &gErr);
 			if (!gba) {
 				GSETERROR(&gErr,"Read error");
 				break;

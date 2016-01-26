@@ -347,6 +347,7 @@ _client_manage_reply_data(struct gridd_client_s *c)
 static GError *
 _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize ds)
 {
+	guint32 s32;
 	ssize_t rc;
 
 	switch (client->step) {
@@ -405,7 +406,8 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 			}
 
 			EXTRA_ASSERT (client->reply->len == 4);
-			client->size = l4v_get_size(client->reply->data);
+			s32 = *((guint32*)(client->reply->data));
+			client->size = g_ntohl(s32);
 
 		case REP_READING_DATA:
 
