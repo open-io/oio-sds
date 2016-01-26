@@ -31,7 +31,24 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <mod_dav.h>
 
 #include <rawx-lib/src/rawx.h>
-#include <rainx/rainx_stats_rrd.h>
+
+#define RAWX_STATNAME_REQ_ALL       "q0"
+#define RAWX_STATNAME_REQ_CHUNKGET  "q1"
+#define RAWX_STATNAME_REQ_CHUNKPUT  "q2"
+#define RAWX_STATNAME_REQ_CHUNKDEL  "q3"
+#define RAWX_STATNAME_REQ_STAT      "q4"
+#define RAWX_STATNAME_REQ_INFO      "q5"
+#define RAWX_STATNAME_REQ_RAW       "q6"
+#define RAWX_STATNAME_REQ_OTHER     "q7"
+
+#define RAWX_STATNAME_REP_2XX       "r1"
+#define RAWX_STATNAME_REP_4XX       "r2"
+#define RAWX_STATNAME_REP_5XX       "r3"
+#define RAWX_STATNAME_REP_OTHER     "r4"
+#define RAWX_STATNAME_REP_403       "r5"
+#define RAWX_STATNAME_REP_404       "r6"
+#define RAWX_STATNAME_REP_BREAD     "r7"
+#define RAWX_STATNAME_REP_BWRITTEN  "r8"
 
 struct rainx_stats_s {
 	apr_uint32_t req_all;
@@ -42,6 +59,7 @@ struct rainx_stats_s {
 	apr_uint32_t req_info;
 	apr_uint32_t req_raw;
 	apr_uint32_t req_other;
+
 	apr_uint32_t rep_2XX;
 	apr_uint32_t rep_4XX;
 	apr_uint32_t rep_5XX;
@@ -50,18 +68,15 @@ struct rainx_stats_s {
 	apr_uint32_t rep_404;
 	apr_uint32_t rep_bread;
 	apr_uint32_t rep_bwritten;
+
 	apr_uint32_t time_all;
 	apr_uint32_t time_put;
 	apr_uint32_t time_get;
 	apr_uint32_t time_del;
-	struct rainx_stats_rrd_s rrd_req_sec;
-	struct rainx_stats_rrd_s rrd_duration;
-	struct rainx_stats_rrd_s rrd_req_put_sec;
-	struct rainx_stats_rrd_s rrd_put_duration;
-	struct rainx_stats_rrd_s rrd_req_get_sec;
-	struct rainx_stats_rrd_s rrd_get_duration;
-	struct rainx_stats_rrd_s rrd_req_del_sec;
-	struct rainx_stats_rrd_s rrd_del_duration;
+	apr_uint32_t time_stat;
+	apr_uint32_t time_info;
+	apr_uint32_t time_raw;
+	apr_uint32_t time_other;
 };
 
 struct shm_stats_s {
@@ -77,7 +92,7 @@ struct shm_stats_s {
 };
 
 typedef struct dav_rainx_server_conf_s dav_rainx_server_conf;
- 
+
 struct dav_rainx_server_conf_s {
 	apr_pool_t *pool;
 	char docroot[1024];
