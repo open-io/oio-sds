@@ -114,6 +114,7 @@ struct network_server_s
 	int wakeup[2];
 	int epollfd;
 	gboolean flag_continue : 1;
+	gboolean abort_allowed : 1;
 };
 
 enum
