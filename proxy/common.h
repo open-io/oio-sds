@@ -65,7 +65,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define GUARDED_DO(Lock,Action) do { \
 	g_mutex_lock(&Lock); \
-	Action ; \
+	do { Action ; } while (0); \
 	g_mutex_unlock(&Lock); \
 } while (0)
 
