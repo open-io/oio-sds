@@ -194,9 +194,7 @@ action_local_list (struct req_args_s *args)
 		return FALSE;
 	}
 
-	PUSH_DO(do {
-		lru_tree_foreach_DEQ (srv_registered, _on_service, NULL);
-	} while (0));
+	PUSH_DO(lru_tree_foreach_DEQ(srv_registered, _on_service, NULL));
 	g_string_append_c (gs, ']');
 
 	return _reply_success_json (args, gs);

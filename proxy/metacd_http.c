@@ -411,15 +411,20 @@ _task_reload_srvtypes (gpointer p)
 }
 
 static guint
-_expire_local (time_t pivot)
+_expire_local (time_t pivot, GString *dbg)
 {
 	guint count = 0;
 	gchar *k = NULL;
 	struct service_info_s *si = NULL;
+
 	while (lru_tree_get_last (srv_registered, (void**)&k, (void**)&si)) {
 		if (si->score.timestamp > pivot)
 			break;
 		lru_tree_steal_last (srv_registered, (void**)&k, (void**)&si);
+		if (dbg->len < 128) {
+			if (dbg->len > 0) g_string_append_c (dbg, ',');
+			g_string_append (dbg, k);
+		}
 		g_free (k);
 		service_info_clean (si);
 		++ count;
@@ -432,10 +437,12 @@ _task_expire_local (gpointer p)
 {
 	(void) p;
 	time_t pivot = oio_ext_monotonic_seconds () - cs_expire_local_services;
+	GString *dbg = g_string_new ("");
 	guint count;
-	PUSH_DO(count = _expire_local(pivot));
+	PUSH_DO(count = _expire_local (pivot, dbg));
 	if (count)
-		GRID_INFO("%u local services expired", count);
+		GRID_INFO("%u local services expired: %s", count, dbg->str);
+	g_string_free (dbg, TRUE);
 }
 
 static void
@@ -774,8 +781,7 @@ grid_main_configure (int argc, char **argv)
 	GRID_INFO ("RESOLVER limits HIGH[%u/%u] LOW[%u/%u]",
 		dir_high_max, dir_high_ttl, dir_low_max, dir_low_ttl);
 
-	srv_registered = lru_tree_create((GCompareFunc)g_strcmp0, g_free,
-			(GDestroyNotify) service_info_clean, 0);
+	srv_registered = _push_queue_create ();
 
 	upstream_gtq = grid_task_queue_create ("upstream");
 
