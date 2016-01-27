@@ -258,6 +258,18 @@ oio_ext_monotonic_time (void)
 	return g_get_monotonic_time();
 }
 
+time_t
+oio_ext_real_seconds (void)
+{
+	return oio_ext_real_time () / G_TIME_SPAN_SECOND;
+}
+
+time_t
+oio_ext_monotonic_seconds (void)
+{
+	return oio_ext_monotonic_time () / G_TIME_SPAN_SECOND;
+}
+
 void
 oio_ext_init_test (int *argc, char ***argv)
 {

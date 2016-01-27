@@ -272,7 +272,7 @@ _task_expire_services_down (gpointer p)
 	gpointer v = NULL;
 	guint count = 0;
 
-	gulong oldest = (oio_ext_monotonic_time() / G_TIME_SPAN_SECOND) - 8;
+	gulong oldest = oio_ext_monotonic_seconds() - 8;
 
 	SRV_DO(while (lru_tree_get_last(srv_down, (void**)&k, &v)) {
 		EXTRA_ASSERT(k != NULL);
@@ -293,7 +293,7 @@ static void
 _task_expire_resolver (gpointer p)
 {
 	(void) p;
-	hc_resolver_set_now (resolver, oio_ext_monotonic_time() / G_TIME_SPAN_SECOND);
+	hc_resolver_set_now (resolver, oio_ext_monotonic_seconds());
 	guint count = hc_resolver_expire (resolver);
 	if (count)
 		GRID_DEBUG ("Expired %u resolver entries", count);
@@ -410,22 +410,32 @@ _task_reload_srvtypes (gpointer p)
 		g_strfreev (newset);
 }
 
+static guint
+_expire_local (time_t pivot)
+{
+	guint count = 0;
+	gchar *k = NULL;
+	struct service_info_s *si = NULL;
+	while (lru_tree_get_last (srv_registered, (void**)&k, (void**)&si)) {
+		if (si->score.timestamp > pivot)
+			break;
+		lru_tree_steal_last (srv_registered, (void**)&k, (void**)&si);
+		g_free (k);
+		service_info_clean (si);
+		++ count;
+	}
+	return count;
+}
+
 static void
 _task_expire_local (gpointer p)
 {
-	gint pivot = (oio_ext_real_time () / G_TIME_SPAN_SECOND) - cs_expire_local_services;
 	(void) p;
-	PUSH_DO(do {
-		gchar *k = NULL;
-		struct service_info_s *si = NULL;
-		while (lru_tree_get_first (srv_registered, (gpointer*)&k, (gpointer)&si)) {
-			if (si->score.timestamp > pivot)
-				break;
-			lru_tree_steal_first (srv_registered, NULL, NULL);
-			g_free (k);
-			service_info_clean (si);
-		}
-	} while (0));
+	time_t pivot = oio_ext_monotonic_seconds () - cs_expire_local_services;
+	guint count;
+	PUSH_DO(count = _expire_local(pivot));
+	if (count)
+		GRID_INFO("%u local services expired", count);
 }
 
 static void
@@ -750,7 +760,7 @@ grid_main_configure (int argc, char **argv)
 	srv_down = lru_tree_create((GCompareFunc)g_strcmp0, g_free,
 			NULL, LTO_NOATIME);
 
-	resolver = hc_resolver_create1 (oio_ext_monotonic_time() / G_TIME_SPAN_SECOND);
+	resolver = hc_resolver_create1 (oio_ext_monotonic_seconds());
 	enum hc_resolver_flags_e f = 0;
 	if (!flag_cache_enabled)
 		f |= HC_RESOLVER_NOCACHE;
@@ -764,7 +774,8 @@ grid_main_configure (int argc, char **argv)
 	GRID_INFO ("RESOLVER limits HIGH[%u/%u] LOW[%u/%u]",
 		dir_high_max, dir_high_ttl, dir_low_max, dir_low_ttl);
 
-	srv_registered = _push_queue_create();
+	srv_registered = lru_tree_create((GCompareFunc)g_strcmp0, g_free,
+			(GDestroyNotify) service_info_clean, 0);
 
 	upstream_gtq = grid_task_queue_create ("upstream");
 
@@ -774,7 +785,7 @@ grid_main_configure (int argc, char **argv)
 	grid_task_queue_register(upstream_gtq, (guint) lb_upstream_delay,
 			(GDestroyNotify) _task_push, NULL, NULL);
 
-	grid_task_queue_register(upstream_gtq, 1,
+	grid_task_queue_register(upstream_gtq, 2,
 			(GDestroyNotify) _task_expire_local, NULL, NULL);
 
 	// Prepare a queue responsible for the downstream from the conscience
