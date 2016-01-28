@@ -498,6 +498,8 @@ _manage_curl_events (struct http_put_s *p)
 			g_assert(rc == CURLM_OK);
 			curl_easy_cleanup(dest->handle);
 			dest->handle = NULL;
+			g_bytes_unref(dest->buffer);
+			dest->buffer = NULL;
 		}
 	}
 }
