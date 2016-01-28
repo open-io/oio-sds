@@ -304,7 +304,8 @@ _configure_backend(struct sqlx_service_s *ss)
 		return FALSE;
 	}
 
-	sqlx_repository_configure_open_timeout (ss->repository, ss->open_timeout);
+	sqlx_repository_configure_open_timeout (ss->repository,
+			ss->open_timeout * G_TIME_SPAN_MILLISECOND);
 
 	sqlx_repository_configure_hash (ss->repository,
 			ss->service_config->repo_hash_width,
@@ -494,7 +495,7 @@ sqlx_service_configure(int argc, char **argv)
 static void
 sqlx_service_set_defaults(void)
 {
-	SRV.open_timeout = 20000;
+	SRV.open_timeout = DEFAULT_CACHE_OPEN_TIMEOUT / G_TIME_SPAN_MILLISECOND;
 	SRV.cnx_backlog = 50;
 
 	SRV.cfg_max_bases = 0;

@@ -426,7 +426,7 @@ sqlx_repository_configure_open_timeout(sqlx_repository_t *repo,
 {
 	struct sqlx_cache_s *cache = sqlx_repository_get_cache(repo);
 	if (cache) {
-		sqlx_cache_set_open_timeout(cache, (glong)timeout);
+		sqlx_cache_set_open_timeout(cache, timeout);
 	} else {
 		GRID_INFO("Not setting open timeout since there is no cache");
 	}
