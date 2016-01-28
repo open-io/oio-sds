@@ -25,9 +25,15 @@ extern "C" {
 
 # include <glib.h>
 
-void oio_ext_init_test (int *argc, char ***argv);
-
 #define HC_TEST_INIT(argc,argv) oio_ext_init_test(&argc,&argv)
+
+# define SLICE_NEW0(T)    g_slice_new0(T)
+# define SLICE_NEW(T)     g_slice_new(T)
+# define SLICE_ALLOC(S)   g_slice_alloc(S)
+# define SLICE_FREE(T,P)  g_slice_free(T,(P))
+# define SLICE_FREE1(S,P) g_slice_free1((S),(P))
+
+void oio_ext_init_test (int *argc, char ***argv);
 
 /** Shuffles the single linked list. The original <src> MUST NOT be reused. */
 GSList * oio_ext_gslist_shuffle(GSList *src);
@@ -68,6 +74,10 @@ const char * oio_ext_get_reqid (void);
 gint64 oio_ext_real_time (void);
 
 gint64 oio_ext_monotonic_time (void);
+
+time_t oio_ext_real_seconds (void);
+
+time_t oio_ext_monotonic_seconds (void);
 
 gdouble oio_sys_cpu_idle (void);
 

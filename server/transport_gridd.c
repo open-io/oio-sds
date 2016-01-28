@@ -21,7 +21,7 @@ License along with this library.
 #include <errno.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
+#include <malloc.h>
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
@@ -38,9 +38,7 @@ struct cnx_data_s
 	GDestroyNotify cleanup;
 };
 
-/**
- * Associates a dispatcher and a working buffer to a client.
- */
+/* Associates a dispatcher and a working buffer to a client. */
 struct transport_client_context_s
 {
 	struct gridd_request_dispatcher_s *dispatcher;
@@ -55,8 +53,8 @@ struct gridd_request_handler_s
 	gpointer gdata;
 	gboolean (*handler) (struct gridd_reply_ctx_s *reply,
 			gpointer gdata, gpointer hdata);
-	gchar stat_name_req[256];
-	gchar stat_name_time[256];
+	GQuark stat_name_req;
+	GQuark stat_name_time;
 };
 
 struct gridd_request_dispatcher_s
@@ -91,29 +89,6 @@ static void transport_gridd_clean_context(struct transport_client_context_s *);
 static gboolean _client_manage_l4v(struct network_client_s *clt, GByteArray *gba);
 
 /* -------------------------------------------------------------------------- */
-
-void
-gridd_register_requests_stats(struct grid_stats_holder_s *stats,
-		struct gridd_request_dispatcher_s *disp)
-{
-	EXTRA_ASSERT(stats != NULL);
-	EXTRA_ASSERT(disp != NULL);
-
-	gboolean _traverser(gpointer k, gpointer v, gpointer u) {
-		(void) k; (void) u;
-		grid_stats_holder_increment(stats,
-				((struct gridd_request_handler_s*)(v))->stat_name_req, 0LLU,
-				((struct gridd_request_handler_s*)(v))->stat_name_time, 0LLU,
-				NULL);
-		return FALSE;
-	}
-
-	grid_stats_holder_increment(stats,
-			INNER_STAT_NAME_REQ_TIME, 0LLU,
-			INNER_STAT_NAME_REQ_COUNTER, 0LLU,
-			NULL);
-	g_tree_foreach(disp->tree_requests, _traverser, NULL);
-}
 
 void
 gridd_request_dispatcher_clean(struct gridd_request_dispatcher_s *disp)
@@ -154,10 +129,11 @@ transport_gridd_dispatcher_add_requests(
 		handler->gdata = gdata;
 		handler->hdata = d->handler_data;
 
-		g_snprintf(handler->stat_name_req, sizeof(handler->stat_name_req),
-			"%s.%s", GRID_STAT_PREFIX_REQ, d->name);
-		g_snprintf(handler->stat_name_time, sizeof(handler->stat_name_time),
-			"%s.%s", GRID_STAT_PREFIX_TIME, d->name);
+		gchar tmp[256];
+		g_snprintf(tmp, sizeof(tmp), "%s.%s", OIO_STAT_PREFIX_REQ, d->name);
+		handler->stat_name_req = g_quark_from_string (tmp);
+		g_snprintf(tmp, sizeof(tmp), "%s.%s", OIO_STAT_PREFIX_TIME, d->name);
+		handler->stat_name_time = g_quark_from_string (tmp);
 
 		g_tree_insert(dispatcher->tree_requests, hashstr_dup(hname), handler);
 	}
@@ -532,20 +508,16 @@ transport_gridd_clean_context(struct transport_client_context_s *ctx)
 /* Request handling --------------------------------------------------------- */
 
 static void
-_notify_request(struct req_ctx_s *ctx,
-		const gchar *name_req, const gchar *name_time)
+_notify_request(struct req_ctx_s *ctx, GQuark gq_count, GQuark gq_time)
 {
 	if (!ctx->tv_end)
 		ctx->tv_end = oio_ext_monotonic_time();
 
 	gint64 diff = ctx->tv_end - ctx->tv_start;
 
-	grid_stats_holder_increment(ctx->client->local_stats,
-			name_req, guint_to_guint64(1),
-			INNER_STAT_NAME_REQ_COUNTER, guint_to_guint64(1),
-			name_time, diff,
-			INNER_STAT_NAME_REQ_TIME, diff,
-			NULL);
+	network_server_stat_push4 (ctx->client->server, TRUE,
+			gq_count, 1, gq_count_all, 1,
+			gq_time, diff, gq_time_all, diff);
 }
 
 static gboolean
@@ -717,11 +689,8 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	hdl = g_tree_lookup(req_ctx->disp->tree_requests, req_ctx->reqname);
 	if (!hdl) {
 		rc = _client_reply_fixed(req_ctx, CODE_NOT_FOUND, "No handler found");
-		_notify_request(req_ctx,
-				GRID_STAT_PREFIX_REQ ".UNEXPECTED", 
-				GRID_STAT_PREFIX_TIME".UNEXPECTED");
-	}
-	else {
+		_notify_request(req_ctx, gq_count_unexpected, gq_time_unexpected);
+	} else {
 		EXTRA_ASSERT(hdl->handler != NULL);
 		rc = hdl->handler(&ctx, hdl->gdata, hdl->hdata);
 		_notify_request(req_ctx, hdl->stat_name_req, hdl->stat_name_time);
@@ -746,7 +715,7 @@ _request_get_cid (MESSAGE request)
 
 	err = metautils_message_extract_cid(request, NAME_MSGKEY_CONTAINERID, &cid);
 	if (!err) {
-		container_id_to_string(cid, strcid, sizeof(strcid));
+		oio_str_bin2hex (cid, sizeof(container_id_t), strcid, sizeof(strcid));
 		return g_strdup(strcid);
 	}
 	g_clear_error(&err);
@@ -858,11 +827,49 @@ dispatch_LISTHANDLERS(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
+dispatch_LEAN(struct gridd_reply_ctx_s *reply,
+		gpointer gdata, gpointer hdata)
+{
+	gchar buf[128] = "Freed:";
+	(void) gdata, (void) hdata;
+
+	if (metautils_message_extract_flag (reply->request, "LIBC", FALSE)) {
+		if (malloc_trim (MALLOC_TRIM_SIZE))
+			g_strlcat (buf, " malloc-heap", sizeof(buf));
+	}
+
+	if (metautils_message_extract_flag (reply->request, "THREADS", FALSE)) {
+		g_thread_pool_stop_unused_threads ();
+		g_strlcat (buf, " idle-threads", sizeof(buf));
+	}
+
+	if (buf[strlen(buf)-1] != ':')
+		g_strlcat (buf, " nothing", sizeof(buf));
+
+	reply->send_reply(CODE_FINAL_OK, buf);
+	return TRUE;
+}
+
+static gboolean
 dispatch_PING(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
 	(void) gdata, (void) hdata;
-	reply->send_reply(CODE_FINAL_OK, "PONG");
+	reply->send_reply(CODE_FINAL_OK, "OK");
+	return TRUE;
+}
+
+static gboolean
+dispatch_KILL(struct gridd_reply_ctx_s *reply,
+		gpointer gdata, gpointer hdata)
+{
+	(void) gdata, (void) hdata;
+	if (reply->client->server->abort_allowed) {
+		abort();
+		reply->send_reply(CODE_FINAL_OK, "OK");
+	} else {
+		reply->send_reply(CODE_NOT_ALLOWED, "abort disabled");
+	}
 	return TRUE;
 }
 
@@ -870,19 +877,19 @@ static gboolean
 dispatch_STATS(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
-	GByteArray *body;
-
-	gboolean runner(const gchar *n, guint64 v) {
-		gchar value[1024];
-		gsize len = g_snprintf(value, sizeof(value),
-				"%s=%"G_GUINT64_FORMAT"\n", n, v);
-		g_byte_array_append (body, (guint8*)value, len);
-		return TRUE;
-	}
-
 	(void) gdata, (void) hdata;
-	body = g_byte_array_new();
-	grid_stats_holder_foreach(reply->client->main_stats, runner);
+	GByteArray *body = g_byte_array_new();
+
+	GArray *array = network_server_stat_getall(reply->client->server);
+	for (guint i=0; i<array->len ;++i) {
+		struct server_stat_s *st = &g_array_index (array, struct server_stat_s, i);
+		gchar tmp[256];
+		gsize len = g_snprintf (tmp, sizeof(tmp), "%s=%"G_GUINT64_FORMAT"\n",
+				g_quark_to_string (st->which), st->value);
+		g_byte_array_append (body, (guint8*)tmp, len);
+	}
+	g_array_free (array, TRUE);
+
 	reply->add_body(body);
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
@@ -902,13 +909,41 @@ const struct gridd_request_descr_s*
 gridd_get_common_requests(void)
 {
 	static struct gridd_request_descr_s descriptions[] = {
+		{"REQ_LEAN",      dispatch_LEAN,          NULL},
 		{"REQ_PING",      dispatch_PING,          NULL},
 		{"REQ_STATS",     dispatch_STATS,         NULL},
 		{"REQ_VERSION",   dispatch_VERSION,       NULL},
 		{"REQ_HANDLERS",  dispatch_LISTHANDLERS,  NULL},
+		{"REQ_KILL",      dispatch_KILL,          NULL},
 		{NULL, NULL, NULL}
 	};
 
 	return descriptions;
+}
+
+void
+grid_daemon_bind_host(struct network_server_s *server, const gchar *url,
+		struct gridd_request_dispatcher_s *dispatcher)
+{
+	EXTRA_ASSERT(server != NULL);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(dispatcher != NULL);
+
+	/* register all the requests handlers so that those never hit by request
+	 * have zored stats (instead of just being absent) */
+	gboolean _traverser(gpointer k, gpointer v, gpointer u) {
+		(void) k; (void) u;
+		struct gridd_request_handler_s *h = (struct gridd_request_handler_s*) v;
+		network_server_stat_push2 (server, FALSE,
+				h->stat_name_req, 0, h->stat_name_time, 0);
+		return FALSE;
+	}
+	g_tree_foreach (dispatcher->tree_requests, _traverser, NULL);
+	network_server_stat_push4 (server, FALSE,
+			gq_count_all, 0, gq_count_unexpected, 0,
+			gq_time_all, 0, gq_time_unexpected, 0);
+
+	network_server_bind_host_lowlatency(server, url, dispatcher,
+			(network_transport_factory)transport_gridd_factory);
 }
 

@@ -82,23 +82,20 @@ struct gridd_client_s **
 gridd_client_create_many(gchar **targets, GByteArray *req, gpointer ctx,
                 client_on_reply cb)
 {
-	gint i, max;
-	struct gridd_client_s **clients;
-
 	EXTRA_ASSERT(targets != NULL);
 	EXTRA_ASSERT(req != NULL);
 
-	max = (gint)g_strv_length(targets);
-	clients = g_malloc0(sizeof(struct gridd_client_s*) * (max+1));
+	const gint max = (gint)g_strv_length(targets);
+	struct gridd_client_s **clients = g_malloc0(sizeof(void*) * (max+1));
 
+	gint i;
 	for (i = 0; i < max; i++) {
 		struct gridd_client_s *client = gridd_client_create(targets[i], req, ctx, cb);
 		if (!client)
 			break;
 		clients[i] = client;
 	}
-	if (i < max) {
-		// something went wrong, rolling back
+	if (i < max) { /* something went wrong, rolling back */
 		for (; i >= 0; i--) {
 			gridd_client_free(clients[i]);
 			clients[i] = NULL;
@@ -372,9 +369,11 @@ gridd_client_exec4 (const gchar *to, gdouble seconds, GByteArray *req,
 
 	struct gridd_client_s *client = gridd_client_create(to, req,
 			(out ? tmp : NULL), out ? (client_on_reply)_cb_exec4 : NULL);
-	if (!client)
-		return NEWERROR(CODE_INTERNAL_ERROR, "client creation");
 	g_byte_array_unref (req);
+	if (!client) {
+		if (tmp) g_ptr_array_free (tmp, TRUE);
+		return NEWERROR(CODE_INTERNAL_ERROR, "client creation");
+	}
 	if (seconds > 0.0)
 		gridd_client_set_timeout (client, seconds);
 	GError *err = gridd_client_run (client);
@@ -418,8 +417,10 @@ gridd_client_exec_and_concat (const gchar *to, gdouble seconds, GByteArray *req,
 	struct gridd_client_s *client = gridd_client_create(to, req,
 			out ? tmp : NULL, out ? (client_on_reply)_cb_exec_and_concat : NULL);
 	g_byte_array_unref (req);
-	if (!client)
+	if (!client) {
+		if (tmp) g_byte_array_free (tmp, TRUE);
 		return NEWERROR(CODE_INTERNAL_ERROR, "client creation");
+	}
 	if (seconds > 0.0)
 		gridd_client_set_timeout (client, seconds);
 	GError *err = gridd_client_run (client);
@@ -440,10 +441,9 @@ gridd_client_exec_and_concat_string (const gchar *to, gdouble seconds, GByteArra
 {
 	GByteArray *tmp = NULL;
 	GError *err = gridd_client_exec_and_concat (to, seconds, req, out ? &tmp : NULL);
-	
+
 	if (err) {
-		if (tmp)
-			g_byte_array_unref (tmp);
+		if (tmp) g_byte_array_unref (tmp);
 		return err;
 	}
 	if (out) {

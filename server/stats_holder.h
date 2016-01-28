@@ -20,83 +20,9 @@ License along with this library.
 #ifndef OIO_SDS__server__stats_holder_h
 # define OIO_SDS__server__stats_holder_h 1
 
-/**
- * @defgroup server_stats Statistics support
- * @ingroup server
- * @brief Storage for named counters and gauges.
- * @details
- * All the functions are are synchronized on the holder itself.
- * @{
- */
-
 # include <glib/gtypes.h>
 
-/* Our hidden types */
-struct grid_stats_holder_s;
-
 struct grid_single_rrd_s;
-
-/**
- * @return
- */
-struct grid_stats_holder_s * grid_stats_holder_init(void);
-
-/**
- * @param gsh
- */
-void grid_stats_holder_clean(struct grid_stats_holder_s *gsh);
-
-/**
- * Thread-safe
- *
- * @param gsh
- * @param ...
- */
-void grid_stats_holder_set(struct grid_stats_holder_s *gsh, ...);
-
-/**
- * Not thread-safe
- *
- * @param gsh
- * @param ...
- */
-void grid_stats_holder_increment(struct grid_stats_holder_s *gsh, ...);
-
-/**
- * Internal lock acquired
- *
- * @param gsh
- * @param ...
- */
-void grid_stats_holder_get(struct grid_stats_holder_s *gsh, ...);
-
-/**
- * Not thread-safe
- *
- * @param gsh
- */
-void grid_stats_holder_zero(struct grid_stats_holder_s *gsh);
-
-/**
- * Internal Lock acquired on base
- *
- * @param base
- * @param inc
- */
-void grid_stats_holder_increment_merge(struct grid_stats_holder_s *base,
-		struct grid_stats_holder_s *inc);
-
-/**
- * Internal lock acquired on gsh
- *
- * @param gsh
- * @param pattern
- * @param output
- */
-void grid_stats_holder_foreach(struct grid_stats_holder_s *gsh,
-		gboolean (*output)(const gchar *name, guint64 value));
-
-/* ------------------------------------------------------------------------- */
 
 /*! Allocates a round-robin set of metrics, working on <period> slots. */
 struct grid_single_rrd_s* grid_single_rrd_create(time_t now, time_t period);
@@ -133,14 +59,5 @@ guint64 grid_single_rrd_get_max(struct grid_single_rrd_s *gsr,
  * 1 and the given <period>. Single run! */
 void grid_single_rrd_get_allmax(struct grid_single_rrd_s *gsr,
 		time_t at, time_t period, guint64 *out);
-
-/*! Lock internally acquired on 'gsh'
- * @param gsh
- * @param ... a NULL terminated sequence of (grid_single_rrd_s*, gchar*)
- */
-void grid_single_rrd_feed(struct grid_stats_holder_s *gsh,
-		time_t now, ...);
-
-/** @} */
 
 #endif /*OIO_SDS__server__stats_holder_h*/

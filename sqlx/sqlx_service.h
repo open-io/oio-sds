@@ -72,8 +72,6 @@ struct sqlx_service_s
 	struct replication_config_s *replication_config;
 	const struct sqlx_service_config_s *service_config;
 
-	GRand *prng;
-
 	GString *url;
 	GString *announce;
 	gchar *zk_url;

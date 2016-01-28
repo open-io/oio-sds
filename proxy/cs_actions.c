@@ -92,8 +92,6 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 					"Unexpected NS"));
 	}
 
-	si->score.timestamp = oio_ext_real_time () / G_TIME_SPAN_SECOND;
-
 	if (op == REGOP_PUSH)
 		si->score.value = SCORE_UNSET;
 	else if (op == REGOP_UNLOCK)
@@ -104,8 +102,11 @@ _registration (struct req_args_s *args, enum reg_op_e op, struct json_object *js
 	if (cs_expire_local_services > 0) {
 		gchar *k = service_info_key (si);
 		struct service_info_s *v = service_info_dup (si);
+		v->score.timestamp = oio_ext_monotonic_seconds ();
 		PUSH_DO(lru_tree_insert (srv_registered, k, v));
 	}
+
+	si->score.timestamp = oio_ext_real_seconds ();
 
 	// TODO follow the DRY principle and factorize this!
 	if (flag_cache_enabled) {
@@ -175,11 +176,7 @@ action_local_list (struct req_args_s *args)
 {
 	args->rp->no_access();
 
-	const char *types = TYPE();
-	if (!types)
-		return _reply_format_error (args, BADREQ("Missing type"));
-
-	gboolean full = _request_has_flag (args, PROXYD_HEADER_MODE, "full");
+	const char *type = TYPE();
 
 	GError *err;
 	if (NULL != (err = _cs_check_tokens(args)))
@@ -189,17 +186,15 @@ action_local_list (struct req_args_s *args)
 	gboolean _on_service (gpointer k, gpointer v, gpointer u) {
 		(void) k, (void) u;
 		struct service_info_s *si = v;
-		if (!g_ascii_strcasecmp (si->type, types)) {
+		if (!type || !g_ascii_strcasecmp (si->type, type)) {
 			if (gs->len > 1)
 				g_string_append_c (gs, ',');
-			service_info_encode_json (gs, si, full);
+			service_info_encode_json (gs, si, type==NULL);
 		}
 		return FALSE;
 	}
 
-	PUSH_DO(do {
-		lru_tree_foreach_DEQ (srv_registered, _on_service, NULL);
-	} while (0));
+	PUSH_DO(lru_tree_foreach_DEQ(srv_registered, _on_service, NULL));
 	g_string_append_c (gs, ']');
 
 	return _reply_success_json (args, gs);

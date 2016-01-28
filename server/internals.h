@@ -21,30 +21,15 @@ License along with this library.
 # define OIO_SDS__server__internals_h 1
 
 #include <metautils/lib/metautils.h>
+#include <server/network_server.h>
 
-# ifndef GRID_STAT_PREFIX_REQ
-#  define GRID_STAT_PREFIX_REQ "gridd.counter.req"
+# ifndef  OIO_STAT_PREFIX_REQ
+#  define OIO_STAT_PREFIX_REQ "counter req.hits"
 # endif
 
-# ifndef GRID_STAT_PREFIX_TIME
-#  define GRID_STAT_PREFIX_TIME "gridd.counter.time"
+# ifndef  OIO_STAT_PREFIX_TIME
+#  define OIO_STAT_PREFIX_TIME "counter req.time"
 # endif
-
-# ifndef HTTP_STAT_PREFIX_REQ
-#  define HTTP_STAT_PREFIX_REQ "http.counter.req"
-# endif
-
-# ifndef HTTP_STAT_PREFIX_TIME
-#  define HTTP_STAT_PREFIX_TIME "http.counter.time"
-# endif
-
-#ifndef SERVER_DEFAULT_MAX_IDLEDELAY
-# define SERVER_DEFAULT_MAX_IDLEDELAY 300
-#endif
-
-#ifndef SERVER_DEFAULT_MAX_WORKERS
-# define SERVER_DEFAULT_MAX_WORKERS 200
-#endif
 
 /* How long (in microseconds) a connection might stay idle between two
  * requests */
@@ -63,5 +48,81 @@ License along with this library.
 #ifndef  SERVER_DEFAULT_CNX_INACTIVE
 # define SERVER_DEFAULT_CNX_INACTIVE  (30 * G_TIME_SPAN_SECOND)
 #endif
+
+enum {
+	NETSERVER_THROUGHPUT = 0x0001,
+	NETSERVER_LATENCY    = 0x0002,
+};
+
+enum {
+	EXCESS_NONE = 0,
+	EXCESS_HARD
+};
+
+#define MAGIC_ENDPOINT 0xFFFFFFFF
+
+struct endpoint_s
+{
+	unsigned int magic;
+	int fd;
+	int port_real;
+	int port_cfg;
+	guint32 flags;
+	gpointer factory_udata;
+	network_transport_factory factory_hook;
+	gchar url[1];
+};
+
+struct network_server_s
+{
+	struct endpoint_s **endpointv;
+
+	struct network_client_s *first;
+
+	GThread *thread_events;
+	GThreadPool *pool_stats;
+	GThreadPool *pool_workers;
+
+	GAsyncQueue *queue_monitor; /* from the workers to the events_thread */
+
+	GMutex lock_stats;
+	GArray *stats; /* <struct server_stat_s> */
+
+	GMutex lock_threads;
+
+	guint64 active_in;
+	guint64 active_out;
+
+	guint64 cnx_accept;
+	guint64 cnx_close;
+	guint cnx_max_sys;
+	guint cnx_max;
+	guint cnx_clients;
+	guint cnx_backlog;
+
+	gint64 atexit_max_open_never_input; /*< max delay for cnx without any input.*/
+	gint64 atexit_max_idle; /*< max idle time since last input */
+	gint64 atexit_max_open_persist; /*< max total time for persistant cnx*/
+
+	GQuark gq_gauge_threads;
+	GQuark gq_gauge_cnx_current;
+	GQuark gq_gauge_cnx_max;
+	GQuark gq_gauge_cnx_maxsys;
+	GQuark gq_counter_cnx_accept;
+	GQuark gq_counter_cnx_close;
+
+	int wakeup[2];
+	int epollfd;
+	gboolean flag_continue : 1;
+	gboolean abort_allowed : 1;
+};
+
+enum
+{
+	NETCLIENT_IN_CLOSED         = 0x0001,
+	NETCLIENT_OUT_CLOSED        = 0x0002,
+	NETCLIENT_OUT_CLOSE_PENDING = 0x0004,
+	NETCLIENT_IN_PAUSED         = 0x0008,
+};
 
 #endif /*OIO_SDS__server__internals_h*/

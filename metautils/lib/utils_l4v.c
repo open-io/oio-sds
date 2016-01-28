@@ -19,24 +19,6 @@ License along with this library.
 
 #include "metautils.h"
 
-gint
-l4v_fill(void *src, gsize srcSize, void *dst, gsize dstSize, GError ** error)
-{
-	if (NULL == src || srcSize < 1 || NULL == dst || dstSize < 4) {
-		GSETERROR(error, "Invalid parameter");
-		return 0;
-	}
-
-	if (dstSize < srcSize - 4) {
-		GSETERROR(error, "Buffer to small");
-		return 0;
-	}
-
-	l4v_prepend_size(dst, dstSize);
-	memcpy(((guint8 *) dst) + 4, src, srcSize);
-	return 1;
-}
-
 GByteArray *
 l4v_read_2to(int fd, gint ms1, gint msAll, GError ** err)
 {
@@ -53,7 +35,8 @@ l4v_read_2to(int fd, gint ms1, gint msAll, GError ** err)
 		return NULL;
 	}
 
-	msgSize = l4v_get_size(recvBuf);
+	guint32 s32 = *((guint32*)recvBuf);
+	msgSize = g_ntohl(s32);
 	gba = g_byte_array_sized_new(MIN(msgSize + 4 + 4, 16384));
 
 	if (NULL == gba) {
@@ -83,10 +66,3 @@ l4v_read_2to(int fd, gint ms1, gint msAll, GError ** err)
 
 	return gba;
 }
-
-GByteArray *
-l4v_read(int fd, gint ms, GError ** err)
-{
-	return l4v_read_2to(fd, ms, ms, err);
-}
-

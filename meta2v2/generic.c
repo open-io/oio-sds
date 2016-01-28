@@ -48,27 +48,27 @@ _gstr_assign(GString *base, GString *gstr)
 }
 
 static void
-_gstr_randomize(GRand *r, GString *gstr)
+_gstr_randomize(GString *gstr)
 {
 	gint i, max;
 
 	g_string_set_size(gstr, 0);
-	max = g_rand_int_range(r, 1, 15);
+	max = g_random_int_range(1, 15);
 	for (i=0; i<max ; i++) {
-		guint32 u32 = g_rand_int_range(r, 0, sizeof(random_chars)-1);
+		guint32 u32 = g_random_int_range(0, sizeof(random_chars)-1);
 		g_string_append_c(gstr, random_chars[u32]);
 	}
 }
 
 static void
-_gba_randomize(GRand *r, GByteArray *gba)
+_gba_randomize(GByteArray *gba)
 {
 	gint i, max;
 
 	g_byte_array_set_size(gba, 0);
-	max = g_rand_int_range(r, 1, 15);
+	max = g_random_int_range(1, 15);
 	for (i=0; i<max ; i+=4) {
-		guint32 u32 = g_rand_int(r);
+		guint32 u32 = g_random_int();
 		g_byte_array_append(gba, (guint8*)&u32, sizeof(u32));
 	}
 	g_byte_array_set_size(gba, max);
@@ -1048,7 +1048,6 @@ void
 _bean_randomize(gpointer bean, gboolean avoid_pk)
 {
 	const struct field_descriptor_s *fd;
-	GRand *r = g_rand_new();
 
 	EXTRA_ASSERT(bean != NULL);
 	HDR(bean)->flags = BEAN_FLAG_DIRTY | (avoid_pk?0:BEAN_FLAG_TRANSIENT);
@@ -1062,19 +1061,19 @@ _bean_randomize(gpointer bean, gboolean avoid_pk)
 
 		switch (fd->type) {
 			case FT_BOOL:
-				*((gboolean*)pf) = g_rand_int(r);
+				*((gboolean*)pf) = g_random_int();
 				break;
 			case FT_INT:
-				*((gint64*)pf) = g_rand_int(r);
+				*((gint64*)pf) = g_random_int();
 				break;
 			case FT_REAL:
-				*((gdouble*)pf) = g_rand_double(r);
+				*((gdouble*)pf) = g_random_double();
 				break;
 			case FT_TEXT:
-				_gstr_randomize(r, GSTR(pf));
+				_gstr_randomize(GSTR(pf));
 				break;
 			case FT_BLOB:
-				_gba_randomize(r, GBA(pf));
+				_gba_randomize(GBA(pf));
 				break;
 			default:
 				g_assert_not_reached();

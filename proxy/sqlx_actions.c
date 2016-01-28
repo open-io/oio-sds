@@ -381,13 +381,19 @@ action_admin_status (struct req_args_s *args)
 enum http_rc_e
 action_admin_info (struct req_args_s *args)
 {
-    return _sqlx_action_flatbody (args, SQLX_NEXT|SQLX_NOREDIR, sqlx_pack_INFO);
+	GByteArray* _pack (struct sqlx_name_s *n) {
+		(void) n; return sqlx_pack_INFO ();
+	}
+	return _sqlx_action_flatbody (args, SQLX_NEXT|SQLX_NOREDIR, _pack);
 }
 
 enum http_rc_e
 action_admin_drop_cache (struct req_args_s *args)
 {
-	return _sqlx_action_noreturn (args, SQLX_NEXT|SQLX_NOREDIR, sqlx_pack_LEANIFY);
+	GByteArray* _pack (struct sqlx_name_s *n) {
+		(void) n; return sqlx_pack_LEANIFY ();
+	}
+	return _sqlx_action_noreturn (args, SQLX_NEXT|SQLX_NOREDIR, _pack);
 }
 
 enum http_rc_e
@@ -411,25 +417,25 @@ action_admin_debug (struct req_args_s *args)
 enum http_rc_e
 action_admin_copy (struct req_args_s *args)
 {
-    return rest_action (args, action_sqlx_copyto);
+	return rest_action (args, action_sqlx_copyto);
 }
 
 enum http_rc_e
 action_admin_prop_get (struct req_args_s *args)
 {
-    return rest_action (args, action_sqlx_propget);
+	return rest_action (args, action_sqlx_propget);
 }
 
 enum http_rc_e
 action_admin_prop_set (struct req_args_s *args)
 {
-    return rest_action (args, action_sqlx_propset);
+	return rest_action (args, action_sqlx_propset);
 }
 
 enum http_rc_e
 action_admin_prop_del (struct req_args_s *args)
 {
-    return rest_action (args, action_sqlx_propdel);
+	return rest_action (args, action_sqlx_propdel);
 }
 
 enum http_rc_e

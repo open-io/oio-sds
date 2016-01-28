@@ -30,17 +30,23 @@ License along with this library.
 #  define EXTRA_ASSERT(X)
 # endif
 
-# define SLICE_NEW0(T)    g_slice_new0(T)
-# define SLICE_NEW(T)     g_slice_new(T)
-# define SLICE_ALLOC(S)   g_slice_alloc(S)
-# define SLICE_FREE(T,P)  g_slice_free(T,(P))
-# define SLICE_FREE1(S,P) g_slice_free1((S),(P))
-
 /* size [in bytes] asn1c can require on the stack. Use 0 for as many bytes
  * as necessary (with the risk of stack smashing). */
 #define ASN1C_MAX_STACK 0
 
 /* Some well known service types */
+
+#ifndef  MALLOC_TRIM_SIZE
+# define MALLOC_TRIM_SIZE (0)
+#endif
+
+#ifndef  PERIODIC_MALLOC_TRIM_SIZE
+# define PERIODIC_MALLOC_TRIM_SIZE (0)
+#endif
+
+#ifndef  SQLITE_RELEASE_SIZE
+# define SQLITE_RELEASE_SIZE  (64*1024*1024)
+#endif
 
 # define NAME_SRVTYPE_META0 "meta0"
 # define NAME_SRVTYPE_META1 "meta1"
@@ -83,7 +89,6 @@ License along with this library.
 # define NAME_TAGNAME_RAWX_VOL "tag.vol"
 # define NAME_TAGNAME_RAWX_FIRST "tag.first"
 # define NAME_TAGNAME_RAWX_LOC "tag.loc"
-# define NAME_TAGNAME_INTERNAL "tag.internal"
 # define NAME_TAGNAME_RAWX_STGCLASS "tag.stgclass"
 
 # define NAME_TAGNAME_AGENT_CHECK "tag.agent_check"
@@ -156,6 +161,7 @@ License along with this library.
 #define NAME_MSGKEY_SPARE              "SPARE"
 #define NAME_MSGKEY_SRC                "SRC"
 #define NAME_MSGKEY_STATUS             "S"
+#define NAME_MSGKEY_SIZE               "SZ"
 #define NAME_MSGKEY_STGPOLICY          "SP"
 #define NAME_MSGKEY_TRUNCATED          "TRUNC"
 #define NAME_MSGKEY_TYPENAME           "T"

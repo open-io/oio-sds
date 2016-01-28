@@ -190,8 +190,8 @@ void sqlx_repository_configure_maxbases(sqlx_repository_t *repo,
 GError* sqlx_repository_configure_type(sqlx_repository_t *repo,
 		const char *type, const char *schema);
 
-/** Set open timeout for bases currently in use by another thread.
- * @param timeout milliseconds */
+/* Set open timeout for bases currently in use by another thread.
+ * Precision uniform with oio_ext_monotonic_time(). */
 void sqlx_repository_configure_open_timeout(sqlx_repository_t *repo,
 		gint64 timeout);
 

@@ -23,7 +23,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include <metautils/lib/metautils.h>
 #include <metautils/lib/metacomm.h>
-#include <server/grid_daemon.h>
 #include <server/transport_gridd.h>
 
 #include "meta0_backend.h"

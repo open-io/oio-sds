@@ -209,7 +209,6 @@ oio_str_randomize(guint8 *buf, gsize buflen)
 		guint32 r32;
 		guint8 r8[4];
 	} raw;
-	GRand *r = g_rand_new();
 
 	if (NULL == buf || 0 == buflen)
 		return;
@@ -218,12 +217,12 @@ oio_str_randomize(guint8 *buf, gsize buflen)
 	gsize mod32 = buflen % 4;
 	gsize max32 = buflen / 4;
 	for (register gsize i32=0; i32 < max32 ; ++i32) {
-		raw.r32 = g_rand_int(r);
+		raw.r32 = g_random_int();
 		((guint32*)buf)[i32] = raw.r32;
 	}
 
 	// Finish with the potentially remaining unset bytes
-	raw.r32 = g_rand_int(r);
+	raw.r32 = g_random_int();
 	switch (mod32) {
 		case 3:
 			buf[ (max32*4) + 2 ] = raw.r8[2];
@@ -232,8 +231,6 @@ oio_str_randomize(guint8 *buf, gsize buflen)
 		case 1:
 			buf[ (max32*4) + 0 ] = raw.r8[0];
 	}
-
-	g_rand_free(r);
 }
 
 const char *

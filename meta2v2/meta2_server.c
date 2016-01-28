@@ -26,7 +26,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <cluster/lib/gridcluster.h>
 #include <server/network_server.h>
 #include <server/transport_gridd.h>
-#include <server/grid_daemon.h>
 #include <resolver/hc_resolver.h>
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/replication_dispatcher.h>

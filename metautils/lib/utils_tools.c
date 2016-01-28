@@ -19,40 +19,9 @@ License along with this library.
 
 #include "metautils.h"
 
-gsize
-container_id_to_string(const container_id_t id, gchar * dst, gsize dstsize)
-{
-	return oio_str_bin2hex(id, sizeof(container_id_t), dst, dstsize);
-}
-
-guint
-container_id_hash(gconstpointer k)
-{
-	const guint *b;
-	guint max, i, h;
-
-	if (!k)
-		return 0;
-	b = k;
-	max = sizeof(container_id_t) / sizeof(guint);
-	h = 0;
-	for (i = 0; i < max; i++)
-		h = h ^ b[i];
-	return h;
-}
-
-gboolean
-container_id_equal(gconstpointer k1, gconstpointer k2)
-{
-	return k1 && k2 && ((k1 == k2)
-	    || (0 == memcmp(k1, k2, sizeof(container_id_t))));
-}
-
 void g_free0(gpointer p) { if (p) g_free(p); }
 void g_free1(gpointer p1, gpointer p2) { (void) p2; g_free0(p1); }
 void g_free2(gpointer p1, gpointer p2) { (void) p1; g_free0(p2); }
-
-/* ----------------------------------------------------------------------------------- */
 
 gsize
 metautils_strlcpy_physical_ns(gchar *d, const gchar *s, gsize dlen)

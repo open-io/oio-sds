@@ -189,10 +189,8 @@ m2v2_remote_pack_RAW_SUBST(struct oio_url_s *url,
 	GByteArray *new_chunks_gba = bean_sequence_marshall(new_chunks);
 	GByteArray *old_chunks_gba = bean_sequence_marshall(old_chunks);
 	MESSAGE msg = _m2v2_build_request(NAME_MSGNAME_M2V2_RAW_SUBST, url, NULL);
-	metautils_message_add_fields_gba(msg,
-			NAME_MSGKEY_NEW, new_chunks_gba,
-			NAME_MSGKEY_OLD, old_chunks_gba,
-			NULL);
+	metautils_message_add_field_gba(msg, NAME_MSGKEY_NEW, new_chunks_gba);
+	metautils_message_add_field_gba(msg, NAME_MSGKEY_OLD, old_chunks_gba);
 	g_byte_array_unref (new_chunks_gba);
 	g_byte_array_unref (old_chunks_gba);
 	return message_marshall_gba_and_clean(msg);

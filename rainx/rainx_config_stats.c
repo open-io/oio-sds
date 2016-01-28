@@ -39,7 +39,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "./rainx_internals.h"
 #include "./rainx_config.h"
-#include "./rainx_stats_rrd.h"
 
 apr_status_t
 server_init_master_stat(dav_rainx_server_conf *conf, apr_pool_t *pool, apr_pool_t *plog)
@@ -72,18 +71,8 @@ server_init_master_stat(dav_rainx_server_conf *conf, apr_pool_t *pool, apr_pool_
 
 	/* Init the SHM */
 	void *ptr_counter = apr_shm_baseaddr_get(conf->shm.handle);
-	if (ptr_counter) {
+	if (ptr_counter)
 		memset(ptr_counter, 0, sizeof(struct shm_stats_s));
-		/* init rrd's */
-		rainx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_req_sec));
-		rainx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_duration));
-		rainx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_req_put_sec));
-		rainx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_put_duration));
-		rainx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_req_get_sec));
-		rainx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_get_duration));
-		rainx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_req_del_sec));
-		rainx_stats_rrd_init(&(((struct shm_stats_s *) ptr_counter)->body.rrd_del_duration));
-	}
 
 	return APR_SUCCESS;
 }
@@ -141,7 +130,7 @@ server_init_child_stat(dav_rainx_server_conf *conf, apr_pool_t *pool, apr_pool_t
 		}
 	}
 	DAV_DEBUG_POOL(plog, 0, "%s : SHM segment attached at [%s]", __FUNCTION__, conf->shm.path);
-	
+
 	return APR_SUCCESS;
 }
 
@@ -150,7 +139,7 @@ server_child_stat_fini(dav_rainx_server_conf *conf, apr_pool_t *plog)
 {
 	char buff[256];
 	apr_status_t rc;
-	
+
 	DAV_XDEBUG_POOL(plog, 0, "%s()", __FUNCTION__);
 
 	/* Detaches the segment */
@@ -163,7 +152,7 @@ server_child_stat_fini(dav_rainx_server_conf *conf, apr_pool_t *plog)
 		}
 		conf->shm.handle = NULL;
 	}
-	
+
 	DAV_DEBUG_POOL(plog, 0, "%s : SHM segment at [%s] detached", __FUNCTION__, conf->shm.path);
 	return APR_SUCCESS;
 }
@@ -171,87 +160,74 @@ server_child_stat_fini(dav_rainx_server_conf *conf, apr_pool_t *plog)
 void
 server_add_stat(dav_rainx_server_conf *conf, const char *n, apr_uint32_t value, apr_uint32_t duration)
 {
-	struct shm_stats_s *shm_stats;
-
-	if (!n)
-		return;
-	
-	if (!conf->shm.handle || !conf->lock.handle) { /* This should never happen! */
-#ifdef HAVE_EXTRA_DEBUG
-		abort();
-#else
-		return;
-#endif
-	}
-
-	if (!n[0] || !n[1] || n[2]!='\0') { /* strlen(n)!=2 */
-#ifdef HAVE_EXTRA_DEBUG
-		abort();
-#else
-		return;
-#endif
-	}
+	EXTRA_ASSERT(NULL != conf->shm.handle);
+	EXTRA_ASSERT(NULL != conf->lock.handle);
+	EXTRA_ASSERT(n && n[0] && n[1]);
 
 	apr_global_mutex_lock(conf->lock.handle);
-	shm_stats = apr_shm_baseaddr_get(conf->shm.handle);
+	struct shm_stats_s *shm_stats = apr_shm_baseaddr_get(conf->shm.handle);
 	apr_global_mutex_unlock(conf->lock.handle);
 
-	/* increase the appropriated counter */
-	if (shm_stats) {
-		switch (*n) {
-			case 'q':
-				switch (n[1]) {
-					case '0': 
-						apr_atomic_add32(&(shm_stats->body.req_all), value);
-						if(duration > 0) {
-							apr_atomic_add32(&(shm_stats->body.time_all), duration);
-							rainx_stats_rrd_push(&(shm_stats->body.rrd_req_sec), shm_stats->body.req_all);
-							rainx_stats_rrd_push(&(shm_stats->body.rrd_duration), shm_stats->body.time_all);
-						}
-						break;
-					case '1':
-						apr_atomic_add32(&(shm_stats->body.req_chunk_get), value);
-						if(duration > 0) {
-							apr_atomic_add32(&(shm_stats->body.time_get), duration);
-							rainx_stats_rrd_push(&(shm_stats->body.rrd_req_get_sec), shm_stats->body.req_chunk_get);
-							rainx_stats_rrd_push(&(shm_stats->body.rrd_get_duration), shm_stats->body.time_get);
-						}
-						break;
-					case '2':
-						apr_atomic_add32(&(shm_stats->body.req_chunk_put), value);
-						if(duration > 0) {
-							apr_atomic_add32(&(shm_stats->body.time_put), duration);
-							rainx_stats_rrd_push(&(shm_stats->body.rrd_req_put_sec), shm_stats->body.req_chunk_put);
-							rainx_stats_rrd_push(&(shm_stats->body.rrd_put_duration), shm_stats->body.time_put);
-						}
-						break;
-					case '3':
-						apr_atomic_add32(&(shm_stats->body.req_chunk_del), value);
-						if(duration > 0) {
-							apr_atomic_add32(&(shm_stats->body.time_del), duration);
-							rainx_stats_rrd_push(&(shm_stats->body.rrd_req_del_sec), shm_stats->body.req_chunk_del);
-							rainx_stats_rrd_push(&(shm_stats->body.rrd_del_duration), shm_stats->body.time_del);
-						}
-						break;
-					case '4': apr_atomic_add32(&(shm_stats->body.req_stat), value); break;
-					case '5': apr_atomic_add32(&(shm_stats->body.req_info), value); break;
-					case '6': apr_atomic_add32(&(shm_stats->body.req_raw), value); break;
-					case '7': apr_atomic_add32(&(shm_stats->body.req_other), value); break;
-				}
-				break;
-			case 'r':
-				switch (n[1]) {
-					case '1': apr_atomic_add32(&(shm_stats->body.rep_2XX), value); break;
-					case '2': apr_atomic_add32(&(shm_stats->body.rep_4XX), value); break;
-					case '3': apr_atomic_add32(&(shm_stats->body.rep_5XX), value); break;
-					case '4': apr_atomic_add32(&(shm_stats->body.rep_other), value); break;
-					case '5': apr_atomic_add32(&(shm_stats->body.rep_403), value); break;
-					case '6': apr_atomic_add32(&(shm_stats->body.rep_404), value); break;
-					case '7': apr_atomic_add32(&(shm_stats->body.rep_bread), value); break;
-					case '8': apr_atomic_add32(&(shm_stats->body.rep_bwritten), value); break;
-				}
-				break;
-		}
+	if (!shm_stats)
+		return;
+
+	switch (*n) {
+		case 'q':
+			switch (n[1]) {
+				case '0':
+					apr_atomic_add32(&(shm_stats->body.req_all), value);
+					if (duration > 0)
+						apr_atomic_add32(&(shm_stats->body.time_all), duration);
+					break;
+				case '1':
+					apr_atomic_add32(&(shm_stats->body.req_chunk_get), value);
+					if (duration > 0)
+						apr_atomic_add32(&(shm_stats->body.time_get), duration);
+					break;
+				case '2':
+					apr_atomic_add32(&(shm_stats->body.req_chunk_put), value);
+					if (duration > 0)
+						apr_atomic_add32(&(shm_stats->body.time_put), duration);
+					break;
+				case '3':
+					apr_atomic_add32(&(shm_stats->body.req_chunk_del), value);
+					if (duration > 0)
+						apr_atomic_add32(&(shm_stats->body.time_del), duration);
+					break;
+				case '4':
+					apr_atomic_add32(&(shm_stats->body.req_stat), value);
+					if (duration > 0)
+						apr_atomic_add32(&(shm_stats->body.time_stat), value);
+					break;
+				case '5':
+					apr_atomic_add32(&(shm_stats->body.req_info), value);
+					if (duration > 0)
+						apr_atomic_add32(&(shm_stats->body.time_info), value);
+					break;
+				case '6':
+					apr_atomic_add32(&(shm_stats->body.req_raw), value);
+					if (duration > 0)
+						apr_atomic_add32(&(shm_stats->body.time_raw), value);
+					break;
+				case '7':
+					apr_atomic_add32(&(shm_stats->body.req_other), value);
+					if (duration > 0)
+						apr_atomic_add32(&(shm_stats->body.time_other), value);
+					break;
+			}
+			break;
+		case 'r':
+			switch (n[1]) {
+				case '1': apr_atomic_add32(&(shm_stats->body.rep_2XX), value); break;
+				case '2': apr_atomic_add32(&(shm_stats->body.rep_4XX), value); break;
+				case '3': apr_atomic_add32(&(shm_stats->body.rep_5XX), value); break;
+				case '4': apr_atomic_add32(&(shm_stats->body.rep_other), value); break;
+				case '5': apr_atomic_add32(&(shm_stats->body.rep_403), value); break;
+				case '6': apr_atomic_add32(&(shm_stats->body.rep_404), value); break;
+				case '7': apr_atomic_add32(&(shm_stats->body.rep_bread), value); break;
+				case '8': apr_atomic_add32(&(shm_stats->body.rep_bwritten), value); break;
+			}
+			break;
 	}
 }
 
@@ -275,7 +251,7 @@ server_inc_daverror_stat(dav_rainx_server_conf *conf, dav_error *derr)
 		server_inc_stat(conf, RAWX_STATNAME_REP_2XX, 0);
 		return;
 	}
-	
+
 	switch (derr->status / 100) {
 		case 2:
 			server_inc_stat(conf, RAWX_STATNAME_REP_2XX, 0);

@@ -45,11 +45,9 @@ static MESSAGE
 make_request(const gchar *rn, struct sqlx_name_s *name)
 {
 	MESSAGE req = metautils_message_create_named(rn);
-	metautils_message_add_fields_str(req,
-				NAME_MSGKEY_BASENAME, name->base,
-				NAME_MSGKEY_BASETYPE, name->type,
-				NAME_MSGKEY_NAMESPACE, name->ns,
-				NULL);
+	metautils_message_add_field_str(req, NAME_MSGKEY_BASENAME, name->base);
+	metautils_message_add_field_str(req, NAME_MSGKEY_BASETYPE, name->type);
+	metautils_message_add_field_str(req, NAME_MSGKEY_NAMESPACE, name->ns);
 	return req;
 }
 
@@ -112,16 +110,16 @@ sqlx_pack_DESCR(struct sqlx_name_s *name)
 }
 
 GByteArray*
-sqlx_pack_INFO(struct sqlx_name_s *name)
+sqlx_pack_INFO(void)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_INFO, name);
+	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_SQLX_INFO);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
-sqlx_pack_LEANIFY(struct sqlx_name_s *name)
+sqlx_pack_LEANIFY(void)
 {
-	MESSAGE req = make_request(NAME_MSGNAME_SQLX_LEANIFY, name);
+	MESSAGE req = metautils_message_create_named (NAME_MSGNAME_SQLX_LEANIFY);
 	return message_marshall_gba_and_clean(req);
 }
 
@@ -135,14 +133,14 @@ sqlx_pack_RESYNC(struct sqlx_name_s *name)
 GByteArray*
 sqlx_pack_STATUS(struct sqlx_name_s *name)
 {
-    MESSAGE req = make_request(NAME_MSGNAME_SQLX_STATUS, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_STATUS, name);
 	return message_marshall_gba_and_clean(req);
 }
 
 GByteArray*
 sqlx_pack_EXITELECTION(struct sqlx_name_s *name)
 {
-    MESSAGE req = make_request(NAME_MSGNAME_SQLX_EXITELECTION, name);
+	MESSAGE req = make_request(NAME_MSGNAME_SQLX_EXITELECTION, name);
 	return message_marshall_gba_and_clean(req);
 }
 
@@ -157,7 +155,7 @@ GByteArray*
 sqlx_pack_PIPEFROM(struct sqlx_name_s *name, const gchar *source)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPEFROM, name);
-	metautils_message_add_fields_str(req, NAME_MSGKEY_SRC, source, NULL);
+	metautils_message_add_field_str(req, NAME_MSGKEY_SRC, source);
 	return message_marshall_gba_and_clean(req);
 }
 
@@ -165,7 +163,7 @@ GByteArray*
 sqlx_pack_PIPETO(struct sqlx_name_s *name, const gchar *target)
 {
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_PIPETO, name);
-	metautils_message_add_fields_str(req, NAME_MSGKEY_DST, target, NULL);
+	metautils_message_add_field_str(req, NAME_MSGKEY_DST, target);
 	return message_marshall_gba_and_clean(req);
 }
 
@@ -214,7 +212,7 @@ sqlx_pack_QUERY(struct sqlx_name_s *name, const gchar *query,
 	guint8 ac = (guint8) autocreate;
 	MESSAGE req = make_request(NAME_MSGNAME_SQLX_QUERY, name);
 	metautils_message_add_field(req, NAME_MSGKEY_AUTOCREATE, &ac, 1);
-	metautils_message_add_fields_str(req, NAME_MSGKEY_QUERY, query, NULL);
+	metautils_message_add_field_str(req, NAME_MSGKEY_QUERY, query);
 	if (params)
 		metautils_message_add_body_unref (req, sqlx_encode_TableSequence(
 					params, NULL));

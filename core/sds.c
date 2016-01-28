@@ -1016,8 +1016,14 @@ oio_sds_upload_clean (struct oio_sds_ul_s *ul)
 		g_checksum_free (ul->checksum_content);
 	if (ul->buffer_tail)
 		g_queue_free (ul->buffer_tail);
-	if (ul->metachunk_ready)
+	if (ul->metachunk_ready) {
 		g_queue_free_full (ul->metachunk_ready, (GDestroyNotify)_metachunk_clean);
+		ul->metachunk_ready = NULL;
+	}
+	if (ul->metachunk_done) {
+		g_list_free_full (ul->metachunk_done, (GDestroyNotify)_metachunk_clean);
+		ul->metachunk_done = NULL;
+	}
 	g_slist_free_full (ul->chunks_done, g_free);
 	g_slist_free_full (ul->chunks_failed, g_free);
 	oio_str_clean (&ul->hexid);
@@ -1899,7 +1905,7 @@ oio_sds_get_compile_options (void)
 #define _ADD_STR(S) _add(#S,S)
 #define _ADD_DBL(S) _add_double(#S,S)
 #define _ADD_INT(S) _add_integer(#S,S)
-	_ADD_STR (PROXYD_PREFIX2);
+	_ADD_STR (PROXYD_PREFIX);
 	_ADD_STR (PROXYD_HEADER_PREFIX);
 	_ADD_STR (PROXYD_HEADER_REQID);
 	_ADD_STR (PROXYD_HEADER_NOEMPTY);

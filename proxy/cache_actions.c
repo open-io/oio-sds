@@ -19,12 +19,13 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "common.h"
 #include "actions.h"
+#include <sqliterepo/sqlx_macros.h>
 
 enum http_rc_e
 action_forward (struct req_args_s *args)
 {
-	const char *id = TOK("SRVID");
-	const char *action = OPT("action");
+	const char *id = OPT("id");
+	const char *action = TOK("ACTION");
 
 	if (!id)
 		return _reply_format_error (args, BADREQ("Missing SRVID"));
@@ -32,16 +33,111 @@ action_forward (struct req_args_s *args)
 		return _reply_format_error (args, BADREQ("Missing action"));
 
 	GError *err = NULL;
-	if (!g_ascii_strcasecmp (action, "flush"))
+	if (!g_ascii_strcasecmp (action, "flush")) {
 		err = sqlx_remote_execute_FLUSH (id);
-	else if (!g_ascii_strcasecmp (action, "reload"))
+		if (!err)
+			return _reply_success_json (args, NULL);
+		return _reply_common_error (args, err);
+	}
+	if (!g_ascii_strcasecmp (action, "reload")) {
 		err = sqlx_remote_execute_RELOAD (id);
-	else
-		err = BADREQ("unexpected action");
-
-	if (!err)
+		if (!err)
+			return _reply_success_json (args, NULL);
+		return _reply_common_error (args, err);
+	}
+	if (!g_ascii_strcasecmp (action, "kill")) {
+		GByteArray *encoded = message_marshall_gba_and_clean (
+				metautils_message_create_named("REQ_KILL"));
+		err = gridd_client_exec (id, 1.0, encoded);
+		if (err)
+			return _reply_common_error (args, err);
 		return _reply_success_json (args, NULL);
-	return _reply_common_error (args, err);
+	}
+	if (!g_ascii_strcasecmp (action, "ping")) {
+		GByteArray *encoded = message_marshall_gba_and_clean (
+				metautils_message_create_named("REQ_PING"));
+		err = gridd_client_exec (id, 1.0, encoded);
+		if (err)
+			return _reply_common_error (args, err);
+		return _reply_success_json (args, NULL);
+	}
+	if (!g_ascii_strcasecmp (action, "lean-glib")) {
+		MESSAGE req = metautils_message_create_named("REQ_LEAN");
+		metautils_message_add_field_str(req, "LIBC", "1");
+		metautils_message_add_field_str(req, "THREADS", "1");
+		GByteArray *encoded = message_marshall_gba_and_clean (req);
+		err = gridd_client_exec (id, 1.0, encoded);
+		if (err)
+			return _reply_common_error (args, err);
+		return _reply_success_json (args, NULL);
+	}
+
+	if (!g_ascii_strcasecmp (action, "lean-sqlx")) {
+		GByteArray *encoded = message_marshall_gba_and_clean (
+				metautils_message_create_named(NAME_MSGNAME_SQLX_LEANIFY));
+		err = gridd_client_exec (id, 1.0, encoded);
+		if (err)
+			return _reply_common_error (args, err);
+		return _reply_success_json (args, NULL);
+	}
+
+	if (!g_ascii_strcasecmp (action, "stats")) {
+		MESSAGE req = metautils_message_create_named("REQ_STATS");
+		GByteArray *encoded = message_marshall_gba_and_clean (req);
+		gchar *packed = NULL;
+		err = gridd_client_exec_and_concat_string (id, 1.0, encoded, &packed);
+		if (err) {
+			g_free0 (packed);
+			return _reply_common_error (args, err);
+		}
+
+		for (gchar *s=packed; *s ;++s) { if (*s == '=') *s = ' '; }
+
+		/* TODO(jfs): quite duplicated from _reply_json() but the original
+		   was not suitable. */
+		args->rp->set_status (200, "OK");
+		args->rp->set_body ((guint8*)packed, strlen(packed));
+		args->rp->finalize ();
+		return HTTPRC_DONE;
+	}
+
+	if (!g_ascii_strcasecmp (action, "version")) {
+		MESSAGE req = metautils_message_create_named("REQ_VERSION");
+		GByteArray *encoded = message_marshall_gba_and_clean (req);
+		gchar *packed = NULL;
+		err = gridd_client_exec_and_concat_string (id, 1.0, encoded, &packed);
+		if (err) {
+			g_free0 (packed);
+			return _reply_common_error (args, err);
+		}
+
+		/* TODO(jfs): quite duplicated from _reply_json() but the original
+		   was not suitable. */
+		args->rp->set_status (200, "OK");
+		args->rp->set_body ((guint8*)packed, strlen(packed));
+		args->rp->finalize ();
+		return HTTPRC_DONE;
+	}
+
+	if (!g_ascii_strcasecmp (action, "handlers")) {
+		MESSAGE req = metautils_message_create_named("REQ_HANDLERS");
+		GByteArray *encoded = message_marshall_gba_and_clean (req);
+		gchar *packed = NULL;
+		err = gridd_client_exec_and_concat_string (id, 1.0, encoded, &packed);
+		if (err) {
+			g_free0 (packed);
+			return _reply_common_error (args, err);
+		}
+
+		/* TODO(jfs): quite duplicated from _reply_json() but the original
+		   was not suitable. */
+		args->rp->set_status (200, "OK");
+		args->rp->set_body ((guint8*)packed, strlen(packed));
+		args->rp->finalize ();
+		return HTTPRC_DONE;
+	}
+
+	return _reply_common_error (args, BADREQ("unexpected action"));
 }
 
 enum http_rc_e

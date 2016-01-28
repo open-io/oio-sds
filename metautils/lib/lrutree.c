@@ -272,10 +272,6 @@ _get(struct lru_tree_s *lt, gpointer *pk, gpointer *pv, struct _node_s *node,
         _node_destroy(lt, node);
 		-- lt->count;
     }
-    else if (!(lt->flags & LTO_NOATIME)) {
-        _node_deq_extract(lt, node);
-        _node_deq_push_front(lt, node);
-    }
 
     return TRUE;
 }
