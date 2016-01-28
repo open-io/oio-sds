@@ -23,8 +23,6 @@ License along with this library.
 #include <unistd.h>
 #include <errno.h>
 
-#include <malloc.h>
-
 #include <metautils/lib/metautils.h>
 
 #include "sqliterepo.h"
@@ -821,11 +819,6 @@ sqlx_cache_expire(sqlx_cache_t *cache, guint max, gint64 duration)
 	}
 
 	g_mutex_unlock(&cache->lock);
-
-	/* Force malloc to release memory to the system.
-	 * Allow 1MiB of unused but not released memory. */
-	malloc_trim(1024 * 1024);
-
 	return nb;
 }
 

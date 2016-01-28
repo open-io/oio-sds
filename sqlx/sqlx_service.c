@@ -21,6 +21,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <stddef.h>
 #include <errno.h>
 #include <string.h>
+#include <malloc.h>
 #include <sys/resource.h>
 
 #include <metautils/lib/metautils.h>
@@ -52,6 +53,7 @@ static void sqlx_service_specific_fini(void);
 static void sqlx_service_specific_stop(void);
 
 // Periodic tasks & thread's workers
+static void _task_malloc_trim(gpointer p);
 static void _task_register(gpointer p);
 static void _task_expire_bases(gpointer p);
 static void _task_expire_resolver(gpointer p);
@@ -326,6 +328,7 @@ _configure_tasks(struct sqlx_service_s *ss)
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_bases, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_expire_resolver, NULL, ss);
 	grid_task_queue_register(ss->gtq_admin, 1, _task_retry_elections, NULL, ss);
+	grid_task_queue_register(ss->gtq_admin, 3600, _task_malloc_trim, NULL, ss);
 
 	return TRUE;
 }
@@ -736,6 +739,13 @@ _task_register(gpointer p)
 		g_message("Service registration failed: (%d) %s", err->code, err->message);
 		g_clear_error(&err);
 	}
+}
+
+static void
+_task_malloc_trim(gpointer p)
+{
+	(void) p;
+	malloc_trim (PERIODIC_MALLOC_TRIM_SIZE);
 }
 
 static void
