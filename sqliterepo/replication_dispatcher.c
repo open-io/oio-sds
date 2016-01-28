@@ -2305,7 +2305,7 @@ sqlx_dispatch_LEANIFY(struct gridd_reply_ctx_s *reply,
 	GError *err = metautils_message_extract_struint (reply->request, NAME_MSGKEY_SIZE, &size);
 	if (err) {
 		g_clear_error (&err);
-		size = 16 * 1024 * 1024;
+		size = SQLITE_RELEASE_SIZE;
 	}
 	sqlite3_release_memory (size);
 	reply->send_reply(CODE_FINAL_OK, "OK");

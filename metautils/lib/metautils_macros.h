@@ -36,6 +36,18 @@ License along with this library.
 
 /* Some well known service types */
 
+#ifndef  MALLOC_TRIM_SIZE
+# define MALLOC_TRIM_SIZE (0)
+#endif
+
+#ifndef  PERIODIC_MALLOC_TRIM_SIZE
+# define PERIODIC_MALLOC_TRIM_SIZE (0)
+#endif
+
+#ifndef  SQLITE_RELEASE_SIZE
+# define SQLITE_RELEASE_SIZE  (64*1024*1024)
+#endif
+
 # define NAME_SRVTYPE_META0 "meta0"
 # define NAME_SRVTYPE_META1 "meta1"
 # define NAME_SRVTYPE_META2 "meta2"

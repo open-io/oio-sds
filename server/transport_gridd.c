@@ -834,7 +834,7 @@ dispatch_LEAN(struct gridd_reply_ctx_s *reply,
 	(void) gdata, (void) hdata;
 
 	if (metautils_message_extract_flag (reply->request, "LIBC", FALSE)) {
-		if (malloc_trim (0))
+		if (malloc_trim (MALLOC_TRIM_SIZE))
 			g_strlcat (buf, " malloc-heap", sizeof(buf));
 	}
 

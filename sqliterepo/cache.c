@@ -23,8 +23,6 @@ License along with this library.
 #include <unistd.h>
 #include <errno.h>
 
-#include <malloc.h>
-
 #include <metautils/lib/metautils.h>
 
 #include "sqliterepo.h"
@@ -92,11 +90,11 @@ struct sqlx_cache_s
 	sqlx_base_t *bases;
 	GCond *cond_array;
 	gsize cond_count;
-	glong open_timeout; // milliseconds
 
 	guint32 heat_threshold;
 	gint64 cool_grace_delay; // same precision as oio_ext_monotonic_time()
 	gint64 hot_grace_delay;  // idem
+	gint64 open_timeout;     // idem
 
 	/* Doubly linked lists of tables, one by status */
 	struct beacon_s beacon_free;
@@ -493,31 +491,27 @@ sqlx_cache_reset_bases(sqlx_cache_t *cache, guint max)
 
 /* ------------------------------------------------------------------------- */
 
-sqlx_cache_t *
+void
 sqlx_cache_set_max_bases(sqlx_cache_t *cache, guint max)
 {
 	GRID_TRACE2("%s(%p,%u)", __FUNCTION__, cache, max);
 	EXTRA_ASSERT(cache != NULL);
 	EXTRA_ASSERT(max < 65536);
 	sqlx_cache_reset_bases(cache, max);
-	return cache;
 }
 
-sqlx_cache_t *
-sqlx_cache_set_close_hook(sqlx_cache_t *cache,
-		sqlx_cache_close_hook hook)
+void
+sqlx_cache_set_close_hook(sqlx_cache_t *cache, sqlx_cache_close_hook hook)
 {
 	EXTRA_ASSERT(cache != NULL);
 	cache->close_hook = hook;
-	return cache;
 }
 
-sqlx_cache_t *
-sqlx_cache_set_open_timeout(sqlx_cache_t *cache, glong timeout)
+void
+sqlx_cache_set_open_timeout(sqlx_cache_t *cache, gint64 timeout)
 {
 	EXTRA_ASSERT(cache != NULL);
 	cache->open_timeout = timeout;
-	return cache;
 }
 
 sqlx_cache_t *
@@ -537,7 +531,7 @@ sqlx_cache_init(void)
 	cache->bases_count = SQLX_MAX_BASES;
 	cache->cond_count = SQLX_MAX_COND;
 	cache->cond_array = g_malloc0(cache->cond_count * sizeof(GCond));
-	cache->open_timeout = DEFAULT_CACHE_OPEN_TIMEOUT;
+	cache->open_timeout = 0;
 	BEACON_RESET(&(cache->beacon_free));
 	BEACON_RESET(&(cache->beacon_idle));
 	BEACON_RESET(&(cache->beacon_idle_hot));
@@ -605,13 +599,14 @@ sqlx_cache_open_and_lock_base(sqlx_cache_t *cache, const hashstr_t *hname,
 	EXTRA_ASSERT(hname != NULL);
 	EXTRA_ASSERT(result != NULL);
 
-	gint64 now = oio_ext_monotonic_time(), deadline = 30 * G_TIME_SPAN_SECOND;
-	if (cache->open_timeout >= 0)
-		deadline = cache->open_timeout * G_TIME_SPAN_MILLISECOND;
+	gint64 start = oio_ext_monotonic_time();
+	gint64 deadline = DEFAULT_CACHE_OPEN_TIMEOUT;
+	if (cache->open_timeout > 0)
+		deadline = cache->open_timeout;
 	GRID_TRACE2("%s(%p,%s,%p) delay = %"G_GINT64_FORMAT, __FUNCTION__,
 			(void*)cache, hname ? hashstr_str(hname) : "NULL",
 			(void*)result, deadline);
-	deadline += now;
+	deadline += start;
 
 	g_mutex_lock(&cache->lock);
 	cache->used = TRUE;
@@ -635,11 +630,12 @@ retry:
 	}
 	else {
 		base = GET(cache, bd);
-		now = oio_ext_monotonic_time ();
+		gint64 now = oio_ext_monotonic_time ();
+
 		if (now > deadline) {
 			err = NEWERROR (CODE_UNAVAILABLE,
 					"DB busy (after %"G_GINT64_FORMAT" ms)",
-					(now - deadline) / G_TIME_SPAN_MILLISECOND);
+					(now - start) / G_TIME_SPAN_MILLISECOND);
 		} else switch (base->status) {
 
 			case SQLX_BASE_FREE:
@@ -665,7 +661,8 @@ retry:
 				if (base->owner != g_thread_self()) {
 					GRID_DEBUG("Base [%s] in use by another thread (%X), waiting...",
 							hashstr_str(hname), oio_log_thread_id(base->owner));
-					/* The lock is held by another thread/request. */
+					/* The lock is held by another thread/request.
+					   XXX(jfs): do not use 'now' because it can be a fake clock */
 					g_cond_wait_until(base->cond, &cache->lock,
 							g_get_monotonic_time() + oio_cache_period_cond_wait);
 					goto retry;
@@ -677,7 +674,8 @@ retry:
 
 			case SQLX_BASE_CLOSING:
 				EXTRA_ASSERT(base->owner != NULL);
-				// Just wait for a notification then retry
+				/* Just wait for a notification then retry
+				   XXX(jfs): do not use 'now' because it can be a fake clock */
 				g_cond_wait_until(base->cond, &cache->lock,
 						g_get_monotonic_time() + oio_cache_period_cond_wait);
 				goto retry;
@@ -821,11 +819,6 @@ sqlx_cache_expire(sqlx_cache_t *cache, guint max, gint64 duration)
 	}
 
 	g_mutex_unlock(&cache->lock);
-
-	/* Force malloc to release memory to the system.
-	 * Allow 1MiB of unused but not released memory. */
-	malloc_trim(1024 * 1024);
-
 	return nb;
 }
 
