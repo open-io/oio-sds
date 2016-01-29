@@ -37,7 +37,7 @@ _log_addr(GString *gs, int fd)
 	memset(&ss, 0, sizeof(ss));
 	ss_len = sizeof(ss);
 
-	if (0 != getsockname(fd, (struct sockaddr*)&ss, &ss_len)) 
+	if (0 != getsockname(fd, (struct sockaddr*)&ss, &ss_len))
 		g_string_append_c(gs, '?');
 	else {
 		memset(buf_port, 0, sizeof(buf_port));
@@ -51,7 +51,7 @@ _log_addr(GString *gs, int fd)
 
 	g_string_append_c(gs, ' ');
 
-	if (0 != getpeername(fd, (struct sockaddr*)&ss, &ss_len)) 
+	if (0 != getpeername(fd, (struct sockaddr*)&ss, &ss_len))
 		g_string_append_c(gs, '?');
 	else {
 		memset(buf_port, 0, sizeof(buf_port));
@@ -62,17 +62,6 @@ _log_addr(GString *gs, int fd)
 		g_string_append_c(gs, ':');
 		g_string_append(gs, buf_port);
 	}
-}
-
-static void
-_log_time(GString *gs, struct request_context_s *req_ctx)
-{
-	struct timeval tvnow, tvdiff;
-
-	gettimeofday(&tvnow, NULL);
-	timersub(&tvnow, &(req_ctx->tv_start), &tvdiff);
-
-	g_string_append_printf(gs, " %lu.%06lu", tvdiff.tv_sec, tvdiff.tv_usec);
 }
 
 static void
@@ -81,18 +70,11 @@ _log_reqid(GString *gs, MESSAGE req)
 	g_string_append_c(gs, ' ');
 
 	gsize field_len=0;
-	void *field = metautils_message_get_ID(req, &field_len);
+	void *field = metautils_message_get_ID (req, &field_len);
 	if (!field || !field_len)
-		g_string_append_c(gs, '_');
-	else {
-		gsize max = field_len * 2 + 2;
-		char *hex;
-		
-		hex = g_alloca(max);
-		memset(hex, 0, max);
-		oio_str_bin2hex(field, field_len, hex, max);
-		g_string_append(gs, (gchar*)hex);
-	}
+		g_string_append_c(gs, '-');
+	else for (gsize i=0; i<field_len ;++i)
+		g_string_append_c (gs, ((gchar*)field)[i]);
 }
 
 static void
@@ -110,49 +92,35 @@ _log_reqname(GString *gs, MESSAGE req)
 	}
 }
 
-static void
-_log_args(GString *gs, const gchar *fmt, va_list vargs)
-{
-	g_string_append_c(gs, ' ');
-	g_string_append_c(gs, '[');
-	if (fmt)
-		g_string_append_vprintf(gs, fmt, vargs);
-	g_string_append_c(gs, ']');
-}
-
-static void
-_log_message(GString *gs, struct reply_context_s *ctx)
-{
-	if (!ctx->header.msg)
-		g_string_append(gs, " 200 OK");
-	else
-		g_string_append_printf(gs, " %d %s", ctx->header.code, ctx->header.msg);
-}
-
 void
 reply_context_log_access (struct reply_context_s *ctx, const gchar *fmt, ...)
 {
-	va_list va;
-	GString *gs;
+	struct timeval tvnow, tvdiff;
+	gettimeofday (&tvnow, NULL);
+	timersub(&tvnow, &(ctx->req_ctx->tv_start), &tvdiff);
 
-	if (!ctx)
-		return;
-	if (!ctx->req_ctx)
-		return;
+	EXTRA_ASSERT(NULL != ctx);
+	EXTRA_ASSERT(NULL != ctx->req_ctx);
 
-	gs = g_string_sized_new(2048);
+	GString *gs = g_string_sized_new(256);
 	_log_addr(gs, ctx->req_ctx->fd);
-	_log_time(gs, ctx->req_ctx);
-	_log_reqid(gs, ctx->req_ctx->request);
 	_log_reqname(gs, ctx->req_ctx->request);
+	g_string_append_printf(gs, " %d %"G_GINT64_FORMAT" 0",
+			ctx->header.code, tvdiff.tv_sec * 1000000 + tvdiff.tv_usec);
+	g_string_append_c(gs, ' ');
+	if (!fmt)
+		g_string_append_c(gs, '-');
+	else {
+		va_list va;
+		va_start(va, fmt);
+		g_string_append_vprintf(gs, fmt, va);
+		va_end(va);
+	}
+	_log_reqid(gs, ctx->req_ctx->request);
 
-	va_start(va, fmt);
-	_log_args(gs, fmt, va);
-	va_end(va);
-
-	_log_message(gs, ctx);
+	g_string_append_printf(gs, " %s", ctx->header.msg ? ctx->header.msg : "OK");
 
 	g_log("access", GRID_LOGLVL_INFO, "%s", gs->str);
-	(void) g_string_free(gs, TRUE);
+	g_string_free(gs, TRUE);
 }
 

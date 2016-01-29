@@ -340,6 +340,8 @@ transport_http_factory0(http_handler_f hdl, struct network_client_s *client)
 
 //------------------------------------------------------------------------------
 
+static const gchar * ensure (const gchar *s) { return s && *s ? s : "-"; }
+
 static gboolean
 sender(gpointer k, gpointer v, gpointer u)
 {
@@ -364,21 +366,22 @@ _access_log(struct req_ctx_s *r, gint status, gsize out_len, const gchar *tail)
 
 	GString *gstr = g_string_sized_new(256);
 
-	g_string_append(gstr, r->client->local_name);
+	/* mandatory */
+	g_string_append(gstr, ensure(r->client->local_name));
 	g_string_append_c(gstr, ' ');
-	g_string_append(gstr, r->client->peer_name);
+	g_string_append(gstr, ensure(r->client->peer_name));
+	g_string_append_c(gstr, ' ');
+	g_string_append(gstr, ensure(r->request->cmd));
+	g_string_append_printf(gstr, " %d %"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" ",
+			status, diff_total, out_len);
+	g_string_append(gstr, ensure(r->uid));
+	g_string_append_c(gstr, ' ');
+	g_string_append(gstr, ensure(reqid));
 
-	g_string_append_printf(gstr,
-			" %s %d %"G_GINT64_FORMAT".%06"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" %s %s %s t=%"G_GINT64_FORMAT".%06"G_GINT64_FORMAT,
-			r->request->cmd,
-			status,
-			diff_total / G_TIME_SPAN_SECOND, diff_total % G_TIME_SPAN_SECOND,
-			out_len,
-			(r->uid && *r->uid) ? r->uid : "-",
-			(reqid && *reqid) ? reqid : "-",
-			r->request->req_uri,
-			diff_handler / G_TIME_SPAN_SECOND, diff_handler % G_TIME_SPAN_SECOND);
-
+	/* arbitrary */
+	g_string_append_c(gstr, ' ');
+	g_string_append(gstr, ensure(r->request->req_uri));
+	g_string_append_printf(gstr, " t=%"G_GINT64_FORMAT" ", diff_handler);
 	if (tail) {
 		g_string_append_c (gstr, ' ');
 		g_string_append (gstr, tail);
