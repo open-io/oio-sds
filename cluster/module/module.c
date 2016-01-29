@@ -653,7 +653,7 @@ handler_get_service(struct request_context_s *req_ctx)
 static void
 push_service(struct conscience_s *cs, struct service_info_s *si)
 {
-	gchar str_addr[STRLEN_ADDRINFO], str_descr[LIMIT_LENGTH_SRVDESCR];
+	gchar str_addr[STRLEN_ADDRINFO] = "", str_descr[LIMIT_LENGTH_SRVDESCR] = "";
 	gint32 old_score=0;
 	GError *error_local=NULL;
 	struct conscience_srvtype_s *srvtype;
