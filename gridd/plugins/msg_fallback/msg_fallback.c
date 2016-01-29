@@ -53,7 +53,7 @@ plugin_handler(MESSAGE m, gint fd, void *param, GError ** err)
 	ctx.req_ctx = &req_ctx;
 
 	reply_context_set_message(&ctx, CODE_NOT_FOUND, "No message handler found, check your NS configuration");
-	reply_context_log_access(&ctx, "");
+	reply_context_log_access(&ctx, NULL);
 
 	rc = reply_context_reply(&ctx, err);
 	reply_context_clear(&ctx, TRUE);
