@@ -46,60 +46,43 @@ plugin_matcher (MESSAGE m, void *param, GError **err)
 }
 
 static gint
-handler_get_stats(struct request_context_s *req_ctx, const char* pattern, GError **err)
+handler_get_stats(struct request_context_s *req_ctx, GError **err)
 {
-	gint rc;
 	struct reply_context_s ctx;
-
 	memset(&ctx, 0x00, sizeof(struct reply_context_s));
 	ctx.req_ctx = req_ctx;
-	
+
+	GString *gs = g_string_new ("");
+
 	void msg_append_field(gpointer u, const gchar *name, GVariant *gv) {
-		gchar *n, *v;
 		(void) u;
-
-		if (!gv)
-			return;
-
-		n = g_strdup_printf("%s%s", MSGFIELD_STATPREFIX, name);
-		v = g_variant_print(gv, FALSE);
-
-		reply_context_add_strheader_in_reply(&ctx, n, v);
-
-		g_free(n);
+		if (!gv) return;
+		gchar *v = g_variant_print(gv, FALSE);
+		g_string_append_printf (gs, "%s=%s\n", name, v);
 		g_free(v);
 	}
 
-	srvstat_foreach_gvariant(pattern, msg_append_field, NULL);
+	srvstat_foreach_gvariant("*", msg_append_field, NULL);
 
+	reply_context_set_body(&ctx, gs->str, gs->len, REPLYCTX_DESTROY_ON_CLEAN);
 	reply_context_set_message(&ctx, 200, "OK");
-	reply_context_log_access(&ctx, "%s", pattern);
-
-	rc = reply_context_reply(&ctx, err);
+	reply_context_log_access(&ctx, NULL);
+	reply_context_reply(&ctx, err);
 	reply_context_clear(&ctx, TRUE);
 
-	return rc;
+	g_string_free (gs, FALSE);
+	return 1;
 }
 
 static gint
 plugin_handler (MESSAGE m, gint fd, void *param, GError **err)
 {
 	(void) param;
-	struct request_context_s ctx;
-	memset(&ctx, 0x00, sizeof(struct request_context_s));
+	struct request_context_s ctx = {0};
 	gettimeofday(&(ctx.tv_start), NULL);
 	ctx.fd = fd;
 	ctx.request = m;
-
-	gchar *pattern = metautils_message_extract_string_copy(m, MSGKEY_PATTERN);
-	if (!pattern) {
-		GSETERROR(err,"no pattern provided %s", MSGKEY_PATTERN);
-		return 0;
-	} else {
-		gint rc = handler_get_stats (&ctx, pattern, err);
-		g_free (pattern);
-		return rc;
-	}
+	return handler_get_stats (&ctx, err);
 }
 
 /* ------------------------------------------------------------------------- */
