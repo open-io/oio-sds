@@ -364,7 +364,7 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 		reply_context_set_message(&ctx, gerror_get_code(ctx.warning),
 				gerror_get_message(ctx.warning));
 		(void) reply_context_reply(&ctx, &(ctx.warning));
-		reply_context_log_access(&ctx, "NS=?");
+		reply_context_log_access(&ctx, NULL);
 		reply_context_clear(&ctx, TRUE);
 		return (0);
 	}
@@ -375,7 +375,7 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 
 	if (gba == NULL) {
 		GSETERROR(&(ctx.warning), "Failed to marshall namespace info");
-		reply_context_log_access(&ctx, "NS=%s", conscience_get_nsname(conscience));
+		reply_context_log_access(&ctx, NULL);
 		reply_context_clear(&ctx, FALSE);
 		return 0;
 	}
@@ -385,12 +385,12 @@ handler_get_ns_info(struct request_context_s *req_ctx)
 	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	if (!reply_context_reply(&ctx, &(ctx.warning))) {
 		GSETERROR(&(ctx.warning), "Cannot reply the namespace info");
-		reply_context_log_access(&ctx, "NS=%s", conscience_get_nsname(conscience));
+		reply_context_log_access(&ctx, NULL);
 		reply_context_clear(&ctx, FALSE);
 		return (0);
 	}
 
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_nsname(conscience));
+	reply_context_log_access(&ctx, NULL);
 	reply_context_clear(&ctx, TRUE);
 	return (1);
 }
@@ -643,7 +643,7 @@ handler_get_service(struct request_context_s *req_ctx)
 	if (sg.gba_body)
 		g_byte_array_free(sg.gba_body, TRUE);
 	g_slist_free_full(sg.response_bodies, metautils_gba_unref);
-	reply_context_log_access(&(reply_ctx), "NS=%s", conscience_get_nsname(conscience));
+	reply_context_log_access(&reply_ctx, NULL);
 	reply_context_clear(&(reply_ctx), TRUE);
 	return rc ? 1 : 0;
 }
@@ -783,14 +783,14 @@ handler_push_service(struct request_context_s *req_ctx)
 
 	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s %d service pushed", conscience_get_nsname(conscience), counter);
+	reply_context_log_access(&ctx, NULL);
 	reply_context_clear(&ctx, TRUE);
 	return 1;
 errorLabel:
 	ERROR("An error occured : %s", gerror_get_message(ctx.warning));
 	_reply_ctx_set_error(&ctx);
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_nsname(conscience));
+	reply_context_log_access(&ctx, NULL);
 	reply_context_clear(&ctx, TRUE);
 	return 0;
 }
@@ -837,7 +837,7 @@ handler_get_services_types(struct request_context_s *req_ctx)
 		reply_context_set_message(&ctx, CODE_INTERNAL_ERROR, gerror_get_message(ctx.warning));
 		ERROR("Failed to reply the service types : %s", gerror_get_message(ctx.warning));
 		reply_context_reply(&ctx, NULL);
-		reply_context_log_access(&ctx, "NS=%s %d names pushed", conscience_get_nsname(conscience), counter);
+		reply_context_log_access(&ctx, NULL);
 		reply_context_clear(&ctx, TRUE);
 		return 0;
 	}
@@ -846,7 +846,7 @@ handler_get_services_types(struct request_context_s *req_ctx)
 	g_byte_array_free(gba_names, TRUE);
 	reply_context_set_message(&ctx, CODE_FINAL_OK, "OK");
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s %d names pushed", conscience_get_nsname(conscience), counter);
+	reply_context_log_access(&ctx, NULL);
 	reply_context_clear(&ctx, TRUE);
 	return 1;
 }
@@ -959,7 +959,7 @@ handler_rm_service(struct request_context_s *req_ctx)
 	}
 
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s %d services removed", conscience_get_nsname(conscience), counter);
+	reply_context_log_access(&ctx, NULL);
 	reply_context_clear(&ctx, TRUE);
 	return 1;
 
@@ -967,7 +967,7 @@ errorLabel:
 	ERROR("Failed to remove the service : %s", gerror_get_message(ctx.warning));
 	_reply_ctx_set_error(&ctx);
 	reply_context_reply(&ctx, NULL);
-	reply_context_log_access(&ctx, "NS=%s", conscience_get_nsname(conscience));
+	reply_context_log_access(&ctx, NULL);
 	reply_context_clear(&ctx, TRUE);
 	return 0;
 }
@@ -977,7 +977,6 @@ errorLabel:
 static struct cmd_s *
 module_find_handler(gchar * n, gsize l)
 {
-	struct cmd_s *c;
 	static struct cmd_s CMD[] = {
 		{NAME_MSGNAME_CS_GET_NSINFO, handler_get_ns_info, &(stats.ns_info)},
 		{NAME_MSGNAME_CS_GET_SRV, handler_get_service, &(stats.services.get)},
@@ -987,7 +986,10 @@ module_find_handler(gchar * n, gsize l)
 		{NULL, NULL, NULL}
 	};
 
-	for (c = CMD; c && c->c; c++) {
+	if (!n || !l)
+		return NULL;
+
+	for (struct cmd_s *c = CMD; c->c; c++) {
 		if (0 == g_ascii_strncasecmp(c->c, n, l))
 			return c;
 	}
@@ -998,51 +1000,27 @@ module_find_handler(gchar * n, gsize l)
 static gint
 plugin_matcher(MESSAGE m, void *param, GError ** err)
 {
-	struct cmd_s *c;
-	gchar *name;
-	gsize nameLen;
+	(void)param, (void)err;
+	EXTRA_ASSERT (m != NULL);
 
-	(void)param;
-	if (!m) {
-		GSETERROR(err, "Invalid parameter");
-		return -1;
-	}
-
-	name = metautils_message_get_NAME(m, &nameLen);
-	if (!name || nameLen <= 0)
-		return 0;
-
-	c = module_find_handler(name, nameLen);
-	return (c ? 1 : 0);
+	gsize nameLen = 0;
+	gchar *name = metautils_message_get_NAME(m, &nameLen);
+	struct cmd_s *c = module_find_handler(name, nameLen);
+	return c != NULL;
 }
 
 static gint
 plugin_handler(MESSAGE m, gint cnx, void *param, GError ** err)
 {
-	gchar *name;
-	gsize nameLen;
-	struct cmd_s *c;
-	struct request_context_s ctx;
+	(void)param, (void) err;
+	EXTRA_ASSERT (m != NULL);
 
-	(void)param;
-	if (!m) {
-		GSETERROR(err, "Invalid parameter");
-		return -1;
-	}
+	gsize nameLen = 0;
+	gchar *name = metautils_message_get_NAME(m, &nameLen);
+	struct cmd_s *c = module_find_handler(name, nameLen);
+	EXTRA_ASSERT (c != NULL);
 
-	name = metautils_message_get_NAME(m, &nameLen);
-	if (!name || nameLen <= 6) {
-		GSETERROR(err, "The message contains an invalid NAME parameter");
-		return -1;
-	}
-
-	c = module_find_handler(name, nameLen);
-	if (!c) {
-		GSETERROR(err, "This message does not concern this plugin.");
-		return -1;
-	}
-
-	memset(&ctx, 0x00, sizeof(ctx));
+	struct request_context_s ctx = {0};
 	ctx.request = m;
 	ctx.fd = cnx;
 	gettimeofday(&(ctx.tv_start), NULL);
