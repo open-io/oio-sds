@@ -47,16 +47,11 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 struct conscience_request_counters
 {
-	guint32 ns_info;
-	struct
-	{
-		guint32 add;
-		guint32 get;
-		guint32 remove;
-		guint32 push_stat;
-		guint32 push_score;
-		guint32 push_vns;
-	} services;
+	guint64 info;
+	guint64 get;
+	guint64 list;
+	guint64 remove;
+	guint64 push;
 };
 
 struct srvget_s
@@ -80,7 +75,7 @@ struct cmd_s
 {
 	char *c;
 	_cmd_handler_f h;
-	guint32 *req_counter;
+	guint64 *req_counter;
 };
 
 static void _alert_service_with_zeroed_score(struct conscience_srv_s *srv);
@@ -149,19 +144,17 @@ init_reply_ctx_with_request(struct request_context_s *req, struct reply_context_
 static void
 save_counters(gpointer u)
 {
-#define CONSCIENCE_COUNTER_PREFIX "conscience.req.counter."
-#define SAVE_COUNTER(F) do { d=stats.F ; srvstat_set( CONSCIENCE_COUNTER_PREFIX #F, d ); } while (0)
+#define CONSCIENCE_COUNTER_PREFIX "counter req.hits."
+#define SAVE_COUNTER(N,F) do { srvstat_set_u64(CONSCIENCE_COUNTER_PREFIX N, stats.F); } while (0)
 	(void)u;
-	gdouble d = oio_ext_real_time () / G_TIME_SPAN_SECOND;
-	srvstat_set(CONSCIENCE_COUNTER_PREFIX "timestamp", d);
+	guint64 d = oio_ext_real_time () / G_TIME_SPAN_SECOND;
+	srvstat_set_u64(CONSCIENCE_COUNTER_PREFIX "timestamp", d);
 
-	SAVE_COUNTER(ns_info);
-
-	SAVE_COUNTER(services.add);
-	SAVE_COUNTER(services.get);
-	SAVE_COUNTER(services.remove);
-	SAVE_COUNTER(services.push_stat);
-	SAVE_COUNTER(services.push_score);
+	SAVE_COUNTER(NAME_MSGNAME_CS_GET_NSINFO, info);
+	SAVE_COUNTER(NAME_MSGNAME_CS_GET_SRV, get);
+	SAVE_COUNTER(NAME_MSGNAME_CS_GET_SRVNAMES, list);
+	SAVE_COUNTER(NAME_MSGNAME_CS_RM_SRV, remove);
+	SAVE_COUNTER(NAME_MSGNAME_CS_PUSH_SRV, push);
 }
 
 static gboolean
@@ -978,11 +971,11 @@ static struct cmd_s *
 module_find_handler(gchar * n, gsize l)
 {
 	static struct cmd_s CMD[] = {
-		{NAME_MSGNAME_CS_GET_NSINFO, handler_get_ns_info, &(stats.ns_info)},
-		{NAME_MSGNAME_CS_GET_SRV, handler_get_service, &(stats.services.get)},
-		{NAME_MSGNAME_CS_GET_SRVNAMES, handler_get_services_types, &(stats.services.get)},
-		{NAME_MSGNAME_CS_PUSH_SRV, handler_push_service, &(stats.services.push_stat)},
-		{NAME_MSGNAME_CS_RM_SRV, handler_rm_service, &(stats.services.remove)},
+		{NAME_MSGNAME_CS_GET_NSINFO, handler_get_ns_info, &(stats.info)},
+		{NAME_MSGNAME_CS_GET_SRV, handler_get_service, &(stats.get)},
+		{NAME_MSGNAME_CS_GET_SRVNAMES, handler_get_services_types, &(stats.list)},
+		{NAME_MSGNAME_CS_PUSH_SRV, handler_push_service, &(stats.push)},
+		{NAME_MSGNAME_CS_RM_SRV, handler_rm_service, &(stats.remove)},
 		{NULL, NULL, NULL}
 	};
 

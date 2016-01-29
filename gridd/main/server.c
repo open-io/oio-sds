@@ -149,7 +149,6 @@ gridd_set_flag(enum gridd_flag_e flag, int onoff)
 static void
 srv_inner_gauges_update (gpointer d)
 {
-	#define STATS_SAVEGAUGE(F)  srvstat_set_u64("server.cnx.gauge."#F, tmpTotalStats.F)
 	struct server_stats_s tmpTotalStats;
 	(void) d;
 
@@ -157,9 +156,7 @@ srv_inner_gauges_update (gpointer d)
 	memcpy (&tmpTotalStats, &stats_total, sizeof(stats_total));
 	STATS_UNLOCK();
 
-	STATS_SAVEGAUGE(total);
-	STATS_SAVEGAUGE(created);
-	STATS_SAVEGAUGE(stopped);
+	srvstat_set_u64("gauge cnx.client", tmpTotalStats.total);
 }
 
 static gboolean 
@@ -456,45 +453,15 @@ static void
 thread_monitoring_periodic_stats (struct server_s *srv)
 {
 	struct thread_monitoring_s mon;
-	gchar keyTab[256];
-	
+
 	/* XXX end od locked section */
 	g_rec_mutex_lock (&(srv->recMutex));
 	memcpy(&mon, &(srv->mon), sizeof( struct thread_monitoring_s));
 	g_rec_mutex_unlock (&(srv->recMutex));
 	/* XXX end of locked section */
 
-	/*  */
-	g_snprintf(keyTab, sizeof(keyTab), "server.%s.threads.gauge.current", srv->name);
-	srvstat_set_int(keyTab, mon.used_workers);
-
-	g_snprintf(keyTab, sizeof(keyTab), "server.%s.threads.gauge.nb", srv->name);
-	srvstat_set_int(keyTab, mon.nb_workers);
-
-	g_snprintf(keyTab, sizeof(keyTab), "server.%s.threads.gauge.idle", srv->name);
-	srvstat_set_int(keyTab, (mon.nb_workers - mon.used_workers));
-	
-	g_snprintf(keyTab, sizeof(keyTab), "server.%s.threads.gauge.max_spare", srv->name);
-	srvstat_set_int(keyTab, mon.max_spare_workers);
-
-	g_snprintf(keyTab, sizeof(keyTab), "server.%s.threads.gauge.max", srv->name);
-	srvstat_set_int(keyTab, mon.max_workers);
-
-	g_snprintf(keyTab, sizeof(keyTab), "server.%s.threads.gauge.min_spare", srv->name);
-	srvstat_set_int(keyTab, mon.min_spare_workers);
-
-	g_snprintf(keyTab, sizeof(keyTab), "server.%s.threads.gauge.min", srv->name);
-	srvstat_set_int(keyTab, mon.min_workers);
-
-	/* counters : 64 bits */
-	g_snprintf(keyTab, sizeof(keyTab), "server.%s.threads.counter.max_reached", srv->name);
-	srvstat_set_u64(keyTab, mon.max_reached);
-
-	g_snprintf(keyTab, sizeof(keyTab), "server.%s.threads.counter.creation", srv->name);
-	srvstat_set_u64(keyTab, mon.creation);
-
-	g_snprintf(keyTab, sizeof(keyTab), "server.%s.threads.counter.destruction", srv->name);
-	srvstat_set_u64(keyTab, mon.destruction);
+	srvstat_set_u64("gauge thread.active", mon.used_workers);
+	srvstat_set_u64("gauge thread.total", mon.nb_workers);
 }
 
 /* ------------------------------------------------------------------------- */
