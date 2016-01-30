@@ -2,7 +2,8 @@ from gunicorn.app.base import BaseApplication
 
 
 class Application(BaseApplication):
-    access_log_fmt = '%(h)s %(u)s %(t)s "%(r)s" %(s)s %(b)s %(D)s'
+    access_log_fmt = '%(l)s %(h)s %(m)s %(s)s %(D)s %(B)s %(l)s ' + \
+                     '%({X-oio-req-id})s %(U)s%(q)s'
 
     def __init__(self, app, conf, logger_class=None):
         self.conf = conf

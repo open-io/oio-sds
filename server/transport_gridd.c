@@ -189,8 +189,7 @@ transport_gridd_factory0(struct gridd_request_dispatcher_s *dispatcher,
 
 /* -------------------------------------------------------------------------- */
 
-static const gchar * ensure (const gchar *s) { return s && *s ? s : "-";
-}
+static const gchar * ensure (const gchar *s) { return s && *s ? s : "-"; }
 
 struct log_item_s
 {
@@ -211,32 +210,24 @@ network_client_log_access(struct log_item_s *item)
 
 	GString *gstr = g_string_sized_new(256);
 
+	/* mandatory */
 	g_string_append(gstr, ensure(item->req_ctx->client->local_name));
 	g_string_append_c(gstr, ' ');
-
 	g_string_append(gstr, ensure(item->req_ctx->client->peer_name));
 	g_string_append_c(gstr, ' ');
-
 	g_string_append(gstr, ensure(hashstr_str(item->req_ctx->reqname)));
-
-	g_string_append_printf(gstr, " %d", item->code);
-
-	g_string_append_printf(gstr, " %"G_GINT64_FORMAT".%06"G_GINT64_FORMAT,
-			diff_total / G_TIME_SPAN_SECOND,
-			diff_total % G_TIME_SPAN_SECOND);
-
-	g_string_append_printf(gstr, " %"G_GSIZE_FORMAT" ", item->out_len); // reply size
-
+	g_string_append_printf(gstr, " %d %"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" ",
+			item->code, diff_total, item->out_len);
 	g_string_append(gstr, ensure(item->req_ctx->uid));
 	g_string_append_c(gstr, ' ');
-
 	g_string_append(gstr, ensure(item->req_ctx->reqid));
 
-	g_string_append_printf(gstr, " t=%"G_GINT64_FORMAT".%06"G_GINT64_FORMAT" ",
-			diff_handler / G_TIME_SPAN_SECOND,
-			diff_handler % G_TIME_SPAN_SECOND);
-
-	g_string_append(gstr, ensure(item->req_ctx->subject));
+	/* arbitrary */
+	g_string_append_printf(gstr, " t=%"G_GINT64_FORMAT, diff_handler);
+	if (item->req_ctx->subject) {
+		g_string_append_c (gstr, ' ');
+		g_string_append(gstr, ensure(item->req_ctx->subject));
+	}
 
 	g_log("access", GRID_LOGLVL_INFO, "%s", gstr->str);
 	g_string_free(gstr, TRUE);

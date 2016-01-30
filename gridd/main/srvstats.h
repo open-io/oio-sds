@@ -33,17 +33,7 @@ gboolean srvstat_set (const gchar *name, gdouble value);
 
 gboolean srvstat_set_double (const gchar *name, gdouble value);
 
-gboolean srvstat_set_int (const gchar *name, gint value);
-
-gboolean srvstat_set_long (const gchar *name, glong value);
-
 gboolean srvstat_set_u64 (const gchar *name, guint64 value);
-
-gboolean srvstat_set_i64 (const gchar *name, gint64 value);
-
-gboolean srvstat_set_bool (const gchar *name, gboolean value);
-
-gboolean srvstat_set_string (const gchar *name, const gchar* value);
 
 gboolean srvstat_set_gvariant(const gchar *name, GVariant* gv);
 
@@ -55,12 +45,6 @@ gboolean srvstat_set_gvariant(const gchar *name, GVariant* gv);
 gboolean srvstat_get (const gchar *name, gdouble *value);
 
 gboolean srvstat_get_double (const gchar *name, gdouble *value);
-
-gboolean srvstat_get_i64 (const gchar *name, gint64 *value);
-
-gboolean srvstat_get_bool (const gchar *name, gboolean *value);
-
-gboolean srvstat_get_string (const gchar *name, gchar **value);
 
 GVariant* srvstat_get_gvariant (const gchar *name);
 

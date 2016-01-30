@@ -308,13 +308,16 @@ min_spare_workers=2
 max_spare_workers=10
 max_workers=10
 listen=${IP}:${PORT}
-plugins=conscience,stats,fallback
+plugins=conscience,stats,ping,fallback
 
 [Service]
 namespace=${NS}
 type=conscience
 register=false
 load_ns_info=false
+
+[Plugin.ping]
+path=${LIBDIR}/grid/msg_ping.so
 
 [Plugin.stats]
 path=${LIBDIR}/grid/msg_stats.so
@@ -437,8 +440,7 @@ group=${NS},localhost,conscience
 on_die=respawn
 enabled=true
 start_at_boot=true
-#command=${EXE_PREFIX}-daemon -s OIO,${NS},conscience ${CFGDIR}/${NS}-conscience.conf
-command=${EXE_PREFIX}-daemon -q ${CFGDIR}/${NS}-conscience.conf
+command=${EXE_PREFIX}-daemon -q -s OIO,${NS},conscience ${CFGDIR}/${NS}-conscience.conf
 
 [service.${NS}-event-agent]
 group=${NS},localhost,event

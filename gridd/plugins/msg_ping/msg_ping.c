@@ -34,9 +34,9 @@ plugin_matcher(MESSAGE m, void *param, GError ** err)
 	(void)param, (void)err;
 	gsize len = 0;
 	void *n = metautils_message_get_NAME(m, &len);
-	if (!n || len != 4)
+	if (!n || len != 8)
 		return 0;
-	return 0 == memcmp(n, "PING", 4);
+	return 0 == memcmp(n, "REQ_PING", 8);
 }
 
 static gint
@@ -55,7 +55,7 @@ plugin_handler(MESSAGE m, gint fd, void *param, GError ** err)
 	ctx.req_ctx = &req_ctx;
 
 	reply_context_set_message(&ctx, 200, "OK");
-	reply_context_log_access(&ctx, "");
+	reply_context_log_access(&ctx, NULL);
 
 	rc = reply_context_reply(&ctx, err);
 	reply_context_clear(&ctx, TRUE);
