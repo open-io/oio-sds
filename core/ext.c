@@ -496,13 +496,14 @@ oio_sys_space_idle (const char *vol)
 	struct statfs sfs;
 	if (statfs(vol, &sfs) < 0)
 		return 0.0;
-	gdouble free_inodes_d = sfs.f_ffree, total_blocks_d = sfs.f_blocks,
-			free_blocks_d = sfs.f_bavail;
-	if (free_blocks_d > free_inodes_d)
-		free_blocks_d = free_inodes_d;
-	if (free_blocks_d <= 0.0 || total_blocks_d <= 0.0)
-		return 0.0;
-	return free_blocks_d / total_blocks_d;
+	gdouble free_inodes_d = sfs.f_ffree,
+			total_inodes_d = sfs.f_files,
+			free_blocks_d = sfs.f_bavail,
+			total_blocks_d = sfs.f_blocks;
+	// Inode count is not always available (e.g. with btrfs)
+	gdouble inode_ratio = (total_inodes_d > 0.0)? free_inodes_d / total_inodes_d : 1.0;
+	gdouble block_ratio = (total_blocks_d > 0.0)? free_blocks_d / total_blocks_d : 1.0;
+	return MIN(inode_ratio, block_ratio);
 }
 
 gdouble
