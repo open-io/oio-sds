@@ -118,6 +118,25 @@ _same_hash (const char *acct, const char *p0)
 	g_checksum_free(c);
 }
 
+static void
+_sysstat (gchar **vols)
+{
+	GString *tmp = g_string_new("");
+	for (;;) {
+		g_string_set_size (tmp, 0);
+		g_string_append_printf (tmp, "%lu %.03f",
+				oio_ext_real_seconds (), 100.0 * oio_sys_cpu_idle ());
+		for (gchar **pvol=vols; *pvol ;++pvol) {
+			g_string_append_printf (tmp, " %s,%3.03f,%.03f", *pvol,
+					100.0 * oio_sys_io_idle (*pvol),
+					100.0 * oio_sys_space_idle (*pvol));
+		}
+		g_print ("%s\n", tmp->str);
+		g_usleep (998 * G_TIME_SPAN_MILLISECOND);
+	}
+	g_string_free (tmp, TRUE);
+}
+
 int
 main (int argc, char **argv)
 {
@@ -126,6 +145,7 @@ main (int argc, char **argv)
 		g_printerr (" %s addr IP:PORT\n", argv[0]);
 		g_printerr (" %s cid  OIOURL\n", argv[0]);
 		g_printerr (" %s hash [PREFIX]\n", argv[0]);
+		g_printerr (" %s stat [path]...\n", argv[0]);
 		return 2;
 	}
 	oio_ext_set_random_reqid ();
@@ -144,6 +164,9 @@ main (int argc, char **argv)
 			return 1;
 		}
 		_same_hash (argv[2], argc==4 ? argv[3] : "");
+		return 0;
+	} else if (!strcmp("stat", argv[1])) {
+		_sysstat (argv+2);
 		return 0;
 	}
 
