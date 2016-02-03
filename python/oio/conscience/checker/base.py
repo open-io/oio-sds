@@ -3,6 +3,8 @@ from oio.common.utils import float_value, RingBuffer
 
 
 class BaseChecker(object):
+    """Base class for all service checkers"""
+
     def __init__(self, conf, logger):
         self.logger = logger
         self.timeout = float_value(conf.get('timeout'), 1.0)
@@ -13,6 +15,7 @@ class BaseChecker(object):
         self.last_result = None
 
     def service_status(self):
+        """Do the check and set `last_result` accordingly"""
         result = False
         try:
             with Timeout(self.timeout):
@@ -22,10 +25,10 @@ class BaseChecker(object):
 
         if self.last_result is None:
             self.last_result = result
-            for i in range(0, self.results._size):
+            for _i in range(0, self.results.size):
                 self.results.append(result)
-
             self.logger.info('%s first check returned %s', self.name, result)
+
         self.results.append(result)
         if not any(self.results[-self.fall:]):
             if self.last_result:
@@ -42,4 +45,5 @@ class BaseChecker(object):
         return self.last_result
 
     def check(self):
+        """Actually do the service check"""
         return False
