@@ -36,18 +36,6 @@ License along with this library.
 
 /* Some well known service types */
 
-#ifndef  MALLOC_TRIM_SIZE
-# define MALLOC_TRIM_SIZE (0)
-#endif
-
-#ifndef  PERIODIC_MALLOC_TRIM_SIZE
-# define PERIODIC_MALLOC_TRIM_SIZE (0)
-#endif
-
-#ifndef  SQLITE_RELEASE_SIZE
-# define SQLITE_RELEASE_SIZE  (64*1024*1024)
-#endif
-
 # define NAME_SRVTYPE_META0 "meta0"
 # define NAME_SRVTYPE_META1 "meta1"
 # define NAME_SRVTYPE_META2 "meta2"
@@ -56,30 +44,6 @@ License along with this library.
 # define NAME_SRVTYPE_RDIR  "rdir"
 
 # define NAME_ACCOUNT_RDIR  "_RDIR"
-
-# ifndef COMMON_CLIENT_TIMEOUT
-#  define COMMON_CLIENT_TIMEOUT 30.0
-# endif
-
-# ifndef SQLX_CLIENT_TIMEOUT
-#  define SQLX_CLIENT_TIMEOUT 30.0
-# endif
-
-# ifndef M2V2_CLIENT_TIMEOUT
-#  define M2V2_CLIENT_TIMEOUT 10.0
-# endif
-
-# ifndef M1V2_CLIENT_TIMEOUT
-#  define M1V2_CLIENT_TIMEOUT 10.0
-# endif
-
-# ifndef M0V2_CLIENT_TIMEOUT
-#  define M0V2_CLIENT_TIMEOUT 10.0
-# endif
-
-# ifndef CS_CLIENT_TIMEOUT
-#  define CS_CLIENT_TIMEOUT 3.0
-# endif
 
 /* Some well known service tags macro names */
 # define NAME_MACRO_SPACE_NAME "stat.space"
@@ -92,14 +56,6 @@ License along with this library.
 # define NAME_TAGNAME_RAWX_STGCLASS "tag.stgclass"
 
 # define NAME_TAGNAME_AGENT_CHECK "tag.agent_check"
-
-#ifndef RAWX_LOSTFOUND_FOLDER
-# define RAWX_LOSTFOUND_FOLDER "_lost+found"
-#endif
-
-#ifndef RAWX_HEADER_PREFIX
-# define RAWX_HEADER_PREFIX "X-oio-chunk-meta-"
-#endif
 
 /* A flag usable in metacnx_ctx_s.flags to keep the connection alive */
 #define METACNX_FLAGMASK_KEEPALIVE 0x00000001
@@ -179,69 +135,5 @@ enum {
 	SCORE_DOWN = 0,
 	SCORE_MAX = 100
 };
-
-#ifndef PROXYD_DEFAULT_TTL_SERVICES
-#define PROXYD_DEFAULT_TTL_SERVICES 3600
-#endif
-
-#ifndef PROXYD_DEFAULT_MAX_SERVICES
-#define PROXYD_DEFAULT_MAX_SERVICES 200000
-#endif
-
-#ifndef PROXYD_DEFAULT_TTL_CSM0
-#define PROXYD_DEFAULT_TTL_CSM0 0
-#endif
-
-#ifndef PROXYD_DEFAULT_MAX_CSM0
-#define PROXYD_DEFAULT_MAX_CSM0 0
-#endif
-
-#ifndef PROXYD_PATH_MAXLEN
-#define PROXYD_PATH_MAXLEN 2048
-#endif
-
-#ifndef PROXYD_DIR_TIMEOUT_SINGLE
-#define PROXYD_DIR_TIMEOUT_SINGLE 10.0
-#endif
-
-#ifndef PROXYD_DIR_TIMEOUT_GLOBAL
-#define PROXYD_DIR_TIMEOUT_GLOBAL 30.0
-#endif
-
-#ifndef PROXYD_M2_TIMEOUT_SINGLE
-#define PROXYD_M2_TIMEOUT_SINGLE 10.0
-#endif
-
-#ifndef PROXYD_M2_TIMEOUT_GLOBAL
-#define PROXYD_M2_TIMEOUT_GLOBAL 30.0
-#endif
-
-#ifndef PROXYD_DEFAULT_TIMEOUT_CONSCIENCE
-#define PROXYD_DEFAULT_TIMEOUT_CONSCIENCE 5000 /*ms*/
-#endif
-
-#ifndef PROXYD_DEFAULT_PERIOD_DOWNSTREAM
-#define PROXYD_DEFAULT_PERIOD_DOWNSTREAM 10 /*s*/
-#endif
-
-#ifndef PROXYD_DEFAULT_PERIOD_UPSTREAM
-#define PROXYD_DEFAULT_PERIOD_UPSTREAM 1 /*s*/
-#endif
-
-#ifndef PROXYD_HEADER_NOEMPTY
-#define PROXYD_HEADER_NOEMPTY PROXYD_HEADER_PREFIX "no-empty-list"
-#endif
-
-#ifndef GCLUSTER_RUN_DIR
-# define GCLUSTER_RUN_DIR "/var/run"
-#endif
-
-#ifndef GCLUSTER_AGENT_SOCK_PATH
-# define GCLUSTER_AGENT_SOCK_PATH GCLUSTER_RUN_DIR "/oio-sds-agent.sock"
-#endif
-
-#ifndef OIO_M2V2_LISTRESULT_BATCH
-# define OIO_M2V2_LISTRESULT_BATCH 1000
-#endif
 
 #endif /*OIO_SDS__metautils__lib__metautils_macros_h*/

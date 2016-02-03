@@ -83,9 +83,13 @@ extern gchar *nsname;
 extern gboolean flag_cache_enabled;
 extern gdouble m2_timeout_all;
 extern time_t nsinfo_refresh_delay;
+extern time_t nsinfo_refresh_m0;
 
 /* how long the proxy remembers the srv it registered ino the conscience */
 extern time_t cs_expire_local_services;
+
+/* how long the proxy remembers dead services */
+extern time_t cs_down_services;
 
 extern struct grid_lbpool_s *lbpool;
 extern struct hc_resolver_s *resolver;

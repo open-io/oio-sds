@@ -31,8 +31,10 @@ static GThread *admin_thread = NULL;
 static GThread *upstream_thread = NULL;
 static GThread *downstream_thread = NULL;
 
-time_t nsinfo_refresh_delay = 5;
-time_t cs_expire_local_services = 5;
+time_t nsinfo_refresh_delay = PROXYD_PERIOD_RELOAD_NSINFO;
+time_t nsinfo_refresh_m0 = PROXYD_PERIOD_RELOAD_M0INFO;
+time_t cs_expire_local_services = PROXYD_TTL_DEAD_LOCAL_SERVICES;
+time_t cs_down_services = PROXYD_TTL_DOWN_SERVICES;
 
 // Configuration
 
@@ -271,7 +273,7 @@ _task_expire_services_down (gpointer p)
 	gpointer v = NULL;
 	guint count = 0;
 
-	gulong oldest = oio_ext_monotonic_seconds() - 8;
+	gulong oldest = oio_ext_monotonic_seconds() - cs_down_services;
 
 	SRV_DO(while (lru_tree_get_last(srv_down, (void**)&k, &v)) {
 		EXTRA_ASSERT(k != NULL);
