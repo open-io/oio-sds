@@ -241,8 +241,8 @@ meta0_dispatch_v1_FILL(struct gridd_reply_ctx_s *reply,
 
 	reply->subject("repl=%u|m1=%u", nbreplicas, g_strv_length(urls));
 
-	err = meta0_backend_fill(m0disp->m0, nbreplicas, urls);
-	g_strfreev(urls);
+	err = meta0_backend_fill(m0disp->m0, nbreplicas, (const char * const *)urls);
+	g_free(urls);
 
 	if (!err)
 		reply->send_reply(CODE_FINAL_OK, "OK");

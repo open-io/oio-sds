@@ -205,15 +205,9 @@ start_namespace_get_task(GError **error)
 /* ------------------------------------------------------------------------- */
 
 namespace_data_t*
-get_namespace(const char *ns_name, GError **error)
+get_namespace(const char *ns, GError **error)
 {
-	gchar ns[LIMIT_LENGTH_NSNAME];
-	namespace_data_t *ns_data = NULL;
-
-	metautils_strlcpy_physical_ns(ns, ns_name, sizeof(ns));
-
-	/* Get namespace data */
-	ns_data = g_hash_table_lookup(namespaces, ns);
+	namespace_data_t *ns_data = g_hash_table_lookup(namespaces, ns);
 	if (ns_data == NULL) {
 		GSETERROR(error, "Namespace [%s] unknown in config", ns);
 		goto end_label;

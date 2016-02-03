@@ -160,7 +160,7 @@ _init_nsinfo(const gchar *ns, gint64 maxvers)
 	nsinfo = g_malloc0 (sizeof(*nsinfo));
 	namespace_info_init (nsinfo);
 	nsinfo->chunk_size = chunk_size;
-	metautils_strlcpy_physical_ns(nsinfo->name, ns, sizeof(nsinfo->name));
+	g_strlcpy (nsinfo->name, ns, sizeof(nsinfo->name));
 
 	g_snprintf (str, sizeof(str), "%"G_GINT64_FORMAT, maxvers);
 	g_hash_table_insert(nsinfo->options, g_strdup("meta2_max_versions"),
@@ -209,8 +209,8 @@ _init_lb(const gchar *ns)
 			return FALSE;
 
 		si = g_malloc0(sizeof(*si));
-		metautils_strlcpy_physical_ns(si->ns_name, "NS", sizeof(si->ns_name));
-		g_strlcpy(si->type, "rawx", sizeof(si->type));
+		g_strlcpy(si->ns_name, "NS", sizeof(si->ns_name));
+		g_strlcpy(si->type, NAME_SRVTYPE_RAWX, sizeof(si->type));
 		si->score.timestamp = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 		si->score.value = ++score;
 		grid_string_to_addrinfo(pdef->url, &(si->addr));

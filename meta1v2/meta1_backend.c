@@ -38,16 +38,13 @@ struct meta1_backend_s *
 meta1_backend_init(const gchar *ns, struct sqlx_repository_s *repo,
 		struct grid_lbpool_s *glp)
 {
-	struct meta1_backend_s *m1;
-
 	EXTRA_ASSERT(ns != NULL);
 	EXTRA_ASSERT(*ns != '\0');
 	EXTRA_ASSERT(glp != NULL);
 	EXTRA_ASSERT(repo != NULL);
 
-	m1 = g_malloc0(sizeof(*m1));
-	metautils_strlcpy_physical_ns(m1->backend.ns_name, ns,
-			sizeof(m1->backend.ns_name));
+	struct meta1_backend_s *m1 = g_malloc0(sizeof(*m1));
+	g_strlcpy (m1->backend.ns_name, ns, sizeof(m1->backend.ns_name));
 	m1->backend.type = NAME_SRVTYPE_META1;
 	m1->backend.lb = glp;
 	m1->backend.repo = repo;

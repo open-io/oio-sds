@@ -306,7 +306,7 @@ namespace_info_init_json_object(struct json_object *obj,
 	GError *err = oio_ext_extract_json (obj, mapping);
 	if (err) return err;
 
-	metautils_strlcpy_physical_ns(ni->name, json_object_get_string(ns), sizeof(ni->name));
+	g_strlcpy(ni->name, json_object_get_string(ns), sizeof(ni->name));
 	ni->chunk_size = json_object_get_int64(sz);
 
 	if (NULL != (err = _load_hash(obj, "options", ni->options))

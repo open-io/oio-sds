@@ -33,7 +33,7 @@ static GError *
 _m0_remote_no_return (const char *m0, GByteArray *req)
 {
 	EXTRA_ASSERT (m0 != NULL);
-	return gridd_client_exec (m0, 30.0, req);
+	return gridd_client_exec (m0, M0V2_CLIENT_TIMEOUT, req);
 }
 
 static GError *
@@ -42,8 +42,8 @@ _m0_remote_m0info (const char *m0, GByteArray *req, GSList **out)
 	EXTRA_ASSERT (m0 != NULL);
 	EXTRA_ASSERT (out != NULL);
 	GSList *result = NULL;
-	GError *e = gridd_client_exec_and_decode (m0, 30.0, req, &result,
-			meta0_info_unmarshall);
+	GError *e = gridd_client_exec_and_decode (m0, M0V2_CLIENT_TIMEOUT,
+			req, &result, meta0_info_unmarshall);
 	if (!e) {
 		*out = result;
 		return NULL;

@@ -138,17 +138,15 @@ destroy_namespace_data(gpointer p)
 }
 
 static struct namespace_data_s *
-create_namespace_data(const gchar * ns)
+create_namespace_data(const char *ns)
 {
 	struct namespace_data_s *ns_data = g_malloc0(sizeof(struct namespace_data_s));
 
 	ns_data->configured = FALSE;
 
 	namespace_info_init (&ns_data->ns_info);
-	metautils_strlcpy_physical_ns(ns_data->name, ns,
-			sizeof(ns_data->name));
-	metautils_strlcpy_physical_ns(ns_data->ns_info.name, ns,
-			sizeof(ns_data->ns_info.name));
+	g_strlcpy(ns_data->name, ns, sizeof(ns_data->name));
+	g_strlcpy(ns_data->ns_info.name, ns, sizeof(ns_data->ns_info.name));
 
 	ns_data->conscience = conscience_create();
 	namespace_info_copy(&(ns_data->ns_info), &(ns_data->conscience->ns_info));

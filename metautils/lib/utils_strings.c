@@ -25,6 +25,10 @@ License along with this library.
 #include "metautils_strings.h"
 #include "metautils_containers.h"
 
+void g_free0(gpointer p) { if (p) g_free(p); }
+void g_free1(gpointer p1, gpointer p2) { (void) p2; g_free0(p1); }
+void g_free2(gpointer p1, gpointer p2) { (void) p1; g_free0(p2); }
+
 int
 metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored)
 {
@@ -106,7 +110,7 @@ metautils_encode_lines(gchar **strv)
 }
 
 gchar **
-g_strdupv2(gchar **src)
+g_strdupv_inline(gchar **src)
 {
 	// get the tail size
 	gsize header = sizeof(void*) * (1+g_strv_length(src));

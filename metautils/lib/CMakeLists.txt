@@ -115,7 +115,6 @@ add_library(metautils SHARED
 		utils_metadata.c
 		utils_namespace_info.c
 		utils_service_info.c
-		utils_tools.c
 		utils_duplication.c
 
 		gridd_client.c gridd_client.h

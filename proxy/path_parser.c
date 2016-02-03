@@ -140,8 +140,7 @@ _match_dup (const struct path_matching_s *m0)
 void
 _match_free (struct path_matching_s *m)
 {
-	if (m->vars)
-		g_strfreev (m->vars);
+	if (m->vars) g_strfreev (m->vars);
 	SLICE_FREE (struct path_matching_s, m);
 }
 

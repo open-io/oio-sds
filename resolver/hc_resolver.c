@@ -34,24 +34,6 @@ gdouble rc_resolver_timeout_m0 = -1.0;
 gdouble rc_resolver_timeout_m1 = -1.0;
 
 /* Packing */
-static gsize
-_strv_length (const char * const *v)
-{
-	guint count = 0;
-	while (*(v++)) ++ count;
-	return count;
-}
-
-static gsize
-_strv_total_length(const char * const *v)
-{
-	register gsize total = 0;
-	for (; *v; v++)
-		total += 1+strlen(*v);
-	return total;
-}
-
-/* Packing */
 static void
 _strv_concat(register gchar *d, const char * const *src)
 {
@@ -96,11 +78,11 @@ hc_resolver_element_create (const char * const *value)
 
 	EXTRA_ASSERT(value != NULL);
 
-	s = offsetof(struct cached_element_s, s) + _strv_total_length(value);
+	s = offsetof(struct cached_element_s, s) + oio_strv_length_total(value);
 
 	elt = g_malloc(s);
 	elt->use = 0;
-	elt->count_elements = _strv_length(value);
+	elt->count_elements = oio_strv_length(value);
 	_strv_concat(elt->s, value);
 
 	return elt;
@@ -337,7 +319,7 @@ _resolve_m1_through_many_m0(struct hc_resolver_s *r, const char * const *urlv,
 	GRID_TRACE2("%s(%02X%02X)", __FUNCTION__, prefix[0], prefix[1]);
 
 	if (urlv && *urlv) {
-		gsize len = _strv_length(urlv);
+		gsize len = oio_strv_length(urlv);
 		if (r->service_qualifier) {
 			/* url already contains ip:port, and not meta1_service_url_s */
 			gboolean _wrap (gconstpointer p) {
@@ -406,7 +388,7 @@ _resolve_service_through_many_meta1(struct hc_resolver_s *r,
 	GRID_TRACE2("%s(%s,%s)", __FUNCTION__, oio_url_get(u, OIOURL_WHOLE), s);
 
 	if (urlv && *urlv) {
-		gsize len = _strv_length (urlv);
+		gsize len = oio_strv_length (urlv);
 		if (r->service_qualifier) {
 			/* we must the callback because our array contains packed URL */
 			gboolean _wrap (gconstpointer p) {

@@ -24,13 +24,6 @@ License along with this library.
 
 #include <metautils/lib/metatypes.h>
 
-/**
- * @defgroup metautils_utils_gba GByteArray
- * @ingroup metautils_utils
- * @brief GByteArray utils
- * @{
- */
-
 GByteArray* metautils_gba_from_cid(const container_id_t cid);
 
 GByteArray* metautils_gba_dup(const GByteArray *gba);
@@ -46,32 +39,19 @@ gsize metautils_gba_data_to_string(const GByteArray *gba, gchar *dst,
  * g_hash_table_new(). */
 gboolean metautils_gba_equal(const GByteArray *a, const GByteArray *b);
 
-/** Generate a hash from a GByteArray. Can be cast to GHashFunc and used as 1st
- * param of g_hash_table_new(). */
-guint metautils_gba_hash(const GByteArray *gba);
-
 /** 3-way comparison */
 int metautils_gba_cmp(const GByteArray *a, const GByteArray *b);
 
 /** Replaces the contents of <gba> with random content of the same length */
 void metautils_gba_randomize(GByteArray *gba);
 
-/** Returns the internal size of gba or 0 if gba is invalid */
-gsize metautils_gba_len(const GByteArray *gba);
-
 /** Calls g_byte_array_free() on GByteArray in GLib containers */
 void metautils_gba_clean(gpointer p);
-
-/** @see g_byte_array_free() */
-void meatutils_gba_gclean(gpointer p1, gpointer p2);
 
 void metautils_gba_cleanv(GByteArray **tab);
 
 /** @see g_byte_array_unref() */
 void metautils_gba_unref(gpointer p);
-
-/** Ignores <p1> and calls metautils_gba_unref() */
-void metautils_gba_gunref(gpointer p0, gpointer p1);
 
 /** Convert the content to its hexadecimal representation */
 GString* metautils_gba_to_hexgstr(GString *gstr, GByteArray *gba);
@@ -79,7 +59,5 @@ GString* metautils_gba_to_hexgstr(GString *gstr, GByteArray *gba);
 void gba_pool_clean(GSList **pool);
 
 GByteArray * gba_poolify(GSList **pool, GByteArray *gba);
-
-/** @} */
 
 #endif /*OIO_SDS__metautils__lib__metautils_gba_h*/

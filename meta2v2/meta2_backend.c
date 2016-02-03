@@ -160,18 +160,13 @@ meta2_backend_init(struct meta2_backend_s **result,
 		struct sqlx_repository_s *repo, const gchar *ns,
 		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver)
 {
-	GError *err = NULL;
-	struct meta2_backend_s *m2 = NULL;
-	gsize s;
-
 	EXTRA_ASSERT(result != NULL);
 	EXTRA_ASSERT(glp != NULL);
 	EXTRA_ASSERT(repo != NULL);
 	EXTRA_ASSERT(resolver != NULL);
 
-	m2 = g_malloc0(sizeof(struct meta2_backend_s));
-	s = metautils_strlcpy_physical_ns(m2->backend.ns_name, ns,
-			sizeof(m2->backend.ns_name));
+	struct meta2_backend_s *m2 = g_malloc0(sizeof(struct meta2_backend_s));
+	gsize s = g_strlcpy(m2->backend.ns_name, ns, sizeof(m2->backend.ns_name));
 	if (sizeof(m2->backend.ns_name) <= s) {
 		g_free(m2);
 		return NEWERROR(CODE_BAD_REQUEST, "Namespace too long");
@@ -185,7 +180,7 @@ meta2_backend_init(struct meta2_backend_s **result,
 
 	m2->flag_precheck_on_generate = TRUE;
 
-	err = sqlx_repository_configure_type(m2->backend.repo,
+	GError *err = sqlx_repository_configure_type(m2->backend.repo,
 			NAME_SRVTYPE_META2, schema);
 	if (NULL != err) {
 		meta2_backend_clean(m2);

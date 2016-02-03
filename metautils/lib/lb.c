@@ -1227,7 +1227,7 @@ grid_lbpool_create(const gchar *ns)
 
 	g_rw_lock_init(&(glp->rwlock));
 
-	metautils_strlcpy_physical_ns(glp->ns, ns, sizeof(glp->ns));
+	g_strlcpy(glp->ns, ns, sizeof(glp->ns));
 
 	glp->pools = g_tree_new_full(metautils_strcmp3, NULL, g_free,
 			(GDestroyNotify)grid_lb_clean);

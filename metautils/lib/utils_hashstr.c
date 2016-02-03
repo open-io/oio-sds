@@ -94,28 +94,16 @@ hashstr_dup(const hashstr_t *hs)
 	return result;
 }
 
-const gchar *
+const char *
 hashstr_str(const hashstr_t *hs)
 {
 	return unlikely(NULL == hs) ? 0 : hs->s0;
-}
-
-guint
-hashstr_ulen(const hashstr_t *hs)
-{
-	return unlikely(NULL == hs) ? 0 : hs->hl.l;
 }
 
 gsize
 hashstr_len(const hashstr_t *hs)
 {
 	return unlikely(NULL == hs) ? 0 : hs->hl.l;
-}
-
-gsize
-hashstr_struct_size(const struct hashstr_s *hs)
-{
-	return unlikely(NULL == hs) ? 0 : hs->hl.l + HASHSTR_PREFIX;
 }
 
 guint
@@ -128,13 +116,7 @@ gboolean
 hashstr_equal(const hashstr_t *hs1, const hashstr_t *hs2)
 {
 	return (hs1->hl.h == hs2->hl.h) && (hs1->hl.l == hs2->hl.l)
-		&& !hashstr_cmp(hs1, hs2);
-}
-
-gint
-hashstr_cmp(const hashstr_t *hs1, const hashstr_t *hs2)
-{
-	return g_strcmp0(hashstr_str(hs1), hashstr_str(hs2));
+		&& !g_strcmp0(hashstr_str(hs1), hashstr_str(hs2));
 }
 
 gint
@@ -144,7 +126,7 @@ hashstr_quick_cmp(const hashstr_t *hs1, const hashstr_t *hs2)
 
 	if (unlikely(rc != 0))
 		return rc;
-	return hashstr_cmp(hs1, hs2);
+	return g_strcmp0(hashstr_str(hs1), hashstr_str(hs2));
 }
 
 gint
@@ -153,30 +135,3 @@ hashstr_quick_cmpdata(gconstpointer p1, gconstpointer p2, gpointer u)
 	(void) u;
 	return hashstr_quick_cmp(p1, p2);
 }
-
-gchar*
-hashstr_dump(const hashstr_t *hs)
-{
-	if (unlikely(NULL == hs))
-		return g_memdup("", 1);
-	return g_strdup_printf("(h=%u;l=%u;s=%s)", hs->hl.h, hs->hl.l, hs->s0);
-}
-
-void
-hashstr_upper(hashstr_t *hs)
-{
-	if (unlikely(NULL == hs))
-		return;
-	metautils_str_upper(hs->s0);
-	hs->hl = djb_hash_str(hs->s0);
-}
-
-void
-hashstr_lower(hashstr_t *hs)
-{
-	if (unlikely(NULL == hs))
-		return;
-	metautils_str_lower(hs->s0);
-	hs->hl = djb_hash_str(hs->s0);
-}
-

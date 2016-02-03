@@ -406,8 +406,8 @@ _configure_registration(struct sqlx_service_s *ss)
 	struct service_info_s *si = ss->si;
 
 	si->tags = g_ptr_array_new();
-	metautils_strlcpy_physical_ns(si->ns_name, ss->ns_name, sizeof(si->ns_name));
-	g_strlcpy(si->type, ss->service_config->srvtype, sizeof(si->type)-1);
+	g_strlcpy(si->ns_name, ss->ns_name, sizeof(si->ns_name));
+	g_strlcpy(si->type, ss->service_config->srvtype, sizeof(si->type));
 	grid_string_to_addrinfo(ss->announce->str, &(si->addr));
 
 	service_tag_set_value_string(

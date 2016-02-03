@@ -344,12 +344,12 @@ _task_reload_lbpool (gpointer p)
 	if (!cs) return;
 
 	gchar **tt = NULL;
-	NSINFO_DO(tt = g_strdupv(srvtypes));
+	NSINFO_DO(tt = g_strdupv_inline(srvtypes));
 
 	if (tt) {
 		for (gchar **t=tt; *t ;++t)
 			_reload_srvtype (*t);
-		g_strfreev (tt);
+		g_free (tt);
 	}
 
 	grid_lbpool_reconfigure(lbpool, &nsinfo);
@@ -744,9 +744,7 @@ grid_main_configure (int argc, char **argv)
 
 	nsname = g_strdup (cfg_namespace);
 	csurl = gridcluster_get_conscience (nsname);
-	metautils_strlcpy_physical_ns (nsname, cfg_namespace, strlen (nsname) + 1);
-
-	metautils_strlcpy_physical_ns (nsinfo.name, cfg_namespace, sizeof (nsinfo.name));
+	g_strlcpy (nsinfo.name, cfg_namespace, sizeof (nsinfo.name));
 	nsinfo.chunk_size = 1;
 
 	path_parser = path_parser_init ();

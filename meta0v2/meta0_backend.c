@@ -346,7 +346,7 @@ _load(struct meta0_backend_s *m0)
 }
 
 static GError*
-__fill(sqlite3 *db, gchar **urls, guint max, guint shift)
+_fill_in__transaction (sqlite3 *db, const char * const *urls, guint max, guint shift)
 {
 	gint rc;
 	guint idx;
@@ -361,7 +361,7 @@ __fill(sqlite3 *db, gchar **urls, guint max, guint shift)
 	/* One partition for each url */
 	for (idx=0; idx<65536 ;idx++) {
 
-		gchar **purl = urls + ((idx+shift) % max);
+		const char * const *purl = urls + ((idx+shift) % max);
 		guint16 index16 = idx;
 
 		sqlite3_reset(stmt);
@@ -384,21 +384,18 @@ __fill(sqlite3 *db, gchar **urls, guint max, guint shift)
 }
 
 static GError*
-_fill(struct sqlx_sqlite3_s *sq3,guint replicas, gchar **m1urls)
+_fill(struct sqlx_sqlite3_s *sq3, guint replicas, const char * const *m1urls)
 {
-	struct sqlx_repctx_s *repctx = NULL;
-	GError *err = NULL;
-	guint max;
-
-	max = m1urls ? g_strv_length(m1urls) : 0;
+	const guint max = oio_strv_length(m1urls);
 	EXTRA_ASSERT(max > 0 && max < 65536);
 
-	err = sqlx_transaction_begin(sq3, &repctx);
+	struct sqlx_repctx_s *repctx = NULL;
+	GError *err = sqlx_transaction_begin(sq3, &repctx);
 	if (NULL != err)
 		return err;
 
 	while (replicas--) {
-		err = __fill(sq3->db, m1urls, max, replicas);
+		err = _fill_in__transaction(sq3->db, m1urls, max, replicas);
 		if (err)
 			 break;
 	}
@@ -606,24 +603,19 @@ _delete_meta1_ref(sqlite3 *db, gchar *meta1_ref)
 /* ------------------------------------------------------------------------- */
 
 GError*
-meta0_backend_fill(struct meta0_backend_s *m0, guint replicas, gchar **m1urls)
+meta0_backend_fill(struct meta0_backend_s *m0, guint replicas, const char * const *m1urls)
 {
-	struct sqlx_sqlite3_s *sq3 = NULL;
-	GError *err;
-	gchar **u = NULL;
-
 	EXTRA_ASSERT(m0 != NULL);
 	EXTRA_ASSERT(replicas < 65535);
 	EXTRA_ASSERT(m1urls != 0);
 
-	u = g_strdupv(m1urls);
-	err = _open_and_lock(m0, M0V2_OPENBASE_MASTERONLY, &sq3);
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	GError *err = _open_and_lock(m0, M0V2_OPENBASE_MASTERONLY, &sq3);
 	if (!err) {
-		err = _fill(sq3,replicas,u);
+		err = _fill(sq3, replicas, m1urls);
 		_unlock_and_close(sq3);
 	}
 
-	g_strfreev(u);
 	return err;
 }
 
