@@ -23,12 +23,6 @@ License along with this library.
 #include "metautils_macros.h"
 #include <glib.h>
 
-/**
- * @defgroup metautils_main Common Main
- * @ingroup metautils
- * @{
- */
-
 #define HC_PROC_INIT(argv,LVL) do { \
 	grid_main_srand(); \
 	grid_main_set_prgname(argv[0]); \
@@ -38,7 +32,8 @@ License along with this library.
 	oio_ext_set_random_reqid (); \
 } while (0)
 
-struct grid_main_option_s {
+struct grid_main_option_s
+{
 	const char *name;
 	enum {
 		OT_BOOL=1,
@@ -76,7 +71,8 @@ extern char syslog_id[64];
  *
  * MANDATORY, NOT PROVIDED BY DEFAULT
  */
-struct grid_main_callbacks {
+struct grid_main_callbacks
+{
 	struct grid_main_option_s * (*options) (void);
 	void (*action) (void);
 	void (*set_defaults) (void);

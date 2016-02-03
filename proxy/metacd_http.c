@@ -127,7 +127,6 @@ _metacd_match (const gchar *method, const gchar *path)
 	for (register const gchar *p = path; *p ;++p) {
 		if (slash && *p == '/')
 			continue;
-		//slash = ('/' == (*(pk++) = *p));
 		slash = 0;
 		*(pk++) = *p;
 	}

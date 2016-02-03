@@ -176,7 +176,7 @@ _sds_client_create_db (struct oio_sqlx_client_s *self)
 	g_assert (c->vtable == &vtable_SDS);
 
 	/* Link with the directory */
-	gchar srvtype[64];
+	gchar srvtype[64] = "";
 	_sds_client_get_srvtype (c, srvtype, sizeof(srvtype));
 
 	gchar **allsrv = NULL;
@@ -385,7 +385,7 @@ _sds_client_batch (struct oio_sqlx_client_s *self,
 	g_assert (c->factory != NULL);
 
 	/* locate the sqlx server via the directory object */
-	gchar srvtype[64];
+	gchar srvtype[64] = "";
 	_sds_client_get_srvtype (c, srvtype, sizeof(srvtype));
 
 	gchar **allsrv = NULL;
@@ -403,8 +403,8 @@ _sds_client_batch (struct oio_sqlx_client_s *self,
 	}
 
 	/* Pack the query parameters */
-	struct sqlx_name_mutable_s name;
-	sqlx_name_fill (&name, c->url, srvtype, atoi(allsrv[0]));
+	struct sqlx_name_mutable_s name = {0};
+	sqlx_name_fill (&name, c->url, NAME_SRVTYPE_SQLX, atoi(allsrv[0]));
 	GByteArray *req = _pack_request (&name, batch);
 	sqlx_name_clean (&name);
 	GRID_DEBUG("Encoded query: %u bytes", req ? req->len : 0);
