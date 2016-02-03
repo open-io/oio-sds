@@ -70,11 +70,13 @@ sqlx_admin_set_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v)
 	sqlx_admin_set_gba_and_clean(sq3, k, metautils_gba_from_string(v));
 }
 
-void
+gboolean
 sqlx_admin_init_str(struct sqlx_sqlite3_s *sq3, const gchar *k, const gchar *v)
 {
-	if (!g_tree_lookup(sq3->admin, k))
-		sqlx_admin_set_str(sq3, k, v);
+	if (g_tree_lookup(sq3->admin, k))
+		return FALSE;
+	sqlx_admin_set_str(sq3, k, v);
+	return TRUE;
 }
 
 void
@@ -135,11 +137,13 @@ sqlx_admin_set_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 v)
 	sqlx_admin_set_str(sq3, k, buf);
 }
 
-void
+gboolean
 sqlx_admin_init_i64(struct sqlx_sqlite3_s *sq3, const gchar *k, const gint64 v)
 {
-	if (!g_tree_lookup(sq3->admin, k))
-		sqlx_admin_set_i64(sq3, k, v);
+	if (g_tree_lookup(sq3->admin, k))
+		return FALSE;
+	sqlx_admin_set_i64(sq3, k, v);
+	return TRUE;
 }
 
 void
@@ -172,12 +176,11 @@ sqlx_admin_inc_version(struct sqlx_sqlite3_s *sq3, const gchar *k, const int del
 	sqlx_admin_set_str(sq3, k, buf);
 }
 
-void
+gboolean
 sqlx_admin_ensure_versions (struct sqlx_sqlite3_s *sq3)
 {
+	int rc, any_added = FALSE;
 	sqlite3_stmt *stmt = NULL;
-	int rc;
-
 	sqlite3_prepare_debug(rc, sq3->db, "SELECT name FROM sqlite_master"
 			" WHERE type = 'table'", -1, &stmt, NULL);
 	if (rc == SQLITE_OK) {
@@ -185,11 +188,12 @@ sqlx_admin_ensure_versions (struct sqlx_sqlite3_s *sq3)
 		while (SQLITE_ROW == (rc = sqlite3_step(stmt))) {
 			const gchar *name = (const gchar*)sqlite3_column_text(stmt, 0);
 			gchar *k = g_strdup_printf("version:main.%s", name);
-			sqlx_admin_init_str (sq3, k, "1:0");
+			any_added |= sqlx_admin_init_str (sq3, k, "1:0");
 			g_free(k);
 		}
 		sqlite3_finalize(stmt);
 	}
+	return BOOL(any_added);
 }
 
 void

@@ -102,7 +102,7 @@ enum election_status_e
 struct sqlx_sqlite3_s
 {
 	struct sqlx_repository_s *repo;
-	const struct replication_config_s *config;
+	struct election_manager_s *manager;
 	struct sqlx_name_mutable_s name;
 	sqlite3 *db;
 	gchar *path;

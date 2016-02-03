@@ -616,9 +616,9 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 			gchar **peers = NULL;
 			struct sqlx_name_mutable_s n;
 			sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
-			err = sqlx_config_get_peers(election_manager_get_config(
-						sqlx_repository_get_elections_manager(m2->backend.repo)),
-					sqlx_name_mutable_to_const(&n), &peers);
+			err = election_get_peers(
+					sqlx_repository_get_elections_manager(m2->backend.repo),
+					sqlx_name_mutable_to_const(&n), FALSE, &peers);
 			sqlx_name_clean (&n);
 
 			// peers may be NULL if no zookeeper URL is configured

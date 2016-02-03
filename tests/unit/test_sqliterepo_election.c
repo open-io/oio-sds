@@ -92,7 +92,6 @@ test_election_init(void)
 
 	err = election_manager_create(&cfg, &m);
 	g_assert_no_error(err);
-	g_assert(&cfg == election_manager_get_config0(m));
 
 	for (int i=0; i<8 ;++i) {
 		struct sqlx_name_mutable_s n = {
@@ -120,7 +119,6 @@ test_create_ok(void)
 		struct election_manager_s *m = NULL;
 		GError *err = election_manager_create(&cfg, &m);
 		g_assert_no_error(err);
-		g_assert(&cfg == election_manager_get_config0(m));
 		election_manager_clean(m);
 	}
 }

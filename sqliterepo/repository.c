@@ -48,10 +48,7 @@ License along with this library.
 static gboolean
 election_manager_configured(const struct election_manager_s *em)
 {
-	const struct replication_config_s *cfg;
-	return (em != NULL)
-		&& ((cfg = election_manager_get_config(em)) != NULL)
-		&& (cfg->mode != ELECTION_MODE_NONE);
+	return em && (ELECTION_MODE_NONE != election_manager_get_mode (em));
 }
 
 static void
@@ -548,17 +545,10 @@ sqlx_repository_get_cache(struct sqlx_repository_s *r)
 const gchar*
 sqlx_repository_get_local_addr(struct sqlx_repository_s *repo)
 {
-	const gchar* url = NULL;
-
     struct election_manager_s* em = sqlx_repository_get_elections_manager(repo);
-    if (em) {
-        const struct replication_config_s *emrc = election_manager_get_config(em);
-        if (emrc) {
-            url = emrc->get_local_url(emrc->ctx);
-            GRID_DEBUG("%s: url:[%s]", __FUNCTION__, url);
-        }
-    }
-	return url;
+    if (em)
+		return election_manager_get_local (em);
+	return NULL;
 }
 
 /* ------------------------------------------------------------------------- */
@@ -721,7 +711,7 @@ retry:
 	sq3->db = handle;
 	sq3->bd = -1;
 	sq3->repo = args->repo;
-	sq3->config = election_manager_get_config(args->repo->election_manager);
+	sq3->manager = args->repo->election_manager;
 	sq3->name.base = g_strdup(args->name.base);
 	sq3->name.type = g_strdup(args->name.type);
 	sq3->name.ns = g_strdup(args->name.ns);
@@ -812,7 +802,8 @@ _open_and_lock_base(struct open_args_s *args, enum election_status_e expected,
 
 	if (election_configured && !args->no_refcheck) {
 		gboolean has_peers = FALSE;
-		err = election_has_peers(args->repo->election_manager, &args->name, &has_peers);
+		err = election_has_peers(args->repo->election_manager, &args->name,
+				FALSE, &has_peers);
 		if (err != NULL) {
 			g_prefix_error(&err, "Peers resolution error: ");
 			return err;
@@ -1085,7 +1076,7 @@ sqlx_repository_status_base(sqlx_repository_t *repo, struct sqlx_name_s *n)
 		return NULL;
 	}
 
-	err = election_has_peers(repo->election_manager, n, &has_peers);
+	err = election_has_peers(repo->election_manager, n, FALSE, &has_peers);
 	if (err != NULL) {
 		g_prefix_error(&err, "Peers resolution error: ");
 		return err;
@@ -1105,7 +1096,7 @@ sqlx_repository_status_base(sqlx_repository_t *repo, struct sqlx_name_s *n)
 			if (GRID_DEBUG_ENABLED()) {
 				gchar **my_peers = NULL;
 				gboolean master_in_peers = FALSE;
-				GError *err2 = election_get_peers(repo->election_manager, n, &my_peers);
+				GError *err2 = election_get_peers(repo->election_manager, n, FALSE, &my_peers);
 				for (gchar **cursor = my_peers;
 						cursor && *cursor && !master_in_peers;
 						cursor++) {
