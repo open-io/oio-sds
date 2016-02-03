@@ -329,8 +329,8 @@ replicate_body_manage(struct sqlx_sqlite3_s *sq3, TableSequence_t *seq)
 	if (NULL != err) {
 		if (err->code == SQLITE_ERROR || err->code == SQLITE_SCHEMA) {
 			g_prefix_error(&err, "Schema error: ");
-			// XXX This is the error returned to the peer, so we tell it
-			// to "pipe to" us.
+			/* XXX This is the error returned to the peer, so we tell it
+			   to "pipe to" us. */
 			err->code = CODE_PIPETO;
 		}
 label_rollback:
@@ -340,14 +340,14 @@ label_rollback:
 		sqlx_admin_reload(sq3);
 	}
 	else {
-		// keep the current version for later
+		/* keep the current version for later */
 		sqlx_admin_reload(sq3);
 		postvers = version_extract_from_admin(sq3);
 
 		gint64 worst = 0;
 		err = version_validate_diff(postvers, expected_version, &worst);
 		if (err == NULL) {
-			if (worst != 0) // Diff missed
+			if (worst != 0) /* Diff missed */
 				err = NEWERROR(CODE_CONCURRENT, "Concurrent change detected");
 		}
 		if (err != NULL)
@@ -396,12 +396,9 @@ static GError *
 _restore(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 		guint8 *dump, gsize dump_size)
 {
-	GError *err;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	err = sqlx_repository_open_and_lock(repo, name,
-			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE,
-			&sq3, NULL);
+	GError *err = sqlx_repository_open_and_lock(repo, name,
+			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE, &sq3, NULL);
 	if (NULL != err)
 		return err;
 
@@ -424,12 +421,9 @@ static GError *
 _restore2(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 		const gchar *path)
 {
-	GError *err;
 	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	err = sqlx_repository_open_and_lock(repo, name,
-			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE,
-			&sq3, NULL);
+	GError *err = sqlx_repository_open_and_lock(repo, name,
+		SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK|SQLX_OPEN_CREATE, &sq3, NULL);
 	if (!err) {
 		err = sqlx_repository_restore_from_file(sq3, path);
 		if (!err) {
@@ -445,17 +439,15 @@ static GError *
 _dump(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 		GByteArray **result)
 {
-	GByteArray *dump = NULL;
-	GError *err;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
 	GRID_TRACE2("%s(%p,%s,%s,%p)", __FUNCTION__, repo, name->base, name->type, result);
 
-	err = sqlx_repository_open_and_lock(repo, name,
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	GError *err = sqlx_repository_open_and_lock(repo, name,
 			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK, &sq3, NULL);
 	if (NULL != err)
 		return err;
 
+	GByteArray *dump = NULL;
 	err = sqlx_repository_dump_base_gba(sq3, &dump);
 	if (!err) {
 		GRID_TRACE("Dump done!");
@@ -476,13 +468,12 @@ _dump_chunked(struct sqlx_repository_s *repo, struct sqlx_name_s *name,
 		void (*_send_chunk)(GByteArray *chunk, gint64 remaining))
 {
 	guint64 sent = 0;
-	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 
 	GRID_TRACE2("%s(%p,%s,%s,%p)", __FUNCTION__,
 			repo, name->base, name->type, _send_chunk);
 
-	err = sqlx_repository_open_and_lock(repo, name,
+	GError *err = sqlx_repository_open_and_lock(repo, name,
 			SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK, &sq3, NULL);
 	if (NULL != err)
 		return err;
@@ -1172,14 +1163,14 @@ _checked_open(struct gridd_reply_ctx_s *reply_ctx, sqlx_repository_t *repo,
 	struct sqlx_repctx_s *replication_ctx;
 
 	replication_ctx = reply_ctx->get_cnx_data("repctx");
-	if (NULL != replication_ctx) { // Maybe is the base still open
+	if (NULL != replication_ctx) { /* Maybe is the base still open */
 		sq3 = sqlx_transaction_get_base(replication_ctx);
 		if (strcmp(name->base, sq3->name.base) || strcmp(name->type, sq3->name.type)) {
 			err = NEWERROR(CODE_BAD_REQUEST, "Another base is still open [%s].[%s]",
 					sq3->name.base, sq3->name.type);
 			return err;
 		}
-	} else { // Normal open
+	} else { /* Normal open */
 		err = sqlx_repository_open_and_lock(repo, name, open_mode, &sq3, NULL);
 		if (NULL != err) {
 			if (err->code != CODE_REDIRECT)
@@ -1202,7 +1193,7 @@ _check_init_flag(struct sqlx_sqlite3_s *sq3, gboolean autocreate)
 			err = NEWERROR(CODE_CONTAINER_NOTFOUND, "Base does not exist");
 		} else {
 			err = sqlx_repository_status_base(sq3->repo, sqlx_name_mutable_to_const(&sq3->name));
-			if (!err) { // We are master
+			if (!err) { /* We are master */
 				struct sqlx_repctx_s *repctx = NULL;
 				GRID_DEBUG("Autocreate %s, inserting %s flag",
 						autocreate? "on":"off", SQLX_ADMIN_INITFLAG);
@@ -1235,8 +1226,8 @@ do_query(struct gridd_reply_ctx_s *reply_ctx, sqlx_repository_t *repo,
 	if (!err)
 		err = do_query_after_open(reply_ctx, sq3, params, result);
 
-	// If a transaction is pending, we do not close the base, but without
-	// a transaction, we can close the base
+	/* If a transaction is pending, we do not close the base, but without
+	   a transaction, we can close the base */
 	if (!reply_ctx->get_cnx_data("repctx"))
 		sqlx_repository_unlock_and_close_noerror(sq3);
 
@@ -1345,7 +1336,7 @@ _load_sqlx_name (struct gridd_reply_ctx_s *ctx,
 /* ------------------------------------------------------------------------- */
 
 static gboolean
-sqlx_dispatch_GETVERS(struct gridd_reply_ctx_s *reply,
+_handler_GETVERS(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1360,15 +1351,16 @@ sqlx_dispatch_GETVERS(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
-	// TODO JFS : trigger an election, useful to reduce the number of
-	// messages during an election.
+	/* TODO JFS : trigger an election, useful to reduce the number of
+	   messages during an election. */
 	if (NULL != (err = sqlx_repository_use_base(repo, CONST(&name)))) {
 		g_prefix_error(&err, "Use: ");
 		reply->send_error(0, err);
 		return TRUE;
 	}
 
-	err = sqlx_repository_open_and_lock(repo, CONST(&name), SQLX_OPEN_LOCAL, &sq3, NULL);
+	err = sqlx_repository_open_and_lock(repo, CONST(&name),
+			SQLX_OPEN_LOCAL, &sq3, NULL);
 	if (NULL != err) {
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
@@ -1398,7 +1390,7 @@ sqlx_dispatch_GETVERS(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_REPLICATE(struct gridd_reply_ctx_s *reply,
+_handler_REPLICATE(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1450,7 +1442,7 @@ sqlx_dispatch_REPLICATE(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_HAS(struct gridd_reply_ctx_s *reply,
+_handler_HAS(struct gridd_reply_ctx_s *reply,
         struct sqlx_repository_s *repo, gpointer ignored)
 {
     GError *err = NULL;
@@ -1480,7 +1472,7 @@ sqlx_dispatch_HAS(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_STATUS(struct gridd_reply_ctx_s *reply,
+_handler_STATUS(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
@@ -1502,7 +1494,7 @@ sqlx_dispatch_STATUS(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_ISMASTER(struct gridd_reply_ctx_s *reply,
+_handler_ISMASTER(struct gridd_reply_ctx_s *reply,
         struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
@@ -1531,7 +1523,7 @@ sqlx_dispatch_ISMASTER(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_DESCR(struct gridd_reply_ctx_s *reply,
+_handler_DESCR(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err = NULL;
@@ -1553,7 +1545,7 @@ sqlx_dispatch_DESCR(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_USE(struct gridd_reply_ctx_s *reply,
+_handler_USE(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
@@ -1574,7 +1566,7 @@ sqlx_dispatch_USE(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_EXITELECTION(struct gridd_reply_ctx_s *reply,
+_handler_EXIT(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
@@ -1595,7 +1587,7 @@ sqlx_dispatch_EXITELECTION(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_PIPETO(struct gridd_reply_ctx_s *reply,
+_handler_PIPETO(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err = NULL;
@@ -1631,7 +1623,7 @@ sqlx_dispatch_PIPETO(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_DUMP(struct gridd_reply_ctx_s *reply,
+_handler_DUMP(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err = NULL;
@@ -1678,7 +1670,7 @@ sqlx_dispatch_DUMP(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_RESTORE(struct gridd_reply_ctx_s *reply,
+_handler_RESTORE(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
@@ -1713,7 +1705,7 @@ sqlx_dispatch_RESTORE(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_PIPEFROM(struct gridd_reply_ctx_s *reply,
+_handler_PIPEFROM(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
@@ -1738,7 +1730,7 @@ sqlx_dispatch_PIPEFROM(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_RESYNC(struct gridd_reply_ctx_s *reply,
+_handler_RESYNC(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err = NULL;
@@ -1767,7 +1759,8 @@ sqlx_dispatch_RESYNC(struct gridd_reply_ctx_s *reply,
 	}
 
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	err = sqlx_repository_open_and_lock(repo, CONST(&name), SQLX_OPEN_SLAVEONLY, &sq3, NULL);
+	err = sqlx_repository_open_and_lock(repo, CONST(&name),
+			SQLX_OPEN_SLAVEONLY, &sq3, NULL);
 	if (NULL != err) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -1788,7 +1781,7 @@ sqlx_dispatch_RESYNC(struct gridd_reply_ctx_s *reply,
 /* ------------------------------------------------------------------------- */
 
 static gboolean
-sqlx_dispatch_PROPDEL(struct gridd_reply_ctx_s *reply,
+_handler_PROPDEL(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1811,9 +1804,9 @@ sqlx_dispatch_PROPDEL(struct gridd_reply_ctx_s *reply,
 		return TRUE;
 	}
 
-	err = sqlx_repository_open_and_lock(repo, CONST(&name),
-			(flags&FLAG_LOCAL) ? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE,
-			&sq3, NULL);
+	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+	err = sqlx_repository_open_and_lock(repo, CONST(&name), how, &sq3, NULL);
 	if (NULL != err) {
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
@@ -1847,7 +1840,7 @@ sqlx_dispatch_PROPDEL(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_PROPGET(struct gridd_reply_ctx_s *reply,
+_handler_PROPGET(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1855,7 +1848,7 @@ sqlx_dispatch_PROPGET(struct gridd_reply_ctx_s *reply,
 	GError *err;
 	guint32 flags = 0;
 
-	// Extraction
+	/* Extraction */
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);
@@ -1863,10 +1856,10 @@ sqlx_dispatch_PROPGET(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
-	// Action
-	err = sqlx_repository_open_and_lock(repo, CONST(&name),
-			(flags&FLAG_LOCAL) ? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE,
-			&sq3, NULL);
+	/* Action */
+	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+	err = sqlx_repository_open_and_lock(repo, CONST(&name), how, &sq3, NULL);
 	if (NULL != err) {
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
@@ -1894,7 +1887,7 @@ sqlx_dispatch_PROPGET(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_PROPSET(struct gridd_reply_ctx_s *reply,
+_handler_PROPSET(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1902,7 +1895,7 @@ sqlx_dispatch_PROPSET(struct gridd_reply_ctx_s *reply,
 	GError *err;
 	guint32 flags = 0;
 
-	// Extraction
+	/* Extraction */
 	(void) ignored;
 	if (NULL != (err = _load_sqlx_name(reply, &name, &flags))) {
 		reply->send_error(0, err);
@@ -1911,13 +1904,14 @@ sqlx_dispatch_PROPSET(struct gridd_reply_ctx_s *reply,
 	SQLXNAME_STACKIFY(name);
 
 	GSList *pairs = NULL;
-	err = metautils_message_extract_body_encoded (reply->request, TRUE, &pairs, key_value_pairs_unmarshall);
+	err = metautils_message_extract_body_encoded (reply->request,
+			TRUE, &pairs, key_value_pairs_unmarshall);
 	if (NULL != err) {
 		reply->send_error(CODE_BAD_REQUEST, err);
 		return TRUE;
 	}
 
-	// check the format
+	/* check the format */
 	for (GSList *l=pairs; !err && l ;l=l->next) {
 		if (!l->data)
 			continue;
@@ -1930,23 +1924,23 @@ sqlx_dispatch_PROPSET(struct gridd_reply_ctx_s *reply,
 	if (NULL != err)
 		goto label_exit;
 
-	// Open
-	err = sqlx_repository_open_and_lock(repo, CONST(&name),
-			(flags&FLAG_LOCAL) ? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE,
-			&sq3, NULL);
+	/* Open */
+	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
+			? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+	err = sqlx_repository_open_and_lock(repo, CONST(&name), how, &sq3, NULL);
 	if (NULL != err) {
 		g_prefix_error(&err, "Open/lock: ");
 		goto label_exit;
 	}
 
-	// Action
+	/* Action */
 	struct sqlx_repctx_s *repctx = NULL;
 	if (!(flags & FLAG_LOCAL))
 		err = sqlx_transaction_begin(sq3, &repctx);
 	if (NULL == err) {
 		if (flags & FLAG_FLUSH)
 			sqlx_admin_del_all_user (sq3);
-		// insertion
+		/* insertion */
 		for (GSList *l=pairs; !err && l ;l=l->next) {
 			if (!l->data)
 				continue;
@@ -1977,7 +1971,7 @@ label_exit:
 }
 
 static gboolean
-sqlx_dispatch_ENABLE(struct gridd_reply_ctx_s *reply,
+_handler_ENABLE(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1992,9 +1986,9 @@ sqlx_dispatch_ENABLE(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
-	err = sqlx_repository_open_and_lock(repo, CONST(&name),
-			(flags&FLAG_LOCAL) ? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE,
-			&sq3, NULL);
+	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+	err = sqlx_repository_open_and_lock(repo, CONST(&name), how, &sq3, NULL);
 	if (NULL != err) {
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
@@ -2026,7 +2020,7 @@ sqlx_dispatch_ENABLE(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_FREEZE(struct gridd_reply_ctx_s *reply,
+_handler_FREEZE(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -2041,9 +2035,9 @@ sqlx_dispatch_FREEZE(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
-	err = sqlx_repository_open_and_lock(repo, CONST(&name),
-			(flags&FLAG_LOCAL) ? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE,
-			&sq3, NULL);
+	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+	err = sqlx_repository_open_and_lock(repo, CONST(&name), how, &sq3, NULL);
 	if (NULL != err) {
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
@@ -2078,7 +2072,7 @@ sqlx_dispatch_FREEZE(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_DISABLE(struct gridd_reply_ctx_s *reply,
+_handler_DISABLE(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -2093,9 +2087,9 @@ sqlx_dispatch_DISABLE(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
-	err = sqlx_repository_open_and_lock(repo, CONST(&name),
-			(flags&FLAG_LOCAL) ? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE,
-			&sq3, NULL);
+	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+	err = sqlx_repository_open_and_lock(repo, CONST(&name), how, &sq3, NULL);
 	if (NULL != err) {
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
@@ -2130,7 +2124,7 @@ sqlx_dispatch_DISABLE(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_DISABLE_DISABLED(struct gridd_reply_ctx_s *reply,
+_handler_DISABLE2(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -2145,9 +2139,9 @@ sqlx_dispatch_DISABLE_DISABLED(struct gridd_reply_ctx_s *reply,
 	}
 	SQLXNAME_STACKIFY(name);
 
-	err = sqlx_repository_open_and_lock(repo, CONST(&name),
-			(flags&FLAG_LOCAL) ? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE,
-			&sq3, NULL);
+	const enum sqlx_open_type_e how = (flags&FLAG_LOCAL)
+		? (SQLX_OPEN_LOCAL|SQLX_OPEN_NOREFCHECK) : SQLX_OPEN_MASTERSLAVE;
+	err = sqlx_repository_open_and_lock(repo, CONST(&name), how, &sq3, NULL);
 	if (NULL != err) {
 		g_prefix_error(&err, "Open/lock: ");
 		reply->send_error(0, err);
@@ -2277,7 +2271,7 @@ _info_cache(struct sqlx_repository_s *repo, GString *gstr)
 }
 
 static gboolean
-sqlx_dispatch_INFO(struct gridd_reply_ctx_s *reply,
+_handler_INFO(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	(void) ignored;
@@ -2296,13 +2290,14 @@ sqlx_dispatch_INFO(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_LEANIFY(struct gridd_reply_ctx_s *reply,
+_handler_LEANIFY(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	(void) ignored, (void) repo;
 
 	guint size = 0;
-	GError *err = metautils_message_extract_struint (reply->request, NAME_MSGKEY_SIZE, &size);
+	GError *err = metautils_message_extract_struint (reply->request,
+			NAME_MSGKEY_SIZE, &size);
 	if (err) {
 		g_clear_error (&err);
 		size = SQLITE_RELEASE_SIZE;
@@ -2332,7 +2327,7 @@ _extract_params(MESSAGE msg, TableSequence_t **params)
 }
 
 static gboolean
-sqlx_dispatch_QUERY(struct gridd_reply_ctx_s *reply,
+_handler_QUERY(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	GError *err;
@@ -2354,6 +2349,7 @@ sqlx_dispatch_QUERY(struct gridd_reply_ctx_s *reply,
 					"Invalid schema name, not prefixed with 'sqlx.'"));
 		return TRUE;
 	}
+
 	if (NULL != (err = _extract_params(reply->request, &params))) {
 		reply->send_error(0, err);
 		return TRUE;
@@ -2396,7 +2392,7 @@ sqlx_dispatch_QUERY(struct gridd_reply_ctx_s *reply,
 }
 
 static gboolean
-sqlx_dispatch_DESTROY(struct gridd_reply_ctx_s *reply,
+_handler_DESTROY(struct gridd_reply_ctx_s *reply,
 		struct sqlx_repository_s *repo, gpointer ignored)
 {
 	(void) ignored;
@@ -2425,30 +2421,30 @@ const struct gridd_request_descr_s *
 sqlx_repli_gridd_get_requests(void)
 {
 	static struct gridd_request_descr_s descriptions[] = {
-		{NAME_MSGNAME_SQLX_HAS,              (hook) sqlx_dispatch_HAS,     NULL},
-		{NAME_MSGNAME_SQLX_PROPSET,          (hook) sqlx_dispatch_PROPSET, NULL},
-		{NAME_MSGNAME_SQLX_PROPGET,          (hook) sqlx_dispatch_PROPGET, NULL},
-		{NAME_MSGNAME_SQLX_PROPDEL,          (hook) sqlx_dispatch_PROPDEL, NULL},
-		{NAME_MSGNAME_SQLX_ENABLE,           (hook) sqlx_dispatch_ENABLE,  NULL},
-		{NAME_MSGNAME_SQLX_FREEZE,           (hook) sqlx_dispatch_FREEZE,  NULL},
-		{NAME_MSGNAME_SQLX_DISABLE,          (hook) sqlx_dispatch_DISABLE, NULL},
-		{NAME_MSGNAME_SQLX_DISABLE_DISABLED, (hook) sqlx_dispatch_DISABLE_DISABLED, NULL},
+		{NAME_MSGNAME_SQLX_HAS,              (hook) _handler_HAS,      NULL},
+		{NAME_MSGNAME_SQLX_PROPSET,          (hook) _handler_PROPSET,  NULL},
+		{NAME_MSGNAME_SQLX_PROPGET,          (hook) _handler_PROPGET,  NULL},
+		{NAME_MSGNAME_SQLX_PROPDEL,          (hook) _handler_PROPDEL,  NULL},
+		{NAME_MSGNAME_SQLX_ENABLE,           (hook) _handler_ENABLE,   NULL},
+		{NAME_MSGNAME_SQLX_FREEZE,           (hook) _handler_FREEZE,   NULL},
+		{NAME_MSGNAME_SQLX_DISABLE,          (hook) _handler_DISABLE,  NULL},
+		{NAME_MSGNAME_SQLX_DISABLE_DISABLED, (hook) _handler_DISABLE2, NULL},
 
-		{NAME_MSGNAME_SQLX_STATUS,       (hook) sqlx_dispatch_STATUS,    NULL},
-		{NAME_MSGNAME_SQLX_DESCR,        (hook) sqlx_dispatch_DESCR,     NULL},
-		{NAME_MSGNAME_SQLX_ISMASTER,     (hook) sqlx_dispatch_ISMASTER,  NULL},
-		{NAME_MSGNAME_SQLX_USE,          (hook) sqlx_dispatch_USE,       NULL},
-		{NAME_MSGNAME_SQLX_EXITELECTION, (hook) sqlx_dispatch_EXITELECTION, NULL},
-		{NAME_MSGNAME_SQLX_PIPETO,       (hook) sqlx_dispatch_PIPETO,    NULL},
-		{NAME_MSGNAME_SQLX_PIPEFROM,     (hook) sqlx_dispatch_PIPEFROM,  NULL},
-		{NAME_MSGNAME_SQLX_DUMP,         (hook) sqlx_dispatch_DUMP,      NULL},
-		{NAME_MSGNAME_SQLX_RESTORE,      (hook) sqlx_dispatch_RESTORE,   NULL},
-		{NAME_MSGNAME_SQLX_REPLICATE,    (hook) sqlx_dispatch_REPLICATE, NULL},
-		{NAME_MSGNAME_SQLX_GETVERS,      (hook) sqlx_dispatch_GETVERS,   NULL},
-		{NAME_MSGNAME_SQLX_RESYNC,       (hook) sqlx_dispatch_RESYNC,    NULL},
+		{NAME_MSGNAME_SQLX_STATUS,       (hook) _handler_STATUS,    NULL},
+		{NAME_MSGNAME_SQLX_DESCR,        (hook) _handler_DESCR,     NULL},
+		{NAME_MSGNAME_SQLX_ISMASTER,     (hook) _handler_ISMASTER,  NULL},
+		{NAME_MSGNAME_SQLX_USE,          (hook) _handler_USE,       NULL},
+		{NAME_MSGNAME_SQLX_EXITELECTION, (hook) _handler_EXIT,      NULL},
+		{NAME_MSGNAME_SQLX_PIPETO,       (hook) _handler_PIPETO,    NULL},
+		{NAME_MSGNAME_SQLX_PIPEFROM,     (hook) _handler_PIPEFROM,  NULL},
+		{NAME_MSGNAME_SQLX_DUMP,         (hook) _handler_DUMP,      NULL},
+		{NAME_MSGNAME_SQLX_RESTORE,      (hook) _handler_RESTORE,   NULL},
+		{NAME_MSGNAME_SQLX_REPLICATE,    (hook) _handler_REPLICATE, NULL},
+		{NAME_MSGNAME_SQLX_GETVERS,      (hook) _handler_GETVERS,   NULL},
+		{NAME_MSGNAME_SQLX_RESYNC,       (hook) _handler_RESYNC,    NULL},
 
-		{NAME_MSGNAME_SQLX_INFO,    (hook) sqlx_dispatch_INFO,      NULL},
-		{NAME_MSGNAME_SQLX_LEANIFY, (hook) sqlx_dispatch_LEANIFY,   NULL},
+		{NAME_MSGNAME_SQLX_INFO,    (hook) _handler_INFO,      NULL},
+		{NAME_MSGNAME_SQLX_LEANIFY, (hook) _handler_LEANIFY,   NULL},
 
 		{NULL, NULL, NULL}
 	};
@@ -2460,8 +2456,8 @@ const struct gridd_request_descr_s *
 sqlx_sql_gridd_get_requests(void)
 {
 	static struct gridd_request_descr_s descriptions[] = {
-		{NAME_MSGNAME_SQLX_QUERY,   (hook) sqlx_dispatch_QUERY,   NULL},
-		{NAME_MSGNAME_SQLX_DESTROY, (hook) sqlx_dispatch_DESTROY, NULL},
+		{NAME_MSGNAME_SQLX_QUERY,   (hook) _handler_QUERY,   NULL},
+		{NAME_MSGNAME_SQLX_DESTROY, (hook) _handler_DESTROY, NULL},
 		{NULL, NULL, NULL}
 	};
 

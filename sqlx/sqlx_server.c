@@ -29,13 +29,20 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <server/transport_gridd.h>
 #include <sqliterepo/replication_dispatcher.h>
 #include <sqliterepo/sqlx_remote.h>
+#include <sqliterepo/sqliterepo.h>
 #include "sqlx_service.h"
+
+# ifndef SQLX_DIR_SCHEMAS
+#  define SQLX_DIR_SCHEMAS NULL
+# endif
 
 #define SQLX_TYPE "sqlx"
 
 #define SQLX_SCHEMA \
 	"INSERT INTO admin(k,v) VALUES (\"schema_version\",\"1.0\");"\
 	"INSERT INTO admin(k,v) VALUES (\"version:main.admin\",\"1:0\")"
+
+static GString *dir_schemas = NULL;
 
 static gchar **
 filter_services(struct sqlx_service_s *ss, gchar **s, gint64 seq, const gchar *t)
@@ -108,13 +115,54 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 	return NULL;
 }
 
+static GError *
+_load_schema_directory (struct sqlx_service_s *ss, const char *dir)
+{
+	GError *err = NULL;
+	GDir *gdir = g_dir_open (dir, 0, &err);
+	if (err)
+		return err;
+
+	const char * filename;
+	while (!err && NULL != (filename = g_dir_read_name (gdir))) {
+		if (filename[0] == '.')
+			continue;
+		gsize len = 0;
+		gchar *content = NULL;
+		gchar *fullpath = g_strjoin (G_DIR_SEPARATOR_S, dir, filename, NULL);
+		if (g_file_get_contents (fullpath, &content, &len, &err)) {
+			err = sqlx_repository_configure_type (ss->repository,
+					filename, content);
+			g_free (content);
+		}
+	}
+
+	g_dir_close (gdir);
+	return err;
+}
+
 static gboolean
 _post_config(struct sqlx_service_s *ss)
 {
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,
 			sqlx_sql_gridd_get_requests(), ss->repository);
 
-	// TODO maybe initiate a events context
+	if (dir_schemas && dir_schemas->len) {
+		if (!g_file_test (dir_schemas->str, G_FILE_TEST_IS_DIR)) {
+			GRID_WARN ("Invalid directory for schemas descriptions: (%d) %s",
+					ENOENT, "Not a directory");
+			return FALSE;
+		}
+		GError *err = _load_schema_directory (ss, dir_schemas->str);
+		if (NULL != err) {
+			GRID_ERROR ("Cannot load schema directory %s: (%d) %s",
+				dir_schemas->str, err->code, err->message);
+			g_clear_error (&err);
+			return FALSE;
+		}
+	}
+
+	/* XXX(jfs): maybe initiate a events context */
 	return TRUE;
 }
 
@@ -122,17 +170,27 @@ static void
 _set_defaults(struct sqlx_service_s *ss)
 {
 	ss->flag_cached_bases = FALSE;
+	const char *def = SQLX_DIR_SCHEMAS;
+	if (def)
+		dir_schemas = g_string_new (def);
 }
 
 int
 main(int argc, char ** argv)
 {
+	static struct grid_main_option_s custom_options[] = {
+		{"DirectorySchemas", OT_STRING, {.str = &dir_schemas},
+			"Override the default directory where application schemas "
+			"are configured." },
+		{NULL, 0, {.i=0}, NULL}
+	};
 	static struct sqlx_service_config_s cfg = {
 		NAME_SRVTYPE_SQLX, "sqlxv1",
 		"el/"NAME_SRVTYPE_SQLX, 1, 3,
 		SQLX_SCHEMA, 1, 3,
 		_get_peers, _post_config, _set_defaults
 	};
+	sqlx_service_set_custom_options (custom_options);
 	return sqlite_service_main(argc, argv, &cfg);
 }
 

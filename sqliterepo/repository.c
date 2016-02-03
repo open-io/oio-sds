@@ -208,11 +208,26 @@ _schema_test (const char *schema)
 static GError*
 _schema_get (sqlx_repository_t *repo, const char *type, const char **res)
 {
-	gchar *realtype = g_strdup (type);
-	gchar *dot = strchr(realtype, '.');
-	if (dot) *dot = '\0';
-	gchar *schema = g_tree_lookup(repo->schemas, realtype);
-	g_free (realtype);
+	gchar *schema = NULL;
+
+	/* XXX(jfs): ugly quirk to quickly manage (in one place and without
+	   excess of abstractions) 2 kinds of services with opposed behaviors.
+	   On one side, we have meta2 where all the meta2[.*] services MUST have
+	   exactly the same schema, and on the other side the sqlx[.*] that
+	   might all have different schemas, and maybe no specific schema at all. */
+	if (!strcmp(type, NAME_SRVTYPE_SQLX) ||
+			g_str_has_prefix (type, NAME_SRVTYPE_SQLX".")) {
+		if (!(schema = g_tree_lookup (repo->schemas, type)))
+			schema = g_tree_lookup (repo->schemas, NAME_SRVTYPE_SQLX);
+		if (!schema)
+			schema = "";
+	} else {
+		gchar *realtype = g_strdup (type);
+		gchar *dot = strchr(realtype, '.');
+		if (dot) *dot = '\0';
+		schema = g_tree_lookup(repo->schemas, realtype);
+		g_free (realtype);
+	}
 
 	if (!schema)
 		return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "Type [%s] not managed", type);
@@ -265,8 +280,8 @@ sqlx_repository_init(const gchar *vol, const struct sqlx_repo_config_s *cfg,
 		return NEWERROR(0, "SQLite not in safe mode");
 
 	if (cfg && cfg->flags & SQLX_REPO_NOCACHE) {
-		// if there are several connections on the same base, we will use a
-		// shared cache that wil prevent us of too many I/O operations.
+		/* if there are several connections on the same base, we will use a
+		   shared cache that wil prevent us of too many I/O operations. */
 		if (SQLITE_OK != sqlite3_enable_shared_cache(1))
 			GRID_NOTICE("SQLite3 not in SHAREDCACHE mode");
 	}
@@ -954,6 +969,7 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 
 	EXTRA_ASSERT(repo != NULL);
 	SQLXNAME_CHECK(n);
+	GRID_TRACE("%s (%s,%s)", __FUNCTION__, n->base, n->type);
 
 	if (result)
 		*result = NULL;
@@ -1285,7 +1301,7 @@ sqlx_repository_dump_base_fd(struct sqlx_sqlite3_s *sq3,
 	EXTRA_ASSERT(read_file_cb != NULL);
 
 	do {
-		// First try to dump on local volume, on error try /tmp
+		/* First try to dump on local volume, on error try /tmp */
 		g_snprintf(path, sizeof(path), "%s/tmp/dump.sqlite3.XXXXXX",
 				try_slash_tmp? "" : sq3->repo->basedir);
 

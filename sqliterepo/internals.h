@@ -20,12 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__sqliterepo__internals_h
 # define OIO_SDS__sqliterepo__internals_h 1
 
-/**
- * @defgroup sqliterepo_misc Misc. features
- * @ingroup sqliterepo
- * @{
- */
-
 # include <sqlite3.h>
 
 # include <metautils/lib/metautils.h>
@@ -55,16 +49,16 @@ License along with this library.
 #  define SQLX_DELAY_ELECTION_REPLAY 5L
 # endif
 
-// Timeout for SQLX_REPLICATE requests, in seconds
+/* Timeout for SQLX_REPLICATE requests, in seconds */
 #define SQLX_REPLICATION_TIMEOUT 10.0
 
-// Size of buffer for reading dump file
+/* Size of buffer for reading dump file */
 #define SQLX_DUMP_BUFFER_SIZE 32768
 
-// Size of chunks sent to client when doing chunked SQLX_DUMP
+/* Size of chunks sent to client when doing chunked SQLX_DUMP */
 #define SQLX_DUMP_CHUNK_SIZE (8*1024*1024)
 
-// Page size at database creation (should be multiple of storage block size)
+/* Page size at database creation (should be multiple of storage block size) */
 #define SQLX_DEFAULT_PAGE_SIZE "4096"
 
 #define MEMBER(D)   ((struct election_member_s*)(D))
@@ -73,7 +67,6 @@ License along with this library.
 #define MCFG(D)     MMANAGER(D)->config
 #define MKEY_S(D)   hashstr_str(MEMBER(D)->key)
 
-/** @param C */
 #define CONFIG_CHECK(C) do {\
 	EXTRA_ASSERT((C) != NULL);\
 	EXTRA_ASSERT((C)->get_local_url != NULL); \
@@ -82,14 +75,12 @@ License along with this library.
 	EXTRA_ASSERT((C)->mode <= ELECTION_MODE_GROUP); \
 } while (0)
 
-/** @param M */
 #define MANAGER_CHECK(M) do {\
 	EXTRA_ASSERT((M) != NULL);\
 	EXTRA_ASSERT((M)->lrutree_members != NULL);\
 	CONFIG_CHECK((M)->config); \
 } while (0)
 
-/** @param M */
 #define MEMBER_CHECK(M) do {\
 	EXTRA_ASSERT(MEMBER(M) != NULL);\
 	NAME_CHECK(&(MEMBER(M)->name)); \
@@ -110,13 +101,11 @@ struct sqlx_repository_s
 
 	GTree *schemas;
 
-	// Not owned
+	/* Not owned */
 	struct sqlx_cache_s *cache;
-
-	// Not owned
 	struct election_manager_s *election_manager;
 
-	// Hooks
+	/* Hooks */
 	sqlx_file_locator_f locator;
 	gpointer locator_data;
 
@@ -129,11 +118,11 @@ struct sqlx_repository_s
 	sqlx_repo_change_hook change_callback;
 	gpointer change_callback_data;
 
-	// hash for the directory structure
+	/* hash for the directory structure */
 	guint hash_width;
 	guint hash_depth;
 
-	// Limits for the base's holder
+	/* Limits for the base's holder */
 	guint bases_count;
 	guint bases_max;
 
@@ -164,7 +153,5 @@ extern gint64 oio_cache_period_cond_wait;
 /* In the same precision as oio_ext_monotonic_time(), how many TIMESPAN the
  * current thread should wait for the condition in the cache of bases. */
 extern gint64 oio_election_period_cond_wait;
-
-/** @} */
 
 #endif /*OIO_SDS__sqliterepo__internals_h*/

@@ -83,6 +83,55 @@ static struct grid_main_callbacks sqlx_service_callbacks =
 	.specific_stop = sqlx_service_specific_stop,
 };
 
+static struct grid_main_option_s *custom_options = NULL;
+static struct grid_main_option_s *all_options = NULL;
+static struct grid_main_option_s common_options[] =
+{
+	{"Endpoint", OT_STRING, {.str = &SRV.url},
+		"Bind to this IP:PORT couple instead of 0.0.0.0 and a random port"},
+	{"Announce", OT_STRING, {.str = &SRV.announce},
+		"Announce this IP:PORT couple instead of the TCP endpoint"},
+
+	{"Tag", OT_LIST, {.lst = &SRV.custom_tags},
+		"Tag to associate to the SRV (multiple custom tags are supported)"},
+
+	{"Replicate", OT_BOOL, {.b = &SRV.flag_replicable},
+		"DO NOT USE THIS. This might disable the replication"},
+	{"NoRegister", OT_BOOL, {.b = &SRV.flag_noregister},
+		"DO NOT USE THIS. The SRV won't register in the conscience"},
+
+	{"Sqlx.Sync.Repli", OT_UINT, {.u = &SRV.sync_mode_repli},
+		"SYNC mode to be applied on replicated bases after open "
+			"(0=NONE,1=NORMAL,2=FULL)"},
+	{"Sqlx.Sync.Solo", OT_UINT, {.u = &SRV.sync_mode_solo},
+		"SYNC mode to be applied on non-replicated bases after open "
+			"(0=NONE,1=NORMAL,2=FULL)"},
+
+	{"OpenTimeout", OT_INT64, {.i64=&SRV.open_timeout},
+		"Timeout when opening bases in use by another thread "
+			"(milliseconds). -1 means wait forever, 0 return "
+			"immediately." },
+	{"CnxBacklog", OT_INT64, {.i64=&SRV.cnx_backlog},
+		"Number of connections allowed when all workers are busy"},
+
+	{"MaxBases", OT_UINT, {.u = &SRV.cfg_max_bases},
+		"Limits the number of concurrent open bases" },
+	{"MaxPassive", OT_UINT, {.u = &SRV.cfg_max_passive},
+		"Limits the number of concurrent passive connections" },
+	{"MaxActive", OT_UINT, {.u = &SRV.cfg_max_active},
+		"Limits the number of concurrent active connections" },
+	{"MaxWorkers", OT_UINT, {.u=&SRV.cfg_max_workers},
+		"Limits the number of worker threads" },
+
+	{"CacheEnabled", OT_BOOL, {.b = &SRV.flag_cached_bases},
+		"If set, each base will be cached in a way it won't be accessed"
+			" by several requests in the same time."},
+	{"DeleteEnabled", OT_BOOL, {.b = &SRV.flag_delete_on},
+		"If not set, prevents deleting database files from disk"},
+
+	{NULL, 0, {.i=0}, NULL}
+};
+
 // repository hooks ------------------------------------------------------------
 
 static const gchar *
@@ -616,59 +665,43 @@ sqlx_service_specific_fini(void)
 
 	if (SRV.nsinfo)
 		namespace_info_free(SRV.nsinfo);
+	if (all_options) {
+		g_free (all_options);
+		all_options = NULL;
+	}
+}
+
+static guint
+_count_options (struct grid_main_option_s const * tab)
+{
+	guint count = 0;
+	for (; tab && tab->name ;++tab,++count) {}
+	return count;
+}
+
+void
+sqlx_service_set_custom_options (struct grid_main_option_s *tab)
+{
+	custom_options = tab;
 }
 
 static struct grid_main_option_s *
 sqlx_service_get_options(void)
 {
-	static struct grid_main_option_s sqlx_options[] =
-	{
-		{"Endpoint", OT_STRING, {.str = &SRV.url},
-			"Bind to this IP:PORT couple instead of 0.0.0.0 and a random port"},
-		{"Announce", OT_STRING, {.str = &SRV.announce},
-			"Announce this IP:PORT couple instead of the TCP endpoint"},
-
-		{"Tag", OT_LIST, {.lst = &SRV.custom_tags},
-			"Tag to associate to the SRV (multiple custom tags are supported)"},
-
-		{"Replicate", OT_BOOL, {.b = &SRV.flag_replicable},
-			"DO NOT USE THIS. This might disable the replication"},
-		{"NoRegister", OT_BOOL, {.b = &SRV.flag_noregister},
-			"DO NOT USE THIS. The SRV won't register in the conscience"},
-
-		{"Sqlx.Sync.Repli", OT_UINT, {.u = &SRV.sync_mode_repli},
-			"SYNC mode to be applied on replicated bases after open "
-				"(0=NONE,1=NORMAL,2=FULL)"},
-		{"Sqlx.Sync.Solo", OT_UINT, {.u = &SRV.sync_mode_solo},
-			"SYNC mode to be applied on non-replicated bases after open "
-				"(0=NONE,1=NORMAL,2=FULL)"},
-
-		{"OpenTimeout", OT_INT64, {.i64=&SRV.open_timeout},
-			"Timeout when opening bases in use by another thread "
-				"(milliseconds). -1 means wait forever, 0 return "
-				"immediately." },
-		{"CnxBacklog", OT_INT64, {.i64=&SRV.cnx_backlog},
-			"Number of connections allowed when all workers are busy"},
-
-		{"MaxBases", OT_UINT, {.u = &SRV.cfg_max_bases},
-			"Limits the number of concurrent open bases" },
-		{"MaxPassive", OT_UINT, {.u = &SRV.cfg_max_passive},
-			"Limits the number of concurrent passive connections" },
-		{"MaxActive", OT_UINT, {.u = &SRV.cfg_max_active},
-			"Limits the number of concurrent active connections" },
-		{"MaxWorkers", OT_UINT, {.u=&SRV.cfg_max_workers},
-			"Limits the number of worker threads" },
-
-		{"CacheEnabled", OT_BOOL, {.b = &SRV.flag_cached_bases},
-			"If set, each base will be cached in a way it won't be accessed"
-			" by several requests in the same time."},
-		{"DeleteEnabled", OT_BOOL, {.b = &SRV.flag_delete_on},
-			"If not set, prevents deleting database files from disk"},
-
-		{NULL, 0, {.i=0}, NULL}
-	};
-
-	return sqlx_options;
+	if (!all_options) {
+		const guint count_common = _count_options (common_options);
+		const guint count_custom = _count_options (custom_options);
+		const guint count_total = count_custom + count_common;
+		all_options = g_malloc0 (
+				(1+count_total) * sizeof(struct grid_main_option_s));
+		if (count_common)
+			memcpy (all_options, common_options,
+					count_common * sizeof(struct grid_main_option_s));
+		if (count_custom)
+			memcpy (all_options + count_common, custom_options,
+					count_custom * sizeof(struct grid_main_option_s));
+	}
+	return all_options;
 }
 
 static const char *

@@ -29,10 +29,20 @@ static struct oio_sqlx_client_s *sqlx_client = NULL;
 static struct oio_sqlx_client_factory_s *sqlx_factory = NULL;
 static struct oio_url_s *url = NULL;
 static gchar **query = NULL;
+static gboolean autocreate = FALSE;
 
 static void
 cli_action (void)
 {
+	if (autocreate) {
+		GError *err = oio_sqlx_client__create_db (sqlx_client);
+		if (NULL != err) {
+			g_printerr ("DB creation failed: (%d) %s\n", err->code, err->message);
+			g_clear_error (&err);
+			grid_main_set_status (1);
+			return;
+		}
+	}
 	struct oio_sqlx_output_ctx_s ctx = {0, 0, 0};
 	gchar **out = NULL;
 	GRID_DEBUG("Query with %u params: %s", g_strv_length(query+1), query[0]);
@@ -54,6 +64,8 @@ static struct grid_main_option_s *
 cli_get_options(void)
 {
 	static struct grid_main_option_s cli_options[] = {
+		{"Autocreate", OT_BOOL, {.b=&autocreate},
+			"Issue a DB creation before querying"},
 		{NULL, 0, {.i=0}, NULL}
 	};
 
@@ -91,10 +103,7 @@ cli_specific_fini(void)
 		oio_directory__destroy (dir);
 		dir = NULL;
 	}
-	if (url) {
-		oio_url_clean(url);
-		url = NULL;
-	}
+	oio_url_pclean(&url);
 }
 
 static void

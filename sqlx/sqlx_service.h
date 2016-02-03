@@ -69,6 +69,7 @@ struct sqlx_service_s
 {
 	gchar volume[1024];
 	gchar ns_name[LIMIT_LENGTH_NSNAME];
+
 	struct replication_config_s *replication_config;
 	const struct sqlx_service_config_s *service_config;
 
@@ -181,7 +182,8 @@ struct sqlx_service_s
 	gboolean flag_replicable;
 };
 
-struct meta_backend_common_s {
+struct meta_backend_common_s
+{
 	gchar ns_name[LIMIT_LENGTH_NSNAME];
 
 	const gchar *type;
@@ -196,6 +198,8 @@ struct meta_backend_common_s {
 
 extern int sqlite_service_main(int argc, char **argv,
 		const struct sqlx_service_config_s *cfg);
+
+void sqlx_service_set_custom_options (struct grid_main_option_s *options);
 
 /** Enables the optional notification system. To be called during the
  * post-config hook. */

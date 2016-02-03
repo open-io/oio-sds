@@ -460,6 +460,15 @@ start_at_boot=false
 command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
 """
 
+template_gridinit_sqlx = """
+[service.${NS}-${SRVTYPE}-${SRVNUM}]
+group=${NS},localhost,${SRVTYPE}
+on_die=respawn
+enabled=true
+start_at_boot=false
+command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/sqlx/schemas -O Endpoint=${IP}:${PORT} ${NS} ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}
+"""
+
 template_gridinit_rawx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
 group=${NS},localhost,${SRVTYPE}
@@ -529,6 +538,41 @@ log_level = INFO
 log_address = /dev/log
 syslog_prefix = OIO,${NS},rdir,1
 """
+
+sqlx_schemas = (
+	("sqlx", ""),
+	("sqlx.mail", """
+CREATE TABLE IF NOT EXISTS box (
+		name TEXT NOT NULL PRIMARY KEY,
+		ro INT NOT NULL DEFAULT 0);
+
+CREATE TABLE IF NOT EXISTS boxattr (
+		box TEXT NOT NULL,
+		k TEXT NOT NULL,
+		v TEXT NOT NULL,
+		PRIMARY KEY (box,k));
+
+CREATE TABLE IF NOT EXISTS mail (
+		seq INTEGER PRIMARY KEY AUTOINCREMENT,
+		uid TEXT NOT NULL UNIQUE,
+		guid TEXT NOT NULL UNIQUE,
+		box TEXT NOT NULL,
+		oiourl TEXT NOT NULL,
+		len INTEGER NOT NULL,
+		hlen INTEGER NOT NULL);
+
+CREATE TABLE IF NOT EXISTS mailattr (
+		guid TEXT NOT NULL,
+		k TEXT NOT NULL,
+		v TEXT NOT NULL,
+		PRIMARY KEY (guid,k));
+
+CREATE INDEX IF NOT EXISTS boxattr_index_by_box ON boxattr(box);
+CREATE INDEX IF NOT EXISTS mail_index_by_box ON mail(box);
+CREATE INDEX IF NOT EXISTS mailattr_index_by_mail ON mailattr(guid);
+INSERT OR REPLACE INTO box (name,ro) VALUES ('INBOX', 1);
+"""),
+)
 
 HOME = str(os.environ['HOME'])
 EXE_PREFIX = "@EXE_PREFIX@"
@@ -683,7 +727,8 @@ def generate(ns, ip, options={}):
         tpl = Template(template_conscience_policies)
         f.write(tpl.safe_substitute(env))
 
-    # Generate the "GRIDD-like" services
+    # Generate the "GRIDD-like" services, excepted the sqlx that require
+	# specific options
     with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
         tpl = Template(template_gridinit_header)
         f.write(tpl.safe_substitute(env))
@@ -692,13 +737,31 @@ def generate(ns, ip, options={}):
         tpl = Template(template_gridinit_ns)
         f.write(tpl.safe_substitute(env))
         tpl = Template(template_gridinit_service)
-        for t, e, n, p in services:
+        for t, e, n, p in ((t,e,n,p) for t,e,n,p in services if t != 'sqlx'):
             mkdir_noerror(DATADIR + '/' + ns + '-' + t + '-' + str(n))
             env['SRVTYPE'] = t
             env['SRVNUM'] = n
             env['PORT'] = p
             env['EXE'] = e
             f.write(tpl.safe_substitute(env))
+
+	# Now create the sqlx and pre-defined schemas
+    with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
+        env['PORT'] = port_proxy
+        tpl = Template(template_gridinit_ns)
+        f.write(tpl.safe_substitute(env))
+        tpl = Template(template_gridinit_sqlx)
+        for t, e, n, p in ((t,e,n,p) for t,e,n,p in services if t == 'sqlx'):
+            mkdir_noerror(DATADIR + '/' + ns + '-' + t + '-' + str(n))
+            env['SRVTYPE'] = t
+            env['SRVNUM'] = n
+            env['PORT'] = p
+            env['EXE'] = e
+            f.write(tpl.safe_substitute(env))
+	mkdir_noerror(CFGDIR + "/sqlx/schemas")
+	for name,content in sqlx_schemas:
+		with open(CFGDIR + '/sqlx/schemas/' + name, 'w+') as f:
+			f.write(content)
 
     # Generate the RAWX services
     tpl = Template(template_gridinit_rawx)
