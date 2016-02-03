@@ -34,6 +34,26 @@ extern "C" {
 #define PROXYD_HEADER_PREFIX "X-oio-"
 #endif
 
+/* in seconds */
+#ifndef PROXYD_PERIOD_RELOAD_NSINFO
+# define PROXYD_PERIOD_RELOAD_NSINFO 30
+#endif
+
+/* in seconds */
+#ifndef PROXYD_PERIOD_RELOAD_M0INFO
+# define PROXYD_PERIOD_RELOAD_M0INFO 30
+#endif
+
+/* in seconds */
+#ifndef PROXYD_TTL_DEAD_LOCAL_SERVICES
+# define PROXYD_TTL_DEAD_LOCAL_SERVICES 30
+#endif
+
+/* in seconds */
+#ifndef PROXYD_TTL_DOWN_SERVICES
+# define PROXYD_TTL_DOWN_SERVICES 5
+#endif
+
 #ifndef PROXYD_HEADER_MODE
 # define PROXYD_HEADER_MODE PROXYD_HEADER_PREFIX "action-mode"
 #endif
