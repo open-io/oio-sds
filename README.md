@@ -16,5 +16,5 @@ And if it succeeds you will have the joy to experiment your own little SDS insta
 
 ## Build
 
-Please refer to [BUILD.md] for detailed information about how to compile and configure the solution.
+Please refer to [BUILD.md](./BUILD.md) for detailed information about how to compile and configure the solution.
 
