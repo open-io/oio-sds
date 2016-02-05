@@ -82,8 +82,8 @@ class ServiceWatcher(object):
             self.service_definition['tags'].update(stats)
 
     def register(self):
-        tag_up = 'true' if self.last_status else 'false'
-        self.service_definition['tags']['tag.up'] = tag_up
+        # Use a boolean so we can easily convert it to a number in conscience
+        self.service_definition['tags']['tag.up'] = self.last_status
         self.cs.register(
             self.service['type'], self.service_definition)
 
