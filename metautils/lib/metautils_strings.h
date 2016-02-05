@@ -55,9 +55,6 @@ gchar** metautils_decode_lines(const gchar *start, const gchar *end);
 
 GByteArray* metautils_encode_lines(gchar **strv);
 
-gsize metautils_hash_content_path(const gchar *src, gsize src_size,
-	gchar *dst, gsize dst_size, gsize dst_bitlength);
-
 /** Calls g_strcmp0(a,b) and ignores its third argument. */
 int metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored);
 

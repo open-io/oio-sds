@@ -22,15 +22,6 @@ License along with this library.
 
 # include <glib.h>
 
-/**
- * @defgroup sqliterepo_election Elections
- * @ingroup sqliterepo
- * @brief
- * @details
- *
- * @{
- */
-
 struct election_counts_s
 {
 	guint total;
@@ -184,7 +175,5 @@ void election_manager_set_sync (struct election_manager_s *m,
 /** Wraps the call to the hook in the config structure */
 GError* sqlx_config_get_peers(const struct replication_config_s *cfg,
 		struct sqlx_name_s *n, gboolean nocache, gchar ***result);
-
-/** @} */
 
 #endif /*OIO_SDS__sqliterepo__election_h*/

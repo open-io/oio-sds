@@ -129,6 +129,7 @@ Used by `gcc`
 | PROXYD_DEFAULT_PERIOD_DOWNSTREAM | 10 |  |
 | PROXYD_DEFAULT_PERIOD_UPSTREAM | 1 |  |
 | OIO_M2V2_LISTRESULT_BATCH | 1000 |  |
+| OIO_EVTQ_MAXPENDING | 1000 | Default queue length for services emitting events (meta1, meta2). Beyond this limit, the queue will be reported as 'stalled' so that the services can properly manage this. |
 | SQLX_DIR_SCHEMAS | NULL | Default directory used to gather applicative schema of SQLX bases. NULL by default, meaning that no directory is set, so that there is no attempt to load a schema. |
 | SQLX_ADMIN_PREFIX_SYS  | "sys." | Prefix used for keys used in admin table of sqlite bases |
 | SQLX_ADMIN_PREFIX_USER | "user." | Prefix used for keys used in admin table of sqlite bases |

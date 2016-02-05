@@ -16,7 +16,7 @@ link_directories(
 		${SQLITE3_LIBRARY_DIRS})
 
 
-add_library(sqlxsrv SHARED sqlx_service.c)
+add_library(sqlxsrv SHARED sqlx_service.c oio_events_queue.c)
 set_target_properties(sqlxsrv PROPERTIES SOVERSION ${ABI_VERSION})
 target_link_libraries(sqlxsrv
 		server metautils gridcluster sqliterepo

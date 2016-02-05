@@ -183,6 +183,10 @@ extern "C" {
 #  define RAWX_HEADER_PREFIX "X-oio-chunk-meta-"
 # endif
 
+# ifndef OIO_EVTQ_MAXPENDING
+#  define OIO_EVTQ_MAXPENDING 1000
+# endif
+
 # define OIO_CFG_PROXY        "proxy"
 # define OIO_CFG_PROXYLOCAL   "proxy-local"
 # define OIO_CFG_PROXY_CONSCIENCE "proxy-conscience"

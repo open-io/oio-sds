@@ -87,3 +87,7 @@ add_executable(test_sqlx_client_mem test_sqlx_client.c)
 target_link_libraries(test_sqlx_client_mem oiosqlx oiosqlx_local ${COMMON})
 add_test(NAME sqlx/client/mem COMMAND test_sqlx_client_mem)
 
+add_executable(test_events_queue test_events_queue.c)
+target_link_libraries(test_events_queue sqlxsrv ${COMMON})
+add_test(NAME sqlx/events COMMAND test_events_queue)
+

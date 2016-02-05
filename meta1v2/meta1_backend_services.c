@@ -481,8 +481,8 @@ static GError*
 _get_iterator(struct meta1_backend_s *m1, struct compound_type_s *ct,
 		struct grid_lb_iterator_s **result)
 {
-	struct grid_lb_iterator_s *r = grid_lbpool_get_iterator(m1->backend.lb,
-			ct->baretype);
+	struct grid_lb_iterator_s *r =
+		grid_lbpool_get_iterator(m1->lb, ct->baretype);
 
 	if (!r) {
 		*result = NULL;
@@ -548,16 +548,14 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 		opt.req.duplicates = FALSE;
 		opt.req.stgclass = NULL;
 		opt.req.strict_stgclass = TRUE;
-		opt.srv_forbidden = __srvinfo_from_m1srvurl(m1->backend.lb,
-				ct->baretype, used);
+		opt.srv_forbidden = __srvinfo_from_m1srvurl(m1->lb, ct->baretype, used);
 
 		if (ct->req.k && !strcmp(ct->req.k, NAME_TAGNAME_USER_IS_SERVICE)) {
 			gchar *srvurl = g_strdup_printf("1||%s|", ct->req.v);
 			struct meta1_service_url_s *inplace[2] = {
 					meta1_unpack_url(srvurl), NULL};
 			/* If ct->req.v is not an addr, srv_inplace will contain NULL */
-			opt.srv_inplace = __srvinfo_from_m1srvurl(
-					m1->backend.lb, NULL, inplace);
+			opt.srv_inplace = __srvinfo_from_m1srvurl(m1->lb, NULL, inplace);
 			opt.req.distance = 1;
 			meta1_service_url_clean(inplace[0]);
 			g_free(srvurl);
@@ -849,10 +847,10 @@ __relink_container_services(struct m1v2_relink_input_s *in, gchar ***out)
 		opt.filter.hook = NULL;
 		opt.filter.data = NULL;
 		if (in->kept)
-			opt.srv_inplace = __srvinfo_from_m1srvurl (in->m1->backend.lb,
+			opt.srv_inplace = __srvinfo_from_m1srvurl (in->m1->lb,
 					in->ct->baretype, in->kept);
 		if (in->replaced)
-			opt.srv_forbidden = __srvinfo_from_m1srvurl (in->m1->backend.lb,
+			opt.srv_forbidden = __srvinfo_from_m1srvurl (in->m1->lb,
 					in->ct->baretype, in->replaced);
 
 		if (g_slist_length(opt.srv_inplace) >= opt.req.max)
@@ -1181,29 +1179,29 @@ static GError *
 __notify_services(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 		struct oio_url_s *url)
 {
-	if (!m1->notify.hook)
+	if (!m1->notifier)
 		return NULL;
 
-	GError *err = NULL;
-	struct meta1_service_url_s **services = NULL, **services2 = NULL;
-
-	err = __get_container_all_services(sq3, url, NULL, &services);
+	struct meta1_service_url_s **services = NULL;
+	GError *err = __get_container_all_services(sq3, url, NULL, &services);
 	if (!err) {
-		services2 = expand_urlv(services);
+		struct meta1_service_url_s **services2 = expand_urlv(services);
 		GString *notif = g_string_sized_new(128);
 		g_string_append (notif, "{\"event\":\""NAME_SRVTYPE_META1".account.services\"");
 		g_string_append_printf (notif, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
 		g_string_append (notif, ",\"data\":{");
 		g_string_append_printf (notif, "\"url\":\"%s\"", oio_url_get(url, OIOURL_WHOLE));
 		g_string_append (notif, ",\"services\":[");
-		for (struct meta1_service_url_s **svc = services2; svc && *svc; svc++) {
-			if (svc != services2) // not at the beginning
-				g_string_append(notif, ",");
-			meta1_service_url_encode_json(notif, *svc);
+		if (services2) {
+			for (struct meta1_service_url_s **svc = services2; *svc ; svc++) {
+				if (svc != services2) // not at the beginning
+					g_string_append(notif, ",");
+				meta1_service_url_encode_json(notif, *svc);
+			}
 		}
 		g_string_append(notif, "]}}");
 
-		m1->notify.hook (m1->notify.udata, g_string_free(notif, FALSE));
+		oio_events_queue__send (m1->notifier, g_string_free(notif, FALSE));
 
 		meta1_service_url_cleanv(services2);
 		meta1_service_url_cleanv(services);
@@ -1219,7 +1217,7 @@ __notify_services_by_cid(struct meta1_backend_s *m1, struct sqlx_sqlite3_s *sq3,
 	sqlx_exec (sq3->db, "BEGIN");
 	GError *err = __info_user(sq3, url, FALSE, &urls);
 	if (!err) {
-		oio_url_set (urls[0], OIOURL_NS, m1->backend.ns_name);
+		oio_url_set (urls[0], OIOURL_NS, m1->ns_name);
 		err = __notify_services(m1, sq3, url);
 	}
 	sqlx_exec (sq3->db, "ROLLBACK");

@@ -20,16 +20,6 @@ License along with this library.
 #ifndef OIO_SDS__metautils__lib__metautils_macros_h
 # define OIO_SDS__metautils__lib__metautils_macros_h 1
 
-# ifndef LOG_DEFAULT_DOMAIN
-#  define LOG_DEFAULT_DOMAIN "default"
-# endif
-
-# ifdef HAVE_EXTRA_ASSERT
-#  define EXTRA_ASSERT(X) g_assert(X)
-# else
-#  define EXTRA_ASSERT(X)
-# endif
-
 /* size [in bytes] asn1c can require on the stack. Use 0 for as many bytes
  * as necessary (with the risk of stack smashing). */
 #define ASN1C_MAX_STACK 0

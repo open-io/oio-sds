@@ -38,6 +38,7 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <meta2v2/meta2_utils_json.h>
 #include <meta2v2/generic.h>
 #include <meta2v2/autogen.h>
+#include <sqlx/oio_events_queue.h>
 #include <core/url_ext.h>
 
 enum content_action_e
@@ -92,10 +93,10 @@ _notify_beans (struct meta2_backend_s *m2b, struct oio_url_s *url,
 		g_string_append (gs, "},\"data\":[");
 		meta2_json_dump_all_xbeans (gs, list_of_beans);
 		g_string_append (gs, "]}");
-		m2b->notify.hook (m2b->notify.udata, g_string_free (gs, FALSE));
+		oio_events_queue__send (m2b->notifier, g_string_free (gs, FALSE));
 	}
 
-	if (!m2b->notify.hook)
+	if (!m2b->notifier)
 		return;
 
 	if (g_slist_length (beans) < 16)

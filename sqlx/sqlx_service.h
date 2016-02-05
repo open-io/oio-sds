@@ -86,50 +86,21 @@ struct sqlx_service_s
 	struct hc_resolver_s *resolver;
 	struct grid_lbpool_s *lb;
 
-	struct {
-		// A queue to transmit events from request workers to the events worker.
-		// A pointer to the queue is given to the service backends.
-		GAsyncQueue *queue;
-		// Runs the converter for GAsyncQueue to ZMQ
-		GThread     *th_gq2zmq;
-		// Runs the events worker
-		GThread     *th_zmq2agent;
-		// Context data specific to the ZMQ context
-		void        *zctx;
-		// Pair of interconnected sockets between the gq2zmq thread and the zmq2agent thread
-		void        *zpush; // write only
-		void        *zpull; // read only
+	struct oio_events_queue_s *events_queue;
+	GThread *thread_queue;
 
-		/* ZMQ socket to the agent */
-		void        *zagent;
-		GPtrArray   *pending_events;
-		/* used to compute the event id */
-		guint16     procid;
-		guint       counter;
-		/* stats on events streams, managed only by the ZMQ2AGENT thead */
-		guint64     counter_received;
-		guint64     counter_sent;
-		guint64     counter_ack;
-		guint64     counter_ack_notfound;
-
-		// how many events are received each time the queue becomes active.
-		// A low value helps preventing starvation but leads to more contexts
-		// switches.
-		guint16     max_recv_per_round;
-	} notify;
-
-	// The tasks under this queue always follow a reload of the
-	// nsinfo field, and can safely play with it. This is the place
-	// for LB reloading, reconfiguration, etc.
+	/* The tasks under this queue always follow a reload of the nsinfo field,
+	   and can safely play with it. This is the place for LB reloading,
+	   reconfiguration, etc. */
 	struct namespace_info_s *nsinfo;
 	struct grid_task_queue_s *gtq_reload;
 	GThread *thread_reload;
 
-	// Queue dedicated to expirations elections, caches, etc.
+	/* Queue dedicated to expirations elections, caches, etc. */
 	struct grid_task_queue_s *gtq_admin;
 	GThread *thread_admin;
 
-	// Conscience registration
+	/* Conscience registration */
 	struct grid_single_rrd_s *gsr_reqcounter;
 	struct grid_single_rrd_s *gsr_reqtime;
 	struct service_info_s *si;
@@ -139,8 +110,8 @@ struct sqlx_service_s
 	struct gridd_client_pool_s *clients_pool;
 	GThread *thread_client;
 
-	// This is configured during the "configure" step, and can be overriden
-	// in the _post_config hook.
+	/* This is configured during the "configure" step, and can be overriden
+	   in the _post_config hook. */
 	gint64 open_timeout;
 	gint64 cnx_backlog;
 	guint max_bases;
@@ -183,32 +154,12 @@ struct sqlx_service_s
 	gboolean flag_replicable;
 };
 
-struct meta_backend_common_s
-{
-	gchar ns_name[LIMIT_LENGTH_NSNAME];
-
-	const gchar *type;
-
-	struct sqlx_repository_s *repo;
-
-	// Managed by sqlx_service_extra, do not allocate/free
-	struct grid_lbpool_s *lb;
-};
-
 /* -------------------------------------------------------------------------- */
 
 extern int sqlite_service_main(int argc, char **argv,
 		const struct sqlx_service_config_s *cfg);
 
 void sqlx_service_set_custom_options (struct grid_main_option_s *options);
-
-/** Enables the optional notification system. To be called during the
- * post-config hook. */
-extern gboolean sqlx_enable_notifier (struct sqlx_service_s *ss);
-
-/** Sends a notification. If notifications are not configured, the
- * message is dropped */
-extern GError * sqlx_notify (gpointer u, gchar *msg);
 
 /** Reloads the optional (grid_lbpool_s*). Exposed to let the
  * server enable it in its post-config hook. This is destined to

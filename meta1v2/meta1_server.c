@@ -201,8 +201,10 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 static gboolean
 _post_config(struct sqlx_service_s *ss)
 {
-	if (!(m1 = meta1_backend_init(ss->ns_name, ss->repository, ss->lb))) {
-		GRID_WARN("META1 backend init failure");
+	GError *err = meta1_backend_init (&m1, ss->ns_name, ss->repository, ss->lb);
+	if (NULL != err) {
+		GRID_WARN("META1 backend init failure: (%d) %s", err->code, err->message);
+		g_clear_error (&err);
 		return FALSE;
 	}
 
@@ -213,14 +215,12 @@ _post_config(struct sqlx_service_s *ss)
 		/* Preloads the prefixes locally managed: It happens often that
 		 * meta1 starts before gridagent, and _reload_prefixes() fails
 		 * for this reason. */
-		GError *err = _reload_prefixes(ss, TRUE);
-		if (NULL == err) {
+		if (!(err = _reload_prefixes(ss, TRUE))) {
 			done = TRUE;
 		} else {
 			GRID_WARN("PREFIXES reload failure : (%d) %s", err->code, err->message);
 			g_clear_error(&err);
-			GRID_NOTICE("Retrying in %d seconds...", CONNECT_RETRY_DELAY);
-			sleep(CONNECT_RETRY_DELAY);
+			g_usleep(1 * G_TIME_SPAN_SECOND);
 		}
 	}
 
@@ -231,9 +231,8 @@ _post_config(struct sqlx_service_s *ss)
 	grid_task_queue_register(ss->gtq_reload, 1,
 			_task_reload_prefixes, NULL, ss);
 
-	m1->notify.udata = ss;
-	m1->notify.hook = sqlx_notify;
-	return sqlx_enable_notifier (ss);
+	m1->notifier = ss->events_queue;
+	return TRUE;
 }
 
 int

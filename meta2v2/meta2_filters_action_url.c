@@ -51,9 +51,9 @@ meta2_filter_action_exit_election(struct gridd_filter_ctx_s *ctx,
 		struct sqlx_name_s n = {
 			.base = oio_url_get(url,OIOURL_HEXID),
 			.type = NAME_SRVTYPE_META2,
-			.ns = m2b->backend.ns_name
+			.ns = m2b->ns_name
 		};
-		GError *err = sqlx_repository_exit_election(m2b->backend.repo, &n);
+		GError *err = sqlx_repository_exit_election(m2b->repo, &n);
 		hc_decache_reference_service(m2b->resolver, url, NAME_SRVTYPE_META2);
 		if (err) {
 			meta2_filter_ctx_set_error(ctx, err);
@@ -61,7 +61,7 @@ meta2_filter_action_exit_election(struct gridd_filter_ctx_s *ctx,
 		}
 	} else {
 		election_manager_exit_all(sqlx_repository_get_elections_manager(
-					m2b->backend.repo), 5 * G_TIME_SPAN_MINUTE, FALSE);
+					m2b->repo), 5 * G_TIME_SPAN_MINUTE, FALSE);
 	}
 	return FILTER_OK;
 }

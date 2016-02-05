@@ -47,7 +47,7 @@ _meta2_filter_check_ns_name(struct gridd_filter_ctx_s *ctx,
 	const struct meta2_backend_s *backend = meta2_filter_ctx_get_backend(ctx);
 	const char *req_ns = oio_url_get(meta2_filter_ctx_get_url(ctx), OIOURL_NS);
 
-	if (!backend || !backend->backend.ns_name[0]) {
+	if (!backend || !backend->ns_name[0]) {
 		GRID_DEBUG("Missing information for namespace checking");
 		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_INTERNAL_ERROR,
 					"Missing backend information, cannot check namespace"));
@@ -63,10 +63,10 @@ _meta2_filter_check_ns_name(struct gridd_filter_ctx_s *ctx,
 		return FILTER_KO;
 	}
 
-	if (0 != g_ascii_strcasecmp(backend->backend.ns_name, req_ns)) {
+	if (0 != g_ascii_strcasecmp(backend->ns_name, req_ns)) {
 		meta2_filter_ctx_set_error(ctx, NEWERROR(CODE_BAD_REQUEST,
 					"Request namespace [%s] does not match server namespace [%s]",
-					req_ns, backend->backend.ns_name));
+					req_ns, backend->ns_name));
 		return FILTER_KO;
 	}
 

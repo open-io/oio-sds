@@ -105,7 +105,6 @@ add_library(metautils SHARED
 		utils_resolv.c metautils_resolv.h
 		utils_task.c metautils_task.h
 		utils_addr_info.c
-		utils_hash.c
 		utils_gba.c
 		utils_kv.c
 		utils_acl.c
