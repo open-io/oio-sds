@@ -29,5 +29,5 @@ class SystemStat(object):
         if not self.__class__.oio_sys_cpu_idle:
             return {}
 
-        stats = {"stat.cpu": self.oio_sys_cpu_idle()}
+        stats = {"stat.cpu": 100.0 * self.oio_sys_cpu_idle()}
         return stats

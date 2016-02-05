@@ -36,6 +36,6 @@ class VolumeStat(object):
         if not self.__class__.oio_sys_space_idle:
             return {}
 
-        stats = {"stat.io": self.oio_sys_io_idle(self.volume),
-                 "stat.space": self.oio_sys_space_idle(self.volume)}
+        stats = {"stat.io": 100.0 * self.oio_sys_io_idle(self.volume),
+                 "stat.space": 100.0 * self.oio_sys_space_idle(self.volume)}
         return stats

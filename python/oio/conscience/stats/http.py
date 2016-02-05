@@ -1,3 +1,4 @@
+from requests.exceptions import RequestException
 from oio.common.http import requests
 
 
@@ -32,6 +33,12 @@ class HttpStat(object):
         return data
 
     def get_stats(self):
-        resp = requests.get(self.url)
-        parsed = self._parse_stats(resp.text)
-        return parsed
+        try:
+            resp = requests.get(self.url)
+            parsed = self._parse_stats(resp.text)
+            return parsed
+        except RequestException as exc:
+            self.logger.warn(
+                    "Could not fetch statistics (%s), assume service down",
+                    str(exc))
+            return {}
