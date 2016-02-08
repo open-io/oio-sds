@@ -21,6 +21,7 @@ def load_modules(group_name):
 class ServiceWatcher(object):
     def __init__(self, conf, service, **kwargs):
         self.conf = conf
+        self.running = False
 
         for k in ['host', 'port', 'type']:
             if k not in service:
@@ -37,7 +38,6 @@ class ServiceWatcher(object):
 
         self.logger = get_logger(self.conf)
         self.cs = ConscienceClient(self.conf)
-        self.init_checkers(service)
         self.last_status = False
         self.failed = False
         self.service_definition = {
@@ -46,6 +46,10 @@ class ServiceWatcher(object):
             'addr': '%s:%s' % (self.service['host'], self.service['port']),
             'score': 0,
             'tags': {}}
+        self.service_checks = list()
+        self.service_stats = list()
+        self.init_checkers(service)
+        self.init_stats(service)
 
     def start(self):
         self.logger.info('watcher "%s" starting', self.name)
@@ -69,9 +73,17 @@ class ServiceWatcher(object):
                 self.logger.warn('service "%s" is now down', self.name)
             self.last_status = status
 
+    def get_stats(self):
+        """Update service definition with all configured stats"""
+        for stat in self.service_stats:
+            stats = stat.get_stats()
+            self.logger.debug("Stat fetcher '%s' returned %s",
+                              str(stat), str(stats))
+            self.service_definition['tags'].update(stats)
+
     def register(self):
-        tag_up = 'true' if self.last_status else 'false'
-        self.service_definition['tags']['tag.up'] = tag_up
+        # Use a boolean so we can easily convert it to a number in conscience
+        self.service_definition['tags']['tag.up'] = self.last_status
         self.cs.register(
             self.service['type'], self.service_definition)
 
@@ -79,6 +91,7 @@ class ServiceWatcher(object):
         try:
             while self.running:
                 self.check()
+                self.get_stats()
                 self.register()
                 sleep(self.check_interval)
         except Exception as e:
@@ -89,7 +102,6 @@ class ServiceWatcher(object):
             self.logger.info('watcher "%s" stopped', self.name)
 
     def init_checkers(self, service):
-        self.service_checks = []
         for check in service['checks']:
             check['host'] = check.get('host') or service['host']
             check['port'] = check.get('port') or service['port']
@@ -103,10 +115,24 @@ class ServiceWatcher(object):
             if not service_check_class:
                 raise Exception(
                     'Invalid check type "%s", valid types: %s' %
-                    (check['type'], ', '.join(self.checkers.keys())))
+                    (check['type'], ', '.join(CHECKERS_MODULES.keys())))
             service_check = service_check_class(check, self.logger)
-
             self.service_checks.append(service_check)
+
+    def init_stats(self, service):
+        """Initialize service stat fetchers"""
+        self.service_stats[:] = []
+        for stat in service['stats']:
+            stat.setdefault('host', service['host'])
+            stat.setdefault('port', service['port'])
+            stat.setdefault('path', "")
+            service_stat_class = STATS_MODULES.get(stat['type'], None)
+            if not service_stat_class:
+                raise Exception(
+                    'Invalid stat type "%s", valid types: %s' %
+                    (stat['type'], ', '.join(STATS_MODULES.keys())))
+            service_stat = service_stat_class(stat, self.logger)
+            self.service_stats.append(service_stat)
 
 
 class ConscienceAgent(Daemon):
@@ -144,7 +170,7 @@ class ConscienceAgent(Daemon):
 
     def init_watchers(self, services):
         watchers = []
-        for name, conf in services.iteritems():
+        for _name, conf in services.iteritems():
             watchers.append(ServiceWatcher(self.conf, conf))
         self.watchers = watchers
 
@@ -160,10 +186,11 @@ class ConscienceAgent(Daemon):
 
             cfgfiles = [os.path.join(include_dir, f)
                         for f in os.listdir(include_dir)
-                        if re.match(r'.*\.(json|yml|yaml)$', f)]
+                        if re.match(r'.+\.(json|yml|yaml)$', f)]
             for cfgfile in cfgfiles:
                 name = os.path.basename(cfgfile)
                 name = os.path.splitext(name)[0]
                 self.conf['services'][name] = parse_config(cfgfile)
 
 CHECKERS_MODULES = load_modules('oio.conscience.checker')
+STATS_MODULES = load_modules('oio.conscience.stats')

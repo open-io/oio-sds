@@ -352,6 +352,11 @@ class RingBuffer(list):
         self._zero = 0
         self._size = size
 
+    @property
+    def size(self):
+        """Get the size of the ring buffer"""
+        return self._size
+
     def __index(self, key):
         if not self._count:
             raise IndexError('list index out of range')

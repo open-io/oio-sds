@@ -22,3 +22,19 @@ checks:
 # Perform a connect on specified host:port
 # Note: you can override host and port
     - {type: tcp}
+
+# Stats configuration
+stats:
+# Perform a GET on specified host:port/path
+# and decode one stat by line
+    - {type: http, path: /stat}
+# Perform a GET on specified host:port/path
+# and decode a JSON object
+    - {type: http, path: /status, parser: json}
+# Perform a GET on specified host:port/path
+# and decode known rawx statistics
+    - {type: rawx, path: /stat}
+# Collect system statistics like CPU usage
+    - {type: system}
+# Collect file system volume statistics like IO and space usage
+    - {type: volume, path: /usr/lib/oio/rawx-1}
