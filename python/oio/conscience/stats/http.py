@@ -7,11 +7,12 @@ class HttpStat(object):
 
     def __init__(self, conf, logger):
         conf['path'] = conf.get('path', '').lstrip('/')
+        self.parser = conf.get('parser', 'lines')
         self.url = 'http://{host}:{port}/{path}'.format(**conf)
         self.logger = logger
 
     @staticmethod
-    def _parse_stats(body):
+    def _parse_stats_lines(body):
         """Converts each line to a dictionary entry"""
         data = {}
         for line in body.splitlines():
@@ -32,10 +33,18 @@ class HttpStat(object):
                 data[parts[0]] = None
         return data
 
+    @staticmethod
+    def _parse_stats_json(body):
+        """Prefix each entry with 'stat.'"""
+        return {'stat.' + k: body[k] for k in body.keys()}
+
     def get_stats(self):
         try:
             resp = requests.get(self.url)
-            parsed = self._parse_stats(resp.text)
+            if self.parser == "json":
+                parsed = self._parse_stats_json(resp.json())
+            else:
+                parsed = self._parse_stats_lines(resp.text)
             return parsed
         except RequestException as exc:
             self.logger.warn(

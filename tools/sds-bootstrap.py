@@ -93,7 +93,7 @@ group=${NS},localhost,account-server
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},account,1 -p ${MONITOR_PERIOD} -m '${EXE_PREFIX}-account-monitor.py' -i '${NS}|account|${IP}:${PORT}' -c '${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf'
+command=${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
@@ -103,7 +103,7 @@ group=${NS},localhost,rdir-server
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-svc-monitor -s OIO,${NS},rdir,1 -p ${MONITOR_PERIOD} -m '${EXE_PREFIX}-rdir-monitor.py' -i '${NS}|rdir|${IP}:${PORT}' -c '${EXE_PREFIX}-rdir-server ${CFGDIR}/${NS}-rdir-server.conf'
+command=${EXE_PREFIX}-rdir-server ${CFGDIR}/${NS}-rdir-server.conf
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
@@ -200,20 +200,6 @@ Require all granted
 </VirtualHost>
 """
 
-template_rawx_watch = """
-host: ${IP}
-port: ${PORT}
-type: rawx
-checks:
-    - {type: http, uri: /info}
-    - {type: tcp}
-
-stats:
-    - {type: volume, path: ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}}
-    - {type: rawx, path: /stat}
-    - {type: system}
-"""
-
 template_rainx_service = """
 LoadModule mpm_worker_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_mpm_worker.so
 LoadModule authz_core_module ${APACHE2_MODULES_SYSTEM_DIR}modules/mod_authz_core.so
@@ -283,6 +269,18 @@ Require all granted
 </VirtualHost>
 """
 
+template_account_watch = """
+host: ${IP}
+port: ${PORT}
+type: account
+checks:
+    - {type: tcp}
+
+stats:
+    - {type: http, path: /status, parser: json}
+    - {type: system}
+"""
+
 template_rainx_watch = """
 host: ${IP}
 port: ${PORT}
@@ -293,6 +291,33 @@ checks:
 
 stats:
     - {type: rawx, path: /stat}
+    - {type: system}
+"""
+
+template_rawx_watch = """
+host: ${IP}
+port: ${PORT}
+type: rawx
+checks:
+    - {type: http, uri: /info}
+    - {type: tcp}
+
+stats:
+    - {type: volume, path: ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}}
+    - {type: rawx, path: /stat}
+    - {type: system}
+"""
+
+template_rdir_watch = """
+host: ${IP}
+port: ${PORT}
+type: rdir
+checks:
+    - {type: tcp}
+
+stats:
+    - {type: volume, path: ${RDIR_DB_PATH}}
+    - {type: http, path: /status, parser: json}
     - {type: system}
 """
 
@@ -396,7 +421,7 @@ param_service.sqlx.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * root(
 
 param_service.rdir.score_timeout=120
 param_service.rdir.score_variation_bound=5
-param_service.rdir.score_expr=(num stat.cpu)
+param_service.rdir.score_expr=(num tag.up) * (num stat.cpu)
 
 param_service.oiofs.score_timeout=120
 param_service.oiofs.score_variation_bound=5
@@ -404,7 +429,7 @@ param_service.oiofs.score_expr=(num stat.cpu)
 
 param_service.account.score_timeout=120
 param_service.account.score_variation_bound=5
-param_service.account.score_expr=(num stat.cpu)
+param_service.account.score_expr=(num tag.up) * (num stat.cpu)
 
 param_service.echo.score_timeout=120
 param_service.echo.score_variation_bound=5
@@ -900,6 +925,9 @@ def generate(ns, ip, options={}):
     with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
         tpl = Template(template_account_server_gridinit)
         f.write(tpl.safe_substitute(env))
+    with open(WATCHDIR + '/' + ns + '-account-1.yml', 'w+') as f:
+        tpl = Template(template_account_watch)
+        f.write(tpl.safe_substitute(env))
 
     # rdir-server
     env['PORT'] = port_rdir
@@ -910,6 +938,9 @@ def generate(ns, ip, options={}):
         f.write(tpl.safe_substitute(env))
     with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
         tpl = Template(template_rdir_server_gridinit)
+        f.write(tpl.safe_substitute(env))
+    with open(WATCHDIR + '/' + ns + '-rdir-1.yml', 'w+') as f:
+        tpl = Template(template_rdir_watch)
         f.write(tpl.safe_substitute(env))
 
     # Event agent configuration
