@@ -176,7 +176,9 @@ extern time_hook_f oio_time_real;
 
 /* -------------------------------------------------------------------------- */
 
-# define GQ() g_quark_from_static_string(G_LOG_DOMAIN)
+# ifndef GQ
+#  define GQ() g_quark_from_static_string(G_LOG_DOMAIN)
+# endif
 
 # ifdef HAVE_BACKTRACE
 #  define NEWERROR(CODE, FMT, ...) oio_error_debug(GQ(), (CODE), FMT, ##__VA_ARGS__)

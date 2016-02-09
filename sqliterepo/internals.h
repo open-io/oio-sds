@@ -29,24 +29,48 @@ License along with this library.
 # include <Table.h>
 # include <TableSequence.h>
 
-# ifndef SQLX_MAX_COND
-#  define SQLX_MAX_COND 64
+# ifndef  SQLX_MAX_COND
+#  define SQLX_MAX_COND 1024
 # endif
 
-# ifndef SQLX_MAX_BASES
+# ifndef  SQLX_MAX_BASES
 #  define SQLX_MAX_BASES 2048
 # endif
 
-# ifndef SQLX_GRACE_DELAY_COOL
+# ifndef  SQLX_GRACE_DELAY_COOL
 #  define SQLX_GRACE_DELAY_COOL 30L
 # endif
 
-# ifndef SQLX_GRACE_DELAY_HOT
+# ifndef  SQLX_GRACE_DELAY_HOT
 #  define SQLX_GRACE_DELAY_HOT 300L
 # endif
 
-# ifndef SQLX_DELAY_ELECTION_REPLAY
-#  define SQLX_DELAY_ELECTION_REPLAY 5L
+# ifndef  SQLX_DELAY_MAXWAIT
+#  define SQLX_DELAY_MAXWAIT 5 * G_TIME_SPAN_SECOND
+# endif
+
+# ifndef  SQLX_DELAY_MAXIDLE
+#  define SQLX_DELAY_MAXIDLE 30 * G_TIME_SPAN_SECOND
+# endif
+
+# ifndef  SQLX_DELAY_ELECTION_REPLAY
+#  define SQLX_DELAY_ELECTION_REPLAY 5 * G_TIME_SPAN_SECOND
+# endif
+
+# ifndef  SQLX_DELAY_RESTART_FAILED
+#  define SQLX_DELAY_RESTART_FAILED 5 * G_TIME_SPAN_SECOND
+# endif
+
+# ifndef  SQLX_DELAY_PING_FAILED
+#  define SQLX_DELAY_PING_FAILED 2 * G_TIME_SPAN_SECOND
+# endif
+
+# ifndef  SQLX_DELAY_PING_PENDING
+#  define SQLX_DELAY_PING_PENDING 2 * G_TIME_SPAN_SECOND
+# endif
+
+# ifndef  SQLX_DELAY_PING_FINAL
+#  define SQLX_DELAY_PING_FINAL 300 * G_TIME_SPAN_SECOND
 # endif
 
 /* Timeout for SQLX_REPLICATE requests, in seconds */
@@ -77,6 +101,9 @@ License along with this library.
 
 #define MANAGER_CHECK(M) do {\
 	EXTRA_ASSERT((M) != NULL);\
+	EXTRA_ASSERT((M)->vtable); \
+	/* EXTRA_ASSERT((M)->sync); */ \
+	EXTRA_ASSERT((M)->peering); \
 	EXTRA_ASSERT((M)->lrutree_members != NULL);\
 	CONFIG_CHECK((M)->config); \
 } while (0)

@@ -100,7 +100,7 @@ oio_cfg_list_ns(void)
 	gpointer k, v;
 	GHashTable *ht = oio_cfg_parse();
 	GPtrArray *tmp = g_ptr_array_sized_new(4);
-	
+
 	g_hash_table_iter_init(&iter, ht);
 	while (g_hash_table_iter_next(&iter, &k, &v)) {
 		const gchar *sk = (gchar*)k;

@@ -26,9 +26,7 @@ License along with this library.
 #include <sys/epoll.h>
 #include <sys/resource.h>
 
-#include "metautils.h"
-#include "metautils_syscall.h"
-#include "gridd_client.h"
+#include <metautils/lib/metautils.h>
 #include "gridd_client_pool.h"
 
 #define MAX_ROUND 32
@@ -98,7 +96,6 @@ gridd_client_pool_create(void)
 	if (0 != getrlimit(RLIMIT_NOFILE, &limit))
 		limit.rlim_cur = limit.rlim_max = 32768;
 
-	/* TODO(jfs): nice spot for SLICE allocation */
 	pool = g_malloc0(sizeof(*pool));
 	pool->pending_clients = g_async_queue_new();
 
@@ -183,7 +180,7 @@ event_client_free(struct event_client_s *ec)
 		ec->on_end(ec);
 	if (ec->client)
 		gridd_client_free(ec->client);
-	g_free(ec);
+	g_free (ec);
 }
 
 static void
