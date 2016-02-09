@@ -65,6 +65,5 @@ License along with this library.
 # include <metautils/lib/metacomm.h>
 # include <metautils/lib/gridd_client.h>
 # include <metautils/lib/gridd_client_ext.h>
-# include <metautils/lib/gridd_client_pool.h>
 
 #endif /*OIO_SDS__metautils__lib__metautils_h*/

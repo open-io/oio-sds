@@ -18,12 +18,14 @@ License along with this library.
 */
 
 #include <metautils/lib/metautils.h>
-#include <metautils/lib/metacomm.h>
 
 #include <zookeeper.h>
 #include <zookeeper_log.h>
 
+#include "version.h"
 #include "synchro.h"
+#include "sqlx_remote.h"
+#include "gridd_client_pool.h"
 
 struct sqlx_sync_s
 {
@@ -330,3 +332,262 @@ _awget_siblings (struct sqlx_sync_s *ss, const char *path,
 	return rc;
 }
 
+/* -------------------------------------------------------------------------- */
+
+static void _direct_destroy (struct sqlx_peering_s *self);
+
+static void _direct_use (struct sqlx_peering_s *self,
+		const char *url,
+		const struct sqlx_name_s *n);
+
+static void _direct_getvers (struct sqlx_peering_s *self,
+		const char *url,
+		const struct sqlx_name_s *n,
+		struct election_manager_s *manager,
+		guint reqid,
+		sqlx_peering_getvers_end_f result);
+
+static void _direct_pipefrom (struct sqlx_peering_s *self,
+		const char *url,
+		const struct sqlx_name_s *n,
+		const char *src,
+		struct election_manager_s *manager,
+		guint reqid,
+		sqlx_peering_pipefrom_end_f result);
+
+struct sqlx_peering_vtable_s vtable_peering_DIRECT =
+{
+	_direct_destroy, _direct_use, _direct_getvers, _direct_pipefrom
+};
+
+struct sqlx_peering_direct_s
+{
+	struct sqlx_peering_vtable_s *vtable;
+
+	/* Instanciates client. Designed for testing purposes, to avoid requiring
+	   any network during the tests. */
+	struct gridd_client_factory_s *factory;
+
+	/* pool'ifies the client sockets to avoid reserving to many file
+	 * descriptors. */
+	struct gridd_client_pool_s *pool;
+};
+
+struct sqlx_peering_s *
+sqlx_peering_factory__create_direct (struct gridd_client_pool_s *pool,
+		struct gridd_client_factory_s *factory)
+{
+	struct sqlx_peering_direct_s *self = g_malloc0 (sizeof(*self));
+	self->vtable = &vtable_peering_DIRECT;
+	self->pool = pool;
+	self->factory = factory;
+	return (struct sqlx_peering_s*) self;
+}
+
+static void
+_direct_destroy (struct sqlx_peering_s *self)
+{
+	if (!self) return;
+	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
+	EXTRA_ASSERT(p->vtable == &vtable_peering_DIRECT);
+	g_free (p);
+}
+
+static void
+_direct_use (struct sqlx_peering_s *self,
+		const char *url,
+		const struct sqlx_name_s *n)
+{
+	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
+	EXTRA_ASSERT(p != NULL && p->vtable == &vtable_peering_DIRECT);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(n != NULL);
+
+	GByteArray *req = sqlx_pack_USE(n);
+
+	struct event_client_s *mc = g_malloc0 (sizeof(struct event_client_s));
+	mc->client = gridd_client_factory_create_client (p->factory);
+	gridd_client_connect_url (mc->client, url);
+	gridd_client_request (mc->client, req, NULL, NULL);
+	gridd_client_set_timeout(mc->client, 1.0);
+	gridd_client_pool_defer(p->pool, mc);
+	g_byte_array_unref(req);
+}
+
+struct evtclient_PIPEFROM_s
+{
+	struct event_client_s ec;
+
+	sqlx_peering_pipefrom_end_f hook;
+	struct election_manager_s *manager;
+	struct sqlx_name_mutable_s name;
+	guint reqid;
+};
+
+static void
+on_end_PIPEFROM (struct evtclient_PIPEFROM_s *mc)
+{
+	EXTRA_ASSERT(mc != NULL);
+	EXTRA_ASSERT(mc->ec.client != NULL);
+	GError *err = gridd_client_error(mc->ec.client);
+	mc->hook (err, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid);
+	if (err) g_error_free(err);
+}
+
+static void
+_direct_pipefrom (struct sqlx_peering_s *self,
+		const char *url,
+		const struct sqlx_name_s *n,
+		const char *src,
+		/* for the output */
+		struct election_manager_s *manager,
+		guint reqid,
+		sqlx_peering_pipefrom_end_f result)
+{
+	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
+	EXTRA_ASSERT(p != NULL && p->vtable == &vtable_peering_DIRECT);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(n != NULL);
+
+	GByteArray *req = sqlx_pack_PIPEFROM(n, src);
+
+	struct evtclient_PIPEFROM_s *mc =
+		g_malloc0 (sizeof(struct evtclient_PIPEFROM_s));
+	mc->ec.client = gridd_client_factory_create_client (p->factory);
+	mc->ec.on_end = (gridd_client_end_f) on_end_PIPEFROM;
+	mc->hook = result;
+	mc->manager = manager;
+	sqlx_name_dup (&mc->name, n);
+	mc->reqid = reqid;
+
+	gridd_client_connect_url (mc->ec.client, url);
+	gridd_client_request(mc->ec.client, req, NULL, NULL);
+	gridd_client_set_timeout(mc->ec.client, 30.0);
+	gridd_client_pool_defer(p->pool, &mc->ec);
+
+	g_byte_array_unref(req);
+}
+
+struct evtclient_GETVERS_s
+{
+	struct event_client_s ec;
+
+	sqlx_peering_getvers_end_f hook;
+	struct sqlx_name_mutable_s name;
+	struct election_manager_s *manager;
+	GTree *vremote;
+	guint reqid;
+};
+
+static void
+on_end_GETVERS(struct evtclient_GETVERS_s *mc)
+{
+	EXTRA_ASSERT(mc != NULL);
+	EXTRA_ASSERT(mc->ec.client != NULL);
+
+	GError *err = gridd_client_error(mc->ec.client);
+	if (err)
+		mc->hook (err, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid, NULL);
+	else if (!mc->vremote) {
+		err = SYSERR("BUG: no version replied");
+		mc->hook (err, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid, NULL);
+	} else {
+		mc->hook (NULL, mc->manager, sqlx_name_mutable_to_const(&mc->name), mc->reqid, mc->vremote);
+	}
+
+	if (mc->vremote)
+		g_tree_destroy (mc->vremote);
+	if (err)
+		g_error_free (err);
+	sqlx_name_clean (&mc->name);
+}
+
+static gboolean
+on_reply_GETVERS (gpointer ctx, MESSAGE reply)
+{
+	GRID_TRACE2("%s(%p,%p)", __FUNCTION__, ctx, reply);
+	EXTRA_ASSERT(reply != NULL);
+	struct evtclient_GETVERS_s *ec = ctx;
+	EXTRA_ASSERT(ec != NULL);
+
+	gsize bsize = 0;
+	void *b = metautils_message_get_BODY(reply, &bsize);
+	if (!b || !bsize)
+		return TRUE;
+
+	GTree *version;
+	if (!(version = version_decode(b, bsize))) {
+		GRID_WARN("Invalid encoded version in reply");
+		return FALSE;
+	}
+
+	if (ec->vremote)
+		g_tree_destroy(ec->vremote);
+	ec->vremote = version;
+	return TRUE;
+}
+
+static void
+_direct_getvers (struct sqlx_peering_s *self,
+		const char *url,
+		const struct sqlx_name_s *n,
+		struct election_manager_s *manager,
+		guint reqid,
+		sqlx_peering_getvers_end_f result)
+{
+	struct sqlx_peering_direct_s *p = (struct sqlx_peering_direct_s*) self;
+	EXTRA_ASSERT(p != NULL && p->vtable == &vtable_peering_DIRECT);
+	EXTRA_ASSERT(url != NULL);
+	EXTRA_ASSERT(n != NULL);
+
+	struct evtclient_GETVERS_s *mc =
+		g_malloc0 (sizeof(struct evtclient_GETVERS_s));
+	mc->ec.client = gridd_client_factory_create_client (p->factory);
+	mc->ec.on_end = (gridd_client_end_f) on_end_GETVERS;
+	mc->hook = result;
+	mc->manager = manager;
+	sqlx_name_dup (&mc->name, n);
+	mc->reqid = reqid;
+	mc->vremote = NULL;
+
+	gridd_client_connect_url (mc->ec.client, url);
+
+	GByteArray *req = sqlx_pack_GETVERS(n);
+	gridd_client_request (mc->ec.client, req, mc, on_reply_GETVERS);
+	g_byte_array_unref(req);
+
+	gridd_client_set_timeout(mc->ec.client, 1.0);
+	gridd_client_pool_defer(p->pool, &mc->ec);
+}
+
+#define PEER_CALL(self,F) VTABLE_CALL(self,struct sqlx_peering_abstract_s*,F)
+
+void
+sqlx_peering__destroy (struct sqlx_peering_s *self)
+{
+	PEER_CALL(self,destroy)(self);
+}
+
+void
+sqlx_peering__use (struct sqlx_peering_s *self, const char *url,
+		const struct sqlx_name_s *n)
+{
+	PEER_CALL(self,use)(self,url,n);
+}
+
+void
+sqlx_peering__getvers (struct sqlx_peering_s *self, const char *url,
+		const struct sqlx_name_s *n, struct election_manager_s *manager,
+		guint reqid, sqlx_peering_getvers_end_f result)
+{
+	PEER_CALL(self,getvers)(self,url,n, manager,reqid,result);
+}
+
+void
+sqlx_peering__pipefrom (struct sqlx_peering_s *self, const char *url,
+			const struct sqlx_name_s *n, const char *src,
+			struct election_manager_s *manager, guint reqid,
+			sqlx_peering_pipefrom_end_f result)
+{
+	PEER_CALL(self,pipefrom)(self,url,n,src, manager,reqid,result);
+}

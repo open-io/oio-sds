@@ -23,18 +23,16 @@ License along with this library.
 # include <glib.h>
 
 struct gridd_client_s;
+struct election_manager_s;
 
-/** Used to associate the information necessary to manage FD events.
- * This will be set in the epoll_event data pointer. */
+struct event_client_s;
+
+typedef void (*gridd_client_end_f) (struct event_client_s*);
+
 struct event_client_s
 {
-	/** when the connection is over, after on_end() has been called, this
-	 * field will be freed unless the on_end() callback has cleared it. */
 	struct gridd_client_s *client;
-	/** Called when the connection is closed. */
-	void (*on_end)(struct event_client_s *);
-	/** arbitrary */
-	gpointer udata;
+	gridd_client_end_f on_end;
 };
 
 struct gridd_client_pool_s;

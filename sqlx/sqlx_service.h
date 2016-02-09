@@ -22,10 +22,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 #define PSRV(P) ((struct sqlx_service_s*)(P))
 
-struct sqlx_service_config_s;
-struct sqlx_service_s;
-
 struct election_manager_s;
+struct gridd_client_factory_s;
 struct gridd_client_pool_s;
 struct gridd_request_dispatcher_s;
 struct grid_single_rrd_s;
@@ -34,10 +32,13 @@ struct hc_resolver_s;
 struct network_server_s;
 struct replication_config_s;
 struct service_info_s;
+struct sqlx_name_s;
+struct sqlx_peering_s;
 struct sqlx_repo_config_s;
 struct sqlx_repository_s;
+struct sqlx_service_config_s;
+struct sqlx_service_s;
 struct sqlx_sync_s;
-struct sqlx_name_s;
 
 struct sqlx_service_config_s
 {
@@ -54,7 +55,7 @@ struct sqlx_service_config_s
 
 	/* if <nocache> is FALSE and <result> is NULL, then only decache */
 	GError* (*get_peers) (struct sqlx_service_s *ss,
-			struct sqlx_name_s *n, gboolean nocache,
+			const struct sqlx_name_s *n, gboolean nocache,
 			gchar ***result);
 
 	// Called at the end of the configure step. Destined to initiating
@@ -80,6 +81,7 @@ struct sqlx_service_s
 
 	struct sqlx_repository_s *repository;
 	struct sqlx_sync_s *sync;
+	struct sqlx_peering_s *peering;
 	struct election_manager_s *election_manager;
 	struct network_server_s *server;
 	struct gridd_request_dispatcher_s *dispatcher;
@@ -107,6 +109,7 @@ struct sqlx_service_s
 	struct grid_task_queue_s *gtq_register;
 	GThread *thread_register;
 
+	struct gridd_client_factory_s *clients_factory;
 	struct gridd_client_pool_s *clients_pool;
 	GThread *thread_client;
 

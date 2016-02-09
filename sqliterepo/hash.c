@@ -25,7 +25,7 @@ License along with this library.
 #include "internals.h"
 
 struct hashstr_s *
-sqliterepo_hash_name(struct sqlx_name_s *n)
+sqliterepo_hash_name (const struct sqlx_name_s *n)
 {
 	GChecksum *hash = g_checksum_new(G_CHECKSUM_SHA256);
 	g_checksum_update(hash, (guint8*)n->base, strlen(n->base));

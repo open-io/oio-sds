@@ -3,7 +3,13 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror")
 
 include_directories(BEFORE . ../..
 		${CMAKE_CURRENT_BINARY_DIR}/../..
-		${CMAKE_CURRENT_BINARY_DIR}/../../metautils/lib)
+		${CMAKE_CURRENT_BINARY_DIR}/../../metautils/lib
+		${ZK_INCLUDE_DIRS}
+		${SQLITE3_INCLUDE_DIRS})
+
+link_directories(
+		${ZK_LIBRARY_DIRS}
+		${SQLITE3_LIBRARY_DIRS})
 
 set(COMMON oiocore oiosds metautils ${GLIB2_LIBRARIES})
 

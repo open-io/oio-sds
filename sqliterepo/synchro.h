@@ -112,4 +112,71 @@ void sqlx_sync_set_prefix(struct sqlx_sync_s *ss, const gchar *prefix);
 
 void sqlx_sync_set_hash(struct sqlx_sync_s *ss, guint witdth, guint depth);
 
+/* -------------------------------------------------------------------------- */
+
+struct sqlx_name_s;
+struct election_manager_s;
+struct gridd_client_factory_s;
+struct gridd_client_pool_s;
+
+struct sqlx_peering_s;
+
+typedef void (*sqlx_peering_pipefrom_end_f) (GError *e,
+		struct election_manager_s *m, const struct sqlx_name_s *n,
+		guint reqid);
+
+typedef void (*sqlx_peering_getvers_end_f) (GError *e,
+		struct election_manager_s *m, const struct sqlx_name_s *n,
+		guint reqid, GTree *vremote);
+
+/* Represents what an election needs to communicate with its peers. */
+struct sqlx_peering_vtable_s
+{
+	void (*destroy) (struct sqlx_peering_s *self);
+
+	void (*use) (struct sqlx_peering_s *self,
+			const char *url,
+			const struct sqlx_name_s *n);
+
+	void (*getvers) (struct sqlx_peering_s *self,
+			const char *url,
+			const struct sqlx_name_s *n,
+			/* for the return */
+			struct election_manager_s *manager,
+			guint reqid,
+			sqlx_peering_getvers_end_f result);
+
+	void (*pipefrom) (struct sqlx_peering_s *self,
+			const char *url,
+			const struct sqlx_name_s *n,
+			const char *src,
+			/* for the return */
+			struct election_manager_s *manager,
+			guint reqid,
+			sqlx_peering_pipefrom_end_f result);
+};
+
+struct sqlx_peering_abstract_s
+{
+	struct sqlx_peering_vtable_s *vtable;
+};
+
+void sqlx_peering__destroy (struct sqlx_peering_s *self);
+
+void sqlx_peering__use (struct sqlx_peering_s *self, const char *url,
+		const struct sqlx_name_s *n);
+
+void sqlx_peering__getvers (struct sqlx_peering_s *self, const char *url,
+		const struct sqlx_name_s *n, struct election_manager_s *manager,
+		guint reqid, sqlx_peering_getvers_end_f result);
+
+void sqlx_peering__pipefrom (struct sqlx_peering_s *self, const char *url,
+			const struct sqlx_name_s *n, const char *src,
+			struct election_manager_s *manager, guint reqid,
+			sqlx_peering_pipefrom_end_f result);
+
+struct sqlx_peering_s * sqlx_peering_factory__create_direct (
+		struct gridd_client_pool_s *clipool,
+		struct gridd_client_factory_s *clifac);
+
 #endif /*OIO_SDS__sqliterepo__synchro_h*/
