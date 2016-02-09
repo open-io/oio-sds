@@ -206,7 +206,7 @@ _read_GString (void *b, size_t s, size_t n, struct view_GString_s *in)
 	size_t available = s * n;
 	size_t len = MIN(remaining,available);
 	if (len) {
-		memcpy(b, in->data->str, len);
+		memcpy(b, in->data->str + in->done, len);
 		in->done += len;
 	}
 	return len;
@@ -293,7 +293,6 @@ _proxy_call_notime (CURL *h, const char *method, const char *url,
 	/* Populate the request headers */
 	struct oio_headers_s headers = {NULL,NULL};
 	oio_headers_common (&headers);
-	//oio_headers_add (&headers, "Connection", "keep-alive");
 	curl_easy_setopt (h, CURLOPT_HTTPHEADER, headers.headers);
 	if (in && in->headers) {
 		for (gchar **p=in->headers; *p && *(p+1) ;p+=2)
