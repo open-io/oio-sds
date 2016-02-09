@@ -106,6 +106,12 @@ hashstr_len(const hashstr_t *hs)
 	return unlikely(NULL == hs) ? 0 : hs->hl.l;
 }
 
+gsize
+hashstr_struct_len(const hashstr_t *hs)
+{
+	return sizeof(hashstr_t) + hashstr_len(hs) + 1;
+}
+
 guint
 hashstr_hash(const hashstr_t *hs)
 {

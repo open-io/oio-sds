@@ -43,7 +43,7 @@ static const gchar name[] =
 		"0123456789ABCDEF";
 
 static void
-_locator (gpointer u, struct sqlx_name_s *n, GString *file_name)
+_locator (gpointer u, const struct sqlx_name_s *n, GString *file_name)
 {
 	(void) u;
 	g_assert_nonnull (n);
