@@ -1834,6 +1834,52 @@ oio_sds_list (struct oio_sds_s *sds, struct oio_sds_list_param_s *param,
 	return (struct oio_error_s*) err;
 }
 
+/* Quota -------------------------------------------------------------------- */
+
+struct oio_error_s*
+oio_sds_get_usage (struct oio_sds_s *sds, struct oio_url_s *url,
+		struct oio_sds_usage_s *out)
+{
+	GString *props_str = NULL;
+	GError *err = NULL;
+	json_object *root = NULL, *usage = NULL, *quota = NULL;
+
+	err = oio_proxy_call_container_get_properties(sds->h, url, &props_str);
+	if (err)
+		goto end;
+	root = json_tokener_parse(props_str->str);
+
+	struct oio_ext_json_mapping_s map[] = {
+		{OIO_SDS_CONTAINER_USAGE, &usage,  json_type_string, 1},
+		{OIO_SDS_CONTAINER_QUOTA, &quota,  json_type_string, 0},
+		{NULL,NULL,0,0}
+	};
+	err = oio_ext_extract_json (root, map);
+	if (err)
+		goto end;
+
+	if (usage)
+		out->used_bytes = (size_t) json_object_get_int64(usage);
+
+	if (quota)
+		out->quota_bytes = (size_t) json_object_get_int64(quota);
+	else
+		out->quota_bytes = SIZE_MAX;
+
+end:
+	if (quota)
+		json_object_put(quota);
+	if (usage)
+		json_object_put(usage);
+	if (root)
+		json_object_put(root);
+	if (props_str)
+		g_string_free(props_str, TRUE);
+
+	return (struct oio_error_s*) err;
+}
+
+
 /* Misc. -------------------------------------------------------------------- */
 
 struct oio_error_s*

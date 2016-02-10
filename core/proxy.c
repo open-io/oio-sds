@@ -376,6 +376,27 @@ oio_proxy_call_container_create (CURL *h, struct oio_url_s *u)
 }
 
 GError *
+oio_proxy_call_container_get_properties (CURL *h, struct oio_url_s *u,
+		GString **props_str)
+{
+	GString *http_url = _curl_container_url (u, "get_properties");
+	struct http_ctx_s out_ctx = {0};
+	if (props_str && *props_str)
+		out_ctx.body = *props_str;
+	else
+		out_ctx.body = g_string_sized_new(512);
+
+	GError *err = _proxy_call (h, "POST", http_url->str, NULL, &out_ctx);
+
+	g_string_free(http_url, TRUE);
+	if (props_str && !*props_str && !err)
+		*props_str = out_ctx.body;
+	else
+		g_string_free(out_ctx.body, TRUE);
+	return err;
+}
+
+GError *
 oio_proxy_call_content_show (CURL *h, struct oio_url_s *u, GString *out)
 {
 	GString *http_url = _curl_content_url (u, "show");

@@ -26,6 +26,19 @@ extern "C" {
 #  define OIOSDS_http_agent "OpenIO-SDS/SDK-2.0"
 # endif
 
+# ifdef M2V2_ADMIN_SIZE
+#  define OIO_SDS_CONTAINER_USAGE M2V2_ADMIN_SIZE
+# else
+#  define OIO_SDS_CONTAINER_USAGE "sys.m2.usage"
+# endif
+
+# ifdef M2V2_ADMIN_QUOTA
+#  define OIO_SDS_CONTAINER_QUOTA M2V2_ADMIN_QUOTA
+# else
+#  define OIO_SDS_CONTAINER_QUOTA "sys.m2.quota"
+# endif
+
+
 CURL * _curl_get_handle (void);
 
 /* --------------------------------------------------------------------------
@@ -89,6 +102,10 @@ GError * oio_proxy_call_reference_link (CURL *h, struct oio_url_s *u,
 
 /* Links the meta2 then triggers container creation */
 GError * oio_proxy_call_container_create (CURL *h, struct oio_url_s *u);
+
+/* Get all meta2 properties as a JSON string */
+GError * oio_proxy_call_container_get_properties (CURL *h,
+    struct oio_url_s *u, GString **props_str);
 
 GError * oio_proxy_call_content_show (CURL *h, struct oio_url_s *u,
 		GString *out);
