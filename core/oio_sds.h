@@ -67,7 +67,7 @@ void oio_log_nothing (void);
 void oio_log_more (void);
 
 /** @return a NULL-terminated array of strings where
- * result[(2*i)]   is the name of the i-th configuration directive 
+ * result[(2*i)]   is the name of the i-th configuration directive
  * result[(2*i)+1] is the value of the i-th configuration directive.
  * The output has to be freed with free().
  */
@@ -310,7 +310,18 @@ struct oio_error_s* oio_sds_list (struct oio_sds_s *sds,
 		struct oio_sds_list_param_s *param,
 		struct oio_sds_list_listener_s *listener);
 
-/* --------------------------------------------------------------------------- */
+/* Quota -------------------------------------------------------------------- */
+
+struct oio_sds_usage_s
+{
+  size_t used_bytes;
+  size_t quota_bytes;
+};
+
+struct oio_error_s* oio_sds_get_usage (struct oio_sds_s *sds,
+    struct oio_url_s *u, struct oio_sds_usage_s *out);
+
+/* Misc. -------------------------------------------------------------------- */
 
 /* works with fully qualified urls (content) */
 struct oio_error_s* oio_sds_delete (struct oio_sds_s *sds, struct oio_url_s *u);
