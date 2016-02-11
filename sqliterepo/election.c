@@ -444,6 +444,13 @@ member_get_peers(struct election_member_s *m, gboolean nocache, gchar ***peers)
 }
 
 static void
+member_decache_peers(struct election_member_s *m)
+{
+	GError *err = member_get_peers(m, TRUE, NULL);
+	g_clear_error(&err);
+}
+
+static void
 member_kickoff(struct election_member_s *m)
 {
 	transition(m, EVT_NONE, NULL);
@@ -1689,6 +1696,10 @@ on_end_GETVERS(struct event_client_s *mc)
 		transition(member, EVT_GETVERS_CONCURRENT, &(udata->reqid));
 	else {
 		GRID_DEBUG("GETVERS error : (%d) %s", err->code, err->message);
+		if (err->code == CODE_CONTAINER_NOTFOUND) {
+			/* We may have asked the wrong peer */
+			member_decache_peers(member);
+		}
 		transition(member, EVT_GETVERS_ERROR, &(udata->reqid));
 	}
 	member_unlock(member);

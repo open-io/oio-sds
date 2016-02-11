@@ -185,8 +185,11 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 	s[1] = n->base[3];
 	((guint8*)cid)[1] = g_ascii_strtoull((gchar*)s, NULL, 16);
 
-	if (nocache)
+	if (nocache) {
 		_reload_prefixes(ss, FALSE);
+		if (!result)
+			return NULL;
+	}
 
 	gchar **peers = meta1_prefixes_get_peers(
 			meta1_backend_get_prefixes(m1), cid);
