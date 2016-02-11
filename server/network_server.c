@@ -261,6 +261,7 @@ static void
 _stop_pools (struct network_server_s *srv)
 {
 	g_thread_pool_stop_unused_threads ();
+
 	if (srv->pool_stats) {
 		g_thread_pool_free (srv->pool_stats, FALSE, TRUE);
 		srv->pool_stats = NULL;
@@ -580,9 +581,18 @@ _thread_cb_events(gpointer d)
 	 * received the exit signal. They will be removed automatically from
 	 * the epoll pool.*/
 
-	while (0 < srv->cnx_clients) {
+	GRID_DEBUG("Server %p waiting for its connections", srv);
+	srv->atexit_max_open_never_input = 5 * G_TIME_SPAN_SECOND;
+	srv->atexit_max_open_persist = 5 * G_TIME_SPAN_SECOND;
+	srv->atexit_max_idle = 1 * G_TIME_SPAN_SECOND;
+
+	for (gint64 next = 0; 0 < srv->cnx_clients ;) {
 		_manage_events(srv);
-		_server_shutdown_inactive_connections(srv);
+		gint64 now = oio_ext_monotonic_time ();
+		if (now > next) {
+			_server_shutdown_inactive_connections(srv);
+			next = now + 1 * G_TIME_SPAN_SECOND;
+		}
 	}
 
 	return d;
@@ -627,8 +637,8 @@ network_server_run(struct network_server_s *srv)
 				srv->gq_counter_cnx_close, srv->cnx_close);
 	}
 
-	GRID_DEBUG("Server %p starting to exit", srv);
 	network_server_close_servers(srv);
+	GRID_DEBUG("Server %p waiting for its threads", srv);
 
 	/* wait for the first event thread */
 	if (srv->thread_events) {
@@ -637,7 +647,6 @@ network_server_run(struct network_server_s *srv)
 	}
 
 	_stop_pools (srv);
-
 	ARM_WAKER(srv, EPOLL_CTL_DEL);
 
 	GRID_DEBUG("Server %p exiting its main loop", srv);
