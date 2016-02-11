@@ -97,7 +97,7 @@ struct network_server_s
 	guint64 cnx_close;
 	guint cnx_max_sys;
 	guint cnx_max;
-	guint cnx_clients;
+	volatile guint cnx_clients;
 	guint cnx_backlog;
 
 	gint64 atexit_max_open_never_input; /*< max delay for cnx without any input.*/
@@ -113,8 +113,8 @@ struct network_server_s
 
 	int wakeup[2];
 	int epollfd;
-	gboolean flag_continue : 1;
-	gboolean abort_allowed : 1;
+	volatile gboolean flag_continue;
+	gboolean abort_allowed;
 };
 
 enum
