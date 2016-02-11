@@ -8,6 +8,8 @@ type: rawx
 rise: 1
 # Fall (number of consecutive unsuccessful checks to switch status to down)
 fall: 1
+# Location of the service (used to check distance between services)
+location: hem.oio.srv1.vol1
 # Checks configuration
 checks:
 # General check configuration
