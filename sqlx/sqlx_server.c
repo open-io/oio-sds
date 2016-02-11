@@ -98,8 +98,13 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 		return NEWERROR(CODE_BAD_REQUEST, "Invalid base name");
 	}
 
-	if (nocache)
+	if (nocache) {
 		hc_decache_reference_service(ss->resolver, u, n->type);
+		if (!result) {
+			oio_url_pclean (&u);
+			return NULL;
+		}
+	}
 
 	gchar **peers = NULL;
 	GError *err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);

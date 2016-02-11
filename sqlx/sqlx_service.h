@@ -52,6 +52,7 @@ struct sqlx_service_config_s
 	const guint repo_hash_depth;
 	const guint repo_hash_width;
 
+	/* if <nocache> is FALSE and <result> is NULL, then only decache */
 	GError* (*get_peers) (struct sqlx_service_s *ss,
 			struct sqlx_name_s *n, gboolean nocache,
 			gchar ***result);

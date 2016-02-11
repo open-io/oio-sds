@@ -102,8 +102,14 @@ _get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
 	}
 
 retry:
-	if (nocache)
+	if (nocache) {
 		hc_decache_reference_service(ss->resolver, u, n->type);
+		if (!result) {
+			oio_url_pclean (&u);
+			return NULL;
+		}
+	}
+
 	peers = NULL;
 	err = hc_resolve_reference_service(ss->resolver, u, n->type, &peers);
 
