@@ -630,13 +630,13 @@ network_server_run(struct network_server_s *srv)
 	GRID_DEBUG("Server %p starting to exit", srv);
 	network_server_close_servers(srv);
 
-	_stop_pools (srv);
-
 	/* wait for the first event thread */
 	if (srv->thread_events) {
 		g_thread_join(srv->thread_events);
 		srv->thread_events = NULL;
 	}
+
+	_stop_pools (srv);
 
 	ARM_WAKER(srv, EPOLL_CTL_DEL);
 
