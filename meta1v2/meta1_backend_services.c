@@ -550,8 +550,21 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 		opt.req.strict_stgclass = TRUE;
 		opt.srv_forbidden = __srvinfo_from_m1srvurl(m1->backend.lb,
 				ct->baretype, used);
-		opt.filter.hook = _filter_tag;
-		opt.filter.data = ct;
+
+		if (ct->req.k && !strcmp(ct->req.k, NAME_TAGNAME_USER_IS_SERVICE)) {
+			gchar *srvurl = g_strdup_printf("1||%s|", ct->req.v);
+			struct meta1_service_url_s *inplace[2] = {
+					meta1_unpack_url(srvurl), NULL};
+			/* If ct->req.v is not an addr, srv_inplace will contain NULL */
+			opt.srv_inplace = __srvinfo_from_m1srvurl(
+					m1->backend.lb, NULL, inplace);
+			opt.req.distance = 1;
+			meta1_service_url_clean(inplace[0]);
+			g_free(srvurl);
+		} else {
+			opt.filter.hook = _filter_tag;
+			opt.filter.data = ct;
+		}
 
 		if (!grid_lb_iterator_next_set2(iter, &siv, &opt)) {
 			EXTRA_ASSERT(siv == NULL);
@@ -561,6 +574,7 @@ __poll_services(struct meta1_backend_s *m1, guint replicas,
 		grid_lb_iterator_clean(iter);
 		iter = NULL;
 		g_slist_free_full(opt.srv_forbidden, (GDestroyNotify)service_info_clean);
+		g_slist_free_full(opt.srv_inplace, (GDestroyNotify)service_info_clean);
 	}
 
 	if(NULL != *err)
@@ -641,6 +655,16 @@ __get_container_service2(struct sqlx_sqlite3_s *sq3,
 	// Patches the constraint on the service type (if not set in the request)
 	// by the constraint set in the NS-wide storage policy.
 	compound_type_update_arg(ct, pol, FALSE);
+
+	/* This special "tag" is used for services types that are to be linked
+	 * to containers belonging to other services (e.g. there is a container
+	 * for each rawx in the special "_RDIR" account). It tells the load
+	 * balancer to compare the location of linked service against the
+	 * location of the container owner. */
+	if (ct->req.k && !strcmp(ct->req.k, NAME_TAGNAME_USER_IS_SERVICE)
+			&& (!ct->req.v || !ct->req.v[0])) {
+		oio_str_replace(&(ct->req.v), oio_url_get(url, OIOURL_USER));
+	}
 
 	err = __get_container_all_services(sq3, url, ct->type, &used);
 	if (NULL != err) {
