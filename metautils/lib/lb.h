@@ -280,7 +280,8 @@ GError* grid_lbpool_reload_json_object(struct grid_lbpool_s *glp, const gchar *s
 GError* grid_lbpool_reload_json(struct grid_lbpool_s *glp, const gchar *srvtype,
 		const gchar *encoded);
 
-/*!  */
+/*! Find a service inside service pools. If `srvtype` is NULL,
+ * search in all the pools (slow, use with parsimony). */
 struct service_info_s* grid_lbpool_get_service_from_url(
 		struct grid_lbpool_s *glp, const gchar *srvtype,
 		const gchar *url);

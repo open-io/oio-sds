@@ -1142,7 +1142,7 @@ _ext_opt_filter(struct service_info_s *si, struct lb_next_opt_ext_s *opt_ext)
 	EXTRA_ASSERT(opt_ext != NULL);
 
 	// Check if the service is not forbidden
-	for (l = opt_ext->srv_forbidden; l ;l=l->next) {
+	for (l = opt_ext->srv_forbidden; l; l=l->next) {
 		if (!(si0 = l->data))
 			continue;
 		if (addr_info_equal(&si->addr, &si0->addr))
@@ -1151,7 +1151,7 @@ _ext_opt_filter(struct service_info_s *si, struct lb_next_opt_ext_s *opt_ext)
 
 	// Check if the service has already be choosen
 	if (!opt_ext->req.duplicates) {
-		for (l = opt_ext->srv_inplace; l ;l=l->next) {
+		for (l = opt_ext->srv_inplace; l; l=l->next) {
 			if (!(si0 = l->data))
 				continue;
 			if (addr_info_equal(&si->addr, &si0->addr))
@@ -1160,7 +1160,7 @@ _ext_opt_filter(struct service_info_s *si, struct lb_next_opt_ext_s *opt_ext)
 	}
 
 	// Check if the distance fits fits already choose services
-	for (l = opt_ext->srv_inplace; l ;l=l->next) {
+	for (l = opt_ext->srv_inplace; l; l=l->next) {
 		if (!(si0 = l->data))
 			continue;
 		guint d = distance_between_services(si, si0);
@@ -1420,13 +1420,37 @@ grid_lbpool_namespace(struct grid_lbpool_s *glp)
 	return glp->ns;
 }
 
+static struct service_info_s*
+_grid_lbpool_get_service_untyped(struct grid_lbpool_s *glp,
+		const gchar *url)
+{
+	struct service_info_s *srv = NULL;
+
+	gboolean _find_service(gpointer key, gpointer value, gpointer data) {
+		(void) key;
+		(void) data;
+		struct grid_lb_s *lb = value;
+		srv = grid_lb_get_service_from_url(lb, url);
+		return srv != NULL;
+	}
+
+	g_rw_lock_reader_lock(&(glp->rwlock));
+	if (glp->pools)
+		g_tree_foreach(glp->pools, (GTraverseFunc)_find_service, NULL);
+	g_rw_lock_reader_unlock(&(glp->rwlock));
+
+	return srv;
+}
+
 struct service_info_s*
 grid_lbpool_get_service_from_url(struct grid_lbpool_s *glp,
 		const gchar *srvtype, const gchar *url)
 {
 	EXTRA_ASSERT(glp != NULL);
-	EXTRA_ASSERT(srvtype != NULL);
 	EXTRA_ASSERT(url != NULL);
+
+	if (!srvtype || !*srvtype)
+		return _grid_lbpool_get_service_untyped(glp, url);
 
 	return grid_lb_get_service_from_url(grid_lbpool_get_lb(glp, srvtype), url);
 }
