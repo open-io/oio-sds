@@ -46,6 +46,9 @@ class ServiceWatcher(object):
             'addr': '%s:%s' % (self.service['host'], self.service['port']),
             'score': 0,
             'tags': {}}
+        if self.service.get('location', None):
+            self.service_definition['tags']['tag.loc'] = \
+                    self.service['location']
         self.service_checks = list()
         self.service_stats = list()
         self.init_checkers(service)

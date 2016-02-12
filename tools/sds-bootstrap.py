@@ -298,6 +298,7 @@ template_rawx_watch = """
 host: ${IP}
 port: ${PORT}
 type: rawx
+location: hem.oio.vol${SRVNUM}
 checks:
     - {type: http, uri: /info}
     - {type: tcp}
@@ -312,6 +313,7 @@ template_rdir_watch = """
 host: ${IP}
 port: ${PORT}
 type: rdir
+location: hem.oio.vol${SRVNUM}
 checks:
     - {type: tcp}
 
