@@ -4,8 +4,7 @@ from optparse import OptionParser
 
 from oio.common.utils import parse_options, read_conf
 from oio.account.server import create_app
-from oio.account.server import AccountServiceLogger
-from oio.common.wsgi import Application
+from oio.common.wsgi import Application, ServiceLogger
 
 
 if __name__ == '__main__':
@@ -13,4 +12,4 @@ if __name__ == '__main__':
     conf_file, options = parse_options(parser)
     conf = read_conf(conf_file, 'account-server')
     app = create_app(conf)
-    Application(app, conf, logger_class=AccountServiceLogger).run()
+    Application(app, conf, logger_class=ServiceLogger).run()

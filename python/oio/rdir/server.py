@@ -18,10 +18,9 @@ import flask
 from flask import request
 from flask import current_app
 from werkzeug.exceptions import BadRequest
-from gunicorn.glogging import Logger
 
 from oio.rdir.server_db import RdirBackend
-from oio.common.utils import get_logger, json
+from oio.common.utils import json
 
 rdir_api = flask.Blueprint('rdir_api', __name__)
 
@@ -253,25 +252,3 @@ def create_app(conf, **kwargs):
     if conf.get('log_level') == 'DEBUG':
         app.config['PROPAGATE_EXCEPTIONS'] = True
     return app
-
-
-class RdirServiceLogger(Logger):
-    def __init__(self, cfg):
-        self.cfg = cfg
-        prefix = cfg.syslog_prefix if cfg.syslog_prefix else ''
-        address = cfg.syslog_addr if cfg.syslog_addr else '/dev/log'
-
-        error_conf = {
-            'syslog_prefix': prefix,
-            'log_facility': 'LOG_LOCAL0',
-            'log_address': address
-        }
-
-        access_conf = {
-            'syslog_prefix': prefix,
-            'log_facility': 'LOG_LOCAL1',
-            'log_address': address
-        }
-
-        self.error_log = get_logger(error_conf, 'rdir.error')
-        self.access_log = get_logger(access_conf, 'rdir.access')
