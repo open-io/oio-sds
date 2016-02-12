@@ -1,4 +1,7 @@
 from gunicorn.app.base import BaseApplication
+from gunicorn.glogging import Logger
+
+from oio.common.utils import get_logger
 
 
 class Application(BaseApplication):
@@ -30,3 +33,29 @@ class Application(BaseApplication):
 
     def load(self):
         return self.application
+
+
+class ServiceLogger(Logger):
+    def __init__(self, cfg):
+        self.cfg = cfg
+        prefix = cfg.syslog_prefix if cfg.syslog_prefix else ''
+        address = cfg.syslog_addr if cfg.syslog_addr else '/dev/log'
+
+        error_conf = {
+            'syslog_prefix': prefix,
+            'log_facility': 'LOG_LOCAL0',
+            'log_address': address
+        }
+
+        access_conf = {
+            'syslog_prefix': prefix,
+            'log_facility': 'LOG_LOCAL1',
+            'log_address': address
+        }
+
+        self.error_log = get_logger(error_conf, 'account.error')
+        self.access_log = get_logger(access_conf, 'account.access')
+
+    def access(self, resp, req, environ, request_time):
+        if environ['PATH_INFO'] != '/status':
+            super(ServiceLogger, self).access(resp, req, environ, request_time)
