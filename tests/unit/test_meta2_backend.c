@@ -917,7 +917,7 @@ test_content_dedup (void)
 			oio_url_pclean (&url2);
 		}
 
-		err = meta2_backend_deduplicate_contents (m2, url, 0, NULL);
+		err = meta2_backend_dedup_contents (m2, url);
 		g_assert_no_error(err);
 
 		/* TODO check the result of the dedup ;) */

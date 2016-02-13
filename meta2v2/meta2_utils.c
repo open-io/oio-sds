@@ -1998,66 +1998,60 @@ _purge_deleted_aliases(struct sqlx_sqlite3_s *sq3, gint64 delay,
 }
 
 GError*
-m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions, gint64 retention_delay,
-	guint32 flags, m2_onbean_cb cb, gpointer u0)
+m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
+		gint64 retention_delay)
 {
-	GError *err;
-	gboolean dry_run = flags & M2V2_MODE_DRYRUN;
+	GPtrArray *tmp = g_ptr_array_new ();
 
-	if (!dry_run) {
-		if ((err = _purge_exceeding_aliases(sq3, max_versions, cb, u0))) {
-			GRID_WARN("Failed to purge ALIASES: (code=%d) %s",
+	GError *err;
+	if ((err = _purge_exceeding_aliases(sq3, max_versions, _bean_buffer_cb, tmp))) {
+		GRID_WARN("Failed to purge ALIASES: (code=%d) %s",
+				err->code, err->message);
+		g_clear_error(&err);
+	}
+
+	if (retention_delay >= 0) {
+		if ((err = _purge_deleted_aliases(sq3, retention_delay, _bean_buffer_cb, tmp))) {
+			GRID_WARN("Failed to purge deleted ALIASES: (code=%d) %s",
 					err->code, err->message);
 			g_clear_error(&err);
 		}
-
-		if (retention_delay >= 0) {
-			if ((err = _purge_deleted_aliases(sq3, retention_delay, cb, u0))) {
-				GRID_WARN("Failed to purge deleted ALIASES: (code=%d) %s",
-						err->code, err->message);
-				g_clear_error(&err);
-			}
-		}
-
-		/* purge unreferenced properties */
-		sqlx_exec(sq3->db, "DELETE FROM properties WHERE NOT EXISTS "
-				"(SELECT alias FROM aliases "
-				" WHERE aliases.alias = properties.alias)");
-
-		/* purge unreferenced content_headers, cascading to contents */
-		sqlx_exec(sq3->db, "DELETE FROM chunks AS c WHERE NOT EXISTS "
-				"(SELECT content FROM aliases AS a WHERE a.content = c.content)");
 	}
 
-	if (!dry_run) {
-		guint64 size = m2db_get_container_size(sq3->db, FALSE);
-		m2db_set_size(sq3, (gint64)size);
-	}
+	/* purge unreferenced properties */
+	sqlx_exec(sq3->db, "DELETE FROM properties WHERE NOT EXISTS "
+			"(SELECT alias FROM aliases "
+			" WHERE aliases.alias = properties.alias)");
 
+	/* purge unreferenced content_headers, cascading to contents */
+	sqlx_exec(sq3->db, "DELETE FROM chunks AS c WHERE NOT EXISTS "
+			"(SELECT content FROM aliases AS a WHERE a.content = c.content)");
+
+	guint64 size = m2db_get_container_size(sq3->db, FALSE);
+	m2db_set_size(sq3, (gint64)size);
+
+	/* TODO(jfs): send the beans to the event-agent */
+	_bean_cleanv2 (tmp);
 	return NULL;
 }
 
 GError*
-m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
-		guint32 flags, GString **status_message)
+m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url)
 {
 	GError *err = NULL;
 	GSList *impacted_aliases = NULL;
-	gboolean dry_run = flags & M2V2_MODE_DRYRUN;
 	guint64 size_before = m2db_get_container_size(sq3->db, TRUE);
-	guint64 saved_space = dedup_aliases(sq3->db, url, dry_run, &impacted_aliases, &err);
+	guint64 saved_space = dedup_aliases(sq3->db, url, &impacted_aliases, &err);
 	guint64 size_after = m2db_get_container_size(sq3->db, TRUE);
-	if (status_message != NULL) {
-		if (*status_message == NULL) {
-			*status_message = g_string_new(NULL);
-		}
-		g_string_printf(*status_message,
-				"%"G_GUINT64_FORMAT" bytes saved "
-				"by deduplication of %u contents "
-				"(%"G_GUINT64_FORMAT" -> %"G_GUINT64_FORMAT" bytes)",
-				saved_space, g_slist_length(impacted_aliases),
-				size_before, size_after);
-	}
+
+	GRID_INFO("DEDUP [%s]"
+			"%"G_GUINT64_FORMAT" bytes saved "
+			"by deduplication of %u contents "
+			"(%"G_GUINT64_FORMAT" -> %"G_GUINT64_FORMAT" bytes)",
+			oio_url_get (url, OIOURL_WHOLE),
+			saved_space, g_slist_length(impacted_aliases),
+			size_before, size_after);
+
 	g_slist_free_full(impacted_aliases, g_free);
 	return err;
 }

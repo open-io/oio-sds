@@ -113,21 +113,21 @@ m2v2_remote_pack_HAS(struct oio_url_s *url)
 }
 
 static GByteArray*
-m2v2_remote_pack_PURGE(struct oio_url_s *url, gboolean dry_run)
+m2v2_remote_pack_FLUSH(struct oio_url_s *url)
 {
-	guint32 flags = 0;
-	if (dry_run)
-		flags |= M2V2_MODE_DRYRUN;
-	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_PURGE, url, NULL, flags);
+	return _m2v2_pack_request(NAME_MSGNAME_M2V2_FLUSH, url, NULL);
 }
 
 static GByteArray*
-m2v2_remote_pack_DEDUP(struct oio_url_s *url, gboolean dry_run)
+m2v2_remote_pack_PURGE(struct oio_url_s *url)
 {
-	guint32 flags = 0;
-	if (dry_run)
-		flags |= M2V2_MODE_DRYRUN;
-	return _m2v2_pack_request_with_flags(NAME_MSGNAME_M2V2_DEDUP, url, NULL, flags);
+	return _m2v2_pack_request(NAME_MSGNAME_M2V2_PURGE, url, NULL);
+}
+
+static GByteArray*
+m2v2_remote_pack_DEDUP(struct oio_url_s *url)
+{
+	return _m2v2_pack_request (NAME_MSGNAME_M2V2_DEDUP, url, NULL);
 }
 
 static GByteArray*
@@ -467,24 +467,27 @@ m2v2_remote_execute_COPY(const char *target, struct oio_url_s *url, const char *
 }
 
 GError*
-m2v2_remote_execute_PURGE(const char *target, struct oio_url_s *url, gboolean dry_run,
-		gdouble timeout, GSList **out)
+m2v2_remote_execute_PURGE(const char *target, struct oio_url_s *url, gdouble to)
 {
-	return _m2v2_request_ex(target, m2v2_remote_pack_PURGE(url, dry_run), timeout, out);
+	return _m2v2_request_ex(target, m2v2_remote_pack_PURGE(url), to, NULL);
+}
+
+GError*
+m2v2_remote_execute_DEDUP(const char *target, struct oio_url_s *url, gdouble to)
+{
+	return _m2v2_request_ex (target, m2v2_remote_pack_DEDUP(url), to, NULL);
+}
+
+GError*
+m2v2_remote_execute_FLUSH(const char *target, struct oio_url_s *url, gdouble to)
+{
+	return _m2v2_request_ex (target, m2v2_remote_pack_FLUSH(url), to, NULL);
 }
 
 GError*
 m2v2_remote_execute_EXITELECTION(const char *target, struct oio_url_s *url)
 {
 	return _m2v2_request(target, m2v2_remote_pack_EXITELECTION(url), NULL);
-}
-
-GError*
-m2v2_remote_execute_DEDUP(const char *target, struct oio_url_s *url,
-		gboolean dry_run, gchar **out)
-{
-	return gridd_client_exec_and_concat_string (target, M2V2_CLIENT_TIMEOUT,
-			m2v2_remote_pack_DEDUP(url, dry_run), out);
 }
 
 GError*

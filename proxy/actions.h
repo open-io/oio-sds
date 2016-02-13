@@ -65,6 +65,7 @@ enum http_rc_e action_container_prop_del (struct req_args_s *args);
 enum http_rc_e action_container_touch (struct req_args_s *args);
 enum http_rc_e action_container_dedup (struct req_args_s *args);
 enum http_rc_e action_container_purge (struct req_args_s *args);
+enum http_rc_e action_container_flush (struct req_args_s *args);
 enum http_rc_e action_container_raw_insert (struct req_args_s *args);
 enum http_rc_e action_container_raw_update (struct req_args_s *args);
 enum http_rc_e action_container_raw_delete (struct req_args_s *args);

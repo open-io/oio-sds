@@ -116,6 +116,7 @@ int
 meta2_filter_action_delete_container(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
+	(void) reply;
 	guint32 flags = 0;
 
 	flags |= meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FORCE) ? M2V2_DESTROY_FORCE : 0;
@@ -127,9 +128,6 @@ meta2_filter_action_delete_container(struct gridd_filter_ctx_s *ctx,
 			meta2_filter_ctx_get_backend(ctx),
 			meta2_filter_ctx_get_url(ctx),
 			flags);
-
-	(void) reply;
-
 	if (!err)
 		return FILTER_OK;
 	meta2_filter_ctx_set_error(ctx, err);
@@ -141,56 +139,44 @@ meta2_filter_action_purge_container(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
 	(void) reply;
-
-	// M2V2_MODE_DRYRUN, ...
-    guint32 flags = 0;
-	struct on_bean_ctx_s *obc = _on_bean_ctx_init(ctx, reply);
-    const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
-    if (NULL != fstr)
-        flags = (guint32) g_ascii_strtoull(fstr, NULL, 10);
-
 	GError *err = meta2_backend_purge_container(
 			meta2_filter_ctx_get_backend(ctx),
-			meta2_filter_ctx_get_url(ctx), flags, _bean_list_cb, &obc->l);
-
-	if (NULL != err) {
-		GRID_DEBUG("Container purge failed (%d): %s", err->code, err->message);
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
-
-	_on_bean_ctx_send_list(obc);
-	_on_bean_ctx_clean(obc);
-	return FILTER_OK;
+			meta2_filter_ctx_get_url(ctx));
+	if (!err)
+		return FILTER_OK;
+	GRID_DEBUG("Container purge failed (%d): %s", err->code, err->message);
+	meta2_filter_ctx_set_error(ctx, err);
+	return FILTER_KO;
 }
 
 int
-meta2_filter_action_deduplicate_container(struct gridd_filter_ctx_s *ctx,
+meta2_filter_action_flush_container(struct gridd_filter_ctx_s *ctx,
 		struct gridd_reply_ctx_s *reply)
 {
-	GString *status_message = NULL;
-
-	// M2V2_MODE_DRYRUN, ...
-	guint32 flags = 0;
-	const char *fstr = meta2_filter_ctx_get_param(ctx, NAME_MSGKEY_FLAGS);
-	if (NULL != fstr)
-		flags = (guint32) g_ascii_strtoull(fstr, NULL, 10);
-
-	GError *err = meta2_backend_deduplicate_contents(
-			meta2_filter_ctx_get_backend(ctx),
-			meta2_filter_ctx_get_url(ctx),
-			flags,
-			&status_message);
 	(void) reply;
-
-	if (!err) {
-		if (status_message != NULL)
-			reply->add_body(metautils_gba_from_string(status_message->str));
+	GError *err = meta2_backend_flush_container(
+			meta2_filter_ctx_get_backend(ctx),
+			meta2_filter_ctx_get_url(ctx));
+	if (!err)
 		return FILTER_OK;
-	} else {
-		meta2_filter_ctx_set_error(ctx, err);
-		return FILTER_KO;
-	}
+	GRID_DEBUG("Container flush failed (%d): %s", err->code, err->message);
+	meta2_filter_ctx_set_error(ctx, err);
+	return FILTER_KO;
+}
+
+int
+meta2_filter_action_dedup_contents(struct gridd_filter_ctx_s *ctx,
+		struct gridd_reply_ctx_s *reply)
+{
+	(void) reply;
+	GError *err = meta2_backend_dedup_contents(
+			meta2_filter_ctx_get_backend(ctx),
+			meta2_filter_ctx_get_url(ctx));
+	if (!err)
+		return FILTER_OK;
+	GRID_DEBUG("Container purge failed (%d): %s", err->code, err->message);
+	meta2_filter_ctx_set_error(ctx, err);
+	return FILTER_KO;
 }
 
 #define S3_RESPONSE_HEADER(FieldName, Var) do { \
