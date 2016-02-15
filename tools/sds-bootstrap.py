@@ -323,6 +323,19 @@ stats:
     - {type: system}
 """
 
+template_redis_watch = """
+host: ${IP}
+port: ${PORT}
+type: redis
+location: hem.oio.db${SRVNUM}
+checks:
+    - {type: tcp}
+
+stats:
+    - {type: volume, path: ${REDIS_DB_PATH}}
+    - {type: system}
+"""
+
 template_agent = """
 [General]
 user=${UID}
@@ -423,7 +436,11 @@ param_service.sqlx.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * root(
 
 param_service.rdir.score_timeout=120
 param_service.rdir.score_variation_bound=5
-param_service.rdir.score_expr=(num tag.up) * (num stat.cpu)
+param_service.rdir.score_expr=(num tag.up) * (num stat.cpu) * ((num stat.space)>=2)
+
+param_service.redis.score_timeout=120
+param_service.redis.score_variation_bound=5
+param_service.redis.score_expr=(num tag.up) * (num stat.cpu)
 
 param_service.oiofs.score_timeout=120
 param_service.oiofs.score_variation_bound=5
@@ -903,14 +920,19 @@ def generate(ns, ip, options={}):
     # redis
     if options.ALLOW_REDIS is not None:
         env['SRVNUM'] = 1
-        mkdir_noerror(DATADIR + '/' + str(env['NS']) + '-' + 'redis'
-                      + '-' + str(env['SRVNUM']))
+        env['PORT'] = env['PORT_REDIS']
+        env['REDIS_DB_PATH'] = (DATADIR + '/' + str(env['NS']) + '-' +
+                                'redis' + '-' + str(env['SRVNUM']))
+        mkdir_noerror(env['REDIS_DB_PATH'])
         path = CFGDIR + '/' + ns + '-redis-' + str(env['SRVNUM']) + '.conf'
         with open(path, 'w+') as f:
             tpl = Template(template_redis)
             f.write(tpl.safe_substitute(env))
         with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
             tpl = Template(template_redis_gridinit)
+            f.write(tpl.safe_substitute(env))
+        with open(WATCHDIR + '/' + ns + '-redis-1.yml', 'w+') as f:
+            tpl = Template(template_redis_watch)
             f.write(tpl.safe_substitute(env))
 
     # proxy
