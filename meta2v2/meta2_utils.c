@@ -2024,8 +2024,8 @@ m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
 			" WHERE aliases.alias = properties.alias)");
 
 	/* purge unreferenced content_headers, cascading to contents */
-	sqlx_exec(sq3->db, "DELETE FROM chunks AS c WHERE NOT EXISTS "
-			"(SELECT content FROM aliases AS a WHERE a.content = c.content)");
+	sqlx_exec(sq3->db, "DELETE FROM chunks WHERE NOT EXISTS "
+			"(SELECT content FROM aliases WHERE aliases.content = chunks.content)");
 
 	guint64 size = m2db_get_container_size(sq3->db, FALSE);
 	m2db_set_size(sq3, (gint64)size);
