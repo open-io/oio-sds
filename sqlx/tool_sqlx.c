@@ -87,30 +87,17 @@ static void
 cli_specific_fini(void)
 {
 	GRID_DEBUG("Exiting");
-	if (query) {
-		g_strfreev(query);
-		query = NULL;
-	}
-	if (sqlx_client) {
+	g_free0 (query);
+	if (sqlx_client)
 		oio_sqlx_client__destroy (sqlx_client);
-		sqlx_client = NULL;
-	}
-	if (sqlx_factory) {
+	if (sqlx_factory)
 		oio_sqlx_client_factory__destroy (sqlx_factory);
-		sqlx_factory = NULL;
-	}
-	if (dir) {
+	if (dir)
 		oio_directory__destroy (dir);
-		dir = NULL;
-	}
 	oio_url_pclean(&url);
 }
 
-static void
-cli_specific_stop(void)
-{
-	/* no op */
-}
+static void cli_specific_stop(void) { /* no op */ }
 
 static const gchar *
 cli_usage(void)
@@ -135,7 +122,7 @@ cli_configure(int argc, char **argv)
 		return FALSE;
 	}
 
-	query = g_strdupv(argv+1);
+	query = g_strdupv_inline(argv+1);
 	GRID_DEBUG("Executing %u requests", g_strv_length(query));
 
 	dir = oio_directory__create_proxy (oio_url_get(url, OIOURL_NS));

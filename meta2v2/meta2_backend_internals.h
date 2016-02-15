@@ -36,21 +36,21 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 struct meta2_backend_s
 {
-	struct meta_backend_common_s backend;
+	const char *type;
+	struct sqlx_repository_s *repo;
+	struct grid_lbpool_s *lb;
 
 	struct namespace_info_s *nsinfo;
 	GMutex nsinfo_lock;
 
 	struct service_update_policies_s *policies;
 	struct hc_resolver_s *resolver;
-
-	struct { // Not owned, not to be freed
-		gpointer udata;
-		GError* (*hook) (gpointer udata, gchar *msg);
-	} notify;
+	struct oio_events_queue_s *notifier;
 
 	// Trigger pre-check on alias upon a BEANS generation request
 	gboolean flag_precheck_on_generate;
+
+	gchar ns_name[LIMIT_LENGTH_NSNAME];
 };
 
 #endif /*OIO_SDS__meta2v2__meta2_backend_internals_h*/

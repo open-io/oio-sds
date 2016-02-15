@@ -143,18 +143,11 @@ oio_str_hex2bin(const char *s0, guint8 *d, gsize dlen)
 		return FALSE;
 
 	while ((dlen--) > 0) {
-		if (!*s)
-			return TRUE;
- 		if (!*(s+1))
-			return FALSE; 
-		register int i0, i1;
-
-		i0 = hexa[*(s++)];
-		i1 = hexa[*(s++)];
-
-		if (i0<0 || i1<0)
-			return FALSE;
-
+		if (!*s) return TRUE;
+		if (!*(s+1)) return FALSE;
+		register const int i0 = hexa[*(s++)];
+		register const int i1 = hexa[*(s++)];
+		if (i0<0 || i1<0) return FALSE;
 		*(d++) = (i0 & 0x0F) << 4 | (i1 & 0x0F);
 	}
 
@@ -312,6 +305,15 @@ oio_strv_append(gchar **tab, gchar *s)
 	return tab;
 }
 
+size_t
+oio_strv_length_total (const char * const *v)
+{
+	register gsize total = 0;
+	for (; *v; v++)
+		total += 1+strlen(*v);
+	return total;
+}
+
 void
 oio_str_upper(register gchar *s)
 {
@@ -346,4 +348,12 @@ oio_str_gstring_append_json_pair (GString *base, const char *k, const char *v)
 	g_string_append_c (base, '"');
 	oio_str_gstring_append_json_string (base, v);
 	g_string_append_c (base, '"');
+}
+
+size_t
+oio_strv_length (const char * const *v)
+{
+	size_t count = 0;
+	if (v) for (; *v ;++v,++count) {}
+	return count;
 }

@@ -83,30 +83,6 @@ grid_task_queue_stop(struct grid_task_queue_s *gtq)
 	gtq->stopped = TRUE;
 }
 
-guint
-grid_task_queue_sleepticks(struct grid_task_queue_s *gtq)
-{
-	EXTRA_ASSERT(gtq != NULL);
-	EXTRA_ASSERT(gtq->tasks != NULL);
-
-	if (!gtq->tasks->len)
-		return 0;
-
-	register struct grid_task_s *task;
-	register task_period_t next;
-
-	task = &g_array_index(gtq->tasks,struct grid_task_s, 0);
-	next = task->next;
-
-	for (register guint i=1; i < gtq->tasks->len ;++i) {
-		task = &g_array_index(gtq->tasks, struct grid_task_s, i);
-		register task_period_t t = task->next;
-		next = MIN(next, t);
-	}
-
-	return next;
-}
-
 void
 grid_task_queue_fire(struct grid_task_queue_s *gtq)
 {

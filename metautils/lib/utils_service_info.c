@@ -469,15 +469,12 @@ service_info_check_storage_class(const struct service_info_s *si, const gchar *w
 gchar *
 service_info_key (const struct service_info_s *si)
 {
-	gchar ns[LIMIT_LENGTH_NSNAME], addr[STRLEN_ADDRINFO];
-	metautils_strlcpy_physical_ns(ns, si->ns_name, sizeof(ns));
-
-	const gchar *explicit = service_info_get_tag_value(si, "tag.id", NULL);
+	gchar addr[STRLEN_ADDRINFO];
+	const char *explicit = service_info_get_tag_value(si, "tag.id", NULL);
 	if (explicit)
-		return g_strdup_printf("%s|%s|%s", ns, si->type, explicit);
-
-	grid_addrinfo_to_string(&si->addr, addr, sizeof(addr));
-	return g_strdup_printf("%s|%s|%s", ns, si->type, addr);
+		return g_strdup_printf("%s|%s|%s", si->ns_name, si->type, explicit);
+	grid_addrinfo_to_string(&si->addr, addr, sizeof(struct addr_info_s));
+	return g_strdup_printf("%s|%s|%s", si->ns_name, si->type, addr);
 }
 
 //------------------------------------------------------------------------------
@@ -583,7 +580,7 @@ service_info_load_json_object(struct json_object *obj,
 
 	struct service_info_s *si = g_malloc0(sizeof(struct service_info_s));
 	if (ns)
-		metautils_strlcpy_physical_ns(si->ns_name, json_object_get_string(ns), sizeof(si->ns_name));
+		g_strlcpy(si->ns_name, json_object_get_string(ns), sizeof(si->ns_name));
 	memcpy (&si->addr, &addr, sizeof(struct addr_info_s));
 	if (type)
 		g_strlcpy(si->type, json_object_get_string(type), sizeof(si->type));

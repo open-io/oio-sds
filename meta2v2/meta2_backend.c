@@ -26,6 +26,8 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include <sqliterepo/sqliterepo.h>
 #include <sqliterepo/election.h>
 
+#include <sqlx/oio_events_queue.h>
+
 #include <meta0v2/meta0_remote.h>
 #include <meta0v2/meta0_utils.h>
 
@@ -152,7 +154,7 @@ _check_policy(struct meta2_backend_s *m2, const gchar *polname)
 const gchar*
 meta2_backend_get_local_addr(struct meta2_backend_s *m2)
 {
-	return sqlx_repository_get_local_addr(m2->backend.repo);
+	return sqlx_repository_get_local_addr(m2->repo);
 }
 
 GError *
@@ -160,32 +162,24 @@ meta2_backend_init(struct meta2_backend_s **result,
 		struct sqlx_repository_s *repo, const gchar *ns,
 		struct grid_lbpool_s *glp, struct hc_resolver_s *resolver)
 {
-	GError *err = NULL;
-	struct meta2_backend_s *m2 = NULL;
-	gsize s;
-
 	EXTRA_ASSERT(result != NULL);
-	EXTRA_ASSERT(glp != NULL);
 	EXTRA_ASSERT(repo != NULL);
+	EXTRA_ASSERT(glp != NULL);
 	EXTRA_ASSERT(resolver != NULL);
 
-	m2 = g_malloc0(sizeof(struct meta2_backend_s));
-	s = metautils_strlcpy_physical_ns(m2->backend.ns_name, ns,
-			sizeof(m2->backend.ns_name));
-	if (sizeof(m2->backend.ns_name) <= s) {
-		g_free(m2);
-		return NEWERROR(CODE_BAD_REQUEST, "Namespace too long");
-	}
+	if (!*ns || strlen(ns) >= LIMIT_LENGTH_NSNAME)
+		return BADREQ("Invalid namespace name");
 
-	m2->backend.type = NAME_SRVTYPE_META2;
-	m2->backend.repo = repo;
-	m2->backend.lb = glp;
+	struct meta2_backend_s *m2 = g_malloc0(sizeof(struct meta2_backend_s));
+	g_strlcpy(m2->ns_name, ns, sizeof(m2->ns_name));
+	m2->type = NAME_SRVTYPE_META2;
+	m2->repo = repo;
+	m2->lb = glp;
 	m2->policies = service_update_policies_create();
 	g_mutex_init(&m2->nsinfo_lock);
-
 	m2->flag_precheck_on_generate = TRUE;
 
-	err = sqlx_repository_configure_type(m2->backend.repo,
+	GError *err = sqlx_repository_configure_type(m2->repo,
 			NAME_SRVTYPE_META2, schema);
 	if (NULL != err) {
 		meta2_backend_clean(m2);
@@ -194,11 +188,10 @@ meta2_backend_init(struct meta2_backend_s **result,
 	}
 
 	m2->resolver = resolver;
+	*result = m2;
 
 	GRID_DEBUG("M2V2 backend created for NS[%s] and repo[%p]",
-			m2->backend.ns_name, m2->backend.repo);
-
-	*result = m2;
+			m2->ns_name, m2->repo);
 	return NULL;
 }
 
@@ -259,7 +252,7 @@ meta2_backend_poll_service(struct meta2_backend_s *m2,
 	EXTRA_ASSERT(type != NULL);
 	EXTRA_ASSERT(si != NULL);
 
-	if (!(iter = grid_lbpool_get_iterator(m2->backend.lb, type)))
+	if (!(iter = grid_lbpool_get_iterator(m2->lb, type)))
 		return NEWERROR(CODE_SRVTYPE_NOTMANAGED, "no such service");
 
 	struct lb_next_opt_ext_s opt_ext;
@@ -344,7 +337,7 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 	EXTRA_ASSERT(url != NULL);
 	EXTRA_ASSERT(result != NULL);
 	EXTRA_ASSERT(m2 != NULL);
-	EXTRA_ASSERT(m2->backend.repo != NULL);
+	EXTRA_ASSERT(m2->repo != NULL);
 
 	/* TODO */
 	gboolean no_peers = FALSE;
@@ -355,7 +348,7 @@ m2b_open(struct meta2_backend_s *m2, struct oio_url_s *url,
 
 	struct sqlx_name_mutable_s n;
 	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
-	err = sqlx_repository_open_and_lock(m2->backend.repo,
+	err = sqlx_repository_open_and_lock(m2->repo,
 			sqlx_name_mutable_to_const(&n), m2_to_sqlx(how), &sq3, NULL);
 	sqlx_name_clean (&n);
 
@@ -445,7 +438,7 @@ meta2_backend_has_container(struct meta2_backend_s *m2,
 
 	struct sqlx_name_mutable_s n;
 	sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
-	err = sqlx_repository_has_base(m2->backend.repo, sqlx_name_mutable_to_const(&n));
+	err = sqlx_repository_has_base(m2->repo, sqlx_name_mutable_to_const(&n));
 	sqlx_name_clean (&n);
 
 	if (NULL != err) {
@@ -550,7 +543,7 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 				m2b_destroy(sq3);
 				return err;
 			}
-			if (!params->local && sq3->election == ELECTION_LEADER && m2->notify.hook) {
+			if (!params->local && sq3->election == ELECTION_LEADER && m2->notifier) {
 				GString *gs = g_string_new ("{");
 				g_string_append (gs, "\"event\":\""NAME_SRVTYPE_META2".container.create\"");
 				g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
@@ -558,7 +551,7 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 				g_string_append (gs, "\"url\":{");
 				_append_url (gs, url);
 				g_string_append (gs, "}}}");
-				m2->notify.hook (m2->notify.udata, g_string_free (gs, FALSE));
+				oio_events_queue__send (m2->notifier, g_string_free (gs, FALSE));
 			}
 		}
 		m2b_close(sq3);
@@ -616,7 +609,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 			struct sqlx_name_mutable_s n;
 			sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
 			err = election_get_peers(
-					sqlx_repository_get_elections_manager(m2->backend.repo),
+					sqlx_repository_get_elections_manager(m2->repo),
 					sqlx_name_mutable_to_const(&n), FALSE, &peers);
 			sqlx_name_clean (&n);
 
@@ -633,19 +626,22 @@ go_on:
 		hc_decache_reference_service(m2->resolver, url, NAME_SRVTYPE_META2);
 
 		if (!err) {
-			GString *gs = g_string_new ("{");
-			g_string_append (gs, "\"event\":\"" NAME_SRVTYPE_META2 ".container.destroy\"");
-			g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
-			g_string_append (gs, ",\"data\":{");
-			g_string_append (gs, "\"url\":{");
-			_append_url (gs, url);
-			g_string_append (gs, "}}}");
 			int master = sq3->election == ELECTION_LEADER;
+			GString *gs = NULL;
+			if (!local && master && m2->notifier) {
+				gs = g_string_new ("{");
+				g_string_append (gs, "\"event\":\"" NAME_SRVTYPE_META2 ".container.destroy\"");
+				g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
+				g_string_append (gs, ",\"data\":{");
+				g_string_append (gs, "\"url\":{");
+				_append_url (gs, url);
+				g_string_append (gs, "}}}");
+			}
 			m2b_destroy(sq3);
-			if (!local && master && m2->notify.hook)
-				m2->notify.hook (m2->notify.udata, g_string_free (gs, FALSE));
-			else
-				g_string_free (gs, TRUE);
+			if (gs) {
+				EXTRA_ASSERT (m2->notifier != NULL);
+				oio_events_queue__send (m2->notifier, g_string_free (gs, FALSE));
+			}
 		} else {
 			m2b_close(sq3);
 		}
@@ -791,8 +787,8 @@ meta2_backend_add_modified_container(struct meta2_backend_s *m2b,
 		struct sqlx_sqlite3_s *sq3)
 {
 	EXTRA_ASSERT(m2b != NULL);
-	if (m2b->notify.hook)
-		m2b->notify.hook(m2b->notify.udata, _container_state (sq3));
+	if (m2b->notifier)
+		oio_events_queue__send (m2b->notifier, _container_state (sq3));
 }
 
 GError*
@@ -866,7 +862,7 @@ meta2_backend_put_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
 		args.nsinfo = meta2_backend_get_nsinfo(m2b);
-		args.lbpool = m2b->backend.lb;
+		args.lbpool = m2b->lb;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_put_alias(&args, in, out_deleted, out_added)))
@@ -903,7 +899,7 @@ meta2_backend_copy_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
 		args.nsinfo = meta2_backend_get_nsinfo(m2b);
-		args.lbpool = m2b->backend.lb;
+		args.lbpool = m2b->lb;
 
 		if (!(err = _transaction_begin(sq3, url, &repctx))) {
 			if (!(err = m2db_copy_alias(&args, src)))
@@ -940,7 +936,7 @@ meta2_backend_force_alias(struct meta2_backend_s *m2b, struct oio_url_s *url,
 		args.url = url;
 		args.max_versions = _maxvers(sq3, m2b);
 		args.nsinfo = meta2_backend_get_nsinfo(m2b);
-		args.lbpool = m2b->backend.lb;
+		args.lbpool = m2b->lb;
 
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
 			if (!(err = m2db_force_alias(&args, in, out_deleted, out_added)))
@@ -1326,7 +1322,7 @@ meta2_backend_generate_beans(struct meta2_backend_s *m2b,
 
 	/* Let's continue to generate the beans, no need for an open container for the moment */
 	if (!err) {
-		iter = grid_lbpool_get_iterator(m2b->backend.lb, "rawx");
+		iter = grid_lbpool_get_iterator(m2b->lb, "rawx");
 		if (!iter)
 			err = NEWERROR(CODE_POLICY_NOT_SATISFIABLE, "No RAWX available");
 		else
@@ -1365,7 +1361,7 @@ meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 			if (strlen(urls[i]) <= 0)
 				continue;
 			struct service_info_s *si = NULL;
-			err2 = service_info_from_chunk_id(m2b->backend.lb, urls[i], &si);
+			err2 = service_info_from_chunk_id(m2b->lb, urls[i], &si);
 			if (NULL != si)
 				sil = g_slist_prepend(sil, si);
 			if (err2 != NULL) {
@@ -1393,7 +1389,7 @@ meta2_backend_get_conditionned_spare_chunks(struct meta2_backend_s *m2b,
 	// FIXME: storage class should come as parameter
 	stgpol = storage_policy_init(m2b->nsinfo, NULL);
 
-	err = get_conditioned_spare_chunks(m2b->backend.lb, count, dist,
+	err = get_conditioned_spare_chunks(m2b->lb, count, dist,
 			storage_policy_get_storage_class(stgpol), notin2, broken2, result,
 			answer_beans);
 
@@ -1454,7 +1450,7 @@ meta2_backend_get_conditionned_spare_chunks_v2(struct meta2_backend_s *m2b,
 	if (err != NULL)
 		return err;
 
-	err = get_conditioned_spare_chunks2(m2b->backend.lb, pol, notin, broken,
+	err = get_conditioned_spare_chunks2(m2b->lb, pol, notin, broken,
 			result, TRUE);
 
 	storage_policy_clean(pol);
@@ -1474,7 +1470,7 @@ meta2_backend_get_spare_chunks(struct meta2_backend_s *m2b, struct oio_url_s *ur
 	err = _load_storage_policy(m2b, url, polname, &pol);
 
 	if (!err) {
-		err = get_spare_chunks(m2b->backend.lb, pol, result, use_beans);
+		err = get_spare_chunks(m2b->lb, pol, result, use_beans);
 	}
 
 	if (pol)

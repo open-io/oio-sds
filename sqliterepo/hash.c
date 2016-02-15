@@ -27,16 +27,17 @@ License along with this library.
 struct hashstr_s *
 sqliterepo_hash_name(struct sqlx_name_s *n)
 {
-	struct hashstr_s *result;
-
 	GChecksum *hash = g_checksum_new(G_CHECKSUM_SHA256);
 	g_checksum_update(hash, (guint8*)n->base, strlen(n->base));
 	g_checksum_update(hash, (guint8*)"@", 1);
 	g_checksum_update(hash, (guint8*)n->type, strlen(n->type));
-	result = hashstr_create(g_checksum_get_string(hash));
+	const char *hex0 = g_checksum_get_string(hash);
+	const size_t len = 2 * g_checksum_type_get_length (G_CHECKSUM_SHA256);
+	gchar *hex = alloca (1 + len);
+	gchar *p = hex;
+	do { *(p++) = g_ascii_toupper(*hex0); } while (*(hex0++));
 	g_checksum_free(hash);
 
-	hashstr_upper(result);
-	return result;
+	return hashstr_create_len (hex, len);
 }
 

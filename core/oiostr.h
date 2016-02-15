@@ -38,8 +38,15 @@ extern "C" {
 
 #define OIO_STRV_APPEND_COPY(Tab,S0) do { (Tab) = oio_strv_append((Tab), g_strdup(S0)); } while (0)
 
+/* Count the items in the array */
+size_t oio_strv_length (const char * const *v);
+
+/* Count the size of the concatenation of all the strings in <v> */
+size_t oio_strv_length_total (const char * const *v);
+
 void oio_str_reuse(gchar **dst, gchar *src);
 
+/* Reallocs <dst> and appends it <s>. <s> is reused and is not duplicated */
 gchar ** oio_strv_append(gchar **dst, gchar *s);
 
 /** frees *s and set it to NULL */

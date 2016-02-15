@@ -160,7 +160,7 @@ _init_nsinfo(const gchar *ns, gint64 maxvers)
 	nsinfo = g_malloc0 (sizeof(*nsinfo));
 	namespace_info_init (nsinfo);
 	nsinfo->chunk_size = chunk_size;
-	metautils_strlcpy_physical_ns(nsinfo->name, ns, sizeof(nsinfo->name));
+	g_strlcpy (nsinfo->name, ns, sizeof(nsinfo->name));
 
 	g_snprintf (str, sizeof(str), "%"G_GINT64_FORMAT, maxvers);
 	g_hash_table_insert(nsinfo->options, g_strdup("meta2_max_versions"),
@@ -209,8 +209,8 @@ _init_lb(const gchar *ns)
 			return FALSE;
 
 		si = g_malloc0(sizeof(*si));
-		metautils_strlcpy_physical_ns(si->ns_name, "NS", sizeof(si->ns_name));
-		g_strlcpy(si->type, "rawx", sizeof(si->type));
+		g_strlcpy(si->ns_name, "NS", sizeof(si->ns_name));
+		g_strlcpy(si->type, NAME_SRVTYPE_RAWX, sizeof(si->type));
 		si->score.timestamp = oio_ext_real_time() / G_TIME_SPAN_SECOND;
 		si->score.value = ++score;
 		grid_string_to_addrinfo(pdef->url, &(si->addr));
@@ -359,38 +359,26 @@ test_backend_create_destroy(void)
 static void
 test_backend_strange_ns(void)
 {
-	static gchar ns_255[LIMIT_LENGTH_NSNAME];
-	static gchar ns_256[LIMIT_LENGTH_NSNAME+1];
+	char ns[LIMIT_LENGTH_NSNAME+1];
 
 	void test(struct meta2_backend_s *m2) {
-		g_assert(strlen(m2->backend.ns_name) > 0);
-		g_assert(NULL == strchr(m2->backend.ns_name, '.'));
+		g_assert_cmpstr(m2->ns_name, ==, ns);
 	}
 
-	/* successful creations */
-	_repo_wraper("NS", 0, test);
-	_repo_wraper("NS00", 0, test);
-	_repo_wraper("NS000", 0, test);
-	memset(ns_255, '0', sizeof(ns_255));
-	ns_255[0] = 'N';
-	ns_255[1] = 'S';
-	ns_255[sizeof(ns_255)-1] = 0;
-	_repo_wraper(ns_255, 0, test);
-	_repo_wraper("NS.VNS0", 0, test);
+	/* empty NS is an error */
+	memset(ns, 0, sizeof(ns));
+	_repo_failure (ns);
 
-	memset(ns_256, '0', sizeof(ns_256));
-	ns_256[0] = 'N';
-	ns_256[1] = 'S';
-	ns_256[2] = '.';
-	ns_256[sizeof(ns_256)-1] = 0;
-	_repo_wraper(ns_256, 0, test);
+	for (guint len=1; len<LIMIT_LENGTH_NSNAME ;len++) {
+		memset(ns, 0, sizeof(ns));
+		memset(ns, 'x', len);
+		_repo_wraper(ns, 0, test);
+	}
 
-	/* creations expected to fail */
-	memset(ns_256, '0', sizeof(ns_256));
-	ns_256[0] = 'N';
-	ns_256[1] = 'S';
-	ns_256[sizeof(ns_256)-1] = 0;
-	_repo_failure(ns_256);
+	/* too long NS is an error */
+	memset(ns, 0, sizeof(ns));
+	memset(ns, 'x', sizeof(ns)-1);
+	_repo_failure(ns);
 }
 
 static void

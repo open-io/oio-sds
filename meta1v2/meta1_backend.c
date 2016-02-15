@@ -34,27 +34,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "./meta1_backend.h"
 #include "./meta1_backend_internals.h"
 
-struct meta1_backend_s *
-meta1_backend_init(const gchar *ns, struct sqlx_repository_s *repo,
-		struct grid_lbpool_s *glp)
+GError *
+meta1_backend_init(struct meta1_backend_s **out, const char *ns,
+		struct sqlx_repository_s *repo, struct grid_lbpool_s *glp)
 {
-	struct meta1_backend_s *m1;
-
-	EXTRA_ASSERT(ns != NULL);
-	EXTRA_ASSERT(*ns != '\0');
-	EXTRA_ASSERT(glp != NULL);
+	EXTRA_ASSERT(out != NULL);
 	EXTRA_ASSERT(repo != NULL);
+	EXTRA_ASSERT(glp != NULL);
 
-	m1 = g_malloc0(sizeof(*m1));
-	metautils_strlcpy_physical_ns(m1->backend.ns_name, ns,
-			sizeof(m1->backend.ns_name));
-	m1->backend.type = NAME_SRVTYPE_META1;
-	m1->backend.lb = glp;
-	m1->backend.repo = repo;
+	if (!*ns || strlen(ns) >= LIMIT_LENGTH_NSNAME)
+		return BADREQ("Invalid namespace name");
+
+	struct meta1_backend_s *m1 = g_malloc0(sizeof(*m1));
+	g_strlcpy (m1->ns_name, ns, sizeof(m1->ns_name));
+	m1->type = NAME_SRVTYPE_META1;
+	m1->lb = glp;
+	m1->repo = repo;
 	m1->prefixes = meta1_prefixes_init();
 	m1->svcupdate = service_update_policies_create();
-
-	return m1;
+	*out = m1;
+	return NULL;
 }
 
 void
@@ -105,8 +104,8 @@ meta1_backend_base_already_created(struct meta1_backend_s *m1, const guint8 *pre
 	GError *err = NULL;
 
 	g_snprintf(base, sizeof(base), "%02X%02X", prefix[0], prefix[1]);
-	struct sqlx_name_s n = {.base=base, .type=NAME_SRVTYPE_META1, .ns=m1->backend.ns_name};
-	err = sqlx_repository_has_base(m1->backend.repo, &n);
+	struct sqlx_name_s n = {.base=base, .type=NAME_SRVTYPE_META1, .ns=m1->ns_name};
+	err = sqlx_repository_has_base(m1->repo, &n);
 	if (!err)
 		return TRUE;
 	g_clear_error(&err);
@@ -116,12 +115,12 @@ meta1_backend_base_already_created(struct meta1_backend_s *m1, const guint8 *pre
 gchar *
 meta1_backend_get_ns_name(const struct meta1_backend_s *m1)
 {
-	return g_strdup(m1->backend.ns_name);
+	return g_strdup(m1->ns_name);
 }
 
 const gchar*
 meta1_backend_get_local_addr(struct meta1_backend_s *m1)
 {
-	return sqlx_repository_get_local_addr(m1->backend.repo);
+	return sqlx_repository_get_local_addr(m1->repo);
 }
 

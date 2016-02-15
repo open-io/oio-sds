@@ -173,7 +173,7 @@ _post_config(struct sqlx_service_s *ss)
 
 	// prepare a meta2 backend
 	err = meta2_backend_init(&m2, ss->repository, ss->ns_name, ss->lb, ss->resolver);
-	if (err) {
+	if (NULL != err) {
 		GRID_WARN("META2 backend init failure: (%d) %s", err->code, err->message);
 		g_clear_error(&err);
 		return FALSE;
@@ -182,19 +182,18 @@ _post_config(struct sqlx_service_s *ss)
 	/* Make deleted bases exit the cache */
 	sqlx_repository_configure_close_callback(ss->repository, meta2_on_close, ss);
 
-	// Register meta2 requests handlers
+	/* Register meta2 requests handlers */
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,
 			meta2_gridd_get_v2_requests(), m2);
 
-	// Register few meta2 tasks
+	/* Register few meta2 tasks */
 	grid_task_queue_register(ss->gtq_reload, 5,
 			_task_reconfigure_m2, NULL, ss);
 	grid_task_queue_register(ss->gtq_reload, 1,
 			(GDestroyNotify)sqlx_task_reload_lb, NULL, ss);
 
-	m2->notify.udata = ss;
-	m2->notify.hook = sqlx_notify;
-	return sqlx_enable_notifier (ss);
+	m2->notifier = ss->events_queue;
+	return TRUE;
 }
 
 int

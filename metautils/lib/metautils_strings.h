@@ -41,21 +41,8 @@ License along with this library.
 	for (gchar **p=(V); *p ;++p) { STRING_STACKIFY(*p); } \
 } while (0)
 
-/**
- * Copies in 'd' the part of 's' representing a valid physical namespace.
- *
- * @param d the target buffer to store the physical NS
- * @param s a source string starting with the physical namespace
- * @param dlen the size of the target buffer
- * @return the size of the physical namespace in the source string
- */
-gsize metautils_strlcpy_physical_ns(gchar *d, const gchar *s, gsize dlen);
-
-/**
- * @param src
- * @return to be freed with g_free(), not g_strfreev()
- */
-gchar ** g_strdupv2(gchar **src);
+/** @return to be freed with g_free(), not g_strfreev() */
+gchar ** g_strdupv_inline (gchar **src);
 
 #define metautils_str_upper oio_str_upper
 #define metautils_str_lower oio_str_lower
@@ -68,9 +55,6 @@ gchar** metautils_decode_lines(const gchar *start, const gchar *end);
 
 GByteArray* metautils_encode_lines(gchar **strv);
 
-gsize metautils_hash_content_path(const gchar *src, gsize src_size,
-	gchar *dst, gsize dst_size, gsize dst_bitlength);
-
 /** Calls g_strcmp0(a,b) and ignores its third argument. */
 int metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored);
 
@@ -78,13 +62,13 @@ int metautils_strcmp3(gconstpointer a, gconstpointer b, gpointer ignored);
  * string (yes, true, on, yes, 1) */
 gboolean metautils_cfg_get_bool(const gchar *value, gboolean def);
 
-/* g_free(p) if p is not NULL */
+/** g_free(p) if p is not NULL */
 void g_free0(gpointer p);
 
-/* g_free0(p1) and ignores p2 */
+/** g_free0(p1) and ignores p2 */
 void g_free1(gpointer p1, gpointer p2);
 
-/* g_free0(p2) and ignores p1 */
+/** g_free0(p2) and ignores p1 */
 void g_free2(gpointer p1, gpointer p2);
 
 gboolean metautils_str_has_caseprefix (const char *str, const char *prefix);

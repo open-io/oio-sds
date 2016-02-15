@@ -127,12 +127,12 @@ conscience_create(void)
 }
 
 struct conscience_s*
-conscience_create_named(const gchar *ns_name, GError **error)
+conscience_create_named(const gchar *ns, GError **error)
 {
 	struct conscience_s *conscience;
 
-	if (!ns_name || !*ns_name) {
-		GSETERROR(error,"NULL/empty namespace name (%p)", ns_name);
+	if (!ns || !*ns) {
+		GSETERROR(error,"NULL/empty namespace name (%p)", ns);
 		return NULL;
 	}
 
@@ -141,9 +141,8 @@ conscience_create_named(const gchar *ns_name, GError **error)
 		GSETERROR(error,"Memory allocation failure");
 		return NULL;
 	}
-	
-	metautils_strlcpy_physical_ns(conscience->ns_info.name, ns_name,
-			sizeof(conscience->ns_info.name));
+
+	g_strlcpy (conscience->ns_info.name, ns, sizeof(conscience->ns_info.name));
 	return conscience;
 }
 

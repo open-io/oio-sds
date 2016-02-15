@@ -329,7 +329,7 @@ meta0_init_get_meta1_info(void)
 			if (result != NULL) {
 				for (gchar **u = result; *u ;u++)
 					g_print("%s\n",*u);
-				g_strfreev(result);
+				g_free(result);
 			} else {
 				GRID_INFO("No meta1 referenced");
 			}

@@ -20,11 +20,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #ifndef OIO_SDS__meta0v2__meta0_backend_h
 # define OIO_SDS__meta0v2__meta0_backend_h 1
 
-/**
- * @addtogroup meta0v2_backend
- * @{
- */
-
 # define META0_SCHEMA \
 	"CREATE TABLE IF NOT EXISTS meta1 ( " \
 		"prefix BLOB NOT NULL," \
@@ -70,7 +65,7 @@ struct sqlx_repository_s* meta0_backend_get_repository(
 void meta0_backend_reload_requested(struct meta0_backend_s *m0);
 
 GError* meta0_backend_fill(struct meta0_backend_s *m0, guint replicas,
-		gchar **urls);
+		const char * const *urls);
 
 GError * meta0_backend_reload(struct meta0_backend_s *m0);
 
@@ -92,7 +87,5 @@ GError* meta0_backend_get_all_meta1_ref(struct meta0_backend_s *m0,
 		GPtrArray **result);
 
 GError* meta0_backend_destroy_meta1_ref(struct meta0_backend_s *m0, gchar *meta1);
-
-/** @} */
 
 #endif /*OIO_SDS__meta0v2__meta0_backend_h*/

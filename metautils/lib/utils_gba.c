@@ -27,14 +27,6 @@ metautils_gba_randomize(GByteArray *gba)
 	oio_str_randomize(gba->data, gba->len);
 }
 
-gsize
-metautils_gba_len(const GByteArray *gba)
-{
-	if (unlikely(NULL == gba))
-		return 0;
-	return gba->len;
-}
-
 static int
 metautils_buffer_cmp(const guint8 * const d0, const guint l0,
 		const guint8 * const d1, const guint l1)
@@ -49,13 +41,6 @@ gboolean
 metautils_gba_equal(const GByteArray *a, const GByteArray *b)
 {
 	return metautils_gba_cmp(a, b) == 0;
-}
-
-guint
-metautils_gba_hash(const GByteArray *gba)
-{
-	EXTRA_ASSERT(gba != NULL);
-	return djb_hash_buf(gba->data, gba->len);
 }
 
 int
@@ -133,14 +118,6 @@ metautils_gba_from_hexstring(const gchar *str)
 }
 
 void
-metautils_gba_gunref(gpointer p0, gpointer p1)
-{
-	(void) p1;
-	if (p0 != NULL)
-		g_byte_array_unref((GByteArray*)p0);
-}
-
-void
 metautils_gba_unref(gpointer p)
 {
 	if (p != NULL)
@@ -164,13 +141,6 @@ metautils_gba_cleanv(GByteArray **tab)
 		}
 		g_free(tab);
 	}
-}
-
-void
-meatutils_gba_gclean(gpointer p1, gpointer p2)
-{
-	(void) p2;
-	metautils_gba_clean(p1);
 }
 
 GByteArray*

@@ -802,7 +802,8 @@ dispatch_LISTHANDLERS(struct gridd_reply_ctx_s *reply,
 
 	gboolean _runner(gpointer k, gpointer v, gpointer u) {
 		(void) v;
-		g_byte_array_append((GByteArray*)u, (guint8*)hashstr_str(k), hashstr_ulen(k));
+		g_byte_array_append((GByteArray*)u, (guint8*)hashstr_str(k),
+				(guint) hashstr_len(k));
 		g_byte_array_append((GByteArray*)u, (guint8*)"\n", 1);
 		return FALSE;
 	}

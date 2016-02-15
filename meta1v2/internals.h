@@ -22,8 +22,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 # include <metautils/lib/metautils.h>
 
-# define CONNECT_RETRY_DELAY 3
-
 # ifndef META1_EVT_TOPIC
 #  define META1_EVT_TOPIC "sds.meta1"
 # endif

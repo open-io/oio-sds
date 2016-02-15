@@ -23,20 +23,22 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 # include <glib.h>
 # include <metautils/lib/metautils.h>
 # include <sqlx/sqlx_service.h>
+# include <sqlx/oio_events_queue.h>
 
 #define M1_SQLITE_GERROR(db,RC) g_error_new(GQ(), (RC), "(%s) %s", \
 		sqlite_strerror(RC), (db)?sqlite3_errmsg(db):"unkown error")
 
 struct meta1_backend_s
 {
-	struct meta_backend_common_s backend;
+	const char *type;
+	struct sqlx_repository_s *repo;
+	struct grid_lbpool_s *lb;
+
 	struct service_update_policies_s *svcupdate;
 	struct meta1_prefixes_set_s *prefixes;
+	struct oio_events_queue_s *notifier;
 
-	struct { // Not owned, not to be freed
-		gpointer udata;
-		GError* (*hook) (gpointer udata, gchar *msg);
-	} notify;
+	gchar ns_name[LIMIT_LENGTH_NSNAME];
 };
 
 void __exec_cid(sqlite3 *handle, const gchar *sql, const container_id_t cid);

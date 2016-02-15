@@ -123,20 +123,6 @@ test_clean(void)
 }
 
 static void
-test_strlcpy_pns(void)
-{
-	gchar * _trans(const gchar *s0) {
-		gchar *s = g_strdup(s0);
-		metautils_strlcpy_physical_ns(s, s0, strlen(s0)+1);
-		return s;
-	}
-	test_transform(_trans, "", "");
-	test_transform(_trans, "....", "");
-	test_transform(_trans, "N", "N");
-	test_transform(_trans, "N.P", "N");
-}
-
-static void
 test_upper(void)
 {
 	gchar * _trans(const gchar *s0) {
@@ -192,7 +178,6 @@ main(int argc, char **argv)
 	g_test_add_func("/core/str/autocontainer", test_autocontainer);
 
 	g_test_add_func("/metautils/str/clean", test_clean);
-	g_test_add_func("/metautils/str/strlcpy_pns", test_strlcpy_pns);
 	g_test_add_func("/metautils/str/upper", test_upper);
 	g_test_add_func("/metautils/str/lower", test_lower);
 	g_test_add_func("/metautils/str/prefix", test_prefix);

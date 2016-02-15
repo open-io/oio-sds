@@ -624,7 +624,7 @@ member_descr(const struct election_member_s *m, gchar *d, gsize ds)
 			"%s [%"G_GINT64_FORMAT"/%"G_GINT64_FORMAT"/%s] %u/%u/%u/%u [%.*s] [%s.%s]",
 			_step2str(m->step), m->myid, m->master_id, m->master_url,
 			m->refcount, m->pending_USE, m->pending_GETVERS, m->pending_PIPEFROM,
-			hashstr_ulen(m->key), hashstr_str(m->key),
+			(guint) hashstr_len(m->key), hashstr_str(m->key),
 			m->name.base, m->name.type);
 }
 

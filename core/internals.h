@@ -23,6 +23,12 @@ License along with this library.
 extern "C" {
 #endif
 
+# ifdef HAVE_EXTRA_ASSERT
+#  define EXTRA_ASSERT(X) g_assert(X)
+# else
+#  define EXTRA_ASSERT(X)
+# endif
+
 #define CODE_IS_NETWORK_ERROR(C) ((C) < CODE_TEMPORARY)
 #define CODE_IS_OK(C)            (((C) >= CODE_FINAL_OK) && ((C) < CODE_BEACON_REDIRECT))
 #define CODE_IS_TEMP(C)          (((C) >= CODE_TEMPORARY) && ((C) < CODE_FINAL_OK))
