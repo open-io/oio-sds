@@ -57,6 +57,8 @@ License along with this library.
 
 # define NAME_TAGNAME_AGENT_CHECK "tag.agent_check"
 
+# define NAME_TAGNAME_USER_IS_SERVICE "user_is_a_service"
+
 /* A flag usable in metacnx_ctx_s.flags to keep the connection alive */
 #define METACNX_FLAGMASK_KEEPALIVE 0x00000001
 

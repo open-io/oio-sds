@@ -338,6 +338,12 @@ conscience_get_services (const char *ns, const char *type, GSList **out)
 			service_tag_set_value_string (service_info_ensure_tag (
 						si->tags, "tag.id"), reg->id);
 			grid_string_to_addrinfo (reg->url, &si->addr);
+			for (const char * const *pp = reg->kv_tags;
+					pp && *pp && *(pp+1);
+					pp += 2) {
+				service_tag_set_value_string (service_info_ensure_tag(
+						si->tags, *pp), *(pp+1));
+			}
 			l = g_slist_prepend (l, si);
 		}
 		GError *err = oio_cs_client__list_services (cs, type, _on_reg);

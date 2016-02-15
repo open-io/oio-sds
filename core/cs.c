@@ -114,11 +114,12 @@ _unpack_registration (json_object *item,
 {
 	EXTRA_ASSERT (preg != NULL);
 	EXTRA_ASSERT (pscore != NULL);
-	struct json_object *id = NULL, *url = NULL, *score = NULL;
+	struct json_object *id = NULL, *url = NULL, *score = NULL, *tags = NULL;
 	struct oio_ext_json_mapping_s mapping[] = {
 		{"id",    &id,    json_type_string, 0},
 		{"addr",  &url,   json_type_string, 1},
 		{"score", &score, json_type_int,    0},
+		{"tags",  &tags,  json_type_object, 0},
 		{NULL, NULL, 0, 0}
 	};
 	GError *err = oio_ext_extract_json (item, mapping);
@@ -127,8 +128,18 @@ _unpack_registration (json_object *item,
 	preg->url = json_object_get_string (url);
 	preg->id = id ? json_object_get_string (id) : preg->url;
 	preg->kv_tags = NULL;
+	if (tags) {
+		GPtrArray *tag_arr = g_ptr_array_new();
+		json_object_object_foreach(tags, tko, tvo) {
+			g_ptr_array_add(tag_arr, g_strdup(tko));
+			g_ptr_array_add(tag_arr, g_strdup(json_object_get_string(tvo)));
+		}
+		g_ptr_array_add(tag_arr, NULL);
+		preg->kv_tags = (const char * const *)g_ptr_array_free(tag_arr, FALSE);
+	}
 	if (score)
 		*pscore = json_object_get_int64 (score);
+
 	return NULL;
 }
 
