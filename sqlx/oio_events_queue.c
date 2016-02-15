@@ -503,6 +503,6 @@ exit:
 	if (zagent) zmq_close (zagent);
 	if (zpull) zmq_close (zpull);
 	if (zpush) zmq_close (zpush);
-	if (zctx) zmq_ctx_term (zctx);
+	if (zctx) zmq_term (zctx);
 	return err;
 }
