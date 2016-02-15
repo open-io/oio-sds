@@ -154,7 +154,9 @@ __close_base(struct sqlx_sqlite3_s *sq3)
 			GError *err = election_exit(sq3->repo->election_manager,
 					sqlx_name_mutable_to_const(&sq3->name));
 			if (err) {
-				GRID_WARN("Failed to exit election [%s]", err->message);
+				GRID_WARN("Failed to exit election [%s][%s]: (%d) %s",
+						sq3->name.base, sq3->name.type,
+						err->code, err->message);
 				g_clear_error(&err);
 			} else {
 				GRID_TRACE("exit election succeeded [%s][%s]",

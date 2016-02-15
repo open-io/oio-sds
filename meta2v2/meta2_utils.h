@@ -218,13 +218,13 @@ GError* m2db_set_container_status(struct sqlx_sqlite3_s *sq3, guint32 r);
  * @return
  */
 GError* m2db_purge(struct sqlx_sqlite3_s *sq3, gint64 max_versions,
-		gint64 retention_delay, guint32 flags, m2_onbean_cb cb, gpointer u0);
+		gint64 retention_delay);
 
 /** Delete all aliases of the container, without doing any check.  */
 GError* m2db_flush_container(sqlite3 *db);
 
 GError* m2db_deduplicate_contents(struct sqlx_sqlite3_s *sq3,
-		struct oio_url_s *url, guint32 flags, GString **status_message);
+		struct oio_url_s *url);
 
 /**
  * Create a new alias for each existing alias of the container, with

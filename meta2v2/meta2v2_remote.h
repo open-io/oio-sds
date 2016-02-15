@@ -43,15 +43,6 @@ License along with this library.
 /* flush the properties */
 #define M2V2_FLAG_FLUSH            0x00000200
 
-#define M2V2_DESTROY_PURGE 0x01
-/* Flush the container before deleting it
- * (slower than M2V2_DESTROY_FORCE but same effect) */
-#define M2V2_DESTROY_FLUSH 0x02
-/* Destroy container even if aliases or snapshots are still present */
-#define M2V2_DESTROY_FORCE 0x04
-/* Destroy only the local base */
-#define M2V2_DESTROY_LOCAL 0x08
-
 /* Request N spare chunks which should not be on provided blacklist */
 #define M2V2_SPARE_BY_BLACKLIST "SPARE_BLACKLIST"
 /* Request N spare chunks according to a storage policy */
@@ -76,29 +67,26 @@ struct m2v2_create_params_s
 
 #define M2V2_MODE_DRYRUN  0x10000000
 
-GError* m2v2_remote_execute_PURGE(const char *target, struct oio_url_s *url,
-		gboolean dry_run, gdouble timeout, GSList **out);
-
-/** @param out A status message */
-GError* m2v2_remote_execute_DEDUP(const char *target, struct oio_url_s *url,
-		gboolean dry_run, gchar **out);
-
 GError* m2v2_remote_execute_CREATE(const char *target, struct oio_url_s *url,
 		struct m2v2_create_params_s *pols);
+
+enum m2v2_destroy_flag_e {
+	M2V2_DESTROY_PURGE = 0x01,
+	M2V2_DESTROY_FLUSH = 0x02,
+	M2V2_DESTROY_FORCE = 0x04,
+	M2V2_DESTROY_LOCAL = 0x08,
+};
 
 GError* m2v2_remote_execute_DESTROY(const char *target, struct oio_url_s *url,
 		guint32 flags);
 
-/**
- * Locally destroy a container on several services.
- *
- * @param targets An array of services managing the database.
- * @param sid
- * @param url URL of the container to destroy
- * @param flags
- */
+/* Locally destroy a container on several services. */
 GError* m2v2_remote_execute_DESTROY_many(gchar **targets, struct oio_url_s *url,
 		guint32 flags);
+
+GError* m2v2_remote_execute_PURGE(const char *m2, struct oio_url_s *u, gdouble to);
+GError* m2v2_remote_execute_DEDUP(const char *m2, struct oio_url_s *u, gdouble to);
+GError* m2v2_remote_execute_FLUSH(const char *m2, struct oio_url_s *u, gdouble to);
 
 GError* m2v2_remote_execute_HAS(const char *target, struct oio_url_s *url);
 

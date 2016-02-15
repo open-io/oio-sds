@@ -46,7 +46,6 @@ static guint dir_low_ttl = PROXYD_DEFAULT_TTL_SERVICES;
 static guint dir_low_max = PROXYD_DEFAULT_MAX_SERVICES;
 static guint dir_high_ttl = PROXYD_DEFAULT_TTL_CSM0;
 static guint dir_high_max = PROXYD_DEFAULT_MAX_CSM0;
-gdouble m2_timeout_all = PROXYD_M2_TIMEOUT_SINGLE;
 gboolean flag_cache_enabled = TRUE;
 
 struct grid_lbpool_s *lbpool = NULL;
@@ -692,6 +691,7 @@ configure_request_handlers (void)
     SET("/$NS/container/touch/#POST", action_container_touch);
     SET("/$NS/container/dedup/#POST", action_container_dedup);
     SET("/$NS/container/purge/#POST", action_container_purge);
+    SET("/$NS/container/flush/#POST", action_container_flush);
     SET("/$NS/container/raw_insert/#POST", action_container_raw_insert);
     SET("/$NS/container/raw_update/#POST", action_container_raw_update);
     SET("/$NS/container/raw_delete/#POST", action_container_raw_delete);

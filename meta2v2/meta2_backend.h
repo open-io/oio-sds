@@ -70,29 +70,19 @@ GError *meta2_backend_has_container(struct meta2_backend_s *m2,
 GError *meta2_backend_create_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url, struct m2v2_create_params_s *params);
 
-#define M2V2_DESTROY_PURGE 0x01 /* XXX Not implemented.
-								   performs a PURGE before the destroy */
-#define M2V2_DESTROY_FLUSH 0x02 /* cleanly triggers a removal of all the
-								   contents, even if snapshots are present. */
-#define M2V2_DESTROY_FORCE 0x04 /* destroy even if aliases or snapshots are
-								   still present */
-#define M2V2_DESTROY_LOCAL 0x08 /* Destroy only the local base */
-
 GError* meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url, guint32 flags);
 
-/** Destroy all contents of a container.  */
+/* Destroy all contents of a container. */
 GError* meta2_backend_flush_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url);
 
-#define M2V2_MODE_DRYRUN  0x10000000
+GError* meta2_backend_purge_container(struct meta2_backend_s *m2,
+		struct oio_url_s *url);
 
-GError *meta2_backend_purge_container(struct meta2_backend_s *m2,
-		struct oio_url_s *url, guint32 flags, m2_onbean_cb cb, gpointer u0);
-
-/** Find and unreference duplicate content headers.  */
-GError* meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, guint32 flags, GString **status_message);
+/* Find and unreference duplicate content headers. */
+GError* meta2_backend_dedup_contents(struct meta2_backend_s *m2b,
+		struct oio_url_s *url);
 
 /* -------------------------------------------------------------------------- */
 

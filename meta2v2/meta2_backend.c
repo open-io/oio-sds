@@ -571,7 +571,7 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url, guint32 flags)
 {
 	GError *err = NULL;
-	gboolean local = flags & M2V2_DESTROY_LOCAL;
+	gboolean local = BOOL(flags & M2V2_DESTROY_LOCAL);
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	guint counter = 0;
 
@@ -581,28 +581,27 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		_bean_clean(bean);
 	}
 
-	struct list_params_s lp;
-	memset(&lp, '\0', sizeof(struct list_params_s));
+	struct list_params_s lp = {0};
 	lp.flag_nodeleted = ~0;
 	lp.maxkeys = 1;
 
-	GRID_DEBUG("DESTROY(%s)%s", oio_url_get(url, OIOURL_WHOLE),
+	GRID_INFO("DESTROY(%s) %s", oio_url_get(url, OIOURL_WHOLE),
 			local? " (local)" : "");
-	err = m2b_open(m2, url, local? M2V2_OPEN_LOCAL : M2V2_OPEN_MASTERONLY,
-			&sq3);
+
+	const guint32 flag_local = M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK;
+	err = m2b_open(m2, url, local ? flag_local : M2V2_OPEN_MASTERONLY, &sq3);
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 
 		// Performs checks only if client did not ask for a local destroy
-		if (!local) { do {
+		if (!local) {
 			err = m2db_list_aliases(sq3, &lp, NULL, counter_cb, NULL);
-			if (err)
-				break;
+			if (err) goto go_on;
 
 			if (counter > 0 && !(flags & (M2V2_DESTROY_FORCE|M2V2_DESTROY_FLUSH))) {
 				err = NEWERROR(CODE_CONTAINER_NOTEMPTY,
 						"%d elements still in container", counter);
-				break;
+				goto go_on;
 			}
 
 			if (counter > 0 && flags & M2V2_DESTROY_FLUSH) {
@@ -627,9 +626,12 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 			if (peers)
 				g_strfreev(peers);
 			peers = NULL;
-		} while (0); }
+		}
 
+go_on:
+		/* TODO(jfs): manage base's subtype */
 		hc_decache_reference_service(m2->resolver, url, NAME_SRVTYPE_META2);
+
 		if (!err) {
 			GString *gs = g_string_new ("{");
 			g_string_append (gs, "\"event\":\"" NAME_SRVTYPE_META2 ".container.destroy\"");
@@ -653,22 +655,20 @@ meta2_backend_destroy_container(struct meta2_backend_s *m2,
 }
 
 GError *
-meta2_backend_flush_container(struct meta2_backend_s *m2,
-		struct oio_url_s *url)
+meta2_backend_flush_container(struct meta2_backend_s *m2, struct oio_url_s *url)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
 	struct sqlx_repctx_s *repctx = NULL;
 
-	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
+	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED
+			|M2V2_OPEN_FROZEN, &sq3);
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-			if (!(err = m2db_flush_container(sq3->db))) {
-				err = m2db_purge(sq3,
-						_maxvers(sq3, m2),
-						_retention_delay(sq3, m2), 0, NULL, NULL);
-			}
+			if (!(err = m2db_flush_container(sq3->db)))
+				err = m2db_purge(sq3, _maxvers(sq3, m2),
+						_retention_delay(sq3, m2));
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(sq3);
@@ -678,8 +678,7 @@ meta2_backend_flush_container(struct meta2_backend_s *m2,
 }
 
 GError *
-meta2_backend_purge_container(struct meta2_backend_s *m2,
-		struct oio_url_s *url, guint32 flags, m2_onbean_cb cb, gpointer u0)
+meta2_backend_purge_container(struct meta2_backend_s *m2, struct oio_url_s *url)
 {
 	GError *err;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -689,8 +688,7 @@ meta2_backend_purge_container(struct meta2_backend_s *m2,
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 		if (!(err = sqlx_transaction_begin(sq3, &repctx))) {
-			err = m2db_purge(sq3, _maxvers(sq3, m2),
-					_retention_delay(sq3, m2), flags, cb, u0);
+			err = m2db_purge(sq3, _maxvers(sq3, m2), _retention_delay(sq3, m2));
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(sq3);
@@ -1209,8 +1207,7 @@ meta2_backend_set_properties(struct meta2_backend_s *m2b, struct oio_url_s *url,
 /* dedup -------------------------------------------------------------------- */
 
 GError*
-meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
-		struct oio_url_s *url, guint32 flags, GString **status_message)
+meta2_backend_dedup_contents(struct meta2_backend_s *m2b, struct oio_url_s *url)
 {
 	GError *err = NULL;
 	struct sqlx_sqlite3_s *sq3 = NULL;
@@ -1220,20 +1217,11 @@ meta2_backend_deduplicate_contents(struct meta2_backend_s *m2b,
 
 	err = m2b_open(m2b, url, M2V2_OPEN_MASTERONLY|M2V2_OPEN_ENABLED, &sq3);
 	if (!err) {
-		GRID_INFO("Starting content deduplication on %s",
-				oio_url_get(url, OIOURL_WHOLE));
 		if (!(err = _transaction_begin(sq3,url, &repctx))) {
-			err = m2db_deduplicate_contents(sq3, url, flags, status_message);
-			if (err == NULL) {
-				GRID_INFO("Finished content deduplication");
-			} else {
-				GRID_WARN("Got error while performing content deduplication");
-			}
+			err = m2db_deduplicate_contents(sq3, url);
 			err = sqlx_transaction_end(repctx, err);
 		}
 		m2b_close(sq3);
-	} else {
-		GRID_WARN("Got error when opening database: %s", err->message);
 	}
 	return err;
 }

@@ -81,7 +81,6 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 extern gchar *nsname;
 extern gboolean flag_cache_enabled;
-extern gdouble m2_timeout_all;
 extern time_t nsinfo_refresh_delay;
 extern time_t nsinfo_refresh_m0;
 
@@ -89,6 +88,7 @@ extern time_t nsinfo_refresh_m0;
 extern time_t cs_expire_local_services;
 
 /* how long the proxy remembers dead services */
+/* TODO(jfs): convert time_t seconds to gint64 monotonic microseconds. */
 extern time_t cs_down_services;
 
 extern struct grid_lbpool_s *lbpool;

@@ -781,29 +781,62 @@ retry:
 	return err;
 }
 
-/* XXX FIXME TODO JFS: this is broken. it removes the m2 DB but not the meta1
- * entry. One possibility should be to mark the base as DISABLED, then remove
- * the reference in the directory, then remove the m2 DB. */
 static enum http_rc_e
 action_m2_container_destroy (struct req_args_s *args)
 {
-	guint32 flags = 0;
-	if (_request_has_flag (args, PROXYD_HEADER_MODE, "force"))
-		flags = M2V2_DESTROY_FORCE;
-	if (_request_has_flag (args, PROXYD_HEADER_MODE, "flush"))
-		flags = M2V2_DESTROY_FLUSH;
-	if (_request_has_flag (args, PROXYD_HEADER_MODE, "purge"))
-		flags = M2V2_DESTROY_PURGE;
-	if (_request_has_flag (args, PROXYD_HEADER_MODE, "local"))
-		flags = M2V2_DESTROY_LOCAL;
+	GError *err = NULL;
+	struct sqlx_name_mutable_s n = {NULL,NULL,NULL};
+	/* TODO(jfs): manage container subtype */
+	sqlx_name_fill (&n, args->url, NAME_SRVTYPE_META2, 1);
 
-	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
-		(void) next;
-		return m2v2_remote_execute_DESTROY (m2->host, args->url, flags);
+	/* 1. FREEZE the base to avoid writings during the operation */
+	if (!err) {
+		GByteArray* _pack_freeze () {
+			return sqlx_pack_FREEZE (sqlx_name_mutable_to_const(&n));
+		}
+		GError * _freeze (struct meta1_service_url_s *m2, gboolean *next) {
+			(void) next;
+			GError *e = _gba_request (m2, _pack_freeze, NULL);
+			if (!e)
+				e = m2v2_remote_execute_FLUSH (m2->host, args->url,
+					M2V2_CLIENT_TIMEOUT_HUGE);
+			return e;
+		}
+		err = _resolve_meta2 (args, _freeze);
 	}
 
-	GError *err;
-	err = _resolve_meta2 (args, hook);
+	/* 2. FLUSH the base on the MASTER, so events are generated for all the
+	   contents removed. */
+	if (!err) {
+		GError * _flush (struct meta1_service_url_s *m2, gboolean *next) {
+			(void) next;
+			return m2v2_remote_execute_FLUSH (m2->host, args->url,
+					M2V2_CLIENT_TIMEOUT_HUGE);
+		}
+		err = _resolve_meta2 (args, _flush);
+	}
+
+	gchar **urlv = NULL;
+	err = hc_resolve_reference_service (resolver, args->url, n.type, &urlv);
+
+	/* 3. UNLINK the base in the directory */
+	if (!err) {
+		GError * _unlink (const char * m1) {
+			return meta1v2_remote_unlink_service (m1, args->url, n.type);
+		}
+		err = _m1_locate_and_action (args->url, _unlink);
+	}
+
+	hc_decache_reference_service (resolver, args->url, n.type);
+
+	/* 4. DESTROY each local base */
+	if (!err && urlv && *urlv) {
+		meta1_urlv_shift_addr(urlv);
+		err = m2v2_remote_execute_DESTROY_many(urlv, args->url, M2V2_DESTROY_LOCAL);
+	}
+
+	if (urlv) g_strfreev (urlv);
+	sqlx_name_clean (&n);
 	if (NULL != err)
 		return _reply_m2_error(args, err);
 	return _reply_nocontent (args);
@@ -818,8 +851,22 @@ action_m2_container_purge (struct req_args_s *args, struct json_object *jargs)
 	GSList *beans = NULL;
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
-		return m2v2_remote_execute_PURGE (m2->host, args->url, FALSE,
-				m2_timeout_all, &beans);
+		return m2v2_remote_execute_PURGE (m2->host, args->url,
+				M2V2_CLIENT_TIMEOUT_HUGE);
+	}
+	GError *err = _resolve_meta2 (args, hook);
+	return _reply_beans (args, err, beans);
+}
+
+static enum http_rc_e
+action_m2_container_flush (struct req_args_s *args, struct json_object *jargs)
+{
+	(void) jargs;
+	GSList *beans = NULL;
+	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		return m2v2_remote_execute_FLUSH (m2->host, args->url,
+				M2V2_CLIENT_TIMEOUT_HUGE);
 	}
 	GError *err = _resolve_meta2 (args, hook);
 	return _reply_beans (args, err, beans);
@@ -835,7 +882,8 @@ action_m2_container_dedup (struct req_args_s *args, struct json_object *jargs)
 	GError *hook (struct meta1_service_url_s *m2, gboolean *next) {
 		(void) next;
 		gchar *msg = NULL;
-		GError *e = m2v2_remote_execute_DEDUP (m2->host, args->url, 0, &msg);
+		GError *e = m2v2_remote_execute_DEDUP (m2->host, args->url,
+				M2V2_CLIENT_TIMEOUT_HUGE);
 		if (msg) {
 			if (!first)
 				g_string_append_c (gstr, ',');
@@ -1217,6 +1265,12 @@ enum http_rc_e
 action_container_purge (struct req_args_s *args)
 {
     return rest_action (args, action_m2_container_purge);
+}
+
+enum http_rc_e
+action_container_flush (struct req_args_s *args)
+{
+    return rest_action (args, action_m2_container_flush);
 }
 
 enum http_rc_e

@@ -137,3 +137,22 @@ meta1_strurl_get_address(const gchar *str)
 	return s;
 }
 
+void
+meta1_url_shift_addr(char *str)
+{
+	gchar *s0 = str;
+	gchar *s = strchr(s0, '|');
+	if (s) s = strchr(s+1, '|');
+	if (s) {
+		++s;
+		while (*s && *s != '|') { *(s0++) = *(s++); }
+		*s0 = 0;
+	}
+}
+
+void
+meta1_urlv_shift_addr (char **v)
+{
+	if (!v) return;
+	for (; *v; ++v) meta1_url_shift_addr (*v);
+}

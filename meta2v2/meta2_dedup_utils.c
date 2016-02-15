@@ -129,7 +129,7 @@ get_dup_contents_headers_by_hash(sqlite3 *db, GError **err)
 }
 
 guint64
-dedup_aliases(sqlite3 *db, struct oio_url_s *url, gboolean dry_run, GSList **impacted_aliases,
+dedup_aliases(sqlite3 *db, struct oio_url_s *url, GSList **impacted_aliases,
 		GError **err)
 {
 	(void) url;
@@ -159,7 +159,7 @@ dedup_aliases(sqlite3 *db, struct oio_url_s *url, gboolean dry_run, GSList **imp
 			(void) d2;
 			GSList *ch_list2 = (GSList *) v2;
 			saved_space += substitute_content_header(db, ch_list2->data,
-					ch_list2->next, dry_run, impacted_aliases, err);
+					ch_list2->next, impacted_aliases, err);
 		}
 		g_hash_table_foreach(by_sp, _dedup_ch_cb2, NULL);
 		g_hash_table_destroy(by_sp);
@@ -173,7 +173,7 @@ dedup_aliases(sqlite3 *db, struct oio_url_s *url, gboolean dry_run, GSList **imp
 
 guint64
 substitute_content_header(sqlite3 *db, struct bean_CONTENTS_HEADERS_s *new_ch,
-		GSList *old_ch, gboolean dry_run, GSList **impacted_aliases ,GError **err)
+		GSList *old_ch, GSList **impacted_aliases ,GError **err)
 {
 	const gchar *clause = " content_id = ? ";
 	GVariant *params[2] = {NULL, NULL};
@@ -182,12 +182,9 @@ substitute_content_header(sqlite3 *db, struct bean_CONTENTS_HEADERS_s *new_ch,
 	void _substitute_ch_cb(gpointer ch, gpointer alias)
 	{
 		GError *err2 = NULL;
-		struct bean_ALIASES_s *new_alias = NULL;
-		if (!dry_run) {
-			new_alias = _bean_dup(alias);
-			ALIASES_set_content(new_alias, CONTENTS_HEADERS_get_id(ch));
-			err2 = ALIASES_save(db, new_alias);
-		}
+		struct bean_ALIASES_s *new_alias = _bean_dup(alias);
+		ALIASES_set_content(new_alias, CONTENTS_HEADERS_get_id(ch));
+		err2 = ALIASES_save(db, new_alias);
 		if (err2 != NULL) {
 			GString *orig_ch_str = metautils_gba_to_hexgstr(NULL,
 					ALIASES_get_content(alias));

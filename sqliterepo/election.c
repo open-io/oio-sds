@@ -1205,15 +1205,17 @@ _election_make(struct election_manager_s *m, struct sqlx_name_s *n,
 	MANAGER_CHECK(m);
 	SQLXNAME_CHECK(n);
 
-	gboolean peers_present = FALSE;
-	GError *err = election_has_peers(m, n, FALSE, &peers_present);
-	if (err != NULL) {
-		g_prefix_error(&err, "Election error: ");
-		return err;
-	}
-	if (!peers_present) {
-		GRID_DEBUG("No peer for [%s][%s]", n->base, n->type);
-		return NULL;
+	if (op != ELOP_EXIT) {
+		gboolean peers_present = FALSE;
+		GError *err = election_has_peers(m, n, FALSE, &peers_present);
+		if (err != NULL) {
+			g_prefix_error(&err, "Election error: ");
+			return err;
+		}
+		if (!peers_present) {
+			GRID_DEBUG("No peer for [%s][%s]", n->base, n->type);
+			return NULL;
+		}
 	}
 
 	g_mutex_lock(&m->lock);
