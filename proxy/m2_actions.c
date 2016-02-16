@@ -305,6 +305,19 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_ctime(alias)));
 }
 
+static service_info_t*
+_service_info_from_chunk_id(struct grid_lbpool_s *lbp,
+		const gchar *id)
+{
+	gchar addr[64] = {0};
+	gchar *start = strstr(id, "://");
+	int offset = start? start - id + 3 : 0;
+	memmove(addr, id+offset, strchr(id+offset, '/') - id - offset);
+	service_info_t *si = grid_lbpool_get_service_from_url(lbp,
+			NAME_SRVTYPE_RAWX, addr);
+	return si;
+}
+
 static enum http_rc_e
 _reply_simplified_beans (struct req_args_s *args, GError *err,
 		GSList *beans, gboolean body)
@@ -317,9 +330,46 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 	gboolean first = TRUE;
 	GString *gstr = body ? g_string_new ("[") : NULL;
 
-	beans = g_slist_sort(beans, _bean_compare_kind);
+	gint _bean_compare_kind_then_score(gconstpointer b0, gconstpointer b1) {
+		if (DESCR(b0) == &descr_struct_CHUNKS &&
+				DESCR(b1) == &descr_struct_CHUNKS) {
+			int rc = 0;
+			const gchar *pos0 = CHUNKS_get_position((struct bean_CHUNKS_s *)b0)->str;
+			const gchar *pos1 = CHUNKS_get_position((struct bean_CHUNKS_s *)b1)->str;
+			if ((rc = g_strcmp0(pos0, pos1))) {
+				// Different position, sort by position
+				int meta_diff = atoi(pos0) - atoi(pos1);
+				if (meta_diff != 0) {
+					// Digitally sort the prefix
+					rc = meta_diff;
+				}
+			} else {
+				// Same position, sort by score
+				service_info_t *si0 = _service_info_from_chunk_id(lbpool,
+						CHUNKS_get_id((struct bean_CHUNKS_s *)b0)->str);
+				service_info_t *si1 = _service_info_from_chunk_id(lbpool,
+						CHUNKS_get_id((struct bean_CHUNKS_s *)b1)->str);
 
-	for (GSList *l0=beans; l0 ;l0=l0->next) {
+				if (si0 && si1) {
+					rc = si1->score.value - si0->score.value;
+				} else if (!si0 && si1) {
+					rc = 1;
+				} else if (si0 && !si1) {
+					rc = -1;
+				}
+
+				service_info_clean(si0);
+				service_info_clean(si1);
+			}
+			return rc;
+		} else {
+			return _bean_compare_kind(b0, b1);
+		}
+	}
+
+	beans = g_slist_sort(beans, _bean_compare_kind_then_score);
+
+	for (GSList *l0=beans; l0; l0=l0->next) {
 		if (!l0->data)
 			continue;
 		if (&descr_struct_ALIASES == DESCR(l0->data)) {
@@ -345,6 +395,8 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 			g_free (k);
 			continue;
 		}
+		// TODO: this case should be the first
+		// since it has a better chance to be matched (more chunks than aliases)
 		if (&descr_struct_CHUNKS != DESCR(l0->data))
 			continue;
 
