@@ -9,7 +9,7 @@ class VolumeStat(object):
 
     def __init__(self, conf, logger):
         self.logger = logger
-        self.volume = conf.get('path', '/')
+        self.volume = conf.get('path', '') or '/'
         if not self.__class__.oio_sys_space_idle:
             self._load_lib()
 

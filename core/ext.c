@@ -437,9 +437,9 @@ _get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
 	g_mutex_lock (&majmin_lock);
 	gint64 now = oio_ext_monotonic_time ();
 	/* ensure an entry exists */
-	for (GSList *l=majmin_cache; l && !out ;l=l->next) {
+	for (GSList *l=majmin_cache; l && !out; l=l->next) {
 		struct path_maj_min_s *p = l->data;
-		if (p && !strcmp(path, p->path))
+		if (p && !g_strcmp0(path, p->path))
 			out = p;
 	}
 	if (!out) {
@@ -466,7 +466,7 @@ _get_major_minor (const gchar *path, guint *pmaj, guint *pmin)
 
 	/* now purge the expired items */
 	GSList *kept = NULL, *trash = NULL;
-	for (GSList *l=majmin_cache; l ;l=l->next) {
+	for (GSList *l=majmin_cache; l; l=l->next) {
 		struct path_maj_min_s *p = l->data;
 		if ((now - p->last_update) > G_TIME_SPAN_HOUR)
 			trash = g_slist_prepend (trash, p);
