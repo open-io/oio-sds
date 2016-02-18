@@ -24,6 +24,7 @@ class SystemStat(object):
             self.logger.exception("Failed to load %s", path)
 
     def get_stats(self):
+        # TODO maybe cache these results
         if not self.__class__.oio_sys_cpu_idle:
             self._load_lib()
         if not self.__class__.oio_sys_cpu_idle:

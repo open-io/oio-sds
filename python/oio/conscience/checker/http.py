@@ -20,10 +20,14 @@ class HttpChecker(BaseChecker):
         self.name = 'http|%s|%s|%s' % (self.host, self.port, self.uri)
         self.url = 'http://%s:%s/%s' % \
             (self.host, self.port, self.uri.lstrip('/'))
+        self.session = requests.session()
 
     def check(self):
         self.uri = self.uri.lstrip('/')
-        resp = requests.get(self.url)
-        if resp.status_code != 200:
-            return False
-        return True
+        success = False
+        try:
+            resp = self.session.get(self.url)
+            if resp.status_code == 200:
+                success = True
+        finally:
+            return success
