@@ -10,10 +10,18 @@ class HttpStat(object):
         self.parser = conf.get('parser', 'lines')
         self.url = 'http://{host}:{port}/{path}'.format(**conf)
         self.logger = logger
+        self.session = requests.session()
+        if self.parser == 'json':
+            # use json parser (account and rdir style)
+            self._parse_func = self._parse_stats_json
+        else:
+            # default to lines parser (rawx style)
+            self._parse_func = self._parse_stats_lines
 
     @staticmethod
-    def _parse_stats_lines(body):
+    def _parse_stats_lines(resp):
         """Converts each line to a dictionary entry"""
+        body = resp.text
         data = {}
         for line in body.splitlines():
             parts = line.split()
@@ -34,20 +42,14 @@ class HttpStat(object):
         return data
 
     @staticmethod
-    def _parse_stats_json(body):
+    def _parse_stats_json(resp):
         """Prefix each entry with 'stat.'"""
+        body = resp.json()
         return {'stat.' + k: body[k] for k in body.keys()}
 
     def get_stats(self):
         try:
-            resp = requests.get(self.url)
-            if self.parser == "json":
-                parsed = self._parse_stats_json(resp.json())
-            else:
-                parsed = self._parse_stats_lines(resp.text)
-            return parsed
-        except RequestException as exc:
-            self.logger.warn(
-                    "Could not fetch statistics (%s), assume service down",
-                    str(exc))
+            resp = self.session.get(self.url)
+            return self._parse_func(resp)
+        except Exception:
             return {}
