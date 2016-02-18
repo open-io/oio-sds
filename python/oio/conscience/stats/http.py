@@ -10,6 +10,7 @@ class HttpStat(object):
         self.url = 'http://{host}:{port}/{path}'.format(**conf)
         self.logger = logger
         self.session = requests.session()
+        self._fetch_func = self.session.get
         if self.parser == 'json':
             # use json parser (account and rdir style)
             self._parse_func = self._parse_stats_json
@@ -48,7 +49,7 @@ class HttpStat(object):
 
     def get_stats(self):
         try:
-            resp = self.session.get(self.url)
+            resp = self._fetch_func(self.url)
             return self._parse_func(resp)
         except Exception:
             return {}
