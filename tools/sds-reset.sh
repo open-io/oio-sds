@@ -15,7 +15,6 @@
 #
 # You should have received a copy of the GNU Affero General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
-set -x
 set -e
 
 PREFIX="@EXE_PREFIX@"
@@ -34,10 +33,11 @@ ZKSLOW=0
 CHUNKSIZE=
 REDIS=0
 PORT=
+verbose=0
 
 OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
 
-while getopts ":B:C:D:E:I:M:N:P:R:S:V:X:Z" opt; do
+while getopts ":B:C:D:E:I:M:N:P:R:S:V:X:Zv" opt; do
 	case $opt in
 		B) REPLICATION_BUCKET="${OPTARG}" ;;
 		C) CHUNKSIZE="${OPTARG}" ;;
@@ -52,34 +52,10 @@ while getopts ":B:C:D:E:I:M:N:P:R:S:V:X:Z" opt; do
 		V) VERSIONING="${OPTARG}" ;;
 		X) AVOID="${AVOID} ${OPTARG}" ;;
 		Z) ZKSLOW=1 ;;
+		v) ((verbose=verbose+1)) ;;
 		\?) ;;
 	esac
 done
-
-echo "$0" \
-	"-B \"${REPLICATION_BUCKET}\"" \
-	"-C \"${CHUNKSIZE}\"" \
-	"-D \"${REPLICATION_DIRECTORY}\"" \
-	"-E \"${NB_RAWX}\"" \
-	"-I \"${IP}\"" \
-	"-M \"${MONITOR_PERIOD}\"" \
-	"-N \"${NS}\"" \
-	"-P \"${PORT}\"" \
-	"-R \"${REDIS}\"" \
-	"-S \"${STGPOL}\"" \
-	"-V \"${VERSIONING}\"" \
-	"-X \"${AVOID}\"" \
-	"-Z \"${ZKSLOW}\""
-
-# Stop and clean everything
-while pkill --full -0 gridinit ; do
-	if pkill --full gridinit ; then
-		sleep 2
-	fi
-done
-
-mkdir -p "$OIO"
-( cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs}))
 
 NB_META2=${REPLICATION_BUCKET}
 if [ -n "$ADD_META2" ] && [ "$ADD_META2" -gt 0 ] ; then
@@ -103,15 +79,73 @@ then
 	echo $PATH | grep -q '/usr/sbin' || PATH="$PATH:/usr/sbin"
 	opts="${opts} --opensuse"
 fi
+
+timeout () {
+	local max="$1" ; shift
+	if [ $count -gt $max ] ; then
+		echo "TIMEOUT: $@"
+		exit 1
+	fi
+	sleep 2
+	((count=count+2))
+}
+
+#-------------------------------------------------------------------------------
+
+G_DEBUG_LEVEL=WARN
+if [ $verbose != 0 ] ; then
+	G_DEBUG_LEVEL=TRACE
+	echo "# $0" \
+		"-B \"${REPLICATION_BUCKET}\"" \
+		"-C \"${CHUNKSIZE}\"" \
+		"-D \"${REPLICATION_DIRECTORY}\"" \
+		"-E \"${NB_RAWX}\"" \
+		"-I \"${IP}\"" \
+		"-M \"${MONITOR_PERIOD}\"" \
+		"-N \"${NS}\"" \
+		"-P \"${PORT}\"" \
+		"-R \"${REDIS}\"" \
+		"-S \"${STGPOL}\"" \
+		"-V \"${VERSIONING}\"" \
+		"-X \"${AVOID}\"" \
+		"-Z \"${ZKSLOW}\""
+fi
+export G_DEBUG_LEVEL
+
+if [ $verbose -ge 1 ] ; then set -x ; fi
+
+# Stop and clean a previous installation.
+pgrep -u "$UID" --full gridinit | while read pidof_gridinit ; do
+	# First try a clean stop of gridinit's children
+	if [ -e "$GRIDINIT_SOCK" ] ; then
+		if ! gridinit_cmd -S "$GRIDINIT_SOCK" stop ; then
+			echo "Failed to send 'stop' to gridinit"
+		fi
+	fi
+	# We know by experience this might fail, so try to kill gridinit's children
+	if ! pkill -u "$UID" -P "$pidof_gridinit" ; then
+		echo "Failed to kill gridinit children" 1>&2
+	fi
+	# Kill gridinit until it dies with its children
+	count=0
+	while kill "$pidof_gridinit" ; do
+		# Waiting for gridinit ...
+		ps -o pid,ppid,cmd $(pgrep -u $UID -P "$pidof_gridinit" | sed 's/^/-p /')
+		timeout 30 "(previous) gridinit exit"
+	done
+done
+
+# Generate a new configuration and start the new gridinit
+mkdir -p "$OIO" && cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs})
 ${PREFIX}-bootstrap.py \
 		-B "$REPLICATION_BUCKET" \
 		-V "$VERSIONING" \
 		-S "$STGPOL" \
-		${opts} \
-		"$NS" "$IP"
-
+		${opts} "$NS" "$IP"
 nice gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
 
+
+# Initiate Zookeeper (if necessary)
 ZK=$(${PREFIX}-cluster --local-cfg | grep "$NS/zookeeper" ; exit 0)
 if [ -n "$ZK" ] ; then
 	opts=
@@ -121,25 +155,30 @@ if [ -n "$ZK" ] ; then
 	zk-bootstrap.py $opts "$NS"
 fi
 
-# wait for the gridinit to startup
-while ! pkill -0 gridinit ; do sleep 1 ; done
-# wait for the gridinit's socket to appear
-while ! [ -e "$GRIDINIT_SOCK" ] ; do sleep 1 ; done
+
+# Wait for the gridinit's startup
+count=0
+while ! pkill -u "$UID" --full -0 gridinit ; do
+	timeout 5 "gridinit startup"
+done
+while ! [ -e "$GRIDINIT_SOCK" ] ; do
+	timeout 15 "gridinit readyness"
+done
 
 gridinit_cmd -S "$GRIDINIT_SOCK" reload
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@conscience" "@proxy" "@agent" "@meta0" "@meta1"
 
-# wait for the meta0 to start
-sleep 1
-while ! pkill --full -0 ${PREFIX}-meta0-server ; do
-	sleep 2
+
+# Wait for the meta0 to start and for meta1 to be registered
+count=0
+while ! pkill -u "$UID" --full -0 ${PREFIX}-meta0-server ; do
+	timeout 30 "meta0 startup"
+done
+count=0
+while [ ${REPLICATION_DIRECTORY} -gt $(${PREFIX}-cluster -r "$NS" | grep -c meta1) ] ; do
+	timeout 30 "meta1 registration"
 done
 
-# wait for meta1 to be known in the conscience (this is necessary for the
-# init phase of the meta0
-while [ ${REPLICATION_DIRECTORY} -gt $(${PREFIX}-cluster -r "$NS" | grep -c meta1) ] ; do
-	sleep 1
-done
 
 # Init the meta0's content
 ${PREFIX}-cluster -r "$NS" | awk -F\| '/meta0/{print $3}' | while read URL ; do
@@ -147,7 +186,11 @@ ${PREFIX}-cluster -r "$NS" | awk -F\| '/meta0/{print $3}' | while read URL ; do
 	${PREFIX}-meta0-client "$URL" reload
 done
 
+
 # then start all the services
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}"
 find $SDS -type d | xargs chmod a+rx
+
+echo
+gridinit_cmd -S "$GRIDINIT_SOCK" status2
 

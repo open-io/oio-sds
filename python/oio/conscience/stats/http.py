@@ -1,4 +1,3 @@
-from requests.exceptions import RequestException
 from oio.common.http import requests
 
 
