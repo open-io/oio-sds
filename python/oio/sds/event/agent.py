@@ -80,6 +80,7 @@ class EventWorker(object):
 
     def init_zmq(self, context):
         socket = context.socket(zmq.REP)
+        socket.set(zmq.LINGER, 1000)
         socket.connect('inproc://event-front')
         self.socket = socket
 
@@ -399,10 +400,12 @@ class EventAgent(Daemon):
     def init_zmq(self):
         self.context = zmq.Context()
         self.server = self.context.socket(zmq.ROUTER)
+        self.server.set(zmq.LINGER, 1000)
         bind_addr = self.conf.get('bind_addr',
                                   'ipc:///tmp/run/event-agent.sock')
         self.server.bind(bind_addr)
         self.backend = self.context.socket(zmq.DEALER)
+        self.backend.set(zmq.LINGER, 1000)
         self.backend.bind('inproc://event-front')
 
     def init_queue(self):
