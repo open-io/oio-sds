@@ -118,7 +118,6 @@ add_library(metautils SHARED
 
 		gridd_client.c gridd_client.h
 		gridd_client_ext.c gridd_client_ext.h
-		gridd_client_pool.c gridd_client_pool.h
 
 		${CMAKE_CURRENT_BINARY_DIR}/NativeEnumerated.c
 		${CMAKE_CURRENT_BINARY_DIR}/NativeEnumerated.h

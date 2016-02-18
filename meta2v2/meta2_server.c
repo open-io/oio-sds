@@ -83,7 +83,7 @@ filter_services_and_clean(struct sqlx_service_s *ss,
 }
 
 static GError *
-_get_peers(struct sqlx_service_s *ss, struct sqlx_name_s *n,
+_get_peers(struct sqlx_service_s *ss, const struct sqlx_name_s *n,
 		gboolean nocache, gchar ***result)
 {
 	EXTRA_ASSERT(ss != NULL);

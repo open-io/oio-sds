@@ -39,8 +39,8 @@ typedef void (*container_test_f) (struct meta2_backend_s *m2,
 static guint64 container_counter = 0;
 static gint64 chunk_size = 3000;
 static gint64 chunks_count = 3;
-static gint64 CLOCK_START = 0;
-static gint64 CLOCK = 0;
+static volatile gint64 CLOCK_START = 0;
+static volatile gint64 CLOCK = 0;
 
 #define CHECK_ALIAS_VERSION(m2,u,v) do {\
 	gint64 _v = 0, _v0 = (v); \

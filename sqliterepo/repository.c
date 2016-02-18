@@ -252,7 +252,7 @@ _schema_has (sqlite3 *db)
 }
 
 static void
-_default_locator (gpointer ignored, struct sqlx_name_s *n, GString *result)
+_default_locator (gpointer ignored, const struct sqlx_name_s *n, GString *result)
 {
 	SQLXNAME_CHECK(n);
 	EXTRA_ASSERT(result != NULL);
@@ -595,7 +595,7 @@ __create_directory(gchar *path)
 
 static GError *
 _open_fill_args(struct open_args_s *args, struct sqlx_repository_s *repo,
-		struct sqlx_name_s *n)
+		const struct sqlx_name_s *n)
 {
 	EXTRA_ASSERT(args != NULL);
 	EXTRA_ASSERT(repo != NULL);
@@ -954,7 +954,7 @@ sqlx_opentype_to_str (enum sqlx_open_type_e type, char *buf)
 
 GError*
 sqlx_repository_open_and_lock(sqlx_repository_t *repo,
-		struct sqlx_name_s *n, enum sqlx_open_type_e how,
+		const struct sqlx_name_s *n, enum sqlx_open_type_e how,
 		struct sqlx_sqlite3_s **result, gchar **lead)
 {
 	GError *err = NULL;
@@ -1029,7 +1029,7 @@ sqlx_repository_open_and_lock(sqlx_repository_t *repo,
 }
 
 GError*
-sqlx_repository_has_base2(sqlx_repository_t *repo, struct sqlx_name_s *n,
+sqlx_repository_has_base2(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 		gchar** bddname)
 {
 	REPO_CHECK(repo);
@@ -1057,7 +1057,7 @@ sqlx_repository_has_base2(sqlx_repository_t *repo, struct sqlx_name_s *n,
 /* ------------------------------------------------------------------------- */
 
 GError*
-sqlx_repository_status_base(sqlx_repository_t *repo, struct sqlx_name_s *n)
+sqlx_repository_status_base(sqlx_repository_t *repo, const struct sqlx_name_s *n)
 {
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
@@ -1129,7 +1129,7 @@ sqlx_repository_status_base(sqlx_repository_t *repo, struct sqlx_name_s *n)
 }
 
 GError*
-sqlx_repository_prepare_election(sqlx_repository_t *repo, struct sqlx_name_s *n)
+sqlx_repository_prepare_election(sqlx_repository_t *repo, const struct sqlx_name_s *n)
 {
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
@@ -1152,7 +1152,7 @@ sqlx_repository_prepare_election(sqlx_repository_t *repo, struct sqlx_name_s *n)
 }
 
 GError*
-sqlx_repository_exit_election(sqlx_repository_t *repo, struct sqlx_name_s *n)
+sqlx_repository_exit_election(sqlx_repository_t *repo, const struct sqlx_name_s *n)
 {
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
@@ -1176,7 +1176,7 @@ sqlx_repository_exit_election(sqlx_repository_t *repo, struct sqlx_name_s *n)
 }
 
 GError*
-sqlx_repository_use_base(sqlx_repository_t *repo, struct sqlx_name_s *n)
+sqlx_repository_use_base(sqlx_repository_t *repo, const struct sqlx_name_s *n)
 {
 	REPO_CHECK(repo);
 	SQLXNAME_CHECK(n);
@@ -1487,7 +1487,7 @@ sqlx_repository_get_version(struct sqlx_sqlite3_s *sq3, GTree **result)
 }
 
 GError *
-sqlx_repository_get_version2(sqlx_repository_t *repo, struct sqlx_name_s *n,
+sqlx_repository_get_version2(sqlx_repository_t *repo, const struct sqlx_name_s *n,
 		GTree **result)
 {
 	REPO_CHECK(repo);

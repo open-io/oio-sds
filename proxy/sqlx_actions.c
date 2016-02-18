@@ -23,8 +23,7 @@ static GError *
 _abstract_sqlx_action (struct req_args_s *args, gboolean next,
 		GError* (*hook) (struct sqlx_name_s *n, struct meta1_service_url_s *m1u))
 {
-	// @TODO Here is a factorisation spot, with sqlx_name_fill()
-	// Build the base name
+	/* @TODO Here is a factorisation spot, with sqlx_name_fill() */
 	const gchar *type = TYPE();
 	if (!type)
 		return BADREQ("No service type");
@@ -75,7 +74,7 @@ _abstract_sqlx_action (struct req_args_s *args, gboolean next,
 
 static enum http_rc_e
 _sqlx_action_noreturn (struct req_args_s *args, guint32 flags,
-		GByteArray* (*reqbuilder) (struct sqlx_name_s *))
+		GByteArray* (*reqbuilder) (const struct sqlx_name_s *))
 {
 	gboolean _on_status_reply (gpointer ctx, MESSAGE reply) {
 		*((gchar**)ctx) = metautils_message_extract_string_copy(reply, "MSG");
@@ -124,7 +123,7 @@ _sqlx_action_noreturn (struct req_args_s *args, guint32 flags,
 
 static enum http_rc_e
 _sqlx_action_flatbody (struct req_args_s *args, guint32 flags,
-		GByteArray* (*reqbuilder) (struct sqlx_name_s *))
+		GByteArray* (*reqbuilder) (const struct sqlx_name_s *))
 {
 	GString *out = g_string_new("{");
 	gboolean first = TRUE;
@@ -297,7 +296,7 @@ action_sqlx_propset (struct req_args_s *args, struct json_object *jargs)
 
 	if (!err) {
 		gboolean flush = NULL != OPT("flush");
-		GByteArray * packer (struct sqlx_name_s *n) {
+		GByteArray * packer (const struct sqlx_name_s *n) {
 			return sqlx_pack_PROPSET_pairs (n, flush, pairs);
 		}
 		rc = _sqlx_action_noreturn (args, 0, packer);
@@ -358,7 +357,7 @@ action_sqlx_propdel (struct req_args_s *args, struct json_object *jargs)
 	if (!namev)
 		return _reply_format_error (args, BADREQ("Bad names"));
 
-	GByteArray * packer (struct sqlx_name_s *n) {
+	GByteArray * packer (const struct sqlx_name_s *n) {
 		return sqlx_pack_PROPDEL (n, (const gchar * const * )namev);
 	}
 	enum http_rc_e rc = _sqlx_action_noreturn (args, 0, packer);
@@ -381,7 +380,7 @@ action_admin_status (struct req_args_s *args)
 enum http_rc_e
 action_admin_info (struct req_args_s *args)
 {
-	GByteArray* _pack (struct sqlx_name_s *n) {
+	GByteArray* _pack (const struct sqlx_name_s *n) {
 		(void) n; return sqlx_pack_INFO ();
 	}
 	return _sqlx_action_flatbody (args, SQLX_NEXT|SQLX_NOREDIR, _pack);
@@ -390,7 +389,7 @@ action_admin_info (struct req_args_s *args)
 enum http_rc_e
 action_admin_drop_cache (struct req_args_s *args)
 {
-	GByteArray* _pack (struct sqlx_name_s *n) {
+	GByteArray* _pack (const struct sqlx_name_s *n) {
 		(void) n; return sqlx_pack_LEANIFY ();
 	}
 	return _sqlx_action_noreturn (args, SQLX_NEXT|SQLX_NOREDIR, _pack);

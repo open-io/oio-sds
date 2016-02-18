@@ -46,6 +46,8 @@ guint hashstr_hash(const hashstr_t *hs);
 
 gsize hashstr_len(const hashstr_t *hs);
 
+gsize hashstr_struct_len(const hashstr_t *hs);
+
 gboolean hashstr_equal(const hashstr_t *hs1, const hashstr_t *hs2);
 
 /** First sort using the hash, then calling hashstr_hash()
