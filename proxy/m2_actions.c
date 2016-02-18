@@ -305,6 +305,30 @@ _populate_headers_with_alias (struct req_args_s *args, struct bean_ALIASES_s *al
 			g_strdup_printf("%"G_GINT64_FORMAT, ALIASES_get_ctime(alias)));
 }
 
+static service_info_t*
+_service_info_from_chunk_id(struct grid_lbpool_s *lbp, const gchar *id)
+{
+	gchar addr[STRLEN_ADDRINFO] = {0};
+	gchar *start = strstr(id, "://");  // skip "http://"
+	int offset = start? start - id + 3 : 0;
+	memmove(addr, id+offset, strchr(id+offset, '/') - id - offset);
+	service_info_t *si = grid_lbpool_get_service_from_url(lbp,
+			NAME_SRVTYPE_RAWX, addr);
+	return si;
+}
+
+static gint32
+_score_from_chunk_id(struct grid_lbpool_s *lbp, const gchar *id)
+{
+	gint32 score = 0;
+	service_info_t *si = _service_info_from_chunk_id(lbp, id);
+	if (si != NULL) {
+		score = si->score.value;
+		service_info_clean(si);
+	}
+	return score;
+}
+
 static enum http_rc_e
 _reply_simplified_beans (struct req_args_s *args, GError *err,
 		GSList *beans, gboolean body)
@@ -319,10 +343,26 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 
 	beans = g_slist_sort(beans, _bean_compare_kind);
 
-	for (GSList *l0=beans; l0 ;l0=l0->next) {
+	for (GSList *l0=beans; l0; l0=l0->next) {
 		if (!l0->data)
 			continue;
-		if (&descr_struct_ALIASES == DESCR(l0->data)) {
+
+		if (&descr_struct_CHUNKS == DESCR(l0->data) && gstr) {
+			if (!first)
+				g_string_append (gstr, ",\n");
+			first = FALSE;
+
+			// Serialize the chunk
+			struct bean_CHUNKS_s *chunk = l0->data;
+			gint32 score = _score_from_chunk_id(lbpool, CHUNKS_get_id(chunk)->str);
+			g_string_append_printf (gstr, "{\"url\":\"%s\"", CHUNKS_get_id (chunk)->str);
+			g_string_append_printf (gstr, ",\"pos\":\"%s\"", CHUNKS_get_position (chunk)->str);
+			g_string_append_printf (gstr, ",\"size\":%"G_GINT64_FORMAT, CHUNKS_get_size (chunk));
+			g_string_append (gstr, ",\"hash\":\"");
+			metautils_gba_to_hexgstr (gstr, CHUNKS_get_hash (chunk));
+			g_string_append_printf(gstr, "\",\"score\":%d}", score);
+		}
+		else if (&descr_struct_ALIASES == DESCR(l0->data)) {
 			alias = l0->data;
 			if (ALIASES_get_deleted(alias) && !metautils_cfg_get_bool(OPT("deleted"),FALSE)) {
 				if (gstr)
@@ -330,37 +370,17 @@ _reply_simplified_beans (struct req_args_s *args, GError *err,
 				_bean_cleanl2(beans);
 				return _reply_notfound_error(args, NEWERROR(CODE_CONTENT_DELETED, "Alias deleted"));
 			}
-			continue;
 		}
-		if (&descr_struct_CONTENTS_HEADERS == DESCR(l0->data)) {
+		else if (&descr_struct_CONTENTS_HEADERS == DESCR(l0->data)) {
 			header = l0->data;
-			continue;
 		}
-		if (&descr_struct_PROPERTIES == DESCR(l0->data)) {
+		else if (&descr_struct_PROPERTIES == DESCR(l0->data)) {
 			struct bean_PROPERTIES_s *prop = l0->data;
 			gchar *k = g_strdup_printf (PROXYD_HEADER_PREFIX "content-meta-x-%s",
 					PROPERTIES_get_key(prop)->str);
 			GByteArray *v = PROPERTIES_get_value (prop);
 			args->rp->add_header(k, g_strndup ((gchar*)v->data, v->len));
 			g_free (k);
-			continue;
-		}
-		if (&descr_struct_CHUNKS != DESCR(l0->data))
-			continue;
-
-		if (gstr) {
-			if (!first)
-				g_string_append (gstr, ",\n");
-			first = FALSE;
-
-			// Serialize the chunk
-			struct bean_CHUNKS_s *chunk = l0->data;
-			g_string_append_printf (gstr, "{\"url\":\"%s\"", CHUNKS_get_id (chunk)->str);
-			g_string_append_printf (gstr, ",\"pos\":\"%s\"", CHUNKS_get_position (chunk)->str);
-			g_string_append_printf (gstr, ",\"size\":%"G_GINT64_FORMAT, CHUNKS_get_size (chunk));
-			g_string_append (gstr, ",\"hash\":\"");
-			metautils_gba_to_hexgstr (gstr, CHUNKS_get_hash (chunk));
-			g_string_append (gstr, "\"}");
 		}
 	}
 	if (body)

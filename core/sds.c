@@ -82,6 +82,7 @@ struct chunk_s
 		gboolean parity : 8;
 	} position;
 	gchar hexhash[STRLEN_CHUNKHASH];
+	guint32 score;
 	gchar url[1];
 };
 
@@ -101,11 +102,13 @@ static gint
 _compare_chunks (const struct chunk_s *c0, const struct chunk_s *c1)
 {
 	g_assert(c0 != NULL && c1 != NULL);
-	int c = CMP(c0->position.meta,c1->position.meta);
+	int c = CMP(c0->position.meta, c1->position.meta);
 	if (c) return c;
-	c = CMP(c0->position.intra,c1->position.intra);
+	c = CMP(c0->position.intra, c1->position.intra);
 	if (c) return c;
-	return CMP(c0->position.parity,c1->position.parity);
+	c = CMP(c0->position.parity, c1->position.parity);
+	if (c) return c;
+	return CMP(c0->score, c1->score);
 }
 
 static void
@@ -129,12 +132,14 @@ _metachunk_cleanv (struct metachunk_s **tab)
 
 static struct chunk_s *
 _load_one_chunk (struct json_object *jurl, struct json_object *jsize,
-		struct json_object *jpos)
+		struct json_object *jpos, struct json_object *jscore)
 {
 	const char *s = json_object_get_string(jurl);
 	struct chunk_s *result = g_malloc0 (sizeof(struct chunk_s) + strlen(s));
 	strcpy (result->url, s);
 	result->size = json_object_get_int64(jsize);
+	if (jscore != NULL)
+		result->score = (gint32)json_object_get_int64(jscore);
 	s = json_object_get_string(jpos);
 	result->position.meta = atoi(s);
 	if (NULL != (s = strchr(s, '.'))) {
@@ -190,12 +195,14 @@ _chunks_load (GSList **out, struct json_object *jtab)
 	GError *err = NULL;
 
 	for (int i=json_object_array_length(jtab); i>0 && !err ;i--) {
-		struct json_object *jurl = NULL, *jpos = NULL, *jsize = NULL, *jhash = NULL;
+		struct json_object *jurl = NULL, *jpos = NULL, *jsize = NULL,
+				*jhash = NULL, *jscore = NULL;
 		struct oio_ext_json_mapping_s m[] = {
-			{"url",  &jurl,  json_type_string, 1},
-			{"pos",  &jpos,  json_type_string, 1},
-			{"size", &jsize, json_type_int,    1},
-			{"hash", &jhash, json_type_string, 1},
+			{"url",   &jurl,   json_type_string, 1},
+			{"pos",   &jpos,   json_type_string, 1},
+			{"size",  &jsize,  json_type_int,    1},
+			{"hash",  &jhash,  json_type_string, 1},
+			{"score", &jscore, json_type_int,    0},
 			{NULL,NULL,0,0}
 		};
 		err = oio_ext_extract_json (json_object_array_get_idx (jtab, i-1), m);
@@ -206,7 +213,7 @@ _chunks_load (GSList **out, struct json_object *jtab)
 			err = NEWERROR(0, "JSON: invalid chunk hash: not hexa of %"G_GSIZE_FORMAT,
 					2*sizeof(chunk_hash_t));
 		else {
-			struct chunk_s *c = _load_one_chunk (jurl, jsize, jpos);
+			struct chunk_s *c = _load_one_chunk(jurl, jsize, jpos, jscore);
 			g_strlcpy (c->hexhash, h, sizeof(c->hexhash));
 			oio_str_upper(c->hexhash);
 			chunks = g_slist_prepend (chunks, c);
@@ -251,7 +258,8 @@ _organize_chunks (GSList *lchunks, struct metachunk_s ***result)
 	for (GSList *l=lchunks; l ;l=l->next) {
 		struct chunk_s *c = l->data;
 		guint i = c->position.meta;
-		out[i]->chunks = g_slist_prepend (out[i]->chunks, c);
+		out[i]->chunks = g_slist_insert_sorted(out[i]->chunks, c,
+				(GCompareFunc)_compare_chunks);
 		if (c->position.ec)
 			out[i]->ec = TRUE;
 	}
