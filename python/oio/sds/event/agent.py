@@ -397,6 +397,10 @@ class EventAgent(Daemon):
             self.logger.warn('event agent: stopping')
             self.stop_workers()
 
+            self.logger.warn('ZMQ context being destroyed')
+            self.context.destroy(linger=True)
+            self.context = None
+
     def init_zmq(self):
         self.context = zmq.Context()
         self.server = self.context.socket(zmq.ROUTER)
