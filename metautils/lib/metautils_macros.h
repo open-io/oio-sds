@@ -125,7 +125,7 @@ enum {
 	SCORE_UNSET = -2,
 	SCORE_UNLOCK = -1,
 	SCORE_DOWN = 0,
-	SCORE_MAX = 100
+	SCORE_MAX = 100000000
 };
 
 #endif /*OIO_SDS__metautils__lib__metautils_macros_h*/

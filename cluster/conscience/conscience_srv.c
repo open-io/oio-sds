@@ -171,9 +171,9 @@ conscience_srv_compute_score(struct conscience_srv_s
 		WARN("[%s] Score underflow : %f <- 0", service->description, d);
 		d = 0.0;
 	}
-	else if (d > 100.0) {
-		WARN("[%s] Score overflow : %f <- 100", service->description, d);
-		d = 100.0;
+	else if (d > SCORE_MAX) {
+		WARN("[%s] Score overflow : %f <- %d", service->description, d, SCORE_MAX);
+		d = SCORE_MAX;
 	}
 
 	current = d;

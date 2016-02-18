@@ -403,19 +403,19 @@ param_storage_conf=${CFGDIR}/${NS}-conscience-policies.conf
 
 param_service.meta0.score_timeout=3600
 param_service.meta0.score_variation_bound=5
-param_service.meta0.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+param_service.meta0.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * (num stat.cpu)*(num stat.space)*(num stat.io)
 
 param_service.meta1.score_timeout=120
 param_service.meta1.score_variation_bound=5
-param_service.meta1.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+param_service.meta1.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * (num stat.cpu)*(num stat.space)*(num stat.io)
 
 param_service.meta2.score_timeout=120
 param_service.meta2.score_variation_bound=5
-param_service.meta2.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+param_service.meta2.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * (num stat.cpu)*(num stat.space)*(num stat.io)
 
 param_service.rawx.score_timeout=120
 param_service.rawx.score_variation_bound=5
-param_service.rawx.score_expr=(num tag.up) * ((num stat.io)>=5) * ((num stat.space)>=5) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+param_service.rawx.score_expr=(num tag.up) * ((num stat.io)>=5) * ((num stat.space)>=5) * (num stat.cpu)*(num stat.space)*(num stat.io)
 
 param_service.rainx.score_timeout=120
 param_service.rainx.score_variation_bound=5
@@ -423,7 +423,7 @@ param_service.rainx.score_expr=(num tag.up) * (num stat.cpu)
 
 param_service.sqlx.score_timeout=120
 param_service.sqlx.score_variation_bound=5
-param_service.sqlx.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * root(3,((num stat.cpu)*(num stat.space)*(num stat.io)))
+param_service.sqlx.score_expr=((num stat.io)>=5) * ((num stat.space)>=5) * (num stat.cpu)*(num stat.space)*(num stat.io)
 
 param_service.rdir.score_timeout=120
 param_service.rdir.score_variation_bound=5
