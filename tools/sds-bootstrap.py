@@ -80,50 +80,41 @@ aof-rewrite-incremental-fsync yes
 
 template_redis_gridinit = """
 [service.${NS}-redis-${SRVNUM}]
-group=${NS},localhost,redis
+group=${NS},localhost,redis,${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
 command=redis-server ${CFGDIR}/${NS}-redis-${SRVNUM}.conf
 """
 
-template_account_server_gridinit = """
-[service.${NS}-account-server]
-group=${NS},localhost,account-server
+template_account_gridinit = """
+[service.${NS}-account]
+group=${NS},localhost,account,${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account-server.conf
+command=${EXE_PREFIX}-account-server ${CFGDIR}/${NS}-account.conf
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
-template_rdir_server_gridinit = """
-[service.${NS}-rdir-server]
-group=${NS},localhost,rdir-server
+template_rdir_gridinit = """
+[service.${NS}-rdir]
+group=${NS},localhost,rdir,${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
-command=${EXE_PREFIX}-rdir-server ${CFGDIR}/${NS}-rdir-server.conf
+command=${EXE_PREFIX}-rdir-server ${CFGDIR}/${NS}-rdir.conf
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 """
 
 template_proxy_gridinit = """
 [service.${NS}-proxy]
-group=${NS},localhost,proxy
+group=${NS},localhost,proxy,${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
 #command=${EXE_PREFIX}-proxy -s OIO,${NS},proxy -O Bind=${RUNDIR}/${NS}-proxy.sock ${IP}:${PORT} ${NS}
 command=${EXE_PREFIX}-proxy -O Cache=off -s OIO,${NS},proxy ${IP}:${PORT} ${NS}
-"""
-
-template_nginx_gridinit = """
-[service.${NS}-endpoint]
-group=${NS},localhost,endpoint
-on_die=respawn
-enabled=true
-start_at_boot=true
-command=/usr/sbin/nginx -p ${CFGDIR} -c ${NS}-endpoint.conf
 """
 
 template_rawx_service = """
@@ -514,7 +505,7 @@ start_at_boot=true
 command=${EXE_PREFIX}-daemon -q -s OIO,${NS},conscience ${CFGDIR}/${NS}-conscience.conf
 
 [service.${NS}-event-agent]
-group=${NS},localhost,event
+group=${NS},localhost,event,${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
@@ -522,7 +513,7 @@ command=${EXE_PREFIX}-event-agent ${CFGDIR}/event-agent.conf
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 
 [service.${NS}-conscience-agent]
-group=${NS},localhost,conscience
+group=${NS},localhost,conscience-agent
 on_die=respawn
 enabled=true
 start_at_boot=true
@@ -532,7 +523,7 @@ env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 
 template_gridinit_service = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE}
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
@@ -541,7 +532,7 @@ command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O Endpoint=${IP}:${PORT} ${NS}
 
 template_gridinit_sqlx = """
 [service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE}
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 on_die=respawn
 enabled=true
 start_at_boot=false
@@ -550,7 +541,7 @@ command=${EXE} -s OIO,${NS},${SRVTYPE},${SRVNUM} -O DirectorySchemas=${CFGDIR}/s
 
 template_gridinit_rawx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE}
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf
 enabled=true
 start_at_boot=false
@@ -559,7 +550,7 @@ on_die=respawn
 
 template_gridinit_rainx = """
 [Service.${NS}-${SRVTYPE}-${SRVNUM}]
-group=${NS},localhost,${SRVTYPE}
+group=${NS},localhost,${SRVTYPE},${IP}:${PORT}
 command=${HTTPD_BINARY} -D FOREGROUND -f ${CFGDIR}/${NS}-${SRVTYPE}-httpd-${SRVNUM}.conf
 enabled=true
 start_at_boot=false
@@ -605,7 +596,7 @@ fall: 1
 include_dir: ${CFGDIR}/watch
 """
 
-template_account_server = """
+template_account = """
 [account-server]
 bind_addr = ${IP}
 bind_port = ${PORT}
@@ -621,7 +612,7 @@ syslog_prefix = OIO,${NS},account,1
 sentinel_master_name = oio
 """
 
-template_rdir_server = """
+template_rdir = """
 [rdir-server]
 bind_addr = ${IP}
 bind_port = ${PORT}
@@ -945,27 +936,27 @@ def generate(ns, ip, options={}):
         tpl = Template(template_proxy_gridinit)
         f.write(tpl.safe_substitute(env))
 
-    # account-server
+    # account
     env['PORT'] = port_account
-    with open(CFGDIR + '/' + ns + '-account-server.conf', 'w+') as f:
-        tpl = Template(template_account_server)
+    with open(CFGDIR + '/' + ns + '-account.conf', 'w+') as f:
+        tpl = Template(template_account)
         f.write(tpl.safe_substitute(env))
     with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-        tpl = Template(template_account_server_gridinit)
+        tpl = Template(template_account_gridinit)
         f.write(tpl.safe_substitute(env))
     with open(WATCHDIR + '/' + ns + '-account-1.yml', 'w+') as f:
         tpl = Template(template_account_watch)
         f.write(tpl.safe_substitute(env))
 
-    # rdir-server
+    # rdir
     env['PORT'] = port_rdir
     env['RDIR_DB_PATH'] = DATADIR + '/' + ns + '-rdir-1'
     mkdir_noerror(env['RDIR_DB_PATH'])
-    with open(CFGDIR + '/' + ns + '-rdir-server.conf', 'w+') as f:
-        tpl = Template(template_rdir_server)
+    with open(CFGDIR + '/' + ns + '-rdir.conf', 'w+') as f:
+        tpl = Template(template_rdir)
         f.write(tpl.safe_substitute(env))
     with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
-        tpl = Template(template_rdir_server_gridinit)
+        tpl = Template(template_rdir_gridinit)
         f.write(tpl.safe_substitute(env))
     with open(WATCHDIR + '/' + ns + '-rdir-1.yml', 'w+') as f:
         tpl = Template(template_rdir_watch)
