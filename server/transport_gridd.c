@@ -88,6 +88,11 @@ static void transport_gridd_clean_context(struct transport_client_context_s *);
 
 static gboolean _client_manage_l4v(struct network_client_s *clt, GByteArray *gba);
 
+/* XXX(jfs): ugly quirk, ok, but helpful to keep simple the stats support in
+   the server but allow it to reply "config volume /path/to/docroot" in its
+   stats. */
+const char *oio_server_volume = NULL;
+
 /* -------------------------------------------------------------------------- */
 
 void
@@ -869,6 +874,7 @@ static gboolean
 dispatch_STATS(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
+
 	(void) gdata, (void) hdata;
 	GByteArray *body = g_byte_array_new();
 
@@ -881,6 +887,14 @@ dispatch_STATS(struct gridd_reply_ctx_s *reply,
 		g_byte_array_append (body, (guint8*)tmp, len);
 	}
 	g_array_free (array, TRUE);
+
+	if (oio_server_volume) {
+#define VOLPREFIX "config volume="
+		g_byte_array_append (body,
+				(guint8*)VOLPREFIX, sizeof(VOLPREFIX)-1);
+		g_byte_array_append (body,
+				(guint8*)oio_server_volume, strlen(oio_server_volume));
+	}
 
 	reply->add_body(body);
 	reply->send_reply(CODE_FINAL_OK, "OK");

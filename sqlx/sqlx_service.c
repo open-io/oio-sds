@@ -418,6 +418,8 @@ sqlx_service_action(void)
 			return _action_report_error(err, "Volume lock failed");
 	}
 
+	oio_server_volume = SRV.volume;
+
 	gridd_client_pool_set_max(SRV.clients_pool, SRV.max_active);
 	network_server_set_maxcnx(SRV.server, SRV.max_passive);
 	network_server_set_cnx_backlog(SRV.server, SRV.cnx_backlog);
@@ -460,6 +462,7 @@ sqlx_service_action(void)
 		return _action_report_error(err, "GRIDD bind failure");
 	if (!grid_main_is_running())
 		return;
+
 	if (NULL != (err = network_server_run(SRV.server)))
 		return _action_report_error(err, "GRIDD run failure");
 }
