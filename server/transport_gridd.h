@@ -22,6 +22,8 @@ License along with this library.
 
 # include <glib.h>
 
+extern const char *oio_server_volume;
+
 /* Forward declarations externally defined */
 struct network_client_s;
 struct network_server_s;

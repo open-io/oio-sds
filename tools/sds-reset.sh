@@ -130,6 +130,10 @@ pgrep -u "$UID" --full gridinit | while read pidof_gridinit ; do
 	count=0
 	while kill "$pidof_gridinit" ; do
 		# Waiting for gridinit ...
+		if [ "$count" -gt 20 ] ; then
+			echo "Gridinit doesn't want to die gracefully. Go for euthanasy"
+			pkill -9 -u "$UID" oio-event-agent
+		fi
 		ps -o pid,ppid,cmd $(pgrep -u $UID -P "$pidof_gridinit" | sed 's/^/-p /')
 		timeout 30 "(previous) gridinit exit"
 	done

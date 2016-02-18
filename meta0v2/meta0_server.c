@@ -170,8 +170,7 @@ _post_config(struct sqlx_service_s *ss)
 	sqlx_repository_configure_change_callback(ss->repository,
 			_callback_change, NULL);
 
-	grid_task_queue_register(ss->gtq_register, 3,
-			_task_zk_registration, NULL, ss);
+	grid_task_queue_register(ss->gtq_admin, 7, _task_zk_registration, NULL, ss);
 
 	return TRUE;
 }

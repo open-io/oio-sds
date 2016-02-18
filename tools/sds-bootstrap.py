@@ -260,6 +260,19 @@ Require all granted
 </VirtualHost>
 """
 
+template_meta_watch = """
+host: ${IP}
+port: ${PORT}
+type: ${SRVTYPE}
+checks:
+    - {type: tcp}
+
+stats:
+    - {type: volume, path: ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}}
+    - {type: meta, proxy: "${IP}:${PORT_PROXYD}", id: "${IP}:${PORT}"}
+    - {type: system}
+"""
+
 template_account_watch = """
 host: ${IP}
 port: ${PORT}
@@ -817,7 +830,7 @@ def generate(ns, ip, options={}):
         f.write(tpl.safe_substitute(env))
 
     # Generate the "GRIDD-like" services, excepted the sqlx that require
-	# specific options
+    # specific options
     with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
         tpl = Template(template_gridinit_header)
         f.write(tpl.safe_substitute(env))
@@ -834,7 +847,7 @@ def generate(ns, ip, options={}):
             env['EXE'] = e
             f.write(tpl.safe_substitute(env))
 
-	# Now create the sqlx and pre-defined schemas
+    # Now create the sqlx and pre-defined schemas
     with open(CFGDIR + '/' + 'gridinit.conf', 'a+') as f:
         env['PORT'] = port_proxy
         tpl = Template(template_gridinit_ns)
@@ -851,6 +864,17 @@ def generate(ns, ip, options={}):
         for name, content in sqlx_schemas:
             with open(CFGDIR + '/sqlx/schemas/' + name, 'w+') as f:
                 f.write(content)
+
+    # All the GRIDD-based servers require a watcher
+    tpl = Template(template_meta_watch)
+    for t, e, n, p in ((t,e,n,p) for t,e,n,p in services if t in ['meta0','meta1','meta2','sqlx']):
+        path = WATCHDIR + '/' + ns + '-' + str(t) + '-' + str(n) + '.yml'
+        with open(path, 'w+') as f:
+            env['SRVTYPE'] = t
+            env['SRVNUM'] = n
+            env['PORT'] = p
+            env['EXE'] = e
+            f.write(tpl.safe_substitute(env))
 
     # Generate the RAWX services
     tpl = Template(template_gridinit_rawx)

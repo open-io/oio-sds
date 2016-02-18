@@ -100,13 +100,6 @@ struct sqlx_service_s
 	struct grid_task_queue_s *gtq_admin;
 	GThread *thread_admin;
 
-	/* Conscience registration */
-	struct grid_single_rrd_s *gsr_reqcounter;
-	struct grid_single_rrd_s *gsr_reqtime;
-	struct service_info_s *si;
-	struct grid_task_queue_s *gtq_register;
-	GThread *thread_register;
-
 	struct gridd_client_pool_s *clients_pool;
 	GThread *thread_client;
 
@@ -122,8 +115,6 @@ struct sqlx_service_s
 	// Variables used during the startup time of the server, but not used
 	// anymore after that.
 	//-------------------------------------------------------------------
-
-	GSList *custom_tags;
 
 	guint cfg_max_bases;
 	guint cfg_max_passive;
