@@ -3,6 +3,7 @@ import uuid
 import math
 
 import redis
+import redis.sentinel
 from oio.common.utils import Timestamp
 from oio.common.utils import int_value
 from oio.common.utils import true_value
@@ -56,15 +57,28 @@ def release_lock(conn, lockname, identifier):
 
 
 class AccountBackend(object):
-    def __init__(self, conf, conn=None):
+    def __init__(self, conf):
         self.conf = conf
-        if not conn:
-            redis_host = conf.get('redis_host', '127.0.0.1')
-            redis_port = int(conf.get('redis_port', '6379'))
-            self.conn = redis.Redis(host=redis_host, port=redis_port)
-        else:
-            self.conn = conn
+        self._conn = None
+        self._sentinel = None
+        self._sentinel_hosts = conf.get('sentinel_hosts', None)
+        self._sentinel_name = conf.get('sentinel_master_name', 'oio')
         self.autocreate = true_value(conf.get('autocreate', 'true'))
+
+        if self._sentinel_hosts:
+            self._sentinel = redis.sentinel.Sentinel(
+                    [(h, int(p)) for h, p, in (hp.split(':', 2)
+                     for hp in self._sentinel_hosts.split(','))])
+
+    @property
+    def conn(self):
+        if self._sentinel:
+            return self._sentinel.master_for(self._sentinel_name)
+        if not self._conn:
+            redis_host = self.conf.get('redis_host', '127.0.0.1')
+            redis_port = int(self.conf.get('redis_port', '6379'))
+            self._conn = redis.StrictRedis(host=redis_host, port=redis_port)
+        return self._conn
 
     def create_account(self, account_id):
         conn = self.conn

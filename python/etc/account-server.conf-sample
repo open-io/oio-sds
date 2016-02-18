@@ -9,3 +9,7 @@ log_level = INFO
 log_facility = LOG_LOCAL0
 log_address = /dev/log
 syslog_prefix = OIO,OPENIO,account,1
+
+# Let this option empty to connect directly to redis_host
+sentinel_hosts = 127.0.0.1:26379,127.0.0.1:26380
+sentinel_master_name = oio
