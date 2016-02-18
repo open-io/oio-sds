@@ -82,13 +82,12 @@ fi
 
 timeout () {
 	local max="$1" ; shift
-	if [ $count -gt $max ] ; then echo "TIMEOUT: $@" 1>&2 ; exit 1 ; fi
+	if [ $count -gt $max ] ; then
+		echo "TIMEOUT: $@"
+		exit 1
+	fi
 	sleep 2
 	((count=count+2))
-}
-
-dump () {
-	if [ $verbose -ge 1 ] ; then /bin/cat ; else /bin/cat >/dev/null ; fi
 }
 
 #-------------------------------------------------------------------------------
@@ -113,12 +112,10 @@ if [ $verbose != 0 ] ; then
 fi
 export G_DEBUG_LEVEL
 
-if [ $verbose -ge 2 ] ; then set -x ; fi
-
+if [ $verbose -ge 1 ] ; then set -x ; fi
 
 # Stop and clean a previous installation.
-pidof_gridinit=$(pgrep -u "$UID" --full gridinit || echo)
-if [ -n "$pidof_gridinit" ] ; then
+pgrep -u "$UID" --full gridinit | while read pidof_gridinit ; do
 	# First try a clean stop of gridinit's children
 	if [ -e "$GRIDINIT_SOCK" ] ; then
 		if ! gridinit_cmd -S "$GRIDINIT_SOCK" stop ; then
@@ -133,11 +130,10 @@ if [ -n "$pidof_gridinit" ] ; then
 	count=0
 	while kill "$pidof_gridinit" ; do
 		# Waiting for gridinit ...
-		ps -o pid,ppid,cmd $(pgrep -u $UID -P "$pidof_gridinit")
+		ps -o pid,ppid,cmd $(pgrep -u $UID -P "$pidof_gridinit" | sed 's/^/-p /')
 		timeout 30 "(previous) gridinit exit"
 	done
-fi 2>&1 | dump
-
+done
 
 # Generate a new configuration and start the new gridinit
 mkdir -p "$OIO" && cd "$OIO" && (rm -rf sds.conf sds/{conf,data,run,logs})
@@ -145,7 +141,7 @@ ${PREFIX}-bootstrap.py \
 		-B "$REPLICATION_BUCKET" \
 		-V "$VERSIONING" \
 		-S "$STGPOL" \
-		${opts} "$NS" "$IP" 2>&1 | dump
+		${opts} "$NS" "$IP"
 nice gridinit -s OIO,gridinit -d ${SDS}/conf/gridinit.conf
 
 
@@ -157,7 +153,7 @@ if [ -n "$ZK" ] ; then
 	if [ $ZKSLOW -ne 0 ] ; then opts="${opts} --slow" ; fi
 	zk-reset.py "$NS"
 	zk-bootstrap.py $opts "$NS"
-fi 2>&1 | dump
+fi
 
 
 # Wait for the gridinit's startup
@@ -169,8 +165,8 @@ while ! [ -e "$GRIDINIT_SOCK" ] ; do
 	timeout 15 "gridinit readyness"
 done
 
-gridinit_cmd -S "$GRIDINIT_SOCK" reload 2>&1 | dump
-gridinit_cmd -S "$GRIDINIT_SOCK" start "@conscience" "@proxy" "@agent" "@meta0" "@meta1" 2>&1 | dump
+gridinit_cmd -S "$GRIDINIT_SOCK" reload
+gridinit_cmd -S "$GRIDINIT_SOCK" start "@conscience" "@proxy" "@agent" "@meta0" "@meta1"
 
 
 # Wait for the meta0 to start and for meta1 to be registered
@@ -188,11 +184,11 @@ done
 ${PREFIX}-cluster -r "$NS" | awk -F\| '/meta0/{print $3}' | while read URL ; do
 	${PREFIX}-meta0-init -O "NbReplicas=${REPLICATION_DIRECTORY}" -O IgnoreDistance=on "$URL"
 	${PREFIX}-meta0-client "$URL" reload
-done 2>&1 | dump
+done
 
 
 # then start all the services
-gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}" 2>&1 | dump
+gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}"
 find $SDS -type d | xargs chmod a+rx
 
 echo
