@@ -34,6 +34,7 @@ CHUNKSIZE=
 REDIS=0
 PORT=
 verbose=0
+NB_RAWX=3
 
 OPENSUSE=`grep -i opensuse /etc/*release || echo -n ''`
 
@@ -88,6 +89,15 @@ timeout () {
 	fi
 	sleep 2
 	((count=count+2))
+}
+
+wait_for_srvtype () {
+	local srvtype=$1 ; shift
+	local expected=$1 ; shift
+	count=0
+	while [ ${expected} -gt $(${PREFIX}-cluster -r "$NS" | grep -c "$srvtype") ] ; do
+		timeout 10 "$srvtype registration"
+	done
 }
 
 #-------------------------------------------------------------------------------
@@ -172,28 +182,19 @@ done
 gridinit_cmd -S "$GRIDINIT_SOCK" reload
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@conscience" "@proxy" "@agent" "@meta0" "@meta1"
 
+wait_for_srvtype "meta0" 1
+wait_for_srvtype "meta1" ${REPLICATION_DIRECTORY}
 
-# Wait for the meta0 to start and for meta1 to be registered
-count=0
-while ! pkill -u "$UID" --full -0 ${PREFIX}-meta0-server ; do
-	timeout 30 "meta0 startup"
-done
-count=0
-while [ ${REPLICATION_DIRECTORY} -gt $(${PREFIX}-cluster -r "$NS" | grep -c meta1) ] ; do
-	timeout 30 "meta1 registration"
-done
-
-
-# Init the meta0's content
 ${PREFIX}-cluster -r "$NS" | awk -F\| '/meta0/{print $3}' | while read URL ; do
 	${PREFIX}-meta0-init -O "NbReplicas=${REPLICATION_DIRECTORY}" -O IgnoreDistance=on "$URL"
 	${PREFIX}-meta0-client "$URL" reload
 done
 
-
-# then start all the services
 gridinit_cmd -S "$GRIDINIT_SOCK" start "@${NS}"
 find $SDS -type d | xargs chmod a+rx
+
+wait_for_srvtype "meta2" ${REPLICATION_BUCKET}
+wait_for_srvtype "rawx" ${REPLICATION_BUCKET}
 
 echo
 gridinit_cmd -S "$GRIDINIT_SOCK" status2

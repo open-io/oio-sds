@@ -646,7 +646,6 @@ network_server_run(struct network_server_s *srv)
 		srv->thread_events = NULL;
 	}
 
-	_stop_pools (srv);
 	ARM_WAKER(srv, EPOLL_CTL_DEL);
 
 	GRID_DEBUG("Server %p exiting its main loop", srv);
@@ -835,6 +834,8 @@ void
 network_server_set_max_workers(struct network_server_s *srv, guint max)
 {
 	EXTRA_ASSERT(srv != NULL);
+	if (!srv->pool_workers)
+		return;
 	g_thread_pool_set_max_threads (srv->pool_workers, CLAMP(max, 1, G_MAXUINT16), NULL);
 }
 
