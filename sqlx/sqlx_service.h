@@ -136,8 +136,9 @@ struct sqlx_service_s
 	// Turn to TRUE to avoid locking the repository volume
 	gboolean flag_nolock;
 
-	// Is the registration task to be executed?
-	gboolean flag_noregister;
+	// Allows the service to avoid initiating an event_queue. To be set by
+	// services that know they won't evr generate events (meta0)
+	gboolean flag_no_event;
 
 	// Controls the election mode:
 	// TRUE :  ELECTION_MODE_QUORUM

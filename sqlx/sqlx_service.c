@@ -366,6 +366,11 @@ _configure_tasks(struct sqlx_service_s *ss)
 static gboolean
 _configure_events_queue (struct sqlx_service_s *ss)
 {
+	if (ss->flag_no_event) {
+		GRID_DEBUG("Events queue disabled, the service disabled it");
+		return TRUE;
+	}
+
 	gchar *url =  gridcluster_get_eventagent (SRV.ns_name);
 	STRING_STACKIFY (url);
 
@@ -678,6 +683,7 @@ sqlite_service_main(int argc, char **argv,
 static gpointer
 _worker_queue (gpointer p)
 {
+	metautils_ignore_signals();
 	struct sqlx_service_s *ss = PSRV(p);
 	if (ss && ss->events_queue)
 		oio_events_queue__run_agent (ss->events_queue, grid_main_is_running);
@@ -709,6 +715,9 @@ _task_malloc_trim(gpointer p)
 static void
 _task_expire_bases(gpointer p)
 {
+	if (!grid_main_is_running ())
+		return;
+
 	struct sqlx_cache_s *cache = sqlx_repository_get_cache(PSRV(p)->repository);
 	if (cache != NULL) {
 		guint count = sqlx_cache_expire(cache, 100, 500 * G_TIME_SPAN_MILLISECOND);
@@ -720,6 +729,9 @@ _task_expire_bases(gpointer p)
 static void
 _task_expire_resolver(gpointer p)
 {
+	if (!grid_main_is_running ())
+		return;
+
 	hc_resolver_set_now(PSRV(p)->resolver, oio_ext_monotonic_time () / G_TIME_SPAN_SECOND);
 	guint count = hc_resolver_expire(PSRV(p)->resolver);
 	if (count)
@@ -729,6 +741,8 @@ _task_expire_resolver(gpointer p)
 static void
 _task_retry_elections(gpointer p)
 {
+	if (!grid_main_is_running ())
+		return;
 	if (!PSRV(p)->flag_replicable)
 		return;
 
@@ -741,6 +755,9 @@ _task_retry_elections(gpointer p)
 static void
 _task_reload_nsinfo(gpointer p)
 {
+	if (!grid_main_is_running ())
+		return;
+
 	struct namespace_info_s *ni = NULL, *old = NULL;
 	GError *err = conscience_get_namespace(PSRV(p)->ns_name, &ni);
 	EXTRA_ASSERT ((err != NULL) ^ (ni != NULL));
@@ -759,10 +776,10 @@ _task_reload_nsinfo(gpointer p)
 static void
 _task_reload_workers(gpointer p)
 {
-	if (!PSRV(p)->nsinfo) {
-		GRID_DEBUG("NS info not yet loaded");
+	if (!grid_main_is_running ())
 		return;
-	}
+	if (!PSRV(p)->nsinfo)
+		return;
 
 	gint64 max_workers = namespace_info_get_srv_param_i64 (PSRV(p)->nsinfo,
 			NULL, PSRV(p)->service_config->srvtype, "max_workers",
@@ -778,9 +795,11 @@ sqlx_task_reload_lb (struct sqlx_service_s *ss)
 	static volatile guint period_reload = 1;
 
 	EXTRA_ASSERT(ss != NULL);
+
+	if (!grid_main_is_running ())
+		return;
 	if (!ss->lb || !ss->nsinfo)
 		return;
-
 	if (already_succeeded && 0 != (tick_reload++ % period_reload))
 		return;
 
