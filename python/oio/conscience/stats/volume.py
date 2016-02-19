@@ -1,15 +1,16 @@
 from ctypes import CDLL, c_char_p, c_double
 
+from oio.conscience.stats.base import BaseStat
 
-class VolumeStat(object):
+
+class VolumeStat(BaseStat):
     """Fetch stats from a local file system volume"""
 
     oio_sys_io_idle = None
     oio_sys_space_idle = None
 
-    def __init__(self, conf, logger):
-        self.logger = logger
-        self.volume = conf.get('path', '') or '/'
+    def configure(self):
+        self.volume = self.stat_conf.get('path', '') or '/'
         if not self.__class__.oio_sys_space_idle:
             self._load_lib()
 

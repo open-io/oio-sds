@@ -6,17 +6,15 @@ from oio.conscience.checker.base import BaseChecker
 class HttpChecker(BaseChecker):
     name = 'http'
 
-    def __init__(self, conf, logger):
-        super(HttpChecker, self).__init__(conf, logger)
-
+    def configure(self):
         for k in ['host', 'port', 'uri']:
-            if k not in conf:
+            if k not in self.checker_conf:
                 raise exc.ConfigurationException(
                     'Missing field "%s" in configuration' % k)
 
-        self.host = conf['host']
-        self.port = conf['port']
-        self.uri = conf['uri']
+        self.host = self.checker_conf['host']
+        self.port = self.checker_conf['port']
+        self.uri = self.checker_conf['uri']
         self.name = 'http|%s|%s|%s' % (self.host, self.port, self.uri)
         self.url = 'http://%s:%s/%s' % \
             (self.host, self.port, self.uri.lstrip('/'))

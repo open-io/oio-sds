@@ -7,6 +7,7 @@ from eventlet import GreenPool, sleep
 from oio.common.daemon import Daemon
 from oio.common.utils import get_logger, float_value, validate_service_conf, \
     int_value, parse_config
+from oio.common.client import Client
 from oio.conscience.client import ConscienceClient
 
 
@@ -38,6 +39,7 @@ class ServiceWatcher(object):
 
         self.logger = get_logger(self.conf)
         self.cs = ConscienceClient(self.conf)
+        self.client = Client(self.conf)
         self.last_status = False
         self.failed = False
         self.service_definition = {
@@ -119,7 +121,7 @@ class ServiceWatcher(object):
                 raise Exception(
                     'Invalid check type "%s", valid types: %s' %
                     (check['type'], ', '.join(CHECKERS_MODULES.keys())))
-            service_check = service_check_class(check, self.logger)
+            service_check = service_check_class(self, check, self.logger)
             self.service_checks.append(service_check)
 
     def init_stats(self, service):
@@ -134,7 +136,7 @@ class ServiceWatcher(object):
                 raise Exception(
                     'Invalid stat type "%s", valid types: %s' %
                     (stat['type'], ', '.join(STATS_MODULES.keys())))
-            service_stat = service_stat_class(stat, self.logger)
+            service_stat = service_stat_class(self, stat, self.logger)
             self.service_stats.append(service_stat)
 
 

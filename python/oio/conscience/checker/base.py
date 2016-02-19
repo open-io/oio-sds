@@ -5,14 +5,21 @@ from oio.common.utils import float_value, RingBuffer
 class BaseChecker(object):
     """Base class for all service checkers"""
 
-    def __init__(self, conf, logger):
+    def __init__(self, agent, checker_conf, logger):
+        self.agent = agent
+        self.checker_conf = checker_conf
         self.logger = logger
-        self.timeout = float_value(conf.get('timeout'), 1.0)
-        self.rise = conf['rise']
-        self.fall = conf['fall']
+        self.timeout = float_value(checker_conf.get('timeout'), 1.0)
+        self.rise = checker_conf['rise']
+        self.fall = checker_conf['fall']
         self.results = RingBuffer(max([self.rise, self.fall]))
-        self.name = conf.get('name')
+        self.name = checker_conf.get('name')
         self.last_result = None
+        self.configure()
+
+    def configure(self):
+        """Configuration handle"""
+        pass
 
     def service_status(self):
         """Do the check and set `last_result` accordingly"""

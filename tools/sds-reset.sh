@@ -96,6 +96,7 @@ wait_for_srvtype () {
 	local expected=$1 ; shift
 	count=0
 	while [ ${expected} -gt $(${PREFIX}-cluster -r "$NS" | grep -c "$srvtype") ] ; do
+		ps -f -u $UID
 		timeout 10 "$srvtype registration"
 	done
 }

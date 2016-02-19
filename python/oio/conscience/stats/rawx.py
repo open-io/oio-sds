@@ -12,8 +12,8 @@ class RawxStat(HttpStat):
             ("counter", "req.time", "stat.total_avreqtime"),
     ]
 
-    def __init__(self, conf, logger):
-        super(RawxStat, self).__init__(conf, logger)
+    def configure(self):
+        super(RawxStat, self).configure()
         self._cur_http_stats = dict()
         self._cur_time = time.time()
         self._prev_http_stats = dict()
@@ -43,7 +43,10 @@ class RawxStat(HttpStat):
         return avreqtime
 
     def get_stats(self):
-        self._cur_http_stats = super(RawxStat, self).get_stats()
+        stats = super(RawxStat, self).get_stats()
+        if not stats:
+            return stats
+        self._cur_http_stats = stats
         self._cur_time = time.time()
         delta = self._cur_time - self._prev_time
         output = dict()
