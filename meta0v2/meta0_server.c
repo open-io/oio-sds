@@ -147,14 +147,22 @@ _post_config(struct sqlx_service_s *ss)
 			g_clear_error(&err);
 			return FALSE;
 		}
-		for (;;) {
+
+		gboolean done = FALSE;
+		while (!done && grid_main_is_running()) {
 			err = create_zk_node(m0zkmanager, NULL, ss->url->str, ss->url->str);
-			if (!err)
-				break;
-			GRID_DEBUG("Meta0's zookeeper node creation failure : (%d) %s",
-				err->code, err->message);
-			g_clear_error(&err);
-			sleep(1);
+			if (!err) {
+				done = TRUE;
+			} else {
+				GRID_WARN("Meta0's zookeeper node creation failure : (%d) %s",
+						err->code, err->message);
+				g_clear_error(&err);
+				g_usleep(1 * G_TIME_SPAN_SECOND);
+			}
+		}
+		if (!done) {
+			GRID_INFO("Stopped while registering in Zookeeper");
+			return FALSE;
 		}
 	}
 
@@ -175,6 +183,12 @@ _post_config(struct sqlx_service_s *ss)
 	return TRUE;
 }
 
+static void
+_set_defaults (struct sqlx_service_s *ss)
+{
+	ss->flag_no_event = 1;
+}
+
 int
 main(int argc, char ** argv)
 {
@@ -182,7 +196,7 @@ main(int argc, char ** argv)
 		NAME_SRVTYPE_META0, "m0v2",
 		"el/"NAME_SRVTYPE_META0, 0, 0,
 		META0_SCHEMA, 0, 0,
-		_get_peers, _post_config, NULL
+		_get_peers, _post_config, _set_defaults
 	};
 	int rc = sqlite_service_main(argc, argv, &cfg);
 	if (m0zkmanager)

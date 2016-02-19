@@ -211,7 +211,8 @@ _post_config(struct sqlx_service_s *ss)
 	transport_gridd_dispatcher_add_requests(ss->dispatcher,
 			meta1_gridd_get_requests(), m1);
 
-	for (gboolean done = FALSE; !done ;) {
+	gboolean done = FALSE;
+	while (!done && grid_main_is_running ()) {
 		/* Preloads the prefixes locally managed: It happens often that
 		 * meta1 starts before gridagent, and _reload_prefixes() fails
 		 * for this reason. */
@@ -222,6 +223,10 @@ _post_config(struct sqlx_service_s *ss)
 			g_clear_error(&err);
 			g_usleep(1 * G_TIME_SPAN_SECOND);
 		}
+	}
+	if (!done) {
+		GRID_INFO("Stopped while loading M0 prefixes");
+		return FALSE;
 	}
 
 	grid_task_queue_register(ss->gtq_reload, 5,
