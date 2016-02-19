@@ -16,6 +16,7 @@ You should have received a copy of the GNU Lesser General Public
 License along with this library.
 */
 
+#include <string.h>
 #include <glib.h>
 #include <json.h>
 #include <curl/curl.h>
@@ -108,6 +109,14 @@ oio_cs_client__list_types (struct oio_cs_client_s *self,
 
 /* -------------------------------------------------------------------------- */
 
+static void
+_clean_registration(struct oio_cs_registration_s *preg)
+{
+	// Values are pointers to the json objects, do not free them
+	g_free((gpointer)preg->kv_tags);
+	memset(preg, 0, sizeof(struct oio_cs_registration_s));
+}
+
 static GError *
 _unpack_registration (json_object *item,
 		struct oio_cs_registration_s *preg, int *pscore)
@@ -131,8 +140,8 @@ _unpack_registration (json_object *item,
 	if (tags) {
 		GPtrArray *tag_arr = g_ptr_array_new();
 		json_object_object_foreach(tags, tko, tvo) {
-			g_ptr_array_add(tag_arr, g_strdup(tko));
-			g_ptr_array_add(tag_arr, g_strdup(json_object_get_string(tvo)));
+			g_ptr_array_add(tag_arr, tko);
+			g_ptr_array_add(tag_arr, (gpointer)json_object_get_string(tvo));
 		}
 		g_ptr_array_add(tag_arr, NULL);
 		preg->kv_tags = (const char * const *)g_ptr_array_free(tag_arr, FALSE);
@@ -385,6 +394,7 @@ _cs_PROXY__list_services (struct oio_cs_client_s *self,
 				err = _unpack_registration (item, &reg, &score);
 				if (!err && on_reg)
 					(on_reg)(&reg, score);
+				_clean_registration(&reg);
 			}
 		}
 		if (jbody) json_object_put (jbody);
