@@ -576,8 +576,6 @@ sqlx_service_specific_fini(void)
 		gridd_request_dispatcher_clean(SRV.dispatcher);
 	if (SRV.repository)
 		sqlx_repository_clean(SRV.repository);
-	if (SRV.election_manager)
-		election_manager_clean(SRV.election_manager);
 	if (SRV.sync)
 		sqlx_sync_clear(SRV.sync);
 	if (SRV.resolver)
@@ -592,6 +590,10 @@ sqlx_service_specific_fini(void)
 
 	if (SRV.clients_pool)
 		gridd_client_pool_destroy (SRV.clients_pool);
+
+	// Must be freed after SRV.clients_pool
+	if (SRV.election_manager)
+		election_manager_clean(SRV.election_manager);
 
 	if (SRV.lb)
 		grid_lbpool_destroy (SRV.lb);
