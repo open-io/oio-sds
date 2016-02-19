@@ -1,13 +1,14 @@
 from ctypes import CDLL, c_double
 
+from oio.conscience.stats.base import BaseStat
 
-class SystemStat(object):
+
+class SystemStat(BaseStat):
     """Fetch stats from the system (e.g. CPU usage)"""
 
     oio_sys_cpu_idle = None
 
-    def __init__(self, _conf, logger, **_kwargs):
-        self.logger = logger
+    def configure(self):
         if not self.__class__.oio_sys_cpu_idle:
             self._load_lib()
 

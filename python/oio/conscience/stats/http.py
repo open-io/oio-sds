@@ -1,14 +1,14 @@
 from oio.common.http import requests
+from oio.conscience.stats.base import BaseStat
 
 
-class HttpStat(object):
+class HttpStat(BaseStat):
     """Fetch stats using HTTP, expects one stat per line"""
 
-    def __init__(self, conf, logger):
-        conf['path'] = conf.get('path', '').lstrip('/')
-        self.parser = conf.get('parser', 'lines')
-        self.url = 'http://{host}:{port}/{path}'.format(**conf)
-        self.logger = logger
+    def configure(self):
+        self.stat_conf['path'] = self.stat_conf.get('path', '').lstrip('/')
+        self.parser = self.stat_conf.get('parser', 'lines')
+        self.url = 'http://{host}:{port}/{path}'.format(**self.stat_conf)
         self.session = requests.session()
         self._fetch_func = self.session.get
         if self.parser == 'json':
@@ -51,5 +51,6 @@ class HttpStat(object):
         try:
             resp = self._fetch_func(self.url)
             return self._parse_func(resp)
-        except Exception:
+        except Exception as e:
+            self.logger.debug("get_stats error: %s", e)
             return {}

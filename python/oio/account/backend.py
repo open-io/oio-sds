@@ -123,7 +123,6 @@ class AccountBackend(object):
 
         if not _account_id:
             if self.autocreate:
-                print "autocreate account", account_id
                 self.create_account(account_id)
             else:
                 return None

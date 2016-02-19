@@ -4,15 +4,12 @@ from oio.conscience.checker.base import BaseChecker
 
 
 class TcpChecker(BaseChecker):
-    def __init__(self, conf, logger):
-        super(TcpChecker, self).__init__(conf, logger)
-
+    def configure(self):
         for k in ['host', 'port']:
-            if k not in conf:
+            if k not in self.checker_conf:
                 raise exc.ConfigurationException(
                     'Missing field "%s" in configuration' % k)
-        self.conf = conf
-        self.addr = (self.conf['host'], self.conf['port'])
+        self.addr = (self.checker_conf['host'], self.checker_conf['port'])
 
     def check(self):
         result = False

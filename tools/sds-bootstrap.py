@@ -269,7 +269,7 @@ checks:
 
 stats:
     - {type: volume, path: ${DATADIR}/${NS}-${SRVTYPE}-${SRVNUM}}
-    - {type: meta, proxy: "${IP}:${PORT_PROXYD}", id: "${IP}:${PORT}"}
+    - {type: meta}
     - {type: system}
 """
 
@@ -526,7 +526,7 @@ command=${EXE_PREFIX}-event-agent ${CFGDIR}/event-agent.conf
 env.PYTHONPATH=${CODEDIR}/@LD_LIBDIR@/python2.7/site-packages
 
 [service.${NS}-conscience-agent]
-group=${NS},localhost,conscience-agent
+group=${NS},localhost,conscience,conscience-agent
 on_die=respawn
 enabled=true
 start_at_boot=true
