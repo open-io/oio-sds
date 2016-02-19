@@ -960,6 +960,11 @@ step_LeaveElection_completion(int zrc, const void *d)
 {
 	struct election_member_s *member;
 
+	if (!grid_main_is_running()) {
+		GRID_DEBUG("%s ignored while exiting", __FUNCTION__);
+		return;
+	}
+
 	member = (struct election_member_s *) d;
 	MEMBER_CHECK(member);
 	member_trace(__FUNCTION__, "DONE", member);
@@ -1044,6 +1049,11 @@ step_WatchMaster_change(zhandle_t *handle, int type, int state,
 	(void) state;
 	(void) path;
 
+	if (!grid_main_is_running()) {
+		GRID_DEBUG("%s ignored while exiting", __FUNCTION__);
+		return;
+	}
+
 	member = d;
 	member_trace(__FUNCTION__, "CHANGE", member);
 	MEMBER_CHECK(member);
@@ -1064,6 +1074,11 @@ step_WatchNode_change(zhandle_t *handle, int type, int state,
 	(void) type;
 	(void) state;
 	(void) path;
+
+	if (!grid_main_is_running()) {
+		GRID_DEBUG("%s ignored while exiting", __FUNCTION__);
+		return;
+	}
 
 	member = d;
 	MEMBER_CHECK(member);
