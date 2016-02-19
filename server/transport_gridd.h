@@ -62,6 +62,8 @@ struct gridd_reply_ctx_s
 	/* Return a data previously associated, or NULL if not found. */
 	gpointer (*get_cnx_data) (const gchar *key);
 
+	void (*no_access) (void);
+
 	/* --------------------------------
 	 * Context belonging to the request
 	 * -------------------------------- */

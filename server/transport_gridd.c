@@ -76,6 +76,7 @@ struct req_ctx_s
 	gchar *uid;
 	const gchar *reqid;
 	gboolean final_sent;
+	gboolean access_disabled;
 };
 
 static int is_code_final(int code) { return CODE_IS_FINAL(code); }
@@ -207,31 +208,36 @@ struct log_item_s
 static void
 network_client_log_access(struct log_item_s *item)
 {
-	if (!item->req_ctx->tv_end)
-		item->req_ctx->tv_end = oio_ext_monotonic_time ();
+	struct req_ctx_s *r = item->req_ctx;
 
-	gint64 diff_total = item->req_ctx->tv_end - item->req_ctx->tv_start;
-	gint64 diff_handler = item->req_ctx->tv_end - item->req_ctx->tv_parsed;
+	if (r->access_disabled && CODE_IS_OK(item->code))
+		return;
+
+	if (!r->tv_end)
+		r->tv_end = oio_ext_monotonic_time ();
+
+	gint64 diff_total = r->tv_end - r->tv_start;
+	gint64 diff_handler = r->tv_end - r->tv_parsed;
 
 	GString *gstr = g_string_sized_new(256);
 
 	/* mandatory */
-	g_string_append(gstr, ensure(item->req_ctx->client->local_name));
+	g_string_append(gstr, ensure(r->client->local_name));
 	g_string_append_c(gstr, ' ');
-	g_string_append(gstr, ensure(item->req_ctx->client->peer_name));
+	g_string_append(gstr, ensure(r->client->peer_name));
 	g_string_append_c(gstr, ' ');
-	g_string_append(gstr, ensure(hashstr_str(item->req_ctx->reqname)));
+	g_string_append(gstr, ensure(hashstr_str(r->reqname)));
 	g_string_append_printf(gstr, " %d %"G_GINT64_FORMAT" %"G_GSIZE_FORMAT" ",
 			item->code, diff_total, item->out_len);
-	g_string_append(gstr, ensure(item->req_ctx->uid));
+	g_string_append(gstr, ensure(r->uid));
 	g_string_append_c(gstr, ' ');
-	g_string_append(gstr, ensure(item->req_ctx->reqid));
+	g_string_append(gstr, ensure(r->reqid));
 
 	/* arbitrary */
 	g_string_append_printf(gstr, " t=%"G_GINT64_FORMAT, diff_handler);
-	if (item->req_ctx->subject) {
+	if (r->subject) {
 		g_string_append_c (gstr, ' ');
-		g_string_append(gstr, ensure(item->req_ctx->subject));
+		g_string_append(gstr, ensure(r->subject));
 	}
 
 	g_log("access", GRID_LOGLVL_INFO, "%s", gstr->str);
@@ -584,6 +590,9 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 			}
 		}
 	}
+	void _no_access (void) {
+		req_ctx->access_disabled = TRUE;
+	}
 	void _add_body(GByteArray *b) {
 		EXTRA_ASSERT(!req_ctx->final_sent);
 		if (body) {
@@ -677,6 +686,7 @@ _client_call_handler(struct req_ctx_s *req_ctx)
 	ctx.register_cnx_data = _register_cnx_data;
 	ctx.forget_cnx_data = _forget_cnx_data;
 	ctx.get_cnx_data = _get_cnx_data;
+	ctx.no_access = _no_access;
 	/* request data */
 	ctx.client = req_ctx->client;
 	ctx.request = req_ctx->request;
@@ -800,25 +810,26 @@ label_exit:
 /* -------------------------------------------------------------------------- */
 
 static gboolean
+_stats_runner(gpointer k, gpointer v, gpointer u)
+{
+	(void) v;
+	g_byte_array_append((GByteArray*)u, (guint8*)hashstr_str(k),
+			(guint) hashstr_len(k));
+	g_byte_array_append((GByteArray*)u, (guint8*)"\n", 1);
+	return FALSE;
+}
+
+static gboolean
 dispatch_LISTHANDLERS(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
-	GByteArray *body;
+	(void) gdata, (void) hdata;
 
-	gboolean _runner(gpointer k, gpointer v, gpointer u) {
-		(void) v;
-		g_byte_array_append((GByteArray*)u, (guint8*)hashstr_str(k),
-				(guint) hashstr_len(k));
-		g_byte_array_append((GByteArray*)u, (guint8*)"\n", 1);
-		return FALSE;
-	}
-
-	(void) gdata;
-	(void) hdata;
-
-	body = g_byte_array_new();
-	g_tree_foreach(reply->client->transport.client_context->dispatcher->tree_requests, _runner, body);
+	GByteArray *body = g_byte_array_new();
+	g_tree_foreach(reply->client->transport.client_context->dispatcher->tree_requests,
+			_stats_runner, body);
 	reply->add_body(body);
+	reply->no_access();
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
@@ -852,6 +863,7 @@ dispatch_PING(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
 	(void) gdata, (void) hdata;
+	reply->no_access();
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
 }
@@ -870,11 +882,12 @@ dispatch_KILL(struct gridd_reply_ctx_s *reply,
 	return TRUE;
 }
 
+#define VOLPREFIX "config volume="
+
 static gboolean
 dispatch_STATS(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
-
 	(void) gdata, (void) hdata;
 	GByteArray *body = g_byte_array_new();
 
@@ -889,13 +902,13 @@ dispatch_STATS(struct gridd_reply_ctx_s *reply,
 	g_array_free (array, TRUE);
 
 	if (oio_server_volume) {
-#define VOLPREFIX "config volume="
 		g_byte_array_append (body,
 				(guint8*)VOLPREFIX, sizeof(VOLPREFIX)-1);
 		g_byte_array_append (body,
 				(guint8*)oio_server_volume, strlen(oio_server_volume));
 	}
 
+	reply->no_access();
 	reply->add_body(body);
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
@@ -906,6 +919,7 @@ dispatch_VERSION(struct gridd_reply_ctx_s *reply,
 		gpointer gdata, gpointer hdata)
 {
 	(void) gdata, (void) hdata;
+	reply->no_access();
 	reply->add_body(metautils_gba_from_string(OIOSDS_API_VERSION));
 	reply->send_reply(CODE_FINAL_OK, "OK");
 	return TRUE;
