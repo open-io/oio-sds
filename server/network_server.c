@@ -288,8 +288,7 @@ network_server_clean(struct network_server_s *srv)
 	network_server_close_servers(srv);
 
 	if (srv->endpointv) {
-		struct endpoint_s **u;
-		for (u=srv->endpointv; *u ;u++)
+		for (struct endpoint_s **u=srv->endpointv; *u ;u++)
 			g_free(*u);
 		g_free(srv->endpointv);
 	}
@@ -646,6 +645,8 @@ network_server_run(struct network_server_s *srv)
 		srv->thread_events = NULL;
 	}
 
+	/* XXX(jfs): seems legit but requires exit critical path to be reviewed.
+	_stop_pools (srv); */
 	ARM_WAKER(srv, EPOLL_CTL_DEL);
 
 	GRID_DEBUG("Server %p exiting its main loop", srv);
@@ -834,7 +835,7 @@ void
 network_server_set_max_workers(struct network_server_s *srv, guint max)
 {
 	EXTRA_ASSERT(srv != NULL);
-	if (!srv->pool_workers)
+	if (!grid_main_is_running() || !srv->pool_workers)
 		return;
 	g_thread_pool_set_max_threads (srv->pool_workers, CLAMP(max, 1, G_MAXUINT16), NULL);
 }
