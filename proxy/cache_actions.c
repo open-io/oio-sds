@@ -54,6 +54,7 @@ action_forward (struct req_args_s *args)
 		return _reply_success_json (args, NULL);
 	}
 	if (!g_ascii_strcasecmp (action, "ping")) {
+		args->rp->no_access();
 		GByteArray *encoded = message_marshall_gba_and_clean (
 				metautils_message_create_named("REQ_PING"));
 		err = gridd_client_exec (id, 1.0, encoded);
@@ -82,6 +83,7 @@ action_forward (struct req_args_s *args)
 	}
 
 	if (!g_ascii_strcasecmp (action, "stats")) {
+		args->rp->no_access();
 		MESSAGE req = metautils_message_create_named("REQ_STATS");
 		GByteArray *encoded = message_marshall_gba_and_clean (req);
 		gchar *packed = NULL;
@@ -102,6 +104,7 @@ action_forward (struct req_args_s *args)
 	}
 
 	if (!g_ascii_strcasecmp (action, "version")) {
+		args->rp->no_access();
 		MESSAGE req = metautils_message_create_named("REQ_VERSION");
 		GByteArray *encoded = message_marshall_gba_and_clean (req);
 		gchar *packed = NULL;
@@ -120,6 +123,7 @@ action_forward (struct req_args_s *args)
 	}
 
 	if (!g_ascii_strcasecmp (action, "handlers")) {
+		args->rp->no_access();
 		MESSAGE req = metautils_message_create_named("REQ_HANDLERS");
 		GByteArray *encoded = message_marshall_gba_and_clean (req);
 		gchar *packed = NULL;
