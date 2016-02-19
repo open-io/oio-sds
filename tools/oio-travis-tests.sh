@@ -1,4 +1,5 @@
 set -x
+set -e
 export COLUMNS=512 LANG=
 
 func_tests () {
