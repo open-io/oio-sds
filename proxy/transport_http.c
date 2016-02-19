@@ -558,14 +558,17 @@ http_manage_request(struct req_ctx_s *r)
 		case HTTPRC_DONE:
 			EXTRA_ASSERT(finalized != FALSE);
 			cleanup();
+			oio_ext_set_reqid (NULL);
 			return NULL;
 		case HTTPRC_ABORT:
 			final_error(HTTP_CODE_INTERNAL_ERROR, "Internal error");
+			oio_ext_set_reqid (NULL);
 			return NEWERROR(HTTP_CODE_INTERNAL_ERROR, "HTTP handler error");
 	}
 
 	EXTRA_ASSERT(!finalized);
 	final_error(HTTP_CODE_NOT_FOUND, "No handler found");
+	oio_ext_set_reqid (NULL);
 	return NULL;
 }
 

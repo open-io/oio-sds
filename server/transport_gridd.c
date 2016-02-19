@@ -804,6 +804,7 @@ label_exit:
 	oio_str_clean(&req_ctx.subject);
 	oio_str_clean(&req_ctx.uid);
 	memset(&req_ctx, 0, sizeof(req_ctx));
+	oio_ext_set_reqid (NULL);
 	return rc;
 }
 

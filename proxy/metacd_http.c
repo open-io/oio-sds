@@ -252,6 +252,7 @@ handler_action (struct http_request_s *rq, struct http_reply_ctx_s *rp)
 	path_matching_cleanv (matchings);
 	oio_requri_clear (&ruri);
 	oio_url_pclean (&url);
+	oio_ext_set_reqid (NULL);
 	return rc;
 }
 
