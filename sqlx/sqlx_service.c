@@ -552,44 +552,72 @@ sqlx_service_specific_fini(void)
 		sqlx_sync_close(SRV.sync);
 
 	// Cleanup
-	if (SRV.gtq_admin)
+	if (SRV.gtq_admin) {
 		grid_task_queue_destroy(SRV.gtq_admin);
-	if (SRV.gtq_reload)
+		SRV.gtq_admin = NULL;
+	}
+	if (SRV.gtq_reload) {
 		grid_task_queue_destroy(SRV.gtq_reload);
+		SRV.gtq_reload = NULL;
+	}
 
-	if (SRV.server)
+	if (SRV.server) {
 		network_server_clean(SRV.server);
-	if (SRV.dispatcher)
+		SRV.server = NULL;
+	}
+	if (SRV.dispatcher) {
 		gridd_request_dispatcher_clean(SRV.dispatcher);
-	if (SRV.repository)
+		SRV.dispatcher = NULL;
+	}
+	if (SRV.repository) {
 		sqlx_repository_clean(SRV.repository);
-	if (SRV.sync)
+		SRV.repository = NULL;
+	}
+	if (SRV.sync) {
 		sqlx_sync_clear(SRV.sync);
-	if (SRV.resolver)
+		SRV.sync = NULL;
+	}
+	if (SRV.resolver) {
 		hc_resolver_destroy(SRV.resolver);
+		SRV.resolver = NULL;
+	}
 
-	if (SRV.announce)
+	if (SRV.announce) {
 		g_string_free(SRV.announce, TRUE);
-	if (SRV.url)
+		SRV.announce = NULL;
+	}
+	if (SRV.url) {
 		g_string_free(SRV.url, TRUE);
+		SRV.url = NULL;
+	}
 	if (SRV.zk_url)
 		oio_str_clean(&SRV.zk_url);
 
-	if (SRV.clients_pool)
+	if (SRV.clients_pool) {
 		gridd_client_pool_destroy (SRV.clients_pool);
+		SRV.clients_pool = NULL;
+	}
 
 	// Must be freed after SRV.clients_pool
-	if (SRV.election_manager)
+	if (SRV.election_manager) {
 		election_manager_clean(SRV.election_manager);
+		SRV.election_manager = NULL;
+	}
 
-	if (SRV.lb)
+	if (SRV.lb) {
 		grid_lbpool_destroy (SRV.lb);
+		SRV.lb = NULL;
+	}
 
-	if (SRV.events_queue)
+	if (SRV.events_queue) {
 		oio_events_queue__destroy (SRV.events_queue);
+		SRV.events_queue = NULL;
+	}
 
-	if (SRV.nsinfo)
+	if (SRV.nsinfo) {
 		namespace_info_free(SRV.nsinfo);
+		SRV.nsinfo = NULL;
+	}
 	if (all_options) {
 		g_free (all_options);
 		all_options = NULL;
