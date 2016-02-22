@@ -39,7 +39,7 @@ class RainContent(Content):
             rainx_addr = "http://%s" % rainx_instance.get('addr')
         except Exception as e:
             self.logger.error("No rainx service found (%s)" % e.message)
-            raise ServiceUnavailable("No rainx service found")
+            raise ServiceUnavailable("No rainx service found (%s)" % e.message)
         if on_the_fly:
             rainx_addr += "/on-the-fly"
         return rainx_addr
