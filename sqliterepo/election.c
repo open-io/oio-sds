@@ -196,6 +196,7 @@ static GPrivate th_local_key_manager = G_PRIVATE_INIT(_noop);
 
 /* ------------------------------------------------------------------------- */
 
+static void member_unref(struct election_member_s *member);
 static void member_destroy(struct election_member_s *member);
 
 static void _manager_clean(struct election_manager_s *manager);
@@ -558,10 +559,30 @@ _manager_clean(struct election_manager_s *manager)
 {
 	if (!manager)
 		return;
-	if (manager->lrutree_members)
+	if (manager->lrutree_members) {
+		gchar *key = NULL;
+		struct election_member_s *member = NULL;
+		struct election_counts_s count = {0};
+
+		lru_tree_foreach_DEQ(manager->lrutree_members,
+				(GTraverseFunc) _count_runner, &count);
+		GRID_DEBUG("%d elections still alive at manager shutdown:",
+				count.total);
+		GRID_DEBUG("%d masters, %d slaves, %d pending, %d failed, %d exited",
+				count.master, count.slave, count.pending, count.failed,
+				count.none);
+
+		while (lru_tree_steal_first(manager->lrutree_members,
+				(gpointer*)&key,
+				(gpointer*)&member)) {
+			g_free(key);
+			member_unref(member);
+			member_destroy(member);
+		}
 		lru_tree_destroy(manager->lrutree_members);
+	}
 	g_mutex_clear(&manager->lock);
-	for (guint i=0; i<SQLX_MAX_COND ;i++)
+	for (guint i=0; i<SQLX_MAX_COND; i++)
 		g_cond_clear(manager->conds + i);
 	g_free(manager);
 }
