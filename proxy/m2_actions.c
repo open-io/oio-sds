@@ -801,61 +801,109 @@ retry:
 	return err;
 }
 
+static void
+_re_enable (struct req_args_s *args, struct sqlx_name_s *name)
+{
+	GByteArray* _pack_enable () { return sqlx_pack_ENABLE (name); }
+	GError * _enable (struct meta1_service_url_s *m2, gboolean *next) {
+		(void) next;
+		return _gba_request (m2, _pack_enable, NULL);
+	}
+	GError *e = _resolve_meta2 (args, _enable);
+	if (e) {
+		GRID_INFO("Failed to un-freeze [%s]", oio_url_get(args->url, OIOURL_WHOLE));
+		g_clear_error (&e);
+	}
+}
+
 static enum http_rc_e
 action_m2_container_destroy (struct req_args_s *args)
 {
 	GError *err = NULL;
+	gchar **urlv = NULL;
 	struct sqlx_name_mutable_s n = {NULL,NULL,NULL};
+
+	const gboolean hdr_flush = _request_has_flag (args, PROXYD_HEADER_MODE, "flush");
+	const gboolean opt_flush = metautils_cfg_get_bool(OPT("flush"), FALSE);
+	const gboolean hdr_force = _request_has_flag (args, PROXYD_HEADER_MODE, "force");
+	const gboolean opt_force = metautils_cfg_get_bool(OPT("force"), FALSE);
+
+	/* TODO(jfs): const! */
+	struct sqlx_name_s *name = sqlx_name_mutable_to_const(&n);
 	/* TODO(jfs): manage container subtype */
 	sqlx_name_fill (&n, args->url, NAME_SRVTYPE_META2, 1);
+	/* XXX(jfs): pre-loads the locations of the container. We will need this
+	   at the destroy step. */
+	err = hc_resolve_reference_service (resolver, args->url, n.type, &urlv);
 
 	/* 1. FREEZE the base to avoid writings during the operation */
 	if (!err) {
-		GByteArray* _pack_freeze () {
-			return sqlx_pack_FREEZE (sqlx_name_mutable_to_const(&n));
-		}
+		GByteArray* _pack_freeze () { return sqlx_pack_FREEZE (name); }
 		GError * _freeze (struct meta1_service_url_s *m2, gboolean *next) {
 			(void) next;
-			GError *e = _gba_request (m2, _pack_freeze, NULL);
-			if (!e)
-				e = m2v2_remote_execute_FLUSH (m2->host, args->url,
-					M2V2_CLIENT_TIMEOUT_HUGE);
-			return e;
+			return _gba_request (m2, _pack_freeze, NULL);
 		}
-		err = _resolve_meta2 (args, _freeze);
+		if (NULL != (err = _resolve_meta2 (args, _freeze))) {
+			/* rollback! */
+			_re_enable (args, name);
+			goto clean_and_exit;
+		}
 	}
 
 	/* 2. FLUSH the base on the MASTER, so events are generated for all the
 	   contents removed. */
 	if (!err) {
-		GError * _flush (struct meta1_service_url_s *m2, gboolean *next) {
-			(void) next;
-			return m2v2_remote_execute_FLUSH (m2->host, args->url,
-					M2V2_CLIENT_TIMEOUT_HUGE);
+		if (hdr_flush || opt_flush) {
+			GError * _flush (struct meta1_service_url_s *m2, gboolean *next) {
+				(void) next;
+				return m2v2_remote_execute_FLUSH (m2->host, args->url,
+						M2V2_CLIENT_TIMEOUT_HUGE);
+			}
+			err = _resolve_meta2 (args, _flush);
+		} else if (!hdr_force && !opt_force) {
+			GError * _check (struct meta1_service_url_s *m2, gboolean *next) {
+				(void) next;
+				return m2v2_remote_execute_ISEMPTY (m2->host, args->url);
+			}
+			err = _resolve_meta2 (args, _check);
 		}
-		err = _resolve_meta2 (args, _flush);
+		if (NULL != err) {
+			/* rollback! */
+			_re_enable (args, name);
+			goto clean_and_exit;
+		}
 	}
-
-	gchar **urlv = NULL;
-	err = hc_resolve_reference_service (resolver, args->url, n.type, &urlv);
 
 	/* 3. UNLINK the base in the directory */
 	if (!err) {
 		GError * _unlink (const char * m1) {
 			return meta1v2_remote_unlink_service (m1, args->url, n.type);
 		}
-		err = _m1_locate_and_action (args->url, _unlink);
+		if (NULL != (err = _m1_locate_and_action (args->url, _unlink))) {
+			_re_enable (args, name);
+			goto clean_and_exit;
+		}
 	}
 
 	hc_decache_reference_service (resolver, args->url, n.type);
 
 	/* 4. DESTROY each local base */
 	if (!err && urlv && *urlv) {
+		const guint32 flag_force = (hdr_force||opt_force) ? M2V2_DESTROY_FORCE : 0;
+		const guint32 flag_flush = (hdr_flush||opt_flush) ? M2V2_DESTROY_FLUSH : 0;
+
 		meta1_urlv_shift_addr(urlv);
-		err = m2v2_remote_execute_DESTROY_many(urlv, args->url, M2V2_DESTROY_LOCAL);
+		err = m2v2_remote_execute_DESTROY (urlv[0], args->url,
+				M2V2_DESTROY_EVENT|flag_force|flag_flush);
+		if (!err && urlv[1]) {
+			err = m2v2_remote_execute_DESTROY_many(urlv+1, args->url,
+					flag_force|flag_flush);
+		}
 	}
 
-	if (urlv) g_strfreev (urlv);
+clean_and_exit:
+	if (urlv)
+		g_strfreev (urlv);
 	sqlx_name_clean (&n);
 	if (NULL != err)
 		return _reply_m2_error(args, err);
