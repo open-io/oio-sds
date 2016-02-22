@@ -32,7 +32,9 @@ License along with this library.
 # define URL_MAXLEN STRLEN_ADDRINFO
 #endif
 
-#define EVENT_BUFFER_SIZE 2048
+#ifndef EVENT_BUFFER_SIZE
+# define EVENT_BUFFER_SIZE 2048
+#endif
 
 enum client_step_e
 {
@@ -418,12 +420,8 @@ _client_manage_event_in_buffer(struct gridd_client_s *client, guint8 *d, gsize d
 static GError *
 _client_manage_event(struct gridd_client_s *client)
 {
-	guint8 *d = SLICE_ALLOC(EVENT_BUFFER_SIZE);
-	if (!d)
-		return NEWERROR(ENOMEM, "Memory allocation failure");
-	GError *err = _client_manage_event_in_buffer(client, d, EVENT_BUFFER_SIZE);
-	SLICE_FREE1 (EVENT_BUFFER_SIZE, d);
-	return err;
+	guint8 d[EVENT_BUFFER_SIZE];
+	return _client_manage_event_in_buffer(client, d, EVENT_BUFFER_SIZE);
 }
 
 /* ------------------------------------------------------------------------- */
