@@ -411,22 +411,6 @@ _transaction_begin(struct sqlx_sqlite3_s *sq3, struct oio_url_s *url,
 }
 
 GError *
-meta2_backend_has_master_container(struct meta2_backend_s *m2,
-		struct oio_url_s *url)
-{
-	GError *err = NULL;
-	struct sqlx_sqlite3_s *sq3 = NULL;
-
-	GRID_DEBUG("HAS(%s)", oio_url_get(url, OIOURL_WHOLE));
-	err = m2b_open(m2, url, M2V2_OPEN_MASTERONLY
-			|M2V2_OPEN_ENABLED|M2V2_OPEN_FROZEN, &sq3);
-	if (sq3) {
-		sqlx_repository_unlock_and_close_noerror(sq3);
-	}
-	return err;
-}
-
-GError *
 meta2_backend_has_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url)
 {
@@ -452,6 +436,51 @@ meta2_backend_has_container(struct meta2_backend_s *m2,
 		if (!sqlx_admin_has(sq3, META2_INIT_FLAG))
 			err = NEWERROR(CODE_CONTAINER_NOTFOUND,
 					"Container created but not initiated");
+		m2b_close(sq3);
+	}
+	return err;
+}
+
+static GError *
+_isempty (struct sqlx_sqlite3_s *sq3)
+{
+	GError *err = NULL;
+	sqlite3_stmt *stmt = NULL;
+	gint64 count = 0;
+
+	int rc = sqlite3_prepare(sq3->db,
+			"SELECT exists(SELECT 1 FROM chunks LIMIT 1)",
+			-1, &stmt, NULL);
+	while (SQLITE_ROW == (rc = sqlite3_step(stmt)))
+		count = sqlite3_column_int64 (stmt, 0);
+	if (rc != SQLITE_OK && rc != SQLITE_DONE) {
+		if (err) {
+			GRID_WARN("SQLite error: (%d) %s",
+					rc, sqlite3_errmsg(sq3->db));
+		} else {
+			err = NEWERROR(CODE_INTERNAL_ERROR, "SQLite error: (%d) %s",
+					rc, sqlite3_errmsg(sq3->db));
+		}
+	}
+	(void) sqlite3_finalize (stmt);
+
+	if (!err && count > 0)
+		err = NEWERROR(CODE_CONTAINER_NOTEMPTY, "Container not empty");
+	return err;
+}
+
+GError *
+meta2_backend_container_isempty (struct meta2_backend_s *m2,
+		struct oio_url_s *url)
+{
+	EXTRA_ASSERT(m2 != NULL);
+	EXTRA_ASSERT(url != NULL);
+	GRID_DEBUG("ISEMPTY(%s)", oio_url_get(url, OIOURL_WHOLE));
+
+	struct sqlx_sqlite3_s *sq3 = NULL;
+	GError *err = m2b_open(m2, url, M2V2_OPEN_MASTERSLAVE, &sq3);
+	if (NULL == err) {
+		err = _isempty (sq3);
 		m2b_close(sq3);
 	}
 	return err;
@@ -543,7 +572,8 @@ meta2_backend_create_container(struct meta2_backend_s *m2,
 				m2b_destroy(sq3);
 				return err;
 			}
-			if (!params->local && sq3->election == ELECTION_LEADER && m2->notifier) {
+			const enum election_status_e s = sq3->election;
+			if (!params->local && m2->notifier && (!s || s == ELECTION_LEADER)) {
 				GString *gs = g_string_new ("{");
 				g_string_append (gs, "\"event\":\""NAME_SRVTYPE_META2".container.create\"");
 				g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
@@ -563,72 +593,34 @@ GError *
 meta2_backend_destroy_container(struct meta2_backend_s *m2,
 		struct oio_url_s *url, guint32 flags)
 {
-	GError *err = NULL;
-	gboolean local = BOOL(flags & M2V2_DESTROY_LOCAL);
+	gboolean event = BOOL(flags & M2V2_DESTROY_EVENT);
+	gboolean force = BOOL(flags & M2V2_DESTROY_FORCE);
+	gboolean flush = BOOL(flags & M2V2_DESTROY_FLUSH);
 	struct sqlx_sqlite3_s *sq3 = NULL;
-	guint counter = 0;
+	GError *err = NULL;
 
-	void counter_cb(gpointer u, gpointer bean) {
-		(void) u;
-		counter ++;
-		_bean_clean(bean);
-	}
-
-	struct list_params_s lp = {0};
-	lp.flag_nodeleted = ~0;
-	lp.maxkeys = 1;
-
-	GRID_INFO("DESTROY(%s) %s", oio_url_get(url, OIOURL_WHOLE),
-			local? " (local)" : "");
-
-	const guint32 flag_local = M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK;
-	err = m2b_open(m2, url, local ? flag_local : M2V2_OPEN_MASTERONLY, &sq3);
+	err = m2b_open(m2, url, M2V2_OPEN_LOCAL|M2V2_OPEN_NOREFCHECK, &sq3);
 	if (!err) {
 		EXTRA_ASSERT(sq3 != NULL);
 
-		// Performs checks only if client did not ask for a local destroy
-		if (!local) {
-			err = m2db_list_aliases(sq3, &lp, NULL, counter_cb, NULL);
-			if (err) goto go_on;
+		if (flush && !force)
+			err = _isempty (sq3);
 
-			if (counter > 0 && !(flags & (M2V2_DESTROY_FORCE|M2V2_DESTROY_FLUSH))) {
-				err = NEWERROR(CODE_CONTAINER_NOTEMPTY,
-						"%d elements still in container", counter);
-				goto go_on;
+		if (!err && flush) {
+			err = m2db_flush_container(sq3->db);
+			if (NULL != err && force) {
+				GRID_WARN ("Destroy error: flush error: (%d) %s",
+						err->code, err->message);
+				g_clear_error (&err);
 			}
-
-			if (counter > 0 && flags & M2V2_DESTROY_FLUSH) {
-				err = m2db_flush_container(sq3->db);
-				if (err != NULL) {
-					GRID_WARN("Error flushing container: %s", err->message);
-					g_clear_error(&err);
-				}
-			}
-
-			gchar **peers = NULL;
-			struct sqlx_name_mutable_s n;
-			sqlx_name_fill (&n, url, NAME_SRVTYPE_META2, 1);
-			err = election_get_peers(
-					sqlx_repository_get_elections_manager(m2->repo),
-					sqlx_name_mutable_to_const(&n), FALSE, &peers);
-			sqlx_name_clean (&n);
-
-			// peers may be NULL if no zookeeper URL is configured
-			if (!err && peers != NULL && g_strv_length(peers) > 0)
-				err = m2v2_remote_execute_DESTROY_many(peers, url, flags);
-			if (peers)
-				g_strfreev(peers);
-			peers = NULL;
 		}
 
-go_on:
 		/* TODO(jfs): manage base's subtype */
 		hc_decache_reference_service(m2->resolver, url, NAME_SRVTYPE_META2);
 
 		if (!err) {
-			int master = sq3->election == ELECTION_LEADER;
 			GString *gs = NULL;
-			if (!local && master && m2->notifier) {
+			if (event && m2->notifier) {
 				gs = g_string_new ("{");
 				g_string_append (gs, "\"event\":\"" NAME_SRVTYPE_META2 ".container.destroy\"");
 				g_string_append_printf (gs, ",\"when\":%"G_GINT64_FORMAT, oio_ext_real_time());
