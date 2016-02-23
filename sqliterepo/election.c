@@ -1177,13 +1177,10 @@ _find_member (void *d)
 		return NULL;
 
 	struct election_member_s *member = NULL;
-	guint64 u64 = (guint64) d;
-	guint32 uid = u64;
-
 	g_mutex_lock (&manager->lock);
 	gboolean _locate (gpointer k, gpointer v, gpointer u) {
 		(void) k, (void) u;
-		if (((struct election_member_s*)v)->uid == uid) {
+		if (((struct election_member_s*)v)->uid == GPOINTER_TO_UINT(d)) {
 			member = v;
 			return TRUE;
 		}

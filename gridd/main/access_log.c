@@ -105,9 +105,12 @@ reply_context_log_access (struct reply_context_s *ctx, const gchar *fmt, ...)
 	GString *gs = g_string_sized_new(256);
 	_log_addr(gs, ctx->req_ctx->fd);
 	_log_reqname(gs, ctx->req_ctx->request);
-	g_string_append_printf(gs, " %d %"G_GINT64_FORMAT" 0",
-			ctx->header.code, tvdiff.tv_sec * 1000000 + tvdiff.tv_usec);
-	g_string_append_c(gs, ' ');
+
+	gint64 d = tvdiff.tv_sec;
+	d = d * 1000000;
+	d += tvdiff.tv_usec;
+	g_string_append_printf(gs, " %d %"G_GINT64_FORMAT" 0 ", ctx->header.code, d);
+
 	if (!fmt)
 		g_string_append_c(gs, '-');
 	else {
