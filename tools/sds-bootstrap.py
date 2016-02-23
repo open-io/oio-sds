@@ -797,7 +797,7 @@ def generate(ns, ip, options={}):
                HTTPD_BINARY=HTTPD_BINARY)
 
     env['CHUNK_SIZE'] = getint(options.CHUNK_SIZE, 1024*1024)
-    env['MONITOR_PERIOD'] = getint(options.MONITOR_PERIOD, 1)
+    env['MONITOR_PERIOD'] = getint(options.MONITOR_PERIOD, 5)
     env['PORT_REDIS'] = 6379
 
     if options.NO_ZOOKEEPER is not None:
